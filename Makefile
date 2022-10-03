@@ -3,5 +3,7 @@ TOPTARGETS := all clean
 SUBDIRS := $(wildcard */.)
 
 $(TOPTARGETS): $(SUBDIRS)
-$(SUBDIRS):
+$(SUBDIRS): FORCE
 	$(MAKE) -C $@ $(MAKECMDGOALS)
+
+FORCE:
