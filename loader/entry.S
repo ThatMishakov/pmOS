@@ -22,7 +22,22 @@ multiboot_header:
     .long   multiboot_header_end - multiboot_header
     /*  checksum */
     .long   -(MULTIBOOT2_HEADER_MAGIC + GRUB_MULTIBOOT_ARCHITECTURE_I386 + (multiboot_header_end - multiboot_header))
+/* Align modules to pages */
+module_alligment_tag_start:
+    .short  MULTIBOOT_HEADER_TAG_MODULE_ALIGN
+    .short  0
+    .long   module_alligment_tag_end - module_alligment_tag_start
+module_alligment_tag_end: 
+
+    /* Terminate multiboot2 header */
+    .short MULTIBOOT_HEADER_TAG_END
+    .short 0
+    .long 8   
 multiboot_header_end:
+
+
+
+
 multiboot_entry:
     /*  Initialize the stack pointer. */
     movl    $(stack + STACK_SIZE), %esp
