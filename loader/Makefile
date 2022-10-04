@@ -8,7 +8,7 @@ CC = clang
 CPP = clang
 CXX = clang++
 AS = nasm
-TARGET := i386-elf
+TARGET := i686-elf
 
 INCLUDEDIR = include
 
@@ -38,8 +38,7 @@ INTERNALCFLAGS  :=       \
 	-mno-3dnow           \
 	-mno-sse             \
 	-mno-sse2            \
-	-mno-red-zone 		\
-	-mgeneral-regs-only
+	-mno-red-zone		 
  
 # Use find to glob all *.c files in the directory and extract the object names.
 CCFILES := $(shell find ./ -type f -name '*.cc')

@@ -50,7 +50,7 @@ _start:
     /*  Push the magic value. */
     pushl   %eax
 
-    jmp main
+    call main
 
     /* halt */
     cli
