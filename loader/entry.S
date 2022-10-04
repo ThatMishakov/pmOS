@@ -3,7 +3,7 @@
 #include <asm.h>
 
 #define GRUB_MULTIBOOT_ARCHITECTURE_I386 0
-#define STACK_SIZE 4096
+#define STACK_SIZE 0x4000
 
     .text
     .globl  start, _start

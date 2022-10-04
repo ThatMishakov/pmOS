@@ -15,18 +15,15 @@ INCLUDEDIR = include
 # User controllable CFLAGS.
 USERCFLAGS = -Wall -Wextra -O2 -pipe -target $(TARGET) 
 
-CFLAGS = $(INTERNALCFLAGS) -I$(INCLUDEDIR) -mcmodel=kernel $(USERCFLAGS) -m32
+CFLAGS = -mcmodel=kernel $(INTERNALCFLAGS) -I$(INCLUDEDIR) $(USERCFLAGS) -m32
 CPPFLAGS = $(CFLAGS)
 ASMFLAGS = -I$(INCLUDEDIR) --32
 LDFLAGS = $(INTERNALLDFLAGS) -target $(TARGET)
 
 # Internal link flags that should not be changed by the user.
 INTERNALLDFLAGS :=     \
-	-shared \
-	-fno-pic -no-pie \
-	-Wl,-static,--no-dynamic-linker,-ztext \
-	-static-pie    \
-	-nostdlib      \
+    -nostdlib               \
+    -static                 \
 	-Tlinker.ld    \
 	-z max-page-size=0x1000
  
@@ -35,7 +32,7 @@ INTERNALCFLAGS  :=       \
 	-I.                  \
 	-ffreestanding       \
 	-fno-stack-protector \
-	-fno-pic -fpie       \
+	-fPIC -fPIE       \
 	-mno-80387           \
 	-mno-mmx             \
 	-mno-3dnow           \
