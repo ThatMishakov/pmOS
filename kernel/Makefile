@@ -1,5 +1,5 @@
 # Kernel executable name
-KERNEL = pmos.elf
+KERNEL = kernel
 
 # It is highly recommended to use a custom built cross toolchain to build a kernel.
 # We are only using "cc" as a placeholder here. It may work by using

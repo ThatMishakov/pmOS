@@ -47,6 +47,9 @@ void main(unsigned long magic, unsigned long addr)
 
 
   struct multiboot_tag *tag;
+  print_str("Multiboot tags location: ");
+  print_hex(addr);
+  print_str("\n");
   unsigned size;
   for (tag = (struct multiboot_tag *) (addr + 8); tag->type != MULTIBOOT_TAG_TYPE_END;
       tag = (struct multiboot_tag *) ((multiboot_uint8_t *) tag + ((tag->size + 7) & ~7))) {
@@ -79,6 +82,17 @@ void main(unsigned long magic, unsigned long addr)
                     print_str("\n");
                 }
         }
+        case MULTIBOOT_TAG_TYPE_MODULE: {
+            struct multiboot_tag_module * mod = (struct multiboot_tag_module *) tag;
+            print_str("Module start: ");
+            print_hex(mod->mod_start);
+            print_str(" end: ");
+            print_hex(mod->mod_end);
+            print_str(" cmdline: ");
+            print_str(mod->cmdline);
+            print_str("\n");
+        }
+            break;
         default:
             break;
         }
