@@ -12,4 +12,4 @@ emul: grub/pmOS.iso
 grub/pmOS.iso:
 	$(MAKE) -C grub pmOS.iso
 
-.PHONY: $(TOPTARGETS) $(SUBDIRS)
+.PHONY: $(TOPTARGETS) $(SUBDIRS) grub/pmOS.iso

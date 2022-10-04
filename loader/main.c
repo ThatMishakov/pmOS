@@ -17,7 +17,7 @@ void int_to_hex(char * buffer, long long n)
   int buffer_pos = 0;
   do {
     char c = n & 0x0f;
-    if (c > 9) c = c - 9 + 'A';
+    if (c > 9) c = c - 10 + 'A';
     else c = c + '0';
     buffer2[buffer_pos] = c;
     n >>= 4;
@@ -30,7 +30,7 @@ void int_to_hex(char * buffer, long long n)
   buffer[buffer_pos] = '\0';
 }
 
-void print_hex(long i)
+void print_hex(long long i)
 {
     char buffer[24];
     print_str("0x");
@@ -46,25 +46,41 @@ void main(unsigned long magic, unsigned long addr)
     print_str("Hello from loader!\n");
 
 
-    print_str("Printing multiboot2 tags...\n");
-    print_str("multiboo2 tags address: ");
-    print_hex(addr);
-    print_str(", ");
-    unsigned long tag = addr + 8;
-    long size = *(long*) addr;
-    print_str("multiboot2 tags size: ");
-    print_hex(size);
-    print_str("\n");
-
-    for (int i = 0; tag < addr + size && i < 20; ++i) {
-        print_str("Tag ");
-        print_hex(i);
-        print_str(" type: ");
-        print_hex(*(long*) tag);
-        print_str(" with size: ");
-        long t_size = *(long*)(tag + 4);
-        print_hex(t_size);
+  struct multiboot_tag *tag;
+  unsigned size;
+  for (tag = (struct multiboot_tag *) (addr + 8); tag->type != MULTIBOOT_TAG_TYPE_END;
+      tag = (struct multiboot_tag *) ((multiboot_uint8_t *) tag + ((tag->size + 7) & ~7))) {
+        print_str("Multiboot tag ");
+        print_hex(tag->type);
+        print_str(" size ");
+        print_hex(tag->size);
         print_str("\n");
-        tag += t_size;
-    }
+
+        switch (tag->type)
+        {
+        case MULTIBOOT_TAG_TYPE_BASIC_MEMINFO:
+            print_str("Memory lower: ");
+            print_hex(((struct multiboot_tag_basic_meminfo *) tag)->mem_lower);
+            print_str(" memory upper: ");
+            print_hex(((struct multiboot_tag_basic_meminfo *) tag)->mem_upper);
+            print_str("\n");
+            break;
+        case MULTIBOOT_TAG_TYPE_MMAP: {
+            print_str("Memory map:\n");
+            for (struct multiboot_mmap_entry * mmap = ((struct multiboot_tag_mmap *)tag)->entries;
+                (multiboot_uint8_t *) mmap < (multiboot_uint8_t *) tag + tag->size;
+                mmap = (multiboot_memory_map_t *) ((unsigned long) mmap + ((struct multiboot_tag_mmap *) tag)->entry_size)){
+                    print_str("  Base addr: ");
+                    print_hex(mmap->addr);
+                    print_str(" length: ");
+                    print_hex(mmap->len);
+                    print_str(" type: ");
+                    print_hex(mmap->type);
+                    print_str("\n");
+                }
+        }
+        default:
+            break;
+        }
+      }
 }
