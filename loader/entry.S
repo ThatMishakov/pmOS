@@ -5,11 +5,7 @@
 #define GRUB_MULTIBOOT_ARCHITECTURE_I386 0
 #define STACK_SIZE 0x4000
 
-    .text
-    .globl  start, _start
-start:
-_start:
-    jmp     multiboot_entry
+    .section .multiboot2
     /*  Align 64 bits boundary. */
     .align  8    
     /*  Multiboot header. */
@@ -38,7 +34,10 @@ multiboot_header_end:
 
 
 
-multiboot_entry:
+    .text
+    .globl  _start
+    .type _start, @function
+_start:
     /*  Initialize the stack pointer. */
     movl    $(stack + STACK_SIZE), %esp
 
@@ -54,6 +53,7 @@ multiboot_entry:
     jmp main
 
     /* halt */
+    cli
 loop:   hlt
     jmp     loop
 

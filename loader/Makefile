@@ -45,7 +45,7 @@ INTERNALCFLAGS  :=       \
 CCFILES := $(shell find ./ -type f -name '*.cc')
 CFILES := $(shell find ./ -type f -name '*.c')
 ASMFILES := $(shell find ./ -type f -name '*.S')
-OBJ    := entry.o main.o
+OBJ    := $(CCFILES:.cc=.o) $(ASMFILES:.S=.o) $(CFILES:.c=.o)
 
 $(EXEC): $(OBJ) linker.ld
 	$(CC) $(LDFLAGS) $(OBJ) -o $@
