@@ -3,6 +3,7 @@
 #include <misc.h>
 #include <io.h>
 #include <linker.h>
+#include <mem.h>
 
 
 void main(unsigned long magic, unsigned long addr)
@@ -78,4 +79,7 @@ void main(unsigned long magic, unsigned long addr)
         }
       }
       init_mem(addr);
+      print_str("Preparing GDT...\n");
+      init_GDT();
+      print_str("Loaded GDT!\n");
 }

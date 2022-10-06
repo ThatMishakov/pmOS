@@ -1,15 +1,15 @@
 #include <multiboot2.h>
 #include <linker.h>
 #include <stdint.h>
-
-typedef struct {
-    uint64_t base_addr;
-    uint64_t size;
-} memory_descr;
+#include <../kernel/common/memory.h>
+#include <io.h>
 
 #define TEMP_MMAP_SIZE 4096 // 128 MB usable
 memory_descr temp_mem[TEMP_MMAP_SIZE/sizeof(memory_descr)];
 int temp_mem_index = 0;
+
+memory_descr *memm = temp_mem;
+int *memm_index = &temp_mem_index;
 
 void mark_usable(memory_descr* memmap, int* index, uint64_t base_addr, uint64_t size)
 {
@@ -48,6 +48,23 @@ void reserve(memory_descr* memmap, int* index, uint64_t base_addr, uint64_t size
         memmap[*index] = temp[i];
         ++*index;
     }
+}
+
+// Allocates a page
+uint64_t alloc_page()
+{
+    for (int i = *memm_index - 1; i > 0; --i) {
+        if (memm[i].size > 0) {
+            memm[i].base_addr += 0x1000;
+            memm[i].size -= 0x1000;
+            print_str("Allocated ");
+            print_hex(memm[i].base_addr - 0x1000);
+            print_str("\n");
+
+            return memm[i].base_addr - 0x1000;
+        }
+    }
+    return -1;
 }
 
 
