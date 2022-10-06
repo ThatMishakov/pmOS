@@ -5,7 +5,6 @@
 #define GRUB_MULTIBOOT_ARCHITECTURE_I386 0
 #define STACK_SIZE 0x4000
 
-exec_start:
     .section .multiboot2
     /*  Align 64 bits boundary. */
     .align  8    
@@ -40,13 +39,11 @@ multiboot_header_end:
     .type _start, @function
 _start:
     /*  Initialize the stack pointer. */
-    movl    $(stack + STACK_SIZE), p_size
+    movl    $(stack + STACK_SIZE), %esp
 
     /*  Reset EFLAGS. */
     pushl   $0
     popf
-
-    movl $(exec_end - exec_start), p_size
 
     /*  Push the pointer to the Multiboot information structure. */
     pushl   %ebx
@@ -63,4 +60,3 @@ loop:   hlt
     /*  Our stack area. */
     .bss
     .comm   stack, STACK_SIZE
-exec_end:

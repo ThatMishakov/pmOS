@@ -6,11 +6,13 @@ SECTIONS
     /* Load in a fixed point */
     . = 1M;
 
+    .start = . ;
     .text : {
         *(.multiboot2)
         *(.text*)
     }
 
+    _exec_start = 1234;
     .rodata : {
         *(.rodata*)
     }
@@ -23,5 +25,9 @@ SECTIONS
         *(COMMON)
         *(.bss*)
     }
+    _exec_start = .start;
+    _exec_size = .end - .start;
+    _exec_end = .end;
+    .end = . ;
 }
 

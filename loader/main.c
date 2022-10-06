@@ -2,9 +2,8 @@
 #include <stdint.h>
 #include <misc.h>
 #include <io.h>
-#include <entry.h>
+#include <linker.h>
 
-int p_size;
 
 void main(unsigned long magic, unsigned long addr)
 {
@@ -13,9 +12,13 @@ void main(unsigned long magic, unsigned long addr)
     /* Initialize everything */
     print_str("Hello from loader!\n");
 
-  print_str("Executable size: ");
-  print_hex(p_size);
+  print_str("Executable start: ");
+  print_hex((int)&_exec_start);
   print_str("\n");
+  print_str("Executable size: ");
+  print_hex((int)&_exec_size);
+  print_str("\n");
+  
   struct multiboot_tag *tag;
   print_str("Multiboot tags location: ");
   print_hex(addr);
