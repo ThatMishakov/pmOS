@@ -29,5 +29,5 @@ void prepare_GDT()
 void init_GDT()
 {
     prepare_GDT();
-    loadGDT((uint32_t)gdt, gdt_size*sizeof(GDT_entry) - 1);
+    //loadGDT((uint32_t)gdt, gdt_size*sizeof(GDT_entry) - 1);
 }

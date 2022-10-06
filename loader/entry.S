@@ -33,7 +33,7 @@ multiboot_header_end:
 
 
 
-
+    .code32
     .text
     .globl  _start
     .type _start, @function
@@ -50,7 +50,17 @@ _start:
     /*  Push the magic value. */
     pushl   %eax
 
+    xchgw %bx, %bx
+    /* Load GDT */
+    pushl   $(temp_gdt_end - temp_gdt - 1) /* size */
+    pushl   $temp_gdt /* base */
+    call    loadGDT_32
+    addl    $8, %esp
+
+    xchgw %bx, %bx
+
     call main
+    addl $8, %esp
 
     /* halt */
     cli
@@ -58,5 +68,45 @@ loop:   hlt
     jmp     loop
 
     /*  Our stack area. */
-    .bss
     .comm   stack, STACK_SIZE
+
+    .align  4096
+temp_gdt:
+    .quad 0 /* Empty entry */
+
+temp_gdt_32bit_code:
+    .short 0xffff /* 32 bit code segment */
+    .short 0x0000
+    .byte 0x00
+    .byte 0x9a
+    .byte 0xcf
+    .byte 0x00
+
+temp_gdt_32bit_data:
+    .short 0xffff /* 32 bit data segment */
+    .short 0x0000
+    .byte 0x00
+    .byte 0x92
+    .byte 0xcf
+    .byte 0x00
+
+temp_gdt_64bit_code:
+    .short 0x00 /* 64 bit code segment */
+    .short 0x00
+    .byte 0x00
+    .byte 0x9a
+    .byte 0xa2
+    .byte 0xa0
+    .byte 0x00
+
+temp_gdt_64bit_code:
+    .short 0x00 /* 64 bit data segment */
+    .short 0x00
+    .byte 0x00
+    .byte 0x92
+    .byte 0xa2
+    .byte 0xc0
+    .byte 0x00
+temp_gdt_end:
+
+

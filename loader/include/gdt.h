@@ -3,6 +3,6 @@
 #include "../../kernel/common/gdt.h"
 #include <stdint.h>
 
-void loadGDT(uint32_t offset, uint16_t size);
+//void loadGDT(uint32_t offset, uint16_t size);
 
 #endif

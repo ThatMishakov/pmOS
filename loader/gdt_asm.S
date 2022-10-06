@@ -3,10 +3,11 @@ DW:
     .short
     .short
 
+    .code32
 .text
-    .globl loadGDT 
-    .type loadGDT, @function
-loadGDT:
+    .globl loadGDT_32
+    .type loadGDT_32, @function
+loadGDT_32:
     movw   8(%esp), %ax
     movw   %ax, DW
     movw   4(%esp), %ax
