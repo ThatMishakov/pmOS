@@ -10,17 +10,7 @@ typedef struct {
     uint8_t access;
     uint8_t limit1_flags;
     uint8_t base2;
-} GDT_entry PACKED;
-
-typedef struct {
-    uint16_t size;
-    uint64_t offset;
-} GDT_descriptor PACKED;
-
-typedef struct {
-    uint16_t size;
-    uint32_t offset;
-} GDT_descriptor_m32 PACKED;
+} PACKED GDT_entry;
 
 typedef struct {
     GDT_entry Null; // always null
@@ -31,6 +21,6 @@ typedef struct {
     GDT_entry _64bit_code;
     GDT_entry _64bit_data;
     GDT_entry IDT_code;
-} GDT PACKED ALIGNED(0x1000) ;
+} PACKED ALIGNED(0x1000) GDT;
 
 #endif

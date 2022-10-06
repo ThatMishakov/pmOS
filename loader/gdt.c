@@ -7,16 +7,17 @@ int gdt_size = 0;
 
 GDT_entry *GDT_add_entry(GDT_entry entry)
 {
-    gdt[gdt_size++] = entry;
-    return &gdt[gdt_size - 1];
+    gdt[gdt_size] = entry;
+    return &gdt[gdt_size++ - 1];
 }
 
 void prepare_GDT()
 {
-    if (!gdt) gdt = (GDT*)alloc_page();
+    if (!gdt) gdt = (GDT_entry*)alloc_page();
+
     GDT_add_entry((GDT_entry){0});
-    GDT_add_entry((GDT_entry){0xffff, 0, 0, 0x9a, 0x80, 0});
-    GDT_add_entry((GDT_entry){0xffff, 0, 0, 0x92, 0x80, 0});
+    GDT_add_entry((GDT_entry){0xffff, 0, 0, 0x9a, 0xCF, 0});
+    GDT_add_entry((GDT_entry){0xffff, 0, 0, 0x92, 0xCF, 0});
 
     /*
     gdt->_64bit_code = (GDT_entry){0, 0, 0, 0x9a, 0xa2, 0}; // 64bit_code
@@ -28,8 +29,5 @@ void prepare_GDT()
 void init_GDT()
 {
     prepare_GDT();
-    GDT_descriptor_m32 gdt_descriptor;
-    gdt_descriptor.size = gdt_size;
-    gdt_descriptor.offset = (uint32_t)gdt;
-    loadGDT(&gdt_descriptor);
+    loadGDT((uint32_t)gdt, gdt_size*sizeof(GDT_entry) - 1);
 }

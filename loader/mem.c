@@ -57,9 +57,6 @@ uint64_t alloc_page()
         if (memm[i].size > 0) {
             memm[i].base_addr += 0x1000;
             memm[i].size -= 0x1000;
-            print_str("Allocated ");
-            print_hex(memm[i].base_addr - 0x1000);
-            print_str("\n");
 
             return memm[i].base_addr - 0x1000;
         }
