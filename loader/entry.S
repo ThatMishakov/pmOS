@@ -56,13 +56,13 @@ _start:
     /* Init paging tables */
     call init_paging_tables
 
-    /* Enable PAE */
+    /* Enable PAE and page size extension */
     movl %cr4, %eax
-    orl $(1 << 5), %eax
+    orl $((1 << 5) | (1 << 4)), %eax
     movl %eax, %cr4
 
     /* Enable long mode */
-    movl $0xc0000000, %ecx
+    movl $0xc0000080, %ecx
     rdmsr
     orl $(1 << 8), %eax
     wrmsr
@@ -111,21 +111,19 @@ temp_gdt_32bit_data:
     .byte 0x00
 
 temp_gdt_64bit_code:
-    .short 0x00 /* 64 bit code segment */
-    .short 0x00
+    .short 0xffff /* 64 bit code segment */
+    .short 0x0000
     .byte 0x00
     .byte 0x9a
-    .byte 0xa2
-    .byte 0xa0
+    .byte 0xaf
     .byte 0x00
 
 temp_gdt_64bit_data:
-    .short 0x00 /* 64 bit data segment */
-    .short 0x00
+    .short 0xFFFF /* 64 bit data segment */
+    .short 0x0000
     .byte 0x00
-    .byte 0x92
-    .byte 0xa2
-    .byte 0xc0
+    .byte 0x92 /* ACESS BYTE */
+    .byte 0xcf
     .byte 0x00
 temp_gdt_end:
 
@@ -138,13 +136,13 @@ init_paging_tables:
 
     /* Add PDPT entry */
     movl $g_pdpt_e0, %eax
-    orl $0x000000403, %eax
+    orl $0x000000403, %eax /* P W*/
     movl %eax, g_pml4
     movl $0, g_pml4+4
 
     /* Add PDE entry */
     movl $g_pd_e0, %eax
-    orl $0x000000403, %eax
+    orl $0x000000403, %eax /* P W*/
     movl %eax, g_pdpt_e0
     movl $0, g_pdpt_e0+4
 
