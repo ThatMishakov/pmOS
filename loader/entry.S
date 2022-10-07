@@ -146,19 +146,26 @@ init_paging_tables:
     movl %eax, g_pdpt_e0
     movl $0, g_pdpt_e0+4
 
-    /* Fill PD Table */
+    /* Add PD entry */
+    movl $g_pt_e0, %eax
+    orl $0x000000403, %eax /* P W*/
+    movl %eax, g_pd_e0
+    movl $0, g_pd_e0+4
+
+    
+    /* Fill Page Table */
+
     movl $0, %ecx
 p_loop_start:
     movl %ecx, %eax
-    shll $21,  %eax
-    orl $0x00000443, %eax /* P W PS*/
-    movl %eax, g_pd_e0(,%ecx,8)
-    movl $0, g_pd_e0+4(,%ecx,8)
+    shll $12, %eax
+    orl $0x000000403, %eax /* P W*/
+    movl %eax, g_pt_e0(,%ecx,8)
+    movl $0, g_pt_e0+4(,%ecx,8)
 
     incl %ecx
     cmpl $512, %ecx
     jl p_loop_start
-    xchgw %bx, %bx
 
     ret
 
@@ -169,7 +176,10 @@ g_pml4:
 g_pdpt_e0:
     .fill 4096
 
+g_pd_e0:
+    .fill 4096
+
     .section .bss
     .align 4096
-    .comm g_pd_e0, 4096
+    .comm g_pt_e0, 4096
 

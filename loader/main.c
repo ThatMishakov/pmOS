@@ -88,4 +88,8 @@ void main()
       //print_str("Preparing GDT...\n");
       //init_GDT();
       //print_str("Loaded GDT!\n");
+
+      while (1) {
+        asm ("hlt");
+      }
 }
