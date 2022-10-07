@@ -31,8 +31,6 @@ module_alligment_tag_end:
     .long 8   
 multiboot_header_end:
 
-
-
     .code32
     .text
     .globl  _start
@@ -45,31 +43,49 @@ _start:
     pushl   $0
     popf
 
-    /*  Push the pointer to the Multiboot information structure. */
-    pushl   %ebx
-    /*  Push the magic value. */
-    pushl   %eax
+    /* Save multiboot structures */
+    movl %ebx, multiboot_info_str
+    movl %eax, multiboot_magic
 
-    xchgw %bx, %bx
     /* Load GDT */
     pushl   $(temp_gdt_end - temp_gdt - 1) /* size */
     pushl   $temp_gdt /* base */
     call    loadGDT_32
     addl    $8, %esp
 
+    /* Init paging tables */
     call init_paging_tables
 
+    /* Enable PAE */
+    movl %cr0, %ebx
+    andl ~(1 << 31), %ebx
+    movl %ebx, %cr0
 
+    /* Enable long mode */
+    movl 0xc0000000, %ecx
+    rdmsr
+    orl $(1 << 8), %eax
+    wrmsr
 
-    xchgw %bx, %bx
+    /* Load PML4 */
+    movl $g_pml4, %eax
+    movl %eax, %cr3
 
-    call main
-    addl $8, %esp
+    /* Enable paging */
+    orl (1 << 32) | (1 << 0), %ebx
+    movl %ebx, %cr0
 
-    /* halt */
-    cli
-loop:   hlt
-    jmp     loop
+    /* Load 64 bit segment registers */
+    movw 0x20, %ax
+    movw %ax, %ss
+    movw %ax, %ds
+    movw %ax, %es
+    movw %ax, %fs
+    movw %ax, %gs
+
+    /* Far jump to main */
+    ljmp   $0x18, $main
+
 
     /*  Our stack area. */
     .comm   stack, STACK_SIZE
@@ -123,14 +139,14 @@ init_paging_tables:
     /* Add PDPT entry */
     movl $g_pdpt_e0, %eax
     andl $0xfffff000, %eax
-    orl $0x000000407, %eax
+    orl $0x000000403, %eax
     movl %eax, g_pml4
     movl $0, g_pml4+4
 
     /* Add PDE entry */
     movl $g_pd_e0, %eax
     andl $0xfffff000, %eax
-    orl $0x000000407, %eax
+    orl $0x000000403, %eax
     movl %eax, g_pdpt_e0
     movl $0, g_pdpt_e0+4
 
@@ -139,7 +155,7 @@ init_paging_tables:
 p_loop_start:
     movl %ecx, %eax
     shll $21,  %eax
-    orl 0x00000447, %eax
+    orl 0x00000443, %eax
     movl %eax, g_pd_e0(,%eax,8)
     movl $0, g_pd_e0+4(,%eax,8)
 

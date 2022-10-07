@@ -4,11 +4,17 @@
 #include <io.h>
 #include <linker.h>
 #include <mem.h>
+#include <entry.h>
 
+uint32_t multiboot_magic;
+uint32_t multiboot_info_str;
 
-void main(unsigned long magic, unsigned long addr)
+void main()
 {
-    if (magic != MULTIBOOT2_BOOTLOADER_MAGIC) return;
+    if (multiboot_magic != MULTIBOOT2_BOOTLOADER_MAGIC) {
+        print_str("Not booted by multiboot2 bootloader\n");
+        while (1) ;
+    }
 
     /* Initialize everything */
     print_str("Hello from loader!\n");
@@ -22,10 +28,10 @@ void main(unsigned long magic, unsigned long addr)
   
   struct multiboot_tag *tag;
   print_str("Multiboot tags location: ");
-  print_hex(addr);
+  print_hex(multiboot_info_str);
   print_str("\n");
   unsigned size;
-  for (tag = (struct multiboot_tag *) (addr + 8); tag->type != MULTIBOOT_TAG_TYPE_END;
+  for (tag = (struct multiboot_tag *) (multiboot_info_str + 8); tag->type != MULTIBOOT_TAG_TYPE_END;
       tag = (struct multiboot_tag *) ((multiboot_uint8_t *) tag + ((tag->size + 7) & ~7))) {
         print_str("Multiboot tag ");
         print_hex(tag->type);
@@ -78,7 +84,7 @@ void main(unsigned long magic, unsigned long addr)
             break;
         }
       }
-      init_mem(addr);
+      init_mem(multiboot_info_str);
       //print_str("Preparing GDT...\n");
       //init_GDT();
       //print_str("Loaded GDT!\n");
