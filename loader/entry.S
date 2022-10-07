@@ -57,6 +57,10 @@ _start:
     call    loadGDT_32
     addl    $8, %esp
 
+    call init_paging_tables
+
+
+
     xchgw %bx, %bx
 
     call main
@@ -99,7 +103,7 @@ temp_gdt_64bit_code:
     .byte 0xa0
     .byte 0x00
 
-temp_gdt_64bit_code:
+temp_gdt_64bit_data:
     .short 0x00 /* 64 bit data segment */
     .short 0x00
     .byte 0x00
@@ -109,4 +113,50 @@ temp_gdt_64bit_code:
     .byte 0x00
 temp_gdt_end:
 
+    .text
+    .align 4
+    .code32
+.type init_paging_tables, @function
+init_paging_tables:
+    /* Directly map 1 GB of memory */
+
+    /* Add PDPT entry */
+    movl $g_pdpt_e0, %eax
+    andl $0xfffff000, %eax
+    orl $0x000000407, %eax
+    movl %eax, g_pml4
+    movl $0, g_pml4+4
+
+    /* Add PDE entry */
+    movl $g_pd_e0, %eax
+    andl $0xfffff000, %eax
+    orl $0x000000407, %eax
+    movl %eax, g_pdpt_e0
+    movl $0, g_pdpt_e0+4
+
+    /* Fill PD Table */
+    movl 0, %ecx
+p_loop_start:
+    movl %ecx, %eax
+    shll $21,  %eax
+    orl 0x00000447, %eax
+    movl %eax, g_pd_e0(,%eax,8)
+    movl $0, g_pd_e0+4(,%eax,8)
+
+    incl %ecx
+    cmpl $512, %ecx
+    jl p_loop_start
+
+    ret
+
+    .align 4096
+g_pml4:
+    .fill 4096
+
+g_pdpt_e0:
+    .fill 4096
+
+    .section .bss
+    .align 4096
+    .comm g_pd_e0, 4096
 
