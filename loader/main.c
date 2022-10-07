@@ -5,6 +5,7 @@
 #include <linker.h>
 #include <mem.h>
 #include <entry.h>
+#include <kernel_loader.h>
 
 uint32_t multiboot_magic;
 uint32_t multiboot_info_str;
@@ -88,6 +89,8 @@ void main()
       //print_str("Preparing GDT...\n");
       //init_GDT();
       //print_str("Loaded GDT!\n");
+
+      load_kernel(multiboot_info_str);
 
       while (1) {
         asm ("hlt");
