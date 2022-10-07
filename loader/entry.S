@@ -57,12 +57,12 @@ _start:
     call init_paging_tables
 
     /* Enable PAE */
-    movl %cr0, %ebx
-    andl ~(1 << 31), %ebx
-    movl %ebx, %cr0
+    movl %cr4, %eax
+    orl $(1 << 5), %eax
+    movl %eax, %cr4
 
     /* Enable long mode */
-    movl 0xc0000000, %ecx
+    movl $0xc0000000, %ecx
     rdmsr
     orl $(1 << 8), %eax
     wrmsr
@@ -72,19 +72,19 @@ _start:
     movl %eax, %cr3
 
     /* Enable paging */
-    orl (1 << 32) | (1 << 0), %ebx
-    movl %ebx, %cr0
+    movl %cr0, %eax
+    orl $((1 << 31) | (1 << 0)), %eax
+    movl %eax, %cr0
 
     /* Load 64 bit segment registers */
-    movw 0x20, %ax
-    movw %ax, %ss
+    movw $(temp_gdt_64bit_data - temp_gdt), %ax
     movw %ax, %ds
     movw %ax, %es
     movw %ax, %fs
     movw %ax, %gs
 
     /* Far jump to main */
-    ljmp   $0x18, $main
+    ljmp   $(temp_gdt_64bit_code - temp_gdt), $main
 
 
     /*  Our stack area. */
@@ -138,30 +138,29 @@ init_paging_tables:
 
     /* Add PDPT entry */
     movl $g_pdpt_e0, %eax
-    andl $0xfffff000, %eax
     orl $0x000000403, %eax
     movl %eax, g_pml4
     movl $0, g_pml4+4
 
     /* Add PDE entry */
     movl $g_pd_e0, %eax
-    andl $0xfffff000, %eax
     orl $0x000000403, %eax
     movl %eax, g_pdpt_e0
     movl $0, g_pdpt_e0+4
 
     /* Fill PD Table */
-    movl 0, %ecx
+    movl $0, %ecx
 p_loop_start:
     movl %ecx, %eax
     shll $21,  %eax
-    orl 0x00000443, %eax
-    movl %eax, g_pd_e0(,%eax,8)
-    movl $0, g_pd_e0+4(,%eax,8)
+    orl $0x00000443, %eax /* P W PS*/
+    movl %eax, g_pd_e0(,%ecx,8)
+    movl $0, g_pd_e0+4(,%ecx,8)
 
     incl %ecx
     cmpl $512, %ecx
     jl p_loop_start
+    xchgw %bx, %bx
 
     ret
 
