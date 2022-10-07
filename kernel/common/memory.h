@@ -85,12 +85,10 @@ typedef struct
 typedef struct {
     uint8_t writeable          : 1;
     uint8_t user_access        : 1;
-    uint8_t write_through      : 1;
-    uint8_t cache_disabled     : 1;
     uint8_t global             : 1;
     uint8_t execution_disabled : 1;
     uint8_t   extra              : 3;
-} PACKED Page_Table_Argumments;
+} Page_Table_Argumments;
 
 typedef struct {
     PML4E entries[512];
@@ -107,5 +105,7 @@ typedef struct {
 typedef struct {
     PTE entries[512];
 } PACKED ALIGNED(0x1000) PT;
+
+#define PAGE_ADDR(page) (page.page_ppn << 12)
 
 #endif
