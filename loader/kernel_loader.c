@@ -4,6 +4,7 @@
 #include "../kernel/common/elf.h"
 #include <utils.h>
 #include <misc.h>
+#include <paging.h>
 
 void load_kernel(uint64_t multiboot_info_str)
 {
@@ -40,17 +41,18 @@ void load_kernel(uint64_t multiboot_info_str)
     // Allocate memory
     for (int i = 0; i < elf_pheader_entries; ++i) {
         ELF_PHeader_64 * p = &elf_pheader[i];
-        //if (p->type == ELF_SEGMENT_LOAD) {
+        if (p->type == ELF_SEGMENT_LOAD) {
             int pages = p->p_memsz >> 12;
             if (p->p_memsz & 0xfff) pages += 1;
-            print_str("ELF type ");
-            print_hex(p->type);
-            print_str(" p_vaddr: ");
-            print_hex(p->p_vaddr);
-            print_str(" pages: ");
-            print_hex(pages);
-            print_str("\n");
-        //}
+            uint64_t base = p->p_vaddr;
+            Page_Table_Argumments arg = {};
+            arg.user_access = 0;
+            arg.writeable = p->flags & ELF_FLAG_WRITABLE;
+            arg.execution_disabled = !(p->flags & ELF_FLAG_EXECUTABLE);
+            for (int i = 0; i < pages; ++i) {
+                get_page(base + 0x1000*i, arg);
+            }
+        }
 
     }
 
