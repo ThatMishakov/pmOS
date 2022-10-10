@@ -2,6 +2,7 @@
 #include <multiboot2.h>
 #include <entry.h>
 #include "../kernel/common/elf.h"
+#include "../kernel/common/com.h"
 #include <utils.h>
 #include <misc.h>
 #include <paging.h>
@@ -53,9 +54,22 @@ void load_kernel(uint64_t multiboot_info_str)
                 get_page(base + 0x1000*i, arg);
             }
         }
-
     }
 
     tlb_flush();
+
+    for (int i = 0; i < elf_pheader_entries; ++i) {
+        ELF_PHeader_64 * p = &elf_pheader[i];
+        if (p->type == ELF_SEGMENT_LOAD) {
+            uint64_t phys_loc = (uint64_t)elf_h + p->p_offset;
+            uint64_t vaddr = p->p_vaddr;
+            uint64_t size = p->p_filesz;
+            memcpy((char*)phys_loc, (char*)vaddr, size);
+        }
+    }
+
+    int (*entry)(Kernel_Entry_Data*) = (void*)elf_h->program_entry;
+    Kernel_Entry_Data data;
+    print_hex(entry(&data));
 }
 

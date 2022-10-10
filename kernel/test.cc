@@ -1,4 +1,4 @@
-extern "C" void _start(void)
+extern "C" int _start(void)
 {
-    while (1) ;
+    return 123;
 }

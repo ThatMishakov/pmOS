@@ -71,10 +71,10 @@ void get_page(uint64_t addr, Page_Table_Argumments arg)
 
     PTE* pte = &((PT*)PAGE_ADDR((*pde)))->entries[ptable_entry];
     if (!pte->present) {
-        *(uint64_t*)pde = alloc_page();
-        memclear(*(void ** )pde, 4096);
-        pde->present = 1;
-        pde->writeable = arg.writeable;
-        pde->execution_disabled = arg.execution_disabled;
+        *(uint64_t*)pte = alloc_page();
+        memclear(*(void ** )pte, 4096);
+        pte->present = 1;
+        pte->writeable = arg.writeable;
+        pte->execution_disabled = arg.execution_disabled;
     }
 }
