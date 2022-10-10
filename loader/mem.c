@@ -149,7 +149,7 @@ void memclear(void * base, int size_bytes)
     }
 }
 
-void memcpy(char * to, char * from, uint64_t bytes)
+void memcpy(char * from, char * to, uint64_t bytes)
 {
     // TODO: **EXTREMELY** INEFFICIENT
     while (bytes-->0) {
