@@ -170,6 +170,7 @@ p_loop_start:
     ret
 
     .align 4096
+    .globl g_pml4
 g_pml4:
     .fill 4096
 

@@ -5,6 +5,6 @@
 
 char is_present(PML4* table, uint64_t addr);
 
-void spawn_page(uint64_t addr, Page_Table_Argumments arg);
+void get_page(uint64_t addr, Page_Table_Argumments arg);
 
 #endif

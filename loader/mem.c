@@ -123,3 +123,28 @@ void init_mem(unsigned long multiboot_str)
         print_str("\n");
     }
 }
+
+void memclear(void * base, int size_bytes)
+{
+    if (size_bytes < 16) {
+        for (int i = 0; i < size_bytes; ++i)
+            ((char*)base)[i] = 0;
+    } else {
+        char * p = (char*)base;
+        char * limit = (char *)((uint64_t)p + size_bytes);
+        while (((uint64_t)base & 0x0007) && p < limit) {
+            *p = 0x00;
+            ++p;
+        }
+
+        while ((uint64_t)base + 8 < (uint64_t)limit) {
+            *((uint64_t*)base) = 0x0000000000000000;
+            base += 8;
+        }
+
+        while (p < limit) {
+            *p = 0x00;
+            ++p;
+        }
+    }
+}

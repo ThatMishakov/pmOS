@@ -6,5 +6,6 @@ void init_mem(unsigned long multiboot_str);
 extern memory_descr *memm;
 extern int *memm_index;
 uint64_t alloc_page();
+void memclear(void * base, int size_bytes);
 
 #endif
