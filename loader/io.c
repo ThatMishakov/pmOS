@@ -1,5 +1,6 @@
 #include <io.h>
 #include <misc.h>
+#include <stdint.h>
 
 void print_str(char * str)
 {
@@ -10,7 +11,7 @@ void print_str(char * str)
     return;
 }
 
-void int_to_hex(char * buffer, long long n, char upper)
+void int_to_hex(char * buffer, uint64_t n, char upper)
 {
   char buffer2[24];
   int buffer_pos = 0;
@@ -29,7 +30,7 @@ void int_to_hex(char * buffer, long long n, char upper)
   buffer[buffer_pos] = '\0';
 }
 
-void print_hex(long long i)
+void print_hex(uint64_t i)
 {
     char buffer[24];
     print_str("0x");
