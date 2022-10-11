@@ -7,7 +7,7 @@ char strcmp(char* str1, char* str2)
         ++str1; ++str2;
     }
 
-    if (str2 != '\0') return 0;
+    if (str2 != 0) return 0;
 
     return 1;
 }

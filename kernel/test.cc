@@ -1,4 +1,5 @@
-extern "C" int _start(void)
+#include "common/com.h"
+extern "C" int _start(Kernel_Entry_Data* d)
 {
-    return 123;
+    return 0xdeadc0de;
 }

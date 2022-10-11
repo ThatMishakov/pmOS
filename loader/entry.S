@@ -138,34 +138,23 @@ init_paging_tables:
     movl $g_pdpt_e0, %eax
     orl $0x000000403, %eax /* P W*/
     movl %eax, g_pml4
-    movl $0, g_pml4+4
 
     /* Add PDE entry */
     movl $g_pd_e0, %eax
     orl $0x000000403, %eax /* P W*/
     movl %eax, g_pdpt_e0
-    movl $0, g_pdpt_e0+4
 
-    /* Add PD entry */
-    movl $g_pt_e0, %eax
-    orl $0x000000403, %eax /* P W*/
-    movl %eax, g_pd_e0
-    movl $0, g_pd_e0+4
-
-    
-    /* Fill Page Table */
-
+    /* Map 1GB worth of huge pages */
     movl $0, %ecx
-p_loop_start:
+g_pt_loop_start:
     movl %ecx, %eax
-    shll $12, %eax
-    orl $0x000000403, %eax /* P W*/
-    movl %eax, g_pt_e0(,%ecx,8)
-    movl $0, g_pt_e0+4(,%ecx,8)
-
+    shll $(12+9), %eax
+    orl $0x000000483, %eax
+    movl %eax, g_pd_e0(,%ecx,8)
     incl %ecx
     cmpl $512, %ecx
-    jl p_loop_start
+    jl g_pt_loop_start
+    
 
     ret
 
@@ -179,8 +168,3 @@ g_pdpt_e0:
 
 g_pd_e0:
     .fill 4096
-
-    .section .bss
-    .align 4096
-    .comm g_pt_e0, 4096
-
