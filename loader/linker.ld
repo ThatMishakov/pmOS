@@ -4,7 +4,7 @@ ENTRY(_start)
 SECTIONS
 {
     /* Load in a fixed point */
-    . = 1M;
+    . = 1M+128K;
 
     .start = . ;
     .text : {

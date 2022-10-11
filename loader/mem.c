@@ -3,72 +3,121 @@
 #include <stdint.h>
 #include <../kernel/common/memory.h>
 #include <io.h>
+#include <mem.h>
 
-#define TEMP_MMAP_SIZE 4096 // 128 MB usable
-memory_descr temp_mem[TEMP_MMAP_SIZE/sizeof(memory_descr)];
-int temp_mem_index = 0;
+typedef struct {
+    uint64_t base;
+    uint64_t size;
+} mem_entry;
 
-memory_descr *memm = temp_mem;
-int *memm_index = &temp_mem_index;
+uint64_t * bitmap = 0;
+uint64_t bitmap_size;
 
-void mark_usable(memory_descr* memmap, int* index, uint64_t base_addr, uint64_t size)
+mem_entry reserved[64];
+int reserved_i = 0;
+
+void bitmap_mark_bit(uint64_t pos, char b)
 {
-    uint64_t base_alligned = base_addr & ~0xfff;
-    size += base_addr & 0xfff;
-    uint64_t size_alligned = size & ~0xfff;
-    //if (size & 0xfff) size_alligned += 0x1000;
+    uint64_t l = pos & 0x3f;
+    uint64_t i = pos >> 6;
 
-    memmap[*index].base_addr = base_alligned;
-    memmap[*index].size = size_alligned;
-    ++*index;
+    if (b) bitmap[i] |= 0x01 << l;
+    else bitmap[i] &= ~(0x01 << l);
 }
 
-void reserve(memory_descr* memmap, int* index, uint64_t base_addr, uint64_t size)
+char bitmap_read_bit(uint64_t pos)
 {
-    uint64_t base_alligned = base_addr & ~0xfff;
-    size += base_addr & 0xfff;
+    uint64_t l = pos & 0x3f;
+    uint64_t i = pos >> 6;
+
+    return !!(bitmap[i] & (0x01 << l));
+}
+
+void mark(uint64_t base, uint64_t size, char usable)
+{
+    uint64_t base_page = base >> 12;
+    uint64_t size_page = size >> 12;
+    if (size_page < 64) {
+        for (int i = 0; i < size_page; ++i) {
+            bitmap_mark_bit(base_page + i, usable);
+        }
+    } else { // TODO: INEFFICIENT!
+        uint64_t pattern = usable ? ~0x0 : 0x0;
+        while (base_page & 0x3f && size_page > 0) {
+            bitmap_mark_bit(base_page, usable);
+            ++base_page;
+            --size_page;
+        }
+        while (size_page > 64) {
+            bitmap[base_page >> 6] = pattern;
+            base_page += 64;
+            size_page -= 64;
+        }
+        while (size_page > 0) {
+            bitmap_mark_bit(base_page, usable);
+            ++base_page;
+            --size_page;
+        }
+    }
+}
+
+void mark_usable(uint64_t base, uint64_t size)
+{
+    mark(base, size, 1);
+}
+
+void reserve(uint64_t base, uint64_t size)
+{
+    reserved[reserved_i] = (mem_entry){base, size};
+    reserved_i++;
+}
+
+void reserve_unal(uint64_t base, uint64_t size)
+{
+    uint64_t base_alligned = base & ~0xfff;
+    size += base & 0xfff;
     uint64_t size_alligned = size & ~0xfff;
     if (size & 0xfff) size_alligned += 0x1000;
 
     if (size == 0) return;
 
-    memory_descr temp[8];
-    int t_index = 0;
-    for (int i = 0; i < *index; ++i) { // TODO: assuming there is no memory overlap
-        if (memmap[i].base_addr <= base_alligned && (memmap[i].base_addr + memmap[i].size > base_alligned)) {
-            temp[t_index].base_addr = base_alligned + size_alligned;
-            temp[t_index].size = memmap[i].base_addr + memmap[i].size - temp[t_index].base_addr;
-            ++t_index;
+    reserve(base_alligned, size_alligned);
+}
 
-            memmap[i].size = base_alligned - memmap[i].base_addr;
-            break;
-        }
-    }
-    for (int i = 0; i < t_index; ++i) {
-        memmap[*index] = temp[i];
-        ++*index;
-    }
+void bitmap_reserve(uint64_t base, uint64_t size)
+{
+    mark(base, size, 0);
 }
 
 // Allocates a page
 uint64_t alloc_page()
 {
-    for (int i = *memm_index - 1; i > 0; --i) {
-        if (memm[i].size > 0) {
-            memm[i].base_addr += 0x1000;
-            memm[i].size -= 0x1000;
-
-            return memm[i].base_addr - 0x1000;
-        }
+    uint64_t page = 0;
+    // Find free page
+    for (uint64_t i = 4/*0x100000 >> (12*6)*/; i < bitmap_size; ++i) {
+        if (bitmap[i])
+            for (int j = 0; j < 64; ++j) {
+                if (bitmap_read_bit(i*64 + j)) {
+                    page = i*64 + j;
+                    goto skip;
+                }
+            }
     }
-    return -1;
+skip:
+    bitmap_mark_bit(page, 0);
+    page <<=12;
+
+    return page;
 }
 
 
 void init_mem(unsigned long multiboot_str)
 {
     print_str("Initializing memory\n");
-    // Walk multiboot structure to find useful memory
+    // Find highes available memory entry
+    uint64_t base = 0;
+    uint64_t end = 0;
+
       for (struct multiboot_tag *tag = (struct multiboot_tag *) (multiboot_str + 8); tag->type != MULTIBOOT_TAG_TYPE_END;
       tag = (struct multiboot_tag *) ((multiboot_uint8_t *) tag + ((tag->size + 7) & ~7))) {
         switch (tag->type)
@@ -77,13 +126,13 @@ void init_mem(unsigned long multiboot_str)
             for (struct multiboot_mmap_entry * mmap = ((struct multiboot_tag_mmap *)tag)->entries;
                 (multiboot_uint8_t *) mmap < (multiboot_uint8_t *) tag + tag->size;
                 mmap = (multiboot_memory_map_t *) ((unsigned long) mmap + ((struct multiboot_tag_mmap *) tag)->entry_size)){
-                    long long base_addr = mmap->addr;
-                    long long length = mmap->len;
+                    uint64_t base_addr = mmap->addr;
+                    uint64_t length = mmap->len;
                     int type = mmap->type;
 
                     if (type == MULTIBOOT_MEMORY_AVAILABLE) {
-                        // Usable memory
-                        mark_usable(temp_mem, &temp_mem_index, base_addr, length);
+                        if (base_addr > base) base = base_addr;
+                        end = base_addr + length;
                     }
                 }
         }
@@ -93,10 +142,10 @@ void init_mem(unsigned long multiboot_str)
     }
 
     // Reserve mbi
-    reserve(temp_mem, &temp_mem_index, multiboot_str, *(unsigned int*)multiboot_str);
+    reserve_unal(multiboot_str, *(unsigned int*)multiboot_str);
 
     // Reserve loader
-    reserve(temp_mem, &temp_mem_index, (int)&_exec_start, (int)&_exec_size);
+    reserve_unal((int)&_exec_start, (int)&_exec_size);
 
     // Reserve modules
     for (struct multiboot_tag *tag = (struct multiboot_tag *) (multiboot_str + 8); tag->type != MULTIBOOT_TAG_TYPE_END;
@@ -105,23 +154,52 @@ void init_mem(unsigned long multiboot_str)
         {
         case MULTIBOOT_TAG_TYPE_MODULE: {
             struct multiboot_tag_module * mod = (struct multiboot_tag_module *) tag;
-            reserve(temp_mem, &temp_mem_index, mod->mod_start, mod->mod_end - mod->mod_start);
+            reserve_unal(mod->mod_start, mod->mod_end - mod->mod_start);
         }
         default:
             break;
         }
     }
 
-    print_str("Memory stack:\n");
-    for (int i = 0; i < temp_mem_index; ++i) {
-        print_str("  Entry ");
-        print_hex(i);
-        print_str(": base: ");
-        print_hex(temp_mem[i].base_addr);
-        print_str(" size: ");
-        print_hex(temp_mem[i].size);
-        print_str("\n");
+    // Prepare bitmap
+    uint64_t high_u = 0;
+    for (int i = 0; i < reserved_i; ++i) {
+        uint64_t end = reserved[i].base + reserved[i].size;
+        if (end > high_u) high_u = end;
     }
+
+    bitmap_size = end/4096/8/8;
+    bitmap_size += 512 - bitmap_size % 512;
+    bitmap = (uint64_t*)high_u;
+    reserve(high_u, bitmap_size*8);
+
+    memclear((void*)bitmap, bitmap_size*8);
+
+    for (struct multiboot_tag *tag = (struct multiboot_tag *) (multiboot_str + 8); tag->type != MULTIBOOT_TAG_TYPE_END;
+      tag = (struct multiboot_tag *) ((multiboot_uint8_t *) tag + ((tag->size + 7) & ~7))) {
+        switch (tag->type)
+        {
+        case MULTIBOOT_TAG_TYPE_MMAP: {
+            for (struct multiboot_mmap_entry * mmap = ((struct multiboot_tag_mmap *)tag)->entries;
+                (multiboot_uint8_t *) mmap < (multiboot_uint8_t *) tag + tag->size;
+                mmap = (multiboot_memory_map_t *) ((unsigned long) mmap + ((struct multiboot_tag_mmap *) tag)->entry_size)){
+                    uint64_t base_addr = mmap->addr;
+                    uint64_t length = mmap->len;
+                    int type = mmap->type;
+
+                    if (type == MULTIBOOT_MEMORY_AVAILABLE) {
+                        mark_usable(mmap->addr, mmap->len);
+                    }
+                }
+        }
+        default:
+            break;
+        }
+    }
+
+    for (int i = 0; i < reserved_i; ++i)
+        bitmap_reserve(reserved[i].base, reserved[i].size);
+
 }
 
 void memclear(void * base, int size_bytes)
