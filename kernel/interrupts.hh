@@ -9,13 +9,13 @@
 
 
 struct PACKED Gate_Descriptor {
-    uint64_t offset0        :16;
-    uint16_t segment_sel    :16;
-    uint8_t ist             :3;
-    uint8_t reserved        :5;
-    uint8_t attributes      :4;
-    uint64_t offset1        :48;
-    uint64_t reserved1      :32;
+    uint16_t offset0;
+    uint16_t segment_sel;
+    uint8_t ist;
+    uint8_t attributes;
+    uint16_t offset1;
+    uint32_t offset2;
+    uint32_t reserved1;
 
     void set_address(void* addr);
     void init(void* addr, uint16_t segment, uint8_t gate, uint8_t priv_level);
@@ -25,14 +25,14 @@ struct PACKED Gate_Descriptor {
 
 };
 
-struct PACKED ALIGNED(0x1000) IDT {
-    Gate_Descriptor entries[256];
-};
+struct IDT {
+    Gate_Descriptor entries[256] = {};
+} PACKED ALIGNED(0x1000);
 
-struct PACKED IDT_descriptor {
+struct IDT_descriptor {
     u16 size;
     uint64_t offset;
-};
+} PACKED;
 
 extern IDT k_idt;
 

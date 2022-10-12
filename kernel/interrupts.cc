@@ -10,9 +10,9 @@ constexpr Gate_Descriptor::Gate_Descriptor(uint64_t offset, uint8_t ist, uint8_t
     : offset0(offset & 0xffff),
     segment_sel(KERNEL_CODE_SELECTOR),
     ist(ist),
-    reserved(0),
     attributes(type_attr),
-    offset1(offset >> 16),
+    offset1((offset >> 16) & 0xffff),
+    offset2((offset >> 32) & 0xffffffff),
     reserved1(0)
 {}
 
@@ -56,6 +56,7 @@ void init_interrupts()
 
 
     IDT_descriptor desc = {sizeof(IDT) - 1, (uint64_t)&k_idt};
+    t_print("IDT_Desc: size %h addr %h\n", desc.size, desc.offset);
     loadIDT(&desc);
 }
 

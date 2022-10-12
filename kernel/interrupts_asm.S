@@ -110,6 +110,7 @@ INTERRUPT_NOERR(128)
     .globl loadIDT
     .type loadIDT, @function
 loadIDT:
+    xchgw %bx, %bx
     lidt (%rdi)
     sti
     ret
