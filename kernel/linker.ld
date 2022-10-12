@@ -26,5 +26,6 @@ SECTIONS
         *(COMMON)
         *(.bss*)
     }
+    _free_after_kernel = ALIGN(4K);
 }
 
