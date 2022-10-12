@@ -5,6 +5,8 @@
 struct TSS {
 };
 
+#define KERNEL_CODE_SELECTOR 0x08
+
 struct GDT {
     GDT_entry Null {}; // always null
     GDT_entry _64bit_kernel_code {0, 0, 0, 0x9a, 0xa2, 0};

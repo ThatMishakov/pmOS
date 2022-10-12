@@ -19,8 +19,8 @@ extern "C" int _start(Kernel_Entry_Data* d)
     void * page = palloc.alloc_page();
     palloc.free(page);
 
-    //t_print("Initializing interrupts...\n");
-    //init_interrupts();
+    t_print("Initializing interrupts...\n");
+    init_interrupts();
 
     t_print("Returning to loader\n");
     return 0xdeadc0de;

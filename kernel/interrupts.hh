@@ -2,23 +2,30 @@
 #include <stdint.h>
 #include "types.hh"
 
+#define INTGATE 0x8e
+#define TRAPGATE 0xee
+
+#define IDT_USER 0b01100000
+
+
 struct PACKED Gate_Descriptor {
     uint64_t offset0        :16;
     uint16_t segment_sel    :16;
     uint8_t ist             :3;
     uint8_t reserved        :5;
-    uint8_t gate_type       :4;
-    uint8_t zero            :1;
-    uint8_t dpl             :2;
-    uint8_t present         :1;
+    uint8_t attributes      :4;
     uint64_t offset1        :48;
     uint64_t reserved1      :32;
 
     void set_address(void* addr);
     void init(void* addr, uint16_t segment, uint8_t gate, uint8_t priv_level);
+    constexpr Gate_Descriptor();
+    constexpr Gate_Descriptor(u64 offset, u8 ist, u8 type_attr);
+
+
 };
 
-struct PACKED IDT {
+struct PACKED ALIGNED(0x1000) IDT {
     Gate_Descriptor entries[256];
 };
 
