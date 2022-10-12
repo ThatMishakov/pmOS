@@ -71,8 +71,9 @@ void init_interrupts()
      k_idt.entries[47] = Gate_Descriptor((u64)&isr47, 0, INTGATE);
 
 
+    mask_PIC();
+
     IDT_descriptor desc = {sizeof(IDT) - 1, (uint64_t)&k_idt};
-    t_print("IDT_Desc: size %h addr %h\n", desc.size, desc.offset);
     loadIDT(&desc);
 }
 

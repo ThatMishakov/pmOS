@@ -39,6 +39,7 @@ extern IDT k_idt;
 void init_interrupts();
 
 extern "C" void loadIDT(IDT_descriptor* IDT_desc);
+extern "C" void mask_PIC();
 
 struct PACKED Interrupt_Stack_Frame {
     uint64_t r15;

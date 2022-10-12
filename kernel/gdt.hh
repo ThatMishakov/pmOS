@@ -5,7 +5,7 @@
 struct TSS {
 };
 
-#define KERNEL_CODE_SELECTOR 0x18
+#define KERNEL_CODE_SELECTOR 0x08
 
 struct GDT {
     GDT_entry Null {}; // always null

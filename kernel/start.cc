@@ -9,7 +9,7 @@ extern "C" int _start(Kernel_Entry_Data* d)
 {
     t_print("Iniaializing kernel\n");
     t_print("Initializing GDT...\n");
-    //init_gdt();
+    init_gdt();
 
     t_print("Initializing page frame allocator\n");
     palloc.init(d->mem_bitmap, d->mem_bitmap_size);
@@ -21,6 +21,9 @@ extern "C" int _start(Kernel_Entry_Data* d)
 
     t_print("Initializing interrupts...\n");
     init_interrupts();
+
+    t_print("Invoking interrupt 32...\n");
+    asm("int $32");
 
     t_print("Returning to loader\n");
     return 0xdeadc0de;
