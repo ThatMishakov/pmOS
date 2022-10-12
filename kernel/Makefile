@@ -15,7 +15,7 @@ INCLUDEDIR = include
 # User controllable CFLAGS.
 USERCFLAGS = -Wall -Wextra -O2 -pipe -target $(TARGET) 
 
-CPPFLAGS = $(INTERNALCFLAGS) -I$(INCLUDEDIR) -mcmodel=kernel $(USERCFLAGS)
+CPPFLAGS = $(INTERNALCFLAGS) -I$(INCLUDEDIR) -mcmodel=kernel $(USERCFLAGS) -MMD -MP
 #CPPFLAGS = $(CFLAGS)
 ASMFLAGS = -I$(INCLUDEDIR)
 LDFLAGS = $(INTERNALLDFLAGS) -target $(TARGET)
@@ -49,12 +49,12 @@ CCFILES := $(shell find ./ -type f -name '*.cc')
 CFILES := $(shell find ./ -type f -name '*.c')
 ASMFILES := $(shell find ./ -type f -name '*.S')
 OBJ    := $(CCFILES:.cc=.o) $(ASMFILES:.S=.o) $(CFILES:.c=.o) 
+DEP    := $(OBJ:.o=.d)
 
 $(KERNEL): $(OBJ) linker.ld
 	$(CC) $(LDFLAGS) $(OBJ) -o $@
-
 	
 clean:
-	rm -f $(KERNEL) *.o *.s
+	$(RM) $(KERNEL) $(OBJ) $(DEP)
 
-all: $(KERNEL)
+-include $(DEP)

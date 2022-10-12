@@ -1,4 +1,4 @@
-#include <gdt.hh>
+#include "gdt.hh"
 
 GDT kernel_gdt;
 

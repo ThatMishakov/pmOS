@@ -1,6 +1,6 @@
 #ifndef GDT_HH
 #define GDT_HH
-#include "../common/gdt.h"
+#include "common/gdt.h"
 
 struct TSS {
 };
