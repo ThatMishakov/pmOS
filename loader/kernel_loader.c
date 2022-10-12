@@ -6,6 +6,7 @@
 #include <utils.h>
 #include <misc.h>
 #include <paging.h>
+#include "include/mem.h"
 
 void load_kernel(uint64_t multiboot_info_str)
 {
@@ -74,6 +75,8 @@ void load_kernel(uint64_t multiboot_info_str)
 
     int (*entry)(Kernel_Entry_Data*) = (void*)elf_h->program_entry;
     Kernel_Entry_Data data;
+    data.mem_bitmap = bitmap;
+    data.mem_bitmap_size = bitmap_size;
     print_hex(entry(&data));
 }
 

@@ -7,6 +7,7 @@ public:
 
     // Returns -1 if not found
     void* alloc_page();
+    uint64_t alloc_page_ppn();
     void reserve(void* base, uint64_t size);
 
     void init(uint64_t * bitmap, uint64_t size);

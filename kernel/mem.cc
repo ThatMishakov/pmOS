@@ -1,5 +1,8 @@
 #include "mem.hh"
 #include <stdint.h>
+#include "utils.hh"
+#include "misc.hh"
+#include "paging.hh"
 
 PFrameAllocator palloc;
 
@@ -20,7 +23,13 @@ skip:
     bitmap_mark_bit(page, false, bitmap);
     if (page != -1) page <<=12;
 
+    t_print("Debug: Allocated page %h\n", page);
     return (void*)page;
+}
+
+uint64_t PFrameAllocator::alloc_page_ppn()
+{
+    return (uint64_t)((int64_t)alloc_page() >> 12);
 }
 
 void PFrameAllocator::mark(uint64_t base, uint64_t size, bool usable, uint64_t * bitmap)
@@ -28,7 +37,7 @@ void PFrameAllocator::mark(uint64_t base, uint64_t size, bool usable, uint64_t *
     uint64_t base_page = base >> 12;
     uint64_t size_page = size >> 12;
     if (size_page < 64) {
-        for (int i = 0; i < size_page; ++i) {
+        for (uint64_t i = 0; i < size_page; ++i) {
             bitmap_mark_bit(base_page + i, usable, bitmap);
         }
     } else { // TODO: INEFFICIENT!
@@ -58,6 +67,7 @@ void PFrameAllocator::mark_single(uint64_t base, bool usable, uint64_t * bitmap)
 
 void PFrameAllocator::free(void* page)
 {
+    t_print("Debug: Freed page %h\n", page);
     mark_single((uint64_t)page, true, bitmap);
 }
 
@@ -76,4 +86,22 @@ bool PFrameAllocator::bitmap_read_bit(uint64_t pos, uint64_t * bitmap)
     uint64_t i = pos >> 6;
 
     return !!(bitmap[i] & (0x01 << l));
+}
+
+void PFrameAllocator::init(uint64_t * bitmap, uint64_t size)
+{
+    this->bitmap = bitmap;
+    this->bitmap_size = size;
+}
+
+void PFrameAllocator::init_after_paging()
+{
+    void* addr = unoccupied;
+    unoccupied = (void*)((uint64_t)unoccupied + this->bitmap_size);
+
+    Page_Table_Argumments pta = {1, 0, 0, 1, 0};
+    for (uint64_t i = 0; i < bitmap_size; i += 4096) {
+        map((uint64_t)bitmap + i, (uint64_t)addr + i, pta);
+    }
+    bitmap = (uint64_t*)addr;
 }

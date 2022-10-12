@@ -1,6 +1,7 @@
 #ifndef MEM_H
 #define MEM_H
 #include "../../kernel/common/memory.h"
+#include <stdint.h>
 
 void bitmap_mark_bit(uint64_t pos, char b);
 char bitmap_read_bit(uint64_t pos);
@@ -17,5 +18,8 @@ uint64_t alloc_page();
 
 void memclear(void * base, int size_bytes);
 void memcpy(char * from, char * to, uint64_t bytes);
+
+extern uint64_t * bitmap;
+extern uint64_t bitmap_size;
 
 #endif

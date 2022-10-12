@@ -87,7 +87,7 @@ typedef struct {
     uint8_t user_access        : 1;
     uint8_t global             : 1;
     uint8_t execution_disabled : 1;
-    uint8_t   extra              : 3;
+    uint8_t extra              : 3;
 } Page_Table_Argumments;
 
 typedef struct {
