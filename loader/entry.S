@@ -82,6 +82,7 @@ _start:
     movw %ax, %es
     movw %ax, %fs
     movw %ax, %gs
+    movw %ax, %ss
 
     /* Far jump to main */
     ljmp   $(temp_gdt_64bit_code - temp_gdt), $main
