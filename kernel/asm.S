@@ -20,3 +20,11 @@ page_clear:
     movq $0, (%rdi, %rcx, 8);
     loop .start
     retq
+
+    .globl loadIDT
+    .type loadIDT, @function
+loadIDT:
+    lidt (%rdi)
+    sti
+    ret
+

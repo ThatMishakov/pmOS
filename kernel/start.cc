@@ -3,6 +3,7 @@
 #include "utils.hh"
 #include "misc.hh"
 #include "mem.hh"
+#include "interrupts.hh"
 
 extern "C" int _start(Kernel_Entry_Data* d)
 {
@@ -17,6 +18,9 @@ extern "C" int _start(Kernel_Entry_Data* d)
     t_print("Allocating and freeing a page just to test...\n");
     void * page = palloc.alloc_page();
     palloc.free(page);
+
+    //t_print("Initializing interrupts...\n");
+    //init_interrupts();
 
     t_print("Returning to loader\n");
     return 0xdeadc0de;
