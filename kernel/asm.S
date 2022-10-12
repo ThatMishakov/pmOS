@@ -21,10 +21,3 @@ page_clear:
     loop .start
     retq
 
-    .globl loadIDT
-    .type loadIDT, @function
-loadIDT:
-    lidt (%rdi)
-    sti
-    ret
-
