@@ -131,5 +131,5 @@ ints_handler:
     call interrupt_handler
     mov %rax, %rsp
     POPALL
-    add 16, %rsp // skip errcode and int no
+    add $16, %rsp // skip errcode and int no
     iretq
