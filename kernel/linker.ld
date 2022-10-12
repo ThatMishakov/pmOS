@@ -3,10 +3,11 @@ ENTRY(_start)
  
 SECTIONS
 {
-    /* We wanna be placed in the higher half, 2MiB above 0 in physical memory. */
-    /* Since we are going to use PIE, this is just the base load address, but the */
-    /* bootloader will be able to relocate us as it sees fit. */
-    . = 0xffffffff80200000;
+    /* Load into upper half, leaving the last page for recursive mapping */
+    . = 01777777760000000000000;
+
+    /* Leave a symbol indicating the start of the kernel space */
+    _kernel_start = .;
 
     /* Then let's place all the other traditional executable sections afterwards. */
     .text : {
