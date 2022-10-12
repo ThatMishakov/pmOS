@@ -14,6 +14,13 @@ bool get_page(uint64_t virtual_addr, Page_Table_Argumments arg)
     return b;
 }
 
+bool get_page_zeroed(uint64_t virtual_addr, Page_Table_Argumments arg)
+{
+    bool b = get_page(virtual_addr, arg);
+    if (b) page_clear((void*)virtual_addr);
+    return b;
+}
+
 bool map(uint64_t physical_addr, uint64_t virtual_addr, Page_Table_Argumments arg)
 {
     uint64_t addr = virtual_addr;
