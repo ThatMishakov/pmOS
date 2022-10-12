@@ -104,4 +104,5 @@ void PFrameAllocator::init_after_paging()
         map((uint64_t)bitmap + i, (uint64_t)addr + i, pta);
     }
     bitmap = (uint64_t*)addr;
+    t_print("Debug: Mapped the bitmap to kernel. Location: %h\n", bitmap);
 }
