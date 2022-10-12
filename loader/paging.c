@@ -45,6 +45,16 @@ void get_page(uint64_t addr, Page_Table_Argumments arg)
     addr >>= 9;
     uint64_t pml4_entry = addr & 0x1ff;
 
+    print_str("pml4i ");
+    print_hex(pml4_entry);
+    print_str(" pdpti ");
+    print_hex(pdpt_entry);
+    print_str(" pdiri ");
+    print_hex(pdir_entry);
+    print_str(" ptablei ");
+    print_hex(ptable_entry);
+    print_str("\n");
+
     PML4E *pml4e = &g_pml4.entries[pml4_entry];
     if (!pml4e->present) {
         *(uint64_t*)pml4e = alloc_page();
@@ -75,6 +85,6 @@ void get_page(uint64_t addr, Page_Table_Argumments arg)
         memclear(*(void ** )pte, 4096);
         pte->present = 1;
         pte->writeable = arg.writeable;
-        pte->execution_disabled = arg.execution_disabled;
+        pte->execution_disabled = 0;//arg.execution_disabled; // TODO
     }
 }

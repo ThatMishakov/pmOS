@@ -139,6 +139,11 @@ init_paging_tables:
     orl $0x000000403, %eax /* P W*/
     movl %eax, g_pml4
 
+    /* Point last entry to self */
+    //movl $g_pml4, %eax
+    //orl $0x000000403, %eax /* P W*/
+    //movl %eax, g_pml4+4096-8
+
     /* Add PDE entry */
     movl $g_pd_e0, %eax
     orl $0x000000403, %eax /* P W*/

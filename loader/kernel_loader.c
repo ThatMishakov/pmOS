@@ -9,6 +9,7 @@
 
 void load_kernel(uint64_t multiboot_info_str)
 {
+    print_str("Loading kernel\n");
     struct multiboot_tag_module * mod = 0;
 
     for (struct multiboot_tag * tag = (struct multiboot_tag *) (multiboot_info_str + 8); tag->type != MULTIBOOT_TAG_TYPE_END;
@@ -58,12 +59,15 @@ void load_kernel(uint64_t multiboot_info_str)
 
     tlb_flush();
 
+    print_str("Loading executable\n");
+
     for (int i = 0; i < elf_pheader_entries; ++i) {
         ELF_PHeader_64 * p = &elf_pheader[i];
         if (p->type == ELF_SEGMENT_LOAD) {
             uint64_t phys_loc = (uint64_t)elf_h + p->p_offset;
             uint64_t vaddr = p->p_vaddr;
             uint64_t size = p->p_filesz;
+            print_str("Loading elf segment...\n");
             memcpy((char*)phys_loc, (char*)vaddr, size);
         }
     }

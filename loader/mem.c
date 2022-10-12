@@ -125,7 +125,8 @@ void init_mem(unsigned long multiboot_str)
         case MULTIBOOT_TAG_TYPE_MMAP: {
             for (struct multiboot_mmap_entry * mmap = ((struct multiboot_tag_mmap *)tag)->entries;
                 (multiboot_uint8_t *) mmap < (multiboot_uint8_t *) tag + tag->size;
-                mmap = (multiboot_memory_map_t *) ((unsigned long) mmap + ((struct multiboot_tag_mmap *) tag)->entry_size)){
+                mmap = (multiboot_memory_map_t *) ((unsigned long) mmap + ((struct multiboot_tag_mmap *) tag)->entry_size)) 
+            {
                     uint64_t base_addr = mmap->addr;
                     uint64_t length = mmap->len;
                     int type = mmap->type;
@@ -216,12 +217,12 @@ void memclear(void * base, int size_bytes)
         }
 
         while ((uint64_t)base + 8 < (uint64_t)limit) {
-            *((uint64_t*)base) = 0x0000000000000000;
+            *((uint64_t*)base) = 0;
             base += 8;
         }
 
         while (p < limit) {
-            *p = 0x00;
+            *p = 0;
             ++p;
         }
     }
@@ -230,7 +231,7 @@ void memclear(void * base, int size_bytes)
 void memcpy(char * from, char * to, uint64_t bytes)
 {
     // TODO: **EXTREMELY** INEFFICIENT
-    while (bytes-->0) {
+    while ((bytes--) > 0) {
         *to = *from;
         ++to; ++from;
     }   
