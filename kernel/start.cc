@@ -9,7 +9,7 @@ extern "C" int _start(Kernel_Entry_Data* d)
 {
     t_print("Iniaializing kernel\n");
     t_print("Initializing GDT...\n");
-    init_gdt();
+    //init_gdt();
 
     t_print("Initializing page frame allocator\n");
     palloc.init(d->mem_bitmap, d->mem_bitmap_size);

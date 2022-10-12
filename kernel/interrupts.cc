@@ -53,6 +53,22 @@ void init_interrupts()
      k_idt.entries[29] = Gate_Descriptor((u64)&isr29, 0, INTGATE);
      k_idt.entries[30] = Gate_Descriptor((u64)&isr30, 0, INTGATE);
      k_idt.entries[31] = Gate_Descriptor((u64)&isr31, 0, INTGATE);
+     k_idt.entries[32] = Gate_Descriptor((u64)&isr32, 0, INTGATE);
+     k_idt.entries[33] = Gate_Descriptor((u64)&isr33, 0, INTGATE);
+     k_idt.entries[34] = Gate_Descriptor((u64)&isr34, 0, INTGATE);
+     k_idt.entries[35] = Gate_Descriptor((u64)&isr35, 0, INTGATE);
+     k_idt.entries[36] = Gate_Descriptor((u64)&isr36, 0, INTGATE);
+     k_idt.entries[37] = Gate_Descriptor((u64)&isr37, 0, INTGATE);
+     k_idt.entries[38] = Gate_Descriptor((u64)&isr38, 0, INTGATE);
+     k_idt.entries[39] = Gate_Descriptor((u64)&isr39, 0, INTGATE);
+     k_idt.entries[40] = Gate_Descriptor((u64)&isr40, 0, INTGATE);
+     k_idt.entries[41] = Gate_Descriptor((u64)&isr41, 0, INTGATE);
+     k_idt.entries[42] = Gate_Descriptor((u64)&isr42, 0, INTGATE);
+     k_idt.entries[43] = Gate_Descriptor((u64)&isr43, 0, INTGATE);
+     k_idt.entries[44] = Gate_Descriptor((u64)&isr44, 0, INTGATE);
+     k_idt.entries[45] = Gate_Descriptor((u64)&isr45, 0, INTGATE);
+     k_idt.entries[46] = Gate_Descriptor((u64)&isr46, 0, INTGATE);
+     k_idt.entries[47] = Gate_Descriptor((u64)&isr47, 0, INTGATE);
 
 
     IDT_descriptor desc = {sizeof(IDT) - 1, (uint64_t)&k_idt};

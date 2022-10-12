@@ -2,7 +2,7 @@
 #include <stdint.h>
 #include "types.hh"
 
-#define INTGATE 0x8e
+#define INTGATE 0x8e /*  */
 #define TRAPGATE 0xee
 
 #define IDT_USER 0b01100000
@@ -102,3 +102,21 @@ extern uint64_t isr28;
 extern uint64_t isr29;
 extern uint64_t isr30;
 extern uint64_t isr31;
+extern uint64_t isr32;
+extern uint64_t isr33;
+extern uint64_t isr34;
+extern uint64_t isr35;
+extern uint64_t isr36;
+extern uint64_t isr37;
+extern uint64_t isr38;
+extern uint64_t isr39;
+extern uint64_t isr40;
+extern uint64_t isr41;
+extern uint64_t isr42;
+extern uint64_t isr43;
+extern uint64_t isr44;
+extern uint64_t isr45;
+extern uint64_t isr46;
+extern uint64_t isr47;
+extern uint64_t isr127;
+extern uint64_t isr128;

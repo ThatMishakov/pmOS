@@ -110,7 +110,6 @@ INTERRUPT_NOERR(128)
     .globl loadIDT
     .type loadIDT, @function
 loadIDT:
-    xchgw %bx, %bx
     lidt (%rdi)
     sti
     ret
@@ -124,5 +123,6 @@ ints_handler:
     call interrupt_handler
     mov %rax, %rsp
     POPALL
+    xchgw %bx, %bx
     add 16, %rsp // skip errcode and int no
     iretq
