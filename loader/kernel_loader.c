@@ -41,6 +41,7 @@ void load_kernel(uint64_t multiboot_info_str)
     ELF_PHeader_64 * elf_pheader = (ELF_PHeader_64 *)((uint64_t)elf_h + elf_h->program_header);
     int elf_pheader_entries = elf_h->program_header_entries;
 
+    print_str("==> Allocating memory...\n");
     // Allocate memory
     for (int i = 0; i < elf_pheader_entries; ++i) {
         ELF_PHeader_64 * p = &elf_pheader[i];
@@ -60,7 +61,7 @@ void load_kernel(uint64_t multiboot_info_str)
 
     tlb_flush();
 
-    print_str("Loading executable\n");
+    print_str("==> Loading executable\n");
 
     for (int i = 0; i < elf_pheader_entries; ++i) {
         ELF_PHeader_64 * p = &elf_pheader[i];
@@ -68,15 +69,18 @@ void load_kernel(uint64_t multiboot_info_str)
             uint64_t phys_loc = (uint64_t)elf_h + p->p_offset;
             uint64_t vaddr = p->p_vaddr;
             uint64_t size = p->p_filesz;
-            print_str("Loading elf segment...\n");
             memcpy((char*)phys_loc, (char*)vaddr, size);
         }
     }
+    print_str("==> Jumping to kernel\n");
 
     int (*entry)(Kernel_Entry_Data*) = (void*)elf_h->program_entry;
     Kernel_Entry_Data data;
     data.mem_bitmap = bitmap;
     data.mem_bitmap_size = bitmap_size;
-    print_hex(entry(&data));
+    int r = entry(&data);
+    print_str("Kernel returned ");
+    print_hex(r);
+    print_str("\n");
 }
 

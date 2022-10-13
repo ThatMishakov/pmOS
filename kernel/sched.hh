@@ -2,6 +2,9 @@
 #include "interrupts.hh"
 #include "lists.hh"
 
+struct TaskPermissions {
+};
+
 struct TaskDescriptor {
     TaskPermissions perm;
     uint64_t page_table;
