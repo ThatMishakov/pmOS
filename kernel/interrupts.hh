@@ -4,6 +4,7 @@
 
 #define INTGATE 0x8e /*  */
 #define TRAPGATE 0xee
+#define IST 0x01
 
 #define IDT_USER 0b01100000
 
