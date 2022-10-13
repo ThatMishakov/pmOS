@@ -7,7 +7,6 @@ KERNEL = kernel
 CC = clang
 CPP = clang
 CXX = clang++
-AS = nasm
 TARGET := x86_64-elf
 
 INCLUDEDIR = include
@@ -22,7 +21,6 @@ LDFLAGS = $(INTERNALLDFLAGS) -target $(TARGET)
 
 # Internal link flags that should not be changed by the user.
 INTERNALLDFLAGS :=     \
-	-shared \
 	-Wl,-static,--no-dynamic-linker,-ztext \
 	-static-pie    \
 	-nostdlib      \
@@ -34,10 +32,8 @@ INTERNALCFLAGS  :=       \
 	-ffreestanding \
 	-mcmodel=large \
 	-mno-red-zone \
-	-mno-mmx \
-	-mno-sse \
-	-mno-sse2 \
-	-fPIE -fPIC
+	-mno-mmx -mno-sse -mno-sse2 \
+	-fPIE
  
 # Use find to glob all *.c files in the directory and extract the object names.
 CCFILES := $(shell find ./ -type f -name '*.cc')
