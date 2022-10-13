@@ -13,7 +13,7 @@ tlb_flush:
     ret
 
     .globl page_clear
-    .type page_clear, function
+    .type page_clear, @function
 page_clear:
     movq $512, %rcx
 .start:
@@ -21,3 +21,9 @@ page_clear:
     loop .start
     retq
 
+    .globl loadTSS
+    .type loadTSS, @function
+loadTSS:
+    movq %rdi, %rax
+    ltr %ax
+    ret

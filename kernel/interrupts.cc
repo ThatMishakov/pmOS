@@ -2,6 +2,7 @@
 #include "utils.hh"
 #include "gdt.hh"
 #include "palloc.hh"
+#include "gdt.hh"
 
 constexpr Gate_Descriptor::Gate_Descriptor() 
     : Gate_Descriptor(0, 0, 0)
@@ -80,9 +81,16 @@ void init_IDT()
     loadIDT(&desc);
 }
 
-void init_interrupts()
+void init_kernel_stack()
 {
     kernel_stack = (Stack*)palloc(sizeof(Stack)/4096);
+    //kernel_gdt.tss_entries[0].ist1 = (uint64_t)kernel_stack;
+    // TODO
+}
+
+void init_interrupts()
+{
+    init_kernel_stack();
     init_IDT();
 }
 
