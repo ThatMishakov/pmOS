@@ -8,3 +8,12 @@ void term_write(const char * str, uint64_t length);
 uint16_t strlen(const char *str);
 
 void t_print(const char *str,...);
+
+extern void printf(const char *str,...);
+
+inline void halt()
+{
+    while (1) {
+      asm ("hlt");
+    }
+}

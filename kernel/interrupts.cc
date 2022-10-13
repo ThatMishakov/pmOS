@@ -3,6 +3,7 @@
 #include "gdt.hh"
 #include "palloc.hh"
 #include "gdt.hh"
+#include "pagefault_manager.hh"
 
 constexpr Gate_Descriptor::Gate_Descriptor() 
     : Gate_Descriptor(0, 0, 0)
@@ -102,27 +103,27 @@ extern "C" u64 interrupt_handler(u64 rsp)
     t_print("Recieved interrupt: 0x%h -> ", stack_frame->intno);
     switch (intno) {
         case 0x0: 
-            t_print("Division by zero (DE)");
+            t_print("Division by zero (DE)\n");
             break;
         case 0x4:
-            t_print("Overflow (OF)");
+            t_print("Overflow (OF)\n");
             break;
         case 0x6: 
-            t_print("Invalid op-code (UD)");
+            t_print("Invalid op-code (UD)\n");
             break;
         case 0x8: 
-            t_print("Double fault (DF) [ABORT]");
+            t_print("Double fault (DF) [ABORT]\n");
             break;
         case 0xE:
-            t_print("Page fault (PE) - Error code: 0x%h", stack_frame->err);
+            t_print("Page fault (PE) - Error code: 0x%h\n", stack_frame->err);
+            pagefault_manager();
             break;
         case 0xD:
-            t_print("General Protection Fault (GP)");
+            t_print("General Protection Fault (GP)\n");
             break;
         default:
-            t_print("Not currently handled.");
+            t_print("Not currently handled.\n");
             break;
     }
-    t_print("\n");
     return rsp;
 }

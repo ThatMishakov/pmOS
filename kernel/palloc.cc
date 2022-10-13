@@ -4,6 +4,7 @@
 #include "common/memory.h"
 #include "paging.hh"
 #include "types.hh"
+#include "utils.hh"
 
 void* palloc_c(size_t number)
 {
@@ -70,10 +71,11 @@ void* palloc(size_t size)
     }
 
     UNLOCK(palloc_l)
+    t_print("Debug: allocated %i pages starting from %h\n", size, block);
     return (void*)block;
 }
 
-void pfree(void* start, size_t number)
+int pfree(void* start, size_t number)
 {
     // Spinlock
     LOCK(palloc_l)
@@ -102,5 +104,5 @@ void pfree(void* start, size_t number)
     }
 
     UNLOCK(palloc_l)
-    return;
+    return 0;
 }

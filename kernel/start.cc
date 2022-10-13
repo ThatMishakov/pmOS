@@ -4,6 +4,7 @@
 #include "misc.hh"
 #include "mem.hh"
 #include "interrupts.hh"
+#include "malloc.hh"
 
 extern "C" int _start(Kernel_Entry_Data* d)
 {
@@ -24,6 +25,13 @@ extern "C" int _start(Kernel_Entry_Data* d)
 
     t_print("Invoking interrupt 32...\n");
     asm("int $32");
+
+    /*
+    t_print("Testing malloc()...\n");
+    t_print("malloc(4): %h",malloc(4));
+    t_print("malloc(4): %h",malloc(4));
+    t_print("malloc(4): %h",malloc(4));
+    */
 
     t_print("Returning to loader\n");
     return 0xdeadc0de;

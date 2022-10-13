@@ -23,7 +23,6 @@ skip:
     bitmap_mark_bit(page, false, bitmap);
     if (page != -1) page <<=12;
 
-    t_print("Debug: Allocated page %h\n", page);
     return (void*)page;
 }
 

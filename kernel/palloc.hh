@@ -10,8 +10,8 @@ void* palloc(size_t number);
 void* palloc_c(size_t number);
 
 
-// Frees pages
-void pfree(void* start, size_t number);
+// Frees pages. Return 0 if successful
+int pfree(void* start, size_t number);
 
 // Internal sorted single linked list structure
 struct palloc_list {
