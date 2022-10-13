@@ -69,6 +69,12 @@ struct PACKED Interrupt_Stack_Frame {
     uint64_t ss;
 };
 
+#define STACK_SIZE KB(16)
+
+struct Stack {
+    uint8_t byte[STACK_SIZE];
+};
+
 extern "C" uint64_t interrupt_handler(uint64_t rsp);
 
 extern uint64_t isr0;

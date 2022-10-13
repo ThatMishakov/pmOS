@@ -1,6 +1,7 @@
 #include "interrupts.hh"
 #include "utils.hh"
 #include "gdt.hh"
+#include "palloc.hh"
 
 constexpr Gate_Descriptor::Gate_Descriptor() 
     : Gate_Descriptor(0, 0, 0)
@@ -19,7 +20,9 @@ constexpr Gate_Descriptor::Gate_Descriptor(uint64_t offset, uint8_t ist, uint8_t
 
 IDT k_idt = {};
 
-void init_interrupts()
+Stack* kernel_stack;
+
+void init_IDT()
 {
     k_idt.entries[0] = Gate_Descriptor((u64)&isr0, 0, INTGATE);
     k_idt.entries[1] = Gate_Descriptor((u64)&isr1, 0, TRAPGATE);
@@ -75,6 +78,12 @@ void init_interrupts()
 
     IDT_descriptor desc = {sizeof(IDT) - 1, (uint64_t)&k_idt};
     loadIDT(&desc);
+}
+
+void init_interrupts()
+{
+    kernel_stack = (Stack*)palloc(sizeof(Stack)/4096);
+    init_IDT();
 }
 
 extern "C" u64 interrupt_handler(u64 rsp)

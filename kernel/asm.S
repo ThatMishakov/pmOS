@@ -17,7 +17,7 @@ tlb_flush:
 page_clear:
     movq $512, %rcx
 .start:
-    movq $0, (%rdi, %rcx, 8);
+    movq $0, -8(%rdi, %rcx, 8);
     loop .start
     retq
 

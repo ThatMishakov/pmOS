@@ -15,7 +15,7 @@ void* palloc_c(size_t number)
     return pages;
 }
 
-palloc_list head;
+palloc_list head = {0,0};
 uint64_t from = (uint64_t)&_palloc_start;
 DECLARE_LOCK(palloc_l);
 
@@ -23,9 +23,8 @@ void* palloc(size_t size)
 {
     // Spinlock to prevent concurrent accesses
     LOCK(palloc_l)
-
     palloc_list* l = &head;
-    while (l->next != nullptr and l->next->number_pages < size) {
+    while (l->next != 0 and l->next->number_pages < size) {
         l = l->next;
     }
 
