@@ -3,7 +3,22 @@
 #include "common/gdt.h"
 
 struct TSS {
-};
+    uint32_t reserved0 = 0;
+    uint64_t rsp0 = 0;
+    uint64_t rsp1 = 0;
+    uint64_t rsp2 = 0;
+    uint64_t reserved = 0;
+    uint64_t ist1 = 0;
+    uint64_t ist2 = 0;
+    uint64_t ist3 = 0;
+    uint64_t ist4 = 0;
+    uint64_t ist5 = 0;
+    uint64_t ist6 = 0;
+    uint64_t ist7 = 0;
+    uint64_t reserved1 = 0;
+    uint16_t reserved2 = 0;
+    uint16_t iopb = 0;
+} PACKED;
 
 struct System_Segment_Descriptor {
     uint16_t limit0;
