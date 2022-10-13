@@ -28,7 +28,7 @@ SECTIONS
     }
     _free_after_kernel = ALIGN(4K);
 
-    . = . + 2048M;
-    _palloc_start = ALIGN(4K);
+    //. = . + 2048M;
+    _palloc_start = ALIGN(4K) + 0xb00b500000;
 }
 
