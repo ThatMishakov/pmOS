@@ -3,6 +3,7 @@
 #include "linker.hh"
 #include "common/memory.h"
 #include "paging.hh"
+#include "types.hh"
 
 void* palloc_c(size_t number)
 {
@@ -16,13 +17,20 @@ void* palloc_c(size_t number)
 
 palloc_list head;
 uint64_t from = (uint64_t)&_palloc_start;
+DECLARE_LOCK(palloc_l);
 
 void* palloc(size_t size)
 {
+    // Spinlock to prevent concurrent accesses
+    LOCK(palloc_l)
+
     palloc_list* l = &head;
     while (l->next != nullptr and l->next->number_pages < size) {
         l = l->next;
     }
+
+    // Variable to be returned
+    palloc_list* block;
 
     // No block of suitable size
     if (l->next == nullptr) {
@@ -41,12 +49,11 @@ void* palloc(size_t size)
             get_page(p_head + i, arg);
         }
 
-        return (void*)p_head;
+        block = (palloc_list*)p_head;
     } else if (l->next->number_pages == size) { // Block of just the right size
         // Remove the block from list and return its base address
-        palloc_list* block = l->next;
+        block = l->next;
         l->next = l->next->next;
-        return (void*)block;
     } else { // Block of larger size than needed
         // Adjust size in pages to bytes
         uint64_t size_p = size * 4096;
@@ -56,19 +63,22 @@ void* palloc(size_t size)
         new_block->number_pages = l->next->number_pages - size;
 
         // Save the interesting block
-        palloc_list* block = l->next;
+        block = l->next;
 
         // Link new block instead of old one
         new_block->next = l->next->next;
         l->next = new_block;
-
-        // Return the right block
-        return (void*)block;
     }
+
+    UNLOCK(palloc_l)
+    return (void*)block;
 }
 
 void pfree(void* start, size_t number)
 {
+    // Spinlock
+    LOCK(palloc_l)
+
     // Create a list head entry
     palloc_list* page = (palloc_list*)start;
     page->number_pages = number;
@@ -92,5 +102,6 @@ void pfree(void* start, size_t number)
         page->next = page->next->next;
     }
 
+    UNLOCK(palloc_l)
     return;
 }
