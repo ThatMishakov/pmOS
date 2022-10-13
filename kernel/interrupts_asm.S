@@ -36,7 +36,9 @@
 
 #define SAVE_INT_FRAME \
     push %rax; \
-    movq int_frame, %rax; \
+    lea int_frame(%rip), %rax; \
+    movq (%rax), %rax; \
+    movq (%rax), %rax; \
     movq %r15, 0(%rax); \
     movq %r14, 8(%rax); \
     movq %r13, 16(%rax); \
@@ -60,7 +62,8 @@
     popq 166(%rax); /* ss */
 
 #define RESTORE_INT_FRAME \
-    movq int_frame, %rax; \
+    lea int_frame(%rip), %rax; \
+    movq (%rax), %rax; \
     movq 0(%rax), %r15; \
     movq 8(%rax), %r14; \
     movq 16(%rax), %r13; \

@@ -25,6 +25,7 @@ constexpr Gate_Descriptor::Gate_Descriptor(uint64_t offset, uint8_t ist, uint8_t
 IDT k_idt = {};
 
 Stack* kernel_stack;
+Interrupt_Stack_Frame* int_frame;
 
 void init_IDT()
 {
@@ -94,6 +95,7 @@ void init_kernel_stack()
 
 void init_interrupts()
 {
+    int_frame = new Interrupt_Stack_Frame;
     init_IDT();
     init_kernel_stack();
 }
