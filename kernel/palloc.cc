@@ -16,7 +16,7 @@ void* palloc_c(size_t number)
     return pages;
 }
 
-palloc_list head = {0,0};
+palloc_list palloc_head = {0,0};
 uint64_t from = (uint64_t)&_palloc_start;
 DECLARE_LOCK(palloc_l);
 
@@ -24,7 +24,7 @@ void* palloc(size_t size)
 {
     // Spinlock to prevent concurrent accesses
     LOCK(palloc_l)
-    palloc_list* l = &head;
+    palloc_list* l = &palloc_head;
     while (l->next != 0 and l->next->number_pages < size) {
         l = l->next;
     }
@@ -80,12 +80,12 @@ int pfree(void* start, size_t number)
     // Spinlock
     LOCK(palloc_l)
 
-    // Create a list head entry
+    // Create a list palloc_head entry
     palloc_list* page = (palloc_list*)start;
     page->number_pages = number;
 
     // Insert into the list
-    palloc_list* p = &head; // Head should always be lower in memory than allocator
+    palloc_list* p = &palloc_head; // palloc_head should always be lower in memory than allocator
 
     // Find a position to insert
     while (p->next != nullptr and p->next < page) {

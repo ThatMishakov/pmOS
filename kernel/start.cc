@@ -26,12 +26,11 @@ extern "C" int _start(Kernel_Entry_Data* d)
     t_print("Invoking interrupt 32...\n");
     asm("int $32");
 
-    /*
+    
     t_print("Testing malloc()...\n");
-    t_print("malloc(4): %h",malloc(4));
-    t_print("malloc(4): %h",malloc(4));
-    t_print("malloc(4): %h",malloc(4));
-    */
+    t_print("new char[2]: %h\n",new char[2]);
+    t_print("new char[8]: %h\n",new char[8]);
+    t_print("new char[32]: %h\n",new char[32]);
 
     t_print("Returning to loader\n");
     return 0xdeadc0de;

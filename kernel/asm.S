@@ -16,6 +16,15 @@ tlb_flush:
     .type page_clear, @function
 page_clear:
     movq $512, %rcx
+.start_c:
+    movq $0, -8(%rdi, %rcx, 8);
+    loop .start_c
+    retq
+
+   .globl memset
+    .type memset, @function
+memset:
+    movq %rdi, %rcx
 .start:
     movq $0, -8(%rdi, %rcx, 8);
     loop .start

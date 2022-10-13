@@ -170,7 +170,7 @@ void init_mem(unsigned long multiboot_str)
     }
 
     bitmap_size = end/4096/8/8;
-    bitmap_size += 512 - bitmap_size % 512;
+    if (bitmap_size % 512) bitmap_size += 512 - bitmap_size % 512;
     bitmap = (uint64_t*)high_u;
     reserve(high_u, bitmap_size*8);
 
