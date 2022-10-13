@@ -10,3 +10,5 @@ struct TaskDescriptor {
     uint64_t page_table;
     Interrupt_Stack_Frame stack;
 };
+
+void init_scheduling();

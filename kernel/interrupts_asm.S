@@ -181,6 +181,3 @@ ints_handler:
     call interrupt_handler
     RESTORE_INT_FRAME
     iretq
-
-int_fram:
-    .quad 

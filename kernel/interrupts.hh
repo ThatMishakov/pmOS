@@ -70,6 +70,8 @@ struct PACKED Interrupt_Stack_Frame {
     uint64_t ss;
 };
 
+extern Interrupt_Stack_Frame* int_frame;
+
 #define STACK_SIZE KB(16)
 
 struct Stack {
