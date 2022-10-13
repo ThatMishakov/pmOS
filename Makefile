@@ -9,6 +9,9 @@ $(SUBDIRS):
 emul: grub/pmOS.iso
 	bochs-debugger -q -f .bochsrc
 
+bochs: grub/pmOS.iso
+	bochs -q -f .bochsrc
+
 qemu: grub/pmOS.iso
 	qemu-system-x86_64 -cdrom grub/pmOS.iso  -no-reboot -d cpu_reset
 
