@@ -23,7 +23,7 @@ LDFLAGS = $(INTERNALLDFLAGS) -target $(TARGET)
 # Internal link flags that should not be changed by the user.
 INTERNALLDFLAGS :=     \
 	-shared \
-	-fno-pic -no-pie \
+	-fno-pic \
 	-Wl,-static,--no-dynamic-linker,-ztext \
 	-static-pie    \
 	-nostdlib      \

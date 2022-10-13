@@ -5,6 +5,21 @@
 struct TSS {
 };
 
+struct System_Segment_Descriptor {
+    uint16_t limit0;
+    uint16_t base0;
+    uint8_t  base1;
+    uint8_t  access;
+    uint8_t  limit1: 4;
+    uint8_t  flags:  4;
+    uint8_t  base2;
+    uint32_t base3;
+    uint32_t reserved;
+
+    constexpr System_Segment_Descriptor();
+    constexpr System_Segment_Descriptor(uint64_t base, uint32_t limit, uint8_t access, uint8_t flags);
+};
+
 #define KERNEL_CODE_SELECTOR 0x08
 
 struct GDT {
