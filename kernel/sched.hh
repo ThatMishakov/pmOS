@@ -14,6 +14,11 @@ struct TaskDescriptor {
 struct sched_pqueue {
     TaskDescriptor* first = nullptr;
     TaskDescriptor* last = nullptr;
+
+    void push_back(TaskDescriptor*);
+    void push_front(TaskDescriptor*);
+    TaskDescriptor* pop_front();
+    TaskDescriptor* get_first();
 };
 
 extern TaskDescriptor* current_task;
