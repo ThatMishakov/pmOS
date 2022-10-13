@@ -23,7 +23,6 @@ LDFLAGS = $(INTERNALLDFLAGS) -target $(TARGET)
 # Internal link flags that should not be changed by the user.
 INTERNALLDFLAGS :=     \
 	-shared \
-	-fno-pic \
 	-Wl,-static,--no-dynamic-linker,-ztext \
 	-static-pie    \
 	-nostdlib      \
@@ -32,17 +31,13 @@ INTERNALLDFLAGS :=     \
  
 # Internal C flags that should not be changed by the user.
 INTERNALCFLAGS  :=       \
-	-I.                  \
-	-ffreestanding       \
-	-fno-stack-protector \
-	-fno-pic -fpie       \
-	-mno-80387           \
-	-mno-mmx             \
-	-mno-3dnow           \
-	-mno-sse             \
-	-mno-sse2            \
-	-mno-red-zone 		\
-	-mgeneral-regs-only
+	-ffreestanding \
+	-mcmodel=large \
+	-mno-red-zone \
+	-mno-mmx \
+	-mno-sse \
+	-mno-sse2 \
+	-fPIE -fPIC
  
 # Use find to glob all *.c files in the directory and extract the object names.
 CCFILES := $(shell find ./ -type f -name '*.cc')
