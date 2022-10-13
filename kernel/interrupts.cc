@@ -85,14 +85,14 @@ void init_IDT()
 void init_kernel_stack()
 {
     kernel_stack = (Stack*)palloc(sizeof(Stack)/4096);
-    //kernel_gdt.tss_entries[0].ist1 = (uint64_t)kernel_stack;
-    // TODO
+    kernel_gdt.SSD_entries[0] = System_Segment_Descriptor((uint64_t) new TSS, 0, 0, 0);
+    kernel_gdt.SSD_entries[0].tss()->ist1 = kernel_stack;
 }
 
 void init_interrupts()
 {
-    init_kernel_stack();
     init_IDT();
+    init_kernel_stack();
 }
 
 extern "C" u64 interrupt_handler(u64 rsp)
@@ -120,6 +120,7 @@ extern "C" u64 interrupt_handler(u64 rsp)
             break;
         case 0xD:
             t_print("General Protection Fault (GP)\n");
+            halt();
             break;
         default:
             t_print("Not currently handled.\n");

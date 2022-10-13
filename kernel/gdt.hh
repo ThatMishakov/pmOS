@@ -1,20 +1,21 @@
 #ifndef GDT_HH
 #define GDT_HH
 #include "common/gdt.h"
+#include "interrupts.hh"
 
 struct TSS {
     uint32_t reserved0 = 0;
-    uint64_t rsp0 = 0;
-    uint64_t rsp1 = 0;
-    uint64_t rsp2 = 0;
+    Stack* rsp0 = 0;
+    Stack* rsp1 = 0;
+    Stack* rsp2 = 0;
     uint64_t reserved = 0;
-    uint64_t ist1 = 0;
-    uint64_t ist2 = 0;
-    uint64_t ist3 = 0;
-    uint64_t ist4 = 0;
-    uint64_t ist5 = 0;
-    uint64_t ist6 = 0;
-    uint64_t ist7 = 0;
+    Stack* ist1 = 0;
+    Stack* ist2 = 0;
+    Stack* ist3 = 0;
+    Stack* ist4 = 0;
+    Stack* ist5 = 0;
+    Stack* ist6 = 0;
+    Stack* ist7 = 0;
     uint64_t reserved1 = 0;
     uint16_t reserved2 = 0;
     uint16_t iopb = 0;
@@ -31,8 +32,15 @@ struct System_Segment_Descriptor {
     uint32_t base3;
     uint32_t reserved;
 
-    constexpr System_Segment_Descriptor();
-    constexpr System_Segment_Descriptor(uint64_t base, uint32_t limit, uint8_t access, uint8_t flags);
+    constexpr System_Segment_Descriptor()
+        : System_Segment_Descriptor(0, 0, 0, 0) {}
+    constexpr System_Segment_Descriptor(uint64_t base, uint32_t limit, uint8_t access, uint8_t flags)
+        : limit0(limit & 0xffff), base0(base & 0xffff), base1((base >> 16) & 0xff),
+          access(access), limit1((limit >> 16) & 0xff), flags(flags),
+          base2((base >> 24) & 0xff), base3((base >> 32) & 0xffffffff),
+          reserved(0) {}
+
+    TSS *tss();
 };
 
 #define KERNEL_CODE_SELECTOR 0x08
