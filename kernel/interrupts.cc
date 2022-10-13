@@ -100,9 +100,9 @@ void init_interrupts()
     init_kernel_stack();
 }
 
-extern "C" u64 interrupt_handler(u64 rsp)
+extern "C" void interrupt_handler()
 {
-    Interrupt_Stack_Frame *stack_frame = reinterpret_cast<Interrupt_Stack_Frame *>(rsp); 
+    Interrupt_Stack_Frame *stack_frame = int_frame; 
     u64 intno = stack_frame->intno;
 
     t_print("Recieved interrupt: 0x%h -> ", stack_frame->intno);
@@ -131,5 +131,4 @@ extern "C" u64 interrupt_handler(u64 rsp)
             t_print("Not currently handled.\n");
             break;
     }
-    return rsp;
 }

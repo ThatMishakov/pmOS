@@ -76,7 +76,7 @@ struct Stack {
     uint8_t byte[STACK_SIZE];
 };
 
-extern "C" uint64_t interrupt_handler(uint64_t rsp);
+extern "C" void interrupt_handler();
 
 extern uint64_t isr0;
 extern uint64_t isr1;

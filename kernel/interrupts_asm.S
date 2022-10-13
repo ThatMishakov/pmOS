@@ -36,54 +36,50 @@
 
 #define SAVE_INT_FRAME \
     push %rax; \
-    lea int_frame(%rip), %rax; \
-    movq (%rax), %rax; \
-    movq (%rax), %rax; \
+    movq int_frame(%rip), %rax; \
     movq %r15, 0(%rax); \
     movq %r14, 8(%rax); \
-    movq %r13, 16(%rax); \
-    movq %r12, 24(%rax); \
-    movq %r11, 32(%rax); \
-    movq %r10, 48(%rax); \
-    movq %r9, 56(%rax); \
-    movq %r8, 64(%rax); \
-    movq %rbp, 72(%rax); \
-    movq %rdi, 80(%rax); \
-    movq %rsi, 88(%rax); \
-    movq %rdx, 96(%rax); \
-    movq %rcx, 104(%rax); \
-    movq %rbx, 112(%rax); \
-    popq 120(%rax); /* %rax */\
-    popq 128(%rax); /* intno */\
-    popq 136(%rax); /* err */\
-    popq 144(%rax); /* rip */\
-    popq 152(%rax); /* cs */\
-    popq 160(%rax); /* rsp */\
-    popq 166(%rax); /* ss */
+    movq %r13, 12(%rax); \
+    movq %r12, 16(%rax); \
+    movq %r11, 24(%rax); \
+    movq %r10, 32(%rax); \
+    movq %r9, 48(%rax); \
+    movq %r8, 56(%rax); \
+    movq %rbp, 64(%rax); \
+    movq %rdi, 72(%rax); \
+    movq %rsi, 80(%rax); \
+    movq %rdx, 88(%rax); \
+    movq %rcx, 96(%rax); \
+    movq %rbx, 104(%rax); \
+    popq 112(%rax); /* %rax */\
+    popq 120(%rax); /* intno */\
+    popq 128(%rax); /* err */\
+    popq 136(%rax); /* rip */\
+    popq 144(%rax); /* cs */\
+    popq 152(%rax); /* rsp */\
+    popq 160(%rax); /* ss */
 
 #define RESTORE_INT_FRAME \
-    lea int_frame(%rip), %rax; \
-    movq (%rax), %rax; \
+    movq int_frame(%rip), %rax; \
     movq 0(%rax), %r15; \
     movq 8(%rax), %r14; \
-    movq 16(%rax), %r13; \
-    movq 24(%rax), %r12; \
-    movq 32(%rax), %r11; \
-    movq 48(%rax), %r10; \
-    movq 56(%rax), %r9; \
-    movq 64(%rax), %r8; \
-    movq 72(%rax), %rbp; \
-    movq 80(%rax), %rdi; \
-    movq 88(%rax), %rsi; \
-    movq 96(%rax), %rdx; \
-    movq 104(%rax), %rcx; \
-    movq 112(%rax), %rbx; \
-    pushq 166(%rax); /* ss */ \
-    pushq 160(%rax); /* rsp */ \
-    pushq 152(%rax); /* cs */ \
-    pushq 144(%rax); /* rip */ \
-    pushq 144(%rax); /* rip */ \
-    movq 120(%rax), %rax /* Restore %rax */
+    movq 12(%rax), %r13; \
+    movq 16(%rax), %r12; \
+    movq 24(%rax), %r11; \
+    movq 32(%rax), %r10; \
+    movq 48(%rax), %r9; \
+    movq 56(%rax), %r8; \
+    movq 64(%rax), %rbp; \
+    movq 72(%rax), %rdi; \
+    movq 80(%rax), %rsi; \
+    movq 88(%rax), %rdx; \
+    movq 96(%rax), %rcx; \
+    movq 104(%rax), %rbx; \
+    pushq 160(%rax); /* ss */ \
+    pushq 152(%rax); /* rsp */ \
+    pushq 144(%rax); /* cs */ \
+    pushq 136(%rax); /* rip */ \
+    movq 112(%rax), %rax /* Restore %rax */
     
     
     
@@ -182,11 +178,8 @@ mask_PIC:
 ints_handler:
     cld
     SAVE_INT_FRAME
-    mov %rsp, %rdi
     call interrupt_handler
-    mov %rax, %rsp
     RESTORE_INT_FRAME
-    add $16, %rsp // skip errcode and int no
     iretq
 
 int_fram:
