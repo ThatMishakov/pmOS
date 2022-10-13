@@ -2,6 +2,7 @@
 #include "utils.hh"
 #include "gdt.hh"
 #include "palloc.hh"
+#include "malloc.hh"
 #include "gdt.hh"
 #include "pagefault_manager.hh"
 #include "asm.hh"
@@ -86,7 +87,7 @@ void init_IDT()
 void init_kernel_stack()
 {
     kernel_stack = (Stack*)palloc(sizeof(Stack)/4096);
-    kernel_gdt.SSD_entries[0] = System_Segment_Descriptor((uint64_t) new TSS, sizeof(TSS), 0x89, 0x02);
+    kernel_gdt.SSD_entries[0] = System_Segment_Descriptor((uint64_t) calloc(1,sizeof(TSS)), sizeof(TSS), 0x89, 0x02);
     kernel_gdt.SSD_entries[0].tss()->ist1 = (uint64_t)kernel_stack + sizeof(Stack);
     loadTSS(0x28);
 }

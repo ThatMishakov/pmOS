@@ -24,7 +24,7 @@ page_clear:
    .globl memset
     .type memset, @function
 memset:
-    movq %rdi, %rcx
+    movq %rsi, %rcx
 .start:
     movq $0, -8(%rdi, %rcx, 8);
     loop .start

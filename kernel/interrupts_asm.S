@@ -132,5 +132,4 @@ ints_handler:
     mov %rax, %rsp
     POPALL
     add $16, %rsp // skip errcode and int no
-    xchgw %bx, %bx
     iretq
