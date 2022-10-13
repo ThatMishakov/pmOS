@@ -1,14 +1,21 @@
 #pragma once
 #include "interrupts.hh"
-#include "lists.hh"
 
 struct TaskPermissions {
 };
 
 struct TaskDescriptor {
+    Interrupt_Register_Frame regs;
     TaskPermissions perm;
     uint64_t page_table;
-    Interrupt_Stack_Frame stack;
+    TaskDescriptor* q_next;
 };
+
+struct sched_pqueue {
+    TaskDescriptor* first = nullptr;
+    TaskDescriptor* last = nullptr;
+};
+
+extern TaskDescriptor* current_task;
 
 void init_scheduling();

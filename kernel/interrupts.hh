@@ -42,7 +42,7 @@ void init_interrupts();
 extern "C" void loadIDT(IDT_descriptor* IDT_desc);
 extern "C" void mask_PIC();
 
-struct PACKED Interrupt_Stack_Frame {
+struct PACKED Interrupt_Register_Frame {
     uint64_t r15;
     uint64_t r14;
     uint64_t r13;
@@ -69,8 +69,6 @@ struct PACKED Interrupt_Stack_Frame {
     uint64_t rsp;
     uint64_t ss;
 };
-
-extern Interrupt_Stack_Frame* int_frame;
 
 #define STACK_SIZE KB(16)
 

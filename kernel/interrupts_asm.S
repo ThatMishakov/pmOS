@@ -36,7 +36,7 @@
 
 #define SAVE_INT_FRAME \
     push %rax; \
-    movq int_frame(%rip), %rax; \
+    movq current_task(%rip), %rax; \
     movq %r15, 0(%rax); \
     movq %r14, 8(%rax); \
     movq %r13, 12(%rax); \
@@ -60,7 +60,7 @@
     popq 160(%rax); /* ss */
 
 #define RESTORE_INT_FRAME \
-    movq int_frame(%rip), %rax; \
+    movq current_task(%rip), %rax; \
     movq 0(%rax), %r15; \
     movq 8(%rax), %r14; \
     movq 12(%rax), %r13; \
