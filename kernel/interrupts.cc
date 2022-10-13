@@ -4,6 +4,7 @@
 #include "palloc.hh"
 #include "gdt.hh"
 #include "pagefault_manager.hh"
+#include "asm.hh"
 
 constexpr Gate_Descriptor::Gate_Descriptor() 
     : Gate_Descriptor(0, 0, 0)
@@ -85,8 +86,9 @@ void init_IDT()
 void init_kernel_stack()
 {
     kernel_stack = (Stack*)palloc(sizeof(Stack)/4096);
-    kernel_gdt.SSD_entries[0] = System_Segment_Descriptor((uint64_t) new TSS, 0, 0, 0);
+    kernel_gdt.SSD_entries[0] = System_Segment_Descriptor((uint64_t) new TSS, sizeof(TSS), 0x80, 0x01);
     kernel_gdt.SSD_entries[0].tss()->ist1 = kernel_stack;
+    loadTSS(0x30);
 }
 
 void init_interrupts()
@@ -119,7 +121,7 @@ extern "C" u64 interrupt_handler(u64 rsp)
             pagefault_manager();
             break;
         case 0xD:
-            t_print("General Protection Fault (GP)\n");
+            t_print("General Protection Fault (GP) error %h\n", stack_frame->err);
             halt();
             break;
         default:
