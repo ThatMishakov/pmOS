@@ -6,6 +6,7 @@
 #include "interrupts.hh"
 #include "malloc.hh"
 #include "sched.hh"
+#include "messaging.hh"
 
 extern "C" int _start(Kernel_Entry_Data* d)
 {
@@ -29,6 +30,8 @@ extern "C" int _start(Kernel_Entry_Data* d)
 
     t_print("Invoking interrupt 0xCA...\n");
     asm("int $0xCA");
+
+    Vector<Message> v;
 
     t_print("Returning to loader\n");
     return 0xdeadc0de;

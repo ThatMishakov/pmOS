@@ -4,7 +4,7 @@
 template<typename T>
 class Vector {
 private:
-    static const size_t start_size = 64;
+    static const size_t start_size = 16;
 
     T* ptr = nullptr;
     size_t a_capacity = 0;
@@ -12,7 +12,7 @@ private:
 public:
     Vector();
     Vector(size_t);
-    Vector(Vector&);
+    Vector(const Vector&);
     Vector(size_t, const T&);
     ~Vector();
 
@@ -48,7 +48,7 @@ Vector<T>::Vector()
 {
     a_size = 0;
     a_capacity = start_size;
-    ptr = new T[a_capacity];
+    ptr = new T[start_size];
 }
 
 template<typename T>
