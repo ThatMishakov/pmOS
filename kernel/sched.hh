@@ -9,6 +9,7 @@ struct TaskDescriptor {
     TaskPermissions perm;
     uint64_t page_table;
     TaskDescriptor* q_next;
+    TaskDescriptor* q_prev;
 };
 
 struct sched_pqueue {
@@ -17,6 +18,7 @@ struct sched_pqueue {
 
     void push_back(TaskDescriptor*);
     void push_front(TaskDescriptor*);
+    void erase(TaskDescriptor*);
     TaskDescriptor* pop_front();
     TaskDescriptor* get_first();
 };
