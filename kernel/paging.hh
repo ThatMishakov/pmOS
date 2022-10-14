@@ -10,8 +10,20 @@ uint64_t get_page_zeroed(uint64_t virtual_addr, Page_Table_Argumments arg);
 // Return true if mapped the page successfully
 uint64_t map(uint64_t physical_addr, uint64_t virtual_addr, Page_Table_Argumments arg);
 
-// Returns true if the page is allocated
-bool is_allocated(int64_t virtual_addr);
+// Release the page
+uint64_t release_page_s(uint64_t virtual_address);
+
+enum Page_Types {
+    NORMAL,
+    HUGE_2M,
+    HUGE_1G,
+    UNALLOCATED
+};
+
+// Returns page type
+Page_Types page_type(int64_t virtual_addr);
+
+
 
 inline PML4* pml4_of(UNUSED uint64_t addr)
 {

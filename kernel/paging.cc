@@ -105,7 +105,7 @@ uint64_t map(uint64_t physical_addr, uint64_t virtual_addr, Page_Table_Argumment
     return SUCCESS;
 }
 
-bool is_allocated(int64_t virtual_addr)
+Page_Types page_type(int64_t virtual_addr)
 {
     uint64_t addr = virtual_addr;
     addr >>= 12;
@@ -120,19 +120,25 @@ bool is_allocated(int64_t virtual_addr)
 
     // Check if PDPT is present
     PML4E& pml4e = pml4()->entries[pml4_entry];
-    if (not pml4e.present) return false;
+    if (not pml4e.present) return Page_Types::UNALLOCATED;
 
     // Check if PD is present 
     PDPTE& pdpte = pdpt_of(virtual_addr)->entries[pdpt_entry];
-    if (pdpte.size) return true;
-    if (not pdpte.present) return false;
+    if (pdpte.size) return Page_Types::HUGE_1G;
+    if (not pdpte.present) return Page_Types::UNALLOCATED;
 
     // Check if PT is present
     PDE& pde = pd_of(virtual_addr)->entries[pdir_entry];
-    if (pde.size) return true;
-    if (not pde.present) return false;
+    if (pde.size) return Page_Types::HUGE_2M;
+    if (not pde.present) return Page_Types::UNALLOCATED;
 
     // Check if page is present
     PTE& pte = pt_of(virtual_addr)->entries[ptable_entry];
-    return pte.present;
+    if (pte.present) return Page_Types::NORMAL;
+    return Page_Types::UNALLOCATED;
+}
+
+uint64_t release_page_s(uint64_t virtual_address)
+{
+    return ERROR_NOT_IMPLEMENTED;
 }
