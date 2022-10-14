@@ -1,0 +1,7 @@
+#ifndef KERNEL_ERRORS_H
+#define KERNEL_ERRORS_H
+
+#define ERROR_UNSUPPORTED -1
+#define ERROR_NOT_IMPLEMENTED -2
+
+#endif
