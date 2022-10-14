@@ -6,6 +6,7 @@
 #include "gdt.hh"
 #include "pagefault_manager.hh"
 #include "asm.hh"
+#include "sched.hh"
 
 constexpr Gate_Descriptor::Gate_Descriptor() 
     : Gate_Descriptor(0, 0, 0)
@@ -25,7 +26,6 @@ constexpr Gate_Descriptor::Gate_Descriptor(uint64_t offset, uint8_t ist, uint8_t
 IDT k_idt = {};
 
 Stack* kernel_stack;
-Interrupt_Stack_Frame* int_frame;
 
 void init_IDT()
 {
@@ -95,14 +95,13 @@ void init_kernel_stack()
 
 void init_interrupts()
 {
-    int_frame = new Interrupt_Stack_Frame;
     init_IDT();
     init_kernel_stack();
 }
 
 extern "C" void interrupt_handler()
 {
-    Interrupt_Stack_Frame *stack_frame = int_frame; 
+    Interrupt_Register_Frame *stack_frame = &current_task->regs; 
     u64 intno = stack_frame->intno;
 
     t_print("Recieved interrupt: 0x%h -> ", stack_frame->intno);

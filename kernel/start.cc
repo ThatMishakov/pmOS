@@ -5,6 +5,7 @@
 #include "mem.hh"
 #include "interrupts.hh"
 #include "malloc.hh"
+#include "sched.hh"
 
 extern "C" int _start(Kernel_Entry_Data* d)
 {
@@ -20,17 +21,14 @@ extern "C" int _start(Kernel_Entry_Data* d)
     void * page = palloc.alloc_page();
     palloc.free(page);
 
+    t_print("Initializing scheduling...\n");
+    init_scheduling();
+
     t_print("Initializing interrupts...\n");
     init_interrupts();
 
     t_print("Invoking interrupt 32...\n");
     asm("int $32");
-
-    
-    t_print("Testing malloc()...\n");
-    t_print("new char[2]: %h\n",new char[2]);
-    t_print("new char[8]: %h\n",new char[8]);
-    t_print("new char[32]: %h\n",new char[32]);
 
     t_print("Returning to loader\n");
     return 0xdeadc0de;
