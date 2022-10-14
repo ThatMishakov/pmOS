@@ -54,5 +54,5 @@ Vector<T>::Vector()
 template<typename T>
 Vector<T>::~Vector()
 {
-    delete ptr;
+    delete[] ptr;
 }
