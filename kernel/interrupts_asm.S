@@ -155,6 +155,8 @@ INTERRUPT_NOERR(47)
 INTERRUPT_NOERR(127)
 INTERRUPT_NOERR(128)
 
+INTERRUPT_NOERR(202)
+
 /* ------------------------------------------ FUNCTIONS ---------------------------------------------- */
 
 

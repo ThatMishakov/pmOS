@@ -7,6 +7,7 @@
 #include "pagefault_manager.hh"
 #include "asm.hh"
 #include "sched.hh"
+#include "syscalls.hh"
 
 constexpr Gate_Descriptor::Gate_Descriptor() 
     : Gate_Descriptor(0, 0, 0)
@@ -78,6 +79,8 @@ void init_IDT()
     k_idt.entries[46] = Gate_Descriptor((u64)&isr46, IST, INTGATE);
     k_idt.entries[47] = Gate_Descriptor((u64)&isr47, IST, INTGATE);
 
+    k_idt.entries[PMOS_SYSCALL_INT] = Gate_Descriptor((u64)&isr202, IST, TRAPGATE);
+
 
     mask_PIC();
 
@@ -126,6 +129,10 @@ extern "C" void interrupt_handler()
             t_print("General Protection Fault (GP) error %h\n", stack_frame->err);
             halt();
             break;
+        case PMOS_SYSCALL_INT:
+            t_print("Syscall. Jumping to the handler\n");
+            syscall_handler(stack_frame);
+            break;;
         default:
             t_print("Not currently handled.\n");
             break;

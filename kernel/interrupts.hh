@@ -128,3 +128,4 @@ extern uint64_t isr46;
 extern uint64_t isr47;
 extern uint64_t isr127;
 extern uint64_t isr128;
+extern uint64_t isr202;
