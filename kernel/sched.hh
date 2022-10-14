@@ -30,3 +30,6 @@ struct sched_pqueue {
 extern TaskDescriptor* current_task;
 
 void init_scheduling();
+
+// Creates a process structure and returns its pid
+uint64_t create_process();

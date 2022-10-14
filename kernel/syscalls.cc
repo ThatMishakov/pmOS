@@ -2,6 +2,7 @@
 #include "utils.hh"
 #include "common/com.h"
 #include "paging.hh"
+#include "sched.hh"
 
 void syscall_handler(TaskDescriptor* task)
 {
@@ -21,6 +22,9 @@ void syscall_handler(TaskDescriptor* task)
         break;
     case SYSCALL_GETPID:
         r = getpid(task);
+        break;
+    case SYSCALL_CREATE_PROCESS:
+        r = syscall_create_process();
         break;
     default:
         // Not supported
@@ -73,4 +77,9 @@ uint64_t release_page(uint64_t virtual_addr)
 TaskReturn getpid(TaskDescriptor* d)
 {
     return {SUCCESS, d->pid};
+}
+
+TaskReturn syscall_create_process()
+{
+    return {static_cast<uint64_t>(ERROR_NOT_IMPLEMENTED), 0};
 }

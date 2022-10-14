@@ -6,5 +6,6 @@
 #define SYSCALL_GETPID          0x01
 #define SYSCALL_GET_PAGE        0x02
 #define SYSCALL_RELEASE_PAGE    0x03
+#define SYSCALL_CREATE_PROCESS  0x04
 
 #endif
