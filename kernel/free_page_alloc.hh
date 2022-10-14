@@ -1,7 +1,7 @@
 #pragma once
 #include <stdint.h>
 
-#define FREE_PAGES_SIZE 128
+#define FREE_PAGES_SIZE 16
 
 void free_page_alloc_init();
 
