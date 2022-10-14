@@ -1,6 +1,6 @@
 #pragma once
 #include <stdint.h>
-#include "lib/vector.hh"
+#include "lib/list.hh"
 #include "utils.hh"
 
 struct Message {
@@ -19,4 +19,4 @@ struct Message {
     }
 };
 
-using Message_storage = Vector<Message>;
+using Message_storage = List<Message>;

@@ -1,5 +1,6 @@
 #pragma once
 #include <stdint.h>
+#include <stddef.h>
 
 template<typename T>
 class Circ_Array {
@@ -10,7 +11,7 @@ private:
     size_t index_start;
     size_t elements;
 public:
-    constexpr Circ_Array();
+    Circ_Array();
     Circ_Array(size_t);
     Circ_Array(const Circ_Array&);
     Circ_Array(size_t, T&);
@@ -53,10 +54,12 @@ size_t Circ_Array<T>::size() const
 }
 
 template<typename T>
-constexpr Circ_Array<T>::Circ_Array(): ptr_array(0), array_size(0), index_start(0), elements(0) {};
-
-template<typename T>
 Circ_Array<t>::~Circ_Array()
 {
-    delete []ptr_array;
+    delete[] ptr_array;
+}
+
+Circ_Array()
+{
+    
 }
