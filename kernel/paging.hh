@@ -3,12 +3,15 @@
 #include <stdint.h>
 #include "types.hh"
 
-// Returns true if assigned the page successfully
-bool get_page(uint64_t virtual_addr, Page_Table_Argumments arg);
-bool get_page_zeroed(uint64_t virtual_addr, Page_Table_Argumments arg);
+// Tries to assign a page. Returns result
+uint64_t get_page(uint64_t virtual_addr, Page_Table_Argumments arg);
+uint64_t get_page_zeroed(uint64_t virtual_addr, Page_Table_Argumments arg);
 
 // Return true if mapped the page successfully
-bool map(uint64_t physical_addr, uint64_t virtual_addr, Page_Table_Argumments arg);
+uint64_t map(uint64_t physical_addr, uint64_t virtual_addr, Page_Table_Argumments arg);
+
+// Returns true if the page is allocated
+bool is_allocated(int64_t virtual_addr);
 
 inline PML4* pml4_of(UNUSED uint64_t addr)
 {

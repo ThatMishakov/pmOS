@@ -2,6 +2,11 @@
 #define SYSCALL_H
 #include <stdint.h>
 
-int64_t syscall(int64_t call_n, ...);
+typedef struct {
+    uint64_t result;
+    uint64_t value;
+} syscall_r;
+
+syscall_r syscall(int64_t call_n, ...);
 
 #endif

@@ -6,3 +6,4 @@
 void syscall_handler(Interrupt_Register_Frame* regs);
 
 uint64_t get_page(Interrupt_Register_Frame* regs);
+uint64_t release_page(Interrupt_Register_Frame* regs);

@@ -27,7 +27,7 @@ void main()
     print_str("Back to loader...\n");
 
     print_str("Trying syscall(1);\n");
-    uint64_t r = syscall(1);
+    uint64_t r = syscall(1).result;
     print_str("--> Recieved: ");
     print_hex(r);
     print_str("\n");

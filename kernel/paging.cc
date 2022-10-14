@@ -3,25 +3,28 @@
 #include "common/memory.h"
 #include "mem.hh"
 #include "asm.hh"
+#include "common/errors.h"
+#include "utils.hh"
 
-bool get_page(uint64_t virtual_addr, Page_Table_Argumments arg)
+uint64_t get_page(uint64_t virtual_addr, Page_Table_Argumments arg)
 {
     void* page = palloc.alloc_page();
-    if ((uint64_t)page == (uint64_t)-1) return false;
+    if ((uint64_t)page == (uint64_t)-1) return ERROR_OUT_OF_MEMORY;
 
-    bool b = map((uint64_t)page, virtual_addr, arg);
-    if (not b) palloc.free(page);
+    uint64_t b = map((uint64_t)page, virtual_addr, arg);
+    if (b != SUCCESS) palloc.free(page);
     return b;
 }
 
-bool get_page_zeroed(uint64_t virtual_addr, Page_Table_Argumments arg)
+uint64_t get_page_zeroed(uint64_t virtual_addr, Page_Table_Argumments arg)
 {
-    bool b = get_page(virtual_addr, arg);
-    if (b) page_clear((void*)virtual_addr);
+    uint64_t b = get_page(virtual_addr, arg);
+    if (b == SUCCESS) page_clear((void*)virtual_addr);
     return b;
 }
 
-bool map(uint64_t physical_addr, uint64_t virtual_addr, Page_Table_Argumments arg)
+// TODO: change falses to errors
+uint64_t map(uint64_t physical_addr, uint64_t virtual_addr, Page_Table_Argumments arg)
 {
     uint64_t addr = virtual_addr;
     addr >>= 12;
@@ -40,7 +43,7 @@ bool map(uint64_t physical_addr, uint64_t virtual_addr, Page_Table_Argumments ar
         pml4e.page_ppn = palloc.alloc_page_ppn();
         if (pml4e.page_ppn == -1) {
             pml4e = {};
-            return false;
+            return ERROR_OUT_OF_MEMORY;
         }
         pml4e.present = 1;
         pml4e.writeable = 1;
@@ -52,13 +55,13 @@ bool map(uint64_t physical_addr, uint64_t virtual_addr, Page_Table_Argumments ar
     }
 
     PDPTE& pdpte = pdpt_of(virtual_addr)->entries[pdpt_entry];
-    if (pdpte.size) return false;
+    if (pdpte.size) return ERROR_PAGE_PRESENT;
     if (not pdpte.present) {
         pdpte = {};
         pdpte.page_ppn = palloc.alloc_page_ppn();
         if (pdpte.page_ppn == -1) {
             pdpte = {};
-            return false;
+            return ERROR_OUT_OF_MEMORY;
         }
         pdpte.present = 1;
         pdpte.writeable = 1;
@@ -70,13 +73,13 @@ bool map(uint64_t physical_addr, uint64_t virtual_addr, Page_Table_Argumments ar
     }
 
     PDE& pde = pd_of(virtual_addr)->entries[pdir_entry];
-    if (pde.size) return false;
+    if (pde.size) return ERROR_PAGE_PRESENT;
     if (not pde.present) {
         pde = {};
         pde.page_ppn = palloc.alloc_page_ppn();
         if (pde.page_ppn == -1) {
             pde = {};
-            return false;
+            return ERROR_OUT_OF_MEMORY;
         }
         pde.present = 1;
         pde.writeable = 1;
@@ -88,16 +91,48 @@ bool map(uint64_t physical_addr, uint64_t virtual_addr, Page_Table_Argumments ar
     }
 
     PTE& pte = pt_of(virtual_addr)->entries[ptable_entry];
-    if (pte.present) return false;
+    if (pte.present) return ERROR_PAGE_PRESENT;
 
     pte = {};
     pte.page_ppn = palloc.alloc_page_ppn();
     if (pte.page_ppn == -1) {
         pte = {};
-        return false;
+        return ERROR_OUT_OF_MEMORY;
     }
     pte.present = 1;
     pte.user_access = arg.user_access;
     pte.writeable = arg.writeable;
-    return true;
+    return SUCCESS;
+}
+
+bool is_allocated(int64_t virtual_addr)
+{
+    uint64_t addr = virtual_addr;
+    addr >>= 12;
+    uint64_t page = addr;
+    uint64_t ptable_entry = addr & 0x1ff;
+    addr >>= 9;
+    uint64_t pdir_entry = addr & 0x1ff;
+    addr >>= 9;
+    uint64_t pdpt_entry = addr & 0x1ff;
+    addr >>= 9;
+    uint64_t pml4_entry = addr & 0x1ff;
+
+    // Check if PDPT is present
+    PML4E& pml4e = pml4()->entries[pml4_entry];
+    if (not pml4e.present) return false;
+
+    // Check if PD is present 
+    PDPTE& pdpte = pdpt_of(virtual_addr)->entries[pdpt_entry];
+    if (pdpte.size) return true;
+    if (not pdpte.present) return false;
+
+    // Check if PT is present
+    PDE& pde = pd_of(virtual_addr)->entries[pdir_entry];
+    if (pde.size) return true;
+    if (not pde.present) return false;
+
+    // Check if page is present
+    PTE& pte = pt_of(virtual_addr)->entries[ptable_entry];
+    return pte.present;
 }
