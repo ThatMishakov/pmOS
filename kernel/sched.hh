@@ -1,5 +1,7 @@
 #pragma once
 #include "interrupts.hh"
+#include "lib/vector.hh"
+#include "messaging.hh"
 
 struct TaskPermissions {
 };
@@ -11,6 +13,7 @@ struct TaskDescriptor {
     TaskDescriptor* q_next;
     TaskDescriptor* q_prev;
     uint64_t pid;
+    Message_storage messages;
 };
 
 struct sched_pqueue {
