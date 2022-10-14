@@ -14,7 +14,7 @@ private:
     Node* last = nullptr;
     size_t size = 0;
 public:
-    List();
+    constexpr List();
     List(const List&);
     ~List();
 
@@ -34,7 +34,7 @@ public:
 };
 
 template<typename T>
-List<T>::List():
+constexpr List<T>::List():
     first(nullptr), last(nullptr), size(0) {};
 
 
@@ -47,4 +47,22 @@ List<T>::~List()
         p = p->next;
         delete current;
     }
+}
+
+template<typename T>
+void List<T>::push_back(const T& k)
+{
+    Node* n = new Node;
+    n->data = k;
+
+    if (last == nullptr) {
+        first = n;
+        last = n;
+    } else {
+        n->next = last->next;
+        n->prev = last;
+        last->next = n;
+        last = n;
+    }
+    ++size;
 }

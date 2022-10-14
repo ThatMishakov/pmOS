@@ -7,6 +7,7 @@
 #include "malloc.hh"
 #include "sched.hh"
 #include "messaging.hh"
+#include "free_page_alloc.hh"
 
 extern "C" int _start(Kernel_Entry_Data* d)
 {
@@ -21,6 +22,8 @@ extern "C" int _start(Kernel_Entry_Data* d)
     t_print("Allocating and freeing a page just to test...\n");
     void * page = palloc.alloc_page();
     palloc.free(page);
+
+    free_page_alloc_init();
 
     t_print("Initializing scheduling...\n");
     init_scheduling();
