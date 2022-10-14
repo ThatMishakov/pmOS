@@ -10,6 +10,7 @@ void init_scheduling()
 {
     current_task = new TaskDescriptor;
     current_task->page_table = getCR3();
+    current_task->pid = 0xe5ca1ade;
 }
 
 void sched_pqueue::push_back(TaskDescriptor* d)

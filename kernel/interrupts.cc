@@ -131,7 +131,7 @@ extern "C" void interrupt_handler()
             break;
         case PMOS_SYSCALL_INT:
             t_print("Syscall. Jumping to the handler\n");
-            syscall_handler(stack_frame);
+            syscall_handler(current_task);
             break;;
         default:
             t_print("Not currently handled.\n");

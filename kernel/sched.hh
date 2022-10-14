@@ -10,6 +10,7 @@ struct TaskDescriptor {
     uint64_t page_table;
     TaskDescriptor* q_next;
     TaskDescriptor* q_prev;
+    uint64_t pid;
 };
 
 struct sched_pqueue {

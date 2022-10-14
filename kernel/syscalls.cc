@@ -3,33 +3,36 @@
 #include "common/com.h"
 #include "paging.hh"
 
-void syscall_handler(Interrupt_Register_Frame* regs)
+void syscall_handler(TaskDescriptor* task)
 {
+    Interrupt_Register_Frame* regs = &task->regs;
+    TaskReturn r = {};
     // TODO: check permissions
 
     uint64_t call_n = regs->rdi;
 
     switch (call_n) {
     case SYSCALL_GET_PAGE:
-        regs->rax = get_page(regs);
+        regs->rax = get_page(regs->rsi);
         break;
 
     case SYSCALL_RELEASE_PAGE:
-        regs->rax = release_page(regs);
+        regs->rax = release_page(regs->rsi);
         break;
-
+    case SYSCALL_GETPID:
+        r = getpid(task);
+        break;
     default:
         // Not supported
         regs->rax = ERROR_UNSUPPORTED;
         break;
     }
+    regs->rax = r.result;
+    regs->rdx = r.val;
 }
 
-uint64_t get_page(Interrupt_Register_Frame* regs)
+uint64_t get_page(uint64_t virtual_addr)
 {
-    // %RSI -> second argument of syscall, page to be obtained
-    uint64_t virtual_addr = regs->rsi;
-
     // Check allignment to 4096K (page size)
     if (virtual_addr & 0xfff) return ERROR_UNALLIGNED;
 
@@ -50,8 +53,13 @@ uint64_t get_page(Interrupt_Register_Frame* regs)
     return result;
 }
 
-uint64_t release_page(Interrupt_Register_Frame* regs)
+uint64_t release_page(uint64_t virtual_addr)
 {
     // Not yet implemented
     return ERROR_NOT_IMPLEMENTED;
+}
+
+TaskReturn getpid(TaskDescriptor* d)
+{
+    return {SUCCESS, d->pid};
 }

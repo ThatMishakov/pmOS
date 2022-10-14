@@ -3,7 +3,13 @@
 #include "common/errors.h"
 #include "common/syscalls.h"
 
-void syscall_handler(Interrupt_Register_Frame* regs);
+struct TaskReturn {
+    uint64_t result;
+    uint64_t val;
+};
 
-uint64_t get_page(Interrupt_Register_Frame* regs);
-uint64_t release_page(Interrupt_Register_Frame* regs);
+void syscall_handler(TaskDescriptor* task);
+
+uint64_t get_page(uint64_t virtual_addr);
+uint64_t release_page(uint64_t virtual_addr);
+TaskReturn getpid(TaskDescriptor*);
