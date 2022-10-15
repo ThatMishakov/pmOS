@@ -179,6 +179,8 @@ ReturnStr<uint64_t> get_new_pml4()
     // Return the free_page to the pool
     // TODO: Error checking
     release_free_page(free_page);
+
+    return {SUCCESS, p};
 }
 
 kresult_t invalidade(uint64_t virtual_addr)

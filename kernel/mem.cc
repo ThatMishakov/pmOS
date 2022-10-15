@@ -11,12 +11,13 @@ PFrameAllocator palloc;
 ReturnStr<void*> PFrameAllocator::alloc_page()
 {
     uint64_t found_page = ERROR_OUT_OF_MEMORY;
-    uint64_t page = -1;
+    uint64_t page = 0;
     // Find free page
-    for (uint64_t i = non_special_base >> (12+3); i < bitmap_size; ++i) {
-        if (bitmap[i])
+    for (uint64_t i = (non_special_base >> (12+6)); i < bitmap_size; ++i) {
+        if (bitmap[i] != 0)
             for (int j = 0; j < 64; ++j) {
                 if (bitmap_read_bit(i*64 + j, bitmap)) {
+                    found_page = SUCCESS;
                     page = i*64 + j;
                     goto skip;
                 }
@@ -24,8 +25,8 @@ ReturnStr<void*> PFrameAllocator::alloc_page()
     }
 skip:
     if (found_page == SUCCESS) {
-        page <<=12;
         bitmap_mark_bit(page, false, bitmap);
+        page <<=12;
     }
 
     return {found_page, (void*)page};
@@ -77,19 +78,19 @@ void PFrameAllocator::free(void* page)
 
 void PFrameAllocator::bitmap_mark_bit(uint64_t pos, bool b, uint64_t * bitmap)
 {
-    uint64_t l = pos & 0x3f;
-    uint64_t i = pos >> 6;
+    uint64_t l = pos%64;
+    uint64_t i = pos/64;
 
-    if (b) bitmap[i] |= 0x01 << l;
-    else bitmap[i] &= ~(0x01 << l);
+    if (b) bitmap[i] |= (uint64_t)0x01 << l;
+    else bitmap[i] &= ~((uint64_t)0x01 << l);
 }
 
 bool PFrameAllocator::bitmap_read_bit(uint64_t pos, uint64_t * bitmap)
 {
-    uint64_t l = pos & 0x3f;
-    uint64_t i = pos >> 6;
+    uint64_t l = pos%64;
+    uint64_t i = pos/64;
 
-    return !!(bitmap[i] & (0x01 << l));
+    return (bitmap[i] & ((uint64_t)0x01 << l)) == (uint64_t)0;
 }
 
 void PFrameAllocator::init(uint64_t * bitmap, uint64_t size)

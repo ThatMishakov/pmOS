@@ -18,8 +18,8 @@ int reserved_i = 0;
 
 void bitmap_mark_bit(uint64_t pos, char b)
 {
-    uint64_t l = pos & 0x3f;
-    uint64_t i = pos >> 6;
+    uint64_t l = pos%64;
+    uint64_t i = pos/64;
 
     if (b) bitmap[i] |= 0x01 << l;
     else bitmap[i] &= ~(0x01 << l);
@@ -27,8 +27,8 @@ void bitmap_mark_bit(uint64_t pos, char b)
 
 char bitmap_read_bit(uint64_t pos)
 {
-    uint64_t l = pos & 0x3f;
-    uint64_t i = pos >> 6;
+    uint64_t l = pos%64;
+    uint64_t i = pos/64;
 
     return !!(bitmap[i] & (0x01 << l));
 }
@@ -200,7 +200,6 @@ void init_mem(unsigned long multiboot_str)
 
     for (int i = 0; i < reserved_i; ++i)
         bitmap_reserve(reserved[i].base, reserved[i].size);
-
 }
 
 void memclear(void * base, int size_bytes)
