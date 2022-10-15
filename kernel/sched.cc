@@ -63,7 +63,6 @@ void sched_pqueue::erase(TaskDescriptor* t)
 
 ReturnStr<uint64_t> create_process()
 {
-    int i = 0;
     TaskDescriptor* n = new TaskDescriptor;
     ReturnStr<uint64_t> k = get_new_pml4();
     if (k.result != SUCCESS) {

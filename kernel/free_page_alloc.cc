@@ -25,6 +25,7 @@ kresult_t free_page_alloc_init()
     free_pages_list = new List<uint64_t>;
 
     add_pages(FREE_PAGES_SIZE);
+    return SUCCESS;
 }
 
 void release_free_page(uint64_t page)
