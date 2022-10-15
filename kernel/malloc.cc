@@ -61,6 +61,8 @@ void *malloc(size_t s)
 
 void free(void * p)
 {
+    if (p == nullptr) return;
+
     uint64_t* base = (uint64_t*)p;
     --base;
     uint64_t size = *base;
