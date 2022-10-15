@@ -60,7 +60,7 @@ kresult_t map(uint64_t physical_addr, uint64_t virtual_addr, Page_Table_Argummen
     if (not pdpte.present) {
         pdpte = {};
         ReturnStr<uint64_t> p =  palloc.alloc_page_ppn();;
-        if (p.result == SUCCESS) return p.result; 
+        if (p.result != SUCCESS) return p.result; 
         pdpte.page_ppn = p.val;
         pdpte.present = 1;
         pdpte.writeable = 1;
@@ -76,7 +76,7 @@ kresult_t map(uint64_t physical_addr, uint64_t virtual_addr, Page_Table_Argummen
     if (not pde.present) {
         pde = {};
         ReturnStr<uint64_t> p = palloc.alloc_page_ppn();
-        if (p.result == SUCCESS) return p.result; 
+        if (p.result != SUCCESS) return p.result; 
         pde.page_ppn = p.val;
         pde.present = 1;
         pde.writeable = 1;
@@ -94,7 +94,7 @@ kresult_t map(uint64_t physical_addr, uint64_t virtual_addr, Page_Table_Argummen
     pte.page_ppn = physical_addr/KB(4);
     pte.present = 1;
     pte.user_access = arg.user_access;
-    pte.writeable = arg.writeable;
+    pte.writeable = arg.writeable;  
     return SUCCESS;
 }
 

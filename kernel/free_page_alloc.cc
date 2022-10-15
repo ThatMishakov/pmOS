@@ -3,6 +3,7 @@
 #include "misc.hh"
 #include "types.hh"
 #include "common/errors.h"
+#include "utils.hh"
 
 List<uint64_t>* free_pages_list = nullptr;
 

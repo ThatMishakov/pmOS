@@ -81,8 +81,8 @@ void PFrameAllocator::bitmap_mark_bit(uint64_t pos, bool b, uint64_t * bitmap)
     uint64_t l = pos%64;
     uint64_t i = pos/64;
 
-    if (b) bitmap[i] |= (uint64_t)0x01 << l;
-    else bitmap[i] &= ~((uint64_t)0x01 << l);
+    if (b) bitmap[i] |= (((uint64_t)0x01) << l);
+    else bitmap[i] &= ~(((uint64_t)0x01) << l);
 }
 
 bool PFrameAllocator::bitmap_read_bit(uint64_t pos, uint64_t * bitmap)
@@ -90,7 +90,7 @@ bool PFrameAllocator::bitmap_read_bit(uint64_t pos, uint64_t * bitmap)
     uint64_t l = pos%64;
     uint64_t i = pos/64;
 
-    return (bitmap[i] & ((uint64_t)0x01 << l)) == (uint64_t)0;
+    return (bitmap[i] & ((uint64_t)0x01 << l)) != (uint64_t)0;
 }
 
 void PFrameAllocator::init(uint64_t * bitmap, uint64_t size)
