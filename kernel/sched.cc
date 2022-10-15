@@ -6,11 +6,15 @@ TaskDescriptor* current_task;
 sched_pqueue ready;
 sched_pqueue blocked;
 
+sched_map* map;
+
 void init_scheduling()
 {
+    map = new sched_map;
     current_task = new TaskDescriptor;
     current_task->page_table = getCR3();
     current_task->pid = 0xe5ca1ade;
+    map->insert({current_task->pid, current_task});
 }
 
 void sched_pqueue::push_back(TaskDescriptor* d)

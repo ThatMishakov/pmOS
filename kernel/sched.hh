@@ -2,6 +2,9 @@
 #include "interrupts.hh"
 #include "lib/vector.hh"
 #include "messaging.hh"
+#include "lib/splay_tree_map.hh"
+
+using PID = uint64_t;
 
 struct TaskPermissions {
 };
@@ -12,7 +15,7 @@ struct TaskDescriptor {
     uint64_t page_table;
     TaskDescriptor* q_next;
     TaskDescriptor* q_prev;
-    uint64_t pid;
+    PID pid;
     Message_storage messages;
 };
 
@@ -30,6 +33,8 @@ struct sched_pqueue {
 extern TaskDescriptor* current_task;
 
 void init_scheduling();
+
+using sched_map = Splay_Tree_Map<PID, TaskDescriptor*>;
 
 // Creates a process structure and returns its pid
 uint64_t create_process();
