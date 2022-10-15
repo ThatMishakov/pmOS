@@ -7,7 +7,7 @@
 void syscall_handler(TaskDescriptor* task)
 {
     Interrupt_Register_Frame* regs = &task->regs;
-    TaskReturn r = {};
+    ReturnStr<uint64_t> r = {};
     // TODO: check permissions
 
     uint64_t call_n = regs->rdi;
@@ -74,12 +74,13 @@ uint64_t release_page(uint64_t virtual_addr)
     return release_page_s(virtual_addr);
 }
 
-TaskReturn getpid(TaskDescriptor* d)
+ReturnStr<uint64_t> getpid(TaskDescriptor* d)
 {
     return {SUCCESS, d->pid};
 }
 
-TaskReturn syscall_create_process()
+ReturnStr<uint64_t> syscall_create_process()
 {
-    return {static_cast<uint64_t>(ERROR_NOT_IMPLEMENTED), 0};
+    // TODO: Error checking
+    return {SUCCESS, create_process()};
 }

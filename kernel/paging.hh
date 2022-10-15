@@ -10,6 +10,12 @@ uint64_t get_page_zeroed(uint64_t virtual_addr, Page_Table_Argumments arg);
 // Return true if mapped the page successfully
 uint64_t map(uint64_t physical_addr, uint64_t virtual_addr, Page_Table_Argumments arg);
 
+// Invalidades a page entry
+uint64_t invalidade(uint64_t virtual_addr);
+
+// Constructs a new pml4
+uint64_t get_new_pml4();
+
 // Release the page
 uint64_t release_page_s(uint64_t virtual_address);
 

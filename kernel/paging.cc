@@ -5,6 +5,8 @@
 #include "asm.hh"
 #include "common/errors.h"
 #include "utils.hh"
+#include "mem.hh"
+#include "free_page_alloc.hh"
 
 uint64_t get_page(uint64_t virtual_addr, Page_Table_Argumments arg)
 {
@@ -28,7 +30,7 @@ uint64_t map(uint64_t physical_addr, uint64_t virtual_addr, Page_Table_Argumment
 {
     uint64_t addr = virtual_addr;
     addr >>= 12;
-    uint64_t page = addr;
+    //uint64_t page = addr;
     uint64_t ptable_entry = addr & 0x1ff;
     addr >>= 9;
     uint64_t pdir_entry = addr & 0x1ff;
@@ -109,7 +111,7 @@ Page_Types page_type(int64_t virtual_addr)
 {
     uint64_t addr = virtual_addr;
     addr >>= 12;
-    uint64_t page = addr;
+    //uint64_t page = addr;
     uint64_t ptable_entry = addr & 0x1ff;
     addr >>= 9;
     uint64_t pdir_entry = addr & 0x1ff;
@@ -141,4 +143,79 @@ Page_Types page_type(int64_t virtual_addr)
 uint64_t release_page_s(uint64_t virtual_address)
 {
     return ERROR_NOT_IMPLEMENTED;
+}
+
+uint64_t get_new_pml4()
+{
+    // Get a free page
+    uint64_t p = (uint64_t)palloc.alloc_page();
+
+    // Find a free spot and map this page
+    uint64_t free_page = get_free_page();
+
+    // Map the page
+    Page_Table_Argumments args;
+    args.user_access = 0;
+    args.writeable = 1;
+
+    // Map the newly created PML4 to some empty space
+    // TODO: Error checking
+    map(p, free_page, args);
+
+    // Flush tlb to apply mapping
+    tlb_flush();
+
+    // Copy the last entries into the new page table as they are shared across all processes
+    // and recurvicely assign the last page to itself
+    ((PML4*)free_page)->entries[509] = pml4()->entries[509];
+    ((PML4*)free_page)->entries[510] = pml4()->entries[510];
+
+    ((PML4*)free_page)->entries[511] = PML4E();
+    ((PML4*)free_page)->entries[511].present = 1;
+    ((PML4*)free_page)->entries[511].user_access = 0;
+    ((PML4*)free_page)->entries[511].page_ppn = p/KB(4);
+
+    // Unmap the page
+    // TODO: Error checking
+    invalidade(free_page);
+
+    // Return the free_page to the pool
+    // TODO: Error checking
+    release_free_page(free_page);
+}
+
+uint64_t invalidade(uint64_t virtual_addr)
+{
+    uint64_t addr = virtual_addr;
+    addr >>= 12;
+    //uint64_t page = addr;
+    uint64_t ptable_entry = addr & 0x1ff;
+    addr >>= 9;
+    uint64_t pdir_entry = addr & 0x1ff;
+    addr >>= 9;
+    uint64_t pdpt_entry = addr & 0x1ff;
+    addr >>= 9;
+    uint64_t pml4_entry = addr & 0x1ff;
+
+    // Check if PDPT is present
+    PML4E& pml4e = pml4()->entries[pml4_entry];
+    if (not pml4e.present) return ERROR_PAGE_NOT_PRESENT;
+
+    // Check if PD is present 
+    PDPTE& pdpte = pdpt_of(virtual_addr)->entries[pdpt_entry];
+    if (pdpte.size) return ERROR_HUGE_PAGE ;
+    if (not pdpte.present) return ERROR_PAGE_NOT_PRESENT;
+
+    // Check if PT is present
+    PDE& pde = pd_of(virtual_addr)->entries[pdir_entry];
+    if (pde.size) return ERROR_HUGE_PAGE;
+    if (not pde.present) return ERROR_PAGE_NOT_PRESENT;
+
+    // Check if page is present
+    PTE& pte = pt_of(virtual_addr)->entries[ptable_entry];
+    if (not pte.present) return ERROR_PAGE_NOT_PRESENT;
+
+    // Everything OK
+    pte = PTE();
+    return SUCCESS;
 }

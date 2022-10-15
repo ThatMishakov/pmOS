@@ -7,4 +7,4 @@ void free_page_alloc_init();
 
 uint64_t get_free_page();
 
-void release_free_page();
+void release_free_page(uint64_t);

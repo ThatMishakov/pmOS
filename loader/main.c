@@ -8,6 +8,7 @@
 #include <kernel_loader.h>
 #include "syscall.h"
 #include <screen.h>
+#include "../kernel/common/syscalls.h"
 
 uint32_t multiboot_magic;
 uint32_t multiboot_info_str;
@@ -30,6 +31,14 @@ void main()
 
     print_str("Trying syscall(1);\n");
     syscall_r r = syscall(1);
+    print_str("--> Recieved: ");
+    print_hex(r.result);
+    print_str(" ");
+    print_hex(r.value);
+    print_str("\n");
+
+    print_str("Attempting to create a process...\n");
+    r = syscall(SYSCALL_CREATE_PROCESS);
     print_str("--> Recieved: ");
     print_hex(r.result);
     print_str(" ");

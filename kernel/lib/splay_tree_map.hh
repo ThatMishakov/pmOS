@@ -38,6 +38,8 @@ public:
 
     const T& at(const K&) const;
     T& at(const T&) const;
+
+    K largest() const;
 };
 
 template<class K, class T>

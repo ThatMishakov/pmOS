@@ -12,5 +12,6 @@
 #define ERROR_OUT_OF_MEMORY     -8
 #define ERROR_HUGE_PAGE         -9
 #define ERROR_PAGE_NOT_ALLOCATED -10
+#define ERROR_PAGE_NOT_PRESENT   -11
 
 #endif

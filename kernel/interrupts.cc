@@ -3,26 +3,10 @@
 #include "gdt.hh"
 #include "palloc.hh"
 #include "malloc.hh"
-#include "gdt.hh"
 #include "pagefault_manager.hh"
 #include "asm.hh"
 #include "sched.hh"
 #include "syscalls.hh"
-
-constexpr Gate_Descriptor::Gate_Descriptor() 
-    : Gate_Descriptor(0, 0, 0)
-{}
-
-constexpr Gate_Descriptor::Gate_Descriptor(uint64_t offset, uint8_t ist, uint8_t type_attr)
-    : offset0(offset & 0xffff),
-    segment_sel(KERNEL_CODE_SELECTOR),
-    ist(ist),
-    attributes(type_attr),
-    offset1((offset >> 16) & 0xffff),
-    offset2((offset >> 32) & 0xffffffff),
-    reserved1(0)
-{}
-
 
 IDT k_idt = {};
 

@@ -1,3 +1,4 @@
+#include "interrupts.hh"
 #include "gdt.hh"
 
 TSS* System_Segment_Descriptor::tss()

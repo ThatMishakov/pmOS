@@ -9,6 +9,13 @@ using PID = uint64_t;
 struct TaskPermissions {
 };
 
+enum Process_Status {
+    PROCESS_RUNNING,
+    PROCESS_READY,
+    PROCESS_BLOCKED,
+    PROCESS_UNINIT
+};
+
 struct TaskDescriptor {
     Interrupt_Register_Frame regs;
     TaskPermissions perm;
@@ -16,6 +23,7 @@ struct TaskDescriptor {
     TaskDescriptor* q_next;
     TaskDescriptor* q_prev;
     PID pid;
+    Process_Status status;
     Message_storage messages;
 };
 
@@ -32,7 +40,11 @@ struct sched_pqueue {
 
 extern TaskDescriptor* current_task;
 
+// Initializes scheduling structures during the kernel initialization
 void init_scheduling();
+
+// Assigns unused PID
+PID assign_pid();
 
 using sched_map = Splay_Tree_Map<PID, TaskDescriptor*>;
 
