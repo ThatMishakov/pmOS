@@ -2,6 +2,7 @@
 #include <stdarg.h>
 #include "types.hh"
 #include "asm.hh"
+#include "start.hh"
 
 void int_to_string(long int n, uint8_t base, char* str, int& length)
 {
@@ -107,5 +108,5 @@ void t_print(const char *str, ...)
 void term_write(const char * str, uint64_t length)
 {
     for (uint64_t i = 0; i < length; ++i)
-        printc(str[i]);
+        kdata->temp_printc(str[i]);
 }

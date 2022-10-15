@@ -9,8 +9,11 @@
 #include "messaging.hh"
 #include "free_page_alloc.hh"
 
+Kernel_Entry_Data* kdata;
+
 extern "C" int _start(Kernel_Entry_Data* d)
 {
+    kdata = d;
     t_print("Hello from kernel!\n");
     t_print("Initializing GDT...\n");
     init_gdt();

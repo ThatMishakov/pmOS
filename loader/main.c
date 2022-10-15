@@ -7,12 +7,14 @@
 #include <entry.h>
 #include <kernel_loader.h>
 #include "syscall.h"
+#include <screen.h>
 
 uint32_t multiboot_magic;
 uint32_t multiboot_info_str;
 
 void main()
 {
+    cls();
     if (multiboot_magic != MULTIBOOT2_BOOTLOADER_MAGIC) {
         print_str("Not booted by multiboot2 bootloader\n");
         while (1) ;

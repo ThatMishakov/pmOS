@@ -12,7 +12,6 @@ void *malloc_int(size_t size_bytes, size_t& size_bytes_a)
     // Allign to 16
     size_bytes_a = size_bytes & ~0x0f;
     if (size_bytes%16) size_bytes_a += 16-size_bytes_a%16;
-    t_print("Debug: malloc %i bytes (alligned %i)\n", size_bytes, size_bytes_a);
     malloc_list* l = &head;
     while (l->next != nullptr and l->next->size < size_bytes_a) {
         l = l->next;
