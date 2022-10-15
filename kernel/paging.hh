@@ -14,10 +14,10 @@ uint64_t map(uint64_t physical_addr, uint64_t virtual_addr, Page_Table_Argumment
 uint64_t invalidade(uint64_t virtual_addr);
 
 // Constructs a new pml4
-uint64_t get_new_pml4();
+ReturnStr<uint64_t> get_new_pml4();
 
 // Release the page
-uint64_t release_page_s(uint64_t virtual_address);
+kresult_t release_page_s(uint64_t virtual_address);
 
 enum Page_Types {
     NORMAL,

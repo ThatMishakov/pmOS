@@ -29,6 +29,7 @@ void main()
 
     print_str("Back to loader...\n");
 
+    /*
     print_str("Trying syscall(1);\n");
     syscall_r r = syscall(1);
     print_str("--> Recieved: ");
@@ -36,9 +37,10 @@ void main()
     print_str(" ");
     print_hex(r.value);
     print_str("\n");
+    */
 
     print_str("Attempting to create a process...\n");
-    r = syscall(SYSCALL_CREATE_PROCESS);
+    syscall_r r = syscall(SYSCALL_CREATE_PROCESS);
     print_str("--> Recieved: ");
     print_hex(r.result);
     print_str(" ");

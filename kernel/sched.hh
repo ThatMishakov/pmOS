@@ -49,4 +49,4 @@ PID assign_pid();
 using sched_map = Splay_Tree_Map<PID, TaskDescriptor*>;
 
 // Creates a process structure and returns its pid
-uint64_t create_process();
+ReturnStr<uint64_t> create_process();

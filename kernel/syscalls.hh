@@ -2,12 +2,7 @@
 #include "sched.hh"
 #include "common/errors.h"
 #include "common/syscalls.h"
-
-template<class T>
-struct ReturnStr {
-    uint64_t result;
-    T val;
-};
+#include "types.hh"
 
 void syscall_handler(TaskDescriptor* task);
 

@@ -7,26 +7,27 @@
 #include "utils.hh"
 #include "mem.hh"
 #include "free_page_alloc.hh"
+#include "utils.hh"
+#include "types.hh"
 
-uint64_t get_page(uint64_t virtual_addr, Page_Table_Argumments arg)
+kresult_t get_page(uint64_t virtual_addr, Page_Table_Argumments arg)
 {
-    void* page = palloc.alloc_page();
-    if ((uint64_t)page == (uint64_t)-1) return ERROR_OUT_OF_MEMORY;
+    ReturnStr<void*> r = palloc.alloc_page();
+    if (r.result != SUCCESS) return r.result;
 
-    uint64_t b = map((uint64_t)page, virtual_addr, arg);
-    if (b != SUCCESS) palloc.free(page);
+    uint64_t b = map((uint64_t)r.val, virtual_addr, arg);
+    if (b != SUCCESS) palloc.free(r.val);
     return b;
 }
 
-uint64_t get_page_zeroed(uint64_t virtual_addr, Page_Table_Argumments arg)
+kresult_t get_page_zeroed(uint64_t virtual_addr, Page_Table_Argumments arg)
 {
-    uint64_t b = get_page(virtual_addr, arg);
+    kresult_t b = get_page(virtual_addr, arg);
     if (b == SUCCESS) page_clear((void*)virtual_addr);
     return b;
 }
 
-// TODO: change falses to errors
-uint64_t map(uint64_t physical_addr, uint64_t virtual_addr, Page_Table_Argumments arg)
+kresult_t map(uint64_t physical_addr, uint64_t virtual_addr, Page_Table_Argumments arg)
 {
     uint64_t addr = virtual_addr;
     addr >>= 12;
@@ -42,11 +43,9 @@ uint64_t map(uint64_t physical_addr, uint64_t virtual_addr, Page_Table_Argumment
     PML4E& pml4e = pml4()->entries[pml4_entry];
     if (not pml4e.present) {
         pml4e = {};
-        pml4e.page_ppn = palloc.alloc_page_ppn();
-        if (pml4e.page_ppn == -1) {
-            pml4e = {};
-            return ERROR_OUT_OF_MEMORY;
-        }
+        ReturnStr<uint64_t> p = palloc.alloc_page_ppn();
+        if (p.result != SUCCESS) return p.result; 
+        pml4e.page_ppn = p.val;
         pml4e.present = 1;
         pml4e.writeable = 1;
         pml4e.user_access = arg.user_access;
@@ -60,11 +59,9 @@ uint64_t map(uint64_t physical_addr, uint64_t virtual_addr, Page_Table_Argumment
     if (pdpte.size) return ERROR_PAGE_PRESENT;
     if (not pdpte.present) {
         pdpte = {};
-        pdpte.page_ppn = palloc.alloc_page_ppn();
-        if (pdpte.page_ppn == -1) {
-            pdpte = {};
-            return ERROR_OUT_OF_MEMORY;
-        }
+        ReturnStr<uint64_t> p =  palloc.alloc_page_ppn();;
+        if (p.result == SUCCESS) return p.result; 
+        pdpte.page_ppn = p.val;
         pdpte.present = 1;
         pdpte.writeable = 1;
         pdpte.user_access = arg.user_access;
@@ -78,11 +75,9 @@ uint64_t map(uint64_t physical_addr, uint64_t virtual_addr, Page_Table_Argumment
     if (pde.size) return ERROR_PAGE_PRESENT;
     if (not pde.present) {
         pde = {};
-        pde.page_ppn = palloc.alloc_page_ppn();
-        if (pde.page_ppn == -1) {
-            pde = {};
-            return ERROR_OUT_OF_MEMORY;
-        }
+        ReturnStr<uint64_t> p = palloc.alloc_page_ppn();
+        if (p.result == SUCCESS) return p.result; 
+        pde.page_ppn = p.val;
         pde.present = 1;
         pde.writeable = 1;
         pde.user_access = arg.user_access;
@@ -96,11 +91,7 @@ uint64_t map(uint64_t physical_addr, uint64_t virtual_addr, Page_Table_Argumment
     if (pte.present) return ERROR_PAGE_PRESENT;
 
     pte = {};
-    pte.page_ppn = palloc.alloc_page_ppn();
-    if (pte.page_ppn == -1) {
-        pte = {};
-        return ERROR_OUT_OF_MEMORY;
-    }
+    pte.page_ppn = physical_addr/KB(4);
     pte.present = 1;
     pte.user_access = arg.user_access;
     pte.writeable = arg.writeable;
@@ -145,13 +136,19 @@ uint64_t release_page_s(uint64_t virtual_address)
     return ERROR_NOT_IMPLEMENTED;
 }
 
-uint64_t get_new_pml4()
+ReturnStr<uint64_t> get_new_pml4()
 {
     // Get a free page
-    uint64_t p = (uint64_t)palloc.alloc_page();
+    ReturnStr<void*> l = palloc.alloc_page();
+    uint64_t p = (uint64_t)l.val;
+
+    // Check for errors
+    if (l.result != SUCCESS) return {l.result, 0}; // Could not allocate a page
 
     // Find a free spot and map this page
-    uint64_t free_page = get_free_page();
+    ReturnStr<uint64_t> r = get_free_page();
+    if (r.result != SUCCESS) return {r.result, 0};
+    uint64_t free_page = r.val;
 
     // Map the page
     Page_Table_Argumments args;
@@ -159,8 +156,8 @@ uint64_t get_new_pml4()
     args.writeable = 1;
 
     // Map the newly created PML4 to some empty space
-    // TODO: Error checking
-    map(p, free_page, args);
+    kresult_t d = map(p, free_page, args);
+    if (d != SUCCESS) return {d, 0};
 
     // Flush tlb to apply mapping
     tlb_flush();
@@ -184,7 +181,7 @@ uint64_t get_new_pml4()
     release_free_page(free_page);
 }
 
-uint64_t invalidade(uint64_t virtual_addr)
+kresult_t invalidade(uint64_t virtual_addr)
 {
     uint64_t addr = virtual_addr;
     addr >>= 12;

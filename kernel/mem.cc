@@ -3,14 +3,17 @@
 #include "utils.hh"
 #include "misc.hh"
 #include "paging.hh"
+#include "common/memory.h"
+#include "common/errors.h"
 
 PFrameAllocator palloc;
 
-void* PFrameAllocator::alloc_page()
+ReturnStr<void*> PFrameAllocator::alloc_page()
 {
+    uint64_t found_page = ERROR_OUT_OF_MEMORY;
     uint64_t page = -1;
     // Find free page
-    for (uint64_t i = non_special_base >> (12+6); i < bitmap_size; ++i) {
+    for (uint64_t i = non_special_base >> (12+3); i < bitmap_size; ++i) {
         if (bitmap[i])
             for (int j = 0; j < 64; ++j) {
                 if (bitmap_read_bit(i*64 + j, bitmap)) {
@@ -20,15 +23,18 @@ void* PFrameAllocator::alloc_page()
             }
     }
 skip:
-    bitmap_mark_bit(page, false, bitmap);
-    if (page != -1) page <<=12;
+    if (found_page == SUCCESS) {
+        page <<=12;
+        bitmap_mark_bit(page, false, bitmap);
+    }
 
-    return (void*)page;
+    return {found_page, (void*)page};
 }
 
-uint64_t PFrameAllocator::alloc_page_ppn()
+ReturnStr<uint64_t> PFrameAllocator::alloc_page_ppn()
 {
-    return (uint64_t)((int64_t)alloc_page() >> 12);
+    ReturnStr<void*> r = alloc_page();
+    return {r.result, (uint64_t)((int64_t)r.val >> 12)};
 }
 
 void PFrameAllocator::mark(uint64_t base, uint64_t size, bool usable, uint64_t * bitmap)
@@ -66,7 +72,6 @@ void PFrameAllocator::mark_single(uint64_t base, bool usable, uint64_t * bitmap)
 
 void PFrameAllocator::free(void* page)
 {
-    t_print("Debug: Freed page %h\n", page);
     mark_single((uint64_t)page, true, bitmap);
 }
 

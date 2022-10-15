@@ -12,6 +12,7 @@ void syscall_handler(TaskDescriptor* task)
 
     uint64_t call_n = regs->rdi;
 
+    t_print("syscall_handler()\n");
     switch (call_n) {
     case SYSCALL_GET_PAGE:
         regs->rax = get_page(regs->rsi);
@@ -81,6 +82,5 @@ ReturnStr<uint64_t> getpid(TaskDescriptor* d)
 
 ReturnStr<uint64_t> syscall_create_process()
 {
-    // TODO: Error checking
-    return {SUCCESS, create_process()};
+    return create_process();
 }

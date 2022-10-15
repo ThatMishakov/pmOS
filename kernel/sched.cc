@@ -2,6 +2,7 @@
 #include "asm.hh"
 #include "paging.hh"
 #include "types.hh"
+#include "common/errors.h"
 
 TaskDescriptor* current_task;
 
@@ -60,10 +61,16 @@ void sched_pqueue::erase(TaskDescriptor* t)
     }
 }
 
-uint64_t create_process()
+ReturnStr<uint64_t> create_process()
 {
+    int i = 0;
     TaskDescriptor* n = new TaskDescriptor;
-    n->page_table = get_new_pml4();
+    ReturnStr<uint64_t> k = get_new_pml4();
+    if (k.result != SUCCESS) {
+        delete n;
+        return {k.result, 0};
+    }
+    n->page_table = k.val;
     n->pid = assign_pid();
     n->status = PROCESS_UNINIT;
     
@@ -71,7 +78,7 @@ uint64_t create_process()
 
     s_map->insert({n->pid, n});
     uninit.push_back(n);
-    return n->pid;
+    return {SUCCESS, n->pid};
 }
 
 DECLARE_LOCK(assign_pid);
