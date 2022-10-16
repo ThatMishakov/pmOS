@@ -8,6 +8,7 @@
 #include <paging.h>
 #include "include/mem.h"
 #include <screen.h>
+#include "io.h"
 
 void load_kernel(uint64_t multiboot_info_str)
 {

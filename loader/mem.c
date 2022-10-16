@@ -38,7 +38,7 @@ void mark(uint64_t base, uint64_t size, char usable)
     uint64_t base_page = base >> 12;
     uint64_t size_page = size >> 12;
     if (size_page < 64) {
-        for (int i = 0; i < size_page; ++i) {
+        for (uint64_t i = 0; i < size_page; ++i) {
             bitmap_mark_bit(base_page + i, usable);
         }
     } else { // TODO: INEFFICIENT!
@@ -146,7 +146,7 @@ void init_mem(unsigned long multiboot_str)
     reserve_unal(multiboot_str, *(unsigned int*)multiboot_str);
 
     // Reserve loader
-    reserve_unal((int)&_exec_start, (int)&_exec_size);
+    reserve_unal((uint64_t)&_exec_start, (uint64_t)&_exec_size);
 
     // Reserve modules
     for (struct multiboot_tag *tag = (struct multiboot_tag *) (multiboot_str + 8); tag->type != MULTIBOOT_TAG_TYPE_END;
@@ -189,7 +189,7 @@ void init_mem(unsigned long multiboot_str)
                     int type = mmap->type;
 
                     if (type == MULTIBOOT_MEMORY_AVAILABLE) {
-                        mark_usable(mmap->addr, mmap->len);
+                        mark_usable(base_addr, length);
                     }
                 }
         }

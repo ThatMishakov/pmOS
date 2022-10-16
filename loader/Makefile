@@ -21,24 +21,24 @@ ASMFLAGS = -I$(INCLUDEDIR)
 LDFLAGS = $(INTERNALLDFLAGS) -target $(TARGET)
 
 # Internal link flags that should not be changed by the user.
-INTERNALLDFLAGS :=     \
+INTERNALLDFLAGS := \
     -nostdlib               \
     -static                 \
 	-Tlinker.ld    \
 	-z max-page-size=0x1000
  
 # Internal C flags that should not be changed by the user.
-INTERNALCFLAGS  :=       \
-	-I.                  \
+INTERNALCFLAGS  := \
+	-I.					 \
 	-ffreestanding       \
 	-fno-stack-protector \
-	-fPIC -fPIE       \
+	-fPIC -fPIE          \
 	-mno-80387           \
 	-mno-mmx             \
 	-mno-3dnow           \
 	-mno-sse             \
 	-mno-sse2            \
-	-mno-red-zone		 
+	-mno-red-zone
  
 # Use find to glob all *.c files in the directory and extract the object names.
 CCFILES := $(shell find ./ -type f -name '*.cc')
