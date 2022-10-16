@@ -4,7 +4,7 @@ ENTRY(_start)
 SECTIONS
 {
     /* Load into upper half, leaving the last page for recursive mapping */
-    . = 01777777760000000000000;
+    . = 0xFFFFFF0000000000; /* 01777777760000000000000 */
 
     /* Leave a symbol indicating the start of the kernel space */
     _kernel_start = .;

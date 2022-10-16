@@ -14,7 +14,7 @@ INCLUDEDIR = include
 # User controllable CFLAGS.
 USERCFLAGS = -Wall -Wextra -O2 -pipe -target $(TARGET) 
 
-CPPFLAGS = $(INTERNALCFLAGS) -I$(INCLUDEDIR) -mcmodel=large $(USERCFLAGS) -MMD -MP
+CPPFLAGS = $(INTERNALCFLAGS) -I$(INCLUDEDIR) -mcmodel=kernel $(USERCFLAGS) -MMD -MP
 #CPPFLAGS = $(CFLAGS)
 ASMFLAGS = -I$(INCLUDEDIR)
 LDFLAGS = $(INTERNALLDFLAGS) -target $(TARGET)
@@ -25,6 +25,7 @@ INTERNALLDFLAGS :=     \
 	-nostdlib      \
 	-static \
 	-Tlinker.ld    \
+	-fuse-ld=lld \
 	-z max-page-size=0x1000
  
 # Internal C flags that should not be changed by the user.
