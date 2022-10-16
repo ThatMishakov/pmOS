@@ -50,3 +50,6 @@ using sched_map = Splay_Tree_Map<PID, TaskDescriptor*>;
 
 // Creates a process structure and returns its pid
 ReturnStr<uint64_t> create_process();
+
+// Creates a stack for the process
+kresult_t init_stack(TaskDescriptor* process);

@@ -3,6 +3,7 @@
 #include "paging.hh"
 #include "types.hh"
 #include "common/errors.h"
+#include "linker.hh"
 
 TaskDescriptor* current_task;
 
@@ -63,20 +64,30 @@ void sched_pqueue::erase(TaskDescriptor* t)
 
 ReturnStr<uint64_t> create_process()
 {
+    // Create the structure
     TaskDescriptor* n = new TaskDescriptor;
+
+    // Create a new page table
     ReturnStr<uint64_t> k = get_new_pml4();
     if (k.result != SUCCESS) {
         delete n;
         return {k.result, 0};
     }
     n->page_table = k.val;
-    n->pid = assign_pid();
-    n->status = PROCESS_UNINIT;
-    
-    // TODO: Stack
 
+    // Assign a pid
+    n->pid = assign_pid();
+    
+    // Init stack
+    kresult_t status = init_stack(n);
+    if (status != SUCCESS) return {status, 0};
+
+    // Add to the map of processes and to uninit list
     s_map->insert({n->pid, n});
     uninit.push_back(n);
+    n->status = PROCESS_UNINIT;
+    
+    // Success!
     return {SUCCESS, n->pid};
 }
 
@@ -91,4 +102,26 @@ PID assign_pid()
     UNLOCK(assign_pid)
 
    return pid_p; 
+}
+
+kresult_t init_stack(TaskDescriptor* process)
+{
+    // Switch to the new pml4
+    uint64_t current_cr3 = getCR3();
+    setCR3(process->page_table);
+
+    kresult_t r;
+    // Prealloc a page for the stack
+    uint64_t stack_end = (uint64_t)&_free_after_kernel;
+    uint64_t stack_page_start = stack_end - KB(4);
+    r = prealloc_page((void*)stack_page_start);
+    if (r != SUCCESS) goto fail;
+
+    // Set new rsp
+    process->regs.rsp = stack_end;
+    process->regs.rbp = stack_end;
+fail:
+    // Load old page table back
+    setCR3(current_cr3);
+    return r;
 }

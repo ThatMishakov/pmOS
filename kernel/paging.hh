@@ -19,6 +19,9 @@ ReturnStr<uint64_t> get_new_pml4();
 // Release the page
 kresult_t release_page_s(uint64_t virtual_address);
 
+// Preallocates an empty page (to be sorted out later by the pagefault manager)
+kresult_t prealloc_page(void* virtual_addr);
+
 enum Page_Types {
     NORMAL,
     HUGE_2M,

@@ -221,3 +221,8 @@ kresult_t invalidade(uint64_t virtual_addr)
     pte = PTE();
     return SUCCESS;
 }
+
+kresult_t prealloc_page(void* virtual_addr)
+{
+    return ERROR_NOT_IMPLEMENTED;
+}
