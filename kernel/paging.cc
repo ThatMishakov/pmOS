@@ -157,7 +157,10 @@ ReturnStr<uint64_t> get_new_pml4()
 
     // Map the newly created PML4 to some empty space
     kresult_t d = map(p, free_page, args);
-    if (d != SUCCESS) return {d, 0};
+    if (d != SUCCESS) { // Check the errors
+        palloc.free((void*)p);
+        return {d, 0};
+    }
 
     // Flush tlb to apply mapping
     tlb_flush();

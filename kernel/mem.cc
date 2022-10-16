@@ -102,12 +102,17 @@ void PFrameAllocator::init(uint64_t * bitmap, uint64_t size)
 void PFrameAllocator::init_after_paging()
 {
     void* addr = unoccupied;
-    unoccupied = (void*)((uint64_t)unoccupied + this->bitmap_size);
+    unoccupied = (void*)((uint64_t)unoccupied + this->bitmap_size_pages());
 
     Page_Table_Argumments pta = {1, 0, 0, 1, 0};
-    for (uint64_t i = 0; i < bitmap_size; i += 4096) {
+    for (uint64_t i = 0; i < bitmap_size_pages(); i += 4096) {
         map((uint64_t)bitmap + i, (uint64_t)addr + i, pta);
     }
     bitmap = (uint64_t*)addr;
     t_print("Debug: Mapped the bitmap to kernel. Location: %h\n", bitmap);
+}
+
+uint64_t PFrameAllocator::bitmap_size_pages() const
+{
+    return bitmap_size*sizeof(uint64_t);
 }

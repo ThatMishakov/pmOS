@@ -13,6 +13,7 @@ public:
 
     void init(uint64_t * bitmap, uint64_t size);
     void init_after_paging();
+    uint64_t bitmap_size_pages() const;
 private:
     void mark(uint64_t base, uint64_t size, bool usable);
     static bool bitmap_read_bit(uint64_t pos, uint64_t * bitmap);

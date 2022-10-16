@@ -91,7 +91,7 @@ extern "C" void interrupt_handler()
     Interrupt_Register_Frame *stack_frame = &current_task->regs; 
     u64 intno = stack_frame->intno;
 
-    t_print("Recieved interrupt: 0x%h -> ", stack_frame->intno);
+    t_print("Recieved interrupt: 0x%h -> ", intno);
     switch (intno) {
         case 0x0: 
             t_print("Division by zero (DE)\n");
