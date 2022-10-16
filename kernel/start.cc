@@ -31,6 +31,9 @@ extern "C" int _start(Kernel_Entry_Data* d)
     }
     palloc.free(page.val);
 
+    // palloc is broken so this is needed to not owerwrite the loader
+    for (int i = 0; i < 200; ++i) palloc.alloc_page();
+
     free_page_alloc_init();
 
     t_print("Initializing scheduling...\n");

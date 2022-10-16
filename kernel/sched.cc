@@ -114,7 +114,7 @@ kresult_t init_stack(TaskDescriptor* process)
 
     kresult_t r;
     // Prealloc a page for the stack
-    uint64_t stack_end = (uint64_t)&_free_after_kernel;
+    uint64_t stack_end = (uint64_t)&_free_to_use;
     uint64_t stack_page_start = stack_end - KB(4);
 
     Page_Table_Argumments arg;

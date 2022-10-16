@@ -283,6 +283,8 @@ kresult_t alloc_page_lazy(uint64_t virtual_addr, Page_Table_Argumments arg)
         page_clear((void*)pt_of(virtual_addr));
     }
 
+    t_print("%h %h\n", pt_of(virtual_addr), virtual_addr);
+
     PTE& pte = pt_of(virtual_addr)->entries[ptable_entry];
     if (pte.present or pte.cache_disabled) return ERROR_PAGE_PRESENT;
 

@@ -108,5 +108,5 @@ void t_print(const char *str, ...)
 void term_write(const char * str, uint64_t length)
 {
     for (uint64_t i = 0; i < length; ++i)
-        kdata->temp_printc(str[i]);
+        printc(str[i]);
 }
