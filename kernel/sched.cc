@@ -64,6 +64,8 @@ void sched_pqueue::erase(TaskDescriptor* t)
 
 ReturnStr<uint64_t> create_process()
 {
+    // BIG TODO: errors may produce **HUGE** memory leaks
+
     // Create the structure
     TaskDescriptor* n = new TaskDescriptor;
 
@@ -114,7 +116,13 @@ kresult_t init_stack(TaskDescriptor* process)
     // Prealloc a page for the stack
     uint64_t stack_end = (uint64_t)&_free_after_kernel;
     uint64_t stack_page_start = stack_end - KB(4);
-    r = prealloc_page((void*)stack_page_start);
+
+    Page_Table_Argumments arg;
+    arg.writeable = 1;
+    arg.execution_disabled = 1;
+    arg.global = 0;
+    arg.user_access = 1;
+    r = alloc_page_lazy(stack_page_start, arg);
     if (r != SUCCESS) goto fail;
 
     // Set new rsp

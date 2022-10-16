@@ -20,13 +20,15 @@ ReturnStr<uint64_t> get_new_pml4();
 kresult_t release_page_s(uint64_t virtual_address);
 
 // Preallocates an empty page (to be sorted out later by the pagefault manager)
-kresult_t prealloc_page(void* virtual_addr);
+kresult_t alloc_page_lazy(uint64_t virtual_addr, Page_Table_Argumments arg);
 
 enum Page_Types {
     NORMAL,
     HUGE_2M,
     HUGE_1G,
-    UNALLOCATED
+    UNALLOCATED,
+    LAZY_ALLOC,
+    UNKNOWN
 };
 
 // Returns page type

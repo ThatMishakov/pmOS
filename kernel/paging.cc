@@ -88,7 +88,7 @@ kresult_t map(uint64_t physical_addr, uint64_t virtual_addr, Page_Table_Argummen
     }
 
     PTE& pte = pt_of(virtual_addr)->entries[ptable_entry];
-    if (pte.present) return ERROR_PAGE_PRESENT;
+    if (pte.present or pte.cache_disabled) return ERROR_PAGE_PRESENT;
 
     pte = {};
     pte.page_ppn = physical_addr/KB(4);
@@ -128,6 +128,7 @@ Page_Types page_type(int64_t virtual_addr)
     // Check if page is present
     PTE& pte = pt_of(virtual_addr)->entries[ptable_entry];
     if (pte.present) return Page_Types::NORMAL;
+    else if (pte.cache_disabled) return Page_Types::LAZY_ALLOC;
     return Page_Types::UNALLOCATED;
 }
 
@@ -215,14 +216,81 @@ kresult_t invalidade(uint64_t virtual_addr)
 
     // Check if page is present
     PTE& pte = pt_of(virtual_addr)->entries[ptable_entry];
-    if (not pte.present) return ERROR_PAGE_NOT_PRESENT;
+    if (not pte.present and not pte.cache_disabled) return ERROR_PAGE_NOT_PRESENT;
 
     // Everything OK
     pte = PTE();
     return SUCCESS;
 }
 
-kresult_t prealloc_page(void* virtual_addr)
+kresult_t alloc_page_lazy(uint64_t virtual_addr, Page_Table_Argumments arg)
 {
-    return ERROR_NOT_IMPLEMENTED;
+    uint64_t addr = virtual_addr;
+    addr >>= 12;
+    //uint64_t page = addr;
+    uint64_t ptable_entry = addr & 0x1ff;
+    addr >>= 9;
+    uint64_t pdir_entry = addr & 0x1ff;
+    addr >>= 9;
+    uint64_t pdpt_entry = addr & 0x1ff;
+    addr >>= 9;
+    uint64_t pml4_entry = addr & 0x1ff;
+
+    PML4E& pml4e = pml4()->entries[pml4_entry];
+    if (not pml4e.present) {
+        pml4e = {};
+        ReturnStr<uint64_t> p = palloc.alloc_page_ppn();
+        if (p.result != SUCCESS) return p.result; 
+        pml4e.page_ppn = p.val;
+        pml4e.present = 1;
+        pml4e.writeable = 1;
+        pml4e.user_access = arg.user_access;
+
+        tlb_flush();
+
+        page_clear((void*)pdpt_of(virtual_addr));
+    }
+
+    PDPTE& pdpte = pdpt_of(virtual_addr)->entries[pdpt_entry];
+    if (pdpte.size) return ERROR_PAGE_PRESENT;
+    if (not pdpte.present) {
+        pdpte = {};
+        ReturnStr<uint64_t> p =  palloc.alloc_page_ppn();;
+        if (p.result != SUCCESS) return p.result; 
+        pdpte.page_ppn = p.val;
+        pdpte.present = 1;
+        pdpte.writeable = 1;
+        pdpte.user_access = arg.user_access;
+
+        tlb_flush();
+
+        page_clear((void*)pd_of(virtual_addr));
+    }
+
+    PDE& pde = pd_of(virtual_addr)->entries[pdir_entry];
+    if (pde.size) return ERROR_PAGE_PRESENT;
+    if (not pde.present) {
+        pde = {};
+        ReturnStr<uint64_t> p = palloc.alloc_page_ppn();
+        if (p.result != SUCCESS) return p.result; 
+        pde.page_ppn = p.val;
+        pde.present = 1;
+        pde.writeable = 1;
+        pde.user_access = arg.user_access;
+
+        tlb_flush();
+
+        page_clear((void*)pt_of(virtual_addr));
+    }
+
+    PTE& pte = pt_of(virtual_addr)->entries[ptable_entry];
+    if (pte.present or pte.cache_disabled) return ERROR_PAGE_PRESENT;
+
+    pte = {};
+    // Allocate lazylly
+    pte.present = 0;
+    pte.user_access = arg.user_access;
+    pte.writeable = arg.writeable; 
+    pte.cache_disabled = 1;
+    return SUCCESS;
 }
