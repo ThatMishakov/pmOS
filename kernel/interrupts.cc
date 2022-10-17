@@ -3,26 +3,10 @@
 #include "gdt.hh"
 #include "palloc.hh"
 #include "malloc.hh"
-#include "gdt.hh"
 #include "pagefault_manager.hh"
 #include "asm.hh"
 #include "sched.hh"
 #include "syscalls.hh"
-
-constexpr Gate_Descriptor::Gate_Descriptor() 
-    : Gate_Descriptor(0, 0, 0)
-{}
-
-constexpr Gate_Descriptor::Gate_Descriptor(uint64_t offset, uint8_t ist, uint8_t type_attr)
-    : offset0(offset & 0xffff),
-    segment_sel(KERNEL_CODE_SELECTOR),
-    ist(ist),
-    attributes(type_attr),
-    offset1((offset >> 16) & 0xffff),
-    offset2((offset >> 32) & 0xffffffff),
-    reserved1(0)
-{}
-
 
 IDT k_idt = {};
 
@@ -107,7 +91,7 @@ extern "C" void interrupt_handler()
     Interrupt_Register_Frame *stack_frame = &current_task->regs; 
     u64 intno = stack_frame->intno;
 
-    t_print("Recieved interrupt: 0x%h -> ", stack_frame->intno);
+    t_print("Recieved interrupt: 0x%h -> ", intno);
     switch (intno) {
         case 0x0: 
             t_print("Division by zero (DE)\n");
@@ -137,5 +121,4 @@ extern "C" void interrupt_handler()
             t_print("Not currently handled.\n");
             break;
     }
-    t_print("Returning from interrupt handler.\n");
 }

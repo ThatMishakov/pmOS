@@ -37,7 +37,7 @@ multiboot_header_end:
     .type _start, @function
 _start:
     /*  Initialize the stack pointer. */
-    movl    $(stack + STACK_SIZE), %esp
+    leal    stack + STACK_SIZE, %esp
 
     /*  Reset EFLAGS. */
     pushl   $0

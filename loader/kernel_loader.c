@@ -7,6 +7,8 @@
 #include <misc.h>
 #include <paging.h>
 #include "include/mem.h"
+#include <screen.h>
+#include "io.h"
 
 void load_kernel(uint64_t multiboot_info_str)
 {
@@ -78,6 +80,7 @@ void load_kernel(uint64_t multiboot_info_str)
     Kernel_Entry_Data data;
     data.mem_bitmap = bitmap;
     data.mem_bitmap_size = bitmap_size;
+    data.temp_printc = &putchar;
     int r = entry(&data);
     print_str("Kernel returned ");
     print_hex(r);

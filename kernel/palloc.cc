@@ -45,9 +45,12 @@ void* palloc(size_t size)
         arg.writeable = 1;
         arg.execution_disabled = 1;
 
-        for (int i = 0; i < size_p; i += 4096) {
+        for (uint64_t i = 0; i < size_p; i += 4096) {
             get_page(p_head + i, arg);
         }
+
+        // Do a TLB flush
+        tlb_flush();
 
         block = (palloc_list*)p_head;
     } else if (l->next->number_pages == size) { // Block of just the right size

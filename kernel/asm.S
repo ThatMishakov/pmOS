@@ -40,5 +40,18 @@ loadTSS:
     .globl getCR3
     .type getCR3, @function
 getCR3:
-    movq %cr3, %rdi
+    movq %cr3, %rax
     ret
+
+    .globl setCR3
+    .type setCR3, @function
+setCR3:
+    movq %rdi, %cr3
+    ret
+
+    .globl getCR2
+    .type getCR2, @function
+getCR2:
+    movq %cr2, %rax
+    ret
+

@@ -2,6 +2,7 @@
 #include <stdarg.h>
 #include "types.hh"
 #include "asm.hh"
+#include "start.hh"
 
 void int_to_string(long int n, uint8_t base, char* str, int& length)
 {

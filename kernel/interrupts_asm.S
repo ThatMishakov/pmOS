@@ -39,10 +39,10 @@
     movq current_task(%rip), %rax; \
     movq %r15, 0(%rax); \
     movq %r14, 8(%rax); \
-    movq %r13, 12(%rax); \
-    movq %r12, 16(%rax); \
-    movq %r11, 24(%rax); \
-    movq %r10, 32(%rax); \
+    movq %r13, 16(%rax); \
+    movq %r12, 24(%rax); \
+    movq %r11, 32(%rax); \
+    movq %r10, 40(%rax); \
     movq %r9, 48(%rax); \
     movq %r8, 56(%rax); \
     movq %rbp, 64(%rax); \
@@ -56,17 +56,17 @@
     popq 128(%rax); /* err */\
     popq 136(%rax); /* rip */\
     popq 144(%rax); /* cs */\
-    popq 152(%rax); /* rsp */\
-    popq 160(%rax); /* ss */
+    popq 160(%rax); /* rsp */\
+    popq 168(%rax); /* ss */
 
 #define RESTORE_INT_FRAME \
     movq current_task(%rip), %rax; \
     movq 0(%rax), %r15; \
     movq 8(%rax), %r14; \
-    movq 12(%rax), %r13; \
-    movq 16(%rax), %r12; \
-    movq 24(%rax), %r11; \
-    movq 32(%rax), %r10; \
+    movq 16(%rax), %r13; \
+    movq 24(%rax), %r12; \
+    movq 32(%rax), %r11; \
+    movq 40(%rax), %r10; \
     movq 48(%rax), %r9; \
     movq 56(%rax), %r8; \
     movq 64(%rax), %rbp; \
@@ -75,8 +75,8 @@
     movq 88(%rax), %rdx; \
     movq 96(%rax), %rcx; \
     movq 104(%rax), %rbx; \
-    pushq 160(%rax); /* ss */ \
-    pushq 152(%rax); /* rsp */ \
+    pushq 168(%rax); /* ss */ \
+    pushq 160(%rax); /* rsp */ \
     pushq 144(%rax); /* cs */ \
     pushq 136(%rax); /* rip */ \
     movq 112(%rax), %rax /* Restore %rax */

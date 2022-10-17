@@ -12,7 +12,6 @@ SECTIONS
         *(.text*)
     }
 
-    _exec_start = 1234;
     .rodata : {
         *(.rodata*)
     }

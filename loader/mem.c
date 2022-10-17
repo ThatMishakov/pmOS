@@ -18,17 +18,17 @@ int reserved_i = 0;
 
 void bitmap_mark_bit(uint64_t pos, char b)
 {
-    uint64_t l = pos & 0x3f;
-    uint64_t i = pos >> 6;
+    uint64_t l = pos%64;
+    uint64_t i = pos/64;
 
-    if (b) bitmap[i] |= 0x01 << l;
-    else bitmap[i] &= ~(0x01 << l);
+    if (b) bitmap[i] |= (uint64_t)0x01 << l;
+    else bitmap[i] &= ~((uint64_t)0x01 << l);
 }
 
 char bitmap_read_bit(uint64_t pos)
 {
-    uint64_t l = pos & 0x3f;
-    uint64_t i = pos >> 6;
+    uint64_t l = pos%64;
+    uint64_t i = pos/64;
 
     return !!(bitmap[i] & (0x01 << l));
 }
@@ -38,12 +38,12 @@ void mark(uint64_t base, uint64_t size, char usable)
     uint64_t base_page = base >> 12;
     uint64_t size_page = size >> 12;
     if (size_page < 64) {
-        for (int i = 0; i < size_page; ++i) {
+        for (uint64_t i = 0; i < size_page; ++i) {
             bitmap_mark_bit(base_page + i, usable);
         }
     } else { // TODO: INEFFICIENT!
-        uint64_t pattern = usable ? ~0x0 : 0x0;
-        while (base_page & 0x3f && size_page > 0) {
+        uint64_t pattern = usable ? ~(uint64_t)0x0 : (uint64_t)0x0;
+        while (base_page%64 && size_page > 0) {
             bitmap_mark_bit(base_page, usable);
             ++base_page;
             --size_page;
@@ -148,7 +148,7 @@ void init_mem(unsigned long multiboot_str)
     reserve_unal(multiboot_str, *(unsigned int*)multiboot_str);
 
     // Reserve loader
-    reserve_unal((int)&_exec_start, (int)&_exec_size);
+    reserve_unal((uint64_t)&_exec_start, (uint64_t)&_exec_size);
 
     // Reserve modules
     for (struct multiboot_tag *tag = (struct multiboot_tag *) (multiboot_str + 8); tag->type != MULTIBOOT_TAG_TYPE_END;
@@ -191,7 +191,7 @@ void init_mem(unsigned long multiboot_str)
                     int type = mmap->type;
 
                     if (type == MULTIBOOT_MEMORY_AVAILABLE) {
-                        mark_usable(mmap->addr, mmap->len);
+                        mark_usable(base_addr, length);
                     }
                 }
         }
@@ -202,7 +202,6 @@ void init_mem(unsigned long multiboot_str)
 
     for (int i = 0; i < reserved_i; ++i)
         bitmap_reserve(reserved[i].base, reserved[i].size);
-
 }
 
 void memclear(void * base, int size_bytes)

@@ -7,7 +7,7 @@
 char is_present(PML4* table, uint64_t addr)
 {
     addr >>= 12;
-    uint64_t page = addr;
+    //uint64_t page = addr;
     uint64_t ptable_entry = addr & 0x1ff;
     addr >>= 9;
     uint64_t pdir_entry = addr & 0x1ff;
@@ -36,7 +36,7 @@ char is_present(PML4* table, uint64_t addr)
 void get_page(uint64_t addr, Page_Table_Argumments arg)
 {
     addr >>= 12;
-    uint64_t page = addr;
+    //uint64_t page = addr;
     uint64_t ptable_entry = addr & 0x1ff;
     addr >>= 9;
     uint64_t pdir_entry = addr & 0x1ff;

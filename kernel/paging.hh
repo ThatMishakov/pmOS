@@ -10,14 +10,27 @@ uint64_t get_page_zeroed(uint64_t virtual_addr, Page_Table_Argumments arg);
 // Return true if mapped the page successfully
 uint64_t map(uint64_t physical_addr, uint64_t virtual_addr, Page_Table_Argumments arg);
 
+// Invalidades a page entry
+uint64_t invalidade(uint64_t virtual_addr);
+
+// Constructs a new pml4
+ReturnStr<uint64_t> get_new_pml4();
+
 // Release the page
-uint64_t release_page_s(uint64_t virtual_address);
+kresult_t release_page_s(uint64_t virtual_address);
+
+// Preallocates an empty page (to be sorted out later by the pagefault manager)
+kresult_t alloc_page_lazy(uint64_t virtual_addr, Page_Table_Argumments arg);
+
+kresult_t get_lazy_page(uint64_t virtual_addr);
 
 enum Page_Types {
-    NORMAL,
-    HUGE_2M,
-    HUGE_1G,
-    UNALLOCATED
+    NORMAL = 0,
+    HUGE_2M = 1,
+    HUGE_1G = 2,
+    UNALLOCATED = 3,
+    LAZY_ALLOC = 4,
+    UNKNOWN = 5
 };
 
 // Returns page type
@@ -37,21 +50,21 @@ inline PML4* pml4()
 
 inline PDPT* pdpt_of(uint64_t addr)
 {
-    addr = (int64_t)addr >> (9+9+9);
-    addr &= ~0xfff;
-    return ((PDPT*)(0177777777777777000000 | addr));
+    addr = (uint64_t)addr >> (9+9+9);
+    addr &= ~(uint64_t)0xfff;
+    return ((PDPT*)((uint64_t)01777777777777770000000 | addr));
 }
 
 inline PD* pd_of(uint64_t addr)
 {
-    addr = (int64_t)addr >> (9+9);
-    addr &= ~0xfff;
-    return ((PD*)(0177777777777000000000 | addr));
+    addr = (uint64_t)addr >> (9+9);
+    addr &= ~(uint64_t)0xfff;
+    return ((PD*)((uint64_t)01777777777770000000000 | addr));
 }
 
 inline PT* pt_of(uint64_t addr)
 {
-    addr = (int64_t)addr >> (9);
-    addr &= ~0xfff;
-    return ((PT*)(0177777777000000000000 | addr));
+    addr = (uint64_t)addr >> (9);
+    addr &= ~(uint64_t)0xfff;
+    return ((PT*)((uint64_t)01777777770000000000000 | addr));
 }

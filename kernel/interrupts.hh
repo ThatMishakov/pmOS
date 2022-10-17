@@ -1,6 +1,7 @@
 #pragma once
 #include <stdint.h>
 #include "types.hh"
+#include "gdt.hh"
 
 #define INTGATE 0x8e /*  */
 #define TRAPGATE 0xee
@@ -22,9 +23,22 @@ struct PACKED Gate_Descriptor {
     void init(void* addr, uint16_t segment, uint8_t gate, uint8_t priv_level);
     constexpr Gate_Descriptor();
     constexpr Gate_Descriptor(u64 offset, u8 ist, u8 type_attr);
-
-
 };
+
+
+constexpr Gate_Descriptor::Gate_Descriptor() 
+    : Gate_Descriptor(0, 0, 0)
+{}
+
+constexpr Gate_Descriptor::Gate_Descriptor(uint64_t offset, uint8_t ist, uint8_t type_attr)
+    : offset0(offset & 0xffff),
+    segment_sel(KERNEL_CODE_SELECTOR),
+    ist(ist),
+    attributes(type_attr),
+    offset1((offset >> 16) & 0xffff),
+    offset2((offset >> 32) & 0xffffffff),
+    reserved1(0)
+{}
 
 struct IDT {
     Gate_Descriptor entries[256] = {};

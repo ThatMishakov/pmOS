@@ -1,7 +1,6 @@
 #ifndef GDT_HH
 #define GDT_HH
 #include "common/gdt.h"
-#include "interrupts.hh"
 
 struct TSS {
     uint32_t reserved0 = 0;

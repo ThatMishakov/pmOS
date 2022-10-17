@@ -7,18 +7,17 @@
 void syscall_handler(TaskDescriptor* task)
 {
     Interrupt_Register_Frame* regs = &task->regs;
-    TaskReturn r = {};
+    ReturnStr<uint64_t> r = {};
     // TODO: check permissions
 
     uint64_t call_n = regs->rdi;
 
     switch (call_n) {
     case SYSCALL_GET_PAGE:
-        regs->rax = get_page(regs->rsi);
+        r.result = get_page(regs->rsi);
         break;
-
     case SYSCALL_RELEASE_PAGE:
-        regs->rax = release_page(regs->rsi);
+        r.result = release_page(regs->rsi);
         break;
     case SYSCALL_GETPID:
         r = getpid(task);
@@ -46,12 +45,12 @@ uint64_t get_page(uint64_t virtual_addr)
     // Check that the page is not already mapped
     if (page_type(virtual_addr) != Page_Types::UNALLOCATED) return ERROR_PAGE_PRESENT;
 
-    // Everything seems ok, get the page
+    // Everything seems ok, get the page (lazy allocation)
     Page_Table_Argumments arg = {};
     arg.user_access = 1;
     arg.writeable = 1;
     arg.execution_disabled = 0;
-    uint64_t result = get_page_zeroed(virtual_addr, arg);
+    uint64_t result = alloc_page_lazy(virtual_addr, arg);
 
     // Return the result (success or failure)
     return result;
@@ -74,12 +73,12 @@ uint64_t release_page(uint64_t virtual_addr)
     return release_page_s(virtual_addr);
 }
 
-TaskReturn getpid(TaskDescriptor* d)
+ReturnStr<uint64_t> getpid(TaskDescriptor* d)
 {
     return {SUCCESS, d->pid};
 }
 
-TaskReturn syscall_create_process()
+ReturnStr<uint64_t> syscall_create_process()
 {
-    return {static_cast<uint64_t>(ERROR_NOT_IMPLEMENTED), 0};
+    return create_process();
 }
