@@ -206,7 +206,7 @@ kresult_t invalidade(uint64_t virtual_addr)
 
     // Check if PD is present 
     PDPTE& pdpte = pdpt_of(virtual_addr)->entries[pdpt_entry];
-    if (pdpte.size) return ERROR_HUGE_PAGE ;
+    if (pdpte.size) return ERROR_HUGE_PAGE;
     if (not pdpte.present) return ERROR_PAGE_NOT_PRESENT;
 
     // Check if PT is present
