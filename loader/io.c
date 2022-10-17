@@ -1,11 +1,12 @@
 #include <io.h>
 #include <misc.h>
 #include <stdint.h>
+#include <utils.h>
 
 void print_str(char * str)
 {
     while (*str != '\0') { 
-        printc(*str);
+        putchar(*str);
         ++str;
     }
     return;

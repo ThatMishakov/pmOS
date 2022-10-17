@@ -132,8 +132,10 @@ void init_mem(unsigned long multiboot_str)
                     int type = mmap->type;
 
                     if (type == MULTIBOOT_MEMORY_AVAILABLE) {
-                        if (base_addr > base) base = base_addr;
-                        end = base_addr + length;
+                        if ((base_addr < GB(1)) && (base_addr > base)) {
+                            base = base_addr;
+                            end = base + length;
+                        }
                     }
                 }
         }

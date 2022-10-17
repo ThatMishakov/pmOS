@@ -20,7 +20,7 @@ extern "C" int _start(Kernel_Entry_Data* d)
     palloc.init_after_paging();
 
     t_print("Allocating and freeing a page just to test...\n");
-    void * page = palloc.alloc_page();
+    void *page = palloc.alloc_page();
     palloc.free(page);
 
     free_page_alloc_init();
