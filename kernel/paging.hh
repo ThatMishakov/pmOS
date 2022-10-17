@@ -22,6 +22,8 @@ kresult_t release_page_s(uint64_t virtual_address);
 // Preallocates an empty page (to be sorted out later by the pagefault manager)
 kresult_t alloc_page_lazy(uint64_t virtual_addr, Page_Table_Argumments arg);
 
+kresult_t get_lazy_page(uint64_t virtual_addr);
+
 enum Page_Types {
     NORMAL,
     HUGE_2M,

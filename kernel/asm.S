@@ -49,3 +49,9 @@ setCR3:
     movq %rdi, %cr3
     ret
 
+    .globl getCR2
+    .type getCR2, @function
+getCR2:
+    movq %cr2, %rax
+    ret
+

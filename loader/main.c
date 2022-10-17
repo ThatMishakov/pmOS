@@ -6,7 +6,7 @@
 #include <mem.h>
 #include <entry.h>
 #include <kernel_loader.h>
-#include "syscall.h"
+#include <syscall.h>
 #include <screen.h>
 #include "../kernel/common/syscalls.h"
 
@@ -46,6 +46,13 @@ void main()
     print_str(" ");
     print_hex(r.value);
     print_str("\n");
+
+    // Get a page and try writing to it
+    print_str("Getting a page -> ");
+    uint64_t addr = 0xdeadbeef;
+    print_hex(get_page(addr).result);
+    print_str(" \n");
+    *((long*)addr) = 1234;
 
     print_str("Nothing to do. Halting...\n");
     while (1) {

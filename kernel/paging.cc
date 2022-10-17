@@ -294,3 +294,35 @@ kresult_t alloc_page_lazy(uint64_t virtual_addr, Page_Table_Argumments arg)
     pte.cache_disabled = 1;
     return SUCCESS;
 }
+
+kresult_t get_lazy_page(uint64_t virtual_addr)
+{
+    uint64_t addr = virtual_addr;
+    addr >>= 12;
+    //uint64_t page = addr;
+    uint64_t ptable_entry = addr & 0x1ff;
+    addr >>= 9;
+    uint64_t pdir_entry = addr & 0x1ff;
+    addr >>= 9;
+    uint64_t pdpt_entry = addr & 0x1ff;
+    addr >>= 9;
+    uint64_t pml4_entry = addr & 0x1ff;
+
+    PTE& pte = pt_of(virtual_addr)->entries[ptable_entry];
+    if (pte.present or not pte.cache_disabled) return ERROR_WRONG_PAGE_TYPE;
+
+    // Get an empty page
+    ReturnStr<uint64_t> page = palloc.alloc_page_ppn();
+    if (page.result != SUCCESS) return page.result;
+    pte.page_ppn = page.val;
+    pte.present = 1;
+    pte.cache_disabled = 0;
+
+    // TLB flush
+    tlb_flush();
+
+    // Clear the page for security and other reasons
+    page_clear((void*)virtual_addr);
+
+    return SUCCESS;
+}
