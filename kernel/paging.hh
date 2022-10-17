@@ -25,12 +25,12 @@ kresult_t alloc_page_lazy(uint64_t virtual_addr, Page_Table_Argumments arg);
 kresult_t get_lazy_page(uint64_t virtual_addr);
 
 enum Page_Types {
-    NORMAL,
-    HUGE_2M,
-    HUGE_1G,
-    UNALLOCATED,
-    LAZY_ALLOC,
-    UNKNOWN
+    NORMAL = 0,
+    HUGE_2M = 1,
+    HUGE_1G = 2,
+    UNALLOCATED = 3,
+    LAZY_ALLOC = 4,
+    UNKNOWN = 5
 };
 
 // Returns page type
@@ -52,19 +52,19 @@ inline PDPT* pdpt_of(uint64_t addr)
 {
     addr = (uint64_t)addr >> (9+9+9);
     addr &= ~(uint64_t)0xfff;
-    return ((PDPT*)((uint64_t)01777777777777777000000 | addr)); // 0177777777777777000000
+    return ((PDPT*)((uint64_t)01777777777777770000000 | addr));
 }
 
 inline PD* pd_of(uint64_t addr)
 {
     addr = (uint64_t)addr >> (9+9);
     addr &= ~(uint64_t)0xfff;
-    return ((PD*)((uint64_t)01777777777777000000000 | addr));
+    return ((PD*)((uint64_t)01777777777770000000000 | addr));
 }
 
 inline PT* pt_of(uint64_t addr)
 {
     addr = (uint64_t)addr >> (9);
     addr &= ~(uint64_t)0xfff;
-    return ((PT*)((uint64_t)01777777777000000000000 | addr));
+    return ((PT*)((uint64_t)01777777770000000000000 | addr));
 }

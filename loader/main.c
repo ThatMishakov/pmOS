@@ -49,9 +49,10 @@ void main()
     // print_str("\n");
 
     // Get a page and try writing to it
+    uint64_t addr = (uint64_t)0xeadbeef0;
+    uint64_t result = get_page(addr & ~((uint64_t)0xfff)).result;
     print_str("Getting a page -> ");
-    uint64_t addr = 0xdeadbeef0;
-    print_hex(get_page(addr).result);
+    print_hex(result);
     print_str(" \n");
     *((long*)addr) = 1234;
 

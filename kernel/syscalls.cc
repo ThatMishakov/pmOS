@@ -12,13 +12,14 @@ void syscall_handler(TaskDescriptor* task)
 
     uint64_t call_n = regs->rdi;
 
+    t_print("Syscall %i\n", call_n);
+
     switch (call_n) {
     case SYSCALL_GET_PAGE:
-        regs->rax = get_page(regs->rsi);
+        r.result = get_page(regs->rsi);
         break;
-
     case SYSCALL_RELEASE_PAGE:
-        regs->rax = release_page(regs->rsi);
+        r.result = release_page(regs->rsi);
         break;
     case SYSCALL_GETPID:
         r = getpid(task);
