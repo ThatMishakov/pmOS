@@ -50,21 +50,21 @@ inline PML4* pml4()
 
 inline PDPT* pdpt_of(uint64_t addr)
 {
-    addr = (int64_t)addr >> (9+9+9);
-    addr &= ~0xfff;
-    return ((PDPT*)(0177777777777777000000 | addr));
+    addr = (uint64_t)addr >> (9+9+9);
+    addr &= ~(uint64_t)0xfff;
+    return ((PDPT*)((uint64_t)01777777777777777000000 | addr)); // 0177777777777777000000
 }
 
 inline PD* pd_of(uint64_t addr)
 {
-    addr = (int64_t)addr >> (9+9);
-    addr &= ~0xfff;
-    return ((PD*)(0177777777777000000000 | addr));
+    addr = (uint64_t)addr >> (9+9);
+    addr &= ~(uint64_t)0xfff;
+    return ((PD*)((uint64_t)01777777777777000000000 | addr));
 }
 
 inline PT* pt_of(uint64_t addr)
 {
-    addr = (int64_t)addr >> (9);
-    addr &= ~0xfff;
-    return ((PT*)(0177777777000000000000 | addr));
+    addr = (uint64_t)addr >> (9);
+    addr &= ~(uint64_t)0xfff;
+    return ((PT*)((uint64_t)01777777777000000000000 | addr));
 }
