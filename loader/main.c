@@ -39,13 +39,14 @@ void main()
     print_str("\n");
     */
 
-    print_str("Attempting to create a process...\n");
-    syscall_r r = syscall(SYSCALL_CREATE_PROCESS);
-    print_str("--> Recieved: ");
-    print_hex(r.result);
-    print_str(" ");
-    print_hex(r.value);
-    print_str("\n");
+    
+    // print_str("Attempting to create a process...\n");
+    // syscall_r r = syscall(SYSCALL_CREATE_PROCESS);
+    // print_str("--> Recieved: ");
+    // print_hex(r.result);
+    // print_str(" ");
+    // print_hex(r.value);
+    // print_str("\n");
 
     // Get a page and try writing to it
     print_str("Getting a page -> ");

@@ -21,8 +21,8 @@ void bitmap_mark_bit(uint64_t pos, char b)
     uint64_t l = pos%64;
     uint64_t i = pos/64;
 
-    if (b) bitmap[i] |= 0x01 << l;
-    else bitmap[i] &= ~(0x01 << l);
+    if (b) bitmap[i] |= (uint64_t)0x01 << l;
+    else bitmap[i] &= ~((uint64_t)0x01 << l);
 }
 
 char bitmap_read_bit(uint64_t pos)
@@ -42,8 +42,8 @@ void mark(uint64_t base, uint64_t size, char usable)
             bitmap_mark_bit(base_page + i, usable);
         }
     } else { // TODO: INEFFICIENT!
-        uint64_t pattern = usable ? ~0x0 : 0x0;
-        while (base_page & 0x3f && size_page > 0) {
+        uint64_t pattern = usable ? ~(uint64_t)0x0 : (uint64_t)0x0;
+        while (base_page%64 && size_page > 0) {
             bitmap_mark_bit(base_page, usable);
             ++base_page;
             --size_page;
