@@ -46,12 +46,12 @@ uint64_t get_page(uint64_t virtual_addr)
     // Check that the page is not already mapped
     if (page_type(virtual_addr) != Page_Types::UNALLOCATED) return ERROR_PAGE_PRESENT;
 
-    // Everything seems ok, get the page
+    // Everything seems ok, get the page (lazy allocation)
     Page_Table_Argumments arg = {};
     arg.user_access = 1;
     arg.writeable = 1;
     arg.execution_disabled = 0;
-    uint64_t result = get_page_zeroed(virtual_addr, arg);
+    uint64_t result = alloc_page_lazy(virtual_addr, arg);
 
     // Return the result (success or failure)
     return result;
