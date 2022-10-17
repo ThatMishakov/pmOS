@@ -14,19 +14,17 @@ void pagefault_manager(void)
     // Get page type
     Page_Types type = page_type(virtual_addr);
 
-    t_print("Gotten pagefault page %h type %i\n", virtual_addr, type);
-
     switch (type) {
     case Page_Types::LAZY_ALLOC: // Lazilly allocated page caused the fault
         get_lazy_page(virtual_addr);
         break;
     case Page_Types::UNALLOCATED: // Page not allocated
-        t_print("--> unallocated... halting...\n");
+        t_print("Pagefault --> unallocated... halting...\n");
         halt();
         break;
     default:
         // Not implemented
-        t_print("--> not implemented. Halting...\n");
+        t_print("Pagefault --> not implemented. Halting...\n");
         halt();
         break;
     }

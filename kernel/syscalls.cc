@@ -12,8 +12,6 @@ void syscall_handler(TaskDescriptor* task)
 
     uint64_t call_n = regs->rdi;
 
-    t_print("Syscall %i\n", call_n);
-
     switch (call_n) {
     case SYSCALL_GET_PAGE:
         r.result = get_page(regs->rsi);

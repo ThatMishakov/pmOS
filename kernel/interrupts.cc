@@ -121,5 +121,4 @@ extern "C" void interrupt_handler()
             t_print("Not currently handled.\n");
             break;
     }
-    t_print("Returning from interrupt handler.\n");
 }

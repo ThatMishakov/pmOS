@@ -49,12 +49,15 @@ void main()
     // print_str("\n");
 
     // Get a page and try writing to it
-    uint64_t addr = (uint64_t)0xeadbeef0;
+    uint64_t addr = (uint64_t)0xdeadbeef0;
     uint64_t result = get_page(addr & ~((uint64_t)0xfff)).result;
-    print_str("Getting a page -> ");
+    print_str("Getting a page ");
+    print_hex(addr);
+    print_str(" -> ");
     print_hex(result);
     print_str(" \n");
-    *((long*)addr) = 1234;
+    uint64_t* ptr = (uint64_t*)addr;
+    ptr[0] = 0xcafebabe;
 
     print_str("Nothing to do. Halting...\n");
     while (1) {
