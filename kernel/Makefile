@@ -26,7 +26,7 @@ INTERNALLDFLAGS :=     \
 	-static \
 	-Tlinker.ld    \
 	-fuse-ld=lld \
-	-z max-page-size=0x1000 -v
+	-z max-page-size=0x1000
  
 # Internal C flags that should not be changed by the user.
 INTERNALCFLAGS  :=       \

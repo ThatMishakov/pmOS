@@ -301,12 +301,6 @@ kresult_t get_lazy_page(uint64_t virtual_addr)
     addr >>= 12;
     //uint64_t page = addr;
     uint64_t ptable_entry = addr & 0x1ff;
-    addr >>= 9;
-    uint64_t pdir_entry = addr & 0x1ff;
-    addr >>= 9;
-    uint64_t pdpt_entry = addr & 0x1ff;
-    addr >>= 9;
-    uint64_t pml4_entry = addr & 0x1ff;
 
     PTE& pte = pt_of(virtual_addr)->entries[ptable_entry];
     if (pte.present or not pte.cache_disabled) return ERROR_WRONG_PAGE_TYPE;

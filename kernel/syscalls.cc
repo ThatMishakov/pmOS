@@ -25,9 +25,12 @@ void syscall_handler(TaskDescriptor* task)
     case SYSCALL_CREATE_PROCESS:
         r = syscall_create_process();
         break;
+    case SYSCALL_MAP_INTO:
+        r.val = syscall_map_into();
+        break;
     default:
         // Not supported
-        regs->rax = ERROR_UNSUPPORTED;
+        r.result = ERROR_UNSUPPORTED;
         break;
     }
     regs->rax = r.result;
@@ -81,4 +84,9 @@ ReturnStr<uint64_t> getpid(TaskDescriptor* d)
 ReturnStr<uint64_t> syscall_create_process()
 {
     return create_process();
+}
+
+kresult_t syscall_map_into()
+{
+    return ERROR_NOT_IMPLEMENTED;
 }

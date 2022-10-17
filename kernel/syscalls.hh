@@ -10,3 +10,4 @@ uint64_t get_page(uint64_t virtual_addr);
 uint64_t release_page(uint64_t virtual_addr);
 ReturnStr<uint64_t> getpid(TaskDescriptor*);
 ReturnStr<uint64_t> syscall_create_process();
+kresult_t syscall_map_into();
