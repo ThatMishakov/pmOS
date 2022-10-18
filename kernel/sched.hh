@@ -28,9 +28,9 @@ struct TaskDescriptor {
     Process_Status status;
 
     // Scheduling lists
-    TaskDescriptor* q_next;
-    TaskDescriptor* q_prev;
-    sched_pqueue* parrent;
+    TaskDescriptor* q_next = nullptr;
+    TaskDescriptor* q_prev = nullptr;
+    sched_pqueue* parrent = nullptr;
 
     // Massaging
     Message_storage messages;
