@@ -19,12 +19,12 @@ void pagefault_manager(void)
         get_lazy_page(virtual_addr);
         break;
     case Page_Types::UNALLOCATED: // Page not allocated
-        t_print("Pagefault --> unallocated... halting...\n");
+        t_print("Pagefault dir %h --> unallocated... halting...\n", getCR2());
         halt();
         break;
     default:
         // Not implemented
-        t_print("Pagefault --> not implemented. Halting...\n");
+        t_print("Pagefault dir %h --> not implemented. Halting...\n", getCR2());
         halt();
         break;
     }
