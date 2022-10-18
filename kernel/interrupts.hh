@@ -81,7 +81,6 @@ struct PACKED Interrupt_Register_Frame {
     uint64_t cs;
     uint64_t rflags;
     uint64_t rsp;
-    uint64_t ss;
 };
 
 #define STACK_SIZE KB(16)

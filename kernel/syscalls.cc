@@ -97,6 +97,5 @@ kresult_t syscall_map_into()
 ReturnStr<uint64_t> syscall_block(TaskDescriptor* current_task)
 {
     kresult_t r = block_process(current_task);
-    
     return {r, 0};
 }

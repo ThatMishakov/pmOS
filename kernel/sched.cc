@@ -91,11 +91,11 @@ ReturnStr<uint64_t> create_process(uint16_t ring)
     {
     case 0:
         n->regs.cs = R0_CODE_SEGMENT;
-        n->regs.ss = R0_DATA_SEGMENT;
+        n->ss = R0_DATA_SEGMENT;
         break;
     case 3:
         n->regs.cs = R3_CODE_SEGMENT;
-        n->regs.ss = R3_DATA_SEGMENT;
+        n->ss = R3_DATA_SEGMENT;
         break;
     default:
         return {static_cast<kresult_t>(ERROR_NOT_IMPLEMENTED), (uint64_t)0};
@@ -219,7 +219,7 @@ void switch_process(TaskDescriptor* p)
     setCR3(p->page_table);
 
     // Set segment registers
-    set_segment_regs(p->regs.ss);
+    set_segment_regs(p->ss);
 
     // Change task
     current_task = p;

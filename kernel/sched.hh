@@ -25,6 +25,7 @@ struct TaskDescriptor {
     PID pid;
     TaskPermissions perm;
     uint64_t page_table;
+    uint16_t ss;
     Process_Status status;
 
     // Scheduling lists

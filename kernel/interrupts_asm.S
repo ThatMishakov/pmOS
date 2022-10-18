@@ -56,8 +56,8 @@
     popq 128(%rax); /* err */\
     popq 136(%rax); /* rip */\
     popq 144(%rax); /* cs */\
-    popq 160(%rax); /* rsp */\
-    popq 168(%rax); /* ss */
+    popq 152(%rax); /* rflags */\
+    popq 160(%rax); /* rsp */
 
 #define RESTORE_INT_FRAME \
     movq current_task(%rip), %rax; \
@@ -75,8 +75,8 @@
     movq 88(%rax), %rdx; \
     movq 96(%rax), %rcx; \
     movq 104(%rax), %rbx; \
-    pushq 168(%rax); /* ss */ \
     pushq 160(%rax); /* rsp */ \
+    pushq 152(%rax); /* rflags */ \
     pushq 144(%rax); /* cs */ \
     pushq 136(%rax); /* rip */ \
     movq 112(%rax), %rax /* Restore %rax */
