@@ -110,7 +110,6 @@ void PFrameAllocator::init_after_paging()
     }
 
     bitmap = (uint64_t*)addr;
-    t_print("Debug: Mapped the bitmap to kernel. Location: %h\n", bitmap);
 }
 
 uint64_t PFrameAllocator::bitmap_size_pages() const

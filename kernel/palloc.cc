@@ -74,7 +74,6 @@ void* palloc(size_t size)
     }
 
     UNLOCK(palloc_l)
-    t_print("Debug: allocated %i pages starting from %h\n", size, block);
     return (void*)block;
 }
 

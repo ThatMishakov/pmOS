@@ -27,8 +27,6 @@ void main()
 
     load_kernel(multiboot_info_str);
 
-    print_str("Back to loader...\n");
-
     /*
     print_str("Trying syscall(1);\n");
     syscall_r r = syscall(1);
@@ -51,7 +49,7 @@ void main()
     // Get a page and try writing to it
     uint64_t addr = (uint64_t)0xdeadbeef0;
     uint64_t result = get_page(addr & ~((uint64_t)0xfff)).result;
-    print_str("Getting a page ");
+    print_str("Getting a page to check syscalls ");
     print_hex(addr);
     print_str(" -> ");
     print_hex(result);
@@ -59,7 +57,7 @@ void main()
     uint64_t* ptr = (uint64_t*)addr;
     ptr[0] = 0xcafebabe;
 
-    print_str("Nothing to do. Blocking...\n");
+    print_str("Everything seems ok. Nothing to do. Blocking...\n");
     syscall(SYSCALL_BLOCK);
 
 
