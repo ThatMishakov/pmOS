@@ -37,7 +37,7 @@ public:
     size_t count(const K&) const;
 
     const T& at(const K&) const;
-    T& at(const T&) const;
+    T& at(const K&);
 
     K largest() const;
 };
@@ -118,7 +118,14 @@ template<class K, class T>
 size_t Splay_Tree_Map<K,T>::count(const K& key) const
 {
     node* p = splay(root, key);
-    if (p == nullptr or p->data != key) return 0;
+    if (p == nullptr or p->key != key) return 0;
 
     return 1;
+}
+
+template<class K, class T>
+T& Splay_Tree_Map<K,T>::at(const K& key)
+{
+    node* p = splay(root, key);
+    return p->data;
 }

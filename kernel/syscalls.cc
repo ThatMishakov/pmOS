@@ -28,6 +28,9 @@ void syscall_handler(TaskDescriptor* task)
     case SYSCALL_MAP_INTO:
         r.val = syscall_map_into();
         break;
+    case SYSCALL_BLOCK:
+        r = syscall_block(task);
+        break;
     default:
         // Not supported
         r.result = ERROR_UNSUPPORTED;
@@ -89,4 +92,11 @@ ReturnStr<uint64_t> syscall_create_process()
 kresult_t syscall_map_into()
 {
     return ERROR_NOT_IMPLEMENTED;
+}
+
+ReturnStr<uint64_t> syscall_block(TaskDescriptor* current_task)
+{
+    kresult_t r = block_process(current_task);
+    
+    return {r, 0};
 }

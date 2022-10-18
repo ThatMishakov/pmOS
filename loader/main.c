@@ -59,7 +59,10 @@ void main()
     uint64_t* ptr = (uint64_t*)addr;
     ptr[0] = 0xcafebabe;
 
-    print_str("Nothing to do. Halting...\n");
+    print_str("Nothing to do. Blocking...\n");
+    syscall(SYSCALL_BLOCK);
+
+
     while (1) {
       asm ("hlt");
     }

@@ -13,17 +13,26 @@ enum Process_Status {
     PROCESS_RUNNING,
     PROCESS_READY,
     PROCESS_BLOCKED,
-    PROCESS_UNINIT
+    PROCESS_UNINIT,
+    PROCESS_DEAD
 };
 
+struct sched_pqueue;
+
 struct TaskDescriptor {
+    // Basic process stuff
     Interrupt_Register_Frame regs;
+    PID pid;
     TaskPermissions perm;
     uint64_t page_table;
+    Process_Status status;
+
+    // Scheduling lists
     TaskDescriptor* q_next;
     TaskDescriptor* q_prev;
-    PID pid;
-    Process_Status status;
+    sched_pqueue* parrent;
+
+    // Massaging
     Message_storage messages;
 };
 
@@ -49,7 +58,19 @@ PID assign_pid();
 using sched_map = Splay_Tree_Map<PID, TaskDescriptor*>;
 
 // Creates a process structure and returns its pid
-ReturnStr<uint64_t> create_process();
+ReturnStr<uint64_t> create_process(uint16_t ring = 3);
 
 // Creates a stack for the process
 kresult_t init_stack(TaskDescriptor* process);
+
+// Inits an idle process
+void init_idle();
+
+// Finds a ready process and switches to it
+void task_switch();
+
+// Blocks a process and finds another one to execute
+kresult_t block_process(TaskDescriptor*);
+
+// Finds and switches to a new process (e.g. if the current is blocked or executing for too long)
+void find_new_process();

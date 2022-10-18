@@ -100,7 +100,8 @@ extern "C" void interrupt_handler()
             t_print("Overflow (OF)\n");
             break;
         case 0x6: 
-            t_print("Invalid op-code (UD)\n");
+            t_print("Invalid op-code (UD) -> instruction %h\n", stack_frame->rip);
+            halt();
             break;
         case 0x8: 
             t_print("Double fault (DF) [ABORT]\n");

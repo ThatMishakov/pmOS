@@ -12,7 +12,7 @@
 
 Kernel_Entry_Data* kdata;
 
-extern "C" int _start(Kernel_Entry_Data* d)
+extern "C" int main(Kernel_Entry_Data* d)
 {
     kdata = d;
     t_print("Hello from kernel!\n");

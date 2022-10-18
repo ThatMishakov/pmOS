@@ -42,8 +42,6 @@ struct System_Segment_Descriptor {
     TSS *tss();
 };
 
-#define KERNEL_CODE_SELECTOR 0x08
-
 struct GDT {
     GDT_entry Null {}; // always null
     GDT_entry _64bit_kernel_code {0, 0, 0, 0x9a, 0xa2, 0};
@@ -52,6 +50,12 @@ struct GDT {
     GDT_entry _64bit_user_data {0, 0, 0, 0xf2, 0xa0, 0};
     System_Segment_Descriptor SSD_entries[1] = {};
 } PACKED ALIGNED(0x1000);
+
+#define R0_CODE_SEGMENT    0x08
+#define R0_DATA_SEGMENT    0x10
+#define R3_CODE_SEGMENT    0x18
+#define R3_DATA_SEGMENT    0x20
+#define TSS_OFFSET         0x28
 
 extern "C" void loadGDT(GDT_descriptor* GDTdescriptor);
 

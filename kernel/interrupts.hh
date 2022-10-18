@@ -32,7 +32,7 @@ constexpr Gate_Descriptor::Gate_Descriptor()
 
 constexpr Gate_Descriptor::Gate_Descriptor(uint64_t offset, uint8_t ist, uint8_t type_attr)
     : offset0(offset & 0xffff),
-    segment_sel(KERNEL_CODE_SELECTOR),
+    segment_sel(R0_CODE_SEGMENT),
     ist(ist),
     attributes(type_attr),
     offset1((offset >> 16) & 0xffff),
