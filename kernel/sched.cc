@@ -5,6 +5,7 @@
 #include "common/errors.h"
 #include "linker.hh"
 #include "idle.hh"
+#include "asm.hh"
 
 TaskDescriptor* current_task;
 TaskDescriptor* idle_task;
@@ -45,11 +46,21 @@ void sched_pqueue::push_back(TaskDescriptor* d)
     d->parrent = this;
 }
 
-//TaskDescriptor* sched_pqueue::pop_front();
+TaskDescriptor* sched_pqueue::pop_front()
+{
+    TaskDescriptor* t = this->get_first();
+    this->erase(t);
+    return t;
+}
 
 TaskDescriptor* sched_pqueue::get_first()
 {
     return this->first;
+}
+
+bool sched_pqueue::empty() const
+{
+    return this->first == nullptr;
 }
 
 void sched_pqueue::erase(TaskDescriptor* t)
@@ -191,7 +202,25 @@ kresult_t block_process(TaskDescriptor* p)
 
 void find_new_process()
 {
-    t_print("find_new_process() not yet implemented. Halting...\n");
+    TaskDescriptor* next = nullptr;
+    if (not ready.empty()) {
+        next = ready.get_first();
+        ready.pop_front();
+    } else { // Nothing to execute. Idling...
+        next = idle_task;
+    }
 
-    halt();
+    switch_process(next);
+}
+
+void switch_process(TaskDescriptor* p)
+{
+    // Load CR3
+    setCR3(p->page_table);
+
+    // Set segment registers
+    set_segment_regs(p->regs.ss);
+
+    // Change task
+    current_task = p;
 }

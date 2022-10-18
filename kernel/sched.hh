@@ -43,6 +43,9 @@ struct sched_pqueue {
     void push_back(TaskDescriptor*);
     void push_front(TaskDescriptor*);
     void erase(TaskDescriptor*);
+
+    bool empty() const;
+
     TaskDescriptor* pop_front();
     TaskDescriptor* get_first();
 };
@@ -74,3 +77,6 @@ kresult_t block_process(TaskDescriptor*);
 
 // Finds and switches to a new process (e.g. if the current is blocked or executing for too long)
 void find_new_process();
+
+// Switches to the new process
+void switch_process(TaskDescriptor*);

@@ -55,3 +55,13 @@ getCR2:
     movq %cr2, %rax
     ret
 
+    .globl set_segment_regs
+    .type set_segment_regs, @function
+set_segment_regs:
+    movq %rdi, %rax
+    movw %ax, %ds
+    movw %ax, %es
+    movw %ax, %fs
+    movw %ax, %gs
+    ret
+
