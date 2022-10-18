@@ -3,6 +3,7 @@
 #include "common/com.h"
 #include "paging.hh"
 #include "sched.hh"
+#include "lib/vector.hh"
 
 void syscall_handler(TaskDescriptor* task)
 {
@@ -26,11 +27,13 @@ void syscall_handler(TaskDescriptor* task)
         r = syscall_create_process();
         break;
     case SYSCALL_MAP_INTO:
-        r.val = syscall_map_into();
+        r.result = syscall_map_into();
         break;
     case SYSCALL_BLOCK:
         r = syscall_block(task);
         break;
+    case SYSCALL_MAP_INTO_RANGE:
+        r.result = syscall_map_into_range(task);
     default:
         // Not supported
         r.result = ERROR_UNSUPPORTED;
@@ -98,4 +101,32 @@ ReturnStr<uint64_t> syscall_block(TaskDescriptor* current_task)
 {
     kresult_t r = block_process(current_task);
     return {r, 0};
+}
+
+kresult_t syscall_map_into_range(TaskDescriptor* d)
+{
+    uint64_t pid = d->regs.rsi;
+    uint64_t page_start = d->regs.rdx;
+    uint64_t to_addr = d->regs.rcx;
+    uint64_t nb_pages = d->regs.r8;
+    Page_Table_Argumments pta = *(Page_Table_Argumments *)&d->regs.r9;
+
+    // TODO: Check permissions
+
+    // Check allignment
+    if (page_start & 0xfff) return ERROR_UNALLIGNED;
+    if (to_addr & 0xfff) return ERROR_UNALLIGNED;
+
+    // Check if process exists
+    if (not exists_process(pid)) return ERROR_NO_SUCH_PROCESS;
+
+    // Check process status
+    if (not is_uninited(pid)) return ERROR_PROCESS_INITED;
+
+    // Get pid task_struct
+    TaskDescriptor* t = get_task(pid);
+
+    kresult_t r = transfer_pages(t, page_start, to_addr, nb_pages, pta);
+
+    return r;
 }

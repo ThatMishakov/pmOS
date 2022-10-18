@@ -15,5 +15,7 @@
 #define ERROR_PAGE_NOT_PRESENT   -11
 #define ERROR_WRONG_PAGE_TYPE    -12
 #define ERROR_ALREADY_BLOCKED    -13
+#define ERROR_NO_SUCH_PROCESS    -14
+#define ERROR_PROCESS_INITED     -15
 
 #endif

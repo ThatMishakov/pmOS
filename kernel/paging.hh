@@ -2,6 +2,7 @@
 #include "common/memory.h"
 #include <stdint.h>
 #include "types.hh"
+#include "sched.hh"
 
 // Tries to assign a page. Returns result
 uint64_t get_page(uint64_t virtual_addr, Page_Table_Argumments arg);
@@ -23,6 +24,15 @@ kresult_t release_page_s(uint64_t virtual_address);
 kresult_t alloc_page_lazy(uint64_t virtual_addr, Page_Table_Argumments arg);
 
 kresult_t get_lazy_page(uint64_t virtual_addr);
+
+// Transfers pages from current process to process t
+kresult_t transfer_pages(TaskDescriptor* t, uint64_t page_start, uint64_t to_addr, uint64_t nb_pages, Page_Table_Argumments pta);
+
+// Prepares a page table for the address
+kresult_t prepare_pt(uint64_t addr);
+
+// Checks if page is allocated
+bool is_allocated(uint64_t page);
 
 enum Page_Types {
     NORMAL = 0,
@@ -67,4 +77,11 @@ inline PT* pt_of(uint64_t addr)
     addr = (uint64_t)addr >> (9);
     addr &= ~(uint64_t)0xfff;
     return ((PT*)((uint64_t)01777777770000000000000 | addr));
+}
+
+inline PTE& get_pte(uint64_t addr)
+{
+    addr = (uint64_t)addr >> (9);
+    addr &= ~(uint64_t)07;
+    return *((PTE*)((uint64_t)01777777770000000000000 | addr));
 }

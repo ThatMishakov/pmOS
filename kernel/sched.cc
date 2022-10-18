@@ -224,3 +224,8 @@ void switch_process(TaskDescriptor* p)
     // Change task
     current_task = p;
 }
+
+bool is_uninited(uint64_t pid)
+{
+    return s_map->at(pid)->status == PROCESS_UNINIT;
+}

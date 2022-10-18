@@ -320,3 +320,54 @@ kresult_t get_lazy_page(uint64_t virtual_addr)
 
     return SUCCESS;
 }
+
+bool is_allocated(uint64_t page)
+{
+    Page_Types p = page_type(page);
+
+    return p == Page_Types::NORMAL or p == Page_Types::LAZY_ALLOC;
+}
+
+kresult_t transfer_pages(TaskDescriptor* t, uint64_t page_start, uint64_t to_address, uint64_t nb_pages, Page_Table_Argumments pta)
+{
+    // Check that pages are allocated
+    for (uint64_t i = 0; i < nb_pages; ++i) {
+        if (not is_allocated(page_start + KB(4))) return ERROR_PAGE_NOT_ALLOCATED;
+    }
+
+    struct Page_Descr {
+        PTE pte;
+        uint64_t vaddr;
+    };
+
+    List<Page_Descr> l;
+
+    // Get pages
+    for (uint64_t i = 0; i < nb_pages; ++i) {
+        uint64_t p = page_start + i*KB(4);
+        l.push_back({get_pte(p), p});
+    }
+
+    // Save %cr3
+    uint64_t cr3 = getCR3();
+
+    // Switch into new process' memory
+    setCR3(t->page_table);
+
+    // Map memory
+    // TODO
+    kresult_t r = ERROR_NOT_IMPLEMENTED;
+
+    // Return old %cr3
+    setCR3(cr3);
+
+    // If successfull, invalidate the pages
+    if (r == SUCCESS) {
+        for (uint64_t i = 0; i < nb_pages; ++i) {
+            get_pte(page_start + i*KB(4096)) = {};
+        }
+        setCR3(cr3);
+    }
+
+    return r;
+}

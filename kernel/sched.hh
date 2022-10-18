@@ -60,6 +60,7 @@ void init_scheduling();
 PID assign_pid();
 
 using sched_map = Splay_Tree_Map<PID, TaskDescriptor*>;
+extern sched_map* s_map;
 
 // Creates a process structure and returns its pid
 ReturnStr<uint64_t> create_process(uint16_t ring = 3);
@@ -81,3 +82,18 @@ void find_new_process();
 
 // Switches to the new process
 void switch_process(TaskDescriptor*);
+
+// Returns true if the process with pid exists, false otherwise
+inline bool exists_process(uint64_t pid)
+{
+    return s_map->count(pid) == 1;
+}
+
+// Returns true if the process with pid is uninitialized
+bool is_uninited(uint64_t pid);
+
+// Gets a task descriptor of the process with pid
+inline TaskDescriptor* get_task(uint64_t pid)
+{
+    return s_map->at(pid);
+}

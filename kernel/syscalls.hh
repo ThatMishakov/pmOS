@@ -21,5 +21,8 @@ ReturnStr<uint64_t> syscall_create_process();
 // Transfers pages to another process
 kresult_t syscall_map_into();
 
+// Transfers pages to another processor in range
+kresult_t syscall_map_into_range(TaskDescriptor*);
+
 // Blocks current process
 ReturnStr<uint64_t> syscall_block(TaskDescriptor* current);

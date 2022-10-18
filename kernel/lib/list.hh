@@ -14,6 +14,27 @@ private:
     Node* last = nullptr;
     size_t l_size = 0;
 public:
+    class iterator {
+    private:
+        Node* ptr;
+    public:
+        constexpr iterator(Node* n): ptr(n) {};
+
+        T* operator++() {
+            ptr = ptr->next;
+            return ptr;
+        }
+
+        T* operator*()
+        {
+            return ptr;
+        }
+        bool operator==(iterator k)
+        {
+            return this->ptr == k.ptr;
+        }
+    };
+
     constexpr List();
     List(const List&);
     ~List();
@@ -33,6 +54,9 @@ public:
     void pop_back();
 
     size_t size() const;
+
+    iterator begin();
+    iterator end();
 };
 
 template<typename T>
@@ -107,4 +131,16 @@ void List<T>::pop_front()
         delete t;
     }
     --l_size;
+}
+
+template<typename T>
+typename List<T>::iterator List<T>::begin()
+{
+    return iterator(first);
+}
+
+template<typename T>
+typename List<T>::iterator List<T>::end()
+{
+    return iterator(nullptr);
 }
