@@ -313,7 +313,7 @@ kresult_t get_lazy_page(uint64_t virtual_addr)
 bool is_allocated(uint64_t page)
 {
     Page_Types p = page_type(page);
-
+    
     return p == Page_Types::NORMAL or p == Page_Types::LAZY_ALLOC;
 }
 
@@ -321,7 +321,7 @@ kresult_t transfer_pages(TaskDescriptor* t, uint64_t page_start, uint64_t to_add
 {
     // Check that pages are allocated
     for (uint64_t i = 0; i < nb_pages; ++i) {
-        if (not is_allocated(page_start + KB(4))) return ERROR_PAGE_NOT_ALLOCATED;
+        if (not is_allocated(page_start + i*KB(4))) return ERROR_PAGE_NOT_ALLOCATED;
     }
 
     List<PTE> l;
@@ -357,7 +357,7 @@ kresult_t transfer_pages(TaskDescriptor* t, uint64_t page_start, uint64_t to_add
     // If successfull, invalidate the pages
     if (r == SUCCESS) {
         for (uint64_t i = 0; i < nb_pages; ++i) {
-            get_pte(page_start + i*KB(4096)) = {};
+            get_pte(page_start + i*KB(4)) = {};
         }
         setCR3(cr3);
     }

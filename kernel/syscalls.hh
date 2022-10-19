@@ -16,7 +16,7 @@ uint64_t release_page(uint64_t virtual_addr);
 ReturnStr<uint64_t> getpid(TaskDescriptor*);
 
 // Creates an empty process
-ReturnStr<uint64_t> syscall_create_process();
+ReturnStr<uint64_t> syscall_create_process(uint8_t ring);
 
 // Transfers pages to another process
 kresult_t syscall_map_into();
@@ -26,3 +26,6 @@ kresult_t syscall_map_into_range(TaskDescriptor*);
 
 // Blocks current process
 ReturnStr<uint64_t> syscall_block(TaskDescriptor* current);
+
+// Allocates the nb_page at virtual_addr
+kresult_t syscall_get_page_multi(uint64_t virtual_addr, uint64_t nb_pages);

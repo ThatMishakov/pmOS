@@ -16,7 +16,7 @@ void add_pages(uint64_t pages)
 
     unoccupied = (void*)((uint64_t)unoccupied + size);
 
-    for (uint64_t i = 0; i < size; i += 1024)
+    for (uint64_t i = 0; i < size; i += 4096)
         free_pages_list->push_back(i+start);
 }
 

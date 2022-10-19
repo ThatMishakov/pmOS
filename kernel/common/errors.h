@@ -2,7 +2,7 @@
 #define KERNEL_ERRORS_H
 
 #define SUCCESS                  0
-#define ERROR_UNSUPPORTED       -1
+#define ERROR_NOT_SUPPORTED     -1
 #define ERROR_NOT_IMPLEMENTED   -2
 #define ERROR_NO_PERMISSION     -3
 #define ERROR_OUT_OF_RANGE      -4

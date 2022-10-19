@@ -9,6 +9,7 @@
 #include <syscall.h>
 #include <screen.h>
 #include "../kernel/common/syscalls.h"
+#include <load_elf.h>
 
 uint32_t multiboot_magic;
 uint32_t multiboot_info_str;
@@ -56,6 +57,20 @@ void main()
     print_str(" \n");
     uint64_t* ptr = (uint64_t*)addr;
     ptr[0] = 0xcafebabe;
+
+    print_str("Loading modules...\n");
+    for (struct multiboot_tag * tag = (struct multiboot_tag *) (multiboot_info_str + 8); tag->type != MULTIBOOT_TAG_TYPE_END;
+      tag = (struct multiboot_tag *) ((multiboot_uint8_t *) tag + ((tag->size + 7) & ~7))) {
+        if (tag->type == MULTIBOOT_TAG_TYPE_MODULE) {
+            if (!str_starts_with(((struct multiboot_tag_module *)tag)->cmdline, "kernel")) {
+                struct multiboot_tag_module * mod = (struct multiboot_tag_module *)tag;
+                print_str(" --> loading ");
+                print_str(mod->cmdline);
+                print_str("\n");
+                load_elf(mod->mod_start, 3);
+            }
+        }
+      }
 
     print_str("Everything seems ok. Nothing to do. Blocking...\n");
     syscall(SYSCALL_BLOCK);

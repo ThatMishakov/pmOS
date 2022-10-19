@@ -98,7 +98,7 @@ ReturnStr<uint64_t> create_process(uint16_t ring)
         n->ss = R3_DATA_SEGMENT;
         break;
     default:
-        return {static_cast<kresult_t>(ERROR_NOT_IMPLEMENTED), (uint64_t)0};
+        return {static_cast<kresult_t>(ERROR_NOT_SUPPORTED), (uint64_t)0};
         break;
     }
 

@@ -15,28 +15,40 @@ void syscall_handler(TaskDescriptor* task)
 
     switch (call_n) {
     case SYSCALL_GET_PAGE:
+        t_print("Debug: Syscall getpage\n");
         r.result = get_page(regs->rsi);
         break;
     case SYSCALL_RELEASE_PAGE:
+        t_print("Debug: Syscall release_page\n");
         r.result = release_page(regs->rsi);
         break;
     case SYSCALL_GETPID:
+        t_print("Debug: Syscall getpid\n");
         r = getpid(task);
         break;
     case SYSCALL_CREATE_PROCESS:
-        r = syscall_create_process();
+        t_print("Debug: Syscall create_process\n");
+        r = syscall_create_process(regs->rsi);
         break;
     case SYSCALL_MAP_INTO:
+        t_print("Debug: Syscall map_into\n");
         r.result = syscall_map_into();
         break;
     case SYSCALL_BLOCK:
+        t_print("Debug: Syscall block\n");
         r = syscall_block(task);
         break;
     case SYSCALL_MAP_INTO_RANGE:
+        t_print("Debug: Syscall map_into_range\n");
         r.result = syscall_map_into_range(task);
+        break;
+    case SYSCALL_GET_PAGE_MULTI:
+        t_print("Debug: Syscall get_pages_multi %h %h\n", regs->rsi, regs->rdx);
+        r.result = syscall_get_page_multi(regs->rsi, regs->rdx);
+        break;
     default:
         // Not supported
-        r.result = ERROR_UNSUPPORTED;
+        r.result = ERROR_NOT_SUPPORTED;
         break;
     }
     regs->rax = r.result;
@@ -87,9 +99,9 @@ ReturnStr<uint64_t> getpid(TaskDescriptor* d)
     return {SUCCESS, d->pid};
 }
 
-ReturnStr<uint64_t> syscall_create_process()
+ReturnStr<uint64_t> syscall_create_process(uint8_t ring)
 {
-    return create_process();
+    return create_process(ring);
 }
 
 kresult_t syscall_map_into()
@@ -113,6 +125,9 @@ kresult_t syscall_map_into_range(TaskDescriptor* d)
 
     // TODO: Check permissions
 
+    // Check if legal address
+    if (page_start >= KERNEL_ADDR_SPACE or (page_start + nb_pages*KB(4)) > KERNEL_ADDR_SPACE) return ERROR_OUT_OF_RANGE;
+
     // Check allignment
     if (page_start & 0xfff) return ERROR_UNALLIGNED;
     if (to_addr & 0xfff) return ERROR_UNALLIGNED;
@@ -129,4 +144,31 @@ kresult_t syscall_map_into_range(TaskDescriptor* d)
     kresult_t r = transfer_pages(t, page_start, to_addr, nb_pages, pta);
 
     return r;
+}
+
+kresult_t syscall_get_page_multi(uint64_t virtual_addr, uint64_t nb_pages)
+{
+    // Check allignment to 4096K (page size)
+    if (virtual_addr & 0xfff) return ERROR_UNALLIGNED;
+
+    // Check that program is not hijacking kernel space
+    if (virtual_addr >= KERNEL_ADDR_SPACE or (virtual_addr + nb_pages*KB(4)) > KERNEL_ADDR_SPACE) return ERROR_OUT_OF_RANGE;
+
+    // Everything seems ok, get the page (lazy allocation)
+    Page_Table_Argumments arg = {};
+    arg.user_access = 1;
+    arg.writeable = 1;
+    arg.execution_disabled = 0;
+    uint64_t result = SUCCESS;
+    uint64_t i = 0;
+    for (; i < nb_pages and result == SUCCESS; ++i)
+        result = alloc_page_lazy(virtual_addr + i*KB(4), arg);
+
+    // If unsuccessfull, return everything back
+    if (result != SUCCESS)
+        for (uint64_t k = 0; k < i; ++k) 
+            get_pte(virtual_addr + k*KB(4)) = {};
+
+    // Return the result (success or failure)
+    return result;
 }

@@ -15,7 +15,7 @@ INCLUDEDIR = include
 # User controllable CFLAGS.
 USERCFLAGS = -Wall -Wextra -O2 -pipe -target $(TARGET) 
 
-CPPFLAGS = -mcmodel=kernel $(INTERNALCFLAGS) -I$(INCLUDEDIR) $(USERCFLAGS) -I../kernel/commmon
+CPPFLAGS = -mcmodel=kernel $(INTERNALCFLAGS) -I$(INCLUDEDIR) $(USERCFLAGS) -I../kernel/commmon  -MMD -MP
 #CXXFLAGS = $(CFLAGS)
 ASMFLAGS = -I$(INCLUDEDIR)
 LDFLAGS = $(INTERNALLDFLAGS) -target $(TARGET)
@@ -52,6 +52,8 @@ $(EXEC): $(OBJ) linker.ld
 
 	
 clean:
-	rm -f $(EXEC) *.o *.s
+	rm -f $(EXEC) *.o *.s *.d
 
 all: $(EXEC)
+
+-include $(DEP)

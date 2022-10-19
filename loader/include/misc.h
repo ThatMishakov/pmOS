@@ -3,5 +3,6 @@
 
 void printc(char c);
 void tlb_flush();
+void halt();
 
 #endif

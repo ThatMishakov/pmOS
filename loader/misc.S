@@ -9,3 +9,7 @@ ENTRY(tlb_flush)
     movq %cr3, %rax
     movq %rax, %cr3
     ret
+
+ENTRY(halt)
+    hlt
+    jmp halt
