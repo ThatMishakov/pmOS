@@ -50,6 +50,9 @@ void syscall_handler(TaskDescriptor* task)
         t_print("Debug: Syscall start_process\n");
         r.result = syscall_start_process(regs->rsi, regs->rdx);
         break;
+    case SYSCALL_EXIT:
+        t_print("Debug: syscall exit\n");
+        r.result = syscall_exit(task);
     default:
         // Not supported
         r.result = ERROR_NOT_SUPPORTED;
@@ -195,6 +198,18 @@ kresult_t syscall_start_process(uint64_t pid, uint64_t start)
 
     // Init task
     init_task(t);
+
+    return SUCCESS;
+}
+
+kresult_t syscall_exit(TaskDescriptor* task)
+{
+    // Record exit code
+    task->ret_hi = task->regs.rdx;
+    task->ret_lo = task->regs.rax;
+
+    // Kill the process
+    kill(task);
 
     return SUCCESS;
 }

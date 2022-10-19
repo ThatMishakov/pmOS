@@ -12,5 +12,6 @@
 #define SYSCALL_MAP_INTO        0x07
 #define SYSCALL_MAP_INTO_RANGE  0x08
 #define SYSCALL_START_PROCESS   0x09
+#define SYSCALL_EXIT            0x0a
 
 #endif

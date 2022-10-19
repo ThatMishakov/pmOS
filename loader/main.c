@@ -72,11 +72,6 @@ void main()
         }
       }
 
-    print_str("Everything seems ok. Nothing to do. Blocking...\n");
-    syscall(SYSCALL_BLOCK);
-
-
-    while (1) {
-      asm ("hlt");
-    }
+    print_str("Everything seems ok. Nothing to do. Exiting...\n");
+    syscall(SYSCALL_EXIT);
 }

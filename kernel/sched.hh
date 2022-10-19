@@ -34,6 +34,10 @@ struct TaskDescriptor {
 
     // Massaging
     Message_storage messages;
+
+    // Return state
+    uint64_t ret_hi;
+    uint64_t ret_lo;
 };
 
 struct sched_pqueue {
@@ -105,3 +109,6 @@ inline void set_entry_point(TaskDescriptor* d, uint64_t entry)
 
 // Initializes uninited task
 void init_task(TaskDescriptor* d);
+
+// Kills the task
+void kill(TaskDescriptor* t);

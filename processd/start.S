@@ -8,8 +8,8 @@ call main
 
 
     // Call destructors
-    // Return to kernel
+    
 
-    // block
-    movq $0x02, %rdi
+    // Exit
+    movq $0x0a, %rdi
     int $0xca

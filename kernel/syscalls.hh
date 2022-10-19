@@ -32,3 +32,6 @@ kresult_t syscall_get_page_multi(uint64_t virtual_addr, uint64_t nb_pages);
 
 // Starts a process with PID pid at starting point start
 kresult_t syscall_start_process(uint64_t pid, uint64_t start);
+
+// Exits (kills the process at the end of its execution)
+kresult_t syscall_exit(TaskDescriptor* task);

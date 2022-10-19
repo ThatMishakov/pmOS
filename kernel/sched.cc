@@ -237,3 +237,18 @@ void init_task(TaskDescriptor* d)
 
     ready.push_back(d);
 }
+
+void kill(TaskDescriptor* p)
+{
+    // Erase from queues
+    if (p->parrent != nullptr) p->parrent->erase(p);
+
+    // Add to blocked queue
+    dead.push_back(p);
+
+    // Task switch if it's a current process
+    if (current_task == p) {
+        current_task = nullptr;
+        find_new_process();
+    }
+}
