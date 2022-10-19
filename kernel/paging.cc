@@ -225,18 +225,7 @@ kresult_t invalidade(uint64_t virtual_addr)
 
 kresult_t alloc_page_lazy(uint64_t virtual_addr, Page_Table_Argumments arg)
 {
-    uint64_t addr = virtual_addr;
-    addr >>= 12;
-    //uint64_t page = addr;
-    uint64_t ptable_entry = addr & 0x1ff;
-    addr >>= 9;
-    uint64_t pdir_entry = addr & 0x1ff;
-    addr >>= 9;
-    uint64_t pdpt_entry = addr & 0x1ff;
-    addr >>= 9;
-    uint64_t pml4_entry = addr & 0x1ff;
-
-    PML4E& pml4e = pml4()->entries[pml4_entry];
+    PML4E& pml4e = *get_pml4e(virtual_addr);
     if (not pml4e.present) {
         pml4e = {};
         ReturnStr<uint64_t> p = palloc.alloc_page_ppn();
@@ -251,7 +240,7 @@ kresult_t alloc_page_lazy(uint64_t virtual_addr, Page_Table_Argumments arg)
         page_clear((void*)pdpt_of(virtual_addr));
     }
 
-    PDPTE& pdpte = pdpt_of(virtual_addr)->entries[pdpt_entry];
+    PDPTE& pdpte = *get_pdpe(virtual_addr);
     if (pdpte.size) return ERROR_PAGE_PRESENT;
     if (not pdpte.present) {
         pdpte = {};
@@ -267,7 +256,7 @@ kresult_t alloc_page_lazy(uint64_t virtual_addr, Page_Table_Argumments arg)
         page_clear((void*)pd_of(virtual_addr));
     }
 
-    PDE& pde = pd_of(virtual_addr)->entries[pdir_entry];
+    PDE& pde = *get_pde(virtual_addr);
     if (pde.size) return ERROR_PAGE_PRESENT;
     if (not pde.present) {
         pde = {};
@@ -283,7 +272,7 @@ kresult_t alloc_page_lazy(uint64_t virtual_addr, Page_Table_Argumments arg)
         page_clear((void*)pt_of(virtual_addr));
     }
 
-    PTE& pte = pt_of(virtual_addr)->entries[ptable_entry];
+    PTE& pte = get_pte(virtual_addr);
     if (pte.present or pte.cache_disabled) return ERROR_PAGE_PRESENT;
 
     pte = {};
