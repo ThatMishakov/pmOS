@@ -7,6 +7,7 @@
 #include "asm.hh"
 #include "sched.hh"
 #include "syscalls.hh"
+#include "misc.hh"
 
 IDT k_idt = {};
 
@@ -110,6 +111,7 @@ extern "C" void interrupt_handler()
             break;
         case 0xD:
             t_print("!!! General Protection Fault (GP) error %h\n", stack_frame->err);
+            print_registers(current_task);
             halt();
             break;
         case PMOS_SYSCALL_INT:

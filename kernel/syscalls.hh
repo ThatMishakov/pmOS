@@ -29,3 +29,6 @@ ReturnStr<uint64_t> syscall_block(TaskDescriptor* current);
 
 // Allocates the nb_page at virtual_addr
 kresult_t syscall_get_page_multi(uint64_t virtual_addr, uint64_t nb_pages);
+
+// Starts a process with PID pid at starting point start
+kresult_t syscall_start_process(uint64_t pid, uint64_t start);

@@ -62,5 +62,8 @@ uint64_t load_elf(uint64_t addr, uint8_t ring)
             }
         }
     }
+
+    r = start_process(pid, elf_h->program_entry);
+
     return 0;
 }

@@ -10,5 +10,4 @@ call main
     // Call destructors
     // Return to kernel
 start:
-    hlt
     jmp start

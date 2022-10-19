@@ -46,6 +46,10 @@ void syscall_handler(TaskDescriptor* task)
         t_print("Debug: Syscall get_pages_multi %h %h\n", regs->rsi, regs->rdx);
         r.result = syscall_get_page_multi(regs->rsi, regs->rdx);
         break;
+    case SYSCALL_START_PROCESS:
+        t_print("Debug: Syscall start_process\n");
+        r.result = syscall_start_process(regs->rsi, regs->rdx);
+        break;
     default:
         // Not supported
         r.result = ERROR_NOT_SUPPORTED;
@@ -171,4 +175,26 @@ kresult_t syscall_get_page_multi(uint64_t virtual_addr, uint64_t nb_pages)
 
     // Return the result (success or failure)
     return result;
+}
+
+kresult_t syscall_start_process(uint64_t pid, uint64_t start)
+{
+    // TODO: Check permissions
+
+    // Check if process exists
+    if (not exists_process(pid)) return ERROR_NO_SUCH_PROCESS;
+
+    // Check process status
+    if (not is_uninited(pid)) return ERROR_PROCESS_INITED;
+
+    // Get task descriptor
+    TaskDescriptor* t = get_task(pid);
+
+    // Set entry
+    set_entry_point(t, start);
+
+    // Init task
+    init_task(t);
+
+    return SUCCESS;
 }

@@ -25,7 +25,6 @@ struct TaskDescriptor {
     PID pid;
     TaskPermissions perm;
     uint64_t page_table;
-    uint16_t ss;
     Process_Status status;
 
     // Scheduling lists
@@ -97,3 +96,12 @@ inline TaskDescriptor* get_task(uint64_t pid)
 {
     return s_map->at(pid);
 }
+
+// Sets the entry point to the task
+inline void set_entry_point(TaskDescriptor* d, uint64_t entry)
+{
+    d->regs.rip = entry;
+}
+
+// Initializes uninited task
+void init_task(TaskDescriptor* d);

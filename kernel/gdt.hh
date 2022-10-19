@@ -53,8 +53,8 @@ struct GDT {
 
 #define R0_CODE_SEGMENT    0x08
 #define R0_DATA_SEGMENT    0x10
-#define R3_CODE_SEGMENT    0x18
-#define R3_DATA_SEGMENT    0x20
+#define R3_CODE_SEGMENT    0x18 | 0x03
+#define R3_DATA_SEGMENT    0x20 | 0x03
 #define TSS_OFFSET         0x28
 
 extern "C" void loadGDT(GDT_descriptor* GDTdescriptor);

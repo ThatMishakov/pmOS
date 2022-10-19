@@ -6,6 +6,7 @@
 #include "linker.hh"
 #include "idle.hh"
 #include "asm.hh"
+#include "misc.hh"
 
 TaskDescriptor* current_task;
 TaskDescriptor* idle_task;
@@ -91,11 +92,11 @@ ReturnStr<uint64_t> create_process(uint16_t ring)
     {
     case 0:
         n->regs.cs = R0_CODE_SEGMENT;
-        n->ss = R0_DATA_SEGMENT;
+        n->regs.ss = R0_DATA_SEGMENT;
         break;
     case 3:
         n->regs.cs = R3_CODE_SEGMENT;
-        n->ss = R3_DATA_SEGMENT;
+        n->regs.ss = R3_DATA_SEGMENT;
         break;
     default:
         return {static_cast<kresult_t>(ERROR_NOT_SUPPORTED), (uint64_t)0};
@@ -132,7 +133,7 @@ PID assign_pid()
 {
     LOCK(assign_pid)
 
-    PID pid_p = pid++;
+    PID pid_p = ++pid;
 
     UNLOCK(assign_pid)
 
@@ -219,7 +220,7 @@ void switch_process(TaskDescriptor* p)
     setCR3(p->page_table);
 
     // Set segment registers
-    set_segment_regs(p->ss);
+    set_segment_regs(p->regs.ss);
 
     // Change task
     current_task = p;
@@ -228,4 +229,11 @@ void switch_process(TaskDescriptor* p)
 bool is_uninited(uint64_t pid)
 {
     return s_map->at(pid)->status == PROCESS_UNINIT;
+}
+
+void init_task(TaskDescriptor* d)
+{
+    if (d->parrent != nullptr) d->parrent->erase(d);
+
+    ready.push_back(d);
 }
