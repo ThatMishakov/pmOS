@@ -9,5 +9,7 @@ call main
 
     // Call destructors
     // Return to kernel
-start:
-    jmp start
+
+    // block
+    movq $0x02, %rdi
+    int $0xca
