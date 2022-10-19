@@ -31,6 +31,9 @@ kresult_t transfer_pages(TaskDescriptor* t, uint64_t page_start, uint64_t to_add
 // Prepares a page table for the address
 kresult_t prepare_pt(uint64_t addr);
 
+// Sets pte with pta at virtual_addr
+kresult_t set_pte(uint64_t virtual_addr, PTE pte, Page_Table_Argumments pta);
+
 // Checks if page is allocated
 bool is_allocated(uint64_t page);
 
@@ -77,6 +80,27 @@ inline PT* pt_of(uint64_t addr)
     addr = (uint64_t)addr >> (9);
     addr &= ~(uint64_t)0xfff;
     return ((PT*)((uint64_t)01777777770000000000000 | addr));
+}
+
+inline PML4E* get_pml4e(uint64_t addr)
+{
+    addr = (uint64_t)addr >> (9+9+9+9);
+    addr &= ~(uint64_t)07;
+    return ((PML4E*)((uint64_t)01777777777777777770000 | addr));
+}
+
+inline PDPTE* get_pdpe(uint64_t addr)
+{
+    addr = (uint64_t)addr >> (9+9+9);
+    addr &= ~(uint64_t)07;
+    return ((PDPTE*)((uint64_t)01777777777777770000000 | addr));
+}
+
+inline PDE* get_pde(uint64_t addr)
+{
+    addr = (uint64_t)addr >> (9+9);
+    addr &= ~(uint64_t)0x07;
+    return ((PDE*)((uint64_t)01777777777770000000000 | addr));
 }
 
 inline PTE& get_pte(uint64_t addr)

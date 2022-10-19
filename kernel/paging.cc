@@ -335,17 +335,12 @@ kresult_t transfer_pages(TaskDescriptor* t, uint64_t page_start, uint64_t to_add
         if (not is_allocated(page_start + KB(4))) return ERROR_PAGE_NOT_ALLOCATED;
     }
 
-    struct Page_Descr {
-        PTE pte;
-        uint64_t vaddr;
-    };
-
-    List<Page_Descr> l;
+    List<PTE> l;
 
     // Get pages
     for (uint64_t i = 0; i < nb_pages; ++i) {
         uint64_t p = page_start + i*KB(4);
-        l.push_back({get_pte(p), p});
+        l.push_back(get_pte(p));
     }
 
     // Save %cr3
@@ -355,8 +350,17 @@ kresult_t transfer_pages(TaskDescriptor* t, uint64_t page_start, uint64_t to_add
     setCR3(t->page_table);
 
     // Map memory
-    // TODO
-    kresult_t r = ERROR_NOT_IMPLEMENTED;
+    kresult_t r = SUCCESS;
+    auto it = l.begin();
+    uint64_t i = 0;
+    for (; i < nb_pages and r == SUCCESS; ++i, ++it) {
+        r = set_pte(to_address + i*KB(4), *it, pta);
+    }
+
+    // If failed, invalidade the pages that succeded
+    if (r != SUCCESS)
+        for (uint64_t k = 0; k < i; ++i)
+            get_pte(to_address + k*KB(4)) = {};
 
     // Return old %cr3
     setCR3(cr3);
@@ -370,4 +374,62 @@ kresult_t transfer_pages(TaskDescriptor* t, uint64_t page_start, uint64_t to_add
     }
 
     return r;
+}
+
+kresult_t set_pte(uint64_t virtual_addr, PTE pte_n, Page_Table_Argumments arg)
+{
+    PML4E& pml4e = *get_pml4e(virtual_addr);
+    if (not pml4e.present) {
+        pml4e = {};
+        ReturnStr<uint64_t> p = palloc.alloc_page_ppn();
+        if (p.result != SUCCESS) return p.result; 
+        pml4e.page_ppn = p.val;
+        pml4e.present = 1;
+        pml4e.writeable = 1;
+        pml4e.user_access = arg.user_access;
+
+        tlb_flush();
+
+        page_clear((void*)pdpt_of(virtual_addr));
+    }
+
+    PDPTE& pdpte = *get_pdpe(virtual_addr);
+    if (pdpte.size) return ERROR_PAGE_PRESENT;
+    if (not pdpte.present) {
+        pdpte = {};
+        ReturnStr<uint64_t> p =  palloc.alloc_page_ppn();;
+        if (p.result != SUCCESS) return p.result; 
+        pdpte.page_ppn = p.val;
+        pdpte.present = 1;
+        pdpte.writeable = 1;
+        pdpte.user_access = arg.user_access;
+
+        tlb_flush();
+
+        page_clear((void*)pd_of(virtual_addr));
+    }
+
+    PDE& pde = *get_pde(virtual_addr);
+    if (pde.size) return ERROR_PAGE_PRESENT;
+    if (not pde.present) {
+        pde = {};
+        ReturnStr<uint64_t> p = palloc.alloc_page_ppn();
+        if (p.result != SUCCESS) return p.result; 
+        pde.page_ppn = p.val;
+        pde.present = 1;
+        pde.writeable = 1;
+        pde.user_access = arg.user_access;
+
+        tlb_flush();
+
+        page_clear((void*)pt_of(virtual_addr));
+    }
+
+    PTE& pte = get_pte(virtual_addr);
+    if (pte.present or pte.cache_disabled) return ERROR_PAGE_PRESENT;
+
+    pte = pte_n;
+    pte.user_access = arg.user_access;
+    pte.writeable = arg.writeable; 
+    return SUCCESS;
 }

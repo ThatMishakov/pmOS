@@ -20,15 +20,16 @@ public:
     public:
         constexpr iterator(Node* n): ptr(n) {};
 
-        T* operator++() {
+        iterator& operator++() {
             ptr = ptr->next;
-            return ptr;
+            return *this;
         }
 
-        T* operator*()
+        T& operator*()
         {
-            return ptr;
+            return ptr->data;
         }
+
         bool operator==(iterator k)
         {
             return this->ptr == k.ptr;
