@@ -16,7 +16,6 @@ uint32_t multiboot_info_str;
 
 void main()
 {
-    asm("xchgw %bx, %bx");
     if (multiboot_magic != MULTIBOOT2_BOOTLOADER_MAGIC) {
         print_str("Not booted by multiboot2 bootloader\n");
         while (1) ;
@@ -24,6 +23,14 @@ void main()
 
     /* Initialize everything */
     print_str("Hello from loader!\n");
+    print_str("The rest is broken! Halting...\n");
+
+    while (1)
+    {
+      asm("hlt");
+    }
+    
+
     init_mem(multiboot_info_str);
 
     load_kernel(multiboot_info_str);
