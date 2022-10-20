@@ -5,6 +5,8 @@
 #define GRUB_MULTIBOOT_ARCHITECTURE_I386 0
 #define STACK_SIZE 0x4000
 
+/* ------------------------------------------------------- MULTIBOOT2 HEADER ---------------------------------------------------- */
+    .code32
     .section .multiboot2
     /*  Align 64 bits boundary. */
     .align  8    
@@ -25,36 +27,106 @@ module_alligment_tag_start:
     .long   module_alligment_tag_end - module_alligment_tag_start
 module_alligment_tag_end: 
 
+/* Set entry point */
+entry_address_tag_start:
+    .short  MULTIBOOT_HEADER_TAG_ENTRY_ADDRESS
+    .short  0
+    .long   entry_address_tag_end - entry_address_tag_start
+    .quad   _multiboot_start // Half-broken!
+entry_address_tag_end:
+
+/* Mark executable as relocatable */
+relocatable_tag_start:
+    .short  MULTIBOOT_HEADER_TAG_RELOCATABLE
+    .short  0
+    .long relocatable_tag_end - relocatable_tag_start
+    .long 0x100000 // start
+    .long 2*1024*1024*1024  // End at 2 GB
+    .long 4096 // Allign to page
+    .long 2 // Preference -> load at highest address possible
+relocatable_tag_end: 
+
+
     /* Terminate multiboot2 header */
     .short MULTIBOOT_HEADER_TAG_END
     .short 0
     .long 8   
 multiboot_header_end:
 
+/* ------------------------------------------------------- BASIC INIT ---------------------------------------------------- */
+    .section .data
+    .globl g_pml4
+g_pml4: .quad 0
+
+
     .code32
     .text
-    .globl  _start
-    .type _start, @function
-_start:
+    .globl  _multiboot_start
+    .type _multiboot_start, @function
+_multiboot_start:
     /*  Initialize the stack pointer. */
-    leal    stack + STACK_SIZE, %esp
+    movl (%ebx), %edx
+    movl %ebx, %ecx
+
+    movl %ebx, %esp
+    addl $4, %esp
+    call rel_addr
+rel_addr:
+    popl %ebx
+    movl %edx, (%ecx)
+
+    #define REL(X) X - rel_addr(%ebx)
+
+    leal    stack + STACK_SIZE - rel_addr(%ebx), %esp
 
     /*  Reset EFLAGS. */
     pushl   $0
     popf
 
     /* Save multiboot structures */
-    movl %ebx, multiboot_info_str
-    movl %eax, multiboot_magic
+    movl %ecx, multiboot_info_str - rel_addr(%ebx)
+    movl %eax, multiboot_magic - rel_addr(%ebx)
 
     /* Load GDT */
     pushl   $(temp_gdt_end - temp_gdt - 1) /* size */
-    pushl   $temp_gdt /* base */
+
+    pushl   $temp_gdt - rel_addr /* base (relative) */
+    addl    %ebx, (%esp)
+
     call    loadGDT_32
     addl    $8, %esp
 
-    /* Init paging tables */
-    call init_paging_tables
+    /* Init misc stuff */
+    call init_free
+
+    /* Get pml4 */
+    call get_free_page
+    movl %eax, REL(g_pml4)
+
+    pushl REL(g_pml4)
+    call clear_page_32
+    addl $4, %esp
+
+    /* Init PML4 */
+
+    /* Point last entry to self */
+    movl REL(g_pml4), %ecx
+    movl %ecx, %eax
+    orl $0x000000403, %eax /* P W*/
+    movl %eax, 4096-8(%ecx)
+
+    /* *casually* map pages */
+    leal REL(_exec_start), %esi
+mem_loop_start:
+
+    pushl %esi
+    call map_page_self
+    addl $4, %esp
+
+    addl $4096, %esi
+    cmpl REL(_map_p_end ), %esi
+    jl mem_loop_start
+
 
     /* Enable PAE and page size extension */
     movl %cr4, %eax
@@ -68,7 +140,7 @@ _start:
     wrmsr
 
     /* Load PML4 */
-    movl $g_pml4, %eax
+    movl REL(g_pml4), %eax
     movl %eax, %cr3
 
     /* Enable paging */
@@ -84,12 +156,164 @@ _start:
     movw %ax, %gs
     movw %ax, %ss
 
-    /* Far jump to main */
-    ljmp   $(temp_gdt_64bit_code - temp_gdt), $main
+    /* Far return to main */
+    pushl $(temp_gdt_64bit_code - temp_gdt)
+    pushl $(main - rel_addr)
+    addl %ebx, (%esp)
+    lretl
 
 
     /*  Our stack area. */
+    .section bss
+    .align 4096
     .comm   stack, STACK_SIZE
+
+// ------------------------------------------------------- PAGING ------------------------------------------------------- */
+.section .paging
+    .fill 4096*30 // Reserve 30 pages
+
+.section .data
+after_exec_free_avail:
+    .quad
+
+.section .text
+    .type init_free, @function
+init_free:
+    leal _map_p_end - rel_addr(%ebx), %eax
+    movl %eax, after_exec_free_avail - rel_addr(%ebx)
+    ret
+
+    .type get_free_page, @function
+get_free_page:
+    movl REL(after_exec_free_avail), %eax
+    addl $4096, REL(after_exec_free_avail)
+    ret
+
+    .type map_page_self, @function
+map_page_self:
+    pushl %ebp
+    movl %esp, %ebp
+    pushl %esi
+    pushl %edi
+
+    // Check if PDPT is present
+    /*
+    movl 8(%ebp), %esi
+    shrl $(12 + 9 + 9 + 9), %esi
+    andl $0777, %esi
+    */
+    movl $0, %esi // 0 for 32 bit addresses
+
+    movl REL(g_pml4), %edi
+    movl (%edi, %esi, 8), %eax
+    btl $0, %eax
+    jc pml4e_present
+
+    // Not present, spawn it
+    call get_free_page
+    pushl %eax
+    call clear_page_32    
+    popl %eax
+    orl $( 1 << 0 | 1 << 1 | 1 << 2), %eax
+    movl %eax, (%edi, %esi, 8)
+
+pml4e_present:
+    andl $~0777, %eax // %eax now has address of PDPT
+
+    // Check if PDPT is present
+    movl %eax, %edi
+    movl 8(%ebp), %esi
+    shrl $(12 + 9 + 9), %esi
+    andl $0777, %esi
+    movl (%edi, %esi, 8), %eax
+    btl $0, %eax
+    jc pdpte_present
+
+    call get_free_page
+    pushl %eax
+    call clear_page_32
+    popl %eax
+    orl $( 1 << 0 | 1 << 1 | 1 << 2), %eax
+    movl %eax, (%edi, %esi, 8)
+
+pdpte_present:
+    andl $~0777, %eax // %eax now has address of PD
+
+    // Check if PD entry is present
+    movl %eax, %edi
+    movl 8(%ebp), %esi
+    shrl $(12 + 9), %esi
+    andl $0777, %esi
+    movl (%edi, %esi, 8), %eax
+    btl $0, %eax
+    jc pde_present
+
+    call get_free_page
+    pushl %eax
+    call clear_page_32
+    popl %eax
+    orl $( 1 << 0 | 1 << 1 | 1 << 2), %eax
+    movl %eax, (%edi, %esi, 8)
+
+pde_present:
+    andl $~0777, %eax // %eax now has address of PT
+    movl %eax, %edi
+    movl 8(%ebp), %esi
+    shrl $(12), %esi
+    andl $0777, %esi
+    movl 8(%ebp), %eax
+    orl $( 1 << 0 | 1 << 1 | 1 << 2), %eax
+    movl %eax, (%edi, %esi, 8)
+
+    popl %edi
+    popl %esi
+    popl %ebp
+    ret
+
+/* -------------------------------------------------------- MISC -------------------------------------------------------- */
+
+    .type clear_page_32, @function
+clear_page_32:
+    movl $1024, %ecx
+    movl 4(%esp), %edx /* Address */
+.start_c:
+    movl $0, -4(%edx, %ecx, 4);
+    loop .start_c
+    ret
+
+
+/* ------------------------------------------------------- GDT --------------------------------------------------------- */
+.bss
+GDT_DW:
+    .short
+    .short
+    .short
+
+    .code32
+.text
+    .globl loadGDT_32
+    .type loadGDT_32, @function
+loadGDT_32:
+    movw   8(%esp), %ax
+    movw   %ax, GDT_DW - rel_addr(%ebx)
+    movw   4(%esp), %ax
+    movw   %ax, GDT_DW+2 - rel_addr(%ebx)
+    movw   6(%esp), %ax
+    movw   %ax, GDT_DW+4 - rel_addr(%ebx)
+    lgdt   GDT_DW - rel_addr(%ebx)
+    pushl $0x08
+    pushl $(reload_CS - rel_addr)
+    addl %ebx, (%esp)
+    lretl
+reload_CS:
+    movw $0x10, %ax
+    movw %ax, %ss
+    movw %ax, %ds
+    movw %ax, %es
+    movw %ax, %fs
+    movw %ax, %gs
+    ret
+
 
     .align  4096
 temp_gdt:
@@ -127,50 +351,3 @@ temp_gdt_64bit_data:
     .byte 0xcf
     .byte 0x00
 temp_gdt_end:
-
-    .text
-    .align 4
-    .code32
-.type init_paging_tables, @function
-init_paging_tables:
-    /* Directly map 1 GB of memory */
-
-    /* Add PDPT entry */
-    movl $g_pdpt_e0, %eax
-    orl $0x000000403, %eax /* P W*/
-    movl %eax, g_pml4
-
-    /* Point last entry to self */
-    movl $g_pml4, %eax
-    orl $0x000000403, %eax /* P W*/
-    movl %eax, g_pml4+4096-8
-
-    /* Add PDE entry */
-    movl $g_pd_e0, %eax
-    orl $0x000000403, %eax /* P W*/
-    movl %eax, g_pdpt_e0
-
-    /* Map 1GB worth of huge pages */
-    movl $0, %ecx
-g_pt_loop_start:
-    movl %ecx, %eax
-    shll $(12+9), %eax
-    orl $0x000000483, %eax
-    movl %eax, g_pd_e0(,%ecx,8)
-    incl %ecx
-    cmpl $512, %ecx
-    jl g_pt_loop_start
-    
-
-    ret
-
-    .align 4096
-    .globl g_pml4
-g_pml4:
-    .fill 4096
-
-g_pdpt_e0:
-    .fill 4096
-
-g_pd_e0:
-    .fill 4096
