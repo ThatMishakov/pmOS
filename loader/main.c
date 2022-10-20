@@ -11,15 +11,17 @@
 #include "../kernel/common/syscalls.h"
 #include <load_elf.h>
 
-uint32_t multiboot_magic;
-uint32_t multiboot_info_str;
+uint64_t multiboot_magic;
+uint64_t multiboot_info_str;
 
 void main()
 {
+    asm("xchgw %bx, %bx");
     if (multiboot_magic != MULTIBOOT2_BOOTLOADER_MAGIC) {
         print_str("Not booted by multiboot2 bootloader\n");
         while (1) ;
     }
+    asm("xchgw %bx, %bx");
 
     /* Initialize everything */
     print_str("Hello from loader!\n");

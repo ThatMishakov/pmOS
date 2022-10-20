@@ -174,7 +174,7 @@ kresult_t syscall_get_page_multi(uint64_t virtual_addr, uint64_t nb_pages)
     // If unsuccessfull, return everything back
     if (result != SUCCESS)
         for (uint64_t k = 0; k < i; ++k) 
-            get_pte(virtual_addr + k*KB(4)) = {};
+            *get_pte(virtual_addr + k*KB(4)) = {};
 
     // Return the result (success or failure)
     return result;

@@ -4,77 +4,92 @@
 #include <entry.h>
 #include <mem.h>
 
-char is_present(PML4* table, uint64_t addr)
+uint64_t after_exec_free_avail;
+
+uint64_t alloc_page_t()
 {
-    addr >>= 12;
-    //uint64_t page = addr;
-    uint64_t ptable_entry = addr & 0x1ff;
-    addr >>= 9;
-    uint64_t pdir_entry = addr & 0x1ff;
-    addr >>= 9;
-    uint64_t pdpt_entry = addr & 0x1ff;
-    addr >>= 9;
-    uint64_t pml4_entry = addr & 0x1ff;
-
-    PML4E pml4e = table->entries[pml4_entry];
-    if (!pml4e.present) return 0;
-
-    PDPTE pdpte = ((PDPT*)PAGE_ADDR(pml4e))->entries[pdpt_entry];
-    if (!pdpte.present) return 0;
-    if (pdpte.size) return 1; // 1 GB page
-
-    PDE pde = ((PD*)PAGE_ADDR(pdpte))->entries[pdir_entry];
-    if (!pde.present) return 0;
-    if (pde.size) return 1; // 2MB page
-
-    PTE pte = ((PT*)PAGE_ADDR(pde))->entries[ptable_entry];
-    if (!pte.present) return 0;
-
-    return 1;
+    uint64_t p = after_exec_free_avail;
+    after_exec_free_avail += 4096;
+    return p;
 }
 
 void get_page(uint64_t addr, Page_Table_Argumments arg)
 {
-    addr >>= 12;
-    //uint64_t page = addr;
-    uint64_t ptable_entry = addr & 0x1ff;
-    addr >>= 9;
-    uint64_t pdir_entry = addr & 0x1ff;
-    addr >>= 9;
-    uint64_t pdpt_entry = addr & 0x1ff;
-    addr >>= 9;
-    uint64_t pml4_entry = addr & 0x1ff;
-
-    PML4E *pml4e = &g_pml4.entries[pml4_entry];
+    PML4E *pml4e = get_pml4e(addr);
     if (!pml4e->present) {
-        *(uint64_t*)pml4e = alloc_page();
+        *(uint64_t*)pml4e = alloc_page_t();
         memclear(*(void ** )pml4e, 4096);
         pml4e->present = 1;
         pml4e->writeable = 1;
+
+        tlb_flush();
     }
 
-    PDPTE* pdpte = &((PDPT*)PAGE_ADDR((*pml4e)))->entries[pdpt_entry];
+    PDPTE* pdpte = get_pdpe(addr);
     if (!pdpte->present) {
-        *(uint64_t*)pdpte = alloc_page();
+        *(uint64_t*)pdpte = alloc_page_t();
         memclear(*(void ** )pdpte, 4096);
         pdpte->present = 1;
         pdpte->writeable = 1;
+        tlb_flush();
     } else if (pdpte->size) ;// TODO
 
-    PDE* pde = &((PD*)PAGE_ADDR((*pdpte)))->entries[pdir_entry];
+    PDE* pde = get_pde(addr);
     if (!pde->present) {
-        *(uint64_t*)pde = alloc_page();
+        *(uint64_t*)pde = alloc_page_t();
         memclear(*(void ** )pde, 4096);
         pde->present = 1;
         pde->writeable = 1;
+        tlb_flush();
     } else if (pde->size) ; // TODO
 
-    PTE* pte = &((PT*)PAGE_ADDR((*pde)))->entries[ptable_entry];
+    PTE* pte = get_pde(addr);
     if (!pte->present) {
-        *(uint64_t*)pte = alloc_page();
+        *(uint64_t*)pte = alloc_page_t();
         memclear(*(void ** )pte, 4096);
         pte->present = 1;
         pte->writeable = arg.writeable;
         pte->execution_disabled = 0;//arg.execution_disabled; // TODO
+        tlb_flush();
+    }
+}
+
+void map(uint64_t addr, uint64_t phys, Page_Table_Argumments arg)
+{
+    PML4E *pml4e = get_pml4e(addr);
+    if (!pml4e->present) {
+        *(uint64_t*)pml4e = alloc_page_t();
+        memclear(*(void ** )pml4e, 4096);
+        pml4e->present = 1;
+        pml4e->writeable = 1;
+
+        tlb_flush();
+    }
+
+    PDPTE* pdpte = get_pdpe(addr);
+    if (!pdpte->present) {
+        *(uint64_t*)pdpte = alloc_page_t();
+        memclear(*(void ** )pdpte, 4096);
+        pdpte->present = 1;
+        pdpte->writeable = 1;
+        tlb_flush();
+    } else if (pdpte->size) ;// TODO
+
+    PDE* pde = get_pde(addr);
+    if (!pde->present) {
+        *(uint64_t*)pde = alloc_page_t();
+        memclear(*(void ** )pde, 4096);
+        pde->present = 1;
+        pde->writeable = 1;
+        tlb_flush();
+    } else if (pde->size) ; // TODO
+
+    PTE* pte = get_pde(addr);
+    if (!pte->present) {
+        pte->page_ppn = phys >> 12;
+        pte->present = 1;
+        pte->writeable = arg.writeable;
+        pte->execution_disabled = 0;//arg.execution_disabled; // TODO
+        tlb_flush();
     }
 }

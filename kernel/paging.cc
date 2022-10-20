@@ -272,7 +272,7 @@ kresult_t alloc_page_lazy(uint64_t virtual_addr, Page_Table_Argumments arg)
         page_clear((void*)pt_of(virtual_addr));
     }
 
-    PTE& pte = get_pte(virtual_addr);
+    PTE& pte = *get_pte(virtual_addr);
     if (pte.present or pte.cache_disabled) return ERROR_PAGE_PRESENT;
 
     pte = {};
@@ -329,7 +329,7 @@ kresult_t transfer_pages(TaskDescriptor* t, uint64_t page_start, uint64_t to_add
     // Get pages
     for (uint64_t i = 0; i < nb_pages; ++i) {
         uint64_t p = page_start + i*KB(4);
-        l.push_back(get_pte(p));
+        l.push_back(*get_pte(p));
     }
 
     // Save %cr3
@@ -349,7 +349,7 @@ kresult_t transfer_pages(TaskDescriptor* t, uint64_t page_start, uint64_t to_add
     // If failed, invalidade the pages that succeded
     if (r != SUCCESS)
         for (uint64_t k = 0; k < i; ++i)
-            get_pte(to_address + k*KB(4)) = {};
+            *get_pte(to_address + k*KB(4)) = {};
 
     // Return old %cr3
     setCR3(cr3);
@@ -357,7 +357,7 @@ kresult_t transfer_pages(TaskDescriptor* t, uint64_t page_start, uint64_t to_add
     // If successfull, invalidate the pages
     if (r == SUCCESS) {
         for (uint64_t i = 0; i < nb_pages; ++i) {
-            get_pte(page_start + i*KB(4)) = {};
+            *get_pte(page_start + i*KB(4)) = {};
         }
         setCR3(cr3);
     }
@@ -414,7 +414,7 @@ kresult_t set_pte(uint64_t virtual_addr, PTE pte_n, Page_Table_Argumments arg)
         page_clear((void*)pt_of(virtual_addr));
     }
 
-    PTE& pte = get_pte(virtual_addr);
+    PTE& pte = *get_pte(virtual_addr);
     if (pte.present or pte.cache_disabled) return ERROR_PAGE_PRESENT;
 
     pte = pte_n;

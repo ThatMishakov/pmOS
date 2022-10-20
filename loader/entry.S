@@ -35,18 +35,6 @@ entry_address_tag_start:
     .quad   _multiboot_start // Half-broken!
 entry_address_tag_end:
 
-/* Mark executable as relocatable */
-relocatable_tag_start:
-    .short  MULTIBOOT_HEADER_TAG_RELOCATABLE
-    .short  0
-    .long relocatable_tag_end - relocatable_tag_start
-    .long 0x100000 // start
-    .long 2*1024*1024*1024  // End at 2 GB
-    .long 4096 // Allign to page
-    .long 2 // Preference -> load at highest address possible
-relocatable_tag_end: 
-
-
     /* Terminate multiboot2 header */
     .short MULTIBOOT_HEADER_TAG_END
     .short 0
@@ -65,6 +53,7 @@ g_pml4: .quad 0
     .type _multiboot_start, @function
 _multiboot_start:
     /*  Initialize the stack pointer. */
+    xchgw %bx, %bx
     movl (%ebx), %edx
     movl %ebx, %ecx
 
@@ -117,6 +106,7 @@ rel_addr:
 
     /* *casually* map pages */
     leal REL(_exec_start), %esi
+    leal REL(_map_p_end ), %edi
 mem_loop_start:
 
     pushl %esi
@@ -124,7 +114,7 @@ mem_loop_start:
     addl $4, %esp
 
     addl $4096, %esi
-    cmpl REL(_map_p_end ), %esi
+    cmpl %edi, %esi
     jl mem_loop_start
 
 
@@ -171,10 +161,6 @@ mem_loop_start:
 // ------------------------------------------------------- PAGING ------------------------------------------------------- */
 .section .paging
     .fill 4096*30 // Reserve 30 pages
-
-.section .data
-after_exec_free_avail:
-    .quad
 
 .section .text
     .type init_free, @function
@@ -277,7 +263,7 @@ clear_page_32:
     movl $1024, %ecx
     movl 4(%esp), %edx /* Address */
 .start_c:
-    movl $0, -4(%edx, %ecx, 4);
+    movl $0, -4(%edx,%ecx, 4);
     loop .start_c
     ret
 

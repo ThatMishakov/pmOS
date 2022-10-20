@@ -108,4 +108,63 @@ typedef struct {
 
 #define PAGE_ADDR(page) (page.page_ppn << 12)
 
+inline PML4* pml4_of(UNUSED uint64_t addr)
+{
+    return ((PML4*)0xfffffffffffff000);
+}
+
+inline PML4* pml4()
+{
+    return ((PML4*)0xfffffffffffff000);
+}
+
+inline PDPT* pdpt_of(uint64_t addr)
+{
+    addr = (uint64_t)addr >> (9+9+9);
+    addr &= ~(uint64_t)0xfff;
+    return ((PDPT*)((uint64_t)01777777777777770000000 | addr));
+}
+
+inline PD* pd_of(uint64_t addr)
+{
+    addr = (uint64_t)addr >> (9+9);
+    addr &= ~(uint64_t)0xfff;
+    return ((PD*)((uint64_t)01777777777770000000000 | addr));
+}
+
+inline PT* pt_of(uint64_t addr)
+{
+    addr = (uint64_t)addr >> (9);
+    addr &= ~(uint64_t)0xfff;
+    return ((PT*)((uint64_t)01777777770000000000000 | addr));
+}
+
+inline PML4E* get_pml4e(uint64_t addr)
+{
+    addr = (uint64_t)addr >> (9+9+9+9);
+    addr &= ~(uint64_t)07;
+    return ((PML4E*)((uint64_t)01777777777777777770000 | addr));
+}
+
+inline PDPTE* get_pdpe(uint64_t addr)
+{
+    addr = (uint64_t)addr >> (9+9+9);
+    addr &= ~(uint64_t)07;
+    return ((PDPTE*)((uint64_t)01777777777777770000000 | addr));
+}
+
+inline PDE* get_pde(uint64_t addr)
+{
+    addr = (uint64_t)addr >> (9+9);
+    addr &= ~(uint64_t)0x07;
+    return ((PDE*)((uint64_t)01777777777770000000000 | addr));
+}
+
+inline PTE* get_pte(uint64_t addr)
+{
+    addr = (uint64_t)addr >> (9);
+    addr &= ~(uint64_t)07;
+    return ((PTE*)((uint64_t)01777777770000000000000 | addr));
+}
+
 #endif
