@@ -53,7 +53,6 @@ g_pml4: .quad 0
     .type _multiboot_start, @function
 _multiboot_start:
     /*  Initialize the stack pointer. */
-    xchgw %bx, %bx
     movl (%ebx), %edx
     movl %ebx, %ecx
 
@@ -271,9 +270,9 @@ clear_page_32:
 /* ------------------------------------------------------- GDT --------------------------------------------------------- */
 .bss
 GDT_DW:
-    .short
-    .short
-    .short
+    .short 0
+    .short 0
+    .short 0
 
     .code32
 .text
