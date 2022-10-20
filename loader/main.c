@@ -23,15 +23,19 @@ void main()
 
     /* Initialize everything */
     print_str("Hello from loader!\n");
-    print_str("The rest is broken! Halting...\n");
 
-    while (1)
-    {
-      asm("hlt");
-    }
+    // Map multiboot structure into the kernel
+    uint64_t multiboot_str_all = multiboot_info_str & ~(uint64_t)0xfff;
+    Page_Table_Argumments pta;
+    pta.user_access = 1;
+    pta.execution_disabled = 1;
+    pta.writeable = 1;
+    map(multiboot_str_all, multiboot_str_all, pta);
     
 
     init_mem(multiboot_info_str);
+
+    asm("xchgw %bx, %bx");
 
     load_kernel(multiboot_info_str);
     uint64_t addr = (uint64_t)0xdeadbeef0;
