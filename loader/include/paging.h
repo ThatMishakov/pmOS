@@ -7,4 +7,6 @@ char is_present(PML4* table, uint64_t addr);
 
 void get_page(uint64_t addr, Page_Table_Argumments arg);
 
+void map(uint64_t addr, uint64_t phys, Page_Table_Argumments arg);
+
 #endif

@@ -158,8 +158,6 @@ mem_loop_start:
     .comm   stack, STACK_SIZE
 
 // ------------------------------------------------------- PAGING ------------------------------------------------------- */
-.section .paging
-    .fill 4096*30 // Reserve 30 pages
 
 .section .text
     .type init_free, @function

@@ -17,24 +17,27 @@ void load_kernel(uint64_t multiboot_info_str)
 
     for (struct multiboot_tag * tag = (struct multiboot_tag *) (multiboot_info_str + 8); tag->type != MULTIBOOT_TAG_TYPE_END;
       tag = (struct multiboot_tag *) ((multiboot_uint8_t *) tag + ((tag->size + 7) & ~7))) {
-        switch (tag->type) {
-        case MULTIBOOT_TAG_TYPE_MODULE: {
-            if (str_starts_with(((struct multiboot_tag_module *)tag)->cmdline, "kernel"))
+        if (tag->type == MULTIBOOT_TAG_TYPE_MODULE && str_starts_with(((struct multiboot_tag_module *)tag)->cmdline, "kernel"))
                 mod = (struct multiboot_tag_module *)tag;
-        }
-            break;
-        default:
-            break;
-        }
       }
+    
 
     if (!mod) {
         print_str("Did not find kernel module\n");
         return;
     }
 
+    /* Map kernel exec into memory */
+    static uint64_t exec_virt_loc = 274877906944;
+    for (uint64_t i = 0; i + mod->mod_start < mod->mod_end; i += 4096) {
+        Page_Table_Argumments arg;
+        arg.writeable = 1;
+        arg.user_access = 1;
+        map(exec_virt_loc + i, mod->mod_start + i, arg);
+    }
+
     /* Parse elf */
-    ELF_64bit * elf_h = (ELF_64bit*)mod->mod_start;
+    ELF_64bit * elf_h = (ELF_64bit*)exec_virt_loc;
     if (elf_h->magic != 0x464c457f) {
         print_str("Kernel is not in ELF format\n");
         return;
@@ -74,6 +77,8 @@ void load_kernel(uint64_t multiboot_info_str)
             memcpy((char*)phys_loc, (char*)vaddr, size);
         }
     }
+
+
     print_str("==> Jumping to kernel\n");
 
     int (*entry)(Kernel_Entry_Data*) = (void*)elf_h->program_entry;

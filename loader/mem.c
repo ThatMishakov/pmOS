@@ -4,21 +4,121 @@
 #include <../kernel/common/memory.h>
 #include <io.h>
 #include <mem.h>
+#include <paging.h>
 
 typedef struct {
     uint64_t base;
     uint64_t size;
 } mem_entry;
 
+uint64_t * bitmap = 0;
+uint64_t bitmap_size;
+
 mem_entry reserved[64];
 int reserved_i = 0;
+
+void bitmap_mark_bit(uint64_t pos, char b)
+{
+    uint64_t l = pos%64;
+    uint64_t i = pos/64;
+
+    if (b) bitmap[i] |= (uint64_t)0x01 << l;
+    else bitmap[i] &= ~((uint64_t)0x01 << l);
+}
+
+char bitmap_read_bit(uint64_t pos)
+{
+    uint64_t l = pos%64;
+    uint64_t i = pos/64;
+
+    return !!(bitmap[i] & (0x01 << l));
+}
+
+void mark(uint64_t base, uint64_t size, char usable)
+{
+    uint64_t base_page = base >> 12;
+    uint64_t size_page = size >> 12;
+    if (size_page < 64) {
+        for (uint64_t i = 0; i < size_page; ++i) {
+            bitmap_mark_bit(base_page + i, usable);
+        }
+    } else { // TODO: INEFFICIENT!
+        uint64_t pattern = usable ? ~(uint64_t)0x0 : (uint64_t)0x0;
+        while (base_page%64 && size_page > 0) {
+            bitmap_mark_bit(base_page, usable);
+            ++base_page;
+            --size_page;
+        }
+        while (size_page > 64) {
+            bitmap[base_page >> 6] = pattern;
+            base_page += 64;
+            size_page -= 64;
+        }
+        while (size_page > 0) {
+            bitmap_mark_bit(base_page, usable);
+            ++base_page;
+            --size_page;
+        }
+    }
+}
+
+void mark_usable(uint64_t base, uint64_t size)
+{
+    mark(base, size, 1);
+}
+
+void reserve(uint64_t base, uint64_t size)
+{
+    reserved[reserved_i] = (mem_entry){base, size};
+    reserved_i++;
+}
+
+void reserve_unal(uint64_t base, uint64_t size)
+{
+    uint64_t base_alligned = base & ~0xfff;
+    size += base & 0xfff;
+    uint64_t size_alligned = size & ~0xfff;
+    if (size & 0xfff) size_alligned += 0x1000;
+
+    if (size == 0) return;
+
+    reserve(base_alligned, size_alligned);
+}
+
+void bitmap_reserve(uint64_t base, uint64_t size)
+{
+    mark(base, size, 0);
+}
+
+// Allocates a page
+uint64_t alloc_page()
+{
+    uint64_t page = 0;
+    // Find free page
+    for (uint64_t i = 4/*0x100000 >> (12*6)*/; i < bitmap_size; ++i) {
+        if (bitmap[i])
+            for (int j = 0; j < 64; ++j) {
+                if (bitmap_read_bit(i*64 + j)) {
+                    page = i*64 + j;
+                    goto skip;
+                }
+            }
+    }
+skip:
+    bitmap_mark_bit(page, 0);
+    page <<=12;
+
+    return page;
+}
+
 
 void init_mem(unsigned long multiboot_str)
 {
     print_str("Initializing memory\n");
-    // Find highes available memory entry
+    // Find highest available memory entry
     uint64_t base = 0;
     uint64_t end = 0;
+
 
       for (struct multiboot_tag *tag = (struct multiboot_tag *) (multiboot_str + 8); tag->type != MULTIBOOT_TAG_TYPE_END;
       tag = (struct multiboot_tag *) ((multiboot_uint8_t *) tag + ((tag->size + 7) & ~7))) {
@@ -75,16 +175,25 @@ void init_mem(unsigned long multiboot_str)
 
     bitmap_size = end/4096/8/8;
     if (bitmap_size % 512) bitmap_size += 512 - bitmap_size % 512;
-    bitmap = (uint64_t*)high_u;
+    uint64_t bitmap_phys = high_u;
+
+    // Map the bitmap
+    const static uint64_t bitmap_virt = 68719476736;
+    for (uint64_t i = 0; i < bitmap_size*8; i += 4096) {
+        Page_Table_Argumments arg;
+        arg.writeable = 1;
+        arg.user_access = 1;
+        map(bitmap_virt + i, bitmap_phys + i, arg);
+    }
+
+    bitmap = (uint64_t*)bitmap_virt;
+
     reserve(high_u, bitmap_size*8);
 
     memclear((void*)bitmap, bitmap_size*8);
-
     for (struct multiboot_tag *tag = (struct multiboot_tag *) (multiboot_str + 8); tag->type != MULTIBOOT_TAG_TYPE_END;
       tag = (struct multiboot_tag *) ((multiboot_uint8_t *) tag + ((tag->size + 7) & ~7))) {
-        switch (tag->type)
-        {
-        case MULTIBOOT_TAG_TYPE_MMAP: {
+        if (tag->type == MULTIBOOT_TAG_TYPE_MMAP) {
             for (struct multiboot_mmap_entry * mmap = ((struct multiboot_tag_mmap *)tag)->entries;
                 (multiboot_uint8_t *) mmap < (multiboot_uint8_t *) tag + tag->size;
                 mmap = (multiboot_memory_map_t *) ((unsigned long) mmap + ((struct multiboot_tag_mmap *) tag)->entry_size)){
@@ -92,13 +201,11 @@ void init_mem(unsigned long multiboot_str)
                     uint64_t length = mmap->len;
                     int type = mmap->type;
 
+
                     if (type == MULTIBOOT_MEMORY_AVAILABLE) {
                         mark_usable(base_addr, length);
                     }
                 }
-        }
-        default:
-            break;
         }
     }
 

@@ -29,11 +29,10 @@ SECTIONS
     _map_p_end = .;
 
 
-    .paging : {
-        KEEP(*(.paging))
-    }
-    _exec_size = .end - .start;
-    _exec_end = .end;
-    .end = . ;
+    . = . + 256K; /* Reserve some space after executable */
+
+    _exec_size = _end - .start;
+    _exec_end = _end;
+    _end = . ;
 }
 
