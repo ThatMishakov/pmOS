@@ -1,5 +1,6 @@
 #include "interrupts.hh"
 #include "gdt.hh"
+#include "utils.hh"
 
 TSS* System_Segment_Descriptor::tss()
 {
@@ -10,6 +11,5 @@ GDT kernel_gdt;
 
 void init_gdt()
 {
-    GDT_descriptor gdt_descriptor = {sizeof(GDT) - 1, (uint64_t)&kernel_gdt};
-    loadGDT(&gdt_descriptor);
+    loadGDT(&kernel_gdt, sizeof(GDT) - 1);
 }

@@ -57,7 +57,7 @@ struct GDT {
 #define R3_DATA_SEGMENT    0x20 | 0x03
 #define TSS_OFFSET         0x28
 
-extern "C" void loadGDT(GDT_descriptor* GDTdescriptor);
+extern "C" void loadGDT(GDT* gdt, uint16_t size);
 
 void init_gdt();
 

@@ -1,8 +1,13 @@
     .globl loadGDT
     .type loadGDT, @function
 loadGDT:
-    cli
-    lgdt (%rdi)
+    pushq %rdi
+    shlq $48, %rsi
+    pushq %rsi
+    leaq 6(%rsp), %rax
+    lgdt (%rax)
+    addq $16,%rsp
+
     mov $0x10, %ax
     mov %ax, %ds
     mov %ax, %es

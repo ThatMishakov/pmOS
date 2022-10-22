@@ -48,6 +48,7 @@ void get_page(uint64_t addr, Page_Table_Argumments arg)
         pte->present = 1;
         pte->writeable = arg.writeable;
         pte->execution_disabled = 0;//arg.execution_disabled; // TODO
+        pte->avl = arg.extra;
         tlb_flush();
         memclear(addr, 4096);
     }
@@ -87,6 +88,7 @@ void map(uint64_t addr, uint64_t phys, Page_Table_Argumments arg)
         pte->page_ppn = phys >> 12;
         pte->present = 1;
         pte->writeable = arg.writeable;
+        pte->avl = arg.extra;
         pte->execution_disabled = 0;//arg.execution_disabled; // TODO
         tlb_flush();
     }
