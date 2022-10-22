@@ -9,23 +9,28 @@ SECTIONS
     /* Leave a symbol indicating the start of the kernel space */
     _kernel_start = .;
     _free_to_use = 0xFFFFFE8000000000;
+    . = ALIGN(4K);
 
     /* Then let's place all the other traditional executable sections afterwards. */
     .text : {
         *(.text*)
+        . = ALIGN(4K);
     }
 
     .rodata : {
         *(.rodata*)
+        . = ALIGN(4K);
     }
- 
+
     .data : {
         *(.data*)
+        . = ALIGN(4K);
     }
  
     .bss : {
         *(COMMON)
         *(.bss*)
+        . = ALIGN(4K);
     }
     _free_after_kernel = ALIGN(4K);
 

@@ -54,11 +54,14 @@ void load_kernel(uint64_t multiboot_info_str)
             int pages = p->p_memsz >> 12;
             if (p->p_memsz & 0xfff) pages += 1;
             uint64_t base = p->p_vaddr;
+
             Page_Table_Argumments arg = {};
             arg.user_access = 0;
             arg.writeable = p->flags & ELF_FLAG_WRITABLE;
             arg.execution_disabled = !(p->flags & ELF_FLAG_EXECUTABLE);
             for (int i = 0; i < pages; ++i) {
+                print_hex(base + 0x1000*i);
+                print_str("\n");
                 get_page(base + 0x1000*i, arg);
             }
         }

@@ -73,8 +73,7 @@ typedef struct
     uint8_t dirty                     :1;
     uint8_t pat                       :1;
     uint8_t global                    :1; 
-    uint8_t avl                       :2;  // Avaliable
-    uint8_t ignored                   :1;
+    uint8_t avl                       :3;  // Avaliable
     uint64_t page_ppn                 :40;
     uint64_t avl2                     :7;
     uint8_t  pk                       :4;
