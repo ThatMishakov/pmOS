@@ -44,6 +44,8 @@ void main()
         if (tag->type == MULTIBOOT_TAG_TYPE_MODULE) {
             if (!str_starts_with(((struct multiboot_tag_module *)tag)->cmdline, "kernel")) {
                 struct multiboot_tag_module * mod = (struct multiboot_tag_module *)tag;
+                static virt_addr = 549755813888;
+                map_phys((uint64_t)mod, virt_addr, tag->size);
                 print_str(" --> loading ");
                 print_str(mod->cmdline);
                 print_str("\n");

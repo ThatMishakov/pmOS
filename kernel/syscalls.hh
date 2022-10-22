@@ -35,3 +35,6 @@ kresult_t syscall_start_process(uint64_t pid, uint64_t start);
 
 // Exits (kills the process at the end of its execution)
 kresult_t syscall_exit(TaskDescriptor* task);
+
+// Maps physical memory into process
+kresult_t syscall_map_phys(TaskDescriptor*);

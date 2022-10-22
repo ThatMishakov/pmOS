@@ -53,6 +53,9 @@ void syscall_handler(TaskDescriptor* task)
     case SYSCALL_EXIT:
         t_print("Debug: syscall exit\n");
         r.result = syscall_exit(task);
+    case SYSCALL_MAP_PHYS:
+        t_print("Debug: Syscall map_phys\n");
+        r.result = syscall_map_phys(task);
     default:
         // Not supported
         r.result = ERROR_NOT_SUPPORTED;
@@ -212,4 +215,9 @@ kresult_t syscall_exit(TaskDescriptor* task)
     kill(task);
 
     return SUCCESS;
+}
+
+kresult_t syscall_map_phys(TaskDescriptor* t)
+{
+    return ERROR_NOT_IMPLEMENTED;
 }

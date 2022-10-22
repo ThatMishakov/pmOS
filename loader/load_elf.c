@@ -7,9 +7,8 @@
 #include <misc.h>
 #include <mem.h>
 
-uint64_t load_elf(uint64_t addr, uint8_t ring)
+uint64_t load_elf(ELF_64bit* elf_h, uint8_t ring)
 {
-    ELF_64bit * elf_h = (ELF_64bit*)addr;
     if (elf_h->magic != 0x464c457f) {
         print_str("Error: not elf format!\n");
         return 1;
