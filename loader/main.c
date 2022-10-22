@@ -38,6 +38,13 @@ void main()
     print_str("Memory bitmap initialized!\n");
 
     load_kernel(multiboot_info_str);
+
+
+    // Print something on the screen
+    map_phys(0xB8000, 0xB8000, 1);
+    cls();
+    print_str("Kernel loaded!\n");
+
     print_str("Loading modules...\n");
     for (struct multiboot_tag * tag = (struct multiboot_tag *) (multiboot_info_str + 8); tag->type != MULTIBOOT_TAG_TYPE_END;
         tag = (struct multiboot_tag *) ((multiboot_uint8_t *) tag + ((tag->size + 7) & ~7))) {
@@ -60,5 +67,6 @@ void main()
         }
 
     print_str("Everything seems ok. Nothing to do. Exiting...\n");
+
     syscall(SYSCALL_EXIT);
 }

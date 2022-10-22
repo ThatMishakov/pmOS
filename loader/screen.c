@@ -19,30 +19,32 @@ static int ypos;
 /*  Point to the video memory. */
 static volatile unsigned char *video;
 
+char screen_init = 0;
+
 /*  Put the character C on the screen. */
 void putchar (int c)
 {
     // Print to bochs as well
   printc(c);
 
-  // Broken !
+  if (!screen_init) return;
 
-  // if (c == '\n' || c == '\r')
-  //   {
-  //   newline:
-  //     xpos = 0;
-  //     ypos++;
-  //     if (ypos >= LINES)
-  //       ypos = 0;
-  //     return;
-  //   }
+  if (c == '\n' || c == '\r')
+    {
+    newline:
+      xpos = 0;
+      ypos++;
+      if (ypos >= LINES)
+        ypos = 0;
+      return;
+    }
 
-  // *(video + (xpos + ypos * COLUMNS) * 2) = c & 0xFF;
-  // *(video + (xpos + ypos * COLUMNS) * 2 + 1) = ATTRIBUTE;
+  *(video + (xpos + ypos * COLUMNS) * 2) = c & 0xFF;
+  *(video + (xpos + ypos * COLUMNS) * 2 + 1) = ATTRIBUTE;
 
-  // xpos++;
-  // if (xpos >= COLUMNS)
-  //   goto newline;
+  xpos++;
+  if (xpos >= COLUMNS)
+    goto newline;
 }
 
 void cls (void)
@@ -56,4 +58,6 @@ void cls (void)
 
   xpos = 0;
   ypos = 0;
+
+  screen_init = 1;
 }
