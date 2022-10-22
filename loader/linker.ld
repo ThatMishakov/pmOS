@@ -6,7 +6,7 @@ SECTIONS
     /* Load in a fixed point */
 
     . = 4M;
-    .start = .;
+    _start = .;
     _exec_start = .;
     .text : {
         *(.multiboot2)
@@ -23,7 +23,7 @@ SECTIONS
         *(.bss*)
     }
     
-    _map_p_size = _map_p_end - .start;
+    _map_p_size = _map_p_end - _start;
 
     . = ALIGN(4096);
     _map_p_end = .;
@@ -31,7 +31,7 @@ SECTIONS
 
     . = . + 256K; /* Reserve some space after executable */
 
-    _exec_size = _end - .start;
+    _exec_size = _end - _start;
     _exec_end = _end;
     _end = . ;
 }

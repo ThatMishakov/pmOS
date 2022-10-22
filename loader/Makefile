@@ -25,7 +25,8 @@ INTERNALLDFLAGS := \
     -nostdlib               \
 	-Tlinker.ld    \
 	-z max-page-size=0x1000 \
-	-fuse-ld=lld
+	-fuse-ld=lld \
+	-static
  
 # Internal C flags that should not be changed by the user.
 INTERNALCFLAGS  := \

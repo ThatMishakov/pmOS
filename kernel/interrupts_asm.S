@@ -166,7 +166,6 @@ INTERRUPT_NOERR(202)
     .type loadIDT, @function
 loadIDT:
     lidt (%rdi)
-    sti
     ret
 
     .globl mask_PIC

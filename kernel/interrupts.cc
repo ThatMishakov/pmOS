@@ -70,6 +70,7 @@ void init_IDT()
     mask_PIC();
 
     IDT_descriptor desc = {sizeof(IDT) - 1, (uint64_t)&k_idt};
+    asm("xchgw %bx, %bx");
     loadIDT(&desc);
 }
 
@@ -83,8 +84,12 @@ void init_kernel_stack()
 
 void init_interrupts()
 {
+    t_print("Initing IDT\n");
     init_IDT();
+    t_print("Initing kernel stack\n");
     init_kernel_stack();
+    t_print("Enabling interrupts\n");
+    asm("sti");
 }
 
 extern "C" void interrupt_handler()
@@ -105,6 +110,7 @@ extern "C" void interrupt_handler()
             break;
         case 0x8: 
             t_print("!!! Double fault (DF) [ABORT]\n");
+            halt();
             break;
         case 0xE:
             pagefault_manager();
