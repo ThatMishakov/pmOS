@@ -166,6 +166,9 @@ ReturnStr<uint64_t> get_new_pml4()
     // Flush tlb to apply mapping
     tlb_flush();
 
+    // Clear it as memory contains rubbish and it will cause weird paging bugs on real machines
+    page_clear((void*)free_page);
+
     // Copy the last entries into the new page table as they are shared across all processes
     // and recurvicely assign the last page to itself
     ((PML4*)free_page)->entries[509] = pml4()->entries[509];
@@ -225,31 +228,31 @@ kresult_t invalidade(uint64_t virtual_addr)
 
 kresult_t alloc_page_lazy(uint64_t virtual_addr, Page_Table_Argumments arg)
 {
-    PML4E& pml4e = *get_pml4e(virtual_addr);
-    if (not pml4e.present) {
-        pml4e = {};
+    PML4E* pml4e = get_pml4e(virtual_addr);
+    if (not pml4e->present) {
+        *pml4e = {};
         ReturnStr<uint64_t> p = palloc.alloc_page_ppn();
         if (p.result != SUCCESS) return p.result; 
-        pml4e.page_ppn = p.val;
-        pml4e.present = 1;
-        pml4e.writeable = 1;
-        pml4e.user_access = arg.user_access;
+        pml4e->page_ppn = p.val;
+        pml4e->present = 1;
+        pml4e->writeable = 1;
+        pml4e->user_access = arg.user_access;
 
         tlb_flush();
 
         page_clear((void*)pdpt_of(virtual_addr));
     }
 
-    PDPTE& pdpte = *get_pdpe(virtual_addr);
-    if (pdpte.size) return ERROR_PAGE_PRESENT;
-    if (not pdpte.present) {
-        pdpte = {};
-        ReturnStr<uint64_t> p =  palloc.alloc_page_ppn();;
+    PDPTE* pdpte = get_pdpe(virtual_addr);
+    if (pdpte->size) return ERROR_PAGE_PRESENT;
+    if (not pdpte->present) {
+        *pdpte = {};
+        ReturnStr<uint64_t> p =  palloc.alloc_page_ppn();
         if (p.result != SUCCESS) return p.result; 
-        pdpte.page_ppn = p.val;
-        pdpte.present = 1;
-        pdpte.writeable = 1;
-        pdpte.user_access = arg.user_access;
+        pdpte->page_ppn = p.val;
+        pdpte->present = 1;
+        pdpte->writeable = 1;
+        pdpte->user_access = arg.user_access;
 
         tlb_flush();
 
@@ -281,6 +284,8 @@ kresult_t alloc_page_lazy(uint64_t virtual_addr, Page_Table_Argumments arg)
     pte.user_access = arg.user_access;
     pte.writeable = arg.writeable; 
     pte.cache_disabled = 1;
+
+    // TODO: TLB flush is needed somewhere here and it will probably crash system at some point
     return SUCCESS;
 }
 

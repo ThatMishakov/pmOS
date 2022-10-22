@@ -83,11 +83,8 @@ void init_kernel_stack()
 
 void init_interrupts()
 {
-    t_print("Initing IDT\n");
     init_IDT();
-    t_print("Initing kernel stack\n");
     init_kernel_stack();
-    t_print("Enabling interrupts\n");
     asm("sti");
 }
 

@@ -9,6 +9,7 @@
 #include "messaging.hh"
 #include "free_page_alloc.hh"
 #include "common/errors.h"
+#include "vga.hh"
 
 Kernel_Entry_Data* kdata;
 
@@ -19,10 +20,8 @@ extern "C" int main(Kernel_Entry_Data* d)
     palloc.init(d->mem_bitmap, d->mem_bitmap_size);
     palloc.init_after_paging();
     free_page_alloc_init();
-    
-    t_print("Initiing scheduling!\n");
+    init_video();
     init_scheduling();
-    t_print("Initiing interrupts!\n");
     init_interrupts();
     return 0;
 }
