@@ -70,7 +70,6 @@ void init_IDT()
     mask_PIC();
 
     IDT_descriptor desc = {sizeof(IDT) - 1, (uint64_t)&k_idt};
-    asm("xchgw %bx, %bx");
     loadIDT(&desc);
 }
 
