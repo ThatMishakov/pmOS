@@ -106,7 +106,8 @@ void PFrameAllocator::init_after_paging()
 
     Page_Table_Argumments pta = {1, 0, 0, 1, 0};
     for (uint64_t i = 0; i < bitmap_size_pages(); i += 4096) {
-        map((uint64_t)bitmap + i, (uint64_t)addr + i, pta);
+        uint64_t phys = phys_addr_of((uint64_t)bitmap + i).val;
+        map(phys, (uint64_t)addr + i, pta);
     }
 
     bitmap = (uint64_t*)addr;

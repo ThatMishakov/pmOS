@@ -3,7 +3,7 @@
 #include "palloc.hh"
 #include "asm.hh"
 
-malloc_list head = {0,0};
+malloc_list head = {nullptr, 0};
 
 void *malloc_int(size_t size_bytes, size_t& size_bytes_a)
 {

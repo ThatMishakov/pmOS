@@ -33,6 +33,7 @@ void load_kernel(uint64_t multiboot_info_str)
         Page_Table_Argumments arg;
         arg.writeable = 1;
         arg.user_access = 1;
+        arg.extra = 0b010;
         map(exec_virt_loc + i, mod->mod_start + i, arg);
     }
 
@@ -60,9 +61,8 @@ void load_kernel(uint64_t multiboot_info_str)
             arg.writeable = p->flags & ELF_FLAG_WRITABLE;
             arg.execution_disabled = !(p->flags & ELF_FLAG_EXECUTABLE);
             for (int i = 0; i < pages; ++i) {
-                print_hex(base + 0x1000*i);
-                print_str("\n");
                 get_page(base + 0x1000*i, arg);
+                clear_page(base + i*0x1000);
             }
         }
     }

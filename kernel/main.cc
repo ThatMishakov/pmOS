@@ -16,13 +16,9 @@ extern "C" int main(Kernel_Entry_Data* d)
 {
     kdata = d;
     init_gdt();
-    t_print("Loading memory\n");
     palloc.init(d->mem_bitmap, d->mem_bitmap_size);
-
-    asm("xchgw %bx, %bx");
     palloc.init_after_paging();
     free_page_alloc_init();
-    t_print("Loading scheduling\n");
     init_scheduling();
     init_interrupts();
     return 0;

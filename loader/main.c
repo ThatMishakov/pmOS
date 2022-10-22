@@ -24,13 +24,6 @@ void main()
     /* Initialize everything */
     print_str("Hello from loader!\n");
 
-    print_hex(&_exec_start);
-    print_str(" ");
-    print_hex(&_map_p_end);
-    print_str(" ");
-    print_hex(&_end);
-    print_str("\n");
-
     // Map multiboot structure into the kernel
     uint64_t multiboot_str_all = multiboot_info_str & ~(uint64_t)0xfff;
     Page_Table_Argumments pta;
@@ -45,16 +38,6 @@ void main()
     print_str("Memory bitmap initialized!\n");
 
     load_kernel(multiboot_info_str);
-    uint64_t addr = (uint64_t)0xdeadbeef0;
-    uint64_t result = get_page(addr & ~((uint64_t)0xfff)).result;
-    print_str("Getting a page to check syscalls ");
-    print_hex(addr);
-    print_str(" -> ");
-    print_hex(result);
-    print_str(" \n");
-    uint64_t* ptr = (uint64_t*)addr;
-    ptr[0] = 0xcafebabe;
-
     print_str("Loading modules...\n");
     for (struct multiboot_tag * tag = (struct multiboot_tag *) (multiboot_info_str + 8); tag->type != MULTIBOOT_TAG_TYPE_END;
       tag = (struct multiboot_tag *) ((multiboot_uint8_t *) tag + ((tag->size + 7) & ~7))) {

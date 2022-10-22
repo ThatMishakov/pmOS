@@ -37,6 +37,9 @@ kresult_t set_pte(uint64_t virtual_addr, PTE pte, Page_Table_Argumments pta);
 // Checks if page is allocated
 bool is_allocated(uint64_t page);
 
+// Returns physical address of the virt
+ReturnStr<uint64_t> phys_addr_of(uint64_t virt);
+
 enum Page_Types {
     NORMAL = 0,
     HUGE_2M = 1,

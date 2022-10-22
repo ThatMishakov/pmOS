@@ -422,3 +422,13 @@ kresult_t set_pte(uint64_t virtual_addr, PTE pte_n, Page_Table_Argumments arg)
     pte.writeable = arg.writeable; 
     return SUCCESS;
 }
+
+ReturnStr<uint64_t> phys_addr_of(uint64_t virt)
+{
+    PTE* pte = get_pte(virt);
+
+    uint64_t phys = (pte->page_ppn << 12) | (virt & (uint64_t)0xfff);
+
+    // TODO: Error checking
+    return {SUCCESS, phys};
+}

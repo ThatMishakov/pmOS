@@ -31,7 +31,7 @@ char bitmap_read_bit(uint64_t pos)
     uint64_t l = pos%64;
     uint64_t i = pos/64;
 
-    return !!(bitmap[i] & (0x01 << l));
+    return !!(bitmap[i] & ((uint64_t)0x01 << l));
 }
 
 void mark(uint64_t base, uint64_t size, char usable)

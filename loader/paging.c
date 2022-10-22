@@ -50,7 +50,6 @@ void get_page(uint64_t addr, Page_Table_Argumments arg)
         pte->execution_disabled = 0;//arg.execution_disabled; // TODO
         pte->avl = arg.extra;
         tlb_flush();
-        memclear(addr, 4096);
     }
 }
 

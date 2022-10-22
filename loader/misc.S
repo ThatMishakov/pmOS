@@ -13,3 +13,10 @@ ENTRY(tlb_flush)
 ENTRY(halt)
     hlt
     jmp halt
+
+ENTRY(clear_page)
+    movq $512, %rcx
+clear_page_start:
+    movq $0, -8(%rdi, %rcx, 8)
+    loop clear_page_start
+    ret
