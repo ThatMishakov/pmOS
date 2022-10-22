@@ -21,6 +21,9 @@ void main()
         while (1) ;
     }
 
+    map(0xb8000, 0xb8000);
+    cls();
+
     /* Initialize everything */
     print_str("Hello from loader!\n");
 
@@ -32,18 +35,11 @@ void main()
     pta.writeable = 1;
     map(multiboot_str_all, multiboot_str_all, pta);
     
-
     init_mem(multiboot_info_str);
 
     print_str("Memory bitmap initialized!\n");
 
     load_kernel(multiboot_info_str);
-
-
-    // Print something on the screen
-    map_phys(0xB8000, 0xB8000, 1);
-    cls();
-    print_str("Kernel loaded!\n");
 
     print_str("Loading modules...\n");
     for (struct multiboot_tag * tag = (struct multiboot_tag *) (multiboot_info_str + 8); tag->type != MULTIBOOT_TAG_TYPE_END;

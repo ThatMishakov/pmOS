@@ -15,47 +15,36 @@ void syscall_handler(TaskDescriptor* task)
 
     switch (call_n) {
     case SYSCALL_GET_PAGE:
-        t_print("Debug: Syscall getpage\n");
         r.result = get_page(regs->rsi);
         break;
     case SYSCALL_RELEASE_PAGE:
-        t_print("Debug: Syscall release_page\n");
         r.result = release_page(regs->rsi);
         break;
     case SYSCALL_GETPID:
-        t_print("Debug: Syscall getpid\n");
         r = getpid(task);
         break;
     case SYSCALL_CREATE_PROCESS:
-        t_print("Debug: Syscall create_process\n");
         r = syscall_create_process(regs->rsi);
         break;
     case SYSCALL_MAP_INTO:
-        t_print("Debug: Syscall map_into\n");
         r.result = syscall_map_into();
         break;
     case SYSCALL_BLOCK:
-        t_print("Debug: Syscall block\n");
         r = syscall_block(task);
         break;
     case SYSCALL_MAP_INTO_RANGE:
-        t_print("Debug: Syscall map_into_range\n");
         r.result = syscall_map_into_range(task);
         break;
     case SYSCALL_GET_PAGE_MULTI:
-        t_print("Debug: Syscall get_pages_multi %h %h\n", regs->rsi, regs->rdx);
         r.result = syscall_get_page_multi(regs->rsi, regs->rdx);
         break;
     case SYSCALL_START_PROCESS:
-        t_print("Debug: Syscall start_process\n");
         r.result = syscall_start_process(regs->rsi, regs->rdx);
         break;
     case SYSCALL_EXIT:
-        t_print("Debug: syscall exit\n");
         r.result = syscall_exit(task);
         break;
     case SYSCALL_MAP_PHYS:
-        t_print("Debug: Syscall map_phys\n");
         r.result = syscall_map_phys(task);
         break;
     default:

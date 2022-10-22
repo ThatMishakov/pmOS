@@ -133,8 +133,16 @@ void init_mem(unsigned long multiboot_str)
                     uint64_t length = mmap->len;
                     int type = mmap->type;
 
+                    print_str("Mem entry base ");
+                    print_hex(base_addr);
+                    print_str(" length ");
+                    print_hex(length);
+                    print_str(" type ");
+                    print_hex(type);
+                    print_str("\n");
+
                     if (type == MULTIBOOT_MEMORY_AVAILABLE) {
-                        if ((base_addr < GB(1)) && (base_addr > base)) {
+                        if (base_addr > base) {
                             base = base_addr;
                             end = base + length;
                         }
@@ -191,6 +199,7 @@ void init_mem(unsigned long multiboot_str)
     reserve(high_u, bitmap_size*8);
 
     memclear((void*)bitmap, bitmap_size*8);
+
     for (struct multiboot_tag *tag = (struct multiboot_tag *) (multiboot_str + 8); tag->type != MULTIBOOT_TAG_TYPE_END;
       tag = (struct multiboot_tag *) ((multiboot_uint8_t *) tag + ((tag->size + 7) & ~7))) {
         if (tag->type == MULTIBOOT_TAG_TYPE_MMAP) {

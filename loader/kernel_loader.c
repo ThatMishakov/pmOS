@@ -81,7 +81,6 @@ void load_kernel(uint64_t multiboot_info_str)
         }
     }
 
-
     print_str("==> Jumping to kernel\n");
 
     int (*entry)(Kernel_Entry_Data*) = (void*)elf_h->program_entry;
