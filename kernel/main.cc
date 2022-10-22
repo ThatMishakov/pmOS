@@ -14,15 +14,12 @@ Kernel_Entry_Data* kdata;
 
 extern "C" int main(Kernel_Entry_Data* d)
 {
-    t_print("Hello from kernel!\n");
     kdata = d;
-    t_print("Iniiting GDT!\n");
     init_gdt();
-    t_print("Initing memory!\n");
     palloc.init(d->mem_bitmap, d->mem_bitmap_size);
     palloc.init_after_paging();
-    t_print("Initing free_page_alloc!\n");
     free_page_alloc_init();
+    
     t_print("Initiing scheduling!\n");
     init_scheduling();
     t_print("Initiing interrupts!\n");

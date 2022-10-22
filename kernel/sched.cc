@@ -156,7 +156,8 @@ kresult_t init_stack(TaskDescriptor* process)
     arg.execution_disabled = 1;
     arg.global = 0;
     arg.user_access = 1;
-    r = alloc_page_lazy(stack_page_start, arg);
+    r = alloc_page_lazy(stack_page_start, arg);  // TODO: This crashes real machines
+
     if (r != SUCCESS) goto fail;
 
     // Set new rsp
