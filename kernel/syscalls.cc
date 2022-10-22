@@ -53,9 +53,11 @@ void syscall_handler(TaskDescriptor* task)
     case SYSCALL_EXIT:
         t_print("Debug: syscall exit\n");
         r.result = syscall_exit(task);
+        break;
     case SYSCALL_MAP_PHYS:
         t_print("Debug: Syscall map_phys\n");
         r.result = syscall_map_phys(task);
+        break;
     default:
         // Not supported
         r.result = ERROR_NOT_SUPPORTED;
@@ -136,7 +138,7 @@ kresult_t syscall_map_into_range(TaskDescriptor* d)
     // TODO: Check permissions
 
     // Check if legal address
-    if (page_start >= KERNEL_ADDR_SPACE or (page_start + nb_pages*KB(4)) > KERNEL_ADDR_SPACE) return ERROR_OUT_OF_RANGE;
+    if (page_start >= KERNEL_ADDR_SPACE or (page_start + nb_pages*KB(4)) > KERNEL_ADDR_SPACE or (page_start + nb_pages*KB(4) < page_start)) return ERROR_OUT_OF_RANGE;
 
     // Check allignment
     if (page_start & 0xfff) return ERROR_UNALLIGNED;
@@ -162,7 +164,7 @@ kresult_t syscall_get_page_multi(uint64_t virtual_addr, uint64_t nb_pages)
     if (virtual_addr & 0xfff) return ERROR_UNALLIGNED;
 
     // Check that program is not hijacking kernel space
-    if (virtual_addr >= KERNEL_ADDR_SPACE or (virtual_addr + nb_pages*KB(4)) > KERNEL_ADDR_SPACE) return ERROR_OUT_OF_RANGE;
+    if (virtual_addr >= KERNEL_ADDR_SPACE or (virtual_addr + nb_pages*KB(4)) > KERNEL_ADDR_SPACE or (virtual_addr + nb_pages*KB(4) < virtual_addr)) return ERROR_OUT_OF_RANGE;
 
     // Everything seems ok, get the page (lazy allocation)
     Page_Table_Argumments arg = {};
@@ -219,5 +221,38 @@ kresult_t syscall_exit(TaskDescriptor* task)
 
 kresult_t syscall_map_phys(TaskDescriptor* t)
 {
-    return ERROR_NOT_IMPLEMENTED;
+    uint64_t virt = t->regs.rsi;
+    uint64_t phys = t->regs.rdx;
+    uint64_t nb_pages = t->regs.rcx;
+    Page_Table_Argumments pta;
+    pta.global = 0;
+    pta.writeable = 1;
+    pta.user_access = 1;
+    pta.execution_disabled = 1;
+    pta.extra = 0b010;
+
+    // TODO: Check permissions
+
+    // Check if legal address
+    if (virt >= KERNEL_ADDR_SPACE or (virt + nb_pages*KB(4)) > KERNEL_ADDR_SPACE or (virt + nb_pages*KB(4) < virt)) return ERROR_OUT_OF_RANGE;
+
+    // Check allignment
+    if (virt & 0xfff) return ERROR_UNALLIGNED;
+    if (phys & 0xfff) return ERROR_UNALLIGNED;
+
+    // TODO: Check if physical address is ok
+
+    uint64_t i = 0;
+    kresult_t r = SUCCESS;
+    for (; i < nb_pages and r == SUCCESS; ++i) {
+        r = map(phys + i*KB(4), virt+i*KB(4), pta);
+    }
+
+    // If was not successfull, invalidade the pages
+    if (r != SUCCESS)
+        for (uint64_t k; k < i; ++i) {
+            invalidade(virt+k*KB(4));
+        }
+
+    return r;
 }
