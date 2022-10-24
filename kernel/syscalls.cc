@@ -4,6 +4,7 @@
 #include "paging.hh"
 #include "sched.hh"
 #include "lib/vector.hh"
+#include "asm.hh"
 
 void syscall_handler(TaskDescriptor* task)
 {
@@ -13,6 +14,7 @@ void syscall_handler(TaskDescriptor* task)
 
     uint64_t call_n = regs->rdi;
 
+    t_print("Debug: syscall %h pid %i\n", call_n, task->pid);
     switch (call_n) {
     case SYSCALL_GET_PAGE:
         r.result = get_page(regs->rsi);
@@ -214,6 +216,8 @@ kresult_t syscall_map_phys(TaskDescriptor* t)
     uint64_t phys = t->regs.rdx;
     uint64_t nb_pages = t->regs.rcx;
     Page_Table_Argumments pta;
+
+    t_print("Debug: map_phys virt %h <- phys %h nb %h\n", virt, phys, nb_pages);
     pta.global = 0;
     pta.writeable = 1;
     pta.user_access = 1;
@@ -242,6 +246,8 @@ kresult_t syscall_map_phys(TaskDescriptor* t)
         for (uint64_t k; k < i; ++i) {
             invalidade(virt+k*KB(4));
         }
+
+    tlb_flush();
 
     return r;
 }

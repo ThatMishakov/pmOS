@@ -95,6 +95,7 @@ kresult_t map(uint64_t physical_addr, uint64_t virtual_addr, Page_Table_Argummen
     pte.present = 1;
     pte.user_access = arg.user_access;
     pte.writeable = arg.writeable;  
+    pte.avl = arg.extra;
     return SUCCESS;
 }
 
@@ -283,6 +284,7 @@ kresult_t alloc_page_lazy(uint64_t virtual_addr, Page_Table_Argumments arg)
     pte.present = 0;
     pte.user_access = arg.user_access;
     pte.writeable = arg.writeable; 
+    pte.avl = arg.extra;
     pte.cache_disabled = 1;
 
     // TODO: TLB flush is needed somewhere here and it will probably crash system at some point

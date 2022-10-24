@@ -57,7 +57,7 @@
     popq 136(%rax); /* rip */\
     popq 144(%rax); /* cs */\
     popq 152(%rax); /* rflags */\
-    popq 160(%rax); /* rsp */
+    popq 160(%rax); /* rsp */\
     popq 168(%rax); /* ss */
 
 #define RESTORE_INT_FRAME \
