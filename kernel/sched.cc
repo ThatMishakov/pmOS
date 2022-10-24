@@ -133,7 +133,7 @@ PID assign_pid()
 {
     LOCK(assign_pid)
 
-    PID pid_p = ++pid;
+    PID pid_p = pid++;
 
     UNLOCK(assign_pid)
 
@@ -217,6 +217,8 @@ void find_new_process()
 
 void switch_process(TaskDescriptor* p)
 {
+    t_print("Debug: switching to process with PID %h\n", p->pid);
+
     // Load CR3
     setCR3(p->page_table);
 

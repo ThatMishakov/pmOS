@@ -16,6 +16,7 @@ void pagefault_manager(void)
 
     switch (type) {
     case Page_Types::LAZY_ALLOC: // Lazilly allocated page caused the fault
+        t_print("Debug: Pagefault %h -> delayed allocation\n", virtual_addr);
         get_lazy_page(virtual_addr);
         break;
     case Page_Types::UNALLOCATED: // Page not allocated
