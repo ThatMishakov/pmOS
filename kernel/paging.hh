@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include "types.hh"
 #include "sched.hh"
+#include "asm.hh"
 
 // Tries to assign a page. Returns result
 uint64_t get_page(uint64_t virtual_addr, Page_Table_Argumments arg);
@@ -50,4 +51,7 @@ enum Page_Types {
 };
 
 // Returns page type
-Page_Types page_type(int64_t virtual_addr);
+Page_Types page_type(uint64_t virtual_addr);
+
+// Invalidade a single page
+void invalidade_noerr(uint64_t virtual_addr);

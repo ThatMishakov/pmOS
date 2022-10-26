@@ -67,8 +67,6 @@ void load_kernel(uint64_t multiboot_info_str)
         }
     }
 
-    tlb_flush();
-
     print_str("==> Loading executable\n");
 
     for (int i = 0; i < elf_pheader_entries; ++i) {

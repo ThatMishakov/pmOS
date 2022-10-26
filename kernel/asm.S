@@ -65,3 +65,8 @@ set_segment_regs:
     movw %ax, %gs
     ret
 
+    .globl invlpg
+    .type invlpg, @function
+invlpg:
+    invlpg (%rdi)
+    ret

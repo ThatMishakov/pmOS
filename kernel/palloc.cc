@@ -49,9 +49,6 @@ void* palloc(size_t size)
             get_page(p_head + i, arg);
         }
 
-        // Do a TLB flush
-        tlb_flush();
-
         block = (palloc_list*)p_head;
     } else if (l->next->number_pages == size) { // Block of just the right size
         // Remove the block from list and return its base address

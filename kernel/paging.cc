@@ -49,9 +49,6 @@ kresult_t map(uint64_t physical_addr, uint64_t virtual_addr, Page_Table_Argummen
         pml4e.present = 1;
         pml4e.writeable = 1;
         pml4e.user_access = arg.user_access;
-
-        tlb_flush();
-
         page_clear((void*)pdpt_of(virtual_addr));
     }
 
@@ -65,9 +62,6 @@ kresult_t map(uint64_t physical_addr, uint64_t virtual_addr, Page_Table_Argummen
         pdpte.present = 1;
         pdpte.writeable = 1;
         pdpte.user_access = arg.user_access;
-
-        tlb_flush();
-
         page_clear((void*)pd_of(virtual_addr));
     }
 
@@ -81,9 +75,6 @@ kresult_t map(uint64_t physical_addr, uint64_t virtual_addr, Page_Table_Argummen
         pde.present = 1;
         pde.writeable = 1;
         pde.user_access = arg.user_access;
-
-        tlb_flush();
-
         page_clear((void*)pt_of(virtual_addr));
     }
 
@@ -99,7 +90,7 @@ kresult_t map(uint64_t physical_addr, uint64_t virtual_addr, Page_Table_Argummen
     return SUCCESS;
 }
 
-Page_Types page_type(int64_t virtual_addr)
+Page_Types page_type(uint64_t virtual_addr)
 {
     uint64_t addr = virtual_addr;
     addr >>= 12;
@@ -164,9 +155,6 @@ ReturnStr<uint64_t> get_new_pml4()
         return {d, 0};
     }
 
-    // Flush tlb to apply mapping
-    tlb_flush();
-
     // Clear it as memory contains rubbish and it will cause weird paging bugs on real machines
     page_clear((void*)free_page);
 
@@ -182,7 +170,7 @@ ReturnStr<uint64_t> get_new_pml4()
 
     // Unmap the page
     // TODO: Error checking
-    invalidade(free_page);
+    invalidade_noerr(free_page);
 
     // Return the free_page to the pool
     // TODO: Error checking
@@ -224,6 +212,8 @@ kresult_t invalidade(uint64_t virtual_addr)
 
     // Everything OK
     pte = PTE();
+    invlpg(virtual_addr);
+
     return SUCCESS;
 }
 
@@ -238,9 +228,6 @@ kresult_t alloc_page_lazy(uint64_t virtual_addr, Page_Table_Argumments arg)
         pml4e->present = 1;
         pml4e->writeable = 1;
         pml4e->user_access = arg.user_access;
-
-        tlb_flush();
-
         page_clear((void*)pdpt_of(virtual_addr));
     }
 
@@ -254,9 +241,6 @@ kresult_t alloc_page_lazy(uint64_t virtual_addr, Page_Table_Argumments arg)
         pdpte->present = 1;
         pdpte->writeable = 1;
         pdpte->user_access = arg.user_access;
-
-        tlb_flush();
-
         page_clear((void*)pd_of(virtual_addr));
     }
 
@@ -270,9 +254,6 @@ kresult_t alloc_page_lazy(uint64_t virtual_addr, Page_Table_Argumments arg)
         pde.present = 1;
         pde.writeable = 1;
         pde.user_access = arg.user_access;
-
-        tlb_flush();
-
         page_clear((void*)pt_of(virtual_addr));
     }
 
@@ -307,9 +288,6 @@ kresult_t get_lazy_page(uint64_t virtual_addr)
     pte.page_ppn = page.val;
     pte.present = 1;
     pte.cache_disabled = 0;
-
-    // TLB flush
-    tlb_flush();
 
     // Clear the page for security and other reasons
     page_clear((void*)virtual_addr);
@@ -383,9 +361,6 @@ kresult_t set_pte(uint64_t virtual_addr, PTE pte_n, Page_Table_Argumments arg)
         pml4e.present = 1;
         pml4e.writeable = 1;
         pml4e.user_access = arg.user_access;
-
-        tlb_flush();
-
         page_clear((void*)pdpt_of(virtual_addr));
     }
 
@@ -400,8 +375,6 @@ kresult_t set_pte(uint64_t virtual_addr, PTE pte_n, Page_Table_Argumments arg)
         pdpte.writeable = 1;
         pdpte.user_access = arg.user_access;
 
-        tlb_flush();
-
         page_clear((void*)pd_of(virtual_addr));
     }
 
@@ -415,8 +388,6 @@ kresult_t set_pte(uint64_t virtual_addr, PTE pte_n, Page_Table_Argumments arg)
         pde.present = 1;
         pde.writeable = 1;
         pde.user_access = arg.user_access;
-
-        tlb_flush();
 
         page_clear((void*)pt_of(virtual_addr));
     }
@@ -438,4 +409,10 @@ ReturnStr<uint64_t> phys_addr_of(uint64_t virt)
 
     // TODO: Error checking
     return {SUCCESS, phys};
+}
+
+void invalidade_noerr(uint64_t virtual_addr)
+{
+    *get_pte(virtual_addr) = PTE();
+    invlpg(virtual_addr);
 }

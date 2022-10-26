@@ -21,7 +21,6 @@ void get_page(uint64_t addr, Page_Table_Argumments arg)
         pml4e->present = 1;
         pml4e->writeable = 1;
         memclear(pdpt_of(addr), 4096);
-        tlb_flush();
     }
 
     PDPTE* pdpte = get_pdpe(addr);
@@ -29,7 +28,6 @@ void get_page(uint64_t addr, Page_Table_Argumments arg)
         *(uint64_t*)pdpte = alloc_page_t();
         pdpte->present = 1;
         pdpte->writeable = 1;
-        tlb_flush();
         memclear(pd_of(addr), 4096);
     } else if (pdpte->size) ;// TODO
 
@@ -38,7 +36,6 @@ void get_page(uint64_t addr, Page_Table_Argumments arg)
         *(uint64_t*)pde = alloc_page_t();
         pde->present = 1;
         pde->writeable = 1;
-        tlb_flush();
         memclear(pt_of(addr), 4096);
     } else if (pde->size) ; // TODO
 
@@ -49,7 +46,6 @@ void get_page(uint64_t addr, Page_Table_Argumments arg)
         pte->writeable = arg.writeable;
         pte->execution_disabled = 0;//arg.execution_disabled; // TODO
         pte->avl = arg.extra;
-        tlb_flush();
     }
 }
 
@@ -61,7 +57,6 @@ void map(uint64_t addr, uint64_t phys, Page_Table_Argumments arg)
         pml4e->present = 1;
         pml4e->writeable = 1;
         memclear(pdpt_of(addr), 4096);
-        tlb_flush();
     }
 
     PDPTE* pdpte = get_pdpe(addr);
@@ -69,7 +64,6 @@ void map(uint64_t addr, uint64_t phys, Page_Table_Argumments arg)
         *(uint64_t*)pdpte = alloc_page_t();
         pdpte->present = 1;
         pdpte->writeable = 1;
-        tlb_flush();
         memclear(pd_of(addr), 4096);
     } else if (pdpte->size) ;// TODO
 
@@ -78,7 +72,6 @@ void map(uint64_t addr, uint64_t phys, Page_Table_Argumments arg)
         *(uint64_t*)pde = alloc_page_t();
         pde->present = 1;
         pde->writeable = 1;
-        tlb_flush();
         memclear(pt_of(addr), 4096);
     } else if (pde->size) ; // TODO
 
@@ -89,6 +82,5 @@ void map(uint64_t addr, uint64_t phys, Page_Table_Argumments arg)
         pte->writeable = arg.writeable;
         pte->avl = arg.extra;
         pte->execution_disabled = 0;//arg.execution_disabled; // TODO
-        tlb_flush();
     }
 }

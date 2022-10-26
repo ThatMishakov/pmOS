@@ -243,11 +243,9 @@ kresult_t syscall_map_phys(TaskDescriptor* t)
 
     // If was not successfull, invalidade the pages
     if (r != SUCCESS)
-        for (uint64_t k; k < i; ++i) {
-            invalidade(virt+k*KB(4));
+        for (uint64_t k = 0; k < i; ++i) {
+            invalidade_noerr(virt+k*KB(4));
         }
-
-    tlb_flush();
 
     return r;
 }
