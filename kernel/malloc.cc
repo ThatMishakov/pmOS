@@ -7,8 +7,8 @@ malloc_list head = {nullptr, 0};
 
 void *malloc_int(size_t size_bytes, size_t& size_bytes_a)
 {
-    // Reserve 8 bytes for size header + 8 for alligning
-    size_bytes += 16;
+    // Reserve 8 bytes for size header
+    size_bytes += 8;
     // Allign to 16
     size_bytes_a = size_bytes & ~0x0f;
     if (size_bytes%16) size_bytes_a += 16-size_bytes_a%16;
@@ -55,7 +55,7 @@ void *calloc(size_t nelem, size_t size)
 void *malloc(size_t s)
 {
     size_t l;
-    return (char*)malloc_int(s, l) + 16;
+    return (char*)malloc_int(s, l) + 8;
 }
 
 void free(void * p)
@@ -63,7 +63,7 @@ void free(void * p)
     if (p == nullptr) return;
 
     uint64_t* base = (uint64_t*)p;
-    base -= 2;
+    --base;
     uint64_t size = *base;
 
     malloc_list* k = (malloc_list*)base;
