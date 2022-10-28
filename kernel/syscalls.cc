@@ -6,56 +6,52 @@
 #include "lib/vector.hh"
 #include "asm.hh"
 
-void syscall_handler(TaskDescriptor* task)
+extern "C" ReturnStr<uint64_t> syscall_handler(uint64_t call_n, uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t arg4, uint64_t arg5)
 {
-    Interrupt_Register_Frame* regs = &task->regs;
     ReturnStr<uint64_t> r = {};
     // TODO: check permissions
 
-    uint64_t call_n = regs->rdi;
-
-    t_print("Debug: syscall %h pid %i\n", call_n, task->pid);
+    t_print("Debug: syscall %h pid\n", call_n);
     switch (call_n) {
     case SYSCALL_GET_PAGE:
-        r.result = get_page(regs->rsi);
+        r.result = get_page(arg1);
         break;
     case SYSCALL_RELEASE_PAGE:
-        r.result = release_page(regs->rsi);
+        r.result = release_page(arg1);
         break;
     case SYSCALL_GETPID:
-        r = getpid(task);
+        r = getpid();
         break;
     case SYSCALL_CREATE_PROCESS:
-        r = syscall_create_process(regs->rsi);
+        r = syscall_create_process();
         break;
     case SYSCALL_MAP_INTO:
         r.result = syscall_map_into();
         break;
     case SYSCALL_BLOCK:
-        r = syscall_block(task);
+        r = syscall_block();
         break;
     case SYSCALL_MAP_INTO_RANGE:
-        r.result = syscall_map_into_range(task);
+        r.result = syscall_map_into_range(arg1, arg2, arg3, arg4, arg5);
         break;
     case SYSCALL_GET_PAGE_MULTI:
-        r.result = syscall_get_page_multi(regs->rsi, regs->rdx);
+        r.result = syscall_get_page_multi(arg1, arg2);
         break;
     case SYSCALL_START_PROCESS:
-        r.result = syscall_start_process(regs->rsi, regs->rdx);
+        r.result = syscall_start_process(arg1, arg2);
         break;
     case SYSCALL_EXIT:
-        r.result = syscall_exit(task);
+        r.result = syscall_exit(arg1, arg2);
         break;
     case SYSCALL_MAP_PHYS:
-        r.result = syscall_map_phys(task);
+        r.result = syscall_map_phys(arg1, arg2, arg3, arg4);
         break;
     default:
         // Not supported
         r.result = ERROR_NOT_SUPPORTED;
         break;
     }
-    regs->rax = r.result;
-    regs->rdx = r.val;
+    return r;
 }
 
 uint64_t get_page(uint64_t virtual_addr)
@@ -97,14 +93,14 @@ uint64_t release_page(uint64_t virtual_addr)
     return release_page_s(virtual_addr);
 }
 
-ReturnStr<uint64_t> getpid(TaskDescriptor* d)
+ReturnStr<uint64_t> getpid()
 {
-    return {SUCCESS, d->pid};
+    return {SUCCESS, get_current()->pid};
 }
 
-ReturnStr<uint64_t> syscall_create_process(uint8_t ring)
+ReturnStr<uint64_t> syscall_create_process()
 {
-    return create_process(ring);
+    return create_process(3);
 }
 
 kresult_t syscall_map_into()
@@ -112,19 +108,24 @@ kresult_t syscall_map_into()
     return ERROR_NOT_IMPLEMENTED;
 }
 
-ReturnStr<uint64_t> syscall_block(TaskDescriptor* current_task)
+ReturnStr<uint64_t> syscall_block()
 {
     kresult_t r = block_process(current_task);
     return {r, 0};
 }
 
-kresult_t syscall_map_into_range(TaskDescriptor* d)
+kresult_t syscall_map_into_range(uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t arg4, uint64_t arg5)
 {
-    uint64_t pid = d->regs.rsi;
-    uint64_t page_start = d->regs.rdx;
-    uint64_t to_addr = d->regs.rcx;
-    uint64_t nb_pages = d->regs.r8;
-    Page_Table_Argumments pta = *(Page_Table_Argumments *)&d->regs.r9;
+    uint64_t pid = arg1;
+    uint64_t page_start = arg2;
+    uint64_t to_addr = arg3;
+    uint64_t nb_pages = arg4;
+
+    Page_Table_Argumments pta = {};
+    pta.user_access = 1;
+    pta.global = 0;
+    pta.writeable = arg5& 0x01;
+    pta.execution_disabled = arg5&0x02;
 
     // TODO: Check permissions
 
@@ -198,11 +199,13 @@ kresult_t syscall_start_process(uint64_t pid, uint64_t start)
     return SUCCESS;
 }
 
-kresult_t syscall_exit(TaskDescriptor* task)
+kresult_t syscall_exit(uint64_t arg1, uint64_t arg2)
 {
+    TaskDescriptor* task = get_current();
+
     // Record exit code
-    task->ret_hi = task->regs.rdx;
-    task->ret_lo = task->regs.rax;
+    task->ret_hi = arg2;
+    task->ret_lo = arg1;
 
     // Kill the process
     kill(task);
@@ -210,19 +213,19 @@ kresult_t syscall_exit(TaskDescriptor* task)
     return SUCCESS;
 }
 
-kresult_t syscall_map_phys(TaskDescriptor* t)
+kresult_t syscall_map_phys(uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t arg4)
 {
-    uint64_t virt = t->regs.rsi;
-    uint64_t phys = t->regs.rdx;
-    uint64_t nb_pages = t->regs.rcx;
-    Page_Table_Argumments pta;
+    uint64_t virt = arg1;
+    uint64_t phys = arg2;
+    uint64_t nb_pages = arg3;
 
-    t_print("Debug: map_phys virt %h <- phys %h nb %h\n", virt, phys, nb_pages);
-    pta.global = 0;
-    pta.writeable = 1;
+    Page_Table_Argumments pta = {};
     pta.user_access = 1;
-    pta.execution_disabled = 1;
     pta.extra = 0b010;
+    pta.global = 0;
+    pta.writeable = arg4& 0x01;
+    pta.execution_disabled = arg4&0x02;
+    t_print("Debug: map_phys virt %h <- phys %h nb %h\n", virt, phys, nb_pages);
 
     // TODO: Check permissions
 

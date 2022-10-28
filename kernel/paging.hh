@@ -5,6 +5,14 @@
 #include "sched.hh"
 #include "asm.hh"
 
+typedef struct {
+    uint8_t writeable          : 1;
+    uint8_t user_access        : 1;
+    uint8_t global             : 1;
+    uint8_t execution_disabled : 1;
+    uint8_t extra              : 3; /* Reserved Shared*/
+} Page_Table_Argumments;
+
 // Tries to assign a page. Returns result
 uint64_t get_page(uint64_t virtual_addr, Page_Table_Argumments arg);
 uint64_t get_page_zeroed(uint64_t virtual_addr, Page_Table_Argumments arg);

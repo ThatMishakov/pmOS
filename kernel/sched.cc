@@ -91,12 +91,12 @@ ReturnStr<uint64_t> create_process(uint16_t ring)
     switch (ring)
     {
     case 0:
-        n->regs.cs = R0_CODE_SEGMENT;
-        n->regs.ss = R0_DATA_SEGMENT;
+        n->regs.e.cs = R0_CODE_SEGMENT;
+        n->regs.e.ss = R0_DATA_SEGMENT;
         break;
     case 3:
-        n->regs.cs = R3_CODE_SEGMENT;
-        n->regs.ss = R3_DATA_SEGMENT;
+        n->regs.e.cs = R3_CODE_SEGMENT;
+        n->regs.e.ss = R3_DATA_SEGMENT;
         break;
     default:
         return {static_cast<kresult_t>(ERROR_NOT_SUPPORTED), (uint64_t)0};
@@ -161,8 +161,7 @@ kresult_t init_stack(TaskDescriptor* process)
     if (r != SUCCESS) goto fail;
 
     // Set new rsp
-    process->regs.rsp = stack_end;
-    process->regs.rbp = stack_end;
+    process->regs.e.rsp = stack_end;
 fail:
     // Load old page table back
     setCR3(current_cr3);
@@ -178,7 +177,7 @@ void init_idle()
     }
 
     idle_task = s_map->at(i.result);
-    idle_task->regs.rip = (uint64_t)&idle;
+    idle_task->regs.e.rsp = (uint64_t)&idle;
     uninit.erase(idle_task);
 }
 
@@ -219,11 +218,11 @@ void switch_process(TaskDescriptor* p)
 {
     t_print("Debug: switching to process with PID %h\n", p->pid);
 
+    t_print("Task switch is temporarely broken! Halting...\n");
+    halt();
+
     // Load CR3
     setCR3(p->page_table);
-
-    // Set segment registers
-    set_segment_regs(p->regs.ss);
 
     // Change task
     current_task = p;

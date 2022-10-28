@@ -56,6 +56,12 @@ struct sched_pqueue {
 
 extern TaskDescriptor* current_task;
 
+// TODO: Make it different per thread
+inline TaskDescriptor* get_current()
+{
+    return current_task;
+}
+
 // Initializes scheduling structures during the kernel initialization
 void init_scheduling();
 
@@ -104,7 +110,7 @@ inline TaskDescriptor* get_task(uint64_t pid)
 // Sets the entry point to the task
 inline void set_entry_point(TaskDescriptor* d, uint64_t entry)
 {
-    d->regs.rip = entry;
+    d->regs.e.rsp = entry;
 }
 
 // Initializes uninited task

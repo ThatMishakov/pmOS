@@ -80,15 +80,6 @@ typedef struct
     uint8_t execution_disabled       :1;
 } PACKED PTE;
 
-
-typedef struct {
-    uint8_t writeable          : 1;
-    uint8_t user_access        : 1;
-    uint8_t global             : 1;
-    uint8_t execution_disabled : 1;
-    uint8_t extra              : 3; /* Reserved Shared*/
-} Page_Table_Argumments;
-
 typedef struct {
     PML4E entries[512];
 } PACKED ALIGNED(0x1000) PML4;

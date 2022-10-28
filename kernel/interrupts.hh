@@ -56,7 +56,7 @@ void init_interrupts();
 extern "C" void loadIDT(IDT_descriptor* IDT_desc);
 extern "C" void mask_PIC();
 
-struct PACKED RFLAGS_Bits {
+struct PACKED RFLAGS {
     uint8_t carry_flag  :1;
     uint8_t reserved0   :1;
     uint8_t parity_flag :1;
@@ -69,7 +69,7 @@ struct PACKED RFLAGS_Bits {
     uint8_t interrupt_e :1;
     uint8_t direction   :1;
     uint8_t overflow    :1;
-    uint8_t iopl        :1;
+    uint8_t iopl        :2;
     uint8_t nested_task :1;
     uint8_t reserved3   :1;
     uint8_t resume      :1;
@@ -77,46 +77,37 @@ struct PACKED RFLAGS_Bits {
     uint8_t allignment  :1;
     uint8_t virtual_i_f :1;
     uint8_t virtual_i_p :1;
-    uint8_t it          :1;
-};
-
-union RFLAGS {
-    uint64_t val = 0;
-    RFLAGS_Bits bits;
+    uint8_t id          :1;
+    uint64_t reserved4  :42;
 };
 
 struct PACKED Interrupt_Stackframe {
-    uint64_t rip;
-    uint64_t cs;
-    RFLAGS rflags;
-    uint64_t rps;
-    uint64_t ss;
-};
-
-union Entry_Regs {
-    uint64_t rsp;
-    Interrupt_Stackframe int_r;
+    uint64_t rip = 0;
+    uint64_t cs = 0;
+    RFLAGS rflags = {};
+    uint64_t rsp = 0;
+    uint64_t ss = 0;
 };
 
 struct PACKED Scratch_Regs {
-    uint64_t rdi;
-    uint64_t rsi;
-    uint64_t rdx;
-    uint64_t rcx;
-    uint64_t r8;
-    uint64_t r9;
-    uint64_t rax;
-    uint64_t r10;
-    uint64_t r11;
+    uint64_t rdi = 0;
+    uint64_t rsi = 0;
+    uint64_t rdx = 0;
+    uint64_t rcx = 0;
+    uint64_t r8 = 0;
+    uint64_t r9 = 0;
+    uint64_t rax = 0;
+    uint64_t r10 = 0;
+    uint64_t r11 = 0;
 };
 
 struct PACKED Preserved_Regs {
-    uint64_t rbx;
-    uint64_t rbp;
-    uint64_t r12;
-    uint64_t r13;
-    uint64_t r14;
-    uint64_t r15;
+    uint64_t rbx = 0;
+    uint64_t rbp = 0;
+    uint64_t r12 = 0;
+    uint64_t r13 = 0;
+    uint64_t r14 = 0;
+    uint64_t r15 = 0;
 };
 
 enum Entry_Type {
@@ -126,11 +117,11 @@ enum Entry_Type {
 
 
 struct PACKED Task_Regs {
-    Entry_Regs e;
+    Interrupt_Stackframe e;
     Scratch_Regs scratch_r;
     Preserved_Regs preserved_r;
 
-    Entry_Type t;
+    Entry_Type t = interrupt;
 };
 
 #define STACK_SIZE KB(16)
@@ -139,7 +130,7 @@ struct Stack {
     uint8_t byte[STACK_SIZE];
 };
 
-extern "C" void interrupt_handler();
+extern "C" void interrupt_handler(uint64_t intno, uint64_t err);
 
 extern uint64_t isr0;
 extern uint64_t isr1;

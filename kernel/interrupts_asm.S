@@ -1,88 +1,33 @@
 /* ------------------------------------------- MACROS --------------------------------------------- */
 
-#define PUSHALL \
-    push %rax; \
-    push %rbx; \
-    push %rcx; \
-    push %rdx; \
-    push %rsi; \
-    push %rdi; \
-    push %rbp; \
-    push %r8; \
-    push %r9; \
-    push %r10; \
-    push %r11; \
-    push %r12; \
-    push %r13; \
-    push %r14; \
-    push %r15;
+    .macro save_scratch
+    pushq %rax
+    movq current_task(%rip), %rax // TODO
 
-#define POPALL \
-    pop %r15; \
-    pop %r14; \
-    pop %r13; \
-    pop %r12; \
-    pop %r11; \
-    pop %r10; \
-    pop %r9;  \
-    pop %r8;  \
-    pop %rbp; \
-    pop %rdi; \
-    pop %rsi; \
-    pop %rdx; \
-    pop %rcx; \
-    pop %rbx; \
-    pop %rax;
+    movq %rdi, 0(%rax)
+    movq %rsi, 8(%rax)
+    movq %rdx, 16(%rax)
+    movq %rcx, 24(%rax)
+    movq %r8, 32(%rax)
+    movq %r9, 40(%rax)
+    popq 48(%rax)
+    movq %r10, 56(%rax)
+    movq %r11, 64(%rax)
+    .endm
 
-#define SAVE_INT_FRAME \
-    push %rax; \
-    movq current_task(%rip), %rax; \
-    movq %r15, 0(%rax); \
-    movq %r14, 8(%rax); \
-    movq %r13, 16(%rax); \
-    movq %r12, 24(%rax); \
-    movq %r11, 32(%rax); \
-    movq %r10, 40(%rax); \
-    movq %r9, 48(%rax); \
-    movq %r8, 56(%rax); \
-    movq %rbp, 64(%rax); \
-    movq %rdi, 72(%rax); \
-    movq %rsi, 80(%rax); \
-    movq %rdx, 88(%rax); \
-    movq %rcx, 96(%rax); \
-    movq %rbx, 104(%rax); \
-    popq 112(%rax); /* %rax */\
-    popq 120(%rax); /* intno */\
-    popq 128(%rax); /* err */\
-    popq 136(%rax); /* rip */\
-    popq 144(%rax); /* cs */\
-    popq 152(%rax); /* rflags */\
-    popq 160(%rax); /* rsp */\
-    popq 168(%rax); /* ss */
+    .macro restore_scratch
+    movq current_task(%rip), %rax
+    movq 0(%rax), %rdi
+    movq 8(%rax), %rsi
+    movq 16(%rax), %rdx
+    movq 24(%rax), %rcx
+    movq 32(%rax), %r8
+    movq 40(%rax), %r9
+    movq 56(%rax), %r10
+    movq 64(%rax), %r11
+    movq 48(%rax), %rax
+    .endm
 
-#define RESTORE_INT_FRAME \
-    movq current_task(%rip), %rax; \
-    movq 0(%rax), %r15; \
-    movq 8(%rax), %r14; \
-    movq 16(%rax), %r13; \
-    movq 24(%rax), %r12; \
-    movq 32(%rax), %r11; \
-    movq 40(%rax), %r10; \
-    movq 48(%rax), %r9; \
-    movq 56(%rax), %r8; \
-    movq 64(%rax), %rbp; \
-    movq 72(%rax), %rdi; \
-    movq 80(%rax), %rsi; \
-    movq 88(%rax), %rdx; \
-    movq 96(%rax), %rcx; \
-    movq 104(%rax), %rbx; \
-    pushq 168(%rax); /* ss */ \
-    pushq 160(%rax); /* rsp */ \
-    pushq 152(%rax); /* rflags */ \
-    pushq 144(%rax); /* cs */ \
-    pushq 136(%rax); /* rip */ \
-    movq 112(%rax), %rax /* Restore %rax */
-    
     
     
 
@@ -179,8 +124,17 @@ mask_PIC:
     .globl ints_handler
     .type ints_handler, @function
 ints_handler:
-    cld
-    SAVE_INT_FRAME
+    save_scratch
+    cmpq $0xCA, 0(%rsp) 
+    jne not_syscall
+
+    addq $16, %rsp
+    call syscall_handler
+    jmp ret_from_interrupt
+not_syscall:
+    movq 0(%rsp), %rdi
+    movq 8(%rsp), %rsi
     call interrupt_handler
-    RESTORE_INT_FRAME
+ret_from_interrupt:
+    restore_scratch
     iretq

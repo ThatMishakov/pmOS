@@ -88,11 +88,8 @@ void init_interrupts()
     asm("sti");
 }
 
-extern "C" void interrupt_handler()
+extern "C" void interrupt_handler(uint64_t intno, uint64_t err)
 {
-    Interrupt_Register_Frame *stack_frame = &current_task->regs; 
-    u64 intno = stack_frame->intno;
-
     switch (intno) {
         case 0x0: 
             t_print("!!! Division by zero (DE)\n");
@@ -101,7 +98,7 @@ extern "C" void interrupt_handler()
             t_print("!!! Overflow (OF)\n");
             break;
         case 0x6: 
-            t_print("!!! Invalid op-code (UD) -> instruction %h\n", stack_frame->rip);
+            t_print("!!! Invalid op-code (UD)\n");
             halt();
             break;
         case 0x8: 
@@ -112,14 +109,9 @@ extern "C" void interrupt_handler()
             pagefault_manager();
             break;
         case 0xD:
-            t_print("!!! General Protection Fault (GP) error %h\n", stack_frame->err);
-            print_registers(current_task);
+            t_print("!!! General Protection Fault (GP) error %h\n", err);
             halt();
             break;
-        case PMOS_SYSCALL_INT:
-            //t_print("Syscall. Jumping to the handler\n");
-            syscall_handler(current_task);
-            break;;
         default:
             t_print("!!! Unknown interrupt %h. Not currently handled.\n", intno);
             break;
