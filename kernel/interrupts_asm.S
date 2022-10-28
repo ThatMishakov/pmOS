@@ -132,8 +132,8 @@ ints_handler:
     call syscall_handler
     jmp ret_from_interrupt
 not_syscall:
-    movq 0(%rsp), %rdi
-    movq 8(%rsp), %rsi
+    popq %rdi
+    popq %rsi
     call interrupt_handler
 ret_from_interrupt:
     restore_scratch
