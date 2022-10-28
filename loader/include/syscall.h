@@ -11,14 +11,14 @@ typedef struct {
 
 syscall_r syscall(uint64_t call_n, ...);
 
-inline syscall_r get_page(uint64_t addr)
+inline syscall_r syscall_get_page(uint64_t addr)
 {
     return syscall(SYSCALL_GET_PAGE, addr);
 }
 
-inline syscall_r map_into_range(uint64_t pid, uint64_t page_start, uint64_t to_addr, uint64_t nb_pages, Page_Table_Argumments pta)
+inline syscall_r map_into_range(uint64_t pid, uint64_t page_start, uint64_t to_addr, uint64_t nb_pages, uint64_t mask)
 {
-    return syscall(SYSCALL_MAP_INTO_RANGE, pid, page_start, to_addr, nb_pages, pta);
+    return syscall(SYSCALL_MAP_INTO_RANGE, pid, page_start, to_addr, nb_pages, mask);
 }
 
 inline syscall_r syscall_new_process(uint8_t ring)

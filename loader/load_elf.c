@@ -6,6 +6,7 @@
 #include <io.h>
 #include <misc.h>
 #include <mem.h>
+#include <paging.h>
 
 uint64_t load_elf(ELF_64bit* elf_h, uint8_t ring)
 {
@@ -38,15 +39,17 @@ uint64_t load_elf(ELF_64bit* elf_h, uint8_t ring)
 
             // TODO: Error checking
             syscall_r r = get_page_multi(memory, pages);
+            print_str("Map into multi -> returned ");
+            print_hex(r.result);
+            print_str("\n");
 
             memcpy((char*)phys_loc, (char*)memory, size);
 
-            Page_Table_Argumments arg = {};
-            arg.user_access = 1;
-            arg.writeable = p->flags & ELF_FLAG_WRITABLE;
-            arg.execution_disabled = !(p->flags & ELF_FLAG_EXECUTABLE);
+            char writeable = p->flags & ELF_FLAG_WRITABLE;
+            char execution_disabled = !(p->flags & ELF_FLAG_EXECUTABLE);
+            uint64_t mask = (writeable << 0) | (execution_disabled << 1);
 
-            r = map_into_range(pid, memory, vaddr, pages, arg);
+            r = map_into_range(pid, memory, vaddr, pages, mask);
             if (r.result != SUCCESS) {
                 print_hex(r.result);
                 print_str(" !!!\n");

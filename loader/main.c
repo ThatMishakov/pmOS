@@ -10,6 +10,8 @@
 #include <screen.h>
 #include "../kernel/common/syscalls.h"
 #include <load_elf.h>
+#include <paging.h>
+#include <syscall.h>
 
 uint64_t multiboot_magic;
 uint64_t multiboot_info_str;
@@ -21,7 +23,13 @@ void main()
         while (1) ;
     }
 
-    map(0xb8000, 0xb8000);
+    Page_Table_Argumments pta;
+    pta.writeable = 1;
+    pta.user_access = 1;
+    pta.execution_disabled = 1;
+    pta.extra = 0b010;
+
+    map(0xb8000, 0xb8000, pta);
     cls();
 
     /* Initialize everything */
@@ -29,10 +37,6 @@ void main()
 
     // Map multiboot structure into the kernel
     uint64_t multiboot_str_all = multiboot_info_str & ~(uint64_t)0xfff;
-    Page_Table_Argumments pta;
-    pta.user_access = 1;
-    pta.execution_disabled = 1;
-    pta.writeable = 1;
     map(multiboot_str_all, multiboot_str_all, pta);
     
     init_mem(multiboot_info_str);

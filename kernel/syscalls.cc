@@ -51,6 +51,10 @@ extern "C" ReturnStr<uint64_t> syscall_handler(uint64_t call_n, uint64_t arg1, u
         r.result = ERROR_NOT_SUPPORTED;
         break;
     }
+    
+    get_current()->regs.scratch_r.rax = r.result;
+    get_current()->regs.scratch_r.rdx = r.val;
+
     return r;
 }
 
