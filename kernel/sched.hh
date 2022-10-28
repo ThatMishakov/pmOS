@@ -21,7 +21,7 @@ struct sched_pqueue;
 
 struct TaskDescriptor {
     // Basic process stuff
-    Interrupt_Register_Frame regs;
+    Task_Regs regs;
     PID pid;
     TaskPermissions perm;
     uint64_t page_table;

@@ -56,32 +56,81 @@ void init_interrupts();
 extern "C" void loadIDT(IDT_descriptor* IDT_desc);
 extern "C" void mask_PIC();
 
-struct PACKED Interrupt_Register_Frame {
-    uint64_t r15;
-    uint64_t r14;
-    uint64_t r13;
-    uint64_t r12;
-    uint64_t r11;
-    uint64_t r10;
-    uint64_t r9;
-    uint64_t r8;
-    uint64_t rbp;
+struct PACKED RFLAGS_Bits {
+    uint8_t carry_flag  :1;
+    uint8_t reserved0   :1;
+    uint8_t parity_flag :1;
+    uint8_t reserved1   :1;
+    uint8_t aux_carry   :1;
+    uint8_t reserved2   :1;
+    uint8_t zero        :1;
+    uint8_t sign        :1;
+    uint8_t trap        :1;
+    uint8_t interrupt_e :1;
+    uint8_t direction   :1;
+    uint8_t overflow    :1;
+    uint8_t iopl        :1;
+    uint8_t nested_task :1;
+    uint8_t reserved3   :1;
+    uint8_t resume      :1;
+    uint8_t virtual_m   :1;
+    uint8_t allignment  :1;
+    uint8_t virtual_i_f :1;
+    uint8_t virtual_i_p :1;
+    uint8_t it          :1;
+};
+
+union RFLAGS {
+    uint64_t val = 0;
+    RFLAGS_Bits bits;
+};
+
+struct PACKED Interrupt_Stackframe {
+    uint64_t rip;
+    uint64_t cs;
+    RFLAGS rflags;
+    uint64_t rps;
+    uint64_t ss;
+};
+
+union Entry_Regs {
+    uint64_t rsp;
+    Interrupt_Stackframe int_r;
+};
+
+struct PACKED Scratch_Regs {
     uint64_t rdi;
     uint64_t rsi;
     uint64_t rdx;
     uint64_t rcx;
-    uint64_t rbx;
+    uint64_t r8;
+    uint64_t r9;
     uint64_t rax;
+    uint64_t r10;
+    uint64_t r11;
+};
 
-    uint64_t intno;
-    uint64_t err;
+struct PACKED Preserved_Regs {
+    uint64_t rbx;
+    uint64_t rbp;
+    uint64_t r12;
+    uint64_t r13;
+    uint64_t r14;
+    uint64_t r15;
+};
 
-    // the interrupt stackframe
-    uint64_t rip;
-    uint64_t cs;
-    uint64_t rflags;
-    uint64_t rsp;
-    uint64_t ss;
+enum Entry_Type {
+    interrupt = 0,
+    syscall   = 1,
+};
+
+
+struct PACKED Task_Regs {
+    Entry_Regs e;
+    Scratch_Regs scratch_r;
+    Preserved_Regs preserved_r;
+
+    Entry_Type t;
 };
 
 #define STACK_SIZE KB(16)
