@@ -32,12 +32,13 @@
     
 
 
-#define INTERRUPT_ERR(NUM) \
-    .globl isr##NUM; \
-    .type isr##NUM, @function; \
-isr##NUM: \
-    push $NUM; \
-    jmp ints_handler; \
+    .macro interrupt_err num
+    .globl isr\num
+    .type isr\num, @function
+isr\num\(): \
+    push $\num
+    jmp ints_handler
+    .endm
 
 #define INTERRUPT_NOERR(NUM) \
     .globl isr##NUM; \
@@ -57,16 +58,16 @@ INTERRUPT_NOERR(4)
 INTERRUPT_NOERR(5)
 INTERRUPT_NOERR(6)
 INTERRUPT_NOERR(7)
-INTERRUPT_ERR  (8)
+interrupt_err  8
 INTERRUPT_NOERR(9)
-INTERRUPT_ERR  (10)
-INTERRUPT_ERR  (11)
-INTERRUPT_ERR  (12)
-INTERRUPT_ERR  (13)
-INTERRUPT_ERR  (14)
+interrupt_err  10
+interrupt_err  11
+interrupt_err  12
+interrupt_err  13
+interrupt_err  14
 INTERRUPT_NOERR(15)
 INTERRUPT_NOERR(16)
-INTERRUPT_ERR  (17)
+interrupt_err  17
 INTERRUPT_NOERR(18)
 INTERRUPT_NOERR(19)
 INTERRUPT_NOERR(20)
@@ -79,7 +80,7 @@ INTERRUPT_NOERR(26)
 INTERRUPT_NOERR(27)
 INTERRUPT_NOERR(28)
 INTERRUPT_NOERR(29)
-INTERRUPT_ERR  (30)
+interrupt_err  30
 INTERRUPT_NOERR(31)
 
 INTERRUPT_NOERR(32)
