@@ -25,6 +25,9 @@ char screen_init = 0;
 /*  Put the character C on the screen. */
 void putchar (int c)
 {
+  // Print to bochs
+  printc(c);
+
   if (video == nullptr) return;
 
   if (c == '\n' || c == '\r')

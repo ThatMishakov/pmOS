@@ -59,7 +59,7 @@ void main()
                     uint64_t phys_end = (uint64_t)mod->mod_end;
                     uint64_t nb_pages = (phys_end - phys_start) >> 12;
                     if (phys_end & 0xfff) nb_pages += 1;
-                    syscall_r p = map_phys(virt_addr, phys_start, nb_pages);
+                    syscall_r p = map_phys(virt_addr, phys_start, nb_pages, 0x3);
                     ELF_64bit* e = (ELF_64bit*)((uint64_t)mod->mod_start - phys_start + virt_addr);
                     load_elf(e, 3);
                 }

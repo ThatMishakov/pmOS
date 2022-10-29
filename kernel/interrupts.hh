@@ -117,8 +117,8 @@ enum Entry_Type {
 
 
 struct PACKED Task_Regs {
-    Interrupt_Stackframe e;
     Scratch_Regs scratch_r;
+    Interrupt_Stackframe e;
     Preserved_Regs preserved_r;
 
     Entry_Type t = interrupt;

@@ -39,9 +39,6 @@ uint64_t load_elf(ELF_64bit* elf_h, uint8_t ring)
 
             // TODO: Error checking
             syscall_r r = get_page_multi(memory, pages);
-            print_str("Map into multi -> returned ");
-            print_hex(r.result);
-            print_str("\n");
 
             memcpy((char*)phys_loc, (char*)memory, size);
 

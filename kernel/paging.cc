@@ -268,7 +268,6 @@ kresult_t alloc_page_lazy(uint64_t virtual_addr, Page_Table_Argumments arg)
     pte.avl = arg.extra;
     pte.cache_disabled = 1;
 
-    // TODO: TLB flush is needed somewhere here and it will probably crash system at some point
     return SUCCESS;
 }
 
@@ -342,7 +341,7 @@ kresult_t transfer_pages(TaskDescriptor* t, uint64_t page_start, uint64_t to_add
     // If successfull, invalidate the pages
     if (r == SUCCESS) {
         for (uint64_t i = 0; i < nb_pages; ++i) {
-            *get_pte(page_start + i*KB(4)) = {};
+            invalidade_noerr(page_start + i*KB(4));
         }
         setCR3(cr3);
     }

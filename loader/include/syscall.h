@@ -36,9 +36,9 @@ inline syscall_r start_process(uint64_t pid, uint64_t entry)
     return syscall(SYSCALL_START_PROCESS, pid, entry);
 }
 
-inline syscall_r map_phys(uint64_t virt, uint64_t phys, uint64_t size)
+inline syscall_r map_phys(uint64_t virt, uint64_t phys, uint64_t size, uint64_t arg)
 {
-    return syscall(SYSCALL_MAP_PHYS, virt, phys, size);
+    return syscall(SYSCALL_MAP_PHYS, virt, phys, size, arg);
 }
 
 

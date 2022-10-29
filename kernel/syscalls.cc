@@ -11,7 +11,7 @@ extern "C" ReturnStr<uint64_t> syscall_handler(uint64_t call_n, uint64_t arg1, u
     ReturnStr<uint64_t> r = {};
     // TODO: check permissions
 
-    t_print("Debug: syscall %h pid\n", call_n);
+    t_print("Debug: syscall %h pid %h\n", call_n, get_current()->pid);
     switch (call_n) {
     case SYSCALL_GET_PAGE:
         r.result = get_page(arg1);
@@ -175,7 +175,7 @@ kresult_t syscall_get_page_multi(uint64_t virtual_addr, uint64_t nb_pages)
     // If unsuccessfull, return everything back
     if (result != SUCCESS)
         for (uint64_t k = 0; k < i; ++k) 
-            *get_pte(virtual_addr + k*KB(4)) = {};
+            invalidade_noerr(virtual_addr + k*KB(4));
 
     // Return the result (success or failure)
     return result;
