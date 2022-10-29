@@ -31,7 +31,7 @@
     
     
 
-
+    .altmacro
     .macro interrupt_err num
     .globl isr\num
     .type isr\num, @function
@@ -40,70 +40,36 @@ isr\num\(): \
     jmp ints_handler
     .endm
 
-#define INTERRUPT_NOERR(NUM) \
-    .globl isr##NUM; \
-    .type isr##NUM, @function; \
-isr##NUM: \
-    push $0; \
-    push $NUM; \
-    jmp ints_handler; \
+    .macro interrupt_noerr num
+    .globl isr\num
+    .type isr\num, @function
+isr\num\():
+    push $0
+    push $\num
+    jmp ints_handler
+    .endm
+
+    .macro fill funct, from, to
+    .local i
+    .set i, \from
+    .rept \to-\from+1
+    \funct %i
+    .set i, i+1
+    .endr
+    .endm
 
 /* ------------------------------------------ ISRs -------------------------------------------------- */
 
-INTERRUPT_NOERR(0)
-INTERRUPT_NOERR(1)
-INTERRUPT_NOERR(2)
-INTERRUPT_NOERR(3)
-INTERRUPT_NOERR(4)
-INTERRUPT_NOERR(5)
-INTERRUPT_NOERR(6)
-INTERRUPT_NOERR(7)
-interrupt_err  8
-INTERRUPT_NOERR(9)
-interrupt_err  10
-interrupt_err  11
-interrupt_err  12
-interrupt_err  13
-interrupt_err  14
-INTERRUPT_NOERR(15)
-INTERRUPT_NOERR(16)
-interrupt_err  17
-INTERRUPT_NOERR(18)
-INTERRUPT_NOERR(19)
-INTERRUPT_NOERR(20)
-INTERRUPT_NOERR(21)
-INTERRUPT_NOERR(22)
-INTERRUPT_NOERR(23)
-INTERRUPT_NOERR(24)
-INTERRUPT_NOERR(25)
-INTERRUPT_NOERR(26)
-INTERRUPT_NOERR(27)
-INTERRUPT_NOERR(28)
-INTERRUPT_NOERR(29)
-interrupt_err  30
-INTERRUPT_NOERR(31)
-
-INTERRUPT_NOERR(32)
-INTERRUPT_NOERR(33)
-INTERRUPT_NOERR(34)
-INTERRUPT_NOERR(35)
-INTERRUPT_NOERR(36)
-INTERRUPT_NOERR(37)
-INTERRUPT_NOERR(38)
-INTERRUPT_NOERR(39)
-INTERRUPT_NOERR(40)
-INTERRUPT_NOERR(41)
-INTERRUPT_NOERR(42)
-INTERRUPT_NOERR(43)
-INTERRUPT_NOERR(44)
-INTERRUPT_NOERR(45)
-INTERRUPT_NOERR(46)
-INTERRUPT_NOERR(47)
-
-INTERRUPT_NOERR(127)
-INTERRUPT_NOERR(128)
-
-INTERRUPT_NOERR(202)
+fill interrupt_noerr, 0,7
+interrupt_err         8
+interrupt_noerr       9
+fill interrupt_err,   10,14
+fill interrupt_noerr  15,16
+interrupt_err         17
+fill interrupt_noerr, 18,29
+interrupt_err         30
+interrupt_noerr       31
+fill interrupt_noerr, 32, 255
 
 /* ------------------------------------------ FUNCTIONS ---------------------------------------------- */
 
