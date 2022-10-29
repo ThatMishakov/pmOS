@@ -119,12 +119,12 @@ struct PACKED Segment_Offsets {
 #define ENTRY_SYSCALL   1
 
 
-struct PACKED Task_Regs {
+struct PACKED Task_Regs { // 184 bytes
     Scratch_Regs scratch_r; //72 bytes
     Interrupt_Stackframe e; // 40 bytes
     Preserved_Regs preserved_r; // 48 bytes
     Segment_Offsets seg; // 16 bytes
-    uint64_t entry_type = ENTRY_INTERRUPT;
+    uint64_t entry_type = ENTRY_INTERRUPT; // 8 bytes
 };
 
 #define STACK_SIZE KB(16)

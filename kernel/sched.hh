@@ -23,8 +23,8 @@ struct TaskDescriptor {
     // Basic process stuff
     Task_Regs regs;
     PID pid;
-    TaskPermissions perm;
     uint64_t page_table;
+    TaskPermissions perm;
     Process_Status status;
 
     // Scheduling lists
@@ -113,7 +113,7 @@ inline TaskDescriptor* get_task(uint64_t pid)
 // Sets the entry point to the task
 inline void set_entry_point(TaskDescriptor* d, uint64_t entry)
 {
-    d->regs.e.rsp = entry;
+    d->regs.e.rip = entry;
 }
 
 // Initializes uninited task

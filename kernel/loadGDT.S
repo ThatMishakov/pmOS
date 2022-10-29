@@ -8,13 +8,14 @@ loadGDT:
     lgdt (%rax)
     addq $16,%rsp
 
-    mov $0x10, %ax
-    mov %ax, %ds
-    mov %ax, %es
-    mov %ax, %fs
-    mov %ax, %gs
-    mov %ax, %ss
-    pop %rdi
+    movw $0x23, %ax
+    movw %ax, %ds
+    movw %ax, %es
+    movw %ax, %fs
+    movw %ax, %gs
+    movw $0x10, %ax
+    movw %ax, %ss
+    popq %rdi
     pushq $0x08
     pushq %rdi
     lretq

@@ -185,7 +185,7 @@ void init_idle()
     }
 
     idle_task = s_map->at(i.result);
-    idle_task->regs.e.rsp = (uint64_t)&idle;
+    idle_task->regs.e.rip = (uint64_t)&idle;
     uninit.erase(idle_task);
 }
 
@@ -227,14 +227,8 @@ void switch_process(TaskDescriptor* p)
 {
     t_print("Debug: switching to process with PID %h\n", p->pid);
 
-    t_print("Task switch is temporarely broken! Halting...\n");
-    halt();
-
-    // Load CR3
-    setCR3(p->page_table);
-
     // Change task
-    get_cpu_struct()->current_task = p;
+    get_cpu_struct()->next_task = p;
 }
 
 bool is_uninited(uint64_t pid)
@@ -254,7 +248,7 @@ void kill(TaskDescriptor* p)
     // Erase from queues
     if (p->parrent != nullptr) p->parrent->erase(p);
 
-    // Add to blocked queue
+    // Add to dead queue
     dead.push_back(p);
 
     // Task switch if it's a current process

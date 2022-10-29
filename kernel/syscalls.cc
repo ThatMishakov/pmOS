@@ -52,8 +52,11 @@ extern "C" ReturnStr<uint64_t> syscall_handler(uint64_t call_n, uint64_t arg1, u
         break;
     }
     
-    get_cpu_struct()->current_task->regs.scratch_r.rax = r.result;
-    get_cpu_struct()->current_task->regs.scratch_r.rdx = r.val;
+    TaskDescriptor* t = get_cpu_struct()->current_task;
+    if (t != nullptr) {
+        t->regs.scratch_r.rax = r.result;
+        t->regs.scratch_r.rdx = r.val;
+    }
 
     return r;
 }
