@@ -28,8 +28,52 @@
     movq 48(%rax), %rax
     .endm
 
-    
-    
+    .macro save_context
+    movq       %gs:16, %r11
+    popq       72(%r11)
+    popq       80(%r11)
+    popq       88(%r11)
+    popq       96(%r11)
+    popq       104(%r11)
+    movq %rbx, 112(%r11)
+    movq %rbp, 120(%r11)
+    movq %r12, 128(%r11)
+    movq %r13, 136(%r11)
+    movq %r14, 144(%r11)
+    movq %r15, 152(%r11)
+    movl $0xC0000100, %ecx
+    rdmsr
+    movl %eax, 160(%r11)
+    movl %edx, 164(%r11)
+    movl $0xC0000102, %ecx
+    rdmsr
+    movl %eax, 168(%r11)
+    movl %edx, 172(%r11)
+    movq $0,   176(%r11)
+    .endm
+
+    .macro restore_context
+    movq       %gs:16, %r11
+    pushq      104(%r11)
+    pushq      96(%r11)
+    pushq      88(%r11)
+    pushq      80(%r11)
+    pushq      72(%r11)
+    movq       112(%r11), %rbx
+    movq       120(%r11), %rbp
+    movq       128(%r11), %r12
+    movq       136(%r11), %r13
+    movq       144(%r11), %r14
+    movq       152(%r11), %r15
+    movl $0xC0000100, %ecx
+    movl       160(%r11), %eax
+    movl       164(%r11), %edx
+    wrmsr
+    movl $0xC0000102, %ecx
+    movl       168(%r11), %eax
+    movl       172(%r11), %edx
+    wrmsr
+    .endm
 
     .altmacro
     .macro interrupt_err num
@@ -173,17 +217,28 @@ ints_handler:
 
     addq $16, %rsp
     call syscall_handler
-    jmp ret_from_interrupt
+    jmp end
 not_syscall:
     popq %rdi
     popq %rsi
     call interrupt_handler
+end:
+    cmpl $0, %gs:24
+    je ret_from_interrupt
+    cmpl $0, %gs:16
+    je task_switch
+    save_context
+    jmp task_switch
+ret_from_switch_int:
+    restore_context
 ret_from_interrupt:
     restore_scratch
-
     cmpw $0x08, 0x8(%rsp)
 	je 1f
 	swapgs
 1:
-
     iretq
+
+    .globl task_switch
+    .type task_switch, @function
+task_switch:

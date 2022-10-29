@@ -110,18 +110,21 @@ struct PACKED Preserved_Regs {
     uint64_t r15 = 0;
 };
 
-enum Entry_Type {
-    interrupt = 0,
-    syscall   = 1,
+struct PACKED Segment_Offsets {
+    uint64_t fs = 0;
+    uint64_t gs = 0;
 };
+
+#define ENTRY_INTERRUPT 0
+#define ENTRY_SYSCALL   1
 
 
 struct PACKED Task_Regs {
-    Scratch_Regs scratch_r;
-    Interrupt_Stackframe e;
-    Preserved_Regs preserved_r;
-
-    Entry_Type t = interrupt;
+    Scratch_Regs scratch_r; //72 bytes
+    Interrupt_Stackframe e; // 40 bytes
+    Preserved_Regs preserved_r; // 48 bytes
+    Segment_Offsets seg; // 16 bytes
+    uint64_t entry_type = ENTRY_INTERRUPT;
 };
 
 #define STACK_SIZE KB(16)

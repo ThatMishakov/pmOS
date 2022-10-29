@@ -44,6 +44,7 @@ struct CPU_Info {
     CPU_Info* self = this;
     Stack* kernel_stack = nullptr;
     TaskDescriptor* current_task = nullptr;
+    TaskDescriptor* next_task = nullptr;
 };
 
 // static CPU_Info* const GSRELATIVE per_cpu = 0; // clang ignores GSRELATIVE for no apparent reason
