@@ -9,8 +9,6 @@
 #include "syscalls.hh"
 #include "misc.hh"
 
-Stack* kernel_stack;
-
 void init_IDT()
 {
     fill_idt();
@@ -22,9 +20,10 @@ void init_IDT()
 
 void init_kernel_stack()
 {
-    kernel_stack = (Stack*)palloc(sizeof(Stack)/4096);
+    CPU_Info* s = get_cpu_struct();
+    s->kernel_stack = (Stack*)palloc(sizeof(Stack)/4096);
     kernel_gdt.SSD_entries[0] = System_Segment_Descriptor((uint64_t) calloc(1,sizeof(TSS)), sizeof(TSS), 0x89, 0x02);
-    kernel_gdt.SSD_entries[0].tss()->ist1 = (uint64_t)kernel_stack + sizeof(Stack);
+    kernel_gdt.SSD_entries[0].tss()->ist1 = (uint64_t)s->kernel_stack + sizeof(Stack);
     loadTSS(0x28);
 }
 

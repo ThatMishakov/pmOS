@@ -8,7 +8,6 @@
 #include "asm.hh"
 #include "misc.hh"
 
-TaskDescriptor* current_task;
 TaskDescriptor* idle_task;
 
 sched_pqueue ready;
@@ -20,10 +19,19 @@ sched_map* s_map;
 
 PID pid = 0;
 
+void init_per_cpu()
+{
+    CPU_Info* c = new CPU_Info;
+    write_msr(0xC0000101, (uint64_t)c);
+}
+
 void init_scheduling()
 {
+    init_per_cpu();
     s_map = new sched_map;
-    current_task = new TaskDescriptor;
+
+    TaskDescriptor* current_task = new TaskDescriptor;
+    get_cpu_struct()->current_task = current_task;
     current_task->page_table = getCR3();
     current_task->pid = pid++;
     s_map->insert({current_task->pid, current_task});
@@ -193,8 +201,9 @@ kresult_t block_process(TaskDescriptor* p)
     blocked.push_back(p);
 
     // Task switch if it's a current process
-    if (current_task == p) {
-        current_task = nullptr;
+    CPU_Info* cpu_str = get_cpu_struct();
+    if (cpu_str->current_task == p) {
+        cpu_str->current_task = nullptr;
         find_new_process();
     }
 
@@ -225,7 +234,7 @@ void switch_process(TaskDescriptor* p)
     setCR3(p->page_table);
 
     // Change task
-    current_task = p;
+    get_cpu_struct()->current_task = p;
 }
 
 bool is_uninited(uint64_t pid)
@@ -249,8 +258,9 @@ void kill(TaskDescriptor* p)
     dead.push_back(p);
 
     // Task switch if it's a current process
-    if (current_task == p) {
-        current_task = nullptr;
+    CPU_Info* cpu_str = get_cpu_struct();
+    if (cpu_str->current_task == p) {
+        cpu_str->current_task = nullptr;
         find_new_process();
     }
 }

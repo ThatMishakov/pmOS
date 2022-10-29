@@ -11,5 +11,7 @@ extern "C" uint64_t setCR3(uint64_t cr3);
 extern "C" uint64_t getCR2();
 extern "C" void set_segment_regs(uint16_t);
 extern "C" void invlpg(uint64_t virtual_addr);
+extern "C" uint64_t read_msr(uint32_t msr);
+extern "C" void write_msr(uint32_t msr, uint64_t val);
 
 #endif

@@ -70,3 +70,29 @@ set_segment_regs:
 invlpg:
     invlpg (%rdi)
     ret
+
+    .globl read_msr
+    .type read_msr, @function
+read_msr:
+    movl %edi, %ecx
+    rdmsr
+    rorq $32, %rax
+    movl %edx, %eax
+    rorq $32, %rax
+    ret 
+
+    .globl write_msr
+    .type write_msr, @function
+write_msr:
+    movl %edi, %ecx
+    movl %esi, %eax
+    rorq $32, %rsi
+    movl %esi, %edx
+    wrmsr
+    ret
+
+    .globl get_cpu_struct
+    .type get_cpu_struct, @function
+get_cpu_struct:
+    movq %gs:0, %rax
+    ret

@@ -40,6 +40,16 @@ struct TaskDescriptor {
     uint64_t ret_lo;
 };
 
+struct CPU_Info {
+    CPU_Info* self = this;
+    Stack* kernel_stack = nullptr;
+    TaskDescriptor* current_task = nullptr;
+};
+
+// static CPU_Info* const GSRELATIVE per_cpu = 0; // clang ignores GSRELATIVE for no apparent reason
+
+extern "C" CPU_Info* get_cpu_struct();
+
 struct sched_pqueue {
     TaskDescriptor* first = nullptr;
     TaskDescriptor* last = nullptr;
@@ -53,14 +63,6 @@ struct sched_pqueue {
     TaskDescriptor* pop_front();
     TaskDescriptor* get_first();
 };
-
-extern TaskDescriptor* current_task;
-
-// TODO: Make it different per thread
-inline TaskDescriptor* get_current()
-{
-    return current_task;
-}
 
 // Initializes scheduling structures during the kernel initialization
 void init_scheduling();

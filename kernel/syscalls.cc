@@ -11,7 +11,7 @@ extern "C" ReturnStr<uint64_t> syscall_handler(uint64_t call_n, uint64_t arg1, u
     ReturnStr<uint64_t> r = {};
     // TODO: check permissions
 
-    t_print("Debug: syscall %h pid %h\n", call_n, get_current()->pid);
+    t_print("Debug: syscall %h pid %h\n", call_n, get_cpu_struct()->current_task->pid);
     switch (call_n) {
     case SYSCALL_GET_PAGE:
         r.result = get_page(arg1);
@@ -52,8 +52,8 @@ extern "C" ReturnStr<uint64_t> syscall_handler(uint64_t call_n, uint64_t arg1, u
         break;
     }
     
-    get_current()->regs.scratch_r.rax = r.result;
-    get_current()->regs.scratch_r.rdx = r.val;
+    get_cpu_struct()->current_task->regs.scratch_r.rax = r.result;
+    get_cpu_struct()->current_task->regs.scratch_r.rdx = r.val;
 
     return r;
 }
@@ -99,7 +99,7 @@ uint64_t release_page(uint64_t virtual_addr)
 
 ReturnStr<uint64_t> getpid()
 {
-    return {SUCCESS, get_current()->pid};
+    return {SUCCESS, get_cpu_struct()->current_task->pid};
 }
 
 ReturnStr<uint64_t> syscall_create_process()
@@ -114,7 +114,7 @@ kresult_t syscall_map_into()
 
 ReturnStr<uint64_t> syscall_block()
 {
-    kresult_t r = block_process(current_task);
+    kresult_t r = block_process(get_cpu_struct()->current_task);
     return {r, 0};
 }
 
@@ -205,7 +205,7 @@ kresult_t syscall_start_process(uint64_t pid, uint64_t start)
 
 kresult_t syscall_exit(uint64_t arg1, uint64_t arg2)
 {
-    TaskDescriptor* task = get_current();
+    TaskDescriptor* task = get_cpu_struct()->current_task;
 
     // Record exit code
     task->ret_hi = arg2;

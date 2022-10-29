@@ -2,7 +2,7 @@
 
     .macro save_scratch
     pushq %rax
-    movq current_task(%rip), %rax // TODO
+    movq %gs:16, %rax
 
     movq %rdi, 0(%rax)
     movq %rsi, 8(%rax)
@@ -16,7 +16,7 @@
     .endm
 
     .macro restore_scratch
-    movq current_task(%rip), %rax
+    movq %gs:16, %rax
     movq 0(%rax), %rdi
     movq 8(%rax), %rsi
     movq 16(%rax), %rdx
@@ -162,6 +162,11 @@ mask_PIC:
     .globl ints_handler
     .type ints_handler, @function
 ints_handler:
+    cmpw $0x08, 24(%rsp)
+	je 1f
+	swapgs
+1:
+
     save_scratch
     cmpq $0xCA, 0(%rsp) 
     jne not_syscall
@@ -175,4 +180,10 @@ not_syscall:
     call interrupt_handler
 ret_from_interrupt:
     restore_scratch
+
+    cmpw $0x08, 0x8(%rsp)
+	je 1f
+	swapgs
+1:
+
     iretq
