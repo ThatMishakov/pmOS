@@ -33,7 +33,6 @@
 
     .altmacro
     .macro interrupt_err num
-    .globl isr\num
     .type isr\num, @function
 isr\num\(): \
     push $\num
@@ -41,7 +40,6 @@ isr\num\(): \
     .endm
 
     .macro interrupt_noerr num
-    .globl isr\num
     .type isr\num, @function
 isr\num\():
     push $0
@@ -58,18 +56,91 @@ isr\num\():
     .endr
     .endm
 
+
+#define ISR 0x01
+#define INTGATE 0x8e
+#define TRAPGATE 0xee
+
+    .macro init_intgate isr_n
+    leaq isr\isr_n(%rip), %rdi
+    leaq (16*\isr_n) + k_idt(%rip), %rsi
+    call set_gate_desc_int
+    .endm
+
+    .macro init_trapgate isr_n
+    leaq isr\isr_n(%rip), %rdi
+    leaq (16*\isr_n) + k_idt(%rip), %rsi
+    call set_gate_desc_trap
+    .endm
+
 /* ------------------------------------------ ISRs -------------------------------------------------- */
 
-fill interrupt_noerr, 0,7
-interrupt_err         8
-interrupt_noerr       9
-fill interrupt_err,   10,14
-fill interrupt_noerr  15,16
-interrupt_err         17
-fill interrupt_noerr, 18,29
-interrupt_err         30
-interrupt_noerr       31
-fill interrupt_noerr, 32, 255
+    .section .data
+    fill interrupt_noerr, 0,7
+    interrupt_err         8
+    interrupt_noerr       9
+    fill interrupt_err,   10,14
+    fill interrupt_noerr  15,16
+    interrupt_err         17
+    fill interrupt_noerr, 18,29
+    interrupt_err         30
+    interrupt_noerr       31
+    fill interrupt_noerr, 32, 255
+
+/* ------------------------------------------ IDT --------------------------------------------------- */
+
+
+    .section .data
+    .type set_idt_e, @function
+set_gate_desc_int:
+    movw %di, 0(%rsi)
+    movw $0x08, 2(%rsi)
+    movw $(ISR | (INTGATE << 8)), 4(%rsi)
+    shrq $16, %rdi
+    movw %di, 6(%rsi)
+    shrq $16, %rdi
+    movl %edi, 8(%rsi)
+    movl $0, 12(%rsi)
+    ret
+
+    .section .data
+    .type set_idt_e, @function
+set_gate_desc_trap:
+    movw %di, 0(%rsi)
+    movw $0x08, 2(%rsi)
+    movw $(ISR | (TRAPGATE << 8)), 4(%rsi)
+    shrq $16, %rdi
+    movw %di, 6(%rsi)
+    shrq $16, %rdi
+    movl %edi, 8(%rsi)
+    movl $0, 12(%rsi)
+    ret
+
+    .section .bss
+    .align 4096
+    .globl k_idt
+k_idt:
+    .space 4096
+
+    .section .data
+    .globl fill_idt
+    .type fill_idt, @function
+fill_idt:
+    pushq %rbp
+    movq %rsp, %rbp
+    init_intgate 0
+    init_trapgate 1
+    init_intgate 2
+    init_trapgate 3
+    init_trapgate 4
+    fill init_intgate, 5, 201
+    init_trapgate 202
+    fill init_intgate 203, 255
+    //movq 0(%rbp), %rsp
+    popq %rbp
+    ret
+
+
 
 /* ------------------------------------------ FUNCTIONS ---------------------------------------------- */
 
