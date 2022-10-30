@@ -11,7 +11,10 @@
 TaskDescriptor* idle_task;
 
 sched_pqueue ready;
+
 sched_pqueue blocked;
+Spinlock blocked_s;
+
 sched_pqueue uninit;
 sched_pqueue dead;
 
@@ -123,7 +126,7 @@ ReturnStr<uint64_t> create_process(uint16_t ring)
     n->pid = assign_pid();
 
     // Init stack
-    kresult_t status = init_stack(n);
+    kresult_t status = n->init_stack();
     if (status != SUCCESS) return {status, 0};
 
     // Add to the map of processes and to uninit list
@@ -148,11 +151,11 @@ PID assign_pid()
    return pid_p; 
 }
 
-kresult_t init_stack(TaskDescriptor* process)
+kresult_t TaskDescriptor::init_stack()
 {
     // Switch to the new pml4
     uint64_t current_cr3 = getCR3();
-    setCR3(process->page_table);
+    setCR3(this->page_table);
 
     kresult_t r;
     // Prealloc a page for the stack
@@ -169,7 +172,7 @@ kresult_t init_stack(TaskDescriptor* process)
     if (r != SUCCESS) goto fail;
 
     // Set new rsp
-    process->regs.e.rsp = stack_end;
+    this->regs.e.rsp = stack_end;
 fail:
     // Load old page table back
     setCR3(current_cr3);
@@ -189,20 +192,22 @@ void init_idle()
     uninit.erase(idle_task);
 }
 
-kresult_t block_process(TaskDescriptor* p)
+kresult_t TaskDescriptor::block()
 {
     // Check status
-    if (p->status == PROCESS_BLOCKED) return ERROR_ALREADY_BLOCKED;
+    if (status == PROCESS_BLOCKED) return ERROR_ALREADY_BLOCKED;
 
     // Erase from queues
-    if (p->parrent != nullptr) p->parrent->erase(p);
+    if (this->parrent != nullptr) this->parrent->erase(this);
 
     // Add to blocked queue
-    blocked.push_back(p);
+    blocked_s.lock();
+    blocked.push_back(this);
+    blocked_s.unlock();
 
     // Task switch if it's a current process
     CPU_Info* cpu_str = get_cpu_struct();
-    if (cpu_str->current_task == p) {
+    if (cpu_str->current_task == this) {
         cpu_str->current_task = nullptr;
         find_new_process();
     }
@@ -220,15 +225,15 @@ void find_new_process()
         next = idle_task;
     }
 
-    switch_process(next);
+    next->switch_to();
 }
 
-void switch_process(TaskDescriptor* p)
+void TaskDescriptor::switch_to()
 {
-    t_print("Debug: switching to process with PID %h\n", p->pid);
+    t_print("Debug: switching to process with PID %h\n", pid);
 
     // Change task
-    get_cpu_struct()->next_task = p;
+    get_cpu_struct()->next_task = this;
 }
 
 bool is_uninited(uint64_t pid)
@@ -236,11 +241,11 @@ bool is_uninited(uint64_t pid)
     return s_map->at(pid)->status == PROCESS_UNINIT;
 }
 
-void init_task(TaskDescriptor* d)
+void TaskDescriptor::init_task()
 {
-    if (d->parrent != nullptr) d->parrent->erase(d);
+    if (this->parrent != nullptr) this->parrent->erase(this);
 
-    ready.push_back(d);
+    ready.push_back(this);
 }
 
 void kill(TaskDescriptor* p)

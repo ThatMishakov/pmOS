@@ -3,6 +3,7 @@
 #include "lib/vector.hh"
 #include "messaging.hh"
 #include "lib/splay_tree_map.hh"
+#include "types.hh"
 
 using PID = uint64_t;
 
@@ -32,12 +33,32 @@ struct TaskDescriptor {
     TaskDescriptor* q_prev = nullptr;
     sched_pqueue* parrent = nullptr;
 
-    // Massaging
+    // Messaging
     Message_storage messages;
+
+    Spinlock lock;
 
     // Return state
     uint64_t ret_hi;
     uint64_t ret_lo;
+
+    // Inits stack
+    kresult_t init_stack();
+
+    // Blocks the process
+    kresult_t block();
+
+    // Switches to this process
+    void switch_to();
+
+    // Initializes uninited task
+    void init_task();
+
+    // Sets the entry point to the task
+    inline void set_entry_point(uint64_t entry)
+    {
+        this->regs.e.rip = entry;
+    }
 };
 
 struct CPU_Info {
@@ -77,23 +98,14 @@ extern sched_map* s_map;
 // Creates a process structure and returns its pid
 ReturnStr<uint64_t> create_process(uint16_t ring = 3);
 
-// Creates a stack for the process
-kresult_t init_stack(TaskDescriptor* process);
-
 // Inits an idle process
 void init_idle();
 
 // Finds a ready process and switches to it
 void task_switch();
 
-// Blocks a process and finds another one to execute
-kresult_t block_process(TaskDescriptor*);
-
 // Finds and switches to a new process (e.g. if the current is blocked or executing for too long)
 void find_new_process();
-
-// Switches to the new process
-void switch_process(TaskDescriptor*);
 
 // Returns true if the process with pid exists, false otherwise
 inline bool exists_process(uint64_t pid)
@@ -109,15 +121,6 @@ inline TaskDescriptor* get_task(uint64_t pid)
 {
     return s_map->at(pid);
 }
-
-// Sets the entry point to the task
-inline void set_entry_point(TaskDescriptor* d, uint64_t entry)
-{
-    d->regs.e.rip = entry;
-}
-
-// Initializes uninited task
-void init_task(TaskDescriptor* d);
 
 // Kills the task
 void kill(TaskDescriptor* t);

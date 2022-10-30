@@ -117,7 +117,7 @@ kresult_t syscall_map_into()
 
 ReturnStr<uint64_t> syscall_block()
 {
-    kresult_t r = block_process(get_cpu_struct()->current_task);
+    kresult_t r = get_cpu_struct()->current_task->block();
     return {r, 0};
 }
 
@@ -198,10 +198,10 @@ kresult_t syscall_start_process(uint64_t pid, uint64_t start)
     TaskDescriptor* t = get_task(pid);
 
     // Set entry
-    set_entry_point(t, start);
+    t->set_entry_point(start);
 
     // Init task
-    init_task(t);
+    t->init_task();
 
     return SUCCESS;
 }

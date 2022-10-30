@@ -18,3 +18,19 @@ struct ReturnStr {
     kresult_t result;
     T val;
 };
+
+struct Spinlock {
+	volatile bool locked = false;
+
+	inline void lock()
+	{
+		while (not __sync_bool_compare_and_swap(&locked, false, true));
+		__sync_synchronize();
+	}
+
+	inline void unlock()
+	{
+		__sync_synchronize();
+		locked = false;
+	}
+};
