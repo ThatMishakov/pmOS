@@ -56,7 +56,7 @@ void init_interrupts();
 extern "C" void loadIDT(IDT_descriptor* IDT_desc);
 extern "C" void mask_PIC();
 
-struct PACKED RFLAGS {
+struct PACKED RFLAGS_Bits {
     uint8_t carry_flag  :1;
     uint8_t reserved0   :1;
     uint8_t parity_flag :1;
@@ -81,10 +81,15 @@ struct PACKED RFLAGS {
     uint64_t reserved4  :42;
 };
 
+union RFLAGS {
+    uint64_t numb = 0;
+    RFLAGS_Bits bits;
+};
+
 struct PACKED Interrupt_Stackframe {
     uint64_t rip = 0;
     uint64_t cs = 0;
-    RFLAGS rflags = {};
+    RFLAGS rflags;
     uint64_t rsp = 0;
     uint64_t ss = 0;
 };
