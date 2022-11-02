@@ -42,6 +42,9 @@ struct TaskDescriptor {
     uint64_t ret_hi;
     uint64_t ret_lo;
 
+    // Arguments
+    Vector<uint8_t> args;
+
     // Inits stack
     kresult_t init_stack();
 

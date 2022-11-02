@@ -91,3 +91,8 @@ void operator delete[](void *p)
 {
     free(p);
 }
+
+void *operator new(size_t, void *p)     throw() { return p; }
+void *operator new[](size_t, void *p)   throw() { return p; }
+void  operator delete  (void *, void *) throw() { };
+void  operator delete[](void *, void *) throw() { };

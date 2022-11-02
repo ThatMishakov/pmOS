@@ -1,6 +1,7 @@
 #pragma once
 #include <stdint.h>
 #include "lib/list.hh"
+#include "lib/queue.hh"
 #include "utils.hh"
 
 struct Message {
@@ -19,4 +20,4 @@ struct Message {
     }
 };
 
-using Message_storage = List<Message>;
+using Message_storage = Queue<Message>;
