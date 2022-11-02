@@ -429,3 +429,8 @@ void invalidade_noerr(uint64_t virtual_addr)
     *get_pte(virtual_addr) = PTE();
     invlpg(virtual_addr);
 }
+
+extern "C" void release_cr3(uint64_t cr3)
+{
+    palloc.free((void*)cr3);
+}

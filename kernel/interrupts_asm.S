@@ -244,17 +244,22 @@ ret_from_interrupt:
 task_switch:
     // TODO: INvalidate SSE stuff here
 
-    movq %gs:24, %rax
-    movq %rax, %gs:16
+    movq %gs:24, %r15
+    movq %r15, %gs:16
     movq $0, %gs:24
 
-    movq %cr3, %rcx
-    cmpq %rcx, 192(%rax)
-    je no_switch_cr3
-    movq 192(%rax), %rcx
+    movq %cr3, %rdi
+    cmpq %rdi, 192(%r15)
+    je skip
+    movq 192(%r15), %rcx
     movq %rcx, %cr3
-no_switch_cr3:
-    cmpq $0, 176(%rax)
+    cmpq $0, %gs:32
+    jz skip
+    call release_cr3
+    movq $0, %gs:32
+skip:
+
+    cmpq $0, 176(%r15)
     je ret_from_switch_int
     // TODO: Return from syscalls
     hlt

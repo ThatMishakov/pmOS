@@ -74,3 +74,6 @@ void free_page(uint64_t page);
 
 // Frees a PML4 of a dead process
 void free_pml4(uint64_t pml4);
+
+// Releases cr3
+extern "C" void release_cr3(uint64_t cr3);

@@ -22,7 +22,7 @@ public:
         return c.back();
     }
 
-    inline const &T top() const
+    inline const T& top() const
     {
         return c.back();
     }

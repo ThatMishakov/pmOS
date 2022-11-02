@@ -4,6 +4,7 @@
 #include "messaging.hh"
 #include "lib/splay_tree_map.hh"
 #include "types.hh"
+#include "lib/stack.hh"
 
 using PID = uint64_t;
 
@@ -69,6 +70,7 @@ struct CPU_Info {
     Stack* kernel_stack = nullptr;
     TaskDescriptor* current_task = nullptr;
     TaskDescriptor* next_task = nullptr;
+    uint64_t release_old_cr3 = 0;
 };
 
 // static CPU_Info* const GSRELATIVE per_cpu = 0; // clang ignores GSRELATIVE for no apparent reason
