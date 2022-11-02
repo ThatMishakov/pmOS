@@ -5,6 +5,11 @@
 #include "sched.hh"
 #include "asm.hh"
 
+#define PAGE_NORMAL  0
+#define PAGE_SHARED  1
+#define PAGE_SPECIAL 2
+#define PAGE_DELAYED 3
+
 typedef struct {
     uint8_t writeable          : 1;
     uint8_t user_access        : 1;
@@ -63,3 +68,9 @@ Page_Types page_type(uint64_t virtual_addr);
 
 // Invalidade a single page
 void invalidade_noerr(uint64_t virtual_addr);
+
+// Frees a page
+void free_page(uint64_t page);
+
+// Frees a PML4 of a dead process
+void free_pml4(uint64_t pml4);

@@ -79,7 +79,7 @@ kresult_t map(uint64_t physical_addr, uint64_t virtual_addr, Page_Table_Argummen
     }
 
     PTE& pte = pt_of(virtual_addr)->entries[ptable_entry];
-    if (pte.present or pte.cache_disabled) return ERROR_PAGE_PRESENT;
+    if (pte.present or pte.avl == PAGE_DELAYED) return ERROR_PAGE_PRESENT;
 
     pte = {};
     pte.page_ppn = physical_addr/KB(4);
@@ -120,13 +120,27 @@ Page_Types page_type(uint64_t virtual_addr)
     // Check if page is present
     PTE& pte = pt_of(virtual_addr)->entries[ptable_entry];
     if (pte.present) return Page_Types::NORMAL;
-    else if (pte.cache_disabled) return Page_Types::LAZY_ALLOC;
+    else if (pte.avl == PAGE_DELAYED) return Page_Types::LAZY_ALLOC;
     return Page_Types::UNALLOCATED;
 }
 
 uint64_t release_page_s(uint64_t virtual_address)
 {
-    return ERROR_NOT_IMPLEMENTED;
+    PTE& pte = *get_pte(virtual_address);
+
+    switch (pte.avl) {
+    case PAGE_NORMAL:
+        palloc.free((void*)virtual_address);
+    case PAGE_DELAYED:
+        invalidade(virtual_address);
+        break;
+    case PAGE_SPECIAL: // Do nothing
+        break;
+    default:
+        return ERROR_NOT_IMPLEMENTED;
+    }
+
+    return SUCCESS;
 }
 
 ReturnStr<uint64_t> get_new_pml4()
@@ -208,7 +222,7 @@ kresult_t invalidade(uint64_t virtual_addr)
 
     // Check if page is present
     PTE& pte = pt_of(virtual_addr)->entries[ptable_entry];
-    if (not pte.present and not pte.cache_disabled) return ERROR_PAGE_NOT_PRESENT;
+    if (not pte.present and pte.avl != PAGE_DELAYED) return ERROR_PAGE_NOT_PRESENT;
 
     // Everything OK
     pte = PTE();
@@ -258,7 +272,7 @@ kresult_t alloc_page_lazy(uint64_t virtual_addr, Page_Table_Argumments arg)
     }
 
     PTE& pte = *get_pte(virtual_addr);
-    if (pte.present or pte.cache_disabled) return ERROR_PAGE_PRESENT;
+    if (pte.present or pte.avl == PAGE_DELAYED) return ERROR_PAGE_PRESENT;
 
     pte = {};
     // Allocate lazylly
@@ -266,7 +280,7 @@ kresult_t alloc_page_lazy(uint64_t virtual_addr, Page_Table_Argumments arg)
     pte.user_access = arg.user_access;
     pte.writeable = arg.writeable; 
     pte.avl = arg.extra;
-    pte.cache_disabled = 1;
+    pte.avl = PAGE_DELAYED;
 
     return SUCCESS;
 }
@@ -279,14 +293,14 @@ kresult_t get_lazy_page(uint64_t virtual_addr)
     uint64_t ptable_entry = addr & 0x1ff;
 
     PTE& pte = pt_of(virtual_addr)->entries[ptable_entry];
-    if (pte.present or not pte.cache_disabled) return ERROR_WRONG_PAGE_TYPE;
+    if (pte.present or pte.avl != PAGE_DELAYED) return ERROR_WRONG_PAGE_TYPE;
 
     // Get an empty page
     ReturnStr<uint64_t> page = palloc.alloc_page_ppn();
     if (page.result != SUCCESS) return page.result;
     pte.page_ppn = page.val;
     pte.present = 1;
-    pte.cache_disabled = 0;
+    pte.avl = PAGE_NORMAL;
 
     // Clear the page for security and other reasons
     page_clear((void*)virtual_addr);
@@ -392,7 +406,7 @@ kresult_t set_pte(uint64_t virtual_addr, PTE pte_n, Page_Table_Argumments arg)
     }
 
     PTE& pte = *get_pte(virtual_addr);
-    if (pte.present or pte.cache_disabled) return ERROR_PAGE_PRESENT;
+    if (pte.present or pte.avl == PAGE_DELAYED) return ERROR_PAGE_PRESENT;
 
     pte = pte_n;
     pte.user_access = arg.user_access;

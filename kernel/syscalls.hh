@@ -5,7 +5,12 @@
 #include "types.hh"
 
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wreturn-type-c-linkage"
+
 extern "C" ReturnStr<uint64_t> syscall_handler(uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t arg4, uint64_t arg5, uint64_t arg6);
+
+#pragma GCC diagnostic pop
 
 // Allocates the page at virtual_addr
 uint64_t get_page(uint64_t virtual_addr);
