@@ -1,5 +1,7 @@
 #pragma once
 
+namespace klib {
+
 template<class T1, class T2>
 struct Pair {
     T1 first;
@@ -11,3 +13,5 @@ struct Pair {
         return this->first < p.first;
     }
 };
+
+}

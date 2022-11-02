@@ -5,7 +5,7 @@
 #include "common/errors.h"
 #include "utils.hh"
 
-List<uint64_t>* free_pages_list = nullptr;
+klib::list<uint64_t>* free_pages_list = nullptr;
 
 DECLARE_LOCK(free_page_alloc);
 
@@ -23,7 +23,7 @@ void add_pages(uint64_t pages)
 kresult_t free_page_alloc_init()
 {
     // TODO: Error checking
-    free_pages_list = new List<uint64_t>;
+    free_pages_list = new klib::list<uint64_t>;
 
     add_pages(FREE_PAGES_SIZE);
     return SUCCESS;

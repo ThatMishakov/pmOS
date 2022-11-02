@@ -1,8 +1,10 @@
 #pragma once
 #include <stddef.h>
 
+namespace klib {
+
 template<typename T>
-class List {
+class list {
 private:
     struct Node {
         Node* next = nullptr;
@@ -36,9 +38,9 @@ public:
         }
     };
 
-    constexpr List();
-    List(const List&);
-    ~List();
+    constexpr list();
+    list(const list&);
+    ~list();
 
     T& front();
     const T& front() const;
@@ -61,12 +63,12 @@ public:
 };
 
 template<typename T>
-constexpr List<T>::List():
+constexpr list<T>::list():
     first(nullptr), last(nullptr), l_size(0) {};
 
 
 template<typename T>
-List<T>::~List()
+list<T>::~list()
 {
     Node* p = first;
     while (p != nullptr) {
@@ -77,7 +79,7 @@ List<T>::~List()
 }
 
 template<typename T>
-void List<T>::push_back(const T& k)
+void list<T>::push_back(const T& k)
 {
     Node* n = new Node;
     n->data = k;
@@ -95,31 +97,31 @@ void List<T>::push_back(const T& k)
 }
 
 template<typename T>
-size_t List<T>::size() const
+size_t list<T>::size() const
 {
     return l_size;
 }
 
 template<typename T>
-bool List<T>::empty() const
+bool list<T>::empty() const
 {
     return l_size == 0;
 }
 
 template<typename T>
-const T& List<T>::front() const
+const T& list<T>::front() const
 {
     return first->data;
 }
 
 template<typename T>
-T& List<T>::front()
+T& list<T>::front()
 {
     return first->data;
 }
 
 template<typename T>
-void List<T>::pop_front()
+void list<T>::pop_front()
 {
     if (this->first->next == nullptr) {
         this->first = nullptr;
@@ -135,13 +137,15 @@ void List<T>::pop_front()
 }
 
 template<typename T>
-typename List<T>::iterator List<T>::begin()
+typename list<T>::iterator list<T>::begin()
 {
     return iterator(first);
 }
 
 template<typename T>
-typename List<T>::iterator List<T>::end()
+typename list<T>::iterator list<T>::end()
 {
     return iterator(nullptr);
+}
+
 }

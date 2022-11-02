@@ -2,8 +2,10 @@
 #include <stddef.h>
 #include "../malloc.hh"
 
+namespace klib {
+
 template<typename T>
-class Vector {
+class vector {
 private:
     static const size_t start_size = 16;
 
@@ -13,14 +15,14 @@ private:
 
     void expand(size_t to);
 public:
-    Vector();
-    Vector(size_t);
-    Vector(size_t, const T&);
-    Vector(const Vector&);
-    ~Vector();
+    vector();
+    vector(size_t);
+    vector(size_t, const T&);
+    vector(const vector&);
+    ~vector();
 
-    Vector<T>& operator=(const Vector<T>& a);
-    Vector<T>& operator=(Vector<T>&& from);
+    vector<T>& operator=(const vector<T>& a);
+    vector<T>& operator=(vector<T>&& from);
     T& operator*();
     const T& operator*() const;
 
@@ -50,7 +52,7 @@ public:
 
 
 template<typename T>
-Vector<T>::Vector()
+vector<T>::vector()
 {
     a_size = 0;
     a_capacity = start_size;
@@ -58,7 +60,7 @@ Vector<T>::Vector()
 }
 
 template<typename T>
-Vector<T>::~Vector()
+vector<T>::~vector()
 {
     for (typeof(a_size) i = 0; i < a_size; ++i) {
         ptr[i].~T();
@@ -68,11 +70,11 @@ Vector<T>::~Vector()
 }
 
 template<typename T>
-Vector<T>::Vector(size_t t): 
+vector<T>::vector(size_t t): 
     ptr(new T[t]), a_capacity(t), a_size(t) {};
 
 template<typename T>
-Vector<T>::Vector(size_t t, const T& e): 
+vector<T>::vector(size_t t, const T& e): 
     ptr(new T[t]), a_capacity(t), a_size(t)
 {
     for (typeof(t) i = 0; i < t; ++i) {
@@ -81,14 +83,14 @@ Vector<T>::Vector(size_t t, const T& e):
 }
 
 /* template<typename T>
-Vector<T>& Vector<T>::operator=(const Vector<T>& from); */
+vector<T>& vector<T>::operator=(const vector<T>& from); */
 
 template<typename T>
-Vector<T>& Vector<T>::operator=(Vector<T>&& from)
+vector<T>& vector<T>::operator=(vector<T>&& from)
 {
     if (this == &from) return *this;
 
-    this->~Vector<T>();
+    this->~vector<T>();
 
     this->ptr = from.ptr;
     this->a_capacity = from.a_capacity;
@@ -102,13 +104,15 @@ Vector<T>& Vector<T>::operator=(Vector<T>&& from)
 }
 
 template<typename T>
-T& Vector<T>::operator*()
+T& vector<T>::operator*()
 {
     return *ptr;
 }
 
 template<typename T>
-const T& Vector<T>::operator*() const
+const T& vector<T>::operator*() const
 {
     return *ptr;
+}
+
 }

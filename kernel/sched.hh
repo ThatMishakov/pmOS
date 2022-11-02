@@ -43,7 +43,7 @@ struct TaskDescriptor {
     uint64_t ret_lo;
 
     // Arguments
-    Vector<uint8_t> args;
+    klib::vector<uint8_t> args;
 
     // Inits stack
     kresult_t init_stack();
@@ -95,7 +95,7 @@ void init_scheduling();
 // Assigns unused PID
 PID assign_pid();
 
-using sched_map = Splay_Tree_Map<PID, TaskDescriptor*>;
+using sched_map = klib::splay_tree_map<PID, TaskDescriptor*>;
 extern sched_map* s_map;
 
 // Creates a process structure and returns its pid

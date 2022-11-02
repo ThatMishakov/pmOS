@@ -1,7 +1,10 @@
 #pragma once
 #include "list.hh"
-template <class T, class Container = List<T> >
-class Queue {
+
+namespace klib {
+
+template <class T, class Container = list<T> >
+class queue {
 private:
     Container C;
 public:
@@ -55,8 +58,10 @@ public:
         C.pop_front();
     }
 
-    void swap (Queue& X)
+    void swap (queue& X)
     {
         C.swap(X.C);
     }
 };
+
+}

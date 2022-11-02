@@ -322,7 +322,7 @@ kresult_t transfer_pages(TaskDescriptor* t, uint64_t page_start, uint64_t to_add
         if (not is_allocated(page_start + i*KB(4))) return ERROR_PAGE_NOT_ALLOCATED;
     }
 
-    List<PTE> l;
+    klib::list<PTE> l;
 
     // Get pages
     for (uint64_t i = 0; i < nb_pages; ++i) {

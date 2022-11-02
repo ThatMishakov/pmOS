@@ -1,8 +1,10 @@
 #pragma once
 #include "pair.hh"
 
+namespace klib {
+
 template<typename K, typename T>
-class Splay_Tree_Map {
+class splay_tree_map {
 private:
     struct node {
         node* left = nullptr;
@@ -21,10 +23,10 @@ private:
     static node* rotate_left(node*);
     static node* rotate_right(node*);
 public:
-    constexpr Splay_Tree_Map():
+    constexpr splay_tree_map():
         elements(0), root(nullptr) {};
-    Splay_Tree_Map(const Splay_Tree_Map&);
-    ~Splay_Tree_Map();
+    splay_tree_map(const splay_tree_map&);
+    ~splay_tree_map();
 
     void clear();
 
@@ -43,7 +45,7 @@ public:
 };
 
 template<class K, class T>
-typename Splay_Tree_Map<K,T>::node* Splay_Tree_Map<K,T>::splay(Splay_Tree_Map<K,T>::node* root, const K& key)
+typename splay_tree_map<K,T>::node* splay_tree_map<K,T>::splay(splay_tree_map<K,T>::node* root, const K& key)
 {
     if (root == nullptr or root->key == key)
         return root;
@@ -64,7 +66,7 @@ typename Splay_Tree_Map<K,T>::node* Splay_Tree_Map<K,T>::splay(Splay_Tree_Map<K,
 }
 
 template<class K, class T>
-typename Splay_Tree_Map<K,T>::node* Splay_Tree_Map<K,T>::rotate_left(Splay_Tree_Map<K,T>::node* p)
+typename splay_tree_map<K,T>::node* splay_tree_map<K,T>::rotate_left(splay_tree_map<K,T>::node* p)
 {
     node* n = p->right;
     p->right = n->left;
@@ -73,7 +75,7 @@ typename Splay_Tree_Map<K,T>::node* Splay_Tree_Map<K,T>::rotate_left(Splay_Tree_
 }
 
 template<class K, class T>
-typename Splay_Tree_Map<K,T>::node* Splay_Tree_Map<K,T>::rotate_right(Splay_Tree_Map<K,T>::node* p)
+typename splay_tree_map<K,T>::node* splay_tree_map<K,T>::rotate_right(splay_tree_map<K,T>::node* p)
 {
     node* n = p->left;
     p->left = n->right;
@@ -82,7 +84,7 @@ typename Splay_Tree_Map<K,T>::node* Splay_Tree_Map<K,T>::rotate_right(Splay_Tree
 }
 
 template<class K, class T>
-void Splay_Tree_Map<K,T>::insert(const Pair<K, T>& pair)
+void splay_tree_map<K,T>::insert(const Pair<K, T>& pair)
 {
     node* p = splay(root, pair.first);
 
@@ -109,13 +111,13 @@ void Splay_Tree_Map<K,T>::insert(const Pair<K, T>& pair)
 }
 
 template<class K, class T>
-size_t Splay_Tree_Map<K,T>::size() const
+size_t splay_tree_map<K,T>::size() const
 {
     return elements;
 }
 
 template<class K, class T>
-size_t Splay_Tree_Map<K,T>::count(const K& key) const
+size_t splay_tree_map<K,T>::count(const K& key) const
 {
     node* p = splay(root, key);
     if (p == nullptr or p->key != key) return 0;
@@ -124,8 +126,10 @@ size_t Splay_Tree_Map<K,T>::count(const K& key) const
 }
 
 template<class K, class T>
-T& Splay_Tree_Map<K,T>::at(const K& key)
+T& splay_tree_map<K,T>::at(const K& key)
 {
     node* p = splay(root, key);
     return p->data;
+}
+
 }

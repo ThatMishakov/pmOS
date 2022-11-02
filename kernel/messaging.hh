@@ -20,4 +20,4 @@ struct Message {
     }
 };
 
-using Message_storage = Queue<Message>;
+using Message_storage = klib::queue<Message>;
