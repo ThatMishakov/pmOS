@@ -1,5 +1,8 @@
 #pragma once
 #include <stdint.h>
+#include <stddef.h>
+#include "types.hh"
+
 void int_to_string(int64_t n, uint8_t base, char* str, int& length);
 
 void uint_to_string(uint64_t n, uint8_t base, char* str, int& length);
@@ -17,3 +20,5 @@ inline void halt()
       asm ("hlt");
     }
 }
+
+kresult_t copy_from_user(char* from, char* to, size_t size);

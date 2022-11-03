@@ -51,7 +51,12 @@ public:
     bool empty() const;
 
     void push_front(const T&);
+    void push_front(T&&);
+    void emplace_front(T&&);
+
     void push_back(const T&);
+    void push_back(T&&);
+    void emplace_back(T&&);
 
     void pop_front();
     void pop_back();

@@ -3,21 +3,21 @@
 #include "lib/list.hh"
 #include "lib/queue.hh"
 #include "utils.hh"
+#include "lib/vector.hh"
+#include "types.hh"
 
 struct Message {
     uint64_t from;
-    uint64_t content;
-    uint64_t ptr;
+    klib::vector<char> content;
 
-    Message()
+    inline size_t size() const
     {
-        t_print("Created Message\n");
-    }
-
-    ~Message()
-    {
-        t_print("Deleted Message\n");
+        return content.size();
     }
 };
 
 using Message_storage = klib::queue<Message>;
+
+struct TaskDescriptor;
+
+kresult_t queue_message(TaskDescriptor* task, uint64_t from, char* message_usr_ptr, size_t size);

@@ -115,4 +115,16 @@ const T& vector<T>::operator*() const
     return *ptr;
 }
 
+template<typename T>
+T& vector<T>::front()
+{
+    return *ptr;
+}
+
+template<typename T>
+const T& vector<T>::front() const
+{
+    return *ptr;
+}
+
 }

@@ -1,5 +1,6 @@
 #pragma once
 #include "list.hh"
+#include "utility.hh"
 
 namespace klib {
 
@@ -40,17 +41,17 @@ public:
 
     inline void push(const T& val)
     {
-        C.push_back(val);
+        C.push_back(forward<T>(val));
     }
 
     inline void push(T&& val)
     {
-        C.push_back(val);
+        C.push_back(forward<T>(val));
     }
 
     inline void emplace(T&& val)
     {
-        C.emplace_back(val);
+        C.emplace_back(forward<T>(val));
     }
 
     inline void pop()
