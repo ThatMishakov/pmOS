@@ -188,9 +188,10 @@ void init_mem(unsigned long multiboot_str)
     // Map the bitmap
     const static uint64_t bitmap_virt = 68719476736;
     for (uint64_t i = 0; i < bitmap_size*8; i += 4096) {
-        Page_Table_Argumments arg;
+        Page_Table_Argumments arg = {0};
         arg.writeable = 1;
         arg.user_access = 1;
+        arg.extra = 0b010;
         map(bitmap_virt + i, bitmap_phys + i, arg);
     }
 

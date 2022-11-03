@@ -140,11 +140,10 @@ void print_pt(uint64_t addr)
 uint64_t release_page_s(uint64_t virtual_address)
 {
     PTE& pte = *get_pte(virtual_address);
-    t_print("Debug: Releasing %h type %h\n", virtual_address, pte.avl);
 
     switch (pte.avl) {
     case PAGE_NORMAL:
-        palloc.free((void*)virtual_address);
+        palloc.free((void*)(pte.page_ppn << 12));
     case PAGE_DELAYED:
         invalidade(virtual_address);
         break;
@@ -510,7 +509,6 @@ void free_user_pages(uint64_t page_table)
     for (uint64_t i = 0; i < KERNEL_ADDR_SPACE; i += (0x01ULL << (12 + 9 + 9 + 9))) {
         PML4E* p = get_pml4e(i);
         if (p->present) {
-            t_print("%h present\n", i);
             free_pdpt(i);
             palloc.free((void*)(p->page_ppn << 12));
         }
