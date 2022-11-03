@@ -60,6 +60,7 @@ extern "C" void interrupt_handler(uint64_t intno, uint64_t err)
             break;
         default:
             t_print("!!! Unknown interrupt %h. Not currently handled.\n", intno);
+            halt();
             break;
     }
 }

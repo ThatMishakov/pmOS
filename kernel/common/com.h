@@ -9,6 +9,8 @@ typedef struct {
     void (*temp_printc)(char);
 } Kernel_Entry_Data;
 
-#define KERNEL_ADDR_SPACE 01777777750000000000000
+//#define KERNEL_ADDR_SPACE 01777777750000000000000
+#define KERNEL_ADDR_SPACE   0x800000000000//0xFFFF800000000000
+#//define USER_ADDR_SPACE   0x800000000000
 
 #endif

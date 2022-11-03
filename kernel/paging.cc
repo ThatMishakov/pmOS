@@ -9,6 +9,8 @@
 #include "free_page_alloc.hh"
 #include "utils.hh"
 #include "types.hh"
+#include "common/com.h"
+
 
 kresult_t get_page(uint64_t virtual_addr, Page_Table_Argumments arg)
 {
@@ -124,9 +126,21 @@ Page_Types page_type(uint64_t virtual_addr)
     return Page_Types::UNALLOCATED;
 }
 
+void print_pt(uint64_t addr)
+{
+    uint64_t ptable_entry = addr >> 12;
+    uint64_t pd_e = ptable_entry >> 9;
+    uint64_t pdpe = pd_e >> 9;
+    uint64_t pml4e = pdpe >> 9;
+    uint64_t upper = pml4e >> 9;
+
+    t_print("Paging indexes %h\'%h\'%h\'%h\'%h\n", upper, pml4e&0777, pdpe&0777, pd_e&0777, ptable_entry&0777);
+}
+
 uint64_t release_page_s(uint64_t virtual_address)
 {
     PTE& pte = *get_pte(virtual_address);
+    t_print("Debug: Releasing %h type %h\n", virtual_address, pte.avl);
 
     switch (pte.avl) {
     case PAGE_NORMAL:
@@ -433,4 +447,75 @@ void invalidade_noerr(uint64_t virtual_addr)
 extern "C" void release_cr3(uint64_t cr3)
 {
     palloc.free((void*)cr3);
+}
+
+void free_pt(uint64_t page_start)
+{
+    for (uint64_t i = 0; i < 512; ++i) {
+        uint64_t addr = page_start + (i << 12);
+        PTE* p = get_pte(addr);
+        if (p->present) {
+            kresult_t result = release_page_s(addr);
+            if (result != SUCCESS) {
+                t_print("Error %i freeing page %h type %h!\n", result, addr, p->avl);
+                print_pt(addr);
+                halt();
+            }
+        }
+    }
+}
+
+void free_pd(uint64_t pd_start)
+{
+    for (uint64_t i = 0; i < 512; ++i) {
+        uint64_t addr = pd_start + (i << (12 + 9));
+        PDE* p = get_pde(addr);
+        if (p->size) {
+            t_print("Error freeing pages: Huge page!\n");
+            halt();
+        } else if (p->present) {
+            switch (p->avl)
+            {
+            case NORMAL:
+                free_pt(addr);
+                break;
+            default:
+                t_print("Error freeing page: Unknown page type!\n");
+                halt();
+                break;
+            }
+        }
+    }
+}
+
+void free_pdpt(uint64_t pdp_start)
+{
+    for (uint64_t i = 0; i < 512; ++i) {
+        uint64_t addr = pdp_start + (i << (12 + 9 + 9));
+        PDPTE* p = get_pdpe(addr);
+        if (p->present) {
+            free_pd(addr);
+            palloc.free((void*)(p->page_ppn << 12));
+        }
+    }
+}
+
+void free_user_pages(uint64_t page_table)
+{
+    uint64_t old_cr3 = getCR3();
+
+    if (old_cr3 != page_table)
+        setCR3(page_table);
+
+    for (uint64_t i = 0; i < KERNEL_ADDR_SPACE; i += (0x01ULL << (12 + 9 + 9 + 9))) {
+        PML4E* p = get_pml4e(i);
+        if (p->present) {
+            t_print("%h present\n", i);
+            free_pdpt(i);
+            palloc.free((void*)(p->page_ppn << 12));
+        }
+    }
+
+    if (old_cr3 != page_table)
+        setCR3(old_cr3);
 }

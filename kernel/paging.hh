@@ -77,3 +77,6 @@ void free_pml4(uint64_t pml4);
 
 // Releases cr3
 extern "C" void release_cr3(uint64_t cr3);
+
+// Frees user pages
+void free_user_pages(uint64_t page_table);

@@ -6,6 +6,7 @@
 #include "linker.hh"
 #include "idle.hh"
 #include "asm.hh"
+#include "common/com.h"
 #include "misc.hh"
 
 TaskDescriptor* idle_task;
@@ -159,7 +160,7 @@ kresult_t TaskDescriptor::init_stack()
 
     kresult_t r;
     // Prealloc a page for the stack
-    uint64_t stack_end = (uint64_t)&_free_to_use;
+    uint64_t stack_end = (uint64_t)KERNEL_ADDR_SPACE; //&_free_to_use;
     uint64_t stack_page_start = stack_end - KB(4);
 
     Page_Table_Argumments arg;
@@ -256,10 +257,17 @@ void kill(TaskDescriptor* p)
     // Add to dead queue
     dead.push_back(p);
 
+    // Release user pages
+    uint64_t ptable = p->page_table;
+    free_user_pages(ptable);
+
     // Task switch if it's a current process
     CPU_Info* cpu_str = get_cpu_struct();
     if (cpu_str->current_task == p) {
         cpu_str->current_task = nullptr;
+        cpu_str->release_old_cr3 = 1;
         find_new_process();
+    } else {
+        release_cr3(ptable);
     }
 }
