@@ -4,6 +4,7 @@
 #include "asm.hh"
 #include "start.hh"
 #include "vga.hh"
+#include "common/errors.h"
 
 void int_to_string(long int n, uint8_t base, char* str, int& length)
 {
@@ -110,4 +111,9 @@ void term_write(const char * str, uint64_t length)
 {
     for (uint64_t i = 0; i < length; ++i)
         putchar(str[i]);
+}
+
+kresult_t copy_from_user(char* from, char* to, size_t size)
+{
+    return ERROR_NOT_IMPLEMENTED;
 }

@@ -19,6 +19,7 @@ public:
     vector(size_t);
     vector(size_t, const T&);
     vector(const vector&);
+    vector(vector<T>&&);
     ~vector();
 
     vector<T>& operator=(const vector<T>& a);
@@ -82,8 +83,22 @@ vector<T>::vector(size_t t, const T& e):
     }
 }
 
-/* template<typename T>
-vector<T>& vector<T>::operator=(const vector<T>& from); */
+template<typename T>
+vector<T>& vector<T>::operator=(const vector<T>& from)
+{
+    if (this == &from) return *this;
+
+    this->~vector<T>();
+
+    this->a_capacity = from.a_size;
+    this->a_size = from.a_size;
+    this->ptr = new T[this->a_size];
+
+    for (size_t i = 0; i < this->a_size; ++i)
+        this->ptr[i] = from.ptr[i];
+
+    return *this;
+}
 
 template<typename T>
 vector<T>& vector<T>::operator=(vector<T>&& from)

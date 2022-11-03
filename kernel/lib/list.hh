@@ -1,5 +1,6 @@
 #pragma once
 #include <stddef.h>
+#include "utility.hh"
 
 namespace klib {
 
@@ -99,6 +100,30 @@ void list<T>::push_back(const T& k)
         last = n;
     }
     ++l_size;
+}
+
+template<typename T>
+void list<T>::push_back(T&& k)
+{
+    Node* n = new Node;
+    n->data = k;
+
+    if (last == nullptr) {
+        first = n;
+        last = n;
+    } else {
+        n->next = last->next;
+        n->prev = last;
+        last->next = n;
+        last = n;
+    }
+    ++l_size;
+}
+
+template<typename T>
+void list<T>::emplace_back(T&& k)
+{
+    push_back(forward<T>(k));
 }
 
 template<typename T>
