@@ -34,7 +34,7 @@ void init_interrupts()
     asm("sti");
 }
 
-extern "C" void interrupt_handler(uint64_t intno, uint64_t err)
+extern "C" void interrupt_handler(uint64_t intno, uint64_t err, Interrupt_Stackframe* int_s)
 {
     switch (intno) {
         case 0x0: 
@@ -44,7 +44,7 @@ extern "C" void interrupt_handler(uint64_t intno, uint64_t err)
             t_print("!!! Overflow (OF)\n");
             break;
         case 0x6: 
-            t_print("!!! Invalid op-code (UD)\n");
+            t_print("!!! Invalid op-code (UD) instr %h\n", int_s->rip);
             halt();
             break;
         case 0x8: 

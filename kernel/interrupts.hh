@@ -139,5 +139,5 @@ struct Stack {
 };
 
 
-extern "C" void interrupt_handler(uint64_t intno, uint64_t err);
+extern "C" void interrupt_handler(uint64_t intno, uint64_t err, Interrupt_Stackframe*);
 extern "C" void fill_idt();
