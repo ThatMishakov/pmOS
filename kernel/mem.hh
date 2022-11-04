@@ -23,6 +23,7 @@ private:
     uint64_t * bitmap = 0;
     uint64_t bitmap_size = 0;
     const uint64_t non_special_base = 0x100000; // Start from 1 MB
+    uint64_t smallest = non_special_base >> (12+6);
 };
 
 extern PFrameAllocator palloc;

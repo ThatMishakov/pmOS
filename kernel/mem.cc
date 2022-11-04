@@ -13,10 +13,11 @@ ReturnStr<void*> PFrameAllocator::alloc_page()
     uint64_t found_page = ERROR_OUT_OF_MEMORY;
     uint64_t page = 0;
     // Find free page
-    for (uint64_t i = (non_special_base >> (12+6)); i < bitmap_size; ++i) {
+    for (uint64_t i = smallest; i < bitmap_size; ++i) {
         if (bitmap[i] != 0)
             for (int j = 0; j < 64; ++j) {
                 if (bitmap_read_bit(i*64 + j, bitmap)) {
+                    smallest = i;
                     found_page = SUCCESS;
                     page = i*64 + j;
                     goto skip;
@@ -73,6 +74,8 @@ void PFrameAllocator::mark_single(uint64_t base, bool usable, uint64_t * bitmap)
 
 void PFrameAllocator::free(void* page)
 {
+    uint64_t smallest_p = (uint64_t)page >> 12 >> 6;
+    if (smallest_p < smallest) smallest = smallest_p;
     mark_single((uint64_t)page, true, bitmap);
 }
 
