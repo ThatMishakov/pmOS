@@ -10,7 +10,7 @@ void *malloc(size_t size);
 void free(void*);
 
 #if defined(__cplusplus)
-} // extern "C"
+} /* extern "C" */
 #endif
 
 #endif

@@ -52,7 +52,7 @@ extern "C" void interrupt_handler(uint64_t intno, uint64_t err, Interrupt_Stackf
             halt();
             break;
         case 0xE:
-            pagefault_manager();
+            pagefault_manager(err);
             break;
         case 0xD:
             t_print("!!! General Protection Fault (GP) error %h\n", err);

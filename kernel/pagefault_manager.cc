@@ -3,7 +3,7 @@
 #include "asm.hh"
 #include "paging.hh"
 
-void pagefault_manager(void)
+void pagefault_manager(uint64_t err)
 {
     // Get the memory location which has caused the fault
     uint64_t virtual_addr = getCR2();
@@ -25,7 +25,7 @@ void pagefault_manager(void)
         break;
     default:
         // Not implemented
-        t_print("Pagefault dir %h --> not implemented. Halting...\n", getCR2());
+        t_print("Pagefault dir %h --> %h not implemented (error %h). Halting...\n", getCR2(), type, err);
         halt();
         break;
     }

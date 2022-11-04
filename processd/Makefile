@@ -24,8 +24,7 @@ INTERNALLDFLAGS :=     \
 	-nostdlib      \
 	-static \
 	-Tlinker.ld    \
-	-z max-page-size=0x1000 \
-	-L../lib/ -l pm
+	-z max-page-size=0x1000
  
 # Internal C flags that should not be changed by the user.
 INTERNALCFLAGS  :=       \
@@ -44,8 +43,10 @@ OBJ    := $(CCFILES:.cc=.o) $(ASMFILES:.S=.o) $(CFILES:.c=.o)
 DEP    := $(OBJ:.o=.d)
 all: $(EXEC)
 
+AFTER_EXEC = -L../lib/ -l pm
+
 $(EXEC): $(OBJ) ../lib/libpm.a linker.ld
-	$(CC) $(LDFLAGS) $(OBJ) -o $@
+	$(CC) $(LDFLAGS) $(OBJ) $(AFTER_EXEC) -o $@
 	
 clean:
 	$(RM) $(EXEC) $(OBJ)

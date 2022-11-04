@@ -313,6 +313,8 @@ kresult_t get_lazy_page(uint64_t virtual_addr)
     if (page.result != SUCCESS) return page.result;
     pte.page_ppn = page.val;
     pte.present = 1;
+    pte.user_access = 1;
+    pte.writeable = 1;
     pte.avl = PAGE_NORMAL;
 
     // Clear the page for security and other reasons
