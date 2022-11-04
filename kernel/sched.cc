@@ -193,13 +193,16 @@ void init_idle()
     uninit.erase(idle_task);
 }
 
-kresult_t TaskDescriptor::block()
+kresult_t TaskDescriptor::block(uint64_t mask)
 {
     // Check status
     if (status == PROCESS_BLOCKED) return ERROR_ALREADY_BLOCKED;
 
     // Erase from queues
     if (this->parrent != nullptr) this->parrent->erase(this);
+
+    // Change mask if not null
+    if (mask != 0) this->unblock_mask = mask;
 
     // Add to blocked queue
     blocked_s.lock();
@@ -269,5 +272,19 @@ void kill(TaskDescriptor* p)
         find_new_process();
     } else {
         release_cr3(ptable);
+    }
+}
+
+void TaskDescriptor::unblock_if_needed(uint64_t reason)
+{
+    if (this->status != PROCESS_BLOCKED) return;
+    
+    uint64_t mask = 0x01ULL << reason;
+
+    if (mask & this->unblock_mask) {
+        this->parrent->erase(this);
+        this->status = PROCESS_READY;
+        this->regs.scratch_r.rdi = reason;
+        ready.push_back(this);
     }
 }

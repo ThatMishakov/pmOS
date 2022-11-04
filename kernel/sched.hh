@@ -39,6 +39,8 @@ struct TaskDescriptor {
 
     Spinlock lock;
 
+    uint64_t unblock_mask = ~0;
+
     // Return state
     uint64_t ret_hi;
     uint64_t ret_lo;
@@ -50,7 +52,10 @@ struct TaskDescriptor {
     kresult_t init_stack();
 
     // Blocks the process
-    kresult_t block();
+    kresult_t block(uint64_t mask);
+
+    // Checks the mask and unblocks the process if needed
+    void unblock_if_needed(uint64_t reason);
 
     // Switches to this process
     void switch_to();

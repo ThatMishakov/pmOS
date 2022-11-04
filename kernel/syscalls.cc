@@ -7,6 +7,7 @@
 #include "asm.hh"
 #include "messaging.hh"
 #include <kernel/messaging.h>
+#include <kernel/block.h>
 
 extern "C" ReturnStr<uint64_t> syscall_handler(uint64_t call_n, uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t arg4, uint64_t arg5)
 {
@@ -31,7 +32,7 @@ extern "C" ReturnStr<uint64_t> syscall_handler(uint64_t call_n, uint64_t arg1, u
         r.result = syscall_map_into();
         break;
     case SYSCALL_BLOCK:
-        r = syscall_block();
+        r = syscall_block(arg1);
         break;
     case SYSCALL_MAP_INTO_RANGE:
         r.result = syscall_map_into_range(arg1, arg2, arg3, arg4, arg5);
@@ -48,8 +49,8 @@ extern "C" ReturnStr<uint64_t> syscall_handler(uint64_t call_n, uint64_t arg1, u
     case SYSCALL_MAP_PHYS:
         r.result = syscall_map_phys(arg1, arg2, arg3, arg4);
         break;
-    case SYSCALL_BLOCK_RCV_MSG:
-        r.result = syscall_wait_for_message(arg1);
+    case SYSCALL_GET_MSG_INFO:
+        r.result = syscall_get_message_info(arg1);
         break;
     case SYSCALL_GET_MESSAGE:
         r.result = syscall_get_first_message(arg1, arg2);
@@ -132,9 +133,9 @@ kresult_t syscall_map_into()
     return ERROR_NOT_IMPLEMENTED;
 }
 
-ReturnStr<uint64_t> syscall_block()
+ReturnStr<uint64_t> syscall_block(uint64_t mask)
 {
-    kresult_t r = get_cpu_struct()->current_task->block();
+    kresult_t r = get_cpu_struct()->current_task->block(mask);
     return {r, 0};
 }
 
@@ -277,11 +278,6 @@ kresult_t syscall_map_phys(uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t
     return r;
 }
 
-kresult_t syscall_wait_for_message(uint64_t message_descr_addr)
-{
-    return ERROR_NOT_IMPLEMENTED;
-}
-
 kresult_t syscall_get_first_message(uint64_t buff, uint64_t args)
 {
     TaskDescriptor* current = get_cpu_struct()->current_task;
@@ -322,6 +318,7 @@ kresult_t syscall_send_message_task(uint64_t pid, uint64_t channel, uint64_t siz
 
     process->lock.lock();
     result = queue_message(process, self_pid, channel, (char*)message, size);
+    process->unblock_if_needed(MESSAGE_S_NUM);
     process->lock.unlock();
 
     return result;
@@ -335,4 +332,33 @@ kresult_t syscall_send_message_port(uint64_t port, size_t size, uint64_t message
 kresult_t syscall_set_port(uint64_t pid, uint64_t dest_pid, uint64_t dest_chan)
 {
     return ERROR_NOT_IMPLEMENTED;
+}
+
+kresult_t syscall_get_message_info(uint64_t message_struct)
+{
+    TaskDescriptor* current = get_cpu_struct()->current_task;
+
+    current->lock.lock();
+
+    kresult_t result = SUCCESS;
+
+    if (current->messages.empty()) {
+        current->lock.unlock();
+        return ERROR_NO_MESSAGES;
+    }
+
+    Message& msg = current->messages.front();
+    uint64_t msg_struct_size = sizeof(Message_Descriptor);
+
+    result = prepare_user_buff((char*)message_struct, msg_struct_size, true);
+
+    if (result == SUCCESS) {
+        Message_Descriptor& desc = *(Message_Descriptor*)message_struct;
+        desc.sender = msg.from;
+        desc.channel = msg.channel;
+        desc.size = msg.size();
+    }
+
+    current->lock.unlock();
+    return result;
 }

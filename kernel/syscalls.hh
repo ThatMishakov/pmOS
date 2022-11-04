@@ -31,7 +31,7 @@ kresult_t syscall_map_into();
 kresult_t syscall_map_into_range(uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t arg4, uint64_t arg5);
 
 // Blocks current process
-ReturnStr<uint64_t> syscall_block();
+ReturnStr<uint64_t> syscall_block(uint64_t mask);
 
 // Allocates the nb_page at virtual_addr
 kresult_t syscall_get_page_multi(uint64_t virtual_addr, uint64_t nb_pages);
@@ -45,8 +45,8 @@ kresult_t syscall_exit(uint64_t arg1, uint64_t arg2);
 // Maps physical memory into process
 kresult_t syscall_map_phys(uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t arg4);
 
-// Block and wait untill message arrives
-kresult_t syscall_wait_for_message(uint64_t message_descr_addr);
+// Get info about the last message
+kresult_t syscall_get_message_info(uint64_t message_struct);
 
 // Gets first message in the messaging queue
 kresult_t syscall_get_first_message(uint64_t buff, uint64_t args);

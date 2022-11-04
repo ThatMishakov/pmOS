@@ -14,7 +14,7 @@
 #define SYSCALL_START_PROCESS   0x09
 #define SYSCALL_EXIT            0x0a
 #define SYSCALL_MAP_PHYS        0x0b
-#define SYSCALL_BLOCK_RCV_MSG   0x0c
+#define SYSCALL_GET_MSG_INFO    0x0c
 #define SYSCALL_GET_MESSAGE     0x0d
 #define SYSCALL_SEND_MSG_TASK   0x0e
 #define SYSCALL_SEND_MSG_PORT   0x0f
