@@ -30,7 +30,7 @@ These are the features that are planned to be had in the OS:
   - [x] Virtual memory manager
   - [x] Allocating memory to userspace
   - [x] Memory mapping
-  - [ ] Releasing used pages
+  - [x] Releasing used pages
   - [ ] Shared memory
   - [x] Delayed allocation
   - [ ] Memory protections (NX bit)
@@ -43,6 +43,8 @@ These are the features that are planned to be had in the OS:
   - [ ] Interrupt dispatching to drivers
 
 - [ ] IPC and messaging
+  - [ ] Buffered string messages
+  
 - [ ] Permissions
 - [ ] Multi CPU support
 

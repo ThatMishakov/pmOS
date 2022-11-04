@@ -23,9 +23,9 @@ INTERNALLDFLAGS :=     \
 	-ffreestanding \
 	-nostdlib      \
 	-static \
-	-fuse-ld=lld \
 	-Tlinker.ld    \
-	-z max-page-size=0x1000
+	-z max-page-size=0x1000 \
+	-L../lib/ -l pm
  
 # Internal C flags that should not be changed by the user.
 INTERNALCFLAGS  :=       \
@@ -34,7 +34,8 @@ INTERNALCFLAGS  :=       \
 	-mno-red-zone \
 	-mno-mmx -mno-sse -mno-sse2 \
 	-fPIE \
-	-fno-exceptions -fno-rtti
+	-fno-exceptions -fno-rtti \
+	-I../lib/include
  
 # Use find to glob all *.c files in the directory and extract the object names.
 CCFILES := $(shell find ./ -type f -name '*.cc')
@@ -44,10 +45,15 @@ OBJ    := $(CCFILES:.cc=.o) $(ASMFILES:.S=.o) $(CFILES:.c=.o)
 DEP    := $(OBJ:.o=.d)
 all: $(EXEC)
 
-$(EXEC): $(OBJ) # linker.ld
+$(EXEC): $(OBJ) ../lib/libpm.a linker.ld
 	$(CC) $(LDFLAGS) $(OBJ) -o $@
 	
 clean:
 	$(RM) $(EXEC) $(OBJ)
 
 -include $(DEP)
+
+../lib/libpm.a:
+	$(MAKE) -C ../lib libpm.a
+
+.PHONY: ../lib/libpm.a
