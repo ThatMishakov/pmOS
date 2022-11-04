@@ -46,6 +46,21 @@ extern "C" ReturnStr<uint64_t> syscall_handler(uint64_t call_n, uint64_t arg1, u
     case SYSCALL_MAP_PHYS:
         r.result = syscall_map_phys(arg1, arg2, arg3, arg4);
         break;
+    case SYSCALL_BLOCK_RCV_MSG:
+        r.result = syscall_wait_for_message(arg1);
+        break;
+    case SYSCALL_GET_MESSAGE:
+        r.result = syscall_get_first_message(arg1, arg2);
+        break;
+    case SYSCALL_SEND_MSG_TASK:
+        r.result = syscall_send_message_task(arg1, arg2, arg3, arg4);
+        break;
+    case SYSCALL_SEND_MSG_PORT:
+        r.result = syscall_send_message_port(arg1, arg2, arg3);
+        break;
+    case SYSCALL_SET_PORT:
+        r.result = syscall_set_port(arg1, arg2, arg3);
+        break;
     default:
         // Not supported
         r.result = ERROR_NOT_SUPPORTED;
@@ -258,4 +273,29 @@ kresult_t syscall_map_phys(uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t
         }
 
     return r;
+}
+
+kresult_t syscall_wait_for_message(uint64_t message_descr_addr)
+{
+    return ERROR_NOT_IMPLEMENTED;
+}
+
+kresult_t syscall_get_first_message(uint64_t buff, uint64_t args)
+{
+    return ERROR_NOT_IMPLEMENTED;
+}
+
+kresult_t syscall_send_message_task(uint64_t pid, uint64_t channel, uint64_t size, uint64_t message)
+{
+    return ERROR_NOT_IMPLEMENTED;
+}
+
+kresult_t syscall_send_message_port(uint64_t port, size_t size, uint64_t message)
+{
+    return ERROR_NOT_IMPLEMENTED;
+}
+
+kresult_t syscall_set_port(uint64_t pid, uint64_t dest_pid, uint64_t dest_chan)
+{
+    return ERROR_NOT_IMPLEMENTED;
 }

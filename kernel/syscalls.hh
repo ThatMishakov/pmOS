@@ -44,3 +44,18 @@ kresult_t syscall_exit(uint64_t arg1, uint64_t arg2);
 
 // Maps physical memory into process
 kresult_t syscall_map_phys(uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t arg4);
+
+// Block and wait untill message arrives
+kresult_t syscall_wait_for_message(uint64_t message_descr_addr);
+
+// Gets first message in the messaging queue
+kresult_t syscall_get_first_message(uint64_t buff, uint64_t args);
+
+// Sends a message to the process pid at channel *channel*
+kresult_t syscall_send_message_task(uint64_t pid, uint64_t channel, uint64_t size, uint64_t message);
+
+// Sends a message to the port
+kresult_t syscall_send_message_port(uint64_t port, size_t size, uint64_t message);\
+
+// Sets a task's port
+kresult_t syscall_set_port(uint64_t pid, uint64_t dest_pid, uint64_t dest_chan);
