@@ -5,6 +5,8 @@
 #include "sched.hh"
 #include "lib/vector.hh"
 #include "asm.hh"
+#include "messaging.hh"
+#include <kernel/messaging.h>
 
 extern "C" ReturnStr<uint64_t> syscall_handler(uint64_t call_n, uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t arg4, uint64_t arg5)
 {
@@ -282,12 +284,47 @@ kresult_t syscall_wait_for_message(uint64_t message_descr_addr)
 
 kresult_t syscall_get_first_message(uint64_t buff, uint64_t args)
 {
-    return ERROR_NOT_IMPLEMENTED;
+    TaskDescriptor* current = get_cpu_struct()->current_task;
+
+    current->lock.lock();
+
+    kresult_t result = SUCCESS;
+
+    if (current->messages.empty()) {
+        current->lock.unlock();
+        return ERROR_NO_MESSAGES;
+    }
+
+    Message& msg = current->messages.front();
+
+    result = msg.copy_to_user_buff((char*)buff);
+
+    if (result == SUCCESS) {
+        if (!(args & MSG_ARG_NOPOP)) {
+            current->messages.pop();
+        }
+    }
+
+    current->lock.unlock();
+    return result;
 }
 
 kresult_t syscall_send_message_task(uint64_t pid, uint64_t channel, uint64_t size, uint64_t message)
 {
-    return ERROR_NOT_IMPLEMENTED;
+    // TODO: Check permissions
+
+    uint64_t self_pid = get_cpu_struct()->current_task->pid;
+    if (self_pid == pid) return ERROR_CANT_MESSAGE_SELF;
+
+    if (not exists_process(pid)) return ERROR_NO_SUCH_PROCESS;
+    TaskDescriptor* process = (*s_map).at(pid);
+    kresult_t result = SUCCESS;
+
+    process->lock.lock();
+    result = queue_message(process, self_pid, channel, (char*)message, size);
+    process->lock.unlock();
+
+    return result;
 }
 
 kresult_t syscall_send_message_port(uint64_t port, size_t size, uint64_t message)

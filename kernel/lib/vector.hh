@@ -142,4 +142,10 @@ const T& vector<T>::front() const
     return *ptr;
 }
 
+template<typename T>
+inline size_t vector<T>::size() const
+{
+    return a_size;
+}
+
 }

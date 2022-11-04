@@ -23,6 +23,8 @@ inline void halt()
 
 void memcpy(char* from, char* to, size_t size);
 
-kresult_t prepare_user_buff(char* buff, size_t size);
+kresult_t prepare_user_buff(char* buff, size_t size, bool will_write);
 
 kresult_t copy_from_user(char* from, char* to, size_t size);
+
+kresult_t copy_to_user(char* from, char* to, size_t size);

@@ -17,5 +17,7 @@
 #define ERROR_ALREADY_BLOCKED    -13
 #define ERROR_NO_SUCH_PROCESS    -14
 #define ERROR_PROCESS_INITED     -15
+#define ERROR_CANT_MESSAGE_SELF  -16
+#define ERROR_NO_MESSAGES        -17
 
 #endif

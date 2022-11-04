@@ -113,14 +113,24 @@ void term_write(const char * str, uint64_t length)
         putchar(str[i]);
 }
 
-kresult_t prepare_user_buff(char* buff, size_t size)
+kresult_t prepare_user_buff(char* buff, size_t size, bool will_write)
 {
     return ERROR_NOT_IMPLEMENTED;
 }
 
 kresult_t copy_from_user(char* from, char* to, size_t size)
 {
-    kresult_t result = prepare_user_buff(from, size);
+    kresult_t result = prepare_user_buff(from, size, false);
+    if (result != SUCCESS) return result;
+
+    memcpy(from, to, size);
+
+    return SUCCESS;
+}
+
+kresult_t copy_to_user(char* from, char* to, size_t size)
+{
+    kresult_t result = prepare_user_buff(to, size, true);
     if (result != SUCCESS) return result;
 
     memcpy(from, to, size);

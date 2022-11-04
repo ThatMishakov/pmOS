@@ -8,4 +8,6 @@ typedef struct {
     uint64_t size;
 } Message_Descriptor;
 
+#define MSG_ARG_NOPOP 0x01
+
 #endif

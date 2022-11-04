@@ -55,7 +55,7 @@ kresult_t syscall_get_first_message(uint64_t buff, uint64_t args);
 kresult_t syscall_send_message_task(uint64_t pid, uint64_t channel, uint64_t size, uint64_t message);
 
 // Sends a message to the port
-kresult_t syscall_send_message_port(uint64_t port, size_t size, uint64_t message);\
+kresult_t syscall_send_message_port(uint64_t port, size_t size, uint64_t message);
 
 // Sets a task's port
 kresult_t syscall_set_port(uint64_t pid, uint64_t dest_pid, uint64_t dest_chan);
