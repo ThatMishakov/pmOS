@@ -1,4 +1,4 @@
-#include "common/com.h"
+#include <kernel/com.h>
 #include "gdt.hh"
 #include "utils.hh"
 #include "misc.hh"
@@ -8,7 +8,7 @@
 #include "sched.hh"
 #include "messaging.hh"
 #include "free_page_alloc.hh"
-#include "common/errors.h"
+#include <kernel/errors.h>
 #include "vga.hh"
 
 Kernel_Entry_Data* kdata;

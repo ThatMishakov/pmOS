@@ -4,7 +4,7 @@
 #include "asm.hh"
 #include "start.hh"
 #include "vga.hh"
-#include "common/errors.h"
+#include <kernel/errors.h>
 
 void int_to_string(long int n, uint8_t base, char* str, int& length)
 {
@@ -113,7 +113,27 @@ void term_write(const char * str, uint64_t length)
         putchar(str[i]);
 }
 
-kresult_t copy_from_user(char* from, char* to, size_t size)
+kresult_t prepare_user_buff(char* buff, size_t size)
 {
     return ERROR_NOT_IMPLEMENTED;
 }
+
+kresult_t copy_from_user(char* from, char* to, size_t size)
+{
+    kresult_t result = prepare_user_buff(from, size);
+    if (result != SUCCESS) return result;
+
+    memcpy(from, to, size);
+
+    return SUCCESS;
+}
+
+void memcpy(char* from, char* to, size_t size)
+{
+    for (size_t i = 0; i < size; ++i) {
+        *from = *to;
+        ++from; ++to;
+    }
+}
+
+

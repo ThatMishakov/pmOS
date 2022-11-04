@@ -2,11 +2,11 @@
 #include "asm.hh"
 #include "paging.hh"
 #include "types.hh"
-#include "common/errors.h"
+#include <kernel/errors.h>
 #include "linker.hh"
 #include "idle.hh"
 #include "asm.hh"
-#include "common/com.h"
+#include <kernel/com.h>
 #include "misc.hh"
 
 TaskDescriptor* idle_task;

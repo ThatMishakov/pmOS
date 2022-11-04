@@ -2,7 +2,7 @@
 #include "lib/list.hh"
 #include "misc.hh"
 #include "types.hh"
-#include "common/errors.h"
+#include <kernel/errors.h>
 #include "utils.hh"
 
 klib::list<uint64_t>* free_pages_list = nullptr;

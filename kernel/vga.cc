@@ -1,4 +1,4 @@
-#include "common/types.h"
+#include <kernel/types.h>
 #include "paging.hh"
 #include "misc.hh"
 

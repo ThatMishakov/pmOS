@@ -9,7 +9,7 @@ CPP = clang
 CXX = clang++
 TARGET := x86_64-elf
 
-INCLUDEDIR = include
+INCLUDEDIR = include:../kernel/include:../lib/include
 
 # User controllable CFLAGS.
 USERCFLAGS = -Wall -Wextra -O2 -pipe
@@ -34,8 +34,7 @@ INTERNALCFLAGS  :=       \
 	-mno-red-zone \
 	-mno-mmx -mno-sse -mno-sse2 \
 	-fPIE \
-	-fno-exceptions -fno-rtti \
-	-I../lib/include
+	-fno-exceptions -fno-rtti
  
 # Use find to glob all *.c files in the directory and extract the object names.
 CCFILES := $(shell find ./ -type f -name '*.cc')

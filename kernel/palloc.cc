@@ -1,7 +1,7 @@
 #include "palloc.hh"
 #include "asm.hh"
 #include "linker.hh"
-#include "common/memory.h"
+#include <kernel/memory.h>
 #include "paging.hh"
 #include "types.hh"
 #include "utils.hh"

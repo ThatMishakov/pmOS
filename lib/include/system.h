@@ -1,8 +1,8 @@
 #ifndef SYSTEM_H
 #define SYSTEM_H
 #include <stdint.h>
-#include "../../kernel/common/syscalls.h"
-#include "../../kernel/common/memory.h"
+#include "../../kernel/include/kernel/syscalls.h"
+#include "../../kernel/include/kernel/memory.h"
 
 typedef struct {
     uint64_t result;

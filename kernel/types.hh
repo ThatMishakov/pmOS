@@ -1,6 +1,6 @@
 #pragma once
 #include <stdint.h>
-#include "common/types.h"
+#include <kernel/types.h>
 
 #define DECLARE_LOCK(name) volatile int name ## Locked
 #define LOCK(name) \

@@ -1,15 +1,15 @@
 #include "paging.hh"
 #include <stdint.h>
-#include "common/memory.h"
+#include <kernel/memory.h>
 #include "mem.hh"
 #include "asm.hh"
-#include "common/errors.h"
+#include <kernel/errors.h>
 #include "utils.hh"
 #include "mem.hh"
 #include "free_page_alloc.hh"
 #include "utils.hh"
 #include "types.hh"
-#include "common/com.h"
+#include <kernel/com.h>
 
 
 kresult_t get_page(uint64_t virtual_addr, Page_Table_Argumments arg)

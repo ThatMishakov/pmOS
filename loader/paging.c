@@ -1,5 +1,5 @@
 #include <paging.h>
-#include "../kernel/common/memory.h"
+#include <kernel/memory.h>
 #include <stdint.h>
 #include <entry.h>
 #include <mem.h>

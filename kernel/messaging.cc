@@ -3,7 +3,7 @@
 #include "sched.hh"
 #include <stdint.h>
 #include <stddef.h>
-#include "common/errors.h"
+#include <kernel/errors.h>
 #include "lib/utility.hh"
 
 kresult_t queue_message(TaskDescriptor* task, uint64_t from, char* message_usr_ptr, size_t size)

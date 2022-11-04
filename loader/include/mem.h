@@ -1,6 +1,6 @@
 #ifndef MEM_H
 #define MEM_H
-#include "../../kernel/common/memory.h"
+#include <kernel/memory.h>
 #include <stdint.h>
 
 void bitmap_mark_bit(uint64_t pos, char b);

@@ -3,8 +3,8 @@
 #include "utils.hh"
 #include "misc.hh"
 #include "paging.hh"
-#include "common/memory.h"
-#include "common/errors.h"
+#include <kernel/memory.h>
+#include <kernel/errors.h>
 
 PFrameAllocator palloc;
 

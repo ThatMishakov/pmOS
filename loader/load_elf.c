@@ -1,7 +1,7 @@
 #include <load_elf.h>
 #include <syscall.h>
-#include "../kernel/common/elf.h"
-#include "../kernel/common/errors.h"
+#include <kernel/elf.h>
+#include <kernel/errors.h>
 #include <utils.h>
 #include <io.h>
 #include <misc.h>
@@ -35,7 +35,7 @@ uint64_t load_elf(ELF_64bit* elf_h, uint8_t ring)
             uint64_t phys_loc = (uint64_t)elf_h + p->p_offset;
             uint64_t vaddr = p->p_vaddr;
             uint64_t size = p->p_filesz;
-            uint64_t pages = (p->p_memsz >> 12) + (pages & 0xfff ? 1 : 0);
+            uint64_t pages = (p->p_memsz >> 12) + ((phys_loc + p->p_memsz) & 0xfff ? 1 : 0);
 
             // TODO: Error checking
             syscall_r r = get_page_multi(memory, pages);

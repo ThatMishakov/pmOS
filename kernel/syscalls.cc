@@ -1,6 +1,6 @@
 #include "syscalls.hh"
 #include "utils.hh"
-#include "common/com.h"
+#include <kernel/com.h>
 #include "paging.hh"
 #include "sched.hh"
 #include "lib/vector.hh"

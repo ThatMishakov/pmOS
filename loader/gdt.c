@@ -1,5 +1,5 @@
 #include <gdt.h>
-#include "../kernel/common/gdt.h"
+#include <kernel/gdt.h>
 #include <mem.h>
 
 GDT_entry *gdt = 0;

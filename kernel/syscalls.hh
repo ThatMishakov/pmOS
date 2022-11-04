@@ -1,7 +1,7 @@
 #pragma once
 #include "sched.hh"
-#include "common/errors.h"
-#include "common/syscalls.h"
+#include <kernel/errors.h>
+#include <kernel/syscalls.h>
 #include "types.hh"
 
 

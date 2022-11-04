@@ -1,7 +1,7 @@
 #include <multiboot2.h>
 #include <linker.h>
 #include <stdint.h>
-#include <../kernel/common/memory.h>
+#include <kernel/memory.h>
 #include <io.h>
 #include <mem.h>
 #include <paging.h>

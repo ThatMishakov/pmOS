@@ -1,4 +1,4 @@
-#include "../kernel/common/syscalls.h"
+#include <kernel/syscalls.h>
 
     .globl syscall
     .type syscall, @function

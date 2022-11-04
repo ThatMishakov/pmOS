@@ -1,7 +1,7 @@
 #ifndef PAGING_H
 #define PAGING_H
 #include <stdint.h>
-#include "../../kernel/common/memory.h"
+#include <kernel/memory.h>
 
 typedef struct {
     uint8_t writeable          : 1;

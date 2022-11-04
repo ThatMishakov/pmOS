@@ -8,7 +8,7 @@
 #include <kernel_loader.h>
 #include <syscall.h>
 #include <screen.h>
-#include "../kernel/common/syscalls.h"
+#include <kernel/syscalls.h>
 #include <load_elf.h>
 #include <paging.h>
 #include <syscall.h>

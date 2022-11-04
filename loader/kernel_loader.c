@@ -1,8 +1,8 @@
 #include <mem.h>
 #include <multiboot2.h>
 #include <entry.h>
-#include "../kernel/common/elf.h"
-#include "../kernel/common/com.h"
+#include <kernel/elf.h>
+#include <kernel/com.h>
 #include <utils.h>
 #include <misc.h>
 #include <paging.h>
