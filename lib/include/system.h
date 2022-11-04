@@ -1,5 +1,5 @@
-#ifndef SYSTEM_H
-#define SYSTEM_H
+#ifndef _SYSTEM_H
+#define _SYSTEM_H 1
 #include <stdint.h>
 #include <stddef.h>
 #include "../../kernel/include/kernel/syscalls.h"

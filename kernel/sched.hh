@@ -52,10 +52,13 @@ struct TaskDescriptor {
     kresult_t init_stack();
 
     // Blocks the process
-    kresult_t block(uint64_t mask);
+    ReturnStr<uint64_t> block(uint64_t mask);
 
     // Checks the mask and unblocks the process if needed
     void unblock_if_needed(uint64_t reason);
+
+    // Returns 0 if there are no unblocking events pending. Otherwise returns 0.
+    uint64_t check_unblock_immediately();
 
     // Switches to this process
     void switch_to();

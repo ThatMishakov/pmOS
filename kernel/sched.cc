@@ -7,6 +7,7 @@
 #include "idle.hh"
 #include "asm.hh"
 #include <kernel/com.h>
+#include <kernel/block.h>
 #include "misc.hh"
 
 TaskDescriptor* idle_task;
@@ -193,10 +194,13 @@ void init_idle()
     uninit.erase(idle_task);
 }
 
-kresult_t TaskDescriptor::block(uint64_t mask)
+ReturnStr<uint64_t> TaskDescriptor::block(uint64_t mask)
 {
     // Check status
-    if (status == PROCESS_BLOCKED) return ERROR_ALREADY_BLOCKED;
+    if (status == PROCESS_BLOCKED) return {ERROR_ALREADY_BLOCKED, 0};
+
+    uint64_t imm = check_unblock_immediately();
+    if (imm != 0) return {SUCCESS, imm};
 
     // Erase from queues
     if (this->parrent != nullptr) this->parrent->erase(this);
@@ -216,7 +220,7 @@ kresult_t TaskDescriptor::block(uint64_t mask)
         find_new_process();
     }
 
-    return SUCCESS;
+    return {SUCCESS, 0};
 }
 
 void find_new_process()
@@ -287,4 +291,13 @@ void TaskDescriptor::unblock_if_needed(uint64_t reason)
         this->regs.scratch_r.rdi = reason;
         ready.push_back(this);
     }
+}
+
+uint64_t TaskDescriptor::check_unblock_immediately()
+{
+    if (this->unblock_mask & MESSAGE_UNBLOCK_MASK) {
+        if (not this->messages.empty()) return MESSAGE_S_NUM;
+    }
+
+    return 0;
 }

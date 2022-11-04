@@ -135,8 +135,8 @@ kresult_t syscall_map_into()
 
 ReturnStr<uint64_t> syscall_block(uint64_t mask)
 {
-    kresult_t r = get_cpu_struct()->current_task->block(mask);
-    return {r, 0};
+    ReturnStr<uint64_t> r = get_cpu_struct()->current_task->block(mask);
+    return r;
 }
 
 kresult_t syscall_map_into_range(uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t arg4, uint64_t arg5)
