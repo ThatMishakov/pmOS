@@ -34,6 +34,7 @@ public:
     void clear();
 
     void insert(const Pair<K, T>&);
+    void insert(Pair<K, T>&&);
 
     void erase(const K&);
 
@@ -120,6 +121,41 @@ void splay_tree_map<K,T>::rotate_right(splay_tree_map<K,T>::node* p) const
 
 template<class K, class T>
 void splay_tree_map<K,T>::insert(const Pair<K, T>& pair)
+{
+    node *n = nullptr;
+    node* temp = root;
+    while (temp != nullptr) {
+        n = temp;
+        if (temp->key > pair.first) {
+            temp = temp->left;
+        } else if (temp->key < pair.first) {
+            temp = temp->right;
+        } else {
+            splay(n);
+            temp->data = pair.second;
+            return;
+        }
+    }
+
+    node* c = new node(pair);
+
+    if (n == nullptr) {
+        root = c;
+    } else if (pair.first < n->key) {
+        n->left = c;
+        c->parent = n;
+    } else {
+        n->right = c;
+        c->parent = n;
+    }
+
+    splay(c);
+
+    ++elements;
+}
+
+template<class K, class T>
+void splay_tree_map<K,T>::insert(Pair<K, T>&& pair)
 {
     node *n = nullptr;
     node* temp = root;

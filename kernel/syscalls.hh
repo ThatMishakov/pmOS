@@ -59,3 +59,6 @@ kresult_t syscall_send_message_port(uint64_t port, size_t size, uint64_t message
 
 // Sets a task's port
 kresult_t syscall_set_port(uint64_t pid, uint64_t port, uint64_t dest_pid, uint64_t dest_chan);
+
+// Sets task's attributes
+kresult_t syscall_set_attribute(uint64_t pid, uint64_t attribute, uint64_t value); 

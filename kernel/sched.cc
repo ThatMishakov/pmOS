@@ -22,7 +22,7 @@ sched_pqueue dead;
 
 sched_map* s_map;
 
-PID pid = 0;
+PID pid = 1;
 
 void init_per_cpu()
 {

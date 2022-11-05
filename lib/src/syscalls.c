@@ -40,3 +40,18 @@ result_t send_message_port(uint64_t port, size_t size, char* message)
 {
     return syscall(SYSCALL_SEND_MSG_PORT, port, size, message).result;
 }
+
+syscall_r block(uint64_t mask)
+{
+    return syscall(SYSCALL_BLOCK, mask);
+}
+
+result_t get_first_message(char* buff, uint64_t args)
+{
+    return syscall(SYSCALL_GET_MESSAGE, buff, args).result;
+}
+
+result_t syscall_get_message_info(Message_Descriptor* descr)
+{
+    return syscall(SYSCALL_GET_MSG_INFO, descr).result;
+}

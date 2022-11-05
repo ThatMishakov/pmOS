@@ -19,5 +19,6 @@
 #define SYSCALL_SEND_MSG_TASK   0x0e
 #define SYSCALL_SEND_MSG_PORT   0x0f
 #define SYSCALL_SET_PORT        0x10
+#define SYSCALL_SET_ATTR        0x11
 
 #endif

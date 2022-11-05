@@ -8,6 +8,7 @@
 #include "messaging.hh"
 #include <kernel/messaging.h>
 #include <kernel/block.h>
+#include <kernel/attributes.h>
 
 extern "C" ReturnStr<uint64_t> syscall_handler(uint64_t call_n, uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t arg4, uint64_t arg5)
 {
@@ -63,6 +64,9 @@ extern "C" ReturnStr<uint64_t> syscall_handler(uint64_t call_n, uint64_t arg1, u
         break;
     case SYSCALL_SET_PORT:
         r.result = syscall_set_port(arg1, arg2, arg3, arg4);
+        break;
+    case SYSCALL_SET_ATTR:
+        r.result = syscall_set_attribute(arg1, arg2, arg3);
         break;
     default:
         // Not supported
@@ -250,7 +254,7 @@ kresult_t syscall_map_phys(uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t
     pta.global = 0;
     pta.writeable = arg4& 0x01;
     pta.execution_disabled = arg4&0x02;
-    t_print("Debug: map_phys virt %h <- phys %h nb %h\n", virt, phys, nb_pages);
+    //t_print("Debug: map_phys virt %h <- phys %h nb %h\n", virt, phys, nb_pages);
 
     // TODO: Check permissions
 
@@ -269,9 +273,11 @@ kresult_t syscall_map_phys(uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t
         r = map(phys + i*KB(4), virt+i*KB(4), pta);
     }
 
+    --i;
+
     // If was not successfull, invalidade the pages
     if (r != SUCCESS)
-        for (uint64_t k = 0; k < i; ++i) {
+        for (uint64_t k = 0; k < i; ++k) {
             invalidade_noerr(virt+k*KB(4));
         }
 
@@ -330,21 +336,7 @@ kresult_t syscall_send_message_port(uint64_t port, size_t size, uint64_t message
 
     TaskDescriptor* current = get_cpu_struct()->current_task;
 
-    if (current->ports.count(port) == 0) return ERROR_PORT_NOT_EXISTS;
-
-    Port_Desc* d = &current->ports.at(port);
-
-    if (not exists_process(d->task)){
-        current->ports.erase(port);
-        return ERROR_PORT_CLOSED;
-    }
-    TaskDescriptor* process = (*s_map).at(d->task);
-    kresult_t result = SUCCESS;
-
-    process->lock.lock();
-    result = queue_message(process, current->pid, d->channel, (char*)message, size);
-    process->unblock_if_needed(MESSAGE_S_NUM);
-    process->lock.unlock();
+    kresult_t result = current->ports.send_from_user(current->pid, port, message, size);
 
     return result;
 }
@@ -356,12 +348,11 @@ kresult_t syscall_set_port(uint64_t pid, uint64_t port, uint64_t dest_pid, uint6
     if (pid == dest_pid) return ERROR_CANT_MESSAGE_SELF;
 
     if (not exists_process(pid)) return ERROR_NO_SUCH_PROCESS;
-    if (not exists_process(dest_pid)) return ERROR_NO_SUCH_PROCESS;
 
     TaskDescriptor* process = s_map->at(pid);
-    
+
     process->lock.lock();
-    process->ports.insert({port, {dest_pid, dest_chan}});
+    process->ports.set_port(port, dest_pid, dest_chan);
     process->lock.unlock();
 
     return SUCCESS;
@@ -394,4 +385,23 @@ kresult_t syscall_get_message_info(uint64_t message_struct)
 
     current->lock.unlock();
     return result;
+}
+
+kresult_t syscall_set_attribute(uint64_t pid, uint64_t attribute, uint64_t value)
+{
+    // TODO: Check persmissions
+
+    if (not exists_process(pid)) return ERROR_NO_SUCH_PROCESS;
+    TaskDescriptor* process = s_map->at(pid);
+
+    switch (attribute) {
+    case ATTR_ALLOW_PORT:
+        process->regs.e.rflags.bits.iopl = value ? 3 : 0;
+        break;
+    default:
+        return ERROR_NOT_SUPPORTED;
+        break;
+    }
+
+    return ERROR_GENERAL;
 }

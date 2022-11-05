@@ -49,10 +49,12 @@ void main()
     load_kernel(multiboot_info_str);
 
     print_str("Loading modules...\n");
+
+    uint64_t terminal_pid = 0;
     for (struct multiboot_tag * tag = (struct multiboot_tag *) (multiboot_info_str + 8); tag->type != MULTIBOOT_TAG_TYPE_END;
         tag = (struct multiboot_tag *) ((multiboot_uint8_t *) tag + ((tag->size + 7) & ~7))) {
             if (tag->type == MULTIBOOT_TAG_TYPE_MODULE) {
-                if (!str_starts_with(((struct multiboot_tag_module *)tag)->cmdline, "kernel")) {
+                if (str_starts_with(((struct multiboot_tag_module *)tag)->cmdline, "terminald")) {
                     struct multiboot_tag_module * mod = (struct multiboot_tag_module *)tag;
                     print_str(" --> loading ");
                     print_str(mod->cmdline);
@@ -64,12 +66,37 @@ void main()
                     if (phys_end & 0xfff) nb_pages += 1;
                     syscall_r p = map_phys(virt_addr, phys_start, nb_pages, 0x3);
                     ELF_64bit* e = (ELF_64bit*)((uint64_t)mod->mod_start - phys_start + virt_addr);
-                    load_elf(e, 3);
+                    uint64_t pid = load_elf(e, 3);
+                    terminal_pid = pid;
+                    syscall(SYSCALL_SET_ATTR, 1, 1);
+                    start_process(pid, e->program_entry);
                 }
             }
         }
 
+    for (struct multiboot_tag * tag = (struct multiboot_tag *) (multiboot_info_str + 8); tag->type != MULTIBOOT_TAG_TYPE_END;
+        tag = (struct multiboot_tag *) ((multiboot_uint8_t *) tag + ((tag->size + 7) & ~7))) {
+            if (tag->type == MULTIBOOT_TAG_TYPE_MODULE) {
+                if (str_starts_with(((struct multiboot_tag_module *)tag)->cmdline, "processd")) {
+                    struct multiboot_tag_module * mod = (struct multiboot_tag_module *)tag;
+                    print_str(" --> loading ");
+                    print_str(mod->cmdline);
+                    print_str("\n");
+                    static uint64_t virt_addr = 549755813888 + 0x1000000;
+                    uint64_t phys_start = (uint64_t)mod->mod_start & ~(uint64_t)0xfff;
+                    uint64_t phys_end = (uint64_t)mod->mod_end;
+                    uint64_t nb_pages = (phys_end - phys_start) >> 12;
+                    if (phys_end & 0xfff) nb_pages += 1;
+                    syscall_r p = map_phys(virt_addr, phys_start, nb_pages, 0x3);
+                    ELF_64bit* e = (ELF_64bit*)((uint64_t)mod->mod_start - phys_start + virt_addr);
+                    uint64_t pid = load_elf(e, 3);
+                    syscall(SYSCALL_SET_PORT, pid, 1, terminal_pid, 1);
+                    start_process(pid, e->program_entry);
+                }
+            }
+        }
 
+   /*
     print_str("Blocking and recieving a message\n");
     syscall_r r = syscall(SYSCALL_BLOCK, 0x01);
     if (r.result == SUCCESS && r.value == MESSAGE_S_NUM) {
@@ -100,6 +127,7 @@ void main()
         print_str("Loader: Message content: ");
         print_str(buff);
     }
+    */
 
     print_str("Everything seems ok. Nothing to do. Exiting...\n");
 

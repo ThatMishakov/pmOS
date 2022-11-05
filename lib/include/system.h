@@ -33,8 +33,8 @@ syscall_r start_process(uint64_t pid, uint64_t entry);
 
 syscall_r map_phys(uint64_t virt, uint64_t phys, uint64_t size, uint64_t arg);
 
-// Block and wait untill message arrives
-result_t wait_for_message(Message_Descriptor* descr);
+// Get info about message
+result_t syscall_get_message_info(Message_Descriptor* descr);
 
 // Gets first message in the messaging queue
 result_t get_first_message(char* buff, uint64_t args);
@@ -46,6 +46,12 @@ result_t send_message_task(uint64_t pid, uint64_t channel, size_t size, char* me
 result_t send_message_port(uint64_t port, size_t size, char* message);
 
 result_t set_port(uint64_t pid, uint64_t dest_pid, uint64_t dest_chan);
+
+// Blocks the process with the mask *mask*. Returns unblock reason as a value
+syscall_r block(uint64_t mask);
+
+// Exits the process
+result_t exit(uint64_t);
 
 #if defined(__cplusplus)
 } /* extern "C" */

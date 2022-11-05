@@ -1,5 +1,6 @@
 #pragma once
 #include "list.hh"
+#include "utility.hh"
 
 namespace klib {
 template <class T, class Container = list<T> >
@@ -29,17 +30,17 @@ public:
 
     inline void push(const T& t)
     {
-        c.push_back(t);
+        c.push_back(forward<T>(t));
     }
 
     inline void push(T&& t)
     {
-        c.push_back(t);
+        c.push_back(forward<T>(t));
     }
 
     inline void emplace(T&& t)
     {
-        c.emplace_back(t);
+        c.emplace_back(forward<T>(t));
     }
 
     inline void pop()
