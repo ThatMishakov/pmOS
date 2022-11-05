@@ -5,7 +5,7 @@
 #include <system.h>
 
 extern "C" int main() {
-    char msg[] = "Hello from loader!\n";
+    char msg[] = "Hello from processd!\n";
     send_message_task(0, 0, strlen(msg), msg);
 
     return 0;

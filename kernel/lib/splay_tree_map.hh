@@ -23,6 +23,8 @@ private:
     void splay(node* n) const;
     void rotate_left(node*) const;
     void rotate_right(node*) const;
+    void delete_node(node*);
+    static node* max(node*);
 public:
     constexpr splay_tree_map():
         elements(0), root(nullptr) {};
@@ -193,6 +195,66 @@ T& splay_tree_map<K,T>::at(const K& key)
     splay(n);
 
     return n->data;
+}
+
+template<class K, class T>
+typename splay_tree_map<K,T>::node* splay_tree_map<K,T>::max(splay_tree_map<K,T>::node* p)
+{
+    while (p->right != nullptr) {
+        p = p->right;
+    }
+    return p;
+}
+
+
+template<class K, class T>
+void splay_tree_map<K,T>::erase(const K& key)
+{
+    node* n = root;
+
+    while (n->key != key) {
+        if (n->key < key) {
+            n = n->right;
+        } else {
+            n = n->left;
+        }
+    }
+
+    delete_node(n);
+}
+
+template<class K, class T>
+splay_tree_map<K,T>::~splay_tree_map()
+{
+    while (root != nullptr) delete_node(root);
+}
+
+template<class K, class T>
+void splay_tree_map<K,T>::delete_node(splay_tree_map<K,T>::node* p)
+{
+    splay(p);
+
+    node* left = root->left;
+    if (left != nullptr) {
+        left->parent = nullptr;
+    }
+
+    node* right = root->right;
+    if (right != nullptr) {
+        right->parent = nullptr;
+    }
+
+    delete p;
+    --elements;
+
+    if (left != root) {
+        root = left;
+        node* p = max(root);
+        p->right = right;
+        splay(p);
+    } else {
+        root = right;
+    }
 }
 
 }

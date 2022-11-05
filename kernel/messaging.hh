@@ -5,6 +5,7 @@
 #include "utils.hh"
 #include "lib/vector.hh"
 #include "types.hh"
+#include "lib/splay_tree_map.hh"
 
 struct Message {
     uint64_t from;
@@ -19,7 +20,13 @@ struct Message {
     kresult_t copy_to_user_buff(char* buff);
 };
 
+struct Port_Desc {
+    uint64_t task;
+    uint64_t channel;
+};
+
 using Message_storage = klib::queue<Message>;
+using Ports_storage = klib::splay_tree_map<uint64_t, Port_Desc>;
 
 struct TaskDescriptor;
 

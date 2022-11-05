@@ -36,6 +36,7 @@ struct TaskDescriptor {
 
     // Messaging
     Message_storage messages;
+    Ports_storage ports;
 
     Spinlock lock;
 

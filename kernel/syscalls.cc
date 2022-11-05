@@ -62,7 +62,7 @@ extern "C" ReturnStr<uint64_t> syscall_handler(uint64_t call_n, uint64_t arg1, u
         r.result = syscall_send_message_port(arg1, arg2, arg3);
         break;
     case SYSCALL_SET_PORT:
-        r.result = syscall_set_port(arg1, arg2, arg3);
+        r.result = syscall_set_port(arg1, arg2, arg3, arg4);
         break;
     default:
         // Not supported
@@ -326,12 +326,44 @@ kresult_t syscall_send_message_task(uint64_t pid, uint64_t channel, uint64_t siz
 
 kresult_t syscall_send_message_port(uint64_t port, size_t size, uint64_t message)
 {
-    return ERROR_NOT_IMPLEMENTED;
+    // TODO: Check permissions
+
+    TaskDescriptor* current = get_cpu_struct()->current_task;
+
+    if (current->ports.count(port) == 0) return ERROR_PORT_NOT_EXISTS;
+
+    Port_Desc* d = &current->ports.at(port);
+
+    if (not exists_process(d->task)){
+        current->ports.erase(port);
+        return ERROR_PORT_CLOSED;
+    }
+    TaskDescriptor* process = (*s_map).at(d->task);
+    kresult_t result = SUCCESS;
+
+    process->lock.lock();
+    result = queue_message(process, current->pid, d->channel, (char*)message, size);
+    process->unblock_if_needed(MESSAGE_S_NUM);
+    process->lock.unlock();
+
+    return result;
 }
 
-kresult_t syscall_set_port(uint64_t pid, uint64_t dest_pid, uint64_t dest_chan)
+kresult_t syscall_set_port(uint64_t pid, uint64_t port, uint64_t dest_pid, uint64_t dest_chan)
 {
-    return ERROR_NOT_IMPLEMENTED;
+    // TODO: Check permissions
+
+    if (pid != dest_pid) return ERROR_CANT_MESSAGE_SELF;
+
+    if (not exists_process(pid)) return ERROR_NO_SUCH_PROCESS;
+    if (not exists_process(dest_pid)) return ERROR_NO_SUCH_PROCESS;
+
+    TaskDescriptor* process = (*s_map).at(pid);
+    process->lock.lock();
+    process->ports.insert({port, {dest_pid, dest_chan}});
+    process->lock.unlock();
+
+    return SUCCESS;
 }
 
 kresult_t syscall_get_message_info(uint64_t message_struct)
