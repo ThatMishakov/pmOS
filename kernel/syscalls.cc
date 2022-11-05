@@ -307,7 +307,6 @@ kresult_t syscall_get_first_message(uint64_t buff, uint64_t args)
 
 kresult_t syscall_send_message_task(uint64_t pid, uint64_t channel, uint64_t size, uint64_t message)
 {
-    t_print("Send message task %h channel %h size %h ptr %h\n", pid, channel, size, message);
     // TODO: Check permissions
 
     uint64_t self_pid = get_cpu_struct()->current_task->pid;

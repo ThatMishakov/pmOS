@@ -9,6 +9,9 @@
 #include <syscall.h>
 #include <screen.h>
 #include <kernel/syscalls.h>
+#include <kernel/errors.h>
+#include <kernel/block.h>
+#include <kernel/messaging.h>
 #include <load_elf.h>
 #include <paging.h>
 #include <syscall.h>
@@ -68,7 +71,35 @@ void main()
 
 
     print_str("Blocking and recieving a message\n");
-    syscall(SYSCALL_BLOCK, 0x01);
+    syscall_r r = syscall(SYSCALL_BLOCK, 0x01);
+    if (r.result == SUCCESS && r.value == MESSAGE_S_NUM) {
+        print_str("Loader: Recieved a message\n");
+
+        Message_Descriptor desc;
+        syscall_r s = syscall(SYSCALL_GET_MSG_INFO, &desc);
+        if (s.result != SUCCESS) {
+            asm("xchgw %bx, %bx");
+            while (1) ;
+        }
+
+        print_str("Loader: From: ");
+        print_hex(desc.sender);
+        print_str(" channel ");
+        print_hex(desc.sender);
+        print_str(" size ");
+        print_hex(desc.size);
+        print_str("\n");
+
+        char buff[128];
+        s = syscall(SYSCALL_GET_MESSAGE, buff, 0);
+        if (s.result != SUCCESS) {
+            asm("xchgw %bx, %bx");
+            while (1) ;
+        }
+
+        print_str("Loader: Message content: ");
+        print_str(buff);
+    }
 
     print_str("Everything seems ok. Nothing to do. Exiting...\n");
 

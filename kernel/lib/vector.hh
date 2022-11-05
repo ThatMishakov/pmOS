@@ -94,8 +94,9 @@ vector<T>& vector<T>::operator=(const vector<T>& from)
     this->a_size = from.a_size;
     this->ptr = new T[this->a_size];
 
-    for (size_t i = 0; i < this->a_size; ++i)
+    for (size_t i = 0; i < this->a_size; ++i) {
         this->ptr[i] = from.ptr[i];
+    }
 
     return *this;
 }

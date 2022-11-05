@@ -153,7 +153,7 @@ kresult_t copy_to_user(char* from, char* to, size_t size)
 void memcpy(char* from, char* to, size_t size)
 {
     for (size_t i = 0; i < size; ++i) {
-        *from = *to;
+        *to = *from;
         ++from; ++to;
     }
 }
