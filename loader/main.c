@@ -66,6 +66,10 @@ void main()
             }
         }
 
+
+    print_str("Blocking and recieving a message\n");
+    syscall(SYSCALL_BLOCK, 0x01);
+
     print_str("Everything seems ok. Nothing to do. Exiting...\n");
 
     syscall(SYSCALL_EXIT);

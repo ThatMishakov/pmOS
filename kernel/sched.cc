@@ -41,7 +41,11 @@ void init_scheduling()
     current_task->pid = pid++;
     s_map->insert({current_task->pid, current_task});
 
+    t_print("dssf\n");
+
     init_idle();
+
+    t_print("dfsdf\n");
 }
 
 void sched_pqueue::push_back(TaskDescriptor* d)
@@ -189,7 +193,7 @@ void init_idle()
         return;
     }
 
-    idle_task = s_map->at(i.result);
+    idle_task = s_map->at(i.val);
     idle_task->regs.e.rip = (uint64_t)&idle;
     uninit.erase(idle_task);
 }
@@ -208,6 +212,9 @@ ReturnStr<uint64_t> TaskDescriptor::block(uint64_t mask)
     // Change mask if not null
     if (mask != 0) this->unblock_mask = mask;
 
+    // Change status to blocked
+    status = PROCESS_BLOCKED;
+
     // Add to blocked queue
     blocked_s.lock();
     blocked.push_back(this);
@@ -216,7 +223,6 @@ ReturnStr<uint64_t> TaskDescriptor::block(uint64_t mask)
     // Task switch if it's a current process
     CPU_Info* cpu_str = get_cpu_struct();
     if (cpu_str->current_task == this) {
-        cpu_str->current_task = nullptr;
         find_new_process();
     }
 

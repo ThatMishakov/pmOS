@@ -80,3 +80,6 @@ extern "C" void release_cr3(uint64_t cr3);
 
 // Frees user pages
 void free_user_pages(uint64_t page_table);
+
+// Prepares a user page for kernel reading or writing
+kresult_t prepare_user_page(uint64_t page);

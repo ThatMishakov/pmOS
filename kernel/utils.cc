@@ -5,6 +5,7 @@
 #include "start.hh"
 #include "vga.hh"
 #include <kernel/errors.h>
+#include "paging.hh"
 
 void int_to_string(long int n, uint8_t base, char* str, int& length)
 {
@@ -115,7 +116,18 @@ void term_write(const char * str, uint64_t length)
 
 kresult_t prepare_user_buff(char* buff, size_t size, bool will_write)
 {
-    return ERROR_NOT_IMPLEMENTED;
+    uint64_t addr_start = (uint64_t)buff;
+    uint64_t end = addr_start+size;
+
+    if (addr_start > KERNEL_ADDR_SPACE or end > KERNEL_ADDR_SPACE or addr_start > end) return ERROR_OUT_OF_RANGE;
+
+    kresult_t result = SUCCESS;
+
+    for (uint64_t i = addr_start; i < end and result == SUCCESS; ++i) {
+        uint64_t page = i & ~0xfffULL;
+        result = prepare_user_page(page);
+    }
+    return SUCCESS;
 }
 
 kresult_t copy_from_user(char* from, char* to, size_t size)

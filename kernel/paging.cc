@@ -519,3 +519,24 @@ void free_user_pages(uint64_t page_table)
     if (old_cr3 != page_table)
         setCR3(old_cr3);
 }
+
+kresult_t prepare_user_page(uint64_t page)
+{
+    Page_Types type = page_type(page);
+
+    switch (type)
+    {
+    case NORMAL:
+        return SUCCESS;
+        break;
+    case LAZY_ALLOC:
+        return get_lazy_page(page);
+        break;
+    case UNALLOCATED:
+        return ERROR_PAGE_NOT_ALLOCATED;
+        break;
+    default:
+        return ERROR_NOT_IMPLEMENTED;
+        break;
+    }
+}

@@ -227,7 +227,10 @@ end:
     cmpl $0, %gs:24
     je ret_from_interrupt
     cmpl $0, %gs:16
-    je task_switch
+    jne save_cont
+    addq $40, %rsp
+    jmp task_switch
+save_cont:
     save_context
     jmp task_switch
 ret_from_switch_int:

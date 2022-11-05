@@ -30,3 +30,8 @@ syscall_r map_phys(uint64_t virt, uint64_t phys, uint64_t size, uint64_t arg)
 {
     return syscall(SYSCALL_MAP_PHYS, virt, phys, size, arg);
 }
+
+result_t send_message_task(uint64_t pid, uint64_t channel, size_t size, char* message)
+{
+    return syscall(SYSCALL_SEND_MSG_TASK, pid, channel, size, message).result;
+}

@@ -9,6 +9,7 @@ private:
     struct node {
         node* left = nullptr;
         node* right = nullptr;
+        node* parent = nullptr;
         K key;
         T data;
 
@@ -19,9 +20,9 @@ private:
     size_t elements;
     mutable node* root;
 
-    static node* splay(node* root, const K& key);
-    static node* rotate_left(node*);
-    static node* rotate_right(node*);
+    void splay(node* n) const;
+    void rotate_left(node*) const;
+    void rotate_right(node*) const;
 public:
     constexpr splay_tree_map():
         elements(0), root(nullptr) {};
@@ -45,69 +46,109 @@ public:
 };
 
 template<class K, class T>
-typename splay_tree_map<K,T>::node* splay_tree_map<K,T>::splay(splay_tree_map<K,T>::node* root, const K& key)
+void splay_tree_map<K,T>::splay(splay_tree_map<K,T>::node* n) const
 {
-    if (root == nullptr or root->key == key)
-        return root;
+    while (n->parent != nullptr) {
+        if (n->parent == root) {
+            if (n == n->parent->left) {
+                rotate_right(n->parent);
+            } else {
+                rotate_left(n->parent);
+            }
+        } else {
+            node* p = n->parent;
+            node* g = p->parent;
 
-    while(root->key != key) {
-        if (root->key > key) { // Data is right. Rotate left or return
-            if (root->right == nullptr) return root;
-
-            root = rotate_left(root);
-        } else { // Rotate right or return
-            if (root->left == nullptr) return root;
-
-            root = rotate_right(nullptr);
+            if  (n->parent->left == n and p->parent->left == p) {
+                rotate_right(g);
+                rotate_right(p);
+            } else if (n->parent->left == n and p->parent->right == p) {
+                rotate_right(p);
+                rotate_left(g);
+            } else if (n->parent->right == n and p->parent->right == p) {
+                rotate_left(g);
+                rotate_right(p);
+            } else if (n->parent->right == n and p->parent->left == p) {
+                rotate_left(p);
+                rotate_right(g);
+            }
         }
     }
-
-    return root;
 }
 
 template<class K, class T>
-typename splay_tree_map<K,T>::node* splay_tree_map<K,T>::rotate_left(splay_tree_map<K,T>::node* p)
+void splay_tree_map<K,T>::rotate_left(splay_tree_map<K,T>::node* p) const
 {
     node* n = p->right;
     p->right = n->left;
+    if (n->left != nullptr) {
+        n->left->parent = p;
+    }
+    n->parent = p->parent;
+    if (n->parent == nullptr) { // p is root
+        root = n;
+    } else if (p == p->parent->left) { // x is left child
+        p->parent->left = n;
+    } else { // x is right child
+        p->parent->right = n;
+    }
     n->left = p;
-    return n;
+    p->parent = n;
 }
 
 template<class K, class T>
-typename splay_tree_map<K,T>::node* splay_tree_map<K,T>::rotate_right(splay_tree_map<K,T>::node* p)
+void splay_tree_map<K,T>::rotate_right(splay_tree_map<K,T>::node* p) const
 {
     node* n = p->left;
     p->left = n->right;
+    if (n->right != nullptr) {
+        n->right->parent = p;
+    }
+    n->parent = p->parent;
+    if (n->parent == nullptr) {
+        root = n;
+    } else if (p == p->parent->right) {
+        p->parent->right = n;
+    } else {
+        p->parent->left = n;
+    }
     n->right = p;
-    return n;
+    p->parent = n;
 }
 
 template<class K, class T>
 void splay_tree_map<K,T>::insert(const Pair<K, T>& pair)
 {
-    node* p = splay(root, pair.first);
-
-    if (p == nullptr) { // Map is empty
-        root = new node(pair);
-        ++elements;
-    } else if (p->key == pair.first) { // Element is already in the map; change T
-        p->data = pair.second;
-    } else { // Add new element
-        node* n = new node(pair);
-
-        if (p->key > pair.first) {
-            n->right = p;
-            n->left = p->left;
-            p->left = nullptr;
+    node *n = nullptr;
+    node* temp = root;
+    while (temp != nullptr) {
+        n = temp;
+        if (temp->key > pair.first) {
+            temp = temp->left;
+        } else if (temp->key < pair.first) {
+            temp = temp->right;
         } else {
-            n->left = p;
-            n->right = p->right;
-            p->right = nullptr;
+            splay(n);
+            temp->data = pair.second;
+            return;
         }
-        ++elements;
-        root = n;
     }
+
+    node* c = new node(pair);
+
+    if (n == nullptr) {
+        root = c;
+    } else if (pair.first < n->key) {
+        n->left = c;
+        c->parent = n;
+    } else {
+        n->right = c;
+        c->parent = n;
+    }
+
+    splay(c);
+
+    ++elements;
 }
 
 template<class K, class T>
@@ -119,17 +160,39 @@ size_t splay_tree_map<K,T>::size() const
 template<class K, class T>
 size_t splay_tree_map<K,T>::count(const K& key) const
 {
-    node* p = splay(root, key);
-    if (p == nullptr or p->key != key) return 0;
+    node* n = root;
+    while (n != nullptr and n->key != key) {
+        if (n->key < key) {
+            n = n->right;
+        } else {
+            n = n->left;
+        }
+    }
 
-    return 1;
+    if (n != nullptr) {
+        splay(n);
+        return 1;
+    }
+
+    return 0;
 }
 
 template<class K, class T>
 T& splay_tree_map<K,T>::at(const K& key)
 {
-    node* p = splay(root, key);
-    return p->data;
+    node* n = root;
+
+    while (n->key != key) {
+        if (n->key < key) {
+            n = n->right;
+        } else {
+            n = n->left;
+        }
+    }
+
+    splay(n);
+
+    return n->data;
 }
 
 }

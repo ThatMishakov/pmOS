@@ -1,11 +1,11 @@
 #include <stdlib.h>
 #include <kernel/types.h>
+#include <string.h>
+#include <system.h>
 
 extern "C" int main() {
-    char* k = (char*)malloc(GB(1));
-    k[MB(100)] = 1;
-    k[MB(200)] = 2;
-    k[MB(300)] = 3;
+    char msg[] = "Hello from loader!\n";
+    send_message_task(0, 0, strlen(msg), msg);
 
     return 0;
 }
