@@ -42,8 +42,12 @@ These are the features that are planned to be had in the OS:
     - [ ] Fast syscalls
   - [ ] Interrupt dispatching to drivers
 
-- [ ] IPC and messaging
-  - [ ] Buffered string messages
+- [x] IPC and messaging
+  - [x] Buffered string messages
+  - [ ] Ports
+  - [ ] Kernel messages
+  - [ ] Quicker messaging
+
   
 - [ ] Permissions
 - [ ] Multi CPU support
@@ -72,6 +76,7 @@ These are the features that are planned to be had in the OS:
 **Userland**
 - [ ] Terminal
 - [ ] GUI
+- [ ] C Library
 
 
 ## Architecture

@@ -41,11 +41,7 @@ void init_scheduling()
     current_task->pid = pid++;
     s_map->insert({current_task->pid, current_task});
 
-    t_print("dssf\n");
-
     init_idle();
-
-    t_print("dfsdf\n");
 }
 
 void sched_pqueue::push_back(TaskDescriptor* d)
