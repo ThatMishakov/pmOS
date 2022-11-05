@@ -353,12 +353,13 @@ kresult_t syscall_set_port(uint64_t pid, uint64_t port, uint64_t dest_pid, uint6
 {
     // TODO: Check permissions
 
-    if (pid != dest_pid) return ERROR_CANT_MESSAGE_SELF;
+    if (pid == dest_pid) return ERROR_CANT_MESSAGE_SELF;
 
     if (not exists_process(pid)) return ERROR_NO_SUCH_PROCESS;
     if (not exists_process(dest_pid)) return ERROR_NO_SUCH_PROCESS;
 
-    TaskDescriptor* process = (*s_map).at(pid);
+    TaskDescriptor* process = s_map->at(pid);
+    
     process->lock.lock();
     process->ports.insert({port, {dest_pid, dest_chan}});
     process->lock.unlock();

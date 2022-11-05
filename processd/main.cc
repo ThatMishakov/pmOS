@@ -6,7 +6,7 @@
 
 extern "C" int main() {
     char msg[] = "Hello from processd!\n";
-    send_message_task(0, 0, strlen(msg), msg);
+    send_message_port(1, strlen(msg), msg);
 
     return 0;
 }

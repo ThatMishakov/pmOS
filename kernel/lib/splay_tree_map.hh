@@ -61,16 +61,16 @@ void splay_tree_map<K,T>::splay(splay_tree_map<K,T>::node* n) const
             node* p = n->parent;
             node* g = p->parent;
 
-            if  (n->parent->left == n and p->parent->left == p) {
+            if  (p->left == n and g->left == p) {
                 rotate_right(g);
                 rotate_right(p);
-            } else if (n->parent->left == n and p->parent->right == p) {
+            } else if (p->left == n and g->right == p) {
                 rotate_right(p);
                 rotate_left(g);
-            } else if (n->parent->right == n and p->parent->right == p) {
+            } else if (p->right == n and g->right == p) {
                 rotate_left(g);
-                rotate_right(p);
-            } else if (n->parent->right == n and p->parent->left == p) {
+                rotate_left(p);
+            } else if (p->right == n and g->left == p) {
                 rotate_left(p);
                 rotate_right(g);
             }

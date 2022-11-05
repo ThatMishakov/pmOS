@@ -55,6 +55,12 @@ uint64_t load_elf(ELF_64bit* elf_h, uint8_t ring)
         }
     }
 
+    r = syscall(SYSCALL_SET_PORT, pid, 1, getpid(), 0);
+
+    if (r.result != SUCCESS) {
+        asm("xchgw %bx, %bx");
+    }
+
     r = start_process(pid, elf_h->program_entry);
 
     return 0;

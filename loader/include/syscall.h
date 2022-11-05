@@ -41,5 +41,9 @@ inline syscall_r map_phys(uint64_t virt, uint64_t phys, uint64_t size, uint64_t 
     return syscall(SYSCALL_MAP_PHYS, virt, phys, size, arg);
 }
 
+inline uint64_t getpid()
+{
+    return syscall(SYSCALL_GETPID).result;
+}
 
 #endif

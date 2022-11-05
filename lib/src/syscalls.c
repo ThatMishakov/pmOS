@@ -35,3 +35,8 @@ result_t send_message_task(uint64_t pid, uint64_t channel, size_t size, char* me
 {
     return syscall(SYSCALL_SEND_MSG_TASK, pid, channel, size, message).result;
 }
+
+result_t send_message_port(uint64_t port, size_t size, char* message)
+{
+    return syscall(SYSCALL_SEND_MSG_PORT, port, size, message).result;
+}
