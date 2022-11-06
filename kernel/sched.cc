@@ -199,14 +199,14 @@ ReturnStr<uint64_t> TaskDescriptor::block(uint64_t mask)
     // Check status
     if (status == PROCESS_BLOCKED) return {ERROR_ALREADY_BLOCKED, 0};
 
+    // Change mask if not null
+    if (mask != 0) this->unblock_mask = mask;
+
     uint64_t imm = check_unblock_immediately();
     if (imm != 0) return {SUCCESS, imm};
 
     // Erase from queues
     if (this->parrent != nullptr) this->parrent->erase(this);
-
-    // Change mask if not null
-    if (mask != 0) this->unblock_mask = mask;
 
     // Change status to blocked
     status = PROCESS_BLOCKED;

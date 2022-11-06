@@ -55,7 +55,8 @@ void *calloc(size_t nelem, size_t size)
 void *malloc(size_t s)
 {
     size_t l;
-    return (char*)malloc_int(s, l) + 8;
+    void* p = (char*)malloc_int(s, l) + 8;
+    return p;
 }
 
 void free(void * p)

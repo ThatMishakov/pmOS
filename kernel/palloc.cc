@@ -22,6 +22,7 @@ DECLARE_LOCK(palloc_l);
 
 void* palloc(size_t size)
 {
+    t_print_bochs("Palloc size %h ->");
     // Spinlock to prevent concurrent accesses
     LOCK(palloc_l)
     palloc_list* l = &palloc_head;
@@ -40,7 +41,7 @@ void* palloc(size_t size)
         from += size_p;
 
         // TODO: check page frame allocator errors
-        Page_Table_Argumments arg;
+        Page_Table_Argumments arg = {};
         arg.user_access = 0;
         arg.writeable = 1;
         arg.execution_disabled = 1;
@@ -71,6 +72,7 @@ void* palloc(size_t size)
     }
 
     UNLOCK(palloc_l)
+    t_print_bochs(" %h\n", block);
     return (void*)block;
 }
 

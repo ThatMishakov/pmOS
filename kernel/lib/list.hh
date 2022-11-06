@@ -220,9 +220,9 @@ template<typename T>
 void list<T>::pop_front()
 {
     if (this->first->next == nullptr) {
+        delete this->first;
         this->first = nullptr;
         this->last = nullptr;
-        delete this->first;
     } else {
         Node* t = this->first;
         this->first = this->first->next;

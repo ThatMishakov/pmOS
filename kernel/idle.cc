@@ -3,7 +3,7 @@
 
 void idle()
 {
-    t_print("Kernel: Idling...\n");
+    //t_print("Kernel: Idling...\n");
 
     while (1) {
         asm("hlt");

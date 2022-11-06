@@ -116,14 +116,74 @@ void t_print(const char *str, ...)
     va_end(arg);
 }
 
+void t_write_bochs(const char * str, uint64_t length)
+{
+    for (uint64_t i = 0; i < length; ++i) {
+        putchar(str[i]);
+    }
+}
+
+void t_print_bochs(const char *str, ...)
+{
+    va_list arg;
+    va_start(arg, str);
+
+    char at = str[0];
+    unsigned int i = 0;
+    while (at != '\0') {
+        uint64_t s = i;
+        while (true) {
+            if (at == '\0') {
+                va_end(arg);
+                if (i - s > 0) {
+                    t_write_bochs(str + s, i - s);
+                }
+                return;
+            }
+            if (at == '%') break;
+            //term_write(str+i, 1);
+            at = str[++i];
+        }
+        if (i - s > 0) {
+            t_write_bochs(str + s, i - s);
+        }
+       
+        at = str[++i]; // char next to %
+        char int_str_buffer[32];
+        int len = 0;
+        switch (at) {
+            case 'i': { // signed integer
+                i64 casted_arg = va_arg(arg, i64);
+                int_to_string(casted_arg, 10, int_str_buffer, len);
+                break;
+            }
+            case 'u': { // unsigned integer
+                u64 casted_arg = va_arg(arg, u64);
+                uint_to_string(casted_arg, 10, int_str_buffer, len);
+                break;
+            }
+            case 'h': { // hexa number
+                u64 casted_arg = va_arg(arg, u64);
+                uint_to_string(casted_arg, 16, int_str_buffer, len);
+                break;
+            }
+        }
+
+        t_write_bochs(int_str_buffer, len);
+        at = str[++i];
+    }
+
+    va_end(arg);
+}
+
 void term_write(const char * str, uint64_t length)
 {
     //putchar('&');
     //putchar('0' + length);
-    for (uint64_t i = 0; i < length; ++i) {
-        putchar(str[i]);
-    }
-    //send_message_system(1, str, length);
+    //for (uint64_t i = 0; i < length; ++i) {
+    //    putchar(str[i]);
+    //}
+    send_message_system(1, str, length);
 }
 
 kresult_t prepare_user_buff_rd(const char* buff, size_t size)

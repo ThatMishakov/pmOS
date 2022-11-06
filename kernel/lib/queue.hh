@@ -16,7 +16,7 @@ public:
 
     inline size_t size() const
     {
-        return C.size;
+        return C.size();
     }
 
     inline T& front()
@@ -41,7 +41,7 @@ public:
 
     inline void push(const T& val)
     {
-        C.push_back(forward<T>(val));
+        C.push_back(val);
     }
 
     inline void push(T&& val)

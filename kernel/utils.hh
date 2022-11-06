@@ -7,6 +7,8 @@ void int_to_string(int64_t n, uint8_t base, char* str, int& length);
 
 void uint_to_string(uint64_t n, uint8_t base, char* str, int& length);
 
+void t_print_bochs(const char *str, ...);
+
 void term_write(const char * str, uint64_t length);
 size_t strlen(const char *str);
 

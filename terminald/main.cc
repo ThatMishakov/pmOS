@@ -14,6 +14,33 @@ void write_bochs(char* buff)
     }
 }
 
+void int_to_hex(char * buffer, uint64_t n, char upper)
+{
+  char buffer2[24];
+  int buffer_pos = 0;
+  do {
+    char c = n & 0x0f;
+    if (c > 9) c = c - 10 + (upper ? 'A' : 'a');
+    else c = c + '0';
+    buffer2[buffer_pos] = c;
+    n >>= 4;
+    ++buffer_pos;
+  } while (n > 0);
+
+  for (int i = 0; i < buffer_pos; ++i) {
+    buffer[i] = buffer2[buffer_pos - 1 - i];
+  }
+  buffer[buffer_pos] = '\0';
+}
+
+void print_hex(uint64_t i)
+{
+    char buffer[24];
+    write_bochs("0x");
+    int_to_hex(buffer, i, 1);
+    write_bochs(buffer);
+}
+
 extern "C" int main() {
     write_bochs("Hello from terminald!\n");
 
@@ -35,6 +62,8 @@ extern "C" int main() {
             msg_buff[msg.size] = '\0';
 
             write_bochs(msg_buff);
+
+            free(msg_buff);
         }
             break;
         default: // Do nothing
