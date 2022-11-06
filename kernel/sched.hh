@@ -19,6 +19,10 @@ enum Process_Status {
     PROCESS_DEAD
 };
 
+struct Task_Attributes {
+    bool debug_syscalls = false;
+};
+
 struct sched_pqueue;
 
 struct TaskDescriptor {
@@ -72,6 +76,9 @@ struct TaskDescriptor {
     {
         this->regs.e.rip = entry;
     }
+
+    // Attributes of the task
+    Task_Attributes attr;
 };
 
 struct CPU_Info {

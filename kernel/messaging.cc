@@ -9,6 +9,7 @@
 #include "utils.hh"
 
 Ports_storage* kernel_ports;
+Spinlock messaging_ports;
 
 kresult_t init_kernel_ports()
 {
@@ -19,7 +20,7 @@ kresult_t init_kernel_ports()
     return SUCCESS;
 }
 
-kresult_t queue_message(TaskDescriptor* task, uint64_t from, uint64_t channel, char* message_usr_ptr, size_t size, bool from_user)
+kresult_t queue_message(TaskDescriptor* task, uint64_t from, uint64_t channel, const char* message_usr_ptr, size_t size, bool from_user)
 {
     Message msg;
     msg.from = from;
@@ -46,7 +47,7 @@ kresult_t Message::copy_to_user_buff(char* buff)
     return copy_to_user(&content.front(), buff, content.size());
 }
 
-kresult_t Port::enqueue(uint64_t from, uint64_t size, char* ptr, bool from_user)
+kresult_t Port::enqueue(uint64_t from, uint64_t size, const char* ptr, bool from_user)
 {
     Message msg;
     msg.from = from;
@@ -94,6 +95,33 @@ kresult_t Ports_storage::send_from_user(uint64_t pid_from, uint64_t port, uint64
     return result;
 }
 
+kresult_t Ports_storage::send_from_system(uint64_t port, const char* msg, size_t size)
+{
+    static const uint64_t pid_from = 0;
+    if (this->storage.count(port) == 0) return ERROR_PORT_NOT_EXISTS;
+
+    Port& d = this->storage.at(port);
+
+    kresult_t result = SUCCESS;
+
+    if (d.attr & 0x01) {
+        d.enqueue(pid_from, size, msg, false);
+    } else if (not exists_process(d.task)){
+        this->storage.erase(port);
+        return ERROR_PORT_CLOSED;
+    } else {
+        TaskDescriptor* process = (*s_map).at(d.task);
+        result = SUCCESS;
+
+        process->lock.lock();
+        result = queue_message(process, pid_from, d.channel, msg, size, false);
+        process->unblock_if_needed(MESSAGE_S_NUM);
+        process->lock.unlock();
+    }
+
+    return result;
+}
+
 kresult_t Ports_storage::set_port(uint64_t port, uint64_t dest_pid, uint64_t dest_chan)
 {
     if (not exists_process(dest_pid)) return ERROR_NO_SUCH_PROCESS;
@@ -101,13 +129,22 @@ kresult_t Ports_storage::set_port(uint64_t port, uint64_t dest_pid, uint64_t des
     if (this->storage.count(port) == 1) {
         Port& p = this->storage.at(port);
 
+        p.task = dest_pid;
+        p.channel = dest_chan;
+        p.attr &= ~0x01ULL;
+
         if (not p.msg_queue.empty()) {
             TaskDescriptor* d = get_task(dest_pid);
 
             while (not p.msg_queue.empty()) {
-                d->messages.emplace(klib::move(p.msg_queue.front()));
+                Message&& m = klib::move(p.msg_queue.front());
+                m.channel = dest_chan;
+
+                d->messages.emplace(klib::move(m));
                 p.msg_queue.pop();
             }
+
+            d->unblock_if_needed(MESSAGE_S_NUM);
         }
     }
 
@@ -125,4 +162,9 @@ kresult_t Ports_storage::set_dummy(uint64_t port)
     }
 
     return SUCCESS;
+}
+
+kresult_t send_message_system(uint64_t port, const char* msg, size_t size)
+{
+    return kernel_ports->send_from_system(port, msg, size);
 }

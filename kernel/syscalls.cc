@@ -15,7 +15,10 @@ extern "C" ReturnStr<uint64_t> syscall_handler(uint64_t call_n, uint64_t arg1, u
     ReturnStr<uint64_t> r = {};
     // TODO: check permissions
 
-    t_print("Debug: syscall %h pid %h\n", call_n, get_cpu_struct()->current_task->pid);
+    TaskDescriptor& task = *get_cpu_struct()->current_task;
+    if (task.attr.debug_syscalls) {
+        t_print("Debug: syscall %h pid %h\n", call_n, get_cpu_struct()->current_task->pid);
+    }
     switch (call_n) {
     case SYSCALL_GET_PAGE:
         r.result = get_page(arg1);
@@ -64,6 +67,9 @@ extern "C" ReturnStr<uint64_t> syscall_handler(uint64_t call_n, uint64_t arg1, u
         break;
     case SYSCALL_SET_PORT:
         r.result = syscall_set_port(arg1, arg2, arg3, arg4);
+        break;
+    case SYSCALL_SET_PORT_KERNEL:
+        r.result = syscall_set_port_kernel(arg1, arg2, arg3);
         break;
     case SYSCALL_SET_ATTR:
         r.result = syscall_set_attribute(arg1, arg2, arg3);
@@ -352,10 +358,21 @@ kresult_t syscall_set_port(uint64_t pid, uint64_t port, uint64_t dest_pid, uint6
     TaskDescriptor* process = s_map->at(pid);
 
     process->lock.lock();
-    process->ports.set_port(port, dest_pid, dest_chan);
+    kresult_t result = process->ports.set_port(port, dest_pid, dest_chan);
     process->lock.unlock();
 
-    return SUCCESS;
+    return result;
+}
+
+kresult_t syscall_set_port_kernel(uint64_t port, uint64_t dest_pid, uint64_t dest_chan)
+{
+    // TODO: Check permissions
+
+    messaging_ports.lock();
+    kresult_t result = kernel_ports->set_port(port, dest_pid, dest_chan);
+    messaging_ports.unlock();
+
+    return result;
 }
 
 kresult_t syscall_get_message_info(uint64_t message_struct)
@@ -374,7 +391,7 @@ kresult_t syscall_get_message_info(uint64_t message_struct)
     Message& msg = current->messages.front();
     uint64_t msg_struct_size = sizeof(Message_Descriptor);
 
-    result = prepare_user_buff((char*)message_struct, msg_struct_size, true);
+    result = prepare_user_buff_wr((char*)message_struct, msg_struct_size);
 
     if (result == SUCCESS) {
         Message_Descriptor& desc = *(Message_Descriptor*)message_struct;
@@ -394,14 +411,21 @@ kresult_t syscall_set_attribute(uint64_t pid, uint64_t attribute, uint64_t value
     if (not exists_process(pid)) return ERROR_NO_SUCH_PROCESS;
     TaskDescriptor* process = s_map->at(pid);
 
+    kresult_t result = ERROR_GENERAL;
+
     switch (attribute) {
     case ATTR_ALLOW_PORT:
         process->regs.e.rflags.bits.iopl = value ? 3 : 0;
+        result = SUCCESS;
+        break;
+    case ATTR_DEBUG_SYSCALLS:
+        process->attr.debug_syscalls = value;
+        result = SUCCESS;
         break;
     default:
-        return ERROR_NOT_SUPPORTED;
+        result = ERROR_NOT_SUPPORTED;
         break;
     }
 
-    return ERROR_GENERAL;
+    return result;
 }

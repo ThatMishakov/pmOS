@@ -15,6 +15,7 @@
 #include <load_elf.h>
 #include <paging.h>
 #include <syscall.h>
+#include <utils.h>
 
 uint64_t multiboot_magic;
 uint64_t multiboot_info_str;
@@ -48,6 +49,10 @@ void main()
 
     load_kernel(multiboot_info_str);
 
+    uint64_t pid = syscall(SYSCALL_GETPID).value;
+
+    syscall(SYSCALL_SET_ATTR, pid, 2, 1);
+
     print_str("Loading modules...\n");
 
     uint64_t terminal_pid = 0;
@@ -64,7 +69,7 @@ void main()
                     uint64_t phys_end = (uint64_t)mod->mod_end;
                     uint64_t nb_pages = (phys_end - phys_start) >> 12;
                     if (phys_end & 0xfff) nb_pages += 1;
-                    syscall_r p = map_phys(virt_addr, phys_start, nb_pages, 0x3);
+                    map_phys(virt_addr, phys_start, nb_pages, 0x3);
                     ELF_64bit* e = (ELF_64bit*)((uint64_t)mod->mod_start - phys_start + virt_addr);
                     uint64_t pid = load_elf(e, 3);
                     terminal_pid = pid;
@@ -73,6 +78,8 @@ void main()
                 }
             }
         }
+
+    syscall(SYSCALL_SET_PORT_KERNEL, 1, terminal_pid, 1);
 
     for (struct multiboot_tag * tag = (struct multiboot_tag *) (multiboot_info_str + 8); tag->type != MULTIBOOT_TAG_TYPE_END;
         tag = (struct multiboot_tag *) ((multiboot_uint8_t *) tag + ((tag->size + 7) & ~7))) {
@@ -87,7 +94,7 @@ void main()
                     uint64_t phys_end = (uint64_t)mod->mod_end;
                     uint64_t nb_pages = (phys_end - phys_start) >> 12;
                     if (phys_end & 0xfff) nb_pages += 1;
-                    syscall_r p = map_phys(virt_addr, phys_start, nb_pages, 0x3);
+                    map_phys(virt_addr, phys_start, nb_pages, 0x3);
                     ELF_64bit* e = (ELF_64bit*)((uint64_t)mod->mod_start - phys_start + virt_addr);
                     uint64_t pid = load_elf(e, 3);
                     syscall(SYSCALL_SET_PORT, pid, 1, terminal_pid, 1);
@@ -95,39 +102,6 @@ void main()
                 }
             }
         }
-
-   /*
-    print_str("Blocking and recieving a message\n");
-    syscall_r r = syscall(SYSCALL_BLOCK, 0x01);
-    if (r.result == SUCCESS && r.value == MESSAGE_S_NUM) {
-        print_str("Loader: Recieved a message\n");
-
-        Message_Descriptor desc;
-        syscall_r s = syscall(SYSCALL_GET_MSG_INFO, &desc);
-        if (s.result != SUCCESS) {
-            asm("xchgw %bx, %bx");
-            while (1) ;
-        }
-
-        print_str("Loader: From: ");
-        print_hex(desc.sender);
-        print_str(" channel ");
-        print_hex(desc.sender);
-        print_str(" size ");
-        print_hex(desc.size);
-        print_str("\n");
-
-        char buff[128];
-        s = syscall(SYSCALL_GET_MESSAGE, buff, 0);
-        if (s.result != SUCCESS) {
-            asm("xchgw %bx, %bx");
-            while (1) ;
-        }
-
-        print_str("Loader: Message content: ");
-        print_str(buff);
-    }
-    */
 
     print_str("Everything seems ok. Nothing to do. Exiting...\n");
 

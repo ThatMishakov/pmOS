@@ -6,6 +6,7 @@
 #include "vga.hh"
 #include <kernel/errors.h>
 #include "paging.hh"
+#include "messaging.hh"
 
 void int_to_string(long int n, uint8_t base, char* str, int& length)
 {
@@ -110,11 +111,13 @@ void t_print(const char *str, ...)
 
 void term_write(const char * str, uint64_t length)
 {
-    for (uint64_t i = 0; i < length; ++i)
+    for (uint64_t i = 0; i < length; ++i) {
         putchar(str[i]);
+    }
+    //send_message_system(1, str, length);
 }
 
-kresult_t prepare_user_buff(char* buff, size_t size, bool will_write)
+kresult_t prepare_user_buff_rd(const char* buff, size_t size)
 {
     uint64_t addr_start = (uint64_t)buff;
     uint64_t end = addr_start+size;
@@ -130,9 +133,27 @@ kresult_t prepare_user_buff(char* buff, size_t size, bool will_write)
     return SUCCESS;
 }
 
-kresult_t copy_from_user(char* from, char* to, size_t size)
+kresult_t prepare_user_buff_wr(char* buff, size_t size)
 {
-    kresult_t result = prepare_user_buff(from, size, false);
+    // TODO: Fix read-only pages & stuff
+
+    uint64_t addr_start = (uint64_t)buff;
+    uint64_t end = addr_start+size;
+
+    if (addr_start > KERNEL_ADDR_SPACE or end > KERNEL_ADDR_SPACE or addr_start > end) return ERROR_OUT_OF_RANGE;
+
+    kresult_t result = SUCCESS;
+
+    for (uint64_t i = addr_start; i < end and result == SUCCESS; ++i) {
+        uint64_t page = i & ~0xfffULL;
+        result = prepare_user_page(page);
+    }
+    return SUCCESS;
+}
+
+kresult_t copy_from_user(const char* from, char* to, size_t size)
+{
+    kresult_t result = prepare_user_buff_rd(from, size);
     if (result != SUCCESS) return result;
 
     memcpy(from, to, size);
@@ -140,9 +161,9 @@ kresult_t copy_from_user(char* from, char* to, size_t size)
     return SUCCESS;
 }
 
-kresult_t copy_to_user(char* from, char* to, size_t size)
+kresult_t copy_to_user(const char* from, char* to, size_t size)
 {
-    kresult_t result = prepare_user_buff(to, size, true);
+    kresult_t result = prepare_user_buff_wr(to, size);
     if (result != SUCCESS) return result;
 
     memcpy(from, to, size);
@@ -150,12 +171,24 @@ kresult_t copy_to_user(char* from, char* to, size_t size)
     return SUCCESS;
 }
 
-void memcpy(char* from, char* to, size_t size)
+void memcpy(const char* from, char* to, size_t size)
 {
     for (size_t i = 0; i < size; ++i) {
         *to = *from;
         ++from; ++to;
     }
+}
+
+size_t strlen(const char *start)
+{
+    if (start == nullptr) return 0;
+
+    const char* end = start;
+
+    for (; *end != '\0'; ++end)
+        ;
+
+    return end - start;
 }
 
 

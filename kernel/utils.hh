@@ -8,7 +8,7 @@ void int_to_string(int64_t n, uint8_t base, char* str, int& length);
 void uint_to_string(uint64_t n, uint8_t base, char* str, int& length);
 
 void term_write(const char * str, uint64_t length);
-uint16_t strlen(const char *str);
+size_t strlen(const char *str);
 
 void t_print(const char *str,...);
 
@@ -21,10 +21,12 @@ inline void halt()
     }
 }
 
-void memcpy(char* from, char* to, size_t size);
+void memcpy(const char* from, char* to, size_t size);
 
-kresult_t prepare_user_buff(char* buff, size_t size, bool will_write);
+kresult_t prepare_user_buff_rd(const char* buff, size_t size);
 
-kresult_t copy_from_user(char* from, char* to, size_t size);
+kresult_t prepare_user_buff_wr(char* buff, size_t size);
 
-kresult_t copy_to_user(char* from, char* to, size_t size);
+kresult_t copy_from_user(const char* from, char* to, size_t size);
+
+kresult_t copy_to_user(const char* from, char* to, size_t size);
