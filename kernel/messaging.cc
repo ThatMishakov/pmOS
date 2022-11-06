@@ -6,6 +6,7 @@
 #include <kernel/errors.h>
 #include "lib/utility.hh"
 #include <kernel/block.h>
+#include "utils.hh"
 
 Ports_storage* kernel_ports;
 
@@ -13,7 +14,7 @@ kresult_t init_kernel_ports()
 {
     kernel_ports = new Ports_storage;
 
-    //kernel_ports->set_dummy(1); // Kernel log messages
+    kernel_ports->set_dummy(1); // Kernel log messages
 
     return SUCCESS;
 }
@@ -122,4 +123,6 @@ kresult_t Ports_storage::set_dummy(uint64_t port)
     } else {
         this->storage.insert({port, {0,0,0x01, {}}});
     }
+
+    return SUCCESS;
 }
