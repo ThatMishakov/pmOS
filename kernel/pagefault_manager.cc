@@ -3,7 +3,7 @@
 #include "asm.hh"
 #include "paging.hh"
 
-void pagefault_manager(uint64_t err)
+void pagefault_manager(uint64_t err, Interrupt_Stackframe* int_s)
 {
     // Get the memory location which has caused the fault
     uint64_t virtual_addr = getCR2();
@@ -14,18 +14,20 @@ void pagefault_manager(uint64_t err)
     // Get page type
     Page_Types type = page_type(virtual_addr);
 
+    t_print("Debug: Pagefault %h rip %h -> ", virtual_addr, int_s->rip);
+
     switch (type) {
     case Page_Types::LAZY_ALLOC: // Lazilly allocated page caused the fault
-        t_print("Debug: Pagefault %h -> delayed allocation\n", virtual_addr);
+        t_print("delayed allocation\n");
         get_lazy_page(virtual_addr);
         break;
     case Page_Types::UNALLOCATED: // Page not allocated
-        t_print("Pagefault dir %h --> unallocated... halting...\n", getCR2());
+        t_print("unallocated... halting...\n");
         halt();
         break;
     default:
         // Not implemented
-        t_print("Pagefault dir %h --> %h not implemented (error %h). Halting...\n", getCR2(), type, err);
+        t_print("%h not implemented (error %h). Halting...\n", type, err);
         halt();
         break;
     }

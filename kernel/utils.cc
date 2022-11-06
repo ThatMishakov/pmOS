@@ -71,14 +71,21 @@ void t_print(const char *str, ...)
     char at = str[0];
     unsigned int i = 0;
     while (at != '\0') {
+        uint64_t s = i;
         while (true) {
             if (at == '\0') {
                 va_end(arg);
+                if (i - s > 0) {
+                    term_write(str + s, i - s);
+                }
                 return;
             }
             if (at == '%') break;
-            term_write(str+i, 1);
+            //term_write(str+i, 1);
             at = str[++i];
+        }
+        if (i - s > 0) {
+            term_write(str + s, i - s);
         }
        
         at = str[++i]; // char next to %
@@ -111,6 +118,8 @@ void t_print(const char *str, ...)
 
 void term_write(const char * str, uint64_t length)
 {
+    //putchar('&');
+    //putchar('0' + length);
     for (uint64_t i = 0; i < length; ++i) {
         putchar(str[i]);
     }
