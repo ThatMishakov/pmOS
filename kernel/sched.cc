@@ -127,10 +127,6 @@ ReturnStr<uint64_t> create_process(uint16_t ring)
     // Assign a pid
     n->pid = assign_pid();
 
-    // Init stack
-    kresult_t status = n->init_stack();
-    if (status != SUCCESS) return {status, 0};
-
     // Add to the map of processes and to uninit list
     s_map->insert({n->pid, n});
     uninit.push_back(n);
@@ -153,7 +149,7 @@ PID assign_pid()
    return pid_p; 
 }
 
-kresult_t TaskDescriptor::init_stack()
+ReturnStr<uint64_t> TaskDescriptor::init_stack()
 {
     // Switch to the new pml4
     uint64_t current_cr3 = getCR3();
@@ -178,7 +174,7 @@ kresult_t TaskDescriptor::init_stack()
 fail:
     // Load old page table back
     setCR3(current_cr3);
-    return r;
+    return {r, this->regs.e.rsp};
 }
 
 void init_idle()
@@ -190,6 +186,9 @@ void init_idle()
     }
 
     idle_task = s_map->at(i.val);
+
+    // Init stack
+    idle_task->init_stack();
     idle_task->regs.e.rip = (uint64_t)&idle;
     uninit.erase(idle_task);
 }

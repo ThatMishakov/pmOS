@@ -55,5 +55,7 @@ uint64_t load_elf(ELF_64bit* elf_h, uint8_t ring)
         }
     }
 
+    syscall(SYSCALL_INIT_STACK, pid, 0);
+
     return pid;
 }

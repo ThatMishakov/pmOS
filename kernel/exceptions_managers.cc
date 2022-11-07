@@ -1,7 +1,8 @@
-#include "pagefault_manager.hh"
+#include "exceptions_managers.hh"
 #include "utils.hh"
 #include "asm.hh"
 #include "paging.hh"
+#include "syscalls.hh"
 
 void pagefault_manager(uint64_t err, Interrupt_Stackframe* int_s)
 {
@@ -22,8 +23,8 @@ void pagefault_manager(uint64_t err, Interrupt_Stackframe* int_s)
         get_lazy_page(page);
         break;
     case Page_Types::UNALLOCATED: // Page not allocated
-        t_print("unallocated... halting...\n");
-        halt();
+        t_print("unallocated... killing process...\n");
+        syscall_exit(4, 0);
         break;
     default:
         // Not implemented

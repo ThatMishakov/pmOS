@@ -65,3 +65,6 @@ kresult_t syscall_set_port_kernel(uint64_t port, uint64_t dest_pid, uint64_t des
 
 // Sets task's attributes
 kresult_t syscall_set_attribute(uint64_t pid, uint64_t attribute, uint64_t value); 
+
+// Inits task's stack
+ReturnStr<uint64_t> syscall_init_stack(uint64_t pid, uint64_t esp);

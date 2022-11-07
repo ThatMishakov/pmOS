@@ -21,6 +21,7 @@
 #define SYSCALL_SET_PORT        0x10
 #define SYSCALL_SET_PORT_KERNEL 0x11
 #define SYSCALL_SET_ATTR        0x12
+#define SYSCALL_INIT_STACK      0x13
 
 
 #endif

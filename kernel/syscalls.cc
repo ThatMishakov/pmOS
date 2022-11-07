@@ -75,6 +75,9 @@ extern "C" ReturnStr<uint64_t> syscall_handler(uint64_t call_n, uint64_t arg1, u
     case SYSCALL_SET_ATTR:
         r.result = syscall_set_attribute(arg1, arg2, arg3);
         break;
+    case SYSCALL_INIT_STACK:
+        r = syscall_init_stack(arg1, arg2);
+        break;
     default:
         // Not supported
         r.result = ERROR_NOT_SUPPORTED;
@@ -233,6 +236,36 @@ kresult_t syscall_start_process(uint64_t pid, uint64_t start)
     t->init_task();
 
     return SUCCESS;
+}
+
+ReturnStr<uint64_t> syscall_init_stack(uint64_t pid, uint64_t esp)
+{
+    ReturnStr<uint64_t> r = {ERROR_GENERAL, 0};
+    // TODO: Check permissions
+
+    // Check if process exists
+    if (not exists_process(pid)) {
+        r.result = ERROR_NO_SUCH_PROCESS;
+        return r;
+    }
+
+    // Check process status
+    if (not is_uninited(pid)) {
+        r.result = ERROR_PROCESS_INITED;
+        return r;
+    }
+
+    // Get task descriptor
+    TaskDescriptor* t = get_task(pid);
+
+    if (esp == 0) { // If ESP == 0 use default kernel's stack policy
+        r = t->init_stack();
+    } else {
+        t->regs.e.rsp = esp;
+        r = {SUCCESS, esp};
+    }
+
+    return r;
 }
 
 kresult_t syscall_exit(uint64_t arg1, uint64_t arg2)

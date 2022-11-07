@@ -54,7 +54,7 @@ struct TaskDescriptor {
     klib::vector<uint8_t> args;
 
     // Inits stack
-    kresult_t init_stack();
+    ReturnStr<uint64_t> init_stack();
 
     // Blocks the process
     ReturnStr<uint64_t> block(uint64_t mask);
