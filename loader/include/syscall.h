@@ -31,9 +31,9 @@ inline syscall_r get_page_multi(uint64_t base, uint64_t nb_pages)
     return syscall(SYSCALL_GET_PAGE_MULTI, base, nb_pages);
 }
 
-inline syscall_r start_process(uint64_t pid, uint64_t entry)
+inline syscall_r start_process(uint64_t pid, uint64_t entry, uint64_t arg1, uint64_t arg2, uint64_t arg3)
 {
-    return syscall(SYSCALL_START_PROCESS, pid, entry);
+    return syscall(SYSCALL_START_PROCESS, pid, entry, arg1, arg2, arg3);
 }
 
 inline syscall_r map_phys(uint64_t virt, uint64_t phys, uint64_t size, uint64_t arg)

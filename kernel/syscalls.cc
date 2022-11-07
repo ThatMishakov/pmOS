@@ -46,7 +46,7 @@ extern "C" ReturnStr<uint64_t> syscall_handler(uint64_t call_n, uint64_t arg1, u
         r.result = syscall_get_page_multi(arg1, arg2);
         break;
     case SYSCALL_START_PROCESS:
-        r.result = syscall_start_process(arg1, arg2);
+        r.result = syscall_start_process(arg1, arg2, arg3, arg4, arg5);
         break;
     case SYSCALL_EXIT:
         r.result = syscall_exit(arg1, arg2);
@@ -216,7 +216,7 @@ kresult_t syscall_get_page_multi(uint64_t virtual_addr, uint64_t nb_pages)
     return result;
 }
 
-kresult_t syscall_start_process(uint64_t pid, uint64_t start)
+kresult_t syscall_start_process(uint64_t pid, uint64_t start, uint64_t arg1, uint64_t arg2, uint64_t arg3)
 {
     // TODO: Check permissions
 
@@ -231,6 +231,11 @@ kresult_t syscall_start_process(uint64_t pid, uint64_t start)
 
     // Set entry
     t->set_entry_point(start);
+
+    // Pass arguments
+    t->regs.scratch_r.rdi = arg1;
+    t->regs.scratch_r.rsi = arg2;
+    t->regs.scratch_r.rdx = arg3;
 
     // Init task
     t->init_task();

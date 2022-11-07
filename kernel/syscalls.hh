@@ -37,7 +37,7 @@ ReturnStr<uint64_t> syscall_block(uint64_t mask);
 kresult_t syscall_get_page_multi(uint64_t virtual_addr, uint64_t nb_pages);
 
 // Starts a process with PID pid at starting point start
-kresult_t syscall_start_process(uint64_t pid, uint64_t start);
+kresult_t syscall_start_process(uint64_t pid, uint64_t start, uint64_t arg1, uint64_t arg2, uint64_t arg3);
 
 // Exits (kills the process at the end of its execution)
 kresult_t syscall_exit(uint64_t arg1, uint64_t arg2);
