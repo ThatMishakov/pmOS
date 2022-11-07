@@ -51,7 +51,7 @@ void main()
 
     uint64_t pid = syscall(SYSCALL_GETPID).value;
 
-    //syscall(SYSCALL_SET_ATTR, pid, 2, 1);
+    syscall(SYSCALL_SET_ATTR, pid, 2, 1);
 
     print_str("Loading modules...\n");
 

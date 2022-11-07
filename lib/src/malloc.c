@@ -52,7 +52,7 @@ void *malloc_int(size_t size_bytes, size_t* size_bytes_a)
         uint64_t* p = (uint64_t*)l->next;
         struct malloc_list* new_e = (struct malloc_list*)((char*)p + (*size_bytes_a));
         new_e->size = l->next->size - (*size_bytes_a);
-        new_e->next = l->next;
+        new_e->next = l->next->next;
         l->next = new_e;
         p[0] = *size_bytes_a;
         return p;

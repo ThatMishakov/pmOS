@@ -16,6 +16,7 @@ extern "C" ReturnStr<uint64_t> syscall_handler(uint64_t call_n, uint64_t arg1, u
     // TODO: check permissions
 
     TaskDescriptor& task = *get_cpu_struct()->current_task;
+    //t_print_bochs("Debug: syscall %h pid %h\n", call_n, get_cpu_struct()->current_task->pid);
     if (task.attr.debug_syscalls) {
         t_print("Debug: syscall %h pid %h\n", call_n, get_cpu_struct()->current_task->pid);
     }

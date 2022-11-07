@@ -240,8 +240,6 @@ void find_new_process()
 
 void TaskDescriptor::switch_to()
 {
-    t_print("Debug: switching to process with PID %h\n", pid);
-
     // Change task
     get_cpu_struct()->next_task = this;
 }
@@ -285,7 +283,7 @@ void TaskDescriptor::unblock_if_needed(uint64_t reason)
 {
     if (this->status != PROCESS_BLOCKED) return;
     
-    uint64_t mask = 0x01ULL << reason;
+    uint64_t mask = 0x01ULL << (reason - 1);
 
     if (mask & this->unblock_mask) {
         this->parrent->erase(this);

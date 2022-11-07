@@ -22,7 +22,6 @@ DECLARE_LOCK(palloc_l);
 
 void* palloc(size_t size)
 {
-    t_print_bochs("Palloc size %h ->");
     // Spinlock to prevent concurrent accesses
     LOCK(palloc_l)
     palloc_list* l = &palloc_head;
@@ -72,7 +71,6 @@ void* palloc(size_t size)
     }
 
     UNLOCK(palloc_l)
-    t_print_bochs(" %h\n", block);
     return (void*)block;
 }
 

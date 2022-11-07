@@ -3,7 +3,6 @@
 #include "types.hh"
 #include "asm.hh"
 #include "start.hh"
-#include "vga.hh"
 #include <kernel/errors.h>
 #include "paging.hh"
 #include "messaging.hh"
@@ -119,7 +118,7 @@ void t_print(const char *str, ...)
 void t_write_bochs(const char * str, uint64_t length)
 {
     for (uint64_t i = 0; i < length; ++i) {
-        putchar(str[i]);
+        printc(str[i]);
     }
 }
 

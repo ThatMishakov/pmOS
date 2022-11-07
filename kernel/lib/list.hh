@@ -10,7 +10,7 @@ private:
     struct Node {
         Node* next = nullptr;
         Node* prev = nullptr;
-        T data;
+        T data = T();
     };
 
     Node* first = nullptr;
@@ -97,7 +97,7 @@ list<T>::list(const list<T>& from)
         this->first = nullptr;
         this->last = nullptr;
     } else {
-        Node* p = new Node;
+        Node* p = new Node();
         Node* c = from.first;
 
         this->first = p;
@@ -105,7 +105,7 @@ list<T>::list(const list<T>& from)
         c = c->next;
 
         while (c != nullptr) {
-            p->next = new Node;
+            p->next = new Node();
             p->next->prev = p;
             p->next->data = c->data;
 
@@ -128,7 +128,7 @@ list<T>& list<T>::operator=(const list<T>& from)
         this->first = nullptr;
         this->last = nullptr;
     } else {
-        Node* p = new Node;
+        Node* p = new Node();
         Node* c = from.first;
 
         this->first = p;
@@ -153,7 +153,7 @@ list<T>& list<T>::operator=(const list<T>& from)
 template<typename T>
 void list<T>::push_back(const T& k)
 {
-    Node* n = new Node;
+    Node* n = new Node();
     n->data = k;
 
     if (last == nullptr) {
@@ -171,7 +171,7 @@ void list<T>::push_back(const T& k)
 template<typename T>
 void list<T>::push_back(T&& k)
 {
-    Node* n = new Node;
+    Node* n = new Node();
     n->data = forward<T>(k);
 
     if (last == nullptr) {

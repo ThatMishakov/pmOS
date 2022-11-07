@@ -12,7 +12,7 @@ TARGET := x86_64-elf
 INCLUDEDIR = include
 
 # User controllable CFLAGS.
-USERCFLAGS = -Wall -Wextra -O2 -pipe
+USERCFLAGS = -Wall -Wextra -O1 -pipe
 
 CPPFLAGS = $(INTERNALCFLAGS) -I$(INCLUDEDIR) -mcmodel=kernel $(USERCFLAGS) -MMD -MP
 #CPPFLAGS = $(CFLAGS)

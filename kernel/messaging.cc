@@ -22,7 +22,6 @@ kresult_t init_kernel_ports()
 
 kresult_t queue_message(TaskDescriptor* task, uint64_t from, uint64_t channel, const char* message_usr_ptr, size_t size, bool from_user)
 {
-    //t_print_bochs("Queue message size %h\n", size);
     Message msg;
     msg.from = from;
     msg.channel = channel;
@@ -140,8 +139,7 @@ kresult_t Ports_storage::set_port(uint64_t port, uint64_t dest_pid, uint64_t des
             while (not p.msg_queue.empty()) {
                 Message& m = p.msg_queue.front();
                 m.channel = dest_chan;
-
-                d->messages.push(m);
+                d->messages.push(klib::move(m));
                 p.msg_queue.pop();
             }
 

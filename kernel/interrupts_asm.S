@@ -221,7 +221,7 @@ ints_handler:
 not_syscall:
     popq %rdi
     popq %rsi
-    leaq (16)(%rsp), %rdx
+    leaq (%rsp), %rdx
     call interrupt_handler
 end:
     cmpl $0, %gs:24

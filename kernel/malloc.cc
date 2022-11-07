@@ -5,15 +5,26 @@
 
 malloc_list head = {nullptr, 0};
 
+void print_list(malloc_list* l)
+{
+    while (l != nullptr) {
+        t_print_bochs(" node %h size %h", l, l->size);
+        l = l->next;
+    }
+
+    t_print_bochs("\n");
+}
+
 void *malloc_int(size_t size_bytes, size_t& size_bytes_a)
 {
+    if (size_bytes == 0) halt();
     // Reserve 8 bytes for size header
     size_bytes += 8;
     // Allign to 16
     size_bytes_a = size_bytes & ~0x0f;
     if (size_bytes%16) size_bytes_a += 16-size_bytes_a%16;
     malloc_list* l = &head;
-    while (l->next != nullptr and l->next->size < size_bytes_a) {
+    while ((l->next != nullptr) and (l->next->size < size_bytes_a)) {
         l = l->next;
     }
     if (l->next == nullptr) {
@@ -35,7 +46,7 @@ void *malloc_int(size_t size_bytes, size_t& size_bytes_a)
         uint64_t* p = (uint64_t*)l->next;
         malloc_list* new_e = (malloc_list*)((char*)p + size_bytes_a);
         new_e->size = l->next->size - size_bytes_a;
-        new_e->next = l->next;
+        new_e->next = l->next->next;
         l->next = new_e;
         p[0] = size_bytes_a;
         return p;
@@ -55,13 +66,15 @@ void *calloc(size_t nelem, size_t size)
 void *malloc(size_t s)
 {
     size_t l;
-    void* p = (char*)malloc_int(s, l) + 8;
+    void* p = ((char*)malloc_int(s, l) + 8);
     return p;
 }
 
 void free(void * p)
 {
     if (p == nullptr) return;
+
+    if ((uint64_t)p < 0x1000) halt();
 
     uint64_t* base = (uint64_t*)p;
     --base;
