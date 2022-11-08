@@ -1,6 +1,7 @@
 #pragma once
 #include <stdint.h>
 #include <stddef.h>
+#include "../malloc.hh"
 
 template<typename T>
 class Circ_Array {

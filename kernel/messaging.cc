@@ -1,7 +1,6 @@
 #include "messaging.hh"
 #include "types.hh"
 #include "sched.hh"
-#include <stdint.h>
 #include <stddef.h>
 #include <kernel/errors.h>
 #include "lib/utility.hh"
@@ -20,7 +19,7 @@ kresult_t init_kernel_ports()
     return SUCCESS;
 }
 
-kresult_t queue_message(TaskDescriptor* task, uint64_t from, uint64_t channel, const char* message_usr_ptr, size_t size, bool from_user)
+kresult_t queue_message(TaskDescriptor* task, u64 from, u64 channel, const char* message_usr_ptr, size_t size, bool from_user)
 {
     Message msg;
     msg.from = from;
@@ -47,7 +46,7 @@ kresult_t Message::copy_to_user_buff(char* buff)
     return copy_to_user(&content.front(), buff, content.size());
 }
 
-kresult_t Port::enqueue(uint64_t from, uint64_t size, const char* ptr, bool from_user)
+kresult_t Port::enqueue(u64 from, u64 size, const char* ptr, bool from_user)
 {
     Message msg;
     msg.from = from;
@@ -69,7 +68,7 @@ kresult_t Port::enqueue(uint64_t from, uint64_t size, const char* ptr, bool from
     return copy_result;
 }
 
-kresult_t Ports_storage::send_from_user(uint64_t pid_from, uint64_t port, uint64_t buff_addr, size_t size)
+kresult_t Ports_storage::send_from_user(u64 pid_from, u64 port, u64 buff_addr, size_t size)
 {
     if (this->storage.count(port) == 0) return ERROR_PORT_NOT_EXISTS;
 
@@ -95,9 +94,9 @@ kresult_t Ports_storage::send_from_user(uint64_t pid_from, uint64_t port, uint64
     return result;
 }
 
-kresult_t Ports_storage::send_from_system(uint64_t port, const char* msg, size_t size)
+kresult_t Ports_storage::send_from_system(u64 port, const char* msg, size_t size)
 {
-    static const uint64_t pid_from = 0;
+    static const u64 pid_from = 0;
     if (this->storage.count(port) == 0) return ERROR_PORT_NOT_EXISTS;
 
     Port& d = this->storage.at(port);
@@ -122,7 +121,7 @@ kresult_t Ports_storage::send_from_system(uint64_t port, const char* msg, size_t
     return result;
 }
 
-kresult_t Ports_storage::set_port(uint64_t port, uint64_t dest_pid, uint64_t dest_chan)
+kresult_t Ports_storage::set_port(u64 port, u64 dest_pid, u64 dest_chan)
 {
     if (not exists_process(dest_pid)) return ERROR_NO_SUCH_PROCESS;
 
@@ -152,7 +151,7 @@ kresult_t Ports_storage::set_port(uint64_t port, uint64_t dest_pid, uint64_t des
     return SUCCESS;
 }
 
-kresult_t Ports_storage::set_dummy(uint64_t port)
+kresult_t Ports_storage::set_dummy(u64 port)
 {
     if (this->storage.count(port) == 1) {
         this->storage.at(port).attr |= 0x01;
@@ -163,7 +162,7 @@ kresult_t Ports_storage::set_dummy(uint64_t port)
     return SUCCESS;
 }
 
-kresult_t send_message_system(uint64_t port, const char* msg, size_t size)
+kresult_t send_message_system(u64 port, const char* msg, size_t size)
 {
     return kernel_ports->send_from_system(port, msg, size);
 }

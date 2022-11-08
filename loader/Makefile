@@ -1,24 +1,21 @@
 # Executable name
 EXEC = loader.elf
 
-# It is highly recommended to use a custom built cross toolchain to build a kernel.
-# We are only using "cc" as a placeholder here. It may work by using
-# the host system's toolchain, but this is not guaranteed.
-CC = clang
-CPP = clang
-CXX = clang++
-AS = nasm
-TARGET := x86_64-elf
+
+CC = x86_64-elf-gcc
+CPP = x86_64-elf-gcc
+CXX = x86_64-elf-g++
+LD = x86_64-elf-ld
 
 INCLUDEDIR = include
 
 # User controllable CFLAGS.
-USERCFLAGS = -Wall -Wextra -O2 -pipe -target $(TARGET) 
+USERCFLAGS = -Wall -Wextra -O2 -pipe
 
 CPPFLAGS = -mcmodel=large $(INTERNALCFLAGS) -I$(INCLUDEDIR) $(USERCFLAGS) -I../kernel/include  -MMD -MP
 #CXXFLAGS = $(CFLAGS)
 ASMFLAGS = -I$(INCLUDEDIR)
-LDFLAGS = $(INTERNALLDFLAGS) -target $(TARGET)
+LDFLAGS = $(INTERNALLDFLAGS)
 
 # Internal link flags that should not be changed by the user.
 INTERNALLDFLAGS := \
@@ -47,7 +44,7 @@ ASMFILES := $(shell find ./ -type f -name '*.S')
 OBJ    := $(CCFILES:.cc=.o) $(ASMFILES:.S=.o) $(CFILES:.c=.o)
 
 $(EXEC): $(OBJ) linker.ld
-	$(CC) $(LDFLAGS) $(OBJ) -o $@
+	$(LD) $(LDFLAGS) $(OBJ) -o $@
 
 	
 clean:

@@ -4,42 +4,43 @@
 #include "types.hh"
 #include <kernel/errors.h>
 #include "utils.hh"
+#include "../malloc.hh"
 
-klib::list<uint64_t>* free_pages_list = nullptr;
+klib::list<u64>* free_pages_list = nullptr;
 
 DECLARE_LOCK(free_page_alloc);
 
-void add_pages(uint64_t pages)
+void add_pages(u64 pages)
 {
-    uint64_t start = (uint64_t)unoccupied;
-    uint64_t size = pages*4096;
+    u64 start = (u64)unoccupied;
+    u64 size = pages*4096;
 
-    unoccupied = (void*)((uint64_t)unoccupied + size);
+    unoccupied = (void*)((u64)unoccupied + size);
 
-    for (uint64_t i = 0; i < size; i += 4096)
+    for (u64 i = 0; i < size; i += 4096)
         free_pages_list->push_back(i+start);
 }
 
 kresult_t free_page_alloc_init()
 {
     // TODO: Error checking
-    free_pages_list = new klib::list<uint64_t>;
+    free_pages_list = new klib::list<u64>;
 
     add_pages(FREE_PAGES_SIZE);
     return SUCCESS;
 }
 
-void release_free_page(uint64_t page)
+void release_free_page(u64 page)
 {
     free_pages_list->push_back(page);
 }
 
-ReturnStr<uint64_t> get_free_page()
+ReturnStr<u64> get_free_page()
 {
     // TODO: Error checking
     if (free_pages_list->empty()) add_pages(FREE_PAGES_SIZE);
 
-    uint64_t page = free_pages_list->front();
+    u64 page = free_pages_list->front();
     free_pages_list->pop_front();
     return {SUCCESS, page};
 }

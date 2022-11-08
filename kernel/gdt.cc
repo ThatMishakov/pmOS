@@ -4,7 +4,7 @@
 
 TSS* System_Segment_Descriptor::tss()
 {
-    return (TSS*)((uint64_t)base0 | (uint64_t)base1 << 16 | (uint64_t)base2 << 24 | (uint64_t)base3 << 32);
+    return (TSS*)((u64)base0 | (u64)base1 << 16 | (u64)base2 << 24 | (u64)base3 << 32);
 }
 
 GDT kernel_gdt;

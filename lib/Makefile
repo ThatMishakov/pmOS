@@ -1,11 +1,10 @@
-CC = clang
-CPP = clang
-TARGET := x86_64-elf
+CC = x86_64-elf-gcc
+CPP = x86_64-elf-g++
 
 LIBEXEC = libpm.a
 
 CPPFLAGS = -MMD -MP
-LDFLAGS = -target $(TARGET)
+LDFLAGS = 
 
 CFILES := $(shell find ./ -type f -name '*.c')
 ASMFILES := $(shell find ./ -type f -name '*.S')

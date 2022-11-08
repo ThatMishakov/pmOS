@@ -8,7 +8,6 @@ SECTIONS
 
     /* Leave a symbol indicating the start of the kernel space */
     _kernel_start = .;
-    _free_to_use = 0xFFFFFE8000000000;
 
     /* Then let's place all the other traditional executable sections afterwards. */
     . = ALIGN(4K);
@@ -32,6 +31,7 @@ SECTIONS
         *(.bss*)
         . = ALIGN(4K);
     }
+    _free_to_use = 0xFFFFFE8000000000;
     _free_after_kernel = ALIGN(4K);
 
     //. = . + 2048M;

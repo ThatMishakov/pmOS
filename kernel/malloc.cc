@@ -38,12 +38,12 @@ void *malloc_int(size_t size_bytes, size_t& size_bytes_a)
     } 
 
     if (l->next->size == size_bytes_a) {
-        uint64_t* p = (uint64_t*)l->next;
+        u64* p = (u64*)l->next;
         l->next = l->next->next;
         p[0] = size_bytes_a;
         return p;
     } else {
-        uint64_t* p = (uint64_t*)l->next;
+        u64* p = (u64*)l->next;
         malloc_list* new_e = (malloc_list*)((char*)p + size_bytes_a);
         new_e->size = l->next->size - size_bytes_a;
         new_e->next = l->next->next;
@@ -58,7 +58,7 @@ void *calloc(size_t nelem, size_t size)
 {
     size_t total_size = nelem * size;
     size_t inited;
-    uint64_t* ptr = (uint64_t*)malloc_int(total_size, inited);
+    u64* ptr = (u64*)malloc_int(total_size, inited);
     if (ptr != nullptr) memset(ptr+1, inited/8 - 1);
     return &ptr[1];
 }
@@ -74,11 +74,11 @@ void free(void * p)
 {
     if (p == nullptr) return;
 
-    if ((uint64_t)p < 0x1000) halt();
+    if ((u64)p < 0x1000) halt();
 
-    uint64_t* base = (uint64_t*)p;
+    u64* base = (u64*)p;
     --base;
-    uint64_t size = *base;
+    u64 size = *base;
 
     malloc_list* k = (malloc_list*)base;
     k->next = head.next;
@@ -96,7 +96,7 @@ void *operator new[](size_t size)
     return malloc(size);
 }
  
- void operator delete(void *p)
+void operator delete(void *p)
 {
     free(p);
 }
@@ -106,7 +106,17 @@ void operator delete[](void *p)
     free(p);
 }
 
-void *operator new(size_t, void *p)     throw() { return p; }
-void *operator new[](size_t, void *p)   throw() { return p; }
-void  operator delete  (void *, void *) throw() { };
-void  operator delete[](void *, void *) throw() { };
+ void operator delete(void *p, UNUSED size_t s)
+{
+    free(p);
+}
+ 
+void operator delete[](void *p, UNUSED size_t s)
+{
+    free(p);
+}
+
+void *operator new(size_t, void *p)     noexcept { return p; }
+void *operator new[](size_t, void *p)   noexcept { return p; }
+void  operator delete  (void *, void *) noexcept { };
+void  operator delete[](void *, void *) noexcept { };

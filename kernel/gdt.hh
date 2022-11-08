@@ -3,44 +3,44 @@
 #include <kernel/gdt.h>
 
 struct TSS {
-    uint32_t reserved0 = 0;
-    uint64_t rsp0 = 0;
-    uint64_t rsp1 = 0;
-    uint64_t rsp2 = 0;
-    uint64_t reserved = 0;
-    uint64_t ist1 = 0;
-    uint64_t ist2 = 0;
-    uint64_t ist3 = 0;
-    uint64_t ist4 = 0;
-    uint64_t ist5 = 0;
-    uint64_t ist6 = 0;
-    uint64_t ist7 = 0;
-    uint64_t reserved1 = 0;
-    uint16_t reserved2 = 0;
-    uint16_t iopb = 0;
+    u32 reserved0 = 0;
+    u64 rsp0 = 0;
+    u64 rsp1 = 0;
+    u64 rsp2 = 0;
+    u64 reserved = 0;
+    u64 ist1 = 0;
+    u64 ist2 = 0;
+    u64 ist3 = 0;
+    u64 ist4 = 0;
+    u64 ist5 = 0;
+    u64 ist6 = 0;
+    u64 ist7 = 0;
+    u64 reserved1 = 0;
+    u16 reserved2 = 0;
+    u16 iopb = 0;
 } PACKED;
 
 struct System_Segment_Descriptor {
-    uint16_t limit0;
-    uint16_t base0;
-    uint8_t  base1;
-    uint8_t  access;
-    uint8_t  limit1: 4;
-    uint8_t  flags:  4;
-    uint8_t  base2;
-    uint32_t base3;
-    uint32_t reserved;
+    u16 limit0;
+    u16 base0;
+    u8  base1;
+    u8  access;
+    u8  limit1: 4;
+    u8  flags:  4;
+    u8  base2;
+    u32 base3;
+    u32 reserved;
 
     constexpr System_Segment_Descriptor()
         : System_Segment_Descriptor(0, 0, 0, 0) {}
-    constexpr System_Segment_Descriptor(uint64_t base, uint32_t limit, uint8_t access, uint8_t flags)
+    constexpr System_Segment_Descriptor(u64 base, u32 limit, u8 access, u8 flags)
         : limit0(limit & 0xffff), base0(base & 0xffff), base1((base >> 16) & 0xff),
           access(access), limit1((limit >> 16) & 0xff), flags(flags),
           base2((base >> 24) & 0xff), base3((base >> 32) & 0xffffffff),
           reserved(0) {}
 
     TSS *tss();
-};
+} PACKED;
 
 struct GDT {
     GDT_entry Null {}; // always null
@@ -57,7 +57,7 @@ struct GDT {
 #define R3_DATA_SEGMENT    0x20 | 0x03
 #define TSS_OFFSET         0x28
 
-extern "C" void loadGDT(GDT* gdt, uint16_t size);
+extern "C" void loadGDT(GDT* gdt, u16 size);
 
 void init_gdt();
 

@@ -7,7 +7,7 @@
 #include "paging.hh"
 #include "messaging.hh"
 
-void int_to_string(long int n, uint8_t base, char* str, int& length)
+void int_to_string(long int n, u8 base, char* str, int& length)
 {
     char temp_str[65];
     length = 0;
@@ -38,7 +38,7 @@ void int_to_string(long int n, uint8_t base, char* str, int& length)
     str[length] = 0;
 }
 
-void uint_to_string(unsigned long int n, uint8_t base, char* str, int& length)
+void uint_to_string(unsigned long int n, u8 base, char* str, int& length)
 {
     char temp_str[65];
     length = 0;
@@ -70,7 +70,7 @@ void t_print(const char *str, ...)
     char at = str[0];
     unsigned int i = 0;
     while (at != '\0') {
-        uint64_t s = i;
+        u64 s = i;
         while (true) {
             if (at == '\0') {
                 va_end(arg);
@@ -115,9 +115,9 @@ void t_print(const char *str, ...)
     va_end(arg);
 }
 
-void t_write_bochs(const char * str, uint64_t length)
+void t_write_bochs(const char * str, u64 length)
 {
-    for (uint64_t i = 0; i < length; ++i) {
+    for (u64 i = 0; i < length; ++i) {
         printc(str[i]);
     }
 }
@@ -130,7 +130,7 @@ void t_print_bochs(const char *str, ...)
     char at = str[0];
     unsigned int i = 0;
     while (at != '\0') {
-        uint64_t s = i;
+        u64 s = i;
         while (true) {
             if (at == '\0') {
                 va_end(arg);
@@ -175,11 +175,11 @@ void t_print_bochs(const char *str, ...)
     va_end(arg);
 }
 
-void term_write(const char * str, uint64_t length)
+void term_write(const char * str, u64 length)
 {
     //putchar('&');
     //putchar('0' + length);
-    //for (uint64_t i = 0; i < length; ++i) {
+    //for (u64 i = 0; i < length; ++i) {
     //    putchar(str[i]);
     //}
     send_message_system(1, str, length);
@@ -187,15 +187,15 @@ void term_write(const char * str, uint64_t length)
 
 kresult_t prepare_user_buff_rd(const char* buff, size_t size)
 {
-    uint64_t addr_start = (uint64_t)buff;
-    uint64_t end = addr_start+size;
+    u64 addr_start = (u64)buff;
+    u64 end = addr_start+size;
 
     if (addr_start > KERNEL_ADDR_SPACE or end > KERNEL_ADDR_SPACE or addr_start > end) return ERROR_OUT_OF_RANGE;
 
     kresult_t result = SUCCESS;
 
-    for (uint64_t i = addr_start; i < end and result == SUCCESS; ++i) {
-        uint64_t page = i & ~0xfffULL;
+    for (u64 i = addr_start; i < end and result == SUCCESS; ++i) {
+        u64 page = i & ~0xfffULL;
         result = prepare_user_page(page);
     }
     return SUCCESS;
@@ -205,15 +205,15 @@ kresult_t prepare_user_buff_wr(char* buff, size_t size)
 {
     // TODO: Fix read-only pages & stuff
 
-    uint64_t addr_start = (uint64_t)buff;
-    uint64_t end = addr_start+size;
+    u64 addr_start = (u64)buff;
+    u64 end = addr_start+size;
 
     if (addr_start > KERNEL_ADDR_SPACE or end > KERNEL_ADDR_SPACE or addr_start > end) return ERROR_OUT_OF_RANGE;
 
     kresult_t result = SUCCESS;
 
-    for (uint64_t i = addr_start; i < end and result == SUCCESS; ++i) {
-        uint64_t page = i & ~0xfffULL;
+    for (u64 i = addr_start; i < end and result == SUCCESS; ++i) {
+        u64 page = i & ~0xfffULL;
         result = prepare_user_page(page);
     }
     return SUCCESS;

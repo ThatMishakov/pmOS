@@ -6,7 +6,7 @@
 #include "types.hh"
 #include "lib/stack.hh"
 
-using PID = uint64_t;
+using PID = u64;
 
 struct TaskPermissions {
 };
@@ -29,7 +29,7 @@ struct TaskDescriptor {
     // Basic process stuff
     Task_Regs regs;
     PID pid;
-    uint64_t page_table;
+    u64 page_table;
     TaskPermissions perm;
     Process_Status status;
 
@@ -44,26 +44,26 @@ struct TaskDescriptor {
 
     Spinlock lock;
 
-    uint64_t unblock_mask = ~0;
+    u64 unblock_mask = ~0;
 
     // Return state
-    uint64_t ret_hi;
-    uint64_t ret_lo;
+    u64 ret_hi;
+    u64 ret_lo;
 
     // Arguments
-    klib::vector<uint8_t> args;
+    klib::vector<u8> args;
 
     // Inits stack
-    ReturnStr<uint64_t> init_stack();
+    ReturnStr<u64> init_stack();
 
     // Blocks the process
-    ReturnStr<uint64_t> block(uint64_t mask);
+    ReturnStr<u64> block(u64 mask);
 
     // Checks the mask and unblocks the process if needed
-    void unblock_if_needed(uint64_t reason);
+    void unblock_if_needed(u64 reason);
 
     // Returns 0 if there are no unblocking events pending. Otherwise returns 0.
-    uint64_t check_unblock_immediately();
+    u64 check_unblock_immediately();
 
     // Switches to this process
     void switch_to();
@@ -72,7 +72,7 @@ struct TaskDescriptor {
     void init_task();
 
     // Sets the entry point to the task
-    inline void set_entry_point(uint64_t entry)
+    inline void set_entry_point(u64 entry)
     {
         this->regs.e.rip = entry;
     }
@@ -86,7 +86,7 @@ struct CPU_Info {
     Stack* kernel_stack = nullptr;
     TaskDescriptor* current_task = nullptr;
     TaskDescriptor* next_task = nullptr;
-    uint64_t release_old_cr3 = 0;
+    u64 release_old_cr3 = 0;
 };
 
 // static CPU_Info* const GSRELATIVE per_cpu = 0; // clang ignores GSRELATIVE for no apparent reason
@@ -117,7 +117,7 @@ using sched_map = klib::splay_tree_map<PID, TaskDescriptor*>;
 extern sched_map* s_map;
 
 // Creates a process structure and returns its pid
-ReturnStr<uint64_t> create_process(uint16_t ring = 3);
+ReturnStr<u64> create_process(u16 ring = 3);
 
 // Inits an idle process
 void init_idle();
@@ -129,16 +129,16 @@ void task_switch();
 void find_new_process();
 
 // Returns true if the process with pid exists, false otherwise
-inline bool exists_process(uint64_t pid)
+inline bool exists_process(u64 pid)
 {
     return s_map->count(pid) == 1;
 }
 
 // Returns true if the process with pid is uninitialized
-bool is_uninited(uint64_t pid);
+bool is_uninited(u64 pid);
 
 // Gets a task descriptor of the process with pid
-inline TaskDescriptor* get_task(uint64_t pid)
+inline TaskDescriptor* get_task(u64 pid)
 {
     return s_map->at(pid);
 }

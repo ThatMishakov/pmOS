@@ -1,5 +1,4 @@
 #pragma once
-#include <stdint.h>
 #include "sched.hh"
 
 // Pointer to where special kernel structures can be mapped

@@ -17,7 +17,7 @@ void* palloc_c(size_t number)
 }
 
 palloc_list palloc_head = {0,0};
-uint64_t from = (uint64_t)&_palloc_start;
+u64 from = (u64)&_palloc_start;
 DECLARE_LOCK(palloc_l);
 
 void* palloc(size_t size)
@@ -35,8 +35,8 @@ void* palloc(size_t size)
     // No block of suitable size
     if (l->next == nullptr) {
         // Allocate blocks
-        uint64_t p_head = from;
-        uint64_t size_p = size * 4096;
+        u64 p_head = from;
+        u64 size_p = size * 4096;
         from += size_p;
 
         // TODO: check page frame allocator errors
@@ -45,7 +45,7 @@ void* palloc(size_t size)
         arg.writeable = 1;
         arg.execution_disabled = 1;
 
-        for (uint64_t i = 0; i < size_p; i += 4096) {
+        for (u64 i = 0; i < size_p; i += 4096) {
             get_page(p_head + i, arg);
         }
 
@@ -56,7 +56,7 @@ void* palloc(size_t size)
         l->next = l->next->next;
     } else { // Block of larger size than needed
         // Adjust size in pages to bytes
-        uint64_t size_p = size * 4096;
+        u64 size_p = size * 4096;
 
         // Create new block
         palloc_list* new_block = (palloc_list*)((char*)l->next + size_p);

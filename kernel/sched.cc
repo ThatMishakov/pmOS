@@ -27,7 +27,7 @@ PID pid = 1;
 void init_per_cpu()
 {
     CPU_Info* c = new CPU_Info;
-    write_msr(0xC0000101, (uint64_t)c);
+    write_msr(0xC0000101, (u64)c);
 }
 
 void init_scheduling()
@@ -93,7 +93,7 @@ void sched_pqueue::erase(TaskDescriptor* t)
     t->parrent = nullptr;
 }
 
-ReturnStr<uint64_t> create_process(uint16_t ring)
+ReturnStr<u64> create_process(u16 ring)
 {
     // BIG TODO: errors may produce **HUGE** memory leaks
 
@@ -112,12 +112,12 @@ ReturnStr<uint64_t> create_process(uint16_t ring)
         n->regs.e.ss = R3_DATA_SEGMENT;
         break;
     default:
-        return {static_cast<kresult_t>(ERROR_NOT_SUPPORTED), (uint64_t)0};
+        return {static_cast<kresult_t>(ERROR_NOT_SUPPORTED), (u64)0};
         break;
     }
 
     // Create a new page table
-    ReturnStr<uint64_t> k = get_new_pml4();
+    ReturnStr<u64> k = get_new_pml4();
     if (k.result != SUCCESS) {
         delete n;
         return {k.result, 0};
@@ -149,16 +149,16 @@ PID assign_pid()
    return pid_p; 
 }
 
-ReturnStr<uint64_t> TaskDescriptor::init_stack()
+ReturnStr<u64> TaskDescriptor::init_stack()
 {
     // Switch to the new pml4
-    uint64_t current_cr3 = getCR3();
+    u64 current_cr3 = getCR3();
     setCR3(this->page_table);
 
     kresult_t r;
     // Prealloc a page for the stack
-    uint64_t stack_end = (uint64_t)KERNEL_ADDR_SPACE; //&_free_to_use;
-    uint64_t stack_page_start = stack_end - KB(4);
+    u64 stack_end = (u64)KERNEL_ADDR_SPACE; //&_free_to_use;
+    u64 stack_page_start = stack_end - KB(4);
 
     Page_Table_Argumments arg;
     arg.writeable = 1;
@@ -179,7 +179,7 @@ fail:
 
 void init_idle()
 {
-    ReturnStr<uint64_t> i = create_process(0);
+    ReturnStr<u64> i = create_process(0);
     if (i.result != SUCCESS) {
         t_print("Error: failed to create the idle process!\n");
         return;
@@ -189,11 +189,11 @@ void init_idle()
 
     // Init stack
     idle_task->init_stack();
-    idle_task->regs.e.rip = (uint64_t)&idle;
+    idle_task->regs.e.rip = (u64)&idle;
     uninit.erase(idle_task);
 }
 
-ReturnStr<uint64_t> TaskDescriptor::block(uint64_t mask)
+ReturnStr<u64> TaskDescriptor::block(u64 mask)
 {
     // Check status
     if (status == PROCESS_BLOCKED) return {ERROR_ALREADY_BLOCKED, 0};
@@ -201,7 +201,7 @@ ReturnStr<uint64_t> TaskDescriptor::block(uint64_t mask)
     // Change mask if not null
     if (mask != 0) this->unblock_mask = mask;
 
-    uint64_t imm = check_unblock_immediately();
+    u64 imm = check_unblock_immediately();
     if (imm != 0) return {SUCCESS, imm};
 
     // Erase from queues
@@ -243,7 +243,7 @@ void TaskDescriptor::switch_to()
     get_cpu_struct()->next_task = this;
 }
 
-bool is_uninited(uint64_t pid)
+bool is_uninited(u64 pid)
 {
     return s_map->at(pid)->status == PROCESS_UNINIT;
 }
@@ -264,7 +264,7 @@ void kill(TaskDescriptor* p)
     dead.push_back(p);
 
     // Release user pages
-    uint64_t ptable = p->page_table;
+    u64 ptable = p->page_table;
     free_user_pages(ptable);
 
     // Task switch if it's a current process
@@ -278,11 +278,11 @@ void kill(TaskDescriptor* p)
     }
 }
 
-void TaskDescriptor::unblock_if_needed(uint64_t reason)
+void TaskDescriptor::unblock_if_needed(u64 reason)
 {
     if (this->status != PROCESS_BLOCKED) return;
     
-    uint64_t mask = 0x01ULL << (reason - 1);
+    u64 mask = 0x01ULL << (reason - 1);
 
     if (mask & this->unblock_mask) {
         this->parrent->erase(this);
@@ -292,7 +292,7 @@ void TaskDescriptor::unblock_if_needed(uint64_t reason)
     }
 }
 
-uint64_t TaskDescriptor::check_unblock_immediately()
+u64 TaskDescriptor::check_unblock_immediately()
 {
     if (this->unblock_mask & MESSAGE_UNBLOCK_MASK) {
         if (not this->messages.empty()) return MESSAGE_S_NUM;

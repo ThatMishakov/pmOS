@@ -10,9 +10,9 @@
 #include <kernel/block.h>
 #include <kernel/attributes.h>
 
-extern "C" ReturnStr<uint64_t> syscall_handler(uint64_t call_n, uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t arg4, uint64_t arg5)
+extern "C" ReturnStr<u64> syscall_handler(u64 call_n, u64 arg1, u64 arg2, u64 arg3, u64 arg4, u64 arg5)
 {
-    ReturnStr<uint64_t> r = {};
+    ReturnStr<u64> r = {};
     // TODO: check permissions
 
     TaskDescriptor& task = *get_cpu_struct()->current_task;
@@ -93,7 +93,7 @@ extern "C" ReturnStr<uint64_t> syscall_handler(uint64_t call_n, uint64_t arg1, u
     return r;
 }
 
-uint64_t get_page(uint64_t virtual_addr)
+u64 get_page(u64 virtual_addr)
 {
     // Check allignment to 4096K (page size)
     if (virtual_addr & 0xfff) return ERROR_UNALLIGNED;
@@ -109,13 +109,13 @@ uint64_t get_page(uint64_t virtual_addr)
     arg.user_access = 1;
     arg.writeable = 1;
     arg.execution_disabled = 0;
-    uint64_t result = alloc_page_lazy(virtual_addr, arg);
+    u64 result = alloc_page_lazy(virtual_addr, arg);
 
     // Return the result (success or failure)
     return result;
 }
 
-uint64_t release_page(uint64_t virtual_addr)
+u64 release_page(u64 virtual_addr)
 {
     // Check allignment to 4096K (page size)
     if (virtual_addr & 0xfff) return ERROR_UNALLIGNED;
@@ -132,12 +132,12 @@ uint64_t release_page(uint64_t virtual_addr)
     return release_page_s(virtual_addr);
 }
 
-ReturnStr<uint64_t> getpid()
+ReturnStr<u64> getpid()
 {
     return {SUCCESS, get_cpu_struct()->current_task->pid};
 }
 
-ReturnStr<uint64_t> syscall_create_process()
+ReturnStr<u64> syscall_create_process()
 {
     return create_process(3);
 }
@@ -147,18 +147,18 @@ kresult_t syscall_map_into()
     return ERROR_NOT_IMPLEMENTED;
 }
 
-ReturnStr<uint64_t> syscall_block(uint64_t mask)
+ReturnStr<u64> syscall_block(u64 mask)
 {
-    ReturnStr<uint64_t> r = get_cpu_struct()->current_task->block(mask);
+    ReturnStr<u64> r = get_cpu_struct()->current_task->block(mask);
     return r;
 }
 
-kresult_t syscall_map_into_range(uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t arg4, uint64_t arg5)
+kresult_t syscall_map_into_range(u64 arg1, u64 arg2, u64 arg3, u64 arg4, u64 arg5)
 {
-    uint64_t pid = arg1;
-    uint64_t page_start = arg2;
-    uint64_t to_addr = arg3;
-    uint64_t nb_pages = arg4;
+    u64 pid = arg1;
+    u64 page_start = arg2;
+    u64 to_addr = arg3;
+    u64 nb_pages = arg4;
 
     Page_Table_Argumments pta = {};
     pta.user_access = 1;
@@ -189,7 +189,7 @@ kresult_t syscall_map_into_range(uint64_t arg1, uint64_t arg2, uint64_t arg3, ui
     return r;
 }
 
-kresult_t syscall_get_page_multi(uint64_t virtual_addr, uint64_t nb_pages)
+kresult_t syscall_get_page_multi(u64 virtual_addr, u64 nb_pages)
 {
     // Check allignment to 4096K (page size)
     if (virtual_addr & 0xfff) return ERROR_UNALLIGNED;
@@ -202,21 +202,21 @@ kresult_t syscall_get_page_multi(uint64_t virtual_addr, uint64_t nb_pages)
     arg.user_access = 1;
     arg.writeable = 1;
     arg.execution_disabled = 0;
-    uint64_t result = SUCCESS;
-    uint64_t i = 0;
+    u64 result = SUCCESS;
+    u64 i = 0;
     for (; i < nb_pages and result == SUCCESS; ++i)
         result = alloc_page_lazy(virtual_addr + i*KB(4), arg);
 
     // If unsuccessfull, return everything back
     if (result != SUCCESS)
-        for (uint64_t k = 0; k < i; ++k) 
+        for (u64 k = 0; k < i; ++k) 
             invalidade_noerr(virtual_addr + k*KB(4));
 
     // Return the result (success or failure)
     return result;
 }
 
-kresult_t syscall_start_process(uint64_t pid, uint64_t start, uint64_t arg1, uint64_t arg2, uint64_t arg3)
+kresult_t syscall_start_process(u64 pid, u64 start, u64 arg1, u64 arg2, u64 arg3)
 {
     // TODO: Check permissions
 
@@ -243,9 +243,9 @@ kresult_t syscall_start_process(uint64_t pid, uint64_t start, uint64_t arg1, uin
     return SUCCESS;
 }
 
-ReturnStr<uint64_t> syscall_init_stack(uint64_t pid, uint64_t esp)
+ReturnStr<u64> syscall_init_stack(u64 pid, u64 esp)
 {
-    ReturnStr<uint64_t> r = {ERROR_GENERAL, 0};
+    ReturnStr<u64> r = {ERROR_GENERAL, 0};
     // TODO: Check permissions
 
     // Check if process exists
@@ -273,7 +273,7 @@ ReturnStr<uint64_t> syscall_init_stack(uint64_t pid, uint64_t esp)
     return r;
 }
 
-kresult_t syscall_exit(uint64_t arg1, uint64_t arg2)
+kresult_t syscall_exit(u64 arg1, u64 arg2)
 {
     TaskDescriptor* task = get_cpu_struct()->current_task;
 
@@ -287,11 +287,11 @@ kresult_t syscall_exit(uint64_t arg1, uint64_t arg2)
     return SUCCESS;
 }
 
-kresult_t syscall_map_phys(uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t arg4)
+kresult_t syscall_map_phys(u64 arg1, u64 arg2, u64 arg3, u64 arg4)
 {
-    uint64_t virt = arg1;
-    uint64_t phys = arg2;
-    uint64_t nb_pages = arg3;
+    u64 virt = arg1;
+    u64 phys = arg2;
+    u64 nb_pages = arg3;
 
     Page_Table_Argumments pta = {};
     pta.user_access = 1;
@@ -312,7 +312,7 @@ kresult_t syscall_map_phys(uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t
 
     // TODO: Check if physical address is ok
 
-    uint64_t i = 0;
+    u64 i = 0;
     kresult_t r = SUCCESS;
     for (; i < nb_pages and r == SUCCESS; ++i) {
         r = map(phys + i*KB(4), virt+i*KB(4), pta);
@@ -322,14 +322,14 @@ kresult_t syscall_map_phys(uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t
 
     // If was not successfull, invalidade the pages
     if (r != SUCCESS)
-        for (uint64_t k = 0; k < i; ++k) {
+        for (u64 k = 0; k < i; ++k) {
             invalidade_noerr(virt+k*KB(4));
         }
 
     return r;
 }
 
-kresult_t syscall_get_first_message(uint64_t buff, uint64_t args)
+kresult_t syscall_get_first_message(u64 buff, u64 args)
 {
     TaskDescriptor* current = get_cpu_struct()->current_task;
 
@@ -356,11 +356,11 @@ kresult_t syscall_get_first_message(uint64_t buff, uint64_t args)
     return result;
 }
 
-kresult_t syscall_send_message_task(uint64_t pid, uint64_t channel, uint64_t size, uint64_t message)
+kresult_t syscall_send_message_task(u64 pid, u64 channel, u64 size, u64 message)
 {
     // TODO: Check permissions
 
-    uint64_t self_pid = get_cpu_struct()->current_task->pid;
+    u64 self_pid = get_cpu_struct()->current_task->pid;
     if (self_pid == pid) return ERROR_CANT_MESSAGE_SELF;
 
     if (not exists_process(pid)) return ERROR_NO_SUCH_PROCESS;
@@ -375,7 +375,7 @@ kresult_t syscall_send_message_task(uint64_t pid, uint64_t channel, uint64_t siz
     return result;
 }
 
-kresult_t syscall_send_message_port(uint64_t port, size_t size, uint64_t message)
+kresult_t syscall_send_message_port(u64 port, size_t size, u64 message)
 {
     // TODO: Check permissions
 
@@ -386,7 +386,7 @@ kresult_t syscall_send_message_port(uint64_t port, size_t size, uint64_t message
     return result;
 }
 
-kresult_t syscall_set_port(uint64_t pid, uint64_t port, uint64_t dest_pid, uint64_t dest_chan)
+kresult_t syscall_set_port(u64 pid, u64 port, u64 dest_pid, u64 dest_chan)
 {
     // TODO: Check permissions
 
@@ -403,7 +403,7 @@ kresult_t syscall_set_port(uint64_t pid, uint64_t port, uint64_t dest_pid, uint6
     return result;
 }
 
-kresult_t syscall_set_port_kernel(uint64_t port, uint64_t dest_pid, uint64_t dest_chan)
+kresult_t syscall_set_port_kernel(u64 port, u64 dest_pid, u64 dest_chan)
 {
     // TODO: Check permissions
 
@@ -414,7 +414,7 @@ kresult_t syscall_set_port_kernel(uint64_t port, uint64_t dest_pid, uint64_t des
     return result;
 }
 
-kresult_t syscall_get_message_info(uint64_t message_struct)
+kresult_t syscall_get_message_info(u64 message_struct)
 {
     TaskDescriptor* current = get_cpu_struct()->current_task;
 
@@ -428,7 +428,7 @@ kresult_t syscall_get_message_info(uint64_t message_struct)
     }
 
     Message& msg = current->messages.front();
-    uint64_t msg_struct_size = sizeof(Message_Descriptor);
+    u64 msg_struct_size = sizeof(Message_Descriptor);
 
     result = prepare_user_buff_wr((char*)message_struct, msg_struct_size);
 
@@ -443,7 +443,7 @@ kresult_t syscall_get_message_info(uint64_t message_struct)
     return result;
 }
 
-kresult_t syscall_set_attribute(uint64_t pid, uint64_t attribute, uint64_t value)
+kresult_t syscall_set_attribute(u64 pid, u64 attribute, u64 value)
 {
     // TODO: Check persmissions
 

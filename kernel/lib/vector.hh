@@ -63,7 +63,7 @@ vector<T>::vector()
 template<typename T>
 vector<T>::~vector()
 {
-    for (typeof(a_size) i = 0; i < a_size; ++i) {
+    for (size_t i = 0; i < a_size; ++i) {
         ptr[i].~T();
     }
 
@@ -78,7 +78,7 @@ template<typename T>
 vector<T>::vector(size_t t, const T& e): 
     ptr(new T[t]), a_capacity(t), a_size(t)
 {
-    for (typeof(t) i = 0; i < t; ++i) {
+    for (size_t i = 0; i < t; ++i) {
         ptr[i] = e;
     }
 }

@@ -14,7 +14,7 @@ void init_IDT()
     fill_idt();
     mask_PIC();
 
-    IDT_descriptor desc = {sizeof(IDT) - 1, (uint64_t)&k_idt};
+    IDT_descriptor desc = {sizeof(IDT) - 1, (u64)&k_idt};
     loadIDT(&desc);
 }
 
@@ -22,8 +22,8 @@ void init_kernel_stack()
 {
     CPU_Info* s = get_cpu_struct();
     s->kernel_stack = (Stack*)palloc(sizeof(Stack)/4096);
-    kernel_gdt.SSD_entries[0] = System_Segment_Descriptor((uint64_t) calloc(1,sizeof(TSS)), sizeof(TSS), 0x89, 0x02);
-    kernel_gdt.SSD_entries[0].tss()->ist1 = (uint64_t)s->kernel_stack + sizeof(Stack);
+    kernel_gdt.SSD_entries[0] = System_Segment_Descriptor((u64) calloc(1,sizeof(TSS)), sizeof(TSS), 0x89, 0x02);
+    kernel_gdt.SSD_entries[0].tss()->ist1 = (u64)s->kernel_stack + sizeof(Stack);
     loadTSS(0x28);
 }
 
@@ -34,7 +34,7 @@ void init_interrupts()
     asm("sti");
 }
 
-extern "C" void interrupt_handler(uint64_t intno, uint64_t err, Interrupt_Stackframe* int_s)
+extern "C" void interrupt_handler(u64 intno, u64 err, Interrupt_Stackframe* int_s)
 {
     switch (intno) {
         case 0x0: 

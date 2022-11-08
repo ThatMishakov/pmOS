@@ -1,5 +1,4 @@
 #pragma once
-#include <stdint.h>
 #include <kernel/types.h>
 
 #define DECLARE_LOCK(name) volatile int name ## Locked
@@ -11,7 +10,7 @@
 	__sync_synchronize(); \
 	name ## Locked = 0;
 
-using kresult_t = uint64_t;
+using kresult_t = u64;
 
 template<class T>
 struct ReturnStr {

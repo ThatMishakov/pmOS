@@ -1,15 +1,14 @@
 #pragma once
-#include <stdint.h>
 #include <stddef.h>
 #include "types.hh"
 
-void int_to_string(int64_t n, uint8_t base, char* str, int& length);
+void int_to_string(int64_t n, u8 base, char* str, int& length);
 
-void uint_to_string(uint64_t n, uint8_t base, char* str, int& length);
+void uint_to_string(u64 n, u8 base, char* str, int& length);
 
 void t_print_bochs(const char *str, ...);
 
-void term_write(const char * str, uint64_t length);
+void term_write(const char * str, u64 length);
 size_t strlen(const char *str);
 
 void t_print(const char *str,...);

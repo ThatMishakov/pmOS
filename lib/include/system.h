@@ -1,6 +1,6 @@
 #ifndef _SYSTEM_H
 #define _SYSTEM_H 1
-#include <stdint.h>
+#include <stdint-gcc.h>
 #include <stddef.h>
 #include "../../kernel/include/kernel/syscalls.h"
 #include "../../kernel/include/kernel/memory.h"
@@ -51,7 +51,7 @@ result_t set_port(uint64_t pid, uint64_t dest_pid, uint64_t dest_chan);
 syscall_r block(uint64_t mask);
 
 // Exits the process
-result_t exit(uint64_t);
+void exit(uint32_t);
 
 #if defined(__cplusplus)
 } /* extern "C" */

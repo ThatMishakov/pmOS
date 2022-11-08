@@ -1,6 +1,6 @@
 #pragma once
-#include <stdint.h>
 #include <stddef.h>
+#include "types.hh"
 
 // Page frame allocator
 

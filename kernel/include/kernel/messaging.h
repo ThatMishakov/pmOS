@@ -1,11 +1,11 @@
 #ifndef KERNEL_MESSAGING_H
 #define KERNEL_MESSAGING_H
-#include <stdint.h>
+#include "types.h"
 
 typedef struct {
-    uint64_t sender;
-    uint64_t channel;
-    uint64_t size;
+    u64 sender;
+    u64 channel;
+    u64 size;
 } Message_Descriptor;
 
 #define MSG_ARG_NOPOP 0x01

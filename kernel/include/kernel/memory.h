@@ -1,83 +1,82 @@
 #ifndef KENREL_MEMORY_H
 #define KENREL_MEMORY_H
-#include <stdint.h>
 #include "types.h"
 
 typedef struct {
-    uint64_t base_addr;
-    uint64_t size;
+    u64 base_addr;
+    u64 size;
 } memory_descr;
 
 typedef struct
 {
-    uint8_t present                   :1; 
-    uint8_t writeable                 :1; 
-    uint8_t user_access               :1;
-    uint8_t write_through             :1;
-    uint8_t cache_disable             :1;
-    uint8_t accessed                  :1;
-    uint8_t ignored                   :1;
-    uint8_t reserved                  :1; // Must be 0
-    uint8_t avl                       :3;  // Avaliable
-    uint8_t pat                       :1;
-    uint64_t page_ppn                   :40;
-    uint64_t avl2                       :7;
-    uint8_t  pk                         :4;
-    uint8_t execution_disabled       :1;
+    u8 present                   :1; 
+    u8 writeable                 :1; 
+    u8 user_access               :1;
+    u8 write_through             :1;
+    u8 cache_disable             :1;
+    u8 accessed                  :1;
+    u8 ignored                   :1;
+    u8 reserved                  :1; // Must be 0
+    u8 avl                       :3;  // Avaliable
+    u8 pat                       :1;
+    u64 page_ppn                   :40;
+    u64 avl2                       :7;
+    u8  pk                         :4;
+    u8 execution_disabled       :1;
 } PACKED PML4E;
 
 typedef struct
 {
-    uint8_t present                   :1;
-    uint8_t writeable                 :1;
-    uint8_t user_access               :1;
-    uint8_t write_through             :1;
-    uint8_t cache_disabled            :1;
-    uint8_t accessed                  :1;
-    uint8_t ignored                   :1;
-    uint8_t size                      :1;  // For 1 GB pages 
-    uint8_t avl                       :3;  // Avaliable
-    uint8_t ignored1                  :1;
-    uint64_t page_ppn                 :40;
-    uint64_t avl2                     :7;
-    uint8_t  pk                       :4;
-    uint8_t execution_disabled        :1;
+    u8 present                   :1;
+    u8 writeable                 :1;
+    u8 user_access               :1;
+    u8 write_through             :1;
+    u8 cache_disabled            :1;
+    u8 accessed                  :1;
+    u8 ignored                   :1;
+    u8 size                      :1;  // For 1 GB pages 
+    u8 avl                       :3;  // Avaliable
+    u8 ignored1                  :1;
+    u64 page_ppn                 :40;
+    u64 avl2                     :7;
+    u8  pk                       :4;
+    u8 execution_disabled        :1;
 } PACKED PDPTE;
 
 typedef struct
 {
-    uint8_t present                   :1;
-    uint8_t writeable                 :1;
-    uint8_t user_access               :1;
-    uint8_t write_through             :1;
-    uint8_t cache_disabled            :1;
-    uint8_t accessed                  :1;
-    uint8_t dirty                     :1;
-    uint8_t size                      :1; 
-    uint8_t avl                       :3;  // Avaliable
-    uint8_t ignored                   :1;
-    uint64_t page_ppn                 :40;
-    uint64_t avl2                     :7;
-    uint8_t  pk                       :4;
-    uint8_t execution_disabled       :1;
+    u8 present                   :1;
+    u8 writeable                 :1;
+    u8 user_access               :1;
+    u8 write_through             :1;
+    u8 cache_disabled            :1;
+    u8 accessed                  :1;
+    u8 dirty                     :1;
+    u8 size                      :1; 
+    u8 avl                       :3;  // Avaliable
+    u8 ignored                   :1;
+    u64 page_ppn                 :40;
+    u64 avl2                     :7;
+    u8  pk                       :4;
+    u8 execution_disabled       :1;
 } PACKED PDE;
 
 typedef struct
 {
-    uint8_t present                   :1;
-    uint8_t writeable                 :1;
-    uint8_t user_access               :1;
-    uint8_t write_through             :1;
-    uint8_t cache_disabled            :1;  // Indicates if it is lazilly allocated
-    uint8_t accessed                  :1;
-    uint8_t dirty                     :1;
-    uint8_t pat                       :1;
-    uint8_t global                    :1; 
-    uint8_t avl                       :3;  // Avaliable
-    uint64_t page_ppn                 :40;
-    uint64_t avl2                     :7;
-    uint8_t  pk                       :4;
-    uint8_t execution_disabled       :1;
+    u8 present                   :1;
+    u8 writeable                 :1;
+    u8 user_access               :1;
+    u8 write_through             :1;
+    u8 cache_disabled            :1;  // Indicates if it is lazilly allocated
+    u8 accessed                  :1;
+    u8 dirty                     :1;
+    u8 pat                       :1;
+    u8 global                    :1; 
+    u8 avl                       :3;  // Avaliable
+    u64 page_ppn                 :40;
+    u64 avl2                     :7;
+    u8  pk                       :4;
+    u8 execution_disabled       :1;
 } PACKED PTE;
 
 typedef struct {
@@ -98,7 +97,7 @@ typedef struct {
 
 #define PAGE_ADDR(page) (page.page_ppn << 12)
 
-inline PML4* pml4_of(UNUSED uint64_t addr)
+inline PML4* pml4_of(UNUSED u64 addr)
 {
     return ((PML4*)0xfffffffffffff000);
 }
@@ -108,53 +107,53 @@ inline PML4* pml4()
     return ((PML4*)0xfffffffffffff000);
 }
 
-inline PDPT* pdpt_of(uint64_t addr)
+inline PDPT* pdpt_of(u64 addr)
 {
-    addr = (uint64_t)addr >> (9+9+9);
-    addr &= ~(uint64_t)0xfff;
-    return ((PDPT*)((uint64_t)01777777777777770000000 | addr));
+    addr = (u64)addr >> (9+9+9);
+    addr &= ~(u64)0xfff;
+    return ((PDPT*)((u64)01777777777777770000000 | addr));
 }
 
-inline PD* pd_of(uint64_t addr)
+inline PD* pd_of(u64 addr)
 {
-    addr = (uint64_t)addr >> (9+9);
-    addr &= ~(uint64_t)0xfff;
-    return ((PD*)((uint64_t)01777777777770000000000 | addr));
+    addr = (u64)addr >> (9+9);
+    addr &= ~(u64)0xfff;
+    return ((PD*)((u64)01777777777770000000000 | addr));
 }
 
-inline PT* pt_of(uint64_t addr)
+inline PT* pt_of(u64 addr)
 {
-    addr = (uint64_t)addr >> (9);
-    addr &= ~(uint64_t)0xfff;
-    return ((PT*)((uint64_t)01777777770000000000000 | addr));
+    addr = (u64)addr >> (9);
+    addr &= ~(u64)0xfff;
+    return ((PT*)((u64)01777777770000000000000 | addr));
 }
 
-inline PML4E* get_pml4e(uint64_t addr)
+inline PML4E* get_pml4e(u64 addr)
 {
-    addr = (uint64_t)addr >> (9+9+9+9);
-    addr &= ~(uint64_t)07;
-    return ((PML4E*)((uint64_t)01777777777777777770000 | addr));
+    addr = (u64)addr >> (9+9+9+9);
+    addr &= ~(u64)07;
+    return ((PML4E*)((u64)01777777777777777770000 | addr));
 }
 
-inline PDPTE* get_pdpe(uint64_t addr)
+inline PDPTE* get_pdpe(u64 addr)
 {
-    addr = (uint64_t)addr >> (9+9+9);
-    addr &= ~(uint64_t)07;
-    return ((PDPTE*)((uint64_t)01777777777777770000000 | addr));
+    addr = (u64)addr >> (9+9+9);
+    addr &= ~(u64)07;
+    return ((PDPTE*)((u64)01777777777777770000000 | addr));
 }
 
-inline PDE* get_pde(uint64_t addr)
+inline PDE* get_pde(u64 addr)
 {
-    addr = (uint64_t)addr >> (9+9);
-    addr &= ~(uint64_t)0x07;
-    return ((PDE*)((uint64_t)01777777777770000000000 | addr));
+    addr = (u64)addr >> (9+9);
+    addr &= ~(u64)0x07;
+    return ((PDE*)((u64)01777777777770000000000 | addr));
 }
 
-inline PTE* get_pte(uint64_t addr)
+inline PTE* get_pte(u64 addr)
 {
-    addr = (uint64_t)addr >> (9);
-    addr &= ~(uint64_t)07;
-    return ((PTE*)((uint64_t)01777777770000000000000 | addr));
+    addr = (u64)addr >> (9);
+    addr &= ~(u64)07;
+    return ((PTE*)((u64)01777777770000000000000 | addr));
 }
 
 #endif

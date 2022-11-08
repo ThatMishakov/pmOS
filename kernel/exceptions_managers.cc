@@ -4,13 +4,13 @@
 #include "paging.hh"
 #include "syscalls.hh"
 
-void pagefault_manager(uint64_t err, Interrupt_Stackframe* int_s)
+void pagefault_manager(u64 err, Interrupt_Stackframe* int_s)
 {
     // Get the memory location which has caused the fault
-    uint64_t virtual_addr = getCR2();
+    u64 virtual_addr = getCR2();
 
     // Get the page
-    uint64_t page = virtual_addr&~0xfff;
+    u64 page = virtual_addr&~0xfff;
 
     // Get page type
     Page_Types type = page_type(page);

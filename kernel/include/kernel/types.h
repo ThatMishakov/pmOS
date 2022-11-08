@@ -1,6 +1,6 @@
 #ifndef KERNEL_TYPES_H
 #define KERNEL_TYPES_H
-#include <stdint.h>
+#include <stdint-gcc.h>
 
 #define u8 uint8_t 
 #define u16 uint16_t 
@@ -21,5 +21,6 @@
 #define ALIGNED(x) __attribute__((aligned(x)))
 #define UNUSED __attribute__((unused))
 #define GSRELATIVE __attribute__((address_space(256)))
+#define FALLTHROUGH __attribute__((fallthrough)) 
 
 #endif

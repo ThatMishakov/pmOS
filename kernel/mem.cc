@@ -1,5 +1,4 @@
 #include "mem.hh"
-#include <stdint.h>
 #include "utils.hh"
 #include "misc.hh"
 #include "paging.hh"
@@ -10,10 +9,10 @@ PFrameAllocator palloc;
 
 ReturnStr<void*> PFrameAllocator::alloc_page()
 {
-    uint64_t found_page = ERROR_OUT_OF_MEMORY;
-    uint64_t page = 0;
+    u64 found_page = ERROR_OUT_OF_MEMORY;
+    u64 page = 0;
     // Find free page
-    for (uint64_t i = smallest; i < bitmap_size; ++i) {
+    for (u64 i = smallest; i < bitmap_size; ++i) {
         if (bitmap[i] != 0)
             for (int j = 0; j < 64; ++j) {
                 if (bitmap_read_bit(i*64 + j, bitmap)) {
@@ -33,22 +32,22 @@ skip:
     return {found_page, (void*)page};
 }
 
-ReturnStr<uint64_t> PFrameAllocator::alloc_page_ppn()
+ReturnStr<u64> PFrameAllocator::alloc_page_ppn()
 {
     ReturnStr<void*> r = alloc_page();
-    return {r.result, (uint64_t)((int64_t)r.val >> 12)};
+    return {r.result, (u64)((int64_t)r.val >> 12)};
 }
 
-void PFrameAllocator::mark(uint64_t base, uint64_t size, bool usable, uint64_t * bitmap)
+void PFrameAllocator::mark(u64 base, u64 size, bool usable, u64 * bitmap)
 {
-    uint64_t base_page = base >> 12;
-    uint64_t size_page = size >> 12;
+    u64 base_page = base >> 12;
+    u64 size_page = size >> 12;
     if (size_page < 64) {
-        for (uint64_t i = 0; i < size_page; ++i) {
+        for (u64 i = 0; i < size_page; ++i) {
             bitmap_mark_bit(base_page + i, usable, bitmap);
         }
     } else { // TODO: INEFFICIENT!
-        uint64_t pattern = usable ? ~0x0 : 0x0;
+        u64 pattern = usable ? ~0x0 : 0x0;
         while (base_page & 0x3f && size_page > 0) {
             bitmap_mark_bit(base_page, usable, bitmap);
             ++base_page;
@@ -67,36 +66,36 @@ void PFrameAllocator::mark(uint64_t base, uint64_t size, bool usable, uint64_t *
     }
 }
 
-void PFrameAllocator::mark_single(uint64_t base, bool usable, uint64_t * bitmap)
+void PFrameAllocator::mark_single(u64 base, bool usable, u64 * bitmap)
 {
     bitmap_mark_bit(base >> 12, usable, bitmap);
 }
 
 void PFrameAllocator::free(void* page)
 {
-    uint64_t smallest_p = (uint64_t)page >> 12 >> 6;
+    u64 smallest_p = (u64)page >> 12 >> 6;
     if (smallest_p < smallest) smallest = smallest_p;
-    mark_single((uint64_t)page, true, bitmap);
+    mark_single((u64)page, true, bitmap);
 }
 
-void PFrameAllocator::bitmap_mark_bit(uint64_t pos, bool b, uint64_t * bitmap)
+void PFrameAllocator::bitmap_mark_bit(u64 pos, bool b, u64 * bitmap)
 {
-    uint64_t l = pos%64;
-    uint64_t i = pos/64;
+    u64 l = pos%64;
+    u64 i = pos/64;
 
-    if (b) bitmap[i] |= (((uint64_t)0x01) << l);
-    else bitmap[i] &= ~(((uint64_t)0x01) << l);
+    if (b) bitmap[i] |= (((u64)0x01) << l);
+    else bitmap[i] &= ~(((u64)0x01) << l);
 }
 
-bool PFrameAllocator::bitmap_read_bit(uint64_t pos, uint64_t * bitmap)
+bool PFrameAllocator::bitmap_read_bit(u64 pos, u64 * bitmap)
 {
-    uint64_t l = pos%64;
-    uint64_t i = pos/64;
+    u64 l = pos%64;
+    u64 i = pos/64;
 
-    return (bitmap[i] & ((uint64_t)0x01 << l)) != (uint64_t)0;
+    return (bitmap[i] & ((u64)0x01 << l)) != (u64)0;
 }
 
-void PFrameAllocator::init(uint64_t * bitmap, uint64_t size)
+void PFrameAllocator::init(u64 * bitmap, u64 size)
 {
     this->bitmap = bitmap;
     this->bitmap_size = size;
@@ -105,18 +104,18 @@ void PFrameAllocator::init(uint64_t * bitmap, uint64_t size)
 void PFrameAllocator::init_after_paging()
 {
     void* addr = unoccupied;
-    unoccupied = (void*)((uint64_t)unoccupied + this->bitmap_size_pages());
+    unoccupied = (void*)((u64)unoccupied + this->bitmap_size_pages());
 
     Page_Table_Argumments pta = {1, 0, 0, 1, 0};
-    for (uint64_t i = 0; i < bitmap_size_pages(); i += 4096) {
-        uint64_t phys = phys_addr_of((uint64_t)bitmap + i).val;
-        map(phys, (uint64_t)addr + i, pta);
+    for (u64 i = 0; i < bitmap_size_pages(); i += 4096) {
+        u64 phys = phys_addr_of((u64)bitmap + i).val;
+        map(phys, (u64)addr + i, pta);
     }
 
-    bitmap = (uint64_t*)addr;
+    bitmap = (u64*)addr;
 }
 
-uint64_t PFrameAllocator::bitmap_size_pages() const
+u64 PFrameAllocator::bitmap_size_pages() const
 {
-    return bitmap_size*sizeof(uint64_t);
+    return bitmap_size*sizeof(u64);
 }

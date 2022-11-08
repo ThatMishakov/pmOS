@@ -1,12 +1,12 @@
 #include "../include/system.h"
-#include <stdint.h>
+#include "../../kernel/include/kernel/types.h"
 
-syscall_r syscall_get_page(uint64_t addr)
+syscall_r syscall_get_page(u64 addr)
 {
     return syscall(SYSCALL_GET_PAGE, addr);
 }
 
-syscall_r map_into_range(uint64_t pid, uint64_t page_start, uint64_t to_addr, uint64_t nb_pages, uint64_t mask)
+syscall_r map_into_range(u64 pid, u64 page_start, u64 to_addr, u64 nb_pages, u64 mask)
 {
     return syscall(SYSCALL_MAP_INTO_RANGE, pid, page_start, to_addr, nb_pages, mask);
 }
@@ -16,37 +16,37 @@ syscall_r syscall_new_process(uint8_t ring)
     return syscall(SYSCALL_CREATE_PROCESS, ring);
 }
 
-syscall_r get_page_multi(uint64_t base, uint64_t nb_pages)
+syscall_r get_page_multi(u64 base, u64 nb_pages)
 {
     return syscall(SYSCALL_GET_PAGE_MULTI, base, nb_pages);
 }
 
-syscall_r start_process(uint64_t pid, uint64_t entry)
+syscall_r start_process(u64 pid, u64 entry)
 {
     return syscall(SYSCALL_START_PROCESS, pid, entry);
 }
 
-syscall_r map_phys(uint64_t virt, uint64_t phys, uint64_t size, uint64_t arg)
+syscall_r map_phys(u64 virt, u64 phys, u64 size, u64 arg)
 {
     return syscall(SYSCALL_MAP_PHYS, virt, phys, size, arg);
 }
 
-result_t send_message_task(uint64_t pid, uint64_t channel, size_t size, char* message)
+result_t send_message_task(u64 pid, u64 channel, size_t size, char* message)
 {
     return syscall(SYSCALL_SEND_MSG_TASK, pid, channel, size, message).result;
 }
 
-result_t send_message_port(uint64_t port, size_t size, char* message)
+result_t send_message_port(u64 port, size_t size, char* message)
 {
     return syscall(SYSCALL_SEND_MSG_PORT, port, size, message).result;
 }
 
-syscall_r block(uint64_t mask)
+syscall_r block(u64 mask)
 {
     return syscall(SYSCALL_BLOCK, mask);
 }
 
-result_t get_first_message(char* buff, uint64_t args)
+result_t get_first_message(char* buff, u64 args)
 {
     return syscall(SYSCALL_GET_MESSAGE, buff, args).result;
 }

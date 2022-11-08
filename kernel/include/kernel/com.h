@@ -1,10 +1,10 @@
 #ifndef KERNEL_COM_H
 #define KERNEL_COM_H
-#include <stdint.h>
+#include "types.h"
 
 typedef struct {
-    uint64_t * mem_bitmap;
-    uint64_t mem_bitmap_size;
+    u64 * mem_bitmap;
+    u64 mem_bitmap_size;
 
     void (*temp_printc)(char);
 } Kernel_Entry_Data;
