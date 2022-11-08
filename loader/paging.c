@@ -29,7 +29,7 @@ void get_page(uint64_t addr, Page_Table_Argumments arg)
         pdpte->present = 1;
         pdpte->writeable = 1;
         memclear(pd_of(addr), 4096);
-    } else if (pdpte->size) ;// TODO
+    } //else if (pdpte->size) ;// TODO
 
     PDE* pde = get_pde(addr);
     if (!pde->present) {
@@ -37,7 +37,7 @@ void get_page(uint64_t addr, Page_Table_Argumments arg)
         pde->present = 1;
         pde->writeable = 1;
         memclear(pt_of(addr), 4096);
-    } else if (pde->size) ; // TODO
+    } //else if (pde->size) ; // TODO
 
     PTE* pte = get_pte(addr);
     if (!pte->present) {
@@ -65,7 +65,7 @@ void map(uint64_t addr, uint64_t phys, Page_Table_Argumments arg)
         pdpte->present = 1;
         pdpte->writeable = 1;
         memclear(pd_of(addr), 4096);
-    } else if (pdpte->size) ;// TODO
+    } //else if (pdpte->size) ;// TODO
 
     PDE* pde = get_pde(addr);
     if (!pde->present) {
@@ -73,7 +73,7 @@ void map(uint64_t addr, uint64_t phys, Page_Table_Argumments arg)
         pde->present = 1;
         pde->writeable = 1;
         memclear(pt_of(addr), 4096);
-    } else if (pde->size) ; // TODO
+    } //else if (pde->size) ; // TODO
 
     PTE* pte = get_pte(addr);
     if (!pte->present) {

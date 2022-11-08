@@ -36,13 +36,13 @@ void int_to_hex(char * buffer, uint64_t n, char upper)
 void print_hex(uint64_t i)
 {
     char buffer[24];
-    write_bochs("0x");
+    write_bochs(const_cast<char*>("0x"));
     int_to_hex(buffer, i, 1);
     write_bochs(buffer);
 }
 
 extern "C" int main() {
-    write_bochs("Hello from terminald!\n");
+    write_bochs(const_cast<char*>("Hello from terminald!\n"));
 
     while (1)
     {

@@ -4,7 +4,7 @@
 
 #define ALLOC_MIN_PAGES 8
 
-extern void _heap_start;
+extern char _heap_start;
 
 uint64_t heap_size = 0;
 
