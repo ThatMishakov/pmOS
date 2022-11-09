@@ -1,14 +1,14 @@
 #include "sched.hh"
-#include "asm.hh"
-#include "paging.hh"
-#include "types.hh"
+#include <asm.hh>
+#include <memory/paging.hh>
+#include <types.hh>
 #include <kernel/errors.h>
-#include "linker.hh"
+#include <linker.hh>
 #include "idle.hh"
-#include "asm.hh"
+#include <asm.hh>
 #include <kernel/com.h>
 #include <kernel/block.h>
-#include "misc.hh"
+#include <misc.hh>
 
 TaskDescriptor* idle_task;
 

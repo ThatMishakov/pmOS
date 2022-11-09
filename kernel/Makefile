@@ -9,15 +9,17 @@ CPP = x86_64-elf-gcc
 CXX = x86_64-elf-g++
 LD = x86_64-elf-g++
 
-INCLUDEDIR = include
+ROOTDIR = $(realpath .)
+INCLUDEDIR = include .
+INCPARAM = $(foreach d, $(INCLUDEDIR), -I$(ROOTDIR)/$d)
 
 # User controllable CFLAGS.
 USERCFLAGS = -Wall -Wextra -O3 -pipe
 
-CPPFLAGS = $(INTERNALCFLAGS) -I$(INCLUDEDIR) -mcmodel=large $(USERCFLAGS) -MMD -MP
-CXXFLAGS = -std=c++20
+CPPFLAGS = $(INTERNALCFLAGS) -mcmodel=large $(USERCFLAGS) -MMD -MP $(INCPARAM)
+CXXFLAGS = -std=c++20 $(INCPARAM)
 #CPPFLAGS = $(CFLAGS)
-ASMFLAGS = -I$(INCLUDEDIR)
+ASMFLAGS = $(INCPARAM)
 LDFLAGS = $(INTERNALLDFLAGS) -mcmodel=large
 
 # Internal link flags that should not be changed by the user.
@@ -43,8 +45,8 @@ INTERNALCFLAGS  :=       \
 CCFILES := $(shell find ./ -type f -name '*.cc')
 CFILES := $(shell find ./ -type f -name '*.c')
 ASMFILES := $(shell find ./ -type f -name '*.S')
-#OBJ    := $(CCFILES:.cc=.o) $(ASMFILES:.S=.o) $(CFILES:.c=.o) 
-OBJ := ./malloc.o ./exceptions_managers.o ./free_page_alloc.o ./gdt.o ./idle.o ./interrupts.o ./main.o ./mem.o ./messaging.o ./misc.o ./paging.o ./palloc.o ./sched.o ./syscalls.o ./utils.o ./loadGDT.o ./start.o ./interrupts_asm.o ./asm.o
+OBJ    := $(CCFILES:.cc=.o) $(ASMFILES:.S=.o) $(CFILES:.c=.o) 
+#OBJ := ./malloc.o ./exceptions_managers.o ./free_page_alloc.o ./gdt.o ./idle.o ./interrupts.o ./main.o ./mem.o ./messaging.o ./misc.o ./paging.o ./palloc.o ./sched.o ./syscalls.o ./utils.o ./loadGDT.o ./start.o ./interrupts_asm.o ./asm.o
 DEP    := $(OBJ:.o=.d)
 
 $(KERNEL): $(OBJ) linker.ld

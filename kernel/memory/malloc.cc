@@ -1,7 +1,7 @@
 #include "malloc.hh"
-#include "utils.hh"
+#include <utils.hh>
 #include "palloc.hh"
-#include "asm.hh"
+#include <asm.hh>
 
 malloc_list head = {nullptr, 0};
 

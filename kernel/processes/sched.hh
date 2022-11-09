@@ -1,10 +1,10 @@
 #pragma once
-#include "interrupts.hh"
-#include "lib/vector.hh"
-#include "messaging.hh"
-#include "lib/splay_tree_map.hh"
-#include "types.hh"
-#include "lib/stack.hh"
+#include <interrupts/interrupts.hh>
+#include <lib/vector.hh>
+#include <messaging/messaging.hh>
+#include <lib/splay_tree_map.hh>
+#include <types.hh>
+#include <lib/stack.hh>
 
 using PID = u64;
 

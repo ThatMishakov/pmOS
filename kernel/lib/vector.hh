@@ -1,6 +1,6 @@
 #pragma once
 #include <stddef.h>
-#include "../malloc.hh"
+#include "../memory/malloc.hh"
 
 namespace klib {
 

@@ -1,5 +1,5 @@
 #include "idle.hh"
-#include "utils.hh"
+#include <utils.hh>
 
 void idle()
 {

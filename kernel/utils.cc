@@ -4,8 +4,8 @@
 #include "asm.hh"
 #include "start.hh"
 #include <kernel/errors.h>
-#include "paging.hh"
-#include "messaging.hh"
+#include <memory/paging.hh>
+#include <messaging/messaging.hh>
 
 void int_to_string(long int n, u8 base, char* str, int& length)
 {

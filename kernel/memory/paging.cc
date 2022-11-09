@@ -1,13 +1,12 @@
 #include "paging.hh"
 #include <kernel/memory.h>
 #include "mem.hh"
-#include "asm.hh"
+#include <asm.hh>
 #include <kernel/errors.h>
-#include "utils.hh"
-#include "mem.hh"
+#include <utils.hh>
 #include "free_page_alloc.hh"
-#include "utils.hh"
-#include "types.hh"
+#include <utils.hh>
+#include <types.hh>
 #include <kernel/com.h>
 
 

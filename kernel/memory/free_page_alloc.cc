@@ -1,10 +1,10 @@
 #include "free_page_alloc.hh"
-#include "lib/list.hh"
-#include "misc.hh"
+#include <lib/list.hh>
+#include <misc.hh>
 #include "types.hh"
 #include <kernel/errors.h>
-#include "utils.hh"
-#include "../malloc.hh"
+#include <utils.hh>
+#include "malloc.hh"
 
 klib::list<u64>* free_pages_list = nullptr;
 

@@ -1,8 +1,8 @@
 #include "exceptions_managers.hh"
-#include "utils.hh"
-#include "asm.hh"
-#include "paging.hh"
-#include "syscalls.hh"
+#include <utils.hh>
+#include <asm.hh>
+#include <memory/paging.hh>
+#include <processes/syscalls.hh>
 
 void pagefault_manager(u64 err, Interrupt_Stackframe* int_s)
 {

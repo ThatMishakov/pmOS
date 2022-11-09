@@ -1,15 +1,14 @@
 #include <kernel/com.h>
-#include "gdt.hh"
+#include <interrupts/gdt.hh>
 #include "utils.hh"
 #include "misc.hh"
-#include "mem.hh"
-#include "interrupts.hh"
-#include "malloc.hh"
-#include "sched.hh"
-#include "messaging.hh"
-#include "free_page_alloc.hh"
+#include <memory/mem.hh>
+#include <interrupts/interrupts.hh>
+#include <memory/malloc.hh>
+#include <processes/sched.hh>
+#include <messaging/messaging.hh>
+#include <memory/free_page_alloc.hh>
 #include <kernel/errors.h>
-#include "messaging.hh"
 
 Kernel_Entry_Data* kdata;
 

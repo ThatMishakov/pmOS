@@ -1,8 +1,8 @@
 #pragma once
 #include <kernel/memory.h>
-#include "types.hh"
-#include "sched.hh"
-#include "asm.hh"
+#include <types.hh>
+#include <processes/sched.hh>
+#include <asm.hh>
 
 #define PAGE_NORMAL  0
 #define PAGE_SHARED  1

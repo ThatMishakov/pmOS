@@ -1,6 +1,6 @@
 #include "mem.hh"
-#include "utils.hh"
-#include "misc.hh"
+#include <utils.hh>
+#include <misc.hh>
 #include "paging.hh"
 #include <kernel/memory.h>
 #include <kernel/errors.h>

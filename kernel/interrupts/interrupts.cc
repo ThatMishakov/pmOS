@@ -1,13 +1,13 @@
 #include "interrupts.hh"
-#include "utils.hh"
+#include <utils.hh>
 #include "gdt.hh"
-#include "palloc.hh"
-#include "malloc.hh"
+#include <memory/palloc.hh>
+#include <memory/malloc.hh>
 #include "exceptions_managers.hh"
 #include "asm.hh"
-#include "sched.hh"
-#include "syscalls.hh"
-#include "misc.hh"
+#include <processes/sched.hh>
+#include <processes/syscalls.hh>
+#include <misc.hh>
 
 void init_IDT()
 {

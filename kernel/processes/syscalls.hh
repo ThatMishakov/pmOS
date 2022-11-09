@@ -1,8 +1,8 @@
 #pragma once
-#include "sched.hh"
+#include <processes/sched.hh>
 #include <kernel/errors.h>
 #include <kernel/syscalls.h>
-#include "types.hh"
+#include <types.hh>
 
 
 //#pragma GCC diagnostic push

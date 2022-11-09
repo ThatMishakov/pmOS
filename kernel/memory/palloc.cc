@@ -1,10 +1,10 @@
 #include "palloc.hh"
 #include "asm.hh"
-#include "linker.hh"
+#include <linker.hh>
 #include <kernel/memory.h>
 #include "paging.hh"
-#include "types.hh"
-#include "utils.hh"
+#include <types.hh>
+#include <utils.hh>
 
 void* palloc_c(size_t number)
 {

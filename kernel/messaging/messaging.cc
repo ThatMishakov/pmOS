@@ -1,11 +1,11 @@
 #include "messaging.hh"
-#include "types.hh"
-#include "sched.hh"
+#include <types.hh>
+#include <processes/sched.hh>
 #include <stddef.h>
 #include <kernel/errors.h>
-#include "lib/utility.hh"
+#include <lib/utility.hh>
 #include <kernel/block.h>
-#include "utils.hh"
+#include <utils.hh>
 
 Ports_storage* kernel_ports;
 Spinlock messaging_ports;

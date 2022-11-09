@@ -19,7 +19,7 @@ Args_Ret prepare_args(u64 argtype, u64 ptr)
         p.argc = args_list->size;
         p.argv = (char**)malloc(sizeof(char*) * args_list->size);
 
-        args_list_node* n = args_list->p;
+        args_list_node* n = (args_list_node*)((u64)(args_list->p) + ptr);
         for (u64 i = 0; i < args_list->size; ++i) {
             p.argv[i] = malloc(n->size + 1);
             p.argv[i][n->size] = '\0';
@@ -27,7 +27,7 @@ Args_Ret prepare_args(u64 argtype, u64 ptr)
             const char* source = ((const char*)n) + sizeof(args_list_node);
             p.argv[i] = strncpy(p.argv[i], source, n->size);
 
-            n = n->next;
+            n = (args_list_node*)((u64)n->next + ptr);
         }
 
         if (args_list->flags & ARGS_LIST_FLAG_ASTEMPPAGE) {
