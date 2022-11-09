@@ -13,10 +13,10 @@ extern "C" ReturnStr<u64> syscall_handler(u64 arg1, u64 arg2, u64 arg3, u64 arg4
 //#pragma GCC diagnostic pop
 
 // Allocates the page at virtual_addr
-u64 get_page(u64 virtual_addr);
+kresult_t get_page(u64 virtual_addr);
 
 // Releases the page at virtual_addr
-u64 release_page(u64 virtual_addr);
+kresult_t release_page(u64 virtual_addr);
 
 // Gets the pid of the current process
 ReturnStr<u64> getpid();
@@ -35,6 +35,9 @@ ReturnStr<u64> syscall_block(u64 mask);
 
 // Allocates the nb_page at virtual_addr
 kresult_t syscall_get_page_multi(u64 virtual_addr, u64 nb_pages);
+
+// Releases the nb_page at virtual_addr
+kresult_t syscall_release_page_multi(u64 virtual_addr, u64 nb_pages);
 
 // Starts a process with PID pid at starting point start
 kresult_t syscall_start_process(u64 pid, u64 start, u64 arg1, u64 arg2, u64 arg3);

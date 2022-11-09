@@ -1,9 +1,13 @@
 CC = x86_64-elf-gcc
 CPP = x86_64-elf-g++
 
-LIBEXEC = libpm.a
 
-CPPFLAGS = -MMD -MP
+ROOTDIR = $(realpath .)/..
+LIBEXEC = libpm.a
+INCLUDE = $(ROOTDIR)/kernel/include $(ROOTDIR)/lib/include
+INCPARAM = $(foreach d, $(INCLUDE), -I$d)
+
+CPPFLAGS = -MMD -MP $(INCPARAM)
 LDFLAGS = 
 
 CFILES := $(shell find ./ -type f -name '*.c')

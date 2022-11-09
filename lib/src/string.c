@@ -7,3 +7,21 @@ size_t strlen(char* str)
 
     return size;
 }
+
+char * strncpy ( char * destination, const char * source, size_t num )
+{
+    char* p = destination;
+    
+    while (num > 0 && *p != '\0') {
+        *p = *source;
+        ++p; ++source;
+        --num;
+    }
+
+    while (num-- > 0) {
+        *p = '\0';
+        ++p;
+    }
+
+    return destination;
+}

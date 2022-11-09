@@ -21,6 +21,11 @@ syscall_r get_page_multi(u64 base, u64 nb_pages)
     return syscall(SYSCALL_GET_PAGE_MULTI, base, nb_pages);
 }
 
+result_t syscall_release_page_multi(u64 base, u64 nb_pages)
+{
+    return syscall(SYSCALL_RELEASE_PAGE_MULTI, base, nb_pages).result;
+}
+
 syscall_r start_process(u64 pid, u64 entry)
 {
     return syscall(SYSCALL_START_PROCESS, pid, entry);

@@ -98,7 +98,7 @@ void main()
                     ELF_64bit* e = (ELF_64bit*)((uint64_t)mod->mod_start - phys_start + virt_addr);
                     uint64_t pid = load_elf(e, 3);
                     syscall(SYSCALL_SET_PORT, pid, 1, terminal_pid, 1);
-                    start_process(pid, e->program_entry, 123, 234, 456);
+                    start_process(pid, e->program_entry, 0, 0, 0);
                 }
             }
         }

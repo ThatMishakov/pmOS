@@ -41,7 +41,7 @@ void print_hex(uint64_t i)
     write_bochs(buffer);
 }
 
-extern "C" int main() {
+extern "C" int main(int argc, char** argv) {
     write_bochs(const_cast<char*>("Hello from terminald!\n"));
 
     while (1)

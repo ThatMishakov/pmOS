@@ -45,6 +45,9 @@ extern "C" ReturnStr<u64> syscall_handler(u64 call_n, u64 arg1, u64 arg2, u64 ar
     case SYSCALL_GET_PAGE_MULTI:
         r.result = syscall_get_page_multi(arg1, arg2);
         break;
+    case SYSCALL_RELEASE_PAGE_MULTI:
+        r.result = syscall_release_page_multi(arg1, arg2);
+        break;
     case SYSCALL_START_PROCESS:
         r.result = syscall_start_process(arg1, arg2, arg3, arg4, arg5);
         break;
@@ -214,6 +217,31 @@ kresult_t syscall_get_page_multi(u64 virtual_addr, u64 nb_pages)
 
     // Return the result (success or failure)
     return result;
+}
+
+kresult_t syscall_release_page_multi(u64 virtual_addr, u64 nb_pages)
+{
+    // Check allignment to 4096K (page size)
+    if (virtual_addr & 0xfff) return ERROR_UNALLIGNED;
+
+    // Check that program is not hijacking kernel space
+    if (virtual_addr >= KERNEL_ADDR_SPACE or (virtual_addr + nb_pages*KB(4)) > KERNEL_ADDR_SPACE or (virtual_addr + nb_pages*KB(4) < virtual_addr)) return ERROR_OUT_OF_RANGE;
+
+    // Check pages
+    for (u64 i = 0; i < nb_pages; ++i) {
+        Page_Types p = page_type(virtual_addr);
+        if (p == Page_Types::UNALLOCATED) return ERROR_PAGE_NOT_ALLOCATED;
+        if (p != NORMAL) return ERROR_HUGE_PAGE;
+    }
+
+    kresult_t r = SUCCESS;
+
+    // Everything ok, release pages
+    for (u64 i = 0; i < nb_pages and r == SUCCESS; ++i)
+        r = release_page_s(virtual_addr + i*KB(4));
+
+    // Return the result (success or failure)
+    return r;
 }
 
 kresult_t syscall_start_process(u64 pid, u64 start, u64 arg1, u64 arg2, u64 arg3)
