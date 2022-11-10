@@ -10,13 +10,13 @@
 #define PAGE_DELAYED 3
 #define PAGE_COW     4
 
-typedef struct {
-    u8 writeable          : 1;
-    u8 user_access        : 1;
-    u8 global             : 1;
-    u8 execution_disabled : 1;
-    u8 extra              : 3; /* Reserved Shared*/
-} Page_Table_Argumments;
+struct Page_Table_Argumments {
+    u8 writeable          : 1 = 0;
+    u8 user_access        : 1 = 0;
+    u8 global             : 1 = 0;
+    u8 execution_disabled : 1 = 0;
+    u8 extra              : 3 = 0;
+};
 
 // Tries to assign a page. Returns result
 u64 get_page(u64 virtual_addr, Page_Table_Argumments arg);
@@ -32,7 +32,7 @@ u64 invalidade(u64 virtual_addr);
 ReturnStr<u64> get_new_pml4();
 
 // Release the page
-kresult_t release_page_s(u64 virtual_address);
+kresult_t release_page_s(u64 virtual_address, u64 pid);
 
 // Preallocates an empty page (to be sorted out later by the pagefault manager)
 kresult_t alloc_page_lazy(u64 virtual_addr, Page_Table_Argumments arg);
@@ -41,6 +41,9 @@ kresult_t get_lazy_page(u64 virtual_addr);
 
 // Transfers pages from current process to process t
 kresult_t transfer_pages(TaskDescriptor* t, u64 page_start, u64 to_addr, u64 nb_pages, Page_Table_Argumments pta);
+
+// Sharess pages from current process with process t
+kresult_t share_pages(TaskDescriptor* t, u64 page_start, u64 to_addr, u64 nb_pages, Page_Table_Argumments pta);
 
 // Prepares a page table for the address
 kresult_t prepare_pt(u64 addr);
@@ -72,16 +75,22 @@ Page_Types page_type(u64 virtual_addr);
 void invalidade_noerr(u64 virtual_addr);
 
 // Frees a page
-void free_page(u64 page);
+void free_page(u64 page, u64 pid);
 
 // Frees a PML4 of a dead process
-void free_pml4(u64 pml4);
+void free_pml4(u64 pml4, u64 pid);
 
 // Releases cr3
 extern "C" void release_cr3(u64 cr3);
 
 // Frees user pages
-void free_user_pages(u64 page_table);
+void free_user_pages(u64 page_table, u64 pid);
 
 // Prepares a user page for kernel reading or writing
 kresult_t prepare_user_page(u64 page);
+
+// Makes the page shared and returns its PTE
+ReturnStr<PTE> share_page(u64 virtual_addr, u64 pid);
+
+// Unshares a page and makes PID its only owner
+kresult_t unshare_page(u64 virtual_addr, u64 pid);

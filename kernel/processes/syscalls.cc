@@ -9,6 +9,7 @@
 #include <kernel/messaging.h>
 #include <kernel/block.h>
 #include <kernel/attributes.h>
+#include <kernel/flags.h>
 
 extern "C" ReturnStr<u64> syscall_handler(u64 call_n, u64 arg1, u64 arg2, u64 arg3, u64 arg4, u64 arg5)
 {
@@ -81,6 +82,9 @@ extern "C" ReturnStr<u64> syscall_handler(u64 call_n, u64 arg1, u64 arg2, u64 ar
     case SYSCALL_INIT_STACK:
         r = syscall_init_stack(arg1, arg2);
         break;
+    case SYSCALL_SHARE_WITH_RANGE:
+        r.result = syscall_share_with_range(arg1, arg2, arg3, arg4, arg5);
+        break;
     default:
         // Not supported
         r.result = ERROR_NOT_SUPPORTED;
@@ -132,7 +136,7 @@ u64 release_page(u64 virtual_addr)
     if (p != NORMAL) return ERROR_HUGE_PAGE;
 
     // Everything ok, release the page
-    return release_page_s(virtual_addr);
+    return release_page_s(virtual_addr, get_cpu_struct()->current_task->pid);
 }
 
 ReturnStr<u64> getpid()
@@ -166,8 +170,8 @@ kresult_t syscall_map_into_range(u64 arg1, u64 arg2, u64 arg3, u64 arg4, u64 arg
     Page_Table_Argumments pta = {};
     pta.user_access = 1;
     pta.global = 0;
-    pta.writeable = arg5& 0x01;
-    pta.execution_disabled = arg5&0x02;
+    pta.writeable = arg5& FLAG_RW;
+    pta.execution_disabled = arg5&FLAG_NOEXECUTE;
 
     // TODO: Check permissions
 
@@ -188,6 +192,37 @@ kresult_t syscall_map_into_range(u64 arg1, u64 arg2, u64 arg3, u64 arg4, u64 arg
     TaskDescriptor* t = get_task(pid);
 
     kresult_t r = transfer_pages(t, page_start, to_addr, nb_pages, pta);
+
+    return r;
+}
+
+kresult_t syscall_share_with_range(u64 pid, u64 page_start, u64 to_addr, u64 nb_pages, u64 args)
+{
+    // TODO: Check permissions
+
+    // Check if legal address
+    if (page_start >= KERNEL_ADDR_SPACE or (page_start + nb_pages*KB(4)) > KERNEL_ADDR_SPACE or (page_start + nb_pages*KB(4) < page_start)) return ERROR_OUT_OF_RANGE;
+
+    // Check allignment
+    if (page_start & 0xfff) return ERROR_UNALLIGNED;
+    if (to_addr & 0xfff) return ERROR_UNALLIGNED;
+
+    // Check if process exists
+    if (not exists_process(pid)) return ERROR_NO_SUCH_PROCESS;
+
+    // Check process status
+    if (not is_uninited(pid)) return ERROR_PROCESS_INITED;
+
+    // Get pid task_struct
+    TaskDescriptor* t = get_task(pid);
+
+    Page_Table_Argumments pta = {};
+    pta.user_access = 1;
+    pta.global = 0;
+    pta.writeable = args& FLAG_RW;
+    pta.execution_disabled = args&FLAG_NOEXECUTE;
+
+    kresult_t r = share_pages(t, page_start, to_addr, nb_pages, pta);
 
     return r;
 }
@@ -236,9 +271,11 @@ kresult_t syscall_release_page_multi(u64 virtual_addr, u64 nb_pages)
 
     kresult_t r = SUCCESS;
 
+    // TODO: Leaves user process in unknown state afterwards
+
     // Everything ok, release pages
     for (u64 i = 0; i < nb_pages and r == SUCCESS; ++i)
-        r = release_page_s(virtual_addr + i*KB(4));
+        r = release_page_s(virtual_addr + i*KB(4), get_cpu_struct()->current_task->pid);
 
     // Return the result (success or failure)
     return r;

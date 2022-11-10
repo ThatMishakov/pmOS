@@ -264,7 +264,7 @@ void kill(TaskDescriptor* p)
 
     // Release user pages
     u64 ptable = p->page_table;
-    free_user_pages(ptable);
+    free_user_pages(ptable, p->pid);
 
     // Task switch if it's a current process
     CPU_Info* cpu_str = get_cpu_struct();

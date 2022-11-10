@@ -160,9 +160,10 @@ void print_pt(u64 addr)
     t_print("Paging indexes %h\'%h\'%h\'%h\'%h\n", upper, pml4e&0777, pdpe&0777, pd_e&0777, ptable_entry&0777);
 }
 
-u64 release_page_s(u64 virtual_address)
+kresult_t release_page_s(u64 virtual_address, u64 pid)
 {
     PTE& pte = *get_pte(virtual_address);
+    kresult_t p;
 
     switch (pte.avl) {
     case PAGE_NORMAL:
@@ -175,7 +176,10 @@ u64 release_page_s(u64 virtual_address)
         break;
     case PAGE_SHARED:
     case PAGE_COW:
-        return release_shared(pte.page_ppn << 12, get_cpu_struct()->current_task->pid);
+        p = release_shared(pte.page_ppn << 12, pid);
+        if (p == SUCCESS)
+            invalidade(virtual_address);
+        return p;
         break;
     default:
         return ERROR_NOT_IMPLEMENTED;
@@ -406,6 +410,61 @@ kresult_t transfer_pages(TaskDescriptor* t, u64 page_start, u64 to_address, u64 
     return r;
 }
 
+kresult_t share_pages(TaskDescriptor* t, u64 page_start, u64 to_addr, u64 nb_pages, Page_Table_Argumments pta)
+{
+    u64 current_pid = get_cpu_struct()->current_task->pid;
+    klib::list<PTE> l;
+
+    kresult_t p = SUCCESS;
+    // Share pages
+    for (u64 i = 0; i < nb_pages and p == SUCCESS; ++i) {
+        ReturnStr<PTE> r = share_page(page_start + i*KB(4), current_pid);
+        p = r.result;
+        if (p == SUCCESS) l.push_back(r.val);
+    }
+
+    // Skip TLB flushes on error
+    if (p != SUCCESS) goto fail;
+
+    {
+    // Save %cr3
+    u64 cr3 = getCR3();
+
+    // Switch into new process' memory
+    setCR3(t->page_table);
+
+    pta.extra = PAGE_SHARED;
+
+    auto it = l.begin();
+    u64 i = 0;
+    for (; i < nb_pages and p == SUCCESS; ++i, ++it) {
+        PTE pte = *it;
+        pte.execution_disabled = pta.execution_disabled;
+        pte.writeable = pta.writeable;
+        p = register_shared(pte.page_ppn << 12, t->pid);
+        if (p == SUCCESS)
+            p = set_pte(to_addr + i*KB(4), *it, pta);
+    }
+
+    // Return everything back on error
+    if (p != SUCCESS)
+        for (u64 k = 0; k < i; ++k)
+            release_page_s(to_addr + i*KB(4), t->pid);
+            
+
+    // Return old %cr3
+    setCR3(cr3);
+    }
+fail:
+    if (p != SUCCESS) {
+        u64 size = l.size();
+        for (u64 k = 0; k < size; ++k)
+            unshare_page(page_start + k*KB(4), current_pid);
+    }
+
+    return p;
+}
+
 kresult_t set_pte(u64 virtual_addr, PTE pte_n, Page_Table_Argumments arg)
 {
     PML4E& pml4e = *get_pml4e(virtual_addr);
@@ -478,13 +537,13 @@ extern "C" void release_cr3(u64 cr3)
     palloc.free((void*)cr3);
 }
 
-void free_pt(u64 page_start)
+void free_pt(u64 page_start, u64 pid)
 {
     for (u64 i = 0; i < 512; ++i) {
         u64 addr = page_start + (i << 12);
         PTE* p = get_pte(addr);
         if (p->present) {
-            kresult_t result = release_page_s(addr);
+            kresult_t result = release_page_s(addr, pid);
             if (result != SUCCESS) {
                 t_print("Error %i freeing page %h type %h!\n", result, addr, p->avl);
                 print_pt(addr);
@@ -494,7 +553,7 @@ void free_pt(u64 page_start)
     }
 }
 
-void free_pd(u64 pd_start)
+void free_pd(u64 pd_start, u64 pid)
 {
     for (u64 i = 0; i < 512; ++i) {
         u64 addr = pd_start + (i << (12 + 9));
@@ -506,7 +565,7 @@ void free_pd(u64 pd_start)
             switch (p->avl)
             {
             case NORMAL:
-                free_pt(addr);
+                free_pt(addr, pid);
                 break;
             default:
                 t_print("Error freeing page: Unknown page type!\n");
@@ -517,19 +576,19 @@ void free_pd(u64 pd_start)
     }
 }
 
-void free_pdpt(u64 pdp_start)
+void free_pdpt(u64 pdp_start, u64 pid)
 {
     for (u64 i = 0; i < 512; ++i) {
         u64 addr = pdp_start + (i << (12 + 9 + 9));
         PDPTE* p = get_pdpe(addr);
         if (p->present) {
-            free_pd(addr);
+            free_pd(addr, pid);
             palloc.free((void*)(p->page_ppn << 12));
         }
     }
 }
 
-void free_user_pages(u64 page_table)
+void free_user_pages(u64 page_table, u64 pid)
 {
     u64 old_cr3 = getCR3();
 
@@ -539,7 +598,7 @@ void free_user_pages(u64 page_table)
     for (u64 i = 0; i < KERNEL_ADDR_SPACE; i += (0x01ULL << (12 + 9 + 9 + 9))) {
         PML4E* p = get_pml4e(i);
         if (p->present) {
-            free_pdpt(i);
+            free_pdpt(i, pid);
             palloc.free((void*)(p->page_ppn << 12));
         }
     }

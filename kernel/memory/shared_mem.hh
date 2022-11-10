@@ -20,3 +20,6 @@ kresult_t release_shared(u64 phys_addr, u64 owner_pid);
 
 // Referebces a shared page
 kresult_t ref_shared(u64 phys_addr, u64 owner);
+
+// Registers a page as shared for owner
+kresult_t register_shared(u64 phys_addr, u64 owner);

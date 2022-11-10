@@ -71,3 +71,6 @@ kresult_t syscall_set_attribute(u64 pid, u64 attribute, u64 value);
 
 // Inits task's stack
 ReturnStr<u64> syscall_init_stack(u64 pid, u64 esp);
+
+// Shares *nb_pages* pages starting with alligned *page_start* to process *pid* at addr *to_addr* with *flags* found in kernel/flags.h
+kresult_t syscall_share_with_range(u64 pid, u64 page_start, u64 to_addr, u64 nb_pages, u64 flags);

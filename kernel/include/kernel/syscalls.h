@@ -12,17 +12,18 @@
 #define SYSCALL_CREATE_PROCESS        0x07
 #define SYSCALL_MAP_INTO              0x08
 #define SYSCALL_MAP_INTO_RANGE        0x09
-#define SYSCALL_START_PROCESS         0x0a
-#define SYSCALL_EXIT                  0x0b
-#define SYSCALL_MAP_PHYS              0x0c
-#define SYSCALL_GET_MSG_INFO          0x0d
-#define SYSCALL_GET_MESSAGE           0x0e
-#define SYSCALL_SEND_MSG_TASK         0x0f
-#define SYSCALL_SEND_MSG_PORT         0x10
-#define SYSCALL_SET_PORT              0x11
-#define SYSCALL_SET_PORT_KERNEL       0x12
-#define SYSCALL_SET_ATTR              0x13
-#define SYSCALL_INIT_STACK            0x14
+#define SYSCALL_SHARE_WITH_RANGE      0x0a
+#define SYSCALL_START_PROCESS         0x0b
+#define SYSCALL_EXIT                  0x0c
+#define SYSCALL_MAP_PHYS              0x0d
+#define SYSCALL_GET_MSG_INFO          0x0e
+#define SYSCALL_GET_MESSAGE           0x0f
+#define SYSCALL_SEND_MSG_TASK         0x10
+#define SYSCALL_SEND_MSG_PORT         0x11
+#define SYSCALL_SET_PORT              0x12
+#define SYSCALL_SET_PORT_KERNEL       0x13
+#define SYSCALL_SET_ATTR              0x14
+#define SYSCALL_INIT_STACK            0x15
 
 
 #endif
