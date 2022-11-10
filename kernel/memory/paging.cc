@@ -120,9 +120,33 @@ Page_Types page_type(u64 virtual_addr)
 
     // Check if page is present
     PTE& pte = pt_of(virtual_addr)->entries[ptable_entry];
-    if (pte.present) return Page_Types::NORMAL;
-    else if (pte.avl == PAGE_DELAYED) return Page_Types::LAZY_ALLOC;
-    return Page_Types::UNALLOCATED;
+    if (pte.present) {
+        switch (pte.avl) {
+        case PAGE_NORMAL:
+            return Page_Types::NORMAL;
+            break;
+        case PAGE_COW:
+            return Page_Types::COW;
+        case PAGE_SHARED:
+            return Page_Types::SHARED;
+            break;
+        default:
+            return Page_Types::UNKNOWN;
+        }
+    } else switch (pte.avl)
+    {
+    case PAGE_DELAYED:
+        return Page_Types::LAZY_ALLOC;
+        break;
+    case PAGE_NORMAL:
+        return Page_Types::UNALLOCATED;
+        break;    
+    default:
+        return Page_Types::UNKNOWN;
+        break;
+    }
+
+    return Page_Types::UNKNOWN;
 }
 
 void print_pt(u64 addr)

@@ -61,7 +61,8 @@ enum Page_Types {
     UNALLOCATED = 3,
     LAZY_ALLOC = 4,
     SHARED = 5,
-    UNKNOWN = 6
+    COW = 6,
+    UNKNOWN = 7
 };
 
 // Returns page type
