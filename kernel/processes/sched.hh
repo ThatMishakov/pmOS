@@ -114,7 +114,7 @@ void init_scheduling();
 PID assign_pid();
 
 using sched_map = klib::splay_tree_map<PID, TaskDescriptor*>;
-extern sched_map* s_map;
+extern sched_map s_map;
 
 // Creates a process structure and returns its pid
 ReturnStr<u64> create_process(u16 ring = 3);
@@ -131,7 +131,7 @@ void find_new_process();
 // Returns true if the process with pid exists, false otherwise
 inline bool exists_process(u64 pid)
 {
-    return s_map->count(pid) == 1;
+    return s_map.count(pid) == 1;
 }
 
 // Returns true if the process with pid is uninitialized
@@ -140,7 +140,7 @@ bool is_uninited(u64 pid);
 // Gets a task descriptor of the process with pid
 inline TaskDescriptor* get_task(u64 pid)
 {
-    return s_map->at(pid);
+    return s_map.at(pid);
 }
 
 // Kills the task

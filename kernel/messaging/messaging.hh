@@ -40,7 +40,7 @@ struct Ports_storage {
     kresult_t set_port(u64 port, u64 dest_pid, u64 dest_chan);
 };
 
-extern Ports_storage* kernel_ports;
+extern Ports_storage kernel_ports;
 
 struct TaskDescriptor;
 

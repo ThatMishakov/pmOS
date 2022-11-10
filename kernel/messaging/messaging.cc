@@ -7,14 +7,12 @@
 #include <kernel/block.h>
 #include <utils.hh>
 
-Ports_storage* kernel_ports;
+Ports_storage kernel_ports;
 Spinlock messaging_ports;
 
 kresult_t init_kernel_ports()
 {
-    kernel_ports = new Ports_storage;
-
-    kernel_ports->set_dummy(1); // Kernel log messages
+    kernel_ports.set_dummy(1); // Kernel log messages
 
     return SUCCESS;
 }
@@ -82,7 +80,7 @@ kresult_t Ports_storage::send_from_user(u64 pid_from, u64 port, u64 buff_addr, s
         this->storage.erase(port);
         return ERROR_PORT_CLOSED;
     } else {
-        TaskDescriptor* process = (*s_map).at(d.task);
+        TaskDescriptor* process = s_map.at(d.task);
         result = SUCCESS;
 
         process->lock.lock();
@@ -109,7 +107,7 @@ kresult_t Ports_storage::send_from_system(u64 port, const char* msg, size_t size
         this->storage.erase(port);
         return ERROR_PORT_CLOSED;
     } else {
-        TaskDescriptor* process = (*s_map).at(d.task);
+        TaskDescriptor* process = s_map.at(d.task);
         result = SUCCESS;
 
         process->lock.lock();
@@ -164,5 +162,5 @@ kresult_t Ports_storage::set_dummy(u64 port)
 
 kresult_t send_message_system(u64 port, const char* msg, size_t size)
 {
-    return kernel_ports->send_from_system(port, msg, size);
+    return kernel_ports.send_from_system(port, msg, size);
 }

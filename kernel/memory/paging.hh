@@ -8,6 +8,7 @@
 #define PAGE_SHARED  1
 #define PAGE_SPECIAL 2
 #define PAGE_DELAYED 3
+#define PAGE_COW     4
 
 typedef struct {
     u8 writeable          : 1;
@@ -59,7 +60,8 @@ enum Page_Types {
     HUGE_1G = 2,
     UNALLOCATED = 3,
     LAZY_ALLOC = 4,
-    UNKNOWN = 5
+    SHARED = 5,
+    UNKNOWN = 6
 };
 
 // Returns page type

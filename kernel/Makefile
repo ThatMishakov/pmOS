@@ -7,7 +7,7 @@ KERNEL = kernel
 CC = x86_64-elf-gcc
 CPP = x86_64-elf-gcc
 CXX = x86_64-elf-g++
-LD = x86_64-elf-g++
+LD = x86_64-elf-gcc
 
 ROOTDIR = $(realpath .)
 INCLUDEDIR = include .
@@ -45,14 +45,21 @@ INTERNALCFLAGS  :=       \
 CCFILES := $(shell find ./ -type f -name '*.cc')
 CFILES := $(shell find ./ -type f -name '*.c')
 ASMFILES := $(shell find ./ -type f -name '*.S')
-OBJ    := $(CCFILES:.cc=.o) $(ASMFILES:.S=.o) $(CFILES:.c=.o) 
-#OBJ := ./malloc.o ./exceptions_managers.o ./free_page_alloc.o ./gdt.o ./idle.o ./interrupts.o ./main.o ./mem.o ./messaging.o ./misc.o ./paging.o ./palloc.o ./sched.o ./syscalls.o ./utils.o ./loadGDT.o ./start.o ./interrupts_asm.o ./asm.o
-DEP    := $(OBJ:.o=.d)
+OBJS = ./main.o ./misc.o ./utils.o ./memory/mem.o ./memory/malloc.o ./memory/free_page_alloc.o ./memory/palloc.o ./memory/paging.o ./memory/shared_mem.o ./interrupts/gdt.o ./interrupts/exceptions_managers.o ./interrupts/interrupts.o ./processes/sched.o ./processes/syscalls.o ./processes/idle.o ./messaging/messaging.o ./objects/icxxabi.o ./start.o ./asm.o ./interrupts/interrupts_asm.o ./interrupts/loadGDT.o
 
-$(KERNEL): $(OBJ) linker.ld
-	$(LD) $(LDFLAGS) $(OBJ) -o $@
+CRTI_OBJ =  ./objects/crti.o
+CRTBEGIN_OBJ:=$(shell $(CC) $(CFLAGS) -print-file-name=crtbegin.o)
+CRTEND_OBJ:=$(shell $(CC) $(CFLAGS) -print-file-name=crtend.o)
+CRTN_OBJ =  ./objects/crtn.o
+
+OBJ_LINK_LIST:=$(CRTI_OBJ) $(CRTBEGIN_OBJ) $(OBJS) $(CRTEND_OBJ) $(CRTN_OBJ)
+INTERNAL_OBJS = $(CRTI_OBJ) $(OBJS) $(CRTN_OBJ) 
+DEP    := $(INTERNAL_OBJS:.o=.d)
+
+$(KERNEL): $(OBJ_LINK_LIST) linker.ld
+	$(LD) $(LDFLAGS) $(OBJ_LINK_LIST) -o $@
 	
 clean:
-	$(RM) $(KERNEL) $(OBJ) $(DEP)
+	$(RM) $(KERNEL) $(INTERNAL_OBJS) $(DEP)
 
 -include $(DEP)

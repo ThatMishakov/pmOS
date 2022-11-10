@@ -8,6 +8,7 @@
 #include <utils.hh>
 #include <types.hh>
 #include <kernel/com.h>
+#include "shared_mem.hh"
 
 
 kresult_t get_page(u64 virtual_addr, Page_Table_Argumments arg)
@@ -147,6 +148,10 @@ u64 release_page_s(u64 virtual_address)
         invalidade(virtual_address);
         break;
     case PAGE_SPECIAL: // Do nothing
+        break;
+    case PAGE_SHARED:
+    case PAGE_COW:
+        return release_shared(pte.page_ppn << 12);
         break;
     default:
         return ERROR_NOT_IMPLEMENTED;

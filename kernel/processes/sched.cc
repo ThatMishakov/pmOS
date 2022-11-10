@@ -20,7 +20,7 @@ Spinlock blocked_s;
 sched_pqueue uninit;
 sched_pqueue dead;
 
-sched_map* s_map;
+sched_map s_map;
 
 PID pid = 1;
 
@@ -33,13 +33,12 @@ void init_per_cpu()
 void init_scheduling()
 {
     init_per_cpu();
-    s_map = new sched_map;
 
     TaskDescriptor* current_task = new TaskDescriptor;
     get_cpu_struct()->current_task = current_task;
     current_task->page_table = getCR3();
     current_task->pid = pid++;
-    s_map->insert({current_task->pid, current_task});
+    s_map.insert({current_task->pid, current_task});
 
     init_idle();
 }
@@ -128,7 +127,7 @@ ReturnStr<u64> create_process(u16 ring)
     n->pid = assign_pid();
 
     // Add to the map of processes and to uninit list
-    s_map->insert({n->pid, n});
+    s_map.insert({n->pid, n});
     uninit.push_back(n);
     n->status = PROCESS_UNINIT;
     
@@ -185,7 +184,7 @@ void init_idle()
         return;
     }
 
-    idle_task = s_map->at(i.val);
+    idle_task = s_map.at(i.val);
 
     // Init stack
     idle_task->init_stack();
@@ -245,7 +244,7 @@ void TaskDescriptor::switch_to()
 
 bool is_uninited(u64 pid)
 {
-    return s_map->at(pid)->status == PROCESS_UNINIT;
+    return s_map.at(pid)->status == PROCESS_UNINIT;
 }
 
 void TaskDescriptor::init_task()
