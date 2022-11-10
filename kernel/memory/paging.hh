@@ -3,6 +3,7 @@
 #include <types.hh>
 #include <processes/sched.hh>
 #include <asm.hh>
+#include <lib/pair.hh>
 
 #define PAGE_NORMAL  0
 #define PAGE_SHARED  1
@@ -90,7 +91,7 @@ void free_user_pages(u64 page_table, u64 pid);
 kresult_t prepare_user_page(u64 page);
 
 // Makes the page shared and returns its PTE
-ReturnStr<PTE> share_page(u64 virtual_addr, u64 pid);
+ReturnStr<klib::pair<PTE, bool>> share_page(u64 virtual_addr, u64 pid);
 
 // Unshares a page and makes PID its only owner
 kresult_t unshare_page(u64 virtual_addr, u64 pid);

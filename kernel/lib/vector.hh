@@ -15,6 +15,28 @@ private:
 
     void expand(size_t to);
 public:
+    class iterator {
+    private:
+        T* ptr;
+    public:
+        constexpr iterator(T* n): ptr(n) {};
+
+        iterator& operator++() {
+            ptr++;
+            return *this;
+        }
+
+        T& operator*()
+        {
+            return *ptr;
+        }
+
+        bool operator==(iterator k)
+        {
+            return this->ptr == k.ptr;
+        }
+    };
+
     vector();
     vector(size_t);
     vector(size_t, const T&);
@@ -26,6 +48,9 @@ public:
     vector<T>& operator=(vector<T>&& from);
     T& operator*();
     const T& operator*() const;
+
+    T& operator[] (size_t);
+    const T& operator[] (size_t) const;
 
     size_t size() const;
     
@@ -49,6 +74,9 @@ public:
     {
         return a_size == 0;
     }
+
+    iterator begin();
+    iterator end();
 };
 
 
@@ -147,6 +175,30 @@ template<typename T>
 inline size_t vector<T>::size() const
 {
     return a_size;
+}
+
+template<typename T>
+typename vector<T>::iterator vector<T>::begin()
+{
+    return iterator(ptr);
+}
+
+template<typename T>
+typename vector<T>::iterator vector<T>::end()
+{
+    return iterator(&ptr[a_size]);
+}
+
+template<typename T>
+const T& vector<T>::operator[] (size_t p) const
+{
+    return ptr[p];
+}
+
+template<typename T>
+T& vector<T>::operator[] (size_t p)
+{
+    return ptr[p];
 }
 
 }

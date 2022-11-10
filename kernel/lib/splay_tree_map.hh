@@ -1,6 +1,7 @@
 #pragma once
 #include "pair.hh"
 #include "../memory/malloc.hh"
+#include "utility.hh"
 
 namespace klib {
 
@@ -14,9 +15,10 @@ private:
         K key;
         T data;
 
+        node() = default;
         constexpr node(const K& key, const T& data): left(nullptr), right(nullptr), key(key), data(data) {};
-        constexpr node(const Pair<K, T>& p): left(nullptr), right(nullptr), key(p.first), data(p.second) {};
-        constexpr node(Pair<K, T>&& p): left(nullptr), right(nullptr), key(p.first), data(p.second) {};
+        constexpr node(const pair<K, T>& p): left(nullptr), right(nullptr), key(p.first), data(p.second) {};
+        constexpr node(pair<K, T>&& p): left(nullptr), right(nullptr), key(forward<T>(p.first)), data(forward<T>(p.second)) {};
     };
 
     size_t elements;
@@ -31,12 +33,13 @@ public:
     constexpr splay_tree_map():
         elements(0), root(nullptr) {};
     splay_tree_map(const splay_tree_map&);
+    splay_tree_map(splay_tree_map&&);
     ~splay_tree_map();
 
     void clear();
 
-    void insert(const Pair<K, T>&);
-    void insert(Pair<K, T>&&);
+    void insert(const pair<K, T>&);
+    void insert(pair<K, T>&&);
 
     void erase(const K&);
 
@@ -122,7 +125,7 @@ void splay_tree_map<K,T>::rotate_right(splay_tree_map<K,T>::node* p) const
 }
 
 template<class K, class T>
-void splay_tree_map<K,T>::insert(const Pair<K, T>& pair)
+void splay_tree_map<K,T>::insert(const pair<K, T>& pair)
 {
     node *n = nullptr;
     node* temp = root;
@@ -157,7 +160,7 @@ void splay_tree_map<K,T>::insert(const Pair<K, T>& pair)
 }
 
 template<class K, class T>
-void splay_tree_map<K,T>::insert(Pair<K, T>&& pair)
+void splay_tree_map<K,T>::insert(pair<K, T>&& pair)
 {
     node *n = nullptr;
     node* temp = root;
@@ -169,12 +172,14 @@ void splay_tree_map<K,T>::insert(Pair<K, T>&& pair)
             temp = temp->right;
         } else {
             splay(n);
-            temp->data = pair.second;
+            temp->data = forward<T>(pair.second);
             return;
         }
     }
 
-    node* c = new node(pair);
+    node* c = new node;
+    c->data = forward<T>(pair.second);
+    c->key = pair.first;
 
     if (n == nullptr) {
         root = c;

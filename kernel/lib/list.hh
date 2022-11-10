@@ -119,6 +119,18 @@ list<T>::list(const list<T>& from)
 }
 
 template<typename T>
+list<T>::list(list<T>&& from)
+{
+    this->l_size = from.l_size;
+    this->first = from.first;
+    this->last = from.last;
+
+    from.l_size = 0;
+    from.first = nullptr;
+    from.last = nullptr;
+}
+
+template<typename T>
 list<T>& list<T>::operator=(const list<T>& from)
 {
     this->~list();
@@ -148,6 +160,21 @@ list<T>& list<T>::operator=(const list<T>& from)
         this->last = p;
     }
 
+    return *this;
+}
+
+template<typename T>
+list<T>& list<T>::operator=(list<T>&& from)
+{
+    this->~list();
+
+    this->l_size = from.l_size;
+    this->first = from.first;
+    this->last = from.last;
+
+    from.l_size = 0;
+    from.first = nullptr;
+    from.last = nullptr;
     return *this;
 }
 

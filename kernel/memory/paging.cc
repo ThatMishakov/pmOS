@@ -413,14 +413,14 @@ kresult_t transfer_pages(TaskDescriptor* t, u64 page_start, u64 to_address, u64 
 kresult_t share_pages(TaskDescriptor* t, u64 page_start, u64 to_addr, u64 nb_pages, Page_Table_Argumments pta)
 {
     u64 current_pid = get_cpu_struct()->current_task->pid;
-    klib::list<PTE> l;
+    klib::vector<klib::pair<PTE, bool>> l(nb_pages);
 
     kresult_t p = SUCCESS;
     // Share pages
     for (u64 i = 0; i < nb_pages and p == SUCCESS; ++i) {
-        ReturnStr<PTE> r = share_page(page_start + i*KB(4), current_pid);
+        ReturnStr<klib::pair<PTE,bool>> r = share_page(page_start + i*KB(4), current_pid);
         p = r.result;
-        if (p == SUCCESS) l.push_back(r.val);
+        if (p == SUCCESS) l[i] = r.val;
     }
 
     // Skip TLB flushes on error
@@ -438,18 +438,19 @@ kresult_t share_pages(TaskDescriptor* t, u64 page_start, u64 to_addr, u64 nb_pag
     auto it = l.begin();
     u64 i = 0;
     for (; i < nb_pages and p == SUCCESS; ++i, ++it) {
-        PTE pte = *it;
+        PTE pte = (*it).first;
         pte.execution_disabled = pta.execution_disabled;
         pte.writeable = pta.writeable;
         p = register_shared(pte.page_ppn << 12, t->pid);
         if (p == SUCCESS)
-            p = set_pte(to_addr + i*KB(4), *it, pta);
+            p = set_pte(to_addr + i*KB(4), pte, pta);
     }
 
     // Return everything back on error
     if (p != SUCCESS)
         for (u64 k = 0; k < i; ++k)
-            release_page_s(to_addr + i*KB(4), t->pid);
+            if (l[k].second)
+                release_page_s(to_addr + i*KB(4), t->pid);
             
 
     // Return old %cr3
@@ -463,6 +464,11 @@ fail:
     }
 
     return p;
+}
+
+ReturnStr<klib::pair<PTE, bool>> share_page(u64 virtual_addr, u64 pid)
+{
+    return {ERROR_NOT_IMPLEMENTED, {0, 0}};
 }
 
 kresult_t set_pte(u64 virtual_addr, PTE pte_n, Page_Table_Argumments arg)
@@ -512,8 +518,14 @@ kresult_t set_pte(u64 virtual_addr, PTE pte_n, Page_Table_Argumments arg)
 
     pte = pte_n;
     pte.user_access = arg.user_access;
-    pte.writeable = arg.writeable; 
+    pte.writeable = arg.writeable;
+    //pte.avl = arg.extra; // TODO: Broken!
     return SUCCESS;
+}
+
+kresult_t unshare_page(u64 virtual_addr, u64 pid)
+{
+    return ERROR_NOT_IMPLEMENTED;
 }
 
 ReturnStr<u64> phys_addr_of(u64 virt)

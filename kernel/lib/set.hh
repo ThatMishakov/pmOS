@@ -17,13 +17,15 @@ private:
 
     size_t elements;
     node* root;
-    constexpr static node NIL = {{}, nullptr, nullptr, nullptr, false};
+    static node NIL;
 
     void erase_node(node*);
+    void insert_node(node*);
     void rotate_left(node*);
     void rotate_right(node*);
     void transplant_node(node*,node*);
     void erase_fix(node*);
+    void insert_fix(node*);
     node* search(const K&);
     node* min(node*);
 public:
@@ -57,6 +59,30 @@ public:
 
     size_t count(const K&);
 };
+
+template<typename K>
+set<K>::set(set&& s)
+{
+    this->elements = s.elements;
+    this->root = s.root;
+
+    s.elements = 0;
+    s.root = &NIL;
+}
+
+template<typename K>
+set<K>& set<K>::operator=(set&& s)
+{
+    this->~set();
+
+    this->elements = s.elements;
+    this->root = s.root;
+
+    s.elements = 0;
+    s.root = &NIL;
+
+    return *this;
+}
 
 template<typename K>
 set<K>::~set()
@@ -250,6 +276,99 @@ void set<K>::erase_fix(node* x)
         }
     }
     x->red = false;
+}
+
+template<class K>
+void set<K>::insert(const K& k)
+{
+    node* n = new node({k, &NIL, &NIL, &NIL, true});
+    insert_node(n);
+}
+
+template<class K>
+void set<K>::insert(K&& k)
+{
+    node* n = new node({k, &NIL, &NIL, &NIL, true});
+    insert_node(n);
+}
+
+template<class K>
+void set<K>::emplace(K&& k)
+{
+    node* n = new node({k, &NIL, &NIL, &NIL, true});
+    insert_node(n);
+}
+
+template<class T> class set<T>::node set<T>::NIL = {{}, nullptr, nullptr, nullptr, false};
+
+template<class K>
+void set<K>::insert_node(node* n)
+{
+    node* y = &NIL;
+    node* temp = root;
+
+    while (temp != &NIL) {
+        y = temp;
+        if (n->key < temp->key)
+            temp = temp->left;
+        else
+            temp = temp->right;
+    }
+
+    n->parent = y;
+    if (y == &NIL)
+        root = n;
+    else if (n->key < y->key)
+        y->left = n;
+    else
+        y->right = n;
+
+    insert_fix(n);    
+}
+
+template<class K>
+void set<K>::insert_fix(node* n)
+{
+    while (n->parent->red) {
+        if (n->parent == n->parent->parent->left) {
+            node* y = n->parent->parent->right;
+
+            if (y->red) {
+                n->parent->red = false;
+                y->red = false;
+                n->parent->parent->red = true;
+                n = n->parent->parent;
+            } else {
+                if (n == n->parent->right) {
+                    n = n->parent;
+                    rotate_left(n);
+                }
+
+                n->parent->red = false;
+                n->parent->parent->red = true;
+                rotate_right(n->parent->parent);
+            }
+        } else {
+            node* y = n->parent->parent->left;
+
+            if (y->red) {
+                n->parent->red = false;
+                y->red = false;
+                n->parent->parent->red = true;
+                n = n->parent->parent;
+            } else {
+                if (n == n->parent->left) {
+                    n = n->parent;
+                    rotate_right(n);
+                }
+
+                n->parent->red = false;
+                n->parent->parent->red = true;
+                rotate_left(n);
+            }
+        }
+    }
+    root->red = false;
 }
 
 }
