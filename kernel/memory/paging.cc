@@ -175,7 +175,7 @@ u64 release_page_s(u64 virtual_address)
         break;
     case PAGE_SHARED:
     case PAGE_COW:
-        return release_shared(pte.page_ppn << 12);
+        return release_shared(pte.page_ppn << 12, get_cpu_struct()->current_task->pid);
         break;
     default:
         return ERROR_NOT_IMPLEMENTED;

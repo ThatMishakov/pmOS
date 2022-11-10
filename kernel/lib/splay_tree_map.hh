@@ -15,7 +15,8 @@ private:
         T data;
 
         constexpr node(const K& key, const T& data): left(nullptr), right(nullptr), key(key), data(data) {};
-        constexpr node(const Pair<K, T> p): left(nullptr), right(nullptr), key(p.first), data(p.second) {};
+        constexpr node(const Pair<K, T>& p): left(nullptr), right(nullptr), key(p.first), data(p.second) {};
+        constexpr node(Pair<K, T>&& p): left(nullptr), right(nullptr), key(p.first), data(p.second) {};
     };
 
     size_t elements;

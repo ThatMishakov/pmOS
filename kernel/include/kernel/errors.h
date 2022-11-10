@@ -22,5 +22,6 @@
 #define ERROR_PORT_NOT_EXISTS    -18ULL
 #define ERROR_PORT_CLOSED        -19ULL
 #define ERROR_PAGE_NOT_SHARED    -20ULL
+#define ERROR_NOT_PAGE_OWNER     -21ULL
 
 #endif

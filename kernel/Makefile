@@ -45,7 +45,10 @@ INTERNALCFLAGS  :=       \
 CCFILES := $(shell find ./ -type f -name '*.cc')
 CFILES := $(shell find ./ -type f -name '*.c')
 ASMFILES := $(shell find ./ -type f -name '*.S')
-OBJS = ./main.o ./misc.o ./utils.o ./memory/mem.o ./memory/malloc.o ./memory/free_page_alloc.o ./memory/palloc.o ./memory/paging.o ./memory/shared_mem.o ./interrupts/gdt.o ./interrupts/exceptions_managers.o ./interrupts/interrupts.o ./processes/sched.o ./processes/syscalls.o ./processes/idle.o ./messaging/messaging.o ./objects/icxxabi.o ./start.o ./asm.o ./interrupts/interrupts_asm.o ./interrupts/loadGDT.o
+OBJS = 	./objects/icxxabi.o ./start.o ./asm.o ./main.o ./misc.o ./utils.o \
+	    ./memory/mem.o ./memory/malloc.o ./memory/free_page_alloc.o ./memory/palloc.o ./memory/paging.o ./memory/shared_mem.o \
+	    ./interrupts/gdt.o ./interrupts/exceptions_managers.o ./interrupts/interrupts.o ./interrupts/interrupts_asm.o ./interrupts/loadGDT.o\
+	    ./processes/sched.o ./processes/syscalls.o ./processes/idle.o ./messaging/messaging.o
 
 CRTI_OBJ =  ./objects/crti.o
 CRTBEGIN_OBJ:=$(shell $(CC) $(CFLAGS) -print-file-name=crtbegin.o)
