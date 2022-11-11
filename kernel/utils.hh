@@ -31,3 +31,6 @@ kresult_t prepare_user_buff_wr(char* buff, size_t size);
 kresult_t copy_from_user(const char* from, char* to, size_t size);
 
 kresult_t copy_to_user(const char* from, char* to, size_t size);
+
+// Copies a frame (ppn)
+void copy_frame(u64 from, u64 to);

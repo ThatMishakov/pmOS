@@ -24,6 +24,7 @@ kresult_t release_shared(u64 phys_addr, u64 owner_pid)
 
 kresult_t register_shared(u64 phys_addr, u64 owner)
 {
+    // TODO: Implement iterators and make more efficient
     if (shared_map.count(phys_addr) == 0)
         shared_map.insert({phys_addr, {}});
     
@@ -36,4 +37,12 @@ kresult_t register_shared(u64 phys_addr, u64 owner)
     e.owners_pid.insert(owner);
 
     return SUCCESS;
+}
+
+size_t nb_owners(u64 phys_addr)
+{
+    if (shared_map.count(phys_addr) == 0)
+        return 0;
+
+    return shared_map.at(phys_addr).owners_pid.size();
 }

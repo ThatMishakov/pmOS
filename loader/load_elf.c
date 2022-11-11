@@ -42,7 +42,7 @@ uint64_t load_elf(ELF_64bit* elf_h, uint8_t ring)
 
             memcpy((char*)phys_loc, (char*)memory, size);
 
-            char writeable = p->flags & ELF_FLAG_WRITABLE;
+            char writeable = !!(p->flags & ELF_FLAG_WRITABLE);
             char execution_disabled = !(p->flags & ELF_FLAG_EXECUTABLE);
             uint64_t mask = (writeable << 0) | (execution_disabled << 1);
 

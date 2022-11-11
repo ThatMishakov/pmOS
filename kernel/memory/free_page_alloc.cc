@@ -7,10 +7,11 @@
 #include "malloc.hh"
 
 klib::list<u64> free_pages_list;
+Free_Page_Alloc global_free_page;
 
 DECLARE_LOCK(free_page_alloc);
 
-void add_pages(u64 pages)
+void Free_Page_Alloc::add_pages(u64 pages)
 {
     u64 start = (u64)unoccupied;
     u64 size = pages*4096;
@@ -21,12 +22,12 @@ void add_pages(u64 pages)
         free_pages_list.push_back(i+start);
 }
 
-void release_free_page(u64 page)
+void Free_Page_Alloc::release_free_page(u64 page)
 {
     free_pages_list.push_back(page);
 }
 
-ReturnStr<u64> get_free_page()
+ReturnStr<u64> Free_Page_Alloc::get_free_page()
 {
     // TODO: Error checking
     if (free_pages_list.empty()) add_pages(FREE_PAGES_SIZE);

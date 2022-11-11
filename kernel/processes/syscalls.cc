@@ -170,8 +170,8 @@ kresult_t syscall_map_into_range(u64 arg1, u64 arg2, u64 arg3, u64 arg4, u64 arg
     Page_Table_Argumments pta = {};
     pta.user_access = 1;
     pta.global = 0;
-    pta.writeable = arg5& FLAG_RW;
-    pta.execution_disabled = arg5&FLAG_NOEXECUTE;
+    pta.writeable = !!(arg5&FLAG_RW);
+    pta.execution_disabled = !!(arg5&FLAG_NOEXECUTE);
 
     // TODO: Check permissions
 
@@ -191,7 +191,8 @@ kresult_t syscall_map_into_range(u64 arg1, u64 arg2, u64 arg3, u64 arg4, u64 arg
     // Get pid task_struct
     TaskDescriptor* t = get_task(pid);
 
-    kresult_t r = transfer_pages(t, page_start, to_addr, nb_pages, pta);
+    TaskDescriptor* current = get_cpu_struct()->current_task;
+    kresult_t r = transfer_pages(current, t, page_start, to_addr, nb_pages, pta);
 
     return r;
 }
@@ -239,7 +240,7 @@ kresult_t syscall_get_page_multi(u64 virtual_addr, u64 nb_pages)
     Page_Table_Argumments arg = {};
     arg.user_access = 1;
     arg.writeable = 1;
-    arg.execution_disabled = 0;
+    arg.execution_disabled = 1;
     u64 result = SUCCESS;
     u64 i = 0;
     for (; i < nb_pages and result == SUCCESS; ++i)

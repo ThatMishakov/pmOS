@@ -4,6 +4,10 @@
 class PFrameAllocator {
 public:
     void free(void* page);
+    inline void free_ppn(u64 ppn)
+    {
+        return free((void*)(ppn << 12));
+    }
 
     // Returns -1 if not found
     ReturnStr<void*> alloc_page();

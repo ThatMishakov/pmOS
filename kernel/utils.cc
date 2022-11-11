@@ -6,6 +6,7 @@
 #include <kernel/errors.h>
 #include <memory/paging.hh>
 #include <messaging/messaging.hh>
+#include <memory/free_page_alloc.hh>
 
 void int_to_string(long int n, u8 base, char* str, int& length)
 {
@@ -260,3 +261,26 @@ size_t strlen(const char *start)
 }
 
 
+Spinlock copy_frame_s;
+Free_Page_Alloc_Static<2> copy_frame_free_p;
+
+void copy_frame(u64 from, u64 to)
+{
+    copy_frame_s.lock();
+    u64 t1 = copy_frame_free_p.get_free_page();
+    u64 t2 = copy_frame_free_p.get_free_page();
+
+
+    Page_Table_Argumments pta = {1, 0, 0, 1, PAGE_SPECIAL};
+    map(from, t1, pta);
+    map(to, t2, pta);
+
+    memcpy((char*)t1, (char*)t2, 4096);
+
+    release_page_s(t1, 0);
+    release_page_s(t2, 0);
+
+    copy_frame_free_p.release_free_page(t1);
+    copy_frame_free_p.release_free_page(t2);
+    copy_frame_s.unlock();
+}

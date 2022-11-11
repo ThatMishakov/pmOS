@@ -198,7 +198,7 @@ ReturnStr<u64> get_new_pml4()
     if (l.result != SUCCESS) return {l.result, 0}; // Could not allocate a page
 
     // Find a free spot and map this page
-    ReturnStr<u64> r = get_free_page();
+    ReturnStr<u64> r = global_free_page.get_free_page();
     if (r.result != SUCCESS) return {r.result, 0};
     u64 free_page = r.val;
 
@@ -233,7 +233,7 @@ ReturnStr<u64> get_new_pml4()
 
     // Return the free_page to the pool
     // TODO: Error checking
-    release_free_page(free_page);
+    global_free_page.release_free_page(free_page);
 
     return {SUCCESS, p};
 }
@@ -324,7 +324,6 @@ kresult_t alloc_page_lazy(u64 virtual_addr, Page_Table_Argumments arg)
     pte.present = 0;
     pte.user_access = arg.user_access;
     pte.writeable = arg.writeable; 
-    pte.avl = arg.extra;
     pte.avl = PAGE_DELAYED;
 
     return SUCCESS;
@@ -346,7 +345,7 @@ kresult_t get_lazy_page(u64 virtual_addr)
     pte.page_ppn = page.val;
     pte.present = 1;
     pte.user_access = 1;
-    pte.writeable = 1;
+    pte.writeable = pte.writeable;
     pte.avl = PAGE_NORMAL;
 
     // Clear the page for security and other reasons
@@ -362,7 +361,7 @@ bool is_allocated(u64 page)
     return p == Page_Types::NORMAL or p == Page_Types::LAZY_ALLOC;
 }
 
-kresult_t transfer_pages(TaskDescriptor* t, u64 page_start, u64 to_address, u64 nb_pages, Page_Table_Argumments pta)
+kresult_t transfer_pages(TaskDescriptor* from, TaskDescriptor* t, u64 page_start, u64 to_address, u64 nb_pages, Page_Table_Argumments pta)
 {
     // Check that pages are allocated
     for (u64 i = 0; i < nb_pages; ++i) {
@@ -388,13 +387,35 @@ kresult_t transfer_pages(TaskDescriptor* t, u64 page_start, u64 to_address, u64 
     auto it = l.begin();
     u64 i = 0;
     for (; i < nb_pages and r == SUCCESS; ++i, ++it) {
+        u8 page_type = (*it).avl;
+        if (page_type == PAGE_COW) {
+            r = register_shared((*it).page_ppn << 12, t->pid);
+            if (r != SUCCESS) break;
+
+            if (not pta.writeable)
+                pta.extra = PAGE_SHARED;
+            else
+                pta.extra = page_type;
+        } else if (page_type == PAGE_SHARED) {
+            r = register_shared((*it).page_ppn << 12, t->pid);
+            if (r != SUCCESS) break;
+
+            pta.extra = page_type;
+        } else {
+            pta.extra = page_type;
+        }
         r = set_pte(to_address + i*KB(4), *it, pta);
     }
 
     // If failed, invalidade the pages that succeded
     if (r != SUCCESS)
-        for (u64 k = 0; k < i; ++i)
+        for (u64 k = 0; k < i; ++i) {
+            PTE* p = get_pte(page_start + i*KB(4));
+            if (p->avl == PAGE_COW or p->avl == PAGE_SHARED)
+                release_shared(p->avl, t->pid);
+
             *get_pte(to_address + k*KB(4)) = {};
+        }
 
     // Return old %cr3
     setCR3(cr3);
@@ -402,6 +423,9 @@ kresult_t transfer_pages(TaskDescriptor* t, u64 page_start, u64 to_address, u64 
     // If successfull, invalidate the pages
     if (r == SUCCESS) {
         for (u64 i = 0; i < nb_pages; ++i) {
+            PTE* p = get_pte(page_start + i*KB(4));
+            if (p->avl == PAGE_COW or p->avl == PAGE_SHARED)
+                release_shared(p->avl, from->pid);
             invalidade_noerr(page_start + i*KB(4));
         }
         setCR3(cr3);
@@ -413,14 +437,15 @@ kresult_t transfer_pages(TaskDescriptor* t, u64 page_start, u64 to_address, u64 
 kresult_t share_pages(TaskDescriptor* t, u64 page_start, u64 to_addr, u64 nb_pages, Page_Table_Argumments pta)
 {
     u64 current_pid = get_cpu_struct()->current_task->pid;
-    klib::vector<klib::pair<PTE, bool>> l(nb_pages);
+    klib::vector<klib::pair<PTE, bool>> l;
 
     kresult_t p = SUCCESS;
     // Share pages
-    for (u64 i = 0; i < nb_pages and p == SUCCESS; ++i) {
-        ReturnStr<klib::pair<PTE,bool>> r = share_page(page_start + i*KB(4), current_pid);
+    u64 z = 0;
+    for (; z < nb_pages and p == SUCCESS; ++z) {
+        ReturnStr<klib::pair<PTE,bool>> r = share_page(page_start + z*KB(4), current_pid);
         p = r.result;
-        if (p == SUCCESS) l[i] = r.val;
+        if (p == SUCCESS) l.push_back(r.val);
     }
 
     // Skip TLB flushes on error
@@ -519,13 +544,46 @@ kresult_t set_pte(u64 virtual_addr, PTE pte_n, Page_Table_Argumments arg)
     pte = pte_n;
     pte.user_access = arg.user_access;
     pte.writeable = arg.writeable;
-    //pte.avl = arg.extra; // TODO: Broken!
+    pte.avl = arg.extra; // TODO: Broken!
     return SUCCESS;
 }
 
 kresult_t unshare_page(u64 virtual_addr, u64 pid)
 {
-    return ERROR_NOT_IMPLEMENTED;
+    PTE* pte = get_pte(virtual_addr);
+    u8 page_type = pte->avl;
+    u64 page = pte->page_ppn << 12;
+
+    if (page_type == PAGE_SHARED) {
+        if (nb_owners(page) == 1) { // Only owner
+            kresult_t r = release_shared(page, pid);
+            if (r != SUCCESS) return r;
+
+            pte->avl == PAGE_NORMAL;
+            return SUCCESS;
+        } else { // Copy page
+            ReturnStr<u64> k = palloc.alloc_page_ppn();
+            if (k.result != SUCCESS) return k.result;
+
+            kresult_t r = release_shared(page, pid);
+            if (r != SUCCESS) {
+                palloc.free_ppn(k.val);
+                return r;
+            }
+
+            copy_frame(pte->page_ppn, k.val);
+
+            pte->page_ppn = k.val;
+            pte->avl == PAGE_NORMAL;
+            return SUCCESS;
+        }
+    } else if (page_type == PAGE_COW) {
+        return ERROR_NOT_IMPLEMENTED;
+    } else {
+        return ERROR_PAGE_NOT_SHARED;
+    }
+
+    return ERROR_GENERAL;
 }
 
 ReturnStr<u64> phys_addr_of(u64 virt)

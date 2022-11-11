@@ -18,8 +18,8 @@ ReturnStr<u64> make_shared(u64 virtual_addr, u64 owner_pid);
 // Releases a page that is shared
 kresult_t release_shared(u64 phys_addr, u64 owner_pid);
 
-// References a shared page
-kresult_t ref_shared(u64 phys_addr, u64 owner);
-
 // Registers a page as shared for owner
 kresult_t register_shared(u64 phys_addr, u64 owner);
+
+// Returns the number of owners of the phys_addr
+size_t nb_owners(u64 phys_addr);
