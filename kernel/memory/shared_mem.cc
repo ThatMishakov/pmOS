@@ -1,5 +1,6 @@
 #include "shared_mem.hh"
 #include <kernel/errors.h>
+#include <utils.hh>
 
 shared_mem_map shared_map;
 

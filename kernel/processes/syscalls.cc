@@ -211,9 +211,6 @@ kresult_t syscall_share_with_range(u64 pid, u64 page_start, u64 to_addr, u64 nb_
     // Check if process exists
     if (not exists_process(pid)) return ERROR_NO_SUCH_PROCESS;
 
-    // Check process status
-    if (not is_uninited(pid)) return ERROR_PROCESS_INITED;
-
     // Get pid task_struct
     TaskDescriptor* t = get_task(pid);
 

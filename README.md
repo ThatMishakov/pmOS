@@ -31,7 +31,7 @@ These are the features that are planned to be had in the OS:
   - [x] Allocating memory to userspace
   - [x] Memory mapping
   - [x] Releasing used pages
-  - [ ] Shared memory
+  - [x] Shared memory
   - [x] Delayed allocation
   - [ ] Memory protections (NX bit)
 
@@ -44,9 +44,10 @@ These are the features that are planned to be had in the OS:
 
 - [x] IPC and messaging
   - [x] Buffered string messages
-  - [ ] Ports
-  - [ ] Kernel messages
+  - [x] Ports
+  - [x] Kernel messages
   - [ ] Quicker messaging
+  - [ ] Separate queues for channels
 
   
 - [ ] Permissions

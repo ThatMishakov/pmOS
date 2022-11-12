@@ -99,6 +99,9 @@ void main()
                     uint64_t pid = load_elf(e, 3);
                     syscall(SYSCALL_SET_PORT, pid, 1, terminal_pid, 1);
                     start_process(pid, e->program_entry, 0, 0, 0);
+
+                    get_page_multi(TB(2), 1);
+                    syscall(SYSCALL_SHARE_WITH_RANGE, pid, TB(2), TB(2), 1, 0x01);
                 }
             }
         }

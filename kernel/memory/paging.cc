@@ -524,7 +524,6 @@ ReturnStr<klib::pair<PTE, bool>> share_page(u64 virtual_addr, u64 pid)
         r = register_shared(pte->page_ppn << 12, pid);
         if (r != SUCCESS)
             break;
-
         pte->avl = PAGE_SHARED;
         k.first = *pte;
         k.second = true;
@@ -587,12 +586,12 @@ kresult_t set_pte(u64 virtual_addr, PTE pte_n, Page_Table_Argumments arg)
     }
 
     PTE& pte = *get_pte(virtual_addr);
-    if (pte.present or pte.avl == PAGE_DELAYED) return ERROR_PAGE_PRESENT;
+    if (pte.present or pte.avl == PAGE_DELAYED) return ERROR_PAGE_PRESENT; // TODO!
 
     pte = pte_n;
     pte.user_access = arg.user_access;
     pte.writeable = arg.writeable;
-    pte.avl = arg.extra; // TODO: Broken!
+    pte.avl = arg.extra;
     return SUCCESS;
 }
 
@@ -664,7 +663,7 @@ void free_pt(u64 page_start, u64 pid)
         if (p->present) {
             kresult_t result = release_page_s(addr, pid);
             if (result != SUCCESS) {
-                t_print("Error %i freeing page %h type %h!\n", result, addr, p->avl);
+                t_print_bochs("Error %i freeing page %h type %h!\n", result, addr, p->avl);
                 print_pt(addr);
                 halt();
             }

@@ -119,7 +119,7 @@ template<typename K>
 size_t set<K>::count(const K& key)
 {
     node* p = search(key);
-    return p == &NIL;
+    return p != &NIL;
 }
 
 template<typename K>
@@ -186,6 +186,7 @@ void set<K>::transplant_node(node* n, node* p)
 template<class K>
 void set<K>::erase_node(node* n)
 {
+    --elements;
     node* y = n;
     bool original_red = n->red;
     node* x;
@@ -288,14 +289,14 @@ void set<K>::insert(const K& k)
 template<class K>
 void set<K>::insert(K&& k)
 {
-    node* n = new node({k, &NIL, &NIL, &NIL, true});
+    node* n = new node({forward<K>(k), &NIL, &NIL, &NIL, true});
     insert_node(n);
 }
 
 template<class K>
 void set<K>::emplace(K&& k)
 {
-    node* n = new node({k, &NIL, &NIL, &NIL, true});
+    node* n = new node({forward<K>(k), &NIL, &NIL, &NIL, true});
     insert_node(n);
 }
 
@@ -323,6 +324,7 @@ void set<K>::insert_node(node* n)
     else
         y->right = n;
 
+    ++elements;
     insert_fix(n);    
 }
 

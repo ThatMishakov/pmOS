@@ -2,6 +2,7 @@
 #include "pair.hh"
 #include "../memory/malloc.hh"
 #include "utility.hh"
+#include "../utils.hh"
 
 namespace klib {
 
@@ -290,14 +291,16 @@ void splay_tree_map<K,T>::delete_node(splay_tree_map<K,T>::node* p)
     delete p;
     --elements;
 
-    if (left != root) {
+    if (left != nullptr) {
         root = left;
         node* p = max(root);
         p->right = right;
+        if (right != nullptr) right->parent = p;
         splay(p);
     } else {
         root = right;
     }
 }
+
 
 }

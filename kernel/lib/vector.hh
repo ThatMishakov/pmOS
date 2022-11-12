@@ -209,8 +209,7 @@ void vector<T>::push_back(T&& p)
     if (a_size >= a_capacity)
         expand(a_capacity*2);
 
-    ++a_size;
-    new (&ptr[a_size]) T(forward<T>(p));
+    new (&ptr[a_size++]) T(forward<T>(p));
 }
 
 template<typename T>
@@ -219,8 +218,7 @@ void vector<T>::push_back(const T& p)
     if (a_size >= a_capacity)
         expand(a_capacity*2);
 
-    ++a_size;
-    new (&ptr[a_size]) T(p);
+    new (&ptr[a_size++]) T(p);
 }
 
 template<typename T>
