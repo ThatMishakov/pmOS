@@ -430,8 +430,13 @@ kresult_t syscall_send_message_task(u64 pid, u64 channel, u64 size, u64 message)
     TaskDescriptor* process = s_map.at(pid);
     kresult_t result = SUCCESS;
 
+    klib::vector<char> msg(size);
+    result = copy_from_user((char*)message, &msg.front(), size);
+
+    if (result != SUCCESS) return result;
+
     process->lock.lock();
-    result = queue_message(process, self_pid, channel, (char*)message, size);
+    result = queue_message(process, self_pid, channel, klib::move(msg));
     process->unblock_if_needed(MESSAGE_S_NUM);
     process->lock.unlock();
 
@@ -472,6 +477,17 @@ kresult_t syscall_set_port_kernel(u64 port, u64 dest_pid, u64 dest_chan)
 
     messaging_ports.lock();
     kresult_t result = kernel_ports.set_port(port, dest_pid, dest_chan);
+    messaging_ports.unlock();
+
+    return result;
+}
+
+kresult_t syscall_set_port_default(u64 port, u64 dest_pid, u64 dest_chan)
+{
+    // TODO: Check permissions
+
+    messaging_ports.lock();
+    kresult_t result = default_ports.set_port(port, dest_pid, dest_chan);
     messaging_ports.unlock();
 
     return result;

@@ -26,10 +26,10 @@ using Message_storage = klib::queue<Message>;
 struct Port {
     u64 task = 0;
     u64 channel = 0;
-    u64 attr = 0;
+    u64 attr = 0; // NODEFAULT DUMMY PRESENT
     Message_storage msg_queue;
 
-    kresult_t enqueue(u64 from, u64 size, const char* buff, bool from_user = true);
+    kresult_t enqueue(u64 from, klib::vector<char>&& msg);
 };
 
 struct Ports_storage {
@@ -38,13 +38,15 @@ struct Ports_storage {
     kresult_t send_from_system(u64 port, const char* msg, size_t size);
     kresult_t set_dummy(u64 port);
     kresult_t set_port(u64 port, u64 dest_pid, u64 dest_chan);
+    kresult_t send_msg(klib::vector<char>&& msg);
 };
 
 extern Ports_storage kernel_ports;
+extern Ports_storage default_ports;
 
 struct TaskDescriptor;
 
-kresult_t queue_message(TaskDescriptor* task, u64 from, u64 channel, const char* message_usr_ptr, size_t size, bool from_user = true);
+kresult_t queue_message(TaskDescriptor* task, u64 from, u64 channel, klib::vector<char>&& msg);
 
 kresult_t init_kernel_ports();
 

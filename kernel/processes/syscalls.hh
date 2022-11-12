@@ -66,6 +66,9 @@ kresult_t syscall_set_port(u64 pid, u64 port, u64 dest_pid, u64 dest_chan);
 // Sets kernel's port
 kresult_t syscall_set_port_kernel(u64 port, u64 dest_pid, u64 dest_chan);
 
+// Sets default port
+kresult_t syscall_set_port_default(u64 port, u64 dest_pid, u64 dest_chan);
+
 // Sets task's attributes
 kresult_t syscall_set_attribute(u64 pid, u64 attribute, u64 value); 
 
