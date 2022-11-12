@@ -235,7 +235,7 @@ void vector<T>::expand(size_t new_capacity)
 
     T* temp_ptr = (T*)malloc(sizeof(T)*new_capacity);
     for (size_t i = 0; i < a_size; ++i)
-        new (&temp_ptr[i]) T( ptr[i] ); // TODO: move! move<T>(ptr[i])
+        new (&temp_ptr[i]) T( move(ptr[i]) );
 
     for (size_t i = 0; i < a_size; ++i)
         ptr[i].~T();
