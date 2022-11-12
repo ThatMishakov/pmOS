@@ -59,14 +59,15 @@ bool is_allocated(u64 page);
 ReturnStr<u64> phys_addr_of(u64 virt);
 
 enum Page_Types {
-    NORMAL = 0,
-    HUGE_2M = 1,
-    HUGE_1G = 2,
-    UNALLOCATED = 3,
-    LAZY_ALLOC = 4,
-    SHARED = 5,
-    COW = 6,
-    UNKNOWN = 7
+    NORMAL,
+    HUGE_2M,
+    HUGE_1G,
+    UNALLOCATED,
+    LAZY_ALLOC,
+    SHARED,
+    COW,
+    SPECIAL,
+    UNKNOWN
 };
 
 // Returns page type

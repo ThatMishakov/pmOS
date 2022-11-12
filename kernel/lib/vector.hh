@@ -64,6 +64,8 @@ public:
     const T* data() const;
 
     void push_back(const T&);
+    void push_back(T&&);
+    void emplace_back(T&&);
     void pop_back();
 
     void clear();
@@ -200,5 +202,49 @@ T& vector<T>::operator[] (size_t p)
 {
     return ptr[p];
 }
+
+template<typename T>
+void vector<T>::push_back(T&& p)
+{
+    if (a_size >= a_capacity)
+        expand(a_capacity*2);
+
+    ++a_size;
+    new (&ptr[a_size]) T(forward<T>(p));
+}
+
+template<typename T>
+void vector<T>::push_back(const T& p)
+{
+    if (a_size >= a_capacity)
+        expand(a_capacity*2);
+
+    ++a_size;
+    new (&ptr[a_size]) T(p);
+}
+
+template<typename T>
+void vector<T>::emplace_back(T&& p)
+{
+    return push_back(forward<T>(p));
+}
+
+template<typename T>
+void vector<T>::expand(size_t new_capacity)
+{
+    if (new_capacity <= a_capacity)
+        return;
+
+    T* temp_ptr = (T*)malloc(sizeof(T)*new_capacity);
+    for (size_t i = 0; i < a_size; ++i)
+        new (&temp_ptr[i]) T( ptr[i] ); // TODO: move! move<T>(ptr[i])
+
+    for (size_t i = 0; i < a_size; ++i)
+        ptr[i].~T();
+
+    free(ptr);
+    ptr = temp_ptr;
+}
+
 
 }

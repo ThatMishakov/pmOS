@@ -130,6 +130,9 @@ Page_Types page_type(u64 virtual_addr)
         case PAGE_SHARED:
             return Page_Types::SHARED;
             break;
+        case PAGE_SPECIAL:
+            return Page_Types::SPECIAL;
+            break;
         default:
             return Page_Types::UNKNOWN;
         }
@@ -485,7 +488,8 @@ fail:
     if (p != SUCCESS) {
         u64 size = l.size();
         for (u64 k = 0; k < size; ++k)
-            unshare_page(page_start + k*KB(4), current_pid);
+            if (l[k].second)
+                unshare_page(page_start + k*KB(4), current_pid);
     }
 
     return p;
@@ -493,7 +497,51 @@ fail:
 
 ReturnStr<klib::pair<PTE, bool>> share_page(u64 virtual_addr, u64 pid)
 {
-    return {ERROR_NOT_IMPLEMENTED, {0, 0}};
+    kresult_t r = ERROR_GENERAL;
+    klib::pair<PTE, bool> k = {PTE(), false};
+    Page_Types p = page_type(virtual_addr);
+
+    switch (p) {
+    case Page_Types::UNALLOCATED:
+        r = ERROR_PAGE_NOT_ALLOCATED;
+        break;
+    case Page_Types::SPECIAL:
+        r = ERROR_SPECIAL_PAGE;
+        break;
+    case Page_Types::HUGE_2M:
+    case Page_Types::HUGE_1G:
+        r = ERROR_HUGE_PAGE; // TODO
+        break;
+    case Page_Types::LAZY_ALLOC:
+    {
+        r = get_lazy_page(virtual_addr);
+        if (r != SUCCESS) break;
+    }
+        FALLTHROUGH;
+    case Page_Types::NORMAL:
+    {
+        PTE* pte = get_pte(virtual_addr);
+        r = register_shared(pte->page_ppn << 12, pid);
+        if (r != SUCCESS)
+            break;
+
+        pte->avl = PAGE_SHARED;
+        k.first = *pte;
+        k.second = true;
+    }
+        break;
+    case Page_Types::COW:
+    case Page_Types::SHARED:
+    {
+        r = SUCCESS;
+        k = {*get_pte(virtual_addr), false};
+    }
+        break;
+    default:
+        break;
+    }
+
+    return {r, k};
 }
 
 kresult_t set_pte(u64 virtual_addr, PTE pte_n, Page_Table_Argumments arg)
@@ -557,9 +605,10 @@ kresult_t unshare_page(u64 virtual_addr, u64 pid)
     if (page_type == PAGE_SHARED) {
         if (nb_owners(page) == 1) { // Only owner
             kresult_t r = release_shared(page, pid);
-            if (r != SUCCESS) return r;
+            if (r != SUCCESS)
+                return r;
 
-            pte->avl == PAGE_NORMAL;
+            pte->avl = PAGE_NORMAL;
             return SUCCESS;
         } else { // Copy page
             ReturnStr<u64> k = palloc.alloc_page_ppn();
@@ -574,7 +623,7 @@ kresult_t unshare_page(u64 virtual_addr, u64 pid)
             copy_frame(pte->page_ppn, k.val);
 
             pte->page_ppn = k.val;
-            pte->avl == PAGE_NORMAL;
+            pte->avl = PAGE_NORMAL;
             return SUCCESS;
         }
     } else if (page_type == PAGE_COW) {

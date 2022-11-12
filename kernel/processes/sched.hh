@@ -90,7 +90,6 @@ struct CPU_Info {
 };
 
 // static CPU_Info* const GSRELATIVE per_cpu = 0; // clang ignores GSRELATIVE for no apparent reason
-
 extern "C" CPU_Info* get_cpu_struct();
 
 struct sched_pqueue {
