@@ -5,8 +5,7 @@
 typedef struct {
     u64 * mem_bitmap;
     u64 mem_bitmap_size;
-
-    void (*temp_printc)(char);
+    u64 flags; /* NX */
 } Kernel_Entry_Data;
 
 //#define KERNEL_ADDR_SPACE 01777777750000000000000

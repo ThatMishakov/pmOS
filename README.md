@@ -33,7 +33,8 @@ These are the features that are planned to be had in the OS:
   - [x] Releasing used pages
   - [x] Shared memory
   - [x] Delayed allocation
-  - [ ] Memory protections (NX bit)
+  - [x] Memory protections (NX bit)
+  - [ ] Swapping
 
 - [ ] Interrupts and exceptions
   - [x] Very basic exception handling

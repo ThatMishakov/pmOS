@@ -85,6 +85,7 @@ void load_kernel(uint64_t multiboot_info_str)
     Kernel_Entry_Data data;
     data.mem_bitmap = bitmap;
     data.mem_bitmap_size = bitmap_size;
+    data.flags = 0 | (!!(nx_enabled) << 0);
     int r = entry(&data);
     print_str("==> Kernel returned ");
     print_hex(r);

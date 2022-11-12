@@ -5,6 +5,7 @@
 #include <mem.h>
 
 uint64_t after_exec_free_avail;
+char nx_enabled = 0;
 
 uint64_t alloc_page_t()
 {
@@ -44,8 +45,9 @@ void get_page(uint64_t addr, Page_Table_Argumments arg)
         pte->page_ppn = alloc_page() >> 12;
         pte->present = 1;
         pte->writeable = arg.writeable;
-        pte->execution_disabled = 0;//arg.execution_disabled; // TODO
         pte->avl = arg.extra;
+        if (nx_enabled) pte->execution_disabled = arg.execution_disabled;
+        else pte->execution_disabled = 0;
     }
 }
 
@@ -81,6 +83,7 @@ void map(uint64_t addr, uint64_t phys, Page_Table_Argumments arg)
         pte->present = 1;
         pte->writeable = arg.writeable;
         pte->avl = arg.extra;
-        pte->execution_disabled = 0;//arg.execution_disabled; // TODO
+        if (nx_enabled) pte->execution_disabled = arg.execution_disabled;
+        else pte->execution_disabled = 0;
     }
 }

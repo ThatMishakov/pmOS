@@ -95,6 +95,23 @@ rel_addr:
     call clear_page_32
     addl $4, %esp
 
+    /* Init NX */
+    pushl %ebx
+    movl $0x80000001, %eax
+    cpuid
+    popl %ebx
+    shrl $20, %edx
+    andl $1, %edx
+    movb %dl, REL(nx_enabled)
+    jz nx_not_supported
+
+    /* Enable NX */
+    movl $0xc0000080, %ecx
+    rdmsr
+    orl $(1 << 11), %eax
+    wrmsr
+
+nx_not_supported:
     /* Init PML4 */
 
     /* Point last entry to self */

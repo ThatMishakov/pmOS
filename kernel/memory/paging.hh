@@ -5,6 +5,8 @@
 #include <asm.hh>
 #include <lib/pair.hh>
 
+extern bool nx_bit_enabled;
+
 #define PAGE_NORMAL  0
 #define PAGE_SHARED  1
 #define PAGE_SPECIAL 2

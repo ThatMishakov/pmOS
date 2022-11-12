@@ -3,6 +3,8 @@
 #include <stdint.h>
 #include <kernel/memory.h>
 
+extern char nx_enabled;
+
 typedef struct {
     uint8_t writeable          : 1;
     uint8_t user_access        : 1;

@@ -10,6 +10,8 @@
 #include <kernel/com.h>
 #include "shared_mem.hh"
 
+bool nx_bit_enabled = false;
+
 
 kresult_t get_page(u64 virtual_addr, Page_Table_Argumments arg)
 {
@@ -88,6 +90,7 @@ kresult_t map(u64 physical_addr, u64 virtual_addr, Page_Table_Argumments arg)
     pte.user_access = arg.user_access;
     pte.writeable = arg.writeable;  
     pte.avl = arg.extra;
+    if (nx_bit_enabled) pte.execution_disabled = arg.execution_disabled;
     return SUCCESS;
 }
 
@@ -327,6 +330,7 @@ kresult_t alloc_page_lazy(u64 virtual_addr, Page_Table_Argumments arg)
     pte.present = 0;
     pte.user_access = arg.user_access;
     pte.writeable = arg.writeable; 
+    if (nx_bit_enabled) pte.execution_disabled = arg.execution_disabled;
     pte.avl = PAGE_DELAYED;
 
     return SUCCESS;
@@ -467,7 +471,7 @@ kresult_t share_pages(TaskDescriptor* t, u64 page_start, u64 to_addr, u64 nb_pag
     u64 i = 0;
     for (; i < nb_pages and p == SUCCESS; ++i, ++it) {
         PTE pte = (*it).first;
-        pte.execution_disabled = pta.execution_disabled;
+        if (nx_bit_enabled) pte.execution_disabled = pta.execution_disabled;
         pte.writeable = pta.writeable;
         p = register_shared(pte.page_ppn << 12, t->pid);
         if (p == SUCCESS)
@@ -592,6 +596,7 @@ kresult_t set_pte(u64 virtual_addr, PTE pte_n, Page_Table_Argumments arg)
     pte.user_access = arg.user_access;
     pte.writeable = arg.writeable;
     pte.avl = arg.extra;
+    if (nx_bit_enabled) pte.execution_disabled = arg.execution_disabled;
     return SUCCESS;
 }
 
