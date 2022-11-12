@@ -56,24 +56,7 @@ kresult_t Ports_storage::send_from_user(u64 pid_from, u64 port, u64 buff_addr, s
 
     if (result != SUCCESS) return result;
 
-    Port& d = this->storage.at(port);
-
-    if (d.attr & 0x01) {
-        d.enqueue(pid_from, move(message));
-    } else if (not exists_process(d.task)){
-        this->storage.erase(port);
-        return ERROR_PORT_CLOSED;
-    } else {
-        TaskDescriptor* process = s_map.at(d.task);
-        result = SUCCESS;
-
-        process->lock.lock();
-        result = queue_message(process, pid_from, d.channel, move(message));
-        process->unblock_if_needed(MESSAGE_S_NUM);
-        process->lock.unlock();
-    }
-
-    return result;
+    return send_msg(pid_from, port, klib::move(message));
 }
 
 kresult_t Ports_storage::send_from_system(u64 port, const char* msg, size_t size)
@@ -83,12 +66,16 @@ kresult_t Ports_storage::send_from_system(u64 port, const char* msg, size_t size
     klib::vector<char> message(size);
     memcpy(msg, &message.front(), size);
 
+    return send_msg(pid_from, port, klib::move(message));
+}
+
+kresult_t Ports_storage::send_msg(u64 pid_from, u64 port, klib::vector<char>&& msg)
+{
+    kresult_t result = SUCCESS;
     Port& d = this->storage.at(port);
 
-    kresult_t result = SUCCESS;
-
     if (d.attr & 0x01) {
-        d.enqueue(pid_from, klib::move(message));
+        d.enqueue(pid_from, klib::forward<klib::vector<char>>(msg));
     } else if (not exists_process(d.task)){
         this->storage.erase(port);
         return ERROR_PORT_CLOSED;
@@ -97,7 +84,7 @@ kresult_t Ports_storage::send_from_system(u64 port, const char* msg, size_t size
         result = SUCCESS;
 
         process->lock.lock();
-        result = queue_message(process, pid_from, d.channel, klib::move(message));
+        result = queue_message(process, pid_from, d.channel, klib::forward<klib::vector<char>>(msg));
         if (result == SUCCESS) process->unblock_if_needed(MESSAGE_S_NUM);
         process->lock.unlock();
     }

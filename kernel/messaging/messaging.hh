@@ -38,7 +38,7 @@ struct Ports_storage {
     kresult_t send_from_system(u64 port, const char* msg, size_t size);
     kresult_t set_dummy(u64 port);
     kresult_t set_port(u64 port, u64 dest_pid, u64 dest_chan);
-    kresult_t send_msg(klib::vector<char>&& msg);
+    kresult_t send_msg(u64 pid_from, u64 port, klib::vector<char>&& msg);
 };
 
 extern Ports_storage kernel_ports;
