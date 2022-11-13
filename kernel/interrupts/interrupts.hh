@@ -53,7 +53,6 @@ extern IDT k_idt;
 void init_interrupts();
 
 extern "C" void loadIDT(IDT_descriptor* IDT_desc);
-extern "C" void mask_PIC();
 
 struct PACKED RFLAGS_Bits {
     u8 carry_flag  :1;

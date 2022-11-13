@@ -7,12 +7,11 @@
 #include <misc.h>
 #include <paging.h>
 #include "include/mem.h"
-#include <screen.h>
 #include "io.h"
 
 void load_kernel(uint64_t multiboot_info_str)
 {
-    print_str("Loading kernel\n");
+    //print_str("Loading kernel\n");
     struct multiboot_tag_module * mod = 0;
 
     for (struct multiboot_tag * tag = (struct multiboot_tag *) (multiboot_info_str + 8); tag->type != MULTIBOOT_TAG_TYPE_END;
@@ -47,7 +46,7 @@ void load_kernel(uint64_t multiboot_info_str)
     ELF_PHeader_64 * elf_pheader = (ELF_PHeader_64 *)((uint64_t)elf_h + elf_h->program_header);
     int elf_pheader_entries = elf_h->program_header_entries;
 
-    print_str("==> Allocating memory...\n");
+    //print_str("==> Allocating memory...\n");
     // Allocate memory
     for (int i = 0; i < elf_pheader_entries; ++i) {
         ELF_PHeader_64 * p = &elf_pheader[i];
@@ -67,7 +66,7 @@ void load_kernel(uint64_t multiboot_info_str)
         }
     }
 
-    print_str("==> Loading executable\n");
+    //print_str("==> Loading executable\n");
 
     for (int i = 0; i < elf_pheader_entries; ++i) {
         ELF_PHeader_64 * p = &elf_pheader[i];
@@ -79,7 +78,7 @@ void load_kernel(uint64_t multiboot_info_str)
         }
     }
 
-    print_str("==> Jumping to kernel\n");
+    //print_str("==> Jumping to kernel\n");
 
     int (*entry)(Kernel_Entry_Data*) = (void*)elf_h->program_entry;
     Kernel_Entry_Data data;
@@ -87,9 +86,9 @@ void load_kernel(uint64_t multiboot_info_str)
     data.mem_bitmap_size = bitmap_size;
     data.flags = 0 | (!!(nx_enabled) << 0);
     int r = entry(&data);
-    print_str("==> Kernel returned ");
-    print_hex(r);
-    if (r == 0) print_str(" (success!)");
-    print_str("\n");
+    //print_str("==> Kernel returned ");
+    //print_hex(r);
+    //if (r == 0) print_str(" (success!)");
+    //print_str("\n");
 }
 

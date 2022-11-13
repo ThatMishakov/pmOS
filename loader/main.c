@@ -45,7 +45,7 @@ void main()
     
     init_mem(multiboot_info_str);
 
-    print_str("Memory bitmap initialized!\n");
+    //print_str("Memory bitmap initialized!\n");
 
     load_kernel(multiboot_info_str);
 

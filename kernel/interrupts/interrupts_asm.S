@@ -195,14 +195,6 @@ loadIDT:
     lidt (%rdi)
     ret
 
-    .globl mask_PIC
-    .type mask_PIC, @function
-mask_PIC:
-    mov $0xff, %al
-    out %al, $0xa1
-    out %al, $0x21
-    ret
-
     .globl ints_handler
     .type ints_handler, @function
 ints_handler:
