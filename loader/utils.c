@@ -20,3 +20,13 @@ char str_starts_with(char* str1, char* str2)
     }
     return 1;
 }
+
+int strlen(char* c)
+{
+    int size = 0;
+    while (*c) {
+        ++c;
+        ++size;
+    }
+    return size;
+}

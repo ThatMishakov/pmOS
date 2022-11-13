@@ -1,5 +1,6 @@
+#include <system.h>
+#include "asm.hh"
 
-#include "misc.h"
 
 /*  Some screen stuff. */
 /*  The number of columns. */
@@ -25,7 +26,7 @@ char screen_init = 0;
 void putchar (int c)
 {
     // Print to bochs as well
-  printc(c);
+  bochs_out(c);
 
   if (!screen_init) return;
 
@@ -60,4 +61,10 @@ void cls (void)
   ypos = 0;
 
   screen_init = 1;
+}
+
+void init_screen()
+{
+    map_phys(0xb8000, 0xb8000,1,0x03);
+    cls();
 }

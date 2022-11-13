@@ -9,4 +9,5 @@ char str_starts_with(char* str1, char* str2);
 
 void cls(void);
 void putchar(int c);
+int strlen(char* c);
 #endif

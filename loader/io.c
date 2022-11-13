@@ -2,12 +2,31 @@
 #include <misc.h>
 #include <stdint.h>
 #include <utils.h>
+#include <syscall.h>
+#include <utils.h>
+
+char screen_buff[8192];
+int buff_pos = 0;
+int buff_ack = 0;
+char write_to_system = 0;
+
+void set_print_syscalls()
+{
+    write_to_system = 1;
+    syscall(SYSCALL_SEND_MSG_PORT, 1, buff_pos - buff_ack, &screen_buff[buff_ack]);
+    buff_ack = buff_pos;
+}
 
 void print_str(char * str)
 {
-    while (*str != '\0') { 
-        putchar(*str);
-        ++str;
+    if (!write_to_system)
+        while (*str != '\0') { 
+            screen_buff[buff_pos++] = (*str);
+            ++str;
+            if (buff_pos == 8192) buff_pos = 0;
+        }
+    else {
+        syscall(SYSCALL_SEND_MSG_PORT, 1, strlen(str), str);
     }
     return;
 }

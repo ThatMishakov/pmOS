@@ -7,7 +7,6 @@
 #include <entry.h>
 #include <kernel_loader.h>
 #include <syscall.h>
-#include <screen.h>
 #include <kernel/syscalls.h>
 #include <kernel/errors.h>
 #include <kernel/block.h>
@@ -33,11 +32,12 @@ void main()
     pta.execution_disabled = 1;
     pta.extra = 0b010;
 
-    map(0xb8000, 0xb8000, pta);
-    cls();
-
     /* Initialize everything */
     print_str("Hello from loader!\n");
+
+    print_str("Info: nx_bit ");
+    print_hex(nx_enabled);
+    print_str("\n");
 
     // Map multiboot structure into the kernel
     uint64_t multiboot_str_all = multiboot_info_str & ~(uint64_t)0xfff;
@@ -49,9 +49,11 @@ void main()
 
     load_kernel(multiboot_info_str);
 
+    set_print_syscalls();
+
     uint64_t pid = syscall(SYSCALL_GETPID).value;
 
-    syscall(SYSCALL_SET_ATTR, pid, 2, 1);
+    //syscall(SYSCALL_SET_ATTR, pid, 2, 1);
 
     print_str("Loading modules...\n");
 

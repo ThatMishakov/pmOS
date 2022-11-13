@@ -16,7 +16,6 @@ Kernel_Entry_Data* kdata;
 extern "C" int main(Kernel_Entry_Data* d)
 {
     nx_bit_enabled = d->flags & 0x01;
-    t_print_bochs("nx_bit_enabled %h\n", nx_bit_enabled);
 
     kdata = d;
     init_gdt();

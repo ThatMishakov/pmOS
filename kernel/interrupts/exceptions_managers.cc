@@ -23,7 +23,7 @@ void pagefault_manager(u64 err, Interrupt_Stackframe* int_s)
         get_lazy_page(page);
         break;
     case Page_Types::UNALLOCATED: // Page not allocated
-        t_print("Debug: Pagefault %h pid %i rip %h error %h -> unallocated... killing process...\n", virtual_addr, get_cpu_struct()->current_task->pid, int_s->rip, err);
+        t_print("Warning: Pagefault %h pid %i rip %h error %h -> unallocated... killing process...\n", virtual_addr, get_cpu_struct()->current_task->pid, int_s->rip, err);
         syscall_exit(4, 0);
         break;
     default:

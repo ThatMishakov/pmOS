@@ -6,10 +6,11 @@
 #include <system.h>
 #include "asm.hh"
 
-void write_bochs(char* buff)
+void putchar (int c);
+void write(char* buff)
 {
     while (*buff != '\0') {
-        bochs_out(*buff);
+        putchar(*buff);
         buff++;
     }
 }
@@ -36,16 +37,19 @@ void int_to_hex(char * buffer, uint64_t n, char upper)
 void print_hex(uint64_t i)
 {
     char buffer[24];
-    write_bochs(const_cast<char*>("0x"));
+    write(const_cast<char*>("0x"));
     int_to_hex(buffer, i, 1);
-    write_bochs(buffer);
+    write(buffer);
 }
 
+void init_screen();
+
 extern "C" int main(int argc, char** argv) {
-    write_bochs(const_cast<char*>("Hello from terminald!\n"));
+    init_screen();
+    write(const_cast<char*>("Hello from terminald!\n"));
     
     result_t r = set_port_default(1, getpid(), 1);
-    if (r != SUCCESS) write_bochs("Warning: could not set the default port\n");
+    if (r != SUCCESS) write("Warning: could not set the default port\n");
 
     while (1)
     {
@@ -64,7 +68,7 @@ extern "C" int main(int argc, char** argv) {
 
             msg_buff[msg.size] = '\0';
 
-            write_bochs(msg_buff);
+            write(msg_buff);
 
             free(msg_buff);
         }
