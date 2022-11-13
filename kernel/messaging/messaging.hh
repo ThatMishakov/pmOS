@@ -23,6 +23,10 @@ struct Message {
 
 using Message_storage = klib::queue<Message>;
 
+
+#define MSG_ATTR_PRESENT   0x01ULL
+#define MSG_ATTR_DUMMY     0x02ULL
+#define MSG_ATTR_NODEFAULT 0x03ULL
 struct Port {
     u64 task = 0;
     u64 channel = 0;
@@ -52,3 +56,6 @@ kresult_t init_kernel_ports();
 
 // Sends a message from the system
 kresult_t send_message_system(u64 port, const char* msg, size_t size);
+
+// Sends a message to the default port
+kresult_t send_msg_default(u64 pid_from, u64 port, klib::vector<char>&& msg);

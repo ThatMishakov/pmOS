@@ -60,3 +60,13 @@ result_t syscall_get_message_info(Message_Descriptor* descr)
 {
     return syscall(SYSCALL_GET_MSG_INFO, descr).result;
 }
+
+result_t set_port_default(uint64_t port, uint64_t dest_pid, uint64_t dest_chan)
+{
+    return syscall(SYSCALL_SET_PORT_DEFAULT, port, dest_pid, dest_chan).result;
+}
+
+u64 getpid()
+{
+    return syscall(SYSCALL_GETPID).value;
+}

@@ -43,6 +43,9 @@ void print_hex(uint64_t i)
 
 extern "C" int main(int argc, char** argv) {
     write_bochs(const_cast<char*>("Hello from terminald!\n"));
+    
+    result_t r = set_port_default(1, getpid(), 1);
+    if (r != SUCCESS) write_bochs("Warning: could not set the default port\n");
 
     while (1)
     {

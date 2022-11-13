@@ -76,6 +76,9 @@ extern "C" ReturnStr<u64> syscall_handler(u64 call_n, u64 arg1, u64 arg2, u64 ar
     case SYSCALL_SET_PORT_KERNEL:
         r.result = syscall_set_port_kernel(arg1, arg2, arg3);
         break;
+    case SYSCALL_SET_PORT_DEFAULT:
+        r.result = syscall_set_port_default(arg1, arg2, arg3);
+        break;
     case SYSCALL_SET_ATTR:
         r.result = syscall_set_attribute(arg1, arg2, arg3);
         break;

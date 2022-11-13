@@ -22,8 +22,9 @@
 #define SYSCALL_SEND_MSG_PORT         0x11
 #define SYSCALL_SET_PORT              0x12
 #define SYSCALL_SET_PORT_KERNEL       0x13
-#define SYSCALL_SET_ATTR              0x14
-#define SYSCALL_INIT_STACK            0x15
+#define SYSCALL_SET_PORT_DEFAULT      0x14
+#define SYSCALL_SET_ATTR              0x15
+#define SYSCALL_INIT_STACK            0x16
 
 
 #endif

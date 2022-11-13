@@ -21,6 +21,9 @@ extern "C" {
 // Generic syscall
 syscall_r syscall(uint64_t call_n, ...);
 
+// Returns a pid of the process
+u64 getpid();
+
 // Allocates a page at *addr*
 syscall_r syscall_get_page(uint64_t addr);
 
@@ -49,7 +52,11 @@ result_t send_message_task(uint64_t pid, uint64_t channel, size_t size, char* me
 // Sends a message to the port
 result_t send_message_port(uint64_t port, size_t size, char* message);
 
+// Sets the port of the process
 result_t set_port(uint64_t pid, uint64_t dest_pid, uint64_t dest_chan);
+
+// Sets default port
+result_t set_port_default(uint64_t port, uint64_t dest_pid, uint64_t dest_chan);
 
 // Blocks the process with the mask *mask*. Returns unblock reason as a value
 syscall_r block(uint64_t mask);
