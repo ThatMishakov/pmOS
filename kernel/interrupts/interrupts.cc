@@ -8,12 +8,12 @@
 #include <processes/sched.hh>
 #include <processes/syscalls.hh>
 #include <misc.hh>
-#include "pic.hh"
+#include "apic.hh"
 
 void init_IDT()
 {
     fill_idt();
-    init_PIC();
+    init_apic();
 
     IDT_descriptor desc = {sizeof(IDT) - 1, (u64)&k_idt};
     loadIDT(&desc);
