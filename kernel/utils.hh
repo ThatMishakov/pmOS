@@ -51,3 +51,11 @@ static inline u8 inb(u16 port)
     asm volatile ("inb %1, %0" : "=a"(ret) : "Nd"(port));
     return ret;
 }
+
+static inline u64 cpuid(u32 p)
+{
+    int eax = 0;
+    int edx = 0;
+    asm volatile ( "cpuid" : "=a"(eax), "=d"(edx) : "0"(p) : "ebx", "ecx" );
+    return eax | (u64)edx << 32;
+}

@@ -77,7 +77,7 @@ read_msr:
     movl %edi, %ecx
     rdmsr
     rorq $32, %rax
-    movl %edx, %eax
+    orq %rdx, %rax
     rorq $32, %rax
     ret 
 

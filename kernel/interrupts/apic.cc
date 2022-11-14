@@ -15,7 +15,7 @@ void map_apic()
 
 void enable_apic()
 {
-    cpu_set_apic_base(apic_base);
+    cpu_set_apic_base(cpu_get_apic_base());
     apic_write_reg(APIC_REG_SPURIOUS_INT, APIC_SPURIOUS_INT | 0x100);
 }
 
@@ -24,7 +24,8 @@ void init_apic()
     init_PIC();
     map_apic();
 
-    apic_write_reg(APIC_REG_TPR, 0);
+    apic_write_reg(APIC_REG_DFR, 0xffffffff);
+    apic_write_reg(APIC_REG_LDR, 0x01000000);
     apic_write_reg(APIC_REG_LVT_TMR, APIC_LVT_MASK);
     apic_write_reg(APIC_REG_LVT_INT0, LVT_INT0);
     apic_write_reg(APIC_REG_LVT_INT1, LVT_INT1);
@@ -52,12 +53,12 @@ void discover_apic_freq()
 
     // Start timer 2
     p = inb(0x61);
-    p = (p&0xfd); 
+    p = (p&0xfe); 
     outb(0x61, p); // Gate LOW
     outb(0x61, p | 1); // Gate HIGH
 
     // Reset APIC counter
-    apic_write_reg(APIC_REG_TMRCURRCNT, (u32)-1);
+    apic_write_reg(APIC_REG_TMRINITCNT, (u32)-1);
 
     // Wait for PIT timer 2 to reach 0
     while (not (inb(0x61)&0x20));
@@ -68,8 +69,8 @@ void discover_apic_freq()
     // Get how many ticks have passed
     u32 ticks = apic_read_reg(APIC_REG_TMRCURRCNT);
 
-    ticks_per_1_ms = ticks*16/10;
-    t_print_bochs("Info: APIC tics per 1ms: %h\n", ticks);
+    ticks_per_1_ms = (0-ticks)*16/10;
+    t_print("Info: APIC timer ticks per 1ms: %h\n", ticks_per_1_ms);
 }
 
 u64 cpu_get_apic_base()
