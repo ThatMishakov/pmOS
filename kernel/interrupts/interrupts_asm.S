@@ -129,7 +129,15 @@ isr\num\():
     fill interrupt_noerr, 18,29
     interrupt_err         30
     interrupt_noerr       31
-    fill interrupt_noerr, 32, 255
+    fill interrupt_noerr, 32, 251
+    fill interrupt_noerr, 253, 255
+
+    .globl isr252 # APIC DUMMY ISR
+    .type isr252, @function
+isr252:
+    movl $0, (0x0b0 + apic_mapped_addr)(%eip)
+    iret
+
 
 /* ------------------------------------------ IDT --------------------------------------------------- */
 

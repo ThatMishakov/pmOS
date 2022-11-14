@@ -47,7 +47,8 @@ CFILES := $(shell find ./ -type f -name '*.c')
 ASMFILES := $(shell find ./ -type f -name '*.S')
 OBJS = 	./objects/icxxabi.o ./start.o ./asm.o ./main.o ./misc.o ./utils.o \
 	    ./memory/mem.o ./memory/malloc.o ./memory/free_page_alloc.o ./memory/palloc.o ./memory/paging.o ./memory/shared_mem.o \
-	    ./interrupts/apic.o ./interrupts/pic.o ./interrupts/gdt.o ./interrupts/exceptions_managers.o ./interrupts/interrupts.o ./interrupts/interrupts_asm.o ./interrupts/loadGDT.o\
+	    ./interrupts/apic.o ./interrupts/pic.o ./interrupts/gdt.o ./interrupts/exceptions_managers.o ./interrupts/interrupts.o \
+		./interrupts/pit.o ./interrupts/interrupts_asm.o ./interrupts/loadGDT.o\
 	    ./processes/sched.o ./processes/syscalls.o ./processes/idle.o ./messaging/messaging.o
 
 CRTI_OBJ =  ./objects/crti.o

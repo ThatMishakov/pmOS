@@ -33,6 +33,7 @@ void init_interrupts()
     init_IDT();
     init_kernel_stack();
     asm("sti");
+    discover_apic_freq();
 }
 
 extern "C" void interrupt_handler(u64 intno, u64 err, Interrupt_Stackframe* int_s)
@@ -45,22 +46,25 @@ extern "C" void interrupt_handler(u64 intno, u64 err, Interrupt_Stackframe* int_
             t_print("!!! Overflow (OF)\n");
             break;
         case 0x6: 
-            t_print("!!! Invalid op-code (UD) instr %h\n", int_s->rip);
+            t_print_bochs("!!! Invalid op-code (UD) instr %h\n", int_s->rip);
             halt();
             break;
         case 0x8: 
-            t_print("!!! Double fault (DF) [ABORT]\n");
+            t_print_bochs("!!! Double fault (DF) [ABORT]\n");
             halt();
             break;
         case 0xE:
             pagefault_manager(err, int_s);
             break;
         case 0xD:
-            t_print("!!! General Protection Fault (GP) error %h\n", err);
+            t_print_bochs("!!! General Protection Fault (GP) error %h\n", err);
             halt();
             break;
+        case APIC_SPURIOUS_INT:
+            t_print_bochs("Notice: Recieved spurious int\n");
+            break;
         default:
-            t_print("!!! Unknown interrupt %h. Not currently handled.\n", intno);
+            t_print_bochs("!!! Unknown interrupt %h. Not currently handled.\n", intno);
             halt();
             break;
     }
