@@ -80,7 +80,7 @@ struct PACKED RFLAGS_Bits {
 };
 
 union PACKED RFLAGS {
-    u64 numb = 0;
+    u64 numb = 0b1000000000;
     RFLAGS_Bits bits;
 };
 

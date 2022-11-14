@@ -38,6 +38,7 @@ void init_interrupts()
 
 extern "C" void interrupt_handler(u64 intno, u64 err, Interrupt_Stackframe* int_s)
 {
+    if (intno < 32)
     switch (intno) {
         case 0x0: 
             t_print("!!! Division by zero (DE)\n");
@@ -60,12 +61,19 @@ extern "C" void interrupt_handler(u64 intno, u64 err, Interrupt_Stackframe* int_
             t_print_bochs("!!! General Protection Fault (GP) error %h\n", err);
             halt();
             break;
-        case APIC_SPURIOUS_INT:
-            t_print_bochs("Notice: Recieved spurious int\n");
-            break;
         default:
             t_print_bochs("!!! Unknown interrupt %h. Not currently handled.\n", intno);
-            halt();
             break;
+    }
+    else
+    {
+        switch(intno) {
+        case APIC_SPURIOUS_INT:
+            //t_print_bochs("Notice: Recieved spurious int\n");
+            break;
+        case APIC_TMR_INT:
+            t_print_bochs("Notice: Recieved clock int\n");
+            break;
+        }
     }
 }

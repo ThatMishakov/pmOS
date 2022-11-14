@@ -73,6 +73,14 @@ void discover_apic_freq()
     t_print("Info: APIC timer ticks per 1ms: %h\n", ticks_per_1_ms);
 }
 
+void apic_one_shot(u32 ms)
+{
+    u32 ticks = ticks_per_1_ms*ms/16;
+    apic_write_reg(APIC_REG_TMRDIV, 0x3); // Divide by 16
+    apic_write_reg(APIC_REG_LVT_TMR, APIC_TMR_INT); // Init in one-shot mode
+    apic_write_reg(APIC_REG_TMRINITCNT, ticks);
+}
+
 u64 cpu_get_apic_base()
 {
     return read_msr(IA32_APIC_BASE_MSR);

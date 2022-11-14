@@ -17,6 +17,7 @@
 #define LVT_INT0                 0xfc
 #define LVT_INT1                 0xfe
 #define APIC_DUMMY_ISR           0xfd
+#define APIC_TMR_INT             0xfb          
 
 #define APIC_LVT_MASK            0x10000
 
@@ -39,3 +40,4 @@ u64 cpu_get_apic_base();
 void cpu_set_apic_base(u64 base);
 
 extern u32 ticks_per_1_ms;
+void apic_one_shot(u32 ms);
