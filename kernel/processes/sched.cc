@@ -221,6 +221,7 @@ ReturnStr<u64> TaskDescriptor::block(u64 mask)
     // Task switch if it's a current process
     CPU_Info* cpu_str = get_cpu_struct();
     if (cpu_str->current_task == this) {
+        cpu_str->current_task->quantum_ticks = apic_get_remaining_ticks();
         find_new_process();
     }
 
@@ -244,6 +245,7 @@ void TaskDescriptor::switch_to()
 {
     // Change task
     get_cpu_struct()->next_task = this;
+    start_timer_ticks(this->quantum_ticks);
 }
 
 bool is_uninited(u64 pid)
@@ -312,7 +314,17 @@ void push_ready(TaskDescriptor* t)
 
 void sched_periodic()
 {
-    t_print_bochs("Recieved periodic\n");
+    // TODO: Replace with more sophisticated algorithm. Will definitely need to be redone once we have multi-cpu support
+
+    TaskDescriptor* current = get_cpu_struct()->current_task;
+
+    if (not ready.empty()) {
+        Ready_Queues::assign_quantum_on_priority(current);
+        push_ready(current);
+        find_new_process();
+    }
+
+    return;
 }
 
 void start_timer_ticks(u32 ticks)

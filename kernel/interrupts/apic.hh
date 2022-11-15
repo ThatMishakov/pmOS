@@ -45,3 +45,4 @@ void cpu_set_apic_base(u64 base);
 extern u32 ticks_per_1_ms;
 void apic_one_shot(u32 ms);
 void apic_one_shot_ticks(u32 ticks);
+u32 apic_get_remaining_ticks();
