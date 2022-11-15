@@ -186,3 +186,6 @@ void start_timer_ticks(u32 ticks);
 
 // Starts the scheduler
 void start_scheduler();
+
+// Pushes current processos to the back of sheduling queues and finds a new one to execute
+void evict(TaskDescriptor*);

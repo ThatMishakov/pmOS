@@ -293,6 +293,9 @@ void TaskDescriptor::unblock_if_needed(u64 reason)
         this->status = PROCESS_READY;
         this->regs.scratch_r.rdi = reason;
         push_ready(this);
+        TaskDescriptor* current = get_cpu_struct()->current_task;
+        if (current->quantum_ticks == 0)
+            evict(current);
     }
 }
 
@@ -322,7 +325,8 @@ void sched_periodic()
         Ready_Queues::assign_quantum_on_priority(current);
         push_ready(current);
         find_new_process();
-    }
+    } else
+        current->quantum_ticks = 0;
 
     return;
 }
@@ -350,4 +354,15 @@ void start_scheduler()
 void Ready_Queues::assign_quantum_on_priority(TaskDescriptor* t)
 {
     t->quantum_ticks = Ready_Queues::quantums[t->priority] * ticks_per_1_ms;
+}
+
+void evict(TaskDescriptor* current_task)
+{
+    current_task->quantum_ticks = apic_get_remaining_ticks();
+    if (current_task->quantum_ticks == 0) Ready_Queues::assign_quantum_on_priority(current_task);
+
+    if (current_task->type != TaskDescriptor::Type::Idle) {
+        push_ready(current_task);
+    }
+    find_new_process();
 }

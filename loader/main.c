@@ -109,8 +109,7 @@ void main()
         }
 
     print_str("Everything seems ok. Nothing to do. Exiting...\n");
-
-    //while (1) ;
+    
 
     syscall(SYSCALL_EXIT);
 }
