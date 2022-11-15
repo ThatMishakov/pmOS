@@ -5,6 +5,7 @@
 #include <lib/splay_tree_map.hh>
 #include <types.hh>
 #include <lib/stack.hh>
+#include <lib/array.hh>
 
 using PID = u64;
 
@@ -79,18 +80,17 @@ struct TaskDescriptor {
 
     // Attributes of the task
     Task_Attributes attr;
-};
+    u32 quantum_ticks = 0; // 0 - infinite
 
-struct CPU_Info {
-    CPU_Info* self = this;
-    Stack* kernel_stack = nullptr;
-    TaskDescriptor* current_task = nullptr;
-    TaskDescriptor* next_task = nullptr;
-    u64 release_old_cr3 = 0;
-};
+    enum Type {
+        Normal,
+        System,
+        Idle,
+    } type = Normal;
 
-// static CPU_Info* const GSRELATIVE per_cpu = 0; // clang ignores GSRELATIVE for no apparent reason
-extern "C" CPU_Info* get_cpu_struct();
+    u8 priority = 1; // 3 - background
+    constexpr static u8 background_priority = 3;
+};
 
 struct sched_pqueue {
     TaskDescriptor* first = nullptr;
@@ -105,6 +105,36 @@ struct sched_pqueue {
     TaskDescriptor* pop_front();
     TaskDescriptor* get_first();
 };
+
+
+struct Ready_Queues {
+    klib::array<sched_pqueue, 4> queues;
+    static constexpr klib::array<u32, 4> quantums = {20, 40, 80, 0};
+    void push_ready(TaskDescriptor*);
+    bool empty() const;
+    TaskDescriptor* get_pop_front();
+    static void assign_quantum_on_priority(TaskDescriptor*);
+};
+
+struct Per_CPU_Scheduler {
+    Ready_Queues queues;
+    u32 timer_val = 0;
+};
+
+struct CPU_Info {
+    CPU_Info* self = this;
+    Stack* kernel_stack = nullptr;
+    TaskDescriptor* current_task = nullptr;
+    TaskDescriptor* next_task = nullptr;
+    u64 release_old_cr3 = 0;
+    Per_CPU_Scheduler sched;
+};
+
+// static CPU_Info* const GSRELATIVE per_cpu = 0; // clang ignores GSRELATIVE for no apparent reason
+extern "C" CPU_Info* get_cpu_struct();
+
+// Adds the task to the appropriate ready queue
+void push_ready(TaskDescriptor*);
 
 // Initializes scheduling structures during the kernel initialization
 void init_scheduling();
@@ -144,3 +174,12 @@ inline TaskDescriptor* get_task(u64 pid)
 
 // Kills the task
 void kill(TaskDescriptor* t);
+
+// To be called from the clock routine
+void sched_periodic();
+
+// Starts the timer and updates CPU_Info
+void start_timer(u32 ms);
+
+// Starts the scheduler
+void start_scheduler();

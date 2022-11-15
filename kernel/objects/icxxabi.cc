@@ -1,4 +1,4 @@
-#include "./icxxabi.h"
+#include "icxxabi.h"
  
 	#ifdef __cplusplus
 	extern "C" {
@@ -97,6 +97,11 @@ void __cxa_finalize(void *f)
 		};
 	};
 };
+
+void __cxa_pure_virtual()
+{
+    // Do nothing or print an error message.
+}
  
 	#ifdef __cplusplus
 	};

@@ -62,7 +62,8 @@ extern "C" void interrupt_handler(u64 intno, u64 err, Interrupt_Stackframe* int_
             halt();
             break;
         default:
-            t_print_bochs("!!! Unknown interrupt %h. Not currently handled.\n", intno);
+            t_print_bochs("!!! Unknown exception %h. Not currently handled.\n", intno);
+            halt();
             break;
     }
     else
@@ -72,7 +73,11 @@ extern "C" void interrupt_handler(u64 intno, u64 err, Interrupt_Stackframe* int_
             //t_print_bochs("Notice: Recieved spurious int\n");
             break;
         case APIC_TMR_INT:
-            t_print_bochs("Notice: Recieved clock int\n");
+            sched_periodic();
+            apic_eoi();
+            break;
+        default:
+            t_print_bochs("!!! Recieved unknown interrupt %h\n", intno);
             break;
         }
     }

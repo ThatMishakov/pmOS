@@ -9,6 +9,7 @@
 #include <kernel/com.h>
 #include <kernel/block.h>
 #include <misc.hh>
+#include <interrupts/apic.hh>
 
 TaskDescriptor* idle_task;
 
@@ -189,6 +190,9 @@ void init_idle()
     // Init stack
     idle_task->init_stack();
     idle_task->regs.e.rip = (u64)&idle;
+    idle_task->type = TaskDescriptor::Type::Idle;
+    idle_task->priority = TaskDescriptor::background_priority;
+    Ready_Queues::assign_quantum_on_priority(idle_task);
     uninit.erase(idle_task);
 }
 
@@ -249,9 +253,8 @@ bool is_uninited(u64 pid)
 
 void TaskDescriptor::init_task()
 {
-    if (this->parrent != nullptr) this->parrent->erase(this);
-
-    ready.push_back(this);
+    Ready_Queues::assign_quantum_on_priority(this);
+    push_ready(this);
 }
 
 void kill(TaskDescriptor* p)
@@ -287,7 +290,7 @@ void TaskDescriptor::unblock_if_needed(u64 reason)
         this->parrent->erase(this);
         this->status = PROCESS_READY;
         this->regs.scratch_r.rdi = reason;
-        ready.push_back(this);
+        push_ready(this);
     }
 }
 
@@ -298,4 +301,41 @@ u64 TaskDescriptor::check_unblock_immediately()
     }
 
     return 0;
+}
+
+void push_ready(TaskDescriptor* t)
+{
+    if (t->parrent != nullptr) t->parrent->erase(t);
+
+    ready.push_back(t);
+}
+
+void sched_periodic()
+{
+    t_print_bochs("Recieved periodic\n");
+}
+
+void start_timer_ticks(u32 ticks)
+{
+    apic_one_shot_ticks(ticks);
+    get_cpu_struct()->sched.timer_val = ticks;
+}
+
+void start_timer(u32 ms)
+{
+    u32 ticks = ticks_per_1_ms*ms;
+    start_timer_ticks(ticks);
+}
+
+void start_scheduler()
+{
+    CPU_Info* s = get_cpu_struct();
+    TaskDescriptor* t = s->current_task;
+    Ready_Queues::assign_quantum_on_priority(t);
+    start_timer_ticks(t->quantum_ticks);
+}
+
+void Ready_Queues::assign_quantum_on_priority(TaskDescriptor* t)
+{
+    t->quantum_ticks = Ready_Queues::quantums[t->priority] * ticks_per_1_ms;
 }

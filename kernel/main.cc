@@ -26,5 +26,6 @@ extern "C" int main(Kernel_Entry_Data* d)
     init_kernel_ports();
     init_scheduling();
     init_interrupts();
+    start_scheduler();
     return 0;
 }

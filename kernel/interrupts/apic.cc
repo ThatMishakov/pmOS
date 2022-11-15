@@ -81,6 +81,14 @@ void apic_one_shot(u32 ms)
     apic_write_reg(APIC_REG_TMRINITCNT, ticks);
 }
 
+void apic_one_shot_ticks(u32 ticks)
+{
+    ticks /= 16;
+    apic_write_reg(APIC_REG_TMRDIV, 0b0011); // Divide by 16
+    apic_write_reg(APIC_REG_LVT_TMR, APIC_TMR_INT); // Init in one-shot mode
+    apic_write_reg(APIC_REG_TMRINITCNT, ticks);
+}
+
 u64 cpu_get_apic_base()
 {
     return read_msr(IA32_APIC_BASE_MSR);
@@ -104,3 +112,8 @@ u32 apic_read_reg(u16 index)
 }
 
 u32 ticks_per_1_ms = 0;
+
+void apic_eoi()
+{
+    apic_write_reg(APIC_REG_EOI, 0);
+}

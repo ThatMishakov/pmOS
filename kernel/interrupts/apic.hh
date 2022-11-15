@@ -3,6 +3,7 @@
 
 #define APIC_REG_LAPIC_ID        0x20
 #define APIC_REG_TPR             0x80
+#define APIC_REG_EOI             0xb0
 #define APIC_REG_LDR             0xd0
 #define APIC_REG_DFR             0xe0
 #define APIC_REG_SPURIOUS_INT    0xf0
@@ -35,9 +36,12 @@ void map_apic();
 void init_apic();
 void discover_apic_freq();
 
+void apic_eoi();
+
 #define IA32_APIC_BASE_MSR 0x1B
 u64 cpu_get_apic_base();
 void cpu_set_apic_base(u64 base);
 
 extern u32 ticks_per_1_ms;
 void apic_one_shot(u32 ms);
+void apic_one_shot_ticks(u32 ticks);
