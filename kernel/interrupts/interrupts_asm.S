@@ -262,6 +262,8 @@ task_switch:
     call release_cr3
     movq $0, %gs:32
 skip:
+    .globl start_first_process
+start_first_process:
 
     cmpq $0, 176(%r15)
     je ret_from_switch_int

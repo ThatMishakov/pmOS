@@ -114,6 +114,8 @@ struct Ready_Queues {
     bool empty() const;
     TaskDescriptor* get_pop_front();
     static void assign_quantum_on_priority(TaskDescriptor*);
+
+    sched_pqueue temp_ready;
 };
 
 struct Per_CPU_Scheduler {
@@ -128,6 +130,7 @@ struct CPU_Info {
     TaskDescriptor* next_task = nullptr;
     u64 release_old_cr3 = 0;
     Per_CPU_Scheduler sched;
+    TaskDescriptor* idle_task = nullptr;
 };
 
 // static CPU_Info* const GSRELATIVE per_cpu = 0; // clang ignores GSRELATIVE for no apparent reason

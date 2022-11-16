@@ -4,6 +4,12 @@ ENTRY(main)
 SECTIONS
 {
     /* Load in a fixed point */
+    . = 0x4000;
+    _cpuinit_start = .;
+    .cpuinit : {
+      *(.cpuinit)  
+    }
+    _cpuinit_end = ALIGN(4096);
 
     . = 4M;
     _start = .;

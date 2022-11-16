@@ -10,22 +10,31 @@
 #include <misc.hh>
 #include "apic.hh"
 
+void set_idt()
+{
+    IDT_descriptor desc = {sizeof(IDT) - 1, (u64)&k_idt};
+    loadIDT(&desc);
+}
+
 void init_IDT()
 {
     fill_idt();
     init_apic();
 
-    IDT_descriptor desc = {sizeof(IDT) - 1, (u64)&k_idt};
-    loadIDT(&desc);
+    set_idt();
 }
+
+int tss_index = 0;
 
 void init_kernel_stack()
 {
+    int tss_i = tss_index++;
+
     CPU_Info* s = get_cpu_struct();
     s->kernel_stack = (Stack*)palloc(sizeof(Stack)/4096);
-    kernel_gdt.SSD_entries[0] = System_Segment_Descriptor((u64) calloc(1,sizeof(TSS)), sizeof(TSS), 0x89, 0x02);
-    kernel_gdt.SSD_entries[0].tss()->ist1 = (u64)s->kernel_stack + sizeof(Stack);
-    loadTSS(0x28);
+    kernel_gdt.SSD_entries[tss_i] = System_Segment_Descriptor((u64) calloc(1,sizeof(TSS)), sizeof(TSS), 0x89, 0x02);
+    kernel_gdt.SSD_entries[tss_i].tss()->ist1 = (u64)s->kernel_stack + sizeof(Stack);
+    loadTSS(0x28 + tss_i);
 }
 
 void init_interrupts()

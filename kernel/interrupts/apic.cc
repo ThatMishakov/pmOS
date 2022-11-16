@@ -15,6 +15,11 @@ void map_apic()
 
 void enable_apic()
 {
+    apic_write_reg(APIC_REG_DFR, 0xffffffff);
+    apic_write_reg(APIC_REG_LDR, 0x01000000);
+    apic_write_reg(APIC_REG_LVT_TMR, APIC_LVT_MASK);
+    apic_write_reg(APIC_REG_LVT_INT0, LVT_INT0);
+    apic_write_reg(APIC_REG_LVT_INT1, LVT_INT1);
     cpu_set_apic_base(cpu_get_apic_base());
     apic_write_reg(APIC_REG_SPURIOUS_INT, APIC_SPURIOUS_INT | 0x100);
 }
@@ -23,12 +28,6 @@ void init_apic()
 {
     init_PIC();
     map_apic();
-
-    apic_write_reg(APIC_REG_DFR, 0xffffffff);
-    apic_write_reg(APIC_REG_LDR, 0x01000000);
-    apic_write_reg(APIC_REG_LVT_TMR, APIC_LVT_MASK);
-    apic_write_reg(APIC_REG_LVT_INT0, LVT_INT0);
-    apic_write_reg(APIC_REG_LVT_INT1, LVT_INT1);
 
     enable_apic();
 }

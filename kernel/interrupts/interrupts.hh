@@ -48,11 +48,13 @@ struct IDT_descriptor {
     u64 offset;
 } PACKED;
 
-extern IDT k_idt;
 
 void init_interrupts();
+void init_kernel_stack();
 
+extern IDT k_idt;
 extern "C" void loadIDT(IDT_descriptor* IDT_desc);
+void set_idt();
 
 struct PACKED RFLAGS_Bits {
     u8 carry_flag  :1;

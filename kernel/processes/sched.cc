@@ -10,10 +10,7 @@
 #include <kernel/block.h>
 #include <misc.hh>
 #include <interrupts/apic.hh>
-
-TaskDescriptor* idle_task;
-
-sched_pqueue ready;
+#include <cpus/cpu_init.hh>
 
 sched_pqueue blocked;
 Spinlock blocked_s;
@@ -25,12 +22,6 @@ sched_map s_map;
 
 PID pid = 1;
 
-void init_per_cpu()
-{
-    CPU_Info* c = new CPU_Info;
-    write_msr(0xC0000101, (u64)c);
-}
-
 void init_scheduling()
 {
     init_per_cpu();
@@ -40,8 +31,6 @@ void init_scheduling()
     current_task->page_table = getCR3();
     current_task->pid = pid++;
     s_map.insert({current_task->pid, current_task});
-
-    init_idle();
 }
 
 void sched_pqueue::push_back(TaskDescriptor* d)
@@ -185,7 +174,9 @@ void init_idle()
         return;
     }
 
-    idle_task = s_map.at(i.val);
+    CPU_Info* cpu_str = get_cpu_struct();
+    cpu_str->idle_task = s_map.at(i.val);
+    TaskDescriptor* idle_task = cpu_str->idle_task;
 
     // Init stack
     idle_task->init_stack();
@@ -231,11 +222,11 @@ ReturnStr<u64> TaskDescriptor::block(u64 mask)
 void find_new_process()
 {
     TaskDescriptor* next = nullptr;
-    if (not ready.empty()) {
-        next = ready.get_first();
-        ready.pop_front();
+    if (not get_cpu_struct()->sched.queues.temp_ready.empty()) {
+        next = get_cpu_struct()->sched.queues.temp_ready.get_first();
+        get_cpu_struct()->sched.queues.temp_ready.pop_front();
     } else { // Nothing to execute. Idling...
-        next = idle_task;
+        next = get_cpu_struct()->idle_task;
     }
 
     next->switch_to();
@@ -312,7 +303,7 @@ void push_ready(TaskDescriptor* t)
 {
     if (t->parrent != nullptr) t->parrent->erase(t);
 
-    ready.push_back(t);
+    get_cpu_struct()->sched.queues.temp_ready.push_back(t);
 }
 
 void sched_periodic()
@@ -321,7 +312,7 @@ void sched_periodic()
 
     TaskDescriptor* current = get_cpu_struct()->current_task;
 
-    if (not ready.empty()) {
+    if (not get_cpu_struct()->sched.queues.temp_ready.empty()) {
         Ready_Queues::assign_quantum_on_priority(current);
         push_ready(current);
         find_new_process();

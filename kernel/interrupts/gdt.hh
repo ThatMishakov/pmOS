@@ -48,7 +48,7 @@ struct GDT {
     GDT_entry _64bit_kernel_data {0, 0, 0, 0x92, 0xa0, 0};
     GDT_entry _64bit_user_code {0, 0, 0, 0xfa, 0xa0, 0};
     GDT_entry _64bit_user_data {0, 0, 0, 0xf2, 0xa0, 0};
-    System_Segment_Descriptor SSD_entries[1] = {};
+    System_Segment_Descriptor SSD_entries[27] = {};
 } PACKED ALIGNED(0x1000);
 
 #define R0_CODE_SEGMENT    0x08

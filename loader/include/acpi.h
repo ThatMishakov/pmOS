@@ -48,6 +48,15 @@ typedef struct MADT_entry {
   uint8_t length;
 } __attribute__ ((packed)) MADT_entry;
 
+#define MADT_LAPIC_entry_type    0
+typedef struct MADT_LAPIC_entry
+{
+  MADT_entry header;
+  uint8_t cpu_id;
+  uint8_t apic_id;
+  uint32_t flags;
+} __attribute__ ((packed)) MADT_LAPIC_entry;
+
 #define MADT_IOAPIC_entry_type    1
 typedef struct MADT_IOAPIC_entry
 {

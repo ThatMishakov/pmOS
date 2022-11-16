@@ -78,6 +78,8 @@ MADT* getMADT()
     return 0;
 }
 
+void (*kernel_cpu_init)(void);
+
 void init_acpi(unsigned long multiboot_info_str)
 {
     struct multiboot_tag_module * mod = 0;
@@ -115,6 +117,11 @@ void init_acpi(unsigned long multiboot_info_str)
         print_str("!!! Did not find ACPI tables!\n");
     }
 
+    extern char _cpuinit_start;
+    extern char _cpuinit_end;
+    lprintf("CPUINIT %h %h\n", &_cpuinit_start, &_cpuinit_end);
+    map_phys(&_cpuinit_start, &_cpuinit_start, (uint64_t)(&_cpuinit_end - &_cpuinit_start)/4096, 0x3);
+
     MADT* madt = getMADT();
     if (madt != 0) {
         uint32_t length = madt->header.length;
@@ -122,10 +129,12 @@ void init_acpi(unsigned long multiboot_info_str)
         char* end = (char*)(madt) + length;
         for (; entry < end; entry += ((MADT_entry*)entry)->length) {
             MADT_entry* e = (MADT_entry*)(entry);
-            lprintf("MADT type %h length %h\n", e->type, e->length);
-            if (e->type == MADT_INT_OVERRIDE_TYPE) {
-                MADT_INT_entry* p = (MADT_INT_entry*)e;
-                lprintf(" -> Source %h gl_int %h flags %h\n", p->source, p->global_system_interrupt, p->flags);
+            lprintf("MADT type %h length", e->type, e->length);
+            if (e->type == MADT_LAPIC_entry_type) {
+                MADT_LAPIC_entry* p = (MADT_LAPIC_entry*)e;
+                lprintf(" -> Local APIC CPU %h APIC ID %h flags %h\n", p->cpu_id, p->apic_id, p->flags);
+            } else {
+                lprintf("\n");
             }
         }
     }
