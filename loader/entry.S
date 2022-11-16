@@ -283,7 +283,7 @@ clear_page_32:
 
 
 /* ------------------------------------------------------- GDT --------------------------------------------------------- */
-.bss
+    .data
 GDT_DW:
     .short 0
     .short 0
@@ -314,7 +314,7 @@ reload_CS:
     movw %ax, %gs
     ret
 
-
+    .data
     .align  4096
 temp_gdt:
     .quad 0 /* Empty entry */
@@ -351,3 +351,81 @@ temp_gdt_64bit_data:
     .byte 0xcf
     .byte 0x00
 temp_gdt_end:
+
+
+    /* ------------------------------------------------------ CPU BOOTSTRAP ---------------------------------------- */
+        .code16
+    .section .cpuinit
+    .globl init_cpucpuinit
+    .type init_cpu, @function
+init_cpu:
+    # Disable interrupts
+    xchgw %bx, %bx
+    cli
+
+    # Enable A20
+    inb $0x92, %al
+    orb $2, %al
+    outb %al, $0x92
+
+    # Load GDT
+    lgdt GDT_DW
+
+    # Enter protected mode
+    movl %cr0, %eax
+    orb 1, %al
+    movl %eax, %cr0
+
+    jmp $(temp_gdt_32bit_code - temp_gdt),$protected_mode
+
+    .code32
+protected_mode:
+    movw $(temp_gdt_32bit_data - temp_gdt), %ax
+    movw %ax, %ds
+    movw %ax, %es
+    movw %ax, %ss
+    movw %ax, %fs
+    movw %ax, %gs
+
+    cmpb $0, nx_enabled
+    jz nx_not_supported_bootstrap
+
+    /* Enable NX */
+    movl $0xc0000080, %ecx
+    rdmsr
+    orl $(1 << 11), %eax
+    wrmsr
+
+nx_not_supported_bootstrap:
+    /* Enable PAE and page size extension */
+    movl %cr4, %eax
+    orl $((1 << 5) | (1 << 4)), %eax
+    movl %eax, %cr4
+
+    /* Enable long mode */
+    movl $0xc0000080, %ecx
+    rdmsr
+    orl $(1 << 8), %eax
+    wrmsr
+    
+    /* Load PML4 */
+    movl g_pml4, %eax
+    movl %eax, %cr3
+
+    /* Enable paging */
+    movl %cr0, %eax
+    orl $((1 << 31) | (1 << 0)), %eax
+    movl %eax, %cr0
+
+    /* Load 64 bit segment registers */
+    movw $(temp_gdt_64bit_data - temp_gdt), %ax
+    movw %ax, %ds
+    movw %ax, %es
+    movw %ax, %fs
+    movw %ax, %gs
+    movw %ax, %ss
+
+    jmp $(temp_gdt_64bit_code - temp_gdt), $long_mode
+    .code64
+long_mode:
+    jmp *kernel_cpu_init(%rip)

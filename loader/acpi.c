@@ -119,8 +119,17 @@ void init_acpi(unsigned long multiboot_info_str)
 
     extern char _cpuinit_start;
     extern char _cpuinit_end;
-    lprintf("CPUINIT %h %h\n", &_cpuinit_start, &_cpuinit_end);
-    map_phys(&_cpuinit_start, &_cpuinit_start, (uint64_t)(&_cpuinit_end - &_cpuinit_start)/4096, 0x3);
+    
+    kernel_cpu_init = (void*)syscall(SYSCALL_CONFIGURE_SYSTEM, 3, 0, 0).value;
+    lprintf("CPUINIT %h %h %h\n", &_cpuinit_start, &_cpuinit_end, kernel_cpu_init);
+
+    lprintf("Bringing up CPU...\n");
+    syscall(SYSCALL_CONFIGURE_SYSTEM, 2, 1, 0);
+    for (int i = 0; i < 1000000; ++i)
+        asm volatile ("");
+
+    uint32_t vector = (uint32_t)(&_cpuinit_start) >> 12;
+    syscall(SYSCALL_CONFIGURE_SYSTEM, 2, 2, vector);
 
     MADT* madt = getMADT();
     if (madt != 0) {

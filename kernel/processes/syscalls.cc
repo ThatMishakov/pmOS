@@ -11,6 +11,8 @@
 #include <kernel/attributes.h>
 #include <kernel/flags.h>
 #include <interrupts/ioapic.hh>
+#include <interrupts/apic.hh>
+#include <cpus/cpu_init.hh>
 
 extern "C" ReturnStr<u64> syscall_handler(u64 call_n, u64 arg1, u64 arg2, u64 arg3, u64 arg4, u64 arg5)
 {
@@ -579,8 +581,15 @@ ReturnStr<u64> syscall_configure_system(u64 type, u64 arg1, u64 arg2)
     case SYS_CONF_IOAPIC:
         return ioapic_configure(arg1, arg2);
         break; 
+    case SYS_CONF_LAPIC:
+        return lapic_configure(arg1, arg2);
+        break;
+    case SYS_CONF_CPU:
+        return cpu_configure(arg1, arg2);
+        break;
     default:
         break;
     };
+
     return {ERROR_NOT_SUPPORTED, 0};
 }

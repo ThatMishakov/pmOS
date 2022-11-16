@@ -4,19 +4,19 @@ ENTRY(main)
 SECTIONS
 {
     /* Load in a fixed point */
-    . = 0x4000;
-    _cpuinit_start = .;
-    .cpuinit : {
-      *(.cpuinit)  
-    }
-    _cpuinit_end = ALIGN(4096);
+    . = 0x8000;
+    . = ALIGN(4096);
+    _cpuinit_end = .;
 
-    . = 4M;
     _start = .;
     _exec_start = .;
     .text : {
         *(.multiboot2)
         *(.text*)
+        . = ALIGN(4096);
+        _cpuinit_start = .;
+        *(.cpuinit)
+        _cpuinit_end = .;
     }
     .rodata : {
         *(.rodata*)

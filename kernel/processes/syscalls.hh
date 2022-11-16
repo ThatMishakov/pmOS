@@ -82,6 +82,8 @@ kresult_t syscall_share_with_range(u64 pid, u64 page_start, u64 to_addr, u64 nb_
 ReturnStr<u64> syscall_is_page_allocated(u64 page);
 
 #define SYS_CONF_IOAPIC          0x01
+#define SYS_CONF_LAPIC           0x02
+#define SYS_CONF_CPU             0x03
 
 // Configures a system
 ReturnStr<u64> syscall_configure_system(u64 type, u64 arg1, u64 arg2);

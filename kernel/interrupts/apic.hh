@@ -7,6 +7,8 @@
 #define APIC_REG_LDR             0xd0
 #define APIC_REG_DFR             0xe0
 #define APIC_REG_SPURIOUS_INT    0xf0
+#define APIC_ICR_LOW             0x300
+#define APIC_ICR_HIGH            0x310
 #define APIC_REG_LVT_TMR         0x320
 #define APIC_REG_LVT_INT0        0x350
 #define APIC_REG_LVT_INT1        0x360
@@ -30,6 +32,7 @@ extern void* apic_mapped_addr;
 
 void apic_write_reg(u16 index, u32 val);
 u32 apic_read_reg(u16 index);
+u32 get_lapic_id();
 
 void enable_apic();
 void map_apic();
@@ -46,3 +49,29 @@ extern u32 ticks_per_1_ms;
 void apic_one_shot(u32 ms);
 void apic_one_shot_ticks(u32 ticks);
 u32 apic_get_remaining_ticks();
+
+struct ICR {
+    u8 vector         :8  = 0; 
+    u8 delivery_mode  :3  = 0;
+    u8 dest_mode      :1  = 0;
+    u8 deliv_status   :1  = 0; // Read only
+    u8 reserved0      :1  = 0;
+    u8 level          :1  = 1;
+    u8 trigger_mode   :1  = 0;
+    u8 reserved1      :2  = 0;
+    u8 dest_shorthand :2  = 0;
+    u16 reserved2     :12 = 0;
+    u32 reserved3     :24 = 0;
+    u8 dest_field     :8  = 0;
+} PACKED ALIGNED(4);
+
+void write_ICR(ICR);
+ICR read_ICR();
+
+ReturnStr<u64> lapic_configure(u64 opt, u64 arg);
+
+void broadcast_init_ipi();
+void broadcast_sipi(u8 vector);
+
+#define APIC_DELIVERY_START_UP    0b110
+#define APIC_DELIVERY_INIT        0b100

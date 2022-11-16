@@ -3,6 +3,7 @@
 #include <asm.hh>
 #include <interrupts/interrupts.hh>
 #include <interrupts/apic.hh>
+#include <kernel/errors.h>
 
 void init_per_cpu()
 {
@@ -20,5 +21,19 @@ extern "C" void cpu_start_routine()
 
     find_new_process();
     
-    t_print_bochs("CPU started!\n");
+    t_print_bochs("CPU %h started!\n", get_lapic_id());
+}
+
+ReturnStr<u64> cpu_configure(u64 type, UNUSED u64 arg)
+{
+    ReturnStr<u64> result = {ERROR_GENERAL, 0};
+    switch (type) {
+    case 0:
+        result.result = SUCCESS;
+        result.val = (u64)&cpu_start_routine;
+        break;
+    default:
+        result.result = ERROR_NOT_SUPPORTED;
+    };
+    return result;
 }

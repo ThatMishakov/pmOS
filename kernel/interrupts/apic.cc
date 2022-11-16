@@ -4,6 +4,7 @@
 #include <memory/paging.hh>
 #include "pic.hh"
 #include "pit.hh"
+#include <kernel/errors.h>
 
 void* apic_mapped_addr = nullptr;
 
@@ -119,4 +120,50 @@ void apic_eoi()
 u32 apic_get_remaining_ticks()
 {
     return apic_read_reg(APIC_REG_TMRCURRCNT);
+}
+
+void write_ICR(ICR i)
+{
+    u32* ptr = (u32*)&i;
+    apic_write_reg(APIC_ICR_HIGH, ptr[1]);
+    apic_write_reg(APIC_ICR_LOW, ptr[0]);
+}
+
+ReturnStr<u64> lapic_configure(u64 opt, u64 arg)
+{
+    ReturnStr<u64> result = {ERROR_GENERAL, 0};
+
+    switch (opt) {
+    case 0:
+        result.result = SUCCESS;
+        result.val = get_lapic_id();
+        break;
+    case 1:
+        result.result = SUCCESS;
+        broadcast_init_ipi();
+        break;
+    case 2:
+        result.result = SUCCESS;
+        broadcast_sipi(arg);
+        break;
+    default:
+        result.result = ERROR_NOT_SUPPORTED;
+    };
+    return result;
+}
+
+u32 get_lapic_id()
+{
+    return apic_read_reg(APIC_REG_LAPIC_ID);
+}
+
+void broadcast_sipi(u8 vector)
+{
+    asm ("xchgw %bx, %bx");
+    apic_write_reg(APIC_ICR_LOW,0x000C4600 | vector);
+}
+
+void broadcast_init_ipi()
+{
+    apic_write_reg(APIC_ICR_LOW,0x000C4500);
 }
