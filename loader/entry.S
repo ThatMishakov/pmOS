@@ -360,7 +360,7 @@ temp_gdt_end:
     .type init_cpu, @function
 init_cpu:
     # Disable interrupts
-    xchgw %bx, %bx
+    # xchgw %bx, %bx
     cli
 
     # Enable A20

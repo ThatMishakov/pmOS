@@ -14,6 +14,7 @@ void init_per_cpu()
 
 extern "C" void cpu_start_routine()
 {
+    asm("xchgw %bx, %bx");
     init_per_cpu();
     set_idt();
     init_kernel_stack();
@@ -30,7 +31,7 @@ ReturnStr<u64> cpu_configure(u64 type, UNUSED u64 arg)
     switch (type) {
     case 0:
         result.result = SUCCESS;
-        result.val = (u64)&cpu_start_routine;
+        result.val = (u64)&cpu_startup_entry;
         break;
     default:
         result.result = ERROR_NOT_SUPPORTED;
