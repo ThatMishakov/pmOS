@@ -15,6 +15,7 @@
 #include <paging.h>
 #include <syscall.h>
 #include <utils.h>
+#include <acpi.h>
 
 uint64_t multiboot_magic;
 uint64_t multiboot_info_str;
@@ -51,7 +52,7 @@ void main()
 
     set_print_syscalls();
 
-    uint64_t pid = syscall(SYSCALL_GETPID).value;
+    //uint64_t pid = syscall(SYSCALL_GETPID).value;
 
     //syscall(SYSCALL_SET_ATTR, pid, 2, 1);
 
@@ -108,7 +109,9 @@ void main()
             }
         }
 
-    print_str("Everything seems ok. Nothing to do. Exiting...\n");
+    init_acpi(multiboot_info_str);
+
+    //print_str("Everything seems ok. Nothing to do. Exiting...\n");
     
 
     syscall(SYSCALL_EXIT);

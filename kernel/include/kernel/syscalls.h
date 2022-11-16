@@ -25,6 +25,8 @@
 #define SYSCALL_SET_PORT_DEFAULT      0x14
 #define SYSCALL_SET_ATTR              0x15
 #define SYSCALL_INIT_STACK            0x16
+#define SYSCALL_IS_PAGE_ALLOCATED     0x17
+#define SYSCALL_CONFIGURE_SYSTEM      0x18
 
 
 #endif

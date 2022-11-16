@@ -10,6 +10,7 @@
 #include <kernel/block.h>
 #include <kernel/attributes.h>
 #include <kernel/flags.h>
+#include <interrupts/ioapic.hh>
 
 extern "C" ReturnStr<u64> syscall_handler(u64 call_n, u64 arg1, u64 arg2, u64 arg3, u64 arg4, u64 arg5)
 {
@@ -87,6 +88,12 @@ extern "C" ReturnStr<u64> syscall_handler(u64 call_n, u64 arg1, u64 arg2, u64 ar
         break;
     case SYSCALL_SHARE_WITH_RANGE:
         r.result = syscall_share_with_range(arg1, arg2, arg3, arg4, arg5);
+        break;
+    case SYSCALL_IS_PAGE_ALLOCATED:
+        r = syscall_is_page_allocated(arg1);
+        break;
+    case SYSCALL_CONFIGURE_SYSTEM:
+        r = syscall_configure_system(arg1, arg2, arg3);
         break;
     default:
         // Not supported
@@ -531,7 +538,6 @@ kresult_t syscall_set_attribute(u64 pid, u64 attribute, u64 value)
 
     if (not exists_process(pid)) return ERROR_NO_SUCH_PROCESS;
     TaskDescriptor* process = s_map.at(pid);
-
     kresult_t result = ERROR_GENERAL;
 
     switch (attribute) {
@@ -549,4 +555,32 @@ kresult_t syscall_set_attribute(u64 pid, u64 attribute, u64 value)
     }
 
     return result;
+}
+
+ReturnStr<u64> syscall_is_page_allocated(u64 virtual_addr)
+{
+    // Check allignment to 4096K (page size)
+    if (virtual_addr & 0xfff) return {ERROR_UNALLIGNED, 0};
+
+    // Check that program is not hijacking kernel space
+    if (virtual_addr >= KERNEL_ADDR_SPACE) return {ERROR_OUT_OF_RANGE, 0};
+
+    Page_Types type = page_type(virtual_addr);
+    bool is_allocated = type != Page_Types::UNALLOCATED and type != Page_Types::UNKNOWN;
+
+    return {SUCCESS, is_allocated};
+}
+
+ReturnStr<u64> syscall_configure_system(u64 type, u64 arg1, u64 arg2)
+{
+    // TODO: Check permissions
+
+    switch (type) {
+    case SYS_CONF_IOAPIC:
+        return ioapic_configure(arg1, arg2);
+        break; 
+    default:
+        break;
+    };
+    return {ERROR_NOT_SUPPORTED, 0};
 }

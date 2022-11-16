@@ -31,6 +31,20 @@ void print_str(char * str)
     return;
 }
 
+void print_str_n(char * str, int length)
+{
+    if (!write_to_system)
+        while (length--) { 
+            screen_buff[buff_pos++] = (*str);
+            ++str;
+            if (buff_pos == 8192) buff_pos = 0;
+        }
+    else {
+        syscall(SYSCALL_SEND_MSG_PORT, 1, length, str);
+    }
+    return;
+}
+
 void int_to_hex(char * buffer, uint64_t n, char upper)
 {
   char buffer2[24];
@@ -56,41 +70,4 @@ void print_hex(uint64_t i)
     print_str("0x");
     int_to_hex(buffer, i, 1);
     print_str(buffer);
-}
-
-void printf(const char* format, ...)
-{
-    char ** arg = (char**) &format;
-    char buff[20];
-    ++arg;
-
-    char c;
-    while ((c = *(format++)) != '\0') {
-        if (c != '%') printc(c);
-        else {
-            char *p;
-            c = *(format++);
-            switch (c) {
-            case 'H':
-            case 'h':
-                int_to_hex(buff, *(long*)arg++, (c == 'H' ? 1 : 0));
-                p = buff;
-                goto string;
-            case 's':
-                p = *arg++;
-                if (!p)
-                    p = "(null)";
-            string:
-                print_str(p);
-                break;
-            case 'c':
-                printc(*((char*)arg++));
-                break;
-            case '0':
-                break;
-            default:
-                break;
-            }
-        }
-    }
 }

@@ -114,7 +114,7 @@ skip:
 
 void init_mem(unsigned long multiboot_str)
 {
-    print_str("Initializing memory\n");
+    //print_str("Initializing memory\n");
     // Find highest available memory entry
     uint64_t base = 0;
     uint64_t end = 0;
@@ -133,6 +133,7 @@ void init_mem(unsigned long multiboot_str)
                     uint64_t length = mmap->len;
                     int type = mmap->type;
 
+                    /*
                     print_str("Mem entry base ");
                     print_hex(base_addr);
                     print_str(" length ");
@@ -140,6 +141,8 @@ void init_mem(unsigned long multiboot_str)
                     print_str(" type ");
                     print_hex(type);
                     print_str("\n");
+                    */
+                    
 
                     if (type == MULTIBOOT_MEMORY_AVAILABLE) {
                         if (base_addr > base) {
