@@ -131,6 +131,8 @@ void init_acpi(unsigned long multiboot_info_str)
     uint32_t vector = (uint32_t)(&_cpuinit_start) >> 12;
     syscall(SYSCALL_CONFIGURE_SYSTEM, 2, 2, vector);
 
+
+    /*
     MADT* madt = getMADT();
     if (madt != 0) {
         uint32_t length = madt->header.length;
@@ -147,4 +149,5 @@ void init_acpi(unsigned long multiboot_info_str)
             }
         }
     }
+    */
 }

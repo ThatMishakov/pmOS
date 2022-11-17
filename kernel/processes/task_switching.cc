@@ -2,6 +2,7 @@
 #include "sched.hh"
 #include <asm.hh>
 #include <memory/paging.hh>
+#include <interrupts/apic.hh>
 
 extern "C" void task_switch()
 {
@@ -25,8 +26,12 @@ extern "C" void task_switch()
             blocked_s.unlock();
             break;
         }
+        case Process_Status::PROCESS_SPECIAL: {
+            // Do nothing
+            break;
+        };
         default:
-            t_print_bochs("!!! Task switch error unknown next status: %h\n", old_task->next_status);
+            t_print_bochs("!!! Task switch error unknown next [status %h PID %i] to [PID %i] CPU %i\n", old_task->next_status, old_task->pid, cpu_struct->current_task->pid, get_lapic_id() >> 24);
             halt();
             break;
         }

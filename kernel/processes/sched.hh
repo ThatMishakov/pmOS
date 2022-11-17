@@ -18,6 +18,7 @@ enum Process_Status: u64 {
     PROCESS_READY,
     PROCESS_BLOCKED,
     PROCESS_UNINIT,
+    PROCESS_SPECIAL, // Would be used by idle or system tasks
     PROCESS_DEAD
 };
 

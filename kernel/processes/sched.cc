@@ -368,7 +368,9 @@ void evict(TaskDescriptor* current_task)
     current_task->quantum_ticks = apic_get_remaining_ticks();
     if (current_task->quantum_ticks == 0) Ready_Queues::assign_quantum_on_priority(current_task);
 
-    if (current_task->type != TaskDescriptor::Type::Idle) {
+    if (current_task->type == TaskDescriptor::Type::Idle) {
+        current_task->next_status = Process_Status::PROCESS_SPECIAL;
+    } else {
         current_task->next_status = Process_Status::PROCESS_READY;
     }
     find_new_process();

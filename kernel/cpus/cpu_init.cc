@@ -22,8 +22,6 @@ extern "C" void cpu_start_routine()
     enable_apic();
 
     find_new_process();
-    
-    t_print_bochs("CPU %h started!\n", get_lapic_id() >> 24);
 }
 
 ReturnStr<u64> cpu_configure(u64 type, UNUSED u64 arg)
