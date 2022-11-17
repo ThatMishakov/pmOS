@@ -439,7 +439,9 @@ kresult_t syscall_send_message_task(u64 pid, u64 channel, u64 size, u64 message)
     if (self_pid == pid) return ERROR_CANT_MESSAGE_SELF;
 
     if (not exists_process(pid)) return ERROR_NO_SUCH_PROCESS;
-    TaskDescriptor* process = s_map.at(pid);
+    tasks_map_lock.lock();
+    TaskDescriptor* process = tasks_map.at(pid);
+    tasks_map_lock.unlock();
     kresult_t result = SUCCESS;
 
     klib::vector<char> msg(size);
@@ -474,7 +476,9 @@ kresult_t syscall_set_port(u64 pid, u64 port, u64 dest_pid, u64 dest_chan)
 
     if (not exists_process(pid)) return ERROR_NO_SUCH_PROCESS;
 
-    TaskDescriptor* process = s_map.at(pid);
+    tasks_map_lock.lock();
+    TaskDescriptor* process = tasks_map.at(pid);
+    tasks_map_lock.unlock();
 
     process->lock.lock();
     kresult_t result = process->ports.set_port(port, dest_pid, dest_chan);
@@ -539,7 +543,9 @@ kresult_t syscall_set_attribute(u64 pid, u64 attribute, u64 value)
     // TODO: Check persmissions
 
     if (not exists_process(pid)) return ERROR_NO_SUCH_PROCESS;
-    TaskDescriptor* process = s_map.at(pid);
+    tasks_map_lock.lock();
+    TaskDescriptor* process = tasks_map.at(pid);
+    tasks_map_lock.unlock();
     kresult_t result = ERROR_GENERAL;
 
     switch (attribute) {

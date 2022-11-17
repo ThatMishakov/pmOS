@@ -107,7 +107,9 @@ kresult_t Ports_storage::send_msg(u64 pid_from, u64 port, klib::vector<char>&& m
     }
 
     if (d.attr & MSG_ATTR_PRESENT) {
-        TaskDescriptor* process = s_map.at(d.task);
+        tasks_map_lock.lock();
+        TaskDescriptor* process = tasks_map.at(d.task);
+        tasks_map_lock.unlock();
         result = SUCCESS;
 
         process->lock.lock();
@@ -185,7 +187,9 @@ kresult_t send_msg_default(u64 pid_from, u64 port, klib::vector<char>&& msg)
     }
 
     if (d.attr & MSG_ATTR_PRESENT) {
-        TaskDescriptor* process = s_map.at(d.task);
+        tasks_map_lock.lock();
+        TaskDescriptor* process = tasks_map.at(d.task);
+        tasks_map_lock.unlock();
         result = SUCCESS;
 
         process->lock.lock();
