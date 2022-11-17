@@ -229,10 +229,10 @@ end:
     cmpl $0, %gs:16
     jne save_cont
     addq $40, %rsp
-    jmp task_switch
+    jmp task_switch_external
 save_cont:
     save_context
-    jmp task_switch
+    jmp task_switch_external
 ret_from_switch_int:
     restore_context
 ret_from_interrupt:
@@ -243,28 +243,17 @@ ret_from_interrupt:
 1:
     iretq
 
-    .globl task_switch
-    .type task_switch, @function
-task_switch:
+    .globl task_switch_external
+    .type task_switch_external, @function
+task_switch_external:
     // TODO: INvalidate SSE stuff here
 
-    movq %gs:24, %r15
-    movq %r15, %gs:16
-    movq $0, %gs:24
+    
+    call task_switch
 
-    movq %cr3, %rdi
-    cmpq %rdi, 192(%r15)
-    je skip
-    movq 192(%r15), %rcx
-    movq %rcx, %cr3
-    cmpq $0, %gs:32
-    jz skip
-    call release_cr3
-    movq $0, %gs:32
-skip:
     .globl start_first_process
 start_first_process:
-
+    movq %gs:16, %r15
     cmpq $0, 176(%r15)
     je ret_from_switch_int
     // TODO: Return from syscalls

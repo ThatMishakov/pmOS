@@ -12,8 +12,9 @@ using PID = u64;
 struct TaskPermissions {
 };
 
-enum Process_Status {
-    PROCESS_RUNNING,
+enum Process_Status: u64 {
+    PROCESS_RUNNING = 0,
+    PROCESS_RUNNING_IN_SYSTEM = 1,
     PROCESS_READY,
     PROCESS_BLOCKED,
     PROCESS_UNINIT,
@@ -30,9 +31,10 @@ struct TaskDescriptor {
     // Basic process stuff
     Task_Regs regs;
     PID pid;
-    u64 page_table;
-    TaskPermissions perm;
+    u64 page_table; // 192
     Process_Status status;
+    Process_Status next_status;
+    TaskPermissions perm;
 
     // Scheduling lists
     TaskDescriptor* q_next = nullptr;
