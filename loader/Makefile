@@ -12,7 +12,7 @@ INCLUDEDIR = include
 # User controllable CFLAGS.
 USERCFLAGS = -Wall -Wextra -O2 -pipe
 
-CPPFLAGS = -mcmodel=large $(INTERNALCFLAGS) -I$(INCLUDEDIR) $(USERCFLAGS) -I../kernel/include  -MMD -MP
+CPPFLAGS = -mcmodel=kernel $(INTERNALCFLAGS) -I$(INCLUDEDIR) $(USERCFLAGS) -I../kernel/include  -MMD -MP
 #CXXFLAGS = $(CFLAGS)
 ASMFLAGS = -I$(INCLUDEDIR)
 LDFLAGS = $(INTERNALLDFLAGS)

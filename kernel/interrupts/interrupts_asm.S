@@ -210,8 +210,10 @@ ints_handler:
 	je 1f
 	swapgs
 1:
-
     save_scratch
+    movq %gs:16, %rax
+    movq $1, 200(%rax)
+
     cmpq $0xCA, 0(%rsp) 
     jne not_syscall
 
@@ -236,6 +238,8 @@ save_cont:
 ret_from_switch_int:
     restore_context
 ret_from_interrupt:
+    movq %gs:16, %rax
+    movq $0, 200(%rax)
     restore_scratch
     cmpw $0x08, 0x8(%rsp)
 	je 1f
