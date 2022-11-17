@@ -151,6 +151,9 @@ using sched_map = klib::splay_tree_map<PID, TaskDescriptor*>;
 extern sched_map tasks_map;
 extern Spinlock tasks_map_lock;
 
+extern sched_pqueue blocked;
+extern Spinlock blocked_s;
+
 // Creates a process structure and returns its pid
 ReturnStr<u64> create_process(u16 ring = 3);
 

@@ -209,22 +209,23 @@ ReturnStr<u64> TaskDescriptor::block(u64 mask)
     u64 imm = check_unblock_immediately();
     if (imm != 0) return {SUCCESS, imm};
 
-    // Erase from queues
-    if (this->parrent != nullptr) this->parrent->erase(this);
-
-    // Change status to blocked
-    status = PROCESS_BLOCKED;
-
-    // Add to blocked queue
-    blocked_s.lock();
-    blocked.push_back(this);
-    blocked_s.unlock();
-
     // Task switch if it's a current process
     CPU_Info* cpu_str = get_cpu_struct();
     if (cpu_str->current_task == this) {
         cpu_str->current_task->quantum_ticks = apic_get_remaining_ticks();
+        cpu_str->current_task->next_status = Process_Status::PROCESS_BLOCKED;
         find_new_process();
+    } else {
+        // Erase from queues
+        if (this->parrent != nullptr) this->parrent->erase(this);
+
+        // Change status to blocked
+        status = PROCESS_BLOCKED;
+
+        // Add to blocked queue
+        blocked_s.lock();
+        blocked.push_back(this);
+        blocked_s.unlock();
     }
 
     return {SUCCESS, 0};
@@ -246,6 +247,7 @@ void find_new_process()
 void TaskDescriptor::switch_to()
 {
     // Change task
+    this->status = Process_Status::PROCESS_RUNNING_IN_SYSTEM;
     get_cpu_struct()->next_task = this;
     start_timer_ticks(this->quantum_ticks);
 }
@@ -328,7 +330,7 @@ void sched_periodic()
 
     if (not get_cpu_struct()->sched.queues.temp_ready.empty()) {
         Ready_Queues::assign_quantum_on_priority(current);
-        push_ready(current);
+        current->next_status = Process_Status::PROCESS_READY;
         find_new_process();
     } else
         current->quantum_ticks = 0;
@@ -367,7 +369,7 @@ void evict(TaskDescriptor* current_task)
     if (current_task->quantum_ticks == 0) Ready_Queues::assign_quantum_on_priority(current_task);
 
     if (current_task->type != TaskDescriptor::Type::Idle) {
-        push_ready(current_task);
+        current_task->next_status = Process_Status::PROCESS_READY;
     }
     find_new_process();
 }

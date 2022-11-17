@@ -12,6 +12,27 @@ extern "C" void task_switch()
     cpu_struct->current_task = cpu_struct->next_task;
     cpu_struct->next_task = nullptr;
 
+    if (old_task != nullptr) {
+        switch (old_task->next_status)
+        {
+        case Process_Status::PROCESS_READY: {
+            push_ready(old_task);
+            break;
+        }    
+        case Process_Status::PROCESS_BLOCKED: {
+            blocked_s.lock();
+            blocked.push_back(old_task);
+            blocked_s.unlock();
+            break;
+        }
+        default:
+            t_print_bochs("!!! Task switch error unknown next status: %h\n", old_task->next_status);
+            halt();
+            break;
+        }
+        old_task->status = old_task->next_status;
+    }
+
     u64 cr3 = getCR3();
     if (cpu_struct->current_task->page_table != cr3) {
         setCR3(cpu_struct->current_task->page_table);

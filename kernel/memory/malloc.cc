@@ -4,6 +4,7 @@
 #include <asm.hh>
 
 malloc_list head = {nullptr, 0};
+Spinlock malloc_lock;
 
 void print_list(malloc_list* l)
 {
@@ -17,12 +18,12 @@ void print_list(malloc_list* l)
 
 void *malloc_int(size_t size_bytes, size_t& size_bytes_a)
 {
-    if (size_bytes == 0) halt();
     // Reserve 8 bytes for size header
     size_bytes += 8;
     // Allign to 16
     size_bytes_a = size_bytes & ~0x0f;
     if (size_bytes%16) size_bytes_a += 16-size_bytes_a%16;
+    malloc_lock.lock();
     malloc_list* l = &head;
     while ((l->next != nullptr) and (l->next->size < size_bytes_a)) {
         l = l->next;
@@ -37,20 +38,21 @@ void *malloc_int(size_t size_bytes, size_t& size_bytes_a)
         l->next->size = pages_needed*4096;
     } 
 
+    u64* p = nullptr;
     if (l->next->size == size_bytes_a) {
-        u64* p = (u64*)l->next;
+        p = (u64*)l->next;
         l->next = l->next->next;
         p[0] = size_bytes_a;
-        return p;
     } else {
-        u64* p = (u64*)l->next;
+        p = (u64*)l->next;
         malloc_list* new_e = (malloc_list*)((char*)p + size_bytes_a);
         new_e->size = l->next->size - size_bytes_a;
         new_e->next = l->next->next;
         l->next = new_e;
         p[0] = size_bytes_a;
-        return p;
     }
+    malloc_lock.unlock();
+    return p;
 }
 
 void *realloc(void *, size_t);
@@ -74,16 +76,16 @@ void free(void * p)
 {
     if (p == nullptr) return;
 
-    if ((u64)p < 0x1000) halt();
-
     u64* base = (u64*)p;
     --base;
     u64 size = *base;
 
+    malloc_lock.lock();
     malloc_list* k = (malloc_list*)base;
     k->next = head.next;
     head.next = k;
     k->size = size;
+    malloc_lock.unlock();
 }
  
 void *operator new(size_t size)
