@@ -4,6 +4,7 @@
 #include <interrupts/interrupts.hh>
 #include <interrupts/apic.hh>
 #include <kernel/errors.h>
+#include <interrupts/gdt.hh>
 
 void init_per_cpu()
 {
@@ -14,7 +15,7 @@ void init_per_cpu()
 
 extern "C" void cpu_start_routine()
 {
-    asm("xchgw %bx, %bx");
+    init_gdt();
     init_per_cpu();
     set_idt();
     init_kernel_stack();

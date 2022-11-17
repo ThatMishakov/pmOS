@@ -170,7 +170,7 @@ void init_idle()
 {
     ReturnStr<u64> i = create_process(0);
     if (i.result != SUCCESS) {
-        t_print("Error: failed to create the idle process!\n");
+        t_print_bochs("Error: failed to create the idle process!\n");
         return;
     }
 

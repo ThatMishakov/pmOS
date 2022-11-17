@@ -13,16 +13,16 @@ _start:
     popq %rsp
     ret
 
+
     .globl cpu_startup_entry
     .type cpu_startup_entry, @function
 cpu_startup_entry:
     leaq (stack_end)(%rip), %rsp # Load temp kernel stack
 
-    movl $0, %eax
-    movl $0, %edx
+    movl $1, %edx
 spin:
-    lock
-    cmpxchgl %edx, init_lock(%rip)
+    xorl %eax, %eax
+    lock cmpxchgl %edx, init_lock(%rip)
     jnz spin
 
     call cpu_start_routine
@@ -44,5 +44,6 @@ spin:
     .comm stack, STACK_SIZE
 stack_end:
 
+    .data
 init_lock:
-    .long
+    .long 0

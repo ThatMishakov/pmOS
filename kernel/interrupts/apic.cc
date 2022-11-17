@@ -159,7 +159,6 @@ u32 get_lapic_id()
 
 void broadcast_sipi(u8 vector)
 {
-    asm ("xchgw %bx, %bx");
     apic_write_reg(APIC_ICR_LOW,0x000C4600 | vector);
 }
 
