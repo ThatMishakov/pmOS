@@ -42,7 +42,9 @@ kresult_t Port::enqueue(u64 from, klib::vector<char>&& msg_v)
     msg.channel = 0;
     msg.content = klib::forward<klib::vector<char>>(msg_v);
 
+    this->lock.lock();
     this->msg_queue.emplace(klib::move(msg));
+    this->lock.unlock();
 
     return SUCCESS;
 }
@@ -99,7 +101,9 @@ kresult_t Ports_storage::send_msg(u64 pid_from, u64 port, klib::vector<char>&& m
     }
 
     kresult_t result = ERROR_NODESTINATION;
+    this->lock.lock();
     Port& d = this->storage.at(port);
+    this->lock.unlock();
     
     if (d.attr&MSG_ATTR_PRESENT and not exists_process(d.task)){
         d.attr &= ~MSG_ATTR_PRESENT;
@@ -129,7 +133,8 @@ kresult_t Ports_storage::set_port(u64 port, u64 dest_pid, u64 dest_chan)
 {
     if (not exists_process(dest_pid)) return ERROR_NO_SUCH_PROCESS;
 
-    if (this->storage.count(port) == 1) {
+    if (exists_port(port)) {
+        lock.lock();
         Port& p = this->storage.at(port);
 
         p.task = dest_pid;
@@ -141,28 +146,36 @@ kresult_t Ports_storage::set_port(u64 port, u64 dest_pid, u64 dest_chan)
             TaskDescriptor* d = get_task(dest_pid);
 
             while (not p.msg_queue.empty()) {
-                Message& m = p.msg_queue.front();
-                m.channel = dest_chan;
-                d->messages.push(klib::move(m));
+                Message m = klib::move(p.msg_queue.front());
                 p.msg_queue.pop();
+
+                m.channel = dest_chan;
+                d->lock.lock();
+                d->messages.push(klib::move(m));
+                d->lock.unlock();
             }
 
             d->unblock_if_needed(MESSAGE_S_NUM);
         }
+        lock.unlock();
     }
 
-    this->storage.insert({port, {dest_pid, dest_chan, MSG_ATTR_PRESENT, {}}});
+    this->lock.lock();
+    this->storage.insert({port, {dest_pid, dest_chan, MSG_ATTR_PRESENT, {}, {}}});
+    this->lock.unlock();
 
     return SUCCESS;
 }
 
 kresult_t Ports_storage::set_dummy(u64 port)
 {
+    lock.lock();
     if (this->storage.count(port) == 1) {
         this->storage.at(port).attr |= MSG_ATTR_DUMMY;
     } else {
-        this->storage.insert({port, {0,0,MSG_ATTR_DUMMY, {}}});
+        this->storage.insert({port, {0,0,MSG_ATTR_DUMMY, {}, {}}});
     }
+    lock.unlock();
 
     return SUCCESS;
 }
@@ -179,7 +192,10 @@ kresult_t send_msg_default(u64 pid_from, u64 port, klib::vector<char>&& msg)
     }
 
     kresult_t result = ERROR_NODESTINATION;
+
+    default_ports.lock.lock();
     Port& d = default_ports.storage.at(port);
+    default_ports.lock.unlock();
     
     if (d.attr&MSG_ATTR_PRESENT and not exists_process(d.task)){
         d.attr &= ~MSG_ATTR_PRESENT;

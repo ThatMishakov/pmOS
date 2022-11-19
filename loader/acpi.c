@@ -117,20 +117,6 @@ void init_acpi(unsigned long multiboot_info_str)
         print_str("!!! Did not find ACPI tables!\n");
     }
 
-    extern char _cpuinit_start;
-    extern char _cpuinit_end;
-    
-    kernel_cpu_init = (void*)syscall(SYSCALL_CONFIGURE_SYSTEM, 3, 0, 0).value;
-    lprintf("CPUINIT %h %h %h\n", &_cpuinit_start, &_cpuinit_end, kernel_cpu_init);
-
-    lprintf("Bringing up CPU...\n");
-    syscall(SYSCALL_CONFIGURE_SYSTEM, 2, 1, 0);
-    for (int i = 0; i < 1000000; ++i)
-        asm volatile ("");
-
-    uint32_t vector = (uint32_t)(&_cpuinit_start) >> 12;
-    syscall(SYSCALL_CONFIGURE_SYSTEM, 2, 2, vector);
-
 
     /*
     MADT* madt = getMADT();
@@ -150,4 +136,24 @@ void init_acpi(unsigned long multiboot_info_str)
         }
     }
     */
+}
+
+void start_cpus()
+{
+    extern char _cpuinit_start;
+    extern char _cpuinit_end;
+    
+    kernel_cpu_init = (void*)syscall(SYSCALL_CONFIGURE_SYSTEM, 3, 0, 0).value;
+    lprintf("CPUINIT %h %h %h\n", &_cpuinit_start, &_cpuinit_end, kernel_cpu_init);
+
+    lprintf("Bringing up CPU...\n");
+    syscall(SYSCALL_CONFIGURE_SYSTEM, 2, 1, 0);
+    for (int i = 0; i < 100000; ++i)
+        asm volatile ("");
+
+    uint32_t vector = (uint32_t)(&_cpuinit_start) >> 12;
+    syscall(SYSCALL_CONFIGURE_SYSTEM, 2, 2, vector);
+
+    for (int i = 0; i < 10000000; ++i)
+        asm volatile ("");
 }

@@ -52,9 +52,7 @@ void main()
 
     set_print_syscalls();
 
-    //uint64_t pid = syscall(SYSCALL_GETPID).value;
-
-    //syscall(SYSCALL_SET_ATTR, pid, 2, 1);
+    start_cpus();
 
     print_str("Loading modules...\n");
 

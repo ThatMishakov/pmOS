@@ -36,7 +36,7 @@ u32 get_lapic_id();
 
 void enable_apic();
 void map_apic();
-void init_apic();
+void prepare_apic();
 void discover_apic_freq();
 
 void apic_eoi();

@@ -10,6 +10,7 @@
 #include <kernel/errors.h>
 #include <objects/crti.h>
 #include <memory/paging.hh>
+#include <interrupts/apic.hh>
 
 Kernel_Entry_Data* kdata;
 
@@ -22,8 +23,8 @@ extern "C" int main(Kernel_Entry_Data* d)
     palloc.init(d->mem_bitmap, d->mem_bitmap_size);
     palloc.init_after_paging();
     _init();
-
     init_kernel_ports();
+    prepare_apic();
     init_scheduling();
     init_interrupts();
     start_scheduler();

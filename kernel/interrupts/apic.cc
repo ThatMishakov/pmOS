@@ -25,12 +25,10 @@ void enable_apic()
     apic_write_reg(APIC_REG_SPURIOUS_INT, APIC_SPURIOUS_INT | 0x100);
 }
 
-void init_apic()
+void prepare_apic()
 {
     init_PIC();
     map_apic();
-
-    enable_apic();
 }
 
 void discover_apic_freq()

@@ -19,7 +19,7 @@ void set_idt()
 void init_IDT()
 {
     fill_idt();
-    init_apic();
+    enable_apic();
 
     set_idt();
 }

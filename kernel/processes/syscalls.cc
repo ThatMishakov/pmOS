@@ -12,7 +12,7 @@
 #include <kernel/flags.h>
 #include <interrupts/ioapic.hh>
 #include <interrupts/apic.hh>
-#include <cpus/cpu_init.hh>
+#include <cpus/cpus.hh>
 
 extern "C" ReturnStr<u64> syscall_handler(u64 call_n, u64 arg1, u64 arg2, u64 arg3, u64 arg4, u64 arg5)
 {

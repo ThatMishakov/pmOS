@@ -10,7 +10,7 @@
 #include <kernel/block.h>
 #include <misc.hh>
 #include <interrupts/apic.hh>
-#include <cpus/cpu_init.hh>
+#include <cpus/cpus.hh>
 
 sched_pqueue blocked;
 Spinlock blocked_s;

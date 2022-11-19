@@ -1,6 +1,7 @@
 #pragma once
 #include <stddef.h>
 #include "../memory/malloc.hh"
+#include "utility.hh"
 
 namespace klib {
 
@@ -98,6 +99,18 @@ vector<T>::~vector()
     }
 
     free(ptr);
+}
+
+template<typename T>
+vector<T>::vector(vector<T>&& from)
+{
+    ptr = from.ptr;
+    a_capacity = from.a_capacity;
+    a_size = from.a_size;
+
+    from.ptr = nullptr;
+    from.a_capacity = 0;
+    from.a_size = 0;
 }
 
 template<typename T>
