@@ -7,6 +7,7 @@ LIBEXEC = libpm.a
 INCLUDE = $(ROOTDIR)/kernel/include $(ROOTDIR)/lib/include
 INCPARAM = $(foreach d, $(INCLUDE), -I$d)
 
+CFLAGS = -std=c17 
 CPPFLAGS = -MMD -MP $(INCPARAM)
 LDFLAGS = 
 

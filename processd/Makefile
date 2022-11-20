@@ -14,6 +14,8 @@ INCLUDEDIR = include:../kernel/include:../lib/include
 # User controllable CFLAGS.
 USERCFLAGS = -Wall -Wextra -O2 -pipe
 
+CFLAGS = -std=c17
+CXXFLAGS = -std=c++17
 CPPFLAGS = $(INTERNALCFLAGS) -Iinclude -I../kernel/include -I../lib/include $(USERCFLAGS) -MMD -MP
 ASMFLAGS = -I$(INCLUDEDIR)
 LDFLAGS = $(INTERNALLDFLAGS)

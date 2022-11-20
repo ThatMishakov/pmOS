@@ -61,9 +61,6 @@ result_t set_port_default(uint64_t port, uint64_t dest_pid, uint64_t dest_chan);
 // Blocks the process with the mask *mask*. Returns unblock reason as a value
 syscall_r block(uint64_t mask);
 
-// Exits the process
-void exit(uint32_t);
-
 #if defined(__cplusplus)
 } /* extern "C" */
 #endif

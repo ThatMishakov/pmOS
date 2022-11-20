@@ -92,6 +92,6 @@ extern "C" void interrupt_handler(u64 intno, u64 err, Interrupt_Stackframe* int_
         programmable_interrupt(intno);
     } else if (intno == 0xfb) {
         sched_periodic();
-        smart_eoi();
+        smart_eoi(intno);
     }
 }
