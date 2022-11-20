@@ -9,6 +9,7 @@
 #include <processes/syscalls.hh>
 #include <misc.hh>
 #include "apic.hh"
+#include <kernel/messaging.h>
 
 void set_idt()
 {
@@ -45,8 +46,18 @@ void init_interrupts()
     discover_apic_freq();
 }
 
+void programmable_interrupt(u32 intno)
+{
+    //t_print_bochs("Debug: Recieved int %h\n", intno);
+    Kernel_Message_Interrupt kmsg = {KERNEL_MSG_INTERRUPT, intno, get_lapic_id()};
+    send_message_system(KERNEL_MSG_INT_START + intno, reinterpret_cast<char*>(&kmsg), sizeof(kmsg));
+
+    smart_eoi(intno);
+}
+
 extern "C" void interrupt_handler(u64 intno, u64 err, Interrupt_Stackframe* int_s)
 {
+    //t_print_bochs("Debug: int %h\n", intno);
     if (intno < 32)
     switch (intno) {
         case 0x0: 
@@ -75,19 +86,12 @@ extern "C" void interrupt_handler(u64 intno, u64 err, Interrupt_Stackframe* int_
             halt();
             break;
     }
-    else
-    {
-        switch(intno) {
-        case APIC_SPURIOUS_INT:
-            //t_print_bochs("Notice: Recieved spurious int\n");
-            break;
-        case APIC_TMR_INT:
-            sched_periodic();
-            apic_eoi();
-            break;
-        default:
-            t_print_bochs("!!! Recieved unknown interrupt %h\n", intno);
-            break;
-        }
+    else if (intno < 48) {
+        // Spurious PIC interrupt
+    } else if (intno < 0xf0) {
+        programmable_interrupt(intno);
+    } else if (intno == 0xfb) {
+        sched_periodic();
+        smart_eoi();
     }
 }

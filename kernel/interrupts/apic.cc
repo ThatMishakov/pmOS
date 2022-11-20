@@ -144,6 +144,10 @@ ReturnStr<u64> lapic_configure(u64 opt, u64 arg)
         result.result = SUCCESS;
         broadcast_sipi(arg);
         break;
+    case 3:
+        result.result = SUCCESS;
+        send_ipi_fixed(arg >> 8, arg);
+        break;
     default:
         result.result = ERROR_NOT_SUPPORTED;
     };
@@ -163,4 +167,20 @@ void broadcast_sipi(u8 vector)
 void broadcast_init_ipi()
 {
     apic_write_reg(APIC_ICR_LOW,0x000C4500);
+}
+
+void send_ipi_fixed(u8 vector, u8 dest)
+{
+    apic_write_reg(APIC_ICR_HIGH, dest << 24);
+    apic_write_reg(APIC_ICR_LOW, vector | (0x01 << 14));
+}
+
+void smart_eoi(u8 intno)
+{
+    u8 isr_index = intno >> 4;
+    u8 offset = intno & 0x0f;
+
+    u32 isr_val = apic_read_reg(APIC_ISR_REG_START + isr_index*0x10);
+
+    if (isr_val & (0x01 << offset)) apic_eoi();
 }

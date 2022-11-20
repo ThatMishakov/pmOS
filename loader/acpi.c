@@ -156,4 +156,8 @@ void start_cpus()
 
     for (int i = 0; i < 10000000; ++i)
         asm volatile ("");
+
+    syscall(SYSCALL_CONFIGURE_SYSTEM, 2, 3, 2 | (50 << 8));
+
+    syscall(SYSCALL_CONFIGURE_SYSTEM, 2, 3, 2 | (100 << 8));
 }

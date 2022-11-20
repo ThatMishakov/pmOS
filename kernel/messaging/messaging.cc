@@ -68,32 +68,6 @@ kresult_t Ports_storage::send_from_system(u64 port, const char* msg, size_t size
     return send_msg(pid_from, port, klib::move(message));
 }
 
-/*
-kresult_t Ports_storage::send_msg(u64 pid_from, u64 port, klib::vector<char>&& msg)
-{
-    if (this->storage.count(port) == 0) return ERROR_PORT_NOT_EXISTS;
-    kresult_t result = SUCCESS;
-    Port& d = this->storage.at(port);
-
-    if (d.attr & MSG_ATTR_DUMMY) {
-        result = d.enqueue(pid_from, klib::forward<klib::vector<char>>(msg));
-    } else if (not exists_process(d.task)){
-        this->storage.erase(port);
-        return ERROR_PORT_CLOSED;
-    } else {
-        TaskDescriptor* process = s_map.at(d.task);
-        result = SUCCESS;
-
-        process->lock.lock();
-        result = queue_message(process, pid_from, d.channel, klib::forward<klib::vector<char>>(msg));
-        if (result == SUCCESS) process->unblock_if_needed(MESSAGE_S_NUM);
-        process->lock.unlock();
-    }
-
-    return result;
-} */
-
-
 kresult_t Ports_storage::send_msg(u64 pid_from, u64 port, klib::vector<char>&& msg)
 {
     if (this->storage.count(port) == 0) {

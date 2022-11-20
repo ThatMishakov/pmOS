@@ -7,6 +7,8 @@
 #define APIC_REG_LDR             0xd0
 #define APIC_REG_DFR             0xe0
 #define APIC_REG_SPURIOUS_INT    0xf0
+#define APIC_ISR_REG_START       0x100
+#define APIC_IRR_REG_START       0x200
 #define APIC_ICR_LOW             0x300
 #define APIC_ICR_HIGH            0x310
 #define APIC_REG_LVT_TMR         0x320
@@ -72,6 +74,9 @@ ReturnStr<u64> lapic_configure(u64 opt, u64 arg);
 
 void broadcast_init_ipi();
 void broadcast_sipi(u8 vector);
+void send_ipi_fixed(u8 vector, u8 dest);
 
 #define APIC_DELIVERY_START_UP    0b110
 #define APIC_DELIVERY_INIT        0b100
+
+void smart_eoi(u8 intno);
