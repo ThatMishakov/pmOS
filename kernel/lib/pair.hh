@@ -7,7 +7,7 @@ struct pair {
     T1 first;
     T2 second;
 
-    bool operator<(const pair<T1,T2>& p)
+    bool operator<(const pair<T1,T2>& p) const noexcept
     {
         if (p.first == this->first) return this->second < p.second;
         return this->first < p.first;

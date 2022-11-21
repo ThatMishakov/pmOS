@@ -8,7 +8,7 @@
 class Free_Page_Alloc {
 private:
     klib::list<u64> free_pages_list;
-    DECLARE_LOCK(free_page_alloc);
+    Spinlock lock;
     void add_pages(u64 pages);
 public:
     ReturnStr<u64> get_free_page();

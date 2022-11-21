@@ -84,6 +84,7 @@ ReturnStr<u64> syscall_is_page_allocated(u64 page);
 #define SYS_CONF_IOAPIC          0x01
 #define SYS_CONF_LAPIC           0x02
 #define SYS_CONF_CPU             0x03
+#define SYS_CONF_SLEEP10         0x04
 
 // Configures a system
 ReturnStr<u64> syscall_configure_system(u64 type, u64 arg1, u64 arg2);

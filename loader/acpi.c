@@ -148,14 +148,16 @@ void start_cpus()
 
     lprintf("Bringing up CPU...\n");
     syscall(SYSCALL_CONFIGURE_SYSTEM, 2, 1, 0);
-    for (int i = 0; i < 100000; ++i)
-        asm volatile ("");
+    //for (int i = 0; i < 100000; ++i)
+    //    asm volatile ("");
+
+    syscall(SYSCALL_CONFIGURE_SYSTEM, 4, 50, 0);
 
     uint32_t vector = (uint32_t)(&_cpuinit_start) >> 12;
     syscall(SYSCALL_CONFIGURE_SYSTEM, 2, 2, vector);
 
-    for (int i = 0; i < 10000000; ++i)
-        asm volatile ("");
+    for (int i = 0; i < 20; ++i)
+        syscall(SYSCALL_CONFIGURE_SYSTEM, 4, 100, 0);
 
     syscall(SYSCALL_CONFIGURE_SYSTEM, 2, 3, 2 | (50 << 8));
 

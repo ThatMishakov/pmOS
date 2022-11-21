@@ -1,6 +1,7 @@
 #ifndef _STDLIB_H
 #define _STDLIB_H 1
 #include <stddef.h>
+#include "stdlib_com.h"
 
 #if defined(__cplusplus)
 extern "C" {
@@ -20,8 +21,6 @@ typedef struct {
   long long quot;
   long long rem;
 } lldiv_t;
-
-typedef unsigned long size_t;
 
 /* String conversion */
 double atof (const char* str);
@@ -101,7 +100,6 @@ size_t wcstombs(char * s,
 
 #define EXIT_SUCCESS 0
 #define EXIT_FAILURE 1
-#define NULL 0L
 
 #if defined(__cplusplus)
 } /* extern "C" */

@@ -37,3 +37,5 @@ struct PACKED RB_Status {
 
 u16 read_pit_count(u8 chan = 0);
 void set_pit_count(u16 count, u8 chan = 0);
+
+void pit_sleep_100us(u16 time);

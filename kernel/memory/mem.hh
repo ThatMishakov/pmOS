@@ -18,6 +18,7 @@ public:
     void init_after_paging();
     u64 bitmap_size_pages() const;
 private:
+    Spinlock lock;
     void mark(u64 base, u64 size, bool usable);
     static bool bitmap_read_bit(u64 pos, u64 * bitmap);
     static void bitmap_mark_bit(u64 pos, bool b, u64 * bitmap);

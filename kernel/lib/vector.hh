@@ -16,6 +16,10 @@ private:
 
     void expand(size_t to);
 public:
+    typedef T value_type;
+    typedef const T& const_reference;
+    typedef size_t size_type;
+
     class iterator {
     private:
         T* ptr;
@@ -255,6 +259,13 @@ void vector<T>::expand(size_t new_capacity)
 
     free(ptr);
     ptr = temp_ptr;
+}
+
+template<typename T>
+void vector<T>::pop_back()
+{
+    ptr[a_size - 1].~T();
+    --a_size;
 }
 
 

@@ -4,7 +4,7 @@
 
 void idle()
 {
-    t_print("Kernel: CPU %i idling for the first time...\n", get_lapic_id() >> 24);
+    //t_print("Kernel: CPU %i idling for the first time...\n", get_lapic_id() >> 24);
 
     while (1) {
         asm("hlt");

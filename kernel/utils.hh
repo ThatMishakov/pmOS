@@ -59,3 +59,17 @@ static inline u64 cpuid(u32 p)
     asm volatile ( "cpuid" : "=a"(eax), "=d"(edx) : "0"(p) : "ebx", "ecx" );
     return eax | (u64)edx << 32;
 }
+
+template<class A>
+const A& max(const A& a, const A& b) noexcept
+{
+    if (a > b) return a;
+    return b;
+}
+
+template<class A>
+const A& min(const A& a, const A& b) noexcept
+{
+    if (a < b) return a;
+    return b;
+}
