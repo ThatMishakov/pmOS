@@ -9,8 +9,13 @@ extern "C" {
 
 typedef struct FILE {
     // TODO
-};
+    int i;
+} FILE;
 typedef size_t fpos_t;
+
+typedef int errno_t;
+typedef size_t rsize_t;
+
 
 int remove ( const char * filename );
 int rename ( const char * oldname, const char * newname );
@@ -71,6 +76,14 @@ void perror ( const char * str );
 #define FOPEN_MAX 65536
 #define L_tmpnam 1
 #define TMP_MAX 65536
+
+extern FILE * stdin;
+extern FILE * stdout;
+extern FILE * stderr;
+
+#define SEEK_SET 0
+#define SEEK_CUR 1
+#define SEEK_END 2
 
 #if defined(__cplusplus)
 } /* extern "C" */
