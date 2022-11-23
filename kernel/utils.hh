@@ -2,7 +2,7 @@
 #include <stddef.h>
 #include "types.hh"
 
-void int_to_string(int64_t n, u8 base, char* str, int& length);
+void int_to_string(i64 n, u8 base, char* str, int& length);
 
 void uint_to_string(u64 n, u8 base, char* str, int& length);
 

@@ -1,15 +1,15 @@
 #ifndef KERNEL_TYPES_H
 #define KERNEL_TYPES_H
 
-#define u8 unsigned char
-#define u16 unsigned short
-#define u32 unsigned int
-#define u64 unsigned long
+typedef unsigned char u8;
+typedef unsigned short u16;
+typedef unsigned int u32;
+typedef unsigned long u64;
 
-#define i8 signed char
-#define i16 signed short
-#define i32 signed int
-#define i64 signed long long
+typedef signed char i8;
+typedef signed short i16;
+typedef signed int i32;
+typedef signed long i64;
 
 #define KB(x) ((u64)(x) << 10)
 #define MB(x) ((u64)(x) << 20)

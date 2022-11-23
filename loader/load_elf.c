@@ -34,8 +34,11 @@ uint64_t load_elf(ELF_64bit* elf_h, uint8_t ring)
         if (p->type == ELF_SEGMENT_LOAD) {
             uint64_t phys_loc = (uint64_t)elf_h + p->p_offset;
             uint64_t vaddr = p->p_vaddr;
+            uint64_t varrd_all = vaddr & ~0xfffULL;
             uint64_t size = p->p_filesz;
-            uint64_t pages = (p->p_memsz >> 12) + ((phys_loc + p->p_memsz) & 0xfff ? 1 : 0);
+            uint64_t memsz = p->p_memsz;
+            uint64_t size_all = memsz + (vaddr - varrd_all);
+            uint64_t pages = (memsz >> 12) + ((memsz) & 0xfff ? 1 : 0);
 
             // TODO: Error checking
             syscall_r r = get_page_multi(memory, pages);
@@ -46,8 +49,9 @@ uint64_t load_elf(ELF_64bit* elf_h, uint8_t ring)
             char execution_disabled = !(p->flags & ELF_FLAG_EXECUTABLE);
             uint64_t mask = (writeable << 0) | (execution_disabled << 1);
 
-            r = map_into_range(pid, memory, vaddr, pages, mask);
+            r = map_into_range(pid, memory, varrd_all, pages, mask);
             if (r.result != SUCCESS) {
+                asm("xchgw %bx, %bx");
                 print_hex(r.result);
                 print_str(" !!!\n");
                 halt();

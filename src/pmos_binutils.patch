@@ -188,7 +188,7 @@ index 00000000000..fd8c7645b7e
 \ No newline at end of file
 diff --git a/ld/emulparams/elf_x86_64_pmos.sh b/ld/emulparams/elf_x86_64_pmos.sh
 new file mode 100644
-index 00000000000..97267c9c396
+index 00000000000..cb8fbbdd649
 --- /dev/null
 +++ b/ld/emulparams/elf_x86_64_pmos.sh
 @@ -0,0 +1,7 @@
@@ -198,5 +198,5 @@ index 00000000000..97267c9c396
 +# SCRIPT_NAME=
 +# TEMPLATE_NAME=
 +# OUTPUT_FORMAT=
-+TEXT_START_ADDR=0xC0DE0000
++#TEXT_START_ADDR=
 \ No newline at end of file

@@ -4,7 +4,8 @@
 
 #define ALLOC_MIN_PAGES 8
 
-extern char _heap_start;
+extern char _end;
+static const void* heap_start = (void*)((uint64_t)(&_end)&~0xfff + 0x1000);
 
 uint64_t heap_size = 0;
 
@@ -17,7 +18,7 @@ struct malloc_list head = {0,0};
 
 void *palloc(size_t pages)
 {
-    uint64_t pos = (uint64_t)(&_heap_start) + (heap_size << 12ULL);
+    uint64_t pos = (uint64_t)(&heap_start) + (heap_size << 12ULL);
     heap_size += pages;
     get_page_multi(pos, pages);
     return (void*)pos;

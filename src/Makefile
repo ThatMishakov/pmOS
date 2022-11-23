@@ -31,8 +31,7 @@ build-gcc-pmos: gcc
 x86_64-pmos-gcc: $(ROOTDIR)/bin/cross/bin/x86_64-pmos-gcc
 $(ROOTDIR)/bin/cross/bin/x86_64-pmos-gcc: build-gcc-pmos x86_64-pmos-ld
 	@mkdir -p $(ROOTDIR)/bin/cross/
-	$(MAKE) -C build-gcc-pmos all-gcc
-	$(MAKE) -C build-gcc-pmos all-target-libgcc
+	$(MAKE) -C build-gcc-pmos all-gcc all-target-libgcc
 	$(MAKE) -C build-gcc-pmos install-gcc install-target-libgcc
 
 x86_64-pmos-ld: $(ROOTDIR)/bin/cross/bin/x86_64-pmos-ld

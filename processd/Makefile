@@ -1,31 +1,28 @@
 # Kernel executable name
 EXEC = processd.elf
 
+ROOTDIR = $(realpath .)/..
+export PATH := $(ROOTDIR)/bin/cross/bin:$(PATH)
+
 # It is highly recommended to use a custom built cross toolchain to build a kernel.
 # We are only using "cc" as a placeholder here. It may work by using
 # the host system's toolchain, but this is not guaranteed.
-CC = x86_64-elf-gcc
-CPP = x86_64-elf-gcc
-CXX = x86_64-elf-g++
-LD = x86_64-elf-gcc
-
-INCLUDEDIR = include:../kernel/include:../lib/include
+CC = x86_64-pmos-gcc
+CPP = x86_64-pmos-gcc
+CXX = x86_64-pmos-g++
 
 # User controllable CFLAGS.
 USERCFLAGS = -Wall -Wextra -O2 -pipe
 
 CFLAGS = -std=c17
 CXXFLAGS = -std=c++17
-CPPFLAGS = $(INTERNALCFLAGS) -Iinclude -I../kernel/include -I../lib/include $(USERCFLAGS) -MMD -MP
+CPPFLAGS = $(INTERNALCFLAGS) $(USERCFLAGS) -MMD -MP
 ASMFLAGS = -I$(INCLUDEDIR)
 LDFLAGS = $(INTERNALLDFLAGS)
 
 # Internal link flags that should not be changed by the user.
 INTERNALLDFLAGS :=     \
-	-ffreestanding \
-	-nostdlib      \
 	-static \
-	-Tlinker.ld    \
 	-z max-page-size=0x1000
  
 # Internal C flags that should not be changed by the user.
@@ -45,17 +42,18 @@ OBJ    := $(CCFILES:.cc=.o) $(ASMFILES:.S=.o) $(CFILES:.c=.o)
 DEP    := $(OBJ:.o=.d)
 all: $(EXEC)
 
-AFTER_EXEC = -L../lib/ -l pm
-
-$(EXEC): $(OBJ) ../lib/libpm.a linker.ld
-	$(LD) $(LDFLAGS) $(OBJ) $(AFTER_EXEC) -o $@
+$(EXEC): $(OBJ) libc
+	$(CC) $(LDFLAGS) $(OBJ) -o $@
 	
 clean:
 	$(RM) $(EXEC) $(OBJ)
 
 -include $(DEP)
 
-../lib/libpm.a:
-	$(MAKE) -C ../lib libpm.a
+libc:
+	$(MAKE) -C ../lib libc
+
+$(CC):
+	$(MAKE) -C ../src x86_64-pmos-gcc
 
 .PHONY: ../lib/libpm.a

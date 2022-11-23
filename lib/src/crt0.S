@@ -7,13 +7,15 @@ _start:
 	pushq %rbp
 	movq %rsp, %rbp
 
+    # xchgw %bx, %bx
+
     # Save arguments
     pushq %rdi
     pushq %rsi
 
     call init_std_lib
 
-    # call _init
+    call _init
 
     popq %rdi
     popq %rsi
@@ -26,7 +28,7 @@ _start:
     call main
 
     pushq %rax
-    # call _fini
+    call _fini
     popq %rax
 
     movq %rax, %rdi

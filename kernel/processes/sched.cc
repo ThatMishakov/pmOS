@@ -247,6 +247,7 @@ void find_new_process()
 void TaskDescriptor::switch_to()
 {
     // Change task
+    t_print_bochs("Task switch! New pid : %i\n", this->pid);
     this->status = Process_Status::PROCESS_RUNNING_IN_SYSTEM;
     get_cpu_struct()->next_task = this;
     start_timer_ticks(this->quantum_ticks);

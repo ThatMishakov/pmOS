@@ -2,6 +2,7 @@ ROOTDIR = $(realpath .)/..
 OBJDIR = $(ROOTDIR)/sysroot/usr/lib
 DEPDIR := .deps
 SRCDIR := src
+LIBC := $(OBJDIR)/libc.a
 
 CC = $(ROOTDIR)/bin/cross/bin/x86_64-pmos-gcc
 CPP = $(ROOTDIR)/bin/cross/bin/x86_64-pmos-gcc
@@ -28,8 +29,9 @@ $(OBJDIR)/%.o: $(SRCDIR)/%.S $(CC)
 	@mkdir -p $(OBJDIR)
 	$(CC) $(CPPFLAGS) $(ASFLAGS) -c -o $@ $<
 
-
-libc: $(OBJ_P)
+libc: $(OBJDIR)/libc.a
+$(OBJDIR)/libc.a: $(OBJ_P)
+	ar r $@ $?
 
 $(DEPDIR):
 	@mkdir -p $@

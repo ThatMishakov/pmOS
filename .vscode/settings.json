@@ -9,6 +9,7 @@
         "string_view": "cpp",
         "initializer_list": "cpp",
         "mem.h": "c",
-        "*.ignore": "cpp"
+        "*.ignore": "cpp",
+        "*.h_": "cpp"
     }
 }

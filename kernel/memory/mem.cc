@@ -40,7 +40,7 @@ skip:
 ReturnStr<u64> PFrameAllocator::alloc_page_ppn()
 {
     ReturnStr<void*> r = alloc_page();
-    return {r.result, (u64)((int64_t)r.val >> 12)};
+    return {r.result, (u64)((u64)r.val >> 12)};
 }
 
 void PFrameAllocator::mark(u64 base, u64 size, bool usable, u64 * bitmap)
