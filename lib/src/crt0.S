@@ -7,8 +7,6 @@ _start:
 	pushq %rbp
 	movq %rsp, %rbp
 
-    # xchgw %bx, %bx
-
     # Save arguments
     pushq %rdi
     pushq %rsi
