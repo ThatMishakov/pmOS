@@ -1,4 +1,4 @@
 /binutils-gdb
 /gcc
-/build-gcc
-/build-binutils
+/build-gcc-pmos
+/build-binutils-pmos

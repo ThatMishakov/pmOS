@@ -1,11 +1,11 @@
 #ifndef _SYSTEM_H
 #define _SYSTEM_H 1
-#include <stdint-gcc.h>
+#include <stdint.h>
 #include <stddef.h>
-#include "../../kernel/include/kernel/syscalls.h"
-#include "../../kernel/include/kernel/memory.h"
-#include "../../kernel/include/kernel/messaging.h"
-#include "../../kernel/include/kernel/types.h"
+#include "kernel/syscalls.h"
+#include "kernel/memory.h"
+#include "kernel/messaging.h"
+#include "kernel/types.h"
 
 typedef uint64_t result_t;
 

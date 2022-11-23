@@ -1,3 +1,4 @@
 !.gitignore
 *.[od]
 libpm.a
+/.deps

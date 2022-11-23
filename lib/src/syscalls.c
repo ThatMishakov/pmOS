@@ -1,5 +1,5 @@
-#include "../include/system.h"
-#include "../../kernel/include/kernel/types.h"
+#include <system.h>
+#include <kernel/types.h>
 
 syscall_r syscall_get_page(u64 addr)
 {

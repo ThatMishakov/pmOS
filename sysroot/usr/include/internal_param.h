@@ -1,6 +1,6 @@
 #ifndef LIB_INTERNAL_PARAM_H
 #define LIB_INTERNAL_PARAM_H 1
-#include "../../kernel/include/kernel/types.h"
+#include "kernel/types.h"
 
 #define NOPARAM       0x00
 #define ARGS_LIST     0x01
