@@ -2,6 +2,8 @@ ROOTDIR = $(realpath .)/..
 PREFIX := $(ROOTDIR)/bin/cross
 SYSROOT := $(ROOTDIR)/sysroot
 
+export PATH := $(ROOTDIR)/bin/cross/bin:$(PATH)
+
 all: x86_64-pmos-ld x86_64-pmos-gcc
 
 binutils-gdb:
@@ -24,12 +26,13 @@ build-binutils-pmos: binutils-gdb
 build-gcc-pmos: gcc
 	mkdir build-gcc-pmos
 	cd build-gcc-pmos; \
-	../gcc/configure --target=x86_64-pmos --prefix="$(PREFIX)" --with-sysroot=$(SYSROOT) --enable-languages=c,c++,ada
+	../gcc/configure --target=x86_64-pmos --prefix="$(PREFIX)" --with-sysroot=$(SYSROOT) --enable-languages=c,c++
 
 x86_64-pmos-gcc: $(ROOTDIR)/bin/cross/bin/x86_64-pmos-gcc
-$(ROOTDIR)/bin/cross/bin/x86_64-pmos-gcc: build-gcc-pmos
+$(ROOTDIR)/bin/cross/bin/x86_64-pmos-gcc: build-gcc-pmos x86_64-pmos-ld
 	@mkdir -p $(ROOTDIR)/bin/cross/
-	$(MAKE) -C build-gcc-pmos all-gcc all-target-libgcc
+	$(MAKE) -C build-gcc-pmos all-gcc
+	$(MAKE) -C build-gcc-pmos all-target-libgcc
 	$(MAKE) -C build-gcc-pmos install-gcc install-target-libgcc
 
 x86_64-pmos-ld: $(ROOTDIR)/bin/cross/bin/x86_64-pmos-ld

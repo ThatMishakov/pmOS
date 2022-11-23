@@ -144,77 +144,6 @@ index ee0c98f65b0..2cc3e411b28 100644
  @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf_x86_64_sol2.Pc@am__quote@
  @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ehppa64linux.Pc@am__quote@
  @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ei386pep.Pc@am__quote@
-diff --git a/ld/configure b/ld/configure
-index 7ab4e9f308e..d8c7088c8dc 100755
---- a/ld/configure
-+++ b/ld/configure
-@@ -798,6 +798,7 @@ infodir
- docdir
- oldincludedir
- includedir
-+runstatedir
- localstatedir
- sharedstatedir
- sysconfdir
-@@ -914,6 +915,7 @@ datadir='${datarootdir}'
- sysconfdir='${prefix}/etc'
- sharedstatedir='${prefix}/com'
- localstatedir='${prefix}/var'
-+runstatedir='${localstatedir}/run'
- includedir='${prefix}/include'
- oldincludedir='/usr/include'
- docdir='${datarootdir}/doc/${PACKAGE_TARNAME}'
-@@ -1166,6 +1168,15 @@ do
-   | -silent | --silent | --silen | --sile | --sil)
-     silent=yes ;;
- 
-+  -runstatedir | --runstatedir | --runstatedi | --runstated \
-+  | --runstate | --runstat | --runsta | --runst | --runs \
-+  | --run | --ru | --r)
-+    ac_prev=runstatedir ;;
-+  -runstatedir=* | --runstatedir=* | --runstatedi=* | --runstated=* \
-+  | --runstate=* | --runstat=* | --runsta=* | --runst=* | --runs=* \
-+  | --run=* | --ru=* | --r=*)
-+    runstatedir=$ac_optarg ;;
-+
-   -sbindir | --sbindir | --sbindi | --sbind | --sbin | --sbi | --sb)
-     ac_prev=sbindir ;;
-   -sbindir=* | --sbindir=* | --sbindi=* | --sbind=* | --sbin=* \
-@@ -1303,7 +1314,7 @@ fi
- for ac_var in	exec_prefix prefix bindir sbindir libexecdir datarootdir \
- 		datadir sysconfdir sharedstatedir localstatedir includedir \
- 		oldincludedir docdir infodir htmldir dvidir pdfdir psdir \
--		libdir localedir mandir
-+		libdir localedir mandir runstatedir
- do
-   eval ac_val=\$$ac_var
-   # Remove trailing slashes.
-@@ -1456,6 +1467,7 @@ Fine tuning of the installation directories:
-   --sysconfdir=DIR        read-only single-machine data [PREFIX/etc]
-   --sharedstatedir=DIR    modifiable architecture-independent data [PREFIX/com]
-   --localstatedir=DIR     modifiable single-machine data [PREFIX/var]
-+  --runstatedir=DIR       modifiable per-process data [LOCALSTATEDIR/run]
-   --libdir=DIR            object code libraries [EPREFIX/lib]
-   --includedir=DIR        C header files [PREFIX/include]
-   --oldincludedir=DIR     C header files for non-gcc [/usr/include]
-@@ -11491,7 +11503,7 @@ else
-   lt_dlunknown=0; lt_dlno_uscore=1; lt_dlneed_uscore=2
-   lt_status=$lt_dlunknown
-   cat > conftest.$ac_ext <<_LT_EOF
--#line 11494 "configure"
-+#line 11506 "configure"
- #include "confdefs.h"
- 
- #if HAVE_DLFCN_H
-@@ -11597,7 +11609,7 @@ else
-   lt_dlunknown=0; lt_dlno_uscore=1; lt_dlneed_uscore=2
-   lt_status=$lt_dlunknown
-   cat > conftest.$ac_ext <<_LT_EOF
--#line 11600 "configure"
-+#line 11612 "configure"
- #include "confdefs.h"
- 
- #if HAVE_DLFCN_H
 diff --git a/ld/configure.tgt b/ld/configure.tgt
 index 2bae9099b6a..a97b6f2e2e8 100644
 --- a/ld/configure.tgt
@@ -242,3 +171,32 @@ index 2bae9099b6a..a97b6f2e2e8 100644
  x86_64-*-redox*)	targ_emul=elf_x86_64
  			targ_extra_emuls=elf_i386
  			;;
+diff --git a/ld/emulparams/elf_i386_pmos.sh b/ld/emulparams/elf_i386_pmos.sh
+new file mode 100644
+index 00000000000..fd8c7645b7e
+--- /dev/null
++++ b/ld/emulparams/elf_i386_pmos.sh
+@@ -0,0 +1,8 @@
++source_sh ${srcdir}/emulparams/elf_i386.sh
++
++GENERATE_SHLIB_SCRIPT=yes
++GENERATE_PIE_SCRIPT=yes
++# SCRIPT_NAME=
++# TEMPLATE_NAME=
++# OUTPUT_FORMAT=
++TEXT_START_ADDR=0x10000
+\ No newline at end of file
+diff --git a/ld/emulparams/elf_x86_64_pmos.sh b/ld/emulparams/elf_x86_64_pmos.sh
+new file mode 100644
+index 00000000000..97267c9c396
+--- /dev/null
++++ b/ld/emulparams/elf_x86_64_pmos.sh
+@@ -0,0 +1,7 @@
++source_sh ${srcdir}/emulparams/elf_x86_64.sh
++GENERATE_SHLIB_SCRIPT=yes
++GENERATE_PIE_SCRIPT=yes
++# SCRIPT_NAME=
++# TEMPLATE_NAME=
++# OUTPUT_FORMAT=
++TEXT_START_ADDR=0xC0DE0000
+\ No newline at end of file

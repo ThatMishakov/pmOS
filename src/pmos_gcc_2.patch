@@ -54,43 +54,6 @@ index c5064dd3766..e44c065e7a1 100644
  ia64*-*-elf*)
  	tm_file="${tm_file} dbxelf.h elfos.h newlib-stdint.h ia64/sysv4.h ia64/elf.h"
  	tmake_file="ia64/t-ia64"
-diff --git a/gcc/config/pmos.h b/gcc/config/pmos.h
-new file mode 100644
-index 00000000000..70388fabe59
---- /dev/null
-+++ b/gcc/config/pmos.h
-@@ -0,0 +1,30 @@
-+/* Useful if you wish to make target-specific GCC changes. */
-+#undef TARGET_PMOS
-+#define TARGET_PMOS 1
-+ 
-+/* Default arguments you want when running your
-+   i686-myos-gcc/x86_64-myos-gcc toolchain */
-+#undef LIB_SPEC
-+#define LIB_SPEC "-lc" /* link against C standard library */
-+ 
-+/* Files that are linked before user code.
-+   The %s tells GCC to look for these files in the library directory. */
-+#undef STARTFILE_SPEC
-+#define STARTFILE_SPEC "crt0.o%s crti.o%s crtbegin.o%s"
-+ 
-+/* Files that are linked after user code. */
-+#undef ENDFILE_SPEC
-+#define ENDFILE_SPEC "crtend.o%s crtn.o%s"
-+ 
-+/* Additional predefined macros. */
-+#undef TARGET_OS_CPP_BUILTINS
-+#define TARGET_OS_CPP_BUILTINS()      \
-+  do {                                \
-+    builtin_define ("__pmos__");      \
-+    builtin_define ("__unix__");      \
-+    builtin_assert ("system=pmos");   \
-+    builtin_assert ("system=unix");   \
-+    builtin_assert ("system=posix");   \
-+  } while(0);
-+
-+#define PID_TYPE UINT64_TYPE
-\ No newline at end of file
 diff --git a/libgcc/config.host b/libgcc/config.host
 index 8c56fcae5d2..cdb02f4de1c 100644
 --- a/libgcc/config.host
