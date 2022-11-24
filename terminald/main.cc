@@ -44,7 +44,7 @@ void print_hex(uint64_t i)
 
 void init_screen();
 
-extern "C" int main(int argc, char** argv) {
+int main() {
     init_screen();
     write(const_cast<char*>("Hello from terminald!\n"));
     

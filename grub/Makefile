@@ -19,14 +19,18 @@ iso: $(ISO)
 ../processd/processd.elf:
 	$(MAKE) -C ../processd processd.elf
 
-$(ISO): ../loader/loader.elf ../kernel/kernel ../processd/processd.elf ../terminald/terminald.elf
+../devicesd/devicesd.elf:
+	$(MAKE) -C ../devicesd devicesd.elf
+
+$(ISO): ../loader/loader.elf ../kernel/kernel ../processd/processd.elf ../terminald/terminald.elf ../devicesd/devicesd.elf
 	mkdir -p isodir/boot/pmos
 	mkdir -p isodir/boot/grub
 	cp ../loader/loader.elf isodir/boot/pmos/
 	cp ../kernel/kernel isodir/boot/pmos/
 	cp ../processd/processd.elf isodir/boot/pmos/
 	cp ../terminald/terminald.elf isodir/boot/pmos/
+	cp ../devicesd/devicesd.elf isodir/boot/pmos/
 	cp grub.cfg isodir/boot/grub/
 	grub2-mkrescue -o $(ISO) isodir
 
-.PHONY: ../loader/loader.elf ../kernel/kernel ../processd/processd.elf ../terminald/terminald.elf
+.PHONY: ../loader/loader.elf ../kernel/kernel ../processd/processd.elf ../terminald/terminald.elf ../devicesd/devicesd.elf

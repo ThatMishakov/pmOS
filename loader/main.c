@@ -100,9 +100,28 @@ void main()
                     uint64_t pid = load_elf(e, 3);
                     //syscall(SYSCALL_SET_PORT, pid, 1, terminal_pid, 1);
                     start_process(pid, e->program_entry, 0, 0, 0);
+                }
+            }
+        }
 
-                    get_page_multi(TB(2), 1);
-                    syscall(SYSCALL_SHARE_WITH_RANGE, pid, TB(2), TB(2), 1, 0x01);
+    for (struct multiboot_tag * tag = (struct multiboot_tag *) (multiboot_info_str + 8); tag->type != MULTIBOOT_TAG_TYPE_END;
+        tag = (struct multiboot_tag *) ((multiboot_uint8_t *) tag + ((tag->size + 7) & ~7))) {
+            if (tag->type == MULTIBOOT_TAG_TYPE_MODULE) {
+                if (str_starts_with(((struct multiboot_tag_module *)tag)->cmdline, "devicesd")) {
+                    struct multiboot_tag_module * mod = (struct multiboot_tag_module *)tag;
+                    print_str(" --> loading ");
+                    print_str(mod->cmdline);
+                    print_str("\n");
+                    static uint64_t virt_addr = 549755813888 + 0x2000000;
+                    uint64_t phys_start = (uint64_t)mod->mod_start & ~(uint64_t)0xfff;
+                    uint64_t phys_end = (uint64_t)mod->mod_end;
+                    uint64_t nb_pages = (phys_end - phys_start) >> 12;
+                    if (phys_end & 0xfff) nb_pages += 1;
+                    map_phys(virt_addr, phys_start, nb_pages, 0x3);
+                    ELF_64bit* e = (ELF_64bit*)((uint64_t)mod->mod_start - phys_start + virt_addr);
+                    uint64_t pid = load_elf(e, 3);
+                    //syscall(SYSCALL_SET_PORT, pid, 1, terminal_pid, 1);
+                    start_process(pid, e->program_entry, 0, 0, 0);
                 }
             }
         }
