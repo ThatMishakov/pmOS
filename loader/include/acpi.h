@@ -86,4 +86,7 @@ typedef struct MADT {
 
 void init_acpi(unsigned long multiboot_str);
 
+extern RSDP_descriptor* rsdp_desc;
+extern RSDP_descriptor20* rsdp20_desc;
+
 #endif

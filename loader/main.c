@@ -16,6 +16,7 @@
 #include <syscall.h>
 #include <utils.h>
 #include <acpi.h>
+#include <args.h>
 
 uint64_t multiboot_magic;
 uint64_t multiboot_info_str;
@@ -51,6 +52,8 @@ void main()
     load_kernel(multiboot_info_str);
 
     set_print_syscalls();
+
+    init_acpi(multiboot_info_str);
 
     start_cpus();
 
@@ -120,8 +123,42 @@ void main()
                     map_phys(virt_addr, phys_start, nb_pages, 0x3);
                     ELF_64bit* e = (ELF_64bit*)((uint64_t)mod->mod_start - phys_start + virt_addr);
                     uint64_t pid = load_elf(e, 3);
-                    //syscall(SYSCALL_SET_PORT, pid, 1, terminal_pid, 1);
-                    start_process(pid, e->program_entry, 0, 0, 0);
+
+                    get_page_multi(virt_addr + 0x30000, 1);
+                    uint64_t virt_page = TB(2);
+                    Args_List_Header *a = (Args_List_Header*)(virt_addr + 0x30000);
+                    a->size = 0;
+                    a->flags = 0x01;
+                    a->pages = 1;
+                    a->p = 0;
+
+                    push_arg(a, "devicesd");
+                    if (rsdp_desc != 0) {
+                        char buff[10];
+                        uint_to_string(rsdp_desc, 10, buff);
+
+                        push_arg(a, "--rsdp-desc");
+                        push_arg(a, buff);
+                    } 
+
+                    if (rsdp20_desc != 0) {
+                        char buff[10];
+                        uint_to_string(rsdp20_desc, 10, buff);
+
+                        push_arg(a, "--rsdp-desc");
+                        push_arg(a, buff);
+                    } 
+
+
+                    syscall_r r = map_into_range(pid, virt_addr + 0x30000, virt_page, 1, 0x01);
+                    if (r.result != SUCCESS) {
+                        asm("xchgw %bx, %bx");
+                        print_hex(r.result);
+                        print_str(" !!!\n");
+                        halt();
+                    }
+
+                    start_process(pid, e->program_entry, 0x01, virt_page, 0);
                 }
             }
         }

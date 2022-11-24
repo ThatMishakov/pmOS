@@ -39,34 +39,35 @@ void term_write(const char* buff, int length)
     print_str_n(buff, length);
 }
 
-void uint_to_string(unsigned long int n, uint8_t base, char* str, int* length)
+int uint_to_string(unsigned long int n, uint8_t base, char* str)
 {
     char temp_str[65];
-    *length = 0;
+    int length = 0;
     if (n == 0) {
-        temp_str[*length] = '0';
-        ++*length;
+        temp_str[length] = '0';
+        ++length;
     }
     while (n != 0) {
         unsigned int tmp = n%base;
         n /= base;
         if (tmp > 9)
-            temp_str[*length] = tmp + 'A' - 10;
+            temp_str[length] = tmp + 'A' - 10;
         else
-            temp_str[*length] = tmp + '0';
+            temp_str[length] = tmp + '0';
         
-        ++*length;
+        ++length;
     }
-    for (int i = 0; i < *length; ++i) {
-        str[i] = temp_str[*length - i - 1];
+    for (int i = 0; i < length; ++i) {
+        str[i] = temp_str[length - i - 1];
     }
-    str[*length] = 0;
+    str[length] = 0;
+    return length;
 }
 
-void int_to_string(long int n, uint8_t base, char* str, int* length)
+int int_to_string(long int n, uint8_t base, char* str)
 {
     char temp_str[65];
-    *length = 0;
+    int length = 0;
     char negative = 0;
     if (n < 0) {
         negative = 1;
@@ -74,24 +75,25 @@ void int_to_string(long int n, uint8_t base, char* str, int* length)
         n *= -1;
     }
     if (n == 0) {
-        temp_str[*length] = '0';
-        ++*length;
+        temp_str[length] = '0';
+        ++length;
     }
     while (n != 0) {
         int tmp = n%base;
         n /= base;
         if (tmp < 10)
-            temp_str[*length] = tmp + '0';
+            temp_str[length] = tmp + '0';
         else
-            temp_str[*length] = tmp + 'A' - 10;
+            temp_str[length] = tmp + 'A' - 10;
         
-        ++*length;
+        ++length;
     }
-    for (int i = 0; i < *length; ++i) {
-        str[i + negative] = temp_str[*length - i - 1];
+    for (int i = 0; i < length; ++i) {
+        str[i + negative] = temp_str[length - i - 1];
     }
-    if (negative) ++*length;
-    str[*length] = 0;
+    if (negative) ++length;
+    str[length] = 0;
+    return length;
 }
 
 void lprintf(const char *str, ...)
@@ -125,17 +127,17 @@ void lprintf(const char *str, ...)
         switch (at) {
             case 'i': { // signed integer
                 int64_t casted_arg = va_arg(arg, int64_t);
-                int_to_string(casted_arg, 10, int_str_buffer, &len);
+                len += int_to_string(casted_arg, 10, int_str_buffer);
                 break;
             }
             case 'u': { // unsigned integer
                 uint64_t casted_arg = va_arg(arg, uint64_t);
-                uint_to_string(casted_arg, 10, int_str_buffer, &len);
+                len += uint_to_string(casted_arg, 10, int_str_buffer);
                 break;
             }
             case 'h': { // hexa number
                 uint64_t casted_arg = va_arg(arg, uint64_t);
-                uint_to_string(casted_arg, 16, int_str_buffer, &len);
+                len += uint_to_string(casted_arg, 16, int_str_buffer);
                 break;
             }
         }

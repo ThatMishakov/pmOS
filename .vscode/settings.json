@@ -10,6 +10,14 @@
         "initializer_list": "cpp",
         "mem.h": "c",
         "*.ignore": "cpp",
-        "*.h_": "cpp"
+        "*.h_": "cpp",
+        "hash_set": "c",
+        "bitset": "c",
+        "hash_map": "c",
+        "ranges": "c",
+        "span": "c",
+        "regex": "c",
+        "random": "c",
+        "*.inc": "c"
     }
 }

@@ -4,6 +4,12 @@
 #include <internal_param.h>
 #include <system.h>
 
+#include <string.h>
+#include <system.h>
+#include <stdio.h>
+
+char buff[200];
+
 typedef struct {
     int argc;
     char **argv;
@@ -22,12 +28,12 @@ Args_Ret prepare_args(u64 argtype, u64 ptr)
         args_list_node* n = (args_list_node*)((u64)(args_list->p) + ptr);
         for (u64 i = 0; i < args_list->size; ++i) {
             p.argv[i] = malloc(n->size + 1);
-            p.argv[i][n->size] = '\0';
 
+            p.argv[i][n->size] = '\0';
             const char* source = ((const char*)n) + sizeof(args_list_node);
             p.argv[i] = strncpy(p.argv[i], source, n->size);
 
-            n = (args_list_node*)((u64)n->next + ptr);
+            n = (args_list_node*)((u64)n->next + (u64)n);
         }
 
         if (args_list->flags & ARGS_LIST_FLAG_ASTEMPPAGE) {

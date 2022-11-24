@@ -15,9 +15,9 @@ _start:
 
     call _init
 
-    popq %rdi
     popq %rsi
-
+    popq %rdi
+    
     call prepare_args
 
     movq %rax, %rdi
