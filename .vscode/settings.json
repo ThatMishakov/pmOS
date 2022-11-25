@@ -18,6 +18,7 @@
         "span": "c",
         "regex": "c",
         "random": "c",
-        "*.inc": "c"
+        "*.inc": "c",
+        "functional": "c"
     }
 }
