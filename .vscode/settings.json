@@ -26,6 +26,11 @@
         "unordered_set": "c",
         "valarray": "c",
         "*.tcc": "c",
-        "stdint.h": "c"
+        "stdint.h": "c",
+        "ratio": "cpp",
+        "tuple": "cpp",
+        "type_traits": "cpp",
+        "utility": "cpp",
+        "any": "cpp"
     }
 }

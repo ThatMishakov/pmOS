@@ -3,9 +3,9 @@ EXEC = devicesd.elf
 ROOTDIR = $(realpath .)/..
 export PATH := $(ROOTDIR)/bin/cross/bin:$(PATH)
 
-CC = x86_64-pmos-gcc
-CPP = x86_64-pmos-gcc
-CXX = x86_64-pmos-g++
+CC = $(ROOTDIR)/bin/cross/bin/x86_64-pmos-gcc
+CPP = $(ROOTDIR)/bin/cross/bin/x86_64-pmos-gcc
+CXX = $(ROOTDIR)/bin/cross/bin/x86_64-pmos-g++
 
 USERCFLAGS = -Wall -Wextra -O2 -pipe
 

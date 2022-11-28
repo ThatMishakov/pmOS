@@ -4,7 +4,7 @@
 #include <string.h>
 #include <system.h>
 #include <stdio.h>
-#include "acpi.h"
+#include "acpi/acpi.h"
 #include <stddef.h>
 
 char* exec = NULL;
