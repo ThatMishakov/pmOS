@@ -23,8 +23,7 @@ void parse_args(int argc, char** argv)
 }
 
 int main(int argc, char** argv) {
-    char msg[] = "Hello from devicesd!\n";
-    send_message_port(1, strlen(msg), msg);
+    printf("Hello from devicesd!\n");
     
     parse_args(argc, argv);
 

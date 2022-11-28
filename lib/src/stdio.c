@@ -49,7 +49,7 @@ static int int_to_string(long int n, uint8_t base, char* str)
     return length;
 }
 
-static int uint_to_string(unsigned long int n, uint8_t base, char* str)
+static int uint_to_string(unsigned long int n, uint8_t base, char* str, int hex_base)
 {
     char temp_str[65];
     int length = 0;
@@ -61,7 +61,7 @@ static int uint_to_string(unsigned long int n, uint8_t base, char* str)
         unsigned int tmp = n%base;
         n /= base;
         if (tmp > 9)
-            temp_str[length] = tmp + 'A' - 10;
+            temp_str[length] = tmp + hex_base - 10;
         else
             temp_str[length] = tmp + '0';
         
@@ -84,51 +84,58 @@ static inline int max_(int a, int b)
     return a > b ? a : b;
 }
 
+static int _size_fputs (size_t size, const char * str, FILE * stream)
+{
+    if (stream == NULL || str == NULL) return EOF;
+
+    int type = stream->type;
+    int result = EOF;
+
+    switch (type)
+    {
+    case _STDIO_FILE_TYPE_PORT: {
+        int k = send_message_port(stream->port_ptr, size, str);
+        result = k == SUCCESS ? size : EOF;
+        break;
+    }
+    default:
+        result = EOF;
+        break;
+    }
+    return result;
+}
+
 static int va_fprintf (FILE * stream, va_list arg, const char * format)
 {
     int chars_transmitted = 0;
     static const int buffsize = 256;
 
-    char* buff = malloc(buffsize + 1);
-    int buffpos = 0;
+    int buffdiff = 0;
 
     int i = 0;
-    while (format && format[i]) {
+    while (format && format[i] != '\0') {
         if (format[i] != '%') {
-            buff[buffpos++] = format[i++];
-            if (buffpos == buffsize) {
-                buff[buffpos] = '\0';
-                int p = fputs(buff, stream);
-                free(buff);
-
-                if (p < 0) return p;
-
-                chars_transmitted += p;
-                buff = malloc(buffsize + 1);
-                buffpos = 0;
-            }
+            ++buffdiff;
+            ++i;
         } else {
+            if (buffdiff > 0) {
+                int p = _size_fputs(buffdiff, &format[i - buffdiff], stream);
+                if (p < 0) return p;
+                chars_transmitted += buffdiff;
+                buffdiff = 0;
+            }
+
             ++i;
             char flags = 0;
             int width = 0;
             int precision = 0;
             char rpt = 1;
             int is_long = 0;
+            int hex_base = 'a';
             while (rpt)
                 switch (format[i]) {
                 case '%': {
-                    buff[buffpos++] = '%';
-                    if (buffpos == buffsize) {
-                        buff[buffpos] = '\0';
-                        int p = fputs(buff, stream);
-                        free(buff);
-
-                        if (p < 0) return p;
-
-                        chars_transmitted += p;
-                        buff = malloc(buffsize + 1);
-                        buffpos = 0;
-                    }
+                    buffdiff = 1;
                     
                     rpt = 0;
                     ++i;
@@ -177,28 +184,14 @@ static int va_fprintf (FILE * stream, va_list arg, const char * format)
 
                 // TODO: Length
                 case 'i':
-                case 'd':{
-                    if (buffpos > 0) {
-                        buff[buffpos] = '\0';
-                        int p = fputs(buff, stream);
-                        buffpos = 0;
-                        if (p < 0) {
-                            chars_transmitted = p;
-                            goto end;
-                        } else {
-                            chars_transmitted += p;
-                            free(buff);
-                            buff = malloc(buffsize + 1);
-                        }
-                    }
-                    
+                case 'd':{                    
                     long t;
                     if (is_long) t = va_arg(arg, long);
                     else t = va_arg(arg, int);
 
                     char* s_buff = malloc(max_(24, width+1));
                     int j = int_to_string(t, 10, s_buff);
-                    j = fputs(s_buff, stream);
+                    j = _size_fputs(j, s_buff, stream);
                     if (j < 0) {
                         chars_transmitted = j;
                         goto end;
@@ -208,28 +201,14 @@ static int va_fprintf (FILE * stream, va_list arg, const char * format)
                     ++i;
                     break;
                 }
-                case 'u': {
-                    if (buffpos > 0) {
-                        buff[buffpos] = '\0';
-                        int p = fputs(buff, stream);
-                        buffpos = 0;
-                        if (p < 0) {
-                            chars_transmitted = p;
-                            goto end;
-                        } else {
-                            chars_transmitted += p;
-                            free(buff);
-                            buff = malloc(buffsize + 1);
-                        }
-                    }
-                    
+                case 'u': {                    
                     unsigned long t;
                     if (is_long) t = va_arg(arg, unsigned long);
                     else t = va_arg(arg, unsigned int);
 
                     char *s_buff = malloc(max_(24, width+1));
-                    int j = uint_to_string(t, 10, s_buff);
-                    j = fputs(s_buff, stream);
+                    int j = uint_to_string(t, 10, s_buff, hex_base);
+                    j = _size_fputs(j, s_buff, stream);
                     if (j < 0) {
                         chars_transmitted = j;
                         goto end;
@@ -240,27 +219,13 @@ static int va_fprintf (FILE * stream, va_list arg, const char * format)
                     break;
                 }
                 case 'o': {
-                    if (buffpos > 0) {
-                        buff[buffpos] = '\0';
-                        int p = fputs(buff, stream);
-                        buffpos = 0;
-                        if (p < 0) {
-                            chars_transmitted = p;
-                            goto end;
-                        } else {
-                            chars_transmitted += p;
-                            free(buff);
-                            buff = malloc(buffsize + 1);
-                        }
-                    }
-                    
                     unsigned long t;
                     if (is_long) t = va_arg(arg, unsigned long);
                     else t = va_arg(arg, unsigned int);
 
                     char *s_buff = malloc(max_(24, width+1));
-                    int j = uint_to_string(t, 8, s_buff);
-                    j = fputs(s_buff, stream);
+                    int j = uint_to_string(t, 8, s_buff, hex_base);
+                    j = _size_fputs(j, s_buff, stream);
                     if (j < 0) {
                         chars_transmitted = j;
                         goto end;
@@ -271,28 +236,16 @@ static int va_fprintf (FILE * stream, va_list arg, const char * format)
                     break;
                 }
                 case 'X': // Todo
+                    hex_base = 'A';
+                    __attribute__((fallthrough));
                 case 'x': {
-                    if (buffpos > 0) {
-                        buff[buffpos] = '\0';
-                        int p = fputs(buff, stream);
-                        buffpos = 0;
-                        if (p < 0) {
-                            chars_transmitted = p;
-                            goto end;
-                        } else {
-                            chars_transmitted += p;
-                            free(buff);
-                            buff = malloc(buffsize + 1);
-                        }
-                    }
-
                     unsigned long t;
                     if (is_long) t = va_arg(arg, unsigned long);
                     else t = va_arg(arg, unsigned int);
 
                     char* s_buff = malloc(max_(24, width+1));
-                    int j = uint_to_string(t, 16, s_buff);
-                    j = fputs(s_buff, stream);
+                    int j = uint_to_string(t, 16, s_buff, hex_base);
+                    j = _size_fputs(j, s_buff, stream);
                     if (j < 0) {
                         chars_transmitted = j;
                         goto end;
@@ -304,37 +257,15 @@ static int va_fprintf (FILE * stream, va_list arg, const char * format)
                 }
                 case 'c': {
                     int c = va_arg(arg, int);
-                    buff[buffpos++] = c;
-                    if (buffpos == buffsize) {
-                        buff[buffpos] = '\0';
-                        int p = fputs(buff, stream);
-                        free(buff);
-
-                        if (p < 0) return p;
-
-                        chars_transmitted += p;
-                        buff = malloc(buffsize + 1);
-                        buffpos = 0;
-                    }
+                    int k = _size_fputs(1, (char*)&c, stream);
+                    if (k < 0) return k;
+                    chars_transmitted += 1;
                     
                     rpt = 0;
                     ++i;
                     break;
                 }
                 case 's': {
-                    if (buffpos > 0) {
-                        buff[buffpos] = '\0';
-                        int p = fputs(buff, stream);
-                        buffpos = 0;
-                        if (p < 0) {
-                            chars_transmitted = p;
-                            goto end;
-                        } else {
-                            chars_transmitted += p;
-                            free(buff);
-                            buff = malloc(buffsize + 1);
-                        }
-                    }
                     int k = write_string(stream, va_arg(arg, const char*), flags, width);
                     if (k < 1) {
                         chars_transmitted = k;
@@ -367,43 +298,23 @@ static int va_fprintf (FILE * stream, va_list arg, const char * format)
     }
 
 end:
-    if (chars_transmitted >= 0 && buffpos > 0) {
-        buff[buffpos] = '\0';
-        int p = fputs(buff, stream);
-        if (p < 0) chars_transmitted = p;
-        else chars_transmitted += p;
+    if (chars_transmitted >= 0 && buffdiff > 0) {
+            int p = _size_fputs(buffdiff, &format[i - buffdiff], stream);
+            if (p < 0) return p;
+            chars_transmitted += buffdiff;
     }
-    free(buff);
     return chars_transmitted;
 }
 
 int fputc ( int character, FILE * stream )
 {
-    char p[2] = " ";
-    p[0] = character;
-    return fputs(p, stream);
+    return _size_fputs(1, (char*)&character, stream);
 }
 
-int fputs (const char * str, FILE * stream)
+int fputs(const char* string, FILE* stream)
 {
-    if (stream == NULL || str == NULL) return EOF;
-
-    int type = stream->type;
-    int result = EOF;
-
-    switch (type)
-    {
-    case _STDIO_FILE_TYPE_PORT: {
-        size_t size = strlen(str);
-        int k = send_message_port(stream->port_ptr, size, str);
-        result = k == SUCCESS ? size : EOF;
-        break;
-    }
-    default:
-        result = EOF;
-        break;
-    }
-    return result;
+    size_t size = strlen(string);
+    return _size_fputs(size, string, stream);
 }
 
 int puts(const char* str)
