@@ -84,7 +84,7 @@ static inline int max_(int a, int b)
     return a > b ? a : b;
 }
 
-static int _size_fputs (size_t size, const char * str, FILE * stream)
+static int _size_fputs (int size, const char * str, FILE * stream)
 {
     if (stream == NULL || str == NULL) return EOF;
 
@@ -108,8 +108,6 @@ static int _size_fputs (size_t size, const char * str, FILE * stream)
 static int va_fprintf (FILE * stream, va_list arg, const char * format)
 {
     int chars_transmitted = 0;
-    static const int buffsize = 256;
-
     int buffdiff = 0;
 
     int i = 0;

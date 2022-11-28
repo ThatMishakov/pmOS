@@ -145,7 +145,7 @@ void main()
                         char buff[10];
                         uint_to_string(rsdp20_desc, 10, buff);
 
-                        push_arg(a, "--rsdp-desc");
+                        push_arg(a, "--rsdp20-desc");
                         push_arg(a, buff);
                     } 
 

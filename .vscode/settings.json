@@ -25,6 +25,7 @@
         "list": "c",
         "unordered_set": "c",
         "valarray": "c",
-        "*.tcc": "c"
+        "*.tcc": "c",
+        "stdint.h": "c"
     }
 }
