@@ -19,6 +19,12 @@
         "regex": "c",
         "random": "c",
         "*.inc": "c",
-        "functional": "c"
+        "functional": "c",
+        "sstream": "c",
+        "forward_list": "c",
+        "list": "c",
+        "unordered_set": "c",
+        "valarray": "c",
+        "*.tcc": "c"
     }
 }

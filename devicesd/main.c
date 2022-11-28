@@ -5,18 +5,28 @@
 #include <system.h>
 #include <stdio.h>
 
+char* exec = NULL;
+
+void usage()
+{
+
+}
+
+void parse_args(int argc, char** argv)
+{
+    if (argc < 1) return;
+    exec = argv[0];
+
+    for (int i = 1; i < argc; ++i) {
+        printf("argc %i %s\n", i, argv[i]);
+    }
+}
+
 int main(int argc, char** argv) {
     char msg[] = "Hello from devicesd!\n";
     send_message_port(1, strlen(msg), msg);
     
-    char buff[256];
-    sprintf(buff, "argc %i\n", argc);
-    send_message_port(1, strlen(buff), buff);
-    
-    for (int i = 0; i < argc; ++i) {
-        sprintf(buff, "Arg %i: %s\n", i, argv[i]);
-        send_message_port(1, strlen(buff), buff);
-    }
+    parse_args(argc, argv);
 
     return 0;
 }

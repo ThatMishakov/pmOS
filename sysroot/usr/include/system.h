@@ -47,10 +47,10 @@ result_t syscall_get_message_info(Message_Descriptor* descr);
 result_t get_first_message(char* buff, uint64_t args);
 
 // Sends a message to the process pid at channel *channel*
-result_t send_message_task(uint64_t pid, uint64_t channel, size_t size, char* message);
+result_t send_message_task(uint64_t pid, uint64_t channel, size_t size, const char* message);
 
 // Sends a message to the port
-result_t send_message_port(uint64_t port, size_t size, char* message);
+result_t send_message_port(uint64_t port, size_t size, const char* message);
 
 // Sets the port of the process
 result_t set_port(uint64_t pid, uint64_t dest_pid, uint64_t dest_chan);

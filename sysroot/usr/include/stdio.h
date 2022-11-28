@@ -2,14 +2,17 @@
 #define _STDIO_H 1
 #include "stdlib_com.h"
 #include <stdarg.h>
+#include <stdint.h>
 
 #if defined(__cplusplus)
 extern "C" {
 #endif
 
 typedef struct FILE {
-    // TODO
-    int i;
+    uint64_t port_ptr;
+    size_t size;
+    uint32_t flags;
+    uint8_t type;
 } FILE;
 typedef size_t fpos_t;
 

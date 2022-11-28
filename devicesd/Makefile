@@ -43,7 +43,7 @@ $(EXEC): $(OBJ) libc
 	$(CC) $(LDFLAGS) $(OBJ) -o $@
 
 clean:
-	$(RM) $(EXEC) $(OBJ)
+	$(RM) $(EXEC) $(OBJ) $(DEP)
 
 -include $(DEP)
 
