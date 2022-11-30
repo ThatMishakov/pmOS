@@ -1,6 +1,7 @@
 EXEC = devicesd.elf
 
-ROOTDIR = $(realpath .)/..
+PROGDIR = $(realpath .)
+ROOTDIR = $(PROGDIR)/..
 export PATH := $(ROOTDIR)/bin/cross/bin:$(PATH)
 
 CC = $(ROOTDIR)/bin/cross/bin/x86_64-pmos-gcc
@@ -9,9 +10,7 @@ CXX = $(ROOTDIR)/bin/cross/bin/x86_64-pmos-g++
 
 USERCFLAGS = -Wall -Wextra -O2 -pipe
 
-CPPFLAGS = $(INTERNALCFLAGS) $(USERCFLAGS) -MMD -MP
-ASMFLAGS = -I$(INCLUDEDIR)
-LDFLAGS = $(INTERNALLDFLAGS)
+INCLUDEFLAGS = -I$(PROGDIR)/include
 
 # Internal link flags that should not be changed by the user.
 INTERNALLDFLAGS :=     \
@@ -23,11 +22,11 @@ INTERNALCFLAGS  :=       \
 	-mno-red-zone \
 	-mno-mmx -mno-sse -mno-sse2 \
 	-fPIE \
-	-fno-exceptions -fno-rtti
+	-fno-exceptions
 
-CFLAGS = -std=c17
-CXXFLAGS = -std=c++17
-CPPFLAGS = $(INTERNALCFLAGS) $(USERCFLAGS) -MMD -MP
+CFLAGS = -std=gnu17 $(INCLUDEFLAGS)
+CXXFLAGS = -std=c++17 $(INCLUDEFLAGS)
+CPPFLAGS = $(INTERNALCFLAGS) $(USERCFLAGS) -MMD -MP $(INCLUDEFLAGS)
 ASMFLAGS = -I$(INCLUDEDIR)
 LDFLAGS = $(INTERNALLDFLAGS)
  

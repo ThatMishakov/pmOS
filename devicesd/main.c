@@ -2,10 +2,11 @@
 #include <kernel/types.h>
 #include <kernel/errors.h>
 #include <string.h>
-#include <system.h>
+#include <pmos/system.h>
 #include <stdio.h>
-#include "acpi/acpi.h"
+#include <acpi/acpi.h>
 #include <stddef.h>
+#include <pmos/special.h>
 
 char* exec = NULL;
 
@@ -46,6 +47,8 @@ int main(int argc, char** argv) {
     puts("Hello from devicesd!\n");
     
     parse_args(argc, argv);
+
+    pmos_request_io_permission();
 
     if (rsdp_desc || rsdp20_desc)
         init_acpi();

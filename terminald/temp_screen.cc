@@ -1,4 +1,4 @@
-#include <system.h>
+#include <pmos/system.h>
 #include "asm.hh"
 
 
@@ -65,6 +65,6 @@ void cls (void)
 
 void init_screen()
 {
-    map_phys(0xb8000, 0xb8000,1,0x03);
+    syscall_map_phys(0xb8000, 0xb8000,1,0x03);
     cls();
 }

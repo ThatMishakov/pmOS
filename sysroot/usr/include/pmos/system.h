@@ -2,10 +2,10 @@
 #define _SYSTEM_H 1
 #include <stdint.h>
 #include <stddef.h>
-#include "kernel/syscalls.h"
-#include "kernel/memory.h"
-#include "kernel/messaging.h"
-#include "kernel/types.h"
+#include "../kernel/syscalls.h"
+#include "../kernel/memory.h"
+#include "../kernel/messaging.h"
+#include "../kernel/types.h"
 
 typedef uint64_t result_t;
 
@@ -38,7 +38,7 @@ result_t syscall_release_page_multi(u64 base, u64 nb_pages);
 
 syscall_r start_process(uint64_t pid, uint64_t entry);
 
-syscall_r map_phys(uint64_t virt, uint64_t phys, uint64_t size, uint64_t arg);
+syscall_r syscall_map_phys(uint64_t virt, uint64_t phys, uint64_t size, uint64_t arg);
 
 // Get info about message
 result_t syscall_get_message_info(Message_Descriptor* descr);

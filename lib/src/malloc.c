@@ -1,13 +1,15 @@
-#include "../include/system.h"
-#include "../include/stdlib.h"
+#include <pmos/system.h>
+#include <stdlib.h>
 #include <stddef.h>
+#include <string.h>
+#include <stdint.h>
 
 #define ALLOC_MIN_PAGES 8
 
 extern char _end;
 static const void* heap_start = (void*)((uint64_t)(&_end)&~0xfff + 0x1000);
 
-uint64_t heap_size = 0;
+size_t heap_size = 0;
 
 typedef struct malloc_list{
     struct malloc_list* next;
@@ -16,10 +18,16 @@ typedef struct malloc_list{
 
 struct malloc_list head = {0,0};
 
+void* heap_reserve_pages(size_t pages)
+{
+    uint64_t k = __atomic_fetch_add(&heap_size, pages, 0);
+    uint64_t pos = (uint64_t)(&heap_start) + (k << 12ULL);
+    return (void*)pos;
+}
+
 void *palloc(size_t pages)
 {
-    uint64_t pos = (uint64_t)(&heap_start) + (heap_size << 12ULL);
-    heap_size += pages;
+    uint64_t pos = (uint64_t)heap_reserve_pages(pages);
     get_page_multi(pos, pages);
     return (void*)pos;
 }
@@ -60,8 +68,23 @@ void *malloc_int(size_t size_bytes, size_t* size_bytes_a)
     }
 }
 
+void *realloc(void *old_ptr, size_t new_size)
+{
+    void* new_ptr = NULL;
+    if (new_size != 0) {
+        new_ptr = malloc(new_size);
+    }
+
+    if (old_ptr != NULL) {
+        if (new_ptr != NULL)
+            memcpy(new_ptr, old_ptr, new_size);
+
+        free(old_ptr);
+    }
+    return new_ptr;
+}
+
 /*
-void *realloc(void *, size_t);
 void *calloc(size_t nelem, size_t size)
 {
     size_t total_size = nelem * size;
@@ -91,3 +114,4 @@ void free(void * p)
     head.next = k;
     k->size = size;
 }
+

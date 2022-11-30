@@ -2,7 +2,7 @@
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio_internal.h>
-#include <system.h>
+#include <pmos/system.h>
 #include <kernel/errors.h>
 #include <string.h>
 #include <stdlib.h>
@@ -233,7 +233,7 @@ static int va_fprintf (FILE * stream, va_list arg, const char * format)
                     ++i;
                     break;
                 }
-                case 'X': // Todo
+                case 'X':
                     hex_base = 'A';
                     __attribute__((fallthrough));
                 case 'x': {
@@ -320,7 +320,7 @@ int puts(const char* str)
     return fputs(str, stdout);
 }
 
-int frpintf(FILE * stream, const char * format, ...)
+int fprintf(FILE * stream, const char * format, ...)
 {
     va_list arg;
     va_start(arg,format);

@@ -1,4 +1,4 @@
-#include <system.h>
+#include <pmos/system.h>
 #include <kernel/types.h>
 
 syscall_r syscall_get_page(u64 addr)
@@ -31,17 +31,17 @@ syscall_r start_process(u64 pid, u64 entry)
     return syscall(SYSCALL_START_PROCESS, pid, entry);
 }
 
-syscall_r map_phys(u64 virt, u64 phys, u64 size, u64 arg)
+syscall_r syscall_map_phys(u64 virt, u64 phys, u64 size, u64 arg)
 {
     return syscall(SYSCALL_MAP_PHYS, virt, phys, size, arg);
 }
 
-result_t send_message_task(u64 pid, u64 channel, size_t size, char* message)
+result_t send_message_task(u64 pid, u64 channel, size_t size, const char* message)
 {
     return syscall(SYSCALL_SEND_MSG_TASK, pid, channel, size, message).result;
 }
 
-result_t send_message_port(u64 port, size_t size, char* message)
+result_t send_message_port(u64 port, size_t size, const char* message)
 {
     return syscall(SYSCALL_SEND_MSG_PORT, port, size, message).result;
 }
