@@ -36,6 +36,16 @@ int strcmp(const char *s1, const char *s2)
     return 1; 
 }
 
+int strncmp(const char *s1, const char *s2, size_t size)
+{
+    size_t i = 0;
+    while (i < size && s1[i] == s2[i] && s1[i]) ++i;
+
+    if (i == size || !s1[i] && !s2[i]) return 0;
+    if (s1[i] < s2[i]) return -1;
+    return 1; 
+}
+
 void *memcpy(void *dest, const void * src, size_t n)
 {
     void* k = dest;

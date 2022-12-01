@@ -88,4 +88,6 @@ void init_acpi();
 
 extern RSDP_descriptor* rsdp_desc;
 extern RSDP_descriptor20* rsdp20_desc;
+
+ACPISDTHeader* get_table(const char* signature, int n);
 #endif

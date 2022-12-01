@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <asm.h>
 #include <phys_map/phys_map.h>
+#include <pmos/debug.h>
 
 void laihost_log(int level, const char *msg)
 {
@@ -13,22 +14,28 @@ void laihost_log(int level, const char *msg)
 __attribute__((noreturn)) void laihost_panic(const char *msg)
 {
     fprintf(stderr, "LAI panic: %s\n", msg);
+    pmos_print_stack_trace();
     exit(2);
 }
 
 void *laihost_malloc(size_t s)
 {
-    return malloc(s);
+    void* p = malloc(s);
+    printf("LAI malloc size %i -> %lx\n", s, p);
+    return p;
 }
 
 void *laihost_realloc(void * p, size_t s)
 {
-    return realloc(p, s);
+    void* np = realloc(p, s);
+    printf("LAI realloc ptr %lx size %li -> %lx\n", (uint64_t)p, s, np);
+    return np;
 }
 
 void laihost_free(void * p)
 {
-    return free(p);
+    printf ("LAI free %lx\n", (uint64_t)p);
+    free(p);
 }
 
 
@@ -78,4 +85,14 @@ uint16_t laihost_inw(uint16_t port)
 uint32_t laihost_ind(uint16_t port)
 {
     return inl(port);
+}
+
+void *laihost_scan(char *sig, size_t index)
+{
+    printf("laihost_scan sig %s index %i\n", sig, index);
+
+    ACPISDTHeader* h = get_table(sig, index);
+
+    printf("Gotten %lX\n", h);
+    return h;
 }

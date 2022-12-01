@@ -339,3 +339,8 @@ int printf(const char* format, ...)
 
     va_end(arg);
 }
+
+size_t fwrite ( const void * ptr, size_t size, size_t count, FILE * stream )
+{
+    return _size_fputs(size*count, ptr, stream);
+}

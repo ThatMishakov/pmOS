@@ -7,7 +7,12 @@
 #define ALLOC_MIN_PAGES 8
 
 extern char _end;
-static const void* heap_start = (void*)((uint64_t)(&_end)&~0xfff + 0x1000);
+static const void* heap_start = NULL;
+
+void init_malloc(void)
+{
+    heap_start = (void*)(((uint64_t)(&_end)&~0xfff) + 0x1000);
+}
 
 size_t heap_size = 0;
 
@@ -21,8 +26,13 @@ struct malloc_list head = {0,0};
 void* heap_reserve_pages(size_t pages)
 {
     uint64_t k = __atomic_fetch_add(&heap_size, pages, 0);
-    uint64_t pos = (uint64_t)(&heap_start) + (k << 12ULL);
+    uint64_t pos = (uint64_t)(heap_start) + (k << 12ULL);
     return (void*)pos;
+}
+
+static size_t get_alloc_size(const void* ptr)
+{
+    return *(((const uint64_t*)ptr) - 1);
 }
 
 void *palloc(size_t pages)
@@ -77,10 +87,11 @@ void *realloc(void *old_ptr, size_t new_size)
 
     if (old_ptr != NULL) {
         if (new_ptr != NULL)
-            memcpy(new_ptr, old_ptr, new_size);
+            memcpy(new_ptr, old_ptr, get_alloc_size(old_ptr));
 
         free(old_ptr);
     }
+    
     return new_ptr;
 }
 

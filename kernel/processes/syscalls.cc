@@ -375,7 +375,7 @@ kresult_t syscall_map_phys(u64 arg1, u64 arg2, u64 arg3, u64 arg4)
     pta.global = 0;
     pta.writeable = arg4& 0x01;
     pta.execution_disabled = arg4&0x02;
-    //t_print("Debug: map_phys virt %h <- phys %h nb %h\n", virt, phys, nb_pages);
+    t_print_bochs("Debug: map_phys virt %h <- phys %h nb %h pid %i\n", virt, phys, nb_pages, get_cpu_struct()->current_task->pid);
 
     // TODO: Check permissions
 

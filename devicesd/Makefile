@@ -24,11 +24,11 @@ INTERNALCFLAGS  :=       \
 	-fPIE \
 	-fno-exceptions
 
-CFLAGS = -std=gnu17 $(INCLUDEFLAGS)
-CXXFLAGS = -std=c++17 $(INCLUDEFLAGS)
+CFLAGS = -std=gnu17 $(INCLUDEFLAGS) -g
+CXXFLAGS = -std=c++17 $(INCLUDEFLAGS) -g
 CPPFLAGS = $(INTERNALCFLAGS) $(USERCFLAGS) -MMD -MP $(INCLUDEFLAGS)
 ASMFLAGS = -I$(INCLUDEDIR)
-LDFLAGS = $(INTERNALLDFLAGS)
+LDFLAGS = $(INTERNALLDFLAGS) -g
  
 # Use find to glob all *.c files in the directory and extract the object names.
 CCFILES := $(shell find ./ -type f -name '*.cc')
