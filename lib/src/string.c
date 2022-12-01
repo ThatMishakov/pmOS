@@ -60,7 +60,7 @@ void *memset(void *s, int c, size_t n)
 {
     void *k = s;
     while (n--) {
-        *((unsigned char*)(s)++) = (unsigned char)n;
+        *((unsigned char*)(s)++) = (unsigned char)c;
     }
 
     return k;

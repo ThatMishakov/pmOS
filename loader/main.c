@@ -114,6 +114,7 @@ void main()
                     struct multiboot_tag_module * mod = (struct multiboot_tag_module *)tag;
                     print_str(" --> loading ");
                     print_str(mod->cmdline);
+                    print_str("\n");
                     static uint64_t virt_addr = 549755813888 + 0x2000000;
                     uint64_t phys_start = (uint64_t)mod->mod_start & ~(uint64_t)0xfff;
                     uint64_t phys_end = (uint64_t)mod->mod_end;
@@ -125,7 +126,7 @@ void main()
 
                     get_page_multi(virt_addr + 0x300000, 1);
                     uint64_t virt_page = TB(2);
-                    Args_List_Header *a = (Args_List_Header*)(virt_addr + 0x30000);
+                    Args_List_Header *a = (Args_List_Header*)(virt_addr + 0x300000);
                     a->size = 0;
                     a->flags = 0x01;
                     a->pages = 1;
@@ -149,7 +150,7 @@ void main()
                     } 
 
 
-                    syscall_r r = map_into_range(pid, virt_addr + 0x30000, virt_page, 1, 0x01);
+                    syscall_r r = map_into_range(pid, virt_addr + 0x300000, virt_page, 1, 0x01);
                     if (r.result != SUCCESS) {
                         asm("xchgw %bx, %bx");
                         print_hex(r.result);
@@ -158,9 +159,6 @@ void main()
                     }
 
                     start_process(pid, e->program_entry, 0x01, virt_page, 0);
-                    print_str(" pid -> ");
-                    print_hex(pid);
-                    print_str("\n");
                 }
             }
         }

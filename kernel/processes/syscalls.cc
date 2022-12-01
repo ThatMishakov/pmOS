@@ -186,6 +186,8 @@ kresult_t syscall_map_into_range(u64 arg1, u64 arg2, u64 arg3, u64 arg4, u64 arg
     pta.writeable = !!(arg5&FLAG_RW);
     pta.execution_disabled = !!(arg5&FLAG_NOEXECUTE);
 
+    //t_print_bochs("Debug: syscall_map_into_range() pid %i page_start %h to_addr %h nb_pages %h flags %h\n", pid, page_start, to_addr, nb_pages, arg5);
+
     // TODO: Check permissions
 
     // Check if legal address
@@ -375,7 +377,7 @@ kresult_t syscall_map_phys(u64 arg1, u64 arg2, u64 arg3, u64 arg4)
     pta.global = 0;
     pta.writeable = arg4& 0x01;
     pta.execution_disabled = arg4&0x02;
-    t_print_bochs("Debug: map_phys virt %h <- phys %h nb %h pid %i\n", virt, phys, nb_pages, get_cpu_struct()->current_task->pid);
+    //t_print_bochs("Debug: map_phys virt %h <- phys %h nb %h pid %i\n", virt, phys, nb_pages, get_cpu_struct()->current_task->pid);
 
     // TODO: Check permissions
 

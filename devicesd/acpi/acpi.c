@@ -67,31 +67,23 @@ void init_acpi()
     printf("Info: Initializing ACPI...\n");
     int acpi_rev = 0;
 
-    // TODO: Checksums
-    if (rsdp20_desc != NULL) {
-        RSDP_descriptor20* rsdp20_desc_virt = acpi_map_and_get_virt(rsdp20_desc, sizeof(RSDP_descriptor20));
-        acpi_rev = rsdp20_desc_virt->firstPart.revision;
-
-        xsdt_phys = rsdp20_desc_virt->xsdt_address;
-        // TODO: checksum     
-        goto acpi_tables_ok;
-    } 
-    
-    if (rsdp_desc != NULL) {
-        RSDP_descriptor* rsdp_desc_virt = acpi_map_and_get_virt(rsdp_desc, sizeof(rsdp_desc));
-        acpi_rev = rsdp_desc_virt->revision;
-
-        rsdt_phys = rsdp_desc_virt->rsdt_address;
-        goto acpi_tables_ok;
-    }
-
-acpi_tables_ok:
-    printf("Mapped tables. ACPI revision: %i\n", acpi_rev);
+    acpi_rev = walk_acpi_tables();
 
     lai_set_acpi_revision(acpi_rev);
     lai_create_namespace();
 
     printf("Inited lai\n"); 
+}
+
+int check_table(ACPISDTHeader* header)
+{
+    uint8_t sum = 0;
+    
+    for (int i = 0; i < header->length; ++i) {
+        sum += ((unsigned char*)header)[i];
+    }
+
+    return sum == 0;
 }
 
 ACPISDTHeader* get_table(const char* signature, int n)
@@ -119,10 +111,12 @@ ACPISDTHeader* get_table(const char* signature, int n)
         uint32_t length = rsdt->h.length;
         rsdt = map_phys(rsdt_phys, length);
         uint32_t entries = (length - sizeof(rsdt->h)) / 4;
+        printf("Debug: length %i size %i sizeof(rsdt->h) %i phys %lX\n", length, entries, sizeof(rsdt->h), (uint64_t)rsdt_phys);
 
         for (uint32_t i = 0; i < entries; ++i) {
             phys = (ACPISDTHeader *) rsdt->PointerToOtherSDT[i];
             h = map_phys(phys, sizeof(ACPISDTHeader));
+            printf("Debug: signature %s\n", h->signature);
             if (!strncmp(h->signature, signature, 4)) {
                 if (i++ == n) break;
             }

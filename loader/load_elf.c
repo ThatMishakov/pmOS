@@ -34,14 +34,23 @@ uint64_t load_elf(ELF_64bit* elf_h, uint8_t ring)
         if (p->type == ELF_SEGMENT_LOAD) {
             uint64_t phys_loc = (uint64_t)elf_h + p->p_offset;
             uint64_t vaddr = p->p_vaddr;
-            uint64_t vaddr_all = vaddr & ~0xfffULL;
+            uint64_t vaddr_all = vaddr & ~0xfffUL;
             uint64_t size = p->p_filesz;
             uint64_t memsz = p->p_memsz;
             uint64_t size_all = memsz + (vaddr - vaddr_all);
-            uint64_t pages = (memsz >> 12) + ((memsz) & 0xfff ? 1 : 0);
+            //uint64_t pages = (memsz >> 12) + ((memsz) & 0xfff ? 1 : 0);
+            uint64_t vaddr_end = vaddr + memsz;
+                     vaddr_end = (vaddr_end & ~0xfffUL) + (vaddr_end & 0xfff ? 0x1000 : 0);
+            uint64_t pages = (vaddr_end - vaddr_all) >> 12;
 
             // TODO: Error checking
             syscall_r r = get_page_multi(memory, pages);
+            if (r.result != SUCCESS) {
+                asm("xchgw %bx, %bx");
+                print_hex(r.result);
+                print_str(" !!!\n");
+                halt();
+            }
 
             memcpy((char*)phys_loc, (char*)(memory + (vaddr - vaddr_all)) , size);
 

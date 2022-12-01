@@ -2,7 +2,7 @@
 #include <limits.h>
 #include <ctype.h>
 
-unsigned long int strtoul(const char * nptr, char ** endptr,int base)
+unsigned long int strtoul(const char * nptr, char ** endptr ,int base)
 {
     const char* s = nptr;
     int neg = 0;

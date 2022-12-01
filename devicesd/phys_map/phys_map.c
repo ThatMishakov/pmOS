@@ -20,6 +20,8 @@ static void map_phys_push_free(uint64_t virt_addr_start, uint64_t number_of_page
 
 void* map_phys(void* phys_addr, size_t bytes)
 {
+    // TODO: It looks like it leaks memory
+
     uint64_t addr_alligned = (uint64_t)phys_addr & ~(uint64_t)07777;
     uint64_t end_alligned = (uint64_t)phys_addr + bytes;
              end_alligned = (end_alligned & ~(uint64_t)07777) + (end_alligned & (uint64_t)07777 ? 010000 : 0);

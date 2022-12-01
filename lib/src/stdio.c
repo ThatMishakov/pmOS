@@ -125,7 +125,7 @@ static int va_fprintf (FILE * stream, va_list arg, const char * format)
 
             ++i;
             char flags = 0;
-            int width = 0;
+            unsigned int width = 0;
             int precision = 0;
             char rpt = 1;
             int is_long = 0;
@@ -168,9 +168,12 @@ static int va_fprintf (FILE * stream, va_list arg, const char * format)
                 case '6':
                 case '7':
                 case '8':
-                case '9':
-                    // TODO
+                case '9': {
+                    char* endptr = NULL;
+                    width = strtoul(&(format[i]), &endptr, 10);
+                    i += &(format[i]) - endptr;
                     break;
+                }
                 case '*':
                     width = va_arg(arg, int);
                     ++i;
@@ -179,8 +182,6 @@ static int va_fprintf (FILE * stream, va_list arg, const char * format)
                     // Precision
                     // TODO
                     break;
-
-                // TODO: Length
                 case 'i':
                 case 'd':{                    
                     long t;

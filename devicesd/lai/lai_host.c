@@ -20,21 +20,16 @@ __attribute__((noreturn)) void laihost_panic(const char *msg)
 
 void *laihost_malloc(size_t s)
 {
-    void* p = malloc(s);
-    printf("LAI malloc size %i -> %lx\n", s, p);
-    return p;
+    return malloc(s);
 }
 
 void *laihost_realloc(void * p, size_t s)
 {
-    void* np = realloc(p, s);
-    printf("LAI realloc ptr %lx size %li -> %lx\n", (uint64_t)p, s, np);
-    return np;
+    return realloc(p, s);
 }
 
 void laihost_free(void * p)
 {
-    printf ("LAI free %lx\n", (uint64_t)p);
     free(p);
 }
 
