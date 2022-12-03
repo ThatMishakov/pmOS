@@ -74,11 +74,6 @@ static int uint_to_string(unsigned long int n, uint8_t base, char* str, int hex_
     return length;
 }
 
-static int write_string(FILE * stream, const char* from, char flags, int width)
-{
-    return fputs(from, stream);
-}
-
 static inline int max_(int a, int b)
 {
     return a > b ? a : b;
@@ -105,6 +100,18 @@ static int _size_fputs (int size, const char * str, FILE * stream)
     return result;
 }
 
+static int write_string(FILE * stream, const char* from, char flags, size_t width)
+{
+    if (width == 0)
+        return fputs(from, stream);
+
+    size_t string_size;
+
+    for (string_size = 0; string_size < width && from[string_size]; ++string_size) ;
+
+    return _size_fputs(string_size, from, stream);
+}
+
 static int va_fprintf (FILE * stream, va_list arg, const char * format)
 {
     int chars_transmitted = 0;
@@ -125,7 +132,7 @@ static int va_fprintf (FILE * stream, va_list arg, const char * format)
 
             ++i;
             char flags = 0;
-            unsigned int width = 0;
+            unsigned long int width = 0;
             int precision = 0;
             char rpt = 1;
             int is_long = 0;
@@ -168,7 +175,7 @@ static int va_fprintf (FILE * stream, va_list arg, const char * format)
                 case '6':
                 case '7':
                 case '8':
-                case '9': {
+                case '9': { // TODO: Broken!
                     char* endptr = NULL;
                     width = strtoul(&(format[i]), &endptr, 10);
                     i += &(format[i]) - endptr;

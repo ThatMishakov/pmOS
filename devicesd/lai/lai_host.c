@@ -84,10 +84,6 @@ uint32_t laihost_ind(uint16_t port)
 
 void *laihost_scan(char *sig, size_t index)
 {
-    printf("laihost_scan sig %s index %i\n", sig, index);
-
     ACPISDTHeader* h = get_table(sig, index);
-
-    printf("Gotten %lX\n", h);
     return h;
 }

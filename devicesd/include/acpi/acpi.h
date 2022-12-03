@@ -2,8 +2,6 @@
 #define ACPI_H
 #include <stdint.h>
 
-int check_table(ACPISDTHeader* header);
-
 typedef struct RSDP_descriptor {
  char signature[8];
  uint8_t checksum;
@@ -98,12 +96,13 @@ typedef struct GenericAddressStructure
   uint8_t BitOffset;
   uint8_t AccessSize;
   uint64_t Address;
-} GenericAddressStructure;
+} __attribute__ ((packed)) GenericAddressStructure;
 
 ACPISDTHeader* get_table(const char* signature, int n);
 
 typedef struct FADT {
   ACPISDTHeader h;
+  uint32_t FIRMWARE_CTRL;
   uint32_t dsdt_phys;
   uint8_t reserved;
   uint8_t preferred_PM_profile;
@@ -144,7 +143,7 @@ typedef struct FADT {
   GenericAddressStructure RESET_REG;
   uint8_t RESET_VALUE;
   uint16_t ARM_BOOT_ARCH;
-  uint8_t FADT Minor Version;
+  uint8_t FADT_Minor_Version;
   uint64_t X_FIRMWARE_CTRL;
   uint64_t X_DSDT;
   GenericAddressStructure X_PM1a_EVT_BLK;
@@ -158,14 +157,16 @@ typedef struct FADT {
   GenericAddressStructure SLEEP_CONTROL_REG;
   GenericAddressStructure SLEEP_STATUS_REG;
   uint64_t Hypervisor_Vendor_Identity;
-};
+} __attribute__ ((packed)) FADT;
 
-typedef struct ACPIList {
-  ACPISDTHeader* virt_addr;
-  ACPIList* next;
-} ACPIList;
+typedef struct DSDT {
+  ACPISDTHeader h;
+  uint8_t definitions[0];
+}__attribute__ ((packed)) DSDT;
 
 // Returns -1 on error or ACPI version otherwise 
 int walk_acpi_tables();
+
+int check_table(ACPISDTHeader* header);
 
 #endif

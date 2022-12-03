@@ -69,66 +69,24 @@ void init_acpi()
 
     acpi_rev = walk_acpi_tables();
 
+    if (acpi_rev == -1) {
+        printf("Warning: Did not initialize ACPI\n");
+        return;
+    }
+
     lai_set_acpi_revision(acpi_rev);
     lai_create_namespace();
 
-    printf("Inited lai\n"); 
+    printf("Inited LAI\n"); 
 }
 
 int check_table(ACPISDTHeader* header)
 {
     uint8_t sum = 0;
     
-    for (int i = 0; i < header->length; ++i) {
+    for (uint32_t i = 0; i < header->length; ++i) {
         sum += ((unsigned char*)header)[i];
     }
 
     return sum == 0;
-}
-
-ACPISDTHeader* get_table(const char* signature, int n)
-{
-    ACPISDTHeader* h = NULL;
-    ACPISDTHeader* phys = NULL;
-    int i = 0;
-
-    if (xsdt_phys != 0) {
-        XSDT *xsdt = map_phys(xsdt_phys, sizeof(XSDT));
-        uint32_t length = xsdt->h.length;
-        xsdt = map_phys(xsdt_phys, length);
-        uint32_t entries = (length - sizeof(xsdt->h)) / 8;
-
-        for (uint32_t i = 0; i < entries; ++i) {
-            phys = (ACPISDTHeader *) xsdt->PointerToOtherSDT[i];
-            h = map_phys(phys, sizeof(ACPISDTHeader));
-            if (!strncmp(h->signature, signature, 4)) {
-                if (i++ == n) break;
-            }
-            h = NULL;
-        }
-    } else if (rsdt_phys != 0) {
-        RSDT *rsdt = map_phys(rsdt_phys, sizeof(RSDT));
-        uint32_t length = rsdt->h.length;
-        rsdt = map_phys(rsdt_phys, length);
-        uint32_t entries = (length - sizeof(rsdt->h)) / 4;
-        printf("Debug: length %i size %i sizeof(rsdt->h) %i phys %lX\n", length, entries, sizeof(rsdt->h), (uint64_t)rsdt_phys);
-
-        for (uint32_t i = 0; i < entries; ++i) {
-            phys = (ACPISDTHeader *) rsdt->PointerToOtherSDT[i];
-            h = map_phys(phys, sizeof(ACPISDTHeader));
-            printf("Debug: signature %s\n", h->signature);
-            if (!strncmp(h->signature, signature, 4)) {
-                if (i++ == n) break;
-            }
-            h = NULL;
-        }
-    }
-
-    if (h == NULL) return NULL;
-    // TODO: Check signature
-
-    uint32_t length = h->length;
-    h = map_phys(phys, length);
-
-    return h;
 }

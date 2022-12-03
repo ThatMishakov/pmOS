@@ -13,9 +13,23 @@ typedef struct map_list {
 
 map_list free_pages_head = {0, 0, NULL};
 
+void list_insert_after(map_list* element, map_list* to_insert)
+{
+    to_insert->next = element->next;
+    element->next = to_insert;
+}
+
 static void map_phys_push_free(uint64_t virt_addr_start, uint64_t number_of_pages)
 {
     // TODO
+    return;
+    // TODO: Ordering and merging (or preferably a better data structure)
+    map_list* l = malloc(sizeof(map_list));
+    l->start = (void*)virt_addr_start;
+    l->pages = number_of_pages;
+    l->next = NULL;
+
+    list_insert_after(&free_pages_head, l);
 }
 
 void* map_phys(void* phys_addr, size_t bytes)
@@ -39,7 +53,7 @@ void* map_phys(void* phys_addr, size_t bytes)
 
     }
 
-    printf("Syscall virt_addr_start %lX addr_alligned %lX size_pages %li\n", virt_addr_start, (uint64_t)addr_alligned, size_pages);
+    //printf("Syscall virt_addr_start %lX addr_alligned %lX size_pages %li\n", virt_addr_start, (uint64_t)addr_alligned, size_pages);
     result_t result = syscall_map_phys(virt_addr_start, (uint64_t)addr_alligned, size_pages, FLAG_RW | FLAG_NOEXECUTE).result;
 
     if (result != SUCCESS) {
