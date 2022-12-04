@@ -410,19 +410,17 @@ kresult_t syscall_map_phys(u64 arg1, u64 arg2, u64 arg3, u64 arg4)
 kresult_t syscall_get_first_message(u64 buff, u64 args)
 {
     TaskDescriptor* current = get_cpu_struct()->current_task;
-
-    current->lock.lock();
-
     kresult_t result = SUCCESS;
 
+    current->lock.lock();
     if (current->messages.empty()) {
         current->lock.unlock();
         return ERROR_NO_MESSAGES;
     }
 
-    Message& msg = current->messages.front();
+    klib::shared_ptr<Message> top_message = current->messages.front();
 
-    result = msg.copy_to_user_buff((char*)buff);
+    result = top_message->copy_to_user_buff((char*)buff);
 
     if (result == SUCCESS) {
         if (!(args & MSG_ARG_NOPOP)) {
@@ -452,8 +450,10 @@ kresult_t syscall_send_message_task(u64 pid, u64 channel, u64 size, u64 message)
 
     if (result != SUCCESS) return result;
 
+    klib::shared_ptr<Message> ptr = klib::make_shared<Message>(Message({self_pid, channel, klib::move(msg)}));
+
     process->lock.lock();
-    result = queue_message(process, self_pid, channel, klib::move(msg));
+    result = queue_message(process, klib::move(ptr));
     process->unblock_if_needed(MESSAGE_S_NUM);
     process->lock.unlock();
 
@@ -524,20 +524,19 @@ kresult_t syscall_get_message_info(u64 message_struct)
         current->lock.unlock();
         return ERROR_NO_MESSAGES;
     }
+    klib::shared_ptr<Message> msg = current->messages.front();
+    current->lock.unlock();
 
-    Message& msg = current->messages.front();
     u64 msg_struct_size = sizeof(Message_Descriptor);
 
     result = prepare_user_buff_wr((char*)message_struct, msg_struct_size);
 
     if (result == SUCCESS) {
         Message_Descriptor& desc = *(Message_Descriptor*)message_struct;
-        desc.sender = msg.from;
-        desc.channel = msg.channel;
-        desc.size = msg.size();
+        desc.sender = msg->from;
+        desc.channel = msg->channel;
+        desc.size = msg->size();
     }
-
-    current->lock.unlock();
     return result;
 }
 

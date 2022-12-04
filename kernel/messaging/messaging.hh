@@ -6,6 +6,7 @@
 #include <types.hh>
 #include <lib/splay_tree_map.hh>
 #include <types.hh>
+#include <lib/memory.hh>
 
 extern Spinlock messaging_ports;
 
@@ -22,7 +23,7 @@ struct Message {
     kresult_t copy_to_user_buff(char* buff);
 };
 
-using Message_storage = klib::queue<Message>;
+using Message_storage = klib::queue<klib::shared_ptr<Message>>;
 
 
 #define MSG_ATTR_PRESENT   0x01ULL
@@ -60,7 +61,7 @@ extern Ports_storage default_ports;
 
 struct TaskDescriptor;
 
-kresult_t queue_message(TaskDescriptor* task, u64 from, u64 channel, klib::vector<char>&& msg);
+kresult_t queue_message(TaskDescriptor* task, klib::shared_ptr<Message> message);
 
 kresult_t init_kernel_ports();
 

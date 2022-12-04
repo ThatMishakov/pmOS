@@ -126,6 +126,34 @@ RSDT* get_rsdt_from_desc(RSDP_descriptor* rsdp_desc_phys)
     return rsdt_virt;
 }
 
+XSDT* get_xsdt_from_desc(RSDP_descriptor20* rsdp_desc_phys)
+{
+    RSDP_descriptor20* rsdp_virt = map_phys(rsdp_desc_phys, sizeof(RSDP_descriptor20));
+
+    if (rsdp_virt == NULL) {
+        // panic("Could not map rsdp\n");
+    }
+
+    unsigned char sum = 0;
+    for (size_t i = 0; i < sizeof(RSDP_descriptor20); ++i)
+        sum += ((unsigned char*)rsdp_virt)[i];
+
+    if (sum || strncmp("RSD PTR ", rsdp_virt->firstPart.signature, 8)) {
+        fprintf(stderr, "Warning: RSDP Descriptor not valid\n");
+        return NULL;
+    }
+
+    ACPISDTHeader *xsdt_phys = (ACPISDTHeader*)(uint64_t)rsdp_virt->xsdt_address; // TODO: Will need to be changed when porting to 32 bit
+    XSDT* xsdt_virt = (XSDT*)check_get_virt_from_phys(xsdt_phys);
+
+    if (!xsdt_virt || strncmp("XSDT", xsdt_virt->h.signature, 4)) {
+        fprintf(stderr, "Warning: XSDT pointed by RSDP not valid\n");
+        return NULL;
+    }
+
+    return xsdt_virt;
+}
+
 void parse_fadt(FADT* fadt_virt)
 {
     uint8_t revision = fadt_virt->h.revision;
@@ -154,14 +182,28 @@ int walk_acpi_tables()
 
     char xsdt_enumerated = 0;
     if (rsdp20_desc != NULL) { // TODO
+        XSDT* xsdt = get_xsdt_from_desc(rsdp20_desc);
+        if (xsdt == NULL) {
+            fprintf(stderr, "Warning: could not validade XSDT table %lX\n", (uint64_t)xsdt);      
+        } else {
+            xsdt_enumerated = 1;
+            push_table((ACPISDTHeader*)xsdt);
+            int length = xsdt->h.length;
+            uint32_t entries = (length - sizeof(xsdt->h))/sizeof(uint64_t);
+            for (uint32_t i = 0; i < entries; ++i) {
+                ACPISDTHeader* h = check_get_virt_from_phys((ACPISDTHeader*)xsdt->PointerToOtherSDT[i]);
+                if (h != NULL) push_table(h);
+            } 
 
+        }
     } 
     
     if (rsdp_desc != NULL) {
         RSDT* rsdt = get_rsdt_from_desc(rsdp_desc);
         if (rsdt == NULL) {
             // panic
-            fprintf(stderr, "Warning: could not validade RSDT table %lX\n", (uint64_t)rsdt);        
+            fprintf(stderr, "Warning: could not validade RSDT table %lX\n", (uint64_t)rsdt);      
+            exit(2);  
         } else {
             push_table((ACPISDTHeader*)rsdt);
 

@@ -18,14 +18,9 @@ kresult_t init_kernel_ports()
     return SUCCESS;
 }
 
-kresult_t queue_message(TaskDescriptor* task, u64 from, u64 channel, klib::vector<char>&& msg_v)
+kresult_t queue_message(TaskDescriptor* task, klib::shared_ptr<Message> message)
 {
-    Message msg;
-    msg.from = from;
-    msg.channel = channel;
-    msg.content = klib::forward<klib::vector<char>>(msg_v);
-
-    task->messages.emplace(klib::move(msg));
+    task->messages.emplace(klib::move(message));
 
     return SUCCESS;
 }
@@ -37,13 +32,10 @@ kresult_t Message::copy_to_user_buff(char* buff)
 
 kresult_t Port::enqueue(u64 from, klib::vector<char>&& msg_v)
 {
-    Message msg;
-    msg.from = from;
-    msg.channel = 0;
-    msg.content = klib::forward<klib::vector<char>>(msg_v);
+    klib::shared_ptr<Message> p = klib::make_shared<Message>(from, channel, klib::forward<klib::vector<char>>(msg_v));
 
     this->lock.lock();
-    this->msg_queue.emplace(klib::move(msg));
+    this->msg_queue.emplace(klib::move(p));
     this->lock.unlock();
 
     return SUCCESS;
@@ -90,8 +82,10 @@ kresult_t Ports_storage::send_msg(u64 pid_from, u64 port, klib::vector<char>&& m
         tasks_map_lock.unlock();
         result = SUCCESS;
 
+        klib::shared_ptr<Message> ptr = klib::make_shared<Message>(Message({pid_from, d.channel, klib::forward<klib::vector<char>>(msg)}));
+
         process->lock.lock();
-        result = queue_message(process, pid_from, d.channel, klib::forward<klib::vector<char>>(msg));
+        result = queue_message(process, klib::forward<klib::shared_ptr<Message>>(ptr));
         if (result == SUCCESS) process->unblock_if_needed(MESSAGE_S_NUM);
         process->lock.unlock();
     } else if (d.attr & MSG_ATTR_DUMMY) {
@@ -120,10 +114,10 @@ kresult_t Ports_storage::set_port(u64 port, u64 dest_pid, u64 dest_chan)
             TaskDescriptor* d = get_task(dest_pid);
 
             while (not p.msg_queue.empty()) {
-                Message m = klib::move(p.msg_queue.front());
+                klib::shared_ptr<Message> m = klib::move(p.msg_queue.front());
                 p.msg_queue.pop();
 
-                m.channel = dest_chan;
+                m->channel = dest_chan;
                 d->lock.lock();
                 d->messages.push(klib::move(m));
                 d->lock.unlock();
@@ -182,8 +176,10 @@ kresult_t send_msg_default(u64 pid_from, u64 port, klib::vector<char>&& msg)
         tasks_map_lock.unlock();
         result = SUCCESS;
 
+        klib::shared_ptr<Message> ptr = klib::make_shared<Message>(Message({pid_from, d.channel, klib::forward<klib::vector<char>>(msg)}));
+
         process->lock.lock();
-        result = queue_message(process, pid_from, d.channel, klib::forward<klib::vector<char>>(msg));
+        result = queue_message(process, ptr);
         if (result == SUCCESS) process->unblock_if_needed(MESSAGE_S_NUM);
         process->lock.unlock();
     } else if (d.attr & MSG_ATTR_DUMMY) {
