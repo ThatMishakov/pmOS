@@ -8,12 +8,12 @@
 
 void laihost_log(int level, const char *msg)
 {
-    printf("LAI Log level %i: %s\n", level, msg);
+    printf("LAI Log level %i: %s", level, msg);
 }
 
 __attribute__((noreturn)) void laihost_panic(const char *msg)
 {
-    fprintf(stderr, "LAI panic: %s\n", msg);
+    fprintf(stderr, "LAI panic: %s", msg);
     pmos_print_stack_trace();
     exit(2);
 }

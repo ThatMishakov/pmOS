@@ -317,10 +317,12 @@ int fputc ( int character, FILE * stream )
     return _size_fputs(1, (char*)&character, stream);
 }
 
+const char endline[] = "\n";
+
 int fputs(const char* string, FILE* stream)
 {
     size_t size = strlen(string);
-    return _size_fputs(size, string, stream);
+    return _size_fputs(size, string, stream) + _size_fputs(sizeof(endline), endline, stream);
 }
 
 int puts(const char* str)

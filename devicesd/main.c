@@ -44,7 +44,7 @@ void parse_args(int argc, char** argv)
 }
 
 int main(int argc, char** argv) {
-    puts("Hello from devicesd!\n");
+    printf("Hello from devicesd!\n");
     
     parse_args(argc, argv);
 

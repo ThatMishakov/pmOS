@@ -46,8 +46,18 @@ public:
         ptr = nullptr;
         return oldptr;
     }
-    constexpr void reset( pointer ptr = pointer() ) noexcept;
-    void swap( unique_ptr& other ) noexcept;
+    constexpr void reset( pointer p_ptr = pointer() ) noexcept
+    {
+        this->~unique_ptr();
+        this->ptr = p_ptr;
+    }
+
+    void swap( unique_ptr& other ) noexcept
+    {
+        pointer tmp = this->ptr;
+        this->ptr = other->ptr;
+        other->ptr = tmp;
+    }
 
     constexpr pointer get() const noexcept
     {
