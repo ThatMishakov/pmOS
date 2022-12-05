@@ -104,8 +104,8 @@ extern "C" ReturnStr<u64> syscall_handler(u64 call_n, u64 arg1, u64 arg2, u64 ar
         break;
     }
     
-    TaskDescriptor* t = get_cpu_struct()->current_task;
-    if (t != nullptr) {
+    auto t = get_cpu_struct()->current_task;
+    if (t) {
         t->regs.scratch_r.rax = r.result;
         t->regs.scratch_r.rdx = r.val;
     }
@@ -159,7 +159,9 @@ ReturnStr<u64> getpid()
 
 ReturnStr<u64> syscall_create_process()
 {
-    return create_process(3);
+    auto process = create_process(3);
+    if (process.result == SUCCESS) return {SUCCESS, process.val->pid};
+    return {process.result, 0};
 }
 
 kresult_t syscall_map_into()

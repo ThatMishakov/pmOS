@@ -37,55 +37,6 @@ void init_scheduling()
     tasks_map.insert({current_task->pid, klib::move(current_task)});
 }
 
-void sched_pqueue::push_back(TaskDescriptor* d)
-{
-    if (this->last != nullptr) {
-        d->q_prev = this->last;
-        this->last->q_next = d;
-        d->q_next = nullptr;
-        this->last = d;
-    } else {
-        this->first = d;
-        this->last = d;
-        d->q_prev = nullptr;
-        d->q_next = nullptr;
-    }
-    d->parrent = this;
-}
-
-TaskDescriptor* sched_pqueue::pop_front()
-{
-    TaskDescriptor* t = this->get_first();
-    this->erase(t);
-    return t;
-}
-
-TaskDescriptor* sched_pqueue::get_first()
-{
-    return this->first;
-}
-
-bool sched_pqueue::empty() const
-{
-    return this->first == nullptr;
-}
-
-void sched_pqueue::erase(TaskDescriptor* t)
-{
-    if (this->first == t) {
-        this->first = t->q_next;
-    } else {
-        t->q_prev->q_next = t->q_next;
-    }
-
-    if (this->last == t) {
-        this->last = t->q_prev;
-    } else {
-        t->q_next->q_prev = t->q_prev;
-    }
-    t->parrent = nullptr;
-}
-
 ReturnStr<klib::shared_ptr<TaskDescriptor>> create_process(u16 ring)
 {
     // Create the structure
@@ -123,7 +74,7 @@ ReturnStr<klib::shared_ptr<TaskDescriptor>> create_process(u16 ring)
     tasks_map.insert({n->pid, n});
     tasks_map_lock.unlock();
     uninit_lock.lock();
-    uninit.push_back(n);
+    uninit.atomic_auto_push_back(n);
     uninit_lock.unlock();
     
     // Success!
@@ -189,51 +140,45 @@ void init_idle()
     i.val->priority = TaskDescriptor::background_priority;
     Ready_Queues::assign_quantum_on_priority(i.val.get());
 
-    /* --- TODO --- */
-    uninit_lock.lock();
-    uninit.erase(idle_task);
-    uninit_lock.unlock();
+    i.val->queue_iterator->atomic_erase_from_parrent();
 }
 
-ReturnStr<u64> TaskDescriptor::block(u64 mask)
+ReturnStr<u64> block_task(const klib::shared_ptr<TaskDescriptor>& task, u64 mask)
 {
+    Auto_Lock_Scope(task->sched_lock);
+
     // Check status
-    if (status == PROCESS_BLOCKED) return {ERROR_ALREADY_BLOCKED, 0};
+    if (task->status == PROCESS_BLOCKED) return {ERROR_ALREADY_BLOCKED, 0};
 
     // Change mask if not null
-    if (mask != 0) this->unblock_mask = mask;
+    if (mask != 0) task->unblock_mask = mask;
 
-    u64 imm = check_unblock_immediately();
+    u64 imm = task->check_unblock_immediately();
     if (imm != 0) return {SUCCESS, imm};
 
     // Task switch if it's a current process
     CPU_Info* cpu_str = get_cpu_struct();
-    if (cpu_str->current_task.get() == this) {
-        cpu_str->current_task->quantum_ticks = apic_get_remaining_ticks();
-        cpu_str->current_task->next_status = Process_Status::PROCESS_BLOCKED;
+    if (cpu_str->current_task == task) {
+        task->quantum_ticks = apic_get_remaining_ticks();
+        task->next_status = Process_Status::PROCESS_BLOCKED;
         find_new_process();
     } else {
-        // Erase from queues
-        if (this->parrent != nullptr) this->parrent->erase(this);
-
         // Change status to blocked
-        status = PROCESS_BLOCKED;
+        task->status = PROCESS_BLOCKED;
 
-        // Add to blocked queue
-        blocked_s.lock();
-        blocked.push_back(this);
-        blocked_s.unlock();
+        blocked.atomic_auto_push_back(task);
     }
 
     return {SUCCESS, 0};
 }
 
-void find_new_process()
+void find_new_process();
+/* --- TODO ---
 {
     klib::shared_ptr<TaskDescriptor> next = nullptr;
     if (not get_cpu_struct()->sched.queues.temp_ready.empty()) {
 
-        /* ---- TODO ---- */
+        
         next = get_cpu_struct()->sched.queues.temp_ready.get_first();
         get_cpu_struct()->sched.queues.temp_ready.pop_front();
     } else { // Nothing to execute. Idling...
@@ -241,7 +186,7 @@ void find_new_process()
     }
 
     next->switch_to();
-}
+} */
 
 void TaskDescriptor::switch_to()
 {
@@ -259,23 +204,24 @@ bool is_uninited(u64 pid)
     return is_uninited_b;
 }
 
-void TaskDescriptor::init_task()
+void init_task(const klib::shared_ptr<TaskDescriptor>& task)
 {
-    Ready_Queues::assign_quantum_on_priority(this);
-    push_ready(this);
+    Ready_Queues::assign_quantum_on_priority(task.get());
+    push_ready(task);
 }
 
 void kill(const klib::shared_ptr<TaskDescriptor>& p)
 {
-    // Erase from queues
-    if (p->parrent != nullptr) p->parrent->erase(p);
+    Auto_Lock_Scope(p->sched_lock);
 
     // Add to dead queue
-    dead.push_back(p);
+    dead.atomic_auto_push_back(p);
 
     // Release user pages
     u64 ptable = p->page_table;
     free_user_pages(ptable, p->pid);
+
+    /* --- TODO: This can be simplified not that I use shared_ptr ---*/
 
     // Task switch if it's a current process
     CPU_Info* cpu_str = get_cpu_struct();
@@ -288,17 +234,20 @@ void kill(const klib::shared_ptr<TaskDescriptor>& p)
     }
 }
 
-void TaskDescriptor::unblock_if_needed(u64 reason)
+void unblock_if_needed(const klib::shared_ptr<TaskDescriptor>& p, u64 reason)
 {
-    if (this->status != PROCESS_BLOCKED) return;
+    Auto_Lock_Scope(p->sched_lock);
+
+    if (p->status != PROCESS_BLOCKED) return;
     
     u64 mask = 0x01ULL << (reason - 1);
 
-    if (mask & this->unblock_mask) {
-        this->parrent->erase(this);
-        this->status = PROCESS_READY;
-        this->regs.scratch_r.rdi = reason;
-        push_ready(this);
+    if (mask & p->unblock_mask) {
+        p->status = PROCESS_READY;
+        p->regs.scratch_r.rdi = reason;
+
+        push_ready(p);
+
         klib::shared_ptr<TaskDescriptor> current = get_cpu_struct()->current_task;
         if (current->quantum_ticks == 0)
             evict(current);
@@ -314,11 +263,9 @@ u64 TaskDescriptor::check_unblock_immediately()
     return 0;
 }
 
-void push_ready(TaskDescriptor* t)
+void push_ready(const klib::shared_ptr<TaskDescriptor>& p)
 {
-    if (t->parrent != nullptr) t->parrent->erase(t);
-
-    get_cpu_struct()->sched.queues.temp_ready.push_back(t);
+    get_cpu_struct()->sched.queues.temp_ready.atomic_auto_push_back(p);
 }
 
 void sched_periodic()

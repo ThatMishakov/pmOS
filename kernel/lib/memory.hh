@@ -251,7 +251,7 @@ template<class T>
 class weak_ptr {
 public:
     constexpr weak_ptr() noexcept = default;
-    weak_ptr(const weak_ptr<T>& r) noexcept: ptr(r.ptr), refcount(r.refcount)
+    weak_ptr(const weak_ptr<T>& p) noexcept: ptr(p.ptr), refcount(p.refcount)
     {
         if (refcount != nullptr) {
             refcount->s.lock();
@@ -259,7 +259,7 @@ public:
             refcount->s.unlock();
         }
     }
-    weak_ptr(const shared_ptr<T>& p) noexcept: ptr(r.ptr), refcount(r.refcount)
+    weak_ptr(const shared_ptr<T>& p) noexcept: ptr(p.ptr), refcount(p.refcount)
     {
         if (refcount != nullptr) {
             refcount->s.lock();

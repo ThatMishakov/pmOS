@@ -33,3 +33,16 @@ struct Spinlock {
 		locked = false;
 	}
 };
+
+struct Auto_Lock_Scope {
+	Spinlock& s;
+	Auto_Lock_Scope(Spinlock& lock): s(lock)
+	{
+		s.lock();
+	}
+
+	~Auto_Lock_Scope()
+	{
+		s.unlock();
+	}
+};

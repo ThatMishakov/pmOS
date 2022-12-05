@@ -29,19 +29,25 @@ struct Task_Attributes {
 
 struct sched_pqueue;
 
+class generic_tqueue_iterator {
+public:
+    virtual bool atomic_erase_from_parrent() = 0;
+    virtual ~generic_tqueue_iterator() = 0;
+};
+
 struct TaskDescriptor {
     // Basic process stuff
     Task_Regs regs;
     PID pid;
     u64 page_table; // 192
-    Process_Status status;
-    Process_Status next_status;
+
     TaskPermissions perm;
 
     // Scheduling lists
-    TaskDescriptor* q_next = nullptr;
-    TaskDescriptor* q_prev = nullptr;
-    sched_pqueue* parrent = nullptr;
+    klib::unique_ptr<generic_tqueue_iterator> queue_iterator;
+    Process_Status status;
+    Process_Status next_status;
+    Spinlock sched_lock;
 
     // Messaging
     Message_storage messages;
@@ -61,9 +67,6 @@ struct TaskDescriptor {
     // Inits stack
     ReturnStr<u64> init_stack();
 
-    // Blocks the process
-    ReturnStr<u64> block(u64 mask);
-
     // Checks the mask and unblocks the process if needed
     void unblock_if_needed(u64 reason);
 
@@ -72,9 +75,6 @@ struct TaskDescriptor {
 
     // Switches to this process
     void switch_to();
-
-    // Initializes uninited task
-    void init_task();
 
     // Sets the entry point to the task
     inline void set_entry_point(u64 entry)
@@ -96,13 +96,12 @@ struct TaskDescriptor {
     constexpr static u8 background_priority = 3;
 };
 
-class generic_tqueue_iterator {
-public:
-    virtual bool erase_from_parrent() = 0;
-};
+// Blocks task with a mask *mask*
+ReturnStr<u64> block_task(const klib::shared_ptr<TaskDescriptor>& task, u64 mask);
 
 struct sched_pqueue {
     klib::list<klib::weak_ptr<TaskDescriptor>> queue_list;
+    Spinlock lock;
 
     // Erases the task from other queue (if in any) and pushes it accordingly
     void atomic_auto_push_back(const klib::weak_ptr<TaskDescriptor>&);
@@ -114,16 +113,17 @@ struct sched_pqueue {
     klib::pair<bool, klib::weak_ptr<TaskDescriptor>> pop_front();
 
     class iterator: public generic_tqueue_iterator {
-        virtual bool erase_from_parrent() override;
+        virtual bool atomic_erase_from_parrent() override;
     };
 };
 
 struct Ready_Queues {
     klib::array<sched_pqueue, 4> queues;
     static constexpr klib::array<u32, 4> quantums = {20, 40, 80, 0};
-    void push_ready(TaskDescriptor*);
+    void push_ready(const klib::shared_ptr<TaskDescriptor>& p);
     bool empty() const;
-    TaskDescriptor* get_pop_front();
+
+    klib::pair<bool, klib::shared_ptr<TaskDescriptor>> atomic_get_pop_first();
     static void assign_quantum_on_priority(TaskDescriptor*);
 
     sched_pqueue temp_ready;
@@ -149,7 +149,7 @@ struct CPU_Info {
 extern "C" CPU_Info* get_cpu_struct();
 
 // Adds the task to the appropriate ready queue
-void push_ready(TaskDescriptor*);
+void push_ready(const klib::shared_ptr<TaskDescriptor>& p);
 
 // Initializes scheduling structures during the kernel initialization
 void init_scheduling();
@@ -199,6 +199,9 @@ inline klib::shared_ptr<TaskDescriptor> get_task(u64 pid)
 
 // Kills the task
 void kill(const klib::shared_ptr<TaskDescriptor>& t);
+
+// Inits the task
+void init_task(const klib::shared_ptr<TaskDescriptor>& task);
 
 // To be called from the clock routine
 void sched_periodic();
