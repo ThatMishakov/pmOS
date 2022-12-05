@@ -11,6 +11,7 @@
 #include <misc.hh>
 #include <interrupts/apic.hh>
 #include <cpus/cpus.hh>
+#include <lib/memory.hh>
 
 sched_pqueue blocked;
 Spinlock blocked_s;
@@ -29,11 +30,11 @@ void init_scheduling()
 {
     init_per_cpu();
 
-    TaskDescriptor* current_task = new TaskDescriptor;
+    klib::shared_ptr<TaskDescriptor> current_task = klib::make_shared<TaskDescriptor>();
     get_cpu_struct()->current_task = current_task;
     current_task->page_table = getCR3();
     current_task->pid = pid++;
-    tasks_map.insert({current_task->pid, current_task});
+    tasks_map.insert({current_task->pid, klib::move(current_task)});
 }
 
 void sched_pqueue::push_back(TaskDescriptor* d)
@@ -85,12 +86,10 @@ void sched_pqueue::erase(TaskDescriptor* t)
     t->parrent = nullptr;
 }
 
-ReturnStr<u64> create_process(u16 ring)
+ReturnStr<klib::shared_ptr<TaskDescriptor>> create_process(u16 ring)
 {
-    // BIG TODO: errors may produce **HUGE** memory leaks
-
     // Create the structure
-    TaskDescriptor* n = new TaskDescriptor;
+    klib::shared_ptr<TaskDescriptor> n = klib::make_shared<TaskDescriptor>();
 
     // Assign cs and ss
     switch (ring)
@@ -104,20 +103,20 @@ ReturnStr<u64> create_process(u16 ring)
         n->regs.e.ss = R3_DATA_SEGMENT;
         break;
     default:
-        return {static_cast<kresult_t>(ERROR_NOT_SUPPORTED), (u64)0};
+        return {static_cast<kresult_t>(ERROR_NOT_SUPPORTED), klib::shared_ptr<TaskDescriptor>()};
         break;
     }
 
     // Create a new page table
     ReturnStr<u64> k = get_new_pml4();
     if (k.result != SUCCESS) {
-        delete n;
-        return {k.result, 0};
+        return {k.result, klib::shared_ptr<TaskDescriptor>()};
     }
     n->page_table = k.val;
 
     // Assign a pid
     n->pid = assign_pid();
+    n->status = PROCESS_UNINIT;
 
     // Add to the map of processes and to uninit list
     tasks_map_lock.lock();
@@ -126,10 +125,9 @@ ReturnStr<u64> create_process(u16 ring)
     uninit_lock.lock();
     uninit.push_back(n);
     uninit_lock.unlock();
-    n->status = PROCESS_UNINIT;
     
     // Success!
-    return {SUCCESS, n->pid};
+    return {SUCCESS, n};
 }
 
 DECLARE_LOCK(assign_pid);
@@ -175,24 +173,23 @@ fail:
 
 void init_idle()
 {
-    ReturnStr<u64> i = create_process(0);
+    ReturnStr<klib::shared_ptr<TaskDescriptor>> i = create_process(0);
     if (i.result != SUCCESS) {
         t_print_bochs("Error: failed to create the idle process!\n");
         return;
     }
 
     CPU_Info* cpu_str = get_cpu_struct();
-    tasks_map_lock.lock();
-    cpu_str->idle_task = tasks_map.at(i.val);
-    tasks_map_lock.unlock();
-    TaskDescriptor* idle_task = cpu_str->idle_task;
+    cpu_str->idle_task = i.val;
 
     // Init stack
-    idle_task->init_stack();
-    idle_task->regs.e.rip = (u64)&idle;
-    idle_task->type = TaskDescriptor::Type::Idle;
-    idle_task->priority = TaskDescriptor::background_priority;
-    Ready_Queues::assign_quantum_on_priority(idle_task);
+    i.val->init_stack();
+    i.val->regs.e.rip = (u64)&idle;
+    i.val->type = TaskDescriptor::Type::Idle;
+    i.val->priority = TaskDescriptor::background_priority;
+    Ready_Queues::assign_quantum_on_priority(i.val.get());
+
+    /* --- TODO --- */
     uninit_lock.lock();
     uninit.erase(idle_task);
     uninit_lock.unlock();
@@ -211,7 +208,7 @@ ReturnStr<u64> TaskDescriptor::block(u64 mask)
 
     // Task switch if it's a current process
     CPU_Info* cpu_str = get_cpu_struct();
-    if (cpu_str->current_task == this) {
+    if (cpu_str->current_task.get() == this) {
         cpu_str->current_task->quantum_ticks = apic_get_remaining_ticks();
         cpu_str->current_task->next_status = Process_Status::PROCESS_BLOCKED;
         find_new_process();
@@ -233,8 +230,10 @@ ReturnStr<u64> TaskDescriptor::block(u64 mask)
 
 void find_new_process()
 {
-    TaskDescriptor* next = nullptr;
+    klib::shared_ptr<TaskDescriptor> next = nullptr;
     if (not get_cpu_struct()->sched.queues.temp_ready.empty()) {
+
+        /* ---- TODO ---- */
         next = get_cpu_struct()->sched.queues.temp_ready.get_first();
         get_cpu_struct()->sched.queues.temp_ready.pop_front();
     } else { // Nothing to execute. Idling...
@@ -266,7 +265,7 @@ void TaskDescriptor::init_task()
     push_ready(this);
 }
 
-void kill(TaskDescriptor* p)
+void kill(const klib::shared_ptr<TaskDescriptor>& p)
 {
     // Erase from queues
     if (p->parrent != nullptr) p->parrent->erase(p);
@@ -300,7 +299,7 @@ void TaskDescriptor::unblock_if_needed(u64 reason)
         this->status = PROCESS_READY;
         this->regs.scratch_r.rdi = reason;
         push_ready(this);
-        TaskDescriptor* current = get_cpu_struct()->current_task;
+        klib::shared_ptr<TaskDescriptor> current = get_cpu_struct()->current_task;
         if (current->quantum_ticks == 0)
             evict(current);
     }
@@ -326,10 +325,10 @@ void sched_periodic()
 {
     // TODO: Replace with more sophisticated algorithm. Will definitely need to be redone once we have multi-cpu support
 
-    TaskDescriptor* current = get_cpu_struct()->current_task;
+    const klib::shared_ptr<TaskDescriptor>& current = get_cpu_struct()->current_task;
 
     if (not get_cpu_struct()->sched.queues.temp_ready.empty()) {
-        Ready_Queues::assign_quantum_on_priority(current);
+        Ready_Queues::assign_quantum_on_priority(current.get());
         current->next_status = Process_Status::PROCESS_READY;
         find_new_process();
     } else
@@ -353,9 +352,9 @@ void start_timer(u32 ms)
 void start_scheduler()
 {
     CPU_Info* s = get_cpu_struct();
-    TaskDescriptor* t = s->current_task;
-    Ready_Queues::assign_quantum_on_priority(t);
-    start_timer_ticks(t->quantum_ticks);
+    const klib::shared_ptr<TaskDescriptor>& t = s->current_task;
+    Ready_Queues::assign_quantum_on_priority(t.get());
+    start_timer_ticks(t.get()->quantum_ticks);
 }
 
 void Ready_Queues::assign_quantum_on_priority(TaskDescriptor* t)

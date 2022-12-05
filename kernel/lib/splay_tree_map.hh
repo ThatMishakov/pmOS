@@ -52,6 +52,8 @@ public:
     T& at(const K&);
 
     K largest() const;
+
+    T get_copy_or_default(const K&);
 };
 
 template<class K, class T>
@@ -302,5 +304,24 @@ void splay_tree_map<K,T>::delete_node(splay_tree_map<K,T>::node* p)
     }
 }
 
+template<class K, class T>
+T splay_tree_map<K,T>::get_copy_or_default(const K& key)
+{
+    node* n = root;
+
+    while (n != nullptr and n->key != key) {
+        if (n->key < key) {
+            n = n->right;
+        } else {
+            n = n->left;
+        }
+    }
+
+    if (n == nullptr) return T();
+
+    splay(n);
+
+    return n->data;
+}
 
 }
