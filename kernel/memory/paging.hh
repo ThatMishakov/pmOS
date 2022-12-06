@@ -4,6 +4,7 @@
 #include <processes/sched.hh>
 #include <asm.hh>
 #include <lib/pair.hh>
+#include <lib/memory.hh>
 
 extern bool nx_bit_enabled;
 
@@ -43,10 +44,10 @@ kresult_t alloc_page_lazy(u64 virtual_addr, Page_Table_Argumments arg);
 kresult_t get_lazy_page(u64 virtual_addr);
 
 // Transfers pages from current process to process t
-kresult_t transfer_pages(TaskDescriptor* from, TaskDescriptor* to, u64 page_start, u64 to_addr, u64 nb_pages, Page_Table_Argumments pta);
+kresult_t transfer_pages(const klib::shared_ptr<TaskDescriptor>& from, const klib::shared_ptr<TaskDescriptor> to, u64 page_start, u64 to_addr, u64 nb_pages, Page_Table_Argumments pta);
 
 // Sharess pages from current process with process t
-kresult_t share_pages(TaskDescriptor* t, u64 page_start, u64 to_addr, u64 nb_pages, Page_Table_Argumments pta);
+kresult_t share_pages(const klib::shared_ptr<TaskDescriptor>& t, u64 page_start, u64 to_addr, u64 nb_pages, Page_Table_Argumments pta);
 
 // Prepares a page table for the address
 kresult_t prepare_pt(u64 addr);

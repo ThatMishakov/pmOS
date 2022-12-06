@@ -20,8 +20,9 @@ private:
 public:
     class iterator {
     private:
-        Node* ptr;
+        Node* ptr = nullptr;
     public:
+        iterator() = default;
         constexpr iterator(Node* n): ptr(n) {};
 
         iterator& operator++() {
@@ -54,20 +55,20 @@ public:
     T& back();
     const T& back() const;
 
-    bool empty() const;
+    bool empty() const noexcept;
 
-    void push_front(const T&);
-    void push_front(T&&);
-    void emplace_front(T&&);
+    iterator push_front(const T&);
+    iterator push_front(T&&);
+    iterator emplace_front(T&&);
 
-    void push_back(const T&);
-    void push_back(T&&);
-    void emplace_back(T&&);
+    iterator push_back(const T&);
+    iterator push_back(T&&);
+    iterator emplace_back(T&&);
 
-    void pop_front();
-    void pop_back();
+    void pop_front() noexcept;
+    void pop_back() noexcept;
 
-    size_t size() const;
+    size_t size() const noexcept;
 
     iterator begin();
     iterator end();
@@ -179,7 +180,7 @@ list<T>& list<T>::operator=(list<T>&& from)
 }
 
 template<typename T>
-void list<T>::push_back(const T& k)
+list<T>::iterator list<T>::push_back(const T& k)
 {
     Node* n = new Node();
     n->data = k;
@@ -194,10 +195,12 @@ void list<T>::push_back(const T& k)
         last = n;
     }
     ++l_size;
+
+    return iterator(n);
 }
 
 template<typename T>
-void list<T>::push_back(T&& k)
+list<T>::iterator list<T>::push_back(T&& k)
 {
     Node* n = new Node();
     n->data = forward<T>(k);
@@ -212,22 +215,24 @@ void list<T>::push_back(T&& k)
         last = n;
     }
     ++l_size;
+
+    return iterator(n);
 }
 
 template<typename T>
-void list<T>::emplace_back(T&& k)
+list<T>::iterator list<T>::emplace_back(T&& k)
 {
-    push_back(forward<T>(k));
+    return push_back(forward<T>(k));
 }
 
 template<typename T>
-size_t list<T>::size() const
+size_t list<T>::size() const noexcept
 {
     return l_size;
 }
 
 template<typename T>
-bool list<T>::empty() const
+bool list<T>::empty() const noexcept
 {
     return l_size == 0;
 }
@@ -245,7 +250,7 @@ T& list<T>::front()
 }
 
 template<typename T>
-void list<T>::pop_front()
+void list<T>::pop_front() noexcept
 {
     if (this->first->next == nullptr) {
         delete this->first;

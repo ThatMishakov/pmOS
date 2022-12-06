@@ -23,7 +23,7 @@ struct Message {
     kresult_t copy_to_user_buff(char* buff);
 };
 
-using Message_storage = klib::queue<klib::shared_ptr<Message>>;
+using Message_storage = klib::list<klib::shared_ptr<Message>>;
 
 
 #define MSG_ATTR_PRESENT   0x01ULL
@@ -61,7 +61,7 @@ extern Ports_storage default_ports;
 
 struct TaskDescriptor;
 
-kresult_t queue_message(TaskDescriptor* task, klib::shared_ptr<Message> message);
+kresult_t queue_message(const klib::shared_ptr<TaskDescriptor>& task, klib::shared_ptr<Message> message);
 
 kresult_t init_kernel_ports();
 

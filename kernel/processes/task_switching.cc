@@ -9,7 +9,7 @@ extern "C" void task_switch()
     // TODO: Invalidate SSE stuff here
 
     CPU_Info* cpu_struct = get_cpu_struct();
-    TaskDescriptor* old_task = cpu_struct->current_task;
+    klib::shared_ptr<TaskDescriptor> old_task = cpu_struct->current_task;
     cpu_struct->current_task = cpu_struct->next_task;
     cpu_struct->next_task = nullptr;
 
@@ -18,7 +18,7 @@ extern "C" void task_switch()
         setCR3(cpu_struct->current_task->page_table);
     }
 
-    if (old_task != nullptr) {
+    if (old_task) {
         switch (old_task->next_status)
         {
         case Process_Status::PROCESS_READY: {
@@ -26,9 +26,7 @@ extern "C" void task_switch()
             break;
         }    
         case Process_Status::PROCESS_BLOCKED: {
-            blocked_s.lock();
-            blocked.push_back(old_task);
-            blocked_s.unlock();
+            blocked.atomic_auto_push_back(old_task);
             break;
         }
         case Process_Status::PROCESS_SPECIAL: {

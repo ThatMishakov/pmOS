@@ -20,11 +20,12 @@ extern "C" ReturnStr<u64> syscall_handler(u64 call_n, u64 arg1, u64 arg2, u64 ar
     ReturnStr<u64> r = {};
     // TODO: check permissions
 
-    TaskDescriptor& task = *get_cpu_struct()->current_task;
+    klib::shared_ptr<TaskDescriptor> task = get_cpu_struct()->current_task;
     //t_print_bochs("Debug: syscall %h pid %h\n", call_n, get_cpu_struct()->current_task->pid);
-    if (task.attr.debug_syscalls) {
+    if (task->attr.debug_syscalls) {
         t_print("Debug: syscall %h pid %h\n", call_n, get_cpu_struct()->current_task->pid);
     }
+
     switch (call_n) {
     case SYSCALL_GET_PAGE:
         r.result = get_page(arg1);
@@ -104,12 +105,9 @@ extern "C" ReturnStr<u64> syscall_handler(u64 call_n, u64 arg1, u64 arg2, u64 ar
         break;
     }
     
-    auto t = get_cpu_struct()->current_task;
-    if (t) {
-        t->regs.scratch_r.rax = r.result;
-        t->regs.scratch_r.rdx = r.val;
-    }
-
+    task->regs.scratch_r.rax = r.result;
+    task->regs.scratch_r.rdx = r.val;
+    
     return r;
 }
 
@@ -171,7 +169,7 @@ kresult_t syscall_map_into()
 
 ReturnStr<u64> syscall_block(u64 mask)
 {
-    ReturnStr<u64> r = get_cpu_struct()->current_task->block(mask);
+    ReturnStr<u64> r = block_task(get_cpu_struct()->current_task, mask);
     return r;
 }
 
@@ -199,16 +197,17 @@ kresult_t syscall_map_into_range(u64 arg1, u64 arg2, u64 arg3, u64 arg4, u64 arg
     if (page_start & 0xfff) return ERROR_UNALLIGNED;
     if (to_addr & 0xfff) return ERROR_UNALLIGNED;
 
+    klib::shared_ptr<TaskDescriptor> t = get_task(pid);
+
     // Check if process exists
-    if (not exists_process(pid)) return ERROR_NO_SUCH_PROCESS;
+    if (not t) return ERROR_NO_SUCH_PROCESS;
+
+    Auto_Lock_Scope scope_lock(t->sched_lock);
 
     // Check process status
-    if (not is_uninited(pid)) return ERROR_PROCESS_INITED;
+    if (not is_uninited(t)) return ERROR_PROCESS_INITED;
 
-    // Get pid task_struct
-    TaskDescriptor* t = get_task(pid);
-
-    TaskDescriptor* current = get_cpu_struct()->current_task;
+    klib::shared_ptr<TaskDescriptor> current = get_cpu_struct()->current_task;
     kresult_t r = transfer_pages(current, t, page_start, to_addr, nb_pages, pta);
 
     return r;
@@ -225,11 +224,12 @@ kresult_t syscall_share_with_range(u64 pid, u64 page_start, u64 to_addr, u64 nb_
     if (page_start & 0xfff) return ERROR_UNALLIGNED;
     if (to_addr & 0xfff) return ERROR_UNALLIGNED;
 
-    // Check if process exists
-    if (not exists_process(pid)) return ERROR_NO_SUCH_PROCESS;
+    klib::shared_ptr<TaskDescriptor> t = get_task(pid);
 
-    // Get pid task_struct
-    TaskDescriptor* t = get_task(pid);
+    // Check if process exists
+    if (not t) return ERROR_NO_SUCH_PROCESS;
+
+    Auto_Lock_Scope scope_lock(t->sched_lock);
 
     Page_Table_Argumments pta = {};
     pta.user_access = 1;
@@ -257,6 +257,9 @@ kresult_t syscall_get_page_multi(u64 virtual_addr, u64 nb_pages)
     arg.execution_disabled = 1;
     u64 result = SUCCESS;
     u64 i = 0;
+
+    Auto_Lock_Scope scope_lock_paging(get_cpu_struct()->current_task->page_table_lock);
+
     for (; i < nb_pages and result == SUCCESS; ++i)
         result = alloc_page_lazy(virtual_addr + i*KB(4), arg);
 
@@ -276,6 +279,8 @@ kresult_t syscall_release_page_multi(u64 virtual_addr, u64 nb_pages)
 
     // Check that program is not hijacking kernel space
     if (virtual_addr >= KERNEL_ADDR_SPACE or (virtual_addr + nb_pages*KB(4)) > KERNEL_ADDR_SPACE or (virtual_addr + nb_pages*KB(4) < virtual_addr)) return ERROR_OUT_OF_RANGE;
+
+    Auto_Lock_Scope scope_lock_paging(get_cpu_struct()->current_task->page_table_lock);
 
     // Check pages
     for (u64 i = 0; i < nb_pages; ++i) {
@@ -300,14 +305,15 @@ kresult_t syscall_start_process(u64 pid, u64 start, u64 arg1, u64 arg2, u64 arg3
 {
     // TODO: Check permissions
 
+    klib::shared_ptr<TaskDescriptor> t = get_task(pid);
+
     // Check if process exists
-    if (not exists_process(pid)) return ERROR_NO_SUCH_PROCESS;
+    if (not t) return ERROR_NO_SUCH_PROCESS;
+
+    Auto_Lock_Scope scope_sched_lock(t->sched_lock);
 
     // Check process status
-    if (not is_uninited(pid)) return ERROR_PROCESS_INITED;
-
-    // Get task descriptor
-    TaskDescriptor* t = get_task(pid);
+    if (not is_uninited(t)) return ERROR_PROCESS_INITED;
 
     // Set entry
     t->set_entry_point(start);
@@ -318,7 +324,7 @@ kresult_t syscall_start_process(u64 pid, u64 start, u64 arg1, u64 arg2, u64 arg3
     t->regs.scratch_r.rdx = arg3;
 
     // Init task
-    t->init_task();
+    init_task(t);
 
     return SUCCESS;
 }
@@ -328,20 +334,18 @@ ReturnStr<u64> syscall_init_stack(u64 pid, u64 esp)
     ReturnStr<u64> r = {ERROR_GENERAL, 0};
     // TODO: Check permissions
 
+    klib::shared_ptr<TaskDescriptor> t = get_task(pid);
+
     // Check if process exists
-    if (not exists_process(pid)) {
-        r.result = ERROR_NO_SUCH_PROCESS;
-        return r;
-    }
+    if (not t) return {ERROR_NO_SUCH_PROCESS, 0};
+
+    Auto_Lock_Scope scope_sched_lock(t->sched_lock);
 
     // Check process status
-    if (not is_uninited(pid)) {
+    if (not is_uninited(t)) {
         r.result = ERROR_PROCESS_INITED;
         return r;
     }
-
-    // Get task descriptor
-    TaskDescriptor* t = get_task(pid);
 
     if (esp == 0) { // If ESP == 0 use default kernel's stack policy
         r = t->init_stack();
@@ -355,7 +359,7 @@ ReturnStr<u64> syscall_init_stack(u64 pid, u64 esp)
 
 kresult_t syscall_exit(u64 arg1, u64 arg2)
 {
-    TaskDescriptor* task = get_cpu_struct()->current_task;
+    klib::shared_ptr<TaskDescriptor> task = get_cpu_struct()->current_task;
 
     // Record exit code
     task->ret_hi = arg2;
@@ -392,6 +396,8 @@ kresult_t syscall_map_phys(u64 arg1, u64 arg2, u64 arg3, u64 arg4)
 
     // TODO: Check if physical address is ok
 
+    Auto_Lock_Scope paging_lock_scope(get_cpu_struct()->current_task->page_table_lock);
+
     u64 i = 0;
     kresult_t r = SUCCESS;
     for (; i < nb_pages and r == SUCCESS; ++i) {
@@ -411,26 +417,28 @@ kresult_t syscall_map_phys(u64 arg1, u64 arg2, u64 arg3, u64 arg4)
 
 kresult_t syscall_get_first_message(u64 buff, u64 args)
 {
-    TaskDescriptor* current = get_cpu_struct()->current_task;
+    klib::shared_ptr<TaskDescriptor> current = get_cpu_struct()->current_task;
     kresult_t result = SUCCESS;
+    klib::shared_ptr<Message> top_message;
 
-    current->lock.lock();
-    if (current->messages.empty()) {
-        current->lock.unlock();
-        return ERROR_NO_MESSAGES;
-    }
-
-    klib::shared_ptr<Message> top_message = current->messages.front();
-
-    result = top_message->copy_to_user_buff((char*)buff);
-
-    if (result == SUCCESS) {
+    {
+        Auto_Lock_Scope messaging_lock(current->messaging_lock);
+        if (current->messages.empty()) {
+            return ERROR_NO_MESSAGES;
+        }
+        top_message = current->messages.front();
         if (!(args & MSG_ARG_NOPOP)) {
-            current->messages.pop();
+            current->messages.pop_front();
         }
     }
 
-    current->lock.unlock();
+    result = top_message->copy_to_user_buff((char*)buff);
+
+    if (result != SUCCESS and not (args & MSG_ARG_NOPOP)) {
+        Auto_Lock_Scope messaging_lock(current->messaging_lock);
+        current->messages.push_front(top_message);
+    }
+
     return result;
 }
 
@@ -441,10 +449,11 @@ kresult_t syscall_send_message_task(u64 pid, u64 channel, u64 size, u64 message)
     u64 self_pid = get_cpu_struct()->current_task->pid;
     if (self_pid == pid) return ERROR_CANT_MESSAGE_SELF;
 
-    if (not exists_process(pid)) return ERROR_NO_SUCH_PROCESS;
-    tasks_map_lock.lock();
-    TaskDescriptor* process = tasks_map.at(pid);
-    tasks_map_lock.unlock();
+    klib::shared_ptr<TaskDescriptor> t = get_task(pid);
+
+    // Check if process exists
+    if (not t) return {ERROR_NO_SUCH_PROCESS};
+
     kresult_t result = SUCCESS;
 
     klib::vector<char> msg(size);
@@ -454,10 +463,11 @@ kresult_t syscall_send_message_task(u64 pid, u64 channel, u64 size, u64 message)
 
     klib::shared_ptr<Message> ptr = klib::make_shared<Message>(Message({self_pid, channel, klib::move(msg)}));
 
-    process->lock.lock();
-    result = queue_message(process, klib::move(ptr));
-    process->unblock_if_needed(MESSAGE_S_NUM);
-    process->lock.unlock();
+    t->messaging_lock.lock();
+    result = queue_message(t, klib::move(ptr));
+    t->messaging_lock.unlock();
+
+    unblock_if_needed(t, MESSAGE_S_NUM);
 
     return result;
 }
@@ -466,7 +476,7 @@ kresult_t syscall_send_message_port(u64 port, size_t size, u64 message)
 {
     // TODO: Check permissions
 
-    TaskDescriptor* current = get_cpu_struct()->current_task;
+    klib::shared_ptr<TaskDescriptor> current = get_cpu_struct()->current_task;
 
     kresult_t result = current->ports.send_from_user(current->pid, port, message, size);
 
@@ -479,15 +489,13 @@ kresult_t syscall_set_port(u64 pid, u64 port, u64 dest_pid, u64 dest_chan)
 
     if (pid == dest_pid) return ERROR_CANT_MESSAGE_SELF;
 
-    if (not exists_process(pid)) return ERROR_NO_SUCH_PROCESS;
+    klib::shared_ptr<TaskDescriptor> t = get_task(pid);
 
-    tasks_map_lock.lock();
-    TaskDescriptor* process = tasks_map.at(pid);
-    tasks_map_lock.unlock();
+    // Check if process exists
+    if (not t) return {ERROR_NO_SUCH_PROCESS};
 
-    process->lock.lock();
-    kresult_t result = process->ports.set_port(port, dest_pid, dest_chan);
-    process->lock.unlock();
+    Auto_Lock_Scope messaging_lock(t->messaging_lock);
+    kresult_t result = t->ports.set_port(port, dest_pid, dest_chan);
 
     return result;
 }
@@ -516,18 +524,22 @@ kresult_t syscall_set_port_default(u64 port, u64 dest_pid, u64 dest_chan)
 
 kresult_t syscall_get_message_info(u64 message_struct)
 {
-    TaskDescriptor* current = get_cpu_struct()->current_task;
+    // TODO: This creates race conditions
 
-    current->lock.lock();
+    klib::shared_ptr<TaskDescriptor> current = get_cpu_struct()->current_task;
+
 
     kresult_t result = SUCCESS;
+    klib::shared_ptr<Message> msg;
 
-    if (current->messages.empty()) {
-        current->lock.unlock();
-        return ERROR_NO_MESSAGES;
+    {
+        Auto_Lock_Scope lock(current->messaging_lock);
+        if (current->messages.empty()) {
+            return ERROR_NO_MESSAGES;
+        }
+        msg = current->messages.front();
     }
-    klib::shared_ptr<Message> msg = current->messages.front();
-    current->lock.unlock();
+    
 
     u64 msg_struct_size = sizeof(Message_Descriptor);
 
@@ -546,10 +558,11 @@ kresult_t syscall_set_attribute(u64 pid, u64 attribute, u64 value)
 {
     // TODO: Check persmissions
 
-    if (not exists_process(pid)) return ERROR_NO_SUCH_PROCESS;
-    tasks_map_lock.lock();
-    TaskDescriptor* process = tasks_map.at(pid);
-    tasks_map_lock.unlock();
+    klib::shared_ptr<TaskDescriptor> process = get_task(pid);
+
+    // Check if process exists
+    if (not process) return ERROR_NO_SUCH_PROCESS;
+
     kresult_t result = ERROR_GENERAL;
 
     switch (attribute) {
@@ -571,6 +584,10 @@ kresult_t syscall_set_attribute(u64 pid, u64 attribute, u64 value)
 
 ReturnStr<u64> syscall_is_page_allocated(u64 virtual_addr)
 {
+    const klib::shared_ptr<TaskDescriptor>& current_task = get_cpu_struct()->current_task;
+
+    Auto_Lock_Scope lock(current_task->page_table_lock);
+
     // Check allignment to 4096K (page size)
     if (virtual_addr & 0xfff) return {ERROR_UNALLIGNED, 0};
 

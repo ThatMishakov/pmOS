@@ -32,6 +32,11 @@ struct Spinlock {
 		__sync_synchronize();
 		locked = false;
 	}
+
+	bool operator==(const Spinlock& s) const
+	{
+		return this == &s;
+	}
 };
 
 struct Auto_Lock_Scope {
@@ -44,5 +49,23 @@ struct Auto_Lock_Scope {
 	~Auto_Lock_Scope()
 	{
 		s.unlock();
+	}
+};
+
+struct Auto_Lock_Scope_Double {
+	Spinlock& a;
+	Spinlock& b;
+	Auto_Lock_Scope_Double(Spinlock& a, Spinlock& b): a(&a < &b ? a : b), b(&a < &b ? b : a)
+	{
+		this->a.lock();
+		if (a != b)
+			this->b.lock();
+	}
+
+	~Auto_Lock_Scope_Double()
+	{
+		a.unlock();
+		if (a != b)
+			b.unlock();
 	}
 };

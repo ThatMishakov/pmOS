@@ -19,6 +19,9 @@ class shared_ptr;
 
 template<class T>
 class unique_ptr {
+    template<typename U>
+    friend class unique_ptr;
+
 private:
     T* ptr;
 public:
@@ -97,22 +100,28 @@ constexpr unique_ptr<T> make_unique( Args&&... args )
     return unique_ptr(new T(forward<Args>(args)...));
 }
 
+struct _smart_ptr_refcount_str {
+    unsigned long shared_refs = 0;
+    unsigned long weak_refs = 0;
+    Spinlock s;
+};
+
 template<class T>
 class shared_ptr {
+    template<class U>
+    friend class shared_ptr;
+
 private:
     T* ptr = nullptr;
-    struct refcount_str {
-        unsigned long shared_refs = 0;
-        unsigned long weak_refs = 0;
-        Spinlock s;
-    };
-
-    refcount_str* refcount = nullptr;
+    _smart_ptr_refcount_str* refcount = nullptr;
 public:
     typedef T element_type;
 
     constexpr shared_ptr() noexcept: ptr(nullptr), refcount(nullptr) {};
-    shared_ptr(const shared_ptr<T>& p): ptr(p.ptr), refcount(p.refcount)
+    constexpr shared_ptr(nullptr_t) noexcept: ptr(nullptr), refcount(nullptr) {};
+
+    template<typename Y>
+    shared_ptr(const shared_ptr<Y>& p): ptr(p.ptr), refcount(p.refcount)
     {
         if (refcount != nullptr) {
             refcount->s.lock();
@@ -121,7 +130,8 @@ public:
         }
     }
 
-    constexpr shared_ptr(shared_ptr<T>&& p): ptr(p.ptr), refcount(p.refcount)
+    template<typename U>
+    constexpr shared_ptr(shared_ptr<U>&& p): ptr(p.ptr), refcount(p.refcount)
     {
         p.ptr = nullptr;
         p.refcount = nullptr;
@@ -129,7 +139,7 @@ public:
 
     shared_ptr(unique_ptr<T>&& p)
     {
-        unique_ptr<refcount_str> refcount_new = make_unique<refcount_str>();
+        unique_ptr<_smart_ptr_refcount_str> refcount_new = make_unique<_smart_ptr_refcount_str>();
 
         ptr = p.release();
         refcount = refcount_new.release();
@@ -154,7 +164,8 @@ public:
 
     }
 
-    shared_ptr& operator=(const shared_ptr& r) noexcept
+    template<typename U>
+    shared_ptr<T>& operator=(const shared_ptr<U>& r) noexcept
     {
         if (this->ptr == r.ptr) return *this;
 
@@ -171,12 +182,13 @@ public:
         return *this;
     }
 
-    shared_ptr& operator=(unique_ptr<T>&& r)
+    template<typename U>
+    shared_ptr<T>& operator=(unique_ptr<U>&& r)
     {
-        unique_ptr<refcount_str> new_refcount = nullptr;
+        unique_ptr<_smart_ptr_refcount_str> new_refcount = nullptr;
 
         if (r) {
-            new_refcount = make_unique<refcount_str>();
+            new_refcount = make_unique<_smart_ptr_refcount_str>();
         }
 
         this->~shared_ptr();
@@ -241,6 +253,13 @@ auto operator==( const shared_ptr<T>& lhs,
 }
 
 template< class T, class U >
+auto operator!=( const shared_ptr<T>& lhs,
+                    const shared_ptr<U>& rhs ) noexcept
+{
+    return lhs.get() != rhs.get();
+}
+
+template< class T, class U >
 auto operator<( const shared_ptr<T>& lhs,
                     const shared_ptr<U>& rhs ) noexcept
 {
@@ -249,6 +268,9 @@ auto operator<( const shared_ptr<T>& lhs,
 
 template<class T>
 class weak_ptr {
+    template<typename U>
+    friend class weak_ptr;
+    
 public:
     constexpr weak_ptr() noexcept = default;
     weak_ptr(const weak_ptr<T>& p) noexcept: ptr(p.ptr), refcount(p.refcount)
@@ -259,6 +281,7 @@ public:
             refcount->s.unlock();
         }
     }
+
     weak_ptr(const shared_ptr<T>& p) noexcept: ptr(p.ptr), refcount(p.refcount)
     {
         if (refcount != nullptr) {
@@ -325,7 +348,7 @@ public:
     }
 private:
     T* ptr = nullptr;
-    shared_ptr<T>::refcount_str* refcount = nullptr;
+    _smart_ptr_refcount_str* refcount = nullptr;
 };
 
 }

@@ -31,7 +31,7 @@ struct sched_pqueue;
 
 class generic_tqueue_iterator {
 public:
-    virtual bool atomic_erase_from_parrent() = 0;
+    virtual bool atomic_erase_from_parrent() noexcept = 0;
     virtual ~generic_tqueue_iterator() = 0;
 };
 
@@ -41,19 +41,20 @@ struct TaskDescriptor {
     PID pid;
     u64 page_table; // 192
 
+    Spinlock page_table_lock;
+
     TaskPermissions perm;
 
     // Scheduling lists
     klib::unique_ptr<generic_tqueue_iterator> queue_iterator;
-    Process_Status status;
-    Process_Status next_status;
+    volatile Process_Status status;
+    volatile Process_Status next_status;
     Spinlock sched_lock;
 
     // Messaging
     Message_storage messages;
     Ports_storage ports;
-
-    Spinlock lock;
+    Spinlock messaging_lock;
 
     u64 unblock_mask = ~0;
 
@@ -66,9 +67,6 @@ struct TaskDescriptor {
 
     // Inits stack
     ReturnStr<u64> init_stack();
-
-    // Checks the mask and unblocks the process if needed
-    void unblock_if_needed(u64 reason);
 
     // Returns 0 if there are no unblocking events pending. Otherwise returns 0.
     u64 check_unblock_immediately();
@@ -96,16 +94,19 @@ struct TaskDescriptor {
     constexpr static u8 background_priority = 3;
 };
 
+// Checks the mask and unblocks the task if needed
+void unblock_if_needed(const klib::shared_ptr<TaskDescriptor>& p, u64 reason);
+
 // Blocks task with a mask *mask*
 ReturnStr<u64> block_task(const klib::shared_ptr<TaskDescriptor>& task, u64 mask);
 
 struct sched_pqueue {
     klib::list<klib::weak_ptr<TaskDescriptor>> queue_list;
-    Spinlock lock;
+    mutable Spinlock lock;
 
     // Erases the task from other queue (if in any) and pushes it accordingly
-    void atomic_auto_push_back(const klib::weak_ptr<TaskDescriptor>&);
-    void atomic_auto_push_front(const klib::weak_ptr<TaskDescriptor>&);
+    void atomic_auto_push_back(const klib::shared_ptr<TaskDescriptor>&);
+    void atomic_auto_push_front(const klib::shared_ptr<TaskDescriptor>&);
 
     bool empty() const;
 
@@ -113,7 +114,19 @@ struct sched_pqueue {
     klib::pair<bool, klib::weak_ptr<TaskDescriptor>> pop_front();
 
     class iterator: public generic_tqueue_iterator {
-        virtual bool atomic_erase_from_parrent() override;
+    public:
+        virtual bool atomic_erase_from_parrent() noexcept override;
+
+        iterator() = default;
+        iterator(const iterator&) = default;
+        iterator(iterator&&) = default;
+        iterator(const klib::list<klib::weak_ptr<TaskDescriptor>>::iterator& l, sched_pqueue* p): list_it(l), parent(p) {};
+        ~iterator() = default;
+    private:
+        klib::list<klib::weak_ptr<TaskDescriptor>>::iterator list_it;
+        sched_pqueue* parent = nullptr;
+
+        friend sched_pqueue;
     };
 };
 
@@ -186,7 +199,7 @@ inline bool exists_process(u64 pid)
 }
 
 // Returns true if the process with pid is uninitialized
-bool is_uninited(u64 pid);
+bool is_uninited(const klib::shared_ptr<const TaskDescriptor>&);
 
 // Gets a task descriptor of the process with pid
 inline klib::shared_ptr<TaskDescriptor> get_task(u64 pid)

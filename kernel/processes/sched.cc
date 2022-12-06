@@ -145,7 +145,7 @@ void init_idle()
 
 ReturnStr<u64> block_task(const klib::shared_ptr<TaskDescriptor>& task, u64 mask)
 {
-    Auto_Lock_Scope(task->sched_lock);
+    Auto_Lock_Scope scope_lock(task->sched_lock);
 
     // Check status
     if (task->status == PROCESS_BLOCKED) return {ERROR_ALREADY_BLOCKED, 0};
@@ -188,6 +188,7 @@ void find_new_process();
     next->switch_to();
 } */
 
+/* --- TODO ---
 void TaskDescriptor::switch_to()
 {
     // Change task
@@ -195,13 +196,11 @@ void TaskDescriptor::switch_to()
     get_cpu_struct()->next_task = this;
     start_timer_ticks(this->quantum_ticks);
 }
+*/
 
-bool is_uninited(u64 pid)
+bool is_uninited(const klib::unique_ptr<TaskDescriptor const>& task)
 {
-    tasks_map_lock.lock();
-    bool is_uninited_b = tasks_map.at(pid)->status == PROCESS_UNINIT;
-    tasks_map_lock.unlock();
-    return is_uninited_b;
+    return task->status == PROCESS_UNINIT;
 }
 
 void init_task(const klib::shared_ptr<TaskDescriptor>& task)
@@ -212,7 +211,7 @@ void init_task(const klib::shared_ptr<TaskDescriptor>& task)
 
 void kill(const klib::shared_ptr<TaskDescriptor>& p)
 {
-    Auto_Lock_Scope(p->sched_lock);
+    Auto_Lock_Scope scope_lock(p->sched_lock);
 
     // Add to dead queue
     dead.atomic_auto_push_back(p);
@@ -221,7 +220,7 @@ void kill(const klib::shared_ptr<TaskDescriptor>& p)
     u64 ptable = p->page_table;
     free_user_pages(ptable, p->pid);
 
-    /* --- TODO: This can be simplified not that I use shared_ptr ---*/
+    /* --- TODO: This can be simplified now that I use shared_ptr ---*/
 
     // Task switch if it's a current process
     CPU_Info* cpu_str = get_cpu_struct();
@@ -236,7 +235,7 @@ void kill(const klib::shared_ptr<TaskDescriptor>& p)
 
 void unblock_if_needed(const klib::shared_ptr<TaskDescriptor>& p, u64 reason)
 {
-    Auto_Lock_Scope(p->sched_lock);
+    Auto_Lock_Scope scope_lock(p->sched_lock);
 
     if (p->status != PROCESS_BLOCKED) return;
     

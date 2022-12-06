@@ -1,53 +1,42 @@
 #include "sched.hh"
 
-void sched_pqueue::push_back(TaskDescriptor* d)
+void sched_pqueue::atomic_auto_push_back(const klib::shared_ptr<TaskDescriptor>& task)
 {
-    if (this->last != nullptr) {
-        d->q_prev = this->last;
-        this->last->q_next = d;
-        d->q_next = nullptr;
-        this->last = d;
-    } else {
-        this->first = d;
-        this->last = d;
-        d->q_prev = nullptr;
-        d->q_next = nullptr;
+    Auto_Lock_Scope scope_lock(lock);
+
+    klib::list<klib::weak_ptr<TaskDescriptor>>::iterator it = queue_list.push_back(task);
+
+    // TODO make_unique exceptions
+
+    klib::unique_ptr<generic_tqueue_iterator> ptr = klib::make_unique<iterator>(it, this);
+
+    if (task->queue_iterator) {
+        task->queue_iterator->atomic_erase_from_parrent();
     }
-    d->parrent = this;
+
+    task->queue_iterator = ptr;
 }
 
-TaskDescriptor* sched_pqueue::pop_front()
+void sched_pqueue::atomic_auto_push_front(const klib::shared_ptr<TaskDescriptor>& task)
 {
-    TaskDescriptor* t = this->get_first();
-    this->erase(t);
-    return t;
-}
+    Auto_Lock_Scope scope_lock(lock);
 
-TaskDescriptor* sched_pqueue::get_first()
-{
-    return this->first;
+    klib::list<klib::weak_ptr<TaskDescriptor>>::iterator it = queue_list.push_front(task);
+
+    // TODO make_unique exceptions
+
+    klib::unique_ptr<generic_tqueue_iterator> ptr = klib::make_unique<iterator>(it, this);
+
+    if (task->queue_iterator) {
+        task->queue_iterator->atomic_erase_from_parrent();
+    }
+
+    task->queue_iterator = ptr;
 }
 
 bool sched_pqueue::empty() const
 {
-    lock.lock();
-    bool is_empty = queue_list.empty();
-    lock.unlock();
-    return is_empty;
-}
+    Auto_Lock_Scope scope_lock(lock);
 
-void sched_pqueue::erase(TaskDescriptor* t)
-{
-    if (this->first == t) {
-        this->first = t->q_next;
-    } else {
-        t->q_prev->q_next = t->q_next;
-    }
-
-    if (this->last == t) {
-        this->last = t->q_prev;
-    } else {
-        t->q_next->q_prev = t->q_prev;
-    }
-    t->parrent = nullptr;
+    return queue_list.empty();
 }
