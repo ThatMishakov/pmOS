@@ -31,8 +31,8 @@ struct sched_pqueue;
 
 class generic_tqueue_iterator {
 public:
-    virtual bool atomic_erase_from_parrent() noexcept = 0;
-    virtual ~generic_tqueue_iterator() = 0;
+    virtual void atomic_erase_from_parrent() noexcept = 0;
+    virtual ~generic_tqueue_iterator() = default;
 };
 
 struct TaskDescriptor {
@@ -115,7 +115,7 @@ struct sched_pqueue {
 
     class iterator: public generic_tqueue_iterator {
     public:
-        virtual bool atomic_erase_from_parrent() noexcept override;
+        virtual void atomic_erase_from_parrent() noexcept override;
 
         iterator() = default;
         iterator(const iterator&) = default;

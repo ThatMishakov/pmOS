@@ -495,7 +495,7 @@ kresult_t syscall_set_port(u64 pid, u64 port, u64 dest_pid, u64 dest_chan)
     if (not t) return {ERROR_NO_SUCH_PROCESS};
 
     Auto_Lock_Scope messaging_lock(t->messaging_lock);
-    kresult_t result = t->ports.set_port(port, dest_pid, dest_chan);
+    kresult_t result = t->ports.set_port(port, t, dest_chan);
 
     return result;
 }
@@ -504,8 +504,13 @@ kresult_t syscall_set_port_kernel(u64 port, u64 dest_pid, u64 dest_chan)
 {
     // TODO: Check permissions
 
+    klib::shared_ptr<TaskDescriptor> t = get_task(dest_pid);
+
+    // Check if process exists
+    if (not t) return {ERROR_NO_SUCH_PROCESS};
+
     messaging_ports.lock();
-    kresult_t result = kernel_ports.set_port(port, dest_pid, dest_chan);
+    kresult_t result = kernel_ports.set_port(port, t, dest_chan);
     messaging_ports.unlock();
 
     return result;
@@ -515,8 +520,13 @@ kresult_t syscall_set_port_default(u64 port, u64 dest_pid, u64 dest_chan)
 {
     // TODO: Check permissions
 
+    klib::shared_ptr<TaskDescriptor> t = get_task(dest_pid);
+
+    // Check if process exists
+    if (not t) return {ERROR_NO_SUCH_PROCESS};
+
     messaging_ports.lock();
-    kresult_t result = default_ports.set_port(port, dest_pid, dest_chan);
+    kresult_t result = default_ports.set_port(port, t, dest_chan);
     messaging_ports.unlock();
 
     return result;

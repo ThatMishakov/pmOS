@@ -172,21 +172,18 @@ ReturnStr<u64> block_task(const klib::shared_ptr<TaskDescriptor>& task, u64 mask
     return {SUCCESS, 0};
 }
 
-void find_new_process();
-/* --- TODO ---
+void find_new_process()
 {
-    klib::shared_ptr<TaskDescriptor> next = nullptr;
-    if (not get_cpu_struct()->sched.queues.temp_ready.empty()) {
+    CPU_Info* c = get_cpu_struct(); 
+    klib::pair<bool, klib::shared_ptr<TaskDescriptor>> t = c->sched.queues.atomic_get_pop_first();
 
-        
-        next = get_cpu_struct()->sched.queues.temp_ready.get_first();
-        get_cpu_struct()->sched.queues.temp_ready.pop_front();
-    } else { // Nothing to execute. Idling...
-        next = get_cpu_struct()->idle_task;
+    if (not t.first) {
+        t.second = c->idle_task;
     }
 
-    next->switch_to();
-} */
+
+    t.second->switch_to();
+}
 
 /* --- TODO ---
 void TaskDescriptor::switch_to()
@@ -198,7 +195,7 @@ void TaskDescriptor::switch_to()
 }
 */
 
-bool is_uninited(const klib::unique_ptr<TaskDescriptor const>& task)
+bool is_uninited(const klib::shared_ptr<const TaskDescriptor>& task)
 {
     return task->status == PROCESS_UNINIT;
 }
@@ -308,10 +305,10 @@ void Ready_Queues::assign_quantum_on_priority(TaskDescriptor* t)
     t->quantum_ticks = Ready_Queues::quantums[t->priority] * ticks_per_1_ms;
 }
 
-void evict(TaskDescriptor* current_task)
+void evict(const klib::shared_ptr<TaskDescriptor>& current_task)
 {
     current_task->quantum_ticks = apic_get_remaining_ticks();
-    if (current_task->quantum_ticks == 0) Ready_Queues::assign_quantum_on_priority(current_task);
+    if (current_task->quantum_ticks == 0) Ready_Queues::assign_quantum_on_priority(current_task.get());
 
     if (current_task->type == TaskDescriptor::Type::Idle) {
         current_task->next_status = Process_Status::PROCESS_SPECIAL;

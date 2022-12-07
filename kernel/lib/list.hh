@@ -39,6 +39,8 @@ public:
         {
             return this->ptr == k.ptr;
         }
+
+        friend list<T>::iterator list<T>::erase(list<T>::iterator pos);
     };
 
     constexpr list();
@@ -72,6 +74,8 @@ public:
 
     iterator begin();
     iterator end();
+
+    iterator erase(iterator pos);
 };
 
 template<typename T>
@@ -200,6 +204,46 @@ list<T>::iterator list<T>::push_back(const T& k)
 }
 
 template<typename T>
+list<T>::iterator list<T>::push_front(const T& k)
+{
+    Node* n = new Node();
+    n->data = k;
+
+    if (first == nullptr) {
+        first = n;
+        last = n;
+    } else {
+        n->next = first;
+        n->prev = nullptr;
+        first->prev = n;
+        first = n;
+    }
+    ++l_size;
+
+    return iterator(n);
+}
+
+template<typename T>
+list<T>::iterator list<T>::push_front(T&& k)
+{
+    Node* n = new Node();
+    n->data = forward<T>(k);
+
+    if (first == nullptr) {
+        first = n;
+        last = n;
+    } else {
+        n->next = first;
+        n->prev = nullptr;
+        first->prev = n;
+        first = n;
+    }
+    ++l_size;
+
+    return iterator(n);
+}
+
+template<typename T>
 list<T>::iterator list<T>::push_back(T&& k)
 {
     Node* n = new Node();
@@ -223,6 +267,12 @@ template<typename T>
 list<T>::iterator list<T>::emplace_back(T&& k)
 {
     return push_back(forward<T>(k));
+}
+
+template<typename T>
+list<T>::iterator list<T>::emplace_front(T&& k)
+{
+    return push_front(forward<T>(k));
 }
 
 template<typename T>
@@ -275,6 +325,30 @@ template<typename T>
 typename list<T>::iterator list<T>::end()
 {
     return iterator(nullptr);
+}
+
+template<typename T>
+typename list<T>::iterator list<T>::erase(list<T>::iterator pos)
+{
+    Node *n = pos.ptr;
+    Node* next = n->next;
+
+    if (first == n) {
+        first = n->next;
+    } else {
+        n->prev->next = n->next;
+    }
+
+    if (last == n) {
+        last = n->prev;
+    } else {
+        n->next->prev = n->prev;
+    }
+
+    --l_size;
+    delete n;
+
+    return iterator(next);
 }
 
 }

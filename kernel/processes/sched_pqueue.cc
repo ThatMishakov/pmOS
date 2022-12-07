@@ -4,34 +4,39 @@ void sched_pqueue::atomic_auto_push_back(const klib::shared_ptr<TaskDescriptor>&
 {
     Auto_Lock_Scope scope_lock(lock);
 
-    klib::list<klib::weak_ptr<TaskDescriptor>>::iterator it = queue_list.push_back(task);
+    klib::unique_ptr<iterator> ptr = klib::make_unique<iterator>(klib::list<klib::weak_ptr<TaskDescriptor>>::iterator(), this);
+    ptr->list_it = queue_list.push_back(task);
 
-    // TODO make_unique exceptions
-
-    klib::unique_ptr<generic_tqueue_iterator> ptr = klib::make_unique<iterator>(it, this);
+    
 
     if (task->queue_iterator) {
         task->queue_iterator->atomic_erase_from_parrent();
     }
 
-    task->queue_iterator = ptr;
+    task->queue_iterator = klib::move(ptr);
 }
 
 void sched_pqueue::atomic_auto_push_front(const klib::shared_ptr<TaskDescriptor>& task)
 {
     Auto_Lock_Scope scope_lock(lock);
 
-    klib::list<klib::weak_ptr<TaskDescriptor>>::iterator it = queue_list.push_front(task);
+    klib::unique_ptr<iterator> ptr = klib::make_unique<iterator>(klib::list<klib::weak_ptr<TaskDescriptor>>::iterator(), this);
+    ptr->list_it = queue_list.push_front(task);
 
-    // TODO make_unique exceptions
-
-    klib::unique_ptr<generic_tqueue_iterator> ptr = klib::make_unique<iterator>(it, this);
+    
 
     if (task->queue_iterator) {
         task->queue_iterator->atomic_erase_from_parrent();
     }
 
-    task->queue_iterator = ptr;
+    task->queue_iterator = klib::move(ptr);
+}
+
+void sched_pqueue::iterator::atomic_erase_from_parrent() noexcept
+{
+    sched_pqueue* parent = this->parent;
+    Auto_Lock_Scope scope_lock(parent->lock);
+    parent->queue_list.erase(list_it);
 }
 
 bool sched_pqueue::empty() const

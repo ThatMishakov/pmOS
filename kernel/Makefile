@@ -30,7 +30,7 @@ INTERNALLDFLAGS :=     \
 	-static \
 	-Tlinker.ld    \
 	-fPIC \
-	-no-pie -fno-pic
+	-no-pie -fno-pic -Wl,--demangle
  
 # Internal C flags that should not be changed by the user.
 INTERNALCFLAGS  :=       \

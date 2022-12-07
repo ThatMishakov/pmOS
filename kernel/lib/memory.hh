@@ -314,7 +314,18 @@ public:
 
     weak_ptr& operator=(const weak_ptr<T>& r) noexcept;
     weak_ptr& operator=(const shared_ptr<T>& r) noexcept;
-    weak_ptr& operator=(weak_ptr<T>&& r) noexcept;
+    constexpr weak_ptr& operator=(weak_ptr<T>&& r) noexcept
+    {
+        this->~weak_ptr();
+
+        ptr = r.ptr;
+        refcount = r.refcount;
+
+        r.ptr = nullptr;
+        r.refcount = nullptr;
+
+        return *this;
+    }
 
     void reset() noexcept;
     void swap(weak_ptr<T>& r) noexcept;

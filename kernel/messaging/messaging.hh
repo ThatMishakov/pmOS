@@ -39,13 +39,15 @@ struct Port {
     kresult_t enqueue(u64 from, klib::vector<char>&& msg);
 };
 
+struct TaskDescriptor;
+
 struct Ports_storage {
     klib::splay_tree_map<u64, Port> storage;
     Spinlock lock;
     kresult_t send_from_user(u64 pid_from, u64 port, u64 buff_addr, size_t size);
     kresult_t send_from_system(u64 port, const char* msg, size_t size);
     kresult_t set_dummy(u64 port);
-    kresult_t set_port(u64 port, u64 dest_pid, u64 dest_chan);
+    kresult_t set_port(u64 port, const klib::shared_ptr<TaskDescriptor>& task, u64 dest_chan);
     kresult_t send_msg(u64 pid_from, u64 port, klib::vector<char>&& msg);
     inline bool exists_port(u64 port)
     {
