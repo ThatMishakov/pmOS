@@ -69,7 +69,7 @@ ReturnStr<klib::shared_ptr<TaskDescriptor>> create_process(u16 ring)
     tasks_map_lock.unlock();
 
     uninit.atomic_auto_push_back(n);    
-    
+
     // Success!
     return {SUCCESS, n};
 }
@@ -321,7 +321,10 @@ klib::pair<bool, klib::shared_ptr<TaskDescriptor>> Ready_Queues::atomic_get_pop_
         if (t.first) {
             klib::shared_ptr<TaskDescriptor> task = t.second.lock();
 
-            if (task) return {true, task};
+            if (task) {
+                task->queue_iterator = nullptr;
+                return {true, task};
+            }
         }
     } while (t.first);
 
