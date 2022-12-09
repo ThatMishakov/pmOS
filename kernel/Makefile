@@ -7,7 +7,7 @@ KERNEL = kernel
 CC = x86_64-elf-gcc
 CPP = x86_64-elf-gcc
 CXX = x86_64-elf-g++
-LD = x86_64-elf-gcc
+LD = x86_64-elf-g++
 
 ROOTDIR = $(realpath .)
 INCLUDEDIR = include .

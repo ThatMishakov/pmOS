@@ -130,6 +130,21 @@ public:
         }
     }
 
+    shared_ptr(const shared_ptr& p): ptr(p.ptr), refcount(p.refcount)
+    {
+        if (refcount != nullptr) {
+            refcount->s.lock();
+            refcount->shared_refs += 1;
+            refcount->s.unlock();
+        }
+    }
+
+    constexpr shared_ptr(shared_ptr&& p): ptr(p.ptr), refcount(p.refcount)
+    {
+        p.ptr = nullptr;
+        p.refcount = nullptr;
+    }
+
     template<typename U>
     constexpr shared_ptr(shared_ptr<U>&& p): ptr(p.ptr), refcount(p.refcount)
     {
@@ -139,8 +154,7 @@ public:
 
     shared_ptr(unique_ptr<T>&& p)
     {
-        unique_ptr<_smart_ptr_refcount_str> refcount_new = make_unique<_smart_ptr_refcount_str>();
-
+        unique_ptr<_smart_ptr_refcount_str> refcount_new = make_unique<_smart_ptr_refcount_str>(_smart_ptr_refcount_str());
         ptr = p.release();
         refcount = refcount_new.release();
         refcount->shared_refs = 1; 
@@ -161,13 +175,11 @@ public:
             }
         }
         refcount->s.unlock();
-
     }
 
-    template<typename U>
-    shared_ptr<T>& operator=(const shared_ptr<U>& r) noexcept
+    shared_ptr& operator=(const shared_ptr& r) noexcept
     {
-        if (this->ptr == r.ptr) return *this;
+        if (this == &r) return *this;
 
         this->~shared_ptr();
         this->ptr = r.ptr;
@@ -183,12 +195,62 @@ public:
     }
 
     template<typename U>
+    shared_ptr<T>& operator=(const shared_ptr<U>& r) noexcept
+    {
+        if (this == &r) return *this;
+
+        this->~shared_ptr();
+        this->ptr = r.ptr;
+        this->refcount = r.refcount;
+
+        if (refcount != nullptr) {
+            refcount->s.lock();
+            refcount->shared_refs += 1;
+            refcount->s.unlock();
+        }
+
+        return *this;
+    }
+
+    shared_ptr& operator=(shared_ptr&& r) noexcept
+    {
+        if (this == &r) return *this;
+
+        this->~shared_ptr();
+
+        this->ptr = r.ptr;
+        this->refcount = r.refcount;
+
+        r.ptr = nullptr;
+        r.refcount = nullptr;
+
+        return *this;
+    }
+
+    template<typename U>
+    shared_ptr<T>& operator=(shared_ptr<U>&& r) noexcept
+    {
+        if (this == &r) return *this;
+
+        this->~shared_ptr();
+
+        this->ptr = r.ptr;
+        this->refcount = r.refcount;
+
+        r.ptr = nullptr;
+        r.refcount = nullptr;
+
+        return *this;
+    }
+
+    template<typename U>
     shared_ptr<T>& operator=(unique_ptr<U>&& r)
     {
         unique_ptr<_smart_ptr_refcount_str> new_refcount = nullptr;
 
         if (r) {
-            new_refcount = make_unique<_smart_ptr_refcount_str>();
+            new_refcount = make_unique<_smart_ptr_refcount_str>(_smart_ptr_refcount_str());
+            new_refcount->shared_refs++;
         }
 
         this->~shared_ptr();
@@ -240,7 +302,7 @@ public:
     friend shared_ptr<T> make_shared( Args&&... args );
 };
 
-template <class T, class... Args>  shared_ptr<T> make_shared (Args&&... args)
+template <class T, class... Args> shared_ptr<T> make_shared (Args&&... args)
 {
     return shared_ptr<T>(make_unique<T>(forward<Args>(args)...));
 }

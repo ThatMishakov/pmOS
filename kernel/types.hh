@@ -18,17 +18,21 @@ struct ReturnStr {
     T val;
 };
 
+void t_print_bochs(const char *str, ...);
+
 struct Spinlock {
 	volatile bool locked = false;
 
 	inline void lock()
 	{
+		// t_print_bochs("Debug: locking   %h\n", this);
 		while (not __sync_bool_compare_and_swap(&locked, false, true));
 		__sync_synchronize();
 	}
-
+	
 	inline void unlock()
 	{
+		// t_print_bochs("Debug: unlocking %h\n", this);
 		__sync_synchronize();
 		locked = false;
 	}

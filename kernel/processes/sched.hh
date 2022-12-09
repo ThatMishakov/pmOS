@@ -40,13 +40,14 @@ struct TaskDescriptor {
     Task_Regs regs;
     PID pid;
     u64 page_table; // 192
+    u64 entry_mode = 0;
 
     Spinlock page_table_lock;
 
     TaskPermissions perm;
 
     // Scheduling lists
-    klib::unique_ptr<generic_tqueue_iterator> queue_iterator;
+    klib::unique_ptr<generic_tqueue_iterator> queue_iterator = nullptr;
     volatile Process_Status status;
     volatile Process_Status next_status;
     Spinlock sched_lock;
@@ -71,9 +72,6 @@ struct TaskDescriptor {
     // Returns 0 if there are no unblocking events pending. Otherwise returns 0.
     u64 check_unblock_immediately();
 
-    // Switches to this process
-    void switch_to();
-
     // Sets the entry point to the task
     inline void set_entry_point(u64 entry)
     {
@@ -94,6 +92,9 @@ struct TaskDescriptor {
     constexpr static u8 background_priority = 3;
 };
 
+// Switches to this process
+void switch_to_task(const klib::shared_ptr<TaskDescriptor>& task);
+
 // Checks the mask and unblocks the task if needed
 void unblock_if_needed(const klib::shared_ptr<TaskDescriptor>& p, u64 reason);
 
@@ -111,7 +112,7 @@ struct sched_pqueue {
     bool empty() const;
 
     // Returns true if queue was not empty and weak_ptr to task
-    klib::pair<bool, klib::weak_ptr<TaskDescriptor>> pop_front();
+    klib::pair<bool, klib::weak_ptr<TaskDescriptor>> atomic_pop_front();
 
     class iterator: public generic_tqueue_iterator {
     public:
@@ -148,11 +149,11 @@ struct Per_CPU_Scheduler {
 };
 
 struct CPU_Info {
-    CPU_Info* self = this;
-    Stack* kernel_stack = nullptr;
-    u64 task_switch = 0;
-    klib::shared_ptr<TaskDescriptor> current_task = klib::shared_ptr<TaskDescriptor>();
-    klib::shared_ptr<TaskDescriptor> next_task = klib::shared_ptr<TaskDescriptor>();
+    CPU_Info* self = this; // 0
+    Stack* kernel_stack = nullptr; // 8
+    u64 task_switch = 0; // 16
+    klib::shared_ptr<TaskDescriptor> current_task = klib::shared_ptr<TaskDescriptor>(); // 24
+    klib::shared_ptr<TaskDescriptor> next_task = klib::shared_ptr<TaskDescriptor>(); // 40
     u64 release_old_cr3 = 0;
     Per_CPU_Scheduler sched;
     klib::shared_ptr<TaskDescriptor> idle_task = klib::shared_ptr<TaskDescriptor>();
@@ -204,10 +205,8 @@ bool is_uninited(const klib::shared_ptr<const TaskDescriptor>&);
 // Gets a task descriptor of the process with pid
 inline klib::shared_ptr<TaskDescriptor> get_task(u64 pid)
 {
-    tasks_map_lock.lock();
-    klib::shared_ptr<TaskDescriptor> t = tasks_map.at(pid);
-    tasks_map_lock.unlock();
-    return t; 
+    Auto_Lock_Scope scope_lock(tasks_map_lock);
+    return tasks_map.get_copy_or_default(pid);
 }
 
 // Kills the task

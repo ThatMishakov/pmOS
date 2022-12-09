@@ -332,17 +332,18 @@ typename list<T>::iterator list<T>::erase(list<T>::iterator pos)
 {
     Node *n = pos.ptr;
     Node* next = n->next;
+    Node* prev = n->prev;
 
-    if (first == n) {
-        first = n->next;
+    if (prev != nullptr) {
+        prev->next = next;
     } else {
-        n->prev->next = n->next;
+        first = next;
     }
 
-    if (last == n) {
-        last = n->prev;
+    if (next != nullptr) {
+        next->prev = prev;
     } else {
-        n->next->prev = n->prev;
+        last = prev;
     }
 
     --l_size;

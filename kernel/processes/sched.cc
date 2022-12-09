@@ -14,11 +14,7 @@
 #include <lib/memory.hh>
 
 sched_pqueue blocked;
-Spinlock blocked_s;
-
-Spinlock uninit_lock;
 sched_pqueue uninit;
-
 sched_pqueue dead;
 
 Spinlock tasks_map_lock;
@@ -29,11 +25,10 @@ PID pid = 1;
 void init_scheduling()
 {
     init_per_cpu();
-
     klib::shared_ptr<TaskDescriptor> current_task = klib::make_shared<TaskDescriptor>();
     get_cpu_struct()->current_task = current_task;
     current_task->page_table = getCR3();
-    current_task->pid = pid++;
+    current_task->pid = pid++;    
     tasks_map.insert({current_task->pid, klib::move(current_task)});
 }
 
@@ -41,7 +36,6 @@ ReturnStr<klib::shared_ptr<TaskDescriptor>> create_process(u16 ring)
 {
     // Create the structure
     klib::shared_ptr<TaskDescriptor> n = klib::make_shared<TaskDescriptor>();
-
     // Assign cs and ss
     switch (ring)
     {
@@ -73,9 +67,8 @@ ReturnStr<klib::shared_ptr<TaskDescriptor>> create_process(u16 ring)
     tasks_map_lock.lock();
     tasks_map.insert({n->pid, n});
     tasks_map_lock.unlock();
-    uninit_lock.lock();
-    uninit.atomic_auto_push_back(n);
-    uninit_lock.unlock();
+
+    uninit.atomic_auto_push_back(n);    
     
     // Success!
     return {SUCCESS, n};
@@ -182,18 +175,18 @@ void find_new_process()
     }
 
 
-    t.second->switch_to();
+    switch_to_task(t.second);
 }
 
-/* --- TODO ---
-void TaskDescriptor::switch_to()
+void switch_to_task(const klib::shared_ptr<TaskDescriptor>& task)
 {
+    // TODO: There is probably a race condition here
+
     // Change task
-    this->status = Process_Status::PROCESS_RUNNING_IN_SYSTEM;
-    get_cpu_struct()->next_task = this;
-    start_timer_ticks(this->quantum_ticks);
+    task->status = Process_Status::PROCESS_RUNNING_IN_SYSTEM;
+    get_cpu_struct()->next_task = task;
+    start_timer_ticks(task->quantum_ticks);
 }
-*/
 
 bool is_uninited(const klib::shared_ptr<const TaskDescriptor>& task)
 {
@@ -317,3 +310,21 @@ void evict(const klib::shared_ptr<TaskDescriptor>& current_task)
     }
     find_new_process();
 }
+
+klib::pair<bool, klib::shared_ptr<TaskDescriptor>> Ready_Queues::atomic_get_pop_first()
+{
+    klib::pair<bool, klib::weak_ptr<TaskDescriptor>> t;
+
+    do {
+        t = temp_ready.atomic_pop_front();
+
+        if (t.first) {
+            klib::shared_ptr<TaskDescriptor> task = t.second.lock();
+
+            if (task) return {true, task};
+        }
+    } while (t.first);
+
+    return {false, nullptr};
+}
+

@@ -17,7 +17,7 @@ void* palloc_c(size_t number)
 }
 
 palloc_list palloc_head = {0,0};
-u64 from = (u64)&_palloc_start;
+u64 from = 0xFFFFFF0000000000 + 0xb00b50000;
 DECLARE_LOCK(palloc_l);
 
 void* palloc(size_t size)

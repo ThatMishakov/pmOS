@@ -13,6 +13,7 @@ void init_per_cpu()
     CPU_Info* c = new CPU_Info;
     write_msr(0xC0000101, (u64)c);
     cpus.push_back({c, get_lapic_id()});
+
     init_idle();
 }
 

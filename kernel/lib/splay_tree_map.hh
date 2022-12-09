@@ -162,7 +162,7 @@ void splay_tree_map<K,T>::insert(const pair<K, T>& pair)
     ++elements;
 }
 
-template<class K, class T>
+template<typename K, typename T>
 void splay_tree_map<K,T>::insert(pair<K, T>&& pair)
 {
     node *n = nullptr;
@@ -180,7 +180,7 @@ void splay_tree_map<K,T>::insert(pair<K, T>&& pair)
         }
     }
 
-    node* c = new node;
+    node* c = new node();
     c->data = forward<T>(pair.second);
     c->key = pair.first;
 

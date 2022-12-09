@@ -2,7 +2,7 @@
 
     .macro save_scratch
     pushq %rax
-    movq %gs:16, %rax
+    movq %gs:24, %rax
 
     movq %rdi, 0(%rax)
     movq %rsi, 8(%rax)
@@ -16,7 +16,7 @@
     .endm
 
     .macro restore_scratch
-    movq %gs:16, %rax
+    movq %gs:24, %rax
     movq 0(%rax), %rdi
     movq 8(%rax), %rsi
     movq 16(%rax), %rdx
@@ -29,7 +29,7 @@
     .endm
 
     .macro save_context
-    movq       %gs:16, %r11
+    movq       %gs:24, %r11
     popq       72(%r11)
     popq       80(%r11)
     popq       88(%r11)
@@ -53,7 +53,7 @@
     .endm
 
     .macro restore_context
-    movq       %gs:16, %r11
+    movq       %gs:24, %r11
     pushq      104(%r11)
     pushq      96(%r11)
     pushq      88(%r11)
@@ -211,7 +211,7 @@ ints_handler:
 	swapgs
 1:
     save_scratch
-    movq %gs:16, %rax
+    movq %gs:24, %rax
     movq $1, 200(%rax)
 
     cmpq $0xCA, 0(%rsp) 
@@ -226,9 +226,9 @@ not_syscall:
     leaq (%rsp), %rdx
     call interrupt_handler
 end:
-    cmpl $0, %gs:24
+    cmpl $0, %gs:40
     je ret_from_interrupt
-    cmpl $0, %gs:16
+    cmpl $0, %gs:24
     jne save_cont
     addq $40, %rsp
     jmp task_switch_external
@@ -238,7 +238,7 @@ save_cont:
 ret_from_switch_int:
     restore_context
 ret_from_interrupt:
-    movq %gs:16, %rax
+    movq %gs:24, %rax
     movq $0, 200(%rax)
     restore_scratch
     cmpw $0x08, 0x8(%rsp)
@@ -257,7 +257,7 @@ task_switch_external:
 
     .globl start_first_process
 start_first_process:
-    movq %gs:16, %r15
+    movq %gs:24, %r15
     cmpq $0, 176(%r15)
     je ret_from_switch_int
     // TODO: Return from syscalls

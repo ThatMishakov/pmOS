@@ -29,9 +29,9 @@ spin:
 
     movl $0, init_lock(%rip)
 
-    movq %gs:24, %r15
-    movq %r15, %gs:16
-    movq $0, %gs:24
+    movq %gs:40, %r15
+    movq %r15, %gs:24
+    movq $0, %gs:40
     
     movq 192(%r15), %rax
     movq %rax, %cr3
