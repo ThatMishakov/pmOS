@@ -283,7 +283,7 @@ kresult_t invalidade(u64 virtual_addr)
     return SUCCESS;
 }
 
-kresult_t alloc_page_lazy(u64 virtual_addr, Page_Table_Argumments arg)
+static kresult_t alloc_page_lazy_common(u64 virtual_addr, Page_Table_Argumments arg)
 {
     PML4E* pml4e = get_pml4e(virtual_addr);
     if (not pml4e->present) {
@@ -323,6 +323,14 @@ kresult_t alloc_page_lazy(u64 virtual_addr, Page_Table_Argumments arg)
         page_clear((void*)pt_of(virtual_addr));
     }
 
+    return SUCCESS;
+}
+
+kresult_t alloc_page_lazy(u64 virtual_addr, Page_Table_Argumments arg, u64 flags)
+{
+    kresult_t r = alloc_page_lazy_common(virtual_addr, arg);
+    if (r != SUCCESS) return r;
+
     PTE& pte = *get_pte(virtual_addr);
     if (pte.present or pte.avl == PAGE_DELAYED) return ERROR_PAGE_PRESENT;
 
@@ -333,12 +341,38 @@ kresult_t alloc_page_lazy(u64 virtual_addr, Page_Table_Argumments arg)
     pte.writeable = arg.writeable; 
     if (nx_bit_enabled) pte.execution_disabled = arg.execution_disabled;
     pte.avl = PAGE_DELAYED;
+    pte.page_ppn = flags;
 
     return SUCCESS;
 }
 
+static void lazy_expand_noerr(u64 from, u64 to, PTE old_pte)
+{
+    if (is_in_kernel_space(from) != is_in_kernel_space(to))
+        return;
+
+    Page_Types to_page_type = page_type(to);
+
+    if (to_page_type != Page_Types::UNALLOCATED)
+        return;
+
+    Page_Table_Argumments arg;
+    arg.execution_disabled = old_pte.execution_disabled;
+    arg.extra = 0;
+    arg.global = 0;
+    arg.user_access = old_pte.user_access;
+    arg.writeable = old_pte.writeable;
+
+    kresult_t r = alloc_page_lazy_common(to, arg);
+    if (r != SUCCESS) return;
+
+    PTE& pte = *get_pte(to);
+    pte = old_pte;
+}
+
 kresult_t get_lazy_page(u64 virtual_addr)
 {
+    virtual_addr &= ~0xfffUL;
     u64 addr = virtual_addr;
     addr >>= 12;
     //u64 page = addr;
@@ -346,6 +380,14 @@ kresult_t get_lazy_page(u64 virtual_addr)
 
     PTE& pte = pt_of(virtual_addr)->entries[ptable_entry];
     if (pte.present or pte.avl != PAGE_DELAYED) return ERROR_WRONG_PAGE_TYPE;
+
+    u64 flags = pte.page_ppn;
+    if (flags & LAZY_FLAG_GROW_UP) {
+        lazy_expand_noerr(virtual_addr, virtual_addr + 4096, pte);
+    }
+    if (flags & LAZY_FLAG_GROW_DOWN) {
+        lazy_expand_noerr(virtual_addr, virtual_addr - 4096, pte);
+    }
 
     // Get an empty page
     ReturnStr<u64> page = palloc.alloc_page_ppn();

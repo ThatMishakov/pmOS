@@ -128,8 +128,8 @@ typedef struct FADT {
   uint8_t GPE1_BLK_LEN;
   uint8_t GPE1_BASE;
   uint8_t CST_CNT;
-  uint8_t P_LVL2_LAT;
-  uint8_t P_LVL3_LAT;
+  uint16_t P_LVL2_LAT;
+  uint16_t P_LVL3_LAT;
   uint16_t FLUSH_SIZE;
   uint16_t FLUSH_STRIDE;
   uint8_t DUTY_OFFSET;
@@ -137,15 +137,19 @@ typedef struct FADT {
   uint8_t DAY_ALRM;
   uint8_t MON_ALRM;
   uint8_t CENTURY;
+
   uint16_t IAPC_BOOT_ARCH;
   uint8_t reserved_1;
+  
   uint32_t Flags;
   GenericAddressStructure RESET_REG;
   uint8_t RESET_VALUE;
   uint16_t ARM_BOOT_ARCH;
   uint8_t FADT_Minor_Version;
+  
   uint64_t X_FIRMWARE_CTRL;
   uint64_t X_DSDT;
+  
   GenericAddressStructure X_PM1a_EVT_BLK;
   GenericAddressStructure X_PM1b_EVT_BLK;
   GenericAddressStructure X_PM1a_CNT_BLK;

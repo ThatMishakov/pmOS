@@ -78,8 +78,14 @@ extern "C" void interrupt_handler(u64 intno, u64 err, Interrupt_Stackframe* int_
             pagefault_manager(err, int_s);
             break;
         case 0xD:
-            t_print_bochs("!!! General Protection Fault (GP) error %h\n", err);
-            halt();
+            //t_print_bochs("!!! General Protection Fault (GP) error %h\n", err);
+            t_print("!!! General Protection Fault (GP) error (segment) %h PID %i RIP %h... Killing the process\n", err, get_cpu_struct()->current_task->pid, int_s->rip);
+            syscall_exit(4, 0);
+            break;
+        case 0xC:
+            t_print_bochs("!!! Stack-Segment Fault error %h RIP %h RSP %h\n", err, int_s->rip, int_s->rsp);
+            t_print("!!! Stack-Segment Fault error %h RIP %h RSP %h\n", err, int_s->rip, int_s->rsp);
+            syscall_exit(4, 0);
             break;
         default:
             t_print_bochs("!!! Unknown exception %h. Not currently handled.\n", intno);

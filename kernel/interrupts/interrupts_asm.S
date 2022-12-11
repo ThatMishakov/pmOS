@@ -218,7 +218,9 @@ ints_handler:
     jne not_syscall
 
     addq $16, %rsp
+    pushq %rsp
     call syscall_handler
+    addq $8, %rsp
     jmp end
 not_syscall:
     popq %rdi

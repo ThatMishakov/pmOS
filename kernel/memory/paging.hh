@@ -5,6 +5,7 @@
 #include <asm.hh>
 #include <lib/pair.hh>
 #include <lib/memory.hh>
+#include <kernel/com.h>
 
 extern bool nx_bit_enabled;
 
@@ -39,9 +40,12 @@ ReturnStr<u64> get_new_pml4();
 kresult_t release_page_s(u64 virtual_address, u64 pid);
 
 // Preallocates an empty page (to be sorted out later by the pagefault manager)
-kresult_t alloc_page_lazy(u64 virtual_addr, Page_Table_Argumments arg);
+kresult_t alloc_page_lazy(u64 virtual_addr, Page_Table_Argumments arg, u64 flags);
 
 kresult_t get_lazy_page(u64 virtual_addr);
+
+#define LAZY_FLAG_GROW_UP   0x01
+#define LAZY_FLAG_GROW_DOWN 0x02
 
 // Transfers pages from current process to process t
 kresult_t transfer_pages(const klib::shared_ptr<TaskDescriptor>& from, const klib::shared_ptr<TaskDescriptor> to, u64 page_start, u64 to_addr, u64 nb_pages, Page_Table_Argumments pta);
@@ -99,3 +103,9 @@ ReturnStr<klib::pair<PTE, bool>> share_page(u64 virtual_addr, u64 pid);
 
 // Unshares a page and makes PID its only owner
 kresult_t unshare_page(u64 virtual_addr, u64 pid);
+
+// Returns true if the address should not accessible to the user
+inline bool is_in_kernel_space(u64 virt_addr)
+{
+    return virt_addr >= KERNEL_ADDR_SPACE;
+}

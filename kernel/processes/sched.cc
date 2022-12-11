@@ -103,7 +103,7 @@ ReturnStr<u64> TaskDescriptor::init_stack()
     arg.execution_disabled = 1;
     arg.global = 0;
     arg.user_access = 1;
-    r = alloc_page_lazy(stack_page_start, arg);  // TODO: This crashes real machines
+    r = alloc_page_lazy(stack_page_start, arg, LAZY_FLAG_GROW_DOWN);  // TODO: This crashes real machines
 
     if (r != SUCCESS) goto fail;
 

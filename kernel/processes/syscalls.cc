@@ -15,7 +15,7 @@
 #include <cpus/cpus.hh>
 #include <interrupts/pit.hh>
 
-extern "C" ReturnStr<u64> syscall_handler(u64 call_n, u64 arg1, u64 arg2, u64 arg3, u64 arg4, u64 arg5)
+extern "C" ReturnStr<u64> syscall_handler(u64 call_n, u64 arg1, u64 arg2, u64 arg3, u64 arg4, u64 arg5, Interrupt_Stackframe* current_frame)
 {
     ReturnStr<u64> r = {};
     // TODO: check permissions
@@ -85,7 +85,7 @@ extern "C" ReturnStr<u64> syscall_handler(u64 call_n, u64 arg1, u64 arg2, u64 ar
         r.result = syscall_set_port_default(arg1, arg2, arg3);
         break;
     case SYSCALL_SET_ATTR:
-        r.result = syscall_set_attribute(arg1, arg2, arg3);
+        r.result = syscall_set_attribute(arg1, arg2, arg3, current_frame);
         break;
     case SYSCALL_INIT_STACK:
         r = syscall_init_stack(arg1, arg2);
@@ -127,7 +127,7 @@ u64 get_page(u64 virtual_addr)
     arg.user_access = 1;
     arg.writeable = 1;
     arg.execution_disabled = 0;
-    u64 result = alloc_page_lazy(virtual_addr, arg);
+    u64 result = alloc_page_lazy(virtual_addr, arg, 0);
 
     // Return the result (success or failure)
     return result;
@@ -261,7 +261,7 @@ kresult_t syscall_get_page_multi(u64 virtual_addr, u64 nb_pages)
     Auto_Lock_Scope scope_lock_paging(get_cpu_struct()->current_task->page_table_lock);
 
     for (; i < nb_pages and result == SUCCESS; ++i)
-        result = alloc_page_lazy(virtual_addr + i*KB(4), arg);
+        result = alloc_page_lazy(virtual_addr + i*KB(4), arg, 0);
 
     // If unsuccessfull, return everything back
     if (result != SUCCESS)
@@ -564,7 +564,7 @@ kresult_t syscall_get_message_info(u64 message_struct)
     return result;
 }
 
-kresult_t syscall_set_attribute(u64 pid, u64 attribute, u64 value)
+kresult_t syscall_set_attribute(u64 pid, u64 attribute, u64 value, Interrupt_Stackframe* current_frame)
 {
     // TODO: Check persmissions
 
@@ -577,7 +577,7 @@ kresult_t syscall_set_attribute(u64 pid, u64 attribute, u64 value)
 
     switch (attribute) {
     case ATTR_ALLOW_PORT:
-        process->regs.e.rflags.bits.iopl = value ? 3 : 0;
+        current_frame->rflags.bits.iopl = value ? 3 : 0;
         result = SUCCESS;
         break;
     case ATTR_DEBUG_SYSCALLS:

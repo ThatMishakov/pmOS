@@ -8,7 +8,7 @@
 //#pragma GCC diagnostic push
 //#pragma GCC diagnostic ignored "-Wreturn-type-c-linkage"
 
-extern "C" ReturnStr<u64> syscall_handler(u64 arg1, u64 arg2, u64 arg3, u64 arg4, u64 arg5, u64 arg6);
+extern "C" ReturnStr<u64> syscall_handler(u64 arg1, u64 arg2, u64 arg3, u64 arg4, u64 arg5, u64 arg6, Interrupt_Stackframe* current_frame);
 
 //#pragma GCC diagnostic pop
 
@@ -70,7 +70,7 @@ kresult_t syscall_set_port_kernel(u64 port, u64 dest_pid, u64 dest_chan);
 kresult_t syscall_set_port_default(u64 port, u64 dest_pid, u64 dest_chan);
 
 // Sets task's attributes
-kresult_t syscall_set_attribute(u64 pid, u64 attribute, u64 value); 
+kresult_t syscall_set_attribute(u64 pid, u64 attribute, u64 value, Interrupt_Stackframe* current_frame); 
 
 // Inits task's stack
 ReturnStr<u64> syscall_init_stack(u64 pid, u64 esp);

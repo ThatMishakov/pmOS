@@ -15,7 +15,7 @@ void pagefault_manager(u64 err, Interrupt_Stackframe* int_s)
     // Get page type
     Page_Types type = page_type(page);
 
-    //t_print_bochs("Debug: Pagefault %h pid %i rip %h error %h\n", virtual_addr, get_cpu_struct()->current_task->pid, int_s->rip, err);
+    t_print_bochs("Debug: Pagefault %h pid %i rip %h error %h\n", virtual_addr, get_cpu_struct()->current_task->pid, int_s->rip, err);
 
     switch (type) {
     case Page_Types::LAZY_ALLOC: // Lazilly allocated page caused the fault

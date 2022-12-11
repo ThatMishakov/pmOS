@@ -84,9 +84,11 @@ ACPISDTHeader* check_get_virt_from_phys(ACPISDTHeader* phys)
     uint32_t size = virt_small->length;
     unmap_phys(virt_small, sizeof(ACPISDTHeader*));   
 
-    // Check if size is sane
-    if (size > 0x4000)
-        return NULL;
+
+    // TODO: I don't know what is a sane value as I've seen some *huge* tables on my laptop
+    // // Check if size is sane
+    // if (size > 0x1000000)
+    //     return NULL;
 
     ACPISDTHeader* virt_big = map_phys(phys, size);
     if (check_table(virt_big)) {
@@ -169,7 +171,7 @@ void parse_fadt(FADT* fadt_virt)
 
     DSDT* dsdt_virt = (DSDT*)check_get_virt_from_phys(dsdt_phys);
     if (dsdt_virt == NULL || strncmp(dsdt_virt->h.signature, "DSDT", 4)) {
-        fprintf(stderr,"Panic: Weird DSDT table pointer in FADT table\n");
+        fprintf(stderr,"Panic: Weird DSDT table pointer in FADT table, dsdt_phys %lx dsdt_virt: %lx revision: %i\n", (uint64_t)dsdt_phys, (uint64_t)dsdt_virt, revision);
         exit(2);
     }
 
