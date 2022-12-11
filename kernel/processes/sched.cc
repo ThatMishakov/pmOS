@@ -196,7 +196,12 @@ bool is_uninited(const klib::shared_ptr<const TaskDescriptor>& task)
 void init_task(const klib::shared_ptr<TaskDescriptor>& task)
 {
     Ready_Queues::assign_quantum_on_priority(task.get());
+
+    CPU_Info* cpu_str = get_cpu_struct();
     push_ready(task);
+
+    if (cpu_str->current_task->quantum_ticks == 0)
+        evict(cpu_str->current_task);
 }
 
 void kill(const klib::shared_ptr<TaskDescriptor>& p)
@@ -261,12 +266,16 @@ void sched_periodic()
 {
     // TODO: Replace with more sophisticated algorithm. Will definitely need to be redone once we have multi-cpu support
 
-    const klib::shared_ptr<TaskDescriptor>& current = get_cpu_struct()->current_task;
+    CPU_Info* c = get_cpu_struct(); 
 
-    if (not get_cpu_struct()->sched.queues.temp_ready.empty()) {
+    klib::shared_ptr<TaskDescriptor> current = c->current_task;
+    klib::pair<bool, klib::shared_ptr<TaskDescriptor>> t = c->sched.queues.atomic_get_pop_first();
+
+    if (t.first) {
         Ready_Queues::assign_quantum_on_priority(current.get());
         current->next_status = Process_Status::PROCESS_READY;
-        find_new_process();
+
+        switch_to_task(t.second);
     } else
         current->quantum_ticks = 0;
 

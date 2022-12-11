@@ -177,8 +177,8 @@ void send_ipi_fixed(u8 vector, u8 dest)
 
 void smart_eoi(u8 intno)
 {
-    u8 isr_index = intno >> 4;
-    u8 offset = intno & 0x0f;
+    u8 isr_index = intno >> 5;
+    u8 offset = intno & 0x1f;
 
     u32 isr_val = apic_read_reg(APIC_ISR_REG_START + isr_index*0x10);
 

@@ -55,7 +55,7 @@ void main()
 
     init_acpi(multiboot_info_str);
 
-    start_cpus();
+    //start_cpus();
 
     print_str("Loading modules...\n");
 
@@ -166,6 +166,10 @@ void main()
     init_acpi(multiboot_info_str);
 
     //print_str("Everything seems ok. Nothing to do. Exiting...\n");
+
+    for (int i = 0; i < 1000000000; ++i)
+        asm volatile("");
+    
     
 
     syscall(SYSCALL_EXIT);

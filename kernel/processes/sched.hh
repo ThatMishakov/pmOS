@@ -133,7 +133,7 @@ struct sched_pqueue {
 
 struct Ready_Queues {
     klib::array<sched_pqueue, 4> queues;
-    static constexpr klib::array<u32, 4> quantums = {20, 40, 80, 0};
+    static constexpr klib::array<u32, 4> quantums = {20, 40, 80, 0}; // TODO: Scheduling it completely broken and I don't know how to fix it yet
     void push_ready(const klib::shared_ptr<TaskDescriptor>& p);
     bool empty() const;
 
