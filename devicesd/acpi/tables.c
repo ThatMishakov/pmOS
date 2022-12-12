@@ -181,7 +181,7 @@ void parse_fadt(FADT* fadt_virt)
 // Returns -1 on error or ACPI version otherwise 
 int walk_acpi_tables()
 {
-
+    int revision = -1;
     char xsdt_enumerated = 0;
     if (rsdp20_desc != NULL) { // TODO
         XSDT* xsdt = get_xsdt_from_desc(rsdp20_desc);
@@ -221,8 +221,10 @@ int walk_acpi_tables()
     }
 
     FADT* fadt_virt = (FADT*)get_table("FACP", 0);
-    if (fadt_virt != 0)
+    if (fadt_virt != 0) {
+        revision = fadt_virt->h.revision;
         parse_fadt(fadt_virt);
+    }
 
-    return 0;
+    return revision;
 }

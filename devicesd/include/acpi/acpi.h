@@ -76,6 +76,14 @@ typedef struct MADT_INT_entry {
   uint32_t flags;
 } __attribute__ ((packed)) MADT_INT_entry;
 
+#define MADT_LOCAL_APIC_NMI_TYPE 4
+typedef struct MADT_LAPIC_NMI_entry {
+  MADT_entry header;
+  uint8_t ACPI_CPU_UID;
+  uint16_t Flags;
+  uint8_t LINT_ID;
+} __attribute__ ((packed)) MADT_LAPIC_NMI_entry;
+
 
 typedef struct MADT {
   ACPISDTHeader header;
@@ -168,9 +176,13 @@ typedef struct DSDT {
   uint8_t definitions[0];
 }__attribute__ ((packed)) DSDT;
 
+
+extern int acpi_revision;
+
 // Returns -1 on error or ACPI version otherwise 
 int walk_acpi_tables();
-
 int check_table(ACPISDTHeader* header);
+
+void init_lai();
 
 #endif

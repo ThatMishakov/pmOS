@@ -7,6 +7,8 @@
 #include <acpi/acpi.h>
 #include <stddef.h>
 #include <pmos/special.h>
+#include <pci/pci.h>
+#include <ioapic/ioapic.h>
 
 char* exec = NULL;
 
@@ -52,6 +54,12 @@ int main(int argc, char** argv) {
 
     if (rsdp_desc || rsdp20_desc)
         init_acpi();
+
+    init_ioapic();
+
+    // TODO: Works, but needs PCI initialization first
+    //if (acpi_revision != -1)
+    //    init_lai();
 
     return 0;
 }

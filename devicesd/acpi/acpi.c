@@ -5,6 +5,8 @@
 #include <lai/core.h>
 #include <string.h>
 
+int acpi_revision = -1;
+
 RSDP_descriptor* rsdp_desc = NULL;
 RSDP_descriptor20* rsdp20_desc = NULL;
 
@@ -65,19 +67,15 @@ XSDT* xsdt_phys = NULL;
 void init_acpi()
 {
     printf("Info: Initializing ACPI...\n");
-    int acpi_rev = 0;
 
-    acpi_rev = walk_acpi_tables();
+    acpi_revision = walk_acpi_tables();
 
-    if (acpi_rev == -1) {
+    if (acpi_revision == -1) {
         printf("Warning: Did not initialize ACPI\n");
         return;
     }
 
-    lai_set_acpi_revision(acpi_rev);
-    lai_create_namespace();
-
-    printf("Inited LAI\n"); 
+    printf("Walked ACPI tables! ACPI revision: %i\n", acpi_revision);
 }
 
 int check_table(ACPISDTHeader* header)
@@ -89,4 +87,11 @@ int check_table(ACPISDTHeader* header)
     }
 
     return sum == 0;
+}
+
+void init_lai()
+{
+    lai_set_acpi_revision(acpi_revision);
+    lai_create_namespace();
+    printf("Inited LAI!\n"); 
 }

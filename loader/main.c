@@ -167,10 +167,5 @@ void main()
 
     //print_str("Everything seems ok. Nothing to do. Exiting...\n");
 
-    for (int i = 0; i < 1000000000; ++i)
-        asm volatile("");
-    
-    
-
     syscall(SYSCALL_EXIT);
 }

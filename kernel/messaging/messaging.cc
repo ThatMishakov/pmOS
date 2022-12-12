@@ -34,9 +34,9 @@ kresult_t Port::enqueue(u64 from, klib::vector<char>&& msg_v)
 {
     klib::shared_ptr<Message> p = klib::make_shared<Message>(from, channel, klib::forward<klib::vector<char>>(msg_v));
 
-    this->lock.lock();
+    Auto_Lock_Scope scope_lock(this->lock);
+    
     this->msg_queue.emplace_back(klib::move(p));
-    this->lock.unlock();
 
     return SUCCESS;
 }

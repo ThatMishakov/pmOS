@@ -317,6 +317,11 @@ int fputc ( int character, FILE * stream )
     return _size_fputs(1, (char*)&character, stream);
 }
 
+int putchar(int c)
+{
+    return _size_fputs(1, (char*)&c, stdout);
+}
+
 const char endline[] = "\n";
 
 int fputs(const char* string, FILE* stream)
