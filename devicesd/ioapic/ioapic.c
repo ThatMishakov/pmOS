@@ -4,29 +4,30 @@
 #include <stdio.h>
 #include <phys_map/phys_map.h>
 #include <ioapic/ints_override.h>
+#include <stdbool.h>
 
 ioapic_list* ioapic_list_root = NULL;
 
-uint32_t ioapic_read_reg(uint32_t* ioapic, uint32_t reg_sel)
+uint32_t ioapic_read_reg(volatile uint32_t* ioapic, uint32_t reg_sel)
 {
     ioapic[0] = reg_sel;
     return ioapic[0x10/4];
 }
 
-void ioapic_write_reg(uint32_t* ioapic, uint32_t reg_sel, uint32_t value)
+void ioapic_write_reg(volatile uint32_t* ioapic, uint32_t reg_sel, uint32_t value)
 {
     ioapic[0] = reg_sel;
     ioapic[4] = value;
 }
 
-IOAPICID ioapic_read_ioapicid(uint32_t* ioapic)
+IOAPICID ioapic_read_ioapicid(volatile uint32_t* ioapic)
 {
     IOAPICID i;
     i.asint = ioapic_read_reg(ioapic, 0);
     return i;
 }
 
-IOAPICVER ioapic_read_ioapicver(uint32_t* ioapic)
+IOAPICVER ioapic_read_ioapicver(volatile uint32_t* ioapic)
 {
     IOAPICVER i;
     i.asint = ioapic_read_reg(ioapic, 1);
@@ -62,6 +63,20 @@ void init_ioapic_at(uint16_t id, uint64_t address, uint32_t base)
 
         c->next = node;
     }
+}
+
+ioapic_descriptor* get_ioapic_for_int(uint32_t intno)
+{
+    ioapic_list* node = ioapic_list_root;
+
+    while (node != NULL) {
+        if (node->desc.int_base <= intno && node->desc.max_int >= intno)
+            return &node->desc;
+
+        node = node->next;
+    } 
+
+    return NULL;
 }
 
 void init_ioapic()
@@ -108,7 +123,7 @@ void init_ioapic()
     }
 }
 
-IOREDTBL ioapic_read_redir_reg(uint32_t* ioapic, int index)
+IOREDTBL ioapic_read_redir_reg(volatile uint32_t* ioapic, int index)
 {
     int i = 0x10 + index*2;
 
@@ -119,10 +134,44 @@ IOREDTBL ioapic_read_redir_reg(uint32_t* ioapic, int index)
     return v;
 }
 
-void ioapic_set_redir_reg(uint32_t* ioapic, int index, IOREDTBL value)
+void ioapic_write_redir_reg(volatile uint32_t* ioapic, int index, IOREDTBL entry)
+{
+    int i = 0x10 + index*2;
+    ioapic_write_reg(ioapic, i,   entry.asints[0]);
+    ioapic_write_reg(ioapic, i+2, entry.asints[1]);
+}
+
+void ioapic_set_redir_reg(volatile uint32_t* ioapic, int index, IOREDTBL value)
 {
     int i = 0x10 + index*2;
 
     ioapic_write_reg(ioapic, i,   value.asints[0]);
     ioapic_write_reg(ioapic, i+1, value.asints[1]);
+}
+
+bool program_ioapic(uint8_t cpu_int_vector, uint32_t ext_int_vector)
+{
+    int_redirect_descriptor desc = get_for_int(ext_int_vector);
+
+    ioapic_descriptor* ioapic_desc = get_ioapic_for_int(desc.destination);
+    if (ioapic_desc == NULL) return false;
+
+    uint32_t* ioapic = ioapic_desc->virt_addr;
+    uint32_t ioapic_base = ext_int_vector - ioapic_desc->int_base;
+
+    IOREDTBL i;
+    i.bits.int_vector = cpu_int_vector;
+    i.bits.DELMOD = 0b001;
+    i.bits.DESTMOD = 1;
+    i.bits.DELIVS = 0;
+    i.bits.INTPOL = desc.active_low;
+    i.bits.REM_IRR = 0;
+    i.bits.TRIGMOD = desc.level_trig;
+    i.bits.mask = 0;
+    i.bits.reserved = 0;
+    i.bits.destination = 0xff;
+
+    ioapic_write_redir_reg(ioapic, ioapic_base, i);
+
+    return true;
 }

@@ -66,6 +66,11 @@ result_t set_port_default(uint64_t port, uint64_t dest_pid, uint64_t dest_chan)
     return syscall(SYSCALL_SET_PORT_DEFAULT, port, dest_pid, dest_chan).result;
 }
 
+result_t set_port_kernel(uint64_t port, uint64_t dest_pid, uint64_t dest_chan)
+{
+    return syscall(SYSCALL_SET_PORT_KERNEL, port, dest_pid, dest_chan).result;
+}
+
 u64 getpid()
 {
     return syscall(SYSCALL_GETPID).value;

@@ -22,7 +22,10 @@ iso: $(ISO)
 ../devicesd/devicesd.elf:
 	$(MAKE) -C ../devicesd devicesd.elf
 
-$(ISO): ../loader/loader.elf ../kernel/kernel ../processd/processd.elf ../terminald/terminald.elf ../devicesd/devicesd.elf
+../ps2d/ps2d.elf:
+	$(MAKE) -C ../ps2d ps2d.elf
+
+$(ISO): ../loader/loader.elf ../kernel/kernel ../processd/processd.elf ../terminald/terminald.elf ../devicesd/devicesd.elf ../ps2d/ps2d.elf
 	mkdir -p isodir/boot/pmos
 	mkdir -p isodir/boot/grub
 	cp ../loader/loader.elf isodir/boot/pmos/
@@ -30,7 +33,8 @@ $(ISO): ../loader/loader.elf ../kernel/kernel ../processd/processd.elf ../termin
 	cp ../processd/processd.elf isodir/boot/pmos/
 	cp ../terminald/terminald.elf isodir/boot/pmos/
 	cp ../devicesd/devicesd.elf isodir/boot/pmos/
+	cp ../ps2d/ps2d.elf isodir/boot/pmos/
 	cp grub.cfg isodir/boot/grub/
 	grub2-mkrescue -o $(ISO) isodir
 
-.PHONY: ../loader/loader.elf ../kernel/kernel ../processd/processd.elf ../terminald/terminald.elf ../devicesd/devicesd.elf
+.PHONY: ../loader/loader.elf ../kernel/kernel ../processd/processd.elf ../terminald/terminald.elf ../devicesd/devicesd.elf ../ps2d/ps2d.elf

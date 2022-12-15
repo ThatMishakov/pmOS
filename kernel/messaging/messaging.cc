@@ -14,6 +14,7 @@ Spinlock messaging_ports;
 kresult_t init_kernel_ports()
 {
     default_ports.set_dummy(1); // General log messages
+    default_ports.set_dummy(1024); // Devicesd
 
     return SUCCESS;
 }

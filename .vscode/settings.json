@@ -54,6 +54,7 @@
         "cstdint": "cpp",
         "exception": "cpp",
         "new": "cpp",
-        "typeinfo": "cpp"
+        "typeinfo": "cpp",
+        "stddef.h": "c"
     }
 }

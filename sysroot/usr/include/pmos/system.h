@@ -7,6 +7,10 @@
 #include "../kernel/messaging.h"
 #include "../kernel/types.h"
 
+#ifndef SUCCESS
+#define SUCCESS 0
+#endif
+
 typedef uint64_t result_t;
 
 typedef struct {
@@ -57,6 +61,9 @@ result_t set_port(uint64_t pid, uint64_t dest_pid, uint64_t dest_chan);
 
 // Sets default port
 result_t set_port_default(uint64_t port, uint64_t dest_pid, uint64_t dest_chan);
+
+// Sets kernel port
+result_t set_port_kernel(uint64_t port, uint64_t dest_pid, uint64_t dest_chan);
 
 // Blocks the process with the mask *mask*. Returns unblock reason as a value
 syscall_r block(uint64_t mask);
