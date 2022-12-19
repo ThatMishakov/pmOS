@@ -31,6 +31,27 @@ typedef struct DEVICESD_MESSAGE_REG_INT_REPLY {
     uint32_t intno;
 } DEVICESD_MESSAGE_REG_INT_REPLY;
 
+#define DEVICESD_MESSAGE_TIMER_T 0x03
+typedef struct DEVICESD_MESSAGE_TIMER {
+    uint32_t type;
+    uint64_t ms;
+    uint64_t reply_channel;
+} DEVICESD_MESSAGE_TIMER;
+
+#define DEVICESD_MESSAGE_TIMER_CONTROL_T 0x04
+typedef struct DEVICESD_MESSAGE_TIMER_CONTROL {
+    uint32_t type;
+    uint32_t cmd;
+    uint64_t timer_id;
+} DEVICESD_MESSAGE_TIMER_CONTROL;
+
+#define DEVICESD_MESSAGE_TIMER_REPLY_T 0x05
+typedef struct DEVICESD_MESSAGE_TIMER_REPLY {
+    uint32_t type;
+    uint32_t status;
+    uint64_t timer_id;
+} DEVICESD_MESSAGE_TIMER_REPLY;
+
 
 #if defined(__cplusplus)
 } /* extern "C" */

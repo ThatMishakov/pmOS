@@ -171,6 +171,29 @@ typedef struct FADT {
   uint64_t Hypervisor_Vendor_Identity;
 } __attribute__ ((packed)) FADT;
 
+typedef struct HPET_Description_Table
+{
+  ACPISDTHeader h;
+  union {
+    struct {
+      uint8_t REV_ID;
+      uint8_t NUM_TIM_CAP: 5;
+      uint8_t COUNT_SIZE_CAP : 1;
+      uint8_t Reserved : 1;
+      uint8_t LEG_RT_CAP : 1;
+      uint16_t VENDOR_ID;
+    } bits;
+    uint32_t asint;
+  } __attribute__((packed)) Event_Timer_Block_ID;
+  
+  GenericAddressStructure BASE_ADDRESS;
+
+  uint8_t HPET_Number;
+  uint16_t Min_Clock_tick;
+  uint8_t page_protection;
+} __attribute__ ((packed)) HPET_Description_Table;
+
+
 typedef struct DSDT {
   ACPISDTHeader h;
   uint8_t definitions[0];

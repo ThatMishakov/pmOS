@@ -13,6 +13,7 @@
 #include <devicesd/devicesd_msgs.h>
 #include <interrupts/interrupts.h>
 #include <configuration.h>
+#include <timers/timers.h>
 
 char* exec = NULL;
 
@@ -60,6 +61,7 @@ int main(int argc, char** argv) {
         init_acpi();
 
     init_ioapic();
+    init_timers();
 
     // TODO: Works, but needs PCI initialization first
     //if (acpi_revision != -1)

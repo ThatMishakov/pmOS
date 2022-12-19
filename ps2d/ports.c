@@ -6,6 +6,11 @@
 int port1_state = PORT_STATE_RESET;
 int port2_state = PORT_STATE_RESET;
 
+void init_port1()
+{
+
+}
+
 void react_port1_int()
 {
     unsigned char data = inb(DATA_PORT);
@@ -16,6 +21,7 @@ void react_port1_int()
         case RESPONSE_SELF_TEST_OK:
             printf("Port 1 success!\n");
             port1_state = PORT_STATE_OK;
+            init_port1();
             break;
         case RESPONSE_FAILURE:
             printf("Port 1 failure!\n");
