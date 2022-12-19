@@ -55,7 +55,7 @@ void main()
 
     init_acpi(multiboot_info_str);
 
-    start_cpus();
+    //start_cpus();
 
     print_str("Loading modules...\n");
 

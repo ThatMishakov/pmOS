@@ -2,7 +2,7 @@
 #define KERNEL_MESSAGING_H
 #include "types.h"
 
-#define SYSTEM_MESSAGES_START (0x01 << 31)
+#define SYSTEM_MESSAGES_START (0x01UL << 31)
 
 typedef struct {
     u64 sender;

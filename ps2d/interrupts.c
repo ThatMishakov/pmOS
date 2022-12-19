@@ -6,25 +6,22 @@
 #include <stdlib.h>
 #include <kernel/block.h>
 
-uint8_t int_vector = 0;
-
-const uint64_t interrupts_conf_reply_chan = 5;
-
-void get_interrupt_number()
+uint8_t get_interrupt_number(uint32_t intnum, uint64_t int_chan)
 {
+    uint8_t int_vector = 0;
     unsigned long mypid = getpid();
 
-    DEVICESD_MESSAGE_REG_INT m = {DEVICESD_MESSAGE_REG_INT_T, MSG_REG_INT_FLAG_EXTERNAL_INTS, 12, 0, mypid, 10, interrupts_conf_reply_chan};
+    DEVICESD_MESSAGE_REG_INT m = {DEVICESD_MESSAGE_REG_INT_T, MSG_REG_INT_FLAG_EXTERNAL_INTS, intnum, 0, mypid, int_chan, interrupts_conf_reply_chan};
     result_t result = send_message_port(1024, sizeof(m), (char*)&m);
     if (result != SUCCESS) {
         printf("Warning: Could not send message to get the interrupt\n");
-        return;
+        return 0;
     }
 
     syscall_r r = block(MESSAGE_UNBLOCK_MASK);
     if (r.result != SUCCESS) {
         printf("Warning: Could not block\n");
-        return;
+        return 0;
     }
 
     Message_Descriptor desc = {};
@@ -33,13 +30,13 @@ void get_interrupt_number()
 
     if (result != SUCCESS) {
         printf("Warning: Could not get message\n");
-        return;
+        return 0;
     }
 
     if (desc.channel != 5) {
         printf("Warning: Recieved message from unknown channel %li\n", desc.channel);
         free(message);
-        return;
+        return 0;
     }
 
     DEVICESD_MESSAGE_REG_INT_REPLY* reply = (DEVICESD_MESSAGE_REG_INT_REPLY*)message;
@@ -51,5 +48,5 @@ void get_interrupt_number()
         printf("Info: Assigned interrupt %i\n", int_vector);
     }
     free(message);
-    return;
+    return int_vector;
 }

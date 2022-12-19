@@ -93,6 +93,8 @@ kresult_t Ports_storage::send_msg(u64 pid_from, u64 port, klib::vector<char>&& m
             Auto_Lock_Scope messaging_lock(task->messaging_lock);
             result = queue_message(task, ptr);
         }
+
+        if (result == SUCCESS) unblock_if_needed(task, MESSAGE_S_NUM);
     } else if (d.attr & MSG_ATTR_DUMMY) {
         return d.enqueue(pid_from, klib::forward<klib::vector<char>>(msg));
     } if (not (d.attr & MSG_ATTR_NODEFAULT)) {

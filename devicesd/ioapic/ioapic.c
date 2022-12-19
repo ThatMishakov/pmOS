@@ -159,17 +159,14 @@ bool program_ioapic(uint8_t cpu_int_vector, uint32_t ext_int_vector)
     uint32_t* ioapic = ioapic_desc->virt_addr;
     uint32_t ioapic_base = ext_int_vector - ioapic_desc->int_base;
 
-    IOREDTBL i;
+    IOREDTBL i = ioapic_read_redir_reg(ioapic, ioapic_base);
     i.bits.int_vector = cpu_int_vector;
-    i.bits.DELMOD = 0b001;
-    i.bits.DESTMOD = 1;
-    i.bits.DELIVS = 0;
+    i.bits.DELMOD = 0b000;
+    i.bits.DESTMOD = 0;
     i.bits.INTPOL = desc.active_low;
-    i.bits.REM_IRR = 0;
     i.bits.TRIGMOD = desc.level_trig;
     i.bits.mask = 0;
-    i.bits.reserved = 0;
-    i.bits.destination = 0xff;
+    i.bits.destination = 0x00;
 
     ioapic_write_redir_reg(ioapic, ioapic_base, i);
 

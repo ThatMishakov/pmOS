@@ -27,7 +27,7 @@ typedef union {
 } IOAPICVER;
 
 struct __attribute__((packed)) IOREDTBL_struct {
-        uint8_t int_vector;
+        uint8_t int_vector:8;
         uint8_t DELMOD : 3;
         uint8_t DESTMOD: 1;
         uint8_t DELIVS : 1;
@@ -36,7 +36,7 @@ struct __attribute__((packed)) IOREDTBL_struct {
         uint8_t TRIGMOD: 1;
         uint8_t mask   : 1;
         uint64_t reserved: 39;
-        uint8_t destination;
+        uint8_t destination:8;
 };
 
 typedef union {

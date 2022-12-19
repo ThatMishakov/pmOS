@@ -31,8 +31,7 @@ INTERNALCFLAGS  :=       \
 	-static \
 	-mno-red-zone \
 	-mno-mmx -mno-sse -mno-sse2 \
-	-fPIE \
-	-fno-exceptions -fno-rtti
+	-fPIE
  
 # Use find to glob all *.c files in the directory and extract the object names.
 CCFILES := $(shell find ./ -type f -name '*.cc')
