@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <acpi/acpi.h>
 #include <phys_map/phys_map.h>
+#include <stdio.h>
 
 static const int hpet_size = 1024;
 
@@ -25,4 +26,9 @@ void init_hpet()
     max_timer = g.bits.NUM_TIM_CAP;
 
     
+}
+
+void hpet_int()
+{
+    timer_tick();
 }

@@ -14,3 +14,8 @@ void init_timers()
     // TODO: Fall back to PIC if HPET is not functional
     //if (hpet_virt == NULL)
 }
+
+void timer_tick()
+{
+    printf("Tic-toc\n");
+}

@@ -14,6 +14,7 @@
 #include <interrupts/interrupts.h>
 #include <configuration.h>
 #include <timers/timers.h>
+#include <timers/hpet.h>
 
 char* exec = NULL;
 
@@ -103,6 +104,11 @@ int main(int argc, char** argv) {
                     reply.status = result != 0;
                     reply.intno = result;
                     send_message_task(msg.sender, m->reply_chan, sizeof(reply), (char*)&reply);
+                }
+                    break;
+                case hpet_int_chan: {
+                    // TODO: Check that it's from kernel, etc.
+                    hpet_int();
                 }
                     break;
                 default:

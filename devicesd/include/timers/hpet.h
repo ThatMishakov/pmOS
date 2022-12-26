@@ -102,5 +102,8 @@ extern volatile HPET* hpet_virt;
 extern short max_timer;
 
 void init_hpet();
+void hpet_int();
+
+static const uint64_t hpet_int_chan = 20;
 
 #endif
