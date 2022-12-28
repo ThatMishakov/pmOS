@@ -55,6 +55,8 @@
         "exception": "cpp",
         "new": "cpp",
         "typeinfo": "cpp",
-        "stddef.h": "c"
+        "stddef.h": "c",
+        "errors.h": "c",
+        "timers_heap.h": "c"
     }
 }

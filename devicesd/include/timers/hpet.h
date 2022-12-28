@@ -4,7 +4,7 @@
 #include <interrupts/interrupts.h>
 
 typedef struct HPET_TIMER {
-    union {
+    union HPET_Timer_Conf_cap {
         struct {
             uint8_t Reserved : 1;
             uint8_t Tn_INT_TYPE_CNF : 1;
@@ -99,11 +99,16 @@ typedef struct HPET
 } __attribute__((packed)) HPET;
 
 extern volatile HPET* hpet_virt;
-extern short max_timer;
+extern unsigned short max_timer;
 
 void init_hpet();
 void hpet_int();
 
 static const uint64_t hpet_int_chan = 20;
+
+uint64_t hpet_calculate_ticks(uint64_t millis);
+
+void hpet_update_system_ticks(uint64_t* system_ticks);
+void hpet_start_oneshot(uint64_t ticks);
 
 #endif

@@ -35,6 +35,7 @@ typedef struct DEVICESD_MESSAGE_REG_INT_REPLY {
 typedef struct DEVICESD_MESSAGE_TIMER {
     uint32_t type;
     uint64_t ms;
+    uint64_t extra;
     uint64_t reply_channel;
 } DEVICESD_MESSAGE_TIMER;
 
@@ -50,7 +51,10 @@ typedef struct DEVICESD_MESSAGE_TIMER_REPLY {
     uint32_t type;
     uint32_t status;
     uint64_t timer_id;
+    uint64_t extra;
 } DEVICESD_MESSAGE_TIMER_REPLY;
+
+#define TIMER_TICK 0x01
 
 
 #if defined(__cplusplus)

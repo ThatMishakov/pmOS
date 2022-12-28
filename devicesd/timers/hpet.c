@@ -4,11 +4,14 @@
 #include <acpi/acpi.h>
 #include <phys_map/phys_map.h>
 #include <stdio.h>
+#include <stdbool.h>
 
 static const int hpet_size = 1024;
 
 volatile HPET* hpet_virt = NULL;
-short max_timer = 0;
+unsigned short max_timer = 0;
+
+uint64_t ticks_picos = 0;
 
 void init_hpet()
 {
@@ -23,12 +26,48 @@ void init_hpet()
 
 
     HPET_General_Cap_And_Id g = hpet_virt->General_Cap_And_Id; // Accesses must be 32 bit or 64 bit
+
+    if (!g.bits.COUNT_SIZE_CAP) {
+        fprintf(stderr, "Warning: HPET counter is 32 bit and that has not yet been implemented\n");
+        return;
+    }
+
     max_timer = g.bits.NUM_TIM_CAP;
 
-    
+    ticks_picos = (uint64_t)(1e9)/g.bits.COUNTER_CLK_PERIOD;
+
+    HPET_General_Conf conf = hpet_virt->General_Conf;
+
+
+    // Reset the timer
+    conf.bits.ENABLE_CNF = 0;
+    hpet_virt->General_Conf = conf;
+
+    hpet_virt->MAIN_COUNTER_VAL.bits64 = 0;
+    conf.bits.ENABLE_CNF = 1;
+    hpet_virt->General_Conf = conf;
+
+    // Init timer 0
+    union HPET_Timer_Conf_cap conf_tmr0 = hpet_virt->timers[0].conf_cap;
+    printf("Tn_INT_ROUTE_CAP %x\n", conf_tmr0.bits.Tn_INT_ROUTE_CAP);
 }
 
 void hpet_int()
 {
     timer_tick();
+}
+
+uint64_t hpet_calculate_ticks(uint64_t millis)
+{
+    return millis*ticks_picos*1000;
+}
+
+void hpet_update_system_ticks(uint64_t* system_ticks)
+{
+    *system_ticks = hpet_virt->MAIN_COUNTER_VAL.bits64;
+}
+
+void hpet_start_oneshot(uint64_t ticks)
+{
+
 }

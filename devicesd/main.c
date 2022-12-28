@@ -51,6 +51,8 @@ void parse_args(int argc, char** argv)
     }
 }
 
+#define CONTROL_PORT 10
+
 int main(int argc, char** argv) {
     printf("Hello from devicesd!\n");
     
@@ -69,7 +71,7 @@ int main(int argc, char** argv) {
     //    init_lai();
 
     // Get messages
-    result_t r = set_port_default(1024, getpid(), 10);
+    result_t r = set_port_default(1024, getpid(), CONTROL_PORT);
     if (r != SUCCESS) printf("Warning: could not set the default port\n");
 
 
@@ -79,8 +81,8 @@ int main(int argc, char** argv) {
         if (r.result != SUCCESS) break;
 
         switch (r.value) {
-        case MESSAGE_S_NUM: // Unblocked by a message
-        {
+            case MESSAGE_S_NUM: // Unblocked by a message
+            {
             Message_Descriptor msg;
             syscall_get_message_info(&msg);
 
@@ -88,33 +90,50 @@ int main(int argc, char** argv) {
 
             get_first_message(msg_buff, 0);
 
-            if (msg.size >= sizeof(DEVICESD_MSG_GENERIC)) {
-                switch (((DEVICESD_MSG_GENERIC*)msg_buff)->type) {
-                case DEVICESD_MESSAGE_REG_INT_T: {
-                    if (msg.size != sizeof(DEVICESD_MESSAGE_REG_INT))
-                        printf("Warning: Message from PID %lx does no have the right size (%lx)\n", msg.sender, msg.size);
-                    // TODO: Add more checks & stuff
+            switch(msg.channel) {
+                case CONTROL_PORT:
+                {
+                    if (msg.size >= sizeof(DEVICESD_MSG_GENERIC)) {
+                        switch (((DEVICESD_MSG_GENERIC*)msg_buff)->type) {
+                            case DEVICESD_MESSAGE_REG_INT_T: {
+                                if (msg.size != sizeof(DEVICESD_MESSAGE_REG_INT))
+                                    printf("Warning: Message from PID %lx does no have the right size (%lx)\n", msg.sender, msg.size);
+                                // TODO: Add more checks & stuff
 
-                    DEVICESD_MESSAGE_REG_INT* m = (DEVICESD_MESSAGE_REG_INT*)msg_buff;
+                                DEVICESD_MESSAGE_REG_INT* m = (DEVICESD_MESSAGE_REG_INT*)msg_buff;
 
-                    uint8_t result = configure_interrupts_for(m);
+                                uint8_t result = configure_interrupts_for(m);
 
-                    DEVICESD_MESSAGE_REG_INT_REPLY reply;
-                    reply.type = DEVICESD_MESSAGE_REG_INT_REPLY_T;
-                    reply.status = result != 0;
-                    reply.intno = result;
-                    send_message_task(msg.sender, m->reply_chan, sizeof(reply), (char*)&reply);
-                }
+                                DEVICESD_MESSAGE_REG_INT_REPLY reply;
+                                reply.type = DEVICESD_MESSAGE_REG_INT_REPLY_T;
+                                reply.status = result != 0;
+                                reply.intno = result;
+                                send_message_task(msg.sender, m->reply_chan, sizeof(reply), (char*)&reply);
+                            }
+                                break;
+                            case DEVICESD_MESSAGE_TIMER_T: {
+                                if (msg.size != sizeof(DEVICESD_MESSAGE_TIMER))
+                                    printf("Warning: Message from PID %lx does no have the right size (%lx)\n", msg.sender, msg.size);
+
+                                DEVICESD_MESSAGE_TIMER* m = (DEVICESD_MESSAGE_TIMER*)msg_buff;
+                                start_timer(m->ms, m->extra, msg.sender, m->reply_channel);
+                            }
+
+                                break;
+                            default:
+                                printf("Warning: Recieved unknown message %x from PID %li\n", ((DEVICESD_MSG_GENERIC*)msg_buff)->type, msg.sender);    
+                                break;
+                            }
+                        }
+                    }
                     break;
                 case hpet_int_chan: {
-                    // TODO: Check that it's from kernel, etc.
-                    hpet_int();
-                }
-                    break;
+                        // TODO: Check that it's from kernel, etc.
+                        hpet_int();
+                    }
+                        break;
                 default:
-                    printf("Warning: Recieved unknown message %x from PID %li\n", ((DEVICESD_MSG_GENERIC*)msg_buff)->type, msg.sender);    
                     break;
-                }
             }
 
             free(msg_buff);

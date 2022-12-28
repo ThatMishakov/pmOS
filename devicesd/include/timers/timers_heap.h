@@ -5,9 +5,9 @@
 
 static const int timers_heap_min_size = 16;
 
-void timer_push_heap(timer_entry entry);
+void timer_push_heap(timer_entry* entry);
 bool timer_is_heap_empty();
-timer_entry timer_get_front();
+timer_entry* timer_get_front();
 void timer_heap_pop();
 
 #endif

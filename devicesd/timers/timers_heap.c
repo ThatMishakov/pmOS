@@ -5,7 +5,7 @@
 
 unsigned long timers_heap_size = 0;
 unsigned long timers_heap_capacity = 0;
-timer_entry* timers_heap_array = NULL;
+timer_entry **timers_heap_array = NULL;
 
 void timers_heap_grow()
 {
@@ -25,7 +25,7 @@ bool timer_is_heap_empty()
     return timers_heap_size == 0;
 }
 
-timer_entry timer_get_front()
+timer_entry* timer_get_front()
 {
     return timers_heap_array[0];
 }
@@ -45,7 +45,7 @@ static inline unsigned long parent(unsigned long i)
     return (i-1)/2;
 }
 
-void timer_push_heap(timer_entry entry)
+void timer_push_heap(timer_entry *entry)
 {
     if (timers_heap_size == timers_heap_capacity)
         timers_heap_grow();
@@ -54,7 +54,7 @@ void timer_push_heap(timer_entry entry)
     ++timers_heap_size;
 
     unsigned long p = parent(i);
-    while (i != 0 && timers_heap_array[p].expires_at_ticks > entry.expires_at_ticks) {
+    while (i != 0 && timers_heap_array[p]->expires_at_ticks > entry->expires_at_ticks) {
         timers_heap_array[i] = timers_heap_array[p];
         i = p;
         p = parent(i);
@@ -68,15 +68,15 @@ void heapify_up(unsigned long i)
     unsigned long min = i;
 
     unsigned long l = left(i);
-    if (l < timers_heap_size && timers_heap_array[i].expires_at_ticks > timers_heap_array[l].expires_at_ticks)
+    if (l < timers_heap_size && timers_heap_array[i]->expires_at_ticks > timers_heap_array[l]->expires_at_ticks)
         min = l;
 
     unsigned long r = right(i);
-    if (r < timers_heap_size && timers_heap_array[i].expires_at_ticks > timers_heap_array[r].expires_at_ticks)
+    if (r < timers_heap_size && timers_heap_array[i]->expires_at_ticks > timers_heap_array[r]->expires_at_ticks)
         min = r;
 
     if (min != i) {
-        timer_entry temp = timers_heap_array[i];
+        timer_entry *temp = timers_heap_array[i];
         timers_heap_array[i] = timers_heap_array[min];
         timers_heap_array[min] = temp;
 
