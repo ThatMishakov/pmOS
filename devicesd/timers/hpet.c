@@ -5,6 +5,10 @@
 #include <phys_map/phys_map.h>
 #include <stdio.h>
 #include <stdbool.h>
+#include <configuration.h>
+#include <ioapic/ioapic.h>
+#include <pmos/system.h>
+#include <timers/timers.h>
 
 static const int hpet_size = 1024;
 
@@ -48,8 +52,25 @@ void init_hpet()
     hpet_virt->General_Conf = conf;
 
     // Init timer 0
+    // TODO: MSI support
     union HPET_Timer_Conf_cap conf_tmr0 = hpet_virt->timers[0].conf_cap;
-    printf("Tn_INT_ROUTE_CAP %x\n", conf_tmr0.bits.Tn_INT_ROUTE_CAP);
+    printf("Tn_FSB_INT_DEL_CAP %x Tn_INT_ROUTE_CAP %x\n", conf_tmr0.bits.Tn_FSB_INT_DEL_CAP, conf_tmr0.bits.Tn_INT_ROUTE_CAP);
+
+    // Assuming int 2 is available as it would normally be used for PIT
+    // Will probably need redoing
+
+    bool int_2_available = conf_tmr0.bits.Tn_INT_ROUTE_CAP & 0x04;
+    if (!int_2_available) {
+        fprintf(stderr, "Error: interrupt 2 is not available for IOAPIC. Vector mask: 0x%x\n", conf_tmr0.bits.Tn_INT_ROUTE_CAP);
+        return;
+    }
+
+    struct int_task_descriptor desc = {getpid(), hpet_int_chan};
+    uint8_t int_vec = ioapic_get_int(desc, 2, conf_tmr0.bits.Tn_INT_TYPE_CNF, false);
+    if (int_vec == 0) {
+        fprintf(stderr, "Error: could not configure IOAPIC\n");
+        return;
+    }
 }
 
 void hpet_int()

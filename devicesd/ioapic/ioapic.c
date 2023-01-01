@@ -63,6 +63,9 @@ void init_ioapic_at(uint16_t id, uint64_t address, uint32_t base)
 
         c->next = node;
     }
+
+    for (unsigned int i = 0; i < node->desc.max_int; ++i)
+        ioapic_mask_int(ioapic, i);
 }
 
 ioapic_descriptor* get_ioapic_for_int(uint32_t intno)
@@ -77,6 +80,11 @@ ioapic_descriptor* get_ioapic_for_int(uint32_t intno)
     } 
 
     return NULL;
+}
+
+ioapic_descriptor* get_first_ioapic()
+{
+    return get_ioapic_for_int(0);
 }
 
 void init_ioapic()
@@ -171,4 +179,19 @@ bool program_ioapic(uint8_t cpu_int_vector, uint32_t ext_int_vector)
     ioapic_write_redir_reg(ioapic, ioapic_base, i);
 
     return true;
+}
+
+void ioapic_mask_int(volatile uint32_t* ioapic, uint32_t intno)
+{
+    IOREDTBL i = ioapic_read_redir_reg(ioapic, intno);
+
+    i.bits.mask = 1;
+
+    ioapic_write_redir_reg(ioapic, intno, i);
+}
+
+// TODO
+uint8_t ioapic_get_int(struct int_task_descriptor desc, uint8_t line, bool active_low, bool level_trig)
+{
+    return 0;
 }

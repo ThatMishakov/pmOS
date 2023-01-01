@@ -2,6 +2,7 @@
 #define IOAPIC_H
 #include <stdint.h>
 #include <stdbool.h>
+#include <configuration.h>
 
 struct IOAPICID_struct {
         uint32_t reserved0: 24;
@@ -62,6 +63,9 @@ void init_ioapic();
 // Returns pointer to IOAPIC virtual (mapped) address o NULL if not found
 ioapic_descriptor* get_ioapic_for_int(uint32_t intno);
 
+// Returns first IOAPIC (for ints 0-23) or NULL on error
+ioapic_descriptor* get_first_ioapic();
+
 uint32_t ioapic_read_reg(volatile uint32_t* ioapic, uint32_t reg_sel);
 IOAPICID ioapic_read_ioapicid(volatile uint32_t* ioapic);
 IOAPICVER ioapic_read_ioapicver(volatile uint32_t* ioapic);
@@ -73,5 +77,9 @@ void ioapic_write_reg(volatile uint32_t* ioapic, uint32_t reg_sel, uint32_t valu
 void ioapic_set_redir_reg(volatile uint32_t* ioapic, int index, IOREDTBL value);
 
 bool program_ioapic(uint8_t cpu_int_vector, uint32_t ext_int_vector);
+
+void ioapic_mask_int(volatile uint32_t* ioapic, uint32_t intno);
+
+uint8_t ioapic_get_int(struct int_task_descriptor desc, uint8_t line, bool active_low, bool level_trig);
 
 #endif
