@@ -107,6 +107,7 @@ void hpet_int();
 static const uint64_t hpet_int_chan = 20;
 
 uint64_t hpet_calculate_ticks(uint64_t millis);
+extern uint64_t hpet_get_ticks();
 
 void hpet_update_system_ticks(uint64_t* system_ticks);
 void hpet_start_oneshot(uint64_t ticks);

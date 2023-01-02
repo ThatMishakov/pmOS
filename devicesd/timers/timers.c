@@ -23,6 +23,9 @@ void init_timers()
     
     // TODO: Fall back to PIC if HPET is not functional
     //if (hpet_virt == NULL)
+
+    // Remove me: check timer
+    start_timer(1000, 0, getpid(), 100);
 }
 
 int start_timer(uint64_t ms, uint64_t extra, uint64_t pid, uint64_t reply_channel)
@@ -53,18 +56,20 @@ int start_timer(uint64_t ms, uint64_t extra, uint64_t pid, uint64_t reply_channe
     } else if (current_timer->expires_at_ticks < e->expires_at_ticks) {
         timer_push_heap(e);
     } else {
-        start_oneshot_ticks(e->expires_at_ticks - timer_ticks);
         timer_push_heap(current_timer);
         current_timer = e;
+        start_oneshot_ticks(e->expires_at_ticks - timer_ticks);
     }
     return 0;
 }
 
 void timer_tick()
 {
+    printf("Timer tick\n");
     update_ticks();
 
     while (current_timer != NULL && current_timer->expires_at_ticks <= timer_ticks) {
+        printf("current task %lx\n",current_timer->pid);
         notify_task(current_timer);
         free(current_timer);
 

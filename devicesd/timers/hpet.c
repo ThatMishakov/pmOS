@@ -70,7 +70,15 @@ void init_hpet()
     if (int_vec == 0) {
         fprintf(stderr, "Error: could not configure IOAPIC\n");
         return;
+    } else {
+        printf("Info: Assigned INT %i for HPET\n", int_vec);
     }
+
+    conf_tmr0.bits.Tn_INT_ROUTE_CNF = 2;
+    conf_tmr0.bits.Tn_INT_ENB_CNF = 1;
+    conf_tmr0.bits.Tn_TYPE_CNF = 0;
+
+    hpet_virt->timers[0].conf_cap = conf_tmr0;
 }
 
 void hpet_int()
@@ -83,12 +91,22 @@ uint64_t hpet_calculate_ticks(uint64_t millis)
     return millis*ticks_picos*1000;
 }
 
+inline uint64_t hpet_get_ticks()
+{
+    return hpet_virt->MAIN_COUNTER_VAL.bits64;
+}
+
 void hpet_update_system_ticks(uint64_t* system_ticks)
 {
-    *system_ticks = hpet_virt->MAIN_COUNTER_VAL.bits64;
+    *system_ticks = hpet_get_ticks();
 }
 
 void hpet_start_oneshot(uint64_t ticks)
 {
+    // TODO: This section is critical
+    uint64_t current_ticks = hpet_get_ticks();
+    uint64_t new_ticks = current_ticks + ticks;
 
+    // TODO: Assuming TMR0 is 64 bits
+    hpet_virt->timers[0].comparator.bits64 = new_ticks;
 }

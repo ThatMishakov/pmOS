@@ -58,6 +58,7 @@
         "stddef.h": "c",
         "errors.h": "c",
         "timers_heap.h": "c",
-        "configuration.h": "c"
+        "configuration.h": "c",
+        "system.h": "c"
     }
 }

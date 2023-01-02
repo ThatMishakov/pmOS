@@ -5,6 +5,7 @@
 #include <phys_map/phys_map.h>
 #include <ioapic/ints_override.h>
 #include <stdbool.h>
+#include <pmos/system.h>
 
 ioapic_list* ioapic_list_root = NULL;
 
@@ -181,6 +182,28 @@ bool program_ioapic(uint8_t cpu_int_vector, uint32_t ext_int_vector)
     return true;
 }
 
+bool program_ioapic_manual(uint8_t cpu_int_vector, uint32_t ext_int_vector, bool active_low, bool level_trig)
+{
+    ioapic_descriptor* ioapic_desc = get_ioapic_for_int(ext_int_vector);
+    if (ioapic_desc == NULL) return false;
+
+    uint32_t* ioapic = ioapic_desc->virt_addr;
+    uint32_t ioapic_base = ext_int_vector - ioapic_desc->int_base;
+
+    IOREDTBL i = ioapic_read_redir_reg(ioapic, ioapic_base);
+    i.bits.int_vector = cpu_int_vector;
+    i.bits.DELMOD = 0b000;
+    i.bits.DESTMOD = 0;
+    i.bits.INTPOL = active_low;
+    i.bits.TRIGMOD = level_trig;
+    i.bits.mask = 0;
+    i.bits.destination = 0x00;
+
+    ioapic_write_redir_reg(ioapic, ioapic_base, i);
+
+    return true;
+}
+
 void ioapic_mask_int(volatile uint32_t* ioapic, uint32_t intno)
 {
     IOREDTBL i = ioapic_read_redir_reg(ioapic, intno);
@@ -193,5 +216,11 @@ void ioapic_mask_int(volatile uint32_t* ioapic, uint32_t intno)
 // TODO
 uint8_t ioapic_get_int(struct int_task_descriptor desc, uint8_t line, bool active_low, bool level_trig)
 {
-    return 0;
+    uint8_t cpu_int_vector = get_free_interrupt();
+
+    result_t kern_result = set_port_kernel(KERNEL_MSG_INT_START+cpu_int_vector, desc.pid, desc.channel);
+    if (kern_result != SUCCESS) return 0;
+
+    bool result = program_ioapic_manual(cpu_int_vector, line, active_low, level_trig);
+    return result ? cpu_int_vector : 0;
 }

@@ -77,6 +77,7 @@ void ioapic_write_reg(volatile uint32_t* ioapic, uint32_t reg_sel, uint32_t valu
 void ioapic_set_redir_reg(volatile uint32_t* ioapic, int index, IOREDTBL value);
 
 bool program_ioapic(uint8_t cpu_int_vector, uint32_t ext_int_vector);
+bool program_ioapic_manual(uint8_t cpu_int_vector, uint32_t ext_int_vector, bool active_low, bool level_trig);
 
 void ioapic_mask_int(volatile uint32_t* ioapic, uint32_t intno);
 

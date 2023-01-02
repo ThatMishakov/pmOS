@@ -447,7 +447,10 @@ kresult_t syscall_send_message_task(u64 pid, u64 channel, u64 size, u64 message)
     // TODO: Check permissions
 
     u64 self_pid = get_cpu_struct()->current_task->pid;
-    if (self_pid == pid) return ERROR_CANT_MESSAGE_SELF;
+    if (self_pid == pid) {
+        t_print_bochs("[Kernel] Warning: PID %h sent message to self\n", pid);
+        return ERROR_CANT_MESSAGE_SELF;
+    }
 
     klib::shared_ptr<TaskDescriptor> t = get_task(pid);
 
