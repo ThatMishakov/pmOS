@@ -65,6 +65,8 @@ void init_hpet()
         return;
     }
 
+    conf_tmr0.bits.Tn_INT_TYPE_CNF = 0;
+
     struct int_task_descriptor desc = {getpid(), hpet_int_chan};
     uint8_t int_vec = ioapic_get_int(desc, 2, conf_tmr0.bits.Tn_INT_TYPE_CNF, false);
     if (int_vec == 0) {

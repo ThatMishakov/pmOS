@@ -23,6 +23,24 @@ struct Page_Table_Argumments {
     u8 extra              : 3 = 0;
 };
 
+struct Page_Table {
+    PML4 *pml4_phys = nullptr;
+    struct shared_info {
+        u64 refcount;
+        Spinlock lock;
+    } *shared_str = nullptr;
+
+    kresult_t prepare_new(const Page_Table*);
+    Page_Table() = default;
+    Page_Table(const Page_Table&) noexcept;
+    Page_Table(Page_Table&&) noexcept;
+
+    Page_Table& operator=(const Page_Table&) noexcept;
+    Page_Table& operator=(Page_Table&&) noexcept;
+};
+
+const u16 rec_map_index = 511;
+
 // Tries to assign a page. Returns result
 u64 get_page(u64 virtual_addr, Page_Table_Argumments arg);
 u64 get_page_zeroed(u64 virtual_addr, Page_Table_Argumments arg);

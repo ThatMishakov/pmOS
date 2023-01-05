@@ -44,7 +44,7 @@ kresult_t map(u64 physical_addr, u64 virtual_addr, Page_Table_Argumments arg)
     addr >>= 9;
     u64 pml4_entry = addr & 0x1ff;
 
-    PML4E& pml4e = pml4()->entries[pml4_entry];
+    PML4E& pml4e = pml4(rec_map_index)->entries[pml4_entry];
     if (not pml4e.present) {
         pml4e = {};
         ReturnStr<u64> p = palloc.alloc_page_ppn();
@@ -53,10 +53,10 @@ kresult_t map(u64 physical_addr, u64 virtual_addr, Page_Table_Argumments arg)
         pml4e.present = 1;
         pml4e.writeable = 1;
         pml4e.user_access = arg.user_access;
-        page_clear((void*)pdpt_of(virtual_addr));
+        page_clear((void*)pdpt_of(virtual_addr, rec_map_index));
     }
 
-    PDPTE& pdpte = pdpt_of(virtual_addr)->entries[pdpt_entry];
+    PDPTE& pdpte = pdpt_of(virtual_addr, rec_map_index)->entries[pdpt_entry];
     if (pdpte.size) return ERROR_PAGE_PRESENT;
     if (not pdpte.present) {
         pdpte = {};
@@ -66,10 +66,10 @@ kresult_t map(u64 physical_addr, u64 virtual_addr, Page_Table_Argumments arg)
         pdpte.present = 1;
         pdpte.writeable = 1;
         pdpte.user_access = arg.user_access;
-        page_clear((void*)pd_of(virtual_addr));
+        page_clear((void*)pd_of(virtual_addr, rec_map_index));
     }
 
-    PDE& pde = pd_of(virtual_addr)->entries[pdir_entry];
+    PDE& pde = pd_of(virtual_addr, rec_map_index)->entries[pdir_entry];
     if (pde.size) return ERROR_PAGE_PRESENT;
     if (not pde.present) {
         pde = {};
@@ -79,10 +79,10 @@ kresult_t map(u64 physical_addr, u64 virtual_addr, Page_Table_Argumments arg)
         pde.present = 1;
         pde.writeable = 1;
         pde.user_access = arg.user_access;
-        page_clear((void*)pt_of(virtual_addr));
+        page_clear((void*)pt_of(virtual_addr, rec_map_index));
     }
 
-    PTE& pte = pt_of(virtual_addr)->entries[ptable_entry];
+    PTE& pte = pt_of(virtual_addr, rec_map_index)->entries[ptable_entry];
     if (pte.present or pte.avl == PAGE_DELAYED) return ERROR_PAGE_PRESENT;
 
     pte = {};
@@ -109,21 +109,21 @@ Page_Types page_type(u64 virtual_addr)
     u64 pml4_entry = addr & 0x1ff;
 
     // Check if PDPT is present
-    PML4E& pml4e = pml4()->entries[pml4_entry];
+    PML4E& pml4e = pml4(rec_map_index)->entries[pml4_entry];
     if (not pml4e.present) return Page_Types::UNALLOCATED;
 
     // Check if PD is present 
-    PDPTE& pdpte = pdpt_of(virtual_addr)->entries[pdpt_entry];
+    PDPTE& pdpte = pdpt_of(virtual_addr, rec_map_index)->entries[pdpt_entry];
     if (pdpte.size) return Page_Types::HUGE_1G;
     if (not pdpte.present) return Page_Types::UNALLOCATED;
 
     // Check if PT is present
-    PDE& pde = pd_of(virtual_addr)->entries[pdir_entry];
+    PDE& pde = pd_of(virtual_addr, rec_map_index)->entries[pdir_entry];
     if (pde.size) return Page_Types::HUGE_2M;
     if (not pde.present) return Page_Types::UNALLOCATED;
 
     // Check if page is present
-    PTE& pte = pt_of(virtual_addr)->entries[ptable_entry];
+    PTE& pte = pt_of(virtual_addr, rec_map_index)->entries[ptable_entry];
     if (pte.present) {
         switch (pte.avl) {
         case PAGE_NORMAL:
@@ -169,7 +169,7 @@ void print_pt(u64 addr)
 
 kresult_t release_page_s(u64 virtual_address, u64 pid)
 {
-    PTE& pte = *get_pte(virtual_address);
+    PTE& pte = *get_pte(virtual_address, rec_map_index);
     kresult_t p;
 
     switch (pte.avl) {
@@ -226,8 +226,8 @@ ReturnStr<u64> get_new_pml4()
 
     // Copy the last entries into the new page table as they are shared across all processes
     // and recurvicely assign the last page to itself
-    ((PML4*)free_page)->entries[509] = pml4()->entries[509];
-    ((PML4*)free_page)->entries[510] = pml4()->entries[510];
+    ((PML4*)free_page)->entries[509] = pml4(rec_map_index)->entries[509];
+    ((PML4*)free_page)->entries[510] = pml4(rec_map_index)->entries[510];
 
     ((PML4*)free_page)->entries[511] = PML4E();
     ((PML4*)free_page)->entries[511].present = 1;
@@ -259,21 +259,21 @@ kresult_t invalidade(u64 virtual_addr)
     u64 pml4_entry = addr & 0x1ff;
 
     // Check if PDPT is present
-    PML4E& pml4e = pml4()->entries[pml4_entry];
+    PML4E& pml4e = pml4(rec_map_index)->entries[pml4_entry];
     if (not pml4e.present) return ERROR_PAGE_NOT_PRESENT;
 
     // Check if PD is present 
-    PDPTE& pdpte = pdpt_of(virtual_addr)->entries[pdpt_entry];
+    PDPTE& pdpte = pdpt_of(virtual_addr, rec_map_index)->entries[pdpt_entry];
     if (pdpte.size) return ERROR_HUGE_PAGE;
     if (not pdpte.present) return ERROR_PAGE_NOT_PRESENT;
 
     // Check if PT is present
-    PDE& pde = pd_of(virtual_addr)->entries[pdir_entry];
+    PDE& pde = pd_of(virtual_addr, rec_map_index)->entries[pdir_entry];
     if (pde.size) return ERROR_HUGE_PAGE;
     if (not pde.present) return ERROR_PAGE_NOT_PRESENT;
 
     // Check if page is present
-    PTE& pte = pt_of(virtual_addr)->entries[ptable_entry];
+    PTE& pte = pt_of(virtual_addr, rec_map_index)->entries[ptable_entry];
     if (not pte.present and pte.avl != PAGE_DELAYED) return ERROR_PAGE_NOT_PRESENT;
 
     // Everything OK
@@ -285,7 +285,7 @@ kresult_t invalidade(u64 virtual_addr)
 
 static kresult_t alloc_page_lazy_common(u64 virtual_addr, Page_Table_Argumments arg)
 {
-    PML4E* pml4e = get_pml4e(virtual_addr);
+    PML4E* pml4e = get_pml4e(virtual_addr, rec_map_index);
     if (not pml4e->present) {
         *pml4e = {};
         ReturnStr<u64> p = palloc.alloc_page_ppn();
@@ -294,10 +294,10 @@ static kresult_t alloc_page_lazy_common(u64 virtual_addr, Page_Table_Argumments 
         pml4e->present = 1;
         pml4e->writeable = 1;
         pml4e->user_access = arg.user_access;
-        page_clear((void*)pdpt_of(virtual_addr));
+        page_clear((void*)pdpt_of(virtual_addr, rec_map_index));
     }
 
-    PDPTE* pdpte = get_pdpe(virtual_addr);
+    PDPTE* pdpte = get_pdpe(virtual_addr, rec_map_index);
     if (pdpte->size) return ERROR_PAGE_PRESENT;
     if (not pdpte->present) {
         *pdpte = {};
@@ -307,10 +307,10 @@ static kresult_t alloc_page_lazy_common(u64 virtual_addr, Page_Table_Argumments 
         pdpte->present = 1;
         pdpte->writeable = 1;
         pdpte->user_access = arg.user_access;
-        page_clear((void*)pd_of(virtual_addr));
+        page_clear((void*)pd_of(virtual_addr, rec_map_index));
     }
 
-    PDE& pde = *get_pde(virtual_addr);
+    PDE& pde = *get_pde(virtual_addr, rec_map_index);
     if (pde.size) return ERROR_PAGE_PRESENT;
     if (not pde.present) {
         pde = {};
@@ -320,7 +320,7 @@ static kresult_t alloc_page_lazy_common(u64 virtual_addr, Page_Table_Argumments 
         pde.present = 1;
         pde.writeable = 1;
         pde.user_access = arg.user_access;
-        page_clear((void*)pt_of(virtual_addr));
+        page_clear((void*)pt_of(virtual_addr, rec_map_index));
     }
 
     return SUCCESS;
@@ -331,7 +331,7 @@ kresult_t alloc_page_lazy(u64 virtual_addr, Page_Table_Argumments arg, u64 flags
     kresult_t r = alloc_page_lazy_common(virtual_addr, arg);
     if (r != SUCCESS) return r;
 
-    PTE& pte = *get_pte(virtual_addr);
+    PTE& pte = *get_pte(virtual_addr, rec_map_index);
     if (pte.present or pte.avl == PAGE_DELAYED) return ERROR_PAGE_PRESENT;
 
     pte = {};
@@ -366,7 +366,7 @@ static void lazy_expand_noerr(u64 from, u64 to, PTE old_pte)
     kresult_t r = alloc_page_lazy_common(to, arg);
     if (r != SUCCESS) return;
 
-    PTE& pte = *get_pte(to);
+    PTE& pte = *get_pte(to, rec_map_index);
     pte = old_pte;
 }
 
@@ -378,7 +378,7 @@ kresult_t get_lazy_page(u64 virtual_addr)
     //u64 page = addr;
     u64 ptable_entry = addr & 0x1ff;
 
-    PTE& pte = pt_of(virtual_addr)->entries[ptable_entry];
+    PTE& pte = pt_of(virtual_addr, rec_map_index)->entries[ptable_entry];
     if (pte.present or pte.avl != PAGE_DELAYED) return ERROR_WRONG_PAGE_TYPE;
 
     u64 flags = pte.page_ppn;
@@ -425,7 +425,7 @@ kresult_t transfer_pages(const klib::shared_ptr<TaskDescriptor>& from, const kli
     // Get pages
     for (u64 i = 0; i < nb_pages; ++i) {
         u64 p = page_start + i*KB(4);
-        l.push_back(*get_pte(p));
+        l.push_back(*get_pte(p, rec_map_index));
     }
 
     // Save %cr3
@@ -462,11 +462,11 @@ kresult_t transfer_pages(const klib::shared_ptr<TaskDescriptor>& from, const kli
     // If failed, invalidade the pages that succeded
     if (r != SUCCESS)
         for (u64 k = 0; k < i; ++i) {
-            PTE* p = get_pte(page_start + i*KB(4));
+            PTE* p = get_pte(page_start + i*KB(4), rec_map_index);
             if (p->avl == PAGE_COW or p->avl == PAGE_SHARED)
                 release_shared(p->avl, t->pid);
 
-            *get_pte(to_address + k*KB(4)) = {};
+            *get_pte(to_address + k*KB(4), rec_map_index) = {};
         }
 
     // Return old %cr3
@@ -475,7 +475,7 @@ kresult_t transfer_pages(const klib::shared_ptr<TaskDescriptor>& from, const kli
     // If successfull, invalidate the pages
     if (r == SUCCESS) {
         for (u64 i = 0; i < nb_pages; ++i) {
-            PTE* p = get_pte(page_start + i*KB(4));
+            PTE* p = get_pte(page_start + i*KB(4), rec_map_index);
             if (p->avl == PAGE_COW or p->avl == PAGE_SHARED)
                 release_shared(p->avl, from->pid);
             invalidade_noerr(page_start + i*KB(4));
@@ -574,7 +574,7 @@ ReturnStr<klib::pair<PTE, bool>> share_page(u64 virtual_addr, u64 pid)
         FALLTHROUGH;
     case Page_Types::NORMAL:
     {
-        PTE* pte = get_pte(virtual_addr);
+        PTE* pte = get_pte(virtual_addr, rec_map_index);
         r = register_shared(pte->page_ppn << 12, pid);
         if (r != SUCCESS)
             break;
@@ -587,7 +587,7 @@ ReturnStr<klib::pair<PTE, bool>> share_page(u64 virtual_addr, u64 pid)
     case Page_Types::SHARED:
     {
         r = SUCCESS;
-        k = {*get_pte(virtual_addr), false};
+        k = {*get_pte(virtual_addr, rec_map_index), false};
     }
         break;
     default:
@@ -599,7 +599,7 @@ ReturnStr<klib::pair<PTE, bool>> share_page(u64 virtual_addr, u64 pid)
 
 kresult_t set_pte(u64 virtual_addr, PTE pte_n, Page_Table_Argumments arg)
 {
-    PML4E& pml4e = *get_pml4e(virtual_addr);
+    PML4E& pml4e = *get_pml4e(virtual_addr, rec_map_index);
     if (not pml4e.present) {
         pml4e = {};
         ReturnStr<u64> p = palloc.alloc_page_ppn();
@@ -608,10 +608,10 @@ kresult_t set_pte(u64 virtual_addr, PTE pte_n, Page_Table_Argumments arg)
         pml4e.present = 1;
         pml4e.writeable = 1;
         pml4e.user_access = arg.user_access;
-        page_clear((void*)pdpt_of(virtual_addr));
+        page_clear((void*)pdpt_of(virtual_addr, rec_map_index));
     }
 
-    PDPTE& pdpte = *get_pdpe(virtual_addr);
+    PDPTE& pdpte = *get_pdpe(virtual_addr, rec_map_index);
     if (pdpte.size) return ERROR_PAGE_PRESENT;
     if (not pdpte.present) {
         pdpte = {};
@@ -622,10 +622,10 @@ kresult_t set_pte(u64 virtual_addr, PTE pte_n, Page_Table_Argumments arg)
         pdpte.writeable = 1;
         pdpte.user_access = arg.user_access;
 
-        page_clear((void*)pd_of(virtual_addr));
+        page_clear((void*)pd_of(virtual_addr, rec_map_index));
     }
 
-    PDE& pde = *get_pde(virtual_addr);
+    PDE& pde = *get_pde(virtual_addr, rec_map_index);
     if (pde.size) return ERROR_PAGE_PRESENT;
     if (not pde.present) {
         pde = {};
@@ -636,10 +636,10 @@ kresult_t set_pte(u64 virtual_addr, PTE pte_n, Page_Table_Argumments arg)
         pde.writeable = 1;
         pde.user_access = arg.user_access;
 
-        page_clear((void*)pt_of(virtual_addr));
+        page_clear((void*)pt_of(virtual_addr, rec_map_index));
     }
 
-    PTE& pte = *get_pte(virtual_addr);
+    PTE& pte = *get_pte(virtual_addr, rec_map_index);
     if (pte.present or pte.avl == PAGE_DELAYED) return ERROR_PAGE_PRESENT; // TODO!
 
     pte = pte_n;
@@ -652,7 +652,7 @@ kresult_t set_pte(u64 virtual_addr, PTE pte_n, Page_Table_Argumments arg)
 
 kresult_t unshare_page(u64 virtual_addr, u64 pid)
 {
-    PTE* pte = get_pte(virtual_addr);
+    PTE* pte = get_pte(virtual_addr, rec_map_index);
     u8 page_type = pte->avl;
     u64 page = pte->page_ppn << 12;
 
@@ -691,7 +691,7 @@ kresult_t unshare_page(u64 virtual_addr, u64 pid)
 
 ReturnStr<u64> phys_addr_of(u64 virt)
 {
-    PTE* pte = get_pte(virt);
+    PTE* pte = get_pte(virt, rec_map_index);
 
     u64 phys = (pte->page_ppn << 12) | (virt & (u64)0xfff);
 
@@ -701,7 +701,7 @@ ReturnStr<u64> phys_addr_of(u64 virt)
 
 void invalidade_noerr(u64 virtual_addr)
 {
-    *get_pte(virtual_addr) = PTE();
+    *get_pte(virtual_addr, rec_map_index) = PTE();
     invlpg(virtual_addr);
 }
 
@@ -714,7 +714,7 @@ void free_pt(u64 page_start, u64 pid)
 {
     for (u64 i = 0; i < 512; ++i) {
         u64 addr = page_start + (i << 12);
-        PTE* p = get_pte(addr);
+        PTE* p = get_pte(addr, rec_map_index);
         if (p->present) {
             kresult_t result = release_page_s(addr, pid);
             if (result != SUCCESS) {
@@ -730,7 +730,7 @@ void free_pd(u64 pd_start, u64 pid)
 {
     for (u64 i = 0; i < 512; ++i) {
         u64 addr = pd_start + (i << (12 + 9));
-        PDE* p = get_pde(addr);
+        PDE* p = get_pde(addr, rec_map_index);
         if (p->size) {
             t_print("Error freeing pages: Huge page!\n");
             halt();
@@ -753,7 +753,7 @@ void free_pdpt(u64 pdp_start, u64 pid)
 {
     for (u64 i = 0; i < 512; ++i) {
         u64 addr = pdp_start + (i << (12 + 9 + 9));
-        PDPTE* p = get_pdpe(addr);
+        PDPTE* p = get_pdpe(addr, rec_map_index);
         if (p->present) {
             free_pd(addr, pid);
             palloc.free((void*)(p->page_ppn << 12));
@@ -769,7 +769,7 @@ void free_user_pages(u64 page_table, u64 pid)
         setCR3(page_table);
 
     for (u64 i = 0; i < KERNEL_ADDR_SPACE; i += (0x01ULL << (12 + 9 + 9 + 9))) {
-        PML4E* p = get_pml4e(i);
+        PML4E* p = get_pml4e(i, rec_map_index);
         if (p->present) {
             free_pdpt(i, pid);
             palloc.free((void*)(p->page_ppn << 12));

@@ -95,65 +95,74 @@ typedef struct {
     PTE entries[512];
 } PACKED ALIGNED(0x1000) PT;
 
-#define PAGE_ADDR(page) (page.page_ppn << 12)
+#define PAGE_ADDR(page) (page.page_ppn << (12)
 
-inline PML4* pml4_of(UNUSED u64 addr)
+inline PML4* pml4_of(UNUSED u64 addr, u64 rec_map_index)
 {
-    return ((PML4*)0xfffffffffffff000);
+    const u64 offset = (rec_map_index << (12)) | (rec_map_index << (12+9)) | (rec_map_index << (12+9+9)) | (rec_map_index << (12+9+9+9));
+    return ((PML4*)(01777770000000000000000 | offset));
 }
 
-inline PML4* pml4()
+inline PML4* pml4(u64 rec_map_index)
 {
-    return ((PML4*)0xfffffffffffff000);
+    const u64 offset = (rec_map_index << (12)) | (rec_map_index << (12+9)) | (rec_map_index << (12+9+9)) | (rec_map_index << (12+9+9+9));
+    return ((PML4*)(01777770000000000000000 | offset));
 }
 
-inline PDPT* pdpt_of(u64 addr)
+inline PDPT* pdpt_of(u64 addr, u64 rec_map_index)
 {
+    const u64 offset = (rec_map_index << (12+9)) | (rec_map_index << (12+9+9)) | (rec_map_index << (12+9+9+9));
     addr = (u64)addr >> (9+9+9);
     addr &= ~(u64)0xfff;
-    return ((PDPT*)((u64)01777777777777770000000 | addr));
+    return ((PDPT*)((u64)01777770000000000000000 | addr | offset));
 }
 
-inline PD* pd_of(u64 addr)
+inline PD* pd_of(u64 addr, u64 rec_map_index)
 {
+    const u64 offset = (rec_map_index << (12+9+9)) | (rec_map_index << (12+9+9+9));
     addr = (u64)addr >> (9+9);
     addr &= ~(u64)0xfff;
-    return ((PD*)((u64)01777777777770000000000 | addr));
+    return ((PD*)((u64)01777770000000000000000 | addr | offset));
 }
 
-inline PT* pt_of(u64 addr)
+inline PT* pt_of(u64 addr, u64 rec_map_index)
 {
+    const u64 offset = (rec_map_index << (12+9+9+9));
     addr = (u64)addr >> (9);
     addr &= ~(u64)0xfff;
-    return ((PT*)((u64)01777777770000000000000 | addr));
+    return ((PT*)((u64)01777770000000000000000 | addr | offset));
 }
 
-inline PML4E* get_pml4e(u64 addr)
+inline PML4E* get_pml4e(u64 addr, u64 rec_map_index)
 {
+    const u64 offset = (rec_map_index << (12)) | (rec_map_index << (12+9)) | (rec_map_index << (12+9+9)) | (rec_map_index << (12+9+9+9));
     addr = (u64)addr >> (9+9+9+9);
     addr &= ~(u64)07;
-    return ((PML4E*)((u64)01777777777777777770000 | addr));
+    return ((PML4E*)((u64)01777770000000000000000 | addr | offset));
 }
 
-inline PDPTE* get_pdpe(u64 addr)
+inline PDPTE* get_pdpe(u64 addr, u64 rec_map_index)
 {
+    const u64 offset = (rec_map_index << (12+9)) | (rec_map_index << (12+9+9)) | (rec_map_index << (12+9+9+9));
     addr = (u64)addr >> (9+9+9);
     addr &= ~(u64)07;
-    return ((PDPTE*)((u64)01777777777777770000000 | addr));
+    return ((PDPTE*)((u64)01777770000000000000000 | addr | offset));
 }
 
-inline PDE* get_pde(u64 addr)
+inline PDE* get_pde(u64 addr, u64 rec_map_index)
 {
+    const u64 offset = (rec_map_index << (12+9+9)) | (rec_map_index << (12+9+9+9));
     addr = (u64)addr >> (9+9);
     addr &= ~(u64)0x07;
-    return ((PDE*)((u64)01777777777770000000000 | addr));
+    return ((PDE*)((u64)01777770000000000000000 | addr | offset));
 }
 
-inline PTE* get_pte(u64 addr)
+inline PTE* get_pte(u64 addr, u64 rec_map_index)
 {
+    const u64 offset = (rec_map_index << (12+9+9+9));
     addr = (u64)addr >> (9);
     addr &= ~(u64)07;
-    return ((PTE*)((u64)01777777770000000000000 | addr));
+    return ((PTE*)((u64)01777770000000000000000 | addr | offset));
 }
 
 #endif

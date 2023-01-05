@@ -30,6 +30,7 @@ void init_timers()
 
 int start_timer(uint64_t ms, uint64_t extra, uint64_t pid, uint64_t reply_channel)
 {
+    printf("Start timer ms %li extra %lx pid %lx reply chan %lx\n", ms, extra, pid, reply_channel);
     if (timer_mode == TIMER_UNKNOWN)
         return (int)ERROR_GENERAL;
 
@@ -65,8 +66,12 @@ int start_timer(uint64_t ms, uint64_t extra, uint64_t pid, uint64_t reply_channe
 
 void timer_tick()
 {
-    printf("Timer tick\n");
+    printf("Timer tick. Current timer %lx\n", (uint64_t)current_timer);
     update_ticks();
+
+    if (current_timer != NULL) {
+        printf("Current ticks %lx smallest_tmr_ticks %lx\n", timer_ticks, current_timer->expires_at_ticks);
+    }
 
     while (current_timer != NULL && current_timer->expires_at_ticks <= timer_ticks) {
         printf("current task %lx\n",current_timer->pid);

@@ -10,7 +10,6 @@
 #include <kernel/block.h>
 #include <kernel/attributes.h>
 #include <kernel/flags.h>
-#include <interrupts/ioapic.hh>
 #include <interrupts/apic.hh>
 #include <cpus/cpus.hh>
 #include <interrupts/pit.hh>
@@ -618,9 +617,6 @@ ReturnStr<u64> syscall_configure_system(u64 type, u64 arg1, u64 arg2)
     // TODO: Check permissions
 
     switch (type) {
-    case SYS_CONF_IOAPIC:
-        return ioapic_configure(arg1, arg2);
-        break; 
     case SYS_CONF_LAPIC:
         return lapic_configure(arg1, arg2);
         break;
