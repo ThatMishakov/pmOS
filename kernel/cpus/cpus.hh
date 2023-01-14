@@ -1,7 +1,7 @@
 #pragma once
 #include <types.hh>
 #include <lib/vector.hh>
-#include <processes/sched.hh>
+#include <sched/sched.hh>
 
 struct CPU_Desc {
     CPU_Info* local_info;

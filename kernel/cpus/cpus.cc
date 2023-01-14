@@ -1,5 +1,5 @@
 #include "cpus.hh"
-#include <processes/sched.hh>
+#include <sched/sched.hh>
 #include <asm.hh>
 #include <interrupts/interrupts.hh>
 #include <interrupts/apic.hh>

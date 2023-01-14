@@ -61,8 +61,6 @@ struct Ports_storage {
 extern Ports_storage kernel_ports;
 extern Ports_storage default_ports;
 
-struct TaskDescriptor;
-
 kresult_t queue_message(const klib::shared_ptr<TaskDescriptor>& task, klib::shared_ptr<Message> message);
 
 kresult_t init_kernel_ports();

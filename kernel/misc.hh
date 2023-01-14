@@ -1,5 +1,5 @@
 #pragma once
-#include <processes/sched.hh>
+#include <processes/tasks.hh>
 
 // Pointer to where special kernel structures can be mapped
 extern void* unoccupied;

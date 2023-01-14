@@ -3,6 +3,7 @@
 #include <asm.hh>
 #include <memory/paging.hh>
 #include <processes/syscalls.hh>
+#include <processes/tasks.hh>
 
 void pagefault_manager(u64 err, Interrupt_Stackframe* int_s)
 {

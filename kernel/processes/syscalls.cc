@@ -2,7 +2,7 @@
 #include <utils.hh>
 #include <kernel/com.h>
 #include <memory/paging.hh>
-#include <processes/sched.hh>
+#include <sched/sched.hh>
 #include <lib/vector.hh>
 #include <asm.hh>
 #include <messaging/messaging.hh>
@@ -207,7 +207,7 @@ kresult_t syscall_map_into_range(u64 arg1, u64 arg2, u64 arg3, u64 arg4, u64 arg
     if (not is_uninited(t)) return ERROR_PROCESS_INITED;
 
     klib::shared_ptr<TaskDescriptor> current = get_cpu_struct()->current_task;
-    kresult_t r = transfer_pages(current, t, page_start, to_addr, nb_pages, pta);
+    kresult_t r = atomic_transfer_pages(current, t, page_start, to_addr, nb_pages, pta);
 
     return r;
 }
@@ -236,11 +236,12 @@ kresult_t syscall_share_with_range(u64 pid, u64 page_start, u64 to_addr, u64 nb_
     pta.writeable = args& FLAG_RW;
     pta.execution_disabled = args&FLAG_NOEXECUTE;
 
-    kresult_t r = share_pages(t, page_start, to_addr, nb_pages, pta);
+    kresult_t r = atomic_share_pages(t, page_start, to_addr, nb_pages, pta);
 
     return r;
 }
 
+/*
 kresult_t syscall_get_page_multi(u64 virtual_addr, u64 nb_pages)
 {
     // Check allignment to 4096K (page size)
@@ -270,7 +271,9 @@ kresult_t syscall_get_page_multi(u64 virtual_addr, u64 nb_pages)
     // Return the result (success or failure)
     return result;
 }
+*/
 
+/*
 kresult_t syscall_release_page_multi(u64 virtual_addr, u64 nb_pages)
 {
     // Check allignment to 4096K (page size)
@@ -299,6 +302,7 @@ kresult_t syscall_release_page_multi(u64 virtual_addr, u64 nb_pages)
     // Return the result (success or failure)
     return r;
 }
+*/
 
 kresult_t syscall_start_process(u64 pid, u64 start, u64 arg1, u64 arg2, u64 arg3)
 {
@@ -370,6 +374,7 @@ kresult_t syscall_exit(u64 arg1, u64 arg2)
     return SUCCESS;
 }
 
+/*
 kresult_t syscall_map_phys(u64 arg1, u64 arg2, u64 arg3, u64 arg4)
 {
     u64 virt = arg1;
@@ -413,6 +418,7 @@ kresult_t syscall_map_phys(u64 arg1, u64 arg2, u64 arg3, u64 arg4)
 
     return r;
 }
+*/
 
 kresult_t syscall_get_first_message(u64 buff, u64 args)
 {
@@ -474,6 +480,7 @@ kresult_t syscall_send_message_task(u64 pid, u64 channel, u64 size, u64 message)
     return result;
 }
 
+/*
 kresult_t syscall_send_message_port(u64 port, size_t size, u64 message)
 {
     // TODO: Check permissions
@@ -484,7 +491,9 @@ kresult_t syscall_send_message_port(u64 port, size_t size, u64 message)
 
     return result;
 }
+*/
 
+/*
 kresult_t syscall_set_port(u64 pid, u64 port, u64 dest_pid, u64 dest_chan)
 {
     // TODO: Check permissions
@@ -501,6 +510,7 @@ kresult_t syscall_set_port(u64 pid, u64 port, u64 dest_pid, u64 dest_chan)
 
     return result;
 }
+*/
 
 kresult_t syscall_set_port_kernel(u64 port, u64 dest_pid, u64 dest_chan)
 {
@@ -594,6 +604,7 @@ kresult_t syscall_set_attribute(u64 pid, u64 attribute, u64 value, Interrupt_Sta
     return result;
 }
 
+/*
 ReturnStr<u64> syscall_is_page_allocated(u64 virtual_addr)
 {
     const klib::shared_ptr<TaskDescriptor>& current_task = get_cpu_struct()->current_task;
@@ -611,6 +622,7 @@ ReturnStr<u64> syscall_is_page_allocated(u64 virtual_addr)
 
     return {SUCCESS, is_allocated};
 }
+*/
 
 ReturnStr<u64> syscall_configure_system(u64 type, u64 arg1, u64 arg2)
 {

@@ -10,6 +10,7 @@
 #include <kernel/com.h>
 #include "shared_mem.hh"
 #include <lib/memory.hh>
+#include <processes/tasks.hh>
 
 bool nx_bit_enabled = false;
 
@@ -411,7 +412,8 @@ bool is_allocated(u64 page)
     return p == Page_Types::NORMAL or p == Page_Types::LAZY_ALLOC;
 }
 
-kresult_t transfer_pages(const klib::shared_ptr<TaskDescriptor>& from, const klib::shared_ptr<TaskDescriptor> t, u64 page_start, u64 to_address, u64 nb_pages, Page_Table_Argumments pta)
+/*
+kresult_t atomic_transfer_pages(const klib::shared_ptr<TaskDescriptor>& from, const klib::shared_ptr<TaskDescriptor> t, u64 page_start, u64 to_address, u64 nb_pages, Page_Table_Argumments pta)
 {
     Auto_Lock_Scope_Double scope_lock(from->page_table_lock, t->page_table_lock);
 
@@ -485,8 +487,10 @@ kresult_t transfer_pages(const klib::shared_ptr<TaskDescriptor>& from, const kli
 
     return r;
 }
+*/
 
-kresult_t share_pages(const klib::shared_ptr<TaskDescriptor>& t, u64 page_start, u64 to_addr, u64 nb_pages, Page_Table_Argumments pta)
+/*
+kresult_t atomic_share_pages(const klib::shared_ptr<TaskDescriptor>& t, u64 page_start, u64 to_addr, u64 nb_pages, Page_Table_Argumments pta)
 {
     klib::shared_ptr<TaskDescriptor> current_task = get_cpu_struct()->current_task;
     u64 current_pid = current_task->pid;
@@ -548,6 +552,7 @@ fail:
 
     return p;
 }
+*/
 
 ReturnStr<klib::pair<PTE, bool>> share_page(u64 virtual_addr, u64 pid)
 {

@@ -49,7 +49,8 @@ OBJS = 	./objects/icxxabi.o ./start.o ./asm.o ./main.o ./misc.o ./utils.o \
 	    ./memory/mem.o ./memory/malloc.o ./memory/free_page_alloc.o ./memory/palloc.o ./memory/paging.o ./memory/shared_mem.o \
 	    ./interrupts/apic.o ./interrupts/pic.o ./interrupts/gdt.o ./interrupts/exceptions_managers.o ./interrupts/interrupts.o \
 		./interrupts/pit.o ./interrupts/interrupts_asm.o ./interrupts/loadGDT.o\
-	    ./processes/sched.o ./processes/sched_pqueue.o ./processes/syscalls.o ./processes/idle.o ./processes/task_switching.o \
+	    ./processes/idle.o ./processes/syscalls.o ./processes/tasks.o \
+		./sched/sched.o ./sched/task_switching.o \
 		./messaging/messaging.o ./cpus/cpus.o
 
 CRTI_OBJ =  ./objects/crti.o

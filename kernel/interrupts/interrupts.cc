@@ -5,7 +5,7 @@
 #include <memory/malloc.hh>
 #include "exceptions_managers.hh"
 #include "asm.hh"
-#include <processes/sched.hh>
+#include <sched/sched.hh>
 #include <processes/syscalls.hh>
 #include <misc.hh>
 #include "apic.hh"

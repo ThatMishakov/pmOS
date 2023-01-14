@@ -1,5 +1,5 @@
 #pragma once
-#include <processes/sched.hh>
+#include <sched/sched.hh>
 #include <kernel/errors.h>
 #include <kernel/syscalls.h>
 #include <types.hh>

@@ -1,6 +1,6 @@
 #include "messaging.hh"
 #include <types.hh>
-#include <processes/sched.hh>
+#include <sched/sched.hh>
 #include <stddef.h>
 #include <kernel/errors.h>
 #include <lib/utility.hh>

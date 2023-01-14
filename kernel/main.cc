@@ -5,7 +5,7 @@
 #include <memory/mem.hh>
 #include <interrupts/interrupts.hh>
 #include <memory/malloc.hh>
-#include <processes/sched.hh>
+#include <sched/sched.hh>
 #include <messaging/messaging.hh>
 #include <kernel/errors.h>
 #include <objects/crti.h>
