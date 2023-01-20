@@ -1,7 +1,6 @@
 #pragma once
 #include <kernel/memory.h>
 #include <types.hh>
-#include <sched/sched.hh>
 #include <asm.hh>
 #include <lib/pair.hh>
 #include <lib/memory.hh>
@@ -26,7 +25,7 @@ struct Page_Table_Argumments {
 struct Page_Table {
     PML4 *pml4_phys = nullptr;
     struct shared_info {
-        u64 refcount;
+        u64 refcount = 1;
         Spinlock lock;
     } *shared_str = nullptr;
 
@@ -37,6 +36,10 @@ struct Page_Table {
 
     Page_Table& operator=(const Page_Table&) noexcept;
     Page_Table& operator=(Page_Table&&) noexcept;
+
+    // Creates a page table structure from physical page table with 1 reference (during kernel initialization)
+    static Page_Table init_from_phys(u64 cr3);
+    static Page_Table get_new_page_table();
 };
 
 const u16 rec_map_index = 511;
@@ -64,6 +67,8 @@ kresult_t get_lazy_page(u64 virtual_addr);
 
 #define LAZY_FLAG_GROW_UP   0x01
 #define LAZY_FLAG_GROW_DOWN 0x02
+
+struct TaskDescriptor;
 
 // Transfers pages from current process to process t
 kresult_t atomic_transfer_pages(const klib::shared_ptr<TaskDescriptor>& from, const klib::shared_ptr<TaskDescriptor> to, u64 page_start, u64 to_addr, u64 nb_pages, Page_Table_Argumments pta);

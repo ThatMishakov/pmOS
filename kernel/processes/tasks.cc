@@ -1,11 +1,15 @@
 #include "tasks.hh"
 #include "kernel/errors.h"
+#include <sched/sched.hh>
+#include "idle.hh"
+#include <sched/defs.hh>
 
-/*
+
 ReturnStr<klib::shared_ptr<TaskDescriptor>> create_process(u16 ring)
 {
     // Create the structure
     klib::shared_ptr<TaskDescriptor> n = klib::make_shared<TaskDescriptor>();
+    
     // Assign cs and ss
     switch (ring)
     {
@@ -23,11 +27,8 @@ ReturnStr<klib::shared_ptr<TaskDescriptor>> create_process(u16 ring)
     }
 
     // Create a new page table
-    ReturnStr<u64> k = get_new_pml4();
-    if (k.result != SUCCESS) {
-        return {k.result, klib::shared_ptr<TaskDescriptor>()};
-    }
-    n->page_table = k.val;
+    // TODO: Exceptions
+    n->page_table = Page_Table::get_new_page_table();
 
     // Assign a pid
     n->pid = assign_pid();
@@ -38,12 +39,12 @@ ReturnStr<klib::shared_ptr<TaskDescriptor>> create_process(u16 ring)
     tasks_map.insert({n->pid, n});
     tasks_map_lock.unlock();
 
-    uninit.atomic_auto_push_back(n);    
+    Auto_Lock_Scope uninit_lock(uninit.lock);
+    uninit.push_back(n);   
 
     // Success!
     return {SUCCESS, n};
 }
-*/
 
 // ReturnStr<u64> TaskDescriptor::init_stack()
 // {
@@ -73,7 +74,6 @@ ReturnStr<klib::shared_ptr<TaskDescriptor>> create_process(u16 ring)
 //     return {r, this->regs.e.rsp};
 // }
 
-/*
 void init_idle()
 {
     ReturnStr<klib::shared_ptr<TaskDescriptor>> i = create_process(0);
@@ -82,6 +82,16 @@ void init_idle()
         return;
     }
 
+    Auto_Lock_Scope lock(i.val->sched_lock);
+
+    sched_queue* idle_parent_queue = i.val->parent_queue;
+    if (idle_parent_queue != nullptr) {
+        Auto_Lock_Scope q_lock(idle_parent_queue->lock);
+
+        idle_parent_queue->erase(i.val);
+    }
+
+
     CPU_Info* cpu_str = get_cpu_struct();
     cpu_str->idle_task = i.val;
 
@@ -89,12 +99,10 @@ void init_idle()
     i.val->init_stack();
     i.val->regs.e.rip = (u64)&idle;
     i.val->type = TaskDescriptor::Type::Idle;
-    i.val->priority = TaskDescriptor::background_priority;
-    Ready_Queues::assign_quantum_on_priority(i.val.get());
 
-    i.val->queue_iterator->atomic_erase_from_parrent();
+    i.val->priority = idle_priority;
+    i.val->quantum = assign_quantum_on_priority(i.val->priority);
 }
-*/
 
 bool is_uninited(const klib::shared_ptr<const TaskDescriptor>& task)
 {

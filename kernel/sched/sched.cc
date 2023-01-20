@@ -12,6 +12,7 @@
 #include <interrupts/apic.hh>
 #include <cpus/cpus.hh>
 #include <lib/memory.hh>
+#include "task_switching.hh"
 
 sched_queue blocked;
 sched_queue uninit;
@@ -27,7 +28,9 @@ void init_scheduling()
     init_per_cpu();
     klib::shared_ptr<TaskDescriptor> current_task = klib::make_shared<TaskDescriptor>();
     get_cpu_struct()->current_task = current_task;
-    current_task->page_table = getCR3();
+
+    current_task->page_table = Page_Table::init_from_phys(getCR3());
+
     current_task->pid = pid++;    
     tasks_map.insert({current_task->pid, klib::move(current_task)});
 }
@@ -45,34 +48,52 @@ PID assign_pid()
    return pid_p; 
 }
 
-// ReturnStr<u64> block_task(const klib::shared_ptr<TaskDescriptor>& task, u64 mask)
-// {
-//     Auto_Lock_Scope scope_lock(task->sched_lock);
+ReturnStr<u64> block_task(const klib::shared_ptr<TaskDescriptor>& task, u64 mask)
+{
+    Auto_Lock_Scope scope_lock(task->sched_lock);
 
-//     // Check status
-//     if (task->status == PROCESS_BLOCKED) return {ERROR_ALREADY_BLOCKED, 0};
+    // Check status
+    if (task->status == PROCESS_BLOCKED) return {ERROR_ALREADY_BLOCKED, 0};
 
-//     // Change mask if not null
-//     if (mask != 0) task->unblock_mask = mask;
+    // Change mask if not null
+    if (mask != 0) task->unblock_mask = mask;
 
-//     u64 imm = task->check_unblock_immediately();
-//     if (imm != 0) return {SUCCESS, imm};
+    u64 imm = task->check_unblock_immediately();
+    if (imm != 0) return {SUCCESS, imm};
 
-//     // Task switch if it's a current process
-//     CPU_Info* cpu_str = get_cpu_struct();
-//     if (cpu_str->current_task == task) {
-//         task->quantum_ticks = apic_get_remaining_ticks();
-//         task->next_status = Process_Status::PROCESS_BLOCKED;
-//         find_new_process();
-//     } else {
-//         // Change status to blocked
-//         task->status = PROCESS_BLOCKED;
+    // Task switch if it's a current process
+    CPU_Info* cpu_str = get_cpu_struct();
+    if (cpu_str->current_task == task) {
+        task->status = Process_Status::PROCESS_BLOCKED;
+        task->parent_queue = &blocked;
 
-//         blocked.atomic_auto_push_back(task);
-//     }
+        {
+            Auto_Lock_Scope scope_l(blocked.lock);
+            blocked.push_back(task);
+        }
 
-//     return {SUCCESS, 0};
-// }
+        cpu_str->current_task = nullptr;
+
+        find_new_process();
+    } else {
+        // Change status to blocked
+        task->status = PROCESS_BLOCKED;
+
+        sched_queue* parent_queue = task->parent_queue;
+        if (parent_queue != nullptr) {
+            Auto_Lock_Scope scope_l(parent_queue->lock);
+            parent_queue->erase(task);
+        }
+
+        task->parent_queue = &blocked;
+        {
+            Auto_Lock_Scope scope_l(blocked.lock);
+            blocked.push_back(task);
+        }
+    }
+
+    return {SUCCESS, 0};
+}
 
 // void find_new_process()
 // {
@@ -189,3 +210,65 @@ u64 TaskDescriptor::check_unblock_immediately()
 //     find_new_process();
 // }
 
+klib::shared_ptr<TaskDescriptor> CPU_Info::atomic_pick_highest_priority()
+{
+    for (unsigned i = 0; i < sched_queues.size(); ++i) {
+        auto& queue = sched_queues[i];
+
+        Auto_Lock_Scope(queue.lock);
+
+        klib::shared_ptr<TaskDescriptor> task = queue.pop_front();
+        if (task != klib::shared_ptr<TaskDescriptor>(nullptr)) return task;
+    }
+
+    return nullptr;
+}
+
+void find_new_process()
+{
+    CPU_Info& cpu_str = *get_cpu_struct();
+
+    klib::shared_ptr<TaskDescriptor> next_task = cpu_str.atomic_pick_highest_priority();
+
+    if (next_task == klib::shared_ptr<TaskDescriptor>(nullptr)) next_task = cpu_str.idle_task;
+
+    switch_to_task(next_task);
+}
+
+klib::shared_ptr<TaskDescriptor> sched_queue::pop_front() noexcept
+{
+    klib::shared_ptr<TaskDescriptor> ptr = first;
+
+    if (first != klib::shared_ptr<TaskDescriptor>(nullptr))
+        erase(ptr);
+
+    return ptr;
+}
+
+void sched_queue::push_back(const klib::shared_ptr<TaskDescriptor>& desc) noexcept
+{
+    if (first == klib::shared_ptr<TaskDescriptor>(nullptr)) {
+        first = desc;
+        last = desc;
+    } else {
+        last->queue_next = desc;
+        last = desc;
+    }
+
+    desc->queue_next = nullptr;
+    desc->parent_queue = this;
+}
+
+void sched_queue::push_front(const klib::shared_ptr<TaskDescriptor>& desc) noexcept
+{
+    if (first == klib::shared_ptr<TaskDescriptor>(nullptr)) {
+        first = desc;
+        last = desc;
+        desc->queue_next = nullptr;
+    } else {
+        desc->queue_next = first;
+        first = desc;
+    }
+
+    desc->parent_queue = this;
+}

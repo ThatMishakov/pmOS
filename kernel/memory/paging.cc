@@ -196,56 +196,6 @@ kresult_t release_page_s(u64 virtual_address, u64 pid)
     return SUCCESS;
 }
 
-ReturnStr<u64> get_new_pml4()
-{
-    // Get a free page
-    ReturnStr<void*> l = palloc.alloc_page();
-    u64 p = (u64)l.val;
-
-    // Check for errors
-    if (l.result != SUCCESS) return {l.result, 0}; // Could not allocate a page
-
-    // Find a free spot and map this page
-    ReturnStr<u64> r = global_free_page.get_free_page();
-    if (r.result != SUCCESS) return {r.result, 0};
-    u64 free_page = r.val;
-
-    // Map the page
-    Page_Table_Argumments args;
-    args.user_access = 0;
-    args.writeable = 1;
-
-    // Map the newly created PML4 to some empty space
-    kresult_t d = map(p, free_page, args);
-    if (d != SUCCESS) { // Check the errors
-        palloc.free((void*)p);
-        return {d, 0};
-    }
-
-    // Clear it as memory contains rubbish and it will cause weird paging bugs on real machines
-    page_clear((void*)free_page);
-
-    // Copy the last entries into the new page table as they are shared across all processes
-    // and recurvicely assign the last page to itself
-    ((PML4*)free_page)->entries[509] = pml4(rec_map_index)->entries[509];
-    ((PML4*)free_page)->entries[510] = pml4(rec_map_index)->entries[510];
-
-    ((PML4*)free_page)->entries[511] = PML4E();
-    ((PML4*)free_page)->entries[511].present = 1;
-    ((PML4*)free_page)->entries[511].user_access = 0;
-    ((PML4*)free_page)->entries[511].page_ppn = p/KB(4);
-
-    // Unmap the page
-    // TODO: Error checking
-    invalidade_noerr(free_page);
-
-    // Return the free_page to the pool
-    // TODO: Error checking
-    global_free_page.release_free_page(free_page);
-
-    return {SUCCESS, p};
-}
-
 kresult_t invalidade(u64 virtual_addr)
 {
     u64 addr = virtual_addr;
@@ -804,4 +754,82 @@ kresult_t prepare_user_page(u64 page)
         return ERROR_NOT_IMPLEMENTED;
         break;
     }
+}
+
+Page_Table Page_Table::init_from_phys(u64 cr3)
+{
+    Page_Table t;
+
+    t.pml4_phys = (PML4 *)cr3;
+    t.shared_str = new shared_info();
+
+    return t;
+}
+
+Page_Table Page_Table::get_new_page_table()
+{
+    // Get a refcount structure
+    klib::unique_ptr<shared_info> refc = klib::make_unique<shared_info>();
+
+    // Get a free page
+    ReturnStr<void*> l = palloc.alloc_page();
+    u64 p = (u64)l.val;
+
+    // TODO: Throw exception
+    // Check for errors
+    if (l.result != SUCCESS) return Page_Table();
+
+    // Find a free spot and map this page
+    ReturnStr<u64> r = global_free_page.get_free_page();
+    u64 free_page = r.val;
+
+    // Map the page
+    Page_Table_Argumments args;
+    args.user_access = 0;
+    args.writeable = 1;
+
+    // Map the newly created PML4 to some empty space
+    // TODO: Exceptions
+    map(p, free_page, args);
+
+    // Clear it as memory contains rubbish and it will cause weird paging bugs on real machines
+    page_clear((void*)free_page);
+
+    // Copy the last entries into the new page table as they are shared across all processes
+    // and recurvicely assign the last page to itself
+    ((PML4*)free_page)->entries[509] = pml4(rec_map_index)->entries[509];
+    ((PML4*)free_page)->entries[510] = pml4(rec_map_index)->entries[510];
+
+    ((PML4*)free_page)->entries[511] = PML4E();
+    ((PML4*)free_page)->entries[511].present = 1;
+    ((PML4*)free_page)->entries[511].user_access = 0;
+    ((PML4*)free_page)->entries[511].page_ppn = p/KB(4);
+
+    // Unmap the page
+    // TODO: Error checking
+    invalidade_noerr(free_page);
+
+    // Return the free_page to the pool
+    // TODO: Error checking
+    global_free_page.release_free_page(free_page);
+
+    Page_Table t;
+
+    t.pml4_phys = (PML4*)p;
+    t.shared_str = refc.release();
+
+    return t;
+}
+
+Page_Table& Page_Table::operator=(Page_Table&& t) noexcept
+{
+    this->~Page_Table();
+
+    this->pml4_phys = t.pml4_phys;
+    this->shared_str = t.shared_str;
+
+    t.pml4_phys = nullptr;
+    t.shared_str = nullptr;
+    
+    return *this;
 }

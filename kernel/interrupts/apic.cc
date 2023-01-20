@@ -5,6 +5,7 @@
 #include "pic.hh"
 #include "pit.hh"
 #include <kernel/errors.h>
+#include <utils.hh>
 
 void* apic_mapped_addr = nullptr;
 

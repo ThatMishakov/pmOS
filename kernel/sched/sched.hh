@@ -8,6 +8,7 @@
 #include <lib/array.hh>
 #include <lib/memory.hh>
 #include <processes/tasks.hh>
+#include "defs.hh"
 
 // Checks the mask and unblocks the task if needed
 void unblock_if_needed(const klib::shared_ptr<TaskDescriptor>& p, u64 reason);
@@ -19,17 +20,18 @@ struct TaskDescriptor;
 
 class sched_queue {
 public:
-    void atomic_push_front(const klib::shared_ptr<TaskDescriptor>& desc) noexcept;
-    void atomic_push_back(const klib::shared_ptr<TaskDescriptor>& desc) noexcept;
+    void push_front(const klib::shared_ptr<TaskDescriptor>& desc) noexcept;
+    void push_back(const klib::shared_ptr<TaskDescriptor>& desc) noexcept;
+    void erase(const klib::shared_ptr<TaskDescriptor>& desc) noexcept;
 
     // Returns front task or null pointer if empty
     klib::shared_ptr<TaskDescriptor> pop_front() noexcept;
 
-    bool atomic_is_empty() noexcept;
+    bool is_empty() noexcept;
+    Spinlock lock;
 private:
     klib::shared_ptr<TaskDescriptor> first;
     klib::shared_ptr<TaskDescriptor> last;
-    Spinlock lock;
 };
 
 extern sched_queue blocked;
@@ -41,13 +43,17 @@ extern sched_queue dead;
 struct CPU_Info {
     CPU_Info* self = this; // 0
     Stack* kernel_stack = nullptr; // 8
-    klib::shared_ptr<TaskDescriptor> current_task = klib::shared_ptr<TaskDescriptor>(); // 24
-    klib::shared_ptr<TaskDescriptor> next_task = klib::shared_ptr<TaskDescriptor>(); // 40
+    klib::shared_ptr<TaskDescriptor> current_task = klib::shared_ptr<TaskDescriptor>(); // 16
 
     klib::shared_ptr<TaskDescriptor> idle_task = klib::shared_ptr<TaskDescriptor>();
 
-    klib::array<sched_queue, 16> sched_queues;
+    klib::array<sched_queue, sched_queues_levels> sched_queues;
+
+    klib::shared_ptr<TaskDescriptor> atomic_pick_highest_priority();
+    klib::shared_ptr<TaskDescriptor> atomic_pick_lowest_priority(unsigned max_priority = 2);
 };
+
+quantum_t assign_quantum_on_priority(priority_t);
 
 // static CPU_Info* const GSRELATIVE per_cpu = 0; // clang ignores GSRELATIVE for no apparent reason
 extern "C" CPU_Info* get_cpu_struct();

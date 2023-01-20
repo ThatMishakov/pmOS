@@ -3,6 +3,8 @@
 #include <lib/memory.hh>
 #include <interrupts/interrupts.hh>
 #include <messaging/messaging.hh>
+#include <memory/paging.hh>
+#include <sched/defs.hh>
 
 using PID = u64;
 
@@ -29,7 +31,7 @@ struct TaskDescriptor {
     // Basic process stuff
     Task_Regs regs;
     PID pid;
-    u64 page_table; // 192
+    Page_Table page_table; // 192
     u64 entry_mode = 0;
 
     TaskPermissions perm;
@@ -46,7 +48,8 @@ struct TaskDescriptor {
     klib::shared_ptr<TaskDescriptor> queue_next = nullptr;
     sched_queue *parent_queue = nullptr;
     Process_Status status;
-    u64 quantum = 0;
+    quantum_t quantum = 0;
+    priority_t priority = background_priority;
     Spinlock sched_lock;
 
     // Inits stack
