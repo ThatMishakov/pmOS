@@ -113,8 +113,6 @@ bool is_uninited(const klib::shared_ptr<const TaskDescriptor>& task)
 
 void init_task(const klib::shared_ptr<TaskDescriptor>& task)
 {
-    Auto_Lock_Scope lock(task->sched_lock);
-
     task->parent_queue->erase(task);
     task->parent_queue = nullptr;
 
@@ -134,14 +132,6 @@ void kill(const klib::shared_ptr<TaskDescriptor>& p) // TODO: UNIX Signals
 {
     Auto_Lock_Scope scope_lock(p->sched_lock);
 
-    // Task switch if it's a current process
-    CPU_Info* cpu_str = get_cpu_struct();
-    if (cpu_str->current_task == p) {
-        cpu_str->current_task = nullptr;
-
-        find_new_process();
-    }
-
     sched_queue* task_queue = p->parent_queue;
     if (task_queue != nullptr) {
         Auto_Lock_Scope queue_lock(task_queue->lock);
@@ -150,9 +140,17 @@ void kill(const klib::shared_ptr<TaskDescriptor>& p) // TODO: UNIX Signals
         p->parent_queue = nullptr;
     }
 
+    // Task switch if it's a current process
+    CPU_Info* cpu_str = get_cpu_struct();
+    if (cpu_str->current_task == p) {
+        find_new_process();
+    }
+
     p->status = PROCESS_DEAD;
     p->parent_queue = &dead_queue;
 
-    Auto_Lock_Scope queue_lock(dead_queue.lock);
-    dead_queue.push_back(p);
+    {
+        Auto_Lock_Scope queue_lock(dead_queue.lock);
+        dead_queue.push_back(p);
+    }
 }

@@ -13,14 +13,22 @@
 #include <interrupts/apic.hh>
 #include <cpus/cpus.hh>
 #include <interrupts/pit.hh>
+#include <sched/sched.hh>
 
-extern "C" ReturnStr<u64> syscall_handler(u64 call_n, u64 arg1, u64 arg2, u64 arg3, u64 arg4, u64 arg5)
+extern "C" ReturnStr<u64> syscall_handler()
 {
+    klib::shared_ptr<TaskDescriptor> task = get_cpu_struct()->current_task;
+    u64 call_n = task->regs.scratch_r.rdi;
+    u64 arg1 = task->regs.scratch_r.rsi;
+    u64 arg2 = task->regs.scratch_r.rdx;
+    u64 arg3 = task->regs.scratch_r.rcx;
+    u64 arg4 = task->regs.scratch_r.r8;
+    u64 arg5 = task->regs.scratch_r.r9;
+
     ReturnStr<u64> r = {};
     // TODO: check permissions
 
-    klib::shared_ptr<TaskDescriptor> task = get_cpu_struct()->current_task;
-    //t_print_bochs("Debug: syscall %h pid %h\n", call_n, get_cpu_struct()->current_task->pid);
+    //t_print_bochs("Debug: syscall %h pid %h", call_n, get_cpu_struct()->current_task->pid);
     if (task->attr.debug_syscalls) {
         t_print("Debug: syscall %h pid %h\n", call_n, get_cpu_struct()->current_task->pid);
     }
@@ -103,7 +111,8 @@ extern "C" ReturnStr<u64> syscall_handler(u64 call_n, u64 arg1, u64 arg2, u64 ar
         r.result = ERROR_NOT_SUPPORTED;
         break;
     }
-    
+    //t_print_bochs(" -> result %h\n", r.result);
+
     task->regs.scratch_r.rax = r.result;
     task->regs.scratch_r.rdx = r.val;
     
@@ -185,8 +194,6 @@ kresult_t syscall_map_into_range(u64 arg1, u64 arg2, u64 arg3, u64 arg4, u64 arg
     pta.writeable = !!(arg5&FLAG_RW);
     pta.execution_disabled = !!(arg5&FLAG_NOEXECUTE);
 
-    //t_print_bochs("Debug: syscall_map_into_range() pid %i page_start %h to_addr %h nb_pages %h flags %h\n", pid, page_start, to_addr, nb_pages, arg5);
-
     // TODO: Check permissions
 
     // Check if legal address
@@ -241,7 +248,6 @@ kresult_t syscall_share_with_range(u64 pid, u64 page_start, u64 to_addr, u64 nb_
     return r;
 }
 
-/*
 kresult_t syscall_get_page_multi(u64 virtual_addr, u64 nb_pages)
 {
     // Check allignment to 4096K (page size)
@@ -258,7 +264,7 @@ kresult_t syscall_get_page_multi(u64 virtual_addr, u64 nb_pages)
     u64 result = SUCCESS;
     u64 i = 0;
 
-    Auto_Lock_Scope scope_lock_paging(get_cpu_struct()->current_task->page_table_lock);
+    Auto_Lock_Scope scope_lock_paging(get_cpu_struct()->current_task->page_table.shared_str->lock);
 
     for (; i < nb_pages and result == SUCCESS; ++i)
         result = alloc_page_lazy(virtual_addr + i*KB(4), arg, 0);
@@ -271,9 +277,7 @@ kresult_t syscall_get_page_multi(u64 virtual_addr, u64 nb_pages)
     // Return the result (success or failure)
     return result;
 }
-*/
 
-/*
 kresult_t syscall_release_page_multi(u64 virtual_addr, u64 nb_pages)
 {
     // Check allignment to 4096K (page size)
@@ -282,7 +286,7 @@ kresult_t syscall_release_page_multi(u64 virtual_addr, u64 nb_pages)
     // Check that program is not hijacking kernel space
     if (virtual_addr >= KERNEL_ADDR_SPACE or (virtual_addr + nb_pages*KB(4)) > KERNEL_ADDR_SPACE or (virtual_addr + nb_pages*KB(4) < virtual_addr)) return ERROR_OUT_OF_RANGE;
 
-    Auto_Lock_Scope scope_lock_paging(get_cpu_struct()->current_task->page_table_lock);
+    Auto_Lock_Scope scope_lock_paging(get_cpu_struct()->current_task->page_table.get_lock());
 
     // Check pages
     for (u64 i = 0; i < nb_pages; ++i) {
@@ -302,7 +306,6 @@ kresult_t syscall_release_page_multi(u64 virtual_addr, u64 nb_pages)
     // Return the result (success or failure)
     return r;
 }
-*/
 
 kresult_t syscall_start_process(u64 pid, u64 start, u64 arg1, u64 arg2, u64 arg3)
 {
@@ -374,7 +377,6 @@ kresult_t syscall_exit(u64 arg1, u64 arg2)
     return SUCCESS;
 }
 
-/*
 kresult_t syscall_map_phys(u64 arg1, u64 arg2, u64 arg3, u64 arg4)
 {
     u64 virt = arg1;
@@ -400,7 +402,7 @@ kresult_t syscall_map_phys(u64 arg1, u64 arg2, u64 arg3, u64 arg4)
 
     // TODO: Check if physical address is ok
 
-    Auto_Lock_Scope paging_lock_scope(get_cpu_struct()->current_task->page_table_lock);
+    Auto_Lock_Scope paging_lock_scope(get_cpu_struct()->current_task->page_table.shared_str->lock);
 
     u64 i = 0;
     kresult_t r = SUCCESS;
@@ -418,7 +420,6 @@ kresult_t syscall_map_phys(u64 arg1, u64 arg2, u64 arg3, u64 arg4)
 
     return r;
 }
-*/
 
 kresult_t syscall_get_first_message(u64 buff, u64 args)
 {
@@ -480,7 +481,6 @@ kresult_t syscall_send_message_task(u64 pid, u64 channel, u64 size, u64 message)
     return result;
 }
 
-/*
 kresult_t syscall_send_message_port(u64 port, size_t size, u64 message)
 {
     // TODO: Check permissions
@@ -491,9 +491,8 @@ kresult_t syscall_send_message_port(u64 port, size_t size, u64 message)
 
     return result;
 }
-*/
 
-/*
+
 kresult_t syscall_set_port(u64 pid, u64 port, u64 dest_pid, u64 dest_chan)
 {
     // TODO: Check permissions
@@ -510,7 +509,6 @@ kresult_t syscall_set_port(u64 pid, u64 port, u64 dest_pid, u64 dest_chan)
 
     return result;
 }
-*/
 
 kresult_t syscall_set_port_kernel(u64 port, u64 dest_pid, u64 dest_chan)
 {
@@ -605,12 +603,9 @@ kresult_t syscall_set_attribute(u64 pid, u64 attribute, u64 value)
     return result;
 }
 
-/*
 ReturnStr<u64> syscall_is_page_allocated(u64 virtual_addr)
 {
     const klib::shared_ptr<TaskDescriptor>& current_task = get_cpu_struct()->current_task;
-
-    Auto_Lock_Scope lock(current_task->page_table_lock);
 
     // Check allignment to 4096K (page size)
     if (virtual_addr & 0xfff) return {ERROR_UNALLIGNED, 0};
@@ -618,12 +613,12 @@ ReturnStr<u64> syscall_is_page_allocated(u64 virtual_addr)
     // Check that program is not hijacking kernel space
     if (virtual_addr >= KERNEL_ADDR_SPACE) return {ERROR_OUT_OF_RANGE, 0};
 
+    Auto_Lock_Scope lock(current_task->page_table.shared_str->lock);
     Page_Types type = page_type(virtual_addr);
     bool is_allocated = type != Page_Types::UNALLOCATED and type != Page_Types::UNKNOWN;
 
     return {SUCCESS, is_allocated};
 }
-*/
 
 ReturnStr<u64> syscall_configure_system(u64 type, u64 arg1, u64 arg2)
 {

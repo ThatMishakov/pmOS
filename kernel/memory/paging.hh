@@ -49,7 +49,12 @@ struct Page_Table {
 
     bool operator==(const Page_Table& p)
     {
-        return pml4_phys != p.pml4_phys;
+        return pml4_phys == p.pml4_phys;
+    }
+
+    constexpr Spinlock& get_lock()
+    {
+        return shared_str->lock;
     }
 };
 

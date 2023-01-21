@@ -1,35 +1,21 @@
 /* ------------------------------------------- MACROS --------------------------------------------- */
-
-    .macro save_scratch
-    pushq %rax
-    movq %gs:16, %rax
-
-    movq %rdi, 0(%rax)
-    movq %rsi, 8(%rax)
-    movq %rdx, 16(%rax)
-    movq %rcx, 24(%rax)
-    movq %r8, 32(%rax)
-    movq %r9, 40(%rax)
-    popq 48(%rax)
-    movq %r10, 56(%rax)
-    movq %r11, 64(%rax)
-    .endm
-
-    .macro restore_scratch
-    movq %gs:16, %rax
-    movq 0(%rax), %rdi
-    movq 8(%rax), %rsi
-    movq 16(%rax), %rdx
-    movq 24(%rax), %rcx
-    movq 32(%rax), %r8
-    movq 40(%rax), %r9
-    movq 56(%rax), %r10
-    movq 64(%rax), %r11
-    movq 48(%rax), %rax
-    .endm
-
     .macro save_context
-    movq       %gs:16, %r11
+    pushq %r11
+    movq %gs:16, %r11
+
+    movq %rdi, 0(%r11)
+    movq %rsi, 8(%r11)
+    movq %rdx, 16(%r11)
+    movq %rcx, 24(%r11)
+    movq %r8, 32(%r11)
+    movq %r9, 40(%r11)
+    movq %rax, 48(%r11)
+    movq %r10, 56(%r11)
+    popq 64(%r11)
+
+    popq       192(%r11)
+    popq       184(%r11)
+
     popq       72(%r11)
     popq       80(%r11)
     popq       88(%r11)
@@ -41,15 +27,16 @@
     movq %r13, 136(%r11)
     movq %r14, 144(%r11)
     movq %r15, 152(%r11)
+
     movl $0xC0000100, %ecx
     rdmsr
     movl %eax, 160(%r11)
     movl %edx, 164(%r11)
+
     movl $0xC0000102, %ecx
     rdmsr
     movl %eax, 168(%r11)
     movl %edx, 172(%r11)
-    movq $0,   176(%r11)
     .endm
 
     .macro restore_context
@@ -65,14 +52,26 @@
     movq       136(%r11), %r13
     movq       144(%r11), %r14
     movq       152(%r11), %r15
+
     movl $0xC0000100, %ecx
     movl       160(%r11), %eax
     movl       164(%r11), %edx
     wrmsr
+
     movl $0xC0000102, %ecx
     movl       168(%r11), %eax
     movl       172(%r11), %edx
     wrmsr
+
+    movq 0(%r11), %rdi
+    movq 8(%r11), %rsi
+    movq 16(%r11), %rdx
+    movq 24(%r11), %rcx
+    movq 32(%r11), %r8
+    movq 40(%r11), %r9
+    movq 48(%r11), %rax
+    movq 56(%r11), %r10
+    movq 64(%r11), %r11
     .endm
 
     .altmacro
@@ -210,30 +209,24 @@ ints_handler:
 	je 1f
 	swapgs
 1:
-    save_scratch
     save_context
     movq %gs:16, %rax
-    movq $1, 200(%rax)
+    movq $0,   176(%rax) // Entry type
 
-    cmpq $0xCA, 0(%rsp) 
+    movq $0, %rbp
+    cmpq $0xCA, 192(%rax) 
     jne not_syscall
 
-    # TODO
-    addq $16, %rsp
-    pushq %rsp
     call syscall_handler
-    addq $8, %rsp
+
     jmp end
 not_syscall:
-    popq %rdi
-    popq %rsi
-    leaq (%rsp), %rdx
     call interrupt_handler
 end:
+
     .globl start_first_process
 start_first_process:
     restore_context
-    restore_scratch
 
     cmpw $0x08, 0x8(%rsp)
 	je 1f

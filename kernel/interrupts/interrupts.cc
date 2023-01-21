@@ -56,9 +56,15 @@ void programmable_interrupt(u32 intno)
     smart_eoi(intno);
 }
 
-extern "C" void interrupt_handler(u64 intno, u64 err, Interrupt_Stackframe* int_s)
+extern "C" void interrupt_handler()
 {
-    //t_print_bochs("Debug: int %h\n", intno);
+    klib::shared_ptr<TaskDescriptor> t = get_cpu_struct()->current_task;
+    u64 intno = t->regs.intno;
+    u64 err = t->regs.int_err;
+    Interrupt_Stackframe* int_s = &t->regs.e;
+
+    //t_print_bochs("Int %h error %h pid %h\n", intno, err, t->pid);
+
     if (intno < 32)
     switch (intno) {
         case 0x0: 

@@ -73,8 +73,6 @@ ReturnStr<u64> block_task(const klib::shared_ptr<TaskDescriptor>& task, u64 mask
             blocked.push_back(task);
         }
 
-        cpu_str->current_task = nullptr;
-
         find_new_process();
     } else {
         // Change status to blocked
@@ -245,7 +243,8 @@ void find_new_process()
 
     klib::shared_ptr<TaskDescriptor> next_task = cpu_str.atomic_pick_highest_priority();
 
-    if (next_task == klib::shared_ptr<TaskDescriptor>(nullptr)) next_task = cpu_str.idle_task;
+    if (not next_task)
+        next_task = cpu_str.idle_task;
 
     switch_to_task(next_task);
 }

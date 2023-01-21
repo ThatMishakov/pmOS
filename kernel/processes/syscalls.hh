@@ -8,7 +8,7 @@
 //#pragma GCC diagnostic push
 //#pragma GCC diagnostic ignored "-Wreturn-type-c-linkage"
 
-extern "C" ReturnStr<u64> syscall_handler(u64 arg1, u64 arg2, u64 arg3, u64 arg4, u64 arg5, u64 arg6);
+extern "C" ReturnStr<u64> syscall_handler();
 
 //#pragma GCC diagnostic pop
 

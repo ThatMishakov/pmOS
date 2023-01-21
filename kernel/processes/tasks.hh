@@ -41,6 +41,7 @@ struct TaskDescriptor {
 
     // Messaging
     Message_storage messages;
+    Ports_storage ports;
     Spinlock messaging_lock;
     u64 unblock_mask = ~0;
 
