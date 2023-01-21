@@ -1,6 +1,7 @@
 #include "tasks.hh"
 #include "kernel/errors.h"
 #include <sched/sched.hh>
+#include <sched/task_switching.hh>
 #include "idle.hh"
 #include <sched/defs.hh>
 
@@ -46,33 +47,35 @@ ReturnStr<klib::shared_ptr<TaskDescriptor>> create_process(u16 ring)
     return {SUCCESS, n};
 }
 
-// ReturnStr<u64> TaskDescriptor::init_stack()
-// {
-//     // Switch to the new pml4
-//     u64 current_cr3 = getCR3();
-//     setCR3(this->page_table);
+ReturnStr<u64> TaskDescriptor::init_stack()
+{
+    // Switch to the new pml4
+    u64 current_cr3 = getCR3();
 
-//     kresult_t r;
-//     // Prealloc a page for the stack
-//     u64 stack_end = (u64)KERNEL_ADDR_SPACE; //&_free_to_use;
-//     u64 stack_page_start = stack_end - KB(4);
+    Auto_Lock_Scope page_lock(this->page_table.shared_str->lock);
+    setCR3(this->page_table.get_cr3());
 
-//     Page_Table_Argumments arg;
-//     arg.writeable = 1;
-//     arg.execution_disabled = 1;
-//     arg.global = 0;
-//     arg.user_access = 1;
-//     r = alloc_page_lazy(stack_page_start, arg, LAZY_FLAG_GROW_DOWN);  // TODO: This crashes real machines
+    kresult_t r;
+    // Prealloc a page for the stack
+    u64 stack_end = (u64)KERNEL_ADDR_SPACE; //&_free_to_use;
+    u64 stack_page_start = stack_end - KB(4);
 
-//     if (r != SUCCESS) goto fail;
+    Page_Table_Argumments arg;
+    arg.writeable = 1;
+    arg.execution_disabled = 1;
+    arg.global = 0;
+    arg.user_access = 1;
+    r = alloc_page_lazy(stack_page_start, arg, LAZY_FLAG_GROW_DOWN);  // TODO: This crashes real machines
 
-//     // Set new rsp
-//     this->regs.e.rsp = stack_end;
-// fail:
-//     // Load old page table back
-//     setCR3(current_cr3);
-//     return {r, this->regs.e.rsp};
-// }
+    if (r != SUCCESS) goto fail;
+
+    // Set new rsp
+    this->regs.e.rsp = stack_end;
+fail:
+    // Load old page table back
+    setCR3(current_cr3);
+    return {r, this->regs.e.rsp};
+}
 
 void init_idle()
 {
@@ -101,7 +104,6 @@ void init_idle()
     i.val->type = TaskDescriptor::Type::Idle;
 
     i.val->priority = idle_priority;
-    i.val->quantum = assign_quantum_on_priority(i.val->priority);
 }
 
 bool is_uninited(const klib::shared_ptr<const TaskDescriptor>& task)
@@ -109,38 +111,48 @@ bool is_uninited(const klib::shared_ptr<const TaskDescriptor>& task)
     return task->status == PROCESS_UNINIT;
 }
 
-// void init_task(const klib::shared_ptr<TaskDescriptor>& task)
-// {
-//     --- TODO ---
-//     Ready_Queues::assign_quantum_on_priority(task.get());
+void init_task(const klib::shared_ptr<TaskDescriptor>& task)
+{
+    Auto_Lock_Scope lock(task->sched_lock);
 
-//     CPU_Info* cpu_str = get_cpu_struct();
-//     push_ready(task);
+    task->parent_queue->erase(task);
+    task->parent_queue = nullptr;
 
-//     if (cpu_str->current_task->quantum_ticks == 0)
-//         evict(cpu_str->current_task);
-// }
+    klib::shared_ptr<TaskDescriptor> current_task = get_cpu_struct()->current_task;
+    if (current_task->priority > task->priority) {
+        Auto_Lock_Scope scope_l(current_task->sched_lock);
 
-// void kill(const klib::shared_ptr<TaskDescriptor>& p) // TODO: UNIX Signals
-// {
-//     Auto_Lock_Scope scope_lock(p->sched_lock);
+        switch_to_task(task);
 
-//     // Add to dead queue
-//     dead.atomic_auto_push_back(p);
+        push_ready(current_task);
+    } else {
+        push_ready(task);
+    }
+}
 
-//     // Release user pages
-//     u64 ptable = p->page_table;
-//     free_user_pages(ptable, p->pid);
+void kill(const klib::shared_ptr<TaskDescriptor>& p) // TODO: UNIX Signals
+{
+    Auto_Lock_Scope scope_lock(p->sched_lock);
 
-//     /* --- TODO: This can be simplified now that I use shared_ptr ---*/
+    // Task switch if it's a current process
+    CPU_Info* cpu_str = get_cpu_struct();
+    if (cpu_str->current_task == p) {
+        cpu_str->current_task = nullptr;
 
-//     // Task switch if it's a current process
-//     CPU_Info* cpu_str = get_cpu_struct();
-//     if (cpu_str->current_task == p) {
-//         cpu_str->current_task = nullptr;
-//         cpu_str->release_old_cr3 = 1;
-//         find_new_process();
-//     } else {
-//         release_cr3(ptable);
-//     }
-// }
+        find_new_process();
+    }
+
+    sched_queue* task_queue = p->parent_queue;
+    if (task_queue != nullptr) {
+        Auto_Lock_Scope queue_lock(task_queue->lock);
+
+        task_queue->erase(p);
+        p->parent_queue = nullptr;
+    }
+
+    p->status = PROCESS_DEAD;
+    p->parent_queue = &dead_queue;
+
+    Auto_Lock_Scope queue_lock(dead_queue.lock);
+    dead_queue.push_back(p);
+}

@@ -11,6 +11,7 @@
 #include "shared_mem.hh"
 #include <lib/memory.hh>
 #include <processes/tasks.hh>
+#include <sched/sched.hh>
 
 bool nx_bit_enabled = false;
 
@@ -168,7 +169,7 @@ void print_pt(u64 addr)
     t_print("Paging indexes %h\'%h\'%h\'%h\'%h\n", upper, pml4e&0777, pdpe&0777, pd_e&0777, ptable_entry&0777);
 }
 
-kresult_t release_page_s(u64 virtual_address, u64 pid)
+kresult_t release_page_s(u64 virtual_address, u64 page_table)
 {
     PTE& pte = *get_pte(virtual_address, rec_map_index);
     kresult_t p;
@@ -184,7 +185,7 @@ kresult_t release_page_s(u64 virtual_address, u64 pid)
         break;
     case PAGE_SHARED:
     case PAGE_COW:
-        p = release_shared(pte.page_ppn << 12, pid);
+        p = release_shared(pte.page_ppn << 12, page_table);
         if (p == SUCCESS)
             invalidade(virtual_address);
         return p;
@@ -362,10 +363,10 @@ bool is_allocated(u64 page)
     return p == Page_Types::NORMAL or p == Page_Types::LAZY_ALLOC;
 }
 
-/*
+
 kresult_t atomic_transfer_pages(const klib::shared_ptr<TaskDescriptor>& from, const klib::shared_ptr<TaskDescriptor> t, u64 page_start, u64 to_address, u64 nb_pages, Page_Table_Argumments pta)
 {
-    Auto_Lock_Scope_Double scope_lock(from->page_table_lock, t->page_table_lock);
+    Auto_Lock_Scope_Double scope_lock(from->page_table.shared_str->lock, t->page_table.shared_str->lock);
 
     // Check that pages are allocated
     for (u64 i = 0; i < nb_pages; ++i) {
@@ -384,7 +385,7 @@ kresult_t atomic_transfer_pages(const klib::shared_ptr<TaskDescriptor>& from, co
     u64 cr3 = getCR3();
 
     // Switch into new process' memory
-    setCR3(t->page_table);
+    setCR3(t->page_table.get_cr3());
 
     // Map memory
     kresult_t r = SUCCESS;
@@ -437,24 +438,22 @@ kresult_t atomic_transfer_pages(const klib::shared_ptr<TaskDescriptor>& from, co
 
     return r;
 }
-*/
 
-/*
+
 kresult_t atomic_share_pages(const klib::shared_ptr<TaskDescriptor>& t, u64 page_start, u64 to_addr, u64 nb_pages, Page_Table_Argumments pta)
 {
     klib::shared_ptr<TaskDescriptor> current_task = get_cpu_struct()->current_task;
-    u64 current_pid = current_task->pid;
 
     klib::vector<klib::pair<PTE, bool>> l;
 
     kresult_t p = SUCCESS;
     // Share pages
 
-    Auto_Lock_Scope_Double scope_lock(t->page_table_lock, current_task->page_table_lock);
+    Auto_Lock_Scope_Double scope_lock(t->page_table.shared_str->lock, current_task->page_table.shared_str->lock);
 
     u64 z = 0;
     for (; z < nb_pages and p == SUCCESS; ++z) {
-        ReturnStr<klib::pair<PTE,bool>> r = share_page(page_start + z*KB(4), current_pid);
+        ReturnStr<klib::pair<PTE,bool>> r = share_page(page_start + z*KB(4), current_task->page_table.get_cr3());
         p = r.result;
         if (p == SUCCESS) l.push_back(r.val);
     }
@@ -467,7 +466,7 @@ kresult_t atomic_share_pages(const klib::shared_ptr<TaskDescriptor>& t, u64 page
     u64 cr3 = getCR3();
 
     // Switch into new process' memory
-    setCR3(t->page_table);
+    setCR3(t->page_table.get_cr3());
 
     pta.extra = PAGE_SHARED;
 
@@ -497,14 +496,13 @@ fail:
         u64 size = l.size();
         for (u64 k = 0; k < size; ++k)
             if (l[k].second)
-                unshare_page(page_start + k*KB(4), current_pid);
+                unshare_page(page_start + k*KB(4), current_task->page_table.get_cr3());
     }
 
     return p;
 }
-*/
 
-ReturnStr<klib::pair<PTE, bool>> share_page(u64 virtual_addr, u64 pid)
+ReturnStr<klib::pair<PTE, bool>> share_page(u64 virtual_addr, u64 owner_page_table)
 {
     kresult_t r = ERROR_GENERAL;
     klib::pair<PTE, bool> k = {PTE(), false};
@@ -530,7 +528,7 @@ ReturnStr<klib::pair<PTE, bool>> share_page(u64 virtual_addr, u64 pid)
     case Page_Types::NORMAL:
     {
         PTE* pte = get_pte(virtual_addr, rec_map_index);
-        r = register_shared(pte->page_ppn << 12, pid);
+        r = register_shared(pte->page_ppn << 12, owner_page_table);
         if (r != SUCCESS)
             break;
         pte->avl = PAGE_SHARED;
@@ -660,18 +658,13 @@ void invalidade_noerr(u64 virtual_addr)
     invlpg(virtual_addr);
 }
 
-extern "C" void release_cr3(u64 cr3)
-{
-    palloc.free((void*)cr3);
-}
-
-void free_pt(u64 page_start, u64 pid)
+void free_pt(u64 page_start, u64 page_table)
 {
     for (u64 i = 0; i < 512; ++i) {
         u64 addr = page_start + (i << 12);
         PTE* p = get_pte(addr, rec_map_index);
         if (p->present) {
-            kresult_t result = release_page_s(addr, pid);
+            kresult_t result = release_page_s(addr, page_table);
             if (result != SUCCESS) {
                 t_print_bochs("Error %i freeing page %h type %h!\n", result, addr, p->avl);
                 print_pt(addr);
@@ -681,7 +674,7 @@ void free_pt(u64 page_start, u64 pid)
     }
 }
 
-void free_pd(u64 pd_start, u64 pid)
+void free_pd(u64 pd_start, u64 page_table)
 {
     for (u64 i = 0; i < 512; ++i) {
         u64 addr = pd_start + (i << (12 + 9));
@@ -693,7 +686,7 @@ void free_pd(u64 pd_start, u64 pid)
             switch (p->avl)
             {
             case NORMAL:
-                free_pt(addr, pid);
+                free_pt(addr, page_table);
                 break;
             default:
                 t_print("Error freeing page: Unknown page type!\n");
@@ -704,19 +697,19 @@ void free_pd(u64 pd_start, u64 pid)
     }
 }
 
-void free_pdpt(u64 pdp_start, u64 pid)
+void free_pdpt(u64 pdp_start, u64 page_table)
 {
     for (u64 i = 0; i < 512; ++i) {
         u64 addr = pdp_start + (i << (12 + 9 + 9));
         PDPTE* p = get_pdpe(addr, rec_map_index);
         if (p->present) {
-            free_pd(addr, pid);
+            free_pd(addr, page_table);
             palloc.free((void*)(p->page_ppn << 12));
         }
     }
 }
 
-void free_user_pages(u64 page_table, u64 pid)
+void free_user_pages(u64 page_table)
 {
     u64 old_cr3 = getCR3();
 
@@ -726,7 +719,7 @@ void free_user_pages(u64 page_table, u64 pid)
     for (u64 i = 0; i < KERNEL_ADDR_SPACE; i += (0x01ULL << (12 + 9 + 9 + 9))) {
         PML4E* p = get_pml4e(i, rec_map_index);
         if (p->present) {
-            free_pdpt(i, pid);
+            free_pdpt(i, page_table);
             palloc.free((void*)(p->page_ppn << 12));
         }
     }
@@ -832,4 +825,24 @@ Page_Table& Page_Table::operator=(Page_Table&& t) noexcept
     t.shared_str = nullptr;
     
     return *this;
+}
+
+Page_Table::Page_Table(Page_Table&& n): pml4_phys(n.pml4_phys), shared_str(n.shared_str)
+{
+    n.pml4_phys = nullptr;
+    n.shared_str = nullptr;
+}
+
+Page_Table::~Page_Table()
+{
+    if (shared_str != nullptr) {
+        u64 new_refcount = __atomic_add_fetch(&(shared_str->refcount), -1, 0);
+
+        if (new_refcount == 0) {
+            delete shared_str;
+
+            free_user_pages((u64)pml4_phys);
+            palloc.free((void*)pml4_phys);
+        }
+    }
 }

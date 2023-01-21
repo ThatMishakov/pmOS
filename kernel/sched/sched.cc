@@ -13,10 +13,11 @@
 #include <cpus/cpus.hh>
 #include <lib/memory.hh>
 #include "task_switching.hh"
+#include "timers.hh"
 
 sched_queue blocked;
 sched_queue uninit;
-sched_queue dead;
+sched_queue dead_queue;
 
 Spinlock tasks_map_lock;
 sched_map tasks_map;
@@ -108,35 +109,46 @@ ReturnStr<u64> block_task(const klib::shared_ptr<TaskDescriptor>& task, u64 mask
 //     switch_to_task(t.second);
 // }
 
-// void switch_to_task(const klib::shared_ptr<TaskDescriptor>& task)
-// {
-//     // TODO: There is probably a race condition here
+void switch_to_task(const klib::shared_ptr<TaskDescriptor>& task)
+{
+    CPU_Info *c = get_cpu_struct();
+    if (c->current_task->page_table != task->page_table) {
+        setCR3(task->page_table.get_cr3());
+    }
 
-//     // Change task
-//     task->status = Process_Status::PROCESS_RUNNING_IN_SYSTEM;
-//     get_cpu_struct()->next_task = task;
-//     start_timer_ticks(task->quantum_ticks);
-// }
+    // Change task
+    task->status = Process_Status::PROCESS_RUNNING;
+    c->current_task = task;
 
-// void unblock_if_needed(const klib::shared_ptr<TaskDescriptor>& p, u64 reason)
-// {
-//     Auto_Lock_Scope scope_lock(p->sched_lock);
+    start_timer_ticks(calculate_timer_ticks(task));
+}
 
-//     if (p->status != PROCESS_BLOCKED) return;
+void unblock_if_needed(const klib::shared_ptr<TaskDescriptor>& p, u64 reason)
+{
+    Auto_Lock_Scope scope_lock(p->sched_lock);
+
+    if (p->status != PROCESS_BLOCKED) return;
     
-//     u64 mask = 0x01ULL << (reason - 1);
+    u64 mask = 0x01ULL << (reason - 1);
 
-//     if (mask & p->unblock_mask) {
-//         p->status = PROCESS_READY;
-//         p->regs.scratch_r.rdi = reason;
+    if (mask & p->unblock_mask) {
+        p->regs.scratch_r.rdi = reason;
 
-//         push_ready(p);
+        p->parent_queue->erase(p);
+        p->parent_queue = nullptr;
 
-//         klib::shared_ptr<TaskDescriptor> current = get_cpu_struct()->current_task;
-//         if (current->quantum_ticks == 0)
-//             evict(current);
-//     }
-// }
+        klib::shared_ptr<TaskDescriptor> current_task = get_cpu_struct()->current_task;
+        if (current_task->priority > p->priority) {
+            Auto_Lock_Scope scope_l(current_task->sched_lock);
+
+            switch_to_task(p);
+
+            push_ready(current_task);
+        } else {
+            push_ready(p);
+        }
+    }
+}
 
 u64 TaskDescriptor::check_unblock_immediately()
 {
@@ -147,55 +159,53 @@ u64 TaskDescriptor::check_unblock_immediately()
     return 0;
 }
 
-// void push_ready(const klib::shared_ptr<TaskDescriptor>& p)
-// {
-//     get_cpu_struct()->sched.queues.temp_ready.atomic_auto_push_back(p);
-// }
+void push_ready(const klib::shared_ptr<TaskDescriptor>& p)
+{
+    p->status = PROCESS_READY;
 
-// void sched_periodic()
-// {
-//     // TODO: Replace with more sophisticated algorithm. Will definitely need to be redone once we have multi-cpu support
+    priority_t priority = p->priority;
+    CPU_Info* cpu_str = get_cpu_struct();
 
-//     CPU_Info* c = get_cpu_struct(); 
+    if (priority < cpu_str->sched_queues.size()) {
+        sched_queue* queue = &cpu_str->sched_queues[priority];
+        p->parent_queue = queue;
 
-//     klib::shared_ptr<TaskDescriptor> current = c->current_task;
-//     klib::pair<bool, klib::shared_ptr<TaskDescriptor>> t = c->sched.queues.atomic_get_pop_first();
+        Auto_Lock_Scope lock(queue->lock);
+        queue->push_back(p);
+    } else {
+        p->parent_queue = nullptr;
+    }
+}
 
-//     if (t.first) {
-//         Ready_Queues::assign_quantum_on_priority(current.get());
-//         current->next_status = Process_Status::PROCESS_READY;
+void sched_periodic()
+{
+    // TODO: Replace with more sophisticated algorithm. Will definitely need to be redone once we have multi-cpu support
 
-//         switch_to_task(t.second);
-//     } else
-//         current->quantum_ticks = 0;
+    CPU_Info* c = get_cpu_struct(); 
 
-//     return;
-// }
+    klib::shared_ptr<TaskDescriptor> current = c->current_task;
+    klib::shared_ptr<TaskDescriptor> next = c->atomic_get_front_priority(current->priority);
 
-// void start_timer_ticks(u32 ticks)
-// {
-//     apic_one_shot_ticks(ticks);
-//     get_cpu_struct()->sched.timer_val = ticks;
-// }
+    if (next) {
+        Auto_Lock_Scope_Double lock(current->sched_lock, next->sched_lock);
 
-// void start_timer(u32 ms)
-// {
-//     u32 ticks = ticks_per_1_ms*ms;
-//     start_timer_ticks(ticks);
-// }
+        current->status = Process_Status::PROCESS_READY;
 
-// void start_scheduler()
-// {
-//     CPU_Info* s = get_cpu_struct();
-//     const klib::shared_ptr<TaskDescriptor>& t = s->current_task;
-//     Ready_Queues::assign_quantum_on_priority(t.get());
-//     start_timer_ticks(t.get()->quantum_ticks);
-// }
+        switch_to_task(next);
 
-// void Ready_Queues::assign_quantum_on_priority(TaskDescriptor* t)
-// {
-//     t->quantum_ticks = Ready_Queues::quantums[t->priority] * ticks_per_1_ms;
-// }
+        push_ready(current);
+    } else {
+        start_timer_ticks(calculate_timer_ticks(current));
+    }
+}
+
+void start_scheduler()
+{
+    CPU_Info* s = get_cpu_struct();
+    const klib::shared_ptr<TaskDescriptor>& t = s->current_task;
+
+    start_timer_ticks(calculate_timer_ticks(t));
+}
 
 // void evict(const klib::shared_ptr<TaskDescriptor>& current_task)
 // {
@@ -209,6 +219,11 @@ u64 TaskDescriptor::check_unblock_immediately()
 //     }
 //     find_new_process();
 // }
+
+u32 calculate_timer_ticks(const klib::shared_ptr<TaskDescriptor>& task)
+{
+    return assign_quantum_on_priority(task->priority)*ticks_per_1_ms;
+}
 
 klib::shared_ptr<TaskDescriptor> CPU_Info::atomic_pick_highest_priority()
 {
@@ -250,8 +265,10 @@ void sched_queue::push_back(const klib::shared_ptr<TaskDescriptor>& desc) noexce
     if (first == klib::shared_ptr<TaskDescriptor>(nullptr)) {
         first = desc;
         last = desc;
+        desc->queue_prev = nullptr;
     } else {
         last->queue_next = desc;
+        desc->queue_prev = last;
         last = desc;
     }
 
@@ -267,8 +284,52 @@ void sched_queue::push_front(const klib::shared_ptr<TaskDescriptor>& desc) noexc
         desc->queue_next = nullptr;
     } else {
         desc->queue_next = first;
+        first->queue_prev = desc;
         first = desc;
     }
 
+    desc->queue_prev = nullptr;
     desc->parent_queue = this;
+}
+
+void sched_queue::erase(const klib::shared_ptr<TaskDescriptor>& desc) noexcept
+{
+    if (desc->queue_prev) {
+        desc->queue_prev->queue_next = desc->queue_next;
+    } else {
+        first = desc->queue_next;
+    }
+
+    if (desc->queue_next) {
+        desc->queue_next->queue_prev = desc->queue_prev;
+    } else {
+        last = desc->queue_prev;
+    }
+
+    desc->queue_prev = nullptr;
+    desc->queue_next = nullptr;
+    desc->parent_queue = nullptr;
+}
+
+quantum_t assign_quantum_on_priority(priority_t priority)
+{
+    static const quantum_t quantums[16] = {50, 50, 20, 20, 10, 10, 10, 5, 5, 5, 5, 5, 5, 5, 5, 5};
+
+    if (priority < 16)
+        return quantums[priority];
+
+    return 0;
+}
+
+klib::shared_ptr<TaskDescriptor> CPU_Info::atomic_get_front_priority(priority_t priority)
+{
+    if (priority < sched_queues.size()) {
+        sched_queue& queue = sched_queues[priority];
+
+        Auto_Lock_Scope lock (queue.lock);
+
+        return queue.pop_front();
+    }
+
+    return nullptr;
 }

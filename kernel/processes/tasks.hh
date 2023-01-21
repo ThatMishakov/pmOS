@@ -32,7 +32,7 @@ struct TaskDescriptor {
     Task_Regs regs;
     PID pid;
     Page_Table page_table; // 192
-    u64 entry_mode = 0;
+    u64 entry_mode = 0; // 200
 
     TaskPermissions perm;
 
@@ -46,10 +46,10 @@ struct TaskDescriptor {
 
     // Scheduling info
     klib::shared_ptr<TaskDescriptor> queue_next = nullptr;
+    klib::shared_ptr<TaskDescriptor> queue_prev = nullptr;
     sched_queue *parent_queue = nullptr;
     Process_Status status;
-    quantum_t quantum = 0;
-    priority_t priority = background_priority;
+    priority_t priority = 8;
     Spinlock sched_lock;
 
     // Inits stack

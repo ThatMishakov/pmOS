@@ -36,7 +36,7 @@ private:
 
 extern sched_queue blocked;
 extern sched_queue uninit;
-extern sched_queue dead;
+extern sched_queue dead_queue;
 
 
 
@@ -49,11 +49,17 @@ struct CPU_Info {
 
     klib::array<sched_queue, sched_queues_levels> sched_queues;
 
+    u32 timer_val = 0;
+
     klib::shared_ptr<TaskDescriptor> atomic_pick_highest_priority();
+    klib::shared_ptr<TaskDescriptor> atomic_get_front_priority(priority_t);
     klib::shared_ptr<TaskDescriptor> atomic_pick_lowest_priority(unsigned max_priority = 2);
+
 };
 
 quantum_t assign_quantum_on_priority(priority_t);
+
+u32 calculate_timer_ticks(const klib::shared_ptr<TaskDescriptor>& task);
 
 // static CPU_Info* const GSRELATIVE per_cpu = 0; // clang ignores GSRELATIVE for no apparent reason
 extern "C" CPU_Info* get_cpu_struct();
@@ -79,5 +85,5 @@ void sched_periodic();
 // Starts the scheduler
 void start_scheduler();
 
-// Pushes current processos to the back of sheduling queues and finds a new one to execute
+// Pushes current processos to the back of sheduling queues
 void evict(const klib::shared_ptr<TaskDescriptor>&);

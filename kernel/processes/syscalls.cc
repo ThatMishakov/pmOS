@@ -14,101 +14,101 @@
 #include <cpus/cpus.hh>
 #include <interrupts/pit.hh>
 
-// extern "C" ReturnStr<u64> syscall_handler(u64 call_n, u64 arg1, u64 arg2, u64 arg3, u64 arg4, u64 arg5, Interrupt_Stackframe* current_frame)
-// {
-//     ReturnStr<u64> r = {};
-//     // TODO: check permissions
+extern "C" ReturnStr<u64> syscall_handler(u64 call_n, u64 arg1, u64 arg2, u64 arg3, u64 arg4, u64 arg5)
+{
+    ReturnStr<u64> r = {};
+    // TODO: check permissions
 
-//     klib::shared_ptr<TaskDescriptor> task = get_cpu_struct()->current_task;
-//     //t_print_bochs("Debug: syscall %h pid %h\n", call_n, get_cpu_struct()->current_task->pid);
-//     if (task->attr.debug_syscalls) {
-//         t_print("Debug: syscall %h pid %h\n", call_n, get_cpu_struct()->current_task->pid);
-//     }
+    klib::shared_ptr<TaskDescriptor> task = get_cpu_struct()->current_task;
+    //t_print_bochs("Debug: syscall %h pid %h\n", call_n, get_cpu_struct()->current_task->pid);
+    if (task->attr.debug_syscalls) {
+        t_print("Debug: syscall %h pid %h\n", call_n, get_cpu_struct()->current_task->pid);
+    }
 
-//     switch (call_n) {
-//     case SYSCALL_GET_PAGE:
-//         r.result = get_page(arg1);
-//         break;
-//     case SYSCALL_RELEASE_PAGE:
-//         r.result = release_page(arg1);
-//         break;
-//     case SYSCALL_GETPID:
-//         r = getpid();
-//         break;
-//     case SYSCALL_CREATE_PROCESS:
-//         r = syscall_create_process();
-//         break;
-//     case SYSCALL_MAP_INTO:
-//         r.result = syscall_map_into();
-//         break;
-//     case SYSCALL_BLOCK:
-//         r = syscall_block(arg1);
-//         break;
-//     case SYSCALL_MAP_INTO_RANGE:
-//         r.result = syscall_map_into_range(arg1, arg2, arg3, arg4, arg5);
-//         break;
-//     case SYSCALL_GET_PAGE_MULTI:
-//         r.result = syscall_get_page_multi(arg1, arg2);
-//         break;
-//     case SYSCALL_RELEASE_PAGE_MULTI:
-//         r.result = syscall_release_page_multi(arg1, arg2);
-//         break;
-//     case SYSCALL_START_PROCESS:
-//         r.result = syscall_start_process(arg1, arg2, arg3, arg4, arg5);
-//         break;
-//     case SYSCALL_EXIT:
-//         r.result = syscall_exit(arg1, arg2);
-//         break;
-//     case SYSCALL_MAP_PHYS:
-//         r.result = syscall_map_phys(arg1, arg2, arg3, arg4);
-//         break;
-//     case SYSCALL_GET_MSG_INFO:
-//         r.result = syscall_get_message_info(arg1);
-//         break;
-//     case SYSCALL_GET_MESSAGE:
-//         r.result = syscall_get_first_message(arg1, arg2);
-//         break;
-//     case SYSCALL_SEND_MSG_TASK:
-//         r.result = syscall_send_message_task(arg1, arg2, arg3, arg4);
-//         break;
-//     case SYSCALL_SEND_MSG_PORT:
-//         r.result = syscall_send_message_port(arg1, arg2, arg3);
-//         break;
-//     case SYSCALL_SET_PORT:
-//         r.result = syscall_set_port(arg1, arg2, arg3, arg4);
-//         break;
-//     case SYSCALL_SET_PORT_KERNEL:
-//         r.result = syscall_set_port_kernel(arg1, arg2, arg3);
-//         break;
-//     case SYSCALL_SET_PORT_DEFAULT:
-//         r.result = syscall_set_port_default(arg1, arg2, arg3);
-//         break;
-//     case SYSCALL_SET_ATTR:
-//         r.result = syscall_set_attribute(arg1, arg2, arg3, current_frame);
-//         break;
-//     case SYSCALL_INIT_STACK:
-//         r = syscall_init_stack(arg1, arg2);
-//         break;
-//     case SYSCALL_SHARE_WITH_RANGE:
-//         r.result = syscall_share_with_range(arg1, arg2, arg3, arg4, arg5);
-//         break;
-//     case SYSCALL_IS_PAGE_ALLOCATED:
-//         r = syscall_is_page_allocated(arg1);
-//         break;
-//     case SYSCALL_CONFIGURE_SYSTEM:
-//         r = syscall_configure_system(arg1, arg2, arg3);
-//         break;
-//     default:
-//         // Not supported
-//         r.result = ERROR_NOT_SUPPORTED;
-//         break;
-//     }
+    switch (call_n) {
+    case SYSCALL_GET_PAGE:
+        r.result = get_page(arg1);
+        break;
+    case SYSCALL_RELEASE_PAGE:
+        r.result = release_page(arg1);
+        break;
+    case SYSCALL_GETPID:
+        r = getpid();
+        break;
+    case SYSCALL_CREATE_PROCESS:
+        r = syscall_create_process();
+        break;
+    case SYSCALL_MAP_INTO:
+        r.result = syscall_map_into();
+        break;
+    case SYSCALL_BLOCK:
+        r = syscall_block(arg1);
+        break;
+    case SYSCALL_MAP_INTO_RANGE:
+        r.result = syscall_map_into_range(arg1, arg2, arg3, arg4, arg5);
+        break;
+    case SYSCALL_GET_PAGE_MULTI:
+        r.result = syscall_get_page_multi(arg1, arg2);
+        break;
+    case SYSCALL_RELEASE_PAGE_MULTI:
+        r.result = syscall_release_page_multi(arg1, arg2);
+        break;
+    case SYSCALL_START_PROCESS:
+        r.result = syscall_start_process(arg1, arg2, arg3, arg4, arg5);
+        break;
+    case SYSCALL_EXIT:
+        r.result = syscall_exit(arg1, arg2);
+        break;
+    case SYSCALL_MAP_PHYS:
+        r.result = syscall_map_phys(arg1, arg2, arg3, arg4);
+        break;
+    case SYSCALL_GET_MSG_INFO:
+        r.result = syscall_get_message_info(arg1);
+        break;
+    case SYSCALL_GET_MESSAGE:
+        r.result = syscall_get_first_message(arg1, arg2);
+        break;
+    case SYSCALL_SEND_MSG_TASK:
+        r.result = syscall_send_message_task(arg1, arg2, arg3, arg4);
+        break;
+    case SYSCALL_SEND_MSG_PORT:
+        r.result = syscall_send_message_port(arg1, arg2, arg3);
+        break;
+    case SYSCALL_SET_PORT:
+        r.result = syscall_set_port(arg1, arg2, arg3, arg4);
+        break;
+    case SYSCALL_SET_PORT_KERNEL:
+        r.result = syscall_set_port_kernel(arg1, arg2, arg3);
+        break;
+    case SYSCALL_SET_PORT_DEFAULT:
+        r.result = syscall_set_port_default(arg1, arg2, arg3);
+        break;
+    case SYSCALL_SET_ATTR:
+        r.result = syscall_set_attribute(arg1, arg2, arg3);
+        break;
+    case SYSCALL_INIT_STACK:
+        r = syscall_init_stack(arg1, arg2);
+        break;
+    case SYSCALL_SHARE_WITH_RANGE:
+        r.result = syscall_share_with_range(arg1, arg2, arg3, arg4, arg5);
+        break;
+    case SYSCALL_IS_PAGE_ALLOCATED:
+        r = syscall_is_page_allocated(arg1);
+        break;
+    case SYSCALL_CONFIGURE_SYSTEM:
+        r = syscall_configure_system(arg1, arg2, arg3);
+        break;
+    default:
+        // Not supported
+        r.result = ERROR_NOT_SUPPORTED;
+        break;
+    }
     
-//     task->regs.scratch_r.rax = r.result;
-//     task->regs.scratch_r.rdx = r.val;
+    task->regs.scratch_r.rax = r.result;
+    task->regs.scratch_r.rdx = r.val;
     
-//     return r;
-// }
+    return r;
+}
 
 u64 get_page(u64 virtual_addr)
 {
@@ -576,11 +576,12 @@ kresult_t syscall_get_message_info(u64 message_struct)
     return result;
 }
 
-kresult_t syscall_set_attribute(u64 pid, u64 attribute, u64 value, Interrupt_Stackframe* current_frame)
+kresult_t syscall_set_attribute(u64 pid, u64 attribute, u64 value)
 {
     // TODO: Check persmissions
 
     klib::shared_ptr<TaskDescriptor> process = get_task(pid);
+    Interrupt_Stackframe* current_frame = &process->regs.e;
 
     // Check if process exists
     if (not process) return ERROR_NO_SUCH_PROCESS;

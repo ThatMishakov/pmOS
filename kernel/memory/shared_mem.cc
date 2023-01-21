@@ -4,7 +4,7 @@
 
 shared_mem_map shared_map;
 
-kresult_t release_shared(u64 phys_addr, u64 owner_pid)
+kresult_t release_shared(u64 phys_addr, u64 owner_page_table)
 {
     if (shared_map.count(phys_addr) == 0) 
         return ERROR_PAGE_NOT_SHARED;
@@ -12,10 +12,10 @@ kresult_t release_shared(u64 phys_addr, u64 owner_pid)
     Shared_Mem_Entry& e = shared_map.at(phys_addr);
 
     // TODO
-    if (e.owners_pid.count(owner_pid) == 0)
+    if (e.owners_pid.count(owner_page_table) == 0)
         return ERROR_NOT_PAGE_OWNER;
 
-    e.owners_pid.erase(owner_pid);
+    e.owners_pid.erase(owner_page_table);
 
     if (e.owners_pid.empty())
         shared_map.erase(phys_addr);
@@ -23,7 +23,7 @@ kresult_t release_shared(u64 phys_addr, u64 owner_pid)
     return SUCCESS;
 }
 
-kresult_t register_shared(u64 phys_addr, u64 owner)
+kresult_t register_shared(u64 phys_addr, u64 owner_page_table)
 {
     // TODO: Implement iterators and make more efficient
     if (shared_map.count(phys_addr) == 0)
@@ -32,10 +32,10 @@ kresult_t register_shared(u64 phys_addr, u64 owner)
     
     Shared_Mem_Entry& e = shared_map.at(phys_addr);
 
-    if (e.owners_pid.count(owner) != 0)
+    if (e.owners_pid.count(owner_page_table) != 0)
         return ERROR_ALREADY_PAGE_OWNER;
 
-    e.owners_pid.insert(owner);
+    e.owners_pid.insert(owner_page_table);
 
     return SUCCESS;
 }

@@ -33,6 +33,7 @@ struct Page_Table {
     Page_Table() = default;
     Page_Table(const Page_Table&) noexcept;
     Page_Table(Page_Table&&) noexcept;
+    ~Page_Table();
 
     Page_Table& operator=(const Page_Table&) noexcept;
     Page_Table& operator=(Page_Table&&) noexcept;
@@ -40,6 +41,16 @@ struct Page_Table {
     // Creates a page table structure from physical page table with 1 reference (during kernel initialization)
     static Page_Table init_from_phys(u64 cr3);
     static Page_Table get_new_page_table();
+
+    u64 get_cr3() const
+    {
+        return (u64)pml4_phys;
+    }
+
+    bool operator==(const Page_Table& p)
+    {
+        return pml4_phys != p.pml4_phys;
+    }
 };
 
 const u16 rec_map_index = 511;
@@ -116,13 +127,13 @@ void free_pml4(u64 pml4, u64 pid);
 extern "C" void release_cr3(u64 cr3);
 
 // Frees user pages
-void free_user_pages(u64 page_table, u64 pid);
+void free_user_pages(u64 page_table);
 
 // Prepares a user page for kernel reading or writing
 kresult_t prepare_user_page(u64 page);
 
 // Makes the page shared and returns its PTE
-ReturnStr<klib::pair<PTE, bool>> share_page(u64 virtual_addr, u64 pid);
+ReturnStr<klib::pair<PTE, bool>> share_page(u64 virtual_addr, u64 owner_page_table);
 
 // Unshares a page and makes PID its only owner
 kresult_t unshare_page(u64 virtual_addr, u64 pid);
