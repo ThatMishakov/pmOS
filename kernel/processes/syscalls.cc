@@ -106,6 +106,9 @@ extern "C" ReturnStr<u64> syscall_handler()
     case SYSCALL_CONFIGURE_SYSTEM:
         r = syscall_configure_system(arg1, arg2, arg3);
         break;
+    case SYSCALL_SET_PRIORITY:
+        r.result = syscall_set_priority(arg1);
+        break;
     default:
         // Not supported
         r.result = ERROR_NOT_SUPPORTED;
@@ -640,4 +643,18 @@ ReturnStr<u64> syscall_configure_system(u64 type, u64 arg1, u64 arg2)
     };
 
     return {ERROR_NOT_SUPPORTED, 0};
+}
+
+kresult_t syscall_set_priority(u64 priority)
+{
+    if (priority >= sched_queues_levels)
+        return ERROR_NOT_SUPPORTED;
+
+    const klib::shared_ptr<TaskDescriptor>& current_task = get_cpu_struct()->current_task;
+
+    Auto_Lock_Scope lock(current_task->sched_lock);
+
+    current_task->priority = priority;
+
+    return SUCCESS;
 }

@@ -88,3 +88,5 @@ ReturnStr<u64> syscall_is_page_allocated(u64 page);
 
 // Configures a system
 ReturnStr<u64> syscall_configure_system(u64 type, u64 arg1, u64 arg2);
+
+kresult_t syscall_set_priority(u64 priority);

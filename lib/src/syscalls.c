@@ -75,3 +75,8 @@ u64 getpid()
 {
     return syscall(SYSCALL_GETPID).value;
 }
+
+result_t request_priority(uint64_t priority)
+{
+    return syscall(SYSCALL_SET_PRIORITY, priority).value;
+}

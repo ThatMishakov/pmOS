@@ -68,6 +68,9 @@ result_t set_port_kernel(uint64_t port, uint64_t dest_pid, uint64_t dest_chan);
 // Blocks the process with the mask *mask*. Returns unblock reason as a value
 syscall_r block(uint64_t mask);
 
+// Chages the tasks' scheduler priority
+result_t request_priority(uint64_t priority);
+
 #if defined(__cplusplus)
 } /* extern "C" */
 #endif
