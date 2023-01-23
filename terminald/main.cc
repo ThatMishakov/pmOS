@@ -3,7 +3,7 @@
 #include <kernel/errors.h>
 #include <kernel/block.h>
 #include <string.h>
-#include <system.h>
+#include <pmos/system.h>
 #include "asm.hh"
 
 void putchar (int c);
@@ -45,6 +45,7 @@ void print_hex(uint64_t i)
 void init_screen();
 
 int main() {
+    request_priority(0);
     init_screen();
     write(const_cast<char*>("Hello from terminald!\n"));
     

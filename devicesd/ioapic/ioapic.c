@@ -39,11 +39,10 @@ void init_ioapic_at(uint16_t id, uint64_t address, uint32_t base)
 {
     uint32_t* ioapic = map_phys((void*)address, 0x20);
 
-    IOAPICID i = ioapic_read_ioapicid(ioapic);
-    if (i.bits.id != id) {
-        printf("Warning: IOAPIC id does not match!\n");
-        return;
-    }
+    // IOAPICID i = ioapic_read_ioapicid(ioapic);
+    // if (i.bits.id != id) {
+    //     printf("Warning: IOAPIC id does not match! (expected 0x%x got 0x%x)\n", id, i.bits.id);
+    // }
 
     ioapic_list* node = malloc(sizeof(ioapic_list));
     node->next = NULL;
@@ -101,17 +100,17 @@ void init_ioapic()
 
     MADT_entry *p = madt->entries;
     for (; (void*)(p) < madt_end; p = (MADT_entry*)((char*)(p) + p->length)) {
-        printf("MADT entry type %x size %i", p->type, p->length);
+        //printf("MADT entry type %x size %i", p->type, p->length);
 
         switch (p->type) {
         case MADT_LOCAL_APIC_NMI_TYPE: {
-            MADT_LAPIC_NMI_entry* e = (MADT_LAPIC_NMI_entry*)p;
-            printf(" -> LAPIC NMI CPU ID: %x flags %X INT%i\n", e->ACPI_CPU_UID, e->Flags, e->LINT_ID);
+            //MADT_LAPIC_NMI_entry* e = (MADT_LAPIC_NMI_entry*)p;
+            //printf(" -> LAPIC NMI CPU ID: %x flags %X INT%i\n", e->ACPI_CPU_UID, e->Flags, e->LINT_ID);
         }
             break;
         case MADT_INT_OVERRIDE_TYPE: {
             MADT_INT_entry* e = (MADT_INT_entry*)p;
-            printf(" -> INT bus %x source %x int %x flags %x", e->bus, e->source, e->global_system_interrupt, e->flags);
+            //printf(" -> INT bus %x source %x int %x flags %x", e->bus, e->source, e->global_system_interrupt, e->flags);
 
             uint8_t is_active_low = (e->flags & 0x03) == 0b11;
             uint8_t is_level_triggered = ((e->flags >> 2) & 0x03) == 0b11;
@@ -120,7 +119,7 @@ void init_ioapic()
             break;
         case MADT_IOAPIC_entry_type: {
             MADT_IOAPIC_entry* e = (MADT_IOAPIC_entry*)p;
-            printf(" -> IOAPIC id %x addr 0x%X base %x", e->ioapic_id, e->ioapic_addr, e->global_system_interrupt_base);
+            //printf(" -> IOAPIC id %x addr 0x%X base %x", e->ioapic_id, e->ioapic_addr, e->global_system_interrupt_base);
             init_ioapic_at(e->ioapic_id, e->ioapic_addr, e->global_system_interrupt_base);
         }
             break;
@@ -128,7 +127,7 @@ void init_ioapic()
             break;
         }
 
-        printf("\n");
+        //printf("\n");
     }
 }
 
@@ -214,7 +213,7 @@ void ioapic_mask_int(volatile uint32_t* ioapic, uint32_t intno)
 }
 
 // TODO
-uint8_t ioapic_get_int(struct int_task_descriptor desc, uint8_t line, bool active_low, bool level_trig)
+uint8_t ioapic_get_int(struct int_task_descriptor desc, uint8_t line, bool active_low, bool level_trig, bool check_free)
 {
     uint8_t cpu_int_vector = get_free_interrupt();
 

@@ -18,7 +18,7 @@ void init_timers()
 {
     init_hpet();
 
-    if (hpet_virt != NULL)
+    if (hpet_is_functional)
         timer_mode = TIMER_HPET;
     
     // TODO: Fall back to PIC if HPET is not functional
@@ -30,7 +30,6 @@ void init_timers()
 
 int start_timer(uint64_t ms, uint64_t extra, uint64_t pid, uint64_t reply_channel)
 {
-    printf("Start timer ms %li extra %lx pid %lx reply chan %lx\n", ms, extra, pid, reply_channel);
     if (timer_mode == TIMER_UNKNOWN)
         return (int)ERROR_GENERAL;
 
@@ -49,24 +48,25 @@ int start_timer(uint64_t ms, uint64_t extra, uint64_t pid, uint64_t reply_channe
     }
 
     uint64_t ticks = timer_calculate_next_ticks(ms);
-    e->expires_at_ticks = ticks;
+    e->expires_at_ticks = ticks + timer_ticks;
 
     if (current_timer == NULL) {
         current_timer = e;
-        start_oneshot_ticks(e->expires_at_ticks - timer_ticks);
+        start_oneshot_ticks(ticks);
     } else if (current_timer->expires_at_ticks < e->expires_at_ticks) {
         timer_push_heap(e);
     } else {
         timer_push_heap(current_timer);
         current_timer = e;
-        start_oneshot_ticks(e->expires_at_ticks - timer_ticks);
+        start_oneshot_ticks(ticks);
     }
+
+    printf("Start timer ms %li extra %lx pid %lx reply chan %lx fires at ticks %lx\n", ms, extra, pid, reply_channel, ticks);
     return 0;
 }
 
 void timer_tick()
 {
-    printf("Timer tick. Current timer %lx\n", (uint64_t)current_timer);
     update_ticks();
 
     if (current_timer != NULL) {

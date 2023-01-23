@@ -81,6 +81,6 @@ bool program_ioapic_manual(uint8_t cpu_int_vector, uint32_t ext_int_vector, bool
 
 void ioapic_mask_int(volatile uint32_t* ioapic, uint32_t intno);
 
-uint8_t ioapic_get_int(struct int_task_descriptor desc, uint8_t line, bool active_low, bool level_trig);
+uint8_t ioapic_get_int(struct int_task_descriptor desc, uint8_t line, bool active_low, bool level_trig, bool check_free);
 
 #endif

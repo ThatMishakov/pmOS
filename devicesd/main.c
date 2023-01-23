@@ -59,7 +59,7 @@ int main(int argc, char** argv) {
     parse_args(argc, argv);
 
     pmos_request_io_permission();
-    request_priority(0);
+    request_priority(1);
 
     if (rsdp_desc || rsdp20_desc)
         init_acpi();
