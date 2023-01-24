@@ -3,5 +3,6 @@
     .globl syscall
     .type syscall, @function
 syscall:
+    movq %rcx, %rax
     int $PMOS_SYSCALL_INT
     ret

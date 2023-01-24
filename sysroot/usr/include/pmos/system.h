@@ -71,6 +71,9 @@ syscall_r block(uint64_t mask);
 // Chages the tasks' scheduler priority
 result_t request_priority(uint64_t priority);
 
+// Returns the LAPIC id the process is running on when calling the process
+u64 get_lapic_id();
+
 #if defined(__cplusplus)
 } /* extern "C" */
 #endif

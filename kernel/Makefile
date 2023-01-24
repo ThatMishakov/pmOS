@@ -49,7 +49,7 @@ OBJS = 	./objects/icxxabi.o ./start.o ./asm.o ./main.o ./misc.o ./utils.o \
 	    ./memory/mem.o ./memory/malloc.o ./memory/free_page_alloc.o ./memory/palloc.o ./memory/paging.o ./memory/shared_mem.o \
 	    ./interrupts/apic.o ./interrupts/pic.o ./interrupts/gdt.o ./interrupts/exceptions_managers.o ./interrupts/interrupts.o \
 		./interrupts/pit.o ./interrupts/interrupts_asm.o ./interrupts/loadGDT.o\
-	    ./processes/idle.o ./processes/syscalls.o ./processes/tasks.o \
+	    ./processes/idle.o ./processes/syscalls.o ./processes/tasks.o ./processes/syscalls_asm.o \
 		./sched/sched.o ./sched/task_switching.o ./sched/timers.o \
 		./messaging/messaging.o ./cpus/cpus.o
 

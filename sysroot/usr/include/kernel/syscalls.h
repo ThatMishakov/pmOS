@@ -29,6 +29,7 @@
 #define SYSCALL_CONFIGURE_SYSTEM      0x18
 #define SYSCALL_REG_NOTIFY_LISTENER   0x19
 #define SYSCALL_SET_PRIORITY          0x1a
+#define SYSCALL_GET_LAPIC_ID          0x1b
 
 
 #endif

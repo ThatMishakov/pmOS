@@ -5,6 +5,7 @@
 #include <interrupts/apic.hh>
 #include <kernel/errors.h>
 #include <interrupts/gdt.hh>
+#include <processes/syscalls.hh>
 
 klib::vector<CPU_Desc> cpus;
 
@@ -15,6 +16,8 @@ void init_per_cpu()
     cpus.push_back({c, get_lapic_id()});
 
     init_idle();
+
+    program_syscall();
 }
 
 extern "C" void cpu_start_routine()
@@ -24,6 +27,8 @@ extern "C" void cpu_start_routine()
     set_idt();
     init_kernel_stack();
     enable_apic();
+
+    get_cpu_struct()->lapic_id = get_lapic_id();
 
     find_new_process();
 }

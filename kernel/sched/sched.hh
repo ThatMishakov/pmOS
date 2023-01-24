@@ -44,12 +44,14 @@ struct CPU_Info {
     CPU_Info* self = this; // 0
     Stack* kernel_stack = nullptr; // 8
     klib::shared_ptr<TaskDescriptor> current_task = klib::shared_ptr<TaskDescriptor>(); // 16
+    u64 temp_var = 0; //32
 
-    klib::shared_ptr<TaskDescriptor> idle_task = klib::shared_ptr<TaskDescriptor>();
 
     klib::array<sched_queue, sched_queues_levels> sched_queues;
-
+    klib::shared_ptr<TaskDescriptor> idle_task = klib::shared_ptr<TaskDescriptor>();
+    
     u32 timer_val = 0;
+    u32 lapic_id = 0;
 
     klib::shared_ptr<TaskDescriptor> atomic_pick_highest_priority();
     klib::shared_ptr<TaskDescriptor> atomic_get_front_priority(priority_t);

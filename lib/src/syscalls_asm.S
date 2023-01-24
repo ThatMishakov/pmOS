@@ -5,7 +5,10 @@
 syscall:
     pushq %rbp
     movq %rsp, %rbp
-    int $PMOS_SYSCALL_INT
+    movq %rcx, %rax
+
+    syscall
+
     popq %rbp
     ret
 

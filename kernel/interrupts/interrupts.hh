@@ -81,12 +81,12 @@ struct PACKED RFLAGS_Bits {
     u64 reserved4  :42;
 };
 
-union PACKED RFLAGS {
+union RFLAGS {
     u64 numb = 0b1000000000;
     RFLAGS_Bits bits;
 };
 
-struct PACKED Interrupt_Stackframe {
+struct Interrupt_Stackframe {
     u64 rip = 0;
     u64 cs = 0;
     RFLAGS rflags;
@@ -94,7 +94,7 @@ struct PACKED Interrupt_Stackframe {
     u64 ss = 0;
 };
 
-struct PACKED Scratch_Regs {
+struct Scratch_Regs {
     u64 rdi = 0;
     u64 rsi = 0;
     u64 rdx = 0;
@@ -106,7 +106,7 @@ struct PACKED Scratch_Regs {
     u64 r11 = 0;
 };
 
-struct PACKED Preserved_Regs {
+struct Preserved_Regs {
     u64 rbx = 0;
     u64 rbp = 0;
     u64 r12 = 0;
@@ -115,7 +115,7 @@ struct PACKED Preserved_Regs {
     u64 r15 = 0;
 };
 
-struct PACKED Segment_Offsets {
+struct Segment_Offsets {
     u64 fs = 0;
     u64 gs = 0;
 };
@@ -124,7 +124,7 @@ struct PACKED Segment_Offsets {
 #define ENTRY_SYSCALL   1
 
 
-struct PACKED Task_Regs { // 192 bytes
+struct Task_Regs { // 192 bytes
     Scratch_Regs scratch_r; //72 bytes
     Interrupt_Stackframe e; // 40 bytes
     Preserved_Regs preserved_r; // 48 bytes

@@ -3,6 +3,7 @@
 #include <kernel/errors.h>
 #include <kernel/syscalls.h>
 #include <types.hh>
+#include <processes/tasks.hh>
 
 
 //#pragma GCC diagnostic push
@@ -81,6 +82,9 @@ kresult_t syscall_share_with_range(u64 pid, u64 page_start, u64 to_addr, u64 nb_
 // Checks if the page is allocated for user process
 ReturnStr<u64> syscall_is_page_allocated(u64 page);
 
+// Returns LAPIC id of the current CPU
+ReturnStr<u64> syscall_get_lapic_id();
+
 #define SYS_CONF_IOAPIC          0x01
 #define SYS_CONF_LAPIC           0x02
 #define SYS_CONF_CPU             0x03
@@ -90,3 +94,44 @@ ReturnStr<u64> syscall_is_page_allocated(u64 page);
 ReturnStr<u64> syscall_configure_system(u64 type, u64 arg1, u64 arg2);
 
 kresult_t syscall_set_priority(u64 priority);
+
+inline u64& syscall_arg1(const klib::shared_ptr<TaskDescriptor>& task)
+{
+    return task->regs.scratch_r.rsi;
+}
+
+inline u64& syscall_arg2(const klib::shared_ptr<TaskDescriptor>& task)
+{
+    return task->regs.scratch_r.rdx;
+}
+
+inline u64& syscall_arg3(const klib::shared_ptr<TaskDescriptor>& task)
+{
+    return task->regs.scratch_r.rax;
+}
+
+inline u64& syscall_arg4(const klib::shared_ptr<TaskDescriptor>& task)
+{
+    return task->regs.scratch_r.r8;
+}
+
+inline u64& syscall_arg5(const klib::shared_ptr<TaskDescriptor>& task)
+{
+    return task->regs.scratch_r.r9;
+}
+
+inline u64& syscall_ret_low(const klib::shared_ptr<TaskDescriptor>& task)
+{
+    return task->regs.scratch_r.rax;
+}
+
+inline u64& syscall_ret_high(const klib::shared_ptr<TaskDescriptor>& task)
+{
+    return task->regs.scratch_r.rdx;
+}
+
+// Entry point for when userpsace calls SYSCALL instruction
+extern "C" void syscall_entry();
+
+// Enables SYSCALL instruction
+void program_syscall();

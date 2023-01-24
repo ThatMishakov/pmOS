@@ -19,11 +19,11 @@ extern "C" ReturnStr<u64> syscall_handler()
 {
     klib::shared_ptr<TaskDescriptor> task = get_cpu_struct()->current_task;
     u64 call_n = task->regs.scratch_r.rdi;
-    u64 arg1 = task->regs.scratch_r.rsi;
-    u64 arg2 = task->regs.scratch_r.rdx;
-    u64 arg3 = task->regs.scratch_r.rcx;
-    u64 arg4 = task->regs.scratch_r.r8;
-    u64 arg5 = task->regs.scratch_r.r9;
+    u64 arg1 = syscall_arg1(task);
+    u64 arg2 = syscall_arg2(task);
+    u64 arg3 = syscall_arg3(task);
+    u64 arg4 = syscall_arg4(task);
+    u64 arg5 = syscall_arg5(task);
 
     ReturnStr<u64> r = {};
     // TODO: check permissions
@@ -109,6 +109,9 @@ extern "C" ReturnStr<u64> syscall_handler()
     case SYSCALL_SET_PRIORITY:
         r.result = syscall_set_priority(arg1);
         break;
+    case SYSCALL_GET_LAPIC_ID:
+        r = syscall_get_lapic_id();
+        break;
     default:
         // Not supported
         r.result = ERROR_NOT_SUPPORTED;
@@ -116,8 +119,8 @@ extern "C" ReturnStr<u64> syscall_handler()
     }
     //t_print_bochs(" -> result %h\n", r.result);
 
-    task->regs.scratch_r.rax = r.result;
-    task->regs.scratch_r.rdx = r.val;
+    syscall_ret_low(task) = r.result;
+    syscall_ret_high(task) = r.val;
     
     return r;
 }
@@ -657,4 +660,20 @@ kresult_t syscall_set_priority(u64 priority)
     current_task->priority = priority;
 
     return SUCCESS;
+}
+
+ReturnStr<u64> syscall_get_lapic_id()
+{
+    return {SUCCESS, get_cpu_struct()->lapic_id};
+}
+
+void program_syscall()
+{
+    write_msr(0xC0000081, ((u64)(R0_CODE_SEGMENT) << 32) | ((u64)(R3_LEGACY_CODE_SEGMENT) << 48)); // STAR (segments for user and kernel code)
+    write_msr(0xC0000082, (u64)&syscall_entry); // LSTAR (64 bit entry point)
+    write_msr(0xC0000084, ~0x0); // SFMASK (mask for %rflags)
+
+    // Enable SYSCALL/SYSRET in EFER register
+    u64 efer = read_msr(0xC0000080);
+    write_msr(0xC0000080, efer | (0x01 << 0));
 }

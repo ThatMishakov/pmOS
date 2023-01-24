@@ -174,7 +174,7 @@ bool program_ioapic(uint8_t cpu_int_vector, uint32_t ext_int_vector)
     i.bits.INTPOL = desc.active_low;
     i.bits.TRIGMOD = desc.level_trig;
     i.bits.mask = 0;
-    i.bits.destination = 0x00;
+    i.bits.destination = get_lapic_id();
 
     ioapic_write_redir_reg(ioapic, ioapic_base, i);
 
@@ -196,7 +196,7 @@ bool program_ioapic_manual(uint8_t cpu_int_vector, uint32_t ext_int_vector, bool
     i.bits.INTPOL = active_low;
     i.bits.TRIGMOD = level_trig;
     i.bits.mask = 0;
-    i.bits.destination = 0x00;
+    i.bits.destination = get_lapic_id();
 
     ioapic_write_redir_reg(ioapic, ioapic_base, i);
 

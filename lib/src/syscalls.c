@@ -80,3 +80,8 @@ result_t request_priority(uint64_t priority)
 {
     return syscall(SYSCALL_SET_PRIORITY, priority).value;
 }
+
+u64 get_lapic_id()
+{
+    return syscall(SYSCALL_GET_LAPIC_ID).value;
+}

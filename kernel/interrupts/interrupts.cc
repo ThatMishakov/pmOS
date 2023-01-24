@@ -35,7 +35,7 @@ void init_kernel_stack()
     s->kernel_stack = (Stack*)palloc(sizeof(Stack)/4096);
     kernel_gdt.SSD_entries[tss_i] = System_Segment_Descriptor((u64) calloc(1,sizeof(TSS)), sizeof(TSS), 0x89, 0x02);
     kernel_gdt.SSD_entries[tss_i].tss()->ist1 = (u64)s->kernel_stack + sizeof(Stack);
-    loadTSS(0x28 + tss_i*0x10);
+    loadTSS(TSS_OFFSET + tss_i*0x10);
 }
 
 void init_interrupts()

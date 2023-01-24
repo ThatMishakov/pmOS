@@ -224,6 +224,12 @@ not_syscall:
     call interrupt_handler
 end:
 
+    movq %gs:16, %r15
+    cmpq $0, 176(%r15)
+    jne ret_from_syscall
+
+    .globl ret_from_interrupt
+ret_from_interrupt:
     .globl start_first_process
 start_first_process:
     restore_context
