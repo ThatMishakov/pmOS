@@ -1,7 +1,6 @@
 #include "tasks.hh"
 #include "kernel/errors.h"
 #include <sched/sched.hh>
-#include <sched/task_switching.hh>
 #include "idle.hh"
 #include <sched/defs.hh>
 

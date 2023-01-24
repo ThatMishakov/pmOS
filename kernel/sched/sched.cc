@@ -12,7 +12,6 @@
 #include <interrupts/apic.hh>
 #include <cpus/cpus.hh>
 #include <lib/memory.hh>
-#include "task_switching.hh"
 #include "timers.hh"
 
 sched_queue blocked;
@@ -114,11 +113,27 @@ void switch_to_task(const klib::shared_ptr<TaskDescriptor>& task)
         setCR3(task->page_table.get_cr3());
     }
 
+    save_segments(c->current_task);
+
     // Change task
     task->status = Process_Status::PROCESS_RUNNING;
     c->current_task = task;
 
+    restore_segments(c->current_task);
+
     start_timer_ticks(calculate_timer_ticks(task));
+}
+
+void save_segments(const klib::shared_ptr<TaskDescriptor>& task)
+{
+    task->regs.seg.gs = read_msr(0xC0000102); // KernelGSBase
+    task->regs.seg.fs = read_msr(0xC0000100); // FSBase
+}
+
+void restore_segments(const klib::shared_ptr<TaskDescriptor>& task)
+{
+    write_msr(0xC0000102, task->regs.seg.gs); // KernelGSBase
+    write_msr(0xC0000100, task->regs.seg.fs); // FSBase
 }
 
 void unblock_if_needed(const klib::shared_ptr<TaskDescriptor>& p, u64 reason)
@@ -332,3 +347,4 @@ klib::shared_ptr<TaskDescriptor> CPU_Info::atomic_get_front_priority(priority_t 
 
     return nullptr;
 }
+

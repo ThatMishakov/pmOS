@@ -49,7 +49,7 @@ struct CPU_Info {
 
     klib::array<sched_queue, sched_queues_levels> sched_queues;
     klib::shared_ptr<TaskDescriptor> idle_task = klib::shared_ptr<TaskDescriptor>();
-    
+
     u32 timer_val = 0;
     u32 lapic_id = 0;
 
@@ -89,3 +89,10 @@ void start_scheduler();
 
 // Pushes current processos to the back of sheduling queues
 void evict(const klib::shared_ptr<TaskDescriptor>&);
+
+// Switches to this process
+void switch_to_task(const klib::shared_ptr<TaskDescriptor>& task);
+
+// Saves and restores GSBase and FSBase
+void save_segments(const klib::shared_ptr<TaskDescriptor>& task);
+void restore_segments(const klib::shared_ptr<TaskDescriptor>& task);

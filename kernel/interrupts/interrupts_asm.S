@@ -27,16 +27,6 @@
     movq %r13, 136(%r11)
     movq %r14, 144(%r11)
     movq %r15, 152(%r11)
-
-    movl $0xC0000100, %ecx
-    rdmsr
-    movl %eax, 160(%r11)
-    movl %edx, 164(%r11)
-
-    movl $0xC0000102, %ecx
-    rdmsr
-    movl %eax, 168(%r11)
-    movl %edx, 172(%r11)
     .endm
 
     .macro restore_context
@@ -52,16 +42,6 @@
     movq       136(%r11), %r13
     movq       144(%r11), %r14
     movq       152(%r11), %r15
-
-    movl $0xC0000100, %ecx
-    movl       160(%r11), %eax
-    movl       164(%r11), %edx
-    wrmsr
-
-    movl $0xC0000102, %ecx
-    movl       168(%r11), %eax
-    movl       172(%r11), %edx
-    wrmsr
 
     movq 0(%r11), %rdi
     movq 8(%r11), %rsi

@@ -25,18 +25,6 @@
     movq %gs:32, %rdi
     movq %rdi, 152(%r15)
 
-    # FSBase
-    movl $0xC0000100, %ecx
-    rdmsr
-    movl %eax, 160(%r15)
-    movl %edx, 164(%r15)
-
-    # KernelGSBase (actually, it's user's GSBase)
-    movl $0xC0000102, %ecx
-    rdmsr
-    movl %eax, 168(%r15)
-    movl %edx, 172(%r15)
-
     # Stack
     movq %rsp, 96(%r15)
 
@@ -47,17 +35,6 @@
     movq       %gs:16, %r15
 
     movq      96(%r15), %rsp
-
-
-    movl $0xC0000100, %ecx
-    movl       160(%r15), %eax
-    movl       164(%r15), %edx
-    wrmsr
-
-    movl $0xC0000102, %ecx
-    movl       168(%r15), %eax
-    movl       172(%r15), %edx
-    wrmsr
 
     movq 0(%r15), %rdi
     movq 8(%r15), %rsi
