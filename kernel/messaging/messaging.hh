@@ -51,10 +51,8 @@ struct Ports_storage {
     kresult_t send_msg(u64 pid_from, u64 port, klib::vector<char>&& msg);
     inline bool exists_port(u64 port)
     {
-        lock.lock();
-        bool exists = this->storage.count(port) == 1;
-        lock.unlock();
-        return exists;
+        Auto_Lock_Scope scope_lock(lock);
+        return this->storage.count(port) == 1;
     }
 };
 

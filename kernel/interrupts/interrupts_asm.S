@@ -1,7 +1,7 @@
 /* ------------------------------------------- MACROS --------------------------------------------- */
     .macro save_context
     pushq %r11
-    movq %gs:16, %r11
+    movq %gs:24, %r11
 
     movq %rdi, 0(%r11)
     movq %rsi, 8(%r11)
@@ -30,7 +30,7 @@
     .endm
 
     .macro restore_context
-    movq       %gs:16, %r11
+    movq       %gs:24, %r11
     pushq      104(%r11)
     pushq      96(%r11)
     pushq      88(%r11)
@@ -190,7 +190,7 @@ ints_handler:
 	swapgs
 1:
     save_context
-    movq %gs:16, %rax
+    movq %gs:24, %rax
     movq $0,   176(%rax) // Entry type
 
     movq $0, %rbp
@@ -204,7 +204,7 @@ not_syscall:
     call interrupt_handler
 end:
 
-    movq %gs:16, %r15
+    movq %gs:24, %r15
     cmpq $0, 176(%r15)
     jne ret_from_syscall
 

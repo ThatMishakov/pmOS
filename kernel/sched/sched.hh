@@ -43,8 +43,8 @@ extern sched_queue dead_queue;
 struct CPU_Info {
     CPU_Info* self = this; // 0
     Stack* kernel_stack = nullptr; // 8
-    klib::shared_ptr<TaskDescriptor> current_task = klib::shared_ptr<TaskDescriptor>(); // 16
-    u64 temp_var = 0; //32
+    u64 temp_var = 0; // 16
+    klib::shared_ptr<TaskDescriptor> current_task = klib::shared_ptr<TaskDescriptor>(); // 24
 
 
     klib::array<sched_queue, sched_queues_levels> sched_queues;

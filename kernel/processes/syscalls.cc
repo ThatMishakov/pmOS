@@ -478,9 +478,10 @@ kresult_t syscall_send_message_task(u64 pid, u64 channel, u64 size, u64 message)
 
     klib::shared_ptr<Message> ptr = klib::make_shared<Message>(Message({self_pid, channel, klib::move(msg)}));
 
-    t->messaging_lock.lock();
-    result = queue_message(t, klib::move(ptr));
-    t->messaging_lock.unlock();
+    {
+        Auto_Lock_Scope lock(t->messaging_lock);
+        result = queue_message(t, klib::move(ptr));
+    }
 
     unblock_if_needed(t, MESSAGE_S_NUM);
 
@@ -554,7 +555,6 @@ kresult_t syscall_get_message_info(u64 message_struct)
 
     klib::shared_ptr<TaskDescriptor> current = get_cpu_struct()->current_task;
 
-
     kresult_t result = SUCCESS;
     klib::shared_ptr<Message> msg;
 
@@ -565,7 +565,6 @@ kresult_t syscall_get_message_info(u64 message_struct)
         }
         msg = current->messages.front();
     }
-    
 
     u64 msg_struct_size = sizeof(Message_Descriptor);
 
@@ -577,6 +576,7 @@ kresult_t syscall_get_message_info(u64 message_struct)
         desc.channel = msg->channel;
         desc.size = msg->size();
     }
+
     return result;
 }
 

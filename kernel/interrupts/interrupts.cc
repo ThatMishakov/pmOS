@@ -58,12 +58,12 @@ void programmable_interrupt(u32 intno)
 
 extern "C" void interrupt_handler()
 {
-    klib::shared_ptr<TaskDescriptor> t = get_cpu_struct()->current_task;
+    const klib::shared_ptr<TaskDescriptor>& t = get_cpu_struct()->current_task;
     u64 intno = t->regs.intno;
     u64 err = t->regs.int_err;
     Interrupt_Stackframe* int_s = &t->regs.e;
 
-    //t_print_bochs("Int %h error %h pid %h\n", intno, err, t->pid);
+    //t_print_bochs("Int %h error %h pid %h rip %h\n", intno, err, t->pid, t->regs.e.rip);
 
     if (intno < 32)
     switch (intno) {
@@ -86,11 +86,12 @@ extern "C" void interrupt_handler()
             halt();
             break;
         case 0xE:
+            //t_print_bochs("!!! Page Fault (PF) error %h PID %i RIP %h\n", err, get_cpu_struct()->current_task->pid, int_s->rip);
             pagefault_manager(err, int_s);
             break;
         case 0xD:
             //t_print_bochs("!!! General Protection Fault (GP) error %h\n", err);
-            t_print("!!! General Protection Fault (GP) error (segment) %h PID %i RIP %h... Killing the process\n", err, get_cpu_struct()->current_task->pid, int_s->rip);
+            t_print_bochs("!!! General Protection Fault (GP) error (segment) %h PID %i RIP %h CS %h... Killing the process\n", err, get_cpu_struct()->current_task->pid, int_s->rip, int_s->cs);
             syscall_exit(4, 0);
             break;
         case 0xC:

@@ -199,7 +199,7 @@ kresult_t prepare_user_buff_rd(const char* buff, size_t size)
         u64 page = i & ~0xfffULL;
         result = prepare_user_page(page);
     }
-    return SUCCESS;
+    return result;
 }
 
 kresult_t prepare_user_buff_wr(char* buff, size_t size)
@@ -217,7 +217,7 @@ kresult_t prepare_user_buff_wr(char* buff, size_t size)
         u64 page = i & ~0xfffULL;
         result = prepare_user_page(page);
     }
-    return SUCCESS;
+    return result;
 }
 
 kresult_t copy_from_user(const char* from, char* to, size_t size)

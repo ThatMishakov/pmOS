@@ -11,8 +11,12 @@ _start:
 
     // Return to loader
     popq %rsp
-    ret
 
+    pushf
+    popq %r11
+    popq %rcx
+    swapgs
+    sysretq
 
     .globl cpu_startup_entry
     .type cpu_startup_entry, @function

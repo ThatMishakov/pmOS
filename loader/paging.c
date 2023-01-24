@@ -16,31 +16,31 @@ uint64_t alloc_page_t()
 
 void get_page(uint64_t addr, Page_Table_Argumments arg)
 {
-    PML4E *pml4e = get_pml4e(addr);
+    PML4E *pml4e = get_pml4e(addr, REC_MAP_INDEX);
     if (!pml4e->present) {
         *(uint64_t*)pml4e = alloc_page_t();
         pml4e->present = 1;
         pml4e->writeable = 1;
-        memclear(pdpt_of(addr), 4096);
+        memclear(pdpt_of(addr, REC_MAP_INDEX), 4096);
     }
 
-    PDPTE* pdpte = get_pdpe(addr);
+    PDPTE* pdpte = get_pdpe(addr, REC_MAP_INDEX);
     if (!pdpte->present) {
         *(uint64_t*)pdpte = alloc_page_t();
         pdpte->present = 1;
         pdpte->writeable = 1;
-        memclear(pd_of(addr), 4096);
+        memclear(pd_of(addr, REC_MAP_INDEX), 4096);
     } //else if (pdpte->size) ;// TODO
 
-    PDE* pde = get_pde(addr);
+    PDE* pde = get_pde(addr, REC_MAP_INDEX);
     if (!pde->present) {
         *(uint64_t*)pde = alloc_page_t();
         pde->present = 1;
         pde->writeable = 1;
-        memclear(pt_of(addr), 4096);
+        memclear(pt_of(addr, REC_MAP_INDEX), 4096);
     } //else if (pde->size) ; // TODO
 
-    PTE* pte = get_pte(addr);
+    PTE* pte = get_pte(addr, REC_MAP_INDEX);
     if (!pte->present) {
         pte->page_ppn = alloc_page() >> 12;
         pte->present = 1;
@@ -53,36 +53,37 @@ void get_page(uint64_t addr, Page_Table_Argumments arg)
 
 void map(uint64_t addr, uint64_t phys, Page_Table_Argumments arg)
 {
-    PML4E *pml4e = get_pml4e(addr);
+    PML4E *pml4e = get_pml4e(addr, REC_MAP_INDEX);
     if (!pml4e->present) {
         *(uint64_t*)pml4e = alloc_page_t();
         pml4e->present = 1;
         pml4e->writeable = 1;
-        memclear(pdpt_of(addr), 4096);
+        memclear(pdpt_of(addr, REC_MAP_INDEX), 4096);
     }
 
-    PDPTE* pdpte = get_pdpe(addr);
+    PDPTE* pdpte = get_pdpe(addr, REC_MAP_INDEX);
     if (!pdpte->present) {
         *(uint64_t*)pdpte = alloc_page_t();
         pdpte->present = 1;
         pdpte->writeable = 1;
-        memclear(pd_of(addr), 4096);
+        memclear(pd_of(addr, REC_MAP_INDEX), 4096);
     } //else if (pdpte->size) ;// TODO
 
-    PDE* pde = get_pde(addr);
+    PDE* pde = get_pde(addr, REC_MAP_INDEX);
     if (!pde->present) {
         *(uint64_t*)pde = alloc_page_t();
         pde->present = 1;
         pde->writeable = 1;
-        memclear(pt_of(addr), 4096);
+        memclear(pt_of(addr, REC_MAP_INDEX), 4096);
     } //else if (pde->size) ; // TODO
 
-    PTE* pte = get_pte(addr);
+    PTE* pte = get_pte(addr, REC_MAP_INDEX);
     if (!pte->present) {
         pte->page_ppn = phys >> 12;
         pte->present = 1;
         pte->writeable = arg.writeable;
         pte->avl = arg.extra;
+        pte->user_access = arg.user_access;
         if (nx_enabled) pte->execution_disabled = arg.execution_disabled;
         else pte->execution_disabled = 0;
     }

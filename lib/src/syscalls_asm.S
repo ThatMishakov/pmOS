@@ -4,6 +4,7 @@
     .type syscall, @function
 syscall:
     movq %rcx, %rax
+    # int $0xca
     syscall
     ret
 

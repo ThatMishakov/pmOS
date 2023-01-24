@@ -152,4 +152,6 @@ void kill(const klib::shared_ptr<TaskDescriptor>& p) // TODO: UNIX Signals
         Auto_Lock_Scope queue_lock(dead_queue.lock);
         dead_queue.push_back(p);
     }
+
+    p->page_table = Page_Table();
 }

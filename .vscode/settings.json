@@ -59,6 +59,8 @@
         "errors.h": "c",
         "timers_heap.h": "c",
         "configuration.h": "c",
-        "system.h": "c"
+        "system.h": "c",
+        "memory.h": "c",
+        "paging.h": "c"
     }
 }

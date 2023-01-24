@@ -1,7 +1,7 @@
     .macro save_regs
     # Save %r15 and load current_task pointer into %r15
-    movq %r15, %gs:32
-    movq %gs:16, %r15
+    movq %r15, %gs:16
+    movq %gs:24, %r15
 
     # Scratch regs
     movq %rdi, 0(%r15)
@@ -22,7 +22,7 @@
     movq %r13, 136(%r15)
     movq %r14, 144(%r15)
 
-    movq %gs:32, %rdi
+    movq %gs:16, %rdi
     movq %rdi, 152(%r15)
 
     # Stack
@@ -32,7 +32,7 @@
     .endm
 
     .macro restore_regs
-    movq       %gs:16, %r15
+    movq       %gs:24, %r15
 
     movq      96(%r15), %rsp
 
@@ -58,7 +58,6 @@
 
     .globl syscall_entry
 syscall_entry:
-
     # SYSCALL will always be from ring 0 to ring 3
     swapgs
 
@@ -78,9 +77,9 @@ syscall_entry:
 
     # Syscall might do a task switch, which might need to be returned to by iret
     # Check that and change return method if that's the case
-    movq %gs:16, %r15
-    cmpq $1, 176(%r15)
-    jne ret_from_interrupt
+    movq %gs:24, %r15
+    cmpq $0, 176(%r15)
+    je ret_from_interrupt
 
     .globl ret_from_syscall
 ret_from_syscall:
