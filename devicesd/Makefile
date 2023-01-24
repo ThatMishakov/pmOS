@@ -20,7 +20,6 @@ INTERNALLDFLAGS :=     \
 INTERNALCFLAGS  :=       \
 	-static \
 	-mno-red-zone \
-	-mno-mmx -mno-sse -mno-sse2 \
 	-fPIE \
 	-fno-exceptions
 

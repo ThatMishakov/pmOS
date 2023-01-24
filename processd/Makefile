@@ -30,7 +30,6 @@ INTERNALCFLAGS  :=       \
 	-ffreestanding \
 	-static \
 	-mno-red-zone \
-	-mno-mmx -mno-sse -mno-sse2 \
 	-fPIE \
 	-fno-exceptions -fno-rtti
  

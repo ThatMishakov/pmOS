@@ -96,3 +96,23 @@ write_msr:
 get_cpu_struct:
     movq %gs:0, %rax
     ret
+
+    .globl getCR0
+getCR0:
+    movq %cr0, %rax
+    ret
+
+    .globl setCR0
+setCR0:
+    movq %rdi, %cr0
+    ret
+
+    .globl getCR4
+getCR4:
+    movq %cr4, %rax
+    ret
+
+    .globl setCR4
+setCR4:
+    movq %rdi, %cr4
+    ret

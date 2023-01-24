@@ -4,6 +4,7 @@
 #include <memory/paging.hh>
 #include <processes/syscalls.hh>
 #include <processes/tasks.hh>
+#include <cpus/sse.hh>
 
 void pagefault_manager(u64 err, Interrupt_Stackframe* int_s)
 {
@@ -33,4 +34,10 @@ void pagefault_manager(u64 err, Interrupt_Stackframe* int_s)
         halt();
         break;
     }
+}
+
+void sse_exception_manager()
+{
+    validate_sse();
+    get_cpu_struct()->current_task->sse_data.restore_sse();
 }

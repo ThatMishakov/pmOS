@@ -51,7 +51,8 @@ OBJS = 	./objects/icxxabi.o ./start.o ./asm.o ./main.o ./misc.o ./utils.o \
 		./interrupts/pit.o ./interrupts/interrupts_asm.o ./interrupts/loadGDT.o\
 	    ./processes/idle.o ./processes/syscalls.o ./processes/tasks.o ./processes/syscalls_asm.o \
 		./sched/sched.o ./sched/timers.o \
-		./messaging/messaging.o ./cpus/cpus.o
+		./messaging/messaging.o \
+		./cpus/cpus.o ./cpus/sse.o
 
 CRTI_OBJ =  ./objects/crti.o
 CRTBEGIN_OBJ:=$(shell $(CC) $(CFLAGS) -print-file-name=crtbegin.o)

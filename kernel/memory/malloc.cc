@@ -18,8 +18,8 @@ void print_list(malloc_list* l)
 
 void *malloc_int(size_t size_bytes, size_t& size_bytes_a)
 {
-    // Reserve 8 bytes for size header
-    size_bytes += 8;
+    // Reserve 16 bytes for size header
+    size_bytes += 16;
     // Allign to 16
     size_bytes_a = size_bytes & ~0x0f;
     if (size_bytes%16) size_bytes_a += 16-size_bytes_a%16;
@@ -61,14 +61,14 @@ void *calloc(size_t nelem, size_t size)
     size_t total_size = nelem * size;
     size_t inited;
     u64* ptr = (u64*)malloc_int(total_size, inited);
-    if (ptr != nullptr) memset(ptr+1, inited/8 - 1);
-    return &ptr[1];
+    if (ptr != nullptr) memset(ptr+2, inited/8 - 2);
+    return &ptr[2];
 }
 
 void *malloc(size_t s)
 {
     size_t l;
-    void* p = ((char*)malloc_int(s, l) + 8);
+    void* p = ((char*)malloc_int(s, l) + 16);
     return p;
 }
 
@@ -77,7 +77,7 @@ void free(void * p)
     if (p == nullptr) return;
 
     u64* base = (u64*)p;
-    --base;
+    base -= 2;
     u64 size = *base;
 
     malloc_lock.lock();

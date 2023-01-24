@@ -6,6 +6,7 @@
 #include <kernel/errors.h>
 #include <interrupts/gdt.hh>
 #include <processes/syscalls.hh>
+#include "sse.hh"
 
 klib::vector<CPU_Desc> cpus;
 
@@ -29,6 +30,8 @@ extern "C" void cpu_start_routine()
     enable_apic();
 
     get_cpu_struct()->lapic_id = get_lapic_id();
+
+    enable_sse();
 
     find_new_process();
 }

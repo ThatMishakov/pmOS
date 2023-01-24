@@ -77,6 +77,10 @@ extern "C" void interrupt_handler()
             t_print_bochs("!!! Invalid op-code (UD) instr %h\n", int_s->rip);
             halt();
             break;
+        case 0x07:
+            //t_print_bochs("!!! Device Not Available (NM) PID %h instr %h -> restoring SSE state\n", t->pid, int_s->rip);
+            sse_exception_manager();
+            break;
         case 0x8: 
             t_print_bochs("!!! Double fault (DF) [ABORT]\n");
             halt();

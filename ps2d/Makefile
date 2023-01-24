@@ -30,7 +30,6 @@ INTERNALCFLAGS  :=       \
 	-ffreestanding \
 	-static \
 	-mno-red-zone \
-	-mno-mmx -mno-sse -mno-sse2 \
 	-fPIE
  
 # Use find to glob all *.c files in the directory and extract the object names.

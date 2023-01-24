@@ -13,6 +13,7 @@
 #include <cpus/cpus.hh>
 #include <lib/memory.hh>
 #include "timers.hh"
+#include <cpus/sse.hh>
 
 sched_queue blocked;
 sched_queue uninit;
@@ -114,6 +115,12 @@ void switch_to_task(const klib::shared_ptr<TaskDescriptor>& task)
     }
 
     save_segments(c->current_task);
+
+    if (sse_is_valid()) {
+        //t_print_bochs("Saving SSE registers for PID %h\n", c->current_task->pid);
+        c->current_task->sse_data.save_sse();
+        invalidate_sse();
+    }
 
     // Change task
     task->status = Process_Status::PROCESS_RUNNING;
