@@ -95,7 +95,7 @@ typedef struct {
     PTE entries[512];
 } PACKED ALIGNED(0x1000) PT;
 
-#define PAGE_ADDR(page) (page.page_ppn << (12)
+#define PAGE_ADDR(page) (page.page_ppn << (12))
 
 inline PML4* pml4_of(UNUSED u64 addr, u64 rec_map_index)
 {
@@ -113,7 +113,7 @@ inline PDPT* pdpt_of(u64 addr, u64 rec_map_index)
 {
     const u64 offset = (rec_map_index << (12+9)) | (rec_map_index << (12+9+9)) | (rec_map_index << (12+9+9+9));
     addr = (u64)addr >> (9+9+9);
-    addr &= ~(u64)0xfff;
+    addr &= 07770000;
     return ((PDPT*)((u64)01777770000000000000000 | addr | offset));
 }
 
@@ -121,7 +121,7 @@ inline PD* pd_of(u64 addr, u64 rec_map_index)
 {
     const u64 offset = (rec_map_index << (12+9+9)) | (rec_map_index << (12+9+9+9));
     addr = (u64)addr >> (9+9);
-    addr &= ~(u64)0xfff;
+    addr &= 07777770000;
     return ((PD*)((u64)01777770000000000000000 | addr | offset));
 }
 
@@ -129,39 +129,35 @@ inline PT* pt_of(u64 addr, u64 rec_map_index)
 {
     const u64 offset = (rec_map_index << (12+9+9+9));
     addr = (u64)addr >> (9);
-    addr &= ~(u64)0xfff;
+    addr &= 07777777770000;
     return ((PT*)((u64)01777770000000000000000 | addr | offset));
 }
 
 inline PML4E* get_pml4e(u64 addr, u64 rec_map_index)
 {
     const u64 offset = (rec_map_index << (12)) | (rec_map_index << (12+9)) | (rec_map_index << (12+9+9)) | (rec_map_index << (12+9+9+9));
-    addr = (u64)addr >> (9+9+9+9);
-    addr &= ~(u64)07;
+    addr = ((u64)addr >> (9+9+9+9)) & 07770;
     return ((PML4E*)((u64)01777770000000000000000 | addr | offset));
 }
 
 inline PDPTE* get_pdpe(u64 addr, u64 rec_map_index)
 {
     const u64 offset = (rec_map_index << (12+9)) | (rec_map_index << (12+9+9)) | (rec_map_index << (12+9+9+9));
-    addr = (u64)addr >> (9+9+9);
-    addr &= ~(u64)07;
+    addr = ((u64)addr >> (9+9+9)) & 07777770;
     return ((PDPTE*)((u64)01777770000000000000000 | addr | offset));
 }
 
 inline PDE* get_pde(u64 addr, u64 rec_map_index)
 {
     const u64 offset = (rec_map_index << (12+9+9)) | (rec_map_index << (12+9+9+9));
-    addr = (u64)addr >> (9+9);
-    addr &= ~(u64)0x07;
+    addr = ((u64)addr >> (9+9)) & 07777777770;
     return ((PDE*)((u64)01777770000000000000000 | addr | offset));
 }
 
 inline PTE* get_pte(u64 addr, u64 rec_map_index)
 {
     const u64 offset = (rec_map_index << (12+9+9+9));
-    addr = (u64)addr >> (9);
-    addr &= ~(u64)07;
+    addr = ((u64)addr >> (9)) & 07777777777770;
     return ((PTE*)((u64)01777770000000000000000 | addr | offset));
 }
 

@@ -58,7 +58,7 @@ struct Page_Table {
     }
 };
 
-const u16 rec_map_index = 511;
+const u16 rec_map_index = 256;
 
 // Tries to assign a page. Returns result
 u64 get_page(u64 virtual_addr, Page_Table_Argumments arg);

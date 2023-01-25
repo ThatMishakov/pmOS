@@ -16,11 +16,11 @@ INCPARAM = $(foreach d, $(INCLUDEDIR), -I$(ROOTDIR)/$d)
 # User controllable CFLAGS.
 USERCFLAGS = -Wall -Wextra -Og -pipe
 
-CPPFLAGS = $(INTERNALCFLAGS) -mcmodel=large $(USERCFLAGS) -MMD -MP $(INCPARAM)
+CPPFLAGS = $(INTERNALCFLAGS) -mcmodel=kernel $(USERCFLAGS) -MMD -MP $(INCPARAM)
 CXXFLAGS = -std=c++20 $(INCPARAM)
 #CPPFLAGS = $(CFLAGS)
 ASMFLAGS = $(INCPARAM)
-LDFLAGS = $(INTERNALLDFLAGS) -mcmodel=large
+LDFLAGS = $(INTERNALLDFLAGS) -mcmodel=kernel
 
 # Internal link flags that should not be changed by the user.
 INTERNALLDFLAGS :=     \

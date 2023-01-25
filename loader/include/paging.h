@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <kernel/memory.h>
 
-#define REC_MAP_INDEX 511
+#define REC_MAP_INDEX 256
 
 extern char nx_enabled;
 

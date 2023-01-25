@@ -26,8 +26,9 @@ void load_kernel(uint64_t multiboot_info_str)
         return;
     }
 
+
     /* Map kernel exec into memory */
-    static uint64_t exec_virt_loc = 274877906944;
+    static uint64_t exec_virt_loc = 0x1000000;
     for (uint64_t i = 0; i + mod->mod_start < mod->mod_end; i += 4096) {
         Page_Table_Argumments arg;
         arg.writeable = 1;
@@ -35,6 +36,7 @@ void load_kernel(uint64_t multiboot_info_str)
         arg.extra = 0b010;
         map(exec_virt_loc + i, mod->mod_start + i, arg);
     }
+
 
     /* Parse elf */
     ELF_64bit * elf_h = (ELF_64bit*)exec_virt_loc;
@@ -45,6 +47,7 @@ void load_kernel(uint64_t multiboot_info_str)
 
     ELF_PHeader_64 * elf_pheader = (ELF_PHeader_64 *)((uint64_t)elf_h + elf_h->program_header);
     int elf_pheader_entries = elf_h->program_header_entries;
+
 
     //print_str("==> Allocating memory...\n");
     // Allocate memory
@@ -85,6 +88,7 @@ void load_kernel(uint64_t multiboot_info_str)
     data.mem_bitmap = bitmap;
     data.mem_bitmap_size = bitmap_size;
     data.flags = 0 | (!!(nx_enabled) << 0);
+
     int r = entry(&data);
     //print_str("==> Kernel returned ");
     //print_hex(r);

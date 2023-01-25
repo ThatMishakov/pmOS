@@ -790,13 +790,13 @@ Page_Table Page_Table::get_new_page_table()
 
     // Copy the last entries into the new page table as they are shared across all processes
     // and recurvicely assign the last page to itself
-    ((PML4*)free_page)->entries[509] = pml4(rec_map_index)->entries[509];
-    ((PML4*)free_page)->entries[510] = pml4(rec_map_index)->entries[510];
+    // ((PML4*)free_page)->entries[509] = pml4(rec_map_index)->entries[509];
+    ((PML4*)free_page)->entries[511] = pml4(rec_map_index)->entries[511];
 
-    ((PML4*)free_page)->entries[511] = PML4E();
-    ((PML4*)free_page)->entries[511].present = 1;
-    ((PML4*)free_page)->entries[511].user_access = 0;
-    ((PML4*)free_page)->entries[511].page_ppn = p/KB(4);
+    ((PML4*)free_page)->entries[rec_map_index] = PML4E();
+    ((PML4*)free_page)->entries[rec_map_index].present = 1;
+    ((PML4*)free_page)->entries[rec_map_index].user_access = 0;
+    ((PML4*)free_page)->entries[rec_map_index].page_ppn = p/KB(4);
 
     // Unmap the page
     // TODO: Error checking

@@ -118,7 +118,7 @@ nx_not_supported:
     movl REL(g_pml4), %ecx
     movl %ecx, %eax
     orl $0x000000403, %eax /* P W*/
-    movl %eax, 4096-8(%ecx)
+    movl %eax, 2048(%ecx)
 
     /* *casually* map pages */
     leal REL(_exec_start), %esi

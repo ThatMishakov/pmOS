@@ -43,6 +43,7 @@ void main()
 
     // Map multiboot structure into the kernel
     uint64_t multiboot_str_all = multiboot_info_str & ~(uint64_t)0xfff;
+
     map(multiboot_str_all, multiboot_str_all, pta);
     
     init_mem(multiboot_info_str);
