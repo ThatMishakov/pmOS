@@ -78,6 +78,8 @@ struct TaskDescriptor {
     SSE_Data sse_data;
 };
 
+using task_ptr = klib::shared_ptr<TaskDescriptor>;
+
 
 // Creates a process structure and returns its pid
 ReturnStr<klib::shared_ptr<TaskDescriptor>> create_process(u16 ring = 3);

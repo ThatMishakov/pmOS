@@ -66,6 +66,11 @@ u32 calculate_timer_ticks(const klib::shared_ptr<TaskDescriptor>& task);
 // static CPU_Info* const GSRELATIVE per_cpu = 0; // clang ignores GSRELATIVE for no apparent reason
 extern "C" CPU_Info* get_cpu_struct();
 
+inline klib::shared_ptr<TaskDescriptor> get_current_task()
+{
+    return get_cpu_struct()->current_task;
+}
+
 // Adds the task to the appropriate ready queue
 void push_ready(const klib::shared_ptr<TaskDescriptor>& p);
 
