@@ -27,7 +27,7 @@ extern "C" void syscall_handler()
 
     // TODO: check permissions
 
-    t_print_bochs("Debug: syscall %h pid %h", call_n, get_cpu_struct()->current_task->pid);
+    //t_print_bochs("Debug: syscall %h pid %h", call_n, get_cpu_struct()->current_task->pid);
     if (task->attr.debug_syscalls) {
         t_print("Debug: syscall %h pid %h\n", call_n, get_cpu_struct()->current_task->pid);
     }
@@ -116,7 +116,7 @@ extern "C" void syscall_handler()
         syscall_ret_low(task) = ERROR_NOT_SUPPORTED;
         break;
     }
-    t_print_bochs(" -> result %h\n", syscall_ret_low(task));
+    //t_print_bochs(" -> result %h\n", syscall_ret_low(task));
 }
 
 void get_page(u64 virtual_addr)

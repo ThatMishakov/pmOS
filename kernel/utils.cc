@@ -248,7 +248,7 @@ void memcpy(const char* from, char* to, size_t size)
     }
 }
 
-size_t strlen(const char *start)
+extern "C" size_t strlen(const char *start)
 {
     if (start == nullptr) return 0;
 
@@ -292,9 +292,16 @@ struct stack_frame {
 
 void print_stack_trace()
 {
-    t_print_bochs("Spinlock error: sprinting stack trace\n");
+    t_print_bochs("Stack trace:\n");
     struct stack_frame* s;
     __asm__ volatile("movq %%rbp, %0": "=a" (s));
     for (; s != NULL; s = s->next)
         t_print_bochs("  -> %h\n", (u64)s->return_addr);
+}
+
+extern "C" void abort(void)
+{
+    t_print_bochs("Error: abort() wal called. Freezing...\n");
+    print_stack_trace();
+    while (1);
 }

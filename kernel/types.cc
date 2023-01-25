@@ -7,9 +7,9 @@ void Spinlock::lock()
     bool result;
     do {
         result = __sync_bool_compare_and_swap(&locked, false, true);
-        if (counter++ == 1000000) {
+        if (counter++ == 10000000) {
+            t_print_bochs("Possible deadlock at spinlock 0x%h... ", this);
             print_stack_trace();
-            while (1) ;
         }
     } while (not result);
     __sync_synchronize();

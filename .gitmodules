@@ -1,0 +1,3 @@
+[submodule "kernel/libcxxrt"]
+	path = kernel/libcxxrt
+	url = https://github.com/libcxxrt/libcxxrt

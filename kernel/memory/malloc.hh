@@ -1,10 +1,10 @@
 #pragma once
 #include <stddef.h>
 
-void *malloc(size_t);
-void *realloc(void *, size_t);
-void *calloc(size_t, size_t);
-void free(void *);
+extern "C" void *malloc(size_t);
+extern "C" void *realloc(void *, size_t);
+extern "C" void *calloc(size_t, size_t);
+extern "C" void free(void *);
 
 void *operator new(size_t size);
 void *operator new[](size_t size);

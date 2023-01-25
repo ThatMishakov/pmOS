@@ -9,7 +9,7 @@ void uint_to_string(u64 n, u8 base, char* str, int& length);
 void t_print_bochs(const char *str, ...);
 
 void term_write(const char * str, u64 length);
-size_t strlen(const char *str);
+extern "C" size_t strlen(const char *str);
 
 void t_print(const char *str,...);
 
@@ -22,7 +22,7 @@ inline void halt()
     }
 }
 
-void memcpy(const char* from, char* to, size_t size);
+extern "C" void memcpy(const char* from, char* to, size_t size);
 
 kresult_t prepare_user_buff_rd(const char* buff, size_t size);
 

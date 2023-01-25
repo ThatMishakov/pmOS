@@ -63,7 +63,7 @@ extern "C" void interrupt_handler()
     u64 err = t->regs.int_err;
     Interrupt_Stackframe* int_s = &t->regs.e;
 
-    t_print_bochs("Int %h error %h pid %h rip %h cs %h\n", intno, err, t->pid, t->regs.e.rip, t->regs.e.cs);
+    //t_print_bochs("Int %h error %h pid %h rip %h cs %h\n", intno, err, t->pid, t->regs.e.rip, t->regs.e.cs);
 
     if (intno < 32)
     switch (intno) {

@@ -27,7 +27,13 @@ struct _Unwind_Exception {
     uint64			 private_2;
 };
 
+struct Registers {
+    uint64 registers[16];
+    uint64 IP;
+};
+
 struct _Unwind_Context {
+    Registers regs;
 };
 
 _Unwind_Reason_Code _Unwind_RaiseException(_Unwind_Exception *exception_object);

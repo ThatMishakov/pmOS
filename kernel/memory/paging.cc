@@ -827,7 +827,7 @@ Page_Table& Page_Table::operator=(Page_Table&& t) noexcept
     return *this;
 }
 
-Page_Table::Page_Table(Page_Table&& n): pml4_phys(n.pml4_phys), shared_str(n.shared_str)
+Page_Table::Page_Table(Page_Table&& n) noexcept: pml4_phys(n.pml4_phys), shared_str(n.shared_str)
 {
     n.pml4_phys = nullptr;
     n.shared_str = nullptr;

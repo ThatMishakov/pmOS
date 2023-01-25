@@ -39,7 +39,8 @@ INTERNALCFLAGS  :=       \
 	-mno-red-zone \
 	-mno-mmx -mno-sse -mno-sse2 \
 	-no-pie -fno-pic \
-	-fno-exceptions -fno-rtti \
+	-fno-exceptions \
+	-D_CXXRT_NO_EXCEPTIONS \
 	-g
  
 # Use find to glob all *.c files in the directory and extract the object names.
@@ -53,7 +54,12 @@ OBJS = 	./objects/icxxabi.o ./start.o ./asm.o ./main.o ./misc.o ./utils.o types.
 	    ./processes/idle.o ./processes/syscalls.o ./processes/tasks.o ./processes/syscalls_asm.o \
 		./sched/sched.o ./sched/timers.o \
 		./messaging/messaging.o \
-		./cpus/cpus.o ./cpus/sse.o
+		./cpus/cpus.o ./cpus/sse.o \
+		./libcxxrt/src/cxa_atexit.o ./libcxxrt/src/cxa_finalize.o \
+		./libcxxrt/src/dynamic_cast.o ./libcxxrt/src/guard.o \
+		./libcxxrt/src/memory.o ./libcxxrt/src/noexception.o ./libcxxrt/src/stdexcept.o \
+		./libcxxrt/src/terminate.o ./libcxxrt/src/typeinfo.o \
+		# ./libcxxrt/src/auxhelper.o ./libcxxrt/src/exception.o 
 
 CRTI_OBJ =  ./objects/crti.o
 CRTBEGIN_OBJ:=$(shell $(CC) $(CFLAGS) -print-file-name=crtbegin.o)

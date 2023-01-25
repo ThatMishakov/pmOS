@@ -55,8 +55,28 @@ void *malloc_int(size_t size_bytes, size_t& size_bytes_a)
     return p;
 }
 
-void *realloc(void *, size_t);
-void *calloc(size_t nelem, size_t size)
+static size_t get_alloc_size(const void* ptr)
+{
+    return *(((const u64*)ptr) - 2);
+}
+
+extern "C" void *realloc(void *old_ptr, size_t new_size)
+{
+    void* new_ptr = NULL;
+    if (new_size != 0) {
+        new_ptr = malloc(new_size);
+    }
+
+    if (old_ptr != NULL) {
+        if (new_ptr != NULL)
+            memcpy((char*)new_ptr, (char*)old_ptr, get_alloc_size(old_ptr));
+
+        free(old_ptr);
+    }
+    
+    return new_ptr;
+}
+extern "C" void *calloc(size_t nelem, size_t size)
 {
     size_t total_size = nelem * size;
     size_t inited;
@@ -65,14 +85,14 @@ void *calloc(size_t nelem, size_t size)
     return &ptr[2];
 }
 
-void *malloc(size_t s)
+extern "C" void *malloc(size_t s)
 {
     size_t l;
     void* p = ((char*)malloc_int(s, l) + 16);
     return p;
 }
 
-void free(void * p)
+extern "C" void free(void * p)
 {
     if (p == nullptr) return;
 
