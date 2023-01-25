@@ -28,30 +28,33 @@
     # Stack
     movq %rsp, 96(%r15)
 
-    # Also, %rip can be loaded from %ecx here to preserve compaitability with iret
+    # Compaitability with iret
+    movq %rcx, 72(%r15)
+    movq %r11, 88(%r15)
     .endm
 
     .macro restore_regs
     movq       %gs:24, %r15
 
-    movq      96(%r15), %rsp
 
-    movq 0(%r15), %rdi
-    movq 8(%r15), %rsi
-    movq 16(%r15), %rdx
-    movq 24(%r15), %rcx
-    movq 32(%r15), %r8
-    movq 40(%r15), %r9
-    movq 48(%r15), %rax
-    movq 56(%r15), %r10
-    movq 64(%r15), %r11
+    movq        0(%r15), %rdi
+    movq        8(%r15), %rsi
+    movq       16(%r15), %rdx
+    movq       32(%r15), %r8
+    movq       40(%r15), %r9
+    movq       48(%r15), %rax
+    movq       56(%r15), %r10
 
-    movq       112(%r15), %rbx
-    movq       120(%r15), %rbp
-    movq       128(%r15), %r12
-    movq       136(%r15), %r13
-    movq       144(%r15), %r14
-    movq       152(%r15), %r15
+    movq       72(%r15), %rcx
+    movq       88(%r15), %r11
+    movq       96(%r15), %rsp
+
+    movq      112(%r15), %rbx
+    movq      120(%r15), %rbp
+    movq      128(%r15), %r12
+    movq      136(%r15), %r13
+    movq      144(%r15), %r14
+    movq      152(%r15), %r15
     .endm
 
 
@@ -65,9 +68,10 @@ syscall_entry:
     save_regs
 
     # Entry type
+    movq %gs:24,   %r15
     movq $1,   176(%r15)
 
-    # Switch to kernelss stack
+    # Switch to kernel's stack
     movq %gs:8, %rsp
 
     # Stack frame conventions
@@ -79,7 +83,7 @@ syscall_entry:
     # Check that and change return method if that's the case
     movq %gs:24, %r15
     cmpq $0, 176(%r15)
-    je ret_from_interrupt
+    jmp ret_from_interrupt
 
     .globl ret_from_syscall
 ret_from_syscall:

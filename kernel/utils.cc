@@ -284,3 +284,17 @@ void copy_frame(u64 from, u64 to)
     copy_frame_free_p.release_free_page(t2);
     copy_frame_s.unlock();
 }
+
+struct stack_frame {
+    stack_frame* next;
+    void* return_addr;
+};
+
+void print_stack_trace()
+{
+    t_print_bochs("Spinlock error: sprinting stack trace\n");
+    struct stack_frame* s;
+    __asm__ volatile("movq %%rbp, %0": "=a" (s));
+    for (; s != NULL; s = s->next)
+        t_print_bochs("  -> %h\n", (u64)s->return_addr);
+}

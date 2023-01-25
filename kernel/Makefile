@@ -40,12 +40,13 @@ INTERNALCFLAGS  :=       \
 	-mno-mmx -mno-sse -mno-sse2 \
 	-no-pie -fno-pic \
 	-fno-exceptions -fno-rtti \
+	-g
  
 # Use find to glob all *.c files in the directory and extract the object names.
 CCFILES := $(shell find ./ -type f -name '*.cc')
 CFILES := $(shell find ./ -type f -name '*.c')
 ASMFILES := $(shell find ./ -type f -name '*.S')
-OBJS = 	./objects/icxxabi.o ./start.o ./asm.o ./main.o ./misc.o ./utils.o \
+OBJS = 	./objects/icxxabi.o ./start.o ./asm.o ./main.o ./misc.o ./utils.o types.o \
 	    ./memory/mem.o ./memory/malloc.o ./memory/free_page_alloc.o ./memory/palloc.o ./memory/paging.o ./memory/shared_mem.o \
 	    ./interrupts/apic.o ./interrupts/pic.o ./interrupts/gdt.o ./interrupts/exceptions_managers.o ./interrupts/interrupts.o \
 		./interrupts/pit.o ./interrupts/interrupts_asm.o ./interrupts/loadGDT.o\

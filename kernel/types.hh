@@ -23,12 +23,7 @@ void t_print_bochs(const char *str, ...);
 struct Spinlock {
 	volatile bool locked = false;
 
-	inline void lock()
-	{
-		// t_print_bochs("Debug: locking   %h\n", this);
-		while (not __sync_bool_compare_and_swap(&locked, false, true));
-		__sync_synchronize();
-	}
+	void lock();
 	
 	inline void unlock()
 	{

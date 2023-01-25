@@ -73,3 +73,5 @@ const A& min(const A& a, const A& b) noexcept
     if (a < b) return a;
     return b;
 }
+
+void print_stack_trace();

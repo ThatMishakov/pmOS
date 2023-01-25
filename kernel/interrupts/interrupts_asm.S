@@ -115,7 +115,7 @@ isr\num\():
     .type isr252, @function
 isr252:
     movl $0, (0x0b0 + apic_mapped_addr)(%eip)
-    iret
+    iretq
 
 
 /* ------------------------------------------ IDT --------------------------------------------------- */
@@ -192,6 +192,9 @@ ints_handler:
     save_context
     movq %gs:24, %rax
     movq $0,   176(%rax) // Entry type
+
+    # Stack frame conventions
+    movq $0, %rbp
 
     movq $0, %rbp
     cmpq $0xCA, 192(%rax) 
