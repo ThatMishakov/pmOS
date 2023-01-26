@@ -42,7 +42,7 @@ extern sched_queue dead_queue;
 
 struct CPU_Info {
     CPU_Info* self = this; // 0
-    Stack* kernel_stack = nullptr; // 8
+    u64* kernel_stack_top = nullptr; // 8
     u64 temp_var = 0; // 16
     klib::shared_ptr<TaskDescriptor> current_task = klib::shared_ptr<TaskDescriptor>(); // 24
 
@@ -52,6 +52,8 @@ struct CPU_Info {
 
     u32 timer_val = 0;
     u32 lapic_id = 0;
+
+    Stack* kernel_stack = nullptr;
 
     klib::shared_ptr<TaskDescriptor> atomic_pick_highest_priority();
     klib::shared_ptr<TaskDescriptor> atomic_get_front_priority(priority_t);

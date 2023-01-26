@@ -138,6 +138,11 @@ struct Task_Regs { // 192 bytes
 
 struct Stack {
     u8 byte[STACK_SIZE];
+
+    inline u64* get_stack_top()
+    {
+        return (u64*)&(byte[STACK_SIZE]);
+    }
 };
 
 
