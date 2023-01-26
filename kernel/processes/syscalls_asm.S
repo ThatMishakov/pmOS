@@ -82,8 +82,8 @@ syscall_entry:
     # Syscall might do a task switch, which might need to be returned to by iret
     # Check that and change return method if that's the case
     movq %gs:24, %r15
-    cmpq $0, 176(%r15)
-    jmp ret_from_interrupt
+    movq 176(%r15), %r15
+    jmpq *return_table(,%r15, 8)
 
     .globl ret_from_syscall
 ret_from_syscall:

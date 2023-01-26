@@ -116,3 +116,8 @@ extern "C" void interrupt_handler()
         smart_eoi(intno);
     }
 }
+
+void (*return_table[2])(void) = {
+    ret_from_interrupt,
+    ret_from_syscall,
+};

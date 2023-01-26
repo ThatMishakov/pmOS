@@ -3,7 +3,7 @@
     .globl syscall
     .type syscall, @function
 syscall:
-    movq %rcx, %rax
+    movq %rcx, %r10
     # int $0xca
     syscall
     ret

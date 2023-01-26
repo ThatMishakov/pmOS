@@ -2,10 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <internal_param.h>
-#include <system.h>
-
+#include <pmos/system.h>
 #include <string.h>
-#include <system.h>
 #include <stdio.h>
 
 char buff[200];

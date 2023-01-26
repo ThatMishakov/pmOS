@@ -148,3 +148,8 @@ struct Stack {
 
 extern "C" void interrupt_handler();
 extern "C" void fill_idt();
+
+extern "C" void ret_from_interrupt(void) NORETURN;
+extern "C" void ret_from_syscall(void) NORETURN;
+
+extern void (*return_table[2])(void);

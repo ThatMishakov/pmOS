@@ -21,5 +21,6 @@ typedef signed long i64;
 #define UNUSED __attribute__((unused))
 #define GSRELATIVE __attribute__((address_space(256)))
 #define FALLTHROUGH __attribute__((fallthrough)) 
+#define NORETURN __attribute__((noreturn))
 
 #endif

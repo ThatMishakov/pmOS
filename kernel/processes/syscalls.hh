@@ -107,7 +107,7 @@ inline u64& syscall_arg2(const klib::shared_ptr<TaskDescriptor>& task)
 
 inline u64& syscall_arg3(const klib::shared_ptr<TaskDescriptor>& task)
 {
-    return task->regs.scratch_r.rax;
+    return task->regs.scratch_r.r10;
 }
 
 inline u64& syscall_arg4(const klib::shared_ptr<TaskDescriptor>& task)

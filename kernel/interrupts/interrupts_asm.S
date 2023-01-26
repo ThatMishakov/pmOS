@@ -208,8 +208,8 @@ not_syscall:
 end:
 
     movq %gs:24, %r15
-    cmpq $0, 176(%r15)
-    jne ret_from_syscall
+    movq 176(%r15), %r15
+    jmpq *return_table(,%r15, 8)
 
     .globl ret_from_interrupt
 ret_from_interrupt:
