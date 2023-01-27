@@ -1,6 +1,5 @@
 #ifndef GDT_HH
 #define GDT_HH
-#include <kernel/gdt.h>
 
 struct TSS {
     u32 reserved0 = 0;
@@ -42,6 +41,20 @@ struct System_Segment_Descriptor {
     TSS *tss();
 } PACKED;
 
+struct GDT_entry {
+    u16 limit0;
+    u16 base0;
+    u8 base1;
+    u8 access;
+    u8 limit1_flags;
+    u8 base2;
+} PACKED;
+
+struct PACKED GDT_descriptor {
+    u16 size;
+    u64 offset;
+};
+
 struct GDT {
     GDT_entry Null {}; // always null
     GDT_entry _64bit_kernel_code {0, 0, 0, 0x9a, 0xa2, 0};
@@ -49,8 +62,8 @@ struct GDT {
     GDT_entry _32bit_user_code   {0, 0, 0, 0xfa, 0xc0, 0};
     GDT_entry _64bit_user_data   {0, 0, 0, 0xf2, 0xa0, 0};
     GDT_entry _64bit_user_code   {0, 0, 0, 0xfa, 0xa0, 0};
-    System_Segment_Descriptor SSD_entries[26] = {};
-} PACKED ALIGNED(0x1000);
+    System_Segment_Descriptor tss_descriptor;
+} PACKED ALIGNED(8);
 
 #define R0_CODE_SEGMENT        (0x08)
 #define R0_DATA_SEGMENT        (0x10)

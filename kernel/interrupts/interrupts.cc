@@ -25,20 +25,16 @@ void init_IDT()
     set_idt();
 }
 
-int tss_index = 0;
-
 void init_kernel_stack()
 {
-    int tss_i = tss_index++;
-
     CPU_Info* s = get_cpu_struct();
     s->kernel_stack = (Stack*)palloc(sizeof(Stack)/4096);
-    kernel_gdt.SSD_entries[tss_i] = System_Segment_Descriptor((u64) calloc(1,sizeof(TSS)), sizeof(TSS), 0x89, 0x02);
+    kernel_gdt.tss_descriptor = System_Segment_Descriptor((u64) calloc(1,sizeof(TSS)), sizeof(TSS), 0x89, 0x02);
 
     s->kernel_stack_top = s->kernel_stack->get_stack_top();
-    kernel_gdt.SSD_entries[tss_i].tss()->ist1 = (u64)s->kernel_stack->get_stack_top();
+    kernel_gdt.tss_descriptor.tss()->ist1 = (u64)s->kernel_stack->get_stack_top();
     
-    loadTSS(TSS_OFFSET + tss_i*0x10);
+    loadTSS(TSS_OFFSET);
 }
 
 void init_interrupts()
