@@ -5,7 +5,7 @@ A hobbyist operating system for x86_64 written in C, C++ and ASM. The goal of th
 
 ## Compilation and execution
 
-clang and lld is used as cross-compiler and linker, and grub2 is used to create bootable CDs (and loading the kernel). In order to compile the system, you need make, clang, lld, grub, xorriso, grub2. You can then use `make bochs` to compile everything and execute it inside the bochs debugger.
+GCC/binutils are used as a cross-compiler and a linker, and grub2 is used to create bootable CDs (and loading the kernel). In order to compile the kernel and loader, you need make, grub, xorriso, grub2 and a gcc cross-compiler (https://wiki.osdev.org/GCC_Cross-Compiler). Userspace programs use hosted gcc cross-compiler, which should be built automatically the first time you execute a make. You can then use `make bochs` to compile everything and execute it inside the bochs debugger.
 
 ## Features
 These are the features that are planned to be had in the OS:
@@ -20,7 +20,7 @@ These are the features that are planned to be had in the OS:
 - [ ] Processes and threads
   - [x] Processes
   - [x] Process switching
-  - [ ] Preemptive multitasking
+  - [x] Preemptive multitasking
   - [ ] Threads
   - [ ] Kernel threads
   - [x] Ring 3
@@ -40,8 +40,10 @@ These are the features that are planned to be had in the OS:
   - [x] Very basic exception handling
   - [x] Syscalls
     - [x] Syscalls with interrupts
-    - [ ] Fast syscalls
-  - [ ] Interrupt dispatching to drivers
+    - [x] Fast syscalls with SYSCALL/SYSRET
+    - [ ] SYSENTER/SYSLEAVE (for no reason...)
+    - [ ] Call Gates ?
+  - [ ] Interrupt dispatching to drivers -> I have written one, but I don't like it and plan on rewriting it
 
 - [x] IPC and messaging
   - [x] Buffered string messages
@@ -52,7 +54,8 @@ These are the features that are planned to be had in the OS:
 
   
 - [ ] Permissions
-- [ ] Multi CPU support
+- [x] Multi CPU support -> race conditions all over the place
+- [X] SSE instructions
 
 **Core utilities and daemons**
 - [ ] Process management (processd)
@@ -74,11 +77,12 @@ These are the features that are planned to be had in the OS:
 - [ ] Serial/Parallel
 - [ ] PCI/PCIe
 - [ ] Network cards
+- [ ] Timers
 
 **Userland**
 - [ ] Terminal
 - [ ] GUI
-- [ ] C Library
+- [ ] C Library -> started workking on one, but it's very far from complete
 
 
 ## Architecture
