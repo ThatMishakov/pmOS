@@ -63,6 +63,11 @@ struct GDT {
     GDT_entry _64bit_user_data   {0, 0, 0, 0xf2, 0xa0, 0};
     GDT_entry _64bit_user_code   {0, 0, 0, 0xfa, 0xa0, 0};
     System_Segment_Descriptor tss_descriptor;
+
+    constexpr u16 get_size()
+    {
+        return sizeof(GDT) - 1;
+    }
 } PACKED ALIGNED(8);
 
 #define R0_CODE_SEGMENT        (0x08)
@@ -73,9 +78,12 @@ struct GDT {
 #define TSS_OFFSET             (0x30)
 
 extern "C" void loadGDT(GDT* gdt, u16 size);
+void loadGDT(GDT* gdt);
 
 void init_gdt();
 
-extern GDT kernel_gdt;
+void load_temp_gdt();
+
+extern GDT temp_gdt;
 
 #endif

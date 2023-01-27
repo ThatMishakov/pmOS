@@ -29,10 +29,10 @@ void init_kernel_stack()
 {
     CPU_Info* s = get_cpu_struct();
     s->kernel_stack = (Stack*)palloc(sizeof(Stack)/4096);
-    kernel_gdt.tss_descriptor = System_Segment_Descriptor((u64) calloc(1,sizeof(TSS)), sizeof(TSS), 0x89, 0x02);
+    s->cpu_gdt.tss_descriptor = System_Segment_Descriptor((u64) calloc(1,sizeof(TSS)), sizeof(TSS), 0x89, 0x02);
 
     s->kernel_stack_top = s->kernel_stack->get_stack_top();
-    kernel_gdt.tss_descriptor.tss()->ist1 = (u64)s->kernel_stack->get_stack_top();
+    s->cpu_gdt.tss_descriptor.tss()->ist1 = (u64)s->kernel_stack->get_stack_top();
     
     loadTSS(TSS_OFFSET);
 }

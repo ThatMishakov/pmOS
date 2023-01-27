@@ -17,9 +17,7 @@ Kernel_Entry_Data* kdata;
 extern "C" int main(Kernel_Entry_Data* d)
 {
     nx_bit_enabled = d->flags & 0x01;
-
     kdata = d;
-    init_gdt();
     palloc.init(d->mem_bitmap, d->mem_bitmap_size);
     palloc.init_after_paging();
     _init();

@@ -13,7 +13,10 @@ klib::vector<CPU_Desc> cpus;
 void init_per_cpu()
 {
     CPU_Info* c = new CPU_Info;
+    loadGDT(&c->cpu_gdt);
+
     write_msr(0xC0000101, (u64)c);
+
     cpus.push_back({c, get_lapic_id()});
 
     init_idle();
@@ -23,7 +26,6 @@ void init_per_cpu()
 
 extern "C" void cpu_start_routine()
 {
-    init_gdt();
     init_per_cpu();
     set_idt();
     init_kernel_stack();

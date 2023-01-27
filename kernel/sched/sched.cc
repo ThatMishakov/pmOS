@@ -27,6 +27,7 @@ PID pid = 1;
 void init_scheduling()
 {
     init_per_cpu();
+    
     klib::shared_ptr<TaskDescriptor> current_task = klib::make_shared<TaskDescriptor>();
     get_cpu_struct()->current_task = current_task;
 

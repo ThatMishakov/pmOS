@@ -59,6 +59,7 @@ struct CPU_Info {
     klib::shared_ptr<TaskDescriptor> atomic_get_front_priority(priority_t);
     klib::shared_ptr<TaskDescriptor> atomic_pick_lowest_priority(unsigned max_priority = 2);
 
+    GDT cpu_gdt;
 };
 
 quantum_t assign_quantum_on_priority(priority_t);

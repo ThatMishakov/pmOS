@@ -1,15 +1,21 @@
 #include "interrupts.hh"
 #include "gdt.hh"
 #include "utils.hh"
+#include "sched/sched.hh"
 
 TSS* System_Segment_Descriptor::tss()
 {
     return (TSS*)((u64)base0 | (u64)base1 << 16 | (u64)base2 << 24 | (u64)base3 << 32);
 }
 
-GDT kernel_gdt;
-
-void init_gdt()
+void loadGDT(GDT *gdt)
 {
-    loadGDT(&kernel_gdt, sizeof(GDT) - 1);
+    loadGDT(gdt, gdt->get_size());
 }
+
+void load_temp_gdt()
+{
+    loadGDT(&temp_gdt);
+}
+
+GDT temp_gdt;

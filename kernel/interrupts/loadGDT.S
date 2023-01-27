@@ -11,6 +11,7 @@ loadGDT:
     movw $0x23, %ax
     movw %ax, %ds
     movw %ax, %es
+    movw $0, %ax
     movw %ax, %fs
     movw %ax, %gs
     movw $0x10, %ax
