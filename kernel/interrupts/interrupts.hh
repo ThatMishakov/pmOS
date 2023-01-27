@@ -50,7 +50,6 @@ struct IDT_descriptor {
 
 
 void init_interrupts();
-void init_kernel_stack();
 
 extern IDT k_idt;
 extern "C" void loadIDT(IDT_descriptor* IDT_desc);

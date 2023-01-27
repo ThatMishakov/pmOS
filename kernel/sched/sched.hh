@@ -46,6 +46,7 @@ struct CPU_Info {
     u64 temp_var = 0; // 16
     klib::shared_ptr<TaskDescriptor> current_task = klib::shared_ptr<TaskDescriptor>(); // 24
 
+    GDT cpu_gdt;
 
     klib::array<sched_queue, sched_queues_levels> sched_queues;
     klib::shared_ptr<TaskDescriptor> idle_task = klib::shared_ptr<TaskDescriptor>();
@@ -58,8 +59,6 @@ struct CPU_Info {
     klib::shared_ptr<TaskDescriptor> atomic_pick_highest_priority();
     klib::shared_ptr<TaskDescriptor> atomic_get_front_priority(priority_t);
     klib::shared_ptr<TaskDescriptor> atomic_pick_lowest_priority(unsigned max_priority = 2);
-
-    GDT cpu_gdt;
 };
 
 quantum_t assign_quantum_on_priority(priority_t);

@@ -7,6 +7,7 @@
 #include <interrupts/gdt.hh>
 #include <processes/syscalls.hh>
 #include "sse.hh"
+#include <memory/palloc.hh>
 
 klib::vector<CPU_Desc> cpus;
 
@@ -16,6 +17,14 @@ void init_per_cpu()
     loadGDT(&c->cpu_gdt);
 
     write_msr(0xC0000101, (u64)c);
+
+    c->kernel_stack = (Stack*)palloc(sizeof(Stack)/4096);
+    c->cpu_gdt.tss_descriptor = System_Segment_Descriptor((u64) calloc(1,sizeof(TSS)), sizeof(TSS), 0x89, 0x02);
+
+    c->kernel_stack_top = c->kernel_stack->get_stack_top();
+    c->cpu_gdt.tss_descriptor.tss()->ist1 = (u64)c->kernel_stack->get_stack_top();
+    
+    loadTSS(TSS_OFFSET);
 
     cpus.push_back({c, get_lapic_id()});
 
@@ -28,7 +37,6 @@ extern "C" void cpu_start_routine()
 {
     init_per_cpu();
     set_idt();
-    init_kernel_stack();
     enable_apic();
 
     get_cpu_struct()->lapic_id = get_lapic_id();
