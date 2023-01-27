@@ -839,4 +839,9 @@ void program_syscall()
     // Enable SYSCALL/SYSRET in EFER register
     u64 efer = read_msr(0xC0000080);
     write_msr(0xC0000080, efer | (0x01 << 0));
+
+
+    write_msr(0x174, R0_CODE_SEGMENT); // IA32_SYSENTER_CS
+    write_msr(0x175, (u64)get_cpu_struct()->kernel_stack_top); // IA32_SYSENTER_ESP
+    write_msr(0x176, (u64)&sysenter_entry); // IA32_SYSENTER_EIP
 }

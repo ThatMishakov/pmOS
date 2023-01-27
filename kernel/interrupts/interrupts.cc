@@ -100,7 +100,8 @@ extern "C" void interrupt_handler()
     }
 }
 
-void (*return_table[2])(void) = {
+void (*return_table[3])(void) = {
     ret_from_interrupt,
     ret_from_syscall,
+    ret_from_sysenter,
 };

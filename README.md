@@ -41,7 +41,7 @@ These are the features that are planned to be had in the OS:
   - [x] Syscalls
     - [x] Syscalls with interrupts
     - [x] Fast syscalls with SYSCALL/SYSRET
-    - [ ] SYSENTER/SYSLEAVE (for no reason...)
+    - [x] SYSENTER/SYSEXIT (for no reason...)
     - [ ] Call Gates ?
   - [ ] Interrupt dispatching to drivers -> I have written one, but I don't like it and plan on rewriting it
 

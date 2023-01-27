@@ -107,7 +107,7 @@ inline u64& syscall_arg2(const klib::shared_ptr<TaskDescriptor>& task)
 
 inline u64& syscall_arg3(const klib::shared_ptr<TaskDescriptor>& task)
 {
-    return task->regs.scratch_r.r10;
+    return task->regs.scratch_r.rcx;
 }
 
 inline u64& syscall_arg4(const klib::shared_ptr<TaskDescriptor>& task)
@@ -132,6 +132,9 @@ inline u64& syscall_ret_high(const klib::shared_ptr<TaskDescriptor>& task)
 
 // Entry point for when userpsace calls SYSCALL instruction
 extern "C" void syscall_entry();
+
+// Entry point for when userpsace calls SYSENTER instruction
+extern "C" void sysenter_entry();
 
 // Enables SYSCALL instruction
 void program_syscall();
