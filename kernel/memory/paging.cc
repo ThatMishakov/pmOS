@@ -18,11 +18,11 @@ bool nx_bit_enabled = false;
 
 kresult_t get_page(u64 virtual_addr, Page_Table_Argumments arg)
 {
-    ReturnStr<void*> r = palloc.alloc_page();
+    ReturnStr<void*> r = kernel_pframe_allocator.alloc_page();
     if (r.result != SUCCESS) return r.result;
 
     u64 b = map((u64)r.val, virtual_addr, arg);
-    if (b != SUCCESS) palloc.free(r.val);
+    if (b != SUCCESS) kernel_pframe_allocator.free(r.val);
     return b;
 }
 
@@ -49,7 +49,7 @@ kresult_t map(u64 physical_addr, u64 virtual_addr, Page_Table_Argumments arg)
     PML4E& pml4e = pml4(rec_map_index)->entries[pml4_entry];
     if (not pml4e.present) {
         pml4e = {};
-        ReturnStr<u64> p = palloc.alloc_page_ppn();
+        ReturnStr<u64> p = kernel_pframe_allocator.alloc_page_ppn();
         if (p.result != SUCCESS) return p.result; 
         pml4e.page_ppn = p.val;
         pml4e.present = 1;
@@ -62,7 +62,7 @@ kresult_t map(u64 physical_addr, u64 virtual_addr, Page_Table_Argumments arg)
     if (pdpte.size) return ERROR_PAGE_PRESENT;
     if (not pdpte.present) {
         pdpte = {};
-        ReturnStr<u64> p =  palloc.alloc_page_ppn();;
+        ReturnStr<u64> p =  kernel_pframe_allocator.alloc_page_ppn();;
         if (p.result != SUCCESS) return p.result; 
         pdpte.page_ppn = p.val;
         pdpte.present = 1;
@@ -75,7 +75,7 @@ kresult_t map(u64 physical_addr, u64 virtual_addr, Page_Table_Argumments arg)
     if (pde.size) return ERROR_PAGE_PRESENT;
     if (not pde.present) {
         pde = {};
-        ReturnStr<u64> p = palloc.alloc_page_ppn();
+        ReturnStr<u64> p = kernel_pframe_allocator.alloc_page_ppn();
         if (p.result != SUCCESS) return p.result; 
         pde.page_ppn = p.val;
         pde.present = 1;
@@ -176,7 +176,7 @@ kresult_t release_page_s(u64 virtual_address, u64 page_table)
 
     switch (pte.avl) {
     case PAGE_NORMAL:
-        palloc.free((void*)(pte.page_ppn << 12));
+        kernel_pframe_allocator.free((void*)(pte.page_ppn << 12));
         FALLTHROUGH;
     case PAGE_DELAYED:
         invalidade(virtual_address);
@@ -240,7 +240,7 @@ static kresult_t alloc_page_lazy_common(u64 virtual_addr, Page_Table_Argumments 
     PML4E* pml4e = get_pml4e(virtual_addr, rec_map_index);
     if (not pml4e->present) {
         *pml4e = {};
-        ReturnStr<u64> p = palloc.alloc_page_ppn();
+        ReturnStr<u64> p = kernel_pframe_allocator.alloc_page_ppn();
         if (p.result != SUCCESS) return p.result; 
         pml4e->page_ppn = p.val;
         pml4e->present = 1;
@@ -253,7 +253,7 @@ static kresult_t alloc_page_lazy_common(u64 virtual_addr, Page_Table_Argumments 
     if (pdpte->size) return ERROR_PAGE_PRESENT;
     if (not pdpte->present) {
         *pdpte = {};
-        ReturnStr<u64> p =  palloc.alloc_page_ppn();
+        ReturnStr<u64> p =  kernel_pframe_allocator.alloc_page_ppn();
         if (p.result != SUCCESS) return p.result; 
         pdpte->page_ppn = p.val;
         pdpte->present = 1;
@@ -266,7 +266,7 @@ static kresult_t alloc_page_lazy_common(u64 virtual_addr, Page_Table_Argumments 
     if (pde.size) return ERROR_PAGE_PRESENT;
     if (not pde.present) {
         pde = {};
-        ReturnStr<u64> p = palloc.alloc_page_ppn();
+        ReturnStr<u64> p = kernel_pframe_allocator.alloc_page_ppn();
         if (p.result != SUCCESS) return p.result; 
         pde.page_ppn = p.val;
         pde.present = 1;
@@ -342,7 +342,7 @@ kresult_t get_lazy_page(u64 virtual_addr)
     }
 
     // Get an empty page
-    ReturnStr<u64> page = palloc.alloc_page_ppn();
+    ReturnStr<u64> page = kernel_pframe_allocator.alloc_page_ppn();
     if (page.result != SUCCESS) return page.result;
     pte.page_ppn = page.val;
     pte.present = 1;
@@ -555,7 +555,7 @@ kresult_t set_pte(u64 virtual_addr, PTE pte_n, Page_Table_Argumments arg)
     PML4E& pml4e = *get_pml4e(virtual_addr, rec_map_index);
     if (not pml4e.present) {
         pml4e = {};
-        ReturnStr<u64> p = palloc.alloc_page_ppn();
+        ReturnStr<u64> p = kernel_pframe_allocator.alloc_page_ppn();
         if (p.result != SUCCESS) return p.result; 
         pml4e.page_ppn = p.val;
         pml4e.present = 1;
@@ -568,7 +568,7 @@ kresult_t set_pte(u64 virtual_addr, PTE pte_n, Page_Table_Argumments arg)
     if (pdpte.size) return ERROR_PAGE_PRESENT;
     if (not pdpte.present) {
         pdpte = {};
-        ReturnStr<u64> p =  palloc.alloc_page_ppn();;
+        ReturnStr<u64> p =  kernel_pframe_allocator.alloc_page_ppn();;
         if (p.result != SUCCESS) return p.result; 
         pdpte.page_ppn = p.val;
         pdpte.present = 1;
@@ -582,7 +582,7 @@ kresult_t set_pte(u64 virtual_addr, PTE pte_n, Page_Table_Argumments arg)
     if (pde.size) return ERROR_PAGE_PRESENT;
     if (not pde.present) {
         pde = {};
-        ReturnStr<u64> p = palloc.alloc_page_ppn();
+        ReturnStr<u64> p = kernel_pframe_allocator.alloc_page_ppn();
         if (p.result != SUCCESS) return p.result; 
         pde.page_ppn = p.val;
         pde.present = 1;
@@ -618,12 +618,12 @@ kresult_t unshare_page(u64 virtual_addr, u64 pid)
             pte->avl = PAGE_NORMAL;
             return SUCCESS;
         } else { // Copy page
-            ReturnStr<u64> k = palloc.alloc_page_ppn();
+            ReturnStr<u64> k = kernel_pframe_allocator.alloc_page_ppn();
             if (k.result != SUCCESS) return k.result;
 
             kresult_t r = release_shared(page, pid);
             if (r != SUCCESS) {
-                palloc.free_ppn(k.val);
+                kernel_pframe_allocator.free_ppn(k.val);
                 return r;
             }
 
@@ -704,7 +704,7 @@ void free_pdpt(u64 pdp_start, u64 page_table)
         PDPTE* p = get_pdpe(addr, rec_map_index);
         if (p->present) {
             free_pd(addr, page_table);
-            palloc.free((void*)(p->page_ppn << 12));
+            kernel_pframe_allocator.free((void*)(p->page_ppn << 12));
         }
     }
 }
@@ -720,7 +720,7 @@ void free_user_pages(u64 page_table)
         PML4E* p = get_pml4e(i, rec_map_index);
         if (p->present) {
             free_pdpt(i, page_table);
-            palloc.free((void*)(p->page_ppn << 12));
+            kernel_pframe_allocator.free((void*)(p->page_ppn << 12));
         }
     }
 
@@ -765,7 +765,7 @@ Page_Table Page_Table::get_new_page_table()
     klib::unique_ptr<shared_info> refc = klib::make_unique<shared_info>();
 
     // Get a free page
-    ReturnStr<void*> l = palloc.alloc_page();
+    ReturnStr<void*> l = kernel_pframe_allocator.alloc_page();
     u64 p = (u64)l.val;
 
     // TODO: Throw exception
@@ -842,7 +842,7 @@ Page_Table::~Page_Table()
             delete shared_str;
 
             free_user_pages((u64)pml4_phys);
-            palloc.free((void*)pml4_phys);
+            kernel_pframe_allocator.free((void*)pml4_phys);
         }
     }
 }

@@ -5,7 +5,7 @@
 #include <kernel/memory.h>
 #include <kernel/errors.h>
 
-PFrameAllocator palloc;
+PFrameAllocator kernel_pframe_allocator;
 
 ReturnStr<void*> PFrameAllocator::alloc_page()
 {

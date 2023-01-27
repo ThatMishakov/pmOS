@@ -30,4 +30,4 @@ private:
     u64 smallest = non_special_base >> (12+6);
 };
 
-extern PFrameAllocator palloc;
+extern PFrameAllocator kernel_pframe_allocator;

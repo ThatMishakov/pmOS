@@ -18,8 +18,8 @@ extern "C" int main(Kernel_Entry_Data* d)
 {
     nx_bit_enabled = d->flags & 0x01;
     kdata = d;
-    palloc.init(d->mem_bitmap, d->mem_bitmap_size);
-    palloc.init_after_paging();
+    kernel_pframe_allocator.init(d->mem_bitmap, d->mem_bitmap_size);
+    kernel_pframe_allocator.init_after_paging();
     _init();
     init_kernel_ports();
     prepare_apic();

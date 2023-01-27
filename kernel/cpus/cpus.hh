@@ -2,6 +2,7 @@
 #include <types.hh>
 #include <lib/vector.hh>
 #include <sched/sched.hh>
+#include <memory/palloc.hh>
 
 struct CPU_Desc {
     CPU_Info* local_info;
