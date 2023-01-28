@@ -29,13 +29,15 @@ int hpet_init_int_ioapic(volatile HPET_TIMER* timer)
 {
     union HPET_Timer_Conf_cap conf_tmr0 = timer->conf_cap;
 
+    conf_tmr0.bits.INT_TYPE_CNF = 0;
+
     unsigned ioapic_input = 0;
     unsigned int_vec = 0;
     struct int_task_descriptor desc = {getpid(), hpet_int_chan};
 
     for (int i = 23; i >= 0; --i) {
         if (conf_tmr0.bits.INT_ROUTE_CAP & (0x01 << i)) {
-            int_vec = ioapic_get_int(desc, 2, conf_tmr0.bits.INT_TYPE_CNF, false, true);
+            int_vec = ioapic_get_int(desc, 2, false, conf_tmr0.bits.INT_TYPE_CNF, true);
             if (int_vec != 0) {
                 ioapic_input = i;
                 break;
@@ -120,7 +122,7 @@ int init_hpet()
     hpet_virt->timers[0].comparator.bits64 = ~0x0UL;
     hpet_virt->timers[0].conf_cap = conf_tmr0;
 
-    conf.bits.ENABLE_CNF = 1;
+    conf.bits.ENABLE_CNF = 0;
     hpet_virt->General_Conf = conf;
 
     hpet_is_functional = true;
@@ -164,4 +166,31 @@ void hpet_start_oneshot(uint64_t ticks)
     uint64_t comparator = hpet_virt->timers[0].comparator.bits64;
 
     printf("HPET oneshot %lx status reg %lx comparator %lx\n", new_ticks, hpet_virt->timers[0].conf_cap.aslong, comparator);
+}
+
+void hpet_program_periodic(uint64_t ticks)
+{
+    printf("Programming HPET for interrupt every %lx ticks...\n", ticks);
+
+    HPET_General_Conf conf = hpet_virt->General_Conf;
+    conf.bits.ENABLE_CNF = 0;
+
+    hpet_virt->MAIN_COUNTER_VAL.bits64 = 0;
+
+    if (ticks < hpet_clock_period) {
+        ticks = hpet_clock_period;
+    }
+
+    union HPET_Timer_Conf_cap conf_tmr0 = hpet_virt->timers[0].conf_cap;
+
+    conf_tmr0.bits.TYPE_CNF = 1; // Periodic mode
+    // conf_tmr0.bits.VAL_SET_CNF = 1; 
+
+    hpet_virt->timers[0].conf_cap = conf_tmr0;     
+
+    // hpet_virt->timers[0].comparator.bits64 = hpet_get_ticks() + ticks;
+    hpet_virt->timers[0].comparator.bits64 = ticks;
+
+    conf.bits.ENABLE_CNF = 1;
+    hpet_virt->General_Conf = conf;
 }

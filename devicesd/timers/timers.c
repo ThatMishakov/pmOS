@@ -25,7 +25,7 @@ void init_timers()
     //if (hpet_virt == NULL)
 
     // Remove me: check timer
-    start_timer(1000, 0, getpid(), 100);
+    program_periodic(100);
 }
 
 int start_timer(uint64_t ms, uint64_t extra, uint64_t pid, uint64_t reply_channel)
@@ -69,27 +69,17 @@ void timer_tick()
 {
     update_ticks();
 
-    if (current_timer != NULL) {
-        printf("Current ticks %lx smallest_tmr_ticks %lx\n", timer_ticks, current_timer->expires_at_ticks);
+    while (!timer_is_heap_empty()) {
+        timer_entry* front = timer_get_front();
+        if (front->expires_at_ticks < timer_ticks)
+            break;
+
+        timer_heap_pop();
+        notify_task(front);
+        free(front);
     }
 
-    while (current_timer != NULL && current_timer->expires_at_ticks <= timer_ticks) {
-        printf("current task %lx\n",current_timer->pid);
-        notify_task(current_timer);
-        free(current_timer);
-
-        if (timer_is_heap_empty()) {
-            current_timer = NULL;
-        } else {
-            current_timer = timer_get_front();
-            timer_heap_pop();
-        }
-    }
-
-
-    if (current_timer != NULL) {
-        start_oneshot_ticks(current_timer->expires_at_ticks - timer_ticks);
-    }
+    printf("Tick! %lx\n", timer_ticks);
 }
 
 void notify_task(timer_entry* e)
@@ -135,5 +125,18 @@ void start_oneshot_ticks(uint64_t ticks)
             break;
         default:
             break;
+    }
+}
+
+void program_periodic(unsigned millis)
+{
+    switch (timer_mode)
+    {
+    case TIMER_HPET:
+        hpet_program_periodic(hpet_calculate_ticks(millis));
+        break;
+    default:
+        fprintf(stderr, "Warning: unknown timer mode %i\n", timer_mode);
+        break;
     }
 }

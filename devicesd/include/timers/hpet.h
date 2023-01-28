@@ -119,4 +119,6 @@ extern uint64_t hpet_get_ticks();
 void hpet_update_system_ticks(uint64_t* system_ticks);
 void hpet_start_oneshot(uint64_t ticks);
 
+void hpet_program_periodic(uint64_t ticks);
+
 #endif

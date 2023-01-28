@@ -36,4 +36,6 @@ void update_ticks();
 void start_oneshot_ticks(uint64_t ticks);
 void notify_task(timer_entry* e);
 
+void program_periodic(unsigned milliseconds);
+
 #endif
