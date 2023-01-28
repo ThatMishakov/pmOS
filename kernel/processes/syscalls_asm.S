@@ -1,3 +1,5 @@
+    .include "interrupts/asm_macros.S"
+    
     .macro save_regs
     # Save %r15 and load current_task pointer into %r15
     movq %r15, %gs:16
@@ -191,3 +193,24 @@ ret_from_sysenter:
 
     # Return
     sysexitq
+
+
+
+    .globl syscall_int_entry
+syscall_int_entry:
+
+    # It will always be from other rings to ring 0
+    swapgs
+
+    # Save registers
+    save_context
+
+    # Entry type
+    movq $0,   176(%r11)
+
+    call syscall_handler
+
+    # Jmp to the right return method (in case there was a task switch)
+    movq %gs:24, %r15
+    movq 176(%r15), %r15
+    jmpq *return_table(,%r15, 8)

@@ -4,5 +4,5 @@
     .type syscall, @function
 syscall:
     movq %rcx, %r10
-    int $PMOS_SYSCALL_INT
+    syscall
     ret

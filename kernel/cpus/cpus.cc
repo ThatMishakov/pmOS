@@ -23,6 +23,7 @@ void init_per_cpu()
 
     c->kernel_stack_top = c->kernel_stack->get_stack_top();
     c->cpu_gdt.tss_descriptor.tss()->ist1 = (u64)c->kernel_stack->get_stack_top();
+    c->cpu_gdt.tss_descriptor.tss()->rsp0 = (u64)c->kernel_stack->get_stack_top();
     
     loadTSS(TSS_OFFSET);
 

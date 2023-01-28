@@ -2,57 +2,8 @@
 #include "types.hh"
 #include "gdt.hh"
 
-#define INTGATE 0x8e /*  */
-#define TRAPGATE 0xee
-#define IST 0x01
-
-#define IDT_USER 0b01100000
-
-
-struct PACKED Gate_Descriptor {
-    u16 offset0;
-    u16 segment_sel;
-    u8 ist;
-    u8 attributes;
-    u16 offset1;
-    u32 offset2;
-    u32 reserved1;
-
-    void set_address(void* addr);
-    void init(void* addr, u16 segment, u8 gate, u8 priv_level);
-    constexpr Gate_Descriptor();
-    constexpr Gate_Descriptor(u64 offset, u8 ist, u8 type_attr);
-};
-
-
-constexpr Gate_Descriptor::Gate_Descriptor() 
-    : Gate_Descriptor(0, 0, 0)
-{}
-
-constexpr Gate_Descriptor::Gate_Descriptor(u64 offset, u8 ist, u8 type_attr)
-    : offset0(offset & 0xffff),
-    segment_sel(R0_CODE_SEGMENT),
-    ist(ist),
-    attributes(type_attr),
-    offset1((offset >> 16) & 0xffff),
-    offset2((offset >> 32) & 0xffffffff),
-    reserved1(0)
-{}
-
-struct IDT {
-    Gate_Descriptor entries[256] = {};
-} PACKED ALIGNED(0x1000);
-
-struct IDT_descriptor {
-    u16 size;
-    u64 offset;
-} PACKED;
-
-
 void init_interrupts();
 
-extern IDT k_idt;
-extern "C" void loadIDT(IDT_descriptor* IDT_desc);
 void set_idt();
 
 struct PACKED RFLAGS_Bits {

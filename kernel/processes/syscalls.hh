@@ -136,5 +136,8 @@ extern "C" void syscall_entry();
 // Entry point for when userpsace calls SYSENTER instruction
 extern "C" void sysenter_entry();
 
+// Entry point for when userpsace calls software interrupt
+extern "C" void syscall_int_entry();
+
 // Enables SYSCALL instruction
 void program_syscall();

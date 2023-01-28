@@ -10,24 +10,27 @@
 #include <misc.hh>
 #include "apic.hh"
 #include <kernel/messaging.h>
+#include "idt.hh"
 
 void set_idt()
 {
-    IDT_descriptor desc = {sizeof(IDT) - 1, (u64)&k_idt};
+    IDTR desc = {sizeof(IDT) - 1, &k_idt};
     loadIDT(&desc);
 }
 
-void init_IDT()
+void init_idt()
 {
     fill_idt();
     enable_apic();
+
+    k_idt.register_isr(0xCA, &syscall_int_entry, interrupt_gate_type, 0, 3);
 
     set_idt();
 }
 
 void init_interrupts()
 {
-    init_IDT();
+    init_idt();
     asm("sti");
     discover_apic_freq();
 }
