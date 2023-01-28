@@ -23,6 +23,8 @@ void init_idt()
     fill_idt();
     enable_apic();
 
+    register_exceptions(k_idt);
+
     k_idt.register_isr(0xCA, &syscall_int_entry, interrupt_gate_type, 0, 3);
 
     set_idt();
@@ -62,26 +64,9 @@ extern "C" void interrupt_handler()
         case 0x4:
             t_print("!!! Overflow (OF)\n");
             break;
-        case 0x6: 
-            t_print_bochs("!!! Invalid op-code (UD) instr %h\n", int_s->rip);
-            halt();
-            break;
-        case 0x07:
-            //t_print_bochs("!!! Device Not Available (NM) PID %h instr %h -> restoring SSE state\n", t->pid, int_s->rip);
-            sse_exception_manager();
-            break;
         case 0x8: 
             t_print_bochs("!!! Double fault (DF) [ABORT]\n");
             halt();
-            break;
-        case 0xE:
-            //t_print_bochs("!!! Page Fault (PF) error %h PID %i RIP %h\n", err, get_cpu_struct()->current_task->pid, int_s->rip);
-            pagefault_manager(err, int_s);
-            break;
-        case 0xD:
-            //t_print_bochs("!!! General Protection Fault (GP) error %h\n", err);
-            t_print_bochs("!!! General Protection Fault (GP) error (segment) %h PID %i RIP %h CS %h... Killing the process\n", err, get_cpu_struct()->current_task->pid, int_s->rip, int_s->cs);
-            syscall_exit(4, 0);
             break;
         case 0xC:
             t_print_bochs("!!! Stack-Segment Fault error %h RIP %h RSP %h\n", err, int_s->rip, int_s->rsp);

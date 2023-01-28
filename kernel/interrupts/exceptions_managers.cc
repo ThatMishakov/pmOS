@@ -6,8 +6,21 @@
 #include <processes/tasks.hh>
 #include <cpus/sse.hh>
 
-void pagefault_manager(u64 err, Interrupt_Stackframe* int_s)
+void register_exceptions(IDT& idt)
 {
+    idt.register_isr(invalid_opcode_num, &invalid_opcode_isr, interrupt_gate_type, 0, 0);
+    idt.register_isr(sse_exception_num, &sse_exception_isr, interrupt_gate_type, 0, 0);
+    idt.register_isr(general_protection_fault_num, &general_protection_fault_isr, interrupt_gate_type, 0, 0);
+    idt.register_isr(pagefault_num, &pagefault_isr, interrupt_gate_type, 0, 0);
+}
+
+extern "C" void pagefault_manager()
+{
+    klib::shared_ptr<TaskDescriptor> task = get_cpu_struct()->current_task;
+
+    u64 err = task->regs.int_err;
+    Interrupt_Stackframe* int_s = &task->regs.e;
+
     // Get the memory location which has caused the fault
     u64 virtual_addr = getCR2();
 
@@ -36,8 +49,22 @@ void pagefault_manager(u64 err, Interrupt_Stackframe* int_s)
     }
 }
 
-void sse_exception_manager()
+extern "C" void sse_exception_manager()
 {
     validate_sse();
     get_cpu_struct()->current_task->sse_data.restore_sse();
+}
+
+extern "C" void general_protection_fault_manager()
+{
+    const task_ptr& task = get_cpu_struct()->current_task;
+    //t_print_bochs("!!! General Protection Fault (GP) error %h\n", err);
+    t_print_bochs("!!! General Protection Fault (GP) error (segment) %h PID %i RIP %h CS %h... Killing the process\n", task->regs.int_err, task->pid, task->regs.e.rip, task->regs.e.cs);
+    syscall_exit(4, 0);
+}
+
+extern "C" void invalid_opcode_manager()
+{
+    t_print_bochs("!!! Invalid op-code (UD) instr %h\n", get_cpu_struct()->current_task->regs.e.rip);
+    halt();
 }

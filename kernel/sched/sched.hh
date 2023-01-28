@@ -57,6 +57,10 @@ struct CPU_Info {
     Kernel_Stack_Pointer kernel_stack;
     Kernel_Stack_Pointer idle_stack;
 
+    Kernel_Stack_Pointer nmi_stack;
+    Kernel_Stack_Pointer machine_check_stack;
+    Kernel_Stack_Pointer double_fault_stack;
+
     klib::shared_ptr<TaskDescriptor> atomic_pick_highest_priority();
     klib::shared_ptr<TaskDescriptor> atomic_get_front_priority(priority_t);
     klib::shared_ptr<TaskDescriptor> atomic_pick_lowest_priority(unsigned max_priority = 2);
