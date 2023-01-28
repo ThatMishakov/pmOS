@@ -98,7 +98,7 @@ void init_idle()
     cpu_str->idle_task = i.val;
 
     // Init stack
-    i.val->init_stack();
+    i.val->regs.e.rsp = (u64)cpu_str->idle_stack.get_stack_top();
     i.val->regs.e.rip = (u64)&idle;
     i.val->type = TaskDescriptor::Type::Idle;
 

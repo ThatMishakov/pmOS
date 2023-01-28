@@ -18,12 +18,11 @@ void init_per_cpu()
 
     write_msr(0xC0000101, (u64)c);
 
-    c->kernel_stack = (Stack*)palloc(sizeof(Stack)/4096);
     c->cpu_gdt.tss_descriptor = System_Segment_Descriptor((u64) calloc(1,sizeof(TSS)), sizeof(TSS), 0x89, 0x02);
 
-    c->kernel_stack_top = c->kernel_stack->get_stack_top();
-    c->cpu_gdt.tss_descriptor.tss()->ist1 = (u64)c->kernel_stack->get_stack_top();
-    c->cpu_gdt.tss_descriptor.tss()->rsp0 = (u64)c->kernel_stack->get_stack_top();
+    c->kernel_stack_top = c->kernel_stack.get_stack_top();
+    c->cpu_gdt.tss_descriptor.tss()->ist1 = (u64)c->kernel_stack.get_stack_top();
+    c->cpu_gdt.tss_descriptor.tss()->rsp0 = (u64)c->kernel_stack.get_stack_top();
     
     loadTSS(TSS_OFFSET);
 

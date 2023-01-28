@@ -54,7 +54,8 @@ struct CPU_Info {
     u32 timer_val = 0;
     u32 lapic_id = 0;
 
-    Stack* kernel_stack = nullptr;
+    Kernel_Stack_Pointer kernel_stack;
+    Kernel_Stack_Pointer idle_stack;
 
     klib::shared_ptr<TaskDescriptor> atomic_pick_highest_priority();
     klib::shared_ptr<TaskDescriptor> atomic_get_front_priority(priority_t);
