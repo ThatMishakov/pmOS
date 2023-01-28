@@ -28,6 +28,10 @@ constexpr u8 double_fault_num = 0x8;
 extern "C" void double_fault_isr();
 extern "C" void double_fault_manager();
 
+constexpr u8 stack_segment_fault_num = 0xC;
+extern "C" void stack_segment_fault_isr();
+extern "C" void stack_segment_fault_manager();
+
 constexpr u8 general_protection_fault_num = 0xD;
 extern "C" void general_protection_fault_isr();
 extern "C" void general_protection_fault_manager();

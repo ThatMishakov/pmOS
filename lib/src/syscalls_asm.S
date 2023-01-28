@@ -4,11 +4,11 @@
     .type syscall, @function
 syscall:
     # ----- Software int -------
-    int $0xca
+    # int $0xca
 
     # ----- syscall -------
-    # movq %rcx, %r10
-    # syscall
+    movq %rcx, %r10
+    syscall
 
     # ------ sysenter -------
     # movq %rcx, %r10

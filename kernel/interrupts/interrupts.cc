@@ -26,6 +26,7 @@ void init_idt()
     register_exceptions(k_idt);
 
     k_idt.register_isr(0xCA, &syscall_int_entry, interrupt_gate_type, 0, 3);
+    k_idt.register_isr(APIC_TMR_INT, &apic_timer_isr, interrupt_gate_type, 0, 0);
 
     set_idt();
 }
@@ -67,11 +68,6 @@ extern "C" void interrupt_handler()
         case 0x8: 
             t_print_bochs("!!! Double fault (DF) [ABORT]\n");
             halt();
-            break;
-        case 0xC:
-            t_print_bochs("!!! Stack-Segment Fault error %h RIP %h RSP %h\n", err, int_s->rip, int_s->rsp);
-            t_print("!!! Stack-Segment Fault error %h RIP %h RSP %h\n", err, int_s->rip, int_s->rsp);
-            syscall_exit(4, 0);
             break;
         default:
             t_print_bochs("!!! Unknown exception %h. Not currently handled.\n", intno);

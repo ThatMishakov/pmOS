@@ -94,7 +94,7 @@ void find_new_process();
 void kill(const klib::shared_ptr<TaskDescriptor>& t);
 
 // To be called from the clock routine
-void sched_periodic();
+extern "C" void sched_periodic();
 
 // Starts the scheduler
 void start_scheduler();

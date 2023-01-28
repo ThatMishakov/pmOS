@@ -10,6 +10,7 @@ void register_exceptions(IDT& idt)
 {
     idt.register_isr(invalid_opcode_num, &invalid_opcode_isr, interrupt_gate_type, 0, 0);
     idt.register_isr(sse_exception_num, &sse_exception_isr, interrupt_gate_type, 0, 0);
+    idt.register_isr(stack_segment_fault_num, &stack_segment_fault_isr, interrupt_gate_type, 0, 0);
     idt.register_isr(general_protection_fault_num, &general_protection_fault_isr, interrupt_gate_type, 0, 0);
     idt.register_isr(pagefault_num, &pagefault_isr, interrupt_gate_type, 0, 0);
 }
@@ -67,4 +68,12 @@ extern "C" void invalid_opcode_manager()
 {
     t_print_bochs("!!! Invalid op-code (UD) instr %h\n", get_cpu_struct()->current_task->regs.e.rip);
     halt();
+}
+
+extern "C" void stack_segment_fault_manager()
+{
+    const task_ptr& task = get_cpu_struct()->current_task;
+    t_print_bochs("!!! Stack-Segment Fault error %h RIP %h RSP %h\n", task->regs.int_err, task->regs.e.rip, task->regs.e.rsp);
+    t_print("!!! Stack-Segment Fault error %h RIP %h RSP %h\n", task->regs.int_err, task->regs.e.rip, task->regs.e.rsp);
+    syscall_exit(4, 0);
 }

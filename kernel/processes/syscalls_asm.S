@@ -203,7 +203,7 @@ syscall_int_entry:
     swapgs
 
     # Save registers
-    save_context
+    call save_context
 
     # Entry type
     movq $0,   176(%r11)

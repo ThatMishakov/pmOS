@@ -14,6 +14,7 @@
 #include <lib/memory.hh>
 #include "timers.hh"
 #include <cpus/sse.hh>
+#include <interrupts/apic.hh>
 
 sched_queue blocked;
 sched_queue uninit;
@@ -218,6 +219,8 @@ void sched_periodic()
     } else {
         start_timer_ticks(calculate_timer_ticks(current));
     }
+
+    smart_eoi(APIC_TMR_INT);
 }
 
 void start_scheduler()

@@ -56,13 +56,9 @@ isr\num\():
     interrupt_err         30
     interrupt_noerr       31
     fill interrupt_noerr, 32, 251
+    interrupt_noerr       252
     fill interrupt_noerr, 253, 255
 
-    .globl isr252 # APIC DUMMY ISR
-    .type isr252, @function
-isr252:
-    movl $0, (0x0b0 + apic_mapped_addr)(%eip)
-    iretq
 
 
 /* ------------------------------------------ IDT --------------------------------------------------- */
@@ -154,3 +150,23 @@ start_first_process:
 	swapgs
 1:
     iretq
+
+
+
+    .text
+    .type apic_timer_isr, @function
+    .globl apic_timer_isr
+apic_timer_isr:
+
+    # Will be when not in kernel
+    swapgs
+
+    call save_context
+
+    movq $0, %rbp
+    movq $0, 176(%r11)
+
+    call sched_periodic
+
+    auto_return
+

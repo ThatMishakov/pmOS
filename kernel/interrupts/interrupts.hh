@@ -126,3 +126,5 @@ extern "C" void ret_from_syscall(void) NORETURN;
 extern "C" void ret_from_sysenter(void) NORETURN;
 
 extern void (*return_table[3])(void);
+
+extern "C" void apic_timer_isr();

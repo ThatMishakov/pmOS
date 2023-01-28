@@ -97,8 +97,11 @@ void init_idle()
     CPU_Info* cpu_str = get_cpu_struct();
     cpu_str->idle_task = i.val;
 
+    i.val->regs.seg.gs = (u64)cpu_str; // Idle has the same %gs as kernel
+
     // Init stack
     i.val->regs.e.rsp = (u64)cpu_str->idle_stack.get_stack_top();
+
     i.val->regs.e.rip = (u64)&idle;
     i.val->type = TaskDescriptor::Type::Idle;
 

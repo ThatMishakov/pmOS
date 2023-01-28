@@ -14,7 +14,7 @@ INCLUDEDIR = include .
 INCPARAM = $(foreach d, $(INCLUDEDIR), -I$(ROOTDIR)/$d)
 
 # User controllable CFLAGS.
-USERCFLAGS = -Wall -Wextra -Og -pipe
+USERCFLAGS = -Wall -Wextra -O3 -pipe
 
 CPPFLAGS = $(INTERNALCFLAGS) -mcmodel=kernel $(USERCFLAGS) -MMD -MP $(INCPARAM)
 CXXFLAGS = -std=c++20 $(INCPARAM)
@@ -49,7 +49,8 @@ CFILES := $(shell find ./ -type f -name '*.c')
 ASMFILES := $(shell find ./ -type f -name '*.S')
 OBJS = 	./objects/icxxabi.o ./start.o ./asm.o ./main.o ./misc.o ./utils.o types.o \
 	    ./memory/mem.o ./memory/malloc.o ./memory/free_page_alloc.o ./memory/palloc.o ./memory/paging.o ./memory/shared_mem.o \
-	    ./interrupts/apic.o ./interrupts/pic.o ./interrupts/gdt.o ./interrupts/exceptions_managers_asm.o ./interrupts/exceptions_managers.o ./interrupts/interrupts.o \
+	    ./interrupts/apic.o ./interrupts/pic.o ./interrupts/gdt.o ./interrupts/exceptions_managers_asm.o ./interrupts/exceptions_managers.o \
+		./interrupts/interrupts.o ./interrupts/asm_helpers.o \
 		./interrupts/pit.o ./interrupts/interrupts_asm.o ./interrupts/loadGDT.o ./interrupts/idt.o \
 	    ./processes/idle.o ./processes/syscalls.o ./processes/tasks.o ./processes/syscalls_asm.o \
 		./sched/sched.o ./sched/timers.o \

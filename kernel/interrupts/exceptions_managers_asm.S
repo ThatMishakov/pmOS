@@ -9,7 +9,7 @@ sse_exception_isr:
     swapgs
 
     # Save registers
-    save_context
+    call save_context
 
     # Calling conventions
     movq $0, %rbp
@@ -31,7 +31,7 @@ invalid_opcode_isr:
     swapgs
 
     # Save registers
-    save_context
+    call save_context
 
     # Calling conventions
     movq $0, %rbp
@@ -56,7 +56,7 @@ general_protection_fault_isr:
 1:
 
     # Save registers
-    save_context_with_error
+    call save_context_with_error
 
     # Calling conventions
     movq $0, %rbp
@@ -82,7 +82,7 @@ pagefault_isr:
 1:
 
     # Save registers
-    save_context_with_error
+    call save_context_with_error
 
     # Calling conventions
     movq $0, %rbp
@@ -91,6 +91,32 @@ pagefault_isr:
     movq $0,   176(%r11)
 
     call pagefault_manager
+
+    # Return
+    auto_return
+
+
+
+    .type stack_segment_fault_isr, @function
+    .globl stack_segment_fault_isr
+stack_segment_fault_isr:
+
+    # swapgs conditionally
+    cmpw $0x08, 16(%rsp)
+	je 1f
+	swapgs
+1:
+
+    # Save registers
+    call save_context_with_error
+
+    # Calling conventions
+    movq $0, %rbp
+
+    # Entry type
+    movq $0,   176(%r11)
+
+    call stack_segment_fault_manager
 
     # Return
     auto_return
