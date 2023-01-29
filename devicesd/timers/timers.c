@@ -25,7 +25,7 @@ void init_timers()
     //if (hpet_virt == NULL)
 
     // Remove me: check timer
-    program_periodic(100);
+    program_periodic(1000);
 }
 
 int start_timer(uint64_t ms, uint64_t extra, uint64_t pid, uint64_t reply_channel)
@@ -50,18 +50,8 @@ int start_timer(uint64_t ms, uint64_t extra, uint64_t pid, uint64_t reply_channe
     uint64_t ticks = timer_calculate_next_ticks(ms);
     e->expires_at_ticks = ticks + timer_ticks;
 
-    if (current_timer == NULL) {
-        current_timer = e;
-        start_oneshot_ticks(ticks);
-    } else if (current_timer->expires_at_ticks < e->expires_at_ticks) {
-        timer_push_heap(e);
-    } else {
-        timer_push_heap(current_timer);
-        current_timer = e;
-        start_oneshot_ticks(ticks);
-    }
+    timer_push_heap(e);
 
-    printf("Start timer ms %li extra %lx pid %lx reply chan %lx fires at ticks %lx\n", ms, extra, pid, reply_channel, ticks);
     return 0;
 }
 

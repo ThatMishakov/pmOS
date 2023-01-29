@@ -42,11 +42,12 @@ struct __attribute__((packed)) IOREDTBL_struct {
 
 typedef union {
     uint32_t asints[2];
+    uint64_t aslong;
     struct IOREDTBL_struct bits;
 } IOREDTBL;
 
 typedef struct ioapic_descriptor {
-    uint32_t* virt_addr;
+    volatile uint32_t* virt_addr;
     uint64_t phys_addr;
     uint32_t int_base;
     uint32_t max_int;

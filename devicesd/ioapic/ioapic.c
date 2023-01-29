@@ -186,7 +186,7 @@ bool program_ioapic_manual(uint8_t cpu_int_vector, uint32_t ext_int_vector, bool
     ioapic_descriptor* ioapic_desc = get_ioapic_for_int(ext_int_vector);
     if (ioapic_desc == NULL) return false;
 
-    uint32_t* ioapic = ioapic_desc->virt_addr;
+    volatile uint32_t* ioapic = ioapic_desc->virt_addr;
     uint32_t ioapic_base = ext_int_vector - ioapic_desc->int_base;
 
     IOREDTBL i = ioapic_read_redir_reg(ioapic, ioapic_base);

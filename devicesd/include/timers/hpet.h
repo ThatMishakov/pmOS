@@ -121,4 +121,10 @@ void hpet_start_oneshot(uint64_t ticks);
 
 void hpet_program_periodic(uint64_t ticks);
 
+#define HPET_TMR0_COMPARATOR_OFFSET 0x108
+void hpet_write_register(uint64_t position, uint64_t value);
+
+void hpet_stop_counter();
+void hpet_start_counter();
+
 #endif

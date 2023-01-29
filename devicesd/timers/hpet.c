@@ -9,6 +9,7 @@
 #include <ioapic/ioapic.h>
 #include <pmos/system.h>
 #include <timers/timers.h>
+#include <asm.h>
 
 static const int hpet_size = 1024;
 
@@ -75,10 +76,10 @@ int init_hpet()
 
     HPET_General_Cap_And_Id g = hpet_virt->General_Cap_And_Id; // Accesses must be 32 bit or 64 bit
 
-    if (!g.bits.COUNT_SIZE_CAP) {
-        fprintf(stderr, "Warning: HPET counter is 32 bit and that has not yet been implemented\n");
-        return 1;
-    }
+    // if (!g.bits.COUNT_SIZE_CAP) {
+    //    fprintf(stderr, "Warning: HPET counter is 32 bit and that has not yet been implemented\n");
+    //    return 1;
+    // }
 
     max_timer = g.bits.NUM_TIM_CAP;
 
@@ -170,27 +171,45 @@ void hpet_start_oneshot(uint64_t ticks)
 
 void hpet_program_periodic(uint64_t ticks)
 {
+    hpet_start_counter();
+
     printf("Programming HPET for interrupt every %lx ticks...\n", ticks);
-
-    HPET_General_Conf conf = hpet_virt->General_Conf;
-    conf.bits.ENABLE_CNF = 0;
-
-    hpet_virt->MAIN_COUNTER_VAL.bits64 = 0;
-
-    if (ticks < hpet_clock_period) {
-        ticks = hpet_clock_period;
-    }
 
     union HPET_Timer_Conf_cap conf_tmr0 = hpet_virt->timers[0].conf_cap;
 
+    conf_tmr0.bits.INT_ENB_CNF = 1;
+    conf_tmr0.bits._32MODE_CNF = 1;
     conf_tmr0.bits.TYPE_CNF = 1; // Periodic mode
-    // conf_tmr0.bits.VAL_SET_CNF = 1; 
+    conf_tmr0.bits.VAL_SET_CNF = 1; // SET_CNF
 
-    hpet_virt->timers[0].conf_cap = conf_tmr0;     
+    hpet_virt->timers[0].conf_cap = conf_tmr0;
 
-    // hpet_virt->timers[0].comparator.bits64 = hpet_get_ticks() + ticks;
-    hpet_virt->timers[0].comparator.bits64 = ticks;
+    uint64_t cmp = hpet_get_ticks() + ticks;
 
+    hpet_write_register(HPET_TMR0_COMPARATOR_OFFSET, cmp); 
+    io_wait();
+    hpet_write_register(HPET_TMR0_COMPARATOR_OFFSET, ticks);
+
+    hpet_start_counter();
+}
+
+void hpet_write_register(uint64_t position, uint64_t value)
+{
+    volatile uint64_t *hpet_register = (uint64_t*)((char*)hpet_virt + position);
+
+    *hpet_register = value;
+}
+
+void hpet_stop_counter()
+{
+    HPET_General_Conf conf = hpet_virt->General_Conf;
+    conf.bits.ENABLE_CNF = 0;
+    hpet_virt->General_Conf = conf;
+}
+
+void hpet_start_counter()
+{
+    HPET_General_Conf conf = hpet_virt->General_Conf;
     conf.bits.ENABLE_CNF = 1;
     hpet_virt->General_Conf = conf;
 }
