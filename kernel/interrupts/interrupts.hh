@@ -119,7 +119,6 @@ public:
 
 
 extern "C" void interrupt_handler();
-extern "C" void fill_idt();
 
 extern "C" void ret_from_interrupt(void) NORETURN;
 extern "C" void ret_from_syscall(void) NORETURN;
@@ -132,3 +131,5 @@ extern "C" void lvt1_int_isr();
 extern "C" void apic_timer_isr();
 
 extern "C" void dummy_isr();
+
+extern "C" void programmable_interrupt(u32 intno);

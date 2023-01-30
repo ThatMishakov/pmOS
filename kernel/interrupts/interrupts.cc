@@ -21,18 +21,7 @@ void set_idt()
 
 void init_idt()
 {
-    fill_idt();
     enable_apic();
-
-    register_exceptions(k_idt);
-
-    k_idt.register_isr(PMOS_SYSCALL_INT, &syscall_int_entry, interrupt_gate_type, 0, 3);
-    k_idt.register_isr(ipi_reschedule_int_vec, &ipi_reschedule_isr, interrupt_gate_type, 0, 0);
-    k_idt.register_isr(ipi_invalidate_tlb_int_vec, &ipi_invalidate_tlb_isr, interrupt_gate_type, 0, 0);
-    k_idt.register_isr(APIC_TMR_INT, &apic_timer_isr, interrupt_gate_type, 0, 0);
-    k_idt.register_isr(LVT_INT0, &lvt0_int_isr, interrupt_gate_type, 0, 0);
-    k_idt.register_isr(LVT_INT1, &lvt1_int_isr, interrupt_gate_type, 0, 0);
-    k_idt.register_isr(APIC_SPURIOUS_INT, &dummy_isr, interrupt_gate_type, 0, 0);
 
     set_idt();
 }
