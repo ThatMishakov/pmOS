@@ -35,12 +35,12 @@ void init_interrupts()
 
 void programmable_interrupt(u32 intno)
 {
-    //t_print_bochs("Interrupt %i\n", intno);
+    // t_print_bochs("Interrupt %i\n", intno);
 
     Kernel_Message_Interrupt kmsg = {KERNEL_MSG_INTERRUPT, intno, get_lapic_id()};
     send_message_system(KERNEL_MSG_INT_START + intno, reinterpret_cast<char*>(&kmsg), sizeof(kmsg));
 
-    smart_eoi(intno);
+    apic_eoi();
 }
 
 extern "C" void interrupt_handler()
@@ -75,7 +75,7 @@ extern "C" void interrupt_handler()
         programmable_interrupt(intno);
     } else if (intno == 0xfb) {
         sched_periodic();
-        smart_eoi(intno);
+        // smart_eoi(intno);
     }
 }
 

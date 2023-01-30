@@ -79,7 +79,7 @@ void send_ipi_fixed(u8 vector, u8 dest);
 #define APIC_DELIVERY_START_UP    0b110
 #define APIC_DELIVERY_INIT        0b100
 
-extern "C" void smart_eoi(u8 intno);
+// extern "C" void smart_eoi(u8 intno);
 
 extern "C" void lvt0_int_routine();
 extern "C" void lvt1_int_routine();

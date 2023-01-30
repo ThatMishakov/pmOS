@@ -220,7 +220,7 @@ void sched_periodic()
         start_timer_ticks(calculate_timer_ticks(current));
     }
 
-    smart_eoi(APIC_TMR_INT);
+    apic_eoi();
 }
 
 void start_scheduler()

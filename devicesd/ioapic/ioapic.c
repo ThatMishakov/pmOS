@@ -146,7 +146,7 @@ void ioapic_write_redir_reg(volatile uint32_t* ioapic, int index, IOREDTBL entry
 {
     int i = 0x10 + index*2;
     ioapic_write_reg(ioapic, i,   entry.asints[0]);
-    ioapic_write_reg(ioapic, i+2, entry.asints[1]);
+    ioapic_write_reg(ioapic, i+1, entry.asints[1]);
 }
 
 void ioapic_set_redir_reg(volatile uint32_t* ioapic, int index, IOREDTBL value)
