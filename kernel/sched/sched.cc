@@ -231,6 +231,11 @@ void start_scheduler()
     start_timer_ticks(calculate_timer_ticks(t));
 }
 
+void reschedule()
+{
+    // TODO
+}
+
 // void evict(const klib::shared_ptr<TaskDescriptor>& current_task)
 // {
 //     current_task->quantum_ticks = apic_get_remaining_ticks();

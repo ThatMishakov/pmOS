@@ -112,7 +112,7 @@ fill_idt:
 
 /* ------------------------------------------ FUNCTIONS ---------------------------------------------- */
 
-
+    .text
     .globl loadIDT
     .type loadIDT, @function
 loadIDT:
@@ -169,4 +169,47 @@ apic_timer_isr:
     call sched_periodic
 
     auto_return
+
+
+
+    .type lvt0_int_isr, @function
+    .globl lvt0_int_isr
+lvt0_int_isr:
+    
+    # Kernel is not preemptive
+    swapgs
+
+    call save_context
+
+    movq $0, %rbp
+    movq $0, 176(%r11)
+
+    call lvt0_int_routine
+
+    auto_return
+
+
+
+    .type lvt1_int_isr, @function
+    .globl lvt1_int_isr
+lvt1_int_isr:
+    
+    # Kernel is not preemptive
+    swapgs
+
+    call save_context
+
+    movq $0, %rbp
+    movq $0, 176(%r11)
+
+    call lvt1_int_routine
+
+    auto_return
+
+
+
+    .type dummy_isr, @function
+    .globl dummy_isr
+dummy_isr:
+    iretq
 

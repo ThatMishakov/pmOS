@@ -185,3 +185,13 @@ void smart_eoi(u8 intno)
 
     if (isr_val & (0x01 << offset)) apic_eoi();
 }
+
+void lvt0_int_routine()
+{
+
+}
+
+void lvt1_int_routine()
+{
+
+}

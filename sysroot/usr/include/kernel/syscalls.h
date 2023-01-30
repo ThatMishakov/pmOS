@@ -1,7 +1,7 @@
 #ifndef KERNEL_SYSCALLS_H
 #define KERNEL_SYSCALLS_H
 
-#define PMOS_SYSCALL_INT              0xca
+#define PMOS_SYSCALL_INT              0xf8
 
 #define SYSCALL_GETPID                0x01
 #define SYSCALL_BLOCK                 0x02

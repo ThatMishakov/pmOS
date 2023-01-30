@@ -18,11 +18,11 @@
 #define APIC_REG_TMRCURRCNT      0x390
 #define APIC_REG_TMRDIV	         0x3e0
 
-#define APIC_SPURIOUS_INT        0xff
-#define LVT_INT0                 0xfc
-#define LVT_INT1                 0xfe
-#define APIC_DUMMY_ISR           0xfd
-#define APIC_TMR_INT             0xfb          
+#define APIC_TMR_INT             0xfc     
+#define LVT_INT0                 0xfd
+#define LVT_INT1                 0xfe 
+#define APIC_SPURIOUS_INT        0xff 
+#define APIC_DUMMY_ISR           0xff   
 
 #define APIC_LVT_MASK            0x10000
 
@@ -80,3 +80,6 @@ void send_ipi_fixed(u8 vector, u8 dest);
 #define APIC_DELIVERY_INIT        0b100
 
 extern "C" void smart_eoi(u8 intno);
+
+extern "C" void lvt0_int_routine();
+extern "C" void lvt1_int_routine();

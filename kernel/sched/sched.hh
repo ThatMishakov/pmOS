@@ -108,3 +108,6 @@ void switch_to_task(const klib::shared_ptr<TaskDescriptor>& task);
 // Saves and restores GSBase and FSBase
 void save_segments(const klib::shared_ptr<TaskDescriptor>& task);
 void restore_segments(const klib::shared_ptr<TaskDescriptor>& task);
+
+// Reschedules the tasks
+extern "C" void reschedule();

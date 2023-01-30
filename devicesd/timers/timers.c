@@ -25,7 +25,7 @@ void init_timers()
     //if (hpet_virt == NULL)
 
     // Remove me: check timer
-    program_periodic(1000);
+    program_periodic(100);
 }
 
 int start_timer(uint64_t ms, uint64_t extra, uint64_t pid, uint64_t reply_channel)

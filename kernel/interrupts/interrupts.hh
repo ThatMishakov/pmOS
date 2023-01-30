@@ -127,4 +127,8 @@ extern "C" void ret_from_sysenter(void) NORETURN;
 
 extern void (*return_table[3])(void);
 
+extern "C" void lvt0_int_isr();
+extern "C" void lvt1_int_isr();
 extern "C" void apic_timer_isr();
+
+extern "C" void dummy_isr();
