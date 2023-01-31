@@ -38,4 +38,6 @@ void notify_task(timer_entry* e);
 
 void program_periodic(unsigned milliseconds);
 
+static const timer_msg_chan = 24;
+
 #endif

@@ -16,7 +16,7 @@ void timers_heap_grow()
         new_capacity = timers_heap_capacity*2;
     }
 
-    timers_heap_array = realloc(timers_heap_array, new_capacity);
+    timers_heap_array = realloc(timers_heap_array, new_capacity*sizeof(timer_entry));
     timers_heap_capacity = new_capacity;
 }
 
@@ -43,6 +43,13 @@ static inline unsigned long right(unsigned long i)
 static inline unsigned long parent(unsigned long i)
 {
     return (i-1)/2;
+}
+
+void swap(timer_entry **a, timer_entry **b)
+{
+    timer_entry *tmp = *a;
+    *a = *b;
+    *b = tmp;
 }
 
 void timer_push_heap(timer_entry *entry)
@@ -86,15 +93,12 @@ void heapify_up(unsigned long i)
 
 void timer_heap_pop()
 {
-    // TODO: Redo it
+    timers_heap_array[0] = timers_heap_array[timers_heap_size - 1];
     timers_heap_size--;
-    if (timers_heap_size > 1) {
-        timers_heap_array[0] = timers_heap_array[timers_heap_size-1];
-        
-        heapify_up(0);
-    }
 
-    if (timers_heap_size >= timers_heap_min_size && timers_heap_size == timers_heap_capacity/2) {
+    heapify_up(0);
+
+    if ((timers_heap_capacity > timers_heap_min_size) && (timers_heap_size == timers_heap_capacity/2)) {
         timers_heap_capacity = timers_heap_size;
         timers_heap_array = realloc(timers_heap_array, sizeof(timer_entry)*timers_heap_capacity);
     }

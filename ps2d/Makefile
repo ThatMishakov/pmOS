@@ -30,7 +30,7 @@ INTERNALCFLAGS  :=       \
 	-ffreestanding \
 	-static \
 	-mno-red-zone \
-	-fPIE
+	-fPIE -D DEBUG
  
 # Use find to glob all *.c files in the directory and extract the object names.
 CCFILES := $(shell find ./ -type f -name '*.cc')

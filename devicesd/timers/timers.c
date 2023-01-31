@@ -52,6 +52,8 @@ int start_timer(uint64_t ms, uint64_t extra, uint64_t pid, uint64_t reply_channe
 
     timer_push_heap(e);
 
+    // printf("Start timer %lx extra %li\n", e, e->extra);
+
     return 0;
 }
 
@@ -61,7 +63,7 @@ void timer_tick()
 
     while (!timer_is_heap_empty()) {
         timer_entry* front = timer_get_front();
-        if (front->expires_at_ticks < timer_ticks)
+        if (front->expires_at_ticks > timer_ticks)
             break;
 
         timer_heap_pop();
@@ -69,7 +71,7 @@ void timer_tick()
         free(front);
     }
 
-    printf("Tick! %lx\n", timer_ticks);
+    // printf("Tick! %lx\n", timer_ticks);
 }
 
 void notify_task(timer_entry* e)

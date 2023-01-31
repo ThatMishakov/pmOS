@@ -2,52 +2,205 @@
 #include "io.h"
 #include "registers.h"
 #include <stdio.h>
+#include "timers.h"
 
-int port1_state = PORT_STATE_RESET;
-int port2_state = PORT_STATE_RESET;
+typedef struct Port {
+    uint64_t last_timer;
+    Port_States state;
+    uint16_t device_id;
+    bool alive;
+} Port;
 
-void init_port1()
+Port ports[2];
+
+void send_data_port(uint8_t cmd, bool port_2)
 {
+    if (port_2) {
+        outb(RW_PORT, SECOND_PORT);
+    }
 
+    outb(DATA_PORT, cmd);
+}
+
+void init_ports()
+{
+    ports[0].state = PORT_STATE_RESET;
+    ports[0].last_timer = 0;
+
+    ports[1].state = PORT_STATE_RESET;
+    ports[1].last_timer = 0;
+
+    if (first_port_works) {
+        send_data_port(0xff, false);
+    }
+
+    if (second_port_works) {
+        send_data_port(0xff, true);
+    }
+}
+
+void react_port_int(unsigned port_num)
+{
+    Port* port = &ports[port_num];
+
+    unsigned char data = inb(DATA_PORT);
+
+    // printf("--- INT port %i data %x state %i\n", port_num, data, port->state);
+
+    if (data == RESPONSE_SELF_TEST_OK) {
+        #ifdef DEBUG
+        printf("Port %i self-test success!\n", port_num+1);
+        #endif
+        port->state = PORT_STATE_DISABLE_SCANNING;
+
+        port->device_id = 0;
+        port->alive = false;
+
+        send_data_port(COMMAND_DISABLE_SCANNING, port_num);
+
+        port->last_timer = start_timer(200);
+        return;
+    }
+
+    switch (port->state) {
+    case PORT_STATE_RESET:
+        switch (data) {
+        case RESPONSE_FAILURE:
+
+            printf("Port %i failure!\n", port_num+1);
+            break;
+        case RESPONSE_ACK:
+            #ifdef DEBUG
+            printf("Port %i ACK\n", port_num+1);
+            #endif
+            break;
+        default:
+            // printf("%i\n", data);
+            break;
+        }
+        break;
+
+
+    case PORT_STATE_DISABLE_SCANNING:
+    switch (data)
+    {
+    case RESPONSE_ACK:
+        port->state = PORT_STATE_IDENTIFY;
+
+        printf("Port %i disabled scanning successfully!\n",port_num+1);
+
+        send_data_port(COMMAND_IDENTIFY, port_num);
+
+        port->last_timer = start_timer(200);
+        break;
+    default:
+        // Ignore data
+        break;
+    }
+    break;
+
+
+    case PORT_STATE_IDENTIFY:
+        if (data == RESPONSE_ACK)
+            break;
+        port->device_id <<= 8;
+        port->device_id |= data;
+    break;
+
+
+    case PORT_STATE_ENABLE_SCANNING:
+    switch (data)
+    {
+    case RESPONSE_ACK:
+        port->state = PORT_STATE_OK;
+        port->alive = false;
+
+        port->last_timer = start_timer(alive_interval);
+
+        #ifdef DEBUG
+        printf("Port %i enabled scanning successfully!\n",port_num+1);
+        #endif
+
+        break;
+    default:
+        // Ignore
+        break;
+    }
+    break;
+
+
+    case PORT_STATE_OK_NOINPUT:
+        port->state = PORT_STATE_OK;
+
+        if (data == RESPONSE_ECHO)
+            break;
+
+        __attribute__((fallthrough));
+    case PORT_STATE_OK: {
+        printf("Port %i data %x\n",port_num, data);
+        port->alive = true;
+        break;
+    }
+    break;
+    };
 }
 
 void react_port1_int()
 {
-    unsigned char data = inb(DATA_PORT);
-
-    switch (port1_state) {
-    case PORT_STATE_RESET:
-        switch (data) {
-        case RESPONSE_SELF_TEST_OK:
-            printf("Port 1 success!\n");
-            port1_state = PORT_STATE_OK;
-            init_port1();
-            break;
-        case RESPONSE_FAILURE:
-            printf("Port 1 failure!\n");
-            port1_state = PORT_STATE_FAILURE;
-            break;
-        case RESPONSE_ACK:
-            printf("Port 1 ACK\n");
-            break;
-        }
-        break;
-    case PORT_STATE_OK: {
-        printf("Port 1 data %x\n", data);
-        break;
-    }
-    };
+    react_port_int(0);
 }
 
 void react_port2_int()
 {
-    unsigned char data = inb(DATA_PORT);
+    react_port_int(1);
+}
 
-    switch (port2_state) {
+void react_timer_port(unsigned port_num)
+{
+    Port* port = &ports[port_num];
 
-    default:
-        printf("Port 2 state %i data %x\n", port1_state, data);
+    switch (port->state) {
+    case PORT_STATE_RESET:
+        // Do nothing
         break;
-    };
+    case PORT_STATE_ENABLE_SCANNING:
+    case PORT_STATE_DISABLE_SCANNING:
+    case PORT_STATE_OK_NOINPUT:
+        printf("Warning: PS/2 port %x timeout\n", port_num+1);
+        port->state = PORT_STATE_RESET;
+        break;
+    case PORT_STATE_OK:
+        if (port->alive) {
+            port->alive = false;
+        } else {
+            port->state = PORT_STATE_OK_NOINPUT;
+            send_data_port(COMMAND_ECHO, port_num);
+        }
+        port->last_timer = start_timer(alive_interval);
+        break;
+    case PORT_STATE_IDENTIFY: {
+        printf("Info: Found PS/2 device on port %i with type 0x%X\n", port_num+1, port->device_id);
+        bool result_success = true;
 
+        if (result_success) {
+            port->state = PORT_STATE_ENABLE_SCANNING;
+
+            send_data_port(COMMAND_ENABLE_SCANNING, port_num);
+
+            port->last_timer = start_timer(200);
+        } else {
+            port->state = PORT_STATE_RESET;
+        }
+    }
+
+    }
+}
+
+void react_timer(uint64_t index)
+{
+    if (ports[0].last_timer == index) {
+        react_timer_port(0);
+    } else if (ports[1].last_timer == index) {
+        react_timer_port(1);
+    }
 }

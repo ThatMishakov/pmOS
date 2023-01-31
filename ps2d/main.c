@@ -8,6 +8,8 @@
 #include <kernel/block.h>
 #include <pmos/helpers.h>
 #include "ports.h"
+#include <devicesd/devicesd_msgs.h>
+#include "timers.h"
 
 bool has_second_channel = false;
 
@@ -30,11 +32,16 @@ void init_controller()
     outb(RW_PORT, CMD_CONFIG_READ);
     data = inb(DATA_PORT);
 
+    printf("PS/2 config value %x\n", data);
+
     data &= ~0x43;
     outb(RW_PORT, CMD_CONFIG_WRITE);
     outb(DATA_PORT, data);
 
-    if (data & 0x20) has_second_channel = true; 
+    if (data & 0x20) {
+        has_second_channel = true; 
+        printf("PS/2 controller has second channel\n");
+    }
 
     // Perform self-test
     outb(RW_PORT, TEST_CONTROLLER);
@@ -52,7 +59,7 @@ void init_controller()
         outb(RW_PORT, ENABLE_SECOND_PORT);
         data = inb(DATA_PORT);
 
-        if (data & 0x05)
+        if (data & 0x20)
             has_second_channel = false;
         else {
             outb(RW_PORT, DISABLE_SECOND_PORT);
@@ -112,6 +119,7 @@ int main(int argc, char *argv[])
 {
     printf("Hello from PS2d!\n");
 
+    request_priority(1);
     init_controller();
 
     if (!first_port_works && !second_port_works) {
@@ -119,15 +127,15 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    if (first_port_works)
-        port1_int = get_interrupt_number(1, int1_chan);
-
     if (second_port_works)
         port2_int = get_interrupt_number(12, int12_chan);
 
+    if (first_port_works)
+        port1_int = get_interrupt_number(1, int1_chan);
+
     enable_ports();
 
-    outb(DATA_PORT, 0xff);
+    init_ports();
 
     while (1) {
         result_t result;
@@ -145,6 +153,7 @@ int main(int argc, char *argv[])
             fprintf(stderr, "Error: Could not get message\n");
         }
 
+
         switch (desc.channel) {
         case int1_chan:
             react_port1_int();
@@ -152,6 +161,24 @@ int main(int argc, char *argv[])
         case int12_chan:
             react_port2_int();
             break;
+        case timer_reply_chan: {
+            unsigned expected_size = sizeof(DEVICESD_MESSAGE_TIMER_REPLY);
+            if (desc.size != expected_size) {
+                fprintf(stderr, "Warning: Recieved message of wrong size on channel %lx (expected %x got %x)\n", desc.channel, expected_size, desc.size);
+                break;
+            }
+
+            DEVICESD_MESSAGE_TIMER_REPLY* reply = (DEVICESD_MESSAGE_TIMER_REPLY*)message;
+
+            if (reply->type != DEVICESD_MESSAGE_TIMER_REPLY_T) {
+                fprintf(stderr, "Warning: Recieved unexpected meesage of type %x on channel %lx\n", reply->type, desc.channel);
+                break;
+            }
+
+            react_timer(reply->extra);            
+
+            break;
+        }
         default:
             fprintf(stderr, "Warning: Recieved message on unknown channel %lx\n", desc.channel);
             break;
