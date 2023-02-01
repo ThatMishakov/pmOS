@@ -13,6 +13,7 @@ typedef enum Port_States {
     PORT_STATE_IDENTIFY,
     PORT_STATE_DISABLE_SCANNING,
     PORT_STATE_ENABLE_SCANNING,
+    PORT_STATE_WAIT,
 } Port_States;
 
 extern int port1_state;

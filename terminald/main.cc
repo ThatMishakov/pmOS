@@ -45,7 +45,7 @@ void print_hex(uint64_t i)
 void init_screen();
 
 int main() {
-    request_priority(0);
+    // request_priority(0);
     init_screen();
     write(const_cast<char*>("Hello from terminald!\n"));
     

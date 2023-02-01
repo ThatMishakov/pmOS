@@ -15,6 +15,8 @@ Port ports[2];
 
 void send_data_port(uint8_t cmd, bool port_2)
 {
+    uint8_t status;
+
     if (port_2) {
         outb(RW_PORT, SECOND_PORT);
     }
@@ -35,7 +37,10 @@ void init_ports()
     }
 
     if (second_port_works) {
-        send_data_port(0xff, true);
+        if (first_port_works) {
+            ports[1].state = PORT_STATE_WAIT;
+            ports[1].last_timer = start_timer(500);
+        }
     }
 }
 
@@ -46,21 +51,6 @@ void react_port_int(unsigned port_num)
     unsigned char data = inb(DATA_PORT);
 
     // printf("--- INT port %i data %x state %i\n", port_num, data, port->state);
-
-    if (data == RESPONSE_SELF_TEST_OK) {
-        #ifdef DEBUG
-        printf("Port %i self-test success!\n", port_num+1);
-        #endif
-        port->state = PORT_STATE_DISABLE_SCANNING;
-
-        port->device_id = 0;
-        port->alive = false;
-
-        send_data_port(COMMAND_DISABLE_SCANNING, port_num);
-
-        port->last_timer = start_timer(200);
-        return;
-    }
 
     switch (port->state) {
     case PORT_STATE_RESET:
@@ -74,6 +64,18 @@ void react_port_int(unsigned port_num)
             printf("Port %i ACK\n", port_num+1);
             #endif
             break;
+        case RESPONSE_SELF_TEST_OK:
+            #ifdef DEBUG
+            printf("Port %i self-test success!\n", port_num+1);
+            #endif
+            port->state = PORT_STATE_DISABLE_SCANNING;
+
+            port->device_id = 0;
+            port->alive = false;
+
+            send_data_port(COMMAND_DISABLE_SCANNING, port_num);
+
+            port->last_timer = start_timer(200);
         default:
             // printf("%i\n", data);
             break;
@@ -131,13 +133,14 @@ void react_port_int(unsigned port_num)
 
     case PORT_STATE_OK_NOINPUT:
         port->state = PORT_STATE_OK;
+        port->alive = true;
 
         if (data == RESPONSE_ECHO)
             break;
 
         __attribute__((fallthrough));
     case PORT_STATE_OK: {
-        printf("Port %i data %x\n",port_num, data);
+        printf("Port %i data %x\n",port_num+1, data);
         port->alive = true;
         break;
     }
@@ -167,7 +170,8 @@ void react_timer_port(unsigned port_num)
     case PORT_STATE_DISABLE_SCANNING:
     case PORT_STATE_OK_NOINPUT:
         printf("Warning: PS/2 port %x timeout\n", port_num+1);
-        port->state = PORT_STATE_RESET;
+        port->state = PORT_STATE_WAIT;
+        port->last_timer = start_timer(5000);
         break;
     case PORT_STATE_OK:
         if (port->alive) {
@@ -191,6 +195,10 @@ void react_timer_port(unsigned port_num)
         } else {
             port->state = PORT_STATE_RESET;
         }
+        break;
+    case PORT_STATE_WAIT:
+        port->state = PORT_STATE_RESET;
+        send_data_port(COMMAND_RESET, port_num);
     }
 
     }

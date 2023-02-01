@@ -16,6 +16,9 @@ bool has_second_channel = false;
 bool first_port_works =  false;
 bool second_port_works = false;
 
+bool enable_first_channel = true;
+bool enable_second_channel = true;
+
 void init_controller()
 {
     uint8_t status;
@@ -73,7 +76,7 @@ void init_controller()
     data = inb(DATA_PORT);
     if (!data) {
         printf("Info: Port 1 passed self-test\n");
-        first_port_works = true;
+        first_port_works = enable_first_channel;
     } else {
         printf("Notice: first port didn't pass self-test (error %x)\n", data);
     }
@@ -86,7 +89,7 @@ void init_controller()
         data = inb(DATA_PORT);
         if (!data) {
             printf("Info: Port 2 passed self-test\n");
-            second_port_works = true;
+            second_port_works = enable_second_channel;
         } else {
             printf("Notice: second port didn't pass self-test (error %x)\n", data);
         }
