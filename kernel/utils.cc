@@ -183,7 +183,15 @@ void term_write(const char * str, u64 length)
     //for (u64 i = 0; i < length; ++i) {
     //    putchar(str[i]);
     //}
-    send_message_system(1, str, length);
+
+    struct Msg {
+        u32 type = 0x40;
+        char buff[0];
+    } *var = (Msg*)__builtin_alloca(length+4);
+
+    memcpy(str, var->buff, length);
+
+    send_message_system(1, (char*)var, length+4);
 }
 
 kresult_t prepare_user_buff_rd(const char* buff, size_t size)
@@ -243,8 +251,7 @@ kresult_t copy_to_user(const char* from, char* to, size_t size)
 void memcpy(const char* from, char* to, size_t size)
 {
     for (size_t i = 0; i < size; ++i) {
-        *to = *from;
-        ++from; ++to;
+        to[i] = from[i];
     }
 }
 
