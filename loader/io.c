@@ -13,7 +13,23 @@ char write_to_system = 0;
 void set_print_syscalls()
 {
     write_to_system = 1;
-    syscall(SYSCALL_SEND_MSG_PORT, 1, buff_pos - buff_ack, &screen_buff[buff_ack]);
+
+    struct {
+        uint32_t type;
+        char buff[256];
+    } msg_str = {0x40, {}};
+
+    unsigned length = buff_pos - buff_ack;
+    char *str = &screen_buff[buff_ack];
+
+    for (unsigned i = 0; i < length; i += 256) {
+        unsigned size = length - i > 256 ? 256 : length - i;
+        memcpy(&str[i], msg_str.buff, size);
+
+        syscall(SYSCALL_SEND_MSG_PORT, 1, size + sizeof(uint32_t), &msg_str);
+    }
+
+    // syscall(SYSCALL_SEND_MSG_PORT, 1, buff_pos - buff_ack, &screen_buff[buff_ack]);
     buff_ack = buff_pos;
 }
 
@@ -26,7 +42,18 @@ void print_str(char * str)
             if (buff_pos == 8192) buff_pos = 0;
         }
     else {
-        syscall(SYSCALL_SEND_MSG_PORT, 1, strlen(str), str);
+        struct {
+            uint32_t type;
+            char buff[256];
+        } msg_str = {0x40, {}};
+
+        unsigned length = strlen(str);
+        for (unsigned i = 0; i < length; i += 256) {
+            unsigned size = length - i > 256 ? 256 : length - i;
+            memcpy(&str[i], msg_str.buff, size);
+
+            syscall(SYSCALL_SEND_MSG_PORT, 1, size+sizeof(uint32_t), &msg_str);
+        }
     }
     return;
 }

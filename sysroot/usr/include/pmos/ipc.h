@@ -55,15 +55,22 @@ typedef struct IPC_Timer_Reply {
     uint64_t timer_id;
     uint64_t extra;
 } IPC_Timer_Reply;
-
 #define IPC_TIMER_TICK 0x01
 
-#define IPC_Kernel_Interrupt_NUM 0x06
+#define IPC_Kernel_Interrupt_NUM 0x20
 typedef struct IPC_Kernel_Interrupt {
     uint32_t type;
     uint32_t intno;
     uint32_t lapic_id;
 } IPC_Kernel_Interrupt;
+
+
+
+#define IPC_Write_Plain_NUM     0x40
+typedef struct IPC_Write_Plain {
+    uint32_t type;
+    char data[0];
+} IPC_Write_Plain;
 
 
 #if defined(__cplusplus)

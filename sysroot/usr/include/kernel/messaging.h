@@ -17,7 +17,7 @@ typedef struct {
 } PACKED Kernel_Message;
 
 
-#define IPC_Kernel_Interrupt_NUM       0x06
+#define IPC_Kernel_Interrupt_NUM       0x20
 #define KERNEL_MSG_INTERRUPT           IPC_Kernel_Interrupt_NUM
 #define KERNEL_MSG_INT_START       SYSTEM_MESSAGES_START
 typedef struct Kernel_Message_Interrupt {

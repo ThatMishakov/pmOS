@@ -6,6 +6,7 @@
 #include <kernel/errors.h>
 #include <string.h>
 #include <stdlib.h>
+#include <pmos/ipc.h>
 
 FILE * stdin = NULL;
 FILE * stdout = NULL;
@@ -89,8 +90,36 @@ static int _size_fputs (int size, const char * str, FILE * stream)
     switch (type)
     {
     case _STDIO_FILE_TYPE_PORT: {
-        int k = send_message_port(stream->port_ptr, size, str);
-        result = k == SUCCESS ? size : EOF;
+        static const int buffer_size = 252;
+
+        struct {
+            uint32_t type;
+            char buffer[buffer_size];
+        } desc;
+
+        desc.type = IPC_Write_Plain_NUM;
+        int s = 0;
+
+        result = SUCCESS;
+
+        for (int i = 0; i < size; i += buffer_size) {
+            int size_s = size - i > buffer_size ? buffer_size : size - i;
+            memcpy(desc.buffer, &str[i], size_s);
+
+            int k = send_message_port(stream->port_ptr, size_s + sizeof(uint32_t), (const char*)(&desc));
+
+            if (k == SUCCESS) {
+                s += size_s;
+            } else {
+                if (s == 0)
+                    result = EOF;
+
+                break;
+            }
+
+            result = result == SUCCESS ? s : EOF;
+        }
+
         break;
     }
     default:

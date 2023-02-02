@@ -5,6 +5,7 @@
 #include <string.h>
 #include <pmos/system.h>
 #include "asm.hh"
+#include <pmos/ipc.h>
 
 void putchar (int c);
 void write(char* buff)
@@ -69,7 +70,21 @@ int main() {
 
             msg_buff[msg.size] = '\0';
 
-            write(msg_buff);
+            if (msg.size < sizeof(IPC_Write_Plain)-1) {
+                write("Warning: recieved very small message\n");
+                free(msg_buff);
+                break;
+            }
+
+            IPC_Write_Plain *str = (IPC_Write_Plain *)(msg_buff);
+
+            switch (str->type) {
+            case IPC_Write_Plain_NUM:
+                write(str->data);
+                break;
+            default:
+                write("Warning: Unknown message type\n");
+            }
 
             free(msg_buff);
         }
