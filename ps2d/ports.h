@@ -25,6 +25,15 @@ void react_timer(uint64_t index);
 
 void init_ports();
 
+typedef struct Port {
+    uint64_t last_timer;
+    Port_States state;
+    uint16_t device_id;
+    bool alive;
+} Port;
+
+extern Port ports[2];
+
 static const uint32_t alive_interval = 2000;
 
 #endif

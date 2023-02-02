@@ -4,13 +4,6 @@
 #include <stdio.h>
 #include "timers.h"
 
-typedef struct Port {
-    uint64_t last_timer;
-    Port_States state;
-    uint16_t device_id;
-    bool alive;
-} Port;
-
 Port ports[2];
 
 void send_data_port(uint8_t cmd, bool port_2)
@@ -89,7 +82,9 @@ void react_port_int(unsigned port_num)
     case RESPONSE_ACK:
         port->state = PORT_STATE_IDENTIFY;
 
+        #ifdef DEBUG
         printf("Port %i disabled scanning successfully!\n",port_num+1);
+        #endif
 
         send_data_port(COMMAND_IDENTIFY, port_num);
 

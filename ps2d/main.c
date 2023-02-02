@@ -8,7 +8,7 @@
 #include <kernel/block.h>
 #include <pmos/helpers.h>
 #include "ports.h"
-#include <devicesd/devicesd_msgs.h>
+#include <pmos/ipc.h>
 #include "timers.h"
 
 bool has_second_channel = false;
@@ -35,7 +35,7 @@ void init_controller()
     outb(RW_PORT, CMD_CONFIG_READ);
     data = inb(DATA_PORT);
 
-    printf("PS/2 config value %x\n", data);
+    // printf("PS/2 config value %x\n", data);
 
     data &= ~0x43;
     outb(RW_PORT, CMD_CONFIG_WRITE);
@@ -43,7 +43,7 @@ void init_controller()
 
     if (data & 0x20) {
         has_second_channel = true; 
-        printf("PS/2 controller has second channel\n");
+        printf("Info: PS/2 controller has second channel\n");
     }
 
     // Perform self-test
@@ -165,15 +165,15 @@ int main(int argc, char *argv[])
             react_port2_int();
             break;
         case timer_reply_chan: {
-            unsigned expected_size = sizeof(DEVICESD_MESSAGE_TIMER_REPLY);
+            unsigned expected_size = sizeof(IPC_Timer_Reply);
             if (desc.size != expected_size) {
                 fprintf(stderr, "Warning: Recieved message of wrong size on channel %lx (expected %x got %x)\n", desc.channel, expected_size, desc.size);
                 break;
             }
 
-            DEVICESD_MESSAGE_TIMER_REPLY* reply = (DEVICESD_MESSAGE_TIMER_REPLY*)message;
+            IPC_Timer_Reply* reply = (IPC_Timer_Reply*)message;
 
-            if (reply->type != DEVICESD_MESSAGE_TIMER_REPLY_T) {
+            if (reply->type != IPC_Timer_Reply_NUM) {
                 fprintf(stderr, "Warning: Recieved unexpected meesage of type %x on channel %lx\n", reply->type, desc.channel);
                 break;
             }

@@ -13,14 +13,15 @@ typedef struct {
 #define MSG_ARG_NOPOP 0x01
 
 typedef struct {
-    u64 type;
+    u32 type;
 } PACKED Kernel_Message;
 
 
-#define KERNEL_MSG_INTERRUPT       0x01
+#define IPC_Kernel_Interrupt_NUM       0x06
+#define KERNEL_MSG_INTERRUPT           IPC_Kernel_Interrupt_NUM
 #define KERNEL_MSG_INT_START       SYSTEM_MESSAGES_START
 typedef struct Kernel_Message_Interrupt {
-    u64 type;
+    u32 type;
     u32 intno;
     u32 lapic_id;
 } PACKED Kernel_Message_Interrupt;
