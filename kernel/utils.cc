@@ -189,6 +189,7 @@ void term_write(const char * str, u64 length)
         char buff[0];
     } *var = (Msg*)__builtin_alloca(length+4);
 
+    var->type = 0x40;
     memcpy(str, var->buff, length);
 
     send_message_system(1, (char*)var, length+4);

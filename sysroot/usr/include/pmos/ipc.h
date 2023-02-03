@@ -6,14 +6,18 @@
 extern "C" {
 #endif
 
-typedef struct DEVICESD_MSG_GENERIC
+typedef struct IPC_Generic_Msg
 {
     uint32_t type;
-} DEVICESD_MSG_GENERIC;
+} IPC_Generic_Msg;
+
+#define IPC_MIN_SIZE (sizeof(IPC_Generic_Msg))
+#define IPC_RIGHT_SIZE(type) (sizeof(type))
+#define IPC_TYPE(ptr) (((IPC_Generic_Msg*)ptr)->type)
 
 // Registers an interrupt handler for the process
 #define IPC_Reg_Int_NUM 0x01
-typedef struct IPC_Reg_Int_Str {
+typedef struct IPC_Reg_Int {
     uint32_t type;
     uint32_t flags;
     uint32_t intno;
@@ -21,24 +25,24 @@ typedef struct IPC_Reg_Int_Str {
     uint64_t dest_task;
     uint64_t dest_chan;
     uint64_t reply_chan;
-} IPC_Reg_Int_Str;
-#define IPC_Reg_Int_Str_FLAG_EXT_INTS 0x01
+} IPC_Reg_Int;
+#define IPC_Reg_Int_FLAG_EXT_INTS 0x01
 
 #define IPC_Reg_Int_Reply_NUM 0x02
-typedef struct IPC_Reg_Int_Reply_Str {
+typedef struct IPC_Reg_Int_Reply {
     uint32_t type;
     uint32_t flags;
     uint32_t status;
     uint32_t intno;
-} IPC_Reg_Int_Reply_Str;
+} IPC_Reg_Int_Reply;
 
 #define IPC_Start_Timer_NUM 0x03
-typedef struct IPC_Start_Timer_Str {
+typedef struct IPC_Start_Timer {
     uint32_t type;
     uint64_t ms;
     uint64_t extra;
     uint64_t reply_channel;
-} IPC_Start_Timer_Str;
+} IPC_Start_Timer;
 
 #define IPC_Timer_Ctrl_NUM 0x04
 typedef struct IPC_Timer_Ctrl {

@@ -10,7 +10,7 @@
 #include <pmos/special.h>
 #include <pci/pci.h>
 #include <ioapic/ioapic.h>
-#include <devicesd/devicesd_msgs.h>
+#include <pmos/ipc.h>
 #include <interrupts/interrupts.h>
 #include <configuration.h>
 #include <timers/timers.h>
@@ -91,51 +91,44 @@ int main(int argc, char** argv) {
 
             get_first_message(msg_buff, 0);
 
-            switch(msg.channel) {
-                case CONTROL_PORT:
-                {
-                    if (msg.size >= sizeof(DEVICESD_MSG_GENERIC)) {
-                        switch (((DEVICESD_MSG_GENERIC*)msg_buff)->type) {
-                            case DEVICESD_MESSAGE_REG_INT_T: {
-                                if (msg.size != sizeof(DEVICESD_MESSAGE_REG_INT))
-                                    printf("Warning: Message from PID %lx does no have the right size (%lx)\n", msg.sender, msg.size);
-                                // TODO: Add more checks & stuff
+            if (msg.size >= sizeof(DEVICESD_MSG_GENERIC)) {
+                switch (((DEVICESD_MSG_GENERIC*)msg_buff)->type) {
+                case IPC_Reg_Int_NUM: {
+                    if (msg.size != sizeof(IPC_Reg_Int))
+                        printf("Warning: Message from PID %lx does no have the right size (%lx)\n", msg.sender, msg.size);
+                    // TODO: Add more checks & stuff
 
-                                DEVICESD_MESSAGE_REG_INT* m = (DEVICESD_MESSAGE_REG_INT*)msg_buff;
+                    IPC_Reg_Int* m = (IPC_Reg_Int*)msg_buff;
 
-                                uint8_t result = configure_interrupts_for(m);
+                    uint8_t result = configure_interrupts_for(m);
 
-                                DEVICESD_MESSAGE_REG_INT_REPLY reply;
-                                reply.type = DEVICESD_MESSAGE_REG_INT_REPLY_T;
-                                reply.status = result != 0;
-                                reply.intno = result;
-                                send_message_task(msg.sender, m->reply_chan, sizeof(reply), (char*)&reply);
-                            }
-                                break;
-                            case DEVICESD_MESSAGE_TIMER_T: {
-                                if (msg.size != sizeof(DEVICESD_MESSAGE_TIMER))
-                                    printf("Warning: Message from PID %lx does no have the right size (%lx)\n", msg.sender, msg.size);
-
-                                DEVICESD_MESSAGE_TIMER* m = (DEVICESD_MESSAGE_TIMER*)msg_buff;
-                                start_timer(m->ms, m->extra, msg.sender, m->reply_channel);
-                            }
-
-                                break;
-                            default:
-                                printf("Warning: Recieved unknown message %x from PID %li\n", ((DEVICESD_MSG_GENERIC*)msg_buff)->type, msg.sender);    
-                                break;
-                            }
-                        }
-                    }
+                    IPC_Reg_Int_Reply reply;
+                    reply.type = IPC_Reg_Int_Reply_NUM;
+                    reply.status = result != 0;
+                    reply.intno = result;
+                    send_message_task(msg.sender, m->reply_chan, sizeof(reply), (char*)&reply);
+                }
                     break;
-                case hpet_int_chan: {
-                        // TODO: Check that it's from kernel, etc.
-                        hpet_int();
-                    }
-                        break;
+                case IPC_Start_Timer_NUM: {
+                    if (msg.size != sizeof(IPC_Start_Timer))
+                        printf("Warning: Message from PID %lx does no have the right size (%lx)\n", msg.sender, msg.size);
+
+                    IPC_Start_Timer* m = (IPC_Start_Timer*)msg_buff;
+                    start_timer(m->ms, m->extra, msg.sender, m->reply_channel);
+                }
+
+                    break;
+                case IPC_Kernel_Interrupt_NUM:
+                    // TODO: Check that it's from kernel, etc.
+
+                    hpet_int();
+                    break;
                 default:
+                    printf("Warning: Recieved unknown message %x from PID %li\n", ((DEVICESD_MSG_GENERIC*)msg_buff)->type, msg.sender);    
                     break;
-            }
+                }
+                }
+
 
             free(msg_buff);
         }

@@ -156,15 +156,35 @@ int main(int argc, char *argv[])
             fprintf(stderr, "Error: Could not get message\n");
         }
 
+        if (desc.size < IPC_MIN_SIZE) {
+            fprintf(stderr, "Error: Message too small (size %i)\n", desc.size);
+            free(message);
+        }
 
-        switch (desc.channel) {
-        case int1_chan:
-            react_port1_int();
+
+        switch (IPC_TYPE(message)) {
+        case IPC_Kernel_Interrupt_NUM: {
+            if (desc.size < sizeof(IPC_Kernel_Interrupt)) {
+                printf("Warning: message for type %i is too small (size %x)\n", IPC_Kernel_Interrupt_NUM, desc.size);
+                break;
+            }
+
+            IPC_Kernel_Interrupt* str = (IPC_Kernel_Interrupt*)message;
+
+            if (str->intno == port1_int) {
+                react_port1_int();
+                break;
+            }
+
+            if (str->intno == port2_int) {
+                react_port2_int();
+                break;
+            }
+
+            printf("Warning: Recieved unknown interrupt %i\n", str->intno);
+        }
             break;
-        case int12_chan:
-            react_port2_int();
-            break;
-        case timer_reply_chan: {
+        case IPC_Timer_Reply_NUM: {
             unsigned expected_size = sizeof(IPC_Timer_Reply);
             if (desc.size != expected_size) {
                 fprintf(stderr, "Warning: Recieved message of wrong size on channel %lx (expected %x got %x)\n", desc.channel, expected_size, desc.size);
@@ -183,9 +203,11 @@ int main(int argc, char *argv[])
             break;
         }
         default:
-            fprintf(stderr, "Warning: Recieved message on unknown channel %lx\n", desc.channel);
+            fprintf(stderr, "Warning: Recieved message of unknown type %lx\n", IPC_TYPE(message));
             break;
         }
+
+        free(message);
     }
 
     return 0;

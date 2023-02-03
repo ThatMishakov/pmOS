@@ -83,7 +83,9 @@ int main() {
                 write(str->data);
                 break;
             default:
-                write("Warning: Unknown message type\n");
+                write("Warning: Unknown message type ");
+                print_hex(str->type);
+                write("\n");
             }
 
             free(msg_buff);

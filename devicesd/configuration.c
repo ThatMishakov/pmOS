@@ -1,6 +1,6 @@
 #include <configuration.h>
 #include <ioapic/ioapic.h>
-#include <devicesd/devicesd_msgs.h>
+#include <pmos/ipc.h>
 #include <interrupts/interrupts.h>
 #include <stdbool.h>
 #include <pmos/system.h>
@@ -16,9 +16,9 @@ uint8_t get_ioapic_int(uint32_t intno, uint64_t dest_pid, uint32_t chan)
     return result ? cpu_int_vector : 0;
 }
 
-uint8_t configure_interrupts_for(DEVICESD_MESSAGE_REG_INT* m)
+uint8_t configure_interrupts_for(IPC_Reg_Int* m)
 {
-    if (m->flags & MSG_REG_INT_FLAG_EXTERNAL_INTS) {
+    if (m->flags & IPC_Reg_Int_FLAG_EXT_INTS) {
         return get_ioapic_int(m->intno, m->dest_task, m->dest_chan);
     }
 
