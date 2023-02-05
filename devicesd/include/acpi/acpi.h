@@ -17,7 +17,7 @@ typedef struct RSDP_descriptor20 {
  uint64_t xsdt_address;
  uint8_t extended_checksum;
  uint8_t reserved[3];
-} __attribute__ ((packed)) RSDP_descriptor20;
+} RSDP_descriptor20;
 
 typedef struct ACPISDTHeader {
   char signature[4];
@@ -94,8 +94,7 @@ typedef struct MADT {
 
 void init_acpi();
 
-extern RSDP_descriptor* rsdp_desc;
-extern RSDP_descriptor20* rsdp20_desc;
+extern RSDP_descriptor20* rsdp_desc;
 
 typedef struct GenericAddressStructure
 {

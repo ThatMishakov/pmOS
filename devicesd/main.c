@@ -15,6 +15,7 @@
 #include <configuration.h>
 #include <timers/timers.h>
 #include <timers/hpet.h>
+#include <pmos/ipc.h>
 
 char* exec = NULL;
 
@@ -27,42 +28,18 @@ void usage()
     exit(0);
 }
 
-void parse_args(int argc, char** argv)
-{
-    if (argc < 1) return;
-    exec = argv[0];
-
-    for (int i = 1; i < argc; ++i) {
-        if (strcmp(argv[i], "--rsdp-desc") == 0) {
-            ++i;
-            if (i == argc) {
-                printf("Error: malformed options\n");
-                usage();
-            }
-            rsdp_desc = (RSDP_descriptor*)strtoul(argv[i], NULL, 0);
-        } else if (strcmp(argv[i], "--rsdp20-desc") == 0) {
-            ++i;
-            if (i == argc) {
-                printf("Error: malformed options\n");
-                usage();
-            }
-            rsdp20_desc = (RSDP_descriptor20*)strtoul(argv[i], NULL, 0);
-        }
-    }
-}
-
 #define CONTROL_PORT 10
 
 int main(int argc, char** argv) {
     printf("Hello from devicesd!\n");
     
-    parse_args(argc, argv);
+    // parse_args(argc, argv);
 
     pmos_request_io_permission();
     request_priority(0);
 
-    if (rsdp_desc || rsdp20_desc)
-        init_acpi();
+
+    init_acpi();
 
     init_ioapic();
     init_timers();
@@ -91,8 +68,8 @@ int main(int argc, char** argv) {
 
             get_first_message(msg_buff, 0);
 
-            if (msg.size >= sizeof(DEVICESD_MSG_GENERIC)) {
-                switch (((DEVICESD_MSG_GENERIC*)msg_buff)->type) {
+            if (msg.size >= sizeof(IPC_Generic_Msg)) {
+                switch (((IPC_Generic_Msg*)msg_buff)->type) {
                 case IPC_Reg_Int_NUM: {
                     if (msg.size != sizeof(IPC_Reg_Int))
                         printf("Warning: Message from PID %lx does no have the right size (%lx)\n", msg.sender, msg.size);
@@ -124,7 +101,7 @@ int main(int argc, char** argv) {
                     hpet_int();
                     break;
                 default:
-                    printf("Warning: Recieved unknown message %x from PID %li\n", ((DEVICESD_MSG_GENERIC*)msg_buff)->type, msg.sender);    
+                    printf("Warning: Recieved unknown message %x from PID %li\n", ((IPC_Generic_Msg*)msg_buff)->type, msg.sender);    
                     break;
                 }
                 }

@@ -136,6 +136,10 @@ XSDT* get_xsdt_from_desc(RSDP_descriptor20* rsdp_desc_phys)
         // panic("Could not map rsdp\n");
     }
 
+    if (rsdp_virt->firstPart.revision < 2) { // Not RDSP 2.0 pointer
+        return NULL;
+    }
+
     unsigned char sum = 0;
     for (size_t i = 0; i < sizeof(RSDP_descriptor20); ++i)
         sum += ((unsigned char*)rsdp_virt)[i];
@@ -144,6 +148,9 @@ XSDT* get_xsdt_from_desc(RSDP_descriptor20* rsdp_desc_phys)
         fprintf(stderr, "Warning: RSDP Descriptor not valid\n");
         return NULL;
     }
+
+    if (rsdp_virt->firstPart.revision < 2)
+        return NULL; // ACPI ver. 1
 
     ACPISDTHeader *xsdt_phys = (ACPISDTHeader*)(uint64_t)rsdp_virt->xsdt_address; // TODO: Will need to be changed when porting to 32 bit
     XSDT* xsdt_virt = (XSDT*)check_get_virt_from_phys(xsdt_phys);
@@ -183,10 +190,10 @@ int walk_acpi_tables()
 {
     int revision = -1;
     char xsdt_enumerated = 0;
-    if (rsdp20_desc != NULL) { // TODO
-        XSDT* xsdt = get_xsdt_from_desc(rsdp20_desc);
+    if (rsdp_desc != NULL) { // TODO
+        XSDT* xsdt = get_xsdt_from_desc(rsdp_desc);
         if (xsdt == NULL) {
-            fprintf(stderr, "Warning: could not validade XSDT table %lX\n", (uint64_t)xsdt);      
+            // fprintf(stderr, "Warning: could not validade XSDT table %lX\n", (uint64_t)xsdt);      
         } else {
             xsdt_enumerated = 1;
             push_table((ACPISDTHeader*)xsdt);
@@ -201,7 +208,7 @@ int walk_acpi_tables()
     } 
     
     if (rsdp_desc != NULL) {
-        RSDT* rsdt = get_rsdt_from_desc(rsdp_desc);
+        RSDT* rsdt = get_rsdt_from_desc(&rsdp_desc->firstPart);
         if (rsdt == NULL) {
             // panic
             fprintf(stderr, "Warning: could not validade RSDT table %lX\n", (uint64_t)rsdt);      

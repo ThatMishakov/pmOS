@@ -1,6 +1,7 @@
 #ifndef _PMOS_IPC_H
 #define _PMOS_IPC_H
 #include <stdint.h>
+#include "acpi.h"
 
 #if defined(__cplusplus)
 extern "C" {
@@ -75,6 +76,20 @@ typedef struct IPC_Write_Plain {
     uint32_t type;
     char data[0];
 } IPC_Write_Plain;
+
+
+#define IPC_ACPI_Request_RSDT_NUM 0x60
+typedef struct IPC_ACPI_Request_RSDT {
+    uint32_t type;
+    uint64_t reply_channel;
+} IPC_ACPI_Request_RSDT;
+
+#define IPC_ACPI_RSDT_Reply_NUM 0x61
+typedef struct IPC_ACPI_RSDT_Reply {
+    uint32_t type;
+    uint32_t result;
+    ACPI_RSDP_descriptor *descriptor;
+} IPC_ACPI_RSDT_Reply;
 
 
 #if defined(__cplusplus)

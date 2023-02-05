@@ -39,7 +39,19 @@ uint8_t get_interrupt_number(uint32_t intnum, uint64_t int_chan)
         return 0;
     }
 
+    if (desc.size < sizeof(IPC_Reg_Int_Reply)) {
+        printf("Warning: Recieved message which is too small\n");
+        free(message);
+        return 0;
+    }
+
     IPC_Reg_Int_Reply* reply = (IPC_Reg_Int_Reply*)message;
+
+    if (reply->type != IPC_Reg_Int_Reply_NUM) {
+        printf("Warning: Recieved unexepcted message type\n");
+        free(message);
+        return 0;
+    }
 
     if (reply->status == 0) {
         printf("Warning: Did not assign the interrupt\n");

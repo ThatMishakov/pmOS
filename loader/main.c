@@ -21,6 +21,17 @@
 uint64_t multiboot_magic;
 uint64_t multiboot_info_str;
 
+typedef struct IPC_ACPI_Request_RSDT {
+    uint32_t type;
+    uint64_t reply_channel;
+} IPC_ACPI_Request_RSDT;
+
+typedef struct IPC_ACPI_RSDT_Reply {
+    uint32_t type;
+    uint32_t result;
+    uint64_t *descriptor;
+} IPC_ACPI_RSDT_Reply;
+
 void main()
 {
     if (multiboot_magic != MULTIBOOT2_BOOTLOADER_MAGIC) {
@@ -59,6 +70,9 @@ void main()
     //start_cpus();
 
     print_str("Loading modules...\n");
+
+    syscall(SYSCALL_SET_PORT_DEFAULT, 2, 2, 1);
+
 
     uint64_t terminal_pid = 0;
     for (struct multiboot_tag * tag = (struct multiboot_tag *) (multiboot_info_str + 8); tag->type != MULTIBOOT_TAG_TYPE_END;
@@ -186,6 +200,50 @@ void main()
         }
 
     init_acpi(multiboot_info_str);
+
+    while (1) {
+    
+        syscall_r r = syscall(SYSCALL_BLOCK, 0x01);
+        if (r.result == SUCCESS && r.value == MESSAGE_S_NUM) {
+            print_str("Loader: Recieved a message\n");
+
+            Message_Descriptor desc;
+            syscall_r s = syscall(SYSCALL_GET_MSG_INFO, &desc);
+            if (s.result != SUCCESS) {
+
+            }
+
+            char buff[desc.size];
+            s = syscall(SYSCALL_GET_MESSAGE, buff, 0);
+            if (s.result != SUCCESS) {
+            }
+
+            if (desc.size < 4) {
+                // Message too small
+            }
+
+            IPC_ACPI_Request_RSDT* ptr = (IPC_ACPI_Request_RSDT *)buff;
+
+            if (ptr->type == 0x60) {
+                IPC_ACPI_RSDT_Reply reply = {};
+
+                reply.type = 0x61;
+                reply.result = 0;
+                reply.descriptor = 0;
+
+                if (rsdp20_desc != 0) {
+                    reply.result = 1;
+                    reply.descriptor = (uint64_t *)rsdp20_desc;
+                } else if (rsdp_desc != 0) {
+                    reply.result = 1;
+                    reply.descriptor = (uint64_t *)rsdp_desc;
+                }
+
+                syscall(SYSCALL_SEND_MSG_TASK, desc.sender, ptr->reply_channel, sizeof(reply), &reply);
+            }
+        }
+ 
+    }
 
     //print_str("Everything seems ok. Nothing to do. Exiting...\n");
 
