@@ -123,8 +123,9 @@ extern "C" void interrupt_handler();
 extern "C" void ret_from_interrupt(void) NORETURN;
 extern "C" void ret_from_syscall(void) NORETURN;
 extern "C" void ret_from_sysenter(void) NORETURN;
+extern "C" void ref_from_exception(void) NORETURN;
 
-extern void (*return_table[3])(void);
+extern void (*return_table[4])(void);
 
 extern "C" void lvt0_int_isr();
 extern "C" void lvt1_int_isr();

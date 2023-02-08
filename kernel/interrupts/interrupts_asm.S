@@ -43,10 +43,8 @@ start_first_process:
 ret_from_interrupt:
     restore_context
 
-    cmpw $0x08, 0x8(%rsp)
-	je 1f
 	swapgs
-1:
+    
     iretq
 
 

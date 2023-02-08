@@ -62,7 +62,7 @@ general_protection_fault_isr:
     movq $0, %rbp
 
     # Entry type
-    movq $0,   176(%r11)
+    movq $3,   176(%r11)
 
     call general_protection_fault_manager
 
@@ -88,7 +88,7 @@ pagefault_isr:
     movq $0, %rbp
 
     # Entry type
-    movq $0,   176(%r11)
+    movq $3,   176(%r11)
 
     call pagefault_manager
 
@@ -114,9 +114,22 @@ stack_segment_fault_isr:
     movq $0, %rbp
 
     # Entry type
-    movq $0,   176(%r11)
+    movq $3,   176(%r11)
 
     call stack_segment_fault_manager
 
     # Return
     auto_return
+
+
+
+    .type ref_from_exception, @function
+    .globl ref_from_exception
+ref_from_exception:
+    restore_context
+
+    cmpw $0x08, 0x8(%rsp)
+	je 1f
+	swapgs
+1:
+    iretq
