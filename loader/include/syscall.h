@@ -41,6 +41,11 @@ inline syscall_r map_phys(uint64_t virt, uint64_t phys, uint64_t size, uint64_t 
     return syscall(SYSCALL_MAP_PHYS, virt, phys, size, arg);
 }
 
+inline syscall_r release_pages(uint64_t virt, uint64_t nb_pages)
+{
+    return syscall(SYSCALL_RELEASE_PAGE_MULTI, virt, nb_pages);
+}
+
 inline uint64_t getpid()
 {
     return syscall(SYSCALL_GETPID).result;

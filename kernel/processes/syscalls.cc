@@ -380,13 +380,19 @@ void syscall_release_page_multi(u64 virtual_addr, u64 nb_pages)
     // Check pages
     for (u64 i = 0; i < nb_pages; ++i) {
         Page_Types p = page_type(virtual_addr);
-        if (p == Page_Types::UNALLOCATED) {
+        switch (p)
+        {
+        case Page_Types::UNALLOCATED:
             syscall_ret_low(task) = ERROR_PAGE_NOT_ALLOCATED;
             return;
-        }
-        if (p != NORMAL) {
+            break;
+        case Page_Types::SPECIAL:
+        case Page_Types::NORMAL:
+            break;
+        default:
             syscall_ret_low(task) = ERROR_HUGE_PAGE;
             return;
+            break;
         }
     }
 

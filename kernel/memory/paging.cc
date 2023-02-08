@@ -178,10 +178,9 @@ kresult_t release_page_s(u64 virtual_address, u64 page_table)
     case PAGE_NORMAL:
         kernel_pframe_allocator.free((void*)(pte.page_ppn << 12));
         FALLTHROUGH;
+    case PAGE_SPECIAL:
     case PAGE_DELAYED:
         invalidade(virtual_address);
-        break;
-    case PAGE_SPECIAL: // Do nothing
         break;
     case PAGE_SHARED:
     case PAGE_COW:
