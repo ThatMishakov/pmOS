@@ -46,7 +46,9 @@ struct CPU_Info {
     u64 temp_var = 0; // 16
     klib::shared_ptr<TaskDescriptor> current_task = klib::shared_ptr<TaskDescriptor>(); // 24
     u64 nested_level = 0; // 40
-    Task_Regs nested_int_regs; // 48
+    u64 jumpto_from = 0;  // 48
+    u64 jumpto_to   = 0;  // 56
+    Task_Regs nested_int_regs; // 64
 
     GDT cpu_gdt;
 

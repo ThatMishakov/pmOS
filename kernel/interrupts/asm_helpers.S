@@ -29,7 +29,7 @@ save_context:
     movq %r13, 136(%r11)
     movq %r14, 144(%r11)
     movq %r15, 152(%r11)
-    jmpq %rax
+    jmpq          *%rax
 
 
 
@@ -43,7 +43,7 @@ cond_save_context:
     cmpw $0x08, 24(%rsp)
 	jne 1f
 	movq %gs:0, %r11
-    leaq 48(%r11), %r11
+    leaq 64(%r11), %r11
     addq $1, %gs:40
 1:
 
@@ -71,7 +71,7 @@ cond_save_context:
     movq %r13, 136(%r11)
     movq %r14, 144(%r11)
     movq %r15, 152(%r11)
-    jmpq %rax
+    jmpq          *%rax
 
 
 
@@ -105,7 +105,7 @@ save_context_with_error:
     movq %r13, 136(%r11)
     movq %r14, 144(%r11)
     movq %r15, 152(%r11)
-    jmpq           %rax
+    jmpq          *%rax
 
 
 
@@ -119,7 +119,7 @@ cond_save_context_with_error:
     cmpw $0x08, 32(%rsp)
 	jne 1f
 	movq %gs:0, %r11
-    leaq 48(%r11), %r11
+    leaq 64(%r11), %r11
     addq $1, %gs:40
 1:
 
@@ -147,4 +147,13 @@ cond_save_context_with_error:
     movq %r13, 136(%r11)
     movq %r14, 144(%r11)
     movq %r15, 152(%r11)
-    jmpq           %rax
+    jmpq           *%rax
+
+
+
+
+    .type jumpto_func, @function
+    .globl jumpto_func
+jumpto_func:
+    pushq  %gs:48
+    jmpq  *%gs:56

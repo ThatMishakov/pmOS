@@ -4,6 +4,10 @@
 
 void register_exceptions(IDT& idt);
 
+extern "C" void jumpto_func(void) NORETURN;
+
+void kernel_jump_to(void (*function)(void));
+
 constexpr u8 division_error_num = 0x0;
 extern "C" void division_error_isr();
 extern "C" void division_error_manager();

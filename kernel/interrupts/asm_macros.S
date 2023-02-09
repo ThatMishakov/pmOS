@@ -29,7 +29,7 @@
     subq       $1, %gs:40
 
     movq       %gs:0, %r11
-    leaq       48(%r11), %r11
+    leaq       64(%r11), %r11
 
     pushq      104(%r11)
     pushq      96(%r11)
@@ -68,4 +68,3 @@
     movq 176(%r15), %r15
     jmpq *return_table(,%r15, 8)
     .endm
-    
