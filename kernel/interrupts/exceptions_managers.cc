@@ -15,9 +15,28 @@ void register_exceptions(IDT& idt)
     idt.register_isr(pagefault_num, &pagefault_isr, interrupt_gate_type, 0, 0);
 }
 
+extern "C" void deal_with_pagefault_in_kernel()
+{
+    t_print_bochs("Error: Pagefault inside the kernel!\n");
+    print_stack_trace();
+    while (1)
+    {
+        asm("hlt");
+    }
+}
+
 extern "C" void pagefault_manager()
 {
-    klib::shared_ptr<TaskDescriptor> task = get_cpu_struct()->current_task;
+    CPU_Info *c = get_cpu_struct();
+
+    if (c->nested_level) {
+        c->nested_int_regs.error_instr = c->nested_int_regs.e.rip;
+        c->nested_int_regs.e.rip = (u64)&deal_with_pagefault_in_kernel;
+
+        return;
+    }
+
+    klib::shared_ptr<TaskDescriptor> task = c->current_task;
 
     u64 err = task->regs.int_err;
     Interrupt_Stackframe* int_s = &task->regs.e;

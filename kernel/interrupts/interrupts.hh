@@ -73,6 +73,8 @@ struct Segment_Offsets {
 
 #define ENTRY_INTERRUPT 0
 #define ENTRY_SYSCALL   1
+#define ENTRY_SYSENTER  2
+#define ENTRY_NESTED    3
 
 
 struct Task_Regs { // 192 bytes
@@ -82,7 +84,7 @@ struct Task_Regs { // 192 bytes
     Segment_Offsets seg; // 16 bytes
     u64 entry_type = ENTRY_INTERRUPT; // 8 bytes
     u64 int_err = 0;
-    u64 intno = 0;
+    u64 error_instr = 0;
 };
 
 #define STACK_SIZE KB(16)
@@ -123,9 +125,8 @@ extern "C" void interrupt_handler();
 extern "C" void ret_from_interrupt(void) NORETURN;
 extern "C" void ret_from_syscall(void) NORETURN;
 extern "C" void ret_from_sysenter(void) NORETURN;
-extern "C" void ref_from_exception(void) NORETURN;
 
-extern void (*return_table[4])(void);
+extern void (*return_table[3])(void);
 
 extern "C" void lvt0_int_isr();
 extern "C" void lvt1_int_isr();

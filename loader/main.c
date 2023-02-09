@@ -95,45 +95,45 @@ void main()
     for (struct multiboot_tag * tag = (struct multiboot_tag *) (multiboot_info_str + 8); tag->type != MULTIBOOT_TAG_TYPE_END;
         tag = (struct multiboot_tag *) ((multiboot_uint8_t *) tag + ((tag->size + 7) & ~7))) {
             if (tag->type == MULTIBOOT_TAG_TYPE_MODULE) {
-                if (str_starts_with(((struct multiboot_tag_module *)tag)->cmdline, "terminald")) {
+                //if (str_starts_with(((struct multiboot_tag_module *)tag)->cmdline, "terminald")) {
                     struct multiboot_tag_module * mod = (struct multiboot_tag_module *)tag;
                     load_multiboot_module(mod);
-                }
+                //}
             }
         }
 
-    syscall(SYSCALL_SET_PORT_DEFAULT, 1, terminal_pid, 1);
+    // syscall(SYSCALL_SET_PORT_DEFAULT, 1, terminal_pid, 1);
 
-    for (struct multiboot_tag * tag = (struct multiboot_tag *) (multiboot_info_str + 8); tag->type != MULTIBOOT_TAG_TYPE_END;
-        tag = (struct multiboot_tag *) ((multiboot_uint8_t *) tag + ((tag->size + 7) & ~7))) {
-            if (tag->type == MULTIBOOT_TAG_TYPE_MODULE) {
-                if (str_starts_with(((struct multiboot_tag_module *)tag)->cmdline, "processd")) {
-                    struct multiboot_tag_module * mod = (struct multiboot_tag_module *)tag;
-                    load_multiboot_module(mod);
-                }
-            }
-        }
+    // for (struct multiboot_tag * tag = (struct multiboot_tag *) (multiboot_info_str + 8); tag->type != MULTIBOOT_TAG_TYPE_END;
+    //     tag = (struct multiboot_tag *) ((multiboot_uint8_t *) tag + ((tag->size + 7) & ~7))) {
+    //         if (tag->type == MULTIBOOT_TAG_TYPE_MODULE) {
+    //             if (str_starts_with(((struct multiboot_tag_module *)tag)->cmdline, "processd")) {
+    //                 struct multiboot_tag_module * mod = (struct multiboot_tag_module *)tag;
+    //                 load_multiboot_module(mod);
+    //             }
+    //         }
+    //     }
 
-    for (struct multiboot_tag * tag = (struct multiboot_tag *) (multiboot_info_str + 8); tag->type != MULTIBOOT_TAG_TYPE_END;
-        tag = (struct multiboot_tag *) ((multiboot_uint8_t *) tag + ((tag->size + 7) & ~7))) {
-            if (tag->type == MULTIBOOT_TAG_TYPE_MODULE) {
-                if (str_starts_with(((struct multiboot_tag_module *)tag)->cmdline, "devicesd")) {
-                    struct multiboot_tag_module * mod = (struct multiboot_tag_module *)tag;
-                    load_multiboot_module(mod);
-                }
-            }
-        }
+    // for (struct multiboot_tag * tag = (struct multiboot_tag *) (multiboot_info_str + 8); tag->type != MULTIBOOT_TAG_TYPE_END;
+    //     tag = (struct multiboot_tag *) ((multiboot_uint8_t *) tag + ((tag->size + 7) & ~7))) {
+    //         if (tag->type == MULTIBOOT_TAG_TYPE_MODULE) {
+    //             if (str_starts_with(((struct multiboot_tag_module *)tag)->cmdline, "devicesd")) {
+    //                 struct multiboot_tag_module * mod = (struct multiboot_tag_module *)tag;
+    //                 load_multiboot_module(mod);
+    //             }
+    //         }
+    //     }
 
     
-    for (struct multiboot_tag * tag = (struct multiboot_tag *) (multiboot_info_str + 8); tag->type != MULTIBOOT_TAG_TYPE_END;
-        tag = (struct multiboot_tag *) ((multiboot_uint8_t *) tag + ((tag->size + 7) & ~7))) {
-            if (tag->type == MULTIBOOT_TAG_TYPE_MODULE) {
-                if (str_starts_with(((struct multiboot_tag_module *)tag)->cmdline, "ps2d")) {
-                    struct multiboot_tag_module * mod = (struct multiboot_tag_module *)tag;
-                    load_multiboot_module(mod);
-                }
-            }
-        }
+    // for (struct multiboot_tag * tag = (struct multiboot_tag *) (multiboot_info_str + 8); tag->type != MULTIBOOT_TAG_TYPE_END;
+    //     tag = (struct multiboot_tag *) ((multiboot_uint8_t *) tag + ((tag->size + 7) & ~7))) {
+    //         if (tag->type == MULTIBOOT_TAG_TYPE_MODULE) {
+    //             if (str_starts_with(((struct multiboot_tag_module *)tag)->cmdline, "ps2d")) {
+    //                 struct multiboot_tag_module * mod = (struct multiboot_tag_module *)tag;
+    //                 load_multiboot_module(mod);
+    //             }
+    //         }
+    //     }
 
     init_acpi(multiboot_info_str);
 

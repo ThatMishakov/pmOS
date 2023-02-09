@@ -43,6 +43,7 @@ void programmable_interrupt(u32 intno)
     apic_eoi();
 }
 
+/*
 extern "C" void interrupt_handler()
 {
     const klib::shared_ptr<TaskDescriptor>& t = get_cpu_struct()->current_task;
@@ -78,10 +79,10 @@ extern "C" void interrupt_handler()
         // smart_eoi(intno);
     }
 }
+*/
 
-void (*return_table[4])(void) = {
+void (*return_table[3])(void) = {
     ret_from_interrupt,
     ret_from_syscall,
     ret_from_sysenter,
-    ref_from_exception,
 };

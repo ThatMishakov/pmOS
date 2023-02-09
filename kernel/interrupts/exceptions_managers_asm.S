@@ -56,18 +56,18 @@ general_protection_fault_isr:
 1:
 
     # Save registers
-    call save_context_with_error
+    call cond_save_context_with_error
 
     # Calling conventions
     movq $0, %rbp
 
     # Entry type
-    movq $3,   176(%r11)
+    movq $0,   176(%r11)
 
     call general_protection_fault_manager
 
     # Return
-    auto_return
+    auto_return_cond
 
 
 
@@ -82,18 +82,18 @@ pagefault_isr:
 1:
 
     # Save registers
-    call save_context_with_error
+    call cond_save_context_with_error
 
     # Calling conventions
     movq $0, %rbp
 
     # Entry type
-    movq $3,   176(%r11)
+    movq $0,   176(%r11)
 
     call pagefault_manager
 
     # Return
-    auto_return
+    auto_return_cond
 
 
 
@@ -108,28 +108,24 @@ stack_segment_fault_isr:
 1:
 
     # Save registers
-    call save_context_with_error
+    call cond_save_context_with_error
 
     # Calling conventions
     movq $0, %rbp
 
     # Entry type
-    movq $3,   176(%r11)
+    movq $0,   176(%r11)
 
     call stack_segment_fault_manager
 
     # Return
-    auto_return
+    auto_return_cond
 
 
 
-    .type ref_from_exception, @function
-    .globl ref_from_exception
-ref_from_exception:
-    restore_context
+    .type ret_nested_exception, @function
+    .globl ret_nested_exception
+ret_nested_exception:
+    restore_context_nested
 
-    cmpw $0x08, 0x8(%rsp)
-	je 1f
-	swapgs
-1:
     iretq

@@ -309,7 +309,7 @@ void print_stack_trace()
 
 extern "C" void abort(void)
 {
-    t_print_bochs("Error: abort() wal called. Freezing...\n");
+    t_print_bochs("Error: abort() was called. Freezing...\n");
     print_stack_trace();
     while (1);
 }
