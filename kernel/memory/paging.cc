@@ -390,11 +390,12 @@ kresult_t atomic_transfer_pages(const klib::shared_ptr<TaskDescriptor>& from, co
     kresult_t r = SUCCESS;
     auto it = l.begin();
     u64 i = 0;
-    for (; i < nb_pages and r == SUCCESS; ++i, ++it) {
+    for (; i < nb_pages; ++i, ++it) {
         u8 page_type = (*it).avl;
         if (page_type == PAGE_COW) {
             r = register_shared((*it).page_ppn << 12, t->page_table.get_cr3());
-            if (r != SUCCESS) break;
+            if (r != SUCCESS)
+                break;
 
             if (not pta.writeable)
                 pta.extra = PAGE_SHARED;
@@ -402,18 +403,22 @@ kresult_t atomic_transfer_pages(const klib::shared_ptr<TaskDescriptor>& from, co
                 pta.extra = page_type;
         } else if (page_type == PAGE_SHARED) {
             r = register_shared((*it).page_ppn << 12, t->page_table.get_cr3());
-            if (r != SUCCESS) break;
+            if (r != SUCCESS)
+                break;
 
             pta.extra = page_type;
         } else {
             pta.extra = page_type;
         }
+
         r = set_pte(to_address + i*KB(4), *it, pta);
+        if (r != SUCCESS)
+            break;
     }
 
     // If failed, invalidade the pages that succeded
     if (r != SUCCESS)
-        for (u64 k = 0; k < i; ++i) {
+        for (u64 k = 0; k < i; ++k) {
             PTE* p = get_pte(page_start + i*KB(4), rec_map_index);
             if (p->avl == PAGE_COW or p->avl == PAGE_SHARED)
                 release_shared(p->avl, t->page_table.get_cr3());
