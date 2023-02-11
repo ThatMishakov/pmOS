@@ -7,6 +7,7 @@
 #include <pmos/ipc.h>
 #include <pmos/system.h>
 #include <kernel/block.h>
+#include <main.h>
 
 int acpi_revision = -1;
 
@@ -68,9 +69,7 @@ XSDT* xsdt_phys = NULL;
 
 void request_acpi_tables()
 {
-    static const int reply_chan = 0;
-
-    IPC_ACPI_Request_RSDT request = {IPC_ACPI_Request_RSDT_NUM, reply_chan};
+    IPC_ACPI_Request_RSDT request = {IPC_ACPI_Request_RSDT_NUM, configuration_port};
 
     result_t result = send_message_port(2, sizeof(request), (char*)&request);
     if (result != SUCCESS) {
@@ -91,11 +90,6 @@ void request_acpi_tables()
     if (result != SUCCESS) {
         printf("Warning: Could not get message\n");
         return;
-    }
-
-    if (reply_chan != desc.channel) {
-        printf("Warning: Recieved message on the wrong channel %li\n", desc.channel);
-        free(message);
     }
 
     if (desc.size < sizeof(IPC_ACPI_RSDT_Reply)) {

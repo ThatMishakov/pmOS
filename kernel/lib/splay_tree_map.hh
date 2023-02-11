@@ -30,7 +30,34 @@ private:
     void rotate_right(node*) const;
     void delete_node(node*);
     static node* max(node*);
+    static node* min(node*);
 public:
+    friend class iterator;
+    class iterator {
+        friend class splay_tree_map;
+    private:
+        node* ptr = nullptr;
+
+        constexpr iterator(node* n): ptr(n) {};
+    public:
+        iterator() = default;
+        
+        constexpr bool operator==(iterator it) const
+        {
+            return ptr == it.ptr;
+        }
+
+        constexpr pair<const K&, T&> operator*() const
+        {
+            return {ptr->key, ptr->data};
+        }
+
+        constexpr pair<const K* const, T* const> operator->() const
+        {
+            return {&ptr->key, &ptr->data};
+        }
+    };
+
     constexpr splay_tree_map():
         elements(0), root(nullptr) {};
     splay_tree_map(const splay_tree_map&);
@@ -44,7 +71,8 @@ public:
 
     void erase(const K&);
 
-    size_t size() const;
+    constexpr size_t size() const;
+    constexpr bool empty() const;
 
     size_t count(const K&) const;
 
@@ -54,6 +82,19 @@ public:
     K largest() const;
 
     T get_copy_or_default(const K&);
+
+    iterator begin() const
+    {
+        if (root != nullptr)
+            splay(min(root));
+
+        return root;
+    }
+
+    constexpr iterator end() const
+    {
+        return nullptr;
+    } 
 };
 
 template<class K, class T>
@@ -200,9 +241,15 @@ void splay_tree_map<K,T>::insert(pair<K, T>&& pair)
 }
 
 template<class K, class T>
-size_t splay_tree_map<K,T>::size() const
+constexpr size_t splay_tree_map<K,T>::size() const
 {
     return elements;
+}
+
+template<class K, class T>
+constexpr bool splay_tree_map<K,T>::empty() const
+{
+    return size() == 0;
 }
 
 template<class K, class T>
@@ -322,6 +369,16 @@ T splay_tree_map<K,T>::get_copy_or_default(const K& key)
     splay(n);
 
     return n->data;
+}
+
+template<class K, class T>
+K splay_tree_map<K,T>::largest() const
+{
+    node* n = root;
+    while (n->right != nullptr)
+        n = n->right;
+
+    return n->key;
 }
 
 }

@@ -10,6 +10,7 @@
 #include "ports.h"
 #include <pmos/ipc.h>
 #include "timers.h"
+#include <pmos/ports.h>
 
 bool has_second_channel = false;
 
@@ -18,6 +19,9 @@ bool second_port_works = false;
 
 bool enable_first_channel = true;
 bool enable_second_channel = true;
+
+pmos_port_t main_port = 0;
+pmos_port_t configuration_port = 0;
 
 void init_controller()
 {
@@ -122,6 +126,23 @@ int main(int argc, char *argv[])
 {
     printf("Hello from PS2d!\n");
 
+    {
+    ports_request_t req;
+    req = create_port(PID_SELF, 0);
+    if (req.result != SUCCESS) {
+        printf("Error creating port %li\n", req.result);
+        return 0;
+    }
+    configuration_port = req.port;
+
+    req = create_port(PID_SELF, 0);
+    if (req.result != SUCCESS) {
+        printf("Error creating port %li\n", req.result);
+        return 0;
+    }
+    main_port = req.port;
+    }
+
     request_priority(1);
     init_controller();
 
@@ -131,10 +152,10 @@ int main(int argc, char *argv[])
     }
 
     if (second_port_works)
-        port2_int = get_interrupt_number(12, int12_chan);
+        port2_int = get_interrupt_number(12, main_port);
 
     if (first_port_works)
-        port1_int = get_interrupt_number(1, int1_chan);
+        port1_int = get_interrupt_number(1, main_port);
 
     enable_ports();
 

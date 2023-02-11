@@ -99,13 +99,13 @@ void cpu_set_apic_base(u64 base)
 
 void apic_write_reg(u16 index, u32 val)
 {
-    u32* reg = (u32*)((u64)apic_mapped_addr + index);
+    volatile u32* reg = (volatile u32*)((u64)apic_mapped_addr + index);
     *reg = val;
 }
 
 u32 apic_read_reg(u16 index)
 {
-    u32* reg = (u32*)((u64)apic_mapped_addr + index);
+    volatile u32* reg = (volatile u32*)((u64)apic_mapped_addr + index);
     return *reg;
 }
 

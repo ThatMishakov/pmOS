@@ -42,6 +42,8 @@ struct Port {
 struct TaskDescriptor;
 
 struct Ports_storage {
+    u64 biggest_port = 1;
+
     klib::splay_tree_map<u64, Port> storage;
     Spinlock lock;
     kresult_t send_from_user(u64 pid_from, u64 port, u64 buff_addr, size_t size);
@@ -49,6 +51,7 @@ struct Ports_storage {
     kresult_t set_dummy(u64 port);
     kresult_t set_port(u64 port, const klib::shared_ptr<TaskDescriptor>& task, u64 dest_chan);
     kresult_t send_msg(u64 pid_from, u64 port, klib::vector<char>&& msg);
+    ReturnStr<u64> atomic_request_port(const klib::shared_ptr<TaskDescriptor>& task);
     inline bool exists_port(u64 port)
     {
         Auto_Lock_Scope scope_lock(lock);

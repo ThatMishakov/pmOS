@@ -1,5 +1,6 @@
 #include <pmos/system.h>
 #include <kernel/types.h>
+#include <pmos/ports.h>
 
 syscall_r syscall_get_page(u64 addr)
 {
@@ -84,4 +85,11 @@ result_t request_priority(uint64_t priority)
 u64 get_lapic_id()
 {
     return syscall(SYSCALL_GET_LAPIC_ID).value;
+}
+
+ports_request_t create_port(pid_t owner, uint64_t flags)
+{
+    syscall_r r = syscall(SYSCALL_CREATE_PORT, owner, flags);
+    ports_request_t t = {r.result, r.value};
+    return t;
 }

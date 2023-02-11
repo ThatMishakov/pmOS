@@ -115,6 +115,9 @@ extern "C" void syscall_handler()
     case SYSCALL_SET_TASK_NAME:
         syscall_set_task_name(arg1, (char*)arg2, arg3);
         break;
+    case SYSCALL_CREATE_PORT:
+        syscall_create_port(arg1);
+        break;
     default:
         // Not supported
         syscall_ret_low(task) = ERROR_NOT_SUPPORTED;
@@ -878,4 +881,31 @@ void syscall_set_task_name(u64 pid, const char* string, u64 length)
     t->name.swap(str.second);
     syscall_ret_low(current) = SUCCESS;
     return;
+}
+
+void syscall_create_port(u64 owner)
+{
+    const task_ptr& task = get_current_task();
+
+    // TODO: Check permissions
+
+    klib::shared_ptr<TaskDescriptor> t;
+
+    if (owner == 0 or task->pid == owner) {
+        t = task;
+    } else {
+        t = get_task(owner);
+    }
+
+    // Check if process exists
+    if (not t) {
+        syscall_ret_low(task) = ERROR_NO_SUCH_PROCESS;
+        return;
+    }
+
+
+    auto result = default_ports.atomic_request_port(t);
+
+    syscall_ret_low(task) = result.result;
+    syscall_ret_high(task) = result.val;
 }

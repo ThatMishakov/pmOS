@@ -97,6 +97,8 @@ void syscall_set_priority(u64 priority);
 
 void syscall_set_task_name(u64 pid, const char* string, u64 length);
 
+void syscall_create_port(u64 owner);
+
 
 inline u64& syscall_arg1(const klib::shared_ptr<TaskDescriptor>& task)
 {

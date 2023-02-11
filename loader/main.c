@@ -178,7 +178,7 @@ void main()
                     reply.descriptor = (uint64_t *)rsdp_desc;
                 }
 
-                syscall(SYSCALL_SEND_MSG_TASK, desc.sender, ptr->reply_channel, sizeof(reply), &reply);
+                syscall(SYSCALL_SEND_MSG_PORT, ptr->reply_channel, sizeof(reply), &reply);
             }
         }
  

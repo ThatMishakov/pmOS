@@ -5,13 +5,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <kernel/block.h>
+#include <pmos/ports.h>
+
+extern pmos_port_t configuration_port;
+extern pmos_port_t main_port;
 
 uint8_t get_interrupt_number(uint32_t intnum, uint64_t int_chan)
 {
     uint8_t int_vector = 0;
     unsigned long mypid = getpid();
 
-    IPC_Reg_Int m = {IPC_Reg_Int_NUM, IPC_Reg_Int_FLAG_EXT_INTS, intnum, 0, mypid, int_chan, interrupts_conf_reply_chan};
+    IPC_Reg_Int m = {IPC_Reg_Int_NUM, IPC_Reg_Int_FLAG_EXT_INTS, intnum, 0, mypid, int_chan, configuration_port};
     result_t result = send_message_port(1024, sizeof(m), (char*)&m);
     if (result != SUCCESS) {
         printf("Warning: Could not send message to get the interrupt\n");
@@ -30,12 +34,6 @@ uint8_t get_interrupt_number(uint32_t intnum, uint64_t int_chan)
 
     if (result != SUCCESS) {
         printf("Warning: Could not get message\n");
-        return 0;
-    }
-
-    if (desc.channel != 5) {
-        printf("Warning: Recieved message from unknown channel %li\n", desc.channel);
-        free(message);
         return 0;
     }
 

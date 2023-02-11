@@ -4,7 +4,7 @@
 #include <kernel/errors.h>
 #include <stdlib.h>
 #include <timers/timers_heap.h>
-#include <devicesd/devicesd_msgs.h>
+#include <pmos/ipc.h>
 #include <pmos/system.h>
 #include <stdio.h>
 
@@ -76,9 +76,9 @@ void timer_tick()
 
 void notify_task(timer_entry* e)
 {
-    DEVICESD_MESSAGE_TIMER_REPLY r = {DEVICESD_MESSAGE_TIMER_REPLY_T, TIMER_TICK, e->id, e->extra};
+    IPC_Timer_Reply r = {IPC_Timer_Reply_NUM, IPC_TIMER_TICK, e->id, e->extra};
 
-    send_message_task(e->pid, e->reply_chan, sizeof(r), (char*)&r);
+    send_message_port(e->reply_chan, sizeof(r), (char*)&r);
 }
 
 uint64_t timer_calculate_next_ticks(uint64_t ms)

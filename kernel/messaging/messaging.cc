@@ -195,3 +195,21 @@ kresult_t send_msg_default(u64 pid_from, u64 port, klib::vector<char>&& msg)
 
     return result;
 }
+
+ReturnStr<u64> Ports_storage::atomic_request_port(const klib::shared_ptr<TaskDescriptor>& t)
+{
+    Auto_Lock_Scope local_lock(lock);
+
+    u64 new_port;
+    if (storage.empty()) {
+        new_port = biggest_port;
+    } else {
+        new_port = max(biggest_port, storage.largest() + 1);
+    }
+
+    biggest_port = new_port + 1;
+
+    storage.insert({new_port, {t->pid, 0, MSG_ATTR_PRESENT, {}, {}}});
+
+    return {SUCCESS, new_port};
+}

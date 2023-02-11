@@ -16,6 +16,7 @@
 #include <timers/timers.h>
 #include <timers/hpet.h>
 #include <pmos/ipc.h>
+#include <pmos/ports.h>
 
 char* exec = NULL;
 
@@ -30,6 +31,9 @@ void usage()
 
 #define CONTROL_PORT 10
 
+pmos_port_t main_port = 0;
+pmos_port_t configuration_port = 0;
+
 int main(int argc, char** argv) {
     printf("Hello from devicesd!\n");
     
@@ -37,6 +41,23 @@ int main(int argc, char** argv) {
 
     pmos_request_io_permission();
     request_priority(0);
+
+    {
+        ports_request_t req;
+        req = create_port(PID_SELF, 0);
+        if (req.result != SUCCESS) {
+            printf("Error creating port %li\n", req.result);
+            return 0;
+        }
+        configuration_port = req.port;
+
+        req = create_port(PID_SELF, 0);
+        if (req.result != SUCCESS) {
+            printf("Error creating port %li\n", req.result);
+            return 0;
+        }
+        main_port = req.port;
+    }
 
 
     init_acpi();
@@ -83,7 +104,7 @@ int main(int argc, char** argv) {
                     reply.type = IPC_Reg_Int_Reply_NUM;
                     reply.status = result != 0;
                     reply.intno = result;
-                    send_message_task(msg.sender, m->reply_chan, sizeof(reply), (char*)&reply);
+                    send_message_port(m->reply_chan, sizeof(reply), (char*)&reply);
                 }
                     break;
                 case IPC_Start_Timer_NUM: {
