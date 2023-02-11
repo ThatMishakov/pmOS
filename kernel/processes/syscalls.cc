@@ -14,6 +14,7 @@
 #include <cpus/cpus.hh>
 #include <interrupts/pit.hh>
 #include <sched/sched.hh>
+#include <lib/string.hh>
 
 extern "C" void syscall_handler()
 {
@@ -110,6 +111,9 @@ extern "C" void syscall_handler()
         break;
     case SYSCALL_GET_LAPIC_ID:
         syscall_get_lapic_id();
+        break;
+    case SYSCALL_SET_TASK_NAME:
+        syscall_set_task_name(arg1, (char*)arg2, arg3);
         break;
     default:
         // Not supported
@@ -594,7 +598,7 @@ void syscall_send_message_task(u64 pid, u64 channel, u64 size, u64 message)
     kresult_t result = SUCCESS;
 
     klib::vector<char> msg(size);
-    result = copy_from_user((char*)message, &msg.front(), size);
+    result = copy_from_user(&msg.front(), (char*)message, size);
 
     if (result != SUCCESS) {
         syscall_ret_low(current) = result;
@@ -850,4 +854,28 @@ void program_syscall()
     write_msr(0x174, R0_CODE_SEGMENT); // IA32_SYSENTER_CS
     write_msr(0x175, (u64)get_cpu_struct()->kernel_stack_top); // IA32_SYSENTER_ESP
     write_msr(0x176, (u64)&sysenter_entry); // IA32_SYSENTER_EIP
+}
+
+void syscall_set_task_name(u64 pid, const char* string, u64 length)
+{
+    const task_ptr& current = get_cpu_struct()->current_task;
+
+    task_ptr t = get_task(pid);
+
+    // Check if process exists
+    if (not t) {
+        syscall_ret_low(current) = ERROR_NO_SUCH_PROCESS;
+        return;
+    }
+
+    auto str = klib::string::fill_from_user(string, length);
+
+    if (str.first != SUCCESS) {
+        syscall_ret_low(current) = str.first;
+        return;
+    }
+
+    t->name.swap(str.second);
+    syscall_ret_low(current) = SUCCESS;
+    return;
 }

@@ -45,6 +45,9 @@ void load_multiboot_module(struct multiboot_tag_module * mod)
     map_phys(virt_addr, phys_start, nb_pages, 0x3);
     ELF_64bit* e = (ELF_64bit*)((uint64_t)mod->mod_start - phys_start + virt_addr);
     uint64_t pid = load_elf(e, 3);
+
+    syscall(SYSCALL_SET_TASK_NAME, pid, mod->cmdline, strlen(mod->cmdline));
+
     start_process(pid, e->program_entry, 0, 0, 0);
     release_pages(virt_addr, nb_pages);
 }

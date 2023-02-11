@@ -30,6 +30,7 @@
 #define SYSCALL_REG_NOTIFY_LISTENER   0x19
 #define SYSCALL_SET_PRIORITY          0x1a
 #define SYSCALL_GET_LAPIC_ID          0x1b
+#define SYSCALL_SET_TASK_NAME         0x1c
 
 
 #endif

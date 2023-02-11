@@ -738,6 +738,7 @@ kresult_t prepare_user_page(u64 page)
 
     switch (type)
     {
+    case SPECIAL:
     case NORMAL:
         return SUCCESS;
         break;

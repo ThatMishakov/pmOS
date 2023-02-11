@@ -6,6 +6,7 @@
 #include <memory/paging.hh>
 #include <sched/defs.hh>
 #include <cpus/sse.hh>
+#include <lib/string.hh>
 
 using PID = u64;
 
@@ -76,6 +77,8 @@ struct TaskDescriptor {
     u64 ret_lo = 0;
 
     SSE_Data sse_data;
+
+    klib::string name = "";
 };
 
 using task_ptr = klib::shared_ptr<TaskDescriptor>;

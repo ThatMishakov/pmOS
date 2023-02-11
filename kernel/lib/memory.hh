@@ -2,6 +2,7 @@
 #include <types.hh>
 #include "utility.hh"
 #include "cstddef.hh"
+#include <stddef.h>
 
 namespace klib {
 
@@ -91,6 +92,80 @@ public:
     constexpr T* operator->() const noexcept
     {
         return get();
+    }
+};
+
+template<class T>
+class unique_ptr<T[]> {
+    template<typename U>
+    friend class unique_ptr;
+
+private:
+    T *ptr;
+public:
+    typedef T* pointer;
+    typedef T element_type;
+
+    constexpr unique_ptr() noexcept: ptr(nullptr) {};
+    constexpr unique_ptr( nullptr_t ) noexcept: ptr(nullptr) {};
+
+    template< class U > constexpr unique_ptr(U p) noexcept: ptr(p) {};
+
+    constexpr unique_ptr(unique_ptr&& p) noexcept:
+        ptr(p.ptr)
+    {
+        p.ptr = nullptr;
+    }
+
+
+
+    ~unique_ptr()
+    {
+        if (ptr != nullptr)
+            delete[] ptr;
+    }
+
+    template<class U>
+    constexpr unique_ptr<T>& operator=( unique_ptr<U>&& r ) noexcept
+    {
+        ptr = r.ptr;
+        r.ptr = nullptr;
+        return *this;
+    }
+
+    constexpr pointer release() noexcept
+    {
+        pointer oldptr = ptr;
+        ptr = nullptr;
+        return oldptr;
+    }
+
+    constexpr void reset( pointer p_ptr = pointer() ) noexcept
+    {
+        this->~unique_ptr();
+        this->ptr = p_ptr;
+    }
+
+    constexpr void swap( unique_ptr& other ) noexcept
+    {
+        pointer tmp = this->ptr;
+        this->ptr = other->ptr;
+        other->ptr = tmp;
+    }
+
+    constexpr pointer get() const noexcept
+    {
+        return this->ptr;
+    }
+
+    constexpr explicit operator bool() const noexcept
+    {
+        return this->ptr != nullptr;
+    }
+
+    constexpr T& operator[](size_t element) const noexcept
+    {
+        return ptr[element];
     }
 };
 

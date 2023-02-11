@@ -190,7 +190,7 @@ void term_write(const char * str, u64 length)
     } *var = (Msg*)__builtin_alloca(length+4);
 
     var->type = 0x40;
-    memcpy(str, var->buff, length);
+    memcpy(var->buff, str, length);
 
     send_message_system(1, (char*)var, length+4);
 }
@@ -229,12 +229,12 @@ kresult_t prepare_user_buff_wr(char* buff, size_t size)
     return result;
 }
 
-kresult_t copy_from_user(const char* from, char* to, size_t size)
+kresult_t copy_from_user(char* to, const char* from, size_t size)
 {
     kresult_t result = prepare_user_buff_rd(from, size);
     if (result != SUCCESS) return result;
 
-    memcpy(from, to, size);
+    memcpy(to, from, size);
 
     return SUCCESS;
 }
@@ -244,12 +244,12 @@ kresult_t copy_to_user(const char* from, char* to, size_t size)
     kresult_t result = prepare_user_buff_wr(to, size);
     if (result != SUCCESS) return result;
 
-    memcpy(from, to, size);
+    memcpy(to, from, size);
 
     return SUCCESS;
 }
 
-void memcpy(const char* from, char* to, size_t size)
+void memcpy(char* to, const char* from, size_t size)
 {
     for (size_t i = 0; i < size; ++i) {
         to[i] = from[i];

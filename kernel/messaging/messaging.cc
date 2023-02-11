@@ -47,7 +47,7 @@ kresult_t Ports_storage::send_from_user(u64 pid_from, u64 port, u64 buff_addr, s
 {
     klib::vector<char> message(size);
 
-    kresult_t result = copy_from_user((char*)buff_addr, &message.front(), size);
+    kresult_t result = copy_from_user(&message.front(), (char*)buff_addr, size);
     if (result != SUCCESS) return result;
 
     return send_msg(pid_from, port, klib::move(message));
@@ -57,7 +57,7 @@ kresult_t Ports_storage::send_from_system(u64 port, const char* msg, size_t size
 {
     static const u64 pid_from = 0;
     klib::vector<char> message(size);
-    memcpy(msg, &message.front(), size);
+    memcpy(&message.front(), msg, size);
 
     return send_msg(pid_from, port, klib::move(message));
 }

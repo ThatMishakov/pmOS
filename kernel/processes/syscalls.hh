@@ -95,6 +95,9 @@ void syscall_configure_system(u64 type, u64 arg1, u64 arg2);
 
 void syscall_set_priority(u64 priority);
 
+void syscall_set_task_name(u64 pid, const char* string, u64 length);
+
+
 inline u64& syscall_arg1(const klib::shared_ptr<TaskDescriptor>& task)
 {
     return task->regs.scratch_r.rsi;
