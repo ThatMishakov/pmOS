@@ -1,5 +1,5 @@
 #include "idt.hh"
-#include "programmable_ints.hh"
+#include "programmable_ints_functs.hh"
 #include "interrupts.hh"
 #include "apic.hh"
 #include <cpus/ipi.hh>

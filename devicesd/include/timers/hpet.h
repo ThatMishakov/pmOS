@@ -111,8 +111,6 @@ int hpet_init_int_ioapic(volatile HPET_TIMER* hpet_virt);
 int init_hpet();
 void hpet_int();
 
-static const uint64_t hpet_int_chan = 20;
-
 uint64_t hpet_calculate_ticks(uint64_t millis);
 extern uint64_t hpet_get_ticks();
 

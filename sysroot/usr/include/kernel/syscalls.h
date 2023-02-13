@@ -32,6 +32,7 @@
 #define SYSCALL_GET_LAPIC_ID          0x1b
 #define SYSCALL_SET_TASK_NAME         0x1c
 #define SYSCALL_CREATE_PORT           0x1d
+#define SYSCALL_SET_INTERRUPT         0x1e
 
 
 #endif

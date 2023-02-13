@@ -66,8 +66,8 @@ public:
 
     void clear();
 
-    void insert(const pair<K, T>&);
-    void insert(pair<K, T>&&);
+    pair<iterator,bool> insert(const pair<K, T>&);
+    pair<iterator,bool> insert(pair<K, T>&&);
 
     void erase(const K&);
 
@@ -169,7 +169,7 @@ void splay_tree_map<K,T>::rotate_right(splay_tree_map<K,T>::node* p) const
 }
 
 template<class K, class T>
-void splay_tree_map<K,T>::insert(const pair<K, T>& pair)
+pair<typename splay_tree_map<K,T>::iterator,bool> splay_tree_map<K,T>::insert(const pair<K, T>& pair)
 {
     node *n = nullptr;
     node* temp = root;
@@ -182,7 +182,7 @@ void splay_tree_map<K,T>::insert(const pair<K, T>& pair)
         } else {
             splay(n);
             temp->data = pair.second;
-            return;
+            return {n, false};
         }
     }
 
@@ -201,10 +201,12 @@ void splay_tree_map<K,T>::insert(const pair<K, T>& pair)
     splay(c);
 
     ++elements;
+
+    return {c, true};
 }
 
 template<typename K, typename T>
-void splay_tree_map<K,T>::insert(pair<K, T>&& pair)
+pair<typename splay_tree_map<K,T>::iterator, bool> splay_tree_map<K,T>::insert(pair<K, T>&& pair)
 {
     node *n = nullptr;
     node* temp = root;
@@ -217,7 +219,7 @@ void splay_tree_map<K,T>::insert(pair<K, T>&& pair)
         } else {
             splay(n);
             temp->data = forward<T>(pair.second);
-            return;
+            return {n, false};
         }
     }
 
@@ -238,6 +240,8 @@ void splay_tree_map<K,T>::insert(pair<K, T>&& pair)
     splay(c);
 
     ++elements;
+
+    return {c, true};
 }
 
 template<class K, class T>

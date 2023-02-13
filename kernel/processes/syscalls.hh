@@ -85,6 +85,9 @@ void syscall_is_page_allocated(u64 page);
 // Returns LAPIC id of the current CPU
 void syscall_get_lapic_id();
 
+// Programs interrupt to send the message to the right port
+void syscall_set_interrupt(uint64_t port, uint32_t intno, uint32_t flags);
+
 #define SYS_CONF_IOAPIC          0x01
 #define SYS_CONF_LAPIC           0x02
 #define SYS_CONF_CPU             0x03

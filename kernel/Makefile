@@ -50,12 +50,13 @@ ASMFILES := $(shell find ./ -type f -name '*.S')
 OBJS = 	./objects/icxxabi.o ./start.o ./asm.o ./main.o ./misc.o ./utils.o types.o \
 	    ./memory/mem.o ./memory/malloc.o ./memory/free_page_alloc.o ./memory/palloc.o ./memory/paging.o ./memory/shared_mem.o \
 	    ./interrupts/apic.o ./interrupts/pic.o ./interrupts/gdt.o ./interrupts/exceptions_managers_asm.o ./interrupts/exceptions_managers.o \
-		./interrupts/interrupts.o ./interrupts/asm_helpers.o \
+		./interrupts/interrupts.o ./interrupts/asm_helpers.o ./interrupts/programmable_ints.o \
 		./interrupts/pit.o ./interrupts/interrupts_asm.o ./interrupts/loadGDT.o ./interrupts/idt.o \
 	    ./processes/idle.o ./processes/syscalls.o ./processes/tasks.o ./processes/syscalls_asm.o \
 		./sched/sched.o ./sched/timers.o \
 		./messaging/messaging.o \
 		./cpus/cpus.o ./cpus/sse.o ./cpus/ipi.o ./cpus/ipi_asm.o \
+		\
 		./libcxxrt/src/cxa_atexit.o ./libcxxrt/src/cxa_finalize.o \
 		./libcxxrt/src/dynamic_cast.o ./libcxxrt/src/guard.o \
 		./libcxxrt/src/memory.o ./libcxxrt/src/noexception.o ./libcxxrt/src/stdexcept.o \

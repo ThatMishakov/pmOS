@@ -37,6 +37,7 @@ struct Port {
     Spinlock lock;
 
     kresult_t enqueue(u64 from, klib::vector<char>&& msg);
+    kresult_t send_from_system(const char* msg, size_t size);
 };
 
 struct TaskDescriptor;
@@ -44,7 +45,7 @@ struct TaskDescriptor;
 struct Ports_storage {
     u64 biggest_port = 1;
 
-    klib::splay_tree_map<u64, Port> storage;
+    klib::splay_tree_map<u64, klib::shared_ptr<Port>> storage;
     Spinlock lock;
     kresult_t send_from_user(u64 pid_from, u64 port, u64 buff_addr, size_t size);
     kresult_t send_from_system(u64 port, const char* msg, size_t size);
@@ -57,6 +58,9 @@ struct Ports_storage {
         Auto_Lock_Scope scope_lock(lock);
         return this->storage.count(port) == 1;
     }
+
+    // Atomically gets the port or null if it doesn't exist
+    klib::shared_ptr<Port> atomic_get_port(u64 portno);
 };
 
 extern Ports_storage kernel_ports;

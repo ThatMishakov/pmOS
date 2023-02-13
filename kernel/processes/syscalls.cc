@@ -15,6 +15,7 @@
 #include <interrupts/pit.hh>
 #include <sched/sched.hh>
 #include <lib/string.hh>
+#include <interrupts/programmable_ints.hh>
 
 extern "C" void syscall_handler()
 {
@@ -117,6 +118,9 @@ extern "C" void syscall_handler()
         break;
     case SYSCALL_CREATE_PORT:
         syscall_create_port(arg1);
+        break;
+    case SYSCALL_SET_INTERRUPT:
+        syscall_set_interrupt(arg1, arg2, arg3);
         break;
     default:
         // Not supported
@@ -908,4 +912,34 @@ void syscall_create_port(u64 owner)
 
     syscall_ret_low(task) = result.result;
     syscall_ret_high(task) = result.val;
+}
+
+void syscall_set_interrupt(uint64_t port, uint32_t intno, uint32_t flags)
+{
+    t_print_bochs("syscall_set_interrupt(%i, %i, %i)\n", port, intno, flags);
+
+
+    const task_ptr& task = get_current_task();
+
+    klib::shared_ptr<Port> port_ptr = default_ports.atomic_get_port(port);
+
+    if (not port_ptr) {
+        syscall_ret_low(task) = ERROR_PORT_DOESNT_EXIST;
+        return;
+    }
+
+    if (not intno_is_ok(intno)) {
+        syscall_ret_low(task) = ERROR_OUT_OF_RANGE;
+        return;
+    }
+
+    Prog_Int_Descriptor& desc = get_descriptor(prog_int_array, intno);
+
+    { 
+        Auto_Lock_Scope local_lock(desc.lock);
+        desc.port = port_ptr;
+    }
+
+    syscall_ret_low(task) = SUCCESS;
+    return;
 }

@@ -237,19 +237,25 @@ public:
 
     ~shared_ptr()
     {
-        if (refcount == nullptr) return;
+        if (refcount == nullptr)
+            return;
+
+        unsigned long temp_shared_refs = -1;
+        unsigned long temp_weak_refs = -1;
 
         refcount->s.lock();
-        refcount->shared_refs--;
-        if (refcount->shared_refs == 0) {
-            delete ptr;
+        temp_shared_refs = --refcount->shared_refs;
+        temp_weak_refs = refcount->weak_refs;
+        refcount->s.unlock();
 
-            if (refcount->weak_refs == 0) {
+        if (temp_shared_refs == 0) {
+            delete ptr;
+            
+
+            if (temp_weak_refs == 0) {
                 delete refcount;
-                return;
             }
         }
-        refcount->s.unlock();
     }
 
     shared_ptr& operator=(const shared_ptr& r) noexcept
@@ -450,7 +456,22 @@ public:
     }
 
     weak_ptr& operator=(const weak_ptr<T>& r) noexcept;
-    weak_ptr& operator=(const shared_ptr<T>& r) noexcept;
+    
+    weak_ptr& operator=(const shared_ptr<T>& r) noexcept
+    {
+        this->~weak_ptr();
+        this->ptr = r.ptr;
+        this->refcount = r.refcount;
+
+        if (refcount != nullptr) {
+            refcount->s.lock();
+            refcount->weak_refs += 1;
+            refcount->s.unlock();
+        }
+
+        return *this;
+    }
+
     constexpr weak_ptr& operator=(weak_ptr<T>&& r) noexcept
     {
         this->~weak_ptr();
@@ -481,7 +502,9 @@ public:
 
     shared_ptr<T> lock() const noexcept
     {
-        if (refcount == nullptr) return shared_ptr<T>();
+        if (refcount == nullptr)
+            return shared_ptr<T>();
+            
         shared_ptr<T> p = shared_ptr<T>();
 
         refcount->s.lock();

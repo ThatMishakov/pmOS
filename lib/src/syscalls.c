@@ -93,3 +93,8 @@ ports_request_t create_port(pid_t owner, uint64_t flags)
     ports_request_t t = {r.result, r.value};
     return t;
 }
+
+result_t set_interrupt(pmos_port_t port, uint32_t intno, uint32_t flags)
+{
+    return syscall(SYSCALL_SET_INTERRUPT, port, intno, flags).result;
+}

@@ -217,7 +217,7 @@ uint8_t ioapic_get_int(struct int_task_descriptor desc, uint8_t line, bool activ
 {
     uint8_t cpu_int_vector = get_free_interrupt();
 
-    result_t kern_result = set_port_kernel(KERNEL_MSG_INT_START+cpu_int_vector, desc.pid, desc.channel);
+    result_t kern_result = set_interrupt(desc.channel, cpu_int_vector, 0);
     if (kern_result != SUCCESS) return 0;
 
     bool result = program_ioapic_manual(cpu_int_vector, line, active_low, level_trig);

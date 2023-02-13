@@ -133,5 +133,3 @@ extern "C" void lvt1_int_isr();
 extern "C" void apic_timer_isr();
 
 extern "C" void dummy_isr();
-
-extern "C" void programmable_interrupt(u32 intno);
