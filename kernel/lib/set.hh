@@ -16,8 +16,8 @@ private:
         bool red = false;
     };
 
-    size_t elements;
-    node* root;
+    size_t elements = 0;
+    node* root = &NIL;
     static node NIL;
 
     void erase_node(node*);
@@ -35,6 +35,7 @@ private:
     static node* max(node*);
     static node* prev(node*);
 public:
+    typedef size_t size_type;
     friend class iterator;
 
     class iterator {
@@ -51,12 +52,12 @@ public:
         iterator& operator--();
         iterator operator--(int);
 
-        K& operator*()
+        const K& operator*()
         {
             return ptr->key;
         }
 
-        K* operator->()
+        const K* operator->()
         {
             return &ptr->key;
         }
@@ -90,7 +91,8 @@ public:
     pair<iterator,bool> insert(K&&);
     pair<iterator,bool> emplace(K&&);
 
-    void erase(const K&);
+    iterator  erase (iterator position);
+    size_type erase(const K&);
 
     void swap(set&);
     void clear();
@@ -191,10 +193,19 @@ size_t set<K>::count(const K& key)
 }
 
 template<typename K>
-void set<K>::erase(const K& key)
+typename set<K>::size_type set<K>::erase(const K& key)
 {
     node* p = search(key);
     erase_node(p);
+    return 1;
+}
+
+template<typename K>
+typename set<K>::iterator set<K>::erase(iterator it)
+{
+    node* n = next(it.ptr);
+    erase_node(it.ptr);
+    return n;
 }
 
 template<class K>
@@ -254,6 +265,8 @@ void set<K>::transplant_node(node* n, node* p)
 template<class K>
 void set<K>::erase_node(node* n)
 {
+    t_print_bochs("set erase node %h\n", n);
+
     --elements;
     node* y = n;
     bool original_red = n->red;
@@ -334,6 +347,8 @@ void set<K>::erase_fix(node* x)
                 if (not w->left->red) {
                     w->right->red = false;
                     w->red = true;
+                    rotate_left(w);
+                    w = x->parent->left;
                 }
 
                 w->red = x->parent->red;
@@ -374,12 +389,15 @@ pair<typename set<K>::iterator,bool> set<K>::emplace(K&& k)
     return {n, true};
 }
 
-template<class T> class set<T>::node set<T>::NIL = {{}, nullptr, nullptr, nullptr, false};
+template<class T> class set<T>::node set<T>::NIL = {{}, &NIL, &NIL, &NIL, false};
 
 template<class K>
 void set<K>::insert_node(node* n)
 {
     node* y = &NIL;
+
+    t_print_bochs("this %h nil %h\n", this, &NIL);
+
     node* temp = root;
 
     while (temp != &NIL) {
@@ -462,16 +480,17 @@ typename set<K>::iterator set<K>::end() const noexcept
 template<class K>
 void set<K>::swap(set<K>& swap_with)
 {
-    set tmp;
-    tmp = forward<set>(*this);
-    *this = forward<set>(swap_with);
-    swap_with = forward<set>(tmp);
+    set tmp = move(*this);
+    *this = move(swap_with);
+    swap_with = move(tmp);
 }
 
 template<class K>
 void set<K>::clear() noexcept
 {
-    *this = set();
+    iterator it = begin();
+    while (it != end())
+        it = erase(it);
 }
 
 template<class K>

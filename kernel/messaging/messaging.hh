@@ -25,6 +25,11 @@ struct Message {
 
 using Message_storage = klib::list<klib::shared_ptr<Message>>;
 
+struct Generic_Port {
+    Generic_Port() = default;
+    virtual ~Generic_Port() = default;
+};
+
 
 #define MSG_ATTR_PRESENT   0x01ULL
 #define MSG_ATTR_DUMMY     0x02ULL

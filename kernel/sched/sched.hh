@@ -58,6 +58,9 @@ struct CPU_Info {
     u32 timer_val = 0;
     u32 lapic_id = 0;
 
+    u64 pagefault_cr2 = 0;
+    u64 pagefault_error = 0;
+
     Kernel_Stack_Pointer kernel_stack;
     Kernel_Stack_Pointer idle_stack;
 

@@ -110,12 +110,16 @@ extern "C" void free(void * p)
  
 void *operator new(size_t size)
 {
-    return malloc(size);
+    void* ptr = malloc(size);
+    //t_print_bochs("new size %h -> 0x%h\n", size, ptr);
+    return ptr;
 }
  
 void *operator new[](size_t size)
 {
-    return malloc(size);
+    void* ptr = malloc(size);
+    //t_print_bochs("new[] size %h -> 0x%h\n", size, ptr);
+    return ptr;
 }
  
 void operator delete(void *p)

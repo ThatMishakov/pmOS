@@ -24,12 +24,14 @@ class unique_ptr {
     friend class unique_ptr;
 
 private:
-    T* ptr;
+    T* ptr = nullptr;
 public:
     typedef T* pointer;
     typedef T element_type;
 
     constexpr unique_ptr() noexcept: ptr(nullptr) {};
+    unique_ptr(const unique_ptr&) = delete;
+
     constexpr unique_ptr( nullptr_t ) noexcept: ptr(nullptr) {};
 
     constexpr unique_ptr<T>(pointer p) noexcept: ptr(p) {};
@@ -45,7 +47,11 @@ public:
     {
         if (ptr != nullptr)
             delete ptr;
+
+        ptr = nullptr;
     }
+
+    unique_ptr operator=(const unique_ptr&) noexcept = delete;
 
     template<class U>
     constexpr unique_ptr<T>& operator=( unique_ptr<U>&& r ) noexcept
@@ -93,6 +99,16 @@ public:
     {
         return get();
     }
+
+    constexpr bool operator<(const unique_ptr& p) const noexcept
+    {
+        return this->get() < p.get();
+    }
+
+    constexpr bool operator>(const unique_ptr& p) const noexcept
+    {
+        return this->get() > p.get();
+    }
 };
 
 template<class T>
@@ -128,6 +144,8 @@ public:
     template<class U>
     constexpr unique_ptr<T>& operator=( unique_ptr<U>&& r ) noexcept
     {
+        this->~unique_ptr();
+        
         ptr = r.ptr;
         r.ptr = nullptr;
         return *this;
@@ -520,7 +538,7 @@ public:
 
     constexpr bool operator<(const weak_ptr& p) const
     {
-        return this->ptr < p.ptr;
+        return this->ptr == p.ptr ? this->refcount < p.refcount : this->ptr < p.ptr;
     }
 private:
     T* ptr = nullptr;

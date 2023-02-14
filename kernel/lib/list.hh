@@ -76,6 +76,9 @@ public:
     iterator end();
 
     iterator erase(iterator pos);
+
+    void swap (list& x);
+    void clear() noexcept;
 };
 
 template<typename T>
@@ -350,6 +353,12 @@ typename list<T>::iterator list<T>::erase(list<T>::iterator pos)
     delete n;
 
     return iterator(next);
+}
+
+template<typename T>
+void list<T>::clear() noexcept
+{
+    *this = list();
 }
 
 }

@@ -982,18 +982,13 @@ void syscall_name_port(u64 portnum, const char* name, u64 length, u32 flags)
         }
 
         named_port->parent_port = port;
+        named_port->present = true;
 
-        for (const klib::weak_ptr<TaskDescriptor>& t : named_port->waiting_tasks) {
-            task_ptr task_res = t.lock();
-
-            if (task_res) {
-                bool unblocked = unblock_if_needed(task_res, PORTNAME_S_NUM, 0);
-                if (unblocked)
-                    syscall_ret_high(task_res) = portnum;
-            }
+        for (const auto& t : named_port->actions) {
+            t->do_action(portnum);
         }
 
-        named_port->waiting_tasks.clear();
+        named_port->actions.clear();
     } else {
         const klib::shared_ptr<Named_Port_Desc> new_desc = klib::make_shared<Named_Port_Desc>(Named_Port_Desc({klib::move(str.second), port, {}, true}));
 
@@ -1036,7 +1031,7 @@ void syscall_get_port_by_name(const char *name, u64 length, u32 flags)
                 syscall_ret_low(task) = ERROR_PORT_DOESNT_EXIST;
                 return;
             } else {
-                named_port->waiting_tasks.insert(task);
+                named_port->actions.insert(klib::make_unique<Notify_Task>(task));
                 block_task(task, PORTNAME_UNBLOCK_MASK, PORTNAME_S_NUM, 0, false);
             }
         }
@@ -1048,7 +1043,7 @@ void syscall_get_port_by_name(const char *name, u64 length, u32 flags)
             const klib::shared_ptr<Named_Port_Desc> new_desc = klib::make_shared<Named_Port_Desc>(Named_Port_Desc({klib::move(str.second), klib::shared_ptr<Port>(nullptr), {}, false}));
 
             auto it = global_named_ports.storage.insert({new_desc->name, new_desc});
-            it.first->second->waiting_tasks.insert(task);
+            it.first->second->actions.insert(klib::make_unique<Notify_Task>(task));
 
             block_task(task, PORTNAME_UNBLOCK_MASK, PORTNAME_S_NUM, 0, false);
         }

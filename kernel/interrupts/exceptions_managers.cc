@@ -23,7 +23,7 @@ void print_registers(const klib::shared_ptr<TaskDescriptor>& task)
     }
 
     const Task_Regs& regs = task->regs;
-    t_print_bochs("Current task pid %i. Registers:\n", task->pid);
+    t_print_bochs("Current task pid %i (%s). Registers:\n", task->pid, task->name.c_str());
     t_print_bochs(" => %%rdi: 0x%h\n", regs.scratch_r.rdi);
     t_print_bochs(" => %%rsi: 0x%h\n", regs.scratch_r.rsi);
     t_print_bochs(" => %%rdx: 0x%h\n", regs.scratch_r.rdx);
@@ -53,7 +53,7 @@ void print_registers(const klib::shared_ptr<TaskDescriptor>& task)
 
 extern "C" void deal_with_pagefault_in_kernel()
 {
-    t_print_bochs("Error: Pagefault inside the kernel!\n");
+    t_print_bochs("Error: Pagefault inside the kernel! Instr %h %%cr2 0x%h  error 0x%h\n", get_cpu_struct()->jumpto_from, get_cpu_struct()->pagefault_cr2, get_cpu_struct()->pagefault_error);
     print_registers(get_cpu_struct()->current_task);
     print_stack_trace();
     while (1)
@@ -76,6 +76,9 @@ extern "C" void pagefault_manager()
     CPU_Info *c = get_cpu_struct();
 
     if (c->nested_level) {
+        c->pagefault_cr2 = getCR2();
+        c->pagefault_error = c->nested_int_regs.int_err;
+
         kernel_jump_to(deal_with_pagefault_in_kernel);
         return;
     }

@@ -167,6 +167,11 @@ void t_print_bochs(const char *str, ...)
                 uint_to_string(casted_arg, 16, int_str_buffer, len);
                 break;
             }
+            case 's': {
+                const char *ss = va_arg(arg, const char *);
+                t_write_bochs(ss, strlen(ss));
+                break;
+            }
         }
 
         t_write_bochs(int_str_buffer, len);
