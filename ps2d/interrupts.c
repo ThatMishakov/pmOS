@@ -9,14 +9,15 @@
 
 extern pmos_port_t configuration_port;
 extern pmos_port_t main_port;
+extern pmos_port_t devicesd_port;
 
 uint8_t get_interrupt_number(uint32_t intnum, uint64_t int_chan)
 {
     uint8_t int_vector = 0;
     unsigned long mypid = getpid();
 
-    IPC_Reg_Int m = {IPC_Reg_Int_NUM, IPC_Reg_Int_FLAG_EXT_INTS, intnum, 0, mypid, int_chan, configuration_port};
-    result_t result = send_message_port(1024, sizeof(m), (char*)&m);
+    IPC_Reg_Int m = {IPC_Reg_Int_NUM, IPC_Reg_Int_FLAG_EXT_INTS, intnum, 0, mypid, main_port, configuration_port};
+    result_t result = send_message_port(devicesd_port, sizeof(m), (char*)&m);
     if (result != SUCCESS) {
         printf("Warning: Could not send message to get the interrupt\n");
         return 0;

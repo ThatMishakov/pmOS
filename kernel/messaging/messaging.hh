@@ -35,6 +35,8 @@ struct Port {
     u64 attr = 0; // NODEFAULT DUMMY PRESENT
     Message_storage msg_queue;
     Spinlock lock;
+    u64 portno;
+
 
     kresult_t enqueue(u64 from, klib::vector<char>&& msg);
     kresult_t send_from_system(const char* msg, size_t size);

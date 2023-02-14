@@ -14,8 +14,6 @@ Spinlock messaging_ports;
 kresult_t init_kernel_ports()
 {
     default_ports.set_dummy(1); // General log messages
-    default_ports.set_dummy(2);
-    default_ports.set_dummy(1024); // Devicesd
 
     return SUCCESS;
 }
@@ -95,7 +93,7 @@ kresult_t Ports_storage::send_msg(u64 pid_from, u64 port, klib::vector<char>&& m
             result = queue_message(task, ptr);
         }
 
-        if (result == SUCCESS) unblock_if_needed(task, MESSAGE_S_NUM);
+        if (result == SUCCESS) unblock_if_needed(task, MESSAGE_S_NUM, 0);
     } else if (d.attr & MSG_ATTR_DUMMY) {
         return d.enqueue(pid_from, klib::forward<klib::vector<char>>(msg));
     } if (not (d.attr & MSG_ATTR_NODEFAULT)) {
@@ -127,13 +125,13 @@ kresult_t Ports_storage::set_port(u64 port,  const klib::shared_ptr<TaskDescript
                 t->messages.push_back(klib::move(m));
             }
 
-            unblock_if_needed(t, MESSAGE_S_NUM);
+            unblock_if_needed(t, MESSAGE_S_NUM, 0);
         }
         lock.unlock();
     }
 
     this->lock.lock();
-    this->storage.insert({port, klib::make_shared<Port>(Port({t->pid, dest_chan, MSG_ATTR_PRESENT, {}, {}}))});
+    this->storage.insert({port, klib::make_shared<Port>(Port({t->pid, dest_chan, MSG_ATTR_PRESENT, {}, {}, port}))});
     this->lock.unlock();
 
     return SUCCESS;
@@ -146,7 +144,7 @@ kresult_t Ports_storage::set_dummy(u64 port)
     if (this->storage.count(port) == 1) {
         this->storage.at(port)->attr |= MSG_ATTR_DUMMY;
     } else {
-        this->storage.insert({port, klib::make_shared<Port>(Port({0,0,MSG_ATTR_DUMMY, {}, {}}))});
+        this->storage.insert({port, klib::make_shared<Port>(Port({0,0,MSG_ATTR_DUMMY, {}, {}, port}))});
     }
 
     return SUCCESS;
@@ -186,7 +184,7 @@ kresult_t send_msg_default(u64 pid_from, u64 port, klib::vector<char>&& msg)
             result = queue_message(task, ptr);
         }
 
-        if (result == SUCCESS) unblock_if_needed(task, MESSAGE_S_NUM);
+        if (result == SUCCESS) unblock_if_needed(task, MESSAGE_S_NUM, 0);
     } else if (d.attr & MSG_ATTR_DUMMY) {
         return d.enqueue(pid_from, klib::forward<klib::vector<char>>(msg));
     } if (not (d.attr & MSG_ATTR_NODEFAULT)) {
@@ -209,7 +207,7 @@ ReturnStr<u64> Ports_storage::atomic_request_port(const klib::shared_ptr<TaskDes
 
     biggest_port = new_port + 1;
 
-    storage.insert({new_port, klib::make_shared<Port>(Port({t->pid, 0, MSG_ATTR_PRESENT, {}, {}}))});
+    storage.insert({new_port, klib::make_shared<Port>(Port({t->pid, 0, MSG_ATTR_PRESENT, {}, {}, new_port}))});
 
     return {SUCCESS, new_port};
 }
@@ -246,7 +244,7 @@ kresult_t Port::send_from_system(const char* msg_ptr, uint64_t size)
             result = queue_message(task, ptr);
         }
 
-        if (result == SUCCESS) unblock_if_needed(task, MESSAGE_S_NUM);
+        if (result == SUCCESS) unblock_if_needed(task, MESSAGE_S_NUM, 0);
     } else if (attr & MSG_ATTR_DUMMY) {
         return enqueue(pid_from, klib::forward<klib::vector<char>>(message));
     } else {

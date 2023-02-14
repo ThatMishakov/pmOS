@@ -88,6 +88,12 @@ void syscall_get_lapic_id();
 // Programs interrupt to send the message to the right port
 void syscall_set_interrupt(uint64_t port, uint32_t intno, uint32_t flags);
 
+// Assigns a name to port
+void syscall_name_port(u64 port, const char* name, u64 length, u32 flags);
+
+// Gets port by its name
+void syscall_get_port_by_name(const char *name, u64 length, u32 flags);
+
 #define SYS_CONF_IOAPIC          0x01
 #define SYS_CONF_LAPIC           0x02
 #define SYS_CONF_CPU             0x03

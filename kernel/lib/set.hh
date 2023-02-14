@@ -1,6 +1,7 @@
 #pragma once
 #include "pair.hh"
 #include "../memory/malloc.hh"
+#include "utility.hh"
 
 namespace klib {
 
@@ -27,8 +28,45 @@ private:
     void erase_fix(node*);
     void insert_fix(node*);
     node* search(const K&);
-    node* min(node*);
+    
+    static node* min(node*);
+    static node* next(node*);
+
+    static node* max(node*);
+    static node* prev(node*);
 public:
+    friend class iterator;
+
+    class iterator {
+        friend class set;
+    private:
+        node* ptr = &NIL;
+        constexpr iterator(node* n): ptr(n) {};
+    public:
+        iterator() = default;
+
+        iterator& operator++();
+        iterator operator++(int);
+
+        iterator& operator--();
+        iterator operator--(int);
+
+        K& operator*()
+        {
+            return ptr->key;
+        }
+
+        K* operator->()
+        {
+            return &ptr->key;
+        }
+
+        bool operator==(iterator k)
+        {
+            return this->ptr == k.ptr;
+        }
+    };
+
     constexpr set():
         elements(0), root(&NIL) {};
     set(const set&);
@@ -48,9 +86,9 @@ public:
         return elements;
     }
 
-    void insert(const K&);
-    void insert(K&&);
-    void emplace(K&&);
+    pair<iterator,bool> insert(const K&);
+    pair<iterator,bool> insert(K&&);
+    pair<iterator,bool> emplace(K&&);
 
     void erase(const K&);
 
@@ -58,7 +96,24 @@ public:
     void clear();
 
     size_t count(const K&);
+
+    iterator begin() const noexcept;
+    iterator end() const noexcept;
 };
+
+template<typename K>
+set<K>::set(const set& s)
+{
+    if (&s == this)
+        return;
+
+    set new_set;
+
+    for (iterator i = s.begin(); i != s.end(); ++i)
+        new_set.insert(*i);
+
+    swap(new_set);
+}
 
 template<typename K>
 set<K>::set(set&& s)
@@ -111,6 +166,19 @@ typename set<K>::node* set<K>::min(node* n)
 {
     while (n->left != &NIL)
         n = n->left;
+
+    return n;
+}
+
+template<typename K>
+typename set<K>::node* set<K>::next(node* n)
+{
+    if (n->right != &NIL)
+        return min(n->right);
+
+    n = n->parent;
+    while (n != &NIL and n == n->parent->right)
+        n = n->parent;
 
     return n;
 }
@@ -280,24 +348,30 @@ void set<K>::erase_fix(node* x)
 }
 
 template<class K>
-void set<K>::insert(const K& k)
+pair<typename set<K>::iterator,bool> set<K>::insert(const K& k)
 {
     node* n = new node({k, &NIL, &NIL, &NIL, true});
     insert_node(n);
+
+    return {n, true};
 }
 
 template<class K>
-void set<K>::insert(K&& k)
+pair<typename set<K>::iterator,bool> set<K>::insert(K&& k)
 {
     node* n = new node({forward<K>(k), &NIL, &NIL, &NIL, true});
     insert_node(n);
+
+    return {n, true};
 }
 
 template<class K>
-void set<K>::emplace(K&& k)
+pair<typename set<K>::iterator,bool> set<K>::emplace(K&& k)
 {
     node* n = new node({forward<K>(k), &NIL, &NIL, &NIL, true});
     insert_node(n);
+
+    return {n, true};
 }
 
 template<class T> class set<T>::node set<T>::NIL = {{}, nullptr, nullptr, nullptr, false};
@@ -371,6 +445,48 @@ void set<K>::insert_fix(node* n)
         }
     }
     root->red = false;
+}
+
+template<class K>
+typename set<K>::iterator set<K>::begin() const noexcept
+{
+    return min(root);
+}
+
+template<class K>
+typename set<K>::iterator set<K>::end() const noexcept
+{
+    return &NIL;
+}
+
+template<class K>
+void set<K>::swap(set<K>& swap_with)
+{
+    set tmp;
+    tmp = forward<set>(*this);
+    *this = forward<set>(swap_with);
+    swap_with = forward<set>(tmp);
+}
+
+template<class K>
+void set<K>::clear() noexcept
+{
+    *this = set();
+}
+
+template<class K>
+typename set<K>::iterator& set<K>::iterator::operator++()
+{
+    ptr = next(ptr);
+    return *this;
+}
+
+template<class K>
+typename set<K>::iterator set<K>::iterator::operator++(int)
+{
+    node* tmp_ptr = ptr;
+    ptr = next(ptr);
+    return tmp_ptr;
 }
 
 }

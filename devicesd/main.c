@@ -34,6 +34,8 @@ void usage()
 pmos_port_t main_port = 0;
 pmos_port_t configuration_port = 0;
 
+const char *devicesd_port_name = "/pmos/devicesd";
+
 int main(int argc, char** argv) {
     printf("Hello from devicesd!\n");
     
@@ -70,8 +72,15 @@ int main(int argc, char** argv) {
     //    init_lai();
 
     // Get messages
-    result_t r = set_port_default(1024, getpid(), CONTROL_PORT);
-    if (r != SUCCESS) printf("Warning: could not set the default port\n");
+
+
+    {
+        result_t r = name_port(main_port, devicesd_port_name, strlen(devicesd_port_name), 0);
+        if (r != SUCCESS) {
+            printf("Error %li naming port\n", r);
+            return 0;
+        }
+    }
 
 
     while (1)

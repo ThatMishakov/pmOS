@@ -11,6 +11,7 @@
 #include <pmos/ipc.h>
 #include "timers.h"
 #include <pmos/ports.h>
+#include <string.h>
 
 bool has_second_channel = false;
 
@@ -22,6 +23,8 @@ bool enable_second_channel = true;
 
 pmos_port_t main_port = 0;
 pmos_port_t configuration_port = 0;
+
+pmos_port_t devicesd_port = 0;
 
 void init_controller()
 {
@@ -141,6 +144,14 @@ int main(int argc, char *argv[])
         return 0;
     }
     main_port = req.port;
+
+    static const char* devicesd_port_name = "/pmos/devicesd";
+    ports_request_t devicesd_port_req = get_port_by_name(devicesd_port_name, strlen(devicesd_port_name), 0);
+    if (devicesd_port_req.result != SUCCESS) {
+        printf("Warning: Could not get devicesd port. Error %li\n", devicesd_port_req.result);
+        return 0;
+    }
+    devicesd_port = devicesd_port_req.port;
     }
 
     request_priority(1);

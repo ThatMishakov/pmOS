@@ -8,18 +8,19 @@ namespace klib {
 
 template<typename K, typename T>
 class splay_tree_map {
+public:
+    typedef pair<const K, T> value_type;
 private:
     struct node {
         node* left = nullptr;
         node* right = nullptr;
         node* parent = nullptr;
-        K key;
-        T data;
+        value_type key_data;
 
         node() = default;
-        constexpr node(const K& key, const T& data): left(nullptr), right(nullptr), key(key), data(data) {};
-        constexpr node(const pair<K, T>& p): left(nullptr), right(nullptr), key(p.first), data(p.second) {};
-        constexpr node(pair<K, T>&& p): left(nullptr), right(nullptr), key(forward<T>(p.first)), data(forward<T>(p.second)) {};
+        constexpr node(const K& key, const T& data): left(nullptr), right(nullptr), key_data({key, data}) {};
+        constexpr node(const value_type& p): left(nullptr), right(nullptr), key_data(p) {};
+        constexpr node(const value_type&& p): left(nullptr), right(nullptr), key_data(p) {};
     };
 
     size_t elements;
@@ -52,9 +53,9 @@ public:
             return {ptr->key, ptr->data};
         }
 
-        constexpr pair<const K* const, T* const> operator->() const
+        constexpr value_type* operator->() const
         {
-            return {&ptr->key, &ptr->data};
+            return &ptr->key_data;
         }
     };
 
@@ -66,8 +67,8 @@ public:
 
     void clear();
 
-    pair<iterator,bool> insert(const pair<K, T>&);
-    pair<iterator,bool> insert(pair<K, T>&&);
+    pair<iterator,bool> insert(const value_type&);
+    pair<iterator,bool> insert(value_type&&);
 
     void erase(const K&);
 
@@ -169,7 +170,7 @@ void splay_tree_map<K,T>::rotate_right(splay_tree_map<K,T>::node* p) const
 }
 
 template<class K, class T>
-pair<typename splay_tree_map<K,T>::iterator,bool> splay_tree_map<K,T>::insert(const pair<K, T>& pair)
+pair<typename splay_tree_map<K,T>::iterator,bool> splay_tree_map<K,T>::insert(const typename splay_tree_map<K,T>::value_type& pair)
 {
     node *n = nullptr;
     node* temp = root;
@@ -206,30 +207,30 @@ pair<typename splay_tree_map<K,T>::iterator,bool> splay_tree_map<K,T>::insert(co
 }
 
 template<typename K, typename T>
-pair<typename splay_tree_map<K,T>::iterator, bool> splay_tree_map<K,T>::insert(pair<K, T>&& pair)
+pair<typename splay_tree_map<K,T>::iterator, bool> splay_tree_map<K,T>::insert(typename splay_tree_map<K,T>::value_type&& pair)
 {
     node *n = nullptr;
     node* temp = root;
     while (temp != nullptr) {
         n = temp;
-        if (temp->key > pair.first) {
+        if (temp->key_data.first > pair.first) {
             temp = temp->left;
-        } else if (temp->key < pair.first) {
+        } else if (temp->key_data.first < pair.first) {
             temp = temp->right;
         } else {
             splay(n);
-            temp->data = forward<T>(pair.second);
+            temp->key_data.second = forward<T>(pair.second);
             return {n, false};
         }
     }
 
-    node* c = new node();
-    c->data = forward<T>(pair.second);
-    c->key = pair.first;
+    node* c = new node(forward<value_type>(pair));
+    // c->data = forward<T>(pair.second);
+    // c->key = pair.first;
 
     if (n == nullptr) {
         root = c;
-    } else if (pair.first < n->key) {
+    } else if (pair.first < n->key_data.first) {
         n->left = c;
         c->parent = n;
     } else {
@@ -260,8 +261,8 @@ template<class K, class T>
 size_t splay_tree_map<K,T>::count(const K& key) const
 {
     node* n = root;
-    while (n != nullptr and n->key != key) {
-        if (n->key < key) {
+    while (n != nullptr and n->key_data.first != key) {
+        if (n->key_data.first < key) {
             n = n->right;
         } else {
             n = n->left;
@@ -281,8 +282,8 @@ T& splay_tree_map<K,T>::at(const K& key)
 {
     node* n = root;
 
-    while (n->key != key) {
-        if (n->key < key) {
+    while (n->key_data.first != key) {
+        if (n->key_data.first < key) {
             n = n->right;
         } else {
             n = n->left;
@@ -291,7 +292,7 @@ T& splay_tree_map<K,T>::at(const K& key)
 
     splay(n);
 
-    return n->data;
+    return n->key_data.second;
 }
 
 template<class K, class T>
@@ -309,8 +310,8 @@ void splay_tree_map<K,T>::erase(const K& key)
 {
     node* n = root;
 
-    while (n->key != key) {
-        if (n->key < key) {
+    while (n->key_data.first != key) {
+        if (n->key_data.first < key) {
             n = n->right;
         } else {
             n = n->left;
@@ -360,8 +361,8 @@ T splay_tree_map<K,T>::get_copy_or_default(const K& key)
 {
     node* n = root;
 
-    while (n != nullptr and n->key != key) {
-        if (n->key < key) {
+    while (n != nullptr and n->key_data.first != key) {
+        if (n->key_data.first < key) {
             n = n->right;
         } else {
             n = n->left;
@@ -372,7 +373,7 @@ T splay_tree_map<K,T>::get_copy_or_default(const K& key)
 
     splay(n);
 
-    return n->data;
+    return n->key_data.second;
 }
 
 template<class K, class T>
@@ -382,7 +383,7 @@ K splay_tree_map<K,T>::largest() const
     while (n->right != nullptr)
         n = n->right;
 
-    return n->key;
+    return n->key_data.first;
 }
 
 }

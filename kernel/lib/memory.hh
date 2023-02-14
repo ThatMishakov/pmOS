@@ -504,7 +504,7 @@ public:
     {
         if (refcount == nullptr)
             return shared_ptr<T>();
-            
+
         shared_ptr<T> p = shared_ptr<T>();
 
         refcount->s.lock();
@@ -516,6 +516,11 @@ public:
 
         if (p.ptr != nullptr) p.refcount = refcount;
         return p;
+    }
+
+    constexpr bool operator<(const weak_ptr& p) const
+    {
+        return this->ptr < p.ptr;
     }
 private:
     T* ptr = nullptr;

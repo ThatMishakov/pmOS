@@ -46,6 +46,7 @@ struct TaskDescriptor {
     Ports_storage ports;
     Spinlock messaging_lock;
     u64 unblock_mask = ~0;
+    u64 block_extra = 0;
 
     // Scheduling info
     klib::shared_ptr<TaskDescriptor> queue_next = nullptr;
@@ -59,7 +60,7 @@ struct TaskDescriptor {
     ReturnStr<u64> init_stack();
 
     // Returns 0 if there are no unblocking events pending. Otherwise returns 0.
-    u64 check_unblock_immediately();
+    u64 check_unblock_immediately(u64 reason, u64 extra);
 
     // Sets the entry point to the task
     inline void set_entry_point(u64 entry)

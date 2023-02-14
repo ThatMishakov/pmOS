@@ -16,6 +16,7 @@
 #include <sched/sched.hh>
 #include <lib/string.hh>
 #include <interrupts/programmable_ints.hh>
+#include <messaging/named_ports.hh>
 
 extern "C" void syscall_handler()
 {
@@ -121,6 +122,12 @@ extern "C" void syscall_handler()
         break;
     case SYSCALL_SET_INTERRUPT:
         syscall_set_interrupt(arg1, arg2, arg3);
+        break;
+    case SYSCALL_NAME_PORT:
+        syscall_name_port(arg1, (const char *)arg2, arg3, arg4);
+        break;
+    case SYSCALL_GET_PORT_BY_NAME:
+        syscall_get_port_by_name((const char *)arg1, arg2, arg3);
         break;
     default:
         // Not supported
@@ -229,7 +236,7 @@ void syscall_map_into()
 void syscall_block(u64 mask)
 {
     task_ptr task = get_current_task();
-    ReturnStr<u64> r = block_task(get_cpu_struct()->current_task, mask);
+    ReturnStr<u64> r = block_task(get_cpu_struct()->current_task, mask, MESSAGE_S_NUM, 0, true);
 
     syscall_ret_low(task) = r.result;
     syscall_ret_high(task) = r.val;
@@ -619,7 +626,7 @@ void syscall_send_message_task(u64 pid, u64 channel, u64 size, u64 message)
         result = queue_message(t, klib::move(ptr));
     }
 
-    unblock_if_needed(t, MESSAGE_S_NUM);
+    unblock_if_needed(t, MESSAGE_S_NUM, 0);
 
     syscall_ret_low(current) = result;
 }
@@ -916,7 +923,7 @@ void syscall_create_port(u64 owner)
 
 void syscall_set_interrupt(uint64_t port, uint32_t intno, uint32_t flags)
 {
-    t_print_bochs("syscall_set_interrupt(%i, %i, %i)\n", port, intno, flags);
+    // t_print_bochs("syscall_set_interrupt(%i, %i, %i)\n", port, intno, flags);
 
 
     const task_ptr& task = get_current_task();
@@ -938,6 +945,113 @@ void syscall_set_interrupt(uint64_t port, uint32_t intno, uint32_t flags)
     { 
         Auto_Lock_Scope local_lock(desc.lock);
         desc.port = port_ptr;
+    }
+
+    syscall_ret_low(task) = SUCCESS;
+    return;
+}
+
+void syscall_name_port(u64 portnum, const char* name, u64 length, u32 flags)
+{
+    const task_ptr& task = get_current_task();
+
+
+    auto str = klib::string::fill_from_user(name, length);
+    if (str.first != SUCCESS) {
+        syscall_ret_low(task) = str.first;
+        return;
+    }
+
+    klib::shared_ptr<Port> port = default_ports.atomic_get_port(portnum);
+
+    if (not port) {
+        syscall_ret_low(task) = ERROR_PORT_DOESNT_EXIST;
+        return;
+    }
+
+    Auto_Lock_Scope scope_lock(port->lock);
+
+    Auto_Lock_Scope scope_lock2(global_named_ports.lock);
+
+    klib::shared_ptr<Named_Port_Desc> named_port = global_named_ports.storage.get_copy_or_default(str.second);
+
+    if (named_port) {
+        if (named_port->present) {
+            syscall_ret_low(task) = ERROR_NAME_EXISTS;
+            return;
+        }
+
+        named_port->parent_port = port;
+
+        for (const klib::weak_ptr<TaskDescriptor>& t : named_port->waiting_tasks) {
+            task_ptr task_res = t.lock();
+
+            if (task_res) {
+                bool unblocked = unblock_if_needed(task_res, PORTNAME_S_NUM, 0);
+                if (unblocked)
+                    syscall_ret_high(task_res) = portnum;
+            }
+        }
+
+        named_port->waiting_tasks.clear();
+    } else {
+        const klib::shared_ptr<Named_Port_Desc> new_desc = klib::make_shared<Named_Port_Desc>(Named_Port_Desc({klib::move(str.second), port, {}, true}));
+
+        global_named_ports.storage.insert({new_desc->name, new_desc});
+    }
+
+    syscall_ret_low(task) = SUCCESS;
+    return;
+}
+
+void syscall_get_port_by_name(const char *name, u64 length, u32 flags)
+{
+    // --------------------- TODO: shared pointers *will* explode if the TaskDescriptor is deleted -------------------------------------
+    constexpr unsigned flag_noblock = 0x01;
+
+    const task_ptr& task = get_current_task();
+
+    auto str = klib::string::fill_from_user(name, length);
+    if (str.first != SUCCESS) {
+        syscall_ret_low(task) = str.first;
+        return;
+    }
+
+    Auto_Lock_Scope scope_lock(global_named_ports.lock);
+
+    klib::shared_ptr<Named_Port_Desc> named_port = global_named_ports.storage.get_copy_or_default(str.second);
+
+    if (named_port) {
+        if (named_port->present) {
+            klib::shared_ptr<Port> ptr = named_port->parent_port.lock();
+            if (not ptr) {
+                syscall_ret_low(task) = ERROR_GENERAL;
+            } else {
+                syscall_ret_low(task) = SUCCESS;
+                syscall_ret_high(task) = ptr->portno;                
+            }
+            return;
+        } else {
+            if (flags & flag_noblock) {
+                syscall_ret_low(task) = ERROR_PORT_DOESNT_EXIST;
+                return;
+            } else {
+                named_port->waiting_tasks.insert(task);
+                block_task(task, PORTNAME_UNBLOCK_MASK, PORTNAME_S_NUM, 0, false);
+            }
+        }
+    } else {
+        if (flags & flag_noblock) {
+            syscall_ret_low(task) = ERROR_PORT_DOESNT_EXIST;
+            return;
+        } else {
+            const klib::shared_ptr<Named_Port_Desc> new_desc = klib::make_shared<Named_Port_Desc>(Named_Port_Desc({klib::move(str.second), klib::shared_ptr<Port>(nullptr), {}, false}));
+
+            auto it = global_named_ports.storage.insert({new_desc->name, new_desc});
+            it.first->second->waiting_tasks.insert(task);
+
+            block_task(task, PORTNAME_UNBLOCK_MASK, PORTNAME_S_NUM, 0, false);
+        }
     }
 
     syscall_ret_low(task) = SUCCESS;

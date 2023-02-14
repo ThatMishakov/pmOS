@@ -140,6 +140,20 @@ void main()
 
     init_acpi(multiboot_info_str);
 
+    syscall_r r = syscall(SYSCALL_CREATE_PORT, getpid());
+    uint64_t loader_port = r.value; 
+    if (r.result != SUCCESS) {
+        print_str("Loader: could not create a port. Error: ");
+        print_hex(r.result);
+        print_str("\n");
+        goto exit;
+    }
+
+    char *loader_port_name = "/pmos/loader";
+
+    syscall(SYSCALL_NAME_PORT, loader_port, loader_port_name, strlen(loader_port_name));
+
+
     while (1) {
     
         syscall_r r = syscall(SYSCALL_BLOCK, 0x01);
@@ -185,6 +199,6 @@ void main()
     }
 
     //print_str("Everything seems ok. Nothing to do. Exiting...\n");
-
+exit:
     syscall(SYSCALL_EXIT);
 }

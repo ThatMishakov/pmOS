@@ -94,7 +94,19 @@ ports_request_t create_port(pid_t owner, uint64_t flags)
     return t;
 }
 
+ports_request_t get_port_by_name(const char *name, u64 length, u32 flags)
+{
+    syscall_r r = syscall(SYSCALL_GET_PORT_BY_NAME, name, length, flags);
+    ports_request_t t = {r.result, r.value};
+    return t;
+}
+
 result_t set_interrupt(pmos_port_t port, uint32_t intno, uint32_t flags)
 {
     return syscall(SYSCALL_SET_INTERRUPT, port, intno, flags).result;
+}
+
+result_t name_port(pmos_port_t portnum, const char* name, size_t length, u32 flags)
+{
+    return syscall(SYSCALL_NAME_PORT, portnum, name, length, flags).result;
 }

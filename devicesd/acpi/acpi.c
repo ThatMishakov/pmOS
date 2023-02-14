@@ -67,11 +67,19 @@ RSDT* rsdt_phys = NULL;
 
 XSDT* xsdt_phys = NULL;
 
+static const char* loader_port_name = "/pmos/loader";
+
 void request_acpi_tables()
 {
     IPC_ACPI_Request_RSDT request = {IPC_ACPI_Request_RSDT_NUM, configuration_port};
 
-    result_t result = send_message_port(2, sizeof(request), (char*)&request);
+    ports_request_t loader_port = get_port_by_name(loader_port_name, strlen(loader_port_name), NULL);
+    if (loader_port.result != SUCCESS) {
+        printf("Warning: Could not get loader port. Error %li\n", loader_port.result);
+        return;
+    }
+
+    result_t result = send_message_port(loader_port.port, sizeof(request), (char*)&request);
     if (result != SUCCESS) {
         printf("Warning: Could not send message to get the RSDT\n");
         return;

@@ -26,5 +26,6 @@
 #define ERROR_ALREADY_PAGE_OWNER -22ULL
 #define ERROR_SPECIAL_PAGE       -23ULL
 #define ERROR_NODESTINATION      -24ULL
+#define ERROR_NAME_EXISTS        -25ULL
 
 #endif

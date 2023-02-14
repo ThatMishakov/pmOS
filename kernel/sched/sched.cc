@@ -51,7 +51,7 @@ PID assign_pid()
    return pid_p; 
 }
 
-ReturnStr<u64> block_task(const klib::shared_ptr<TaskDescriptor>& task, u64 mask)
+ReturnStr<u64> block_task(const klib::shared_ptr<TaskDescriptor>& task, u64 mask, u64 imm_reason, u64 extra, bool check_unblock_immediate)
 {
     Auto_Lock_Scope scope_lock(task->sched_lock);
 
@@ -61,8 +61,12 @@ ReturnStr<u64> block_task(const klib::shared_ptr<TaskDescriptor>& task, u64 mask
     // Change mask if not null
     if (mask != 0) task->unblock_mask = mask;
 
-    u64 imm = task->check_unblock_immediately();
-    if (imm != 0) return {SUCCESS, imm};
+    task->block_extra = extra;
+
+    if (check_unblock_immediate) {
+        u64 imm = task->check_unblock_immediately(imm_reason, extra);
+        if (imm != 0) return {SUCCESS, imm};
+    }
 
     // Task switch if it's a current process
     CPU_Info* cpu_str = get_cpu_struct();
@@ -145,16 +149,19 @@ void restore_segments(const klib::shared_ptr<TaskDescriptor>& task)
     write_msr(0xC0000100, task->regs.seg.fs); // FSBase
 }
 
-void unblock_if_needed(const klib::shared_ptr<TaskDescriptor>& p, u64 reason)
+bool unblock_if_needed(const klib::shared_ptr<TaskDescriptor>& p, u64 reason, u64 extra)
 {
+    bool unblocked = false;
     Auto_Lock_Scope scope_lock(p->sched_lock);
 
-    if (p->status != PROCESS_BLOCKED) return;
+    if (p->status != PROCESS_BLOCKED)
+        return unblocked;
     
     u64 mask = 0x01ULL << (reason - 1);
 
-    if (mask & p->unblock_mask) {
+    if (mask & p->unblock_mask and p->block_extra == extra) {
         p->regs.scratch_r.rdi = reason;
+        unblocked = true;
 
         p->parent_queue->erase(p);
         p->parent_queue = nullptr;
@@ -170,12 +177,15 @@ void unblock_if_needed(const klib::shared_ptr<TaskDescriptor>& p, u64 reason)
             push_ready(p);
         }
     }
+    return unblocked;
 }
 
-u64 TaskDescriptor::check_unblock_immediately()
+u64 TaskDescriptor::check_unblock_immediately(u64 reason, u64 extra)
 {
-    if (this->unblock_mask & MESSAGE_UNBLOCK_MASK) {
-        if (not this->messages.empty()) return MESSAGE_S_NUM;
+    u64 mask = 0x01ULL << (reason - 1);
+
+    if ((this->unblock_mask & mask) and (this->block_extra == extra)) {
+        if (not this->messages.empty()) return reason;
     }
 
     return 0;

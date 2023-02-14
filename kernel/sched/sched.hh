@@ -11,10 +11,10 @@
 #include "defs.hh"
 
 // Checks the mask and unblocks the task if needed
-void unblock_if_needed(const klib::shared_ptr<TaskDescriptor>& p, u64 reason);
+bool unblock_if_needed(const klib::shared_ptr<TaskDescriptor>& p, u64 reason, u64 extra);
 
 // Blocks task with a mask *mask*
-ReturnStr<u64> block_task(const klib::shared_ptr<TaskDescriptor>& task, u64 mask);
+ReturnStr<u64> block_task(const klib::shared_ptr<TaskDescriptor>& task, u64 mask, u64 imm_reason, u64 extra, bool check_unblock_immediate);
 
 struct TaskDescriptor;
 

@@ -34,7 +34,24 @@ public:
     static const size_t npos = -1;
 
     constexpr string() noexcept: s_capacity(0), long_string({0,0}) {};
-    string(const string& str);
+    string(const string& str)
+    {
+        size_t length = str.length();
+
+        if (length > small_size) {
+            long_string.ptr = new char[length + 1];
+            s_capacity = length;
+            long_string.size = length;
+
+            memcpy(long_string.ptr, str.data(), length);
+            long_string.ptr[length] = '\0';
+        } else {
+            s_capacity = length;
+            long_string = str.long_string;
+        }
+
+    }
+
     string (const string& str, size_t pos, size_t len = npos);
     string (const char* s)
     {
@@ -164,7 +181,21 @@ public:
 
     void pop_back();
 
-    int compare (const string& str) const noexcept;
+    int compare (const string& str) const noexcept
+    {
+        size_t size = min(this->size(), str.size());
+
+        const char* str1_data = this->data();
+        const char* str2_data = str.data();
+
+        for (size_t i = 0; i < size; ++i) {
+            if (str1_data[i] != str2_data[i])
+                return (int)str2_data[i] - (int)str1_data[i];
+        }
+
+        return (long)str.size() - (long)this->size();
+    }
+
     int compare (size_t pos, size_t len, const string& str) const;
     int compare (size_t pos, size_t len, const string& str, size_t subpos, size_t sublen = npos) const;
     int compare (const char* s) const;int compare (size_t pos, size_t len, const char* s) const;
@@ -173,6 +204,11 @@ public:
     bool operator<(const string& s) const
     {
         return compare(s) < 0;
+    }
+
+    bool operator>(const string& s) const
+    {
+        return compare(s) > 0;
     }
 
     bool operator==(const string& s) const
