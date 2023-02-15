@@ -26,9 +26,27 @@ private:
 
     static constexpr size_t small_size = sizeof(long_string_str)*2 - 1;
 
+    static constexpr bool fits_in_short(size_t s)
+    {
+        return s <= small_size;
+    }
+
     constexpr bool is_long() const noexcept
     {
-        return s_capacity > 15;
+        return not fits_in_short(s_capacity);
+    }
+
+    constexpr char* mutable_data() noexcept
+    {
+        return is_long() ? long_string.ptr : short_string;
+    }
+
+    constexpr void set_size(size_t new_size) noexcept
+    {
+        if (is_long())
+            long_string.size = new_size;
+        else
+            s_capacity = new_size;
     }
 public:
     static const size_t npos = -1;
@@ -53,6 +71,7 @@ public:
     }
 
     string (const string& str, size_t pos, size_t len = npos);
+
     string (const char* s)
     {
         size_t length = strlen(s);
@@ -117,9 +136,47 @@ public:
     void resize (size_t n);
     void resize (size_t n, char c);
 
-    size_t capacity() const noexcept;
+    constexpr size_t capacity() const noexcept
+    {
+        return is_long() ? s_capacity : small_size;
+    }
 
-    void reserve (size_t n = 0);
+    void reserve (size_t n = 0)
+    {
+        if (n <= capacity())
+            return;
+
+        if (is_long()) {
+            char* new_ptr = new char[n+1];
+            char* old_ptr = long_string.ptr;
+
+            for (size_t i = 0; i < size(); ++i) {
+                new_ptr[i] = old_ptr[i];
+            }
+
+            new_ptr[size()] = '\0';
+
+            s_capacity = n;
+            long_string.size = n;
+            long_string.ptr = new_ptr;
+
+            delete[] old_ptr;
+        } else {
+            if (fits_in_short(n))
+                return;
+
+            char* new_ptr = new char[n+1];
+
+            for (size_t i = 0; i < size(); ++i) {
+                new_ptr[i] = short_string[i];
+            }
+            new_ptr[size()] = '\0';
+
+            s_capacity = n;
+            long_string.size = n;
+            long_string.ptr = new_ptr;
+        }
+    }
 
     void clear() noexcept;
 
@@ -156,14 +213,74 @@ public:
 
     string substr (size_t pos = 0, size_t len = npos) const;
 
-    string& operator+= (const string& str);
-    string& operator+= (const char* s);
-    string& operator+= (char c);
-    string& append (const string& str);
     string& append (const string& str, size_t subpos, size_t sublen = npos);
-    string& append (const char* s);
-    string& append (const char* s, size_t n);
-    string& append (size_t n, char c);
+
+    string& append (const char* s, size_t n)
+    {
+        size_t current_size = size();
+        size_t str_size = n;
+        size_t new_size = current_size + str_size;
+
+        reserve(new_size);
+
+        char* to = mutable_data();
+        const char* from = s;
+
+        for (size_t i = 0; i < str_size; ++i) {
+            to[current_size + i] = from[i];
+        }
+        to[new_size] = '\0';
+
+        set_size(new_size);
+
+        return *this;
+    }
+
+    string& append (const string& str)
+    {
+        return append(str.data(), str.size());
+    }
+
+    string& append (size_t n, char c)
+    {
+        size_t current_size = size();
+        size_t str_size = n;
+        size_t new_size = current_size + str_size;
+
+        if (new_size > capacity())
+            reserve(capacity()*2);
+
+        char* to = mutable_data();
+
+        for (size_t i = 0; i < str_size; ++i) {
+            to[current_size + i] = c;
+        }
+        to[new_size] = '\0';
+
+        set_size(new_size);
+
+        return *this;
+    }
+
+    string& append (const char* s)
+    {
+        return append(s, strlen(s));
+    }
+
+    string& operator+= (const string& str)
+    {
+        return append(str);
+    }
+
+    string& operator+= (const char* s)
+    {
+        return append(s);
+    }
+
+    string& operator+= (char c)
+    {
+        return append(1, c);
+    }
 
     string& assign (const string& str);
     string& assign (const string& str, size_t subpos, size_t sublen = npos);

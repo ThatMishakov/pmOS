@@ -7,10 +7,27 @@
 #include <string.h>
 #include <stdlib.h>
 #include <pmos/ipc.h>
+#include <pmos/ports.h>
+
+const char default_terminal_port_name[] = "/pmos/terminald";
+
+FILE default_stdout = {0, default_terminal_port_name, 0, 0, _STDIO_FILE_TYPE_PORT};
 
 FILE * stdin = NULL;
-FILE * stdout = NULL;
-FILE * stderr = NULL;
+FILE * stdout = &default_stdout;
+FILE * stderr = &default_stdout;
+
+void _clib_init_stdio()
+{
+    // stdout = malloc(sizeof(FILE));
+    // stdout->type = _STDIO_FILE_TYPE_PORT;
+    // stdout->port_ptr = 1;
+    // stdout->flags = 0;
+    // stdout->size = 0;
+
+    // // TODO
+    // stderr = stdout;
+}
 
 #define PRINTF_FLAG_LEFT_J 0x01
 #define PRINTF_FLAG_P_PLUS 0x02
@@ -90,6 +107,17 @@ static int _size_fputs (int size, const char * str, FILE * stream)
     switch (type)
     {
     case _STDIO_FILE_TYPE_PORT: {
+        if (stream->port_ptr == 0) {
+            if (!stream->port_name)
+                return EOF;
+
+            ports_request_t port_req = get_port_by_name(stream->port_name, strlen(stream->port_name), NULL);
+            if (port_req.result != SUCCESS) {
+                return EOF;
+            }
+            stream->port_ptr = port_req.port;
+        }
+
         static const int buffer_size = 252;
 
         struct {

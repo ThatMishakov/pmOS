@@ -10,8 +10,11 @@ extern "C" {
 
 #ifdef __STDC_HOSTED__
 
+typedef uint64_t pmos_port_t;
+
 typedef struct FILE {
-    uint64_t port_ptr;
+    pmos_port_t port_ptr;
+    const char* port_name;
     size_t size;
     uint32_t flags;
     uint8_t type;

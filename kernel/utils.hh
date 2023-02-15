@@ -8,7 +8,9 @@ void uint_to_string(u64 n, u8 base, char* str, int& length);
 
 void t_print_bochs(const char *str, ...);
 
-void term_write(const char * str, u64 length);
+namespace klib { class string; }
+void term_write(const klib::string&);
+
 extern "C" size_t strlen(const char *str);
 
 void t_print(const char *str,...);

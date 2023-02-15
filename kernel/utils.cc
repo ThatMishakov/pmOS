@@ -7,6 +7,7 @@
 #include <memory/paging.hh>
 #include <messaging/messaging.hh>
 #include <memory/free_page_alloc.hh>
+#include <lib/string.hh>
 
 void int_to_string(long int n, u8 base, char* str, int& length)
 {
@@ -65,6 +66,7 @@ void uint_to_string(unsigned long int n, u8 base, char* str, int& length)
  
 void t_print(const char *str, ...)
 {
+    klib::string buff;
     va_list arg;
     va_start(arg, str);
 
@@ -76,16 +78,18 @@ void t_print(const char *str, ...)
             if (at == '\0') {
                 va_end(arg);
                 if (i - s > 0) {
-                    term_write(str + s, i - s);
+                    buff.append(str+s, i-s);
+                    //term_write(str + s, i - s);
                 }
-                return;
+                goto end;
             }
             if (at == '%') break;
             //term_write(str+i, 1);
             at = str[++i];
         }
         if (i - s > 0) {
-            term_write(str + s, i - s);
+            buff.append(str+s, i-s);
+            // term_write(str + s, i - s);
         }
        
         at = str[++i]; // char next to %
@@ -109,11 +113,14 @@ void t_print(const char *str, ...)
             }
         }
 
-        term_write(int_str_buffer, len);
+        buff.append(int_str_buffer, len);
+        //term_write(int_str_buffer, len);
         at = str[++i];
     }
 
+end:
     va_end(arg);
+    term_write(buff);
 }
 
 void t_write_bochs(const char * str, u64 length)
@@ -181,7 +188,7 @@ void t_print_bochs(const char *str, ...)
     va_end(arg);
 }
 
-void term_write(const char * str, size_t length)
+void term_write(const klib::string& s)
 {
     //putchar('&');
     //putchar('0' + length);
@@ -196,6 +203,9 @@ void term_write(const char * str, size_t length)
         char buff[buff_size];
     } var;
 
+
+    size_t length = s.length();
+    const char* str = s.c_str();
 
     for (size_t i = 0; i < length; i += buff_size) {
         size_t length = min(length - i, buff_size);

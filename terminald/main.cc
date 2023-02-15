@@ -6,6 +6,7 @@
 #include <pmos/system.h>
 #include "asm.hh"
 #include <pmos/ipc.h>
+#include <pmos/ports.h>
 
 void putchar (int c);
 void write(char* buff)
@@ -45,6 +46,11 @@ void print_hex(uint64_t i)
 
 void init_screen();
 
+pmos_port_t main_port = 0;
+pmos_port_t configuration_port = 0;
+
+const char terminal_port_name[] = "/pmos/terminald";
+
 int main() {
     // request_priority(0);
     init_screen();
@@ -52,6 +58,34 @@ int main() {
     
     result_t r = set_port_default(1, getpid(), 1);
     if (r != SUCCESS) write("Warning: could not set the default port\n");
+
+    {
+        ports_request_t req;
+        req = create_port(PID_SELF, 0);
+        if (req.result != SUCCESS) {
+            write("Error creating configuration port ");
+            print_hex(req.result);
+            write("\n");
+        }
+        configuration_port = req.port;
+
+        req = create_port(PID_SELF, 0);
+        if (req.result != SUCCESS) {
+            write("Error creating main port ");
+            print_hex(req.result);
+            write("\n");
+        }
+        main_port = req.port;
+    }
+
+    {
+        result_t r = name_port(main_port, terminal_port_name, strlen(terminal_port_name), 0);
+        if (r != SUCCESS) {
+            write("terminald: Error 0x");
+            print_hex(r);
+            write(" naming port\n");
+        }
+    }
 
     while (1)
     {

@@ -265,8 +265,6 @@ void set<K>::transplant_node(node* n, node* p)
 template<class K>
 void set<K>::erase_node(node* n)
 {
-    t_print_bochs("set erase node %h\n", n);
-
     --elements;
     node* y = n;
     bool original_red = n->red;
@@ -395,9 +393,6 @@ template<class K>
 void set<K>::insert_node(node* n)
 {
     node* y = &NIL;
-
-    t_print_bochs("this %h nil %h\n", this, &NIL);
-
     node* temp = root;
 
     while (temp != &NIL) {
