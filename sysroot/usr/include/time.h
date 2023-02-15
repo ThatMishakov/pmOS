@@ -29,6 +29,7 @@ typedef struct tm {
     int tm_isdst; 
 };
 
+#ifdef __STDC_HOSTED__
 /* Time manipulation */
 clock_t clock(void);
 double difftime(time_t time1, time_t time0);
@@ -45,6 +46,8 @@ size_t strftime(char * s,
                 size_t maxsize,
                 const char * format,
                 const struct tm * timeptr);
+
+#endif
 
 
 #if defined(__cplusplus)

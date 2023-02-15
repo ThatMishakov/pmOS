@@ -22,6 +22,8 @@ typedef struct ports_request_t
     pmos_port_t port;
 } ports_request_t;
 
+#ifdef __STDC_HOSTED__
+
 // Creates a new port
 ports_request_t create_port(pid_t owner, uint64_t flags);
 
@@ -30,6 +32,8 @@ result_t name_port(pmos_port_t portnum, const char* name, size_t length, u32 fla
 
 // Requests a port by its name. This syscall blocks the process untill the name is created
 ports_request_t get_port_by_name(const char *name, u64 length, u32 flags);
+
+#endif
 
 // Causes process not to block when the port doesn't exist, returning ERROR_PORT_DOESNT_EXIST instead 
 #define FLAG_NOBLOCK    0x01

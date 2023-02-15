@@ -5,12 +5,16 @@
 extern "C" {
 #endif
 
+#ifdef __STDC_HOSTED__
+
 void _assert_fail(const char* condition, const char* file, unsigned int line);
 
 #ifdef NDEBUG
 #define assert(bool)
 #else
 #define assert(COND) if (!COND) _assert_fail(#COND, __FILE__, __LINE__); 
+#endif
+
 #endif
 
 #if defined(__cplusplus)

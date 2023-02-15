@@ -18,11 +18,15 @@ typedef unsigned long int pid_t;
 typedef long int intptr_t;
 typedef unsigned long long int uintprt_t;
 
+#ifdef __STDC_HOSTED__
+
 pid_t fork(void);
 int execv(const char *, char *const []);
 int execve(const char *, char *const [], char *const []);
 int execvp(const char *, char *const []);
 pid_t getpid(void);
+
+#endif
 
 
 #if defined(__cplusplus)

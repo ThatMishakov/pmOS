@@ -4,10 +4,10 @@ KERNEL = kernel
 # It is highly recommended to use a custom built cross toolchain to build a kernel.
 # We are only using "cc" as a placeholder here. It may work by using
 # the host system's toolchain, but this is not guaranteed.
-CC = x86_64-elf-gcc
-CPP = x86_64-elf-gcc
-CXX = x86_64-elf-g++
-LD = x86_64-elf-g++
+CC = $(ROOTDIR)/../bin/cross/bin/x86_64-pmos-gcc
+CPP = $(ROOTDIR)/../bin/cross/bin/x86_64-pmos-gcc
+CXX = $(ROOTDIR)/../bin/cross/bin/x86_64-pmos-g++
+LD = $(ROOTDIR)/../bin/cross/bin/x86_64-pmos-g++
 
 ROOTDIR = $(realpath .)
 INCLUDEDIR = include .

@@ -6,6 +6,9 @@
 malloc_list head = {nullptr, 0};
 Spinlock malloc_lock;
 
+size_t malloced = 0;
+size_t freed = 0;
+
 void print_list(malloc_list* l)
 {
     while (l != nullptr) {
@@ -52,6 +55,10 @@ void *malloc_int(size_t size_bytes, size_t& size_bytes_a)
         p[0] = size_bytes_a;
     }
     malloc_lock.unlock();
+
+    if (p != nullptr)
+        malloced += size_bytes_a;
+
     return p;
 }
 
@@ -100,6 +107,8 @@ extern "C" void free(void * p)
     base -= 2;
     u64 size = *base;
 
+    freed += size;
+
     malloc_lock.lock();
     malloc_list* k = (malloc_list*)base;
     k->next = head.next;
@@ -111,14 +120,12 @@ extern "C" void free(void * p)
 void *operator new(size_t size)
 {
     void* ptr = malloc(size);
-    //t_print_bochs("new size %h -> 0x%h\n", size, ptr);
     return ptr;
 }
  
 void *operator new[](size_t size)
 {
     void* ptr = malloc(size);
-    //t_print_bochs("new[] size %h -> 0x%h\n", size, ptr);
     return ptr;
 }
  

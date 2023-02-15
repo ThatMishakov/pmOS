@@ -4,12 +4,13 @@
     .type _start, @function
 _start:
     // Switch to temp in-kernel stack
-    movq %rsp, stack_end-8(%rip)
-    leaq (stack_end-8)(%rip), %rsp
+    movq %rsp, (stack+STACK_SIZE-8)(%rip)
+    leaq (stack+STACK_SIZE-16)(%rip), %rsp
 
     call main
 
     // Return to loader
+    addq $8, %rsp
     popq %rsp
 
     pushf
@@ -21,7 +22,7 @@ _start:
     .globl cpu_startup_entry
     .type cpu_startup_entry, @function
 cpu_startup_entry:
-    leaq (stack_end)(%rip), %rsp # Load temp kernel stack
+    leaq (stack+STACK_SIZE)(%rip), %rsp # Load temp kernel stack
 
     movl $1, %edx
 spin:
@@ -48,8 +49,8 @@ spin:
     
 
     .bss
+    .align 16
     .comm stack, STACK_SIZE
-stack_end:
 
     .data
 init_lock:

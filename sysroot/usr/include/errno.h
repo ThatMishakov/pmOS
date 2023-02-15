@@ -5,9 +5,13 @@
 extern "C" {
 #endif
 
+#ifdef __STDC_HOSTED__
+
 int _get_errno();
 
 #define errno _get_errno()
+
+#endif
 
 #if defined(__cplusplus)
 } /* extern "C" */

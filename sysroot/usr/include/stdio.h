@@ -8,6 +8,8 @@
 extern "C" {
 #endif
 
+#ifdef __STDC_HOSTED__
+
 typedef struct FILE {
     uint64_t port_ptr;
     size_t size;
@@ -87,6 +89,8 @@ extern FILE * stderr;
 #define SEEK_SET 0
 #define SEEK_CUR 1
 #define SEEK_END 2
+
+#endif
 
 #if defined(__cplusplus)
 } /* extern "C" */

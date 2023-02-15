@@ -5,6 +5,7 @@
 #include "timers.h"
 
 Port ports[2];
+uint64_t last_polling_timer = 0;
 
 void send_data_port(uint8_t cmd, bool port_2)
 {
@@ -35,14 +36,34 @@ void init_ports()
             ports[1].last_timer = start_timer(500);
         }
     }
+
+    poll_ports();
 }
 
-void react_port_int(unsigned port_num)
+bool read_data(char* data, bool* is_second)
+{
+    if (!data)
+        return false;
+
+    uint8_t status = inb(RW_PORT);
+    if (!(status & STATUS_MASK_OUTPUT_FULL)) {
+        // No data to read
+        return false;
+    }
+
+    if (is_second) {
+        *is_second = !!(status & STATUS_MASK_SECOND_FULL);
+    }
+
+    *data = inb(DATA_PORT);
+
+    return true;
+}
+
+
+void react_data(uint8_t data, char port_num)
 {
     Port* port = &ports[port_num];
-
-    unsigned char data = inb(DATA_PORT);
-
     // printf("--- INT port %i data %x state %i\n", port_num, data, port->state);
 
     switch (port->state) {
@@ -88,7 +109,7 @@ void react_port_int(unsigned port_num)
 
         send_data_port(COMMAND_IDENTIFY, port_num);
 
-        port->last_timer = start_timer(200);
+        port->last_timer = start_timer(700);
         break;
     default:
         // Ignore data
@@ -143,6 +164,22 @@ void react_port_int(unsigned port_num)
     };
 }
 
+void react_port_int(unsigned port_num)
+{
+    char data = 0;
+    bool second = port_num;
+
+    bool two_ports_work = first_port_works && second_port_works;
+
+    bool* check_second = two_ports_work ? &second : NULL;
+    bool have_read_data = read_data(&data, check_second);
+
+    if (!have_read_data)
+        return;
+
+    react_data(data, second);
+}
+
 void react_port1_int()
 {
     react_port_int(0);
@@ -172,6 +209,9 @@ void react_timer_port(unsigned port_num)
         if (port->alive) {
             port->alive = false;
         } else {
+            if (inb(RW_PORT) & STATUS_MASK_INPUT_FULL) {
+            }
+
             port->state = PORT_STATE_OK_NOINPUT;
             send_data_port(COMMAND_ECHO, port_num);
         }
@@ -186,7 +226,7 @@ void react_timer_port(unsigned port_num)
 
             send_data_port(COMMAND_ENABLE_SCANNING, port_num);
 
-            port->last_timer = start_timer(200);
+            port->last_timer = start_timer(800);
         } else {
             port->state = PORT_STATE_RESET;
         }
@@ -199,11 +239,31 @@ void react_timer_port(unsigned port_num)
     }
 }
 
+void poll_ports()
+{
+    char data = 0;
+    bool second = second_port_works;
+
+    bool two_ports_work = first_port_works && second_port_works;
+
+    bool* check_second = two_ports_work ? &second : NULL;
+    bool have_read_data = read_data(&data, check_second);
+
+    last_polling_timer = start_timer(200);
+
+    if (!have_read_data)
+        return;
+
+    react_data(data, second);
+}
+
 void react_timer(uint64_t index)
 {
     if (ports[0].last_timer == index) {
         react_timer_port(0);
     } else if (ports[1].last_timer == index) {
         react_timer_port(1);
+    } else if (last_polling_timer == index) {
+        poll_ports();
     }
 }

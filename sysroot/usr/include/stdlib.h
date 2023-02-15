@@ -59,6 +59,8 @@ int rand (void);
 void srand (unsigned int seed);
 
 
+#ifdef __STDC_HOSTED__
+
 /* Dynamic memory */
 void* calloc (size_t num, size_t size);
 void *malloc(size_t size);
@@ -97,6 +99,8 @@ size_t mbstowcs(wchar_t * pwcs,
 size_t wcstombs(char * s,
                 const wchar_t * pwcs,
                 size_t n);
+
+#endif
 
 #define EXIT_SUCCESS 0
 #define EXIT_FAILURE 1

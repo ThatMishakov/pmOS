@@ -5,7 +5,11 @@
 extern "C" {
 #endif
 
+#ifdef __STDC_HOSTED__
+
 void pmos_print_stack_trace();
+
+#endif
 
 #if defined(__cplusplus)
 } /* extern "C" */

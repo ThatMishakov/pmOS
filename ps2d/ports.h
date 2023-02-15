@@ -24,6 +24,7 @@ void react_port2_int();
 void react_timer(uint64_t index);
 
 void init_ports();
+void poll_ports();
 
 typedef struct Port {
     uint64_t last_timer;
@@ -31,6 +32,8 @@ typedef struct Port {
     uint16_t device_id;
     bool alive;
 } Port;
+
+extern uint64_t last_polling_timer;
 
 extern Port ports[2];
 

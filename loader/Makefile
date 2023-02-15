@@ -1,18 +1,18 @@
 # Executable name
 EXEC = loader.elf
 
-
-CC = x86_64-elf-gcc
-CPP = x86_64-elf-gcc
-CXX = x86_64-elf-g++
-LD = x86_64-elf-ld
+ROOTDIR = $(realpath .)
+CC = $(ROOTDIR)/../bin/cross/bin/x86_64-pmos-gcc
+CPP = $(ROOTDIR)/../bin/cross/bin/x86_64-pmos-gcc
+CXX = $(ROOTDIR)/../bin/cross/bin/x86_64-pmos-g++
+LD = $(ROOTDIR)/../bin/cross/bin/x86_64-pmos-g++
 
 INCLUDEDIR = include
 
 # User controllable CFLAGS.
 USERCFLAGS = -Wall -Wextra -O2 -pipe
 
-CPPFLAGS = -mcmodel=kernel $(INTERNALCFLAGS) -I$(INCLUDEDIR) $(USERCFLAGS) -I../kernel/include  -MMD -MP
+CPPFLAGS = $(INTERNALCFLAGS) -I$(INCLUDEDIR) $(USERCFLAGS) -I../kernel/include  -MMD -MP
 #CXXFLAGS = $(CFLAGS)
 ASMFLAGS = -I$(INCLUDEDIR)
 LDFLAGS = $(INTERNALLDFLAGS)
@@ -22,7 +22,6 @@ INTERNALLDFLAGS := \
     -nostdlib               \
 	-Tlinker.ld    \
 	-z max-page-size=0x1000 \
-	-fuse-ld=lld \
 	-static
  
 # Internal C flags that should not be changed by the user.

@@ -22,6 +22,8 @@ typedef struct {
 extern "C" {
 #endif
 
+#ifdef __STDC_HOSTED__
+
 // Generic syscall
 syscall_r syscall(uint64_t call_n, ...);
 
@@ -73,6 +75,8 @@ result_t request_priority(uint64_t priority);
 
 // Returns the LAPIC id the process is running on when calling the process
 u64 get_lapic_id();
+
+#endif
 
 #if defined(__cplusplus)
 } /* extern "C" */

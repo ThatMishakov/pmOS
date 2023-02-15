@@ -70,8 +70,7 @@ const A& max(const A& a, const A& b) noexcept
 template<class A>
 const A& min(const A& a, const A& b) noexcept
 {
-    if (a < b) return a;
-    return b;
+    return a < b ? a : b;
 }
 
 void print_stack_trace();

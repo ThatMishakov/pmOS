@@ -105,7 +105,7 @@ extern "C" void pagefault_manager()
         get_lazy_page(page);
         break;
     case Page_Types::UNALLOCATED: // Page not allocated
-        t_print_bochs("Warning: Pagefault %h pid %i rip %h error %h -> unallocated... killing process...\n", virtual_addr, get_cpu_struct()->current_task->pid, int_s->rip, err);
+        t_print_bochs("Warning: Pagefault %h pid %i (%s) rip %h error %h -> unallocated... killing process...\n", virtual_addr, get_cpu_struct()->current_task->pid, get_cpu_struct()->current_task->name.c_str(), int_s->rip, err);
         syscall_exit(4, 0);
         break;
     default:
