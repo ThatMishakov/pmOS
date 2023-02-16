@@ -17,6 +17,7 @@
 #include <lib/string.hh>
 #include <interrupts/programmable_ints.hh>
 #include <messaging/named_ports.hh>
+#include <kern_logger/kern_logger.hh>
 
 extern "C" void syscall_handler()
 {
@@ -32,7 +33,7 @@ extern "C" void syscall_handler()
 
     //t_print_bochs("Debug: syscall %h pid %h", call_n, get_cpu_struct()->current_task->pid);
     if (task->attr.debug_syscalls) {
-        t_print("Debug: syscall %h pid %h\n", call_n, get_cpu_struct()->current_task->pid);
+        global_logger.printf("Debug: syscall %h pid %h\n", call_n, get_cpu_struct()->current_task->pid);
     }
 
     switch (call_n) {
@@ -128,6 +129,9 @@ extern "C" void syscall_handler()
         break;
     case SYSCALL_GET_PORT_BY_NAME:
         syscall_get_port_by_name((const char *)arg1, arg2, arg3);
+        break;
+    case SYSCALL_SET_LOG_PORT:
+        syscall_set_log_port(arg1, arg2);
         break;
     default:
         // Not supported
@@ -1050,5 +1054,20 @@ void syscall_get_port_by_name(const char *name, u64 length, u32 flags)
     }
 
     syscall_ret_low(task) = SUCCESS;
+    return;
+}
+
+void syscall_set_log_port(u64 port, u32 flags)
+{
+    const task_ptr& task = get_current_task();
+
+    klib::shared_ptr<Port> port_ptr = default_ports.atomic_get_port(port);
+
+    if (not port_ptr) {
+        syscall_ret_low(task) = ERROR_PORT_DOESNT_EXIST;
+        return;
+    }
+
+    syscall_ret_low(task) = global_logger.set_port(port_ptr, flags);
     return;
 }

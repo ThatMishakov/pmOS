@@ -13,8 +13,6 @@ void term_write(const klib::string&);
 
 extern "C" size_t strlen(const char *str);
 
-void t_print(const char *str,...);
-
 extern void printf(const char *str,...);
 
 inline void halt()

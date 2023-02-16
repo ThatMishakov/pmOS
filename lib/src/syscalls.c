@@ -110,3 +110,8 @@ result_t name_port(pmos_port_t portnum, const char* name, size_t length, u32 fla
 {
     return syscall(SYSCALL_NAME_PORT, portnum, name, length, flags).result;
 }
+
+result_t set_log_port(pmos_port_t port, uint32_t flags)
+{
+    return syscall(SYSCALL_SET_LOG_PORT, port, flags).result;
+}

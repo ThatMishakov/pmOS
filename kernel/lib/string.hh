@@ -178,7 +178,13 @@ public:
         }
     }
 
-    void clear() noexcept;
+    void clear() noexcept
+    {
+        if (is_long())
+            long_string.size = 0;
+        else
+            s_capacity = 0;
+    }
 
     constexpr bool empty() const noexcept
     {

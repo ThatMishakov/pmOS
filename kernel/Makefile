@@ -56,6 +56,7 @@ OBJS = 	./objects/icxxabi.o ./start.o ./asm.o ./main.o ./misc.o ./utils.o types.
 		./sched/sched.o ./sched/timers.o \
 		./messaging/messaging.o ./messaging/named_ports.o \
 		./cpus/cpus.o ./cpus/sse.o ./cpus/ipi.o ./cpus/ipi_asm.o \
+		./kern_logger/kern_logger.o \
 		\
 		./libcxxrt/src/cxa_atexit.o ./libcxxrt/src/cxa_finalize.o \
 		./libcxxrt/src/dynamic_cast.o ./libcxxrt/src/guard.o \

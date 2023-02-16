@@ -12,6 +12,7 @@
 #include <lib/memory.hh>
 #include <processes/tasks.hh>
 #include <sched/sched.hh>
+#include <kern_logger/kern_logger.hh>
 
 bool nx_bit_enabled = false;
 
@@ -166,7 +167,7 @@ void print_pt(u64 addr)
     u64 pml4e = pdpe >> 9;
     u64 upper = pml4e >> 9;
 
-    t_print("Paging indexes %h\'%h\'%h\'%h\'%h\n", upper, pml4e&0777, pdpe&0777, pd_e&0777, ptable_entry&0777);
+    global_logger.printf("Paging indexes %h\'%h\'%h\'%h\'%h\n", upper, pml4e&0777, pdpe&0777, pd_e&0777, ptable_entry&0777);
 }
 
 kresult_t release_page_s(u64 virtual_address, u64 page_table)
@@ -684,7 +685,7 @@ void free_pd(u64 pd_start, u64 page_table)
         u64 addr = pd_start + (i << (12 + 9));
         PDE* p = get_pde(addr, rec_map_index);
         if (p->size) {
-            t_print("Error freeing pages: Huge page!\n");
+            global_logger.printf("Error freeing pages: Huge page!\n");
             halt();
         } else if (p->present) {
             switch (p->avl)
@@ -693,7 +694,7 @@ void free_pd(u64 pd_start, u64 page_table)
                 free_pt(addr, page_table);
                 break;
             default:
-                t_print("Error freeing page: Unknown page type!\n");
+                global_logger.printf("Error freeing page: Unknown page type!\n");
                 halt();
                 break;
             }

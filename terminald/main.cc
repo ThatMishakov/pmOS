@@ -78,6 +78,8 @@ int main() {
         main_port = req.port;
     }
 
+    set_log_port(main_port, 0);
+
     {
         result_t r = name_port(main_port, terminal_port_name, strlen(terminal_port_name), 0);
         if (r != SUCCESS) {

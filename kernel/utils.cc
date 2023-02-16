@@ -8,6 +8,7 @@
 #include <messaging/messaging.hh>
 #include <memory/free_page_alloc.hh>
 #include <lib/string.hh>
+#include <kern_logger/kern_logger.hh>
 
 void int_to_string(long int n, u8 base, char* str, int& length)
 {
@@ -190,28 +191,7 @@ void t_print_bochs(const char *str, ...)
 
 void term_write(const klib::string& s)
 {
-    //putchar('&');
-    //putchar('0' + length);
-    //for (u64 i = 0; i < length; ++i) {
-    //    putchar(str[i]);
-    //}
-
-    constexpr size_t buff_size = 508;
-
-    struct Msg {
-        u32 type = 0x40;
-        char buff[buff_size];
-    } var;
-
-
-    size_t length = s.length();
-    const char* str = s.c_str();
-
-    for (size_t i = 0; i < length; i += buff_size) {
-        size_t length = min(length - i, buff_size);
-        memcpy(var.buff, str, length);
-        send_message_system(1, (char*)&var, length+4);
-    }
+    global_logger.log(s);
 }
 
 kresult_t prepare_user_buff_rd(const char* buff, size_t size)

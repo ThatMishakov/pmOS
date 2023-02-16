@@ -33,6 +33,9 @@ result_t name_port(pmos_port_t portnum, const char* name, size_t length, u32 fla
 // Requests a port by its name. This syscall blocks the process untill the name is created
 ports_request_t get_port_by_name(const char *name, u64 length, u32 flags);
 
+// Sets kernel's global log port
+result_t set_log_port(pmos_port_t portnum, u32 flags);
+
 #endif
 
 // Causes process not to block when the port doesn't exist, returning ERROR_PORT_DOESNT_EXIST instead 

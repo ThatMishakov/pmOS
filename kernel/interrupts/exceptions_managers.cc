@@ -5,6 +5,7 @@
 #include <processes/syscalls.hh>
 #include <processes/tasks.hh>
 #include <cpus/sse.hh>
+#include <kern_logger/kern_logger.hh>
 
 void register_exceptions(IDT& idt)
 {
@@ -105,12 +106,12 @@ extern "C" void pagefault_manager()
         get_lazy_page(page);
         break;
     case Page_Types::UNALLOCATED: // Page not allocated
-        t_print_bochs("Warning: Pagefault %h pid %i (%s) rip %h error %h -> unallocated... killing process...\n", virtual_addr, get_cpu_struct()->current_task->pid, get_cpu_struct()->current_task->name.c_str(), int_s->rip, err);
+        global_logger.printf("Warning: Pagefault %h pid %i (%s) rip %h error %h -> unallocated... killing process...\n", virtual_addr, get_cpu_struct()->current_task->pid, get_cpu_struct()->current_task->name.c_str(), int_s->rip, err);
         syscall_exit(4, 0);
         break;
     default:
         // Not implemented
-        t_print_bochs("Debug: Pagefault %h pid %i rip %h error %h -> %h not implemented. Halting...\n", virtual_addr, get_cpu_struct()->current_task->pid, int_s->rip, err, type);
+        global_logger.printf("Debug: Pagefault %h pid %i rip %h error %h -> %h not implemented. Halting...\n", virtual_addr, get_cpu_struct()->current_task->pid, int_s->rip, err, type);
         halt();
         break;
     }
@@ -140,6 +141,6 @@ extern "C" void stack_segment_fault_manager()
 {
     const task_ptr& task = get_cpu_struct()->current_task;
     t_print_bochs("!!! Stack-Segment Fault error %h RIP %h RSP %h\n", task->regs.int_err, task->regs.e.rip, task->regs.e.rsp);
-    t_print("!!! Stack-Segment Fault error %h RIP %h RSP %h\n", task->regs.int_err, task->regs.e.rip, task->regs.e.rsp);
+    global_logger.printf("!!! Stack-Segment Fault error %h RIP %h RSP %h\n", task->regs.int_err, task->regs.e.rip, task->regs.e.rsp);
     syscall_exit(4, 0);
 }

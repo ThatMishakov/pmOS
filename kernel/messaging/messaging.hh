@@ -45,6 +45,7 @@ struct Port {
 
     kresult_t enqueue(u64 from, klib::vector<char>&& msg);
     kresult_t send_from_system(const char* msg, size_t size);
+    kresult_t atomic_send_from_system(const char* msg, size_t size);
 };
 
 struct TaskDescriptor;

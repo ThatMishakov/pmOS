@@ -94,6 +94,9 @@ void syscall_name_port(u64 port, const char* name, u64 length, u32 flags);
 // Gets port by its name
 void syscall_get_port_by_name(const char *name, u64 length, u32 flags);
 
+// Sets the kernel's log port
+void syscall_set_log_port(u64 port, u32 flags);
+
 #define SYS_CONF_IOAPIC          0x01
 #define SYS_CONF_LAPIC           0x02
 #define SYS_CONF_CPU             0x03

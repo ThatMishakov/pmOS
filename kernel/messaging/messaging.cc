@@ -219,6 +219,13 @@ klib::shared_ptr<Port> Ports_storage::atomic_get_port(u64 portno)
     return storage.get_copy_or_default(portno);
 }
 
+kresult_t Port::atomic_send_from_system(const char* msg_ptr, uint64_t size)
+{
+    Auto_Lock_Scope scope_lock(lock);
+
+    return send_from_system(msg_ptr, size);
+}
+
 kresult_t Port::send_from_system(const char* msg_ptr, uint64_t size)
 {
     static const u64 pid_from = 0;
