@@ -44,6 +44,7 @@ struct Port {
 
 
     kresult_t enqueue(u64 from, klib::vector<char>&& msg);
+    kresult_t send_from_system(klib::vector<char>&& msg);
     kresult_t send_from_system(const char* msg, size_t size);
     kresult_t atomic_send_from_system(const char* msg, size_t size);
 };
@@ -71,15 +72,11 @@ struct Ports_storage {
     klib::shared_ptr<Port> atomic_get_port(u64 portno);
 };
 
-extern Ports_storage kernel_ports;
 extern Ports_storage default_ports;
 
 kresult_t queue_message(const klib::shared_ptr<TaskDescriptor>& task, klib::shared_ptr<Message> message);
 
 kresult_t init_kernel_ports();
-
-// Sends a message from the system
-kresult_t send_message_system(u64 port, const char* msg, size_t size);
 
 // Sends a message to the default port
 kresult_t send_msg_default(u64 pid_from, u64 port, klib::vector<char>&& msg);

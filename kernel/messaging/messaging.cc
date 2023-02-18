@@ -7,14 +7,11 @@
 #include <kernel/block.h>
 #include <utils.hh>
 
-Ports_storage kernel_ports;
 Ports_storage default_ports;
 Spinlock messaging_ports;
 
 kresult_t init_kernel_ports()
 {
-    default_ports.set_dummy(1); // General log messages
-
     return SUCCESS;
 }
 
@@ -150,11 +147,6 @@ kresult_t Ports_storage::set_dummy(u64 port)
     return SUCCESS;
 }
 
-kresult_t send_message_system(u64 port, const char* msg, size_t size)
-{
-    return kernel_ports.send_from_system(port, msg, size);
-}
-
 kresult_t send_msg_default(u64 pid_from, u64 port, klib::vector<char>&& msg)
 {
     if (default_ports.storage.count(port) == 0) {
@@ -226,11 +218,9 @@ kresult_t Port::atomic_send_from_system(const char* msg_ptr, uint64_t size)
     return send_from_system(msg_ptr, size);
 }
 
-kresult_t Port::send_from_system(const char* msg_ptr, uint64_t size)
+kresult_t Port::send_from_system(klib::vector<char>&& message)
 {
     static const u64 pid_from = 0;
-    klib::vector<char> message(size);
-    memcpy(&message.front(), msg_ptr, size);
 
     kresult_t result = ERROR_GENERAL;
 
@@ -259,4 +249,11 @@ kresult_t Port::send_from_system(const char* msg_ptr, uint64_t size)
     }
 
     return result;
+}
+
+kresult_t Port::send_from_system(const char* msg_ptr, uint64_t size)
+{
+    klib::vector<char> message(size);
+    memcpy(&message.front(), msg_ptr, size);
+    return send_from_system(klib::move(message));
 }

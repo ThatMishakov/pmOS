@@ -52,9 +52,6 @@ result_t syscall_get_message_info(Message_Descriptor* descr);
 // Gets first message in the messaging queue
 result_t get_first_message(char* buff, uint64_t args);
 
-// Sends a message to the process pid at channel *channel*
-result_t send_message_task(uint64_t pid, uint64_t channel, size_t size, const char* message);
-
 // Sends a message to the port
 result_t send_message_port(uint64_t port, size_t size, const char* message);
 
@@ -63,9 +60,6 @@ result_t set_port(uint64_t pid, uint64_t dest_pid, uint64_t dest_chan);
 
 // Sets default port
 result_t set_port_default(uint64_t port, uint64_t dest_pid, uint64_t dest_chan);
-
-// Sets kernel port
-result_t set_port_kernel(uint64_t port, uint64_t dest_pid, uint64_t dest_chan);
 
 // Blocks the process with the mask *mask*. Returns unblock reason as a value
 syscall_r block(uint64_t mask);

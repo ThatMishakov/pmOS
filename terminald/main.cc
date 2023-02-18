@@ -55,9 +55,6 @@ int main() {
     // request_priority(0);
     init_screen();
     write(const_cast<char*>("Hello from terminald!\n"));
-    
-    result_t r = set_port_default(1, getpid(), 1);
-    if (r != SUCCESS) write("Warning: could not set the default port\n");
 
     {
         ports_request_t req;

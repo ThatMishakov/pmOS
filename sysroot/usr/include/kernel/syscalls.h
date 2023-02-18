@@ -18,10 +18,9 @@
 #define SYSCALL_MAP_PHYS              0x0d
 #define SYSCALL_GET_MSG_INFO          0x0e
 #define SYSCALL_GET_MESSAGE           0x0f
-#define SYSCALL_SEND_MSG_TASK         0x10
+#define SYSCALL_REQUEST_NAMED_PORT    0x10
 #define SYSCALL_SEND_MSG_PORT         0x11
 #define SYSCALL_SET_PORT              0x12
-#define SYSCALL_SET_PORT_KERNEL       0x13
 #define SYSCALL_SET_PORT_DEFAULT      0x14
 #define SYSCALL_SET_ATTR              0x15
 #define SYSCALL_INIT_STACK            0x16

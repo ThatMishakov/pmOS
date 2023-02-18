@@ -64,65 +64,6 @@ void uint_to_string(unsigned long int n, u8 base, char* str, int& length)
     }
     str[length] = 0;
 }
- 
-void t_print(const char *str, ...)
-{
-    klib::string buff;
-    va_list arg;
-    va_start(arg, str);
-
-    char at = str[0];
-    unsigned int i = 0;
-    while (at != '\0') {
-        u64 s = i;
-        while (true) {
-            if (at == '\0') {
-                va_end(arg);
-                if (i - s > 0) {
-                    buff.append(str+s, i-s);
-                    //term_write(str + s, i - s);
-                }
-                goto end;
-            }
-            if (at == '%') break;
-            //term_write(str+i, 1);
-            at = str[++i];
-        }
-        if (i - s > 0) {
-            buff.append(str+s, i-s);
-            // term_write(str + s, i - s);
-        }
-       
-        at = str[++i]; // char next to %
-        char int_str_buffer[32];
-        int len = 0;
-        switch (at) {
-            case 'i': { // signed integer
-                i64 casted_arg = va_arg(arg, i64);
-                int_to_string(casted_arg, 10, int_str_buffer, len);
-                break;
-            }
-            case 'u': { // unsigned integer
-                u64 casted_arg = va_arg(arg, u64);
-                uint_to_string(casted_arg, 10, int_str_buffer, len);
-                break;
-            }
-            case 'h': { // hexa number
-                u64 casted_arg = va_arg(arg, u64);
-                uint_to_string(casted_arg, 16, int_str_buffer, len);
-                break;
-            }
-        }
-
-        buff.append(int_str_buffer, len);
-        //term_write(int_str_buffer, len);
-        at = str[++i];
-    }
-
-end:
-    va_end(arg);
-    term_write(buff);
-}
 
 void t_write_bochs(const char * str, u64 length)
 {

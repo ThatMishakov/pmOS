@@ -55,17 +55,11 @@ void syscall_get_message_info(u64 message_struct);
 // Gets first message in the messaging queue
 void syscall_get_first_message(u64 buff, u64 args);
 
-// Sends a message to the process pid at channel *channel*
-void syscall_send_message_task(u64 pid, u64 channel, u64 size, u64 message);
-
 // Sends a message to the port
 void syscall_send_message_port(u64 port, size_t size, u64 message);
 
 // Sets a task's port
 void syscall_set_port(u64 pid, u64 port, u64 dest_pid, u64 dest_chan);
-
-// Sets kernel's port
-void syscall_set_port_kernel(u64 port, u64 dest_pid, u64 dest_chan);
 
 // Sets default port
 void syscall_set_port_default(u64 port, u64 dest_pid, u64 dest_chan);
@@ -96,6 +90,9 @@ void syscall_get_port_by_name(const char *name, u64 length, u32 flags);
 
 // Sets the kernel's log port
 void syscall_set_log_port(u64 port, u32 flags);
+
+// Requests a port by its name in a non-blocking way and sends a message with the descriptor when it becomes available
+void syscall_request_named_port(u64 string_ptr, u64 length, u64 reply_chan, u32 flags);
 
 #define SYS_CONF_IOAPIC          0x01
 #define SYS_CONF_LAPIC           0x02

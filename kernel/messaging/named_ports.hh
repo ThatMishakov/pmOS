@@ -8,7 +8,8 @@
 class Named_Port_Action {
 public:
     virtual ~Named_Port_Action() = default;
-    kresult_t virtual do_action(u64 portnum) = 0;
+
+    kresult_t virtual do_action(u64 portnum, const klib::string& name) = 0;
 };
 
 struct Named_Port_Desc {
@@ -32,10 +33,10 @@ class Notify_Task : public Named_Port_Action {
 public:
     virtual ~Notify_Task() override
     {
-        do_action(0);
+        do_action(0, klib::string());
     }
 
-    virtual kresult_t do_action(u64 portnum) override;
+    virtual kresult_t do_action(u64 portnum, const klib::string& name) override;
 
     Notify_Task(const klib::shared_ptr<TaskDescriptor>& t): task(t) {};
 private:
@@ -43,14 +44,14 @@ private:
     bool did_action = false;
 };
 
-class Send_Message : protected Named_Port_Action {
+class Send_Message : public Named_Port_Action {
 public:
     virtual ~Send_Message() override
     {
-        do_action(0);
+        do_action(0, klib::string());
     }
 
-    virtual kresult_t do_action(u64 portnum) override;
+    virtual kresult_t do_action(u64 portnum, const klib::string& name) override;
 
     Send_Message(const klib::shared_ptr<Port>& t): port(t) {};
 private:

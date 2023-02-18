@@ -17,20 +17,11 @@
 #include <utils.h>
 #include <acpi.h>
 #include <args.h>
+#include <pmos/ipc.h>
+#include <stddef.h>
 
 uint64_t multiboot_magic;
 uint64_t multiboot_info_str;
-
-typedef struct IPC_ACPI_Request_RSDT {
-    uint32_t type;
-    uint64_t reply_channel;
-} IPC_ACPI_Request_RSDT;
-
-typedef struct IPC_ACPI_RSDT_Reply {
-    uint32_t type;
-    uint32_t result;
-    uint64_t *descriptor;
-} IPC_ACPI_RSDT_Reply;
 
 void load_multiboot_module(struct multiboot_tag_module * mod)
 {
@@ -83,17 +74,11 @@ void main()
 
     load_kernel(multiboot_info_str);
 
-    set_print_syscalls();
-
     init_acpi(multiboot_info_str);
 
     //start_cpus();
 
     print_str("Loading modules...\n");
-
-    syscall(SYSCALL_SET_PORT_DEFAULT, 2, 2, 1);
-
-
     uint64_t terminal_pid = 0;
     for (struct multiboot_tag * tag = (struct multiboot_tag *) (multiboot_info_str + 8); tag->type != MULTIBOOT_TAG_TYPE_END;
         tag = (struct multiboot_tag *) ((multiboot_uint8_t *) tag + ((tag->size + 7) & ~7))) {
@@ -104,39 +89,6 @@ void main()
                 }
             }
         }
-
-    // syscall(SYSCALL_SET_PORT_DEFAULT, 1, terminal_pid, 1);
-
-    // for (struct multiboot_tag * tag = (struct multiboot_tag *) (multiboot_info_str + 8); tag->type != MULTIBOOT_TAG_TYPE_END;
-    //     tag = (struct multiboot_tag *) ((multiboot_uint8_t *) tag + ((tag->size + 7) & ~7))) {
-    //         if (tag->type == MULTIBOOT_TAG_TYPE_MODULE) {
-    //             if (str_starts_with(((struct multiboot_tag_module *)tag)->cmdline, "processd")) {
-    //                 struct multiboot_tag_module * mod = (struct multiboot_tag_module *)tag;
-    //                 load_multiboot_module(mod);
-    //             }
-    //         }
-    //     }
-
-    // for (struct multiboot_tag * tag = (struct multiboot_tag *) (multiboot_info_str + 8); tag->type != MULTIBOOT_TAG_TYPE_END;
-    //     tag = (struct multiboot_tag *) ((multiboot_uint8_t *) tag + ((tag->size + 7) & ~7))) {
-    //         if (tag->type == MULTIBOOT_TAG_TYPE_MODULE) {
-    //             if (str_starts_with(((struct multiboot_tag_module *)tag)->cmdline, "devicesd")) {
-    //                 struct multiboot_tag_module * mod = (struct multiboot_tag_module *)tag;
-    //                 load_multiboot_module(mod);
-    //             }
-    //         }
-    //     }
-
-    
-    // for (struct multiboot_tag * tag = (struct multiboot_tag *) (multiboot_info_str + 8); tag->type != MULTIBOOT_TAG_TYPE_END;
-    //     tag = (struct multiboot_tag *) ((multiboot_uint8_t *) tag + ((tag->size + 7) & ~7))) {
-    //         if (tag->type == MULTIBOOT_TAG_TYPE_MODULE) {
-    //             if (str_starts_with(((struct multiboot_tag_module *)tag)->cmdline, "ps2d")) {
-    //                 struct multiboot_tag_module * mod = (struct multiboot_tag_module *)tag;
-    //                 load_multiboot_module(mod);
-    //             }
-    //         }
-    //     }
 
     init_acpi(multiboot_info_str);
 
@@ -149,6 +101,9 @@ void main()
         goto exit;
     }
 
+    char *log_port_name = "/pmos/terminald";
+    syscall(SYSCALL_REQUEST_NAMED_PORT, log_port_name, strlen(log_port_name), loader_port, 0);
+
     char *loader_port_name = "/pmos/loader";
 
     syscall(SYSCALL_NAME_PORT, loader_port, loader_port_name, strlen(loader_port_name));
@@ -158,8 +113,6 @@ void main()
     
         syscall_r r = syscall(SYSCALL_BLOCK, 0x01);
         if (r.result == SUCCESS && r.value == MESSAGE_S_NUM) {
-            print_str("Loader: Recieved a message\n");
-
             Message_Descriptor desc;
             syscall_r s = syscall(SYSCALL_GET_MSG_INFO, &desc);
             if (s.result != SUCCESS) {
@@ -177,7 +130,8 @@ void main()
 
             IPC_ACPI_Request_RSDT* ptr = (IPC_ACPI_Request_RSDT *)buff;
 
-            if (ptr->type == 0x60) {
+            switch (ptr->type) {
+            case 0x60: {
                 IPC_ACPI_RSDT_Reply reply = {};
 
                 reply.type = 0x61;
@@ -193,6 +147,28 @@ void main()
                 }
 
                 syscall(SYSCALL_SEND_MSG_PORT, ptr->reply_channel, sizeof(reply), &reply);
+            }
+                break;
+            case 0x21: {
+                IPC_Kernel_Named_Port_Notification* notif = (IPC_Kernel_Named_Port_Notification *)ptr;
+                if (desc.size < sizeof(IPC_Kernel_Named_Port_Notification)) {
+                    print_str("Loader: Recieved IPC_Kernel_Named_Port_Notification with unexpected size 0x");
+                    print_hex(desc.size);
+                    print_str("\n");
+                    break;
+                }
+
+                size_t msg_size = desc.size - sizeof(IPC_Kernel_Named_Port_Notification);
+
+                if (strncmp(notif->port_name, log_port_name, msg_size) == 0) {
+                    set_print_syscalls(notif->port_num);
+                }
+            }
+                break;
+            default:
+                print_str("Loader: Recievend unknown message with type 0x");
+                print_hex(ptr->type);
+                print_str("\n");
             }
         }
  

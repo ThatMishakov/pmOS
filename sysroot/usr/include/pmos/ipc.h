@@ -69,6 +69,16 @@ typedef struct IPC_Kernel_Interrupt {
     uint32_t lapic_id;
 } IPC_Kernel_Interrupt;
 
+typedef uint64_t pmos_port_t;
+
+#define IPC_Kernel_Named_Port_Notification_NUM 0x21
+typedef struct IPC_Kernel_Named_Port_Notification {
+    uint32_t type;
+    uint32_t reserved;
+    pmos_port_t port_num;
+    char port_name[0];
+} IPC_Kernel_Named_Port_Notification;
+
 
 
 #define IPC_Write_Plain_NUM     0x40

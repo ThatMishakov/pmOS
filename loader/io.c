@@ -4,15 +4,26 @@
 #include <utils.h>
 #include <syscall.h>
 #include <utils.h>
+#include <stddef.h>
 
 char screen_buff[8192];
 int buff_pos = 0;
 int buff_ack = 0;
-char write_to_system = 0;
+uint64_t log_port = 0;
 
-void set_print_syscalls()
+int strncmp(const char *s1, const char *s2, size_t size)
 {
-    write_to_system = 1;
+    size_t i = 0;
+    while (i < size && s1[i] == s2[i] && s1[i]) ++i;
+
+    if (i == size || !s1[i] && !s2[i]) return 0;
+    if (s1[i] < s2[i]) return -1;
+    return 1; 
+}
+
+void set_print_syscalls(uint64_t port)
+{
+    log_port = port;
 
     struct {
         uint32_t type;
@@ -23,10 +34,11 @@ void set_print_syscalls()
     char *str = &screen_buff[buff_ack];
 
     for (unsigned i = 0; i < length; i += 256) {
+        msg_str.type = 0x40;
         unsigned size = length - i > 256 ? 256 : length - i;
         memcpy(&str[i], msg_str.buff, size);
 
-        syscall(SYSCALL_SEND_MSG_PORT, 1, size + sizeof(uint32_t), &msg_str);
+        syscall(SYSCALL_SEND_MSG_PORT, log_port, size + sizeof(uint32_t), &msg_str);
     }
 
     // syscall(SYSCALL_SEND_MSG_PORT, 1, buff_pos - buff_ack, &screen_buff[buff_ack]);
@@ -35,41 +47,32 @@ void set_print_syscalls()
 
 void print_str(char * str)
 {
-    if (!write_to_system)
-        while (*str != '\0') { 
-            screen_buff[buff_pos++] = (*str);
-            ++str;
-            if (buff_pos == 8192) buff_pos = 0;
-        }
-    else {
+    print_str_n(str, strlen(str));
+}
+
+void print_str_n(char * str, int length)
+{
+    if (log_port) {
         struct {
             uint32_t type;
             char buff[256];
         } msg_str = {0x40, {}};
 
-        unsigned length = strlen(str);
         for (unsigned i = 0; i < length; i += 256) {
             unsigned size = length - i > 256 ? 256 : length - i;
             memcpy(&str[i], msg_str.buff, size);
 
-            syscall(SYSCALL_SEND_MSG_PORT, 1, size+sizeof(uint32_t), &msg_str);
+            syscall(SYSCALL_SEND_MSG_PORT, log_port, size+sizeof(uint32_t), &msg_str);
+            // TODO: Error checking
         }
     }
-    return;
-}
 
-void print_str_n(char * str, int length)
-{
-    if (!write_to_system)
-        while (length--) { 
+    if (!log_port)
+        while (*str != '\0') { 
             screen_buff[buff_pos++] = (*str);
             ++str;
             if (buff_pos == 8192) buff_pos = 0;
-        }
-    else {
-        syscall(SYSCALL_SEND_MSG_PORT, 1, length, str);
     }
-    return;
 }
 
 void int_to_hex(char * buffer, uint64_t n, char upper)
