@@ -111,9 +111,30 @@ extern "C" void free(void * p)
 
     malloc_lock.lock();
     malloc_list* k = (malloc_list*)base;
-    k->next = head.next;
-    head.next = k;
     k->size = size;
+    k->next = nullptr;
+
+    malloc_list* it = &head;
+    while (it->next != nullptr and it->next < k) {
+        it = it->next;
+    }
+
+    malloc_list *next = nullptr;
+    if ((char*)(it) + it->size == (char*)k) {
+        it->size += k->size;
+        k = it;
+        next = it->next;
+    } else {
+        next = it->next;
+        it->next = k;
+    }
+
+    if ((char*)(k) + k->size == (char*)next) {
+        k->size += next->size;
+        k->next = next->next;
+    } else {
+        k->next = next;
+    }
     malloc_lock.unlock();
 }
  
