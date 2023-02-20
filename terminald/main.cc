@@ -88,45 +88,34 @@ int main() {
 
     while (1)
     {
-        syscall_r r = block(MESSAGE_UNBLOCK_MASK);
-        if (r.result != SUCCESS) break;
+        Message_Descriptor msg;
+        syscall_get_message_info(&msg, main_port, 0);
 
-        switch (r.value) {
-        case MESSAGE_S_NUM: // Unblocked by a message
-        {
-            Message_Descriptor msg;
-            syscall_get_message_info(&msg);
+        char* msg_buff = (char*)malloc(msg.size+1);
 
-            char* msg_buff = (char*)malloc(msg.size+1);
+        get_first_message(msg_buff, 0, main_port);
 
-            get_first_message(msg_buff, 0);
+        msg_buff[msg.size] = '\0';
 
-            msg_buff[msg.size] = '\0';
-
-            if (msg.size < sizeof(IPC_Write_Plain)-1) {
-                write("Warning: recieved very small message\n");
-                free(msg_buff);
-                break;
-            }
-
-            IPC_Write_Plain *str = (IPC_Write_Plain *)(msg_buff);
-
-            switch (str->type) {
-            case IPC_Write_Plain_NUM:
-                write(str->data);
-                break;
-            default:
-                write("Warning: Unknown message type ");
-                print_hex(str->type);
-                write("\n");
-            }
-
+        if (msg.size < sizeof(IPC_Write_Plain)-1) {
+            write("Warning: recieved very small message\n");
             free(msg_buff);
-        }
-            break;
-        default: // Do nothing
             break;
         }
+
+        IPC_Write_Plain *str = (IPC_Write_Plain *)(msg_buff);
+
+        switch (str->type) {
+        case IPC_Write_Plain_NUM:
+            write(str->data);
+            break;
+        default:
+            write("Warning: Unknown message type ");
+            print_hex(str->type);
+            write("\n");
+        }
+
+        free(msg_buff);
     }
     
 

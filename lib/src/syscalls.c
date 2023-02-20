@@ -37,39 +37,19 @@ syscall_r syscall_map_phys(u64 virt, u64 phys, u64 size, u64 arg)
     return syscall(SYSCALL_MAP_PHYS, virt, phys, size, arg);
 }
 
-result_t send_message_task(u64 pid, u64 channel, size_t size, const char* message)
-{
-    return syscall(SYSCALL_SEND_MSG_TASK, pid, channel, size, message).result;
-}
-
 result_t send_message_port(u64 port, size_t size, const char* message)
 {
     return syscall(SYSCALL_SEND_MSG_PORT, port, size, message).result;
 }
 
-syscall_r block(u64 mask)
+result_t get_first_message(char* buff, u64 args, u64 port)
 {
-    return syscall(SYSCALL_BLOCK, mask);
+    return syscall(SYSCALL_GET_MESSAGE, buff, args, port).result;
 }
 
-result_t get_first_message(char* buff, u64 args)
+result_t syscall_get_message_info(Message_Descriptor* descr, u64 port, uint32_t flags)
 {
-    return syscall(SYSCALL_GET_MESSAGE, buff, args).result;
-}
-
-result_t syscall_get_message_info(Message_Descriptor* descr)
-{
-    return syscall(SYSCALL_GET_MSG_INFO, descr).result;
-}
-
-result_t set_port_default(uint64_t port, uint64_t dest_pid, uint64_t dest_chan)
-{
-    return syscall(SYSCALL_SET_PORT_DEFAULT, port, dest_pid, dest_chan).result;
-}
-
-result_t set_port_kernel(uint64_t port, uint64_t dest_pid, uint64_t dest_chan)
-{
-    return syscall(SYSCALL_SET_PORT_KERNEL, port, dest_pid, dest_chan).result;
+    return syscall(SYSCALL_GET_MSG_INFO, descr, port, flags).result;
 }
 
 u64 getpid()

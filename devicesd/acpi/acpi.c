@@ -85,15 +85,9 @@ void request_acpi_tables()
         return;
     }
 
-    syscall_r r = block(MESSAGE_UNBLOCK_MASK);
-    if (r.result != SUCCESS) {
-        printf("Warning: Could not block\n");
-        return;
-    }
-
     Message_Descriptor desc = {};
     unsigned char* message = NULL;
-    result = get_message(&desc, &message);
+    result = get_message(&desc, &message, configuration_port);
 
     if (result != SUCCESS) {
         printf("Warning: Could not get message\n");

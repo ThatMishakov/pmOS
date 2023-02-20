@@ -31,9 +31,6 @@ void syscall_map_into();
 // Transfers pages to another processor in range
 void syscall_map_into_range(u64 arg1, u64 arg2, u64 arg3, u64 arg4, u64 arg5);
 
-// Blocks current process
-void syscall_block(u64 mask);
-
 // Allocates the nb_page at virtual_addr
 void syscall_get_page_multi(u64 virtual_addr, u64 nb_pages);
 
@@ -50,19 +47,16 @@ void syscall_exit(u64 arg1, u64 arg2);
 void syscall_map_phys(u64 arg1, u64 arg2, u64 arg3, u64 arg4);
 
 // Get info about the last message
-void syscall_get_message_info(u64 message_struct);
+void syscall_get_message_info(u64 message_struct, u64 portno, u32 flags);
 
 // Gets first message in the messaging queue
-void syscall_get_first_message(u64 buff, u64 args);
+void syscall_get_first_message(u64 buff, u64 args, u64 portno);
 
 // Sends a message to the port
 void syscall_send_message_port(u64 port, size_t size, u64 message);
 
 // Sets a task's port
 void syscall_set_port(u64 pid, u64 port, u64 dest_pid, u64 dest_chan);
-
-// Sets default port
-void syscall_set_port_default(u64 port, u64 dest_pid, u64 dest_chan);
 
 // Sets task's attributes
 void syscall_set_attribute(u64 pid, u64 attribute, u64 value); 

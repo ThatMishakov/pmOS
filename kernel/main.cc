@@ -20,8 +20,9 @@ extern "C" int main(Kernel_Entry_Data* d)
     kdata = d;
     kernel_pframe_allocator.init(d->mem_bitmap, d->mem_bitmap_size);
     kernel_pframe_allocator.init_after_paging();
+    
     _init();
-    init_kernel_ports();
+
     prepare_apic();
     init_scheduling();
     init_interrupts();

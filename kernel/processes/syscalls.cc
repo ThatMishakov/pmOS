@@ -52,9 +52,6 @@ extern "C" void syscall_handler()
     case SYSCALL_MAP_INTO:
         syscall_map_into();
         break;
-    case SYSCALL_BLOCK:
-        syscall_block(arg1);
-        break;
     case SYSCALL_MAP_INTO_RANGE:
         syscall_map_into_range(arg1, arg2, arg3, arg4, arg5);
         break;
@@ -74,19 +71,16 @@ extern "C" void syscall_handler()
         syscall_map_phys(arg1, arg2, arg3, arg4);
         break;
     case SYSCALL_GET_MSG_INFO:
-        syscall_get_message_info(arg1);
+        syscall_get_message_info(arg1, arg2, arg3);
         break;
     case SYSCALL_GET_MESSAGE:
-        syscall_get_first_message(arg1, arg2);
+        syscall_get_first_message(arg1, arg2, arg3);
         break;
     case SYSCALL_SEND_MSG_PORT:
         syscall_send_message_port(arg1, arg2, arg3);
         break;
     case SYSCALL_SET_PORT:
         syscall_set_port(arg1, arg2, arg3, arg4);
-        break;
-    case SYSCALL_SET_PORT_DEFAULT:
-        syscall_set_port_default(arg1, arg2, arg3);
         break;
     case SYSCALL_SET_ATTR:
         syscall_set_attribute(arg1, arg2, arg3);
@@ -232,16 +226,6 @@ void syscall_create_process()
 void syscall_map_into()
 {
     syscall_ret_low(get_current_task()) = ERROR_NOT_IMPLEMENTED;
-}
-
-void syscall_block(u64 mask)
-{
-    task_ptr task = get_current_task();
-    ReturnStr<u64> r = block_task(get_cpu_struct()->current_task, mask, MESSAGE_S_NUM, 0, true);
-
-    syscall_ret_low(task) = r.result;
-    syscall_ret_high(task) = r.val;
-    return;
 }
 
 void syscall_map_into_range(u64 arg1, u64 arg2, u64 arg3, u64 arg4, u64 arg5)
@@ -561,41 +545,77 @@ void syscall_map_phys(u64 arg1, u64 arg2, u64 arg3, u64 arg4)
     syscall_ret_low(task) =  r;
 }
 
-void syscall_get_first_message(u64 buff, u64 args)
+void syscall_get_first_message(u64 buff, u64 args, u64 portno)
 {
     klib::shared_ptr<TaskDescriptor> current = get_cpu_struct()->current_task;
     kresult_t result = SUCCESS;
+
+    klib::shared_ptr<Port> port;
+
+    // Optimization: Try last blocked-by port
+    port = klib::dynamic_pointer_cast<Port>(current->blocked_by.lock());
+
+    if (not port or port->portno != portno) {
+        port = global_ports.atomic_get_port(portno);
+    }
+
+    if (not port) {
+        syscall_ret_low(current) = ERROR_PORT_DOESNT_EXIST;
+        return;
+    }
+
     klib::shared_ptr<Message> top_message;
 
     {
-        Auto_Lock_Scope messaging_lock(current->messaging_lock);
-        if (current->messages.empty()) {
+        Auto_Lock_Scope scope_lock(port->lock);
+        if (current != port->owner.lock()) {
+            syscall_ret_low(current) = ERROR_NO_PERMISSION;
+            return;
+        }
+
+        if (port->msg_queue.empty()) {
             syscall_ret_low(current) = ERROR_NO_MESSAGES;
             return;
         }
-        top_message = current->messages.front();
-        if (!(args & MSG_ARG_NOPOP)) {
-            current->messages.pop_front();
+
+        top_message = port->msg_queue.front();
+
+        result = top_message->copy_to_user_buff((char*)buff);
+
+        if (result != SUCCESS) {
+            syscall_ret_low(current) = result;
+            return;
         }
-    }
 
-    result = top_message->copy_to_user_buff((char*)buff);
-
-    if (result != SUCCESS and not (args & MSG_ARG_NOPOP)) {
-        Auto_Lock_Scope messaging_lock(current->messaging_lock);
-        current->messages.push_front(top_message);
+        if (!(args & MSG_ARG_NOPOP)) {
+            port->msg_queue.pop_front();
+        }
     }
 
     syscall_ret_low(current) = result;
 }
 
-void syscall_send_message_port(u64 port, size_t size, u64 message)
+void syscall_send_message_port(u64 port_num, size_t size, u64 message)
 {
     klib::shared_ptr<TaskDescriptor> current = get_cpu_struct()->current_task;
 
     // TODO: Check permissions
 
-    kresult_t result = current->ports.send_from_user(current->pid, port, message, size);
+    klib::shared_ptr<Port> port;
+
+    // Optimization: Try hint
+    port = klib::dynamic_pointer_cast<Port>(current->blocked_by.lock());
+
+    if (not port or port->portno != port_num) {
+        port = global_ports.atomic_get_port(port_num);
+    }
+
+    if (not port) {
+        syscall_ret_low(current) = ERROR_PORT_DOESNT_EXIST;
+        return;
+    }
+
+    kresult_t result = port->atomic_send_from_user(current, (char *)message, size);
 
     syscall_ret_low(current) = result;
 }
@@ -605,66 +625,45 @@ void syscall_set_port(u64 pid, u64 port, u64 dest_pid, u64 dest_chan)
 {
     const task_ptr& task = get_current_task();
 
-    // TODO: Check permissions
-
-    if (pid == dest_pid) {
-        syscall_ret_low(task) = ERROR_CANT_MESSAGE_SELF;
-        return;
-    }
-
-    klib::shared_ptr<TaskDescriptor> t = get_task(pid);
-
-    // Check if process exists
-    if (not t) {
-        syscall_ret_low(task) = ERROR_NO_SUCH_PROCESS;
-        return;
-    }
-
-    Auto_Lock_Scope messaging_lock(t->messaging_lock);
-    kresult_t result = t->ports.set_port(port, t, dest_chan);
-
-    syscall_ret_low(task) = result;
+    syscall_ret_low(task) = ERROR_NOT_IMPLEMENTED;
 }
 
-void syscall_set_port_default(u64 port, u64 dest_pid, u64 dest_chan)
+void syscall_get_message_info(u64 message_struct, u64 portno, u32 flags)
 {
-    const task_ptr& task = get_current_task();
+    task_ptr task = get_current_task();
 
-    // TODO: Check permissions
+    klib::shared_ptr<Port> port;
 
-    klib::shared_ptr<TaskDescriptor> t = get_task(dest_pid);
+    // Optimization: Try last blocked-by port
+    port = klib::dynamic_pointer_cast<Port>(task->blocked_by.lock());
 
-    // Check if process exists
-    if (not t) {
-        syscall_ret_low(task) = {ERROR_NO_SUCH_PROCESS};
-        return;
+    if (not port or port->portno != portno) {
+        port = global_ports.atomic_get_port(portno);
     }
 
-    messaging_ports.lock();
-    kresult_t result = default_ports.set_port(port, t, dest_chan);
-    messaging_ports.unlock();
-
-    syscall_ret_low(task) = result;
-}
-
-void syscall_get_message_info(u64 message_struct)
-{
-    const task_ptr& task = get_current_task();
-
-    // TODO: This creates race conditions
-
-    klib::shared_ptr<TaskDescriptor> current = get_cpu_struct()->current_task;
+    if (not port) {
+        syscall_ret_low(task) = ERROR_PORT_DOESNT_EXIST;
+        return;
+    }
 
     kresult_t result = SUCCESS;
     klib::shared_ptr<Message> msg;
 
     {
-        Auto_Lock_Scope lock(current->messaging_lock);
-        if (current->messages.empty()) {
-            syscall_ret_low(task) = ERROR_NO_MESSAGES;
+        Auto_Lock_Scope lock(port->lock);
+        if (port->msg_queue.empty()) {
+            constexpr unsigned FLAG_NOBLOCK= 0x01;
+
+            if (flags & FLAG_NOBLOCK) {
+                syscall_ret_low(task) = ERROR_NO_MESSAGES;
+            } else {
+                request_repeat_syscall(task);
+                block_current_task(port);
+            }
+
             return;
         }
-        msg = current->messages.front();
+        msg = port->msg_queue.front();
     }
 
     u64 msg_struct_size = sizeof(Message_Descriptor);
@@ -673,8 +672,8 @@ void syscall_get_message_info(u64 message_struct)
 
     if (result == SUCCESS) {
         Message_Descriptor& desc = *(Message_Descriptor*)message_struct;
-        desc.sender = msg->from;
-        desc.channel = msg->channel;
+        desc.sender = msg->pid_from;
+        desc.channel = 0;
         desc.size = msg->size();
     }
 
@@ -852,7 +851,7 @@ void syscall_create_port(u64 owner)
     }
 
 
-    auto result = default_ports.atomic_request_port(t);
+    auto result = global_ports.atomic_request_port(t);
 
     syscall_ret_low(task) = result.result;
     syscall_ret_high(task) = result.val;
@@ -865,7 +864,7 @@ void syscall_set_interrupt(uint64_t port, uint32_t intno, uint32_t flags)
 
     const task_ptr& task = get_current_task();
 
-    klib::shared_ptr<Port> port_ptr = default_ports.atomic_get_port(port);
+    klib::shared_ptr<Port> port_ptr = global_ports.atomic_get_port(port);
 
     if (not port_ptr) {
         syscall_ret_low(task) = ERROR_PORT_DOESNT_EXIST;
@@ -899,7 +898,7 @@ void syscall_name_port(u64 portnum, const char* name, u64 length, u32 flags)
         return;
     }
 
-    klib::shared_ptr<Port> port = default_ports.atomic_get_port(portnum);
+    klib::shared_ptr<Port> port = global_ports.atomic_get_port(portnum);
 
     if (not port) {
         syscall_ret_low(task) = ERROR_PORT_DOESNT_EXIST;
@@ -913,21 +912,20 @@ void syscall_name_port(u64 portnum, const char* name, u64 length, u32 flags)
     klib::shared_ptr<Named_Port_Desc> named_port = global_named_ports.storage.get_copy_or_default(str.second);
 
     if (named_port) {
-        if (named_port->present) {
+        if (not named_port->parent_port.expired()) {
             syscall_ret_low(task) = ERROR_NAME_EXISTS;
             return;
         }
 
         named_port->parent_port = port;
-        named_port->present = true;
 
         for (const auto& t : named_port->actions) {
-            t->do_action(portnum, str.second);
+            t->do_action(port, str.second);
         }
 
         named_port->actions.clear();
     } else {
-        const klib::shared_ptr<Named_Port_Desc> new_desc = klib::make_shared<Named_Port_Desc>(Named_Port_Desc({klib::move(str.second), port, {}, true}));
+        const klib::shared_ptr<Named_Port_Desc> new_desc = klib::make_shared<Named_Port_Desc>(klib::move(str.second), port);
 
         global_named_ports.storage.insert({new_desc->name, new_desc});
     }
@@ -941,7 +939,7 @@ void syscall_get_port_by_name(const char *name, u64 length, u32 flags)
     // --------------------- TODO: shared pointers *will* explode if the TaskDescriptor is deleted -------------------------------------
     constexpr unsigned flag_noblock = 0x01;
 
-    const task_ptr& task = get_current_task();
+    task_ptr task = get_current_task();
 
     auto str = klib::string::fill_from_user(name, length);
     if (str.first != SUCCESS) {
@@ -951,10 +949,17 @@ void syscall_get_port_by_name(const char *name, u64 length, u32 flags)
 
     Auto_Lock_Scope scope_lock(global_named_ports.lock);
 
-    klib::shared_ptr<Named_Port_Desc> named_port = global_named_ports.storage.get_copy_or_default(str.second);
+    klib::shared_ptr<Named_Port_Desc> named_port;
+
+    // Optimization: Try last blocked-by port
+    named_port = klib::dynamic_pointer_cast<Named_Port_Desc>(task->blocked_by.lock());
+
+    if (not named_port or named_port->name != str.second) {
+        named_port = global_named_ports.storage.get_copy_or_default(str.second);
+    }
 
     if (named_port) {
-        if (named_port->present) {
+        if (not named_port->parent_port.expired()) {
             klib::shared_ptr<Port> ptr = named_port->parent_port.lock();
             if (not ptr) {
                 syscall_ret_low(task) = ERROR_GENERAL;
@@ -968,8 +973,10 @@ void syscall_get_port_by_name(const char *name, u64 length, u32 flags)
                 syscall_ret_low(task) = ERROR_PORT_DOESNT_EXIST;
                 return;
             } else {
-                named_port->actions.insert(klib::make_unique<Notify_Task>(task));
-                block_task(task, PORTNAME_UNBLOCK_MASK, PORTNAME_S_NUM, 0, false);
+                named_port->actions.insert(klib::make_unique<Notify_Task>(task, klib::shared_ptr<Generic_Port>(named_port)));
+
+                request_repeat_syscall(task);
+                block_current_task(named_port);
             }
         }
     } else {
@@ -977,12 +984,13 @@ void syscall_get_port_by_name(const char *name, u64 length, u32 flags)
             syscall_ret_low(task) = ERROR_PORT_DOESNT_EXIST;
             return;
         } else {
-            const klib::shared_ptr<Named_Port_Desc> new_desc = klib::make_shared<Named_Port_Desc>(Named_Port_Desc({klib::move(str.second), klib::shared_ptr<Port>(nullptr), {}, false}));
+            const klib::shared_ptr<Named_Port_Desc> new_desc = klib::make_shared<Named_Port_Desc>(klib::move(str.second), klib::shared_ptr<Port>(nullptr));
 
             auto it = global_named_ports.storage.insert({new_desc->name, new_desc});
-            it.first->second->actions.insert(klib::make_unique<Notify_Task>(task));
+            it.first->second->actions.insert(klib::make_unique<Notify_Task>(task, it.first->second));
 
-            block_task(task, PORTNAME_UNBLOCK_MASK, PORTNAME_S_NUM, 0, false);
+            request_repeat_syscall(task);
+            block_current_task(named_port);
         }
     }
 
@@ -1000,7 +1008,7 @@ void syscall_request_named_port(u64 string_ptr, u64 length, u64 reply_port, u32 
         return;
     }
 
-    klib::shared_ptr<Port> port_ptr = default_ports.atomic_get_port(reply_port);
+    klib::shared_ptr<Port> port_ptr = global_ports.atomic_get_port(reply_port);
 
     if (not port_ptr) {
         syscall_ret_low(task) = ERROR_PORT_DOESNT_EXIST;
@@ -1012,20 +1020,20 @@ void syscall_request_named_port(u64 string_ptr, u64 length, u64 reply_port, u32 
     klib::shared_ptr<Named_Port_Desc> named_port = global_named_ports.storage.get_copy_or_default(str.second);
 
     if (named_port) {
-        if (named_port->present) {
+        if (not named_port->parent_port.expired()) {
             klib::shared_ptr<Port> ptr = named_port->parent_port.lock();
             if (not ptr) {
                 syscall_ret_low(task) = ERROR_GENERAL;
             } else {
                 Send_Message msg(port_ptr);
-                syscall_ret_low(task) = msg.do_action(ptr->portno, str.second);
+                syscall_ret_low(task) = msg.do_action(ptr, str.second);
             }
             return;
         } else {
             named_port->actions.insert(klib::make_unique<Send_Message>(port_ptr));
         }
     } else {
-        const klib::shared_ptr<Named_Port_Desc> new_desc = klib::make_shared<Named_Port_Desc>(Named_Port_Desc({klib::move(str.second), klib::shared_ptr<Port>(nullptr), {}, false}));
+        const klib::shared_ptr<Named_Port_Desc> new_desc = klib::make_shared<Named_Port_Desc>( Named_Port_Desc(klib::move(str.second), nullptr) );
 
         auto it = global_named_ports.storage.insert({new_desc->name, new_desc});
         it.first->second->actions.insert(klib::make_unique<Send_Message>(port_ptr));
@@ -1039,7 +1047,7 @@ void syscall_set_log_port(u64 port, u32 flags)
 {
     const task_ptr& task = get_current_task();
 
-    klib::shared_ptr<Port> port_ptr = default_ports.atomic_get_port(port);
+    klib::shared_ptr<Port> port_ptr = global_ports.atomic_get_port(port);
 
     if (not port_ptr) {
         syscall_ret_low(task) = ERROR_PORT_DOESNT_EXIST;

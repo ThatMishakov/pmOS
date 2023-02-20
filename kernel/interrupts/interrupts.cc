@@ -71,8 +71,9 @@ extern "C" void interrupt_handler()
 }
 */
 
-void (*return_table[3])(void) = {
+void (*return_table[4])(void) = {
     ret_from_interrupt,
     ret_from_syscall,
     ret_from_sysenter,
+    ret_repeat_syscall,
 };

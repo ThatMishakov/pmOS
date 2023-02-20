@@ -12,6 +12,7 @@
 #endif
 
 typedef uint64_t result_t;
+typedef uint64_t pmos_port_t;
 
 typedef struct {
     result_t result;
@@ -47,22 +48,16 @@ syscall_r start_process(uint64_t pid, uint64_t entry);
 syscall_r syscall_map_phys(uint64_t virt, uint64_t phys, uint64_t size, uint64_t arg);
 
 // Get info about message
-result_t syscall_get_message_info(Message_Descriptor* descr);
+result_t syscall_get_message_info(Message_Descriptor* descr, pmos_port_t port, uint32_t flags);
 
 // Gets first message in the messaging queue
-result_t get_first_message(char* buff, uint64_t args);
+result_t get_first_message(char* buff, pmos_port_t port, uint64_t args);
 
 // Sends a message to the port
 result_t send_message_port(uint64_t port, size_t size, const char* message);
 
 // Sets the port of the process
 result_t set_port(uint64_t pid, uint64_t dest_pid, uint64_t dest_chan);
-
-// Sets default port
-result_t set_port_default(uint64_t port, uint64_t dest_pid, uint64_t dest_chan);
-
-// Blocks the process with the mask *mask*. Returns unblock reason as a value
-syscall_r block(uint64_t mask);
 
 // Chages the tasks' scheduler priority
 result_t request_priority(uint64_t priority);

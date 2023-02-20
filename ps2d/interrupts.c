@@ -23,15 +23,9 @@ uint8_t get_interrupt_number(uint32_t intnum, uint64_t int_chan)
         return 0;
     }
 
-    syscall_r r = block(MESSAGE_UNBLOCK_MASK);
-    if (r.result != SUCCESS) {
-        printf("Warning: Could not block\n");
-        return 0;
-    }
-
     Message_Descriptor desc = {};
     unsigned char* message = NULL;
-    result = get_message(&desc, &message);
+    result = get_message(&desc, &message, configuration_port);
 
     if (result != SUCCESS) {
         printf("Warning: Could not get message\n");

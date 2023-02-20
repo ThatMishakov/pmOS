@@ -51,67 +51,26 @@ PID assign_pid()
    return pid_p; 
 }
 
-ReturnStr<u64> block_task(const klib::shared_ptr<TaskDescriptor>& task, u64 mask, u64 imm_reason, u64 extra, bool check_unblock_immediate)
+ReturnStr<u64> block_current_task(const klib::shared_ptr<Generic_Port>& ptr)
 {
+    const klib::shared_ptr<TaskDescriptor>& task = get_cpu_struct()->current_task;
+
     Auto_Lock_Scope scope_lock(task->sched_lock);
 
-    // Check status
-    if (task->status == PROCESS_BLOCKED) return {ERROR_ALREADY_BLOCKED, 0};
+    task->status = Process_Status::PROCESS_BLOCKED;
+    task->blocked_by = ptr;
+    task->parent_queue = &blocked;
 
-    // Change mask if not null
-    if (mask != 0) task->unblock_mask = mask;
-
-    task->block_extra = extra;
-
-    if (check_unblock_immediate) {
-        u64 imm = task->check_unblock_immediately(imm_reason, extra);
-        if (imm != 0) return {SUCCESS, imm};
+    {
+        Auto_Lock_Scope scope_l(blocked.lock);
+        blocked.push_back(task);
     }
 
-    // Task switch if it's a current process
-    CPU_Info* cpu_str = get_cpu_struct();
-    if (cpu_str->current_task == task) {
-        task->status = Process_Status::PROCESS_BLOCKED;
-        task->parent_queue = &blocked;
-
-        {
-            Auto_Lock_Scope scope_l(blocked.lock);
-            blocked.push_back(task);
-        }
-
-        find_new_process();
-    } else {
-        // Change status to blocked
-        task->status = PROCESS_BLOCKED;
-
-        sched_queue* parent_queue = task->parent_queue;
-        if (parent_queue != nullptr) {
-            Auto_Lock_Scope scope_l(parent_queue->lock);
-            parent_queue->erase(task);
-        }
-
-        task->parent_queue = &blocked;
-        {
-            Auto_Lock_Scope scope_l(blocked.lock);
-            blocked.push_back(task);
-        }
-    }
+    // Task switch
+    find_new_process();
 
     return {SUCCESS, 0};
 }
-
-// void find_new_process()
-// {
-//     CPU_Info* c = get_cpu_struct(); 
-//     klib::pair<bool, klib::shared_ptr<TaskDescriptor>> t = c->sched.queues.atomic_get_pop_first();
-
-//     if (not t.first) {
-//         t.second = c->idle_task;
-//     }
-
-
-//     switch_to_task(t.second);
-// }
 
 void switch_to_task(const klib::shared_ptr<TaskDescriptor>& task)
 {
@@ -149,18 +108,15 @@ void restore_segments(const klib::shared_ptr<TaskDescriptor>& task)
     write_msr(0xC0000100, task->regs.seg.fs); // FSBase
 }
 
-bool unblock_if_needed(const klib::shared_ptr<TaskDescriptor>& p, u64 reason, u64 extra)
+bool unblock_if_needed(const klib::shared_ptr<TaskDescriptor>& p, const klib::shared_ptr<Generic_Port>& ptr)
 {
     bool unblocked = false;
     Auto_Lock_Scope scope_lock(p->sched_lock);
 
     if (p->status != PROCESS_BLOCKED)
         return unblocked;
-    
-    u64 mask = 0x01ULL << (reason - 1);
 
-    if (mask & p->unblock_mask and p->block_extra == extra) {
-        p->regs.scratch_r.rdi = reason;
+    if (ptr and p->blocked_by.lock() == ptr) {
         unblocked = true;
 
         p->parent_queue->erase(p);
@@ -180,16 +136,16 @@ bool unblock_if_needed(const klib::shared_ptr<TaskDescriptor>& p, u64 reason, u6
     return unblocked;
 }
 
-u64 TaskDescriptor::check_unblock_immediately(u64 reason, u64 extra)
-{
-    u64 mask = 0x01ULL << (reason - 1);
+// u64 TaskDescriptor::check_unblock_immediately(u64 reason, u64 extra)
+// {
+//     u64 mask = 0x01ULL << (reason - 1);
 
-    if ((this->unblock_mask & mask) and (this->block_extra == extra)) {
-        if (not this->messages.empty()) return reason;
-    }
+//     if ((this->unblock_mask & mask) and (this->block_extra == extra)) {
+//         if (not this->messages.empty()) return reason;
+//     }
 
-    return 0;
-}
+//     return 0;
+// }
 
 void push_ready(const klib::shared_ptr<TaskDescriptor>& p)
 {
@@ -245,19 +201,6 @@ void reschedule()
 {
     // TODO
 }
-
-// void evict(const klib::shared_ptr<TaskDescriptor>& current_task)
-// {
-//     current_task->quantum_ticks = apic_get_remaining_ticks();
-//     if (current_task->quantum_ticks == 0) Ready_Queues::assign_quantum_on_priority(current_task.get());
-
-//     if (current_task->type == TaskDescriptor::Type::Idle) {
-//         current_task->next_status = Process_Status::PROCESS_SPECIAL;
-//     } else {
-//         current_task->next_status = Process_Status::PROCESS_READY;
-//     }
-//     find_new_process();
-// }
 
 u32 calculate_timer_ticks(const klib::shared_ptr<TaskDescriptor>& task)
 {
@@ -372,5 +315,13 @@ klib::shared_ptr<TaskDescriptor> CPU_Info::atomic_get_front_priority(priority_t 
     }
 
     return nullptr;
+}
+
+void request_repeat_syscall(const klib::shared_ptr<TaskDescriptor>& task)
+{
+    if (task->entry_mode != 3) {
+        task->saved_entry_mode = task->entry_mode;
+        task->entry_mode = 3;
+    }
 }
 

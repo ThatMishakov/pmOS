@@ -174,15 +174,10 @@ int main(int argc, char *argv[])
 
     while (1) {
         result_t result;
-        syscall_r r = block(MESSAGE_UNBLOCK_MASK);
-        if (r.result != SUCCESS) {
-            printf("Warning: Could not block\n");
-            return 0;
-        }
 
         Message_Descriptor desc = {};
         unsigned char* message = NULL;
-        result = get_message(&desc, &message);
+        result = get_message(&desc, &message, main_port);
 
         if (result != SUCCESS) {
             fprintf(stderr, "Error: Could not get message\n");

@@ -399,7 +399,34 @@ public:
     
     template< class... Args >
     friend shared_ptr<T> make_shared( Args&&... args );
+
+    template <class A, class U>
+    friend shared_ptr<A> dynamic_pointer_cast (const shared_ptr<U>& sp) noexcept;
 };
+
+template <class T, class U>  shared_ptr<T> dynamic_pointer_cast (const shared_ptr<U>& sp) noexcept
+{
+    if (sp.ptr == nullptr)
+        return nullptr;
+
+    T* ptr = dynamic_cast<T*>(sp.ptr);
+
+    if (ptr == nullptr)
+        return nullptr;
+
+    shared_ptr<T> new_ptr;
+
+    new_ptr.ptr = ptr;
+    new_ptr.refcount = sp.refcount;
+
+    if (new_ptr.refcount != nullptr) {
+        new_ptr.refcount->s.lock();
+        new_ptr.refcount->shared_refs += 1;
+        new_ptr.refcount->s.unlock();
+    }
+
+    return new_ptr;
+}
 
 template <class T, class... Args> shared_ptr<T> make_shared (Args&&... args)
 {

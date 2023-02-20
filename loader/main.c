@@ -111,65 +111,62 @@ void main()
 
     while (1) {
     
-        syscall_r r = syscall(SYSCALL_BLOCK, 0x01);
-        if (r.result == SUCCESS && r.value == MESSAGE_S_NUM) {
-            Message_Descriptor desc;
-            syscall_r s = syscall(SYSCALL_GET_MSG_INFO, &desc);
-            if (s.result != SUCCESS) {
+        Message_Descriptor desc;
+        syscall_r s = syscall(SYSCALL_GET_MSG_INFO, &desc, loader_port, 0);
+        if (s.result != SUCCESS) {
 
+        }
+
+        char buff[desc.size];
+        s = syscall(SYSCALL_GET_MESSAGE, buff, 0, loader_port);
+        if (s.result != SUCCESS) {
+        }
+
+        if (desc.size < 4) {
+            // Message too small
+        }
+
+        IPC_ACPI_Request_RSDT* ptr = (IPC_ACPI_Request_RSDT *)buff;
+
+        switch (ptr->type) {
+        case 0x60: {
+            IPC_ACPI_RSDT_Reply reply = {};
+
+            reply.type = 0x61;
+            reply.result = 0;
+            reply.descriptor = 0;
+
+            if (rsdp20_desc != 0) {
+                reply.result = 1;
+                reply.descriptor = (uint64_t *)rsdp20_desc;
+            } else if (rsdp_desc != 0) {
+                reply.result = 1;
+                reply.descriptor = (uint64_t *)rsdp_desc;
             }
 
-            char buff[desc.size];
-            s = syscall(SYSCALL_GET_MESSAGE, buff, 0);
-            if (s.result != SUCCESS) {
-            }
-
-            if (desc.size < 4) {
-                // Message too small
-            }
-
-            IPC_ACPI_Request_RSDT* ptr = (IPC_ACPI_Request_RSDT *)buff;
-
-            switch (ptr->type) {
-            case 0x60: {
-                IPC_ACPI_RSDT_Reply reply = {};
-
-                reply.type = 0x61;
-                reply.result = 0;
-                reply.descriptor = 0;
-
-                if (rsdp20_desc != 0) {
-                    reply.result = 1;
-                    reply.descriptor = (uint64_t *)rsdp20_desc;
-                } else if (rsdp_desc != 0) {
-                    reply.result = 1;
-                    reply.descriptor = (uint64_t *)rsdp_desc;
-                }
-
-                syscall(SYSCALL_SEND_MSG_PORT, ptr->reply_channel, sizeof(reply), &reply);
-            }
-                break;
-            case 0x21: {
-                IPC_Kernel_Named_Port_Notification* notif = (IPC_Kernel_Named_Port_Notification *)ptr;
-                if (desc.size < sizeof(IPC_Kernel_Named_Port_Notification)) {
-                    print_str("Loader: Recieved IPC_Kernel_Named_Port_Notification with unexpected size 0x");
-                    print_hex(desc.size);
-                    print_str("\n");
-                    break;
-                }
-
-                size_t msg_size = desc.size - sizeof(IPC_Kernel_Named_Port_Notification);
-
-                if (strncmp(notif->port_name, log_port_name, msg_size) == 0) {
-                    set_print_syscalls(notif->port_num);
-                }
-            }
-                break;
-            default:
-                print_str("Loader: Recievend unknown message with type 0x");
-                print_hex(ptr->type);
+            syscall(SYSCALL_SEND_MSG_PORT, ptr->reply_channel, sizeof(reply), &reply);
+        }
+            break;
+        case 0x21: {
+            IPC_Kernel_Named_Port_Notification* notif = (IPC_Kernel_Named_Port_Notification *)ptr;
+            if (desc.size < sizeof(IPC_Kernel_Named_Port_Notification)) {
+                print_str("Loader: Recieved IPC_Kernel_Named_Port_Notification with unexpected size 0x");
+                print_hex(desc.size);
                 print_str("\n");
+                break;
             }
+
+            size_t msg_size = desc.size - sizeof(IPC_Kernel_Named_Port_Notification);
+
+            if (strncmp(notif->port_name, log_port_name, msg_size) == 0) {
+                set_print_syscalls(notif->port_num);
+            }
+        }
+            break;
+        default:
+            print_str("Loader: Recievend unknown message with type 0x");
+            print_hex(ptr->type);
+            print_str("\n");
         }
  
     }

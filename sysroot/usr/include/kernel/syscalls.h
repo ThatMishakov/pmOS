@@ -4,7 +4,6 @@
 #define PMOS_SYSCALL_INT              0xf8
 
 #define SYSCALL_GETPID                0x01
-#define SYSCALL_BLOCK                 0x02
 #define SYSCALL_GET_PAGE              0x03
 #define SYSCALL_GET_PAGE_MULTI        0x04
 #define SYSCALL_RELEASE_PAGE          0x05
@@ -21,7 +20,6 @@
 #define SYSCALL_REQUEST_NAMED_PORT    0x10
 #define SYSCALL_SEND_MSG_PORT         0x11
 #define SYSCALL_SET_PORT              0x12
-#define SYSCALL_SET_PORT_DEFAULT      0x14
 #define SYSCALL_SET_ATTR              0x15
 #define SYSCALL_INIT_STACK            0x16
 #define SYSCALL_IS_PAGE_ALLOCATED     0x17

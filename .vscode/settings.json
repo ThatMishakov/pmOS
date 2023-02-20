@@ -62,6 +62,7 @@
         "system.h": "c",
         "memory.h": "c",
         "paging.h": "c",
-        "*.def": "cpp"
+        "*.def": "cpp",
+        "internet": "cpp"
     }
 }

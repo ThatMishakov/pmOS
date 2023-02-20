@@ -11,10 +11,10 @@
 #include "defs.hh"
 
 // Checks the mask and unblocks the task if needed
-bool unblock_if_needed(const klib::shared_ptr<TaskDescriptor>& p, u64 reason, u64 extra);
+bool unblock_if_needed(const klib::shared_ptr<TaskDescriptor>& p, const klib::shared_ptr<Generic_Port>& compare_blocked_by);
 
-// Blocks task with a mask *mask*
-ReturnStr<u64> block_task(const klib::shared_ptr<TaskDescriptor>& task, u64 mask, u64 imm_reason, u64 extra, bool check_unblock_immediate);
+// Blocks current task, setting blocked_by to *ptr*.
+ReturnStr<u64> block_current_task(const klib::shared_ptr<Generic_Port>& ptr);
 
 struct TaskDescriptor;
 
@@ -118,3 +118,6 @@ void restore_segments(const klib::shared_ptr<TaskDescriptor>& task);
 
 // Reschedules the tasks
 extern "C" void reschedule();
+
+// Changes the *task* to repeat the syscall upon reentering the system
+void request_repeat_syscall(const klib::shared_ptr<TaskDescriptor>& task);

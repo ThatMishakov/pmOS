@@ -214,3 +214,21 @@ syscall_int_entry:
     movq %gs:24, %r15
     movq 176(%r15), %r15
     jmpq *return_table(,%r15, 8)
+
+
+    .globl ret_repeat_syscall
+ret_repeat_syscall:
+    # Load current_task into %r15
+    movq %gs:24, %r15
+
+    # Restore entry_mode
+    movq 208(%r15), %rax
+    movq %rax, 200(%r15)
+    movq $0, 208(%r15)
+
+    call syscall_handler
+
+    # Jmp to the right return method (in case there was a task switch)
+    movq %gs:24, %r15
+    movq 176(%r15), %r15
+    jmpq *return_table(,%r15, 8)

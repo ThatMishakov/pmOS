@@ -85,64 +85,53 @@ int main(int argc, char** argv) {
 
     while (1)
     {
-        syscall_r r = block(MESSAGE_UNBLOCK_MASK);
-        if (r.result != SUCCESS) break;
+        Message_Descriptor msg;
+        syscall_get_message_info(&msg, main_port, 0);
 
-        switch (r.value) {
-            case MESSAGE_S_NUM: // Unblocked by a message
-            {
-            Message_Descriptor msg;
-            syscall_get_message_info(&msg);
+        char* msg_buff = (char*)malloc(msg.size);
 
-            char* msg_buff = (char*)malloc(msg.size);
+        get_first_message(msg_buff, 0, main_port);
 
-            get_first_message(msg_buff, 0);
+        if (msg.size >= sizeof(IPC_Generic_Msg)) {
+            switch (((IPC_Generic_Msg*)msg_buff)->type) {
+            case IPC_Reg_Int_NUM: {
+                if (msg.size != sizeof(IPC_Reg_Int))
+                    printf("Warning: Message from PID %lx does no have the right size (%lx)\n", msg.sender, msg.size);
+                // TODO: Add more checks & stuff
 
-            if (msg.size >= sizeof(IPC_Generic_Msg)) {
-                switch (((IPC_Generic_Msg*)msg_buff)->type) {
-                case IPC_Reg_Int_NUM: {
-                    if (msg.size != sizeof(IPC_Reg_Int))
-                        printf("Warning: Message from PID %lx does no have the right size (%lx)\n", msg.sender, msg.size);
-                    // TODO: Add more checks & stuff
+                IPC_Reg_Int* m = (IPC_Reg_Int*)msg_buff;
 
-                    IPC_Reg_Int* m = (IPC_Reg_Int*)msg_buff;
+                uint8_t result = configure_interrupts_for(m);
 
-                    uint8_t result = configure_interrupts_for(m);
+                IPC_Reg_Int_Reply reply;
+                reply.type = IPC_Reg_Int_Reply_NUM;
+                reply.status = result != 0;
+                reply.intno = result;
+                send_message_port(m->reply_chan, sizeof(reply), (char*)&reply);
+            }
+                break;
+            case IPC_Start_Timer_NUM: {
+                if (msg.size != sizeof(IPC_Start_Timer))
+                    printf("Warning: Message from PID %lx does no have the right size (%lx)\n", msg.sender, msg.size);
 
-                    IPC_Reg_Int_Reply reply;
-                    reply.type = IPC_Reg_Int_Reply_NUM;
-                    reply.status = result != 0;
-                    reply.intno = result;
-                    send_message_port(m->reply_chan, sizeof(reply), (char*)&reply);
-                }
-                    break;
-                case IPC_Start_Timer_NUM: {
-                    if (msg.size != sizeof(IPC_Start_Timer))
-                        printf("Warning: Message from PID %lx does no have the right size (%lx)\n", msg.sender, msg.size);
+                IPC_Start_Timer* m = (IPC_Start_Timer*)msg_buff;
+                start_timer(m->ms, m->extra, msg.sender, m->reply_channel);
+            }
 
-                    IPC_Start_Timer* m = (IPC_Start_Timer*)msg_buff;
-                    start_timer(m->ms, m->extra, msg.sender, m->reply_channel);
-                }
+                break;
+            case IPC_Kernel_Interrupt_NUM:
+                // TODO: Check that it's from kernel, etc.
 
-                    break;
-                case IPC_Kernel_Interrupt_NUM:
-                    // TODO: Check that it's from kernel, etc.
-
-                    hpet_int();
-                    break;
-                default:
-                    printf("Warning: Recieved unknown message %x from PID %li\n", ((IPC_Generic_Msg*)msg_buff)->type, msg.sender);    
-                    break;
-                }
-                }
+                hpet_int();
+                break;
+            default:
+                printf("Warning: Recieved unknown message %x from PID %li\n", ((IPC_Generic_Msg*)msg_buff)->type, msg.sender);    
+                break;
+            }
+            }
 
 
-            free(msg_buff);
-        }
-            break;
-        default: // Do nothing
-            break;
-        }
+        free(msg_buff);
     }
 
     return 0;

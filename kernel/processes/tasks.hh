@@ -7,6 +7,7 @@
 #include <sched/defs.hh>
 #include <cpus/sse.hh>
 #include <lib/string.hh>
+#include <lib/set.hh>
 
 using PID = u64;
 
@@ -35,6 +36,7 @@ struct TaskDescriptor {
     PID pid;
     Page_Table page_table; // 192
     u64 entry_mode = 0; // 200
+    u64 saved_entry_mode = 0; // 208
 
     TaskPermissions perm;
 
@@ -42,11 +44,10 @@ struct TaskDescriptor {
     Task_Attributes attr;
 
     // Messaging
-    Message_storage messages;
-    Ports_storage ports;
+    klib::set<klib::weak_ptr<Generic_Port>> owned_ports;
+    klib::weak_ptr<Generic_Port> blocked_by;
+    klib::weak_ptr<Generic_Port> sender_hint;
     Spinlock messaging_lock;
-    u64 unblock_mask = ~0;
-    u64 block_extra = 0;
 
     // Scheduling info
     klib::shared_ptr<TaskDescriptor> queue_next = nullptr;

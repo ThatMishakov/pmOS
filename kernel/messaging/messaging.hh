@@ -10,9 +10,15 @@
 
 extern Spinlock messaging_ports;
 
+struct TaskDescriptor;
+
+struct Generic_Port {
+    virtual ~Generic_Port() = default;
+};
+
 struct Message {
-    u64 from;
-    u64 channel;
+    klib::weak_ptr<TaskDescriptor> task_from;
+    u64 pid_from = 0;
     klib::vector<char> content;
 
     inline size_t size() const
@@ -25,58 +31,52 @@ struct Message {
 
 using Message_storage = klib::list<klib::shared_ptr<Message>>;
 
-struct Generic_Port {
-    Generic_Port() = default;
-    virtual ~Generic_Port() = default;
-};
-
 
 #define MSG_ATTR_PRESENT   0x01ULL
 #define MSG_ATTR_DUMMY     0x02ULL
 #define MSG_ATTR_NODEFAULT 0x03ULL
-struct Port {
-    u64 task = 0;
-    u64 channel = 0;
-    u64 attr = 0; // NODEFAULT DUMMY PRESENT
+
+struct Port: public Generic_Port {
+    klib::weak_ptr<TaskDescriptor> owner;
+    klib::weak_ptr<Port> self;
     Message_storage msg_queue;
+
     Spinlock lock;
     u64 portno;
 
+    Port(const klib::shared_ptr<TaskDescriptor>& owner, u64 portno): owner(owner), portno(portno) {}
 
-    kresult_t enqueue(u64 from, klib::vector<char>&& msg);
+
+    kresult_t enqueue(const klib::shared_ptr<TaskDescriptor>& from, const klib::shared_ptr<Message>& msg);
+
     kresult_t send_from_system(klib::vector<char>&& msg);
     kresult_t send_from_system(const char* msg, size_t size);
+    kresult_t send_from_user(const klib::shared_ptr<TaskDescriptor>& sender, const char *unsafe_user_ptr, size_t msg_size);
     kresult_t atomic_send_from_system(const char* msg, size_t size);
-};
+    kresult_t atomic_send_from_user(const klib::shared_ptr<TaskDescriptor>& sender, const char* unsafe_user_message, size_t msg_size);
 
-struct TaskDescriptor;
+    void change_return_upon_unblock(const klib::shared_ptr<TaskDescriptor>& task);
+};
 
 struct Ports_storage {
     u64 biggest_port = 1;
 
     klib::splay_tree_map<u64, klib::shared_ptr<Port>> storage;
     Spinlock lock;
-    kresult_t send_from_user(u64 pid_from, u64 port, u64 buff_addr, size_t size);
-    kresult_t send_from_system(u64 port, const char* msg, size_t size);
-    kresult_t set_dummy(u64 port);
-    kresult_t set_port(u64 port, const klib::shared_ptr<TaskDescriptor>& task, u64 dest_chan);
-    kresult_t send_msg(u64 pid_from, u64 port, klib::vector<char>&& msg);
+
+    // Atomically gets the port or null if it doesn't exist
+    klib::shared_ptr<Port> atomic_get_port(u64 portno);
+
+    // Atomically creates a new port with *task* as its owner
     ReturnStr<u64> atomic_request_port(const klib::shared_ptr<TaskDescriptor>& task);
+
     inline bool exists_port(u64 port)
     {
         Auto_Lock_Scope scope_lock(lock);
         return this->storage.count(port) == 1;
     }
-
-    // Atomically gets the port or null if it doesn't exist
-    klib::shared_ptr<Port> atomic_get_port(u64 portno);
 };
 
-extern Ports_storage default_ports;
+extern Ports_storage global_ports;
 
 kresult_t queue_message(const klib::shared_ptr<TaskDescriptor>& task, klib::shared_ptr<Message> message);
-
-kresult_t init_kernel_ports();
-
-// Sends a message to the default port
-kresult_t send_msg_default(u64 pid_from, u64 port, klib::vector<char>&& msg);

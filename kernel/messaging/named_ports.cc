@@ -5,22 +5,20 @@
 
 Named_Port_Storage global_named_ports;
 
-kresult_t Notify_Task::do_action(u64 portnum, [[maybe_unused]] const klib::string& name)
+kresult_t Notify_Task::do_action(const klib::shared_ptr<Port>& port, [[maybe_unused]] const klib::string& name)
 {
     if (not did_action) {
         klib::shared_ptr<TaskDescriptor> ptr = task.lock();
 
         if (ptr) {
-            bool unblocked = unblock_if_needed(ptr, PORTNAME_S_NUM, 0);
-            if (unblocked)
-                    syscall_ret_high(ptr) = portnum;
+            unblock_if_needed(ptr, parent_port.lock());
         }
         did_action = true;
     }
     return SUCCESS;
 }
 
-kresult_t Send_Message::do_action(u64 portnum, const klib::string& name)
+kresult_t Send_Message::do_action(const klib::shared_ptr<Port>& p, const klib::string& name)
 {
     kresult_t result = SUCCESS;
     if (not did_action) {
@@ -34,7 +32,7 @@ kresult_t Send_Message::do_action(u64 portnum, const klib::string& name)
 
             ipc_ptr->type = IPC_Kernel_Named_Port_Notification_NUM;
             ipc_ptr->reserved = 0;
-            ipc_ptr->port_num = portnum;
+            ipc_ptr->port_num = p->portno;
             
             memcpy(ipc_ptr->port_name, name.c_str(), name.length());
 
