@@ -32,11 +32,11 @@ class sched_queue;
 
 struct TaskDescriptor {
     // Basic process stuff
-    Task_Regs regs;
+    Task_Regs regs; // 200
     PID pid;
-    Page_Table page_table; // 192
-    u64 entry_mode = 0; // 200
-    u64 saved_entry_mode = 0; // 208
+    Page_Table page_table;
+
+    // Repeated syscalls
 
     TaskPermissions perm;
 

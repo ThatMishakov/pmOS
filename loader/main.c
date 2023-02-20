@@ -105,7 +105,6 @@ void main()
     syscall(SYSCALL_REQUEST_NAMED_PORT, log_port_name, strlen(log_port_name), loader_port, 0);
 
     char *loader_port_name = "/pmos/loader";
-
     syscall(SYSCALL_NAME_PORT, loader_port, loader_port_name, strlen(loader_port_name));
 
 

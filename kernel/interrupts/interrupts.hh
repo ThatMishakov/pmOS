@@ -77,14 +77,15 @@ struct Segment_Offsets {
 #define ENTRY_NESTED    3
 
 
-struct Task_Regs { // 192 bytes
+struct Task_Regs { // 208 bytes
     Scratch_Regs scratch_r; //72 bytes
     Interrupt_Stackframe e; // 40 bytes
     Preserved_Regs preserved_r; // 48 bytes
     Segment_Offsets seg; // 16 bytes
     u64 entry_type = ENTRY_INTERRUPT; // 8 bytes
-    u64 int_err = 0;
-    u64 error_instr = 0;
+    u64 int_err = 0; // 8
+    u64 error_instr = 0; // 8
+    u64 saved_entry_type = 0; // 8
 };
 
 #define STACK_SIZE KB(16)

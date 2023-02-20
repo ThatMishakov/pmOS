@@ -218,13 +218,14 @@ syscall_int_entry:
 
     .globl ret_repeat_syscall
 ret_repeat_syscall:
+
     # Load current_task into %r15
     movq %gs:24, %r15
 
     # Restore entry_mode
-    movq 208(%r15), %rax
-    movq %rax, 200(%r15)
-    movq $0, 208(%r15)
+    movq 200(%r15), %rax
+    movq %rax, 176(%r15)
+    movq $0, 200(%r15)
 
     call syscall_handler
 

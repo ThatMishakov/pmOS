@@ -31,7 +31,8 @@ extern "C" void syscall_handler()
 
     // TODO: check permissions
 
-    //t_print_bochs("Debug: syscall %h pid %h", call_n, get_cpu_struct()->current_task->pid);
+    //t_print_bochs("Debug: syscall %h pid %h (%s)", call_n, get_cpu_struct()->current_task->pid, get_cpu_struct()->current_task->name.c_str());
+    //t_print_bochs(" %h %h %h %h %h ", arg1, arg2, arg3, arg4, arg5);
     if (task->attr.debug_syscalls) {
         global_logger.printf("Debug: syscall %h pid %h\n", call_n, get_cpu_struct()->current_task->pid);
     }
@@ -986,11 +987,11 @@ void syscall_get_port_by_name(const char *name, u64 length, u32 flags)
         } else {
             const klib::shared_ptr<Named_Port_Desc> new_desc = klib::make_shared<Named_Port_Desc>(klib::move(str.second), klib::shared_ptr<Port>(nullptr));
 
-            auto it = global_named_ports.storage.insert({new_desc->name, new_desc});
-            it.first->second->actions.insert(klib::make_unique<Notify_Task>(task, it.first->second));
+            global_named_ports.storage.insert({new_desc->name, new_desc});
+            new_desc->actions.insert(klib::make_unique<Notify_Task>(task, new_desc));
 
             request_repeat_syscall(task);
-            block_current_task(named_port);
+            block_current_task(new_desc);
         }
     }
 

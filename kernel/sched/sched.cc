@@ -319,9 +319,9 @@ klib::shared_ptr<TaskDescriptor> CPU_Info::atomic_get_front_priority(priority_t 
 
 void request_repeat_syscall(const klib::shared_ptr<TaskDescriptor>& task)
 {
-    if (task->entry_mode != 3) {
-        task->saved_entry_mode = task->entry_mode;
-        task->entry_mode = 3;
+    if (task->regs.entry_type != 3) {
+        task->regs.saved_entry_type = task->regs.entry_type;
+        task->regs.entry_type = 3;
     }
 }
 

@@ -8,6 +8,8 @@
 #include <pmos/system.h>
 #include <kernel/block.h>
 #include <main.h>
+#include <pmos/ports.h>
+#include <pmos/helpers.h>
 
 int acpi_revision = -1;
 
@@ -73,7 +75,7 @@ void request_acpi_tables()
 {
     IPC_ACPI_Request_RSDT request = {IPC_ACPI_Request_RSDT_NUM, configuration_port};
 
-    ports_request_t loader_port = get_port_by_name(loader_port_name, strlen(loader_port_name), NULL);
+    ports_request_t loader_port = get_port_by_name(loader_port_name, strlen(loader_port_name), 0);
     if (loader_port.result != SUCCESS) {
         printf("Warning: Could not get loader port. Error %li\n", loader_port.result);
         return;
