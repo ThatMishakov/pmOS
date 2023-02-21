@@ -89,7 +89,7 @@ void react_data(uint8_t data, char port_num)
 
             send_data_port(COMMAND_DISABLE_SCANNING, port_num);
 
-            port->last_timer = start_timer(200);
+            port->last_timer = start_timer(1000);
         default:
             // printf("%i\n", data);
             break;
@@ -226,7 +226,7 @@ void react_timer_port(unsigned port_num)
 
             send_data_port(COMMAND_ENABLE_SCANNING, port_num);
 
-            port->last_timer = start_timer(800);
+            port->last_timer = start_timer(1000);
         } else {
             port->state = PORT_STATE_RESET;
         }
@@ -249,7 +249,7 @@ void poll_ports()
     bool* check_second = two_ports_work ? &second : NULL;
     bool have_read_data = read_data(&data, check_second);
 
-    last_polling_timer = start_timer(200);
+    last_polling_timer = start_timer(100);
 
     if (!have_read_data)
         return;

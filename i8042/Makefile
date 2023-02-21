@@ -1,5 +1,5 @@
 # Kernel executable name
-EXEC = ps2d.elf
+EXEC = i8042.elf
 
 ROOTDIR = $(realpath .)/..
 export PATH := $(ROOTDIR)/bin/cross/bin:$(PATH)
