@@ -974,7 +974,7 @@ void syscall_get_port_by_name(const char *name, u64 length, u32 flags)
                 syscall_ret_low(task) = ERROR_PORT_DOESNT_EXIST;
                 return;
             } else {
-                named_port->actions.insert(klib::make_unique<Notify_Task>(task, klib::shared_ptr<Generic_Port>(named_port)));
+                named_port->actions.push_back(klib::make_unique<Notify_Task>(task, klib::shared_ptr<Generic_Port>(named_port)));
 
                 request_repeat_syscall(task);
                 block_current_task(named_port);
@@ -988,7 +988,7 @@ void syscall_get_port_by_name(const char *name, u64 length, u32 flags)
             const klib::shared_ptr<Named_Port_Desc> new_desc = klib::make_shared<Named_Port_Desc>(klib::move(str.second), klib::shared_ptr<Port>(nullptr));
 
             global_named_ports.storage.insert({new_desc->name, new_desc});
-            new_desc->actions.insert(klib::make_unique<Notify_Task>(task, new_desc));
+            new_desc->actions.push_back(klib::make_unique<Notify_Task>(task, new_desc));
 
             request_repeat_syscall(task);
             block_current_task(new_desc);
@@ -1031,13 +1031,13 @@ void syscall_request_named_port(u64 string_ptr, u64 length, u64 reply_port, u32 
             }
             return;
         } else {
-            named_port->actions.insert(klib::make_unique<Send_Message>(port_ptr));
+            named_port->actions.push_back(klib::make_unique<Send_Message>(port_ptr));
         }
     } else {
         const klib::shared_ptr<Named_Port_Desc> new_desc = klib::make_shared<Named_Port_Desc>( Named_Port_Desc(klib::move(str.second), nullptr) );
 
         auto it = global_named_ports.storage.insert({new_desc->name, new_desc});
-        it.first->second->actions.insert(klib::make_unique<Send_Message>(port_ptr));
+        it.first->second->actions.push_back(klib::make_unique<Send_Message>(port_ptr));
     }
 
     syscall_ret_low(task) = SUCCESS;

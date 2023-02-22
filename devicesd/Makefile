@@ -19,8 +19,6 @@ INTERNALLDFLAGS :=     \
 # Internal C flags that should not be changed by the user.
 INTERNALCFLAGS  :=       \
 	-static \
-	-mno-red-zone \
-	-fPIE \
 	-fno-exceptions
 
 CFLAGS = -std=gnu17 $(INCLUDEFLAGS) -g

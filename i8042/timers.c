@@ -16,15 +16,13 @@ extern pmos_port_t devicesd_port;
 
 uint64_t start_timer(unsigned ms)
 {
-    IPC_Start_Timer tmr = {IPC_Start_Timer_NUM, ms, tmr_index, main_port};
+    IPC_Start_Timer tmr = {IPC_Start_Timer_NUM, ms, main_port, tmr_index, 0, 0};
 
     result_t result = send_message_port(devicesd_port, sizeof(tmr), (char*)&tmr);
     if (result != SUCCESS) {
         printf("Warning: Could not send message to get the interrupt\n");
         return 0;
     }
-
-    //printf("Started timer index %i\n", tmr_index);
 
     return tmr_index++;
 }

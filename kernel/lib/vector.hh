@@ -268,5 +268,14 @@ void vector<T>::pop_back()
     --a_size;
 }
 
+template<typename T>
+void vector<T>::clear()
+{
+    for (size_t i = 0; i < a_size; ++i)
+        ptr[i].~T();
+
+    a_size = 0;
+}
+
 
 }

@@ -37,7 +37,7 @@ pmos_port_t configuration_port = 0;
 const char *devicesd_port_name = "/pmos/devicesd";
 
 int main(int argc, char** argv) {
-    printf("Hello from devicesd!\n");
+    printf("Hello from devicesd!. My PID: %lx\n", getpid());
     
     // parse_args(argc, argv);
 
@@ -95,7 +95,7 @@ int main(int argc, char** argv) {
             switch (((IPC_Generic_Msg*)msg_buff)->type) {
             case IPC_Reg_Int_NUM: {
                 if (msg.size != sizeof(IPC_Reg_Int))
-                    printf("Warning: Message from PID %lx does no have the right size (%lx)\n", msg.sender, msg.size);
+                    printf("[devicesd] Warning: Message from PID %lx does no have the right size (%lx)\n", msg.sender, msg.size);
                 // TODO: Add more checks & stuff
 
                 IPC_Reg_Int* m = (IPC_Reg_Int*)msg_buff;
@@ -111,10 +111,10 @@ int main(int argc, char** argv) {
                 break;
             case IPC_Start_Timer_NUM: {
                 if (msg.size != sizeof(IPC_Start_Timer))
-                    printf("Warning: Message from PID %lx does no have the right size (%lx)\n", msg.sender, msg.size);
+                    printf("[devicesd] Warning: Message from PID %lx does no have the right size (%lx)\n", msg.sender, msg.size);
 
                 IPC_Start_Timer* m = (IPC_Start_Timer*)msg_buff;
-                start_timer(m->ms, m->extra, msg.sender, m->reply_channel);
+                start_timer(m, msg.sender);
             }
 
                 break;
@@ -124,7 +124,7 @@ int main(int argc, char** argv) {
                 hpet_int();
                 break;
             default:
-                printf("Warning: Recieved unknown message %x from PID %li\n", ((IPC_Generic_Msg*)msg_buff)->type, msg.sender);    
+                printf("[devicesd] Warning: Recieved unknown message %x from PID %li\n", ((IPC_Generic_Msg*)msg_buff)->type, msg.sender);    
                 break;
             }
             }

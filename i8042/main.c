@@ -1,5 +1,4 @@
 #include <stdio.h>
-#include "interrupts.h"
 #include "io.h"
 #include "registers.h"
 #include <stdbool.h>
@@ -12,6 +11,7 @@
 #include "timers.h"
 #include <pmos/ports.h>
 #include <string.h>
+#include <stdlib.h>
 
 bool has_second_channel = false;
 
@@ -25,6 +25,124 @@ pmos_port_t main_port = 0;
 pmos_port_t configuration_port = 0;
 
 pmos_port_t devicesd_port = 0;
+pmos_port_t ps2d_port = 0;
+
+uint8_t get_interrupt_number(uint32_t intnum, uint64_t int_port)
+{
+    uint8_t int_vector = 0;
+    unsigned long mypid = getpid();
+
+    IPC_Reg_Int m = {IPC_Reg_Int_NUM, IPC_Reg_Int_FLAG_EXT_INTS, intnum, 0, mypid, int_port, configuration_port};
+    result_t result = send_message_port(devicesd_port, sizeof(m), (char*)&m);
+    if (result != SUCCESS) {
+        printf("[i8042] Warning: Could not send message to get the interrupt\n");
+        return 0;
+    }
+
+    Message_Descriptor desc = {};
+    unsigned char* message = NULL;
+    result = get_message(&desc, &message, configuration_port);
+
+    if (result != SUCCESS) {
+        printf("[i8042] Warning: Could not get message\n");
+        return 0;
+    }
+
+    if (desc.size < sizeof(IPC_Reg_Int_Reply)) {
+        printf("[i8042] Warning: Recieved message which is too small\n");
+        free(message);
+        return 0;
+    }
+
+    IPC_Reg_Int_Reply* reply = (IPC_Reg_Int_Reply*)message;
+
+    if (reply->type != IPC_Reg_Int_Reply_NUM) {
+        printf("[i8042] Warning: Recieved unexepcted message type\n");
+        free(message);
+        return 0;
+    }
+
+    if (reply->status == 0) {
+        printf("[i8042] Warning: Did not assign the interrupt\n");
+    } else {
+        int_vector = reply->intno;
+        printf("[i8042] Info: Assigned interrupt %i\n", int_vector);
+    }
+    free(message);
+    return int_vector;
+}
+
+pmos_port_t register_port(unsigned char id)
+{
+    IPC_PS2_Reg_Port req = {
+        .type = IPC_PS2_Reg_Port_NUM,
+        .flags = 0,
+        .internal_id = id,
+        .cmd_port = main_port,
+        .config_port = configuration_port,
+    };
+
+    result_t result = send_message_port(ps2d_port, sizeof(req), (char*)&req);
+    if (result != SUCCESS) {
+        printf("[i8042] Warning: Could not send message to register the port %i\n", id);
+        return 0;
+    }
+
+    Message_Descriptor desc = {};
+    unsigned char* message = NULL;
+    result = get_message(&desc, &message, configuration_port);
+
+    if (result != SUCCESS) {
+        printf("[i8042] Warning: Could not get message\n");
+        return 0;
+    }
+
+    if (desc.size < sizeof(IPC_PS2_Config)) {
+        printf("[i8042] Warning: Recieved message which is too small\n");
+        free(message);
+        return 0;
+    }
+
+    IPC_PS2_Config* reply = (IPC_PS2_Config *)message;
+
+    if (reply->type != IPC_PS2_Config_NUM) {
+        printf("[i8042] Warning: Recieved unexepcted message type\n");
+        free(message);
+        return 0;
+    }
+
+    if (reply->request_type != IPC_PS2_Config_Reg_Port) {
+        printf("[i8042] Warning: Could register port %i\n", id);
+        free(message);
+        return 0; 
+    }
+
+    if (reply->result_cmd == 0)
+        printf("[i8042] Warning: Did not register the port\n");
+
+    pmos_port_t port = reply->result_cmd;
+    free(message);
+
+    return port;
+};
+
+void register_ports()
+{
+    bool success = false;
+
+    if (first_port_works)
+        success = (ports[0].notification_port = register_port(0));
+
+    if (second_port_works)
+        ports[1].notification_port = register_port(1);
+
+    success = success || ports[1].notification_port;
+
+    if (!success) {
+        fprintf(stderr, "[i8042] Error: Could not register ports with PS2d\n");
+        exit(1);
+    }
+}
 
 void init_controller()
 {
@@ -45,6 +163,7 @@ void init_controller()
 
     // printf("PS/2 config value %x\n", data);
 
+    // Disables translation and enables first and second ports' interrupts
     data &= ~0x43;
     outb(RW_PORT, CMD_CONFIG_WRITE);
     outb(DATA_PORT, data);
@@ -126,31 +245,39 @@ void enable_ports()
 uint8_t port1_int = 0;
 uint8_t port2_int = 0;
 
-int main(int argc, char *argv[])
+int main()
 {
     {
-    ports_request_t req;
-    req = create_port(PID_SELF, 0);
-    if (req.result != SUCCESS) {
-        printf("[i8042] Error creating port %li\n", req.result);
-        return 0;
-    }
-    configuration_port = req.port;
+        ports_request_t req;
+        req = create_port(PID_SELF, 0);
+        if (req.result != SUCCESS) {
+            printf("[i8042] Error creating port %li\n", req.result);
+            return 0;
+        }
+        configuration_port = req.port;
 
-    req = create_port(PID_SELF, 0);
-    if (req.result != SUCCESS) {
-        printf("[i8042] Error creating port %li\n", req.result);
-        return 0;
-    }
-    main_port = req.port;
+        req = create_port(PID_SELF, 0);
+        if (req.result != SUCCESS) {
+            printf("[i8042] Error creating port %li\n", req.result);
+            return 0;
+        }
+        main_port = req.port;
 
-    static const char* devicesd_port_name = "/pmos/devicesd";
-    ports_request_t devicesd_port_req = get_port_by_name(devicesd_port_name, strlen(devicesd_port_name), 0);
-    if (devicesd_port_req.result != SUCCESS) {
-        printf("[i8042] Warning: Could not get devicesd port. Error %li\n", devicesd_port_req.result);
-        return 0;
-    }
-    devicesd_port = devicesd_port_req.port;
+        static const char* devicesd_port_name = "/pmos/devicesd";
+        ports_request_t devicesd_port_req = get_port_by_name(devicesd_port_name, strlen(devicesd_port_name), 0);
+        if (devicesd_port_req.result != SUCCESS) {
+            printf("[i8042] Warning: Could not get devicesd port. Error %li\n", devicesd_port_req.result);
+            return 0;
+        }
+        devicesd_port = devicesd_port_req.port;
+
+        static const char* ps2d_port_name = "/pmos/ps2d";
+        ports_request_t ps2d_port_req = get_port_by_name(ps2d_port_name, strlen(ps2d_port_name), 0);
+        if (ps2d_port_req.result != SUCCESS) {
+            printf("[i8042] Warning: Could not get devicesd port. Error %li\n", ps2d_port_req.result);
+            return 0;
+        }
+        ps2d_port = ps2d_port_req.port;
     }
 
     request_priority(1);
@@ -161,6 +288,8 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
+    register_ports();
+
     if (second_port_works)
         port2_int = get_interrupt_number(12, main_port);
 
@@ -169,7 +298,7 @@ int main(int argc, char *argv[])
 
     enable_ports();
 
-    init_ports();
+    poll_ports();
 
     while (1) {
         result_t result;
@@ -183,7 +312,7 @@ int main(int argc, char *argv[])
         }
 
         if (desc.size < IPC_MIN_SIZE) {
-            fprintf(stderr, "[i8042] Error: Message too small (size %i)\n", desc.size);
+            fprintf(stderr, "[i8042] Error: Message too small (size %li)\n", desc.size);
             free(message);
         }
 
@@ -191,7 +320,7 @@ int main(int argc, char *argv[])
         switch (IPC_TYPE(message)) {
         case IPC_Kernel_Interrupt_NUM: {
             if (desc.size < sizeof(IPC_Kernel_Interrupt)) {
-                printf("[i8042] Warning: message for type %i is too small (size %x)\n", IPC_Kernel_Interrupt_NUM, desc.size);
+                printf("[i8042] Warning: message for type %i is too small (size %lx)\n", IPC_Kernel_Interrupt_NUM, desc.size);
                 break;
             }
 
@@ -213,7 +342,7 @@ int main(int argc, char *argv[])
         case IPC_Timer_Reply_NUM: {
             unsigned expected_size = sizeof(IPC_Timer_Reply);
             if (desc.size != expected_size) {
-                fprintf(stderr, "[i8042] Warning: Recieved message of wrong size on channel %lx (expected %x got %x)\n", desc.channel, expected_size, desc.size);
+                fprintf(stderr, "[i8042] Warning: Recieved message of wrong size on channel %lx (expected %x got %lx)\n", desc.channel, expected_size, desc.size);
                 break;
             }
 
@@ -224,12 +353,17 @@ int main(int argc, char *argv[])
                 break;
             }
 
-            react_timer(reply->extra);            
+            react_timer(reply->extra0);            
 
             break;
         }
+        case IPC_PS2_Send_Data_NUM: {
+            IPC_PS2_Send_Data* d = (IPC_PS2_Send_Data *)message;
+            react_send_data(d, desc.size);
+            break;
+        }
         default:
-            fprintf(stderr, "[i8042] Warning: Recieved message of unknown type %lx\n", IPC_TYPE(message));
+            fprintf(stderr, "[i8042] Warning: Recieved message of unknown type %x\n", IPC_TYPE(message));
             break;
         }
 

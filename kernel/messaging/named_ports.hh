@@ -18,7 +18,7 @@ struct Named_Port_Desc: public Generic_Port {
 
     const klib::string name;
     klib::weak_ptr<Port> parent_port;
-    klib::set<klib::unique_ptr<Named_Port_Action>> actions;
+    klib::vector<klib::unique_ptr<Named_Port_Action>> actions;
 };
 
 using named_ports_map = klib::splay_tree_map<const klib::string&, klib::shared_ptr<Named_Port_Desc>>;

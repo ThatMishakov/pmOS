@@ -28,7 +28,7 @@ void init_timers()
     program_periodic(100);
 }
 
-int start_timer(uint64_t ms, uint64_t extra, uint64_t pid, uint64_t reply_channel)
+int start_timer(IPC_Start_Timer* t, uint64_t reply_pid)
 {
     if (timer_mode == TIMER_UNKNOWN)
         return (int)ERROR_GENERAL;
@@ -37,17 +37,19 @@ int start_timer(uint64_t ms, uint64_t extra, uint64_t pid, uint64_t reply_channe
 
     timer_entry *e = malloc(sizeof(timer_entry));
     e->id = timer_id++;
-    e->extra = extra;
-    e->pid = pid;
-    e->reply_chan = reply_channel;
+    e->extra0 = t->extra0;
+    e->extra1 = t->extra1;
+    e->extra2 = t->extra2;
+    e->pid = reply_pid;
+    e->reply_chan = t->reply_channel;
 
-    if (ms == 0) {
+    if (t->ms == 0) {
         notify_task(e);
         free(e);
         return 0;
     }
 
-    uint64_t ticks = timer_calculate_next_ticks(ms);
+    uint64_t ticks = timer_calculate_next_ticks(t->ms);
     e->expires_at_ticks = ticks + timer_ticks;
 
     timer_push_heap(e);
@@ -76,7 +78,7 @@ void timer_tick()
 
 void notify_task(timer_entry* e)
 {
-    IPC_Timer_Reply r = {IPC_Timer_Reply_NUM, IPC_TIMER_TICK, e->id, e->extra};
+    IPC_Timer_Reply r = {IPC_Timer_Reply_NUM, IPC_TIMER_TICK, e->id, e->extra0, e->extra1, e->extra2};
 
     send_message_port(e->reply_chan, sizeof(r), (char*)&r);
 }

@@ -3,41 +3,37 @@
 #include "registers.h"
 #include <stdio.h>
 #include "timers.h"
+#include <alloca.h>
+#include <pmos/ipc.h>
+#include <pmos/system.h>
 
 Port ports[2];
 uint64_t last_polling_timer = 0;
 
-void send_data_port(uint8_t cmd, bool port_2)
+bool send_data_port(uint8_t cmd, bool port_2)
 {
-    uint8_t status;
+    unsigned count = 0;
+    uint8_t status = 0;
 
     if (port_2) {
+        do {
+            status = inb(RW_PORT);
+            if (count++ > 1000)
+                return false;
+        } while (status & STATUS_MASK_OUTPUT_FULL);
+
         outb(RW_PORT, SECOND_PORT);
     }
 
+    status = 0;
+    do {
+        status = inb(RW_PORT);
+        if (count++ > 1000)
+            return false;
+    } while (status & STATUS_MASK_OUTPUT_FULL);
+
     outb(DATA_PORT, cmd);
-}
-
-void init_ports()
-{
-    ports[0].state = PORT_STATE_RESET;
-    ports[0].last_timer = 0;
-
-    ports[1].state = PORT_STATE_RESET;
-    ports[1].last_timer = 0;
-
-    if (first_port_works) {
-        send_data_port(0xff, false);
-    }
-
-    if (second_port_works) {
-        if (first_port_works) {
-            ports[1].state = PORT_STATE_WAIT;
-            ports[1].last_timer = start_timer(500);
-        }
-    }
-
-    poll_ports();
+    return true;
 }
 
 bool read_data(char* data, bool* is_second)
@@ -61,107 +57,21 @@ bool read_data(char* data, bool* is_second)
 }
 
 
-void react_data(uint8_t data, char port_num)
+void react_data(uint8_t data, unsigned char port_num)
 {
-    Port* port = &ports[port_num];
-    // printf("--- INT port %i data %x state %i\n", port_num, data, port->state);
+    size_t size = sizeof(IPC_PS2_Notify_Data) + 1;
 
-    switch (port->state) {
-    case PORT_STATE_RESET:
-        switch (data) {
-        case RESPONSE_FAILURE:
+    IPC_PS2_Notify_Data* str = alloca(size);
 
-            printf("Port %i failure!\n", port_num+1);
-            break;
-        case RESPONSE_ACK:
-            #ifdef DEBUG
-            printf("Port %i ACK\n", port_num+1);
-            #endif
-            break;
-        case RESPONSE_SELF_TEST_OK:
-            #ifdef DEBUG
-            printf("Port %i self-test success!\n", port_num+1);
-            #endif
-            port->state = PORT_STATE_DISABLE_SCANNING;
+    str->type = IPC_PS2_Notify_Data_NUM;
+    str->flags = 0;
+    str->internal_id = port_num;
+    str->data[0] = data;
 
-            port->device_id = 0;
-            port->alive = false;
-
-            send_data_port(COMMAND_DISABLE_SCANNING, port_num);
-
-            port->last_timer = start_timer(1000);
-        default:
-            // printf("%i\n", data);
-            break;
-        }
-        break;
-
-
-    case PORT_STATE_DISABLE_SCANNING:
-    switch (data)
-    {
-    case RESPONSE_ACK:
-        port->state = PORT_STATE_IDENTIFY;
-
-        #ifdef DEBUG
-        printf("Port %i disabled scanning successfully!\n",port_num+1);
-        #endif
-
-        send_data_port(COMMAND_IDENTIFY, port_num);
-
-        port->last_timer = start_timer(700);
-        break;
-    default:
-        // Ignore data
-        break;
+    result_t result = send_message_port(ports[port_num].notification_port, size, (char *)str);
+    if (result != SUCCESS) {
+        printf("[i8042] Warning: Could not send message to get the interrupt\n");
     }
-    break;
-
-
-    case PORT_STATE_IDENTIFY:
-        if (data == RESPONSE_ACK)
-            break;
-        port->device_id <<= 8;
-        port->device_id |= data;
-    break;
-
-
-    case PORT_STATE_ENABLE_SCANNING:
-    switch (data)
-    {
-    case RESPONSE_ACK:
-        port->state = PORT_STATE_OK;
-        port->alive = false;
-
-        port->last_timer = start_timer(alive_interval);
-
-        #ifdef DEBUG
-        printf("Port %i enabled scanning successfully!\n",port_num+1);
-        #endif
-
-        break;
-    default:
-        // Ignore
-        break;
-    }
-    break;
-
-
-    case PORT_STATE_OK_NOINPUT:
-        port->state = PORT_STATE_OK;
-        port->alive = true;
-
-        if (data == RESPONSE_ECHO)
-            break;
-
-        __attribute__((fallthrough));
-    case PORT_STATE_OK: {
-        printf("Port %i data %x\n",port_num+1, data);
-        port->alive = true;
-        break;
-    }
-    break;
-    };
 }
 
 void react_port_int(unsigned port_num)
@@ -190,55 +100,6 @@ void react_port2_int()
     react_port_int(1);
 }
 
-void react_timer_port(unsigned port_num)
-{
-    Port* port = &ports[port_num];
-
-    switch (port->state) {
-    case PORT_STATE_RESET:
-        // Do nothing
-        break;
-    case PORT_STATE_ENABLE_SCANNING:
-    case PORT_STATE_DISABLE_SCANNING:
-    case PORT_STATE_OK_NOINPUT:
-        printf("Warning: PS/2 port %x timeout\n", port_num+1);
-        port->state = PORT_STATE_WAIT;
-        port->last_timer = start_timer(5000);
-        break;
-    case PORT_STATE_OK:
-        if (port->alive) {
-            port->alive = false;
-        } else {
-            if (inb(RW_PORT) & STATUS_MASK_INPUT_FULL) {
-            }
-
-            port->state = PORT_STATE_OK_NOINPUT;
-            send_data_port(COMMAND_ECHO, port_num);
-        }
-        port->last_timer = start_timer(alive_interval);
-        break;
-    case PORT_STATE_IDENTIFY: {
-        printf("Info: Found PS/2 device on port %i with type 0x%X\n", port_num+1, port->device_id);
-        bool result_success = true;
-
-        if (result_success) {
-            port->state = PORT_STATE_ENABLE_SCANNING;
-
-            send_data_port(COMMAND_ENABLE_SCANNING, port_num);
-
-            port->last_timer = start_timer(1000);
-        } else {
-            port->state = PORT_STATE_RESET;
-        }
-        break;
-    case PORT_STATE_WAIT:
-        port->state = PORT_STATE_RESET;
-        send_data_port(COMMAND_RESET, port_num);
-    }
-
-    }
-}
-
 void poll_ports()
 {
     char data = 0;
@@ -259,11 +120,22 @@ void poll_ports()
 
 void react_timer(uint64_t index)
 {
-    if (ports[0].last_timer == index) {
-        react_timer_port(0);
-    } else if (ports[1].last_timer == index) {
-        react_timer_port(1);
-    } else if (last_polling_timer == index) {
+    if (last_polling_timer == index) {
         poll_ports();
+    } else {
+        fprintf(stderr, "[i8042] Warning: Recieved timer message with unknown index %li\n", index);
     }
+}
+
+void react_send_data(IPC_PS2_Send_Data* str, size_t message_size)
+{
+    if (message_size < sizeof(IPC_PS2_Send_Data)) {
+        fprintf(stderr, "[i8042] Warning: IPC_PS2_Send_Data with size %lx smaller than expected\n", message_size);
+    }
+
+    unsigned port = str->internal_id;
+    size_t data_size = message_size - sizeof(IPC_PS2_Send_Data);
+
+    for (size_t i = 0; i < data_size; ++i)
+        send_data_port(str->data[i], port);
 }

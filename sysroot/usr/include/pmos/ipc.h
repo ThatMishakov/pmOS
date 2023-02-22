@@ -39,10 +39,19 @@ typedef struct IPC_Reg_Int_Reply {
 
 #define IPC_Start_Timer_NUM 0x03
 typedef struct IPC_Start_Timer {
+    // Type of the message (must be IPC_Start_Timer_NUM)
     uint32_t type;
+
+    // Time in milliseconds after which the reply will be sent
     uint64_t ms;
-    uint64_t extra;
-    uint64_t reply_channel;
+
+    // Port for the reply
+    uint64_t reply_port;
+
+    // Data up to the choosing of the sender, will be maintained in the reply message
+    uint64_t extra0;
+    uint64_t extra1;
+    uint64_t extra2;
 } IPC_Start_Timer;
 
 #define IPC_Timer_Ctrl_NUM 0x04
@@ -58,7 +67,9 @@ typedef struct IPC_Timer_Reply {
     uint32_t type;
     uint32_t status;
     uint64_t timer_id;
-    uint64_t extra;
+    uint64_t extra0;
+    uint64_t extra1;
+    uint64_t extra2;
 } IPC_Timer_Reply;
 #define IPC_TIMER_TICK 0x01
 
@@ -100,6 +111,79 @@ typedef struct IPC_ACPI_RSDT_Reply {
     uint32_t result;
     ACPI_RSDP_descriptor *descriptor;
 } IPC_ACPI_RSDT_Reply;
+
+
+// Structure used for registering a new PS/2 port by its driver
+#define IPC_PS2_Reg_Port_NUM 0x80
+typedef struct IPC_PS2_Reg_Port
+{
+    // Message type (must be equal to IPC_PS2_Reg_Port_NUM)
+    uint32_t type;
+
+    // Configuration flags
+    uint32_t flags;
+
+    // Internal ID of the port, decided by its driver (used for identification when driver registers more than one port)
+    uint64_t internal_id;
+
+    // Port used for sending commands to the port
+    uint64_t cmd_port;
+
+    // Port used for configuration
+    uint64_t config_port;
+} IPC_PS2_Reg_Port;
+
+// Structure that can be sent by both driver and PS2d for internal configuration
+#define IPC_PS2_Config_NUM 0x81
+typedef struct IPC_PS2_Config {
+    // Message type (must be equal to IPC_PS2_Config_NUM)
+    uint32_t type;
+
+    // Configuration flags
+    uint32_t flags;
+
+    // Internal ID of the port
+    uint64_t internal_id;
+
+    // Request type
+    uint64_t request_type;
+
+    // Result or command
+    uint64_t result_cmd;
+} IPC_PS2_Config;
+#define IPC_PS2_Config_Reg_Port   1 // Indicates the chanel where ps/2 driver should send the data and requests or 0 on failure
+
+// Structure used for communicating new data recieved by PS/2 drivers to PS2d
+#define IPC_PS2_Notify_Data_NUM 0x82
+typedef struct IPC_PS2_Notify_Data {
+    // Message type (must be equal to IPC_PS2_Notify_Data_NUM)
+    uint32_t type;
+
+    // Configuration flags
+    uint32_t flags;
+
+    // Internal ID of the port, must be the same as used with IPC_PS2_Reg_Port
+    uint64_t internal_id;
+
+    // Data recieved by the port; size of the array should be determined by the message size
+    char data[0];
+} IPC_PS2_Notify_Data;
+
+// Structure used by PS2d to send data to devices
+#define IPC_PS2_Send_Data_NUM 0x83
+typedef struct IPC_PS2_Send_Data {
+    // Message type (must be equal to IPC_PS2_Send_Data_NUM)
+    uint32_t type;
+
+    // Configuration flags
+    uint32_t flags;
+    
+    // Internal ID of the port
+    uint64_t internal_id;
+
+    // Data to be sent to the port; size of the array should be determined by the message size
+    char data[0];
+} IPC_PS2_Send_Data;
 
 
 #if defined(__cplusplus)
