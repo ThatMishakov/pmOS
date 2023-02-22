@@ -4,6 +4,7 @@
 #include <stdio.h>
 
 unsigned keyboard_ids[] = {
+    0x41ab,
     0x83ab,
 };
 
@@ -193,9 +194,57 @@ void keyboard_scan_byte(struct port_list_node *port, unsigned char data)
     }
 
     if (port->kb_state.expected_bytes == 0) {
-        printf("Keyboard scancode %lx\n", port->kb_state.scancode);
+        keyboard_react_scancode(port, port->kb_state.scancode);
+
         port->kb_state.scancode = 0;
         port->kb_state.shift_val = 0;
         port->kb_state.expected_bytes = 1;
     }
+}
+
+char scancodes [128] =
+{
+    0, 0, 0, 0,
+    0, 0, 0, 0,
+    0, 0, 0, 0,
+    0, '\t', '`', 0,
+    0, 0, 0, 0,
+    0, 'q', '1', 0,
+    0, 0, 'z', 's',
+    'a', 'w', '2', 0,
+    0, 'c', 'x', 'd',
+    'e', '4', '3', 0,
+    0, ' ', 'v', 'f',
+    't', 'r', '5', 0,
+    0, 'n', 'b', 'h',
+    'g', 'y', '6', 0,
+    0, 0, 'm', 'j',
+    'u', '7', '8', 0,
+    0, ',', 'k', 'i',
+    'o', '0', '9', 0,
+    0, '.', '/', 'l',
+    ';', 'p', '-', 0,
+    0, '-', '\'', 0,
+    '[', '=', 0, 0,
+    0, 0, '\n', ']',
+    0, '\\', 0, 0,
+    0, 0, 0, 0,
+    0, 0, 0, 0,
+    0, '1', 0, '4',
+    '7', 0, 0, 0,
+    '0', '.', '2', '5',
+    '6', '8', 0, 0,
+    0, '+', '3', '-',
+    '*', '9', 0, 0,
+};
+
+void keyboard_react_scancode(struct port_list_node *port, uint64_t scancode)
+{
+    uint8_t first_byte = scancode;
+    if (first_byte > 127)
+        return;
+
+    uint8_t byte = scancodes[first_byte];
+    if (byte)
+        putchar(byte);
 }

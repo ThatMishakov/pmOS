@@ -149,6 +149,7 @@ void init_controller()
     printf("[i8042] Initializing the controller...\n");
     uint8_t status;
     uint8_t data;
+    uint8_t config_byte;
 
     // Disable ports
     outb(RW_PORT, DISABLE_FIRST_PORT);
@@ -159,16 +160,19 @@ void init_controller()
 
     // Configure the controller
     outb(RW_PORT, CMD_CONFIG_READ);
-    data = inb(DATA_PORT);
+    config_byte = inb(DATA_PORT);
 
-    // printf("PS/2 config value %x\n", data);
+    // printf("PS/2 config value %x\n", config_byte);
 
     // Disables translation and enables first and second ports' interrupts
-    data &= ~0x43;
+    config_byte &= ~0x43;
     outb(RW_PORT, CMD_CONFIG_WRITE);
-    outb(DATA_PORT, data);
+    outb(DATA_PORT, config_byte);
 
-    if (data & 0x20) {
+    printf("PS/2 config value %x\n", config_byte);
+
+
+    if (config_byte & 0x20) {
         has_second_channel = true; 
         printf("[i8042] Info: PS/2 controller has second channel\n");
     }
@@ -183,6 +187,10 @@ void init_controller()
         printf("[i8042] Error: PS/2 controller did not pass self-test (status %x)\n", data);
         exit(1);
     }
+
+    // Restore configuration bit
+    outb(RW_PORT, CMD_CONFIG_WRITE);
+    outb(DATA_PORT, config_byte);
 
     // Test if the controller has second channel
     if (has_second_channel) {

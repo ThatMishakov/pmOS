@@ -49,4 +49,6 @@ void keyboard_pop_front_cmd(struct port_list_node *port);
 void keyboard_send_front_cmd(struct port_list_node *port);
 bool keyboard_cmd_queue_empty(struct port_list_node *port);
 
+void keyboard_react_scancode(struct port_list_node *port, uint64_t scancode);
+
 #endif
