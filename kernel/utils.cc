@@ -9,6 +9,7 @@
 #include <memory/free_page_alloc.hh>
 #include <lib/string.hh>
 #include <kern_logger/kern_logger.hh>
+#include <sched/sched.hh>
 
 void int_to_string(long int n, u8 base, char* str, int& length)
 {
@@ -146,7 +147,7 @@ kresult_t prepare_user_buff_rd(const char* buff, size_t size)
 
     for (u64 i = addr_start; i < end and result == SUCCESS; ++i) {
         u64 page = i & ~0xfffULL;
-        result = prepare_user_page(page);
+        result = get_cpu_struct()->current_task->page_table->prepare_user_page(page, Page_Table::Readable, get_cpu_struct()->current_task);
     }
     return result;
 }
@@ -164,7 +165,7 @@ kresult_t prepare_user_buff_wr(char* buff, size_t size)
 
     for (u64 i = addr_start; i < end and result == SUCCESS; ++i) {
         u64 page = i & ~0xfffULL;
-        result = prepare_user_page(page);
+        result = get_cpu_struct()->current_task->page_table->prepare_user_page(page, Page_Table::Writeable, get_cpu_struct()->current_task);
     }
     return result;
 }
@@ -222,14 +223,17 @@ void copy_frame(u64 from, u64 to)
     u64 t2 = copy_frame_free_p.get_free_page();
 
 
-    Page_Table_Argumments pta = {1, 0, 0, 1, PAGE_SPECIAL};
+    Page_Table_Argumments pta = {1, 0, 0, 1, 0b010};
     map(from, t1, pta);
     map(to, t2, pta);
 
     memcpy((char*)t1, (char*)t2, 4096);
 
-    release_page_s(t1, 0);
-    release_page_s(t2, 0);
+    release_page_s(*get_pte(t1, rec_map_index));
+    release_page_s(*get_pte(t2, rec_map_index));
+
+    invalidade(t1);
+    invalidade(t2);
 
     copy_frame_free_p.release_free_page(t1);
     copy_frame_free_p.release_free_page(t2);

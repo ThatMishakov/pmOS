@@ -11,16 +11,6 @@ int buff_pos = 0;
 int buff_ack = 0;
 uint64_t log_port = 0;
 
-int strncmp(const char *s1, const char *s2, size_t size)
-{
-    size_t i = 0;
-    while (i < size && s1[i] == s2[i] && s1[i]) ++i;
-
-    if (i == size || !s1[i] && !s2[i]) return 0;
-    if (s1[i] < s2[i]) return -1;
-    return 1; 
-}
-
 void set_print_syscalls(uint64_t port)
 {
     log_port = port;

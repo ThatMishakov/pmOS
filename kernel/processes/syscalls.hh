@@ -13,38 +13,31 @@ extern "C" void syscall_handler();
 
 //#pragma GCC diagnostic pop
 
-// Allocates the page at virtual_addr
-void get_page(u64 virtual_addr);
-
-// Releases the page at virtual_addr
-void release_page(u64 virtual_addr);
-
 // Gets the pid of the current process
 void getpid();
 
 // Creates an empty process
 void syscall_create_process();
 
-// Transfers pages to another process
-void syscall_map_into();
+// Creates a normal (dellayed allocation region)
+void syscall_create_normal_region(u64 pid, u64 addr_start, u64 size, u64 access_flags);
 
-// Transfers pages to another processor in range
-void syscall_map_into_range(u64 arg1, u64 arg2, u64 arg3, u64 arg4, u64 arg5);
+// Creates a managed region
+void syscall_create_managed_region(u64 pid, u64 addr_start, u64 size, u64 access, u64 port);
 
-// Allocates the nb_page at virtual_addr
-void syscall_get_page_multi(u64 virtual_addr, u64 nb_pages);
+// Creates a region mapped to phys_addr
+void syscall_create_phys_map_region(u64 pid, u64 addr_start, u64 size, u64 access, u64 phys_addr);
 
-// Releases the nb_page at virtual_addr
-void syscall_release_page_multi(u64 virtual_addr, u64 nb_pages);
 
 // Starts a process with PID pid at starting point start
 void syscall_start_process(u64 pid, u64 start, u64 arg1, u64 arg2, u64 arg3);
 
+
+// Gets an index of the processes' page table. PID 0 can be used as PID_SELF
+void syscall_get_page_table(u64 pid);
+
 // Exits (kills the process at the end of its execution)
 void syscall_exit(u64 arg1, u64 arg2);
-
-// Maps physical memory into process
-void syscall_map_phys(u64 arg1, u64 arg2, u64 arg3, u64 arg4);
 
 // Get info about the last message
 void syscall_get_message_info(u64 message_struct, u64 portno, u32 flags);
@@ -63,9 +56,6 @@ void syscall_set_attribute(u64 pid, u64 attribute, u64 value);
 
 // Inits task's stack
 void syscall_init_stack(u64 pid, u64 esp);
-
-// Shares *nb_pages* pages starting with alligned *page_start* to process *pid* at addr *to_addr* with *flags* found in kernel/flags.h
-void syscall_share_with_range(u64 pid, u64 page_start, u64 to_addr, u64 nb_pages, u64 flags);
 
 // Checks if the page is allocated for user process
 void syscall_is_page_allocated(u64 page);

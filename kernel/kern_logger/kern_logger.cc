@@ -105,9 +105,9 @@ void Buffered_Logger::log_nolock(const char* c, size_t size)
         const char* str = c;
 
         for (size_t i = 0; i < length; i += buff_size) {
-            size_t length = min(length - i, buff_size);
-            memcpy(var.buff, str, length);
-            ptr->atomic_send_from_system((char*)&var, length+4);
+            size_t l = min(length - i, buff_size);
+            memcpy(var.buff, str, l);
+            ptr->atomic_send_from_system((char*)&var, l+4);
         }
     } else {
         log_buffer.append(c, size);

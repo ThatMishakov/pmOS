@@ -250,12 +250,3 @@ void memclear(void * base, int size_bytes)
         }
     }
 }
-
-void memcpy(char * from, char * to, uint64_t bytes)
-{
-    // TODO: **EXTREMELY** INEFFICIENT
-    while ((bytes--) > 0) {
-        *to = *from;
-        ++to; ++from;
-    }   
-}

@@ -17,7 +17,6 @@ uint64_t alloc_page();
 
 
 void memclear(void * base, int size_bytes);
-void memcpy(char * from, char * to, uint64_t bytes);
 
 extern uint64_t * bitmap;
 extern uint64_t bitmap_size;

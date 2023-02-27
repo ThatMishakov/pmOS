@@ -38,38 +38,17 @@ extern "C" void syscall_handler()
     }
 
     switch (call_n) {
-    case SYSCALL_GET_PAGE:
-        get_page(arg1);
-        break;
-    case SYSCALL_RELEASE_PAGE:
-        release_page(arg1);
-        break;
     case SYSCALL_GETPID:
         getpid();
         break;
     case SYSCALL_CREATE_PROCESS:
         syscall_create_process();
         break;
-    case SYSCALL_MAP_INTO:
-        syscall_map_into();
-        break;
-    case SYSCALL_MAP_INTO_RANGE:
-        syscall_map_into_range(arg1, arg2, arg3, arg4, arg5);
-        break;
-    case SYSCALL_GET_PAGE_MULTI:
-        syscall_get_page_multi(arg1, arg2);
-        break;
-    case SYSCALL_RELEASE_PAGE_MULTI:
-        syscall_release_page_multi(arg1, arg2);
-        break;
     case SYSCALL_START_PROCESS:
         syscall_start_process(arg1, arg2, arg3, arg4, arg5);
         break;
     case SYSCALL_EXIT:
         syscall_exit(arg1, arg2);
-        break;
-    case SYSCALL_MAP_PHYS:
-        syscall_map_phys(arg1, arg2, arg3, arg4);
         break;
     case SYSCALL_GET_MSG_INFO:
         syscall_get_message_info(arg1, arg2, arg3);
@@ -88,12 +67,6 @@ extern "C" void syscall_handler()
         break;
     case SYSCALL_INIT_STACK:
         syscall_init_stack(arg1, arg2);
-        break;
-    case SYSCALL_SHARE_WITH_RANGE:
-        syscall_share_with_range(arg1, arg2, arg3, arg4, arg5);
-        break;
-    case SYSCALL_IS_PAGE_ALLOCATED:
-        syscall_is_page_allocated(arg1);
         break;
     case SYSCALL_CONFIGURE_SYSTEM:
         syscall_configure_system(arg1, arg2, arg3);
@@ -125,79 +98,21 @@ extern "C" void syscall_handler()
     case SYSCALL_REQUEST_NAMED_PORT:
         syscall_request_named_port(arg1, arg2, arg3, arg4);
         break;
+    case SYSCALL_CREATE_NORMAL_REGION:
+        syscall_create_normal_region(arg1, arg2, arg3, arg4);
+        break;
+    case SYSCALL_CREATE_MANAGED_REGION:
+        syscall_create_managed_region(arg1, arg2, arg3, arg4, arg5);
+        break;
+    case SYSCALL_CREATE_PHYS_REGION:
+        syscall_create_phys_map_region(arg1, arg2, arg3, arg4, arg5);
+        break;
     default:
         // Not supported
         syscall_ret_low(task) = ERROR_NOT_SUPPORTED;
         break;
     }
     //t_print_bochs(" -> result %h\n", syscall_ret_low(task));
-}
-
-void get_page(u64 virtual_addr)
-{
-    const task_ptr& task = get_current_task();
-
-    // Check allignment to 4096K (page size)
-    if (virtual_addr & 0xfff) {
-        syscall_ret_low(task) = ERROR_UNALLIGNED;
-        return;
-    }
-
-
-    // Check that program is not hijacking kernel space
-    if (virtual_addr >= KERNEL_ADDR_SPACE) {
-        syscall_ret_low(task) = ERROR_OUT_OF_RANGE;
-        return;
-    }
-
-    // Check that the page is not already mapped
-    if (page_type(virtual_addr) != Page_Types::UNALLOCATED) {
-        syscall_ret_low(task) = ERROR_PAGE_PRESENT;
-        return;
-    }
-
-    // Everything seems ok, get the page (lazy allocation)
-    Page_Table_Argumments arg = {};
-    arg.user_access = 1;
-    arg.writeable = 1;
-    arg.execution_disabled = 0;
-    u64 result = alloc_page_lazy(virtual_addr, arg, 0);
-
-    // Return the result (success or failure)
-    syscall_ret_low(task) = result;
-    return;
-}
-
-void release_page(u64 virtual_addr)
-{
-    const task_ptr& task = get_current_task();
-
-    // Check allignment to 4096K (page size)
-    if (virtual_addr & 0xfff) {
-        syscall_ret_low(task) = ERROR_UNALLIGNED;
-        return;
-    }
-
-    // Check that program is not hijacking kernel space
-    if (virtual_addr >= KERNEL_ADDR_SPACE) {
-        syscall_ret_low(task) = ERROR_OUT_OF_RANGE;
-        return;
-    }
-
-    // Check page
-    Page_Types p = page_type(virtual_addr);
-    if (p == Page_Types::UNALLOCATED) {
-        syscall_ret_low(task) = ERROR_PAGE_NOT_ALLOCATED;
-        return;
-    }
-    if (p != NORMAL) {
-        syscall_ret_low(task) = ERROR_HUGE_PAGE;
-        return;
-    }
-
-    // Everything ok, release the page
-    syscall_ret_low(task) = release_page_s(virtual_addr, get_cpu_struct()->current_task->pid);
-    return;
 }
 
 void getpid()
@@ -222,194 +137,6 @@ void syscall_create_process()
 
     syscall_ret_low(task) = process.result;
     return;
-}
-
-void syscall_map_into()
-{
-    syscall_ret_low(get_current_task()) = ERROR_NOT_IMPLEMENTED;
-}
-
-void syscall_map_into_range(u64 arg1, u64 arg2, u64 arg3, u64 arg4, u64 arg5)
-{
-    klib::shared_ptr<TaskDescriptor> current = get_cpu_struct()->current_task;
-
-    u64 pid = arg1;
-    u64 page_start = arg2;
-    u64 to_addr = arg3;
-    u64 nb_pages = arg4;
-
-    Page_Table_Argumments pta = {};
-    pta.user_access = 1;
-    pta.global = 0;
-    pta.writeable = !!(arg5&FLAG_RW);
-    pta.execution_disabled = !!(arg5&FLAG_NOEXECUTE);
-
-    // TODO: Check permissions
-
-    // Check if legal address
-    if (page_start >= KERNEL_ADDR_SPACE or (page_start + nb_pages*KB(4)) > KERNEL_ADDR_SPACE or (page_start + nb_pages*KB(4) < page_start)) {
-        syscall_ret_low(current) = ERROR_OUT_OF_RANGE;
-        return;
-    }
-
-    // Check allignment
-    if (page_start & 0xfff) {
-        syscall_ret_low(current) = ERROR_UNALLIGNED; 
-        return;
-    }
-    if (to_addr & 0xfff) {
-        syscall_ret_low(current) = ERROR_UNALLIGNED; 
-        return;
-    }
-
-    klib::shared_ptr<TaskDescriptor> t = get_task(pid);
-
-    // Check if process exists
-    if (not t) {
-        syscall_ret_low(current) = ERROR_NO_SUCH_PROCESS;
-        return;
-    }
-
-    Auto_Lock_Scope scope_lock(t->sched_lock);
-
-    // Check process status
-    if (not is_uninited(t)) {
-        syscall_ret_low(current) = ERROR_PROCESS_INITED;
-        return;
-    }
-
-    syscall_ret_low(current) = atomic_transfer_pages(current, t, page_start, to_addr, nb_pages, pta);
-}
-
-void syscall_share_with_range(u64 pid, u64 page_start, u64 to_addr, u64 nb_pages, u64 args)
-{
-    const task_ptr& task = get_current_task();
-
-    // TODO: Check permissions
-
-    // Check if legal address
-    if (page_start >= KERNEL_ADDR_SPACE or (page_start + nb_pages*KB(4)) > KERNEL_ADDR_SPACE or (page_start + nb_pages*KB(4) < page_start)) {
-        syscall_ret_low(task) = ERROR_OUT_OF_RANGE;
-        return;
-    }
-
-    // Check allignment
-    if (page_start & 0xfff) {
-        syscall_ret_low(task) = ERROR_UNALLIGNED;
-        return;
-    }
-
-    if (to_addr & 0xfff) {
-        syscall_ret_low(task) = ERROR_UNALLIGNED;
-        return;
-    }
-
-    klib::shared_ptr<TaskDescriptor> t = get_task(pid);
-
-    // Check if process exists
-    if (not t) {
-        syscall_ret_low(task) = ERROR_NO_SUCH_PROCESS;
-        return;
-    }
-
-    Auto_Lock_Scope scope_lock(t->sched_lock);
-
-    Page_Table_Argumments pta = {};
-    pta.user_access = 1;
-    pta.global = 0;
-    pta.writeable = args& FLAG_RW;
-    pta.execution_disabled = args&FLAG_NOEXECUTE;
-
-    kresult_t r = atomic_share_pages(t, page_start, to_addr, nb_pages, pta);
-
-    syscall_ret_low(task) = r;
-}
-
-void syscall_get_page_multi(u64 virtual_addr, u64 nb_pages)
-{
-    const task_ptr& task = get_current_task();
-
-    // Check allignment to 4096K (page size)
-    if (virtual_addr & 0xfff) {
-        syscall_ret_low(task) = ERROR_UNALLIGNED;
-        return;
-    }
-
-    // Check that program is not hijacking kernel space
-    if (virtual_addr >= KERNEL_ADDR_SPACE or (virtual_addr + nb_pages*KB(4)) > KERNEL_ADDR_SPACE or (virtual_addr + nb_pages*KB(4) < virtual_addr)) {
-        syscall_ret_low(task) = ERROR_OUT_OF_RANGE;
-        return;
-    }
-
-    // Everything seems ok, get the page (lazy allocation)
-    Page_Table_Argumments arg = {};
-    arg.user_access = 1;
-    arg.writeable = 1;
-    arg.execution_disabled = 1;
-    u64 result = SUCCESS;
-    u64 i = 0;
-
-    Auto_Lock_Scope scope_lock_paging(get_cpu_struct()->current_task->page_table.shared_str->lock);
-
-    for (; i < nb_pages and result == SUCCESS; ++i)
-        result = alloc_page_lazy(virtual_addr + i*KB(4), arg, 0);
-
-    // If unsuccessfull, return everything back
-    if (result != SUCCESS)
-        for (u64 k = 0; k < i; ++k) 
-            invalidade_noerr(virtual_addr + k*KB(4));
-
-    // Return the result (success or failure)
-    syscall_ret_low(task) = result;
-}
-
-void syscall_release_page_multi(u64 virtual_addr, u64 nb_pages)
-{
-    const task_ptr& task = get_current_task();
-
-    // Check allignment to 4096K (page size)
-    if (virtual_addr & 0xfff) {
-        syscall_ret_low(task) = ERROR_UNALLIGNED;
-        return;
-    }
-
-    // Check that program is not hijacking kernel space
-    if (virtual_addr >= KERNEL_ADDR_SPACE or (virtual_addr + nb_pages*KB(4)) > KERNEL_ADDR_SPACE or (virtual_addr + nb_pages*KB(4) < virtual_addr)) {
-        syscall_ret_low(task) = ERROR_OUT_OF_RANGE;
-        return;
-    }
-
-    Auto_Lock_Scope scope_lock_paging(get_cpu_struct()->current_task->page_table.get_lock());
-
-    // Check pages
-    for (u64 i = 0; i < nb_pages; ++i) {
-        Page_Types p = page_type(virtual_addr);
-        switch (p)
-        {
-        case Page_Types::UNALLOCATED:
-            syscall_ret_low(task) = ERROR_PAGE_NOT_ALLOCATED;
-            return;
-            break;
-        case Page_Types::SPECIAL:
-        case Page_Types::NORMAL:
-            break;
-        default:
-            syscall_ret_low(task) = ERROR_HUGE_PAGE;
-            return;
-            break;
-        }
-    }
-
-    kresult_t r = SUCCESS;
-
-    // TODO: Leaves user process in unknown state afterwards
-
-    // Everything ok, release pages
-    for (u64 i = 0; i < nb_pages and r == SUCCESS; ++i)
-        r = release_page_s(virtual_addr + i*KB(4), get_cpu_struct()->current_task->pid);
-
-    // Return the result (success or failure)
-    syscall_ret_low(task) = r;
 }
 
 void syscall_start_process(u64 pid, u64 start, u64 arg1, u64 arg2, u64 arg3)
@@ -493,57 +220,6 @@ void syscall_exit(u64 arg1, u64 arg2)
     kill(task);
 
     syscall_ret_low(task) = SUCCESS;
-}
-
-void syscall_map_phys(u64 arg1, u64 arg2, u64 arg3, u64 arg4)
-{
-    const task_ptr& task = get_current_task();
-
-    u64 virt = arg1;
-    u64 phys = arg2;
-    u64 nb_pages = arg3;
-
-    Page_Table_Argumments pta = {};
-    pta.user_access = 1;
-    pta.extra = 0b010;
-    pta.global = 0;
-    pta.writeable = arg4& 0x01;
-    pta.execution_disabled = arg4&0x02;
-    //t_print_bochs("Debug: map_phys virt %h <- phys %h nb %h pid %i\n", virt, phys, nb_pages, get_cpu_struct()->current_task->pid);
-
-    // TODO: Check permissions
-
-    // Check if legal address
-    if (virt >= KERNEL_ADDR_SPACE or (virt + nb_pages*KB(4)) > KERNEL_ADDR_SPACE or (virt + nb_pages*KB(4) < virt)) {
-        syscall_ret_low(task) = ERROR_OUT_OF_RANGE;
-        return;
-    }
-
-    // Check allignment
-    if ((virt & 0xfff) or (phys & 0xfff)) {
-        syscall_ret_low(task) = ERROR_UNALLIGNED;
-        return;
-    }
-
-    // TODO: Check if physical address is ok
-
-    Auto_Lock_Scope paging_lock_scope(get_cpu_struct()->current_task->page_table.shared_str->lock);
-
-    u64 i = 0;
-    kresult_t r = SUCCESS;
-    for (; i < nb_pages and r == SUCCESS; ++i) {
-        r = map(phys + i*KB(4), virt+i*KB(4), pta);
-    }
-
-    --i;
-
-    // If was not successfull, invalidade the pages
-    if (r != SUCCESS)
-        for (u64 k = 0; k < i; ++k) {
-            invalidade_noerr(virt+k*KB(4));
-        }
-
-    syscall_ret_low(task) =  r;
 }
 
 void syscall_get_first_message(u64 buff, u64 args, u64 portno)
@@ -713,30 +389,6 @@ void syscall_set_attribute(u64 pid, u64 attribute, u64 value)
     }
 
     syscall_ret_low(task) = result;
-}
-
-void syscall_is_page_allocated(u64 virtual_addr)
-{
-    const klib::shared_ptr<TaskDescriptor>& current_task = get_cpu_struct()->current_task;
-
-    // Check allignment to 4096K (page size)
-    if (virtual_addr & 0xfff) {
-        syscall_ret_low(current_task) = ERROR_UNALLIGNED;
-        return;
-    }
-
-    // Check that program is not hijacking kernel space
-    if (virtual_addr >= KERNEL_ADDR_SPACE) {
-        syscall_ret_low(current_task) = ERROR_OUT_OF_RANGE;
-        return;
-    }
-
-    Auto_Lock_Scope lock(current_task->page_table.shared_str->lock);
-    Page_Types type = page_type(virtual_addr);
-    bool is_allocated = type != Page_Types::UNALLOCATED and type != Page_Types::UNKNOWN;
-
-    syscall_ret_low(current_task) = SUCCESS;
-    syscall_ret_high(current_task) = is_allocated;
 }
 
 void syscall_configure_system(u64 type, u64 arg1, u64 arg2)
@@ -1057,4 +709,137 @@ void syscall_set_log_port(u64 port, u32 flags)
 
     syscall_ret_low(task) = global_logger.set_port(port_ptr, flags);
     return;
+}
+
+void syscall_create_normal_region(u64 pid, u64 addr_start, u64 size, u64 access)
+{
+    const klib::shared_ptr<TaskDescriptor>& current = get_cpu_struct()->current_task;
+
+    klib::shared_ptr<TaskDescriptor> dest_task = nullptr;
+
+    if (pid == 0 or current->pid == pid)
+        dest_task = current;
+
+    if (not dest_task)
+        dest_task = get_task(pid);
+
+    // Check if process exists
+    if (not dest_task) {
+        syscall_ret_low(current) = ERROR_NO_SUCH_PROCESS;
+        return;
+    }
+
+    if (addr_start & 07777 or size & 07777) {
+        syscall_ret_low(current) = ERROR_PAGE_NOT_ALLOCATED;
+        return;
+    }
+
+    {
+        Auto_Lock_Scope paging_lock(dest_task->page_table->lock);
+
+        auto result = dest_task->page_table->create_normal_region(addr_start, size, access & 0x07, access & 0x08, klib::string(), 0);
+        syscall_ret_low(current) = result.result;
+        syscall_ret_high(current) = result.val;
+        return;
+    }
+}
+
+void syscall_create_managed_region(u64 pid, u64 addr_start, u64 size, u64 access, u64 port)
+{
+    const klib::shared_ptr<TaskDescriptor>& current = get_cpu_struct()->current_task;
+
+    klib::shared_ptr<TaskDescriptor> dest_task = nullptr;
+
+    if (pid == 0 or current->pid == pid)
+        dest_task = current;
+
+    if (not dest_task)
+        dest_task = get_task(pid);
+
+    // Check if process exists
+    if (not dest_task) {
+        syscall_ret_low(current) = ERROR_NO_SUCH_PROCESS;
+        return;
+    }
+
+    if (addr_start & 07777 or size & 07777) {
+        syscall_ret_low(current) = ERROR_PAGE_NOT_ALLOCATED;
+        return;
+    }
+
+    klib::shared_ptr<Port> p = global_ports.atomic_get_port(port);
+
+    if (not p) {
+        syscall_ret_low(current) = ERROR_PORT_DOESNT_EXIST;
+        return;
+    }
+
+    {
+        Auto_Lock_Scope paging_lock(dest_task->page_table->lock);
+
+        auto result = dest_task->page_table->create_managed_region(addr_start, size, access & 0x07, access & 0x08, klib::string(), klib::move(p));
+        syscall_ret_low(current) = result.result;
+        syscall_ret_high(current) = result.val;
+        return;
+    }
+}
+
+void syscall_create_phys_map_region(u64 pid, u64 addr_start, u64 size, u64 access, u64 phys_addr)
+{
+    const klib::shared_ptr<TaskDescriptor>& current = get_cpu_struct()->current_task;
+
+    klib::shared_ptr<TaskDescriptor> dest_task = nullptr;
+
+    if (pid == 0 or current->pid == pid)
+        dest_task = current;
+
+    if (not dest_task)
+        dest_task = get_task(pid);
+
+    // Check if process exists
+    if (not dest_task) {
+        syscall_ret_low(current) = ERROR_NO_SUCH_PROCESS;
+        return;
+    }
+
+    if (addr_start & 07777 or size & 07777) {
+        syscall_ret_low(current) = ERROR_PAGE_NOT_ALLOCATED;
+        return;
+    }
+
+    {
+        Auto_Lock_Scope paging_lock(dest_task->page_table->lock);
+
+        auto result = dest_task->page_table->create_phys_region(addr_start, size, access & 0x07, access & 0x08, klib::string(), phys_addr);
+        syscall_ret_low(current) = result.result;
+        syscall_ret_high(current) = result.val;
+        return;
+    }
+}
+
+void syscall_get_page_table(u64 pid)
+{
+    const klib::shared_ptr<TaskDescriptor>& current = get_cpu_struct()->current_task;
+
+    klib::shared_ptr<TaskDescriptor> target{};
+
+    if (pid == 0 or current->pid == pid)
+        target = current;
+    else
+        target = get_task(pid);
+
+    if (not target) {
+        syscall_ret_low(current) = ERROR_NO_SUCH_PROCESS;
+        return;
+    }
+
+    Auto_Lock_Scope target_lock(target->sched_lock);
+
+    if (not target->page_table) {
+        syscall_ret_low(current) = ERROR_HAS_NO_PAGE_TABLE;
+        return;
+    }
+
+    syscall_ret_low(current) = SUCCESS;
+    syscall_ret_high(current) = target->page_table->id;
 }

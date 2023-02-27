@@ -289,6 +289,7 @@ GDT_DW:
     .short 0
     .short 0
 
+    .text
     .code32
 .text
     .globl loadGDT_32

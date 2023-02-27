@@ -18,11 +18,11 @@ SECTIONS
         *(.cpuinit)
         _cpuinit_end = .;
     }
-    .rodata : {
-        *(.rodata*)
-    }
     .data : {
         *(.data*)
+    }
+    .rodata : {
+        *(.rodata*)
     }
     .bss : {
         *(COMMON)

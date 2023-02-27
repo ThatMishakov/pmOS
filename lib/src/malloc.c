@@ -3,16 +3,9 @@
 #include <stddef.h>
 #include <string.h>
 #include <stdint.h>
+#include <pmos/memory.h>
 
 #define ALLOC_MIN_PAGES 8
-
-extern char _end;
-static const void* heap_start = NULL;
-
-void init_malloc(void)
-{
-    heap_start = (void*)(((uint64_t)(&_end)&~0xfff) + 0x1000);
-}
 
 size_t heap_size = 0;
 
@@ -23,13 +16,6 @@ typedef struct malloc_list{
 
 struct malloc_list head = {0,0};
 
-void* heap_reserve_pages(size_t pages)
-{
-    uint64_t k = __atomic_fetch_add(&heap_size, pages, 0);
-    uint64_t pos = (uint64_t)(heap_start) + (k << 12ULL);
-    return (void*)pos;
-}
-
 static size_t get_alloc_size(const void* ptr)
 {
     return *(((const uint64_t*)ptr) - 1);
@@ -37,9 +23,11 @@ static size_t get_alloc_size(const void* ptr)
 
 void *palloc(size_t pages)
 {
-    uint64_t pos = (uint64_t)heap_reserve_pages(pages);
-    get_page_multi(pos, pages);
-    return (void*)pos;
+    mem_request_ret_t req = create_normal_region(0, NULL, pages*4096, PROT_READ | PROT_WRITE);
+    if (req.result != SUCCESS)
+        return NULL;
+
+    return req.virt_addr;
 }
 
 void *malloc_int(size_t size_bytes, size_t* size_bytes_a)

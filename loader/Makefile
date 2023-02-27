@@ -5,7 +5,7 @@ ROOTDIR = $(realpath .)
 CC = $(ROOTDIR)/../bin/cross/bin/x86_64-pmos-gcc
 CPP = $(ROOTDIR)/../bin/cross/bin/x86_64-pmos-gcc
 CXX = $(ROOTDIR)/../bin/cross/bin/x86_64-pmos-g++
-LD = $(ROOTDIR)/../bin/cross/bin/x86_64-pmos-g++
+LD = $(ROOTDIR)/../bin/cross/bin/x86_64-pmos-gcc
 
 INCLUDEDIR = include
 
@@ -19,7 +19,6 @@ LDFLAGS = $(INTERNALLDFLAGS)
 
 # Internal link flags that should not be changed by the user.
 INTERNALLDFLAGS := \
-    -nostdlib               \
 	-Tlinker.ld    \
 	-z max-page-size=0x1000 \
 	-static
@@ -27,7 +26,6 @@ INTERNALLDFLAGS := \
 # Internal C flags that should not be changed by the user.
 INTERNALCFLAGS  := \
 	-I.					 \
-	-ffreestanding       \
 	-fno-stack-protector \
 	-mno-80387           \
 	-mno-mmx             \

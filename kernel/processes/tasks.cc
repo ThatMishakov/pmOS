@@ -8,7 +8,7 @@
 ReturnStr<klib::shared_ptr<TaskDescriptor>> create_process(u16 ring)
 {
     // Create the structure
-    klib::shared_ptr<TaskDescriptor> n = klib::make_shared<TaskDescriptor>();
+    klib::shared_ptr<TaskDescriptor> n = TaskDescriptor::create();
     
     // Assign cs and ss
     switch (ring)
@@ -27,12 +27,12 @@ ReturnStr<klib::shared_ptr<TaskDescriptor>> create_process(u16 ring)
     }
 
     // Create a new page table
-    // TODO: Exceptions
-    n->page_table = Page_Table::get_new_page_table();
+    kresult_t result = n->create_new_page_table();
+    if (result != SUCCESS)
+        return {result, 0};
 
     // Assign a pid
     n->pid = assign_pid();
-    n->status = PROCESS_UNINIT;
 
     // Add to the map of processes and to uninit list
     tasks_map_lock.lock();
@@ -48,31 +48,30 @@ ReturnStr<klib::shared_ptr<TaskDescriptor>> create_process(u16 ring)
 
 ReturnStr<u64> TaskDescriptor::init_stack()
 {
-    // Switch to the new pml4
-    u64 current_cr3 = getCR3();
-
-    Auto_Lock_Scope page_lock(this->page_table.shared_str->lock);
-    setCR3(this->page_table.get_cr3());
+    Auto_Lock_Scope page_lock(this->page_table->lock);
 
     kresult_t r;
     // Prealloc a page for the stack
     u64 stack_end = (u64)KERNEL_ADDR_SPACE; //&_free_to_use;
-    u64 stack_page_start = stack_end - KB(4);
+    u64 stack_size = GB(2);
+    u64 stack_page_start = stack_end - stack_size;
 
-    Page_Table_Argumments arg;
-    arg.writeable = 1;
-    arg.execution_disabled = 1;
-    arg.global = 0;
-    arg.user_access = 1;
-    r = alloc_page_lazy(stack_page_start, arg, LAZY_FLAG_GROW_DOWN);  // TODO: This crashes real machines
+    static const klib::string stack_region_name = "default_stack";
 
-    if (r != SUCCESS) goto fail;
+    r = this->page_table->create_normal_region(
+        stack_page_start, 
+        stack_size, 
+        Page_Table::Writeable | Page_Table::Readable, 
+        true,
+        stack_region_name, 
+        -1).result;
+
+    if (r != SUCCESS)
+        return {r, 0};
 
     // Set new rsp
     this->regs.e.rsp = stack_end;
-fail:
-    // Load old page table back
-    setCR3(current_cr3);
+
     return {r, this->regs.e.rsp};
 }
 
@@ -80,7 +79,7 @@ void init_idle()
 {
     ReturnStr<klib::shared_ptr<TaskDescriptor>> i = create_process(0);
     if (i.result != SUCCESS) {
-        t_print_bochs("Error: failed to create the idle process!\n");
+        t_print_bochs("Error: failed to create the idle process! Error: %i\n", i.result);
         return;
     }
 
@@ -156,5 +155,41 @@ void kill(const klib::shared_ptr<TaskDescriptor>& p) // TODO: UNIX Signals
         dead_queue.push_back(p);
     }
 
-    p->page_table = Page_Table();
+    p->page_table = nullptr;
+}
+
+kresult_t TaskDescriptor::create_new_page_table()
+{
+    Auto_Lock_Scope scope_lock(sched_lock);
+
+    if (status != PROCESS_UNINIT)
+        return ERROR_PROCESS_INITED;
+
+    if (page_table)
+        return ERROR_HAS_PAGE_TABLE;
+
+    klib::shared_ptr<Page_Table> table = Page_Table::create_empty_page_table();
+
+    Auto_Lock_Scope page_table_lock(table->lock);
+    table->owner_tasks.insert(weak_self);
+    page_table = table;
+
+    return SUCCESS;
+}
+
+kresult_t TaskDescriptor::register_page_table(klib::shared_ptr<Page_Table> table)
+{
+    Auto_Lock_Scope scope_lock(sched_lock);
+
+    if (status != PROCESS_UNINIT)
+        return ERROR_PROCESS_INITED;
+
+    if (page_table)
+        return ERROR_HAS_PAGE_TABLE;
+
+    Auto_Lock_Scope page_table_lock(table->lock);
+    table->owner_tasks.insert(weak_self);
+    page_table = table;
+
+    return SUCCESS;
 }

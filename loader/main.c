@@ -19,29 +19,60 @@
 #include <args.h>
 #include <pmos/ipc.h>
 #include <stddef.h>
+#include <pmos/system.h>
+#include <pmos/memory.h>
 
 uint64_t multiboot_magic;
 uint64_t multiboot_info_str;
+
+uint64_t loader_port = 0;
+
+struct task_list_node {
+    struct task_list_node *next;
+    struct multiboot_tag_module * mod_ptr;
+    ELF_64bit* elf_virt_addr;
+    uint64_t page_table;
+};
+
+struct task_list_node *modules_list = NULL;
+
+void push_modules_list(struct task_list_node *n)
+{
+    n->next = modules_list;
+    modules_list = n;
+}
 
 void load_multiboot_module(struct multiboot_tag_module * mod)
 {
     print_str(" --> loading ");
     print_str(mod->cmdline);
     print_str("\n");
-    static uint64_t virt_addr = 549755813888;
+
+    struct task_list_node *n = malloc(sizeof(struct task_list_node));
+    push_modules_list(n);
+
+    n->mod_ptr = mod;
+    n->page_table = 0;
+
     uint64_t phys_start = (uint64_t)mod->mod_start & ~(uint64_t)0xfff;
     uint64_t phys_end = (uint64_t)mod->mod_end;
     uint64_t nb_pages = (phys_end - phys_start) >> 12;
     if (phys_end & 0xfff) nb_pages += 1;
-    map_phys(virt_addr, phys_start, nb_pages, 0x3);
-    ELF_64bit* e = (ELF_64bit*)((uint64_t)mod->mod_start - phys_start + virt_addr);
-    uint64_t pid = load_elf(e, 3);
+
+    mem_request_ret_t result = create_phys_map_region(0, NULL, nb_pages*4096, PROT_READ, (void *)phys_start);
+    if (result.result != SUCCESS) {
+        asm ("xchgw %bx, %bx");
+    }
+    n->elf_virt_addr = result.virt_addr;
+
+    uint64_t pid = load_elf(n, 3);
 
     syscall(SYSCALL_SET_TASK_NAME, pid, mod->cmdline, strlen(mod->cmdline));
 
-    start_process(pid, e->program_entry, 0, 0, 0);
-    release_pages(virt_addr, nb_pages);
+    start_process(pid, n->elf_virt_addr->program_entry, 0, 0, 0);
 }
+
+void init_std_lib(void);
 
 void main()
 {
@@ -74,7 +105,18 @@ void main()
 
     load_kernel(multiboot_info_str);
 
+    init_std_lib();
+
     init_acpi(multiboot_info_str);
+
+    syscall_r r = syscall(SYSCALL_CREATE_PORT, getpid());
+    loader_port = r.value; 
+    if (r.result != SUCCESS) {
+        print_str("Loader: could not create a port. Error: ");
+        print_hex(r.result);
+        print_str("\n");
+        goto exit;
+    }
 
     //start_cpus();
 
@@ -91,15 +133,6 @@ void main()
         }
 
     init_acpi(multiboot_info_str);
-
-    syscall_r r = syscall(SYSCALL_CREATE_PORT, getpid());
-    uint64_t loader_port = r.value; 
-    if (r.result != SUCCESS) {
-        print_str("Loader: could not create a port. Error: ");
-        print_hex(r.result);
-        print_str("\n");
-        goto exit;
-    }
 
     char *log_port_name = "/pmos/terminald";
     syscall(SYSCALL_REQUEST_NAMED_PORT, log_port_name, strlen(log_port_name), loader_port, 0);

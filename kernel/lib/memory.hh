@@ -245,13 +245,7 @@ public:
         p.refcount = nullptr;
     }
 
-    shared_ptr(unique_ptr<T>&& p)
-    {
-        unique_ptr<_smart_ptr_refcount_str> refcount_new = make_unique<_smart_ptr_refcount_str>(_smart_ptr_refcount_str());
-        ptr = p.release();
-        refcount = refcount_new.release();
-        refcount->shared_refs = 1; 
-    }
+    shared_ptr(unique_ptr<T>&& p);
 
     ~shared_ptr()
     {
@@ -571,5 +565,57 @@ private:
     T* ptr = nullptr;
     _smart_ptr_refcount_str* refcount = nullptr;
 };
+
+template< class T > class enable_shared_from_this
+{
+private:
+    // TODO: Weak_ptr is reduntant as *this == ptr anyways
+    weak_ptr<T> weak_this = weak_ptr<T>();
+protected:
+    constexpr enable_shared_from_this() noexcept = default;
+    enable_shared_from_this( const enable_shared_from_this<T>&obj ) noexcept = default;
+    enable_shared_from_this( enable_shared_from_this<T>&&obj ) noexcept = delete;
+    ~enable_shared_from_this() = default;
+
+    enable_shared_from_this<T>& operator=( const enable_shared_from_this<T> &obj ) noexcept
+    {
+        return *this;
+    }
+public:
+    shared_ptr<T> shared_from_this()
+    {
+        return weak_this.lock();
+    }
+    shared_ptr<T const> shared_from_this() const
+    {
+        return weak_this.lock();
+    }
+    weak_ptr<T> weak_from_this() noexcept
+    {
+        return weak_this;
+    }
+    weak_ptr<T const> weak_from_this() const noexcept
+    {
+        return weak_this;
+    }
+
+    friend shared_ptr<T>;
+};
+
+template<class T>
+shared_ptr<T>::shared_ptr(unique_ptr<T>&& p)
+{
+    if (not p.get())
+        return;
+
+    unique_ptr<_smart_ptr_refcount_str> refcount_new = make_unique<_smart_ptr_refcount_str>(_smart_ptr_refcount_str());
+    ptr = p.release();
+    refcount = refcount_new.release();
+    refcount->shared_refs = 1; 
+
+    if constexpr(klib::is_base_of<enable_shared_from_this<T>, T>::value) {
+        ptr->weak_this = *this;
+    }
+}
 
 }

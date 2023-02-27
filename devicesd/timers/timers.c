@@ -41,7 +41,7 @@ int start_timer(IPC_Start_Timer* t, uint64_t reply_pid)
     e->extra1 = t->extra1;
     e->extra2 = t->extra2;
     e->pid = reply_pid;
-    e->reply_chan = t->reply_channel;
+    e->reply_chan = t->reply_port; 
 
     if (t->ms == 0) {
         notify_task(e);

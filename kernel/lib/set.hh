@@ -178,11 +178,13 @@ typename set<K>::node* set<K>::next(node* n)
     if (n->right != &NIL)
         return min(n->right);
 
-    n = n->parent;
-    while (n != &NIL and n == n->parent->right)
-        n = n->parent;
+    node* p = n->parent;
+    while (p != &NIL and n == p->right) {
+        n = p;
+        p = p->parent;
+    }
 
-    return n;
+    return p;
 }
 
 template<typename K>

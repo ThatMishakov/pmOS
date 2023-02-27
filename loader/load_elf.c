@@ -7,9 +7,20 @@
 #include <misc.h>
 #include <mem.h>
 #include <paging.h>
+#include <pmos/memory.h>
 
-uint64_t load_elf(ELF_64bit* elf_h, uint8_t ring)
+struct task_list_node {
+    struct task_list_node *next;
+    struct multiboot_tag_module * mod_ptr;
+    ELF_64bit* elf_virt_addr;
+    uint64_t page_table;
+};
+
+extern uint64_t loader_port;
+
+uint64_t load_elf(struct task_list_node* n, uint8_t ring)
 {
+    ELF_64bit *elf_h = n->elf_virt_addr;
     if (elf_h->magic != 0x464c457f) {
         print_str("Error: not elf format!\n");
         return 1;
@@ -29,6 +40,8 @@ uint64_t load_elf(ELF_64bit* elf_h, uint8_t ring)
     }
     uint64_t pid = r.value;
 
+    n->page_table = get_page_table(pid).page_table;
+
     for (int i = 0; i < elf_pheader_entries; ++i) {
         ELF_PHeader_64 * p = &elf_pheader[i];
         if (p->type == ELF_SEGMENT_LOAD) {
@@ -43,27 +56,15 @@ uint64_t load_elf(ELF_64bit* elf_h, uint8_t ring)
                      vaddr_end = (vaddr_end & ~0xfffUL) + (vaddr_end & 0xfff ? 0x1000 : 0);
             uint64_t pages = (vaddr_end - vaddr_all) >> 12;
 
-            // TODO: Error checking
-            syscall_r r = get_page_multi(memory, pages);
-            if (r.result != SUCCESS) {
-                asm("xchgw %bx, %bx");
-                print_hex(r.result);
-                print_str(" !!!\n");
-                halt();
-            }
-
-            memcpy((char*)phys_loc, (char*)(memory + (vaddr - vaddr_all)) , size);
-
+            char readable = !!(p->flags & ELF_FLAG_READABLE);
             char writeable = !!(p->flags & ELF_FLAG_WRITABLE);
-            char execution_disabled = !(p->flags & ELF_FLAG_EXECUTABLE);
-            uint64_t mask = (writeable << 0) | (execution_disabled << 1);
-
-            r = map_into_range(pid, memory, vaddr_all, pages, mask);
-            if (r.result != SUCCESS) {
+            char executable = !!(p->flags & ELF_FLAG_EXECUTABLE);
+            uint64_t mask = (writeable << 1) | (executable << 2) | (readable << 0);
+            mem_request_ret_t req = create_managed_region(pid, (void *)vaddr_all, vaddr_end - vaddr_all, mask | 0x08, loader_port);
+            if (req.result != SUCCESS) {
                 asm("xchgw %bx, %bx");
                 print_hex(r.result);
                 print_str(" !!!\n");
-                halt();
             }
         }
     }

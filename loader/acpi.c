@@ -44,7 +44,6 @@ void printACPI(void *RootSDT)
     for (int i = 0; i < entries; i++)
     {
         ACPISDTHeader *h = (ACPISDTHeader *) xsdt->PointerToOtherSDT[i];
-        map_phys((u64)(h)&~0xfffULL, (u64)(h)&~0xfffULL, 1, 0x3);
         print_str("ACPI ");
         print_hex(h);
         print_str(" signature ");
@@ -62,7 +61,6 @@ MADT* getMADT()
 
         for (uint32_t i = 0; i < entries; ++i) {
             ACPISDTHeader *h = (ACPISDTHeader *) xsdt->PointerToOtherSDT[i];
-            map_phys((u64)(h)&~0xfffULL, (u64)(h)&~0xfffULL, 1, 0x3);
             if (*(uint32_t*)(h->signature) == apic_signature) return (MADT*)h;
         }
     } if (rsdp_desc != 0) {
@@ -71,7 +69,6 @@ MADT* getMADT()
 
         for (uint32_t i = 0; i < entries; ++i) {
             ACPISDTHeader *h = (ACPISDTHeader *) rsdt->PointerToOtherSDT[i];
-            map_phys((u64)(h)&~0xfffULL, (u64)(h)&~0xfffULL, 1, 0x3);
             if (*(uint32_t*)(h->signature) == apic_signature) return (MADT*)h;
         }
     }
@@ -102,7 +99,6 @@ void init_acpi(unsigned long multiboot_info_str)
         //print_hex(RDSP_checksum_20(rsdp20_desc));
         //print_str("\n");
         uint64_t xsdt_addr = rsdp20_desc->xsdt_address;
-        map_phys(xsdt_addr&~0xfffULL, xsdt_addr&~0xfffULL, 1, 0x3);
         //printACPI(xsdt_addr);
 
     } else if (rsdp_desc != 0) {
@@ -112,7 +108,6 @@ void init_acpi(unsigned long multiboot_info_str)
         //print_hex(RDSP_checksum(rsdp_desc));
         //print_str("\n");
         uint32_t rsdt_addr = rsdp_desc->rsdt_address;
-        map_phys(rsdt_addr&~0xfffULL, rsdt_addr&~0xfffULL, 1, 0x3);
     } else {
         print_str("!!! Did not find ACPI tables!\n");
     }

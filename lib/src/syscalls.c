@@ -1,40 +1,16 @@
 #include <pmos/system.h>
 #include <kernel/types.h>
 #include <pmos/ports.h>
-
-syscall_r syscall_get_page(u64 addr)
-{
-    return syscall(SYSCALL_GET_PAGE, addr);
-}
-
-syscall_r map_into_range(u64 pid, u64 page_start, u64 to_addr, u64 nb_pages, u64 mask)
-{
-    return syscall(SYSCALL_MAP_INTO_RANGE, pid, page_start, to_addr, nb_pages, mask);
-}
+#include <pmos/memory.h>
 
 syscall_r syscall_new_process(uint8_t ring)
 {
     return syscall(SYSCALL_CREATE_PROCESS, ring);
 }
 
-syscall_r get_page_multi(u64 base, u64 nb_pages)
-{
-    return syscall(SYSCALL_GET_PAGE_MULTI, base, nb_pages);
-}
-
-result_t syscall_release_page_multi(u64 base, u64 nb_pages)
-{
-    return syscall(SYSCALL_RELEASE_PAGE_MULTI, base, nb_pages).result;
-}
-
 syscall_r start_process(u64 pid, u64 entry)
 {
     return syscall(SYSCALL_START_PROCESS, pid, entry);
-}
-
-syscall_r syscall_map_phys(u64 virt, u64 phys, u64 size, u64 arg)
-{
-    return syscall(SYSCALL_MAP_PHYS, virt, phys, size, arg);
 }
 
 result_t send_message_port(u64 port, size_t size, const char* message)
@@ -94,4 +70,32 @@ result_t name_port(pmos_port_t portnum, const char* name, size_t length, u32 fla
 result_t set_log_port(pmos_port_t port, uint32_t flags)
 {
     return syscall(SYSCALL_SET_LOG_PORT, port, flags).result;
+}
+
+mem_request_ret_t create_phys_map_region(uint64_t pid, void *addr_start, size_t size, uint64_t access, void* phys_addr)
+{
+    syscall_r r = syscall(SYSCALL_CREATE_PHYS_REGION, pid, addr_start, size, access, phys_addr);
+    mem_request_ret_t t = {r.result, (void *)r.value};
+    return t;
+}
+
+mem_request_ret_t create_managed_region(uint64_t pid, void *addr_start, size_t size, uint64_t access, pmos_port_t port)
+{
+    syscall_r r = syscall(SYSCALL_CREATE_PHYS_REGION, pid, addr_start, size, access, port);
+    mem_request_ret_t t = {r.result, (void *)r.value};
+    return t;
+}
+
+mem_request_ret_t create_normal_region(uint64_t pid, void *addr_start, size_t size, uint64_t access)
+{
+    syscall_r r = syscall(SYSCALL_CREATE_PHYS_REGION, pid, addr_start, size, access);
+    mem_request_ret_t t = {r.result, (void *)r.value};
+    return t;
+}
+
+page_table_req_ret_t get_page_table(uint64_t pid)
+{
+    syscall_r r = syscall(SYSCALL_CREATE_PHYS_REGION, pid);
+    page_table_req_ret_t t = {r.result, r.value};
+    return t;
 }

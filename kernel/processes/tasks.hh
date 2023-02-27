@@ -30,14 +30,13 @@ struct Task_Attributes {
 
 class sched_queue;
 
-struct TaskDescriptor {
+class TaskDescriptor {
+public:
     // Basic process stuff
     Task_Regs regs; // 200
     PID pid;
-    Page_Table page_table;
 
-    // Repeated syscalls
-
+    // Permissions
     TaskPermissions perm;
 
     // Attributes of the task
@@ -53,15 +52,34 @@ struct TaskDescriptor {
     klib::shared_ptr<TaskDescriptor> queue_next = nullptr;
     klib::shared_ptr<TaskDescriptor> queue_prev = nullptr;
     sched_queue *parent_queue = nullptr;
-    Process_Status status;
+    Process_Status status = PROCESS_UNINIT;
     priority_t priority = 8;
     Spinlock sched_lock;
+
+    klib::weak_ptr<TaskDescriptor> weak_self;
+
+    // Paging
+    klib::shared_ptr<Page_Table> page_table;
+    u64 page_blocked_by = 0;
+
+    // Creates and assigns an emty valid page table
+    kresult_t create_new_page_table();
+
+    // Registers a page table within a process, if it doesn't have any
+    kresult_t register_page_table(klib::shared_ptr<Page_Table>);
 
     // Inits stack
     ReturnStr<u64> init_stack();
 
+    // Blocks the process by a page (for example in case of a pagefault)
+    kresult_t atomic_block_by_page(u64 page);
+
+
     // Returns 0 if there are no unblocking events pending. Otherwise returns 0.
     u64 check_unblock_immediately(u64 reason, u64 extra);
+
+    // Checks if the process is blocked by the port and unblocks it if needef
+    bool unblock_if_needed(const klib::shared_ptr<Generic_Port>& compare_blocked_by);
 
     // Sets the entry point to the task
     inline void set_entry_point(u64 entry)
@@ -81,6 +99,22 @@ struct TaskDescriptor {
     SSE_Data sse_data;
 
     klib::string name = "";
+
+    klib::shared_ptr<TaskDescriptor> get_ptr()
+    {
+        return weak_self.lock();
+    }
+
+    static klib::shared_ptr<TaskDescriptor> create()
+    {
+        klib::shared_ptr<TaskDescriptor> p = klib::shared_ptr<TaskDescriptor>(new TaskDescriptor());
+        p->weak_self = p;
+        return p;
+    }
+
+    ~TaskDescriptor() = default;
+protected:
+    TaskDescriptor() = default;
 };
 
 using task_ptr = klib::shared_ptr<TaskDescriptor>;

@@ -31,21 +31,11 @@ syscall_r syscall(uint64_t call_n, ...);
 // Returns a pid of the process
 u64 getpid();
 
-// Allocates a page at *addr*
-syscall_r syscall_get_page(uint64_t addr);
-
-syscall_r map_into_range(uint64_t pid, uint64_t page_start, uint64_t to_addr, uint64_t nb_pages, uint64_t mask);
 
 syscall_r syscall_new_process(uint8_t ring);
 
-syscall_r get_page_multi(uint64_t base, uint64_t nb_pages);
-
-// Releases multiple pages
-result_t syscall_release_page_multi(u64 base, u64 nb_pages);
-
-syscall_r start_process(uint64_t pid, uint64_t entry);
-
-syscall_r syscall_map_phys(uint64_t virt, uint64_t phys, uint64_t size, uint64_t arg);
+// TODO: Outdated
+// syscall_r start_process(uint64_t pid, uint64_t entry);
 
 // Get info about message
 result_t syscall_get_message_info(Message_Descriptor* descr, pmos_port_t port, uint32_t flags);
@@ -64,6 +54,7 @@ result_t request_priority(uint64_t priority);
 
 // Returns the LAPIC id the process is running on when calling the process
 u64 get_lapic_id();
+
 
 #endif
 

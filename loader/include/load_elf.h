@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <kernel/elf.h>
 
-uint64_t load_elf(ELF_64bit* addr, uint8_t ring);
+struct task_list_node;
+uint64_t load_elf(struct task_list_node* addr, uint8_t ring);
 
 #endif

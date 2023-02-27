@@ -85,35 +85,26 @@ extern "C" void pagefault_manager()
     }
 
     klib::shared_ptr<TaskDescriptor> task = c->current_task;
-
     u64 err = task->regs.int_err;
-    Interrupt_Stackframe* int_s = &task->regs.e;
 
     // Get the memory location which has caused the fault
     u64 virtual_addr = getCR2();
 
-    // Get the page
-    u64 page = virtual_addr&~0xfff;
+    Auto_Lock_Scope scope_lock(task->page_table->lock);
 
-    // Get page type
-    Page_Types type = page_type(page);
+    kresult_t result = ERROR_PAGE_NOT_ALLOCATED;
 
-    //t_print_bochs("Debug: Pagefault %h pid %i rip %h error %h\n", virtual_addr, get_cpu_struct()->current_task->pid, int_s->rip, err);
+    auto& regions = task->page_table->paging_regions;
+    auto it = regions.lower_bound(virtual_addr);
 
-    switch (type) {
-    case Page_Types::LAZY_ALLOC: // Lazilly allocated page caused the fault
-        //t_print_bochs("delayed allocation\n");
-        get_lazy_page(page);
-        break;
-    case Page_Types::UNALLOCATED: // Page not allocated
-        global_logger.printf("Warning: Pagefault %h pid %i (%s) rip %h error %h -> unallocated... killing process...\n", virtual_addr, get_cpu_struct()->current_task->pid, get_cpu_struct()->current_task->name.c_str(), int_s->rip, err);
+    if (it != regions.end() and it->second->is_in_range(virtual_addr)) {
+        result = it->second->on_page_fault(err, virtual_addr, task);
+    }
+
+    if (result != SUCCESS) {
+        t_print_bochs("Debug: Pagefault %h pid %i rip %h error %h returned error %i\n", virtual_addr, get_cpu_struct()->current_task->pid, task->regs.e.rip, err, result);
+        global_logger.printf("Warning: Pagefault %h pid %i (%s) rip %h error %h -> %i killing process...\n", virtual_addr, get_cpu_struct()->current_task->pid, get_cpu_struct()->current_task->name.c_str(), task->regs.e.rip, err, result);
         syscall_exit(4, 0);
-        break;
-    default:
-        // Not implemented
-        global_logger.printf("Debug: Pagefault %h pid %i rip %h error %h -> %h not implemented. Halting...\n", virtual_addr, get_cpu_struct()->current_task->pid, int_s->rip, err, type);
-        halt();
-        break;
     }
 }
 

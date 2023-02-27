@@ -47,7 +47,7 @@ struct Port: public Generic_Port {
     Port(const klib::shared_ptr<TaskDescriptor>& owner, u64 portno): owner(owner), portno(portno) {}
 
 
-    kresult_t enqueue(const klib::shared_ptr<TaskDescriptor>& from, const klib::shared_ptr<Message>& msg);
+    kresult_t enqueue(const klib::shared_ptr<Message>& msg);
 
     kresult_t send_from_system(klib::vector<char>&& msg);
     kresult_t send_from_system(const char* msg, size_t size);
@@ -78,5 +78,3 @@ struct Ports_storage {
 };
 
 extern Ports_storage global_ports;
-
-kresult_t queue_message(const klib::shared_ptr<TaskDescriptor>& task, klib::shared_ptr<Message> message);

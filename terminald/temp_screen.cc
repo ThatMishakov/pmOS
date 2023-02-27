@@ -1,5 +1,6 @@
 #include <pmos/system.h>
 #include "asm.hh"
+#include <pmos/memory.h>
 
 
 /*  Some screen stuff. */
@@ -9,8 +10,10 @@
 #define LINES                   24
 /*  The attribute of an character. */
 #define ATTRIBUTE               7
+
+
 /*  The video memory address. */
-#define VIDEO                   0xB8000
+
 
 /*  Variables. */
 /*  Save the X position. */
@@ -51,8 +54,6 @@ void putchar (int c)
 void cls (void)
 {
   int i;
-
-  video = (unsigned char *) VIDEO;
   
   for (i = 0; i < COLUMNS * LINES * 2; i++)
     *(video + i) = 0;
@@ -65,6 +66,11 @@ void cls (void)
 
 void init_screen()
 {
-    syscall_map_phys(0xb8000, 0xb8000,1,0x03);
-    cls();
+  mem_request_ret_t m = create_phys_map_region(0, NULL, 4096, PROT_READ | PROT_WRITE, (void*)0xB8000);
+  if (m.result != SUCCESS)
+    return;
+
+  video = (volatile unsigned char*)m.virt_addr;
+
+  cls();
 }

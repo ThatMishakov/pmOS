@@ -47,7 +47,7 @@ void* palloc(size_t size)
         arg.execution_disabled = 1;
 
         for (u64 i = 0; i < size_p; i += 4096) {
-            get_page(p_head + i, arg);
+            kernel_get_page(p_head + i, arg);
         }
 
         block = (palloc_list*)p_head;

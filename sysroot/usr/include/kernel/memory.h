@@ -79,6 +79,8 @@ typedef struct
     u8 execution_disabled       :1;
 } PACKED PTE;
 
+#define PAGING_FLAG_NOFREE 0x02
+
 typedef struct {
     PML4E entries[512];
 } PACKED ALIGNED(0x1000) PML4;

@@ -86,7 +86,7 @@ kresult_t Port::atomic_send_from_system(const char* msg_ptr, uint64_t size)
     return send_from_system(msg_ptr, size);
 }
 
-kresult_t Port::enqueue(const klib::shared_ptr<TaskDescriptor>& from, const klib::shared_ptr<Message>& msg)
+kresult_t Port::enqueue(const klib::shared_ptr<Message>& msg)
 {
     klib::shared_ptr<TaskDescriptor> t = owner.lock();
 
@@ -105,7 +105,7 @@ kresult_t Port::send_from_system(klib::vector<char>&& v)
 
     klib::shared_ptr<Message> ptr = klib::make_shared<Message>(task_ptr, 0, klib::forward<klib::vector<char>>(v));
 
-    return enqueue(nullptr, ptr);
+    return enqueue(ptr);
 }
 
 kresult_t Port::send_from_system(const char* msg_ptr, uint64_t size)
@@ -124,7 +124,7 @@ kresult_t Port::send_from_user(const klib::shared_ptr<TaskDescriptor>& sender, c
 
     klib::shared_ptr<Message> ptr = klib::make_shared<Message>(sender, sender->pid, klib::forward<klib::vector<char>>(message));
 
-    return enqueue(sender, ptr);
+    return enqueue(ptr);
 }
 
 kresult_t Port::atomic_send_from_user(const klib::shared_ptr<TaskDescriptor>& sender, const char* unsafe_user_message, size_t msg_size)
@@ -138,5 +138,5 @@ kresult_t Port::atomic_send_from_user(const klib::shared_ptr<TaskDescriptor>& se
 
     Auto_Lock_Scope scope_lock(lock);
 
-    return enqueue(sender, ptr);
+    return enqueue(ptr);
 }

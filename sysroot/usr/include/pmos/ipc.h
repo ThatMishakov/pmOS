@@ -90,6 +90,14 @@ typedef struct IPC_Kernel_Named_Port_Notification {
     char port_name[0];
 } IPC_Kernel_Named_Port_Notification;
 
+#define IPC_Kernel_Alloc_Page_NUM 0x22
+typedef struct IPC_Kernel_Alloc_Page {
+    uint32_t type;
+    uint32_t flags;
+    uint64_t page_table_id;
+    uint64_t page_addr;
+} IPC_Kernel_Alloc_Page;
+
 
 
 #define IPC_Write_Plain_NUM     0x40

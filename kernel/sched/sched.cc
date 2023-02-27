@@ -29,10 +29,16 @@ void init_scheduling()
 {
     init_per_cpu();
     
-    klib::shared_ptr<TaskDescriptor> current_task = klib::make_shared<TaskDescriptor>();
+    klib::shared_ptr<TaskDescriptor> current_task = TaskDescriptor::create();
     get_cpu_struct()->current_task = current_task;
 
-    current_task->page_table = Page_Table::init_from_phys(getCR3());
+    current_task->register_page_table(Page_Table::init_from_phys(getCR3()));
+
+    auto result = current_task->page_table->create_phys_region(0x1000, GB(4), Page_Table::Readable | Page_Table::Writeable | Page_Table::Executable, true, "init_default_map", 0x1000);
+    if (result.result != SUCCESS) {
+        t_print_bochs("Error: Could not assign the page table to the first process. Error %i\n", result.result);
+        return;
+    }
 
     current_task->pid = pid++;    
     tasks_map.insert({current_task->pid, klib::move(current_task)});
@@ -72,11 +78,39 @@ ReturnStr<u64> block_current_task(const klib::shared_ptr<Generic_Port>& ptr)
     return {SUCCESS, 0};
 }
 
+
+kresult_t TaskDescriptor::atomic_block_by_page(u64 page)
+{
+    if (status == PROCESS_BLOCKED)
+        return ERROR_ALREADY_BLOCKED;
+
+    Auto_Lock_Scope scope_lock(sched_lock);
+    
+    status = Process_Status::PROCESS_BLOCKED;
+    page_blocked_by = page;
+
+    klib::shared_ptr<TaskDescriptor> self = weak_self.lock();
+
+    if (get_cpu_struct()->current_task == self) {
+        find_new_process();
+    } else if (parent_queue) {
+        Auto_Lock_Scope scope_l(parent_queue->lock);
+        parent_queue->erase(self);
+    }
+    
+    {
+        Auto_Lock_Scope scope_l(blocked.lock);
+        blocked.push_back(self);
+    }
+
+    return SUCCESS;
+}
+
 void switch_to_task(const klib::shared_ptr<TaskDescriptor>& task)
 {
     CPU_Info *c = get_cpu_struct();
     if (c->current_task->page_table != task->page_table) {
-        setCR3(task->page_table.get_cr3());
+        setCR3(task->page_table->get_cr3());
     }
 
     save_segments(c->current_task);
@@ -114,6 +148,9 @@ bool unblock_if_needed(const klib::shared_ptr<TaskDescriptor>& p, const klib::sh
     Auto_Lock_Scope scope_lock(p->sched_lock);
 
     if (p->status != PROCESS_BLOCKED)
+        return unblocked;
+
+    if (p->page_blocked_by != 0)
         return unblocked;
 
     if (ptr and p->blocked_by.lock() == ptr) {
