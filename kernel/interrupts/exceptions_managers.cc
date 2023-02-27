@@ -72,6 +72,27 @@ void kernel_jump_to(void (*function)(void))
     c->nested_int_regs.e.rip = (u64)&jumpto_func;
 }
 
+void print_pt_chain(u64 page)
+{
+    PML4E* pml4e = get_pml4e(page, rec_map_index);
+    t_print_bochs("PML4E: %h\n", *((u64 *)pml4e));
+    if (not pml4e->present)
+        return;
+
+    PDPTE* pdpte = get_pdpe(page, rec_map_index);
+    t_print_bochs("PDPTE: %h\n", *((u64 *)pdpte));
+    if (not pdpte->present)
+        return;
+
+    PDE* pde = get_pde(page, rec_map_index);
+    t_print_bochs("PDE: %h\n", *((u64 *)pde));
+    if (not pde->present)
+        return;
+
+    PTE* pte = get_pte(page, rec_map_index);
+    t_print_bochs("PTE: %h\n", *((u64 *)pte));
+}
+
 extern "C" void pagefault_manager()
 {
     CPU_Info *c = get_cpu_struct();
@@ -90,21 +111,24 @@ extern "C" void pagefault_manager()
     // Get the memory location which has caused the fault
     u64 virtual_addr = getCR2();
 
-    Auto_Lock_Scope scope_lock(task->page_table->lock);
-
     kresult_t result = ERROR_PAGE_NOT_ALLOCATED;
 
-    auto& regions = task->page_table->paging_regions;
-    auto it = regions.lower_bound(virtual_addr);
+    {
+        Auto_Lock_Scope scope_lock(task->page_table->lock);
 
-    if (it != regions.end() and it->second->is_in_range(virtual_addr)) {
-        result = it->second->on_page_fault(err, virtual_addr, task);
+        auto& regions = task->page_table->paging_regions;
+        auto it = regions.get_smaller_or_equal(virtual_addr);
+
+        if (it != regions.end() and it->second->is_in_range(virtual_addr)) {
+            result = it->second->on_page_fault(err, virtual_addr, task);
+        }
     }
 
-    if (result != SUCCESS) {
-        t_print_bochs("Debug: Pagefault %h pid %i rip %h error %h returned error %i\n", virtual_addr, get_cpu_struct()->current_task->pid, task->regs.e.rip, err, result);
-        global_logger.printf("Warning: Pagefault %h pid %i (%s) rip %h error %h -> %i killing process...\n", virtual_addr, get_cpu_struct()->current_task->pid, get_cpu_struct()->current_task->name.c_str(), task->regs.e.rip, err, result);
-        syscall_exit(4, 0);
+    if (result != SUCCESS and result != SUCCESS_REPEAT) {
+        t_print_bochs("Debug: Pagefault %h pid %i rip %h error %h returned error %i\n", virtual_addr, task->pid, task->regs.e.rip, err, result);
+        global_logger.printf("Warning: Pagefault %h pid %i (%s) rip %h error %h -> %i killing process...\n", virtual_addr, task->pid, task->name.c_str(), task->regs.e.rip, err, result);
+        
+        task->atomic_kill();
     }
 }
 

@@ -340,7 +340,7 @@ typename splay_tree_map<K,T>::node* splay_tree_map<K,T>::next(splay_tree_map<K,T
     if (p->right != nullptr)
         return min(p->right);
 
-    while (p != nullptr and p != p->parent->left)
+    while (p != nullptr and p->parent != nullptr and p != p->parent->left)
         p = p->parent;
 
     if (p == nullptr)

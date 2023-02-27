@@ -74,6 +74,9 @@ public:
     // Blocks the process by a page (for example in case of a pagefault)
     kresult_t atomic_block_by_page(u64 page);
 
+    // Kills the task
+    void atomic_kill();
+
 
     // Returns 0 if there are no unblocking events pending. Otherwise returns 0.
     u64 check_unblock_immediately(u64 reason, u64 extra);

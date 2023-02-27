@@ -48,8 +48,6 @@ ReturnStr<klib::shared_ptr<TaskDescriptor>> create_process(u16 ring)
 
 ReturnStr<u64> TaskDescriptor::init_stack()
 {
-    Auto_Lock_Scope page_lock(this->page_table->lock);
-
     kresult_t r;
     // Prealloc a page for the stack
     u64 stack_end = (u64)KERNEL_ADDR_SPACE; //&_free_to_use;
@@ -58,7 +56,7 @@ ReturnStr<u64> TaskDescriptor::init_stack()
 
     static const klib::string stack_region_name = "default_stack";
 
-    r = this->page_table->create_normal_region(
+    r = this->page_table->atomic_create_normal_region(
         stack_page_start, 
         stack_size, 
         Page_Table::Writeable | Page_Table::Readable, 
@@ -129,33 +127,35 @@ void init_task(const klib::shared_ptr<TaskDescriptor>& task)
     }
 }
 
-void kill(const klib::shared_ptr<TaskDescriptor>& p) // TODO: UNIX Signals
+void TaskDescriptor::atomic_kill() // TODO: UNIX Signals
 {
-    Auto_Lock_Scope scope_lock(p->sched_lock);
+    klib::shared_ptr<TaskDescriptor> self = weak_self.lock();
 
-    sched_queue* task_queue = p->parent_queue;
+    Auto_Lock_Scope scope_lock(sched_lock);
+
+    sched_queue* task_queue = parent_queue;
     if (task_queue != nullptr) {
         Auto_Lock_Scope queue_lock(task_queue->lock);
 
-        task_queue->erase(p);
-        p->parent_queue = nullptr;
+        task_queue->erase(self);
+        parent_queue = nullptr;
     }
 
     // Task switch if it's a current process
     CPU_Info* cpu_str = get_cpu_struct();
-    if (cpu_str->current_task == p) {
+    if (cpu_str->current_task == self) {
         find_new_process();
     }
 
-    p->status = PROCESS_DEAD;
-    p->parent_queue = &dead_queue;
+    status = PROCESS_DEAD;
+    parent_queue = &dead_queue;
 
     {
         Auto_Lock_Scope queue_lock(dead_queue.lock);
-        dead_queue.push_back(p);
+        dead_queue.push_back(self);
     }
 
-    p->page_table = nullptr;
+    page_table = nullptr;
 }
 
 kresult_t TaskDescriptor::create_new_page_table()

@@ -8,6 +8,8 @@
 #include <paging.h>
 #include "include/mem.h"
 #include "io.h"
+#include <stdlib.h>
+#include <string.h>
 
 void load_kernel(uint64_t multiboot_info_str)
 {
@@ -77,7 +79,7 @@ void load_kernel(uint64_t multiboot_info_str)
             uint64_t phys_loc = (uint64_t)elf_h + p->p_offset;
             uint64_t vaddr = p->p_vaddr;
             uint64_t size = p->p_filesz;
-            memcpy((char*)phys_loc, (char*)vaddr, size);
+            memcpy((char*)vaddr, (const char*)phys_loc, size);
         }
     }
 
@@ -89,7 +91,7 @@ void load_kernel(uint64_t multiboot_info_str)
     data.mem_bitmap_size = bitmap_size;
     data.flags = 0 | (!!(nx_enabled) << 0);
 
-    int r = entry(&data);
+    entry(&data);
     //print_str("==> Kernel returned ");
     //print_hex(r);
     //if (r == 0) print_str(" (success!)");

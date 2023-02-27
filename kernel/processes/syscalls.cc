@@ -217,7 +217,7 @@ void syscall_exit(u64 arg1, u64 arg2)
     task->ret_lo = arg1;
 
     // Kill the process
-    kill(task);
+    task->atomic_kill();
 
     syscall_ret_low(task) = SUCCESS;
 }
@@ -734,14 +734,10 @@ void syscall_create_normal_region(u64 pid, u64 addr_start, u64 size, u64 access)
         return;
     }
 
-    {
-        Auto_Lock_Scope paging_lock(dest_task->page_table->lock);
-
-        auto result = dest_task->page_table->create_normal_region(addr_start, size, access & 0x07, access & 0x08, klib::string(), 0);
-        syscall_ret_low(current) = result.result;
-        syscall_ret_high(current) = result.val;
-        return;
-    }
+    auto result = dest_task->page_table->atomic_create_normal_region(addr_start, size, access & 0x07, access & 0x08, klib::string(), 0);
+    syscall_ret_low(current) = result.result;
+    syscall_ret_high(current) = result.val;
+    return;
 }
 
 void syscall_create_managed_region(u64 pid, u64 addr_start, u64 size, u64 access, u64 port)
@@ -774,14 +770,10 @@ void syscall_create_managed_region(u64 pid, u64 addr_start, u64 size, u64 access
         return;
     }
 
-    {
-        Auto_Lock_Scope paging_lock(dest_task->page_table->lock);
-
-        auto result = dest_task->page_table->create_managed_region(addr_start, size, access & 0x07, access & 0x08, klib::string(), klib::move(p));
-        syscall_ret_low(current) = result.result;
-        syscall_ret_high(current) = result.val;
-        return;
-    }
+    auto result = dest_task->page_table->atomic_create_managed_region(addr_start, size, access & 0x07, access & 0x08, klib::string(), klib::move(p));
+    syscall_ret_low(current) = result.result;
+    syscall_ret_high(current) = result.val;
+    return;
 }
 
 void syscall_create_phys_map_region(u64 pid, u64 addr_start, u64 size, u64 access, u64 phys_addr)
@@ -807,14 +799,10 @@ void syscall_create_phys_map_region(u64 pid, u64 addr_start, u64 size, u64 acces
         return;
     }
 
-    {
-        Auto_Lock_Scope paging_lock(dest_task->page_table->lock);
-
-        auto result = dest_task->page_table->create_phys_region(addr_start, size, access & 0x07, access & 0x08, klib::string(), phys_addr);
-        syscall_ret_low(current) = result.result;
-        syscall_ret_high(current) = result.val;
-        return;
-    }
+    auto result = dest_task->page_table->atomic_create_phys_region(addr_start, size, access & 0x07, access & 0x08, klib::string(), phys_addr);
+    syscall_ret_low(current) = result.result;
+    syscall_ret_high(current) = result.val;
+    return;
 }
 
 void syscall_get_page_table(u64 pid)

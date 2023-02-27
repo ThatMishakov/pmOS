@@ -81,14 +81,14 @@ mem_request_ret_t create_phys_map_region(uint64_t pid, void *addr_start, size_t 
 
 mem_request_ret_t create_managed_region(uint64_t pid, void *addr_start, size_t size, uint64_t access, pmos_port_t port)
 {
-    syscall_r r = syscall(SYSCALL_CREATE_PHYS_REGION, pid, addr_start, size, access, port);
+    syscall_r r = syscall(SYSCALL_CREATE_MANAGED_REGION, pid, addr_start, size, access, port);
     mem_request_ret_t t = {r.result, (void *)r.value};
     return t;
 }
 
 mem_request_ret_t create_normal_region(uint64_t pid, void *addr_start, size_t size, uint64_t access)
 {
-    syscall_r r = syscall(SYSCALL_CREATE_PHYS_REGION, pid, addr_start, size, access);
+    syscall_r r = syscall(SYSCALL_CREATE_NORMAL_REGION, pid, addr_start, size, access);
     mem_request_ret_t t = {r.result, (void *)r.value};
     return t;
 }

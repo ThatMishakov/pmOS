@@ -94,6 +94,7 @@ save_context_with_error:
     popq       %rax # Return address
     popq       184(%r11)
 
+
     popq       72(%r11)
     popq       80(%r11)
     popq       88(%r11)
@@ -135,6 +136,7 @@ cond_save_context_with_error:
 
     popq       %rax # Return address
     popq       184(%r11)
+
 
     popq       72(%r11)
     popq       80(%r11)

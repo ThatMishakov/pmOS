@@ -97,9 +97,6 @@ void task_switch();
 // Finds and switches to a new process (e.g. if the current is blocked or executing for too long)
 void find_new_process();
 
-// Kills the task
-void kill(const klib::shared_ptr<TaskDescriptor>& t);
-
 // To be called from the clock routine
 extern "C" void sched_periodic();
 

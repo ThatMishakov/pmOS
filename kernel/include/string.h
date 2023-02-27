@@ -7,7 +7,7 @@ extern "C" {
 
 typedef unsigned long size_t;
 
-void memcpy(const void* from, void* to, size_t size);
+void memcpy(void* to, const void* from, size_t size);
 void *memset(void *str, int c, size_t n);
 int strcmp (const char * str1, const char * str2);
 size_t strlen (const char * str);

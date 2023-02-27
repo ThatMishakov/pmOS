@@ -59,7 +59,7 @@ kresult_t Private_Normal_Region::alloc_page(u64 ptr_addr, [[maybe_unused]] const
         kernel_pframe_allocator.free(new_page.val);
     } else {
         for (size_t i = 0; i < 4096/sizeof(u64); ++i) {
-            ((u64 *)new_page.val)[i] = pattern;
+            ((u64 *)page_addr)[i] = pattern;
         }
     }
 

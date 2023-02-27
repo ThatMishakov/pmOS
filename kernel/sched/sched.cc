@@ -34,7 +34,7 @@ void init_scheduling()
 
     current_task->register_page_table(Page_Table::init_from_phys(getCR3()));
 
-    auto result = current_task->page_table->create_phys_region(0x1000, GB(4), Page_Table::Readable | Page_Table::Writeable | Page_Table::Executable, true, "init_default_map", 0x1000);
+    auto result = current_task->page_table->atomic_create_phys_region(0x1000, GB(4), Page_Table::Readable | Page_Table::Writeable | Page_Table::Executable, true, "init_default_map", 0x1000);
     if (result.result != SUCCESS) {
         t_print_bochs("Error: Could not assign the page table to the first process. Error %i\n", result.result);
         return;

@@ -58,6 +58,7 @@ void map(uint64_t addr, uint64_t phys, Page_Table_Argumments arg)
         *(uint64_t*)pml4e = alloc_page_t();
         pml4e->present = 1;
         pml4e->writeable = 1;
+        pml4e->user_access = arg.user_access;
         memclear(pdpt_of(addr, REC_MAP_INDEX), 4096);
     }
 
@@ -66,6 +67,7 @@ void map(uint64_t addr, uint64_t phys, Page_Table_Argumments arg)
         *(uint64_t*)pdpte = alloc_page_t();
         pdpte->present = 1;
         pdpte->writeable = 1;
+        pdpte->user_access = arg.user_access;
         memclear(pd_of(addr, REC_MAP_INDEX), 4096);
     } //else if (pdpte->size) ;// TODO
 
@@ -74,6 +76,7 @@ void map(uint64_t addr, uint64_t phys, Page_Table_Argumments arg)
         *(uint64_t*)pde = alloc_page_t();
         pde->present = 1;
         pde->writeable = 1;
+        pde->user_access = arg.user_access;
         memclear(pt_of(addr, REC_MAP_INDEX), 4096);
     } //else if (pde->size) ; // TODO
 

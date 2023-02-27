@@ -540,7 +540,7 @@ void free_user_pages(u64 page_table)
         setCR3(old_cr3);
 }
 
-ReturnStr<u64> Page_Table::create_normal_region(u64 page_aligned_start, u64 page_aligned_size, unsigned access, bool fixed, klib::string name, u64 pattern)
+ReturnStr<u64> Page_Table::atomic_create_normal_region(u64 page_aligned_start, u64 page_aligned_size, unsigned access, bool fixed, klib::string name, u64 pattern)
 {
     Auto_Lock_Scope scope_lock(lock);
 
@@ -559,7 +559,7 @@ ReturnStr<u64> Page_Table::create_normal_region(u64 page_aligned_start, u64 page
     return new_region_start;
 }
 
-ReturnStr<u64> Page_Table::create_managed_region(u64 page_aligned_start, u64 page_aligned_size, unsigned access, bool fixed, klib::string name, klib::shared_ptr<Port> t)
+ReturnStr<u64> Page_Table::atomic_create_managed_region(u64 page_aligned_start, u64 page_aligned_size, unsigned access, bool fixed, klib::string name, klib::shared_ptr<Port> t)
 {
     Auto_Lock_Scope scope_lock(lock);
 
@@ -578,7 +578,7 @@ ReturnStr<u64> Page_Table::create_managed_region(u64 page_aligned_start, u64 pag
     return new_region_start;
 }
 
-ReturnStr<u64> Page_Table::create_phys_region(u64 page_aligned_start, u64 page_aligned_size, unsigned access, bool fixed, klib::string name, u64 phys_addr_start)
+ReturnStr<u64> Page_Table::atomic_create_phys_region(u64 page_aligned_start, u64 page_aligned_size, unsigned access, bool fixed, klib::string name, u64 phys_addr_start)
 {
     Auto_Lock_Scope scope_lock(lock);
 

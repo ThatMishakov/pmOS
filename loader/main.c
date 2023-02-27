@@ -21,6 +21,7 @@
 #include <stddef.h>
 #include <pmos/system.h>
 #include <pmos/memory.h>
+#include <string.h>
 
 uint64_t multiboot_magic;
 uint64_t multiboot_info_str;
