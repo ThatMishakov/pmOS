@@ -107,6 +107,9 @@ extern "C" void syscall_handler()
     case SYSCALL_CREATE_PHYS_REGION:
         syscall_create_phys_map_region(arg1, arg2, arg3, arg4, arg5);
         break;
+    case SYSCALL_PROVIDE_PAGE:
+        syscall_provide_page(arg1, arg2, arg3, arg4);
+        break;
     default:
         // Not supported
         syscall_ret_low(task) = ERROR_NOT_SUPPORTED;
@@ -795,7 +798,7 @@ void syscall_create_phys_map_region(u64 pid, u64 addr_start, u64 size, u64 acces
     }
 
     if (addr_start & 07777 or size & 07777) {
-        syscall_ret_low(current) = ERROR_PAGE_NOT_ALLOCATED;
+        syscall_ret_low(current) = ERROR_UNALLIGNED;
         return;
     }
 
@@ -830,4 +833,24 @@ void syscall_get_page_table(u64 pid)
 
     syscall_ret_low(current) = SUCCESS;
     syscall_ret_high(current) = target->page_table->id;
+}
+
+void syscall_provide_page(u64 page_table, u64 dest_page, u64 source, u64 flags)
+{
+    klib::shared_ptr<TaskDescriptor> current = get_cpu_struct()->current_task;
+
+    if (dest_page & 07777 or source & 07777) {
+        syscall_ret_low(current) = ERROR_UNALLIGNED;
+        return;
+    }
+
+    klib::shared_ptr<Page_Table> pt = Page_Table::get_page_table(page_table);
+
+    if (not pt) {
+        syscall_ret_low(current) = ERROR_OBJECT_DOESNT_EXIST;
+        return;
+    }
+
+    syscall_ret_low(current) = Page_Table::atomic_provide_page(current, pt, source, dest_page, flags);
+    return;
 }

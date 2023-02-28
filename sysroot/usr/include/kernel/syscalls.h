@@ -9,6 +9,7 @@
 #define SYSCALL_CREATE_PHYS_REGION    0x04
 #define SYSCALL_CREATE_PROCESS        0x07
 #define SYSCALL_GET_PAGE_TABLE        0x08
+#define SYSCALL_PROVIDE_PAGE          0x09
 #define SYSCALL_START_PROCESS         0x0b
 #define SYSCALL_EXIT                  0x0c
 #define SYSCALL_GET_MSG_INFO          0x0e

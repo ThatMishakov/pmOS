@@ -11,7 +11,10 @@
 #include "defs.hh"
 
 // Checks the mask and unblocks the task if needed
-bool unblock_if_needed(const klib::shared_ptr<TaskDescriptor>& p, const klib::shared_ptr<Generic_Port>& compare_blocked_by);
+inline bool unblock_if_needed(const klib::shared_ptr<TaskDescriptor>& p, const klib::shared_ptr<Generic_Port>& compare_blocked_by)
+{
+    return p->atomic_unblock_if_needed(compare_blocked_by);
+}
 
 // Blocks current task, setting blocked_by to *ptr*.
 ReturnStr<u64> block_current_task(const klib::shared_ptr<Generic_Port>& ptr);

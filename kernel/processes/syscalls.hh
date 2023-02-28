@@ -78,6 +78,9 @@ void syscall_set_log_port(u64 port, u32 flags);
 // Requests a port by its name in a non-blocking way and sends a message with the descriptor when it becomes available
 void syscall_request_named_port(u64 string_ptr, u64 length, u64 reply_chan, u32 flags);
 
+// Provide a page for a managed region
+void syscall_provide_page(u64 page_table, u64 dest_page, u64 source, u64 flags);
+
 #define SYS_CONF_IOAPIC          0x01
 #define SYS_CONF_LAPIC           0x02
 #define SYS_CONF_CPU             0x03

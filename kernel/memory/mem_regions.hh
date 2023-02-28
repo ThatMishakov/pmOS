@@ -7,6 +7,7 @@ class Port;
 class TaskDescriptor;
 
 extern u64 counter;
+struct Page_Table_Argumments;
 
 // Generic memory region class. Defines an action that needs to be executed when pagefault is produced.
 struct Generic_Mem_Region {
@@ -33,6 +34,7 @@ struct Generic_Mem_Region {
     static constexpr u8 Executable = 0x04;
 
     virtual kresult_t alloc_page(u64 ptr_addr, const klib::shared_ptr<TaskDescriptor>& task) = 0;
+    virtual bool can_takeout_page() const = 0;
 
     kresult_t prepare_page(u64 access_mode, u64 page_addr, const klib::shared_ptr<TaskDescriptor>& task);
 
@@ -76,6 +78,13 @@ struct Generic_Mem_Region {
     {
         return start_addr + size;
     }
+
+    virtual Page_Table_Argumments craft_arguments() const = 0;
+
+    constexpr virtual bool is_managed() const
+    {
+        return false;
+    }
 };
 
 
@@ -85,6 +94,17 @@ struct Phys_Mapped_Region: Generic_Mem_Region {
     virtual kresult_t alloc_page(u64 ptr_addr, const klib::shared_ptr<TaskDescriptor>& task);
 
     u64 phys_addr_start = 0;
+    constexpr bool can_takeout_page() const override
+    {
+        return false;
+    }
+
+    constexpr bool is_managed() const override
+    {
+        return true;
+    }
+
+    virtual Page_Table_Argumments craft_arguments() const;
 
     // Constructs a region with virtual address starting at *aligned_virt* of size *size* pointing to *aligned_phys*
     Phys_Mapped_Region(u64 aligned_virt, u64 size, u64 aligned_phys);
@@ -100,11 +120,18 @@ struct Private_Normal_Region: Generic_Mem_Region {
     // This pattern is used to fill the newly allocated pages
     u64 pattern = 0;
 
+    constexpr bool can_takeout_page() const override
+    {
+        return true;
+    }
+
     // Attempt to allocate a new page
     virtual kresult_t alloc_page(u64 ptr_addr, const klib::shared_ptr<TaskDescriptor>& task);
 
     // Tries to preallocate all the pages
     void prefill();
+
+    virtual Page_Table_Argumments craft_arguments() const;
 
     Private_Normal_Region(u64 start_addr, u64 size, klib::string name, u64 owner_cr3, u8 access, u64 pattern):
         Generic_Mem_Region(start_addr, size, klib::forward<klib::string>(name), owner_cr3, access), pattern(pattern)
@@ -116,6 +143,13 @@ struct Private_Normal_Region: Generic_Mem_Region {
 struct Private_Managed_Region: Generic_Mem_Region {
     // When pagefaults occur, the notification is sent to this port
     klib::weak_ptr<Port> notifications_port;
+
+    constexpr bool can_takeout_page() const override
+    {
+        return false;
+    }
+
+    virtual Page_Table_Argumments craft_arguments() const;
 
     // When pagefault occurs to the current task, it is blocked and the message is sent to the *notifications_port*. 
     virtual kresult_t alloc_page(u64 ptr_addr, const klib::shared_ptr<TaskDescriptor>& task);

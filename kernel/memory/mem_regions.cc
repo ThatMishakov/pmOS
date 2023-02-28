@@ -37,19 +37,24 @@ kresult_t Generic_Mem_Region::prepare_page(u64 access_mode, u64 page_addr, const
     return alloc_page(page_addr, task);
 }
 
-kresult_t Private_Normal_Region::alloc_page(u64 ptr_addr, [[maybe_unused]] const klib::shared_ptr<TaskDescriptor>& task)
+Page_Table_Argumments Private_Normal_Region::craft_arguments() const
 {
-    auto new_page = kernel_pframe_allocator.alloc_page();
-    if (new_page.result != SUCCESS)
-        return new_page.result;
-
-    Page_Table_Argumments args = {
+    return {
         !!(access_type & Writeable),
         true,
         false,
         !(access_type & Executable) ,
         0b000,
     };
+}
+
+kresult_t Private_Normal_Region::alloc_page(u64 ptr_addr, [[maybe_unused]] const klib::shared_ptr<TaskDescriptor>& task)
+{
+    auto new_page = kernel_pframe_allocator.alloc_page();
+    if (new_page.result != SUCCESS)
+        return new_page.result;
+
+    Page_Table_Argumments args = craft_arguments();
 
     u64 page_addr = (u64)ptr_addr & ~07777UL;
 
@@ -66,15 +71,20 @@ kresult_t Private_Normal_Region::alloc_page(u64 ptr_addr, [[maybe_unused]] const
     return result;
 }
 
-kresult_t Phys_Mapped_Region::alloc_page(u64 ptr_addr, [[maybe_unused]] const klib::shared_ptr<TaskDescriptor>& task)
+Page_Table_Argumments Phys_Mapped_Region::craft_arguments() const
 {
-    Page_Table_Argumments args = {
+    return {
         !!(access_type & Writeable),
         true,
         false,
         !(access_type & Executable) ,
         0b010,
     };
+}
+
+kresult_t Phys_Mapped_Region::alloc_page(u64 ptr_addr, [[maybe_unused]] const klib::shared_ptr<TaskDescriptor>& task)
+{
+    Page_Table_Argumments args = craft_arguments();
 
     u64 page_addr = (u64)ptr_addr & ~07777UL;
     u64 phys_addr = page_addr - start_addr + phys_addr_start;
@@ -84,19 +94,22 @@ kresult_t Phys_Mapped_Region::alloc_page(u64 ptr_addr, [[maybe_unused]] const kl
     return result;
 }
 
-kresult_t Private_Managed_Region::alloc_page(u64 ptr_addr, const klib::shared_ptr<TaskDescriptor>& task)
+Page_Table_Argumments Private_Managed_Region::craft_arguments() const
 {
-    u64 page_addr = (u64)ptr_addr & ~07777UL;
-
-    Page_Table_Argumments args = {
+    return {
         !!(access_type & Writeable),
         true,
         false,
         !(access_type & Executable) ,
         0b010,
     };
+}
 
-    auto r = check_if_allocated_and_set_flag(page_addr, 0b100, args);
+kresult_t Private_Managed_Region::alloc_page(u64 ptr_addr, const klib::shared_ptr<TaskDescriptor>& task)
+{
+    u64 page_addr = (u64)ptr_addr & ~07777UL;
+
+    auto r = check_if_allocated_and_set_flag(page_addr, 0b100, craft_arguments());
 
     if (r.result != SUCCESS)
         return r.result;

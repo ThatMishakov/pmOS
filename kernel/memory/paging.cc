@@ -79,6 +79,65 @@ kresult_t map(u64 physical_addr, u64 virtual_addr, Page_Table_Argumments arg)
     return SUCCESS;
 }
 
+u64 Page_Table::get_page_frame(u64 virt_addr)
+{
+    u64 cr3 = getCR3();
+    u64 local_cr3 = reinterpret_cast<u64>(pml4_phys);
+    if (cr3 != local_cr3)
+        setCR3(local_cr3);
+
+    PTE& pte = *get_pte(virt_addr, rec_map_index);
+    u64 page_frame = pte.page_ppn << 12;
+
+    if (cr3 != local_cr3)
+        setCR3(cr3);
+
+    return page_frame;
+}
+
+
+void Page_Table::invalidate_nofree(u64 virt_addr)
+{
+    bool invalidated = false;
+    u64 cr3 = getCR3();
+    u64 local_cr3 = reinterpret_cast<u64>(pml4_phys);
+    if (cr3 != local_cr3)
+        setCR3(local_cr3);
+
+    do {
+        PML4E& pml4e = *get_pml4e(virt_addr, rec_map_index);
+        if (not pml4e.present)
+            break;
+
+        PDPTE& pdpte = *get_pdpe(virt_addr, rec_map_index);
+        if (not pdpte.present)
+            break;
+
+        PDE& pde = *get_pde(virt_addr, rec_map_index);
+        if (not pde.present)
+            break;
+
+        PTE& pte = *get_pte(virt_addr, rec_map_index);
+        if (not pte.present)
+            break;
+
+        pte = PTE();
+        invalidated = true;
+    } while (false);
+
+    if (cr3 != local_cr3)
+        setCR3(cr3);
+
+    if (invalidated)
+        invalidate_tlb(virt_addr);
+}
+
+void Page_Table::invalidate_tlb(u64 page)
+{
+    // TODO: IPI
+    invlpg(page);
+}
+
 Check_Return_Str check_if_allocated_and_set_flag(u64 virtual_addr, u8 flag, Page_Table_Argumments arg)
 {
     u64 addr = virtual_addr;
@@ -481,7 +540,7 @@ klib::shared_ptr<Page_Table> Page_Table::create_empty_page_table()
 
     // Map the newly created PML4 to some empty space
     // TODO: Exceptions
-    map(p, free_page, args);
+    ::map(p, free_page, args);
 
     // Clear it as memory contains rubbish and it will cause weird paging bugs on real machines
     page_clear((void*)free_page);
@@ -518,6 +577,21 @@ Page_Table::~Page_Table()
     free_user_pages((u64)pml4_phys);
     kernel_pframe_allocator.free((void*)pml4_phys);
     takeout_global_page_tables();
+}
+
+kresult_t Page_Table::map(u64 physical_addr, u64 virtual_addr, Page_Table_Argumments arg)
+{
+    u64 cr3 = getCR3();
+    u64 local_cr3 = reinterpret_cast<u64>(pml4_phys);
+    if (cr3 != local_cr3)
+        setCR3(local_cr3);
+
+    kresult_t result = ::map(physical_addr, virtual_addr, arg);
+
+    if (cr3 != local_cr3)
+        setCR3(cr3);
+
+    return result;
 }
 
 
@@ -606,6 +680,38 @@ void free_pages_range(u64 addr_start, u64 size, u64 cr3)
     }
 }
 
+Page_Table::pagind_regions_map::iterator Page_Table::get_region(u64 page)
+{
+    auto it = paging_regions.get_smaller_or_equal(page);
+    if (it == paging_regions.end() or not it->second->is_in_range(page))
+        return paging_regions.end();
+
+    return it;
+}
+
+bool Page_Table::can_takeout_page(u64 page_addr)
+{
+    auto it = paging_regions.get_smaller_or_equal(page_addr);
+    if (it == paging_regions.end() or not it->second->is_in_range(page_addr))
+        return false;
+
+    return it->second->can_takeout_page();
+}
+
+u64 Page_Table::provide_managed(u64 page_addr, u64 virt_addr)
+{
+    auto it = get_region(virt_addr);
+    if (it == paging_regions.end())
+        return ERROR_NO_FREE_REGION;
+
+    if (not it->second->is_managed())
+        return ERROR_NOT_MANAGED_REGION;
+
+    Page_Table_Argumments args = it->second->craft_arguments();
+
+    return map(page_addr, virt_addr, args);
+}
+
 ReturnStr<u64> Page_Table::find_region_spot(u64 desired_start, u64 size, bool fixed)
 {
     u64 end = desired_start + size;
@@ -675,3 +781,41 @@ void Page_Table::insert_global_page_tables()
 
 Page_Table::page_table_map Page_Table::global_page_tables;
 Spinlock Page_Table::page_table_index_lock;
+
+kresult_t Page_Table::atomic_provide_page(const klib::shared_ptr<TaskDescriptor>& from_task, const klib::shared_ptr<Page_Table>& to, u64 page_from, u64 page_to, u64 flags)
+{
+    const klib::shared_ptr<Page_Table>& from = from_task->page_table;
+    Auto_Lock_Scope_Double scope_lock(from->lock, to->lock);
+
+    bool can_takeout_page = from->can_takeout_page(page_from);
+    if (not can_takeout_page)
+        return ERROR_NOT_SUPPORTED;
+
+    kresult_t r = from->prepare_user_page(page_from, Readable, from_task);
+    if (r != SUCCESS)
+        return r;
+
+    u64 page = from->get_page_frame(page_from);
+
+    r = to->provide_managed(page_to, page);
+    if (r != SUCCESS)
+        return r;
+
+    to->unblock_tasks(page_to);
+
+    from->invalidate_nofree(page_from);
+    return r;
+}
+
+void Page_Table::unblock_tasks(u64 page)
+{
+    for (const auto& it : owner_tasks)
+        it.lock()->atomic_try_unblock_by_page(page);
+}
+
+klib::shared_ptr<Page_Table> Page_Table::get_page_table(u64 id)
+{
+    Auto_Lock_Scope scope_lock(page_table_index_lock);
+
+    return global_page_tables.get_copy_or_default(id).lock();
+}

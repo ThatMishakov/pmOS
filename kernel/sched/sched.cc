@@ -142,35 +142,56 @@ void restore_segments(const klib::shared_ptr<TaskDescriptor>& task)
     write_msr(0xC0000100, task->regs.seg.fs); // FSBase
 }
 
-bool unblock_if_needed(const klib::shared_ptr<TaskDescriptor>& p, const klib::shared_ptr<Generic_Port>& ptr)
+bool TaskDescriptor::atomic_try_unblock_by_page(u64 page)
+{
+    Auto_Lock_Scope scope_lock(sched_lock);
+
+    if (status != PROCESS_BLOCKED)
+        return false;
+
+    if (page_blocked_by != page)
+        return false;
+
+    unblock();
+    return true;
+}
+
+bool TaskDescriptor::atomic_unblock_if_needed(const klib::shared_ptr<Generic_Port>& ptr)
 {
     bool unblocked = false;
-    Auto_Lock_Scope scope_lock(p->sched_lock);
+    Auto_Lock_Scope scope_lock(sched_lock);
 
-    if (p->status != PROCESS_BLOCKED)
+    if (status != PROCESS_BLOCKED)
         return unblocked;
 
-    if (p->page_blocked_by != 0)
+    if (page_blocked_by != 0)
         return unblocked;
 
-    if (ptr and p->blocked_by.lock() == ptr) {
+    if (ptr and blocked_by.lock() == ptr) {
         unblocked = true;
 
-        p->parent_queue->erase(p);
-        p->parent_queue = nullptr;
-
-        klib::shared_ptr<TaskDescriptor> current_task = get_cpu_struct()->current_task;
-        if (current_task->priority > p->priority) {
-            Auto_Lock_Scope scope_l(current_task->sched_lock);
-
-            switch_to_task(p);
-
-            push_ready(current_task);
-        } else {
-            push_ready(p);
-        }
+        unblock();
     }
     return unblocked;
+}
+
+void TaskDescriptor::unblock()
+{
+    klib::shared_ptr<TaskDescriptor> self = weak_self.lock();
+
+    parent_queue->erase(self);
+    parent_queue = nullptr;
+
+    klib::shared_ptr<TaskDescriptor> current_task = get_cpu_struct()->current_task;
+    if (current_task->priority > priority) {
+        Auto_Lock_Scope scope_l(current_task->sched_lock);
+
+        switch_to_task(self);
+
+        push_ready(current_task);
+    } else {
+        push_ready(self);
+    }
 }
 
 // u64 TaskDescriptor::check_unblock_immediately(u64 reason, u64 extra)

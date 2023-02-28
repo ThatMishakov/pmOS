@@ -28,7 +28,8 @@ struct Page_Table_Argumments {
 class Page_Table: public klib::enable_shared_from_this<Page_Table> {
 public:
     PML4 *pml4_phys = nullptr;
-    klib::splay_tree_map<u64, klib::unique_ptr<Generic_Mem_Region>> paging_regions;
+    using pagind_regions_map = klib::splay_tree_map<u64, klib::unique_ptr<Generic_Mem_Region>>;
+    pagind_regions_map paging_regions;
     klib::set<klib::weak_ptr<TaskDescriptor>> owner_tasks;
     u64 id = create_new_id();
 
@@ -84,14 +85,48 @@ public:
 
     kresult_t prepare_user_page(u64 virt_addr, unsigned access_type, const klib::shared_ptr<TaskDescriptor>& task);
     kresult_t prepare_user_buffer(u64 virt_addr, unsigned access_type);
+
+    bool can_takeout_page(u64 page_addr);
+
+    // Gets a page table by its id or returns an empty pointer
+    static klib::shared_ptr<Page_Table> get_page_table(u64 id);
+
+    // Provides a page to a new page table
+    static kresult_t atomic_provide_page(
+            const klib::shared_ptr<TaskDescriptor>& from_task,
+            const klib::shared_ptr<Page_Table>& to,
+            u64 page_from,
+            u64 page_to,
+            u64 flags);
+
+    // Maps the page with the appropriate permissions
+    u64 map(u64 page_addr, u64 virt_addr);
+    u64 map(u64 page_addr, u64 virt_addr, Page_Table_Argumments arg);
+
+    // Maps a page for a managed region, doing the appropriate checks
+    u64 provide_managed(u64 page_addr, u64 virtual_addr);
+
+    // Automatically invalidates a page table entry on all processors
+    void invalidate_tlb(u64 page);
+
 protected:
     void insert_global_page_tables();
     void takeout_global_page_tables();
     Page_Table() = default;
 
+    u64 get_page_frame(u64 virt_addr);
+
+    // Checks if the pages exists and invalidates it, invalidating TLB entries if needed
+    void invalidate_nofree(u64 virt_addr);
+
+    void unblock_tasks(u64 blocked_by_page);
+
     using page_table_map = klib::splay_tree_map<u64, klib::weak_ptr<Page_Table>>;
     static page_table_map global_page_tables;
     static Spinlock page_table_index_lock;
+
+    // Gets the region for the page. Returns end() if no region exists
+    pagind_regions_map::iterator get_region(u64 page);
 };
 
 const u16 rec_map_index = 256;

@@ -74,6 +74,9 @@ public:
     // Blocks the process by a page (for example in case of a pagefault)
     kresult_t atomic_block_by_page(u64 page);
 
+    // Unblocks the task when the page becomes available
+    bool atomic_try_unblock_by_page(u64 page);
+
     // Kills the task
     void atomic_kill();
 
@@ -81,8 +84,8 @@ public:
     // Returns 0 if there are no unblocking events pending. Otherwise returns 0.
     u64 check_unblock_immediately(u64 reason, u64 extra);
 
-    // Checks if the process is blocked by the port and unblocks it if needef
-    bool unblock_if_needed(const klib::shared_ptr<Generic_Port>& compare_blocked_by);
+    // Checks if the process is blocked by the port and unblocks it if needed
+    bool atomic_unblock_if_needed(const klib::shared_ptr<Generic_Port>& compare_blocked_by);
 
     // Sets the entry point to the task
     inline void set_entry_point(u64 entry)
@@ -118,6 +121,9 @@ public:
     ~TaskDescriptor() = default;
 protected:
     TaskDescriptor() = default;
+
+    // Unblocks the task from the blocked state
+    void unblock();
 };
 
 using task_ptr = klib::shared_ptr<TaskDescriptor>;
