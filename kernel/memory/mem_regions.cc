@@ -23,6 +23,9 @@ kresult_t Generic_Mem_Region::on_page_fault(u64 error, u64 pagefault_addr, [[may
     if (not has_permissions(error))
         return ERROR_OUT_OF_RANGE;
 
+    if (task->page_table->is_allocated(pagefault_addr))
+        return SUCCESS;
+
     return alloc_page(pagefault_addr, task);
 }
 
@@ -33,6 +36,9 @@ kresult_t Generic_Mem_Region::prepare_page(u64 access_mode, u64 page_addr, const
 
     if (not has_access(access_mode))
         return ERROR_OUT_OF_RANGE;
+
+    if (task->page_table->is_allocated(page_addr))
+        return SUCCESS;
 
     return alloc_page(page_addr, task);
 }
@@ -117,7 +123,7 @@ kresult_t Private_Managed_Region::alloc_page(u64 ptr_addr, const klib::shared_pt
     if (r.allocated)
         return SUCCESS;
 
-    if (r.prev_flags & 0b100) {
+    if (not (r.prev_flags & 0b100)) {
         IPC_Kernel_Alloc_Page str {
             IPC_Kernel_Alloc_Page_NUM,
             0,
@@ -129,7 +135,7 @@ kresult_t Private_Managed_Region::alloc_page(u64 ptr_addr, const klib::shared_pt
         if (not p)
             return ERROR_PORT_DOESNT_EXIST;
 
-        kresult_t result = p->atomic_send_from_system((const char *)&str, sizeof(str));
+        kresult_t result = p->atomic_send_from_system((const char *)&str, sizeof(IPC_Kernel_Alloc_Page));
         if (result != SUCCESS)
             return result;
     }

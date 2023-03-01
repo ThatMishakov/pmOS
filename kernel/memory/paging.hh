@@ -109,6 +109,8 @@ public:
     // Automatically invalidates a page table entry on all processors
     void invalidate_tlb(u64 page);
 
+    // Checks whether page is allocated
+    bool is_allocated(u64 addr) const;
 protected:
     void insert_global_page_tables();
     void takeout_global_page_tables();

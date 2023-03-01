@@ -61,6 +61,8 @@ ReturnStr<u64> block_current_task(const klib::shared_ptr<Generic_Port>& ptr)
 {
     const klib::shared_ptr<TaskDescriptor>& task = get_cpu_struct()->current_task;
 
+    //t_print_bochs("Blocking %i (%s) by port\n", task->pid, task->name.c_str());
+
     Auto_Lock_Scope scope_lock(task->sched_lock);
 
     task->status = Process_Status::PROCESS_BLOCKED;
@@ -83,6 +85,8 @@ kresult_t TaskDescriptor::atomic_block_by_page(u64 page)
 {
     if (status == PROCESS_BLOCKED)
         return ERROR_ALREADY_BLOCKED;
+
+    //t_print_bochs("Blocking %i (%s) by page\n", this->pid, this->name.c_str());
 
     Auto_Lock_Scope scope_lock(sched_lock);
     
@@ -152,6 +156,7 @@ bool TaskDescriptor::atomic_try_unblock_by_page(u64 page)
     if (page_blocked_by != page)
         return false;
 
+    page_blocked_by = 0;
     unblock();
     return true;
 }
@@ -177,6 +182,8 @@ bool TaskDescriptor::atomic_unblock_if_needed(const klib::shared_ptr<Generic_Por
 
 void TaskDescriptor::unblock()
 {
+    // t_print_bochs("Unblocked %i (%s)\n", this->pid, this->name.c_str());
+
     klib::shared_ptr<TaskDescriptor> self = weak_self.lock();
 
     parent_queue->erase(self);
@@ -373,13 +380,5 @@ klib::shared_ptr<TaskDescriptor> CPU_Info::atomic_get_front_priority(priority_t 
     }
 
     return nullptr;
-}
-
-void request_repeat_syscall(const klib::shared_ptr<TaskDescriptor>& task)
-{
-    if (task->regs.entry_type != 3) {
-        task->regs.saved_entry_type = task->regs.entry_type;
-        task->regs.entry_type = 3;
-    }
 }
 

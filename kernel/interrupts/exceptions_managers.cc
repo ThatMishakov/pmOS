@@ -155,7 +155,7 @@ extern "C" void invalid_opcode_manager()
 extern "C" void stack_segment_fault_manager()
 {
     const task_ptr& task = get_cpu_struct()->current_task;
-    t_print_bochs("!!! Stack-Segment Fault error %h RIP %h RSP %h\n", task->regs.int_err, task->regs.e.rip, task->regs.e.rsp);
+    t_print_bochs("!!! Stack-Segment Fault error %h RIP %h RSP %h PID %h (%s)\n", task->regs.int_err, task->regs.e.rip, task->regs.e.rsp, task->pid, task->name.c_str());
     global_logger.printf("!!! Stack-Segment Fault error %h RIP %h RSP %h\n", task->regs.int_err, task->regs.e.rip, task->regs.e.rsp);
     syscall_exit(4, 0);
 }

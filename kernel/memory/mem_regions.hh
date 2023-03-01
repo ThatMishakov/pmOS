@@ -34,7 +34,10 @@ struct Generic_Mem_Region {
     static constexpr u8 Executable = 0x04;
 
     virtual kresult_t alloc_page(u64 ptr_addr, const klib::shared_ptr<TaskDescriptor>& task) = 0;
-    virtual bool can_takeout_page() const = 0;
+    constexpr virtual bool can_takeout_page() const
+    {
+        return false;
+    }
 
     kresult_t prepare_page(u64 access_mode, u64 page_addr, const klib::shared_ptr<TaskDescriptor>& task);
 
@@ -99,11 +102,6 @@ struct Phys_Mapped_Region: Generic_Mem_Region {
         return false;
     }
 
-    constexpr bool is_managed() const override
-    {
-        return true;
-    }
-
     virtual Page_Table_Argumments craft_arguments() const;
 
     // Constructs a region with virtual address starting at *aligned_virt* of size *size* pointing to *aligned_phys*
@@ -147,6 +145,11 @@ struct Private_Managed_Region: Generic_Mem_Region {
     constexpr bool can_takeout_page() const override
     {
         return false;
+    }
+
+    constexpr bool is_managed() const override
+    {
+        return true;
     }
 
     virtual Page_Table_Argumments craft_arguments() const;

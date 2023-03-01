@@ -27,6 +27,8 @@ typedef struct page_table_req_ret_t {
 
 page_table_req_ret_t get_page_table(uint64_t pid);
 
+result_t provide_page(uint64_t page_table, uint64_t dest_page, uint64_t source, uint64_t flags);
+
 #endif
 
 #if defined(__cplusplus)

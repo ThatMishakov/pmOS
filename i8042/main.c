@@ -169,9 +169,6 @@ void init_controller()
     outb(RW_PORT, CMD_CONFIG_WRITE);
     outb(DATA_PORT, config_byte);
 
-    printf("PS/2 config value %x\n", config_byte);
-
-
     if (config_byte & 0x20) {
         has_second_channel = true; 
         printf("[i8042] Info: PS/2 controller has second channel\n");

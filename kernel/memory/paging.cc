@@ -95,6 +95,37 @@ u64 Page_Table::get_page_frame(u64 virt_addr)
     return page_frame;
 }
 
+bool Page_Table::is_allocated(u64 virt_addr) const
+{
+    bool allocated = false;
+    u64 cr3 = getCR3();
+    u64 local_cr3 = reinterpret_cast<u64>(pml4_phys);
+    if (cr3 != local_cr3)
+        setCR3(local_cr3);
+
+    do {
+        PML4E& pml4e = *get_pml4e(virt_addr, rec_map_index);
+        if (not pml4e.present)
+            break;
+
+        PDPTE& pdpte = *get_pdpe(virt_addr, rec_map_index);
+        if (not pdpte.present)
+            break;
+
+        PDE& pde = *get_pde(virt_addr, rec_map_index);
+        if (not pde.present)
+            break;
+
+        PTE& pte = *get_pte(virt_addr, rec_map_index);
+        allocated = pte.present;
+    } while (false);
+
+    if (cr3 != local_cr3)
+        setCR3(cr3);
+
+    return allocated;
+}
+
 
 void Page_Table::invalidate_nofree(u64 virt_addr)
 {
@@ -797,7 +828,7 @@ kresult_t Page_Table::atomic_provide_page(const klib::shared_ptr<TaskDescriptor>
 
     u64 page = from->get_page_frame(page_from);
 
-    r = to->provide_managed(page_to, page);
+    r = to->provide_managed(page, page_to);
     if (r != SUCCESS)
         return r;
 

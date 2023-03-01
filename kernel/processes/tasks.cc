@@ -103,6 +103,7 @@ void init_idle()
     i.val->type = TaskDescriptor::Type::Idle;
 
     i.val->priority = idle_priority;
+    i.val->name = "idle";
 }
 
 bool is_uninited(const klib::shared_ptr<const TaskDescriptor>& task)
@@ -192,4 +193,19 @@ kresult_t TaskDescriptor::register_page_table(klib::shared_ptr<Page_Table> table
     page_table = table;
 
     return SUCCESS;
+}
+
+void TaskDescriptor::request_repeat_syscall()
+{
+    if (regs.entry_type != 3) {
+        regs.saved_entry_type = regs.entry_type;
+        regs.entry_type = 3;
+    }
+}
+
+void TaskDescriptor::pop_repeat_syscall()
+{
+    if (regs.entry_type == 3) {
+        regs.entry_type = regs.saved_entry_type;
+    }
 }

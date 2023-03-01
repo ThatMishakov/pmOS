@@ -43,6 +43,15 @@ void push_modules_list(struct task_list_node *n)
     modules_list = n;
 }
 
+struct task_list_node *get_by_page_table(uint64_t page_table)
+{
+    struct task_list_node *p = modules_list;
+    while (p && p->page_table != page_table)
+        p = p->next;
+
+    return p;
+}
+
 void load_multiboot_module(struct multiboot_tag_module * mod)
 {
     print_str(" --> loading ");
@@ -72,6 +81,8 @@ void load_multiboot_module(struct multiboot_tag_module * mod)
 
     start_process(pid, n->elf_virt_addr->program_entry, 0, 0, 0);
 }
+
+void react_alloc_page(IPC_Kernel_Alloc_Page *p);
 
 void init_std_lib(void);
 
@@ -143,9 +154,9 @@ void main()
 
 
     while (1) {
-    
         Message_Descriptor desc;
         syscall_r s = syscall(SYSCALL_GET_MSG_INFO, &desc, loader_port, 0);
+
         if (s.result != SUCCESS) {
 
         }
@@ -158,6 +169,7 @@ void main()
         if (desc.size < 4) {
             // Message too small
         }
+
 
         IPC_ACPI_Request_RSDT* ptr = (IPC_ACPI_Request_RSDT *)buff;
 
@@ -196,6 +208,22 @@ void main()
             }
         }
             break;
+        
+        case 0x22: {
+            IPC_Kernel_Alloc_Page *a = (IPC_Kernel_Alloc_Page *)ptr;
+            if (desc.size < sizeof (IPC_Kernel_Alloc_Page)) {
+                print_str("Loader: Recieved IPC_Kernel_Alloc_Page of unexpected size 0x");
+                print_hex(desc.size);
+                print_str("\n");
+                break;
+            }
+
+            react_alloc_page(a);
+
+
+            break;
+        }
+
         default:
             print_str("Loader: Recievend unknown message with type 0x");
             print_hex(ptr->type);

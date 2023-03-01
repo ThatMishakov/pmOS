@@ -107,7 +107,11 @@ public:
     }
 
     constexpr const string& operator=(const string& str);
-    string& operator= (const char* s);
+    string& operator= (const char* s)
+    {
+        *this = string(s);
+        return *this;
+    }
     string& operator= (char c);
     // string& operator= (std::initializer_list<char> il);
     const string& operator=(string&& str) noexcept

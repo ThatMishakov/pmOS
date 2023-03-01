@@ -118,6 +118,3 @@ void restore_segments(const klib::shared_ptr<TaskDescriptor>& task);
 
 // Reschedules the tasks
 extern "C" void reschedule();
-
-// Changes the *task* to repeat the syscall upon reentering the system
-void request_repeat_syscall(const klib::shared_ptr<TaskDescriptor>& task);

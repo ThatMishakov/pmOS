@@ -119,6 +119,10 @@ public:
     }
 
     ~TaskDescriptor() = default;
+
+    // Changes the *task* to repeat the syscall upon reentering the system
+    void request_repeat_syscall();
+    void pop_repeat_syscall();
 protected:
     TaskDescriptor() = default;
 

@@ -95,7 +95,12 @@ mem_request_ret_t create_normal_region(uint64_t pid, void *addr_start, size_t si
 
 page_table_req_ret_t get_page_table(uint64_t pid)
 {
-    syscall_r r = syscall(SYSCALL_CREATE_PHYS_REGION, pid);
+    syscall_r r = syscall(SYSCALL_GET_PAGE_TABLE, pid);
     page_table_req_ret_t t = {r.result, r.value};
     return t;
+}
+
+result_t provide_page(uint64_t page_table, uint64_t dest_page, uint64_t source, uint64_t flags)
+{
+    return syscall(SYSCALL_PROVIDE_PAGE, page_table, dest_page, source, flags).result;
 }

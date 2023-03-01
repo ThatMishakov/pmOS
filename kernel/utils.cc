@@ -145,10 +145,16 @@ kresult_t prepare_user_buff_rd(const char* buff, size_t size)
 
     kresult_t result = SUCCESS;
 
+    klib::shared_ptr<TaskDescriptor> current_task = get_current_task();
+    current_task->request_repeat_syscall();
+
     for (u64 i = addr_start; i < end and result == SUCCESS; ++i) {
         u64 page = i & ~0xfffULL;
-        result = get_cpu_struct()->current_task->page_table->prepare_user_page(page, Page_Table::Readable, get_cpu_struct()->current_task);
+        result = current_task->page_table->prepare_user_page(page, Page_Table::Readable, current_task);
     }
+    if (result != SUCCESS_REPEAT)
+        current_task->pop_repeat_syscall();
+
     return result;
 }
 
@@ -163,10 +169,16 @@ kresult_t prepare_user_buff_wr(char* buff, size_t size)
 
     kresult_t result = SUCCESS;
 
+    klib::shared_ptr<TaskDescriptor> current_task = get_current_task();
+    current_task->request_repeat_syscall();
+
     for (u64 i = addr_start; i < end and result == SUCCESS; ++i) {
         u64 page = i & ~0xfffULL;
-        result = get_cpu_struct()->current_task->page_table->prepare_user_page(page, Page_Table::Writeable, get_cpu_struct()->current_task);
+        result = current_task->page_table->prepare_user_page(page, Page_Table::Writeable, current_task);
     }
+    if (result != SUCCESS_REPEAT)
+        current_task->pop_repeat_syscall();
+
     return result;
 }
 

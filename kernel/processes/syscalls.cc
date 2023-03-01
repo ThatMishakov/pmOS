@@ -21,7 +21,7 @@
 
 extern "C" void syscall_handler()
 {
-    klib::shared_ptr<TaskDescriptor> task = get_cpu_struct()->current_task;
+    const klib::shared_ptr<TaskDescriptor>& task = get_cpu_struct()->current_task;
     u64 call_n = task->regs.scratch_r.rdi;
     u64 arg1 = syscall_arg1(task);
     u64 arg2 = syscall_arg2(task);
@@ -110,12 +110,15 @@ extern "C" void syscall_handler()
     case SYSCALL_PROVIDE_PAGE:
         syscall_provide_page(arg1, arg2, arg3, arg4);
         break;
+    case SYSCALL_GET_PAGE_TABLE:
+        syscall_get_page_table(arg1);
+        break;
     default:
         // Not supported
         syscall_ret_low(task) = ERROR_NOT_SUPPORTED;
         break;
     }
-    //t_print_bochs(" -> result %h\n", syscall_ret_low(task));
+    //t_print_bochs(" -> result %i\n", syscall_ret_low(task));
 }
 
 void getpid()
@@ -337,7 +340,7 @@ void syscall_get_message_info(u64 message_struct, u64 portno, u32 flags)
             if (flags & FLAG_NOBLOCK) {
                 syscall_ret_low(task) = ERROR_NO_MESSAGES;
             } else {
-                request_repeat_syscall(task);
+                task->request_repeat_syscall();
                 block_current_task(port);
             }
 
@@ -631,7 +634,7 @@ void syscall_get_port_by_name(const char *name, u64 length, u32 flags)
             } else {
                 named_port->actions.push_back(klib::make_unique<Notify_Task>(task, klib::shared_ptr<Generic_Port>(named_port)));
 
-                request_repeat_syscall(task);
+                task->request_repeat_syscall();
                 block_current_task(named_port);
             }
         }
@@ -645,7 +648,7 @@ void syscall_get_port_by_name(const char *name, u64 length, u32 flags)
             global_named_ports.storage.insert({new_desc->name, new_desc});
             new_desc->actions.push_back(klib::make_unique<Notify_Task>(task, new_desc));
 
-            request_repeat_syscall(task);
+            task->request_repeat_syscall();
             block_current_task(new_desc);
         }
     }
