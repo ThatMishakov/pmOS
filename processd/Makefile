@@ -27,7 +27,6 @@ INTERNALLDFLAGS :=     \
  
 # Internal C flags that should not be changed by the user.
 INTERNALCFLAGS  :=       \
-	-ffreestanding \
 	-static \
 	-mno-red-zone \
 	-fPIE \

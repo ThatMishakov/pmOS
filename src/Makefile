@@ -1,6 +1,7 @@
 ROOTDIR = $(realpath .)/..
 PREFIX := $(ROOTDIR)/bin/cross
 SYSROOT := $(ROOTDIR)/sysroot
+TARGET = x86_64-pmos
 
 export PATH := $(ROOTDIR)/bin/cross/bin:$(PATH)
 
@@ -31,7 +32,10 @@ build-gcc-pmos: gcc
 x86_64-pmos-gcc: $(ROOTDIR)/bin/cross/bin/x86_64-pmos-gcc
 $(ROOTDIR)/bin/cross/bin/x86_64-pmos-gcc: build-gcc-pmos x86_64-pmos-ld
 	@mkdir -p $(ROOTDIR)/bin/cross/
-	$(MAKE) -C build-gcc-pmos all-gcc all-target-libgcc
+	$(MAKE) -C build-gcc-pmos all-gcc
+	$(MAKE) -C build-gcc-pmos all-target-libgcc CFLAGS_FOR_TARGET='-g -O2 -mcmodel=kernel -mno-red-zone' || true
+	sed -i 's/PICFLAG/DISABLED_PICFLAG/g' build-gcc-pmos/$(TARGET)/libgcc/Makefile
+	$(MAKE) -C build-gcc-pmos all-target-libgcc CFLAGS_FOR_TARGET='-g -O2 -mcmodel=kernel -mno-red-zone'
 	$(MAKE) -C build-gcc-pmos install-gcc install-target-libgcc
 
 x86_64-pmos-ld: $(ROOTDIR)/bin/cross/bin/x86_64-pmos-ld

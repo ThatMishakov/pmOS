@@ -2,12 +2,13 @@
 #define _MMAN_H
 
 #include "../pmos/memory_flags.h"
+#include "types.h"
 
 #if defined(__cplusplus)
 extern "C" {
 #endif
 
-#define MAP_FAILED    -1
+#define MAP_FAILED    ((void*)0)
 
 #define POSIX_MADV_NORMAL     0
 #define POSIX_MADV_SEQUENTIAL 1
@@ -20,6 +21,7 @@ extern "C" {
 #define POSIX_TYPED_MEM_MAP_ALLOCATABLE 0x04
 
 static const size_t  posix_tmi_length = -1;
+typedef size_t off_t;
 
 #ifdef __STDC_HOSTED__
 
