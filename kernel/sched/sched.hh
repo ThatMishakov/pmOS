@@ -9,6 +9,7 @@
 #include <lib/memory.hh>
 #include <processes/tasks.hh>
 #include "defs.hh"
+#include <memory/temp_mapper.hh>
 
 // Checks the mask and unblocks the task if needed
 inline bool unblock_if_needed(const klib::shared_ptr<TaskDescriptor>& p, const klib::shared_ptr<Generic_Port>& compare_blocked_by)
@@ -74,6 +75,8 @@ struct CPU_Info {
     klib::shared_ptr<TaskDescriptor> atomic_pick_highest_priority();
     klib::shared_ptr<TaskDescriptor> atomic_get_front_priority(priority_t);
     klib::shared_ptr<TaskDescriptor> atomic_pick_lowest_priority(unsigned max_priority = 2);
+
+    x86_PAE_Temp_Mapper temp_mapper;
 };
 
 quantum_t assign_quantum_on_priority(priority_t);

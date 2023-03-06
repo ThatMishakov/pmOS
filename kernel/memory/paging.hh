@@ -171,12 +171,40 @@ public:
     }
 
     ReturnStr<u64> phys_addr_of(u64 virt) const;
+
+    static inline unsigned pt_index(u64 addr)
+    {
+        u64 index = (u64)addr >> 12;
+        return index & 0777;
+    }
+
+    static inline unsigned pd_index(u64 addr)
+    {
+        u64 index = (u64)addr >> (12+9);
+        return index & 0777;
+    }
+
+    static inline unsigned pdpt_index(u64 addr)
+    {
+        u64 index = (u64)addr >> (12+9+9);
+        return index & 0777;
+    }
+
+    static inline unsigned pml4_index(u64 addr)
+    {
+        u64 index = (u64)addr >> (12+9+9+9);
+        return index & 0777;  
+    }
 protected:
     virtual u64 get_page_frame(u64 virt_addr) override;
     x86_4level_Page_Table() = default;
 
     // Frees user pages
     void free_user_pages();
+
+    void free_pt(u64 pt_phys);
+    void free_pd(u64 pd_phys);
+    void free_pdpt(u64 pdpt_phys);
 };
 
 const u16 rec_map_index = 256;
@@ -187,6 +215,9 @@ u64 kernel_get_page_zeroed(u64 virtual_addr, Page_Table_Argumments arg);
 
 // Return true if mapped the page successfully
 u64 map(u64 physical_addr, u64 virtual_addr, Page_Table_Argumments arg);
+
+PT* rec_prepare_pt_for(u64 virt_addr, Page_Table_Argumments arg);
+u64 rec_get_pt_ppn(u64 virt_addr);
 
 struct Check_Return_Str {
     kresult_t result = 0;

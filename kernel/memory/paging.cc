@@ -12,6 +12,7 @@
 #include <processes/tasks.hh>
 #include <sched/sched.hh>
 #include <kern_logger/kern_logger.hh>
+#include "temp_mapper.hh"
 
 bool nx_bit_enabled = false;
 
@@ -79,6 +80,65 @@ kresult_t map(u64 physical_addr, u64 virtual_addr, Page_Table_Argumments arg)
     return SUCCESS;
 }
 
+u64 rec_get_pt_ppn(u64 virt_addr)
+{
+    return get_pde(virt_addr, rec_map_index)->page_ppn;
+}
+
+PT* rec_prepare_pt_for(u64 virtual_addr, Page_Table_Argumments arg)
+{
+    u64 addr = virtual_addr;
+    addr >>= 12;
+    //u64 page = addr;
+    u64 ptable_entry = addr & 0x1ff;
+    addr >>= 9;
+    u64 pdir_entry = addr & 0x1ff;
+    addr >>= 9;
+    u64 pdpt_entry = addr & 0x1ff;
+    addr >>= 9;
+    u64 pml4_entry = addr & 0x1ff;
+
+    PML4E& pml4e = pml4(rec_map_index)->entries[pml4_entry];
+    if (not pml4e.present) {
+        pml4e = {};
+        ReturnStr<u64> p = kernel_pframe_allocator.alloc_page_ppn();
+        if (p.result != SUCCESS) return nullptr; 
+        pml4e.page_ppn = p.val;
+        pml4e.present = 1;
+        pml4e.writeable = 1;
+        pml4e.user_access = arg.user_access;
+        page_clear((void*)pdpt_of(virtual_addr, rec_map_index));
+    }
+
+    PDPTE& pdpte = pdpt_of(virtual_addr, rec_map_index)->entries[pdpt_entry];
+    if (pdpte.size) return nullptr;
+    if (not pdpte.present) {
+        pdpte = {};
+        ReturnStr<u64> p =  kernel_pframe_allocator.alloc_page_ppn();;
+        if (p.result != SUCCESS) return nullptr; 
+        pdpte.page_ppn = p.val;
+        pdpte.present = 1;
+        pdpte.writeable = 1;
+        pdpte.user_access = arg.user_access;
+        page_clear((void*)pd_of(virtual_addr, rec_map_index));
+    }
+
+    PDE& pde = pd_of(virtual_addr, rec_map_index)->entries[pdir_entry];
+    if (pde.size) return nullptr;
+    if (not pde.present) {
+        pde = {};
+        ReturnStr<u64> p = kernel_pframe_allocator.alloc_page_ppn();
+        if (p.result != SUCCESS) return nullptr; 
+        pde.page_ppn = p.val;
+        pde.present = 1;
+        pde.writeable = 1;
+        pde.user_access = arg.user_access;
+        page_clear((void*)pt_of(virtual_addr, rec_map_index));
+    }
+
+    return pt_of(virtual_addr, rec_map_index);
+}
+
 u64 x86_4level_Page_Table::get_page_frame(u64 virt_addr)
 {
     u64 cr3 = getCR3();
@@ -98,30 +158,29 @@ u64 x86_4level_Page_Table::get_page_frame(u64 virt_addr)
 bool x86_4level_Page_Table::is_allocated(u64 virt_addr) const
 {
     bool allocated = false;
-    u64 cr3 = getCR3();
-    u64 local_cr3 = reinterpret_cast<u64>(pml4_phys);
-    if (cr3 != local_cr3)
-        setCR3(local_cr3);
+
+    Temp_Mapper_Obj mapper(get_cpu_struct()->temp_mapper);
 
     do {
-        PML4E& pml4e = *get_pml4e(virt_addr, rec_map_index);
-        if (not pml4e.present)
+        mapper.map((u64)pml4_phys);
+        PML4E* pml4e = &((PML4 *)mapper.ptr)->entries[pml4_index(virt_addr)];
+        if (not pml4e->present)
             break;
 
-        PDPTE& pdpte = *get_pdpe(virt_addr, rec_map_index);
-        if (not pdpte.present)
+        mapper.map((u64)pml4e->page_ppn << 12);
+        PDPTE* pdpte = &((PDPT *)mapper.ptr)->entries[pdpt_index(virt_addr)];
+        if (not pdpte->present)
             break;
 
-        PDE& pde = *get_pde(virt_addr, rec_map_index);
-        if (not pde.present)
+        mapper.map((u64)pdpte->page_ppn << 12);
+        PDE* pde = &((PD *)mapper.ptr)->entries[pd_index(virt_addr)];
+        if (not pde->present)
             break;
 
-        PTE& pte = *get_pte(virt_addr, rec_map_index);
-        allocated = pte.present;
+        mapper.map((u64)pde->page_ppn << 12);
+        PTE* pte = &((PT *)mapper.ptr)->entries[pt_index(virt_addr)];
+        allocated = pte->present;
     } while (false);
-
-    if (cr3 != local_cr3)
-        setCR3(cr3);
 
     return allocated;
 }
@@ -130,34 +189,33 @@ bool x86_4level_Page_Table::is_allocated(u64 virt_addr) const
 void x86_4level_Page_Table::invalidate_nofree(u64 virt_addr)
 {
     bool invalidated = false;
-    u64 cr3 = getCR3();
-    u64 local_cr3 = reinterpret_cast<u64>(pml4_phys);
-    if (cr3 != local_cr3)
-        setCR3(local_cr3);
+    
+    Temp_Mapper_Obj mapper(get_cpu_struct()->temp_mapper);
 
     do {
-        PML4E& pml4e = *get_pml4e(virt_addr, rec_map_index);
-        if (not pml4e.present)
+        mapper.map((u64)pml4_phys);
+        PML4E* pml4e = &((PML4 *)mapper.ptr)->entries[pml4_index(virt_addr)];
+        if (not pml4e->present)
             break;
 
-        PDPTE& pdpte = *get_pdpe(virt_addr, rec_map_index);
-        if (not pdpte.present)
+        mapper.map((u64)pml4e->page_ppn << 12);
+        PDPTE* pdpte = &((PDPT *)mapper.ptr)->entries[pdpt_index(virt_addr)];
+        if (not pdpte->present)
             break;
 
-        PDE& pde = *get_pde(virt_addr, rec_map_index);
-        if (not pde.present)
+        mapper.map((u64)pdpte->page_ppn << 12);
+        PDE* pde = &((PD *)mapper.ptr)->entries[pd_index(virt_addr)];
+        if (not pde->present)
             break;
 
-        PTE& pte = *get_pte(virt_addr, rec_map_index);
-        if (not pte.present)
+        mapper.map((u64)pde->page_ppn << 12);
+        PTE* pte = &((PT *)mapper.ptr)->entries[pt_index(virt_addr)];
+        if (not pte->present)
             break;
 
-        pte = PTE();
+        *pte = PTE();
         invalidated = true;
     } while (false);
-
-    if (cr3 != local_cr3)
-        setCR3(cr3);
 
     if (invalidated)
         invalidate_tlb(virt_addr);
@@ -341,43 +399,6 @@ void invalidade_noerr(u64 virtual_addr)
     invlpg(virtual_addr);
 }
 
-void free_pt(u64 page_start, u64 page_table)
-{
-    for (u64 i = 0; i < 512; ++i) {
-        u64 addr = page_start + (i << 12);
-        PTE* p = get_pte(addr, rec_map_index);
-        if (p->present) {
-            release_page_s(*get_pte(addr, rec_map_index));
-        }
-    }
-}
-
-void free_pd(u64 pd_start, u64 page_table)
-{
-    for (u64 i = 0; i < 512; ++i) {
-        u64 addr = pd_start + (i << (12 + 9));
-        PDE* p = get_pde(addr, rec_map_index);
-        if (p->size) {
-            global_logger.printf("Error freeing pages: Huge page!\n");
-            halt();
-        } else if (p->present) {
-            free_pt(addr, page_table);
-        }
-    }
-}
-
-void free_pdpt(u64 pdp_start, u64 page_table)
-{
-    for (u64 i = 0; i < 512; ++i) {
-        u64 addr = pdp_start + (i << (12 + 9 + 9));
-        PDPTE* p = get_pdpe(addr, rec_map_index);
-        if (p->present) {
-            free_pd(addr, page_table);
-            kernel_pframe_allocator.free((void*)(p->page_ppn << 12));
-        }
-    }
-}
-
 klib::shared_ptr<x86_4level_Page_Table> x86_4level_Page_Table::init_from_phys(u64 cr3)
 {
     klib::shared_ptr<x86_4level_Page_Table> t = klib::unique_ptr<x86_4level_Page_Table>(new x86_4level_Page_Table());
@@ -400,39 +421,28 @@ klib::shared_ptr<Page_Table> x86_4level_Page_Table::create_empty()
     // Check for errors
     if (l.result != SUCCESS) return nullptr;
 
-    // Find a free spot and map this page
-    ReturnStr<u64> r = global_free_page.get_free_page();
-    u64 free_page = r.val;
+    // Map pages
+    Temp_Mapper_Obj<PML4> new_page_m(get_cpu_struct()->temp_mapper);
+    Temp_Mapper_Obj<PML4> current_page_m(get_cpu_struct()->temp_mapper);
 
-    // Map the page
-    Page_Table_Argumments args;
-    args.user_access = 0;
-    args.writeable = 1;
-
-    // Map the newly created PML4 to some empty space
-    // TODO: Exceptions
-    ::map(p, free_page, args);
+    new_page_m.map(p);
+    current_page_m.map(getCR3());
 
     // Clear it as memory contains rubbish and it will cause weird paging bugs on real machines
-    page_clear((void*)free_page);
+    page_clear((void*)new_page_m.ptr);
 
     // Copy the last entries into the new page table as they are shared across all processes
     // and recurvicely assign the last page to itself
     // ((PML4*)free_page)->entries[509] = pml4(rec_map_index)->entries[509];
-    ((PML4*)free_page)->entries[511] = pml4(rec_map_index)->entries[511];
+    new_page_m.ptr->entries[510] = current_page_m.ptr->entries[510];
+    new_page_m.ptr->entries[511] = current_page_m.ptr->entries[511];
 
-    ((PML4*)free_page)->entries[rec_map_index] = PML4E();
-    ((PML4*)free_page)->entries[rec_map_index].present = 1;
-    ((PML4*)free_page)->entries[rec_map_index].user_access = 0;
-    ((PML4*)free_page)->entries[rec_map_index].page_ppn = p/KB(4);
+    new_page_m.ptr->entries[rec_map_index] = PML4E();
+    new_page_m.ptr->entries[rec_map_index].present = 1;
+    new_page_m.ptr->entries[rec_map_index].user_access = 0;
+    new_page_m.ptr->entries[rec_map_index].page_ppn = p/KB(4);
 
-    // Unmap the page
-    // TODO: Error checking
-    invalidade_noerr(free_page);
 
-    // Return the free_page to the pool
-    // TODO: Error checking
-    global_free_page.release_free_page(free_page);
 
     new_table->pml4_phys = (PML4*)p;
 
@@ -468,25 +478,63 @@ kresult_t x86_4level_Page_Table::map(u64 physical_addr, u64 virtual_addr, Page_T
     return result;
 }
 
+void x86_4level_Page_Table::free_pt(u64 pt_phys)
+{
+    Temp_Mapper_Obj<PT> mapper(get_cpu_struct()->temp_mapper);
+    mapper.map(pt_phys);
+
+    for (u64 i = 0; i < 512; ++i) {
+        PTE* p = &mapper.ptr->entries[i];
+        if (p->present) {
+            release_page_s(*p);
+        }
+    }
+}
+
+void x86_4level_Page_Table::free_pd(u64 pd_phys)
+{
+    Temp_Mapper_Obj<PD> mapper(get_cpu_struct()->temp_mapper);
+    mapper.map(pd_phys);
+
+    for (u64 i = 0; i < 512; ++i) {
+        PDE* p = &mapper.ptr->entries[i];
+        if (p->present) {
+            if (not p->size) // Not a huge page
+                free_pt(p->page_ppn << 12);
+
+            release_page_s(*(PTE *)p);
+        }
+    }
+}
+
+void x86_4level_Page_Table::free_pdpt(u64 pdpt_phys)
+{
+    Temp_Mapper_Obj<PDPT> mapper(get_cpu_struct()->temp_mapper);
+    mapper.map(pdpt_phys);
+
+    for (u64 i = 0; i < 512; ++i) {
+        PDPTE* p = &mapper.ptr->entries[i];
+        if (p->present) {
+            if (not p->size) // Not a huge page
+                free_pt(p->page_ppn << 12);
+
+            release_page_s(*(PTE *)p);
+        }
+    }
+}
 
 void x86_4level_Page_Table::free_user_pages()
 {
-    u64 page_table = (u64)pml4_phys;
-    u64 old_cr3 = getCR3();
+    Temp_Mapper_Obj<PML4> mapper(get_cpu_struct()->temp_mapper);
+    mapper.map((u64)pml4_phys);
 
-    if (old_cr3 != page_table)
-        setCR3(page_table);
-
-    for (u64 i = 0; i < user_addr_max(); i += (0x01ULL << (12 + 9 + 9 + 9))) {
-        PML4E* p = get_pml4e(i, rec_map_index);
+    for (u64 i = 0; i < 256; ++i) {
+        PML4E* p = &mapper.ptr->entries[i];
         if (p->present) {
-            free_pdpt(i, page_table);
+            free_pdpt(p->page_ppn << 12);
             kernel_pframe_allocator.free((void*)(p->page_ppn << 12));
         }
     }
-
-    if (old_cr3 != page_table)
-        setCR3(old_cr3);
 }
 
 ReturnStr<u64> Page_Table::atomic_create_normal_region(u64 page_aligned_start, u64 page_aligned_size, unsigned access, bool fixed, klib::string name, u64 pattern)
