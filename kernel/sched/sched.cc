@@ -32,7 +32,7 @@ void init_scheduling()
     klib::shared_ptr<TaskDescriptor> current_task = TaskDescriptor::create();
     get_cpu_struct()->current_task = current_task;
 
-    current_task->register_page_table(Page_Table::init_from_phys(getCR3()));
+    current_task->register_page_table(x86_4level_Page_Table::init_from_phys(getCR3()));
 
     auto result = current_task->page_table->atomic_create_phys_region(0x1000, GB(4), Page_Table::Readable | Page_Table::Writeable | Page_Table::Executable, true, "init_default_map", 0x1000);
     if (result.result != SUCCESS) {
@@ -110,11 +110,13 @@ kresult_t TaskDescriptor::atomic_block_by_page(u64 page)
     return SUCCESS;
 }
 
-void switch_to_task(const klib::shared_ptr<TaskDescriptor>& task)
+void TaskDescriptor::switch_to()
 {
+    //t_print_bochs("Switching to %i (%s)\n", task->pid, task->name.c_str());
+
     CPU_Info *c = get_cpu_struct();
-    if (c->current_task->page_table != task->page_table) {
-        setCR3(task->page_table->get_cr3());
+    if (c->current_task->page_table != page_table) {
+        setCR3(klib::dynamic_pointer_cast<x86_Page_Table>(page_table)->get_cr3());
     }
 
     save_segments(c->current_task);
@@ -126,12 +128,12 @@ void switch_to_task(const klib::shared_ptr<TaskDescriptor>& task)
     }
 
     // Change task
-    task->status = Process_Status::PROCESS_RUNNING;
-    c->current_task = task;
+    status = Process_Status::PROCESS_RUNNING;
+    c->current_task = weak_self.lock();
 
     restore_segments(c->current_task);
 
-    start_timer_ticks(calculate_timer_ticks(task));
+    start_timer_ticks(calculate_timer_ticks(c->current_task));
 }
 
 void save_segments(const klib::shared_ptr<TaskDescriptor>& task)
@@ -193,7 +195,7 @@ void TaskDescriptor::unblock()
     if (current_task->priority > priority) {
         Auto_Lock_Scope scope_l(current_task->sched_lock);
 
-        switch_to_task(self);
+        switch_to();
 
         push_ready(current_task);
     } else {
@@ -244,7 +246,7 @@ void sched_periodic()
 
         current->status = Process_Status::PROCESS_READY;
 
-        switch_to_task(next);
+        next->switch_to();
 
         push_ready(current);
     } else {
@@ -295,7 +297,7 @@ void find_new_process()
     if (not next_task)
         next_task = cpu_str.idle_task;
 
-    switch_to_task(next_task);
+    next_task->switch_to();
 }
 
 klib::shared_ptr<TaskDescriptor> sched_queue::pop_front() noexcept

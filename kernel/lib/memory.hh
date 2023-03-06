@@ -599,7 +599,8 @@ public:
         return weak_this;
     }
 
-    friend shared_ptr<T>;
+    template<class X>
+    friend class shared_ptr;
 };
 
 template<class T>
@@ -613,7 +614,8 @@ shared_ptr<T>::shared_ptr(unique_ptr<T>&& p)
     refcount = refcount_new.release();
     refcount->shared_refs = 1; 
 
-    if constexpr(klib::is_base_of<enable_shared_from_this<T>, T>::value) {
+
+    if constexpr(klib::is_base_of_template<enable_shared_from_this, T>::value) {
         ptr->weak_this = *this;
     }
 }

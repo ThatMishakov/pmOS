@@ -64,6 +64,26 @@
         "paging.h": "c",
         "*.def": "cpp",
         "internet": "cpp",
-        "cstddef": "c"
-    }
+        "cstddef": "c",
+        "atomic": "cpp",
+        "chrono": "cpp",
+        "clocale": "cpp",
+        "condition_variable": "cpp",
+        "cstdarg": "cpp",
+        "ctime": "cpp",
+        "algorithm": "cpp",
+        "iterator": "cpp",
+        "memory_resource": "cpp",
+        "numeric": "cpp",
+        "optional": "cpp",
+        "fstream": "cpp",
+        "iostream": "cpp",
+        "istream": "cpp",
+        "mutex": "cpp",
+        "semaphore": "cpp",
+        "stop_token": "cpp",
+        "thread": "cpp",
+        "cinttypes": "cpp"
+    },
+    "cmake.configureOnOpen": false
 }

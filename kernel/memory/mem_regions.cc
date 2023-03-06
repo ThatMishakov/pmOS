@@ -7,11 +7,6 @@
 
 u64 counter = 1;
 
-Generic_Mem_Region::~Generic_Mem_Region()
-{
-    free_pages_range(start_addr, size, owner_cr3);
-}
-
 kresult_t Generic_Mem_Region::on_page_fault(u64 error, u64 pagefault_addr, [[maybe_unused]] const klib::shared_ptr<TaskDescriptor>& task)
 {
     if (not is_in_range(pagefault_addr))

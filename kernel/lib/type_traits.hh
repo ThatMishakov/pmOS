@@ -21,11 +21,46 @@ struct integral_constant {
 template< class T >
 using remove_reference_t = typename remove_reference<T>::type;
 
+template< class T > struct remove_cv                   { typedef T type; };
+template< class T > struct remove_cv<const T>          { typedef T type; };
+template< class T > struct remove_cv<volatile T>       { typedef T type; };
+template< class T > struct remove_cv<const volatile T> { typedef T type; };
+ 
+template< class T > struct remove_const                { typedef T type; };
+template< class T > struct remove_const<const T>       { typedef T type; };
+ 
+template< class T > struct remove_volatile             { typedef T type; };
+template< class T > struct remove_volatile<volatile T> { typedef T type; };
+
 typedef integral_constant<bool,true> true_type;
 typedef integral_constant<bool,false> false_type;
 
+template<bool B, class T, class F>
+struct conditional { using type = T; };
+ 
+template<class T, class F>
+struct conditional<false, T, F> { using type = F; };
+
+template< bool B, class T, class F >
+using conditional_t = typename conditional<B,T,F>::type;
+
+template<class...> struct conjunction : klib::true_type { };
+template<class B1> struct conjunction<B1> : B1 { };
+template<class B1, class... Bn>
+struct conjunction<B1, Bn...>
+    : klib::conditional_t<bool(B1::value), conjunction<Bn...>, B1> {};
+
 template<class T> struct is_lvalue_reference     : false_type {};
 template<class T> struct is_lvalue_reference<T&> : true_type {};
+
+template<class T, class U>
+struct is_same : klib::false_type {};
+ 
+template<class T>
+struct is_same<T, T> : klib::true_type {};
+
+template< class T >
+struct is_void : klib::is_same<void, typename klib::remove_cv<T>::type> {};
 
 template<class T>
 constexpr bool is_lvalue_reference_v = is_lvalue_reference<T>::value;
@@ -67,4 +102,87 @@ struct is_base_of :
         klib::is_class<Base>::value && klib::is_class<Derived>::value &&
         decltype(klib_is_base_of_details::test_pre_is_base_of<Base, Derived>(0))::value
     > { };
+
+namespace add_lvalue_reference_detail {
+ 
+template <class T>
+struct type_identity { using type = T; }; // or use std::type_identity (since C++20)
+ 
+template <class T> // Note that `cv void&` is a substitution failure
+auto try_add_lvalue_reference(int) -> type_identity<T&>;
+template <class T> // Handle T = cv void case
+auto try_add_lvalue_reference(...) -> type_identity<T>;
+ 
+template <class T>
+auto try_add_rvalue_reference(int) -> type_identity<T&&>;
+template <class T>
+auto try_add_rvalue_reference(...) -> type_identity<T>;
+ 
+} // namespace add_lvalue_reference_detail
+ 
+template <class T>
+struct add_lvalue_reference
+    : decltype(add_lvalue_reference_detail::try_add_lvalue_reference<T>(0)) {};
+ 
+template <class T>
+struct add_rvalue_reference
+    : decltype(add_lvalue_reference_detail::try_add_rvalue_reference<T>(0)) {};
+
+template<typename T>
+constexpr bool always_false = false;
+ 
+template<typename T>
+typename klib::add_rvalue_reference<T>::type declval() noexcept
+{
+    static_assert(always_false<T>, "declval not allowed in an evaluated context");
+}
+
+namespace is_convertible_detail {
+ 
+template<class T>
+auto test_returnable(int) -> decltype(
+    void(static_cast<T(*)()>(nullptr)), klib::true_type{}
+);
+template<class>
+auto test_returnable(...) -> klib::false_type;
+ 
+template<class From, class To>
+auto test_implicitly_convertible(int) -> decltype(
+    void(klib::declval<void(&)(To)>()(klib::declval<From>())), klib::true_type{}
+);
+template<class, class>
+auto test_implicitly_convertible(...) -> klib::false_type;
+ 
+} // is_convertible_detail detail
+ 
+template<class From, class To>
+struct is_convertible : klib::integral_constant<bool,
+    (decltype(is_convertible_detail::test_returnable<To>(0))::value &&
+     decltype(is_convertible_detail::test_implicitly_convertible<From, To>(0))::value) ||
+    (klib::is_void<From>::value && klib::is_void<To>::value)
+> {};
+
+template<class From, class To>
+struct is_nothrow_convertible : klib::conjunction<klib::is_void<From>, klib::is_void<To>> {};
+ 
+template<class From, class To>
+    requires
+        requires {
+            static_cast<To(*)()>(nullptr);
+            { klib::declval<void(&)(To) noexcept>()(klib::declval<From>()) } noexcept;
+        }
+struct is_nothrow_convertible<From, To> : klib::true_type {};
+
+template < template <typename...> class base,typename derived>
+struct is_base_of_template_impl
+{
+    template<typename... Ts>
+    static constexpr klib::true_type  test(const base<Ts...> *);
+    static constexpr klib::false_type test(...);
+    using type = decltype(test(klib::declval<derived*>()));
+};
+
+template < template <typename...> class base,typename derived>
+using is_base_of_template = typename is_base_of_template_impl<base,derived>::type;
+
 } // namespace klib

@@ -79,7 +79,7 @@ kresult_t map(u64 physical_addr, u64 virtual_addr, Page_Table_Argumments arg)
     return SUCCESS;
 }
 
-u64 Page_Table::get_page_frame(u64 virt_addr)
+u64 x86_4level_Page_Table::get_page_frame(u64 virt_addr)
 {
     u64 cr3 = getCR3();
     u64 local_cr3 = reinterpret_cast<u64>(pml4_phys);
@@ -95,7 +95,7 @@ u64 Page_Table::get_page_frame(u64 virt_addr)
     return page_frame;
 }
 
-bool Page_Table::is_allocated(u64 virt_addr) const
+bool x86_4level_Page_Table::is_allocated(u64 virt_addr) const
 {
     bool allocated = false;
     u64 cr3 = getCR3();
@@ -127,7 +127,7 @@ bool Page_Table::is_allocated(u64 virt_addr) const
 }
 
 
-void Page_Table::invalidate_nofree(u64 virt_addr)
+void x86_4level_Page_Table::invalidate_nofree(u64 virt_addr)
 {
     bool invalidated = false;
     u64 cr3 = getCR3();
@@ -163,7 +163,7 @@ void Page_Table::invalidate_nofree(u64 virt_addr)
         invalidate_tlb(virt_addr);
 }
 
-void Page_Table::invalidate_tlb(u64 page)
+void x86_Page_Table::invalidate_tlb(u64 page)
 {
     // TODO: IPI
     invlpg(page);
@@ -233,39 +233,6 @@ Check_Return_Str check_if_allocated_and_set_flag(u64 virtual_addr, u8 flag, Page
     pte.avl |= flag;
 
     return ret;
-}
-
-void free_page(u64 addr, u64 cr3)
-{
-    u64 old_cr3 = getCR3();
-
-    if (cr3 != old_cr3)
-        setCR3(cr3);
-
-    do {
-        PML4E& pml4e = *get_pml4e(addr, rec_map_index);
-        if (not pml4e.present)
-            break;
-
-        PDPTE& pdpte = *get_pdpe(addr, rec_map_index);
-        if (not pdpte.present)
-            break;
-
-        PDE& pde = *get_pde(addr, rec_map_index);
-        if (not pde.present)
-            break;
-
-        PTE& pte = *get_pte(addr, rec_map_index);
-        if (pte.present and not (pte.avl & PAGING_FLAG_NOFREE))
-            kernel_pframe_allocator.free((void*)(pte.page_ppn << 12));
-
-        pte = PTE();
-    } while (false);
-
-    if (cr3 != old_cr3)
-        setCR3(old_cr3);
-
-    return;
 }
 
 
@@ -339,151 +306,24 @@ kresult_t release_page_s(PTE& pte)
     return SUCCESS;
 }
 
+ReturnStr<u64> x86_4level_Page_Table::phys_addr_of(u64 virt) const
+{
+    u64 old_cr3 = getCR3();
+    u64 cr3 = (u64)pml4_phys;
 
+    if (cr3 != old_cr3)
+        setCR3(cr3);
 
-// kresult_t atomic_transfer_pages(const klib::shared_ptr<TaskDescriptor>& from, const klib::shared_ptr<TaskDescriptor> t, u64 page_start, u64 to_address, u64 nb_pages, Page_Table_Argumments pta)
-// {
-//     Auto_Lock_Scope_Double scope_lock(from->page_table.shared_str->lock, t->page_table.shared_str->lock);
+    PTE* pte = get_pte(virt, rec_map_index);
 
-//     // Check that pages are allocated
-//     for (u64 i = 0; i < nb_pages; ++i) {
-//         if (not is_allocated(page_start + i*KB(4))) return ERROR_PAGE_NOT_ALLOCATED;
-//     }
+    u64 phys = (pte->page_ppn << 12) | (virt & (u64)0xfff);
 
-//     klib::list<PTE> l;
+    if (cr3 != old_cr3)
+        setCR3(old_cr3);
 
-//     // Get pages
-//     for (u64 i = 0; i < nb_pages; ++i) {
-//         u64 p = page_start + i*KB(4);
-//         l.push_back(*get_pte(p, rec_map_index));
-//     }
-
-//     // Save %cr3
-//     u64 cr3 = getCR3();
-
-//     // Switch into new process' memory
-//     setCR3(t->page_table.get_cr3());
-
-//     // Map memory
-//     kresult_t r = SUCCESS;
-//     auto it = l.begin();
-//     u64 i = 0;
-//     for (; i < nb_pages; ++i, ++it) {
-//         u8 page_type = (*it).avl;
-//         if (page_type == PAGE_COW) {
-//             r = register_shared((*it).page_ppn << 12, t->page_table.get_cr3());
-//             if (r != SUCCESS)
-//                 break;
-
-//             if (not pta.writeable)
-//                 pta.extra = PAGE_SHARED;
-//             else
-//                 pta.extra = page_type;
-//         } else if (page_type == PAGE_SHARED) {
-//             r = register_shared((*it).page_ppn << 12, t->page_table.get_cr3());
-//             if (r != SUCCESS)
-//                 break;
-
-//             pta.extra = page_type;
-//         } else {
-//             pta.extra = page_type;
-//         }
-
-//         r = set_pte(to_address + i*KB(4), *it, pta);
-//         if (r != SUCCESS)
-//             break;
-//     }
-
-//     // If failed, invalidade the pages that succeded
-//     if (r != SUCCESS)
-//         for (u64 k = 0; k < i; ++k) {
-//             PTE* p = get_pte(page_start + i*KB(4), rec_map_index);
-//             if (p->avl == PAGE_COW or p->avl == PAGE_SHARED)
-//                 release_shared(p->avl, t->page_table.get_cr3());
-
-//             *get_pte(to_address + k*KB(4), rec_map_index) = {};
-//         }
-
-//     // Return old %cr3
-//     setCR3(cr3);
-
-//     // If successfull, invalidate the pages
-//     if (r == SUCCESS) {
-//         for (u64 i = 0; i < nb_pages; ++i) {
-//             PTE* p = get_pte(page_start + i*KB(4), rec_map_index);
-//             if (p->avl == PAGE_COW or p->avl == PAGE_SHARED)
-//                 release_shared(p->avl, from->page_table.get_cr3());
-//             invalidade_noerr(page_start + i*KB(4));
-//         }
-//         setCR3(cr3);
-//     }
-
-//     return r;
-// }
-
-
-// kresult_t atomic_share_pages(const klib::shared_ptr<TaskDescriptor>& t, u64 page_start, u64 to_addr, u64 nb_pages, Page_Table_Argumments pta)
-// {
-//     klib::shared_ptr<TaskDescriptor> current_task = get_cpu_struct()->current_task;
-
-//     klib::vector<klib::pair<PTE, bool>> l;
-
-//     kresult_t p = SUCCESS;
-//     // Share pages
-
-//     Auto_Lock_Scope_Double scope_lock(t->page_table.shared_str->lock, current_task->page_table.shared_str->lock);
-
-//     u64 z = 0;
-//     for (; z < nb_pages and p == SUCCESS; ++z) {
-//         ReturnStr<klib::pair<PTE,bool>> r = share_page(page_start + z*KB(4), current_task->page_table.get_cr3());
-//         p = r.result;
-//         if (p == SUCCESS) l.push_back(r.val);
-//     }
-
-//     // Skip TLB flushes on error
-//     if (p != SUCCESS) goto fail;
-
-//     {
-//     // Save %cr3
-//     u64 cr3 = getCR3();
-
-//     // Switch into new process' memory
-//     setCR3(t->page_table.get_cr3());
-
-//     pta.extra = PAGE_SHARED;
-
-//     auto it = l.begin();
-//     u64 i = 0;
-//     for (; i < nb_pages and p == SUCCESS; ++i, ++it) {
-//         PTE pte = (*it).first;
-//         if (nx_bit_enabled) pte.execution_disabled = pta.execution_disabled;
-//         pte.writeable = pta.writeable;
-//         p = register_shared(pte.page_ppn << 12, t->pid);
-//         if (p == SUCCESS)
-//             p = set_pte(to_addr + i*KB(4), pte, pta);
-//     }
-
-//     // Return everything back on error
-//     if (p != SUCCESS)
-//         for (u64 k = 0; k < i; ++k)
-//             if (l[k].second)
-//                 release_page_s(to_addr + i*KB(4), t->pid);
-            
-
-//     // Return old %cr3
-//     setCR3(cr3);
-//     }
-// fail:
-//     if (p != SUCCESS) {
-//         u64 size = l.size();
-//         for (u64 k = 0; k < size; ++k)
-//             if (l[k].second)
-//                 unshare_page(page_start + k*KB(4), current_task->page_table.get_cr3());
-//     }
-
-//     return p;
-// }
-
+    // TODO: Error checking
+    return {SUCCESS, phys};
+}
 
 ReturnStr<u64> phys_addr_of(u64 virt)
 {
@@ -538,18 +378,18 @@ void free_pdpt(u64 pdp_start, u64 page_table)
     }
 }
 
-klib::shared_ptr<Page_Table> Page_Table::init_from_phys(u64 cr3)
+klib::shared_ptr<x86_4level_Page_Table> x86_4level_Page_Table::init_from_phys(u64 cr3)
 {
-    klib::shared_ptr<Page_Table> t = klib::unique_ptr<Page_Table>(new Page_Table());
+    klib::shared_ptr<x86_4level_Page_Table> t = klib::unique_ptr<x86_4level_Page_Table>(new x86_4level_Page_Table());
     t->pml4_phys = (PML4 *)cr3;
     t->insert_global_page_tables();
 
     return t;
 }
 
-klib::shared_ptr<Page_Table> Page_Table::create_empty_page_table()
+klib::shared_ptr<Page_Table> x86_4level_Page_Table::create_empty()
 {
-    klib::shared_ptr<Page_Table> new_table = klib::unique_ptr<Page_Table>(new Page_Table());
+    klib::shared_ptr<x86_4level_Page_Table> new_table = klib::unique_ptr<x86_4level_Page_Table>(new x86_4level_Page_Table());
 
 
     // Get a free page
@@ -604,13 +444,16 @@ klib::shared_ptr<Page_Table> Page_Table::create_empty_page_table()
 Page_Table::~Page_Table()
 {
     paging_regions.clear();
-
-    free_user_pages((u64)pml4_phys);
-    kernel_pframe_allocator.free((void*)pml4_phys);
     takeout_global_page_tables();
 }
 
-kresult_t Page_Table::map(u64 physical_addr, u64 virtual_addr, Page_Table_Argumments arg)
+x86_4level_Page_Table::~x86_4level_Page_Table()
+{
+    free_user_pages();
+    kernel_pframe_allocator.free((void*)pml4_phys);
+}
+
+kresult_t x86_4level_Page_Table::map(u64 physical_addr, u64 virtual_addr, Page_Table_Argumments arg)
 {
     u64 cr3 = getCR3();
     u64 local_cr3 = reinterpret_cast<u64>(pml4_phys);
@@ -626,14 +469,15 @@ kresult_t Page_Table::map(u64 physical_addr, u64 virtual_addr, Page_Table_Argumm
 }
 
 
-void free_user_pages(u64 page_table)
+void x86_4level_Page_Table::free_user_pages()
 {
+    u64 page_table = (u64)pml4_phys;
     u64 old_cr3 = getCR3();
 
     if (old_cr3 != page_table)
         setCR3(page_table);
 
-    for (u64 i = 0; i < KERNEL_ADDR_SPACE; i += (0x01ULL << (12 + 9 + 9 + 9))) {
+    for (u64 i = 0; i < user_addr_max(); i += (0x01ULL << (12 + 9 + 9 + 9))) {
         PML4E* p = get_pml4e(i, rec_map_index);
         if (p->present) {
             free_pdpt(i, page_table);
@@ -658,7 +502,7 @@ ReturnStr<u64> Page_Table::atomic_create_normal_region(u64 page_aligned_start, u
 
     paging_regions.insert({start_addr,
         klib::make_unique<Private_Normal_Region>(
-            start_addr, page_aligned_size, klib::forward<klib::string>(name), (u64)pml4_phys, access, pattern
+            start_addr, page_aligned_size, klib::forward<klib::string>(name), weak_from_this(), access, pattern
         )});
 
     return new_region_start;
@@ -677,7 +521,7 @@ ReturnStr<u64> Page_Table::atomic_create_managed_region(u64 page_aligned_start, 
 
     paging_regions.insert({start_addr,
         klib::make_unique<Private_Managed_Region>(
-            start_addr, page_aligned_size, klib::forward<klib::string>(name), (u64)pml4_phys, access, klib::forward<klib::shared_ptr<Port>>(t)
+            start_addr, page_aligned_size, klib::forward<klib::string>(name), weak_from_this(), access, klib::forward<klib::shared_ptr<Port>>(t)
         )});
 
     return new_region_start;
@@ -696,19 +540,10 @@ ReturnStr<u64> Page_Table::atomic_create_phys_region(u64 page_aligned_start, u64
 
     paging_regions.insert({start_addr,
         klib::make_unique<Phys_Mapped_Region>(
-            start_addr, page_aligned_size, klib::forward<klib::string>(name), (u64)pml4_phys, access, phys_addr_start
+            start_addr, page_aligned_size, klib::forward<klib::string>(name), weak_from_this(), access, phys_addr_start
         )});
 
     return new_region_start;
-}
-
-
-void free_pages_range(u64 addr_start, u64 size, u64 cr3)
-{
-    // TODO: Inefficient!
-    for (u64 i = 0; i < size; i += 4096) {
-        free_page(addr_start+i, cr3);
-    }
 }
 
 Page_Table::pagind_regions_map::iterator Page_Table::get_region(u64 page)
@@ -772,14 +607,14 @@ ReturnStr<u64> Page_Table::find_region_spot(u64 desired_start, u64 size, bool fi
         while (it != paging_regions.end()) {
             u64 end = addr + size;
 
-            if (it->first > end and end <= KERNEL_ADDR_SPACE)
+            if (it->first > end and end <= user_addr_max())
                 return {SUCCESS, addr};
 
             addr = it->second->addr_end();
             ++it;
         }
 
-        if (addr + size <= KERNEL_ADDR_SPACE)
+        if (addr + size <= user_addr_max())
             return {SUCCESS, addr};
 
         return {ERROR_NO_FREE_REGION, 0};
@@ -849,4 +684,13 @@ klib::shared_ptr<Page_Table> Page_Table::get_page_table(u64 id)
     Auto_Lock_Scope scope_lock(page_table_index_lock);
 
     return global_page_tables.get_copy_or_default(id).lock();
+}
+
+u64 Page_Table::map(u64 page_addr, u64 virt_addr)
+{
+    auto it = get_region(virt_addr);
+    if (it == paging_regions.end())
+        return ERROR_PAGE_NOT_ALLOCATED;
+
+    return map(page_addr, virt_addr, it->second->craft_arguments());
 }

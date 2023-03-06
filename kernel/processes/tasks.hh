@@ -93,6 +93,16 @@ public:
         this->regs.e.rip = entry;
     }
 
+    // Switches to this task on the current CPU
+    void switch_to();
+
+    // Checks if the task is uninited
+    bool is_uninited() const;
+
+    // Inits the task
+    void init();
+
+
     enum Type {
         Normal,
         System,
@@ -156,15 +166,9 @@ inline bool exists_process(u64 pid)
     return exists;
 }
 
-// Returns true if the process with pid is uninitialized
-bool is_uninited(const klib::shared_ptr<const TaskDescriptor>&);
-
 // Gets a task descriptor of the process with pid
 inline klib::shared_ptr<TaskDescriptor> get_task(u64 pid)
 {
     Auto_Lock_Scope scope_lock(tasks_map_lock);
     return tasks_map.get_copy_or_default(pid);
 }
-
-// Inits the task
-void init_task(const klib::shared_ptr<TaskDescriptor>& task);

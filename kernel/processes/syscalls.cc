@@ -161,7 +161,7 @@ void syscall_start_process(u64 pid, u64 start, u64 arg1, u64 arg2, u64 arg3)
     Auto_Lock_Scope scope_sched_lock(t->sched_lock);
 
     // Check process status
-    if (not is_uninited(t)) {
+    if (not t->is_uninited()) {
         syscall_ret_low(task) = ERROR_PROCESS_INITED;
         return;
     }
@@ -175,7 +175,7 @@ void syscall_start_process(u64 pid, u64 start, u64 arg1, u64 arg2, u64 arg3)
     t->regs.scratch_r.rdx = arg3;
 
     // Init task
-    init_task(t);
+    t->init();
 
     syscall_ret_low(task) = SUCCESS;
 }
@@ -198,7 +198,7 @@ void syscall_init_stack(u64 pid, u64 esp)
     Auto_Lock_Scope scope_sched_lock(t->sched_lock);
 
     // Check process status
-    if (not is_uninited(t)) {
+    if (not t->is_uninited()) {
         syscall_ret_low(task) = ERROR_PROCESS_INITED;
         return;
     }

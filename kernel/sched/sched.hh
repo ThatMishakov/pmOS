@@ -109,9 +109,6 @@ void start_scheduler();
 // Pushes current processos to the back of sheduling queues
 void evict(const klib::shared_ptr<TaskDescriptor>&);
 
-// Switches to this process
-void switch_to_task(const klib::shared_ptr<TaskDescriptor>& task);
-
 // Saves and restores GSBase and FSBase
 void save_segments(const klib::shared_ptr<TaskDescriptor>& task);
 void restore_segments(const klib::shared_ptr<TaskDescriptor>& task);

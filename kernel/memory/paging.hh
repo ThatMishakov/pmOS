@@ -27,7 +27,6 @@ struct Page_Table_Argumments {
 
 class Page_Table: public klib::enable_shared_from_this<Page_Table> {
 public:
-    PML4 *pml4_phys = nullptr;
     using pagind_regions_map = klib::splay_tree_map<u64, klib::unique_ptr<Generic_Mem_Region>>;
     pagind_regions_map paging_regions;
     klib::set<klib::weak_ptr<TaskDescriptor>> owner_tasks;
@@ -35,7 +34,7 @@ public:
 
     Spinlock lock;
 
-    ~Page_Table();
+    virtual ~Page_Table();
 
     Page_Table(const Page_Table&) = delete;
     Page_Table(Page_Table&&) = delete;
@@ -47,20 +46,6 @@ public:
     {
         static u64 top_id = 1;
         return __atomic_fetch_add(&top_id, 1, 0);
-    }
-
-    // Creates a page table structure from physical page table with 1 reference (during kernel initialization)
-    static klib::shared_ptr<Page_Table> init_from_phys(u64 cr3);
-    static klib::shared_ptr<Page_Table> create_empty_page_table();
-
-    u64 get_cr3() const
-    {
-        return (u64)pml4_phys;
-    }
-
-    bool operator==(const Page_Table& p)
-    {
-        return pml4_phys == p.pml4_phys;
     }
 
     enum Protection {
@@ -100,27 +85,36 @@ public:
             u64 flags);
 
     // Maps the page with the appropriate permissions
-    u64 map(u64 page_addr, u64 virt_addr);
-    u64 map(u64 page_addr, u64 virt_addr, Page_Table_Argumments arg);
+    virtual u64 map(u64 page_addr, u64 virt_addr);
+    virtual u64 map(u64 page_addr, u64 virt_addr, Page_Table_Argumments arg) = 0;
 
     // Maps a page for a managed region, doing the appropriate checks
-    u64 provide_managed(u64 page_addr, u64 virtual_addr);
-
-    // Automatically invalidates a page table entry on all processors
-    void invalidate_tlb(u64 page);
+    virtual u64 provide_managed(u64 page_addr, u64 virtual_addr);
 
     // Checks whether page is allocated
-    bool is_allocated(u64 addr) const;
+    virtual bool is_allocated(u64 addr) const = 0;
+
+    // Creates an empty page table, preparing appropriately the kernel entries
+    // virtual klib::shared_ptr<Page_Table> create_empty_from_existing() = 0;
+
+    // Maximum address that a pointer from the userspace can have
+    virtual u64 user_addr_max() const = 0;
+
+    // Returns true if the address should not accessible to the user
+    inline bool is_in_kernel_space(u64 virt_addr)
+    {
+        return virt_addr >= user_addr_max();
+    }
+
+    // Returns physical address of the virt
+    virtual ReturnStr<u64> phys_addr_of(u64 virt) const = 0;
 protected:
     void insert_global_page_tables();
     void takeout_global_page_tables();
     Page_Table() = default;
 
-    u64 get_page_frame(u64 virt_addr);
-
     // Checks if the pages exists and invalidates it, invalidating TLB entries if needed
-    void invalidate_nofree(u64 virt_addr);
-
+    virtual void invalidate_nofree(u64 virt_addr) = 0;
     void unblock_tasks(u64 blocked_by_page);
 
     using page_table_map = klib::splay_tree_map<u64, klib::weak_ptr<Page_Table>>;
@@ -129,6 +123,60 @@ protected:
 
     // Gets the region for the page. Returns end() if no region exists
     pagind_regions_map::iterator get_region(u64 page);
+
+    // Gets a PPN from its virtual address
+    virtual u64 get_page_frame(u64 virt_addr) = 0;
+};
+
+class x86_Page_Table: public Page_Table {
+public:
+    virtual u64 get_cr3() const = 0;
+
+    // Automatically invalidates a page table entry on all processors
+    void invalidate_tlb(u64 page);
+protected:
+    virtual u64 get_page_frame(u64 virt_addr) = 0;
+    virtual void free_user_pages() = 0;
+};
+
+class x86_4level_Page_Table: public x86_Page_Table {
+public:
+    PML4 *pml4_phys = nullptr;
+
+    virtual u64 get_cr3() const override
+    {
+        return (u64)pml4_phys;
+    }
+
+    // Creates a page table structure from physical page table with 1 reference (during kernel initialization)
+    static klib::shared_ptr<x86_4level_Page_Table> init_from_phys(u64 cr3);
+
+    static klib::shared_ptr<Page_Table> create_empty();
+
+    // Maps the page with the appropriate permissions
+    // virtual u64 map(u64 page_addr, u64 virt_addr) override;
+    virtual u64 map(u64 page_addr, u64 virt_addr, Page_Table_Argumments arg) override;
+
+    virtual void invalidate_nofree(u64 virt_addr) override;
+
+    bool is_allocated(u64 virt_addr) const override;
+
+    // virtual u64 provide_managed(u64 page_addr, u64 virtual_addr) override;
+
+    virtual ~x86_4level_Page_Table();
+
+    constexpr u64 user_addr_max() const override
+    {
+        return 0x800000000000;
+    }
+
+    ReturnStr<u64> phys_addr_of(u64 virt) const;
+protected:
+    virtual u64 get_page_frame(u64 virt_addr) override;
+    x86_4level_Page_Table() = default;
+
+    // Frees user pages
+    void free_user_pages();
 };
 
 const u16 rec_map_index = 256;
@@ -151,9 +199,6 @@ Check_Return_Str check_if_allocated_and_set_flag(u64 virt_addr, u8 flag, Page_Ta
 // Invalidades a page entry
 u64 invalidade(u64 virtual_addr);
 
-// Constructs a new pml4
-ReturnStr<u64> get_new_pml4();
-
 // Release the page
 kresult_t release_page_s(PTE& pte);
 
@@ -162,44 +207,14 @@ kresult_t release_page_s(PTE& pte);
 
 struct TaskDescriptor;
 
-// Transfers pages from current process to process t
-kresult_t atomic_transfer_pages(const klib::shared_ptr<TaskDescriptor>& from, const klib::shared_ptr<TaskDescriptor> to, u64 page_start, u64 to_addr, u64 nb_pages, Page_Table_Argumments pta);
-
-// Prepares a page table for the address
-kresult_t prepare_pt(u64 addr);
-
-// Sets pte with pta at virtual_addr
-kresult_t set_pte(u64 virtual_addr, PTE pte, Page_Table_Argumments pta);
-
-// Checks if page is allocated
-bool is_allocated(u64 page);
-
-// Returns physical address of the virt
-ReturnStr<u64> phys_addr_of(u64 virt);
-
 // Invalidade a single page
 void invalidade_noerr(u64 virtual_addr);
 
 // Frees a page
 void free_page(u64 page, u64 cr3);
 
-// Frees a PML4 of a dead process
-void free_pml4(u64 pml4, u64 pid);
-
 // Releases cr3
 extern "C" void release_cr3(u64 cr3);
 
-// Frees user pages
-void free_user_pages(u64 page_table);
-
-// Prepares a user page for kernel reading or writing
-kresult_t prepare_user_page(u64 page);
-
-// Frees pages in range
-void free_pages_range(u64 addr_start, u64 size, u64 cr3);
-
-// Returns true if the address should not accessible to the user
-inline bool is_in_kernel_space(u64 virt_addr)
-{
-    return virt_addr >= KERNEL_ADDR_SPACE;
-}
+// Returns physical address of the virt
+ReturnStr<u64> phys_addr_of(u64 virt);

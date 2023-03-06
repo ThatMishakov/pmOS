@@ -48,9 +48,11 @@ ReturnStr<klib::shared_ptr<TaskDescriptor>> create_process(u16 ring)
 
 ReturnStr<u64> TaskDescriptor::init_stack()
 {
+    // TODO: Check if page table exists and that task is uninited
+
     kresult_t r;
     // Prealloc a page for the stack
-    u64 stack_end = (u64)KERNEL_ADDR_SPACE; //&_free_to_use;
+    u64 stack_end = page_table->user_addr_max(); //&_free_to_use;
     u64 stack_size = GB(2);
     u64 stack_page_start = stack_end - stack_size;
 
@@ -106,13 +108,14 @@ void init_idle()
     i.val->name = "idle";
 }
 
-bool is_uninited(const klib::shared_ptr<const TaskDescriptor>& task)
+bool TaskDescriptor::is_uninited() const
 {
-    return task->status == PROCESS_UNINIT;
+    return status == PROCESS_UNINIT;
 }
 
-void init_task(const klib::shared_ptr<TaskDescriptor>& task)
+void TaskDescriptor::init()
 {
+    klib::shared_ptr<TaskDescriptor> task = weak_self.lock();
     task->parent_queue->erase(task);
     task->parent_queue = nullptr;
 
@@ -120,7 +123,7 @@ void init_task(const klib::shared_ptr<TaskDescriptor>& task)
     if (current_task->priority > task->priority) {
         Auto_Lock_Scope scope_l(current_task->sched_lock);
 
-        switch_to_task(task);
+        task->switch_to();
 
         push_ready(current_task);
     } else {
@@ -169,7 +172,7 @@ kresult_t TaskDescriptor::create_new_page_table()
     if (page_table)
         return ERROR_HAS_PAGE_TABLE;
 
-    klib::shared_ptr<Page_Table> table = Page_Table::create_empty_page_table();
+    klib::shared_ptr<Page_Table> table = x86_4level_Page_Table::create_empty();
 
     Auto_Lock_Scope page_table_lock(table->lock);
     table->owner_tasks.insert(weak_self);

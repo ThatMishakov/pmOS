@@ -141,11 +141,13 @@ kresult_t prepare_user_buff_rd(const char* buff, size_t size)
     u64 addr_start = (u64)buff;
     u64 end = addr_start+size;
 
-    if (addr_start > KERNEL_ADDR_SPACE or end > KERNEL_ADDR_SPACE or addr_start > end) return ERROR_OUT_OF_RANGE;
-
     kresult_t result = SUCCESS;
 
     klib::shared_ptr<TaskDescriptor> current_task = get_current_task();
+
+    if (addr_start > current_task->page_table->user_addr_max() or end > current_task->page_table->user_addr_max() or addr_start > end) return ERROR_OUT_OF_RANGE;
+
+
     current_task->request_repeat_syscall();
 
     for (u64 i = addr_start; i < end and result == SUCCESS; ++i) {
@@ -165,11 +167,13 @@ kresult_t prepare_user_buff_wr(char* buff, size_t size)
     u64 addr_start = (u64)buff;
     u64 end = addr_start+size;
 
-    if (addr_start > KERNEL_ADDR_SPACE or end > KERNEL_ADDR_SPACE or addr_start > end) return ERROR_OUT_OF_RANGE;
-
     kresult_t result = SUCCESS;
 
     klib::shared_ptr<TaskDescriptor> current_task = get_current_task();
+    u64 kern_addr_start = current_task->page_table->user_addr_max();
+
+    if (addr_start > kern_addr_start or end > kern_addr_start or addr_start > end) return ERROR_OUT_OF_RANGE;
+
     current_task->request_repeat_syscall();
 
     for (u64 i = addr_start; i < end and result == SUCCESS; ++i) {

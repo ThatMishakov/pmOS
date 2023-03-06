@@ -5,6 +5,7 @@
 
 class Port;
 class TaskDescriptor;
+class Page_Table;
 
 extern u64 counter;
 struct Page_Table_Argumments;
@@ -24,7 +25,7 @@ struct Generic_Mem_Region {
     u64 id = 0;
 
     // Owner of the region
-    u64 owner_cr3 = 0;
+    klib::weak_ptr<Page_Table> owner;
 
     // Flags for the region
     u8 access_type = 0;
@@ -46,15 +47,15 @@ struct Generic_Mem_Region {
     kresult_t on_page_fault(u64 error, u64 pagefault_addr, const klib::shared_ptr<TaskDescriptor>& task);
 
 
-    virtual ~Generic_Mem_Region();
+    virtual ~Generic_Mem_Region() = default;
 
     Generic_Mem_Region()
     {
         id = __atomic_add_fetch(&counter, 1, 0);
     }
 
-    Generic_Mem_Region(u64 start_addr, u64 size, klib::string name, u64 owner_cr3, u8 access):
-        start_addr(start_addr), size(size), name(klib::forward<klib::string>(name)), id(__atomic_add_fetch(&counter, 1, 0)), owner_cr3(owner_cr3), access_type(access)
+    Generic_Mem_Region(u64 start_addr, u64 size, klib::string name, klib::weak_ptr<Page_Table> owner, u8 access):
+        start_addr(start_addr), size(size), name(klib::forward<klib::string>(name)), id(__atomic_add_fetch(&counter, 1, 0)), owner(klib::forward<klib::weak_ptr<Page_Table>>(owner)), access_type(access)
         {};
 
     bool is_in_range(u64 addr) const
@@ -107,8 +108,8 @@ struct Phys_Mapped_Region: Generic_Mem_Region {
     // Constructs a region with virtual address starting at *aligned_virt* of size *size* pointing to *aligned_phys*
     Phys_Mapped_Region(u64 aligned_virt, u64 size, u64 aligned_phys);
 
-    Phys_Mapped_Region(u64 start_addr, u64 size, klib::string name, u64 owner_cr3, u8 access, u64 phys_addr_start):
-        Generic_Mem_Region(start_addr, size, klib::forward<klib::string>(name), owner_cr3, access), phys_addr_start(phys_addr_start)
+    Phys_Mapped_Region(u64 start_addr, u64 size, klib::string name, klib::weak_ptr<Page_Table> owner, u8 access, u64 phys_addr_start):
+        Generic_Mem_Region(start_addr, size, klib::forward<klib::string>(name), klib::forward<klib::weak_ptr<Page_Table>>(owner), access), phys_addr_start(phys_addr_start)
         {};
 };
 
@@ -131,8 +132,8 @@ struct Private_Normal_Region: Generic_Mem_Region {
 
     virtual Page_Table_Argumments craft_arguments() const;
 
-    Private_Normal_Region(u64 start_addr, u64 size, klib::string name, u64 owner_cr3, u8 access, u64 pattern):
-        Generic_Mem_Region(start_addr, size, klib::forward<klib::string>(name), owner_cr3, access), pattern(pattern)
+    Private_Normal_Region(u64 start_addr, u64 size, klib::string name, klib::weak_ptr<Page_Table> owner, u8 access, u64 pattern):
+        Generic_Mem_Region(start_addr, size, klib::forward<klib::string>(name), klib::forward<klib::weak_ptr<Page_Table>>(owner), access), pattern(pattern)
         {};
 };
 
@@ -157,7 +158,7 @@ struct Private_Managed_Region: Generic_Mem_Region {
     // When pagefault occurs to the current task, it is blocked and the message is sent to the *notifications_port*. 
     virtual kresult_t alloc_page(u64 ptr_addr, const klib::shared_ptr<TaskDescriptor>& task);
 
-    Private_Managed_Region(u64 start_addr, u64 size, klib::string name, u64 owner_cr3, u8 access, klib::shared_ptr<Port> p):
-        Generic_Mem_Region(start_addr, size, klib::forward<klib::string>(name), owner_cr3, access), notifications_port(klib::forward<klib::shared_ptr<Port>>(p))
+    Private_Managed_Region(u64 start_addr, u64 size, klib::string name, klib::weak_ptr<Page_Table> owner, u8 access, klib::shared_ptr<Port> p):
+        Generic_Mem_Region(start_addr, size, klib::forward<klib::string>(name), klib::forward<klib::weak_ptr<Page_Table>>(owner), access), notifications_port(klib::forward<klib::shared_ptr<Port>>(p))
         {};
 };
