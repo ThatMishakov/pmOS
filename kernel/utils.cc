@@ -285,6 +285,8 @@ extern "C" void *memset(void *str, int c, size_t n)
     unsigned char *cc = (unsigned char *)str;
     for (size_t i = 0; i < n; ++i)
         cc[i] = c;
+
+    return str;
 }
 
 void clear_page(u64 phys_addr)
@@ -337,7 +339,7 @@ int pthread_rwlock_unlock(pthread_rwlock_t *rwlock)
         unlock_var(&rwlock->g);
     } else {
         lock_var(&rwlock->r);
-        rwlock->b += 1;
+        rwlock->b = rwlock->b - 1;
         if (rwlock->b == 0)
             unlock_var(&rwlock->g);
 
@@ -349,7 +351,7 @@ int pthread_rwlock_unlock(pthread_rwlock_t *rwlock)
 int pthread_rwlock_rdlock(pthread_rwlock_t *rwlock)
 {
     lock_var(&rwlock->r);
-    rwlock->b += 1;
+    rwlock->b = rwlock->b + 1;
     if (rwlock->b == 1)
         lock_var(&rwlock->g);
 
@@ -378,11 +380,15 @@ int pthread_mutex_lock(pthread_mutex_t* mutex)
         r = __sync_bool_compare_and_swap(mutex, 0, 1);
     } while (not r);
     __sync_synchronize();
+
+    return 0;
 }
 
 int pthread_mutex_unlock(pthread_mutex_t* mutex)
 {
     *mutex = 0;
+
+    return 0;
 }
 
 // I have no idea if it works
@@ -400,9 +406,63 @@ int pthread_cond_wait(pthread_cond_t* cond, pthread_mutex_t* mutex)
     __sync_synchronize();
 
     pthread_mutex_lock(mutex);
+
+    return 0;
 }
 
 int pthread_cond_signal(pthread_cond_t* cond)
 {
     *cond = 1;
+
+    return 0;
+}
+
+struct Pthread_Once_Global_S {
+    void (*destructor)(void*) = nullptr;
+    bool valid = false;
+};
+
+klib::array<Pthread_Once_Global_S, CPU_Info::pthread_once_size> pthread_global = {};
+Spinlock pthread_key_lock;
+
+extern "C" int pthread_key_create(pthread_key_t* key, void (*destructor)(void*))
+{
+    Auto_Lock_Scope local_lock(pthread_key_lock);
+    for (unsigned i = 0; i < pthread_global.size(); ++i) {
+        auto &p = pthread_global[i];
+        if (not p.valid) {
+            p.valid = true;
+            p.destructor = destructor;
+            *key = i;
+            return 0;
+        }
+    }
+
+    return -1; 
+}
+
+
+extern "C" void* pthread_getspecific(pthread_key_t key)
+{
+    return (void*)get_cpu_struct()->pthread_once_storage[key];
+}
+
+extern "C" int pthread_setspecific(pthread_key_t key, const void* data)
+{
+    get_cpu_struct()->pthread_once_storage[key] = data;
+
+    return 0;
+}
+
+extern "C" int pthread_once(pthread_once_t *once_control, void (*init_routine)(void))
+{
+    if (*once_control != 1) {
+        bool r = __sync_bool_compare_and_swap(once_control, 0, 1);
+
+        if (r) {
+            init_routine();
+        }
+    }
+
+    return 0;
 }

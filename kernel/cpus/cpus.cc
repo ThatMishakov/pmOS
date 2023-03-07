@@ -18,7 +18,8 @@ void init_per_cpu()
 
     write_msr(0xC0000101, (u64)c);
 
-    c->cpu_gdt.tss_descriptor = System_Segment_Descriptor((u64) calloc(1,sizeof(TSS)), sizeof(TSS), 0x89, 0x02);
+    TSS* tss = new TSS();
+    c->cpu_gdt.tss_descriptor = System_Segment_Descriptor((u64) tss, sizeof(TSS), 0x89, 0x02);
 
     c->kernel_stack_top = c->kernel_stack.get_stack_top();
 

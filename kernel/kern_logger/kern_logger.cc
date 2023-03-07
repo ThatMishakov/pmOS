@@ -32,29 +32,43 @@ void Logger::vprintf(const char* str, va_list arg)
         at = str[++i]; // char next to %
         char int_str_buffer[32];
         int len = 0;
-        switch (at) {
-            case 'i': { // signed integer
-                i64 casted_arg = va_arg(arg, i64);
-                int_to_string(casted_arg, 10, int_str_buffer, len);
-                break;
+        bool repeat = false;
+        do {
+            repeat =  false;
+            switch (at) {
+                case 'i': { // signed integer
+                    i64 casted_arg = va_arg(arg, i64);
+                    int_to_string(casted_arg, 10, int_str_buffer, len);
+                    break;
+                }
+                case 'u': { // unsigned integer
+                    u64 casted_arg = va_arg(arg, u64);
+                    uint_to_string(casted_arg, 10, int_str_buffer, len);
+                    break;
+                }
+                case 'x':
+                case 'h': { // hexa number
+                    u64 casted_arg = va_arg(arg, u64);
+                    uint_to_string(casted_arg, 16, int_str_buffer, len);
+                    break;
+                }
+                case 's': {
+                    const char *ss = va_arg(arg, const char *);
+                    log_nolock(ss, strlen(ss));
+                    // t_write_bochs(ss, strlen(ss));
+                    break;
+                }
+                case 'l': {
+                    at = str[++i];
+                    repeat = true;
+                    break;
+                }
+                default:
+                    log_nolock(&at, 1);
+                    break;
             }
-            case 'u': { // unsigned integer
-                u64 casted_arg = va_arg(arg, u64);
-                uint_to_string(casted_arg, 10, int_str_buffer, len);
-                break;
-            }
-            case 'h': { // hexa number
-                u64 casted_arg = va_arg(arg, u64);
-                uint_to_string(casted_arg, 16, int_str_buffer, len);
-                break;
-            }
-            case 's': {
-                const char *ss = va_arg(arg, const char *);
-                log_nolock(ss, strlen(ss));
-                // t_write_bochs(ss, strlen(ss));
-                break;
-            }
-        }
+        } while (repeat);
+        
 
         log_nolock(int_str_buffer, len);
         at = str[++i];

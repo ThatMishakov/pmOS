@@ -44,7 +44,6 @@ INTERNALCFLAGS  :=       \
 	-D_LIBUNWIND_IS_BAREMETAL \
 	-mgeneral-regs-only \
 	-g \
-#	-D_CXXRT_NO_EXCEPTIONS \
  
 # Use find to glob all *.c files in the directory and extract the object names.
 CCFILES := $(shell find ./ -type f -name '*.cc')
@@ -87,3 +86,4 @@ clean:
 	$(RM) $(KERNEL) $(INTERNAL_OBJS) $(DEP)
 
 -include $(DEP)
+

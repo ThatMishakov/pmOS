@@ -25,8 +25,9 @@ extern "C" int main(Kernel_Entry_Data* d)
     _init();
 
     prepare_apic();
-    init_scheduling();
     init_interrupts();
+
+    init_scheduling();
 
     get_cpu_struct()->lapic_id = get_lapic_id();
     enable_sse();

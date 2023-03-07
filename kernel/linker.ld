@@ -33,19 +33,24 @@ SECTIONS
         . = ALIGN(4K);
     }
 
-    .eh_frame_hdr : {
-        PROVIDE (__eh_frame_hdr_start = .);
-        *(.eh_frame_hdr*)
-        PROVIDE (__eh_frame_hdr_end = .);
+   .eh_frame :
+   {
+       __eh_frame_start = .;
+       KEEP(*(.eh_frame))
+       __eh_frame_end = .;
         . = ALIGN(4K);
-    }
 
-    .eh_frame : {
-        PROVIDE (__eh_frame_start = .);
-        *(.eh_frame*)
-        PROVIDE (__eh_frame_end = .);
+   }
+
+   .eh_frame_hdr :
+   {
+       KEEP(*(.eh_frame_hdr))
         . = ALIGN(4K);
-    }
+
+   }
+
+   __eh_frame_hdr_start = SIZEOF(.eh_frame_hdr) > 0 ? ADDR(.eh_frame_hdr) : 0;
+   __eh_frame_hdr_end = SIZEOF(.eh_frame_hdr) > 0 ? . : 0;
 
     .gcc_except_table : {
         *(.gcc_except_table*)

@@ -77,6 +77,9 @@ struct CPU_Info {
     klib::shared_ptr<TaskDescriptor> atomic_pick_lowest_priority(unsigned max_priority = 2);
 
     x86_PAE_Temp_Mapper temp_mapper;
+
+    constexpr static unsigned pthread_once_size = 16;
+    klib::array<const void *, pthread_once_size> pthread_once_storage = {};
 };
 
 quantum_t assign_quantum_on_priority(priority_t);

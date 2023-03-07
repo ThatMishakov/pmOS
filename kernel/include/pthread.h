@@ -6,7 +6,7 @@ extern "C" {
 #endif
 
 #define PTHREAD_ONCE_INIT 0
-typedef unsigned pthread_once_t;
+typedef volatile unsigned pthread_once_t;
 int pthread_once(pthread_once_t *once_control, void (*init_routine)(void));
 
 #define PTHREAD_MUTEX_INITIALIZER 0

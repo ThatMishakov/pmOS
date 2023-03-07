@@ -29,7 +29,6 @@ void init_idt()
 void init_interrupts()
 {
     init_idt();
-    asm("sti");
     discover_apic_freq();
 }
 
