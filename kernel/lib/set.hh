@@ -95,7 +95,7 @@ public:
     size_type erase(const K&);
 
     void swap(set&);
-    void clear();
+    void clear() noexcept;
 
     size_t count(const K&);
 

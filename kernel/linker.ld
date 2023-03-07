@@ -32,6 +32,26 @@ SECTIONS
         *(.bss*)
         . = ALIGN(4K);
     }
+
+    .eh_frame_hdr : {
+        PROVIDE (__eh_frame_hdr_start = .);
+        *(.eh_frame_hdr*)
+        PROVIDE (__eh_frame_hdr_end = .);
+        . = ALIGN(4K);
+    }
+
+    .eh_frame : {
+        PROVIDE (__eh_frame_start = .);
+        *(.eh_frame*)
+        PROVIDE (__eh_frame_end = .);
+        . = ALIGN(4K);
+    }
+
+    .gcc_except_table : {
+        *(.gcc_except_table*)
+        . = ALIGN(4K);
+    }
+
     _free_to_use = 0xFFFFFE8000000000;
     _free_after_kernel = ALIGN(4K);
 

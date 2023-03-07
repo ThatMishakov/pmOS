@@ -59,7 +59,7 @@ kresult_t Private_Normal_Region::alloc_page(u64 ptr_addr, [[maybe_unused]] const
 
     u64 page_addr = (u64)ptr_addr & ~07777UL;
 
-    kresult_t result = map((u64)new_page.val, page_addr, args);
+    kresult_t result = owner.lock()->map((u64)new_page.val, page_addr, args);
 
     if (result != SUCCESS) {
         kernel_pframe_allocator.free(new_page.val);
@@ -90,7 +90,7 @@ kresult_t Phys_Mapped_Region::alloc_page(u64 ptr_addr, [[maybe_unused]] const kl
     u64 page_addr = (u64)ptr_addr & ~07777UL;
     u64 phys_addr = page_addr - start_addr + phys_addr_start;
 
-    kresult_t result = map(phys_addr, page_addr, args);
+    kresult_t result = owner.lock()->map(phys_addr, page_addr, args);
 
     return result;
 }
@@ -110,7 +110,7 @@ kresult_t Private_Managed_Region::alloc_page(u64 ptr_addr, const klib::shared_pt
 {
     u64 page_addr = (u64)ptr_addr & ~07777UL;
 
-    auto r = check_if_allocated_and_set_flag(page_addr, 0b100, craft_arguments());
+    auto r = owner.lock()->check_if_allocated_and_set_flag(page_addr, 0b100, craft_arguments());
 
     if (r.result != SUCCESS)
         return r.result;

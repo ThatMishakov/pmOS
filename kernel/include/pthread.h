@@ -10,7 +10,7 @@ typedef unsigned pthread_once_t;
 int pthread_once(pthread_once_t *once_control, void (*init_routine)(void));
 
 #define PTHREAD_MUTEX_INITIALIZER 0
-typedef unsigned pthread_mutex_t;
+typedef volatile unsigned pthread_mutex_t;
 typedef unsigned pthread_mutexattr_t;
 int pthread_mutex_init(pthread_mutex_t* mutex, const pthread_mutexattr_t*);
 int pthread_mutex_lock(pthread_mutex_t* mutex);
@@ -25,6 +25,21 @@ typedef unsigned pthread_key_t;
 int pthread_key_create(pthread_key_t* key, void (*)(void*));
 void* pthread_getspecific(pthread_key_t key);
 int pthread_setspecific(pthread_key_t key, const void* data);
+
+typedef struct pthread_rwlock_t {
+    volatile unsigned b;
+    volatile unsigned char r;
+    volatile unsigned char g;
+} pthread_rwlock_t;
+
+#define PTHREAD_RWLOCK_INITIALIZER {0, 0, 0};
+
+int pthread_rwlock_rdlock(pthread_rwlock_t *rwlock);
+int pthread_rwlock_tryrdlock(pthread_rwlock_t *rwlock);
+int pthread_rwlock_wrlock(pthread_rwlock_t *rwlock);
+int pthread_rwlock_trywrlock(pthread_rwlock_t *rwlock);
+int pthread_rwlock_unlock(pthread_rwlock_t *rwlock);
+
 
 #ifdef __cplusplus
 }

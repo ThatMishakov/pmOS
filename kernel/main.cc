@@ -11,6 +11,7 @@
 #include <objects/crti.h>
 #include <memory/paging.hh>
 #include <interrupts/apic.hh>
+#include <kern_logger/kern_logger.hh>
 
 Kernel_Entry_Data* kdata;
 

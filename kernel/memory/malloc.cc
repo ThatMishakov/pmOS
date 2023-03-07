@@ -88,7 +88,7 @@ extern "C" void *calloc(size_t nelem, size_t size)
     size_t total_size = nelem * size;
     size_t inited;
     u64* ptr = (u64*)malloc_int(total_size, inited);
-    if (ptr != nullptr) memset(ptr+2, inited/8 - 2);
+    if (ptr != nullptr) memset(ptr+2, 0, inited - 16);
     return &ptr[2];
 }
 

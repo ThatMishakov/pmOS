@@ -4,7 +4,6 @@
 extern "C" void printc(char c);
 extern "C" void tlb_flush();
 extern "C" void page_clear(void* page);
-extern "C" void memset(u64* dir, u64 size_qwords);
 extern "C" void loadTSS(u16 selector);
 extern "C" void set_segment_regs(u16);
 extern "C" void invlpg(u64 virtual_addr);

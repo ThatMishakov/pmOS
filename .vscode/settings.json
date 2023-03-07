@@ -85,5 +85,6 @@
         "thread": "cpp",
         "cinttypes": "cpp"
     },
-    "cmake.configureOnOpen": false
+    "cmake.configureOnOpen": false,
+    "cmake.sourceDirectory": "${workspaceFolder}/kernel/libcxxrt"
 }

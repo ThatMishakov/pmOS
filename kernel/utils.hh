@@ -13,7 +13,7 @@ void term_write(const klib::string&);
 
 extern "C" size_t strlen(const char *str);
 
-extern void printf(const char *str,...);
+extern "C" int printf(const char *str,...);
 
 inline void halt()
 {
@@ -23,6 +23,7 @@ inline void halt()
 }
 
 extern "C" void memcpy(char* to, const char* from, size_t size);
+extern "C" void *memset(void *str, int c, size_t n);
 
 kresult_t prepare_user_buff_rd(const char* buff, size_t size);
 
@@ -34,6 +35,8 @@ kresult_t copy_to_user(const char* from, char* to, size_t size);
 
 // Copies a frame (ppn)
 void copy_frame(u64 from, u64 to);
+
+void clear_page(u64 phys_addr);
 
 static inline void outb(u16 port, u8 data)
 {

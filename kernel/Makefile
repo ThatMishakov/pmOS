@@ -10,14 +10,14 @@ CXX = $(ROOTDIR)/../bin/cross/bin/x86_64-pmos-g++
 LD = $(ROOTDIR)/../bin/cross/bin/x86_64-pmos-g++
 
 ROOTDIR = $(realpath .)
-INCLUDEDIR = include .
+INCLUDEDIR = include . libunwind/include
 INCPARAM = $(foreach d, $(INCLUDEDIR), -I$(ROOTDIR)/$d)
 
 # User controllable CFLAGS.
 USERCFLAGS = -Wall -Wextra -O3 -pipe
 
 CPPFLAGS = $(INTERNALCFLAGS) -mcmodel=kernel $(USERCFLAGS) -MMD -MP $(INCPARAM)
-CXXFLAGS = -std=c++20 $(INCPARAM)
+CXXFLAGS = -std=c++20
 #CPPFLAGS = $(CFLAGS)
 ASMFLAGS = $(INCPARAM)
 LDFLAGS = $(INTERNALLDFLAGS) -mcmodel=kernel
@@ -37,11 +37,14 @@ INTERNALCFLAGS  :=       \
 	-static \
 	-ffreestanding \
 	-mno-red-zone \
-	-mno-mmx -mno-sse -mno-sse2 \
+	-mno-80387 \
+	-msoft-float \
+	-mno-fp-ret-in-387 \
 	-no-pie -fno-pic \
-	-fno-exceptions \
-	-D_CXXRT_NO_EXCEPTIONS \
-	-g
+	-D_LIBUNWIND_IS_BAREMETAL \
+	-mgeneral-regs-only \
+	-g \
+#	-D_CXXRT_NO_EXCEPTIONS \
  
 # Use find to glob all *.c files in the directory and extract the object names.
 CCFILES := $(shell find ./ -type f -name '*.cc')
@@ -59,11 +62,14 @@ OBJS = 	./objects/icxxabi.o ./start.o ./asm.o ./main.o ./misc.o ./utils.o types.
 		./cpus/cpus.o ./cpus/sse.o ./cpus/ipi.o ./cpus/ipi_asm.o \
 		./kern_logger/kern_logger.o \
 		\
+		./libunwind/src/libunwind.o ./libunwind/src/Unwind-seh.o ./libunwind/src/Unwind-sjlj.o ./libunwind/src/UnwindLevel1.o \
+		./libunwind/src/UnwindLevel1-gcc-ext.o ./libunwind/src/UnwindRegistersRestore.o ./libunwind/src/UnwindRegistersSave.o \
 		./libcxxrt/src/cxa_atexit.o ./libcxxrt/src/cxa_finalize.o \
 		./libcxxrt/src/dynamic_cast.o ./libcxxrt/src/guard.o \
-		./libcxxrt/src/memory.o ./libcxxrt/src/noexception.o ./libcxxrt/src/stdexcept.o \
+		./libcxxrt/src/memory.o ./libcxxrt/src/stdexcept.o \
 		./libcxxrt/src/terminate.o ./libcxxrt/src/typeinfo.o \
-		# ./libcxxrt/src/auxhelper.o ./libcxxrt/src/exception.o 
+		./libcxxrt/src/auxhelper.o ./libcxxrt/src/exception.o \
+		#./libcxxrt/src/noexception.o
 
 CRTI_OBJ =  ./objects/crti.o
 CRTBEGIN_OBJ:=$(shell $(CC) $(CFLAGS) -print-file-name=crtbegin.o)

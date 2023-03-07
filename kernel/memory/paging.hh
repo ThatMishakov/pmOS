@@ -25,6 +25,23 @@ struct Page_Table_Argumments {
     u8 extra              : 3 = 0;
 };
 
+struct x86_PAE_Entry {
+    u8 present                   :1 = 0;
+    u8 writeable                 :1 = 0;
+    u8 user_access               :1 = 0;
+    u8 write_through             :1 = 0;
+    u8 cache_disabled            :1 = 0;
+    u8 accessed                  :1 = 0;
+    u8 dirty                     :1 = 0;
+    u8 pat_size                  :1 = 0;
+    u8 global                    :1 = 0; 
+    u8 avl                       :3 = 0;  // Avaliable
+    u64 page_ppn                 :40 = 0;
+    u64 avl2                     :7 = 0;
+    u8  pk                       :4 = 0;
+    u8 execution_disabled        :1 = 0;
+} PACKED ALIGNED(8);
+
 class Page_Table: public klib::enable_shared_from_this<Page_Table> {
 public:
     using pagind_regions_map = klib::splay_tree_map<u64, klib::unique_ptr<Generic_Mem_Region>>;
@@ -88,6 +105,14 @@ public:
     virtual u64 map(u64 page_addr, u64 virt_addr);
     virtual u64 map(u64 page_addr, u64 virt_addr, Page_Table_Argumments arg) = 0;
 
+    struct Check_Return_Str {
+        kresult_t result = 0;
+        u8 prev_flags = 0;
+        bool allocated = 0;
+    };
+
+    virtual Check_Return_Str check_if_allocated_and_set_flag(u64 virt_addr, u8 flag, Page_Table_Argumments arg) = 0;
+
     // Maps a page for a managed region, doing the appropriate checks
     virtual u64 provide_managed(u64 page_addr, u64 virtual_addr);
 
@@ -108,6 +133,9 @@ public:
 
     // Returns physical address of the virt
     virtual ReturnStr<u64> phys_addr_of(u64 virt) const = 0;
+
+    // Returns the physical limit
+    static u64 phys_addr_limit();
 protected:
     void insert_global_page_tables();
     void takeout_global_page_tables();
@@ -141,7 +169,7 @@ protected:
 
 class x86_4level_Page_Table: public x86_Page_Table {
 public:
-    PML4 *pml4_phys = nullptr;
+    x86_PAE_Entry *pml4_phys = nullptr;
 
     virtual u64 get_cr3() const override
     {
@@ -154,8 +182,9 @@ public:
     static klib::shared_ptr<Page_Table> create_empty();
 
     // Maps the page with the appropriate permissions
-    // virtual u64 map(u64 page_addr, u64 virt_addr) override;
     virtual u64 map(u64 page_addr, u64 virt_addr, Page_Table_Argumments arg) override;
+
+    Check_Return_Str check_if_allocated_and_set_flag(u64 virt_addr, u8 flag, Page_Table_Argumments arg);
 
     virtual void invalidate_nofree(u64 virt_addr) override;
 
@@ -219,19 +248,11 @@ u64 map(u64 physical_addr, u64 virtual_addr, Page_Table_Argumments arg);
 PT* rec_prepare_pt_for(u64 virt_addr, Page_Table_Argumments arg);
 u64 rec_get_pt_ppn(u64 virt_addr);
 
-struct Check_Return_Str {
-    kresult_t result = 0;
-    u8 prev_flags = 0;
-    bool allocated = 0;
-};
-
-Check_Return_Str check_if_allocated_and_set_flag(u64 virt_addr, u8 flag, Page_Table_Argumments arg);
-
 // Invalidades a page entry
 u64 invalidade(u64 virtual_addr);
 
 // Release the page
-kresult_t release_page_s(PTE& pte);
+kresult_t release_page_s(x86_PAE_Entry& pte);
 
 #define LAZY_FLAG_GROW_UP   0x01
 #define LAZY_FLAG_GROW_DOWN 0x02

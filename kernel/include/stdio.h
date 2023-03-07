@@ -5,15 +5,15 @@
 extern "C" {
 #endif
 
-typedef struct FILE {
-    unsigned long channel;
-    unsigned long type;
-} FILE;
+typedef unsigned long FILE;
+
+static FILE zero = 0;
+static FILE *stderr = &zero;
+
 
 int fprintf(FILE *stream, const char *format, ...);
 int printf(const char *format, ...);
-
-extern FILE * stderr;
+int fflush(FILE *stream);
 
 #ifdef __cplusplus
 }

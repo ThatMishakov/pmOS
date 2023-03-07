@@ -14,3 +14,4 @@ void Spinlock::lock()
     } while (not result);
     __sync_synchronize();
 }
+

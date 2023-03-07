@@ -10,6 +10,7 @@
 #include <lib/string.hh>
 #include <kern_logger/kern_logger.hh>
 #include <sched/sched.hh>
+#include <stdio.h>
 
 void int_to_string(long int n, u8 base, char* str, int& length)
 {
@@ -228,33 +229,29 @@ extern "C" size_t strlen(const char *start)
     return end - start;
 }
 
-
-Spinlock copy_frame_s;
-Free_Page_Alloc_Static<2> copy_frame_free_p;
-
-void copy_frame(u64 from, u64 to)
-{
-    copy_frame_s.lock();
-    u64 t1 = copy_frame_free_p.get_free_page();
-    u64 t2 = copy_frame_free_p.get_free_page();
+// void copy_frame(u64 from, u64 to)
+// {
+//     copy_frame_s.lock();
+//     u64 t1 = copy_frame_free_p.get_free_page();
+//     u64 t2 = copy_frame_free_p.get_free_page();
 
 
-    Page_Table_Argumments pta = {1, 0, 0, 1, 0b010};
-    map(from, t1, pta);
-    map(to, t2, pta);
+//     Page_Table_Argumments pta = {1, 0, 0, 1, 0b010};
+//     map(from, t1, pta);
+//     map(to, t2, pta);
 
-    memcpy((char*)t1, (char*)t2, 4096);
+//     memcpy((char*)t1, (char*)t2, 4096);
 
-    release_page_s(*get_pte(t1, rec_map_index));
-    release_page_s(*get_pte(t2, rec_map_index));
+//     release_page_s(*get_pte(t1, rec_map_index));
+//     release_page_s(*get_pte(t2, rec_map_index));
 
-    invalidade(t1);
-    invalidade(t2);
+//     invalidade(t1);
+//     invalidade(t2);
 
-    copy_frame_free_p.release_free_page(t1);
-    copy_frame_free_p.release_free_page(t2);
-    copy_frame_s.unlock();
-}
+//     copy_frame_free_p.release_free_page(t1);
+//     copy_frame_free_p.release_free_page(t2);
+//     copy_frame_s.unlock();
+// }
 
 struct stack_frame {
     stack_frame* next;
@@ -281,4 +278,131 @@ extern "C" void _assert_fail(const char* condition, const char* file, unsigned i
 {
     t_print_bochs("Assert fail %s in file %s at line %i\n", condition, file, line);
     abort();
+}
+
+extern "C" void *memset(void *str, int c, size_t n)
+{
+    unsigned char *cc = (unsigned char *)str;
+    for (size_t i = 0; i < n; ++i)
+        cc[i] = c;
+}
+
+void clear_page(u64 phys_addr)
+{
+    Temp_Mapper_Obj<u64> mapper(get_cpu_struct()->temp_mapper);
+    mapper.map(phys_addr);
+
+    for (int i = 0; i < 4096/sizeof(u64); ++i)
+        mapper.ptr[i] = 0;
+}
+
+int fflush(FILE *stream)
+{
+
+}
+
+int fprintf(FILE *stream, const char *format, ...)
+{
+    va_list args;
+    va_start(args, format);
+    bochs_logger.vprintf(format, args);
+
+    va_end(args);
+    return 1;
+}
+
+void lock_var(volatile unsigned char *var)
+{
+    bool r = false;
+    do {
+        if (*var)
+            continue;
+
+        r = __sync_bool_compare_and_swap(var, 0, 1);
+    } while (not r);
+    __sync_synchronize();
+}
+
+void unlock_var(volatile unsigned char *var)
+{
+    *var = 0;
+}
+
+#include <pthread.h>
+
+// https://en.wikipedia.org/wiki/Readers%E2%80%93writer_lock
+int pthread_rwlock_unlock(pthread_rwlock_t *rwlock)
+{
+    if (rwlock->b == 0) {
+        unlock_var(&rwlock->g);
+    } else {
+        lock_var(&rwlock->r);
+        rwlock->b += 1;
+        if (rwlock->b == 0)
+            unlock_var(&rwlock->g);
+
+        unlock_var(&rwlock->r);
+    }
+    return 0;
+}
+
+int pthread_rwlock_rdlock(pthread_rwlock_t *rwlock)
+{
+    lock_var(&rwlock->r);
+    rwlock->b += 1;
+    if (rwlock->b == 1)
+        lock_var(&rwlock->g);
+
+    unlock_var(&rwlock->r);
+    return 0;
+}
+
+int pthread_rwlock_wrlock(pthread_rwlock_t *rwlock)
+{
+    lock_var(&rwlock->g);
+    return 0;
+}
+
+extern "C" char *getenv(const char *name)
+{
+    return NULL;
+}
+
+int pthread_mutex_lock(pthread_mutex_t* mutex)
+{
+    bool r = false;
+    do {
+        if (*mutex)
+            continue;
+
+        r = __sync_bool_compare_and_swap(mutex, 0, 1);
+    } while (not r);
+    __sync_synchronize();
+}
+
+int pthread_mutex_unlock(pthread_mutex_t* mutex)
+{
+    *mutex = 0;
+}
+
+// I have no idea if it works
+int pthread_cond_wait(pthread_cond_t* cond, pthread_mutex_t* mutex)
+{
+    pthread_mutex_unlock(mutex);
+
+    bool r = false;
+    do {
+        if (*cond == 0)
+            continue;
+
+        r = __sync_bool_compare_and_swap(cond, 1, 0);
+    } while (not r);
+    __sync_synchronize();
+
+    pthread_mutex_lock(mutex);
+}
+
+int pthread_cond_signal(pthread_cond_t* cond)
+{
+    *cond = 1;
 }

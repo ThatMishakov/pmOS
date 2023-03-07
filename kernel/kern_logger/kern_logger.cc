@@ -6,12 +6,9 @@
 Buffered_Logger global_logger;
 Bochs_Logger bochs_logger;
 
-void Logger::printf(const char* str, ...)
+void Logger::vprintf(const char* str, va_list arg)
 {
     Auto_Lock_Scope scope_lock(logger_lock);
-
-    va_list arg;
-    va_start(arg, str);
 
     char at = str[0];
     unsigned int i = 0;
@@ -19,7 +16,6 @@ void Logger::printf(const char* str, ...)
         u64 s = i;
         while (true) {
             if (at == '\0') {
-                va_end(arg);
                 if (i - s > 0) {
                     log_nolock(str + s, i - s);
                 }
@@ -63,6 +59,14 @@ void Logger::printf(const char* str, ...)
         log_nolock(int_str_buffer, len);
         at = str[++i];
     }
+}
+
+void Logger::printf(const char* str, ...)
+{
+    va_list arg;
+    va_start(arg, str);
+
+    vprintf(str, arg);
 
     va_end(arg);
 }

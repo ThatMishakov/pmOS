@@ -72,25 +72,25 @@ void kernel_jump_to(void (*function)(void))
     c->nested_int_regs.e.rip = (u64)&jumpto_func;
 }
 
-void print_pt_chain(u64 page)
+void print_pt_chain(u64 page, Logger& logger)
 {
     PML4E* pml4e = get_pml4e(page, rec_map_index);
-    t_print_bochs("PML4E: %h\n", *((u64 *)pml4e));
+    logger.printf("PML4E: %h\n", *((u64 *)pml4e));
     if (not pml4e->present)
         return;
 
     PDPTE* pdpte = get_pdpe(page, rec_map_index);
-    t_print_bochs("PDPTE: %h\n", *((u64 *)pdpte));
+    logger.printf("PDPTE: %h\n", *((u64 *)pdpte));
     if (not pdpte->present)
         return;
 
     PDE* pde = get_pde(page, rec_map_index);
-    t_print_bochs("PDE: %h\n", *((u64 *)pde));
+    logger.printf("PDE: %h\n", *((u64 *)pde));
     if (not pde->present)
         return;
 
     PTE* pte = get_pte(page, rec_map_index);
-    t_print_bochs("PTE: %h\n", *((u64 *)pte));
+    logger.printf("PTE: %h\n", *((u64 *)pte));
 }
 
 extern "C" void pagefault_manager()
@@ -128,6 +128,8 @@ extern "C" void pagefault_manager()
         t_print_bochs("Debug: Pagefault %h pid %i rip %h error %h returned error %i\n", virtual_addr, task->pid, task->regs.e.rip, err, result);
         global_logger.printf("Warning: Pagefault %h pid %i (%s) rip %h error %h -> %i killing process...\n", virtual_addr, task->pid, task->name.c_str(), task->regs.e.rip, err, result);
         
+        print_pt_chain(virtual_addr, global_logger);
+
         task->atomic_kill();
     }
 }

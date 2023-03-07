@@ -21,15 +21,6 @@ page_clear:
     loop .start_c
     retq
 
-   .globl memset
-    .type memset, @function
-memset:
-    movq %rsi, %rcx
-.start:
-    movq $0, -8(%rdi, %rcx, 8);
-    loop .start
-    retq
-
     .globl loadTSS
     .type loadTSS, @function
 loadTSS:

@@ -526,7 +526,7 @@ splay_tree_map<K,T>::iterator splay_tree_map<K,T>::get_smaller_or_equal(const ke
 }
 
 template<class K, class T>
-splay_tree_map<K,T>::iterator splay_tree_map<K,T>::iterator::operator++()
+splay_tree_map<K,T>::iterator splay_tree_map<K,T>::iterator::operator++() noexcept
 {
     ptr = next(ptr);
 
@@ -534,7 +534,7 @@ splay_tree_map<K,T>::iterator splay_tree_map<K,T>::iterator::operator++()
 }
 
 template<class K, class T>
-splay_tree_map<K,T>::iterator splay_tree_map<K,T>::iterator::operator++(int)
+splay_tree_map<K,T>::iterator splay_tree_map<K,T>::iterator::operator++(int) noexcept
 {
     iterator temp = *this;
     ++*this;

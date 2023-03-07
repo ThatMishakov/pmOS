@@ -67,7 +67,7 @@ typedef struct
     u8 writeable                 :1;
     u8 user_access               :1;
     u8 write_through             :1;
-    u8 cache_disabled            :1;  // Indicates if it is lazilly allocated
+    u8 cache_disabled            :1;
     u8 accessed                  :1;
     u8 dirty                     :1;
     u8 pat                       :1;
