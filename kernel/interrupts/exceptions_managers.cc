@@ -6,6 +6,7 @@
 #include <processes/tasks.hh>
 #include <cpus/sse.hh>
 #include <kern_logger/kern_logger.hh>
+#include <stdlib.h>
 
 void register_exceptions(IDT& idt)
 {
@@ -56,11 +57,9 @@ extern "C" void deal_with_pagefault_in_kernel()
 {
     t_print_bochs("Error: Pagefault inside the kernel! Instr %h %%cr2 0x%h  error 0x%h\n", get_cpu_struct()->jumpto_from, get_cpu_struct()->pagefault_cr2, get_cpu_struct()->pagefault_error);
     print_registers(get_cpu_struct()->current_task);
-    print_stack_trace();
-    while (1)
-    {
-        asm("hlt");
-    }
+    print_stack_trace(bochs_logger);
+
+    abort();
 }
 
 void kernel_jump_to(void (*function)(void))
@@ -113,7 +112,7 @@ extern "C" void pagefault_manager()
 
     kresult_t result = ERROR_PAGE_NOT_ALLOCATED;
 
-    {
+    try {
         Auto_Lock_Scope scope_lock(task->page_table->lock);
 
         auto& regions = task->page_table->paging_regions;
@@ -122,11 +121,9 @@ extern "C" void pagefault_manager()
         if (it != regions.end() and it->second->is_in_range(virtual_addr)) {
             result = it->second->on_page_fault(err, virtual_addr, task);
         }
-    }
-
-    if (result != SUCCESS and result != SUCCESS_REPEAT) {
-        t_print_bochs("Debug: Pagefault %h pid %i rip %h error %h returned error %i\n", virtual_addr, task->pid, task->regs.e.rip, err, result);
-        global_logger.printf("Warning: Pagefault %h pid %i (%s) rip %h error %h -> %i killing process...\n", virtual_addr, task->pid, task->name.c_str(), task->regs.e.rip, err, result);
+    } catch (const Kern_Exception& e) {
+        t_print_bochs("Debug: Pagefault %h pid %i rip %h error %h returned error %i (%s)\n", virtual_addr, task->pid, task->regs.e.rip, err, e.err_code, e.err_message);
+        global_logger.printf("Warning: Pagefault %h pid %i (%s) rip %h error %h -> %i killing process...\n", virtual_addr, task->pid, task->name.c_str(), task->regs.e.rip, err, e.err_code);
         
         print_pt_chain(virtual_addr, global_logger);
 

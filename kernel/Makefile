@@ -36,6 +36,7 @@ INTERNALLDFLAGS :=     \
 INTERNALCFLAGS  :=       \
 	-static \
 	-ffreestanding \
+	-fexceptions \
 	-mno-red-zone \
 	-mno-80387 \
 	-msoft-float \
@@ -43,6 +44,7 @@ INTERNALCFLAGS  :=       \
 	-no-pie -fno-pic \
 	-D_LIBUNWIND_IS_BAREMETAL \
 	-mgeneral-regs-only \
+	-fasynchronous-unwind-tables \
 	-g \
  
 # Use find to glob all *.c files in the directory and extract the object names.

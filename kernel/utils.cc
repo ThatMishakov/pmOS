@@ -11,6 +11,7 @@
 #include <kern_logger/kern_logger.hh>
 #include <sched/sched.hh>
 #include <stdio.h>
+#include <libunwind.h>
 
 void int_to_string(long int n, u8 base, char* str, int& length)
 {
@@ -137,72 +138,70 @@ void term_write(const klib::string& s)
     global_logger.log(s);
 }
 
-kresult_t prepare_user_buff_rd(const char* buff, size_t size)
+bool prepare_user_buff_rd(const char* buff, size_t size)
 {
     u64 addr_start = (u64)buff;
     u64 end = addr_start+size;
 
-    kresult_t result = SUCCESS;
-
     klib::shared_ptr<TaskDescriptor> current_task = get_current_task();
 
-    if (addr_start > current_task->page_table->user_addr_max() or end > current_task->page_table->user_addr_max() or addr_start > end) return ERROR_OUT_OF_RANGE;
+    if (addr_start > current_task->page_table->user_addr_max() or end > current_task->page_table->user_addr_max() or addr_start > end)
+        throw(Kern_Exception(ERROR_OUT_OF_RANGE, "user parameter is out of range"));
 
 
     current_task->request_repeat_syscall();
 
-    for (u64 i = addr_start; i < end and result == SUCCESS; ++i) {
+    for (u64 i = addr_start; i < end; ++i) {
         u64 page = i & ~0xfffULL;
-        result = current_task->page_table->prepare_user_page(page, Page_Table::Readable, current_task);
+        bool result = current_task->page_table->prepare_user_page(page, Page_Table::Readable, current_task);
+        if (not result)
+            return result;
     }
-    if (result != SUCCESS_REPEAT)
-        current_task->pop_repeat_syscall();
+    
+    current_task->pop_repeat_syscall();
 
-    return result;
+    return true;
 }
 
-kresult_t prepare_user_buff_wr(char* buff, size_t size)
+bool prepare_user_buff_wr(char* buff, size_t size)
 {
-    // TODO: Fix read-only pages & stuff
-
     u64 addr_start = (u64)buff;
     u64 end = addr_start+size;
 
-    kresult_t result = SUCCESS;
+    bool avail = true;
 
     klib::shared_ptr<TaskDescriptor> current_task = get_current_task();
     u64 kern_addr_start = current_task->page_table->user_addr_max();
 
-    if (addr_start > kern_addr_start or end > kern_addr_start or addr_start > end) return ERROR_OUT_OF_RANGE;
+    if (addr_start > kern_addr_start or end > kern_addr_start or addr_start > end)
+        throw(Kern_Exception(ERROR_OUT_OF_RANGE, "prepare_user_buff_wr outside userspace"));
 
     current_task->request_repeat_syscall();
 
-    for (u64 i = addr_start; i < end and result == SUCCESS; ++i) {
+    for (u64 i = addr_start; i < end and avail; ++i) {
         u64 page = i & ~0xfffULL;
-        result = current_task->page_table->prepare_user_page(page, Page_Table::Writeable, current_task);
+        avail = current_task->page_table->prepare_user_page(page, Page_Table::Writeable, current_task);
     }
-    if (result != SUCCESS_REPEAT)
+    if (avail)
         current_task->pop_repeat_syscall();
+
+    return avail;
+}
+
+bool copy_from_user(char* to, const char* from, size_t size)
+{
+    bool result = prepare_user_buff_rd(from, size);
+    if (result)
+        memcpy(to, from, size);
 
     return result;
 }
 
-kresult_t copy_from_user(char* to, const char* from, size_t size)
+bool copy_to_user(const char* from, char* to, size_t size)
 {
-    kresult_t result = prepare_user_buff_rd(from, size);
-    if (result != SUCCESS) return result;
-
-    memcpy(to, from, size);
-
-    return SUCCESS;
-}
-
-kresult_t copy_to_user(const char* from, char* to, size_t size)
-{
-    kresult_t result = prepare_user_buff_wr(to, size);
-    if (result != SUCCESS) return result;
-
-    memcpy(to, from, size);
+    bool result = prepare_user_buff_wr(to, size);
+    if (result)
+        memcpy(to, from, size);
 
     return SUCCESS;
 }
@@ -258,19 +257,33 @@ struct stack_frame {
     void* return_addr;
 };
 
-void print_stack_trace()
+void print_stack_trace(Logger& logger)
 {
-    t_print_bochs("Stack trace:\n");
-    struct stack_frame* s;
-    __asm__ volatile("movq %%rbp, %0": "=a" (s));
-    for (; s != NULL; s = s->next)
-        t_print_bochs("  -> %h\n", (u64)s->return_addr);
+    unw_context_t uc;
+	unw_getcontext(&uc);
+
+	unw_cursor_t cursor;
+	unw_init_local(&cursor, &uc);
+
+
+    while(unw_step(&cursor)>0) {
+		unw_word_t ip;
+		unw_get_reg(&cursor, UNW_REG_IP, &ip);
+
+		unw_word_t offset;
+		char name[32];
+		
+        
+        unw_get_proc_name(&cursor, name,sizeof(name), &offset);
+
+        logger.printf("  0x%x at <%s>+0x%x\n", ip, name, offset);
+    }
 }
 
 extern "C" void abort(void)
 {
     t_print_bochs("Error: abort() was called. Freezing...\n");
-    print_stack_trace();
+    print_stack_trace(bochs_logger);
     while (1);
 }
 

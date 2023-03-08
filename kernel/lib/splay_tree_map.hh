@@ -3,6 +3,7 @@
 #include "../memory/malloc.hh"
 #include "utility.hh"
 #include "../utils.hh"
+#include "stdexcept.hh"
 
 namespace klib {
 
@@ -73,13 +74,13 @@ public:
         iterator operator++(int) noexcept;
     };
 
-    constexpr splay_tree_map():
+    constexpr splay_tree_map() noexcept:
         elements(0), root(nullptr) {};
     splay_tree_map(const splay_tree_map&);
     splay_tree_map(splay_tree_map&&);
     ~splay_tree_map();
 
-    void clear();
+    void clear() noexcept;
 
     pair<iterator,bool> insert(const value_type&);
     pair<iterator,bool> insert(value_type&&);
@@ -87,19 +88,19 @@ public:
     void erase(const K&);
     void erase_if_exists(const K&);
 
-    constexpr size_t size() const;
-    constexpr bool empty() const;
+    constexpr size_t size() const noexcept;
+    constexpr bool empty() const noexcept;
 
-    size_t count(const K&) const;
+    size_t count(const K&) const noexcept;
 
     const T& at(const K&) const;
     T& at(const K&);
 
     K largest() const;
 
-    T get_copy_or_default(const K&);
+    T get_copy_or_default(const K&) noexcept;
 
-    iterator begin() const
+    iterator begin() const noexcept
     {
         if (root != nullptr)
             splay(min(root));
@@ -107,16 +108,16 @@ public:
         return root;
     }
 
-    constexpr iterator end() const
+    constexpr iterator end() const noexcept
     {
         return nullptr;
     } 
 
-    iterator find (const key_type& k);
-    iterator lower_bound (const key_type& k);
-    iterator upper_bound (const key_type& k);
+    iterator find (const key_type& k) noexcept;
+    iterator lower_bound (const key_type& k) noexcept;
+    iterator upper_bound (const key_type& k) noexcept;
 
-    iterator get_smaller_or_equal(const key_type& k);
+    iterator get_smaller_or_equal(const key_type& k) noexcept;
 };
 
 template<class K, class T>
@@ -267,19 +268,19 @@ pair<typename splay_tree_map<K,T>::iterator, bool> splay_tree_map<K,T>::insert(t
 }
 
 template<class K, class T>
-constexpr size_t splay_tree_map<K,T>::size() const
+constexpr size_t splay_tree_map<K,T>::size() const noexcept
 {
     return elements;
 }
 
 template<class K, class T>
-constexpr bool splay_tree_map<K,T>::empty() const
+constexpr bool splay_tree_map<K,T>::empty() const noexcept
 {
     return size() == 0;
 }
 
 template<class K, class T>
-size_t splay_tree_map<K,T>::count(const K& key) const
+size_t splay_tree_map<K,T>::count(const K& key) const noexcept
 {
     node* n = root;
     while (n != nullptr and n->key_data.first != key) {
@@ -296,24 +297,6 @@ size_t splay_tree_map<K,T>::count(const K& key) const
     }
 
     return 0;
-}
-
-template<class K, class T>
-T& splay_tree_map<K,T>::at(const K& key)
-{
-    node* n = root;
-
-    while (n->key_data.first != key) {
-        if (n->key_data.first < key) {
-            n = n->right;
-        } else {
-            n = n->left;
-        }
-    }
-
-    splay(n);
-
-    return n->key_data.second;
 }
 
 template<class K, class T>
@@ -419,7 +402,7 @@ void splay_tree_map<K,T>::delete_node(splay_tree_map<K,T>::node* p)
 }
 
 template<class K, class T>
-T splay_tree_map<K,T>::get_copy_or_default(const K& key)
+T splay_tree_map<K,T>::get_copy_or_default(const K& key) noexcept
 {
     node* n = root;
 
@@ -432,6 +415,27 @@ T splay_tree_map<K,T>::get_copy_or_default(const K& key)
     }
 
     if (n == nullptr) return T();
+
+    splay(n);
+
+    return n->key_data.second;
+}
+
+template<class K, class T>
+T& splay_tree_map<K,T>::at(const K& key)
+{
+    node* n = root;
+
+    while (n != nullptr and n->key_data.first != key) {
+        if (n->key_data.first < key) {
+            n = n->right;
+        } else {
+            n = n->left;
+        }
+    }
+
+    if (n == nullptr) 
+        throw (std::out_of_range("splay_three_map::at"));
 
     splay(n);
 
@@ -497,7 +501,7 @@ splay_tree_map<K,T>::node* splay_tree_map<K,T>::eq_or_larger(node* n, const key_
 }
 
 template<class K, class T>
-splay_tree_map<K,T>::iterator splay_tree_map<K,T>::lower_bound (const key_type& k)
+splay_tree_map<K,T>::iterator splay_tree_map<K,T>::lower_bound (const key_type& k) noexcept
 {
     node* n = eq_or_larger(root, k);
     
@@ -508,14 +512,14 @@ splay_tree_map<K,T>::iterator splay_tree_map<K,T>::lower_bound (const key_type& 
 }
 
 template<class K, class T>
-void splay_tree_map<K,T>::clear ()
+void splay_tree_map<K,T>::clear () noexcept
 {
     while (root != nullptr)
         delete_node(root);
 }
 
 template<class K, class T>
-splay_tree_map<K,T>::iterator splay_tree_map<K,T>::get_smaller_or_equal(const key_type& k)
+splay_tree_map<K,T>::iterator splay_tree_map<K,T>::get_smaller_or_equal(const key_type& k) noexcept
 {
     node* n = eq_or_smaller(root, k);
     

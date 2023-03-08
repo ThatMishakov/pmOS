@@ -2,6 +2,7 @@
 #include <utils.hh>
 #include "palloc.hh"
 #include <asm.hh>
+#include <lib/new.hh>
 
 malloc_list head = {nullptr, 0};
 Spinlock malloc_lock;
@@ -9,7 +10,7 @@ Spinlock malloc_lock;
 size_t malloced = 0;
 size_t freed = 0;
 
-void print_list(malloc_list* l)
+void print_list(malloc_list* l) 
 {
     while (l != nullptr) {
         t_print_bochs(" node %h size %h", l, l->size);
@@ -19,7 +20,7 @@ void print_list(malloc_list* l)
     t_print_bochs("\n");
 }
 
-void *malloc_int(size_t size_bytes, size_t& size_bytes_a)
+void *malloc_int(size_t size_bytes, size_t& size_bytes_a) 
 {
     // Reserve 16 bytes for size header
     size_bytes += 16;
@@ -37,6 +38,8 @@ void *malloc_int(size_t size_bytes, size_t& size_bytes_a)
         if (pages_needed < ALLOC_MIN_PAGES) pages_needed = ALLOC_MIN_PAGES;
 
         l->next = (malloc_list*)palloc(pages_needed);
+        if (l->next == nullptr) return nullptr;
+
         l->next->next = nullptr;
         l->next->size = pages_needed*4096;
     } 
@@ -62,12 +65,12 @@ void *malloc_int(size_t size_bytes, size_t& size_bytes_a)
     return p;
 }
 
-static size_t get_alloc_size(const void* ptr)
+static size_t get_alloc_size(const void* ptr) 
 {
     return *(((const u64*)ptr) - 2);
 }
 
-extern "C" void *realloc(void *old_ptr, size_t new_size)
+extern "C" void *realloc(void *old_ptr, size_t new_size) 
 {
     void* new_ptr = NULL;
     if (new_size != 0) {
@@ -93,14 +96,14 @@ extern "C" void *calloc(size_t nelem, size_t size)
     return &ptr[2];
 }
 
-extern "C" void *malloc(size_t s)
+extern "C" void *malloc(size_t s) 
 {
     size_t l;
     void* p = ((char*)malloc_int(s, l) + 16);
     return p;
 }
 
-extern "C" void free(void * p)
+extern "C" void free(void * p) 
 {
     if (p == nullptr) return;
 
@@ -142,12 +145,16 @@ extern "C" void free(void * p)
 void *operator new(size_t size)
 {
     void* ptr = malloc(size);
+    if (ptr == nullptr)
+        throw std::bad_alloc();
     return ptr;
 }
  
 void *operator new[](size_t size)
 {
     void* ptr = malloc(size);
+    if (ptr == nullptr)
+        throw std::bad_alloc();
     return ptr;
 }
  

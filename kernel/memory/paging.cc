@@ -32,9 +32,9 @@ kresult_t map(u64 physical_addr, u64 virtual_addr, Page_Table_Argumments arg)
     PML4E& pml4e = pml4(rec_map_index)->entries[pml4_entry];
     if (not pml4e.present) {
         pml4e = {};
-        ReturnStr<u64> p = kernel_pframe_allocator.alloc_page_ppn();
-        if (p.result != SUCCESS) return p.result; 
-        pml4e.page_ppn = p.val;
+        u64 p = kernel_pframe_allocator.alloc_page_ppn();
+
+        pml4e.page_ppn = p;
         pml4e.present = 1;
         pml4e.writeable = 1;
         pml4e.user_access = arg.user_access;
@@ -45,9 +45,9 @@ kresult_t map(u64 physical_addr, u64 virtual_addr, Page_Table_Argumments arg)
     if (pdpte.size) return ERROR_PAGE_PRESENT;
     if (not pdpte.present) {
         pdpte = {};
-        ReturnStr<u64> p =  kernel_pframe_allocator.alloc_page_ppn();;
-        if (p.result != SUCCESS) return p.result; 
-        pdpte.page_ppn = p.val;
+        u64 p =  kernel_pframe_allocator.alloc_page_ppn();;
+
+        pdpte.page_ppn = p;
         pdpte.present = 1;
         pdpte.writeable = 1;
         pdpte.user_access = arg.user_access;
@@ -58,9 +58,9 @@ kresult_t map(u64 physical_addr, u64 virtual_addr, Page_Table_Argumments arg)
     if (pde.size) return ERROR_PAGE_PRESENT;
     if (not pde.present) {
         pde = {};
-        ReturnStr<u64> p = kernel_pframe_allocator.alloc_page_ppn();
-        if (p.result != SUCCESS) return p.result; 
-        pde.page_ppn = p.val;
+        u64 p = kernel_pframe_allocator.alloc_page_ppn();
+
+        pde.page_ppn = p;
         pde.present = 1;
         pde.writeable = 1;
         pde.user_access = arg.user_access;
@@ -101,9 +101,9 @@ PT* rec_prepare_pt_for(u64 virtual_addr, Page_Table_Argumments arg)
     PML4E& pml4e = pml4(rec_map_index)->entries[pml4_entry];
     if (not pml4e.present) {
         pml4e = {};
-        ReturnStr<u64> p = kernel_pframe_allocator.alloc_page_ppn();
-        if (p.result != SUCCESS) return nullptr; 
-        pml4e.page_ppn = p.val;
+        u64 p = kernel_pframe_allocator.alloc_page_ppn();
+
+        pml4e.page_ppn = p;
         pml4e.present = 1;
         pml4e.writeable = 1;
         pml4e.user_access = arg.user_access;
@@ -114,9 +114,9 @@ PT* rec_prepare_pt_for(u64 virtual_addr, Page_Table_Argumments arg)
     if (pdpte.size) return nullptr;
     if (not pdpte.present) {
         pdpte = {};
-        ReturnStr<u64> p =  kernel_pframe_allocator.alloc_page_ppn();;
-        if (p.result != SUCCESS) return nullptr; 
-        pdpte.page_ppn = p.val;
+        u64 p =  kernel_pframe_allocator.alloc_page_ppn();
+
+        pdpte.page_ppn = p;
         pdpte.present = 1;
         pdpte.writeable = 1;
         pdpte.user_access = arg.user_access;
@@ -127,9 +127,9 @@ PT* rec_prepare_pt_for(u64 virtual_addr, Page_Table_Argumments arg)
     if (pde.size) return nullptr;
     if (not pde.present) {
         pde = {};
-        ReturnStr<u64> p = kernel_pframe_allocator.alloc_page_ppn();
-        if (p.result != SUCCESS) return nullptr; 
-        pde.page_ppn = p.val;
+        u64 p = kernel_pframe_allocator.alloc_page_ppn();
+
+        pde.page_ppn = p;
         pde.present = 1;
         pde.writeable = 1;
         pde.user_access = arg.user_access;
@@ -236,16 +236,14 @@ Page_Table::Check_Return_Str x86_4level_Page_Table::check_if_allocated_and_set_f
     if (not pml4e->present) {
         *pml4e = x86_PAE_Entry();
 
-        ReturnStr<u64> p = kernel_pframe_allocator.alloc_page_ppn();
-        if (p.result != SUCCESS) 
-            return {p.result, false, 0}; 
+        u64 p = kernel_pframe_allocator.alloc_page_ppn();
 
-        pml4e->page_ppn = p.val;
+        pml4e->page_ppn = p;
         pml4e->present = 1;
         pml4e->writeable = 1;
         pml4e->user_access = arg.user_access;
 
-        clear_page(p.val << 12);
+        clear_page(p << 12);
     }
 
     mapper.map((u64)pml4e->page_ppn << 12);
@@ -253,36 +251,32 @@ Page_Table::Check_Return_Str x86_4level_Page_Table::check_if_allocated_and_set_f
     if (not pdpte->present) {
         *pdpte = x86_PAE_Entry();
 
-        ReturnStr<u64> p = kernel_pframe_allocator.alloc_page_ppn();
-        if (p.result != SUCCESS) 
-            return {p.result, false, 0}; 
+        u64 p = kernel_pframe_allocator.alloc_page_ppn();
 
-        pdpte->page_ppn = p.val;
+        pdpte->page_ppn = p;
         pdpte->present = 1;
         pdpte->writeable = 1;
         pdpte->user_access = arg.user_access;
 
-        clear_page(p.val << 12);
+        clear_page(p << 12);
     }
 
     mapper.map((u64)pdpte->page_ppn << 12);
     x86_PAE_Entry* pde = &mapper.ptr[pd_index(virtual_addr)];
     if (pde->pat_size) // Huge page
-        return {ERROR_PAGE_PRESENT, 0, 0};
+        throw(Kern_Exception(ERROR_PAGE_PRESENT, "huge page in check_if_allocated_and_set_flag"));
 
     if (not pde->present) {
         *pde = x86_PAE_Entry();
 
-        ReturnStr<u64> p = kernel_pframe_allocator.alloc_page_ppn();
-        if (p.result != SUCCESS) 
-            return {p.result, false, 0}; 
+        u64 p = kernel_pframe_allocator.alloc_page_ppn();
 
-        pde->page_ppn = p.val;
+        pde->page_ppn = p;
         pde->present = 1;
         pde->writeable = 1;
         pde->user_access = arg.user_access;
 
-        clear_page(p.val << 12);
+        clear_page(p << 12);
     }
 
 
@@ -290,9 +284,9 @@ Page_Table::Check_Return_Str x86_4level_Page_Table::check_if_allocated_and_set_f
     x86_PAE_Entry* pte = &mapper.ptr[pt_index(virtual_addr)];
 
     if (pte->present)
-        return {SUCCESS, pte->avl, true};
+        return {pte->avl, true};
 
-    Check_Return_Str ret {SUCCESS, pte->avl, false};
+    Check_Return_Str ret {pte->avl, false};
 
     pte->avl |= flag;
 
@@ -302,12 +296,18 @@ Page_Table::Check_Return_Str x86_4level_Page_Table::check_if_allocated_and_set_f
 
 kresult_t kernel_get_page(u64 virtual_addr, Page_Table_Argumments arg)
 {
-    ReturnStr<void*> r = kernel_pframe_allocator.alloc_page();
-    if (r.result != SUCCESS) return r.result;
+    void* r = kernel_pframe_allocator.alloc_page();
 
-    u64 b = map((u64)r.val, virtual_addr, arg);
-    if (b != SUCCESS) kernel_pframe_allocator.free(r.val);
-    return b;
+    try {
+        kresult_t b = map((u64)r, virtual_addr, arg);
+        if (b != SUCCESS) 
+            kernel_pframe_allocator.free(r);
+        
+        return b;
+    } catch (...) {
+        kernel_pframe_allocator.free(r);
+        throw;
+    }
 }
 
 
@@ -360,33 +360,40 @@ kresult_t invalidade(u64 virtual_addr)
     return SUCCESS;
 }
 
-kresult_t release_page_s(x86_PAE_Entry& pte)
+void release_page_s(x86_PAE_Entry& pte)
 {
     if (pte.present and not (pte.avl & PAGING_FLAG_NOFREE))
             kernel_pframe_allocator.free((void*)(pte.page_ppn << 12));
 
     pte = x86_PAE_Entry();
-
-    return SUCCESS;
 }
 
-ReturnStr<u64> x86_4level_Page_Table::phys_addr_of(u64 virt) const
+
+u64 x86_4level_Page_Table::phys_addr_of(u64 virt) const
 {
-    u64 old_cr3 = getCR3();
-    u64 cr3 = (u64)pml4_phys;
+    Temp_Mapper_Obj<x86_PAE_Entry> mapper(get_cpu_struct()->temp_mapper);
 
-    if (cr3 != old_cr3)
-        setCR3(cr3);
+    // PML4 entry
+    mapper.map((u64)pml4_phys); unsigned pml4_i = pml4_index(virt);
+    if (not mapper.ptr[pml4_i].present)
+        throw (Kern_Exception(ERROR_PAGE_NOT_ALLOCATED, "phys_addr_of pml4e not allocated"));
 
-    PTE* pte = get_pte(virt, rec_map_index);
+    // PDPT entry
+    mapper.map(mapper.ptr[pml4_i].page_ppn << 12); unsigned pdpt_i = pdpt_index(virt);
+    if (not mapper.ptr[pdpt_i].present)
+        throw (Kern_Exception(ERROR_PAGE_NOT_ALLOCATED, "phys_addr_of pdpte not allocated"));
 
-    u64 phys = (pte->page_ppn << 12) | (virt & (u64)0xfff);
+    // PD entry
+    mapper.map(mapper.ptr[pdpt_i].page_ppn << 12); unsigned pd_i = pd_index(virt);
+    if (not mapper.ptr[pd_i].present)
+        throw (Kern_Exception(ERROR_PAGE_NOT_ALLOCATED, "phys_addr_of pde not allocated"));
 
-    if (cr3 != old_cr3)
-        setCR3(old_cr3);
+    // PT entry
+    mapper.map(mapper.ptr[pd_i].page_ppn << 12); unsigned pt_i = pt_index(virt);
+    if (not mapper.ptr[pt_i].present)
+        throw (Kern_Exception(ERROR_PAGE_NOT_ALLOCATED, "phys_addr_of pte not allocated"));
 
-    // TODO: Error checking
-    return {SUCCESS, phys};
+    return (mapper.ptr[pt_i].page_ppn << 12) | (virt & (u64)0xfff);
 }
 
 ReturnStr<u64> phys_addr_of(u64 virt)
@@ -420,39 +427,41 @@ klib::shared_ptr<Page_Table> x86_4level_Page_Table::create_empty()
 
 
     // Get a free page
-    ReturnStr<void*> l = kernel_pframe_allocator.alloc_page();
-    u64 p = (u64)l.val;
+    void* l = nullptr; 
+    try {
+        l = kernel_pframe_allocator.alloc_page();
+        u64 p = (u64)l;
 
-    // TODO: Throw exception
-    // Check for errors
-    if (l.result != SUCCESS) return nullptr;
+        // Map pages
+        Temp_Mapper_Obj<x86_PAE_Entry> new_page_m(get_cpu_struct()->temp_mapper);
+        Temp_Mapper_Obj<x86_PAE_Entry> current_page_m(get_cpu_struct()->temp_mapper);
 
-    // Map pages
-    Temp_Mapper_Obj<x86_PAE_Entry> new_page_m(get_cpu_struct()->temp_mapper);
-    Temp_Mapper_Obj<x86_PAE_Entry> current_page_m(get_cpu_struct()->temp_mapper);
+        new_page_m.map(p);
+        current_page_m.map(getCR3());
 
-    new_page_m.map(p);
-    current_page_m.map(getCR3());
+        // Clear it as memory contains rubbish and it will cause weird paging bugs on real machines
+        page_clear((void*)new_page_m.ptr);
 
-    // Clear it as memory contains rubbish and it will cause weird paging bugs on real machines
-    page_clear((void*)new_page_m.ptr);
+        // Copy the last entries into the new page table as they are shared across all processes
+        // and recurvicely assign the last page to itself
+        // ((PML4*)free_page)->entries[509] = pml4(rec_map_index)->entries[509];
+        new_page_m.ptr[510] = current_page_m.ptr[510];
+        new_page_m.ptr[511] = current_page_m.ptr[511];
 
-    // Copy the last entries into the new page table as they are shared across all processes
-    // and recurvicely assign the last page to itself
-    // ((PML4*)free_page)->entries[509] = pml4(rec_map_index)->entries[509];
-    new_page_m.ptr[510] = current_page_m.ptr[510];
-    new_page_m.ptr[511] = current_page_m.ptr[511];
+        new_page_m.ptr[rec_map_index] = x86_PAE_Entry();
+        new_page_m.ptr[rec_map_index].present = 1;
+        new_page_m.ptr[rec_map_index].user_access = 0;
+        new_page_m.ptr[rec_map_index].page_ppn = p/KB(4);
 
-    new_page_m.ptr[rec_map_index] = x86_PAE_Entry();
-    new_page_m.ptr[rec_map_index].present = 1;
-    new_page_m.ptr[rec_map_index].user_access = 0;
-    new_page_m.ptr[rec_map_index].page_ppn = p/KB(4);
+        new_table->pml4_phys = (x86_PAE_Entry *)p;
 
+        new_table->insert_global_page_tables();
+    } catch (...) {
+        if (l != nullptr)
+            kernel_pframe_allocator.free(l);
 
-
-    new_table->pml4_phys = (x86_PAE_Entry *)p;
-
-    new_table->insert_global_page_tables();
+        throw;
+    }
 
     return new_table;
 }
@@ -469,68 +478,55 @@ x86_4level_Page_Table::~x86_4level_Page_Table()
     kernel_pframe_allocator.free((void*)pml4_phys);
 }
 
-kresult_t x86_4level_Page_Table::map(u64 physical_addr, u64 virtual_addr, Page_Table_Argumments arg)
+void x86_4level_Page_Table::map(u64 physical_addr, u64 virtual_addr, Page_Table_Argumments arg)
 {
-    if (physical_addr >> 48) {
-        return ERROR_OUT_OF_RANGE;
-    }
+    if (physical_addr >> 48)
+        throw(Kern_Exception(ERROR_OUT_OF_RANGE, "x86_4level_Page_Table::map physical page out of range"));
 
     Temp_Mapper_Obj<x86_PAE_Entry> mapper(get_cpu_struct()->temp_mapper);
     mapper.map((u64)pml4_phys);
 
     x86_PAE_Entry* pml4e = &mapper.ptr[pml4_index(virtual_addr)];
     if (not pml4e->present) {
-        *pml4e = x86_PAE_Entry();
-        ReturnStr<u64> p = kernel_pframe_allocator.alloc_page_ppn();
-        if (p.result != SUCCESS) return p.result; 
-        pml4e->page_ppn = p.val;
-        pml4e->present = 1;
-        pml4e->writeable = 1;
-        pml4e->user_access = arg.user_access;
-        clear_page(p.val << 12);
+        u64 p = kernel_pframe_allocator.alloc_page_ppn();
+
+        *pml4e = x86_PAE_Entry(); pml4e->page_ppn = p; pml4e->present = 1; pml4e->writeable = 1; pml4e->user_access = arg.user_access;
+        clear_page(p << 12);
     }
 
     mapper.map(pml4e->page_ppn << 12);
     x86_PAE_Entry* pdpte = &mapper.ptr[pdpt_index(virtual_addr)];
-    if (pdpte->pat_size) return ERROR_PAGE_PRESENT;
+    if (pdpte->pat_size) // 1GB page is already present
+        throw (Kern_Exception(ERROR_PAGE_PRESENT, "map 1G page is present"));
+    
     if (not pdpte->present) {
-        *pdpte = x86_PAE_Entry();
-        ReturnStr<u64> p =  kernel_pframe_allocator.alloc_page_ppn();;
-        if (p.result != SUCCESS) return p.result; 
-        pdpte->page_ppn = p.val;
-        pdpte->present = 1;
-        pdpte->writeable = 1;
-        pdpte->user_access = arg.user_access;
-        clear_page(p.val << 12);
+        u64 p =  kernel_pframe_allocator.alloc_page_ppn();
+
+        *pdpte = x86_PAE_Entry(); pdpte->page_ppn = p; pdpte->present = 1; pdpte->writeable = 1; pdpte->user_access = arg.user_access;
+        clear_page(p << 12);
     }
 
     mapper.map(pdpte->page_ppn << 12);
     x86_PAE_Entry* pde = &mapper.ptr[pd_index(virtual_addr)];
-    if (pde->pat_size) return ERROR_PAGE_PRESENT;
+    if (pde->pat_size)
+        throw (Kern_Exception(ERROR_PAGE_PRESENT, "map 2M page is present"));
+    
     if (not pde->present) {
-        *pde = x86_PAE_Entry();
-        ReturnStr<u64> p = kernel_pframe_allocator.alloc_page_ppn();
-        if (p.result != SUCCESS) return p.result; 
-        pde->page_ppn = p.val;
-        pde->present = 1;
-        pde->writeable = 1;
-        pde->user_access = arg.user_access;
-        clear_page(p.val << 12);
+        u64 p = kernel_pframe_allocator.alloc_page_ppn();
+
+        *pde = x86_PAE_Entry(); pde->page_ppn = p; pde->present = 1; pde->writeable = 1; pde->user_access = arg.user_access;
+        clear_page(p << 12);
     }
 
     mapper.map(pde->page_ppn << 12);
     x86_PAE_Entry* pte = &mapper.ptr[pt_index(virtual_addr)];
     if (pte->present)
-        return ERROR_PAGE_PRESENT;
+        throw (Kern_Exception(ERROR_PAGE_PRESENT, "map page is present"));
 
-    *pte = x86_PAE_Entry();
-    pte->page_ppn = physical_addr/KB(4);
-    pte->present = 1;
-    pte->user_access = arg.user_access;
-    pte->writeable = arg.writeable;  
+    *pte = x86_PAE_Entry(); pte->page_ppn = physical_addr/KB(4); pte->present = 1; pte->user_access = arg.user_access; pte->writeable = arg.writeable;  
     pte->avl = arg.extra;
-    if (nx_bit_enabled) pte->execution_disabled = arg.execution_disabled;
-    return SUCCESS;
+    if (nx_bit_enabled)
+        pte->execution_disabled = arg.execution_disabled;
 }
 
 void x86_4level_Page_Table::free_pt(u64 pt_phys)
@@ -592,64 +588,49 @@ void x86_4level_Page_Table::free_user_pages()
     }
 }
 
-ReturnStr<u64> Page_Table::atomic_create_normal_region(u64 page_aligned_start, u64 page_aligned_size, unsigned access, bool fixed, klib::string name, u64 pattern)
+u64 Page_Table::atomic_create_normal_region(u64 page_aligned_start, u64 page_aligned_size, unsigned access, bool fixed, klib::string name, u64 pattern)
 {
     Auto_Lock_Scope scope_lock(lock);
 
-    ReturnStr<u64> new_region_start = find_region_spot(page_aligned_start, page_aligned_size, fixed);
-
-    if (new_region_start.result != SUCCESS)
-        return new_region_start;
-
-    u64 start_addr = new_region_start.val;
+    u64 start_addr = find_region_spot(page_aligned_start, page_aligned_size, fixed);
 
     paging_regions.insert({start_addr,
         klib::make_unique<Private_Normal_Region>(
             start_addr, page_aligned_size, klib::forward<klib::string>(name), weak_from_this(), access, pattern
         )});
 
-    return new_region_start;
+    return start_addr;
 }
 
-ReturnStr<u64> Page_Table::atomic_create_managed_region(u64 page_aligned_start, u64 page_aligned_size, unsigned access, bool fixed, klib::string name, klib::shared_ptr<Port> t)
+u64 Page_Table::atomic_create_managed_region(u64 page_aligned_start, u64 page_aligned_size, unsigned access, bool fixed, klib::string name, klib::shared_ptr<Port> t)
 {
     Auto_Lock_Scope scope_lock(lock);
 
-    ReturnStr<u64> new_region_start = find_region_spot(page_aligned_start, page_aligned_size, fixed);
-
-    if (new_region_start.result != SUCCESS)
-        return new_region_start;
-
-    u64 start_addr = new_region_start.val;
+    u64 start_addr = find_region_spot(page_aligned_start, page_aligned_size, fixed);
 
     paging_regions.insert({start_addr,
         klib::make_unique<Private_Managed_Region>(
             start_addr, page_aligned_size, klib::forward<klib::string>(name), weak_from_this(), access, klib::forward<klib::shared_ptr<Port>>(t)
         )});
 
-    return new_region_start;
+    return start_addr;
 }
 
-ReturnStr<u64> Page_Table::atomic_create_phys_region(u64 page_aligned_start, u64 page_aligned_size, unsigned access, bool fixed, klib::string name, u64 phys_addr_start)
+u64 Page_Table::atomic_create_phys_region(u64 page_aligned_start, u64 page_aligned_size, unsigned access, bool fixed, klib::string name, u64 phys_addr_start)
 {
     Auto_Lock_Scope scope_lock(lock);
 
     if (phys_addr_start >= phys_addr_limit() or phys_addr_start + page_aligned_size >= phys_addr_limit() or phys_addr_start > phys_addr_start+page_aligned_size)
-        return {ERROR_OUT_OF_RANGE, 0};
+        throw(Kern_Exception(ERROR_OUT_OF_RANGE, "atomic_create_phys_region phys_addr outside the supported by x86"));
 
-    ReturnStr<u64> new_region_start = find_region_spot(page_aligned_start, page_aligned_size, fixed);
-
-    if (new_region_start.result != SUCCESS)
-        return new_region_start;
-
-    u64 start_addr = new_region_start.val;
+    u64 start_addr = find_region_spot(page_aligned_start, page_aligned_size, fixed);
 
     paging_regions.insert({start_addr,
         klib::make_unique<Phys_Mapped_Region>(
             start_addr, page_aligned_size, klib::forward<klib::string>(name), weak_from_this(), access, phys_addr_start
         )});
 
-    return new_region_start;
+    return start_addr;
 }
 
 Page_Table::pagind_regions_map::iterator Page_Table::get_region(u64 page)
@@ -670,21 +651,21 @@ bool Page_Table::can_takeout_page(u64 page_addr)
     return it->second->can_takeout_page();
 }
 
-u64 Page_Table::provide_managed(u64 page_addr, u64 virt_addr)
+void Page_Table::provide_managed(u64 page_addr, u64 virt_addr)
 {
     auto it = get_region(virt_addr);
     if (it == paging_regions.end())
-        return ERROR_NO_FREE_REGION;
+        throw(Kern_Exception(ERROR_NO_FREE_REGION, "provide_managed no region found"));
 
     if (not it->second->is_managed())
-        return ERROR_NOT_MANAGED_REGION;
+        throw(Kern_Exception(ERROR_NOT_MANAGED_REGION, "provide_managed not a managed region"));
 
     Page_Table_Argumments args = it->second->craft_arguments();
 
-    return map(page_addr, virt_addr, args);
+    map(page_addr, virt_addr, args);
 }
 
-ReturnStr<u64> Page_Table::find_region_spot(u64 desired_start, u64 size, bool fixed)
+u64 Page_Table::find_region_spot(u64 desired_start, u64 size, bool fixed)
 {
     u64 end = desired_start + size;
 
@@ -702,11 +683,13 @@ ReturnStr<u64> Page_Table::find_region_spot(u64 desired_start, u64 size, bool fi
             region_ok = false;
     }
 
+    // If the new region doesn't overlap with anything, just use it
     if (region_ok) {
-        return {SUCCESS, desired_start};
+        return desired_start;
+
     } else {
         if (fixed)
-            return {ERROR_REGION_OCCUPIED, 0};
+            throw(Kern_Exception(ERROR_REGION_OCCUPIED, "find_region_spot fixed region overlaps"));
 
         u64 addr = 0x1000;
         auto it = paging_regions.begin();
@@ -714,25 +697,25 @@ ReturnStr<u64> Page_Table::find_region_spot(u64 desired_start, u64 size, bool fi
             u64 end = addr + size;
 
             if (it->first > end and end <= user_addr_max())
-                return {SUCCESS, addr};
+                return addr;
 
             addr = it->second->addr_end();
             ++it;
         }
 
-        if (addr + size <= user_addr_max())
-            return {SUCCESS, addr};
+        if (addr + size > user_addr_max())
+            throw(Kern_Exception(ERROR_NO_FREE_REGION, "find_region_spot no free region found"));
 
-        return {ERROR_NO_FREE_REGION, 0};
+        return addr;
     }
 }
 
-kresult_t Page_Table::prepare_user_page(u64 virt_addr, unsigned access_type, const klib::shared_ptr<TaskDescriptor>& task)
+bool Page_Table::prepare_user_page(u64 virt_addr, unsigned access_type, const klib::shared_ptr<TaskDescriptor>& task)
 {
     auto it = paging_regions.get_smaller_or_equal(virt_addr);
 
     if (it == paging_regions.end() or not it->second->is_in_range(virt_addr))
-        return ERROR_OUT_OF_RANGE;
+        throw(Kern_Exception(ERROR_OUT_OF_RANGE, "user provided parameter is unallocated"));
 
     Generic_Mem_Region &reg = *it->second;
 
@@ -754,28 +737,28 @@ void Page_Table::insert_global_page_tables()
 Page_Table::page_table_map Page_Table::global_page_tables;
 Spinlock Page_Table::page_table_index_lock;
 
-kresult_t Page_Table::atomic_provide_page(const klib::shared_ptr<TaskDescriptor>& from_task, const klib::shared_ptr<Page_Table>& to, u64 page_from, u64 page_to, u64 flags)
+bool Page_Table::atomic_provide_page(const klib::shared_ptr<TaskDescriptor>& from_task, const klib::shared_ptr<Page_Table>& to, u64 page_from, u64 page_to, u64 flags)
 {
     const klib::shared_ptr<Page_Table>& from = from_task->page_table;
     Auto_Lock_Scope_Double scope_lock(from->lock, to->lock);
 
     bool can_takeout_page = from->can_takeout_page(page_from);
     if (not can_takeout_page)
-        return ERROR_NOT_SUPPORTED;
+        throw (Kern_Exception(ERROR_NOT_SUPPORTED, "taking out the page from unsupported region"));
 
-    kresult_t r = from->prepare_user_page(page_from, Readable, from_task);
-    if (r != SUCCESS)
+    // User page is not ready if not r
+    bool r = from->prepare_user_page(page_from, Readable, from_task);
+    if (not r)
         return r;
 
     u64 page = from->get_page_frame(page_from);
 
-    r = to->provide_managed(page, page_to);
-    if (r != SUCCESS)
-        return r;
+    to->provide_managed(page, page_to);
 
     to->unblock_tasks(page_to);
 
     from->invalidate_nofree(page_from);
+
     return r;
 }
 
@@ -792,13 +775,24 @@ klib::shared_ptr<Page_Table> Page_Table::get_page_table(u64 id)
     return global_page_tables.get_copy_or_default(id).lock();
 }
 
-u64 Page_Table::map(u64 page_addr, u64 virt_addr)
+klib::shared_ptr<Page_Table> Page_Table::get_page_table_throw(u64 id)
+{
+    Auto_Lock_Scope scope_lock(page_table_index_lock);
+
+    try {
+        return global_page_tables.at(id).lock();
+    } catch (const std::out_of_range&) {
+        throw Kern_Exception(ERROR_OBJECT_DOESNT_EXIST, "requested page table doesn't exist");
+    }
+}
+
+void Page_Table::map(u64 page_addr, u64 virt_addr)
 {
     auto it = get_region(virt_addr);
     if (it == paging_regions.end())
-        return ERROR_PAGE_NOT_ALLOCATED;
+        throw(Kern_Exception(ERROR_PAGE_NOT_ALLOCATED, "map no region found"));
 
-    return map(page_addr, virt_addr, it->second->craft_arguments());
+    map(page_addr, virt_addr, it->second->craft_arguments());
 }
 
 u64 Page_Table::phys_addr_limit()

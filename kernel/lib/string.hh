@@ -343,15 +343,15 @@ public:
         return compare(s) == 0;
     }
 
-    static klib::pair<kresult_t, string> fill_from_user(const char* ptr, size_t size)
+    static klib::pair<bool, string> fill_from_user(const char* ptr, size_t size)
     {
 
-        klib::pair<kresult_t, string> ret;
+        klib::pair<bool, string> ret;
 
         if (size < small_size) {
             ret.first = copy_from_user(ret.second.short_string, ptr, size);
 
-            if (ret.first != SUCCESS)
+            if (not ret.first)
                 return ret;
 
             ret.second.s_capacity = size;
@@ -360,7 +360,7 @@ public:
 
             ret.first = copy_from_user(p.get(), ptr, size);
 
-            if (ret.first != SUCCESS)
+            if (not ret.first)
                 return ret;
 
             p[size] = '\0';

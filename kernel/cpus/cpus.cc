@@ -51,16 +51,15 @@ extern "C" void cpu_start_routine()
     find_new_process();
 }
 
-ReturnStr<u64> cpu_configure(u64 type, UNUSED u64 arg)
+u64 cpu_configure(u64 type, UNUSED u64 arg)
 {
-    ReturnStr<u64> result = {ERROR_GENERAL, 0};
+    u64 result = 0;
     switch (type) {
     case 0:
-        result.result = SUCCESS;
-        result.val = (u64)&cpu_startup_entry;
+        result = (u64)&cpu_startup_entry;
         break;
     default:
-        result.result = ERROR_NOT_SUPPORTED;
+        throw(Kern_Exception(ERROR_NOT_SUPPORTED, "cpu_configure unknown type"));
     };
     return result;
 }

@@ -5,7 +5,7 @@
 
 Named_Port_Storage global_named_ports;
 
-kresult_t Notify_Task::do_action(const klib::shared_ptr<Port>& port, [[maybe_unused]] const klib::string& name)
+void Notify_Task::do_action(const klib::shared_ptr<Port>& port, [[maybe_unused]] const klib::string& name)
 {
     if (not did_action) {
         klib::shared_ptr<TaskDescriptor> ptr = task.lock();
@@ -15,10 +15,9 @@ kresult_t Notify_Task::do_action(const klib::shared_ptr<Port>& port, [[maybe_unu
         }
         did_action = true;
     }
-    return SUCCESS;
 }
 
-kresult_t Send_Message::do_action(const klib::shared_ptr<Port>& p, const klib::string& name)
+void Send_Message::do_action(const klib::shared_ptr<Port>& p, const klib::string& name)
 {
     kresult_t result = SUCCESS;
     if (not did_action) {
@@ -37,13 +36,11 @@ kresult_t Send_Message::do_action(const klib::shared_ptr<Port>& p, const klib::s
             memcpy(ipc_ptr->port_name, name.c_str(), name.length());
 
             Auto_Lock_Scope scope_lock(ptr->lock);
-            result = ptr->send_from_system(klib::move(vec));
+            ptr->send_from_system(klib::move(vec));
         } else {
             result = ERROR_PORT_CLOSED;
         }
 
         did_action = true;
-    }
-    return result;
-        
+    }        
 }

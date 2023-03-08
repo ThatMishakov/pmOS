@@ -9,9 +9,9 @@ public:
         return free((void*)(ppn << 12));
     }
 
-    // Returns -1 if not found
-    ReturnStr<void*> alloc_page();
-    ReturnStr<u64> alloc_page_ppn();
+    // Throws if not found
+    void* alloc_page();
+    u64 alloc_page_ppn();
     void reserve(void* base, u64 size);
 
     void init(u64 * bitmap, u64 size);

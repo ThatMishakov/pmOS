@@ -34,17 +34,17 @@ struct Generic_Mem_Region {
     static constexpr u8 Writeable  = 0x02;
     static constexpr u8 Executable = 0x04;
 
-    virtual kresult_t alloc_page(u64 ptr_addr, const klib::shared_ptr<TaskDescriptor>& task) = 0;
+    virtual bool alloc_page(u64 ptr_addr, const klib::shared_ptr<TaskDescriptor>& task) = 0;
     constexpr virtual bool can_takeout_page() const
     {
         return false;
     }
 
-    kresult_t prepare_page(u64 access_mode, u64 page_addr, const klib::shared_ptr<TaskDescriptor>& task);
+    bool prepare_page(u64 access_mode, u64 page_addr, const klib::shared_ptr<TaskDescriptor>& task);
 
     // Do action on page fault. If result != SUCCESS, kill the task.
     // Might do task switching
-    kresult_t on_page_fault(u64 error, u64 pagefault_addr, const klib::shared_ptr<TaskDescriptor>& task);
+    bool on_page_fault(u64 error, u64 pagefault_addr, const klib::shared_ptr<TaskDescriptor>& task);
 
 
     virtual ~Generic_Mem_Region() = default;
@@ -95,7 +95,7 @@ struct Generic_Mem_Region {
 // Physical memory mapping class.
 struct Phys_Mapped_Region: Generic_Mem_Region {
     // Allocated a new page, pointing to the corresponding physical address.
-    virtual kresult_t alloc_page(u64 ptr_addr, const klib::shared_ptr<TaskDescriptor>& task);
+    virtual bool alloc_page(u64 ptr_addr, const klib::shared_ptr<TaskDescriptor>& task);
 
     u64 phys_addr_start = 0;
     constexpr bool can_takeout_page() const override
@@ -125,7 +125,7 @@ struct Private_Normal_Region: Generic_Mem_Region {
     }
 
     // Attempt to allocate a new page
-    virtual kresult_t alloc_page(u64 ptr_addr, const klib::shared_ptr<TaskDescriptor>& task);
+    virtual bool alloc_page(u64 ptr_addr, const klib::shared_ptr<TaskDescriptor>& task);
 
     // Tries to preallocate all the pages
     void prefill();
@@ -156,7 +156,7 @@ struct Private_Managed_Region: Generic_Mem_Region {
     virtual Page_Table_Argumments craft_arguments() const;
 
     // When pagefault occurs to the current task, it is blocked and the message is sent to the *notifications_port*. 
-    virtual kresult_t alloc_page(u64 ptr_addr, const klib::shared_ptr<TaskDescriptor>& task);
+    virtual bool alloc_page(u64 ptr_addr, const klib::shared_ptr<TaskDescriptor>& task);
 
     Private_Managed_Region(u64 start_addr, u64 size, klib::string name, klib::weak_ptr<Page_Table> owner, u8 access, klib::shared_ptr<Port> p):
         Generic_Mem_Region(start_addr, size, klib::forward<klib::string>(name), klib::forward<klib::weak_ptr<Page_Table>>(owner), access), notifications_port(klib::forward<klib::shared_ptr<Port>>(p))

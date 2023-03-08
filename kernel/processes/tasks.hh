@@ -8,6 +8,7 @@
 #include <cpus/sse.hh>
 #include <lib/string.hh>
 #include <lib/set.hh>
+#include <exceptions.hh>
 
 using PID = u64;
 
@@ -63,16 +64,16 @@ public:
     u64 page_blocked_by = 0;
 
     // Creates and assigns an emty valid page table
-    kresult_t create_new_page_table();
+    void create_new_page_table();
 
     // Registers a page table within a process, if it doesn't have any
-    kresult_t register_page_table(klib::shared_ptr<Page_Table>);
+    void register_page_table(klib::shared_ptr<Page_Table>);
 
     // Inits stack
-    ReturnStr<u64> init_stack();
+    u64 init_stack();
 
     // Blocks the process by a page (for example in case of a pagefault)
-    kresult_t atomic_block_by_page(u64 page);
+    void atomic_block_by_page(u64 page);
 
     // Unblocks the task when the page becomes available
     bool atomic_try_unblock_by_page(u64 page);
@@ -133,6 +134,9 @@ public:
     // Changes the *task* to repeat the syscall upon reentering the system
     void request_repeat_syscall();
     void pop_repeat_syscall();
+
+    // Creates a process structure and returns its pid
+    static klib::shared_ptr<TaskDescriptor> create_process(u16 ring = 3);
 protected:
     TaskDescriptor() = default;
 
@@ -141,10 +145,6 @@ protected:
 };
 
 using task_ptr = klib::shared_ptr<TaskDescriptor>;
-
-
-// Creates a process structure and returns its pid
-ReturnStr<klib::shared_ptr<TaskDescriptor>> create_process(u16 ring = 3);
 
 // Inits an idle process
 void init_idle();
@@ -171,4 +171,18 @@ inline klib::shared_ptr<TaskDescriptor> get_task(u64 pid)
 {
     Auto_Lock_Scope scope_lock(tasks_map_lock);
     return tasks_map.get_copy_or_default(pid);
+}
+
+// Gets a task descriptor of the process with pid *pid*. Throws 
+inline klib::shared_ptr<TaskDescriptor> get_task_throw(u64 pid)
+{
+    Auto_Lock_Scope scope_lock(tasks_map_lock);
+
+    try {
+        const auto& t = tasks_map.at(pid);
+
+        return t;
+    } catch (const std::out_of_range&) {
+        throw Kern_Exception(ERROR_NO_SUCH_PROCESS, "Requested process does not exist");
+    }
 }

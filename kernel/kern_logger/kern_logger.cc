@@ -132,7 +132,7 @@ void Buffered_Logger::log_nolock(const char* c, size_t size)
     }
 }
 
-kresult_t Buffered_Logger::set_port(const klib::shared_ptr<Port>& port, uint32_t flags)
+void Buffered_Logger::set_port(const klib::shared_ptr<Port>& port, uint32_t flags)
 {
     Auto_Lock_Scope scope_lock(logger_lock);
 
@@ -157,11 +157,8 @@ kresult_t Buffered_Logger::set_port(const klib::shared_ptr<Port>& port, uint32_t
         size_t length = min(length - i, buff_size);
         memcpy(var.buff, str, length);
         kresult_t r;
-        if ((r = port->send_from_system((char*)&var, length+4)) != SUCCESS)
-            return r;
+        port->send_from_system((char*)&var, length+4);
     }
 
     log_buffer.clear();
-
-    return SUCCESS;
 }

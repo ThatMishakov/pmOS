@@ -26,7 +26,8 @@ struct Message {
         return content.size();
     }
 
-    kresult_t copy_to_user_buff(char* buff);
+    // Returns true if done successfully, false otherwise (e.g. when syscall needs to be repeated)
+    bool copy_to_user_buff(char* buff);
 };
 
 using Message_storage = klib::list<klib::shared_ptr<Message>>;
@@ -47,13 +48,17 @@ struct Port: public Generic_Port {
     Port(const klib::shared_ptr<TaskDescriptor>& owner, u64 portno): owner(owner), portno(portno) {}
 
 
-    kresult_t enqueue(const klib::shared_ptr<Message>& msg);
+    void enqueue(const klib::shared_ptr<Message>& msg);
 
-    kresult_t send_from_system(klib::vector<char>&& msg);
-    kresult_t send_from_system(const char* msg, size_t size);
-    kresult_t send_from_user(const klib::shared_ptr<TaskDescriptor>& sender, const char *unsafe_user_ptr, size_t msg_size);
-    kresult_t atomic_send_from_system(const char* msg, size_t size);
-    kresult_t atomic_send_from_user(const klib::shared_ptr<TaskDescriptor>& sender, const char* unsafe_user_message, size_t msg_size);
+    void send_from_system(klib::vector<char>&& msg);
+    void send_from_system(const char* msg, size_t size);
+
+    // Returns true if successfully sent, false otherwise (e.g. when it is needed to repeat the syscall). Throws on crytical errors
+    bool send_from_user(const klib::shared_ptr<TaskDescriptor>& sender, const char *unsafe_user_ptr, size_t msg_size);
+    void atomic_send_from_system(const char* msg, size_t size);
+
+    // Returns true if successfully sent, false otherwise (e.g. when it is needed to repeat the syscall). Throws on crytical errors
+    bool atomic_send_from_user(const klib::shared_ptr<TaskDescriptor>& sender, const char* unsafe_user_message, size_t msg_size);
 
     void change_return_upon_unblock(const klib::shared_ptr<TaskDescriptor>& task);
 };
@@ -67,8 +72,11 @@ struct Ports_storage {
     // Atomically gets the port or null if it doesn't exist
     klib::shared_ptr<Port> atomic_get_port(u64 portno);
 
+    // Atomically gets the port. Throws ERROR_PORT_DOESNT_EXIST if there is no port
+    klib::shared_ptr<Port> atomic_get_port_throw(u64 portno);
+
     // Atomically creates a new port with *task* as its owner
-    ReturnStr<u64> atomic_request_port(const klib::shared_ptr<TaskDescriptor>& task);
+    u64 atomic_request_port(const klib::shared_ptr<TaskDescriptor>& task);
 
     inline bool exists_port(u64 port)
     {

@@ -18,6 +18,7 @@
 #include <interrupts/programmable_ints.hh>
 #include <messaging/named_ports.hh>
 #include <kern_logger/kern_logger.hh>
+#include <exceptions.hh>
 
 extern "C" void syscall_handler()
 {
@@ -38,112 +39,109 @@ extern "C" void syscall_handler()
         global_logger.printf("Debug: syscall %h pid %h\n", call_n, get_cpu_struct()->current_task->pid);
     }
 
-    switch (call_n) {
-    case SYSCALL_GETPID:
-        getpid();
-        break;
-    case SYSCALL_CREATE_PROCESS:
-        syscall_create_process();
-        break;
-    case SYSCALL_START_PROCESS:
-        syscall_start_process(arg1, arg2, arg3, arg4, arg5);
-        break;
-    case SYSCALL_EXIT:
-        syscall_exit(arg1, arg2);
-        break;
-    case SYSCALL_GET_MSG_INFO:
-        syscall_get_message_info(arg1, arg2, arg3);
-        break;
-    case SYSCALL_GET_MESSAGE:
-        syscall_get_first_message(arg1, arg2, arg3);
-        break;
-    case SYSCALL_SEND_MSG_PORT:
-        syscall_send_message_port(arg1, arg2, arg3);
-        break;
-    case SYSCALL_SET_PORT:
-        syscall_set_port(arg1, arg2, arg3, arg4);
-        break;
-    case SYSCALL_SET_ATTR:
-        syscall_set_attribute(arg1, arg2, arg3);
-        break;
-    case SYSCALL_INIT_STACK:
-        syscall_init_stack(arg1, arg2);
-        break;
-    case SYSCALL_CONFIGURE_SYSTEM:
-        syscall_configure_system(arg1, arg2, arg3);
-        break;
-    case SYSCALL_SET_PRIORITY:
-        syscall_set_priority(arg1);
-        break;
-    case SYSCALL_GET_LAPIC_ID:
-        syscall_get_lapic_id();
-        break;
-    case SYSCALL_SET_TASK_NAME:
-        syscall_set_task_name(arg1, (char*)arg2, arg3);
-        break;
-    case SYSCALL_CREATE_PORT:
-        syscall_create_port(arg1);
-        break;
-    case SYSCALL_SET_INTERRUPT:
-        syscall_set_interrupt(arg1, arg2, arg3);
-        break;
-    case SYSCALL_NAME_PORT:
-        syscall_name_port(arg1, (const char *)arg2, arg3, arg4);
-        break;
-    case SYSCALL_GET_PORT_BY_NAME:
-        syscall_get_port_by_name((const char *)arg1, arg2, arg3);
-        break;
-    case SYSCALL_SET_LOG_PORT:
-        syscall_set_log_port(arg1, arg2);
-        break;
-    case SYSCALL_REQUEST_NAMED_PORT:
-        syscall_request_named_port(arg1, arg2, arg3, arg4);
-        break;
-    case SYSCALL_CREATE_NORMAL_REGION:
-        syscall_create_normal_region(arg1, arg2, arg3, arg4);
-        break;
-    case SYSCALL_CREATE_MANAGED_REGION:
-        syscall_create_managed_region(arg1, arg2, arg3, arg4, arg5);
-        break;
-    case SYSCALL_CREATE_PHYS_REGION:
-        syscall_create_phys_map_region(arg1, arg2, arg3, arg4, arg5);
-        break;
-    case SYSCALL_PROVIDE_PAGE:
-        syscall_provide_page(arg1, arg2, arg3, arg4);
-        break;
-    case SYSCALL_GET_PAGE_TABLE:
-        syscall_get_page_table(arg1);
-        break;
-    default:
-        // Not supported
-        syscall_ret_low(task) = ERROR_NOT_SUPPORTED;
-        break;
+    try {
+        switch (call_n) {
+        case SYSCALL_GETPID:
+            getpid();
+            break;
+        case SYSCALL_CREATE_PROCESS:
+            syscall_create_process();
+            break;
+        case SYSCALL_START_PROCESS:
+            syscall_start_process(arg1, arg2, arg3, arg4, arg5);
+            break;
+        case SYSCALL_EXIT:
+            syscall_exit(arg1, arg2);
+            break;
+        case SYSCALL_GET_MSG_INFO:
+            syscall_get_message_info(arg1, arg2, arg3);
+            break;
+        case SYSCALL_GET_MESSAGE:
+            syscall_get_first_message(arg1, arg2, arg3);
+            break;
+        case SYSCALL_SEND_MSG_PORT:
+            syscall_send_message_port(arg1, arg2, arg3);
+            break;
+        case SYSCALL_SET_PORT:
+            syscall_set_port(arg1, arg2, arg3, arg4);
+            break;
+        case SYSCALL_SET_ATTR:
+            syscall_set_attribute(arg1, arg2, arg3);
+            break;
+        case SYSCALL_INIT_STACK:
+            syscall_init_stack(arg1, arg2);
+            break;
+        case SYSCALL_CONFIGURE_SYSTEM:
+            syscall_configure_system(arg1, arg2, arg3);
+            break;
+        case SYSCALL_SET_PRIORITY:
+            syscall_set_priority(arg1);
+            break;
+        case SYSCALL_GET_LAPIC_ID:
+            syscall_get_lapic_id();
+            break;
+        case SYSCALL_SET_TASK_NAME:
+            syscall_set_task_name(arg1, (char*)arg2, arg3);
+            break;
+        case SYSCALL_CREATE_PORT:
+            syscall_create_port(arg1);
+            break;
+        case SYSCALL_SET_INTERRUPT:
+            syscall_set_interrupt(arg1, arg2, arg3);
+            break;
+        case SYSCALL_NAME_PORT:
+            syscall_name_port(arg1, (const char *)arg2, arg3, arg4);
+            break;
+        case SYSCALL_GET_PORT_BY_NAME:
+            syscall_get_port_by_name((const char *)arg1, arg2, arg3);
+            break;
+        case SYSCALL_SET_LOG_PORT:
+            syscall_set_log_port(arg1, arg2);
+            break;
+        case SYSCALL_REQUEST_NAMED_PORT:
+            syscall_request_named_port(arg1, arg2, arg3, arg4);
+            break;
+        case SYSCALL_CREATE_NORMAL_REGION:
+            syscall_create_normal_region(arg1, arg2, arg3, arg4);
+            break;
+        case SYSCALL_CREATE_MANAGED_REGION:
+            syscall_create_managed_region(arg1, arg2, arg3, arg4, arg5);
+            break;
+        case SYSCALL_CREATE_PHYS_REGION:
+            syscall_create_phys_map_region(arg1, arg2, arg3, arg4, arg5);
+            break;
+        case SYSCALL_PROVIDE_PAGE:
+            syscall_provide_page(arg1, arg2, arg3, arg4);
+            break;
+        case SYSCALL_GET_PAGE_TABLE:
+            syscall_get_page_table(arg1);
+            break;
+        default:
+            // Not supported
+            syscall_ret_low(task) = ERROR_NOT_SUPPORTED;
+            break;
+        }
+    } catch (Kern_Exception e) {
+        syscall_ret_low(task) = e.err_code;
+        return;
+    } catch (...) {
+        t_print_bochs("[Kernel] Caught unknown exception\n");
+        syscall_ret_low(task) = ERROR_GENERAL;
     }
-    //t_print_bochs(" -> result %i\n", syscall_ret_low(task));
+    
+    syscall_ret_low(task) = SUCCESS;
 }
 
 void getpid()
 {
     const task_ptr& task = get_cpu_struct()->current_task;
 
-    syscall_ret_low(task) = SUCCESS;
     syscall_ret_high(task) = task->pid;
 }
 
 void syscall_create_process()
 {
-    auto process = create_process(3);
-
-    const task_ptr& task = get_current_task();
-
-    if (process.result == SUCCESS) {
-        syscall_ret_low(task) = SUCCESS;
-        syscall_ret_high(task) = process.val->pid;
-        return;
-    }
-
-    syscall_ret_low(task) = process.result;
-    return;
+    syscall_ret_high(get_current_task()) = TaskDescriptor::create_process(3)->pid;
 }
 
 void syscall_start_process(u64 pid, u64 start, u64 arg1, u64 arg2, u64 arg3)
@@ -151,21 +149,13 @@ void syscall_start_process(u64 pid, u64 start, u64 arg1, u64 arg2, u64 arg3)
     task_ptr task = get_current_task();
     // TODO: Check permissions
 
-    klib::shared_ptr<TaskDescriptor> t = get_task(pid);
-
-    // Check if process exists
-    if (not t) {
-        syscall_ret_low(task) = ERROR_NO_SUCH_PROCESS;
-        return;
-    }
+    klib::shared_ptr<TaskDescriptor> t = get_task_throw(pid);
 
     Auto_Lock_Scope scope_sched_lock(t->sched_lock);
 
-    // Check process status
-    if (not t->is_uninited()) {
-        syscall_ret_low(task) = ERROR_PROCESS_INITED;
-        return;
-    }
+    // If the process is running, you can't start it again
+    if (not t->is_uninited())
+        throw(Kern_Exception(ERROR_PROCESS_INITED, "Process is not in UNINIT state"));
 
     // Set entry
     t->set_entry_point(start);
@@ -177,42 +167,28 @@ void syscall_start_process(u64 pid, u64 start, u64 arg1, u64 arg2, u64 arg3)
 
     // Init task
     t->init();
-
-    syscall_ret_low(task) = SUCCESS;
 }
 
 void syscall_init_stack(u64 pid, u64 esp)
 {
     const task_ptr& task = get_current_task();
 
-    ReturnStr<u64> r = {ERROR_GENERAL, 0};
     // TODO: Check permissions
 
-    klib::shared_ptr<TaskDescriptor> t = get_task(pid);
-
-    // Check if process exists
-    if (not t) {
-        syscall_ret_low(task) = ERROR_NO_SUCH_PROCESS;
-        return;
-    }
-
+    klib::shared_ptr<TaskDescriptor> t = get_task_throw(pid);
     Auto_Lock_Scope scope_sched_lock(t->sched_lock);
 
-    // Check process status
-    if (not t->is_uninited()) {
-        syscall_ret_low(task) = ERROR_PROCESS_INITED;
-        return;
-    }
+    // If the process is running, you can't start it again
+    if (not t->is_uninited())
+        throw(Kern_Exception(ERROR_PROCESS_INITED, "Process is not in UNINIT state"));
 
     if (esp == 0) { // If ESP == 0 use default kernel's stack policy
-        r = t->init_stack();
+        syscall_ret_high(task) = t->init_stack();
     } else {
         t->regs.e.rsp = esp;
-        r = {SUCCESS, esp};
-    }
 
-    syscall_ret_low(task) = r.result;
-    syscall_ret_high(task) = r.val;
+        syscall_ret_high(task) = esp;
+    }
 }
 
 void syscall_exit(u64 arg1, u64 arg2)
@@ -225,58 +201,40 @@ void syscall_exit(u64 arg1, u64 arg2)
 
     // Kill the process
     task->atomic_kill();
-
-    syscall_ret_low(task) = SUCCESS;
 }
 
 void syscall_get_first_message(u64 buff, u64 args, u64 portno)
 {
     klib::shared_ptr<TaskDescriptor> current = get_cpu_struct()->current_task;
-    kresult_t result = SUCCESS;
-
     klib::shared_ptr<Port> port;
 
     // Optimization: Try last blocked-by port
     port = klib::dynamic_pointer_cast<Port>(current->blocked_by.lock());
 
-    if (not port or port->portno != portno) {
-        port = global_ports.atomic_get_port(portno);
-    }
-
-    if (not port) {
-        syscall_ret_low(current) = ERROR_PORT_DOESNT_EXIST;
-        return;
-    }
+    if (not port or port->portno != portno)
+        port = global_ports.atomic_get_port_throw(portno);
 
     klib::shared_ptr<Message> top_message;
 
     {
         Auto_Lock_Scope scope_lock(port->lock);
-        if (current != port->owner.lock()) {
-            syscall_ret_low(current) = ERROR_NO_PERMISSION;
-            return;
-        }
+        if (current != port->owner.lock())
+            throw(Kern_Exception(ERROR_NO_PERMISSION, "Callee is not a port owner"));
 
-        if (port->msg_queue.empty()) {
-            syscall_ret_low(current) = ERROR_NO_MESSAGES;
-            return;
-        }
+        if (port->msg_queue.empty())
+            throw(Kern_Exception(ERROR_NO_MESSAGES, "Port queue is empty"));
 
         top_message = port->msg_queue.front();
 
-        result = top_message->copy_to_user_buff((char*)buff);
+        bool result = top_message->copy_to_user_buff((char*)buff);
 
-        if (result != SUCCESS) {
-            syscall_ret_low(current) = result;
+        if (not result)
             return;
-        }
 
         if (!(args & MSG_ARG_NOPOP)) {
             port->msg_queue.pop_front();
         }
     }
-
-    syscall_ret_low(current) = result;
 }
 
 void syscall_send_message_port(u64 port_num, size_t size, u64 message)
@@ -291,25 +249,16 @@ void syscall_send_message_port(u64 port_num, size_t size, u64 message)
     port = klib::dynamic_pointer_cast<Port>(current->blocked_by.lock());
 
     if (not port or port->portno != port_num) {
-        port = global_ports.atomic_get_port(port_num);
+        port = global_ports.atomic_get_port_throw(port_num);
     }
 
-    if (not port) {
-        syscall_ret_low(current) = ERROR_PORT_DOESNT_EXIST;
-        return;
-    }
-
-    kresult_t result = port->atomic_send_from_user(current, (char *)message, size);
-
-    syscall_ret_low(current) = result;
+    port->atomic_send_from_user(current, (char *)message, size);
 }
 
 
 void syscall_set_port(u64 pid, u64 port, u64 dest_pid, u64 dest_chan)
 {
-    const task_ptr& task = get_current_task();
-
-    syscall_ret_low(task) = ERROR_NOT_IMPLEMENTED;
+    throw(Kern_Exception(ERROR_NOT_IMPLEMENTED, "syscall_set_port is not implemented"));
 }
 
 void syscall_get_message_info(u64 message_struct, u64 portno, u32 flags)
@@ -322,15 +271,9 @@ void syscall_get_message_info(u64 message_struct, u64 portno, u32 flags)
     port = klib::dynamic_pointer_cast<Port>(task->blocked_by.lock());
 
     if (not port or port->portno != portno) {
-        port = global_ports.atomic_get_port(portno);
+        port = global_ports.atomic_get_port_throw(portno);
     }
 
-    if (not port) {
-        syscall_ret_low(task) = ERROR_PORT_DOESNT_EXIST;
-        return;
-    }
-
-    kresult_t result = SUCCESS;
     klib::shared_ptr<Message> msg;
 
     {
@@ -339,29 +282,27 @@ void syscall_get_message_info(u64 message_struct, u64 portno, u32 flags)
             constexpr unsigned FLAG_NOBLOCK= 0x01;
 
             if (flags & FLAG_NOBLOCK) {
-                syscall_ret_low(task) = ERROR_NO_MESSAGES;
+                throw(Kern_Exception(ERROR_NO_MESSAGES, "FLAG_NOBLOCK is set and the process has no messages"));
+
             } else {
                 task->request_repeat_syscall();
                 block_current_task(port);
+                return;
             }
-
-            return;
         }
         msg = port->msg_queue.front();
     }
 
     u64 msg_struct_size = sizeof(Message_Descriptor);
 
-    result = prepare_user_buff_wr((char*)message_struct, msg_struct_size);
+    bool result = prepare_user_buff_wr((char*)message_struct, msg_struct_size);
+    if (not result)
+        return;
 
-    if (result == SUCCESS) {
-        Message_Descriptor& desc = *(Message_Descriptor*)message_struct;
-        desc.sender = msg->pid_from;
-        desc.channel = 0;
-        desc.size = msg->size();
-    }
-
-    syscall_ret_low(task) = result;
+    Message_Descriptor& desc = *(Message_Descriptor*)message_struct;
+    desc.sender = msg->pid_from;
+    desc.channel = 0;
+    desc.size = msg->size();
 }
 
 void syscall_set_attribute(u64 pid, u64 attribute, u64 value)
@@ -370,32 +311,22 @@ void syscall_set_attribute(u64 pid, u64 attribute, u64 value)
 
     // TODO: Check persmissions
 
-    klib::shared_ptr<TaskDescriptor> process = pid == task->pid ? task : get_task(pid);
+    klib::shared_ptr<TaskDescriptor> process = pid == task->pid ? task : get_task_throw(pid);
     Interrupt_Stackframe* current_frame = &process->regs.e;
-
-    // Check if process exists
-    if (not process) {
-        syscall_ret_low(task) = ERROR_NO_SUCH_PROCESS;
-        return;
-    }
-
-    kresult_t result = ERROR_GENERAL;
 
     switch (attribute) {
     case ATTR_ALLOW_PORT:
         current_frame->rflags.bits.iopl = value ? 3 : 0;
-        result = SUCCESS;
         break;
+
     case ATTR_DEBUG_SYSCALLS:
         process->attr.debug_syscalls = value;
-        result = SUCCESS;
         break;
+
     default:
-        result = ERROR_NOT_SUPPORTED;
+        throw(Kern_Exception(ERROR_NOT_IMPLEMENTED, "syscall_set_attribute with given request is not implemented"));
         break;
     }
-
-    syscall_ret_low(task) = result;
 }
 
 void syscall_configure_system(u64 type, u64 arg1, u64 arg2)
@@ -403,25 +334,23 @@ void syscall_configure_system(u64 type, u64 arg1, u64 arg2)
     task_ptr task = get_current_task();
     // TODO: Check permissions
 
-    ReturnStr<u64> result = {ERROR_NOT_SUPPORTED, 0};
-
     switch (type) {
     case SYS_CONF_LAPIC:
-        result = lapic_configure(arg1, arg2);
+         syscall_ret_high(get_current_task()) = lapic_configure(arg1, arg2);
         break;
+
     case SYS_CONF_CPU:
-        result = cpu_configure(arg1, arg2);
+        syscall_ret_high(get_current_task()) = cpu_configure(arg1, arg2);
         break;
+
     case SYS_CONF_SLEEP10:
         pit_sleep_100us(arg1);
-        result = {SUCCESS, 0};
         break;
+
     default:
+        throw (Kern_Exception(ERROR_NOT_IMPLEMENTED, "syscall_configure_system with unknown parameter"));
         break;
     };
-
-    syscall_ret_low(task) = result.result;
-    syscall_ret_high(task) = result.val;
 }
 
 void syscall_set_priority(u64 priority)
@@ -429,8 +358,7 @@ void syscall_set_priority(u64 priority)
     task_ptr current_task = get_current_task();
 
     if (priority >= sched_queues_levels) {
-        syscall_ret_low(current_task) = ERROR_NOT_SUPPORTED;
-        return;
+        throw (Kern_Exception(ERROR_NOT_SUPPORTED, "priority outside of queue levels"));
     }
 
     Auto_Lock_Scope lock(current_task->sched_lock);
@@ -438,16 +366,11 @@ void syscall_set_priority(u64 priority)
     current_task->priority = priority;
 
     // TODO: Changing priority to lower one
-
-    syscall_ret_low(current_task) = SUCCESS;
 }
 
 void syscall_get_lapic_id()
 {
-    const task_ptr& task = get_current_task();
-
-    syscall_ret_low(task) = SUCCESS;
-    syscall_ret_high(task) = get_cpu_struct()->lapic_id;
+    syscall_ret_high(get_current_task()) = get_cpu_struct()->lapic_id;
 }
 
 void program_syscall()
@@ -470,24 +393,15 @@ void syscall_set_task_name(u64 pid, const char* string, u64 length)
 {
     const task_ptr& current = get_cpu_struct()->current_task;
 
-    task_ptr t = get_task(pid);
-
-    // Check if process exists
-    if (not t) {
-        syscall_ret_low(current) = ERROR_NO_SUCH_PROCESS;
-        return;
-    }
+    task_ptr t = get_task_throw(pid);
 
     auto str = klib::string::fill_from_user(string, length);
 
-    if (str.first != SUCCESS) {
-        syscall_ret_low(current) = str.first;
+    if (not str.first) {
         return;
     }
 
     t->name.swap(str.second);
-    syscall_ret_low(current) = SUCCESS;
-    return;
 }
 
 void syscall_create_port(u64 owner)
@@ -501,20 +415,11 @@ void syscall_create_port(u64 owner)
     if (owner == 0 or task->pid == owner) {
         t = task;
     } else {
-        t = get_task(owner);
-    }
-
-    // Check if process exists
-    if (not t) {
-        syscall_ret_low(task) = ERROR_NO_SUCH_PROCESS;
-        return;
+        t = get_task_throw(owner);
     }
 
 
-    auto result = global_ports.atomic_request_port(t);
-
-    syscall_ret_low(task) = result.result;
-    syscall_ret_high(task) = result.val;
+    syscall_ret_high(task) = global_ports.atomic_request_port(t);
 }
 
 void syscall_set_interrupt(uint64_t port, uint32_t intno, uint32_t flags)
@@ -524,17 +429,10 @@ void syscall_set_interrupt(uint64_t port, uint32_t intno, uint32_t flags)
 
     const task_ptr& task = get_current_task();
 
-    klib::shared_ptr<Port> port_ptr = global_ports.atomic_get_port(port);
+    klib::shared_ptr<Port> port_ptr = global_ports.atomic_get_port_throw(port);
 
-    if (not port_ptr) {
-        syscall_ret_low(task) = ERROR_PORT_DOESNT_EXIST;
-        return;
-    }
-
-    if (not intno_is_ok(intno)) {
-        syscall_ret_low(task) = ERROR_OUT_OF_RANGE;
-        return;
-    }
+    if (not intno_is_ok(intno))
+        throw(Kern_Exception(ERROR_OUT_OF_RANGE, "intno outside of supported"));
 
     Prog_Int_Descriptor& desc = get_descriptor(prog_int_array, intno);
 
@@ -542,9 +440,6 @@ void syscall_set_interrupt(uint64_t port, uint32_t intno, uint32_t flags)
         Auto_Lock_Scope local_lock(desc.lock);
         desc.port = port_ptr;
     }
-
-    syscall_ret_low(task) = SUCCESS;
-    return;
 }
 
 void syscall_name_port(u64 portnum, const char* name, u64 length, u32 flags)
@@ -553,28 +448,20 @@ void syscall_name_port(u64 portnum, const char* name, u64 length, u32 flags)
 
 
     auto str = klib::string::fill_from_user(name, length);
-    if (str.first != SUCCESS) {
-        syscall_ret_low(task) = str.first;
+    if (not str.first) {
         return;
     }
 
-    klib::shared_ptr<Port> port = global_ports.atomic_get_port(portnum);
-
-    if (not port) {
-        syscall_ret_low(task) = ERROR_PORT_DOESNT_EXIST;
-        return;
-    }
+    klib::shared_ptr<Port> port = global_ports.atomic_get_port_throw(portnum);
 
     Auto_Lock_Scope scope_lock(port->lock);
-
     Auto_Lock_Scope scope_lock2(global_named_ports.lock);
 
     klib::shared_ptr<Named_Port_Desc> named_port = global_named_ports.storage.get_copy_or_default(str.second);
 
     if (named_port) {
         if (not named_port->parent_port.expired()) {
-            syscall_ret_low(task) = ERROR_NAME_EXISTS;
-            return;
+            throw(Kern_Exception(ERROR_NAME_EXISTS, "Named port with a given name already exists"));
         }
 
         named_port->parent_port = port;
@@ -589,9 +476,6 @@ void syscall_name_port(u64 portnum, const char* name, u64 length, u32 flags)
 
         global_named_ports.storage.insert({new_desc->name, new_desc});
     }
-
-    syscall_ret_low(task) = SUCCESS;
-    return;
 }
 
 void syscall_get_port_by_name(const char *name, u64 length, u32 flags)
@@ -602,8 +486,7 @@ void syscall_get_port_by_name(const char *name, u64 length, u32 flags)
     task_ptr task = get_current_task();
 
     auto str = klib::string::fill_from_user(name, length);
-    if (str.first != SUCCESS) {
-        syscall_ret_low(task) = str.first;
+    if (not str.first) {
         return;
     }
 
@@ -622,15 +505,14 @@ void syscall_get_port_by_name(const char *name, u64 length, u32 flags)
         if (not named_port->parent_port.expired()) {
             klib::shared_ptr<Port> ptr = named_port->parent_port.lock();
             if (not ptr) {
-                syscall_ret_low(task) = ERROR_GENERAL;
+                throw(Kern_Exception(ERROR_GENERAL, "named port parent is expired"));
             } else {
-                syscall_ret_low(task) = SUCCESS;
                 syscall_ret_high(task) = ptr->portno;                
             }
             return;
         } else {
             if (flags & flag_noblock) {
-                syscall_ret_low(task) = ERROR_PORT_DOESNT_EXIST;
+                throw(Kern_Exception(ERROR_PORT_DOESNT_EXIST, "requested named port does not exist"));
                 return;
             } else {
                 named_port->actions.push_back(klib::make_unique<Notify_Task>(task, klib::shared_ptr<Generic_Port>(named_port)));
@@ -641,8 +523,7 @@ void syscall_get_port_by_name(const char *name, u64 length, u32 flags)
         }
     } else {
         if (flags & flag_noblock) {
-            syscall_ret_low(task) = ERROR_PORT_DOESNT_EXIST;
-            return;
+            throw(Kern_Exception(ERROR_PORT_DOESNT_EXIST, "requested named port does not exist"));
         } else {
             const klib::shared_ptr<Named_Port_Desc> new_desc = klib::make_shared<Named_Port_Desc>(klib::move(str.second), klib::shared_ptr<Port>(nullptr));
 
@@ -653,9 +534,6 @@ void syscall_get_port_by_name(const char *name, u64 length, u32 flags)
             block_current_task(new_desc);
         }
     }
-
-    syscall_ret_low(task) = SUCCESS;
-    return;
 }
 
 void syscall_request_named_port(u64 string_ptr, u64 length, u64 reply_port, u32 flags)
@@ -663,17 +541,11 @@ void syscall_request_named_port(u64 string_ptr, u64 length, u64 reply_port, u32 
     const task_ptr& task = get_current_task();
 
     auto str = klib::string::fill_from_user(reinterpret_cast<char*>(string_ptr), length);
-    if (str.first != SUCCESS) {
-        syscall_ret_low(task) = str.first;
+    if (not str.first) {
         return;
     }
 
-    klib::shared_ptr<Port> port_ptr = global_ports.atomic_get_port(reply_port);
-
-    if (not port_ptr) {
-        syscall_ret_low(task) = ERROR_PORT_DOESNT_EXIST;
-        return;
-    }
+    klib::shared_ptr<Port> port_ptr = global_ports.atomic_get_port_throw(reply_port);
 
     Auto_Lock_Scope scope_lock(global_named_ports.lock);
 
@@ -683,10 +555,10 @@ void syscall_request_named_port(u64 string_ptr, u64 length, u64 reply_port, u32 
         if (not named_port->parent_port.expired()) {
             klib::shared_ptr<Port> ptr = named_port->parent_port.lock();
             if (not ptr) {
-                syscall_ret_low(task) = ERROR_GENERAL;
+                throw(Kern_Exception(ERROR_GENERAL, "named port parent is expired"));
             } else {
                 Send_Message msg(port_ptr);
-                syscall_ret_low(task) = msg.do_action(ptr, str.second);
+                msg.do_action(ptr, str.second);
             }
             return;
         } else {
@@ -698,24 +570,15 @@ void syscall_request_named_port(u64 string_ptr, u64 length, u64 reply_port, u32 
         auto it = global_named_ports.storage.insert({new_desc->name, new_desc});
         it.first->second->actions.push_back(klib::make_unique<Send_Message>(port_ptr));
     }
-
-    syscall_ret_low(task) = SUCCESS;
-    return;
 }
 
 void syscall_set_log_port(u64 port, u32 flags)
 {
     const task_ptr& task = get_current_task();
 
-    klib::shared_ptr<Port> port_ptr = global_ports.atomic_get_port(port);
+    klib::shared_ptr<Port> port_ptr = global_ports.atomic_get_port_throw(port);
 
-    if (not port_ptr) {
-        syscall_ret_low(task) = ERROR_PORT_DOESNT_EXIST;
-        return;
-    }
-
-    syscall_ret_low(task) = global_logger.set_port(port_ptr, flags);
-    return;
+    global_logger.set_port(port_ptr, flags);
 }
 
 void syscall_create_normal_region(u64 pid, u64 addr_start, u64 size, u64 access)
@@ -728,23 +591,15 @@ void syscall_create_normal_region(u64 pid, u64 addr_start, u64 size, u64 access)
         dest_task = current;
 
     if (not dest_task)
-        dest_task = get_task(pid);
+        dest_task = get_task_throw(pid);
 
-    // Check if process exists
-    if (not dest_task) {
-        syscall_ret_low(current) = ERROR_NO_SUCH_PROCESS;
-        return;
-    }
-
+    // Syscall must be page aligned
     if (addr_start & 07777 or size & 07777) {
-        syscall_ret_low(current) = ERROR_PAGE_NOT_ALLOCATED;
+        throw(Kern_Exception(ERROR_UNALLIGNED, "arguments are not page aligned"));
         return;
     }
 
-    auto result = dest_task->page_table->atomic_create_normal_region(addr_start, size, access & 0x07, access & 0x08, klib::string(), 0);
-    syscall_ret_low(current) = result.result;
-    syscall_ret_high(current) = result.val;
-    return;
+    syscall_ret_high(current) = dest_task->page_table->atomic_create_normal_region(addr_start, size, access & 0x07, access & 0x08, klib::string(), 0);
 }
 
 void syscall_create_managed_region(u64 pid, u64 addr_start, u64 size, u64 access, u64 port)
@@ -757,30 +612,17 @@ void syscall_create_managed_region(u64 pid, u64 addr_start, u64 size, u64 access
         dest_task = current;
 
     if (not dest_task)
-        dest_task = get_task(pid);
+        dest_task = get_task_throw(pid);
 
-    // Check if process exists
-    if (not dest_task) {
-        syscall_ret_low(current) = ERROR_NO_SUCH_PROCESS;
-        return;
-    }
-
+    // Syscall must be page aligned
     if (addr_start & 07777 or size & 07777) {
-        syscall_ret_low(current) = ERROR_PAGE_NOT_ALLOCATED;
+        throw(Kern_Exception(ERROR_UNALLIGNED, "arguments are not page aligned"));
         return;
     }
 
-    klib::shared_ptr<Port> p = global_ports.atomic_get_port(port);
+    klib::shared_ptr<Port> p = global_ports.atomic_get_port_throw(port);
 
-    if (not p) {
-        syscall_ret_low(current) = ERROR_PORT_DOESNT_EXIST;
-        return;
-    }
-
-    auto result = dest_task->page_table->atomic_create_managed_region(addr_start, size, access & 0x07, access & 0x08, klib::string(), klib::move(p));
-    syscall_ret_low(current) = result.result;
-    syscall_ret_high(current) = result.val;
-    return;
+    syscall_ret_high(current) = dest_task->page_table->atomic_create_managed_region(addr_start, size, access & 0x07, access & 0x08, klib::string(), klib::move(p));
 }
 
 void syscall_create_phys_map_region(u64 pid, u64 addr_start, u64 size, u64 access, u64 phys_addr)
@@ -793,23 +635,15 @@ void syscall_create_phys_map_region(u64 pid, u64 addr_start, u64 size, u64 acces
         dest_task = current;
 
     if (not dest_task)
-        dest_task = get_task(pid);
+        dest_task = get_task_throw(pid);
 
-    // Check if process exists
-    if (not dest_task) {
-        syscall_ret_low(current) = ERROR_NO_SUCH_PROCESS;
-        return;
-    }
-
+    // Syscall must be page aligned
     if (addr_start & 07777 or size & 07777) {
-        syscall_ret_low(current) = ERROR_UNALLIGNED;
+        throw(Kern_Exception(ERROR_UNALLIGNED, "arguments are not page aligned"));
         return;
     }
 
-    auto result = dest_task->page_table->atomic_create_phys_region(addr_start, size, access & 0x07, access & 0x08, klib::string(), phys_addr);
-    syscall_ret_low(current) = result.result;
-    syscall_ret_high(current) = result.val;
-    return;
+    syscall_ret_high(current) = dest_task->page_table->atomic_create_phys_region(addr_start, size, access & 0x07, access & 0x08, klib::string(), phys_addr);
 }
 
 void syscall_get_page_table(u64 pid)
@@ -821,21 +655,14 @@ void syscall_get_page_table(u64 pid)
     if (pid == 0 or current->pid == pid)
         target = current;
     else
-        target = get_task(pid);
-
-    if (not target) {
-        syscall_ret_low(current) = ERROR_NO_SUCH_PROCESS;
-        return;
-    }
+        target = get_task_throw(pid);
 
     Auto_Lock_Scope target_lock(target->sched_lock);
 
     if (not target->page_table) {
-        syscall_ret_low(current) = ERROR_HAS_NO_PAGE_TABLE;
-        return;
+        throw(Kern_Exception(ERROR_HAS_NO_PAGE_TABLE, "process has no page table"));
     }
-
-    syscall_ret_low(current) = SUCCESS;
+    
     syscall_ret_high(current) = target->page_table->id;
 }
 
@@ -844,17 +671,11 @@ void syscall_provide_page(u64 page_table, u64 dest_page, u64 source, u64 flags)
     klib::shared_ptr<TaskDescriptor> current = get_cpu_struct()->current_task;
 
     if (dest_page & 07777 or source & 07777) {
-        syscall_ret_low(current) = ERROR_UNALLIGNED;
+        throw(Kern_Exception(ERROR_UNALLIGNED, "arguments are not page aligned"));
         return;
     }
 
-    klib::shared_ptr<Page_Table> pt = Page_Table::get_page_table(page_table);
+    klib::shared_ptr<Page_Table> pt = Page_Table::get_page_table_throw(page_table);
 
-    if (not pt) {
-        syscall_ret_low(current) = ERROR_OBJECT_DOESNT_EXIST;
-        return;
-    }
-
-    syscall_ret_low(current) = Page_Table::atomic_provide_page(current, pt, source, dest_page, flags);
-    return;
+    Page_Table::atomic_provide_page(current, pt, source, dest_page, flags);
 }

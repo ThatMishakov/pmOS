@@ -3,9 +3,10 @@
 #include <sched/sched.hh>
 #include "idle.hh"
 #include <sched/defs.hh>
+#include <exceptions.hh>
 
 
-ReturnStr<klib::shared_ptr<TaskDescriptor>> create_process(u16 ring)
+klib::shared_ptr<TaskDescriptor> TaskDescriptor::create_process(u16 ring)
 {
     // Create the structure
     klib::shared_ptr<TaskDescriptor> n = TaskDescriptor::create();
@@ -22,35 +23,31 @@ ReturnStr<klib::shared_ptr<TaskDescriptor>> create_process(u16 ring)
         n->regs.e.ss = R3_DATA_SEGMENT;
         break;
     default:
-        return {static_cast<kresult_t>(ERROR_NOT_SUPPORTED), klib::shared_ptr<TaskDescriptor>()};
+        throw(Kern_Exception(ERROR_NOT_SUPPORTED, "create_process with unsupported ring"));
         break;
     }
 
     // Create a new page table
-    kresult_t result = n->create_new_page_table();
-    if (result != SUCCESS)
-        return {result, 0};
+    n->create_new_page_table();
 
     // Assign a pid
     n->pid = assign_pid();
 
     // Add to the map of processes and to uninit list
-    tasks_map_lock.lock();
+    Auto_Lock_Scope l(tasks_map_lock);
     tasks_map.insert({n->pid, n});
-    tasks_map_lock.unlock();
 
     Auto_Lock_Scope uninit_lock(uninit.lock);
-    uninit.push_back(n);   
+    uninit.push_back(n);
 
-    // Success!
-    return {SUCCESS, n};
+    return n;
 }
 
-ReturnStr<u64> TaskDescriptor::init_stack()
+u64 TaskDescriptor::init_stack()
 {
     // TODO: Check if page table exists and that task is uninited
 
-    kresult_t r;
+
     // Prealloc a page for the stack
     u64 stack_end = page_table->user_addr_max(); //&_free_to_use;
     u64 stack_size = GB(2);
@@ -58,54 +55,52 @@ ReturnStr<u64> TaskDescriptor::init_stack()
 
     static const klib::string stack_region_name = "default_stack";
 
-    r = this->page_table->atomic_create_normal_region(
+    this->page_table->atomic_create_normal_region(
         stack_page_start, 
         stack_size, 
         Page_Table::Writeable | Page_Table::Readable, 
         true,
         stack_region_name, 
-        -1).result;
-
-    if (r != SUCCESS)
-        return {r, 0};
+        -1);
 
     // Set new rsp
     this->regs.e.rsp = stack_end;
 
-    return {r, this->regs.e.rsp};
+    return this->regs.e.rsp;
 }
 
 void init_idle()
 {
-    ReturnStr<klib::shared_ptr<TaskDescriptor>> i = create_process(0);
-    if (i.result != SUCCESS) {
-        t_print_bochs("Error: failed to create the idle process! Error: %i\n", i.result);
-        return;
+    try {
+        klib::shared_ptr<TaskDescriptor> i = TaskDescriptor::create_process(0);
+
+        Auto_Lock_Scope lock(i->sched_lock);
+
+        sched_queue* idle_parent_queue = i->parent_queue;
+        if (idle_parent_queue != nullptr) {
+            Auto_Lock_Scope q_lock(idle_parent_queue->lock);
+
+            idle_parent_queue->erase(i);
+        }
+
+
+        CPU_Info* cpu_str = get_cpu_struct();
+        cpu_str->idle_task = i;
+
+        i->regs.seg.gs = (u64)cpu_str; // Idle has the same %gs as kernel
+
+        // Init stack
+        i->regs.e.rsp = (u64)cpu_str->idle_stack.get_stack_top();
+
+        i->regs.e.rip = (u64)&idle;
+        i->type = TaskDescriptor::Type::Idle;
+
+        i->priority = idle_priority;
+        i->name = "idle";
+    } catch (const Kern_Exception& e) {
+        t_print_bochs("Error creating idle process: %i (%s)\n", e.err_code, e.err_message.c_str());
+        throw e;
     }
-
-    Auto_Lock_Scope lock(i.val->sched_lock);
-
-    sched_queue* idle_parent_queue = i.val->parent_queue;
-    if (idle_parent_queue != nullptr) {
-        Auto_Lock_Scope q_lock(idle_parent_queue->lock);
-
-        idle_parent_queue->erase(i.val);
-    }
-
-
-    CPU_Info* cpu_str = get_cpu_struct();
-    cpu_str->idle_task = i.val;
-
-    i.val->regs.seg.gs = (u64)cpu_str; // Idle has the same %gs as kernel
-
-    // Init stack
-    i.val->regs.e.rsp = (u64)cpu_str->idle_stack.get_stack_top();
-
-    i.val->regs.e.rip = (u64)&idle;
-    i.val->type = TaskDescriptor::Type::Idle;
-
-    i.val->priority = idle_priority;
-    i.val->name = "idle";
 }
 
 bool TaskDescriptor::is_uninited() const
@@ -162,40 +157,36 @@ void TaskDescriptor::atomic_kill() // TODO: UNIX Signals
     page_table = nullptr;
 }
 
-kresult_t TaskDescriptor::create_new_page_table()
+void TaskDescriptor::create_new_page_table()
 {
     Auto_Lock_Scope scope_lock(sched_lock);
 
     if (status != PROCESS_UNINIT)
-        return ERROR_PROCESS_INITED;
+        throw Kern_Exception(ERROR_PROCESS_INITED, "Process is already inited");
 
     if (page_table)
-        return ERROR_HAS_PAGE_TABLE;
+        throw Kern_Exception(ERROR_HAS_PAGE_TABLE, "Process already has a page table");
 
     klib::shared_ptr<Page_Table> table = x86_4level_Page_Table::create_empty();
 
     Auto_Lock_Scope page_table_lock(table->lock);
     table->owner_tasks.insert(weak_self);
     page_table = table;
-
-    return SUCCESS;
 }
 
-kresult_t TaskDescriptor::register_page_table(klib::shared_ptr<Page_Table> table)
+void TaskDescriptor::register_page_table(klib::shared_ptr<Page_Table> table)
 {
     Auto_Lock_Scope scope_lock(sched_lock);
 
     if (status != PROCESS_UNINIT)
-        return ERROR_PROCESS_INITED;
+        throw Kern_Exception(ERROR_PROCESS_INITED, "Process is already inited");
 
     if (page_table)
-        return ERROR_HAS_PAGE_TABLE;
+        throw Kern_Exception(ERROR_HAS_PAGE_TABLE, "Process already has a page table");
 
     Auto_Lock_Scope page_table_lock(table->lock);
     table->owner_tasks.insert(weak_self);
     page_table = table;
-
-    return SUCCESS;
 }
 
 void TaskDescriptor::request_repeat_syscall()

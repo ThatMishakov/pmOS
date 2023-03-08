@@ -7,6 +7,7 @@
 #include <kernel/errors.h>
 #include <utils.hh>
 #include <kern_logger/kern_logger.hh>
+#include <exceptions.hh>
 
 void* apic_mapped_addr = nullptr;
 
@@ -129,29 +130,25 @@ void write_ICR(ICR i)
     apic_write_reg(APIC_ICR_LOW, ptr[0]);
 }
 
-ReturnStr<u64> lapic_configure(u64 opt, u64 arg)
+u64 lapic_configure(u64 opt, u64 arg)
 {
-    ReturnStr<u64> result = {ERROR_GENERAL, 0};
+    u64 result = {0};
 
     switch (opt) {
     case 0:
-        result.result = SUCCESS;
-        result.val = get_lapic_id();
+        result = get_lapic_id();
         break;
     case 1:
-        result.result = SUCCESS;
         broadcast_init_ipi();
         break;
     case 2:
-        result.result = SUCCESS;
         broadcast_sipi(arg);
         break;
     case 3:
-        result.result = SUCCESS;
         send_ipi_fixed(arg >> 8, arg);
         break;
     default:
-        result.result = ERROR_NOT_SUPPORTED;
+        throw(Kern_Exception(ERROR_NOT_SUPPORTED, "lapic_configure with unsupported parameter\n"));
     };
     return result;
 }

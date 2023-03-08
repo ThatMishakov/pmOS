@@ -7,12 +7,12 @@
 
 PFrameAllocator kernel_pframe_allocator;
 
-ReturnStr<void*> PFrameAllocator::alloc_page()
+void* PFrameAllocator::alloc_page()
 {
     u64 found_page = ERROR_OUT_OF_MEMORY;
     u64 page = 0;
 
-    lock.lock();
+    Auto_Lock_Scope scope_lock(lock);
 
     // Find free page
     for (u64 i = smallest; i < bitmap_size; ++i) {
@@ -27,20 +27,21 @@ ReturnStr<void*> PFrameAllocator::alloc_page()
             }
     }
 skip:
-    if (found_page == SUCCESS) {
-        bitmap_mark_bit(page, false, bitmap);
-        page <<=12;
-    }
 
-    lock.unlock();
 
-    return {found_page, (void*)page};
+    if (found_page == SUCCESS)
+        throw(Kern_Exception(found_page, "alloc_page no free frames"));
+
+    bitmap_mark_bit(page, false, bitmap);
+    page <<=12;
+
+    return (void*)page;
 }
 
-ReturnStr<u64> PFrameAllocator::alloc_page_ppn()
+u64 PFrameAllocator::alloc_page_ppn()
 {
-    ReturnStr<void*> r = alloc_page();
-    return {r.result, (u64)((u64)r.val >> 12)};
+    void* r = alloc_page();
+    return ((u64)r) >> 12;
 }
 
 void PFrameAllocator::mark(u64 base, u64 size, bool usable, u64 * bitmap)

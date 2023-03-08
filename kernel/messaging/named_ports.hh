@@ -9,7 +9,7 @@ class Named_Port_Action {
 public:
     virtual ~Named_Port_Action() = default;
 
-    kresult_t virtual do_action(const klib::shared_ptr<Port>& port, const klib::string& name) = 0;
+    virtual void do_action(const klib::shared_ptr<Port>& port, const klib::string& name) = 0;
 };
 
 struct Named_Port_Desc: public Generic_Port {
@@ -37,7 +37,7 @@ public:
         do_action(nullptr, klib::string());
     }
 
-    virtual kresult_t do_action(const klib::shared_ptr<Port>& port, const klib::string& name) override;
+    virtual void do_action(const klib::shared_ptr<Port>& port, const klib::string& name) override;
 
     Notify_Task(const klib::shared_ptr<TaskDescriptor>& t, const klib::shared_ptr<Generic_Port>& parent_port): task(t), parent_port(parent_port) {};
 private:
@@ -53,7 +53,7 @@ public:
         do_action(nullptr, klib::string());
     }
 
-    virtual kresult_t do_action(const klib::shared_ptr<Port>& port, const klib::string& name) override;
+    virtual void do_action(const klib::shared_ptr<Port>& port, const klib::string& name) override;
 
     Send_Message(const klib::shared_ptr<Port>& t): port(t) {};
 private:

@@ -24,7 +24,7 @@ struct Buffered_Logger: Logger {
 
     virtual void log_nolock(const char* c, size_t size) override;
 
-    kresult_t set_port(const klib::shared_ptr<Port>& port, uint32_t flags);
+    void set_port(const klib::shared_ptr<Port>& port, uint32_t flags);
 };
 
 struct Bochs_Logger: Logger {

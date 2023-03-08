@@ -34,14 +34,14 @@ void init_scheduling()
 
     current_task->register_page_table(x86_4level_Page_Table::init_from_phys(getCR3()));
 
-    auto result = current_task->page_table->atomic_create_phys_region(0x1000, GB(4), Page_Table::Readable | Page_Table::Writeable | Page_Table::Executable, true, "init_default_map", 0x1000);
-    if (result.result != SUCCESS) {
-        t_print_bochs("Error: Could not assign the page table to the first process. Error %i\n", result.result);
-        return;
-    }
+    try {
+        current_task->page_table->atomic_create_phys_region(0x1000, GB(4), Page_Table::Readable | Page_Table::Writeable | Page_Table::Executable, true, "init_default_map", 0x1000);
 
-    current_task->pid = pid++;    
-    tasks_map.insert({current_task->pid, klib::move(current_task)});
+        current_task->pid = pid++;    
+        tasks_map.insert({current_task->pid, klib::move(current_task)});
+    } catch (const Kern_Exception& e) {
+        t_print_bochs("Error: Could not assign the page table to the first process. Error %i (%s)\n", e.err_code, e.err_message);
+    }
 }
 
 DECLARE_LOCK(assign_pid);
@@ -81,10 +81,10 @@ ReturnStr<u64> block_current_task(const klib::shared_ptr<Generic_Port>& ptr)
 }
 
 
-kresult_t TaskDescriptor::atomic_block_by_page(u64 page)
+void TaskDescriptor::atomic_block_by_page(u64 page)
 {
     if (status == PROCESS_BLOCKED)
-        return ERROR_ALREADY_BLOCKED;
+        throw(Kern_Exception(ERROR_ALREADY_BLOCKED, "atomic_block_by_page task already blocked"));
 
     //t_print_bochs("Blocking %i (%s) by page\n", this->pid, this->name.c_str());
 
@@ -106,8 +106,6 @@ kresult_t TaskDescriptor::atomic_block_by_page(u64 page)
         Auto_Lock_Scope scope_l(blocked.lock);
         blocked.push_back(self);
     }
-
-    return SUCCESS;
 }
 
 void TaskDescriptor::switch_to()

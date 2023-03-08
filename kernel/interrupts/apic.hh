@@ -70,7 +70,7 @@ struct ICR {
 void write_ICR(ICR);
 ICR read_ICR();
 
-ReturnStr<u64> lapic_configure(u64 opt, u64 arg);
+u64 lapic_configure(u64 opt, u64 arg);
 
 void broadcast_init_ipi();
 void broadcast_sipi(u8 vector);
