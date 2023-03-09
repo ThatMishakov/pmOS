@@ -29,7 +29,7 @@ void* PFrameAllocator::alloc_page()
 skip:
 
 
-    if (found_page == SUCCESS)
+    if (found_page != SUCCESS)
         throw(Kern_Exception(found_page, "alloc_page no free frames"));
 
     bitmap_mark_bit(page, false, bitmap);

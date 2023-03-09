@@ -22,7 +22,7 @@
 
 extern "C" void syscall_handler()
 {
-    const klib::shared_ptr<TaskDescriptor>& task = get_cpu_struct()->current_task;
+    klib::shared_ptr<TaskDescriptor> task = get_cpu_struct()->current_task;
     u64 call_n = task->regs.scratch_r.rdi;
     u64 arg1 = syscall_arg1(task);
     u64 arg2 = syscall_arg2(task);
@@ -33,7 +33,7 @@ extern "C" void syscall_handler()
 
     // TODO: check permissions
 
-    //t_print_bochs("Debug: syscall %h pid %h (%s)", call_n, get_cpu_struct()->current_task->pid, get_cpu_struct()->current_task->name.c_str());
+    //t_print_bochs("Debug: syscall %h pid %h (%s)\n", call_n, get_cpu_struct()->current_task->pid, get_cpu_struct()->current_task->name.c_str());
     //t_print_bochs(" %h %h %h %h %h ", arg1, arg2, arg3, arg4, arg5);
     if (task->attr.debug_syscalls) {
         global_logger.printf("Debug: syscall %h pid %h\n", call_n, get_cpu_struct()->current_task->pid);

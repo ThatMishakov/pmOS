@@ -98,7 +98,7 @@ void init_idle()
         i->priority = idle_priority;
         i->name = "idle";
     } catch (const Kern_Exception& e) {
-        t_print_bochs("Error creating idle process: %i (%s)\n", e.err_code, e.err_message.c_str());
+        t_print_bochs("Error creating idle process: %i (%s)\n", e.err_code, e.err_message);
         throw e;
     }
 }

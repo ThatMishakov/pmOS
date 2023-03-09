@@ -149,16 +149,21 @@ bool prepare_user_buff_rd(const char* buff, size_t size)
         throw(Kern_Exception(ERROR_OUT_OF_RANGE, "user parameter is out of range"));
 
 
-    current_task->request_repeat_syscall();
+    try {
+        current_task->request_repeat_syscall();
 
-    for (u64 i = addr_start; i < end; ++i) {
-        u64 page = i & ~0xfffULL;
-        bool result = current_task->page_table->prepare_user_page(page, Page_Table::Readable, current_task);
-        if (not result)
-            return result;
+        for (u64 i = addr_start; i < end; ++i) {
+            u64 page = i & ~0xfffULL;
+            bool result = current_task->page_table->prepare_user_page(page, Page_Table::Readable, current_task);
+            if (not result)
+                return result;
+        }
+        
+        current_task->pop_repeat_syscall();
+    } catch (...) {
+        current_task->pop_repeat_syscall();
+        throw;
     }
-    
-    current_task->pop_repeat_syscall();
 
     return true;
 }
@@ -176,14 +181,18 @@ bool prepare_user_buff_wr(char* buff, size_t size)
     if (addr_start > kern_addr_start or end > kern_addr_start or addr_start > end)
         throw(Kern_Exception(ERROR_OUT_OF_RANGE, "prepare_user_buff_wr outside userspace"));
 
-    current_task->request_repeat_syscall();
-
-    for (u64 i = addr_start; i < end and avail; ++i) {
-        u64 page = i & ~0xfffULL;
-        avail = current_task->page_table->prepare_user_page(page, Page_Table::Writeable, current_task);
-    }
-    if (avail)
+    try {
+        current_task->request_repeat_syscall();
+        for (u64 i = addr_start; i < end and avail; ++i) {
+            u64 page = i & ~0xfffULL;
+            avail = current_task->page_table->prepare_user_page(page, Page_Table::Writeable, current_task);
+        }
+        if (avail)
+            current_task->pop_repeat_syscall();
+    } catch (...) {
         current_task->pop_repeat_syscall();
+        throw;
+    }
 
     return avail;
 }
@@ -203,7 +212,7 @@ bool copy_to_user(const char* from, char* to, size_t size)
     if (result)
         memcpy(to, from, size);
 
-    return SUCCESS;
+    return result;
 }
 
 void memcpy(char* to, const char* from, size_t size)

@@ -14,7 +14,7 @@ INCLUDEDIR = include . libunwind/include
 INCPARAM = $(foreach d, $(INCLUDEDIR), -I$(ROOTDIR)/$d)
 
 # User controllable CFLAGS.
-USERCFLAGS = -Wall -Wextra -O3 -pipe
+USERCFLAGS = -Wall -Wextra -O2 -pipe
 
 CPPFLAGS = $(INTERNALCFLAGS) -mcmodel=kernel $(USERCFLAGS) -MMD -MP $(INCPARAM)
 CXXFLAGS = -std=c++20
