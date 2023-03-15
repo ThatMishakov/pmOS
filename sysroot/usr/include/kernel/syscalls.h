@@ -28,6 +28,7 @@
 #define SYSCALL_NAME_PORT             0x1f
 #define SYSCALL_GET_PORT_BY_NAME      0x20
 #define SYSCALL_SET_LOG_PORT          0x21
+#define SYSCALL_SET_SEGMENT           0x22
 
 
 #endif

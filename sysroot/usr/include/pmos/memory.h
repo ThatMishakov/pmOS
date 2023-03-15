@@ -1,6 +1,8 @@
 #ifndef _PMOS_MEMORY_H
 #define _PMOS_MEMORY_H
 #include "memory_flags.h"
+#include <stddef.h>
+#include "system.h"
 
 #if defined(__cplusplus)
 extern "C" {
@@ -10,6 +12,9 @@ typedef struct mem_request_ret_t {
     result_t result;
     void *virt_addr;
 } mem_request_ret_t;
+
+#define SEGMENT_FS 1
+#define SEGMENT_GS 2
 
 
 #ifdef __STDC_HOSTED__
@@ -28,6 +33,8 @@ typedef struct page_table_req_ret_t {
 page_table_req_ret_t get_page_table(uint64_t pid);
 
 result_t provide_page(uint64_t page_table, uint64_t dest_page, uint64_t source, uint64_t flags);
+
+result_t set_segment(uint64_t pid, unsigned segment, void * addr);
 
 #endif
 

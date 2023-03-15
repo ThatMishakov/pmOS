@@ -3,6 +3,10 @@
         "array": "cpp",
         "string_view": "cpp",
         "initializer_list": "cpp",
-        "valarray": "cpp"
+        "valarray": "cpp",
+        "hash_map": "c",
+        "compare": "cpp",
+        "string.h": "c",
+        "stdbool.h": "c"
     }
 }

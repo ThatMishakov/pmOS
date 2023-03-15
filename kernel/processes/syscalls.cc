@@ -116,6 +116,9 @@ extern "C" void syscall_handler()
         case SYSCALL_GET_PAGE_TABLE:
             syscall_get_page_table(arg1);
             break;
+        case SYSCALL_SET_SEGMENT:
+            syscall_set_segment(arg1, arg2, arg3);
+            break;
         default:
             // Not supported
             syscall_ret_low(task) = ERROR_NOT_SUPPORTED;
@@ -678,4 +681,26 @@ void syscall_provide_page(u64 page_table, u64 dest_page, u64 source, u64 flags)
     klib::shared_ptr<Page_Table> pt = Page_Table::get_page_table_throw(page_table);
 
     Page_Table::atomic_provide_page(current, pt, source, dest_page, flags);
+}
+
+void syscall_set_segment(u64 pid, u64 segment_type, u64 ptr)
+{
+    klib::shared_ptr<TaskDescriptor>& current = get_cpu_struct()->current_task;
+    klib::shared_ptr<TaskDescriptor> target{};
+
+    if (pid == 0 or current->pid == pid)
+        target = current;
+    else
+        target = get_task_throw(pid);
+
+    switch (segment_type) {
+    case 1:
+        target->regs.seg.fs = ptr;
+        break;
+    case 2:
+        target->regs.seg.fs = ptr;
+        break;
+    default:
+        throw Kern_Exception(ERROR_OUT_OF_RANGE, "invalid segment in syscall_set_segment");
+    }
 }

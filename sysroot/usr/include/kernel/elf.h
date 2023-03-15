@@ -40,6 +40,8 @@ typedef struct {
 
 #define ELF_SEGMENT_LOAD    1
 #define ELF_SEGNEMT_DYNAMIC 2
+#define STT_TLS             6
+#define PT_TLS              7
 
 #define ELF_FLAG_EXECUTABLE 1
 #define ELF_FLAG_WRITABLE   2

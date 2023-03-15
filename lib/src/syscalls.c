@@ -104,3 +104,8 @@ result_t provide_page(uint64_t page_table, uint64_t dest_page, uint64_t source, 
 {
     return syscall(SYSCALL_PROVIDE_PAGE, page_table, dest_page, source, flags).result;
 }
+
+result_t set_segment(uint64_t pid, unsigned segment, void * addr)
+{
+    return syscall(SYSCALL_SET_SEGMENT, pid, segment, addr).result;
+}

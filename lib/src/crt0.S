@@ -11,6 +11,9 @@ _start:
     pushq %rdi
     pushq %rsi
 
+    movq %rdx, %rdi
+    call init_tls_first_time
+
     call init_std_lib
 
     call _init
