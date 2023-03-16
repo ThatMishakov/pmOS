@@ -24,6 +24,8 @@ mem_request_ret_t create_managed_region(uint64_t pid, void *addr_start, size_t s
 
 mem_request_ret_t create_phys_map_region(uint64_t pid, void *addr_start, size_t size, uint64_t access, void* phys_addr);
 
+mem_request_ret_t transfer_region(uint64_t to_page_table, void * region, void * dest, uint64_t flags);
+
 typedef uint64_t pmos_pagetable_t;
 typedef struct page_table_req_ret_t {
     result_t result;

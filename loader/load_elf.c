@@ -68,6 +68,9 @@ uint64_t load_elf(struct task_list_node* n, uint8_t ring)
         }
     }
 
+    mem_request_ret_t req = create_normal_region(0, 0, 8192, 1 | 2);
+    req = transfer_region(n->page_table, req.virt_addr, NULL, 1);
+
     syscall(SYSCALL_INIT_STACK, pid, 0);
 
     return pid;

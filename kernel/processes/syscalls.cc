@@ -685,7 +685,7 @@ void syscall_provide_page(u64 page_table, u64 dest_page, u64 source, u64 flags)
 
 void syscall_set_segment(u64 pid, u64 segment_type, u64 ptr)
 {
-    klib::shared_ptr<TaskDescriptor>& current = get_cpu_struct()->current_task;
+    const klib::shared_ptr<TaskDescriptor>& current = get_cpu_struct()->current_task;
     klib::shared_ptr<TaskDescriptor> target{};
 
     if (pid == 0 or current->pid == pid)
@@ -703,4 +703,13 @@ void syscall_set_segment(u64 pid, u64 segment_type, u64 ptr)
     default:
         throw Kern_Exception(ERROR_OUT_OF_RANGE, "invalid segment in syscall_set_segment");
     }
+}
+
+void syscall_transfer_region(u64 to_page_table, u64 region, u64 dest, u64 flags)
+{
+    const klib::shared_ptr<TaskDescriptor>& current = get_current_task();
+    
+    klib::shared_ptr<Page_Table> pt = Page_Table::get_page_table_throw(to_page_table);
+
+    current->page_table->atomic_transfer_region(pt, region, dest, flags, false);
 }

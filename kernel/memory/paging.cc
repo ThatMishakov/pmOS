@@ -396,6 +396,37 @@ u64 x86_4level_Page_Table::phys_addr_of(u64 virt) const
     return (mapper.ptr[pt_i].page_ppn << 12) | (virt & (u64)0xfff);
 }
 
+x86_4level_Page_Table::Page_Info x86_4level_Page_Table::get_page_mapping(u64 virt_addr) const
+{
+    Page_Info i{};
+
+    Temp_Mapper_Obj<x86_PAE_Entry> mapper(get_cpu_struct()->temp_mapper);
+
+    // PML4 entry
+    mapper.map((u64)pml4_phys); unsigned pml4_i = pml4_index(virt_addr);
+    if (not mapper.ptr[pml4_i].present)
+        return i;
+
+    // PDPT entry
+    mapper.map(mapper.ptr[pml4_i].page_ppn << 12); unsigned pdpt_i = pdpt_index(virt_addr);
+    if (not mapper.ptr[pdpt_i].present)
+        return i;
+
+    // PD entry
+    mapper.map(mapper.ptr[pdpt_i].page_ppn << 12); unsigned pd_i = pd_index(virt_addr);
+    if (not mapper.ptr[pd_i].present)
+        return i;
+
+    // PT entry
+    mapper.map(mapper.ptr[pd_i].page_ppn << 12); unsigned pt_i = pt_index(virt_addr);
+    i.flags = mapper.ptr->avl;
+    i.is_allocated = mapper.ptr->present;
+    i.dirty = mapper.ptr->dirty;
+    i.user_access = mapper.ptr->user_access;
+    i.page_addr = mapper.ptr->page_ppn << 12;
+    return i;
+}
+
 ReturnStr<u64> phys_addr_of(u64 virt)
 {
     PTE* pte = get_pte(virt, rec_map_index);
@@ -595,11 +626,29 @@ u64 Page_Table::atomic_create_normal_region(u64 page_aligned_start, u64 page_ali
     u64 start_addr = find_region_spot(page_aligned_start, page_aligned_size, fixed);
 
     paging_regions.insert({start_addr,
-        klib::make_unique<Private_Normal_Region>(
+        klib::make_shared<Private_Normal_Region>(
             start_addr, page_aligned_size, klib::forward<klib::string>(name), weak_from_this(), access, pattern
         )});
 
     return start_addr;
+}
+
+u64 Page_Table::atomic_transfer_region(const klib::shared_ptr<Page_Table>& to, u64 region_orig, u64 prefered_to, u64 access, bool fixed)
+{
+    Auto_Lock_Scope_Double scope_lock(lock, to->lock);
+
+    try {
+        auto& reg = paging_regions.at(region_orig);
+
+        if (prefered_to%07777)
+            prefered_to = 0;
+
+        u64 start_addr = to->find_region_spot(prefered_to, reg->size, fixed);
+        reg->move_to(to, start_addr, access);
+        return start_addr;
+    } catch (std::out_of_range& r) {
+        throw Kern_Exception(ERROR_OUT_OF_RANGE, "atomic_transfer_region source not found");
+    }
 }
 
 u64 Page_Table::atomic_create_managed_region(u64 page_aligned_start, u64 page_aligned_size, unsigned access, bool fixed, klib::string name, klib::shared_ptr<Port> t)
@@ -609,7 +658,7 @@ u64 Page_Table::atomic_create_managed_region(u64 page_aligned_start, u64 page_al
     u64 start_addr = find_region_spot(page_aligned_start, page_aligned_size, fixed);
 
     paging_regions.insert({start_addr,
-        klib::make_unique<Private_Managed_Region>(
+        klib::make_shared<Private_Managed_Region>(
             start_addr, page_aligned_size, klib::forward<klib::string>(name), weak_from_this(), access, klib::forward<klib::shared_ptr<Port>>(t)
         )});
 
@@ -626,7 +675,7 @@ u64 Page_Table::atomic_create_phys_region(u64 page_aligned_start, u64 page_align
     u64 start_addr = find_region_spot(page_aligned_start, page_aligned_size, fixed);
 
     paging_regions.insert({start_addr,
-        klib::make_unique<Phys_Mapped_Region>(
+        klib::make_shared<Phys_Mapped_Region>(
             start_addr, page_aligned_size, klib::forward<klib::string>(name), weak_from_this(), access, phys_addr_start
         )});
 
@@ -798,4 +847,39 @@ void Page_Table::map(u64 page_addr, u64 virt_addr)
 u64 Page_Table::phys_addr_limit()
 {
     return 0x01UL << 48;
+}
+
+void Page_Table::move_pages(const klib::shared_ptr<Page_Table>& to, u64 from_addr, u64 to_addr, u64 size_bytes, u8 access)
+{
+    u64 offset = 0;
+
+    try {
+        for (; offset < size_bytes; offset += 4096) {
+            auto info = get_page_mapping(from_addr + to_addr);
+            if (info.is_allocated) {
+                Page_Table_Argumments arg = {
+                    access & Writeable,
+                    info.user_access,
+                    0,
+                    not (access & Executable),
+                    info.flags,
+                };
+                to->map(info.page_addr, to_addr + offset, arg);
+            }
+        }
+
+        invalidate_range_nofree(from_addr, size_bytes);
+    } catch (...) {
+        to->invalidate_range_nofree(to_addr, offset);
+
+        throw;
+    }
+}
+
+void x86_4level_Page_Table::invalidate_range_nofree(u64 virt_addr, u64 size_bytes)
+{
+    // -------- CAN BE MADE MUCH FASTER ------------
+    u64 end = virt_addr + size_bytes;
+    for (int i = virt_addr; i < end; i += 4096)
+        invalidate_nofree(i);
 }

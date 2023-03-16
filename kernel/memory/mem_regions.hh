@@ -11,7 +11,7 @@ extern u64 counter;
 struct Page_Table_Argumments;
 
 // Generic memory region class. Defines an action that needs to be executed when pagefault is produced.
-struct Generic_Mem_Region {
+struct Generic_Mem_Region: public klib::enable_shared_from_this<Generic_Mem_Region> {
     // Page aligned start of the region
     u64 start_addr = 0;
 
@@ -89,6 +89,8 @@ struct Generic_Mem_Region {
     {
         return false;
     }
+
+    virtual void move_to(const klib::shared_ptr<Page_Table>& new_table, u64 base_addr, u64 new_access);
 };
 
 
@@ -161,4 +163,6 @@ struct Private_Managed_Region: Generic_Mem_Region {
     Private_Managed_Region(u64 start_addr, u64 size, klib::string name, klib::weak_ptr<Page_Table> owner, u8 access, klib::shared_ptr<Port> p):
         Generic_Mem_Region(start_addr, size, klib::forward<klib::string>(name), klib::forward<klib::weak_ptr<Page_Table>>(owner), access), notifications_port(klib::forward<klib::shared_ptr<Port>>(p))
         {};
+
+    virtual void move_to(const klib::shared_ptr<Page_Table>& new_table, u64 base_addr, u64 new_access) override;
 };

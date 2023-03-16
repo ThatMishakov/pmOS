@@ -120,7 +120,7 @@ bool Private_Managed_Region::alloc_page(u64 ptr_addr, const klib::shared_ptr<Tas
 
         klib::shared_ptr<Port> p = notifications_port.lock();
         if (not p)
-            throw(Kern_Exception(ERROR_PORT_DOESNT_EXIST, "Private_Managed_Region::alloc_page port doesn't exist"));
+            throw Kern_Exception(ERROR_PORT_DOESNT_EXIST, "Private_Managed_Region::alloc_page port doesn't exist");
 
         p->atomic_send_from_system((const char *)&str, sizeof(IPC_Kernel_Alloc_Page));
     }
@@ -128,4 +128,28 @@ bool Private_Managed_Region::alloc_page(u64 ptr_addr, const klib::shared_ptr<Tas
     task->atomic_block_by_page(page_addr);
 
     return false;
+}
+
+void Generic_Mem_Region::move_to(const klib::shared_ptr<Page_Table>& new_table, u64 base_addr, u64 new_access)
+{
+    auto self = shared_from_this();
+
+    new_table->paging_regions.insert({base_addr, self});
+    try {
+        klib::shared_ptr<Page_Table> old_owner = owner.lock();
+        old_owner->move_pages(new_table, start_addr, base_addr, size, new_access);
+
+        access_type = new_access;
+        start_addr = base_addr;
+
+        old_owner->paging_regions.erase(base_addr);
+    } catch (...) {
+        new_table->paging_regions.erase(base_addr);
+        throw;
+    }
+}
+
+void Private_Managed_Region::move_to(const klib::shared_ptr<Page_Table>& new_table, u64 base_addr, u64 new_access)
+{
+    throw Kern_Exception(ERROR_NOT_SUPPORTED, "move_to of Private_Managed_Region is currently not supported");
 }

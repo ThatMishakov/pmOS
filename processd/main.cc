@@ -6,6 +6,7 @@
 
 __thread char test2[1];
 
+
 int main() {
     char msg[] = "Hello from processd!\n";
     send_message_port(1, strlen(msg), msg);

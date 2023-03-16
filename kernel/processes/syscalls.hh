@@ -81,6 +81,9 @@ void syscall_request_named_port(u64 string_ptr, u64 length, u64 reply_chan, u32 
 // Provide a page for a managed region
 void syscall_provide_page(u64 page_table, u64 dest_page, u64 source, u64 flags);
 
+// Transfers a memory region to a new page table
+void syscall_transfer_region(u64 to_page_table, u64 region, u64 dest, u64 flags);
+
 // Sets segment registers for the task
 void syscall_set_segment(u64 pid, u64 segment_type, u64 ptr);
 

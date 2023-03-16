@@ -435,7 +435,7 @@ T& splay_tree_map<K,T>::at(const K& key)
     }
 
     if (n == nullptr) 
-        throw (std::out_of_range("splay_three_map::at"));
+        throw std::out_of_range("splay_three_map::at");
 
     splay(n);
 

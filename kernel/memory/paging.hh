@@ -44,7 +44,7 @@ struct x86_PAE_Entry {
 
 class Page_Table: public klib::enable_shared_from_this<Page_Table> {
 public:
-    using pagind_regions_map = klib::splay_tree_map<u64, klib::unique_ptr<Generic_Mem_Region>>;
+    using pagind_regions_map = klib::splay_tree_map<u64, klib::shared_ptr<Generic_Mem_Region>>;
     pagind_regions_map paging_regions;
     klib::set<klib::weak_ptr<TaskDescriptor>> owner_tasks;
     u64 id = create_new_id();
@@ -138,6 +138,23 @@ public:
 
     // Returns the physical limit
     static u64 phys_addr_limit();
+
+    // Atomically takes out the paging region and transfers it to a new page table using new access flag, finding a spot for it
+    u64 atomic_transfer_region(const klib::shared_ptr<Page_Table>& to, u64 region_orig, u64 prefered_to, u64 access, bool fixed);
+
+    // Moves the pages from the old region to a new region, invaludating the old page table as needed
+    void move_pages(const klib::shared_ptr<Page_Table>& to, u64 from_addr, u64 to_addr, u64 size_bytes, u8 new_access);
+
+    struct Page_Info {
+        u8 flags = 0;
+        bool is_allocated = 0;
+        bool dirty = 0;
+        bool user_access = 0;
+        u64 page_addr = 0;
+    };
+
+    // Gets the info for the page mapping.
+    virtual Page_Info get_page_mapping(u64 virt_addr) const = 0;
 protected:
     void insert_global_page_tables();
     void takeout_global_page_tables();
@@ -145,6 +162,7 @@ protected:
 
     // Checks if the pages exists and invalidates it, invalidating TLB entries if needed
     virtual void invalidate_nofree(u64 virt_addr) = 0;
+    virtual void invalidate_range_nofree(u64 virt_addr, u64 size_bytes) = 0;
     void unblock_tasks(u64 blocked_by_page);
 
     using page_table_map = klib::splay_tree_map<u64, klib::weak_ptr<Page_Table>>;
@@ -226,7 +244,16 @@ public:
         u64 index = (u64)addr >> (12+9+9+9);
         return index & 0777;  
     }
+
+    Page_Info get_page_mapping(u64 virt_addr) const override;
+
+    constexpr static u64 l4_align = 4096UL * 512 * 512 * 512;
+    constexpr static u64 l3_align = 4096UL * 512 * 512;
+    constexpr static u64 l2_align = 4096UL * 512;
+    constexpr static u64 l1_align = 4096UL;
 protected:
+    virtual void invalidate_range_nofree(u64 virt_addr, u64 size_bytes);
+
     virtual u64 get_page_frame(u64 virt_addr) override;
     x86_4level_Page_Table() = default;
 
@@ -236,6 +263,8 @@ protected:
     void free_pt(u64 pt_phys);
     void free_pd(u64 pd_phys);
     void free_pdpt(u64 pdpt_phys);
+
+    static void map_return_rec_nofree(const x86_PAE_Entry* entry_virt, u64 alignment_log, u64 start, u64 end, u64 curr_start);
 };
 
 const u16 rec_map_index = 256;
