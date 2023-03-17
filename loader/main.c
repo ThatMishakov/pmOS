@@ -33,6 +33,7 @@ struct task_list_node {
     struct multiboot_tag_module * mod_ptr;
     ELF_64bit* elf_virt_addr;
     uint64_t page_table;
+    void * tls_virt;
 };
 
 struct task_list_node *modules_list = NULL;
@@ -63,6 +64,7 @@ void load_multiboot_module(struct multiboot_tag_module * mod)
 
     n->mod_ptr = mod;
     n->page_table = 0;
+    n->tls_virt = NULL;
 
     uint64_t phys_start = (uint64_t)mod->mod_start & ~(uint64_t)0xfff;
     uint64_t phys_end = (uint64_t)mod->mod_end;
@@ -73,13 +75,14 @@ void load_multiboot_module(struct multiboot_tag_module * mod)
     if (result.result != SUCCESS) {
         asm ("xchgw %bx, %bx");
     }
+    
     n->elf_virt_addr = result.virt_addr;
 
     uint64_t pid = load_elf(n, 3);
 
     syscall(SYSCALL_SET_TASK_NAME, pid, mod->cmdline, strlen(mod->cmdline));
 
-    start_process(pid, n->elf_virt_addr->program_entry, 0, 0, 0);
+    start_process(pid, n->elf_virt_addr->program_entry, 0, 0, n->tls_virt);
 }
 
 void react_alloc_page(IPC_Kernel_Alloc_Page *p);

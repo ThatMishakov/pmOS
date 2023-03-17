@@ -419,11 +419,11 @@ x86_4level_Page_Table::Page_Info x86_4level_Page_Table::get_page_mapping(u64 vir
 
     // PT entry
     mapper.map(mapper.ptr[pd_i].page_ppn << 12); unsigned pt_i = pt_index(virt_addr);
-    i.flags = mapper.ptr->avl;
-    i.is_allocated = mapper.ptr->present;
-    i.dirty = mapper.ptr->dirty;
-    i.user_access = mapper.ptr->user_access;
-    i.page_addr = mapper.ptr->page_ppn << 12;
+    i.flags = mapper.ptr[pt_i].avl;
+    i.is_allocated = mapper.ptr[pt_i].present;
+    i.dirty = mapper.ptr[pt_i].dirty;
+    i.user_access = mapper.ptr[pt_i].user_access;
+    i.page_addr = mapper.ptr[pt_i].page_ppn << 12;
     return i;
 }
 
@@ -855,7 +855,7 @@ void Page_Table::move_pages(const klib::shared_ptr<Page_Table>& to, u64 from_add
 
     try {
         for (; offset < size_bytes; offset += 4096) {
-            auto info = get_page_mapping(from_addr + to_addr);
+            auto info = get_page_mapping(from_addr + offset);
             if (info.is_allocated) {
                 Page_Table_Argumments arg = {
                     access & Writeable,
@@ -870,7 +870,7 @@ void Page_Table::move_pages(const klib::shared_ptr<Page_Table>& to, u64 from_add
 
         invalidate_range_nofree(from_addr, size_bytes);
     } catch (...) {
-        to->invalidate_range_nofree(to_addr, offset);
+        to->invalidate_range_nofree(to_addr, size_bytes);
 
         throw;
     }
@@ -880,6 +880,6 @@ void x86_4level_Page_Table::invalidate_range_nofree(u64 virt_addr, u64 size_byte
 {
     // -------- CAN BE MADE MUCH FASTER ------------
     u64 end = virt_addr + size_bytes;
-    for (int i = virt_addr; i < end; i += 4096)
+    for (u64 i = virt_addr; i < end; i += 4096)
         invalidate_nofree(i);
 }

@@ -135,14 +135,18 @@ void Generic_Mem_Region::move_to(const klib::shared_ptr<Page_Table>& new_table, 
     auto self = shared_from_this();
 
     new_table->paging_regions.insert({base_addr, self});
+
     try {
         klib::shared_ptr<Page_Table> old_owner = owner.lock();
+
         old_owner->move_pages(new_table, start_addr, base_addr, size, new_access);
+
+        old_owner->paging_regions.erase(start_addr);
+
+        owner = new_table;
 
         access_type = new_access;
         start_addr = base_addr;
-
-        old_owner->paging_regions.erase(base_addr);
     } catch (...) {
         new_table->paging_regions.erase(base_addr);
         throw;

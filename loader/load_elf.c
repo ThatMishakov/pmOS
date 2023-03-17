@@ -9,15 +9,21 @@
 #include <paging.h>
 #include <pmos/memory.h>
 #include <pmos/ipc.h>
+#include <stdbool.h>
+#include <pmos/tls.h>
+#include <string.h>
 
 struct task_list_node {
     struct task_list_node *next;
     struct multiboot_tag_module * mod_ptr;
     ELF_64bit* elf_virt_addr;
     uint64_t page_table;
+    void * tls_virt;
 };
 
 extern uint64_t loader_port;
+
+#define alignup(size, alignment) (size%alignment ? size + (alignment - size%alignment) : size)
 
 uint64_t load_elf(struct task_list_node* n, uint8_t ring)
 {
@@ -65,11 +71,25 @@ uint64_t load_elf(struct task_list_node* n, uint8_t ring)
                 print_hex(r.result);
                 print_str(" !!!\n");
             }
+        } else if (p->type == PT_TLS) {
+            if (n->tls_virt)
+                print_str("Warning: Duplicate tls!\n");
+
+            uint64_t size = sizeof(TLS_Data) + p->p_filesz;
+            size = alignup(size, 4096);
+
+            mem_request_ret_t req = create_normal_region(0, 0, size, 1 | 2);
+
+            TLS_Data * d = req.virt_addr;
+            d->memsz = p->p_memsz;
+            d->filesz = p->p_filesz;
+            d->align = p->allignment;   
+            memcpy(d->data, (void*)((uint64_t)elf_h + p->p_offset), p->p_filesz);   
+
+            req = transfer_region(n->page_table, req.virt_addr, NULL, 1);
+            n->tls_virt = req.virt_addr;
         }
     }
-
-    mem_request_ret_t req = create_normal_region(0, 0, 8192, 1 | 2);
-    req = transfer_region(n->page_table, req.virt_addr, NULL, 1);
 
     syscall(SYSCALL_INIT_STACK, pid, 0);
 

@@ -266,28 +266,38 @@ struct stack_frame {
     void* return_addr;
 };
 
-void print_stack_trace(Logger& logger)
-{
-    unw_context_t uc;
-	unw_getcontext(&uc);
+// void print_stack_trace(Logger& logger)
+// {
+//     unw_context_t uc;
+// 	unw_getcontext(&uc);
 
-	unw_cursor_t cursor;
-	unw_init_local(&cursor, &uc);
+// 	unw_cursor_t cursor;
+// 	unw_init_local(&cursor, &uc);
 
 
-    while(unw_step(&cursor)>0) {
-		unw_word_t ip;
-		unw_get_reg(&cursor, UNW_REG_IP, &ip);
+//     while(unw_step(&cursor)>0) {
+// 		unw_word_t ip;
+// 		unw_get_reg(&cursor, UNW_REG_IP, &ip);
 
-		unw_word_t offset;
-		char name[32];
+// 		unw_word_t offset;
+// 		char name[32];
 		
         
-        unw_get_proc_name(&cursor, name,sizeof(name), &offset);
+//         unw_get_proc_name(&cursor, name,sizeof(name), &offset);
 
-        logger.printf("  0x%x at <%s>+0x%x\n", ip, name, offset);
-    }
+//         logger.printf("  0x%x at <%s>+0x%x\n", ip, name, offset);
+//     }
+// }
+
+void print_stack_trace(Logger& logger)
+{
+    logger.printf("Stack trace:\n");
+    struct stack_frame* s;
+    __asm__ volatile("movq %%rbp, %0": "=a" (s));
+    for (; s != NULL; s = s->next)
+        logger.printf("  -> %h\n", (u64)s->return_addr);
 }
+
 
 extern "C" void abort(void)
 {

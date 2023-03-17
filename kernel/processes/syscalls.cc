@@ -33,7 +33,7 @@ extern "C" void syscall_handler()
 
     // TODO: check permissions
 
-    //t_print_bochs("Debug: syscall %h pid %h (%s)\n", call_n, get_cpu_struct()->current_task->pid, get_cpu_struct()->current_task->name.c_str());
+    //t_print_bochs("Debug: syscall %h pid %h (%s)", call_n, get_cpu_struct()->current_task->pid, get_cpu_struct()->current_task->name.c_str());
     //t_print_bochs(" %h %h %h %h %h ", arg1, arg2, arg3, arg4, arg5);
     if (task->attr.debug_syscalls) {
         global_logger.printf("Debug: syscall %h pid %h\n", call_n, get_cpu_struct()->current_task->pid);
@@ -119,6 +119,9 @@ extern "C" void syscall_handler()
         case SYSCALL_SET_SEGMENT:
             syscall_set_segment(arg1, arg2, arg3);
             break;
+        case SYSCALL_TRANSFER_REGION:
+            syscall_transfer_region(arg1, arg2, arg3, arg4);
+            break;
         default:
             // Not supported
             syscall_ret_low(task) = ERROR_NOT_SUPPORTED;
@@ -126,12 +129,15 @@ extern "C" void syscall_handler()
         }
     } catch (Kern_Exception e) {
         syscall_ret_low(task) = e.err_code;
+        t_print_bochs(" -> %h (%s)\n", e.err_code, e.err_message);
         return;
     } catch (...) {
         t_print_bochs("[Kernel] Caught unknown exception\n");
         syscall_ret_low(task) = ERROR_GENERAL;
+        return;
     }
     
+    //t_print_bochs(" -> SUCCESS\n");
     syscall_ret_low(task) = SUCCESS;
 }
 
@@ -698,11 +704,14 @@ void syscall_set_segment(u64 pid, u64 segment_type, u64 ptr)
         target->regs.seg.fs = ptr;
         break;
     case 2:
-        target->regs.seg.fs = ptr;
+        target->regs.seg.gs = ptr;
         break;
     default:
         throw Kern_Exception(ERROR_OUT_OF_RANGE, "invalid segment in syscall_set_segment");
     }
+
+    if (target == current)
+        restore_segments(target);
 }
 
 void syscall_transfer_region(u64 to_page_table, u64 region, u64 dest, u64 flags)
@@ -711,5 +720,5 @@ void syscall_transfer_region(u64 to_page_table, u64 region, u64 dest, u64 flags)
     
     klib::shared_ptr<Page_Table> pt = Page_Table::get_page_table_throw(to_page_table);
 
-    current->page_table->atomic_transfer_region(pt, region, dest, flags, false);
+    syscall_ret_high(current) = current->page_table->atomic_transfer_region(pt, region, dest, flags, false);
 }

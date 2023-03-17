@@ -95,7 +95,7 @@ mem_request_ret_t create_normal_region(uint64_t pid, void *addr_start, size_t si
 
 mem_request_ret_t transfer_region(uint64_t to_page_table, void * region, void * dest, uint64_t flags)
 {
-    syscall_r r = syscall(SYSCALL_CREATE_NORMAL_REGION, to_page_table, region, dest, flags);
+    syscall_r r = syscall(SYSCALL_TRANSFER_REGION, to_page_table, region, dest, flags);
     mem_request_ret_t t = {r.result, (void *)r.value};
     return t;
 }

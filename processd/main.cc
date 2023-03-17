@@ -3,9 +3,7 @@
 #include <kernel/errors.h>
 #include <string.h>
 #include <pmos/system.h>
-
-__thread char test2[1];
-
+#include <stdio.h>
 
 int main() {
     char msg[] = "Hello from processd!\n";

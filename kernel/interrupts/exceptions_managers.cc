@@ -110,7 +110,7 @@ extern "C" void pagefault_manager()
     // Get the memory location which has caused the fault
     u64 virtual_addr = getCR2();
 
-    kresult_t result = ERROR_PAGE_NOT_ALLOCATED;
+    //t_print_bochs("Debug: Pagefault %h pid %i (%s) rip %h error %h\n", virtual_addr, task->pid, task->name.c_str(), task->regs.e.rip, err);
 
     try {
         Auto_Lock_Scope scope_lock(task->page_table->lock);
@@ -119,8 +119,11 @@ extern "C" void pagefault_manager()
         auto it = regions.get_smaller_or_equal(virtual_addr);
 
         if (it != regions.end() and it->second->is_in_range(virtual_addr)) {
-            result = it->second->on_page_fault(err, virtual_addr, task);
+            it->second->on_page_fault(err, virtual_addr, task);
+        } else {
+            throw Kern_Exception(ERROR_PAGE_NOT_ALLOCATED, "pagefault in unknown region");
         }
+
     } catch (const Kern_Exception& e) {
         t_print_bochs("Debug: Pagefault %h pid %i rip %h error %h returned error %i (%s)\n", virtual_addr, task->pid, task->regs.e.rip, err, e.err_code, e.err_message);
         global_logger.printf("Warning: Pagefault %h pid %i (%s) rip %h error %h -> %i killing process...\n", virtual_addr, task->pid, task->name.c_str(), task->regs.e.rip, err, e.err_code);

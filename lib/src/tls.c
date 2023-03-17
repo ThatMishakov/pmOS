@@ -48,5 +48,5 @@ void init_tls_first_time(TLS_Data * d)
     if (u == NULL)
         return; // TODO: Panic
 
-    set_segment(0, SEGMENT_GS, u);
+    set_segment(0, SEGMENT_FS, u);
 }
