@@ -9,11 +9,13 @@ extern "C" {
 
 #ifdef __STDC_HOSTED__
 
-// Returns 0 if successfull or -1 if process doesn't have enough permissions.
+/**
+ * Requests the permission to use the processor's IO ports (in* and out* assembly instructions).
+ * 
+ * @return int 0 if the request was successfull. -1 if the process does not have enough permissions
+ *         to use the command
+ */
 int pmos_request_io_permission();
-
-// Reserves given number of pages and returns (page-alligned) pointer to them
-void* heap_reserve_pages(size_t nb_pages);
 
 #endif
 

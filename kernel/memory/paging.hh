@@ -40,6 +40,12 @@ struct x86_PAE_Entry {
     u64 avl2                     :7 = 0;
     u8  pk                       :4 = 0;
     u8 execution_disabled        :1 = 0;
+
+    // Clears the entry, freeing the page unless the no release flag is set
+    void clear_auto();
+
+    // Clears the entry
+    void clear_nofree();
 } PACKED ALIGNED(8);
 
 class Page_Table: public klib::enable_shared_from_this<Page_Table> {
@@ -161,8 +167,8 @@ protected:
     Page_Table() = default;
 
     // Checks if the pages exists and invalidates it, invalidating TLB entries if needed
-    virtual void invalidate_nofree(u64 virt_addr) = 0;
-    virtual void invalidate_range_nofree(u64 virt_addr, u64 size_bytes) = 0;
+    virtual void invalidate(u64 virt_addr, bool free) = 0;
+    virtual void invalidate_range(u64 virt_addr, u64 size_bytes, bool free) = 0;
     void unblock_tasks(u64 blocked_by_page);
 
     using page_table_map = klib::splay_tree_map<u64, klib::weak_ptr<Page_Table>>;
@@ -206,7 +212,7 @@ public:
 
     Check_Return_Str check_if_allocated_and_set_flag(u64 virt_addr, u8 flag, Page_Table_Argumments arg);
 
-    virtual void invalidate_nofree(u64 virt_addr) override;
+    virtual void invalidate(u64 virt_addr, bool free) override;
 
     bool is_allocated(u64 virt_addr) const override;
 
@@ -252,7 +258,7 @@ public:
     constexpr static u64 l2_align = 4096UL * 512;
     constexpr static u64 l1_align = 4096UL;
 protected:
-    virtual void invalidate_range_nofree(u64 virt_addr, u64 size_bytes);
+    virtual void invalidate_range(u64 virt_addr, u64 size_bytes, bool free);
 
     virtual u64 get_page_frame(u64 virt_addr) override;
     x86_4level_Page_Table() = default;
@@ -281,9 +287,6 @@ u64 rec_get_pt_ppn(u64 virt_addr);
 
 // Invalidades a page entry
 u64 invalidade(u64 virtual_addr);
-
-// Release the page
-void release_page_s(x86_PAE_Entry& pte);
 
 #define LAZY_FLAG_GROW_UP   0x01
 #define LAZY_FLAG_GROW_DOWN 0x02

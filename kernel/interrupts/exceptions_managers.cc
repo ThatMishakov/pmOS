@@ -142,22 +142,23 @@ extern "C" void sse_exception_manager()
 
 extern "C" void general_protection_fault_manager()
 {
-    const task_ptr& task = get_cpu_struct()->current_task;
+    task_ptr task = get_cpu_struct()->current_task;
     //t_print_bochs("!!! General Protection Fault (GP) error %h\n", err);
-    t_print_bochs("!!! General Protection Fault (GP) error (segment) %h PID %i RIP %h CS %h... Killing the process\n", task->regs.int_err, task->pid, task->regs.e.rip, task->regs.e.cs);
-    syscall_exit(4, 0);
+    global_logger.printf("!!! General Protection Fault (GP) error (segment) %h PID %i RIP %h CS %h... Killing the process\n", task->regs.int_err, task->pid, task->regs.e.rip, task->regs.e.cs);
+    task->atomic_kill();
 }
 
 extern "C" void invalid_opcode_manager()
 {
-    t_print_bochs("!!! Invalid op-code (UD) instr %h\n", get_cpu_struct()->current_task->regs.e.rip);
-    halt();
+    task_ptr task = get_cpu_struct()->current_task;
+    global_logger.printf("!!! Invalid op-code (UD) instr %h\n", get_cpu_struct()->current_task->regs.e.rip);
+    task->atomic_kill();
 }
 
 extern "C" void stack_segment_fault_manager()
 {
-    const task_ptr& task = get_cpu_struct()->current_task;
+    task_ptr task = get_cpu_struct()->current_task;
     t_print_bochs("!!! Stack-Segment Fault error %h RIP %h RSP %h PID %h (%s)\n", task->regs.int_err, task->regs.e.rip, task->regs.e.rsp, task->pid, task->name.c_str());
     global_logger.printf("!!! Stack-Segment Fault error %h RIP %h RSP %h\n", task->regs.int_err, task->regs.e.rip, task->regs.e.rsp);
-    syscall_exit(4, 0);
+    task->atomic_kill();
 }

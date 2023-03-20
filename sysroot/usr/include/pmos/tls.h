@@ -6,15 +6,29 @@
 extern "C" {
 #endif
 
+/**
+ * @brief Internal TLS structure
+ * 
+ * An internal structure, used to hold Thread Local Storage data (created by the compiler to support variables with __thread keyword). 
+ */
 typedef struct TLS_Data {
-    uint64_t memsz;
-    uint64_t align;
+    uint64_t memsz; ///< Memory size in bytes holding the TLS data
+    uint64_t align; ///< Memory alignment
 
-    uint64_t filesz;
-    unsigned char data[0];
+    uint64_t filesz; ///< The size of the data. If filesz < memsz, the rest is initialized to 0.
+    unsigned char data[0]; ///< TLS data, to which the __thread variables are intiialized upon the program
+                           ///< first start and thread creation.
 } TLS_Data;
 
+/**
+ * @brief Structure holging the thread local data
+ * 
+ * This structure holds the internal data stored needed for correct working of the treads.
+ * tls_data variable holds the end of the region which is used by the __thread variabled.
+ * self must point to itself. In x86, self must be loaded into %gs or %fs registors depending on the architecture.
+ */
 typedef struct uthread {
+    unsigned char tls_data[0];
     struct uthread *self;
 };
 

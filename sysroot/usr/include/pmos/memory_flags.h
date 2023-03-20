@@ -1,9 +1,16 @@
 #ifndef _PMOS_MEMORY_FLAGS_H
 #define _PMOS_MEMORY_FLAGS_H
 
+/// Access flag indicating read permission
 #define PROT_READ     0x01
+
+/// Access flag indicating write permission
 #define PROT_WRITE    0x02
+
+/// Access flag indicating execution permission
 #define PROT_EXEC     0x04
+
+/// Access flag indicating no permissions
 #define PROT_NONE     0x00
 
 #define MAP_SHARED    0x01

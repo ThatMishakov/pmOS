@@ -186,7 +186,7 @@ bool x86_4level_Page_Table::is_allocated(u64 virt_addr) const
 }
 
 
-void x86_4level_Page_Table::invalidate_nofree(u64 virt_addr)
+void x86_4level_Page_Table::invalidate(u64 virt_addr, bool free)
 {
     bool invalidated = false;
     
@@ -213,7 +213,11 @@ void x86_4level_Page_Table::invalidate_nofree(u64 virt_addr)
         if (not pte->present)
             break;
 
-        *pte = x86_PAE_Entry();
+        if (free)
+            pte->clear_auto();
+        else
+            pte->clear_nofree();
+
         invalidated = true;
     } while (false);
 
@@ -358,14 +362,6 @@ kresult_t invalidade(u64 virtual_addr)
     invlpg(virtual_addr);
 
     return SUCCESS;
-}
-
-void release_page_s(x86_PAE_Entry& pte)
-{
-    if (pte.present and not (pte.avl & PAGING_FLAG_NOFREE))
-            kernel_pframe_allocator.free((void*)(pte.page_ppn << 12));
-
-    pte = x86_PAE_Entry();
 }
 
 
@@ -567,9 +563,7 @@ void x86_4level_Page_Table::free_pt(u64 pt_phys)
 
     for (u64 i = 0; i < 512; ++i) {
         x86_PAE_Entry* p = &mapper.ptr[i];
-        if (p->present) {
-            release_page_s(*p);
-        }
+        p->clear_auto();
     }
 }
 
@@ -584,7 +578,7 @@ void x86_4level_Page_Table::free_pd(u64 pd_phys)
             if (not p->pat_size) // Not a huge page
                 free_pt(p->page_ppn << 12);
 
-            release_page_s(*p);
+            p->clear_auto();
         }
     }
 }
@@ -600,7 +594,7 @@ void x86_4level_Page_Table::free_pdpt(u64 pdpt_phys)
             if (not p->pat_size) // Not a huge page
                 free_pt(p->page_ppn << 12);
 
-            release_page_s(*p);
+            p->clear_auto();
         }
     }
 }
@@ -806,7 +800,7 @@ bool Page_Table::atomic_provide_page(const klib::shared_ptr<TaskDescriptor>& fro
 
     to->unblock_tasks(page_to);
 
-    from->invalidate_nofree(page_from);
+    from->invalidate(page_from, false);
 
     return r;
 }
@@ -868,18 +862,31 @@ void Page_Table::move_pages(const klib::shared_ptr<Page_Table>& to, u64 from_add
             }
         }
 
-        invalidate_range_nofree(from_addr, size_bytes);
+        invalidate_range(from_addr, size_bytes, false);
     } catch (...) {
-        to->invalidate_range_nofree(to_addr, size_bytes);
+        to->invalidate_range(to_addr, size_bytes, false);
 
         throw;
     }
 }
 
-void x86_4level_Page_Table::invalidate_range_nofree(u64 virt_addr, u64 size_bytes)
+void x86_4level_Page_Table::invalidate_range(u64 virt_addr, u64 size_bytes, bool free)
 {
     // -------- CAN BE MADE MUCH FASTER ------------
     u64 end = virt_addr + size_bytes;
     for (u64 i = virt_addr; i < end; i += 4096)
-        invalidate_nofree(i);
+        invalidate(i, free);
+}
+
+void x86_PAE_Entry::clear_nofree()
+{
+    *this = {};
+}
+
+void x86_PAE_Entry::clear_auto()
+{
+    if (present and not (avl & PAGING_FLAG_NOFREE))
+            kernel_pframe_allocator.free((void*)(page_ppn << 12));
+
+    *this = x86_PAE_Entry();
 }
