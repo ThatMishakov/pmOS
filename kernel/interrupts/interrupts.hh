@@ -2,6 +2,7 @@
 #include "types.hh"
 #include "gdt.hh"
 #include <memory/palloc.hh>
+#include <lib/memory.hh>
 
 void init_interrupts();
 
@@ -101,19 +102,8 @@ struct Stack {
 
 class Kernel_Stack_Pointer {
 protected:
-    Stack *stack = nullptr;
-
+    klib::unique_ptr<Stack> stack = klib::make_unique<Stack>();
 public:
-    Kernel_Stack_Pointer()
-    {
-        stack = (Stack*)palloc(sizeof(Stack)/4096);
-    }
-
-    ~Kernel_Stack_Pointer()
-    {
-        pfree((void*)stack, sizeof(Stack)/4096);
-    }
-
     inline u64* get_stack_top()
     {
         return stack->get_stack_top();
