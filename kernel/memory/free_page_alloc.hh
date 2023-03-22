@@ -5,6 +5,12 @@
 
 #define FREE_PAGES_SIZE 16
 
+/**
+ * @brief Allocator for free pages in kernel memory space.
+ * 
+ * This allocator is used for finding free pages to map things to and is used once during the LAPIC configuration.
+ * It could probably be safely thrown away and forgoten and I don't know why it's still here...
+ */
 class Free_Page_Alloc {
 private:
     klib::list<u64> free_pages_list;

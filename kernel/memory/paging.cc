@@ -68,7 +68,7 @@ kresult_t map(u64 physical_addr, u64 virtual_addr, Page_Table_Argumments arg)
     }
 
     PTE& pte = pt_of(virtual_addr, rec_map_index)->entries[ptable_entry];
-    if (pte.present or pte.avl == PAGE_DELAYED) return ERROR_PAGE_PRESENT;
+    if (pte.present) return ERROR_PAGE_PRESENT;
 
     pte = {};
     pte.page_ppn = physical_addr/KB(4);
@@ -155,7 +155,7 @@ u64 x86_4level_Page_Table::get_page_frame(u64 virt_addr)
     return page_frame;
 }
 
-bool x86_4level_Page_Table::is_allocated(u64 virt_addr) const
+bool x86_4level_Page_Table::is_mapped(u64 virt_addr) const
 {
     bool allocated = false;
 
@@ -355,7 +355,7 @@ kresult_t invalidade(u64 virtual_addr)
 
     // Check if page is present
     PTE& pte = pt_of(virtual_addr, rec_map_index)->entries[ptable_entry];
-    if (not pte.present and pte.avl != PAGE_DELAYED) return ERROR_PAGE_NOT_PRESENT;
+    if (not pte.present) return ERROR_PAGE_NOT_PRESENT;
 
     // Everything OK
     pte = PTE();
@@ -685,7 +685,7 @@ Page_Table::pagind_regions_map::iterator Page_Table::get_region(u64 page)
     return it;
 }
 
-bool Page_Table::can_takeout_page(u64 page_addr)
+bool Page_Table::can_takeout_page(u64 page_addr) noexcept
 {
     auto it = paging_regions.get_smaller_or_equal(page_addr);
     if (it == paging_regions.end() or not it->second->is_in_range(page_addr))

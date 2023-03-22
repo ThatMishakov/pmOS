@@ -2,7 +2,8 @@
 #include "interrupts.hh"
 #include "idt.hh"
 
-void register_exceptions(IDT& idt);
+// This file contains different exception managers.
+// See https://wiki.osdev.org/Exceptions for what each one does.
 
 extern "C" void jumpto_func(void) NORETURN;
 

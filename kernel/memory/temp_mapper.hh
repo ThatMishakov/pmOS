@@ -2,23 +2,58 @@
 #include <types.hh>
 #include "kernel/memory.h"
 
+/**
+ * @brief Per-CPU temporary mapper
+ * 
+ * This class helps with temporary mappings which are needed to access paging structures, which reside scattered in the memory. I have originally used recursive
+ * mappings, but I have found them to be really anoying and needing a lot of TLB flushed, si I believe it's a better solution that kills two birds with one stone:
+ * I can also access physical memory with it (e.g. for clearing newly allocated pages) without worying about protection violations in the corner cases.
+ * 
+ * An alternative that Linux is using is linear mapping, however I think it is really ugly and a. consumes precious memory (although who am I kidding) and b.
+ * leads to kernel or CPU vulnerabilities being even worse that they already are.
+ * 
+ * This class is to be stored in a per-CPU CPU_Info structure and allows lock-free temporary mappings of the physical pages into the kernel's virtual space. This
+ * is perfect for paging structures and is actually very nice to use.
+ * 
+ * Upon initialization, we take out 16 pages from the region designated for it and, after preparing the multilevel paging structures and whatnot, map
+ * the page directory into the first entry. This leaves us with 15 other entries which can be used for quickly mapping physical memory.
+ */
 class Temp_Mapper {
 public:
-    // Maps page frame to the temporary location
+    /// @brief  Maps the frame to the kernel virtual address space.
+    /// @param phys_frame Physical address of the page
+    /// @return Returns the new virtual address or nullpts if the page if there are no slots where the page can be mapped. The latter should never happen
+    ///         and if it does, there is a serious bug in the kernel
     virtual void * kern_map(u64 phys_frame) = 0;
     
-    // Returns the mapping
-    virtual void return_map(void *) = 0;
+    /// @brief Returns the mapping back, automatically invalidating the TLB entry
+    /// @param virt_addr Virtual address previously returned by kern_map.
+    virtual void return_map(void * virt_addr) = 0;
+
+    // TODO: Remap would be nice
 
     Temp_Mapper() = default;
     Temp_Mapper(const Temp_Mapper&) = delete;
 };
 
+/**
+ * @brief Wrapper for Temp_Mapper. Manages mapping and unmapping with trendy RAII, preventing you from forgeting to return the mappings
+ * 
+ * @tparam P the pointer type stored in the structure.
+ */
 template<typename P = void>
 struct Temp_Mapper_Obj {
     P * ptr = nullptr;
     Temp_Mapper& parent;
 
+    /**
+     * @brief Maps the phys_frame to ptr
+     * 
+     * This function maps the phys_frame to some virtual address, modifying ptr. If ptr was pointing to another mapping, unmaps it first.
+     * 
+     * @param phys_frame Physical page-aligned address that is to be mapped
+     * @return P* new virtual address
+     */
     P * map(u64 phys_frame)
     {
         if (ptr != nullptr)
@@ -28,14 +63,25 @@ struct Temp_Mapper_Obj {
         return ptr;
     }
 
+    /**
+     * @brief Unmaps the entry
+     * 
+     * This function returns the map if there was any.
+     */
     void clear()
     {
-        if (ptr != nullptr)
+        if (ptr != nullptr) {
             parent.return_map(reinterpret_cast<void *>(ptr));
+            ptr = nullptr;
+        }
     }
 
 
-
+    /**
+     * @brief Destroy the Temp_Mapper_Obj object
+     * 
+     * Upon the object destruction, if it held the mapping, it is returned to the Temp_Mapper.
+     */
     ~Temp_Mapper_Obj()
     {
         clear();
@@ -51,7 +97,10 @@ struct Temp_Mapper_Obj {
     Temp_Mapper_Obj(const Temp_Mapper_Obj&) = delete;
 };
 
-
+/**
+ * @brief Temp_Mapper for x86_64 CPUs
+ * 
+ */
 class x86_PAE_Temp_Mapper: public Temp_Mapper {
 public:
     virtual void * kern_map(u64 phys_frame) override;

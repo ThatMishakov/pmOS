@@ -15,7 +15,7 @@ bool Generic_Mem_Region::on_page_fault(u64 error, u64 pagefault_addr, [[maybe_un
     if (not has_permissions(error))
         throw(Kern_Exception(ERROR_PROTECTION_VIOLATION, "task has no permission to do the operation"));
 
-    if (task->page_table->is_allocated(pagefault_addr))
+    if (task->page_table->is_mapped(pagefault_addr))
         return true;
 
     return alloc_page(pagefault_addr, task);
@@ -26,7 +26,7 @@ bool Generic_Mem_Region::prepare_page(u64 access_mode, u64 page_addr, const klib
     if (not has_access(access_mode))
         throw (Kern_Exception(ERROR_OUT_OF_RANGE, "process has no access to the page"));
 
-    if (task->page_table->is_allocated(page_addr))
+    if (task->page_table->is_mapped(page_addr))
         return true;
 
     return alloc_page(page_addr, task);
@@ -54,6 +54,7 @@ bool Private_Normal_Region::alloc_page(u64 ptr_addr, [[maybe_unused]] const klib
     try {
         owner.lock()->map((u64)new_page, page_addr, args);
 
+        // TODO: This *will* explode if the page is read-only
         for (size_t i = 0; i < 4096/sizeof(u64); ++i) {
             ((u64 *)page_addr)[i] = pattern;
         }

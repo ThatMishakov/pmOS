@@ -8,15 +8,6 @@
 #include <kern_logger/kern_logger.hh>
 #include <stdlib.h>
 
-void register_exceptions(IDT& idt)
-{
-    idt.register_isr(invalid_opcode_num, &invalid_opcode_isr, interrupt_gate_type, 0, 0);
-    idt.register_isr(sse_exception_num, &sse_exception_isr, interrupt_gate_type, 0, 0);
-    idt.register_isr(stack_segment_fault_num, &stack_segment_fault_isr, interrupt_gate_type, 0, 0);
-    idt.register_isr(general_protection_fault_num, &general_protection_fault_isr, interrupt_gate_type, 0, 0);
-    idt.register_isr(pagefault_num, &pagefault_isr, interrupt_gate_type, 0, 0);
-}
-
 void print_registers(const klib::shared_ptr<TaskDescriptor>& task)
 {
     if (not task) {

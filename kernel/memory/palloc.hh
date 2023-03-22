@@ -3,6 +3,7 @@
 #include <types.hh>
 
 // Page frame allocator
+// Todo: This is stupid and I should probably let malloc() do its job without this as this is a circular dependency
 
 // Allocates *number* of pages
 void* palloc(size_t number);
