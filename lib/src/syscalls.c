@@ -3,9 +3,9 @@
 #include <pmos/ports.h>
 #include <pmos/memory.h>
 
-syscall_r syscall_new_process(uint8_t ring)
+syscall_r syscall_new_process()
 {
-    return syscall(SYSCALL_CREATE_PROCESS, ring);
+    return syscall(SYSCALL_CREATE_PROCESS);
 }
 
 syscall_r start_process(u64 pid, u64 entry)

@@ -20,6 +20,41 @@
 #include <kern_logger/kern_logger.hh>
 #include <exceptions.hh>
 
+using syscall_function = void (*)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t);
+klib::array<syscall_function, 29> syscall_table = {
+    syscall_exit,
+    getpid,
+    syscall_create_process,
+    syscall_start_process,
+    syscall_init_stack,
+    syscall_set_priority,
+    syscall_set_task_name,
+    syscall_get_lapic_id,
+    syscall_configure_system,
+
+    syscall_get_message_info,
+    syscall_get_first_message,
+    syscall_request_named_port,
+    syscall_send_message_port,
+    syscall_create_port,
+    syscall_set_attribute,
+    syscall_set_interrupt,
+    syscall_name_port,
+    syscall_get_port_by_name,
+    syscall_set_log_port,
+
+    syscall_get_page_table,
+    syscall_provide_page,
+    syscall_transfer_region,
+    syscall_create_normal_region,
+    syscall_create_managed_region,
+    syscall_create_phys_map_region,
+    nullptr,
+    nullptr,
+    nullptr,
+    syscall_set_segment,
+};
+
 extern "C" void syscall_handler()
 {
     klib::shared_ptr<TaskDescriptor> task = get_cpu_struct()->current_task;
@@ -40,93 +75,10 @@ extern "C" void syscall_handler()
     }
 
     try {
-        switch (call_n) {
-        case SYSCALL_GETPID:
-            getpid();
-            break;
-        case SYSCALL_CREATE_PROCESS:
-            syscall_create_process();
-            break;
-        case SYSCALL_START_PROCESS:
-            syscall_start_process(arg1, arg2, arg3, arg4, arg5);
-            break;
-        case SYSCALL_EXIT:
-            syscall_exit(arg1, arg2);
-            break;
-        case SYSCALL_GET_MSG_INFO:
-            syscall_get_message_info(arg1, arg2, arg3);
-            break;
-        case SYSCALL_GET_MESSAGE:
-            syscall_get_first_message(arg1, arg2, arg3);
-            break;
-        case SYSCALL_SEND_MSG_PORT:
-            syscall_send_message_port(arg1, arg2, arg3);
-            break;
-        case SYSCALL_SET_PORT:
-            syscall_set_port(arg1, arg2, arg3, arg4);
-            break;
-        case SYSCALL_SET_ATTR:
-            syscall_set_attribute(arg1, arg2, arg3);
-            break;
-        case SYSCALL_INIT_STACK:
-            syscall_init_stack(arg1, arg2);
-            break;
-        case SYSCALL_CONFIGURE_SYSTEM:
-            syscall_configure_system(arg1, arg2, arg3);
-            break;
-        case SYSCALL_SET_PRIORITY:
-            syscall_set_priority(arg1);
-            break;
-        case SYSCALL_GET_LAPIC_ID:
-            syscall_get_lapic_id();
-            break;
-        case SYSCALL_SET_TASK_NAME:
-            syscall_set_task_name(arg1, (char*)arg2, arg3);
-            break;
-        case SYSCALL_CREATE_PORT:
-            syscall_create_port(arg1);
-            break;
-        case SYSCALL_SET_INTERRUPT:
-            syscall_set_interrupt(arg1, arg2, arg3);
-            break;
-        case SYSCALL_NAME_PORT:
-            syscall_name_port(arg1, (const char *)arg2, arg3, arg4);
-            break;
-        case SYSCALL_GET_PORT_BY_NAME:
-            syscall_get_port_by_name((const char *)arg1, arg2, arg3);
-            break;
-        case SYSCALL_SET_LOG_PORT:
-            syscall_set_log_port(arg1, arg2);
-            break;
-        case SYSCALL_REQUEST_NAMED_PORT:
-            syscall_request_named_port(arg1, arg2, arg3, arg4);
-            break;
-        case SYSCALL_CREATE_NORMAL_REGION:
-            syscall_create_normal_region(arg1, arg2, arg3, arg4);
-            break;
-        case SYSCALL_CREATE_MANAGED_REGION:
-            syscall_create_managed_region(arg1, arg2, arg3, arg4, arg5);
-            break;
-        case SYSCALL_CREATE_PHYS_REGION:
-            syscall_create_phys_map_region(arg1, arg2, arg3, arg4, arg5);
-            break;
-        case SYSCALL_PROVIDE_PAGE:
-            syscall_provide_page(arg1, arg2, arg3, arg4);
-            break;
-        case SYSCALL_GET_PAGE_TABLE:
-            syscall_get_page_table(arg1);
-            break;
-        case SYSCALL_SET_SEGMENT:
-            syscall_set_segment(arg1, arg2, arg3);
-            break;
-        case SYSCALL_TRANSFER_REGION:
-            syscall_transfer_region(arg1, arg2, arg3, arg4);
-            break;
-        default:
-            // Not supported
-            syscall_ret_low(task) = ERROR_NOT_SUPPORTED;
-            break;
-        }
+        if (call_n > syscall_table.size())
+            throw Kern_Exception(ERROR_NOT_SUPPORTED, "syscall is not supported");
+
+        syscall_table[call_n](arg1, arg2, arg3, arg4, arg5, 0);
     } catch (Kern_Exception e) {
         syscall_ret_low(task) = e.err_code;
         t_print_bochs(" -> %h (%s)\n", e.err_code, e.err_message);
@@ -141,19 +93,19 @@ extern "C" void syscall_handler()
     syscall_ret_low(task) = SUCCESS;
 }
 
-void getpid()
+void getpid(u64, u64, u64, u64, u64, u64)
 {
     const task_ptr& task = get_cpu_struct()->current_task;
 
     syscall_ret_high(task) = task->pid;
 }
 
-void syscall_create_process()
+void syscall_create_process(u64, u64, u64, u64, u64, u64)
 {
     syscall_ret_high(get_current_task()) = TaskDescriptor::create_process(3)->pid;
 }
 
-void syscall_start_process(u64 pid, u64 start, u64 arg1, u64 arg2, u64 arg3)
+void syscall_start_process(u64 pid, u64 start, u64 arg1, u64 arg2, u64 arg3, u64)
 {
     task_ptr task = get_current_task();
     // TODO: Check permissions
@@ -178,7 +130,7 @@ void syscall_start_process(u64 pid, u64 start, u64 arg1, u64 arg2, u64 arg3)
     t->init();
 }
 
-void syscall_init_stack(u64 pid, u64 esp)
+void syscall_init_stack(u64 pid, u64 esp, u64, u64, u64, u64)
 {
     const task_ptr& task = get_current_task();
 
@@ -200,7 +152,7 @@ void syscall_init_stack(u64 pid, u64 esp)
     }
 }
 
-void syscall_exit(u64 arg1, u64 arg2)
+void syscall_exit(u64 arg1, u64 arg2, u64, u64, u64, u64)
 {
     klib::shared_ptr<TaskDescriptor> task = get_cpu_struct()->current_task;
 
@@ -212,7 +164,7 @@ void syscall_exit(u64 arg1, u64 arg2)
     task->atomic_kill();
 }
 
-void syscall_get_first_message(u64 buff, u64 args, u64 portno)
+void syscall_get_first_message(u64 buff, u64 args, u64 portno, u64, u64, u64)
 {
     klib::shared_ptr<TaskDescriptor> current = get_cpu_struct()->current_task;
     klib::shared_ptr<Port> port;
@@ -246,7 +198,7 @@ void syscall_get_first_message(u64 buff, u64 args, u64 portno)
     }
 }
 
-void syscall_send_message_port(u64 port_num, size_t size, u64 message)
+void syscall_send_message_port(u64 port_num, size_t size, u64 message, u64, u64, u64)
 {
     klib::shared_ptr<TaskDescriptor> current = get_cpu_struct()->current_task;
 
@@ -264,13 +216,7 @@ void syscall_send_message_port(u64 port_num, size_t size, u64 message)
     port->atomic_send_from_user(current, (char *)message, size);
 }
 
-
-void syscall_set_port(u64 pid, u64 port, u64 dest_pid, u64 dest_chan)
-{
-    throw(Kern_Exception(ERROR_NOT_IMPLEMENTED, "syscall_set_port is not implemented"));
-}
-
-void syscall_get_message_info(u64 message_struct, u64 portno, u32 flags)
+void syscall_get_message_info(u64 message_struct, u64 portno, u64 flags, u64, u64, u64)
 {
     task_ptr task = get_current_task();
 
@@ -314,7 +260,7 @@ void syscall_get_message_info(u64 message_struct, u64 portno, u32 flags)
     desc.size = msg->size();
 }
 
-void syscall_set_attribute(u64 pid, u64 attribute, u64 value)
+void syscall_set_attribute(u64 pid, u64 attribute, u64 value, u64, u64, u64)
 {
     task_ptr task = get_current_task();
 
@@ -338,7 +284,7 @@ void syscall_set_attribute(u64 pid, u64 attribute, u64 value)
     }
 }
 
-void syscall_configure_system(u64 type, u64 arg1, u64 arg2)
+void syscall_configure_system(u64 type, u64 arg1, u64 arg2, u64, u64, u64)
 {
     task_ptr task = get_current_task();
     // TODO: Check permissions
@@ -362,7 +308,7 @@ void syscall_configure_system(u64 type, u64 arg1, u64 arg2)
     };
 }
 
-void syscall_set_priority(u64 priority)
+void syscall_set_priority(u64 priority, u64, u64, u64, u64, u64)
 {
     task_ptr current_task = get_current_task();
 
@@ -377,7 +323,7 @@ void syscall_set_priority(u64 priority)
     // TODO: Changing priority to lower one
 }
 
-void syscall_get_lapic_id()
+void syscall_get_lapic_id(u64, u64, u64, u64, u64, u64)
 {
     syscall_ret_high(get_current_task()) = get_cpu_struct()->lapic_id;
 }
@@ -398,13 +344,13 @@ void program_syscall()
     write_msr(0x176, (u64)&sysenter_entry); // IA32_SYSENTER_EIP
 }
 
-void syscall_set_task_name(u64 pid, const char* string, u64 length)
+void syscall_set_task_name(u64 pid, u64 /* const char* */ string, u64 length, u64, u64, u64)
 {
     const task_ptr& current = get_cpu_struct()->current_task;
 
     task_ptr t = get_task_throw(pid);
 
-    auto str = klib::string::fill_from_user(string, length);
+    auto str = klib::string::fill_from_user(reinterpret_cast<const char*>(string), length);
 
     if (not str.first) {
         return;
@@ -413,7 +359,7 @@ void syscall_set_task_name(u64 pid, const char* string, u64 length)
     t->name.swap(str.second);
 }
 
-void syscall_create_port(u64 owner)
+void syscall_create_port(u64 owner, u64, u64, u64, u64, u64)
 {
     const task_ptr& task = get_current_task();
 
@@ -431,7 +377,7 @@ void syscall_create_port(u64 owner)
     syscall_ret_high(task) = global_ports.atomic_request_port(t);
 }
 
-void syscall_set_interrupt(uint64_t port, uint32_t intno, uint32_t flags)
+void syscall_set_interrupt(uint64_t port, u64 intno, u64 flags, u64, u64, u64)
 {
     // t_print_bochs("syscall_set_interrupt(%i, %i, %i)\n", port, intno, flags);
 
@@ -451,12 +397,12 @@ void syscall_set_interrupt(uint64_t port, uint32_t intno, uint32_t flags)
     }
 }
 
-void syscall_name_port(u64 portnum, const char* name, u64 length, u32 flags)
+void syscall_name_port(u64 portnum, u64 /*const char* */ name, u64 length, u64 flags, u64, u64)
 {
     const task_ptr& task = get_current_task();
 
 
-    auto str = klib::string::fill_from_user(name, length);
+    auto str = klib::string::fill_from_user(reinterpret_cast<const char*>(name), length);
     if (not str.first) {
         return;
     }
@@ -487,14 +433,14 @@ void syscall_name_port(u64 portnum, const char* name, u64 length, u32 flags)
     }
 }
 
-void syscall_get_port_by_name(const char *name, u64 length, u32 flags)
+void syscall_get_port_by_name(u64 /* const char * */ name, u64 length, u64 flags, u64, u64, u64)
 {
     // --------------------- TODO: shared pointers *will* explode if the TaskDescriptor is deleted -------------------------------------
     constexpr unsigned flag_noblock = 0x01;
 
     task_ptr task = get_current_task();
 
-    auto str = klib::string::fill_from_user(name, length);
+    auto str = klib::string::fill_from_user(reinterpret_cast<const char*>(name), length);
     if (not str.first) {
         return;
     }
@@ -545,7 +491,7 @@ void syscall_get_port_by_name(const char *name, u64 length, u32 flags)
     }
 }
 
-void syscall_request_named_port(u64 string_ptr, u64 length, u64 reply_port, u32 flags)
+void syscall_request_named_port(u64 string_ptr, u64 length, u64 reply_port, u64 flags, u64, u64)
 {
     const task_ptr& task = get_current_task();
 
@@ -581,7 +527,7 @@ void syscall_request_named_port(u64 string_ptr, u64 length, u64 reply_port, u32 
     }
 }
 
-void syscall_set_log_port(u64 port, u32 flags)
+void syscall_set_log_port(u64 port, u64 flags, u64, u64, u64, u64)
 {
     const task_ptr& task = get_current_task();
 
@@ -590,7 +536,7 @@ void syscall_set_log_port(u64 port, u32 flags)
     global_logger.set_port(port_ptr, flags);
 }
 
-void syscall_create_normal_region(u64 pid, u64 addr_start, u64 size, u64 access)
+void syscall_create_normal_region(u64 pid, u64 addr_start, u64 size, u64 access, u64, u64)
 {
     const klib::shared_ptr<TaskDescriptor>& current = get_cpu_struct()->current_task;
 
@@ -611,7 +557,7 @@ void syscall_create_normal_region(u64 pid, u64 addr_start, u64 size, u64 access)
     syscall_ret_high(current) = dest_task->page_table->atomic_create_normal_region(addr_start, size, access & 0x07, access & 0x08, klib::string(), 0);
 }
 
-void syscall_create_managed_region(u64 pid, u64 addr_start, u64 size, u64 access, u64 port)
+void syscall_create_managed_region(u64 pid, u64 addr_start, u64 size, u64 access, u64 port, u64)
 {
     const klib::shared_ptr<TaskDescriptor>& current = get_cpu_struct()->current_task;
 
@@ -634,7 +580,7 @@ void syscall_create_managed_region(u64 pid, u64 addr_start, u64 size, u64 access
     syscall_ret_high(current) = dest_task->page_table->atomic_create_managed_region(addr_start, size, access & 0x07, access & 0x08, klib::string(), klib::move(p));
 }
 
-void syscall_create_phys_map_region(u64 pid, u64 addr_start, u64 size, u64 access, u64 phys_addr)
+void syscall_create_phys_map_region(u64 pid, u64 addr_start, u64 size, u64 access, u64 phys_addr, u64)
 {
     const klib::shared_ptr<TaskDescriptor>& current = get_cpu_struct()->current_task;
 
@@ -655,7 +601,7 @@ void syscall_create_phys_map_region(u64 pid, u64 addr_start, u64 size, u64 acces
     syscall_ret_high(current) = dest_task->page_table->atomic_create_phys_region(addr_start, size, access & 0x07, access & 0x08, klib::string(), phys_addr);
 }
 
-void syscall_get_page_table(u64 pid)
+void syscall_get_page_table(u64 pid, u64, u64, u64, u64, u64)
 {
     const klib::shared_ptr<TaskDescriptor>& current = get_cpu_struct()->current_task;
 
@@ -675,7 +621,7 @@ void syscall_get_page_table(u64 pid)
     syscall_ret_high(current) = target->page_table->id;
 }
 
-void syscall_provide_page(u64 page_table, u64 dest_page, u64 source, u64 flags)
+void syscall_provide_page(u64 page_table, u64 dest_page, u64 source, u64 flags, u64, u64)
 {
     klib::shared_ptr<TaskDescriptor> current = get_cpu_struct()->current_task;
 
@@ -689,7 +635,7 @@ void syscall_provide_page(u64 page_table, u64 dest_page, u64 source, u64 flags)
     Page_Table::atomic_provide_page(current, pt, source, dest_page, flags);
 }
 
-void syscall_set_segment(u64 pid, u64 segment_type, u64 ptr)
+void syscall_set_segment(u64 pid, u64 segment_type, u64 ptr, u64, u64, u64)
 {
     const klib::shared_ptr<TaskDescriptor>& current = get_cpu_struct()->current_task;
     klib::shared_ptr<TaskDescriptor> target{};
@@ -714,7 +660,7 @@ void syscall_set_segment(u64 pid, u64 segment_type, u64 ptr)
         restore_segments(target);
 }
 
-void syscall_transfer_region(u64 to_page_table, u64 region, u64 dest, u64 flags)
+void syscall_transfer_region(u64 to_page_table, u64 region, u64 dest, u64 flags, u64, u64)
 {
     const klib::shared_ptr<TaskDescriptor>& current = get_current_task();
     

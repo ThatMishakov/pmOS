@@ -13,7 +13,7 @@ extern "C" {
  * Requests the permission to use the processor's IO ports (in* and out* assembly instructions).
  * 
  * @return int 0 if the request was successfull. -1 if the process does not have enough permissions
- *         to use the command
+ *         to use the command.
  */
 int pmos_request_io_permission();
 
