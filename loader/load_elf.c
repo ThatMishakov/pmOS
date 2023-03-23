@@ -45,7 +45,7 @@ uint64_t load_elf(struct task_list_node* n, uint8_t ring)
     }
     uint64_t pid = r.value;
 
-    n->page_table = get_page_table(pid).page_table;
+    n->page_table = asign_page_table(pid, 0, PAGE_TABLE_CREATE).page_table;
 
     for (int i = 0; i < elf_pheader_entries; ++i) {
         ELF_PHeader_64 * p = &elf_pheader[i];

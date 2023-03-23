@@ -43,8 +43,6 @@ uint64_t getpid();
  * 
  * @return syscall_r structure containing the result and the PID of the new process. If the result != SUCCESS, value does not hold a meaningful data.
  * @see start_process();
- * @todo There is no reason to create a page table upon the creation of the new process and changing this function allows to very easilly have threads.
- *       Either create a new syscall to set a page table to the new process or add flags allowing to inherit arbitrary page tables.
  */
 syscall_r syscall_new_process();
 

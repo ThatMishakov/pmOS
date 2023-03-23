@@ -151,7 +151,7 @@ public:
      */
     u64 /* page_start */ atomic_create_normal_region(u64 page_aligned_start, u64 page_aligned_size, unsigned access, bool fixed, klib::string name, u64 pattern);
 
-    u64 /* page_start */ atomic_create_managed_region(u64 page_aligned_start, u64 page_aligned_size, unsigned access, bool fixed, klib::string name, klib::shared_ptr<Port> t);
+    u64 atomic_create_managed_region(u64 page_aligned_start, u64 page_aligned_size, unsigned access, bool fixed, klib::string name, klib::shared_ptr<Port> t);
 
     /**
      * @brief Creates a memory region mapping to the physical memory.

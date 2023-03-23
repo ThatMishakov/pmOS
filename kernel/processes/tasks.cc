@@ -27,9 +27,6 @@ klib::shared_ptr<TaskDescriptor> TaskDescriptor::create_process(u16 ring)
         break;
     }
 
-    // Create a new page table
-    n->create_new_page_table();
-
     // Assign a pid
     n->pid = assign_pid();
 
@@ -73,6 +70,7 @@ void init_idle()
 {
     try {
         klib::shared_ptr<TaskDescriptor> i = TaskDescriptor::create_process(0);
+        i->create_new_page_table();
 
         Auto_Lock_Scope lock(i->sched_lock);
 

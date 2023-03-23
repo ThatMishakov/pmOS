@@ -19,9 +19,10 @@
 #include <messaging/named_ports.hh>
 #include <kern_logger/kern_logger.hh>
 #include <exceptions.hh>
+#include <lib/utility.hh>
 
 using syscall_function = void (*)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t);
-klib::array<syscall_function, 29> syscall_table = {
+klib::array<syscall_function, 30> syscall_table = {
     syscall_exit,
     getpid,
     syscall_create_process,
@@ -53,6 +54,7 @@ klib::array<syscall_function, 29> syscall_table = {
     nullptr,
     nullptr,
     syscall_set_segment,
+    syscall_asign_page_table,
 };
 
 extern "C" void syscall_handler()
@@ -667,4 +669,31 @@ void syscall_transfer_region(u64 to_page_table, u64 region, u64 dest, u64 flags,
     klib::shared_ptr<Page_Table> pt = Page_Table::get_page_table_throw(to_page_table);
 
     syscall_ret_high(current) = current->page_table->atomic_transfer_region(pt, region, dest, flags, false);
+}
+
+void syscall_asign_page_table(u64 pid, u64 page_table, u64 flags, u64, u64, u64)
+{
+    const klib::shared_ptr<TaskDescriptor>& current = get_current_task();
+    const klib::shared_ptr<TaskDescriptor> dest = get_task_throw(pid);
+
+    switch (flags) {
+    case 1: // PAGE_TABLE_CREATE
+        dest->create_new_page_table();
+        syscall_ret_high(current) = dest->page_table->id;
+        break;
+    case 2: // PAGE_TABLE_ASIGN
+        {
+            klib::shared_ptr<Page_Table> t;
+            if (page_table == 0 or page_table == current->page_table->id)
+                t = current->page_table;
+            else
+                t = Page_Table::get_page_table_throw(page_table);
+
+            dest->register_page_table(klib::forward<klib::shared_ptr<Page_Table>>(t));
+            syscall_ret_high(current) = dest->page_table->id;
+            break;
+        }
+    default:
+        throw Kern_Exception(ERROR_NOT_SUPPORTED, "value of flags parameter is not supported");
+    }
 }

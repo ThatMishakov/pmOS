@@ -5,10 +5,6 @@
 // This file contains different exception managers.
 // See https://wiki.osdev.org/Exceptions for what each one does.
 
-extern "C" void jumpto_func(void) NORETURN;
-
-void kernel_jump_to(void (*function)(void));
-
 constexpr u8 division_error_num = 0x0;
 extern "C" void division_error_isr();
 extern "C" void division_error_manager();
@@ -44,3 +40,8 @@ extern "C" void general_protection_fault_manager();
 constexpr u8 pagefault_num = 0xE;
 extern "C" void pagefault_isr();
 extern "C" void pagefault_manager();
+
+// Jumpto functions. This change the return %RIP address in a way that upon returning from the kernel exception, *function* is executed.
+// Used for in-kernel exceptions to print debug information upon panic.
+extern "C" void jumpto_func(void) NORETURN;
+void kernel_jump_to(void (*function)(void));

@@ -34,6 +34,7 @@
 #define SYSCALL_UNMAP_RANGE           26
 #define SYSCALL_MEM_PROTECT           27
 #define SYSCALL_SET_SEGMENT           28
+#define SYSCALL_ASIGN_PAGE_TABLE      29
 
 
 

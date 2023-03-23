@@ -107,6 +107,13 @@ page_table_req_ret_t get_page_table(uint64_t pid)
     return t;
 }
 
+page_table_req_ret_t asign_page_table(uint64_t pid, uint64_t page_table, uint64_t flags)
+{
+    syscall_r r = syscall(SYSCALL_ASIGN_PAGE_TABLE, pid, page_table, flags);
+    page_table_req_ret_t t = {r.result, r.value};
+    return t;
+}
+
 result_t provide_page(uint64_t page_table, uint64_t dest_page, uint64_t source, uint64_t flags)
 {
     return syscall(SYSCALL_PROVIDE_PAGE, page_table, dest_page, source, flags).result;
