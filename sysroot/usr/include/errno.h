@@ -5,11 +5,14 @@
 extern "C" {
 #endif
 
+#define EINVAL 1
+
 #ifdef __STDC_HOSTED__
 
-int _get_errno();
-
-#define errno _get_errno()
+/// This variable is used for returning errors in C functions.
+/// The variable is defined as weak so if the application does not have thread-local data,
+/// it might be freely redefined with the appropriate storage specificator
+int __thread __attribute__((weak)) errno = 0;
 
 #endif
 

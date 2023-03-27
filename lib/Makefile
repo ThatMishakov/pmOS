@@ -1,6 +1,5 @@
 ROOTDIR = $(realpath .)/..
 OBJDIR = $(ROOTDIR)/sysroot/usr/lib
-DEPDIR := .deps
 SRCDIR := src
 LIBC := $(OBJDIR)/libc.a
 
@@ -12,37 +11,33 @@ CFLAGS = -std=c17
 CPPFLAGS = $(DEPFLAGS)
 LDFLAGS = 
 
-DEPFLAGS = -MT $@ -MMD -MP -MF $(DEPDIR)/$*.d
+DEPFLAGS = -MT $@ -MMD -MP
 
 CFILES := $(shell find ./src/ -type f -name '*.c')
 ASMFILES := $(shell find ./src/ -type f -name '*.S')
 OBJ    := $(ASMFILES:.S=.o) $(CFILES:.c=.o) 
-OBJ_P := $(patsubst ./src%,$(OBJDIR)% , $(OBJ))
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.c $(CC)
-	@mkdir -p $(DEPDIR)
 	@mkdir -p $(OBJDIR)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.S $(CC)
-	@mkdir -p $(DEPDIR)
 	@mkdir -p $(OBJDIR)
 	$(CC) $(CPPFLAGS) $(ASFLAGS) -c -o $@ $<
 
 libc: $(OBJDIR)/libc.a
-$(OBJDIR)/libc.a: $(OBJ_P)
+$(OBJDIR)/libc.a: $(OBJ)
 	ar r $@ $?
-
-$(DEPDIR):
-	@mkdir -p $@
 
 $(OBJDIR):
 	@mkdir -p $@	
 
 clean:
-	rm -rf $(OBJ_P) $(DEPDIR)
+	rm -rf $(OBJ) $(DEP)
 
--include $(OBJ: src/%.o, .deps/%.d)
+-include $(DEP)
+
+DEP    := $(OBJ:.o=.d)
 
 $(CC):
 	$(MAKE) -C ../src x86_64-pmos-gcc

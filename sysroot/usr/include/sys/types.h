@@ -38,7 +38,17 @@ typedef size_t mode_t;
 typedef size_t nlink_t;
 typedef size_t off_t;
 
-typedef unsigned pthread_attr_t;
+typedef struct {
+    unsigned long stackaddr;
+    unsigned long stacksize;
+    unsigned long guardsize;
+    
+    unsigned char scope;
+    unsigned char detachstate;
+    unsigned char inheritsched;
+    unsigned char schedpolicy;
+} pthread_attr_t;
+
 typedef volatile void * pthread_cond_t;
 typedef unsigned pthread_condattr_t;
 typedef _u64 pthread_key_t;

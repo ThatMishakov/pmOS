@@ -17,8 +17,8 @@ extern "C" {
 
 #define PTHREAD_COND_INITIALIZER ((pthread_cond_t)(NULL))
 
-#define PTHREAD_CREATE_JOINABLE (0x01);
-#define PTHREAD_CREATE_DETACHED (0x02);
+#define PTHREAD_CREATE_JOINABLE (0x00);
+#define PTHREAD_CREATE_DETACHED (0x01);
 
 #define PTHREAD_INHERIT_SCHED (0x01);
 #define PTHREAD_EXPLICIT_SCHED (0x02);
@@ -50,9 +50,74 @@ extern "C" {
 #define PTHREAD_SCOPE_PROCESS (0x01);
 #define PTHREAD_SCOPE_SYSTEM  (0x02);
 
-int   pthread_attr_destroy(pthread_attr_t *);
-int   pthread_attr_getdetachstate(const pthread_attr_t *, int *);
-int   pthread_attr_getguardsize(const pthread_attr_t *, size_t *);
+#define PTHREAD_CREATE_JOINABLE (0)
+#define PTHREAD_CREATE_DETACHED (1)
+
+/**
+ * @brief Uninitializes the pthread_attr_t structure
+ * 
+ * This function should uninitialize provided pthread_attr_t structure. In pmOS this does nothing and should
+ * always return success, however you should call this function anyways for portability of your program.
+ * 
+ * @param attrs_ptr structure to be uninitialized.
+ * @return 0 is returned upon the successfull execution. Otherwise, -1 is returned and errno is set to the error code.
+ */
+int   pthread_attr_destroy(pthread_attr_t * attrs_ptr);
+
+/**
+ * @brief Gets the detachstate attribute
+ * 
+ * _detachstate_ atribute controls whether the thread is created in a detached state. 
+ * 
+ * @param attrs_ptr Pointer to the pthread_attr_t holding the attribute.
+ * @param detachstate Sets the pointer to the detachstate attrribute value defined in attrs_ptr. Possible values are:
+ *                    PTHREAD_CREATE_DETACHED - new threads created with attr are in the detached state
+ *                    PTHREAD_CREATE_JOINABLE - new threads created with attr are in the joinable state
+ * @return 0 is returned upon the successfull execution. Otherwise -1 is returned and errno is set to the error code.
+ */
+int   pthread_attr_getdetachstate(const pthread_attr_t * attrs_ptr, int * detachstate);
+
+/**
+ * @brief Sets the detachstate attribute
+ * 
+ * _detachstate_ atribute controls whether the thread is created in a detached state. 
+ * 
+ * @param attrs_ptr Pointer to the pthread_attr_t which attribute should be set.
+ * @param detachstate The new value of the pointer. Possible parameters are:
+ *                    PTHREAD_CREATE_DETACHED - new threads created with attr are in the detached state
+ *                    PTHREAD_CREATE_JOINABLE - new threads created with attr are in the joinable state
+ * @return 0 is returned upon the successfull execution. Otherwise -1 is returned and errno is set to the error code.
+ */
+int   pthread_attr_setdetachstate(pthread_attr_t * attr, int detachstate);
+
+/**
+ * @brief Sets the guardsize attribute from the attr structure
+ * 
+ * This function sets the guardsize attribute of the attr structure. This attribute controls the guard area created for the created thread's stack which
+ * protects against the stack overflow. This area is created on the end of the stack and whet it is reached, a SIGSEGV is sent to the application. The
+ * default value of the attribute if no pthread_attr_setguardsize() calls have been made is PAGESIZE. If it is set to 0, new thread should not have
+ * a guard region for the stack.
+ * 
+ * @param attrs_ptr Pointer to the pthread_attr_t which attribute should be set.
+ * @param guardsize the size of the guard area. The actual size will be rounded up to the PAGESIZE, however the call to the pthread_attr_getguardsize() shall
+ *                  return the value set by this function without rounding. 0 indicates that the newly created thread will not have a guard region.
+ * @return 0 if successfull. If the error is produced, -1 is returned and errno is set to the error.
+ */
+int   pthread_attr_setguardsize(pthread_attr_t * attr, size_t guardsize);
+
+/**
+ * @brief Returns the value of the guardsize attribute.
+ * 
+ * This function returns the value of the guardsize attribute. This value can be set by pthread_attr_setguardsize(). Please see its documentation for the
+ * better explanation of the attribute.
+ * 
+ * @param attr Pointer to the pthread_attr_t structure holding the arguments.
+ * @param guardsize In case of the successful execution, the pointer is set to the guardsize value.
+ * @return 0 if the execution was successful. Otherwise, -1 is returned and errno is set to the error code. 
+ */
+int   pthread_attr_getguardsize(const pthread_attr_t * attr, size_t * guardsize);
+
+
 int   pthread_attr_getinheritsched(const pthread_attr_t *, int *);
 int   pthread_attr_getschedparam(const pthread_attr_t *,
           struct sched_param *);
@@ -61,8 +126,6 @@ int   pthread_attr_getscope(const pthread_attr_t *, int *);
 int   pthread_attr_getstackaddr(const pthread_attr_t *, void **);
 int   pthread_attr_getstacksize(const pthread_attr_t *, size_t *);
 int   pthread_attr_init(pthread_attr_t *);
-int   pthread_attr_setdetachstate(pthread_attr_t *, int);
-int   pthread_attr_setguardsize(pthread_attr_t *, size_t);
 int   pthread_attr_setinheritsched(pthread_attr_t *, int);
 int   pthread_attr_setschedparam(pthread_attr_t *,
           const struct sched_param *);
@@ -70,6 +133,7 @@ int   pthread_attr_setschedpolicy(pthread_attr_t *, int);
 int   pthread_attr_setscope(pthread_attr_t *, int);
 int   pthread_attr_setstackaddr(pthread_attr_t *, void *);
 int   pthread_attr_setstacksize(pthread_attr_t *, size_t);
+
 int   pthread_cancel(pthread_t);
 void  pthread_cleanup_push(void (*)(void), void *);
 void  pthread_cleanup_pop(int);
@@ -103,6 +167,7 @@ int   pthread_mutex_setprioceiling(pthread_mutex_t *, int, int *);
 int   pthread_mutex_trylock(pthread_mutex_t *);
 int   pthread_mutex_unlock(pthread_mutex_t *);
 int   pthread_mutexattr_destroy(pthread_mutexattr_t *);
+
 int   pthread_mutexattr_getprioceiling(const pthread_mutexattr_t *,
           int *);
 int   pthread_mutexattr_getprotocol(const pthread_mutexattr_t *, int *);
@@ -113,6 +178,7 @@ int   pthread_mutexattr_setprioceiling(pthread_mutexattr_t *, int);
 int   pthread_mutexattr_setprotocol(pthread_mutexattr_t *, int);
 int   pthread_mutexattr_setpshared(pthread_mutexattr_t *, int);
 int   pthread_mutexattr_settype(pthread_mutexattr_t *, int);
+
 int   pthread_once(pthread_once_t *, void (*)(void));
 int   pthread_rwlock_destroy(pthread_rwlock_t *);
 int   pthread_rwlock_init(pthread_rwlock_t *,
