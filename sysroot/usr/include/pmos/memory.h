@@ -16,6 +16,9 @@ typedef struct mem_request_ret_t {
     void *virt_addr; ///< Address of the new region. Does not hold a meningful value if the result was not successfull.
 } mem_request_ret_t;
 
+/// pmOS memory object identificator
+typedef unsigned long mem_object_t;
+
 #define SEGMENT_FS 1
 #define SEGMENT_GS 2
 

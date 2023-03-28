@@ -9,12 +9,13 @@ extern "C" {
 
 #ifdef __STDC_HOSTED__
 
-/// This variable is used for returning errors in C functions.
-/// The variable is defined as weak so if the application does not have thread-local data,
-/// it might be freely redefined with the appropriate storage specificator
-int __thread __attribute__((weak)) errno = 0;
+/// This function returns the pointer to thread-local __errno variable. The program might redefine this function
+/// if thread-local storage is not supported.
+int* __attribute__((weak)) __get_errno();
 
 #endif
+
+#define errno (*__get_errno())
 
 #if defined(__cplusplus)
 } /* extern "C" */

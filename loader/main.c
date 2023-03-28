@@ -23,6 +23,12 @@
 #include <pmos/memory.h>
 #include <string.h>
 
+int* __get_errno()
+{
+    static int errno_s = 0;
+    return &errno_s;
+}
+
 uint64_t multiboot_magic;
 uint64_t multiboot_info_str;
 
