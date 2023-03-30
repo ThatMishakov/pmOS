@@ -1,5 +1,5 @@
-#ifndef _STDIO_H
-#define _STDIO_H 1
+#ifndef __TIME_H
+#define __TIME_H 1
 #include "stdlib_com.h"
 
 #if defined(__cplusplus)
@@ -9,7 +9,7 @@ extern "C" {
 #define CLOCKS_PER_SEC 1000
 // #define TIME_UTC 0
 
-typedef long long int clock_t;
+typedef unsigned long clock_t;
 typedef clock_t time_t;
 
 typedef struct timespec {
@@ -27,7 +27,7 @@ typedef struct tm {
     int tm_wday;
     int tm_yday;
     int tm_isdst; 
-};
+} tm;
 
 #ifdef __STDC_HOSTED__
 /* Time manipulation */

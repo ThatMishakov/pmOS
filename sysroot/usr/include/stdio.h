@@ -78,6 +78,9 @@ int feof ( FILE * stream );
 int ferror ( FILE * stream );
 void perror ( const char * str );
 
+FILE    *fdopen(int, const char *);
+int      fileno(FILE *);
+
 #define BUFSIZ 4096
 #define EOF -1
 #define FILENAME_MAX 65536
@@ -92,6 +95,16 @@ extern FILE * stderr;
 #define SEEK_SET 0
 #define SEEK_CUR 1
 #define SEEK_END 2
+
+#define _IONBF 0
+#define _IOLBF 1
+#define _IOFBF 2
+
+#define FP_NAN 0
+#define FP_INFINITE 1
+#define FP_NORMAL 2
+#define FP_SUBNORMAL 3
+#define FP_ZERO 4
 
 #endif
 

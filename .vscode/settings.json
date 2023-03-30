@@ -67,6 +67,11 @@
         "thread": "cpp",
         "typeinfo": "cpp",
         "stddef.h": "c",
-        "memory_flags.h": "c"
+        "memory_flags.h": "c",
+        "quadmath-printf.h": "c",
+        "stdlib_com.h": "c",
+        "quadmath-rounding-mode.h": "c",
+        "types.h": "c",
+        "stdint.h": "c"
     }
 }
