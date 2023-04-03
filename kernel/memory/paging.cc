@@ -890,3 +890,10 @@ void x86_PAE_Entry::clear_auto()
 
     *this = x86_PAE_Entry();
 }
+
+void Page_Table::atomic_pin_memory_object(klib::shared_ptr<Mem_Object> object)
+{
+    Auto_Lock_Scope l(lock);
+
+    mem_objects.insert(object);
+}

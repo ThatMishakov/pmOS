@@ -22,6 +22,11 @@
 #define S_ISLNK(m) ((m & S_IFMT) == S_IFLNK)
 #define S_ISSOCK(m) ((m & S_IFMT) == S_IFSOCK)
 
+#define S_TYPEISMQ(buf) 0 // TODO
+#define S_TYPEISSEM(buf) 0
+#define S_TYPEISSHM(buf) 0
+#define S_TYPEISTMO(buf) 0
+
 #define S_ISUID 04000
 #define S_ISGID 02000
 #define S_ISVTX 01000

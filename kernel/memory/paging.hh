@@ -8,6 +8,7 @@
 #include <kernel/com.h>
 #include "mem_regions.hh"
 #include <lib/splay_tree_map.hh>
+#include "mem_object.hh"
 
 /// @brief Indicates NX (no execute) bit is supported and enabled
 /// @todo Very x86-specific
@@ -321,6 +322,23 @@ public:
 
     /// Gets information for the page mapping.
     virtual Page_Info get_page_mapping(u64 virt_addr) const = 0;
+
+    /**
+     * @brief Pin a memory object to the page table
+     * 
+     * This function pins a reference (pointer) to the memory object to this page table. If the object was already pinned, nothing should
+     * be done.
+     * 
+     * @param object A valid pointer to the object to be pinned.
+     */
+    void atomic_pin_memory_object(klib::shared_ptr<Mem_Object> object);
+
+    /**
+     * @brief Remove a reference to the memory object from the page table
+     * 
+     * @param object Object to be removed
+     */
+    void atomic_unpin_memory_object(klib::shared_ptr<Mem_Object> object);
 protected:
     /// @brief Inserts this page table into the map of the page tables
     void insert_global_page_tables();
@@ -356,6 +374,10 @@ protected:
 
     /// Gets a PPN from its virtual address
     virtual u64 get_page_frame(u64 virt_addr) = 0;
+
+    /// Storage for the pointers to the pinned memory objects
+    /// @todo Max permission of the page
+    klib::set<klib::shared_ptr<Mem_Object>> mem_objects;
 };
 
 class x86_Page_Table: public Page_Table {

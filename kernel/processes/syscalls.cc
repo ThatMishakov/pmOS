@@ -20,9 +20,10 @@
 #include <kern_logger/kern_logger.hh>
 #include <exceptions.hh>
 #include <lib/utility.hh>
+#include <memory/mem_object.hh>
 
 using syscall_function = void (*)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t);
-klib::array<syscall_function, 30> syscall_table = {
+klib::array<syscall_function, 31> syscall_table = {
     syscall_exit,
     getpid,
     syscall_create_process,
@@ -55,6 +56,7 @@ klib::array<syscall_function, 30> syscall_table = {
     nullptr,
     syscall_set_segment,
     syscall_asign_page_table,
+    syscall_create_managed_region,
 };
 
 extern "C" void syscall_handler()
@@ -696,4 +698,25 @@ void syscall_asign_page_table(u64 pid, u64 page_table, u64 flags, u64, u64, u64)
     default:
         throw Kern_Exception(ERROR_NOT_SUPPORTED, "value of flags parameter is not supported");
     }
+}
+
+void syscall_create_mem_object(u64 size_bytes, u64, u64, u64, u64, u64)
+{
+    const auto &current_task = get_current_task();
+    const auto &current_page_table = current_task->page_table;
+
+    // TODO: Remove hard-coded page sizes
+
+    // Syscall must be page aligned
+    if (size_bytes & 07777)
+        throw Kern_Exception(ERROR_UNALLIGNED, "arguments are not page aligned");
+
+    const auto page_size_log = 12; // 2^12 = 4096 bytes
+    const auto size_pages = size_bytes/4096;
+
+    const auto ptr = Mem_Object::create(page_size_log, size_pages);
+
+    current_page_table->atomic_pin_memory_object(ptr);
+
+    syscall_ret_high(current_task) = ptr->get_id();
 }

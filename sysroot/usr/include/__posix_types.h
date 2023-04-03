@@ -18,8 +18,11 @@ typedef _u32 ssize_t;
 // typedef _u64 suseconds_t;
 // typedef _u64 useconds_t;
 // typedef _u64 timer_t;
-// typedef _u64 time_t;
 
+#if defined (__DECLARE_TIME_T) && ! defined (__DECLARED_TIME_T)
+typedef _u64 time_t;
+#define __DECLARED_TIME_T
+#endif
 
 // typedef _u64 dev_t;
 
@@ -46,7 +49,15 @@ typedef _u64 pid_t;
 #define __DECLARED_PID_T
 #endif
 
-// typedef size_t ino_t;
+#if defined (__DECLARE_IDTYPE_T) && ! defined (__DECLARED_IDTYPE_T)
+typedef _u64 idtype_t;
+#define __DECLARED_IDTYPE_T
+#endif
+
+#if defined (__DECLARE_INO_T) && defined (__DECLARED_INO_T)
+typedef size_t ino_t;
+#define __DECLARED_INO_T
+#endif
 
 // typedef _u64 key_t;
 
@@ -86,6 +97,15 @@ typedef struct {
 #if defined  (__DECLARE_PTHREAD_T) && ! defined (__DECLARED_PTHREAD_T)
 typedef _u64 pthread_t;
 #define __DECLARED_PTHREAD_T
+#endif
+
+#if defined (__DECLARE_STACK_T) && ! defined (__DECLARED_STACK_T)
+typedef struct stack_t {
+    void     *ss_sp;
+    size_t    ss_size;
+    int       ss_flags;
+} stack_t;
+#define __DECLARED_STACK_T
 #endif
 
 #endif

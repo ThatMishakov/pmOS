@@ -89,6 +89,8 @@ void syscall_set_segment(u64 pid, u64 segment_type, u64 ptr, u64 = 0 /* unused *
 
 void syscall_asign_page_table(u64 pid, u64 page_table, u64 flags, u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */);
 
+void syscall_create_mem_object(u64 size_bytes, u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */);
+
 #define SYS_CONF_IOAPIC          0x01
 #define SYS_CONF_LAPIC           0x02
 #define SYS_CONF_CPU             0x03

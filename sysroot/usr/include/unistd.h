@@ -85,6 +85,8 @@ int          ttyname_r(int, char *, size_t);
 int          unlink(const char *);
 ssize_t      write(int, const void *, size_t);
 
+int getpagesize(void);
+
 #endif
 
 

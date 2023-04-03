@@ -2,7 +2,7 @@
 #define _MMAN_H
 
 #include "../pmos/memory_flags.h"
-#include "types.h"
+#include <sys/types.h>
 
 #if defined(__cplusplus)
 extern "C" {

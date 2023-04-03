@@ -2,10 +2,10 @@
 #define _STRING_H 1
 #include <stddef.h>
 #include "stdlib_com.h"
-
 #if defined(__cplusplus)
 extern "C" {
 #endif
+
 
 /* Copying functions */
 void * memcpy ( void * destination, const void * source, size_t num );

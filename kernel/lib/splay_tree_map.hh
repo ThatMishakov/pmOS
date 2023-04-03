@@ -85,6 +85,8 @@ public:
     pair<iterator,bool> insert(const value_type&);
     pair<iterator,bool> insert(value_type&&);
 
+    pair<iterator,bool> emplace(value_type&&);
+
     void erase(const K&);
     void erase_if_exists(const K&);
 
@@ -265,6 +267,12 @@ pair<typename splay_tree_map<K,T>::iterator, bool> splay_tree_map<K,T>::insert(t
     ++elements;
 
     return {c, true};
+}
+
+template<typename K, typename T>
+pair<typename splay_tree_map<K,T>::iterator, bool> splay_tree_map<K,T>::emplace(typename splay_tree_map<K,T>::value_type&& pair)
+{
+    return insert(klib::move(pair));
 }
 
 template<class K, class T>

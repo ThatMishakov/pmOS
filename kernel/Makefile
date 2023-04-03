@@ -53,7 +53,7 @@ CFILES := $(shell find ./ -type f -name '*.c')
 ASMFILES := $(shell find ./ -type f -name '*.S')
 OBJS = 	./objects/icxxabi.o ./start.o ./asm.o ./main.o ./misc.o ./utils.o types.o \
 	    ./memory/mem.o ./memory/mem_regions.o ./memory/malloc.o ./memory/free_page_alloc.o ./memory/palloc.o ./memory/paging.o \
-		./memory/temp_mapper.o \
+		./memory/temp_mapper.o ./memory/mem_object.o \
 	    ./interrupts/apic.o ./interrupts/pic.o ./interrupts/gdt.o ./interrupts/exceptions_managers_asm.o ./interrupts/exceptions_managers.o \
 		./interrupts/interrupts.o ./interrupts/asm_helpers.o ./interrupts/programmable_ints.o \
 		./interrupts/pit.o ./interrupts/interrupts_asm.o ./interrupts/loadGDT.o ./interrupts/idt.o \
