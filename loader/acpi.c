@@ -135,6 +135,7 @@ void init_acpi(unsigned long multiboot_info_str)
 
 void start_cpus()
 {
+    // TODO: This is very ugly & ideally should be moved to the kernel
     extern char _cpuinit_start;
     extern char _cpuinit_end;
     

@@ -31,6 +31,8 @@ void init_per_cpu()
     
     loadTSS(TSS_OFFSET);
 
+    // This might create race condition but I don't like the idea of putting a lock here
+    // TODO: Think of something
     cpus.push_back({c, get_lapic_id()});
 
     init_idle();
@@ -38,9 +40,12 @@ void init_per_cpu()
     program_syscall();
 }
 
+#include <kern_logger/kern_logger.hh>
+
 extern "C" void cpu_start_routine()
 {
     init_per_cpu();
+
     set_idt();
     enable_apic();
 
@@ -48,7 +53,13 @@ extern "C" void cpu_start_routine()
 
     enable_sse();
 
-    find_new_process();
+    get_cpu_struct()->current_task = get_cpu_struct()->idle_task;
+    global_logger.printf("[Kernel] Initialized CPU %h\n", get_lapic_id());
+}
+
+extern "C" u64* get_kern_stack_top()
+{
+    return get_cpu_struct()->kernel_stack.get_stack_top();
 }
 
 u64 cpu_configure(u64 type, UNUSED u64 arg)

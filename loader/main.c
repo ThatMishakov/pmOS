@@ -139,7 +139,7 @@ void main()
         goto exit;
     }
 
-    //start_cpus();
+    start_cpus();
 
     print_str("Loading modules...\n");
     uint64_t terminal_pid = 0;

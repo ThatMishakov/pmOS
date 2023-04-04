@@ -154,10 +154,9 @@ void Buffered_Logger::set_port(const klib::shared_ptr<Port>& port, uint32_t flag
     const char* str = log_buffer.c_str();
 
     for (size_t i = 0; i < length; i += buff_size) {
-        size_t length = min(length - i, buff_size);
-        memcpy(var.buff, str, length);
-        kresult_t r;
-        port->send_from_system((char*)&var, length+4);
+        size_t buf_length = min(length - i, buff_size);
+        memcpy(var.buff, str, buf_length);
+        port->send_from_system((char*)&var, buf_length+4);
     }
 
     log_buffer.clear();

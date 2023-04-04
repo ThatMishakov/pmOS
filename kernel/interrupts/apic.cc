@@ -71,7 +71,7 @@ void discover_apic_freq()
     u32 ticks = apic_read_reg(APIC_REG_TMRCURRCNT);
 
     ticks_per_1_ms = (0-ticks)*16/10;
-    global_logger.printf("Info: APIC timer ticks per 1ms: %h\n", ticks_per_1_ms);
+    global_logger.printf("[Kernel] Info: APIC timer ticks per 1ms: %h\n", ticks_per_1_ms);
 }
 
 void apic_one_shot(u32 ms)

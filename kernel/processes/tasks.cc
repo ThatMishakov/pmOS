@@ -69,8 +69,10 @@ u64 TaskDescriptor::init_stack()
 void init_idle()
 {
     try {
+        static klib::shared_ptr<Page_Table> idle_page_table = x86_4level_Page_Table::create_empty();
+
         klib::shared_ptr<TaskDescriptor> i = TaskDescriptor::create_process(0);
-        i->create_new_page_table();
+        i->register_page_table(idle_page_table);
 
         Auto_Lock_Scope lock(i->sched_lock);
 
