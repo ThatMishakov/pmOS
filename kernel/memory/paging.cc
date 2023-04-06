@@ -13,6 +13,7 @@
 #include <sched/sched.hh>
 #include <kern_logger/kern_logger.hh>
 #include "temp_mapper.hh"
+#include <cpus/ipi.hh>
 
 bool nx_bit_enabled = false;
 
@@ -222,13 +223,32 @@ void x86_4level_Page_Table::invalidate(u64 virt_addr, bool free)
     } while (false);
 
     if (invalidated)
-        invalidate_tlb(virt_addr);
+        invalidate_tlb(virt_addr, 4096);
 }
 
-void x86_Page_Table::invalidate_tlb(u64 page)
+bool x86_Page_Table::is_used_by_others() const
 {
-    // TODO: IPI
-    invlpg(page);
+    return (active_count - is_active()) != 0;
+}
+
+bool x86_Page_Table::is_active() const
+{
+    return ::getCR3() == get_cr3();
+}
+
+void x86_Page_Table::invalidate_tlb(u64 page, u64 size)
+{
+    if (is_active())
+        for (u64 i = 0; i < size; i += 4096)
+            invlpg(page+i);
+
+    if (is_used_by_others())
+        ::signal_tlb_shootdown();
+}
+
+void x86_Page_Table::atomic_active_sum(u64 val) noexcept
+{
+    __atomic_add_fetch(&active_count, val, 0);
 }
 
 Page_Table::Check_Return_Str x86_4level_Page_Table::check_if_allocated_and_set_flag(u64 virtual_addr, u8 flag, Page_Table_Argumments arg)
@@ -497,6 +517,9 @@ Page_Table::~Page_Table()
 {
     paging_regions.clear();
     takeout_global_page_tables();
+
+    for (const auto &p : mem_objects)
+        p->atomic_unregister_pined(weak_from_this());
 }
 
 x86_4level_Page_Table::~x86_4level_Page_Table()
@@ -893,7 +916,16 @@ void x86_PAE_Entry::clear_auto()
 
 void Page_Table::atomic_pin_memory_object(klib::shared_ptr<Mem_Object> object)
 {
-    Auto_Lock_Scope l(lock);
+    {
+        Auto_Lock_Scope l(lock);
+        mem_objects.insert(object);
+    }
 
-    mem_objects.insert(object);
+    try {
+        object->atomic_register_pined(weak_from_this());
+    } catch (...) {
+        Auto_Lock_Scope l(lock);
+        mem_objects.erase(object);
+        throw;
+    }
 }

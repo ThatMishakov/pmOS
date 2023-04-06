@@ -61,7 +61,11 @@ extern "C" void cpu_start_routine()
     enable_sse();
 
     // IMO this is ugly
-    get_cpu_struct()->current_task = get_cpu_struct()->idle_task;
+    const auto& idle = get_cpu_struct()->idle_task;
+    get_cpu_struct()->current_task = idle;
+    const auto idle_pt = klib::dynamic_pointer_cast<x86_Page_Table>(idle->page_table);
+    idle_pt->atomic_active_sum(1);
+    setCR3(idle_pt->get_cr3());
     get_cpu_struct()->current_task->switch_to();
     start_timer_ticks(calculate_timer_ticks(get_cpu_struct()->current_task));
     reschedule();

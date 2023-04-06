@@ -169,7 +169,11 @@ void broadcast_sipi(u8 vector);
 /// @brief Sends a fixed IPI
 /// @param vector Destination interrupt vector (which interrupt will be recieved)
 /// @param dest Destination LAPIC ID
-void send_ipi_fixed(u8 vector, u8 dest);
+void send_ipi_fixed(u8 vector, u32 dest);
+
+/// @brief Sends an IPI with *others* shorthand
+/// @param vector Destination interrupt vector (which interrupt will be recieved)
+void send_ipi_fixed_others(u8 vector);
 
 #define APIC_DELIVERY_START_UP    0b110
 #define APIC_DELIVERY_INIT        0b100

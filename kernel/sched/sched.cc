@@ -36,6 +36,9 @@ void init_scheduling()
     get_cpu_struct()->current_task = current_task;
 
     current_task->register_page_table(x86_4level_Page_Table::init_from_phys(getCR3()));
+    // Again, there is no reason to store a pointer to the Page_Table instead of x86_Page_Table
+    const auto current_pt = klib::dynamic_pointer_cast<x86_Page_Table>(current_task->page_table);
+    current_pt->atomic_active_sum(1);
 
     try {
         current_task->page_table->atomic_create_phys_region(0x1000, GB(4), Page_Table::Readable | Page_Table::Writeable | Page_Table::Executable, true, "init_default_map", 0x1000);
@@ -118,7 +121,13 @@ void TaskDescriptor::switch_to()
 
     CPU_Info *c = get_cpu_struct();
     if (c->current_task->page_table != page_table) {
-        setCR3(klib::dynamic_pointer_cast<x86_Page_Table>(page_table)->get_cr3());
+        // TODO: There is no reason to not just store a pointer to x86_Page_Table (or other architecture-dependant tables) in TaskDescriptor
+        auto old_table = klib::dynamic_pointer_cast<x86_Page_Table>(c->current_task->page_table);
+        auto new_table = klib::dynamic_pointer_cast<x86_Page_Table>(page_table);
+
+        old_table->atomic_active_sum(-1);
+        new_table->atomic_active_sum(1);
+        setCR3(new_table->get_cr3());
     }
 
     save_segments(c->current_task);
@@ -285,7 +294,19 @@ void start_scheduler()
 
 void reschedule()
 {
-    // TODO
+    auto * const cpu_str = get_cpu_struct();
+    const auto current_priority = cpu_str->current_task->priority;
+
+    auto const new_task = cpu_str->atomic_pick_highest_priority(current_priority - 1);
+    if (new_task) {
+        auto const current_task = cpu_str->current_task;
+
+        // It might be fine to lock the locks separately
+        Auto_Lock_Scope_Double l(current_task->sched_lock, new_task->sched_lock);
+
+        new_task->switch_to();
+        push_ready(current_task);
+    }
 }
 
 u32 calculate_timer_ticks(const klib::shared_ptr<TaskDescriptor>& task)
@@ -458,8 +479,10 @@ klib::shared_ptr<TaskDescriptor> CPU_Info::atomic_get_front_priority(priority_t 
     return nullptr;
 }
 
+#include <cpus/ipi.hh>
+
 void CPU_Info::ipi_reschedule()
 {
-    // TODO
+    send_ipi_fixed(ipi_reschedule_int_vec, lapic_id);
 }
 

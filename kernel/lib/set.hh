@@ -154,7 +154,7 @@ typename set<K>::node* set<K>::search(const K& key)
     node* p = root;
 
     while (p != &NIL and p->key != key) {
-        if (p->key > key) 
+        if (key < p->key) 
             p = p->left;
         else
             p = p->right;

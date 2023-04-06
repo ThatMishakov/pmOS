@@ -168,10 +168,18 @@ void broadcast_init_ipi()
     apic_write_reg(APIC_ICR_LOW,0x000C4500);
 }
 
-void send_ipi_fixed(u8 vector, u8 dest)
+void send_ipi_fixed(u8 vector, u32 dest)
 {
-    apic_write_reg(APIC_ICR_HIGH, dest << 24);
+    apic_write_reg(APIC_ICR_HIGH, dest);
     apic_write_reg(APIC_ICR_LOW, vector | (0x01 << 14));
+}
+
+void send_ipi_fixed_others(u8 vector)
+{
+    apic_write_reg(APIC_ICR_HIGH, 0);
+
+    // Send to *vector* vector with Assert level and All Excluding Self shorthand
+    apic_write_reg(APIC_ICR_LOW, vector | (0x01 << 14) | (0b11 << 18));
 }
 
 void smart_eoi(u8 intno)

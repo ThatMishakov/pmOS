@@ -12,7 +12,7 @@ ipi_reschedule_isr:
     movq $0, %rbp
     movq $0, 176(%r11)
 
-    call reschedule
+    call reschedule_isr
 
     auto_return
 

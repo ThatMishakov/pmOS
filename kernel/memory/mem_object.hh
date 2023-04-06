@@ -29,6 +29,8 @@ public:
     /// Gets the id of the memory region
     id_type get_id() const noexcept;
 
+    Spinlock lock;
+
     /**
      * @brief Creates a new memory object
      * 
@@ -104,6 +106,14 @@ public:
      * @param new_size_pages New size of the object in pages. 0 is a valid size.
      */
     void atomic_resize(u64 new_size_pages);
+
+    /// Registers a pined by page table 
+    void register_pined(klib::weak_ptr<Page_Table> pined_by);
+    void atomic_register_pined(klib::weak_ptr<Page_Table> pined_by);
+
+    /// Deletes a pined by page table
+    void unregister_pined(const klib::weak_ptr<Page_Table> &pined_by) noexcept;
+    void atomic_unregister_pined(const klib::weak_ptr<Page_Table> &pined_by) noexcept;
 protected:
     Mem_Object() = delete;
 

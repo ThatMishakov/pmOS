@@ -15,8 +15,11 @@ bool Generic_Mem_Region::on_page_fault(u64 error, u64 pagefault_addr, [[maybe_un
     if (not has_permissions(error))
         throw(Kern_Exception(ERROR_PROTECTION_VIOLATION, "task has no permission to do the operation"));
 
-    if (task->page_table->is_mapped(pagefault_addr))
+    if (task->page_table->is_mapped(pagefault_addr)) {
+        // Some CPUs supposedly remember invalid pages. INVALPG might be needed here...
+
         return true;
+    }
 
     return alloc_page(pagefault_addr, task);
 }

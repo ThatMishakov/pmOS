@@ -325,7 +325,7 @@ void syscall_set_priority(u64 priority, u64, u64, u64, u64, u64)
 
     current_task->priority = priority;
 
-    // TODO: Changing priority to lower one
+    reschedule();
 }
 
 void syscall_get_lapic_id(u64, u64, u64, u64, u64, u64)

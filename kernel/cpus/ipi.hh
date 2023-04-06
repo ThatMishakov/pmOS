@@ -11,3 +11,9 @@ extern "C" void ipi_reschedule_isr();
 constexpr u8 ipi_invalidate_tlb_int_vec = 0xfb;
 extern "C" void ipi_invalidate_tlb_isr();
 extern "C" void ipi_invalidate_tlb_routine();
+
+/// Sends IPI to other CPUs to flush TLB
+void signal_tlb_shootdown();
+
+/// ISR for reschedule
+extern "C" void reschedule_isr();

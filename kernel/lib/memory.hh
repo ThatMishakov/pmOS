@@ -452,7 +452,6 @@ template<class T>
 class weak_ptr {
     template<typename U>
     friend class weak_ptr;
-    
 public:
     constexpr weak_ptr() noexcept = default;
     weak_ptr(const weak_ptr<T>& p) noexcept: ptr(p.ptr), refcount(p.refcount)
@@ -560,6 +559,12 @@ public:
     constexpr bool operator<(const weak_ptr& p) const
     {
         return this->ptr == p.ptr ? this->refcount < p.refcount : this->ptr < p.ptr;
+    }
+
+    template< class U >
+    bool operator==( const weak_ptr<U>& rhs ) noexcept
+    {
+        return refcount == rhs.refcount;
     }
 private:
     T* ptr = nullptr;

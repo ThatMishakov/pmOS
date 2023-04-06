@@ -384,11 +384,22 @@ class x86_Page_Table: public Page_Table {
 public:
     virtual u64 get_cr3() const = 0;
 
-    /// Automatically invalidates a page table entry on all processors
-    void invalidate_tlb(u64 page);
+    /// Automatically invalidates a page table entries, sending TLB shootdown IPI if needed
+    void invalidate_tlb(u64 page, u64 size);
+
+    /// True if the page table is used by the current task 
+    bool is_active() const;
+
+    /// True if the page table is used by other processors
+    bool is_used_by_others() const;
+
+    /// Atomically incerement and decrement active counter
+    void atomic_active_sum(u64 val) noexcept;
 protected:
     virtual u64 get_page_frame(u64 virt_addr) = 0;
     virtual void free_user_pages() = 0;
+
+    volatile u64 active_count = 0;
 };
 
 class x86_4level_Page_Table: public x86_Page_Table {

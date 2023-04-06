@@ -1,4 +1,5 @@
 #include "mem_object.hh"
+#include <assert.h>
 
 Mem_Object::Mem_Object(u64 page_size_log, u64 size_pages):
         page_size_log(page_size_log), pages(size_pages) {};
@@ -40,4 +41,30 @@ void Mem_Object::atomic_erase_gloabl_storage(id_type object_to_delete)
     Auto_Lock_Scope l(object_storage_lock);
 
     objects_storage.erase(object_to_delete);
+}
+
+void Mem_Object::register_pined(klib::weak_ptr<Page_Table> pined_by)
+{
+    assert(lock.is_locked() && "lock is not locked!");
+
+    this->pined_by.insert(pined_by);
+}
+
+void Mem_Object::atomic_register_pined(klib::weak_ptr<Page_Table> pined_by)
+{
+    Auto_Lock_Scope l(lock);
+    register_pined(klib::move(pined_by));
+}
+
+void Mem_Object::atomic_unregister_pined(const klib::weak_ptr<Page_Table> &pined_by) noexcept
+{
+    Auto_Lock_Scope l(lock);
+    unregister_pined(klib::move(pined_by));
+}
+
+void Mem_Object::unregister_pined(const klib::weak_ptr<Page_Table> &pined_by) noexcept
+{
+    assert(lock.is_locked() && "lock is not locked!");
+
+    this->pined_by.erase(pined_by);
 }
