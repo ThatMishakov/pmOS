@@ -15,7 +15,7 @@ IDT k_idt = {{
     {},
     {&invalid_opcode_isr, interrupt_gate_type, 0, 0},
     {&sse_exception_isr, interrupt_gate_type, 0, 0},
-    {},
+    {&double_fault_isr, interrupt_gate_type, 7, 0},
     {},
     {},
     {},

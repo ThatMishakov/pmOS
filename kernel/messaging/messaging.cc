@@ -7,6 +7,7 @@
 #include <kernel/block.h>
 #include <utils.hh>
 #include <processes/syscalls.hh>
+#include <assert.h>
 
 Ports_storage global_ports;
 Spinlock messaging_ports;
@@ -64,6 +65,8 @@ void Port::atomic_send_from_system(const char* msg_ptr, uint64_t size)
 
 void Port::enqueue(const klib::shared_ptr<Message>& msg)
 {
+    assert(lock.is_locked() && "Spinlock not locked!");
+
     klib::shared_ptr<TaskDescriptor> t = owner.lock();
 
     if (not t)
@@ -75,6 +78,8 @@ void Port::enqueue(const klib::shared_ptr<Message>& msg)
 
 void Port::send_from_system(klib::vector<char>&& v)
 {
+    assert(lock.is_locked() && "Spinlock not locked!");
+
     klib::shared_ptr<TaskDescriptor> task_ptr = nullptr;
 
     klib::shared_ptr<Message> ptr = klib::make_shared<Message>(task_ptr, 0, klib::forward<klib::vector<char>>(v));
@@ -91,6 +96,8 @@ void Port::send_from_system(const char* msg_ptr, uint64_t size)
 
 bool Port::send_from_user(const klib::shared_ptr<TaskDescriptor>& sender, const char *unsafe_user_ptr, size_t msg_size)
 {
+    assert(lock.is_locked() && "Spinlock not locked!");
+
     klib::vector<char> message(msg_size);
 
     kresult_t result = copy_from_user(&message.front(), (char*)unsafe_user_ptr, msg_size);
@@ -119,4 +126,25 @@ bool Port::atomic_send_from_user(const klib::shared_ptr<TaskDescriptor>& sender,
     enqueue(ptr);
 
     return true;
+}
+
+void Port::pop_front() noexcept
+{
+    assert(lock.is_locked() && "Spinlock not locked!");
+
+    return msg_queue.pop_front();
+}
+
+bool Port::is_empty() const noexcept
+{
+    assert(lock.is_locked() && "Spinlock not locked!");
+
+    return msg_queue.empty();
+}
+
+klib::shared_ptr<Message>& Port::get_front()
+{
+    assert(lock.is_locked() && "Spinlock not locked!");
+
+    return msg_queue.front();
 }

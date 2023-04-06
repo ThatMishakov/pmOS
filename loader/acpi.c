@@ -133,6 +133,8 @@ void init_acpi(unsigned long multiboot_info_str)
     */
 }
 
+extern int started_cpus;
+
 void start_cpus()
 {
     // TODO: This is very ugly & ideally should be moved to the kernel
@@ -152,10 +154,19 @@ void start_cpus()
     uint32_t vector = (uint32_t)(&_cpuinit_start) >> 12;
     syscall(SYSCALL_CONFIGURE_SYSTEM, 2, 2, vector);
 
-    for (int i = 0; i < 20; ++i)
-        syscall(SYSCALL_CONFIGURE_SYSTEM, 4, 100, 0);
+    // TODO: Second SIPI
 
-    syscall(SYSCALL_CONFIGURE_SYSTEM, 2, 3, 2 | (50 << 8));
+    for (int i = 0; i < 20 && !started_cpus; ++i)
+         syscall(SYSCALL_CONFIGURE_SYSTEM, 4, 100, 0);
 
-    syscall(SYSCALL_CONFIGURE_SYSTEM, 2, 3, 2 | (100 << 8));
+    if (!start_cpus)
+        syscall(SYSCALL_CONFIGURE_SYSTEM, 2, 2, vector);
+
+
+    // This makes no sense
+    // syscall(SYSCALL_CONFIGURE_SYSTEM, 2, 3, 2 | (50 << 8));
+
+    // syscall(SYSCALL_CONFIGURE_SYSTEM, 2, 3, 2 | (100 << 8));
+
+    // TODO: Put a tangent about programming languages here
 }

@@ -123,6 +123,31 @@ stack_segment_fault_isr:
 
 
 
+    .type double_fault_isr, @function
+    .globl double_fault_isr
+double_fault_isr:
+
+    # swapgs conditionally
+    cmpw $0x08, 16(%rsp)
+	je 1f
+	swapgs
+1:
+
+    # Save registers
+    call cond_save_context_with_error
+
+    # Calling conventions
+    movq $0, %rbp
+
+    # Entry type
+    movq $0,   176(%r11)
+
+    call double_fault_manager
+
+    # Return
+    auto_return_cond
+
+
     .type ret_nested_exception, @function
     .globl ret_nested_exception
 ret_nested_exception:

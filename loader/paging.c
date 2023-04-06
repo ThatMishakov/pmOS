@@ -5,6 +5,8 @@
 #include <mem.h>
 
 uint64_t after_exec_free_avail;
+
+char started_cpus = 0;
 char nx_enabled = 0;
 
 uint64_t alloc_page_t()

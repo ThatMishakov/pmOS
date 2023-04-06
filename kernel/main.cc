@@ -33,6 +33,8 @@ extern "C" int main(Kernel_Entry_Data* d)
     enable_sse();
 
     start_scheduler();
+
+    global_logger.printf("[Kernel] Info: Bootstrap CPU 0x%h\n", get_cpu_struct()->lapic_id);
     
     return 0;
 }

@@ -8,6 +8,7 @@
 #include <processes/syscalls.hh>
 #include "sse.hh"
 #include <memory/palloc.hh>
+#include <sched/timers.hh>
 
 klib::vector<CPU_Desc> cpus;
 
@@ -31,9 +32,15 @@ void init_per_cpu()
     
     loadTSS(TSS_OFFSET);
 
-    // This might create race condition but I don't like the idea of putting a lock here
+    c->lapic_id = get_lapic_id();
+
+    // This creates a *fat* use-after-free race condition (which hopefully shouldn't lead to a lot of crashes because
+    // current malloc is not that good) during the initialization but I don't like the idea of putting a lock here
     // TODO: Think of something
+
+    // On a separate note, is the lapic_id in the vector really needed...?
     cpus.push_back({c, get_lapic_id()});
+    c->cpu_id = cpus.size();
 
     init_idle();
 
@@ -53,7 +60,12 @@ extern "C" void cpu_start_routine()
 
     enable_sse();
 
+    // IMO this is ugly
     get_cpu_struct()->current_task = get_cpu_struct()->idle_task;
+    get_cpu_struct()->current_task->switch_to();
+    start_timer_ticks(calculate_timer_ticks(get_cpu_struct()->current_task));
+    reschedule();
+    
     global_logger.printf("[Kernel] Initialized CPU %h\n", get_lapic_id());
 }
 

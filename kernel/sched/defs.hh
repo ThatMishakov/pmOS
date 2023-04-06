@@ -1,7 +1,7 @@
 #pragma once
 #include <types.hh>
 
-using priority_t = u16;
+using priority_t = i16;
 using quantum_t = u64;
 
 

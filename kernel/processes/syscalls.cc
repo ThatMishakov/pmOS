@@ -183,13 +183,14 @@ void syscall_get_first_message(u64 buff, u64 args, u64 portno, u64, u64, u64)
 
     {
         Auto_Lock_Scope scope_lock(port->lock);
+
         if (current != port->owner.lock())
             throw(Kern_Exception(ERROR_NO_PERMISSION, "Callee is not a port owner"));
 
-        if (port->msg_queue.empty())
+        if (port->is_empty())
             throw(Kern_Exception(ERROR_NO_MESSAGES, "Port queue is empty"));
 
-        top_message = port->msg_queue.front();
+        top_message = port->get_front();
 
         bool result = top_message->copy_to_user_buff((char*)buff);
 
@@ -197,7 +198,7 @@ void syscall_get_first_message(u64 buff, u64 args, u64 portno, u64, u64, u64)
             return;
 
         if (!(args & MSG_ARG_NOPOP)) {
-            port->msg_queue.pop_front();
+            port->pop_front();
         }
     }
 }
@@ -237,7 +238,7 @@ void syscall_get_message_info(u64 message_struct, u64 portno, u64 flags, u64, u6
 
     {
         Auto_Lock_Scope lock(port->lock);
-        if (port->msg_queue.empty()) {
+        if (port->is_empty()) {
             constexpr unsigned FLAG_NOBLOCK= 0x01;
 
             if (flags & FLAG_NOBLOCK) {
@@ -249,7 +250,7 @@ void syscall_get_message_info(u64 message_struct, u64 portno, u64 flags, u64, u6
                 return;
             }
         }
-        msg = port->msg_queue.front();
+        msg = port->get_front();
     }
 
     u64 msg_struct_size = sizeof(Message_Descriptor);

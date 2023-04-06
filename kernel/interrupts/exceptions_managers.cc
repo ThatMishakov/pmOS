@@ -46,7 +46,7 @@ void print_registers(const klib::shared_ptr<TaskDescriptor>& task)
 
 extern "C" void deal_with_pagefault_in_kernel()
 {
-    t_print_bochs("Error: Pagefault inside the kernel! Instr %h %%cr2 0x%h  error 0x%h\n", get_cpu_struct()->jumpto_from, get_cpu_struct()->pagefault_cr2, get_cpu_struct()->pagefault_error);
+    t_print_bochs("Error: Pagefault inside the kernel! Instr %h %%cr2 0x%h  error 0x%h CPU %i\n", get_cpu_struct()->jumpto_from, get_cpu_struct()->pagefault_cr2, get_cpu_struct()->pagefault_error, get_cpu_struct()->cpu_id);
     print_registers(get_cpu_struct()->current_task);
     print_stack_trace(bochs_logger);
 
@@ -151,5 +151,13 @@ extern "C" void stack_segment_fault_manager()
     task_ptr task = get_cpu_struct()->current_task;
     t_print_bochs("!!! Stack-Segment Fault error %h RIP %h RSP %h PID %h (%s)\n", task->regs.int_err, task->regs.e.rip, task->regs.e.rsp, task->pid, task->name.c_str());
     global_logger.printf("!!! Stack-Segment Fault error %h RIP %h RSP %h\n", task->regs.int_err, task->regs.e.rip, task->regs.e.rsp);
+    task->atomic_kill();
+}
+
+extern "C" void double_fault_manager()
+{
+    task_ptr task = get_cpu_struct()->current_task;
+    t_print_bochs("!!! Double Fault error %h RIP %h RSP %h PID %h (%s)\n", task->regs.int_err, task->regs.e.rip, task->regs.e.rsp, task->pid, task->name.c_str());
+    global_logger.printf("!!! Double Fault error %h RIP %h RSP %h PID %h (%s)\n", task->regs.int_err, task->regs.e.rip, task->regs.e.rsp, task->pid, task->name.c_str());
     task->atomic_kill();
 }

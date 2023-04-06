@@ -12,6 +12,7 @@
 #include <memory/temp_mapper.hh>
 
 // Checks the mask and unblocks the task if needed
+// This function needs to be axed
 inline bool unblock_if_needed(const klib::shared_ptr<TaskDescriptor>& p, const klib::shared_ptr<Generic_Port>& compare_blocked_by)
 {
     return p->atomic_unblock_if_needed(compare_blocked_by);
@@ -28,6 +29,15 @@ public:
     void push_back(const klib::shared_ptr<TaskDescriptor>& desc) noexcept;
     void erase(const klib::shared_ptr<TaskDescriptor>& desc) noexcept;
 
+    /**
+     * @brief Erases *desc* from the given queue
+     * 
+     * Same as erase(), except it protects the queue with a spinlock
+     * 
+     * @param desc Task to be erased from the queue. Must be valid and pertain to the queue. Does not do errors checking
+     */
+    void atomic_erase(const klib::shared_ptr<TaskDescriptor>& desc) noexcept;
+
     // Returns front task or null pointer if empty
     klib::shared_ptr<TaskDescriptor> pop_front() noexcept;
 
@@ -42,7 +52,7 @@ extern sched_queue blocked;
 extern sched_queue uninit;
 extern sched_queue dead_queue;
 
-
+inline klib::array<sched_queue, sched_queues_levels> global_sched_queues;
 
 struct CPU_Info {
     CPU_Info* self = this; // 0
@@ -72,14 +82,20 @@ struct CPU_Info {
     Kernel_Stack_Pointer machine_check_stack;
     Kernel_Stack_Pointer double_fault_stack;
 
-    klib::shared_ptr<TaskDescriptor> atomic_pick_highest_priority();
+    klib::shared_ptr<TaskDescriptor> atomic_pick_highest_priority(priority_t min = sched_queues_levels - 1);
     klib::shared_ptr<TaskDescriptor> atomic_get_front_priority(priority_t);
-    klib::shared_ptr<TaskDescriptor> atomic_pick_lowest_priority(unsigned max_priority = 2);
 
     x86_PAE_Temp_Mapper temp_mapper;
 
     constexpr static unsigned pthread_once_size = 16;
     klib::array<const void *, pthread_once_size> pthread_once_storage = {};
+
+    u32 cpu_id = 0;
+
+    // IMHO this is better than protecting current_task pointer with spinlock
+    priority_t current_task_priority = sched_queues_levels;
+
+    void ipi_reschedule(); // nothrow ?
 };
 
 quantum_t assign_quantum_on_priority(priority_t);

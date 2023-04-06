@@ -55,6 +55,7 @@ public:
     sched_queue *parent_queue = nullptr;
     Process_Status status = PROCESS_UNINIT;
     priority_t priority = 8;
+    u32 cpu_affinity = 0;
     Spinlock sched_lock;
 
     klib::weak_ptr<TaskDescriptor> weak_self;

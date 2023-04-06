@@ -30,17 +30,14 @@ struct Message {
     bool copy_to_user_buff(char* buff);
 };
 
-using Message_storage = klib::list<klib::shared_ptr<Message>>;
-
-
 #define MSG_ATTR_PRESENT   0x01ULL
 #define MSG_ATTR_DUMMY     0x02ULL
 #define MSG_ATTR_NODEFAULT 0x03ULL
 
-struct Port: public Generic_Port {
+class Port: public Generic_Port {
+public:
     klib::weak_ptr<TaskDescriptor> owner;
     klib::weak_ptr<Port> self;
-    Message_storage msg_queue;
 
     Spinlock lock;
     u64 portno;
@@ -61,6 +58,13 @@ struct Port: public Generic_Port {
     bool atomic_send_from_user(const klib::shared_ptr<TaskDescriptor>& sender, const char* unsafe_user_message, size_t msg_size);
 
     void change_return_upon_unblock(const klib::shared_ptr<TaskDescriptor>& task);
+
+    klib::shared_ptr<Message>& get_front();
+    void pop_front() noexcept;
+    bool is_empty() const noexcept;
+protected:
+    using Message_storage = klib::list<klib::shared_ptr<Message>>;
+    Message_storage msg_queue;
 };
 
 struct Ports_storage {

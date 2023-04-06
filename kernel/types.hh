@@ -36,10 +36,17 @@ struct Spinlock {
 	{
 		return this == &s;
 	}
+
+	inline bool is_locked() const
+	{
+		return locked;
+	}
 };
 
 struct Auto_Lock_Scope {
 	Spinlock& s;
+
+	Auto_Lock_Scope() = delete;
 	Auto_Lock_Scope(Spinlock& lock): s(lock)
 	{
 		s.lock();

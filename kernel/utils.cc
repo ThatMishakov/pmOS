@@ -77,6 +77,9 @@ void t_write_bochs(const char * str, u64 length)
 
 void t_print_bochs(const char *str, ...)
 {
+    static Spinlock l;
+    Auto_Lock_Scope ll(l);
+    
     va_list arg;
     va_start(arg, str);
 

@@ -111,8 +111,7 @@ bool TaskDescriptor::is_uninited() const
 void TaskDescriptor::init()
 {
     klib::shared_ptr<TaskDescriptor> task = weak_self.lock();
-    task->parent_queue->erase(task);
-    task->parent_queue = nullptr;
+    task->parent_queue->atomic_erase(task);
 
     klib::shared_ptr<TaskDescriptor> current_task = get_cpu_struct()->current_task;
     if (current_task->priority > task->priority) {

@@ -51,7 +51,8 @@ void * x86_PAE_Temp_Mapper::kern_map(u64 phys_frame)
             min_index = i+1;
 
             char *t = (char *)pt_mapped;
-            t += i*4096;
+            t += (i - start_index)*4096;
+
             return (void *)t;
         }
     }

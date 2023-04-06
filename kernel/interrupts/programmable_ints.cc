@@ -21,7 +21,7 @@ extern "C" void programmable_interrupt(u32 intno)
     }
 
     if (port) {
-        port->send_from_system(reinterpret_cast<char*>(&kmsg), sizeof(kmsg));
+        port->atomic_send_from_system(reinterpret_cast<char*>(&kmsg), sizeof(kmsg));
     }
 
     apic_eoi();

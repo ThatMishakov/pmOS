@@ -380,12 +380,16 @@ init_cpu:
 
     .code32
 protected_mode:
+    # Load segment registers
     movw $(temp_gdt_32bit_data - temp_gdt), %ax
     movw %ax, %ds
     movw %ax, %es
     movw %ax, %ss
     movw %ax, %fs
     movw %ax, %gs
+
+    # Signal that CPUs have been started
+    movb $1, started_cpus
 
     cmpb $0, nx_enabled
     jz nx_not_supported_bootstrap
