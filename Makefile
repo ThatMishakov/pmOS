@@ -16,6 +16,6 @@ bochs: grub/pmOS.iso
 	bochs -q -f .bochsrc
 
 qemu: grub/pmOS.iso
-	qemu-system-x86_64 -cdrom grub/pmOS.iso  -no-reboot -d cpu_reset -smp 4
+	qemu-system-x86_64 -cdrom grub/pmOS.iso  -no-shutdown -d cpu_reset -smp 4 -serial stdio
 
 .PHONY: $(TOPTARGETS) $(SUBDIRS) grub/pmOS.iso

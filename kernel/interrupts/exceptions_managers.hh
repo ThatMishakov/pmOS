@@ -17,6 +17,10 @@ constexpr u8 nmi_num = 0x2;
 extern "C" void nmi_isr();
 extern "C" void nmi_manager();
 
+constexpr u8 breakpoint_num = 0x03;
+extern "C" void breakpoint_isr();
+extern "C" void breakpoint_manager();
+
 constexpr u8 invalid_opcode_num = 0x6;
 extern "C" void invalid_opcode_isr();
 extern "C" void invalid_opcode_manager();

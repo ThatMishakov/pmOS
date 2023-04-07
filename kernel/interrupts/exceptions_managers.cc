@@ -161,3 +161,8 @@ extern "C" void double_fault_manager()
     global_logger.printf("!!! Double Fault error %h RIP %h RSP %h PID %h (%s)\n", task->regs.int_err, task->regs.e.rip, task->regs.e.rsp, task->pid, task->name.c_str());
     task->atomic_kill();
 }
+
+void breakpoint_manager()
+{
+    global_logger.printf("Warning: hit a breakpoint but it's not implemented\n");
+}

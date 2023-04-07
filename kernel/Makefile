@@ -10,7 +10,7 @@ CXX = $(ROOTDIR)/../bin/cross/bin/x86_64-pmos-g++
 LD = $(ROOTDIR)/../bin/cross/bin/x86_64-pmos-g++
 
 ROOTDIR = $(realpath .)
-INCLUDEDIR = include . libunwind/include
+INCLUDEDIR = include . libunwind/include minidbg/x86_64
 INCPARAM = $(foreach d, $(INCLUDEDIR), -I$(ROOTDIR)/$d)
 
 # User controllable CFLAGS.
@@ -70,7 +70,7 @@ OBJS = 	./objects/icxxabi.o ./start.o ./asm.o ./main.o ./misc.o ./utils.o types.
 		./libcxxrt/src/memory.o ./libcxxrt/src/stdexcept.o \
 		./libcxxrt/src/terminate.o ./libcxxrt/src/typeinfo.o \
 		./libcxxrt/src/auxhelper.o ./libcxxrt/src/exception.o \
-		#./libcxxrt/src/noexception.o
+		./minidbg/dbg.o ./minidbg/x86_64/dbga.o ./minidbg/x86_64/dbgc.o ./minidbg/x86_64/uart.o
 
 CRTI_OBJ =  ./objects/crti.o
 CRTBEGIN_OBJ:=$(shell $(CC) $(CFLAGS) -print-file-name=crtbegin.o)

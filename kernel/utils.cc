@@ -12,6 +12,7 @@
 #include <sched/sched.hh>
 #include <stdio.h>
 #include <libunwind.h>
+#include <dbg.h>
 
 void int_to_string(long int n, u8 base, char* str, int& length)
 {
@@ -292,26 +293,51 @@ struct stack_frame {
 //     }
 // }
 
-void print_stack_trace(Logger& logger)
+void print_stack_trace(Logger& logger, stack_frame * s)
 {
     logger.printf("Stack trace:\n");
-    struct stack_frame* s;
-    __asm__ volatile("movq %%rbp, %0": "=a" (s));
     for (; s != NULL; s = s->next)
         logger.printf("  -> %h\n", (u64)s->return_addr);
 }
 
+void print_stack_trace(Logger& logger)
+{
+    struct stack_frame* s;
+    __asm__ volatile("movq %%rbp, %0": "=a" (s));
+    print_stack_trace(logger, s);
+}
+
+extern "C" void serial_print_stack_trace(void * s)
+{
+    print_stack_trace(serial_logger, (stack_frame *)s);
+}
+
+extern "C" void dbg_uart_init();
 
 extern "C" void abort(void)
 {
-    t_print_bochs("Error: abort() was called. Freezing...\n");
+    t_print_bochs("Error: abort() was called. Hint: use debugger on COM1\n");
+
+    dbg_uart_init();
+    serial_logger.printf("Error: abort() was called.\n");
+
     print_stack_trace(bochs_logger);
+    print_stack_trace(serial_logger);
+
+    serial_logger.printf("Dropping into debugger...\n---------------\n");
+
+    breakpoint;
+
     while (1);
 }
 
 extern "C" void _assert_fail(const char* condition, const char* file, unsigned int line)
 {
     t_print_bochs("Assert fail %s in file %s at line %i\n", condition, file, line);
+
+    dbg_uart_init();
+    serial_logger.printf("Assert fail %s in file %s at line %i\n", condition, file, line);
+
     abort();
 }
 

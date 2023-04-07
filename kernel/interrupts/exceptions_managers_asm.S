@@ -1,5 +1,35 @@
     .include "interrupts/asm_macros.S"
 
+
+    .type breakpoint_isr, @function
+    .globl breakpoint_isr
+breakpoint_isr:
+
+    # Invoke debuger if breakpoint was hit in kernel
+    cmpw $0x08, 8(%rsp)
+    je 1f
+
+    # It will always be from userspace to ring 0
+    swapgs
+
+    # Save registers
+    call save_context
+
+    # Calling conventions
+    movq $0, %rbp
+
+    # Entry type
+    movq $0,   176(%r11)
+
+    call breakpoint_manager
+
+    auto_return
+
+1:
+    dbg_code 3, 0
+
+
+
     .text
     .type sse_exception_isr, @function
     .globl sse_exception_isr
@@ -75,11 +105,10 @@ general_protection_fault_isr:
     .globl pagefault_isr
 pagefault_isr:
 
-    # swapgs conditionally
+    # Jump to debugger upon pagefault in kernel
     cmpw $0x08, 16(%rsp)
 	je 1f
 	swapgs
-1:
 
     # Save registers
     call cond_save_context_with_error
@@ -95,6 +124,8 @@ pagefault_isr:
     # Return
     auto_return_cond
 
+1:
+    dbg_code 14, 1
 
 
     .type stack_segment_fault_isr, @function

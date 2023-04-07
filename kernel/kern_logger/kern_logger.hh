@@ -51,3 +51,11 @@ struct Bochs_Logger: Logger {
     virtual void log_nolock(const char* c, size_t size) override;
 };
 extern Bochs_Logger bochs_logger;
+
+class Serial_Logger : public Logger {
+public:
+    void log_nolock(const char* c, size_t size) override;
+    virtual ~Serial_Logger() = default;
+};
+
+inline Serial_Logger serial_logger;

@@ -68,3 +68,20 @@
     movq 176(%r15), %r15
     jmpq *return_table(,%r15, 8)
     .endm
+
+    # Macro indicating code needed for calling mini debugger
+    # intno indicated the exception vector
+    # errcode indicates whether the exception pushes an error code. 0 means it doesn't
+    .macro dbg_code intno, errcode
+    .if \errcode == 0
+    pushq   $0
+    .endif
+    call dbg_saveregs
+    addq $8, %rsp
+    movq $\intno, %rdi
+    call dbg_main
+    movq    dbg_regs + 31*8, %rax   # update the return address
+    movq    %rax, (%rsp)
+    call dbg_loadregs
+    iretq
+    .endm

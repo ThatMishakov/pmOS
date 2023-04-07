@@ -10,7 +10,7 @@ IDT k_idt = {{
     {},
     {},
     {},
-    {},
+    {&breakpoint_isr, interrupt_gate_type, 2, 0},
     {},
     {},
     {&invalid_opcode_isr, interrupt_gate_type, 0, 0},

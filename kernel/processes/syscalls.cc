@@ -21,6 +21,8 @@
 #include <exceptions.hh>
 #include <lib/utility.hh>
 #include <memory/mem_object.hh>
+#include <dbg.h>
+#include <assert.h>
 
 using syscall_function = void (*)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t);
 klib::array<syscall_function, 31> syscall_table = {
@@ -68,7 +70,6 @@ extern "C" void syscall_handler()
     u64 arg3 = syscall_arg3(task);
     u64 arg4 = syscall_arg4(task);
     u64 arg5 = syscall_arg5(task);
-
 
     // TODO: check permissions
 

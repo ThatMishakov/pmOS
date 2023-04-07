@@ -78,6 +78,7 @@ struct CPU_Info {
     Kernel_Stack_Pointer kernel_stack;
     Kernel_Stack_Pointer idle_stack;
 
+    Kernel_Stack_Pointer debug_stack;
     Kernel_Stack_Pointer nmi_stack;
     Kernel_Stack_Pointer machine_check_stack;
     Kernel_Stack_Pointer double_fault_stack;

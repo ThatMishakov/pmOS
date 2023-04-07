@@ -161,3 +161,15 @@ void Buffered_Logger::set_port(const klib::shared_ptr<Port>& port, uint32_t flag
 
     log_buffer.clear();
 }
+
+extern "C" void dbg_uart_putc(unsigned int c);
+
+void Serial_Logger::log_nolock(const char* c, size_t size)
+{
+    for (auto i = 0; i < size; ++i) {
+        const char cc = c[i];
+        if (cc == '\n')
+            dbg_uart_putc('\r');
+        dbg_uart_putc(cc);
+    }
+}
