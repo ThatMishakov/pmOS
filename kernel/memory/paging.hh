@@ -60,6 +60,11 @@ struct x86_PAE_Entry {
     void clear_nofree();
 } PACKED ALIGNED(8);
 
+struct Mem_Object_Data {
+    u8 max_privilege_mask = 0;
+    klib::set<klib::shared_ptr<Generic_Mem_Region>> regions;
+};
+
 /**
  * @brief Generic Page Table class
  * 
@@ -376,8 +381,7 @@ protected:
     virtual u64 get_page_frame(u64 virt_addr) = 0;
 
     /// Storage for the pointers to the pinned memory objects
-    /// @todo Max permission of the page
-    klib::set<klib::shared_ptr<Mem_Object>> mem_objects;
+    klib::splay_tree_map<klib::shared_ptr<Mem_Object>, Mem_Object_Data> mem_objects;
 };
 
 class x86_Page_Table: public Page_Table {

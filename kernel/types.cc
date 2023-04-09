@@ -2,7 +2,7 @@
 #include "utils.hh"
 #include <kern_logger/kern_logger.hh>
 
-void Spinlock::lock()
+void Spinlock::lock() noexcept
 {
     int counter = 0;
     bool result;

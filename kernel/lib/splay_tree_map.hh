@@ -11,6 +11,7 @@ template<typename K, typename T>
 class splay_tree_map {
 public:
     typedef pair<const K, T> value_type;
+    typedef value_type& reference;
     typedef K key_type;
 private:
     struct node {
@@ -59,9 +60,9 @@ public:
             return ptr == it.ptr;
         }
 
-        constexpr pair<const K&, T&> operator*() const
+        constexpr reference operator*() const
         {
-            return {ptr->key, ptr->data};
+            return ptr->key_data;
         }
 
         constexpr value_type* operator->() const
@@ -237,7 +238,7 @@ pair<typename splay_tree_map<K,T>::iterator, bool> splay_tree_map<K,T>::insert(t
     node* temp = root;
     while (temp != nullptr) {
         n = temp;
-        if (temp->key_data.first > pair.first) {
+        if (pair.first < temp->key_data.first) {
             temp = temp->left;
         } else if (temp->key_data.first < pair.first) {
             temp = temp->right;

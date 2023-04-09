@@ -170,7 +170,7 @@ struct Generic_Mem_Region: public klib::enable_shared_from_this<Generic_Mem_Regi
  * 
  * @see syscall_create_phys_map_region()
  */
-struct Phys_Mapped_Region: Generic_Mem_Region {
+struct Phys_Mapped_Region final: Generic_Mem_Region {
     // Allocated a new page, pointing to the corresponding physical address.
     virtual bool alloc_page(u64 ptr_addr, const klib::shared_ptr<TaskDescriptor>& task);
 
@@ -192,7 +192,7 @@ struct Phys_Mapped_Region: Generic_Mem_Region {
 
 
 // Normal region. On page fault, attempts to allocate the page and fills it with specified pattern (e.g. zeroing) if successfull
-struct Private_Normal_Region: Generic_Mem_Region {
+struct Private_Normal_Region final: Generic_Mem_Region {
     // This pattern is used to fill the newly allocated pages
     u64 pattern = 0;
 
@@ -240,4 +240,30 @@ struct Private_Managed_Region: Generic_Mem_Region {
         {};
 
     virtual void move_to(const klib::shared_ptr<Page_Table>& new_table, u64 base_addr, u64 new_access) override;
+};
+
+class Mem_Object;
+
+/// Memory region which references memory object
+struct Mem_Object_Reference final : Generic_Mem_Region
+{
+    /// Memory object that is referenced by the region
+    const klib::shared_ptr<Mem_Object> references;
+
+    /// Offset in bytes from the start of the memory object
+    u64 start_offset_bytes = 0;
+
+    /// Indicates whether the pages should be copied on access
+    bool cow = false;
+
+    Mem_Object_Reference(u64 start_addr, u64 size, klib::string name, klib::weak_ptr<Page_Table> owner, u8 access, klib::shared_ptr<Mem_Object> references, u64 start_offset_bytes, bool copy_on_write):
+        Generic_Mem_Region(start_addr, size, klib::forward<klib::string>(name), klib::forward<klib::weak_ptr<Page_Table>>(owner), access), 
+        references(klib::forward<klib::shared_ptr<Mem_Object>>(references)), start_offset_bytes(start_offset_bytes), cow(copy_on_write)
+        {};
+
+    virtual bool alloc_page(u64 ptr_addr, const klib::shared_ptr<TaskDescriptor>& task);
+
+    virtual void move_to(const klib::shared_ptr<Page_Table>& new_table, u64 base_addr, u64 new_access) override;
+
+    virtual Page_Table_Argumments craft_arguments() const;
 };

@@ -519,7 +519,7 @@ Page_Table::~Page_Table()
     takeout_global_page_tables();
 
     for (const auto &p : mem_objects)
-        p->atomic_unregister_pined(weak_from_this());
+        p.first->atomic_unregister_pined(weak_from_this());
 }
 
 x86_4level_Page_Table::~x86_4level_Page_Table()
@@ -887,7 +887,7 @@ void Page_Table::move_pages(const klib::shared_ptr<Page_Table>& to, u64 from_add
 
         invalidate_range(from_addr, size_bytes, false);
     } catch (...) {
-        to->invalidate_range(to_addr, size_bytes, false);
+        to->invalidate_range(to_addr, offset, false);
 
         throw;
     }
@@ -916,16 +916,20 @@ void x86_PAE_Entry::clear_auto()
 
 void Page_Table::atomic_pin_memory_object(klib::shared_ptr<Mem_Object> object)
 {
-    {
-        Auto_Lock_Scope l(lock);
-        mem_objects.insert(object);
-    }
+    // This needs to be done in this particular order to avoid deadlocks
+    Auto_Lock_Scope object_lock(object->pinned_lock);
+    object->register_pined(weak_from_this());
+
+    bool inserted = false;
 
     try {
-        object->atomic_register_pined(weak_from_this());
-    } catch (...) {
         Auto_Lock_Scope l(lock);
-        mem_objects.erase(object);
+        inserted = mem_objects.insert({object, Mem_Object_Data()}).second;
+    } catch (...) {
+        object->unregister_pined(weak_from_this());
         throw;
     }
+
+    if (not inserted)
+        throw Kern_Exception(ERROR_PAGE_PRESENT, "memory object is already referenced");
 }

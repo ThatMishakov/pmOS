@@ -181,11 +181,18 @@ protected:
         return ptr >> page_size_log;
     }
 
+public:
+    /**
+     * @brief Lock for when pinned pages are needed to be modified
+     * 
+     */
+    Spinlock pinned_lock;
+
+protected:
     /**
      * @brief Page tables pinning the memory region
      * 
-     * This set holds the pointers to the page tables currently pining this region. This mechanism can be used for holding
-     * the memory region from deliting if it stops being used by all the processes and it is not desired free all the pages.
+     * This set holds the pointers to the page tables currently pining this region.
      * 
      * The Page_Table is used to pin the objects instead of TaskDescriptor because the kernel treats threads as different tasks
      * that share the page table without specific knowledge about what is actually being executed. Thus, in my vision, Page_Table
@@ -193,14 +200,6 @@ protected:
      * 
      */
     klib::set<klib::weak_ptr<Page_Table>> pined_by;
-
-    /**
-     * @brief Shared regions referencing the memory region
-     * 
-     * This set holds the pointers to the memory regions currently referencing this memory object.
-     * 
-     */
-    klib::set<klib::weak_ptr<Generic_Mem_Region>> referenced_by;
 
     /**
      * @brief Pager for the region
