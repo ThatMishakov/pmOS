@@ -2,6 +2,7 @@
 #include <types.hh>
 #include <lib/memory.hh>
 #include <lib/string.hh>
+#include "page_descriptor.hh"
 
 class Port;
 class TaskDescriptor;
@@ -40,6 +41,7 @@ struct Generic_Mem_Region: public klib::enable_shared_from_this<Generic_Mem_Regi
     u64 id = 0;
 
     /// Owner of the region
+    /// @todo Replace with a normal pointer
     klib::weak_ptr<Page_Table> owner;
 
     /// Flags for the region
@@ -52,16 +54,13 @@ struct Generic_Mem_Region: public klib::enable_shared_from_this<Generic_Mem_Regi
     /**
      * @brief Allocate a page inside the region
      * 
-     * This function tries to allocate the page for the task (as the kernel is *very* lazy (which is a good thing) ans uses delayed allocation for everything).
-     * Depending on the actuall region class, different actions could be done, one of them being mercilessly blocking the task desperately trying to access it.
-     * Thus, the callee must be prepared for that and expect that if the false is returned, the task is blocked.
+     * This function tries to allocate the page for the task (as the kernel is *very* lazy (which is a good thing) and uses delayed allocation for everything).
+     * Depending on the actual region class, different actions could be done, one of them being mercilessly blocking the task desperately trying to access it.
      * 
      * @param ptr_addr The address which needs to be allocated/has caused the petition.
-     * @param task The task that has caused the allocation. This task might accidentally be found blocked if it misbehaves.
-     * @return true if the allocation has been successfull and the task was not blocked
-     * @return false if the allocation has been successfull but the task *was* blocked
+     * @return true if the page is avaiable, false otherwise.
      */
-    virtual bool alloc_page(u64 ptr_addr, const klib::shared_ptr<TaskDescriptor>& task) = 0;
+    virtual bool alloc_page(u64 ptr_addr) = 0;
 
     /**
      * @brief Checks if a page from the region can be taken out by provide_page() syscall
@@ -79,13 +78,12 @@ struct Generic_Mem_Region: public klib::enable_shared_from_this<Generic_Mem_Regi
      * 
      * @param access_mode Mode in which the page is to be accessed
      * @param page_addr Address of the page
-     * @param task Task trying to access the page
      * @return true if the execution was successfull and the page is immediately available
      * @return false is the execution was successfull but the resource is currently unavailable and the operation is needed to be repeated again once
      *         it becomes available.
      * @see alloc_page()
      */
-    bool prepare_page(u64 access_mode, u64 page_addr, const klib::shared_ptr<TaskDescriptor>& task);
+    bool prepare_page(u64 access_mode, u64 page_addr);
 
     /**
      * @brief Function to be executed upon a page fault.
@@ -97,7 +95,7 @@ struct Generic_Mem_Region: public klib::enable_shared_from_this<Generic_Mem_Regi
      * @return false Execution was successfull but the page is not immediately available
      * @todo This function is very x86-specific
      */
-    bool on_page_fault(u64 error, u64 pagefault_addr, const klib::shared_ptr<TaskDescriptor>& task);
+    bool on_page_fault(u64 error, u64 pagefault_addr);
 
 
     Generic_Mem_Region(u64 start_addr, u64 size, klib::string name, klib::weak_ptr<Page_Table> owner, u8 access):
@@ -172,7 +170,7 @@ struct Generic_Mem_Region: public klib::enable_shared_from_this<Generic_Mem_Regi
  */
 struct Phys_Mapped_Region final: Generic_Mem_Region {
     // Allocated a new page, pointing to the corresponding physical address.
-    virtual bool alloc_page(u64 ptr_addr, const klib::shared_ptr<TaskDescriptor>& task);
+    virtual bool alloc_page(u64 ptr_addr);
 
     u64 phys_addr_start = 0;
     constexpr bool can_takeout_page() const noexcept override
@@ -202,7 +200,7 @@ struct Private_Normal_Region final: Generic_Mem_Region {
     }
 
     // Attempt to allocate a new page
-    virtual bool alloc_page(u64 ptr_addr, const klib::shared_ptr<TaskDescriptor>& task);
+    virtual bool alloc_page(u64 ptr_addr);
 
     // Tries to preallocate all the pages
     void prefill();
@@ -233,7 +231,7 @@ struct Private_Managed_Region: Generic_Mem_Region {
     virtual Page_Table_Argumments craft_arguments() const;
 
     /// When pagefault occurs to the current task, it is blocked and the message is sent to the *notifications_port*. 
-    virtual bool alloc_page(u64 ptr_addr, const klib::shared_ptr<TaskDescriptor>& task);
+    virtual bool alloc_page(u64 ptr_addr);
 
     Private_Managed_Region(u64 start_addr, u64 size, klib::string name, klib::weak_ptr<Page_Table> owner, u8 access, klib::shared_ptr<Port> p):
         Generic_Mem_Region(start_addr, size, klib::forward<klib::string>(name), klib::forward<klib::weak_ptr<Page_Table>>(owner), access), notifications_port(klib::forward<klib::shared_ptr<Port>>(p))
@@ -261,9 +259,9 @@ struct Mem_Object_Reference final : Generic_Mem_Region
         references(klib::forward<klib::shared_ptr<Mem_Object>>(references)), start_offset_bytes(start_offset_bytes), cow(copy_on_write)
         {};
 
-    virtual bool alloc_page(u64 ptr_addr, const klib::shared_ptr<TaskDescriptor>& task);
+    virtual bool alloc_page(u64 ptr_addr) override;
 
     virtual void move_to(const klib::shared_ptr<Page_Table>& new_table, u64 base_addr, u64 new_access) override;
 
-    virtual Page_Table_Argumments craft_arguments() const;
+    virtual Page_Table_Argumments craft_arguments() const override;
 };

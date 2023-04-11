@@ -4,10 +4,11 @@
 #include "mem.hh"
 #include <pmos/ipc.h>
 #include <processes/tasks.hh>
+#include <assert.h>
 
 u64 counter = 1;
 
-bool Generic_Mem_Region::on_page_fault(u64 error, u64 pagefault_addr, [[maybe_unused]] const klib::shared_ptr<TaskDescriptor>& task)
+bool Generic_Mem_Region::on_page_fault(u64 error, u64 pagefault_addr)
 {
     if (protection_violation(error))
         throw(Kern_Exception(ERROR_PROTECTION_VIOLATION, "violation of protection policy"));
@@ -15,24 +16,24 @@ bool Generic_Mem_Region::on_page_fault(u64 error, u64 pagefault_addr, [[maybe_un
     if (not has_permissions(error))
         throw(Kern_Exception(ERROR_PROTECTION_VIOLATION, "task has no permission to do the operation"));
 
-    if (task->page_table->is_mapped(pagefault_addr)) {
+    if (owner.lock()->is_mapped(pagefault_addr)) {
         // Some CPUs supposedly remember invalid pages. INVALPG might be needed here...
 
         return true;
     }
 
-    return alloc_page(pagefault_addr, task);
+    return alloc_page(pagefault_addr);
 }
 
-bool Generic_Mem_Region::prepare_page(u64 access_mode, u64 page_addr, const klib::shared_ptr<TaskDescriptor>& task)
+bool Generic_Mem_Region::prepare_page(u64 access_mode, u64 page_addr)
 {
     if (not has_access(access_mode))
         throw (Kern_Exception(ERROR_OUT_OF_RANGE, "process has no access to the page"));
 
-    if (task->page_table->is_mapped(page_addr))
+    if (owner.lock()->is_mapped(page_addr))
         return true;
 
-    return alloc_page(page_addr, task);
+    return alloc_page(page_addr);
 }
 
 Page_Table_Argumments Private_Normal_Region::craft_arguments() const
@@ -46,7 +47,7 @@ Page_Table_Argumments Private_Normal_Region::craft_arguments() const
     };
 }
 
-bool Private_Normal_Region::alloc_page(u64 ptr_addr, [[maybe_unused]] const klib::shared_ptr<TaskDescriptor>& task)
+bool Private_Normal_Region::alloc_page(u64 ptr_addr)
 {
     void* new_page = kernel_pframe_allocator.alloc_page();
 
@@ -80,7 +81,7 @@ Page_Table_Argumments Phys_Mapped_Region::craft_arguments() const
     };
 }
 
-bool Phys_Mapped_Region::alloc_page(u64 ptr_addr, [[maybe_unused]] const klib::shared_ptr<TaskDescriptor>& task)
+bool Phys_Mapped_Region::alloc_page(u64 ptr_addr)
 {
     Page_Table_Argumments args = craft_arguments();
 
@@ -103,7 +104,7 @@ Page_Table_Argumments Private_Managed_Region::craft_arguments() const
     };
 }
 
-bool Private_Managed_Region::alloc_page(u64 ptr_addr, const klib::shared_ptr<TaskDescriptor>& task)
+bool Private_Managed_Region::alloc_page(u64 ptr_addr)
 {
     u64 page_addr = (u64)ptr_addr & ~07777UL;
 
@@ -118,7 +119,7 @@ bool Private_Managed_Region::alloc_page(u64 ptr_addr, const klib::shared_ptr<Tas
         IPC_Kernel_Alloc_Page str {
             IPC_Kernel_Alloc_Page_NUM,
             0,
-            task->page_table->id,
+            owner.lock()->id,
             page_addr,
         };
 
@@ -128,8 +129,6 @@ bool Private_Managed_Region::alloc_page(u64 ptr_addr, const klib::shared_ptr<Tas
 
         p->atomic_send_from_system((const char *)&str, sizeof(IPC_Kernel_Alloc_Page));
     }
-
-    task->atomic_block_by_page(page_addr);
 
     return false;
 }
@@ -160,4 +159,38 @@ void Generic_Mem_Region::move_to(const klib::shared_ptr<Page_Table>& new_table, 
 void Private_Managed_Region::move_to(const klib::shared_ptr<Page_Table>& new_table, u64 base_addr, u64 new_access)
 {
     throw Kern_Exception(ERROR_NOT_SUPPORTED, "move_to of Private_Managed_Region is currently not supported");
+}
+
+Page_Table_Argumments Mem_Object_Reference::craft_arguments() const
+{
+    return {
+        !!(access_type & Writeable),
+        true,
+        false,
+        !(access_type & Executable),
+        0b010,
+    };
+}
+
+bool Mem_Object_Reference::alloc_page(u64 ptr_addr)
+{
+    // Find the actual address of the page inside the object
+    const auto reg_addr = ptr_addr + start_offset_bytes;
+
+    auto page = references->atomic_request_page(reg_addr);
+
+    if (not page.available)
+        return false;
+
+    if (cow)
+        page = page.create_copy();
+
+    owner.lock()->map(klib::move(page), ptr_addr, craft_arguments());
+
+    return true;
+}
+
+void Mem_Object_Reference::move_to(const klib::shared_ptr<Page_Table>& new_table, u64 base_addr, u64 new_access)
+{
+    throw Kern_Exception(ERROR_NOT_IMPLEMENTED, "move_to of Mem_Object_Reference was not yet implemented");
 }

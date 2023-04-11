@@ -527,3 +527,15 @@ extern "C" int pthread_once(pthread_once_t *once_control, void (*init_routine)(v
 
     return 0;
 }
+
+extern "C" int strcmp(const char *str1, const char *str2)
+{
+    while (*str1) {
+        if (*str1 != *str2)
+            break;
+
+        ++str1; ++str2;
+    }
+
+    return (int)*str1 - (int)*str2;
+}

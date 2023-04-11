@@ -4,10 +4,12 @@
 #include <lib/set.hh>
 #include <lib/list.hh>
 #include <lib/splay_tree_map.hh>
+#include "page_descriptor.hh"
 
 class Page_Table;
 class Generic_Mem_Region;
 class Port;
+
 
 /**
  * @brief Memory object used for shared memory
@@ -94,7 +96,8 @@ public:
      *                 blocked before the page is available.
      *         second - pointer to the start of the page at the offset. If the first is not true, this value is meaningless and should be ignored.
      */
-    klib::pair<bool /* available */, u64 /* page_ptr */> request_page(u64 offset);
+    Page_Descriptor request_page(u64 offset);
+    Page_Descriptor atomic_request_page(u64 offser);
 
     /**
      * @brief Atomically resizes the memory region
@@ -150,8 +153,23 @@ protected:
     struct Page_Storage {
         bool present : 1 = false;
         bool dont_delete : 1 = false;
-        u8 pager_index : 3 = 0;
+        bool requested : 1 = false;
         u64 ppn : 54 = 0;
+
+        constexpr u64 get_page() const
+        {
+            return ppn << (64 - 54);
+        }
+
+        static Page_Storage from_allocated(void * page)
+        {
+            return {
+                true,
+                false,
+                false,
+                ((u64)(page)) >> 10,
+            };
+        }
     } PACKED ALIGNED(8);
 
     /**
@@ -169,6 +187,14 @@ protected:
      * page size.
      */
     klib::vector<Page_Storage> pages;
+
+    /**
+     * @brief Allocates a page
+     * 
+     * @param size_log log2 size of the page
+     * @return Page_Storage Newly allocated page. The new page is automatically zero-initialized
+     */
+    static Page_Storage allocate_page(u8 size_log);
 
     /**
      * @brief Finds the index for the pointer

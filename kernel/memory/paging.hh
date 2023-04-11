@@ -9,6 +9,7 @@
 #include "mem_regions.hh"
 #include <lib/splay_tree_map.hh>
 #include "mem_object.hh"
+#include <sched/sched_queue.hh>
 
 /// @brief Indicates NX (no execute) bit is supported and enabled
 /// @todo Very x86-specific
@@ -84,6 +85,9 @@ public:
     /// List of the tasks that own the page table. Task_Descriptor should contain a page_table pointer which should point to this page table.
     /// The kernel does not have special structures for the threads, so they are achieved by a page table and using IPC for synchronization.
     klib::set<klib::weak_ptr<TaskDescriptor>> owner_tasks;
+
+    /// Queue of the tasks blocked by the page table
+    blocked_sched_queue blocked_tasks;
 
     /// Page Table ID. these are sequentially created upon the creation of new page tables (during the creation and initialization of the process or sending a message)
     u64 id = create_new_id();
@@ -235,6 +239,18 @@ public:
      * @param arg Arguments and protections with which the page should be mapped.
      */
     virtual void map(u64 page_addr, u64 virt_addr, Page_Table_Argumments arg) = 0;
+
+    /**
+     * @brief Maps the page to the virtual address
+     * 
+     * This function maps the specified page to the virtual address with given *arg* arguments and adjusting and allocating memory for
+     * the appropriate paging structures as needed (in case of using multi-level page tables)
+     * 
+     * @param page Descriptor of the page
+     * @param virt_addr Virtual address to where the page shall be mapped
+     * @param arg Arguments and protections with which the page should be mapped.
+     */
+    virtual void map(Page_Descriptor page, u64 virt_addr, Page_Table_Argumments arg) = 0;
 
     /// Return structure used with check_if_allocated_and_set_flag()
     struct Check_Return_Str {
@@ -423,6 +439,8 @@ public:
     // Maps the page with the appropriate permissions
     virtual void map(u64 page_addr, u64 virt_addr, Page_Table_Argumments arg) override;
 
+    virtual void map(Page_Descriptor page, u64 virt_addr, Page_Table_Argumments arg) override;
+
     Check_Return_Str check_if_allocated_and_set_flag(u64 virt_addr, u8 flag, Page_Table_Argumments arg);
 
     virtual void invalidate(u64 virt_addr, bool free) override;
@@ -511,3 +529,4 @@ extern "C" void release_cr3(u64 cr3);
 
 /// Returns physical address of the virt using recursive mappings
 ReturnStr<u64> phys_addr_of(u64 virt);
+

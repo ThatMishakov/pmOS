@@ -107,10 +107,13 @@ extern "C" void pagefault_manager()
         Auto_Lock_Scope scope_lock(task->page_table->lock);
 
         auto& regions = task->page_table->paging_regions;
-        auto it = regions.get_smaller_or_equal(virtual_addr);
+        const auto it = regions.get_smaller_or_equal(virtual_addr);
+        const auto addr_all = virtual_addr & ~07777;
 
         if (it != regions.end() and it->second->is_in_range(virtual_addr)) {
-            it->second->on_page_fault(err, virtual_addr, task);
+            auto r = it->second->on_page_fault(err, virtual_addr);
+            if (not r)
+                task->atomic_block_by_page(addr_all, &task->page_table->blocked_tasks);
         } else {
             throw Kern_Exception(ERROR_PAGE_NOT_ALLOCATED, "pagefault in unknown region");
         }

@@ -1,5 +1,8 @@
 #include "mem_object.hh"
 #include <assert.h>
+#include <pmos/ipc.h>
+#include <messaging/messaging.hh>
+#include "mem.hh"
 
 Mem_Object::Mem_Object(u64 page_size_log, u64 size_pages):
         page_size_log(page_size_log), pages(size_pages) {};
@@ -61,4 +64,53 @@ void Mem_Object::unregister_pined(const klib::weak_ptr<Page_Table> &pined_by) no
     assert(pinned_lock.is_locked() && "lock is not locked!");
 
     this->pined_by.erase(pined_by);
+}
+
+
+Page_Descriptor Mem_Object::atomic_request_page(u64 offset)
+{
+    const auto index = offset >> page_size_log;
+
+    Auto_Lock_Scope l(lock);
+        
+    assert(pages.size() > index && "Requesting page outside storage boundary");
+
+    auto& p = pages[index];
+
+    do {
+        // Page is already present
+        if (p.present)
+            continue;
+
+        const auto pager_port = pager.lock();
+        // Page not present and there is no pager -> alocate zeroed page
+        if (not pager_port) {
+            p = allocate_page(page_size_log);
+            continue;
+        }
+
+        // Page not present, there is a pager and the page was already requested once -> do not request the page again
+        if (p.requested)
+            continue;
+
+        // Request a page
+        IPC_Kernel_Request_Page request {
+            .type = IPC_Kernel_Request_Page_NUM,
+            .flags = 0,
+            .mem_object_id = id,
+            .page_offset = offset,
+        };
+        pager_port->atomic_send_from_system(reinterpret_cast<char*>(&request), sizeof(request));
+
+        p.requested = true;
+    } while (false);
+
+    return Page_Descriptor(true, false, page_size_log, p.get_page());
+}
+
+Mem_Object::Page_Storage Mem_Object::allocate_page(u8 size_log)
+{
+    assert(size_log == 12 && "only 4K pages are supported");
+
+    return Page_Storage::from_allocated(kernel_pframe_allocator.alloc_page());
 }

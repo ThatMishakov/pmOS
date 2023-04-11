@@ -98,6 +98,14 @@ typedef struct IPC_Kernel_Alloc_Page {
     uint64_t page_addr;
 } IPC_Kernel_Alloc_Page;
 
+#define IPC_Kernel_Request_Page_NUM 0x23
+/// Page request for Memory Object
+typedef struct IPC_Kernel_Request_Page {
+    uint32_t type;
+    uint32_t flags;
+    uint64_t mem_object_id;
+    uint64_t page_offset;
+} IPC_Kernel_Request_Page;
 
 
 #define IPC_Write_Plain_NUM     0x40

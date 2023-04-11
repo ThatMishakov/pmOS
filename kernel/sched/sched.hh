@@ -10,6 +10,7 @@
 #include <processes/tasks.hh>
 #include "defs.hh"
 #include <memory/temp_mapper.hh>
+#include "sched_queue.hh"
 
 // Checks the mask and unblocks the task if needed
 // This function needs to be axed
@@ -20,33 +21,6 @@ inline bool unblock_if_needed(const klib::shared_ptr<TaskDescriptor>& p, const k
 
 // Blocks current task, setting blocked_by to *ptr*.
 ReturnStr<u64> block_current_task(const klib::shared_ptr<Generic_Port>& ptr);
-
-struct TaskDescriptor;
-
-class sched_queue {
-public:
-    void push_front(const klib::shared_ptr<TaskDescriptor>& desc) noexcept;
-    void push_back(const klib::shared_ptr<TaskDescriptor>& desc) noexcept;
-    void erase(const klib::shared_ptr<TaskDescriptor>& desc) noexcept;
-
-    /**
-     * @brief Erases *desc* from the given queue
-     * 
-     * Same as erase(), except it protects the queue with a spinlock
-     * 
-     * @param desc Task to be erased from the queue. Must be valid and pertain to the queue. Does not do errors checking
-     */
-    void atomic_erase(const klib::shared_ptr<TaskDescriptor>& desc) noexcept;
-
-    // Returns front task or null pointer if empty
-    klib::shared_ptr<TaskDescriptor> pop_front() noexcept;
-
-    bool is_empty() noexcept;
-    Spinlock lock;
-private:
-    klib::shared_ptr<TaskDescriptor> first;
-    klib::shared_ptr<TaskDescriptor> last;
-};
 
 extern sched_queue blocked;
 extern sched_queue uninit;

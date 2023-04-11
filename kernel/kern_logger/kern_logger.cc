@@ -85,6 +85,19 @@ void Logger::printf(const char* str, ...)
     va_end(arg);
 }
 
+extern "C" int printf(const char* str, ...)
+{
+    va_list arg;
+    va_start(arg, str);
+
+    global_logger.vprintf(str, arg);
+
+    va_end(arg);
+
+    // TODO
+    return 0;
+}
+
 void Logger::log(const char* str, size_t size)
 {
     Auto_Lock_Scope local_lock(logger_lock);

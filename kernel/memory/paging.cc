@@ -14,6 +14,7 @@
 #include <kern_logger/kern_logger.hh>
 #include "temp_mapper.hh"
 #include <cpus/ipi.hh>
+#include "assert.h"
 
 bool nx_bit_enabled = false;
 
@@ -579,6 +580,64 @@ void x86_4level_Page_Table::map(u64 physical_addr, u64 virtual_addr, Page_Table_
         pte->execution_disabled = arg.execution_disabled;
 }
 
+void x86_4level_Page_Table::map(Page_Descriptor page, u64 virtual_addr, Page_Table_Argumments arg)
+{
+    if (page.page_ptr >> 48)
+        throw(Kern_Exception(ERROR_OUT_OF_RANGE, "x86_4level_Page_Table::map physical page out of range"));
+
+    assert(page.available && "Page is not available");
+
+    Temp_Mapper_Obj<x86_PAE_Entry> mapper(get_cpu_struct()->temp_mapper);
+    mapper.map((u64)pml4_phys);
+
+    x86_PAE_Entry* pml4e = &mapper.ptr[pml4_index(virtual_addr)];
+    if (not pml4e->present) {
+        u64 p = kernel_pframe_allocator.alloc_page_ppn();
+
+        *pml4e = x86_PAE_Entry(); pml4e->page_ppn = p; pml4e->present = 1; pml4e->writeable = 1; pml4e->user_access = arg.user_access;
+        clear_page(p << 12);
+    }
+
+    mapper.map(pml4e->page_ppn << 12);
+    x86_PAE_Entry* pdpte = &mapper.ptr[pdpt_index(virtual_addr)];
+    if (pdpte->pat_size) // 1GB page is already present
+        throw (Kern_Exception(ERROR_PAGE_PRESENT, "map 1G page is present"));
+    
+    if (not pdpte->present) {
+        u64 p =  kernel_pframe_allocator.alloc_page_ppn();
+
+        *pdpte = x86_PAE_Entry(); pdpte->page_ppn = p; pdpte->present = 1; pdpte->writeable = 1; pdpte->user_access = arg.user_access;
+        clear_page(p << 12);
+    }
+
+    mapper.map(pdpte->page_ppn << 12);
+    x86_PAE_Entry* pde = &mapper.ptr[pd_index(virtual_addr)];
+    if (pde->pat_size)
+        throw (Kern_Exception(ERROR_PAGE_PRESENT, "map 2M page is present"));
+    
+    if (not pde->present) {
+        u64 p = kernel_pframe_allocator.alloc_page_ppn();
+
+        *pde = x86_PAE_Entry(); pde->page_ppn = p; pde->present = 1; pde->writeable = 1; pde->user_access = arg.user_access;
+        clear_page(p << 12);
+    }
+
+    mapper.map(pde->page_ppn << 12);
+    x86_PAE_Entry* pte = &mapper.ptr[pt_index(virtual_addr)];
+    if (pte->present)
+        throw (Kern_Exception(ERROR_PAGE_PRESENT, "map page is present"));
+
+    *pte = x86_PAE_Entry();
+    pte->present = 1;
+    pte->user_access = arg.user_access;
+    pte->writeable = arg.writeable;  
+    pte->avl = page.owning ? 0 : PAGING_FLAG_NOFREE;
+    pte->page_ppn = page.takeout_page().first;
+
+    if (nx_bit_enabled)
+        pte->execution_disabled = arg.execution_disabled;
+}
+
 void x86_4level_Page_Table::free_pt(u64 pt_phys)
 {
     Temp_Mapper_Obj<x86_PAE_Entry> mapper(get_cpu_struct()->temp_mapper);
@@ -785,7 +844,11 @@ bool Page_Table::prepare_user_page(u64 virt_addr, unsigned access_type, const kl
 
     Generic_Mem_Region &reg = *it->second;
 
-    return reg.prepare_page(access_type, virt_addr, task);
+    const auto available = reg.prepare_page(access_type, virt_addr);
+    if (not available)
+        task->atomic_block_by_page(virt_addr, &blocked_tasks);
+
+    return available;
 }
 
 void Page_Table::takeout_global_page_tables()

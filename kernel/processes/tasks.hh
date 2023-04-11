@@ -74,10 +74,14 @@ public:
     u64 init_stack();
 
     // Blocks the process by a page (for example in case of a pagefault)
-    void atomic_block_by_page(u64 page);
+    void atomic_block_by_page(u64 page, sched_queue *push_to_queue);
 
     // Unblocks the task when the page becomes available
     bool atomic_try_unblock_by_page(u64 page);
+
+    /// Tries to atomically erase the task from the queue. If task's parrent queue is not equal to *queue*,
+    /// does nothing
+    void atomic_erase_from_queue(sched_queue *queue) noexcept;
 
     // Kills the task
     void atomic_kill();
@@ -142,7 +146,7 @@ protected:
     TaskDescriptor() = default;
 
     // Unblocks the task from the blocked state
-    void unblock();
+    void unblock() noexcept;
 };
 
 using task_ptr = klib::shared_ptr<TaskDescriptor>;

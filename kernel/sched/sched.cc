@@ -88,10 +88,9 @@ ReturnStr<u64> block_current_task(const klib::shared_ptr<Generic_Port>& ptr)
 }
 
 
-void TaskDescriptor::atomic_block_by_page(u64 page)
+void TaskDescriptor::atomic_block_by_page(u64 page, sched_queue *blocked_ptr)
 {
-    if (status == PROCESS_BLOCKED)
-        throw(Kern_Exception(ERROR_ALREADY_BLOCKED, "atomic_block_by_page task already blocked"));
+    assert(status != PROCESS_BLOCKED && "task cannot be blocked twice");
 
     // t_print_bochs("Blocking %i (%s) by page. CPU %i\n", this->pid, this->name.c_str(), get_cpu_struct()->cpu_id);
 
@@ -110,8 +109,8 @@ void TaskDescriptor::atomic_block_by_page(u64 page)
     }
     
     {
-        Auto_Lock_Scope scope_l(blocked.lock);
-        blocked.push_back(self);
+        Auto_Lock_Scope scope_l(blocked_ptr->lock);
+        blocked_ptr->push_back(self);
     }
 }
 
@@ -194,7 +193,19 @@ bool TaskDescriptor::atomic_unblock_if_needed(const klib::shared_ptr<Generic_Por
     return unblocked;
 }
 
-void TaskDescriptor::unblock()
+void TaskDescriptor::atomic_erase_from_queue(sched_queue *q) noexcept
+{
+    Auto_Lock_Scope l(sched_lock);
+
+    if (parent_queue != q) {
+        [[unlikely]];
+        return;
+    }
+    
+    unblock();
+}
+
+void TaskDescriptor::unblock() noexcept
 {
     const auto self = weak_self.lock();
 
@@ -360,98 +371,6 @@ void find_new_process()
     // Possible deadlock...?
     Auto_Lock_Scope(next_task->sched_lock);
     next_task->switch_to();
-}
-
-klib::shared_ptr<TaskDescriptor> sched_queue::pop_front() noexcept
-{
-    assert(lock.is_locked() and "Queue is not locked!");
-
-    klib::shared_ptr<TaskDescriptor> ptr = first;
-
-    if (first != klib::shared_ptr<TaskDescriptor>(nullptr))
-        erase(ptr);
-
-    return ptr;
-}
-
-void sched_queue::push_back(const klib::shared_ptr<TaskDescriptor>& desc) noexcept
-{
-    assert(lock.is_locked() and "Queue is not locked!");
-
-    if (first == klib::shared_ptr<TaskDescriptor>(nullptr)) {
-        first = desc;
-        last = desc;
-        desc->queue_prev = nullptr;
-    } else {
-        last->queue_next = desc;
-        desc->queue_prev = last;
-        last = desc;
-    }
-
-    desc->queue_next = nullptr;
-    desc->parent_queue = this;
-}
-
-void sched_queue::push_front(const klib::shared_ptr<TaskDescriptor>& desc) noexcept
-{
-    assert(lock.is_locked() and "Queue is not locked!");
-
-
-    if (first == klib::shared_ptr<TaskDescriptor>(nullptr)) {
-        first = desc;
-        last = desc;
-        desc->queue_next = nullptr;
-    } else {
-        desc->queue_next = first;
-        first->queue_prev = desc;
-        first = desc;
-    }
-
-    desc->queue_prev = nullptr;
-    desc->parent_queue = this;
-}
-
-void sched_queue::erase(const klib::shared_ptr<TaskDescriptor>& desc) noexcept
-{
-    assert(lock.is_locked() and "Queue is not locked!");
-
-    if (desc->queue_prev) {
-        desc->queue_prev->queue_next = desc->queue_next;
-    } else {
-        first = desc->queue_next;
-    }
-
-    if (desc->queue_next) {
-        desc->queue_next->queue_prev = desc->queue_prev;
-    } else {
-        last = desc->queue_prev;
-    }
-
-    desc->queue_prev = nullptr;
-    desc->queue_next = nullptr;
-    desc->parent_queue = nullptr;
-}
-
-void sched_queue::atomic_erase(const klib::shared_ptr<TaskDescriptor>& desc) noexcept
-{
-    {
-        Auto_Lock_Scope l(lock);
-        if (desc->queue_prev) {
-            desc->queue_prev->queue_next = desc->queue_next;
-        } else {
-            first = desc->queue_next;
-        }
-
-        if (desc->queue_next) {
-            desc->queue_next->queue_prev = desc->queue_prev;
-        } else {
-            last = desc->queue_prev;
-        }
-    }
-
-    desc->queue_prev = nullptr;
-    desc->queue_next = nullptr;
-    desc->parent_queue = nullptr;
 }
 
 quantum_t assign_quantum_on_priority(priority_t priority)
