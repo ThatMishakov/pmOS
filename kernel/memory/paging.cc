@@ -996,3 +996,33 @@ void Page_Table::atomic_pin_memory_object(klib::shared_ptr<Mem_Object> object)
     if (not inserted)
         throw Kern_Exception(ERROR_PAGE_PRESENT, "memory object is already referenced");
 }
+
+void Page_Table::atomic_shrink_regions(const klib::shared_ptr<Mem_Object> &id, u64 new_size) noexcept
+{
+    Auto_Lock_Scope l(lock);
+
+    auto p = mem_objects.at(id);
+    auto it = p.regions.begin();
+    while (it != p.regions.end()) {
+        const auto &reg = *it;
+        ++it;
+
+    
+        const auto object_end = reg->object_up_to();
+        if (object_end < new_size) {
+            const auto change_size_to = new_size > reg->start_offset_bytes ? new_size - reg->start_offset_bytes : 0UL;
+
+            const auto free_from = reg->start_addr + change_size_to;
+            const auto free_size = reg->addr_end() - free_from;
+
+            if (change_size_to == 0) { // Delete region
+                paging_regions.erase(reg->start_addr);
+                p.regions.erase(reg);
+            } else { // Resize region
+                reg->size = change_size_to;
+            }
+
+            invalidate_range(free_from, free_size, true);
+        }
+    }
+}

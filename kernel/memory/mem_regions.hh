@@ -121,22 +121,22 @@ struct Generic_Mem_Region: public klib::enable_shared_from_this<Generic_Mem_Regi
      * @return true Process has permission
      * @return false Process has no permisison
      */
-    bool has_permissions(u64 err_code) const
+    bool has_permissions(u64 err_code) const noexcept
     {
         return (not ((err_code & 0x02) and not (access_type & Writeable))) and (not ((err_code & 0x10) and not (access_type & Executable)));
     }
 
-    bool has_access(unsigned access_mask) const
+    bool has_access(unsigned access_mask) const noexcept
     {
         return not (access_mask & ~this->access_type);
     }
 
-    static inline bool protection_violation(u64 err_code)
+    static inline bool protection_violation(u64 err_code) noexcept
     {
         return err_code & 0x01;
     }
 
-    u64 addr_end() const
+    u64 addr_end() const noexcept
     {
         return start_addr + size;
     }
@@ -144,7 +144,7 @@ struct Generic_Mem_Region: public klib::enable_shared_from_this<Generic_Mem_Regi
     /// @brief Prepares the appropriate Page_Table_Arguments for the region
     virtual Page_Table_Argumments craft_arguments() const = 0;
 
-    constexpr virtual bool is_managed() const
+    constexpr virtual bool is_managed() const noexcept
     {
         return false;
     }
@@ -223,7 +223,7 @@ struct Private_Managed_Region: Generic_Mem_Region {
         return false;
     }
 
-    constexpr bool is_managed() const override
+    virtual constexpr bool is_managed() const noexcept override
     {
         return true;
     }
@@ -264,4 +264,12 @@ struct Mem_Object_Reference final : Generic_Mem_Region
     virtual void move_to(const klib::shared_ptr<Page_Table>& new_table, u64 base_addr, u64 new_access) override;
 
     virtual Page_Table_Argumments craft_arguments() const override;
+
+    /**
+     * Returns the end byte of the memory object that is referenced by the region
+     */
+    inline u64 object_up_to() const noexcept
+    {
+        return start_offset_bytes + size;
+    }
 };

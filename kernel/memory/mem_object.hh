@@ -156,12 +156,12 @@ protected:
         bool requested : 1 = false;
         u64 ppn : 54 = 0;
 
-        constexpr u64 get_page() const
+        constexpr u64 get_page() const noexcept
         {
             return ppn << (64 - 54);
         }
 
-        static Page_Storage from_allocated(void * page)
+        static Page_Storage from_allocated(void * page) noexcept
         {
             return {
                 true,
@@ -171,6 +171,14 @@ protected:
             };
         }
     } PACKED ALIGNED(8);
+
+    /**
+     * @brief Tries to free page if it is present
+     * 
+     * @param p Pointer to the page
+     * @param page_size_log Log2 of the size of the page
+     */
+    static void try_free_page(Page_Storage &p, u8 page_size_log) noexcept;
 
     /**
      * @brief Size of the single page
@@ -187,6 +195,13 @@ protected:
      * page size.
      */
     klib::vector<Page_Storage> pages;
+
+    /// Size of the pages vector.
+    /// This might be smaller than pages.size() for a short time during the this->atomic_resize() operation
+    u64 pages_size = 0;
+
+    /// Lock that must be acquired when resizing the memory object
+    Spinlock resize_lock;
 
     /**
      * @brief Allocates a page

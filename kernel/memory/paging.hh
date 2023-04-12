@@ -63,7 +63,7 @@ struct x86_PAE_Entry {
 
 struct Mem_Object_Data {
     u8 max_privilege_mask = 0;
-    klib::set<klib::shared_ptr<Generic_Mem_Region>> regions;
+    klib::set<klib::shared_ptr<Mem_Object_Reference>> regions;
 };
 
 /**
@@ -360,6 +360,17 @@ public:
      * @param object Object to be removed
      */
     void atomic_unpin_memory_object(klib::shared_ptr<Mem_Object> object);
+
+    /**
+     * @brief Shrink memory regions referencing *id*
+     * 
+     * This procedure cheks all the memory regions if they go out of bound of the new size and shrinks
+     * the memory regions that are larger than it accordingly
+     * 
+     * @param id Memory region that is shrunk
+     * @param new_size New size of the region in bytes
+     */
+    void atomic_shrink_regions(const klib::shared_ptr<Mem_Object> &id, u64 new_size) noexcept;
 protected:
     /// @brief Inserts this page table into the map of the page tables
     void insert_global_page_tables();

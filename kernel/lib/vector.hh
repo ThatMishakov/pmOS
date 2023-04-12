@@ -84,6 +84,9 @@ public:
 
     iterator begin();
     iterator end();
+
+    void resize (size_type n);
+    void resize (size_type n, const value_type& val);
 };
 
 
@@ -227,6 +230,32 @@ void vector<T>::push_back(T&& p)
         expand(a_capacity*2);
 
     new (&ptr[a_size++]) T(forward<T>(p));
+}
+
+template<typename T>
+void vector<T>::resize(size_t new_size)
+{
+    if (a_size > new_size) {
+        for (auto i = a_size; i > new_size; --i) {
+            ptr[i - 1].~T();
+        }
+    } else if (a_size < new_size) {
+        if (new_size < a_capacity)
+            expand(new_size);
+
+        auto i = a_size;
+
+        try {
+            for (; i < new_size; ++i)
+                new (&ptr[i]) T();
+        } catch (...) {
+            for (; i > a_size; --i)
+                ptr[i - 1].~T();
+            throw;
+        }
+
+        a_size = new_size;
+    }
 }
 
 template<typename T>
