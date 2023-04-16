@@ -16,7 +16,7 @@ bool Generic_Mem_Region::on_page_fault(u64 error, u64 pagefault_addr)
     if (not has_permissions(error))
         throw(Kern_Exception(ERROR_PROTECTION_VIOLATION, "task has no permission to do the operation"));
 
-    if (owner.lock()->is_mapped(pagefault_addr)) {
+    if (owner->is_mapped(pagefault_addr)) {
         // Some CPUs supposedly remember invalid pages. INVALPG might be needed here...
 
         return true;
@@ -30,7 +30,7 @@ bool Generic_Mem_Region::prepare_page(u64 access_mode, u64 page_addr)
     if (not has_access(access_mode))
         throw (Kern_Exception(ERROR_OUT_OF_RANGE, "process has no access to the page"));
 
-    if (owner.lock()->is_mapped(page_addr))
+    if (owner->is_mapped(page_addr))
         return true;
 
     return alloc_page(page_addr);
@@ -56,7 +56,7 @@ bool Private_Normal_Region::alloc_page(u64 ptr_addr)
     u64 page_addr = (u64)ptr_addr & ~07777UL;
 
     try {
-        owner.lock()->map((u64)new_page, page_addr, args);
+        owner->map((u64)new_page, page_addr, args);
 
         // TODO: This *will* explode if the page is read-only
         for (size_t i = 0; i < 4096/sizeof(u64); ++i) {
@@ -88,7 +88,7 @@ bool Phys_Mapped_Region::alloc_page(u64 ptr_addr)
     u64 page_addr = (u64)ptr_addr & ~07777UL;
     u64 phys_addr = page_addr - start_addr + phys_addr_start;
 
-    owner.lock()->map(phys_addr, page_addr, args);
+    owner->map(phys_addr, page_addr, args);
 
     return true;
 }
@@ -108,7 +108,7 @@ bool Private_Managed_Region::alloc_page(u64 ptr_addr)
 {
     u64 page_addr = (u64)ptr_addr & ~07777UL;
 
-    auto r = owner.lock()->check_if_allocated_and_set_flag(page_addr, 0b100, craft_arguments());
+    auto r = owner->check_if_allocated_and_set_flag(page_addr, 0b100, craft_arguments());
 
     // Other thread has already allocated the page
     if (r.allocated)
@@ -119,7 +119,7 @@ bool Private_Managed_Region::alloc_page(u64 ptr_addr)
         IPC_Kernel_Alloc_Page str {
             IPC_Kernel_Alloc_Page_NUM,
             0,
-            owner.lock()->id,
+            owner->id,
             page_addr,
         };
 
@@ -140,13 +140,13 @@ void Generic_Mem_Region::move_to(const klib::shared_ptr<Page_Table>& new_table, 
     new_table->paging_regions.insert({base_addr, self});
 
     try {
-        klib::shared_ptr<Page_Table> old_owner = owner.lock();
+        Page_Table * const old_owner = owner;
 
         old_owner->move_pages(new_table, start_addr, base_addr, size, new_access);
 
         old_owner->paging_regions.erase(start_addr);
 
-        owner = new_table;
+        owner = new_table.get();
 
         access_type = new_access;
         start_addr = base_addr;
@@ -185,7 +185,7 @@ bool Mem_Object_Reference::alloc_page(u64 ptr_addr)
     if (cow)
         page = page.create_copy();
 
-    owner.lock()->map(klib::move(page), ptr_addr, craft_arguments());
+    owner->map(klib::move(page), ptr_addr, craft_arguments());
 
     return true;
 }
@@ -193,4 +193,14 @@ bool Mem_Object_Reference::alloc_page(u64 ptr_addr)
 void Mem_Object_Reference::move_to(const klib::shared_ptr<Page_Table>& new_table, u64 base_addr, u64 new_access)
 {
     throw Kern_Exception(ERROR_NOT_IMPLEMENTED, "move_to of Mem_Object_Reference was not yet implemented");
+}
+
+void Generic_Mem_Region::prepare_deletion() noexcept
+{
+    // Do nothing
+}
+
+void Mem_Object_Reference::prepare_deletion() noexcept
+{
+    owner->unreference_object(references, this);
 }

@@ -516,6 +516,9 @@ klib::shared_ptr<Page_Table> x86_4level_Page_Table::create_empty()
 
 Page_Table::~Page_Table()
 {
+    for (const auto &i : paging_regions)
+        i.second->prepare_deletion();
+
     paging_regions.clear();
     takeout_global_page_tables();
 
@@ -703,7 +706,7 @@ u64 Page_Table::atomic_create_normal_region(u64 page_aligned_start, u64 page_ali
 
     paging_regions.insert({start_addr,
         klib::make_shared<Private_Normal_Region>(
-            start_addr, page_aligned_size, klib::forward<klib::string>(name), weak_from_this(), access, pattern
+            start_addr, page_aligned_size, klib::forward<klib::string>(name), this, access, pattern
         )});
 
     return start_addr;
@@ -735,7 +738,7 @@ u64 Page_Table::atomic_create_managed_region(u64 page_aligned_start, u64 page_al
 
     paging_regions.insert({start_addr,
         klib::make_shared<Private_Managed_Region>(
-            start_addr, page_aligned_size, klib::forward<klib::string>(name), weak_from_this(), access, klib::forward<klib::shared_ptr<Port>>(t)
+            start_addr, page_aligned_size, klib::forward<klib::string>(name), this, access, klib::forward<klib::shared_ptr<Port>>(t)
         )});
 
     return start_addr;
@@ -752,7 +755,7 @@ u64 Page_Table::atomic_create_phys_region(u64 page_aligned_start, u64 page_align
 
     paging_regions.insert({start_addr,
         klib::make_shared<Phys_Mapped_Region>(
-            start_addr, page_aligned_size, klib::forward<klib::string>(name), weak_from_this(), access, phys_addr_start
+            start_addr, page_aligned_size, klib::forward<klib::string>(name), this, access, phys_addr_start
         )});
 
     return start_addr;
@@ -1016,13 +1019,44 @@ void Page_Table::atomic_shrink_regions(const klib::shared_ptr<Mem_Object> &id, u
             const auto free_size = reg->addr_end() - free_from;
 
             if (change_size_to == 0) { // Delete region
+                reg->prepare_deletion();
                 paging_regions.erase(reg->start_addr);
-                p.regions.erase(reg);
             } else { // Resize region
                 reg->size = change_size_to;
             }
 
             invalidate_range(free_from, free_size, true);
+            unblock_tasks_rage(free_from, free_size);
         }
     }
+}
+
+void Page_Table::atomic_delete_region(u64 region_start)
+{
+    Auto_Lock_Scope l(lock);
+
+    auto region = get_region(region_start);
+    if (region == paging_regions.end())
+        throw Kern_Exception(ERROR_PAGE_NOT_ALLOCATED, "memory region was not found");
+
+    auto region_size = region->second->size;
+
+    region->second->prepare_deletion();
+    // paging_regions.erase(region); 
+    paging_regions.erase(region_start);
+
+    invalidate_range(region_start, region_size, true);
+    unblock_tasks_rage(region_start, region_size);
+}
+
+void Page_Table::unreference_object(const klib::shared_ptr<Mem_Object> &object, Mem_Object_Reference *region) noexcept
+{
+    auto &p = mem_objects.at(object);
+
+    p.regions.erase(region);
+}
+
+void Page_Table::unblock_tasks_rage(u64 blocked_by_page, u64 size_bytes)
+{
+    // TODO
 }

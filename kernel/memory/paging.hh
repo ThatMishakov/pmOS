@@ -63,7 +63,7 @@ struct x86_PAE_Entry {
 
 struct Mem_Object_Data {
     u8 max_privilege_mask = 0;
-    klib::set<klib::shared_ptr<Mem_Object_Reference>> regions;
+    klib::set<Mem_Object_Reference *> regions;
 };
 
 /**
@@ -371,6 +371,23 @@ public:
      * @param new_size New size of the region in bytes
      */
     void atomic_shrink_regions(const klib::shared_ptr<Mem_Object> &id, u64 new_size) noexcept;
+
+    /**
+     * @brief Deletes a memory region identified by (starting at) *region_start*
+     * 
+     * @param region_start Start of the memory region
+     * 
+     * If the region exists, it is automatically deleted and the underlying memory is freed. If it is not, an error is thrown
+     */
+    void atomic_delete_region(u64 region_start);
+
+    /**
+     * @brief Unreferences memory region from memory object
+     * 
+     * @param object Memory object associated with the region
+     * @param region Memory region to be deleted
+     */
+    void unreference_object(const klib::shared_ptr<Mem_Object> &object, Mem_Object_Reference *region) noexcept;
 protected:
     /// @brief Inserts this page table into the map of the page tables
     void insert_global_page_tables();
@@ -394,6 +411,7 @@ protected:
     /// @brief Unblocks the tasks blocked by the given page
     /// @param blocked_by_page Virtuall address of the page that has blocked the tasks
     void unblock_tasks(u64 blocked_by_page);
+    void unblock_tasks_rage(u64 blocked_by_page, u64 size_bytes);
 
     using page_table_map = klib::splay_tree_map<u64, klib::weak_ptr<Page_Table>>;
     /// @brief Map holding all the page tables. Currently using splay tree for the storage

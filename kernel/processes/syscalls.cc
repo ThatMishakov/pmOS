@@ -53,7 +53,7 @@ klib::array<syscall_function, 31> syscall_table = {
     syscall_create_normal_region,
     syscall_create_managed_region,
     syscall_create_phys_map_region,
-    nullptr,
+    syscall_delete_region,
     nullptr,
     nullptr,
     syscall_set_segment,
@@ -721,4 +721,15 @@ void syscall_create_mem_object(u64 size_bytes, u64, u64, u64, u64, u64)
     current_page_table->atomic_pin_memory_object(ptr);
 
     syscall_ret_high(current_task) = ptr->get_id();
+}
+
+void syscall_delete_region(u64 region_start, u64, u64, u64, u64, u64)
+{
+    const auto &current_task = get_current_task();
+    const auto &current_page_table = current_task->page_table;
+
+    // TODO: Contemplate about adding a check to see if it's inside the kernels address space
+
+    // TODO: This is completely untested and knowing me is probably utterly broken
+    current_page_table->atomic_delete_region(region_start);
 }

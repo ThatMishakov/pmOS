@@ -41,8 +41,7 @@ struct Generic_Mem_Region: public klib::enable_shared_from_this<Generic_Mem_Regi
     u64 id = 0;
 
     /// Owner of the region
-    /// @todo Replace with a normal pointer
-    klib::weak_ptr<Page_Table> owner;
+    Page_Table *owner;
 
     /// Flags for the region
     u8 access_type = 0;
@@ -98,8 +97,8 @@ struct Generic_Mem_Region: public klib::enable_shared_from_this<Generic_Mem_Regi
     bool on_page_fault(u64 error, u64 pagefault_addr);
 
 
-    Generic_Mem_Region(u64 start_addr, u64 size, klib::string name, klib::weak_ptr<Page_Table> owner, u8 access):
-        start_addr(start_addr), size(size), name(klib::forward<klib::string>(name)), id(__atomic_add_fetch(&counter, 1, 0)), owner(klib::forward<klib::weak_ptr<Page_Table>>(owner)), access_type(access)
+    Generic_Mem_Region(u64 start_addr, u64 size, klib::string name, Page_Table *owner, u8 access):
+        start_addr(start_addr), size(size), name(klib::forward<klib::string>(name)), id(__atomic_add_fetch(&counter, 1, 0)), owner(owner), access_type(access)
         {};
 
     /**
@@ -157,6 +156,15 @@ struct Generic_Mem_Region: public klib::enable_shared_from_this<Generic_Mem_Regi
      * @param new_access New access specifier to be had in the new page table
      */
     virtual void move_to(const klib::shared_ptr<Page_Table>& new_table, u64 base_addr, u64 new_access);
+
+    /**
+     * @brief Prepares a region for being deleted
+     * 
+     * This procedure must be called before deleting the memory region. It does not free pages and that must be done
+     * by the caller after calling the function.
+     * 
+     */
+    virtual void prepare_deletion() noexcept;
 };
 
 
@@ -183,8 +191,8 @@ struct Phys_Mapped_Region final: Generic_Mem_Region {
     // Constructs a region with virtual address starting at *aligned_virt* of size *size* pointing to *aligned_phys*
     Phys_Mapped_Region(u64 aligned_virt, u64 size, u64 aligned_phys);
 
-    Phys_Mapped_Region(u64 start_addr, u64 size, klib::string name, klib::weak_ptr<Page_Table> owner, u8 access, u64 phys_addr_start):
-        Generic_Mem_Region(start_addr, size, klib::forward<klib::string>(name), klib::forward<klib::weak_ptr<Page_Table>>(owner), access), phys_addr_start(phys_addr_start)
+    Phys_Mapped_Region(u64 start_addr, u64 size, klib::string name, Page_Table * owner, u8 access, u64 phys_addr_start):
+        Generic_Mem_Region(start_addr, size, klib::forward<klib::string>(name), owner, access), phys_addr_start(phys_addr_start)
         {};
 };
 
@@ -207,8 +215,8 @@ struct Private_Normal_Region final: Generic_Mem_Region {
 
     virtual Page_Table_Argumments craft_arguments() const;
 
-    Private_Normal_Region(u64 start_addr, u64 size, klib::string name, klib::weak_ptr<Page_Table> owner, u8 access, u64 pattern):
-        Generic_Mem_Region(start_addr, size, klib::forward<klib::string>(name), klib::forward<klib::weak_ptr<Page_Table>>(owner), access), pattern(pattern)
+    Private_Normal_Region(u64 start_addr, u64 size, klib::string name, Page_Table * owner, u8 access, u64 pattern):
+        Generic_Mem_Region(start_addr, size, klib::forward<klib::string>(name), owner, access), pattern(pattern)
         {};
 };
 
@@ -233,8 +241,8 @@ struct Private_Managed_Region: Generic_Mem_Region {
     /// When pagefault occurs to the current task, it is blocked and the message is sent to the *notifications_port*. 
     virtual bool alloc_page(u64 ptr_addr);
 
-    Private_Managed_Region(u64 start_addr, u64 size, klib::string name, klib::weak_ptr<Page_Table> owner, u8 access, klib::shared_ptr<Port> p):
-        Generic_Mem_Region(start_addr, size, klib::forward<klib::string>(name), klib::forward<klib::weak_ptr<Page_Table>>(owner), access), notifications_port(klib::forward<klib::shared_ptr<Port>>(p))
+    Private_Managed_Region(u64 start_addr, u64 size, klib::string name, Page_Table * owner, u8 access, klib::shared_ptr<Port> p):
+        Generic_Mem_Region(start_addr, size, klib::forward<klib::string>(name), owner, access), notifications_port(klib::forward<klib::shared_ptr<Port>>(p))
         {};
 
     virtual void move_to(const klib::shared_ptr<Page_Table>& new_table, u64 base_addr, u64 new_access) override;
@@ -254,8 +262,8 @@ struct Mem_Object_Reference final : Generic_Mem_Region
     /// Indicates whether the pages should be copied on access
     bool cow = false;
 
-    Mem_Object_Reference(u64 start_addr, u64 size, klib::string name, klib::weak_ptr<Page_Table> owner, u8 access, klib::shared_ptr<Mem_Object> references, u64 start_offset_bytes, bool copy_on_write):
-        Generic_Mem_Region(start_addr, size, klib::forward<klib::string>(name), klib::forward<klib::weak_ptr<Page_Table>>(owner), access), 
+    Mem_Object_Reference(u64 start_addr, u64 size, klib::string name, Page_Table *owner, u8 access, klib::shared_ptr<Mem_Object> references, u64 start_offset_bytes, bool copy_on_write):
+        Generic_Mem_Region(start_addr, size, klib::forward<klib::string>(name), owner, access), 
         references(klib::forward<klib::shared_ptr<Mem_Object>>(references)), start_offset_bytes(start_offset_bytes), cow(copy_on_write)
         {};
 
@@ -271,5 +279,12 @@ struct Mem_Object_Reference final : Generic_Mem_Region
     inline u64 object_up_to() const noexcept
     {
         return start_offset_bytes + size;
+    }
+
+    virtual void prepare_deletion() noexcept override;
+
+    constexpr bool can_takeout_page() const noexcept override
+    {
+        return false;
     }
 };
