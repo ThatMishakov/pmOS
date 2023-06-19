@@ -577,8 +577,7 @@ void syscall_create_managed_region(u64 pid, u64 addr_start, u64 size, u64 access
 
     // Syscall must be page aligned
     if (addr_start & 07777 or size & 07777) {
-        throw(Kern_Exception(ERROR_UNALLIGNED, "arguments are not page aligned"));
-        return;
+        throw Kern_Exception(ERROR_UNALLIGNED, "arguments are not page aligned");
     }
 
     klib::shared_ptr<Port> p = global_ports.atomic_get_port_throw(port);

@@ -73,5 +73,6 @@
         "quadmath-rounding-mode.h": "c",
         "types.h": "c",
         "stdint.h": "c"
-    }
+    },
+    "cmake.configureOnOpen": false
 }

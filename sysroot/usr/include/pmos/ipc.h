@@ -114,6 +114,49 @@ typedef struct IPC_Write_Plain {
     char data[0];
 } IPC_Write_Plain;
 
+#define IPC_Read_NUM 0x41
+typedef struct IPC_Read {
+    // Message type (must be IPC_Read_NUM)
+    uint32_t num;
+
+    // Flags changing the behaviour
+    uint32_t flags;
+
+    // Specific identificator for the file within the process
+    uint64_t file_id;
+
+    // Beginning of the file to be read
+    uint64_t start_offset;
+
+    // Maximum size to be read
+    uint64_t max_size;
+
+    // Channel where the reply would be sent
+    uint64_t reply_chan;
+} IPC_Read;
+
+#define IPC_Read_Reply_NUM 0x50;
+typedef struct IPC_Read_Reply {
+    // Message type (must be IPC_Read_Reply_NUM)
+    uint32_t num;
+
+    // Flags changing the behaviour
+    uint16_t flags;
+
+    // Result of the operation
+    uint16_t result_code;
+
+    // Specific identificator for the file within the process
+    uint64_t file_id;
+
+    // Beginning of the file to be read
+    uint64_t start_offset;
+
+    // Data that was read
+    unsigned char[0];
+} IPC_Read_Reply;
+
+
 
 #define IPC_ACPI_Request_RSDT_NUM 0x60
 typedef struct IPC_ACPI_Request_RSDT {
