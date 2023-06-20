@@ -1,34 +1,41 @@
 #ifndef FILE_DESCRIPTOR_H
 #define FILE_DESCRIPTOR_H
-#include <stdint.h>
+
 #include <stddef.h>
-
-enum Descriptor_Type {
-    Directory,
-    File,
-};
-
-struct Path_Node;
-struct Dir_Data {
-    struct Path_Node *child_root;
-};
-
-struct File_Data {
-    uint64_t memory_object;
-
-};
+#include <pmos/ports.h>
+#include <stdbool.h>
+#include <stdint.h>
 
 struct Filesystem;
 
-struct File_Descriptor {
-    uint64_t id;
-    size_t refcount;
-    struct Filesystem *filesystem;
+enum File_Type {
+    FILE,
+    FOLDER,
+    MOUNTPOINT
+}
 
-    enum Descriptor_Type type;
+struct File {
+    /// Filesystem owner of the file
+    struct Filesystem* parent_fs;
+
+    /// ID of the file within the filesystem
+    uint64_t file_id;
+};
+
+struct Mountpoint {
+    struct File mountpoint_root;
+    struct File mount_folder;
+};
+
+struct File_Descriptor {
+    /// Number of pointers to the descriptor
+    size_t refcount;
+
+    enum File_Type type;
+
     union {
-        Dir_Data dir_data;
-        File_Data file_data;
+        struct File file;
+        struct Mountpoint mountpoint;
     };
 };
 

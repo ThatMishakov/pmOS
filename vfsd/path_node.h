@@ -5,14 +5,16 @@
 #include "file_descriptor.h"
 
 typedef struct Path_Node {
+    long height;
+    
     struct Path_Node *tree_parent;
     struct Path_Node *tree_left;
     struct Path_Node *tree_right;
-    long height;
 
     struct File_Descriptor *parent;
     struct File_Descriptor *file_desc;
-    size_t size;
+
+    size_t name_length;
     unsigned char name[0];
 } Path_Node;
 
