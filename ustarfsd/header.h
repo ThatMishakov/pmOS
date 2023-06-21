@@ -22,4 +22,32 @@ typedef struct TARHeader {
     int8_t filename_prefix[155];
 } TARHeader;
 
+/**
+ * @brief Calculates the checksum of a TARHeader structure.
+ *
+ * The checksum is calculated by treating the checksum field itself as filled with spaces,
+ * performing a simple sum of all bytes in the header, and subtracting the sum from the
+ * checksum field size.
+ *
+ * @param header A pointer to a TARHeader structure.
+ * @return The calculated checksum value.
+ *
+ * @note This function assumes that the TARHeader structure is properly initialized and
+ *       contains valid data.
+ */
+int calculate_checksum(const TARHeader *header);
+
+/**
+ * @brief Checks whether a TARHeader structure represents an empty header.
+ *
+ * An empty header is defined as a TARHeader structure where all fields are zeroed.
+ *
+ * @param header A pointer to a TARHeader structure.
+ * @return 1 if the header is empty, 0 otherwise.
+ *
+ * @note This function assumes that the TARHeader structure is properly initialized and
+ *       contains valid data.
+ */
+int is_empty_header(const TARHeader *header);
+
 #endif // HEADER_H
