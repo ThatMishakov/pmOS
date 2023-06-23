@@ -17,6 +17,7 @@ struct File_Descriptor {
     uint16_t flags;
 
     uint64_t filesystem_id;
+    uint64_t file_id;
     pmos_port_t fs_port;
 };
 
@@ -80,7 +81,48 @@ static int64_t reserve_descriptor(struct Filesystem_Data* fs_data) {
 
 
 // Fills a reserved descriptor. Returns 0 on success and -1 on error.
-int fill_descriptor(struct Filesystem_Data *fs_data, int64_t descriptor_id, uint16_t flags, uint64_t filesystem_id, pmos_port_t filesystem_port);
+int fill_descriptor(struct Filesystem_Data *fs_data, int64_t descriptor_id, uint16_t flags, uint64_t filesystem_id, pmos_port_t filesystem_port) {
+    if (fs_data == NULL || descriptor_id < 0 || descriptor_id >= fs_data->capacity) {
+        // Invalid fs_data or descriptor index
+        return -1;
+    }
+
+    // Lock the descriptor to ensure thread-safety
+    pthread_spin_lock(&fs_data->lock);
+
+    if (!fs_data->descriptors_vector[descriptor_id].used) {
+        // Descriptor must be used
+
+        // Unlock the descriptor
+        pthread_spin_unlock(&fs_data->lock);
+
+        // Return error
+        return -1;
+    }
+
+    if (fs_data->descriptors_vector[descriptor_id].reserved) {
+        // Descriptor must not be reserved
+
+        // Unlock the descriptor
+        pthread_spin_unlock(&fs_data->lock);
+
+        // Return error
+        return -1;
+    }
+
+    // Fill in the necessary information in the descriptor
+    fs_data->descriptors_vector[descriptor_id].flags = flags;
+    fs_data->descriptors_vector[descriptor_id].filesystem_id = filesystem_id;
+    fs_data->descriptors_vector[descriptor_id].fs_port = filesystem_port;
+
+    // Mark the descriptor as not reserved
+    fs_data->descriptors_vector[descriptor_id].reserved = false;
+
+    // Unlock the descriptor
+    pthread_spin_unlock(&fs_data->lock);
+
+    return 0; // Success
+}
 
 // Releases a reserved descriptor. Returns 0 on success and -1 on error.
 static int release_descriptor(struct Filesystem_Data *fs_data, int64_t descriptor) {
@@ -201,7 +243,7 @@ int open(const char* path, int flags) {
     memcpy(message->path, path, path_length);
 
     // Send the IPC_Open message to the filesystem daemon
-    result_t result = send_message_port(fs_data->descriptors_vector[descriptor].fs_port, message_size, (const char*)message);
+    result_t result = send_message_port(fs_port, message_size, (const char*)message);
 
     int fail_count = 0;
     while (result == ERROR_PORT_DOESNT_EXIST && fail_count < 5) {
@@ -273,4 +315,111 @@ int open(const char* path, int flags) {
     
     // Return the file descriptor
     return descriptor;
+}
+
+ssize_t pread(int fd, void *buf, size_t count, off_t offset) {
+    // Double-checked locking to initialize fs_data if it is NULL
+    if (fs_data == NULL) {
+        pthread_spin_lock(&fs_data_lock);
+        if (fs_data == NULL) {
+            int init_result = init_filesystem();
+            if (init_result != 0) {
+                pthread_spin_unlock(&fs_data_lock);
+                return -1;
+            }
+        }
+        pthread_spin_unlock(&fs_data_lock);
+    }
+
+    // Lock the file descriptor to ensure thread-safety
+    pthread_spin_lock(&fs_data->lock);
+
+    // Check if the file descriptor is valid
+    if (fd < 0 || fd >= fs_data->capacity) {
+        errno = EBADF; // Bad file descriptor
+        return -1;
+    }
+
+    // Obtain the file descriptor data
+    struct File_Descriptor *file_desc = &fs_data->descriptors_vector[fd];
+
+    // Check if the file descriptor is in use and reserved
+    if (!file_desc->used || !file_desc->reserved) {
+        errno = EBADF; // Bad file descriptor
+        return -1;
+    }
+
+    // Extract the necessary information from the file descriptor
+    uint64_t file_id = file_desc->file_id;
+    pmos_port_t fs_port = file_desc->fs_port;
+
+    // Unlock the file descriptor
+    pthread_spin_unlock(&fs_data->lock);
+
+    // Check if reply port exists
+    if (fs_cmd_reply_port == INVALID_PORT) {
+        // Create a new port for the current thread
+        ports_request_t port_request = create_port(PID_SELF, 0);
+        if (port_request.result != SUCCESS) {
+            // Handle error: Failed to create the port
+            return -1;
+        }
+
+        // Save the created port in the thread-local variable
+        fs_cmd_reply_port = port_request.port;
+    }
+
+    // Initialize the message type, flags, file ID, offset, count, and reply channel
+    IPC_Read message = {
+        .type = IPC_Read_NUM,
+        .flags = 0,
+        .file_id = file_id,
+        .start_offset = offset,
+        .max_size = count,
+        .reply_chan = fs_cmd_reply_port,
+    };
+
+    size_t message_size = sizeof(IPC_Read);
+
+    // Send the IPC_Read message to the filesystem daemon
+    result_t result = send_message_port(fs_port, message_size, (const char *)&message);
+
+    if (result != SUCCESS) {
+        errno = EIO; // I/O error
+        return -1;
+    }
+
+    // Receive the reply message containing the result and data
+    Message_Descriptor reply_descr;
+    IPC_Generic_Msg * reply_msg;
+    result = get_message(&reply_descr, (unsigned char **)&reply_msg, fs_cmd_reply_port);
+    if (result != SUCCESS) {
+        errno = EIO; // I/O error
+        return -1;
+    }
+
+    // Verify that the reply message is of type IPC_Read_Reply
+    if (reply_msg->type != IPC_Read_Reply_NUM) {
+        errno = EIO; // I/O error
+        return -1;
+    }
+
+    // Read the result code from the reply message
+    IPC_Read_Reply *reply = (IPC_Read_Reply *)reply_msg;
+    int result_code = reply->result_code;
+
+    if (result_code < 0) {
+        free(reply_msg);
+        errno = -result_code; // Set errno to appropriate error code (negative value)
+        return -1;
+    }
+
+    // Copy the data from the reply message to the output buffer
+    memcpy(buf, reply->data, count);
+
+    // Free the memory for the reply message
+    free(reply_msg);
+
+    // Return the number of bytes read
+    return count;
 }

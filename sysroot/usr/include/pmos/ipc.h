@@ -114,10 +114,31 @@ typedef struct IPC_Write_Plain {
     char data[0];
 } IPC_Write_Plain;
 
-#define IPC_Read_NUM 0x41
+#define IPC_Write_NUM 0x41
+typedef struct IPC_Write {
+    /// Message type (must be IPC_Write_NUM)
+    uint32_t type;
+
+    /// Flags changing the behaviour
+    uint32_t flags;
+
+    /// Specific identificator for the file within the process
+    uint64_t file_id;
+
+    /// Offset where the data should be written
+    uint64_t offset;
+
+    /// Channel where the reply would be sent
+    uint64_t reply_chan;
+
+    /// Data to be written
+    char data[0];
+};
+
+#define IPC_Read_NUM 0x42
 typedef struct IPC_Read {
     /// Message type (must be IPC_Read_NUM)
-    uint32_t num;
+    uint32_t type;
 
     /// Flags changing the behaviour
     uint32_t flags;
@@ -135,7 +156,7 @@ typedef struct IPC_Read {
     uint64_t reply_chan;
 } IPC_Read;
 
-#define IPC_Read_Reply_NUM 0x50;
+#define IPC_Read_Reply_NUM 0x50
 typedef struct IPC_Read_Reply {
     /// Message type (must be IPC_Read_Reply_NUM)
     uint32_t num;
@@ -146,15 +167,22 @@ typedef struct IPC_Read_Reply {
     /// Result of the operation
     uint16_t result_code;
 
-    /// Specific identificator for the file within the process
-    uint64_t file_id;
-
-    /// Beginning of the file to be read
-    uint64_t start_offset;
-
     /// Data that was read. The size can be deduced from the size of the message.
     unsigned char data[0];
 } IPC_Read_Reply;
+
+#define IPC_Write_Reply_NUM 0x51
+typedef struct IPC_Write_Reply {
+    /// Message type (must be IPC_Write_Reply_NUM)
+    uint32_t num;
+
+    uint16_t flags;
+
+    int16_t result;
+
+    uint64_t bytes_written;
+};
+
 
 #define IPC_Open_NUM 0x58
 typedef struct IPC_Open {
