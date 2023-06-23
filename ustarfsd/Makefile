@@ -2,9 +2,9 @@ EXEC = ustarfsd.elf
 
 export PATH := $(ROOTDIR)/bin/cross/bin:$(PATH)
 
-#CC = x86_64-pmos-gcc
-#CPP = x86_64-pmos-gcc
-#CXX = x86_64-pmos-g++
+CC = x86_64-pmos-gcc
+CPP = x86_64-pmos-gcc
+CXX = x86_64-pmos-g++
 
 INTERNALCFLAGS  :=       \
 	-static \

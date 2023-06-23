@@ -273,14 +273,21 @@ struct File *resolve_parent_dir(const struct File *file) {
             // No '/' found, the remaining filepath is the file name
             const char *fileName = filepath;
 
-            // Iterate through the child_array of the current directory
-            for (size_t i = 0; i < currentDir->child_size; ++i) {
-                struct File *child = currentDir->child_array[i];
+            // Binary search for the file in the sorted child_array of the current directory
+            size_t left = 0;
+            size_t right = currentDir->child_size;
+            while (left < right) {
+                size_t mid = left + (right - left) / 2;
+                struct File *child = currentDir->child_array[mid];
 
-                // Compare the name of each child with the file name
-                if (strcmp(child->name, fileName) == 0) {
+                int comparison = strcmp(child->name, fileName);
+                if (comparison == 0) {
                     // File found, return the parent directory
                     return currentDir;
+                } else if (comparison < 0) {
+                    left = mid + 1;
+                } else {
+                    right = mid;
                 }
             }
 
@@ -291,16 +298,23 @@ struct File *resolve_parent_dir(const struct File *file) {
         // Compute the length of the directory name
         size_t dirNameLength = nextSlash - filepath;
 
-        // Iterate through the child_array of the current directory
+        // Binary search for the directory in the sorted child_array of the current directory
+        size_t left = 0;
+        size_t right = currentDir->child_size;
         struct File *nextDir = NULL;
-        for (size_t i = 0; i < currentDir->child_size; ++i) {
-            struct File *child = currentDir->child_array[i];
+        while (left < right) {
+            size_t mid = left + (right - left) / 2;
+            struct File *child = currentDir->child_array[mid];
 
-            // Compare the name of each child with the directory name
-            if (strncmp(child->name, filepath, dirNameLength) == 0 && child->name[dirNameLength] == '\0') {
+            int comparison = strncmp(child->name, filepath, dirNameLength);
+            if (comparison == 0 && child->name[dirNameLength] == '\0') {
                 // Directory found, update nextDir
                 nextDir = child;
                 break;
+            } else if (comparison < 0 || (comparison == 0 && child->name[dirNameLength] < '\0')) {
+                left = mid + 1;
+            } else {
+                right = mid;
             }
         }
 

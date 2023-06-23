@@ -116,45 +116,78 @@ typedef struct IPC_Write_Plain {
 
 #define IPC_Read_NUM 0x41
 typedef struct IPC_Read {
-    // Message type (must be IPC_Read_NUM)
+    /// Message type (must be IPC_Read_NUM)
     uint32_t num;
 
-    // Flags changing the behaviour
+    /// Flags changing the behaviour
     uint32_t flags;
 
-    // Specific identificator for the file within the process
+    /// Specific identificator for the file within the process
     uint64_t file_id;
 
-    // Beginning of the file to be read
+    /// Beginning of the file to be read
     uint64_t start_offset;
 
-    // Maximum size to be read
+    /// Maximum size to be read
     uint64_t max_size;
 
-    // Channel where the reply would be sent
+    /// Channel where the reply would be sent
     uint64_t reply_chan;
 } IPC_Read;
 
 #define IPC_Read_Reply_NUM 0x50;
 typedef struct IPC_Read_Reply {
-    // Message type (must be IPC_Read_Reply_NUM)
+    /// Message type (must be IPC_Read_Reply_NUM)
     uint32_t num;
 
-    // Flags changing the behaviour
+    /// Flags changing the behaviour
     uint16_t flags;
 
-    // Result of the operation
+    /// Result of the operation
     uint16_t result_code;
 
-    // Specific identificator for the file within the process
+    /// Specific identificator for the file within the process
     uint64_t file_id;
 
-    // Beginning of the file to be read
+    /// Beginning of the file to be read
     uint64_t start_offset;
 
-    // Data that was read
-    unsigned char[0];
+    /// Data that was read. The size can be deduced from the size of the message.
+    unsigned char data[0];
 } IPC_Read_Reply;
+
+#define IPC_Open_NUM 0x58
+typedef struct IPC_Open {
+    /// Message type (must be IPC_Open_NUM)
+    uint32_t num;
+
+    /// Flags changing the behavior of the open operation
+    uint32_t flags;
+
+    /// Port where the reply will be sent
+    pmos_port_t reply_port;
+
+    /// Path of the file to be opened (flexible array member)
+    char path[];
+} IPC_Open;
+
+#define IPC_Open_Reply_NUM 0x59
+typedef struct IPC_Open_Reply {
+    /// Message type (must be IPC_Open_Reply_NUM)
+    uint32_t num;
+
+    /// Result code indicating the outcome of the open operation
+    int16_t result_code;
+
+    /// Flags associated with the file system
+    uint16_t fs_flags;
+
+    /// ID of the file system
+    uint64_t filesystem_id;
+
+    /// Port associated with the file system
+    pmos_port_t fs_port;
+} IPC_Open_Reply;
 
 
 

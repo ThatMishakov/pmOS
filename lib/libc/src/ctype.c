@@ -24,3 +24,15 @@ int isspace(int c)
 {
     return c == ' ' || c == '\f' || c == '\n' || c == '\r' || c == '\t' || c == '\v';
 }
+
+int tolower(int c) {
+    if (c >= 'A' && c <= 'Z') {
+        return c + ('a' - 'A');
+    } else {
+        return c;
+    }
+}
+
+int isxdigit(int c) {
+    return isdigit(c) || (tolower(c) >= 'a' && tolower(c) <= 'f');
+}

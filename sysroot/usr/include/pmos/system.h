@@ -19,6 +19,8 @@ typedef struct {
     uint64_t value;
 } syscall_r;
 
+#define INVALID_PORT 0
+
 #if defined(__cplusplus)
 extern "C" {
 #endif
@@ -95,7 +97,7 @@ result_t get_first_message(char* buff, pmos_port_t port, uint64_t args);
  * @todo Now that I have redone the memory system in the kernel and have (- and at least I think -) cool memory-moving syscalls, it might be a good idea to
  *       provide an interface to move the pages with the messages.
  */
-result_t send_message_port(uint64_t port, size_t size, const char* message);
+result_t send_message_port(pmos_port_t port, size_t size, const char* message);
 
 /**
  * @brief Chages the tasks' scheduler priority

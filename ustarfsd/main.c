@@ -77,6 +77,10 @@ int parse_archive(int fd, struct File ***file_pointer_array, size_t *file_count,
                 free(file);  // Free the allocated file struct
                 return -1;
             }
+
+            // Free the path as it is not needed anymore.
+            free(file->path);
+            file->path = NULL;
         } else if (result == -2) {
             // Reached the end of the archive
             return 0;

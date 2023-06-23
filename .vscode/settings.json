@@ -72,7 +72,9 @@
         "stdlib_com.h": "c",
         "quadmath-rounding-mode.h": "c",
         "types.h": "c",
-        "stdint.h": "c"
+        "stdint.h": "c",
+        "errno.h": "c",
+        "stdlib.h": "c"
     },
     "cmake.configureOnOpen": false
 }

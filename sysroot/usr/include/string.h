@@ -36,7 +36,7 @@ char *strtok(char * s1, const char * s2);
 
 /* Miscellaneous functions */
 void *memset(void *s, int c, size_t n);
-char *strerror(int errnum);
+const char *strerror(int errnum);
 size_t strlen(const char* str);
 
 

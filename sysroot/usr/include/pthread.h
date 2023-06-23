@@ -204,6 +204,50 @@ int   pthread_setspecific(pthread_key_t, const void *);
 void  pthread_testcancel(void);
 
 
+/**
+ * @brief Spin lock type for thread synchronization.
+ *
+ * The `pthread_spinlock_t` type represents a spin lock, which is a simple form of
+ * thread synchronization. It provides mutual exclusion and is useful in scenarios
+ * where the critical section is expected to be held for a short duration.
+ */
+typedef int pthread_spinlock_t;
+
+/**
+ * @brief Try to acquire a spin lock.
+ *
+ * This function attempts to acquire the given spin lock. If the lock is currently
+ * available, it is acquired and the function returns immediately with a value of 0.
+ * If the lock is currently held by another thread, the function returns EBUSY without
+ * acquiring the lock.
+ *
+ * @param lock Pointer to the spin lock variable.
+ * @return 0 if the lock was successfully acquired, EBUSY otherwise.
+ */
+int pthread_spin_trylock(pthread_spinlock_t *lock);
+
+/**
+ * @brief Acquire a spin lock.
+ *
+ * This function acquires the given spin lock. If the lock is currently held by another
+ * thread, the calling thread will spin in a busy loop until the lock becomes available.
+ *
+ * @param lock Pointer to the spin lock variable.
+ * @return 0 on success, or a positive error code on failure.
+ */
+int pthread_spin_lock(pthread_spinlock_t *lock);
+
+/**
+ * @brief Release a spin lock.
+ *
+ * This function releases the given spin lock, allowing other threads to acquire it.
+ *
+ * @param lock Pointer to the spin lock variable.
+ * @return 0 on success, or a positive error code on failure.
+ */
+int pthread_spin_unlock(pthread_spinlock_t *lock);
+
+
 
 #if defined(__cplusplus)
 } /* extern "C" */

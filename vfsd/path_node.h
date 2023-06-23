@@ -4,32 +4,74 @@
 #include <stddef.h>
 #include "file_descriptor.h"
 
+struct Path_Hash_Map;
+
+/**
+ * @brief Enumerates the types of nodes in the file system.
+ */
+enum Node_Type {
+    DIRECTORY,  ///< Represents a directory node.
+    FILE,       ///< Represents a file node.
+};
+
+/**
+ * @brief Represents a node in the virtual file system hierarchy.
+ */
 typedef struct Path_Node {
-    long height;
-    
-    struct Path_Node *tree_parent;
-    struct Path_Node *tree_left;
-    struct Path_Node *tree_right;
+    struct Path_Node *ll_next;               ///< Pointer to the next node in the linked list.
+    struct Path_Node *ll_previous;           ///< Pointer to the previous node in the linked list.
 
-    struct File_Descriptor *parent;
-    struct File_Descriptor *file_desc;
+    struct Path_Node *parent;                ///< Pointer to the parent node.
+    struct Filesystem* parent_fs;            ///< Pointer to the filesystem owner of the file.
 
-    size_t name_length;
-    unsigned char name[0];
+    uint64_t file_id;                        ///< ID of the file within the filesystem.
+    int file_type;                           ///< Type of the node (DIRECTORY or FILE).
+
+    struct Path_Hash_Map *children_nodes_map; ///< Pointer to the hash map of children nodes.
+
+    size_t name_length;                      ///< Length of the node's name.
+    unsigned char name[0];                   ///< Name of the node.
 } Path_Node;
+
+/**
+ * @brief Represents a vector of nodes for a specific hash value in the Path_Hash_Map.
+ */
+struct Path_Hash_Vector {
+    struct Path_Node *head;    ///< Pointer to the head (first) node in the linked list.
+    struct Path_Node *tail;    ///< Pointer to the tail (last) node in the linked list.
+    size_t nodes_count;        ///< Number of nodes in the vector.
+};
+
+struct Path_Hash_Map {
+    struct Path_Hash_Vector *hash_vector;
+    size_t vector_size;
+    size_t nodes_count;
+};
 
 extern Path_Node root;
 
 /**
- * @brief Insert a node into the tree.
- * 
- * This function inserts a new node into the tree cheking for duplicates.
- * 
- * @param root Pointer to the pointer of the root of the tree
- * @param new_node Node to be inserted
- * @return 0 on success. -1 on error (if the duplicate node was found).
+ * @brief Inserts a Path_Node into the Path_Hash_Map.
+ *
+ * This function inserts a Path_Node into the specified Path_Hash_Map. If the load factor
+ * exceeds the threshold, the hash map will be resized and existing nodes will be rehashed.
+ *
+ * @param map The Path_Hash_Map to insert the node into.
+ * @param node The Path_Node to be inserted.
+ *
+ * @return 0 on success, 1 if rehashing failed due to memory allocation error, -1 if the map or node is NULL.
  */
-int path_node_insert(struct Path_Node **root, struct Path_Node *new_node);
+int insert_node(struct Path_Hash_Map *map, struct Path_Node *node);
+
+/**
+ * @brief Inserts a Path_Node into the linked list represented by the Path_Hash_Vector.
+ *
+ * This function inserts the given node into the linked list represented by the specified Path_Hash_Vector.
+ *
+ * @param vector The Path_Hash_Vector representing the linked list.
+ * @param node The Path_Node to be inserted.
+ */
+void insert_node_into_linked_list(struct Path_Hash_Vector *vector, struct Path_Node *node);
 
 /**
  * @brief Search for the node in the tree

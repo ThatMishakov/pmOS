@@ -8,6 +8,10 @@ result_t get_message(Message_Descriptor* desc, unsigned char** message, pmos_por
         return result;
 
     *message = malloc(desc->size);
+    if (*message == NULL) {
+        return 1; // This needs to be changed
+    }
+
     result = get_first_message(*message, 0, port);
     if (result != SUCCESS) {
         free(*message);

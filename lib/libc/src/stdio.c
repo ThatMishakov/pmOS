@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <pmos/ipc.h>
 #include <pmos/ports.h>
+#include <errno.h>
 
 const char default_terminal_port_name[] = "/pmos/terminald";
 
@@ -415,4 +416,12 @@ int printf(const char* format, ...)
 size_t fwrite ( const void * ptr, size_t size, size_t count, FILE * stream )
 {
     return _size_fputs(size*count, ptr, stream);
+}
+
+void perror(const char *message) {
+    if (message != NULL && message[0] != '\0') {
+        fprintf(stderr, "%s: ", message);
+    }
+
+    fprintf(stderr, "%s\n", strerror(errno));
 }
