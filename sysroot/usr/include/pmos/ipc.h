@@ -305,6 +305,15 @@ typedef struct IPC_PS2_Send_Data {
     char data[0];
 } IPC_PS2_Send_Data;
 
+#define IPC_Mutex_Unlock_NUM 0xA0
+typedef struct IPC_Mutex_Unlock {
+    /// Message type (must be IPC_Mutex_Unlock_NUM)
+    uint32_t type;
+
+    /// Flags changing the behaviour
+    uint32_t flags;
+} IPC_Mutex_Unlock;
+
 
 #if defined(__cplusplus)
 } /* extern "C" */

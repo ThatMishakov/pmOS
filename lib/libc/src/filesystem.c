@@ -176,6 +176,18 @@ static __thread pmos_port_t fs_port = INVALID_PORT;
 // Global thread-local variable to save a reply port
 static __thread pmos_port_t fs_cmd_reply_port = INVALID_PORT;
 
+pmos_port_t get_filesytem_port() {
+    const char * port_name = "filesystem";
+    ports_request_t request = get_port_by_name(port_name, strlen(port_name), NULL);
+
+    if (request.result != SUCCESS) {
+        // Handle error
+        return INVALID_PORT;
+    }
+
+    return request.port;
+}
+
 int open(const char* path, int flags) {
     // Double-checked locking to initialize fs_data if it is NULL
     if (fs_data == NULL) {

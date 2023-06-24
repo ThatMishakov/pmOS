@@ -50,7 +50,21 @@ typedef size_t off_t;
 typedef volatile void * pthread_cond_t;
 typedef unsigned pthread_condattr_t;
 typedef _u64 pthread_key_t;
-typedef volatile void * pthread_mutex_t;
+
+struct __pthread_waiter {
+    _u64 notification_port;
+    struct __pthread_waiter* next;
+};
+
+typedef struct {
+    _u64 block_count;
+    _u64 blocking_thread_id;
+    struct __pthread_waiter* waiters_list_head;
+    struct __pthread_waiter* waiters_list_tail;
+    _u64 recursive_lock_count;
+    int type;
+} pthread_mutex_t;
+
 typedef size_t pthread_mutexattr_t;
 typedef volatile unsigned pthread_once_t;
 typedef struct pthread_rwlock_t {
