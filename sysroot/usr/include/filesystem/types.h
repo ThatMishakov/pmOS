@@ -1,0 +1,7 @@
+#ifndef _FILESYSTEM_TYPES_H
+#define _FILESYSTEM_TYPES_H
+
+#define FS_FILE_REGULAR 1
+#define FS_DIRECTORY 4
+
+#endif // _FILESYSTEM_TYPES_H

@@ -68,15 +68,15 @@ int main()
 
             switch (ipc_msg->type) {
             case IPC_VFS_Open_NUM: {
-                printf("[VFSd] Recieved IPC_VFS_Open\n");
+                printf("[VFSd] Recieved IPC_Open\n");
 
-                IPC_VFS_Open_Msg* open_msg = (IPC_VFS_Open_Msg*)ipc_msg;
+                IPC_Open* open_msg = (IPC_Open*)ipc_msg;
 
                 break;
             }
-            case IPC_VFS_Close_NUM: {
-                printf("[VFSd] Recieved IPC_VFS_Close\n");
-                IPC_VFS_Close_Msg* close_msg = (IPC_VFS_Close_Msg*)ipc_msg;
+            case IPC_Close_NUM: {
+                printf("[VFSd] Recieved IPC_Close\n");
+                IPC_Close* close_msg = (IPC_Close*)ipc_msg;
                 break;
             }
             default:

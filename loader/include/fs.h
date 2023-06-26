@@ -3,22 +3,26 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <pmos/ipc.h>
 
 struct fs_entry {
     char *name;
-    size_t size;
-    char *data;
+    size_t name_size;
+
+    int type;
+    union {
+        struct {
+            size_t file_size;
+            char *data;
+        } file;
+
+        struct {
+            struct fs_entry *entries;
+            size_t entry_count;
+            size_t entry_capacity;
+        } directory;
+    };
 };
-
-struct fs_data {
-    size_t size;
-    size_t capacity;
-    struct fs_entry *entries;
-};
-
-void init_fs();
-
-
 
 struct open_file_bucket {
     struct open_file_bucket *next;
@@ -33,6 +37,11 @@ struct open_file_bucket {
 #define TASKS_START_SIZE 8
 #define TASKS_GROWTH_FACTOR 2
 
+#define CONSUMER_LOAD_FACTOR 3/4
+#define CONSUMER_GROWTH_FACTOR 2
+#define CONSUMER_BUCKET_START_SIZE 16
+#define CONSUMER_SHRINK_FACTOR 1/2
+
 struct fs_consumer {
     uint64_t id;
 
@@ -46,6 +55,72 @@ struct fs_consumer {
     size_t open_files_size;
     size_t open_files_count;
 };
+
+struct fs_consumer_bucket {
+    struct fs_consumer_bucket *next;
+    struct fs_consumer *consumer;
+};
+
+struct fs_data {
+    size_t size;
+    size_t capacity;
+    struct fs_entry *entries;
+
+    size_t consumer_count;
+    size_t consumer_table_size;
+    struct fs_consumer_bucket **consumers;    
+
+    size_t open_files_count;
+    size_t open_files_table_size;
+    struct open_file_bucket **fs_open_files;
+
+    uint64_t next_open_file_id;
+};
+
+/**
+ * @brief Get consumer by ID.
+ * 
+ * @param data fs_data struct to search
+ * @param id ID of the consumer to get
+ * @return struct fs_consumer* pointer to the consumer. NULL if not found.
+ */
+struct fs_consumer *get_fs_consumer(struct fs_data *data, uint64_t id);
+
+void init_fs();
+
+/**
+ * @brief Adds a consumer to the fs_data struct.
+ * 
+ * @param data fs_data struct to add the consumer to
+ * @param consumer consumer to add
+ * @return int 0 on success, -1 on failure
+ */
+int fs_data_add_consumer(struct fs_data *data, struct fs_consumer *consumer);
+
+/**
+ * @brief Removes a consumer from the fs_data struct.
+ * 
+ * @param data fs_data struct to remove the consumer from
+ * @param consumer consumer to remove
+ */
+void fs_data_remove_consumer(struct fs_data *data, struct fs_consumer *consumer);
+
+/**
+ * @brief Adds an open file to the fs_data struct.
+ * 
+ * @param data fs_data struct to add the open file to
+ * @param file open file to add
+ * @return int 0 on success, -1 on failure
+ */
+int fs_data_add_open_file(struct fs_data *data, struct open_file *file);
+
+/**
+ * @brief Removes an open file from the fs_data struct.
+ * 
+ * @param data fs_data struct to remove the open file from
+ * @param file open file to remove
+ */
+void fs_data_remove_open_file(struct fs_data *data, struct open_file *file);
 
 int init_consumer_open_files_map(struct fs_consumer *consumer);
 
@@ -77,9 +152,8 @@ int insert_open_file(struct fs_consumer *consumer, struct open_file *file);
 int remove_open_file(struct fs_consumer *consumer, struct open_file *file);
 
 struct open_file {
-    struct open_file *next;
-    uint64_t seek_pos;
     uint64_t file_id;
+    uint64_t seek_pos;
 
     struct fs_entry *file;
     struct fs_consumer *consumer;
@@ -108,6 +182,13 @@ struct open_file_list open_files = {
  */
 int open_file(struct fs_consumer *consumer, const char *path, struct open_file **file);
 
-
+/**
+ * @brief Registers an open request for the filesystem.
+ * 
+ * @param msg Pointer to the open request message
+ * @param reply Pointer to the open request reply
+ * @return int 0 on success, -1 on failure
+*/
+int register_open_request(IPC_FS_Open *msg, IPC_FS_Open_Reply *reply);
 
 #endif /* FS_H */

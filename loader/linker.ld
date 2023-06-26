@@ -11,12 +11,12 @@ SECTIONS
     _start = .;
     _exec_start = .;
     .text : {
-        *(.multiboot2)
-        *(.text*)
         . = ALIGN(4096);
         _cpuinit_start = .;
         *(.cpuinit)
         _cpuinit_end = .;
+        *(.multiboot2)
+        *(.text*)
     }
     .data : {
         *(.data*)

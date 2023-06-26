@@ -189,6 +189,36 @@ int pthread_mutex_lock(pthread_mutex_t* mutex) {
     return 0;
 }
 
+int pthread_mutex_trylock(pthread_mutex_t* mutex)
+{
+    uint64_t thread_id = get_thread_id();
+
+    uint64_t blocking_thread_id = __atomic_load_n(&mutex->blocking_thread_id, __ATOMIC_SEQ_CST);
+    if (blocking_thread_id == thread_id) {
+        if (mutex->type == PTHREAD_MUTEX_RECURSIVE) {
+            // Mutex has been acquired by the current thread
+            mutex->recursive_lock_count++;
+            return 0;
+        }
+
+        // Since we are here anyways, return the error no mater the type
+        errno = EDEADLK;
+        return -1;
+    }
+
+    // Compare and set block count
+    uint64_t block_count = 0;
+    if (!__atomic_compare_exchange_n(&mutex->block_count, &block_count, 1, 0, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)) {
+        // Mutex is locked
+        errno = EBUSY;
+        return -1;
+    }
+
+    // Mutex has been acquired
+    mutex->blocking_thread_id = thread_id;
+    return 0;
+}
+
 int pthread_mutex_unlock(pthread_mutex_t* mutex) {
     uint64_t thread_id = get_thread_id();
 

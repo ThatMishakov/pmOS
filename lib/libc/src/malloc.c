@@ -83,16 +83,16 @@ void *realloc(void *old_ptr, size_t new_size)
     return new_ptr;
 }
 
-/*
-void *calloc(size_t nelem, size_t size)
+void *calloc(size_t num, size_t size)
 {
-    size_t total_size = nelem * size;
-    size_t inited;
-    uint64_t* ptr = (uint64_t*)malloc_int(total_size, inited);
-    if (ptr != 0) memset(ptr+1, inited/8 - 1);
-    return &ptr[1];
+    size_t total_size = num*size;
+    void* ptr = malloc(total_size);
+    
+    if (ptr != NULL)
+        memset(ptr, 0, total_size);
+    
+    return ptr;
 }
-*/
 
 void *malloc(size_t size)
 {

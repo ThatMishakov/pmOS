@@ -314,6 +314,48 @@ typedef struct IPC_Mutex_Unlock {
     uint32_t flags;
 } IPC_Mutex_Unlock;
 
+#define IPC_FS_Open_NUM 0xC0
+typedef struct IPC_FS_Open {
+    /// Message type (must be IPC_FS_Open_NUM)
+    uint32_t type;
+
+    /// Flags changing the behaviour
+    uint32_t flags;
+
+    /// Port where the reply will be sent
+    pmos_port_t reply_port;
+
+    /// ID of the file system consumer
+    uint64_t filesystem_id;
+
+    /// ID of the file
+    uint64_t file_id;
+
+    /// Operation ID
+    uint64_t operation_id;
+} IPC_FS_Open;
+
+#define IPC_FS_Open_Reply_NUM 0xD0
+typedef struct IPC_FS_Open_Reply {
+    /// Message type (must be IPC_FS_Open_Reply_NUM)
+    uint32_t type;
+
+    /// Result code indicating the outcome of the open operation
+    int16_t result_code;
+
+    /// Flags associated with the file system
+    uint16_t fs_flags;
+
+    /// Port associated with the file
+    pmos_port_t file_port;
+
+    /// ID of the file within the file system
+    uint64_t file_id;
+
+    /// Operation ID
+    uint64_t operation_id;
+} IPC_FS_Open_Reply;
+
 
 #if defined(__cplusplus)
 } /* extern "C" */
