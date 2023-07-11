@@ -267,7 +267,7 @@ int register_open_request(IPC_FS_Open *msg, IPC_FS_Open_Reply *reply)
         return 0;
     }
 
-    struct fs_consumer *consumer = get_fs_consumer(&filesystem_data, msg->filesystem_id);
+    struct fs_consumer *consumer = get_fs_consumer(&filesystem_data, msg->fs_consumer_id);
     bool new_consumer = false;
 
     if (consumer == NULL) {
@@ -280,7 +280,7 @@ int register_open_request(IPC_FS_Open *msg, IPC_FS_Open_Reply *reply)
 
         memset(consumer, 0, sizeof(struct fs_consumer));
 
-        consumer->id = msg->filesystem_id;
+        consumer->id = msg->fs_consumer_id;
         consumer->open_files_size = OPEN_FILE_BUCKET_START_SIZE;
         consumer->open_files = malloc(sizeof(struct open_file_bucket *) * consumer->open_files_size);
         if (consumer->open_files == NULL) {
