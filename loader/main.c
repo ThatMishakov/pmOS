@@ -22,6 +22,7 @@
 #include <pmos/system.h>
 #include <pmos/memory.h>
 #include <string.h>
+#include <fs.h>
 
 int* __get_errno()
 {
@@ -229,6 +230,24 @@ void main()
 
             react_alloc_page(a);
 
+
+            break;
+        }
+        case IPC_FS_Open_NUM: {
+            IPC_FS_Open *a = (IPC_FS_Open *)ptr;
+            IPC_FS_Open_Reply reply = {};
+            if (desc.size < sizeof (IPC_FS_Open)) {
+                int result = register_open_request(a, &reply);
+                
+                if (result != 0) {
+                    reply.result_code = result;
+                }
+                syscall(SYSCALL_SEND_MSG_PORT, ptr->reply_channel, sizeof(reply), &reply);
+            } else {
+                print_str("Loader: Recieved IPC_FS_Open of unexpected size 0x");
+                print_hex(desc.size);
+                print_str("\n");
+            }
 
             break;
         }

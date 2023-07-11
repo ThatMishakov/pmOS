@@ -146,6 +146,9 @@ typedef struct IPC_Read {
     /// Specific identificator for the file within the process
     uint64_t file_id;
 
+    /// ID of the filesystem consumer
+    uint64_t fs_consumer_id;
+
     /// Beginning of the file to be read
     uint64_t start_offset;
 
@@ -195,6 +198,9 @@ typedef struct IPC_Open {
     /// Port where the reply will be sent
     pmos_port_t reply_port;
 
+    /// ID of the file system consumer
+    uint64_t fs_consumer_id;
+
     /// Path of the file to be opened (flexible array member)
     char path[];
 } IPC_Open;
@@ -212,6 +218,9 @@ typedef struct IPC_Open_Reply {
 
     /// ID of the file system
     uint64_t filesystem_id;
+
+    /// ID of the file
+    uint64_t file_id;
 
     /// Port associated with the file system
     pmos_port_t fs_port;
@@ -326,7 +335,7 @@ typedef struct IPC_FS_Open {
     pmos_port_t reply_port;
 
     /// ID of the file system consumer
-    uint64_t filesystem_id;
+    uint64_t fs_consumer_id;
 
     /// ID of the file
     uint64_t file_id;

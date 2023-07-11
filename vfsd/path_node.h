@@ -5,6 +5,7 @@
 #include "file_descriptor.h"
 
 struct Path_Hash_Map;
+struct Filesystem;
 
 /**
  * @brief Enumerates the types of nodes in the file system.

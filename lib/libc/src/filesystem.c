@@ -18,6 +18,7 @@ struct File_Descriptor {
 
     uint64_t filesystem_id;
     uint64_t file_id;
+    off_t offset;
     pmos_port_t fs_port;
 };
 
@@ -27,6 +28,8 @@ struct Filesystem_Data {
     size_t capacity;
 
     size_t refcount;
+
+    uint64_t fs_consumer_id;
 
     pthread_spinlock_t lock;
 };
@@ -114,6 +117,7 @@ int fill_descriptor(struct Filesystem_Data *fs_data, int64_t descriptor_id, uint
     fs_data->descriptors_vector[descriptor_id].flags = flags;
     fs_data->descriptors_vector[descriptor_id].filesystem_id = filesystem_id;
     fs_data->descriptors_vector[descriptor_id].fs_port = filesystem_port;
+    fs_data->descriptors_vector[descriptor_id].offset = 0;
 
     // Mark the descriptor as not reserved
     fs_data->descriptors_vector[descriptor_id].reserved = false;
@@ -250,6 +254,7 @@ int open(const char* path, int flags) {
     message->num = IPC_Open_NUM;
     message->flags = 0; // Set appropriate flags based on the 'flags' argument
     message->reply_port = fs_cmd_reply_port; // Use the reply port
+    message->fs_consumer_id = fs_data->fs_consumer_id;
 
     // Copy the path string into the message
     memcpy(message->path, path, path_length);
@@ -386,6 +391,7 @@ ssize_t pread(int fd, void *buf, size_t count, off_t offset) {
         .type = IPC_Read_NUM,
         .flags = 0,
         .file_id = file_id,
+        .fs_consumer_id = fs_data->fs_consumer_id,
         .start_offset = offset,
         .max_size = count,
         .reply_chan = fs_cmd_reply_port,

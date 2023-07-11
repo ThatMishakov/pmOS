@@ -159,19 +159,6 @@ struct open_file {
     struct fs_consumer *consumer;
 };
 
-struct open_file_list {
-    // Hash table of open files
-    struct open_file **files;
-    size_t capacity;
-    size_t count;
-};
-
-struct open_file_list open_files = {
-    .files = NULL,
-    .capacity = 0,
-    .count = 0
-};
-
 /**
  * @brief Opens a file for reading.
  * 

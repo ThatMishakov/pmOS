@@ -67,10 +67,11 @@ int main()
             IPC_Generic_Msg* ipc_msg = (IPC_Generic_Msg*)msg_buff;
 
             switch (ipc_msg->type) {
-            case IPC_VFS_Open_NUM: {
+            case IPC_Open_NUM: {
                 printf("[VFSd] Recieved IPC_Open\n");
 
                 IPC_Open* open_msg = (IPC_Open*)ipc_msg;
+                
 
                 break;
             }
