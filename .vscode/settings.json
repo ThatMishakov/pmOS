@@ -74,7 +74,9 @@
         "types.h": "c",
         "stdint.h": "c",
         "errno.h": "c",
-        "stdlib.h": "c"
+        "stdlib.h": "c",
+        "errors.h": "c",
+        "fs_consumer.h": "c"
     },
     "cmake.configureOnOpen": false
 }

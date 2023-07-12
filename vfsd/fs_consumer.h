@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <sys/types.h>
+#include <stdbool.h>
 
 struct Filesystem;
 
@@ -47,6 +48,11 @@ int init_fs_consumer(struct fs_consumer *fs_consumer);
 /// @param fs_consumer The fs_consumer which's buffers to free.
 void free_buffers_fs_consumer(struct fs_consumer *fs_consumer);
 
+/// @brief Gets a fs consumer by its ID.    
+/// @param consumer_id The ID of the fs consumer.
+/// @return The fs consumer with the given ID, or NULL if no such fs consumer exists.
+struct fs_consumer *get_fs_consumer(uint64_t consumer_id);
+
 struct fs_consumer_node {
     struct fs_consumer_node *prev, *next;
     struct fs_consumer *fs_consumer;
@@ -81,3 +87,15 @@ int register_consumer_task(struct consumer_task *task, struct fs_consumer *fs_co
  * @return int 0 on success, -1 on failure.
 */
 int reference_open_filesystem(struct fs_consumer *fs_consumer, struct Filesystem *fs, uint64_t open_count);
+
+/**
+ * @brief Checks is the task_id is a consumer of the fs_consumer.
+ * 
+ * @param fs_consumer Filesystem consumer to check.
+ * @param task_id Task id to check.
+ * @return true Task is a consumer
+ * @return false Task is not a consumer
+ */
+bool is_fs_consumer(struct fs_consumer *consumer, uint64_t task_id);
+
+#endif // FS_CONSUMER_H

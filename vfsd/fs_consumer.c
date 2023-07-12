@@ -1,4 +1,5 @@
 #include "fs_consumer.h"
+#include "filesystem.h"
 #include <stdlib.h>
 
 int init_fs_consumer(struct fs_consumer *fs_consumer)

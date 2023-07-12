@@ -4,6 +4,7 @@
 #include <string.h>
 #include <pmos/helpers.h>
 #include <stdlib.h>
+#include "file_op.h"
 
 struct File_Descriptor root = NULL;
 
@@ -27,9 +28,9 @@ int create_main_port()
     return 0;
 }
 
-int name_port()
+int name_main_port()
 {
-    result_t result = name_port(main_port, vfsd_port_name);
+    result_t result = name_port(main_port, vfsd_port_name, strlen(vfsd_port_name), 0);
     if (result != SUCCESS) {
         printf("Error naming port %li\n", result);
         return -1;
@@ -49,7 +50,7 @@ int main()
 
     
     // Name the main port
-    result = name_port();
+    result = name_main_port();
     if (result != 0)
         return 1;
 
@@ -69,9 +70,17 @@ int main()
             switch (ipc_msg->type) {
             case IPC_Open_NUM: {
                 printf("[VFSd] Recieved IPC_Open\n");
+                if (msg.size < sizeof(IPC_Open)) {
+                    printf("[VFSd] Warning: Recieved IPC_Open that is too small. Size: %li\n", msg.size);
+                    break;
+                }
 
                 IPC_Open* open_msg = (IPC_Open*)ipc_msg;
                 
+                int result = open_file(open_msg, msg.sender, msg.size);
+                if (result != 0) {
+                    printf("[VFSd] Error opening file: %i\n", result);
+                }
 
                 break;
             }
