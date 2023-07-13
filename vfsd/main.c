@@ -5,8 +5,9 @@
 #include <pmos/helpers.h>
 #include <stdlib.h>
 #include "file_op.h"
+#include "path_node.h"
 
-struct File_Descriptor root = NULL;
+struct Path_Node * root_node = NULL;
 
 pmos_port_t main_port = 0;
 
@@ -84,11 +85,12 @@ int main()
 
                 break;
             }
+            /*
             case IPC_Close_NUM: {
                 printf("[VFSd] Recieved IPC_Close\n");
                 IPC_Close* close_msg = (IPC_Close*)ipc_msg;
                 break;
-            }
+            }*/
             default:
                 printf("[VFSd] Warning: Recieved unknown message type: %i\n", ipc_msg->type);
                 break;

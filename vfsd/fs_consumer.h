@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <sys/types.h>
 #include <stdbool.h>
+#include "string.h"
 
 struct Filesystem;
 
@@ -37,6 +38,11 @@ struct fs_consumer {
     #define OPEN_FILESYSTEM_INITIAL_SIZE 16
     #define OPEN_FILESYSTEM_SIZE_MULTIPLIER 2
     #define OPEN_FILESYSTEM_MAX_LOAD_FACTOR 3/4
+
+    struct File_Request *requests_head, *requests_tail;
+    size_t requests_count;
+
+    struct String path;
 };
 
 /// @brief Initializes a fs consumer.
@@ -64,6 +70,20 @@ struct consumer_task {
     // Linked list fs_consumers
     struct fs_consumer_node *consumers_first, *consumers_last;
 };
+
+struct fs_consumer_map {
+    // Doubly-linked hash table. fs_consumer->id is the key.
+    struct fs_consumer_node **table;
+    size_t size;
+    size_t count;
+    #define FS_CONSUMER_INITIAL_SIZE 16
+    #define FS_CONSUMER_SIZE_MULTIPLIER 2
+    #define FS_CONSUMER_MAX_LOAD_FACTOR 3/4
+    #define FS_CONSUMER_SHRINK_THRESHOLD 1/4
+    #define FS_CONSUMER_SHRINK_FACTOR 1/2
+};
+
+extern struct fs_consumer_map global_fs_consumers;
 
 /**
  * @brief Registers a consumer task with the fs consumer.

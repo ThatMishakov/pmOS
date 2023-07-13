@@ -26,8 +26,20 @@ int init_fs_consumer(struct fs_consumer *fs_consumer)
         free(fs_consumer->consumer_tasks);
         return -1;
     }
+
+    int result = init_null_string(&fs_consumer->path);
+    if (result != 0) {
+        // Could not allocate memory
+        free(fs_consumer->consumer_tasks);
+        return result;
+    }
+
     fs_consumer->open_filesystem_size = OPEN_FILESYSTEM_INITIAL_SIZE;
     fs_consumer->open_filesystem_count = 0;
+
+    fs_consumer->requests_head = NULL;
+    fs_consumer->requests_tail = NULL;
+    fs_consumer->requests_count = 0;
 
     return 0;
 }
@@ -39,6 +51,8 @@ void free_buffers_fs_consumer(struct fs_consumer *fs_consumer)
 
     if (fs_consumer->open_filesystem != NULL)
         free(fs_consumer->open_filesystem);
+
+    destroy_string(&fs_consumer->path);
 }
 
 int register_consumer_task(struct consumer_task *task, struct fs_consumer *fs_consumer)
@@ -101,7 +115,7 @@ int reference_open_filesystem(struct fs_consumer *fs_consumer, struct Filesystem
     if (fs_consumer->open_filesystem_count > fs_consumer->open_filesystem_size * OPEN_FILESYSTEM_MAX_LOAD_FACTOR) {
         // Resize the hash table
         size_t new_size = fs_consumer->open_filesystem_size * OPEN_FILESYSTEM_SIZE_MULTIPLIER;
-        struct open_filesystem **new_open_filesystem = malloc(sizeof(struct open_filesystem *) * new_size);
+        struct consumer_fs_map_node **new_open_filesystem = malloc(sizeof(struct consumer_fs_map_node *) * new_size);
         if (new_open_filesystem == NULL) {
             // Could not allocate memory
             return -1;
@@ -146,4 +160,23 @@ int reference_open_filesystem(struct fs_consumer *fs_consumer, struct Filesystem
     fs_consumer->open_filesystem_count++;
 
     return 0;
+}
+
+bool is_fs_consumer(struct fs_consumer *fs_consumer, uint64_t id)
+{
+    if (fs_consumer == NULL)
+        return false;
+
+    // Binary search consumer tasks
+    size_t left = 0;
+    size_t right = fs_consumer->consumer_tasks_count;
+    while (left < right) {
+        size_t mid = (left + right) / 2;
+        if (fs_consumer->consumer_tasks[mid]->task_id < id)
+            left = mid + 1;
+        else
+            right = mid;
+    }
+
+    return left < fs_consumer->consumer_tasks_count && fs_consumer->consumer_tasks[left]->task_id == id;
 }

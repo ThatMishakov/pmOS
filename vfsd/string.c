@@ -1,4 +1,6 @@
 #include "string.h"
+#include <stdlib.h>
+#include <string.h>
 
 int init_null_string(struct String *string) {
     string->data = NULL;

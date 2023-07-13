@@ -2,7 +2,6 @@
 #define PATH_NODE_H
 #include <stdint.h>
 #include <stddef.h>
-#include "file_descriptor.h"
 
 struct Path_Hash_Map;
 struct Filesystem;
@@ -11,8 +10,8 @@ struct Filesystem;
  * @brief Enumerates the types of nodes in the file system.
  */
 enum Node_Type {
-    DIRECTORY,  ///< Represents a directory node.
-    FILE,       ///< Represents a file node.
+    NODE_DIRECTORY,  ///< Represents a directory node.
+    NODE_FILE,       ///< Represents a file node.
 };
 
 /**
@@ -33,6 +32,7 @@ typedef struct Path_Node {
     size_t name_length;                      ///< Length of the node's name.
     unsigned char name[0];                   ///< Name of the node.
 } Path_Node;
+#define PATH_NODE_HASH_LOAD_FACTOR 3/4
 
 /**
  * @brief Represents a vector of nodes for a specific hash value in the Path_Hash_Map.

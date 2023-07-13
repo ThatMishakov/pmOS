@@ -1,5 +1,14 @@
 #include "path_node.h"
 #include <stdbool.h>
+#include <stdlib.h>
+
+size_t sdbm_hash(const unsigned char * str, size_t length) {
+    size_t hash = 0;
+    for (size_t i = 0; i < length; i++) {
+        hash = str[i] + (hash << 6) + (hash << 16) - hash;
+    }
+    return hash;
+}
 
 void insert_node_into_linked_list(struct Path_Hash_Vector *vector, struct Path_Node *node) {
     if (vector->head == NULL) {
@@ -23,7 +32,7 @@ int insert_node(struct Path_Hash_Map *map, struct Path_Node *node) {
     bool rehashing_failed = false;
 
     // Check if resizing is needed
-    if (map->nodes_count >= map->vector_size * HASH_LOAD_FACTOR) {
+    if (map->nodes_count >= map->vector_size * PATH_NODE_HASH_LOAD_FACTOR) {
         // Resize the hash table
         size_t new_vector_size = map->vector_size * 2;
         struct Path_Hash_Vector *new_hash_vector = calloc(new_vector_size, sizeof(struct Path_Hash_Vector));

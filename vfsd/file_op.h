@@ -6,14 +6,14 @@
 #include <pmos/ipc.h>
 
 struct Path_Node;
-struct FS_Consumer;
-struct Open_Request {
+struct fs_consumer;
+struct File_Request {
     /// Implicit linked list
-    struct Open_Request *path_node_next, *path_node_prev;
-    struct Open_Request *consumer_node_next, *consumer_node_prev;
+    struct File_Request *path_node_next, *path_node_prev;
+    struct File_Request *consumer_req_next, *consumer_req_prev;
 
     /// Parent filesystem
-    struct FS_Consumer *consumer;
+    struct fs_consumer *consumer;
 
     /// Port to send the reply to
     uint64_t reply_port;
@@ -21,8 +21,8 @@ struct Open_Request {
     /// Full absolute path to the file processed
     struct String path;
 
-    /// Pointer to the first character of the file name currently being processed
-    const char *active_name;
+    /// Index of the first character within path of the file name currently being processed
+    size_t active_file_index;
 
     /// Pointer to the node currently being parsed
     struct Path_Node *active_node;
@@ -50,14 +50,14 @@ int open_file(const struct IPC_Open *request, uint64_t sender, uint64_t request_
  * @param request Request to initialize
  * @return int result of the operation. 0 if successful, -1 otherwise
  */
-int init_open_request(struct Open_Request *request);
+int init_open_request(struct File_Request *request);
 
 /**
  * @brief Frees the memory buffers of an open request
  * 
  * @param request Request which's buffers to free
  */
-void free_buffers_open_request(struct Open_Request *request);
+void free_buffers_file_request(struct File_Request *request);
 
 /**
  * @brief Register the request with the consumer
@@ -66,6 +66,36 @@ void free_buffers_open_request(struct Open_Request *request);
  * @param consumer Consumer to register the request with
  * @return int result of the operation. 0 if successful, -1 otherwise
  */
-int register_request_with_consumer(struct Open_Request *request, struct fs_consumer *consumer);
+int register_request_with_consumer(struct File_Request *request, struct fs_consumer *consumer);
+
+/**
+ * @brief Binds the request to the root of the filesystem
+ * 
+ * @param request Request to bind
+ * @return int 0 on success, negative value otherwise
+ */
+int bind_request_to_root(struct File_Request *request);
+
+/**
+ * @brief Prepares the filename of the request
+ *
+ * This function takes the given file path and prepares it for the given request. If the file_path is zero, it uses
+ * the consumer's path. If the file_path is an absolute path, it is copied as-is. If the file_path is a relative path,
+ * it is appended to the consumer's path. The result is saved in the request's path.
+ *
+ * @param request The request where the processed filename is saved.
+ * @param consumer The consumer to prepare the filename for.
+ * @param file_path The path to the file.
+ * @param path_length The length of the file path.
+ * @return 0 on success, -EINVAL if the request or consumer is NULL, -ENOMEM if memory allocation fails,
+ *         or -ENOSPC if the resulting path exceeds the capacity of the request's path.
+ *
+ * @note The request must be already initialized, and the string should already be initialized.
+ * @note If file_path is an empty string, the consumer's path will be used.
+ * @note If file_path is an absolute path, it will be copied as-is.
+ * @note If file_path is a relative path, it will be appended to the consumer's path.
+ * @note The existing contents of request->path will be overridden, leading to potential memory leaks if not properly managed.
+ */
+int prepare_filename(struct File_Request * request, const struct fs_consumer *consumer, const char * file_path, size_t path_length);
 
 #endif // FILE_OP_H
