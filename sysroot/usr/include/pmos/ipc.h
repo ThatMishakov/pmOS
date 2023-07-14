@@ -186,7 +186,6 @@ typedef struct IPC_Write_Reply {
     uint64_t bytes_written;
 };
 
-
 #define IPC_Open_NUM 0x58
 typedef struct IPC_Open {
     /// Message type (must be IPC_Open_NUM)
@@ -225,6 +224,33 @@ typedef struct IPC_Open_Reply {
     /// Port associated with the file system
     pmos_port_t fs_port;
 } IPC_Open_Reply;
+
+#define IPC_Create_Consumer_NUM 0x5a
+typedef struct IPC_Create_Consumer {
+    /// Message type (must be IPC_Create_Consumer_NUM)
+    uint32_t type;
+
+    /// Flags changing the behaviour
+    uint32_t flags;
+
+    /// Port where the reply would be sent
+    uint64_t reply_port;
+} IPC_Create_Consumer;
+
+#define IPC_Create_Consumer_Reply_NUM 0x5b
+typedef struct IPC_Create_Consumer_Reply {
+    /// Message type (must be IPC_Create_Consumer_Reply_NUM)
+    uint32_t type;
+
+    /// Flags changing the behaviour
+    uint32_t flags;
+
+    /// Result of the operation
+    int32_t result_code;
+
+    /// ID of the consumer
+    uint64_t consumer_id;
+} IPC_Create_Consumer_Reply;
 
 
 

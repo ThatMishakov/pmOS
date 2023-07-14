@@ -85,6 +85,21 @@ int main()
 
                 break;
             }
+            case IPC_Create_Consumer_NUM: {
+                printf("[VFSd] Recieved IPC_Create_Consumer\n");
+                if (msg.size < sizeof(IPC_Create_Consumer)) {
+                    printf("[VFSd] Warning: Recieved IPC_Create_Consumer that is too small. Size: %li\n", msg.size);
+                    break;
+                }
+
+                IPC_Create_Consumer* create_consumer_msg = (IPC_Create_Consumer*)ipc_msg;
+                int result = create_consumer(create_consumer_msg, msg.sender, msg.size);
+                if (result != 0) {
+                    printf("[VFSd] Error creating consumer: %i\n", result);
+                }
+
+                break;
+            }
             /*
             case IPC_Close_NUM: {
                 printf("[VFSd] Recieved IPC_Close\n");

@@ -77,7 +77,8 @@
         "stdlib.h": "c",
         "errors.h": "c",
         "fs_consumer.h": "c",
-        "path_node.h": "c"
+        "path_node.h": "c",
+        "system.h": "c"
     },
     "cmake.configureOnOpen": false
 }

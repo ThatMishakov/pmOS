@@ -6,6 +6,7 @@
 #include <sys/types.h>
 #include <stdbool.h>
 #include "string.h"
+#include <pmos/ipc.h>
 
 struct Filesystem;
 
@@ -83,6 +84,30 @@ extern struct fs_consumer_map {
     #define FS_CONSUMER_SHRINK_FACTOR 1/2
 } global_fs_consumers;
 
+struct consumer_task_map_node {
+    struct consumer_task_map_node *next;
+    struct consumer_task *task;
+};
+
+extern struct consumer_task_map {
+    // Singly-linked hash table. task_id is the key.
+    struct consumer_task_map_node **table;
+    size_t table_size;
+    size_t tasks_count;
+    #define CONSUMER_TASK_INITIAL_SIZE 16
+    #define CONSUMER_TASK_SIZE_MULTIPLIER 2
+    #define CONSUMER_TASK_MAX_LOAD_FACTOR 3/4
+    #define CONSUMER_TASK_SHRINK_THRESHOLD 1/4
+    #define CONSUMER_TASK_SHRINK_FACTOR 1/2
+} global_consumer_tasks;
+
+
+struct consumer_task *get_consumer_task(uint64_t task_id);
+
+void remove_global_consumer_task(struct consumer_task *task);
+
+int register_global_consumer_task(struct consumer_task *task);
+
 /**
  * @brief Registers a consumer task with the fs consumer.
  * 
@@ -115,5 +140,15 @@ int reference_open_filesystem(struct fs_consumer *fs_consumer, struct Filesystem
  * @return false Task is not a consumer
  */
 bool is_fs_consumer(struct fs_consumer *consumer, uint64_t task_id);
+
+/**
+ * @brief Create a filesystem consumer
+ * 
+ * @param request Request message
+ * @param sender_task_id Sender of the message
+ * @param request_size Size of the message
+ * @return int 0 on success, negative on failure
+ */
+int create_consumer(const IPC_Create_Consumer *request, uint64_t sender_task_id, size_t request_size);
 
 #endif // FS_CONSUMER_H

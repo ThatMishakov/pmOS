@@ -27,8 +27,6 @@ struct Filesystem_Data {
     size_t count;
     size_t capacity;
 
-    size_t refcount;
-
     uint64_t fs_consumer_id;
 
     pthread_spinlock_t lock;
@@ -36,6 +34,9 @@ struct Filesystem_Data {
 
 static struct Filesystem_Data * fs_data = NULL;
 static pthread_spinlock_t fs_data_lock;
+
+// Initializes fs_data variable. Returns 0 on success, -1 otherwise, setting errno to the appropriate code.
+int init_filesystem();
 
 // Reserves a file descriptor and returns its id. Returns -1 on error.
 static int64_t reserve_descriptor(struct Filesystem_Data* fs_data) {
@@ -168,11 +169,18 @@ static int release_descriptor(struct Filesystem_Data *fs_data, int64_t descripto
     pthread_spin_unlock(&fs_data->lock);
 }
 
-// Initializes fs_data variable. Returns 0 on success, -1 otherwise, setting errno to the appropriate code.
-int init_filesystem();
-
 // Requests a port of the filesystem daemon
-pmos_port_t request_filesystem_port();
+pmos_port_t request_filesystem_port()
+{
+    static const char filesystem_port_name[] = "/pmos/vfsd";
+    ports_request_t port_req = get_port_by_name(filesystem_port_name, strlen(filesystem_port_name), 0);
+    if (port_req.result != SUCCESS) {
+        // Handle error
+        return INVALID_PORT;
+    }
+
+    return port_req.port;
+}
 
 // Global thread-local variable to cache the filesystem port
 static __thread pmos_port_t fs_port = INVALID_PORT;
@@ -440,4 +448,116 @@ ssize_t pread(int fd, void *buf, size_t count, off_t offset) {
 
     // Return the number of bytes read
     return count;
+}
+
+int init_filesystem() {
+    // Check if reply port exists
+    if (fs_cmd_reply_port == INVALID_PORT) {
+        // Create a new port for the current thread
+        ports_request_t port_request = create_port(PID_SELF, 0);
+        if (port_request.result != SUCCESS) {
+            // Handle error: Failed to create the port
+            return -1;
+        }
+
+        // Save the created port in the thread-local variable
+        fs_cmd_reply_port = port_request.port;
+    }
+
+    struct Filesystem_Data *new_fs_data = malloc(sizeof(struct Filesystem_Data));
+    if (new_fs_data == NULL) {
+        // Handle memory allocation error
+        errno = ENOMEM;
+        return -1;
+    }
+
+    new_fs_data->descriptors_vector = NULL;
+    new_fs_data->count = 0;
+    new_fs_data->capacity = 0;
+
+    // Initialize the spinlock
+    int result = pthread_spin_init(&new_fs_data->lock, PTHREAD_PROCESS_PRIVATE);
+    if (result != 0) {
+        // Handle error
+        free(new_fs_data);
+        errno = -result;
+        return -1;
+    }
+
+
+    // Register new filesystem consumer
+    IPC_Create_Consumer request = {
+        .type = IPC_Create_Consumer_NUM,
+        .flags = 0,
+        .reply_chan = fs_cmd_reply_port,
+    };
+
+    // Send the IPC_Open message to the filesystem daemon
+    result_t k_result = fs_port != INVALID_PORT ? send_message_port(fs_port, sizeof(request), (const char*)&request) : ERROR_PORT_DOESNT_EXIST;
+
+    int fail_count = 0;
+    while (k_result == ERROR_PORT_DOESNT_EXIST && fail_count < 5) {
+        // Request the port of the filesystem daemon
+        pmos_port_t fs_port = request_filesystem_port();
+        if (fs_port == INVALID_PORT) {
+            // Handle error: Failed to request the port
+            pthread_spin_destroy(&new_fs_data->lock);
+            free(new_fs_data);
+            errno = EIO; // Set errno to appropriate error code
+            return -1;
+        }
+
+        // Retry sending IPC_Open message to the filesystem daemon
+        k_result = send_message_port(fs_port, sizeof(request), (const char*)&request);
+        ++fail_count;
+    }
+
+    if (k_result != SUCCESS) {
+        // Handle error: Failed to send the IPC_Open message
+        pthread_spin_destroy(&new_fs_data->lock);
+        free(new_fs_data);
+        errno = EIO; // Set errno to appropriate error code
+        return -1;
+    }
+
+    // Get the reply from the filesystem daemon
+    Message_Descriptor reply_descr;
+    IPC_Generic_Msg * reply_msg;
+    k_result = get_message(&reply_descr, (unsigned char **)&reply_msg, fs_cmd_reply_port);
+    if (k_result != SUCCESS) {
+        // Handle error: Failed to get the reply
+        pthread_spin_destroy(&new_fs_data->lock);
+        free(new_fs_data);
+        errno = EIO; // Set errno to appropriate error code
+        return -1;
+    }
+
+    // Check if the reply is valid
+    if (reply_msg->type != IPC_Create_Consumer_Reply_NUM || reply_descr.size < sizeof(IPC_Create_Consumer_Reply)) {
+        // Handle error: Invalid reply type
+        pthread_spin_destroy(&new_fs_data->lock);
+        free(new_fs_data);
+        free(reply_msg);
+        errno = EIO; // Set errno to appropriate error code
+        return -1;
+    }
+
+    IPC_Create_Consumer_Reply * reply = (IPC_Create_Consumer_Reply *)reply_msg;
+    if (reply->result_code != SUCCESS) {
+        // Handle error: Failed to create the consumer
+        pthread_spin_destroy(&new_fs_data->lock);
+        free(new_fs_data);
+        free(reply_msg);
+        errno = -result;
+        return -1;
+    }
+
+    // Save the consumer id
+    new_fs_data->fs_consumer_id = reply->consumer_id;
+
+    // Free the reply message
+    free(reply_msg);
+
+    fs_data = new_fs_data;
+    return 0;
 }

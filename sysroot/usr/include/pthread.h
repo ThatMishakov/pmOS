@@ -35,8 +35,8 @@ extern "C" {
 #define PTHREAD_PRIO_INHERIT (0x02);
 #define PTHREAD_PRIO_PROTECT (0x03);
 
-#define PTHREAD_PROCESS_PRIVATE (0x01);
-#define PTHREAD_PROCESS_SHARED (0x02);
+#define PTHREAD_PROCESS_PRIVATE (0x01)
+#define PTHREAD_PROCESS_SHARED (0x02)
 
 #define PTHREAD_RWLOCK_INITIALIZER { \
     PTHREAD_COND_INITIALIZER, \
@@ -247,7 +247,32 @@ int pthread_spin_lock(pthread_spinlock_t *lock);
  */
 int pthread_spin_unlock(pthread_spinlock_t *lock);
 
+/**
+ * @brief Initialize a spinlock.
+ *
+ * The `pthread_spin_init` function initializes the spinlock pointed to by `lock`.
+ *
+ * @param lock Pointer to the spinlock to be initialized.
+ * @param pshared If `pshared` has a non-zero value, then the spinlock can be shared
+ *        between multiple processes; otherwise, the spinlock is only visible to the
+ *        threads of the calling process.
+ * @return 0 on success, or an error code on failure.
+ * @retval EINVAL The value specified by `pshared` is invalid.
+ * @retval ENOMEM Insufficient memory exists to initialize the spinlock.
+ */
+int pthread_spin_init(pthread_spinlock_t *lock, int pshared);
 
+/**
+ * @brief Destroy a spinlock.
+ *
+ * The `pthread_spin_destroy` function destroys the spinlock pointed to by `lock`.
+ *
+ * @param lock Pointer to the spinlock to be destroyed.
+ * @return 0 on success, or an error code on failure.
+ * @retval EBUSY The spinlock is locked.
+ * @retval EINVAL The value specified by `lock` is invalid.
+ */
+int pthread_spin_destroy(pthread_spinlock_t *lock);
 
 #if defined(__cplusplus)
 } /* extern "C" */
