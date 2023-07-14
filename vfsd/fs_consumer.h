@@ -71,7 +71,7 @@ struct consumer_task {
     struct fs_consumer_node *consumers_first, *consumers_last;
 };
 
-struct fs_consumer_map {
+extern struct fs_consumer_map {
     // Doubly-linked hash table. fs_consumer->id is the key.
     struct fs_consumer_node **table;
     size_t size;
@@ -81,9 +81,7 @@ struct fs_consumer_map {
     #define FS_CONSUMER_MAX_LOAD_FACTOR 3/4
     #define FS_CONSUMER_SHRINK_THRESHOLD 1/4
     #define FS_CONSUMER_SHRINK_FACTOR 1/2
-};
-
-extern struct fs_consumer_map global_fs_consumers;
+} global_fs_consumers;
 
 /**
  * @brief Registers a consumer task with the fs consumer.

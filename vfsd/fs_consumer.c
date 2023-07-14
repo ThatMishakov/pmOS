@@ -180,3 +180,36 @@ bool is_fs_consumer(struct fs_consumer *fs_consumer, uint64_t id)
 
     return left < fs_consumer->consumer_tasks_count && fs_consumer->consumer_tasks[left]->task_id == id;
 }
+
+struct fs_consumer_map global_fs_consumers = {
+    NULL,
+    0,
+    0,
+};
+
+__attribute__((constructor)) void init_global_fs_consumers()
+{
+    const uint64_t initial_size = FS_CONSUMER_INITIAL_SIZE;
+
+    global_fs_consumers.table = calloc(sizeof(struct fs_consumer_node *), initial_size);
+    if (global_fs_consumers.table == NULL) {
+        // Could not allocate memory
+        exit(1);
+    }
+
+    global_fs_consumers.size = initial_size;
+}
+
+struct fs_consumer *get_fs_consumer(uint64_t consumer_id)
+{
+    if (global_fs_consumers.table == NULL)
+        return NULL;
+
+    uint64_t hash = consumer_id % global_fs_consumers.size;
+
+    struct fs_consumer_node *curr_node = global_fs_consumers.table[hash];
+    while (curr_node != NULL && curr_node->fs_consumer->id != consumer_id)
+        curr_node = curr_node->next;
+
+    return curr_node == NULL ? NULL : curr_node->fs_consumer;
+}
