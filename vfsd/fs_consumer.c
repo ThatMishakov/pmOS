@@ -82,6 +82,7 @@ void free_buffers_fs_consumer(struct fs_consumer *fs_consumer)
     destroy_string(&fs_consumer->path);
 }
 
+// This code is problematic because of potential divisions by zero
 int reference_open_filesystem(struct fs_consumer *fs_consumer, struct Filesystem *fs, uint64_t open_count)
 {
     if (fs_consumer == NULL || fs == NULL)
@@ -220,9 +221,9 @@ static int send_create_consumer_reply(pmos_port_t port, uint32_t flags, int32_t 
 int register_global_fs_consumer(struct fs_consumer *fs_consumer)
 {
     // Resize the hash table as needed
-    if (global_fs_consumers.count > global_fs_consumers.size * FS_CONSUMER_MAX_LOAD_FACTOR) {
+    if (global_fs_consumers.count >= global_fs_consumers.size * FS_CONSUMER_MAX_LOAD_FACTOR) {
         // Resize the hash table
-        size_t new_size = global_fs_consumers.size * FS_CONSUMER_SIZE_MULTIPLIER;
+        size_t new_size = global_fs_consumers.size > 0 ? global_fs_consumers.size * FS_CONSUMER_SIZE_MULTIPLIER : FS_CONSUMER_INITIAL_SIZE;
         struct fs_consumer_node **new_table = calloc(sizeof(struct fs_consumer_node *), new_size);
         if (new_table == NULL) {
             // Could not allocate memory
@@ -571,6 +572,10 @@ struct consumer_task_map global_consumer_tasks = {
 
 struct consumer_task *get_consumer_task(uint64_t task_id)
 {
+    if (global_consumer_tasks.table_size == 0)
+        return NULL;
+    
+    
     size_t index = task_id % global_consumer_tasks.table_size;
     struct consumer_task_map_node *node = global_consumer_tasks.table != NULL ? global_consumer_tasks.table[index] : NULL;
     while (node != NULL) {
@@ -583,6 +588,9 @@ struct consumer_task *get_consumer_task(uint64_t task_id)
 
 void remove_global_consumer_task(struct consumer_task *task)
 {
+    if (global_consumer_tasks.table_size == 0)
+        return;
+    
     size_t index = task->task_id % global_consumer_tasks.table_size;
     struct consumer_task_map_node *node = global_consumer_tasks.table != NULL ? global_consumer_tasks.table[index] : NULL;
     struct consumer_task_map_node *prev = NULL;
@@ -632,7 +640,7 @@ int register_global_consumer_task(struct consumer_task *task)
 {
     if (global_consumer_tasks.table == NULL || global_consumer_tasks.tasks_count > global_consumer_tasks.table_size * CONSUMER_TASK_MAX_LOAD_FACTOR) {
         // Grow table
-        size_t new_table_size = global_consumer_tasks.table_size * FS_CONSUMER_SIZE_MULTIPLIER;
+        size_t new_table_size = global_consumer_tasks.table_size > 0 ? global_consumer_tasks.table_size * FS_CONSUMER_SIZE_MULTIPLIER : CONSUMER_TASK_INITIAL_SIZE;
         struct consumer_task_map_node **new_table = calloc(sizeof(struct consumer_task_map_node *), new_table_size);
         if (new_table == NULL) {
             // Could not allocate memory
@@ -669,4 +677,10 @@ int register_global_consumer_task(struct consumer_task *task)
     global_consumer_tasks.tasks_count++;
 
     return 0;
+}
+
+void remove_consumer_from_filesystem(struct Filesystem *fs, uint64_t open_files_count, struct fs_consumer *consumer)
+{
+    // Not yet implemented
+    return;
 }

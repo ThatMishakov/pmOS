@@ -112,7 +112,7 @@ static int _size_fputs (int size, const char * str, FILE * stream)
             if (!stream->port_name)
                 return EOF;
 
-            ports_request_t port_req = get_port_by_name(stream->port_name, strlen(stream->port_name), NULL);
+            ports_request_t port_req = get_port_by_name(stream->port_name, strlen(stream->port_name), 0);
             if (port_req.result != SUCCESS) {
                 return EOF;
             }
@@ -330,7 +330,9 @@ static int va_fprintf (FILE * stream, va_list arg, const char * format)
                     break;
                 }
                 case 's': {
-                    int k = write_string(stream, va_arg(arg, const char*), flags, width);
+                    const char * str = va_arg(arg, const char*);
+                    str = str ? str : "(null)";
+                    int k = write_string(stream, str, flags, width);
                     if (k < 1) {
                         chars_transmitted = k;
                         goto end;

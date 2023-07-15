@@ -45,7 +45,7 @@ static int64_t reserve_descriptor(struct Filesystem_Data* fs_data) {
     // Check if the descriptors vector needs to be resized
     if (fs_data->count == fs_data->capacity) {
         // Double the capacity of the descriptors vector
-        size_t new_capacity = (fs_data->capacity == 0) ? 1 : fs_data->capacity * 2;
+        size_t new_capacity = (fs_data->capacity == 0) ? 4 : fs_data->capacity * 2;
         struct File_Descriptor* new_vector = realloc(fs_data->descriptors_vector, new_capacity * sizeof(struct File_Descriptor));
         if (new_vector == NULL) {
             pthread_spin_unlock(&fs_data->lock);
@@ -62,7 +62,7 @@ static int64_t reserve_descriptor(struct Filesystem_Data* fs_data) {
 
     // Find an available descriptor
     int64_t descriptor_id = -1;
-    for (size_t i = 0; i < fs_data->count; ++i) {
+    for (size_t i = 0; i < fs_data->capacity; ++i) {
         if (!fs_data->descriptors_vector[i].used) {
             descriptor_id = i;
             break;
@@ -489,7 +489,7 @@ int init_filesystem() {
     IPC_Create_Consumer request = {
         .type = IPC_Create_Consumer_NUM,
         .flags = 0,
-        .reply_chan = fs_cmd_reply_port,
+        .reply_port = fs_cmd_reply_port,
     };
 
     // Send the IPC_Open message to the filesystem daemon
@@ -559,5 +559,95 @@ int init_filesystem() {
     free(reply_msg);
 
     fs_data = new_fs_data;
+    return 0;
+}
+
+int close(int filedes) {
+    if (filedes < 0) {
+        errno = EBADF;
+        return -1;
+    }
+
+    if (fs_data == NULL) {
+        errno = EBADF;
+        return -1;
+    }
+
+    int result = pthread_spin_lock(&fs_data->lock);
+    if (result != SUCCESS) {
+        errno = result;
+        return -1;
+    }
+
+    if (fs_data->capacity <= filedes) {
+        pthread_spin_unlock(&fs_data->lock);
+        errno = EBADF;
+        return -1;
+    }
+
+    struct File_Descriptor *des = &fs_data->descriptors_vector[filedes];
+
+    if (!des->used || des->reserved) {
+        pthread_spin_unlock(&fs_data->lock);
+        errno = EBADF;
+        return -1;
+    }
+
+    struct File_Descriptor copy = *des;
+    uint64_t fs_consumer_id = fs_data->fs_consumer_id;
+
+    des->used = false;
+    
+    pthread_spin_unlock(&fs_data->lock);
+
+    // Check if reply port exists
+    if (fs_cmd_reply_port == INVALID_PORT) {
+        // Create a new port for the current thread
+        ports_request_t port_request = create_port(PID_SELF, 0);
+        if (port_request.result != SUCCESS) {
+            // Handle error: Failed to create the port
+            errno = -port_request.result;
+            return -1;
+        }
+
+        // Save the created port in the thread-local variable
+        fs_cmd_reply_port = port_request.port;
+    }
+
+    IPC_Close message = {
+        .type = IPC_Close_NUM,
+        .flags = 0,
+        .reply_port = fs_cmd_reply_port,
+        .fs_consumer_id = fs_consumer_id,
+        .filesystem_id = copy.filesystem_id,
+        .file_id = copy.file_id,
+    };
+
+
+    // Send the IPC_Close message to the filesystem daemon
+    result_t k_result = fs_port != INVALID_PORT ? send_message_port(fs_port, sizeof(message), (const char*)&message) : ERROR_PORT_DOESNT_EXIST;
+
+    int fail_count = 0;
+    while (result == ERROR_PORT_DOESNT_EXIST && fail_count < 5) {
+        // Request the port of the filesystem daemon
+        pmos_port_t fs_port = request_filesystem_port();
+        if (fs_port == INVALID_PORT) {
+            // Handle error: Failed to obtain the filesystem port
+            errno = EIO; // Set errno to appropriate error code
+            return -1;
+        }
+
+        // Retry sending IPC_Open message to the filesystem daemon
+        result = send_message_port(fs_port, sizeof(message), (const char*)&message);
+        ++fail_count;
+    }
+
+
+    if (result != SUCCESS) {
+        // Handle error: Failed to send the IPC_Close message
+        errno = -result; // Set errno to appropriate error code
+        return -1;
+    }
+
     return 0;
 }

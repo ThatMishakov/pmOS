@@ -85,6 +85,27 @@ int          ttyname_r(int, char *, size_t);
 int          unlink(const char *);
 ssize_t      write(int, const void *, size_t);
 
+/**
+ * @brief Reads data from a file at a specified offset
+ *
+ * The pread() function reads 'count' bytes of data from the file associated with the file descriptor 'fd'
+ * into the buffer pointed to by 'buf'. The read operation starts at the byte offset 'offset' in the file.
+ * The file must have been opened with the read access mode.
+ *
+ * @param fd The file descriptor of the file to read from
+ * @param buf The buffer to store the read data
+ * @param count The number of bytes to read
+ * @param offset The offset within the file to start reading from
+ * @return On success, the number of bytes read is returned. On error, -1 is returned, and errno is set appropriately.
+ *         Possible error values:
+ *         - EBADF: Invalid file descriptor 'fd'
+ *         - EIO: I/O error occurred during the read operation
+ *
+ * @note This implementation assumes the availability of a filesystem daemon and uses an IPC mechanism to communicate
+ *       with it for performing the read operation.
+ */
+ssize_t pread(int fd, void *buf, size_t count, off_t offset);
+
 int getpagesize(void);
 
 #endif

@@ -205,7 +205,7 @@ int prepare_filename(struct File_Request *request, const struct fs_consumer *con
 
         if (append_string(&request->path, consumer->path.data, consumer_path_length) == -1)
             return -ENOMEM; // Failed to append consumer's path
-    } else if (file_path[0] == '/') {
+    } else if (path_length > 0 && file_path[0] == '/') {
         // Absolute path, copy as-is
         // Clear the existing contents of request->path
         erase_string(&request->path, 0, request->path.length);
@@ -222,7 +222,7 @@ int prepare_filename(struct File_Request *request, const struct fs_consumer *con
         if (append_string(&request->path, consumer->path.data, consumer_path_length) == -1)
             return -ENOMEM; // Failed to append consumer's path
 
-        if (consumer->path.data[consumer_path_length - 1] != '/') {
+        if (consumer->path.length == 0 || consumer->path.data[consumer_path_length - 1] != '/') {
             if (append_string(&request->path, "/", 1) == -1)
                 return -ENOMEM; // Failed to append directory separator
         }
@@ -232,4 +232,11 @@ int prepare_filename(struct File_Request *request, const struct fs_consumer *con
     }
 
     return 0; // Success
+}
+
+int process_request(struct File_Request * request)
+{
+    // Not yet implemented. Fail for a bogus reason.
+    printf("process_request() for consumer %i path %s. Not yet implemented, returning ENOSYS\n", request->consumer->id, request->path.data);
+    return -ENOSYS;
 }

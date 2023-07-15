@@ -1,0 +1,10 @@
+!.gitignore
+/bochsout.txt
+/bx_enh_dbg.ini
+/bin
+/tmp*
+/devicesd/lai/**
+/kernel/libcxxrt/**
+/kernel/linunwind/**
+/kernel/minidbg/**
+/src

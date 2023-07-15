@@ -151,4 +151,6 @@ bool is_fs_consumer(struct fs_consumer *consumer, uint64_t task_id);
  */
 int create_consumer(const IPC_Create_Consumer *request, uint64_t sender_task_id, size_t request_size);
 
+void remove_consumer_from_filesystem(struct Filesystem *fs, uint64_t open_files_count, struct fs_consumer *consumer);
+
 #endif // FS_CONSUMER_H

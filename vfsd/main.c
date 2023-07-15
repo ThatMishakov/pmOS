@@ -70,7 +70,7 @@ int main()
 
             switch (ipc_msg->type) {
             case IPC_Open_NUM: {
-                printf("[VFSd] Recieved IPC_Open\n");
+                // printf("[VFSd] Recieved IPC_Open\n");
                 if (msg.size < sizeof(IPC_Open)) {
                     printf("[VFSd] Warning: Recieved IPC_Open that is too small. Size: %li\n", msg.size);
                     break;
@@ -86,7 +86,7 @@ int main()
                 break;
             }
             case IPC_Create_Consumer_NUM: {
-                printf("[VFSd] Recieved IPC_Create_Consumer\n");
+                // printf("[VFSd] Recieved IPC_Create_Consumer\n");
                 if (msg.size < sizeof(IPC_Create_Consumer)) {
                     printf("[VFSd] Warning: Recieved IPC_Create_Consumer that is too small. Size: %li\n", msg.size);
                     break;

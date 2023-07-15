@@ -263,7 +263,7 @@ extern "C" {
 
 /// This function returns the pointer to thread-local __errno variable. The program might redefine this function
 /// if thread-local storage is not supported.
-int* __attribute__((weak)) __get_errno();
+extern int* __get_errno();
 
 #endif
 

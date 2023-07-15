@@ -14,8 +14,8 @@ CXX = x86_64-pmos-g++
 # User controllable CFLAGS.
 USERCFLAGS = -Wall -Wextra -O2 -pipe
 
-CFLAGS = -std=c17
-CXXFLAGS = -std=c++17
+CFLAGS = -std=c17 -g
+CXXFLAGS = -std=c++17 -g
 CPPFLAGS = $(INTERNALCFLAGS) $(USERCFLAGS) -MMD -MP
 ASMFLAGS = -I$(INCLUDEDIR)
 LDFLAGS = $(INTERNALLDFLAGS)

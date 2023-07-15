@@ -39,6 +39,33 @@ void *memset(void *s, int c, size_t n);
 const char *strerror(int errnum);
 size_t strlen(const char* str);
 
+/**
+ * @brief Get the length of a string, limited by a maximum number of characters.
+ *
+ * The strnlen function calculates the length of the null-terminated string pointed
+ * to by `s`, but limits the length to a maximum of `maxlen` characters.
+ *
+ * @param s       Pointer to the null-terminated string.
+ * @param maxlen  Maximum number of characters to consider.
+ *
+ * @return The length of the string, limited by `maxlen`, without including the null terminator.
+ *
+ * @note If no null terminator is found within the specified length `maxlen`, the function returns `maxlen`.
+ * @note The behavior is undefined if `s` is not a valid pointer to a null-terminated string.
+ *
+ * @see strlen
+ */
+size_t strnlen(const char *s, size_t maxlen);
+
+/**
+ * @brief Duplicate a string.
+ *
+ * The `strdup` function allocates memory for a new string containing a duplicate of the null-terminated string `s`.
+ *
+ * @param s The null-terminated string to duplicate.
+ * @return A pointer to the new string, or `NULL` if the allocation fails.
+ */
+char *strdup(const char *s);
 
 #if defined(__cplusplus)
 } /* extern "C" */

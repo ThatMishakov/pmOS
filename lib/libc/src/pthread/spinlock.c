@@ -11,7 +11,7 @@ int pthread_spin_trylock(pthread_spinlock_t* lock) {
     }
 }
 
-inline int sched_yield(void)
+int sched_yield(void)
 {
     return 0;
 }

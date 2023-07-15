@@ -8,8 +8,13 @@
 #include <stdlib.h>
 
 char *get_filename(int argc, char *argv[]) {
+    return "arhive.tar";
+
     if (argc < 2) {
-        fprintf(stderr, "Usage: %s <filename>\n", argv[0]);
+        // Prepare for the worst
+        const char * name = argc > 0 && argv != NULL ? argv[0] : NULL;
+
+        fprintf(stderr, "Usage: %s <filename>\n", name);
         return NULL;
     }
     return argv[1];

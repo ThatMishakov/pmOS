@@ -8,7 +8,8 @@ CXX = x86_64-pmos-g++
 
 INTERNALCFLAGS  :=       \
 	-static \
-	-fno-exceptions
+	-fno-exceptions \
+	-fno-stack-protector
 
 CFLAGS = -std=gnu17 $(INCLUDEFLAGS) -g
 CXXFLAGS = -std=c++17 $(INCLUDEFLAGS) -g

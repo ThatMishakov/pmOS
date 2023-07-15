@@ -245,12 +245,33 @@ typedef struct IPC_Create_Consumer_Reply {
     /// Flags changing the behaviour
     uint32_t flags;
 
-    /// Result of the operation
-    int32_t result_code;
-
     /// ID of the consumer
     uint64_t consumer_id;
+
+    /// Result of the operation
+    int32_t result_code;
 } IPC_Create_Consumer_Reply;
+
+#define IPC_Close_NUM 0x5c
+typedef struct IPC_Close {
+    /// Message type (must be IPC_Create_Consumer_Reply_NUM)
+    uint32_t type;
+
+    /// Flags changing the behaviour
+    uint32_t flags;
+
+    /// Port for the reply
+    pmos_port_t reply_port;
+
+    /// ID of the file system consumer
+    uint64_t fs_consumer_id;
+
+    /// ID of the file system
+    uint64_t filesystem_id;
+
+    /// ID of the file
+    uint64_t file_id;
+} IPC_Close;
 
 
 

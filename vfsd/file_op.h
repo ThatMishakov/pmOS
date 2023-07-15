@@ -98,4 +98,6 @@ int bind_request_to_root(struct File_Request *request);
  */
 int prepare_filename(struct File_Request * request, const struct fs_consumer *consumer, const char * file_path, size_t path_length);
 
+int process_request(struct File_Request * request);
+
 #endif // FILE_OP_H
