@@ -283,7 +283,7 @@ clear_page_32:
 
 
 /* ------------------------------------------------------- GDT --------------------------------------------------------- */
-    .data
+    .section .gdt # This gets referenced by the 16 bit code which is limited in memory it can address so special care is needed
 GDT_DW:
     .short 0
     .short 0
@@ -355,7 +355,7 @@ temp_gdt_end:
 
 
     /* ------------------------------------------------------ CPU BOOTSTRAP ---------------------------------------- */
-        .code16
+    .code16
     .section .cpuinit
     .globl init_cpucpuinit
     .type init_cpu, @function

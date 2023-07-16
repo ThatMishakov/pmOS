@@ -159,6 +159,9 @@ void main()
     char *log_port_name = "/pmos/terminald";
     syscall(SYSCALL_REQUEST_NAMED_PORT, log_port_name, strlen(log_port_name), loader_port, 0);
 
+    char *vfsd_port_name = "/pmos/vfsd";
+    syscall(SYSCALL_REQUEST_NAMED_PORT, vfsd_port_name, strlen(vfsd_port_name), loader_port, 0);
+
     char *loader_port_name = "/pmos/loader";
     syscall(SYSCALL_NAME_PORT, loader_port, loader_port_name, strlen(loader_port_name));
 
@@ -215,6 +218,8 @@ void main()
 
             if (strncmp(notif->port_name, log_port_name, msg_size) == 0) {
                 set_print_syscalls(notif->port_num);
+            } else if (strncmp(notif->port_name, vfsd_port_name, msg_size) == 0) {
+                initialize_filesystem(notif->port_num);
             }
         }
             break;

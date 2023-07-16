@@ -19,6 +19,9 @@ SECTIONS
         *(.text*)
     }
     .data : {
+        *(.gdt) /* It's a bit hacky but (at least for now) putting GDT here makes the loader link.
+                 * GDT gets referenced by 16 bit code (hooray, 16, 32 and 64 bit code in one binary)
+                 * and if not put here, it gets pushed to the end of binary, breaking everything */
         *(.data*)
     }
     .rodata : {

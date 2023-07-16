@@ -187,6 +187,7 @@ typedef struct IPC_Write_Reply {
 };
 
 #define IPC_Open_NUM 0x58
+/// Message sent by the user process to VFS daemon to open a file
 typedef struct IPC_Open {
     /// Message type (must be IPC_Open_NUM)
     uint32_t num;
@@ -253,6 +254,7 @@ typedef struct IPC_Create_Consumer_Reply {
 } IPC_Create_Consumer_Reply;
 
 #define IPC_Close_NUM 0x5c
+/// Message sent by the user process to VFS daemon to close a file
 typedef struct IPC_Close {
     /// Message type (must be IPC_Create_Consumer_Reply_NUM)
     uint32_t type;
@@ -391,9 +393,66 @@ typedef struct IPC_FS_Open {
     uint64_t operation_id;
 } IPC_FS_Open;
 
-#define IPC_FS_Open_Reply_NUM 0xD0
+#define IPC_Register_FS_NUM 0xC1
+/// Message sent by a filesystem driver to register itself with VFS daemon
+typedef struct IPC_Register_FS {
+    /// Message type (must be IPC_REGISTER_FS_NUM)
+    uint32_t num;
+
+    /// Flags indicating the behavior of the registration
+    uint32_t flags;
+
+    /// Port where the reply will be sent
+    pmos_port_t reply_port;
+
+    /// Port associated with the filesystem
+    pmos_port_t fs_port;
+
+    /// Additional data specific to the filesystem (flexible array member)
+    char name[];
+} IPC_Register_FS;
+
+#define IPC_Mount_FS_NUM 0xC2
+/// Message sent by a user process to VFS daemon to mount a filesystem
+typedef struct IPC_Mount_FS {
+    /// Message type (must be IPC_Mount_FS_NUM)
+    uint32_t num;
+
+    /// Flags indicating the behavior of the mount operation
+    uint32_t flags;
+
+    /// Port where the reply will be sent
+    pmos_port_t reply_port;
+
+    /// ID of the filesystem to be mounted
+    uint64_t filesystem_id;
+
+    /// Path where the filesystem should be mounted (flexible array member)
+    char mount_path[];
+} IPC_Mount_FS;
+
+#define IPC_UNMOUNT_FS_NUM 0xC3
+/// Message sent by a user process to VFS daemon to unmount a filesystem
+typedef struct IPC_Unmount_FS {
+    /// Message type (must be IPC_UNMOUNT_FS_NUM)
+    uint32_t num;
+
+    /// Flags indicating the behavior of the unmount operation
+    uint32_t flags;
+
+    /// Port where the reply will be sent
+    pmos_port_t reply_port;
+
+    /// ID of the filesystem
+    uint64_t filesystem_id;
+
+    /// ID of the mountpoint to be unmounted
+    uint64_t mountpoint_id;
+} IPC_Unmount_FS;
+
+#define IPC_FS_OPEN_REPLY_NUM 0xD0
 typedef struct IPC_FS_Open_Reply {
-    /// Message type (must be IPC_FS_Open_Reply_NUM)
+    /// Message type (must be IPC_FS_OPEN_REPLY_NUM)
     uint32_t type;
 
     /// Result code indicating the outcome of the open operation
@@ -412,6 +471,41 @@ typedef struct IPC_FS_Open_Reply {
     uint64_t operation_id;
 } IPC_FS_Open_Reply;
 
+
+#define IPC_Register_FS_Reply_NUM 0xD1
+typedef struct IPC_Register_FS_Reply {
+    /// Message type (must be IPC_REGISTER_FS_REPLY_NUM)
+    uint32_t type;
+
+    /// Result code indicating the outcome of the registration
+    int32_t result_code;
+
+    /// ID of the registered filesystem
+    uint64_t filesystem_id;
+} IPC_Register_FS_Reply;
+
+
+#define IPC_MOUNT_FS_REPLY_NUM 0xD2
+typedef struct IPC_Mount_FS_Reply{
+    /// Message type (must be IPC_MOUNT_FS_REPLY_NUM)
+    uint32_t num;
+
+    /// Result code indicating the outcome of the mount operation
+    int32_t result_code;
+
+    /// ID of the new mountpoint
+    uint64_t mountpoint_id;
+} IPC_Mount_FS_Reply;
+
+
+#define IPC_UNMOUNT_FS_REPLY_NUM 0xD3
+typedef struct IPC_Unmount_FS_Reply {
+    /// Message type (must be IPC_UNMOUNT_FS_REPLY_NUM)
+    uint32_t type;
+
+    /// Result code indicating the outcome of the unmount operation
+    int32_t result_code;
+} IPC_Unmount_FS_Reply;
 
 #if defined(__cplusplus)
 } /* extern "C" */

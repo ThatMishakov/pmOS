@@ -3,10 +3,16 @@
 #include <string.h>
 #include <filesystem/errors.h>
 #include <filesystem/types.h>
+#include <pmos/system.h>
+#include <pmos/ports.h>
 
 struct fs_data filesystem_data = {0};
 
 extern uint64_t loader_port;
+
+uint64_t filesystem_id = 0;
+
+uint64_t fs_service_port = 0;
 
 int init_consumer_open_files(struct fs_consumer *consumer)
 {
@@ -588,4 +594,67 @@ void fs_data_remove_consumer(struct fs_data *data, struct fs_consumer *consumer)
         data->consumers = new_table;
         data->consumer_table_size = new_size;
     }
+}
+
+void initialize_filesystem(pmos_port_t vfsd_port)
+{
+    print_str("Loader: Attempting to register the filesystem with the VFS at port ");
+    print_hex(vfsd_port);
+    print_str("\n");
+
+    if (fs_service_port == 0) {
+        ports_request_t request = create_port(PID_SELF, 0);
+        if (request.result != SUCCESS) {
+            print_str("Loader: Failed to create a port for the filesystem request: ");
+            print_hex(request.result);
+            print_str("\n");
+            return;
+        }
+        fs_service_port = request.port;
+    }
+
+    const char * const fs_name = "loader_fs";
+    size_t message_size = sizeof(struct IPC_Register_FS) + strlen(fs_name);
+
+
+    IPC_Register_FS * request = alloca(message_size);
+    if (request == NULL) {
+        print_str("Loader: Failed to allocate a message for the filesystem request\n");
+        return;
+    }
+
+    request->num = IPC_Register_FS_NUM;
+    request->flags = 0;
+    request->reply_port = fs_service_port;
+    request->fs_port = loader_port;
+    strncpy(request->name, fs_name, strlen(fs_name));
+
+    result_t result = send_message_port(vfsd_port, message_size, (char *)request);
+    if (result != SUCCESS) {
+        print_str("Loader: Failed to send the filesystem request to the VFS: ");
+        print_hex(result);
+        print_str("\n");
+        return;
+    }
+
+    Message_Descriptor reply_descr;
+    IPC_Generic_Msg * reply_msg;
+    result = get_message(&reply_descr, (unsigned char **)&reply_msg, fs_service_port);
+    if (result != SUCCESS) {
+        print_str("Loader: Failed to receive a reply from the VFS: ");
+        print_hex(result);
+        print_str("\n");
+        return;
+    }
+
+    if (reply_msg->type != IPC_Register_FS_Reply_NUM) {
+        print_str("Loader: Received an unexpected reply from the VFS: ");
+        print_hex(reply_msg->type);
+        print_str("\n");
+        return;
+    }
+
+    IPC_Register_FS_Reply * reply = (IPC_Register_FS_Reply *)reply_msg;
+    filesystem_id = reply->filesystem_id;
+    print_hex(reply->result_code);
 }

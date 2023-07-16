@@ -78,7 +78,9 @@
         "errors.h": "c",
         "fs_consumer.h": "c",
         "path_node.h": "c",
-        "system.h": "c"
+        "system.h": "c",
+        "filesystem.h": "c",
+        "ipc.h": "c"
     },
     "cmake.configureOnOpen": false
 }

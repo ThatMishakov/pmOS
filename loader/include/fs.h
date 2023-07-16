@@ -178,4 +178,11 @@ int open_file(struct fs_consumer *consumer, const char *path, struct open_file *
 */
 int register_open_request(IPC_FS_Open *msg, IPC_FS_Open_Reply *reply);
 
+/**
+ * @brief Initializes the filesystem and attempts to register it with the VFS dameon.
+ * 
+ * @param vfsd_port Port of the VFS daemon
+ */
+void initialize_filesystem(pmos_port_t vfsd_port);
+
 #endif /* FS_H */

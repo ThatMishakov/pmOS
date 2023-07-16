@@ -100,6 +100,21 @@ int main()
 
                 break;
             }
+            case IPC_Register_FS_NUM: {
+                // printf("[VFSd] Recieved IPC_Register_FS\n");
+                if (msg.size < sizeof(IPC_Register_FS)) {
+                    printf("[VFSd] Warning: Recieved IPC_Register_FS that is too small. Size: %li\n", msg.size);
+                    break;
+                }
+
+                IPC_Register_FS* register_fs_msg = (IPC_Register_FS*)ipc_msg;
+                int result = register_fs(register_fs_msg, msg.sender, msg.size);
+                if (result != 0) {
+                    printf("[VFSd] Error registering FS: %i\n", result);
+                }
+
+                break;
+            }
             /*
             case IPC_Close_NUM: {
                 printf("[VFSd] Recieved IPC_Close\n");
