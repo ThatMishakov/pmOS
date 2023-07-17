@@ -62,9 +62,10 @@ struct fs_consumer_bucket {
 };
 
 struct fs_data {
-    size_t size;
-    size_t capacity;
-    struct fs_entry *entries;
+    size_t entries_size;
+    size_t entries_capacity;
+    // Flat array of pointers to fs_entry
+    struct fs_entry **entries;
 
     size_t consumer_count;
     size_t consumer_table_size;
@@ -86,7 +87,7 @@ struct fs_data {
  */
 struct fs_consumer *get_fs_consumer(struct fs_data *data, uint64_t id);
 
-void init_fs();
+int init_fs();
 
 /**
  * @brief Adds a consumer to the fs_data struct.

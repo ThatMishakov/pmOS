@@ -231,10 +231,10 @@ bool is_consumer(struct fs_consumer *consumer, uint64_t task_id)
 
 struct fs_entry *get_file(struct fs_data * data, uint64_t file_id)
 {
-    if (file_id > data->size)
+    if (file_id > data->entries_size)
         return NULL;
 
-    return &data->entries[file_id];
+    return data->entries[file_id];
 }
 
 void consumer_free_buffers(struct fs_consumer *consumer)
@@ -657,4 +657,9 @@ void initialize_filesystem(pmos_port_t vfsd_port)
     IPC_Register_FS_Reply * reply = (IPC_Register_FS_Reply *)reply_msg;
     filesystem_id = reply->filesystem_id;
     print_hex(reply->result_code);
+}
+
+int init_fs()
+{
+
 }

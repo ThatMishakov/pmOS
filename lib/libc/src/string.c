@@ -132,6 +132,70 @@ char *strrchr(const char *str, int c) {
     return (char *)last_occurrence;
 }
 
+char *strtok_r(char *str, const char *delim, char **saveptr) {
+    if (str == NULL && *saveptr == NULL) {
+        return NULL;  // No more tokens, and no saved context
+    }
+
+    if (str != NULL) {
+        *saveptr = str;  // Set the initial context
+    }
+
+    // Find the start of the next token
+    char *token_start = *saveptr;
+    char *delim_pos = strpbrk(token_start, delim);
+
+    if (delim_pos != NULL) {
+        *delim_pos = '\0';          // Replace delimiter with null character
+        *saveptr = delim_pos + 1;   // Update the context for the next call
+    } else {
+        *saveptr = NULL;  // No more tokens, clear the context
+    }
+
+    return token_start;
+}
+
+char *strtok(char *str, const char *delim) {
+    static char *saveptr = NULL;  // Static variable to store the context
+    
+    if (str != NULL) {
+        saveptr = str;  // Set the initial context
+    } else if (saveptr == NULL) {
+        return NULL;  // No more tokens, and no saved context
+    }
+
+    // Find the start of the next token
+    char *token_start = saveptr;
+    char *delim_pos = strpbrk(token_start, delim);
+
+    if (delim_pos != NULL) {
+        *delim_pos = '\0';          // Replace delimiter with null character
+        saveptr = delim_pos + 1;    // Update the context for the next call
+    } else {
+        saveptr = NULL;  // No more tokens, clear the context
+    }
+
+    return token_start;
+}
+
+char *strpbrk(const char *str, const char *charset) {
+    const char *s1 = str;
+    const char *s2;
+
+    while (*s1 != '\0') {
+        s2 = charset;
+        while (*s2 != '\0') {
+            if (*s1 == *s2) {
+                return (char *)s1;  // Found a match, return the pointer to the matching character
+            }
+            s2++;
+        }
+        s1++;
+    }
+
+    return NULL;  // No match found, return NULL
+}
+
 char *strdup(const char *str) {
     size_t length = strlen(str) + 1;
     char *duplicate = malloc(length);
@@ -151,6 +215,36 @@ size_t strnlen(const char *str, size_t maxlen) {
     }
 
     return length;
+}
+
+void *memccpy(void *dest, const void *src, int c, size_t n) {
+    unsigned char *d = (unsigned char *)dest;
+    const unsigned char *s = (const unsigned char *)src;
+
+    while (n > 0) {
+        *d = *s;
+        if (*s == (unsigned char)c) {
+            return d + 1;  // Found the character, return pointer to next byte
+        }
+        d++;
+        s++;
+        n--;
+    }
+
+    return NULL;  // Character not found within n bytes, return NULL
+}
+
+void *memchr(const void *s, int c, size_t n) {
+    const unsigned char *p = (const unsigned char *)s;
+
+    for (size_t i = 0; i < n; ++i) {
+        if (*p == (unsigned char)c) {
+            return (void *)p;  // Found the character, return pointer to it
+        }
+        ++p;
+    }
+
+    return NULL;  // Character not found within n bytes, return NULL
 }
 
 const char *strerror(int errnum) {

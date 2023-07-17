@@ -80,7 +80,11 @@
         "path_node.h": "c",
         "system.h": "c",
         "filesystem.h": "c",
-        "ipc.h": "c"
+        "ipc.h": "c",
+        "fs.h": "c",
+        "memory.h": "c",
+        "block.h": "c",
+        "io.h": "c"
     },
     "cmake.configureOnOpen": false
 }

@@ -16,10 +16,15 @@
 struct task_list_node {
     struct task_list_node *next;
     struct multiboot_tag_module * mod_ptr;
-    ELF_64bit* elf_virt_addr;
+    char * name;
+    char * path;
+    char * cmdline;
+    void * file_virt_addr;
     uint64_t page_table;
     void * tls_virt;
+    bool executable;
 };
+
 
 extern uint64_t loader_port;
 
@@ -27,7 +32,7 @@ extern uint64_t loader_port;
 
 uint64_t load_elf(struct task_list_node* n, uint8_t ring)
 {
-    ELF_64bit *elf_h = n->elf_virt_addr;
+    ELF_64bit *elf_h = n->file_virt_addr;
     if (elf_h->magic != 0x464c457f) {
         print_str("Error: not elf format!\n");
         return 1;
@@ -107,7 +112,7 @@ void react_alloc_page(IPC_Kernel_Alloc_Page *req)
     if (n == NULL)
         return;
 
-    ELF_64bit *elf_h = n->elf_virt_addr;
+    ELF_64bit *elf_h = n->file_virt_addr;
 
     ELF_PHeader_64 * elf_pheader = (ELF_PHeader_64 *)((uint64_t)elf_h + elf_h->program_header);
     int elf_pheader_entries = elf_h->program_header_entries;

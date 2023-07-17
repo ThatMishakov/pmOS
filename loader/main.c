@@ -23,6 +23,9 @@
 #include <pmos/memory.h>
 #include <string.h>
 #include <fs.h>
+#include <stdbool.h>
+#include <string.h>
+#include <stdlib.h>
 
 int* __get_errno()
 {
@@ -38,9 +41,13 @@ uint64_t loader_port = 0;
 struct task_list_node {
     struct task_list_node *next;
     struct multiboot_tag_module * mod_ptr;
-    ELF_64bit* elf_virt_addr;
+    char * name;
+    char * path;
+    char * cmdline;
+    void * file_virt_addr;
     uint64_t page_table;
     void * tls_virt;
+    bool executable;
 };
 
 struct task_list_node *modules_list = NULL;
@@ -54,7 +61,7 @@ void push_modules_list(struct task_list_node *n)
 struct task_list_node *get_by_page_table(uint64_t page_table)
 {
     struct task_list_node *p = modules_list;
-    while (p && p->page_table != page_table)
+    while (p && (!p->executable || p->page_table != page_table))
         p = p->next;
 
     return p;
@@ -67,11 +74,34 @@ void load_multiboot_module(struct multiboot_tag_module * mod)
     print_str("\n");
 
     struct task_list_node *n = malloc(sizeof(struct task_list_node));
-    push_modules_list(n);
-
     n->mod_ptr = mod;
+    n->name = NULL;
+    n->path = NULL;
+    n->cmdline = NULL;
     n->page_table = 0;
     n->tls_virt = NULL;
+    n->executable = false;
+
+    push_modules_list(n);
+
+    char * cmdline = strdup(mod->cmdline);
+    char * ptrptr;
+    char * token = strtok_r(cmdline, " ", &ptrptr);
+    while (token != NULL) {
+        if (strncmp(token, "--execute", 9) == 0) {
+            n->executable = true;
+        } else if (strncmp(token, "--path", 6) == 0) {
+            if (n->path == NULL)
+                strncpy(n->path, ptrptr, strlen(ptrptr) + 1);
+        } else {
+            if (n->name == NULL)
+                n->name = strdup(token);
+        }
+
+        token = strtok_r(NULL, " ", &ptrptr);
+    }
+    free(cmdline);
+
 
     uint64_t phys_start = (uint64_t)mod->mod_start & ~(uint64_t)0xfff;
     uint64_t phys_end = (uint64_t)mod->mod_end;
@@ -82,14 +112,19 @@ void load_multiboot_module(struct multiboot_tag_module * mod)
     if (result.result != SUCCESS) {
         asm ("xchgw %bx, %bx");
     }
+
+    n->file_virt_addr = result.virt_addr;
+
     
-    n->elf_virt_addr = result.virt_addr;
+    if (n->executable) {
+        uint64_t pid = load_elf(n, 3);
 
-    uint64_t pid = load_elf(n, 3);
+        syscall(SYSCALL_SET_TASK_NAME, pid, n->name, strlen(n->name));
 
-    syscall(SYSCALL_SET_TASK_NAME, pid, mod->cmdline, strlen(mod->cmdline));
+        ELF_64bit * elf = n->file_virt_addr;
 
-    start_process(pid, n->elf_virt_addr->program_entry, 0, 0, n->tls_virt);
+        start_process(pid, elf->program_entry, 0, 0, n->tls_virt);
+    }
 }
 
 void react_alloc_page(IPC_Kernel_Alloc_Page *p);
