@@ -472,18 +472,38 @@ void remove_filesystem_from_map(struct filesystem_map *map, struct Filesystem *f
 
     size_t start_index = fs->id % map->filesystems_capacity;
     size_t index = start_index;
+    // Find the key
     do {
-        if (map->filesystems[index] == fs) {
-            map->filesystems[index] = NULL;
-            map->filesystems_count--;
+        if (map->filesystems[index] == fs)
             break;
-        }
         index = (index + 1) % map->filesystems_capacity;
     } while (index != start_index);
 
     if (index == start_index)
         // The filesystem was not found
         return;
+
+    // Mark the slot as deleted
+    map->filesystems[index] = NULL;
+
+    // Move the later elements backward until we find a NULL slot or reach the starting point
+    size_t next_index = (index + 1) % map->filesystems_capacity;
+    while (map->filesystems[next_index] != NULL) {
+        size_t target_index = map->filesystems[next_index]->id % map->filesystems_capacity;
+        // Check if we need to move the element backward to its correct position
+        if ((next_index > index && (target_index <= index || target_index > next_index)) ||
+            (next_index < index && (target_index <= index && target_index > next_index))) {
+            map->filesystems[index] = map->filesystems[next_index];
+            index = next_index;
+        }
+        next_index = (next_index + 1) % map->filesystems_capacity;
+    }
+
+    // Remove the last occurrence of the filesystem
+    map->filesystems[index] = NULL;
+
+    map->filesystems_count--;
+    
 
     // Shrink the array if it's too big
     if (map->filesystems_count * 4 < map->filesystems_capacity && map->filesystems_capacity > FILESYSTEMS_INITIAL_CAPACITY) {
