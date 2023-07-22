@@ -4,25 +4,45 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <pmos/ipc.h>
+#include "task_list.h"
 
 struct fs_entry {
-    char *name;
+    const char *name;
     size_t name_size;
 
     int type;
     union {
         struct {
             size_t file_size;
-            char *data;
+            const char *data;
+            struct task_list_node *task;
         } file;
 
         struct {
-            struct fs_entry *entries;
+            struct fs_entry **entries;
             size_t entry_count;
             size_t entry_capacity;
         } directory;
     };
 };
+
+/// @brief Destroys a fs_entry struct.
+///
+/// This function frees all memory buffers allocated by the fs_entry struct
+/// and then frees the struct itself. It does not free child entries or
+/// task_list_node structs as it does not own them.
+/// @param entry Entry to be destroyed
+void destroy_fs_entry(struct fs_entry *entry);
+
+/**
+ * @brief Adds a child entry to the given directory.
+ * 
+ * @param directory Directory to add the child to
+ * @param entry Entry to add
+ * @return int 0 on success, -1 on failure
+ */
+int fs_entry_add_child(struct fs_entry *directory, struct fs_entry *entry);
+
 
 struct open_file_bucket {
     struct open_file_bucket *next;
@@ -77,6 +97,31 @@ struct fs_data {
 
     uint64_t next_open_file_id;
 };
+
+/**
+ * @brief Adds an entry to the filesystem.
+ * 
+ * @param data fs_data struct to add the entry to
+ * @param entry entry to add
+ * @return int 0 on success, -1 on failure
+ */
+int fs_data_push_entry(struct fs_data *data, struct fs_entry *entry);
+
+/**
+ * @brief Reserves space for entries in the filesystem.
+ * 
+ * @param data fs_data struct to reserve space in
+ * @param count number of entries to reserve space for
+ * @return int 0 on success, -1 on failure
+ */
+int fs_data_reserve_entries(struct fs_data *data, size_t count);
+
+/**
+ * @brief Clears the filesystem.
+ * 
+ * @param data fs_data struct to clear
+ */
+void fs_data_clear(struct fs_data *data);
 
 /**
  * @brief Get consumer by ID.
@@ -159,6 +204,16 @@ struct open_file {
     struct fs_entry *file;
     struct fs_consumer *consumer;
 };
+
+/**
+ * @brief Destroys an open file struct.
+ * 
+ * This function frees all the buffers inside the open_file struct
+ * and then frees the struct itself.
+ * 
+ * @param file Pointer to the open file to destroy
+ */
+void destroy_open_file(struct open_file *file);
 
 /**
  * @brief Opens a file for reading.

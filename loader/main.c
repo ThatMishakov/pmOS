@@ -38,18 +38,6 @@ uint64_t multiboot_info_str;
 
 uint64_t loader_port = 0;
 
-struct task_list_node {
-    struct task_list_node *next;
-    struct multiboot_tag_module * mod_ptr;
-    char * name;
-    char * path;
-    char * cmdline;
-    void * file_virt_addr;
-    uint64_t page_table;
-    void * tls_virt;
-    bool executable;
-};
-
 struct task_list_node *modules_list = NULL;
 
 void push_modules_list(struct task_list_node *n)

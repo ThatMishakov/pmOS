@@ -5,6 +5,8 @@
 #include <filesystem/types.h>
 #include <pmos/system.h>
 #include <pmos/ports.h>
+#include <task_list.h>
+#include <assert.h>
 
 struct fs_data filesystem_data = {0};
 
@@ -248,6 +250,17 @@ void consumer_free_buffers(struct fs_consumer *consumer)
     }
 
     if (consumer->open_files != NULL) {
+        for (size_t i = 0; i < consumer->open_files_size; i++) {
+            struct open_file_bucket *bucket = consumer->open_files[i];
+            while (bucket != NULL) {
+                struct open_file_bucket *next = bucket->next;
+                fs_data_remove_open_file(&filesystem_data, bucket->file);
+                destroy_open_file(bucket->file);
+                free(bucket);
+                bucket = next;
+            }
+        }
+
         free(consumer->open_files);
         consumer->open_files = NULL;
     }
@@ -602,6 +615,12 @@ void initialize_filesystem(pmos_port_t vfsd_port)
     print_hex(vfsd_port);
     print_str("\n");
 
+    int r = init_fs();
+    if (r != 0) {
+        print_str("Loader: Failed to initialize the filesystem\n");
+        return;
+    }
+
     if (fs_service_port == 0) {
         ports_request_t request = create_port(PID_SELF, 0);
         if (request.result != SUCCESS) {
@@ -627,7 +646,7 @@ void initialize_filesystem(pmos_port_t vfsd_port)
     request->flags = 0;
     request->reply_port = fs_service_port;
     request->fs_port = loader_port;
-    strncpy(request->name, fs_name, strlen(fs_name));
+    memcpy(request->name, fs_name, strlen(fs_name));
 
     result_t result = send_message_port(vfsd_port, message_size, (char *)request);
     if (result != SUCCESS) {
@@ -661,5 +680,200 @@ void initialize_filesystem(pmos_port_t vfsd_port)
 
 int init_fs()
 {
+    // Init root node
+    struct fs_entry *root = malloc(sizeof(struct fs_entry));
+    if (root == NULL)
+        return -1;
 
+    root->name = "/";
+    root->name_size = 1;
+
+    root->type = FS_DIRECTORY;
+    root->directory.entries = NULL;
+    root->directory.entry_count = 0;
+    root->directory.entry_capacity = 0;
+
+    int result = fs_data_push_entry(&filesystem_data, root);
+    if (result != 0) {
+        free(root);
+        return -1;
+    }
+
+    // Parse modules and add them to the filesystem
+    struct task_list_node *p = modules_list;
+    while (p != NULL) {
+        const char * path = p->path;
+        if (path == NULL)
+            path = p->name;
+
+        if (path == NULL) {
+            p = p->next;
+            continue;
+        }
+
+        if (strchr(path, '/') != NULL) {
+            // Subdirectories are not supported
+            continue;
+        }
+
+        struct fs_entry *entry = malloc(sizeof(struct fs_entry));
+        if (entry == NULL) {
+            fs_data_clear(&filesystem_data);
+            return -1;
+        }
+
+        entry->type = FS_FILE_REGULAR;
+
+        entry->name = path;
+        if (entry->name == NULL) {
+            destroy_fs_entry(entry);
+            fs_data_clear(&filesystem_data);
+            return -1;
+        }
+        entry->name_size = strlen(path);
+
+        entry->file.file_size = p->mod_ptr->mod_end - p->mod_ptr->mod_start;
+        entry->file.data = p->file_virt_addr;
+        entry->file.task = p;
+
+        result = fs_data_push_entry(&filesystem_data, entry);
+        if (result != 0) {
+            destroy_fs_entry(entry);
+            fs_data_clear(&filesystem_data);
+            return -1;
+        }
+
+        // Add the file to the root directory
+        result = fs_entry_add_child(root, entry);
+        if (result != 0) {
+            fs_data_clear(&filesystem_data);
+            return -1;
+        }
+
+        p = p->next;
+    }
+
+    return 0;
+}
+
+void destroy_fs_entry(struct fs_entry *entry)
+{
+    if (entry == NULL)
+        return;
+
+    switch (entry->type) {
+        case FS_FILE_REGULAR:
+            break;
+        case FS_DIRECTORY:
+            free(entry->directory.entries);
+            break;
+        default:
+            break;
+    }
+}
+
+int fs_data_push_entry(struct fs_data *data, struct fs_entry *entry)
+{
+    if (data == NULL || entry == NULL)
+        return -1;
+
+    // Check if the entries array needs to be resized
+    if (data->entries_size == data->entries_capacity) {
+        size_t new_capacity = data->entries_capacity == 0 ? 4 : data->entries_capacity * 2;
+        struct fs_entry **new_entries = realloc(data->entries, sizeof(struct fs_entry *) * new_capacity);
+        if (new_entries == NULL)
+            return -1;
+
+        data->entries = new_entries;
+        data->entries_capacity = new_capacity;
+    }
+
+    // Insert the entry into the array
+    data->entries[data->entries_size++] = entry;
+
+    return 0;
+}
+
+int fs_entry_add_child(struct fs_entry *directory, struct fs_entry *entry)
+{
+    if (directory == NULL || entry == NULL)
+        return -1;
+
+    if (directory->type != FS_DIRECTORY)
+        return -1;
+
+    // Check if the directory's entries array needs to be resized
+    if (directory->directory.entry_count == directory->directory.entry_capacity) {
+        size_t new_capacity = directory->directory.entry_capacity == 0 ? 4 : directory->directory.entry_capacity * 2;
+        struct fs_entry **new_entries = realloc(directory->directory.entries, sizeof(struct fs_entry *) * new_capacity);
+        if (new_entries == NULL)
+            return -1;
+
+        directory->directory.entries = new_entries;
+        directory->directory.entry_capacity = new_capacity;
+    }
+
+    // Insert the entry into the array
+    directory->directory.entries[directory->directory.entry_count++] = entry;
+
+    return 0;
+}
+
+void fs_data_clear(struct fs_data *data)
+{
+    if (data == NULL)
+        return;
+
+    if (data->entries != NULL) {
+        for (size_t i = 0; i < data->entries_size; ++i)
+            destroy_fs_entry(data->entries[i]);
+
+        free(data->entries);
+        data->entries = NULL;
+        data->entries_size = 0;
+        data->entries_capacity = 0;
+    }
+
+    if (data->consumers != NULL) {
+        for (size_t i = 0; i < data->consumer_table_size; ++i) {
+            struct fs_consumer_bucket *bucket = data->consumers[i];
+            while (bucket != NULL) {
+                struct fs_consumer_bucket *next = bucket->next;
+                consumer_free_buffers(bucket->consumer);
+                free(bucket->consumer);
+                free(bucket);
+                bucket = next;
+            }
+        }
+
+        free(data->consumers);
+        data->consumers = NULL;
+        data->consumer_table_size = 0;
+        data->consumer_count = 0;
+    }
+
+    if (data->fs_open_files != NULL) {
+        for (size_t i = 0; i < data->open_files_table_size; ++i) {
+            struct open_file_bucket *bucket = data->fs_open_files[i];
+            while (bucket != NULL) {
+                struct open_file_bucket *next = bucket->next;
+                destroy_open_file(bucket->file);
+                free(bucket);
+                bucket = next;
+            }
+        }
+
+        free(data->fs_open_files);
+        data->fs_open_files = NULL;
+        data->open_files_table_size = 0;
+        data->open_files_count = 0;
+    }
+}
+
+void destroy_open_file(struct open_file *file)
+{
+    if (file == NULL)
+        return;
+
+    free(file);
 }
