@@ -427,6 +427,9 @@ typedef struct IPC_Mount_FS {
     /// ID of the filesystem to be mounted
     uint64_t filesystem_id;
 
+    /// Root file descriptor
+    uint64_t root_fd;
+
     /// Path where the filesystem should be mounted (flexible array member)
     char mount_path[];
 } IPC_Mount_FS;
@@ -485,10 +488,10 @@ typedef struct IPC_Register_FS_Reply {
 } IPC_Register_FS_Reply;
 
 
-#define IPC_MOUNT_FS_REPLY_NUM 0xD2
+#define IPC_Mount_FS_Reply_NUM 0xD2
 typedef struct IPC_Mount_FS_Reply{
     /// Message type (must be IPC_MOUNT_FS_REPLY_NUM)
-    uint32_t num;
+    uint32_t type;
 
     /// Result code indicating the outcome of the mount operation
     int32_t result_code;

@@ -301,7 +301,7 @@ int register_fs(IPC_Register_FS *msg, uint64_t sender, size_t size)
             destroy_fs_task(task);
         return register_fs_reply(msg->reply_port, result, 0);
     }
-    
+
     int reply_result = register_fs_reply(msg->reply_port, 0, fs->id);
     if (reply_result != 0) {
         unregister_task_from_filesystem(fs, task);
@@ -528,4 +528,33 @@ void remove_filesystem_from_map(struct filesystem_map *map, struct Filesystem *f
         map->filesystems = new_filesystems;
         map->filesystems_capacity = new_capacity;
     }
+}
+
+struct fs_task * get_task_from_filesystem(struct Filesystem *fs, uint64_t task_id)
+{
+    if (fs == NULL)
+        return NULL;
+
+    // Binary search
+    struct fs_task * task = NULL;
+
+    size_t left = 0, right = fs->tasks_count;
+    while (left < right) {
+        size_t middle = (left + right) / 2;
+        if (fs->tasks[middle]->id < task_id)
+            left = middle + 1;
+        else if (fs->tasks[middle]->id > task_id)
+            right = middle;
+        else {
+            task = fs->tasks[middle];
+            break;
+        }
+    }
+
+    return task;
+}
+
+struct Filesystem * get_filesystem(uint64_t fs_id)
+{
+    return find_filesystem_in_map(&global_filesystem_map, fs_id);
 }

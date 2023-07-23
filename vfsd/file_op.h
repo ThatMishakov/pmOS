@@ -7,13 +7,24 @@
 
 struct Path_Node;
 struct fs_consumer;
+struct Filesystem;
+
+enum Request_Type {
+    REQUEST_TYPE_UNKNOWN = 0,
+    REQUEST_TYPE_OPEN_FILE,
+    REQUEST_TYPE_MOUNT,
+};
+
 struct File_Request {
     /// Implicit linked list
     struct File_Request *path_node_next, *path_node_prev;
     struct File_Request *consumer_req_next, *consumer_req_prev;
 
     /// Parent filesystem
-    struct fs_consumer *consumer;
+    union {
+        struct fs_consumer *consumer;
+        struct Filesystem *filesystem;
+    };
 
     /// Port to send the reply to
     uint64_t reply_port;
@@ -31,7 +42,7 @@ struct File_Request {
     uint64_t request_id;
 
     /// Type of request made by the client
-    int request_type;
+    enum Request_Type request_type;
 };
 
 /**
@@ -39,10 +50,23 @@ struct File_Request {
  * 
  * @param request Request made by the client 
  * @param sender Task id that made the request
- * @param reply Reply to be sent to the client
+ * @param request_length The length of the request message,
  * @return int result of the operation. 0 if successful, -1 otherwise
  */
 int open_file(const struct IPC_Open *request, uint64_t sender, uint64_t request_length);
+
+/**
+ * @brief Processes a mount request
+ * 
+ * This function is similar to open_file. It attempts to prepare and register mount request and then replies to it.
+ * On error, it sends the reply to the reply port indicated in the request message, if possible.
+ * 
+ * @param request Request to mount a filesystem made by a driver
+ * @param sender Task id that sent the request
+ * @param request_length Length of the request message send by the task
+ * @return int resilt of the operation. 0 if successfull, negative otherwise.
+ */
+int mount_filesystem(const struct IPC_Mount_FS *request, uint64_t sender, uint64_t request_length);
 
 /**
  * @brief Initializes an open request
@@ -69,6 +93,18 @@ void free_buffers_file_request(struct File_Request *request);
 int register_request_with_consumer(struct File_Request *request, struct fs_consumer *consumer);
 
 /**
+ * @brief Register the request with the filesystem
+ * 
+ * This function is very similar to the register_request_with_consumer, except that it registers new request (e.g. mount)
+ * with the given filesystem.
+ * 
+ * @param request Request to register
+ * @param filesystem Filesystem to register request with
+ * @return in retult of the operation. 0 if successful, -1 otherwise
+ */
+int register_request_with_filesystem(struct File_Request *request, struct Filesystem *filesystem);
+
+/**
  * @brief Binds the request to the root of the filesystem
  * 
  * @param request Request to bind
@@ -84,7 +120,8 @@ int bind_request_to_root(struct File_Request *request);
  * it is appended to the consumer's path. The result is saved in the request's path.
  *
  * @param request The request where the processed filename is saved.
- * @param consumer The consumer to prepare the filename for.
+ * @param path Path of the filesystem consumer
+ * @param path_length Length of the path of the filesystem consumer
  * @param file_path The path to the file.
  * @param path_length The length of the file path.
  * @return 0 on success, -EINVAL if the request or consumer is NULL, -ENOMEM if memory allocation fails,
@@ -96,7 +133,7 @@ int bind_request_to_root(struct File_Request *request);
  * @note If file_path is a relative path, it will be appended to the consumer's path.
  * @note The existing contents of request->path will be overridden, leading to potential memory leaks if not properly managed.
  */
-int prepare_filename(struct File_Request * request, const struct fs_consumer *consumer, const char * file_path, size_t path_length);
+int prepare_filename(struct File_Request * request, const char * path, size_t path_length, const char * filename, size_t filename_length);
 
 int process_request(struct File_Request * request);
 

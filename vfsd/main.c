@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include "file_op.h"
 #include "path_node.h"
+#include "filesystem.h"
 
 struct Path_Node * root_node = NULL;
 
@@ -68,6 +69,8 @@ int main()
         if (msg.size >= sizeof(IPC_Generic_Msg)) {
             IPC_Generic_Msg* ipc_msg = (IPC_Generic_Msg*)msg_buff;
 
+            //printf("[VFSd] Recieved message type: 0x%X\n", ipc_msg->type);
+
             switch (ipc_msg->type) {
             case IPC_Open_NUM: {
                 // printf("[VFSd] Recieved IPC_Open\n");
@@ -85,8 +88,22 @@ int main()
 
                 break;
             }
+            case IPC_Mount_FS_NUM: {
+                if (msg.size < sizeof(IPC_Mount_FS)) {
+                    printf("[VFSd] Warning: Recieved IPC_Mount that is too small. Size: %li\n", msg.size);
+                    break;
+                }
+
+                IPC_Mount_FS* mount_msg = (IPC_Mount_FS*)ipc_msg;
+
+                int result = mount_filesystem(mount_msg, msg.sender, msg.size);
+                if (result != 0) {
+                    printf("[VFSd] Error mounting filesystem: %i\n", result);
+                }
+
+                break;
+            }
             case IPC_Create_Consumer_NUM: {
-                // printf("[VFSd] Recieved IPC_Create_Consumer\n");
                 if (msg.size < sizeof(IPC_Create_Consumer)) {
                     printf("[VFSd] Warning: Recieved IPC_Create_Consumer that is too small. Size: %li\n", msg.size);
                     break;
@@ -101,7 +118,7 @@ int main()
                 break;
             }
             case IPC_Register_FS_NUM: {
-                // printf("[VFSd] Recieved IPC_Register_FS\n");
+                printf("[VFSd] Recieved IPC_Register_FS\n");
                 if (msg.size < sizeof(IPC_Register_FS)) {
                     printf("[VFSd] Warning: Recieved IPC_Register_FS that is too small. Size: %li\n", msg.size);
                     break;

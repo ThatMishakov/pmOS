@@ -13,8 +13,8 @@ struct fs_data filesystem_data = {0};
 extern uint64_t loader_port;
 
 uint64_t filesystem_id = 0;
-
-uint64_t fs_service_port = 0;
+uint64_t filesystem_port = 0;
+uint64_t mountpoint_id = 0;
 
 int init_consumer_open_files(struct fs_consumer *consumer)
 {
@@ -615,67 +615,117 @@ void initialize_filesystem(pmos_port_t vfsd_port)
     print_hex(vfsd_port);
     print_str("\n");
 
-    int r = init_fs();
-    if (r != 0) {
-        print_str("Loader: Failed to initialize the filesystem\n");
-        return;
+    switch (filesystem_data.status) {
+    case FS_DATA_UNINITIALIZED: {
+        int r = init_fs();
+        if (r != 0) {
+            print_str("Loader: Failed to initialize the filesystem\n");
+            return;
+        }
+        filesystem_data.status = FS_DATA_INITIALIZED;
     }
+    // Fallthrough
+    case FS_DATA_INITIALIZED: {
+        const char * const fs_name = "loader_fs";
+        size_t message_size = sizeof(struct IPC_Register_FS) + strlen(fs_name);
 
-    if (fs_service_port == 0) {
-        ports_request_t request = create_port(PID_SELF, 0);
-        if (request.result != SUCCESS) {
-            print_str("Loader: Failed to create a port for the filesystem request: ");
-            print_hex(request.result);
+
+        IPC_Register_FS * request = alloca(message_size);
+        if (request == NULL) {
+            print_str("Loader: Failed to allocate a message for the filesystem request\n");
+            return;
+        }
+
+        request->num = IPC_Register_FS_NUM;
+        request->flags = 0;
+        request->reply_port = loader_port;
+        request->fs_port = loader_port;
+        memcpy(request->name, fs_name, strlen(fs_name));
+
+        result_t result = send_message_port(vfsd_port, message_size, (char *)request);
+        if (result != SUCCESS) {
+            print_str("Loader: Failed to send the filesystem request to the VFS: ");
+            print_hex(result);
             print_str("\n");
             return;
         }
-        fs_service_port = request.port;
+
+        filesystem_data.status = FS_DATA_REGISTERING;
+        filesystem_port = vfsd_port;
+        break;
     }
-
-    const char * const fs_name = "loader_fs";
-    size_t message_size = sizeof(struct IPC_Register_FS) + strlen(fs_name);
-
-
-    IPC_Register_FS * request = alloca(message_size);
-    if (request == NULL) {
-        print_str("Loader: Failed to allocate a message for the filesystem request\n");
+    default: {
+        print_str("Loader: Failed to register the filesystem with the VFS: Filesystem already registered\n");
         return;
     }
+    }
+}
 
-    request->num = IPC_Register_FS_NUM;
-    request->flags = 0;
-    request->reply_port = fs_service_port;
-    request->fs_port = loader_port;
-    memcpy(request->name, fs_name, strlen(fs_name));
+int fs_react_register_reply(IPC_Register_FS_Reply *reply, size_t reply_size, uint64_t sender)
+{
+    if (reply == NULL || reply->type != IPC_Register_FS_Reply_NUM)
+        return -EINVAL;
 
-    result_t result = send_message_port(vfsd_port, message_size, (char *)request);
-    if (result != SUCCESS) {
-        print_str("Loader: Failed to send the filesystem request to the VFS: ");
-        print_hex(result);
-        print_str("\n");
-        return;
+    if (filesystem_data.status != FS_DATA_REGISTERING)
+        return -EINVAL;
+
+    if (reply->result_code != FS_SUCCESS) {
+        print_str("Loader: Failed to register the filesystem with the VFS\n");
+        return -reply->result_code;
     }
 
-    Message_Descriptor reply_descr;
-    IPC_Generic_Msg * reply_msg;
-    result = get_message(&reply_descr, (unsigned char **)&reply_msg, fs_service_port);
-    if (result != SUCCESS) {
-        print_str("Loader: Failed to receive a reply from the VFS: ");
-        print_hex(result);
-        print_str("\n");
-        return;
-    }
-
-    if (reply_msg->type != IPC_Register_FS_Reply_NUM) {
-        print_str("Loader: Received an unexpected reply from the VFS: ");
-        print_hex(reply_msg->type);
-        print_str("\n");
-        return;
-    }
-
-    IPC_Register_FS_Reply * reply = (IPC_Register_FS_Reply *)reply_msg;
+    filesystem_data.status = FS_DATA_REGISTERED;
     filesystem_id = reply->filesystem_id;
-    print_hex(reply->result_code);
+
+    const char * root_path = "/";
+    size_t message_size = sizeof(IPC_Mount_FS) + strlen(root_path);
+
+    IPC_Mount_FS *mount_request = alloca(message_size);
+    if (mount_request == NULL) {
+        print_str("Loader: Failed to allocate a message for the filesystem mount request\n");
+        return -ENOMEM;
+    }
+
+    mount_request->num = IPC_Mount_FS_NUM;
+    mount_request->flags = 0;
+    mount_request->reply_port = loader_port;
+    mount_request->filesystem_id = filesystem_id;
+    mount_request->root_fd = 0;
+    memcpy(mount_request->mount_path, root_path, strlen(root_path));
+
+    result_t result = send_message_port(filesystem_port, message_size, (char *)mount_request);
+    if (result != SUCCESS) {
+        print_str("Loader: Failed to send the filesystem mount request to the VFS: ");
+        print_hex(result);
+        print_str("\n");
+        return -result;
+    }
+
+    filesystem_data.status = FS_DATA_MOUNTING;
+
+    return 0;
+}
+
+int fs_react_mount_reply(IPC_Mount_FS_Reply *reply, size_t reply_size, uint64_t sender)
+{
+    if (reply == NULL || reply->type != IPC_Mount_FS_Reply_NUM)
+        return -EINVAL;
+
+    if (filesystem_data.status != FS_DATA_MOUNTING)
+        return -EINVAL;
+
+    if (reply->result_code != FS_SUCCESS) {
+        print_str("Loader: Failed to mount the filesystem with the VFS\n");
+        filesystem_data.status = FS_DATA_REGISTERED;
+        return -reply->result_code;
+    }
+
+    filesystem_data.status = FS_DATA_MOUNTED;
+    mountpoint_id = reply->mountpoint_id;
+
+    print_str("Loader: Successfully registered the filesystem with the VFS\n");
+
+    return 0;
 }
 
 int init_fs()

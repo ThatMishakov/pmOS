@@ -246,6 +246,35 @@ void main()
             }
         }
             break;
+        case IPC_Register_FS_Reply_NUM: {
+            IPC_Register_FS_Reply *a = (IPC_Register_FS_Reply *)ptr;
+            if (desc.size < sizeof (IPC_Register_FS_Reply)) {
+                print_str("Loader: Recieved IPC_Register_FS_Reply of unexpected size 0x");
+                print_hex(desc.size);
+                print_str("\n");
+                break;
+            }
+
+            if (fs_react_register_reply(a, desc.size, desc.sender) != 0) {
+                print_str("Loader: Error registering filesystem\n");
+            }
+            break;
+        }
+        case IPC_Mount_FS_Reply_NUM: {
+            IPC_Mount_FS_Reply *a = (IPC_Mount_FS_Reply *)ptr;
+            if (desc.size < sizeof (IPC_Mount_FS_Reply)) {
+                print_str("Loader: Recieved IPC_Mount_FS_Reply of unexpected size 0x");
+                print_hex(desc.size);
+                print_str("\n");
+                break;
+            }
+
+            if (fs_react_mount_reply(a, desc.size, desc.sender) != 0) {
+                print_str("Loader: Error mounting filesystem\n");
+            }
+
+            break;
+        }
         
         case 0x22: {
             IPC_Kernel_Alloc_Page *a = (IPC_Kernel_Alloc_Page *)ptr;

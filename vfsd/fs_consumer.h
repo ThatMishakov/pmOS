@@ -23,6 +23,9 @@ struct fs_consumer {
     // ID of the fs consumer
     uint64_t id;
 
+    struct File_Request *requests_head, *requests_tail;
+    size_t requests_count;
+
     // Memory consumption is more important than the lookup speed
     // so use a flat set
     struct consumer_task **consumer_tasks;
@@ -39,9 +42,6 @@ struct fs_consumer {
     #define OPEN_FILESYSTEM_INITIAL_SIZE 16
     #define OPEN_FILESYSTEM_SIZE_MULTIPLIER 2
     #define OPEN_FILESYSTEM_MAX_LOAD_FACTOR 3/4
-
-    struct File_Request *requests_head, *requests_tail;
-    size_t requests_count;
 
     struct String path;
 };

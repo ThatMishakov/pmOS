@@ -81,6 +81,15 @@ struct fs_consumer_bucket {
     struct fs_consumer *consumer;
 };
 
+enum fs_data_status {
+    FS_DATA_UNINITIALIZED = 0,
+    FS_DATA_INITIALIZED,
+    FS_DATA_REGISTERING,
+    FS_DATA_REGISTERED,
+    FS_DATA_MOUNTING,
+    FS_DATA_MOUNTED,
+};
+
 struct fs_data {
     size_t entries_size;
     size_t entries_capacity;
@@ -96,6 +105,7 @@ struct fs_data {
     struct open_file_bucket **fs_open_files;
 
     uint64_t next_open_file_id;
+    enum fs_data_status status;
 };
 
 /**
@@ -240,5 +250,25 @@ int register_open_request(IPC_FS_Open *msg, IPC_FS_Open_Reply *reply);
  * @param vfsd_port Port of the VFS daemon
  */
 void initialize_filesystem(pmos_port_t vfsd_port);
+
+/**
+ * @brief React to the register reply message from the VFS daemon.
+ * 
+ * @param reply Pointer to the register reply message
+ * @param reply_size Size of the register reply message
+ * @param sender ID of the sender
+ * @return int 0 on success, -1 on failure
+ */
+int fs_react_register_reply(IPC_Register_FS_Reply *reply, size_t reply_size, uint64_t sender);
+
+/**
+ * @brief React to the mount reply message from the VFS daemon.
+ * 
+ * @param reply Reply message
+ * @param reply_size Size of the message
+ * @param sender Message sender
+ * @return int 0 on success, negative on failure
+ */
+int fs_react_mount_reply(IPC_Mount_FS_Reply *reply, size_t reply_size, uint64_t sender);
 
 #endif /* FS_H */

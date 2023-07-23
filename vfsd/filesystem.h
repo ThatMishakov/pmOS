@@ -10,6 +10,9 @@ struct Filesystem {
     /// ID of the filesystem
     uint64_t id;
 
+    struct File_Request *requests_head, *requests_tail;
+    size_t requests_count;
+
     /// Port used for communication with the filesystem driver
     pmos_port_t command_port;
 
@@ -165,5 +168,11 @@ void unregister_task_from_filesystem(struct Filesystem *fs, struct fs_task *task
 /// @param size The size of the message
 /// @return 0 on success, negative value on failure
 int register_fs(IPC_Register_FS *msg, uint64_t sender, size_t size);
+
+/// @brief Gets the task pointer from the given filesystem
+/// @param fs The filesystem to search in
+/// @param task_id The ID of the task to search for
+/// @return The task pointer, or NULL if no such task is registered with filesystem
+struct fs_task * get_task_from_filesystem(struct Filesystem *fs, uint64_t task_id);
 
 #endif // FILESYSTEM_H
