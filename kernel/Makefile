@@ -4,10 +4,10 @@ KERNEL = kernel
 # It is highly recommended to use a custom built cross toolchain to build a kernel.
 # We are only using "cc" as a placeholder here. It may work by using
 # the host system's toolchain, but this is not guaranteed.
-CC = $(ROOTDIR)/../bin/cross/bin/x86_64-pmos-gcc
-CPP = $(ROOTDIR)/../bin/cross/bin/x86_64-pmos-gcc
-CXX = $(ROOTDIR)/../bin/cross/bin/x86_64-pmos-g++
-LD = $(ROOTDIR)/../bin/cross/bin/x86_64-pmos-g++
+CC = x86_64-pmos-gcc
+CPP = x86_64-pmos-gcc
+CXX = x86_64-pmos-g++
+LD = x86_64-pmos-g++
 
 ROOTDIR = $(realpath .)
 INCLUDEDIR = include . libunwind/include minidbg/x86_64

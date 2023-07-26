@@ -208,7 +208,7 @@ typedef struct IPC_Open {
 #define IPC_Open_Reply_NUM 0x59
 typedef struct IPC_Open_Reply {
     /// Message type (must be IPC_Open_Reply_NUM)
-    uint32_t num;
+    uint32_t type;
 
     /// Result code indicating the outcome of the open operation
     int16_t result_code;

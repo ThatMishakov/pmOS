@@ -2,10 +2,10 @@
 EXEC = loader.elf
 
 ROOTDIR = $(realpath .)
-CC = $(ROOTDIR)/../bin/cross/bin/x86_64-pmos-gcc
-CPP = $(ROOTDIR)/../bin/cross/bin/x86_64-pmos-gcc
-CXX = $(ROOTDIR)/../bin/cross/bin/x86_64-pmos-g++
-LD = $(ROOTDIR)/../bin/cross/bin/x86_64-pmos-gcc
+CC = x86_64-pmos-gcc
+CPP = x86_64-pmos-gcc
+CXX = x86_64-pmos-g++
+LD = x86_64-pmos-gcc
 
 INCLUDEDIR = include
 

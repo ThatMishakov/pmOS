@@ -84,7 +84,9 @@
         "fs.h": "c",
         "memory.h": "c",
         "block.h": "c",
-        "io.h": "c"
+        "io.h": "c",
+        "ports.h": "c",
+        "pthread.h": "c"
     },
     "cmake.configureOnOpen": false
 }

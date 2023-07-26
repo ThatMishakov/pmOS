@@ -3,9 +3,9 @@ OBJDIR = $(ROOTDIR)/sysroot/usr/lib
 SRCDIR := src
 LIBC := $(OBJDIR)/libc.a
 
-CC = $(ROOTDIR)/bin/cross/bin/x86_64-pmos-gcc
-CPP = $(ROOTDIR)/bin/cross/bin/x86_64-pmos-gcc
-CXX = $(ROOTDIR)/bin/cross/bin/x86_64-pmos-g++
+CC = x86_64-pmos-gcc
+CPP = x86_64-pmos-gcc
+CXX = x86_64-pmos-g++
 
 CFLAGS = -std=c17 
 CPPFLAGS = $(DEPFLAGS)

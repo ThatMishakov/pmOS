@@ -19,7 +19,7 @@ uint64_t get_next_open_request_id()
 int open_file_send_fail(const struct IPC_Open *request, int error)
 {
     IPC_Open_Reply reply = {
-        .num = IPC_Open_Reply_NUM,
+        .type = IPC_Open_Reply_NUM,
         .result_code = -error,
         .fs_flags = 0,
         .filesystem_id = 0,
@@ -163,7 +163,7 @@ int mount_filesystem(const struct IPC_Mount_FS *request, uint64_t sender, uint64
     struct Filesystem *filesystem = get_filesystem(filesystem_id);
     if (filesystem == NULL) {
         IPC_Mount_FS_Reply reply = {
-            .num = IPC_Mount_FS_Reply_NUM,
+            .type = IPC_Mount_FS_Reply_NUM,
             .result_code = -ENOENT,
             .mountpoint_id = 0,
         };
@@ -176,7 +176,7 @@ int mount_filesystem(const struct IPC_Mount_FS *request, uint64_t sender, uint64
     if (task == NULL) {
         // Task is not registered with the filesystem
         IPC_Mount_FS_Reply reply = {
-            .num = IPC_Mount_FS_Reply_NUM,
+            .type = IPC_Mount_FS_Reply_NUM,
             .result_code = -EPERM,
             .mountpoint_id = 0,
         };
@@ -188,7 +188,7 @@ int mount_filesystem(const struct IPC_Mount_FS *request, uint64_t sender, uint64
     struct File_Request *mount_request = create_mount_request();
     if (request == NULL) {
         IPC_Mount_FS_Reply reply = {
-            .num = IPC_Mount_FS_Reply_NUM,
+            .type = IPC_Mount_FS_Reply_NUM,
             .result_code = -ENOMEM,
             .mountpoint_id = 0,
         };
@@ -207,7 +207,7 @@ int mount_filesystem(const struct IPC_Mount_FS *request, uint64_t sender, uint64
         free(mount_request);
 
         IPC_Mount_FS_Reply reply = {
-            .num = IPC_Mount_FS_Reply_NUM,
+            .type = IPC_Mount_FS_Reply_NUM,
             .result_code = -result,
             .mountpoint_id = 0,
         };
@@ -222,7 +222,7 @@ int mount_filesystem(const struct IPC_Mount_FS *request, uint64_t sender, uint64
         free(mount_request);
 
         IPC_Mount_FS_Reply reply = {
-            .num = IPC_Mount_FS_Reply_NUM,
+            .type = IPC_Mount_FS_Reply_NUM,
             .result_code = -result,
             .mountpoint_id = 0,
         };
@@ -237,7 +237,7 @@ int mount_filesystem(const struct IPC_Mount_FS *request, uint64_t sender, uint64
         free(mount_request);
 
         IPC_Mount_FS_Reply reply = {
-            .num = IPC_Mount_FS_Reply_NUM,
+            .type = IPC_Mount_FS_Reply_NUM,
             .result_code = -result,
             .mountpoint_id = 0,
         };
