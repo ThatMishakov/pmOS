@@ -8,6 +8,7 @@
 #include <pmos/system.h>
 #include <string.h>
 #include "filesystem.h"
+#include <assert.h>
 
 uint64_t next_open_request_id = 1;
 
@@ -143,15 +144,7 @@ int open_file(const struct IPC_Open *request, uint64_t sender, uint64_t request_
         return 0;
     }
 
-    result = process_request(open_request);
-    if (result != 0) {
-        open_file_send_fail(request, -result);
-        free_buffers_file_request(open_request);
-        free(open_request);
-        return 0;
-    }
-
-    return 0;
+    return process_request(open_request);
 }
 
 int mount_filesystem(const struct IPC_Mount_FS *request, uint64_t sender, uint64_t request_length)
@@ -231,22 +224,7 @@ int mount_filesystem(const struct IPC_Mount_FS *request, uint64_t sender, uint64
         return -result;
     }
 
-    result = process_request(mount_request);
-    if (result != 0) {
-        free_buffers_file_request(mount_request);
-        free(mount_request);
-
-        IPC_Mount_FS_Reply reply = {
-            .type = IPC_Mount_FS_Reply_NUM,
-            .result_code = -result,
-            .mountpoint_id = 0,
-        };
-
-        result_t result = send_message_port(request->reply_port, sizeof(reply), (char *)&reply);
-        return -result;
-    }
-
-    return result;
+    return process_request(mount_request);
 }
 
 extern struct Path_Node * root_node;
@@ -361,9 +339,109 @@ int prepare_filename(struct File_Request *request, const char *consumer_path_dat
     return 0; // Success
 }
 
+static int destroy_and_reply_mount_request(struct File_Request * mount_request, int status_code, uint64_t mountpoint_id)
+{
+    // Assert is not yet implemented
+    // assert(mount_request->request_type == REQUEST_TYPE_MOUNT);
+
+    IPC_Mount_FS_Reply reply = {
+        .type = IPC_Mount_FS_Reply_NUM,
+        .result_code = status_code,
+        .mountpoint_id = mountpoint_id
+    };
+    pmos_port_t reply_port = mount_request->reply_port;
+
+    free_buffers_file_request(mount_request);
+    free(mount_request);
+
+
+    result_t result = send_message_port(reply_port, sizeof(reply), (char *)&reply);
+    return -result;
+}
+
 int process_request(struct File_Request * request)
 {
-    // Not yet implemented. Fail for a bogus reason.
-    printf("process_request() for consumer %i path %s. Not yet implemented, returning ENOSYS\n", request->consumer->id, request->path.data);
-    return -ENOSYS;
+    switch (request->request_type) {
+    case REQUEST_TYPE_OPEN_FILE: {
+        // Not yet implemented. Fail for a bogus reason
+
+        IPC_Open_Reply reply = {
+            .type = IPC_Open_Reply_NUM,
+            .result_code = -ENOSYS,
+            .fs_flags = 0,
+            .filesystem_id = 0,
+            .file_id = 0,
+            .fs_port = 0,
+        };
+
+        pmos_port_t reply_port = request->reply_port;
+
+
+        free_buffers_file_request(request);
+        free(request);
+        return -send_message_port(reply_port, sizeof(reply), (char *)&reply);
+    }
+    case REQUEST_TYPE_MOUNT: {
+        bool is_root = request->path.length == 1 && request->path.data[0] == '/';
+        if (!is_root)
+            // Mounting is only supported on the root directory. Fail for a bogus reason
+            return destroy_and_reply_mount_request(request, -ENOSYS, 0);
+
+        // TODO: Walk the tree to find the actual mountpoint.
+
+        // Bind to root node
+        if (request->active_node == NULL) {
+            int result = bind_request_to_root(request);
+            if (result != 0)
+                return destroy_and_reply_mount_request(request, result, 0);
+        }
+
+        Path_Node *n = request->active_node;
+        uint64_t file_id = request->file_id;
+
+        // Root node is a special case: it's assumed it's always present, so if no root filesystem is mounted,
+        // its status is unresolved.
+        if (request->active_node->file_type != NODE_UNRESOLVED) {
+            // Root is already mounted
+            return destroy_and_reply_mount_request(request, -EEXIST, 0);
+        }
+
+        struct fs_mountpoint *mountpoint = create_mountpoint(request->filesystem, request->active_node);
+        if (mountpoint == NULL) {
+            return destroy_and_reply_mount_request(request, -ENOMEM, 0);
+        }
+
+        int result = destroy_and_reply_mount_request(request, 0, mountpoint->mountpoint_id);
+        if (result != 0) {
+            destroy_mountpoint(mountpoint);
+            return result;
+        }
+
+        n->owner_mountpoint = mountpoint;
+        n->file_type = NODE_DIRECTORY;
+        n->file_id = file_id;
+
+        return process_requests_of_node(n);
+    }
+    default: {
+        return -ENOSYS;
+    }
+    }
+}
+
+int process_requests_of_node(struct Path_Node *node)
+{
+    if (node == NULL)
+        return -EINVAL;
+
+    struct File_Request *current = NULL, *previous = NULL;
+    while ((current = node->requests_head) != NULL) {
+        // When processing, requests must always remove themselves from the list
+        // assert(previous == NULL || current != previous);
+
+        process_request(current);
+        previous = current;
+    }
+
+    return 0;
 }

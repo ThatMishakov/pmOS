@@ -5,6 +5,62 @@
 #include <pmos/ipc.h>
 
 struct fs_task;
+struct fs_mountpoint;
+struct Path_Node;
+
+/// Flat set of the mountpoints
+struct fs_mountpoints_set {
+    struct fs_mountpoint **mountpooints;
+    size_t mountpoints_count;
+    size_t mountpoints_capacity;
+    #define MOUNTPOINTS_INITIAL_CAPACITY 4
+    #define MOUNTPOINTS_CAPACITY_MULTIPLIER 2
+    #define MOUNTPOINTS_SHRINK_THRESHOLD 1/4
+};
+
+/**
+ * @brief Adds the given mountpoint to the set
+ * 
+ * @param mountpoint mountpoint to be added
+ * @param set Set where it shall be added
+ * @return int result of the operation. 0 on success, negative otherwise
+ */
+int add_mountpoint_to_set(struct fs_mountpoints_set *set, struct fs_mountpoint *mountpoint);
+
+/**
+ * @brief Removes mountpoint from the set
+ * 
+ * @param mountpoint Mountpoint to be removed
+ * @param set Set from where it should be removed
+ */
+void remove_mountpoint_from_set(struct fs_mountpoints_set *set, struct fs_mountpoint *mountpoint);
+
+/**
+ * @brief Initializes the given mountpoint set
+ * 
+ * @param set Set to be initialized
+ * @return int result of the operation. 0 on success, negative otherwise
+ */
+int init_moiuntpoints_set(struct fs_mountpoints_set *set);
+
+/**
+ * @brief Frees the buffers within the given mountpoint set
+ * 
+ * @param set Set whoose buffers are needed to be freed
+ */
+void mountpoints_set_free_buffers(struct fs_mountpoints_set *set);
+
+/**
+ * @brief Gets the last node from the mountpoints set
+ * 
+ * @param set Set from which the node should be obtained
+ * @return struct fs_mountpoint* Last node of the set. NULL if the set is empty or invalid
+ */
+struct fs_mountpoint *mountpoints_set_back(const struct fs_mountpoints_set *set);
+
+extern struct fs_mountpoints_set global_mountpoints_set; 
+
+
 
 struct Filesystem {
     /// ID of the filesystem
@@ -23,6 +79,8 @@ struct Filesystem {
     #define TASKS_INITIAL_CAPACITY 4
     #define TASKS_CAPACITY_MULTIPLIER 2
     #define TASKS_SHRINK_THRESHOLD 1/4
+
+    struct fs_mountpoints_set mountpoints;
 
     /// Name of the filesystem
     struct String name;
@@ -174,5 +232,31 @@ int register_fs(IPC_Register_FS *msg, uint64_t sender, size_t size);
 /// @param task_id The ID of the task to search for
 /// @return The task pointer, or NULL if no such task is registered with filesystem
 struct fs_task * get_task_from_filesystem(struct Filesystem *fs, uint64_t task_id);
+
+
+/// @brief A representation of a mountpoint.
+///
+/// In my vision, a single filesystem represents a single file tree, which 
+/// can then be mounted at multiple mountpoints.
+struct fs_mountpoint {
+    /// Pointer to the filesystem that is mounted
+    struct Filesystem *fs;
+
+    /// Pointer to the node representing the mountpoint root
+    struct Path_Node *node;
+
+    /// ID of the mountpoint
+    uint64_t mountpoint_id;
+};
+
+/// @brief Creates a new mountpoint object and registers it with the given filesystem
+/// @param fs The filesystem to mount
+/// @param node Node representing the mountpoint root
+/// @return The newly created mountpoint object. NULL on error.
+struct fs_mountpoint *create_mountpoint(struct Filesystem *fs, struct Path_Node *node);
+
+/// @brief Destroys a given mountpoint and frees its memory. If fs != NULL, removes it from the filesystem
+/// @param mountpoint Mountpoint to be destroyed
+void destroy_mountpoint(struct fs_mountpoint *mountpoint);
 
 #endif // FILESYSTEM_H

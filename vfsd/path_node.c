@@ -74,3 +74,9 @@ int insert_node(struct Path_Hash_Map *map, struct Path_Node *node) {
 
     return 0;
 }
+
+Path_Node root = {
+    .parent = &root,
+    .name_length = 1,
+    .name = "/"
+};

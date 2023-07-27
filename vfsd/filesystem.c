@@ -5,9 +5,12 @@
 #include <stdbool.h>
 #include <pmos/ipc.h>
 #include <pmos/system.h>
+#include "path_node.h"
 
 struct filesystem_map global_filesystem_map = {.filesystems = 0, .filesystems_count = 0, .filesystems_capacity = 0};
 struct fs_task_map global_task_map = {.tasks = 0, .tasks_count = 0, .tasks_capacity = 0};
+
+struct fs_mountpoints_set global_mountpoints_set = {};
 
 uint64_t get_next_filesystem_id()
 {
@@ -32,11 +35,19 @@ struct Filesystem * create_filesystem(const char * name, size_t name_length)
         return NULL;
     }
 
-    filesystem->id = get_next_filesystem_id();
-
-    int result = add_filesystem_to_map(&global_filesystem_map, filesystem);
+    int result = init_moiuntpoints_set(&filesystem->mountpoints);
     if (result != 0) {
         destroy_string(&filesystem->name);
+        free(filesystem);
+        return NULL;
+    }
+
+    filesystem->id = get_next_filesystem_id();
+
+    result = add_filesystem_to_map(&global_filesystem_map, filesystem);
+    if (result != 0) {
+        destroy_string(&filesystem->name);
+        mountpoints_set_free_buffers(&filesystem->mountpoints);
         free(filesystem);
         return NULL;
     }
@@ -557,4 +568,145 @@ struct fs_task * get_task_from_filesystem(struct Filesystem *fs, uint64_t task_i
 struct Filesystem * get_filesystem(uint64_t fs_id)
 {
     return find_filesystem_in_map(&global_filesystem_map, fs_id);
+}
+
+struct fs_mountpoint *create_mountpoint(struct Filesystem *fs, struct Path_Node *node)
+{
+    if (fs == NULL || node == NULL)
+        return NULL;
+
+    struct fs_mountpoint *mountpoint = malloc(sizeof(struct fs_mountpoint));
+    if (mountpoint == NULL)
+        return NULL;
+
+    static uint64_t next_mountpoint_id = 1;
+    mountpoint->mountpoint_id = __atomic_fetch_add(&next_mountpoint_id, 1, __ATOMIC_SEQ_CST);
+    mountpoint->node = node;
+    mountpoint->fs = fs;
+
+    int result = add_mountpoint_to_set(&global_mountpoints_set, mountpoint);
+    if (result != 0) {
+        free(mountpoint);
+        return NULL;
+    }
+
+    result = add_mountpoint_to_set(&fs->mountpoints, mountpoint);
+    if (result != 0) {
+        remove_mountpoint_from_set(&global_mountpoints_set, mountpoint);
+        free(mountpoint);
+        return NULL;
+    }
+
+    return mountpoint;
+}
+
+void destroy_mountpoint(struct fs_mountpoint *mountpoint)
+{
+    if (mountpoint == NULL)
+        return;
+
+    if (mountpoint->fs != NULL)
+        remove_mountpoint_from_set(&mountpoint->fs->mountpoints, mountpoint);
+
+    if (mountpoint->node != NULL)
+        destroy_path_node(mountpoint->node);
+
+    remove_mountpoint_from_set(&global_mountpoints_set, mountpoint);
+}
+
+void mountpoints_set_free_buffers(struct fs_mountpoints_set *set)
+{
+    if (set == NULL)
+        return;
+
+    free(set->mountpooints);
+
+    set->mountpooints = NULL;
+    set->mountpoints_capacity = 0;
+    set->mountpoints_count = 0;
+}
+
+int init_moiuntpoints_set(struct fs_mountpoints_set *set)
+{
+    if (set == NULL)
+        return -EINVAL;
+
+    set->mountpooints = NULL;
+    set->mountpoints_capacity = 0;
+    set->mountpoints_count = 0;
+
+    if (MOUNTPOINTS_INITIAL_CAPACITY == 0)
+        return 0;
+
+    set->mountpooints = malloc(sizeof(struct fs_mountpoint *) * MOUNTPOINTS_INITIAL_CAPACITY);
+    if (set->mountpooints == NULL)
+        return -errno;
+    set->mountpoints_capacity = MOUNTPOINTS_INITIAL_CAPACITY;
+
+    return 0;
+}
+
+int add_mountpoint_to_set(struct fs_mountpoints_set *set, struct fs_mountpoint *mountpoint)
+{
+    if (set == NULL || mountpoint == NULL)
+        return -EINVAL;
+
+    if (set->mountpoints_capacity == set->mountpoints_count) {
+        size_t new_capacity = set->mountpoints_capacity > 0 ? set->mountpoints_capacity * MOUNTPOINTS_CAPACITY_MULTIPLIER : MOUNTPOINTS_INITIAL_CAPACITY;
+        struct fs_mountpoint **new_set = realloc(set->mountpooints, new_capacity * sizeof(struct fs_mountpoint *));
+        if (new_set == NULL)
+            return -errno;
+
+        set->mountpoints_capacity = new_capacity;
+        set->mountpooints = new_set;
+    }
+
+    size_t left = 0, right = set->mountpoints_count;
+    while (left < right) {
+        size_t middle = (left + right)/2;
+        if (set->mountpooints[middle]->mountpoint_id < mountpoint->mountpoint_id)
+            left = middle + 1;
+        else
+            right = middle;
+    }
+
+    if (left < set->mountpoints_count && set->mountpooints[left]->mountpoint_id == mountpoint->mountpoint_id)
+        return -EEXIST;
+
+    memmove(set->mountpooints + left + 1, set->mountpooints + left, (set->mountpoints_count - left) * sizeof(struct fs_mountpoint *));
+
+    set->mountpooints[left] = mountpoint;
+    set->mountpoints_count++;
+
+    return 0;
+}
+
+void remove_mountpoint_from_set(struct fs_mountpoints_set *set, struct fs_mountpoint *mountpoint)
+{
+    if (set == NULL || mountpoint == NULL)
+        return;
+
+    size_t left = 0, right = set->mountpoints_count;
+    while (left < right) {
+        size_t middle = (left + right)/2;
+        if (set->mountpooints[middle]->mountpoint_id < mountpoint->mountpoint_id)
+            left = middle + 1;
+        else
+            right = middle;
+    }
+
+    if (left > set->mountpoints_count || set->mountpooints[left]->mountpoint_id != mountpoint->mountpoint_id)
+        return;
+
+    memmove(set->mountpooints + left, set->mountpooints + left + 1, (set->mountpoints_count - left - 1) * sizeof(struct fs_mountpoint *));
+    set->mountpoints_count--;
+
+    if (set->mountpoints_capacity > MOUNTPOINTS_INITIAL_CAPACITY && set->mountpoints_capacity * MOUNTPOINTS_SHRINK_THRESHOLD > set->mountpoints_count) {
+        size_t new_capacity = set->mountpoints_capacity / MOUNTPOINTS_CAPACITY_MULTIPLIER;
+        struct fs_mountpoint **new_set = realloc(set->mountpooints, new_capacity * sizeof(struct fs_mountpoint *));
+        if (new_set != NULL) {
+            set->mountpoints_capacity = new_capacity;
+            set->mountpooints = new_set;
+        }
+    }
 }

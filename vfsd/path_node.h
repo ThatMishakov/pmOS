@@ -2,9 +2,11 @@
 #define PATH_NODE_H
 #include <stdint.h>
 #include <stddef.h>
+#include <stdbool.h>
 
 struct Path_Hash_Map;
 struct Filesystem;
+struct File_Request;
 
 /**
  * @brief Enumerates the types of nodes in the file system.
@@ -12,6 +14,7 @@ struct Filesystem;
 enum Node_Type {
     NODE_DIRECTORY,  ///< Represents a directory node.
     NODE_FILE,       ///< Represents a file node.
+    NODE_UNRESOLVED, ///< Represents a node that has not been resolved yet.
 };
 
 /**
@@ -22,15 +25,17 @@ typedef struct Path_Node {
     struct Path_Node *ll_previous;           ///< Pointer to the previous node in the linked list.
 
     struct Path_Node *parent;                ///< Pointer to the parent node.
-    struct Filesystem* parent_fs;            ///< Pointer to the filesystem owner of the file.
+    struct fs_mountpoint* owner_mountpoint;  ///< Pointer to the mountpoint owner of the file.
 
     uint64_t file_id;                        ///< ID of the file within the filesystem.
-    int file_type;                           ///< Type of the node (DIRECTORY or FILE).
+    enum Node_Type file_type;                ///< Type of the node (DIRECTORY or FILE).
 
     struct Path_Hash_Map *children_nodes_map; ///< Pointer to the hash map of children nodes.
 
+    struct File_Request *requests_head, *requests_tail; ///< Linked list of requests associated with this node.
+
     size_t name_length;                      ///< Length of the node's name.
-    unsigned char name[0];                   ///< Name of the node.
+    unsigned char name[];                   ///< Name of the node.
 } Path_Node;
 #define PATH_NODE_HASH_LOAD_FACTOR 3/4
 
@@ -98,4 +103,21 @@ struct Path_Node *path_node_find(struct Path_Node *root, size_t str_size, const 
  * @param node Node to be deleted 
  */
 void path_node_delete(struct Path_Node **root, struct Path_Node *node);
+
+/**
+ * @brief Checks if the node is a root of the VFS
+ * 
+ * @param node Pointer to the node to be checked
+ * @return true if the node is a root of the filesystem, false otherwise
+ */
+ bool path_node_is_root(struct Path_Node *node);
+
+ /**
+  * @brief Destroys the path node and all of its children.
+  * 
+  * This function destroys the path node and frees all the memory associated with it. It also destroys all the children
+  * of the node and notifies the filesystems that they have been unmounted
+  */
+ void destroy_path_node(struct Path_Node *node);
+
 #endif

@@ -29,6 +29,9 @@ struct File_Request {
     /// Port to send the reply to
     uint64_t reply_port;
 
+    /// ID of the file in some requests
+    uint64_t file_id;
+
     /// Full absolute path to the file processed
     struct String path;
 
@@ -135,6 +138,27 @@ int bind_request_to_root(struct File_Request *request);
  */
 int prepare_filename(struct File_Request * request, const char * path, size_t path_length, const char * filename, size_t filename_length);
 
+/**
+ * @brief Processes a request
+ * 
+ * This function takes an ownership of a prepared file request and then processes it as needed. Even if the error is encountered, the memory occupied
+ * by the request is freed by this function. If the request is valid, this function always attempts to reply to it and only returns error if it was
+ * not possible.
+ * 
+ * @param request Request to be processed 
+ * @return int Result of the operation. 0 on success, negative if the request is invalid or if the reply could not be sent.
+ */
 int process_request(struct File_Request * request);
+
+/**
+ * @brief Processes requests of the node
+ * 
+ * This function takes a given Path_Node and processes all its pending requests. This function shall be called when the status of
+ * the node has changed, e.g. it was resolved or it was found that the file does not exist.
+ * 
+ * @param node Node to process requests for
+ * @return int Result of the operation. 0 on success, negative if the node is not valid (NULL) or some serious error was encountered.
+ */
+int process_requests_of_node(struct Path_Node *node);
 
 #endif // FILE_OP_H
