@@ -413,7 +413,7 @@ int process_request(struct File_Request * request)
 
         int result = destroy_and_reply_mount_request(request, 0, mountpoint->mountpoint_id);
         if (result != 0) {
-            destroy_mountpoint(mountpoint);
+            destroy_mountpoint(mountpoint, true);
             return result;
         }
 

@@ -600,18 +600,27 @@ struct fs_mountpoint *create_mountpoint(struct Filesystem *fs, struct Path_Node 
     return mountpoint;
 }
 
-void destroy_mountpoint(struct fs_mountpoint *mountpoint)
+void destroy_mountpoint(struct fs_mountpoint *mountpoint, bool dont_notify_task)
 {
     if (mountpoint == NULL)
         return;
 
-    if (mountpoint->fs != NULL)
+    if (mountpoint->fs != NULL) {
         remove_mountpoint_from_set(&mountpoint->fs->mountpoints, mountpoint);
 
-    if (mountpoint->node != NULL)
+        // TODO: Notify the task that the mountpoint was removed if the filesystem is still alive
+    }
+
+    if (mountpoint->node != NULL) {
+        // Do this to prevent calling destroy_mountpoint() from destroy_path_node() in a loop
+        mountpoint->node->owner_mountpoint = NULL;
+
         destroy_path_node(mountpoint->node);
+    }
 
     remove_mountpoint_from_set(&global_mountpoints_set, mountpoint);
+
+    free(mountpoint);
 }
 
 void mountpoints_set_free_buffers(struct fs_mountpoints_set *set)
@@ -710,3 +719,4 @@ void remove_mountpoint_from_set(struct fs_mountpoints_set *set, struct fs_mountp
         }
     }
 }
+

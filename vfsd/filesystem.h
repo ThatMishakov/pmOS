@@ -3,6 +3,7 @@
 #include <pmos/ports.h>
 #include "string.h"
 #include <pmos/ipc.h>
+#include <stdbool.h>
 
 struct fs_task;
 struct fs_mountpoint;
@@ -255,8 +256,11 @@ struct fs_mountpoint {
 /// @return The newly created mountpoint object. NULL on error.
 struct fs_mountpoint *create_mountpoint(struct Filesystem *fs, struct Path_Node *node);
 
-/// @brief Destroys a given mountpoint and frees its memory. If fs != NULL, removes it from the filesystem
+/// @brief Destroys a given mountpoint and frees its memory. If fs != NULL, removes it from the filesystem. If the
+///        filesystem is alive and dont_notify_fs is false, sends a notification to the filesystem that the mountpoint
+///        has been destroyed.
 /// @param mountpoint Mountpoint to be destroyed
-void destroy_mountpoint(struct fs_mountpoint *mountpoint);
+/// @param dont_notify_fs If true, the filesystem will not be notified of the mountpoint destruction
+void destroy_mountpoint(struct fs_mountpoint *mountpoint, bool dont_notify_fs);
 
 #endif // FILESYSTEM_H

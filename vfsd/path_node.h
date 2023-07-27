@@ -94,15 +94,16 @@ void insert_node_into_linked_list(struct Path_Hash_Vector *vector, struct Path_N
 struct Path_Node *path_node_find(struct Path_Node *root, size_t str_size, const unsigned char * name);
 
 /**
- * @brief Deletes a node from the tree
+ * @brief Deletes a node from the map
  * 
- * This function deletes the node from the tree identified by the pointer to the root pointer. This function does not check
- * if the node is part of the tree. This function does not automatically alliberate new_node upon deletion from the tree.
+ * This function deletes a node from the map (and manages map's memory as necessary). It does not do anything
+ * extra, so it is up to the caller to free the memory associated with the node. It does not check if the node
+ * is in the map, so it is up to the caller to check that.
  * 
- * @param root Pointer to the root of the tree from where the node should be deleted
+ * @param map Map to delete the node from
  * @param node Node to be deleted 
  */
-void path_node_delete(struct Path_Node **root, struct Path_Node *node);
+void path_node_delete(struct Path_Hash_Map *map, struct Path_Node *node);
 
 /**
  * @brief Checks if the node is a root of the VFS
@@ -119,5 +120,24 @@ void path_node_delete(struct Path_Node **root, struct Path_Node *node);
   * of the node and notifies the filesystems that they have been unmounted
   */
  void destroy_path_node(struct Path_Node *node);
+
+ /**
+  * @brief Destroys the map of the path nodes
+  * 
+  * This function deletes the map of the path nodes and frees all the memory associated with it. It does not destroy
+  * the nodes themselves, so it is up to the caller to free the memory associated with the nodes.
+  * 
+  * @param map Pointer to the map to be destroyed
+  */
+void destroy_path_node_map(struct Path_Hash_Map *map);
+
+ /**
+  * @brief Gets the fron child of the node
+  * 
+  * This function returns the front child of the node. If the node has no children, NULL is returned.
+  * @param node Pointer to the node
+  * @return Pointer to the front child of the node. If the node has no children, NULL is returned.
+  */
+struct Path_Node *path_node_get_front_child(struct Path_Node *node);
 
 #endif

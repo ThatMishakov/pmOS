@@ -161,4 +161,15 @@ int process_request(struct File_Request * request);
  */
 int process_requests_of_node(struct Path_Node *node);
 
+/**
+ * @brief Fail and destroy the request
+ * 
+ * This function responds to the request with a given message and then destroys it, freeing the associated memory
+ * and the request itself. It also removes the requests from all the lists it is currently in.
+ * 
+ * @param request Request to fail
+ * @param error_code errno-like error code code to send to the client
+ */
+void fail_and_destroy_request(struct File_Request *request, int error_code);
+
 #endif // FILE_OP_H
