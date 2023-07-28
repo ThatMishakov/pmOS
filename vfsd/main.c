@@ -8,8 +8,6 @@
 #include "path_node.h"
 #include "filesystem.h"
 
-struct Path_Node * root_node = NULL;
-
 pmos_port_t main_port = 0;
 
 const char *vfsd_port_name = "/pmos/vfsd";

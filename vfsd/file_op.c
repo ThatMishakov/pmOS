@@ -230,21 +230,15 @@ int mount_filesystem(const struct IPC_Mount_FS *request, uint64_t sender, uint64
     return process_request(mount_request);
 }
 
-extern struct Path_Node * root_node;
-
 int bind_request_to_root(struct File_Request *request)
 {
     if (request == NULL)
         return -EINVAL;
 
-    struct Path_Node *root = root_node;
-    if (root == NULL)
-        return -ENOENT;
-
     if (request->path.data == NULL)
         return -EINVAL;
 
-    request->active_node = root;
+    request->active_node = &root;
     request->active_file_index = 0;
 
     return 0;

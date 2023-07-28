@@ -144,7 +144,10 @@ void path_node_delete(struct Path_Hash_Map *map, struct Path_Node *node)
 Path_Node root = {
     .parent = &root,
     .name_length = 1,
-    .name = "/"
+    .name = "/",
+    // Root is a special case: it is always assumed it is mounted. If it is not, it is "unresolved". This allows
+    // to processes to asynchronously fire open requests before the root filesystem has been initialized and mounted.
+    .file_type = NODE_UNRESOLVED,
 };
 
 static struct Path_Node *find_leaf(struct Path_Node *node)

@@ -725,7 +725,11 @@ int fs_react_mount_reply(IPC_Mount_FS_Reply *reply, size_t reply_size, uint64_t 
     filesystem_data.status = FS_DATA_MOUNTED;
     mountpoint_id = reply->mountpoint_id;
 
-    print_str("Loader: Successfully registered the filesystem with the VFS\n");
+    print_str("Loader: Successfully registered and mounted the filesystem! Filesystem ID: ");
+    print_hex(filesystem_id);
+    print_str(", Mountpoint ID: ");
+    print_hex(mountpoint_id);
+    print_str("\n");
 
     return 0;
 }
