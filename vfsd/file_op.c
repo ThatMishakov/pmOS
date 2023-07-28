@@ -445,3 +445,112 @@ int process_requests_of_node(struct Path_Node *node)
 
     return 0;
 }
+
+void fail_and_destroy_request(struct File_Request *request, int error_code)
+{
+    if (request == NULL)
+        return;
+
+    remove_request_from_path_node(request);
+
+    switch (request->request_type) {
+    case REQUEST_TYPE_OPEN_FILE: {
+        IPC_Open_Reply reply = {
+            .type = IPC_Open_Reply_NUM,
+            .result_code = error_code,
+            .fs_flags = 0,
+            .filesystem_id = 0,
+            .file_id = 0,
+            .fs_port = 0,
+        };
+
+        pmos_port_t reply_port = request->reply_port;
+
+        send_message_port(reply_port, sizeof(reply), (char *)&reply);
+        break;
+    }
+    case REQUEST_TYPE_MOUNT: {
+        IPC_Mount_FS_Reply reply = {
+            .type = IPC_Mount_FS_Reply_NUM,
+            .result_code = error_code,
+            .mountpoint_id = 0
+        };
+
+        pmos_port_t reply_port = request->reply_port;
+
+        send_message_port(reply_port, sizeof(reply), (char *)&reply);
+        break;
+    }
+    case REQUEST_TYPE_UNKNOWN: {
+        // Do nothing
+        break;
+    }
+    }
+
+    unregister_request_from_parent(request);
+    
+    free_buffers_file_request(request);
+    free(request);
+}
+
+void unregister_request_from_parent(struct File_Request *request)
+{
+    if (request == NULL)
+        return;
+
+    // The pointer location is the same
+    if (request->consumer == NULL)
+        return;
+
+    switch (request->request_type) {
+    case REQUEST_TYPE_OPEN_FILE: {
+        struct fs_consumer *consumer = request->consumer;
+        if (request->consumer_req_prev == NULL) {
+            // assert(consumer->open_requests_head == request);
+            consumer->requests_head = request->consumer_req_next;
+        } else {
+            // assert(consumer->open_requests_head != request && request->consumer_req_prev != NULL && request->consumer_req_prev->consumer_req_next == request);
+            request->consumer_req_prev->consumer_req_next = request->consumer_req_next;
+        }
+
+        if (request->consumer_req_next == NULL) {
+            // assert(consumer->open_requests_tail == request);
+            consumer->requests_tail = request->consumer_req_prev;
+        } else {
+            // assert(consumer->open_requests_tail != request && request->consumer_req_next != NULL && request->consumer_req_next->consumer_req_prev == request);
+            request->consumer_req_next->consumer_req_prev = request->consumer_req_prev;
+        }
+
+        request->consumer = NULL;
+
+        break;
+    }
+    case REQUEST_TYPE_MOUNT: {
+        struct Filesystem *fs = request->filesystem;
+
+        if (request->consumer_req_prev == NULL) {
+            // assert(fs->requests_head == request);
+            fs->requests_head = request->consumer_req_next;
+        } else {
+            // assert(fs->requests_head != request && request->consumer_req_prev != NULL && request->consumer_req_prev->consumer_req_next == request);
+            request->consumer_req_prev->consumer_req_next = request->consumer_req_next;
+        }
+
+        if (request->consumer_req_next == NULL) {
+            // assert(fs->requests_tail == request);
+            fs->requests_tail = request->consumer_req_prev;
+        } else {
+            // assert(fs->requests_tail != request && request->consumer_req_next != NULL && request->consumer_req_next->consumer_req_prev == request);
+            request->consumer_req_next->consumer_req_prev = request->consumer_req_prev;
+        }
+
+        request->filesystem = NULL;
+
+        break;
+    }
+    case REQUEST_TYPE_UNKNOWN: {
+        // assert(false);
+        break;
+    }
+    }
+}

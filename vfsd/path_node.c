@@ -27,6 +27,26 @@ void insert_node_into_linked_list(struct Path_Hash_Vector *vector, struct Path_N
     vector->nodes_count++;
 }
 
+void delete_node_from_linked_list(struct Path_Hash_Vector *vector, struct Path_Node *node) {
+    if (node->ll_previous == NULL) {
+        // assert(node == vector->head);
+        vector->head = node->ll_next;
+    } else {
+        // assert(node != vector->head && vector->head != NULL);
+        node->ll_previous->ll_next = node->ll_next;
+    }
+
+    if (node->ll_next == NULL) {
+        // assert(node == vector->tail);
+        vector->tail = node->ll_previous;
+    } else {
+        // assert(node != vector->tail && vector->tail != NULL);
+        node->ll_next->ll_previous = node->ll_previous;
+    }
+
+    vector->nodes_count--;
+}
+
 int insert_node(struct Path_Hash_Map *map, struct Path_Node *node) {
     if (map == NULL || node == NULL) {
         return -1;
@@ -76,6 +96,49 @@ int insert_node(struct Path_Hash_Map *map, struct Path_Node *node) {
     }
 
     return 0;
+}
+
+void path_node_delete(struct Path_Hash_Map *map, struct Path_Node *node)
+{
+    if (map == NULL || node == NULL) {
+        return;
+    }
+
+    size_t index = sdbm_hash(node->name, node->name_length) % map->vector_size;
+    struct Path_Hash_Vector *vector = &(map->hash_vector[index]);
+
+    delete_node_from_linked_list(vector, node);
+    map->nodes_count--;
+
+    if (map->vector_size > PATH_NODE_HASH_INITIAL_SIZE && map->nodes_count < map->vector_size * PATH_NODE_HASH_LOAD_FACTOR / 2) {
+        // Resize the hash table
+        size_t new_vector_size = map->vector_size / 2;
+        struct Path_Hash_Vector *new_hash_vector = calloc(new_vector_size, sizeof(struct Path_Hash_Vector));
+        if (new_hash_vector == NULL) {
+            return;
+        }
+
+        // Rehash the existing nodes into the new hash vector
+        for (size_t i = 0; i < map->vector_size; i++) {
+            struct Path_Node *current_node = map->hash_vector[i].head;
+            while (current_node != NULL) {
+                struct Path_Node *next_node = current_node->ll_next;
+
+                size_t index = sdbm_hash(current_node->name, current_node->name_length) % new_vector_size;
+                struct Path_Hash_Vector *vector = &(new_hash_vector[index]);
+
+                insert_node_into_linked_list(vector, current_node);
+                current_node = next_node;
+            }
+        }
+
+        // Free the memory used by the old hash vector
+        free(map->hash_vector);
+
+        // Update the hash vector and vector size
+        map->hash_vector = new_hash_vector;
+        map->vector_size = new_vector_size;
+    }
 }
 
 Path_Node root = {
@@ -195,4 +258,29 @@ void destroy_path_node_map(struct Path_Hash_Map *map)
 
     free(map->hash_vector);
     free(map);
+}
+
+void remove_request_from_path_node(struct File_Request *request)
+{
+    if (request == NULL)
+        return;
+
+    if (request->active_node == NULL)
+        return;
+
+    struct Path_Node *node = request->active_node;
+
+    if (node->requests_head == request) {
+        node->requests_head = request->path_node_next;
+    } else {
+        request->path_node_prev->path_node_next = request->path_node_next;
+    }
+
+    if (node->requests_tail == request) {
+        node->requests_tail = request->path_node_prev;
+    } else {
+        request->path_node_next->path_node_prev = request->path_node_prev;
+    }
+
+    request->active_node = NULL;
 }

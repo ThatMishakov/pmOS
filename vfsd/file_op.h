@@ -108,6 +108,25 @@ int register_request_with_consumer(struct File_Request *request, struct fs_consu
 int register_request_with_filesystem(struct File_Request *request, struct Filesystem *filesystem);
 
 /**
+ * @brief Unregisters the request from the parent consumer or filesystem
+ * 
+ * This function unregisters the request from the parent consumer or filesystem. If the request is not registered with
+ * consumer or filesystem, this function does nothing. The type of the parent is determined by the request_type field.
+ * 
+ * @param request Request to unregister
+ */
+void unregister_request_from_parent(struct File_Request *request);
+
+/**
+ * @brief Removes a request from the Path_Node
+ * 
+ * This function removes a given request from the Path_Node it is registered with. If the request is not registered with any
+ * Path_Node, this function does nothing.
+ * @param request Request to remove
+ */
+void remove_request_from_path_node(struct File_Request *request);
+
+/**
  * @brief Binds the request to the root of the filesystem
  * 
  * @param request Request to bind

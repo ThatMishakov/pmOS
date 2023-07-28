@@ -38,6 +38,7 @@ typedef struct Path_Node {
     unsigned char name[];                   ///< Name of the node.
 } Path_Node;
 #define PATH_NODE_HASH_LOAD_FACTOR 3/4
+#define PATH_NODE_HASH_INITIAL_SIZE 4
 
 /**
  * @brief Represents a vector of nodes for a specific hash value in the Path_Hash_Map.
