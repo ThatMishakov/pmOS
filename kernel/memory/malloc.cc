@@ -38,7 +38,10 @@ void *malloc_int(size_t size_bytes, size_t& size_bytes_a)
         if (pages_needed < ALLOC_MIN_PAGES) pages_needed = ALLOC_MIN_PAGES;
 
         l->next = (malloc_list*)palloc(pages_needed);
-        if (l->next == nullptr) return nullptr;
+        if (l->next == nullptr) {
+            malloc_lock.unlock();
+            return nullptr;
+        }
 
         l->next->next = nullptr;
         l->next->size = pages_needed*4096;
@@ -62,6 +65,7 @@ void *malloc_int(size_t size_bytes, size_t& size_bytes_a)
     if (p != nullptr)
         malloced += size_bytes_a;
 
+    p[1] = 0xA110CA7F;
     return p;
 }
 
@@ -103,6 +107,8 @@ extern "C" void *malloc(size_t s)
     return p;
 }
 
+extern "C" void abort()  __attribute__((noreturn));
+
 extern "C" void free(void * p) 
 {
     if (p == nullptr) return;
@@ -110,6 +116,11 @@ extern "C" void free(void * p)
     u64* base = (u64*)p;
     base -= 2;
     u64 size = *base;
+
+    if (base[1] != 0xA110CA7F) {
+        t_print_bochs("Invalid free %h\n", p);
+        abort();
+    }
 
     freed += size;
 

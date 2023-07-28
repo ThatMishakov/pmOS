@@ -310,8 +310,10 @@ void main()
         }
 
         default:
-            print_str("Loader: Recievend unknown message with type 0x");
+            print_str("Loader: Recievend unknown message with type ");
             print_hex(ptr->type);
+            print_str(" from task ");
+            print_hex(desc.sender);
             print_str("\n");
         }
  

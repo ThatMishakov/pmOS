@@ -84,7 +84,7 @@ extern "C" void syscall_handler()
             throw Kern_Exception(ERROR_NOT_SUPPORTED, "syscall is not supported");
 
         syscall_table[call_n](arg1, arg2, arg3, arg4, arg5, 0);
-    } catch (Kern_Exception e) {
+    } catch (Kern_Exception &e) {
         syscall_ret_low(task) = e.err_code;
         t_print_bochs(" -> %h (%s)\n", e.err_code, e.err_message);
         return;

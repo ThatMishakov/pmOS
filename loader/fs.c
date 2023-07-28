@@ -715,7 +715,9 @@ int fs_react_mount_reply(IPC_Mount_FS_Reply *reply, size_t reply_size, uint64_t 
         return -EINVAL;
 
     if (reply->result_code != FS_SUCCESS) {
-        print_str("Loader: Failed to mount the filesystem with the VFS\n");
+        print_str("Loader: Failed to mount the filesystem with the VFS: ");
+        print_str(strerror(-reply->result_code));
+        print_str("\n");
         filesystem_data.status = FS_DATA_REGISTERED;
         return -reply->result_code;
     }

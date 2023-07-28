@@ -136,6 +136,8 @@ int open_file(const struct IPC_Open *request, uint64_t sender, uint64_t request_
         return 0;
     }
 
+    open_request->reply_port = request->reply_port;
+
     result = register_request_with_consumer(open_request, consumer);
     if (result != 0) {
         open_file_send_fail(request, -result);
@@ -191,6 +193,7 @@ int mount_filesystem(const struct IPC_Mount_FS *request, uint64_t sender, uint64
     }
 
     mount_request->filesystem = filesystem;
+    mount_request->reply_port = request->reply_port;
 
     size_t path_length = request_length - sizeof(struct IPC_Mount_FS);
     const char * fs_path = "/";

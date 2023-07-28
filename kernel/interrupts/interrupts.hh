@@ -95,7 +95,7 @@ struct Task_Regs { // 208 bytes
 };
 
 /// Size of the kernel stacks
-#define STACK_SIZE KB(16)
+#define STACK_SIZE KB(32)
 
 /**
  * This structure holds the kernel stack. In pmOS, we use 1 (actually 5) stack(s) per CPU and do task switches by changing the

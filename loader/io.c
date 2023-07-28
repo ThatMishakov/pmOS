@@ -5,6 +5,7 @@
 #include <syscall.h>
 #include <utils.h>
 #include <stddef.h>
+#include <pmos/ipc.h>
 
 char screen_buff[8192];
 int buff_pos = 0;
@@ -26,7 +27,7 @@ void set_print_syscalls(uint64_t port)
     for (unsigned i = 0; i < length; i += 256) {
         msg_str.type = 0x40;
         unsigned size = length - i > 256 ? 256 : length - i;
-        memcpy(&str[i], msg_str.buff, size);
+        memcpy(msg_str.buff, &str[i], size);
 
         syscall(SYSCALL_SEND_MSG_PORT, log_port, size + sizeof(uint32_t), &msg_str);
     }
@@ -50,7 +51,7 @@ void print_str_n(char * str, int length)
 
         for (unsigned i = 0; i < length; i += 256) {
             unsigned size = length - i > 256 ? 256 : length - i;
-            memcpy(&str[i], msg_str.buff, size);
+            memcpy(msg_str.buff, &str[i], size);
 
             syscall(SYSCALL_SEND_MSG_PORT, log_port, size+sizeof(uint32_t), &msg_str);
             // TODO: Error checking
