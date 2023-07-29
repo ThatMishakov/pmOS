@@ -35,8 +35,8 @@ struct File_Request {
     /// Full absolute path to the file processed
     struct String path;
 
-    /// Index of the first character within path of the file name currently being processed
-    size_t active_file_index;
+    /// Index of the first character (including the '/') of the next path node (e.g. /home/user/file.txt -> 5)
+    size_t next_path_node_index;
 
     /// Pointer to the node currently being parsed
     struct Path_Node *active_node;
@@ -125,6 +125,17 @@ void unregister_request_from_parent(struct File_Request *request);
  * @param request Request to remove
  */
 void remove_request_from_path_node(struct File_Request *request);
+
+/**
+ * @brief Adds the request to the given path node
+ * 
+ * This function adds the request that is not bound to anything to the given path node. Caller must make sure it is not already bound to another node
+ * 
+ * @param request Request to add to the node
+ * @param node Node where the request should be added
+ * @return int 0 on success, negative on error
+ */
+int add_request_to_path_node(struct File_Request *request, struct Path_Node *node);
 
 /**
  * @brief Binds the request to the root of the filesystem
