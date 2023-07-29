@@ -4,6 +4,7 @@
 #include <errno.h>
 #include "file_op.h"
 #include "filesystem.h"
+#include <assert.h>
 
 size_t sdbm_hash(const unsigned char * str, size_t length) {
     size_t hash = 0;
@@ -29,18 +30,18 @@ void insert_node_into_linked_list(struct Path_Hash_Vector *vector, struct Path_N
 
 void delete_node_from_linked_list(struct Path_Hash_Vector *vector, struct Path_Node *node) {
     if (node->ll_previous == NULL) {
-        // assert(node == vector->head);
+        assert(node == vector->head);
         vector->head = node->ll_next;
     } else {
-        // assert(node != vector->head && vector->head != NULL);
+        assert(node != vector->head && vector->head != NULL);
         node->ll_previous->ll_next = node->ll_next;
     }
 
     if (node->ll_next == NULL) {
-        // assert(node == vector->tail);
+        assert(node == vector->tail);
         vector->tail = node->ll_previous;
     } else {
-        // assert(node != vector->tail && vector->tail != NULL);
+        assert(node != vector->tail && vector->tail != NULL);
         node->ll_next->ll_previous = node->ll_previous;
     }
 
