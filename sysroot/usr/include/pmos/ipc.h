@@ -453,6 +453,30 @@ typedef struct IPC_Unmount_FS {
     uint64_t mountpoint_id;
 } IPC_Unmount_FS;
 
+#define IPC_FS_Resolve_Path_NUM 0xC4
+typedef struct IPC_FS_Resolve_Path {
+    /// Message type (must be IPC_FS_Resolve_Path_NUM)
+    uint32_t type;
+
+    /// Flags changing the behaviour
+    uint32_t flags;
+
+    /// Port where the reply will be sent
+    pmos_port_t reply_port;
+
+    /// ID of the filesystem
+    uint64_t filesystem_id;
+
+    /// ID of the parent directory
+    uint64_t parent_dir_id;
+
+    /// Operation ID
+    uint64_t operation_id;
+
+    /// Name of the file node
+    char path_name[];
+} IPC_FS_Resolve_Path;
+
 #define IPC_FS_OPEN_REPLY_NUM 0xD0
 typedef struct IPC_FS_Open_Reply {
     /// Message type (must be IPC_FS_OPEN_REPLY_NUM)
@@ -509,6 +533,28 @@ typedef struct IPC_Unmount_FS_Reply {
     /// Result code indicating the outcome of the unmount operation
     int32_t result_code;
 } IPC_Unmount_FS_Reply;
+
+
+#define IPC_FS_Resolve_Path_Reply_NUM 0xD4
+typedef struct IPC_FS_Resolve_Path_Reply {
+    /// Message type (must be IPC_FS_Resolve_Path_Reply_NUM)
+    uint32_t type;
+
+    /// Flags
+    uint16_t flags;
+
+    /// Result code indicating the outcome of the operation
+    int16_t result_code;
+
+    /// Operation ID
+    uint64_t operation_id;
+
+    /// ID of the file node
+    uint64_t file_id;
+
+    /// File type
+    uint16_t file_type;
+} IPC_FS_Resolve_Path_Reply;
 
 #if defined(__cplusplus)
 } /* extern "C" */

@@ -308,6 +308,19 @@ void main()
 
             break;
         }
+        case IPC_FS_Resolve_Path_NUM: {
+            IPC_FS_Resolve_Path *a = (IPC_FS_Resolve_Path *)ptr;
+            if (desc.size < sizeof (IPC_FS_Resolve_Path)) {
+                print_str("Loader: Recieved IPC_FS_Resolve_Path of unexpected size 0x");
+                print_hex(desc.size);
+                print_str("\n");
+                break;
+            }
+
+            fs_react_resolve_path(a, desc.size, desc.sender);
+
+            break;
+        }
 
         default:
             print_str("Loader: Recievend unknown message with type ");

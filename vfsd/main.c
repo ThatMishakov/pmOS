@@ -116,7 +116,7 @@ int main()
                 break;
             }
             case IPC_Register_FS_NUM: {
-                printf("[VFSd] Recieved IPC_Register_FS\n");
+                printf("[VFSd] Recieved IPC_Register_FS from task %lu\n", msg.sender);
                 if (msg.size < sizeof(IPC_Register_FS)) {
                     printf("[VFSd] Warning: Recieved IPC_Register_FS that is too small. Size: %li\n", msg.size);
                     break;
@@ -126,6 +126,20 @@ int main()
                 int result = register_fs(register_fs_msg, msg.sender, msg.size);
                 if (result != 0) {
                     printf("[VFSd] Error registering FS: %i\n", result);
+                }
+
+                break;
+            }
+            case IPC_FS_Resolve_Path_Reply_NUM: {
+                if (msg.size < sizeof(IPC_FS_Resolve_Path_Reply)) {
+                    printf("[VFSd] Warning: Recieved IPC_FS_Resolve_Path_Reply that is too small. Size: %li\n", msg.size);
+                    break;
+                }
+
+                IPC_FS_Resolve_Path_Reply* resolve_path_reply_msg = (IPC_FS_Resolve_Path_Reply*)ipc_msg;
+                int result = react_resolve_path_reply(resolve_path_reply_msg, msg.sender, msg.size);
+                if (result != 0) {
+                    printf("[VFSd] Error resolving path reply: %i\n", result);
                 }
 
                 break;

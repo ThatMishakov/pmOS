@@ -221,6 +221,12 @@ int register_task_with_filesystem(struct Filesystem *fs, struct fs_task *task);
 /// @param task The task to unregister
 void unregister_task_from_filesystem(struct Filesystem *fs, struct fs_task *task);
 
+/// @brief Checks if the task is registered with the filesystem
+/// @param fs The filesystem to search in
+/// @param task_id The ID of the task to search for
+/// @return true if the task is registered with the filesystem, false otherwise
+bool is_task_registered_with_filesystem(struct Filesystem *fs, uint64_t task_id);
+
 /// @brief Registers a new filesystem with the given task
 /// @param msg The message containing the request
 /// @param sender The sender of the message

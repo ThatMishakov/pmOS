@@ -9,10 +9,11 @@
 #include <string.h>
 #include "filesystem.h"
 #include <assert.h>
+#include <stdio.h>
 
 uint64_t next_open_request_id = 1;
 
-uint64_t get_next_open_request_id()
+uint64_t get_next_request_id()
 {
     return __atomic_fetch_add(&next_open_request_id, 1, __ATOMIC_SEQ_CST);
 }
@@ -57,7 +58,7 @@ int init_open_request(struct File_Request *request)
     request->next_path_node_index = 0;
     request->active_node = NULL;
 
-    request->request_id = get_next_open_request_id();
+    request->request_id = get_next_request_id();
     request->request_type = REQUEST_TYPE_OPEN_FILE;
 
     return 0;
@@ -75,7 +76,7 @@ struct File_Request *create_mount_request()
         return NULL;
     }
 
-    new_request->request_id = get_next_open_request_id();
+    new_request->request_id = get_next_request_id();
     new_request->request_type = REQUEST_TYPE_MOUNT;
 
     return new_request;
@@ -360,6 +361,8 @@ static int destroy_and_reply_mount_request(struct File_Request * mount_request, 
     };
     pmos_port_t reply_port = mount_request->reply_port;
 
+    unregister_request_from_parent(mount_request);
+
     free_buffers_file_request(mount_request);
     free(mount_request);
 
@@ -421,7 +424,7 @@ int process_request(struct File_Request * request)
             case NODE_DIRECTORY: {
                 // Advance to the node
                 size_t path_index = request->next_path_node_index;
-                while (path_index < request->path.length && request->path.data[path_index] != '/')
+                while (path_index < request->path.length && request->path.data[path_index] == '/')
                     path_index++;
 
                 if (path_index == request->path.length) {
@@ -447,7 +450,7 @@ int process_request(struct File_Request * request)
                 while (next_index < request->path.length && request->path.data[next_index] != '/')
                     next_index++;
 
-                size_t node_name_length = path_index - request->next_path_node_index;
+                size_t node_name_length = next_index - path_index;
 
                 if (node_name_length == 1 && memcmp(request->path.data + path_index, ".", 1) == 0) {
                     // Reference to the current directory
@@ -490,18 +493,40 @@ int process_request(struct File_Request * request)
 
                     return process_request(request);
                 } else {
-                    // TODO: Not implemented. Return distinct error code
-                    IPC_Open_Reply reply = {
-                        .type = IPC_Open_Reply_NUM,
-                        .result_code = -ECANCELED,
-                        .fs_flags = 0,
-                        .filesystem_id = 0,
-                        .file_id = 0,
-                        .fs_port = 0,
-                    };
+                    // Resolve the child node
+                    Path_Node *child_node = NULL;
+                    result = path_node_resolve_child(&child_node, active_node, (unsigned char *)request->path.data + path_index, node_name_length);
+                    if (result != 0) {
+                        IPC_Open_Reply reply = {
+                            .type = IPC_Open_Reply_NUM,
+                            .result_code = result,
+                            .fs_flags = 0,
+                            .filesystem_id = 0,
+                            .file_id = 0,
+                            .fs_port = 0,
+                        };
 
-                    result = -send_message_port(request->reply_port, sizeof(reply), (char *)&reply);
-                    break;
+                        result = -send_message_port(request->reply_port, sizeof(reply), (char *)&reply);
+                        break;
+                    }
+
+                    request->next_path_node_index = next_index;
+                    result = add_request_to_path_node(request, child_node);
+                    if (result != 0) {
+                        IPC_Open_Reply reply = {
+                            .type = IPC_Open_Reply_NUM,
+                            .result_code = result,
+                            .fs_flags = 0,
+                            .filesystem_id = 0,
+                            .file_id = 0,
+                            .fs_port = 0,
+                        };
+
+                        result = -send_message_port(request->reply_port, sizeof(reply), (char *)&reply);
+                        break;
+                    }
+
+                    return process_request(request);
                 }
             } break;
                 default: {
@@ -563,6 +588,10 @@ int process_request(struct File_Request * request)
 
         return process_requests_of_node(active_node);
     }
+    case REQUEST_TYPE_RESOLVE_PATH:
+        // Ignore it
+        result = 0;
+        break;
     default: {
         result = -ENOSYS;
         break;
@@ -629,11 +658,17 @@ void fail_and_destroy_request(struct File_Request *request, int error_code)
         send_message_port(reply_port, sizeof(reply), (char *)&reply);
         break;
     }
+    case REQUEST_TYPE_RESOLVE_PATH: {
+        // Ignore it
+        break;
+    }
     case REQUEST_TYPE_UNKNOWN: {
         // Do nothing
         break;
     }
     }
+
+    remove_request_from_global_map(request);
 
     unregister_request_from_parent(request);
     
@@ -673,6 +708,7 @@ void unregister_request_from_parent(struct File_Request *request)
 
         break;
     }
+    case REQUEST_TYPE_RESOLVE_PATH:
     case REQUEST_TYPE_MOUNT: {
         struct Filesystem *fs = request->filesystem;
 
@@ -727,4 +763,229 @@ int add_request_to_path_node(struct File_Request *request, struct Path_Node *n)
     request->active_node = n;
 
     return 0;
+}
+
+struct File_Request_Map global_requests_map = {};
+
+void remove_request_from_global_map(struct File_Request *request)
+{
+    if (request == NULL)
+        return;
+
+    if (!is_request_in_global_map(request))
+        return;
+
+    remove_request_from_map(&global_requests_map, request);
+}
+
+bool is_request_in_global_map(struct File_Request *request)
+{
+    assert(request != NULL);
+
+    switch (request->request_type) {
+    case REQUEST_TYPE_OPEN_FILE:
+    case REQUEST_TYPE_MOUNT:
+        return false;
+    case REQUEST_TYPE_RESOLVE_PATH:
+    case REQUEST_TYPE_UNKNOWN:
+        // Unknown requests might be in the map
+        return true;
+    }
+
+    // Should never happen
+    return true;
+}
+
+void remove_request_from_map(struct File_Request_Map *map, struct File_Request *request)
+{
+    if (map == NULL || request == NULL)
+        return;
+
+    if (map->hash_vector == NULL || map->vector_size == 0)
+        return;
+
+    size_t index = request->request_id % map->vector_size;
+    struct File_Request_Node *node = map->hash_vector[index];
+    while (node != NULL) {
+        if (node->next != NULL && node->next->request == request) {
+            struct File_Request_Node *next = node->next;
+            node->next = next->next;
+            free(next);
+            map->nodes_count--;
+            break;
+        }
+        node = node->next;
+    }
+
+    if (map->vector_size > FILE_REQUEST_HASH_INITIAL_SIZE && map->nodes_count < map->vector_size * FILE_REQUEST_HASH_SHRINK_THRESHOLD) {
+        size_t new_size = map->vector_size / 2;
+        struct File_Request_Node **new_vector = calloc(new_size, sizeof(struct File_Request_Node *));
+        if (new_vector == NULL)
+            return;
+
+        for (size_t i = 0; i < map->vector_size; i++) {
+            struct File_Request_Node *node = map->hash_vector[i];
+            while (node != NULL) {
+                struct File_Request_Node *next = node->next;
+                size_t new_index = node->request->request_id % new_size;
+                node->next = new_vector[new_index];
+                new_vector[new_index] = node;
+                node = next;
+            }
+        }
+
+        free(map->hash_vector);
+        map->hash_vector = new_vector;
+        map->vector_size = new_size;
+    }
+}
+
+struct File_Request *create_resolve_path_request(struct Path_Node *child_node)
+{
+    struct File_Request *new_request = calloc(1, sizeof(struct File_Request));
+    if (new_request == NULL)
+        return NULL;
+
+    new_request->request_type = REQUEST_TYPE_RESOLVE_PATH;
+    new_request->request_id = get_next_request_id();
+
+    int result = add_request_to_map(&global_requests_map, new_request);
+    if (result < 0) {
+        free(new_request);
+        return NULL;
+    }
+
+    result = register_request_with_filesystem(new_request, child_node->parent->owner_mountpoint->fs);
+    if (result < 0) {
+        remove_request_from_map(&global_requests_map, new_request);
+        free(new_request);
+        return NULL;
+    }
+
+    result = add_request_to_path_node(new_request, child_node);
+    if (result < 0) {
+        remove_request_from_map(&global_requests_map, new_request);
+        unregister_request_from_parent(new_request);
+        free(new_request);
+        return NULL;
+    }
+
+    return new_request;
+}
+
+int add_request_to_map(struct File_Request_Map *map, struct File_Request *request)
+{
+    if (map == NULL || request == NULL)
+        return -EINVAL;
+
+    if (map->hash_vector == NULL || map->vector_size < FILE_REQUEST_HASH_INITIAL_SIZE || map->vector_size * FILE_REQUEST_HASH_LOAD_FACTOR < map->nodes_count) {
+        size_t new_size = map->vector_size == 0 ? FILE_REQUEST_HASH_INITIAL_SIZE : map->vector_size * 2;
+        struct File_Request_Node **new_vector = calloc(new_size, sizeof(struct File_Request_Node *));
+        if (new_vector == NULL)
+            return -ENOMEM;
+
+        for (size_t i = 0; i < map->vector_size; i++) {
+            struct File_Request_Node *node = map->hash_vector[i];
+            while (node != NULL) {
+                struct File_Request_Node *next = node->next;
+                size_t new_index = node->request->request_id % new_size;
+                node->next = new_vector[new_index];
+                new_vector[new_index] = node;
+                node = next;
+            }
+        }
+
+        free(map->hash_vector);
+        map->hash_vector = new_vector;
+        map->vector_size = new_size;
+    }
+
+    struct File_Request_Node *new_node = calloc(1, sizeof(struct File_Request_Node));
+    if (new_node == NULL)
+        return -ENOMEM;
+
+    size_t index = request->request_id % map->vector_size;
+    new_node->next = map->hash_vector[index];
+    new_node->request = request;
+    map->hash_vector[index] = new_node;
+    map->nodes_count++;
+
+    return 0;
+}
+
+int react_resolve_path_reply(struct IPC_FS_Resolve_Path_Reply *message, size_t sender, uint64_t message_length)
+{
+    if (message == NULL)
+        return -EINVAL;
+
+    if (message_length < sizeof(struct IPC_FS_Resolve_Path_Reply))
+        return -EINVAL;
+
+    struct File_Request *request = get_request_from_global_map(message->operation_id);
+    if (request == NULL) {
+        printf("[VFSd] Warning: recieved IPC_FS_Resolve_Path_Reply from task %ld with unknown request ID %ld\n", sender, message->operation_id);
+        return -ENOENT;
+    }
+
+    // Check that the sender is the part of the filesystem that we expect
+    bool is_registered = is_task_registered_with_filesystem(request->filesystem, sender);
+    if (!is_registered) {
+        printf("[VFSd] Warning: recieved IPC_FS_Resolve_Path_Reply from task %ld that is not registered with the filesystem %ld\n", sender, request->filesystem->id);
+        return -EPERM;
+    }
+
+    int result = message->result_code;
+    if (result == 0) {
+        if (!is_file_type_valid(message->file_type)) {
+            // File type is not supported
+            result = -ENOSYS;
+            goto fail;
+        }
+
+        request->active_node->file_type = message->file_type;
+        request->active_node->file_id = message->file_id;
+        // TODO: File size
+
+        struct Path_Node *node = request->active_node;
+
+        remove_request_from_path_node(request);
+        remove_request_from_map(&global_requests_map, request);
+        unregister_request_from_parent(request);
+        free_buffers_file_request(request);
+        free(request);
+
+        process_requests_of_node(node);
+        return 0;
+    }
+fail:
+
+    destroy_path_node_with_error(request->active_node, result);
+
+    return 0;
+}
+
+struct File_Request *get_request_from_global_map(uint64_t id)
+{
+    return get_request_from_map(&global_requests_map, id);
+}
+
+struct File_Request *get_request_from_map(struct File_Request_Map *map, uint64_t id)
+{
+    if (map == NULL)
+        return NULL;
+
+    if (map->nodes_count == 0)
+        return NULL;
+
+    assert(map->hash_vector != NULL && map->vector_size > 0);
+
+    size_t index = id % map->vector_size;
+    struct File_Request_Node *node = map->hash_vector[index];
+    while (node != NULL) {
+        if (node->request->request_id == id)
+            return node->request;
+        node = node->next;
+    }
+
+    return NULL;
 }

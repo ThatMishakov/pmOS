@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
+#include <filesystem/types.h>
 
 struct Path_Hash_Map;
 struct Filesystem;
@@ -12,10 +13,19 @@ struct File_Request;
  * @brief Enumerates the types of nodes in the file system.
  */
 enum Node_Type {
-    NODE_DIRECTORY,  ///< Represents a directory node.
-    NODE_FILE,       ///< Represents a file node.
+    NODE_DIRECTORY = FS_DIRECTORY,  ///< Represents a directory node.
+    NODE_FILE = FS_FILE_REGULAR,       ///< Represents a file node.
     NODE_UNRESOLVED, ///< Represents a node that has not been resolved yet.
 };
+
+/**
+ * @brief Checks if the given type is valid.
+ * 
+ * @param type Type to check
+ * @return true Type is valid
+ * @return false Type is not valid
+ */
+bool is_file_type_valid(int type);
 
 /**
  * @brief Represents a node in the virtual file system hierarchy.
@@ -35,7 +45,7 @@ typedef struct Path_Node {
     struct File_Request *requests_head, *requests_tail; ///< Linked list of requests associated with this node.
 
     size_t name_length;                      ///< Length of the node's name.
-    unsigned char name[];                   ///< Name of the node.
+    unsigned char name[];                    ///< Name of the node.
 } Path_Node;
 #define PATH_NODE_HASH_LOAD_FACTOR 3/4
 #define PATH_NODE_HASH_INITIAL_SIZE 4
@@ -55,6 +65,13 @@ struct Path_Hash_Map {
     size_t nodes_count;
 };
 
+/**
+ * @brief Creates a new empty Path_Hash_Map
+ * 
+ * @return Pointer to the new map on success, NULL is memory allocation error has ocurred.
+ */
+struct Path_Hash_Map *create_path_map();
+
 extern Path_Node root;
 
 /**
@@ -69,6 +86,31 @@ extern Path_Node root;
  * @return 0 on success, 1 if rehashing failed due to memory allocation error, -1 if the map or node is NULL.
  */
 int insert_node(struct Path_Hash_Map *map, struct Path_Node *node);
+
+/**
+ * @brief Inserts a Path_Node into the Path_Node
+ * 
+ * This function inserts and registers the child node with the given parent node. It allocates the memory as needed and
+ * does necessary steps to link them. child_node must not have parent node at the time of insertion.
+ * 
+ * @param parent_node Parent node where the child node shall be inserted
+ * @param child_node Node to be inserted into the path_map
+ * @return int 0 on success, 1 if rehashing failed due to memory allocation error, negative if some error has occured
+ */
+int path_node_add_child(struct Path_Node *parent, struct Path_Node *child);
+
+/**
+ * @brief Searches for the node in the Path_Hash_Map.
+ * 
+ * This function searches for the Path_Node with the indicated name within the map. No node exists
+ * or some parameter is invalid, NULL is returned.
+ * 
+ * @param map The Path_Hash_Map where the node shall be searcher.
+ * @param name Name of the node to be searched. '\0' is not considered a string terminator.
+ * @param name_length The length of the name. Must not be 0.
+ * @return pointer to the node. If no node was found, NULL is returned
+ */
+struct Path_Node *path_map_find(struct Path_Hash_Map *map, const unsigned char *name, size_t name_length);
 
 /**
  * @brief Inserts a Path_Node into the linked list represented by the Path_Hash_Vector.
@@ -114,13 +156,21 @@ void path_node_delete(struct Path_Hash_Map *map, struct Path_Node *node);
  */
  bool path_node_is_root(struct Path_Node *node);
 
- /**
-  * @brief Destroys the path node and all of its children.
-  * 
-  * This function destroys the path node and frees all the memory associated with it. It also destroys all the children
-  * of the node and notifies the filesystems that they have been unmounted
-  */
- void destroy_path_node(struct Path_Node *node);
+/**
+ * @brief Destroys the path node and all of its children.
+ * 
+ * This function destroys the path node and frees all the memory associated with it. It also destroys all the children
+ * of the node and notifies the filesystems that they have been unmounted
+ */
+void destroy_path_node(struct Path_Node *node);
+
+/**
+ * @brief Destroys the path node and all of its children, returning the specified error code.
+ * 
+ * This function destroys the path node and frees all the memory associated with it. It also destroys all the children
+ * of the node and notifies the filesystems that they have been unmounted
+ */
+void destroy_path_node_with_error(struct Path_Node *node, int error_code);
 
  /**
   * @brief Destroys the map of the path nodes
@@ -140,5 +190,21 @@ void destroy_path_node_map(struct Path_Hash_Map *map);
   * @return Pointer to the front child of the node. If the node has no children, NULL is returned.
   */
 struct Path_Node *path_node_get_front_child(struct Path_Node *node);
+
+/**
+ * @brief Gets the child of the node with the given name
+ * 
+ * This function resolves and returns the child of the node with the given name. If it is unknown whether the child exists,
+ * Path_Node with NODE_UNRESOLVED type is returned. If the execution was successful, the node pointer is set to the child
+ * node. If it does not exist or an error occured, the node pointer is not changed.
+ * 
+ * This function may create and send necessary requests to filesystems to resolve the node.
+ * @param node Pointer to the pointer to the node
+ * @param parent Pointer to the parent node
+ * @param name Filtered name of the child to be resolved
+ * @param name_length Length of the name
+ * @return 0 on success, negative value on error
+ */
+int path_node_resolve_child(struct Path_Node **node, struct Path_Node *parent, const unsigned char *name, size_t name_length);
 
 #endif

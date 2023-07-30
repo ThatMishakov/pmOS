@@ -8,7 +8,7 @@
 #include <stdlib.h>
 
 char *get_filename(int argc, char *argv[]) {
-    return "arhive.tar";
+    return "/././/../arhive.tar";
 
     if (argc < 2) {
         // Prepare for the worst

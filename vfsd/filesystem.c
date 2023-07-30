@@ -720,3 +720,19 @@ void remove_mountpoint_from_set(struct fs_mountpoints_set *set, struct fs_mountp
     }
 }
 
+bool is_task_registered_with_filesystem(struct Filesystem *fs, uint64_t task_id)
+{
+    if (fs == NULL)
+        return false;
+
+    size_t left = 0, right = fs->tasks_count;
+    while (left < right) {
+        size_t middle = (left + right)/2;
+        if (fs->tasks[middle]->id < task_id)
+            left = middle + 1;
+        else
+            right = middle;
+    }
+
+    return left < fs->tasks_count && fs->tasks[left]->id == task_id;
+}

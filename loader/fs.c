@@ -743,6 +743,7 @@ int init_fs()
 
     root->name = "/";
     root->name_size = 1;
+    root->id = 0;
 
     root->type = FS_DIRECTORY;
     root->directory.entries = NULL;
@@ -798,6 +799,8 @@ int init_fs()
             fs_data_clear(&filesystem_data);
             return -1;
         }
+
+        entry->id = filesystem_data.entries_size - 1;
 
         // Add the file to the root directory
         result = fs_entry_add_child(root, entry);
@@ -932,4 +935,97 @@ void destroy_open_file(struct open_file *file)
         return;
 
     free(file);
+}
+
+void fs_react_resolve_path(IPC_FS_Resolve_Path *msg, uint64_t message_size, size_t sender)
+{
+    assert(msg != NULL);
+
+    // TODO: Check that the sender is VFSd
+
+    uint64_t parent_id = msg->parent_dir_id;
+    if (parent_id >= filesystem_data.entries_size) {
+        IPC_FS_Resolve_Path_Reply reply = {
+            .type = IPC_FS_Resolve_Path_Reply_NUM,
+            .flags = 0,
+            .result_code = -ENOENT,
+            .file_id = 0,
+            .operation_id = msg->operation_id,
+            .file_type = 0,
+        };
+
+        result_t result = send_message_port(msg->reply_port, sizeof(reply), (char *)&reply);
+        if (result != SUCCESS) {
+            print_str("[Loader] Failed to send IPC_FS_Resolve_Path_Reply message: ");
+            print_hex(result);
+            print_str("\n");
+        }
+
+        return;
+    }
+
+    struct fs_entry *parent = filesystem_data.entries[parent_id];
+    if (parent->type != FS_DIRECTORY) {
+        IPC_FS_Resolve_Path_Reply reply = {
+            .type = IPC_FS_Resolve_Path_Reply_NUM,
+            .flags = 0,
+            .result_code = -ENOTDIR,
+            .file_id = 0,
+            .operation_id = msg->operation_id,
+            .file_type = 0,
+        };
+
+        result_t result = send_message_port(msg->reply_port, sizeof(reply), (char *)&reply);
+        if (result != SUCCESS) {
+            print_str("[Loader] Failed to send IPC_FS_Resolve_Path_Reply message: ");
+            print_hex(result);
+            print_str("\n");
+        }
+
+        return;
+    }
+
+    size_t msg_name_size = message_size - sizeof(IPC_FS_Resolve_Path);
+
+    for (size_t i = 0; i < parent->directory.entry_count; ++i) {
+        struct fs_entry *entry = parent->directory.entries[i];
+        if (entry->name_size != msg_name_size || memcmp(entry->name, msg->path_name, msg_name_size) != 0)
+            continue;
+
+        IPC_FS_Resolve_Path_Reply reply = {
+            .type = IPC_FS_Resolve_Path_Reply_NUM,
+            .flags = 0,
+            .result_code = 0,
+            .file_id = entry->id,
+            .operation_id = msg->operation_id,
+            .file_type = entry->type,
+        };
+
+        result_t result = send_message_port(msg->reply_port, sizeof(reply), (char *)&reply);
+        if (result != SUCCESS) {
+            print_str("[Loader] Failed to send IPC_FS_Resolve_Path_Reply message: ");
+            print_hex(result);
+            print_str("\n");
+        }
+
+        return;
+    }
+
+    IPC_FS_Resolve_Path_Reply reply = {
+        .type = IPC_FS_Resolve_Path_Reply_NUM,
+        .flags = 0,
+        .result_code = -ENOENT,
+        .file_id = 0,
+        .operation_id = msg->operation_id,
+        .file_type = 0,
+    };
+
+    result_t result = send_message_port(msg->reply_port, sizeof(reply), (char *)&reply);
+    if (result != SUCCESS) {
+        print_str("[Loader] Failed to send IPC_FS_Resolve_Path_Reply message: ");
+        print_hex(result);
+        print_str("\n");
+    }
+
+    return;
 }

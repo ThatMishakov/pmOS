@@ -7,6 +7,7 @@
 #include "task_list.h"
 
 struct fs_entry {
+    uint64_t id;
     const char *name;
     size_t name_size;
 
@@ -270,5 +271,15 @@ int fs_react_register_reply(IPC_Register_FS_Reply *reply, size_t reply_size, uin
  * @return int 0 on success, negative on failure
  */
 int fs_react_mount_reply(IPC_Mount_FS_Reply *reply, size_t reply_size, uint64_t sender);
+
+/**
+ * @brief React to the Resolve_Path message from the VFS daemon.
+ * 
+ * @param msg Pointer to the message
+ * @param message_size Size of the message
+ * @param sender ID of the sender
+ */
+void fs_react_resolve_path(IPC_FS_Resolve_Path *msg, uint64_t message_size, size_t sender);
+
 
 #endif /* FS_H */

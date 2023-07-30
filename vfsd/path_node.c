@@ -5,6 +5,11 @@
 #include "file_op.h"
 #include "filesystem.h"
 #include <assert.h>
+#include <string.h>
+#include <alloca.h>
+#include <assert.h>
+
+extern pmos_port_t main_port;
 
 size_t sdbm_hash(const unsigned char * str, size_t length) {
     size_t hash = 0;
@@ -178,7 +183,7 @@ static struct Path_Node *find_leaf(struct Path_Node *node)
  * 
  * @param node Node to be destroyed
  */
-static void destroy_path_node_leaf(struct Path_Node *node)
+static void destroy_path_node_leaf(struct Path_Node *node, int error)
 {
     if (node == NULL)
         return;
@@ -197,7 +202,7 @@ static void destroy_path_node_leaf(struct Path_Node *node)
 
     // Free the requests
     while (node->requests_head != NULL) {
-        fail_and_destroy_request(node->requests_head, EAGAIN);
+        fail_and_destroy_request(node->requests_head, error);
     }
 
     if (node->owner_mountpoint != NULL && node->owner_mountpoint->node == node) {
@@ -223,14 +228,35 @@ static void destroy_path_node_leaf(struct Path_Node *node)
     while (current_node != node) {
         struct Path_Node *parent_node = current_node->parent;
 
-        destroy_path_node_leaf(current_node);
+        destroy_path_node_leaf(current_node, -EAGAIN);
 
         current_node = find_leaf(parent_node);
     }
 
     // At this point, node is a leaf
-    destroy_path_node_leaf(node);
+    destroy_path_node_leaf(node, -EAGAIN);
  }
+
+void destroy_path_node_with_error(struct Path_Node *node, int error_code)
+{
+    if (node == NULL) {
+        return;
+    }
+
+    // The tree can be very high, so do it iteratively
+    struct Path_Node *current_node = find_leaf(node);
+
+    while (current_node != node) {
+        struct Path_Node *parent_node = current_node->parent;
+
+        destroy_path_node_leaf(current_node, error_code);
+
+        current_node = find_leaf(parent_node);
+    }
+
+    // At this point, node is a leaf
+    destroy_path_node_leaf(node, error_code);
+}
 
  struct Path_Node *path_node_get_front_child(struct Path_Node *node)
  {
@@ -287,4 +313,132 @@ void remove_request_from_path_node(struct File_Request *request)
     }
 
     request->active_node = NULL;
+}
+
+int path_node_resolve_child(struct Path_Node **node, struct Path_Node *parent, const unsigned char *name, size_t name_length)
+{
+    if (node == NULL || parent == NULL || name == NULL || name_length == 0)
+        return -EINVAL;
+
+    assert(parent->file_type == NODE_DIRECTORY);
+
+    struct Path_Node *child = path_map_find(parent->children_nodes_map, name, name_length);
+    if (child != NULL) {
+        *node = child;
+        return 0;
+    }
+
+    // The child does not exist, create it
+    child = calloc(sizeof(struct Path_Node) + name_length, 1);
+    if (child == NULL)
+        return -ENOMEM;
+
+    child->file_type = NODE_UNRESOLVED;
+    child->owner_mountpoint = parent->owner_mountpoint;
+
+    memcpy(child->name, name, name_length);
+    child->name_length = name_length;
+
+    int result = path_node_add_child(parent, child);
+    if (result != 0) {
+        free(child);
+        return result;
+    }
+
+    // Send the request to the filesystem
+    struct File_Request *request = create_resolve_path_request(child);
+    if (request == NULL) {
+        destroy_path_node(child);
+        return -ENOMEM;
+    }
+
+    size_t message_size = sizeof(IPC_FS_Resolve_Path) + name_length;
+    IPC_FS_Resolve_Path *message = alloca(message_size);
+    
+    message->type = IPC_FS_Resolve_Path_NUM,
+    message->flags = 0,
+    message->reply_port = main_port,
+    message->filesystem_id = parent->owner_mountpoint->fs->id,
+    message->parent_dir_id = parent->file_id,
+    message->operation_id = request->request_id,
+    memcpy(message->path_name, name, name_length);
+
+    result = -send_message_port(parent->owner_mountpoint->fs->command_port, message_size, (char *)message);
+    if (result != 0) {
+        fail_and_destroy_request(request, result);
+        destroy_path_node(child);
+        return result;
+    }
+
+    *node = child;
+    return 0;
+}
+
+int path_node_add_child(struct Path_Node *parent, struct Path_Node *child)
+{
+    if (parent == NULL || child == NULL)
+        return -EINVAL;
+
+    assert(child->parent == NULL);
+
+    if (parent->children_nodes_map == NULL) {
+        parent->children_nodes_map = create_path_map();
+        if (parent->children_nodes_map == NULL)
+            return -ENOMEM;
+    }
+
+    int result = insert_node(parent->children_nodes_map, child);
+    if (result >= 0)
+        child->parent = parent;
+
+    return result;
+}
+
+struct Path_Hash_Map *create_path_map()
+{
+    struct Path_Hash_Map *new_map = malloc(sizeof(struct Path_Hash_Map));
+    if (new_map == NULL)
+        return NULL;
+
+    new_map->nodes_count = 0;
+    new_map->vector_size = PATH_NODE_HASH_INITIAL_SIZE;
+    new_map->hash_vector = calloc(new_map->vector_size, sizeof(struct Path_Hash_Vector));
+    if (new_map->hash_vector == NULL) {
+        free(new_map);
+        return NULL;
+    }
+
+    return new_map;
+}
+
+struct Path_Node *path_map_find(struct Path_Hash_Map *map, const unsigned char *name, size_t name_length)
+{
+    if (map == NULL || name == NULL || name_length == 0)
+        return NULL;
+
+    if (map->vector_size == 0)
+        return NULL;
+
+    size_t index = sdbm_hash(name, name_length) % map->vector_size;
+    Path_Node * p = map->hash_vector[index].head;
+    while (p != NULL) {
+        if (p->name_length == name_length && memcmp(p->name, name, name_length) == 0) {
+            return p;
+        }
+
+        p = p->ll_next;
+    }
+
+    return NULL;
+}
+
+bool is_file_type_valid(int type)
+{
+    switch (type) {
+        case NODE_FILE:
+        case NODE_DIRECTORY:
+            return true;
+        default:
+            return false;
+    }
 }

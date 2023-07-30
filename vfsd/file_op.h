@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include "fs_consumer.h"
 #include <pmos/ipc.h>
+#include <stdbool.h>
 
 struct Path_Node;
 struct fs_consumer;
@@ -13,6 +14,7 @@ enum Request_Type {
     REQUEST_TYPE_UNKNOWN = 0,
     REQUEST_TYPE_OPEN_FILE,
     REQUEST_TYPE_MOUNT,
+    REQUEST_TYPE_RESOLVE_PATH,
 };
 
 struct File_Request {
@@ -48,6 +50,20 @@ struct File_Request {
     enum Request_Type request_type;
 };
 
+struct File_Request_Node {
+    struct File_Request_Node *next;
+    struct File_Request *request;
+};
+
+struct File_Request_Map {
+    struct File_Request_Node **hash_vector;
+    size_t vector_size;
+    size_t nodes_count;
+};
+#define FILE_REQUEST_HASH_LOAD_FACTOR 3/4
+#define FILE_REQUEST_HASH_INITIAL_SIZE 4
+#define FILE_REQUEST_HASH_SHRINK_THRESHOLD 1/4
+
 /**
  * @brief Processes an open request from a client
  * 
@@ -57,6 +73,17 @@ struct File_Request {
  * @return int result of the operation. 0 if successful, -1 otherwise
  */
 int open_file(const struct IPC_Open *request, uint64_t sender, uint64_t request_length);
+
+/**
+ * @brief Creates a new RESOLVE_PATH request
+ * 
+ * This function creates a new request to resolve the ID of the file. It allocates the memory as necessary
+ * and initializes the request. The request is registered with the child node and in the global request map.
+ * 
+ * @param child_node Node to resolve the path for
+ * @return struct File_Request* Pointer to the request. NULL if an error occurred.
+ */
+struct File_Request *create_resolve_path_request(struct Path_Node *child_node);
 
 /**
  * @brief Processes a mount request
@@ -201,5 +228,72 @@ int process_requests_of_node(struct Path_Node *node);
  * @param error_code errno-like error code code to send to the client
  */
 void fail_and_destroy_request(struct File_Request *request, int error_code);
+
+/**
+ * @brief Checks if the request should be in the global requests map
+ * 
+ * This function checks if the request should be in the global requests map, by checking its type.
+ * 
+ * @param request Request to check
+ * @return true if the request should be in the global requests map, false otherwise
+ */
+bool is_request_in_global_map(struct File_Request *request);
+
+/**
+ * @brief Removes the request from global map
+ * 
+ * This function checks if the request is in the global map and if so, removes it from there.
+ * 
+ * @param request Valid request to remove
+ */
+void remove_request_from_global_map(struct File_Request *request);
+
+/**
+ * @brief Adds the request to the requests map
+ * 
+ * @param map Map to add the request to
+ * @param request Request to add
+ * @return int 0 on success, negative value otherwise
+ */
+int add_request_to_map(struct File_Request_Map *map, struct File_Request *request);
+
+/**
+ * @brief Gets the request from the map by its ID
+ * 
+ * @param map Map to get the request from
+ * @param id ID of the request to get
+ * @return struct File_Request* Pointer to the request, NULL if not found
+ */
+struct File_Request *get_request_from_map(struct File_Request_Map *map, uint64_t id);
+
+/**
+ * @brief Removes the request from the requests map
+ * 
+ * @param map Map to remove the request from
+ * @param request Request to remove
+ */
+void remove_request_from_map(struct File_Request_Map *map, struct File_Request *request);
+
+/**
+ * @brief Gets the request from the global requests map by its ID
+ * 
+ * @param id ID of the request to get
+ * @return struct File_Request* Pointer to the request, NULL if not found
+ */
+struct File_Request *get_request_from_global_map(uint64_t id);
+
+/**
+ * @brief Reacts to the IPC_FS_Resolve_Path_Reply message
+ * 
+ * This function reacts to the IPC_FS_Resolve_Path_Reply message (which would normally be sent by path_node_resolve_child)
+ * and updates the internal state in accordance with it. It does not take the ownership of the message.
+ * 
+ * @param message Message (reply) to react to
+ * @param sender Sender of the message
+ * @param message_length Length of the message
+ * @return int 0 on success, negative value otherwise
+ * @see path_node_resolve_child
+ */
+int react_resolve_path_reply(struct IPC_FS_Resolve_Path_Reply *message, size_t sender, uint64_t message_length);
 
 #endif // FILE_OP_H
