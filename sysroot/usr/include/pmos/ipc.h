@@ -477,7 +477,7 @@ typedef struct IPC_FS_Resolve_Path {
     char path_name[];
 } IPC_FS_Resolve_Path;
 
-#define IPC_FS_OPEN_REPLY_NUM 0xD0
+#define IPC_FS_Open_Reply_NUM 0xD0
 typedef struct IPC_FS_Open_Reply {
     /// Message type (must be IPC_FS_OPEN_REPLY_NUM)
     uint32_t type;

@@ -5,6 +5,7 @@
 #include <pmos/system.h>
 #include <pmos/ipc.h>
 #include <errno.h>
+#include <assert.h>
 
 int register_global_fs_consumer(struct fs_consumer *fs_consumer);
 
@@ -151,6 +152,65 @@ int reference_open_filesystem(struct fs_consumer *fs_consumer, struct Filesystem
     fs_consumer->open_filesystem_count++;
 
     return 0;
+}
+
+void unreference_open_filesystem(struct fs_consumer *fs_consumer, struct Filesystem *fs, uint64_t close_count)
+{
+    assert(fs_consumer != NULL && fs != NULL);
+    assert(close_count > 0);
+
+    assert(fs_consumer->open_filesystem_size > 0);
+
+    size_t index = fs->id % fs_consumer->open_filesystem_size;
+
+    struct consumer_fs_map_node *node = fs_consumer->open_filesystem[index], *prev = NULL;
+    while (node != NULL && node->fs != fs) {
+        prev = node;
+        node = node->next;
+    }
+
+    assert(node != NULL);
+
+    assert(node->open_files_count >= close_count);
+
+    node->open_files_count -= close_count;
+
+    if (node->open_files_count != 0)
+        return;
+        
+    prev == NULL ? (fs_consumer->open_filesystem[index] = node->next) : (prev->next = node->next);
+    fs_consumer->open_filesystem_count--;
+    free(node);
+
+    if (fs_consumer->open_filesystem_count < fs_consumer->open_filesystem_size * OPEN_FILESYSTEM_SHRINK_FACTOR) {
+        size_t new_size = fs_consumer->open_filesystem_size / OPEN_FILESYSTEM_SIZE_MULTIPLIER;
+        struct consumer_fs_map_node **new_open_filesystem = calloc(new_size, sizeof(struct consumer_fs_map_node *));
+
+        if (new_open_filesystem == NULL)
+            return;
+
+        // Rehash the filesystems
+        for (size_t i = 0; i < fs_consumer->open_filesystem_size; i++) {
+            node = fs_consumer->open_filesystem[i];
+            while (node != NULL) {
+                struct consumer_fs_map_node *next = node->next;
+
+                // Rehash the filesystem
+                size_t new_index = node->fs->id % new_size;
+                node->next = new_open_filesystem[new_index];
+                new_open_filesystem[new_index] = node;
+
+                node = next;
+            }
+        }
+
+        free(fs_consumer->open_filesystem);
+
+        fs_consumer->open_filesystem = new_open_filesystem;
+        fs_consumer->open_filesystem_size = new_size;
+
+        index = fs->id % fs_consumer->open_filesystem_size;
+    }
 }
 
 bool is_fs_consumer(struct fs_consumer *fs_consumer, uint64_t id)

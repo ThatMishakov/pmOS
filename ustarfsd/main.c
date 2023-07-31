@@ -8,7 +8,7 @@
 #include <stdlib.h>
 
 char *get_filename(int argc, char *argv[]) {
-    return "/././/../arhive.tar";
+    return "processd";
 
     if (argc < 2) {
         // Prepare for the worst
@@ -139,6 +139,8 @@ int main(int argc, char *argv[]) {
         perror("Failed to open file");
         return 1;
     }
+
+    printf("[USTARFSd] Info: open(%s, O_RDONLY) = %d\n", filename, fd);
 
     struct File **file_pointer_array = NULL; // Array of pointers to File structs
     size_t file_count = 0;

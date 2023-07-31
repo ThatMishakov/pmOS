@@ -386,7 +386,7 @@ int fs_data_add_open_file(struct fs_data *data, struct open_file *file)
 
     // Check if the open file table needs to be resized
     if (data->fs_open_files == NULL || data->open_files_table_size * OPEN_FILE_LOAD_FACTOR >= data->open_files_count) {
-        size_t new_size = data->open_files_table_size * OPEN_FILE_GROWTH_FACTOR;
+        size_t new_size = data->open_files_table_size > 0 ? data->open_files_table_size * OPEN_FILE_GROWTH_FACTOR : OPEN_FILE_BUCKET_START_SIZE;
         struct open_file_bucket **new_table = malloc(sizeof(struct open_file_bucket *) * new_size);
 
         if (new_table == NULL)
@@ -435,6 +435,9 @@ struct fs_consumer *get_fs_consumer(struct fs_data *data, uint64_t id)
     if (data == NULL)
         return NULL;
 
+    if (data->consumers == NULL || data->consumer_table_size == 0)
+        return NULL;
+
     uint64_t index = id % data->consumer_table_size;
     struct fs_consumer_bucket *bucket = data->consumers[index];
 
@@ -455,7 +458,7 @@ int fs_data_add_consumer(struct fs_data *data, struct fs_consumer *consumer)
 
     // Check if the consumer table needs to be resized
     if (data->consumers == NULL || data->consumer_table_size * CONSUMER_LOAD_FACTOR >= data->consumer_count) {
-        size_t new_size = data->consumer_table_size * CONSUMER_GROWTH_FACTOR;
+        size_t new_size = data->consumer_table_size > 0 ? data->consumer_table_size * CONSUMER_GROWTH_FACTOR : CONSUMER_BUCKET_START_SIZE;
         struct fs_consumer_bucket **new_table = malloc(sizeof(struct fs_consumer_bucket *) * new_size);
 
         if (new_table == NULL)

@@ -92,7 +92,10 @@ int fill_descriptor(struct Filesystem_Data *fs_data, int64_t descriptor_id, uint
     }
 
     // Lock the descriptor to ensure thread-safety
-    pthread_spin_lock(&fs_data->lock);
+    if (pthread_spin_lock(&fs_data->lock) != 0) {
+        // Error
+        return -1;
+    }
 
     if (!fs_data->descriptors_vector[descriptor_id].used) {
         // Descriptor must be used
@@ -104,8 +107,8 @@ int fill_descriptor(struct Filesystem_Data *fs_data, int64_t descriptor_id, uint
         return -1;
     }
 
-    if (fs_data->descriptors_vector[descriptor_id].reserved) {
-        // Descriptor must not be reserved
+    if (!fs_data->descriptors_vector[descriptor_id].reserved) {
+        // Descriptor must be reserved
 
         // Unlock the descriptor
         pthread_spin_unlock(&fs_data->lock);

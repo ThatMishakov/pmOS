@@ -292,8 +292,8 @@ void main()
         }
         case IPC_FS_Open_NUM: {
             IPC_FS_Open *a = (IPC_FS_Open *)ptr;
-            IPC_FS_Open_Reply reply = {};
-            if (desc.size < sizeof (IPC_FS_Open)) {
+            IPC_FS_Open_Reply reply = { .type = IPC_FS_Open_Reply_NUM };
+            if (desc.size >= sizeof (IPC_FS_Open)) {
                 int result = register_open_request(a, &reply);
                 
                 if (result != 0) {

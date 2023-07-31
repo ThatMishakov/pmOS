@@ -11,7 +11,11 @@
 #include <assert.h>
 #include <stdio.h>
 
+extern pmos_port_t main_port;
+
 uint64_t next_open_request_id = 1;
+
+struct File_Request_Map global_requests_map = {};
 
 uint64_t get_next_request_id()
 {
@@ -46,10 +50,14 @@ int init_open_request(struct File_Request *request)
 
     request->path_node_next = NULL;
     request->path_node_prev = NULL;
+
     request->consumer_req_next = NULL;
     request->consumer_req_prev = NULL;
-
     request->consumer = NULL;
+
+    request->fs_req_next = NULL;
+    request->fs_req_prev = NULL;
+    request->filesystem = NULL;
 
     request->reply_port = 0;
     
@@ -202,7 +210,6 @@ int mount_filesystem(const struct IPC_Mount_FS *request, uint64_t sender, uint64
         return -result;
     }
 
-    mount_request->filesystem = filesystem;
     mount_request->reply_port = request->reply_port;
 
     size_t path_length = request_length - sizeof(struct IPC_Mount_FS);
@@ -287,17 +294,19 @@ int register_request_with_filesystem(struct File_Request *request, struct Filesy
     if (request == NULL || filesystem == NULL)
         return -EINVAL;
 
+    assert("Request already registsered with filesystem" && request->filesystem == NULL);
+
     request->filesystem = filesystem;
 
-        if (filesystem->requests_head == NULL) {
+    if (filesystem->requests_head == NULL) {
         filesystem->requests_head = request;
         filesystem->requests_tail = request;
 
-        request->consumer_req_prev = NULL;
-        request->consumer_req_next = NULL;
+        request->fs_req_prev = NULL;
+        request->fs_req_next = NULL;
     } else {
-        request->consumer_req_prev = filesystem->requests_tail;
-        request->consumer_req_next = NULL;
+        request->fs_req_prev = filesystem->requests_tail;
+        request->fs_req_next = NULL;
         filesystem->requests_tail = request;
     }
     filesystem->requests_count++;
@@ -381,22 +390,7 @@ int process_request(struct File_Request * request)
 
     switch (request->request_type) {
     case REQUEST_TYPE_OPEN_FILE: {
-        if (active_node == NULL) {
-            // No active node: this is an error
-            IPC_Open_Reply reply = {
-                .type = IPC_Open_Reply_NUM,
-                .result_code = -ENOSYS,
-                .fs_flags = 0,
-                .filesystem_id = 0,
-                .file_id = 0,
-                .fs_port = 0,
-            };
-
-            pmos_port_t reply_port = request->reply_port;
-
-            result = -send_message_port(reply_port, sizeof(reply), (char *)&reply);
-            break;
-        }
+        assert(active_node != NULL);
 
         switch (active_node->file_type) {
             case NODE_UNRESOLVED: {
@@ -529,6 +523,87 @@ int process_request(struct File_Request * request)
                     return process_request(request);
                 }
             } break;
+            case NODE_FILE: {
+                // Reached the end of the path
+                if (request->next_path_node_index != request->path.length) {
+                    // This is a file and the directory was wanted, so fail
+                    IPC_Open_Reply reply = {
+                        .type = IPC_Open_Reply_NUM,
+                        .result_code = -ENOENT,
+                        .fs_flags = 0,
+                        .filesystem_id = 0,
+                        .file_id = 0,
+                        .fs_port = 0,
+                    };
+
+                    result = -send_message_port(request->reply_port, sizeof(reply), (char *)&reply);
+                    break;
+                }
+
+                result = register_request_with_filesystem(request, active_node->owner_mountpoint->fs);
+                if (result != 0) {
+                    IPC_Open_Reply reply = {
+                        .type = IPC_Open_Reply_NUM,
+                        .result_code = result,
+                        .fs_flags = 0,
+                        .filesystem_id = 0,
+                        .file_id = 0,
+                        .fs_port = 0,
+                    };
+
+                    result = -send_message_port(request->reply_port, sizeof(reply), (char *)&reply);
+                    break;
+                }
+
+                request->request_type = REQUEST_TYPE_OPEN_FILE_RESOLVED;
+                result = add_request_to_map(&global_requests_map, request);
+                if (result != 0) {
+                    IPC_Open_Reply reply = {
+                        .type = IPC_Open_Reply_NUM,
+                        .result_code = result,
+                        .fs_flags = 0,
+                        .filesystem_id = 0,
+                        .file_id = 0,
+                        .fs_port = 0,
+                    };
+
+                    result = -send_message_port(request->reply_port, sizeof(reply), (char *)&reply);
+                    break;
+                }
+
+                result = reference_open_filesystem(request->consumer, active_node->owner_mountpoint->fs, 1);
+                if (result != 0) {
+                    IPC_Open_Reply reply = {
+                        .type = IPC_Open_Reply_NUM,
+                        .result_code = result,
+                        .fs_flags = 0,
+                        .filesystem_id = 0,
+                        .file_id = 0,
+                        .fs_port = 0,
+                    };
+
+                    result = -send_message_port(request->reply_port, sizeof(reply), (char *)&reply);
+                    break;
+                }
+
+                IPC_FS_Open msg_request = {
+                    .type = IPC_FS_Open_NUM,
+                    .flags = 0,
+                    .reply_port = main_port,
+                    .fs_consumer_id = request->consumer->id,
+                    .file_id = active_node->file_id,
+                    .operation_id = request->request_id,
+                };
+                    
+                result = -send_message_port(active_node->owner_mountpoint->fs->command_port, sizeof(msg_request), (char *)&msg_request);
+                if (result == 0)
+                    return 0;
+                else {
+                    unreference_open_filesystem(request->consumer, active_node->owner_mountpoint->fs, 1);
+                }
+
+                break;
+            } break;
                 default: {
                 // Not implemented
 
@@ -598,6 +673,8 @@ int process_request(struct File_Request * request)
     }
     }
 
+    remove_request_from_global_map(request);
+
     unregister_request_from_parent(request);
     
     free_buffers_file_request(request);
@@ -658,6 +735,10 @@ void fail_and_destroy_request(struct File_Request *request, int error_code)
         send_message_port(reply_port, sizeof(reply), (char *)&reply);
         break;
     }
+    case REQUEST_TYPE_OPEN_FILE_RESOLVED: {
+        unreference_open_filesystem(request->consumer, request->filesystem, 1);
+        break;
+    }
     case REQUEST_TYPE_RESOLVE_PATH: {
         // Ignore it
         break;
@@ -681,12 +762,7 @@ void unregister_request_from_parent(struct File_Request *request)
     if (request == NULL)
         return;
 
-    // The pointer location is the same
-    if (request->consumer == NULL)
-        return;
-
-    switch (request->request_type) {
-    case REQUEST_TYPE_OPEN_FILE: {
+    if (request->consumer != NULL) {
         struct fs_consumer *consumer = request->consumer;
         if (request->consumer_req_prev == NULL) {
             assert(consumer->requests_head == request);
@@ -705,37 +781,28 @@ void unregister_request_from_parent(struct File_Request *request)
         }
 
         request->consumer = NULL;
-
-        break;
     }
-    case REQUEST_TYPE_RESOLVE_PATH:
-    case REQUEST_TYPE_MOUNT: {
+
+    if (request->filesystem != NULL) {
         struct Filesystem *fs = request->filesystem;
 
-        if (request->consumer_req_prev == NULL) {
+        if (request->fs_req_prev == NULL) {
             assert(fs->requests_head == request);
-            fs->requests_head = request->consumer_req_next;
+            fs->requests_head = request->fs_req_next;
         } else {
-            assert(fs->requests_head != request && request->consumer_req_prev != NULL && request->consumer_req_prev->consumer_req_next == request);
-            request->consumer_req_prev->consumer_req_next = request->consumer_req_next;
+            assert(fs->requests_head != request && request->fs_req_prev != NULL && request->fs_req_prev->fs_req_next == request);
+            request->fs_req_prev->fs_req_next = request->fs_req_next;
         }
 
-        if (request->consumer_req_next == NULL) {
+        if (request->fs_req_next == NULL) {
             assert(fs->requests_tail == request);
-            fs->requests_tail = request->consumer_req_prev;
+            fs->requests_tail = request->fs_req_prev;
         } else {
-            assert(fs->requests_tail != request && request->consumer_req_next != NULL && request->consumer_req_next->consumer_req_prev == request);
-            request->consumer_req_next->consumer_req_prev = request->consumer_req_prev;
+            assert(fs->requests_tail != request && request->fs_req_next != NULL && request->fs_req_next->fs_req_prev == request);
+            request->fs_req_next->fs_req_prev = request->fs_req_prev;
         }
 
         request->filesystem = NULL;
-
-        break;
-    }
-    case REQUEST_TYPE_UNKNOWN: {
-        assert(false);
-        break;
-    }
     }
 }
 
@@ -765,8 +832,6 @@ int add_request_to_path_node(struct File_Request *request, struct Path_Node *n)
     return 0;
 }
 
-struct File_Request_Map global_requests_map = {};
-
 void remove_request_from_global_map(struct File_Request *request)
 {
     if (request == NULL)
@@ -787,6 +852,7 @@ bool is_request_in_global_map(struct File_Request *request)
     case REQUEST_TYPE_MOUNT:
         return false;
     case REQUEST_TYPE_RESOLVE_PATH:
+    case REQUEST_TYPE_OPEN_FILE_RESOLVED:
     case REQUEST_TYPE_UNKNOWN:
         // Unknown requests might be in the map
         return true;
@@ -960,6 +1026,55 @@ int react_resolve_path_reply(struct IPC_FS_Resolve_Path_Reply *message, size_t s
 fail:
 
     destroy_path_node_with_error(request->active_node, result);
+
+    return 0;
+}
+
+int react_ipc_fs_open_reply(struct IPC_FS_Open_Reply *message, size_t sender, uint64_t message_length)
+{
+    if (message == NULL)
+        return -EINVAL;
+
+    if (message_length < sizeof(struct IPC_FS_Open_Reply))
+        return -EINVAL;
+
+    struct File_Request *request = get_request_from_global_map(message->operation_id);
+    if (request == NULL) {
+        printf("[VFSd] Warning: recieved IPC_FS_Open_Reply from task %ld with unknown request ID %ld\n", sender, message->operation_id);
+        return -ENOENT;
+    }
+
+    if (request->request_type != REQUEST_TYPE_OPEN_FILE_RESOLVED) {
+        printf("[VFSd] Warning: recieved IPC_FS_Open_Reply from task %ld with request ID %ld that is not of type REQUEST_TYPE_OPEN_FILE_RESOLVED\n", sender, message->operation_id);
+        return -EINVAL;
+    }
+
+    // Check that the sender is the part of the filesystem that we expect
+    bool is_registered = is_task_registered_with_filesystem(request->filesystem, sender);
+    if (!is_registered) {
+        printf("[VFSd] Warning: recieved IPC_FS_Open_Reply from task %ld that is not registered with the filesystem %ld\n", sender, request->filesystem->id);
+        return -EPERM;
+    }
+
+    IPC_Open_Reply reply_msg = {
+        .type = IPC_Open_Reply_NUM,
+        .result_code = message->result_code,
+        .file_id = message->file_id,
+        .filesystem_id = message->result_code < 0 ? 0 : request->filesystem->id,
+        .fs_port = message->file_port,
+        .fs_flags = 0,
+    };
+
+    result_t send_result = send_message_port(request->reply_port, sizeof(reply_msg), (char *)&reply_msg);
+    if (send_result != SUCCESS || reply_msg.result_code < 0)
+        unreference_open_filesystem(request->consumer, request->filesystem, 1);
+        
+    // TODO: Send Close if the file was oppened but the reply failed
+
+    remove_request_from_map(&global_requests_map, request);
+    unregister_request_from_parent(request);
+    free_buffers_file_request(request);
+    free(request);
 
     return 0;
 }

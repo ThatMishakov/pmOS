@@ -144,6 +144,19 @@ int main()
 
                 break;
             }
+            case IPC_FS_Open_Reply_NUM: {
+                if (msg.size < sizeof(IPC_FS_Open_Reply)) {
+                    printf("[VFSd] Warning: Recieved IPC_FS_Open_Reply that is too small. Size: %li\n", msg.size);
+                    break;
+                }
+
+                IPC_FS_Open_Reply *req = (IPC_FS_Open_Reply *)ipc_msg;
+                int result = react_ipc_fs_open_reply(req, msg.sender, msg.size);
+                if (result != 0) {
+                    printf("[VFSd] Error opening file: %i\n", result);
+                }
+                break;
+            }
             /*
             case IPC_Close_NUM: {
                 printf("[VFSd] Recieved IPC_Close\n");

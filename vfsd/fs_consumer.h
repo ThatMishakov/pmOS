@@ -39,9 +39,10 @@ struct fs_consumer {
     struct consumer_fs_map_node **open_filesystem;
     size_t open_filesystem_size;
     size_t open_filesystem_count;
-    #define OPEN_FILESYSTEM_INITIAL_SIZE 16
+    #define OPEN_FILESYSTEM_INITIAL_SIZE    16
     #define OPEN_FILESYSTEM_SIZE_MULTIPLIER 2
     #define OPEN_FILESYSTEM_MAX_LOAD_FACTOR 3/4
+    #define OPEN_FILESYSTEM_SHRINK_FACTOR   1/4
 
     struct String path;
 };
@@ -130,6 +131,19 @@ int register_consumer_task(struct consumer_task *task, struct fs_consumer *fs_co
  * @return int 0 on success, -1 on failure.
 */
 int reference_open_filesystem(struct fs_consumer *fs_consumer, struct Filesystem *fs, uint64_t open_count);
+
+/**
+ * @brief Unreferences a filesystem from the fs consumer
+ * 
+ * This function is similar to the reference_open_filesystem, except that the open file count is decreased
+ * instead and when reached 0, the filesystem is unlinked from the consumer.
+ * 
+ * @param fs_consumer The fs consumer to unreference the filesystem from
+ * @param fs The filesystem to unreference
+ * @param close_count The number of files closed with the filesystem
+ * @see reference_open_filesystem
+ */
+void unreference_open_filesystem(struct fs_consumer *fs_consumer, struct Filesystem *fs, uint64_t close_count);
 
 /**
  * @brief Checks is the task_id is a consumer of the fs_consumer.

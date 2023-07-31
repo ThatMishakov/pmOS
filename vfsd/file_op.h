@@ -13,6 +13,7 @@ struct Filesystem;
 enum Request_Type {
     REQUEST_TYPE_UNKNOWN = 0,
     REQUEST_TYPE_OPEN_FILE,
+    REQUEST_TYPE_OPEN_FILE_RESOLVED,
     REQUEST_TYPE_MOUNT,
     REQUEST_TYPE_RESOLVE_PATH,
 };
@@ -21,12 +22,11 @@ struct File_Request {
     /// Implicit linked list
     struct File_Request *path_node_next, *path_node_prev;
     struct File_Request *consumer_req_next, *consumer_req_prev;
+    struct File_Request *fs_req_next, *fs_req_prev;
 
     /// Parent filesystem
-    union {
-        struct fs_consumer *consumer;
-        struct Filesystem *filesystem;
-    };
+    struct fs_consumer *consumer;
+    struct Filesystem *filesystem;
 
     /// Port to send the reply to
     uint64_t reply_port;
@@ -295,5 +295,18 @@ struct File_Request *get_request_from_global_map(uint64_t id);
  * @see path_node_resolve_child
  */
 int react_resolve_path_reply(struct IPC_FS_Resolve_Path_Reply *message, size_t sender, uint64_t message_length);
+
+/**
+ * @brief Reacts to the IPC_FS_Open_Replay message
+ * 
+ * This function reacts to the IPC_FS_Open_Replay message sent by the filesystem server and updates the internal state
+ * in accordance with it. It does not take the ownership of the message.
+ * 
+ * @param message Message (reply) to react to
+ * @param sender Sender of the message
+ * @param message_length Length of the message
+ * @return int 0 on success, negative value otherwise
+ */
+int react_ipc_fs_open_reply(struct IPC_FS_Open_Reply *message, size_t sender, uint64_t message_length);
 
 #endif // FILE_OP_H
