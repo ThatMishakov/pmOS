@@ -13,7 +13,6 @@ size_t freed = 0;
 void print_list(malloc_list* l) 
 {
     while (l != nullptr) {
-        t_print_bochs(" node %h size %h", l, l->size);
         l = l->next;
     }
 
@@ -93,11 +92,10 @@ extern "C" void *realloc(void *old_ptr, size_t new_size)
 extern "C" void *calloc(size_t nelem, size_t size)
 {
     size_t total_size = nelem * size;
-    size_t inited;
-    u64* ptr = (u64*)malloc_int(total_size, inited);
+    void *ptr = malloc(total_size);
     if (ptr != nullptr)
-        memset(ptr+2, 0, inited - 16);
-    return &ptr[2];
+        memset(ptr, 0, total_size);
+    return ptr;
 }
 
 extern "C" void *malloc(size_t s) 

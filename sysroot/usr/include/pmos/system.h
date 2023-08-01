@@ -119,6 +119,44 @@ result_t request_priority(uint64_t priority);
 /// Returns the LAPIC id the process is running on when calling the process
 u64 get_lapic_id();
 
+/// Type for the task group ID
+typedef uint64_t task_group_t;
+
+/**
+ * @brief Creates a new task group
+ * 
+ * This syscall creates a new task group and returns its ID. Every process can be member of any number of task groups and it is up to the 
+ * application to decide how to use them. The task groups are currently used to implement the filesystem clients, where the group ID is
+ * used as the filesystem consumer ID. The tasks can be added to the group using the add_task_to_group() and removed using the remove_task_from_group()
+ * and also queried using the is_task_group_member().
+ * 
+ * @return syscall_r result of the operation. If the result is SUCCESS, the value contains the ID of the new group.
+ * @see add_task_to_group() remove_task_from_group() is_task_group_member()
+ */
+syscall_r create_task_group();
+
+/**
+ * @brief Removes the task from the task group
+ * 
+ * This syscall removes the task from the task group. If the task is not in the group, the syscall returns ERROR_NOT_IN_GROUP.
+ * The task groups with no members are automatically destroyed by the kernel.
+ * 
+ * @param task_id ID of the task. Takes PID_SELF (0)
+ * @param group_id ID of the group
+ * @return result_t result of the operation. If the result is SUCCESS, the task was removed from the group.
+ * @see create_task_group() add_task_to_group() is_task_group_member()
+ */
+result_t remove_task_from_group(uint64_t task_id, uint64_t group_id);
+
+/**
+ * @brief Check if the task is in the task group
+ * 
+ * @param task_id ID of the task
+ * @param group_id ID of the group
+ * @return syscall_r result of the operation. If the result is SUCCESS, the value contains 1 if the task is in the group, 0 otherwise.
+ * @see create_task_group() add_task_to_group() remove_task_from_group()
+ */
+syscall_r is_task_group_member(uint64_t task_id, uint64_t group_id);
 
 #endif
 

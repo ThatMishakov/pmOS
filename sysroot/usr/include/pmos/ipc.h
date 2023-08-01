@@ -236,6 +236,9 @@ typedef struct IPC_Create_Consumer {
 
     /// Port where the reply would be sent
     uint64_t reply_port;
+
+    /// ID of the tasks group representing the consumer
+    uint64_t task_group_id;
 } IPC_Create_Consumer;
 
 #define IPC_Create_Consumer_Reply_NUM 0x5b
@@ -245,9 +248,6 @@ typedef struct IPC_Create_Consumer_Reply {
 
     /// Flags changing the behaviour
     uint32_t flags;
-
-    /// ID of the consumer
-    uint64_t consumer_id;
 
     /// Result of the operation
     int32_t result_code;

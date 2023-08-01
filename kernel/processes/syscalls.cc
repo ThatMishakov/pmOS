@@ -23,9 +23,10 @@
 #include <memory/mem_object.hh>
 #include <dbg.h>
 #include <assert.h>
+#include "task_group.hh"
 
 using syscall_function = void (*)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t);
-klib::array<syscall_function, 31> syscall_table = {
+klib::array<syscall_function, 35> syscall_table = {
     syscall_exit,
     getpid,
     syscall_create_process,
@@ -57,8 +58,13 @@ klib::array<syscall_function, 31> syscall_table = {
     nullptr,
     nullptr,
     syscall_set_segment,
+
     syscall_asign_page_table,
     syscall_create_managed_region,
+    syscall_create_task_group,
+    nullptr,
+    syscall_remove_from_task_group,
+    syscall_is_in_task_group,
 };
 
 extern "C" void syscall_handler()
@@ -73,7 +79,7 @@ extern "C" void syscall_handler()
 
     // TODO: check permissions
 
-    //t_print_bochs("Debug: syscall %h pid %h (%s)", call_n, get_cpu_struct()->current_task->pid, get_cpu_struct()->current_task->name.c_str());
+    //t_print_bochs("Debug: syscall %h pid %h (%s) \n", call_n, get_cpu_struct()->current_task->pid, get_cpu_struct()->current_task->name.c_str());
     //t_print_bochs(" %h %h %h %h %h ", arg1, arg2, arg3, arg4, arg5);
     if (task->attr.debug_syscalls) {
         global_logger.printf("Debug: syscall %h pid %h\n", call_n, get_cpu_struct()->current_task->pid);
@@ -731,4 +737,32 @@ void syscall_delete_region(u64 region_start, u64, u64, u64, u64, u64)
 
     // TODO: This is completely untested and knowing me is probably utterly broken
     current_page_table->atomic_delete_region(region_start);
+}
+
+void syscall_remove_from_task_group(u64 pid, u64 group, u64, u64, u64, u64)
+{
+    const auto task = pid == 0 ? get_current_task() : get_task_throw(pid);
+
+    const auto group_ptr = TaskGroup::get_task_group_throw(group);
+
+    group_ptr->atomic_remove_task(task);
+}
+
+void syscall_create_task_group(u64, u64 , u64 , u64 , u64 , u64)
+{
+    const auto &current_task = get_current_task();
+    const auto new_task_group = TaskGroup::create();
+
+    new_task_group->atomic_register_task(current_task);
+
+    syscall_ret_high(current_task) = new_task_group->get_id();
+}
+
+void syscall_is_in_task_group(u64 pid, u64 group, u64, u64, u64, u64)
+{
+    const u64 current_pid = pid == 0 ? get_current_task()->pid : pid;
+    const auto group_ptr = TaskGroup::get_task_group_throw(group);
+
+    const bool has_task = group_ptr->atomic_has_task(current_pid);
+    syscall_ret_high(get_current_task()) = has_task;
 }

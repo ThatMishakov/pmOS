@@ -16,7 +16,7 @@ struct File_Descriptor {
     bool reserved;
     uint16_t flags;
 
-    uint64_t filesystem_id;
+    task_group_t filesystem_id;
     uint64_t file_id;
     off_t offset;
     pmos_port_t fs_port;
@@ -487,12 +487,24 @@ int init_filesystem() {
         return -1;
     }
 
+    // Create a new task group
+    syscall_r sys_result = create_task_group();
+    if (sys_result.result != SUCCESS) {
+        // Handle error: Failed to create the task group
+        pthread_spin_destroy(&new_fs_data->lock);
+        free(new_fs_data);
+        errno = -sys_result.result;
+        return -1;
+    }
+
+    new_fs_data->fs_consumer_id = sys_result.value;
 
     // Register new filesystem consumer
     IPC_Create_Consumer request = {
         .type = IPC_Create_Consumer_NUM,
         .flags = 0,
         .reply_port = fs_cmd_reply_port,
+        .task_group_id = new_fs_data->fs_consumer_id,
     };
 
     // Send the IPC_Open message to the filesystem daemon
@@ -504,6 +516,7 @@ int init_filesystem() {
         pmos_port_t fs_port = request_filesystem_port();
         if (fs_port == INVALID_PORT) {
             // Handle error: Failed to request the port
+            remove_task_from_group(PID_SELF, new_fs_data->fs_consumer_id);
             pthread_spin_destroy(&new_fs_data->lock);
             free(new_fs_data);
             errno = EIO; // Set errno to appropriate error code
@@ -517,6 +530,7 @@ int init_filesystem() {
 
     if (k_result != SUCCESS) {
         // Handle error: Failed to send the IPC_Open message
+        remove_task_from_group(PID_SELF, new_fs_data->fs_consumer_id);
         pthread_spin_destroy(&new_fs_data->lock);
         free(new_fs_data);
         errno = EIO; // Set errno to appropriate error code
@@ -529,6 +543,7 @@ int init_filesystem() {
     k_result = get_message(&reply_descr, (unsigned char **)&reply_msg, fs_cmd_reply_port);
     if (k_result != SUCCESS) {
         // Handle error: Failed to get the reply
+        remove_task_from_group(PID_SELF, new_fs_data->fs_consumer_id);
         pthread_spin_destroy(&new_fs_data->lock);
         free(new_fs_data);
         errno = EIO; // Set errno to appropriate error code
@@ -538,6 +553,7 @@ int init_filesystem() {
     // Check if the reply is valid
     if (reply_msg->type != IPC_Create_Consumer_Reply_NUM || reply_descr.size < sizeof(IPC_Create_Consumer_Reply)) {
         // Handle error: Invalid reply type
+        remove_task_from_group(PID_SELF, new_fs_data->fs_consumer_id);
         pthread_spin_destroy(&new_fs_data->lock);
         free(new_fs_data);
         free(reply_msg);
@@ -548,15 +564,13 @@ int init_filesystem() {
     IPC_Create_Consumer_Reply * reply = (IPC_Create_Consumer_Reply *)reply_msg;
     if (reply->result_code != SUCCESS) {
         // Handle error: Failed to create the consumer
+        remove_task_from_group(PID_SELF, new_fs_data->fs_consumer_id);
         pthread_spin_destroy(&new_fs_data->lock);
         free(new_fs_data);
         free(reply_msg);
         errno = -result;
         return -1;
     }
-
-    // Save the consumer id
-    new_fs_data->fs_consumer_id = reply->consumer_id;
 
     // Free the reply message
     free(reply_msg);

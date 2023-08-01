@@ -505,11 +505,13 @@ extern "C" int pthread_key_create(pthread_key_t* key, void (*destructor)(void*))
 
 extern "C" void* pthread_getspecific(pthread_key_t key)
 {
+    t_print_bochs("pthread_getspecific(%h) = %h\n", key, (void*)get_cpu_struct()->pthread_once_storage[key]);
     return (void*)get_cpu_struct()->pthread_once_storage[key];
 }
 
 extern "C" int pthread_setspecific(pthread_key_t key, const void* data)
 {
+    t_print_bochs("pthread_setspecific(%h %h)\n", key, data);
     get_cpu_struct()->pthread_once_storage[key] = data;
 
     return 0;

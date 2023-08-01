@@ -123,3 +123,23 @@ result_t set_segment(uint64_t pid, unsigned segment, void * addr)
 {
     return syscall(SYSCALL_SET_SEGMENT, pid, segment, addr).result;
 }
+
+syscall_r create_task_group()
+{
+    return syscall(SYSCALL_CREATE_TASK_GROUP);
+}
+
+syscall_r add_task_to_group(uint64_t group, uint64_t task)
+{
+    return syscall(SYSCALL_ADD_TASK_TO_GROUP, group, task);
+}
+
+result_t remove_task_from_group(uint64_t group, uint64_t task)
+{
+    return syscall(SYSCALL_REMOVE_TASK_FROM_GROUP, group, task).result;
+}
+
+syscall_r is_task_group_member(uint64_t task_id, uint64_t group_id)
+{
+    return syscall(SYSCALL_CHECK_IF_TASK_IN_GROUP, task_id, group_id);
+}

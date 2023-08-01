@@ -108,6 +108,18 @@ void syscall_set_task_name(u64 pid, u64 /* const char* */ string, u64 length, u6
 
 void syscall_create_port(u64 owner, u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */);
 
+// Creates a new task group. Adds current task to it.
+void syscall_create_task_group(u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */);
+
+// Adds a task to a task group
+void syscall_add_to_task_group(u64 pid, u64 group, u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */);
+
+// Removes a task from a task group
+void syscall_remove_from_task_group(u64 pid, u64 group, u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */);
+
+// Checks if a task is in a task group
+void syscall_is_in_task_group(u64 pid, u64 group, u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */);
+
 
 inline u64& syscall_arg1(const klib::shared_ptr<TaskDescriptor>& task)
 {

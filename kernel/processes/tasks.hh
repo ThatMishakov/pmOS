@@ -9,6 +9,7 @@
 #include <lib/string.hh>
 #include <lib/set.hh>
 #include <exceptions.hh>
+#include "task_group.hh"
 
 using PID = u64;
 
@@ -30,6 +31,7 @@ struct Task_Attributes {
 };
 
 class sched_queue;
+class TaskGroup;
 
 class TaskDescriptor {
 public:
@@ -63,6 +65,10 @@ public:
     // Paging
     klib::shared_ptr<Page_Table> page_table;
     u64 page_blocked_by = 0;
+
+    // Task groups
+    klib::set<klib::shared_ptr<TaskGroup>> task_groups;
+    Spinlock task_groups_lock;
 
     // Creates and assigns an emty valid page table
     void create_new_page_table();
