@@ -405,7 +405,7 @@ ssize_t pread(int fd, void *buf, size_t count, off_t offset) {
         .fs_consumer_id = fs_data->fs_consumer_id,
         .start_offset = offset,
         .max_size = count,
-        .reply_chan = fs_cmd_reply_port,
+        .reply_port = fs_cmd_reply_port,
     };
 
     size_t message_size = sizeof(IPC_Read);
