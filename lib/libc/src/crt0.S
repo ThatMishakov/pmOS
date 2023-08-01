@@ -28,10 +28,6 @@ _start:
 
     call main
 
-    pushq %rax
-    call _fini
-    popq %rax
-
     movq %rax, %rdi
     call exit
     .size _start, . - _start

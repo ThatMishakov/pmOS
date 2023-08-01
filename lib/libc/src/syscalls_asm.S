@@ -22,9 +22,9 @@ syscall:
 
     ret
 
-    .globl exit
-    .type exit, @function
-exit:
+    .globl _syscall_exit
+    .type _syscall_exit, @function
+_syscall_exit:
     pushq %rbp
     movq %rsp, %rbp
     movq %rdi, %rsi

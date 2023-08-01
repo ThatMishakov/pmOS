@@ -252,6 +252,18 @@ long double fmal(long double x, long double y, long double z);
 #define islessgreater(x, y) (__builtin_islessgreater(x, y))
 #define isunordered(x, y) (__builtin_isunordered(x, y))
 
+/**
+ * @brief Check if a floating-point number is infinite.
+ *
+ * The `isinf` function checks if the given floating-point number `x` is infinite.
+ * If `x` is positive or negative infinity, the function returns a nonzero value (true);
+ * otherwise, it returns 0 (false).
+ *
+ * @param x The floating-point number to check.
+ * @return Nonzero value (true) if `x` is infinite, 0 (false) otherwise.
+ */
+int isinf(double x);
+
 #if defined(__cplusplus)
 } /* extern "C" */
 #endif

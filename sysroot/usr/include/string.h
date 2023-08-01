@@ -20,7 +20,22 @@ char * strncat ( char * destination, const char * source, size_t num );
 /* Comparison functions */
 int memcmp ( const void * ptr1, const void * ptr2, size_t num );
 int strcmp ( const char * str1, const char * str2 );
-int strcoll ( const char * str1, const char * str2 );
+
+/**
+ * @brief Compare two strings using the current locale's collation rules.
+ *
+ * The `strcoll` function compares the two strings `s1` and `s2` using the current locale's
+ * collation rules. It performs a lexicographic comparison and returns an integer less than,
+ * equal to, or greater than zero if `s1` is found to be less than, equal to, or greater than `s2`,
+ * respectively.
+ *
+ * @param s1 The first null-terminated string to compare.
+ * @param s2 The second null-terminated string to compare.
+ * @return An integer less than, equal to, or greater than zero if `s1` is found to be less than,
+ *         equal to, or greater than `s2`, respectively.
+ */
+int strcoll(const char *s1, const char *s2);
+
 int strncmp ( const char * str1, const char * str2, size_t num );
 size_t strxfrm ( char * destination, const char * source, size_t num );\
 

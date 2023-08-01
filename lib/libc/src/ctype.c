@@ -36,3 +36,19 @@ int tolower(int c) {
 int isxdigit(int c) {
     return isdigit(c) || (tolower(c) >= 'a' && tolower(c) <= 'f');
 }
+
+int isblank(int c) {
+    return c == ' ' || c == '\t';
+}
+
+int ispunct(int c) {
+    return isprint(c) && !isalnum(c) && !isspace(c);
+}
+
+int isprint(int c) {
+    return c >= ' ' && c <= '~';
+}
+
+int iscntrl(int c) {
+    return (unsigned char)c < ' ' || c == 127;
+}

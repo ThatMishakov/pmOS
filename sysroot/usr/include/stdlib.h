@@ -29,8 +29,24 @@ int atoi(const char *nptr);
 long int atol(const char *nptr);
 long long int atoll(const char *nptr);
 
-double strtod(const char * nptr,
-            char ** endptr);
+/**
+ * @brief Convert string to double-precision floating-point number.
+ *
+ * The `strtod` function converts the initial portion of the string pointed to by `str`
+ * to a `double` representation. It stops when the first unrecognized character is encountered.
+ * If `endptr` is not a null pointer, the function stores the address of the first invalid character
+ * in `*endptr`. If `str` does not point to a valid floating-point number, or if no digits were found,
+ * `strtod` returns 0.0. If the converted value is outside the range of representable values for `double`,
+ * the result is undefined, and `HUGE_VAL` or `HUGE_VALF` may be returned. The function recognizes
+ * an optional initial whitespace, an optional sign (+ or -), an optional prefix (0x for hexadecimal
+ * numbers), decimal digits, and an optional decimal point.
+ *
+ * @param str Pointer to the null-terminated string to be converted.
+ * @param endptr Pointer to a pointer that will be updated to point to the first invalid character.
+ * @return The converted double-precision floating-point number, or 0.0 if no valid digits were found.
+ */
+double strtod(const char *str, char **endptr);
+
 float strtof(const char * nptr,
             char ** endptr);
 long double strtold(const char * nptr,
@@ -67,7 +83,20 @@ void *malloc(size_t size);
 void free(void*);
 void* realloc (void* ptr, size_t size);
 
+/**
+ * @brief Terminate the program abnormally.
+ *
+ * The `abort` function terminates the program abnormally by generating a program termination
+ * signal (SIGABRT). It is usually called when an unrecoverable error or critical condition is
+ * encountered in the program. The function performs abnormal termination without any cleanup
+ * or unwinding of the stack, so it is recommended to only use it in exceptional cases where
+ * normal program flow cannot continue.
+ *
+ * @warning The `abort` function does not return to the caller and does not execute any
+ *          registered exit handlers or cleanup functions.
+ */
 void abort(void);
+
 int atexit(void (*func)(void));
 void exit(int status);
 void _Exit(int status);
