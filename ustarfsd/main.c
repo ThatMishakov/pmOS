@@ -6,9 +6,10 @@
 #include "file.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <errno.h>
 
 char *get_filename(int argc, char *argv[]) {
-    return "processd";
+    return "./sysroot.tar";
 
     if (argc < 2) {
         // Prepare for the worst
@@ -102,6 +103,8 @@ int parse_archive(int fd, struct File ***file_pointer_array, size_t *file_count,
 
     // Check if the end of the archive was not reached
     if (bytesRead != 0) {
+        if (bytesRead < 0)
+            fprintf(stderr, "pread() failed: %s\n", strerror(errno));
         fprintf(stderr, "Archive ended unexpectedly.\n");
         return -1;
     }

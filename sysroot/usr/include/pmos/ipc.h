@@ -156,13 +156,13 @@ typedef struct IPC_Read {
     uint64_t max_size;
 
     /// Channel where the reply would be sent
-    uint64_t reply_chan;
+    uint64_t reply_port;
 } IPC_Read;
 
 #define IPC_Read_Reply_NUM 0x50
 typedef struct IPC_Read_Reply {
     /// Message type (must be IPC_Read_Reply_NUM)
-    uint32_t num;
+    uint32_t type;
 
     /// Flags changing the behaviour
     uint16_t flags;
@@ -171,7 +171,7 @@ typedef struct IPC_Read_Reply {
     uint16_t result_code;
 
     /// Data that was read. The size can be deduced from the size of the message.
-    unsigned char data[0];
+    unsigned char data[];
 } IPC_Read_Reply;
 
 #define IPC_Write_Reply_NUM 0x51

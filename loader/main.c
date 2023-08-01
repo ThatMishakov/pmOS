@@ -321,6 +321,19 @@ void main()
 
             break;
         }
+        case IPC_Read_NUM: {
+            IPC_Read *a = (IPC_Read *)ptr;
+            if (desc.size < sizeof (IPC_Read)) {
+                print_str("Loader: Recieved IPC_Read of unexpected size 0x");
+                print_hex(desc.size);
+                print_str("\n");
+                break;
+            }
+
+            fs_react_read(a, desc.size, desc.sender);
+
+            break;
+        }
 
         default:
             print_str("Loader: Recievend unknown message with type ");

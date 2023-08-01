@@ -372,7 +372,7 @@ ssize_t pread(int fd, void *buf, size_t count, off_t offset) {
     struct File_Descriptor *file_desc = &fs_data->descriptors_vector[fd];
 
     // Check if the file descriptor is in use and reserved
-    if (!file_desc->used || !file_desc->reserved) {
+    if (!file_desc->used || file_desc->reserved) {
         errno = EBADF; // Bad file descriptor
         return -1;
     }

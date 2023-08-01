@@ -237,6 +237,15 @@ void destroy_open_file(struct open_file *file);
 int open_file(struct fs_consumer *consumer, const char *path, struct open_file **file);
 
 /**
+ * @brief Gets open file by ID.
+ * 
+ * @param data fs_data struct to search
+ * @param id ID of the open file to get
+ * @return struct open_file* Pointer to the open file. NULL if not found.
+ */
+struct open_file *fs_data_get_open_file(struct fs_data *data, uint64_t id);
+
+/**
  * @brief Registers an open request for the filesystem.
  * 
  * @param msg Pointer to the open request message
@@ -280,6 +289,15 @@ int fs_react_mount_reply(IPC_Mount_FS_Reply *reply, size_t reply_size, uint64_t 
  * @param sender ID of the sender
  */
 void fs_react_resolve_path(IPC_FS_Resolve_Path *msg, uint64_t message_size, size_t sender);
+
+/**
+ * @brief React to the IPC_Read message from the consumer
+ * 
+ * @param msg Pointer to the message
+ * @param message_size Size of the message
+ * @param sender ID of the sender
+ */
+void fs_react_read(IPC_Read *msg, uint64_t message_size, size_t sender);
 
 
 #endif /* FS_H */

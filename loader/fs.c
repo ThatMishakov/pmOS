@@ -1032,3 +1032,104 @@ void fs_react_resolve_path(IPC_FS_Resolve_Path *msg, uint64_t message_size, size
 
     return;
 }
+
+void fs_react_read(IPC_Read *msg, uint64_t message_size, size_t sender)
+{
+    // Check that the sender is part of the filesystem consumer group
+    uint64_t consumer_group = msg->fs_consumer_id;
+    syscall_r r = is_task_group_member(sender, consumer_group);
+    if (r.result != 0 || r.value != 1) {
+        IPC_Read_Reply reply = {
+            .type = IPC_Read_Reply_NUM,
+            .flags = 0,
+            .result_code = -EPERM,
+        };
+
+        result_t result = send_message_port(msg->reply_port, sizeof(reply), (char *)&reply);
+        if (result != SUCCESS) {
+            print_str("[Loader] Failed to send IPC_Read_Reply message: ");
+            print_hex(result);
+            print_str("\n");
+        }
+        return;
+    }
+
+    struct open_file *file = fs_data_get_open_file(&filesystem_data, msg->file_id);
+    if (file == NULL) {
+        IPC_Read_Reply reply = {
+            .type = IPC_Read_Reply_NUM,
+            .flags = 0,
+            .result_code = -EBADF,
+        };
+
+        result_t result = send_message_port(msg->reply_port, sizeof(reply), (char *)&reply);
+        if (result != SUCCESS) {
+            print_str("[Loader] Failed to send IPC_Read_Reply message: ");
+            print_hex(result);
+            print_str("\n");
+        }
+        return;
+    }
+
+    if (file->consumer->id != consumer_group) {
+        IPC_Read_Reply reply = {
+            .type = IPC_Read_Reply_NUM,
+            .flags = 0,
+            .result_code = -EPERM,
+        };
+
+        result_t result = send_message_port(msg->reply_port, sizeof(reply), (char *)&reply);
+        if (result != SUCCESS) {
+            print_str("[Loader] Failed to send IPC_Read_Reply message: ");
+            print_hex(result);
+            print_str("\n");
+        }
+        return;
+    }
+
+    const size_t buffer_size = 1024 - sizeof(IPC_Read_Reply);
+
+    struct {
+        IPC_Read_Reply reply;
+        char data[buffer_size];
+    } reply;
+
+    size_t start = msg->start_offset;
+    size_t size = buffer_size > msg->max_size ? msg->max_size : buffer_size;
+    size_t end = start + size;
+
+    size_t file_size = file->file->file.file_size;
+    size_t actual_start = file_size > start ? start : file_size;
+    size_t actual_end = file_size > end ? end : file_size;
+    size_t actual_size = actual_end - actual_start;
+
+    reply.reply.type = IPC_Read_Reply_NUM;
+    reply.reply.flags = 0;
+    reply.reply.result_code = 0;
+    memcpy(reply.data, file->file->file.data + actual_start, actual_size);
+    result_t result = send_message_port(msg->reply_port, sizeof(reply.reply) + actual_size, (char *)&reply);
+    if (result != SUCCESS) {
+        print_str("[Loader] Failed to send IPC_Read_Reply message: ");
+        print_hex(result);
+        print_str("\n");
+    }
+}
+
+struct open_file *fs_data_get_open_file(struct fs_data *data, uint64_t id)
+{
+    if (data == NULL)
+        return NULL;
+
+    if (data->open_files_count == 0)
+        return NULL;
+
+    size_t index = id % data->open_files_table_size;
+    struct open_file_bucket *file = data->fs_open_files[index];
+    while (file != NULL) {
+        if (file->file->file_id == id)
+            return file->file;
+        file = file->next;
+    }
+
+    return NULL;
+}
