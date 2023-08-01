@@ -30,7 +30,7 @@ int parse_archive(int fd, struct File ***file_pointer_array, size_t *file_count,
 
     while ((bytesRead = pread(fd, &header, sizeof(TARHeader), offset)) == sizeof(TARHeader)) {
         int result;
-        struct File *file = malloc(sizeof(struct File));
+        struct File *file = calloc(sizeof(struct File), 1);
         if (file == NULL) {
             perror("Failed to allocate memory for file");
             return -1;
