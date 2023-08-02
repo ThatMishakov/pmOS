@@ -34,7 +34,19 @@ typedef struct tm {
 clock_t clock(void);
 double difftime(time_t time1, time_t time0);
 time_t mktime(struct tm *timeptr);
+
+/**
+ * @brief Get the current calendar time.
+ *
+ * The `time` function returns the current calendar time as the number of seconds
+ * elapsed since the epoch (January 1, 1970, 00:00:00 UTC).
+ *
+ * @param timer Pointer to a `time_t` object where the current time will be stored.
+ * @return The current calendar time as the number of seconds since the epoch. If an
+ *         error occurred, the function returns `(time_t)-1`.
+ */
 time_t time(time_t *timer);
+
 int timespec_get(struct timespec *ts, int base);
 
 /* Time conversion */

@@ -10,6 +10,8 @@
 #include <kernel/errors.h>
 #include <pmos/ipc.h>
 #include <pmos/helpers.h>
+#include <unistd.h>
+#include <stdio.h>
 
 struct File_Descriptor {
     bool used;
@@ -373,6 +375,7 @@ ssize_t pread(int fd, void *buf, size_t count, off_t offset) {
 
     // Check if the file descriptor is in use and reserved
     if (!file_desc->used || file_desc->reserved) {
+        pthread_spin_unlock(&fs_data->lock);
         errno = EBADF; // Bad file descriptor
         return -1;
     }
@@ -448,6 +451,131 @@ ssize_t pread(int fd, void *buf, size_t count, off_t offset) {
 
     // Free the memory for the reply message
     free(reply_msg);
+
+    // Return the number of bytes read
+    return count;
+}
+
+ssize_t read(int fd, void *buf, size_t count) {
+    // Double-checked locking to initialize fs_data if it is NULL
+    if (fs_data == NULL) {
+        pthread_spin_lock(&fs_data_lock);
+        if (fs_data == NULL) {
+            int init_result = init_filesystem();
+            if (init_result != 0) {
+                pthread_spin_unlock(&fs_data_lock);
+                return -1;
+            }
+        }
+        pthread_spin_unlock(&fs_data_lock);
+    }
+
+    // Lock the file descriptor to ensure thread-safety
+    pthread_spin_lock(&fs_data->lock);
+
+    // Check if the file descriptor is valid
+    if (fd < 0 || fd >= fs_data->capacity) {
+        errno = EBADF; // Bad file descriptor
+        return -1;
+    }
+
+    // Obtain the file descriptor data
+    struct File_Descriptor file_desc = fs_data->descriptors_vector[fd];
+
+    // Check if the file descriptor is in use and reserved
+    if (!file_desc.used || file_desc.reserved) {
+        pthread_spin_unlock(&fs_data->lock);
+        errno = EBADF; // Bad file descriptor
+        return -1;
+    }
+
+    // Extract the necessary information from the file descriptor
+    uint64_t file_id = file_desc.file_id;
+    pmos_port_t fs_port = file_desc.fs_port;
+    size_t offset = file_desc.offset;
+
+    // Unlock the file descriptor
+    pthread_spin_unlock(&fs_data->lock);
+
+    // Check if reply port exists
+    if (fs_cmd_reply_port == INVALID_PORT) {
+        // Create a new port for the current thread
+        ports_request_t port_request = create_port(PID_SELF, 0);
+        if (port_request.result != SUCCESS) {
+            // Handle error: Failed to create the port
+            return -1;
+        }
+
+        // Save the created port in the thread-local variable
+        fs_cmd_reply_port = port_request.port;
+    }
+
+    // Initialize the message type, flags, file ID, offset, count, and reply channel
+    IPC_Read message = {
+        .type = IPC_Read_NUM,
+        .flags = 0,
+        .file_id = file_id,
+        .fs_consumer_id = fs_data->fs_consumer_id,
+        .start_offset = offset,
+        .max_size = count,
+        .reply_port = fs_cmd_reply_port,
+    };
+
+    size_t message_size = sizeof(IPC_Read);
+
+    // Send the IPC_Read message to the filesystem daemon
+    result_t result = send_message_port(fs_port, message_size, (const char *)&message);
+
+    if (result != SUCCESS) {
+        errno = EIO; // I/O error
+        return -1;
+    }
+
+    // Receive the reply message containing the result and data
+    Message_Descriptor reply_descr;
+    IPC_Generic_Msg * reply_msg;
+    result = get_message(&reply_descr, (unsigned char **)&reply_msg, fs_cmd_reply_port);
+    if (result != SUCCESS) {
+        errno = EIO; // I/O error
+        return -1;
+    }
+
+    // Verify that the reply message is of type IPC_Read_Reply
+    if (reply_msg->type != IPC_Read_Reply_NUM) {
+        errno = EIO; // I/O error
+        return -1;
+    }
+
+    // Read the result code from the reply message
+    IPC_Read_Reply *reply = (IPC_Read_Reply *)reply_msg;
+    int result_code = reply->result_code;
+
+    if (result_code < 0) {
+        free(reply_msg);
+        errno = -result_code; // Set errno to appropriate error code (negative value)
+        return -1;
+    }
+
+    // Copy the data from the reply message to the output buffer
+    memcpy(buf, reply->data, count);
+
+    // Free the memory for the reply message
+    free(reply_msg);
+
+    // Add count to the file descriptor's offset
+    pthread_spin_lock(&fs_data->lock);
+
+    // Check if the file descriptor is valid
+    if (fd < 0 || fd >= fs_data->capacity || memcmp(&fs_data->descriptors_vector[fd], &file_desc, sizeof(struct File_Descriptor)) != 0) {
+        // POSIX says that the behavior is undefined if multiple threads use the same file descriptor
+        // Be nice and don't crash the program but don't update the offset
+        pthread_spin_unlock(&fs_data->lock);
+        return count;
+    }
+
+    // Update the file descriptor's offset
+    fs_data->descriptors_vector[fd].offset += count;
+    pthread_spin_unlock(&fs_data->lock);
 
     // Return the number of bytes read
     return count;
@@ -667,4 +795,65 @@ int close(int filedes) {
     }
 
     return 0;
+}
+
+off_t lseek(int fd, off_t offset, int whence)
+{
+    if (fs_data == NULL) {
+        // Filesystem is not initialized; No files opened
+        errno = EBADF;
+        return -1;
+    }
+
+    int result = pthread_spin_lock(&fs_data->lock);
+    if (result != SUCCESS) {
+        errno = result;
+        return -1;
+    }
+
+    if (fd < 0 || fs_data->capacity <= fd) {
+        pthread_spin_unlock(&fs_data->lock);
+        errno = EBADF;
+        return -1;
+    }
+
+    struct File_Descriptor *des = &fs_data->descriptors_vector[fd];
+
+    if (des->used == false || des->reserved == true) {
+        pthread_spin_unlock(&fs_data->lock);
+        errno = EBADF;
+        return -1;
+    }
+
+    switch (whence) {
+        case SEEK_SET:
+            if (offset < 0) {
+                pthread_spin_unlock(&fs_data->lock);
+                errno = EINVAL;
+                return -1;
+            }
+            des->offset = offset;
+            break;
+        case SEEK_CUR:
+            if (des->offset + offset < 0) {
+                pthread_spin_unlock(&fs_data->lock);
+                errno = EINVAL;
+                return -1;
+            }
+            des->offset += offset;
+            break;
+        case SEEK_END:
+            // Not implemented
+            pthread_spin_unlock(&fs_data->lock);
+            errno = EINVAL;
+            return -1;
+        default:
+            pthread_spin_unlock(&fs_data->lock);
+            errno = EINVAL;
+            return -1;
+    }
+
+    off_t result_offset = des->offset;
+    pthread_spin_unlock(&fs_data->lock);
+    return result_offset;
 }

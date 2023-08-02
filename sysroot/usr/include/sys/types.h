@@ -45,7 +45,7 @@ typedef _u64 key_t;
 
 typedef size_t mode_t;
 typedef size_t nlink_t;
-typedef size_t off_t;
+typedef ssize_t off_t;
 
 typedef volatile void * pthread_cond_t;
 typedef unsigned pthread_condattr_t;

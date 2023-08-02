@@ -108,15 +108,15 @@ static int _size_fputs (int size, const char * str, FILE * stream)
     switch (type)
     {
     case _STDIO_FILE_TYPE_PORT: {
-        if (stream->port_ptr == 0) {
-            if (!stream->port_name)
+        if (stream->port.port_ptr == 0) {
+            if (!stream->port.port_name)
                 return EOF;
 
-            ports_request_t port_req = get_port_by_name(stream->port_name, strlen(stream->port_name), 0);
+            ports_request_t port_req = get_port_by_name(stream->port.port_name, strlen(stream->port.port_name), 0);
             if (port_req.result != SUCCESS) {
                 return EOF;
             }
-            stream->port_ptr = port_req.port;
+            stream->port.port_ptr = port_req.port;
         }
 
         static const int buffer_size = 252;
@@ -135,7 +135,7 @@ static int _size_fputs (int size, const char * str, FILE * stream)
             int size_s = size - i > buffer_size ? buffer_size : size - i;
             memcpy(desc.buffer, &str[i], size_s);
 
-            int k = send_message_port(stream->port_ptr, size_s + sizeof(uint32_t), (const char*)(&desc));
+            int k = send_message_port(stream->port.port_ptr, size_s + sizeof(uint32_t), (const char*)(&desc));
 
             if (k == SUCCESS) {
                 s += size_s;
@@ -151,6 +151,14 @@ static int _size_fputs (int size, const char * str, FILE * stream)
 
         break;
     }
+    case _STDIO_FILE_TYPE_STRING: {
+        size_t max_size = stream->string.size - stream->string.pos;
+        size_t size_s = size > max_size ? max_size : size;
+        memcpy(&stream->string.buffer[stream->string.pos], str, size_s);
+        stream->string.pos += size_s;
+        result = size_s;
+        break;
+    };
     default:
         result = EOF;
         break;
@@ -403,6 +411,26 @@ int fprintf(FILE * stream, const char * format, ...)
     return va_fprintf(stream, arg, format);
 
     va_end(arg);
+}
+
+int sprintf(char * str, const char * format, ...)
+{
+    va_list arg;
+    va_start(arg,format);
+
+    FILE string = {
+        .string.buffer = str,
+        .string.size = -1,
+        .string.pos = 0,
+        .string.flags = 0,
+        .type = _STDIO_FILE_TYPE_STRING,
+    };
+
+    int ret = va_fprintf(NULL, arg, format);
+
+    va_end(arg);
+
+    return ret;
 }
 
 int printf(const char* format, ...)

@@ -86,7 +86,10 @@
         "block.h": "c",
         "io.h": "c",
         "ports.h": "c",
-        "pthread.h": "c"
+        "pthread.h": "c",
+        "stdio_internal.h": "c",
+        "stdarg.h": "c",
+        "time.h": "c"
     },
     "cmake.configureOnOpen": false
 }

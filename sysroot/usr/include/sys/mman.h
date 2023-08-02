@@ -21,7 +21,6 @@ extern "C" {
 #define POSIX_TYPED_MEM_MAP_ALLOCATABLE 0x04
 
 static const size_t  posix_tmi_length = -1;
-typedef size_t off_t;
 
 #ifdef __STDC_HOSTED__
 

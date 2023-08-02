@@ -37,7 +37,7 @@ int strcmp ( const char * str1, const char * str2 );
 int strcoll(const char *s1, const char *s2);
 
 int strncmp ( const char * str1, const char * str2, size_t num );
-size_t strxfrm ( char * destination, const char * source, size_t num );\
+size_t strxfrm ( char * destination, const char * source, size_t num );
 
 /* Search functions */
 void * memchr ( const void * ptr, int value, size_t num );

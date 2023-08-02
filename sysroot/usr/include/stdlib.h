@@ -97,7 +97,24 @@ void* realloc (void* ptr, size_t size);
  */
 void abort(void);
 
+/**
+ * @brief Register a function to be called at program exit.
+ *
+ * The `atexit` function registers the function pointed to by `func` to be called
+ * automatically when the program terminates normally using the `exit` function. Multiple
+ * functions can be registered in the order in which they are called by successive calls
+ * to `atexit`.
+ *
+ * The registered functions are called in reverse order of their registration, which means
+ * that the last function registered is called first, followed by the second-to-last, and
+ * so on. Each registered function is called without any arguments.
+ *
+ * @param func Pointer to the function to be called at program exit.
+ * @return 0 on success, or a nonzero value if the maximum number of registered functions
+ *         has been reached, or if an error occurred.
+ */
 int atexit(void (*func)(void));
+
 void exit(int status);
 void _Exit(int status);
 char *getenv(const char *name);

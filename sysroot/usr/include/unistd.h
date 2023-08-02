@@ -60,11 +60,53 @@ pid_t        getppid(void);
 uid_t        getuid(void);
 int          isatty(int);
 int          link(const char *, const char *);
-off_t        lseek(int, off_t, int);
+
+/**
+ * @brief Set the file offset for a file descriptor.
+ *
+ * The `lseek` function sets the file offset for the file associated with the file descriptor `fd`
+ * to the specified `offset` from the reference point `whence`. The reference point can be one of
+ * the following constants:
+ *
+ * - `SEEK_SET`: The offset is relative to the beginning of the file.
+ * - `SEEK_CUR`: The offset is relative to the current file position.
+ * - `SEEK_END`: The offset is relative to the end of the file.
+ *
+ * After a successful call to `lseek`, the next operation on the file associated with `fd`,
+ * such as a read or write, will occur at the specified position. If `lseek` encounters an error,
+ * it will return -1, and the file offset may be unchanged.
+ *
+ * @param fd     The file descriptor of the file.
+ * @param offset The offset value to set the file offset to.
+ * @param whence The reference point from which to calculate the offset.
+ * @return The resulting file offset from the beginning of the file, or -1 if an error occurred.
+ */
+off_t lseek(int fd, off_t offset, int whence);
+
 long         pathconf(const char *, int);
 int          pause(void);
 int          pipe(int [2]);
-ssize_t      read(int, void *, size_t);
+
+/**
+ * @brief Read data from a file descriptor.
+ *
+ * The `read` function reads up to `nbytes` bytes from the file descriptor `fd` into
+ * the buffer pointed to by `buf`. The data read is stored in the buffer, and the
+ * file offset associated with the file descriptor is incremented by the number of bytes
+ * read. The function returns the number of bytes actually read, which may be less than
+ * `nbytes` if there is not enough data available at the time of the call. A return value
+ * of 0 indicates end-of-file (EOF) has been reached.
+ *
+ * If `read` encounters an error, it returns -1, and the contents of the buffer pointed
+ * to by `buf` are undefined. The specific error can be retrieved using the `errno` variable.
+ *
+ * @param fd     The file descriptor from which to read data.
+ * @param buf    Pointer to the buffer where the read data will be stored.
+ * @param nbytes The maximum number of bytes to read.
+ * @return The number of bytes actually read on success, 0 for end-of-file, or -1 on error.
+ */
+ssize_t read(int fd, void *buf, size_t nbytes);
+
 ssize_t      readlink(const char *, char *, size_t);
 int          rmdir(const char *);
 int          setegid(gid_t);
