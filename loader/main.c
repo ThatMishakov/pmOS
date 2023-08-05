@@ -115,8 +115,6 @@ void load_multiboot_module(struct multiboot_tag_module * mod)
     }
 }
 
-void react_alloc_page(IPC_Kernel_Alloc_Page *p);
-
 void init_std_lib(void);
 
 void main()
@@ -272,21 +270,6 @@ void main()
             if (fs_react_mount_reply(a, desc.size, desc.sender) != 0) {
                 print_str("Loader: Error mounting filesystem\n");
             }
-
-            break;
-        }
-        
-        case 0x22: {
-            IPC_Kernel_Alloc_Page *a = (IPC_Kernel_Alloc_Page *)ptr;
-            if (desc.size < sizeof (IPC_Kernel_Alloc_Page)) {
-                print_str("Loader: Recieved IPC_Kernel_Alloc_Page of unexpected size 0x");
-                print_hex(desc.size);
-                print_str("\n");
-                break;
-            }
-
-            react_alloc_page(a);
-
 
             break;
         }

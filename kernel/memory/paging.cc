@@ -719,7 +719,7 @@ u64 Page_Table::atomic_transfer_region(const klib::shared_ptr<Page_Table>& to, u
     try {
         auto& reg = paging_regions.at(region_orig);
 
-        if (prefered_to%07777)
+        if (prefered_to&07777)
             prefered_to = 0;
 
         u64 start_addr = to->find_region_spot(prefered_to, reg->size, fixed);
@@ -728,20 +728,6 @@ u64 Page_Table::atomic_transfer_region(const klib::shared_ptr<Page_Table>& to, u
     } catch (std::out_of_range& r) {
         throw Kern_Exception(ERROR_OUT_OF_RANGE, "atomic_transfer_region source not found");
     }
-}
-
-u64 Page_Table::atomic_create_managed_region(u64 page_aligned_start, u64 page_aligned_size, unsigned access, bool fixed, klib::string name, klib::shared_ptr<Port> t)
-{
-    Auto_Lock_Scope scope_lock(lock);
-
-    u64 start_addr = find_region_spot(page_aligned_start, page_aligned_size, fixed);
-
-    paging_regions.insert({start_addr,
-        klib::make_shared<Private_Managed_Region>(
-            start_addr, page_aligned_size, klib::forward<klib::string>(name), this, access, klib::forward<klib::shared_ptr<Port>>(t)
-        )});
-
-    return start_addr;
 }
 
 u64 Page_Table::atomic_create_phys_region(u64 page_aligned_start, u64 page_aligned_size, unsigned access, bool fixed, klib::string name, u64 phys_addr_start)
@@ -777,20 +763,6 @@ bool Page_Table::can_takeout_page(u64 page_addr) noexcept
         return false;
 
     return it->second->can_takeout_page();
-}
-
-void Page_Table::provide_managed(u64 page_addr, u64 virt_addr)
-{
-    auto it = get_region(virt_addr);
-    if (it == paging_regions.end())
-        throw(Kern_Exception(ERROR_NO_FREE_REGION, "provide_managed no region found"));
-
-    if (not it->second->is_managed())
-        throw(Kern_Exception(ERROR_NOT_MANAGED_REGION, "provide_managed not a managed region"));
-
-    Page_Table_Argumments args = it->second->craft_arguments();
-
-    map(page_addr, virt_addr, args);
 }
 
 u64 Page_Table::find_region_spot(u64 desired_start, u64 size, bool fixed)
@@ -869,31 +841,6 @@ void Page_Table::insert_global_page_tables()
 Page_Table::page_table_map Page_Table::global_page_tables;
 Spinlock Page_Table::page_table_index_lock;
 
-bool Page_Table::atomic_provide_page(const klib::shared_ptr<TaskDescriptor>& from_task, const klib::shared_ptr<Page_Table>& to, u64 page_from, u64 page_to, u64 flags)
-{
-    const klib::shared_ptr<Page_Table>& from = from_task->page_table;
-    Auto_Lock_Scope_Double scope_lock(from->lock, to->lock);
-
-    bool can_takeout_page = from->can_takeout_page(page_from);
-    if (not can_takeout_page)
-        throw (Kern_Exception(ERROR_NOT_SUPPORTED, "taking out the page from unsupported region"));
-
-    // User page is not ready if not r
-    bool r = from->prepare_user_page(page_from, Readable, from_task);
-    if (not r)
-        return r;
-
-    u64 page = from->get_page_frame(page_from);
-
-    to->provide_managed(page, page_to);
-
-    to->unblock_tasks(page_to);
-
-    from->invalidate(page_from, false);
-
-    return r;
-}
-
 void Page_Table::unblock_tasks(u64 page)
 {
     for (const auto& it : owner_tasks)
@@ -941,7 +888,7 @@ void Page_Table::move_pages(const klib::shared_ptr<Page_Table>& to, u64 from_add
             auto info = get_page_mapping(from_addr + offset);
             if (info.is_allocated) {
                 Page_Table_Argumments arg = {
-                    access & Writeable,
+                    !!(access & Writeable),
                     info.user_access,
                     0,
                     not (access & Executable),

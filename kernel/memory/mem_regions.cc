@@ -93,46 +93,6 @@ bool Phys_Mapped_Region::alloc_page(u64 ptr_addr)
     return true;
 }
 
-Page_Table_Argumments Private_Managed_Region::craft_arguments() const
-{
-    return {
-        !!(access_type & Writeable),
-        true,
-        false,
-        !(access_type & Executable) ,
-        0b010,
-    };
-}
-
-bool Private_Managed_Region::alloc_page(u64 ptr_addr)
-{
-    u64 page_addr = (u64)ptr_addr & ~07777UL;
-
-    auto r = owner->check_if_allocated_and_set_flag(page_addr, 0b100, craft_arguments());
-
-    // Other thread has already allocated the page
-    if (r.allocated)
-        return true;
-
-    // Region hit for the first time. Otherwise, be nice and don't send messages to the userspace again
-    if (not (r.prev_flags & 0b100)) {
-        IPC_Kernel_Alloc_Page str {
-            IPC_Kernel_Alloc_Page_NUM,
-            0,
-            owner->id,
-            page_addr,
-        };
-
-        klib::shared_ptr<Port> p = notifications_port.lock();
-        if (not p)
-            throw Kern_Exception(ERROR_PORT_DOESNT_EXIST, "Private_Managed_Region::alloc_page port doesn't exist");
-
-        p->atomic_send_from_system((const char *)&str, sizeof(IPC_Kernel_Alloc_Page));
-    }
-
-    return false;
-}
-
 void Generic_Mem_Region::move_to(const klib::shared_ptr<Page_Table>& new_table, u64 base_addr, u64 new_access)
 {
     auto self = shared_from_this();
@@ -154,11 +114,6 @@ void Generic_Mem_Region::move_to(const klib::shared_ptr<Page_Table>& new_table, 
         new_table->paging_regions.erase(base_addr);
         throw;
     }
-}
-
-void Private_Managed_Region::move_to(const klib::shared_ptr<Page_Table>& new_table, u64 base_addr, u64 new_access)
-{
-    throw Kern_Exception(ERROR_NOT_SUPPORTED, "move_to of Private_Managed_Region is currently not supported");
 }
 
 Page_Table_Argumments Mem_Object_Reference::craft_arguments() const

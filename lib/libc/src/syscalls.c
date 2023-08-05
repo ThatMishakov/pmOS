@@ -79,13 +79,6 @@ mem_request_ret_t create_phys_map_region(uint64_t pid, void *addr_start, size_t 
     return t;
 }
 
-mem_request_ret_t create_managed_region(uint64_t pid, void *addr_start, size_t size, uint64_t access, pmos_port_t port)
-{
-    syscall_r r = syscall(SYSCALL_CREATE_MANAGED_REGION, pid, addr_start, size, access, port);
-    mem_request_ret_t t = {r.result, (void *)r.value};
-    return t;
-}
-
 mem_request_ret_t create_normal_region(uint64_t pid, void *addr_start, size_t size, uint64_t access)
 {
     syscall_r r = syscall(SYSCALL_CREATE_NORMAL_REGION, pid, addr_start, size, access);
@@ -112,11 +105,6 @@ page_table_req_ret_t asign_page_table(uint64_t pid, uint64_t page_table, uint64_
     syscall_r r = syscall(SYSCALL_ASIGN_PAGE_TABLE, pid, page_table, flags);
     page_table_req_ret_t t = {r.result, r.value};
     return t;
-}
-
-result_t provide_page(uint64_t page_table, uint64_t dest_page, uint64_t source, uint64_t flags)
-{
-    return syscall(SYSCALL_PROVIDE_PAGE, page_table, dest_page, source, flags).result;
 }
 
 result_t set_segment(uint64_t pid, unsigned segment, void * addr)

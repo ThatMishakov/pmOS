@@ -22,9 +22,6 @@ void syscall_create_process(u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 
 // Creates a normal (dellayed allocation region)
 void syscall_create_normal_region(u64 pid, u64 addr_start, u64 size, u64 access_flags, u64 = 0 /* unused */, u64 = 0 /* unused */);
 
-// Creates a managed region
-void syscall_create_managed_region(u64 pid, u64 addr_start, u64 size, u64 access, u64 port, u64 = 0 /* unused */);
-
 // Creates a region mapped to phys_addr
 void syscall_create_phys_map_region(u64 pid, u64 addr_start, u64 size, u64 access, u64 phys_addr, u64 = 0 /* unused */);
 
@@ -77,9 +74,6 @@ void syscall_set_log_port(u64 port, u64 flags, u64 = 0 /* unused */, u64 = 0 /* 
 
 // Requests a port by its name in a non-blocking way and sends a message with the descriptor when it becomes available
 void syscall_request_named_port(u64 string_ptr, u64 length, u64 reply_chan, u64 flags, u64 = 0 /* unused */, u64 = 0 /* unused */);
-
-// Provide a page for a managed region
-void syscall_provide_page(u64 page_table, u64 dest_page, u64 source, u64 flags, u64 = 0 /* unused */, u64 = 0 /* unused */);
 
 // Transfers a memory region to a new page table
 void syscall_transfer_region(u64 to_page_table, u64 region, u64 dest, u64 flags, u64 = 0 /* unused */, u64 = 0 /* unused */);

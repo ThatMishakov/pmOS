@@ -220,34 +220,6 @@ struct Private_Normal_Region final: Generic_Mem_Region {
         {};
 };
 
-
-// Managed private region. Pagefaults block the process and send the message to the managing process
-struct Private_Managed_Region: Generic_Mem_Region {
-    // When pagefaults occur, the notification is sent to this port
-    klib::weak_ptr<Port> notifications_port;
-
-    virtual constexpr bool can_takeout_page() const noexcept override
-    {
-        return false;
-    }
-
-    virtual constexpr bool is_managed() const noexcept override
-    {
-        return true;
-    }
-
-    virtual Page_Table_Argumments craft_arguments() const;
-
-    /// When pagefault occurs to the current task, it is blocked and the message is sent to the *notifications_port*. 
-    virtual bool alloc_page(u64 ptr_addr);
-
-    Private_Managed_Region(u64 start_addr, u64 size, klib::string name, Page_Table * owner, u8 access, klib::shared_ptr<Port> p):
-        Generic_Mem_Region(start_addr, size, klib::forward<klib::string>(name), owner, access), notifications_port(klib::forward<klib::shared_ptr<Port>>(p))
-        {};
-
-    virtual void move_to(const klib::shared_ptr<Page_Table>& new_table, u64 base_addr, u64 new_access) override;
-};
-
 class Mem_Object;
 
 /// Memory region which references memory object

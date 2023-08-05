@@ -49,10 +49,10 @@ klib::array<syscall_function, 35> syscall_table = {
     syscall_set_log_port,
 
     syscall_get_page_table,
-    syscall_provide_page,
+    nullptr,
     syscall_transfer_region,
     syscall_create_normal_region,
-    syscall_create_managed_region,
+    nullptr,
     syscall_create_phys_map_region,
     syscall_delete_region,
     nullptr,
@@ -60,7 +60,7 @@ klib::array<syscall_function, 35> syscall_table = {
     syscall_set_segment,
 
     syscall_asign_page_table,
-    syscall_create_managed_region,
+    nullptr,
     syscall_create_task_group,
     nullptr,
     syscall_remove_from_task_group,
@@ -86,7 +86,7 @@ extern "C" void syscall_handler()
     }
 
     try {
-        if (call_n > syscall_table.size())
+        if (call_n > syscall_table.size() or syscall_table[call_n] == nullptr)
             throw Kern_Exception(ERROR_NOT_SUPPORTED, "syscall is not supported");
 
         syscall_table[call_n](arg1, arg2, arg3, arg4, arg5, 0);
@@ -569,28 +569,6 @@ void syscall_create_normal_region(u64 pid, u64 addr_start, u64 size, u64 access,
     syscall_ret_high(current) = dest_task->page_table->atomic_create_normal_region(addr_start, size, access & 0x07, access & 0x08, klib::string(), 0);
 }
 
-void syscall_create_managed_region(u64 pid, u64 addr_start, u64 size, u64 access, u64 port, u64)
-{
-    const klib::shared_ptr<TaskDescriptor>& current = get_cpu_struct()->current_task;
-
-    klib::shared_ptr<TaskDescriptor> dest_task = nullptr;
-
-    if (pid == 0 or current->pid == pid)
-        dest_task = current;
-
-    if (not dest_task)
-        dest_task = get_task_throw(pid);
-
-    // Syscall must be page aligned
-    if (addr_start & 07777 or size & 07777) {
-        throw Kern_Exception(ERROR_UNALLIGNED, "arguments are not page aligned");
-    }
-
-    klib::shared_ptr<Port> p = global_ports.atomic_get_port_throw(port);
-
-    syscall_ret_high(current) = dest_task->page_table->atomic_create_managed_region(addr_start, size, access & 0x07, access & 0x08, klib::string(), klib::move(p));
-}
-
 void syscall_create_phys_map_region(u64 pid, u64 addr_start, u64 size, u64 access, u64 phys_addr, u64)
 {
     const klib::shared_ptr<TaskDescriptor>& current = get_cpu_struct()->current_task;
@@ -632,20 +610,6 @@ void syscall_get_page_table(u64 pid, u64, u64, u64, u64, u64)
     syscall_ret_high(current) = target->page_table->id;
 }
 
-void syscall_provide_page(u64 page_table, u64 dest_page, u64 source, u64 flags, u64, u64)
-{
-    klib::shared_ptr<TaskDescriptor> current = get_cpu_struct()->current_task;
-
-    if (dest_page & 07777 or source & 07777) {
-        throw(Kern_Exception(ERROR_UNALLIGNED, "arguments are not page aligned"));
-        return;
-    }
-
-    klib::shared_ptr<Page_Table> pt = Page_Table::get_page_table_throw(page_table);
-
-    Page_Table::atomic_provide_page(current, pt, source, dest_page, flags);
-}
-
 void syscall_set_segment(u64 pid, u64 segment_type, u64 ptr, u64, u64, u64)
 {
     const klib::shared_ptr<TaskDescriptor>& current = get_cpu_struct()->current_task;
@@ -677,7 +641,11 @@ void syscall_transfer_region(u64 to_page_table, u64 region, u64 dest, u64 flags,
     
     klib::shared_ptr<Page_Table> pt = Page_Table::get_page_table_throw(to_page_table);
 
-    syscall_ret_high(current) = current->page_table->atomic_transfer_region(pt, region, dest, flags, false);
+    bool fixed = flags & 0x08;
+
+    const auto result = current->page_table->atomic_transfer_region(pt, region, dest, flags, fixed);
+
+    syscall_ret_high(current) = result;
 }
 
 void syscall_asign_page_table(u64 pid, u64 page_table, u64 flags, u64, u64, u64)

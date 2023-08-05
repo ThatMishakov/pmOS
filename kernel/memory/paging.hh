@@ -161,8 +161,6 @@ public:
      */
     u64 /* page_start */ atomic_create_normal_region(u64 page_aligned_start, u64 page_aligned_size, unsigned access, bool fixed, klib::string name, u64 pattern);
 
-    u64 atomic_create_managed_region(u64 page_aligned_start, u64 page_aligned_size, unsigned access, bool fixed, klib::string name, klib::shared_ptr<Port> t);
-
     /**
      * @brief Creates a memory region mapping to the physical memory.
      * 
@@ -270,9 +268,6 @@ public:
      * @return Returns old flag value and whether the page is allocated.
      */
     virtual Check_Return_Str check_if_allocated_and_set_flag(u64 virt_addr, u8 flag, Page_Table_Argumments arg) = 0;
-
-    /// Maps a page for a managed region, doing the appropriate checks
-    virtual void provide_managed(u64 page_addr, u64 virtual_addr);
 
     /// @brief Checks whether page is mapped
     ///
@@ -475,8 +470,6 @@ public:
     virtual void invalidate(u64 virt_addr, bool free) override;
 
     bool is_mapped(u64 virt_addr) const override;
-
-    // virtual u64 provide_managed(u64 page_addr, u64 virtual_addr) override;
 
     virtual ~x86_4level_Page_Table();
 

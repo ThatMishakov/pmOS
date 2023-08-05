@@ -3,14 +3,14 @@
 void _init(void);
 void _fini(void);
 
-extern void (*__preinit_array_start[])(void);
-extern void (*__preinit_array_end[])(void);
+extern void (*__preinit_array_start[])(void) __attribute__((weak));
+extern void (*__preinit_array_end[])(void) __attribute__((weak));
 
-extern void (*__init_array_start[])(void);
-extern void (*__init_array_end[])(void);
+extern void (*__init_array_start[])(void) __attribute__((weak));
+extern void (*__init_array_end[])(void) __attribute__((weak));
 
-extern void (*__fini_array_start[])(void);
-extern void (*__fini_array_end[])(void);
+extern void (*__fini_array_start[])(void) __attribute__((weak));
+extern void (*__fini_array_end[])(void) __attribute__((weak));
 
 void __call_init_functions(void)
 {

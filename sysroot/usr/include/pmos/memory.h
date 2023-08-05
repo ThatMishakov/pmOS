@@ -45,9 +45,6 @@ typedef unsigned long mem_object_t;
 /// @see release_region()
 mem_request_ret_t create_normal_region(uint64_t pid, void *addr_start, size_t size, uint64_t access);
 
-/// I don't like this syscall and will probably redo it so no documentation from me :=P
-mem_request_ret_t create_managed_region(uint64_t pid, void *addr_start, size_t size, uint64_t access, pmos_port_t port);
-
 /**
  * @brief Create a physically mapped memory region. The functioning is very similar to create_normal_region() with the exception
  *        that when accessing it, the physical location indicated by *phys_addr* would be references.
@@ -95,8 +92,6 @@ typedef struct page_table_req_ret_t {
  *         page_table does not hold a meaningful value.
  */
 page_table_req_ret_t get_page_table(uint64_t pid);
-
-result_t provide_page(uint64_t page_table, uint64_t dest_page, uint64_t source, uint64_t flags);
 
 /**
  * @brief Sets the segment registers of the task indicated by PID. If setting for the other process,
