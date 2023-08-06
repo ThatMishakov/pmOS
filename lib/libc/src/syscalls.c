@@ -131,3 +131,13 @@ syscall_r is_task_group_member(uint64_t task_id, uint64_t group_id)
 {
     return syscall(SYSCALL_CHECK_IF_TASK_IN_GROUP, task_id, group_id);
 }
+
+syscall_r get_segment(uint64_t pid, unsigned segment)
+{
+    return syscall(SYSCALL_GET_SEGMENT, pid, segment);
+}
+
+result_t syscall_start_process(uint64_t pid, uint64_t entry, uint64_t arg1, uint64_t arg2, uint64_t arg3)
+{
+    return syscall(SYSCALL_START_PROCESS, pid, entry, arg1, arg2, arg3).result;
+}

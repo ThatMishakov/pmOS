@@ -48,8 +48,22 @@ uint64_t getpid();
  */
 syscall_r syscall_new_process();
 
-// TODO: Outdated
-// syscall_r start_process(uint64_t pid, uint64_t entry);
+/**
+ * @brief Starts the execution of the process
+ * 
+ * This system call starts the execution of the process with the given PID. The process must be in the UNINITED state and have a valid page table.
+ * After this call, the process gets into the RUNNING state and starts executing the code at the given entry point. The stack pointer can be set
+ * using init_stack() call.
+ * 
+ * @param pid PID of the task to start
+ * @param entry Entry point of the process
+ * @param arg1 First argument to the entry point. On x86_64, it is passed in the RDI register.
+ * @param arg2 Second argument to the entry point. On x86_64, it is passed in the RSI register.
+ * @param arg3 Third argument to the entry point. On x86_64, it is passed in the RDX register.
+ * @return result_t Result of the call. If the result != SUCCESS, the process was not started.
+ * @see init_stack() syscall_new_process() asign_page_table()
+ */
+result_t syscall_start_process(uint64_t pid, uint64_t entry, uint64_t arg1, uint64_t arg2, uint64_t arg3);
 
 /**
  * @brief Gets info about the first message in the given *port* message queue

@@ -274,6 +274,33 @@ int pthread_spin_init(pthread_spinlock_t *lock, int pshared);
  */
 int pthread_spin_destroy(pthread_spinlock_t *lock);
 
+/**
+ * @brief Register fork handlers for thread synchronization.
+ *
+ * The `pthread_atfork` function registers handler functions to be called when a new
+ * process is created with `fork`. This function allows you to specify handlers to
+ * perform necessary synchronization tasks before and after the fork operation. The
+ * handlers are called in the parent process before fork, in the child process after
+ * fork, and in the child process after fork when exec is successful.
+ *
+ * The `prepare` function is called in the parent process before fork and should perform
+ * any necessary locking or cleanup to prepare for a fork operation.
+ *
+ * The `parent` function is called in the parent process after fork and should reinitialize
+ * any locks or resources that were held by the parent before the fork operation.
+ *
+ * The `child` function is called in the child process after fork when exec is not called.
+ * It should release any locks or resources that were held by the parent before the fork
+ * operation but should not reinitialize them since the child will typically start with
+ * a clean state.
+ *
+ * @param prepare Pointer to the function to be called in the parent process before fork.
+ * @param parent  Pointer to the function to be called in the parent process after fork.
+ * @param child   Pointer to the function to be called in the child process after fork.
+ * @return 0 on success, or a positive error code on failure.
+ */
+int pthread_atfork(void (*prepare)(void), void (*parent)(void), void (*child)(void));
+
 #if defined(__cplusplus)
 } /* extern "C" */
 #endif

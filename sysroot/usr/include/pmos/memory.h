@@ -8,6 +8,11 @@
 extern "C" {
 #endif
 
+#ifndef PID_SELF
+/// Parameter used in some function calls to indicate the current tasks PID should be used
+#define PID_SELF 0
+#endif
+
 /***
  * A structure returned by the memory-related system calls
 */
@@ -103,6 +108,17 @@ page_table_req_ret_t get_page_table(uint64_t pid);
  * @return result_t The result of the operation.
  */
 result_t set_segment(uint64_t pid, unsigned segment, void * addr);
+
+/**
+ * @brief Gets the segment registers of the task indicated by PID. If getting for the other process,
+ *        it must not be running at the time. Otherwise, the behaviour is undefined. Requesting the
+ *        segment for self is always allowed.
+ * 
+ * @param pid The PID of the target task. Can take PID_SELF (0).
+ * @param segment The desired segment, defined by SEGMENT_FS and SEGMENT_GS constants
+ * @return syscall_r The result of the operation. If the result is SUCCESS, the value of the segment is stored in the *value* field.
+ */
+syscall_r get_segment(uint64_t pid, unsigned segment);
 
 #define PAGE_TABLE_SELF 0
 

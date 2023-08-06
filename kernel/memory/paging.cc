@@ -636,7 +636,8 @@ void x86_4level_Page_Table::map(Page_Descriptor page, u64 virtual_addr, Page_Tab
     pte->user_access = arg.user_access;
     pte->writeable = arg.writeable;  
     pte->avl = page.owning ? 0 : PAGING_FLAG_NOFREE;
-    pte->page_ppn = page.takeout_page().first;
+    u64 page_ppn = page.takeout_page().first >> 12;
+    pte->page_ppn = page_ppn;
 
     if (nx_bit_enabled)
         pte->execution_disabled = arg.execution_disabled;
@@ -1109,6 +1110,7 @@ Page_Descriptor Page_Table::Page_Info::create_copy() const
     const auto page_size_bytes = 4096;
 
     memcpy(new_mapping.ptr, this_mapping.ptr, page_size_bytes);
+
 
     return new_page;
 }

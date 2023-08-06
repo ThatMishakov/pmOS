@@ -81,6 +81,9 @@ void syscall_transfer_region(u64 to_page_table, u64 region, u64 dest, u64 flags,
 // Sets segment registers for the task
 void syscall_set_segment(u64 pid, u64 segment_type, u64 ptr, u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */);
 
+// Gests segment registers for the task
+void syscall_get_segment(u64 pid, u64 segment_type, u64 = 0, u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */);
+
 void syscall_asign_page_table(u64 pid, u64 page_table, u64 flags, u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */);
 
 void syscall_create_mem_object(u64 size_bytes, u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */);

@@ -28,7 +28,7 @@
 
 #define SYSCALL_TRANSFER_REGION        21
 #define SYSCALL_CREATE_NORMAL_REGION   22
-
+#define SYSCALL_GET_SEGMENT            23
 #define SYSCALL_CREATE_PHYS_REGION     24
 #define SYSCALL_DELETE_REGION          25
 #define SYSCALL_UNMAP_RANGE            26

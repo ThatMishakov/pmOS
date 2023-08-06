@@ -52,7 +52,7 @@ klib::array<syscall_function, 35> syscall_table = {
     nullptr,
     syscall_transfer_region,
     syscall_create_normal_region,
-    nullptr,
+    syscall_get_segment,
     syscall_create_phys_map_region,
     syscall_delete_region,
     nullptr,
@@ -620,6 +620,9 @@ void syscall_set_segment(u64 pid, u64 segment_type, u64 ptr, u64, u64, u64)
     else
         target = get_task_throw(pid);
 
+    if (target == current)
+        save_segments(target);
+
     switch (segment_type) {
     case 1:
         target->regs.seg.fs = ptr;
@@ -633,6 +636,34 @@ void syscall_set_segment(u64 pid, u64 segment_type, u64 ptr, u64, u64, u64)
 
     if (target == current)
         restore_segments(target);
+}
+
+void syscall_get_segment(u64 pid, u64 segment_type, u64, u64, u64, u64)
+{
+    const klib::shared_ptr<TaskDescriptor>& current = get_cpu_struct()->current_task;
+    klib::shared_ptr<TaskDescriptor> target{};
+    u64 segment = 0;
+
+    if (pid == 0 or current->pid == pid)
+        target = current;
+    else
+        target = get_task_throw(pid);
+
+    if (target == current)
+        save_segments(target);
+
+    switch (segment_type) {
+    case 1:
+        segment = target->regs.seg.fs;
+        break;
+    case 2:
+        segment = target->regs.seg.gs;
+        break;
+    default:
+        throw Kern_Exception(ERROR_OUT_OF_RANGE, "invalid segment in syscall_set_segment");
+    }
+
+    syscall_ret_high(current) = segment;
 }
 
 void syscall_transfer_region(u64 to_page_table, u64 region, u64 dest, u64 flags, u64, u64)

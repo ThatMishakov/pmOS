@@ -69,6 +69,7 @@ klib::pair<u64 /* page_ppn */, bool /* owning reference */> Page_Descriptor::tak
 {
     const klib::pair<u64, bool> p = {page_ptr, available};
 
+    owning = false;
     *this = Page_Descriptor();
 
     return p;

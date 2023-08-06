@@ -3106,6 +3106,27 @@ static void post_fork_parent(void) { RELEASE_LOCK(&(gm)->mutex); }
 static void post_fork_child(void)  { INITIAL_LOCK(&(gm)->mutex); }
 #endif /* LOCK_AT_FORK */
 
+void __libc_malloc_pre_fork() {
+  if (mparams.magic == 0)
+    return;
+
+  ACQUIRE_LOCK(&(gm)->mutex);
+}
+
+void __libc_malloc_post_fork_parent() {
+  if (mparams.magic == 0)
+    return;
+
+  RELEASE_LOCK(&(gm)->mutex);
+}
+
+void __libc_malloc_post_fork_child() {
+  if (mparams.magic == 0)
+    return;
+
+  INITIAL_LOCK(&(gm)->mutex);
+}
+
 /* Initialize mparams */
 static int init_mparams(void) {
 #ifdef NEED_GLOBAL_LOCK_INIT

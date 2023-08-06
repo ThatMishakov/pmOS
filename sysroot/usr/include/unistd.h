@@ -42,7 +42,29 @@ int          execve(const char *, char *const [], char *const []);
 int          execvp(const char *, char *const []);
 void        _exit(int);
 int          fchown(int, uid_t, gid_t);
-pid_t        fork(void);
+
+/**
+ * @brief Create a new process (fork).
+ *
+ * The `fork` function creates a new process (child process) that is an exact copy of
+ * the calling process (parent process). The child process starts executing from the
+ * point of the `fork` call, and both the parent and child processes continue executing
+ * independently from that point.
+ *
+ * The `fork` function returns the process ID (PID) of the child process to the parent
+ * process, and 0 to the child process. If the `fork` call fails, it returns -1 to the
+ * parent process, and no child process is created.
+ *
+ * @note The use of `fork` followed by `exec*` is discouraged for new software. Because of the use
+ * of microkernel and the general system architectures, the `fork` operation can be relatively
+ * inefficient and clunky. If possible, consider using `posix_spawn()` or other process creation
+ * mechanisms that are more modern, efficient, flexible and better adjusted to the architecture.
+ *
+ * @return The PID of the child process to the parent process, 0 to the child process, or
+ *         -1 on failure.
+ */
+pid_t fork(void);
+
 long         fpathconf(int, int);
 int          ftruncate(int, off_t);
 char        *getcwd(char *, size_t);
