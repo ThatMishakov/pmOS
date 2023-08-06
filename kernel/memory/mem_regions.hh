@@ -158,6 +158,15 @@ struct Generic_Mem_Region: public klib::enable_shared_from_this<Generic_Mem_Regi
     virtual void move_to(const klib::shared_ptr<Page_Table>& new_table, u64 base_addr, u64 new_access);
 
     /**
+     * @brief Clones the region to the new page table
+     * 
+     * @param new_table The page table to which the region is to be cloned
+     * @param base_addr Base address in the new page table
+     * @param new_access New access specifier to be had in the new page table
+     */
+    virtual void clone_to(const klib::shared_ptr<Page_Table>& new_table, u64 base_addr, u64 new_access) = 0;
+
+    /**
      * @brief Prepares a region for being deleted
      * 
      * This procedure must be called before deleting the memory region. It does not free pages and that must be done
@@ -186,6 +195,8 @@ struct Phys_Mapped_Region final: Generic_Mem_Region {
         return false;
     }
 
+    virtual void clone_to(const klib::shared_ptr<Page_Table>& new_table, u64 base_addr, u64 new_access) override;
+
     virtual Page_Table_Argumments craft_arguments() const;
 
     // Constructs a region with virtual address starting at *aligned_virt* of size *size* pointing to *aligned_phys*
@@ -206,6 +217,8 @@ struct Private_Normal_Region final: Generic_Mem_Region {
     {
         return true;
     }
+
+    virtual void clone_to(const klib::shared_ptr<Page_Table>& new_table, u64 base_addr, u64 new_access) override;
 
     // Attempt to allocate a new page
     virtual bool alloc_page(u64 ptr_addr);
@@ -242,6 +255,7 @@ struct Mem_Object_Reference final : Generic_Mem_Region
     virtual bool alloc_page(u64 ptr_addr) override;
 
     virtual void move_to(const klib::shared_ptr<Page_Table>& new_table, u64 base_addr, u64 new_access) override;
+    virtual void clone_to(const klib::shared_ptr<Page_Table>& new_table, u64 base_addr, u64 new_access) override;
 
     virtual Page_Table_Argumments craft_arguments() const override;
 

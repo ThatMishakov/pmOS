@@ -441,6 +441,7 @@ x86_4level_Page_Table::Page_Info x86_4level_Page_Table::get_page_mapping(u64 vir
     i.dirty = mapper.ptr[pt_i].dirty;
     i.user_access = mapper.ptr[pt_i].user_access;
     i.page_addr = mapper.ptr[pt_i].page_ppn << 12;
+    i.nofree = mapper.ptr[pt_i].avl & PAGING_FLAG_NOFREE;
     return i;
 }
 
@@ -469,7 +470,7 @@ klib::shared_ptr<x86_4level_Page_Table> x86_4level_Page_Table::init_from_phys(u6
     return t;
 }
 
-klib::shared_ptr<Page_Table> x86_4level_Page_Table::create_empty()
+klib::shared_ptr<x86_4level_Page_Table> x86_4level_Page_Table::create_empty()
 {
     klib::shared_ptr<x86_4level_Page_Table> new_table = klib::unique_ptr<x86_4level_Page_Table>(new x86_4level_Page_Table());
 
@@ -906,6 +907,32 @@ void Page_Table::move_pages(const klib::shared_ptr<Page_Table>& to, u64 from_add
     }
 }
 
+void Page_Table::copy_pages(const klib::shared_ptr<Page_Table>& to, u64 from_addr, u64 to_addr, u64 size_bytes, u8 access)
+{
+    u64 offset = 0;
+
+        try {
+        for (; offset < size_bytes; offset += 4096) {
+            auto info = get_page_mapping(from_addr + offset);
+            if (info.is_allocated) {
+                Page_Table_Argumments arg = {
+                    !!(access & Writeable),
+                    info.user_access,
+                    0,
+                    not (access & Executable),
+                    info.flags,
+                };
+
+                to->map(info.create_copy(), to_addr + offset, arg);
+            }
+        }
+    } catch (...) {
+        to->invalidate_range(to_addr, offset, true);
+
+        throw;
+    }
+}
+
 void x86_4level_Page_Table::invalidate_range(u64 virt_addr, u64 size_bytes, bool free)
 {
     // -------- CAN BE MADE MUCH FASTER ------------
@@ -929,22 +956,20 @@ void x86_PAE_Entry::clear_auto()
 
 void Page_Table::atomic_pin_memory_object(klib::shared_ptr<Mem_Object> object)
 {
-    // This needs to be done in this particular order to avoid deadlocks
-    Auto_Lock_Scope object_lock(object->pinned_lock);
-    object->register_pined(weak_from_this());
-
-    bool inserted = false;
-
-    try {
-        Auto_Lock_Scope l(lock);
-        inserted = mem_objects.insert({object, Mem_Object_Data()}).second;
-    } catch (...) {
-        object->unregister_pined(weak_from_this());
-        throw;
-    }
+    // TODO: I have changed the order of locking, which might cause deadlocks elsewhere
+    Auto_Lock_Scope l(lock);
+    bool inserted = mem_objects.insert({object, Mem_Object_Data()}).second;
 
     if (not inserted)
         throw Kern_Exception(ERROR_PAGE_PRESENT, "memory object is already referenced");
+
+    try {
+        Auto_Lock_Scope object_lock(object->pinned_lock);
+        object->register_pined(weak_from_this());
+    } catch (...) {
+        mem_objects.erase(object);
+        throw;
+    }
 }
 
 void Page_Table::atomic_shrink_regions(const klib::shared_ptr<Mem_Object> &id, u64 new_size) noexcept
@@ -1006,4 +1031,84 @@ void Page_Table::unreference_object(const klib::shared_ptr<Mem_Object> &object, 
 void Page_Table::unblock_tasks_rage(u64 blocked_by_page, u64 size_bytes)
 {
     // TODO
+}
+
+klib::shared_ptr<Page_Table> x86_4level_Page_Table::create_clone()
+{
+    klib::shared_ptr<x86_4level_Page_Table> new_table = create_empty();
+
+    Auto_Lock_Scope_Double(this->lock, new_table->lock);
+
+    if (new_table->mem_objects.size() != 0)
+        // Somebody has messed with the page table while it was being created
+        // I don't know if its the best solution to not block the tables immediately
+        // but I believe it's better to block them for shorter time and abort the operation
+        // when someone tries to mess with the paging, which would either be very poor
+        // coding or a bug anyways
+        throw Kern_Exception(ERROR_NAME_EXISTS, "page table is already cloned");
+
+    try {
+        for (auto &reg : this->mem_objects) {
+            new_table->mem_objects.insert(
+                    {reg.first, {
+                        .max_privilege_mask = reg.second.max_privilege_mask,
+                        .regions = {},}}
+                        );
+            
+            Auto_Lock_Scope reg_lock(reg.first->pinned_lock);
+            reg.first->register_pined(new_table->weak_from_this());
+        }
+
+        for (auto &reg : this->paging_regions) {
+            reg.second->clone_to(new_table, reg.first, reg.second->access_type);
+        }
+    } catch (...) {
+        // Remove all the regions and objects. It might not be necessary, since it should be handled by the destructor
+        // but in case somebody from userspace specultively does weird stuff with the not-yet-fully-constructed page table, it's better
+        // to give them an empty table
+        for (const auto& reg : new_table->mem_objects)
+            reg.first->atomic_unregister_pined(new_table->weak_from_this());
+
+        auto it = new_table->paging_regions.begin();
+        while (it != new_table->paging_regions.end()) {
+            auto region_start = it->first;
+            auto region_size = it->second->size;
+
+            it->second->prepare_deletion();
+            paging_regions.erase(region_start);
+
+            invalidate_range(region_start, region_size, true);
+
+            it = new_table->paging_regions.begin();
+        }
+
+        throw;
+    }
+
+    return new_table;  
+}
+
+Page_Descriptor Page_Table::Page_Info::create_copy() const
+{
+    if (not is_allocated)
+        return {};
+
+    if (nofree)
+        // Return a reference
+        return Page_Descriptor(true, false, page_addr, 12);
+
+    // Return a copy
+    Page_Descriptor new_page = Page_Descriptor::allocate_page(12);
+
+    Temp_Mapper_Obj<char> this_mapping(get_cpu_struct()->temp_mapper);
+    Temp_Mapper_Obj<char> new_mapping(get_cpu_struct()->temp_mapper);
+
+    this_mapping.map(page_addr);
+    new_mapping.map(new_page.page_ptr);
+
+    const auto page_size_bytes = 4096;
+
+    memcpy(new_mapping.ptr, this_mapping.ptr, page_size_bytes);
+
+    return new_page;
 }

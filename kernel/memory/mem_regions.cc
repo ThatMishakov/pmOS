@@ -116,6 +116,37 @@ void Generic_Mem_Region::move_to(const klib::shared_ptr<Page_Table>& new_table, 
     }
 }
 
+void Phys_Mapped_Region::clone_to(const klib::shared_ptr<Page_Table>& new_table, u64 base_addr, u64 new_access)
+{
+    auto copy = klib::make_shared<Phys_Mapped_Region>(*this);
+
+    copy->owner = new_table.get();
+    copy->id = __atomic_add_fetch(&counter, 1, 0);
+    copy->access_type = new_access;
+    copy->start_addr = base_addr;
+
+    new_table->paging_regions.insert({base_addr, copy});
+}
+
+void Private_Normal_Region::clone_to(const klib::shared_ptr<Page_Table>& new_table, u64 base_addr, u64 new_access)
+{
+    auto copy = klib::make_shared<Private_Normal_Region>(*this);
+
+    copy->owner = new_table.get();
+    copy->id = __atomic_add_fetch(&counter, 1, 0);
+    copy->access_type = new_access;
+    copy->start_addr = base_addr;
+
+    new_table->paging_regions.insert({base_addr, copy});
+
+    try {
+        owner->copy_pages(new_table, start_addr, base_addr, size, new_access);
+    } catch (...) {
+        new_table->paging_regions.erase(base_addr);
+        throw;
+    }
+}
+
 Page_Table_Argumments Mem_Object_Reference::craft_arguments() const
 {
     return {
@@ -146,6 +177,11 @@ bool Mem_Object_Reference::alloc_page(u64 ptr_addr)
 }
 
 void Mem_Object_Reference::move_to(const klib::shared_ptr<Page_Table>& new_table, u64 base_addr, u64 new_access)
+{
+    throw Kern_Exception(ERROR_NOT_IMPLEMENTED, "move_to of Mem_Object_Reference was not yet implemented");
+}
+
+void Mem_Object_Reference::clone_to(const klib::shared_ptr<Page_Table>& new_table, u64 base_addr, u64 new_access)
 {
     throw Kern_Exception(ERROR_NOT_IMPLEMENTED, "move_to of Mem_Object_Reference was not yet implemented");
 }

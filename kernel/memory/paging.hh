@@ -328,12 +328,26 @@ public:
      */
     void move_pages(const klib::shared_ptr<Page_Table>& to, u64 from_addr, u64 to_addr, u64 size_bytes, u8 new_access);
 
+    /**
+     * @brief  Copiest the mapped pages from the old region to a new region.
+     * 
+     * @param to Page Table to which the pages shall be moved
+     * @param from_addr From where the pages should be taken out in the old tage table
+     * @param to_addr To where the pages should be transferred in the new page table
+     * @param size_bytes Size of the region that should be transferred in bytes
+     * @param new_access The protections that the pages should have after being moved to the new page table
+     */
+    void copy_pages(const klib::shared_ptr<Page_Table>& to, u64 from_addr, u64 to_addr, u64 size_bytes, u8 new_access);
+
     struct Page_Info {
         u8 flags = 0;
         bool is_allocated = 0;
         bool dirty = 0;
         bool user_access = 0;
+        bool nofree = 0;
         u64 page_addr = 0;
+
+        Page_Descriptor create_copy() const;
     };
 
     /// Gets information for the page mapping.
@@ -383,6 +397,18 @@ public:
      * @param region Memory region to be deleted
      */
     void unreference_object(const klib::shared_ptr<Mem_Object> &object, Mem_Object_Reference *region) noexcept;
+
+    /**
+     * @brief Creates a clone of this page table
+     * 
+     * This function creates a new page table, which is a 'clone' of this page table. The clone references the same memory objects
+     * and the same memory regions, with the memory layout being the same in such a way that two tasks using the clone would see
+     * the same memory layout and contents as if they were using the original page table. This function is a bit of an abstraction
+     * because the pages might not actually be copied immediately, but rather shared and then copied on write or something similar.
+     * 
+     * @return klib::shared_ptr<Page_Table> A clone of the page table
+     */
+    virtual klib::shared_ptr<Page_Table> create_clone() = 0;
 protected:
     /// @brief Inserts this page table into the map of the page tables
     void insert_global_page_tables();
@@ -458,7 +484,7 @@ public:
     // Creates a page table structure from physical page table with 1 reference (during kernel initialization)
     static klib::shared_ptr<x86_4level_Page_Table> init_from_phys(u64 cr3);
 
-    static klib::shared_ptr<Page_Table> create_empty();
+    static klib::shared_ptr<x86_4level_Page_Table> create_empty();
 
     // Maps the page with the appropriate permissions
     virtual void map(u64 page_addr, u64 virt_addr, Page_Table_Argumments arg) override;
@@ -505,6 +531,9 @@ public:
     }
 
     Page_Info get_page_mapping(u64 virt_addr) const override;
+
+    virtual klib::shared_ptr<Page_Table> create_clone() override;
+
 
     constexpr static u64 l4_align = 4096UL * 512 * 512 * 512;
     constexpr static u64 l3_align = 4096UL * 512 * 512;

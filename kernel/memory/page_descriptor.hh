@@ -32,4 +32,9 @@ struct Page_Descriptor {
 
     /// Frees the page that is held by the descriptor if it is managed
     void try_free_page() noexcept;
+
+    /// @brief Allocates a page
+    /// @param alignment_log Logarithm of the alignment of the page (e.g. 12 for 4096 bytes)
+    /// @return Newly allocated page. Throws on error
+    static Page_Descriptor allocate_page(u8 alignment_log);
 };

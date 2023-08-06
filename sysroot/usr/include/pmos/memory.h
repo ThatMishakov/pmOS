@@ -108,6 +108,7 @@ result_t set_segment(uint64_t pid, unsigned segment, void * addr);
 
 #define PAGE_TABLE_CREATE  1
 #define PAGE_TABLE_ASIGN   2
+#define PAGE_TABLE_CLONE   3
 /**
  * @brief Asigns a page table to the process
  * 
@@ -124,6 +125,9 @@ result_t set_segment(uint64_t pid, unsigned segment, void * addr);
  *              PAGE_TABLE_CREATE - create a new empty page table. In this case, the page_table parameter is ignored.
  *              PAGE_TABLE_ASIGN - asigns the page table provided by the page_table argument. In this case, all the process with the same
  *                                 page table object share the same address space with the same protections.
+ *              PAGE_TABLE_CLONE - clones the page table provided by the page_table argument. In this case, the page table is copied and
+ *                                 the new process has its own address space. The page table can be modified without affecting the other
+ *                                 processes.
  * @return page_table_req_ret_t returns the result of the execution and the ID of the page table asigned to the process. If result != SUCCESS,
  *         page_table does not hold a meaningful value.
  */

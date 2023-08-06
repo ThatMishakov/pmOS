@@ -670,6 +670,13 @@ void syscall_asign_page_table(u64 pid, u64 page_table, u64 flags, u64, u64, u64)
             syscall_ret_high(current) = dest->page_table->id;
             break;
         }
+    case 3: // PAGE_TABLE_CLONE
+        {
+            klib::shared_ptr<Page_Table> t = current->page_table->create_clone();
+            dest->register_page_table(klib::forward<klib::shared_ptr<Page_Table>>(t));
+            syscall_ret_high(current) = dest->page_table->id;
+            break;
+        }
     default:
         throw Kern_Exception(ERROR_NOT_SUPPORTED, "value of flags parameter is not supported");
     }

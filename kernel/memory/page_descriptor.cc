@@ -73,3 +73,12 @@ klib::pair<u64 /* page_ppn */, bool /* owning reference */> Page_Descriptor::tak
 
     return p;
 }
+
+Page_Descriptor Page_Descriptor::allocate_page(u8 alignment_log)
+{
+    assert(alignment_log == 12 && "Only 4K pages are currently supported");
+
+    void *page = kernel_pframe_allocator.alloc_page();
+
+    return Page_Descriptor(true, true, alignment_log, (u64)page);
+}
