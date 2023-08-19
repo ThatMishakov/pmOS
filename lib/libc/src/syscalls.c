@@ -117,9 +117,9 @@ syscall_r create_task_group()
     return syscall(SYSCALL_CREATE_TASK_GROUP);
 }
 
-syscall_r add_task_to_group(uint64_t group, uint64_t task)
+result_t add_task_to_group(uint64_t group, uint64_t task)
 {
-    return syscall(SYSCALL_ADD_TASK_TO_GROUP, group, task);
+    return syscall(SYSCALL_ADD_TASK_TO_GROUP, group, task).result;
 }
 
 result_t remove_task_from_group(uint64_t group, uint64_t task)

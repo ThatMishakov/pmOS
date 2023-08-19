@@ -9,8 +9,6 @@ extern void __fork_child_entry_point();
 
 uint64_t __libc_fork_inner(struct fork_for_child * child_data)
 {
-    // TODO: Prepare filesystem
-
     // Create new process
     syscall_r r = syscall_new_process(3);
     if (r.result != 0) {
@@ -18,6 +16,12 @@ uint64_t __libc_fork_inner(struct fork_for_child * child_data)
         return -1;
     }
     uint64_t child_tid = r.value;
+
+    // Prepare filesystem
+    int result = __clone_fs_data(&child_data->fs_data, child_tid);
+    if (result != 0) {
+        return -1;
+    }
 
     // Transfer segments
     r = get_segment(PID_SELF, SEGMENT_GS);
@@ -50,13 +54,7 @@ uint64_t __libc_fork_inner(struct fork_for_child * child_data)
     __libc_pre_fork();
 
     // Clone memory
-    page_table_req_ret_t my_page_table = get_page_table(PID_SELF);
-    if (my_page_table.result != 0) {
-        // TODO: Kill process
-        errno = -my_page_table.result;
-        return -1;
-    }
-    page_table_req_ret_t child_new_page_table = asign_page_table(child_tid, my_page_table.page_table, PAGE_TABLE_CLONE);
+    page_table_req_ret_t child_new_page_table = asign_page_table(child_tid, PAGE_TABLE_SELF, PAGE_TABLE_CLONE);
     if (child_new_page_table.result != 0) {
         // TODO: Kill process
         errno = -child_new_page_table.result;
@@ -77,9 +75,9 @@ uint64_t __libc_fork_inner(struct fork_for_child * child_data)
     return child_tid;
 }
 
-uint64_t __libc_fork_child()
+uint64_t __libc_fork_child(struct fork_for_child * child_data)
 {
-    // TODO: Filesystem stuff
+    __libc_fixup_fs_post_fork(child_data);
 
     // Call atfork handlers
     __libc_post_fork_child();

@@ -12,33 +12,15 @@
 #include <pmos/helpers.h>
 #include <unistd.h>
 #include <stdio.h>
-
-struct File_Descriptor {
-    bool used;
-    bool reserved;
-    uint16_t flags;
-
-    task_group_t filesystem_id;
-    uint64_t file_id;
-    off_t offset;
-    pmos_port_t fs_port;
-};
-
-struct Filesystem_Data {
-    struct File_Descriptor *descriptors_vector;
-    size_t count;
-    size_t capacity;
-
-    uint64_t fs_consumer_id;
-
-    pthread_spinlock_t lock;
-};
+#include "filesystem.h"
+#include <assert.h>
+#include "fork/fork.h"
 
 static struct Filesystem_Data * fs_data = NULL;
 static pthread_spinlock_t fs_data_lock;
 
-// Initializes fs_data variable. Returns 0 on success, -1 otherwise, setting errno to the appropriate code.
-int init_filesystem();
+// Creates and initializes new Filesystem_Data. Returns its pointer on success, NULL otherwise, setting errno to the appropriate code.
+struct Filesystem_Data *init_filesystem();
 
 // Reserves a file descriptor and returns its id. Returns -1 on error.
 static int64_t reserve_descriptor(struct Filesystem_Data* fs_data) {
@@ -210,11 +192,12 @@ int open(const char* path, int flags) {
     if (fs_data == NULL) {
         pthread_spin_lock(&fs_data_lock);
         if (fs_data == NULL) {
-            int init_result = init_filesystem();
-            if (init_result != 0) {
+            struct Filesystem_Data *new_data = init_filesystem();
+            if (new_data == NULL) {
                 pthread_spin_unlock(&fs_data_lock);
                 return -1;
             }
+            fs_data = new_data;
         }
         pthread_spin_unlock(&fs_data_lock);
     }
@@ -352,11 +335,12 @@ ssize_t pread(int fd, void *buf, size_t count, off_t offset) {
     if (fs_data == NULL) {
         pthread_spin_lock(&fs_data_lock);
         if (fs_data == NULL) {
-            int init_result = init_filesystem();
-            if (init_result != 0) {
+            struct Filesystem_Data *new_fs_data = init_filesystem();
+            if (new_fs_data == NULL) {
                 pthread_spin_unlock(&fs_data_lock);
                 return -1;
             }
+            fs_data = new_fs_data;
         }
         pthread_spin_unlock(&fs_data_lock);
     }
@@ -459,15 +443,8 @@ ssize_t pread(int fd, void *buf, size_t count, off_t offset) {
 ssize_t read(int fd, void *buf, size_t count) {
     // Double-checked locking to initialize fs_data if it is NULL
     if (fs_data == NULL) {
-        pthread_spin_lock(&fs_data_lock);
-        if (fs_data == NULL) {
-            int init_result = init_filesystem();
-            if (init_result != 0) {
-                pthread_spin_unlock(&fs_data_lock);
-                return -1;
-            }
-        }
-        pthread_spin_unlock(&fs_data_lock);
+        errno = EBADF; // Bad file descriptor
+        return -1;
     }
 
     // Lock the file descriptor to ensure thread-safety
@@ -581,14 +558,14 @@ ssize_t read(int fd, void *buf, size_t count) {
     return count;
 }
 
-int init_filesystem() {
+struct Filesystem_Data *init_filesystem() {
     // Check if reply port exists
     if (fs_cmd_reply_port == INVALID_PORT) {
         // Create a new port for the current thread
         ports_request_t port_request = create_port(PID_SELF, 0);
         if (port_request.result != SUCCESS) {
             // Handle error: Failed to create the port
-            return -1;
+            return NULL;
         }
 
         // Save the created port in the thread-local variable
@@ -599,7 +576,7 @@ int init_filesystem() {
     if (new_fs_data == NULL) {
         // Handle memory allocation error
         errno = ENOMEM;
-        return -1;
+        return NULL;
     }
 
     new_fs_data->descriptors_vector = NULL;
@@ -612,7 +589,7 @@ int init_filesystem() {
         // Handle error
         free(new_fs_data);
         errno = -result;
-        return -1;
+        return NULL;
     }
 
     // Create a new task group
@@ -622,7 +599,7 @@ int init_filesystem() {
         pthread_spin_destroy(&new_fs_data->lock);
         free(new_fs_data);
         errno = -sys_result.result;
-        return -1;
+        return NULL;
     }
 
     new_fs_data->fs_consumer_id = sys_result.value;
@@ -648,7 +625,7 @@ int init_filesystem() {
             pthread_spin_destroy(&new_fs_data->lock);
             free(new_fs_data);
             errno = EIO; // Set errno to appropriate error code
-            return -1;
+            return NULL;
         }
 
         // Retry sending IPC_Open message to the filesystem daemon
@@ -662,7 +639,7 @@ int init_filesystem() {
         pthread_spin_destroy(&new_fs_data->lock);
         free(new_fs_data);
         errno = EIO; // Set errno to appropriate error code
-        return -1;
+        return NULL;
     }
 
     // Get the reply from the filesystem daemon
@@ -675,7 +652,7 @@ int init_filesystem() {
         pthread_spin_destroy(&new_fs_data->lock);
         free(new_fs_data);
         errno = EIO; // Set errno to appropriate error code
-        return -1;
+        return NULL;
     }
 
     // Check if the reply is valid
@@ -686,7 +663,7 @@ int init_filesystem() {
         free(new_fs_data);
         free(reply_msg);
         errno = EIO; // Set errno to appropriate error code
-        return -1;
+        return NULL;
     }
 
     IPC_Create_Consumer_Reply * reply = (IPC_Create_Consumer_Reply *)reply_msg;
@@ -697,14 +674,29 @@ int init_filesystem() {
         free(new_fs_data);
         free(reply_msg);
         errno = -result;
-        return -1;
+        return NULL;
     }
 
     // Free the reply message
     free(reply_msg);
 
-    fs_data = new_fs_data;
-    return 0;
+    return new_fs_data;
+}
+
+/// Destroys the filesystem data structure. Assumes that all of the processes inside the group have left it.
+/// @param fs_data Filesystem data to be destroyed
+void destroy_filesystem(struct Filesystem_Data * fs_data)
+{
+    if (fs_data == NULL)
+        return;
+
+    // Destroy the spinlock
+    pthread_spin_destroy(&fs_data->lock);
+
+    if (fs_data->descriptors_vector != NULL) 
+        free(fs_data->descriptors_vector);
+
+    free(fs_data);
 }
 
 int close(int filedes) {
@@ -856,4 +848,212 @@ off_t lseek(int fd, off_t offset, int whence)
     off_t result_offset = des->offset;
     pthread_spin_unlock(&fs_data->lock);
     return result_offset;
+}
+
+int vfsd_send_persistant(size_t msg_size, const void *message)
+{
+    result_t k_result = fs_port != INVALID_PORT ? 
+        send_message_port(fs_port, msg_size, (char *)message) 
+        : ERROR_PORT_DOESNT_EXIST;
+
+    int fail_count = 0;
+    while (k_result == ERROR_PORT_DOESNT_EXIST && fail_count < 5) {
+        // Request the port of the filesystem daemon
+        pmos_port_t fs_port = request_filesystem_port();
+        if (fs_port == INVALID_PORT) {
+            // Handle error: Failed to obtain the filesystem port
+            errno = EIO; // Set errno to appropriate error code
+            return -1;
+        }
+
+        // Retry sending IPC_Open message to the filesystem daemon
+        k_result = send_message_port(fs_port, msg_size, (char *)message);
+        ++fail_count;
+    }
+
+    return k_result == SUCCESS ? 0 : -1;
+}
+
+int __clone_fs_data(struct Filesystem_Data ** new_data, uint64_t for_task)
+{
+    assert(new_data != NULL);
+
+    if (fs_data == NULL) {
+        *new_data = NULL;
+        return 0;
+    }
+
+    // Check if reply port exists
+    if (fs_cmd_reply_port == INVALID_PORT) {
+        // Create a new port for the current thread
+        ports_request_t port_request = create_port(PID_SELF, 0);
+        if (port_request.result != SUCCESS) {
+            // Handle error: Failed to create the port
+            return -1;
+        }
+
+        // Save the created port in the thread-local variable
+        fs_cmd_reply_port = port_request.port;
+    }
+
+    struct Filesystem_Data * new_fs_data = init_filesystem();
+    if (new_fs_data == NULL) {
+        // errno is set by init_filesystem
+        return -1;
+    }
+
+    result_t r = add_task_to_group(new_fs_data->fs_consumer_id, for_task);
+    if (r != SUCCESS) {
+        remove_task_from_group(new_fs_data->fs_consumer_id, for_task);
+        destroy_filesystem(new_fs_data);
+        errno = -r;
+        return -1;
+    }
+
+    int result = pthread_spin_lock(&fs_data->lock);
+    if (result != SUCCESS) {
+        remove_task_from_group(new_fs_data->fs_consumer_id, for_task);
+        destroy_filesystem(new_fs_data);
+        // errno is set by pthread_spin_lock
+        return -1;
+    }
+
+    // Make sure there is enough space in the new vector
+    if (new_fs_data->capacity < fs_data->capacity) {
+        // Resize the vector
+        struct File_Descriptor * new_vector = realloc(new_fs_data->descriptors_vector, fs_data->capacity * sizeof(struct File_Descriptor));
+        if (new_vector == NULL) {
+            remove_task_from_group(new_fs_data->fs_consumer_id, for_task);
+            destroy_filesystem(new_fs_data);
+            pthread_spin_unlock(&fs_data->lock);
+            errno = ENOMEM;
+            return -1;
+        }
+        new_fs_data->descriptors_vector = new_vector;
+        new_fs_data->capacity = fs_data->capacity;
+    }
+
+    // Clone tasks
+    size_t i = 0;
+    for (i = 0; i < fs_data->capacity; ++i) {
+        if (fs_data->descriptors_vector[i].used == false || fs_data->descriptors_vector[i].reserved == true) {
+            // If the vector is reserved, it means that the file descriptor was being opened by another thread.
+            // Since it's a race condition, don't clone it.
+            new_fs_data->descriptors_vector[i].used = false;
+            new_fs_data->descriptors_vector[i].reserved = false;
+            continue;
+        }
+
+        struct File_Descriptor fd = fs_data->descriptors_vector[i];
+
+        // Clone the entry
+        IPC_Dup request = {
+            .type = IPC_Dup_NUM,
+            .flags = 0,
+            .file_id = fd.file_id,
+            .reply_port = fs_cmd_reply_port,
+            .fs_consumer_id = fs_data->fs_consumer_id,
+            .filesystem_id = fd.filesystem_id,
+            .new_consumer_id = new_fs_data->fs_consumer_id,
+        };
+
+        // Send the IPC_Dup message to the filesystem daemon
+        int result = vfsd_send_persistant(sizeof(request), &request);
+        if (result != 0) {
+            remove_task_from_group(new_fs_data->fs_consumer_id, for_task);
+            destroy_filesystem(new_fs_data);
+            pthread_spin_unlock(&fs_data->lock);
+            return -1;
+        }
+
+        // Receive the reply message containing the result
+        Message_Descriptor reply_descr;
+        IPC_Generic_Msg * reply_msg;
+        result = get_message(&reply_descr, (unsigned char **)&reply_msg, fs_cmd_reply_port);
+        if (result != SUCCESS) {
+            // Handle error: Failed to receive the reply message
+            remove_task_from_group(new_fs_data->fs_consumer_id, for_task);
+            destroy_filesystem(new_fs_data);
+            pthread_spin_unlock(&fs_data->lock);
+            errno = -result;
+            return -1;
+        }
+
+        // Verify that the reply message is of type IPC_Open_Reply
+        if (reply_msg->type != IPC_Dup_Reply_NUM) {
+            // Handle error: Unexpected reply message type
+            remove_task_from_group(new_fs_data->fs_consumer_id, for_task);
+            destroy_filesystem(new_fs_data);
+            pthread_spin_unlock(&fs_data->lock);
+            errno = EIO;
+            return -1;
+        }
+
+        // Read the result code from the reply message
+        IPC_Dup_Reply* reply = (IPC_Dup_Reply*)reply_msg;
+
+        if (reply->result_code < 0) {
+            // Could not clone the file descriptor: skip it
+            new_fs_data->descriptors_vector[i].used = false;
+            new_fs_data->descriptors_vector[i].reserved = false;
+            continue;
+        }
+
+        // Clone the file descriptor
+        new_fs_data->descriptors_vector[i].used = true;
+        new_fs_data->descriptors_vector[i].reserved = false;
+        new_fs_data->descriptors_vector[i].flags = fd.flags;
+        new_fs_data->descriptors_vector[i].file_id = reply->file_id;
+        new_fs_data->descriptors_vector[i].filesystem_id = reply->filesystem_id;
+        new_fs_data->descriptors_vector[i].offset = fd.offset;
+        new_fs_data->descriptors_vector[i].fs_port = reply->fs_port;
+    }
+
+    for (; i < new_fs_data->capacity; ++i) {
+        new_fs_data->descriptors_vector[i].used = false;
+        new_fs_data->descriptors_vector[i].reserved = false;
+    }
+
+    pthread_spin_unlock(&fs_data->lock);
+
+    // Remove self from the group
+    remove_task_from_group(new_fs_data->fs_consumer_id, for_task);
+
+    *new_data = new_fs_data;
+    return 0;
+}
+
+void __libc_fixup_fs_post_fork(struct fork_for_child * child_data)
+{
+    if (fs_data != NULL)
+        destroy_filesystem(fs_data);
+    else
+        pthread_spin_unlock(&fs_data_lock);
+
+    fs_data = child_data->fs_data;
+
+    // Fixup the reply port
+    fs_cmd_reply_port = INVALID_PORT;
+}
+
+void __libc_fs_lock_pre_fork()
+{
+    if (fs_data == NULL) {
+        pthread_spin_lock(&fs_data_lock);
+
+        if (fs_data == NULL)
+            return;
+            
+        pthread_spin_unlock(&fs_data_lock);
+    }
+
+    pthread_spin_lock(&fs_data->lock);
+}
+
+void __libc_fs_unlock_post_fork()
+{
+    if (fs_data == NULL)
+        pthread_spin_unlock(&fs_data_lock);
+    else
+        pthread_spin_unlock(&fs_data->lock);
 }

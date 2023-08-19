@@ -218,6 +218,48 @@ typedef struct IPC_Open_Reply {
     pmos_port_t fs_port;
 } IPC_Open_Reply;
 
+#define IPC_Dup_NUM 0x5d
+typedef struct IPC_Dup {
+    /// Message type (must be IPC_Dup_NUM)
+    uint32_t type;
+
+    /// Flags changing the behaviour
+    uint32_t flags;
+
+    /// ID of the file to be duplicated
+    uint64_t file_id;
+
+    /// ID of the filesystem
+    uint64_t filesystem_id;
+
+    /// ID of the consumer that has the file currently opened
+    uint64_t fs_consumer_id;
+
+    /// ID of the consumer that will have the file opened
+    uint64_t new_consumer_id;
+
+    /// Port where the reply would be sent
+    uint64_t reply_port;
+} IPC_Dup;
+
+#define IPC_Dup_Reply_NUM 0x5e
+typedef struct IPC_Dup_Reply {
+    /// Message type (must be IPC_Dup_Reply_NUM)
+    uint32_t type;
+
+    /// Result of the operation
+    int32_t result_code;
+
+    /// ID of the file
+    uint64_t file_id;
+
+    /// ID of the filesystem
+    uint64_t filesystem_id;
+
+    /// Port associated with the file
+    pmos_port_t fs_port;
+} IPC_Dup_Reply;
+
 #define IPC_Create_Consumer_NUM 0x5a
 typedef struct IPC_Create_Consumer {
     /// Message type (must be IPC_Create_Consumer_NUM)

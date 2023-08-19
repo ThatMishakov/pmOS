@@ -150,6 +150,18 @@ typedef uint64_t task_group_t;
 syscall_r create_task_group();
 
 /**
+ * @brief Adds the task to the task group
+ * 
+ * This syscall adds the task to the task group. If the task is already in the group, the syscall returns ERROR_ALREADY_IN_GROUP. If the same task
+ * is added or removed from the same group by multiple threads at the same time, the return value might not reflect the actual state of the task group.
+ * 
+ * @param task_id ID of the task to be added. Takes PID_SELF (0)
+ * @param group_id ID of the group where the task should be added
+ * @return result_t Result of the operation. If the result is SUCCESS, the task was added to the group.
+ */
+result_t add_task_to_group(uint64_t task_id, uint64_t group_id);
+
+/**
  * @brief Removes the task from the task group
  * 
  * This syscall removes the task from the task group. If the task is not in the group, the syscall returns ERROR_NOT_IN_GROUP.

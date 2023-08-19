@@ -13,7 +13,7 @@ fork:
     pushq   %r15
 
     # Reserve space for the child information structure.
-    subq    $16, %rsp
+    subq    $24, %rsp
 
     # Save the return frame pointer to child_data->return_rbp
     movq    %rbp, %rax
@@ -44,7 +44,7 @@ __fork_child_entry_point:
     call __libc_fork_child
 
     # Restore registers
-    addq    $16, %rsp
+    addq    $24, %rsp
 
     popq    %r15
     popq    %r14
