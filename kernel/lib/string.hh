@@ -24,7 +24,7 @@ private:
         char short_string[16];
     };
 
-    static constexpr size_t small_size = sizeof(long_string_str)*2 - 1;
+    static constexpr size_t small_size = sizeof(long_string_str) - 1;
 
     static constexpr bool fits_in_short(size_t s)
     {
@@ -348,7 +348,7 @@ public:
 
         klib::pair<bool, string> ret;
 
-        if (size < small_size) {
+        if (fits_in_short(size)) {
             ret.first = copy_from_user(ret.second.short_string, ptr, size);
 
             if (not ret.first)

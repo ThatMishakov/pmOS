@@ -62,7 +62,7 @@ klib::array<syscall_function, 35> syscall_table = {
     syscall_asign_page_table,
     nullptr,
     syscall_create_task_group,
-    nullptr,
+    syscall_add_to_task_group,
     syscall_remove_from_task_group,
     syscall_is_in_task_group,
 };
@@ -771,4 +771,13 @@ void syscall_is_in_task_group(u64 pid, u64 group, u64, u64, u64, u64)
 
     const bool has_task = group_ptr->atomic_has_task(current_pid);
     syscall_ret_high(get_current_task()) = has_task;
+}
+
+void syscall_add_to_task_group(u64 pid, u64 group, u64, u64, u64, u64)
+{
+    const auto task = pid == 0 ? get_current_task() : get_task_throw(pid);
+
+    const auto group_ptr = TaskGroup::get_task_group_throw(group);
+
+    group_ptr->atomic_register_task(task);
 }

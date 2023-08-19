@@ -910,6 +910,8 @@ int __clone_fs_data(struct Filesystem_Data ** new_data, uint64_t for_task)
         return -1;
     }
 
+    __asm__("xchgw %bx, %bx");
+
     int result = pthread_spin_lock(&fs_data->lock);
     if (result != SUCCESS) {
         remove_task_from_group(new_fs_data->fs_consumer_id, for_task);
@@ -917,6 +919,7 @@ int __clone_fs_data(struct Filesystem_Data ** new_data, uint64_t for_task)
         // errno is set by pthread_spin_lock
         return -1;
     }
+
 
     // Make sure there is enough space in the new vector
     if (new_fs_data->capacity < fs_data->capacity) {

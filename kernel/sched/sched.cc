@@ -41,7 +41,7 @@ void init_scheduling()
     current_pt->atomic_active_sum(1);
 
     try {
-        current_task->page_table->atomic_create_phys_region(0x1000, GB(4), Page_Table::Readable | Page_Table::Writeable | Page_Table::Executable, true, "init_default_map", 0x1000);
+        current_task->page_table->atomic_create_phys_region(0x1000, GB(4), Page_Table::Readable | Page_Table::Writeable | Page_Table::Executable, true, "init_def_map", 0x1000);
 
         current_task->pid = pid++;    
         tasks_map.insert({current_task->pid, klib::move(current_task)});
