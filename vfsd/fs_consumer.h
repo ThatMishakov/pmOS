@@ -52,6 +52,12 @@ void free_buffers_fs_consumer(struct fs_consumer *fs_consumer);
 /// @return The fs consumer with the given ID, or NULL if no such fs consumer exists.
 struct fs_consumer *get_fs_consumer(uint64_t consumer_id);
 
+/// @brief Checks if a task is a fs consumer.
+/// @param consumer THe consumer to check.
+/// @param task_id The ID of the task to check.
+/// @return True if the task is a fs consumer, false otherwise.
+bool is_fs_consumer(struct fs_consumer *fs_consumer, uint64_t id);
+
 struct fs_consumer_node {
     struct fs_consumer_node *prev, *next;
     struct fs_consumer *fs_consumer;

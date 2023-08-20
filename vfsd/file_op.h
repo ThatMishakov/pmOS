@@ -16,6 +16,7 @@ enum Request_Type {
     REQUEST_TYPE_OPEN_FILE_RESOLVED,
     REQUEST_TYPE_MOUNT,
     REQUEST_TYPE_RESOLVE_PATH,
+    REQUEST_TYPE_DUP,
 };
 
 struct File_Request {
@@ -297,7 +298,7 @@ struct File_Request *get_request_from_global_map(uint64_t id);
 int react_resolve_path_reply(struct IPC_FS_Resolve_Path_Reply *message, size_t sender, uint64_t message_length);
 
 /**
- * @brief Reacts to the IPC_FS_Open_Replay message
+ * @brief Reacts to the IPC_FS_Open_Reply message
  * 
  * This function reacts to the IPC_FS_Open_Replay message sent by the filesystem server and updates the internal state
  * in accordance with it. It does not take the ownership of the message.
@@ -308,5 +309,32 @@ int react_resolve_path_reply(struct IPC_FS_Resolve_Path_Reply *message, size_t s
  * @return int 0 on success, negative value otherwise
  */
 int react_ipc_fs_open_reply(struct IPC_FS_Open_Reply *message, size_t sender, uint64_t message_length);
+
+/**
+ * @brief Reacts to the IPC_Dup message
+ * 
+ * This function reacts to the IPC_Dup message sent by the filesystem consumer and attempts to duplicate the file descriptor
+ * for the given filesystem consumer. It does not take the ownership of the message.
+ * 
+ * @param message Message to react to
+ * @param sender Sender of the message
+ * @param message_length Length of the message
+ * @return int 0 on success, negative value otherwise
+ */
+int react_ipc_dup(struct IPC_Dup *message, size_t sender, uint64_t message_length);
+
+/**
+ * @brief Reacts to the IPC_FS_Dup_Reply message
+ * 
+ * This function reacts to the IPC_FS_Dup_Reply message sent by the filesystem server and updates the internal state
+ * in accordance with it. It does not take the ownership of the message. The functionality is very similar to the
+ * react_ipc_fs_open_reply.
+ * 
+ * @param message Message (reply) to react to
+ * @param sender Sender of the message
+ * @param message_length Length of the message
+ * @return int 0 on success, negative value otherwise
+ */
+int react_ipc_fs_dup_reply(struct IPC_FS_Dup_Reply *message, size_t sender, uint64_t message_length);
 
 #endif // FILE_OP_H

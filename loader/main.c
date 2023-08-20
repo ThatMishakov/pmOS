@@ -317,6 +317,19 @@ void main()
 
             break;
         }
+        case IPC_FS_Dup_NUM: {
+            IPC_Dup *a = (IPC_FS_Dup *)ptr;
+            if (desc.size < sizeof (IPC_FS_Dup)) {
+                print_str("Loader: Recieved IPC_Dup of unexpected size 0x");
+                print_hex(desc.size);
+                print_str("\n");
+                break;
+            }
+
+            fs_react_dup(a, desc.size, desc.sender);
+
+            break;
+        }
 
         default:
             print_str("Loader: Recievend unknown message with type ");

@@ -207,6 +207,20 @@ char *strdup(const char *str) {
     return duplicate;
 }
 
+char *strndup(const char *str, size_t s) {
+    size_t length = strlen(str);
+    if (length > s)
+        length = s;
+
+    char *duplicate = malloc(length + 1);
+    if (duplicate != NULL) {
+        memcpy(duplicate, str, length);
+        duplicate[length] = '\0';
+    }
+
+    return duplicate;
+}
+
 size_t strnlen(const char *str, size_t maxlen) {
     size_t length = 0;
 

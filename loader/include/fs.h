@@ -299,5 +299,14 @@ void fs_react_resolve_path(IPC_FS_Resolve_Path *msg, uint64_t message_size, size
  */
 void fs_react_read(IPC_Read *msg, uint64_t message_size, size_t sender);
 
+/**
+ * @brief React to the IPC_Dup message from the VFS daemon.
+ * 
+ * @param msg Pointer to the message
+ * @param message_size Size of the message
+ * @param sender ID of the sender
+ */
+void fs_react_dup(IPC_FS_Dup *msg, uint64_t message_size, size_t sender);
+
 
 #endif /* FS_H */

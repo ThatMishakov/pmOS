@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 200809L
+
 #include <assert.h>
 #include <stdio.h>
 #include <fcntl.h>
@@ -105,6 +107,8 @@ int parse_archive(int fd, struct File ***file_pointer_array, size_t *file_count,
     if (bytesRead != 0) {
         if (bytesRead < 0)
             fprintf(stderr, "pread() failed: %s\n", strerror(errno));
+        
+        printf("bytesRead: %i\n", bytesRead);
         fprintf(stderr, "Archive ended unexpectedly.\n");
         return -1;
     }
@@ -145,7 +149,11 @@ int main(int argc, char *argv[]) {
 
     printf("[USTARFSd] Info: open(%s, O_RDONLY) = %d\n", filename, fd);
 
-    fork();
+    uint64_t pid = fork();
+    printf("[USTARFSd] Info: fork() = %d\n", pid);
+
+    if (pid != 0)
+        return 0;
 
     struct File **file_pointer_array = NULL; // Array of pointers to File structs
     size_t file_count = 0;
@@ -155,25 +163,25 @@ int main(int argc, char *argv[]) {
 
     if (result == 0) {
         // Parsing successful
-        // for (size_t i = 0; i < file_count; i++) {
-        //     struct File *file = file_pointer_array[i];
-        //     printf("File Name: %s\n", file->name);
-        //     if (file->path != NULL) {
-        //         printf("File Path: %s\n", file->path);
-        //     }
-        //     printf("File Size: %zu\n", file->file_size);
-        //     printf("Last Modified Time: %lu\n", file->last_modified_time);
-        //     printf("Type: %u\n", file->type);
-        //     printf("File Mode: %u\n", file->file_mode);
-        //     printf("Owner UID: %u\n", file->owner_uid);
-        //     printf("Owner GID: %u\n", file->owner_gid);
-        //     printf("Device Major: %u\n", file->device_major);
-        //     printf("Device Minor: %u\n", file->device_minor);
-        //     printf("Header Offset: %zu\n", file->header_offset);
-        //     printf("RefCount: %u\n", file->refcount); // Print refcount field
-        //     // ... Print other file details ...
-        //     printf("\n");
-        // }
+        for (size_t i = 0; i < file_count; i++) {
+            struct File *file = file_pointer_array[i];
+            printf("File Name: %s\n", file->name);
+            if (file->path != NULL) {
+                printf("File Path: %s\n", file->path);
+            }
+            printf("File Size: %zu\n", file->file_size);
+            printf("Last Modified Time: %lu\n", file->last_modified_time);
+            printf("Type: %u\n", file->type);
+            printf("File Mode: %u\n", file->file_mode);
+            printf("Owner UID: %u\n", file->owner_uid);
+            printf("Owner GID: %u\n", file->owner_gid);
+            printf("Device Major: %u\n", file->device_major);
+            printf("Device Minor: %u\n", file->device_minor);
+            printf("Header Offset: %zu\n", file->header_offset);
+            printf("RefCount: %u\n", file->refcount); // Print refcount field
+            // ... Print other file details ...
+            printf("\n");
+        }
 
         print_tree(&root_directory, 0);
     } else {

@@ -2,7 +2,11 @@
 #define KERNEL_ERRORS_H
 
 #define SUCCESS_REPEAT              1UL
+
+#ifndef SUCCESS
 #define SUCCESS                     0UL
+#endif
+
 #define ERROR_NOT_SUPPORTED        -1UL
 #define ERROR_NOT_IMPLEMENTED      -2UL
 #define ERROR_NO_PERMISSION        -3UL

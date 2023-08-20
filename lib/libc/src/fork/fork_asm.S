@@ -35,7 +35,7 @@ __fork_child_entry_point:
     # Restore stack pointer
     movq    (%rdi), %rbp
     movq    %rbp, %rsp
-    subq    $56, %rsp
+    subq    $64, %rsp
 
     # Pass pointer to child data to function
     movq    %rsp, %rdi

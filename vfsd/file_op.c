@@ -11,6 +11,8 @@
 #include <assert.h>
 #include <stdio.h>
 
+static int ipc_dup_send_fail(pmos_port_t reply_port, int result);
+
 extern pmos_port_t main_port;
 
 uint64_t next_open_request_id = 1;
@@ -747,6 +749,10 @@ void fail_and_destroy_request(struct File_Request *request, int error_code)
         // Do nothing
         break;
     }
+    case REQUEST_TYPE_DUP: {
+        ipc_dup_send_fail(request->reply_port, error_code);
+        break;
+    }
     }
 
     remove_request_from_global_map(request);
@@ -851,6 +857,7 @@ bool is_request_in_global_map(struct File_Request *request)
     case REQUEST_TYPE_OPEN_FILE:
     case REQUEST_TYPE_MOUNT:
         return false;
+    case REQUEST_TYPE_DUP:
     case REQUEST_TYPE_RESOLVE_PATH:
     case REQUEST_TYPE_OPEN_FILE_RESOLVED:
     case REQUEST_TYPE_UNKNOWN:
@@ -1079,6 +1086,52 @@ int react_ipc_fs_open_reply(struct IPC_FS_Open_Reply *message, size_t sender, ui
     return 0;
 }
 
+int react_ipc_fs_dup_reply(struct IPC_FS_Dup_Reply *message, size_t sender, uint64_t message_length)
+{
+    if (message == NULL)
+        return -EINVAL;
+
+    if (message_length < sizeof(struct IPC_FS_Dup_Reply))
+        return -EINVAL;
+
+    struct File_Request *request = get_request_from_global_map(message->operation_id);
+    if (request == NULL) {
+        printf("[VFSd] Warning: recieved IPC_FS_Dup_Reply from task %ld with unknown request ID %ld\n", sender, message->operation_id);
+        return -ENOENT;
+    }
+
+    if (request->request_type != REQUEST_TYPE_DUP) {
+        printf("[VFSd] Warning: recieved IPC_FS_Dup_Reply from task %ld with request ID %ld that is not of type REQUEST_TYPE_DUP\n", sender, message->operation_id);
+        return -EINVAL;
+    }
+
+    // Check that the sender is the part of the filesystem that we expect
+    bool is_registered = is_task_registered_with_filesystem(request->filesystem, sender);
+    if (!is_registered) {
+        printf("[VFSd] Warning: recieved IPC_FS_Dup_Reply from task %ld that is not registered with the filesystem %ld\n", sender, request->filesystem->id);
+        return -EPERM;
+    }
+
+    IPC_Dup_Reply reply_msg = {
+        .type = IPC_Dup_Reply_NUM,
+        .result_code = message->result_code,
+        .file_id = message->result_code < 0 ? 0 : request->filesystem->id,
+        .fs_port = message->file_port,
+        .filesystem_id = message->result_code < 0 ? 0 : request->filesystem->id,
+    };
+
+    result_t send_result = send_message_port(request->reply_port, sizeof(reply_msg), (char *)&reply_msg);
+    if (send_result != SUCCESS || reply_msg.result_code < 0)
+        unreference_open_filesystem(request->consumer, request->filesystem, 1);
+
+    remove_request_from_map(&global_requests_map, request);
+    unregister_request_from_parent(request);
+    free_buffers_file_request(request);
+    free(request);
+
+    return 0;
+}
+
 struct File_Request *get_request_from_global_map(uint64_t id)
 {
     return get_request_from_map(&global_requests_map, id);
@@ -1103,4 +1156,105 @@ struct File_Request *get_request_from_map(struct File_Request_Map *map, uint64_t
     }
 
     return NULL;
+}
+
+static int ipc_dup_send_fail(pmos_port_t reply_port, int result)
+{
+    IPC_Dup_Reply reply = {
+        .type = IPC_Dup_Reply_NUM,
+        .result_code = result,
+        .file_id = 0,
+        .fs_port = 0,
+        .filesystem_id = 0,
+    };
+
+    return -send_message_port(reply_port, sizeof(reply), (char *)&reply);
+}
+
+int react_ipc_dup(struct IPC_Dup *message, size_t sender, uint64_t message_length)
+{
+    if (message == NULL)
+        return -EINVAL;
+
+    if (message_length < sizeof(struct IPC_Dup))
+        return -EINVAL;
+
+    struct fs_consumer *from_consumer = get_fs_consumer(message->fs_consumer_id);
+    if (from_consumer == NULL)
+        return ipc_dup_send_fail(message->reply_port, -EINVAL);
+
+    struct fs_consumer *to_consumer = get_fs_consumer(message->new_consumer_id);
+    if (to_consumer == NULL)
+        return ipc_dup_send_fail(message->reply_port, -EINVAL);
+
+    bool is_consumer = is_fs_consumer(from_consumer, sender);
+    if (!is_consumer)
+        return ipc_dup_send_fail(message->reply_port, -EPERM);
+
+    is_consumer = is_fs_consumer(to_consumer, sender);
+    if (!is_consumer)
+        return ipc_dup_send_fail(message->reply_port, -EPERM);
+
+    struct Filesystem *fs = get_filesystem(message->filesystem_id);
+    if (fs == NULL)
+        return ipc_dup_send_fail(message->reply_port, -EINVAL);
+
+    struct File_Request *request = calloc(1, sizeof(struct File_Request));
+    if (request == NULL)
+        return ipc_dup_send_fail(message->reply_port, -errno);
+
+    request->request_type = REQUEST_TYPE_DUP;
+    request->request_id = get_next_request_id();
+    request->reply_port = message->reply_port;
+
+    int result = add_request_to_map(&global_requests_map, request);
+    if (result < 0) {
+        free(request);
+        return ipc_dup_send_fail(message->reply_port, result);
+    }
+
+    result = register_request_with_consumer(request, to_consumer);
+    if (result < 0) {
+        remove_request_from_map(&global_requests_map, request);
+        free(request);
+        return ipc_dup_send_fail(message->reply_port, result);
+    }
+
+    result = register_request_with_filesystem(request, fs);
+    if (result < 0) {
+        remove_request_from_map(&global_requests_map, request);
+        unregister_request_from_parent(request);
+        free(request);
+        return ipc_dup_send_fail(message->reply_port, result);
+    }
+
+    result = reference_open_filesystem(request->consumer, fs, 1);
+    if (result != 0) {
+        remove_request_from_map(&global_requests_map, request);
+        unregister_request_from_parent(request);
+        free(request);
+        return ipc_dup_send_fail(message->reply_port, result);
+    }
+
+    IPC_FS_Dup msg_request = {
+        .type = IPC_FS_Dup_NUM,
+        .flags = message->flags,
+        .reply_port = main_port,
+        .file_id = message->file_id,
+        .fs_consumer_id = from_consumer->id,
+        .new_consumer_id = to_consumer->id,
+        .operation_id = request->request_id,
+        .filesystem_id = fs->id,
+    };
+
+    result = -send_message_port(fs->command_port, sizeof(msg_request), (char *)&msg_request);
+    if (result == 0)
+        return 0;
+    else {
+        unreference_open_filesystem(request->consumer, fs, 1);
+        remove_request_from_map(&global_requests_map, request);
+        unregister_request_from_parent(request);
+        free(request);
+        return ipc_dup_send_fail(message->reply_port, result);
+    }
 }

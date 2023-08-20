@@ -64,7 +64,7 @@ klib::shared_ptr<TaskGroup> TaskGroup::get_task_group_throw(u64 groupno)
             throw (Kern_Exception(ERROR_PORT_DOESNT_EXIST, "requested task group does not exist"));
 
         return group;
-    } catch (std::out_of_range) {
+    } catch (const std::out_of_range&) {
         throw (Kern_Exception(ERROR_PORT_DOESNT_EXIST, "requested task group does not exist"));
     }
 }

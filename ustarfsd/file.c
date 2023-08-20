@@ -55,6 +55,10 @@ int parse_header(const TARHeader *header, struct File *file, uint64_t *next_head
             return -2;  // End of archive
         }
         fprintf(stderr, "Header checksum verification failed.\n");
+
+        char * read_str = strndup((const char *)header, 512);
+        fprintf(stderr, "Read: %s\n", read_str);
+        free(read_str);
         return -1;
     }
 

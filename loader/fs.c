@@ -379,6 +379,143 @@ int register_open_request(IPC_FS_Open *msg, IPC_FS_Open_Reply *reply)
     return 0;
 }
 
+void fs_react_dup(IPC_FS_Dup *msg, uint64_t message_size, size_t sender)
+{
+    if (msg == NULL)
+        return;
+
+    if (message_size < sizeof(IPC_FS_Dup)) {
+        // printf("[VFSd] Warning: Recieved IPC_Dup that is too small. Size: %li\n", message_size);
+        return;
+    }
+
+    IPC_FS_Dup_Reply reply = {0};
+    reply.operation_id = msg->operation_id;
+    reply.type = IPC_FS_Dup_Reply_NUM;
+
+    struct open_file *file = fs_data_get_open_file(&filesystem_data, msg->file_id);
+    if (file == NULL) {
+        reply.result_code = FS_ERROR_FILE_NOT_FOUND;
+        send_message_port(msg->reply_port, sizeof(IPC_FS_Dup_Reply), &reply);
+        return;
+    }
+
+    // Check if the file is open by the consumer
+    if (file->consumer->id != msg->fs_consumer_id) {
+        reply.result_code = FS_ERROR_NOT_CONSUMER;
+        send_message_port(msg->reply_port, sizeof(IPC_FS_Dup_Reply), &reply);
+        return;
+    }
+
+    // Get new consumer
+    struct fs_consumer *new_consumer = get_fs_consumer(&filesystem_data, msg->new_consumer_id);
+    bool is_new_consumer = false;
+
+    if (new_consumer == NULL) {
+        // Create new consumer
+        new_consumer = calloc(1, sizeof(struct fs_consumer));
+        if (new_consumer == NULL) {
+            reply.result_code = FS_ERROR_OUT_OF_MEMORY;
+            send_message_port(msg->reply_port, sizeof(IPC_FS_Dup_Reply), &reply);
+            return;
+        }
+
+        new_consumer->id = msg->new_consumer_id;
+        new_consumer->open_files_size = OPEN_FILE_BUCKET_START_SIZE;
+        new_consumer->open_files = calloc(1, sizeof(struct open_file_bucket *) * new_consumer->open_files_size);
+        if (new_consumer->open_files == NULL) {
+            free(new_consumer);
+            reply.result_code = FS_ERROR_OUT_OF_MEMORY;
+            send_message_port(msg->reply_port, sizeof(IPC_FS_Dup_Reply), &reply);
+            return;
+        }
+
+        is_new_consumer = true;
+
+        // Add consumer to the hash table
+        if (fs_data_add_consumer(&filesystem_data, new_consumer) != 0) {
+            consumer_free_buffers(new_consumer);
+            free(new_consumer);
+            reply.result_code = FS_ERROR_OUT_OF_MEMORY;
+            send_message_port(msg->reply_port, sizeof(IPC_FS_Dup_Reply), &reply);
+            return;
+        }
+    }
+
+    // Allocate a new open_file struct
+    struct open_file *new_open_file = calloc(1, sizeof(struct open_file));
+    if (new_open_file == NULL) {
+        if (is_new_consumer) {
+            fs_data_remove_consumer(&filesystem_data, new_consumer);
+            consumer_free_buffers(new_consumer);
+            free(new_consumer);
+        }
+
+        reply.result_code = FS_ERROR_OUT_OF_MEMORY;
+        send_message_port(msg->reply_port, sizeof(IPC_FS_Dup_Reply), &reply);
+        return;
+    }
+
+    // Initialize open_file
+    new_open_file->file_id = filesystem_data.next_open_file_id++;
+    new_open_file->seek_pos = file->seek_pos;
+    new_open_file->file = file->file;
+    new_open_file->consumer = new_consumer;
+
+    // Insert open_file into the global open file table
+    int result = fs_data_add_open_file(&filesystem_data, new_open_file);
+    if (result != 0) {
+        free(new_open_file);
+
+        if (is_new_consumer) {
+            fs_data_remove_consumer(&filesystem_data, new_consumer);
+            consumer_free_buffers(new_consumer);
+            free(new_consumer);
+        }
+
+        reply.result_code = FS_ERROR_OUT_OF_MEMORY;
+        send_message_port(msg->reply_port, sizeof(IPC_FS_Dup_Reply), &reply);
+        return;
+    }
+
+    // Insert open_file into the consumer's open file table
+    result = insert_open_file(new_consumer, new_open_file);
+    if (result != 0) {
+        fs_data_remove_open_file(&filesystem_data, new_open_file);
+        free(new_open_file);
+
+        if (is_new_consumer) {
+            fs_data_remove_consumer(&filesystem_data, new_consumer);
+            consumer_free_buffers(new_consumer);
+            free(new_consumer);
+        }
+
+        reply.result_code = FS_ERROR_OUT_OF_MEMORY;
+        send_message_port(msg->reply_port, sizeof(IPC_FS_Dup_Reply), &reply);
+        return;
+    }
+
+    reply.result_code = FS_SUCCESS;
+    reply.file_id = new_open_file->file_id;
+    reply.fs_flags = 0;
+    reply.file_port = loader_port;
+
+    result = send_message_port(msg->reply_port, sizeof(IPC_FS_Dup_Reply), &reply);
+    if (result != SUCCESS) {
+        remove_open_file(new_consumer, new_open_file);
+        fs_data_remove_open_file(&filesystem_data, new_open_file);
+        free(new_open_file);
+
+        if (is_new_consumer) {
+            fs_data_remove_consumer(&filesystem_data, new_consumer);
+            consumer_free_buffers(new_consumer);
+            free(new_consumer);
+        }
+
+        return;
+    }
+}
+
 int fs_data_add_open_file(struct fs_data *data, struct open_file *file)
 {
     if (data == NULL || file == NULL)

@@ -874,7 +874,7 @@ int vfsd_send_persistant(size_t msg_size, const void *message)
     return k_result == SUCCESS ? 0 : -1;
 }
 
-int __clone_fs_data(struct Filesystem_Data ** new_data, uint64_t for_task)
+int __clone_fs_data(struct Filesystem_Data ** new_data, uint64_t for_task, bool exclusive)
 {
     assert(new_data != NULL);
 
@@ -902,22 +902,23 @@ int __clone_fs_data(struct Filesystem_Data ** new_data, uint64_t for_task)
         return -1;
     }
 
-    result_t r = add_task_to_group(new_fs_data->fs_consumer_id, for_task);
+    result_t r = add_task_to_group(for_task, new_fs_data->fs_consumer_id);
     if (r != SUCCESS) {
-        remove_task_from_group(new_fs_data->fs_consumer_id, for_task);
+        remove_task_from_group(for_task, new_fs_data->fs_consumer_id);
         destroy_filesystem(new_fs_data);
         errno = -r;
         return -1;
     }
 
-    __asm__("xchgw %bx, %bx");
-
-    int result = pthread_spin_lock(&fs_data->lock);
-    if (result != SUCCESS) {
-        remove_task_from_group(new_fs_data->fs_consumer_id, for_task);
-        destroy_filesystem(new_fs_data);
-        // errno is set by pthread_spin_lock
-        return -1;
+    int result;
+    if (!exclusive) {
+        result = pthread_spin_lock(&fs_data->lock);
+        if (result != SUCCESS) {
+            remove_task_from_group(for_task, new_fs_data->fs_consumer_id);
+            destroy_filesystem(new_fs_data);
+            // errno is set by pthread_spin_lock
+            return -1;
+        }
     }
 
 
@@ -926,9 +927,12 @@ int __clone_fs_data(struct Filesystem_Data ** new_data, uint64_t for_task)
         // Resize the vector
         struct File_Descriptor * new_vector = realloc(new_fs_data->descriptors_vector, fs_data->capacity * sizeof(struct File_Descriptor));
         if (new_vector == NULL) {
-            remove_task_from_group(new_fs_data->fs_consumer_id, for_task);
+            remove_task_from_group(for_task, new_fs_data->fs_consumer_id);
             destroy_filesystem(new_fs_data);
-            pthread_spin_unlock(&fs_data->lock);
+
+            if (!exclusive)
+                pthread_spin_unlock(&fs_data->lock);
+            
             errno = ENOMEM;
             return -1;
         }
@@ -963,9 +967,12 @@ int __clone_fs_data(struct Filesystem_Data ** new_data, uint64_t for_task)
         // Send the IPC_Dup message to the filesystem daemon
         int result = vfsd_send_persistant(sizeof(request), &request);
         if (result != 0) {
-            remove_task_from_group(new_fs_data->fs_consumer_id, for_task);
+            remove_task_from_group(for_task, new_fs_data->fs_consumer_id);
             destroy_filesystem(new_fs_data);
-            pthread_spin_unlock(&fs_data->lock);
+            
+            if (!exclusive)
+                pthread_spin_unlock(&fs_data->lock);
+            
             return -1;
         }
 
@@ -975,9 +982,12 @@ int __clone_fs_data(struct Filesystem_Data ** new_data, uint64_t for_task)
         result = get_message(&reply_descr, (unsigned char **)&reply_msg, fs_cmd_reply_port);
         if (result != SUCCESS) {
             // Handle error: Failed to receive the reply message
-            remove_task_from_group(new_fs_data->fs_consumer_id, for_task);
+            remove_task_from_group(for_task, new_fs_data->fs_consumer_id);
             destroy_filesystem(new_fs_data);
-            pthread_spin_unlock(&fs_data->lock);
+
+            if (!exclusive)
+                pthread_spin_unlock(&fs_data->lock);
+            
             errno = -result;
             return -1;
         }
@@ -985,9 +995,13 @@ int __clone_fs_data(struct Filesystem_Data ** new_data, uint64_t for_task)
         // Verify that the reply message is of type IPC_Open_Reply
         if (reply_msg->type != IPC_Dup_Reply_NUM) {
             // Handle error: Unexpected reply message type
-            remove_task_from_group(new_fs_data->fs_consumer_id, for_task);
+            remove_task_from_group(for_task, new_fs_data->fs_consumer_id);
             destroy_filesystem(new_fs_data);
-            pthread_spin_unlock(&fs_data->lock);
+
+            if (!exclusive)
+                pthread_spin_unlock(&fs_data->lock);
+            
+            free(reply_msg);
             errno = EIO;
             return -1;
         }
@@ -1010,6 +1024,10 @@ int __clone_fs_data(struct Filesystem_Data ** new_data, uint64_t for_task)
         new_fs_data->descriptors_vector[i].filesystem_id = reply->filesystem_id;
         new_fs_data->descriptors_vector[i].offset = fd.offset;
         new_fs_data->descriptors_vector[i].fs_port = reply->fs_port;
+
+        new_fs_data->count++;
+
+        free(reply_msg);    
     }
 
     for (; i < new_fs_data->capacity; ++i) {
@@ -1017,10 +1035,11 @@ int __clone_fs_data(struct Filesystem_Data ** new_data, uint64_t for_task)
         new_fs_data->descriptors_vector[i].reserved = false;
     }
 
-    pthread_spin_unlock(&fs_data->lock);
+    if (!exclusive)
+        pthread_spin_unlock(&fs_data->lock);
 
     // Remove self from the group
-    remove_task_from_group(new_fs_data->fs_consumer_id, for_task);
+    remove_task_from_group(PID_SELF, new_fs_data->fs_consumer_id);
 
     *new_data = new_fs_data;
     return 0;

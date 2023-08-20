@@ -82,6 +82,23 @@ size_t strnlen(const char *s, size_t maxlen);
  */
 char *strdup(const char *s);
 
+#if _POSIX_C_SOURCE >= 200809L
+/**
+ * @brief Duplicate a portion of a string with limited length.
+ *
+ * The `strndup` function duplicates at most `n` bytes from the string `str`, creating
+ * a new null-terminated string. The result is stored in dynamically allocated memory,
+ * which should be released using the `free` function when it is no longer needed.
+ *
+ * If the length of the original string is less than `n`, the entire string is duplicated.
+ *
+ * @param str Pointer to the null-terminated string to be duplicated.
+ * @param n   The maximum number of bytes to duplicate.
+ * @return A pointer to the newly allocated string on success, or NULL on failure.
+ */
+char *strndup(const char *str, size_t n);
+#endif
+
 #if defined(__cplusplus)
 } /* extern "C" */
 #endif

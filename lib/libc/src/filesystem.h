@@ -35,9 +35,10 @@ struct Filesystem_Data {
  * 
  * @param new_data Pointer to the new filesystem data
  * @param for_task Task ID to clone the data for
+ * @param exclusive If true, no locks would be acquired and it would be assumed that the caller has exclusive access to the data
  * @return int 0 on success, -1 on error. Sets errno on error.
  */
-int __clone_fs_data(struct Filesystem_Data ** new_data, uint64_t for_task);
+int __clone_fs_data(struct Filesystem_Data ** new_data, uint64_t for_task, bool exclusive);
 
 
 #endif
