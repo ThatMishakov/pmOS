@@ -144,7 +144,8 @@ void unreference_open_filesystem(struct fs_consumer *fs_consumer, struct Filesys
     assert(fs_consumer != NULL && fs != NULL);
     assert(close_count > 0);
 
-    assert(fs_consumer->open_filesystem_size > 0);
+    if (fs_consumer->open_filesystem_size == 0)
+        return;
 
     size_t index = fs->id % fs_consumer->open_filesystem_size;
 
@@ -154,9 +155,11 @@ void unreference_open_filesystem(struct fs_consumer *fs_consumer, struct Filesys
         node = node->next;
     }
 
-    assert(node != NULL);
+    if (node == NULL)
+        return;
 
-    assert(node->open_files_count >= close_count);
+    if (node->open_files_count < close_count)
+        close_count = node->open_files_count;
 
     node->open_files_count -= close_count;
 

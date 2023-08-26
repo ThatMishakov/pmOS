@@ -296,9 +296,6 @@ typedef struct IPC_Close {
     /// Flags changing the behaviour
     uint32_t flags;
 
-    /// Port for the reply
-    pmos_port_t reply_port;
-
     /// ID of the file system consumer
     uint64_t fs_consumer_id;
 
@@ -541,6 +538,22 @@ typedef struct IPC_FS_Dup {
     /// Port where the reply would be sent
     uint64_t reply_port;
 } IPC_FS_Dup;
+
+#define IPC_FS_Close_NUM 0xC6
+/// Message sent by a VFS daemon to a filesystem driver to close a file
+typedef struct IPC_FS_Close {
+    /// Message type (must be IPC_FS_Close_NUM)
+    uint32_t type;
+
+    /// Flags changing the behaviour
+    uint32_t flags;
+
+    /// ID of the filesystem
+    uint64_t filesystem_id;
+
+    /// ID of the file
+    uint64_t file_id;
+} IPC_FS_Close;
 
 #define IPC_FS_Open_Reply_NUM 0xD0
 typedef struct IPC_FS_Open_Reply {

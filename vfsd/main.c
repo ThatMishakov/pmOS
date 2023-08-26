@@ -183,12 +183,14 @@ int main()
                 }
                 break;
             }
-            /*
             case IPC_Close_NUM: {
-                printf("[VFSd] Recieved IPC_Close\n");
                 IPC_Close* close_msg = (IPC_Close*)ipc_msg;
+                int result = react_ipc_close(close_msg, msg.sender, msg.size);
+                if (result != 0) {
+                    printf("[VFSd] Error closing file: %i\n", result);
+                }
                 break;
-            }*/
+            }
             default:
                 printf("[VFSd] Warning: Recieved unknown message type: %i\n", ipc_msg->type);
                 break;

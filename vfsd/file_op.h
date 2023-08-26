@@ -337,4 +337,17 @@ int react_ipc_dup(struct IPC_Dup *message, size_t sender, uint64_t message_lengt
  */
 int react_ipc_fs_dup_reply(struct IPC_FS_Dup_Reply *message, size_t sender, uint64_t message_length);
 
+/**
+ * @brief Reacts to the IPC_Close message
+ * 
+ * This function reacts to the IPC_Close message sent by the filesystem consumer and attempts to close the file descriptor.
+ * The reply is not sent to avoid deadlock and is assumed to be successful. It does not take the ownership of the message.
+ * 
+ * @param message Message to react to
+ * @param sender Sender of the message
+ * @param message_length Length of the message
+ * @return int 0 on success, negative value otherwise
+ */ 
+int react_ipc_close(struct IPC_Close *message, size_t sender, uint64_t message_length);
+
 #endif // FILE_OP_H

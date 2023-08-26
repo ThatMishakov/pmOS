@@ -149,12 +149,6 @@ int main(int argc, char *argv[]) {
 
     printf("[USTARFSd] Info: open(%s, O_RDONLY) = %d\n", filename, fd);
 
-    uint64_t pid = fork();
-    printf("[USTARFSd] Info: fork() = %d\n", pid);
-
-    if (pid != 0)
-        return 0;
-
     struct File **file_pointer_array = NULL; // Array of pointers to File structs
     size_t file_count = 0;
     size_t file_capacity = 0;

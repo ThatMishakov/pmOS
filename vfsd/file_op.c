@@ -1258,3 +1258,39 @@ int react_ipc_dup(struct IPC_Dup *message, size_t sender, uint64_t message_lengt
         return ipc_dup_send_fail(message->reply_port, result);
     }
 }
+
+int react_ipc_close(struct IPC_Close *message, size_t sender, uint64_t message_length)
+{
+    if (message == NULL)
+        return -EINVAL;
+
+    if (message_length < sizeof(struct IPC_Close))
+        return -EINVAL;
+
+    struct fs_consumer *consumer = get_fs_consumer(message->fs_consumer_id);
+    if (consumer == NULL)
+        // It's an error, but the reply is not sent
+        return 0;
+
+    bool is_consumer = is_fs_consumer(consumer, sender);
+    if (!is_consumer) {
+        printf("[VFSd] Warning: recieved IPC_Close from task %ld that is not registered with the consumer %ld\n", sender, consumer->id);
+        return 0;
+    }
+
+    struct Filesystem *fs = get_filesystem(message->filesystem_id);
+    if (fs == NULL)
+        // It's an error, but the reply is not sent
+        return 0;
+
+    unreference_open_filesystem(consumer, fs, 1);
+
+    IPC_FS_Close close_message = {
+        .type = IPC_FS_Close_NUM,
+        .flags = message->flags,
+        .filesystem_id = message->filesystem_id,
+        .file_id = message->file_id,
+    };
+
+    return -send_message_port(fs->command_port, sizeof(close_message), (char *)&close_message);
+}

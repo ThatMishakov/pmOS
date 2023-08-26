@@ -93,7 +93,8 @@ int reference_open_filesystem(struct fs_consumer *fs_consumer, struct Filesystem
  * @brief Unreferences a filesystem from the fs consumer
  * 
  * This function is similar to the reference_open_filesystem, except that the open file count is decreased
- * instead and when reached 0, the filesystem is unlinked from the consumer.
+ * instead and when reached 0, the filesystem is unlinked from the consumer. If the filesystem is not
+ * referenced by the consumer, nothing happens.
  * 
  * @param fs_consumer The fs consumer to unreference the filesystem from
  * @param fs The filesystem to unreference
