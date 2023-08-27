@@ -26,7 +26,7 @@
 #include "task_group.hh"
 
 using syscall_function = void (*)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t);
-klib::array<syscall_function, 35> syscall_table = {
+klib::array<syscall_function, 36> syscall_table = {
     syscall_exit,
     getpid,
     syscall_create_process,
@@ -65,6 +65,8 @@ klib::array<syscall_function, 35> syscall_table = {
     syscall_add_to_task_group,
     syscall_remove_from_task_group,
     syscall_is_in_task_group,
+
+    syscall_set_notify_mask,
 };
 
 extern "C" void syscall_handler()
@@ -780,4 +782,13 @@ void syscall_add_to_task_group(u64 pid, u64 group, u64, u64, u64, u64)
     const auto group_ptr = TaskGroup::get_task_group_throw(group);
 
     group_ptr->atomic_register_task(task);
+}
+
+void syscall_set_notify_mask(u64 task_group, u64 port_id, u64 new_mask, u64, u64, u64)
+{
+    const auto group = TaskGroup::get_task_group_throw(task_group);
+    const auto port = global_ports.atomic_get_port_throw(port_id);
+
+    u64 old_mask = group->atomic_change_notifier_mask(port, new_mask);
+    syscall_ret_high(get_current_task()) = old_mask;
 }

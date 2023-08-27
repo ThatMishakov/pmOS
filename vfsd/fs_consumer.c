@@ -7,6 +7,8 @@
 #include <errno.h>
 #include <assert.h>
 
+extern pmos_port_t main_port;
+
 struct fs_consumer_map global_fs_consumers = {
     NULL,
     0,
@@ -14,6 +16,7 @@ struct fs_consumer_map global_fs_consumers = {
 };
 
 int register_global_fs_consumer(struct fs_consumer *fs_consumer);
+void remove_fs_consumer_global(struct fs_consumer *fs_consumer);
 
 struct fs_consumer * create_fs_consumer(uint64_t consumer_task_group)
 {
@@ -51,6 +54,16 @@ struct fs_consumer * create_fs_consumer(uint64_t consumer_task_group)
     result = register_global_fs_consumer(fs_consumer);
     if (result != 0) {
         // Could not register the consumer
+        free(fs_consumer->open_filesystem);
+        destroy_string(&fs_consumer->path);
+        free(fs_consumer);
+        return NULL;
+    }
+
+    syscall_r r = set_task_group_notifier_mask(consumer_task_group, main_port, NOTIFICATION_MASK_DESTROYED);
+    if (r.result != SUCCESS) {
+        // Could not set up notifier
+        remove_fs_consumer_global(fs_consumer);
         free(fs_consumer->open_filesystem);
         destroy_string(&fs_consumer->path);
         free(fs_consumer);

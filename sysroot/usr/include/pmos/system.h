@@ -184,6 +184,41 @@ result_t remove_task_from_group(uint64_t task_id, uint64_t group_id);
  */
 syscall_r is_task_group_member(uint64_t task_id, uint64_t group_id);
 
+/// Mask bit for when the task group is destroyed
+#define NOTIFICATION_MASK_DESTROYED       0x01
+/// Mask bit for when a task is removed from the task group
+#define NOTIFICATION_MASK_ON_REMOVE_TASK  0x02
+/// Mask bit for when a task is added to the task group
+#define NOTIFICATION_MASK_ON_ADD_TASK     0x03
+
+/**
+ * @brief Sets the notification mask for the given task group
+ * 
+ * This function allows to set up notifications for the task group. They are done by assigning messaging port
+ * and a mask to the group, which in turn causes kernel to send the notification messages to the port
+ * when an event is triggered.
+ * 
+ * There is no remove function, as setting a 0 as a mask removes notification checking and frees up the resources
+ * needed to have port watchers.
+ * 
+ * Internally, this is implemented as an unbound list-like structure, storing ports where the notifications are needed
+ * to be sent. Thus, any number of ports can watch the task group, though it is advised to not overuse this function to
+ * avoid slowdowns of operations involving modification of task group state.
+ * 
+ * The mask is a bitmap of events that should send messages. To avoid the problems with future compaitability, bits that
+ * have no function should be set to 0.
+ * 
+ * Upon the execution, the previous mask is returned. The function is atomic and calling it concurrently will not corrupt
+ * kernel's internal state, though programmer should be wary of possible race conditions, since the kernel
+ * does not give guaranties on the execution order of concurrent operations.
+ * 
+ * @param task_group_id ID of the task group
+ * @param port_id ID of the port where the notifications must be sent
+ * @param new_mask New mask of the notifier, which replaces the old one. 0 removes the port from the watchers list.
+ * @return syscall_r result. If the result is SUCCESS, the value contains the old mask. Otherwise, the value is undefined.
+ */
+syscall_r set_task_group_notifier_mask(uint64_t task_group_id, pmos_port_t port_id, uint64_t new_mask);
+
 #endif
 
 #if defined(__cplusplus)

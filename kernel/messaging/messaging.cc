@@ -8,6 +8,7 @@
 #include <utils.hh>
 #include <processes/syscalls.hh>
 #include <assert.h>
+#include <processes/task_group.hh>
 
 Ports_storage global_ports;
 Spinlock messaging_ports;
@@ -147,4 +148,15 @@ klib::shared_ptr<Message>& Port::get_front()
     assert(lock.is_locked() && "Spinlock not locked!");
 
     return msg_queue.front();
+}
+
+Port::~Port() noexcept
+{
+    for (const auto &p : notifier_ports) {
+        const auto &ptr = p.second.lock();
+        if (ptr) {
+            Auto_Lock_Scope l(ptr->notifier_ports_lock);
+            ptr->notifier_ports.erase(portno);
+        }
+    }
 }

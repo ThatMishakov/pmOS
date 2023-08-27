@@ -117,6 +117,9 @@ void syscall_remove_from_task_group(u64 pid, u64 group, u64 = 0 /* unused */, u6
 // Checks if a task is in a task group
 void syscall_is_in_task_group(u64 pid, u64 group, u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */);
 
+// Sets up the notification mask for the given task group for the port
+void syscall_set_notify_mask(u64 task_group, u64 port_id, u64 new_mask, u64, u64, u64);
+
 
 inline u64& syscall_arg1(const klib::shared_ptr<TaskDescriptor>& task)
 {

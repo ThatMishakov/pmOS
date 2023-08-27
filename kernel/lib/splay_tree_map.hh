@@ -89,7 +89,8 @@ public:
     pair<iterator,bool> emplace(value_type&&);
 
     void erase(const K&);
-    void erase_if_exists(const K&);
+    void erase(iterator it) noexcept;
+    void erase_if_exists(const K&) noexcept;
 
     constexpr size_t size() const noexcept;
     constexpr bool empty() const noexcept;
@@ -359,7 +360,16 @@ void splay_tree_map<K,T>::erase(const K& key)
 }
 
 template<class K, class T>
-void splay_tree_map<K,T>::erase_if_exists(const K& key)
+void splay_tree_map<K,T>::erase(iterator it) noexcept
+{
+    node *n = it.ptr;
+
+    if (n != nullptr)
+        delete_node(it.ptr);
+}
+
+template<class K, class T>
+void splay_tree_map<K,T>::erase_if_exists(const K& key) noexcept
 {
     node* n = root;
 

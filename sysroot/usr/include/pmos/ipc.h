@@ -99,6 +99,43 @@ typedef struct IPC_Kernel_Request_Page {
     uint64_t page_offset;
 } IPC_Kernel_Request_Page;
 
+#define IPC_Kernel_Group_Destroyed_NUM 0x24
+/// Notification of port group destruction
+typedef struct IPC_Kernel_Group_Destroyed {
+    /// @brief  Message type (must be IPC_Kernel_Group_Destroyed_NUM)
+    uint32_t type;
+
+    /// Flags
+    uint32_t flags;
+
+    /// ID of the port group that had been destroyed
+    uint64_t port_group_id;
+} IPC_Kernel_Group_Destroyed;
+
+/// Notification of task being removed from a group
+#define Event_Group_Task_Removed_NUM 0x01
+/// Notification of task being added to a group
+#define Event_Group_Task_Added_NUM 0x02
+
+#define IPC_Kernel_Group_Task_Changed_NUM 0x25
+/// Notification of task group change of tasks
+typedef struct IPC_Kernel_Group_Task_Changed {
+    /// @brief  Message type (must be IPC_Kernel_Group_Task_Changed_NUM)
+    uint32_t type;
+
+    /// Flags
+    uint16_t flags;
+
+    /// Event type
+    uint16_t event_type;
+
+    /// ID of the task group that had been changed
+    uint64_t task_group_id;
+
+    /// ID of the task that has changed
+    uint64_t task_id;
+} IPC_Kernel_Group_Task_Changed;
+
 
 #define IPC_Write_Plain_NUM     0x40
 typedef struct IPC_Write_Plain {

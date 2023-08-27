@@ -141,3 +141,8 @@ result_t syscall_start_process(uint64_t pid, uint64_t entry, uint64_t arg1, uint
 {
     return syscall(SYSCALL_START_PROCESS, pid, entry, arg1, arg2, arg3).result;
 }
+
+syscall_r set_task_group_notifier_mask(uint64_t task_group_id, pmos_port_t port_id, uint64_t new_mask)
+{
+    return syscall(SYSCALL_SET_NOTIFY_MASK, task_group_id, port_id, new_mask);
+}

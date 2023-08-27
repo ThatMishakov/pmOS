@@ -13,7 +13,7 @@ extern Spinlock messaging_ports;
 struct TaskDescriptor;
 
 struct Generic_Port {
-    virtual ~Generic_Port() = default;
+    virtual ~Generic_Port() noexcept = default;
 };
 
 struct Message {
@@ -33,6 +33,8 @@ struct Message {
 #define MSG_ATTR_PRESENT   0x01ULL
 #define MSG_ATTR_DUMMY     0x02ULL
 #define MSG_ATTR_NODEFAULT 0x03ULL
+
+class TaskGroup;
 
 class Port: public Generic_Port {
 public:
@@ -62,9 +64,21 @@ public:
     klib::shared_ptr<Message>& get_front();
     void pop_front() noexcept;
     bool is_empty() const noexcept;
+
+    /**
+     * @brief Destructor of port
+     * 
+     * This destructor cleans up the port and does other misc stuff such as sending not-delivered acknowledgements
+     */
+    virtual ~Port() noexcept override;
 protected:
     using Message_storage = klib::list<klib::shared_ptr<Message>>;
     Message_storage msg_queue;
+
+    klib::splay_tree_map<u64, klib::weak_ptr<TaskGroup>> notifier_ports;
+    mutable Spinlock notifier_ports_lock;
+
+    friend class TaskGroup;
 };
 
 struct Ports_storage {
