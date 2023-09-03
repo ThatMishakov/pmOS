@@ -83,7 +83,6 @@ general_protection_fault_isr:
     cmpw $0x08, 16(%rsp)
 	je 1f
 	swapgs
-1:
 
     # Save registers
     call cond_save_context_with_error
@@ -98,6 +97,9 @@ general_protection_fault_isr:
 
     # Return
     auto_return_cond
+
+1:
+    dbg_code 13, 1
 
 
 
