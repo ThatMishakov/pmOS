@@ -754,7 +754,6 @@ int close(int filedes) {
     IPC_Close message = {
         .type = IPC_Close_NUM,
         .flags = 0,
-        .reply_port = fs_cmd_reply_port,
         .fs_consumer_id = fs_consumer_id,
         .filesystem_id = copy.filesystem_id,
         .file_id = copy.file_id,
