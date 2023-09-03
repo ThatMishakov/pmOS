@@ -88,6 +88,7 @@ uint64_t load_elf(struct task_list_node* n, uint8_t ring)
 
             req = transfer_region(n->page_table, req.virt_addr, (void *)vaddr_all, mask | 0x08);
             if (req.result != SUCCESS) {
+                print_str("Error: Failed to transfer page region! ");
                 print_hex(r.result);
                 print_str(" !!!\n");
                 asm("xchgw %bx, %bx");
@@ -108,6 +109,11 @@ uint64_t load_elf(struct task_list_node* n, uint8_t ring)
             memcpy(d->data, (void*)((uint64_t)elf_h + p->p_offset), p->p_filesz);   
 
             req = transfer_region(n->page_table, req.virt_addr, NULL, 1);
+            if (req.result != SUCCESS) {
+                print_str("Error: Failed to transfer tls! ");
+                print_hex(r.result);
+                print_str(" !!!\n");
+            }
             n->tls_virt = req.virt_addr;
         }
     }
