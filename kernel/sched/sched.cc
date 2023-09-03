@@ -21,7 +21,6 @@
 
 sched_queue blocked;
 sched_queue uninit;
-sched_queue dead_queue;
 
 Spinlock tasks_map_lock;
 sched_map tasks_map;

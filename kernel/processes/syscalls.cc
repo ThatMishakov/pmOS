@@ -26,7 +26,7 @@
 #include "task_group.hh"
 
 using syscall_function = void (*)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t);
-klib::array<syscall_function, 36> syscall_table = {
+klib::array<syscall_function, 37> syscall_table = {
     syscall_exit,
     getpid,
     syscall_create_process,
@@ -67,6 +67,7 @@ klib::array<syscall_function, 36> syscall_table = {
     syscall_is_in_task_group,
 
     syscall_set_notify_mask,
+    nullptr,
 };
 
 extern "C" void syscall_handler()

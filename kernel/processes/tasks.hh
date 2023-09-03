@@ -140,7 +140,7 @@ public:
         return p;
     }
 
-    ~TaskDescriptor() = default;
+    ~TaskDescriptor() noexcept;
 
     // Changes the *task* to repeat the syscall upon reentering the system
     void request_repeat_syscall();
@@ -161,7 +161,7 @@ using task_ptr = klib::shared_ptr<TaskDescriptor>;
 void init_idle();
 
 // A map of all the tasks
-using sched_map = klib::splay_tree_map<PID, klib::shared_ptr<TaskDescriptor>>;
+using sched_map = klib::splay_tree_map<PID, klib::weak_ptr<TaskDescriptor>>;
 extern sched_map tasks_map;
 extern Spinlock tasks_map_lock;
 
@@ -181,7 +181,7 @@ inline bool exists_process(u64 pid)
 inline klib::shared_ptr<TaskDescriptor> get_task(u64 pid)
 {
     Auto_Lock_Scope scope_lock(tasks_map_lock);
-    return tasks_map.get_copy_or_default(pid);
+    return tasks_map.get_copy_or_default(pid).lock();
 }
 
 // Gets a task descriptor of the process with pid *pid*. Throws 
@@ -192,8 +192,20 @@ inline klib::shared_ptr<TaskDescriptor> get_task_throw(u64 pid)
     try {
         const auto& t = tasks_map.at(pid);
 
-        return t;
+        const auto ptr = t.lock();
+
+        if (!ptr) {
+            throw Kern_Exception(ERROR_NO_SUCH_PROCESS, "Requested process does not exist");
+        }
+
+        return ptr;
     } catch (const std::out_of_range&) {
         throw Kern_Exception(ERROR_NO_SUCH_PROCESS, "Requested process does not exist");
     }
+}
+
+inline TaskDescriptor::~TaskDescriptor() noexcept
+{
+    Auto_Lock_Scope scope_lock(tasks_map_lock);
+    tasks_map.erase(pid);
 }

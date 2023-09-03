@@ -24,7 +24,6 @@ ReturnStr<u64> block_current_task(const klib::shared_ptr<Generic_Port>& ptr);
 
 extern sched_queue blocked;
 extern sched_queue uninit;
-extern sched_queue dead_queue;
 
 inline klib::array<sched_queue, sched_queues_levels> global_sched_queues;
 

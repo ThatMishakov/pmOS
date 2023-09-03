@@ -146,14 +146,7 @@ void TaskDescriptor::atomic_kill() // TODO: UNIX Signals
     }
 
     status = PROCESS_DEAD;
-    parent_queue = &dead_queue;
-
-    {
-        Auto_Lock_Scope queue_lock(dead_queue.lock);
-        dead_queue.push_back(self);
-    }
-
-    page_table = nullptr;
+    parent_queue = NULL;
 }
 
 void TaskDescriptor::create_new_page_table()
