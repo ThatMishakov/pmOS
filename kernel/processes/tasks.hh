@@ -46,7 +46,7 @@ public:
     Task_Attributes attr;
 
     // Messaging
-    klib::set<klib::weak_ptr<Generic_Port>> owned_ports;
+    klib::set<klib::shared_ptr<Generic_Port>> owned_ports;    
     klib::weak_ptr<Generic_Port> blocked_by;
     klib::weak_ptr<Generic_Port> sender_hint;
     Spinlock messaging_lock;

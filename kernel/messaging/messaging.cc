@@ -10,51 +10,54 @@
 #include <assert.h>
 #include <processes/task_group.hh>
 
-Ports_storage global_ports;
-Spinlock messaging_ports;
-
 bool Message::copy_to_user_buff(char* buff)
 {
     return copy_to_user(&content.front(), buff, content.size());
 }
 
-u64 Ports_storage::atomic_request_port(const klib::shared_ptr<TaskDescriptor>& t)
+klib::shared_ptr<Port> Port::atomic_create_port(const klib::shared_ptr<TaskDescriptor>& task)
 {
-    Auto_Lock_Scope local_lock(lock);
+    assert(task);
 
-    u64 new_port;
-    if (storage.empty()) {
-        new_port = biggest_port;
-    } else {
-        new_port = max(biggest_port, storage.largest() + 1);
+    u64 new_port = __atomic_add_fetch(&biggest_port, 1, __ATOMIC_SEQ_CST);
+
+    klib::shared_ptr<Port> new_port_ptr = klib::make_shared<Port>(task, new_port);
+
+    {
+        Auto_Lock_Scope local_lock(ports_lock);
+        ports.insert({new_port, new_port_ptr});
     }
 
-    biggest_port = new_port + 1;
-
-    klib::shared_ptr<Port> new_port_ptr = klib::make_shared<Port>(t, new_port);
     new_port_ptr->self = new_port_ptr;
 
-    storage.insert({new_port, new_port_ptr});
-
-    return new_port;
-}
-
-klib::shared_ptr<Port> Ports_storage::atomic_get_port(u64 portno)
-{
-    Auto_Lock_Scope scope_lock(lock);
-
-    return storage.get_copy_or_default(portno);
-}
-
-klib::shared_ptr<Port> Ports_storage::atomic_get_port_throw(u64 portno)
-{
-    Auto_Lock_Scope scope_lock(lock);
-
     try {
-        return storage.at(portno);
-    } catch (const std::out_of_range&) {
-        throw (Kern_Exception(ERROR_PORT_DOESNT_EXIST, "requested port does not exist"));
+        Auto_Lock_Scope local_lock(task->messaging_lock);
+        task->owned_ports.insert(new_port_ptr);
+    } catch (...) {
+        Auto_Lock_Scope local_lock(ports_lock);
+        ports.erase(new_port);
+        throw;
     }
+
+    return new_port_ptr;
+}
+
+klib::shared_ptr<Port> Port::atomic_get_port(u64 portno) noexcept
+{
+    Auto_Lock_Scope scope_lock(ports_lock);
+
+    return ports.get_copy_or_default(portno).lock();
+}
+
+klib::shared_ptr<Port> Port::atomic_get_port_throw(u64 portno)
+{
+    Auto_Lock_Scope scope_lock(ports_lock);
+    const auto ptr = ports.get_copy_or_default(portno).lock();
+
+    if (not ptr)
+        throw (Kern_Exception(ERROR_PORT_DOESNT_EXIST, "requested port does not exist"));
+
+    return ptr;
 }
 
 void Port::atomic_send_from_system(const char* msg_ptr, uint64_t size)
@@ -159,4 +162,9 @@ Port::~Port() noexcept
             ptr->notifier_ports.erase(portno);
         }
     }
+
+    Auto_Lock_Scope scope_lock(ports_lock);
+    ports.erase(portno);
 }
+
+Port::Port(const klib::shared_ptr<TaskDescriptor>& owner, u64 portno): owner(owner), portno(portno) {}

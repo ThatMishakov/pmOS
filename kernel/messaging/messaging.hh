@@ -44,7 +44,7 @@ public:
     Spinlock lock;
     u64 portno;
 
-    Port(const klib::shared_ptr<TaskDescriptor>& owner, u64 portno): owner(owner), portno(portno) {}
+    Port(const klib::shared_ptr<TaskDescriptor>& owner, u64 portno);
 
 
     void enqueue(const klib::shared_ptr<Message>& msg);
@@ -71,6 +71,21 @@ public:
      * This destructor cleans up the port and does other misc stuff such as sending not-delivered acknowledgements
      */
     virtual ~Port() noexcept override;
+
+    /**
+     * @brief Gets the port or NULL if it doesn't exist
+     */
+    static klib::shared_ptr<Port> atomic_get_port(u64 portno) noexcept;
+
+    /**
+     * @brief Gets the port. Throws ERROR_PORT_DOESNT_EXIST if there is no port
+     */
+    static klib::shared_ptr<Port> atomic_get_port_throw(u64 portno);
+
+    /**
+     * @brief Creates a new port with *task* as its owner
+     */
+    static klib::shared_ptr<Port> atomic_create_port(const klib::shared_ptr<TaskDescriptor>& task);
 protected:
     using Message_storage = klib::list<klib::shared_ptr<Message>>;
     Message_storage msg_queue;
@@ -78,29 +93,9 @@ protected:
     klib::splay_tree_map<u64, klib::weak_ptr<TaskGroup>> notifier_ports;
     mutable Spinlock notifier_ports_lock;
 
+    static inline u64 biggest_port = 1;
+    static inline klib::splay_tree_map<u64, klib::weak_ptr<Port>> ports;
+    static inline Spinlock ports_lock;
+
     friend class TaskGroup;
 };
-
-struct Ports_storage {
-    u64 biggest_port = 1;
-
-    klib::splay_tree_map<u64, klib::shared_ptr<Port>> storage;
-    Spinlock lock;
-
-    // Atomically gets the port or null if it doesn't exist
-    klib::shared_ptr<Port> atomic_get_port(u64 portno);
-
-    // Atomically gets the port. Throws ERROR_PORT_DOESNT_EXIST if there is no port
-    klib::shared_ptr<Port> atomic_get_port_throw(u64 portno);
-
-    // Atomically creates a new port with *task* as its owner
-    u64 atomic_request_port(const klib::shared_ptr<TaskDescriptor>& task);
-
-    inline bool exists_port(u64 port)
-    {
-        Auto_Lock_Scope scope_lock(lock);
-        return this->storage.count(port) == 1;
-    }
-};
-
-extern Ports_storage global_ports;

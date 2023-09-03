@@ -82,7 +82,7 @@ extern "C" void syscall_handler()
 
     // TODO: check permissions
 
-    //t_print_bochs("Debug: syscall %h pid %h (%s) \n", call_n, get_cpu_struct()->current_task->pid, get_cpu_struct()->current_task->name.c_str());
+    //t_print_bochs("Debug: syscall %h pid %h (%s) ", call_n, get_cpu_struct()->current_task->pid, get_cpu_struct()->current_task->name.c_str());
     //t_print_bochs(" %h %h %h %h %h ", arg1, arg2, arg3, arg4, arg5);
     if (task->attr.debug_syscalls) {
         global_logger.printf("Debug: syscall %h pid %h\n", call_n, get_cpu_struct()->current_task->pid);
@@ -187,7 +187,7 @@ void syscall_get_first_message(u64 buff, u64 args, u64 portno, u64, u64, u64)
     port = klib::dynamic_pointer_cast<Port>(current->blocked_by.lock());
 
     if (not port or port->portno != portno)
-        port = global_ports.atomic_get_port_throw(portno);
+        port = Port::atomic_get_port_throw(portno);
 
     klib::shared_ptr<Message> top_message;
 
@@ -225,7 +225,7 @@ void syscall_send_message_port(u64 port_num, size_t size, u64 message, u64, u64,
     port = klib::dynamic_pointer_cast<Port>(current->blocked_by.lock());
 
     if (not port or port->portno != port_num) {
-        port = global_ports.atomic_get_port_throw(port_num);
+        port = Port::atomic_get_port_throw(port_num);
     }
 
     port->atomic_send_from_user(current, (char *)message, size);
@@ -241,7 +241,7 @@ void syscall_get_message_info(u64 message_struct, u64 portno, u64 flags, u64, u6
     port = klib::dynamic_pointer_cast<Port>(task->blocked_by.lock());
 
     if (not port or port->portno != portno) {
-        port = global_ports.atomic_get_port_throw(portno);
+        port = Port::atomic_get_port_throw(portno);
     }
 
     klib::shared_ptr<Message> msg;
@@ -389,7 +389,7 @@ void syscall_create_port(u64 owner, u64, u64, u64, u64, u64)
     }
 
 
-    syscall_ret_high(task) = global_ports.atomic_request_port(t);
+    syscall_ret_high(task) = Port::atomic_create_port(t)->portno;
 }
 
 void syscall_set_interrupt(uint64_t port, u64 intno, u64 flags, u64, u64, u64)
@@ -399,7 +399,7 @@ void syscall_set_interrupt(uint64_t port, u64 intno, u64 flags, u64, u64, u64)
 
     const task_ptr& task = get_current_task();
 
-    klib::shared_ptr<Port> port_ptr = global_ports.atomic_get_port_throw(port);
+    klib::shared_ptr<Port> port_ptr = Port::atomic_get_port_throw(port);
 
     if (not intno_is_ok(intno))
         throw(Kern_Exception(ERROR_OUT_OF_RANGE, "intno outside of supported"));
@@ -422,7 +422,7 @@ void syscall_name_port(u64 portnum, u64 /*const char* */ name, u64 length, u64 f
         return;
     }
 
-    klib::shared_ptr<Port> port = global_ports.atomic_get_port_throw(portnum);
+    klib::shared_ptr<Port> port = Port::atomic_get_port_throw(portnum);
 
     Auto_Lock_Scope scope_lock(port->lock);
     Auto_Lock_Scope scope_lock2(global_named_ports.lock);
@@ -515,7 +515,7 @@ void syscall_request_named_port(u64 string_ptr, u64 length, u64 reply_port, u64 
         return;
     }
 
-    klib::shared_ptr<Port> port_ptr = global_ports.atomic_get_port_throw(reply_port);
+    klib::shared_ptr<Port> port_ptr = Port::atomic_get_port_throw(reply_port);
 
     Auto_Lock_Scope scope_lock(global_named_ports.lock);
 
@@ -546,7 +546,7 @@ void syscall_set_log_port(u64 port, u64 flags, u64, u64, u64, u64)
 {
     const task_ptr& task = get_current_task();
 
-    klib::shared_ptr<Port> port_ptr = global_ports.atomic_get_port_throw(port);
+    klib::shared_ptr<Port> port_ptr = Port::atomic_get_port_throw(port);
 
     global_logger.set_port(port_ptr, flags);
 }
@@ -788,7 +788,7 @@ void syscall_add_to_task_group(u64 pid, u64 group, u64, u64, u64, u64)
 void syscall_set_notify_mask(u64 task_group, u64 port_id, u64 new_mask, u64, u64, u64)
 {
     const auto group = TaskGroup::get_task_group_throw(task_group);
-    const auto port = global_ports.atomic_get_port_throw(port_id);
+    const auto port = Port::atomic_get_port_throw(port_id);
 
     u64 old_mask = group->atomic_change_notifier_mask(port, new_mask);
     syscall_ret_high(get_current_task()) = old_mask;
