@@ -1,8 +1,10 @@
-#ifdef _SYS_RESOURCE_H
+#ifndef _SYS_RESOURCE_H
 #define _SYS_RESOURCE_H
 
 #define __DECLARE_ID_T
 #include "__posix_types.h"
+
+#include <sys/time.h>
 
 enum {
     PRIO_PROCESS = 0,
