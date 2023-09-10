@@ -95,6 +95,7 @@ extern "C" void syscall_handler()
         syscall_table[call_n](arg1, arg2, arg3, arg4, arg5, 0);
     } catch (Kern_Exception &e) {
         syscall_ret_low(task) = e.err_code;
+        t_print_bochs("Debug: syscall %h pid %h (%s) ", call_n, task->pid, task->name.c_str());
         t_print_bochs(" -> %h (%s)\n", e.err_code, e.err_message);
         return;
     } catch (...) {

@@ -6,8 +6,8 @@
 #include <stdio.h>
 
 int main() {
-    char msg[] = "Hello from processd!\n";
-    send_message_port(1, strlen(msg), msg);
+    // char msg[] = "Hello from processd!\n";
+    // send_message_port(1, strlen(msg), msg);
 
     return 0;
 }

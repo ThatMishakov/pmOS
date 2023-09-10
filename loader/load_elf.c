@@ -94,8 +94,10 @@ uint64_t load_elf(struct task_list_node* n, uint8_t ring)
                 asm("xchgw %bx, %bx");
             }
         } else if (p->type == PT_TLS) {
-            if (n->tls_virt)
-                print_str("Warning: Duplicate tls!\n");
+            if (n->tls_virt) {
+                print_str("Warning: Duplicate tls! Skipping it...\n");
+                continue;
+            }
 
             uint64_t size = sizeof(TLS_Data) + p->p_filesz;
             size = alignup(size, 4096);

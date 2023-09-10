@@ -6,6 +6,7 @@
 #define __DECLARE_UID_T
 #define __DECLARE_PTHREAD_T
 #define __DECLARE_PTHREAD_ATTR_T
+#define __DECLARE_STACK_T
 #include "__posix_types.h"
 
 typedef int sig_atomic_t;
@@ -82,12 +83,6 @@ typedef unsigned long pid_t;
 #define SIGEV_SIGNAL 1
 #define SIGEV_THREAD 2
 
-typedef struct stack_t {
-    void     *ss_sp;
-    size_t    ss_size;
-    int       ss_flags;
-} stack_t;
-
 typedef struct sigstack {
     int       ss_onstack;
     void     *ss_sp;
@@ -97,6 +92,11 @@ typedef union sigval {
     int sival_int;
     void *sival_ptr;
 } sigval;
+
+#define SIGRTMIN 32
+#define SIGRTMAX 64
+
+#define _NSIG 64
 
 typedef struct siginfo_t {
     int           si_signo;
