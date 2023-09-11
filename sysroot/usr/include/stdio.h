@@ -1,8 +1,15 @@
 #ifndef _STDIO_H
 #define _STDIO_H 1
-#include "stdlib_com.h"
+#include <stddef.h>
 #include <stdarg.h>
+
+// This shouldn't be included here, but this header is broken without it.
 #include <stdint.h>
+
+#define __DECLARE_SIZE_T
+#define __DECLARE_SSIZE_T
+#define __DECLARE_OFF_T
+#include "__posix_types.h"
 
 #if defined(__cplusplus)
 extern "C" {
@@ -10,7 +17,7 @@ extern "C" {
 
 #ifdef __STDC_HOSTED__
 
-typedef uint64_t pmos_port_t;
+typedef unsigned long pmos_port_t;
 
 typedef struct FILE {
     union {

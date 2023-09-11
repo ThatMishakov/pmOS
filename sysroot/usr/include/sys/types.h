@@ -1,19 +1,20 @@
 #ifndef _SYS_TYPES_H
 #define _SYS_TYPES_H
-#include "../stdlib_com.h"
-
 
 #define __DECLARE_PTHREAD_T
 #define __DECLARE_PTHREAD_ATTR_T
-
+#define __DECLARE_SIZE_T
+#define __DECLARE_SSIZE_T
+#define __DECLARE_ID_T
+#define __DECLARE_PID_T
+#define __DECLARE_GID_T
+#define __DECLARE_UID_T
 #include "../__posix_types.h"
 
 typedef unsigned long _u64;
 typedef unsigned int  _u32;
 
 typedef signed long _i64;
-
-typedef _i64 ssize_t;
 
 // typedef size_t off_t;
 // typedef size_t mode_t;
@@ -33,11 +34,6 @@ typedef _u64 dev_t;
 
 typedef size_t fsblkcnt_t;
 typedef size_t fsfilcnt_t;
-
-typedef _u64 id_t;
-typedef id_t gid_t;
-typedef id_t uid_t;
-typedef id_t pid_t;
 
 typedef size_t ino_t;
 

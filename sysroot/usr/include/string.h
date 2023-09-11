@@ -1,7 +1,12 @@
 #ifndef _STRING_H
 #define _STRING_H 1
-#include <stddef.h>
-#include "stdlib_com.h"
+
+#define __DECLARE_SIZE_T
+#define __DECLARE_NULL
+#define __DECLARE_LOCALE_T
+#include "__posix_types.h"
+
+
 #if defined(__cplusplus)
 extern "C" {
 #endif

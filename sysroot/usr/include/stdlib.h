@@ -1,7 +1,26 @@
 #ifndef _STDLIB_H
 #define _STDLIB_H 1
 #include <stddef.h>
-#include "stdlib_com.h"
+#include <limits.h>
+#include <sys/wait.h>
+#include <math.h>
+
+#define __DECLARE_SIZE_T
+#define __DECLARE_WCHAR_T
+#include "__posix_types.h"
+
+/// Successful termination for exit()
+#define EXIT_SUCCESS 0
+
+/// Unsuccessful termination for exit()
+#define EXIT_FAILURE 1
+
+
+/// Maximum value returned by rand()
+#define RAND_MAX 32767
+
+/// Maximum number of bytes in a multibyte character
+#define MB_CUR_MAX 1
 
 #if defined(__cplusplus)
 extern "C" {
@@ -147,9 +166,6 @@ size_t wcstombs(char * s,
                 size_t n);
 
 #endif
-
-#define EXIT_SUCCESS 0
-#define EXIT_FAILURE 1
 
 #if defined(__cplusplus)
 } /* extern "C" */

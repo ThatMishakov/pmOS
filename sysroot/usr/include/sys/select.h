@@ -4,6 +4,10 @@
 #include <time.h>
 #include <signal.h>
 
+#define __DECLARE_TIME_T
+#define __DECLARE_SUSECONDS_T
+#include "__posix_types.h"
+
 struct timeval {
     time_t tv_sec; //< Seconds
     suseconds_t tv_usec; //< Microseconds
@@ -26,10 +30,10 @@ int  FD_ISSET(int, fd_set *);
 void FD_SET(int, fd_set *);
 void FD_ZERO(fd_set *);
 
-int  pselect(int, fd_set *restrict, fd_set *restrict, fd_set *restrict,
-         const struct timespec *restrict, const sigset_t *restrict);
-int  select(int, fd_set *restrict, fd_set *restrict, fd_set *restrict,
-         struct timeval *restrict);
+int  pselect(int, fd_set *restrict, fd_set *, fd_set *,
+         const struct timespec *, const sigset_t *);
+int  select(int, fd_set *, fd_set *, fd_set *,
+         struct timeval *);
 
 #ifdef __cplusplus
 } /* extern "C" */

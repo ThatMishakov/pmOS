@@ -21,11 +21,11 @@ extern "C" {
 #ifdef __STDC_HOSTED__
 
 int   getitimer(int, struct itimerval *);
-int   gettimeofday(struct timeval *restrict, void *restrict);
-int   setitimer(int, const struct itimerval *restrict,
-          struct itimerval *restrict);
-int   select(int, fd_set *restrict, fd_set *restrict, fd_set *restrict,
-          struct timeval *restrict);
+int   gettimeofday(struct timeval *, void *);
+int   setitimer(int, const struct itimerval *,
+          struct itimerval *);
+int   select(int, fd_set *, fd_set *, fd_set *,
+          struct timeval *);
 int   utimes(const char *, const struct timeval [2]);
 
 #endif

@@ -1,7 +1,8 @@
 #ifndef __LOCALE_H
 #define __LOCALE_H
 
-#include "stdlib_com.h"
+#define __DECLARE_LOCALE_T
+#include "__posix_types.h"
 
 #define LC_ALL 0
 #define LC_COLLATE 1

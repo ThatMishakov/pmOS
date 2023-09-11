@@ -22,7 +22,6 @@ extern "C" {
 void (*signal(int sig, void (*func)(int)))(int);
 int raise(int sig);
 
-#define SIGABRT 0
 #define SIGFPE 1
 #define SIGILL 2
 #define SIGINT 3
@@ -58,6 +57,7 @@ int raise(int sig);
 #define SIGVTALRM 25
 #define SIGXCPU 26
 #define SIGXFSZ 27
+#define SIGABRT 28
 
 #define SIG_HOLD (void(*)(int)3)
 
@@ -77,7 +77,6 @@ int raise(int sig);
 #define SIGSTKSZ (32*4096)
 
 typedef int sigset_t;
-typedef unsigned long pid_t;
 
 #define SIGEV_NONE 0
 #define SIGEV_SIGNAL 1
@@ -96,9 +95,10 @@ typedef union sigval {
 #define SIGRTMIN 32
 #define SIGRTMAX 64
 
+#define NSIG 64
 #define _NSIG 64
 
-typedef struct siginfo_t {
+typedef struct {
     int           si_signo;
     int           si_code;
     int           si_errno;

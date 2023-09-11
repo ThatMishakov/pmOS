@@ -1,6 +1,20 @@
 #ifndef __TIME_H
 #define __TIME_H 1
-#include "stdlib_com.h"
+#include <signal.h>
+
+#define __DECLARE_CLOCK_T
+#define __DECLARE_TIME_T
+#define __DECLARE_SIZE_T
+#define __DECLARE_PID_T
+#define __DECLARE_CLOCKID_T
+#define __DECLARE_TIMER_T
+#define __DECLARE_LOCALE_T
+#define __DECLARE_NULL
+#include "__posix_types.h"
+
+extern int    daylight;
+extern long   timezone;
+extern char  *tzname[];
 
 #if defined(__cplusplus)
 extern "C" {
