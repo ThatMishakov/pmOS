@@ -1,6 +1,7 @@
 #ifndef _NETINET_IN_H
 #define _NETINET_IN_H
-// #include <inttypes.h>
+
+#include <inttypes.h>
 #include <sys/socket.h>
 // #include <arpa/inet.h>
 #include <stdint.h>
