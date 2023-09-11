@@ -5,10 +5,6 @@
 #define __DECLARE_STACK_T
 #include "__posix_types.h"
 
-typedef unsigned long size_t;
-
-
-typedef int sigset_t;
 typedef void* mcontext_t; // TODO
 
 typedef struct ucontext_t {

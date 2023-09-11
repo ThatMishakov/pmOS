@@ -7,6 +7,7 @@
 #define __DECLARE_PTHREAD_T
 #define __DECLARE_PTHREAD_ATTR_T
 #define __DECLARE_STACK_T
+#define __DECLARE_SIGSET_T
 #include "__posix_types.h"
 
 typedef int sig_atomic_t;
@@ -15,22 +16,12 @@ typedef int sig_atomic_t;
 #define SIG_ERR (void(*)(int)1)
 #define SIG_IGN (void(*)(int)2)
 
-#if defined(__cplusplus)
-extern "C" {
-#endif
-
-void (*signal(int sig, void (*func)(int)))(int);
-int raise(int sig);
 
 #define SIGFPE 1
 #define SIGILL 2
 #define SIGINT 3
 #define SIGSEGV 4
 #define SIGTERM 5
-
-#if defined(__cplusplus)
-} /* extern "C" */
-#endif
 
 // TODO
 // #ifdef _POSIX_C_SOURCE
@@ -76,27 +67,24 @@ int raise(int sig);
 #define MINSIGSTKSZ (2*4096)
 #define SIGSTKSZ (32*4096)
 
-typedef int sigset_t;
-
 #define SIGEV_NONE 0
 #define SIGEV_SIGNAL 1
 #define SIGEV_THREAD 2
 
-typedef struct sigstack {
+struct sigstack {
     int       ss_onstack;
     void     *ss_sp;
-} sigstack;
+};
 
-typedef union sigval {
+union sigval {
     int sival_int;
     void *sival_ptr;
-} sigval;
+};
 
 #define SIGRTMIN 32
 #define SIGRTMAX 64
 
 #define NSIG 64
-#define _NSIG 64
 
 typedef struct {
     int           si_signo;
@@ -110,13 +98,13 @@ typedef struct {
     union sigval  si_value;
 } siginfo_t;
 
-typedef struct sigevent {
+struct sigevent {
     int sigev_notify;
     int sigev_signo;
     union sigval sigev_value;
     void(*sigev_notify_function)(union sigval);
     pthread_attr_t * sigev_notify_attributes;
-} sigevent;
+};
 
 struct sigaction {
     void (*sa_handler)(int);
@@ -166,6 +154,13 @@ struct sigaction {
 #define SI_ASYNCIO 38
 #define SI_MESGQ 39
 
+#if defined(__cplusplus)
+extern "C" {
+#endif
+
+void (*signal(int sig, void (*func)(int)))(int);
+int raise(int sig);
+
 void (*bsd_signal(int, void (*)(int)))(int);
 int    kill(pid_t, int);
 int    killpg(pid_t, int);
@@ -193,6 +188,10 @@ int    sigsuspend(const sigset_t *);
 int    sigtimedwait(const sigset_t *, siginfo_t *, const struct timespec *);
 int    sigwait(const sigset_t *, int *);
 int    sigwaitinfo(const sigset_t *, siginfo_t *);
+
+#if defined(__cplusplus)
+} /* extern "C" */
+#endif
 
 // #endif _POSIX_C_SOURCE
 

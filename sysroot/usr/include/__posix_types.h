@@ -17,9 +17,15 @@ typedef signed long off_t;
 #define __DECLARED_OFF_T
 #endif
 
+#if defined(__DECLARE_BLKCNT_T) && !defined(__DECLARED_BLKCNT_T)
+typedef unsigned long blkcnt_t;
+#define __DECLARED_BLKCNT_T
+#endif
 
-// typedef unsigned long blkcnt_t;
-// typedef unsigned long blksize_t;
+#if defined(__DECLARE_BLKSIZE_T) && !defined(__DECLARED_BLKSIZE_T)
+typedef unsigned long blksize_t;
+#define __DECLARED_BLKSIZE_T
+#endif
 
 #if defined(__DECLARE_CLOCK_T) && !defined(__DECLARED_CLOCK_T)
 typedef unsigned long clock_t;
@@ -36,7 +42,10 @@ typedef unsigned long suseconds_t;
 #define __DECLARED_SUSECONDS_T
 #endif
 
-// typedef unsigned long useconds_t;
+#if defined(__DECLARE_USECONDS_T) && !defined(__DECLARED_USECONDS_T)
+typedef unsigned long useconds_t;
+#define __DECLARED_USECONDS_T
+#endif
 
 #if defined(__DECLARE_TIMER_T) && !defined(__DECLARED_TIMER_T)
 typedef unsigned long timer_t;
@@ -142,4 +151,9 @@ typedef struct stack_t {
 #if defined(__DECLARE_LOCALE_T) && !defined(__DECLARED_LOCALE_T)
 typedef unsigned long locale_t;
 #define __DECLARED_LOCALE_T
+#endif
+
+#if defined(__DECLARE_SIGSET_T) && !defined(__DECLARED_SIGSET_T)
+typedef unsigned long sigset_t;
+#define __DECLARED_SIGSET_T
 #endif
