@@ -1,6 +1,19 @@
 #ifndef __SYS_STAT_H
 #define __SYS_STAT_H
-#include "types.h"
+#include <time.h>
+
+#define __DECLARE_BLKCNT_T
+#define __DECLARE_BLKSIZE_T
+#define __DECLARE_DEV_T
+#define __DECLARE_INO_T
+#define __DECLARE_MODE_T
+#define __DECLARE_NLINK_T
+#define __DECLARE_UID_T
+#define __DECLARE_GID_T
+#define __DECLARE_OFF_T
+#define __DECLARE_TIME_T
+#define __DECLARE_TIMESPEC_T
+#include "../__posix_types.h"
 
 // TODO: File type macros and whatnot
 
@@ -61,9 +74,9 @@ struct stat {
                        ///     For a typed memory object, the length in bytes. 
                        ///     For other file types, the use of this field is 
                        ///     unspecified. 
-    time_t    st_atime; ///<   Time of last access. 
-    time_t    st_mtime; ///<   Time of last data modification. 
-    time_t    st_ctime; ///<   Time of last status change. 
+    struct timespec   st_atim; ///<   Time of last access. 
+    struct timespec    st_mtim; ///<   Time of last data modification. 
+    struct timespec    st_ctim; ///<   Time of last status change. 
     blksize_t st_blksize; ///< A file system-specific preferred I/O block size for 
                           ///  this object. In some file system types, this may 
                           ///  vary from file to file. 
@@ -78,12 +91,22 @@ extern "C" {
 
 int    chmod(const char *, mode_t);
 int    fchmod(int, mode_t);
+int    fchmodat(int, const char *, mode_t, int);
 int    fstat(int, struct stat *);
+int    fstatat(int, const char *, struct stat *, int);
+int    futimens(int, const struct timespec [2]);
 int    lstat(const char *, struct stat *);
 int    mkdir(const char *, mode_t);
+int    mkdirat(int, const char *, mode_t);
 int    mkfifo(const char *, mode_t);
+int    mkfifoat(int, const char *, mode_t);
+
+int    mknod(const char *, mode_t, dev_t);
+int    mknodat(int, const char *, mode_t, dev_t);
+
 int    stat(const char *, struct stat *);
 mode_t umask(mode_t);
+int    utimensat(int, const char *, const struct timespec [2], int);
 
 #if defined(__cplusplus)
 } /* extern "C" */

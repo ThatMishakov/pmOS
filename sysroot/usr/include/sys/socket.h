@@ -6,9 +6,11 @@
 #define __DECLARE_SSIZE_T
 #define __DECLARE_SIZE_T
 #define __DECLARE_SA_FAMILY_T
+#define __DECLARE_OFF_T
 #include "__posix_types.h"
 
-typedef unsigned long socklen_t;
+// TODO: This is what Go expects, but I prefer it to be 64-bit.
+typedef unsigned socklen_t;
 
 struct sockaddr {
     sa_family_t sa_family;
@@ -17,8 +19,7 @@ struct sockaddr {
 
 struct sockaddr_storage {
     sa_family_t ss_family;
-    // TODO: Pad for appropriate size.
-    // char ss_data[];
+    char ss_data[254];
 };
 
 struct msghdr {
@@ -110,16 +111,16 @@ extern "C" {
 
 #ifdef __STDC_HOSTED__
 
-int     accept(int, struct sockaddr *restrict, socklen_t *restrict);
+int     accept(int, struct sockaddr *, socklen_t *);
 int     bind(int, const struct sockaddr *, socklen_t);
 int     connect(int, const struct sockaddr *, socklen_t);
-int     getpeername(int, struct sockaddr *restrict, socklen_t *restrict);
-int     getsockname(int, struct sockaddr *restrict, socklen_t *restrict);
-int     getsockopt(int, int, int, void *restrict, socklen_t *restrict);
+int     getpeername(int, struct sockaddr *, socklen_t *);
+int     getsockname(int, struct sockaddr *, socklen_t *);
+int     getsockopt(int, int, int, void *, socklen_t *);
 int     listen(int, int);
 ssize_t recv(int, void *, size_t, int);
-ssize_t recvfrom(int, void *restrict, size_t, int,
-        struct sockaddr *restrict, socklen_t *restrict);
+ssize_t recvfrom(int, void *, size_t, int,
+        struct sockaddr *, socklen_t *);
 ssize_t recvmsg(int, struct msghdr *, int);
 ssize_t send(int, const void *, size_t, int);
 ssize_t sendmsg(int, const struct msghdr *, int);
@@ -130,6 +131,81 @@ int     shutdown(int, int);
 int     sockatmark(int);
 int     socket(int, int, int);
 int     socketpair(int, int, int, int [2]);
+
+/**
+ * @brief Accept an incoming network connection with additional options.
+ *
+ * The `accept4` function is used to accept an incoming network connection on a
+ * socket. It provides additional options for controlling the behavior of the
+ * accepted socket, such as setting flags for the socket.
+ *
+ * @param sockfd    The socket file descriptor on which to accept the connection.
+ * @param addr      A pointer to a sockaddr structure to store the address of the
+ *                  connecting peer. Pass NULL if you don't need the peer's address.
+ * @param addrlen   A pointer to an integer that specifies the size of the `addr`
+ *                  structure. This should be initialized to the size of the `addr`
+ *                  structure before calling `accept4`.
+ * @param flags     Additional flags to control the behavior of the accepted socket.
+ * @return          If successful, the function returns a new socket file descriptor
+ *                  representing the accepted connection. On error, it returns -1 and
+ *                  sets `errno` to indicate the error.
+ *
+ * @note            The `accept4` function is typically used with non-blocking sockets
+ *                  and can be used to set socket options like O_NONBLOCK and O_CLOEXEC.
+ */
+int accept4(int sockfd, struct sockaddr *addr, socklen_t *addrlen, int flags);
+
+/**
+ * @brief Accept an incoming network connection with additional options (POSIX version).
+ *
+ * The `paccept` function is used to accept an incoming network connection on a socket.
+ * It provides additional options for controlling the behavior of the accepted socket
+ * and is a POSIX version of the `accept4` function.
+ *
+ * @param sockfd    The socket file descriptor on which to accept the connection.
+ * @param addr      A pointer to a sockaddr structure to store the address of the
+ *                  connecting peer. Pass NULL if you don't need the peer's address.
+ * @param addrlen   A pointer to an integer that specifies the size of the `addr`
+ *                  structure. This should be initialized to the size of the `addr`
+ *                  structure before calling `paccept`.
+ * @param sigmask   A pointer to a signal mask that specifies the set of signals to
+ *                  be blocked while waiting for a connection. Pass NULL for no signal
+ *                  blocking.
+ * @param flags     Additional flags to control the behavior of the accepted socket.
+ * @return          If successful, the function returns a new socket file descriptor
+ *                  representing the accepted connection. On error, it returns -1 and
+ *                  sets `errno` to indicate the error.
+ *
+ * @note            The `paccept` function is typically used with non-blocking sockets
+ *                  and can be used to set socket options like O_NONBLOCK and O_CLOEXEC.
+ *                  It also allows specifying a signal mask to block certain signals
+ *                  while waiting for a connection.
+ */
+int paccept(int sockfd, struct sockaddr *addr, socklen_t *addrlen, const sigset_t *sigmask, int flags);
+
+/**
+ * @brief Send a file to a socket.
+ *
+ * This function sends a regular file or shared memory object specified by the
+ * file descriptor @p fd out to a stream socket specified by descriptor @p s.
+ *
+ * @param fd      The file descriptor of the file to send.
+ * @param s       The descriptor of the socket to send the file to.
+ * @param offset  The offset in the file where to begin sending.
+ * @param nbytes  The number of bytes of the file to send. Use 0 to send until
+ *                the end of the file is reached.
+ * @param hdtr    An optional header and/or trailer to send before and after
+ *                the file data. See struct sf_hdtr for details.
+ * @param sbytes  If non-NULL, the total number of bytes sent is stored here.
+ * @param flags   A bitmap of flags that control the behavior of sendfile.
+ *
+ * @return 0 on success, or -1 on error with errno set to indicate the error.
+ *
+ * @note This function is not standard and is only generally present on BSD systems.
+ *       Since pmOS is not BSD, its behavior might be slightly different.
+ */
+int sendfile(int fd, int s, off_t offset, size_t nbytes, struct sf_hdtr *hdtr,
+             off_t *sbytes, int flags);
 
 #endif
 

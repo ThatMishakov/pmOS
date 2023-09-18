@@ -381,6 +381,7 @@ enum {
     _SC_XOPEN_UNIX = 122, //< X/Open UNIX.
     _SC_XOPEN_UUCP = 123, //< X/Open UUCP.
     _SC_XOPEN_VERSION = 124, //< X/Open version.
+    _SC_NPROCESSORS_ONLN = 125, //< Number of processors currently online (available).
 };
 
 
@@ -489,6 +490,7 @@ off_t lseek(int fd, off_t offset, int whence);
 long         pathconf(const char *, int);
 int          pause(void);
 int          pipe(int [2]);
+int          pipe2(int [2], int);
 
 /**
  * @brief Read data from a file descriptor.

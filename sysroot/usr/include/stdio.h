@@ -1,21 +1,20 @@
 #ifndef _STDIO_H
 #define _STDIO_H 1
-#include <stddef.h>
-#include <stdarg.h>
-
-// This shouldn't be included here, but this header is broken without it.
-#include <stdint.h>
 
 #define __DECLARE_SIZE_T
 #define __DECLARE_SSIZE_T
 #define __DECLARE_OFF_T
 #include "__posix_types.h"
 
+// This shouldn't be included here, but this header is broken without it.
+#include <stdint.h>
+
+#include <stddef.h>
+#include <stdarg.h>
+
 #if defined(__cplusplus)
 extern "C" {
 #endif
-
-#ifdef __STDC_HOSTED__
 
 typedef unsigned long pmos_port_t;
 
@@ -43,6 +42,7 @@ typedef size_t fpos_t;
 typedef int errno_t;
 typedef size_t rsize_t;
 
+#ifdef __STDC_HOSTED__
 
 int remove ( const char * filename );
 int rename ( const char * oldname, const char * newname );

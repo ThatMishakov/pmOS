@@ -28,7 +28,7 @@ extern "C" {
 #ifdef __STDC_HOSTED__
 
 // Generic syscall
-syscall_r syscall(uint64_t call_n, ...);
+syscall_r pmos_syscall(uint64_t call_n, ...);
 
 /**
  * @brief Returns the PID of the callee

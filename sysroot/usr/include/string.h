@@ -56,7 +56,19 @@ char *strtok(char * s1, const char * s2);
 
 /* Miscellaneous functions */
 void *memset(void *s, int c, size_t n);
-const char *strerror(int errnum);
+
+/** 
+ * @brief Get an error message string for an error number.
+ * 
+ * The `strerror` function returns a pointer to a string that describes the error code
+ * passed in the argument `errnum`, possibly using the LC_MESSAGES part of the current locale
+ * to select the appropriate language. The string is not guaranteed to be unique for each
+ * distinct `errnum` value.
+ * 
+ * @param errnum The error number to get a message string for.
+ * @return A pointer to a string describing the error code `errnum`.
+ */
+char *strerror(int errnum);
 size_t strlen(const char* str);
 
 /**
@@ -87,7 +99,6 @@ size_t strnlen(const char *s, size_t maxlen);
  */
 char *strdup(const char *s);
 
-#if _POSIX_C_SOURCE >= 200809L
 /**
  * @brief Duplicate a portion of a string with limited length.
  *
@@ -102,7 +113,6 @@ char *strdup(const char *s);
  * @return A pointer to the newly allocated string on success, or NULL on failure.
  */
 char *strndup(const char *str, size_t n);
-#endif
 
 #if defined(__cplusplus)
 } /* extern "C" */

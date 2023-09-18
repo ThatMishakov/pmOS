@@ -3,22 +3,34 @@
 #include "../signal.h"
 #include "resource.h"
 
-#define WNOHANG 0
-#define WUNTRACED 1
+/// Constants for the `waitpid' function.
+enum {
+    WCONTINUED = 1, //< Report status of continued child process.
+    WNOHANG = 2, //< Return immediately if no child has exited.
+    WUNTRACED = 4, //< Report status of stopped child process.
+};
 
-#define WEXITSTATUS 0
-#define WIFCONTINUED 1
-#define WIFEXITED 2
-#define WIFSIGNALED 3
-#define WIFSTOPPED 4
-#define WSTOPSIG 5
-#define WTERMSIG 6
+/// Exit status of a child process.
+#define WEXITSTATUS(status) (((status) & 0xff00) >> 8)
+/// Returns true if the child process was continued.
+#define WIFCONTINUED(status) ((status) == 0xffff)
+/// Returns true if the child process exited normally.
+#define WIFEXITED(status) (((status) & 0xff) == 0)
+/// Returns true if the child process was terminated by a signal.
+#define WIFSIGNALED(status) (((status) & 0xff) != 0 && ((status) & 0xff00) == 0)
+/// Returns true if the child process was stopped.
+#define WIFSTOPPED(status) (((status) & 0xff) == 0x7f)
+/// Returns the signal that stopped the child process.
+#define WSTOPSIG(status) (((status) & 0xff00) >> 8)
+/// Returns the signal that terminated the child process.
+#define WTERMSIG(status) ((status) & 0xff)
 
-#define WEXITED 0
-#define WSTOPPED 1
-#define WCONTINUED 2
-#define WNOHANG 3
-#define WNOWAIT 4
+/// Constants for the `waitid' function.
+enum {
+    WEXITED = 0, //< Wait for processes that have exited.
+    WNOWAIT = 1, //< Leave process running; just report status.
+    WSTOPPED = 2, //< Wait for processes that have stopped.
+};
 
 #define __DECLARE_IDTYPE_T
 #define __DECLARE_ID_T

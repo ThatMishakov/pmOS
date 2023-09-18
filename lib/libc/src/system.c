@@ -11,6 +11,6 @@ int pmos_request_io_permission()
 
     pid_t my_pid = getpid();
 
-    uint64_t result = syscall(SYSCALL_SET_ATTR, my_pid, ATTR_ALLOW_PORT, 1).result;
+    uint64_t result = pmos_syscall(SYSCALL_SET_ATTR, my_pid, ATTR_ALLOW_PORT, 1).result;
     return result ? -1 : 0;
 }

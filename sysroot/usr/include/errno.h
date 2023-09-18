@@ -5,139 +5,141 @@
 extern "C" {
 #endif
 
+// Fun fact: gcc/libgo/mksysinfo.sh doesn't like errno constants with parentheses
+
 // C signals
-#define ERANGE (1)
-#define EILSEQ (2)
-#define ERANGE (3)
+#define ERANGE 1
+#define EILSEQ 2
+#define ERANGE 3
 
 // TODO: Fix this macro
 // #ifdef _POSIX_C_SOURCE
 
 /// Argument list too long
-#define E2BIG (4)
+#define E2BIG 4
 
 /// Permission denied
-#define EACCES (5)
+#define EACCES 5
 
 /// Address in use
-#define EADDRINUSE (6)
+#define EADDRINUSE 6
 
 /// Address not available
-#define EADDRNOTAVAIL (7)
+#define EADDRNOTAVAIL 7
 
 /// Address family not supported
-#define EAFNOSUPPORT (8)
+#define EAFNOSUPPORT 8
 
 /// Recource not available, try again
-#define EAGAIN (9)
+#define EAGAIN 9
 
 /// Connection already in progress
-#define EALREADY (10)
+#define EALREADY 10
 
 /// Bad file descriptor
-#define EBADF (11)
+#define EBADF 11
 
 /// Bad message
-#define EBADMSG (12)
+#define EBADMSG 12
 
 /// Device or recource busy
-#define EBUSY (13)
+#define EBUSY 13
 
 /// Operation cancelled
-#define ECANCELED (14)
+#define ECANCELED 14
 
 /// No child process
-#define ECHILD (15)
+#define ECHILD 15
 
 /// Connection aborted
-#define ECONNABORTED (16)
+#define ECONNABORTED 16
 
 /// Connection refused
-#define ECONNREFUSED (17)
+#define ECONNREFUSED 17
 
 /// Connection reset
-#define ECONNRESET (18)
+#define ECONNRESET 18
 
 /// Recource deadlock will be caused
-#define EDEADLK (19)
+#define EDEADLK 19
 
 /// Destination address required
-#define EDESTADDRREQ (20)
+#define EDESTADDRREQ 20
 
 /// Argument out of domain function
-#define EDOM (21)
+#define EDOM 21
 
 /// Reserved
-#define EDQUOT (22)
+#define EDQUOT 22
 
 /// File exists
-#define EEXIST (23)
+#define EEXIST 23
 
 /// Bad address
-#define EFAULT (24)
+#define EFAULT 24
 
 /// File too large
-#define EFBIG (25)
+#define EFBIG 25
 
 /// Host is unreachable
-#define EHOSTUNREACH (26)
+#define EHOSTUNREACH 26
 
 /// Identifier removed
-#define EIDRM (27)
+#define EIDRM 27
 
 /// Illegal byte sequence
-#define EILSEQ (28)
+#define EILSEQ 28
 
 /// Operation in progress
-#define EINPROGRESS (29)
+#define EINPROGRESS 29
 
 /// Interrupted function
-#define EINTR (30)
+#define EINTR 30
 
 /// Invalid argument
-#define EINVAL (31)
+#define EINVAL 31
 
 /// I/O error
-#define EIO (32)
+#define EIO 32
 
 /// Socket is connected
-#define EISCONN (33)
+#define EISCONN 33
 
 /// Is a directory
-#define EISDIR (34)
+#define EISDIR 34
 
 /// Too many levels of symbolic links
-#define ELOOP (35)
+#define ELOOP 35
 
 /// File descruptor value too large
-#define EMFILE (36)
+#define EMFILE 36
 
 /// Too many links
-#define EMLINK (37)
+#define EMLINK 37
 
 /// Message too large
-#define EMSGSIZE (38)
+#define EMSGSIZE 38
 
 /// Reserved
-#define EMULTIHOP (39)
+#define EMULTIHOP 39
 
 /// File name too long
-#define ENAMETOOLONG (40)
+#define ENAMETOOLONG 40
 
 /// Network is down
-#define ENETDOWN (41)
+#define ENETDOWN 41
 
 /// Connection aborted by network
-#define ENETRESET (42)
+#define ENETRESET 42
 
 /// Network unreachable
-#define ENETUNREACH (43)
+#define ENETUNREACH 43
 
 /// Too many files open
-#define ENFILE (44)
+#define ENFILE 44
 
 /// No buffer space available
-#define ENOBUFS (45)
+#define ENOBUFS 45
 
 /*
 
@@ -145,31 +147,31 @@ extern "C" {
 */
 
 /// No such device
-#define ENODEV (47)
+#define ENODEV 47
 
 /// No such file or directory
-#define ENOENT (48)
+#define ENOENT 48
 
 /// Executable format error
-#define ENOEXEC (49)
+#define ENOEXEC 49
 
 /// No locks available
-#define ENOLCK (50)
+#define ENOLCK 50
 
 /// Reserved
-#define ENOLCK (51)
+#define ENOLCK 51
 
 /// Not enough space
-#define ENOMEM (52)
+#define ENOMEM 52
 
 /// No message of the desired type
-#define ENOMSG (53)
+#define ENOMSG 53
 
 /// Protocol not available
-#define ENOPROTOOPT (54)
+#define ENOPROTOOPT 54
 
 /// No space left on device
-#define ENOSPC (55)
+#define ENOSPC 55
 
 /*
 
@@ -179,82 +181,82 @@ extern "C" {
 */
 
 /// Functionality not supported
-#define ENOSYS (58)
+#define ENOSYS 58
 
 /// Socket is not connected
-#define ENOTCONN (59)
+#define ENOTCONN 59
 
 /// Not a directory or a symbolic link to a directory
-#define ENOTDIR (60)
+#define ENOTDIR 60
 
 /// Directory not empty
-#define ENOTEMPTY (61)
+#define ENOTEMPTY 61
 
 /// State not recoverable
-#define ENOTRECOVERABLE (62)
+#define ENOTRECOVERABLE 62
 
 /// Not a socket
-#define ENOTSOCK (63)
+#define ENOTSOCK 63
 
 /// Not supported
-#define ENOTSUP (64)
+#define ENOTSUP 64
 
 /// Inappropriate I/O operation
-#define ENOTTY (65)
+#define ENOTTY 65
 
 /// No such device or address
-#define ENXIO (66)
+#define ENXIO 66
 
 /// Operation not supported on socket
-#define EOPNOTSUPP (67)
+#define EOPNOTSUPP 67
 
 /// Value too large to be stored in data type
-#define EOVERFLOW (68)
+#define EOVERFLOW 68
 
 /// Previous owner died
-#define EOWNERDEAD (69)
+#define EOWNERDEAD 69
 
 /// Operation not permitted
-#define EPERM (70)
+#define EPERM 70
 
 /// Broken pipe
-#define EPIPE (71)
+#define EPIPE 71
 
 /// Protocol error
-#define EPROTO (72)
+#define EPROTO 72
 
 /// Protocol not supported
-#define EPROTONOSUPPORT (73)
+#define EPROTONOSUPPORT 73
 
 /// Protocol weong type for socket
-#define EPROTOTYPE (74)
+#define EPROTOTYPE 74
 
 /// Result too large
-#define ERANGE (75)
+#define ERANGE 75
 
 /// Read-only file system
-#define EROFS (76)
+#define EROFS 76
 
 /// Invalid seek
-#define ESPIPE (77)
+#define ESPIPE 77
 
 /// No such process
-#define ESRCH (78)
+#define ESRCH 78
 
 /// Reserved
-#define ESTALE (79)
+#define ESTALE 79
 
 /// Connection timed out
-#define ETIMEDOUT (80)
+#define ETIMEDOUT 80
 
 /// Text file busy
-#define ETXTBSY (81)
+#define ETXTBSY 81
 
 /// Operation would block
-#define EWOULDBLOCK (82)
+#define EWOULDBLOCK 82
 
 /// Cross-device link
-#define EXDEV (83)
+#define EXDEV 83
 
 // #endif // _POSIX_C_SOURCE
 

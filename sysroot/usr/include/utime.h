@@ -4,8 +4,6 @@
 #define __DECLARE_TIME_T
 #include "__posix_types.h"
 
-typedef unsigned long DIR;
-
 struct utimbuf {
     time_t    actime;
     time_t    modtime;

@@ -31,13 +31,41 @@
 #define O_APPEND   (02000)
 #define O_NONBLOCK (04000)
 #define O_SYNC     (010000)
+#define O_DSYNC    (020000)
+#define O_RSYNC    (04010000)
 
-#define O_ACCMODE (1)
+#define O_ACCMODE (07)
 
 #define O_SEARCH  (00)
 #define O_RDONLY  (01)
 #define O_RDWR    (02)
 #define O_WRONLY  (03)
+
+#define AT_FDCWD (-1)
+
+#define AT_EACCESS (1)
+
+#define AT_SYMLINK_NOFOLLOW (1)
+
+#define AT_SYMLINK_FOLLOW   (1)
+
+#define AT_REMOVEDIR (1)
+
+#define POSIX_FADV_NORMAL     (0)
+#define POSIX_FADV_RANDOM     (1)
+#define POSIX_FADV_SEQUENTIAL (2)
+#define POSIX_FADV_WILLNEED   (3)
+#define POSIX_FADV_DONTNEED   (4)
+#define POSIX_FADV_NOREUSE    (5)
+
+struct flock {
+    short l_type; //< Type of lock: F_RDLCK, F_WRLCK, or F_UNLCK
+    short l_whence; //< Where `l_start` is relative to (like `whence` in `lseek`)
+    off_t l_start; //< Offset where the lock begins
+    off_t l_len; //< Number of bytes to lock. 0 means "until EOF".
+    pid_t l_pid; //< Process holding the lock. F_GETLK fills this field on return.
+};
+
 
 #if defined(__cplusplus)
 extern "C" {

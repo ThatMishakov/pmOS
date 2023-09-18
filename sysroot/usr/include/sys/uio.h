@@ -5,7 +5,7 @@
 #define __DECLARE_SSIZE_T
 #include "__posix_types.h"
 
-struct io_vec {
+struct iovec {
     void *iov_base; //< Base address of the buffer.
     size_t iov_len; //< Size of the buffer.
 };

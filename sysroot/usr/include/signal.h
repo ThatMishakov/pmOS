@@ -1,6 +1,5 @@
-#ifndef __SIGNAL_H
-#define __SIGNAL_H
-#include <time.h>
+#ifndef _SIGNAL_H
+#define _SIGNAL_H
 
 #define __DECLARE_PID_T
 #define __DECLARE_UID_T
@@ -8,9 +7,10 @@
 #define __DECLARE_PTHREAD_ATTR_T
 #define __DECLARE_STACK_T
 #define __DECLARE_SIGSET_T
+#define __DECLARE_TIMESPEC_T
 #include "__posix_types.h"
 
-typedef int sig_atomic_t;
+typedef unsigned long sig_atomic_t;
 
 #define SIG_DFL ((void(*)(int))0)
 #define SIG_ERR (void(*)(int)1)
@@ -196,4 +196,4 @@ int    sigwaitinfo(const sigset_t *, siginfo_t *);
 // #endif _POSIX_C_SOURCE
 
 
-#endif // __SIGNAL_H
+#endif // _SIGNAL_H

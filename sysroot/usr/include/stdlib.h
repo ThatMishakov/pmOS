@@ -137,6 +137,41 @@ int atexit(void (*func)(void));
 void exit(int status);
 void _Exit(int status);
 char *getenv(const char *name);
+
+/**
+ * @brief Set the value of an environment variable or create a new one.
+ *
+ * The `setenv` function is used to set the value of an environment variable
+ * or create a new one variable if it does not exist. If the specified
+ * environment variable already exists, its value is updated with the provided one.
+ *
+ * @param name    A pointer to a null-terminated string containing the name of
+ *                the environment variable. Must not contain the '=' character.
+ * @param value   A pointer to a null-terminated string containing the new value
+ *                to be associated with the environment variable. If this parameter
+ *                is NULL, the environment variable will be removed from the environment.
+ * @param overwrite If this parameter is non-zero and the environment variable
+ *                already exists, its value will be overwritten with the provided
+ *                value, and if the value is NULL, it will be removed. If `overwrite`
+ *                is zero and the variable exists, the function will have no effect.
+ * @return        Upon successful completion, the `setenv` function returns zero (0).
+ *                If an error occurs, it returns -1, and sets the `errno` variable to
+ *                indicate the error.
+ *
+ * @note          The `setenv` function is typically used to modify or create
+ *                environment variables within a process.
+ * 
+ * @note          NULL may be passed as the `value` parameter to remove the
+ *                variable from the environment. This is not a standard POSIX
+ *                feature and should be avoided in portable applications.
+ *                Instead, `unsetenv` can be used to achieve the same effect.
+ *
+ * @warning       Modifying or creating environment variables can affect the behavior
+ *                of the entire process and should be used with caution.
+ */
+int setenv(const char *name, const char *value, int overwrite);
+
+int putenv(char *string);
 int system(const char *string);
 
 void *bsearch(const void *key, const void *base,

@@ -94,7 +94,12 @@
         "termios.h": "c",
         "__posix_types.h": "c",
         "wait.h": "c",
-        "limits.h": "c"
+        "limits.h": "c",
+        "math.h": "c",
+        "runtime.h": "c",
+        "resource.h": "c",
+        "signal.h": "c",
+        "in.h": "c"
     },
     "cmake.configureOnOpen": false
 }

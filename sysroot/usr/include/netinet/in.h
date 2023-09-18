@@ -17,6 +17,7 @@ struct sockaddr_in {
     sa_family_t sin_family; //< Address family (AF_INET)
     in_port_t sin_port; //< Port number
     struct in_addr sin_addr; //< IP address
+    char sin_zero[8]; //< Not used
 };
 
 struct in6_addr {
@@ -63,6 +64,10 @@ enum {
     IPV6_ADD_MEMBERSHIP = 20, //< Join a group membership
     IPV6_DROP_MEMBERSHIP = 21, //< Leave a group membership
     IPV6_V6ONLY = 26, //< Set whether an IPv6 socket is IPv6 only
+
+    IP_MULTICAST_IF = 32, //< Set the interface for outgoing multicast packets
+    IP_MULTICAST_TTL = 33, //< Set the time-to-live for outgoing multicast packets
+    IP_MULTICAST_LOOP = 34, //< Set whether outgoing multicast packets should be looped back to the local sockets
 };
 
 /// Unspecified address

@@ -1,8 +1,8 @@
 #include <kernel/syscalls.h>
 
-    .globl syscall
-    .type syscall, @function
-syscall:
+    .globl pmos_syscall
+    .type pmos_syscall, @function
+pmos_syscall:
     # ----- Software int -------
     # int $0xca
 
@@ -29,6 +29,6 @@ _syscall_exit:
     movq %rsp, %rbp
     movq %rdi, %rsi
     movq $SYSCALL_EXIT, %rdi
-    call syscall
+    call pmos_syscall
     popq %rbp
     ret

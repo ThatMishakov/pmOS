@@ -2,8 +2,14 @@
 #define NULL ((void *)0)
 #endif
 
-#if defined(__DECLARE_SIZE_T) && !defined(__DECLARED_SIZE_T)
-typedef unsigned long size_t;
+#if defined(__DECLARE_WCHAR_T) && !defined(__DECLARED_WCHAR_T)
+typedef int wchar_t;
+#define __DECLARED_WCHAR_T
+#endif
+
+#if defined(__DECLARE_SIZE_T) && !defined(__DECLARED_SIZE_T) \
+    && !defined(__SIZE_TYPE__) // GCC stddef.h craziness
+typedef long unsigned int size_t;
 #define __DECLARED_SIZE_T
 #endif
 
@@ -53,7 +59,8 @@ typedef unsigned long timer_t;
 #endif
 
 
-#if defined(__DECLARE_TIME_T) && !defined(__DECLARED_TIME_T)
+#if (defined(__DECLARE_TIME_T) || defined(__DECLARE_TIMESPEC_T)) \
+    && !defined(__DECLARED_TIME_T)
 typedef unsigned long time_t;
 #define __DECLARED_TIME_T
 #endif
@@ -61,11 +68,14 @@ typedef unsigned long time_t;
 #if defined(__DECLARE_SA_FAMILY_T) && !defined(__DECLARED_SA_FAMILY_T)
 // This has to be 64 bits to have the same padding between 32 and 64 bit
 // TODO: Revisit this.
-typedef unsigned long sa_family_t;
+typedef unsigned short sa_family_t;
 #define __DECLARED_SA_FAMILY_T
 #endif
 
-// typedef unsigned long dev_t;
+#if defined(__DECLARE_DEV_T) && !defined(__DECLARED_DEV_T)
+typedef unsigned long dev_t;
+#define __DECLARED_DEV_T
+#endif
 
 // typedef unsigned long fsblkcnt_t;
 // typedef unsigned long fsfilcnt_t;
@@ -139,6 +149,23 @@ typedef unsigned long pthread_t;
 #define __DECLARED_PTHREAD_T
 #endif
 
+#if defined(__DECLARE_PTHREAD_MUTEX_T) && !defined(__DECLARED_PTHREAD_MUTEX_T)
+struct __pthread_waiter {
+    unsigned long notification_port;
+    struct __pthread_waiter* next;
+};
+
+typedef struct {
+    unsigned long block_count;
+    unsigned long blocking_thread_id;
+    struct __pthread_waiter* waiters_list_head;
+    struct __pthread_waiter* waiters_list_tail;
+    unsigned long recursive_lock_count;
+    int type;
+} pthread_mutex_t;
+#define __DECLARED_PTHREAD_MUTEX_T
+#endif
+
 #if defined(__DECLARE_STACK_T) && !defined(__DECLARED_STACK_T)
 typedef struct stack_t {
     void     *ss_sp;
@@ -156,4 +183,12 @@ typedef unsigned long locale_t;
 #if defined(__DECLARE_SIGSET_T) && !defined(__DECLARED_SIGSET_T)
 typedef unsigned long sigset_t;
 #define __DECLARED_SIGSET_T
+#endif
+
+#if defined(__DECLARE_TIMESPEC) && !defined(__DECLARED_TIMESPEC)
+typedef struct timespec {
+    time_t tv_sec;
+    long tv_nsec;
+};
+#define __DECLARED_TIMESPEC
 #endif
