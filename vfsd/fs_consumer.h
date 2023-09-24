@@ -38,6 +38,14 @@ struct fs_consumer {
     struct String path;
 };
 
+/// @brief Creates a new FS consumer with the given task group.
+///
+/// This function creates a new fs consumer with the given task group.
+/// It does not check if a fs consumer with the given task group already exists.
+/// @param consumer_task_group The task group of the consumer
+/// @return The created fs consumer, or NULL on failure.
+struct fs_consumer * create_fs_consumer(uint64_t consumer_task_group);
+
 /// @brief Initializes a fs consumer.
 /// @param fs_consumer The fs consumer to initialize.
 /// @return 0 on success, -1 on failure.

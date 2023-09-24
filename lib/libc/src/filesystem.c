@@ -248,7 +248,7 @@ int open(const char* path, int flags) {
 
     // Set the message type, flags, and reply port
     message->num = IPC_Open_NUM;
-    message->flags = 0; // Set appropriate flags based on the 'flags' argument
+    message->flags = IPC_FLAG_REGISTER_IF_NOT_FOUND; // Set appropriate flags based on the 'flags' argument
     message->reply_port = fs_cmd_reply_port; // Use the reply port
     message->fs_consumer_id = fs_data->fs_consumer_id;
 
@@ -604,82 +604,6 @@ struct Filesystem_Data *init_filesystem() {
 
     new_fs_data->fs_consumer_id = sys_result.value;
 
-    // Register new filesystem consumer
-    IPC_Create_Consumer request = {
-        .type = IPC_Create_Consumer_NUM,
-        .flags = 0,
-        .reply_port = fs_cmd_reply_port,
-        .task_group_id = new_fs_data->fs_consumer_id,
-    };
-
-    // Send the IPC_Open message to the filesystem daemon
-    result_t k_result = fs_port != INVALID_PORT ? send_message_port(fs_port, sizeof(request), (const char*)&request) : ERROR_PORT_DOESNT_EXIST;
-
-    int fail_count = 0;
-    while (k_result == ERROR_PORT_DOESNT_EXIST && fail_count < 5) {
-        // Request the port of the filesystem daemon
-        pmos_port_t fs_port = request_filesystem_port();
-        if (fs_port == INVALID_PORT) {
-            // Handle error: Failed to request the port
-            remove_task_from_group(PID_SELF, new_fs_data->fs_consumer_id);
-            pthread_spin_destroy(&new_fs_data->lock);
-            free(new_fs_data);
-            errno = EIO; // Set errno to appropriate error code
-            return NULL;
-        }
-
-        // Retry sending IPC_Open message to the filesystem daemon
-        k_result = send_message_port(fs_port, sizeof(request), (const char*)&request);
-        ++fail_count;
-    }
-
-    if (k_result != SUCCESS) {
-        // Handle error: Failed to send the IPC_Open message
-        remove_task_from_group(PID_SELF, new_fs_data->fs_consumer_id);
-        pthread_spin_destroy(&new_fs_data->lock);
-        free(new_fs_data);
-        errno = EIO; // Set errno to appropriate error code
-        return NULL;
-    }
-
-    // Get the reply from the filesystem daemon
-    Message_Descriptor reply_descr;
-    IPC_Generic_Msg * reply_msg;
-    k_result = get_message(&reply_descr, (unsigned char **)&reply_msg, fs_cmd_reply_port);
-    if (k_result != SUCCESS) {
-        // Handle error: Failed to get the reply
-        remove_task_from_group(PID_SELF, new_fs_data->fs_consumer_id);
-        pthread_spin_destroy(&new_fs_data->lock);
-        free(new_fs_data);
-        errno = EIO; // Set errno to appropriate error code
-        return NULL;
-    }
-
-    // Check if the reply is valid
-    if (reply_msg->type != IPC_Create_Consumer_Reply_NUM || reply_descr.size < sizeof(IPC_Create_Consumer_Reply)) {
-        // Handle error: Invalid reply type
-        remove_task_from_group(PID_SELF, new_fs_data->fs_consumer_id);
-        pthread_spin_destroy(&new_fs_data->lock);
-        free(new_fs_data);
-        free(reply_msg);
-        errno = EIO; // Set errno to appropriate error code
-        return NULL;
-    }
-
-    IPC_Create_Consumer_Reply * reply = (IPC_Create_Consumer_Reply *)reply_msg;
-    if (reply->result_code != SUCCESS) {
-        // Handle error: Failed to create the consumer
-        remove_task_from_group(PID_SELF, new_fs_data->fs_consumer_id);
-        pthread_spin_destroy(&new_fs_data->lock);
-        free(new_fs_data);
-        free(reply_msg);
-        errno = -result;
-        return NULL;
-    }
-
-    // Free the reply message
-    free(reply_msg);
-
     return new_fs_data;
 }
 
@@ -955,7 +879,7 @@ int __clone_fs_data(struct Filesystem_Data ** new_data, uint64_t for_task, bool 
         // Clone the entry
         IPC_Dup request = {
             .type = IPC_Dup_NUM,
-            .flags = 0,
+            .flags = IPC_FLAG_REGISTER_IF_NOT_FOUND,
             .file_id = fd.file_id,
             .reply_port = fs_cmd_reply_port,
             .fs_consumer_id = fs_data->fs_consumer_id,

@@ -4,13 +4,14 @@
 #define __DECLARE_WCHAR_T
 #define __DECLARE_NULL
 #define __DECLARE_SIZE_T
-#define __DECLARE_NULL
+#define __DECLARE_PTRDIFF_T
 #include "__posix_types.h"
 
-typedef size_t ptrdiff_t;
-typedef unsigned long long max_align_t;
+typedef unsigned long max_align_t;
 
-#define offsetof(type, member_designator) \
-        ((size_t)&((*type)(0)->member_designator))
+// This is complicated for C++; use builtin instead
+//#define offsetof(TYPE, MEMBER_DESIGNATOR) ((size_t)&((*const TYPE)(0)->MEMBER_DESIGNATOR))
+#define offsetof(TYPE, MEMBER_DESIGNATOR) __builtin_offsetof(TYPE, MEMBER_DESIGNATOR)
+
 
 #endif /* _STDDEF_H */

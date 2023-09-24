@@ -1,5 +1,11 @@
-#if defined(__DECLARE_NULL) && !defined(NULL)
+#if defined(__DECLARE_NULL) && !defined(__DECLARED_NULL)
+#ifndef __cplusplus
 #define NULL ((void *)0)
+#else
+// Hooray: C++ defines NULL as 0 or nullptr, and C defines it as (void *)0
+#define NULL 0
+#endif
+#define __DECLARED_NULL
 #endif
 
 #if defined(__DECLARE_WCHAR_T) && !defined(__DECLARED_WCHAR_T)
@@ -7,15 +13,20 @@ typedef int wchar_t;
 #define __DECLARED_WCHAR_T
 #endif
 
-#if defined(__DECLARE_SIZE_T) && !defined(__DECLARED_SIZE_T) \
-    && !defined(__SIZE_TYPE__) // GCC stddef.h craziness
+#if defined(__DECLARE_SIZE_T) && !defined(__DECLARED_SIZE_T)
+    // && !defined(__SIZE_TYPE__) // GCC stddef.h craziness
 typedef long unsigned int size_t;
 #define __DECLARED_SIZE_T
 #endif
 
 #if defined(__DECLARE_SSIZE_T) && !defined(__DECLARED_SSIZE_T)
-typedef signed long ssize_t;
+typedef long ssize_t;
 #define __DECLARED_SSIZE_T
+#endif
+
+#if defined(__DECLARE_PTRDIFF_T) && !defined(__DECLARED_PTRDIFF_T)
+typedef long ptrdiff_t;
+#define __DECLARED_PTRDIFF_T
 #endif
 
 #if defined(__DECLARE_OFF_T) && !defined(__DECLARED_OFF_T)
@@ -112,8 +123,16 @@ typedef unsigned long ino_t;
 
 // typedef unsigned long key_t;
 
-// typedef unsigned long mode_t;
-// typedef unsigned long nlink_t;
+#if defined(__DECLARE_MODE_T) && !defined(__DECLARED_MODE_T)
+typedef unsigned long mode_t;
+#define __DECLARED_MODE_T
+#endif
+
+#if defined(__DECLARE_NLINK_T) && !defined(__DECLARED_NLINK_T)
+typedef unsigned long nlink_t;
+#define __DECLARED_NLINK_T
+#endif
+
 
 #if defined(__DECLARE_PTHREAD_ATTR_T) && !defined(__DECLARED_PTHREAD_ATTR_T)
 typedef struct {

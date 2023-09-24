@@ -1,9 +1,15 @@
 #ifndef _PTHREAD_H
 #define _PTHREAD_H 1
 
-#if defined(__cplusplus)
-extern "C" {
-#endif
+#define __DECLARE_SIZE_T
+// POSIX doesn't seem to mention NULL here, but it's pulled from
+// time.h and everyone expects it
+#define __DECLARE_NULL
+#include "__posix_types.h"
+
+#include <time.h>
+#include <sched.h>
+
 
 #include "sys/types.h"
 
@@ -52,6 +58,10 @@ extern "C" {
 
 #define PTHREAD_CREATE_JOINABLE (0)
 #define PTHREAD_CREATE_DETACHED (1)
+
+#if defined(__cplusplus)
+extern "C" {
+#endif
 
 /**
  * @brief Uninitializes the pthread_attr_t structure

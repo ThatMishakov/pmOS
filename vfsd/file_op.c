@@ -106,16 +106,25 @@ int open_file(const struct IPC_Open *request, uint64_t sender, uint64_t request_
     if (request == NULL)
         return -1;
 
-    uint64_t filesystem_id = request->fs_consumer_id;
-    struct fs_consumer *consumer = get_fs_consumer(filesystem_id);
-    if (consumer == NULL) {
-        open_file_send_fail(request, ENOENT);
+    // Check if the sender is a member of the task group
+    syscall_r res = is_task_group_member(sender, request->fs_consumer_id);
+    if (res.result != SUCCESS || !res.value) {
+        open_file_send_fail(request, EPERM);
         return 0;
     }
 
-    bool is_consumer = is_fs_consumer(consumer, sender);
-    if (!is_consumer) {
-        open_file_send_fail(request, EPERM);
+    bool register_if_not_found = request->flags & IPC_FLAG_REGISTER_IF_NOT_FOUND;
+
+    uint64_t filesystem_id = request->fs_consumer_id;
+    struct fs_consumer *consumer = get_fs_consumer(filesystem_id);
+    if (consumer == NULL && register_if_not_found) {
+        consumer = create_fs_consumer(request->fs_consumer_id);
+        if (consumer == NULL) {
+            open_file_send_fail(request, ENOMEM);
+            return 0;
+        }
+    } else if (consumer == NULL) {
+        open_file_send_fail(request, ENOENT);
         return 0;
     }
 
@@ -1179,21 +1188,30 @@ int react_ipc_dup(struct IPC_Dup *message, size_t sender, uint64_t message_lengt
     if (message_length < sizeof(struct IPC_Dup))
         return -EINVAL;
 
+    // Check if the sender is a member of the task group
+    syscall_r res = is_task_group_member(sender, message->fs_consumer_id);
+    if (res.result != SUCCESS || !res.value) {
+        return ipc_dup_send_fail(message->reply_port, -EPERM);
+    }
+    res = is_task_group_member(sender, message->new_consumer_id);
+    if (res.result != SUCCESS || !res.value) {
+        return ipc_dup_send_fail(message->reply_port, -EPERM);
+    }
+
+    bool create_new = message->flags & IPC_FLAG_REGISTER_IF_NOT_FOUND;
+
     struct fs_consumer *from_consumer = get_fs_consumer(message->fs_consumer_id);
     if (from_consumer == NULL)
-        return ipc_dup_send_fail(message->reply_port, -EINVAL);
+        // If the consumer was not registered, it has no files open
+        return ipc_dup_send_fail(message->reply_port, -ENOENT);
 
     struct fs_consumer *to_consumer = get_fs_consumer(message->new_consumer_id);
-    if (to_consumer == NULL)
+    if (to_consumer == NULL && create_new) {
+        to_consumer = create_fs_consumer(message->new_consumer_id);
+        if (to_consumer == NULL)
+            return ipc_dup_send_fail(message->reply_port, -ENOMEM);
+    } else if (to_consumer == NULL)
         return ipc_dup_send_fail(message->reply_port, -EINVAL);
-
-    bool is_consumer = is_fs_consumer(from_consumer, sender);
-    if (!is_consumer)
-        return ipc_dup_send_fail(message->reply_port, -EPERM);
-
-    is_consumer = is_fs_consumer(to_consumer, sender);
-    if (!is_consumer)
-        return ipc_dup_send_fail(message->reply_port, -EPERM);
 
     struct Filesystem *fs = get_filesystem(message->filesystem_id);
     if (fs == NULL)

@@ -143,6 +143,9 @@ typedef struct IPC_Write_Plain {
     char data[0];
 } IPC_Write_Plain;
 
+/// Registers a task with the VFS daemon in case it is not already
+#define IPC_FLAG_REGISTER_IF_NOT_FOUND 0x01
+
 #define IPC_Write_NUM 0x41
 typedef struct IPC_Write {
     /// Message type (must be IPC_Write_NUM)

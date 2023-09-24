@@ -105,6 +105,10 @@ enum {
     SHUT_RDWR = 0x3, //< Disables further send and receive operations.
 };
 
+enum {
+    SOMAXCONN = 1024, //< Maximum number of connections.
+};
+
 #ifdef __cplusplus
 extern "C" {
 #endif

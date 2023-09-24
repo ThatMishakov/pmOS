@@ -13,6 +13,7 @@
 #define __DECLARE_TIMESPEC
 #define __DECLARE_TIME_T
 #define __DECLARE_CLOCK_T
+#define __DECLARE_NULL
 #include "__posix_types.h"
 
 extern int    daylight;

@@ -40,8 +40,8 @@ typedef signed long int_fast64_t;
 typedef unsigned long uintptr_t;
 typedef long intptr_t;
 
-typedef long long intmax_t;
-typedef unsigned long long uintmax_t;
+typedef long intmax_t;
+typedef unsigned long uintmax_t;
 
 #define INT8_MIN (-128)
 #define INT16_MIN (-32768)

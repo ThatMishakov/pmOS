@@ -4,12 +4,22 @@
 #define __DECLARE_INO_T
 #define __DECLARE_SSIZE_T
 #define __DECLARE_OFF_T
+#define __DECLARE_SIZE_T
 #include "__posix_types.h"
 
 typedef struct {
     unsigned long __fd;
     unsigned long __pos;
 } DIR;
+
+#define DT_BLK 06
+#define DT_CHR 02
+#define DT_DIR 04
+#define DT_FIFO 01
+#define DT_LNK 012
+#define DT_REG 010
+#define DT_SOCK 014
+#define DT_UNKNOWN 0
 
 struct dirent {
     ino_t  d_ino; //< File serial number.

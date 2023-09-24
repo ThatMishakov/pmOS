@@ -12,6 +12,7 @@ struct passwd {
     gid_t pw_gid; //< Numerical group ID.
     char *pw_dir; //< Initial working directory.
     char *pw_shell; //< Program to use as shell.
+    char *pw_gecos; //< Real name.
 };
 
 #ifdef __STDC_HOSTED__
