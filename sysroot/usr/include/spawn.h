@@ -38,6 +38,7 @@ int   posix_spawn(pid_t *, const char *,
           const posix_spawn_file_actions_t *,
           const posix_spawnattr_t *, char *const [],
           char *const []);
+          
 int   posix_spawn_file_actions_addclose(posix_spawn_file_actions_t *,
           int);
 int   posix_spawn_file_actions_adddup2(posix_spawn_file_actions_t *,

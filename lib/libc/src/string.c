@@ -261,7 +261,8 @@ void *memchr(const void *s, int c, size_t n) {
     return NULL;  // Character not found within n bytes, return NULL
 }
 
-const char *strerror(int errnum) {
+// missing const is a mistake in a standard and callers cannot change the string
+char *strerror(int errnum) {
     switch (errnum) {
         case 0:
             return "No error";

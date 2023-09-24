@@ -99,7 +99,11 @@
         "runtime.h": "c",
         "resource.h": "c",
         "signal.h": "c",
-        "in.h": "c"
+        "in.h": "c",
+        "charconv": "c",
+        "variant": "c",
+        "stdio.h": "c",
+        "assert.h": "c"
     },
     "cmake.configureOnOpen": false
 }

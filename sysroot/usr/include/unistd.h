@@ -530,6 +530,24 @@ int          tcsetpgrp(int, pid_t);
 char        *ttyname(int);
 int          ttyname_r(int, char *, size_t);
 int          unlink(const char *);
+
+/**
+ * @brief Write data to a file descriptor.
+ *
+ * The write() function writes up to 'count' bytes from the buffer pointed to by
+ * 'buffer' to the file descriptor 'fd'.
+ *
+ * @param fd      The file descriptor to write to.
+ * @param buffer  Pointer to the data to be written.
+ * @param count   The number of bytes to write.
+ *
+ * @return On success, the number of bytes written is returned. On error, -1 is
+ * returned, and 'errno' is set to indicate the error.
+ *
+ * @note The write() function may not write all 'count' bytes if there is not
+ * enough space available or if an error occurs. The caller should check the
+ * return value to determine the number of bytes successfully written.
+ */
 ssize_t      write(int, const void *, size_t);
 
 /**

@@ -8,11 +8,11 @@
 #include <pmos/ipc.h>
 #include <pmos/ports.h>
 
-void putchar (int c);
-void write(char* buff)
+void putchar_screen (int c);
+void write_screen(char* buff)
 {
     while (*buff != '\0') {
-        putchar(*buff);
+        putchar_screen(*buff);
         buff++;
     }
 }
@@ -39,9 +39,9 @@ void int_to_hex(char * buffer, uint64_t n, char upper)
 void print_hex(uint64_t i)
 {
     char buffer[24];
-    write(const_cast<char*>("0x"));
+    write_screen(const_cast<char*>("0x"));
     int_to_hex(buffer, i, 1);
-    write(buffer);
+    write_screen(buffer);
 }
 
 void init_screen();
@@ -50,27 +50,29 @@ pmos_port_t main_port = 0;
 pmos_port_t configuration_port = 0;
 
 const char terminal_port_name[] = "/pmos/terminald";
+const char stdout_port_name[] = "/pmos/stdout";
+const char stderr_port_name[] = "/pmos/stderr";
 
 int main() {
     // request_priority(0);
     init_screen();
-    write(const_cast<char*>("Hello from terminald!\n"));
+    write_screen(const_cast<char*>("Hello from terminald!\n"));
 
     {
         ports_request_t req;
         req = create_port(PID_SELF, 0);
         if (req.result != SUCCESS) {
-            write("Error creating configuration port ");
+            write_screen("Error creating configuration port ");
             print_hex(req.result);
-            write("\n");
+            write_screen("\n");
         }
         configuration_port = req.port;
 
         req = create_port(PID_SELF, 0);
         if (req.result != SUCCESS) {
-            write("Error creating main port ");
+            write_screen("Error creating main port ");
             print_hex(req.result);
-            write("\n");
+            write_screen("\n");
         }
         main_port = req.port;
     }
@@ -80,9 +82,23 @@ int main() {
     {
         result_t r = name_port(main_port, terminal_port_name, strlen(terminal_port_name), 0);
         if (r != SUCCESS) {
-            write("terminald: Error 0x");
+            write_screen("terminald: Error 0x");
             print_hex(r);
-            write(" naming port\n");
+            write_screen(" naming port\n");
+        }
+
+        r = name_port(main_port, stdout_port_name, strlen(stdout_port_name), 0);
+        if (r != SUCCESS) {
+            write_screen("terminald: Error 0x");
+            print_hex(r);
+            write_screen(" naming port\n");
+        }
+
+        r = name_port(main_port, stderr_port_name, strlen(stderr_port_name), 0);
+        if (r != SUCCESS) {
+            write_screen("terminald: Error 0x");
+            print_hex(r);
+            write_screen(" naming port\n");
         }
     }
 
@@ -98,7 +114,7 @@ int main() {
         msg_buff[msg.size] = '\0';
 
         if (msg.size < sizeof(IPC_Write_Plain)-1) {
-            write("Warning: recieved very small message\n");
+            write_screen("Warning: recieved very small message\n");
             free(msg_buff);
             break;
         }
@@ -107,12 +123,12 @@ int main() {
 
         switch (str->type) {
         case IPC_Write_Plain_NUM:
-            write(str->data);
+            write_screen(str->data);
             break;
         default:
-            write("Warning: Unknown message type ");
+            write_screen("Warning: Unknown message type ");
             print_hex(str->type);
-            write("\n");
+            write_screen("\n");
         }
 
         free(msg_buff);

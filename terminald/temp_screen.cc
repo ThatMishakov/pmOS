@@ -26,7 +26,7 @@ static volatile unsigned char *video;
 char screen_init = 0;
 
 /*  Put the character C on the screen. */
-void putchar (int c)
+void putchar_screen (int c)
 {
     // Print to bochs as well
   bochs_out(c);

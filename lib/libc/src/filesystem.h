@@ -6,15 +6,35 @@
 #include <pthread.h>
 #include <pmos/system.h>
 
+struct File {
+    task_group_t filesystem_id;
+    uint64_t file_id;
+    pmos_port_t fs_port;
+};
+
+struct IPC_Queue {
+    pmos_port_t port;
+    char *name;
+};
+
 struct File_Descriptor {
     bool used;
     bool reserved;
-    uint16_t flags;
-
-    task_group_t filesystem_id;
-    uint64_t file_id;
+    uint8_t flags;
+    uint8_t type;
     off_t offset;
-    pmos_port_t fs_port;
+
+    union {
+        struct File file;
+        //struct Logger logger;
+        struct IPC_Queue ipc_queue;
+    };
+};
+
+enum Desctiptor_Type {
+    DESCRIPTOR_FILE,
+    DESCRIPTOR_LOGGER,
+    DESCRIPTOR_IPC_QUEUE,
 };
 
 struct Filesystem_Data {
