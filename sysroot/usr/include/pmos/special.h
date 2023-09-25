@@ -5,8 +5,6 @@
 extern "C" {
 #endif
 
-#include "../stdlib_com.h"
-
 #ifdef __STDC_HOSTED__
 
 /**

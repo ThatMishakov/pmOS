@@ -18,25 +18,9 @@ extern "C" {
 
 typedef unsigned long pmos_port_t;
 
-typedef struct FILE {
-    union {
-        struct {
-            pmos_port_t port_ptr;
-            const char* port_name;
-            size_t size;
-            uint32_t flags;
-        } port;
+// FILE * is actually POSIX file descriptor (int)
+typedef void FILE;
 
-        struct {
-            uint8_t* buffer;
-            size_t size;
-            size_t pos;
-            uint32_t flags;
-        } string;
-    };
-    uint8_t type;
-} 
-FILE;
 typedef size_t fpos_t;
 
 typedef int errno_t;
@@ -129,9 +113,9 @@ int      fileno(FILE *);
 #define L_tmpnam 1
 #define TMP_MAX 65536
 
-extern FILE * stdin;
-extern FILE * stdout;
-extern FILE * stderr;
+static FILE * stdin = (FILE *) 0;
+static FILE * stdout = (FILE *) 1;
+static FILE * stderr = (FILE *) 2;
 
 #define SEEK_SET 0
 #define SEEK_CUR 1

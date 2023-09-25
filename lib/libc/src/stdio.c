@@ -9,14 +9,9 @@
 #include <pmos/ipc.h>
 #include <pmos/ports.h>
 #include <errno.h>
+#include <stdbool.h>
 
 const char default_terminal_port_name[] = "/pmos/terminald";
-
-FILE default_stdout = {0, default_terminal_port_name, 0, 0, _STDIO_FILE_TYPE_PORT};
-
-FILE * stdin = NULL;
-FILE * stdout = &default_stdout;
-FILE * stderr = &default_stdout;
 
 void _clib_init_stdio()
 {
@@ -35,6 +30,36 @@ void _clib_init_stdio()
 #define PRINTF_FLAG_SPACE  0x04
 #define PRINTF_FLAG_HASH   0x08
 #define PRINTF_FLAG_ZERO   0x10
+
+typedef ssize_t (*write_str_f) (void * arg, const char * str, size_t size);
+
+// Defined in filesystem.c
+ssize_t __write_internal(long int fd, const void * buf, size_t count, bool inc_offset);
+
+static ssize_t write_file(void * arg, const char * str, size_t size)
+{
+    FILE * stream = (FILE*)arg;
+    long int fd = (long int)stream;
+    
+    return __write_internal(fd, str, size, true);
+}
+
+struct string_descriptor {
+    char * buffer;
+    size_t size;
+    size_t pos;
+    char flags;
+};
+
+static ssize_t write_string(void * arg, const char * str, size_t size)
+{
+    struct string_descriptor * stream = (struct string_descriptor*)arg;
+    size_t max_size = stream->size - stream->pos;
+    size_t size_s = size > max_size ? max_size : size;
+    memcpy(&stream->buffer[stream->pos], str, size_s);
+    stream->pos += size_s;
+    return size_s;
+}
 
 static int int_to_string(long int n, uint8_t base, char* str)
 {
@@ -98,90 +123,10 @@ static inline int max_(int a, int b)
     return a > b ? a : b;
 }
 
-static int _size_fputs (int size, const char * str, FILE * stream)
+static ssize_t __va_printf_closure(write_str_f puts, void * puts_arg, va_list arg, const char * format)
 {
-    if (stream == NULL || str == NULL) return EOF;
-
-    int type = stream->type;
-    int result = EOF;
-
-    switch (type)
-    {
-    case _STDIO_FILE_TYPE_PORT: {
-        if (stream->port.port_ptr == 0) {
-            if (!stream->port.port_name)
-                return EOF;
-
-            ports_request_t port_req = get_port_by_name(stream->port.port_name, strlen(stream->port.port_name), 0);
-            if (port_req.result != SUCCESS) {
-                return EOF;
-            }
-            stream->port.port_ptr = port_req.port;
-        }
-
-        static const int buffer_size = 252;
-
-        struct {
-            uint32_t type;
-            char buffer[buffer_size];
-        } desc;
-
-        desc.type = IPC_Write_Plain_NUM;
-        int s = 0;
-
-        result = SUCCESS;
-
-        for (int i = 0; i < size; i += buffer_size) {
-            int size_s = size - i > buffer_size ? buffer_size : size - i;
-            memcpy(desc.buffer, &str[i], size_s);
-
-            int k = send_message_port(stream->port.port_ptr, size_s + sizeof(uint32_t), (const char*)(&desc));
-
-            if (k == SUCCESS) {
-                s += size_s;
-            } else {
-                if (s == 0)
-                    result = EOF;
-
-                break;
-            }
-
-            result = result == SUCCESS ? s : EOF;
-        }
-
-        break;
-    }
-    case _STDIO_FILE_TYPE_STRING: {
-        size_t max_size = stream->string.size - stream->string.pos;
-        size_t size_s = size > max_size ? max_size : size;
-        memcpy(&stream->string.buffer[stream->string.pos], str, size_s);
-        stream->string.pos += size_s;
-        result = size_s;
-        break;
-    };
-    default:
-        result = EOF;
-        break;
-    }
-    return result;
-}
-
-static int write_string(FILE * stream, const char* from, char flags, size_t width)
-{
-    if (width == 0)
-        return fputs(from, stream);
-
-    size_t string_size;
-
-    for (string_size = 0; string_size < width && from[string_size]; ++string_size) ;
-
-    return _size_fputs(string_size, from, stream);
-}
-
-static int va_fprintf (FILE * stream, va_list arg, const char * format)
-{
-    int chars_transmitted = 0;
-    int buffdiff = 0;
+    size_t chars_transmitted = 0;
+    ssize_t buffdiff = 0;
 
     int i = 0;
     while (format && format[i] != '\0') {
@@ -190,7 +135,7 @@ static int va_fprintf (FILE * stream, va_list arg, const char * format)
             ++i;
         } else {
             if (buffdiff > 0) {
-                int p = _size_fputs(buffdiff, &format[i - buffdiff], stream);
+                ssize_t p = puts(puts_arg, &format[i - buffdiff], buffdiff);
                 if (p < 0) return p;
                 chars_transmitted += buffdiff;
                 buffdiff = 0;
@@ -263,7 +208,7 @@ static int va_fprintf (FILE * stream, va_list arg, const char * format)
 
                     char* s_buff = malloc(max_(24, width+1));
                     int j = int_to_string(t, 10, s_buff);
-                    j = _size_fputs(j, s_buff, stream);
+                    j = puts(puts_arg, s_buff, j);
                     if (j < 0) {
                         chars_transmitted = j;
                         goto end;
@@ -280,7 +225,7 @@ static int va_fprintf (FILE * stream, va_list arg, const char * format)
 
                     char *s_buff = malloc(max_(24, width+1));
                     int j = uint_to_string(t, 10, s_buff, hex_base);
-                    j = _size_fputs(j, s_buff, stream);
+                    j = puts(puts_arg, s_buff, j);
                     if (j < 0) {
                         chars_transmitted = j;
                         goto end;
@@ -297,7 +242,7 @@ static int va_fprintf (FILE * stream, va_list arg, const char * format)
 
                     char *s_buff = malloc(max_(24, width+1));
                     int j = uint_to_string(t, 8, s_buff, hex_base);
-                    j = _size_fputs(j, s_buff, stream);
+                    j = puts(puts_arg, s_buff, j);
                     if (j < 0) {
                         chars_transmitted = j;
                         goto end;
@@ -317,7 +262,7 @@ static int va_fprintf (FILE * stream, va_list arg, const char * format)
 
                     char* s_buff = malloc(max_(24, width+1));
                     int j = uint_to_string(t, 16, s_buff, hex_base);
-                    j = _size_fputs(j, s_buff, stream);
+                    j = puts(puts_arg, s_buff, j);
                     if (j < 0) {
                         chars_transmitted = j;
                         goto end;
@@ -329,7 +274,7 @@ static int va_fprintf (FILE * stream, va_list arg, const char * format)
                 }
                 case 'c': {
                     int c = va_arg(arg, int);
-                    int k = _size_fputs(1, (char*)&c, stream);
+                    int k = puts(puts_arg, (char*)&c, 1);
                     if (k < 0) return k;
                     chars_transmitted += 1;
                     
@@ -340,7 +285,10 @@ static int va_fprintf (FILE * stream, va_list arg, const char * format)
                 case 's': {
                     const char * str = va_arg(arg, const char*);
                     str = str ? str : "(null)";
-                    int k = write_string(stream, str, flags, width);
+                    size_t size = width;
+                    if (size == 0)
+                        size = strlen(str);
+                    ssize_t k = puts(puts_arg, str, size);
                     if (k < 1) {
                         chars_transmitted = k;
                         goto end;
@@ -373,7 +321,7 @@ static int va_fprintf (FILE * stream, va_list arg, const char * format)
 
 end:
     if (chars_transmitted >= 0 && buffdiff > 0) {
-            int p = _size_fputs(buffdiff, &format[i - buffdiff], stream);
+            int p = puts(puts_arg, &format[i - buffdiff], buffdiff);
             if (p < 0) return p;
             chars_transmitted += buffdiff;
     }
@@ -382,12 +330,12 @@ end:
 
 int fputc ( int character, FILE * stream )
 {
-    return _size_fputs(1, (char*)&character, stream);
+    return write_file(stream, (char*)&character, 1);
 }
 
 int putchar(int c)
 {
-    return _size_fputs(1, (char*)&c, stdout);
+    return write_file(stdout, (char*)&c, 1);
 }
 
 const char endline[] = "\n";
@@ -395,7 +343,7 @@ const char endline[] = "\n";
 int fputs(const char* string, FILE* stream)
 {
     size_t size = strlen(string);
-    return _size_fputs(size, string, stream) + _size_fputs(sizeof(endline), endline, stream);
+    return write_file(stream, string, size) + write_file(stream, endline, sizeof(endline));
 }
 
 int puts(const char* str)
@@ -408,7 +356,7 @@ int fprintf(FILE * stream, const char * format, ...)
     va_list arg;
     va_start(arg,format);
 
-    return va_fprintf(stream, arg, format);
+    return __va_printf_closure(write_file, stream, arg, format);
 
     va_end(arg);
 }
@@ -418,15 +366,9 @@ int sprintf(char * str, const char * format, ...)
     va_list arg;
     va_start(arg,format);
 
-    FILE string = {
-        .string.buffer = str,
-        .string.size = -1,
-        .string.pos = 0,
-        .string.flags = 0,
-        .type = _STDIO_FILE_TYPE_STRING,
-    };
+    struct string_descriptor desc = {str, -1, 0, 0};
 
-    int ret = va_fprintf(NULL, arg, format);
+    int ret = __va_printf_closure(write_string, &desc, arg, format);
 
     va_end(arg);
 
@@ -438,14 +380,14 @@ int printf(const char* format, ...)
     va_list arg;
     va_start(arg,format);
 
-    return va_fprintf(stdout, arg, format);
+    return __va_printf_closure(write_file, stdout, arg, format);
 
     va_end(arg);
 }
 
 size_t fwrite ( const void * ptr, size_t size, size_t count, FILE * stream )
 {
-    return _size_fputs(size*count, ptr, stream);
+    return write_file(stream, ptr, size*count);
 }
 
 void perror(const char *message) {

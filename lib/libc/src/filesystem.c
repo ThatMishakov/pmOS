@@ -642,7 +642,7 @@ struct Filesystem_Data *init_filesystem() {
     new_fs_data->count = 0;
     new_fs_data->capacity = initial_capacity;
 
-    int result = set_desc_queue(new_fs_data, 0, "/pmos/stdout");
+    int result = set_desc_queue(new_fs_data, 1, "/pmos/stdout");
     if (result != SUCCESS) {
         // Handle error
         free(new_fs_data->descriptors_vector);
@@ -651,7 +651,7 @@ struct Filesystem_Data *init_filesystem() {
         return NULL;
     }
 
-    result = set_desc_queue(new_fs_data, 1, "/pmos/stderr");
+    result = set_desc_queue(new_fs_data, 2, "/pmos/stderr");
     if (result != SUCCESS) {
         // Handle error
         free_descriptor(&new_fs_data->descriptors_vector[0]);
@@ -661,7 +661,7 @@ struct Filesystem_Data *init_filesystem() {
         return NULL;
     }
 
-    result = set_desc_queue(new_fs_data, 2, "/pmos/stdin");
+    result = set_desc_queue(new_fs_data, 0, "/pmos/stdin");
     if (result != SUCCESS) {
         // Handle error
         free_descriptor(&new_fs_data->descriptors_vector[0]);
@@ -706,7 +706,7 @@ struct Filesystem_Data *init_filesystem() {
 
 /// Destroys the filesystem data structure. Assumes that all of the processes inside the group have left it.
 /// @param fs_data Filesystem data to be destroyed
-void destroy_filesystem(struct Filesystem_Data * fs_data)
+static void destroy_filesystem(struct Filesystem_Data * fs_data)
 {
     if (fs_data == NULL)
         return;
@@ -1277,7 +1277,7 @@ ssize_t write_ipc_queue(pmos_port_t port, const void *buf, size_t size) {
     return result;
 }
 
-ssize_t __write_internal(int fd, const void * buf, size_t count, bool inc_offset) {
+ssize_t __write_internal(long int fd, const void * buf, size_t count, bool inc_offset) {
     // Double-checked locking to initialize fs_data if it is NULL
     if (fs_data == NULL) {
         pthread_spin_lock(&fs_data_lock);
