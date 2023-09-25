@@ -1239,17 +1239,57 @@ ssize_t write_file(uint64_t file_id, pmos_port_t fs_port, size_t offset, size_t 
     return -1;
 }
 
-ssize_t write_ipc_queue(pmos_port_t port, const void *buf, size_t count) {
-    errno = ENOSYS;
-    return -1;
+ssize_t write_ipc_queue(pmos_port_t port, const void *buf, size_t size) {
+    static const int buffer_size = 252;
+    const char * str = buf;
+
+    struct {
+        uint32_t type;
+        char buffer[buffer_size];
+    } desc;
+
+    desc.type = IPC_Write_Plain_NUM;
+    int s = 0;
+
+    result_t result = SUCCESS;
+
+    for (int i = 0; i < size; i += buffer_size) {
+        int size_s = size - i > buffer_size ? buffer_size : size - i;
+        memcpy(desc.buffer, &str[i], size_s);
+
+        int k = send_message_port(port, size_s + sizeof(uint32_t), (const char*)(&desc));
+
+        if (k == SUCCESS) {
+            s += size_s;
+        } else {
+            if (s == 0) {
+                errno = -k;
+                result = EOF;
+            }
+
+            break;
+        }
+
+        // TODO: If the file was sent partially, return the number of bytes sent and not EOF
+        result = result == SUCCESS ? s : EOF;
+    }
+
+    return result;
 }
 
-ssize_t __write_internal(int fd, const void * buf, size_t count)
-{
+ssize_t __write_internal(int fd, const void * buf, size_t count, bool inc_offset) {
     // Double-checked locking to initialize fs_data if it is NULL
     if (fs_data == NULL) {
-        errno = EBADF; // Bad file descriptor
-        return -1;
+        pthread_spin_lock(&fs_data_lock);
+        if (fs_data == NULL) {
+            struct Filesystem_Data *new_fs_data = init_filesystem();
+            if (new_fs_data == NULL) {
+                pthread_spin_unlock(&fs_data_lock);
+                return -1;
+            }
+            fs_data = new_fs_data;
+        }
+        pthread_spin_unlock(&fs_data_lock);
     }
 
     // Lock the file descriptor to ensure thread-safety
@@ -1278,7 +1318,9 @@ ssize_t __write_internal(int fd, const void * buf, size_t count)
     pmos_port_t fs_port = file_desc.file.fs_port;
     size_t offset = file_desc.offset;
     unsigned type = file_desc.type;
-    bool is_seekable = seekable(&file_desc);
+    bool seek = inc_offset && seekable(&file_desc);
+    bool cache_port = false;
+    pmos_port_t queue_port = 0;
 
     switch (type) {
     case DESCRIPTOR_FILE:
@@ -1288,7 +1330,21 @@ ssize_t __write_internal(int fd, const void * buf, size_t count)
     //     count = log(file_id, buf, count);
     //     break;
     case DESCRIPTOR_IPC_QUEUE: {
-        count = write_ipc_queue(file_id, buf, count);
+        // Check if the port is valid
+        queue_port = file_desc.ipc_queue.port;
+        const char * port_name = file_desc.ipc_queue.name;
+        if (queue_port == INVALID_PORT) {
+            ports_request_t port_req = get_port_by_name(port_name, strlen(port_name), 0);
+            if (port_req.result != SUCCESS) {
+                errno = -port_req.result;
+                return -1;
+            }
+
+            queue_port = port_req.port;
+            cache_port = true;
+        }
+
+        count = write_ipc_queue(queue_port, buf, count);
     } break;
     default:
         errno = EBADF; // Bad file descriptor
@@ -1299,8 +1355,8 @@ ssize_t __write_internal(int fd, const void * buf, size_t count)
         // Error
         return -1;
 
-    if (!is_seekable)
-        // Don't update the offset
+    if (!seek && !cache_port)
+        // Don't update the offset and port
         return count;
 
     // Add count to the file descriptor's offset
@@ -1315,9 +1371,19 @@ ssize_t __write_internal(int fd, const void * buf, size_t count)
     }
 
     // Update the file descriptor's offset
-    fs_data->descriptors_vector[fd].offset = offset + count;
+    if (seek)
+        fs_data->descriptors_vector[fd].offset = offset + count;
+
+    if (cache_port)
+        fs_data->descriptors_vector[fd].ipc_queue.port = queue_port;
+
     pthread_spin_unlock(&fs_data->lock);
 
     // Return the number of bytes read
     return count;
+}
+
+ssize_t write(int fd, const void * buf, size_t count)
+{
+    return __write_internal(fd, buf, count, true);
 }

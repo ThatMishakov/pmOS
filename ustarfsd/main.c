@@ -141,6 +141,12 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+    int res = write(0, test_string, strlen(test_string));
+    if (res < 0) {
+        perror("Failed to write to stdout");
+        return 1;
+    }
+
     int fd = open(filename, O_RDONLY);
     if (fd == -1) {
         perror("Failed to open file");
