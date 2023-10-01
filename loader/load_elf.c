@@ -2,6 +2,7 @@
 #include <syscall.h>
 #include <kernel/elf.h>
 #include <kernel/errors.h>
+#include <kernel/syscalls.h>
 #include <utils.h>
 #include <io.h>
 #include <misc.h>
@@ -12,18 +13,7 @@
 #include <stdbool.h>
 #include <pmos/tls.h>
 #include <string.h>
-
-struct task_list_node {
-    struct task_list_node *next;
-    struct multiboot_tag_module * mod_ptr;
-    char * name;
-    char * path;
-    char * cmdline;
-    void * file_virt_addr;
-    uint64_t page_table;
-    void * tls_virt;
-    bool executable;
-};
+#include <task_list.h>
 
 
 extern uint64_t loader_port;
@@ -120,7 +110,17 @@ uint64_t load_elf(struct task_list_node* n, uint8_t ring)
         }
     }
 
-    syscall(SYSCALL_INIT_STACK, pid, 0);
+    syscall_r result = syscall(SYSCALL_INIT_STACK, pid, 0);
+    if (result.result != SUCCESS) {
+        print_str("Error: Failed to init stack! ");
+        print_hex(r.result);
+        print_str(" !!!\n");
+    }
+
+    n->stack_top = result.value;
+    // TODO: This is hardcoded in the kernel, but it should be configurable and can be done with a different syscall
+    n->stack_size = GB(2);
+    n->stack_guard_size = 0;
 
     return pid;
 }

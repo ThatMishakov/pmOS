@@ -30,6 +30,8 @@ typedef struct TLS_Data {
 typedef struct uthread {
     unsigned char tls_data[0];
     struct uthread *self;
+    void *stack_top;
+    size_t stack_size;
 };
 
 #if defined(__cplusplus)

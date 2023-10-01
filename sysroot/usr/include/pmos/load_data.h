@@ -23,6 +23,14 @@ struct load_tag_generic {
     uint64_t offset_to_next; //< Offset to the next tag starting from the beginning of this one
 };
 
+/// @brief Gets the first tag of the specified type
+///
+/// @param tag The tag type to search for
+/// @param load_data The address of the first tag
+/// @param load_data_size The size of the load data
+/// @return The address of the first tag of the specified type, or NULL if not found
+struct load_tag_generic * get_load_tag(uint32_t tag, void * load_data, size_t load_data_size);
+
 /// @brief Closing tag. Must be the last tag and has no data, with the offset_to_next field set to 0
 struct load_tag_close {
     struct load_tag_generic header;

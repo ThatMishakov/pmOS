@@ -5,7 +5,8 @@
 #include <kernel/memory.h>
 #include <pmos/system.h>
 
-syscall_r syscall(uint64_t call_n, ...);
+// TODO
+#define syscall pmos_syscall
 
 inline syscall_r start_process(uint64_t pid, uint64_t entry, uint64_t arg1, uint64_t arg2, uint64_t arg3)
 {

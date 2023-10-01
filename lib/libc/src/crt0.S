@@ -4,22 +4,14 @@ _start:
     # Set up stack frame
     movq $0, %rbp
 	pushq %rbp
-	pushq %rbp
-	movq %rsp, %rbp
 
-    # Save arguments
-    pushq %rdi
-    pushq %rsi
-
-    movq %rdx, %rdi
-    call init_tls_first_time
+    # Initialize the libc
     call init_std_lib
     
+    # C++ (or others) constructors
     call __call_init_functions
-
-    popq %rsi
-    popq %rdi
     
+    # Get argc and argv
     call prepare_args
 
     movq %rax, %rdi
@@ -27,6 +19,7 @@ _start:
 
     call main
 
+    # This is equivalent to calling exit from main()
     movq %rax, %rdi
     call exit
     .size _start, . - _start

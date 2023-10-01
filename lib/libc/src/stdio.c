@@ -13,18 +13,6 @@
 
 const char default_terminal_port_name[] = "/pmos/terminald";
 
-void _clib_init_stdio()
-{
-    // stdout = malloc(sizeof(FILE));
-    // stdout->type = _STDIO_FILE_TYPE_PORT;
-    // stdout->port_ptr = 1;
-    // stdout->flags = 0;
-    // stdout->size = 0;
-
-    // // TODO
-    // stderr = stdout;
-}
-
 #define PRINTF_FLAG_LEFT_J 0x01
 #define PRINTF_FLAG_P_PLUS 0x02
 #define PRINTF_FLAG_SPACE  0x04

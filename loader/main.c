@@ -26,6 +26,9 @@
 #include <stdbool.h>
 #include <string.h>
 #include <stdlib.h>
+#include <pmos/load_data.h>
+
+#define alignup(size, alignment) (size%alignment ? size + (alignment - size%alignment) : size)
 
 int* __get_errno()
 {
@@ -55,6 +58,69 @@ struct task_list_node *get_by_page_table(uint64_t page_table)
     return p;
 }
 
+struct load_data_array {
+    char * data;
+    uint64_t size;
+    uint64_t capacity;
+};
+
+int init_load_data_array(struct load_data_array *a)
+{
+    a->data = NULL;
+    a->size = 0;
+    a->capacity = 0;
+
+    return 0;
+}
+
+int push_load_data_array(struct load_data_array *a, char * data, uint64_t size)
+{
+    if (size % 16 != 0) {
+        return -1;
+    }
+
+    if (a->size + size > a->capacity) {
+        uint64_t new_capacity = a->capacity + size;
+        char * new_data = realloc(a->data, new_capacity);
+        if (new_data == NULL) {
+            return -1;
+        }
+    }
+
+    memcpy(a->data + a->size, data, size);
+    a->size += size;
+
+    return 0;
+}
+
+int send_and_close_load_data_array(struct load_data_array *a, struct task_list_node *n)
+{
+    size_t needed_size = a->size + sizeof(struct load_tag_close);
+    needed_size = alignup(needed_size, 4096); // PAGE_SIZE
+
+    mem_request_ret_t req = create_normal_region(0, 0, needed_size, 1 | 2);
+    if (req.result != SUCCESS) {
+        free(a->data);
+        return -1;
+    }
+
+    memcpy(req.virt_addr, a->data, a->size);
+    // Don't copy closing tag, since it's all zeroes and that's what kernel sets memory to anyways
+
+    req = transfer_region(n->page_table, req.virt_addr, NULL, 1);
+    if (req.result != SUCCESS) {
+        free(a->data);
+        return -1;
+    }
+
+    free(a->data);
+
+    n->load_data_virt_addr = req.virt_addr;
+    n->load_data_size = needed_size;
+
+    return 0;
+}
+
 void load_multiboot_module(struct multiboot_tag_module * mod)
 {
     print_str(" --> loading ");
@@ -69,6 +135,11 @@ void load_multiboot_module(struct multiboot_tag_module * mod)
     n->page_table = 0;
     n->tls_virt = NULL;
     n->executable = false;
+    n->stack_top = 0;
+    n->stack_size = 0;
+    n->stack_guard_size = 0;
+    n->load_data_virt_addr = 0;
+    n->load_data_size = 0;
 
     push_modules_list(n);
 
@@ -111,7 +182,25 @@ void load_multiboot_module(struct multiboot_tag_module * mod)
 
         ELF_64bit * elf = n->file_virt_addr;
 
-        start_process(pid, elf->program_entry, 0, 0, n->tls_virt);
+        struct load_data_array load_data;
+        init_load_data_array(&load_data);
+
+        struct load_tag_stack_descriptor stack_desc = {
+            .header = {
+                .tag = LOAD_TAG_STACK_DESCRIPTOR,
+                .flags = 0,
+                .offset_to_next = sizeof(struct load_tag_stack_descriptor),
+            },
+            .stack_top = n->stack_top,
+            .stack_size = n->stack_size,
+            .guard_size = n->stack_guard_size,
+            .unused0 = 0,
+        };
+
+        push_load_data_array(&load_data, (char *)&stack_desc, sizeof(stack_desc));
+        send_and_close_load_data_array(&load_data, n);
+
+        start_process(pid, elf->program_entry, n->load_data_virt_addr, n->load_data_size, n->tls_virt);
     }
 }
 

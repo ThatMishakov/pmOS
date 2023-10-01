@@ -100,10 +100,8 @@
         "resource.h": "c",
         "signal.h": "c",
         "in.h": "c",
-        "charconv": "c",
-        "variant": "c",
-        "stdio.h": "c",
-        "assert.h": "c"
+        "tls.h": "c",
+        "load_data.h": "c"
     },
     "cmake.configureOnOpen": false
 }

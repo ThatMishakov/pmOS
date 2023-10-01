@@ -14,6 +14,11 @@ struct task_list_node {
     uint64_t page_table;
     void * tls_virt;
     bool executable;
+    uint64_t stack_top;
+    uint64_t stack_size;
+    uint64_t stack_guard_size;
+    uint64_t load_data_virt_addr;
+    uint64_t load_data_size;
 };
 
 extern struct task_list_node *modules_list;
