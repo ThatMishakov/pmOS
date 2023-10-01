@@ -217,6 +217,30 @@ pmos_port_t get_filesytem_port() {
     return request.port;
 }
 
+int __share_fs_data(uint64_t tid) {
+    // Double-checked locking to initialize fs_data if it is NULL
+    if (fs_data == NULL) {
+        pthread_spin_lock(&fs_data_lock);
+        if (fs_data == NULL) {
+            struct Filesystem_Data *new_data = init_filesystem();
+            if (new_data == NULL) {
+                pthread_spin_unlock(&fs_data_lock);
+                return -1;
+            }
+            fs_data = new_data;
+        }
+        pthread_spin_unlock(&fs_data_lock);
+    }
+
+    result_t r = add_task_to_group(tid, fs_data->fs_consumer_id);
+    if (r != SUCCESS) {
+        errno = -r;
+        return -1;
+    }
+
+    return 0;
+}
+
 int open(const char* path, int flags) {
     // Double-checked locking to initialize fs_data if it is NULL
     if (fs_data == NULL) {

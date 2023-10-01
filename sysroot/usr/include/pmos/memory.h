@@ -149,6 +149,23 @@ syscall_r get_segment(uint64_t pid, unsigned segment);
  */
 page_table_req_ret_t asign_page_table(uint64_t pid, uint64_t page_table, uint64_t flags);
 
+/**
+ * @brief Initializes stack for the given task
+ * 
+ * This syscall initializes the stack for the task, by setting %rsp to the given value. The task must be uninitialized, otherwise
+ * the behaviour is undefined. Apart from allocating and setting the registers, the kernel does not manage the stack in any way.
+ * If reimplementing program startup, threads and related, the task must take care of the stack in the userspace.
+ * 
+ * If NULL is passed as a stack pointer, the kernel will allocate 2GB stack for the task. This currently is hardcoded and needs to be revised
+ * in the future.
+ * @param tid ID of the task
+ * @param stack_top The top of the stack. If NULL, the kernel will allocate 2GB stack for the task.
+ * @return syscall_r The result of the operation. If the result is SUCCESS, the pointer to the top of the stack is stored in the *value* field.
+ * @todo This functionality can be replicated in by the callee, both being more convenient, flexible, faster (not requiring trip to kernel) and
+ *       more akin to the pmOS philosophy. This syscall should be revised in the future.
+ */
+syscall_r init_stack(uint64_t tid, void * stack_top);
+
 #endif
 
 #if defined(__cplusplus)

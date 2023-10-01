@@ -26,7 +26,7 @@ DEP    := $(OBJ:.o=.d)
 all: $(EXEC)
 
 $(EXEC): $(OBJ) libc
-	$(CXX) $(LDFLAGS) $(OBJ) -o $@
+	$(CXX) $(LDFLAGS) $(OBJ) -lpthread -o $@
 
 clean:
 	$(RM) $(EXEC) $(OBJ) $(DEP)

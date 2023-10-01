@@ -5,7 +5,6 @@ void _fini();
 
 /// Atexit functions
 void _atexit_pop_all();
-
 void __call_destructors(void);
 
 

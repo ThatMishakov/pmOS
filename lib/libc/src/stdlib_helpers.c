@@ -12,14 +12,14 @@ static TLS_Data * global_tls_data = NULL;
 #define max(x, y) (x > y ? x : y)
 #define alignup(size, alignment) (size%alignment ? size + (alignment - size%alignment) : size)
 
-void init_uthread(struct uthread * u, void * stack_top, size_t stack_size)
+void __init_uthread(struct uthread * u, void * stack_top, size_t stack_size)
 {
     u->self = u;
     u->stack_top = stack_top;
     u->stack_size = stack_size;
 }
 
-struct uthread * prepare_tls(void * stack_top, size_t stack_size)
+struct uthread * __prepare_tls(void * stack_top, size_t stack_size)
 {
     bool has_tls = global_tls_data != NULL;
 
@@ -41,12 +41,43 @@ struct uthread * prepare_tls(void * stack_top, size_t stack_size)
         memcpy(tls - memsz, global_tls_data->data, global_tls_data->filesz);
     }
     
-    init_uthread((struct uthread *)tls, stack_top, stack_size);
+    __init_uthread((struct uthread *)tls, stack_top, stack_size);
 
     return (struct uthread *)tls;
 }
 
-void init_tls_first_time(void * load_data, size_t load_data_size, TLS_Data * d)
+void __release_tls(struct uthread * u)
+{
+    if (u == NULL)
+        return;
+
+    size_t memsz = global_tls_data->memsz;
+    size_t align = global_tls_data->align;
+
+    align = max(align, _Alignof(struct uthread));
+    size_t alloc_size = alignup(memsz, align) + sizeof(struct uthread);
+
+    size_t size_all = alignup(alloc_size, 4096);
+
+    release_region(PID_SELF, (void *)u - alignup(memsz, align));
+}
+
+struct uthread * __get_tls()
+{
+    struct uthread * u;
+    __asm__("movq %%fs:0, %0" : "=r"(u));
+    return u;
+}
+
+void __thread_exit_destroy_tls()
+{
+    struct uthread * u = __get_tls();
+    // TODO: Check if the thread is detached and only do this if it is
+    if (true)
+        __release_tls(u);
+}
+
+static void init_tls_first_time(void * load_data, size_t load_data_size, TLS_Data * d)
 {
     global_tls_data = d;
 
@@ -54,12 +85,15 @@ void init_tls_first_time(void * load_data, size_t load_data_size, TLS_Data * d)
     if (d == NULL)
         return; // TODO: Panic
 
-    struct uthread *u = prepare_tls((void *)s->stack_top, s->stack_size);
+    struct uthread *u = __prepare_tls((void *)s->stack_top, s->stack_size);
     if (u == NULL)
         return; // TODO: Panic
 
     set_segment(0, SEGMENT_FS, u);
 }
+
+// defined in pthread/threads.c
+extern uint64_t __active_threads;
 
 /// @brief Initializes the standard library
 ///
@@ -73,6 +107,27 @@ void init_tls_first_time(void * load_data, size_t load_data_size, TLS_Data * d)
 void init_std_lib(void * load_data, size_t load_data_size, TLS_Data * d)
 {
     init_tls_first_time(load_data, load_data_size, d);
+
+    __active_threads = 1;
+}
+
+void _atexit_pop_all();
+void __call_destructors(void);
+
+/// @brief Run destructor functions
+///
+/// This function gets called from pthread_exit() and __cxa_thread_exit() and runs the __cxa_thread_atexit() functions.
+/// If the thread is the last one, it also runs the atexit() (and similar cxa) functions.
+void __thread_exit_fire_destructors()
+{
+    // TODO: Call __cxa_thread_atexit() stuff
+
+    uint64_t remaining_count = __atomic_sub_fetch(&__active_threads, 1, __ATOMIC_SEQ_CST);
+    if (remaining_count == 0) {
+        // Last thread, call atexit() stuff
+        _atexit_pop_all();
+        __call_destructors();
+    }
 }
 
 struct load_tag_generic * get_load_tag(uint32_t tag, void * load_data, size_t load_data_size)
