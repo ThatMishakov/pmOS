@@ -3,6 +3,7 @@
 _start:
     # Set up stack frame
     movq $0, %rbp
+    pushq %rbp
 	pushq %rbp
 
     # Initialize the libc

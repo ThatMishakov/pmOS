@@ -85,6 +85,9 @@ int push_load_data_array(struct load_data_array *a, char * data, uint64_t size)
         if (new_data == NULL) {
             return -1;
         }
+
+        a->data = new_data;
+        a->capacity = new_capacity;
     }
 
     memcpy(a->data + a->size, data, size);
@@ -237,7 +240,7 @@ void main()
 
     load_kernel(multiboot_info_str);
 
-    init_std_lib();
+    // init_std_lib();
 
     init_acpi(multiboot_info_str);
 
