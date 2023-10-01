@@ -158,8 +158,42 @@ int   pthread_condattr_destroy(pthread_condattr_t *);
 int   pthread_condattr_getpshared(const pthread_condattr_t *, int *);
 int   pthread_condattr_init(pthread_condattr_t *);
 int   pthread_condattr_setpshared(pthread_condattr_t *, int);
-int   pthread_create(pthread_t *, const pthread_attr_t *,
-          void *(*)(void *), void *);
+
+/**
+ * @brief Create a new thread.
+ *
+ * This function creates a new thread of execution within the calling process.
+ *
+ * @param thread Pointer to the thread identifier of the newly created thread.
+ * @param attr Pointer to thread attributes (can be NULL for default attributes).
+ * @param start_routine Pointer to the function that the new thread will execute.
+ * @param arg Argument to pass to the `start_routine` function.
+ * 
+ * @return 0 on success, or an error code on failure.
+ *
+ * @note The `thread` argument must be a pointer to a `pthread_t` variable where
+ *       the thread identifier will be stored.
+ * @note The `attr` argument can be used to specify thread attributes such as
+ *       stack size or scheduling policy. Pass `NULL` for default attributes.
+ * @note The `start_routine` is the function that the new thread will run. It
+ *       should have the following signature: `void* start_routine(void* arg)`.
+ * @note The `arg` argument is a pointer to data that will be passed as an
+ *       argument to the `start_routine` function.
+ * @note The return value indicates success (0) or an error code (non-zero).
+ *
+ * Example usage:
+ * @code
+ * pthread_t my_thread;
+ * int result = pthread_create(&my_thread, NULL, my_function, NULL);
+ * if (result == 0) {
+ *     // Thread creation succeeded.
+ * } else {
+ *     // Thread creation failed, handle the error.
+ * }
+ * @endcode
+ */
+int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_routine)(void *), void *arg);
+
 int   pthread_detach(pthread_t);
 int   pthread_equal(pthread_t, pthread_t);
 void  pthread_exit(void *);
