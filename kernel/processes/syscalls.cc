@@ -742,15 +742,16 @@ void syscall_create_mem_object(u64 size_bytes, u64, u64, u64, u64, u64)
     syscall_ret_high(current_task) = ptr->get_id();
 }
 
-void syscall_delete_region(u64 region_start, u64, u64, u64, u64, u64)
+void syscall_delete_region(u64 tid, u64 region_start, u64, u64, u64, u64)
 {
-    const auto &current_task = get_current_task();
-    const auto &current_page_table = current_task->page_table;
+    // 0 is PID_SELF
+    const auto task = tid == 0 ? get_cpu_struct()->current_task : get_task_throw(tid);
+    const auto &page_table = task->page_table;
 
     // TODO: Contemplate about adding a check to see if it's inside the kernels address space
 
     // TODO: This is completely untested and knowing me is probably utterly broken
-    current_page_table->atomic_delete_region(region_start);
+    page_table->atomic_delete_region(region_start);
 }
 
 void syscall_remove_from_task_group(u64 pid, u64 group, u64, u64, u64, u64)

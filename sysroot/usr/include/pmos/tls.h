@@ -21,6 +21,19 @@ typedef struct TLS_Data {
 } TLS_Data;
 
 /**
+ * @brief Node of the atexit list
+ * 
+ * This is an internal structure, used to hold the atexit list, for __cxa_thread_atexit_impl() function.
+ * It should not be used directly.
+ */
+struct __atexit_list_entry {
+    struct __atexit_list_entry * next;
+    void (*destructor_func) (void *);
+    void *arg;
+    void *dso_handle;
+};
+
+/**
  * @brief Structure holging the thread local data
  * 
  * This structure holds the internal data stored needed for correct working of the treads.
@@ -33,6 +46,7 @@ typedef struct uthread {
     void * stack_top;
     size_t stack_size;
     void * return_value; // A.k.a. uint64_t
+    struct __atexit_list_entry * atexit_list_head;
 };
 
 #if defined(__cplusplus)

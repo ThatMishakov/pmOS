@@ -51,8 +51,6 @@ __pthread_exit:
     # Destroy the TLS (the function decides whether to free it or not)
     callq __thread_exit_destroy_tls
 
-
-
     # Free the stack!
     # Since the is no stack, syscalls have to be done manually from here on
 
@@ -74,8 +72,9 @@ __pthread_exit:
     syscall
     # It doesn't really matter if it succeeds or not, since the thread is exiting anyway
 
+
     # Exit the task
-    movq $0, %rax # SYSCALL_EXIT
-    movq %r15, %rdi # return_value
+    movq $0, %rdi # SYSCALL_EXIT
+    movq %r15, %rsi # return_value
     syscall
     # The task is dead, long live the task!

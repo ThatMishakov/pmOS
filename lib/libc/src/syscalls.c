@@ -93,10 +93,9 @@ mem_request_ret_t transfer_region(uint64_t to_page_table, void * region, void * 
     return t;
 }
 
-result_t release_region(uint64_t pid, void * region)
+result_t release_region(uint64_t tid, void * region)
 {
-    // TODO: This completely ignores PID and removes the region inside the current process
-    return pmos_syscall(SYSCALL_DELETE_REGION, region).result;
+    return pmos_syscall(SYSCALL_DELETE_REGION, tid, region).result;
 }
 
 syscall_r init_stack(uint64_t tid, void * stack_top) 

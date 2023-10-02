@@ -40,5 +40,8 @@ int main() {
     pthread_t thread;
     pthread_create(&thread, nullptr, thread_func, nullptr);
 
+    // Allow other thread to run
+    pthread_exit(nullptr);
+
     return 0;
 }

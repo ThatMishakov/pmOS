@@ -18,11 +18,11 @@ These are the features that are planned to be had in the OS:
   - [x] Exiting
 
 - [ ] Processes and threads
-  - [x] Processes
+  - [ ] Processes - The kernel has tasks, but POSIX processes and execlp/spawn is not yet implemented
   - [x] Process switching
   - [x] Preemptive multitasking
-  - [ ] Threads
-  - [ ] Kernel threads
+  - [X] Threads - pthreads are very basic
+  - [X] Kernel threads
   - [x] Ring 3
 
 - [ ] Memory
@@ -50,7 +50,6 @@ These are the features that are planned to be had in the OS:
   - [x] Ports
   - [x] Kernel messages
   - [ ] Quicker messaging
-  - [ ] Separate queues for channels
 
   
 - [ ] Permissions
@@ -60,17 +59,22 @@ These are the features that are planned to be had in the OS:
 **Core utilities and daemons**
 - [ ] Process management (processd)
 - [ ] Networking (networkd)
-- [ ] Filesystems (filesystemsd)
+- [ ] Filesystems
   - [ ] FAT32
   - [ ] FUSE
+  - [ ] USTAR filesystem daemon - Archive parsing works, but it is very incomplete
+  - [ ] VFSd
+    - [X] Mounting filesystems
+    - [X] Opening files
+    - [X] Traversing trees
 - [ ] Drawing on screen (screend)
 - [ ] Human input
-- [ ] Native executables
-- [ ] POSIX compatibility layer
+- [X] Native executables
+- [ ] POSIX compatibility layer - Many functions are implemented and working, but a lot more are yet to be done
 
 **Drivers**
-- [ ] PS/2
-  - [ ] Keyboard
+- [X] PS/2
+  - [X] Keyboard
   - [ ] Mouse
 - [ ] ATA/Bulk storage
 - [ ] USB
@@ -84,14 +88,26 @@ These are the features that are planned to be had in the OS:
 - [ ] GUI
 - [ ] C Library -> started workking on one, but it's very far from complete
 
+**Languages/Runtimes**
+- [X] Hosted GCC cross-compiler
+- [X] C and its runtime (using homemade C/POSIX library)
+- [X] C++ and libstdc++ (and other) runtime(s) - Compiling and working but a lot of C library functions are missing
+- [X] Go and libgo runtime - Compiling, but untested and probably broken for now. Also, exec-stuff is missing
+
 
 ## Architecture
 
-The OS is based on a microkernel architecture, with the idea of running drivers and services in the userspace. The kernel currently has physical and virtual memory managers, scheduling, interrupts, IPC and permissions managed inside it. The processed are to be loaded and managed by the processd and everything else is planned to be had outside the kernel in the future.
+The OS is based on a microkernel architecture, with the idea of running drivers and services in the userspace. The kernel currently has physical and virtual memory managers, scheduling, interrupts, IPC and permissions managed inside it. Of the process management, the kernel only knows about tasks, with (POSIX) processes and threads being an
+abstraction on top of it, being managed in a userspace
 
 The executables in ELF format are used
 
-The system supports booting by the multiboot2 protocol. The loader is booted by the bootloader, which then prepares virtual memory as if it was an userspace program, loads the kernel (in elf format), briefly transfers execution to its init function, starts the processes via syscalls and then exits.
+The system supports booting by the multiboot2 protocol. The loader is booted by the bootloader, which then prepares virtual memory as if it was an userspace program, loads the kernel (in elf format), briefly transfers execution to its init function, starts the processes via syscalls and then mounts itself as a ramdisk filesystem, helping processes
+continue initialization, having conveniences of the mostly-working runtime
+
+## Known issues
+
+- Compiling C Library with -O2 or O3 breaks booting the system
 
 ## License
 

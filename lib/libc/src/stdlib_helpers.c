@@ -17,6 +17,8 @@ void __init_uthread(struct uthread * u, void * stack_top, size_t stack_size)
     u->self = u;
     u->stack_top = stack_top;
     u->stack_size = stack_size;
+    u->return_value = NULL;
+    u->atexit_list_head = NULL;
 }
 
 struct uthread * __prepare_tls(void * stack_top, size_t stack_size)
@@ -109,25 +111,6 @@ void init_std_lib(void * load_data, size_t load_data_size, TLS_Data * d)
     init_tls_first_time(load_data, load_data_size, d);
 
     __active_threads = 1;
-}
-
-void _atexit_pop_all();
-void __call_destructors(void);
-
-/// @brief Run destructor functions
-///
-/// This function gets called from pthread_exit() and __cxa_thread_exit() and runs the __cxa_thread_atexit() functions.
-/// If the thread is the last one, it also runs the atexit() (and similar cxa) functions.
-void __thread_exit_fire_destructors()
-{
-    // TODO: Call __cxa_thread_atexit() stuff
-
-    uint64_t remaining_count = __atomic_sub_fetch(&__active_threads, 1, __ATOMIC_SEQ_CST);
-    if (remaining_count == 0) {
-        // Last thread, call atexit() stuff
-        _atexit_pop_all();
-        __call_destructors();
-    }
 }
 
 struct load_tag_generic * get_load_tag(uint32_t tag, void * load_data, size_t load_data_size)
