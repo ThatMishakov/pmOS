@@ -6,6 +6,9 @@
 #include <pmos/memory.h>
 #include <pmos/load_data.h>
 #include <string.h>
+#include <pmos/ipc.h>
+#include <pmos/ports.h>
+#include <assert.h>
 
 static TLS_Data * global_tls_data = NULL;
 
@@ -19,6 +22,9 @@ void __init_uthread(struct uthread * u, void * stack_top, size_t stack_size)
     u->stack_size = stack_size;
     u->return_value = NULL;
     u->atexit_list_head = NULL;
+    u->thread_status = __THREAD_STATUS_RUNNING;
+    u->join_notify_port = INVALID_PORT;
+
 }
 
 struct uthread * __prepare_tls(void * stack_top, size_t stack_size)
@@ -74,9 +80,36 @@ struct uthread * __get_tls()
 void __thread_exit_destroy_tls()
 {
     struct uthread * u = __get_tls();
-    // TODO: Check if the thread is detached and only do this if it is
-    if (true)
-        __release_tls(u);
+
+    if (u->thread_status == __THREAD_STATUS_RUNNING) {
+        bool not_detached = __sync_bool_compare_and_swap(&u->thread_status, __THREAD_STATUS_RUNNING, __THREAD_STATUS_FINISHED);
+        if (not_detached)
+            // Let caller get the return value and release the TLS
+            // If pthread_detach is called at this point, it would be what does it
+            return;
+    }
+
+    switch (u->thread_status) {
+        case __THREAD_STATUS_DETACHED:
+            __release_tls(u);
+            break;
+        case __THREAD_STATUS_JOINING: {
+            IPC_Thread_Finished msg = {
+                .type = IPC_Thread_Finished_NUM,
+                .flags = 0,
+                .thread_id = (uint64_t)u->self,
+            };
+
+            // If it fails there is nothing that can be done
+            // Ideally, kernel should guarantee that once the port is created, sending
+            // messages will always succeed
+            send_message_port(u->join_notify_port, sizeof(msg), (char *)&msg);
+            break;
+        }
+        default:
+            assert(false && "Invalid thread status");
+            break;
+    }
 }
 
 static void init_tls_first_time(void * load_data, size_t load_data_size, TLS_Data * d)
