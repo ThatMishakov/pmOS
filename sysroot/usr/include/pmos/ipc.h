@@ -695,6 +695,19 @@ typedef struct IPC_FS_Dup_Reply {
     uint64_t operation_id;
 } IPC_FS_Dup_Reply;
 
+#define IPC_Thread_Finished_NUM 0x100
+/// @brief Message sent by the thread to the one calling pthread_join() when notifing that it has finished.
+typedef struct IPC_Thread_Finished {
+    /// Message type (must be IPC_Thread_Finished_NUM)
+    uint32_t type;
+
+    /// Flags
+    uint32_t flags;
+
+    /// ID of the thread that has finished
+    uint64_t thread_id;
+} IPC_Thread_Finished;
+
 #if defined(__cplusplus)
 } /* extern "C" */
 #endif

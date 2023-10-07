@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <pmos/debug.h>
 #include <pthread.h>
+#include <thread>
 
 const thread_local std::deque<std::string> v = {"Hello", "from", "vfatfsd!"};
 
@@ -30,15 +31,10 @@ int main() {
     }
     printf("\n");
 
-    // pid_t pid = fork();
-    // if(pid != 0) {
-    //     printf("I'm the child!\n");
-    // } else {
-    //     printf("I'm the parent!\n");
-    // }
-
-    pthread_t thread;
-    pthread_create(&thread, nullptr, thread_func, nullptr);
+    std::thread t1([]() {
+        printf("Hello from a std::thread!\n");
+    });
+    t1.join();
 
     // Allow other thread to run
     pthread_exit(nullptr);

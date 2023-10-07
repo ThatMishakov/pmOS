@@ -164,7 +164,8 @@ typedef struct {
 // } pthread_rwlock_t;
 // typedef unsigned long pthread_rwlockattr_t;
 #if defined(__DECLARE_PTHREAD_T) && !defined(__DECLARED_PTHREAD_T)
-typedef unsigned long pthread_t;
+// Currently a pointer to uthread defined in pmos/tls.h
+typedef void * pthread_t;
 #define __DECLARED_PTHREAD_T
 #endif
 

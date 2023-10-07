@@ -194,7 +194,21 @@ int   pthread_condattr_setpshared(pthread_condattr_t *, int);
  */
 int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_routine)(void *), void *arg);
 
-int   pthread_detach(pthread_t);
+/**
+ * @brief Detach a thread.
+ *
+ * The `pthread_detach` function is used to mark a thread as detached. A detached
+ * thread's resources will be automatically released by the system when it exits.
+ * Detached threads cannot be joined with `pthread_join`.
+ *
+ * @param thread The thread to be detached.
+ * @return 0 on success, or an error code on failure.
+ *
+ * @note Once a thread is detached, it cannot be joined with `pthread_join`.
+ *       Attempting to join a detached thread will result in an error.
+ */
+int pthread_detach(pthread_t thread);
+
 int   pthread_equal(pthread_t, pthread_t);
 void  pthread_exit(void *);
 int   pthread_getconcurrency(void);
@@ -228,7 +242,52 @@ int   pthread_rwlock_destroy(pthread_rwlock_t *);
 int   pthread_rwlock_init(pthread_rwlock_t *,
           const pthread_rwlockattr_t *);
 int   pthread_rwlock_rdlock(pthread_rwlock_t *);
-int   pthread_rwlock_tryrdlock(pthread_rwlock_t *);
+
+/**
+ * @brief Try to acquire a read lock on a read-write lock.
+ *
+ * This function attempts to acquire a read lock on the specified read-write lock.
+ * If the read lock is already held by another thread in write mode, this function
+ * will return immediately with a failure status.
+ *
+ * @param rwlock A pointer to the read-write lock to be locked.
+ * @return 0 if the read lock was successfully acquired, EBUSY if the lock is
+ *         held in write mode by another thread, or a positive error code on failure.
+ */
+int pthread_rwlock_tryrdlock(pthread_rwlock_t *rwlock);
+
+/**
+ * @brief Try to acquire a read lock on a read-write lock with a timeout.
+ *
+ * This function attempts to acquire a read lock on the specified read-write lock.
+ * If the read lock is already held by another thread in write mode, this function
+ * will wait for the specified timeout duration to acquire the lock. If the timeout
+ * is reached before the lock is acquired, it will return with a failure status.
+ *
+ * @param rwlock A pointer to the read-write lock to be locked.
+ * @param abstime A pointer to the absolute timeout time.
+ * @return 0 if the read lock was successfully acquired, ETIMEDOUT if the timeout
+ *         was reached before acquiring the lock, EBUSY if the lock is held in write
+ *         mode by another thread, or a positive error code on failure.
+ */
+int pthread_rwlock_timedrdlock(pthread_rwlock_t *rwlock, const struct timespec *abstime);
+
+/**
+ * @brief Try to acquire a write lock on a read-write lock with a timeout.
+ *
+ * This function attempts to acquire a write lock on the specified read-write lock.
+ * If the write lock is already held by another thread (read or write), this function
+ * will wait for the specified timeout duration to acquire the lock. If the timeout
+ * is reached before the lock is acquired, it will return with a failure status.
+ *
+ * @param rwlock A pointer to the read-write lock to be locked.
+ * @param abstime A pointer to the absolute timeout time.
+ * @return 0 if the write lock was successfully acquired, ETIMEDOUT if the timeout
+ *         was reached before acquiring the lock, or a positive error code on failure.
+ */
+int pthread_rwlock_timedwrlock(pthread_rwlock_t *rwlock, const struct timespec *abstime);
+
+
 int   pthread_rwlock_trywrlock(pthread_rwlock_t *);
 int   pthread_rwlock_unlock(pthread_rwlock_t *);
 int   pthread_rwlock_wrlock(pthread_rwlock_t *);
@@ -344,6 +403,24 @@ int pthread_spin_destroy(pthread_spinlock_t *lock);
  * @return 0 on success, or a positive error code on failure.
  */
 int pthread_atfork(void (*prepare)(void), void (*parent)(void), void (*child)(void));
+
+
+
+/**
+ * @brief Try to acquire a mutex within a specified time limit.
+ *
+ * This function tries to acquire the specified mutex. If the mutex is already
+ * locked by another thread, it will block until the mutex becomes available
+ * or the specified timeout expires.
+ *
+ * @param mutex A pointer to the mutex to be locked.
+ * @param abstime A pointer to a structure specifying the absolute time limit.
+ * @return 0 if the mutex was successfully acquired within the timeout, 
+ *         EBUSY if the mutex is already locked, or a positive error code
+ *         on failure.
+ */
+int pthread_mutex_timedlock(pthread_mutex_t *mutex, const struct timespec *abstime);
+
 
 #if defined(__cplusplus)
 } /* extern "C" */

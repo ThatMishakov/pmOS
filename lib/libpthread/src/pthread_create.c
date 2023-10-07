@@ -98,14 +98,14 @@ int pthread_create(pthread_t * thread, const pthread_attr_t * attr, void *(*star
     }
 
     if (thread != NULL)
-        *thread = thread_task_id;
+        *thread = (void *)u;
 
     return 0;
 }
 
 extern void __pthread_exit(void * retval) __attribute__((noreturn));
 
- __attribute__((noreturn)) void pthread_exit(void * retval)
+__attribute__((noreturn)) void pthread_exit(void * retval)
 {
     __pthread_exit(retval);
 }
