@@ -1,5 +1,6 @@
 #include <pmos/ports.h>
 #include <pmos/ipc.h>
+#include <pmos/system.h>
 #include <errno.h>
 #include <stdint.h>
 #include <stddef.h>
@@ -7,7 +8,9 @@
 #include <assert.h>
 #include <pthread.h>
 
-__thread struct __pthread_waiter waiter_struct = {0, NULL};
+#include "waiter_struct.h"
+
+static __thread struct __pthread_waiter waiter_struct = {0, NULL};
 
 int pthread_mutex_init(pthread_mutex_t* mutex, const pthread_mutexattr_t* attr) {
     // Check if attr is NULL and if not, its type
@@ -29,60 +32,9 @@ int sched_yield();
 
 /// @brief Gets the thread ID of the current thread
 /// @return The thread ID of the current thread
-uint64_t get_thread_id();
-
-static int init_waiter_struct() {
-    ports_request_t request = create_port(PID_SELF, 0);
-    if (request.result != SUCCESS) {
-        errno = request.result;
-        return -1;
-    }
-
-    waiter_struct.notification_port = request.port;
-    waiter_struct.next = NULL;
-    return 0;
-}
-
-static void atomic_add_to_list(pthread_mutex_t* mutex, struct __pthread_waiter* waiter) {
-    waiter->next = NULL;
-
-    while (1) {
-        // Atomically add waiter to mutex->waiters_list_tail
-        struct __pthread_waiter* waiters_list_tail = __atomic_load_n(&mutex->waiters_list_tail, __ATOMIC_SEQ_CST);
-        if (waiters_list_tail == NULL) {
-            // List is empty
-
-            if (__atomic_compare_exchange_n(&mutex->waiters_list_tail, &waiters_list_tail, waiter, 1, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)) {
-                // Successfully added waiter to the list
-                __atomic_store_n(&mutex->waiters_list_head, waiter, __ATOMIC_SEQ_CST);
-                return;
-            }
-
-            // A wild waiter has appeared
-            sched_yield();
-            continue;
-        } else {
-            // List is not empty
-            
-            if (!__atomic_compare_exchange_n(&mutex->waiters_list_tail, &waiters_list_tail, waiter, 1, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)) {
-                // Failed to add waiter to the list
-                sched_yield();
-                continue;
-            }
-
-            struct __pthread_waiter* head = __atomic_load_n(&mutex->waiters_list_head, __ATOMIC_SEQ_CST);
-            if (head == NULL) {
-                // All nodes have been removed from the list
-                __atomic_store_n(&mutex->waiters_list_head, waiter, __ATOMIC_SEQ_CST);
-                return;
-            }
-
-            // Add waiter to the list
-            __atomic_store_n(&head->next, waiter, __ATOMIC_SEQ_CST);
-            return;
-        }
-        __atomic_store_n(&mutex->waiters_list_tail, waiter, __ATOMIC_SEQ_CST);
-    }
+static uint64_t get_thread_id() {
+    // Since getpid() returns the task ID instead of PID (which is tecnically wrong), use it for now
+    return getpid();
 }
 
 static void atomic_pop_front(pthread_mutex_t* mutex) {
@@ -154,7 +106,7 @@ int pthread_mutex_lock(pthread_mutex_t* mutex) {
 
     // Prepare waiter struct
     if (waiter_struct.notification_port == 0) {
-        int result = init_waiter_struct();
+        int result = __init_waiter_struct(&waiter_struct);
         if (result != 0) {
             // Could not prepare it. Atomically decrement mutex->block_count and return error
             __atomic_fetch_sub(&mutex->block_count, 1, __ATOMIC_SEQ_CST);
@@ -165,7 +117,7 @@ int pthread_mutex_lock(pthread_mutex_t* mutex) {
     // Add waiter to the lock-free list
     struct __pthread_waiter* waiter = &waiter_struct;
 
-    atomic_add_to_list(mutex, waiter);
+    __atomic_add_waiter(&mutex->waiters_list_head, &mutex->waiters_list_tail, waiter);
 
     // Wait for the mutex to be unlocked
     IPC_Mutex_Unlock unlock_signal;
@@ -276,5 +228,50 @@ int pthread_mutex_unlock(pthread_mutex_t* mutex) {
     }
 
     // Mutex has been unlocked
+    return 0;
+}
+
+int pthread_mutexattr_init(pthread_mutexattr_t *attr) {
+    if (attr == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    *attr = PTHREAD_MUTEX_DEFAULT;
+    return 0;
+}
+
+int pthread_mutexattr_settype(pthread_mutexattr_t *attr, int type) {
+    if (attr == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (type != PTHREAD_MUTEX_NORMAL && type != PTHREAD_MUTEX_ERRORCHECK && type != PTHREAD_MUTEX_RECURSIVE) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    *attr = type;
+    return 0;
+}
+
+int pthread_mutexattr_gettype(const pthread_mutexattr_t *attr, int *type) {
+    if (attr == NULL || type == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    *type = *attr;
+    return 0;
+}
+
+int pthread_mutexattr_destroy(pthread_mutexattr_t *attr) {
+    if (attr == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    *attr = 0;
     return 0;
 }

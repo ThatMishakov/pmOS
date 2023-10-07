@@ -101,7 +101,8 @@
         "signal.h": "c",
         "in.h": "c",
         "tls.h": "c",
-        "load_data.h": "c"
+        "load_data.h": "c",
+        "waiter_struct.h": "c"
     },
     "cmake.configureOnOpen": false
 }

@@ -21,6 +21,7 @@
 #define __DECLARE_DEV_T
 #define __DECLARE_PTHREAD_MUTEX_T
 #define __DECLARE_MODE_T
+#define __DECLARE_PTHREAD_COND_T
 #include "../__posix_types.h"
 
 typedef unsigned long fsblkcnt_t;
@@ -32,7 +33,6 @@ typedef unsigned long key_t;
 
 typedef unsigned long nlink_t;
 
-typedef volatile void * pthread_cond_t;
 typedef unsigned pthread_condattr_t;
 typedef unsigned long pthread_key_t;
 

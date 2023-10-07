@@ -5,6 +5,7 @@
 // POSIX doesn't seem to mention NULL here, but it's pulled from
 // time.h and everyone expects it
 #define __DECLARE_NULL
+#define __DECLARE_PTHREAD_COND_T
 #include "__posix_types.h"
 
 #include <time.h>
@@ -153,7 +154,26 @@ int   pthread_cond_init(pthread_cond_t *, const pthread_condattr_t *);
 int   pthread_cond_signal(pthread_cond_t *);
 int   pthread_cond_timedwait(pthread_cond_t *, 
           pthread_mutex_t *, const struct timespec *);
-int   pthread_cond_wait(pthread_cond_t *, pthread_mutex_t *);
+          
+/**
+ * @brief Wait on a condition variable.
+ *
+ * The `pthread_cond_wait` function atomically releases the mutex pointed to by
+ * `mutex` and blocks the calling thread on the condition variable pointed to by
+ * `cond`. The thread will remain blocked until another thread signals the
+ * condition variable using `pthread_cond_signal` or `pthread_cond_broadcast`,
+ * and the current thread is chosen to unblock.
+ *
+ * Before returning from `pthread_cond_wait`, the mutex is locked again, and
+ * this function behaves as if it reacquired the mutex.
+ *
+ * @param cond  A pointer to the condition variable.
+ * @param mutex A pointer to the mutex to be released and reacquired.
+ *
+ * @return 0 on success, or a positive error code on failure.
+ */
+int pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex);
+
 int   pthread_condattr_destroy(pthread_condattr_t *);
 int   pthread_condattr_getpshared(const pthread_condattr_t *, int *);
 int   pthread_condattr_init(pthread_condattr_t *);
@@ -217,7 +237,21 @@ void *pthread_getspecific(pthread_key_t);
 int   pthread_join(pthread_t, void **);
 int   pthread_key_create(pthread_key_t *, void (*)(void *));
 int   pthread_key_delete(pthread_key_t);
-int   pthread_mutex_destroy(pthread_mutex_t *);
+
+/**
+ * @brief Destroys a mutex attributes object.
+ *
+ * The pthread_mutexattr_destroy() function deallocates any resources used by
+ * the mutex attributes object referred to by attr. After this function is
+ * called, the attributes object is no longer valid, and any further use of it
+ * results in undefined behavior.
+ *
+ * @param attr A pointer to the mutex attributes object to be destroyed.
+ *
+ * @return 0 on success, or a positive error code on failure.
+ */
+int pthread_mutexattr_destroy(pthread_mutexattr_t *attr);
+
 int   pthread_mutex_getprioceiling(const pthread_mutex_t *, int *);
 int   pthread_mutex_init(pthread_mutex_t *, const pthread_mutexattr_t *);
 int   pthread_mutex_lock(pthread_mutex_t *);
@@ -230,14 +264,75 @@ int   pthread_mutexattr_getprioceiling(const pthread_mutexattr_t *,
           int *);
 int   pthread_mutexattr_getprotocol(const pthread_mutexattr_t *, int *);
 int   pthread_mutexattr_getpshared(const pthread_mutexattr_t *, int *);
-int   pthread_mutexattr_gettype(const pthread_mutexattr_t *, int *);
-int   pthread_mutexattr_init(pthread_mutexattr_t *);
+
+/**
+ * @brief Initializes a mutex attributes object with default values.
+ *
+ * The pthread_mutexattr_init() function initializes the mutex attributes
+ * object referred to by attr with default values for all of the individual
+ * attributes used by a mutex type. After initialization, the attributes object
+ * can be used to specify various attributes when creating a mutex.
+ *
+ * @param attr A pointer to the mutex attributes object to be initialized.
+ *
+ * @return 0 on success, or a positive error code on failure.
+ */
+int pthread_mutexattr_init(pthread_mutexattr_t *attr);
+
+/**
+ * @brief Get the mutex type attribute.
+ *
+ * The pthread_mutexattr_gettype() function retrieves the mutex type attribute
+ * from the attributes object referred to by attr and stores it in the location
+ * pointed to by type.
+ *
+ * @param attr A pointer to the mutex attributes object.
+ * @param type A pointer to an integer where the mutex type will be stored.
+ *
+ * @return 0 on success, or a positive error code on failure.
+ */
+int pthread_mutexattr_gettype(const pthread_mutexattr_t *attr, int *type);
+
+
 int   pthread_mutexattr_setprioceiling(pthread_mutexattr_t *, int);
 int   pthread_mutexattr_setprotocol(pthread_mutexattr_t *, int);
 int   pthread_mutexattr_setpshared(pthread_mutexattr_t *, int);
-int   pthread_mutexattr_settype(pthread_mutexattr_t *, int);
 
-int   pthread_once(pthread_once_t *, void (*)(void));
+/**
+ * @brief Sets the mutex type attribute in a mutex attributes object.
+ *
+ * The pthread_mutexattr_settype() function sets the mutex type attribute in
+ * the attributes object referred to by attr. The type argument must be one of
+ * the following constants:
+ *
+ * - PTHREAD_MUTEX_NORMAL: This type of mutex does not check for deadlock.
+ * - PTHREAD_MUTEX_ERRORCHECK: This type of mutex provides error checking.
+ * - PTHREAD_MUTEX_RECURSIVE: This type of mutex allows recursive locking.
+ * - PTHREAD_MUTEX_DEFAULT: The default mutex type.
+ *
+ * @param attr A pointer to the mutex attributes object to be modified.
+ * @param type The desired mutex type.
+ *
+ * @return 0 on success, or a positive error code on failure.
+ */
+int pthread_mutexattr_settype(pthread_mutexattr_t *attr, int type);
+
+/**
+ * @brief Initializes a once-only control variable and executes a specified
+ *        initialization routine once and only once across all threads.
+ *
+ * The pthread_once() function provides a simple and efficient mechanism for
+ * ensuring that a specific initialization routine is executed only once,
+ * regardless of how many threads attempt to invoke it.
+ *
+ * @param once_control A pointer to the once-only control variable of type
+ *                     pthread_once_t.
+ * @param init_routine The initialization routine to be executed once.
+ *
+ * @return 0 on success, error otherwise.
+ */
+int pthread_once(pthread_once_t *once_control, void (*init_routine)(void));
+
 int   pthread_rwlock_destroy(pthread_rwlock_t *);
 int   pthread_rwlock_init(pthread_rwlock_t *,
           const pthread_rwlockattr_t *);

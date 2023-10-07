@@ -169,12 +169,16 @@ typedef void * pthread_t;
 #define __DECLARED_PTHREAD_T
 #endif
 
-#if defined(__DECLARE_PTHREAD_MUTEX_T) && !defined(__DECLARED_PTHREAD_MUTEX_T)
+#if (defined(__DECLARE_PTHREAD_MUTEX_T) || defined(__DECLARE_PTHREAD_COND_T)) \
+    && !defined(__DECLARED___PTHREAD_WAITER)
 struct __pthread_waiter {
     unsigned long notification_port;
     struct __pthread_waiter* next;
 };
+#define __DECLARED___PTHREAD_WAITER
+#endif
 
+#if defined(__DECLARE_PTHREAD_MUTEX_T) && !defined(__DECLARED_PTHREAD_MUTEX_T)
 typedef struct {
     unsigned long block_count;
     unsigned long blocking_thread_id;
@@ -184,6 +188,15 @@ typedef struct {
     int type;
 } pthread_mutex_t;
 #define __DECLARED_PTHREAD_MUTEX_T
+#endif
+
+#if defined(__DECLARE_PTHREAD_COND_T) && !defined(__DECLARED_PTHREAD_COND_T)
+typedef struct {
+    struct __pthread_waiter* waiters_list_head;
+    struct __pthread_waiter* waiters_list_tail;
+    int    pop_spinlock;
+} pthread_cond_t;
+#define __DECLARED_PTHREAD_COND_T
 #endif
 
 #if defined(__DECLARE_STACK_T) && !defined(__DECLARED_STACK_T)

@@ -14,7 +14,7 @@ CFLAGS = -std=gnu17 $(INCLUDEFLAGS) -g
 CXXFLAGS = -std=c++17 $(INCLUDEFLAGS) -g
 CPPFLAGS = $(INTERNALCFLAGS) $(USERCFLAGS) -MMD -MP $(INCLUDEFLAGS)
 ASMFLAGS = -I$(INCLUDEDIR)
-LDFLAGS = $(INTERNALLDFLAGS) -g
+LDFLAGS = $(INTERNALLDFLAGS) -g -pthread
 
 
 CCFILES := $(shell find ./ -type f -name '*.cc')
@@ -26,7 +26,7 @@ DEP    := $(OBJ:.o=.d)
 all: $(EXEC)
 
 $(EXEC): $(OBJ) libc
-	$(CXX) $(LDFLAGS) $(OBJ) -lpthread -o $@
+	$(CXX) $(LDFLAGS) $(OBJ) -o $@
 
 clean:
 	$(RM) $(EXEC) $(OBJ) $(DEP)

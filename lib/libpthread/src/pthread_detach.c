@@ -6,7 +6,7 @@
 
 void __release_tls(struct uthread * u);
 
-int ptrhead_detach(pthread_t thread)
+int pthread_detach(pthread_t thread)
 {
     struct uthread * u = thread;
     if (u == NULL) {
