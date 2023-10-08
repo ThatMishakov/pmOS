@@ -44,6 +44,19 @@ void print_registers(const klib::shared_ptr<TaskDescriptor>& task)
     t_print_bochs(" Entry type: %i\n", regs.entry_type);
 }
 
+void print_stack_trace(const klib::shared_ptr<TaskDescriptor>& task)
+{
+    if (not task)
+        return;
+
+    t_print_bochs("Stack trace:\n");
+    u64* rbp = (u64*)task->regs.preserved_r.rbp;
+    while (rbp) {
+        t_print_bochs(" => 0x%h\n", rbp[1]);
+        rbp = (u64*)rbp[0];
+    }
+}
+
 extern "C" void deal_with_pagefault_in_kernel()
 {
     t_print_bochs("Error: Pagefault inside the kernel! Instr %h %%cr2 0x%h  error 0x%h CPU %i\n", get_cpu_struct()->jumpto_from, get_cpu_struct()->pagefault_cr2, get_cpu_struct()->pagefault_error, get_cpu_struct()->cpu_id);
@@ -123,6 +136,8 @@ extern "C" void pagefault_manager()
         global_logger.printf("Warning: Pagefault %h pid %i (%s) rip %h error %h -> %i killing process...\n", virtual_addr, task->pid, task->name.c_str(), task->regs.e.rip, err, e.err_code);
         
         print_pt_chain(virtual_addr, global_logger);
+        print_registers(task);
+        print_stack_trace(task);
 
         task->atomic_kill();
     }

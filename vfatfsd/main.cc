@@ -26,6 +26,7 @@ void * thread_func(void * arg) {
 }
 
 int main() {
+    sleep(2);
     for(auto i : v) {
         printf("%s ", i.c_str());
     }
