@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include "pthread_key.h"
 
 void _atexit_pop_all();
 void __call_destructors(void);
@@ -14,6 +15,7 @@ extern uint64_t __active_threads;
 /// If the thread is the last one, it also runs the atexit() (and similar cxa) functions.
 void __thread_exit_fire_destructors()
 {
+    __pthread_key_call_destructors();
     __call_thread_atexit();
 
     uint64_t remaining_count = __atomic_sub_fetch(&__active_threads, 1, __ATOMIC_SEQ_CST);

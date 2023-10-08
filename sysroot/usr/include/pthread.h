@@ -233,10 +233,65 @@ int   pthread_equal(pthread_t, pthread_t);
 void  pthread_exit(void *);
 int   pthread_getconcurrency(void);
 int   pthread_getschedparam(pthread_t, int *, struct sched_param *);
-void *pthread_getspecific(pthread_key_t);
 int   pthread_join(pthread_t, void **);
-int   pthread_key_create(pthread_key_t *, void (*)(void *));
-int   pthread_key_delete(pthread_key_t);
+
+
+
+
+/**
+ * @brief Create a thread-specific data key.
+ *
+ * This function creates a thread-specific data key that can be used by multiple
+ * threads to store and retrieve thread-specific data. The key is associated with
+ * a destructor function that is called when a thread exits and the key's data
+ * is non-NULL.
+ *
+ * @param key Pointer to a key variable where the created key will be stored.
+ * @param destructor A destructor function to be called when a thread exits, or
+ *                   NULL if no destructor is needed.
+ * @return 0 on success, or a positive error code on failure.
+ */
+int pthread_key_create(pthread_key_t *key, void (*destructor)(void *));
+
+/**
+ * @brief Delete a thread-specific data key.
+ *
+ * This function deletes a thread-specific data key that was previously created
+ * with `pthread_key_create`. It does not affect the data associated with the key
+ * in individual threads; it only prevents new keys from being created with the
+ * specified key.
+ *
+ * @param key The key to be deleted.
+ * @return 0 on success, or a positive error code on failure.
+ */
+int pthread_key_delete(pthread_key_t key);
+
+/**
+ * @brief Get the thread-specific data associated with a key.
+ *
+ * This function retrieves the thread-specific data associated with a key for the
+ * calling thread.
+ *
+ * @param key The key to retrieve data from.
+ * @return A pointer to the thread-specific data associated with the key, or NULL
+ * if the key is not associated with a value for the calling thread.
+ */
+void *pthread_getspecific(pthread_key_t key);
+
+/**
+ * @brief Set the thread-specific data associated with a key.
+ *
+ * This function sets the thread-specific data associated with a key for the
+ * calling thread.
+ *
+ * @param key The key to associate the data with.
+ * @param value A pointer to the data to be associated with the key.
+ * @return 0 on success, or a positive error code on failure.
+ */
+int pthread_setspecific(pthread_key_t key, const void *value);
+
+
+
 
 /**
  * @brief Destroys a mutex attributes object.
@@ -333,10 +388,58 @@ int pthread_mutexattr_settype(pthread_mutexattr_t *attr, int type);
  */
 int pthread_once(pthread_once_t *once_control, void (*init_routine)(void));
 
-int   pthread_rwlock_destroy(pthread_rwlock_t *);
-int   pthread_rwlock_init(pthread_rwlock_t *,
-          const pthread_rwlockattr_t *);
-int   pthread_rwlock_rdlock(pthread_rwlock_t *);
+
+
+
+/**
+ * @brief Initialize a read-write lock.
+ *
+ * This function initializes a read-write lock with the attributes specified in
+ * `attr`. If `attr` is NULL, default attributes are used.
+ *
+ * @param rwlock Pointer to the read-write lock to be initialized.
+ * @param attr Pointer to the attributes object, or NULL for default attributes.
+ * @return 0 on success, or a positive error code on failure.
+ */
+int pthread_rwlock_init(pthread_rwlock_t *rwlock, const pthread_rwlockattr_t *attr);
+
+/**
+ * @brief Destroy a read-write lock.
+ *
+ * This function destroys a read-write lock previously initialized with
+ * `pthread_rwlock_init`. Any threads currently blocked on the lock will be
+ * awakened with an error status.
+ *
+ * @param rwlock Pointer to the read-write lock to be destroyed.
+ * @return 0 on success, or a positive error code on failure.
+ */
+int pthread_rwlock_destroy(pthread_rwlock_t *rwlock);
+
+/**
+ * @brief Acquire a read lock.
+ *
+ * This function acquires a read lock on the specified read-write lock `rwlock`.
+ * Multiple threads can hold read locks simultaneously, but if any thread holds
+ * a write lock or requests one, read lock requests will be blocked until the
+ * write lock is released.
+ *
+ * @param rwlock Pointer to the read-write lock to acquire a read lock on.
+ * @return 0 on success, or a positive error code on failure.
+ */
+int pthread_rwlock_rdlock(pthread_rwlock_t *rwlock);
+
+/**
+ * @brief Acquire a write lock.
+ *
+ * This function acquires a write lock on the specified read-write lock `rwlock`.
+ * Only one thread can hold a write lock at a time, and if any thread holds a
+ * read lock, write lock requests will be blocked until all read locks are
+ * released.
+ *
+ * @param rwlock Pointer to the read-write lock to acquire a write lock on.
+ * @return 0 on success, or a positive error code on failure.
+ */
+int pthread_rwlock_wrlock(pthread_rwlock_t *rwlock);
 
 /**
  * @brief Try to acquire a read lock on a read-write lock.
@@ -350,6 +453,30 @@ int   pthread_rwlock_rdlock(pthread_rwlock_t *);
  *         held in write mode by another thread, or a positive error code on failure.
  */
 int pthread_rwlock_tryrdlock(pthread_rwlock_t *rwlock);
+
+/**
+ * @brief Attempt to acquire a write lock.
+ *
+ * This function attempts to acquire a write lock on the specified read-write lock
+ * `rwlock`. If the lock is already held by another thread in either read or
+ * write mode, the function returns immediately with an error status.
+ *
+ * @param rwlock Pointer to the read-write lock to attempt to acquire a write lock on.
+ * @return 0 if the write lock was successfully acquired, or a positive error code on failure.
+ */
+int pthread_rwlock_trywrlock(pthread_rwlock_t *rwlock);
+
+/**
+ * @brief Release a read or write lock.
+ *
+ * This function releases a read or write lock held on the specified read-write
+ * lock `rwlock`. If multiple threads are waiting for the lock, one of them will
+ * be granted the lock.
+ *
+ * @param rwlock Pointer to the read-write lock to release.
+ * @return 0 on success, or a positive error code on failure.
+ */
+int pthread_rwlock_unlock(pthread_rwlock_t *rwlock);
 
 /**
  * @brief Try to acquire a read lock on a read-write lock with a timeout.
@@ -383,9 +510,7 @@ int pthread_rwlock_timedrdlock(pthread_rwlock_t *rwlock, const struct timespec *
 int pthread_rwlock_timedwrlock(pthread_rwlock_t *rwlock, const struct timespec *abstime);
 
 
-int   pthread_rwlock_trywrlock(pthread_rwlock_t *);
-int   pthread_rwlock_unlock(pthread_rwlock_t *);
-int   pthread_rwlock_wrlock(pthread_rwlock_t *);
+
 int   pthread_rwlockattr_destroy(pthread_rwlockattr_t *);
 int   pthread_rwlockattr_getpshared(const pthread_rwlockattr_t *,
           int *);
@@ -398,7 +523,6 @@ int   pthread_setcanceltype(int, int *);
 int   pthread_setconcurrency(int);
 int   pthread_setschedparam(pthread_t, int ,
           const struct sched_param *);
-int   pthread_setspecific(pthread_key_t, const void *);
 void  pthread_testcancel(void);
 
 

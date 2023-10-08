@@ -37,6 +37,8 @@ static uint64_t get_thread_id() {
     return getpid();
 }
 
+
+// TODO: I've changed other parts of code without touching this, so it's very likely to be broken
 static void atomic_pop_front(pthread_mutex_t* mutex) {
     assert(mutex->waiters_list_head != NULL);
 
@@ -174,6 +176,7 @@ int pthread_mutex_trylock(pthread_mutex_t* mutex)
 int pthread_mutex_unlock(pthread_mutex_t* mutex) {
     uint64_t thread_id = get_thread_id();
 
+    // TODO: Other threads may potentially unlock it (?)
     if (mutex->blocking_thread_id != thread_id) {
         errno = EPERM;
         return -1;

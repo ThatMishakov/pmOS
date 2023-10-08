@@ -34,7 +34,10 @@ typedef unsigned long key_t;
 typedef unsigned long nlink_t;
 
 typedef unsigned pthread_condattr_t;
-typedef unsigned long pthread_key_t;
+typedef struct {
+    size_t index;
+    size_t generation;
+} pthread_key_t;
 
 typedef unsigned long pthread_mutexattr_t;
 
