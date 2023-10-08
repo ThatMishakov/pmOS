@@ -65,7 +65,10 @@ typedef struct IPC_Timer_Ctrl {
 #define IPC_Timer_Reply_NUM 0x05
 typedef struct IPC_Timer_Reply {
     uint32_t type;
-    uint32_t status;
+
+    // Status of the operation. Negative values indicate errors (errno of negative sign)
+    int32_t status;
+
     uint64_t timer_id;
     uint64_t extra0;
     uint64_t extra1;

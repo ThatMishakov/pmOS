@@ -40,6 +40,13 @@ int pthread_key_create(pthread_key_t * key, void (*destructor)(void *)) {
             return -1;
         }
 
+        // NULL out the new elements
+        for (size_t i = pthread_key_capacity; i < new_capacity; i++) {
+            new_pthread_key_data[i].destructor = NULL;
+            new_pthread_key_data[i].generation = 0;
+            new_pthread_key_data[i].used = false;
+        }
+
         pthread_key_data = new_pthread_key_data;
         pthread_key_capacity = new_capacity;
     }

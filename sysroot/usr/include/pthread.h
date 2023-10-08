@@ -22,7 +22,7 @@
 
 #define PTHREAD_CANCELLED (-1)
 
-#define PTHREAD_COND_INITIALIZER ((pthread_cond_t)(NULL))
+#define PTHREAD_COND_INITIALIZER {NULL, NULL, 0}
 
 #define PTHREAD_CREATE_JOINABLE (0x00)
 #define PTHREAD_CREATE_DETACHED (0x01)
@@ -371,6 +371,22 @@ int   pthread_mutexattr_setpshared(pthread_mutexattr_t *, int);
  * @return 0 on success, or a positive error code on failure.
  */
 int pthread_mutexattr_settype(pthread_mutexattr_t *attr, int type);
+
+/**
+ * @brief Destroy a mutex object.
+ *
+ * This function destroys the mutex object referenced by the `mutex` argument.
+ * The mutex must be unlocked before it is destroyed. Attempting to destroy a
+ * locked mutex results in undefined behavior.
+ *
+ * After a mutex has been destroyed, it can be safely reinitialized using
+ * `pthread_mutex_init`.
+ *
+ * @param mutex A pointer to the mutex object to be destroyed.
+ * @return 0 on success, or a positive error code on failure.
+ */
+int pthread_mutex_destroy(pthread_mutex_t *mutex);
+
 
 /**
  * @brief Initializes a once-only control variable and executes a specified

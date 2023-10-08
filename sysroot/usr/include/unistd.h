@@ -522,7 +522,18 @@ int          setgid(gid_t);
 int          setpgid(pid_t, pid_t);
 pid_t        setsid(void);
 int          setuid(uid_t);
-unsigned     sleep(unsigned);
+
+/**
+ * @brief Sleep for a specified number of seconds.
+ *
+ * The `sleep` function suspends the execution of the calling thread for at least
+ * the specified number of seconds, unless interrupted by a signal or an error occurs.
+ *
+ * @param seconds The number of seconds to sleep.
+ * @return The number of seconds remaining to sleep (0 if the sleep completes).
+ */
+unsigned int sleep(unsigned int seconds);
+
 int          symlink(const char *, const char *);
 long         sysconf(int);
 pid_t        tcgetpgrp(int);
