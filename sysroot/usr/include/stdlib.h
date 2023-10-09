@@ -200,6 +200,27 @@ size_t wcstombs(char * s,
                 const wchar_t * pwcs,
                 size_t n);
 
+/**
+ * @brief Create a unique temporary filename.
+ *
+ * This function generates a unique temporary filename based on the template
+ * provided in `template`. The `template` should include at least six 'X'
+ * characters at the end, which will be replaced with a combination of letters
+ * and digits to ensure the filename's uniqueness.
+ *
+ * The function modifies the `template` string to contain the generated
+ * filename. If a unique filename is created, it returns a pointer to the
+ * modified `template`. If it encounters an error, it returns NULL.
+ *
+ * @param t A character string containing the filename template with at
+ *                 least six 'X' characters at the end.
+ *
+ * @return A pointer to the modified `template` with a unique filename, or NULL
+ * if an error occurs.
+ */
+char *mktemp(char * t);
+// template can't be used as a variable name as it's a C++ keyword
+
 #endif
 
 #if defined(__cplusplus)

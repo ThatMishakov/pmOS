@@ -51,7 +51,31 @@ int vfprintf ( FILE * stream, const char * format, va_list arg );
 int vfscanf ( FILE * stream, const char * format, va_list arg );
 int vprintf ( const char * format, va_list arg );
 int vscanf ( const char * format, va_list arg );
-int vsnprintf (char * s, size_t n, const char * format, va_list arg );
+
+/**
+ * @brief Format a string with a maximum length, using a va_list.
+ *
+ * This function writes formatted data to a character string `str` with a
+ * specified maximum `size`, using the format and arguments provided in
+ * `format` and `ap` (a `va_list`).
+ *
+ * @param str   A pointer to the destination character string.
+ * @param size  The maximum number of characters to write, including the null
+ *              terminator. If the formatted output exceeds this size, it will
+ *              be truncated.
+ * @param format A format string that specifies how the following arguments are
+ *               formatted.
+ * @param ap    A `va_list` containing the arguments to be formatted and
+ *              inserted into the resulting string.
+ *
+ * @return The number of characters written (excluding the null terminator) if
+ * successful. If the output is truncated, it returns the number of characters
+ * that would have been written if the size were sufficiently large (not
+ * counting the null terminator). If an error occurs, it returns a negative
+ * value.
+ */
+int vsnprintf(char *str, size_t size, const char *format, va_list ap);
+
 int vsprintf (char * s, const char * format, va_list arg );
 int vsscanf ( const char * s, const char * format, va_list arg );
 

@@ -103,7 +103,8 @@
         "tls.h": "c",
         "load_data.h": "c",
         "waiter_struct.h": "c",
-        "pthread_key.h": "c"
+        "pthread_key.h": "c",
+        "unix_to_tm.h": "c"
     },
     "cmake.configureOnOpen": false
 }

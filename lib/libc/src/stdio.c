@@ -373,6 +373,15 @@ int printf(const char* format, ...)
     va_end(arg);
 }
 
+int vsnprintf(char *str, size_t size, const char *format, va_list ap)
+{
+    struct string_descriptor desc = {str, size, 0, 0};
+
+    int ret = __va_printf_closure(write_string, &desc, ap, format);
+
+    return ret;
+}
+
 size_t fwrite ( const void * ptr, size_t size, size_t count, FILE * stream )
 {
     return write_file(stream, ptr, size*count);

@@ -134,7 +134,8 @@ int pthread_setspecific(pthread_key_t key, const void * value) {
 
         // Align new size to KEY_DATA_CAPACITY_INCREMENT to be inline with pthread_key_create()
         size_t new_size = key.index + KEY_DATA_CAPACITY_INCREMENT - (key.index % KEY_DATA_CAPACITY_INCREMENT);
-        struct key_specific_data * new_key_specific_data = realloc(key_specific_data, new_size * sizeof(struct key_specific_data));
+        size_t new_size_bytes = new_size * sizeof(struct key_specific_data);
+        struct key_specific_data * new_key_specific_data = realloc(key_specific_data, new_size_bytes);
         if (new_key_specific_data == NULL) {
             // realloc() sets errno
             return -1;

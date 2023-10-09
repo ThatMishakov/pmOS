@@ -1015,8 +1015,8 @@ void Page_Table::atomic_delete_region(u64 region_start)
     auto region_size = region->second->size;
 
     region->second->prepare_deletion();
-    // paging_regions.erase(region); 
-    paging_regions.erase(region_start);
+    paging_regions.erase(region); 
+    // paging_regions.erase(region_start);
 
     invalidate_range(region_start, region_size, true);
     unblock_tasks_rage(region_start, region_size);

@@ -45,7 +45,7 @@ unsigned long pmos_clocks_per_sec(void);
 /// Flag indicating time is absolute.
 #define TIMER_ABSTIME 1
 
-typedef struct tm {
+struct tm {
     int tm_sec;
     int tm_min; 
     int tm_hour;
@@ -55,7 +55,7 @@ typedef struct tm {
     int tm_wday;
     int tm_yday;
     int tm_isdst; 
-} tm;
+};
 
 #ifdef __STDC_HOSTED__
 /* Time manipulation */
@@ -82,10 +82,64 @@ char *asctime(const struct tm *timeptr);
 char      *asctime_r(const struct tm *, char *);
 char *ctime(const time_t *timer);
 char      *ctime_r(const time_t *, char *);
-struct tm *gmtime(const time_t *timer);
-struct tm *gmtime_r(const time_t *, struct tm *);
-struct tm *localtime(const time_t *timer);
-struct tm *localtime_r(const time_t *, struct tm *);
+
+/**
+ * @brief Convert time_t to UTC time structure.
+ *
+ * The `gmtime` function converts the given time in seconds since the
+ * Unix epoch (time_t) into a `struct tm` representing Coordinated
+ * Universal Time (UTC).
+ *
+ * @param timeptr A pointer to a time_t containing the time value.
+ * @return A pointer to a `struct tm` representing the UTC time.
+ *         Returns NULL if an error occurs.
+ */
+struct tm *gmtime(const time_t *timeptr);
+
+/**
+ * @brief Convert time_t to UTC time structure (reentrant).
+ *
+ * The `gmtime_r` function is similar to `gmtime` but reentrant, allowing
+ * multiple threads to safely use it simultaneously by providing a buffer
+ * to store the result.
+ *
+ * @param timeptr A pointer to a time_t containing the time value.
+ * @param result A pointer to a `struct tm` where the UTC time will be stored.
+ * @return A pointer to the `struct tm` representing the UTC time.
+ *         Returns NULL if an error occurs.
+ */
+struct tm *gmtime_r(const time_t *timeptr, struct tm *result);
+
+/**
+ * @brief Convert a time_t value to a broken-down time structure (thread-safe).
+ *
+ * The localtime_r() function converts the given time value pointed to by timep
+ * into a broken-down time structure expressed as a local time. The resulting
+ * structure is stored in the tm structure pointed to by result. The time is
+ * represented in seconds since the epoch (00:00:00 UTC, January 1, 1970).
+ *
+ * @param timep Pointer to a time_t value representing the time to convert.
+ * @param result Pointer to a struct tm where the result will be stored.
+ * @return If successful, a pointer to the struct tm containing the local time.
+ *         If an error occurs, NULL is returned, and errno is set accordingly.
+ */
+struct tm *localtime_r(const time_t *timep, struct tm *result);
+
+/**
+ * @brief Convert a time_t value to a broken-down time structure (not thread-safe).
+ *
+ * The localtime() function converts the given time value pointed to by timep
+ * into a broken-down time structure expressed as a local time. The resulting
+ * structure is stored in a static internal object. Since the internal object is
+ * shared among all threads, this function is not thread-safe. To ensure
+ * thread-safety, it is recommended to use localtime_r() instead.
+ *
+ * @param timep Pointer to a time_t value representing the time to convert.
+ * @return If successful, a pointer to the struct tm containing the local time.
+ *         If an error occurs, NULL is returned, and errno is set accordingly.
+ */
+struct tm *localtime(const time_t *timep);
+
 size_t strftime(char * s,
                 size_t maxsize,
                 const char * format,

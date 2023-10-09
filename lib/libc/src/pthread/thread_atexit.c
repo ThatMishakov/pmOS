@@ -51,10 +51,7 @@ int __cxa_thread_atexit_impl(void (*func) (void *), void * arg, void * dso_handl
     u->atexit_list_head = entry;
 }
 
-// By the looks of things, GCC (and Clang, but don't quote me on that) already provide this function
-// calling __cxa_thread_atexit_impl() from it
-// int __cxa_thread_atexit(void (*func) (void *), void * arg, void * dso_handle)
-// {
-//     return __cxa_thread_atexit_impl(func, arg, dso_handle);
-// }
-
+int __cxa_thread_atexit(void (*func) (void *), void * arg, void * dso_handle)
+{
+    return __cxa_thread_atexit_impl(func, arg, dso_handle);
+}

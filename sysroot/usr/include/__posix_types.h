@@ -72,7 +72,7 @@ typedef unsigned long timer_t;
 
 #if (defined(__DECLARE_TIME_T) || defined(__DECLARE_TIMESPEC_T)) \
     && !defined(__DECLARED_TIME_T)
-typedef unsigned long time_t;
+typedef long time_t;
 #define __DECLARED_TIME_T
 #endif
 
