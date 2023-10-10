@@ -50,8 +50,3 @@ int __cxa_thread_atexit_impl(void (*func) (void *), void * arg, void * dso_handl
 
     u->atexit_list_head = entry;
 }
-
-int __cxa_thread_atexit(void (*func) (void *), void * arg, void * dso_handle)
-{
-    return __cxa_thread_atexit_impl(func, arg, dso_handle);
-}

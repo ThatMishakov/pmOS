@@ -66,10 +66,31 @@ long long int atoll(const char *nptr);
  */
 double strtod(const char *str, char **endptr);
 
-float strtof(const char * nptr,
-            char ** endptr);
-long double strtold(const char * nptr,
-            char ** endptr);
+/**
+ * @brief Converts a string to a float.
+ *
+ * This function parses the string `nptr` interpreting its content as a
+ * floating-point number, and returns the result as a `float`.
+ *
+ * @param nptr   Pointer to the input string to be converted.
+ * @param endptr If not NULL, it points to a pointer where the function stores
+ *               the address of the first character after the numerical value.
+ * @return The converted floating-point number.
+ */
+float strtof(const char* nptr, char** endptr);
+
+/**
+ * @brief Converts a string to a long double.
+ *
+ * This function parses the string `nptr` interpreting its content as a
+ * floating-point number, and returns the result as a `long double`.
+ *
+ * @param nptr   Pointer to the input string to be converted.
+ * @param endptr If not NULL, it points to a pointer where the function stores
+ *               the address of the first character after the numerical value.
+ * @return The converted long double value.
+ */
+long double strtold(const char* nptr, char** endptr);
 
 long int strtol(
                 const char * nptr,
