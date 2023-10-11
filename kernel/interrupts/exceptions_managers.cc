@@ -154,6 +154,8 @@ extern "C" void general_protection_fault_manager()
     task_ptr task = get_cpu_struct()->current_task;
     //t_print_bochs("!!! General Protection Fault (GP) error %h\n", err);
     global_logger.printf("!!! General Protection Fault (GP) error (segment) %h PID %i (%s) RIP %h CS %h... Killing the process\n", task->regs.int_err, task->pid, task->name.c_str(), task->regs.e.rip, task->regs.e.cs);
+    print_registers(get_cpu_struct()->current_task);
+    print_stack_trace(task);
     task->atomic_kill();
 }
 

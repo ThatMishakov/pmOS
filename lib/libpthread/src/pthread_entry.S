@@ -21,8 +21,8 @@ __pthread_entry_point:
     # Pass the return value of the function to pthread_exit()
     movq %rax, %rdi
     # pthread_exit() outa here!
-    # Use jump since pthread_exit() is noreturn
-    jmp __pthread_exit
+    # Although it's noreturn, it's still need to be invoked with call and not jmp to maintain stack alignment
+    call __pthread_exit
 
 
 
@@ -32,6 +32,10 @@ __pthread_entry_point:
 __pthread_exit:
     # This function calls appropriate destructors (__cxa_thread_atexit stuff and also atexit() stuff if it's the last thread),
     # destroys the TLS (if the thread is not detached), frees its stack (since kernel doesn't manage it) and exits the task
+
+    # Do the normal stack frame stuff to be compatible with the C ABI and maintain stack alignment
+    pushq %rbp
+    movq %rsp, %rbp
 
 
     # Call __cxa_thread_atexit destructors and stuff
@@ -78,3 +82,6 @@ __pthread_exit:
     movq %r15, %rsi # return_value
     syscall
     # The task is dead, long live the task!
+
+    # Crash the task if the exit syscall fails
+    hlt

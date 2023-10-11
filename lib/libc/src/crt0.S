@@ -3,6 +3,8 @@
 _start:
     # Set up stack frame
     movq $0, %rbp
+
+    # Push in needed to be done twice to align stack to 16 bytes (according to calling conventions)
     pushq %rbp
 	pushq %rbp
 

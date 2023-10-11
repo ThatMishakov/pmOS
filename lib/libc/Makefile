@@ -11,7 +11,7 @@ CFLAGS = -std=c17
 CPPFLAGS = $(DEPFLAGS)
 LDFLAGS = 
 
-DEPFLAGS = -MT $@ -MMD -MP -g
+DEPFLAGS = -MT $@ -MMD -MP -g -O1
 
 CFILES := $(shell find ./src/ -type f -name '*.c')
 ASMFILES := $(shell find ./src/ -type f -name '*.S')
