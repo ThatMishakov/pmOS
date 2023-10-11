@@ -34,7 +34,7 @@ int main() {
     printf("\n");
 
     std::thread t1([]() {
-        printf("Hello from a std::thread!\n");
+        printf("Hello from std::thread!\n");
     });
     t1.join();
 

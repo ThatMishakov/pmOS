@@ -10,6 +10,7 @@
 #include <pmos/ports.h>
 #include <errno.h>
 #include <stdbool.h>
+#include <fcntl.h>
 
 const char default_terminal_port_name[] = "/pmos/terminald";
 
@@ -23,6 +24,14 @@ typedef ssize_t (*write_str_f) (void * arg, const char * str, size_t size);
 
 // Defined in filesystem.c
 ssize_t __write_internal(long int fd, const void * buf, size_t count, bool inc_offset);
+ssize_t __read_internal(long int fd, void *buf, size_t count, bool should_seek, size_t offset);
+off_t __lseek_internal(long int fd, off_t offset, int whence);
+int __close_internal(long int fd);
+
+int __check_fd_internal(long int fd, int posix_mode) {
+    // TODO
+    return 0;
+}
 
 static ssize_t write_file(void * arg, const char * str, size_t size)
 {
@@ -326,6 +335,23 @@ int putchar(int c)
     return write_file(stdout, (char*)&c, 1);
 }
 
+int putc(int c, FILE * stream)
+{
+    return fputc(c, stream);
+}
+
+int fseek(FILE *stream, long offset, int origin) {
+    return __lseek_internal((long int)stream, offset, origin);
+}
+
+int fclose(FILE *stream) {
+    return __close_internal((long int)stream);
+}
+
+long ftell(FILE *stream) {
+    return __lseek_internal((long int)stream, 0, SEEK_CUR);
+}
+
 const char endline[] = "\n";
 
 int fputs(const char* string, FILE* stream)
@@ -362,6 +388,80 @@ int sprintf(char * str, const char * format, ...)
 
     return ret;
 }
+
+int snprintf(char * str, size_t size, const char * format, ...)
+{
+    va_list arg;
+    va_start(arg,format);
+
+    struct string_descriptor desc = {str, size, 0, 0};
+
+    int ret = __va_printf_closure(write_string, &desc, arg, format);
+
+    va_end(arg);
+
+    return ret;
+}
+
+size_t fread ( void * ptr, size_t size, size_t count, FILE * stream )
+{
+    return __read_internal((long int)stream, ptr, size*count, true, 0);
+}
+
+int getc(FILE *stream)
+{
+    char c = 0;
+    int ret = fread(&c, 1, 1, stream);
+    if (ret < 0) return ret;
+    return c;
+}
+
+int fgetc(FILE *stream)
+{
+    char c = 0;
+    int ret = fread(&c, 1, 1, stream);
+    if (ret < 0) return ret;
+    return c;
+}
+
+static int to_posix_mode(const char * mode) {
+    int posix_mode = 0;
+    if (mode[0] == 'r') {
+        posix_mode |= O_RDONLY;
+    } else if (mode[0] == 'w') {
+        posix_mode |= O_WRONLY;
+        posix_mode |= O_CREAT;
+        posix_mode |= O_TRUNC;
+    } else if (mode[0] == 'a') {
+        posix_mode |= O_WRONLY;
+        posix_mode |= O_CREAT;
+        posix_mode |= O_APPEND;
+    } else {
+        return -1;
+    }
+
+    if (mode[1] == '+') {
+        posix_mode |= O_RDWR;
+    }
+
+    return posix_mode;
+}
+
+
+FILE * fdopen(int fd, const char * mode)
+{
+    int posix_mode = to_posix_mode(mode);
+
+    int ret = __check_fd_internal(fd, posix_mode);
+    if (ret < 0) {
+        errno = -ret;
+        return NULL;
+    }
+
+    return (FILE*)(unsigned long)fd;
+}
+
+
 
 int printf(const char* format, ...)
 {

@@ -457,60 +457,6 @@ static ssize_t read_file(uint64_t file_id, pmos_port_t fs_port, size_t offset, s
     return count;
 }
 
-ssize_t pread(int fd, void *buf, size_t count, off_t offset) {
-    // Double-checked locking to initialize fs_data if it is NULL
-    if (fs_data == NULL) {
-        pthread_spin_lock(&fs_data_lock);
-        if (fs_data == NULL) {
-            struct Filesystem_Data *new_fs_data = init_filesystem();
-            if (new_fs_data == NULL) {
-                pthread_spin_unlock(&fs_data_lock);
-                return -1;
-            }
-            fs_data = new_fs_data;
-        }
-        pthread_spin_unlock(&fs_data_lock);
-    }
-
-    // Lock the file descriptor to ensure thread-safety
-    pthread_spin_lock(&fs_data->lock);
-
-    // Check if the file descriptor is valid
-    if (fd < 0 || fd >= fs_data->capacity) {
-        errno = EBADF; // Bad file descriptor
-        return -1;
-    }
-
-    // Obtain the file descriptor data
-    struct File_Descriptor *file_desc = &fs_data->descriptors_vector[fd];
-
-    // Check if the file descriptor is in use and reserved
-    if (!file_desc->used || file_desc->reserved) {
-        pthread_spin_unlock(&fs_data->lock);
-        errno = EBADF; // Bad file descriptor
-        return -1;
-    }
-
-    // Extract the necessary information from the file descriptor
-    uint64_t file_id = file_desc->file.file_id;
-    pmos_port_t fs_port = file_desc->file.fs_port;
-    unsigned type = file_desc->type;
-
-    // Unlock the file descriptor
-    pthread_spin_unlock(&fs_data->lock);
-
-    switch (type) {
-    case DESCRIPTOR_FILE:
-        return read_file(file_id, fs_port, offset, count, buf);
-    default:
-        errno = EBADF; // Bad file descriptor
-        return -1;
-    }
-
-    // Why are we here?
-    return -1;
-}
-
 static bool seekable(const struct File_Descriptor * file_desc) {
     switch (file_desc->type) {
     case DESCRIPTOR_FILE:
@@ -523,7 +469,7 @@ static bool seekable(const struct File_Descriptor * file_desc) {
     return false;
 }
 
-ssize_t read(int fd, void *buf, size_t count) {
+ssize_t __read_internal(long int fd, void *buf, size_t count, bool should_seek, size_t _offset) {
     // Double-checked locking to initialize fs_data if it is NULL
     if (fs_data == NULL) {
         errno = EBADF; // Bad file descriptor
@@ -554,7 +500,7 @@ ssize_t read(int fd, void *buf, size_t count) {
     // Extract the necessary information from the file descriptor
     uint64_t file_id = file_desc.file.file_id;
     pmos_port_t fs_port = file_desc.file.fs_port;
-    size_t offset = file_desc.offset;
+    size_t offset = should_seek ? file_desc.offset : _offset;
     unsigned type = file_desc.type;
     bool is_seekable = seekable(&file_desc);
 
@@ -571,7 +517,7 @@ ssize_t read(int fd, void *buf, size_t count) {
         // Error
         return -1;
 
-    if (!is_seekable)
+    if (!is_seekable || !should_seek)
         // Don't update the offset
         return count;
 
@@ -592,6 +538,14 @@ ssize_t read(int fd, void *buf, size_t count) {
 
     // Return the number of bytes read
     return count;
+}
+
+ssize_t read(int fd, void *buf, size_t count) {
+    return __read_internal(fd, buf, count, true, 0);
+}
+
+ssize_t pread(int fd, void *buf, size_t count, off_t offset) {
+    return __read_internal(fd, buf, count, false, offset);
 }
 
 /// Initializes the descriptor to the IPC queue with the given name
@@ -752,7 +706,7 @@ static void destroy_filesystem(struct Filesystem_Data * fs_data)
     free(fs_data);
 }
 
-int close(int filedes) {
+int __close_internal(long int filedes) {
     if (filedes < 0) {
         errno = EBADF;
         return -1;
@@ -841,7 +795,11 @@ int close(int filedes) {
     return 0;
 }
 
-off_t lseek(int fd, off_t offset, int whence)
+int close(int filedes) {
+    return __close_internal(filedes);
+}
+
+off_t __lseek_internal(long int fd, off_t offset, int whence)
 {
     if (fs_data == NULL) {
         // Filesystem is not initialized; No files opened
@@ -906,6 +864,10 @@ off_t lseek(int fd, off_t offset, int whence)
     off_t result_offset = des->offset;
     pthread_spin_unlock(&fs_data->lock);
     return result_offset;
+}
+
+off_t lseek(int fd, off_t offset, int whence) {
+    return __lseek_internal(fd, offset, whence);
 }
 
 int vfsd_send_persistant(size_t msg_size, const void *message)

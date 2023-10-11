@@ -33,6 +33,14 @@ int tolower(int c) {
     }
 }
 
+int toupper(int c) {
+    if (c >= 'a' && c <= 'Z') {
+        return c + ('A' - 'a');
+    } else {
+        return c;
+    }
+}
+
 int isxdigit(int c) {
     return isdigit(c) || (tolower(c) >= 'a' && tolower(c) <= 'f');
 }

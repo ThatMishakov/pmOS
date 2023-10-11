@@ -240,6 +240,8 @@ void main()
 
     load_kernel(multiboot_info_str);
 
+    // asm("xchgw %bx, %bx");
+
     // init_std_lib();
 
     init_acpi(multiboot_info_str);

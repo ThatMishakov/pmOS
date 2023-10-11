@@ -35,7 +35,20 @@ char * tmpnam ( char * str );
 
 int fclose ( FILE * stream );
 int fflush ( FILE * stream );
-FILE * fopen ( const char * filename, const char * mode );
+
+/**
+ * @brief Open a file.
+ *
+ * The `fopen` function opens the file specified by `filename` and associates it with the stream `mode`.
+ *
+ * @param filename The name of the file to be opened.
+ * @param mode     The access mode for the file (e.g., "r" for read, "w" for write, "a" for append).
+ *
+ * @return If successful, a pointer to the `FILE` structure associated with the opened file is returned.
+ *         If an error occurs, NULL is returned, and `errno` is set to indicate the error.
+ */
+FILE *fopen(const char *filename, const char *mode);
+
 FILE * freopen ( const char * filename, const char * mode, FILE * stream );
 void setbuf ( FILE * stream, char * buffer );
 int setvbuf ( FILE * stream, char * buffer, int mode, size_t size );
@@ -79,19 +92,89 @@ int vsnprintf(char *str, size_t size, const char *format, va_list ap);
 int vsprintf (char * s, const char * format, va_list arg );
 int vsscanf ( const char * s, const char * format, va_list arg );
 
-int fgetc ( FILE * stream );
+/**
+ * @brief Get a character from a file stream.
+ *
+ * The `fgetc` function reads a character from the file stream specified by the file pointer `stream`.
+ *
+ * @param stream The file stream to read a character from.
+ *
+ * @return On success, the character read is returned as an `int`. If an error occurs or the end-of-file
+ * is reached, `EOF` is returned.
+ */
+int fgetc(FILE *stream);
+
 char * fgets ( char * str, int num, FILE * stream );
-int fputc ( int character, FILE * stream );
+
+/**
+ * @brief Write a character to the given file stream.
+ *
+ * The fputc() function writes the character c (converted to an unsigned char)
+ * to the given file stream stream. If the write is successful, the character
+ * is written, and its value is returned. If an error occurs, it returns
+ * EOF (indicating failure).
+ *
+ * @param c The character to be written.
+ * @param stream The file stream to write to.
+ *
+ * @return If successful, returns the character written; otherwise, returns EOF.
+ */
+int fputc(int c, FILE *stream);
+
 int fputs ( const char * str, FILE * stream );
-int getc ( FILE * stream );
+
+/**
+ * @brief Get a character from a file stream.
+ *
+ * The `getc` function reads a character from the file stream specified by the file pointer `stream`.
+ *
+ * @param stream The file stream to read a character from.
+ *
+ * @return On success, the character read is returned as an `int`. If an error occurs or the end-of-file
+ * is reached, `EOF` is returned.
+ */
+int getc(FILE *stream);
+
 int getchar ( void );
 char * gets ( char * str );
-int putc ( int character, FILE * stream );
+
+/**
+ * @brief Write a character to the given file stream.
+ *
+ * The putc() function writes the character c (converted to an unsigned char)
+ * to the given file stream stream. If the write is successful, the character
+ * is written, and its value is returned. If an error occurs, it returns
+ * EOF (indicating failure).
+ *
+ * @param c The character to be written.
+ * @param stream The file stream to write to.
+ *
+ * @return If successful, returns the character written; otherwise, returns EOF.
+ */
+int putc(int c, FILE *stream);
+
 int putchar ( int character );
 int puts ( const char * str );
 int ungetc ( int character, FILE * stream );
 
-size_t fread ( void * ptr, size_t size, size_t count, FILE * stream );
+/**
+ * @brief Read data from a file stream.
+ *
+ * The fread() function reads up to `size` elements of data, each `count` bytes in size,
+ * from the file stream specified by the file pointer `stream` and stores them in the
+ * buffer pointed to by `ptr`.
+ *
+ * @param ptr   Pointer to the buffer where data will be stored.
+ * @param size  The size in bytes of each element to be read.
+ * @param count The number of elements to read.
+ * @param stream The file stream to read data from.
+ *
+ * @return The total number of elements successfully read is returned.
+ *         If an error occurs, or the end-of-file is reached, the return value may be less than `count`.
+ *         Use `feof` or `ferror` to determine the reason for the return value.
+ */
+size_t fread(void *ptr, size_t size, size_t count, FILE *stream);
+
 size_t fwrite ( const void * ptr, size_t size, size_t count, FILE * stream );
 
 int fgetpos ( FILE * stream, fpos_t * pos );
@@ -119,7 +202,19 @@ int fgetpos ( FILE * stream, fpos_t * pos );
 int fseek(FILE *stream, long int offset, int whence);
 
 int fsetpos ( FILE * stream, const fpos_t * pos );
-long int ftell ( FILE * stream );
+
+/**
+ * @brief Get the current file position indicator for a stream.
+ *
+ * The `ftell` function obtains the current file position indicator for the given stream.
+ *
+ * @param stream A pointer to the FILE stream for which the position is to be determined.
+ *
+ * @return The current file position indicator, if successful.
+ *         If an error occurs, `ftell` returns -1 and sets `errno` to indicate the error.
+ */
+long ftell(FILE *stream);
+
 void rewind ( FILE * stream );
 
 void clearerr ( FILE * stream );
@@ -127,7 +222,19 @@ int feof ( FILE * stream );
 int ferror ( FILE * stream );
 void perror ( const char * str );
 
-FILE    *fdopen(int, const char *);
+/**
+ * @brief Associate a file descriptor with a file stream.
+ *
+ * The `fdopen` function associates the existing file descriptor `fd` with the file stream `mode`.
+ *
+ * @param fd   The existing file descriptor to be associated with the stream.
+ * @param mode The access mode for the stream (e.g., "r" for read, "w" for write, "a" for append).
+ *
+ * @return If successful, a pointer to the `FILE` structure associated with the stream is returned.
+ *         If an error occurs, NULL is returned, and `errno` is set to indicate the error.
+ */
+FILE *fdopen(int fd, const char *mode);
+
 int      fileno(FILE *);
 
 #define BUFSIZ 4096

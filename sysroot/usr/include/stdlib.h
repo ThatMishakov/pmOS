@@ -195,9 +195,26 @@ int setenv(const char *name, const char *value, int overwrite);
 int putenv(char *string);
 int system(const char *string);
 
-void *bsearch(const void *key, const void *base,
-            size_t nmemb, size_t size,
-            int (*compar)(const void *, const void *));
+/**
+ * @brief Binary search in a sorted array.
+ *
+ * The bsearch() function searches for the key element in the sorted array base,
+ * which contains nel elements of width bytes each, using a binary search
+ * algorithm. The compare function cmp is called with two arguments that point
+ * to the key object and to an array element, in that order.
+ *
+ * @param key Pointer to the key element to be searched for.
+ * @param base Pointer to the sorted array to search within.
+ * @param nel Number of elements in the array.
+ * @param width Size of each element in bytes.
+ * @param cmp Pointer to the comparison function.
+ *
+ * @return A pointer to the found element, or NULL if no match is found.
+ */
+void *bsearch(const void *key, const void *base, size_t nel, size_t width,
+              int (*cmp)(const void *keyval, const void *datum));
+
+
 void qsort(void *base, size_t nmemb, size_t size,
             int (*compar)(const void *, const void *));
 

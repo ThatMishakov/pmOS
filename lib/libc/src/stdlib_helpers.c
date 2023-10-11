@@ -33,6 +33,8 @@ struct uthread * __prepare_tls(void * stack_top, size_t stack_size)
 
     size_t memsz = has_tls ? global_tls_data->memsz : 0;
     size_t align = has_tls ? global_tls_data->align : 0;
+    size_t filesz = has_tls ? global_tls_data->filesz : 0;
+    assert(memsz >= filesz && "TLS memsz must be greater than or equal to TLS filesz");
 
     align = max(align, _Alignof(struct uthread));
     size_t alloc_size = alignup(memsz, align) + sizeof(struct uthread);
@@ -46,7 +48,7 @@ struct uthread * __prepare_tls(void * stack_top, size_t stack_size)
     unsigned char * tls = (unsigned char *)res.virt_addr + alignup(memsz, align);
 
     if (memsz > 0) {
-        memcpy(tls - memsz, global_tls_data->data, global_tls_data->filesz);
+        memcpy(tls - memsz, global_tls_data->data, filesz);
     }
     
     __init_uthread((struct uthread *)tls, stack_top, stack_size);
