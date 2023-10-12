@@ -14,7 +14,7 @@
 #include <stdio.h>
 #include "filesystem.h"
 #include <assert.h>
-#include "fork/fork.h"
+#include "../fork/fork.h"
 
 static struct Filesystem_Data * fs_data = NULL;
 static pthread_spinlock_t fs_data_lock;

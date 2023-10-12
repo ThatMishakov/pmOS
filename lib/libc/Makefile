@@ -7,7 +7,7 @@ CC = x86_64-pmos-gcc
 CPP = x86_64-pmos-gcc
 CXX = x86_64-pmos-g++
 
-CFLAGS = -std=c17 
+CFLAGS = -std=c17
 CPPFLAGS = $(DEPFLAGS)
 LDFLAGS = 
 
