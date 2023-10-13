@@ -33,6 +33,6 @@ static struct Filesystem_Adaptor __file_adaptor = {
 /// @param descriptor File descriptor to be filled in
 /// @param consumer_id ID of the consumer for which the file is being opened
 /// @return 0 on success, -1 on error setting errno
-int open_file(const char * path, int flags, mode_t mode, struct File_Descriptor * descriptor, uint64_t consumer_id);
+int __open_file(const char * path, int flags, mode_t mode, void * file_data, uint64_t consumer_id);
 
 #endif // FILESYSTEM_FILE_H

@@ -23,7 +23,7 @@ const char default_terminal_port_name[] = "/pmos/terminald";
 typedef ssize_t (*write_str_f) (void * arg, const char * str, size_t size);
 
 // Defined in filesystem.c
-ssize_t __write_internal(long int fd, const void * buf, size_t count, bool inc_offset);
+ssize_t __write_internal(long int fd, const void * buf, size_t count, size_t offset, bool inc_offset);
 ssize_t __read_internal(long int fd, void *buf, size_t count, bool should_seek, size_t offset);
 off_t __lseek_internal(long int fd, off_t offset, int whence);
 int __close_internal(long int fd);
@@ -38,7 +38,7 @@ static ssize_t write_file(void * arg, const char * str, size_t size)
     FILE * stream = (FILE*)arg;
     long int fd = (long int)stream;
     
-    return __write_internal(fd, str, size, true);
+    return __write_internal(fd, str, size, 0, true);
 }
 
 struct string_descriptor {

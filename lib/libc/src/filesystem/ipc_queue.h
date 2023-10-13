@@ -26,4 +26,11 @@ static struct Filesystem_Adaptor __ipc_queue_adaptor = {
     .free = &__ipc_queue_free,
 };
 
+/// Initializes the descriptor to the IPC queue with the given name
+/// @param file_data The file descriptor data
+/// @param consumer_id The consumer ID
+/// @param name The name of the queue
+/// @return int 0 on success, -1 on error
+int __set_desc_queue(void * file_data, uint64_t consumer_id, const char * name);
+
 #endif // IPC_QUEUE_H

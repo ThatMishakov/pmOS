@@ -149,13 +149,84 @@ ssize_t __file_read(void * file_data, uint64_t consumer_id, void * buf, size_t s
     return count;
 }
 
+// int write_file(uint64_t file_id, pmos_port_t fs_port, size_t offset, size_t count, const void *buf) {
+//     // Check if reply port exists
+//     if (fs_cmd_reply_port == INVALID_PORT) {
+//         // Create a new port for the current thread
+//         ports_request_t port_request = create_port(PID_SELF, 0);
+//         if (port_request.result != SUCCESS) {
+//             // Handle error: Failed to create the port
+//             return -1;
+//         }
+
+//         // Save the created port in the thread-local variable
+//         fs_cmd_reply_port = port_request.port;
+//     }
+
+//     // Initialize the message type, flags, file ID, offset, count, and reply channel
+//     IPC_Write message = {
+//         .type = IPC_Write_NUM,
+//         .flags = 0,
+//         .file_id = file_id,
+//         .fs_consumer_id = fs_data->fs_consumer_id,
+//         .start_offset = offset,
+//         .max_size = count,
+//         .reply_port = fs_cmd_reply_port,
+//     };
+
+//     size_t message_size = sizeof(IPC_Write) + count;
+
+//     // Copy the data into the message
+//     memcpy(message.data, buf, count);
+
+//     // Send the IPC_Write message to the filesystem daemon
+//     result_t result = send_message_port(fs_port, message_size, (const char *)&message);
+
+//     if (result != SUCCESS) {
+//         errno = EIO; // I/O error
+//         return -1;
+//     }
+
+//     // Receive the reply message containing the result and data
+//     Message_Descriptor reply_descr;
+//     IPC_Generic_Msg * reply_msg;
+//     result = get_message(&reply_descr, (unsigned char **)&reply_msg, fs_cmd_reply_port);
+//     if (result != SUCCESS) {
+//         errno = EIO; // I/O error
+//         return -1;
+//     }
+
+//     // Verify that the reply message is of type IPC_Write_Reply
+//     if (reply_msg->type != IPC_Write_Reply_NUM) {
+//         errno = EIO; // I/O error
+//         return -1;
+//     }
+
+//     // Read the result code from the reply message
+//     IPC_Write_Reply *reply = (IPC_Write_Reply *)reply_msg;
+//     int result_code = reply->result_code;
+
+//     if (result_code < 0) {
+//         free(reply_msg);
+//         errno = -result_code; // Set errno to appropriate error code (negative value)
+//         return -1;
+//     }
+
+//     count = reply_descr.size - offsetof(IPC_Write_Reply, data);
+
+//     // Free the memory for the reply message
+//     free(reply_msg);
+
+//     return count;
+// }
+
 ssize_t __file_write(void * file_data, uint64_t consumer_id, const void * buf, size_t size, size_t offset) {
     // Not yet implemented
     errno = ENOSYS; // Function not implemented
     return -1;
 }
 
-int __clone_file(void * file_data, uint64_t consumer_id, uint64_t new_consumer_id, void * new_data) {
+int __file_clone(void * file_data, uint64_t consumer_id, void * new_data, uint64_t new_consumer_id) {
     struct File *file = (struct File *)file_data;
     
     // Clone the entry in the filesystem daemon
@@ -222,7 +293,13 @@ int __clone_file(void * file_data, uint64_t consumer_id, uint64_t new_consumer_i
     return 0;
 }
 
-int __file_isseakable(void *, uint64_t) {
+int __file_fstat (void * file_data, uint64_t consumer_id, struct stat * statbuf) {
+    // Not yet implemented
+    errno = ENOSYS; // Function not implemented
+    return -1;
+}
+
+int __file_isseekable(void *, uint64_t) {
     // TODO: This is an assumption. Redo it once more sophisticated file types are introduced
     return 1;
 }
@@ -340,4 +417,118 @@ int __file_close(void * file_data, uint64_t consumer_id) {
 
 void __file_free(void *, uint64_t) {
     // No dynamic memory associated with the file data so nothing to do here
+}
+
+int __open_file(const char * path, int flags, mode_t mode, void * file_data, uint64_t consumer_id) {
+    struct File *file = (struct File *)file_data;
+
+    // TODO: Mode is ignored for now
+
+    // Check if the filesystem port is already cached
+    if (fs_port == INVALID_PORT) {
+        // Request the port of the filesystem daemon
+        fs_port = request_filesystem_port();
+        if (fs_port == INVALID_PORT) {
+            // Handle error: Failed to obtain the filesystem port
+            return -1;
+        }
+    }
+
+    // Check if reply port exists
+    if (fs_cmd_reply_port == INVALID_PORT) {
+        // Create a new port for the current thread
+        ports_request_t port_request = create_port(PID_SELF, 0);
+        if (port_request.result != SUCCESS) {
+            // Handle error: Failed to create the port
+            errno = EIO; // Set errno to appropriate error code
+            return -1;
+        }
+
+        // Save the created port in the thread-local variable
+        fs_cmd_reply_port = port_request.port;
+    }
+
+    // Calculate the required size for the IPC_Open message (including the variable-sized path and excluding NULL character)
+    size_t path_length = strlen(path);
+    size_t message_size = sizeof(IPC_Open) + path_length;
+
+    // Allocate memory for the IPC_Open message
+    IPC_Open* message = malloc(message_size);
+    if (message == NULL) {
+        // Handle memory allocation error
+        errno = ENOMEM; // Set errno to appropriate error code
+        return -1;
+    }
+
+    // Set the message type, flags, and reply port
+    message->num = IPC_Open_NUM;
+    message->flags = IPC_FLAG_REGISTER_IF_NOT_FOUND; // Set appropriate flags based on the 'flags' argument
+    message->reply_port = fs_cmd_reply_port; // Use the reply port
+    message->fs_consumer_id = consumer_id;
+
+    // Copy the path string into the message
+    memcpy(message->path, path, path_length);
+
+    // Send the IPC_Open message to the filesystem daemon
+    result_t result = send_message_port(fs_port, message_size, (const char*)message);
+
+    int fail_count = 0;
+    while (result == ERROR_PORT_DOESNT_EXIST && fail_count < 5) {
+        // Request the port of the filesystem daemon
+        pmos_port_t fs_port = request_filesystem_port();
+        if (fs_port == INVALID_PORT) {
+            // Handle error: Failed to obtain the filesystem port
+            free(message); // Free the allocated message memory
+            errno = EIO; // Set errno to appropriate error code
+            return -1;
+        }
+
+        // Retry sending IPC_Open message to the filesystem daemon
+        result = send_message_port(fs_port, message_size, (const char*)message);
+        ++fail_count;
+    }
+
+    free(message); // Free the allocated message memory
+
+    if (result != SUCCESS) {
+        errno = EIO; // Set errno to appropriate error code
+        return -1;
+    }
+
+    // Receive the reply message containing the result
+    Message_Descriptor reply_descr;
+    IPC_Generic_Msg * reply_msg;
+    result = get_message(&reply_descr, (unsigned char **)&reply_msg, fs_cmd_reply_port);
+    if (result != SUCCESS) {
+        // Handle error: Failed to receive the reply message
+        errno = EIO; // Set errno to appropriate error code
+        return -1;
+    }
+
+    // Verify that the reply message is of type IPC_Open_Reply
+    if (reply_msg->type != IPC_Open_Reply_NUM) {
+        // Handle error: Unexpected reply message type
+        free(reply_msg);
+        errno = EIO; // Set errno to appropriate error code
+        return -1;
+    }
+
+    // Read the result code from the reply message
+    IPC_Open_Reply* reply = (IPC_Open_Reply*)reply_msg;
+    int result_code = reply->result_code;
+
+    if (result_code < 0) {
+        // Handle error: Failed to open the file
+        free(reply_msg);
+        errno = -result_code; // Set errno to appropriate error code (negative value)
+        return -1;
+    }
+
+    file->file_id = reply->file_id;
+    file->filesystem_id = reply->filesystem_id;
+    file->fs_port = reply->fs_port;
+
+    free(reply_msg);
+    
+    return 0;
 }

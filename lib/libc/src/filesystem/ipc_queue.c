@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <sys/stat.h>
 #include <stdlib.h>
+#include <assert.h>
 
 ssize_t __ipc_queue_read(void * file_data, uint64_t consumer_id, void * buf, size_t count, size_t offset) {
     // TODO: Not implemented
@@ -137,4 +138,22 @@ void __ipc_queue_free(void * file_data, uint64_t /* unused consumer_id */) {
     }
 
     q->port = INVALID_PORT;
+}
+
+int __set_desc_queue(void * file_data, uint64_t consumer_id, const char * name) {
+    assert(file_data != NULL);
+
+    struct IPC_Queue * q = (struct IPC_Queue *)file_data;
+
+    char * name_copy = strdup(name);
+    if (name_copy == NULL) {
+        // Appropriate errno is set by strdup
+        // errno = ENOMEM;
+        return -1;
+    }
+
+    q->name = name_copy;
+    q->port = INVALID_PORT;
+
+    return 0;
 }

@@ -17,6 +17,11 @@ struct IPC_Queue {
     char *name;
 };
 
+union File_Data {
+    struct File file;
+    struct IPC_Queue ipc_queue;
+};
+
 struct File_Descriptor {
     bool used;
     bool reserved;
@@ -24,11 +29,8 @@ struct File_Descriptor {
     uint8_t type;
     off_t offset;
 
-    union {
-        struct File file;
-        //struct Logger logger;
-        struct IPC_Queue ipc_queue;
-    };
+    const struct Filesystem_Adaptor * adaptor;
+    union File_Data data;
 };
 
 enum Desctiptor_Type {

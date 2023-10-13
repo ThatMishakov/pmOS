@@ -104,7 +104,8 @@
         "load_data.h": "c",
         "waiter_struct.h": "c",
         "pthread_key.h": "c",
-        "unix_to_tm.h": "c"
+        "unix_to_tm.h": "c",
+        "cerrno": "c"
     },
     "cmake.configureOnOpen": false
 }
