@@ -201,9 +201,9 @@ typedef struct {
 
 #if defined(__DECLARE_STACK_T) && !defined(__DECLARED_STACK_T)
 typedef struct stack_t {
-    void     *ss_sp;
+    void            *ss_sp;
     unsigned long    ss_size;
-    int       ss_flags;
+    int              ss_flags;
 } stack_t;
 #define __DECLARED_STACK_T
 #endif

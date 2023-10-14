@@ -582,6 +582,16 @@ ssize_t      write(int, const void *, size_t);
  */
 ssize_t pread(int fd, void *buf, size_t count, off_t offset);
 
+/**
+ * @brief Get the page size of the system.
+ *
+ * This function returns the system's page size in bytes. This function is equivalent to sysconf(_SC_PAGESIZE)
+ * and is provided for compatibility because int might not be large enough to represent the page size and
+ * cause problems on some future systems.
+ *
+ * @return The page size in bytes.
+ * @see sysconf()
+ */
 int getpagesize(void);
 
 #if defined(__cplusplus)

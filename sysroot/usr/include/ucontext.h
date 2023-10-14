@@ -5,13 +5,22 @@
 #define __DECLARE_STACK_T
 #include "__posix_types.h"
 
-typedef void* mcontext_t; // TODO
+typedef struct {
+    unsigned long rbx;
+    unsigned long r12;
+    unsigned long r13;
+    unsigned long r14;
+    unsigned long r15;
+
+    unsigned long rsp;
+    unsigned long rbp;
+} mcontext_t; // TODO
 
 typedef struct ucontext_t {
+    mcontext_t  uc_mcontext;
     struct ucontext_t *uc_link;
     sigset_t    uc_sigmask;
     stack_t     uc_stack;
-    mcontext_t  uc_mcontext;
 } ucontext_t;
 
 #if defined(__cplusplus)
