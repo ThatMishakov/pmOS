@@ -4,9 +4,9 @@ PROGDIR = $(realpath .)
 ROOTDIR = $(PROGDIR)/..
 export PATH := $(ROOTDIR)/bin/cross/bin:$(PATH)
 
-CC = $(ROOTDIR)/bin/cross/bin/x86_64-pmos-gcc
-CPP = $(ROOTDIR)/bin/cross/bin/x86_64-pmos-gcc
-CXX = $(ROOTDIR)/bin/cross/bin/x86_64-pmos-g++
+CC = x86_64-pmos-gcc
+CPP = x86_64-pmos-gcc
+CXX = x86_64-pmos-g++
 
 USERCFLAGS = -Wall -Wextra -O2 -pipe
 

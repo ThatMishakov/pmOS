@@ -5,7 +5,6 @@
 #include <pmos/debug.h>
 #include <pthread.h>
 #include <thread>
-#include <iostream>
 
 const thread_local std::deque<std::string> v = {"Hello", "from", "vfatfsd!"};
 

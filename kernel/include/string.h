@@ -8,7 +8,7 @@ extern "C" {
 typedef unsigned long size_t;
 
 // Locale is not yet supported
-typedef int locale_t;
+typedef unsigned long locale_t;
 
 /**
  * @brief Copy memory area with limited length, stopping after a specific character is found.
