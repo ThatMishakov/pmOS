@@ -3,6 +3,7 @@
    _init:
    push %rbp
    movq %rsp, %rbp
+   # TODO: Save preserved registers :)
 
    .section .fini
    .globl _fini

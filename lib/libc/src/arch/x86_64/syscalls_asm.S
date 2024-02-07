@@ -1,5 +1,4 @@
-#include <kernel/syscalls.h>
-
+    .text
     .globl pmos_syscall
     .type pmos_syscall, @function
 pmos_syscall:
@@ -20,15 +19,4 @@ pmos_syscall:
 # sysenter_ret:
     # movq %r11, %rdx
 
-    ret
-
-    .globl _syscall_exit
-    .type _syscall_exit, @function
-_syscall_exit:
-    pushq %rbp
-    movq %rsp, %rbp
-    movq %rdi, %rsi
-    movq $SYSCALL_EXIT, %rdi
-    call pmos_syscall
-    popq %rbp
     ret
