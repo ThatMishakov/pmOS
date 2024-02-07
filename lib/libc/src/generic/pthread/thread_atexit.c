@@ -3,16 +3,11 @@
 #include <errno.h>
 #include <stdlib.h>
 
-static struct uthread *get_tls()
-{
-    struct uthread * u;
-    __asm__("movq %%fs:0, %0" : "=r"(u));
-    return u;
-}
+struct uthread *__get_tls();
 
 void __call_thread_atexit()
 {
-    struct uthread * u = get_tls();
+    struct uthread * u = __get_tls();
     if (u == NULL)
         return;
 
@@ -28,7 +23,7 @@ void __call_thread_atexit()
 int __cxa_thread_atexit_impl(void (*func) (void *), void * arg, void * dso_handle)
 {
     // TODO: This will need to be revised when we have dynamic linking
-    struct uthread * u = get_tls();
+    struct uthread * u = __get_tls();
     if (u == NULL) {
         errno = EINVAL;
         return -1;

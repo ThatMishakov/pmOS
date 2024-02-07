@@ -15,6 +15,8 @@ static TLS_Data * global_tls_data = NULL;
 #define max(x, y) (x > y ? x : y)
 #define alignup(size, alignment) (size%alignment ? size + (alignment - size%alignment) : size)
 
+struct uthread *__get_tls();
+
 void __init_uthread(struct uthread * u, void * stack_top, size_t stack_size)
 {
     u->self = u;
@@ -70,13 +72,6 @@ void __release_tls(struct uthread * u)
     size_t size_all = alignup(alloc_size, 4096);
 
     release_region(PID_SELF, (void *)u - alignup(memsz, align));
-}
-
-struct uthread * __get_tls()
-{
-    struct uthread * u;
-    __asm__("movq %%fs:0, %0" : "=r"(u));
-    return u;
 }
 
 void __thread_exit_destroy_tls()
