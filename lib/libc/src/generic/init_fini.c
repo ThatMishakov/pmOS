@@ -1,7 +1,9 @@
 #include <stdlib.h>
 
-void _init(void);
-void _fini(void);
+// Make init and fini weak since not all architectures have them
+// RISC-V in particular doesn't use them
+void _init(void) __attribute__((weak));
+void _fini(void) __attribute__((weak));
 
 extern void (*__preinit_array_start[])(void) __attribute__((weak));
 extern void (*__preinit_array_end[])(void) __attribute__((weak));
@@ -18,7 +20,8 @@ void __call_init_functions(void)
         __preinit_array_start[i]();
     }
 
-    _init();
+    if (_init)
+        _init();
 
     for (size_t i = 0; __init_array_start[i] < __init_array_end[0]; i++) {
         __init_array_start[i]();
@@ -42,5 +45,6 @@ void __call_destructors(void)
         __fini_array_start[i]();
     }
 
-    _fini();
+    if (_fini)
+        _fini();
 }
