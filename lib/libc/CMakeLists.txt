@@ -3,6 +3,7 @@ set(CMAKE_C_STANDARD 17)
 
 set(TARGET_ARCH "x86_64" CACHE STRING "Target architecture (x86_64 or riscv64)")
 set(TOOLCHAIN_PREFIX "${TARGET_ARCH}-pmos-")
+set(CMAKE_TRY_COMPILE_TARGET_TYPE "STATIC_LIBRARY")
 
 set(CMAKE_C_COMPILER "${TOOLCHAIN_PREFIX}gcc")
 set(CMAKE_ASM_COMPILER "${TOOLCHAIN_PREFIX}gcc")
@@ -22,14 +23,14 @@ set(SRC ${GENERIC_SRC} ${ARCH_SRC})
 list(REMOVE_ITEM SRC "${SRC_FOLDER}/arch/${TARGET_ARCH}/crti.S" "${SRC_FOLDER}/arch/${TARGET_ARCH}/crtn.S")
 
 # Main library
-add_library(libc STATIC ${SRC})
-set_target_properties(libc PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/build)
+add_library(c STATIC ${SRC})
+set_target_properties(c PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/build)
 
 # crti and crtn
 add_library(crti_crtn OBJECT ${SRC_FOLDER}/arch/${TARGET_ARCH}/crti.S ${SRC_FOLDER}/arch/${TARGET_ARCH}/crtn.S)
 
 set(INSTALL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../sysroot/usr/lib" CACHE PATH "Installation directory")
-install(TARGETS libc ARCHIVE DESTINATION ${INSTALL_DIR}/lib)
+install(TARGETS c ARCHIVE DESTINATION ${INSTALL_DIR}/lib)
 
 # https://stackoverflow.com/questions/75256690/how-to-install-object-files-using-cmake
 macro(install_objects OBJFILE_LIST)

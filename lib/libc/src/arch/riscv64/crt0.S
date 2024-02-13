@@ -9,12 +9,11 @@ _start:
     # riscv64-linux-gnu-g++ -O1 -fno-omit-frame-pointer -S test.cc
     addi sp, sp, -16
     # Since this is the first frame, set everything to 0
-    sd 0, 0(sp) # Previous frame pointer
-    sd 0, 8(sp) # Return address
+    sd zero, 0(sp) # Previous frame pointer
+    sd zero, 8(sp) # Return address
     # Unlike x86, this points to the top of the stack frame
     addi fp, sp, 16
     # Also, stack needs to be 16-byte aligned, but it already is
-
 
 
     # Initialize libc
