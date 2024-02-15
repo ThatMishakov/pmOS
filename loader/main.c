@@ -207,70 +207,8 @@ void load_multiboot_module(struct multiboot_tag_module * mod)
     }
 }
 
-void init_std_lib(void);
-
-void main()
+void service_ports()
 {
-    if (multiboot_magic != MULTIBOOT2_BOOTLOADER_MAGIC) {
-        print_str("Not booted by multiboot2 bootloader\n");
-        while (1) ;
-    }
-
-    Page_Table_Argumments pta;
-    pta.writeable = 1;
-    pta.user_access = 1;
-    pta.execution_disabled = 1;
-    pta.extra = 0b010;
-
-    /* Initialize everything */
-    print_str("Hello from loader!\n");
-
-    print_str("Info: nx_bit ");
-    print_hex(nx_enabled);
-    print_str("\n");
-
-    // Map multiboot structure into the kernel
-    uint64_t multiboot_str_all = multiboot_info_str & ~(uint64_t)0xfff;
-
-    map(multiboot_str_all, multiboot_str_all, pta);
-    
-    init_mem(multiboot_info_str);
-
-    //print_str("Memory bitmap initialized!\n");
-
-    load_kernel(multiboot_info_str);
-
-    // asm("xchgw %bx, %bx");
-
-    // init_std_lib();
-
-    init_acpi(multiboot_info_str);
-
-    syscall_r r = syscall(SYSCALL_CREATE_PORT, getpid());
-    loader_port = r.value; 
-    if (r.result != SUCCESS) {
-        print_str("Loader: could not create a port. Error: ");
-        print_hex(r.result);
-        print_str("\n");
-        goto exit;
-    }
-
-    start_cpus();
-
-    print_str("Loading modules...\n");
-    uint64_t terminal_pid = 0;
-    for (struct multiboot_tag * tag = (struct multiboot_tag *) (multiboot_info_str + 8); tag->type != MULTIBOOT_TAG_TYPE_END;
-        tag = (struct multiboot_tag *) ((multiboot_uint8_t *) tag + ((tag->size + 7) & ~7))) {
-            if (tag->type == MULTIBOOT_TAG_TYPE_MODULE) {
-                if (!str_starts_with(((struct multiboot_tag_module *)tag)->cmdline, "kernel")) {
-                    struct multiboot_tag_module * mod = (struct multiboot_tag_module *)tag;
-                    load_multiboot_module(mod);
-                }
-            }
-        }
-
-    init_acpi(multiboot_info_str);
-
     char *log_port_name = "/pmos/terminald";
     syscall(SYSCALL_REQUEST_NAMED_PORT, log_port_name, strlen(log_port_name), loader_port, 0);
 
@@ -434,6 +372,71 @@ void main()
         }
  
     }
+}
+
+void init_std_lib(void);
+
+void main()
+{
+    if (multiboot_magic != MULTIBOOT2_BOOTLOADER_MAGIC) {
+        print_str("Not booted by multiboot2 bootloader\n");
+        while (1) ;
+    }
+
+    Page_Table_Argumments pta;
+    pta.writeable = 1;
+    pta.user_access = 1;
+    pta.execution_disabled = 1;
+    pta.extra = 0b010;
+
+    /* Initialize everything */
+    print_str("Hello from loader!\n");
+
+    print_str("Info: nx_bit ");
+    print_hex(nx_enabled);
+    print_str("\n");
+
+    // Map multiboot structure into the kernel
+    uint64_t multiboot_str_all = multiboot_info_str & ~(uint64_t)0xfff;
+
+    map(multiboot_str_all, multiboot_str_all, pta);
+    
+    init_mem(multiboot_info_str);
+
+    //print_str("Memory bitmap initialized!\n");
+
+    load_kernel(multiboot_info_str);
+
+    // init_std_lib();
+
+    init_acpi(multiboot_info_str);
+
+    syscall_r r = syscall(SYSCALL_CREATE_PORT, getpid());
+    loader_port = r.value; 
+    if (r.result != SUCCESS) {
+        print_str("Loader: could not create a port. Error: ");
+        print_hex(r.result);
+        print_str("\n");
+        goto exit;
+    }
+
+    start_cpus();
+
+    print_str("Loading modules...\n");
+    uint64_t terminal_pid = 0;
+    for (struct multiboot_tag * tag = (struct multiboot_tag *) (multiboot_info_str + 8); tag->type != MULTIBOOT_TAG_TYPE_END;
+        tag = (struct multiboot_tag *) ((multiboot_uint8_t *) tag + ((tag->size + 7) & ~7))) {
+            if (tag->type == MULTIBOOT_TAG_TYPE_MODULE) {
+                if (!str_starts_with(((struct multiboot_tag_module *)tag)->cmdline, "kernel")) {
+                    struct multiboot_tag_module * mod = (struct multiboot_tag_module *)tag;
+                    load_multiboot_module(mod);
+                }
+            }
+        }
+
+    init_acpi(multiboot_info_str);
+
+    service_ports();
 
     //print_str("Everything seems ok. Nothing to do. Exiting...\n");
 exit:
