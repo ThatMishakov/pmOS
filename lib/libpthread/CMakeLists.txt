@@ -18,6 +18,6 @@ add_library(pthread STATIC ${SRC})
 set_target_properties(pthread PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/build)
 
 set(INSTALL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../sysroot/usr/lib" CACHE PATH "Installation directory")
-install(TARGETS pthread ARCHIVE DESTINATION ${INSTALL_DIR}/lib)
+install(TARGETS pthread ARCHIVE DESTINATION ${INSTALL_DIR})
 
 # TODO: libc and libm might be dependencies

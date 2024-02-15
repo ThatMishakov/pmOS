@@ -105,7 +105,8 @@
         "waiter_struct.h": "c",
         "pthread_key.h": "c",
         "unix_to_tm.h": "c",
-        "cerrno": "c"
+        "cerrno": "c",
+        "immintrin.h": "c"
     },
     "cmake.configureOnOpen": false
 }

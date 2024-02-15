@@ -38,7 +38,7 @@ struct __pthread_waiter * __try_pop_waiter(struct __pthread_waiter **waiters_lis
     struct __pthread_waiter * head = __atomic_load_n(waiters_list_head, __ATOMIC_SEQ_CST);
     while (head == NULL) {
         // List is not empty, but head was not yet set. Wait for it
-        spin_pause();
+        __spin_pause();
         head = __atomic_load_n(waiters_list_head, __ATOMIC_SEQ_CST);
     }
 
@@ -54,7 +54,7 @@ struct __pthread_waiter * __try_pop_waiter(struct __pthread_waiter **waiters_lis
 
         // Head is not the only element, which means that next cannot not be NULL, so wait for it to be set
         while (next == NULL) {
-            spin_pause();
+            __spin_pause();
             next = __atomic_load_n(&head->next, __ATOMIC_SEQ_CST);
         }
     }

@@ -2,6 +2,8 @@
 
 #include "spin_pause.h"
 #include "internal_rwlock.h"
+#include <errno.h>
+#include <stdlib.h>
 
 struct pthread_key_data {
     void (*destructor)(void *);

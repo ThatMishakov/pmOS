@@ -18,4 +18,4 @@ add_library(m STATIC ${SRC})
 set_target_properties(m PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/build)
 
 set(INSTALL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../sysroot/usr/lib" CACHE PATH "Installation directory")
-install(TARGETS m ARCHIVE DESTINATION ${INSTALL_DIR}/lib)
+install(TARGETS m ARCHIVE DESTINATION ${INSTALL_DIR})

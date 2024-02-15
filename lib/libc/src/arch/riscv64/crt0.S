@@ -17,7 +17,7 @@ _start:
 
 
     # Initialize libc
-    call init_str_lib
+    call init_std_lib
 
     # C++ (or others) constructors
     call __call_init_functions

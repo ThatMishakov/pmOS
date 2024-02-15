@@ -38,6 +38,6 @@ void __internal_rwlock_spinlock(uint32_t *lock) {
             return;
 
         while (__atomic_load_n(lock, __ATOMIC_RELAXED))
-            spin_pause();
+            __spin_pause();
     }
 }

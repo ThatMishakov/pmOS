@@ -5,7 +5,7 @@
 // Unified Extensible Firmware Interface (UEFI) Specification
 // Release 2.10
 
-#include <stdin.h>
+#include <stdint.h>
 #include <stdbool.h>
 
 #define BOOLEAN bool
@@ -22,15 +22,8 @@
 // #define INT128 int128_t
 // #define UINT128 uint128_t
 #define CHAR8 char
-#define CHAR16 char16_t
+#define CHAR16 short
 #define VOID void
-typedef struct {
-    UINT32 Data1;
-    UINT16 Data2;
-    UINT16 Data3;
-    UINT8 Data4[8];
-} GUID;
-#define EFI_GUID GUID
 #define EFI_STATUS UINTN
 #define EFI_HANDLE void *
 #define EFI_EVENT void *
@@ -45,7 +38,12 @@ typedef struct {
 #define OUT
 #define OPTIONAL
 #define CONST const
+
+#ifdef __amd64__
 #define EFIAPI __attribute__((ms_abi))
+#else
+#define EFIAPI
+#endif
 
 typedef struct {
     UINT64 Signature;
@@ -62,6 +60,58 @@ bool uefi_verify_header_crc(const EFI_TABLE_HEADER *hdr);
 
 
 //******************************************************
+// Status Codes
+//******************************************************
+#define EFI_SUCCESS 0
+
+#define EFIERR(a) (a | ~(((EFI_STATUS)-1) >> 1))
+#define EFI_ERROR(a) (a & ~(((EFI_STATUS)-1) >> 1))
+
+// High bit set
+#define EFI_LOAD_ERROR 1
+#define EFI_INVALID_PARAMETER 2
+#define EFI_UNSUPPORTED 3
+#define EFI_BAD_BUFFER_SIZE 4
+#define EFI_BUFFER_TOO_SMALL 5
+#define EFI_NOT_READY 6
+#define EFI_DEVICE_ERROR 7
+#define EFI_WRITE_PROTECTED 8
+#define EFI_OUT_OF_RESOURCES 9
+#define EFI_VOLUME_CORRUPTED 10
+#define EFI_VOLUME_FULL 11
+#define EFI_NO_MEDIA 12
+#define EFI_MEDIA_CHANGED 13
+#define EFI_NOT_FOUND 14
+#define EFI_ACCESS_DENIED 15
+#define EFI_NO_RESPONSE 16
+#define EFI_NO_MAPPING 17
+#define EFI_TIMEOUT 18
+#define EFI_NOT_STARTED 19
+#define EFI_ALTEADY_STARTED 20
+#define EFI_ABORTED 21
+#define EFI_ICMP_ERROR 22
+#define EFI_TFTP_ERROR 23
+#define EFI_PROTOCOL_ERROR 24
+#define EFI_INCOMPATIBLE_VERSION 25
+#define EFI_SECURITY_VIOLATION 26
+#define EFI_CRC_ERROR 27
+#define EFI_END_OF_MEDIA 28
+#define EFI_END_OF_FILE 31
+#define EFI_INVALID_LANGUAGE 32
+#define EFI_COMPROMISED_DATA 33
+#define EFI_IP_ADDRESS_CONFLICT 34
+#define EFI_HTTP_ERROR 35
+
+// Hight bit clear
+#define EFI_WARN_UNKNOWN_GLYPH 1
+#define EFI_WARN_DELETE_FAILURE 2
+#define EFI_WARN_WRITE_FAILURE 3
+#define EFI_WARN_BUFFER_TOO_SMALL 4
+#define EFI_WARN_STALE_DATA 5
+#define EFI_WARN_FILE_SYSTEM 6
+#define EFI_WARN_RESET_REQUIRED 7
+
+//******************************************************
 // Simple Text Input Protocol
 //******************************************************
 typedef struct {
@@ -69,18 +119,20 @@ typedef struct {
     CHAR16 UnicodeChar;
 } EFI_INPUT_KEY;
 
-typedef EFI_STATUS(EFIAPI *EFI_INPUT_RESET)(
-    IN EFI_SIMPLE_TEXT_INPUT_PROTOCOL *This,
-    IN BOOLEAN ExtendedVerification
-);
-typedef EFI_STATUS(EFIAPI *EFI_INPUT_READ_KEY) (
-    IN EFI_SIMPLE_TEXT_INPUT_PROTOCOL *This,
-    OUT EFI_INPUT_KEY *Key
-);
-
 #define EFI_SIMPLE_TEXT_INPUT_PROTOCOL_GUID \
     {0x387477c1,0x69c7,0x11d2,\
     {0x8e,0x39,0x00,0xa0,0xc9,0x69,0x72,0x3b}}
+
+struct _EFI_SIMPLE_TEXT_INPUT_PROTOCOL;
+
+typedef EFI_STATUS(EFIAPI *EFI_INPUT_RESET)(
+    IN struct _EFI_SIMPLE_TEXT_INPUT_PROTOCOL *This,
+    IN BOOLEAN ExtendedVerification
+);
+typedef EFI_STATUS(EFIAPI *EFI_INPUT_READ_KEY) (
+    IN struct _EFI_SIMPLE_TEXT_INPUT_PROTOCOL *This,
+    OUT EFI_INPUT_KEY *Key
+);
 
 typedef struct _EFI_SIMPLE_TEXT_INPUT_PROTOCOL {
     EFI_INPUT_RESET Reset;
@@ -100,7 +152,7 @@ typedef struct _EFI_SIMPLE_TEXT_INPUT_PROTOCOL {
 #define EFI_BROWN 0x06
 #define EFI_LIGHTGRAY 0x07
 #define EFI_BRIGHT 0x08
-#define EFI_DARKGRAY(EFI_BLACK \| EFI_BRIGHT) 0x08
+#define EFI_DARKGRAY EFI_BLACK | EFI_BRIGHT
 #define EFI_LIGHTBLUE 0x09
 #define EFI_LIGHTGREEN 0x0A
 #define EFI_LIGHTCYAN 0x0B
@@ -144,43 +196,45 @@ typedef struct {
     BOOLEAN CursorVisible;
 } SIMPLE_TEXT_OUTPUT_MODE;
 
+struct _EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL;
+
 typedef EFI_STATUS(EFIAPI *EFI_TEXT_RESET) (
-    IN EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL *This,
+    IN struct _EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL *This,
     IN BOOLEAN ExtendedVerification
 );
 typedef EFI_STATUS(EFIAPI *EFI_TEXT_STRING) (
-    IN EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL *This,
+    IN struct _EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL *This,
     IN CHAR16 *String
 );
 // Unicode characters can be found in unicode.h
 typedef EFI_STATUS(EFIAPI *EFI_TEXT_TEST_STRING) (
-    IN EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL *This,
+    IN struct _EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL *This,
     IN CHAR16 *String
 );
 typedef EFI_STATUS(EFIAPI *EFI_TEXT_QUERY_MODE) (
-    IN EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL *This,
+    IN struct _EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL *This,
     IN UINTN ModeNumber,
     OUT UINTN *Columns,
     OUT UINTN *Rows
 );
 typedef EFI_STATUS(EFIAPI *EFI_TEXT_SET_MODE) (
-    IN EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL *This,
+    IN struct _EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL *This,
     IN UINTN ModeNumber
 );
 typedef EFI_STATUS(EFIAPI *EFI_TEXT_SET_ATTRIBUTE) (
-    IN EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL *This,
+    IN struct _EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL *This,
     IN UINTN Attribute
 );
 typedef EFI_STATUS(EFIAPI *EFI_TEXT_CLEAR_SCREEN) (
-    IN EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL *This
+    IN struct _EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL *This
 );
 typedef EFI_STATUS(EFIAPI *EFI_TEXT_SET_CURSOR_POSITION) (
-    IN EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL *This,
+    IN struct _EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL *This,
     IN UINTN Column,
     IN UINTN Row
 );
 typedef EFI_STATUS(EFIAPI *EFI_TEXT_ENABLE_CURSOR) (
-    IN EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL *This,
+    IN struct _EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL *This,
     IN BOOLEAN Visible
 );
 
@@ -205,7 +259,6 @@ typedef struct _EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL {
 //***************************************************
 // EFI_EVENT
 //******************************************************
-typedef VOID *EFI_EVENT;
 //******************************************************
 // Event Types
 //******************************************************
@@ -239,7 +292,6 @@ typedef enum {
 //******************************************************
 // EFI_TPL
 //******************************************************
-typedef UINTN EFI_TPL;
 //******************************************************
 // Task Priority Levels
 //******************************************************
@@ -330,7 +382,6 @@ typedef struct {
 //******************************************************
 //EFI_HANDLE
 //******************************************************
-typedef VOID *EFI_HANDLE;
 //******************************************************
 //EFI_GUID
 //******************************************************
@@ -591,7 +642,7 @@ typedef EFI_STATUS(EFIAPI *EFI_IMAGE_LOAD) (
     IN BOOLEAN BootPolicy,
     IN EFI_HANDLE ParentImageHandle,
     IN EFI_DEVICE_PATH_PROTOCOL *DevicePath OPTIONAL,
-    IN VOID *SourceBuffer OPTIONAL
+    IN VOID *SourceBuffer OPTIONAL,
     IN UINTN SourceSize,
     OUT EFI_HANDLE *ImageHandle
 );
@@ -602,10 +653,6 @@ typedef EFI_STATUS(EFIAPI *EFI_IMAGE_START) (
 );
 typedef EFI_STATUS(EFIAPI *EFI_IMAGE_UNLOAD) (
     IN EFI_HANDLE ImageHandle
-);
-typedef EFI_STATUS(EFIAPI *EFI_IMAGE_ENTRY_POINT) (
-    IN EFI_HANDLE ImageHandle,
-    IN EFI_SYSTEM_TABLE *SystemTable
 );
 typedef EFI_STATUS(EFIAPI *EFI_EXIT) (
     IN EFI_HANDLE ImageHandle,
@@ -806,10 +853,10 @@ typedef struct _WIN_CERTIFICATE_UEFI_GUID {
     EFI_GUID CertType;
     UINT8 CertData[];
 } WIN_CERTIFICATE_UEFI_GUID;
-#define EFI_CERT_TYPE_RSA2048_SHA256_GUID
+#define EFI_CERT_TYPE_RSA2048_SHA256_GUID \
     {0xa7717414, 0xc616, 0x4977, \
     {0x94, 0x20, 0x84, 0x47, 0x12, 0xa7, 0x35, 0xbf}}
-#define EFI_CERT_TYPE_PKCS7_GUID
+#define EFI_CERT_TYPE_PKCS7_GUID \
     {0x4aafd29d, 0x68df, 0x49ee, \
     {0x8a, 0xa9, 0x34, 0x7d, 0x37, 0x56, 0x65, 0xa7}}
 typedef struct _EFI_CERT_BLOCK_RSA_2048_SHA256 {
@@ -915,15 +962,6 @@ typedef struct {
     EFI_PHYSICAL_ADDRESS Address;
     UINT64 Length;
 } EFI_MEMORY_RANGE;
-//******************************************************
-// EFI_MEMORY_RANGE_CAPSULE
-//******************************************************
-typedef struct {
-    EFI_CAPSULE_HEADER Header;
-    UINT32 OsRequestedMemoryType;
-    UINT64 NumberOfMemoryRanges;
-    EFI_MEMORY_RANGE MemoryRanges[];
-} EFI_MEMORY_RANGE_CAPSULE;
 //******************************************************
 // EFI_MEMORY_RANGE_CAPSULE
 //******************************************************
@@ -1117,7 +1155,6 @@ typedef struct{
 #define EFI_ACPI_TABLE_GUID \
     {0x8868e871,0xe4f1,0x11d3,\
     {0xbc,0x22,0x00,0x80,0xc7,0x3c,0x88,0x81}}
-#define EFI_ACPI_20_TABLE_GUID EFI_ACPI_TABLE_GUID
 #define ACPI_TABLE_GUID \
     {0xeb9d2d30,0x2d88,0x11d3,\
     {0x9a,0x16,0x00,0x90,0x27,0x3f,0xc1,0x4d}}
@@ -1253,5 +1290,10 @@ typedef struct {
     UINTN NumberOfTableEntries;
     EFI_CONFIGURATION_TABLE *ConfigurationTable;
 } EFI_SYSTEM_TABLE;
+
+typedef EFI_STATUS(EFIAPI *EFI_IMAGE_ENTRY_POINT) (
+    IN EFI_HANDLE ImageHandle,
+    IN EFI_SYSTEM_TABLE *SystemTable
+);
 
 #endif

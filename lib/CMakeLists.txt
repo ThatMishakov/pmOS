@@ -7,6 +7,8 @@ set(CMAKE_C_COMPILER "${TOOLCHAIN_PREFIX}gcc")
 set(CMAKE_ASM_COMPILER "${TOOLCHAIN_PREFIX}gcc")
 set(CMAKE_AR "${TOOLCHAIN_PREFIX}ar")
 
+set(CMAKE_TRY_COMPILE_TARGET_TYPE "STATIC_LIBRARY")
+
 project(pmos-libraries VERSION 0.1)
 
 add_subdirectory(libc)
