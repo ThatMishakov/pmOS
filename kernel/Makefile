@@ -25,7 +25,6 @@ LDFLAGS = $(INTERNALLDFLAGS) -mcmodel=kernel
 # Internal link flags that should not be changed by the user.
 INTERNALLDFLAGS :=     \
 	-nostdlib \
-	-lgcc \
 	-ffreestanding \
 	-static \
 	-Tlinker.ld    \

@@ -8,13 +8,13 @@ set(CMAKE_C_COMPILER "${TOOLCHAIN_PREFIX}gcc")
 set(CMAKE_ASM_COMPILER "${TOOLCHAIN_PREFIX}gcc")
 set(CMAKE_AR "${TOOLCHAIN_PREFIX}ar")
 
-project(loader VERSION 0.1 LANGUAGES C ASM)
-
-set(CMAKE_C_FLAGS "-Wall -Wextra -O2 -ffreestanding" CACHE STRING "C compiler flags")
+set(CMAKE_C_FLAGS "-Wall -Wextra -O2 -ffreestanding -fPIE -fshort-wchar" CACHE STRING "C compiler flags")
 set(CMAKE_ASM_FLAGS ${CMAKE_C_FLAGS} CACHE STRING "ASM compiler flags")
 
+project(loader VERSION 0.1 LANGUAGES C ASM)
+
 set(LINKER_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/linker/${TARGET_ARCH}.ld")
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -T ${LINKER_SCRIPT}")
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -pie -nostartfiles -lc -T ${LINKER_SCRIPT}")
 set_target_properties(${TARGET_NAME} PROPERTIES LINK_DEPENDS ${LINKER_SCRIPT})
 
 set(SRC_FOLDER "src")
