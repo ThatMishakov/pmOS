@@ -106,7 +106,8 @@
         "pthread_key.h": "c",
         "unix_to_tm.h": "c",
         "cerrno": "c",
-        "immintrin.h": "c"
+        "immintrin.h": "c",
+        "*.inc": "c"
     },
     "cmake.configureOnOpen": false
 }

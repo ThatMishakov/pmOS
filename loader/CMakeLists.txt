@@ -8,7 +8,7 @@ set(CMAKE_C_COMPILER "${TOOLCHAIN_PREFIX}gcc")
 set(CMAKE_ASM_COMPILER "${TOOLCHAIN_PREFIX}gcc")
 set(CMAKE_AR "${TOOLCHAIN_PREFIX}ar")
 
-set(CMAKE_C_FLAGS "-Wall -Wextra -O2 -ffreestanding -fPIE -fshort-wchar" CACHE STRING "C compiler flags")
+set(CMAKE_C_FLAGS "-Wall -Wextra -O2 -fPIE -fshort-wchar" CACHE STRING "C compiler flags")
 set(CMAKE_ASM_FLAGS ${CMAKE_C_FLAGS} CACHE STRING "ASM compiler flags")
 
 project(loader VERSION 0.1 LANGUAGES C ASM)

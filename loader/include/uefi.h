@@ -22,7 +22,7 @@
 // #define INT128 int128_t
 // #define UINT128 uint128_t
 #define CHAR8 char
-#define CHAR16 short
+#define CHAR16 unsigned short
 #define VOID void
 #define EFI_STATUS UINTN
 #define EFI_HANDLE void *
@@ -64,43 +64,43 @@ bool uefi_verify_header_crc(const EFI_TABLE_HEADER *hdr);
 //******************************************************
 #define EFI_SUCCESS 0
 
-#define EFIERR(a) (a | ~(((EFI_STATUS)-1) >> 1))
-#define EFI_ERROR(a) (a & ~(((EFI_STATUS)-1) >> 1))
+#define EFIERR(a) ((a) | (((EFI_STATUS)-1)^(((EFI_STATUS)-1) >> 1)))
+#define EFI_ERROR(a) (((INTN)a)<0)
 
 // High bit set
-#define EFI_LOAD_ERROR 1
-#define EFI_INVALID_PARAMETER 2
-#define EFI_UNSUPPORTED 3
-#define EFI_BAD_BUFFER_SIZE 4
-#define EFI_BUFFER_TOO_SMALL 5
-#define EFI_NOT_READY 6
-#define EFI_DEVICE_ERROR 7
-#define EFI_WRITE_PROTECTED 8
-#define EFI_OUT_OF_RESOURCES 9
-#define EFI_VOLUME_CORRUPTED 10
-#define EFI_VOLUME_FULL 11
-#define EFI_NO_MEDIA 12
-#define EFI_MEDIA_CHANGED 13
-#define EFI_NOT_FOUND 14
-#define EFI_ACCESS_DENIED 15
-#define EFI_NO_RESPONSE 16
-#define EFI_NO_MAPPING 17
-#define EFI_TIMEOUT 18
-#define EFI_NOT_STARTED 19
-#define EFI_ALTEADY_STARTED 20
-#define EFI_ABORTED 21
-#define EFI_ICMP_ERROR 22
-#define EFI_TFTP_ERROR 23
-#define EFI_PROTOCOL_ERROR 24
-#define EFI_INCOMPATIBLE_VERSION 25
-#define EFI_SECURITY_VIOLATION 26
-#define EFI_CRC_ERROR 27
-#define EFI_END_OF_MEDIA 28
-#define EFI_END_OF_FILE 31
-#define EFI_INVALID_LANGUAGE 32
-#define EFI_COMPROMISED_DATA 33
-#define EFI_IP_ADDRESS_CONFLICT 34
-#define EFI_HTTP_ERROR 35
+#define EFI_LOAD_ERROR EFIERR(1)
+#define EFI_INVALID_PARAMETER EFIERR(2)
+#define EFI_UNSUPPORTED EFIERR(3)
+#define EFI_BAD_BUFFER_SIZE EFIERR(4)
+#define EFI_BUFFER_TOO_SMALL EFIERR(5)
+#define EFI_NOT_READY EFIERR(6)
+#define EFI_DEVICE_ERROR EFIERR(7)
+#define EFI_WRITE_PROTECTED EFIERR(8)
+#define EFI_OUT_OF_RESOURCES EFIERR(9)
+#define EFI_VOLUME_CORRUPTED EFIERR(10)
+#define EFI_VOLUME_FULL EFIERR(11)
+#define EFI_NO_MEDIA EFIERR(12)
+#define EFI_MEDIA_CHANGED EFIERR(13)
+#define EFI_NOT_FOUND EFIERR(14)
+#define EFI_ACCESS_DENIED EFIERR(15)
+#define EFI_NO_RESPONSE EFIERR(16)
+#define EFI_NO_MAPPING EFIERR(17)
+#define EFI_TIMEOUT EFIERR(18)
+#define EFI_NOT_STARTED EFIERR(19)
+#define EFI_ALTEADY_STARTED EFIERR(20)
+#define EFI_ABORTED EFIERR(21)
+#define EFI_ICMP_ERROR EFIERR(22)
+#define EFI_TFTP_ERROR EFIERR(23)
+#define EFI_PROTOCOL_ERROR EFIERR(24)
+#define EFI_INCOMPATIBLE_VERSION EFIERR(25)
+#define EFI_SECURITY_VIOLATION EFIERR(26)
+#define EFI_CRC_ERROR EFIERR(27)
+#define EFI_END_OF_MEDIA EFIERR(28)
+#define EFI_END_OF_FILE EFIERR(31)
+#define EFI_INVALID_LANGUAGE EFIERR(32)
+#define EFI_COMPROMISED_DATA EFIERR(33)
+#define EFI_IP_ADDRESS_CONFLICT EFIERR(34)
+#define EFI_HTTP_ERROR EFIERR(35)
 
 // Hight bit clear
 #define EFI_WARN_UNKNOWN_GLYPH 1
@@ -1295,5 +1295,240 @@ typedef EFI_STATUS(EFIAPI *EFI_IMAGE_ENTRY_POINT) (
     IN EFI_HANDLE ImageHandle,
     IN EFI_SYSTEM_TABLE *SystemTable
 );
+
+//******************************************
+// EFI Loaded Image Protocol
+//******************************************
+#define EFI_LOADED_IMAGE_PROTOCOL_GUID \
+    {0x5B1B31A1,0x9562,0x11d2,\
+    {0x8E,0x3F,0x00,0xA0,0xC9,0x69,0x72,0x3B}}
+
+typedef EFI_STATUS(EFIAPI *EFI_IMAGE_UNLOAD) (
+    IN EFI_HANDLE ImageHandle
+);
+
+#define EFI_LOADED_IMAGE_PROTOCOL_REVISION 0x1000
+typedef struct {
+    UINT32 Revision;
+    EFI_HANDLE ParentHandle;
+    EFI_SYSTEM_TABLE *SystemTable;
+    // Source location of the image
+    EFI_HANDLE DeviceHandle;
+    EFI_DEVICE_PATH_PROTOCOL *FilePath;
+    VOID *Reserved;
+    // Image’s load options
+    UINT32 LoadOptionsSize;
+    VOID *LoadOptions;
+    // Location where image was loaded
+    VOID *ImageBase;
+    UINT64 ImageSize;
+    EFI_MEMORY_TYPE ImageCodeType;
+    EFI_MEMORY_TYPE ImageDataType;
+    EFI_IMAGE_UNLOAD Unload;
+} EFI_LOADED_IMAGE_PROTOCOL;
+
+//******************************************************
+// Load File Protocol
+//******************************************************
+#define EFI_LOAD_FILE_PROTOCOL_GUID \
+    {0x56EC3091,0x954C,0x11d2,\
+    {0x8e,0x3f,0x00,0xa0, 0xc9,0x69,0x72,0x3b}}
+
+struct _EFI_LOAD_FILE_PROTOCOL;
+typedef EFI_STATUS(EFIAPI *EFI_LOAD_FILE) (
+    IN struct _EFI_LOAD_FILE_PROTOCOL *This,
+    IN EFI_DEVICE_PATH_PROTOCOL *FilePath,
+    IN BOOLEAN BootPolicy,
+    IN OUT UINTN *BufferSize,
+    IN VOID *Buffer OPTIONAL
+);
+typedef struct _EFI_LOAD_FILE_PROTOCOL {
+    EFI_LOAD_FILE LoadFile;
+} EFI_LOAD_FILE_PROTOCOL;
+
+//******************************************************
+// Load File 2 Protocol
+//******************************************************
+#define EFI_LOAD_FILE2_PROTOCOL_GUID \
+    { 0x4006c0c1, 0xfcb3, 0x403e, \
+    { 0x99, 0x6d, 0x4a, 0x6c, 0x87, 0x24, 0xe0, 0x6d } }
+typedef EFI_LOAD_FILE_PROTOCOL EFI_LOAD_FILE2_PROTOCOL;
+
+//******************************************************
+// Simple File System Protocol
+//******************************************************
+#define EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_GUID \
+    {0x0964e5b22,0x6459,0x11d2,\
+    {0x8e,0x39,0x00,0xa0,0xc9,0x69,0x72,0x3b}}
+#define EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_REVISION 0x00010000
+struct _EFI_SIMPLE_FILE_SYSTEM_PROTOCOL;
+struct _EFI_FILE_PROTOCOL;
+typedef EFI_STATUS(EFIAPI *EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_OPEN_VOLUME) (
+    IN struct _EFI_SIMPLE_FILE_SYSTEM_PROTOCOL *This,
+    OUT struct _EFI_FILE_PROTOCOL **Root
+);
+typedef struct _EFI_SIMPLE_FILE_SYSTEM_PROTOCOL {
+    UINT64 Revision;
+    EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_OPEN_VOLUME OpenVolume;
+} EFI_SIMPLE_FILE_SYSTEM_PROTOCOL;
+
+//******************************************************
+// File Protocol
+//******************************************************
+#define EFI_FILE_PROTOCOL_REVISION 0x0000000
+#define EFI_FILE_PROTOCOL_REVISION2 0x00020000
+#define EFI_FILE_PROTOCOL_LATEST_REVISION EFI_FILE_PROTOCOL_REVISION2
+
+typedef EFI_STATUS(EFIAPI *EFI_FILE_OPEN) (
+    IN struct _EFI_FILE_PROTOCOL *This,
+    OUT struct _EFI_FILE_PROTOCOL **NewHandle,
+    IN CHAR16 *FileName,
+    IN UINT64 OpenMode,
+    IN UINT64 Attributes
+);
+//******************************************************
+// Open Modes
+//******************************************************
+#define EFI_FILE_MODE_READ 0x0000000000000001
+#define EFI_FILE_MODE_WRITE 0x0000000000000002
+#define EFI_FILE_MODE_CREATE 0x8000000000000000
+//******************************************************
+// File Attributes
+//******************************************************
+#define EFI_FILE_READ_ONLY 0x0000000000000001
+#define EFI_FILE_HIDDEN 0x0000000000000002
+#define EFI_FILE_SYSTEM 0x0000000000000004
+#define EFI_FILE_RESERVED 0x0000000000000008
+#define EFI_FILE_DIRECTORY 0x0000000000000010
+#define EFI_FILE_ARCHIVE 0x0000000000000020
+#define EFI_FILE_VALID_ATTR 0x0000000000000037
+
+typedef EFI_STATUS(EFIAPI *EFI_FILE_CLOSE) (
+    IN struct _EFI_FILE_PROTOCOL *This
+);
+typedef EFI_STATUS(EFIAPI *EFI_FILE_DELETE) (
+    IN struct _EFI_FILE_PROTOCOL *This
+);
+typedef EFI_STATUS(EFIAPI *EFI_FILE_READ) (
+    IN struct _EFI_FILE_PROTOCOL *This,
+    IN OUT UINTN *BufferSize,
+    OUT VOID *Buffer
+);
+typedef EFI_STATUS(EFIAPI *EFI_FILE_WRITE) (
+    IN struct _EFI_FILE_PROTOCOL *This,
+    IN OUT UINTN *BufferSize,
+    IN VOID *Buffer
+);
+typedef struct {
+    EFI_EVENT Event;
+    EFI_STATUS Status;
+    UINTN BufferSize;
+    VOID *Buffer;
+} EFI_FILE_IO_TOKEN;
+typedef EFI_STATUS(EFIAPI *EFI_FILE_OPEN_EX) (
+    IN struct _EFI_FILE_PROTOCOL *This,
+    OUT struct _EFI_FILE_PROTOCOL **NewHandle,
+    IN CHAR16 *FileName,
+    IN UINT64 OpenMode,
+    IN UINT64 Attributes,
+    IN OUT EFI_FILE_IO_TOKEN *Token
+);
+typedef EFI_STATUS(EFIAPI *EFI_FILE_READ_EX) (
+    IN struct _EFI_FILE_PROTOCOL *This,
+    IN OUT EFI_FILE_IO_TOKEN *Token
+);
+typedef EFI_STATUS(EFIAPI *EFI_FILE_WRITE_EX) (
+    IN struct _EFI_FILE_PROTOCOL *This,
+    IN OUT EFI_FILE_IO_TOKEN *Token
+);
+typedef EFI_STATUS(EFIAPI *EFI_FILE_FLUSH_EX) (
+    IN struct _EFI_FILE_PROTOCOL *This,
+    IN OUT EFI_FILE_IO_TOKEN *Token
+);
+typedef EFI_STATUS(EFIAPI *EFI_FILE_SET_POSITION) (
+    IN struct _EFI_FILE_PROTOCOL *This,
+    IN UINT64 Position
+);
+typedef EFI_STATUS(EFIAPI *EFI_FILE_GET_POSITION) (
+    IN struct _EFI_FILE_PROTOCOL *This,
+    OUT UINT64 *Position
+);
+typedef EFI_STATUS(EFIAPI *EFI_FILE_GET_INFO) (
+    IN struct _EFI_FILE_PROTOCOL *This,
+    IN EFI_GUID *InformationType,
+    IN OUT UINTN *BufferSize,
+    OUT VOID *Buffer
+);
+typedef EFI_STATUS(EFIAPI *EFI_FILE_SET_INFO) (
+    IN struct _EFI_FILE_PROTOCOL *This,
+    IN EFI_GUID *InformationType,
+    IN UINTN BufferSize,
+    IN VOID *Buffer
+);
+typedef EFI_STATUS(EFIAPI *EFI_FILE_FLUSH) (
+    IN struct _EFI_FILE_PROTOCOL *This
+);
+
+#define EFI_FILE_INFO_ID \
+    {0x09576e92,0x6d3f,0x11d2,{0x8e,0x39,\
+    0x00,0xa0,0xc9,0x69,0x72,0x3b}}
+typedef struct {
+    UINT64 Size;
+    UINT64 FileSize;
+    UINT64 PhysicalSize;
+    EFI_TIME CreateTime;
+    EFI_TIME LastAccessTime;
+    EFI_TIME ModificationTime;
+    UINT64 Attribute;
+    CHAR16 FileName [];
+} EFI_FILE_INFO;
+//******************************************
+// File Attribute Bits
+//******************************************
+#define EFI_FILE_READ_ONLY 0x0000000000000001
+#define EFI_FILE_HIDDEN 0x0000000000000002
+#define EFI_FILE_SYSTEM 0x0000000000000004
+#define EFI_FILE_RESERVED 0x0000000000000008
+#define EFI_FILE_DIRECTORY 0x0000000000000010
+#define EFI_FILE_ARCHIVE 0x0000000000000020
+#define EFI_FILE_VALID_ATTR 0x0000000000000037
+
+#define EFI_FILE_SYSTEM_INFO_ID \
+    {0x09576e93,0x6d3f,0x11d2,{0x8e,0x39,0x00,0xa0,0xc9,0x69,0x72,\
+    0x3b}}
+typedef struct {
+    UINT64 Size;
+    BOOLEAN ReadOnly;
+    UINT64 VolumeSize;
+    UINT64 FreeSpace;
+    UINT32 BlockSize;
+    CHAR16 VolumeLabel[];
+} EFI_FILE_SYSTEM_INFO;
+
+#define EFI_FILE_SYSTEM_VOLUME_LABEL_ID \
+    {0xdb47d7d3,0xfe81,0x11d3,0x9a35,\
+    {0x00,0x90,0x27,0x3f,0xC1,0x4d}}
+
+typedef struct {
+    CHAR16 VolumeLabel[0];
+} EFI_FILE_SYSTEM_VOLUME_LABEL;
+
+typedef struct _EFI_FILE_PROTOCOL {
+    UINT64 Revision;
+    EFI_FILE_OPEN Open;
+    EFI_FILE_CLOSE Close;
+    EFI_FILE_DELETE Delete;
+    EFI_FILE_READ Read;
+    EFI_FILE_WRITE Write;
+    EFI_FILE_GET_POSITION GetPosition;
+    EFI_FILE_SET_POSITION SetPosition;
+    EFI_FILE_GET_INFO GetInfo;
+    EFI_FILE_SET_INFO SetInfo;
+    EFI_FILE_FLUSH Flush;
+    EFI_FILE_OPEN_EX OpenEx; // Added for revision 2
+    EFI_FILE_READ_EX ReadEx; // Added for revision 2
+    EFI_FILE_WRITE_EX WriteEx; // Added for revision 2
+    EFI_FILE_FLUSH_EX FlushEx; // Added for revision 2
+} EFI_FILE_PROTOCOL;
 
 #endif
