@@ -43,7 +43,8 @@ INTERNALCFLAGS  :=       \
 	-no-pie -fno-pic \
 	-D_LIBUNWIND_IS_BAREMETAL \
 	-mgeneral-regs-only \
-	-fasynchronous-unwind-tables
+	-fasynchronous-unwind-tables \
+	-g
  
 # Use find to glob all *.c files in the directory and extract the object names.
 CCFILES := $(shell find ./ -type f -name '*.cc')
@@ -60,6 +61,7 @@ OBJS = 	./objects/icxxabi.o ./start.o ./asm.o ./main.o ./misc.o ./utils.o types.
 		./messaging/messaging.o ./messaging/named_ports.o \
 		./cpus/cpus.o ./cpus/sse.o ./cpus/ipi.o ./cpus/ipi_asm.o \
 		./kern_logger/kern_logger.o \
+		./limine/limine.o \
 		\
 		./libunwind/src/libunwind.o ./libunwind/src/Unwind-seh.o ./libunwind/src/Unwind-sjlj.o ./libunwind/src/UnwindLevel1.o \
 		./libunwind/src/UnwindLevel1-gcc-ext.o ./libunwind/src/UnwindRegistersRestore.o ./libunwind/src/UnwindRegistersSave.o \

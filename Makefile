@@ -9,13 +9,15 @@ $(TOPTARGETS): $(SUBDIRS)
 $(SUBDIRS):
 	$(MAKE) -C $@ $(MAKECMDGOALS)
 
-emul: grub/pmOS.iso
+ISO = kernel/build/image.iso
+
+emul: $(ISO)
 	bochs-debugger -q -f .bochsrc
 
-bochs: grub/pmOS.iso
+bochs: $(ISO)
 	bochs -q -f .bochsrc
 
-qemu: grub/pmOS.iso
-	qemu-system-x86_64 -cdrom grub/pmOS.iso  -no-shutdown -d cpu_reset -smp 4 -serial stdio
+qemu: $(ISO)
+	qemu-system-x86_64 -cdrom $(ISO)  -no-shutdown -d cpu_reset -smp 4 -serial stdio
 
 .PHONY: $(TOPTARGETS) $(SUBDIRS) grub/pmOS.iso

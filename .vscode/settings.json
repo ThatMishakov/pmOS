@@ -109,7 +109,9 @@
         "immintrin.h": "c",
         "*.inc": "c",
         "elf.h": "c",
-        "any": "c"
+        "any": "c",
+        "*.def": "cpp",
+        "locale": "cpp"
     },
     "cmake.configureOnOpen": false
 }
