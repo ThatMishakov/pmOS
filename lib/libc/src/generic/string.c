@@ -164,13 +164,18 @@ char *strtok(char *str, const char *delim) {
         return NULL;  // No more tokens, and no saved context
     }
 
-    // Find the start of the next token
-    char *token_start = saveptr;
-    char *delim_pos = strpbrk(token_start, delim);
+    // Skip leading delimiters
+    char *token_start = saveptr + strspn(saveptr, delim);
+    if (*token_start == '\0') {
+        saveptr = NULL;  // No more tokens, clear the context
+        return NULL;
+    }
 
+    // Find the end of the token
+    char *delim_pos = strpbrk(token_start, delim);
     if (delim_pos != NULL) {
-        *delim_pos = '\0';          // Replace delimiter with null character
-        saveptr = delim_pos + 1;    // Update the context for the next call
+        *delim_pos = '\0';  // Replace delimiter with null character
+        saveptr = delim_pos + 1;  // Update the context for the next call
     } else {
         saveptr = NULL;  // No more tokens, clear the context
     }

@@ -14,7 +14,7 @@ INCLUDEDIR = include . libunwind/include minidbg/x86_64
 INCPARAM = $(foreach d, $(INCLUDEDIR), -I$(ROOTDIR)/$d)
 
 # User controllable CFLAGS.
-USERCFLAGS = -Wall -Wextra -Og -pipe
+USERCFLAGS = -Wall -Wextra -O3 -pipe
 
 CPPFLAGS = $(INTERNALCFLAGS) -mcmodel=kernel $(USERCFLAGS) -MMD -MP $(INCPARAM)
 CXXFLAGS = -std=c++20
@@ -43,8 +43,7 @@ INTERNALCFLAGS  :=       \
 	-no-pie -fno-pic \
 	-D_LIBUNWIND_IS_BAREMETAL \
 	-mgeneral-regs-only \
-	-fasynchronous-unwind-tables \
-	-g \
+	-fasynchronous-unwind-tables
  
 # Use find to glob all *.c files in the directory and extract the object names.
 CCFILES := $(shell find ./ -type f -name '*.cc')

@@ -107,7 +107,9 @@
         "unix_to_tm.h": "c",
         "cerrno": "c",
         "immintrin.h": "c",
-        "*.inc": "c"
+        "*.inc": "c",
+        "elf.h": "c",
+        "any": "c"
     },
     "cmake.configureOnOpen": false
 }

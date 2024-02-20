@@ -26,6 +26,23 @@ typedef struct {
 
 #define ELF_X86     3
 #define ELF_64BIT   2
+#define ELF_RISCV   0xF3
+#define ELF_X86_64  0x3E
+#define ELF_AARCH64 0xB7
+
+#ifdef __x86_64__
+#define ELF_BITNESS ELF_64BIT
+#define ELF_INSTR_SET ELF_X86_64
+#elif defined(__i386__)
+#define ELF_BITNESS ELF_32BIT
+#define ELF_INSTR_SET ELF_X86
+#elif defined(__riscv__)
+#define ELF_BITNESS ELF_64BIT
+#define ELF_INSTR_SET ELF_RISCV
+#elif defined(__aarch64__)
+#define ELF_BITNESS ELF_64BIT
+#define ELF_INSTR_SET ELF_AARCH64
+#endif
 
 typedef struct {
     uint32_t    type;
