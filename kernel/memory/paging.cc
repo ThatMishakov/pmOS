@@ -18,20 +18,21 @@
 
 bool nx_bit_enabled = false;
 
-kresult_t map(u64 physical_addr, u64 virtual_addr, Page_Table_Argumments arg)
+kresult_t map(u64 physical_addr, u64 virtual_addr, Page_Table_Argumments arg, u64 pt_phys)
 {
+    Temp_Mapper_Obj<x86_PAE_Entry> mapper(request_temp_mapper());
+
     u64 addr = virtual_addr;
     addr >>= 12;
-    //u64 page = addr;
     u64 ptable_entry = addr & 0x1ff;
     addr >>= 9;
     u64 pdir_entry = addr & 0x1ff;
     addr >>= 9;
     u64 pdpt_entry = addr & 0x1ff;
-    addr >>= 9;
-    u64 pml4_entry = addr & 0x1ff;
 
-    PML4E& pml4e = pml4(rec_map_index)->entries[pml4_entry];
+    u64 pml4_entry = (virtual_addr >> 39) & 0x1ff;
+    x86_PAE_Entry *pml4 = mapper.map(pt_phys);
+    x86_PAE_Entry& pml4e = pml4[pml4_entry];
     if (not pml4e.present) {
         pml4e = {};
         u64 p = kernel_pframe_allocator.alloc_page_ppn();
@@ -43,8 +44,9 @@ kresult_t map(u64 physical_addr, u64 virtual_addr, Page_Table_Argumments arg)
         page_clear((void*)pdpt_of(virtual_addr, rec_map_index));
     }
 
-    PDPTE& pdpte = pdpt_of(virtual_addr, rec_map_index)->entries[pdpt_entry];
-    if (pdpte.size) return ERROR_PAGE_PRESENT;
+    x86_PAE_Entry *pdpt = mapper.map(pml4e.page_ppn << 12);
+    x86_PAE_Entry& pdpte = pdpt[pdpt_entry];
+    if (pdpte.pat_size) return ERROR_PAGE_PRESENT;
     if (not pdpte.present) {
         pdpte = {};
         u64 p =  kernel_pframe_allocator.alloc_page_ppn();;
@@ -56,8 +58,9 @@ kresult_t map(u64 physical_addr, u64 virtual_addr, Page_Table_Argumments arg)
         page_clear((void*)pd_of(virtual_addr, rec_map_index));
     }
 
-    PDE& pde = pd_of(virtual_addr, rec_map_index)->entries[pdir_entry];
-    if (pde.size) return ERROR_PAGE_PRESENT;
+    x86_PAE_Entry *pd = mapper.map(pdpte.page_ppn << 12);
+    x86_PAE_Entry& pde = pd[pdir_entry];
+    if (pde.pat_size) return ERROR_PAGE_PRESENT;
     if (not pde.present) {
         pde = {};
         u64 p = kernel_pframe_allocator.alloc_page_ppn();
@@ -82,9 +85,21 @@ kresult_t map(u64 physical_addr, u64 virtual_addr, Page_Table_Argumments arg)
     return SUCCESS;
 }
 
-u64 rec_get_pt_ppn(u64 virt_addr)
-{
-    return get_pde(virt_addr, rec_map_index)->page_ppn;
+u64 map_pages(u64 phys_addr, u64 virt_addr, u64 size_bytes, Page_Table_Argumments args, u64 cr3) {
+    u64 result = SUCCESS;
+    u64 i = 0;
+    for (; i < size_bytes; i += 0x1000) {
+        result = map(phys_addr + i, virt_addr + i, args, cr3);
+        if (result != SUCCESS)
+            break;
+    }
+
+    // TODO: It would probably be better to unmap the pages on error
+    // Doesn't matter now
+    // if (result != SUCCESS)
+    //     ...
+
+    return result;
 }
 
 PT* rec_prepare_pt_for(u64 virtual_addr, Page_Table_Argumments arg)
@@ -161,7 +176,7 @@ bool x86_4level_Page_Table::is_mapped(u64 virt_addr) const
 {
     bool allocated = false;
 
-    Temp_Mapper_Obj<x86_PAE_Entry> mapper(get_cpu_struct()->temp_mapper);
+    Temp_Mapper_Obj<x86_PAE_Entry> mapper(request_temp_mapper());
 
     do {
         mapper.map((u64)pml4_phys);
@@ -192,7 +207,7 @@ void x86_4level_Page_Table::invalidate(u64 virt_addr, bool free)
 {
     bool invalidated = false;
     
-    Temp_Mapper_Obj<x86_PAE_Entry> mapper(get_cpu_struct()->temp_mapper);
+    Temp_Mapper_Obj<x86_PAE_Entry> mapper(request_temp_mapper());
 
     do {
         mapper.map((u64)pml4_phys);
@@ -254,7 +269,7 @@ void x86_Page_Table::atomic_active_sum(u64 val) noexcept
 
 Page_Table::Check_Return_Str x86_4level_Page_Table::check_if_allocated_and_set_flag(u64 virtual_addr, u8 flag, Page_Table_Argumments arg)
 {
-    Temp_Mapper_Obj<x86_PAE_Entry> mapper(get_cpu_struct()->temp_mapper);
+    Temp_Mapper_Obj<x86_PAE_Entry> mapper(request_temp_mapper());
 
     mapper.map((u64)pml4_phys);
     x86_PAE_Entry* pml4e = &mapper.ptr[pml4_index(virtual_addr)];
@@ -322,9 +337,10 @@ Page_Table::Check_Return_Str x86_4level_Page_Table::check_if_allocated_and_set_f
 kresult_t kernel_get_page(u64 virtual_addr, Page_Table_Argumments arg)
 {
     void* r = kernel_pframe_allocator.alloc_page();
+    u64 cr3 = getCR3();
 
     try {
-        kresult_t b = map((u64)r, virtual_addr, arg);
+        kresult_t b = map((u64)r, virtual_addr, arg, cr3);
         if (b != SUCCESS) 
             kernel_pframe_allocator.free(r);
         
@@ -388,7 +404,7 @@ kresult_t invalidade(u64 virtual_addr)
 
 u64 x86_4level_Page_Table::phys_addr_of(u64 virt) const
 {
-    Temp_Mapper_Obj<x86_PAE_Entry> mapper(get_cpu_struct()->temp_mapper);
+    Temp_Mapper_Obj<x86_PAE_Entry> mapper(request_temp_mapper());
 
     // PML4 entry
     mapper.map((u64)pml4_phys); unsigned pml4_i = pml4_index(virt);
@@ -417,7 +433,7 @@ x86_4level_Page_Table::Page_Info x86_4level_Page_Table::get_page_mapping(u64 vir
 {
     Page_Info i{};
 
-    Temp_Mapper_Obj<x86_PAE_Entry> mapper(get_cpu_struct()->temp_mapper);
+    Temp_Mapper_Obj<x86_PAE_Entry> mapper(request_temp_mapper());
 
     // PML4 entry
     mapper.map((u64)pml4_phys); unsigned pml4_i = pml4_index(virt_addr);
@@ -482,8 +498,8 @@ klib::shared_ptr<x86_4level_Page_Table> x86_4level_Page_Table::create_empty()
         u64 p = (u64)l;
 
         // Map pages
-        Temp_Mapper_Obj<x86_PAE_Entry> new_page_m(get_cpu_struct()->temp_mapper);
-        Temp_Mapper_Obj<x86_PAE_Entry> current_page_m(get_cpu_struct()->temp_mapper);
+        Temp_Mapper_Obj<x86_PAE_Entry> new_page_m(request_temp_mapper());
+        Temp_Mapper_Obj<x86_PAE_Entry> current_page_m(request_temp_mapper());
 
         new_page_m.map(p);
         current_page_m.map(getCR3());
@@ -538,7 +554,7 @@ void x86_4level_Page_Table::map(u64 physical_addr, u64 virtual_addr, Page_Table_
     if (physical_addr >> 48)
         throw(Kern_Exception(ERROR_OUT_OF_RANGE, "x86_4level_Page_Table::map physical page out of range"));
 
-    Temp_Mapper_Obj<x86_PAE_Entry> mapper(get_cpu_struct()->temp_mapper);
+    Temp_Mapper_Obj<x86_PAE_Entry> mapper(request_temp_mapper());
     mapper.map((u64)pml4_phys);
 
     x86_PAE_Entry* pml4e = &mapper.ptr[pml4_index(virtual_addr)];
@@ -591,7 +607,7 @@ void x86_4level_Page_Table::map(Page_Descriptor page, u64 virtual_addr, Page_Tab
 
     assert(page.available && "Page is not available");
 
-    Temp_Mapper_Obj<x86_PAE_Entry> mapper(get_cpu_struct()->temp_mapper);
+    Temp_Mapper_Obj<x86_PAE_Entry> mapper(request_temp_mapper());
     mapper.map((u64)pml4_phys);
 
     x86_PAE_Entry* pml4e = &mapper.ptr[pml4_index(virtual_addr)];
@@ -645,7 +661,7 @@ void x86_4level_Page_Table::map(Page_Descriptor page, u64 virtual_addr, Page_Tab
 
 void x86_4level_Page_Table::free_pt(u64 pt_phys)
 {
-    Temp_Mapper_Obj<x86_PAE_Entry> mapper(get_cpu_struct()->temp_mapper);
+    Temp_Mapper_Obj<x86_PAE_Entry> mapper(request_temp_mapper());
     mapper.map(pt_phys);
 
     for (u64 i = 0; i < 512; ++i) {
@@ -656,7 +672,7 @@ void x86_4level_Page_Table::free_pt(u64 pt_phys)
 
 void x86_4level_Page_Table::free_pd(u64 pd_phys)
 {
-    Temp_Mapper_Obj<x86_PAE_Entry> mapper(get_cpu_struct()->temp_mapper);
+    Temp_Mapper_Obj<x86_PAE_Entry> mapper(request_temp_mapper());
     mapper.map(pd_phys);
 
     for (u64 i = 0; i < 512; ++i) {
@@ -672,7 +688,7 @@ void x86_4level_Page_Table::free_pd(u64 pd_phys)
 
 void x86_4level_Page_Table::free_pdpt(u64 pdpt_phys)
 {
-    Temp_Mapper_Obj<x86_PAE_Entry> mapper(get_cpu_struct()->temp_mapper);
+    Temp_Mapper_Obj<x86_PAE_Entry> mapper(request_temp_mapper());
     mapper.map(pdpt_phys);
 
     for (u64 i = 0; i < 512; ++i) {
@@ -688,7 +704,7 @@ void x86_4level_Page_Table::free_pdpt(u64 pdpt_phys)
 
 void x86_4level_Page_Table::free_user_pages()
 {
-    Temp_Mapper_Obj<x86_PAE_Entry> mapper(get_cpu_struct()->temp_mapper);
+    Temp_Mapper_Obj<x86_PAE_Entry> mapper(request_temp_mapper());
     mapper.map((u64)pml4_phys);
 
     for (u64 i = 0; i < 256; ++i) {
@@ -1101,8 +1117,8 @@ Page_Descriptor Page_Table::Page_Info::create_copy() const
     // Return a copy
     Page_Descriptor new_page = Page_Descriptor::allocate_page(12);
 
-    Temp_Mapper_Obj<char> this_mapping(get_cpu_struct()->temp_mapper);
-    Temp_Mapper_Obj<char> new_mapping(get_cpu_struct()->temp_mapper);
+    Temp_Mapper_Obj<char> this_mapping(request_temp_mapper());
+    Temp_Mapper_Obj<char> new_mapping(request_temp_mapper());
 
     this_mapping.map(page_addr);
     new_mapping.map(new_page.page_ptr);

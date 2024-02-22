@@ -37,6 +37,18 @@ public:
 };
 
 /**
+ * @brief Request the appropriate temp mapper
+ * 
+ * This function returns the appropriate temp mapper, local to the CPU if needed.
+ * 
+ * This is done as a separate function, since initializing CPU-local data (where the temp mapper is allocated
+ * on each CPU/hardware thread) requires malloc, which creates a circular dependency.
+ * To break the loop, a global static temp mapper is used when bringing up the system and this function
+ * provides an interface, which abstracts it away.
+*/
+Temp_Mapper &request_temp_mapper();
+
+/**
  * @brief Wrapper for Temp_Mapper. Manages mapping and unmapping with trendy RAII, preventing you from forgeting to return the mappings
  * 
  * @tparam P the pointer type stored in the structure.
@@ -114,3 +126,24 @@ private:
     unsigned min_index   = 1;
     constexpr static unsigned size = 16;
 };
+
+/**
+ * @brief Temp_Mapper using direct mapping
+ * 
+ * This class allows use direct physical mapping, typically provided by a bootloader for accessing physical memory
+*/
+class Direct_Mapper final: public Temp_Mapper {
+public:
+    virtual void * kern_map(u64 phys_frame) override;
+    virtual void return_map(void *) override;
+
+    /**
+     * Virtual offset of the direct mapping
+     * 
+     * This offset is added to the physical address to obtain the virtual address
+    */
+    u64 virt_offset = 0;
+};
+
+// nullptr indicates that the per-CPU mapper must be used
+extern Temp_Mapper *global_temp_mapper;

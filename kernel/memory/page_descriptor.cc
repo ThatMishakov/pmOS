@@ -52,8 +52,8 @@ Page_Descriptor Page_Descriptor::create_copy() const
         (u64)kernel_pframe_allocator.alloc_page() // page_ptr
     );
 
-    Temp_Mapper_Obj<char> this_mapping(get_cpu_struct()->temp_mapper);
-    Temp_Mapper_Obj<char> new_mapping(get_cpu_struct()->temp_mapper);
+    Temp_Mapper_Obj<char> this_mapping(request_temp_mapper());
+    Temp_Mapper_Obj<char> new_mapping(request_temp_mapper());
 
     this_mapping.map(page_ptr);
     new_mapping.map(new_page.page_ptr);

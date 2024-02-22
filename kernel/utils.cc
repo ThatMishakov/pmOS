@@ -352,7 +352,7 @@ extern "C" void *memset(void *str, int c, size_t n)
 
 void clear_page(u64 phys_addr)
 {
-    Temp_Mapper_Obj<u64> mapper(get_cpu_struct()->temp_mapper);
+    Temp_Mapper_Obj<u64> mapper(request_temp_mapper());
     mapper.map(phys_addr);
 
     for (int i = 0; i < 4096/sizeof(u64); ++i)
