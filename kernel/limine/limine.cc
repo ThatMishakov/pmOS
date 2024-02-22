@@ -285,8 +285,6 @@ void construct_paging() {
         hcf();
 
     setCR3(cr3);
-
-    asm ("xchgw %bx, %bx");
 }
 
 
@@ -296,6 +294,7 @@ void limine_main() {
     }
 
     init_memory();
+    construct_paging();
 
     asm ("xchgw %bx, %bx");
 }

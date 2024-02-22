@@ -18,6 +18,8 @@ u64 temp_mapper_get_offset()
 
 x86_PAE_Temp_Mapper::x86_PAE_Temp_Mapper()
 {
+    u64 cr3 = getCR3();
+
     start_index = temp_mapper_get_index(temp_mapper_get_offset());
     pt_mapped = (PTE *)temp_mapper_get_offset();
 
@@ -33,7 +35,7 @@ x86_PAE_Temp_Mapper::x86_PAE_Temp_Mapper()
     pt[start_index] = PTE();
     pt[start_index].present = true;
     pt[start_index].writeable = true;
-    pt[start_index].page_ppn = rec_get_pt_ppn(temp_mapper_get_offset());
+    pt[start_index].page_ppn = get_pt_ppn(temp_mapper_get_offset(), cr3);
 
 
     min_index = start_index + 1;
@@ -63,7 +65,7 @@ void * x86_PAE_Temp_Mapper::kern_map(u64 phys_frame)
 
 void * Direct_Mapper::kern_map(u64 phys_frame)
 {
-    return (void *)(virt_offset + (phys_frame << 12));
+    return (void *)(virt_offset + phys_frame);
 }
 
 void Direct_Mapper::return_map(void * /* unused */)

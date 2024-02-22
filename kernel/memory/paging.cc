@@ -41,7 +41,7 @@ kresult_t map(u64 physical_addr, u64 virtual_addr, Page_Table_Argumments arg, u6
         pml4e.present = 1;
         pml4e.writeable = 1;
         pml4e.user_access = arg.user_access;
-        page_clear((void*)pdpt_of(virtual_addr, rec_map_index));
+        clear_page(p << 12);
     }
 
     x86_PAE_Entry *pdpt = mapper.map(pml4e.page_ppn << 12);
@@ -55,7 +55,7 @@ kresult_t map(u64 physical_addr, u64 virtual_addr, Page_Table_Argumments arg, u6
         pdpte.present = 1;
         pdpte.writeable = 1;
         pdpte.user_access = arg.user_access;
-        page_clear((void*)pd_of(virtual_addr, rec_map_index));
+        clear_page(p << 12);
     }
 
     x86_PAE_Entry *pd = mapper.map(pdpte.page_ppn << 12);
@@ -69,10 +69,11 @@ kresult_t map(u64 physical_addr, u64 virtual_addr, Page_Table_Argumments arg, u6
         pde.present = 1;
         pde.writeable = 1;
         pde.user_access = arg.user_access;
-        page_clear((void*)pt_of(virtual_addr, rec_map_index));
+        clear_page(p << 12);
     }
 
-    PTE& pte = pt_of(virtual_addr, rec_map_index)->entries[ptable_entry];
+    x86_PAE_Entry *pt = mapper.map(pde.page_ppn << 12);
+    x86_PAE_Entry& pte = pt[ptable_entry];
     if (pte.present) return ERROR_PAGE_PRESENT;
 
     pte = {};
@@ -83,6 +84,24 @@ kresult_t map(u64 physical_addr, u64 virtual_addr, Page_Table_Argumments arg, u6
     pte.avl = arg.extra;
     if (nx_bit_enabled) pte.execution_disabled = arg.execution_disabled;
     return SUCCESS;
+}
+
+u64 get_pt_ppn(u64 virtual_addr, u64 pt_phys) {
+    Temp_Mapper_Obj<x86_PAE_Entry> mapper(request_temp_mapper());
+
+    u64 pml4_entry = (virtual_addr >> 39) & 0x1ff;
+    x86_PAE_Entry *pml4 = mapper.map(pt_phys);
+    x86_PAE_Entry& pml4e = pml4[pml4_entry];
+
+    x86_PAE_Entry *pdpt = mapper.map(pml4e.page_ppn << 12);
+    u64 pdpt_entry = (virtual_addr >> 30) & 0x1ff;
+    x86_PAE_Entry& pdpte = pdpt[pdpt_entry];
+
+    x86_PAE_Entry *pd = mapper.map(pdpte.page_ppn << 12);
+    u64 pd_entry = (virtual_addr >> 21) & 0x1ff;
+    x86_PAE_Entry& pde = pd[pd_entry];
+
+    return pde.page_ppn;
 }
 
 u64 map_pages(u64 phys_addr, u64 virt_addr, u64 size_bytes, Page_Table_Argumments args, u64 cr3) {
