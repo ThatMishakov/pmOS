@@ -6,7 +6,6 @@
 #include <kernel/errors.h>
 #include <memory/paging.hh>
 #include <messaging/messaging.hh>
-#include <memory/free_page_alloc.hh>
 #include <lib/string.hh>
 #include <kern_logger/kern_logger.hh>
 #include <sched/sched.hh>

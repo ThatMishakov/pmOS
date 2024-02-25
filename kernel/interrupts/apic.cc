@@ -1,6 +1,5 @@
 #include "apic.hh"
 #include <asm.hh>
-#include <memory/free_page_alloc.hh>
 #include <memory/paging.hh>
 #include "pic.hh"
 #include "pit.hh"
@@ -8,13 +7,15 @@
 #include <utils.hh>
 #include <kern_logger/kern_logger.hh>
 #include <exceptions.hh>
+#include <memory/virtmem.hh>
+
 
 void* apic_mapped_addr = nullptr;
 
 void map_apic()
 {
     u64 cr3 = getCR3();
-    apic_mapped_addr = (void*)global_free_page.get_free_page().val;
+    apic_mapped_addr = virtmem_alloc(1);
     map(apic_base, (u64)apic_mapped_addr, {1,0,0,0,PAGE_SPECIAL}, cr3);
 }
 

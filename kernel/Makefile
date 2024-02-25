@@ -14,7 +14,7 @@ INCLUDEDIR = include . libunwind/include minidbg/x86_64
 INCPARAM = $(foreach d, $(INCLUDEDIR), -I$(ROOTDIR)/$d)
 
 # User controllable CFLAGS.
-USERCFLAGS = -Wall -Wextra -O3 -pipe
+USERCFLAGS = -Wall -Wextra -Og -pipe
 
 CPPFLAGS = $(INTERNALCFLAGS) -mcmodel=kernel $(USERCFLAGS) -MMD -MP $(INCPARAM)
 CXXFLAGS = -std=c++20
@@ -51,8 +51,8 @@ CCFILES := $(shell find ./ -type f -name '*.cc')
 CFILES := $(shell find ./ -type f -name '*.c')
 ASMFILES := $(shell find ./ -type f -name '*.S')
 OBJS = 	./objects/icxxabi.o ./start.o ./asm.o ./main.o ./misc.o ./utils.o types.o \
-	    ./memory/mem.o ./memory/mem_regions.o ./memory/malloc.o ./memory/dlmalloc.o ./memory/free_page_alloc.o ./memory/palloc.o ./memory/paging.o \
-		./memory/temp_mapper.o ./memory/mem_object.o ./memory/page_descriptor.o \
+	    ./memory/mem.o ./memory/mem_regions.o ./memory/malloc.o ./memory/dlmalloc.o ./memory/palloc.o ./memory/paging.o \
+		./memory/temp_mapper.o ./memory/mem_object.o ./memory/page_descriptor.o ./memory/virtmem.o \
 	    ./interrupts/apic.o ./interrupts/pic.o ./interrupts/gdt.o ./interrupts/exceptions_managers_asm.o ./interrupts/exceptions_managers.o \
 		./interrupts/interrupts.o ./interrupts/asm_helpers.o ./interrupts/programmable_ints.o \
 		./interrupts/pit.o ./interrupts/interrupts_asm.o ./interrupts/loadGDT.o ./interrupts/idt.o \

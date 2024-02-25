@@ -567,7 +567,7 @@ u64 map(u64 physical_addr, u64 virtual_addr, Page_Table_Argumments arg, u64 cr3)
 // Maps the pages. Returns the result
 u64 map_pages(u64 physical_address, u64 virtual_address, u64 size_bytes, Page_Table_Argumments pta, u64 page_table_pointer);
 
-PT* rec_prepare_pt_for(u64 virt_addr, Page_Table_Argumments arg);
+u64 prepare_pt_for(u64 virt_addr, Page_Table_Argumments arg, u64 pt_top_phys);
 u64 get_pt_ppn(u64 virt_addr, u64 pt_top_phys);
 
 // Invalidades a page entry using recursive mappings

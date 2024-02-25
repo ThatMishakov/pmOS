@@ -2,6 +2,7 @@
 #include "../memory/mem.hh"
 #include "../memory/temp_mapper.hh"
 #include "../memory/paging.hh"
+#include "../memory/virtmem.hh"
 
 extern "C" void limine_main();
 extern "C" void _limine_entry();
@@ -68,6 +69,9 @@ void bitmap_clear_range(uint64_t * bitmap, uint64_t start, uint64_t end) {
 }
 
 Direct_Mapper init_mapper;
+
+// Temporary temporary mapper
+x86_PAE_Temp_Mapper temp_temp_mapper;
 
 void init_memory() {
     limine_memmap_response * resp = memory_request.response;
@@ -181,8 +185,19 @@ extern void * __eh_frame_end;
 extern void * _gcc_except_table_start;
 extern void * _gcc_except_table_end;
 
+const u64 kernel_space_start = (u64)(-1) >> 47 << 47;
+
 void construct_paging() {
+    const u64 kernel_start_virt = (u64)&_kernel_start & ~0xfff;
+
+    // While we're here, initialize virtmem
+    virtmem_init(kernel_space_start, kernel_start_virt - kernel_space_start);
+
     u64 cr3 = (u64)kernel_pframe_allocator.alloc_page();
+
+    // Init temp mapper with direct map, while it is still available
+    void * temp_mapper_start = virtmem_alloc_aligned(16, 4); // 16 pages aligned to 16 pages boundary
+    temp_temp_mapper = x86_PAE_Temp_Mapper(temp_mapper_start, cr3);
 
     // Map kernel pages
     //
@@ -228,7 +243,6 @@ void construct_paging() {
     // The addresses of these sections are known from the symbols, defined by linker script and their physical
     // location can be obtained from Kernel Address Feature Request by limine protocol
     // Map these pages and switch to kernel page table
-    const u64 kernel_start_virt = (u64)&_kernel_start & ~0xfff;
     const u64 kernel_text_start = kernel_start_virt & ~0xfff;
     const u64 kernel_text_end = ((u64)&_text_end + 0xfff) & ~0xfff;
     
@@ -292,7 +306,7 @@ void limine_main() {
     if (LIMINE_BASE_REVISION_SUPPORTED == false) {
         hcf();
     }
-
+   
     init_memory();
     construct_paging();
 

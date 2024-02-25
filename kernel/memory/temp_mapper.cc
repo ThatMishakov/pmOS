@@ -16,12 +16,37 @@ u64 temp_mapper_get_offset()
     return temp_mapper_start_addr + temp_mapper_offset*4096;
 }
 
-x86_PAE_Temp_Mapper::x86_PAE_Temp_Mapper()
-{
-    u64 cr3 = getCR3();
+// x86_PAE_Temp_Mapper::x86_PAE_Temp_Mapper()
+// {
+//     u64 cr3 = getCR3();
 
-    start_index = temp_mapper_get_index(temp_mapper_get_offset());
-    pt_mapped = (PTE *)temp_mapper_get_offset();
+//     start_index = temp_mapper_get_index(temp_mapper_get_offset());
+//     pt_mapped = (PTE *)temp_mapper_get_offset();
+
+//     Page_Table_Argumments arg {
+//         1,
+//         0, 
+//         0, 
+//         1,
+//         000
+//     };
+
+//     PTE* pt = (PTE *)rec_prepare_pt_for(temp_mapper_get_offset(), arg);
+//     pt[start_index] = PTE();
+//     pt[start_index].present = true;
+//     pt[start_index].writeable = true;
+//     pt[start_index].page_ppn = get_pt_ppn(temp_mapper_get_offset(), cr3);
+
+
+//     min_index = start_index + 1;
+
+//     temp_mapper_offset += size;
+// }
+
+x86_PAE_Temp_Mapper::x86_PAE_Temp_Mapper(void * virt_addr, u64 cr3)
+{
+    u64 addr = (u64)virt_addr;
+    start_index = addr/4096 % 512;
 
     Page_Table_Argumments arg {
         1,
@@ -31,16 +56,16 @@ x86_PAE_Temp_Mapper::x86_PAE_Temp_Mapper()
         000
     };
 
-    PTE* pt = (PTE *)rec_prepare_pt_for(temp_mapper_get_offset(), arg);
-    pt[start_index] = PTE();
+    u64 pt_phys = prepare_pt_for(temp_mapper_get_offset(), arg, cr3);
+    Temp_Mapper_Obj<x86_PAE_Entry> tm(request_temp_mapper());
+    x86_PAE_Entry *pt = tm.map(pt_phys);
+
+    pt[start_index] = x86_PAE_Entry();
     pt[start_index].present = true;
     pt[start_index].writeable = true;
-    pt[start_index].page_ppn = get_pt_ppn(temp_mapper_get_offset(), cr3);
-
+    pt[start_index].page_ppn = pt_phys >> 12;
 
     min_index = start_index + 1;
-
-    temp_mapper_offset += size;
 }
 
 void * x86_PAE_Temp_Mapper::kern_map(u64 phys_frame)

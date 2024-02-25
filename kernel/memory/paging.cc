@@ -4,7 +4,6 @@
 #include <asm.hh>
 #include <kernel/errors.h>
 #include <utils.hh>
-#include "free_page_alloc.hh"
 #include <utils.hh>
 #include <types.hh>
 #include <kernel/com.h>
@@ -121,20 +120,13 @@ u64 map_pages(u64 phys_addr, u64 virt_addr, u64 size_bytes, Page_Table_Argumment
     return result;
 }
 
-PT* rec_prepare_pt_for(u64 virtual_addr, Page_Table_Argumments arg)
+u64 prepare_pt_for(u64 virtual_addr, Page_Table_Argumments arg, u64 pt_phys)
 {
-    u64 addr = virtual_addr;
-    addr >>= 12;
-    //u64 page = addr;
-    u64 ptable_entry = addr & 0x1ff;
-    addr >>= 9;
-    u64 pdir_entry = addr & 0x1ff;
-    addr >>= 9;
-    u64 pdpt_entry = addr & 0x1ff;
-    addr >>= 9;
-    u64 pml4_entry = addr & 0x1ff;
+    Temp_Mapper_Obj<x86_PAE_Entry> mapper(request_temp_mapper());
 
-    PML4E& pml4e = pml4(rec_map_index)->entries[pml4_entry];
+    u64 pml4_entry = (virtual_addr >> 39) & 0x1ff;
+    x86_PAE_Entry *pml4 = mapper.map(pt_phys);
+    x86_PAE_Entry& pml4e = pml4[pml4_entry];
     if (not pml4e.present) {
         pml4e = {};
         u64 p = kernel_pframe_allocator.alloc_page_ppn();
@@ -143,11 +135,13 @@ PT* rec_prepare_pt_for(u64 virtual_addr, Page_Table_Argumments arg)
         pml4e.present = 1;
         pml4e.writeable = 1;
         pml4e.user_access = arg.user_access;
-        page_clear((void*)pdpt_of(virtual_addr, rec_map_index));
+        clear_page(p << 12);
     }
 
-    PDPTE& pdpte = pdpt_of(virtual_addr, rec_map_index)->entries[pdpt_entry];
-    if (pdpte.size) return nullptr;
+    x86_PAE_Entry *pdpt = mapper.map(pml4e.page_ppn << 12);
+    u64 pdpt_entry = (virtual_addr >> 30) & 0x1ff;
+    x86_PAE_Entry& pdpte = pdpt[pdpt_entry];
+    if (pdpte.pat_size) return -1;
     if (not pdpte.present) {
         pdpte = {};
         u64 p =  kernel_pframe_allocator.alloc_page_ppn();
@@ -156,11 +150,13 @@ PT* rec_prepare_pt_for(u64 virtual_addr, Page_Table_Argumments arg)
         pdpte.present = 1;
         pdpte.writeable = 1;
         pdpte.user_access = arg.user_access;
-        page_clear((void*)pd_of(virtual_addr, rec_map_index));
+        clear_page(p << 12);
     }
 
-    PDE& pde = pd_of(virtual_addr, rec_map_index)->entries[pdir_entry];
-    if (pde.size) return nullptr;
+    x86_PAE_Entry *pd = mapper.map(pdpte.page_ppn << 12);
+    u64 pd_entry = (virtual_addr >> 21) & 0x1ff;
+    x86_PAE_Entry& pde = pd[pd_entry];
+    if (pde.pat_size) return -1;
     if (not pde.present) {
         pde = {};
         u64 p = kernel_pframe_allocator.alloc_page_ppn();
@@ -169,10 +165,10 @@ PT* rec_prepare_pt_for(u64 virtual_addr, Page_Table_Argumments arg)
         pde.present = 1;
         pde.writeable = 1;
         pde.user_access = arg.user_access;
-        page_clear((void*)pt_of(virtual_addr, rec_map_index));
+        clear_page(p << 12);
     }
 
-    return pt_of(virtual_addr, rec_map_index);
+    return pde.page_ppn << 12;
 }
 
 u64 x86_4level_Page_Table::get_page_frame(u64 virt_addr)

@@ -118,7 +118,8 @@ public:
     virtual void * kern_map(u64 phys_frame) override;
     virtual void return_map(void *) override;
 
-    x86_PAE_Temp_Mapper();
+    constexpr x86_PAE_Temp_Mapper() = default;
+    x86_PAE_Temp_Mapper(void *virt_addr, u64 cr3);
 private:
     PTE * pt_mapped = nullptr;
     unsigned max_index = 0;
