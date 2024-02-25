@@ -43,6 +43,7 @@ struct CPU_Info {
     klib::shared_ptr<TaskDescriptor> idle_task = klib::shared_ptr<TaskDescriptor>();
 
     u32 timer_val = 0;
+    // TODO: this is arch-specific
     u32 lapic_id = 0;
 
     u64 pagefault_cr2 = 0;
@@ -51,6 +52,7 @@ struct CPU_Info {
     Kernel_Stack_Pointer kernel_stack;
     Kernel_Stack_Pointer idle_stack;
 
+    // TODO: This is arch-specific
     Kernel_Stack_Pointer debug_stack;
     Kernel_Stack_Pointer nmi_stack;
     Kernel_Stack_Pointer machine_check_stack;
@@ -59,6 +61,7 @@ struct CPU_Info {
     klib::shared_ptr<TaskDescriptor> atomic_pick_highest_priority(priority_t min = sched_queues_levels - 1);
     klib::shared_ptr<TaskDescriptor> atomic_get_front_priority(priority_t);
 
+    // TODO: this is arch-specific
     x86_PAE_Temp_Mapper temp_mapper;
 
     constexpr static unsigned pthread_once_size = 16;

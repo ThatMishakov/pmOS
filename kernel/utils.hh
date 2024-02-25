@@ -15,13 +15,6 @@ extern "C" size_t strlen(const char *str);
 
 extern "C" int printf(const char *str,...);
 
-inline void halt()
-{
-    while (1) {
-      asm ("hlt");
-    }
-}
-
 extern "C" void memcpy(char* to, const char* from, size_t size);
 extern "C" void *memset(void *str, int c, size_t n);
 
@@ -37,31 +30,6 @@ bool copy_to_user(const char* from, char* to, size_t size);
 void copy_frame(u64 from, u64 to);
 
 void clear_page(u64 phys_addr);
-
-static inline void outb(u16 port, u8 data)
-{
-    asm volatile ("outb %0, %1" :: "a"(data), "Nd"(port));
-}
-
-static inline void io_wait()
-{
-    outb(0x80, 0);
-}
-
-static inline u8 inb(u16 port)
-{ 
-    u8 ret;
-    asm volatile ("inb %1, %0" : "=a"(ret) : "Nd"(port));
-    return ret;
-}
-
-static inline u64 cpuid(u32 p)
-{
-    int eax = 0;
-    int edx = 0;
-    asm volatile ( "cpuid" : "=a"(eax), "=d"(edx) : "0"(p) : "ebx", "ecx" );
-    return eax | (u64)edx << 32;
-}
 
 template<class A>
 const A& max(const A& a, const A& b) noexcept

@@ -50,7 +50,7 @@ INTERNALCFLAGS  :=       \
 CCFILES := $(shell find ./ -type f -name '*.cc')
 CFILES := $(shell find ./ -type f -name '*.c')
 ASMFILES := $(shell find ./ -type f -name '*.S')
-OBJS = 	./objects/icxxabi.o ./start.o ./asm.o ./main.o ./misc.o ./utils.o types.o \
+OBJS = 	./objects/icxxabi.o ./start.o ./x86_asm.o ./main.o ./misc.o ./utils.o types.o \
 	    ./memory/mem.o ./memory/mem_regions.o ./memory/malloc.o ./memory/dlmalloc.o ./memory/palloc.o ./memory/paging.o \
 		./memory/temp_mapper.o ./memory/mem_object.o ./memory/page_descriptor.o ./memory/virtmem.o \
 	    ./interrupts/apic.o ./interrupts/pic.o ./interrupts/gdt.o ./interrupts/exceptions_managers_asm.o ./interrupts/exceptions_managers.o \
