@@ -4,24 +4,19 @@
 #include <memory/paging.hh>
 #include <sched/sched.hh>
 #include <lib/vector.hh>
-#include <asm.hh>
 #include <messaging/messaging.hh>
 #include <kernel/messaging.h>
 #include <kernel/block.h>
 #include <kernel/attributes.h>
 #include <kernel/flags.h>
-#include <interrupts/apic.hh>
-#include <cpus/cpus.hh>
-#include <interrupts/pit.hh>
+//#include <cpus/cpus.hh>
 #include <sched/sched.hh>
 #include <lib/string.hh>
-#include <interrupts/programmable_ints.hh>
 #include <messaging/named_ports.hh>
 #include <kern_logger/kern_logger.hh>
 #include <exceptions.hh>
 #include <lib/utility.hh>
 #include <memory/mem_object.hh>
-#include <dbg.h>
 #include <assert.h>
 #include "task_group.hh"
 
@@ -73,7 +68,7 @@ klib::array<syscall_function, 37> syscall_table = {
 extern "C" void syscall_handler()
 {
     klib::shared_ptr<TaskDescriptor> task = get_cpu_struct()->current_task;
-    u64 call_n = task->regs.scratch_r.rdi;
+    u64 call_n = task->regs.syscall_number();
     u64 arg1 = syscall_arg1(task);
     u64 arg2 = syscall_arg2(task);
     u64 arg3 = syscall_arg3(task);
@@ -137,9 +132,9 @@ void syscall_start_process(u64 pid, u64 start, u64 arg1, u64 arg2, u64 arg3, u64
     t->set_entry_point(start);
 
     // Pass arguments
-    t->regs.scratch_r.rdi = arg1;
-    t->regs.scratch_r.rsi = arg2;
-    t->regs.scratch_r.rdx = arg3;
+    t->regs.arg1() = arg1;
+    t->regs.arg2() = arg2;
+    t->regs.arg3() = arg3;
 
     // Init task
     t->init();
@@ -161,7 +156,7 @@ void syscall_init_stack(u64 pid, u64 esp, u64, u64, u64, u64)
     if (esp == 0) { // If ESP == 0 use default kernel's stack policy
         syscall_ret_high(task) = t->init_stack();
     } else {
-        t->regs.e.rsp = esp;
+        t->regs.stack_pointer() = esp;
 
         syscall_ret_high(task) = esp;
     }
@@ -282,22 +277,24 @@ void syscall_set_attribute(u64 pid, u64 attribute, u64 value, u64, u64, u64)
 
     // TODO: Check persmissions
 
-    klib::shared_ptr<TaskDescriptor> process = pid == task->pid ? task : get_task_throw(pid);
-    Interrupt_Stackframe* current_frame = &process->regs.e;
+    // TODO: This is *very* x86-specific and is a bad idea in general
 
-    switch (attribute) {
-    case ATTR_ALLOW_PORT:
-        current_frame->rflags.bits.iopl = value ? 3 : 0;
-        break;
+    // klib::shared_ptr<TaskDescriptor> process = pid == task->pid ? task : get_task_throw(pid);
+    // Interrupt_Stackframe* current_frame = &process->regs.e;
 
-    case ATTR_DEBUG_SYSCALLS:
-        process->attr.debug_syscalls = value;
-        break;
+    // switch (attribute) {
+    // case ATTR_ALLOW_PORT:
+    //     current_frame->rflags.bits.iopl = value ? 3 : 0;
+    //     break;
 
-    default:
-        throw(Kern_Exception(ERROR_NOT_IMPLEMENTED, "syscall_set_attribute with given request is not implemented"));
-        break;
-    }
+    // case ATTR_DEBUG_SYSCALLS:
+    //     process->attr.debug_syscalls = value;
+    //     break;
+
+    // default:
+    //     throw(Kern_Exception(ERROR_NOT_IMPLEMENTED, "syscall_set_attribute with given request is not implemented"));
+    //     break;
+    // }
 }
 
 void syscall_configure_system(u64 type, u64 arg1, u64 arg2, u64, u64, u64)
@@ -306,17 +303,17 @@ void syscall_configure_system(u64 type, u64 arg1, u64 arg2, u64, u64, u64)
     // TODO: Check permissions
 
     switch (type) {
-    case SYS_CONF_LAPIC:
-         syscall_ret_high(get_current_task()) = lapic_configure(arg1, arg2);
-        break;
+    // case SYS_CONF_LAPIC:
+    //      syscall_ret_high(get_current_task()) = lapic_configure(arg1, arg2);
+    //     break;
 
-    case SYS_CONF_CPU:
-        syscall_ret_high(get_current_task()) = cpu_configure(arg1, arg2);
-        break;
+    // case SYS_CONF_CPU:
+    //     syscall_ret_high(get_current_task()) = cpu_configure(arg1, arg2);
+    //     break;
 
-    case SYS_CONF_SLEEP10:
-        pit_sleep_100us(arg1);
-        break;
+    // case SYS_CONF_SLEEP10:
+    //     pit_sleep_100us(arg1);
+    //     break;
 
     default:
         throw (Kern_Exception(ERROR_NOT_IMPLEMENTED, "syscall_configure_system with unknown parameter"));
@@ -342,26 +339,6 @@ void syscall_set_priority(u64 priority, u64, u64, u64, u64, u64)
 void syscall_get_lapic_id(u64, u64, u64, u64, u64, u64)
 {
     syscall_ret_high(get_current_task()) = get_cpu_struct()->lapic_id;
-}
-
-void program_syscall()
-{
-    u64 cpuid = ::cpuid(1);
-
-    write_msr(0xC0000081, ((u64)(R0_CODE_SEGMENT) << 32) | ((u64)(R3_LEGACY_CODE_SEGMENT) << 48)); // STAR (segments for user and kernel code)
-    write_msr(0xC0000082, (u64)&syscall_entry); // LSTAR (64 bit entry point)
-    write_msr(0xC0000084, (u32)~0x0); // SFMASK (mask for %rflags)
-
-    // Enable SYSCALL/SYSRET in EFER register
-    u64 efer = read_msr(0xC0000080);
-    write_msr(0xC0000080, efer | (0x01 << 0));
-
-    // This doesn't work on AMD CPUs
-    // if (cpuid & (u64(1) << (11 + 32))) {
-    //     write_msr(0x174, R0_CODE_SEGMENT); // IA32_SYSENTER_CS
-    //     write_msr(0x175, (u64)get_cpu_struct()->kernel_stack_top); // IA32_SYSENTER_ESP
-    //     write_msr(0x176, (u64)&sysenter_entry); // IA32_SYSENTER_EIP
-    // }
 }
 
 void syscall_set_task_name(u64 pid, u64 /* const char* */ string, u64 length, u64, u64, u64)
@@ -401,20 +378,22 @@ void syscall_set_interrupt(uint64_t port, u64 intno, u64 flags, u64, u64, u64)
 {
     // t_print_bochs("syscall_set_interrupt(%i, %i, %i)\n", port, intno, flags);
 
+    throw Kern_Exception(ERROR_NOT_IMPLEMENTED, "syscall_set_interrupt is not implemented");
 
-    const task_ptr& task = get_current_task();
 
-    klib::shared_ptr<Port> port_ptr = Port::atomic_get_port_throw(port);
+    // const task_ptr& task = get_current_task();
 
-    if (not intno_is_ok(intno))
-        throw(Kern_Exception(ERROR_OUT_OF_RANGE, "intno outside of supported"));
+    // klib::shared_ptr<Port> port_ptr = Port::atomic_get_port_throw(port);
 
-    Prog_Int_Descriptor& desc = get_descriptor(prog_int_array, intno);
+    // if (not intno_is_ok(intno))
+    //     throw(Kern_Exception(ERROR_OUT_OF_RANGE, "intno outside of supported"));
 
-    { 
-        Auto_Lock_Scope local_lock(desc.lock);
-        desc.port = port_ptr;
-    }
+    // Prog_Int_Descriptor& desc = get_descriptor(prog_int_array, intno);
+
+    // { 
+    //     Auto_Lock_Scope local_lock(desc.lock);
+    //     desc.port = port_ptr;
+    // }
 }
 
 void syscall_name_port(u64 portnum, u64 /*const char* */ name, u64 length, u64 flags, u64, u64)
@@ -618,6 +597,8 @@ void syscall_get_page_table(u64 pid, u64, u64, u64, u64, u64)
     syscall_ret_high(current) = target->page_table->id;
 }
 
+// TODO: This should be renamed, as %fs and %gs segments are x86-64 specific thing, used to hold thread-local storage
+// and stuff. Other architectures also store thread and global pointers somewhere, so this syscall is essentially that
 void syscall_set_segment(u64 pid, u64 segment_type, u64 ptr, u64, u64, u64)
 {
     const klib::shared_ptr<TaskDescriptor>& current = get_cpu_struct()->current_task;
@@ -633,10 +614,10 @@ void syscall_set_segment(u64 pid, u64 segment_type, u64 ptr, u64, u64, u64)
 
     switch (segment_type) {
     case 1:
-        target->regs.seg.fs = ptr;
+        target->regs.thread_pointer() = ptr;
         break;
     case 2:
-        target->regs.seg.gs = ptr;
+        target->regs.global_pointer() = ptr;
         break;
     default:
         throw Kern_Exception(ERROR_OUT_OF_RANGE, "invalid segment in syscall_set_segment");
@@ -662,10 +643,10 @@ void syscall_get_segment(u64 pid, u64 segment_type, u64, u64, u64, u64)
 
     switch (segment_type) {
     case 1:
-        segment = target->regs.seg.fs;
+        segment = target->regs.thread_pointer();
         break;
     case 2:
-        segment = target->regs.seg.gs;
+        segment = target->regs.global_pointer();
         break;
     default:
         throw Kern_Exception(ERROR_OUT_OF_RANGE, "invalid segment in syscall_set_segment");

@@ -45,3 +45,18 @@ void * x86_PAE_Temp_Mapper::kern_map(u64 phys_frame)
     
     return nullptr;
 }
+
+void x86_PAE_Temp_Mapper::return_map(void * p)
+{
+    if (p == nullptr)
+        return;
+
+    u64 i = (u64)p;
+    unsigned index = temp_mapper_get_index(i);
+
+    pt_mapped[index] = PTE();
+    if (index < min_index)
+        min_index = index;
+
+    invlpg(i);
+}

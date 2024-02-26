@@ -1,7 +1,6 @@
 #include "paging.hh"
 #include <kernel/memory.h>
 #include "mem.hh"
-#include <asm.hh>
 #include <kernel/errors.h>
 #include <utils.hh>
 #include <utils.hh>
@@ -12,7 +11,6 @@
 #include <sched/sched.hh>
 #include <kern_logger/kern_logger.hh>
 #include "temp_mapper.hh"
-#include <cpus/ipi.hh>
 #include "assert.h"
 
 Page_Table::~Page_Table()

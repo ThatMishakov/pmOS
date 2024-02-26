@@ -1,7 +1,6 @@
 #pragma once
 #include <kernel/memory.h>
 #include <types.hh>
-#include <asm.hh>
 #include <lib/pair.hh>
 #include <lib/memory.hh>
 #include <lib/set.hh>

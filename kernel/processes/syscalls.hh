@@ -123,37 +123,37 @@ void syscall_set_notify_mask(u64 task_group, u64 port_id, u64 new_mask, u64, u64
 
 inline u64& syscall_arg1(const klib::shared_ptr<TaskDescriptor>& task)
 {
-    return task->regs.scratch_r.rsi;
+    return task->regs.syscall_arg1();
 }
 
 inline u64& syscall_arg2(const klib::shared_ptr<TaskDescriptor>& task)
 {
-    return task->regs.scratch_r.rdx;
+    return task->regs.syscall_arg2();
 }
 
 inline u64& syscall_arg3(const klib::shared_ptr<TaskDescriptor>& task)
 {
-    return task->regs.scratch_r.rcx;
+    return task->regs.syscall_arg3();
 }
 
 inline u64& syscall_arg4(const klib::shared_ptr<TaskDescriptor>& task)
 {
-    return task->regs.scratch_r.r8;
+    return task->regs.syscall_arg4();
 }
 
 inline u64& syscall_arg5(const klib::shared_ptr<TaskDescriptor>& task)
 {
-    return task->regs.scratch_r.r9;
+    return task->regs.syscall_arg5();
 }
 
 inline kresult_t& syscall_ret_low(const klib::shared_ptr<TaskDescriptor>& task)
 {
-    return task->regs.scratch_r.rax;
+    return task->regs.syscall_retval_low();
 }
 
 inline u64& syscall_ret_high(const klib::shared_ptr<TaskDescriptor>& task)
 {
-    return task->regs.scratch_r.rdx;
+    return task->regs.syscall_retval_high();
 }
 
 // Entry point for when userpsace calls SYSCALL instruction

@@ -1,6 +1,4 @@
 #include "idle.hh"
-#include <utils.hh>
-#include <interrupts/apic.hh>
 
 void idle()
 {

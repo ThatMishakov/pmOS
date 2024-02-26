@@ -12,20 +12,21 @@ klib::shared_ptr<TaskDescriptor> TaskDescriptor::create_process(u16 ring)
     klib::shared_ptr<TaskDescriptor> n = TaskDescriptor::create();
     
     // Assign cs and ss
-    switch (ring)
-    {
-    case 0:
-        n->regs.e.cs = R0_CODE_SEGMENT;
-        n->regs.e.ss = R0_DATA_SEGMENT;
-        break;
-    case 3:
-        n->regs.e.cs = R3_CODE_SEGMENT;
-        n->regs.e.ss = R3_DATA_SEGMENT;
-        break;
-    default:
-        throw(Kern_Exception(ERROR_NOT_SUPPORTED, "create_process with unsupported ring"));
-        break;
-    }
+    // X86 specific!!!!!
+    // switch (ring)
+    // {
+    // case 0:
+    //     n->regs.e.cs = R0_CODE_SEGMENT;
+    //     n->regs.e.ss = R0_DATA_SEGMENT;
+    //     break;
+    // case 3:
+    //     n->regs.e.cs = R3_CODE_SEGMENT;
+    //     n->regs.e.ss = R3_DATA_SEGMENT;
+    //     break;
+    // default:
+    //     throw(Kern_Exception(ERROR_NOT_SUPPORTED, "create_process with unsupported ring"));
+    //     break;
+    // }
 
     // Assign a pid
     n->pid = assign_pid();
@@ -61,18 +62,19 @@ u64 TaskDescriptor::init_stack()
         -1);
 
     // Set new rsp
-    this->regs.e.rsp = stack_end;
+    this->regs.stack_pointer() = stack_end;
 
-    return this->regs.e.rsp;
+    return this->regs.stack_pointer();
 }
 
 void init_idle()
 {
     try {
-        static klib::shared_ptr<Page_Table> idle_page_table = x86_4level_Page_Table::create_empty();
+        // TODO!!!
+        //static klib::shared_ptr<Page_Table> idle_page_table = x86_4level_Page_Table::create_empty();
 
         klib::shared_ptr<TaskDescriptor> i = TaskDescriptor::create_process(0);
-        i->register_page_table(idle_page_table);
+        //i->register_page_table(idle_page_table);
 
         Auto_Lock_Scope lock(i->sched_lock);
 
@@ -87,12 +89,14 @@ void init_idle()
         CPU_Info* cpu_str = get_cpu_struct();
         cpu_str->idle_task = i;
 
-        i->regs.seg.gs = (u64)cpu_str; // Idle has the same %gs as kernel
+        // Idle has the same stack pointer as the kernel
+        // Also, one idle is created per CPU
+        i->regs.thread_pointer() = (u64)cpu_str;
 
         // Init stack
-        i->regs.e.rsp = (u64)cpu_str->idle_stack.get_stack_top();
+        i->regs.stack_pointer() = (u64)cpu_str->idle_stack.get_stack_top();
 
-        i->regs.e.rip = (u64)&idle;
+        i->regs.program_counter() = (u64)&idle;
         i->type = TaskDescriptor::Type::Idle;
 
         i->priority = idle_priority;
@@ -159,11 +163,12 @@ void TaskDescriptor::create_new_page_table()
     if (page_table)
         throw Kern_Exception(ERROR_HAS_PAGE_TABLE, "Process already has a page table");
 
-    klib::shared_ptr<Page_Table> table = x86_4level_Page_Table::create_empty();
+    // TODO!!!!
+    //klib::shared_ptr<Page_Table> table = x86_4level_Page_Table::create_empty();
 
-    Auto_Lock_Scope page_table_lock(table->lock);
-    table->owner_tasks.insert(weak_self);
-    page_table = table;
+    //Auto_Lock_Scope page_table_lock(table->lock);
+    //table->owner_tasks.insert(weak_self);
+    //page_table = table;
 }
 
 void TaskDescriptor::register_page_table(klib::shared_ptr<Page_Table> table)
@@ -181,17 +186,18 @@ void TaskDescriptor::register_page_table(klib::shared_ptr<Page_Table> table)
     page_table = table;
 }
 
-void TaskDescriptor::request_repeat_syscall()
-{
-    if (regs.entry_type != 3) {
-        regs.saved_entry_type = regs.entry_type;
-        regs.entry_type = 3;
-    }
-}
+// TODO: Arch-specific!!!
+// void TaskDescriptor::request_repeat_syscall()
+// {
+//     if (regs.entry_type != 3) {
+//         regs.saved_entry_type = regs.entry_type;
+//         regs.entry_type = 3;
+//     }
+// }
 
-void TaskDescriptor::pop_repeat_syscall()
-{
-    if (regs.entry_type == 3) {
-        regs.entry_type = regs.saved_entry_type;
-    }
-}
+// void TaskDescriptor::pop_repeat_syscall()
+// {
+//     if (regs.entry_type == 3) {
+//         regs.entry_type = regs.saved_entry_type;
+//     }
+// }

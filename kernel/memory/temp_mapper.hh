@@ -109,12 +109,6 @@ struct Temp_Mapper_Obj {
     Temp_Mapper_Obj(const Temp_Mapper_Obj&) = delete;
 };
 
-#ifdef __x86_64__
-using Temp_Mapper_Archspecific = x86_PAE_Temp_Mapper;
-#elif defined(__riscv64__)
-using Temp_Mapper_Archspecific = RISCV_Temp_Mapper;
-#endif
-
 /**
  * @brief Temp_Mapper using direct mapping
  * 

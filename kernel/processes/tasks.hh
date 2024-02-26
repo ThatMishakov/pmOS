@@ -1,15 +1,15 @@
 #pragma once
 #include <types.hh>
 #include <lib/memory.hh>
-#include <interrupts/interrupts.hh>
 #include <messaging/messaging.hh>
 #include <memory/paging.hh>
 #include <sched/defs.hh>
-#include <cpus/sse.hh>
 #include <lib/string.hh>
 #include <lib/set.hh>
 #include <exceptions.hh>
 #include "task_group.hh"
+#include <interrupts/stack.hh>
+#include <registers.hh>
 
 using PID = u64;
 
@@ -36,7 +36,7 @@ class TaskGroup;
 class TaskDescriptor {
 public:
     // Basic process stuff
-    Task_Regs regs; // 200
+    Task_Regs regs; // 200 on x86_64
     PID pid;
 
     // Permissions
@@ -102,7 +102,7 @@ public:
     // Sets the entry point to the task
     inline void set_entry_point(u64 entry)
     {
-        this->regs.e.rip = entry;
+        this->regs.program_counter() = entry;
     }
 
     // Switches to this task on the current CPU
@@ -124,7 +124,9 @@ public:
     u64 ret_hi = 0;
     u64 ret_lo = 0;
 
-    SSE_Data sse_data;
+    // This holds the SSE data on x86_64 CPUs
+    // Other architectures have different registers, so stash it for now
+    //SSE_Data sse_data;
 
     klib::string name = "";
 

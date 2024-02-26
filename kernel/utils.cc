@@ -1,8 +1,6 @@
 #include "utils.hh"
 #include <stdarg.h>
 #include "types.hh"
-#include "asm.hh"
-#include "start.hh"
 #include <kernel/errors.h>
 #include <memory/paging.hh>
 #include <messaging/messaging.hh>
@@ -11,7 +9,6 @@
 #include <sched/sched.hh>
 #include <stdio.h>
 #include <libunwind.h>
-#include <dbg.h>
 
 void int_to_string(long int n, u8 base, char* str, int& length)
 {
@@ -67,6 +64,8 @@ void uint_to_string(unsigned long int n, u8 base, char* str, int& length)
     }
     str[length] = 0;
 }
+
+void printc(int);
 
 void t_write_bochs(const char * str, u64 length)
 {
@@ -299,12 +298,13 @@ void print_stack_trace(Logger& logger, stack_frame * s)
         logger.printf("  -> %h\n", (u64)s->return_addr);
 }
 
-void print_stack_trace(Logger& logger)
-{
-    struct stack_frame* s;
-    __asm__ volatile("movq %%rbp, %0": "=a" (s));
-    print_stack_trace(logger, s);
-}
+// Arch-specific!
+// void print_stack_trace(Logger& logger)
+// {
+//     struct stack_frame* s;
+//     __asm__ volatile("movq %%rbp, %0": "=a" (s));
+//     print_stack_trace(logger, s);
+// }
 
 extern "C" void serial_print_stack_trace(void * s)
 {
@@ -325,7 +325,7 @@ extern "C" void abort(void)
 
     serial_logger.printf("Dropping into debugger...\n---------------\n");
 
-    breakpoint;
+    //breakpoint;
 
     while (1);
 }

@@ -1,5 +1,4 @@
 #pragma once
-#include <interrupts/interrupts.hh>
 #include <lib/vector.hh>
 #include <messaging/messaging.hh>
 #include <lib/splay_tree_map.hh>
@@ -11,6 +10,10 @@
 #include "defs.hh"
 #include <memory/temp_mapper.hh>
 #include "sched_queue.hh"
+
+#ifdef __riscv
+#include <paging/riscv64_temp_mapper.hh>
+#endif
 
 // Checks the mask and unblocks the task if needed
 // This function needs to be axed
@@ -37,7 +40,8 @@ struct CPU_Info {
     u64 jumpto_to   = 0;  // 56
     Task_Regs nested_int_regs; // 64
 
-    GDT cpu_gdt;
+    // X86 specific!
+    // GDT cpu_gdt;
 
     klib::array<sched_queue, sched_queues_levels> sched_queues;
     klib::shared_ptr<TaskDescriptor> idle_task = klib::shared_ptr<TaskDescriptor>();
@@ -61,19 +65,32 @@ struct CPU_Info {
     klib::shared_ptr<TaskDescriptor> atomic_pick_highest_priority(priority_t min = sched_queues_levels - 1);
     klib::shared_ptr<TaskDescriptor> atomic_get_front_priority(priority_t);
 
-    // TODO: this is arch-specific
+    // Temporary memory mapper; This is arch specific
+    #ifdef __x86_64__
     x86_PAE_Temp_Mapper temp_mapper;
+    #elif defined(__riscv)
+    RISCV64_Temp_Mapper temp_mapper;
+    #endif
 
     constexpr static unsigned pthread_once_size = 16;
     klib::array<const void *, pthread_once_size> pthread_once_storage = {};
 
     u32 cpu_id = 0;
 
+    #ifdef __x86_64__
+    u32 lapic_id = 0;
+    #endif
+
     // IMHO this is better than protecting current_task pointer with spinlock
     priority_t current_task_priority = sched_queues_levels;
 
     void ipi_reschedule(); // nothrow ?
 };
+
+/**
+ * This vector holds the data of all of the CPUs
+ */
+extern klib::vector<CPU_Info *> cpus;
 
 quantum_t assign_quantum_on_priority(priority_t);
 

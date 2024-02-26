@@ -1,23 +1,10 @@
 #include "malloc.hh"
 #include <utils.hh>
 #include "palloc.hh"
-#include <asm.hh>
 #include <lib/new.hh>
-
-malloc_list head = {nullptr, 0};
-Spinlock malloc_lock;
 
 size_t malloced = 0;
 size_t freed = 0;
-
-void print_list(malloc_list* l) 
-{
-    while (l != nullptr) {
-        l = l->next;
-    }
-
-    t_print_bochs("\n");
-}
 
 extern "C" void *sbrk(size_t bytes)
 {

@@ -42,10 +42,12 @@ limine_hhdm_request hhdm_request = {
 
 // Halt and catch fire function.
 static void hcf(void) {
-    asm ("cli");
-    for (;;) {
-        asm ("hlt");
-    }
+    // asm ("cli");
+    // for (;;) {
+    //     asm ("hlt");
+    // }
+
+    while (1) ;
 }
 
 inline void bitmap_set(uint64_t * bitmap, uint64_t bit) {
@@ -70,8 +72,17 @@ void bitmap_clear_range(uint64_t * bitmap, uint64_t start, uint64_t end) {
 
 Direct_Mapper init_mapper;
 
+
 // Temporary temporary mapper
-x86_PAE_Temp_Mapper temp_temp_mapper;
+#ifdef __x86_64__
+using Arch_Temp_Mapper = x86_PAE_Temp_Mapper;
+#elif defined(__riscv)
+#include <paging/riscv64_temp_mapper.hh>
+using Arch_Temp_Mapper = RISCV64_Temp_Mapper;
+#endif
+
+Arch_Temp_Mapper temp_temp_mapper;
+
 
 void init_memory() {
     limine_memmap_response * resp = memory_request.response;
@@ -188,6 +199,8 @@ extern void * _gcc_except_table_end;
 const u64 kernel_space_start = (u64)(-1) >> 47 << 47;
 
 void construct_paging() {
+    kresult_t result = SUCCESS;
+
     const u64 kernel_start_virt = (u64)&_kernel_start & ~0xfff;
 
     // While we're here, initialize virtmem
@@ -197,7 +210,7 @@ void construct_paging() {
 
     // Init temp mapper with direct map, while it is still available
     void * temp_mapper_start = virtmem_alloc_aligned(16, 4); // 16 pages aligned to 16 pages boundary
-    temp_temp_mapper = x86_PAE_Temp_Mapper(temp_mapper_start, cr3);
+    temp_temp_mapper = Arch_Temp_Mapper(temp_mapper_start, cr3);
 
     // Map kernel pages
     //
@@ -257,9 +270,10 @@ void construct_paging() {
         .execution_disabled = false,
         .extra = 0,
     };
-    u64 result = map_pages(text_phys, text_virt, text_size, args, cr3);
-    if (result != SUCCESS)
-        hcf();
+    // TODO
+    //u64 result = map_pages(text_phys, text_virt, text_size, args, cr3);
+    // if (result != SUCCESS)
+    //     hcf();
 
     const u64 rodata_start = (u64)(&_rodata_start) & ~0xfff;
     const u64 rodata_end = ((u64)&_rodata_end + 0xfff) & ~0xfff;
@@ -268,7 +282,7 @@ void construct_paging() {
     const u64 rodata_phys = kernel_phys + rodata_offset;
     const u64 rodata_virt = kernel_start_virt + rodata_offset;
     args = {false, false, true, true, 0};
-    result = map_pages(rodata_phys, rodata_virt, rodata_size, args, cr3);
+    //result = map_pages(rodata_phys, rodata_virt, rodata_size, args, cr3);
     if (result != SUCCESS)
         hcf();
 
@@ -282,7 +296,7 @@ void construct_paging() {
     const u64 data_phys = kernel_phys + data_offset;
     const u64 data_virt = kernel_start_virt + data_offset;
     args = {true, false, true, true, 0};
-    result = map_pages(data_phys, data_virt, data_size, args, cr3);
+    //result = map_pages(data_phys, data_virt, data_size, args, cr3);
     if (result != SUCCESS)
         hcf();
 
@@ -294,11 +308,11 @@ void construct_paging() {
     const u64 eh_frame_phys = kernel_phys + eh_frame_offset;
     const u64 eh_frame_virt = kernel_start_virt + eh_frame_offset;
     args = {true, false, true, true, 0};
-    result = map_pages(eh_frame_phys, eh_frame_virt, eh_frame_size, args, cr3);
+    //result = map_pages(eh_frame_phys, eh_frame_virt, eh_frame_size, args, cr3);
     if (result != SUCCESS)
         hcf();
 
-    setCR3(cr3);
+    //setCR3(cr3);
 }
 
 
@@ -309,6 +323,4 @@ void limine_main() {
    
     init_memory();
     construct_paging();
-
-    asm ("xchgw %bx, %bx");
 }
