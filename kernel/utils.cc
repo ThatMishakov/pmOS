@@ -306,10 +306,10 @@ void print_stack_trace(Logger& logger, stack_frame * s)
 //     print_stack_trace(logger, s);
 // }
 
-extern "C" void serial_print_stack_trace(void * s)
-{
-    print_stack_trace(serial_logger, (stack_frame *)s);
-}
+// extern "C" void serial_print_stack_trace(void * s)
+// {
+//     print_stack_trace(serial_logger, (stack_frame *)s);
+// }
 
 extern "C" void dbg_uart_init();
 
@@ -317,11 +317,10 @@ extern "C" void abort(void)
 {
     t_print_bochs("Error: abort() was called. Hint: use debugger on COM1\n");
 
-    dbg_uart_init();
     serial_logger.printf("Error: abort() was called.\n");
 
-    print_stack_trace(bochs_logger);
-    print_stack_trace(serial_logger);
+    //print_stack_trace(bochs_logger);
+    //print_stack_trace(serial_logger);
 
     serial_logger.printf("Dropping into debugger...\n---------------\n");
 
@@ -332,9 +331,6 @@ extern "C" void abort(void)
 
 extern "C" void _assert_fail(const char* condition, const char* file, unsigned int line)
 {
-    t_print_bochs("Assert fail %s in file %s at line %i\n", condition, file, line);
-
-    dbg_uart_init();
     serial_logger.printf("Assert fail %s in file %s at line %i\n", condition, file, line);
 
     abort();

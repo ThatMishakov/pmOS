@@ -32,9 +32,7 @@ struct Spinlock {
 	
 	inline void unlock() noexcept
 	{
-		// t_print_bochs("Debug: unlocking %h\n", this);
-		__sync_synchronize();
-		locked = false;
+		__atomic_store_n(&locked, false, __ATOMIC_RELEASE);
 	}
 
 	bool operator==(const Spinlock& s) const noexcept

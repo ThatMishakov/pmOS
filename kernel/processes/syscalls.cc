@@ -609,8 +609,10 @@ void syscall_set_segment(u64 pid, u64 segment_type, u64 ptr, u64, u64, u64)
     else
         target = get_task_throw(pid);
 
+    #ifdef __x86_64__
     if (target == current)
         save_segments(target);
+    #endif
 
     switch (segment_type) {
     case 1:
@@ -623,8 +625,10 @@ void syscall_set_segment(u64 pid, u64 segment_type, u64 ptr, u64, u64, u64)
         throw Kern_Exception(ERROR_OUT_OF_RANGE, "invalid segment in syscall_set_segment");
     }
 
+    #ifdef __x86_64__
     if (target == current)
-        restore_segments(target);
+       restore_segments(target);
+    #endif
 }
 
 void syscall_get_segment(u64 pid, u64 segment_type, u64, u64, u64, u64)
@@ -637,9 +641,6 @@ void syscall_get_segment(u64 pid, u64 segment_type, u64, u64, u64, u64)
         target = current;
     else
         target = get_task_throw(pid);
-
-    if (target == current)
-        save_segments(target);
 
     switch (segment_type) {
     case 1:

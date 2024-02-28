@@ -18,6 +18,8 @@ sched_queue uninit;
 Spinlock tasks_map_lock;
 sched_map tasks_map;
 
+klib::vector<CPU_Info*> cpus;
+
 PID pid = 1;
 
 DECLARE_LOCK(assign_pid);
@@ -83,36 +85,30 @@ void TaskDescriptor::atomic_block_by_page(u64 page, sched_queue *blocked_ptr)
     }
 }
 
-// void TaskDescriptor::switch_to()
-// {
-//     CPU_Info *c = get_cpu_struct();
-//     if (c->current_task->page_table != page_table) {
-//         // TODO: There is no reason to not just store a pointer to x86_Page_Table (or other architecture-dependant tables) in TaskDescriptor
-//         auto old_table = klib::dynamic_pointer_cast<x86_Page_Table>(c->current_task->page_table);
-//         auto new_table = klib::dynamic_pointer_cast<x86_Page_Table>(page_table);
+void TaskDescriptor::switch_to()
+{
+    CPU_Info *c = get_cpu_struct();
+    // if (c->current_task->page_table != page_table) {
+    //     // TODO: There is no reason to not just store a pointer to x86_Page_Table (or other architecture-dependant tables) in TaskDescriptor
+    //     auto old_table = klib::dynamic_pointer_cast<x86_Page_Table>(c->current_task->page_table);
+    //     auto new_table = klib::dynamic_pointer_cast<x86_Page_Table>(page_table);
 
-//         old_table->atomic_active_sum(-1);
-//         new_table->atomic_active_sum(1);
-//         setCR3(new_table->get_cr3());
-//     }
+    //     old_table->atomic_active_sum(-1);
+    //     new_table->atomic_active_sum(1);
+    //     setCR3(new_table->get_cr3());
+    // }
 
-//     save_segments(c->current_task);
+    c->current_task->before_task_switch();
 
-//     if (sse_is_valid()) {
-//         //t_print_bochs("Saving SSE registers for PID %h\n", c->current_task->pid);
-//         c->current_task->sse_data.save_sse();
-//         invalidate_sse();
-//     }
+    // Switch task task
+    status = Process_Status::PROCESS_RUNNING;
+    c->current_task_priority = priority;
+    c->current_task = weak_self.lock();
 
-//     // Change task
-//     status = Process_Status::PROCESS_RUNNING;
-//     c->current_task_priority = priority;
-//     c->current_task = weak_self.lock();
+    this->after_task_switch();
 
-//     restore_segments(c->current_task);
-
-//     start_timer_ticks(calculate_timer_ticks(c->current_task));
-// }
+    start_timer(assign_quantum_on_priority(priority));
+}
 
 bool TaskDescriptor::atomic_try_unblock_by_page(u64 page)
 {
@@ -244,7 +240,7 @@ void sched_periodic()
 
         push_ready(current);
     } else {
-        start_timer_ticks(calculate_timer_ticks(current));
+        start_timer(assign_quantum_on_priority(current->priority));
     }
 }
 
@@ -253,7 +249,7 @@ void start_scheduler()
     CPU_Info* s = get_cpu_struct();
     const klib::shared_ptr<TaskDescriptor>& t = s->current_task;
 
-    start_timer_ticks(calculate_timer_ticks(t));
+    start_timer(assign_quantum_on_priority(t->priority));
 }
 
 void reschedule()

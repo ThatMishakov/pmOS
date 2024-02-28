@@ -108,6 +108,13 @@ public:
     // Switches to this task on the current CPU
     void switch_to();
 
+    // Functions to be called before and after task switch
+    // These function save and restore extra data (floating point and vector registers,
+    // segment registers on x86, etc.) that are not stored upon the kernel entry
+    // This function is architecture-dependent and is defined in arch/-specific directory
+    void before_task_switch();
+    void after_task_switch();
+
     // Checks if the task is uninited
     bool is_uninited() const;
 
@@ -145,8 +152,12 @@ public:
     ~TaskDescriptor() noexcept;
 
     // Changes the *task* to repeat the syscall upon reentering the system
-    void request_repeat_syscall();
-    void pop_repeat_syscall();
+    inline void request_repeat_syscall() noexcept {
+        regs.request_syscall_restart();
+    }
+    inline void pop_repeat_syscall() noexcept {
+        regs.clear_syscall_restart();
+    }
 
     // Creates a process structure and returns its pid
     static klib::shared_ptr<TaskDescriptor> create_process(u16 ring = 3);

@@ -29,6 +29,7 @@ INTERNALLDFLAGS :=     \
 	-static \
 	-Tlinker.ld    \
 	-fPIC \
+	-lgcc \
 	-no-pie -fno-pic -Wl,--demangle
  
 # Internal C flags that should not be changed by the user.
@@ -39,6 +40,8 @@ INTERNALCFLAGS  :=       \
 	-no-pie -fno-pic \
 	-D_LIBUNWIND_IS_BAREMETAL \
 	-fasynchronous-unwind-tables \
+	-march=rv64ima_zicsr_zba_zbb_zbc -mabi=lp64 \
+	-Wall -Wextra \
 	-g
  
 # Use find to glob all *.c files in the directory and extract the object names.
@@ -53,6 +56,11 @@ OBJS = 	./objects/icxxabi.o ./utils.o types.o \
 		./messaging/messaging.o ./messaging/named_ports.o \
 		./kern_logger/kern_logger.o \
 		./limine/limine.o \
+		\
+		./arch/riscv64/cpus/cpus_asm.o ./arch/riscv64/tasks/task_switch.o ./arch/riscv64/arch_specific.o \
+		./arch/riscv64/sbi/console.o \
+		./arch/riscv64/cpus/sched_helpers.o \
+		./arch/riscv64/start.o ./arch/riscv64/console.o \
 		\
 		./libunwind/src/libunwind.o ./libunwind/src/Unwind-seh.o ./libunwind/src/Unwind-sjlj.o ./libunwind/src/UnwindLevel1.o \
 		./libunwind/src/UnwindLevel1-gcc-ext.o ./libunwind/src/UnwindRegistersRestore.o ./libunwind/src/UnwindRegistersSave.o \

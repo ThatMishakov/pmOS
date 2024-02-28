@@ -111,7 +111,10 @@
         "elf.h": "c",
         "any": "c",
         "*.def": "cpp",
-        "locale": "cpp"
+        "locale": "cpp",
+        "forward_list": "cpp",
+        "hash_set": "cpp",
+        "ctype.h": "c"
     },
     "cmake.configureOnOpen": false
 }

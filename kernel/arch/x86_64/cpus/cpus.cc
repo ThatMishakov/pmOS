@@ -10,8 +10,6 @@
 #include <memory/palloc.hh>
 #include <sched/timers.hh>
 
-klib::vector<CPU_Desc> cpus;
-
 void init_per_cpu()
 {
     CPU_Info* c = new CPU_Info;

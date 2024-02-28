@@ -42,6 +42,10 @@ struct RiscV64Regs {
     u64 t5 = 0;
     u64 t6 = 0;
 
+    // 1 if the syscall should be repeated
+    // Store it here as on other architectures (x86) the entry type is stored here
+    u64 syscall_restart = 0;
+
     // Do the as functions, for it to be the same for all architectures
 
     // Program counter
@@ -79,6 +83,9 @@ struct RiscV64Regs {
     inline u64& arg2() { return a1; }
     inline u64& arg3() { return a2; }
     inline u64& arg4() { return a3; }
+
+    inline void request_syscall_restart() { syscall_restart = 1; }
+    inline void clear_syscall_restart() { syscall_restart = 0; }
 };
 
 // Generic Task registers, for all architectures

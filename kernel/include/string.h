@@ -5,6 +5,8 @@
 extern "C" {
 #endif
 
+#define NULL 0
+
 typedef unsigned long size_t;
 
 // Locale is not yet supported
