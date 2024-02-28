@@ -27,9 +27,9 @@ void* pthread_getspecific(pthread_key_t key);
 int pthread_setspecific(pthread_key_t key, const void* data);
 
 typedef struct pthread_rwlock_t {
-    volatile unsigned b;
-    volatile unsigned char r;
-    volatile unsigned char g;
+    unsigned b;
+    unsigned r;
+    unsigned g;
 } pthread_rwlock_t;
 
 #define PTHREAD_RWLOCK_INITIALIZER {0, 0, 0};

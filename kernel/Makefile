@@ -48,7 +48,7 @@ INTERNALCFLAGS  :=       \
 CCFILES := $(shell find ./ -type f -name '*.cc')
 CFILES := $(shell find ./ -type f -name '*.c')
 ASMFILES := $(shell find ./ -type f -name '*.S')
-OBJS = 	./objects/icxxabi.o ./utils.o types.o \
+OBJS = 	./objects/icxxabi.o ./utils.o \
 	    ./memory/mem.o ./memory/mem_regions.o ./memory/malloc.o ./memory/dlmalloc.o ./memory/palloc.o ./memory/paging.o \
 		./memory/temp_mapper.o ./memory/mem_object.o ./memory/page_descriptor.o ./memory/virtmem.o \
 	    ./processes/idle.o ./processes/syscalls.o ./processes/tasks.o ./processes/task_group.o \
@@ -60,7 +60,7 @@ OBJS = 	./objects/icxxabi.o ./utils.o types.o \
 		./arch/riscv64/cpus/cpus_asm.o ./arch/riscv64/tasks/task_switch.o ./arch/riscv64/arch_specific.o \
 		./arch/riscv64/sbi/console.o \
 		./arch/riscv64/cpus/sched_helpers.o \
-		./arch/riscv64/start.o ./arch/riscv64/console.o \
+		./arch/riscv64/start.o ./arch/riscv64/console.o ./arch/riscv64/spinlock.o ./arch/riscv64/spinlock_asm.o \
 		\
 		./libunwind/src/libunwind.o ./libunwind/src/Unwind-seh.o ./libunwind/src/Unwind-sjlj.o ./libunwind/src/UnwindLevel1.o \
 		./libunwind/src/UnwindLevel1-gcc-ext.o ./libunwind/src/UnwindRegistersRestore.o ./libunwind/src/UnwindRegistersSave.o \

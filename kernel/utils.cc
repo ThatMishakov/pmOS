@@ -369,21 +369,21 @@ int fprintf(FILE *stream, const char *format, ...)
     return 1;
 }
 
-void lock_var(volatile unsigned char *var)
-{
-    bool r = false;
-    do {
-        if (*var)
-            continue;
-
-        r = __sync_bool_compare_and_swap(var, 0, 1);
-    } while (not r);
-    __sync_synchronize();
+// Arch-specific spinlock functions
+extern "C" {
+    void acquire_lock_spin(u32 *lock) noexcept;
+    void release_lock(u32 *lock) noexcept;
+    bool try_lock(u32 *lock) noexcept;
 }
 
-void unlock_var(volatile unsigned char *var)
+void lock_var(unsigned *var)
 {
-    *var = 0;
+    acquire_lock_spin(var);
+}
+
+void unlock_var(unsigned *var)
+{
+    release_lock(var);
 }
 
 #include <pthread.h>

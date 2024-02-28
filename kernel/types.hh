@@ -1,15 +1,6 @@
 #pragma once
 #include <kernel/types.h>
 
-#define DECLARE_LOCK(name) volatile int name ## Locked
-#define LOCK(name) \
-	while (!__sync_bool_compare_and_swap(& name ## Locked, 0, 1)); \
-	__sync_synchronize();
-    
-#define UNLOCK(name) \
-	__sync_synchronize(); \
-	name ## Locked = 0;
-
 using kresult_t = u64;
 
 template<class T>
@@ -21,19 +12,15 @@ struct ReturnStr {
 void t_print_bochs(const char *str, ...);
 
 struct Spinlock {
-	volatile bool locked = false;
+	u32 locked = false;
 
 	void lock() noexcept;
 	/// Tries to lock the spinlock. True if lock has been ackquired, false otherwise
-	bool try_lock() noexcept
-	{
-		return (not locked) and __sync_bool_compare_and_swap(&locked, false, true);
-	}
+	bool try_lock() noexcept;
 	
-	inline void unlock() noexcept
-	{
-		__atomic_store_n(&locked, false, __ATOMIC_RELEASE);
-	}
+	// Function to unlock the spinlock
+	void unlock() noexcept;
+
 
 	bool operator==(const Spinlock& s) const noexcept
 	{

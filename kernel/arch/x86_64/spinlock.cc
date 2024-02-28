@@ -18,3 +18,12 @@ void Spinlock::lock() noexcept
     } while (not result);
 }
 
+void Spinlock::unlock() noexcept
+{
+	__atomic_store_n(&locked, false, __ATOMIC_RELEASE);
+}
+
+bool Spinlock::try_lock() noexcept
+{
+    return __atomic_compare_exchange(&locked, &lock_free, &lock_wanted, false, __ATOMIC_ACQUIRE, __ATOMIC_RELAXED);
+}

@@ -22,16 +22,9 @@ klib::vector<CPU_Info*> cpus;
 
 PID pid = 1;
 
-DECLARE_LOCK(assign_pid);
-
 PID assign_pid()
 {
-    LOCK(assign_pid)
-
-    PID pid_p = pid++;
-
-    UNLOCK(assign_pid)
-
+   PID pid_p = __atomic_fetch_add(&pid, 1, __ATOMIC_SEQ_CST);
    return pid_p; 
 }
 
