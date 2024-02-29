@@ -27,11 +27,25 @@ SECTIONS
 
     . += CONSTANT(MAXPAGESIZE);
 
+    _rodata_start = .;
     .rodata : {
-        _rodata_start = .;
         *(.rodata .rodata.*)
-        _rodata_end = .;
     } :rodata
+
+    .init_array : {
+        _init_array_start = .;
+        KEEP(*(SORT(.init_array.*)))
+        KEEP(*(.init_array))
+        _init_array_end = .;
+    } :rodata
+
+    .fini_array : {
+        _fini_array_start = .;
+        KEEP(*(SORT(.fini_array.*)))
+        KEEP(*(.fini_array))
+        _fini_array_end = .;
+    } :rodata
+    _rodata_end = .;
 
     . += CONSTANT(MAXPAGESIZE);
 

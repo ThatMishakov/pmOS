@@ -204,7 +204,7 @@ u64 get_current_hart_pt() noexcept
 {
     u64 satp;
     asm volatile("csrr %0, satp" : "=r"(satp));
-    return (satp & ((1UL << 44) - 1)) << 12;
+    return (satp & (((1UL << 44) - 1))) << 12;
 }
 
 void apply_page_table(ptable_top_ptr_t page_table)

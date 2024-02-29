@@ -348,6 +348,8 @@ void construct_paging() {
     kernel_pframe_allocator.init((u64 *)bitmap_virt, bitmap_size_pages*0x1000/8);
 }
 
+void init(void);
+
 void limine_main() {
     if (LIMINE_BASE_REVISION_SUPPORTED == false) {
         hcf();
@@ -357,6 +359,9 @@ void limine_main() {
    
     init_memory();
     construct_paging();
+
+    // Call global (C++) constructors
+    init();
 
     while (1) ;
 }

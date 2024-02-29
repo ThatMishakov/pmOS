@@ -49,7 +49,7 @@ INTERNALCFLAGS  :=       \
 CCFILES := $(shell find ./ -type f -name '*.cc')
 CFILES := $(shell find ./ -type f -name '*.c')
 ASMFILES := $(shell find ./ -type f -name '*.S')
-OBJS = 	./objects/icxxabi.o ./utils.o ./misc.o \
+OBJS = 	./objects/icxxabi.o ./objects/constructors.o ./utils.o ./misc.o \
 	    ./memory/mem.o ./memory/mem_regions.o ./memory/malloc.o ./memory/dlmalloc.o ./memory/palloc.o ./memory/paging.o \
 		./memory/temp_mapper.o ./memory/mem_object.o ./memory/page_descriptor.o ./memory/virtmem.o \
 	    ./processes/idle.o ./processes/syscalls.o ./processes/tasks.o ./processes/task_group.o \

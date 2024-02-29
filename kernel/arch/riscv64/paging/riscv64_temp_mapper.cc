@@ -5,6 +5,8 @@
 
 RISCV64_Temp_Mapper::RISCV64_Temp_Mapper(void *virt_addr, u64 pt_ptr)
 {
+    pt_mapped = (RISCV64_PTE *)virt_addr;
+    
     u64 addr = (u64)virt_addr;
     start_index = addr/4096 % 512;
 
