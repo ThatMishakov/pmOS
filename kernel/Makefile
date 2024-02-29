@@ -58,8 +58,8 @@ OBJS = 	./objects/icxxabi.o ./utils.o \
 		./limine/limine.o \
 		\
 		./arch/riscv64/cpus/cpus_asm.o ./arch/riscv64/tasks/task_switch.o ./arch/riscv64/arch_specific.o \
-		./arch/riscv64/sbi/console.o \
-		./arch/riscv64/cpus/sched_helpers.o \
+		./arch/riscv64/sbi/sbi.o \
+		./arch/riscv64/cpus/sched_helpers.o ./arch/riscv64/cpus/timer.o \
 		./arch/riscv64/start.o ./arch/riscv64/console.o ./arch/riscv64/spinlock.o ./arch/riscv64/spinlock_asm.o \
 		\
 		./libunwind/src/libunwind.o ./libunwind/src/Unwind-seh.o ./libunwind/src/Unwind-sjlj.o ./libunwind/src/UnwindLevel1.o \
