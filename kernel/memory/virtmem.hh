@@ -35,6 +35,7 @@ struct VirtmemBoundaryTag {
     enum class State: u8 {
         FREE = 0,
         ALLOCATED,
+        LISTHEAD, // The segment is a head of the list of all segments
     } state = State::FREE;
     // Defines if the boundary tag is used
     
@@ -154,6 +155,9 @@ void virtmem_free(void *ptr, u64 npages);
 
 // Links the boundary tag with the list of tags sorted by address
 void virtmem_link_tag(VirtmemBoundaryTag* preceeding, VirtmemBoundaryTag* new_tag);
+
+// Unlinks the boundary tag from the list of tags sorted by address
+void virtmem_unlink_tag(VirtmemBoundaryTag* tag);
 
 // Dummy head of the list of segments sorted by address
 // This is used to simplify the code and avoid special cases when adding new segments

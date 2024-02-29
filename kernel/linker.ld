@@ -1,5 +1,5 @@
 /* Tell the linker that we want the symbol _start to be our entry point */
-ENTRY(_start)
+ENTRY(_limine_entry)
 
 PHDRS
 {

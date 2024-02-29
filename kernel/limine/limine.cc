@@ -206,11 +206,11 @@ void construct_paging() {
     // While we're here, initialize virtmem
     virtmem_init(kernel_space_start, kernel_start_virt - kernel_space_start);
 
-    u64 cr3 = (u64)kernel_pframe_allocator.alloc_page();
+    ptable_top_ptr_t kernel_ptable_top = (u64)kernel_pframe_allocator.alloc_page();
 
     // Init temp mapper with direct map, while it is still available
     void * temp_mapper_start = virtmem_alloc_aligned(16, 4); // 16 pages aligned to 16 pages boundary
-    temp_temp_mapper = Arch_Temp_Mapper(temp_mapper_start, cr3);
+    temp_temp_mapper = Arch_Temp_Mapper(temp_mapper_start, kernel_ptable_top);
 
     // Map kernel pages
     //
@@ -270,10 +270,10 @@ void construct_paging() {
         .execution_disabled = false,
         .extra = 0,
     };
-    // TODO
-    //u64 result = map_pages(text_phys, text_virt, text_size, args, cr3);
-    // if (result != SUCCESS)
-    //     hcf();
+
+    result = map_pages(kernel_ptable_top, text_phys, text_virt, text_size, args);
+    if (result != SUCCESS)
+        hcf();
 
     const u64 rodata_start = (u64)(&_rodata_start) & ~0xfff;
     const u64 rodata_end = ((u64)&_rodata_end + 0xfff) & ~0xfff;
@@ -282,7 +282,7 @@ void construct_paging() {
     const u64 rodata_phys = kernel_phys + rodata_offset;
     const u64 rodata_virt = kernel_start_virt + rodata_offset;
     args = {false, false, true, true, 0};
-    //result = map_pages(rodata_phys, rodata_virt, rodata_size, args, cr3);
+    result = map_pages(kernel_ptable_top, rodata_phys, rodata_virt, rodata_size, args);
     if (result != SUCCESS)
         hcf();
 
@@ -296,7 +296,7 @@ void construct_paging() {
     const u64 data_phys = kernel_phys + data_offset;
     const u64 data_virt = kernel_start_virt + data_offset;
     args = {true, false, true, true, 0};
-    //result = map_pages(data_phys, data_virt, data_size, args, cr3);
+    result = map_pages(kernel_ptable_top, data_phys, data_virt, data_size, args);
     if (result != SUCCESS)
         hcf();
 
@@ -308,7 +308,7 @@ void construct_paging() {
     const u64 eh_frame_phys = kernel_phys + eh_frame_offset;
     const u64 eh_frame_virt = kernel_start_virt + eh_frame_offset;
     args = {true, false, true, true, 0};
-    //result = map_pages(eh_frame_phys, eh_frame_virt, eh_frame_size, args, cr3);
+    result = map_pages(kernel_ptable_top, eh_frame_phys, eh_frame_virt, eh_frame_size, args);
     if (result != SUCCESS)
         hcf();
 

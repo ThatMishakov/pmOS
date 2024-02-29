@@ -20,11 +20,12 @@
 
 /// @brief Arguments for mapping of pages
 struct Page_Table_Argumments {
+    u8 readable           : 1 = 1;
     u8 writeable          : 1 = 0;
     u8 user_access        : 1 = 0;
     u8 global             : 1 = 0;
     u8 execution_disabled : 1 = 0;
-    u8 extra              : 3 = 0;
+    u8 extra              : 2 = 0;
 };
 
 struct Mem_Object_Data {
@@ -415,3 +416,16 @@ protected:
     /// Storage for the pointers to the pinned memory objects
     klib::splay_tree_map<klib::shared_ptr<Mem_Object>, Mem_Object_Data> mem_objects;
 };
+
+// Arch-generic pointer to the physical address of the top-level page table
+using ptable_top_ptr_t = u64;
+
+// Generic function to map a page
+kresult_t map_page(ptable_top_ptr_t page_table, u64 phys_addr, u64 virt_addr, Page_Table_Argumments arg);
+
+// Generic functions to map and release pages in kernel, using the active page table
+kresult_t map_kernel_page(u64 phys_addr, void * virt_addr, Page_Table_Argumments arg);
+kresult_t unmap_kernel_page(void * virt_addr);
+
+// Generic function to map multiple pages
+kresult_t map_pages(ptable_top_ptr_t page_table, u64 phys_addr, u64 virt_addr, u64 count, Page_Table_Argumments arg);

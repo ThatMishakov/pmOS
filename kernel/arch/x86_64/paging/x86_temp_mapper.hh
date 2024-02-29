@@ -4,7 +4,7 @@
  * @brief Temp_Mapper for x86_64 CPUs
  * 
  */
-class x86_PAE_Temp_Mapper: public Temp_Mapper {
+class x86_PAE_Temp_Mapper final: public Temp_Mapper {
 public:
     virtual void * kern_map(u64 phys_frame) override;
     virtual void return_map(void *) override;

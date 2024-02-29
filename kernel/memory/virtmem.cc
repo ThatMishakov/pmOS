@@ -1,5 +1,6 @@
 #include "virtmem.hh"
 #include <kernel/errors.h>
+#include <assert.h>
 
 void virtmem_fill_initial_tags() {
     for (u64 i = 0; i < virtmem_initial_segments; ++i) {
@@ -37,6 +38,7 @@ void virtmem_return_tag(VirtmemBoundaryTag* tag) {
 void virtmem_init(u64 virtmem_base, u64 virtmem_size) {
     segment_ll_dummy_head.segment_next = &segment_ll_dummy_head;
     segment_ll_dummy_head.segment_prev = &segment_ll_dummy_head;
+    segment_ll_dummy_head.state = VirtmemBoundaryTag::State::LISTHEAD;
 
     // Init lists
     // See VirtMemFreelist::init_empty() for the explanation
@@ -262,4 +264,50 @@ void virtmem_save_to_alloc_hashtable(VirtmemBoundaryTag* tag) {
     u64 idx = virtmem_hashtable_index(tag->base);
     auto head = &virtmem_hashtable[idx];
     virtmem_add_to_list(head, tag);
+}
+
+void virtmem_free(void *ptr, u64 npages) {
+    // Find the tag that corresponds to the base of the segment
+    u64 base = (u64)ptr;
+    u64 idx = virtmem_hashtable_index(base);
+    auto head = &virtmem_hashtable[idx];
+    VirtmemBoundaryTag *tag = nullptr;
+    for (auto i = head->ll_next; i != (VirtmemBoundaryTag*)head; i = i->ll_next) {
+        if (tag->base == base) {
+            // Found the tag
+            tag = i;
+            break;
+        }
+    }
+
+    assert(tag != nullptr);
+    assert(tag->state == VirtmemBoundaryTag::State::ALLOCATED);
+    assert(tag->size == npages);
+
+    // Take the tag out of the hashtable
+    virtmem_remove_from_list(tag);
+
+    // Mark the tag as free
+    tag->state = VirtmemBoundaryTag::State::FREE;
+
+    // Merge the tag with the previous and next tags if they are free
+    if (tag->segment_prev->state == VirtmemBoundaryTag::State::FREE) {
+        auto prev = tag->segment_prev;
+        virtmem_remove_from_list(prev);
+        tag->base = prev->base;
+        tag->size += prev->size;
+        virtmem_unlink_tag(prev);
+        virtmem_return_tag(prev);
+    }
+
+    if (tag->segment_next->state == VirtmemBoundaryTag::State::FREE) {
+        auto next = tag->segment_next;
+        virtmem_remove_from_list(next);
+        tag->size += next->size;
+        virtmem_unlink_tag(next);
+        virtmem_return_tag(next);
+    }
+
+    // Add the tag to the free list
+    virtmem_add_to_free_list(tag);
 }

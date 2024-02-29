@@ -14,7 +14,7 @@ INCLUDEDIR = include . libunwind/include arch/riscv64
 INCPARAM = $(foreach d, $(INCLUDEDIR), -I$(ROOTDIR)/$d)
 
 # User controllable CFLAGS.
-USERCFLAGS = -Wall -Wextra -Og -pipe
+USERCFLAGS = -Wall -Wextra -O3 -pipe
 
 CPPFLAGS = $(INTERNALCFLAGS) $(USERCFLAGS) -MMD -MP $(INCPARAM)
 CXXFLAGS = -std=c++20
@@ -61,6 +61,7 @@ OBJS = 	./objects/icxxabi.o ./utils.o \
 		./arch/riscv64/sbi/sbi.o \
 		./arch/riscv64/cpus/sched_helpers.o ./arch/riscv64/cpus/timer.o \
 		./arch/riscv64/start.o ./arch/riscv64/console.o ./arch/riscv64/spinlock.o ./arch/riscv64/spinlock_asm.o \
+		./arch/riscv64/paging/riscv64_temp_mapper.o ./arch/riscv64/paging/riscv64_paging.o \
 		\
 		./libunwind/src/libunwind.o ./libunwind/src/Unwind-seh.o ./libunwind/src/Unwind-sjlj.o ./libunwind/src/UnwindLevel1.o \
 		./libunwind/src/UnwindLevel1-gcc-ext.o ./libunwind/src/UnwindRegistersRestore.o ./libunwind/src/UnwindRegistersSave.o \
