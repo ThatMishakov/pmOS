@@ -183,6 +183,19 @@ char *strtok(char *str, const char *delim) {
     return token_start;
 }
 
+size_t strspn ( const char * str1, const char * str2 ) {
+    size_t i = 0;
+    while (str1[i] != '\0') {
+        const char * s = str2;
+        while (*s != '\0') {
+            if (str1[i] == *s) 
+                return i;
+            ++s;
+        }
+        ++i;
+    }
+}
+
 char *strpbrk(const char *str, const char *charset) {
     const char *s1 = str;
     const char *s2;

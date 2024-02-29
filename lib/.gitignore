@@ -2,3 +2,4 @@
 *.[od]
 libpm.a
 /.deps
+/build
