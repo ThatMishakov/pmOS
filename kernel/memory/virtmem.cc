@@ -62,7 +62,7 @@ void virtmem_add_to_free_list(VirtmemBoundaryTag* tag) {
     int idx = virtmem_freelist_index(tag->size);
     auto &list = virtmem_freelists[idx];
     virtmem_add_to_list(&list, tag);
-    virtmem_freelist_bitmap |= (1 << idx);
+    virtmem_freelist_bitmap |= (1UL << idx);
 }
 
 u64 virtmem_ensure_tags(u64 size) {
@@ -109,7 +109,7 @@ void *virtmem_alloc(u64 npages, VirtmemAllocPolicy policy) {
                 virtmem_remove_from_list(tag);
                 if (list.ll_next == (VirtmemBoundaryTag*)&list)
                     // Mark the list as empty
-                    virtmem_freelist_bitmap &= ~(1 << l);
+                    virtmem_freelist_bitmap &= ~(1UL << l);
 
                 tag->state = VirtmemBoundaryTag::State::ALLOCATED;
                 virtmem_save_to_alloc_hashtable(tag);
@@ -121,7 +121,7 @@ void *virtmem_alloc(u64 npages, VirtmemAllocPolicy policy) {
         }
     }
 
-    if (best != nullptr) {
+    if (best == nullptr) {
         // The best fit hasn't been wanted or found. Go to the first fit of some larger list
         // which is guaranteed to have a fit
 
@@ -147,7 +147,7 @@ void *virtmem_alloc(u64 npages, VirtmemAllocPolicy policy) {
         auto &list = virtmem_freelists[free_list_idx];
         if (list.ll_next == (VirtmemBoundaryTag*)&list)
             // Mark the list as empty
-            virtmem_freelist_bitmap &= ~(1 << free_list_idx);
+            virtmem_freelist_bitmap &= ~(1UL << free_list_idx);
 
         best->state = VirtmemBoundaryTag::State::ALLOCATED;
         virtmem_save_to_alloc_hashtable(best);
@@ -182,10 +182,10 @@ void *virtmem_alloc_aligned(u64 npages, u64 alignment) {
     const u64 size = npages << 12;
 
     // Find the smallest list that can fit the requested size
-    int l = sizeof(npages) - __builtin_clzl(npages);
+    int l = sizeof(npages)*8 - __builtin_clzl(npages);
 
     VirtmemBoundaryTag *t = nullptr;
-    u64 mask = (1 << l) - 1;
+    u64 mask = ~((1UL << l) - 1);
     u64 wanted_mask = mask & virtmem_freelist_bitmap;
     while (wanted_mask != 0) {
         // __builtin_ffsl returns the index of the first set bit + 1, or 0 if there are none

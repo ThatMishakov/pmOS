@@ -2,6 +2,7 @@
 #include <memory/temp_mapper.hh>
 #include <memory/mem.hh>
 #include <exceptions.hh>
+#include <kern_logger/kern_logger.hh>
 
 void flush_page(void *virt) noexcept
 {
@@ -57,7 +58,7 @@ kresult_t riscv_map_page(u64 pt_top_phys, u64 phys_addr, void * virt_addr, Page_
                 *entry = new_entry;
 
                 next_level_phys = new_pt_phys << 12;
-                clear_page(next_level_phys << 12);
+                clear_page(next_level_phys);
             } else if (entry->is_leaf()) {
                 return ERROR_HUGE_PAGE;
             } else {
@@ -74,6 +75,8 @@ kresult_t riscv_map_page(u64 pt_top_phys, u64 phys_addr, void * virt_addr, Page_
 
 kresult_t riscv_unmap_page(u64 pt_top_phys, void * virt_addr) noexcept
 {
+    // TODO: Return values of this function make no sense...
+
     Temp_Mapper_Obj<RISCV64_PTE> mapper(request_temp_mapper());
 
     RISCV64_PTE *active_pt = mapper.map(pt_top_phys);
@@ -168,7 +171,7 @@ u64 prepare_leaf_pt_for(void * virt_addr, Page_Table_Argumments /* unused */, u6
             *entry = new_entry;
 
             next_level_phys = new_pt_phys << 12;
-            clear_page(next_level_phys << 12);
+            clear_page(next_level_phys);
         } else if (entry->is_leaf()) {
             return ERROR_HUGE_PAGE;
         } else {
@@ -202,5 +205,19 @@ u64 get_current_hart_pt() noexcept
     u64 satp;
     asm volatile("csrr %0, satp" : "=r"(satp));
     return (satp & ((1UL << 44) - 1)) << 12;
+}
+
+void apply_page_table(ptable_top_ptr_t page_table)
+{
+    u64 ppn = page_table >> 12;
+    u64 asid = 0;
+    u64 mode = 5 + riscv64_paging_levels;
+    u64 satp = (mode << 60) | (asid << 44) | (ppn << 0);
+
+    // Apply the new page table
+    asm volatile("csrw satp, %0" : : "r"(satp) : "memory");
+
+    // Flush the TLB
+    asm volatile("sfence.vma x0, x0" : : : "memory");
 }
 

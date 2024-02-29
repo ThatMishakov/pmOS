@@ -30,6 +30,7 @@ INTERNALLDFLAGS :=     \
 	-Tlinker.ld    \
 	-fPIC \
 	-lgcc \
+	-z max-page-size=0x1000 \
 	-no-pie -fno-pic -Wl,--demangle
  
 # Internal C flags that should not be changed by the user.

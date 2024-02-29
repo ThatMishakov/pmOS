@@ -1,7 +1,7 @@
 .equ STACK_SIZE, 0x1000
 
 .bss
-.align 16
+.align 4
 .comm stack, STACK_SIZE
 
 .text

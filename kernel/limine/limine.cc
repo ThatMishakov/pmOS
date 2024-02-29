@@ -84,6 +84,8 @@ using Arch_Temp_Mapper = RISCV64_Temp_Mapper;
 
 Arch_Temp_Mapper temp_temp_mapper;
 
+u64 bitmap_phys = 0;
+u64 bitmap_size_pages = 0;
 
 void init_memory() {
     limine_memmap_response * resp = memory_request.response;
@@ -129,7 +131,7 @@ void init_memory() {
 
     uint64_t *bitmap_base_virt = (uint64_t*)(bitmap_base_phys + hhdm_request.response->offset);
 
-    serial_logger.printf("Bitmap base: 0x%x, bitmap size: 0x%u\n", bitmap_base_virt, bitmap_size);
+    serial_logger.printf("Bitmap base: 0x%x, phys: 0x%x, bitmap size: 0x%x pages 0x%x top address 0x%x\n", bitmap_base_virt, bitmap_base_phys, bitmap_size, bitmap_pages, top_physical_address);
 
     // Init the bitmap
     uint64_t last_free_base = 0;
@@ -176,6 +178,9 @@ void init_memory() {
             bitmap_clear_range(bitmap_base_virt, start_page, end_page);
         }
     }
+
+    bitmap_phys = bitmap_base_phys;
+    bitmap_size_pages = bitmap_pages;
     
     // Install the bitmap, as a physical address for now, since the kernel doesn't use its own paging yet
     kernel_pframe_allocator.init(bitmap_base_virt, bitmap_pages*0x1000/8);
@@ -218,48 +223,60 @@ void construct_paging() {
     virtmem_init(kernel_space_start, kernel_start_virt - kernel_space_start);
 
     ptable_top_ptr_t kernel_ptable_top = (u64)kernel_pframe_allocator.alloc_page();
+    clear_page(kernel_ptable_top);
 
     // Init temp mapper with direct map, while it is still available
     void * temp_mapper_start = virtmem_alloc_aligned(16, 4); // 16 pages aligned to 16 pages boundary
     temp_temp_mapper = Arch_Temp_Mapper(temp_mapper_start, kernel_ptable_top);
 
+    // Map bitmap
+    void * bitmap_virt = virtmem_alloc(bitmap_size_pages);
+    if (bitmap_virt == nullptr)
+        hcf();
+    const Page_Table_Argumments bitmap_args = {
+        .writeable = true,
+        .user_access = false,
+        .global = true,
+        .execution_disabled = true,
+        .extra = 0,
+    };
+    map_pages(kernel_ptable_top, bitmap_phys, (u64)bitmap_virt, bitmap_size_pages*0x1000, bitmap_args);
+
+
     // Map kernel pages
     //
     // Prelude:
-    // $ misha@Yoga:~/pmos/kernel/build$ readelf -l ../kernel
-    //
+    // misha@Yoga:~/pmos/kernel$ readelf -l kernel
+
     // Elf file type is EXEC (Executable file)
-    // Entry point 0xffffffff80000247
+    // Entry point 0xffffffff800200a8
     // There are 6 program headers, starting at offset 64
-    //
+
     // Program Headers:
-    //   Type           Offset             VirtAddr           PhysAddr
-    //                  FileSiz            MemSiz              Flags  Align
-    //   LOAD           0x0000000000200000 0xffffffff80000000 0xffffffff80000000
-    //                  0x00000000000575dc 0x00000000000575dc  R E    0x1000
-    //   LOAD           0x0000000000258000 0xffffffff80058000 0xffffffff80058000
-    //                  0x00000000000078e0 0x00000000000078e0  R      0x1000
-    //   LOAD           0x0000000000260000 0xffffffff80060000 0xffffffff80060000
-    //                  0x00000000000044b8 0x00000000000044b8  RW     0x1000
-    //   LOAD           0x00000000000644c0 0xffffffff800644c0 0xffffffff800644c0
-    //                  0x0000000000000000 0x000000000000922c  RW     0x1000
-    //   LOAD           0x000000000026e000 0xffffffff8006e000 0xffffffff8006e000
-    //                  0x0000000000009798 0x0000000000009798  R      0x1000
-    //   LOAD           0x0000000000277798 0xffffffff80077798 0xffffffff80077798
-    //                  0x000000000000198e 0x000000000000198e  R      0x1000
-    // 
-    // Section to Segment mapping:
-    //     Segment Sections...
-    //     00     .text .init .fini
-    //     01     .rodata
-    //     02     .data .ctors .dtors
-    //     03     .bss
-    //     04     .eh_frame
-    //     05     .gcc_except_table
+    // Type           Offset             VirtAddr           PhysAddr
+    //                 FileSiz            MemSiz              Flags  Align
+    // RISCV_ATTRIBUT 0x000000000029d420 0x0000000000000000 0x0000000000000000
+    //                 0x0000000000000048 0x0000000000000000  R      0x1
+    // LOAD           0x0000000000001000 0xffffffff80000000 0xffffffff80000000
+    //                 0x000000000002b728 0x000000000002b728  R E    0x1000
+    // LOAD           0x000000000002c728 0xffffffff8002c728 0xffffffff8002c728
+    //                 0x00000000000055f8 0x00000000000055f8  R      0x1000
+    // LOAD           0x0000000000031d20 0xffffffff80032d20 0xffffffff80032d20
+    //                 0x0000000000000878 0x0000000000007bf4  RW     0x1000
+    // LOAD           0x0000000000032918 0xffffffff8003b918 0xffffffff8003b918
+    //                 0x0000000000008c71 0x0000000000008c71  R      0x1000
+    // DYNAMIC        0x0000000000000000 0x0000000000000000 0x0000000000000000
+    //                 0x0000000000000000 0x0000000000000000  RW     0x8
+    //...
+    //  Section to Segment mapping:
+    //    Segment Sections...
+    //    00     .riscv.attributes
+    //    01     .text
+    //    02     .rodata .srodata .srodata._ZTS4Port ...
+    //    03     .data .init_array ... .bss .sbss ...
+    //    04     .eh_frame .gcc_except_table
     //
-    //
-    //
-    // The kernel is loaded into higher half and has 6 memory regions (4 of which could be merged into 2):
+    // The kernel is loaded into higher half and has 4 memory regions:
     // 1. .text and related, with Read an Execute permissions
     // 2. .rodata, with Read permissions
     // 3. .data and .bss, with Read and Write permissions
@@ -275,6 +292,7 @@ void construct_paging() {
     const u64 text_size = kernel_text_end - kernel_text_start;
     const u64 text_virt = text_phys - kernel_phys + kernel_start_virt;
     Page_Table_Argumments args = {
+        .readable = true,
         .writeable = false,
         .user_access = false,
         .global = true,
@@ -292,21 +310,19 @@ void construct_paging() {
     const u64 rodata_offset = rodata_start - kernel_start_virt;
     const u64 rodata_phys = kernel_phys + rodata_offset;
     const u64 rodata_virt = kernel_start_virt + rodata_offset;
-    args = {false, false, true, true, 0};
+    args = {true, false, false, true, true, 0};
     result = map_pages(kernel_ptable_top, rodata_phys, rodata_virt, rodata_size, args);
     if (result != SUCCESS)
         hcf();
 
     const u64 data_start = (u64)(&_data_start) & ~0xfff;
     // Data and BSS are merged and have the same permissions
-    // And linker script doesn't align their boundary to page
-    // So merge them together
     const u64 data_end = ((u64)&_bss_end + 0xfff) & ~0xfff;
     const u64 data_size = data_end - data_start;
     const u64 data_offset = data_start - kernel_start_virt;
     const u64 data_phys = kernel_phys + data_offset;
     const u64 data_virt = kernel_start_virt + data_offset;
-    args = {true, false, true, true, 0};
+    args = {true, true, false, true, true, 0};
     result = map_pages(kernel_ptable_top, data_phys, data_virt, data_size, args);
     if (result != SUCCESS)
         hcf();
@@ -318,14 +334,18 @@ void construct_paging() {
     const u64 eh_frame_offset = eh_frame_start - kernel_start_virt;
     const u64 eh_frame_phys = kernel_phys + eh_frame_offset;
     const u64 eh_frame_virt = kernel_start_virt + eh_frame_offset;
-    args = {true, false, true, true, 0};
+    args = {true, false, false, true, true, 0};
     result = map_pages(kernel_ptable_top, eh_frame_phys, eh_frame_virt, eh_frame_size, args);
     if (result != SUCCESS)
         hcf();
 
-    serial_logger.printf("Switching to in-kernel page table...");
+    serial_logger.printf("Switching to in-kernel page table...\n");
 
-    //setCR3(cr3);
+    apply_page_table(kernel_ptable_top);
+
+    // Set up the right mapper (since there is no direct map anymore) and bitmap
+    global_temp_mapper = &temp_temp_mapper;
+    kernel_pframe_allocator.init((u64 *)bitmap_virt, bitmap_size_pages*0x1000/8);
 }
 
 void limine_main() {
@@ -337,4 +357,6 @@ void limine_main() {
    
     init_memory();
     construct_paging();
+
+    while (1) ;
 }
