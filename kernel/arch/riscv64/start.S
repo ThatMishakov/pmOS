@@ -13,7 +13,8 @@ _limine_entry:
     # Switch to our own stack since the one provided by limine will be unusable
     # once the kernel switched to its own page tables
     la sp, stack
-    addi sp, sp, %lo(STACK_SIZE)
+    li t0, STACK_SIZE
+    add sp, sp, t0
 
     mv fp, zero
     mv ra, zero

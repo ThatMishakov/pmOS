@@ -14,7 +14,7 @@ INCLUDEDIR = include . libunwind/include arch/riscv64
 INCPARAM = $(foreach d, $(INCLUDEDIR), -I$(ROOTDIR)/$d)
 
 # User controllable CFLAGS.
-USERCFLAGS = -Wall -Wextra -O3 -pipe
+USERCFLAGS = -Wall -Wextra -O2 -pipe
 
 CPPFLAGS = $(INTERNALCFLAGS) $(USERCFLAGS) -MMD -MP $(INCPARAM)
 CXXFLAGS = -std=c++20
@@ -48,7 +48,7 @@ INTERNALCFLAGS  :=       \
 CCFILES := $(shell find ./ -type f -name '*.cc')
 CFILES := $(shell find ./ -type f -name '*.c')
 ASMFILES := $(shell find ./ -type f -name '*.S')
-OBJS = 	./objects/icxxabi.o ./utils.o \
+OBJS = 	./objects/icxxabi.o ./utils.o ./misc.o \
 	    ./memory/mem.o ./memory/mem_regions.o ./memory/malloc.o ./memory/dlmalloc.o ./memory/palloc.o ./memory/paging.o \
 		./memory/temp_mapper.o ./memory/mem_object.o ./memory/page_descriptor.o ./memory/virtmem.o \
 	    ./processes/idle.o ./processes/syscalls.o ./processes/tasks.o ./processes/task_group.o \

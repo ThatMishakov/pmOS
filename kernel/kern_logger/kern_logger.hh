@@ -52,7 +52,7 @@ struct Bochs_Logger: Logger {
 };
 extern Bochs_Logger bochs_logger;
 
-class Serial_Logger : public Logger {
+class Serial_Logger final: public Logger {
 public:
     void log_nolock(const char* c, size_t size) override;
     virtual ~Serial_Logger() = default;

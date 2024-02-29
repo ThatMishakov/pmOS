@@ -3,6 +3,7 @@
 #include "../memory/temp_mapper.hh"
 #include "../memory/paging.hh"
 #include "../memory/virtmem.hh"
+#include <kern_logger/kern_logger.hh>
 
 extern "C" void limine_main();
 extern "C" void _limine_entry();
@@ -90,6 +91,8 @@ void init_memory() {
         hcf();
     }
 
+    serial_logger.printf("Initializing memory bitmap\n");
+
     uint64_t top_physical_address = 0;
     for (uint64_t i = 0; i < resp->entry_count; i++) {
         uint64_t type = resp->entries[i]->type;
@@ -126,9 +129,13 @@ void init_memory() {
 
     uint64_t *bitmap_base_virt = (uint64_t*)(bitmap_base_phys + hhdm_request.response->offset);
 
+    serial_logger.printf("Bitmap base: 0x%x, bitmap size: 0x%u\n", bitmap_base_virt, bitmap_size);
+
     // Init the bitmap
     uint64_t last_free_base = 0;
     for (uint64_t i = 0; i < resp->entry_count; i++) {
+        serial_logger.printf("memmap entry %i: base: 0x%x, length: 0x%x, type: %i\n", i, resp->entries[i]->base, resp->entries[i]->length, resp->entries[i]->type);
+
         if (resp->entries[i]->type == LIMINE_MEMMAP_USABLE) {
             uint64_t base = resp->entries[i]->base;
             uint64_t length = resp->entries[i]->length;
@@ -169,12 +176,14 @@ void init_memory() {
             bitmap_clear_range(bitmap_base_virt, start_page, end_page);
         }
     }
-
+    
     // Install the bitmap, as a physical address for now, since the kernel doesn't use its own paging yet
     kernel_pframe_allocator.init(bitmap_base_virt, bitmap_pages*0x1000/8);
 
     init_mapper.virt_offset = hhdm_request.response->offset;
     global_temp_mapper = &init_mapper;
+
+    serial_logger.printf("Memory bitmap initialized. Top address: %u\n", top_physical_address);
 }
 
 extern void * _kernel_start;
@@ -199,6 +208,8 @@ extern void * _gcc_except_table_end;
 const u64 kernel_space_start = (u64)(-1) >> 47 << 47;
 
 void construct_paging() {
+    serial_logger.printf("Initializing paging...\n");
+
     kresult_t result = SUCCESS;
 
     const u64 kernel_start_virt = (u64)&_kernel_start & ~0xfff;
@@ -312,14 +323,17 @@ void construct_paging() {
     if (result != SUCCESS)
         hcf();
 
+    serial_logger.printf("Switching to in-kernel page table...");
+
     //setCR3(cr3);
 }
-
 
 void limine_main() {
     if (LIMINE_BASE_REVISION_SUPPORTED == false) {
         hcf();
     }
+
+    serial_logger.printf("Hello from pmOS kernel!\n");
    
     init_memory();
     construct_paging();
