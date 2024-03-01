@@ -10,6 +10,7 @@
 #include "task_group.hh"
 #include <interrupts/stack.hh>
 #include <registers.hh>
+#include <paging/arch_paging.hh>
 
 using PID = u64;
 
@@ -37,6 +38,9 @@ class TaskDescriptor {
 public:
     // Basic process stuff
     Task_Regs regs; // 200 on x86_64
+    #ifdef __riscv
+    u64 is_system = 0; // 0 if user space task, 1 if kernel task
+    #endif
     PID pid;
 
     // Permissions
@@ -63,7 +67,7 @@ public:
     klib::weak_ptr<TaskDescriptor> weak_self;
 
     // Paging
-    klib::shared_ptr<Page_Table> page_table;
+    klib::shared_ptr<Arch_Page_Table> page_table;
     u64 page_blocked_by = 0;
 
     // Task groups
@@ -74,7 +78,7 @@ public:
     void create_new_page_table();
 
     // Registers a page table within a process, if it doesn't have any
-    void register_page_table(klib::shared_ptr<Page_Table>);
+    void register_page_table(klib::shared_ptr<Arch_Page_Table>);
 
     // Inits stack
     u64 init_stack();
@@ -128,6 +132,11 @@ public:
         Idle,
     } type = Normal;
 
+    enum class PrivilegeLevel {
+        User,
+        Kernel
+    };
+
     u64 ret_hi = 0;
     u64 ret_lo = 0;
 
@@ -160,7 +169,7 @@ public:
     }
 
     // Creates a process structure and returns its pid
-    static klib::shared_ptr<TaskDescriptor> create_process(u16 ring = 3);
+    static klib::shared_ptr<TaskDescriptor> create_process(PrivilegeLevel level = PrivilegeLevel::User);
 protected:
     TaskDescriptor() = default;
 

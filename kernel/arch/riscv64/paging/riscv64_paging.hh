@@ -74,3 +74,78 @@ kresult_t riscv_unmap_page(u64 pt_top_phys, void * virt_addr) noexcept;
 
 // Gets the top level page table pointer for the current hart
 u64 get_current_hart_pt() noexcept;
+
+/* final allow virtual functions optimizations */
+class RISCV64_Page_Table final : public Page_Table {
+public:
+    // Gets the page table by its ID
+    static klib::shared_ptr<RISCV64_Page_Table> get_page_table(u64 id) noexcept;
+    static klib::shared_ptr<RISCV64_Page_Table> get_page_table_throw(u64 id);
+
+    /**
+     * @brief Creates an initial page table, capturing pointer to the root level
+     * @param root Pointer to the root level of the page table
+     * @return klib::shared_ptr<RISCV64_Page_Table> A shared pointer to the page table
+     */
+    static klib::shared_ptr<RISCV64_Page_Table> capture_initial(u64 root);
+    
+
+    /**
+     * @brief Creates a clone of this page table
+     * 
+     * This function creates a new page table, which is a 'clone' of this page table. The clone references the same memory objects
+     * and the same memory regions, with the memory layout being the same in such a way that the new task using the page table will
+     * see the same memory layout and contents as the original task. This function is somewhat abstract as it doesn't actually have
+     * to clone the page tables, but can transform the memory into copy on write, or do other things, as long as the previous condition
+     * is met.
+     * 
+     * @return klib::shared_ptr<RISCV64_Page_Table> A clone of the page table
+     */
+    klib::shared_ptr<RISCV64_Page_Table> create_clone();
+
+    /// @brief Atomically add to the active_counter
+    ///
+    /// This function should atomically add the given integer to the active_counter variable
+    /// This is typically done in scheduling on task switches, helping to track how many tasks
+    /// are there to do TLB shootdowns
+    /// @param i Integer to be added
+    void atomic_active_sum(u64 i) noexcept;
+
+    /// Installs the page table
+    void apply() noexcept;
+
+    /// Gets the root of the page table
+    u64 get_root() const noexcept
+    {
+        return table_root;
+    }
+
+    /// @brief Maximum address that the user space is allowed to use
+    /// @return u64 the number, addresses before which are allowed for user space
+    virtual u64 user_addr_max() const noexcept override;
+protected:
+    /// Root node/top level of paging structures
+    u64 table_root = 0;
+
+    RISCV64_Page_Table() = default;
+
+private:
+    // There is an interesting pattern for this:
+    // https://en.wikipedia.org/wiki/Curiously_recurring_template_pattern#Object_counter
+    // But it seems to be very clunky with shared pointers, so I'm not using it
+    
+    /// @brief Inserts the page table into the map of the page tables
+    static void insert_global_page_tables(klib::shared_ptr<RISCV64_Page_Table> table);
+
+    /// @brief Takes out this page table from the map of the page tables
+    void takeout_global_page_tables();
+
+    using page_table_map = klib::splay_tree_map<u64, klib::weak_ptr<RISCV64_Page_Table>>;
+    /// @brief Map holding all the page tables. Currently using splay tree for the storage
+    /// @todo Consider AVL or Red-Black tree instead for better concurrency
+    static page_table_map global_page_tables;
+    static Spinlock page_table_index_lock;
+
+    /// Counter of how many Harts have this page table active
+    u64 active_counter = 0;
+};

@@ -1,5 +1,11 @@
 #pragma once
 
+// !!!!!! HUGE TODO !!!!!!!!!!!
+// Investigate locks and concurrency in the allocator
+
+
+
+
 /** Kernel's virtual memory allocator
  * 
  * virtmem is a virtual memory allocator for the kernel. It is inspired by vmem algorithm created by Bonwick and Adams

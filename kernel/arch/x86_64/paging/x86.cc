@@ -490,7 +490,6 @@ klib::shared_ptr<x86_4level_Page_Table> x86_4level_Page_Table::create_empty()
 {
     klib::shared_ptr<x86_4level_Page_Table> new_table = klib::unique_ptr<x86_4level_Page_Table>(new x86_4level_Page_Table());
 
-
     // Get a free page
     void* l = nullptr; 
     try {
@@ -733,7 +732,7 @@ klib::shared_ptr<Page_Table> x86_4level_Page_Table::create_clone()
 
     if (new_table->mem_objects.size() != 0)
         // Somebody has messed with the page table while it was being created
-        // I don't know if its the best solution to not block the tables immediately
+        // I don't know if it's the best solution to not block the tables immediately
         // but I believe it's better to block them for shorter time and abort the operation
         // when someone tries to mess with the paging, which would either be very poor
         // coding or a bug anyways

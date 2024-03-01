@@ -4,6 +4,7 @@
 #include "../memory/paging.hh"
 #include "../memory/virtmem.hh"
 #include <kern_logger/kern_logger.hh>
+#include <paging/arch_paging.hh>
 
 extern "C" void limine_main();
 extern "C" void _limine_entry();
@@ -212,6 +213,8 @@ extern void * _gcc_except_table_end;
 
 const u64 kernel_space_start = (u64)(-1) >> 47 << 47;
 
+ptable_top_ptr_t kernel_ptable_top = 0;
+
 void construct_paging() {
     serial_logger.printf("Initializing paging...\n");
 
@@ -222,7 +225,7 @@ void construct_paging() {
     // While we're here, initialize virtmem
     virtmem_init(kernel_space_start, kernel_start_virt - kernel_space_start);
 
-    ptable_top_ptr_t kernel_ptable_top = (u64)kernel_pframe_allocator.alloc_page();
+    kernel_ptable_top = (u64)kernel_pframe_allocator.alloc_page();
     clear_page(kernel_ptable_top);
 
     // Init temp mapper with direct map, while it is still available
@@ -348,7 +351,10 @@ void construct_paging() {
     kernel_pframe_allocator.init((u64 *)bitmap_virt, bitmap_size_pages*0x1000/8);
 }
 
+klib::shared_ptr<Arch_Page_Table> idle_page_table = nullptr;
+
 void init(void);
+void init_scheduling();
 
 void limine_main() {
     if (LIMINE_BASE_REVISION_SUPPORTED == false) {
@@ -362,6 +368,11 @@ void limine_main() {
 
     // Call global (C++) constructors
     init();
+
+    // Init idle task page table
+    idle_page_table = Arch_Page_Table::capture_initial(kernel_ptable_top);
+
+    init_scheduling();
 
     while (1) ;
 }

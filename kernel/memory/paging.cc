@@ -19,7 +19,6 @@ Page_Table::~Page_Table()
         i.second->prepare_deletion();
 
     paging_regions.clear();
-    takeout_global_page_tables();
 
     for (const auto &p : mem_objects)
         p.first->atomic_unregister_pined(weak_from_this());
@@ -153,43 +152,10 @@ bool Page_Table::prepare_user_page(u64 virt_addr, unsigned access_type, const kl
     return available;
 }
 
-void Page_Table::takeout_global_page_tables()
-{
-    Auto_Lock_Scope local_lock(page_table_index_lock);
-    global_page_tables.erase_if_exists(this->id);
-}
-
-void Page_Table::insert_global_page_tables()
-{
-    Auto_Lock_Scope local_lock(page_table_index_lock);
-    global_page_tables.insert({id, weak_from_this()});
-}
-
-Page_Table::page_table_map Page_Table::global_page_tables;
-Spinlock Page_Table::page_table_index_lock;
-
 void Page_Table::unblock_tasks(u64 page)
 {
     for (const auto& it : owner_tasks)
         it.lock()->atomic_try_unblock_by_page(page);
-}
-
-klib::shared_ptr<Page_Table> Page_Table::get_page_table(u64 id)
-{
-    Auto_Lock_Scope scope_lock(page_table_index_lock);
-
-    return global_page_tables.get_copy_or_default(id).lock();
-}
-
-klib::shared_ptr<Page_Table> Page_Table::get_page_table_throw(u64 id)
-{
-    Auto_Lock_Scope scope_lock(page_table_index_lock);
-
-    try {
-        return global_page_tables.at(id).lock();
-    } catch (const std::out_of_range&) {
-        throw Kern_Exception(ERROR_OBJECT_DOESNT_EXIST, "requested page table doesn't exist");
-    }
 }
 
 void Page_Table::map(u64 page_addr, u64 virt_addr)

@@ -17,7 +17,7 @@ INCPARAM = $(foreach d, $(INCLUDEDIR), -I$(ROOTDIR)/$d)
 USERCFLAGS = -Wall -Wextra -O2 -pipe
 
 CPPFLAGS = $(INTERNALCFLAGS) $(USERCFLAGS) -MMD -MP $(INCPARAM)
-CXXFLAGS = -std=c++20
+CXXFLAGS = -std=c++23
 #CPPFLAGS = $(CFLAGS)
 ASMFLAGS = $(INCPARAM)
 LDFLAGS = $(INTERNALLDFLAGS)
@@ -60,8 +60,10 @@ OBJS = 	./objects/icxxabi.o ./objects/constructors.o ./utils.o ./misc.o \
 		\
 		./arch/riscv64/cpus/cpus_asm.o ./arch/riscv64/tasks/task_switch.o ./arch/riscv64/arch_specific.o \
 		./arch/riscv64/sbi/sbi.o \
+		./arch/riscv64/interrupts/interrupts.o \
 		./arch/riscv64/cpus/sched_helpers.o ./arch/riscv64/cpus/timer.o \
 		./arch/riscv64/start.o ./arch/riscv64/console.o ./arch/riscv64/spinlock.o ./arch/riscv64/spinlock_asm.o \
+		./arch/riscv64/scheduling.o ./arch/riscv64/isr.o \
 		./arch/riscv64/paging/riscv64_temp_mapper.o ./arch/riscv64/paging/riscv64_paging.o \
 		\
 		./libunwind/src/libunwind.o ./libunwind/src/Unwind-seh.o ./libunwind/src/Unwind-sjlj.o ./libunwind/src/UnwindLevel1.o \

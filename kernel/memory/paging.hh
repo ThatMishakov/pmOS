@@ -33,6 +33,7 @@ struct Mem_Object_Data {
     klib::set<Mem_Object_Reference *> regions;
 };
 
+
 /**
  * @brief Generic Page Table class
  * 
@@ -364,25 +365,7 @@ public:
      * @param region Memory region to be deleted
      */
     void unreference_object(const klib::shared_ptr<Mem_Object> &object, Mem_Object_Reference *region) noexcept;
-
-    /**
-     * @brief Creates a clone of this page table
-     * 
-     * This function creates a new page table, which is a 'clone' of this page table. The clone references the same memory objects
-     * and the same memory regions, with the memory layout being the same in such a way that two tasks using the clone would see
-     * the same memory layout and contents as if they were using the original page table. This function is a bit of an abstraction
-     * because the pages might not actually be copied immediately, but rather shared and then copied on write or something similar.
-     * 
-     * @return klib::shared_ptr<Page_Table> A clone of the page table
-     */
-    virtual klib::shared_ptr<Page_Table> create_clone() = 0;
 protected:
-    /// @brief Inserts this page table into the map of the page tables
-    void insert_global_page_tables();
-
-    /// @brief Takes out this page table from the map of the page tables
-    void takeout_global_page_tables();
-
     Page_Table() = default;
 
     /// @brief Checks if the pages exists and invalidates it, invalidating TLB entries if needed
@@ -401,12 +384,6 @@ protected:
     void unblock_tasks(u64 blocked_by_page);
     void unblock_tasks_rage(u64 blocked_by_page, u64 size_bytes);
 
-    using page_table_map = klib::splay_tree_map<u64, klib::weak_ptr<Page_Table>>;
-    /// @brief Map holding all the page tables. Currently using splay tree for the storage
-    /// @todo Consider AVL or Red-Black tree instead for better concurrency
-    static page_table_map global_page_tables;
-    static Spinlock page_table_index_lock;
-
     /// Gets the region for the page. Returns end() if no region exists
     pagind_regions_map::iterator get_region(u64 page);
 
@@ -416,6 +393,7 @@ protected:
     /// Storage for the pointers to the pinned memory objects
     klib::splay_tree_map<klib::shared_ptr<Mem_Object>, Mem_Object_Data> mem_objects;
 };
+
 
 // Arch-generic pointer to the physical address of the top-level page table
 using ptable_top_ptr_t = u64;

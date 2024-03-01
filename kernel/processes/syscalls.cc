@@ -112,7 +112,7 @@ void getpid(u64, u64, u64, u64, u64, u64)
 
 void syscall_create_process(u64, u64, u64, u64, u64, u64)
 {
-    syscall_ret_high(get_current_task()) = TaskDescriptor::create_process(3)->pid;
+    syscall_ret_high(get_current_task()) = TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel::User)->pid;
 }
 
 void syscall_start_process(u64 pid, u64 start, u64 arg1, u64 arg2, u64 arg3, u64)
@@ -338,7 +338,10 @@ void syscall_set_priority(u64 priority, u64, u64, u64, u64, u64)
 
 void syscall_get_lapic_id(u64, u64, u64, u64, u64, u64)
 {
-    syscall_ret_high(get_current_task()) = get_cpu_struct()->lapic_id;
+    // Not available on RISC-V
+    // TODO: This should be hart id
+    //syscall_ret_high(get_current_task()) = get_cpu_struct()->lapic_id;
+    throw Kern_Exception(ERROR_NOT_IMPLEMENTED, "syscall_get_lapic_id is not implemented");
 }
 
 void syscall_set_task_name(u64 pid, u64 /* const char* */ string, u64 length, u64, u64, u64)
@@ -660,7 +663,7 @@ void syscall_transfer_region(u64 to_page_table, u64 region, u64 dest, u64 flags,
 {
     const klib::shared_ptr<TaskDescriptor>& current = get_current_task();
     
-    klib::shared_ptr<Page_Table> pt = Page_Table::get_page_table_throw(to_page_table);
+    klib::shared_ptr<Arch_Page_Table> pt = Arch_Page_Table::get_page_table_throw(to_page_table);
 
     bool fixed = flags & 0x08;
 
@@ -681,20 +684,20 @@ void syscall_asign_page_table(u64 pid, u64 page_table, u64 flags, u64, u64, u64)
         break;
     case 2: // PAGE_TABLE_ASIGN
         {
-            klib::shared_ptr<Page_Table> t;
+            klib::shared_ptr<Arch_Page_Table> t;
             if (page_table == 0 or page_table == current->page_table->id)
                 t = current->page_table;
             else
-                t = Page_Table::get_page_table_throw(page_table);
+                t = Arch_Page_Table::get_page_table_throw(page_table);
 
-            dest->register_page_table(klib::forward<klib::shared_ptr<Page_Table>>(t));
+            dest->register_page_table(klib::forward<klib::shared_ptr<Arch_Page_Table>>(t));
             syscall_ret_high(current) = dest->page_table->id;
             break;
         }
     case 3: // PAGE_TABLE_CLONE
         {
-            klib::shared_ptr<Page_Table> t = current->page_table->create_clone();
-            dest->register_page_table(klib::forward<klib::shared_ptr<Page_Table>>(t));
+            klib::shared_ptr<Arch_Page_Table> t = current->page_table->create_clone();
+            dest->register_page_table(klib::forward<klib::shared_ptr<Arch_Page_Table>>(t));
             syscall_ret_high(current) = dest->page_table->id;
             break;
         }

@@ -6,27 +6,27 @@
 #include <exceptions.hh>
 
 
-klib::shared_ptr<TaskDescriptor> TaskDescriptor::create_process(u16 ring)
+klib::shared_ptr<TaskDescriptor> TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel level)
 {
     // Create the structure
     klib::shared_ptr<TaskDescriptor> n = TaskDescriptor::create();
     
+    #ifdef __x86_64__
     // Assign cs and ss
-    // X86 specific!!!!!
-    // switch (ring)
-    // {
-    // case 0:
-    //     n->regs.e.cs = R0_CODE_SEGMENT;
-    //     n->regs.e.ss = R0_DATA_SEGMENT;
-    //     break;
-    // case 3:
-    //     n->regs.e.cs = R3_CODE_SEGMENT;
-    //     n->regs.e.ss = R3_DATA_SEGMENT;
-    //     break;
-    // default:
-    //     throw(Kern_Exception(ERROR_NOT_SUPPORTED, "create_process with unsupported ring"));
-    //     break;
-    // }
+    switch (level)
+    {
+    case PrivilegeLevel::Kernel:
+        n->regs.e.cs = R0_CODE_SEGMENT;
+        n->regs.e.ss = R0_DATA_SEGMENT;
+        break;
+    case PrivilegeLevel::User:
+        n->regs.e.cs = R3_CODE_SEGMENT;
+        n->regs.e.ss = R3_DATA_SEGMENT;
+        break;
+    }
+    #elif defined(__riscv)
+    n->is_system = level == PrivilegeLevel::Kernel;
+    #endif
 
     // Assign a pid
     n->pid = assign_pid();
@@ -67,14 +67,13 @@ u64 TaskDescriptor::init_stack()
     return this->regs.stack_pointer();
 }
 
+extern klib::shared_ptr<Arch_Page_Table> idle_page_table;
+
 void init_idle()
 {
     try {
-        // TODO!!!
-        //static klib::shared_ptr<Page_Table> idle_page_table = x86_4level_Page_Table::create_empty();
-
-        klib::shared_ptr<TaskDescriptor> i = TaskDescriptor::create_process(0);
-        //i->register_page_table(idle_page_table);
+        klib::shared_ptr<TaskDescriptor> i = TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel::Kernel);
+        i->register_page_table(idle_page_table);
 
         Auto_Lock_Scope lock(i->sched_lock);
 
@@ -171,7 +170,7 @@ void TaskDescriptor::create_new_page_table()
     //page_table = table;
 }
 
-void TaskDescriptor::register_page_table(klib::shared_ptr<Page_Table> table)
+void TaskDescriptor::register_page_table(klib::shared_ptr<Arch_Page_Table> table)
 {
     Auto_Lock_Scope scope_lock(sched_lock);
 

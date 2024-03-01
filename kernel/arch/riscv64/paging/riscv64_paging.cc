@@ -221,3 +221,68 @@ void apply_page_table(ptable_top_ptr_t page_table)
     asm volatile("sfence.vma x0, x0" : : : "memory");
 }
 
+void RISCV64_Page_Table::takeout_global_page_tables()
+{
+    Auto_Lock_Scope local_lock(page_table_index_lock);
+    global_page_tables.erase_if_exists(this->id);
+}
+
+void RISCV64_Page_Table::insert_global_page_tables(klib::shared_ptr<RISCV64_Page_Table> table)
+{
+    Auto_Lock_Scope local_lock(page_table_index_lock);
+    global_page_tables.insert({table->id, table});
+}
+
+RISCV64_Page_Table::page_table_map RISCV64_Page_Table::global_page_tables;
+Spinlock RISCV64_Page_Table::page_table_index_lock;
+
+void RISCV64_Page_Table::atomic_active_sum(u64 i) noexcept
+{
+    __atomic_add_fetch(&active_counter, i, __ATOMIC_SEQ_CST);
+}
+
+void RISCV64_Page_Table::apply() noexcept
+{
+    apply_page_table(table_root);
+}
+
+klib::shared_ptr<RISCV64_Page_Table> RISCV64_Page_Table::get_page_table(u64 id) noexcept
+{
+    Auto_Lock_Scope scope_lock(page_table_index_lock);
+
+    return global_page_tables.get_copy_or_default(id).lock();
+}
+
+klib::shared_ptr<RISCV64_Page_Table> RISCV64_Page_Table::get_page_table_throw(u64 id)
+{
+    Auto_Lock_Scope scope_lock(page_table_index_lock);
+
+    try {
+        return global_page_tables.at(id).lock();
+    } catch (const std::out_of_range&) {
+        throw Kern_Exception(ERROR_OBJECT_DOESNT_EXIST, "requested page table doesn't exist");
+    }
+}
+
+klib::shared_ptr<RISCV64_Page_Table> RISCV64_Page_Table::create_clone() {
+    // Not implemented
+    throw Kern_Exception(ERROR_NOT_IMPLEMENTED, "Cloning RISC-V page tables is not yet implemented");
+}
+
+klib::shared_ptr<RISCV64_Page_Table> RISCV64_Page_Table::capture_initial(u64 root) {
+    klib::shared_ptr<RISCV64_Page_Table> new_table = klib::unique_ptr<RISCV64_Page_Table>(new RISCV64_Page_Table());
+
+    new_table->table_root = root;
+    insert_global_page_tables(new_table);
+
+    return new_table;
+}
+
+u64 RISCV64_Page_Table::user_addr_max() const noexcept
+{
+    // Of the page tables, user space gets 256 entries in the root level + other levels
+    // For example, in RV39, with 3 levels of paging, the following is the pointer breakdown:
+    // | all 0 | 0XXXXXXXX 256 entries (8 bits) | XXXXXXXXX 512 entries (9 bits) | XXXXXXXXX 512 entries (9 bits) | 4096 bytes in a page, 12 bits |
+    // 12 bits + levels * 9 bits - 1 bit (half of virtual memory is used by kernel)
+    return 1UL << (12 + (riscv64_paging_levels * 9) - 1);
+}

@@ -20,3 +20,4 @@ private:
     unsigned min_index   = 1;
     constexpr static unsigned size = 16;
 };
+

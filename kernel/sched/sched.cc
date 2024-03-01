@@ -81,15 +81,12 @@ void TaskDescriptor::atomic_block_by_page(u64 page, sched_queue *blocked_ptr)
 void TaskDescriptor::switch_to()
 {
     CPU_Info *c = get_cpu_struct();
-    // if (c->current_task->page_table != page_table) {
-    //     // TODO: There is no reason to not just store a pointer to x86_Page_Table (or other architecture-dependant tables) in TaskDescriptor
-    //     auto old_table = klib::dynamic_pointer_cast<x86_Page_Table>(c->current_task->page_table);
-    //     auto new_table = klib::dynamic_pointer_cast<x86_Page_Table>(page_table);
-
-    //     old_table->atomic_active_sum(-1);
-    //     new_table->atomic_active_sum(1);
-    //     setCR3(new_table->get_cr3());
-    // }
+    if (c->current_task->page_table != page_table) {
+        // TODO: There is no reason to not just store a pointer to x86_Page_Table (or other architecture-dependant tables) in TaskDescriptor
+        c->current_task->page_table->atomic_active_sum(-1);
+        page_table->atomic_active_sum(1);
+        page_table->apply();
+    }
 
     c->current_task->before_task_switch();
 
