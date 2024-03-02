@@ -3,6 +3,7 @@
 #include <memory/virtmem.hh>
 #include <paging/riscv64_paging.hh>
 #include <types.hh>
+#include <kern_logger/kern_logger.hh>
 
 extern klib::shared_ptr<Arch_Page_Table> idle_page_table;
 
@@ -24,6 +25,8 @@ void set_sscratch(u64 scratch) {
 }
 
 void init_scheduling() {
+    serial_logger.printf("Initializing scheduling\n");
+
     CPU_Info * i = new CPU_Info();
     i->kernel_stack_top = i->kernel_stack.get_stack_top();
 
@@ -40,5 +43,10 @@ void init_scheduling() {
 
     program_stvec();
 
+    serial_logger.printf("Initializing idle task\n");
 
+    init_idle();
+    i->current_task = i->idle_task;
+
+    serial_logger.printf("Scheduling initialized\n");
 }

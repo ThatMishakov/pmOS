@@ -109,22 +109,6 @@ void PFrameAllocator::init(u64 * bitmap, u64 size)
     this->bitmap_size = size;
 }
 
-// This makes no sense atm
-// void PFrameAllocator::init_after_paging()
-// {
-//     void* addr = unoccupied;
-//     unoccupied = (void*)((u64)unoccupied + this->bitmap_size_pages());
-//     u64 cr3 = getCR3();
-
-//     Page_Table_Argumments pta = {1, 0, 0, 1, 0};
-//     for (u64 i = 0; i < bitmap_size_pages(); i += 4096) {
-//         u64 phys = phys_addr_of((u64)bitmap + i).val;
-//         map(phys, (u64)addr + i, pta, cr3);
-//     }
-
-//     bitmap = (u64*)addr;
-// }
-
 u64 PFrameAllocator::bitmap_size_pages() const
 {
     return bitmap_size*sizeof(u64);

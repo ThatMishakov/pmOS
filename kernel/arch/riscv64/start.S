@@ -22,6 +22,5 @@ _limine_entry:
 
     call limine_main
 
-    # Halt the CPU if limine_main returns
-    wfi
-    j .
+    # Return to userspace
+    j return_from_kernel

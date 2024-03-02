@@ -4,6 +4,7 @@
 #include "idle.hh"
 #include <sched/defs.hh>
 #include <exceptions.hh>
+#include <kern_logger/kern_logger.hh>
 
 
 klib::shared_ptr<TaskDescriptor> TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel level)

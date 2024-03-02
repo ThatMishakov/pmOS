@@ -218,24 +218,24 @@ public:
      */
     virtual void map(Page_Descriptor page, u64 virt_addr, Page_Table_Argumments arg) = 0;
 
-    /// Return structure used with check_if_allocated_and_set_flag()
-    struct Check_Return_Str {
-        u8 prev_flags = 0;
-        bool allocated = 0;
-    };
+    // /// Return structure used with check_if_allocated_and_set_flag()
+    // struct Check_Return_Str {
+    //     u8 prev_flags = 0;
+    //     bool allocated = 0;
+    // };
 
-    /**
-     * @brief Checks if the page is allocated and if it is not, sets a flag
-     * 
-     * This function checks if the page is allocated. If it is, it signals that is it allocated and returns current flags. Otherwise, it sets the
-     * flag in the *flag* parameter and returns the old flag.
-     * 
-     * @param virt_addr Virtual address that is checked.
-     * @param flag Flag to be set in case the page is not allocated
-     * @param arg Arguments for the allocation of the new structures, in case multilevel pagins structures are in use
-     * @return Returns old flag value and whether the page is allocated.
-     */
-    virtual Check_Return_Str check_if_allocated_and_set_flag(u64 virt_addr, u8 flag, Page_Table_Argumments arg) = 0;
+    // /**
+    //  * @brief Checks if the page is allocated and if it is not, sets a flag
+    //  * 
+    //  * This function checks if the page is allocated. If it is, it signals that is it allocated and returns current flags. Otherwise, it sets the
+    //  * flag in the *flag* parameter and returns the old flag.
+    //  * 
+    //  * @param virt_addr Virtual address that is checked.
+    //  * @param flag Flag to be set in case the page is not allocated
+    //  * @param arg Arguments for the allocation of the new structures, in case multilevel pagins structures are in use
+    //  * @return Returns old flag value and whether the page is allocated.
+    //  */
+    // virtual Check_Return_Str check_if_allocated_and_set_flag(u64 virt_addr, u8 flag, Page_Table_Argumments arg) = 0;
 
     /// @brief Checks whether page is mapped
     ///
@@ -255,13 +255,6 @@ public:
     {
         return virt_addr >= user_addr_max();
     }
-
-    /// @brief  Returns physical address of the page
-    ///
-    /// @param virt Virtual address of the page
-    /// @returns Physical address of the page.
-    /// @throws ERROR_PAGE_NOT_ALLOCATED if the page is not allocated.
-    virtual u64 phys_addr_of(u64 virt) const = 0;
 
     /// @brief Returns the limit of the physical address that is supported by the given paging scheme
     /// @return maximum value (first not supported) that can be a valid physical address
@@ -387,9 +380,6 @@ protected:
     /// Gets the region for the page. Returns end() if no region exists
     pagind_regions_map::iterator get_region(u64 page);
 
-    /// Gets a PPN from its virtual address
-    virtual u64 get_page_frame(u64 virt_addr) = 0;
-
     /// Storage for the pointers to the pinned memory objects
     klib::splay_tree_map<klib::shared_ptr<Mem_Object>, Mem_Object_Data> mem_objects;
 };
@@ -399,14 +389,14 @@ protected:
 using ptable_top_ptr_t = u64;
 
 // Generic function to map a page
-kresult_t map_page(ptable_top_ptr_t page_table, u64 phys_addr, u64 virt_addr, Page_Table_Argumments arg);
+void map_page(ptable_top_ptr_t page_table, u64 phys_addr, u64 virt_addr, Page_Table_Argumments arg);
 
 // Generic functions to map and release pages in kernel, using the active page table
-kresult_t map_kernel_page(u64 phys_addr, void * virt_addr, Page_Table_Argumments arg);
-kresult_t unmap_kernel_page(void * virt_addr);
+void map_kernel_page(u64 phys_addr, void * virt_addr, Page_Table_Argumments arg);
+void unmap_kernel_page(void * virt_addr);
 
 // Generic function to map multiple pages
-kresult_t map_pages(ptable_top_ptr_t page_table, u64 phys_addr, u64 virt_addr, u64 size_bytes, Page_Table_Argumments arg);
+void map_pages(ptable_top_ptr_t page_table, u64 phys_addr, u64 virt_addr, u64 size_bytes, Page_Table_Argumments arg);
 
 // Generic function to apply the page table to the current CPU
 void apply_page_table(ptable_top_ptr_t page_table);

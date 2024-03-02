@@ -3,13 +3,15 @@
 #include <memory/mem.hh>
 #include <exceptions.hh>
 #include <kern_logger/kern_logger.hh>
+#include <assert.h>
+#include <processes/tasks.hh>
 
 void flush_page(void *virt) noexcept
 {
     asm volatile("sfence.vma %0, x0" : : "r"(virt) : "memory");
 }
 
-kresult_t riscv_map_page(u64 pt_top_phys, u64 phys_addr, void * virt_addr, Page_Table_Argumments arg) noexcept
+void riscv_map_page(u64 pt_top_phys, u64 phys_addr, void * virt_addr, Page_Table_Argumments arg)
 {
     Temp_Mapper_Obj<RISCV64_PTE> mapper(request_temp_mapper());
 
@@ -23,7 +25,7 @@ kresult_t riscv_map_page(u64 pt_top_phys, u64 phys_addr, void * virt_addr, Page_
             // Leaf page table
 
             if (entry->valid) {
-                return ERROR_PAGE_PRESENT;
+                throw Kern_Exception(ERROR_PAGE_PRESENT, "Page already present");
             }
 
             RISCV64_PTE new_entry = RISCV64_PTE();
@@ -37,20 +39,13 @@ kresult_t riscv_map_page(u64 pt_top_phys, u64 phys_addr, void * virt_addr, Page_
             new_entry.ppn = phys_addr >> 12;
 
             active_pt[index] = new_entry;
-            return SUCCESS;
+            return;
         } else {
             // Non-leaf page table
             u64 next_level_phys;
             if (not entry->valid) {
                 // Allocate a new page table
-                u64 new_pt_phys;
-
-                // TODO: Contemplate about removing exceptions :)
-                try {
-                    new_pt_phys = kernel_pframe_allocator.alloc_page_ppn();
-                } catch (Kern_Exception &e) {
-                    return e.err_code;
-                }
+                u64 new_pt_phys = kernel_pframe_allocator.alloc_page_ppn();
 
                 RISCV64_PTE new_entry = RISCV64_PTE();
                 new_entry.valid = true;
@@ -60,7 +55,7 @@ kresult_t riscv_map_page(u64 pt_top_phys, u64 phys_addr, void * virt_addr, Page_
                 next_level_phys = new_pt_phys << 12;
                 clear_page(next_level_phys);
             } else if (entry->is_leaf()) {
-                return ERROR_HUGE_PAGE;
+                throw Kern_Exception(ERROR_HUGE_PAGE, "Huge page encountered");
             } else {
                 next_level_phys = entry->ppn << 12;
             }
@@ -70,10 +65,40 @@ kresult_t riscv_map_page(u64 pt_top_phys, u64 phys_addr, void * virt_addr, Page_
     }
 
     // 0 paging levels???
-    return ERROR_GENERAL;
+    assert(!"0 paging levels");
 }
 
-kresult_t riscv_unmap_page(u64 pt_top_phys, void * virt_addr) noexcept
+void RISCV64_Page_Table::map(u64 page_addr, u64 virt_addr, Page_Table_Argumments arg)
+{
+    riscv_map_page(table_root, page_addr, (void*)virt_addr, arg);
+}
+
+void RISCV64_Page_Table::map(Page_Descriptor page, u64 virt_addr, Page_Table_Argumments arg)
+{
+    u64 pte_phys = prepare_leaf_pt_for((void*)virt_addr, arg, table_root);
+
+    const int index = (virt_addr >> 12) & 0x1FF;
+
+    Temp_Mapper_Obj<RISCV64_PTE> mapper(request_temp_mapper());
+    RISCV64_PTE *active_pt = mapper.map(pte_phys);
+
+    auto &entry = active_pt[index];
+    if (entry.valid)
+        throw Kern_Exception(ERROR_PAGE_PRESENT, "Page already present");
+
+    RISCV64_PTE pte = RISCV64_PTE();
+    pte.valid = true;
+    pte.user = arg.user_access;
+    pte.writeable = arg.writeable;
+    pte.readable = arg.readable;
+    pte.executable = not arg.execution_disabled;
+    pte.available = page.owning ? 0 : PAGING_FLAG_NOFREE;
+    pte.ppn = page.takeout_page().first >> 12;
+
+    entry = pte;
+}
+
+void riscv_unmap_page(u64 pt_top_phys, void * virt_addr)
 {
     // TODO: Return values of this function make no sense...
 
@@ -88,8 +113,8 @@ kresult_t riscv_unmap_page(u64 pt_top_phys, void * virt_addr) noexcept
         if (i == 1) {
             // Leaf page table
 
-            if (entry->valid) {
-                return ERROR_PAGE_PRESENT;
+            if (not entry->valid) {
+                throw Kern_Exception(ERROR_PAGE_NOT_PRESENT, "Page not present");
             }
 
             RISCV64_PTE entry = active_pt[index];
@@ -100,14 +125,14 @@ kresult_t riscv_unmap_page(u64 pt_top_phys, void * virt_addr) noexcept
             entry = RISCV64_PTE();
             active_pt[index] = entry;
             flush_page(virt_addr);
-            return SUCCESS;
+            return;
         } else {
             // Non-leaf page table
             u64 next_level_phys;
             if (not entry->valid) {
-                return ERROR_PAGE_NOT_PRESENT;
+                throw Kern_Exception(ERROR_PAGE_NOT_PRESENT, "Page not present");
             } else if (entry->is_leaf()) {
-                return ERROR_HUGE_PAGE;
+                throw Kern_Exception(ERROR_HUGE_PAGE, "Huge page encountered");
             } else {
                 next_level_phys = entry->ppn << 12;
             }
@@ -116,33 +141,143 @@ kresult_t riscv_unmap_page(u64 pt_top_phys, void * virt_addr) noexcept
         }
     }
 
-    // 0 paging levels???
-    return ERROR_GENERAL;
+    assert(!"0 paging levels");
 }
 
-kresult_t map_page(ptable_top_ptr_t page_table, u64 phys_addr, u64 virt_addr, Page_Table_Argumments arg)
+void RISCV64_Page_Table::invalidate(u64 virt_addr, bool free) noexcept
 {
-    return riscv_map_page(page_table, phys_addr, (void*)virt_addr, arg);
+    bool invalidated = false;
+    Temp_Mapper_Obj<RISCV64_PTE> mapper(request_temp_mapper());
+
+    RISCV64_PTE *active_pt = mapper.map(table_root);
+    for (int i = riscv64_paging_levels; i > 0; --i) {
+        const u8 offset = 12 + (i-1)*9;
+        const u64 index = (virt_addr >> offset) & 0x1FF;
+
+        RISCV64_PTE *entry = &active_pt[index];
+        if (i == 1) {
+            // Leaf page table
+            if (entry->valid) {
+                if (free and not entry->is_special()) {
+                    // Free the page
+                    kernel_pframe_allocator.free_ppn(entry->ppn);
+                }
+                *entry = RISCV64_PTE();
+                invalidated = true;
+            }
+            break;
+        } else {
+            // Non-leaf page table
+            u64 next_level_phys;
+            if (not entry->valid) {
+                break;
+            } else if (entry->is_leaf()) {
+                assert(!"Unexpected huge page!");
+                break;
+            } else {
+                next_level_phys = entry->ppn << 12;
+            }
+
+            active_pt = mapper.map(next_level_phys);
+        }
+    }
+
+    if (invalidated)
+        flush_page((void*)virt_addr);
 }
 
-kresult_t map_pages(ptable_top_ptr_t page_table, u64 phys_addr, u64 virt_addr, u64 size, Page_Table_Argumments arg)
+bool RISCV64_Page_Table::is_mapped(u64 virt_addr) const noexcept
+{
+    Temp_Mapper_Obj<RISCV64_PTE> mapper(request_temp_mapper());
+
+    RISCV64_PTE *active_pt = mapper.map(table_root);
+    for (int i = riscv64_paging_levels; i > 0; --i) {
+        const u8 offset = 12 + (i-1)*9;
+        const u64 index = (virt_addr >> offset) & 0x1FF;
+
+        RISCV64_PTE *entry = &active_pt[index];
+        if (i == 1) {
+            // Leaf page table
+            return entry->valid;
+        } else {
+            // Non-leaf page table
+            u64 next_level_phys;
+            if (not entry->valid) {
+                return false;
+            } else if (entry->is_leaf()) {
+                assert(!"Unexpected huge page!");
+                return false;
+            } else {
+                next_level_phys = entry->ppn << 12;
+            }
+
+            active_pt = mapper.map(next_level_phys);
+        }
+    }
+
+    return false;
+}
+
+// TODO: This function had great possibilities, but now seems weird
+RISCV64_Page_Table::Page_Info RISCV64_Page_Table::get_page_mapping(u64 virt_addr) const
+{
+    Temp_Mapper_Obj<RISCV64_PTE> mapper(request_temp_mapper());
+
+    RISCV64_PTE *active_pt = mapper.map(table_root);
+    for (int i = riscv64_paging_levels; i > 0; --i) {
+        const u8 offset = 12 + (i-1)*9;
+        const u64 index = (virt_addr >> offset) & 0x1FF;
+
+        RISCV64_PTE *entry = &active_pt[index];
+        if (i == 1) {
+            // Leaf page table
+            if (entry->valid) {
+                Page_Info i{};
+                i.flags = entry->available;
+                i.is_allocated = entry->valid;
+                i.dirty = entry->dirty;
+                i.user_access = entry->user;
+                i.page_addr = entry->ppn << 12;
+                i.nofree = entry->available & PAGING_FLAG_NOFREE;
+                return i;
+            }
+            break;
+        } else {
+            // Non-leaf page table
+            u64 next_level_phys;
+            if (not entry->valid) {
+                break;
+            } else if (entry->is_leaf()) {
+                assert(!"Unexpected huge page!");
+                break;
+            } else {
+                next_level_phys = entry->ppn << 12;
+            }
+
+            active_pt = mapper.map(next_level_phys);
+        }
+    }
+    return Page_Info{};
+}
+
+void map_page(ptable_top_ptr_t page_table, u64 phys_addr, u64 virt_addr, Page_Table_Argumments arg)
+{
+    riscv_map_page(page_table, phys_addr, (void*)virt_addr, arg);
+}
+
+void map_pages(ptable_top_ptr_t page_table, u64 phys_addr, u64 virt_addr, u64 size, Page_Table_Argumments arg)
 {
     // Don't overcomplicate things for now, just call map
     // This is *very* inefficient
     for (u64 i = 0; i < size; i += 4096) {
-        kresult_t res = map_page(page_table, phys_addr + i, virt_addr + i, arg);
-        if (res != SUCCESS) {
-            return res;
-        }
+        map_page(page_table, phys_addr + i, virt_addr + i, arg);
     }
 
     // On failure, pages need to be unmapped here...
     // Leak memory for now :)
-
-    return SUCCESS;
 }
 
-u64 prepare_leaf_pt_for(void * virt_addr, Page_Table_Argumments /* unused */, u64 pt_ptr) noexcept
+u64 prepare_leaf_pt_for(void * virt_addr, Page_Table_Argumments /* unused */, u64 pt_ptr)
 {
     Temp_Mapper_Obj<RISCV64_PTE> mapper(request_temp_mapper());
 
@@ -156,14 +291,7 @@ u64 prepare_leaf_pt_for(void * virt_addr, Page_Table_Argumments /* unused */, u6
         u64 next_level_phys;
         if (not entry->valid) {
             // Allocate a new page table
-            u64 new_pt_phys;
-
-            // TODO: Contemplate about removing exceptions :)
-            try {
-                new_pt_phys = kernel_pframe_allocator.alloc_page_ppn();
-            } catch (Kern_Exception &e) {
-                return e.err_code;
-            }
+            u64 new_pt_phys = kernel_pframe_allocator.alloc_page_ppn();
 
             RISCV64_PTE new_entry = RISCV64_PTE();
             new_entry.valid = true;
@@ -173,7 +301,7 @@ u64 prepare_leaf_pt_for(void * virt_addr, Page_Table_Argumments /* unused */, u6
             next_level_phys = new_pt_phys << 12;
             clear_page(next_level_phys);
         } else if (entry->is_leaf()) {
-            return ERROR_HUGE_PAGE;
+            throw Kern_Exception(ERROR_HUGE_PAGE, "Huge page encountered");
         } else {
             next_level_phys = entry->ppn << 12;
         }
@@ -185,19 +313,20 @@ u64 prepare_leaf_pt_for(void * virt_addr, Page_Table_Argumments /* unused */, u6
     }
 
     // 0 paging levels???
-    return ERROR_GENERAL;
+    assert(!"0 paging levels");
+    return 0;
 }
 
-kresult_t map_kernel_page(u64 phys_addr, void * virt_addr, Page_Table_Argumments arg)
+void map_kernel_page(u64 phys_addr, void * virt_addr, Page_Table_Argumments arg)
 {
     const u64 pt_top = get_current_hart_pt();
-    return riscv_map_page(pt_top, phys_addr, virt_addr, arg);
+    riscv_map_page(pt_top, phys_addr, virt_addr, arg);
 }
 
-kresult_t unmap_kernel_page(void * virt_addr)
+void unmap_kernel_page(void * virt_addr)
 {
     const u64 pt_top = get_current_hart_pt();
-    return riscv_unmap_page(pt_top, virt_addr);
+    riscv_unmap_page(pt_top, virt_addr);
 }
 
 u64 get_current_hart_pt() noexcept
@@ -285,4 +414,60 @@ u64 RISCV64_Page_Table::user_addr_max() const noexcept
     // | all 0 | 0XXXXXXXX 256 entries (8 bits) | XXXXXXXXX 512 entries (9 bits) | XXXXXXXXX 512 entries (9 bits) | 4096 bytes in a page, 12 bits |
     // 12 bits + levels * 9 bits - 1 bit (half of virtual memory is used by kernel)
     return 1UL << (12 + (riscv64_paging_levels * 9) - 1);
+}
+
+void RISCV64_Page_Table::invalidate_range(u64 virt_addr, u64 size_bytes, bool free)
+{
+    // Slow but doesn't matter for now
+    u64 end = virt_addr + size_bytes;
+    for (u64 i = virt_addr; i < end; i += 4096)
+        invalidate(i, free);
+}
+
+RISCV64_Page_Table::~RISCV64_Page_Table()
+{
+    free_user_pages();
+    kernel_pframe_allocator.free((void*)table_root);
+}
+
+void free_pages_in_level(u64 pt_phys, u64 level)
+{
+    Temp_Mapper_Obj<RISCV64_PTE> mapper(request_temp_mapper());
+    RISCV64_PTE *active_pt = mapper.map(pt_phys);
+
+    for (u64 i = 0; i < 512; ++i) {
+        RISCV64_PTE *entry = &active_pt[i];
+        if (entry->valid) {
+            if (level > 1)
+                free_pages_in_level(entry->ppn << 12, level - 1);
+            else
+                assert(!entry->is_leaf());
+
+            entry->clear_auto();
+        }
+    }
+}
+
+
+void RISCV64_Page_Table::free_user_pages()
+{
+    Temp_Mapper_Obj<RISCV64_PTE> mapper(request_temp_mapper());
+    RISCV64_PTE *active_pt = mapper.map(table_root);
+
+    for (u64 i = 0; i < 256; ++i) {
+        RISCV64_PTE *entry = &active_pt[i];
+        if (entry->valid) {
+            assert(not entry->is_leaf());
+            free_pages_in_level(entry->ppn << 12, riscv64_paging_levels - 1);
+            kernel_pframe_allocator.free_ppn(entry->ppn);
+        }
+    }
+}
+
+void RISCV64_PTE::clear_auto()
+{
+    if (valid and not is_special())
+        kernel_pframe_allocator.free_ppn(ppn);
+
+    *this = RISCV64_PTE();
 }

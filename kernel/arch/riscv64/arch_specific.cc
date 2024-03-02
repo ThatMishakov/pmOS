@@ -1,4 +1,4 @@
 void halt() {
-    // Do nothing
+    asm volatile ("wfi");
 }
 

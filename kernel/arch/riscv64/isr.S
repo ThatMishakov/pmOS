@@ -87,6 +87,9 @@ isr:
 
 
 
+    .globl return_from_kernel
+return_from_kernel:
+
     # nested_level counter
     ld t1, 40(tp)
     addi t1, t1, -1
@@ -99,7 +102,7 @@ isr:
     # If the task is in user space, clear it, otherwise set it
     li t1, 0x100 # SPP bit mask
     csrc sstatus, t1
-    ld t2, 256(t0)
+    ld t2, 264(t0)
     beq t2, zero, 1f
     csrs sstatus, t1
 1:

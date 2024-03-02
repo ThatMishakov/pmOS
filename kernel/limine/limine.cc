@@ -303,9 +303,7 @@ void construct_paging() {
         .extra = 0,
     };
 
-    result = map_pages(kernel_ptable_top, text_phys, text_virt, text_size, args);
-    if (result != SUCCESS)
-        hcf();
+    map_pages(kernel_ptable_top, text_phys, text_virt, text_size, args);
 
     const u64 rodata_start = (u64)(&_rodata_start) & ~0xfff;
     const u64 rodata_end = ((u64)&_rodata_end + 0xfff) & ~0xfff;
@@ -314,7 +312,7 @@ void construct_paging() {
     const u64 rodata_phys = kernel_phys + rodata_offset;
     const u64 rodata_virt = kernel_start_virt + rodata_offset;
     args = {true, false, false, true, true, 0};
-    result = map_pages(kernel_ptable_top, rodata_phys, rodata_virt, rodata_size, args);
+    map_pages(kernel_ptable_top, rodata_phys, rodata_virt, rodata_size, args);
     if (result != SUCCESS)
         hcf();
 
@@ -326,9 +324,7 @@ void construct_paging() {
     const u64 data_phys = kernel_phys + data_offset;
     const u64 data_virt = kernel_start_virt + data_offset;
     args = {true, true, false, true, true, 0};
-    result = map_pages(kernel_ptable_top, data_phys, data_virt, data_size, args);
-    if (result != SUCCESS)
-        hcf();
+    map_pages(kernel_ptable_top, data_phys, data_virt, data_size, args);
 
     const u64 eh_frame_start = (u64)(&__eh_frame_start) & ~0xfff;
     // Same as with data; merge eh_frame and gcc_except_table
@@ -338,9 +334,7 @@ void construct_paging() {
     const u64 eh_frame_phys = kernel_phys + eh_frame_offset;
     const u64 eh_frame_virt = kernel_start_virt + eh_frame_offset;
     args = {true, false, false, true, true, 0};
-    result = map_pages(kernel_ptable_top, eh_frame_phys, eh_frame_virt, eh_frame_size, args);
-    if (result != SUCCESS)
-        hcf();
+    map_pages(kernel_ptable_top, eh_frame_phys, eh_frame_virt, eh_frame_size, args);
 
     serial_logger.printf("Switching to in-kernel page table...\n");
 
@@ -366,6 +360,8 @@ void limine_main() {
     init_memory();
     construct_paging();
 
+    serial_logger.printf("Calling global constructors...\n");
+
     // Call global (C++) constructors
     init();
 
@@ -374,5 +370,5 @@ void limine_main() {
 
     init_scheduling();
 
-    while (1) ;
+    // TODO: Initialize Task 1 and reschedule to it!
 }

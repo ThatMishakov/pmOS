@@ -2,6 +2,7 @@
 #include "virtmem.hh"
 #include "mem.hh"
 #include "paging.hh"
+#include <exceptions.hh>
 
 void* palloc(size_t number)
 {
@@ -30,21 +31,19 @@ void* palloc(size_t number)
             .execution_disabled = true,
             .extra = 0,
         };
-        kresult_t res = map_kernel_page((u64)page, virt_addr, arg);
-        if (res != SUCCESS) {
+        try {
+            map_kernel_page((u64)page, virt_addr, arg);
+        } catch (Kern_Exception &e) {
             kernel_pframe_allocator.free(page);
-            break;
+            
+            // Unmap and free the allocated pages
+            for (size_t j = 0; j < i; ++j) {
+                void * virt_addr = (void*)((u64)ptr + j*4096);
+                unmap_kernel_page(virt_addr);
+            }
+            virtmem_free(ptr, number);
+            throw e;
         }
-    }
-
-    if (i != number) {
-        // Unmap and free the allocated pages
-        for (size_t j = 0; j < i; ++j) {
-            void * virt_addr = (void*)((u64)ptr + j*4096);
-            unmap_kernel_page(virt_addr);
-        }
-        virtmem_free(ptr, number);
-        return nullptr;
     }
     
     return ptr;

@@ -48,6 +48,9 @@ struct RISCV64_PTE {
     {
         return available != 0;
     }
+
+    /// Clears the entry, freeing the memory if needed
+    void clear_auto();
 } __attribute__((packed, aligned(8)));
 
 // Active number of paging levels of the system, e.g. 4 for SV48.
@@ -61,16 +64,16 @@ inline u8 riscv64_paging_levels = 4;
 void flush_page(void * virt_addr) noexcept;
 
 // Prepares a leaf PT for a given virtual address. This function is used during temp mapper initialization.
-u64 prepare_leaf_pt_for(void * virt_addr, Page_Table_Argumments arg, u64 pt_ptr) noexcept;
+u64 prepare_leaf_pt_for(void * virt_addr, Page_Table_Argumments arg, u64 pt_ptr);
 
 // Maps a page to a given virtual address, using the available temporary maper.
 // riscv64_paging_levels is used to determine the number of levels of the page table
 // This function can allocate pages for leaf entries, if not already installed
-kresult_t riscv_map_page(u64 pt_top_phys, void * virt_addr, u64 phys_addr, Page_Table_Argumments arg) noexcept;
+void riscv_map_page(u64 pt_top_phys, void * virt_addr, u64 phys_addr, Page_Table_Argumments arg);
 
 // Unmaps the page from the given virtual address, using the available temporary maper.
 // If the page is not special, it's freed
-kresult_t riscv_unmap_page(u64 pt_top_phys, void * virt_addr) noexcept;
+void riscv_unmap_page(u64 pt_top_phys, void * virt_addr);
 
 // Gets the top level page table pointer for the current hart
 u64 get_current_hart_pt() noexcept;
@@ -123,12 +126,30 @@ public:
     /// @brief Maximum address that the user space is allowed to use
     /// @return u64 the number, addresses before which are allowed for user space
     virtual u64 user_addr_max() const noexcept override;
+
+    /// Invalidate (return) the page table entry for the given virtual address.
+    /// If free is set to true, the page is also returned to the page frame allocator 
+    /// @param virt_addr Virtual address of the page
+    /// @param free Whether the page needs to be freed
+    void invalidate(u64 virt_addr, bool free) noexcept override;
+
+    /// Checks if the page is mapped
+    bool is_mapped(u64 virt_addr) const noexcept override;
+
+    Page_Info get_page_mapping(u64 virt_addr) const override;
+
+    virtual void invalidate_range(u64 virt_addr, u64 size_bytes, bool free) override;
+
+    virtual void map(u64 page_addr, u64 virt_addr, Page_Table_Argumments arg) override;
+
+    virtual void map(Page_Descriptor page, u64 virt_addr, Page_Table_Argumments arg) override;
+
+    virtual ~RISCV64_Page_Table() override;
 protected:
     /// Root node/top level of paging structures
     u64 table_root = 0;
 
     RISCV64_Page_Table() = default;
-
 private:
     // There is an interesting pattern for this:
     // https://en.wikipedia.org/wiki/Curiously_recurring_template_pattern#Object_counter
@@ -148,4 +169,7 @@ private:
 
     /// Counter of how many Harts have this page table active
     u64 active_counter = 0;
+
+    /// Frees user space pages. Should be called when deleting the page table pointer
+    void free_user_pages();
 };
