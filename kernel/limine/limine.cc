@@ -100,11 +100,15 @@ Arch_Temp_Mapper temp_temp_mapper;
 u64 bitmap_phys = 0;
 u64 bitmap_size_pages = 0;
 
+u64 hhdm_offset = 0;
+
 void init_memory() {
     limine_memmap_response * resp = memory_request.response;
     if (resp == nullptr) {
         hcf();
     }
+
+    hhdm_offset = hhdm_request.response->offset;
 
     serial_logger.printf("Initializing memory bitmap\n");
 
@@ -363,6 +367,53 @@ void construct_paging() {
     kernel_pframe_allocator.init((u64 *)bitmap_virt, bitmap_size_pages*0x1000/8);
 }
 
+limine_module_request module_request = {
+    .id = LIMINE_MODULE_REQUEST,
+    .revision = 1,
+    .response = nullptr,
+    .internal_module_count = 0,
+    .internal_modules = nullptr,
+};
+
+struct module {
+    klib::string path;
+    klib::string cmdline;
+
+    u64 phys_addr;
+    u64 size;
+};
+
+klib::vector<module> modules;
+
+void init_modules()
+{
+    limine_module_response * resp = module_request.response;
+    if (resp == nullptr) 
+        return;
+
+    const u64 resp_phys = (u64)resp - hhdm_offset;
+    limine_module_response r;
+    copy_from_phys(resp_phys, &r, sizeof(r));
+
+    klib::vector<limine_file*> modules(r.module_count);
+    const u64 files_phys = (u64)r.modules - hhdm_offset;
+    copy_from_phys(files_phys, modules.data(), r.module_count * sizeof(limine_file*));
+
+    for (auto &mm : modules) {
+        limine_file f;
+        copy_from_phys((u64)mm - hhdm_offset, &f, sizeof(f));
+        module m = {
+            .path = capture_from_phys((u64)f.path - hhdm_offset),
+            .cmdline = capture_from_phys((u64)f.cmdline - hhdm_offset),
+            .phys_addr = (u64)f.address - hhdm_offset,
+            .size = f.size,
+        };
+
+        serial_logger.printf("Module: %s, cmdline: %s\n", m.path.c_str(), m.cmdline.c_str());
+        ::modules.push_back(m);
+    }
+}
+
 klib::shared_ptr<Arch_Page_Table> idle_page_table = nullptr;
 
 void init(void);
@@ -388,5 +439,6 @@ void limine_main() {
 
     init_scheduling();
 
+    init_modules();
     // TODO: Initialize Task 1 and reschedule to it!
 }

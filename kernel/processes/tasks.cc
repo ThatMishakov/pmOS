@@ -163,12 +163,11 @@ void TaskDescriptor::create_new_page_table()
     if (page_table)
         throw Kern_Exception(ERROR_HAS_PAGE_TABLE, "Process already has a page table");
 
-    // TODO!!!!
-    //klib::shared_ptr<Page_Table> table = x86_4level_Page_Table::create_empty();
+    klib::shared_ptr<Arch_Page_Table> table = Arch_Page_Table::create_empty();
 
-    //Auto_Lock_Scope page_table_lock(table->lock);
-    //table->owner_tasks.insert(weak_self);
-    //page_table = table;
+    Auto_Lock_Scope page_table_lock(table->lock);
+    table->owner_tasks.insert(weak_self);
+    page_table = table;
 }
 
 void TaskDescriptor::register_page_table(klib::shared_ptr<Arch_Page_Table> table)

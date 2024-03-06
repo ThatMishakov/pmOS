@@ -306,5 +306,16 @@ void vector<T>::clear()
     a_size = 0;
 }
 
+template<typename T>
+T* vector<T>::data()
+{
+    return ptr;
+}
+
+template<typename T>
+const T* vector<T>::data() const
+{
+    return ptr;
+}
 
 }

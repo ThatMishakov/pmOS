@@ -1,12 +1,14 @@
-#include <fs.h>
+#include "fs.h"
+#include "io.h"
 #include <stdlib.h>
 #include <string.h>
 #include <filesystem/errors.h>
 #include <filesystem/types.h>
 #include <pmos/system.h>
 #include <pmos/ports.h>
-#include <task_list.h>
 #include <assert.h>
+#include <alloca.h>
+#include "task_list.h"
 
 struct fs_data filesystem_data = {0};
 
@@ -896,61 +898,65 @@ int init_fs()
         return -1;
     }
 
-    // Parse modules and add them to the filesystem
-    struct task_list_node *p = modules_list;
-    while (p != NULL) {
-        const char * path = p->path;
-        if (path == NULL)
-            path = p->name;
+    // ------------------------------------------------------------------------
+    // TODO
+    // ------------------------------------------------------------------------
+    
+    // // Parse modules and add them to the filesystem
+    // struct task_list_node *p = modules_list;
+    // while (p != NULL) {
+    //     const char * path = p->path;
+    //     if (path == NULL)
+    //         path = p->name;
 
-        if (path == NULL) {
-            p = p->next;
-            continue;
-        }
+    //     if (path == NULL) {
+    //         p = p->next;
+    //         continue;
+    //     }
 
-        if (strchr(path, '/') != NULL) {
-            // Subdirectories are not supported
-            continue;
-        }
+    //     if (strchr(path, '/') != NULL) {
+    //         // Subdirectories are not supported
+    //         continue;
+    //     }
 
-        struct fs_entry *entry = malloc(sizeof(struct fs_entry));
-        if (entry == NULL) {
-            fs_data_clear(&filesystem_data);
-            return -1;
-        }
+    //     struct fs_entry *entry = malloc(sizeof(struct fs_entry));
+    //     if (entry == NULL) {
+    //         fs_data_clear(&filesystem_data);
+    //         return -1;
+    //     }
 
-        entry->type = FS_FILE_REGULAR;
+    //     entry->type = FS_FILE_REGULAR;
 
-        entry->name = path;
-        if (entry->name == NULL) {
-            destroy_fs_entry(entry);
-            fs_data_clear(&filesystem_data);
-            return -1;
-        }
-        entry->name_size = strlen(path);
+    //     entry->name = path;
+    //     if (entry->name == NULL) {
+    //         destroy_fs_entry(entry);
+    //         fs_data_clear(&filesystem_data);
+    //         return -1;
+    //     }
+    //     entry->name_size = strlen(path);
 
-        entry->file.file_size = p->mod_ptr->mod_end - p->mod_ptr->mod_start;
-        entry->file.data = p->file_virt_addr;
-        entry->file.task = p;
+    //     entry->file.file_size = p->mod_ptr->mod_end - p->mod_ptr->mod_start;
+    //     entry->file.data = p->file_virt_addr;
+    //     entry->file.task = p;
 
-        result = fs_data_push_entry(&filesystem_data, entry);
-        if (result != 0) {
-            destroy_fs_entry(entry);
-            fs_data_clear(&filesystem_data);
-            return -1;
-        }
+    //     result = fs_data_push_entry(&filesystem_data, entry);
+    //     if (result != 0) {
+    //         destroy_fs_entry(entry);
+    //         fs_data_clear(&filesystem_data);
+    //         return -1;
+    //     }
 
-        entry->id = filesystem_data.entries_size - 1;
+    //     entry->id = filesystem_data.entries_size - 1;
 
-        // Add the file to the root directory
-        result = fs_entry_add_child(root, entry);
-        if (result != 0) {
-            fs_data_clear(&filesystem_data);
-            return -1;
-        }
+    //     // Add the file to the root directory
+    //     result = fs_entry_add_child(root, entry);
+    //     if (result != 0) {
+    //         fs_data_clear(&filesystem_data);
+    //         return -1;
+    //     }
 
-        p = p->next;
-    }
+    //     p = p->next;
+    // }
 
     return 0;
 }

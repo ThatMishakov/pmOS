@@ -90,7 +90,26 @@ public:
         }
     }
     string (const char* s, size_t n);
-    string (size_t n, char c);
+    string (size_t n, char c)
+    {
+        if (n > small_size) {
+            long_string.ptr = new char[n+1];
+            s_capacity = n;
+            long_string.size = n;
+
+            for (size_t i = 0; i < n; ++i) {
+                long_string.ptr[i] = c;
+            }
+            long_string.ptr[n] = '\0';
+        } else {
+            s_capacity = n;
+            for (size_t i = 0; i < n; ++i) {
+                short_string[i] = c;
+            }
+            short_string[n] = '\0';
+        }
+
+    }
     // string (std::initializer_list<char> il);
 
     constexpr string(string&& str) noexcept: s_capacity(str.s_capacity), long_string(str.long_string)

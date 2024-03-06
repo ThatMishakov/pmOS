@@ -106,6 +106,16 @@ public:
      */
     klib::shared_ptr<RISCV64_Page_Table> create_clone();
 
+    /**
+     * @brief Creates an empty page table
+     * 
+     * This function creates a new empty page table. The correct kernel tables are inherited, and the userspace has empty
+     * address space with no mappings and memory regions.
+     * 
+     * @return klib::shared_ptr<RISCV64_Page_Table> A pointer to the new page table
+     */
+    static klib::shared_ptr<RISCV64_Page_Table> create_empty();
+
     /// @brief Atomically add to the active_counter
     ///
     /// This function should atomically add the given integer to the active_counter variable

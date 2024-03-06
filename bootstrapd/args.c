@@ -1,5 +1,5 @@
-#include <args.h>
-#include <utils.h>
+#include "args.h"
+#include <string.h>
 
 void push_arg(Args_List_Header* header, const char* param)
 {
@@ -18,7 +18,7 @@ void push_arg(Args_List_Header* header, const char* param)
         p = (args_list_node*)((uint64_t)p + (uint64_t)p->next);
     }
     p->size = strlen(param);
-    memcpy(param, (char*)((uint64_t)(p)+sizeof(args_list_node)), p->size);
+    memcpy((char*)((uint64_t)(p)+sizeof(args_list_node)), param, p->size);
     p->next = 0;
     ++header->size;
 }

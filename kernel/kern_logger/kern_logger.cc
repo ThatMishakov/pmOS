@@ -145,7 +145,7 @@ void Buffered_Logger::log_nolock(const char* c, size_t size)
     }
 }
 
-void Buffered_Logger::set_port(const klib::shared_ptr<Port>& port, uint32_t flags)
+void Buffered_Logger::set_port(const klib::shared_ptr<Port>& port, uint32_t /* flags */)
 {
     Auto_Lock_Scope scope_lock(logger_lock);
 
@@ -179,7 +179,7 @@ extern "C" void dbg_uart_putc(unsigned int c);
 
 void Serial_Logger::log_nolock(const char* c, size_t size)
 {
-    for (auto i = 0; i < size; ++i) {
+    for (size_t i = 0; i < size; ++i) {
         const char cc = c[i];
         if (cc == '\n')
             dbg_uart_putc('\r');

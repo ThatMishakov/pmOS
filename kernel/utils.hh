@@ -31,6 +31,9 @@ void copy_frame(u64 from, u64 to);
 
 void clear_page(u64 phys_addr);
 
+void copy_from_phys(u64 phys_addr, void* to, size_t size);
+klib::string capture_from_phys(u64 phys_addr);
+
 template<class A>
 const A& max(const A& a, const A& b) noexcept
 {

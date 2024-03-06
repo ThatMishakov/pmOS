@@ -350,7 +350,7 @@ void clear_page(u64 phys_addr)
     Temp_Mapper_Obj<u64> mapper(request_temp_mapper());
     mapper.map(phys_addr);
 
-    for (int i = 0; i < 4096/sizeof(u64); ++i)
+    for (size_t i = 0; i < 4096/sizeof(u64); ++i)
         mapper.ptr[i] = 0;
 }
 
@@ -533,4 +533,41 @@ extern "C" int strcmp(const char *str1, const char *str2)
     }
 
     return (int)*str1 - (int)*str2;
+}
+
+void copy_from_phys(u64 phys_addr, void* to, size_t size)
+{
+    Temp_Mapper_Obj<void> mapper(request_temp_mapper());
+    for (u64 i = phys_addr&~0xfffULL; i < phys_addr+size; i += 0x1000) {
+        mapper.map(i);
+        const u64 start = i < phys_addr ? phys_addr : i;
+        const u64 end = i+0x1000 < phys_addr+size ? i+0x1000 : phys_addr+size;
+        memcpy((char*)to + (start-phys_addr), (char*)mapper.ptr + (start-i), end-start);
+    }
+}
+
+size_t strlen_over_phys(u64 phys_addr)
+{
+    Temp_Mapper_Obj<char> mapper(request_temp_mapper());
+
+    size_t len = 0;
+    for (u64 i = phys_addr&~0xfffULL; ; i += 0x1000) {
+        mapper.map(i);
+        const u64 start = i < phys_addr ? phys_addr : i;
+        const u64 end = i+0x1000;
+        for (u64 j = start; j < end; ++j) {
+            if (mapper.ptr[j-i] == '\0')
+                return len;
+            ++len;
+        }
+    }
+}
+    
+
+klib::string capture_from_phys(u64 phys_addr)
+{
+    auto len = strlen_over_phys(phys_addr);
+    klib::string s(len, ' ');
+    copy_from_phys(phys_addr, const_cast<char *>(s.data()), len);
+    return s;
 }
