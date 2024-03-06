@@ -42,6 +42,18 @@ limine_hhdm_request hhdm_request = {
     .response = nullptr,
 };
 
+limine_paging_mode_request paging_request = {
+    .id = LIMINE_PAGING_MODE_REQUEST,
+    .revision = 0,
+    .response = nullptr,
+    #ifdef __riscv
+    .mode = LIMINE_PAGING_MODE_RISCV_SV57,
+    #else
+    .mode = LIMINE_PAGING_MODE_DEFAULT,
+    #endif
+    .flags = 0,
+};
+
 // Halt and catch fire function.
 static void hcf(void) {
     // asm ("cli");
@@ -211,19 +223,25 @@ extern void * __eh_frame_end;
 extern void * _gcc_except_table_start;
 extern void * _gcc_except_table_end;
 
-const u64 kernel_space_start = (u64)(-1) >> 47 << 47;
-
 ptable_top_ptr_t kernel_ptable_top = 0;
 
 void construct_paging() {
     serial_logger.printf("Initializing paging...\n");
+
+    auto r = paging_request.response;
+    riscv64_paging_levels = r->mode + 3;
+    serial_logger.printf("Using %i paging levels\n", riscv64_paging_levels);
 
     kresult_t result = SUCCESS;
 
     const u64 kernel_start_virt = (u64)&_kernel_start & ~0xfff;
 
     // While we're here, initialize virtmem
-    virtmem_init(kernel_space_start, kernel_start_virt - kernel_space_start);
+    // Give it the first page of the root paging level
+    const u64 heap_space_shift = 12 + (riscv64_paging_levels-1)*9;
+    const u64 heap_space_start = (-1UL) << (heap_space_shift + 8);
+    const u64 heap_addr_size = 1UL << heap_space_shift;
+    virtmem_init(heap_space_start, heap_addr_size);
 
     kernel_ptable_top = (u64)kernel_pframe_allocator.alloc_page();
     clear_page(kernel_ptable_top);
