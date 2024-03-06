@@ -1,6 +1,8 @@
 #include "virtmem.hh"
 #include <kernel/errors.h>
 #include <assert.h>
+#include "mem.hh"
+#include "paging.hh"
 
 void virtmem_fill_initial_tags() {
     for (u64 i = 0; i < virtmem_initial_segments; ++i) {
@@ -66,13 +68,82 @@ void virtmem_add_to_free_list(VirtmemBoundaryTag* tag) {
 }
 
 u64 virtmem_ensure_tags(u64 size) {
-    // TODO: Implement this function
-    // For now, just check if the tags are available and error otherwise
     if (virtmem_available_tags_count >= size)
         return SUCCESS;
 
-    // -- The algoritm for allocating new tags would go here --
-    return ERROR_OUT_OF_MEMORY;
+    // Allocate a page and slice it into boundary tags
+    // Find the smallest tag and take the first page out of it
+    if (virtmem_freelist_bitmap == 0)
+        // No free tags
+        return ERROR_OUT_OF_MEMORY;
+
+    int idx = __builtin_ffsl(virtmem_freelist_bitmap) - 1;
+    auto &list = virtmem_freelists[idx];
+    auto &tag = list.ll_next;
+
+    // Allocate a page and try and map it
+    const auto addr = tag->base;
+    u64 page_phys = -1UL;
+    try {
+        page_phys = (u64)kernel_pframe_allocator.alloc_page();
+
+        Page_Table_Argumments pta = {
+            .readable = true,
+            .writeable = true,
+            .user_access = false,
+            .global = false,
+            .execution_disabled = true,
+            .extra = 0,
+        };
+        map_kernel_page(page_phys, (void*)addr, pta);
+    } catch (...) {
+        if (page_phys != -1UL)
+            kernel_pframe_allocator.free((void*)page_phys);
+
+        return ERROR_OUT_OF_MEMORY;
+    }
+
+    // Slice the page into boundary tags
+    VirtmemBoundaryTag* new_tags = (VirtmemBoundaryTag*)addr;
+    for (size_t i = 0; i < 4096/sizeof(VirtmemBoundaryTag); ++i) {
+        virtmem_return_tag(&new_tags[i]);
+    }
+
+    // Add a new boundary tag
+    if (tag->size == 4096) {
+        // Boundary tag is an exact fit. Take it out of free and mark as used
+        virtmem_remove_from_list(tag);
+        if (list.ll_next == (VirtmemBoundaryTag*)&list)
+            // Mark the list as empty
+            virtmem_freelist_bitmap &= ~(1UL << idx);
+
+        tag->state = VirtmemBoundaryTag::State::ALLOCATED;
+        virtmem_save_to_alloc_hashtable(tag);
+    } else {
+        auto new_tag = virtmem_get_free_tag();
+        new_tag->base = tag->base;
+        new_tag->size = 4096;
+        new_tag->state = VirtmemBoundaryTag::State::ALLOCATED;
+
+        tag->base += 4096;
+        tag->size -= 4096;
+        virtmem_link_tag(tag->segment_prev, new_tag);
+        virtmem_save_to_alloc_hashtable(new_tag);
+
+        // If the old tag freelist index is different, move it
+        int new_idx = virtmem_freelist_index(tag->size);
+        if (new_idx != idx) {
+            virtmem_remove_from_list(tag);
+            if (list.ll_next == (VirtmemBoundaryTag*)&list)
+                // Mark the list as empty
+                virtmem_freelist_bitmap &= ~(1UL << idx);
+
+            virtmem_add_to_free_list(tag);
+        }
+    }
+
+    // Allocate more in case 1024 isn't enough
+    return virtmem_ensure_tags(size);
 }
 
 int virtmem_freelist_index(u64 size) {
