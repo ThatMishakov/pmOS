@@ -75,7 +75,7 @@ public:
 
     void clear();
 
-    void reserve();
+    void reserve(size_t);
 
     inline bool empty() const
     {

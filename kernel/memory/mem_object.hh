@@ -45,6 +45,20 @@ public:
     static klib::shared_ptr<Mem_Object> create(u64 page_size_log, u64 size_pages);
 
     /**
+     * @brief Creates a new memory object, taking ownership of the given physical memory region
+     * 
+     * This function creates a new memory object and takes ownership of the physical memory region. If take_ownership
+     * is true, the region takes the ownership of the pages, and they will be released to the page frame allocator
+     * upon the region deletion.
+     * 
+     * @param phys_addr Physical address of the start of the region
+     * @param size_bytes Size of the region in bytes
+     * @param take_ownership Whether the region should take the ownership of the pages
+     * @return klib::shared_ptr<Mem_Object> Newly created object
+     */
+    static klib::shared_ptr<Mem_Object> create_from_phys(u64 phys_addr, u64 size_bytes, bool take_ownership);
+
+    /**
      * @brief Gets the memory object by its id. If the object is not found, a null pointer is returned
      * 
      * @param id ID if the memory object to be searched for

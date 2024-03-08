@@ -5,6 +5,7 @@
 #include "../memory/virtmem.hh"
 #include <kern_logger/kern_logger.hh>
 #include <paging/arch_paging.hh>
+#include <memory/mem_object.hh>
 
 extern "C" void limine_main();
 extern "C" void _limine_entry();
@@ -381,6 +382,8 @@ struct module {
 
     u64 phys_addr;
     u64 size;
+
+    klib::shared_ptr<Mem_Object> object;
 };
 
 klib::vector<module> modules;
@@ -407,6 +410,7 @@ void init_modules()
             .cmdline = capture_from_phys((u64)f.cmdline - hhdm_offset),
             .phys_addr = (u64)f.address - hhdm_offset,
             .size = f.size,
+            .object = Mem_Object::create_from_phys((u64)f.address - hhdm_offset, (f.size+0xfff)&~0xfffUL, true),
         };
 
         serial_logger.printf("Module: %s, cmdline: %s\n", m.path.c_str(), m.cmdline.c_str());

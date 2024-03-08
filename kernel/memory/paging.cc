@@ -73,6 +73,22 @@ u64 Page_Table::atomic_create_phys_region(u64 page_aligned_start, u64 page_align
     return start_addr;
 }
 
+u64 Page_Table::atomic_create_mem_object_region(u64 page_aligned_start, u64 page_aligned_size, unsigned access, bool fixed, klib::string name, klib::shared_ptr<Mem_Object> object,
+        bool cow, u64 start_offset_bytes, u64 object_offset_bytes, u64 object_size_bytes)
+{
+    Auto_Lock_Scope scope_lock(lock);
+
+    u64 start_addr = find_region_spot(page_aligned_start, page_aligned_size, fixed);
+
+    klib::shared_ptr<Generic_Mem_Region> region = klib::make_shared<Mem_Object_Reference>(
+        start_addr, page_aligned_size, klib::forward<klib::string>(name), this, access, klib::forward<klib::shared_ptr<Mem_Object>>(object), object_offset_bytes, cow, start_offset_bytes, object_size_bytes
+    );
+
+    paging_regions.insert({start_addr, region});
+
+    return start_addr;
+}
+
 Page_Table::pagind_regions_map::iterator Page_Table::get_region(u64 page)
 {
     auto it = paging_regions.get_smaller_or_equal(page);

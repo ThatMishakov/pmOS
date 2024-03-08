@@ -241,16 +241,20 @@ struct Mem_Object_Reference final : Generic_Mem_Region
     /// Memory object that is referenced by the region
     const klib::shared_ptr<Mem_Object> references;
 
-    /// Offset in bytes from the start of the memory object
+    /// Offset in bytes, from the start of the memory region to the start of the memory object. Before this offset, the pages are zeroed
     u64 start_offset_bytes = 0;
+
+    /// Offset in bytes from the start of the memory object
+    u64 object_offset_bytes = 0;
+
+    /// Size in bytes copied from the object. After this size, the pages are zeroed
+    u64 object_size_bytes = 0;
 
     /// Indicates whether the pages should be copied on access
     bool cow = false;
 
-    Mem_Object_Reference(u64 start_addr, u64 size, klib::string name, Page_Table *owner, u8 access, klib::shared_ptr<Mem_Object> references, u64 start_offset_bytes, bool copy_on_write):
-        Generic_Mem_Region(start_addr, size, klib::forward<klib::string>(name), owner, access), 
-        references(klib::forward<klib::shared_ptr<Mem_Object>>(references)), start_offset_bytes(start_offset_bytes), cow(copy_on_write)
-        {};
+    Mem_Object_Reference(u64 start_addr, u64 size, klib::string name, Page_Table *owner, u8 access,
+                         klib::shared_ptr<Mem_Object> references, u64 object_offset_bytes, bool copy_on_write, u64 start_offset_bytes, u64 object_size_bytes);
 
     virtual bool alloc_page(u64 ptr_addr) override;
 

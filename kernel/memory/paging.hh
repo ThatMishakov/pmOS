@@ -148,6 +148,29 @@ public:
     u64 /* page_start */ atomic_create_phys_region(u64 page_aligned_start, u64 page_aligned_size, unsigned access, bool fixed, klib::string name, u64 phys_addr_start);
 
     /**
+     * @brief Creates a memory region referencing the memory object
+     * 
+     * This function creates a memory region, which would lazilly use pages from the memory object. Depending on CoW parameter, the pages are either copied on access, or
+     * referenced, allowing several processes to access shared memory. The memory object is pinned to the page table, so it cannot be deleted until the page table is
+     * destroyed.
+     * 
+     * @param page_aligned_start A page-aligned hint indicating where to place the new region. This hint is passed to find_region_spot() function, so see
+     *                          its behaviour to know how this is honoured.
+     * @param page_aligned_size A page-aligned size of the new region.
+     * @param access A combination of bits from Protection enum, indicating the region memory protection
+     * @param fixed If the page_aligned_start should always be honoured. See find_region_spot().
+     * @param name The name of the new region.
+     * @param object Memory object to be referenced by the new region.
+     * @param cow If the memory should be copied on write or not.
+     * @param start_offset_bytes Offset in bytes, after which the memory object is to be accessed. Must be 0 for non-CoW regions
+     * @param object_offset_bytes Offset in bytes of memory object to start_offset mapping. Must be page-aligned for non-CoW regions
+     * @param object_size_bytes Size of the memory object, after which the memory will be nulled. On non-CoW regions, it must be equal to page_aligned_size.
+     * @return The start virtual address of the new memory region.
+     * @see find_region_spot()
+     */
+    u64 /* page_start */ atomic_create_mem_object_region(u64 page_aligned_start, u64 page_aligned_size, unsigned access, bool fixed, klib::string name, klib::shared_ptr<Mem_Object> object, bool cow, u64 start_offset_bytes, u64 object_offset_bytes, u64 object_size_bytes);
+
+    /**
      * @brief Prepares user page for being accessed by the kernel.
      * 
      * This function prepares the user page to be accessed by the kernel in the mannes specified by access_type. This function might block the task, in which

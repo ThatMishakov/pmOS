@@ -28,6 +28,34 @@ klib::shared_ptr<Mem_Object> Mem_Object::create(u64 page_size_log, u64 size_page
     return ptr;
 }
 
+klib::shared_ptr<Mem_Object> Mem_Object::create_from_phys(u64 phys_addr, u64 size_bytes, bool take_ownership)
+{
+    const u64 size_alligned = (size_bytes + 0xFFF) & ~0xFFFUL;
+    const u64 pages_count = size_alligned >> 12;
+    const u64 fisrt_ppn = phys_addr >> 12;
+    
+    // Create new object
+    klib::shared_ptr<Mem_Object> ptr(new Mem_Object(12, pages_count));
+
+    // Lock the object so nobody overwrites it while the pages are inserted
+    Auto_Lock_Scope l(ptr->lock);
+
+    // Atomically insert into the object storage
+    atomic_push_global_storage(ptr);
+
+    // Provide the pages
+    // This can't fail
+    for (u64 i = 0; i < pages_count; ++i)
+        ptr->pages[i] = {
+            .present = true,
+            .dont_delete = !take_ownership,
+            .requested = false,
+            .ppn = fisrt_ppn + i
+        };
+
+    return ptr;
+}
+
 Mem_Object::id_type Mem_Object::get_id() const noexcept
 {
     return id;

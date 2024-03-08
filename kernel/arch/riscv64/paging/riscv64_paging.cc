@@ -471,3 +471,34 @@ void RISCV64_PTE::clear_auto()
 
     *this = RISCV64_PTE();
 }
+
+klib::shared_ptr<RISCV64_Page_Table> RISCV64_Page_Table::create_empty()
+{
+    klib::shared_ptr<RISCV64_Page_Table> new_table = klib::unique_ptr<RISCV64_Page_Table>(new RISCV64_Page_Table());
+
+    new_table->table_root = kernel_pframe_allocator.alloc_page_ppn() << 12;
+    clear_page(new_table->table_root);
+
+    Temp_Mapper_Obj<RISCV64_PTE> new_pt_mapper(request_temp_mapper());
+    Temp_Mapper_Obj<RISCV64_PTE> current_pt_mapper(request_temp_mapper());
+
+    RISCV64_PTE *new_pt = new_pt_mapper.map(new_table->table_root);
+    RISCV64_PTE *current_pt = current_pt_mapper.map(get_current_hart_pt());
+
+    // Copy heap entry and kernel entries
+    // Heap
+    new_pt[256] = current_pt[256];
+
+    // Kernel code
+    new_pt[510] = current_pt[510];
+    new_pt[511] = current_pt[511];
+
+    try {
+        new_table->insert_global_page_tables(new_table);
+    } catch (...) {
+        kernel_pframe_allocator.free_ppn(new_table->table_root >> 12);
+        throw;
+    }
+
+    return new_table;
+}
