@@ -345,13 +345,13 @@ extern "C" void *memset(void *str, int c, size_t n)
     return str;
 }
 
-void clear_page(u64 phys_addr)
+void clear_page(u64 phys_addr, u64 pattern)
 {
     Temp_Mapper_Obj<u64> mapper(request_temp_mapper());
     mapper.map(phys_addr);
 
     for (size_t i = 0; i < 4096/sizeof(u64); ++i)
-        mapper.ptr[i] = 0;
+        mapper.ptr[i] = pattern;
 }
 
 int fflush(FILE *stream)

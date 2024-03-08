@@ -502,3 +502,8 @@ klib::shared_ptr<RISCV64_Page_Table> RISCV64_Page_Table::create_empty()
 
     return new_table;
 }
+
+void RISCV64_Page_Table::invalidate_tlb(u64 page)
+{
+    flush_page((void*)page);
+}

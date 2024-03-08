@@ -84,17 +84,30 @@ struct Generic_Mem_Region: public klib::enable_shared_from_this<Generic_Mem_Regi
      */
     bool prepare_page(u64 access_mode, u64 page_addr);
 
+    // /**
+    //  * @brief Function to be executed upon a page fault.
+    //  * 
+    //  * @param error Pagefault error (passed with the exception)
+    //  * @param pagefault_addr Address of the pagefault
+    //  * @param task Task causing the pagefault
+    //  * @return true Execution was successfull and the page is immediately available
+    //  * @return false Execution was successfull but the page is not immediately available
+    //  * @todo This function is very x86-specific
+    //  */
+    // bool on_page_fault(u64 error, u64 pagefault_addr);
+
     /**
      * @brief Function to be executed upon a page fault.
      * 
-     * @param error Pagefault error (passed with the exception)
-     * @param pagefault_addr Address of the pagefault
-     * @param task Task causing the pagefault
+     * This is a generic function, to be executed on page fault. It checks the access permissions
+     * and installs the page as needed.
+     * @param access_mode Access mode (OR of Readable, Writeable, Executable)
+     * @param fault_addr Address of the pagefault
      * @return true Execution was successfull and the page is immediately available
      * @return false Execution was successfull but the page is not immediately available
-     * @todo This function is very x86-specific
+     * @throw Kern_Exception If the access mode is not allowed
      */
-    bool on_page_fault(u64 error, u64 pagefault_addr);
+    bool on_page_fault(u64 access_mode, u64 fault_addr);
 
 
     Generic_Mem_Region(u64 start_addr, u64 size, klib::string name, Page_Table *owner, u8 access):

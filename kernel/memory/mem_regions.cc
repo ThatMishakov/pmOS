@@ -8,19 +8,18 @@
 #include "mem_object.hh"
 #include "temp_mapper.hh"
 
+#include <kern_logger/kern_logger.hh>
 u64 counter = 1;
 
-bool Generic_Mem_Region::on_page_fault(u64 error, u64 pagefault_addr)
+bool Generic_Mem_Region::on_page_fault(u64 access_type, u64 pagefault_addr)
 {
-    if (protection_violation(error))
-        throw(Kern_Exception(ERROR_PROTECTION_VIOLATION, "violation of protection policy"));
-
-    if (not has_permissions(error))
-        throw(Kern_Exception(ERROR_PROTECTION_VIOLATION, "task has no permission to do the operation"));
+    if (not has_access(access_type))
+        throw Kern_Exception(ERROR_PROTECTION_VIOLATION, "task has no permission to do the operation");
 
     if (owner->is_mapped(pagefault_addr)) {
-        // Some CPUs supposedly remember invalid pages. INVALPG might be needed here...
-
+        // Some CPUs supposedly remember invalid pages.
+        // RISC-V spec in particular says that unallocated pages can be cached
+        owner->invalidate_tlb(pagefault_addr);
         return true;
     }
 
@@ -41,6 +40,7 @@ bool Generic_Mem_Region::prepare_page(u64 access_mode, u64 page_addr)
 Page_Table_Argumments Private_Normal_Region::craft_arguments() const
 {
     return {
+        !!(access_type & Readable),
         !!(access_type & Writeable),
         true,
         false,
@@ -52,6 +52,7 @@ Page_Table_Argumments Private_Normal_Region::craft_arguments() const
 bool Private_Normal_Region::alloc_page(u64 ptr_addr)
 {
     void* new_page = kernel_pframe_allocator.alloc_page();
+    clear_page((u64)new_page, pattern);
 
     Page_Table_Argumments args = craft_arguments();
 
@@ -59,11 +60,6 @@ bool Private_Normal_Region::alloc_page(u64 ptr_addr)
 
     try {
         owner->map((u64)new_page, page_addr, args);
-
-        // TODO: This *will* explode if the page is read-only
-        for (size_t i = 0; i < 4096/sizeof(u64); ++i) {
-            ((u64 *)page_addr)[i] = pattern;
-        }
 
         return true;
     } catch (...) {

@@ -155,6 +155,9 @@ public:
     virtual void map(Page_Descriptor page, u64 virt_addr, Page_Table_Argumments arg) override;
 
     virtual ~RISCV64_Page_Table() override;
+
+    // Clears the TLB cache for the given page
+    void invalidate_tlb(u64 page) override;
 protected:
     /// Root node/top level of paging structures
     u64 table_root = 0;

@@ -381,6 +381,13 @@ public:
      * @param region Memory region to be deleted
      */
     void unreference_object(const klib::shared_ptr<Mem_Object> &object, Mem_Object_Reference *region) noexcept;
+
+    /**
+     * @brief Invalidates the TLB entries for the given page in the given page table
+     * 
+     * @param page Page to be invalidated
+    */
+    virtual void invalidate_tlb(u64 page) = 0;
 protected:
     Page_Table() = default;
 
