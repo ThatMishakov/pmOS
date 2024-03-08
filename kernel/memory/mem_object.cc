@@ -5,6 +5,7 @@
 #include "mem.hh"
 #include <exceptions.hh>
 #include "paging.hh"
+#include "temp_mapper.hh"
 
 Mem_Object::Mem_Object(u64 page_size_log, u64 size_pages):
         page_size_log(page_size_log), pages(size_pages), pages_size(size_pages) {};
@@ -31,8 +32,8 @@ klib::shared_ptr<Mem_Object> Mem_Object::create(u64 page_size_log, u64 size_page
 klib::shared_ptr<Mem_Object> Mem_Object::create_from_phys(u64 phys_addr, u64 size_bytes, bool take_ownership)
 {
     const u64 size_alligned = (size_bytes + 0xFFF) & ~0xFFFUL;
+    const u64 start_alligned = phys_addr & ~0xFFFUL;
     const u64 pages_count = size_alligned >> 12;
-    const u64 fisrt_ppn = phys_addr >> 12;
     
     // Create new object
     klib::shared_ptr<Mem_Object> ptr(new Mem_Object(12, pages_count));
@@ -50,7 +51,10 @@ klib::shared_ptr<Mem_Object> Mem_Object::create_from_phys(u64 phys_addr, u64 siz
             .present = true,
             .dont_delete = !take_ownership,
             .requested = false,
-            .ppn = fisrt_ppn + i
+            // Shift right by 10 because of x86 reasons...
+            // No further explanation will be given :)
+            // (In retrospect, I think this is somewhat stupid and needs to be changed, but whatever for now...)
+            .ppn = (start_alligned + (i << 12)) >> 10,
         };
 
     return ptr;
@@ -99,12 +103,16 @@ void Mem_Object::unregister_pined(const klib::weak_ptr<Page_Table> &pined_by) no
     this->pined_by.erase(pined_by);
 }
 
-
 Page_Descriptor Mem_Object::atomic_request_page(u64 offset)
 {
-    const auto index = offset >> page_size_log;
-
     Auto_Lock_Scope l(lock);
+    return request_page(offset);
+}
+
+
+Page_Descriptor Mem_Object::request_page(u64 offset)
+{
+    const auto index = offset >> page_size_log;
         
     if (pages_size <= index)
         throw Kern_Exception(ERROR_OUT_OF_RANGE, "Trying to access to memory out of the Page Descriptor's range");
@@ -214,4 +222,28 @@ void Mem_Object::try_free_page(Page_Storage &p, u8 page_size_log) noexcept
         kernel_pframe_allocator.free(reinterpret_cast<void*>(p.get_page()));
         p = Page_Storage();
     }
+}
+
+bool Mem_Object::read_to_kernel(u64 offset, void *buffer, u64 size)
+{
+    if (size == 0)
+        return true;
+
+    Auto_Lock_Scope l(lock);
+
+    Temp_Mapper_Obj<char> mapper(request_temp_mapper());
+    for (u64 i = offset&~0xfffUL; i < offset+size; i += 0x1000) {
+        const auto page = request_page(i);
+        if (not page.available)
+            return false;
+
+        char * ptr = mapper.map(page.page_ptr);
+
+        const u64 start = i < offset ? offset : i;
+        const u64 end = i + 0x1000 < offset + size ? i + 0x1000 : offset + size;
+        const u64 len = end - start;
+        memcpy(reinterpret_cast<char*>(buffer) + start - offset, ptr + (start & 0xfff), len);
+    }
+
+    return true;
 }

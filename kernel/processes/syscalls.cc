@@ -690,14 +690,14 @@ void syscall_asign_page_table(u64 pid, u64 page_table, u64 flags, u64, u64, u64)
             else
                 t = Arch_Page_Table::get_page_table_throw(page_table);
 
-            dest->register_page_table(klib::forward<klib::shared_ptr<Arch_Page_Table>>(t));
+            dest->atomic_register_page_table(klib::forward<klib::shared_ptr<Arch_Page_Table>>(t));
             syscall_ret_high(current) = dest->page_table->id;
             break;
         }
     case 3: // PAGE_TABLE_CLONE
         {
             klib::shared_ptr<Arch_Page_Table> t = current->page_table->create_clone();
-            dest->register_page_table(klib::forward<klib::shared_ptr<Arch_Page_Table>>(t));
+            dest->atomic_register_page_table(klib::forward<klib::shared_ptr<Arch_Page_Table>>(t));
             syscall_ret_high(current) = dest->page_table->id;
             break;
         }

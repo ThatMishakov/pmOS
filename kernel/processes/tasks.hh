@@ -33,6 +33,7 @@ struct Task_Attributes {
 
 class sched_queue;
 class TaskGroup;
+class Mem_Object;
 
 class TaskDescriptor {
 public:
@@ -79,6 +80,7 @@ public:
 
     // Registers a page table within a process, if it doesn't have any
     void register_page_table(klib::shared_ptr<Arch_Page_Table>);
+    void atomic_register_page_table(klib::shared_ptr<Arch_Page_Table>);
 
     // Inits stack
     u64 init_stack();
@@ -170,6 +172,11 @@ public:
 
     // Creates a process structure and returns its pid
     static klib::shared_ptr<TaskDescriptor> create_process(PrivilegeLevel level = PrivilegeLevel::User);
+
+    // Loads ELF into the task from the given memory object
+    // Returns true if the ELF was loaded successfully, false if the memory object data is not immediately available
+    // Throws on errors
+    bool load_elf(klib::shared_ptr<Mem_Object> obj, klib::string name = "");
 protected:
     TaskDescriptor() = default;
 

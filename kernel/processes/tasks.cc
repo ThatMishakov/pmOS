@@ -5,6 +5,7 @@
 #include <sched/defs.hh>
 #include <exceptions.hh>
 #include <kern_logger/kern_logger.hh>
+#include <kernel/elf.h>
 
 
 klib::shared_ptr<TaskDescriptor> TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel level)
@@ -74,7 +75,7 @@ void init_idle()
 {
     try {
         klib::shared_ptr<TaskDescriptor> i = TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel::Kernel);
-        i->register_page_table(idle_page_table);
+        i->atomic_register_page_table(idle_page_table);
 
         Auto_Lock_Scope lock(i->sched_lock);
 
@@ -172,8 +173,6 @@ void TaskDescriptor::create_new_page_table()
 
 void TaskDescriptor::register_page_table(klib::shared_ptr<Arch_Page_Table> table)
 {
-    Auto_Lock_Scope scope_lock(sched_lock);
-
     if (status != PROCESS_UNINIT)
         throw Kern_Exception(ERROR_PROCESS_INITED, "Process is already inited");
 
@@ -183,6 +182,129 @@ void TaskDescriptor::register_page_table(klib::shared_ptr<Arch_Page_Table> table
     Auto_Lock_Scope page_table_lock(table->lock);
     table->owner_tasks.insert(weak_self);
     page_table = table;
+}
+
+void TaskDescriptor::atomic_register_page_table(klib::shared_ptr<Arch_Page_Table> table)
+{
+    Auto_Lock_Scope scope_lock(sched_lock);
+
+    register_page_table(klib::forward<klib::shared_ptr<Arch_Page_Table>>(table));
+}
+
+bool TaskDescriptor::load_elf(klib::shared_ptr<Mem_Object> elf, klib::string name)
+{
+    Auto_Lock_Scope scope_lock(sched_lock);
+
+    if (status != PROCESS_UNINIT)
+        throw Kern_Exception(ERROR_PROCESS_INITED, "Process is already inited");
+
+    if (page_table)
+        throw Kern_Exception(ERROR_NOT_IMPLEMENTED, "Process has a page table");
+
+    ELF_64bit header;
+    bool r = elf->read_to_kernel(0, (u8*)&header, sizeof(ELF_64bit));
+    if (!r)
+        // ELF header can't be read immediately
+        return false;
+
+    if (header.magic != ELF_MAGIC)
+        throw Kern_Exception(ERROR_BAD_FORMAT, "Not an ELF file");
+
+    if (header.bitness != ELF_BITNESS)
+        throw Kern_Exception(ERROR_BAD_FORMAT, "Not a 64-bit ELF file");
+
+    if (header.endianness != ELF_ENDIANNESS)
+        throw Kern_Exception(ERROR_BAD_FORMAT, "Wrong endianness ELF file");
+
+    if (header.type != ELF_EXEC)
+        throw Kern_Exception(ERROR_BAD_FORMAT, "Not an executable ELF file");
+
+    if (header.instr_set != ELF_INSTR_SET)
+        throw Kern_Exception(ERROR_BAD_FORMAT, "Wrong instruction set ELF file");
+
+    
+    // Parse program headers
+    using phreader = ELF_PHeader_64;
+    if (header.prog_header_size != sizeof(phreader))
+        throw Kern_Exception(ERROR_BAD_FORMAT, "Wrong program header size");
+
+    const u64 ph_count = header.program_header_entries;
+    klib::vector<phreader> phs(ph_count);
+    r = elf->read_to_kernel(header.program_header, (u8*)phs.data(), ph_count * sizeof(phreader));
+    if (!r)
+        // Program headers can't be read immediately
+        return false;
+
+    // Create a new page table
+    auto table = Arch_Page_Table::create_empty();
+
+    // Load the program header into the page table
+    for (size_t i = 0; i < ph_count; ++i) {
+        const phreader& ph = phs[i];
+
+        if (ph.type != ELF_SEGMENT_LOAD)
+            continue;
+
+        if ((ph.p_vaddr&0xfff) != (ph.p_offset&0xfff))
+            throw Kern_Exception(ERROR_BAD_FORMAT, "Unaligned segment");
+
+        if (!(ph.flags & ELF_FLAG_WRITABLE)) {
+            // Direct map the region
+            const u64 region_start = ph.p_vaddr & ~0xFFFUL;
+            const u64 file_offset = ph.p_offset & ~0xFFFUL;
+            const u64 size = (ph.p_memsz + 0xFFF) & ~0xFFFUL;
+            
+            u8 protection_mask = (ph.flags & ELF_FLAG_EXECUTABLE) ? Page_Table::Executable : 0;
+               protection_mask |= (ph.flags & ELF_FLAG_READABLE) ? Page_Table::Readable : 0;
+               protection_mask |= (ph.flags & ELF_FLAG_WRITABLE) ? Page_Table::Writeable : 0;
+
+            table->atomic_create_mem_object_region(
+                region_start, 
+                size, 
+                protection_mask, 
+                true, 
+                name, 
+                elf,
+                false,
+                0,
+                file_offset,
+                size
+            );
+        } else {
+            // Copy the region on access
+            const u64 region_start = ph.p_vaddr & ~0xFFFUL;
+            const u64 size = (ph.p_memsz + 0xFFF) & ~0xFFFUL;
+            const u64 file_offset = ph.p_offset;
+            const u64 file_size = ph.p_filesz;
+            const u64 object_start_offset = ph.p_vaddr - region_start;
+
+            u8 protection_mask = (ph.flags & ELF_FLAG_EXECUTABLE) ? Page_Table::Executable : 0;
+               protection_mask |= (ph.flags & ELF_FLAG_READABLE) ? Page_Table::Readable : 0;
+               protection_mask |= (ph.flags & ELF_FLAG_WRITABLE) ? Page_Table::Writeable : 0;
+
+            table->atomic_create_mem_object_region(
+                region_start, 
+                size, 
+                protection_mask, 
+                true, 
+                name, 
+                elf,
+                true,
+                object_start_offset,
+                file_offset,
+                file_size
+            );
+        }
+    }
+
+    // Pass TLS data
+    // TODO!
+
+    register_page_table(table);
+    init_stack();
+    regs.program_counter() = header.program_entry;
+    init();
+    return true;
 }
 
 // TODO: Arch-specific!!!

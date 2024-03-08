@@ -131,6 +131,11 @@ public:
     /// Deletes a pined by page table
     void unregister_pined(const klib::weak_ptr<Page_Table> &pined_by) noexcept;
     void atomic_unregister_pined(const klib::weak_ptr<Page_Table> &pined_by) noexcept;
+
+    /// Reads from the memory object into the kernel buffer
+    /// Returns true if the operation was successful, false if the operation can't be completed immediately and needs to be repeated
+    /// Throws on errors
+    bool read_to_kernel(u64 offset, void *buffer, u64 size);
 protected:
     Mem_Object() = delete;
 

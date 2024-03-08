@@ -6,6 +6,7 @@
 #include <kern_logger/kern_logger.hh>
 #include <paging/arch_paging.hh>
 #include <memory/mem_object.hh>
+#include <processes/tasks.hh>
 
 extern "C" void limine_main();
 extern "C" void _limine_entry();
@@ -423,6 +424,35 @@ klib::shared_ptr<Arch_Page_Table> idle_page_table = nullptr;
 void init(void);
 void init_scheduling();
 
+void init_task1()
+{
+    // Find task 1 module.
+    // For now, just search for "bootstrap"
+    module * task1 = nullptr;
+    const klib::string bootstrap = "bootstrap";
+    for (auto &m : modules) {
+        if (m.cmdline == bootstrap) {
+            task1 = &m;
+            break;
+        }
+    }
+
+    if (task1 == nullptr) {
+        serial_logger.printf("Task 1 not found\n");
+        hcf();
+    }
+
+    serial_logger.printf("Task 1 found: %s\n", task1->path.c_str());
+
+    // Create new task and load ELF into it
+    auto task = TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel::User);
+    bool p = task->load_elf(task1->object, task1->path);
+    if (!p) {
+        serial_logger.printf("Failed to load ELF\n");
+        hcf();
+    }
+}
+
 void limine_main() {
     if (LIMINE_BASE_REVISION_SUPPORTED == false) {
         hcf();
@@ -444,5 +474,5 @@ void limine_main() {
     init_scheduling();
 
     init_modules();
-    // TODO: Initialize Task 1 and reschedule to it!
+    init_task1();
 }

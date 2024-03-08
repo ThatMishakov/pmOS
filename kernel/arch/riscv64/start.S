@@ -1,4 +1,4 @@
-.equ STACK_SIZE, 0x1000
+.equ STACK_SIZE, 0x2000
 
 .bss
 .align 4
