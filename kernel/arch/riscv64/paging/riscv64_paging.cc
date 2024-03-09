@@ -438,10 +438,11 @@ void free_pages_in_level(u64 pt_phys, u64 level)
     for (u64 i = 0; i < 512; ++i) {
         RISCV64_PTE *entry = &active_pt[i];
         if (entry->valid) {
-            if (level > 1)
-                free_pages_in_level(entry->ppn << 12, level - 1);
-            else
+            if (level > 1) {
                 assert(!entry->is_leaf());
+                free_pages_in_level(entry->ppn << 12, level - 1);
+            }
+                
 
             entry->clear_auto();
         }

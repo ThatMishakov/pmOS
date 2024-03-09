@@ -217,6 +217,8 @@ bool copy_to_user(const char* from, char* to, size_t size)
     return result;
 }
 
+extern "C" void print_stack_trace();
+
 void memcpy(char* to, const char* from, size_t size)
 {
     //t_print_bochs("memcpy %h <- %h size %h\n", to, from, size);
@@ -317,6 +319,7 @@ extern "C" void abort(void)
 {
     t_print_bochs("Error: abort() was called. Hint: use debugger on COM1\n");
 
+    print_stack_trace();
     serial_logger.printf("Error: abort() was called.\n");
 
     //print_stack_trace(bochs_logger);
@@ -423,6 +426,9 @@ int pthread_rwlock_wrlock(pthread_rwlock_t *rwlock)
 
 extern "C" char *getenv(const char *name)
 {
+    // if (klib::string(name) == "LIBUNWIND_PRINT_UNWINDING")
+    //     return (char*)"1";
+
     return NULL;
 }
 
@@ -570,4 +576,12 @@ klib::string capture_from_phys(u64 phys_addr)
     klib::string s(len, ' ');
     copy_from_phys(phys_addr, const_cast<char *>(s.data()), len);
     return s;
+}
+
+#include <assert.h>
+
+extern "C" void __floatundidf()
+{
+    // stub
+    assert(false);
 }

@@ -97,6 +97,8 @@ public:
 
     size_t count(const K&) const noexcept;
 
+    T& operator[](const K& k);
+
     const T& at(const K&) const;
     T& at(const K&);
 
@@ -441,6 +443,27 @@ T splay_tree_map<K,T>::get_copy_or_default(const K& key) noexcept
 }
 
 template<class K, class T>
+T& splay_tree_map<K,T>::operator[](const K& key)
+{
+    node* n = root;
+
+    while (n != nullptr and n->key_data.first != key) {
+        if (n->key_data.first < key) {
+            n = n->right;
+        } else {
+            n = n->left;
+        }
+    }
+
+    if (n == nullptr) 
+        return insert({key, T()}).first->second;
+
+    splay(n);
+
+    return n->key_data.second;
+}
+
+template<class K, class T>
 T& splay_tree_map<K,T>::at(const K& key)
 {
     node* n = root;
@@ -459,6 +482,24 @@ T& splay_tree_map<K,T>::at(const K& key)
     splay(n);
 
     return n->key_data.second;
+}
+
+template<class K, class T>
+splay_tree_map<K,T>::iterator splay_tree_map<K,T>::find(const K& key) noexcept
+{
+    node* n = root;
+
+    while (n != nullptr and n->key_data.first != key) {
+        if (n->key_data.first < key) {
+            n = n->right;
+        } else {
+            n = n->left;
+        }
+    }
+
+    splay(n);
+
+    return n;
 }
 
 template<class K, class T>

@@ -198,6 +198,8 @@ template<typename K>
 typename set<K>::size_type set<K>::erase(const K& key)
 {
     node* p = search(key);
+    if (p == end())
+        return 0;
     erase_node(p);
     return 1;
 }

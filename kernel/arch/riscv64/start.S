@@ -16,9 +16,10 @@ _limine_entry:
     li t0, STACK_SIZE
     add sp, sp, t0
 
-    mv fp, zero
-    mv ra, zero
-
+    addi sp, sp, -16
+    sd zero, 0(sp)
+    sd zero, 8(sp)
+    addi fp, sp, 16
 
     call limine_main
 

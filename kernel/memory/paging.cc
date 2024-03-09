@@ -80,9 +80,11 @@ u64 Page_Table::atomic_create_mem_object_region(u64 page_aligned_start, u64 page
 
     u64 start_addr = find_region_spot(page_aligned_start, page_aligned_size, fixed);
 
-    klib::shared_ptr<Generic_Mem_Region> region = klib::make_shared<Mem_Object_Reference>(
-        start_addr, page_aligned_size, klib::forward<klib::string>(name), this, access, klib::forward<klib::shared_ptr<Mem_Object>>(object), object_offset_bytes, cow, start_offset_bytes, object_size_bytes
+    auto region = klib::make_shared<Mem_Object_Reference>(
+        start_addr, page_aligned_size, klib::forward<klib::string>(name), this, access, object, object_offset_bytes, cow, start_offset_bytes, object_size_bytes
     );
+
+    mem_objects[object].regions.insert(region.get());
 
     paging_regions.insert({start_addr, region});
 
@@ -311,9 +313,10 @@ void Page_Table::atomic_delete_region(u64 region_start)
 
 void Page_Table::unreference_object(const klib::shared_ptr<Mem_Object> &object, Mem_Object_Reference *region) noexcept
 {
-    auto &p = mem_objects.at(object);
+    auto p = mem_objects.find(object);
 
-    p.regions.erase(region);
+    if (p != mem_objects.end()) 
+        p->second.regions.erase(region);
 }
 
 void Page_Table::unblock_tasks_rage(u64 blocked_by_page, u64 size_bytes)

@@ -47,6 +47,7 @@ void Logger::vprintf(const char* str, va_list arg)
                     break;
                 }
                 case 'x':
+                case 'p':
                 case 'h': { // hexa number
                     u64 casted_arg = va_arg(arg, u64);
                     uint_to_string(casted_arg, 16, int_str_buffer, len);

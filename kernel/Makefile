@@ -14,7 +14,7 @@ INCLUDEDIR = include . libunwind/include arch/riscv64
 INCPARAM = $(foreach d, $(INCLUDEDIR), -I$(ROOTDIR)/$d)
 
 # User controllable CFLAGS.
-USERCFLAGS = -Wall -Wextra -O2 -pipe
+USERCFLAGS = -Wall -Wextra -O1 -pipe
 
 CPPFLAGS = $(INTERNALCFLAGS) $(USERCFLAGS) -MMD -MP $(INCPARAM)
 CXXFLAGS = -std=c++23
@@ -31,6 +31,7 @@ INTERNALLDFLAGS :=     \
 	-fPIC \
 	-lgcc \
 	-z max-page-size=0x1000 \
+	-Wl,--eh-frame-hdr \
 	-no-pie -fno-pic -Wl,--demangle
  
 # Internal C flags that should not be changed by the user.
@@ -43,7 +44,7 @@ INTERNALCFLAGS  :=       \
 	-fasynchronous-unwind-tables \
 	-march=rv64ima_zicsr_zba_zbb_zbc -mabi=lp64 \
 	-Wall -Wextra \
-	-g
+	-g -fno-omit-frame-pointer
  
 # Use find to glob all *.c files in the directory and extract the object names.
 CCFILES := $(shell find ./ -type f -name '*.cc')

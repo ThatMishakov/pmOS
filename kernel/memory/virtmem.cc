@@ -319,6 +319,11 @@ void virtmem_link_tag(VirtmemBoundaryTag* prev, VirtmemBoundaryTag* next) {
     prev->segment_next = next;
 }
 
+void virtmem_unlink_tag(VirtmemBoundaryTag* tag) {
+    tag->segment_prev->segment_next = tag->segment_next;
+    tag->segment_next->segment_prev = tag->segment_prev;
+}
+
 u64 virtmem_hashtable_index(u64 base) {
     // Hashtable size is always a power of 2
     u64 mask = virtmem_hashtable_size - 1;

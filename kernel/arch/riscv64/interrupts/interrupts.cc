@@ -10,14 +10,21 @@ struct fp_s {
     u64 ra;
 };
 
-void print_stack_trace()
+u64 get_fp()
 {
-    u64 fp = get_cpu_struct()->current_task->regs.s0;
+    u64 fp;
+    asm volatile("add %0, x0, fp" : "=r"(fp));
+    return fp;
+}
+
+extern "C" void print_stack_trace()
+{
+    u64 fp = get_fp();
     fp_s *current = (fp_s*)fp - 1;
     serial_logger.printf("Stack trace:\n");
     while (1) {
-        serial_logger.printf("  0x%x\n", current->ra);
-        if (current->ra == 0) {
+        serial_logger.printf("  0x%x fp 0x%x\n", current->ra, current->fp);
+        if (current->fp == 0 or ((i64)current->fp > 0)) {
             break;
         }
         current = (fp_s*)current->fp - 1;    
@@ -72,7 +79,7 @@ void handle_interrupt()
     auto c = get_cpu_struct();
     if (c->nested_level > 1) {
         serial_logger.printf("!!! kernel interrupt !!!\n");
-        //print_stack_trace();
+        print_stack_trace();
         while (1) ;
     }
 
