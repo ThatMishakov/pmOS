@@ -15,6 +15,12 @@ _start:
     addi fp, sp, 16
     # Also, stack needs to be 16-byte aligned, but it already is
 
+    # Load global pointer
+    # https://five-embeddev.com/quickref/global_pointer.html
+    .option push
+	.option norelax
+	la gp, __global_pointer$
+	.option pop
 
     # Initialize libc
     call init_std_lib

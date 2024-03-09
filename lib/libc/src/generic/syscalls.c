@@ -13,7 +13,7 @@ syscall_r start_process(u64 pid, u64 entry)
     return pmos_syscall(SYSCALL_START_PROCESS, pid, entry);
 }
 
-result_t send_message_port(u64 port, size_t size, const char* message)
+result_t send_message_port(u64 port, size_t size, const void* message)
 {
     return pmos_syscall(SYSCALL_SEND_MSG_PORT, port, size, message).result;
 }

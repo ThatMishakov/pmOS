@@ -5,7 +5,7 @@ set(CMAKE_TRY_COMPILE_TARGET_TYPE "STATIC_LIBRARY")
 
 project(libpthread VERSION 0.1 LANGUAGES C ASM)
 
-set(CMAKE_C_FLAGS "-Wall -Wextra -O2 -fPIC" CACHE STRING "C compiler flags")
+set(CMAKE_C_FLAGS "-Wall -Wextra -O2 -fPIC -g" CACHE STRING "C compiler flags")
 set(CMAKE_ASM_FLAGS ${CMAKE_C_FLAGS} CACHE STRING "ASM compiler flags")
 
 set(SRC_FOLDER "src")
