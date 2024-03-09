@@ -59,7 +59,7 @@ OBJS = 	./objects/icxxabi.o ./objects/constructors.o ./utils.o ./misc.o \
 		./kern_logger/kern_logger.o \
 		./limine/limine.o \
 		\
-		./arch/riscv64/cpus/cpus_asm.o ./arch/riscv64/tasks/task_switch.o ./arch/riscv64/arch_specific.o \
+		./arch/riscv64/cpus/cpus_asm.o ./arch/riscv64/tasks/task_switch.o ./arch/riscv64/arch_specific.o ./arch/riscv64/arch.o \
 		./arch/riscv64/sbi/sbi.o \
 		./arch/riscv64/interrupts/interrupts.o \
 		./arch/riscv64/cpus/sched_helpers.o ./arch/riscv64/cpus/timer.o \

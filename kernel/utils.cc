@@ -204,11 +204,17 @@ bool prepare_user_buff_wr(char* buff, size_t size)
     return avail;
 }
 
+extern "C" void allow_access_user();
+extern "C" void disallow_access_user();
+
 bool copy_from_user(char* to, const char* from, size_t size)
 {
     bool result = prepare_user_buff_rd(from, size);
-    if (result)
+    if (result) {
+        allow_access_user();
         memcpy(to, from, size);
+        disallow_access_user();
+    }
 
     return result;
 }
@@ -216,8 +222,11 @@ bool copy_from_user(char* to, const char* from, size_t size)
 bool copy_to_user(const char* from, char* to, size_t size)
 {
     bool result = prepare_user_buff_wr(to, size);
-    if (result)
+    if (result) {
+        allow_access_user();
         memcpy(to, from, size);
+        disallow_access_user();
+    }
 
     return result;
 }

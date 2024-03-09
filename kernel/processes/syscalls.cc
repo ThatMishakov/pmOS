@@ -74,7 +74,7 @@ extern "C" void syscall_handler()
     u64 arg3 = syscall_arg3(task);
     u64 arg4 = syscall_arg4(task);
     u64 arg5 = syscall_arg5(task);
-
+    
     // TODO: check permissions
 
     //t_print_bochs("Debug: syscall %h pid %h (%s) ", call_n, get_cpu_struct()->current_task->pid, get_cpu_struct()->current_task->name.c_str());

@@ -69,6 +69,8 @@ void page_fault(u64 virt_addr, u64 scause)
     }
 }
 
+extern "C" void syscall_handler();
+
 void handle_interrupt()
 {
     u64 scause, stval;
@@ -93,9 +95,21 @@ void handle_interrupt()
             case STORE_AMO_PAGE_FAULT:
                 page_fault(stval, scause);
                 break;
+            case ENV_CALL_FROM_U_MODE:
+                // Advance the program counter to the next instruction
+                c->current_task->regs.program_counter() += 4;
+                syscall_handler();
+                break;
             default:
                 serial_logger.printf("Unknown interrupt: 0x%x\n", scause);
                 while (1) ;
         }
+    }
+
+    for (;;) {
+        if (c->current_task->regs.syscall_restart == 0)
+            break;
+
+        syscall_handler();
     }
 }
