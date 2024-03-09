@@ -311,6 +311,27 @@ public:
         return append(1, c);
     }
 
+    string operator+(const string& str) const
+    {
+        string ret(*this);
+        ret.append(str);
+        return ret;
+    }
+
+    string operator+(const char* s) const
+    {
+        string ret(*this);
+        ret.append(s);
+        return ret;
+    }
+
+    string operator+(char c) const
+    {
+        string ret(*this);
+        ret.append(1, c);
+        return ret;
+    }
+
     string& assign (const string& str);
     string& assign (const string& str, size_t subpos, size_t sublen = npos);
     string& assign (const char* s);

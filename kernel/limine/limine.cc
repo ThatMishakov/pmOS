@@ -468,11 +468,16 @@ void limine_main() {
     // Call global (C++) constructors
     init();
 
-    // Init idle task page table
-    idle_page_table = Arch_Page_Table::capture_initial(kernel_ptable_top);
+    try {
+        // Init idle task page table
+        idle_page_table = Arch_Page_Table::capture_initial(kernel_ptable_top);
 
-    init_scheduling();
+        init_scheduling();
 
-    init_modules();
-    init_task1();
+        init_modules();
+        init_task1();
+    } catch (Kern_Exception &e) {
+        serial_logger.printf("Error loading kernel: code %i message %s\n", e.err_code, e.err_message);
+        throw;
+    }
 }

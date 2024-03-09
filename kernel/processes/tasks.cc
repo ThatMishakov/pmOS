@@ -6,6 +6,8 @@
 #include <exceptions.hh>
 #include <kern_logger/kern_logger.hh>
 #include <kernel/elf.h>
+#include <pmos/tls.h>
+#include <pmos/load_data.h>
 
 
 klib::shared_ptr<TaskDescriptor> TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel level)
@@ -297,13 +299,78 @@ bool TaskDescriptor::load_elf(klib::shared_ptr<Mem_Object> elf, klib::string nam
         }
     }
 
-    // Pass TLS data
-    // TODO!
+    for (size_t i = 0; i < ph_count; ++i) {
+        const phreader& ph = phs[i];
+
+        if (ph.type != PT_TLS)
+            continue;
+
+        const size_t size = sizeof(TLS_Data) + ((ph.p_filesz+7)&~7UL);
+        klib::unique_ptr<u64[]> t(new u64[size/sizeof(u64)]);
+        TLS_Data* tls_data = (TLS_Data*)t.get();
+
+        tls_data->memsz = ph.p_memsz;
+        tls_data->align = ph.allignment;
+        tls_data->filesz = ph.p_filesz;
+
+        r = elf->read_to_kernel(ph.p_offset, tls_data->data, ph.p_filesz);
+        // Install memory region
+        const u64 pa_size = (size + 0xFFF) & ~0xFFFUL;
+        u64 tls_virt = table->atomic_create_normal_region(
+            0,
+            pa_size,
+            Page_Table::Readable | Page_Table::Writeable,
+            false,
+            name + "_tls",
+            0);
+
+        auto r = table->atomic_copy_to_user(tls_virt, tls_data, size);
+        if (!r)
+            return false;
+        
+        regs.arg3() = tls_virt;
+    }
 
     register_page_table(table);
-    init_stack();
+    const u64 stack_top = init_stack();
     regs.program_counter() = header.program_entry;
+
+    // Push stack descriptor structure
+    const u64 size = sizeof(load_tag_stack_descriptor) + sizeof(load_tag_close);
+    u64 load_stack[size/8];
+    load_tag_stack_descriptor *d = (load_tag_stack_descriptor*)&load_stack[0];
+    *d = {
+        .header = LOAD_TAG_STACK_DESCRIPTOR_HEADER,
+        .stack_top = stack_top,
+        .stack_size = GB(2),
+        .guard_size = 0,
+        .unused0 = 0,
+    };
+
+    load_tag_close *h = (load_tag_close*)&load_stack[sizeof(load_tag_stack_descriptor)/8];
+    *h = {
+        .header = LOAD_TAG_CLOSE_HEADER,
+    };
+
+    const u64 tag_size_page = (size + 0xFFF) & ~0xFFFUL;
+
+    const u64 pos = table->atomic_create_normal_region(
+        0,
+        tag_size_page,
+        Page_Table::Readable | Page_Table::Writeable,
+        false,
+        name + "_load_tags",
+        0
+    );
+    auto b = table->atomic_copy_to_user(pos, &(load_stack[0]), size);
+    if (!b)
+        return false;
+
+    regs.arg1() = pos;
+    regs.arg2() = size;
+
     init();
+
     return true;
 }
 

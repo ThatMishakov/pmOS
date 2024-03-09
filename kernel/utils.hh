@@ -6,7 +6,7 @@ void int_to_string(i64 n, u8 base, char* str, int& length);
 
 void uint_to_string(u64 n, u8 base, char* str, int& length);
 
-void t_print_bochs(const char *str, ...);
+extern "C" void t_print_bochs(const char *str, ...);
 
 namespace klib { class string; }
 void term_write(const klib::string&);

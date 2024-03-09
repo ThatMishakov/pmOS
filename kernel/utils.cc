@@ -116,6 +116,7 @@ void t_print_bochs(const char *str, ...)
                 uint_to_string(casted_arg, 10, int_str_buffer, len);
                 break;
             }
+            case 'x':
             case 'h': { // hexa number
                 u64 casted_arg = va_arg(arg, u64);
                 uint_to_string(casted_arg, 16, int_str_buffer, len);
@@ -156,7 +157,9 @@ bool prepare_user_buff_rd(const char* buff, size_t size)
 
         for (u64 i = addr_start; i < end; ++i) {
             u64 page = i & ~0xfffULL;
-            bool result = current_task->page_table->prepare_user_page(page, Page_Table::Readable, current_task);
+            bool result = current_task->page_table->prepare_user_page(page, Page_Table::Readable);
+            if (not result)
+                current_task->atomic_block_by_page(page, &current_task->page_table->blocked_tasks);
             if (not result)
                 return result;
         }
@@ -187,7 +190,9 @@ bool prepare_user_buff_wr(char* buff, size_t size)
         current_task->request_repeat_syscall();
         for (u64 i = addr_start; i < end and avail; ++i) {
             u64 page = i & ~0xfffULL;
-            avail = current_task->page_table->prepare_user_page(page, Page_Table::Writeable, current_task);
+            avail = current_task->page_table->prepare_user_page(page, Page_Table::Writeable);
+            if (not avail)
+                current_task->atomic_block_by_page(page, &current_task->page_table->blocked_tasks);
         }
         if (avail)
             current_task->pop_repeat_syscall();

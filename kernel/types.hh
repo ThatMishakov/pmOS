@@ -9,7 +9,7 @@ struct ReturnStr {
     T val;
 };
 
-void t_print_bochs(const char *str, ...);
+extern "C" void t_print_bochs(const char *str, ...);
 
 struct Spinlock {
 	u32 locked = false;

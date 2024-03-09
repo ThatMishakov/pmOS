@@ -508,3 +508,25 @@ void RISCV64_Page_Table::invalidate_tlb(u64 page)
 {
     flush_page((void*)page);
 }
+
+bool RISCV64_Page_Table::atomic_copy_to_user(u64 to, const void* from, u64 size)
+{
+    Auto_Lock_Scope l(lock);
+
+    Temp_Mapper_Obj<char> mapper(request_temp_mapper());
+    for (u64 i = to&~0xfffUL; i < to+size; i += 0x1000) {
+        const auto b = prepare_user_page(i, Writeable);
+        if (not b)
+            return false;
+
+        const auto page = get_page_mapping(i);
+        assert(page.is_allocated);
+
+        char * ptr = mapper.map(page.page_addr);
+        const u64 start = i < to ? to : i;
+        const u64 end = i + 0x1000 < to + size ? i + 0x1000 : to + size;
+        memcpy(ptr + (start - i), (const char*)from + (start - to), end - start);
+    }
+
+    return true;
+}

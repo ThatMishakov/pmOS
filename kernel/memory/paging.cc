@@ -154,7 +154,7 @@ u64 Page_Table::find_region_spot(u64 desired_start, u64 size, bool fixed)
     }
 }
 
-bool Page_Table::prepare_user_page(u64 virt_addr, unsigned access_type, const klib::shared_ptr<TaskDescriptor>& task)
+bool Page_Table::prepare_user_page(u64 virt_addr, unsigned access_type)
 {
     auto it = paging_regions.get_smaller_or_equal(virt_addr);
 
@@ -163,11 +163,7 @@ bool Page_Table::prepare_user_page(u64 virt_addr, unsigned access_type, const kl
 
     Generic_Mem_Region &reg = *it->second;
 
-    const auto available = reg.prepare_page(access_type, virt_addr);
-    if (not available)
-        task->atomic_block_by_page(virt_addr, &blocked_tasks);
-
-    return available;
+    return reg.prepare_page(access_type, virt_addr);
 }
 
 void Page_Table::unblock_tasks(u64 page)

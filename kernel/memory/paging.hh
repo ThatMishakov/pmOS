@@ -183,7 +183,7 @@ public:
      * @return false The operation has been successfull, however the page is not immediately available and the task has been blocked. The action
      *         might need to be repeated once the page becomes available and the task is unblocked.
      */
-    bool prepare_user_page(u64 virt_addr, unsigned access_type, const klib::shared_ptr<TaskDescriptor>& task);
+    bool prepare_user_page(u64 virt_addr, unsigned access_type);
     //bool prepare_user_buffer(u64 virt_addr, unsigned access_type);
 
     /// @brief Indicates if the page can be taken out and used without copying to provide for the missing page
@@ -388,6 +388,22 @@ public:
      * @param page Page to be invalidated
     */
     virtual void invalidate_tlb(u64 page) = 0;
+
+    /**
+     * @brief Copies the data from kernel to the user space
+     * 
+     * This function copies data from kernel to user space at the indicated address. Is does not have to be of an active
+     * page table.
+     * 
+     * @param to Virtual address in the user space
+     * @param from Pointer to the data in the kernel space
+     * @param size Size of the data in bytes
+     * @return true The operation has been successfull
+     * @return false The pages are not immediately available, and the task should be blocked and the operation should be
+     *              repeated once the pages are available.
+     * @throw Kern_Exception If the operation is not successfull
+     */
+    virtual bool atomic_copy_to_user(u64 to, const void* from, u64 size) = 0;
 protected:
     Page_Table() = default;
 

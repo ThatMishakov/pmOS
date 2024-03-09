@@ -158,6 +158,8 @@ public:
 
     // Clears the TLB cache for the given page
     void invalidate_tlb(u64 page) override;
+
+    bool atomic_copy_to_user(u64 to, const void* from, u64 size);
 protected:
     /// Root node/top level of paging structures
     u64 table_root = 0;
