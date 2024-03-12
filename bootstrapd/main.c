@@ -48,6 +48,39 @@ void init_modules()
     }
 }
 
+void start_executables()
+{
+    struct module_descriptor_list * d = module_list;
+    while (d != NULL) {
+        struct module_descriptor_list * c = d;
+        d = d->next;
+        if (strcmp(c->cmdline, "init") == 0) {
+            syscall_r r = syscall_new_process();
+            if (r.result != SUCCESS) {
+                print_str("Loader: Could not create process for ");
+                print_str(c->path);
+                print_str(". Error: ");
+                print_hex(r.result);
+                print_str("\n");
+            }
+
+            syscall_set_task_name(r.value, c->path, strlen(c->path));
+
+            result_t res = syscall_load_executable(r.value, c->object_id, 0);
+            if (res != SUCCESS) {
+                print_str("Loader: Could not load executable ");
+                print_str(c->path);
+                print_str(". Error: ");
+                print_hex(res);
+                print_str("\n");
+
+                // TODO: Terminate the task on error
+            }
+        }
+    }
+}
+        
+
 void service_ports()
 {
     syscall_r r = pmos_syscall(SYSCALL_CREATE_PORT, getpid());
@@ -228,5 +261,6 @@ exit:
 int main()
 {
     init_modules();
+    start_executables();
     service_ports();
 }

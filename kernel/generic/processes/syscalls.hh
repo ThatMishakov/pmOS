@@ -91,6 +91,9 @@ void syscall_create_mem_object(u64 size_bytes, u64 = 0 /* unused */, u64 = 0 /* 
 // Deletes a region identified by region_start
 void syscall_delete_region(u64 region_start, u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */);
 
+// Loads the elf executable into the task
+void syscall_load_executable(u64 task_id, u64 object_id, u64 flags, u64 /* unused */, u64 /* unused */, u64 /* unused */);
+
 #define SYS_CONF_IOAPIC          0x01
 #define SYS_CONF_LAPIC           0x02
 #define SYS_CONF_CPU             0x03

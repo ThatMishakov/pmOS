@@ -125,11 +125,54 @@ public:
         }
     }
 
-    constexpr const string& operator=(const string& str);
+    constexpr const string& operator=(const string& str)
+    {
+        if (this == &str)
+            return *this;
+
+        if (is_long())
+            delete[] long_string.ptr;
+
+        size_t length = str.length();
+
+        if (length > small_size) {
+            long_string.ptr = new char[length + 1];
+            s_capacity = length;
+            long_string.size = length;
+
+            memcpy(long_string.ptr, str.data(), length+1);
+            long_string.ptr[length] = '\0';
+        } else {
+            s_capacity = length;
+            long_string = str.long_string;
+        }
+
+        return *this;
+    }
 
     string& operator= (const char* s)
     {
-        *this = string(s);
+        if (c_str() == s)
+            return *this;
+
+        if (is_long())
+            delete[] long_string.ptr;
+
+        size_t length = strlen(s);
+
+        if (length > small_size) {
+            long_string.ptr = new char[length+1];
+            s_capacity = length;
+            long_string.size = length;
+
+            memcpy(long_string.ptr, s, length);
+            long_string.ptr[length] = '\0';
+        } else {
+            s_capacity = length;
+            memcpy(short_string, s, length);
+            short_string[length] = '\0';
+        }
+
         return *this;
     }
     string& operator= (char c);

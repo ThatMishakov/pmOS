@@ -214,6 +214,18 @@ void Mem_Object::atomic_resize(u64 new_size_pages)
     }
 }
 
+klib::shared_ptr<Mem_Object> Mem_Object::get_object(u64 object_id)
+{
+    Auto_Lock_Scope l(object_storage_lock);
+
+    auto p = objects_storage.get_copy_or_default(object_id).lock();
+
+    if (not p)
+        throw Kern_Exception(ERROR_OBJECT_DOESNT_EXIST, "memory object not found");
+
+    return p;
+}
+
 void Mem_Object::try_free_page(Page_Storage &p, u8 page_size_log) noexcept
 {
     assert(page_size_log == 12 && "Only 4K pages are supported");

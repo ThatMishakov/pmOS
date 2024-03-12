@@ -66,6 +66,24 @@ syscall_r syscall_new_process();
 result_t syscall_start_process(uint64_t pid, uint64_t entry, uint64_t arg1, uint64_t arg2, uint64_t arg3);
 
 /**
+ * @brief Loads an executable from the memory object into the address space of a task
+ * 
+ * This system call loads an executable from a given memory object into the address space of a given task. Currently, ELF format is supported.
+ * The task must not have a page table assigned. The shared memory is used for mapping the data.
+ * 
+ * @param tid ID of the task to load the executable into
+ * @param object_id ID of the memory object containing the executable
+ * @param flags Flags for the function. Currently unused, but at least FLAG_NOBLOCK is planned
+ * @return result_t Result of the operation. If the result != SUCCESS, the executable was not loaded.
+ * @see syscall_start_process()
+ * @todo Think of a way to pass the arguments to the executable
+*/
+result_t syscall_load_executable(uint64_t tid, uint64_t object_id, uint64_t flags);
+
+/// Sets the name of the task
+result_t syscall_set_task_name(uint64_t tid, const char* name, size_t name_length);
+
+/**
  * @brief Gets info about the first message in the given *port* message queue
  * 
  * This syscall checks the message queue and fills the *descr* descriptor with the information about the first (front) message in it.

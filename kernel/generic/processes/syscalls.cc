@@ -62,7 +62,7 @@ klib::array<syscall_function, 37> syscall_table = {
     syscall_is_in_task_group,
 
     syscall_set_notify_mask,
-    nullptr,
+    syscall_load_executable,
 };
 
 extern "C" void syscall_handler()
@@ -142,6 +142,27 @@ void syscall_start_process(u64 pid, u64 start, u64 arg1, u64 arg2, u64 arg3, u64
 
     // Init task
     t->init();
+}
+
+void syscall_load_executable(u64 task_id, u64 object_id, u64 flags, u64 /* unused */, u64 /* unused */, u64 /* unused */)
+{
+    task_ptr task = get_current_task();
+    // TODO: Check permissions
+
+    klib::shared_ptr<TaskDescriptor> t = get_task_throw(task_id);
+
+    klib::shared_ptr<Mem_Object> object = Mem_Object::get_object(object_id);
+
+    klib::string name;
+    {
+        Auto_Lock_Scope scope_lock(t->name_lock);
+        name = t->name;
+    }
+
+    auto b = t->load_elf(object, name);
+    // Blocking is not implemented. Return error
+    if (!b)
+        throw Kern_Exception(ERROR_GENERAL, "pages not available immediately");
 }
 
 void syscall_init_stack(u64 pid, u64 esp, u64, u64, u64, u64)
@@ -359,6 +380,8 @@ void syscall_set_task_name(u64 pid, u64 /* const char* */ string, u64 length, u6
     if (not str.first) {
         return;
     }
+
+    Auto_Lock_Scope scope_lock(t->name_lock);
 
     t->name.swap(str.second);
 }

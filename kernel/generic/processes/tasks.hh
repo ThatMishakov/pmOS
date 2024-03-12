@@ -147,6 +147,7 @@ public:
     // Other architectures have different registers, so stash it for now
     //SSE_Data sse_data;
 
+    Spinlock name_lock;
     klib::string name = "";
 
     klib::shared_ptr<TaskDescriptor> get_ptr()

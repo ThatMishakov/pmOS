@@ -161,3 +161,13 @@ int _syscall_exit(unsigned long status1, unsigned long status2)
 {
     return pmos_syscall(SYSCALL_EXIT, status1, status2).result;
 }
+
+result_t syscall_set_task_name(uint64_t tid, const char* name, size_t name_length)
+{
+    return pmos_syscall(SYSCALL_SET_TASK_NAME, tid, name, name_length).result;
+}
+
+result_t syscall_load_executable(uint64_t tid, uint64_t object_id, uint64_t flags)
+{
+    return pmos_syscall(SYSCALL_LOAD_EXECUTABLE, tid, object_id, flags).result;
+}

@@ -340,9 +340,9 @@ void construct_paging() {
     if (result != SUCCESS)
         hcf();
 
-    const u64 data_start = (u64)(&_data_start) & ~0xfff;
+    const u64 data_start = (u64)(&_data_start) & ~0xfffUL;
     // Data and BSS are merged and have the same permissions
-    const u64 data_end = ((u64)&_bss_end + 0xfff) & ~0xfff;
+    const u64 data_end = ((u64)&_bss_end + 0xfffUL) & ~0xfffUL;
     const u64 data_size = data_end - data_start;
     const u64 data_offset = data_start - kernel_start_virt;
     const u64 data_phys = kernel_phys + data_offset;
