@@ -371,19 +371,19 @@ void clear_page(u64 phys_addr, u64 pattern)
         mapper.ptr[i] = pattern;
 }
 
-int fflush(FILE *stream)
+int fflush(FILE *)
 {
-
+    return 0;
 }
 
-int fprintf(FILE *stream, const char *format, ...)
+int fprintf(FILE *, const char *format, ...)
 {
     va_list args;
     va_start(args, format);
     bochs_logger.vprintf(format, args);
 
     va_end(args);
-    return 1;
+    return 0;
 }
 
 // Arch-specific spinlock functions
@@ -442,6 +442,7 @@ extern "C" char *getenv(const char *name)
 {
     // if (klib::string(name) == "LIBUNWIND_PRINT_UNWINDING")
     //     return (char*)"1";
+    (void)name;
 
     return NULL;
 }

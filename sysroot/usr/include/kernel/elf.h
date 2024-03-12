@@ -5,7 +5,7 @@
 typedef struct {
     uint32_t    magic;
     uint8_t     bitness;
-    uint8_t     endiannes;
+    uint8_t     endianness;
     uint8_t     header_version;
     uint8_t     os_abi;
     uint64_t    padding;
@@ -30,13 +30,21 @@ typedef struct {
 #define ELF_X86_64  0x3E
 #define ELF_AARCH64 0xB7
 
+#define ELF_EXEC    2
+
+#define ELF_MAGIC   0x464C457F
+
+#define ELF_LITTLE_ENDIAN 1
+
+#define ELF_ENDIANNESS  ELF_LITTLE_ENDIAN
+
 #ifdef __x86_64__
 #define ELF_BITNESS ELF_64BIT
 #define ELF_INSTR_SET ELF_X86_64
 #elif defined(__i386__)
 #define ELF_BITNESS ELF_32BIT
 #define ELF_INSTR_SET ELF_X86
-#elif defined(__riscv__)
+#elif defined(__riscv)
 #define ELF_BITNESS ELF_64BIT
 #define ELF_INSTR_SET ELF_RISCV
 #elif defined(__aarch64__)

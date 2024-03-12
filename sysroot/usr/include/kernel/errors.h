@@ -39,5 +39,6 @@
 #define ERROR_HAS_NO_PAGE_TABLE    -30UL
 #define ERROR_OBJECT_DOESNT_EXIST  -31UL
 #define ERROR_NOT_MANAGED_REGION   -32UL
+#define ERROR_BAD_FORMAT           -33UL
 
 #endif

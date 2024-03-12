@@ -11,6 +11,7 @@
 #include <interrupts/stack.hh>
 #include <registers.hh>
 #include <paging/arch_paging.hh>
+#include <pmos/load_data.h>
 
 using PID = u64;
 
@@ -176,7 +177,7 @@ public:
     // Loads ELF into the task from the given memory object
     // Returns true if the ELF was loaded successfully, false if the memory object data is not immediately available
     // Throws on errors
-    bool load_elf(klib::shared_ptr<Mem_Object> obj, klib::string name = "");
+    bool load_elf(klib::shared_ptr<Mem_Object> obj, klib::string name = "", const klib::vector<klib::unique_ptr<load_tag_generic>>& tags = {});
 protected:
     TaskDescriptor() = default;
 

@@ -36,7 +36,29 @@ public:
             return *ptr;
         }
 
-        bool operator==(iterator k)
+        bool operator==(iterator k) const
+        {
+            return this->ptr == k.ptr;
+        }
+    };
+
+    class const_iterator {
+    private:
+        const T* ptr;
+    public:
+        constexpr const_iterator(const T* n): ptr(n) {};
+
+        const_iterator& operator++() {
+            ptr++;
+            return *this;
+        }
+
+        const T& operator*() const
+        {
+            return *ptr;
+        }
+
+        bool operator==(const_iterator k) const
         {
             return this->ptr == k.ptr;
         }
@@ -84,6 +106,9 @@ public:
 
     iterator begin();
     iterator end();
+
+    const_iterator begin() const;
+    const_iterator end() const;
 
     void resize (size_type n);
     void resize (size_type n, const value_type& val);
@@ -209,6 +234,18 @@ template<typename T>
 typename vector<T>::iterator vector<T>::end()
 {
     return iterator(&ptr[a_size]);
+}
+
+template<typename T>
+typename vector<T>::const_iterator vector<T>::begin() const
+{
+    return const_iterator(ptr);
+}
+
+template<typename T>
+typename vector<T>::const_iterator vector<T>::end() const
+{
+    return const_iterator(&ptr[a_size]);
 }
 
 template<typename T>

@@ -5,6 +5,7 @@
 #define __DECLARE_STACK_T
 #include "__posix_types.h"
 
+#ifdef __x86_64__
 typedef struct {
     unsigned long rbx;
     unsigned long r12;
@@ -15,6 +16,24 @@ typedef struct {
     unsigned long rsp;
     unsigned long rbp;
 } mcontext_t; // TODO
+#elif defined(__riscv)
+typedef struct {
+    unsigned long s0;
+    unsigned long s1;
+    unsigned long s2;
+    unsigned long s3;
+    unsigned long s4;
+    unsigned long s5;
+    unsigned long s6;
+    unsigned long s7;
+    unsigned long s8;
+    unsigned long s9;
+    unsigned long s10;
+    unsigned long s11;
+
+    unsigned long sp;
+} mcontext_t;
+#endif
 
 typedef struct ucontext_t {
     mcontext_t  uc_mcontext;

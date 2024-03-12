@@ -193,7 +193,7 @@ void TaskDescriptor::atomic_register_page_table(klib::shared_ptr<Arch_Page_Table
     register_page_table(klib::forward<klib::shared_ptr<Arch_Page_Table>>(table));
 }
 
-bool TaskDescriptor::load_elf(klib::shared_ptr<Mem_Object> elf, klib::string name)
+bool TaskDescriptor::load_elf(klib::shared_ptr<Mem_Object> elf, klib::string name, const klib::vector<klib::unique_ptr<load_tag_generic>>& tags)
 {
     Auto_Lock_Scope scope_lock(sched_lock);
 
@@ -336,9 +336,15 @@ bool TaskDescriptor::load_elf(klib::shared_ptr<Mem_Object> elf, klib::string nam
     regs.program_counter() = header.program_entry;
 
     // Push stack descriptor structure
-    const u64 size = sizeof(load_tag_stack_descriptor) + sizeof(load_tag_close);
+    u64 size = sizeof(load_tag_stack_descriptor) + sizeof(load_tag_close);
+    // Add other tags
+    for (auto& tag: tags) {
+        size += tag->offset_to_next;
+    }
+    u64 current_offset = 0;
+
     u64 load_stack[size/8];
-    load_tag_stack_descriptor *d = (load_tag_stack_descriptor*)&load_stack[0];
+    load_tag_stack_descriptor *d = (load_tag_stack_descriptor*)&load_stack[current_offset/8];
     *d = {
         .header = LOAD_TAG_STACK_DESCRIPTOR_HEADER,
         .stack_top = stack_top,
@@ -347,7 +353,14 @@ bool TaskDescriptor::load_elf(klib::shared_ptr<Mem_Object> elf, klib::string nam
         .unused0 = 0,
     };
 
-    load_tag_close *h = (load_tag_close*)&load_stack[sizeof(load_tag_stack_descriptor)/8];
+    current_offset += sizeof(*d);
+    for (auto& tag: tags) {
+        auto ptr = load_stack + current_offset/8;
+        current_offset += tag->offset_to_next;
+        memcpy((char *)ptr, (const char *)tag.get(), tag->offset_to_next);
+    }
+
+    load_tag_close *h = (load_tag_close*)&load_stack[current_offset/8];
     *h = {
         .header = LOAD_TAG_CLOSE_HEADER,
     };
