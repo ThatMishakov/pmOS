@@ -76,7 +76,7 @@ void handle_interrupt()
     u64 scause, stval;
     get_scause_stval(&scause, &stval);
 
-    serial_logger.printf("Recieved an interrupt! scause: 0x%x stval: 0x%x pc 0x%x\n", scause, stval, get_cpu_struct()->current_task->regs.program_counter());
+    serial_logger.printf("Recieved an interrupt! scause: 0x%x stval: 0x%x pc 0x%x task %i (%s)\n", scause, stval, get_cpu_struct()->current_task->regs.program_counter(), get_cpu_struct()->current_task->pid, get_cpu_struct()->current_task->name.c_str());
 
     auto c = get_cpu_struct();
     if (c->nested_level > 1) {

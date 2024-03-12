@@ -1,7 +1,7 @@
 #pragma once
 #include <stddef.h>
-#include "../memory/malloc.hh"
 #include "utility.hh"
+#include <memory/malloc.hh>
 
 namespace klib {
 

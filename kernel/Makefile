@@ -10,7 +10,7 @@ CXX = riscv64-pmos-g++
 LD = riscv64-pmos-g++
 
 ROOTDIR = $(realpath .)
-INCLUDEDIR = include . libunwind/include arch/riscv64
+INCLUDEDIR = include . libunwind/include arch/riscv64 generic
 INCPARAM = $(foreach d, $(INCLUDEDIR), -I$(ROOTDIR)/$d)
 
 # User controllable CFLAGS.
@@ -50,14 +50,14 @@ INTERNALCFLAGS  :=       \
 CCFILES := $(shell find ./ -type f -name '*.cc')
 CFILES := $(shell find ./ -type f -name '*.c')
 ASMFILES := $(shell find ./ -type f -name '*.S')
-OBJS = 	./objects/icxxabi.o ./objects/constructors.o ./utils.o ./misc.o \
-	    ./memory/mem.o ./memory/mem_regions.o ./memory/malloc.o ./memory/dlmalloc.o ./memory/palloc.o ./memory/paging.o \
-		./memory/temp_mapper.o ./memory/mem_object.o ./memory/page_descriptor.o ./memory/virtmem.o \
-	    ./processes/idle.o ./processes/syscalls.o ./processes/tasks.o ./processes/task_group.o \
-		./sched/sched.o ./sched/sched_queue.o \
-		./messaging/messaging.o ./messaging/named_ports.o \
-		./kern_logger/kern_logger.o \
-		./limine/limine.o \
+OBJS = 	./generic/objects/icxxabi.o ./generic/objects/constructors.o ./generic/utils.o ./generic/misc.o \
+	    ./generic/memory/mem.o ./generic/memory/mem_regions.o ./generic/memory/malloc.o ./generic/memory/dlmalloc.o ./generic/memory/palloc.o ./generic/memory/paging.o \
+		./generic/memory/temp_mapper.o ./generic/memory/mem_object.o ./generic/memory/page_descriptor.o ./generic/memory/virtmem.o \
+	    ./generic/processes/idle.o ./generic/processes/syscalls.o ./generic/processes/tasks.o ./generic/processes/task_group.o \
+		./generic/sched/sched.o ./generic/sched/sched_queue.o \
+		./generic/messaging/messaging.o ./generic/messaging/named_ports.o \
+		./generic/kern_logger/kern_logger.o \
+		./generic/limine/limine.o \
 		\
 		./arch/riscv64/cpus/cpus_asm.o ./arch/riscv64/tasks/task_switch.o ./arch/riscv64/arch_specific.o ./arch/riscv64/arch.o \
 		./arch/riscv64/sbi/sbi.o \

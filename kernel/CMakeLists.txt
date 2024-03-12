@@ -1,0 +1,61 @@
+cmake_minimum_required(VERSION 3.22)
+
+set(TARGET_ARCH "riscv64" CACHE STRING "Target architecture (x86_64 or riscv64)")
+set(TOOLCHAIN_PREFIX "${TARGET_ARCH}-pmos-")
+
+set(CMAKE_C_COMPILER "${TOOLCHAIN_PREFIX}gcc")
+set(CMAKE_CXX_COMPILER "${TOOLCHAIN_PREFIX}g++")
+set(CMAKE_ASM_COMPILER "${TOOLCHAIN_PREFIX}gcc")
+set(CMAKE_AR "${TOOLCHAIN_PREFIX}ar")
+
+project(kernel C CXX ASM)
+
+set(CMAKE_C_FLAGS "-O1 -static -ffreestanding -no-pie -fno-pic -march=rv64ima_zicsr_zba_zbb_zbc -mabi=lp64 -Wall -Wextra -g -fno-omit-frame-pointer")
+set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -fexceptions -fasynchronous-unwind-tables")
+set(CMAKE_ASM_FLAGS "${CMAKE_C_FLAGS}")
+
+set(LIBUNWIND_ENABLE_SHARED OFF)
+set(LIBUNWIND_IS_BAREMETAL ON)
+set(LIBUNWIND_INSTALL_HEADERS OFF)
+
+add_subdirectory(libunwind)
+
+file(GLOB_RECURSE PLATFORM_SRCS
+    "${CMAKE_CURRENT_SOURCE_DIR}/arch/${TARGET_ARCH}/*.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/arch/${TARGET_ARCH}/*.S"
+    "${CMAKE_CURRENT_SOURCE_DIR}/arch/${TARGET_ARCH}/*.cc")
+
+file(GLOB_RECURSE GENERIC_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/generic/*.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/generic/*.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/generic/*.S")
+
+add_executable(kernel ${PLATFORM_SRCS} ${GENERIC_SRC})
+
+set_target_properties(kernel PROPERTIES CXX_STANDARD 20)
+set_target_properties(kernel PROPERTIES LINK_FLAGS 
+  "-nostdlib -ffreestanding -static -T${CMAKE_CURRENT_SOURCE_DIR}/linker.ld -fPIC -lgcc -z max-page-size=0x1000 -Wl,--eh-frame-hdr -no-pie -fno-pic -Wl,--demangle")
+
+  target_include_directories(kernel PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_include_directories(kernel PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/arch/${TARGET_ARCH}")
+target_include_directories(kernel PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/generic")
+
+set(CXXRT_SRCDIR "${CMAKE_CURRENT_SOURCE_DIR}/libcxxrt/src")
+set(CXXRT_FILES
+    "${CXXRT_SRCDIR}/cxa_atexit.c"
+    "${CXXRT_SRCDIR}/cxa_finalize.c"
+    "${CXXRT_SRCDIR}/dynamic_cast.cc"
+    "${CXXRT_SRCDIR}/guard.cc"
+    "${CXXRT_SRCDIR}/memory.cc"
+    "${CXXRT_SRCDIR}/stdexcept.cc"
+    "${CXXRT_SRCDIR}/typeinfo.cc"
+    "${CXXRT_SRCDIR}/terminate.cc"
+    "${CXXRT_SRCDIR}/auxhelper.cc"
+    "${CXXRT_SRCDIR}/exception.cc")
+
+add_library(cxxrt STATIC)
+target_sources(cxxrt PRIVATE ${CXXRT_FILES})
+target_include_directories(cxxrt PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+
+target_link_libraries(kernel PUBLIC cxxrt)
+target_link_libraries(kernel PUBLIC libunwind-kernel)

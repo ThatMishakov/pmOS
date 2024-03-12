@@ -1,6 +1,5 @@
 #pragma once
 #include "pair.hh"
-#include "../memory/malloc.hh"
 #include "utility.hh"
 
 namespace klib {
