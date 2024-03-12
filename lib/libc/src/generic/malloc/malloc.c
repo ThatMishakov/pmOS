@@ -525,11 +525,11 @@ void *__request_mem_b(unsigned long bytes);
 
 #define USE_LOCKS 1
 #define USE_SPIN_LOCKS 1
-#define HAVE_MORECORE 1
+#define HAVE_MORECORE 0
 #define MORECORE __request_mem_b
 #define MORECORE_CONTIGUOUS 0
-#define MORECORE_CANNOT_TRIM 0
-#define HAVE_MMAP 0
+#define MORECORE_CANNOT_TRIM 1
+#define HAVE_MMAP 1
 #define LACKS_TIME_H 1
 
 #define LACKS_SYS_PARAM_H 1

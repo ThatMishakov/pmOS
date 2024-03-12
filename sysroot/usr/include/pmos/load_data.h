@@ -45,7 +45,8 @@ struct load_tag_stack_descriptor {
 /// @brief Descriptor of a memory object
 struct module_descriptor {
     uint64_t memory_object_id; //< ID of the memory object containing the module
-    uint64_t path_offser; //< Offset to the start of the module name from the start of parent load_tag_modules_descriptor,
+    uint64_t size; //< Size of the module in bytes. The size of the memory object is rounded up to the nearest page from this.
+    uint64_t path_offset; //< Offset to the start of the module name from the start of parent load_tag_modules_descriptor,
                           //< pointing to the null-terminated string containing the path of the module
     uint64_t cmdline_offset; //< Offset to the start of cmdline argument for the module, similar to path_offset
 };

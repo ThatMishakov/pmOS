@@ -6,8 +6,47 @@
 #include <sys/syscall.h>
 #include "io.h"
 #include "fs.h"
+#include <pmos/load_data.h>
+#include <stdlib.h>
 
 uint64_t loader_port = 0;
+
+extern void * __load_data_kernel;
+extern size_t __load_data_size_kernel;
+
+struct module_descriptor_list {
+    struct module_descriptor_list * next;
+    uint64_t object_id;
+    size_t size;
+    char * cmdline;
+    char * path;
+};
+
+struct module_descriptor_list * module_list = NULL;
+
+void init_modules()
+{
+    struct load_tag_generic * t = get_load_tag(LOAD_TAG_LOAD_MODULES, __load_data_kernel, __load_data_size_kernel);
+    if (t == NULL)
+        return;
+
+    struct load_tag_load_modules_descriptor * m = (struct load_tag_load_modules_descriptor *)t;
+
+    for (size_t i = 0; i < m->modules_count; i++) {
+        struct module_descriptor_list * d = malloc(sizeof(struct module_descriptor_list));
+        if (d == NULL) {
+            print_str("Loader: Could not allocate memory for module descriptor\n");
+            return;
+        }
+
+        d->object_id = m->modules[i].memory_object_id;
+        d->size = m->modules[i].size;
+        d->cmdline = strdup((char *)m + m->modules[i].cmdline_offset);
+        d->path = strdup((char *)m + m->modules[i].path_offset);
+        d->next = module_list;
+        module_list = d;
+    }
+}
 
 void service_ports()
 {
@@ -188,5 +227,6 @@ exit:
 
 int main()
 {
+    init_modules();
     service_ports();
 }

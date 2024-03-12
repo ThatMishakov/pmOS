@@ -448,13 +448,16 @@ klib::unique_ptr<load_tag_generic> construct_load_tag_for_modules() {
 
     load_tag_load_modules_descriptor * desc = (load_tag_load_modules_descriptor*)tag.get();
 
+    desc->modules_count = modules.size();
+
     // Fill in the tags
     for (size_t i = 0; i < modules.size(); i++) {
         auto &module = modules[i];
         auto &descriptor = desc->modules[i];
         descriptor.memory_object_id = module.object->get_id();
+        descriptor.size = module.size;
         memcpy((char*)tag.get() + string_offset, module.path.c_str(), module.path.size() + 1);
-        descriptor.path_offser = string_offset;
+        descriptor.path_offset = string_offset;
         string_offset += module.path.size() + 1;
         memcpy((char*)tag.get() + string_offset, module.cmdline.c_str(), module.cmdline.size() + 1);
         descriptor.cmdline_offset = string_offset;
@@ -495,7 +498,6 @@ void init_task1()
 
     // Create new task and load ELF into it
     auto task = TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel::User);
-    task->name = task1->path;
     bool p = task->load_elf(task1->object, task1->path, tags);
     if (!p) {
         serial_logger.printf("Failed to load ELF\n");

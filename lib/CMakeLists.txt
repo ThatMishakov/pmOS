@@ -11,6 +11,9 @@ set(CMAKE_TRY_COMPILE_TARGET_TYPE "STATIC_LIBRARY")
 
 project(pmos-libraries VERSION 0.1)
 
+set(CMAKE_C_FLAGS "-Wall -Wextra -O2 -fPIC -g")
+set(CMAKE_ASM_FLAGS ${CMAKE_C_FLAGS})
+
 add_subdirectory(libc)
 add_subdirectory(libpthread)
 add_subdirectory(libm)

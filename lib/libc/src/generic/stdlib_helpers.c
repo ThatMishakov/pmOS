@@ -109,8 +109,17 @@ void __thread_exit_destroy_tls()
     }
 }
 
+void __libc_init_hook() __attribute__((weak));
+
+// TODO: This does not look good
+void * __load_data_kernel = 0;
+size_t __load_data_size_kernel = 0;
+
 static void init_tls_first_time(void * load_data, size_t load_data_size, TLS_Data * d)
 {
+    __load_data_kernel = load_data;
+    __load_data_size_kernel = load_data_size;
+
     global_tls_data = d;
 
     struct load_tag_stack_descriptor * s = (struct load_tag_stack_descriptor *)get_load_tag(LOAD_TAG_STACK_DESCRIPTOR, load_data, load_data_size);
@@ -122,6 +131,9 @@ static void init_tls_first_time(void * load_data, size_t load_data_size, TLS_Dat
         return; // TODO: Panic
 
     set_segment(0, SEGMENT_FS, u);
+
+    if (__libc_init_hook)
+        __libc_init_hook();
 }
 
 // defined in pthread/threads.c

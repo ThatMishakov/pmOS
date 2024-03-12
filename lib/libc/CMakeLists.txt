@@ -8,8 +8,8 @@ set(CMAKE_C_OUTPUT_EXTENSION_REPLACE 1)
 
 project(libc VERSION 0.1 LANGUAGES C ASM)
 
-set(CMAKE_C_FLAGS "-Wall -Wextra -O2 -fPIC" CACHE STRING "C compiler flags")
-set(CMAKE_ASM_FLAGS ${CMAKE_C_FLAGS} CACHE STRING "ASM compiler flags")
+set(CMAKE_C_FLAGS "-Wall -Wextra -O2 -g")
+set(CMAKE_ASM_FLAGS ${CMAKE_C_FLAGS})
 
 set(SRC_FOLDER "src")
 

@@ -75,6 +75,8 @@ extern "C" void syscall_handler()
     u64 arg4 = syscall_arg4(task);
     u64 arg5 = syscall_arg5(task);
     
+    //serial_logger.printf("syscall_handler: call_n: %x, arg1: %x, arg2: %x, arg3: %x, arg4: %x, arg5: %x\n", call_n, arg1, arg2, arg3, arg4, arg5);
+
     // TODO: check permissions
 
     //t_print_bochs("Debug: syscall %h pid %h (%s) ", call_n, get_cpu_struct()->current_task->pid, get_cpu_struct()->current_task->name.c_str());
@@ -98,6 +100,8 @@ extern "C" void syscall_handler()
         syscall_ret_low(task) = ERROR_GENERAL;
         return;
     }
+
+    //t_print_bochs("SUCCESS %h\n", syscall_ret_high(task));
     
     //t_print_bochs(" -> SUCCESS\n");
     syscall_ret_low(task) = SUCCESS;
@@ -556,7 +560,7 @@ void syscall_create_normal_region(u64 pid, u64 addr_start, u64 size, u64 access,
         return;
     }
 
-    syscall_ret_high(current) = dest_task->page_table->atomic_create_normal_region(addr_start, size, access & 0x07, access & 0x08, klib::string(), 0);
+    syscall_ret_high(current) = dest_task->page_table->atomic_create_normal_region(addr_start, size, access & 0x07, access & 0x08, "anonymous region", 0);
 }
 
 void syscall_create_phys_map_region(u64 pid, u64 addr_start, u64 size, u64 access, u64 phys_addr, u64)

@@ -126,6 +126,7 @@ public:
     }
 
     constexpr const string& operator=(const string& str);
+
     string& operator= (const char* s)
     {
         *this = string(s);
