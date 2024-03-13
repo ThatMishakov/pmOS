@@ -72,6 +72,14 @@ struct load_tag_framebuffer {
     uint32_t framebuffer_height; //< Height of the framebuffer in pixels
     uint32_t framebuffer_pitch; //< Pitch of the framebuffer in bytes
     uint32_t framebuffer_bpp; //< Bits per pixel
+    uint8_t memory_model; //< Memory model of the framebuffer
+    uint8_t red_mask_size; //< Size of the red mask in bits
+    uint8_t red_mask_shift; //< Shift of the red mask
+    uint8_t green_mask_size; //< Size of the green mask in bits
+    uint8_t green_mask_shift; //< Shift of the green mask
+    uint8_t blue_mask_size; //< Size of the blue mask in bits
+    uint8_t blue_mask_shift; //< Shift of the blue mask
+    uint8_t unused[1]; //< Unused, must be 0
 };
 #define LOAD_TAG_FRAMEBUFFER_HEADER {LOAD_TAG_FRAMEBUFFER, 0, sizeof(struct load_tag_framebuffer)}
 

@@ -11,10 +11,10 @@ isr:
     # sched/sched.hh has the struct layout
     sd t0, 16(tp)
 
-    # Load the address of the 
+    # Load the address of the task struct
     # TODO: At the moment, in-kernel interrupts are not supported
     # Load task struct info
-    ld t0, 24(tp)
+    ld t0, 32(tp)
 
     # Save registers
     sd x1, 8(t0)  # ra
@@ -51,7 +51,7 @@ isr:
 
     # Save t0
     ld t1, 16(tp)
-    sd t1, 40(tp)
+    sd t1, 40(t0)
 
     # Save tp
     # Read user tp
@@ -75,9 +75,9 @@ isr:
     addi fp, sp, 16
 
     # Tick the nested_level counter, to know if the interrupt is in kernel next time
-    ld t1, 40(tp)
+    ld t1, 24(tp)
     addi t1, t1, 1
-    sd t1, 40(tp)
+    sd t1, 24(tp)
 
 
 
@@ -91,12 +91,12 @@ isr:
 return_from_kernel:
 
     # nested_level counter
-    ld t1, 40(tp)
+    ld t1, 24(tp)
     addi t1, t1, -1
-    sd t1, 40(tp)
+    sd t1, 24(tp)
 
     # Load the struct holding the saved registers
-    ld t0, 24(tp)
+    ld t0, 32(tp)
 
     # SPP bit
     # If the task is in user space, clear it, otherwise set it

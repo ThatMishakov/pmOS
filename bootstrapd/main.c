@@ -31,6 +31,13 @@ struct framebuffer {
     uint32_t framebuffer_height;
     uint32_t framebuffer_pitch;
     uint32_t framebuffer_bpp;
+    uint16_t framebuffer_memory_model;
+    uint8_t framebuffer_red_mask_size;
+    uint8_t framebuffer_red_mask_shift;
+    uint8_t framebuffer_green_mask_size;
+    uint8_t framebuffer_green_mask_shift;
+    uint8_t framebuffer_blue_mask_size;
+    uint8_t framebuffer_blue_mask_shift;
 };
 
 // TODO: Several framebuffers can be present. Only store one for now
@@ -77,6 +84,13 @@ void init_misc()
     fb->framebuffer_height = tt->framebuffer_height;
     fb->framebuffer_pitch = tt->framebuffer_pitch;
     fb->framebuffer_bpp = tt->framebuffer_bpp;
+    fb->framebuffer_memory_model = tt->memory_model;
+    fb->framebuffer_red_mask_size = tt->red_mask_size;
+    fb->framebuffer_red_mask_shift = tt->red_mask_shift;
+    fb->framebuffer_green_mask_size = tt->green_mask_size;
+    fb->framebuffer_green_mask_shift = tt->green_mask_shift;
+    fb->framebuffer_blue_mask_size = tt->blue_mask_size;
+    fb->framebuffer_blue_mask_shift = tt->blue_mask_shift;
 }
 
 void provide_framebuffer(pmos_port_t port, uint32_t flags)
@@ -97,6 +111,13 @@ void provide_framebuffer(pmos_port_t port, uint32_t flags)
         r.framebuffer_height = fb->framebuffer_height;
         r.framebuffer_width = fb->framebuffer_width;
         r.framebuffer_pitch = fb->framebuffer_pitch;
+        r.framebuffer_memory_model = fb->framebuffer_memory_model;
+        r.framebuffer_red_mask_size = fb->framebuffer_red_mask_size;
+        r.framebuffer_red_mask_shift = fb->framebuffer_red_mask_shift;
+        r.framebuffer_green_mask_size = fb->framebuffer_green_mask_size;
+        r.framebuffer_green_mask_shift = fb->framebuffer_green_mask_shift;
+        r.framebuffer_blue_mask_size = fb->framebuffer_blue_mask_size;
+        r.framebuffer_blue_mask_shift = fb->framebuffer_blue_mask_shift;
     }
 
 

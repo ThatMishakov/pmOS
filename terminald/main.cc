@@ -16,7 +16,7 @@ struct flanterm_context *ft_ctx;
 
 void write_screen(const char * msg)
 {
-    //flanterm_write(ft_ctx, msg, strlen(msg));
+    flanterm_write(ft_ctx, msg, strlen(msg));
 }
 
 void int_to_hex(char * buffer, uint64_t n, char upper)
@@ -97,7 +97,7 @@ void init_screen()
     // Map memory
     size_t start = r->framebuffer_addr&~0xfffUL;
     size_t size = r->framebuffer_width*r->framebuffer_height*r->framebuffer_bpp/8;
-    size_t end = (start + size * 0xfff)&~0xfffUL;
+    size_t end = (start + size + 0xfff)&~0xfffUL;
     size_t size_alligned = end - start;
 
     mem_request_ret_t map_request = create_phys_map_region(PID_SELF, 0, size_alligned, PROT_READ|PROT_WRITE, (void*)start);
@@ -107,6 +107,7 @@ void init_screen()
     framebuffer_ptr = (void*)((u64)map_request.virt_addr + (r->framebuffer_addr&0xfff));
 
     ft_ctx = flanterm_fb_init(malloc, flanterm_free, (uint32_t *)framebuffer_ptr, r->framebuffer_width, r->framebuffer_height, r->framebuffer_pitch,
+        r->framebuffer_red_mask_size, r->framebuffer_red_mask_shift, r->framebuffer_green_mask_size, r->framebuffer_green_mask_shift, r->framebuffer_blue_mask_size, r->framebuffer_blue_mask_shift,
         nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, 0, 1, 1, 1, 1, 1, 0);
 
     free(message);
@@ -123,10 +124,8 @@ int main() {
     configuration_port = req.port;
 
     init_screen();
-    const char msg[] = "Hello world\n";
+    const char msg[] = "Initialized framebuffer...\n";
     flanterm_write(ft_ctx, msg, sizeof(msg));
-
-    write_screen(const_cast<char*>("Hello from terminald!\n"));
 
     req = create_port(PID_SELF, 0);
     if (req.result != SUCCESS) {

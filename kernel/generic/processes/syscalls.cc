@@ -75,11 +75,11 @@ extern "C" void syscall_handler()
     u64 arg4 = syscall_arg4(task);
     u64 arg5 = syscall_arg5(task);
     
-    serial_logger.printf("syscall_handler: call_n: %x, arg1: %x, arg2: %x, arg3: %x, arg4: %x, arg5: %x\n", call_n, arg1, arg2, arg3, arg4, arg5);
+    //serial_logger.printf("syscall_handler: call_n: %x, arg1: %x, arg2: %x, arg3: %x, arg4: %x, arg5: %x\n", call_n, arg1, arg2, arg3, arg4, arg5);
 
     // TODO: check permissions
 
-    t_print_bochs("Debug: syscall %h pid %h (%s) ", call_n, get_cpu_struct()->current_task->pid, get_cpu_struct()->current_task->name.c_str());
+    //t_print_bochs("Debug: syscall %h pid %h (%s) ", call_n, get_cpu_struct()->current_task->pid, get_cpu_struct()->current_task->name.c_str());
     //t_print_bochs(" %h %h %h %h %h ", arg1, arg2, arg3, arg4, arg5);
     if (task->attr.debug_syscalls) {
         global_logger.printf("Debug: syscall %h pid %h\n", call_n, get_cpu_struct()->current_task->pid);
@@ -101,7 +101,7 @@ extern "C" void syscall_handler()
         return;
     }
 
-    t_print_bochs("SUCCESS %h\n", syscall_ret_high(task));
+    //t_print_bochs("SUCCESS %h\n", syscall_ret_high(task));
     
     //t_print_bochs(" -> SUCCESS\n");
     if (task == get_cpu_struct()->current_task)

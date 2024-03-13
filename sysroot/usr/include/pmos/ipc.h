@@ -744,6 +744,13 @@ typedef struct IPC_Framebuffer_Reply {
     uint32_t framebuffer_height;
     uint32_t framebuffer_pitch;
     uint32_t framebuffer_bpp;
+    uint16_t framebuffer_memory_model;
+    uint8_t framebuffer_red_mask_size;
+    uint8_t framebuffer_red_mask_shift;
+    uint8_t framebuffer_green_mask_size;
+    uint8_t framebuffer_green_mask_shift;
+    uint8_t framebuffer_blue_mask_size;
+    uint8_t framebuffer_blue_mask_shift;
 }  IPC_Framebuffer_Reply;
 
 #if defined(__cplusplus)

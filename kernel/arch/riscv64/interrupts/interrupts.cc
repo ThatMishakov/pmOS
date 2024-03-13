@@ -58,7 +58,7 @@ void page_fault(u64 virt_addr, u64 scause)
         auto& regions = page_table->paging_regions;
         const auto it = regions.get_smaller_or_equal(page);
         if (it != regions.end() and it->second->is_in_range(virt_addr)) {
-            serial_logger.printf("Pagefault in region %s\n", it->second->name.c_str());
+            //serial_logger.printf("Pagefault in region %s\n", it->second->name.c_str());
             auto r = it->second->on_page_fault(access_type, virt_addr);
             if (not r)
                 task->atomic_block_by_page(page, &task->page_table->blocked_tasks);
@@ -66,6 +66,7 @@ void page_fault(u64 virt_addr, u64 scause)
             throw Kern_Exception(ERROR_PAGE_NOT_ALLOCATED, "pagefault in unknown region");
     } catch (const Kern_Exception& e) {
         serial_logger.printf("Warning: Pagefault %h pid %i (%s) rip %h error %h -> %i killing process...\n", virt_addr, task->pid, task->name.c_str(), task->regs.pc, scause, e.err_code);
+        global_logger.printf("Warning: Pagefault %h pid %i (%s) pc %h error %h -> %i killing process...\n", virt_addr, task->pid, task->name.c_str(), task->regs.pc, scause, e.err_code);
         task->atomic_kill();
     }
 }
@@ -77,7 +78,7 @@ void handle_interrupt()
     u64 scause, stval;
     get_scause_stval(&scause, &stval);
 
-    serial_logger.printf("Recieved an interrupt! scause: 0x%x stval: 0x%x pc 0x%x task %i (%s)\n", scause, stval, get_cpu_struct()->current_task->regs.program_counter(), get_cpu_struct()->current_task->pid, get_cpu_struct()->current_task->name.c_str());
+    //serial_logger.printf("Recieved an interrupt! scause: 0x%x stval: 0x%x pc 0x%x task %i (%s)\n", scause, stval, get_cpu_struct()->current_task->regs.program_counter(), get_cpu_struct()->current_task->pid, get_cpu_struct()->current_task->name.c_str());
 
     auto c = get_cpu_struct();
     if (c->nested_level > 1) {
