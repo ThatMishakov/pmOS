@@ -467,6 +467,46 @@ klib::unique_ptr<load_tag_generic> construct_load_tag_for_modules() {
     return tag;
 }
 
+struct limine_framebuffer_request fb_req = {
+    .id = LIMINE_FRAMEBUFFER_REQUEST,
+    .revision = 1,
+    .response = nullptr,
+};
+
+klib::vector<klib::unique_ptr<load_tag_generic>> construct_load_tag_framebuffer() {
+    if (fb_req.response == nullptr)
+        return {};
+
+    struct limine_framebuffer_response r;
+    copy_from_phys((u64)fb_req.response - hhdm_offset, &r, sizeof(r));
+
+    limine_framebuffer *framebuffers[r.framebuffer_count];
+    copy_from_phys((u64)r.framebuffers - hhdm_offset, framebuffers, r.framebuffer_count * sizeof(limine_framebuffer*));
+
+    klib::vector<klib::unique_ptr<load_tag_generic>> tags;
+
+    for (size_t i = 0; i < r.framebuffer_count; i++) {
+        limine_framebuffer fb;
+        copy_from_phys((u64)framebuffers[i] - hhdm_offset, &fb, sizeof(fb));
+        
+        klib::unique_ptr<load_tag_generic> tag = (load_tag_generic*) new load_tag_framebuffer;
+        tag->tag = LOAD_TAG_FRAMEBUFFER;
+        tag->flags = 0;
+        tag->offset_to_next = sizeof(load_tag_framebuffer);
+
+        load_tag_framebuffer * desc = (load_tag_framebuffer*)tag.get();
+        desc->framebuffer_addr = (u64)fb.address - hhdm_offset;
+        desc->framebuffer_pitch = fb.pitch;
+        desc->framebuffer_width = fb.width;
+        desc->framebuffer_height = fb.height;
+        desc->framebuffer_bpp = fb.bpp;
+
+        tags.push_back(klib::move(tag));
+    }
+
+    return tags;
+}
+
 klib::shared_ptr<Arch_Page_Table> idle_page_table = nullptr;
 
 void init(void);
@@ -494,6 +534,7 @@ void init_task1()
 
     // Pass the modules to the task
     klib::vector<klib::unique_ptr<load_tag_generic>> tags;
+    tags = construct_load_tag_framebuffer();
     tags.push_back(construct_load_tag_for_modules());
 
     // Create new task and load ELF into it

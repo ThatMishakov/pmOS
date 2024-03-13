@@ -9,6 +9,7 @@ enum {
     LOAD_TAG_STACK_DESCRIPTOR = 3,
     // LOAD_TAG_FILE_DESCRIPTORS = 4,
     LOAD_TAG_LOAD_MODULES = 5,
+    LOAD_TAG_FRAMEBUFFER = 6,
 };
 
 /// @brief Header for a load tag
@@ -60,6 +61,19 @@ struct load_tag_load_modules_descriptor {
     struct module_descriptor modules[]; //< List of the modules, modules_count entries
     // Strings of modules go here
 };
+
+/// @brief Framebuffer tag
+///
+/// This tag is used to pass the framebuffer information, provided by the bootloader to the bootstrap process
+struct load_tag_framebuffer {
+    struct load_tag_generic header;
+    uint64_t framebuffer_addr; //< Physical address of the framebuffer
+    uint32_t framebuffer_width; //< Width of the framebuffer in pixels
+    uint32_t framebuffer_height; //< Height of the framebuffer in pixels
+    uint32_t framebuffer_pitch; //< Pitch of the framebuffer in bytes
+    uint32_t framebuffer_bpp; //< Bits per pixel
+};
+#define LOAD_TAG_FRAMEBUFFER_HEADER {LOAD_TAG_FRAMEBUFFER, 0, sizeof(struct load_tag_framebuffer)}
 
 /// @brief Gets the first tag of the specified type
 ///

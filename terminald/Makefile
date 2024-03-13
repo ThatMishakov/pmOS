@@ -3,28 +3,23 @@ EXEC = terminald.elf
 ROOTDIR = $(realpath .)/..
 export PATH := $(ROOTDIR)/bin/cross/bin:$(PATH)
 
-CC = x86_64-pmos-gcc
-CPP = x86_64-pmos-gcc
-CXX = x86_64-pmos-g++
+CC = riscv64-pmos-gcc
+CPP = riscv64-pmos-gcc
+CXX = riscv64-pmos-g++
 
 INCLUDEDIR =
 
-USERCFLAGS = -Wall -Wextra -O2 -pipe
+USERCFLAGS = -Wall -Wextra -O2 -g -pipe -I.
 
 CPPFLAGS = $(INTERNALCFLAGS) $(USERCFLAGS) -MMD -MP
 ASMFLAGS = -I$(INCLUDEDIR)
 LDFLAGS = $(INTERNALLDFLAGS)
 
 # Internal link flags that should not be changed by the user.
-INTERNALLDFLAGS :=     \
-	-static
+INTERNALLDFLAGS := -static
 
 # Internal C flags that should not be changed by the user.
-INTERNALCFLAGS  :=       \
-	-static \
-	-mno-red-zone \
-	-fPIE \
-	-fno-exceptions -fno-rtti
+INTERNALCFLAGS  := -static
  
 # Use find to glob all *.c files in the directory and extract the object names.
 CCFILES := $(shell find ./ -type f -name '*.cc')

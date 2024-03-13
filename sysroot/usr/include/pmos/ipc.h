@@ -711,6 +711,41 @@ typedef struct IPC_Thread_Finished {
     uint64_t thread_id;
 } IPC_Thread_Finished;
 
+
+
+#define IPC_Framebuffer_Request_NUM 0x120
+/// @brief Request of the framebuffer to the bootstrap server or devices driver
+typedef struct IPC_Framebuffer_Request {
+    /// Message type (must be IPC_Framebuffer_Request_NUM)
+    uint32_t type;
+
+    /// Flags
+    uint32_t flags;
+
+    /// Port for the reply
+    pmos_port_t reply_port;
+} IPC_Framebuffer_Request;
+
+#define IPC_Framebuffer_Reply_NUM 0x121
+/// @brief Reply with the framebuffer address
+typedef struct IPC_Framebuffer_Reply {
+    /// Message type (must be IPC_Framebuffer_Reply_NUM)
+    uint32_t type;
+
+    /// Flags
+    uint16_t flags;
+
+    /// Result code
+    int64_t result_code;
+
+    // Framebuffer data
+    uint64_t framebuffer_addr;
+    uint32_t framebuffer_width;
+    uint32_t framebuffer_height;
+    uint32_t framebuffer_pitch;
+    uint32_t framebuffer_bpp;
+}  IPC_Framebuffer_Reply;
+
 #if defined(__cplusplus)
 } /* extern "C" */
 #endif

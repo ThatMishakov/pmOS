@@ -75,11 +75,11 @@ extern "C" void syscall_handler()
     u64 arg4 = syscall_arg4(task);
     u64 arg5 = syscall_arg5(task);
     
-    //serial_logger.printf("syscall_handler: call_n: %x, arg1: %x, arg2: %x, arg3: %x, arg4: %x, arg5: %x\n", call_n, arg1, arg2, arg3, arg4, arg5);
+    serial_logger.printf("syscall_handler: call_n: %x, arg1: %x, arg2: %x, arg3: %x, arg4: %x, arg5: %x\n", call_n, arg1, arg2, arg3, arg4, arg5);
 
     // TODO: check permissions
 
-    //t_print_bochs("Debug: syscall %h pid %h (%s) ", call_n, get_cpu_struct()->current_task->pid, get_cpu_struct()->current_task->name.c_str());
+    t_print_bochs("Debug: syscall %h pid %h (%s) ", call_n, get_cpu_struct()->current_task->pid, get_cpu_struct()->current_task->name.c_str());
     //t_print_bochs(" %h %h %h %h %h ", arg1, arg2, arg3, arg4, arg5);
     if (task->attr.debug_syscalls) {
         global_logger.printf("Debug: syscall %h pid %h\n", call_n, get_cpu_struct()->current_task->pid);
@@ -101,10 +101,11 @@ extern "C" void syscall_handler()
         return;
     }
 
-    //t_print_bochs("SUCCESS %h\n", syscall_ret_high(task));
+    t_print_bochs("SUCCESS %h\n", syscall_ret_high(task));
     
     //t_print_bochs(" -> SUCCESS\n");
-    syscall_ret_low(task) = SUCCESS;
+    if (task == get_cpu_struct()->current_task)
+        syscall_ret_low(task) = SUCCESS;
 }
 
 void getpid(u64, u64, u64, u64, u64, u64)
@@ -285,15 +286,15 @@ void syscall_get_message_info(u64 message_struct, u64 portno, u64 flags, u64, u6
     }
 
     u64 msg_struct_size = sizeof(Message_Descriptor);
+    Message_Descriptor desc = {
+        .sender = msg->pid_from,
+        .channel = 0,
+        .size = msg->size(),
+    };
 
-    bool result = prepare_user_buff_wr((char*)message_struct, msg_struct_size);
-    if (not result)
-        return;
-
-    Message_Descriptor& desc = *(Message_Descriptor*)message_struct;
-    desc.sender = msg->pid_from;
-    desc.channel = 0;
-    desc.size = msg->size();
+    bool b = copy_to_user((char *)&desc, (char *)message_struct, msg_struct_size);
+    if (not b)
+        assert(!"blocking by page is not yet implemented");
 }
 
 void syscall_set_attribute(u64 pid, u64 attribute, u64 value, u64, u64, u64)

@@ -5,3 +5,9 @@
 	path = llvm-project
 	url = https://github.com/llvm/llvm-project.git
 	branch = release/16.x
+[submodule "terminald/terminald/flanterm"]
+	path = terminald/terminald/flanterm
+	url = https://github.com/mintsuki/flanterm
+[submodule "terminald/flanterm"]
+	path = terminald/flanterm
+	url = https://github.com/mintsuki/flanterm

@@ -8,6 +8,7 @@
 #include "fs.h"
 #include <pmos/load_data.h>
 #include <stdlib.h>
+#include <errno.h>
 
 uint64_t loader_port = 0;
 
@@ -23,6 +24,17 @@ struct module_descriptor_list {
 };
 
 struct module_descriptor_list * module_list = NULL;
+
+struct framebuffer {
+    uint64_t framebuffer_addr;
+    uint32_t framebuffer_width;
+    uint32_t framebuffer_height;
+    uint32_t framebuffer_pitch;
+    uint32_t framebuffer_bpp;
+};
+
+// TODO: Several framebuffers can be present. Only store one for now
+struct framebuffer *fb = NULL;
 
 void init_modules()
 {
@@ -46,6 +58,49 @@ void init_modules()
         d->next = module_list;
         module_list = d;
     }
+}
+
+void init_misc()
+{
+    struct load_tag_generic * t = get_load_tag(LOAD_TAG_FRAMEBUFFER, __load_data_kernel, __load_data_size_kernel);
+    if (t == NULL)
+        return;
+
+    fb = malloc(sizeof(struct framebuffer));
+    if (fb == NULL)
+        return;
+
+    struct load_tag_framebuffer *tt = (struct load_tag_framebuffer*)t;
+
+    fb->framebuffer_addr = tt->framebuffer_addr;
+    fb->framebuffer_width = tt->framebuffer_width;
+    fb->framebuffer_height = tt->framebuffer_height;
+    fb->framebuffer_pitch = tt->framebuffer_pitch;
+    fb->framebuffer_bpp = tt->framebuffer_bpp;
+}
+
+void provide_framebuffer(pmos_port_t port, uint32_t flags)
+{
+    (void)flags;
+
+    IPC_Framebuffer_Reply r = {
+        .type = IPC_Framebuffer_Reply_NUM,
+    };
+
+    if (fb == NULL)
+        r.result_code = -ENOSYS;
+    else {
+        r.result_code = 0;
+        r.flags = 0;
+        r.framebuffer_addr = fb->framebuffer_addr;
+        r.framebuffer_bpp = fb->framebuffer_bpp;
+        r.framebuffer_height = fb->framebuffer_height;
+        r.framebuffer_width = fb->framebuffer_width;
+        r.framebuffer_pitch = fb->framebuffer_pitch;
+    }
+
+
+    send_message_port(port, sizeof(r), &r);
 }
 
 void start_executables()
@@ -245,6 +300,20 @@ void service_ports()
 
             break;
         }
+        case IPC_Framebuffer_Request_NUM: {
+            // Provide framebuffer
+            IPC_Framebuffer_Request *a = (IPC_Framebuffer_Request*)ptr;
+            if (desc.size < sizeof (IPC_Framebuffer_Request)) {
+                print_str("Loader: Recieved IPC_Framebuffer_Request of unexpected size 0x");
+                print_hex(desc.size);
+                print_str("\n");
+                break;
+            }
+
+            provide_framebuffer(a->reply_port, a->flags);
+
+            break;
+        }
 
         default:
             print_str("Loader: Recievend unknown message with type ");
@@ -261,6 +330,7 @@ exit:
 int main()
 {
     init_modules();
+    init_misc();
     start_executables();
     service_ports();
 }

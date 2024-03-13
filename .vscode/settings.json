@@ -114,7 +114,11 @@
         "locale": "cpp",
         "forward_list": "cpp",
         "hash_set": "cpp",
-        "ctype.h": "c"
+        "ctype.h": "c",
+        "args.h": "c",
+        "mman.h": "c",
+        "messaging.h": "c",
+        "syscalls.h": "c"
     },
     "cmake.configureOnOpen": false
 }
