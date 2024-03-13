@@ -8,9 +8,6 @@ set(CMAKE_C_OUTPUT_EXTENSION_REPLACE 1)
 
 project(libc VERSION 0.1 LANGUAGES C ASM)
 
-set(CMAKE_C_FLAGS "-Wall -Wextra -O2 -g")
-set(CMAKE_ASM_FLAGS ${CMAKE_C_FLAGS})
-
 set(SRC_FOLDER "src")
 
 file(GLOB_RECURSE GENERIC_SRC "${SRC_FOLDER}/generic/*.c" "${SRC_FOLDER}/generic/*.S")

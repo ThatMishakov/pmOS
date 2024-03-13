@@ -55,6 +55,12 @@ const char stderr_port_name[] = "/pmos/stderr";
 
 void *framebuffer_ptr = nullptr;
 
+
+void flanterm_free(void *ptr, size_t)
+{
+    free(ptr);
+}
+
 void init_screen()
 {
     IPC_Framebuffer_Request req = {
@@ -100,9 +106,8 @@ void init_screen()
 
     framebuffer_ptr = (void*)((u64)map_request.virt_addr + (r->framebuffer_addr&0xfff));
 
-    ft_ctx = flanterm_fb_simple_init(
-        (uint32_t *)framebuffer_ptr, r->framebuffer_width, r->framebuffer_height, r->framebuffer_pitch
-    );
+    ft_ctx = flanterm_fb_init(malloc, flanterm_free, (uint32_t *)framebuffer_ptr, r->framebuffer_width, r->framebuffer_height, r->framebuffer_pitch,
+        nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, 0, 1, 1, 1, 1, 1, 0);
 
     free(message);
 }
@@ -120,6 +125,7 @@ int main() {
     init_screen();
     const char msg[] = "Hello world\n";
     flanterm_write(ft_ctx, msg, sizeof(msg));
+
     write_screen(const_cast<char*>("Hello from terminald!\n"));
 
     req = create_port(PID_SELF, 0);

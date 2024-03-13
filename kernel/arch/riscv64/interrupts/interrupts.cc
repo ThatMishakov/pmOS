@@ -2,6 +2,7 @@
 #include <cpus/csr.hh>
 #include <sched/sched.hh>
 #include "interrupts.hh"
+#include <assert.h>
 
 extern "C" void handle_interrupt();
 
@@ -81,6 +82,7 @@ void handle_interrupt()
     auto c = get_cpu_struct();
     if (c->nested_level > 1) {
         serial_logger.printf("!!! kernel interrupt !!!\n");
+        serial_logger.printf("nested level: %i\n", c->nested_level);
         print_stack_trace();
         while (1) ;
     }
@@ -112,4 +114,6 @@ void handle_interrupt()
 
         syscall_handler();
     }
+
+    assert(c->nested_level == 1);
 }

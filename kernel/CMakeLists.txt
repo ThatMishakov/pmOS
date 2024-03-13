@@ -10,7 +10,7 @@ set(CMAKE_AR "${TOOLCHAIN_PREFIX}ar")
 
 project(kernel C CXX ASM)
 
-set(CMAKE_C_FLAGS "-O1 -static -ffreestanding -no-pie -fno-pic -march=rv64ima_zicsr_zba_zbb_zbc -mabi=lp64 -Wall -Wextra -g -fno-omit-frame-pointer")
+set(CMAKE_C_FLAGS "-O2 -static -ffreestanding -no-pie -fno-pic -march=rv64ima_zicsr_zba_zbb_zbc -mabi=lp64 -Wall -Wextra -g -fno-omit-frame-pointer")
 set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -fexceptions -fasynchronous-unwind-tables")
 set(CMAKE_ASM_FLAGS "${CMAKE_C_FLAGS}")
 

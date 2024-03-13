@@ -163,9 +163,11 @@ bool Mem_Object_Reference::alloc_page(u64 ptr_addr)
     if (cow) {
         const auto reg_addr = (ptr_addr&~0xfffUL) - start_addr;
 
-        if (reg_addr+0x1000 <= start_offset_bytes or reg_addr >= start_offset_bytes + object_size_bytes) {
+        if (reg_addr+0x1000 <= start_offset_bytes or reg_addr >= start_offset_bytes + object_size_bytes) { 
             // Out of object range. Allocate an empty page
             auto page = Page_Descriptor::allocate_page(12);
+            
+            clear_page(page.page_ptr, 0);
 
             owner->map(klib::move(page), ptr_addr, craft_arguments());
             return true;
