@@ -12,6 +12,7 @@ RISCV64_Temp_Mapper::RISCV64_Temp_Mapper(void *virt_addr, u64 pt_ptr)
 
     Page_Table_Argumments arg {
         1,
+        1,
         0, 
         0, 
         1,

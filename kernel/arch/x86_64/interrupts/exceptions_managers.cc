@@ -1,6 +1,6 @@
 #include "exceptions_managers.hh"
 #include <utils.hh>
-#include <asm.hh>
+#include <x86_asm.hh>
 #include <memory/paging.hh>
 #include <processes/syscalls.hh>
 #include <processes/tasks.hh>
@@ -8,15 +8,8 @@
 #include <kern_logger/kern_logger.hh>
 #include <stdlib.h>
 
-void print_registers(const klib::shared_ptr<TaskDescriptor>& task)
+void print_registers(const Task_Regs& regs)
 {
-    if (not task) {
-        t_print_bochs("get_cpu_struct()->current_task == nullptr!\n");
-        return;
-    }
-
-    const Task_Regs& regs = task->regs;
-    t_print_bochs("Current task pid %i (%s). Registers:\n", task->pid, task->name.c_str());
     t_print_bochs(" => %%rdi: 0x%h\n", regs.scratch_r.rdi);
     t_print_bochs(" => %%rsi: 0x%h\n", regs.scratch_r.rsi);
     t_print_bochs(" => %%rdx: 0x%h\n", regs.scratch_r.rdx);
@@ -42,6 +35,25 @@ void print_registers(const klib::shared_ptr<TaskDescriptor>& task)
     t_print_bochs(" => %%fs offset: 0x%h\n", regs.seg.fs);
 
     t_print_bochs(" Entry type: %i\n", regs.entry_type);
+
+    t_print_bochs(" Error code: 0x%h\n", regs.int_err);
+}
+
+void print_registers(const klib::shared_ptr<TaskDescriptor>& task)
+{
+    if (not task)
+        return;
+
+    t_print_bochs("Registers for task %i (%s)\n", task->pid, task->name.c_str());
+    print_registers(task->regs);
+}
+
+Task_Regs kernel_interrupt_regs;
+extern "C" void dbg_main()
+{
+    t_print_bochs("Error! Kernel interrupt!\n");
+    print_registers(kernel_interrupt_regs);
+    while (1) ;
 }
 
 void print_stack_trace(const klib::shared_ptr<TaskDescriptor>& task)
@@ -96,6 +108,11 @@ void print_pt_chain(u64 page, Logger& logger)
     logger.printf("PTE: %h\n", *((u64 *)pte));
 }
 
+bool is_protection_violation(u64 err_code) noexcept
+{
+    return err_code & 0x01;
+}
+
 extern "C" void pagefault_manager()
 {
     CPU_Info *c = get_cpu_struct();
@@ -117,14 +134,22 @@ extern "C" void pagefault_manager()
     //t_print_bochs("Debug: Pagefault %h pid %i (%s) rip %h error %h\n", virtual_addr, task->pid, task->name.c_str(), task->regs.e.rip, err);
 
     try {
+        if (is_protection_violation(err))
+            throw Kern_Exception(ERROR_PROTECTION_VIOLATION, "Page protection violation");
+
         Auto_Lock_Scope scope_lock(task->page_table->lock);
 
         auto& regions = task->page_table->paging_regions;
         const auto it = regions.get_smaller_or_equal(virtual_addr);
         const auto addr_all = virtual_addr & ~07777;
 
+        // Reads can't really be checked on x86, so don't set read flag
+        u64 access_mask =
+              (err & 0x002) ? Generic_Mem_Region::Writeable : 0
+            | (err & 0x010) ? Generic_Mem_Region::Executable : 0;
+
         if (it != regions.end() and it->second->is_in_range(virtual_addr)) {
-            auto r = it->second->on_page_fault(err, virtual_addr);
+            auto r = it->second->on_page_fault(access_mask, virtual_addr);
             if (not r)
                 task->atomic_block_by_page(addr_all, &task->page_table->blocked_tasks);
         } else {

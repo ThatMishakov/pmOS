@@ -1,6 +1,6 @@
-    .globl printc
-    .type printc, @function
-printc:
+    .globl bochs_printc
+    .type bochs_printc, @function
+bochs_printc:
     movb %dil, %al
     outb $0xe9
     ret

@@ -20,6 +20,10 @@
 #include <assert.h>
 #include "task_group.hh"
 
+#ifdef __x86_64__
+#include <sched/segments.hh>
+#endif
+
 using syscall_function = void (*)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t);
 klib::array<syscall_function, 37> syscall_table = {
     syscall_exit,
@@ -642,7 +646,7 @@ void syscall_set_segment(u64 pid, u64 segment_type, u64 ptr, u64, u64, u64)
 
     #ifdef __x86_64__
     if (target == current)
-        save_segments(target);
+        save_segments(target.get());
     #endif
 
     switch (segment_type) {
@@ -658,7 +662,7 @@ void syscall_set_segment(u64 pid, u64 segment_type, u64 ptr, u64, u64, u64)
 
     #ifdef __x86_64__
     if (target == current)
-       restore_segments(target);
+       restore_segments(target.get());
     #endif
 }
 

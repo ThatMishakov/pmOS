@@ -1,0 +1,1 @@
+set(PLATFORM_C_FLAGS "-march=rv64ima_zicsr_zba_zbb_zbc -mabi=lp64")

@@ -1,5 +1,6 @@
 #include "pic.hh"
 #include <utils.hh>
+#include <x86_utils.hh>
 
 void PIC_sendEOI(u16 irq)
 {

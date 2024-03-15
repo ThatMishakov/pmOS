@@ -1,4 +1,12 @@
-#include "x86.hh"
+#include "x86_paging.hh"
+#include <memory/temp_mapper.hh>
+#include <assert.h>
+#include <memory/mem.hh>
+#include <exceptions.hh>
+#include <x86_asm.hh>
+#include <kern_logger/kern_logger.hh>
+#include <cpus/ipi.hh>
+#include <processes/tasks.hh>
 
 bool nx_bit_enabled = false;
 
@@ -88,21 +96,23 @@ u64 get_pt_ppn(u64 virtual_addr, u64 pt_phys) {
     return pde.page_ppn;
 }
 
-u64 map_pages(u64 phys_addr, u64 virt_addr, u64 size_bytes, Page_Table_Argumments args, u64 cr3) {
+void map_pages( u64 cr3, u64 phys_addr, u64 virt_addr, u64 size_bytes, Page_Table_Argumments args) {
     u64 result = SUCCESS;
     u64 i = 0;
     for (; i < size_bytes; i += 0x1000) {
-        result = map(phys_addr + i, virt_addr + i, args, cr3);
-        if (result != SUCCESS)
-            break;
+        map(phys_addr + i, virt_addr + i, args, cr3);
     }
 
     // TODO: It would probably be better to unmap the pages on error
     // Doesn't matter now
-    // if (result != SUCCESS)
+    // catch (...) {
     //     ...
+}
 
-    return result;
+void map_kernel_page(u64 phys_addr, void * virt_addr, Page_Table_Argumments arg)
+{
+    const u64 cr3 = getCR3();
+    map(phys_addr, (u64)virt_addr, arg, cr3);
 }
 
 u64 prepare_pt_for(u64 virtual_addr, Page_Table_Argumments arg, u64 pt_phys)
@@ -202,8 +212,7 @@ bool x86_4level_Page_Table::is_mapped(u64 virt_addr) const
     return allocated;
 }
 
-
-void x86_4level_Page_Table::invalidate(u64 virt_addr, bool free)
+void invalidate(u64 virt_addr, bool free, u64 pml4_phys)
 {
     bool invalidated = false;
     
@@ -211,22 +220,22 @@ void x86_4level_Page_Table::invalidate(u64 virt_addr, bool free)
 
     do {
         mapper.map((u64)pml4_phys);
-        x86_PAE_Entry* pml4e = &mapper.ptr[pml4_index(virt_addr)];
+        x86_PAE_Entry* pml4e = &mapper.ptr[x86_4level_Page_Table::pml4_index(virt_addr)];
         if (not pml4e->present)
             break;
 
         mapper.map((u64)pml4e->page_ppn << 12);
-        x86_PAE_Entry* pdpte = &mapper.ptr[pdpt_index(virt_addr)];
+        x86_PAE_Entry* pdpte = &mapper.ptr[x86_4level_Page_Table::pdpt_index(virt_addr)];
         if (not pdpte->present)
             break;
 
         mapper.map((u64)pdpte->page_ppn << 12);
-        x86_PAE_Entry* pde = &mapper.ptr[pd_index(virt_addr)];
+        x86_PAE_Entry* pde = &mapper.ptr[x86_4level_Page_Table::pd_index(virt_addr)];
         if (not pde->present)
             break;
 
         mapper.map((u64)pde->page_ppn << 12);
-        x86_PAE_Entry* pte = &mapper.ptr[pt_index(virt_addr)];
+        x86_PAE_Entry* pte = &mapper.ptr[x86_4level_Page_Table::pt_index(virt_addr)];
         if (not pte->present)
             break;
 
@@ -239,7 +248,19 @@ void x86_4level_Page_Table::invalidate(u64 virt_addr, bool free)
     } while (false);
 
     if (invalidated)
-        invalidate_tlb(virt_addr, 4096);
+        invlpg(virt_addr);
+}
+
+
+void x86_4level_Page_Table::invalidate(u64 virt_addr, bool free)
+{
+    ::invalidate(virt_addr, free, (u64)pml4_phys);
+}
+
+void unmap_kernel_page(void * virt_addr)
+{
+    const u64 cr3 = getCR3();
+    invalidate((u64)virt_addr, true, cr3);
 }
 
 bool x86_Page_Table::is_used_by_others() const
@@ -266,73 +287,6 @@ void x86_Page_Table::atomic_active_sum(u64 val) noexcept
 {
     __atomic_add_fetch(&active_count, val, 0);
 }
-
-Page_Table::Check_Return_Str x86_4level_Page_Table::check_if_allocated_and_set_flag(u64 virtual_addr, u8 flag, Page_Table_Argumments arg)
-{
-    Temp_Mapper_Obj<x86_PAE_Entry> mapper(request_temp_mapper());
-
-    mapper.map((u64)pml4_phys);
-    x86_PAE_Entry* pml4e = &mapper.ptr[pml4_index(virtual_addr)];
-    if (not pml4e->present) {
-        *pml4e = x86_PAE_Entry();
-
-        u64 p = kernel_pframe_allocator.alloc_page_ppn();
-
-        pml4e->page_ppn = p;
-        pml4e->present = 1;
-        pml4e->writeable = 1;
-        pml4e->user_access = arg.user_access;
-
-        clear_page(p << 12);
-    }
-
-    mapper.map((u64)pml4e->page_ppn << 12);
-    x86_PAE_Entry* pdpte = &mapper.ptr[pdpt_index(virtual_addr)];
-    if (not pdpte->present) {
-        *pdpte = x86_PAE_Entry();
-
-        u64 p = kernel_pframe_allocator.alloc_page_ppn();
-
-        pdpte->page_ppn = p;
-        pdpte->present = 1;
-        pdpte->writeable = 1;
-        pdpte->user_access = arg.user_access;
-
-        clear_page(p << 12);
-    }
-
-    mapper.map((u64)pdpte->page_ppn << 12);
-    x86_PAE_Entry* pde = &mapper.ptr[pd_index(virtual_addr)];
-    if (pde->pat_size) // Huge page
-        throw(Kern_Exception(ERROR_PAGE_PRESENT, "huge page in check_if_allocated_and_set_flag"));
-
-    if (not pde->present) {
-        *pde = x86_PAE_Entry();
-
-        u64 p = kernel_pframe_allocator.alloc_page_ppn();
-
-        pde->page_ppn = p;
-        pde->present = 1;
-        pde->writeable = 1;
-        pde->user_access = arg.user_access;
-
-        clear_page(p << 12);
-    }
-
-
-    mapper.map((u64)pde->page_ppn << 12);
-    x86_PAE_Entry* pte = &mapper.ptr[pt_index(virtual_addr)];
-
-    if (pte->present)
-        return {pte->avl, true};
-
-    Check_Return_Str ret {pte->avl, false};
-
-    pte->avl |= flag;
-
-    return ret;
-}
-
 
 kresult_t kernel_get_page(u64 virtual_addr, Page_Table_Argumments arg)
 {
@@ -477,11 +431,12 @@ void invalidade_noerr(u64 virtual_addr)
     invlpg(virtual_addr);
 }
 
-klib::shared_ptr<x86_4level_Page_Table> x86_4level_Page_Table::init_from_phys(u64 cr3)
+klib::shared_ptr<x86_4level_Page_Table> x86_4level_Page_Table::capture_initial(u64 cr3)
 {
     klib::shared_ptr<x86_4level_Page_Table> t = klib::unique_ptr<x86_4level_Page_Table>(new x86_4level_Page_Table());
+
     t->pml4_phys = (x86_PAE_Entry *)cr3;
-    t->insert_global_page_tables();
+    insert_global_page_tables(t);
 
     return t;
 }
@@ -507,11 +462,13 @@ klib::shared_ptr<x86_4level_Page_Table> x86_4level_Page_Table::create_empty()
         page_clear((void*)new_page_m.ptr);
 
         // Copy the last entries into the new page table as they are shared across all processes
-        // and recurvicely assign the last page to itself
-        // ((PML4*)free_page)->entries[509] = pml4(rec_map_index)->entries[509];
+        new_page_m.ptr[256] = current_page_m.ptr[256];
         new_page_m.ptr[510] = current_page_m.ptr[510];
         new_page_m.ptr[511] = current_page_m.ptr[511];
 
+        // TODO: I've switch almost everything to use temporary mappings, but recursive mapping is still used in some places
+        // This should be removed but doesn't matter for now...
+        // Also, RISC-V functions fine without it
         new_page_m.ptr[rec_map_index] = x86_PAE_Entry();
         new_page_m.ptr[rec_map_index].present = 1;
         new_page_m.ptr[rec_map_index].user_access = 0;
@@ -519,7 +476,7 @@ klib::shared_ptr<x86_4level_Page_Table> x86_4level_Page_Table::create_empty()
 
         new_table->pml4_phys = (x86_PAE_Entry *)p;
 
-        new_table->insert_global_page_tables();
+        insert_global_page_tables(new_table);
     } catch (...) {
         if (l != nullptr)
             kernel_pframe_allocator.free(l);
@@ -534,6 +491,7 @@ x86_4level_Page_Table::~x86_4level_Page_Table()
 {
     free_user_pages();
     kernel_pframe_allocator.free((void*)pml4_phys);
+    takeout_global_page_tables();
 }
 
 void x86_4level_Page_Table::map(u64 physical_addr, u64 virtual_addr, Page_Table_Argumments arg)
@@ -724,7 +682,7 @@ void x86_PAE_Entry::clear_auto()
     *this = x86_PAE_Entry();
 }
 
-klib::shared_ptr<Page_Table> x86_4level_Page_Table::create_clone()
+klib::shared_ptr<x86_4level_Page_Table> x86_4level_Page_Table::create_clone()
 {
     klib::shared_ptr<x86_4level_Page_Table> new_table = create_empty();
 
@@ -779,3 +737,65 @@ klib::shared_ptr<Page_Table> x86_4level_Page_Table::create_clone()
     return new_table;  
 }
 
+x86_4level_Page_Table::page_table_map x86_4level_Page_Table::global_page_tables;
+Spinlock x86_4level_Page_Table::page_table_index_lock;
+
+klib::shared_ptr<x86_4level_Page_Table> x86_4level_Page_Table::get_page_table_throw(u64 id)
+{
+    Auto_Lock_Scope scope_lock(page_table_index_lock);
+
+    try {
+        return global_page_tables.at(id).lock();
+    } catch (const std::out_of_range&) {
+        throw Kern_Exception(ERROR_OBJECT_DOESNT_EXIST, "requested page table doesn't exist");
+    }
+}
+
+void x86_4level_Page_Table::insert_global_page_tables(klib::shared_ptr<x86_4level_Page_Table> table)
+{
+    Auto_Lock_Scope local_lock(page_table_index_lock);
+    global_page_tables.insert({table->id, table});
+}
+
+void x86_4level_Page_Table::takeout_global_page_tables()
+{
+    Auto_Lock_Scope local_lock(page_table_index_lock);
+    global_page_tables.erase_if_exists(this->id);
+}
+
+void x86_4level_Page_Table::apply() noexcept
+{
+    setCR3((u64)pml4_phys);
+}
+
+void apply_page_table(ptable_top_ptr_t page_table)
+{
+    setCR3((u64)page_table);
+}
+
+void x86_Page_Table::invalidate_tlb(u64 addr)
+{
+    invlpg(addr);
+}
+
+bool x86_4level_Page_Table::atomic_copy_to_user(u64 to, const void* from, u64 size)
+{
+    Auto_Lock_Scope l(lock);
+
+    Temp_Mapper_Obj<char> mapper(request_temp_mapper());
+    for (u64 i = to&~0xfffUL; i < to+size; i += 0x1000) {
+        const auto b = prepare_user_page(i, Writeable);
+        if (not b)
+            return false;
+
+        const auto page = get_page_mapping(i);
+        assert(page.is_allocated);
+
+        char * ptr = mapper.map(page.page_addr);
+        const u64 start = i < to ? to : i;
+        const u64 end = i + 0x1000 < to + size ? i + 0x1000 : to + size;
+        memcpy(ptr + (start - i), (const char*)from + (start - to), end - start);
+    }
+
+    return true;
+}

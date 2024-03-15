@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-set(TARGET_ARCH "riscv64" CACHE STRING "Target architecture (x86_64 or riscv64)")
+set(TARGET_ARCH "x86_64" CACHE STRING "Target architecture (x86_64 or riscv64)")
 set(TOOLCHAIN_PREFIX "${TARGET_ARCH}-pmos-")
 
 set(CMAKE_C_COMPILER "${TOOLCHAIN_PREFIX}gcc")
@@ -10,20 +10,18 @@ set(CMAKE_AR "${TOOLCHAIN_PREFIX}ar")
 
 project(kernel C CXX ASM)
 
-set(CMAKE_C_FLAGS "-O2 -static -ffreestanding -no-pie -fno-pic -march=rv64ima_zicsr_zba_zbb_zbc -mabi=lp64 -Wall -Wextra -g -fno-omit-frame-pointer")
-set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -fexceptions -fasynchronous-unwind-tables")
-set(CMAKE_ASM_FLAGS "${CMAKE_C_FLAGS}")
+include(arch/arch.cmake)
+LOAD_PLATFORM(${TARGET_ARCH})
+
+set(CMAKE_C_FLAGS "${PLATFORM_C_FLAGS} -O1 -static -ffreestanding -no-pie -fno-pic -Wall -Wextra -g -fno-omit-frame-pointer -fasynchronous-unwind-tables  -fexceptions")
+set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} ${PLATFORM_CXX_FLAGS}")
+set(CMAKE_ASM_FLAGS "${CMAKE_C_FLAGS} ${PLATFORM_ASM_FLAGS}")
 
 set(LIBUNWIND_ENABLE_SHARED OFF)
 set(LIBUNWIND_IS_BAREMETAL ON)
 set(LIBUNWIND_INSTALL_HEADERS OFF)
 
 add_subdirectory(libunwind)
-
-file(GLOB_RECURSE PLATFORM_SRCS
-    "${CMAKE_CURRENT_SOURCE_DIR}/arch/${TARGET_ARCH}/*.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/arch/${TARGET_ARCH}/*.S"
-    "${CMAKE_CURRENT_SOURCE_DIR}/arch/${TARGET_ARCH}/*.cc")
 
 file(GLOB_RECURSE GENERIC_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/generic/*.cc"

@@ -11,7 +11,10 @@
 #include <memory/temp_mapper.hh>
 #include "sched_queue.hh"
 
-#ifdef __riscv
+#ifdef __x86_64__
+#include <paging/x86_temp_mapper.hh>
+#include <interrupts/gdt.hh>
+#elif  defined(__riscv)
 #include <paging/riscv64_temp_mapper.hh>
 #endif
 
@@ -40,9 +43,6 @@ struct CPU_Info {
     u64 jumpto_to   = 0;  // 56
     Task_Regs nested_int_regs; // 64
 
-    // X86 specific!
-    // GDT cpu_gdt;
-
     klib::array<sched_queue, sched_queues_levels> sched_queues;
     klib::shared_ptr<TaskDescriptor> idle_task = klib::shared_ptr<TaskDescriptor>();
 
@@ -60,6 +60,7 @@ struct CPU_Info {
     Kernel_Stack_Pointer nmi_stack;
     Kernel_Stack_Pointer machine_check_stack;
     Kernel_Stack_Pointer double_fault_stack;
+    GDT cpu_gdt;
     #endif
 
     klib::shared_ptr<TaskDescriptor> atomic_pick_highest_priority(priority_t min = sched_queues_levels - 1);
@@ -124,10 +125,6 @@ void start_scheduler();
 
 // Pushes current processos to the back of sheduling queues
 void evict(const klib::shared_ptr<TaskDescriptor>&);
-
-// Saves and restores GSBase and FSBase
-void save_segments(const klib::shared_ptr<TaskDescriptor>& task);
-void restore_segments(const klib::shared_ptr<TaskDescriptor>& task);
 
 // Reschedules the tasks
 extern "C" void reschedule();

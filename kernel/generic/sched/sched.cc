@@ -82,7 +82,6 @@ void TaskDescriptor::switch_to()
 {
     CPU_Info *c = get_cpu_struct();
     if (c->current_task->page_table != page_table) {
-        // TODO: There is no reason to not just store a pointer to x86_Page_Table (or other architecture-dependant tables) in TaskDescriptor
         c->current_task->page_table->atomic_active_sum(-1);
         page_table->atomic_active_sum(1);
         page_table->apply();

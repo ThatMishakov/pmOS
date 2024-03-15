@@ -2,15 +2,31 @@
 #include <utils.hh>
 #include "palloc.hh"
 #include <lib/new.hh>
+#include <kern_logger/kern_logger.hh>
 
 size_t malloced = 0;
 size_t freed = 0;
 
-extern "C" void *sbrk(size_t bytes)
+extern "C" void *mmap(void *, size_t length, int , int , int , long )
 {
-    size_t size_pages = bytes/4096 + (bytes%4096 ? 1 : 0);
-    void* p = palloc(size_pages);
+    // This function is (only) called by malloc
+    // Only len is interesting
+    void* p = palloc(length/4096 + (length%4096 ? 1 : 0));
+    if (p == nullptr)
+        return (void *)-1UL;
+
     return p;
+}
+
+extern "C" int munmap(void *addr, size_t length)
+{
+    (void)addr;
+    (void)length;
+
+    serial_logger.printf("Info: munmap(%p, %x)\n", addr, length);
+
+    return -1;
+    // Can be implemented easilly, but not supported for now
 }
  
 void *operator new(size_t size)

@@ -1,7 +1,7 @@
-#ifndef ASM_HH
-#define ASM_HH
+#pragma once
+#include <types.hh>
 
-extern "C" void printc(char c);
+extern "C" void bochs_printc(char c);
 extern "C" void tlb_flush();
 extern "C" void page_clear(void* page);
 extern "C" void loadTSS(u16 selector);
@@ -22,5 +22,3 @@ extern "C" void setCR3(u64 cr3);
 
 extern "C" u64 getCR4();
 extern "C" void setCR4(u64 cr4);
-
-#endif

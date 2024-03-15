@@ -1,6 +1,5 @@
-#include "timers.hh"
 #include <interrupts/apic.hh>
-#include "sched/sched.hh"
+#include <sched/sched.hh>
 
 void start_timer_ticks(u32 ticks)
 {

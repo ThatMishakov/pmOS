@@ -1,5 +1,7 @@
 #pragma once
 
+#include <types.hh>
+
 /**
  * This function is called upon the kernel initialization, once for each CPU.
  * Its function is to allocate local CPU_Infos, initialize idle processors, stacks

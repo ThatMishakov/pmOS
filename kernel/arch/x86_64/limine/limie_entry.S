@@ -1,5 +1,13 @@
 #define STACK_SIZE 4096
 
+    .section .bss
+    .align 16
+    .globl stack
+    .type stack, @object
+stack:
+    .space STACK_SIZE
+
+    .section .text
     .globl _limine_entry
     .type _limine_entry, @function
 _limine_entry:
@@ -14,10 +22,8 @@ _limine_entry:
 
     call limine_main
 
-    # Panic?! Yes!!!
-    cli
-1:
-    hlt
-    jmp 1b
+    # TODO: This is hacky
+    # get_cpu_info()->nested_level = 0;
+    movq $0, %gs:24
 
-    # TODO: Exit to userspace here...
+    jmp start_first_process

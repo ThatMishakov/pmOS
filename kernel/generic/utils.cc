@@ -279,10 +279,10 @@ extern "C" size_t strlen(const char *start)
 //     copy_frame_s.unlock();
 // }
 
-struct stack_frame {
-    stack_frame* next;
-    void* return_addr;
-};
+// struct stack_frame {
+//     stack_frame* next;
+//     void* return_addr;
+// };
 
 // void print_stack_trace(Logger& logger)
 // {
@@ -307,12 +307,12 @@ struct stack_frame {
 //     }
 // }
 
-void print_stack_trace(Logger& logger, stack_frame * s)
-{
-    logger.printf("Stack trace:\n");
-    for (; s != NULL; s = s->next)
-        logger.printf("  -> %h\n", (u64)s->return_addr);
-}
+// void print_stack_trace(Logger& logger, stack_frame * s)
+// {
+//     logger.printf("Stack trace:\n");
+//     for (; s != NULL; s = s->next)
+//         logger.printf("  -> %h\n", (u64)s->return_addr);
+// }
 
 // Arch-specific!
 // void print_stack_trace(Logger& logger)

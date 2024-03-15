@@ -1,5 +1,5 @@
 #include "sse.hh"
-#include <asm.hh>
+#include <x86_asm.hh>
 
 void enable_sse()
 {

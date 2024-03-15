@@ -3,6 +3,7 @@
 #include "mem.hh"
 #include "paging.hh"
 #include <exceptions.hh>
+#include <kern_logger/kern_logger.hh>
 
 void* palloc(size_t number)
 {
@@ -14,27 +15,26 @@ void* palloc(size_t number)
     // Allocate and try to map memory
     size_t i = 0;
     for (; i < number; ++i) {
-        void * page;
+        void *page = nullptr;
+        bool alloced_page = false;
         try {
-            page = kernel_pframe_allocator.alloc_page();
-        } catch (...) {
-            break;
-        }
-        
+            void * page = kernel_pframe_allocator.alloc_page();
+            alloced_page = true;
+            
+            void * virt_addr = (void*)((u64)ptr + i*4096);
+            static const Page_Table_Argumments arg = {
+                .readable = true,
+                .writeable = true,
+                .user_access = false,
+                .global = false,
+                .execution_disabled = true,
+                .extra = 0,
+            };
 
-        void * virt_addr = (void*)((u64)ptr + i*4096);
-        static const Page_Table_Argumments arg = {
-            .readable = true,
-            .writeable = true,
-            .user_access = false,
-            .global = false,
-            .execution_disabled = true,
-            .extra = 0,
-        };
-        try {
             map_kernel_page((u64)page, virt_addr, arg);
         } catch (Kern_Exception &e) {
-            kernel_pframe_allocator.free(page);
+            if (alloced_page)
+                kernel_pframe_allocator.free(page);
             
             // Unmap and free the allocated pages
             for (size_t j = 0; j < i; ++j) {

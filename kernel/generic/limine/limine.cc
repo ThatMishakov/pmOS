@@ -91,6 +91,7 @@ Direct_Mapper init_mapper;
 
 // Temporary temporary mapper
 #ifdef __x86_64__
+#include <paging/x86_temp_mapper.hh>
 using Arch_Temp_Mapper = x86_PAE_Temp_Mapper;
 #elif defined(__riscv)
 #include <paging/riscv64_temp_mapper.hh>
@@ -234,9 +235,11 @@ ptable_top_ptr_t kernel_ptable_top = 0;
 void construct_paging() {
     serial_logger.printf("Initializing paging...\n");
 
+    #ifdef __riscv
     auto r = paging_request.response;
     riscv64_paging_levels = r->mode + 3;
     serial_logger.printf("Using %i paging levels\n", riscv64_paging_levels);
+    #endif
 
     kresult_t result = SUCCESS;
 
@@ -244,7 +247,12 @@ void construct_paging() {
 
     // While we're here, initialize virtmem
     // Give it the first page of the root paging level
+    #ifdef __riscv
     const u64 heap_space_shift = 12 + (riscv64_paging_levels-1)*9;
+    #else
+    const u64 heap_space_shift = 12+27;
+    #endif
+
     const u64 heap_space_start = (-1UL) << (heap_space_shift + 8);
     const u64 heap_addr_size = 1UL << heap_space_shift;
     virtmem_init(heap_space_start, heap_addr_size);

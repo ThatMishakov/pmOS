@@ -3,7 +3,7 @@
     .macro save_regs
     # Save %r15 and load current_task pointer into %r15
     movq %r15, %gs:16
-    movq %gs:24, %r15
+    movq %gs:32, %r15
 
     # Scratch regs
     movq %rdi, 0(%r15)
@@ -36,7 +36,7 @@
     .endm
 
     .macro restore_regs
-    movq       %gs:24, %r15
+    movq       %gs:32, %r15
 
 
     movq        0(%r15), %rdi
@@ -64,7 +64,7 @@
     .macro save_regs_sysenter
     # Save %r15 and load current_task pointer into %r15
     movq %r15, %gs:16
-    movq %gs:24, %r15
+    movq %gs:32, %r15
 
     # Scratch regs
     movq %rdi, 0(%r15)
@@ -96,7 +96,7 @@
     .endm
 
     .macro restore_regs_sysenter
-    movq       %gs:24, %r15
+    movq       %gs:32, %r15
 
     movq        0(%r15), %rdi
     movq        8(%r15), %rsi
@@ -142,7 +142,7 @@ syscall_entry:
 
     # Syscall might do a task switch, which might need to be returned to by iret
     # Check that and change return method if that's the case
-    movq %gs:24, %r15
+    movq %gs:32, %r15
     movq 176(%r15), %r15
     jmpq *return_table(,%r15, 8)
 
@@ -174,7 +174,7 @@ sysenter_entry:
     call syscall_handler
 
     # Jmp to the right return method (in case there was a task switch)
-    movq %gs:24, %r15
+    movq %gs:32, %r15
     movq 176(%r15), %r15
     jmpq *return_table(,%r15, 8)
 
@@ -211,7 +211,7 @@ syscall_int_entry:
     call syscall_handler
 
     # Jmp to the right return method (in case there was a task switch)
-    movq %gs:24, %r15
+    movq %gs:32, %r15
     movq 176(%r15), %r15
     jmpq *return_table(,%r15, 8)
 
@@ -220,7 +220,7 @@ syscall_int_entry:
 ret_repeat_syscall:
 
     # Load current_task into %r15
-    movq %gs:24, %r15
+    movq %gs:32, %r15
 
     # Restore entry_mode
     movq 200(%r15), %rax
@@ -230,6 +230,6 @@ ret_repeat_syscall:
     call syscall_handler
 
     # Jmp to the right return method (in case there was a task switch)
-    movq %gs:24, %r15
+    movq %gs:32, %r15
     movq 176(%r15), %r15
     jmpq *return_table(,%r15, 8)

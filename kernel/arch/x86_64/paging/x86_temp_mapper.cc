@@ -1,12 +1,17 @@
 #include "x86_temp_mapper.hh"
 #include <types.hh>
+#include "x86_paging.hh"
+#include <x86_asm.hh>
 
 x86_PAE_Temp_Mapper::x86_PAE_Temp_Mapper(void * virt_addr, u64 cr3)
 {
+    pt_mapped = (x86_PAE_Entry*)virt_addr;
+
     u64 addr = (u64)virt_addr;
     start_index = addr/4096 % 512;
 
     Page_Table_Argumments arg {
+        1,
         1,
         0, 
         0, 
@@ -14,7 +19,7 @@ x86_PAE_Temp_Mapper::x86_PAE_Temp_Mapper(void * virt_addr, u64 cr3)
         000
     };
 
-    u64 pt_phys = prepare_pt_for(temp_mapper_get_offset(), arg, cr3);
+    u64 pt_phys = prepare_pt_for((u64)virt_addr, arg, cr3);
     Temp_Mapper_Obj<x86_PAE_Entry> tm(request_temp_mapper());
     x86_PAE_Entry *pt = tm.map(pt_phys);
 
@@ -46,6 +51,11 @@ void * x86_PAE_Temp_Mapper::kern_map(u64 phys_frame)
     return nullptr;
 }
 
+static u64 temp_mapper_get_index(u64 addr)
+{
+    return (addr/4096) % 512;
+}
+
 void x86_PAE_Temp_Mapper::return_map(void * p)
 {
     if (p == nullptr)
@@ -54,7 +64,7 @@ void x86_PAE_Temp_Mapper::return_map(void * p)
     u64 i = (u64)p;
     unsigned index = temp_mapper_get_index(i);
 
-    pt_mapped[index] = PTE();
+    pt_mapped[index] = x86_PAE_Entry();
     if (index < min_index)
         min_index = index;
 

@@ -1,5 +1,6 @@
 #include "pit.hh"
 #include <utils.hh>
+#include <x86_utils.hh>
 
 u16 read_pit_count(u8 chan)
 {

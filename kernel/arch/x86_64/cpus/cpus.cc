@@ -1,6 +1,6 @@
 #include "cpus.hh"
 #include <sched/sched.hh>
-#include <asm.hh>
+#include <x86_asm.hh>
 #include <interrupts/interrupts.hh>
 #include <interrupts/apic.hh>
 #include <kernel/errors.h>
@@ -9,6 +9,26 @@
 #include "sse.hh"
 #include <memory/palloc.hh>
 #include <sched/timers.hh>
+#include <kern_logger/kern_logger.hh>
+
+void program_syscall()
+{
+    write_msr(0xC0000081, ((u64)(R0_CODE_SEGMENT) << 32) | ((u64)(R3_LEGACY_CODE_SEGMENT) << 48)); // STAR (segments for user and kernel code)
+    write_msr(0xC0000082, (u64)&syscall_entry); // LSTAR (64 bit entry point)
+    write_msr(0xC0000084, (u32)~0x0); // SFMASK (mask for %rflags)
+
+    // Enable SYSCALL/SYSRET in EFER register
+    u64 efer = read_msr(0xC0000080);
+    write_msr(0xC0000080, efer | (0x01 << 0));
+
+    // This doesn't work on AMD CPUs
+    // u64 cpuid = ::cpuid(1);
+    // if (cpuid & (u64(1) << (11 + 32))) {
+    //     write_msr(0x174, R0_CODE_SEGMENT); // IA32_SYSENTER_CS
+    //     write_msr(0x175, (u64)get_cpu_struct()->kernel_stack_top); // IA32_SYSENTER_ESP
+    //     write_msr(0x176, (u64)&sysenter_entry); // IA32_SYSENTER_EIP
+    // }
+}
 
 void init_per_cpu()
 {
@@ -37,16 +57,19 @@ void init_per_cpu()
     // current malloc is not that good) during the initialization but I don't like the idea of putting a lock here
     // TODO: Think of something
 
-    // On a separate note, is the lapic_id in the vector really needed...?
-    cpus.push_back({c, get_lapic_id()});
+    cpus.push_back(c);
     c->cpu_id = cpus.size();
 
+    serial_logger.printf("Initializing idle task\n");
+    
     init_idle();
+    c->current_task = c->idle_task;
 
     program_syscall();
+    set_idt();
+    enable_apic();
+    enable_sse();
 }
-
-#include <kern_logger/kern_logger.hh>
 
 extern "C" void cpu_start_routine()
 {
@@ -66,7 +89,6 @@ extern "C" void cpu_start_routine()
     idle_pt->atomic_active_sum(1);
     setCR3(idle_pt->get_cr3());
     get_cpu_struct()->current_task->switch_to();
-    start_timer_ticks(calculate_timer_ticks(get_cpu_struct()->current_task));
     reschedule();
     
     global_logger.printf("[Kernel] Initialized CPU %h\n", get_lapic_id());
@@ -77,15 +99,16 @@ extern "C" u64* get_kern_stack_top()
     return get_cpu_struct()->kernel_stack.get_stack_top();
 }
 
-u64 cpu_configure(u64 type, UNUSED u64 arg)
+void init_scheduling()
 {
-    u64 result = 0;
-    switch (type) {
-    case 0:
-        result = (u64)&cpu_startup_entry;
-        break;
-    default:
-        throw(Kern_Exception(ERROR_NOT_SUPPORTED, "cpu_configure unknown type"));
-    };
-    return result;
+    serial_logger.printf("Initializing APIC\n");
+    prepare_apic();
+
+    serial_logger.printf("Initializing interrupts\n");
+    init_interrupts();
+
+    serial_logger.printf("Initializing per-CPU structures\n");
+    init_per_cpu();
+
+    serial_logger.printf("Scheduling initialized\n");
 }

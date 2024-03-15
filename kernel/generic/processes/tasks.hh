@@ -13,6 +13,10 @@
 #include <paging/arch_paging.hh>
 #include <pmos/load_data.h>
 
+#ifdef __x86_64__
+#include <cpus/sse.hh>
+#endif
+
 using PID = u64;
 
 struct TaskPermissions {
@@ -143,9 +147,10 @@ public:
     u64 ret_hi = 0;
     u64 ret_lo = 0;
 
-    // This holds the SSE data on x86_64 CPUs
-    // Other architectures have different registers, so stash it for now
-    //SSE_Data sse_data;
+    #ifdef __x86_64__
+    // SSE data on x86_64 CPUs (floating point, vector registers)
+    SSE_Data sse_data;
+    #endif
 
     Spinlock name_lock;
     klib::string name = "";

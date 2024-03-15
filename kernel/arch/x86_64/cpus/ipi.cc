@@ -2,6 +2,7 @@
 #include <types.hh>
 #include <sched/sched.hh>
 #include <interrupts/apic.hh>
+#include <x86_asm.hh>
 
 
 void ipi_invalidate_tlb_routine()
@@ -20,4 +21,9 @@ void reschedule_isr()
 {
     reschedule();
     apic_eoi();
+}
+
+void CPU_Info::ipi_reschedule()
+{
+    send_ipi_fixed(ipi_reschedule_int_vec, lapic_id);
 }

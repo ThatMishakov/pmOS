@@ -532,7 +532,8 @@ void *sbrk(long size);
 #define EINVAL (31)
 #define ENOMEM (52)
 
-#define HAVE_MMAP 0
+#define HAVE_MMAP 1
+#define HAVE_MORECORE 0
 
 #define LACKS_TIME_H 1
 #define LACKS_ERRNO_H 1

@@ -1,5 +1,5 @@
     .macro restore_context
-    movq       %gs:24, %r11
+    movq       %gs:32, %r11
     pushq      104(%r11)
     pushq      96(%r11)
     pushq      88(%r11)
@@ -26,7 +26,7 @@
 
 
     .macro restore_context_nested
-    subq       $1, %gs:40
+    subq       $1, %gs:24
 
     movq       %gs:0, %r11
     leaq       64(%r11), %r11
@@ -55,16 +55,16 @@
     .endm
     
     .macro auto_return_cond
-    cmpq $0, %gs:40
+    cmpq $0, %gs:24
     jne  ret_nested_exception
-    movq %gs:24, %r15
+    movq %gs:32, %r15
     movq 176(%r15), %r15
     jmpq *return_table(,%r15, 8)
     .endm
 
 
     .macro auto_return
-    movq %gs:24, %r15
+    movq %gs:32, %r15
     movq 176(%r15), %r15
     jmpq *return_table(,%r15, 8)
     .endm
@@ -80,7 +80,7 @@
     addq $8, %rsp
     movq $\intno, %rdi
     call dbg_main
-    movq    dbg_regs + 31*8, %rax   # update the return address
+    movq    kernel_interrupt_regs + 72, %rax   # update the return address
     movq    %rax, (%rsp)
     call dbg_loadregs
     iretq

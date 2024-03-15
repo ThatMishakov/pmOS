@@ -4,7 +4,7 @@
 #include <memory/palloc.hh>
 #include <memory/malloc.hh>
 #include "exceptions_managers.hh"
-#include "asm.hh"
+#include <x86_asm.hh>
 #include <sched/sched.hh>
 #include <processes/syscalls.hh>
 #include <misc.hh>

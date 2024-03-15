@@ -1,5 +1,6 @@
 #include "apic.hh"
-#include <asm.hh>
+#include <x86_asm.hh>
+#include <x86_utils.hh>
 #include <memory/paging.hh>
 #include "pic.hh"
 #include "pit.hh"
@@ -14,9 +15,8 @@ void* apic_mapped_addr = nullptr;
 
 void map_apic()
 {
-    u64 cr3 = getCR3();
     apic_mapped_addr = virtmem_alloc(1);
-    map(apic_base, (u64)apic_mapped_addr, {1,0,0,0,PAGE_SPECIAL}, cr3);
+    map_kernel_page(apic_base, apic_mapped_addr, {1,1,0,0,0,PAGE_SPECIAL});
 }
 
 void enable_apic()
