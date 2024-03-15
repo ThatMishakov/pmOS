@@ -12,7 +12,7 @@ CPP = riscv64-pmos-gcc
 CXX = riscv64-pmos-g++
 
 # User controllable CFLAGS.
-USERCFLAGS = -Wall -Wextra -O2 -pipe
+USERCFLAGS = -Wall -Wextra -Og -g -pipe
 
 CFLAGS = -std=c17 -g
 CXXFLAGS = -std=c++17 -g

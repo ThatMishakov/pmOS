@@ -92,7 +92,7 @@ void init_screen()
         exit(5);
 
     if (r->result_code != 0)
-        exit(r->result_code);
+        exit(-r->result_code);
 
     // Map memory
     size_t start = r->framebuffer_addr&~0xfffUL;

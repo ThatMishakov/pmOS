@@ -477,7 +477,7 @@ klib::unique_ptr<load_tag_generic> construct_load_tag_for_modules() {
 
 struct limine_framebuffer_request fb_req = {
     .id = LIMINE_FRAMEBUFFER_REQUEST,
-    .revision = 1,
+    .revision = 0,
     .response = nullptr,
 };
 

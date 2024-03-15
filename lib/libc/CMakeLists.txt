@@ -16,6 +16,16 @@ set(SRC ${GENERIC_SRC} ${ARCH_SRC})
 
 list(REMOVE_ITEM SRC "${SRC_FOLDER}/arch/${TARGET_ARCH}/crti.S" "${SRC_FOLDER}/arch/${TARGET_ARCH}/crtn.S" "${SRC_FOLDER}/arch/${TARGET_ARCH}/crt0.S")
 
+# GCC shenanigans
+# https://gcc.gnu.org/bugzilla/show_bug.cgi?id=67618
+# https://github.com/zephyrproject-rtos/zephyr/issues/64941
+# https://github.com/zephyrproject-rtos/zephyr/pull/65082
+# https://gcc.gnu.org/onlinedocs/gcc/Other-Builtins.html
+#
+# Apply -fno-inline-malloc so GCC doesn't optimize calloc to itself, creating infinite recursion
+set_source_files_properties(${SRC_FOLDER}/generic/malloc/malloc.c PROPERTIES COMPILE_FLAGS "-fno-builtin-malloc -fno-builtin-free -fno-builtin-calloc -fno-builtin-realloc")
+set_source_files_properties(${SRC_FOLDER}/generic/string.c PROPERTIES COMPILE_FLAGS "-fno-builtin")
+
 # Main library
 add_library(c STATIC ${SRC})
 set_target_properties(c PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/build)
