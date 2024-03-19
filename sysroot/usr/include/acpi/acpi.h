@@ -84,6 +84,15 @@ typedef struct MADT_LAPIC_NMI_entry {
   uint8_t LINT_ID;
 } __attribute__ ((packed)) MADT_LAPIC_NMI_entry;
 
+#define MADT_RINTC_ENTRY_TYPE 0x18
+typedef struct MADT_RINTC_entry {
+  MADT_entry header;
+  uint8_t version;
+  uint8_t reserved;
+  uint32_t flags;
+  uint64_t hart_id;
+  uint32_t acpi_processor_id;
+} __attribute__ ((packed)) MADT_RINTC_entry;
 
 typedef struct MADT {
   ACPISDTHeader header;

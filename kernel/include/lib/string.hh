@@ -89,7 +89,22 @@ public:
             short_string[length] = '\0';
         }
     }
-    string (const char* s, size_t n);
+    string (const char* s, size_t n)
+    {
+        if (n > small_size) {
+            long_string.ptr = new char[n+1];
+            s_capacity = n;
+            long_string.size = n;
+
+            memcpy(long_string.ptr, s, n);
+            long_string.ptr[n] = '\0';
+        } else {
+            s_capacity = n;
+            memcpy(short_string, s, n);
+            short_string[n] = '\0';
+        }
+    }
+
     string (size_t n, char c)
     {
         if (n > small_size) {

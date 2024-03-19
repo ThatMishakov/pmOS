@@ -82,6 +82,11 @@ struct CPU_Info {
     u32 lapic_id = 0;
     #endif
 
+
+    #ifdef __riscv
+    klib::string isa_string;
+    #endif
+
     // IMHO this is better than protecting current_task pointer with spinlock
     priority_t current_task_priority = sched_queues_levels;
 

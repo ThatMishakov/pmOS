@@ -29,7 +29,8 @@ void set_sscratch(u64 scratch) {
     asm volatile("csrw sscratch, %0" : : "r"(scratch) : "memory");
 }
 
-RCHT * get_rhct() {
+RCHT * get_rhct()
+{
     static RCHT * rhct_virt = nullptr;
     static bool have_acpi = true;
 
@@ -65,7 +66,95 @@ void initialize_timer()
     }
 }
 
-void init_scheduling() {
+MADT * get_madt()
+{
+    static MADT * rhct_virt = nullptr;
+    static bool have_acpi = true;
+
+    if (rhct_virt == nullptr and have_acpi) {
+        u64 rhct_phys = get_table(0x43495041); // APIC (because why not)
+        if (rhct_phys == 0) {
+            have_acpi = false;
+            return nullptr;
+        }
+
+        ACPISDTHeader h;
+        copy_from_phys(rhct_phys, &h, sizeof(h));
+
+        rhct_virt = (MADT*)malloc(h.length);
+        copy_from_phys(rhct_phys, rhct_virt, h.length);
+    }
+
+    return rhct_virt;
+}
+
+ReturnStr<u32> get_apic_processor_uid(u64 hart_id)
+{
+    MADT * m = get_madt();
+    if (m == nullptr)
+        return {ERROR_GENERAL, 0};
+
+    // Find the RINTC
+    u32 offset = sizeof(MADT);
+    u32 length = m->header.length;
+    while (offset < length) {
+        MADT_RINTC_entry * e = (MADT_RINTC_entry *)((char *)m + offset);
+        if (e->header.type == MADT_RINTC_ENTRY_TYPE and e->hart_id == hart_id)
+            return {SUCCESS, e->acpi_processor_id};
+
+        offset += e->header.length;
+    }
+
+    return {ERROR_GENERAL, 0};
+}
+
+// TODO: Think about return type
+ReturnStr<klib::string> get_isa_string(u64 hart_id)
+{
+    auto apic_id = get_apic_processor_uid(hart_id);
+    if (apic_id.result != SUCCESS)
+        return {apic_id.result, {}};
+
+    RCHT * rhct = get_rhct();
+    if (rhct == nullptr) {
+        serial_logger.printf("Could not get rhct\n");
+        return {ERROR_GENERAL, {}};
+    }
+
+    const u32 size = rhct->h.length;
+
+    // Find the right hart info node
+    u32 offset = sizeof(RCHT);
+    RCHT_HART_INFO_node * n = nullptr;
+    while (offset < size) {
+        RCHT_HART_INFO_node * t = (RCHT_HART_INFO_node *)((char *)rhct + offset);
+        if (t->header.type == RCHT_HART_INFO_NODE and t->acpi_processor_uid == apic_id.val) {
+            n = t;
+            break;
+        }
+
+        offset += t->header.length;
+    }
+
+    if (n == nullptr) {
+        serial_logger.printf("Could not find hart node info for ACPI processor UID %i\n", apic_id.val);
+        return {ERROR_GENERAL, {}};
+    }
+
+    // Find ISA string
+    for (u16 i = 0; i < n->offsets_count; ++i) {
+        RCHT_ISA_STRING_node * node = (RCHT_ISA_STRING_node *)((char *)rhct + n->offsets[i]);
+        if (node->header.type == RHCT_ISA_STRING_NODE) {
+            return {SUCCESS, klib::string(node->string, node->string_length)};
+        }
+    }
+
+    serial_logger.printf("Could not find ISA string for ACPI processor UID %i\n", apic_id.val);
+    return {ERROR_GENERAL, {}};
+}
+
+void init_scheduling()
+{
     serial_logger.printf("Initializing scheduling\n");
 
     CPU_Info * i = new CPU_Info();
@@ -85,6 +174,14 @@ void init_scheduling() {
     program_stvec();
 
     initialize_timer();
+
+    // Set ISA string
+    // hart id 0 should always be present
+    auto s = get_isa_string(0);
+    if (s.result == SUCCESS) {
+        i->isa_string = s.val;
+        serial_logger.printf("ISA string: %s\n", s.val.c_str());
+    }
 
     // Enable interrupts
     const u64 mask = (1 << TIMER_INTERRUPT);
