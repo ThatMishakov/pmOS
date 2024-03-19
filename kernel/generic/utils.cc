@@ -233,14 +233,29 @@ bool copy_to_user(const char* from, char* to, size_t size)
 
 extern "C" void print_stack_trace();
 
-void memcpy(char* to, const char* from, size_t size)
+void *memcpy(void* to, const void* from, size_t size)
 {
     //t_print_bochs("memcpy %h <- %h size %h\n", to, from, size);
     //print_stack_trace();
 
     for (size_t i = 0; i < size; ++i) {
-        to[i] = from[i];
+        ((char*)to)[i] = ((const char*)from)[i];
     }
+
+    return to;
+}
+
+extern "C" int memcmp(const void* s1, const void* s2, size_t n)
+{
+    const char* c1 = (const char*)s1;
+    const char* c2 = (const char*)s2;
+
+    for (size_t i = 0; i < n; ++i) {
+        if (c1[i] != c2[i])
+            return c1[i] - c2[i];
+    }
+
+    return 0;
 }
 
 extern "C" size_t strlen(const char *start)

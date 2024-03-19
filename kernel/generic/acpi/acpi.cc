@@ -1,0 +1,119 @@
+#include <types.hh>
+#include <acpi/acpi.h>
+#include <utils.hh>
+#include <exceptions.hh>
+#include <kernel/errors.h>
+#include <lib/splay_tree_map.hh>
+#include <string.h>
+
+#include <kern_logger/kern_logger.hh>
+
+struct ACPITable {
+    u64 phys_addr;
+    u64 length;
+};
+
+using ACPISignature = u32;
+klib::splay_tree_map<ACPISignature, ACPITable> acpi_tables;
+
+u64 get_table(u32 signature)
+{
+    return acpi_tables.get_copy_or_default(signature).phys_addr;
+}
+
+bool enumerate_tables_from_rsdt(u64 rsdt_desc_phys)
+{
+    if (rsdt_desc_phys == 0) {
+        serial_logger.printf("Error: RSDT address is 0\n");
+        return false;
+    }
+
+    RSDT rsdt_virt;
+    copy_from_phys((u64)rsdt_desc_phys, &rsdt_virt, sizeof(rsdt_virt));
+
+    auto size = rsdt_virt.h.length;
+    if (memcmp(rsdt_virt.h.signature, "RSDT", 4) != 0) {
+        char buf[5];
+        memcpy(buf, rsdt_virt.h.signature, 4);
+        buf[4] = 0;
+
+        serial_logger.printf("Error: RSDT signature mismatch: %s\n", buf);
+        return false;
+    }
+
+    size_t entries = (size - sizeof(ACPISDTHeader)) / 4;
+    u32 pointers[entries];
+    copy_from_phys(rsdt_desc_phys + sizeof(ACPISDTHeader), pointers, entries * 4);
+
+    for (size_t i = 0; i < entries; ++i) {
+        ACPISDTHeader header;
+        copy_from_phys((u64)pointers[i], &header, sizeof(header));
+
+        acpi_tables.insert({*(u32*)header.signature, {pointers[i], header.length}});
+    }
+
+    return true;
+}
+
+bool enumerate_tables_from_xsdt(u64 xsdt_desc_phys)
+{
+    if (xsdt_desc_phys == 0) {
+        serial_logger.printf("Error: XSDT address is 0\n");
+        return false;
+    }
+
+    XSDT xsdt_virt;
+    copy_from_phys((u64)xsdt_desc_phys, &xsdt_virt, sizeof(xsdt_virt));
+
+    auto size = xsdt_virt.h.length;
+    if (memcmp(xsdt_virt.h.signature, "XSDT", 4) != 0) {
+        char buf[5];
+        memcpy(buf, xsdt_virt.h.signature, 4);
+        buf[4] = 0;
+
+        serial_logger.printf("Error: XSDT signature mismatch: %s\n", buf);
+        return false;
+    }
+
+    size_t entries = (size - sizeof(ACPISDTHeader)) / 8;
+    u64 pointers[entries];
+    copy_from_phys(xsdt_desc_phys + sizeof(ACPISDTHeader), pointers, entries * 8);
+
+    for (size_t i = 0; i < entries; ++i) {
+        ACPISDTHeader header;
+        copy_from_phys(pointers[i], &header, sizeof(header));
+
+        acpi_tables.insert({*(u32*)header.signature, {pointers[i], header.length}});
+    }
+
+    return true;
+}
+
+void enumerate_tables(u64 rsdt_desc_phys)
+{
+    serial_logger.printf("Enumerating ACPI tables\n");
+
+    RSDP_descriptor desc;
+    copy_from_phys(rsdt_desc_phys, &desc, sizeof(desc));
+
+    // Wisdom from someone on the internet: ACPI checksums are broken on half of the real hardware
+    // Don't verify them
+
+    if (memcmp(desc.signature, "RSD PTR ", 8) != 0) {
+        serial_logger.printf("Error: RSDP signature mismatch\n");
+        return;
+    }
+
+    if (desc.revision > 1) {
+        RSDP_descriptor20 desc20;
+        copy_from_phys(rsdt_desc_phys, &desc20, sizeof(desc20));
+
+        bool enumerated_xsdt = enumerate_tables_from_xsdt(desc20.xsdt_address);
+        if (enumerated_xsdt)
+            return;
+    }
+
+    bool b = enumerate_tables_from_rsdt(desc.rsdt_address);
+    if (!b)
+        serial_logger.printf("Error: Failed to enumerate ACPI tables\n");
+}

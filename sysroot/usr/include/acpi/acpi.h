@@ -17,7 +17,7 @@ typedef struct RSDP_descriptor20 {
  uint64_t xsdt_address;
  uint8_t extended_checksum;
  uint8_t reserved[3];
-} RSDP_descriptor20;
+} __attribute__ ((packed)) RSDP_descriptor20;
 
 typedef struct ACPISDTHeader {
   char signature[4];
@@ -198,6 +198,64 @@ typedef struct DSDT {
   uint8_t definitions[0];
 }__attribute__ ((packed)) DSDT;
 
+// https://github.com/riscv-non-isa/riscv-acpi
+
+// -------------- RISC-V Hart Capabilities Table (RCHT) --------------
+// If 0, timer interrupt can wake up the CPU from suspend/idle states
+// If 1, timer can't wake up the CPU
+#define RCHT_TIMER_CANNOT_WAKEUP_CPU (1 << 0)
+
+typedef struct RCHT_node {
+  uint16_t type; // Node type
+  uint16_t length; // Node length. Including the length of the header
+  uint16_t revision; // Node revision
+} __attribute__ ((packed)) RCHT_node;
+
+#define RHCT_ISA_STRING_NODE 0
+typedef struct RCHT_ISA_STRING_node {
+  RCHT_node header;
+  uint16_t string_length; // Length of the ISA string
+  char string[0]; // RISC-V ISA string
+  // Padding to align the next node to 2 bytes
+} __attribute__ ((packed)) RCHT_ISA_STRING_node;
+
+#define RCHT_CMO_NODE 1
+typedef struct RCHT_CMO_node {
+  RCHT_node header;
+  uint8_t reserved; // Reserved
+  uint8_t CBOM_block_size; //< Cache block size for management instructions, defined as power of 2 exponent.
+  uint8_t CBOP_block_size; //< Cache block size for prefetch instructions, defined as power of 2 exponent.
+  uint8_t CBOZ_block_size; //< Cache block size for zero instructions, defined as power of 2 exponent.
+} __attribute__ ((packed)) RCHT_CMO_node;
+
+#define RCHT_MMU_TYPE_SV39 0
+#define RCHT_MMU_TYPE_SV48 1
+#define RCHT_MMU_TYPE_SV57 2
+
+#define RCHT_MMU_NODE 2
+typedef struct RCHT_MMU_node {
+  RCHT_node header;
+  uint8_t reserved; // Reserved
+  uint8_t mmu_type; // MMU type
+} __attribute__ ((packed)) RCHT_MMU_node;
+
+#define RCHT_HART_INFO_NODE 65535
+typedef struct RCHT_HART_INFO_node {
+  RCHT_node header;
+  uint16_t offsets_count; //< Number of elements in the Offsets array
+  uint32_t acpi_processor_uid; //< ACPI processor UID
+  uint32_t offsets[0]; //< Offsets to the RCHT nodes, relative to the start of RHCT
+                       //< Each hart should have at least ISA string node
+} __attribute__ ((packed)) RCHT_HART_INFO_node;
+
+// RISC-V Hart Capabilities Table 
+typedef struct RCHT {
+  ACPISDTHeader h;
+  uint32_t flags; // RHCT flags
+  uint64_t time_base_frequency; // Frequency of the system counter. Same for all harts in the system
+  uint32_t rhct_nodes_count; // Number of RCHT nodes
+  uint32_t rhct_node_offset; // Offset to the first RCHT node from the start of the RCHT table
+} __attribute__ ((packed)) RCHT;
 
 extern int acpi_revision;
 

@@ -134,17 +134,6 @@ void init_acpi()
     printf("Walked ACPI tables! ACPI revision: %i\n", acpi_revision);
 }
 
-int check_table(ACPISDTHeader* header)
-{
-    uint8_t sum = 0;
-    
-    for (uint32_t i = 0; i < header->length; ++i) {
-        sum += ((unsigned char*)header)[i];
-    }
-
-    return sum == 0;
-}
-
 void init_lai()
 {
     lai_set_acpi_revision(acpi_revision);

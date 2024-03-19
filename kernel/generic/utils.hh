@@ -15,7 +15,7 @@ extern "C" size_t strlen(const char *str);
 
 extern "C" int printf(const char *str,...);
 
-extern "C" void memcpy(char* to, const char* from, size_t size);
+extern "C" void *memcpy(void* to, const void* from, size_t size);
 extern "C" void *memset(void *str, int c, size_t n);
 
 bool prepare_user_buff_rd(const char* buff, size_t size);

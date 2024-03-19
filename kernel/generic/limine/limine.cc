@@ -562,6 +562,28 @@ void init_task1()
     }
 }
 
+#include <acpi/acpi.hh>
+limine_rsdp_request rsdp_request = {
+    .id = LIMINE_RSDP_REQUEST,
+    .revision = 0,
+    .response = nullptr,
+};
+
+void init_acpi() {
+    if (rsdp_request.response == nullptr) {
+        serial_logger.printf("No RSDP found\n");
+        return;
+    }
+
+    limine_rsdp_response resp;
+    copy_from_phys((u64)rsdp_request.response - hhdm_offset, &resp, sizeof(resp));
+
+    u64 addr = (u64)resp.address - hhdm_offset;
+    serial_logger.printf("RSDP found at 0x%x\n", addr);
+    enumerate_tables(addr);
+}
+
+
 void limine_main() {
     if (LIMINE_BASE_REVISION_SUPPORTED == false) {
         hcf();
@@ -578,6 +600,8 @@ void limine_main() {
     init();
 
     try {
+        init_acpi();
+
         // Init idle task page table
         idle_page_table = Arch_Page_Table::capture_initial(kernel_ptable_top);
 

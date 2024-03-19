@@ -34,7 +34,7 @@ set_target_properties(kernel PROPERTIES CXX_STANDARD 20)
 set_target_properties(kernel PROPERTIES LINK_FLAGS 
   "-nostdlib -ffreestanding -static -T${CMAKE_CURRENT_SOURCE_DIR}/linker.ld -fPIC -lgcc -z max-page-size=0x1000 -Wl,--eh-frame-hdr -no-pie -fno-pic -Wl,--demangle")
 
-  target_include_directories(kernel PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_include_directories(kernel PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_include_directories(kernel PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/arch/${TARGET_ARCH}")
 target_include_directories(kernel PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/generic")
 
@@ -57,3 +57,10 @@ target_include_directories(cxxrt PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
 target_link_libraries(kernel PUBLIC cxxrt)
 target_link_libraries(kernel PUBLIC libunwind-kernel)
+
+add_subdirectory(smoldtb)
+
+if (DEFINED ENABLE_DTB)
+  target_link_libraries(kernel PUBLIC smoldtb)
+  add_compile_definitions(ENABLE_DTB)
+endif()

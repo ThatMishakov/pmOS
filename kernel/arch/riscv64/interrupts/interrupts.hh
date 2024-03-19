@@ -13,3 +13,5 @@ constexpr int ENV_CALL_FROM_S_MODE = 9;
 constexpr int INSTRUCTION_PAGE_FAULT = 12;
 constexpr int LOAD_PAGE_FAULT = 13;
 constexpr int STORE_AMO_PAGE_FAULT = 15;
+
+constexpr int TIMER_INTERRUPT = 5;

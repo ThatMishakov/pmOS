@@ -73,6 +73,12 @@ void page_fault(u64 virt_addr, u64 scause)
 
 extern "C" void syscall_handler();
 
+void service_timer_interrupt()
+{
+    sched_periodic();
+    // Pending timer interrupt is cleared by SBI
+}
+
 void handle_interrupt()
 {
     u64 scause, stval;
@@ -89,8 +95,19 @@ void handle_interrupt()
     }
 
     if ((i64)scause < 0) {
-        serial_logger.printf("interrupt!\n");
-        while (1) ;
+        // Clear last bit
+        u64 intno = scause & ~(1UL << 63);
+        switch (intno)
+        {
+        case TIMER_INTERRUPT:
+            service_timer_interrupt();
+            break;
+        
+        default:
+            serial_logger.printf("Unknown interrupt: 0x%x\n", scause);
+            while (1) ;
+            break;
+        }
     } else {
         switch (scause) {
             case INSTRUCTION_PAGE_FAULT:

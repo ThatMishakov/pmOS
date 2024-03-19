@@ -32,6 +32,15 @@ void init_interrupts()
     discover_apic_freq();
 }
 
+extern "C" void timer_interrupt()
+{
+    // apic_eoi was always at the end, but I think it needs to be at the beginning so that the interrupts are not lost
+    // Not sure about it and don't remember what it was doing exactly
+    apic_eoi();
+
+    sched_periodic();
+}
+
 /*
 extern "C" void interrupt_handler()
 {

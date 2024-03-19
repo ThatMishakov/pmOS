@@ -4,6 +4,11 @@
 #include <paging/riscv64_paging.hh>
 #include <types.hh>
 #include <kern_logger/kern_logger.hh>
+#include <acpi/acpi.hh>
+#include <acpi/acpi.h>
+#include <memory/malloc.hh>
+#include <cpus/timer.hh>
+#include <interrupts/interrupts.hh>
 
 extern klib::shared_ptr<Arch_Page_Table> idle_page_table;
 
@@ -24,6 +29,42 @@ void set_sscratch(u64 scratch) {
     asm volatile("csrw sscratch, %0" : : "r"(scratch) : "memory");
 }
 
+RCHT * get_rhct() {
+    static RCHT * rhct_virt = nullptr;
+    static bool have_acpi = true;
+
+    if (rhct_virt == nullptr and have_acpi) {
+        u64 rhct_phys = get_table(0x54434852); // RHCT
+        if (rhct_phys == 0) {
+            have_acpi = false;
+            return nullptr;
+        }
+
+        ACPISDTHeader h;
+        copy_from_phys(rhct_phys, &h, sizeof(h));
+
+        rhct_virt = (RCHT*)malloc(h.length);
+        copy_from_phys(rhct_phys, rhct_virt, h.length);
+    }
+
+    return rhct_virt;
+}
+
+void initialize_timer()
+{
+    if (timer_needs_initialization()) {
+        RCHT * rhct = get_rhct();
+        if (rhct == nullptr) {
+            serial_logger.printf("Error: could not initialize timer. RHCT table not found\n");
+            return;
+        }
+
+        serial_logger.printf("Info: time base frequency: %i\n", rhct->time_base_frequency);
+
+        set_timer_frequency(rhct->time_base_frequency);
+    }
+}
+
 void init_scheduling() {
     serial_logger.printf("Initializing scheduling\n");
 
@@ -42,6 +83,12 @@ void init_scheduling() {
     set_sscratch((u64)i);
 
     program_stvec();
+
+    initialize_timer();
+
+    // Enable interrupts
+    const u64 mask = (1 << TIMER_INTERRUPT);
+    asm volatile("csrs sie, %0" : : "r"(mask) : "memory");
 
     serial_logger.printf("Initializing idle task\n");
 

@@ -118,7 +118,7 @@ void task_switch();
 void find_new_process();
 
 // To be called from the clock routine
-extern "C" void sched_periodic();
+void sched_periodic();
 
 // Starts the scheduler
 void start_scheduler();

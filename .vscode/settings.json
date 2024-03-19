@@ -118,7 +118,10 @@
         "args.h": "c",
         "mman.h": "c",
         "messaging.h": "c",
-        "syscalls.h": "c"
+        "syscalls.h": "c",
+        "phys_map.h": "c",
+        "panic.h": "c",
+        "acpi.h": "c"
     },
     "cmake.configureOnOpen": false
 }

@@ -104,6 +104,8 @@ return_from_kernel:
     csrc sstatus, t1
     ld t2, 264(t0)
     beq t2, zero, 1f
+    # Also enable interrupts while we're here
+    ori t1, t1, 0x20 # sstatus.SPIE
     csrs sstatus, t1
 1:
 

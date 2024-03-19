@@ -64,6 +64,11 @@ void Logger::vprintf(const char* str, va_list arg)
                     repeat = true;
                     break;
                 }
+                case 'c': {
+                    char c = va_arg(arg, int);
+                    log_nolock(&c, 1);
+                    break;
+                }
                 default:
                     log_nolock(&at, 1);
                     break;

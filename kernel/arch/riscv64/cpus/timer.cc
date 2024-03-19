@@ -3,7 +3,7 @@
 
 // TODO: ACPI tables need to be walked to get the frequency
 // Put a bogus value for now
-u64 ticks_per_ms = 1000000;
+u64 ticks_per_ms = 0;
 
 // https://popovicu.com/posts/risc-v-interrupts-with-timer-example/
 u64 get_current_timer_val()
@@ -13,9 +13,9 @@ u64 get_current_timer_val()
     return value;
 }
 
-void fire_timer_at(u64 next_value)
+int fire_timer_at(u64 next_value)
 {
-    sbi_set_timer(next_value);
+    return sbi_set_timer(next_value).error;
 }
 
 void start_timer(u32 ms)

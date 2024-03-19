@@ -74,7 +74,7 @@ apic_timer_isr:
     movq $0, %rbp
     movq $0, 176(%r11)
 
-    call sched_periodic
+    call timer_interrupt
 
     auto_return
 
