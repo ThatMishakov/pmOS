@@ -30,6 +30,7 @@ SECTIONS
     _rodata_start = .;
     .rodata : {
         *(.rodata .rodata.*)
+        *(.srodata .srodata.*)
     } :rodata
 
     .init_array : {
@@ -52,6 +53,7 @@ SECTIONS
     .data : {
         _data_start = .;
         *(.data .data.*)
+        *(.sdata .sdata.*)
         _data_end = .;
     } :data
 
@@ -63,6 +65,7 @@ SECTIONS
     .bss : {
         _bss_start = .;
         *(.bss .bss.*)
+        *(.sbss .sbss.*)
         *(COMMON)
         _bss_end = .;
     } :data

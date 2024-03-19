@@ -17,6 +17,10 @@
 #include <cpus/sse.hh>
 #endif
 
+#ifdef __riscv
+#include <cpus/floating_point.hh>
+#endif
+
 using PID = u64;
 
 struct TaskPermissions {
@@ -150,6 +154,17 @@ public:
     #ifdef __x86_64__
     // SSE data on x86_64 CPUs (floating point, vector registers)
     SSE_Data sse_data;
+    #elif defined(__riscv)
+    // Floating point data on RISC-V CPUs
+
+    /// Last state of the floating point register of the task
+    /// If it is clean or disabled, task_fp_registers might not be present
+    FloatingPointState task_fp_state = FloatingPointState::Disabled;
+
+    /// Floating point registers of the task. The actual size depends on what is supported by the ISA (F, D or Q extensions)
+    /// Since I expect most of the tasks to not use floating point, don't allocate it by default and only do so when saving
+    /// registers is needed (when the task leaves the CPU state as dirty)
+    klib::unique_ptr<u64[]> task_fp_registers = nullptr;
     #endif
 
     Spinlock name_lock;

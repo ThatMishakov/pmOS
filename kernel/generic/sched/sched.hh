@@ -16,6 +16,7 @@
 #include <interrupts/gdt.hh>
 #elif  defined(__riscv)
 #include <paging/riscv64_temp_mapper.hh>
+#include <cpus/floating_point.hh>
 #endif
 
 // Checks the mask and unblocks the task if needed
@@ -85,6 +86,9 @@ struct CPU_Info {
 
     #ifdef __riscv
     klib::string isa_string;
+
+    u64 last_fp_task = 0;
+    FloatingPointSize last_fp_size = FloatingPointSize::None;
     #endif
 
     // IMHO this is better than protecting current_task pointer with spinlock

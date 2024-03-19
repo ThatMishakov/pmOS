@@ -10,6 +10,8 @@
 #include <cpus/timer.hh>
 #include <interrupts/interrupts.hh>
 
+#include <cpus/floating_point.hh>
+
 extern klib::shared_ptr<Arch_Page_Table> idle_page_table;
 
 extern "C" void set_cpu_struct(CPU_Info *);
@@ -153,6 +155,33 @@ ReturnStr<klib::string> get_isa_string(u64 hart_id)
     return {ERROR_GENERAL, {}};
 }
 
+void initialize_fp(const klib::string & isa_string)
+{
+    // Find the maximum supported floating point extension
+    auto c = isa_string.c_str();
+    FloatingPointSize max = FloatingPointSize::None;
+    while (*c != '\0' and *c != '_') {
+        switch (*c) {
+            case 'd':
+                if (max < FloatingPointSize::DoublePrecision)
+                    max = FloatingPointSize::DoublePrecision;
+                break;
+            case 'f':
+                if (max < FloatingPointSize::SinglePrecision)
+                    max = FloatingPointSize::SinglePrecision;
+                break;
+            case 'q':
+                if (max < FloatingPointSize::QuadPrecision)
+                    max = FloatingPointSize::QuadPrecision;
+                break;
+        }
+        ++c;
+    }
+
+    serial_logger.printf("Floating point register size: %i\n", fp_register_size(max));
+    max_supported_fp_level = max;
+}
+
 void init_scheduling()
 {
     serial_logger.printf("Initializing scheduling\n");
@@ -179,9 +208,11 @@ void init_scheduling()
     // hart id 0 should always be present
     auto s = get_isa_string(0);
     if (s.result == SUCCESS) {
-        i->isa_string = s.val;
-        serial_logger.printf("ISA string: %s\n", s.val.c_str());
+        i->isa_string = klib::forward<klib::string>(s.val);
+        serial_logger.printf("ISA string: %s\n", i->isa_string.c_str());
     }
+
+    initialize_fp(i->isa_string);
 
     // Enable interrupts
     const u64 mask = (1 << TIMER_INTERRUPT);
