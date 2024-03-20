@@ -10,12 +10,14 @@
 #include <pmos/ports.h>
 #include <assert.h>
 
-static TLS_Data * global_tls_data = NULL;
+TLS_Data * __global_tls_data = NULL;
 
 #define max(x, y) (x > y ? x : y)
 #define alignup(size, alignment) (size%alignment ? size + (alignment - size%alignment) : size)
 
 struct uthread *__get_tls();
+void __release_tls(struct uthread * u);
+struct uthread * __prepare_tls(void * stack_top, size_t stack_size);
 
 void __init_uthread(struct uthread * u, void * stack_top, size_t stack_size)
 {
@@ -27,51 +29,6 @@ void __init_uthread(struct uthread * u, void * stack_top, size_t stack_size)
     u->thread_status = __THREAD_STATUS_RUNNING;
     u->join_notify_port = INVALID_PORT;
 
-}
-
-struct uthread * __prepare_tls(void * stack_top, size_t stack_size)
-{
-    bool has_tls = global_tls_data != NULL;
-
-    size_t memsz = has_tls ? global_tls_data->memsz : 0;
-    size_t align = has_tls ? global_tls_data->align : 0;
-    size_t filesz = has_tls ? global_tls_data->filesz : 0;
-    assert(memsz >= filesz && "TLS memsz must be greater than or equal to TLS filesz");
-
-    align = max(align, _Alignof(struct uthread));
-    size_t alloc_size = alignup(memsz, align) + sizeof(struct uthread);
-
-    size_t size_all = alignup(alloc_size, 4096);
-
-    mem_request_ret_t res = create_normal_region(0, 0, size_all, PROT_READ|PROT_WRITE);
-    if (res.result != SUCCESS)
-        return NULL;
-
-    unsigned char * tls = (unsigned char *)res.virt_addr + alignup(memsz, align);
-
-    if (memsz > 0) {
-        memcpy(tls - memsz, global_tls_data->data, filesz);
-    }
-    
-    __init_uthread((struct uthread *)tls, stack_top, stack_size);
-
-    return (struct uthread *)tls;
-}
-
-void __release_tls(struct uthread * u)
-{
-    if (u == NULL)
-        return;
-
-    size_t memsz = global_tls_data->memsz;
-    size_t align = global_tls_data->align;
-
-    align = max(align, _Alignof(struct uthread));
-    size_t alloc_size = alignup(memsz, align) + sizeof(struct uthread);
-
-    size_t size_all = alignup(alloc_size, 4096);
-
-    release_region(PID_SELF, (void *)u - alignup(memsz, align));
 }
 
 void __thread_exit_destroy_tls()
@@ -120,7 +77,7 @@ static void init_tls_first_time(void * load_data, size_t load_data_size, TLS_Dat
     __load_data_kernel = load_data;
     __load_data_size_kernel = load_data_size;
 
-    global_tls_data = d;
+    __global_tls_data = d;
 
     struct load_tag_stack_descriptor * s = (struct load_tag_stack_descriptor *)get_load_tag(LOAD_TAG_STACK_DESCRIPTOR, load_data, load_data_size);
     if (d == NULL)
@@ -130,7 +87,8 @@ static void init_tls_first_time(void * load_data, size_t load_data_size, TLS_Dat
     if (u == NULL)
         return; // TODO: Panic
 
-    set_segment(0, SEGMENT_FS, u);
+    void * thread_pointer = __thread_pointer_from_uthread(u);
+    set_segment(0, SEGMENT_FS, thread_pointer);
 
     if (__libc_init_hook)
         __libc_init_hook();

@@ -1,6 +1,7 @@
 #include <pthread.h>
 #include <pmos/memory.h>
 #include <errno.h>
+#include <pmos/tls.h>
 
 // Defined in libc/src/pthread/threads.c
 extern uint64_t __active_threads;
@@ -74,7 +75,7 @@ int pthread_create(pthread_t * thread, const pthread_attr_t * attr, void *(*star
         return -1;
     }
 
-    result_t s_result = set_segment(thread_task_id, SEGMENT_FS, u);
+    result_t s_result = set_segment(thread_task_id, SEGMENT_FS, __thread_pointer_from_uthread(u));
     // This should never fail but just in case
     if (s_result != SUCCESS) {
         release_region(PID_SELF, stack.virt_addr);

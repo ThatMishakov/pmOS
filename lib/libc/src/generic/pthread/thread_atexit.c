@@ -44,4 +44,6 @@ int __cxa_thread_atexit_impl(void (*func) (void *), void * arg, void * dso_handl
     };
 
     u->atexit_list_head = entry;
+
+    return 0;
 }

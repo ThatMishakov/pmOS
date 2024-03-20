@@ -17,6 +17,10 @@ typedef struct TLS_Data {
                            ///< first start and thread creation.
 } TLS_Data;
 
+/// Thread local data for all threads
+/// It is passed by the kernel and initialized during the program entry and is then copied for each thread.
+extern TLS_Data * __global_tls_data;
+
 /**
  * @brief Node of the atexit list
  * 
@@ -60,6 +64,19 @@ typedef struct uthread {
     // TODO: Store errno here instead of __thread
     pmos_port_t join_notify_port; // Port used to notify the thread that does pthread_join() that the thread has exited
 };
+
+/**
+ * @brief Returns thread pointer for the given uthread
+ * 
+ * This function gets the appropriate thread pointer for the given uthread address. This function is arch specific and
+ * depends on the TLS structures variants.
+*/
+void * __thread_pointer_from_uthread(struct uthread * uthread);
+
+/**
+ * Returns TLS uthread pointer for the current thread
+*/
+struct uthread *__get_tls();
 
 #if defined(__cplusplus)
 extern "C" {
