@@ -140,6 +140,7 @@ int pthread_mutex_lock(pthread_mutex_t* mutex) {
     assert(result == SUCCESS);
 
     // Mutex has been acquired
+    mutex->blocking_thread_id = thread_id;
     return 0;
 }
 
@@ -185,9 +186,9 @@ int pthread_mutex_unlock(pthread_mutex_t* mutex) {
     if (mutex->recursive_lock_count > 0) {
         mutex->recursive_lock_count--;
         return 0;
+    } else {
+        mutex->blocking_thread_id = 0;
     }
-
-    mutex->blocking_thread_id = 0;
 
     // Atomically decrement mutex->block_count
     uint64_t block_count = __atomic_fetch_sub(&mutex->block_count, 1, __ATOMIC_SEQ_CST);

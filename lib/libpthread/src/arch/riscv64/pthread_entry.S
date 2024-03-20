@@ -62,16 +62,20 @@ __pthread_exit:
     # Save the return value, so it can survive untill syscall_exit
     mv s1, a0
 
+    # Get thread local data
+    call __get_tls
+    mv s3, a0
+
     # Take care of destructors
     call __thread_exit_fire_destructors
 
     # Save data to TLS and stuff; see x86_64 and sysroot/usr/include/pmos/tls.h
     # for more info
-    sd s1, 0x18(tp) # void * return_value
+    sd s1, 0x18(s3) # void * return_value
     # Load stack pointer into saved registers, to be accessible after
     # destroying TLS
-    ld s2, 0x08(tp) # void * stack_top
-    ld t0, 0x10(tp) # void * stack_size
+    ld s2, 0x08(s3) # void * stack_top
+    ld t0, 0x10(s3) # void * stack_size
 
     # Destroy the TLS (the function decides whether to free it or not)
     call __thread_exit_destroy_tls
