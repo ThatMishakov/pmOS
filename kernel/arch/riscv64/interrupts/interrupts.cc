@@ -126,10 +126,7 @@ void handle_interrupt()
         }
     }
 
-    for (;;) {
-        if (c->current_task->regs.syscall_restart == 0)
-            break;
-
+    while (c->current_task->regs.syscall_restart != 0) {
         syscall_handler();
     }
 

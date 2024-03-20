@@ -1,15 +1,17 @@
-#include <deque>
 #include <cstdio>
 #include <string>
 #include <unistd.h>
 #include <pmos/debug.h>
 #include <pthread.h>
 #include <thread>
-
-const thread_local std::deque<std::string> v = {"Hello", "from", "vfatfsd!"};
+#include <list>
 
 class Test {
 public:
+    Test(const std::string & msg) {
+        printf("Test::Test(char * msg): %s\n", msg.c_str());
+    }
+
     Test() {
         printf("Test::Test()\n");
     }
@@ -18,25 +20,30 @@ public:
     }
 };
 
+// Check global constructors
+Test tt("Global constructor test");
+
 thread_local Test t;
 
 void * thread_func(void * arg) {
-    printf("Hello from a pthread!\n");
+    printf("Hello from a pthread! My PID: %i\n", getpid());
     return nullptr;
 }
 
+std::list<std::thread> threads;
+
 int main() {
-    sleep(1);
+    // Sleep is broken
+    //sleep(1);
+    printf("Starting tests...\n");
 
-    for(auto i : v) {
-        printf("%s ", i.c_str());
+    for (size_t i = 0; i < 100; i++) {
+        threads.push_back(std::thread(thread_func, nullptr));
     }
-    printf("\n");
 
-    std::thread t1([]() {
-        printf("Hello from std::thread!\n");
-    });
-    t1.join();
+    for (auto & t : threads) {
+        t.detach();
+    }
 
     // Allow other thread to run
     pthread_exit(nullptr);

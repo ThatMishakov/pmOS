@@ -1,7 +1,6 @@
 #include <sched/timers.hh>
 #include <sbi/sbi.hh>
 
-// TODO: ACPI tables need to be walked to get the frequency
 // Put a bogus value for now
 u64 ticks_per_ms = 0;
 

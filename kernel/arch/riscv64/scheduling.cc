@@ -62,6 +62,7 @@ void initialize_timer()
             return;
         }
 
+        global_logger.printf("[Kernel] Info: time base frequency: %i\n", rhct->time_base_frequency);
         serial_logger.printf("Info: time base frequency: %i\n", rhct->time_base_frequency);
 
         set_timer_frequency(rhct->time_base_frequency);
@@ -178,7 +179,8 @@ void initialize_fp(const klib::string & isa_string)
         ++c;
     }
 
-    serial_logger.printf("Floating point register size: %i\n", fp_register_size(max));
+    serial_logger.printf("[Kernel] Floating point register size: %i\n", fp_register_size(max));
+    global_logger.printf("Floating point register size: %i\n", fp_register_size(max));
     max_supported_fp_level = max;
 }
 
@@ -209,6 +211,7 @@ void init_scheduling()
     auto s = get_isa_string(0);
     if (s.result == SUCCESS) {
         i->isa_string = klib::forward<klib::string>(s.val);
+        global_logger.printf("[Kernel] ISA string: %s\n", i->isa_string.c_str());
         serial_logger.printf("ISA string: %s\n", i->isa_string.c_str());
     }
 

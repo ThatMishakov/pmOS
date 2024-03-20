@@ -15,6 +15,13 @@ __pthread_entry_point:
     sd ra, 8(sp)
     addi fp, sp, 16
 
+    # Set global pointer
+    # https://five-embeddev.com/quickref/global_pointer.html
+    .option push
+	.option norelax
+	la gp, __global_pointer$
+	.option pop
+
     # Move the arguments in the right registers
     # Start routine
     mv t0, a0

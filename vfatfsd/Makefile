@@ -2,11 +2,13 @@ EXEC = vfatfsd.elf
 
 export PATH := $(ROOTDIR)/bin/cross/bin:$(PATH)
 
-CC = x86_64-pmos-gcc
-CPP = x86_64-pmos-gcc
-CXX = x86_64-pmos-g++
-LD = x86_64-pmos-g++
-GO = x86_64-pmos-gccgo
+ARCH = riscv64
+
+CC = $(ARCH)-pmos-gcc
+CPP = $(ARCH)-pmos-gcc
+CXX = $(ARCH)-pmos-g++
+LD = $(ARCH)-pmos-g++
+GO = $(ARCH)-pmos-gccgo
 
 INTERNALCFLAGS  :=       \
 	-static

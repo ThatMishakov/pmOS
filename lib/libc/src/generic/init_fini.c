@@ -16,14 +16,14 @@ extern void (*__fini_array_end[])(void) __attribute__((weak));
 
 void __call_init_functions(void)
 {
-    for (size_t i = 0; __preinit_array_start[i] < __preinit_array_end[0]; i++) {
+    for (size_t i = 0; __preinit_array_start + i < __preinit_array_end; i++) {
         __preinit_array_start[i]();
     }
 
     if (_init)
         _init();
 
-    for (size_t i = 0; __init_array_start[i] < __init_array_end[0]; i++) {
+    for (size_t i = 0; __init_array_start + i < __init_array_end; i++) {
         __init_array_start[i]();
     }
 }
@@ -41,7 +41,7 @@ void __call_destructors(void)
 
     // I don't know which one needs to be called first
 
-    for (size_t i = 0; __fini_array_start[i] < __fini_array_end[0]; i++) {
+    for (size_t i = 0; __fini_array_start + i < __fini_array_end; i++) {
         __fini_array_start[i]();
     }
 
