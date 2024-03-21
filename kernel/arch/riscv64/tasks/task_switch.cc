@@ -14,25 +14,25 @@ void TaskDescriptor::before_task_switch() {
     case FloatingPointState::Disabled:
         break;
     case FloatingPointState::Initial:
-        fp_state = FloatingPointState::Initial;
-        last_fp_hart_id = c->hart_id;
+        this->fp_state = FloatingPointState::Initial;
+        this->last_fp_hart_id = c->hart_id;
         c->last_fp_task = pid;
         c->last_fp_state = FloatingPointState::Initial;
         break;
     case FloatingPointState::Clean:
-        fp_state = FloatingPointState::Clean;
-        last_fp_hart_id = c->hart_id;
+        this->fp_state = FloatingPointState::Clean;
+        this->last_fp_hart_id = c->hart_id;
         c->last_fp_task = pid;
         c->last_fp_state = FloatingPointState::Clean;
         break;
     case FloatingPointState::Dirty:
-        if (!fp_registers)
-            fp_registers = klib::unique_ptr<u64[]>(new u64[fp_register_size(max_supported_fp_level)*2]);
+        if (!this->fp_registers)
+            this->fp_registers = klib::unique_ptr<u64[]>(new u64[fp_register_size(max_supported_fp_level)*2]);
         
-        asm("csrr %0, fcsr" : "=r"(fcsr));
+        asm("csrr %0, fcsr" : "=r"(this->fcsr));
         save_fp_registers(fp_registers.get());
-        fp_state = FloatingPointState::Clean;
-        last_fp_hart_id = c->hart_id;
+        this->fp_state = FloatingPointState::Clean;
+        this->last_fp_hart_id = c->hart_id;
         c->last_fp_task = pid;
         c->last_fp_state = FloatingPointState::Clean;
         break;

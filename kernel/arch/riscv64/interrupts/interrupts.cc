@@ -87,7 +87,11 @@ bool instruction_is_fp_op(u32 instruction)
 }
 bool instruction_is_fp_ld_st(u32 instruction)
 {
-    return (instruction & 0x7f) == 0x07 or (instruction & 0x7f) == 0x27;
+    // C extension encoding (16 bit)
+    bool compressed = ((instruction&0x3) == 0b00 or (instruction&0x3) == 0b10) and ((instruction & 0x6000) == 0x2000);
+    // 32 bit encoding
+    bool full = (instruction & 0x7f) == 0x07 or (instruction & 0x7f) == 0x27;
+    return compressed or full;
 }
 bool instruction_is_fp_csr(u32 instruction)
 {
@@ -130,8 +134,8 @@ void illegal_instruction(u32 instruction)
             throw Kern_Exception(ERROR_BAD_INSTRUCTION, "Illegal instruction");
         }
     } catch (const Kern_Exception& e) {
-        serial_logger.printf("Warning: Illegal instruction pid %i (%s) rip %h -> %i killing process...\n", task->pid, task->name.c_str(), task->regs.pc, e.err_code);
-        global_logger.printf("Warning: Illegal instruction pid %i (%s) pc %h -> %i killing process...\n", task->pid, task->name.c_str(), task->regs.pc, e.err_code);
+        serial_logger.printf("Warning: %s pid %i (%s) pc %h instr 0x%h -> %i killing process...\n", e.err_message, task->pid, task->name.c_str(), task->regs.pc, instruction, e.err_code);
+        global_logger.printf("Warning: %s pid %i (%s) pc %h instr 0x%h -> %i killing process...\n", e.err_message, task->pid, task->name.c_str(), task->regs.pc, instruction, e.err_code);
         task->atomic_kill();
     }
 }
@@ -155,6 +159,9 @@ void handle_interrupt()
     if (c->nested_level > 1) {
         serial_logger.printf("!!! kernel interrupt !!!\n");
         serial_logger.printf("nested level: %i\n", c->nested_level);
+        serial_logger.printf("scause: 0x%x\n", scause);
+        serial_logger.printf("stval: 0x%x\n", stval);
+        serial_logger.printf("pc: 0x%x\n", c->current_task->regs.program_counter());
         print_stack_trace();
         while (1) ;
     }

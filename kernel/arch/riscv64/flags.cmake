@@ -1,1 +1,2 @@
-set(PLATFORM_C_FLAGS "-march=rv64imafd_zicsr_zba_zbb_zbc -mabi=lp64")
+set(PLATFORM_C_FLAGS "-march=rv64ima_zicsr_zba_zbb_zbc -mabi=lp64")
+set_source_files_properties(${CMAKE_CURRENT_FUNCTION_LIST_DIR}/${ARCH}/cpus/floating_point.S PROPERTIES COMPILE_FLAGS "-march=rv64imafd_zicsr_zba_zbb_zbc")
