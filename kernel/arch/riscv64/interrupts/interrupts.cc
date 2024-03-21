@@ -76,10 +76,9 @@ void page_fault(u64 virt_addr, u64 scause)
 
 bool instruction_is_csr(u32 instruction)
 {
-    u32 funct3 = (instruction >> 12) & 0x7;
     // SYSTEM
     return (instruction & 0x7f) == 0x73
-        and funct3 != 0x0 and funct3 != 0x7 and funct3 != 0x8;
+        and ((instruction >> 12) & 0x3) != 0x0;
 }
 bool instruction_is_fp_op(u32 instruction)
 {
