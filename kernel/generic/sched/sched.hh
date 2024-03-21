@@ -85,10 +85,11 @@ struct CPU_Info {
 
 
     #ifdef __riscv
+    u64 hart_id = 0;
     klib::string isa_string;
 
     u64 last_fp_task = 0;
-    FloatingPointSize last_fp_size = FloatingPointSize::None;
+    FloatingPointState last_fp_state = FloatingPointState::Disabled;
     #endif
 
     // IMHO this is better than protecting current_task pointer with spinlock

@@ -159,12 +159,16 @@ public:
 
     /// Last state of the floating point register of the task
     /// If it is clean or disabled, task_fp_registers might not be present
-    FloatingPointState task_fp_state = FloatingPointState::Disabled;
+    FloatingPointState fp_state = FloatingPointState::Disabled;
 
     /// Floating point registers of the task. The actual size depends on what is supported by the ISA (F, D or Q extensions)
     /// Since I expect most of the tasks to not use floating point, don't allocate it by default and only do so when saving
     /// registers is needed (when the task leaves the CPU state as dirty)
-    klib::unique_ptr<u64[]> task_fp_registers = nullptr;
+    klib::unique_ptr<u64[]> fp_registers = nullptr;
+    u64 fcsr = 0;
+
+    /// Last hart id that used the floating point unit
+    u64 last_fp_hart_id = 0;
     #endif
 
     Spinlock name_lock;

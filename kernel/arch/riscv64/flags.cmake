@@ -1,1 +1,1 @@
-set(PLATFORM_C_FLAGS "-march=rv64ima_zicsr_zba_zbb_zbc -mabi=lp64")
+set(PLATFORM_C_FLAGS "-march=rv64imafd_zicsr_zba_zbb_zbc -mabi=lp64")

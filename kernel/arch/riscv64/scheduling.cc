@@ -186,10 +186,14 @@ void initialize_fp(const klib::string & isa_string)
 
 void init_scheduling()
 {
+    // TODO
+    u64 hart_id = 0;
+
     serial_logger.printf("Initializing scheduling\n");
 
     CPU_Info * i = new CPU_Info();
     i->kernel_stack_top = i->kernel_stack.get_stack_top();
+    i->hart_id = hart_id;
 
     void * temp_mapper_start = virtmem_alloc_aligned(16, 4);
     i->temp_mapper = RISCV64_Temp_Mapper(temp_mapper_start, idle_page_table->get_root());
@@ -208,7 +212,7 @@ void init_scheduling()
 
     // Set ISA string
     // hart id 0 should always be present
-    auto s = get_isa_string(0);
+    auto s = get_isa_string(hart_id);
     if (s.result == SUCCESS) {
         i->isa_string = klib::forward<klib::string>(s.val);
         global_logger.printf("[Kernel] ISA string: %s\n", i->isa_string.c_str());
@@ -216,6 +220,7 @@ void init_scheduling()
     }
 
     initialize_fp(i->isa_string);
+    set_fp_state(FloatingPointState::Disabled);
 
     // Enable interrupts
     const u64 mask = (1 << TIMER_INTERRUPT);

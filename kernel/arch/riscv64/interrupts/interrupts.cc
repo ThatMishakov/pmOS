@@ -3,6 +3,9 @@
 #include <sched/sched.hh>
 #include "interrupts.hh"
 #include <assert.h>
+#include <utils.hh>
+#include <cpus/csr.hh>
+#include <cpus/floating_point.hh>
 
 extern "C" void handle_interrupt();
 
@@ -71,6 +74,69 @@ void page_fault(u64 virt_addr, u64 scause)
     }
 }
 
+bool instruction_is_csr(u32 instruction)
+{
+    u32 funct3 = (instruction >> 12) & 0x7;
+    // SYSTEM
+    return (instruction & 0x7f) == 0x73
+        and funct3 != 0x0 and funct3 != 0x7 and funct3 != 0x8;
+}
+bool instruction_is_fp_op(u32 instruction)
+{
+    // MADD, MSUB, NMSUB, NMADD and OP-FP
+    return (instruction & 0x63) == 0x43 and (instruction & 0x1c) != 0x18 and (instruction & 0x1c) != 0x14;
+}
+bool instruction_is_fp_ld_st(u32 instruction)
+{
+    return (instruction & 0x7f) == 0x07 or (instruction & 0x7f) == 0x27;
+}
+bool instruction_is_fp_csr(u32 instruction)
+{
+    u32 csr_imm = instruction >> 20;
+    return instruction_is_csr(instruction) and
+        (csr_imm == FFLAGS
+        or csr_imm == FRM
+        or csr_imm == FCSR);
+}
+
+
+void illegal_instruction(u32 instruction)
+{
+    auto task = get_cpu_struct()->current_task;
+
+    try {
+        if (instruction == 0) {
+            bool b = copy_from_user((char *)&instruction, (char *)task->regs.pc, sizeof(instruction));
+            if (not b) {
+                task->atomic_block_by_page(task->regs.pc, &task->page_table->blocked_tasks);
+                return;
+            }
+        }
+
+        if (instruction_is_fp_csr(instruction)) {
+            if (not fp_is_supported())
+                throw Kern_Exception(ERROR_INSTRUCTION_UNAVAILABLE, "Floating point not supported");
+            
+            restore_fp_state(task.get());
+        } else if (instruction_is_fp_op(instruction) or instruction_is_fp_ld_st(instruction)) {
+            if (not fp_is_supported())
+                throw Kern_Exception(ERROR_INSTRUCTION_UNAVAILABLE, "Floating point not supported");
+
+            if (get_fp_state() != FloatingPointState::Disabled) // FP is enabled but instruction is illegal -> not supported
+                throw Kern_Exception(ERROR_INSTRUCTION_UNAVAILABLE, "Floating point width not supported");
+
+            restore_fp_state(task.get());
+        } else {
+            // What is this
+            throw Kern_Exception(ERROR_BAD_INSTRUCTION, "Illegal instruction");
+        }
+    } catch (const Kern_Exception& e) {
+        serial_logger.printf("Warning: Illegal instruction pid %i (%s) rip %h -> %i killing process...\n", task->pid, task->name.c_str(), task->regs.pc, e.err_code);
+        global_logger.printf("Warning: Illegal instruction pid %i (%s) pc %h -> %i killing process...\n", task->pid, task->name.c_str(), task->regs.pc, e.err_code);
+        task->atomic_kill();
+    }
+}
+
 extern "C" void syscall_handler();
 
 void service_timer_interrupt()
@@ -110,6 +176,9 @@ void handle_interrupt()
         }
     } else {
         switch (scause) {
+            case ILLEGAL_INSTRUCTION:
+                illegal_instruction(stval);
+                break;
             case INSTRUCTION_PAGE_FAULT:
             case LOAD_PAGE_FAULT:
             case STORE_AMO_PAGE_FAULT:

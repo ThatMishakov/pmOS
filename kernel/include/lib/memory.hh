@@ -34,7 +34,7 @@ public:
 
     constexpr unique_ptr( nullptr_t ) noexcept: ptr(nullptr) {};
 
-    constexpr unique_ptr<T>(pointer p) noexcept: ptr(p) {};
+    constexpr unique_ptr(pointer p) noexcept: ptr(p) {};
 
     template<class U>
     constexpr unique_ptr<T>(unique_ptr<U>&& p) noexcept:
@@ -125,7 +125,7 @@ public:
     constexpr unique_ptr() noexcept: ptr(nullptr) {};
     constexpr unique_ptr( nullptr_t ) noexcept: ptr(nullptr) {};
 
-    template< class U > constexpr unique_ptr(U p) noexcept: ptr(p) {};
+    explicit constexpr unique_ptr(pointer p) noexcept: ptr(p) {};
 
     constexpr unique_ptr(unique_ptr&& p) noexcept:
         ptr(p.ptr)
@@ -143,6 +143,15 @@ public:
 
     template<class U>
     constexpr unique_ptr<T>& operator=( unique_ptr<U>&& r ) noexcept
+    {
+        this->~unique_ptr();
+        
+        ptr = r.ptr;
+        r.ptr = nullptr;
+        return *this;
+    }
+
+    unique_ptr& operator=( unique_ptr&& r ) noexcept
     {
         this->~unique_ptr();
         
@@ -191,6 +200,12 @@ template< class T, class... Args >
 constexpr unique_ptr<T> make_unique( Args&&... args )
 {
     return unique_ptr(new T(forward<Args>(args)...));
+}
+
+template< class T >
+constexpr unique_ptr<T> make_unique( size_t size )
+{
+    return unique_ptr<T>(new typename remove_extent<T>::type[size]());
 }
 
 struct _smart_ptr_refcount_str {

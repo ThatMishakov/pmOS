@@ -13,12 +13,14 @@ GO = $(ARCH)-pmos-gccgo
 INTERNALCFLAGS  :=       \
 	-static
 
+USERCFLAGS := -march=rv64gc -mabi=lp64d -O3
+
 CFLAGS = -std=gnu20 $(INCLUDEFLAGS) -g
 CXXFLAGS = -std=c++20 $(INCLUDEFLAGS) -g
 CPPFLAGS = $(INTERNALCFLAGS) $(USERCFLAGS) -MMD -MP $(INCLUDEFLAGS)
-GOFLAGS = $(INTERNALCFLAGS) $(USERCFLAGS) -MMD -MP $(INCLUDEFLAGS) -O3
+GOFLAGS = $(INTERNALCFLAGS) $(USERCFLAGS) -MMD -MP $(INCLUDEFLAGS)
 ASMFLAGS = -I$(INCLUDEDIR)
-LDFLAGS = $(INTERNALLDFLAGS) -g -pthread -O3
+LDFLAGS = $(INTERNALLDFLAGS) -g -pthread -O3 -march=rv64gc -mabi=lp64d
 
 
 CCFILES := $(shell find ./ -type f -name '*.cc')

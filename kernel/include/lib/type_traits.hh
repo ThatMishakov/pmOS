@@ -5,9 +5,18 @@
 namespace klib
 {
 
+typedef unsigned long size_t;
+
 template< class T > struct remove_reference      { typedef T type; };
 template< class T > struct remove_reference<T&>  { typedef T type; };
 template< class T > struct remove_reference<T&&> { typedef T type; };
+
+template<class T>
+struct remove_extent { using type = T; }; 
+template<class T>
+struct remove_extent<T[]> { using type = T; };
+template<class T, size_t N>
+struct remove_extent<T[N]> { using type = T; };
 
 template<class T, T v>
 struct integral_constant {
