@@ -121,7 +121,20 @@
         "syscalls.h": "c",
         "phys_map.h": "c",
         "panic.h": "c",
-        "acpi.h": "c"
+        "acpi.h": "c",
+        "inttypes.h": "c",
+        "commands.h": "c",
+        "internal_rwlock.h": "c",
+        "spin_pause.h": "c",
+        "filesystem_struct.h": "c",
+        "internal_param.h": "c",
+        "debug.h": "c",
+        "registers.h": "c",
+        "stdio.h": "c",
+        "configuration.h": "c",
+        "timers.h": "c",
+        "timers_heap.h": "c",
+        "interrupts.h": "c"
     },
     "cmake.configureOnOpen": false
 }
