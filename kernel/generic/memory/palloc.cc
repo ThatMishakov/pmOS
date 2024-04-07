@@ -36,7 +36,7 @@
 void* palloc(size_t number)
 {
     // Find the suitable memory region
-    void * ptr = virtmem_alloc(number);
+    void * ptr = kernel_space_allocator.virtmem_alloc(number);
     if (ptr == nullptr)
         return nullptr;
 
@@ -69,7 +69,7 @@ void* palloc(size_t number)
                 void * virt_addr = (void*)((u64)ptr + j*4096);
                 unmap_kernel_page(virt_addr);
             }
-            virtmem_free(ptr, number);
+            kernel_space_allocator.virtmem_free(ptr, number);
             throw e;
         }
     }

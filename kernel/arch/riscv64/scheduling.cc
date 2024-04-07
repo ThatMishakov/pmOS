@@ -223,7 +223,7 @@ void init_scheduling()
     i->kernel_stack_top = i->kernel_stack.get_stack_top();
     i->hart_id = hart_id;
 
-    void * temp_mapper_start = virtmem_alloc_aligned(16, 4);
+    void * temp_mapper_start = kernel_space_allocator.virtmem_alloc_aligned(16, 4);
     i->temp_mapper = RISCV64_Temp_Mapper(temp_mapper_start, idle_page_table->get_root());
 
     set_cpu_struct(i);

@@ -289,11 +289,11 @@ void construct_paging() {
     clear_page(kernel_ptable_top);
 
     // Init temp mapper with direct map, while it is still available
-    void * temp_mapper_start = virtmem_alloc_aligned(16, 4); // 16 pages aligned to 16 pages boundary
+    void * temp_mapper_start = kernel_space_allocator.virtmem_alloc_aligned(16, 4); // 16 pages aligned to 16 pages boundary
     temp_temp_mapper = Arch_Temp_Mapper(temp_mapper_start, kernel_ptable_top);
 
     // Map bitmap
-    void * bitmap_virt = virtmem_alloc(bitmap_size_pages);
+    void * bitmap_virt = kernel_space_allocator.virtmem_alloc(bitmap_size_pages);
     if (bitmap_virt == nullptr)
         hcf();
     const Page_Table_Argumments bitmap_args = {
