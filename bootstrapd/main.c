@@ -95,6 +95,8 @@ void init_modules()
     }
 }
 
+uint64_t rsdp_desc = 0;
+
 void init_misc()
 {
     struct load_tag_generic * t = get_load_tag(LOAD_TAG_FRAMEBUFFER, __load_data_kernel, __load_data_size_kernel);
@@ -119,6 +121,13 @@ void init_misc()
     fb->framebuffer_green_mask_shift = tt->green_mask_shift;
     fb->framebuffer_blue_mask_size = tt->blue_mask_size;
     fb->framebuffer_blue_mask_shift = tt->blue_mask_shift;
+
+
+    struct load_tag_rsdp * tr = (struct load_tag_rsdp *)get_load_tag(LOAD_TAG_RSDP, __load_data_kernel, __load_data_size_kernel);
+    if (tr == NULL)
+        return;
+
+    rsdp_desc = tr->rsdp;
 }
 
 void provide_framebuffer(pmos_port_t port, uint32_t flags)
@@ -183,7 +192,6 @@ void start_executables()
         }
     }
 }
-        
 
 void service_ports()
 {
@@ -227,24 +235,21 @@ void service_ports()
         IPC_ACPI_Request_RSDT* ptr = (IPC_ACPI_Request_RSDT *)buff;
 
         switch (ptr->type) {
-        // case 0x60: {
-        //     IPC_ACPI_RSDT_Reply reply = {};
+        case 0x60: {
+            IPC_ACPI_RSDT_Reply reply = {};
 
-        //     reply.type = 0x61;
-        //     reply.result = 0;
-        //     reply.descriptor = 0;
+            reply.type = 0x61;
+            reply.result = 0;
+            reply.descriptor = 0;
 
-        //     if (rsdp20_desc != 0) {
-        //         reply.result = 1;
-        //         reply.descriptor = (uint64_t *)rsdp20_desc;
-        //     } else if (rsdp_desc != 0) {
-        //         reply.result = 1;
-        //         reply.descriptor = (uint64_t *)rsdp_desc;
-        //     }
+            if (rsdp_desc != 0) {
+                reply.result = 1;
+                reply.descriptor = (uint64_t *)rsdp_desc;
+            }
 
-        //     pmos_syscall(SYSCALL_SEND_MSG_PORT, ptr->reply_channel, sizeof(reply), &reply);
-        // }
-        //     break;
+            pmos_syscall(SYSCALL_SEND_MSG_PORT, ptr->reply_channel, sizeof(reply), &reply);
+        }
+            break;
         case 0x21: {
             IPC_Kernel_Named_Port_Notification* notif = (IPC_Kernel_Named_Port_Notification *)ptr;
             if (desc.size < sizeof(IPC_Kernel_Named_Port_Notification)) {

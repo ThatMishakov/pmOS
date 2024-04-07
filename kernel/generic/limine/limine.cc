@@ -551,6 +551,24 @@ klib::vector<klib::unique_ptr<load_tag_generic>> construct_load_tag_framebuffer(
     return tags;
 }
 
+constexpr u64 RSDP_INITIALIZER = (u64)-1;
+u64 rsdp = RSDP_INITIALIZER;
+
+klib::unique_ptr<load_tag_generic> construct_load_tag_rsdp()
+{
+    if (rsdp == RSDP_INITIALIZER)
+        return {};
+
+    klib::unique_ptr<load_tag_generic> tag = (load_tag_generic*) new load_tag_rsdp;
+
+    auto *t = (load_tag_rsdp *)tag.get();
+    t->header = LOAD_TAG_RSDP_HEADER;
+    t->rsdp = rsdp;
+
+    return tag;
+}
+
+
 klib::shared_ptr<Arch_Page_Table> idle_page_table = nullptr;
 
 void init(void);
@@ -579,6 +597,9 @@ void init_task1()
     // Pass the modules to the task
     klib::vector<klib::unique_ptr<load_tag_generic>> tags;
     tags = construct_load_tag_framebuffer();
+    auto t = construct_load_tag_rsdp();
+    if (t)
+        tags.push_back(klib::move(t));
     tags.push_back(construct_load_tag_for_modules());
 
     // Create new task and load ELF into it
@@ -608,7 +629,9 @@ void init_acpi() {
 
     u64 addr = (u64)resp.address - hhdm_offset;
     serial_logger.printf("RSDP found at 0x%x\n", addr);
-    enumerate_tables(addr);
+    const bool b = enumerate_tables(addr);
+    if (b)
+        rsdp = addr;
 }
 
 

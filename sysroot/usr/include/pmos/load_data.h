@@ -38,6 +38,7 @@ enum {
     // LOAD_TAG_FILE_DESCRIPTORS = 4,
     LOAD_TAG_LOAD_MODULES = 5,
     LOAD_TAG_FRAMEBUFFER = 6,
+    LOAD_TAG_RSDP = 7,
 };
 
 /// @brief Header for a load tag
@@ -110,6 +111,15 @@ struct load_tag_framebuffer {
     uint8_t unused[1]; //< Unused, must be 0
 };
 #define LOAD_TAG_FRAMEBUFFER_HEADER {LOAD_TAG_FRAMEBUFFER, 0, sizeof(struct load_tag_framebuffer)}
+
+/// @brief RSDP tag
+///
+/// This tag is used to pass the ACPI RSDP pointer
+struct load_tag_rsdp {
+    struct load_tag_generic header;
+    uint64_t rsdp; //< Pointer to the RSDP in the physical memory
+};
+#define LOAD_TAG_RSDP_HEADER {LOAD_TAG_RSDP, 0, sizeof(struct load_tag_rsdp)}
 
 /// @brief Gets the first tag of the specified type
 ///

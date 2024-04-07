@@ -52,7 +52,7 @@ public:
 // Check global constructors
 Test tt("Global constructor test");
 
-thread_local Test t;
+// thread_local Test t;
 
 double count = 0;
 std::mutex count_mutex;
@@ -61,7 +61,7 @@ thread_local auto pid = getpid();
 
 
 void thread_func(void *) {
-    printf("Hello from a pthread! My PID: %i\n", pid);
+    //printf("Hello from a pthread! My PID: %i\n", pid);
     double p = 0;
     for (size_t i = 0; i < 10000000; ++i) {
         asm volatile ("");
@@ -70,7 +70,7 @@ void thread_func(void *) {
 
     std::lock_guard<std::mutex> lock(count_mutex);
     count += p;
-    printf("Count: %li p: %li\n", (uint64_t)count, (uint64_t)p);
+    // printf("Count: %li p: %li\n", (uint64_t)count, (uint64_t)p);
 }
 
 std::list<std::thread> threads;

@@ -30,7 +30,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <phys_map/phys_map.h>
-#include <lai/core.h>
 #include <string.h>
 #include <pmos/ipc.h>
 #include <pmos/system.h>
@@ -160,11 +159,4 @@ void init_acpi()
     }
 
     printf("Walked ACPI tables! ACPI revision: %i\n", acpi_revision);
-}
-
-void init_lai()
-{
-    lai_set_acpi_revision(acpi_revision);
-    lai_create_namespace();
-    printf("Inited LAI!\n"); 
 }

@@ -4,9 +4,11 @@ PROGDIR = $(realpath .)
 ROOTDIR = $(PROGDIR)/..
 export PATH := $(ROOTDIR)/bin/cross/bin:$(PATH)
 
-CC = x86_64-pmos-gcc
-CPP = x86_64-pmos-gcc
-CXX = x86_64-pmos-g++
+ARCH = riscv64
+
+CC = $(ARCH)-pmos-gcc
+CPP = $(ARCH)-pmos-gcc
+CXX = $(ARCH)-pmos-g++
 
 USERCFLAGS = -Wall -Wextra -O2 -pipe
 
@@ -28,9 +30,9 @@ ASMFLAGS = -I$(INCLUDEDIR)
 LDFLAGS = $(INTERNALLDFLAGS) -g
  
 # Use find to glob all *.c files in the directory and extract the object names.
-CCFILES := $(shell find ./ -type f -name '*.cc')
-CFILES := $(shell find ./ -type f -name '*.c')
-ASMFILES := $(shell find ./ -type f -name '*.S')
+CCFILES := $(shell find ./generic/ -type f -name '*.cc')
+CFILES := $(shell find ./generic/ -type f -name '*.c')
+ASMFILES := $(shell find ./generic/ -type f -name '*.S')
 OBJ    := $(CCFILES:.cc=.o) $(ASMFILES:.S=.o) $(CFILES:.c=.o)
 DEP    := $(OBJ:.o=.d)
 all: $(EXEC)

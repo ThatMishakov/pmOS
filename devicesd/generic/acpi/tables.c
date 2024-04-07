@@ -119,9 +119,11 @@ ACPISDTHeader* check_get_virt_from_phys(ACPISDTHeader* phys)
     //     return NULL;
 
     ACPISDTHeader* virt_big = map_phys(phys, size);
-    if (check_table(virt_big)) {
-        return virt_big;
-    }
+    // Wisdom from the internet: ACPI checksum is broken half the time and nobody checks it
+    // if (check_table(virt_big)) {
+    //     return virt_big;
+    // }
+    return virt_big;
 
     // On error
     unmap_phys(virt_big, size);
@@ -221,7 +223,7 @@ int walk_acpi_tables()
     if (rsdp_desc != NULL) { // TODO
         XSDT* xsdt = get_xsdt_from_desc(rsdp_desc);
         if (xsdt == NULL) {
-            // fprintf(stderr, "Warning: could not validade XSDT table %lX\n", (uint64_t)xsdt);      
+            fprintf(stderr, "Warning: could not validade XSDT table %lX\n", (uint64_t)xsdt);      
         } else {
             xsdt_enumerated = 1;
             push_table((ACPISDTHeader*)xsdt);

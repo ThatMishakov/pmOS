@@ -294,6 +294,30 @@ typedef struct RCHT {
   uint32_t rhct_node_offset; // Offset to the first RCHT node from the start of the RCHT table
 } __attribute__ ((packed)) RCHT;
 
+
+// -------------- MCFG table --------------
+//
+// https://wiki.osdev.org/PCI_Express is a good explanation
+
+// Base allocation structure
+typedef struct MCFGBase {
+  uint64_t base_addr; //< Base address of Enhanced configuration mecanism
+  uint16_t group_number; //< PCI Segment Group Number
+  uint8_t start_bus_number; //< Start bus number decoded by this host bridge
+  uint8_t end_bus_number; //< End bus number decoded by this host bridge
+  uint8_t reserved[4];
+} __attribute__ ((packed)) MCFGBase;
+
+// MCFG Table
+typedef struct MCFG {
+  ACPISDTHeader h;
+  uint64_t reserved;
+  struct MCFGBase structs_list[0];
+  // There is a base address structure for each PCI segment group that is not hot pluggable
+} __attribute__ ((packed)) MCFG;
+/// Returns the number of MCFGBase structures in the MCFG table
+#define MCFG_list_size(m) ((m->h.length - sizeof(struct MCFG))/sizeof(struct MCFGBase))
+
 extern int acpi_revision;
 
 // Returns -1 on error or ACPI version otherwise 

@@ -90,9 +90,10 @@ int main(int argc, char** argv) {
     }
 
     init_acpi();
+    init_pci();
 
-    init_ioapic();
-    init_timers();
+    // init_ioapic();
+    // init_timers();
 
     // TODO: Works, but needs PCI initialization first
     //if (acpi_revision != -1)
@@ -121,36 +122,36 @@ int main(int argc, char** argv) {
 
         if (msg.size >= sizeof(IPC_Generic_Msg)) {
             switch (((IPC_Generic_Msg*)msg_buff)->type) {
-            case IPC_Reg_Int_NUM: {
-                if (msg.size != sizeof(IPC_Reg_Int))
-                    printf("[devicesd] Warning: Message from PID %lx does no have the right size (%lx)\n", msg.sender, msg.size);
-                // TODO: Add more checks & stuff
+            // case IPC_Reg_Int_NUM: {
+            //     if (msg.size != sizeof(IPC_Reg_Int))
+            //         printf("[devicesd] Warning: Message from PID %lx does no have the right size (%lx)\n", msg.sender, msg.size);
+            //     // TODO: Add more checks & stuff
 
-                IPC_Reg_Int* m = (IPC_Reg_Int*)msg_buff;
+            //     IPC_Reg_Int* m = (IPC_Reg_Int*)msg_buff;
 
-                uint8_t result = configure_interrupts_for(m);
+            //     uint8_t result = configure_interrupts_for(m);
 
-                IPC_Reg_Int_Reply reply;
-                reply.type = IPC_Reg_Int_Reply_NUM;
-                reply.status = result != 0;
-                reply.intno = result;
-                send_message_port(m->reply_chan, sizeof(reply), (char*)&reply);
-            }
-                break;
-            case IPC_Start_Timer_NUM: {
-                if (msg.size != sizeof(IPC_Start_Timer))
-                    printf("[devicesd] Warning: Message from PID %lx does no have the right size (%lx)\n", msg.sender, msg.size);
+            //     IPC_Reg_Int_Reply reply;
+            //     reply.type = IPC_Reg_Int_Reply_NUM;
+            //     reply.status = result != 0;
+            //     reply.intno = result;
+            //     send_message_port(m->reply_chan, sizeof(reply), (char*)&reply);
+            // }
+            //     break;
+            // case IPC_Start_Timer_NUM: {
+            //     if (msg.size != sizeof(IPC_Start_Timer))
+            //         printf("[devicesd] Warning: Message from PID %lx does no have the right size (%lx)\n", msg.sender, msg.size);
 
-                IPC_Start_Timer* m = (IPC_Start_Timer*)msg_buff;
-                start_timer(m, msg.sender);
-            }
+            //     IPC_Start_Timer* m = (IPC_Start_Timer*)msg_buff;
+            //     start_timer(m, msg.sender);
+            // }
 
-                break;
-            case IPC_Kernel_Interrupt_NUM:
-                // TODO: Check that it's from kernel, etc.
+            //     break;
+            // case IPC_Kernel_Interrupt_NUM:
+            //     // TODO: Check that it's from kernel, etc.
 
-                hpet_int();
-                break;
+            //     hpet_int();
+            //     break;
             default:
                 printf("[devicesd] Warning: Recieved unknown message %x from PID %li\n", ((IPC_Generic_Msg*)msg_buff)->type, msg.sender);    
                 break;
