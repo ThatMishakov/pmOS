@@ -29,6 +29,7 @@
 #ifndef PCI_H
 #define PCI_H
 #include <stdint.h>
+#include <stdbool.h>
 
 void init_pci();
 
@@ -39,5 +40,94 @@ uint32_t pci_readl(uint16_t seg, uint8_t bus, uint8_t slot, uint8_t fun, uint16_
 void pci_writeb(uint16_t seg, uint8_t bus, uint8_t slot, uint8_t fun, uint16_t offset, uint8_t val);
 void pci_writew(uint16_t seg, uint8_t bus, uint8_t slot, uint8_t fun, uint16_t offset, uint16_t val);
 void pci_writel(uint16_t seg, uint8_t bus, uint8_t slot, uint8_t fun, uint16_t offset, uint32_t val);
+
+#define VENDOR_ID_NO_DEVICE 0xFFFF
+
+#define HEADER_TYPE_MASK 0x7f;
+#define HEADER_MULTIFUNCTION 0x80;
+
+struct PCIGroup {
+    struct PCIGroup *next;
+    uint64_t base_addr;
+
+    // Pointer to the bus 0 of the group (even if it doesn't exist)
+    void *base_ptr;
+
+    unsigned group_number;
+    unsigned start_bus_number;
+    unsigned end_bus_number;
+};
+
+inline unsigned long pcie_config_space_size(unsigned pci_start, unsigned pci_end)
+{
+    // https://wiki.osdev.org/PCI#Configuration_Space_Access_Mechanism_.231
+    // With PCI, the registers are 256 bytes, with PCIe it's expanded to 4096 bytes
+    // Thus, bus number is bits 27-20 of the pointer
+    return (pci_end - pci_start + 1) << 20;
+}
+
+inline uint64_t pcie_config_space_start(uint64_t base, unsigned pci_start)
+{
+    return base + (pci_start << 20);
+}
+
+inline void *pcie_config_space_device(struct PCIGroup * group, unsigned bus, unsigned device, unsigned function)
+{
+    // config_space_virt is expected to point to the bus number 0, even if it is not mapped
+    void * config_space_virt = group->base_ptr;
+
+    // https://wiki.osdev.org/PCI_Express
+    const unsigned long offset = (bus << 20) | (device << 15) | (function << 12);
+
+    return (void *)((char *)config_space_virt + offset);
+}
+
+#define PCI_FUNCTIONS 8
+#define PCI_DEVICES_PER_BUS 32
+
+inline uint32_t pci_read_register(void *s, int id)
+{
+    volatile uint32_t *r = (volatile uint32_t *)s;
+    return r[id];
+}
+
+inline uint8_t pcie_header_type(void *s)
+{
+    uint8_t r = pci_read_register(s, 0x3) >> 16;
+    return r & HEADER_TYPE_MASK;
+}
+
+inline bool pcie_multifunction(void *s)
+{
+    uint8_t r = pci_read_register(s, 0x3) >> 16;
+    return r & HEADER_MULTIFUNCTION;
+}
+
+inline uint32_t pcie_vendor_id(void *s)
+{
+    uint32_t r = pci_read_register(s, 0);
+    return r & 0xffff;
+}
+
+inline uint32_t pcie_device_id(void *s)
+{
+    uint32_t r = pci_read_register(s, 0);
+    return r >> 16;
+}
+
+inline uint8_t pcie_class_code(void *s)
+{
+    return pci_read_register(s, 2) >> 24;
+}
+
+inline uint8_t pcie_subclass(void *s)
+{
+    return pci_read_register(s, 2) >> 16;
+}
+
+inline bool pci_no_device(void *s)
+{
+    return pcie_vendor_id(s) == VENDOR_ID_NO_DEVICE;
+}
 
 #endif
