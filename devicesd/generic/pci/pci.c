@@ -35,12 +35,21 @@
 #include <stdlib.h>
 #include <errno.h>
 
+void check_bus(struct PCIGroup *g, uint8_t bus);
+
 void check_function(struct PCIGroup *g, uint8_t bus, uint8_t device, uint8_t function)
 {
     void *c = pcie_config_space_device(g, bus, device, function);
-    printf("--- %lx\n", c);
-    printf("!! PCI group %i bus %i device %i function %i vendor %x device %x\n", g->group_number, bus, device, function, pcie_vendor_id(c), pcie_device_id(c));
+    printf("!! PCI group %i bus %i device %i function %i vendor %x device %x", g->group_number, bus, device, function, pcie_vendor_id(c), pcie_device_id(c));
     printf("  -> class %x subclass %x\n", pcie_class_code(c), pcie_subclass(c));
+
+    uint8_t class = pcie_class_code(c);
+    uint8_t subclass = pcie_subclass(c);
+    if (class == 0x06 && subclass == 0x04) { // Host bridge
+        uint8_t secondary_bus = pci_secondary_bus(c);
+        printf("PCI secondary bus %x\n", secondary_bus);
+        check_bus(g, secondary_bus);
+    }
 }
 
 void check_device(struct PCIGroup *g, uint8_t bus, uint8_t device)
@@ -55,10 +64,8 @@ void check_device(struct PCIGroup *g, uint8_t bus, uint8_t device)
         for (int function = 1; function < PCI_FUNCTIONS; ++function) {
             union PCIConfigSpace *c = pcie_config_space_device(g, bus, device, function);
             uint16_t vendor_id = pcie_vendor_id(c);
-            if (vendor_id == VENDOR_ID_NO_DEVICE)
-                break;
-
-            check_function(g, bus, 0, function);
+            if (vendor_id != VENDOR_ID_NO_DEVICE)
+                check_function(g, bus, device, function);
         }
     }
 }
@@ -82,10 +89,11 @@ void check_all_buses(struct PCIGroup *g)
         printf("Multifunction\n");
         for (int function = 0; function < PCI_FUNCTIONS; ++function) {
             union PCIConfigSpace *c = pcie_config_space_device(g, bus, 0, function);
-            if (pci_no_device(c))
+            uint16_t vendor_id = pcie_vendor_id(c);
+            if (vendor_id == VENDOR_ID_NO_DEVICE)
                 break;
 
-            check_function(g, bus, 0, function);
+            check_bus(g, function);
         }
     }
 }

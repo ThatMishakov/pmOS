@@ -4,12 +4,14 @@ EXEC = vfsd.elf
 ROOTDIR = $(realpath .)/..
 export PATH := $(ROOTDIR)/bin/cross/bin:$(PATH)
 
+ARCH = x86_64
+
 # It is highly recommended to use a custom built cross toolchain to build a kernel.
 # We are only using "cc" as a placeholder here. It may work by using
 # the host system's toolchain, but this is not guaranteed.
-CC = riscv64-pmos-gcc
-CPP = riscv64-pmos-gcc
-CXX = riscv64-pmos-g++
+CC = $(ARCH)-pmos-gcc
+CPP = $(ARCH)-pmos-gcc
+CXX = $(ARCH)-pmos-g++
 
 # User controllable CFLAGS.
 USERCFLAGS = -Wall -Wextra -Og -g -pipe

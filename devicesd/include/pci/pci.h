@@ -130,4 +130,9 @@ inline bool pci_no_device(void *s)
     return pcie_vendor_id(s) == VENDOR_ID_NO_DEVICE;
 }
 
+inline uint8_t pci_secondary_bus(void *s)
+{
+    return pci_read_register(s, 0x6) >> 8;
+}
+
 #endif
