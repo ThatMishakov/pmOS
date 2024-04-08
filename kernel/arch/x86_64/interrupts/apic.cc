@@ -43,7 +43,7 @@ void* apic_mapped_addr = nullptr;
 
 void map_apic()
 {
-    apic_mapped_addr = virtmem_alloc(1);
+    apic_mapped_addr = kernel_space_allocator.virtmem_alloc(1);
     map_kernel_page(apic_base, apic_mapped_addr, {1,1,0,0,0,PAGE_SPECIAL});
 }
 
