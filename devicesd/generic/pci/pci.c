@@ -39,15 +39,14 @@ void check_function(struct PCIGroup *g, uint8_t bus, uint8_t device, uint8_t fun
 {
     void *c = pcie_config_space_device(g, bus, device, function);
     printf("--- %lx\n", c);
-    printf("!! PCI group %i bus %i device %i function %i vendor %i device %i\n", g->group_number, bus, device, function, pcie_vendor_id(c), pcie_device_id(c));
-    printf("  -> class %i subclass %i\n", pcie_class_code(c), pcie_subclass(c));
+    printf("!! PCI group %i bus %i device %i function %i vendor %x device %x\n", g->group_number, bus, device, function, pcie_vendor_id(c), pcie_device_id(c));
+    printf("  -> class %x subclass %x\n", pcie_class_code(c), pcie_subclass(c));
 }
 
 void check_device(struct PCIGroup *g, uint8_t bus, uint8_t device)
 {
     void *c = pcie_config_space_device(g, bus, device, 0);
     uint16_t vendor_id = pcie_vendor_id(c);
-    printf("%i\n", vendor_id);
     if (vendor_id == VENDOR_ID_NO_DEVICE)
         return;
 

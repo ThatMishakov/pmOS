@@ -53,5 +53,5 @@ void TaskDescriptor::before_task_switch() {
 }
 
 void TaskDescriptor::after_task_switch() {
-    save_segments(this);
+    restore_segments(this);
 }
