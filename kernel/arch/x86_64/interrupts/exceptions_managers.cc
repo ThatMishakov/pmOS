@@ -36,63 +36,63 @@
 #include <kern_logger/kern_logger.hh>
 #include <stdlib.h>
 
-void print_registers(const Task_Regs& regs)
+void print_registers(const Task_Regs& regs, Logger& logger)
 {
-    t_print_bochs(" => %%rdi: 0x%h\n", regs.scratch_r.rdi);
-    t_print_bochs(" => %%rsi: 0x%h\n", regs.scratch_r.rsi);
-    t_print_bochs(" => %%rdx: 0x%h\n", regs.scratch_r.rdx);
-    t_print_bochs(" => %%rcx: 0x%h\n", regs.scratch_r.rcx);
-    t_print_bochs(" => %%r8:  0x%h\n", regs.scratch_r.r8);
-    t_print_bochs(" => %%r9:  0x%h\n", regs.scratch_r.r9);
-    t_print_bochs(" => %%rax: 0x%h\n", regs.scratch_r.rax);
-    t_print_bochs(" => %%r10: 0x%h\n", regs.scratch_r.r10);
-    t_print_bochs(" => %%r11: 0x%h\n", regs.scratch_r.r11);
+    logger.printf(" => %%rdi: 0x%h\n", regs.scratch_r.rdi);
+    logger.printf(" => %%rsi: 0x%h\n", regs.scratch_r.rsi);
+    logger.printf(" => %%rdx: 0x%h\n", regs.scratch_r.rdx);
+    logger.printf(" => %%rcx: 0x%h\n", regs.scratch_r.rcx);
+    logger.printf(" => %%r8:  0x%h\n", regs.scratch_r.r8);
+    logger.printf(" => %%r9:  0x%h\n", regs.scratch_r.r9);
+    logger.printf(" => %%rax: 0x%h\n", regs.scratch_r.rax);
+    logger.printf(" => %%r10: 0x%h\n", regs.scratch_r.r10);
+    logger.printf(" => %%r11: 0x%h\n", regs.scratch_r.r11);
 
-    t_print_bochs(" => %%rbx: 0x%h\n", regs.preserved_r.rbx);
-    t_print_bochs(" => %%rbp: 0x%h\n", regs.preserved_r.rbp);
-    t_print_bochs(" => %%r12: 0x%h\n", regs.preserved_r.r12);
-    t_print_bochs(" => %%r13: 0x%h\n", regs.preserved_r.r13);
-    t_print_bochs(" => %%r14: 0x%h\n", regs.preserved_r.r14);
-    t_print_bochs(" => %%r15: 0x%h\n", regs.preserved_r.r15);
+    logger.printf(" => %%rbx: 0x%h\n", regs.preserved_r.rbx);
+    logger.printf(" => %%rbp: 0x%h\n", regs.preserved_r.rbp);
+    logger.printf(" => %%r12: 0x%h\n", regs.preserved_r.r12);
+    logger.printf(" => %%r13: 0x%h\n", regs.preserved_r.r13);
+    logger.printf(" => %%r14: 0x%h\n", regs.preserved_r.r14);
+    logger.printf(" => %%r15: 0x%h\n", regs.preserved_r.r15);
 
-    t_print_bochs(" => %%rip: 0x%h\n", regs.e.rip);
-    t_print_bochs(" => %%rsp: 0x%h\n", regs.e.rsp);
-    t_print_bochs(" => %%rflags: 0x%h\n", regs.e.rflags.numb);
+    logger.printf(" => %%rip: 0x%h\n", regs.e.rip);
+    logger.printf(" => %%rsp: 0x%h\n", regs.e.rsp);
+    logger.printf(" => %%rflags: 0x%h\n", regs.e.rflags.numb);
 
-    t_print_bochs(" => %%gs offset: 0x%h\n", regs.seg.gs);
-    t_print_bochs(" => %%fs offset: 0x%h\n", regs.seg.fs);
+    logger.printf(" => %%gs offset: 0x%h\n", regs.seg.gs);
+    logger.printf(" => %%fs offset: 0x%h\n", regs.seg.fs);
 
-    t_print_bochs(" Entry type: %i\n", regs.entry_type);
+    logger.printf(" Entry type: %i\n", regs.entry_type);
 
-    t_print_bochs(" Error code: 0x%h\n", regs.int_err);
+    logger.printf(" Error code: 0x%h\n", regs.int_err);
 }
 
-void print_registers(const klib::shared_ptr<TaskDescriptor>& task)
+void print_registers(const klib::shared_ptr<TaskDescriptor>& task, Logger& logger)
 {
     if (not task)
         return;
 
-    t_print_bochs("Registers for task %i (%s)\n", task->pid, task->name.c_str());
-    print_registers(task->regs);
+    logger.printf("Registers for task %i (%s)\n", task->pid, task->name.c_str());
+    print_registers(task->regs, logger);
 }
 
 Task_Regs kernel_interrupt_regs;
 extern "C" void dbg_main()
 {
     t_print_bochs("Error! Kernel interrupt!\n");
-    print_registers(kernel_interrupt_regs);
+    print_registers(kernel_interrupt_regs, bochs_logger);
     while (1) ;
 }
 
-void print_stack_trace(const klib::shared_ptr<TaskDescriptor>& task)
+void print_stack_trace(const klib::shared_ptr<TaskDescriptor>& task, Logger& logger)
 {
     if (not task)
         return;
 
-    t_print_bochs("Stack trace:\n");
+    logger.printf("Stack trace:\n");
     u64* rbp = (u64*)task->regs.preserved_r.rbp;
     while (rbp) {
-        t_print_bochs(" => 0x%h\n", rbp[1]);
+        logger.printf(" => 0x%h\n", rbp[1]);
         rbp = (u64*)rbp[0];
     }
 }
@@ -100,7 +100,7 @@ void print_stack_trace(const klib::shared_ptr<TaskDescriptor>& task)
 extern "C" void deal_with_pagefault_in_kernel()
 {
     t_print_bochs("Error: Pagefault inside the kernel! Instr %h %%cr2 0x%h  error 0x%h CPU %i\n", get_cpu_struct()->jumpto_from, get_cpu_struct()->pagefault_cr2, get_cpu_struct()->pagefault_error, get_cpu_struct()->cpu_id);
-    print_registers(get_cpu_struct()->current_task);
+    print_registers(get_cpu_struct()->current_task, bochs_logger);
     print_stack_trace(bochs_logger);
 
     abort();
@@ -189,8 +189,8 @@ extern "C" void pagefault_manager()
         global_logger.printf("Warning: Pagefault %h pid %i (%s) rip %h error %h -> %i killing process...\n", virtual_addr, task->pid, task->name.c_str(), task->regs.e.rip, err, e.err_code);
         
         print_pt_chain(virtual_addr, global_logger);
-        print_registers(task);
-        print_stack_trace(task);
+        print_registers(task, global_logger);
+        print_stack_trace(task, global_logger);
 
         task->atomic_kill();
     }
@@ -207,8 +207,8 @@ extern "C" void general_protection_fault_manager()
     task_ptr task = get_cpu_struct()->current_task;
     //t_print_bochs("!!! General Protection Fault (GP) error %h\n", err);
     global_logger.printf("!!! General Protection Fault (GP) error (segment) %h PID %i (%s) RIP %h CS %h... Killing the process\n", task->regs.int_err, task->pid, task->name.c_str(), task->regs.e.rip, task->regs.e.cs);
-    print_registers(get_cpu_struct()->current_task);
-    print_stack_trace(task);
+    print_registers(get_cpu_struct()->current_task, global_logger);
+    print_stack_trace(task, global_logger);
     task->atomic_kill();
 }
 

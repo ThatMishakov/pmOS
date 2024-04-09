@@ -64,7 +64,9 @@ __pthread_exit:
     pushq %rbp
     movq %rsp, %rbp
 
-    // Save %rax
+    # Align stack to 16 before push (required by x86 calling convention)
+    pushq $0
+    # Save %rax
     pushq %r15
     movq %rax, %r15
 

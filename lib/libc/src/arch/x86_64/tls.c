@@ -38,7 +38,6 @@ void __init_uthread(struct uthread * u, void * stack_top, size_t stack_size);
 #define max(x, y) ((x) > (y) ? (x) : (y)) 
 #define alignup(size, alignment) (size%alignment ? size + (alignment - size%alignment) : size)
 
-
 struct uthread * __prepare_tls(void * stack_top, size_t stack_size)
 {
     bool has_tls = __global_tls_data != NULL;
