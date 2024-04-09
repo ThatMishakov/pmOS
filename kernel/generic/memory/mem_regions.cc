@@ -105,6 +105,8 @@ Page_Table_Argumments Phys_Mapped_Region::craft_arguments() const
         false,
         !(access_type & Executable) ,
         0b010,
+        // TODO: This is temporary, make it a flag
+        Memory_Type::IONoCache,
     };
 }
 

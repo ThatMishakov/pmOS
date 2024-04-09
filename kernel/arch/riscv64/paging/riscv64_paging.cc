@@ -39,6 +39,25 @@ void flush_page(void *virt) noexcept
     asm volatile("sfence.vma %0, x0" : : "r"(virt) : "memory");
 }
 
+bool svpbmt_enabled = true;
+
+u8 pbmt_type(Page_Table_Argumments arg)
+{
+    if (!svpbmt_enabled)
+        return PBMT_PMA;
+
+    switch (arg.cache_policy) {
+    case Memory_Type::Normal:
+        return PBMT_PMA;
+    case Memory_Type::MemoryNoCache:
+        return PBMT_NC;
+    case Memory_Type::IONoCache:
+        return PBMT_IO;
+    }
+
+    return PBMT_PMA;
+}
+
 void riscv_map_page(u64 pt_top_phys, u64 phys_addr, void * virt_addr, Page_Table_Argumments arg)
 {
     Temp_Mapper_Obj<RISCV64_PTE> mapper(request_temp_mapper());
@@ -65,6 +84,7 @@ void riscv_map_page(u64 pt_top_phys, u64 phys_addr, void * virt_addr, Page_Table
             new_entry.global = arg.global;
             new_entry.available = arg.extra;
             new_entry.ppn = phys_addr >> 12;
+            new_entry.pbmt = pbmt_type(arg);
 
             active_pt[index] = new_entry;
             return;
@@ -122,6 +142,7 @@ void RISCV64_Page_Table::map(Page_Descriptor page, u64 virt_addr, Page_Table_Arg
     pte.executable = not arg.execution_disabled;
     pte.available = page.owning ? 0 : PAGING_FLAG_NOFREE;
     pte.ppn = page.takeout_page().first >> 12;
+    pte.pbmt = pbmt_type(arg);
 
     entry = pte;
 }

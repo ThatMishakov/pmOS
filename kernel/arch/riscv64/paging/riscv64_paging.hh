@@ -30,6 +30,10 @@
 #include <types.hh>
 #include <memory/paging.hh>
 
+#define PBMT_PMA 0x0
+#define PBMT_NC  0x1
+#define PBMT_IO  0x2
+
 struct RISCV64_PTE {
     bool valid : 1 = false; // Indicates if the PTE (page table entry) is valid.
                             // If not set, the other bits are ignored and can be

@@ -3,7 +3,7 @@ EXEC = terminald.elf
 ROOTDIR = $(realpath .)/..
 export PATH := $(ROOTDIR)/bin/cross/bin:$(PATH)
 
-ARCH = x86_64
+ARCH = riscv64
 
 CC = $(ARCH)-pmos-gcc
 CPP = $(ARCH)-pmos-gcc

@@ -45,6 +45,12 @@
 #define PAGE_DELAYED 3
 #define PAGE_COW     4
 
+/// @brief Memory mapping type
+enum class Memory_Type {
+    Normal,
+    MemoryNoCache,
+    IONoCache
+};
 
 /// @brief Arguments for mapping of pages
 struct Page_Table_Argumments {
@@ -54,6 +60,7 @@ struct Page_Table_Argumments {
     u8 global             : 1 = 0;
     u8 execution_disabled : 1 = 0;
     u8 extra              : 2 = 0;
+    Memory_Type            cache_policy = Memory_Type::Normal;
 };
 
 struct Mem_Object_Data {
