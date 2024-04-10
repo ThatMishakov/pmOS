@@ -34,6 +34,9 @@
 #include <pmos/memory.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <vector.h>
+
+PCIDeviceVector pci_devices = VECTOR_INIT;
 
 void check_bus(struct PCIGroup *g, uint8_t bus);
 
@@ -49,6 +52,24 @@ void check_function(struct PCIGroup *g, uint8_t bus, uint8_t device, uint8_t fun
         uint8_t secondary_bus = pci_secondary_bus(c);
         printf("PCI secondary bus %x\n", secondary_bus);
         check_bus(g, secondary_bus);
+    }
+
+    struct PCIDevice d = {
+        .group = g->group_number,
+        .bus = bus,
+        .device = device,
+        .function = function,
+        .vendor_id = pcie_vendor_id(c),
+        .device_id = pcie_device_id(c),
+        .class_code = pcie_class_code(c),
+        .subclass = pcie_subclass(c),
+    };
+
+    int result = 0;
+    VECTOR_PUSH_BACK_CHECKED(pci_devices, d, result);
+
+    if (result != 0) {
+        fprintf(stderr, "Error: Could not allocate PCIDevice: %i\n", errno);
     }
 }
 
@@ -121,8 +142,9 @@ void init_pci()
         printf("Table %i base addr %lx group %i start %i end %i\n", i, b->base_addr, b->group_number, b->start_bus_number, b->end_bus_number);
 
         assert(b->start_bus_number <= b->end_bus_number);
+        uint64_t ecam_base = 0x30000000;
         uint64_t size = pcie_config_space_size(b->start_bus_number, b->end_bus_number);
-        uint64_t start = pcie_config_space_start(b->base_addr, b->start_bus_number);
+        uint64_t start = pcie_config_space_start(ecam_base, b->start_bus_number);
         
         uint64_t phys_start = start;
         uint64_t phys_end = phys_start + size;
@@ -141,7 +163,7 @@ void init_pci()
         }
         printf("<<<< %lx\n", t.virt_addr);
 
-        void *ptr = (char *)t.virt_addr + (b->base_addr % PAGE_SIZE) - (start - b->base_addr);
+        void *ptr = (char *)t.virt_addr + (ecam_base % PAGE_SIZE) - (start - ecam_base);
 
         g->next = groups;
         groups = g;
@@ -153,4 +175,19 @@ void init_pci()
 
         check_all_buses(g);
     }
+
+    VECTOR_SORT(pci_devices, pcicdevice_compare);
+}
+
+int pcicdevice_compare(const void *aa, const void *bb)
+{
+    const struct PCIDevice *a = aa, *b = bb;
+
+    if (a->group != b->group)
+        return a->group - b->group;
+    if (a->bus != b->bus)
+        return a->bus - b->bus;
+    if (a->device != b->device)
+        return a->device - b->device;
+    return a->function - b->function;
 }

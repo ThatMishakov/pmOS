@@ -30,6 +30,7 @@
 #define PCI_H
 #include <stdint.h>
 #include <stdbool.h>
+#include <vector.h>
 
 void init_pci();
 
@@ -57,6 +58,24 @@ struct PCIGroup {
     unsigned start_bus_number;
     unsigned end_bus_number;
 };
+
+struct PCIDevice {
+    uint16_t group;
+    uint8_t bus;
+    uint8_t device;
+    uint8_t function;
+
+    uint16_t vendor_id;
+    uint16_t device_id;
+
+    uint8_t class_code;
+    uint8_t subclass;
+};
+
+int pcicdevice_compare(const void *a, const void *b);
+
+VECTOR_TYPEDEF(struct PCIDevice, PCIDeviceVector);
+extern PCIDeviceVector pci_devices;
 
 inline unsigned long pcie_config_space_size(unsigned pci_start, unsigned pci_end)
 {

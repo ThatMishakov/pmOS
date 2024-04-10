@@ -134,7 +134,10 @@
         "configuration.h": "c",
         "timers.h": "c",
         "timers_heap.h": "c",
-        "interrupts.h": "c"
+        "interrupts.h": "c",
+        "vector.h": "c",
+        "pci.h": "c",
+        "libc-header-start.h": "c"
     },
     "cmake.configureOnOpen": false
 }

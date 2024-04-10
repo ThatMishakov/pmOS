@@ -26,76 +26,49 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <cstdio>
-#include <string>
-#include <unistd.h>
-#include <pmos/debug.h>
-#include <pthread.h>
-#include <thread>
-#include <list>
-#include <pthread.h>
+#include <stdlib.h>
+#include <string.h>
 
-class Test {
-public:
-    Test(const std::string & msg) {
-        printf("Test::Test(char * msg): %s\n", msg.c_str());
-    }
+static void swap(void *a, void *b, size_t size)
+{
+    unsigned char t[size];
 
-    Test() {
-        printf("Test::Test()\n");
-    }
-    ~Test() {
-        printf("Test::~Test()\n");
-    }
-};
-
-// Check global constructors
-Test tt("Global constructor test");
-
-// thread_local Test t;
-
-double count = 0;
-std::mutex count_mutex;
-
-thread_local auto pid = getpid();
-
-
-void thread_func(void *) {
-    //printf("Hello from a pthread! My PID: %i\n", pid);
-    double p = 0;
-    for (size_t i = 0; i < 10000000; ++i) {
-        asm volatile ("");
-        p += i;
-    }
-
-    std::lock_guard<std::mutex> lock(count_mutex);
-    count += p;
-    // printf("Count: %li p: %li\n", (uint64_t)count, (uint64_t)p);
+    memcpy(t, a, size);
+    memcpy(a, b, size);
+    memcpy(b, t, size);
 }
 
-std::list<std::thread> threads;
+static size_t partition(void *base, size_t elem_size, size_t l, size_t r, int (*compar)(const void *, const void *))
+{
+    void *pivot = base + r * elem_size;
+    size_t i = l;
 
-extern "C" void test_qsort();
-
-int main() {
-    // Sleep is broken
-    //sleep(1);
-    printf("Starting tests...\n");
-
-    for (size_t i = 0; i < 10; i++) {
-        threads.push_back(std::thread(thread_func, nullptr));
+    for (size_t j = l; j < r; j++)
+    {
+        if (compar(base + j * elem_size, pivot) < 0)
+        {
+            swap(base + i * elem_size, base + j * elem_size, elem_size);
+            i++;
+        }
     }
 
-    for (auto & t : threads) {
-        t.join();
-    }
-
-    printf("Count: %li\n", (uint64_t)count);
-
-    //test_qsort();
-
-    // Allow other thread to run
-    pthread_exit(nullptr);
-
-    return 0;
+    swap(base + i * elem_size, pivot, elem_size);
+    return i;
 }
+
+static void qsort_i(void *base, size_t elem_size, size_t l, size_t r, int (*compar)(const void *, const void *))
+{
+    size_t p = partition(base, elem_size, l, r, compar);
+
+    if (p > l+1)
+        qsort_i(base, elem_size, l, p - 1, compar);
+    if (p+1 < r)
+        qsort_i(base, elem_size, p + 1, r, compar);
+}
+
+void qsort(void *base, size_t nmemb, size_t size, int (*compar)(const void *, const void *))
+{
+    if (nmemb > 2)
+        qsort_i(base, size, 0, nmemb - 1, compar);
+}
+
