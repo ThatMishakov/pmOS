@@ -35,7 +35,7 @@ void _fini();
 void _atexit_pop_all();
 void __call_destructors(void);
 void __call_thread_atexit();
-
+void __close_files_on_exit();
 
 __attribute__((noreturn)) void exit(int status)
 {
@@ -43,5 +43,6 @@ __attribute__((noreturn)) void exit(int status)
     __call_thread_atexit();
     _atexit_pop_all();
     __call_destructors();
+    __close_files_on_exit();
     _syscall_exit(status);
 }

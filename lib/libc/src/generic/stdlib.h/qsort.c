@@ -33,6 +33,9 @@ static void swap(void *a, void *b, size_t size)
 {
     unsigned char t[size];
 
+    if (a == b)
+        return;
+
     memcpy(t, a, size);
     memcpy(a, b, size);
     memcpy(b, t, size);
@@ -40,19 +43,19 @@ static void swap(void *a, void *b, size_t size)
 
 static size_t partition(void *base, size_t elem_size, size_t l, size_t r, int (*compar)(const void *, const void *))
 {
-    void *pivot = base + r * elem_size;
+    void *pivot = (char *)base + r * elem_size;
     size_t i = l;
 
     for (size_t j = l; j < r; j++)
     {
-        if (compar(base + j * elem_size, pivot) < 0)
+        if (compar((char *)base + j * elem_size, pivot) < 0)
         {
-            swap(base + i * elem_size, base + j * elem_size, elem_size);
+            swap((char *)base + i * elem_size, (char *)base + j * elem_size, elem_size);
             i++;
         }
     }
 
-    swap(base + i * elem_size, pivot, elem_size);
+    swap((char *)base + i * elem_size, pivot, elem_size);
     return i;
 }
 

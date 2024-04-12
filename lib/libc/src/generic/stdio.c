@@ -61,12 +61,182 @@ int __check_fd_internal(long int fd, int posix_mode) {
     return 0;
 }
 
+static int to_posix_mode(const char * mode) {
+    int posix_mode = 0;
+    if (mode[0] == 'r') {
+        posix_mode |= O_RDONLY;
+    } else if (mode[0] == 'w') {
+        posix_mode |= O_WRONLY;
+        posix_mode |= O_CREAT;
+        posix_mode |= O_TRUNC;
+    } else if (mode[0] == 'a') {
+        posix_mode |= O_WRONLY;
+        posix_mode |= O_CREAT;
+        posix_mode |= O_APPEND;
+    } else {
+        return -1;
+    }
+
+    if (mode[1] == '+') {
+        posix_mode |= O_RDWR;
+    }
+
+    return posix_mode;
+}
+
+static FILE *open_files = NULL;
+int file_lock = 0;
+
+void __close_files_on_exit() {
+    FILE * file = open_files;
+    while (file) {
+        FILE * next = file->next;
+        fclose(file);
+        file = next;
+    }
+}
+
+FILE *stdin;
+FILE *stdout;
+FILE *stderr;
+
+void __init_stdio() {
+    stdin = fdopen(0, "r");
+    stdout = fdopen(1, "w");
+    stderr = fdopen(2, "w");
+
+    if (!stdin || !stdout || !stderr) {
+        exit(1);
+    }
+
+    setvbuf(stdout, NULL, _IOLBF, 0);
+}
+
+void __pause();
+#define LOCK(v) \
+    while (__sync_lock_test_and_set(v, 1) != 0) { \
+        while (*v) \
+            __pause();}
+#define UNLOCK_FILE(v) \
+    __sync_lock_release(v);
+
+FILE * fdopen(int fd, const char * mode)
+{
+    FILE * file = malloc(sizeof *file);
+    if (!file)
+        goto fail;
+    
+    memset(file, 0, sizeof(*file));
+    file->fd = fd;
+    
+    file->buf_size = BUFSIZ;
+    file->buf_flags = _FILE_FLAG_FLUSHNEWLINE;
+    // The buffer is gonna be malloc'ed on the first access
+
+    int posix_mode = to_posix_mode(mode);
+    file->mode = posix_mode;
+
+    int ret = __check_fd_internal(fd, posix_mode);
+    if (ret < 0) {
+        errno = -ret;
+        goto fail;
+    }
+
+    LOCK(&file_lock);
+    file->next = open_files;
+    open_files = file;
+    if (file->next)
+        file->next->prev = file;
+    UNLOCK_FILE(&file_lock);
+
+    return file;
+fail:
+    free(file);
+    return NULL;
+}
+
+int setvbuf(FILE * stream, char * buffer, int mode, size_t size)
+{
+    if (mode == _IONBF) {
+        stream->buf = NULL;
+        stream->buf_size = 0;
+    } else if (mode == _IOLBF || mode == _IOFBF) {
+        stream->buf = buffer;
+        stream->buf_size = size == 0 ? BUFSIZ : size;
+        stream->buf_flags = mode == _IOLBF ? _FILE_FLAG_FLUSHNEWLINE : 0;
+    } else {
+        errno = EINVAL;
+        return -1;
+    }
+
+    return 0;
+}
+
+static ssize_t flush_buffer(FILE * stream)
+{
+    if (stream->buf_pos == 0)
+        return 0;
+
+    ssize_t ret = __write_internal(stream->fd, stream->buf, stream->buf_pos, 0, true);
+    if (ret < 0) return ret;
+    stream->buf_pos = 0;
+    return 0;
+}
+
 static ssize_t write_file(void * arg, const char * str, size_t size)
 {
     FILE * stream = (FILE*)arg;
-    long int fd = (long int)stream;
+    size_t t = size;
+
+    // Callee is expected to lock the file
+
+    if (stream->buf_size != 0 && stream->buf == NULL) {
+        stream->buf = malloc(stream->buf_size);
+        if (!stream->buf) {
+            errno = ENOMEM;
+            return -1;
+        }
+        stream->buf_flags |= _FILE_FLAG_MYBUF;
+    }
+
+    if (stream->buf_size != 0 && (size > stream->buf_size - stream->buf_pos)) {
+        ssize_t ret = flush_buffer(stream);
+        if (ret < 0)
+            return ret;
+    }
+
+    if (size > stream->buf_size) {
+        ssize_t ret = __write_internal(stream->fd, str, size, 0, true);
+        return ret;
+    }
+
+    if (size == 0)
+        return 0;
+
+    size_t i = size;
+    for (; i > 0; i--) {
+        if (str[i-1] == '\n' && stream->buf_flags & _FILE_FLAG_FLUSHNEWLINE) {
+            ssize_t ret = flush_buffer(stream);
+            if (ret < 0) return ret;
+
+            ret = __write_internal(stream->fd, str, i, 0, true);
+            if (ret < 0) return ret;
+            str += i;
+            size -= i;
+            break;
+        }
+    }
     
-    return __write_internal(fd, str, size, 0, true);
+    memcpy(stream->buf + stream->buf_pos, str, size);
+    stream->buf_pos += size;
+    return t;
+}
+
+static int flush_file(FILE * stream)
+{
+    ssize_t ret = flush_buffer(stream);
+    if (ret < 0) return ret;
+    return 0;
 }
 
 struct string_descriptor {
@@ -345,7 +515,7 @@ static ssize_t __va_printf_closure(write_str_f puts, void * puts_arg, va_list ar
     }
 
 end:
-    if (chars_transmitted >= 0 && buffdiff > 0) {
+    if (/* chars_transmitted >= 0 && */ buffdiff > 0) {
             int p = puts(puts_arg, &format[i - buffdiff], buffdiff);
             if (p < 0) return p;
             chars_transmitted += buffdiff;
@@ -355,12 +525,15 @@ end:
 
 int fputc ( int character, FILE * stream )
 {
-    return write_file(stream, (char*)&character, 1);
+    LOCK(&stream->lock);
+    int t = write_file(stream, (char*)&character, 1);
+    UNLOCK_FILE(&stream->lock);
+    return t;
 }
 
 int putchar(int c)
 {
-    return write_file(stdout, (char*)&c, 1);
+    return fputc(c, stdout);
 }
 
 int putc(int c, FILE * stream)
@@ -373,10 +546,28 @@ int fseek(FILE *stream, long offset, int origin) {
 }
 
 int fclose(FILE *stream) {
-    return __close_internal((long int)stream);
+    LOCK(&file_lock);
+    if (stream->prev)
+        stream->prev->next = stream->next;
+    else
+        open_files = stream->next;
+    if (stream->next)
+        stream->next->prev = stream->prev;
+    UNLOCK_FILE(&file_lock);
+    fflush(stream);
+    int t = __close_internal(stream->fd);
+    
+    if (stream->buf_flags & _FILE_FLAG_MYBUF)
+        free(stream->buf);
+    free(stream);
+
+    return t;
 }
 
 long ftell(FILE *stream) {
+    errno = ENOSYS;
+    return -1;
+
     return __lseek_internal((long int)stream, 0, SEEK_CUR);
 }
 
@@ -384,8 +575,11 @@ const char endline[] = "\n";
 
 int fputs(const char* string, FILE* stream)
 {
+    LOCK(&stream->lock);
     size_t size = strlen(string);
-    return write_file(stream, string, size) + write_file(stream, endline, sizeof(endline));
+    int t = write_file(stream, string, size) + write_file(stream, endline, sizeof(endline));
+    UNLOCK_FILE(&stream->lock);
+    return t;
 }
 
 int puts(const char* str)
@@ -398,9 +592,13 @@ int fprintf(FILE * stream, const char * format, ...)
     va_list arg;
     va_start(arg,format);
 
-    return __va_printf_closure(write_file, stream, arg, format);
+    LOCK(&stream->lock);
+    int t = __va_printf_closure(write_file, stream, arg, format);
+    UNLOCK_FILE(&stream->lock);
 
     va_end(arg);
+
+    return t;
 }
 
 int sprintf(char * str, const char * format, ...)
@@ -433,6 +631,10 @@ int snprintf(char * str, size_t size, const char * format, ...)
 
 size_t fread ( void * ptr, size_t size, size_t count, FILE * stream )
 {
+    // Not implemented
+    errno = ENOSYS;
+    return -1;
+
     return __read_internal((long int)stream, ptr, size*count, true, 0);
 }
 
@@ -452,53 +654,17 @@ int fgetc(FILE *stream)
     return c;
 }
 
-static int to_posix_mode(const char * mode) {
-    int posix_mode = 0;
-    if (mode[0] == 'r') {
-        posix_mode |= O_RDONLY;
-    } else if (mode[0] == 'w') {
-        posix_mode |= O_WRONLY;
-        posix_mode |= O_CREAT;
-        posix_mode |= O_TRUNC;
-    } else if (mode[0] == 'a') {
-        posix_mode |= O_WRONLY;
-        posix_mode |= O_CREAT;
-        posix_mode |= O_APPEND;
-    } else {
-        return -1;
-    }
-
-    if (mode[1] == '+') {
-        posix_mode |= O_RDWR;
-    }
-
-    return posix_mode;
-}
-
-
-FILE * fdopen(int fd, const char * mode)
-{
-    int posix_mode = to_posix_mode(mode);
-
-    int ret = __check_fd_internal(fd, posix_mode);
-    if (ret < 0) {
-        errno = -ret;
-        return NULL;
-    }
-
-    return (FILE*)(unsigned long)fd;
-}
-
-
-
 int printf(const char* format, ...)
 {
     va_list arg;
     va_start(arg,format);
 
-    return __va_printf_closure(write_file, stdout, arg, format);
+    LOCK(&stdout->lock);
+    int t = __va_printf_closure(write_file, stdout, arg, format);
+    UNLOCK_FILE(&stdout->lock);
 
     va_end(arg);
+    return t;
 }
 
 int vsnprintf(char *str, size_t size, const char *format, va_list ap)
@@ -512,7 +678,10 @@ int vsnprintf(char *str, size_t size, const char *format, va_list ap)
 
 size_t fwrite ( const void * ptr, size_t size, size_t count, FILE * stream )
 {
-    return write_file(stream, ptr, size*count);
+    LOCK(&stream->lock);
+    size_t i = write_file(stream, ptr, size*count);
+    UNLOCK_FILE(&stream->lock);
+    return i;
 }
 
 void perror(const char *message) {
@@ -521,4 +690,12 @@ void perror(const char *message) {
     }
 
     fprintf(stderr, "%s\n", strerror(errno));
+}
+
+int fflush(FILE * stream)
+{
+    LOCK(&stream->lock);
+    int i = flush_file(stream);
+    UNLOCK_FILE(&stream->lock);
+    return i;
 }

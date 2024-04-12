@@ -122,6 +122,8 @@ static void init_tls_first_time(void * load_data, size_t load_data_size, TLS_Dat
         __libc_init_hook();
 }
 
+void __init_stdio();
+
 // defined in pthread/threads.c
 extern uint64_t __active_threads;
 
@@ -139,6 +141,8 @@ void init_std_lib(void * load_data, size_t load_data_size, TLS_Data * d)
     init_tls_first_time(load_data, load_data_size, d);
 
     __active_threads = 1;
+
+    __init_stdio();
 }
 
 struct load_tag_generic * get_load_tag(uint32_t tag, void * load_data, size_t load_data_size)
