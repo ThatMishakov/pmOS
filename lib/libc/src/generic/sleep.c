@@ -51,32 +51,57 @@ static pmos_port_t get_sleep_port() {
     }
 }
 
+// int pmos_request_timer(pmos_port_t port, size_t ms) {
+//     if (sleep_reply_port == INVALID_PORT) {
+//         ports_request_t port_request = create_port(PID_SELF, 0);
+//         if (port_request.result != SUCCESS) {
+//             errno = port_request.result;
+//             return -1;
+//         }
+//         sleep_reply_port = port_request.port;
+//     }
+
+//     IPC_Start_Timer tmr = {
+//         .type = IPC_Start_Timer_NUM,
+//         .ms = ms,
+//         .reply_port = sleep_reply_port,
+//     };
+
+//     pmos_port_t sleep_port = get_sleep_port();
+//     if (sleep_port == INVALID_PORT) {
+//         // Errno is set by get_sleep_port
+//         // errno = ENOSYS;
+//         return -1;
+//     }
+
+//     result_t result = send_message_port(sleep_port, sizeof(tmr), (char*)&tmr);
+//     if (result != SUCCESS) {
+//         errno = result;
+//         return -1;
+//     }
+
+//     return 0;
+// }
+
+int pmos_request_timer(pmos_port_t port, size_t ms) {
+    // Request a timer from the kernel
+    // Initially, this was implemented using HPET in the userspace, on x86.
+    // However, other arches (RISC-V) don't have a global timer and even on x86,
+    // it might be better to do this in kernel and use LAPIC timer, freeing HPET
+    // for other 
+
+    syscall_r r = pmos_syscall(SYSCALL_REQUEST_TIMER, port, ms);
+    if (r.result != SUCCESS) {
+        errno = r.result;
+        return -1;
+    }
+
+    return 0;
+}
+
 unsigned int sleep(unsigned int seconds) {
-    if (sleep_reply_port == INVALID_PORT) {
-        ports_request_t port_request = create_port(PID_SELF, 0);
-        if (port_request.result != SUCCESS) {
-            errno = port_request.result;
-            return seconds;
-        }
-        sleep_reply_port = port_request.port;
-    }
-
     size_t ms = seconds * 1000;
-
-    IPC_Start_Timer tmr = {
-        .type = IPC_Start_Timer_NUM,
-        .ms = ms,
-        .reply_port = sleep_reply_port,
-    };
-
-    pmos_port_t sleep_port = get_sleep_port();
-    if (sleep_port == INVALID_PORT) {
-        // Errno is set by get_sleep_port
-        // errno = ENOSYS;
-        return seconds;
-    }
-
-    result_t result = send_message_port(sleep_port, sizeof(tmr), (char*)&tmr);
+    result_t result = pmos_request_timer(sleep_reply_port, ms);
     if (result != SUCCESS) {
         errno = result;
         return seconds;

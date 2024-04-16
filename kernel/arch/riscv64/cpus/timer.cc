@@ -28,6 +28,7 @@
 
 #include <sched/timers.hh>
 #include <sbi/sbi.hh>
+#include <sched/sched.hh>
 
 // Put a bogus value for now
 u64 ticks_per_ms = 0;
@@ -51,4 +52,14 @@ void start_timer(u32 ms)
     const u64 current_value = get_current_timer_val();
     const u64 next_value = current_value + ticks;
     fire_timer_at(next_value);
+}
+
+u64 get_current_time_ticks()
+{
+    return get_current_timer_val();
+}
+
+u64 CPU_Info::ticks_after_ms(u64 ms)
+{
+    return get_current_time_ticks() + ms * ticks_per_ms;
 }

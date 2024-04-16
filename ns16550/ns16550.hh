@@ -22,7 +22,9 @@ constexpr int LCR = 0x3; // Line Control REgister
 constexpr int MCR = 0x4; // Modem Control Register
 constexpr int LSR = 0x5; // Line Status Register
 
+constexpr int LSR_DATA_READY = 0x01;
 constexpr int LSR_TX_EMPTY = 0x40;
+
 
 constexpr int DLAB_MASK = 0x80;
 

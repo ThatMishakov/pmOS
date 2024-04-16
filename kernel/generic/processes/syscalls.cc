@@ -53,7 +53,7 @@
 #endif
 
 using syscall_function = void (*)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t);
-klib::array<syscall_function, 37> syscall_table = {
+klib::array<syscall_function, 38> syscall_table = {
     syscall_exit,
     getpid,
     syscall_create_process,
@@ -95,6 +95,7 @@ klib::array<syscall_function, 37> syscall_table = {
 
     syscall_set_notify_mask,
     syscall_load_executable,
+    syscall_request_timer,
 };
 
 extern "C" void syscall_handler()
@@ -893,4 +894,14 @@ void syscall_set_notify_mask(u64 task_group, u64 port_id, u64 new_mask, u64, u64
 
     syscall_ret_low(get_current_task()) = SUCCESS;
     syscall_ret_high(get_current_task()) = old_mask;
+}
+
+void syscall_request_timer(u64 port, u64 timeout, u64, u64, u64, u64)
+{
+    const auto port_ptr = Port::atomic_get_port_throw(port);
+    auto c = get_cpu_struct();
+    syscall_ret_low(c->current_task) = SUCCESS;
+
+    u64 core_time_ms = c->ticks_after_ms(timeout);
+    c->atomic_timer_queue_push(core_time_ms, port_ptr);
 }

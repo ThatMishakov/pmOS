@@ -51,6 +51,16 @@ typedef uint64_t pmos_port_t;
  */
 result_t get_message(Message_Descriptor* desc, unsigned char** message, pmos_port_t port);
 
+/**
+ * @brief Requests a timer message from the system. On success, the given port will receive a IPC_Timer_Reply
+ *        after at least ms milliseconds.
+ * 
+ * @param port Port to receive the message
+ * @param ms Time in milliseconds
+ * @return int 0 on success, -1 on failure. Sets errno on error
+*/
+int pmos_request_timer(pmos_port_t port, size_t ms);
+
 #endif
 
 

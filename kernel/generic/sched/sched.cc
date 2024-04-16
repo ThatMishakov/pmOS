@@ -39,6 +39,7 @@
 #include "timers.hh"
 #include <stdlib.h>
 #include <assert.h>
+#include <pmos/ipc.h>
 
 sched_queue blocked;
 sched_queue uninit;
@@ -104,6 +105,34 @@ void TaskDescriptor::atomic_block_by_page(u64 page, sched_queue *blocked_ptr)
         Auto_Lock_Scope scope_l(blocked_ptr->lock);
         blocked_ptr->push_back(self);
     }
+}
+
+void service_timer_ports()
+{
+    auto c = get_cpu_struct();
+    auto current_time = get_current_time_ticks();
+    Auto_Lock_Scope l(c->timer_lock);
+
+    for (auto t = c->timer_queue.begin(); t != c->timer_queue.end() and t->first < current_time; ) {
+        klib::shared_ptr<Port> port = t->second.lock();
+        if (port) {
+            IPC_Timer_Reply r = {
+                IPC_Timer_Reply_NUM,
+            };
+            port->atomic_send_from_system(reinterpret_cast<char*>(&r), sizeof(r));
+        }
+
+        auto o = t++;
+        c->timer_queue.erase(o);
+    }
+}
+
+void CPU_Info::atomic_timer_queue_push(u64 fire_on_core_ticks, const klib::shared_ptr<Port>& port)
+{
+    Auto_Lock_Scope l(timer_lock);
+
+    timer_queue[fire_on_core_ticks] = port;
+
 }
 
 void TaskDescriptor::switch_to()
@@ -247,6 +276,8 @@ void sched_periodic()
 
     klib::shared_ptr<TaskDescriptor> current = c->current_task;
     klib::shared_ptr<TaskDescriptor> next = c->atomic_pick_highest_priority(current->priority);
+
+    service_timer_ports();
 
     if (next) {
         Auto_Lock_Scope_Double lock(current->sched_lock, next->sched_lock);

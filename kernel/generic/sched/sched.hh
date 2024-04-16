@@ -124,6 +124,15 @@ struct CPU_Info {
     priority_t current_task_priority = sched_queues_levels;
 
     void ipi_reschedule(); // nothrow ?
+
+    klib::splay_tree_map<u64 /* next clock tick */ , klib::weak_ptr<Port>> timer_queue;
+    Spinlock timer_lock;
+
+    // Adds a new timer to the timer queue
+    void atomic_timer_queue_push(u64 fire_on_core_ticks, const klib::shared_ptr<Port>&);
+
+    // Returns the number of ticks after the given number of milliseconds
+    u64 ticks_after_ms(u64 ms);
 };
 
 /**

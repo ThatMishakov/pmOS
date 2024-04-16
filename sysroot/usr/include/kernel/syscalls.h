@@ -73,6 +73,8 @@
 #define SYSCALL_SET_NOTIFY_MASK        35
 #define SYSCALL_LOAD_EXECUTABLE        36
 
+#define SYSCALL_REQUEST_TIMER          37
+
 
 
 #endif

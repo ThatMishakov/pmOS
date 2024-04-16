@@ -31,3 +31,6 @@
 
 // Starts the timer and updates CPU_Info
 void start_timer(u32 ms);
+
+// Gets the current system time for local CPU, in ticks
+u64 get_current_time_ticks();

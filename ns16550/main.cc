@@ -7,6 +7,8 @@
 #include <memory>
 #include <string>
 #include "ns16550.hh"
+#include <queue>
+#include <cstring>
 
 // Either physcial memory base or I/O port base
 uint64_t terminal_base = 0x0;
@@ -188,6 +190,16 @@ void ns16550_init()
 int buff_length = 0;
 constexpr int buff_capacity = 16;
 
+struct buffer {
+    std::unique_ptr<char[]> data;
+    size_t pos;
+    size_t length;
+};
+
+std::queue<buffer> write_queue;
+
+buffer active_buffer;
+
 void write_str(const char * str)
 {
     while (*str != '\0') {
@@ -197,11 +209,149 @@ void write_str(const char * str)
     }
 }
 
+void write_str(const std::string & str)
+{
+    write_str(str.c_str());
+}
+
+void write_blind(const char *str, size_t size)
+{
+    for (size_t i = 0; i < size; ++i)
+        write_register(THR, str[i]);
+}
+
+void check_tx()
+{
+    if ((read_register(LSR) & LSR_TX_EMPTY) == 0)
+        return;
+
+    if (not active_buffer.data and not write_queue.empty()) {
+        active_buffer = std::move(write_queue.front());
+        write_queue.pop();
+    }
+
+    if (active_buffer.data) {
+        size_t i = active_buffer.length - active_buffer.pos;
+        if (i > 16)
+            i = 16;
+
+        write_blind(active_buffer.data.get() + active_buffer.pos, i);
+        active_buffer.pos += i;
+        if (active_buffer.pos == active_buffer.length)
+            active_buffer = {};
+    }
+}
+
+void check_rx()
+{
+    while ((read_register(LSR) & LSR_DATA_READY) != 0) {
+        auto t = read_register(THR);
+        putc(t, stdout);
+        fflush(stdout);
+    }
+}
+
+void check_buffers()
+{
+    check_tx();
+    check_rx();
+}
+
+void poll()
+{
+    auto r = pmos_request_timer(serial_port, 100);
+    if (r != 0) {
+        printf("Failed to request timer\n");
+        return;
+    }
+}
+
+void react_timer_msg()
+{
+    poll();
+    check_buffers();
+}
+
+constexpr std::string log_port_name = "/pmos/logd";
+pmos_port_t log_port = 0;
+
+void request_logger_port()
+{
+    // TODO: Add a syscall for this
+    pmos_syscall(SYSCALL_REQUEST_NAMED_PORT, log_port_name.c_str(), log_port_name.length(), serial_port, 0);
+}
+
+void react_named_port_notification(char *msg_buff, size_t size)
+{
+    IPC_Kernel_Named_Port_Notification *msg = (IPC_Kernel_Named_Port_Notification *)msg_buff;
+    if (size < sizeof(IPC_Kernel_Named_Port_Notification))
+        return;
+    
+    log_port = msg->port_num;
+
+    IPC_Register_Log_Output reg = {
+        .type = IPC_Register_Log_Output_NUM,
+        .flags = 0,
+        .reply_port = serial_port,
+        .log_port = serial_port,
+        .task_id = getpid(),
+    };
+
+    send_message_port(log_port, sizeof(reg), &reg);
+}
+
 int main()
 {
     printf("Hello from ns16550!\n");
 
     ns16550_init();
 
-    write_str("Hello from ns16550!\n");
+    request_logger_port();
+
+    poll();
+
+    while (1)
+    {
+        Message_Descriptor msg;
+        syscall_get_message_info(&msg, serial_port, 0);
+
+        std::unique_ptr<char[]> msg_buff = std::make_unique<char[]>(msg.size);
+
+        get_first_message(msg_buff.get(), 0, serial_port);
+
+        if (msg.size < sizeof(IPC_Generic_Msg)) {
+            write_str("Warning: recieved very small message\n");
+            break;
+        }
+        
+        IPC_Generic_Msg *ipc_msg = reinterpret_cast<IPC_Generic_Msg *>(msg_buff.get());
+
+        switch (ipc_msg->type) {
+        case IPC_Timer_Reply_NUM: {
+            react_timer_msg();
+            break;
+        }
+        case IPC_Write_Plain_NUM: {
+            if (msg.size <= sizeof(IPC_Write_Plain))
+                break;
+
+            write_queue.push({
+                std::move(msg_buff),
+                sizeof(IPC_Write_Plain),
+                msg.size,
+            });
+        }
+            break;
+        case IPC_Log_Output_Reply_NUM:
+            // Ignore it :)
+            // (TODO)
+            break;
+        case IPC_Kernel_Named_Port_Notification_NUM:
+            react_named_port_notification(msg_buff.get(), msg.size);
+            break;
+        default:
+            write_str("Warning: Unknown message type " + std::to_string(ipc_msg->type) + " from task " + std::to_string(msg.sender) + "\n");
+            break;
+        } 
+    }
 }
