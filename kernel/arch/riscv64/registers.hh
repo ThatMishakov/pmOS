@@ -111,6 +111,8 @@ struct RiscV64Regs {
     inline u64& arg2() { return a1; }
     inline u64& arg3() { return a2; }
     inline u64& arg4() { return a3; }
+    inline u64& arg5() { return a4; }
+    inline u64& arg6() { return a5; }
 
     inline void request_syscall_restart() { syscall_restart = 1; }
     inline void clear_syscall_restart() { syscall_restart = 0; }

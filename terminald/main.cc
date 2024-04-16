@@ -141,6 +141,34 @@ void init_screen()
     free(message);
 }
 
+const char log_port_name[] = "/pmos/logd";
+pmos_port_t log_port = 0;
+
+void request_logger_port()
+{
+    // TODO: Add a syscall for this
+    pmos_syscall(SYSCALL_REQUEST_NAMED_PORT, log_port_name, strlen(log_port_name), main_port, 0);
+}
+
+void react_named_port_notification(char *msg_buff, size_t size)
+{
+    IPC_Kernel_Named_Port_Notification *msg = (IPC_Kernel_Named_Port_Notification *)msg_buff;
+    if (size < sizeof(IPC_Kernel_Named_Port_Notification))
+        return;
+    
+    log_port = msg->port_num;
+
+    IPC_Register_Log_Output reg = {
+        .type = IPC_Register_Log_Output_NUM,
+        .flags = 0,
+        .reply_port = main_port,
+        .log_port = main_port,
+        .task_id = getpid(),
+    };
+
+    send_message_port(log_port, sizeof(reg), &reg);
+}
+
 int main() {
     ports_request_t req;
     req = create_port(PID_SELF, 0);
@@ -163,31 +191,7 @@ int main() {
     }
     main_port = req.port;
 
-
-    set_log_port(main_port, 0);
-
-    {
-        result_t r = name_port(main_port, terminal_port_name, strlen(terminal_port_name), 0);
-        if (r != SUCCESS) {
-            write_screen("terminald: Error 0x");
-            print_hex(r);
-            write_screen(" naming port\n");
-        }
-
-        r = name_port(main_port, stdout_port_name, strlen(stdout_port_name), 0);
-        if (r != SUCCESS) {
-            write_screen("terminald: Error 0x");
-            print_hex(r);
-            write_screen(" naming port\n");
-        }
-
-        r = name_port(main_port, stderr_port_name, strlen(stderr_port_name), 0);
-        if (r != SUCCESS) {
-            write_screen("terminald: Error 0x");
-            print_hex(r);
-            write_screen(" naming port\n");
-        }
-    }
+    request_logger_port();
 
     while (1)
     {
@@ -212,7 +216,15 @@ int main() {
         case IPC_Write_Plain_NUM:
             write_screen(str->data);
             break;
+        case IPC_Kernel_Named_Port_Notification_NUM:
+            react_named_port_notification(msg_buff, msg.size);
+            break;
+        case IPC_Log_Output_Reply_NUM:
+            // Ignore it :)
+            // (TODO)
+            break;
         default:
+            write_screen("!!!!!!!!!!!!!!!!!!!\n");
             write_screen("Warning: Unknown message type ");
             print_hex(str->type);
             write_screen("\n");

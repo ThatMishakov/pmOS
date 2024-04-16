@@ -148,6 +148,8 @@ struct X86_64Regs { // 208 bytes
     inline u64& arg2() { return scratch_r.rsi; }
     inline u64& arg3() { return scratch_r.rdx; }
     inline u64& arg4() { return scratch_r.rcx; }
+    inline u64& arg5() { return scratch_r.r8; }
+    inline u64& arg6() { return scratch_r.r9; }
 
     inline void request_syscall_restart()
     {

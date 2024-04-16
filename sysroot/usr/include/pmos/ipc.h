@@ -104,6 +104,38 @@ typedef struct IPC_Timer_Reply {
 } IPC_Timer_Reply;
 #define IPC_TIMER_TICK 0x01
 
+#define IPC_Request_Serial_NUM 0x06
+typedef struct IPC_Request_Serial {
+    uint32_t type;
+    uint32_t flags;
+    uint64_t reply_port;
+    uint64_t serial_id;
+} IPC_Request_Serial;
+
+#define IPC_Serial_Reply_NUM 0x07
+// TODO: Document this
+// See devicesd/include/serial.h for details
+typedef struct IPC_Serial_Reply {
+    uint32_t type;
+    uint32_t flags;
+    // 0 on success, -errno on failure
+    int32_t result;
+
+    uint64_t base_address;
+    uint8_t access_type;
+    uint8_t access_width;
+    uint8_t interface_type;
+    uint8_t pc_int_number;
+    uint32_t baud_rate;
+    uint8_t parity;
+    uint8_t stop_bits;
+    uint8_t flow_control;
+    uint8_t terminal_type;
+    uint32_t gsi_number;
+    uint8_t interrupt_type;
+    uint8_t reserved[7];
+} IPC_Serial_Reply;
+
 #define IPC_Kernel_Interrupt_NUM 0x20
 typedef struct IPC_Kernel_Interrupt {
     uint32_t type;
@@ -780,6 +812,36 @@ typedef struct IPC_Framebuffer_Reply {
     uint8_t framebuffer_blue_mask_size;
     uint8_t framebuffer_blue_mask_shift;
 }  IPC_Framebuffer_Reply;
+
+#define IPC_Register_Log_Output_NUM 0x140
+typedef struct IPC_Register_Log_Output {
+    /// Message type (must be IPC_Register_Log_Output_NUM)
+    uint32_t type;
+
+    /// Flags
+    uint32_t flags;
+
+    /// Port for the reply
+    pmos_port_t reply_port;
+
+    /// Log output port
+    pmos_port_t log_port;
+
+    /// ID of the task that wants to register the log output
+    uint64_t task_id;
+} IPC_Register_Log_Output;
+
+#define IPC_Log_Output_Reply_NUM 0x141
+typedef struct IPC_Log_Output_Reply {
+    /// Message type (must be IPC_Log_Output_Reply_NUM)
+    uint32_t type;
+
+    /// Flags
+    uint32_t flags;
+
+    /// Result code
+    int64_t result_code;
+} IPC_Log_Output_Reply;
 
 #if defined(__cplusplus)
 } /* extern "C" */

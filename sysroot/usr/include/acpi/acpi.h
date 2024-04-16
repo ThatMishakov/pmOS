@@ -120,7 +120,52 @@ typedef struct MADT_RINTC_entry {
   uint32_t flags;
   uint64_t hart_id;
   uint32_t acpi_processor_id;
+  uint32_t external_interrupt_controller_id;
+  uint64_t imsic_base_id;
+  uint32_t imsic_size;
 } __attribute__ ((packed)) MADT_RINTC_entry;
+
+#define MADT_IMSICT_ENTRY_TYPE 0x19
+typedef struct MADT_IMSICT_entry {
+  MADT_entry header;
+  uint8_t version;
+  uint8_t reserved;
+  uint32_t flags;
+  uint16_t supervisor_mode_interrupt_identities;
+  uint16_t guest_mode_interrupt_identities;
+  uint8_t guest_index_bits;
+  uint8_t hart_index_bits;
+  uint8_t group_index_bits;
+  uint8_t group_index_shift;
+} __attribute__ ((packed)) MADT_IMSICT_entry;
+
+#define MADT_APLIC_ENTRY_TYPE 0x1A
+typedef struct MADT_APLIC_entry {
+  MADT_entry header;
+  uint8_t version;
+  uint8_t aplic_id;
+  uint32_t flags;
+  uint64_t hardware_id;
+  uint16_t number_of_idcs;
+  uint16_t total_ext_int_sources_supported;
+  uint32_t global_system_interrupt_base;
+  uint64_t aplic_address;
+  uint32_t aplic_size;
+} __attribute__ ((packed)) MADT_APLIC_entry;
+
+#define MADT_PLIC_ENTRY_TYPE 0x1B
+typedef struct MADT_PLIC_entry {
+  MADT_entry header;
+  uint8_t version;
+  uint8_t plic_id;
+  uint64_t hardware_id;
+  uint16_t total_ext_int_sources_supported;
+  uint16_t max_priority;
+  uint32_t flags;
+  uint32_t plic_size;
+  uint64_t plic_address;
+  uint32_t global_sys_int_vec_base;
+} __attribute__ ((packed)) MADT_PLIC_entry;
 
 typedef struct MADT {
   ACPISDTHeader header;
@@ -138,9 +183,15 @@ typedef struct GenericAddressStructure
   uint8_t AddressSpace;
   uint8_t BitWidth;
   uint8_t BitOffset;
+  // 0 - legacy
+  // 1 - byte
+  // 2 - word
+  // 3 - dword
+  // 4 - qword
   uint8_t AccessSize;
   uint64_t Address;
 } __attribute__ ((packed)) GenericAddressStructure;
+#define ACPI_GAS GenericAddressStructure
 
 ACPISDTHeader* get_table(const char* signature, int n);
 
@@ -317,6 +368,39 @@ typedef struct MCFG {
 } __attribute__ ((packed)) MCFG;
 /// Returns the number of MCFGBase structures in the MCFG table
 #define MCFG_list_size(m) ((m->h.length - sizeof(struct MCFG))/sizeof(struct MCFGBase))
+
+
+// -------------- SPCR table --------------
+typedef struct SPCR {
+  ACPISDTHeader h;
+  uint8_t interface_type;
+  uint8_t reserved[3];
+  struct ACPI_GAS address;
+  uint8_t interrupt_type;
+  uint8_t pc_irq;
+  uint32_t interrupt;
+  uint8_t configured_baud_rate;
+  uint8_t parity;
+  uint8_t stop_bits;
+  uint8_t flow_control;
+  uint8_t terminal_type;
+  uint8_t language;
+  uint16_t pci_device_id;
+  uint16_t pci_vendor_id;
+  uint8_t pci_bus_number;
+  uint8_t pci_device_number;
+  uint8_t pci_function_number;
+  uint32_t pci_flags;
+  uint8_t pci_segment;
+
+  // Revision 3 or higher
+  uint32_t uart_clock_frequency;
+  uint32_t precise_baud_rate;
+  uint16_t namespace_string_length;
+  uint16_t namespace_string_offset;
+  // NULL-terminated string
+  char namespace_string[0];
+} __attribute__ ((packed)) SPCR;
 
 extern int acpi_revision;
 

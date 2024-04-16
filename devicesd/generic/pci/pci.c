@@ -142,7 +142,7 @@ void init_pci()
         printf("Table %i base addr %lx group %i start %i end %i\n", i, b->base_addr, b->group_number, b->start_bus_number, b->end_bus_number);
 
         assert(b->start_bus_number <= b->end_bus_number);
-        uint64_t ecam_base = 0x30000000;
+        uint64_t ecam_base = b->base_addr;
         uint64_t size = pcie_config_space_size(b->start_bus_number, b->end_bus_number);
         uint64_t start = pcie_config_space_start(ecam_base, b->start_bus_number);
         

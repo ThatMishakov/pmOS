@@ -45,6 +45,7 @@
 #include <timers/hpet.h>
 #include <pmos/ipc.h>
 #include <pmos/ports.h>
+#include <serial.h>
 
 char* exec = NULL;
 
@@ -91,6 +92,7 @@ int main(int argc, char** argv) {
 
     init_acpi();
     init_pci();
+    init_serial();
 
     // init_ioapic();
     // init_timers();
@@ -152,6 +154,10 @@ int main(int argc, char** argv) {
 
             //     hpet_int();
             //     break;
+            case IPC_Request_Serial_NUM:
+                IPC_Request_Serial * m = (IPC_Request_Serial*)msg_buff;
+                request_serial(&msg, m);
+                break;
             default:
                 printf("[devicesd] Warning: Recieved unknown message %x from PID %li\n", ((IPC_Generic_Msg*)msg_buff)->type, msg.sender);    
                 break;

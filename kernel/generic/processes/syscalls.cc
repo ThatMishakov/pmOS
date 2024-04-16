@@ -136,20 +136,21 @@ extern "C" void syscall_handler()
     //t_print_bochs("SUCCESS %h\n", syscall_ret_high(task));
     
     //t_print_bochs(" -> SUCCESS\n");
-    if (task == get_cpu_struct()->current_task)
-        syscall_ret_low(task) = SUCCESS;
 }
 
 void getpid(u64, u64, u64, u64, u64, u64)
 {
     const task_ptr& task = get_cpu_struct()->current_task;
 
+    syscall_ret_low(task) = SUCCESS;
     syscall_ret_high(task) = task->pid;
 }
 
 void syscall_create_process(u64, u64, u64, u64, u64, u64)
 {
-    syscall_ret_high(get_current_task()) = TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel::User)->pid;
+    auto task = get_current_task();
+    syscall_ret_low(task) = SUCCESS;
+    syscall_ret_high(task) = TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel::User)->pid;
 }
 
 void syscall_start_process(u64 pid, u64 start, u64 arg1, u64 arg2, u64 arg3, u64)
@@ -172,6 +173,8 @@ void syscall_start_process(u64 pid, u64 start, u64 arg1, u64 arg2, u64 arg3, u64
     t->regs.arg1() = arg1;
     t->regs.arg2() = arg2;
     t->regs.arg3() = arg3;
+
+    syscall_ret_low(task) = SUCCESS;
 
     // Init task
     t->init();
@@ -196,6 +199,9 @@ void syscall_load_executable(u64 task_id, u64 object_id, u64 flags, u64 /* unuse
     // Blocking is not implemented. Return error
     if (!b)
         throw Kern_Exception(ERROR_GENERAL, "pages not available immediately");
+
+    // TODO: This will race once blocking is to be implemented
+    syscall_ret_low(task) = SUCCESS;
 }
 
 void syscall_init_stack(u64 pid, u64 esp, u64, u64, u64, u64)
@@ -216,6 +222,7 @@ void syscall_init_stack(u64 pid, u64 esp, u64, u64, u64, u64)
     } else {
         t->regs.stack_pointer() = esp;
 
+        syscall_ret_low(task) = SUCCESS;
         syscall_ret_high(task) = esp;
     }
 }
@@ -228,6 +235,7 @@ void syscall_exit(u64 arg1, u64 arg2, u64, u64, u64, u64)
     task->ret_hi = arg2;
     task->ret_lo = arg1;
 
+    syscall_ret_low(task) = SUCCESS;
     // Kill the process
     task->atomic_kill();
 }
@@ -264,6 +272,8 @@ void syscall_get_first_message(u64 buff, u64 args, u64 portno, u64, u64, u64)
         if (!(args & MSG_ARG_NOPOP)) {
             port->pop_front();
         }
+
+        syscall_ret_low(current) = SUCCESS;
     }
 }
 
@@ -281,6 +291,8 @@ void syscall_send_message_port(u64 port_num, size_t size, u64 message, u64, u64,
     if (not port or port->portno != port_num) {
         port = Port::atomic_get_port_throw(port_num);
     }
+
+    syscall_ret_low(current) = SUCCESS;
 
     port->atomic_send_from_user(current, (char *)message, size);
 }
@@ -327,6 +339,8 @@ void syscall_get_message_info(u64 message_struct, u64 portno, u64 flags, u64, u6
     bool b = copy_to_user((char *)&desc, (char *)message_struct, msg_struct_size);
     if (not b)
         assert(!"blocking by page is not yet implemented");
+    
+    syscall_ret_low(task) = SUCCESS;
 }
 
 void syscall_set_attribute(u64 pid, u64 attribute, u64 value, u64, u64, u64)
@@ -353,6 +367,8 @@ void syscall_set_attribute(u64 pid, u64 attribute, u64 value, u64, u64, u64)
     //     throw(Kern_Exception(ERROR_NOT_IMPLEMENTED, "syscall_set_attribute with given request is not implemented"));
     //     break;
     // }
+
+    throw(Kern_Exception(ERROR_NOT_IMPLEMENTED, "syscall_set_attribute is not implemented"));
 }
 
 void syscall_configure_system(u64 type, u64 arg1, u64 arg2, u64, u64, u64)
@@ -382,6 +398,9 @@ void syscall_configure_system(u64 type, u64 arg1, u64 arg2, u64, u64, u64)
 void syscall_set_priority(u64 priority, u64, u64, u64, u64, u64)
 {
     task_ptr current_task = get_current_task();
+
+    // SUCCESS will be overriden on error
+    syscall_ret_low(current_task) = SUCCESS;
 
     if (priority >= sched_queues_levels) {
         throw (Kern_Exception(ERROR_NOT_SUPPORTED, "priority outside of queue levels"));
@@ -416,6 +435,7 @@ void syscall_set_task_name(u64 pid, u64 /* const char* */ string, u64 length, u6
 
     Auto_Lock_Scope scope_lock(t->name_lock);
 
+    syscall_ret_low(current) = SUCCESS;
     t->name.swap(str.second);
 }
 
@@ -433,7 +453,7 @@ void syscall_create_port(u64 owner, u64, u64, u64, u64, u64)
         t = get_task_throw(owner);
     }
 
-
+    syscall_ret_low(task) = SUCCESS;
     syscall_ret_high(task) = Port::atomic_create_port(t)->portno;
 }
 
@@ -482,6 +502,8 @@ void syscall_name_port(u64 portnum, u64 /*const char* */ name, u64 length, u64 f
         }
 
         named_port->parent_port = port;
+        syscall_ret_low(task) = SUCCESS;
+
 
         for (const auto& t : named_port->actions) {
             t->do_action(port, str.second);
@@ -492,6 +514,7 @@ void syscall_name_port(u64 portnum, u64 /*const char* */ name, u64 length, u64 f
         const klib::shared_ptr<Named_Port_Desc> new_desc = klib::make_shared<Named_Port_Desc>(klib::move(str.second), port);
 
         global_named_ports.storage.insert({new_desc->name, new_desc});
+        syscall_ret_low(task) = SUCCESS;
     }
 }
 
@@ -524,6 +547,7 @@ void syscall_get_port_by_name(u64 /* const char * */ name, u64 length, u64 flags
             if (not ptr) {
                 throw(Kern_Exception(ERROR_GENERAL, "named port parent is expired"));
             } else {
+                syscall_ret_low(task) = SUCCESS;
                 syscall_ret_high(task) = ptr->portno;                
             }
             return;
@@ -587,6 +611,9 @@ void syscall_request_named_port(u64 string_ptr, u64 length, u64 reply_port, u64 
         auto it = global_named_ports.storage.insert({new_desc->name, new_desc});
         it.first->second->actions.push_back(klib::make_unique<Send_Message>(port_ptr));
     }
+
+    // This is a race condition on SMP
+    syscall_ret_low(task) = SUCCESS;
 }
 
 void syscall_set_log_port(u64 port, u64 flags, u64, u64, u64, u64)
@@ -596,6 +623,7 @@ void syscall_set_log_port(u64 port, u64 flags, u64, u64, u64, u64)
     klib::shared_ptr<Port> port_ptr = Port::atomic_get_port_throw(port);
 
     global_logger.set_port(port_ptr, flags);
+    syscall_ret_low(task) = SUCCESS;
 }
 
 void syscall_create_normal_region(u64 pid, u64 addr_start, u64 size, u64 access, u64, u64)
@@ -616,6 +644,7 @@ void syscall_create_normal_region(u64 pid, u64 addr_start, u64 size, u64 access,
         return;
     }
 
+    syscall_ret_low(current) = SUCCESS;
     syscall_ret_high(current) = dest_task->page_table->atomic_create_normal_region(addr_start, size, access & 0x07, access & 0x08, "anonymous region", 0);
 }
 
@@ -637,12 +666,14 @@ void syscall_create_phys_map_region(u64 pid, u64 addr_start, u64 size, u64 acces
         return;
     }
 
+    syscall_ret_low(current) = SUCCESS;
     syscall_ret_high(current) = dest_task->page_table->atomic_create_phys_region(addr_start, size, access & 0x07, access & 0x08, klib::string(), phys_addr);
 }
 
 void syscall_get_page_table(u64 pid, u64, u64, u64, u64, u64)
 {
     const klib::shared_ptr<TaskDescriptor>& current = get_cpu_struct()->current_task;
+    syscall_ret_low(current) = SUCCESS;
 
     klib::shared_ptr<TaskDescriptor> target{};
 
@@ -665,6 +696,8 @@ void syscall_get_page_table(u64 pid, u64, u64, u64, u64, u64)
 void syscall_set_segment(u64 pid, u64 segment_type, u64 ptr, u64, u64, u64)
 {
     const klib::shared_ptr<TaskDescriptor>& current = get_cpu_struct()->current_task;
+    syscall_ret_low(current) = SUCCESS;
+
     klib::shared_ptr<TaskDescriptor> target{};
 
     if (pid == 0 or current->pid == pid)
@@ -697,6 +730,8 @@ void syscall_set_segment(u64 pid, u64 segment_type, u64 ptr, u64, u64, u64)
 void syscall_get_segment(u64 pid, u64 segment_type, u64, u64, u64, u64)
 {
     const klib::shared_ptr<TaskDescriptor>& current = get_cpu_struct()->current_task;
+    syscall_ret_low(current) = SUCCESS;
+
     klib::shared_ptr<TaskDescriptor> target{};
     u64 segment = 0;
 
@@ -729,6 +764,7 @@ void syscall_transfer_region(u64 to_page_table, u64 region, u64 dest, u64 flags,
 
     const auto result = current->page_table->atomic_transfer_region(pt, region, dest, flags, fixed);
 
+    syscall_ret_low(current) = SUCCESS;
     syscall_ret_high(current) = result;
 }
 
@@ -736,6 +772,7 @@ void syscall_asign_page_table(u64 pid, u64 page_table, u64 flags, u64, u64, u64)
 {
     const klib::shared_ptr<TaskDescriptor>& current = get_current_task();
     const klib::shared_ptr<TaskDescriptor> dest = get_task_throw(pid);
+    syscall_ret_low(current) = SUCCESS;
 
     switch (flags) {
     case 1: // PAGE_TABLE_CREATE
@@ -770,6 +807,7 @@ void syscall_create_mem_object(u64 size_bytes, u64, u64, u64, u64, u64)
 {
     const auto &current_task = get_current_task();
     const auto &current_page_table = current_task->page_table;
+    syscall_ret_low(current_task) = SUCCESS;
 
     // TODO: Remove hard-coded page sizes
 
@@ -789,6 +827,8 @@ void syscall_create_mem_object(u64 size_bytes, u64, u64, u64, u64, u64)
 
 void syscall_delete_region(u64 tid, u64 region_start, u64, u64, u64, u64)
 {
+    syscall_ret_low(get_current_task()) = SUCCESS;
+
     // 0 is PID_SELF
     const auto task = tid == 0 ? get_cpu_struct()->current_task : get_task_throw(tid);
     const auto &page_table = task->page_table;
@@ -801,6 +841,8 @@ void syscall_delete_region(u64 tid, u64 region_start, u64, u64, u64, u64)
 
 void syscall_remove_from_task_group(u64 pid, u64 group, u64, u64, u64, u64)
 {
+    syscall_ret_low(get_current_task()) = SUCCESS;
+
     const auto task = pid == 0 ? get_current_task() : get_task_throw(pid);
 
     const auto group_ptr = TaskGroup::get_task_group_throw(group);
@@ -813,6 +855,8 @@ void syscall_create_task_group(u64, u64 , u64 , u64 , u64 , u64)
     const auto &current_task = get_current_task();
     const auto new_task_group = TaskGroup::create();
 
+    syscall_ret_low(current_task) = SUCCESS;
+
     new_task_group->atomic_register_task(current_task);
 
     syscall_ret_high(current_task) = new_task_group->get_id();
@@ -820,6 +864,8 @@ void syscall_create_task_group(u64, u64 , u64 , u64 , u64 , u64)
 
 void syscall_is_in_task_group(u64 pid, u64 group, u64, u64, u64, u64)
 {
+    syscall_ret_low(get_current_task()) = SUCCESS;
+
     const u64 current_pid = pid == 0 ? get_current_task()->pid : pid;
     const auto group_ptr = TaskGroup::get_task_group_throw(group);
 
@@ -829,6 +875,8 @@ void syscall_is_in_task_group(u64 pid, u64 group, u64, u64, u64, u64)
 
 void syscall_add_to_task_group(u64 pid, u64 group, u64, u64, u64, u64)
 {
+    syscall_ret_low(get_current_task()) = SUCCESS;
+
     const auto task = pid == 0 ? get_current_task() : get_task_throw(pid);
 
     const auto group_ptr = TaskGroup::get_task_group_throw(group);
@@ -837,10 +885,12 @@ void syscall_add_to_task_group(u64 pid, u64 group, u64, u64, u64, u64)
 }
 
 void syscall_set_notify_mask(u64 task_group, u64 port_id, u64 new_mask, u64, u64, u64)
-{
+{    
     const auto group = TaskGroup::get_task_group_throw(task_group);
     const auto port = Port::atomic_get_port_throw(port_id);
 
     u64 old_mask = group->atomic_change_notifier_mask(port, new_mask);
+
+    syscall_ret_low(get_current_task()) = SUCCESS;
     syscall_ret_high(get_current_task()) = old_mask;
 }

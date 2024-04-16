@@ -84,6 +84,9 @@ void page_fault(u64 virt_addr, u64 scause)
     auto page_table = task->page_table;
 
     try {
+        if (scause == 7)
+            throw Kern_Exception(ERROR_GENERAL, "Dodgy userspace");
+
         Auto_Lock_Scope lock(page_table->lock);
 
         auto& regions = page_table->paging_regions;
@@ -223,8 +226,13 @@ void handle_interrupt()
                 c->current_task->regs.program_counter() += 4;
                 syscall_handler();
                 break;
+            case STORE_AMO_ACCESS_FAULT:
+            case LOAD_ACCESS_FAULT:
+            case INSTRUCTION_ACCESS_FAULT:
+                page_fault(stval, scause);
+                break;
             default:
-                serial_logger.printf("Unknown interrupt: 0x%x\n", scause);
+                serial_logger.printf("Unknown exception: 0x%x\n", scause);
                 while (1) ;
         }
     }

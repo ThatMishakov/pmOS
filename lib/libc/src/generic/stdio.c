@@ -577,7 +577,7 @@ int fputs(const char* string, FILE* stream)
 {
     LOCK(&stream->lock);
     size_t size = strlen(string);
-    int t = write_file(stream, string, size) + write_file(stream, endline, sizeof(endline));
+    int t = write_file(stream, string, size) + write_file(stream, endline, strlen(endline));
     UNLOCK_FILE(&stream->lock);
     return t;
 }

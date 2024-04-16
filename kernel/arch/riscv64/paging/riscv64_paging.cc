@@ -39,7 +39,7 @@ void flush_page(void *virt) noexcept
     asm volatile("sfence.vma %0, x0" : : "r"(virt) : "memory");
 }
 
-bool svpbmt_enabled = true;
+bool svpbmt_enabled = false;
 
 u8 pbmt_type(Page_Table_Argumments arg)
 {
