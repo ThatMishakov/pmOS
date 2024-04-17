@@ -39,6 +39,9 @@
 #define SUCCESS 0
 #endif
 
+#define NO_CPU 0
+#define CURRENT_CPU (uint64_t)(-1)
+
 typedef uint64_t result_t;
 typedef uint64_t pmos_port_t;
 
@@ -175,6 +178,20 @@ result_t send_message_port(pmos_port_t port, size_t size, const void* message);
  * @todo Setting the lower than current priority is currently semi-broken (though not catastriphically) as I have not yet implemented the logic for that
  */
 result_t request_priority(uint64_t priority);
+
+/**
+ * @brief Sets the affinity of the task to the given CPU
+ * 
+ * This system call allows to bind a given task to the given CPU. Additionally, NO_CPU can be passed to unbind the task from any concrete CPU and allow
+ * kernel to freely schedule it across processors. Also, CURRENT_CPU can be passed to bind the task to the CPU where the task is currently running.
+ * 
+ * @param tid ID of the task to bind. Takes PID_SELF (0). Currently, only the current task can be bound.
+ * @param cpu_id ID of the CPU to bind the task to. NO_CPU unbinds the task, CURRENT_CPU binds the task to the current CPU. If the task is not bound to
+ *              any CPU and is not running, the kernel will bind it to the CPU of the system call caller.
+ * @param flags Flags for the operation. Currently unused, must be set to 0.
+ * @return result_t result of the operation
+*/
+result_t set_affinity(uint64_t tid, uint64_t cpu_id, uint64_t flags);
 
 /// Returns the LAPIC id the process is running on when calling the process
 u64 get_lapic_id();

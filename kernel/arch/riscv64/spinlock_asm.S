@@ -29,12 +29,22 @@
     .globl acquire_lock_spin
     .type acquire_lock_spin, @function
 acquire_lock_spin:
+    addi sp, sp, -16
+    sd fp, 0(sp)
+    sd ra, 8(sp)
+    addi fp, sp, 16
+
     li t0, 1
 loop:
     lw t1, (a0)
     bnez t1, loop
     amoswap.w.aq t1, t0, (a0)
     bnez t1, loop
+
+    ld fp, 0(sp)
+    ld ra, 8(sp)
+    addi sp, sp, 16
+    
     ret
 
     .globl release_lock

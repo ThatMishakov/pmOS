@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <cstdint>
 #include <pmos/ipc.h>
+#include <pmos/system.h>
 #include <pmos/ports.h>
 #include <pmos/helpers.h>
 #include <pmos/memory.h>
@@ -9,6 +10,7 @@
 #include "ns16550.hh"
 #include <queue>
 #include <cstring>
+#include <pmos/interrupts.h>
 
 // Either physcial memory base or I/O port base
 uint64_t terminal_base = 0x0;
@@ -31,6 +33,8 @@ unsigned clock_frequency = 1843200;
 
 volatile uint8_t *serial_mapped = nullptr;
 
+bool have_interrupts = false;
+
 pmos_port_t serial_port = []() -> auto
 {
     ports_request_t request = create_port(PID_SELF, 0);
@@ -44,7 +48,7 @@ pmos_port_t devicesd_port = []() -> auto
     return request.port;
 }();
 
-uint8_t read_register(int index)
+auto read_register(int index) -> uint8_t
 {
     // TODO: IO access for x86
     return *(serial_mapped + index);
@@ -54,6 +58,8 @@ void write_register(int index, uint8_t value)
 {
     *(serial_mapped + index) = value;
 }
+
+void poll();
 
 void set_register(int index, uint8_t mask)
 {
@@ -69,8 +75,37 @@ void clear_register(int index, uint8_t mask)
     write_register(index, val);
 }
 
-void ns16550_init()
+void set_up_interrupt()
 {
+    #ifdef __riscv
+    printf("Initializing interrupts... Mask: %x\n", interrupt_type_mask);
+
+    // Check if interrupts are supported
+    if ((interrupt_type_mask & 0x10) == 0)
+        return;
+
+    // Bind to the current CPU
+    auto r = set_affinity(PID_SELF, CURRENT_CPU, 0);
+    if (r != SUCCESS)
+        return;
+
+    // Request interrupt from kernel
+    r = set_interrupt(serial_port, gsi_num, 0);
+    if (r != SUCCESS) {
+        set_affinity(PID_SELF, NO_CPU, 0);
+        return;
+    }
+
+    have_interrupts = true;
+    #endif
+}
+
+void ns16550_init()
+{   
+    // Request a high priority, since we are a driver
+    // TODO: There is a bug where setting a priority makes the task disappear after some time :)
+    //request_priority(4);
+
     IPC_Request_Serial request = {
         .type = IPC_Request_Serial_NUM,
         .flags = 0,
@@ -181,6 +216,16 @@ void ns16550_init()
 
     // Set LCR
     write_register(LCR, lcr);
+
+    // Set up interrupt
+    set_up_interrupt();
+
+    if (have_interrupts) {
+        // Enable interrupts
+        set_register(IER, IER_RLS | IER_RX_DATA | IER_TX_EMPTY);
+    } else {
+        poll();
+    }
 
     // Enable FIFO
     // TODO: Be compatible with 16450
@@ -307,8 +352,6 @@ int main()
     ns16550_init();
 
     request_logger_port();
-
-    poll();
 
     while (1)
     {

@@ -74,6 +74,7 @@
 #define SYSCALL_LOAD_EXECUTABLE        36
 
 #define SYSCALL_REQUEST_TIMER          37
+#define SYSCALL_SET_AFFINITY           38
 
 
 

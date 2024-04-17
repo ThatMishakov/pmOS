@@ -326,6 +326,12 @@ void map_pages(ptable_top_ptr_t page_table, u64 phys_addr, u64 virt_addr, u64 si
     // Leak memory for now :)
 }
 
+void map_kernel_pages(u64 phys_addr, u64 virt_addr, u64 size, Page_Table_Argumments arg)
+{
+    const u64 pt_top = get_current_hart_pt();
+    map_pages(pt_top, phys_addr, virt_addr, size, arg);
+}
+
 u64 prepare_leaf_pt_for(void * virt_addr, Page_Table_Argumments /* unused */, u64 pt_ptr)
 {
     Temp_Mapper_Obj<RISCV64_PTE> mapper(request_temp_mapper());

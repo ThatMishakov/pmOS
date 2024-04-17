@@ -478,6 +478,8 @@ void unmap_kernel_page(void * virt_addr);
 
 // Generic function to map multiple pages
 void map_pages(ptable_top_ptr_t page_table, u64 phys_addr, u64 virt_addr, u64 size_bytes, Page_Table_Argumments arg);
+void map_kernel_pages(u64 phys_addr, u64 virt_addr, u64 size, Page_Table_Argumments arg);
+
 
 // Generic function to apply the page table to the current CPU
 void apply_page_table(ptable_top_ptr_t page_table);

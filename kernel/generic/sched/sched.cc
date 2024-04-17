@@ -49,6 +49,11 @@ sched_map tasks_map;
 
 klib::vector<CPU_Info*> cpus;
 
+size_t get_cpu_count() noexcept
+{
+    return cpus.size();
+}
+
 PID pid = 1;
 
 PID assign_pid()

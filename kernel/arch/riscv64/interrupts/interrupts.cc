@@ -49,10 +49,9 @@ u64 get_fp()
     return fp;
 }
 
-extern "C" void print_stack_trace()
+void print_stack_trace_fp(u64 fp = get_fp())
 {
-    u64 fp = get_fp();
-    fp_s *current = (fp_s*)fp - 1;
+    fp_s *current = (fp_s *)((char*)fp - 16);
     serial_logger.printf("Stack trace:\n");
     while (1) {
         serial_logger.printf("  0x%x fp 0x%x\n", current->ra, current->fp);
@@ -61,6 +60,11 @@ extern "C" void print_stack_trace()
         }
         current = (fp_s*)current->fp - 1;    
     }
+}
+
+extern "C" void print_stack_trace()
+{
+    print_stack_trace_fp();
 }
 
 void page_fault(u64 virt_addr, u64 scause)
@@ -193,7 +197,7 @@ void handle_interrupt()
         serial_logger.printf("scause: 0x%x\n", scause);
         serial_logger.printf("stval: 0x%x\n", stval);
         serial_logger.printf("pc: 0x%x\n", c->current_task->regs.program_counter());
-        print_stack_trace();
+        print_stack_trace_fp(c->current_task->regs.s0);
         while (1) ;
     }
 

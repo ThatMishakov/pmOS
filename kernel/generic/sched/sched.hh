@@ -45,6 +45,7 @@
 #elif  defined(__riscv)
 #include <paging/riscv64_temp_mapper.hh>
 #include <cpus/floating_point.hh>
+#include <interrupts/interrupt_handler.hh>
 #endif
 
 // Checks the mask and unblocks the task if needed
@@ -114,10 +115,21 @@ struct CPU_Info {
 
     #ifdef __riscv
     u64 hart_id = 0;
+    // External interrupt controller ID
+    // Bits [31:24] PLIC ID or APLIC ID
+    // Bits [23:16] Reserved
+    // Bits [15:0]  PLIC S-Mode context ID or APLIC IDC ID
+    u32 eic_id = 0;
+
     klib::string isa_string;
 
     u64 last_fp_task = 0;
     FloatingPointState last_fp_state = FloatingPointState::Disabled;
+    #endif
+
+    // ISRs in userspace
+    #ifdef __riscv
+    Interrupt_Handler_Table int_handlers;
     #endif
 
     // IMHO this is better than protecting current_task pointer with spinlock
@@ -134,6 +146,10 @@ struct CPU_Info {
     // Returns the number of ticks after the given number of milliseconds
     u64 ticks_after_ms(u64 ms);
 };
+
+extern klib::vector<CPU_Info*> cpus;
+
+size_t get_cpu_count() noexcept;
 
 /**
  * This vector holds the data of all of the CPUs

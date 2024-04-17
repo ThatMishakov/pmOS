@@ -39,6 +39,7 @@
 #include <interrupts/interrupts.hh>
 
 #include <cpus/floating_point.hh>
+#include <interrupts/plic.hh>
 
 extern klib::shared_ptr<Arch_Page_Table> idle_page_table;
 
@@ -119,11 +120,11 @@ MADT * get_madt()
     return rhct_virt;
 }
 
-ReturnStr<u32> get_apic_processor_uid(u64 hart_id)
+MADT_RINTC_entry * get_hart_rtnic(u64 hart_id)
 {
     MADT * m = get_madt();
     if (m == nullptr)
-        return {ERROR_GENERAL, 0};
+        return nullptr;
 
     // Find the RINTC
     u32 offset = sizeof(MADT);
@@ -131,10 +132,19 @@ ReturnStr<u32> get_apic_processor_uid(u64 hart_id)
     while (offset < length) {
         MADT_RINTC_entry * e = (MADT_RINTC_entry *)((char *)m + offset);
         if (e->header.type == MADT_RINTC_ENTRY_TYPE and e->hart_id == hart_id)
-            return {SUCCESS, e->acpi_processor_id};
+            return e;
 
         offset += e->header.length;
     }
+
+    return nullptr;
+}
+
+ReturnStr<u32> get_apic_processor_uid(u64 hart_id)
+{
+    auto e = get_hart_rtnic(hart_id);
+    if (e)
+        return {SUCCESS, e->acpi_processor_id};
 
     return {ERROR_GENERAL, 0};
 }
@@ -236,6 +246,8 @@ void init_scheduling()
 
     program_stvec();
 
+    cpus.push_back(i);
+
     initialize_timer();
 
     // Set ISA string
@@ -245,6 +257,16 @@ void init_scheduling()
         i->isa_string = klib::forward<klib::string>(s.val);
         global_logger.printf("[Kernel] ISA string: %s\n", i->isa_string.c_str());
         serial_logger.printf("ISA string: %s\n", i->isa_string.c_str());
+    }
+
+    // Set EIC ID
+    auto e = get_hart_rtnic(hart_id);
+    if (!e) {
+        serial_logger.printf("Could not get EIC ID\n");
+    } else {
+        i->eic_id = e->external_interrupt_controller_id;
+        global_logger.printf("[Kernel] EIC ID: %i\n", i->eic_id);
+        serial_logger.printf("EIC ID: %i\n", i->eic_id);
     }
 
     initialize_fp(i->isa_string);
@@ -258,6 +280,12 @@ void init_scheduling()
 
     init_idle();
     i->current_task = i->idle_task;
+
+    serial_logger.printf("Initializing PLIC...\n");
+    init_plic();
+
+    // Enable all interrupts
+    plic_set_threshold(0);
 
     serial_logger.printf("Scheduling initialized\n");
 }

@@ -154,6 +154,9 @@ void syscall_set_notify_mask(u64 task_group, u64 port_id, u64 new_mask, u64, u64
 // Requests a timer notification on a given port after a given timeout
 void syscall_request_timer(u64 port, u64 timeout, u64, u64, u64, u64);
 
+// Sets the task's affinity
+void syscall_set_affinity(u64 task_id, u64 cpu, u64 flags, u64, u64, u64);
+
 inline u64& syscall_arg1(const klib::shared_ptr<TaskDescriptor>& task)
 {
     return task->regs.syscall_arg1();

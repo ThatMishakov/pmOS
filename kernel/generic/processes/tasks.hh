@@ -47,6 +47,8 @@
 
 #ifdef __riscv
 #include <cpus/floating_point.hh>
+
+struct Interrupt_Handler;
 #endif
 
 using PID = u64;
@@ -197,6 +199,14 @@ public:
 
     /// Last hart id that used the floating point unit
     u64 last_fp_hart_id = 0;
+
+
+    // Interrupts handlers
+    klib::set<Interrupt_Handler*> interrupt_handlers;
+    inline bool can_be_rebound()
+    {
+        return interrupt_handlers.empty();
+    }
     #endif
 
     Spinlock name_lock;

@@ -53,7 +53,7 @@
 #endif
 
 using syscall_function = void (*)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t);
-klib::array<syscall_function, 38> syscall_table = {
+klib::array<syscall_function, 39> syscall_table = {
     syscall_exit,
     getpid,
     syscall_create_process,
@@ -96,6 +96,7 @@ klib::array<syscall_function, 38> syscall_table = {
     syscall_set_notify_mask,
     syscall_load_executable,
     syscall_request_timer,
+    syscall_set_affinity,
 };
 
 extern "C" void syscall_handler()
@@ -108,7 +109,7 @@ extern "C" void syscall_handler()
     u64 arg4 = syscall_arg4(task);
     u64 arg5 = syscall_arg5(task);
     
-    //serial_logger.printf("syscall_handler: call_n: %x, arg1: %x, arg2: %x, arg3: %x, arg4: %x, arg5: %x\n", call_n, arg1, arg2, arg3, arg4, arg5);
+    //serial_logger.printf("syscall_handler: task: %d (%s) call_n: %x, arg1: %x, arg2: %x, arg3: %x, arg4: %x, arg5: %x\n", task->pid, task->name.c_str(), call_n, arg1, arg2, arg3, arg4, arg5);
 
     // TODO: check permissions
 
@@ -460,24 +461,16 @@ void syscall_create_port(u64 owner, u64, u64, u64, u64, u64)
 
 void syscall_set_interrupt(uint64_t port, u64 intno, u64 flags, u64, u64, u64)
 {
-    // t_print_bochs("syscall_set_interrupt(%i, %i, %i)\n", port, intno, flags);
+    auto c = get_cpu_struct();
+    const task_ptr& task = c->current_task;
 
-    throw Kern_Exception(ERROR_NOT_IMPLEMENTED, "syscall_set_interrupt is not implemented");
+    auto port_ptr = Port::atomic_get_port_throw(port);
+    if (task != port_ptr->owner.lock()) {
+        throw(Kern_Exception(ERROR_NO_PERMISSION, "Caller is not a port owner"));
+    }
 
-
-    // const task_ptr& task = get_current_task();
-
-    // klib::shared_ptr<Port> port_ptr = Port::atomic_get_port_throw(port);
-
-    // if (not intno_is_ok(intno))
-    //     throw(Kern_Exception(ERROR_OUT_OF_RANGE, "intno outside of supported"));
-
-    // Prog_Int_Descriptor& desc = get_descriptor(prog_int_array, intno);
-
-    // { 
-    //     Auto_Lock_Scope local_lock(desc.lock);
-    //     desc.port = port_ptr;
-    // }
+    syscall_ret_low(task) = SUCCESS;
+    c->int_handlers.add_handler(intno, port_ptr);
 }
 
 void syscall_name_port(u64 portnum, u64 /*const char* */ name, u64 length, u64 flags, u64, u64)
@@ -904,4 +897,36 @@ void syscall_request_timer(u64 port, u64 timeout, u64, u64, u64, u64)
 
     u64 core_time_ms = c->ticks_after_ms(timeout);
     c->atomic_timer_queue_push(core_time_ms, port_ptr);
+}
+
+void syscall_set_affinity(u64 pid, u64 affinity, u64 flags, u64, u64, u64)
+{
+    const auto current_cpu = get_cpu_struct();
+    const auto task = pid == 0 ? current_cpu->current_task : get_task_throw(pid);
+    const auto cpu = affinity == -1UL ? current_cpu->cpu_id + 1 : affinity;
+
+    if (task != current_cpu->current_task) {
+        throw Kern_Exception(ERROR_NO_PERMISSION, "setting affinity for another task is not implemented");
+    }
+
+    const auto cpu_count = get_cpu_count();
+    if (cpu > cpu_count) {
+        throw Kern_Exception(ERROR_OUT_OF_RANGE, "cpu id is out of range");
+    }
+
+    if (cpu == 0 or cpu != (current_cpu->cpu_id + 1)) {
+        throw Kern_Exception(ERROR_NOT_SUPPORTED, "binding affinity to a different CPU is not implemented");
+    }
+
+    if (not task->can_be_rebound())
+        throw Kern_Exception(ERROR_NO_PERMISSION, "task can't be rebound");
+
+    syscall_ret_low(task) = SUCCESS;
+
+    {
+        Auto_Lock_Scope lock(task->sched_lock);
+        task->cpu_affinity = cpu;
+    }
+
+    reschedule();
 }

@@ -199,3 +199,8 @@ result_t syscall_load_executable(uint64_t tid, uint64_t object_id, uint64_t flag
 {
     return pmos_syscall(SYSCALL_LOAD_EXECUTABLE, tid, object_id, flags).result;
 }
+
+result_t set_affinity(uint64_t tid, uint64_t cpu_id, uint64_t flags)
+{
+    return pmos_syscall(SYSCALL_SET_AFFINITY, tid, cpu_id, flags).result;
+}

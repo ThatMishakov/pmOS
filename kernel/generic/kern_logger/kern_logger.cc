@@ -64,6 +64,7 @@ void Logger::vprintf(const char* str, va_list arg)
         do {
             repeat =  false;
             switch (at) {
+                case 'd':
                 case 'i': { // signed integer
                     i64 casted_arg = va_arg(arg, i64);
                     int_to_string(casted_arg, 10, int_str_buffer, len);
