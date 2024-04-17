@@ -17,6 +17,11 @@ constexpr int IER_TX_EMPTY = 0x4; // Transmitter Holding Register Empty
 constexpr int IER_MS = 0x8; // Modem Status
 
 constexpr int ISR = 0x2; // Interuupt Status Register
+
+constexpr int ISR_INT_PENDING = 0x1;
+constexpr int ISR_MASK = 0xf;
+
+
 constexpr int FCR = 0x2; // FIFO Control Register
 
 constexpr int FIFO_ENABLE = 0x1;

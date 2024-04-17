@@ -39,6 +39,8 @@ extern "C" {
 
 result_t set_interrupt(pmos_port_t port, uint32_t intno, uint32_t flags);
 
+result_t complete_interrupt(uint32_t intno);
+
 #endif
 
 #if defined(__cplusplus)

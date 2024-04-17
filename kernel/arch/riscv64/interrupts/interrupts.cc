@@ -34,6 +34,8 @@
 #include <utils.hh>
 #include <cpus/csr.hh>
 #include <cpus/floating_point.hh>
+#include <pmos/ipc.h>
+#include "plic.hh"
 
 extern "C" void handle_interrupt();
 
@@ -183,6 +185,51 @@ void service_timer_interrupt()
     // Pending timer interrupt is cleared by SBI
 }
 
+void plic_service_interrupt()
+{
+    auto c = get_cpu_struct();
+    
+    const u32 irq = plic_claim();
+    if (irq == 0) {
+        // Spurious interrupt
+        return;
+    }
+
+    // Get handler
+    auto handler = c->int_handlers.get_handler(irq);
+    if (handler == nullptr) {
+        // Disable the interrupt
+        plic_interrupt_disable(irq);
+        plic_complete(irq);
+        return;
+    }
+
+    // Send the interrupt to the port
+    auto port = handler->port.lock();
+    bool sent = false;
+    try {
+        if (port) {
+            IPC_Kernel_Interrupt kmsg = {IPC_Kernel_Interrupt_NUM, irq, c->cpu_id};
+            port->atomic_send_from_system(reinterpret_cast<char*>(&kmsg), sizeof(kmsg));
+        }
+
+        sent = true;
+    } catch (const Kern_Exception& e) {
+        serial_logger.printf("Error: %s\n", e.err_message);
+    }
+
+    if (not sent) {
+        // Disable the interrupt
+        plic_interrupt_disable(irq);
+        plic_complete(irq);
+    
+        // Delete the handler
+        c->int_handlers.remove_handler(irq);
+    } else {
+        handler->active = true;
+    }
+}
+
 void handle_interrupt()
 {
     u64 scause, stval;
@@ -208,6 +255,9 @@ void handle_interrupt()
         {
         case TIMER_INTERRUPT:
             service_timer_interrupt();
+            break;
+        case EXTERNAL_INTERRUPT:
+            plic_service_interrupt();
             break;
         
         default:

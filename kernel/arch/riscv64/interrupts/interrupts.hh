@@ -42,4 +42,6 @@ constexpr int INSTRUCTION_PAGE_FAULT = 12;
 constexpr int LOAD_PAGE_FAULT = 13;
 constexpr int STORE_AMO_PAGE_FAULT = 15;
 
+constexpr int SOFTWARE_INTERRUPT = 1;
 constexpr int TIMER_INTERRUPT = 5;
+constexpr int EXTERNAL_INTERRUPT = 9; // PLIC

@@ -235,6 +235,8 @@ void ns16550_init()
 int buff_length = 0;
 constexpr int buff_capacity = 16;
 
+
+bool writing = false;
 struct buffer {
     std::unique_ptr<char[]> data;
     size_t pos;
@@ -287,13 +289,37 @@ void check_tx()
     }
 }
 
+void write_interrupt()
+{
+    if (not active_buffer.data and not write_queue.empty()) {
+        active_buffer = std::move(write_queue.front());
+        write_queue.pop();
+    }
+
+    if (active_buffer.data) {
+        size_t i = active_buffer.length - active_buffer.pos;
+        if (i > 16)
+            i = 16;
+
+        writing = true;
+
+        write_blind(active_buffer.data.get() + active_buffer.pos, i);
+        active_buffer.pos += i;
+        if (active_buffer.pos == active_buffer.length)
+            active_buffer = {};
+    } else {
+        writing = false;
+        read_register(ISR);
+    }
+}
+
 void check_rx()
 {
     while ((read_register(LSR) & LSR_DATA_READY) != 0) {
         auto t = read_register(THR);
         putc(t, stdout);
-        fflush(stdout);
     }
+    fflush(stdout);
 }
 
 void check_buffers()
@@ -345,6 +371,30 @@ void react_named_port_notification(char *msg_buff, size_t size)
     send_message_port(log_port, sizeof(reg), &reg);
 }
 
+void react_interrupt()
+{
+    u8 interrupt_status = read_register(ISR);
+    if ((interrupt_status & ISR_INT_PENDING) == 0) {
+        switch (interrupt_status & ISR_MASK) {
+        case 0b0110: // Receiver Line Status
+            // Acknowledge by reading LSR
+            read_register(LSR);
+            break;
+        case 0b0100: // Received Data Available
+            check_rx();
+            break;
+        case 0b1100: // Reception Timeout
+            check_rx();
+            break;
+        case 0b0010: // Transmitter Holding Register Empty
+            write_interrupt();
+            break;
+        }
+    } // else: Spurious interrupt
+
+    complete_interrupt(gsi_num);
+}
+
 int main()
 {
     printf("Hello from ns16550!\n");
@@ -383,6 +433,8 @@ int main()
                 sizeof(IPC_Write_Plain),
                 msg.size,
             });
+            if (!writing)
+                check_tx();
         }
             break;
         case IPC_Log_Output_Reply_NUM:
@@ -391,6 +443,9 @@ int main()
             break;
         case IPC_Kernel_Named_Port_Notification_NUM:
             react_named_port_notification(msg_buff.get(), msg.size);
+            break;
+        case IPC_Kernel_Interrupt_NUM:
+            react_interrupt();
             break;
         default:
             write_str("Warning: Unknown message type " + std::to_string(ipc_msg->type) + " from task " + std::to_string(msg.sender) + "\n");

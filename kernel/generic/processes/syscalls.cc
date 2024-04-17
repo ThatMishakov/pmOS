@@ -53,7 +53,7 @@
 #endif
 
 using syscall_function = void (*)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t);
-klib::array<syscall_function, 39> syscall_table = {
+klib::array<syscall_function, 40> syscall_table = {
     syscall_exit,
     getpid,
     syscall_create_process,
@@ -97,6 +97,7 @@ klib::array<syscall_function, 39> syscall_table = {
     syscall_load_executable,
     syscall_request_timer,
     syscall_set_affinity,
+    syscall_complete_interrupt,
 };
 
 extern "C" void syscall_handler()
@@ -471,6 +472,15 @@ void syscall_set_interrupt(uint64_t port, u64 intno, u64 flags, u64, u64, u64)
 
     syscall_ret_low(task) = SUCCESS;
     c->int_handlers.add_handler(intno, port_ptr);
+}
+
+void syscall_complete_interrupt(u64 intno, u64, u64, u64, u64, u64)
+{
+    auto c = get_cpu_struct();
+    const task_ptr& task = c->current_task;
+
+    c->int_handlers.ack_interrupt(intno, task->pid);
+    syscall_ret_low(task) = SUCCESS;
 }
 
 void syscall_name_port(u64 portnum, u64 /*const char* */ name, u64 length, u64 flags, u64, u64)

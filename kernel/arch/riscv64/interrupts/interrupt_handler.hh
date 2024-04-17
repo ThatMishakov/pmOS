@@ -23,4 +23,5 @@ struct Interrupt_Handler_Table {
     void ack_interrupt(u64 interrupt_number, u64 task);
 
     Interrupt_Handler *get_handler(u64 interrupt_number);
+    size_t get_handler_index(u64 interrupt_number);
 };

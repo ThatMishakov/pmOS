@@ -104,6 +104,20 @@ void plic_interrupt_enable(u32 interrupt_id)
     plic_write(system_plic, offset, reg | mask);
 }
 
+void plic_interrupt_disable(u32 interrupt_id)
+{
+    const auto c = get_cpu_struct();
+    const u16 context_id = c->eic_id & 0xffff;
+
+    const u32 offset = PLIC_IE_OFFSET + (context_id * PLIC_IE_CONTEXT_STRIDE) + (interrupt_id / 32) * 4;
+    const u32 shift = interrupt_id % 32;
+    const u32 mask = 1 << shift;
+
+    const u32 reg = plic_read(system_plic, offset);
+    plic_write(system_plic, offset, reg & ~mask);
+
+}
+
 u32 plic_interrupt_limit()
 {
     return system_plic.external_interrupt_sources;
@@ -122,4 +136,22 @@ void plic_set_priority(u32 interrupt_id, u32 priority)
 {
     const u32 offset = PLIC_PRIORITY_OFFSET + interrupt_id * PLIC_PRIORITY_SOURCE_STRIDE;
     plic_write(system_plic, offset, priority);
+}
+
+u32 plic_claim()
+{
+    const auto c = get_cpu_struct();
+    const u16 context_id = c->eic_id & 0xffff;
+
+    const u32 offset = PLIC_CLAIM_OFFSET + (context_id * PLIC_COMPLETE_CONTEXT_STRIDE);
+    return plic_read(system_plic, offset);
+}
+
+void plic_complete(u32 interrupt_id)
+{
+    const auto c = get_cpu_struct();
+    const u16 context_id = c->eic_id & 0xffff;
+
+    const u32 offset = PLIC_COMPLETE_OFFSET + (context_id * PLIC_COMPLETE_CONTEXT_STRIDE);
+    plic_write(system_plic, offset, interrupt_id);
 }

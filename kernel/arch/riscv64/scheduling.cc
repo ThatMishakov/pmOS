@@ -273,7 +273,7 @@ void init_scheduling()
     set_fp_state(FloatingPointState::Disabled);
 
     // Enable interrupts
-    const u64 mask = (1 << TIMER_INTERRUPT);
+    const u64 mask = (1 << TIMER_INTERRUPT) | (1 << EXTERNAL_INTERRUPT);
     asm volatile("csrs sie, %0" : : "r"(mask) : "memory");
 
     serial_logger.printf("Initializing idle task\n");

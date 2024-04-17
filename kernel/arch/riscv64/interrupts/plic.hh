@@ -25,12 +25,19 @@ u32 plic_interrupt_limit();
 
 // Enable interrupt for the current hart
 void plic_interrupt_enable(u32 interrupt_id);
+void plic_interrupt_disable(u32 interrupt_id);
 
 // Sets the priority threshold for the current hart
 void plic_set_threshold(u32 threshold);
 
 // Sets the interrupt priority
 void plic_set_priority(u32 interrupt_id, u32 priority);
+
+// Claim the interrupt
+u32 plic_claim();
+
+// Complete the interrupt
+void plic_complete(u32 interrupt_id);
 
 constexpr int PLIC_IE_OFFSET = 0x02000;
 constexpr int PLIC_IE_CONTEXT_STRIDE = 0x80;

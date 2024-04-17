@@ -75,6 +75,7 @@
 
 #define SYSCALL_REQUEST_TIMER          37
 #define SYSCALL_SET_AFFINITY           38
+#define SYSCALL_COMPLETE_INTERRUPT     39
 
 
 

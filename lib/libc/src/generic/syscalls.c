@@ -204,3 +204,8 @@ result_t set_affinity(uint64_t tid, uint64_t cpu_id, uint64_t flags)
 {
     return pmos_syscall(SYSCALL_SET_AFFINITY, tid, cpu_id, flags).result;
 }
+
+result_t complete_interrupt(uint32_t intno)
+{
+    return pmos_syscall(SYSCALL_COMPLETE_INTERRUPT, intno).result;
+}
