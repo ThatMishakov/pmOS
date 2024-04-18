@@ -43,6 +43,14 @@ extern "C" {
 /* Copying functions */
 void * memcpy ( void * destination, const void * source, size_t num );
 void * memmove ( void * destination, const void * source, size_t num );
+
+/**
+ * @brief Copy the string from source to destination, including the NULL terminator.
+ * 
+ * @param destination Destination for the copy.
+ * @param source Source string to copy. NULL-termination denotes its end.
+ * @return A pointer to the destination string.
+*/
 char * strcpy ( char * destination, const char * source );
 char * strncpy ( char * destination, const char * source, size_t num );
 
@@ -75,6 +83,17 @@ size_t strxfrm ( char * destination, const char * source, size_t num );
 /* Search functions */
 void * memchr ( const void * ptr, int value, size_t num );
 char *strchr(const char *s, int c);
+
+/**
+ * @brief Find the first occurrence of a character in a string.
+ * 
+ * This function returns the length of the initial part of s1 that does not contain any characters that are
+ * part of s2. If no characters from s2 are found, the length of s1 is returned.
+ * 
+ * @param s1 The string to be searched.
+ * @param s2 The characters to search for.
+ * @return The length of the initial part of s1 that does not contain any characters that are part of s2.
+*/
 size_t strcspn(const char *s1, const char *s2);
 char *strpbrk(const char *s1, const char *s2);
 char *strrchr(const char *s, int c);
@@ -141,6 +160,19 @@ char *strdup(const char *s);
  * @return A pointer to the newly allocated string on success, or NULL on failure.
  */
 char *strndup(const char *str, size_t n);
+
+/**
+ * @brief Copy the string from str to dst, up to the maximum length sz
+ *        and return a pointer to the end of the copied string.
+ * 
+ * The stpncpy function is similar to the strncpy function, except that
+ * it returns a pointer to the end of the copied string.
+ * 
+ * @param dst Destination.
+ * @param src Source string. NULL-termination denotes its end.
+ * @return A pointer to one after the last character in the destination sequence.
+*/
+char *stpncpy(char *dst, const char * src, size_t sz);
 
 #if defined(__cplusplus)
 } /* extern "C" */

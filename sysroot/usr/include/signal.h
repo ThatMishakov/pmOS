@@ -41,8 +41,8 @@
 typedef unsigned long sig_atomic_t;
 
 #define SIG_DFL ((void(*)(int))0)
-#define SIG_ERR (void(*)(int)1)
-#define SIG_IGN (void(*)(int)2)
+#define SIG_ERR ((void(*)(int))1)
+#define SIG_IGN ((void(*)(int))2)
 
 
 #define SIGFPE 1
@@ -98,6 +98,9 @@ typedef unsigned long sig_atomic_t;
 #define SIGEV_NONE 0
 #define SIGEV_SIGNAL 1
 #define SIGEV_THREAD 2
+
+extern const char * const sys_siglist[];
+extern const char * const sys_signame[];
 
 struct sigstack {
     int       ss_onstack;
@@ -216,6 +219,8 @@ int    sigsuspend(const sigset_t *);
 int    sigtimedwait(const sigset_t *, siginfo_t *, const struct timespec *);
 int    sigwait(const sigset_t *, int *);
 int    sigwaitinfo(const sigset_t *, siginfo_t *);
+
+void   psignal(int sig,	const char *s);
 
 #if defined(__cplusplus)
 } /* extern "C" */

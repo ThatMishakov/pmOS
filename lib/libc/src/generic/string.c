@@ -38,6 +38,18 @@ size_t strlen(const char* str)
     return size;
 }
 
+char * strcpy ( char * destination, const char * source )
+{
+    char* p = destination;
+    while (*source != '\0') {
+        *p = *source;
+        ++p; ++source;
+    }
+
+    *p = '\0';
+    return destination;
+}
+
 char * strncpy ( char * destination, const char * source, size_t num )
 {
     char* p = destination;
@@ -56,6 +68,24 @@ char * strncpy ( char * destination, const char * source, size_t num )
     return destination;
 }
 
+char *stpncpy(char *dst, const char * src, size_t sz)
+{
+    char *d = dst;
+    while (sz > 0 && *src != '\0') {
+        *d = *src;
+        ++d; ++src;
+        --sz;
+    }
+
+    while (sz-- > 0) {
+        *d = '\0';
+        ++d;
+    }
+
+    return dst;
+
+}
+
 int strcmp(const char *s1, const char *s2)
 {
     size_t i = 0;
@@ -71,7 +101,7 @@ int strncmp(const char *s1, const char *s2, size_t size)
     size_t i = 0;
     while (i < size && s1[i] == s2[i] && s1[i]) ++i;
 
-    if (i == size || !s1[i] && !s2[i]) return 0;
+    if (i == size || (!s1[i] && !s2[i])) return 0;
     if (s1[i] < s2[i]) return -1;
     return 1; 
 }
@@ -222,6 +252,24 @@ size_t strspn ( const char * str1, const char * str2 ) {
         }
         ++i;
     }
+
+    return i;
+}
+
+size_t strcspn(const char *s1, const char *s2)
+{
+    size_t i = 0;
+    while (s1[i] != '\0') {
+        const char *s = s2;
+        while (*s != '\0') {
+            if (s1[i] == *s) 
+                return i;
+            ++s;
+        }
+        ++i;
+    }
+
+    return i;
 }
 
 char *strpbrk(const char *str, const char *charset) {
@@ -305,6 +353,31 @@ void *memchr(const void *s, int c, size_t n) {
     }
 
     return NULL;  // Character not found within n bytes, return NULL
+}
+
+char *strstr(const char *s, const char *cc) {
+    const char *c = cc;
+    if (*c == '\0') {
+        return (char *)s;
+    }
+
+    while (*s != '\0') {
+        if (*s == *c) {
+            const char *s1 = s;
+            const char *c1 = c;
+            while (*s1 != '\0' && *c1 != '\0' && *s1 == *c1) {
+                ++s1;
+                ++c1;
+            }
+
+            if (*c1 == '\0') {
+                return (char *)s;
+            }
+        }
+        ++s;
+    }
+
+    return NULL;
 }
 
 // missing const is a mistake in a standard and callers cannot change the string

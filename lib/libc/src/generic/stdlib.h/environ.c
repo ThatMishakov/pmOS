@@ -94,8 +94,13 @@ int setenv(const char *name, const char *value, int overwrite) {
         }
 
         if (overwrite && strcmp(env->value, value) != 0) {
+            char * new_val = strdup(value);
+            if (!new_val) {
+                errno = ENOMEM;
+                return -1;
+            }
             free(env->value);
-            env->value = strdup(value);
+            env->value = new_val;
         }
 
         return 0;
@@ -137,4 +142,12 @@ int setenv(const char *name, const char *value, int overwrite) {
 
     environ_count++;
     return 0;
+}
+
+char *getenv(const char *name) {
+    size_t index = env_lower_bound(name);
+    if (index < environ_count && strcmp(environ[index].name, name) == 0) {
+        return environ[index].value;
+    }
+    return NULL;
 }

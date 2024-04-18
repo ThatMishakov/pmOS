@@ -29,27 +29,76 @@
 #ifndef __SETJMP_H
 #define __SETJMP_H 1
 
+struct __sigjmp_buf_tag {
+    #ifdef __riscv
+    long ra;
+    long sp;
+    long s0;
+    long s1;
+    long s2;
+    long s3;
+    long s4;
+    long s5;
+    long s6;
+    long s7;
+    long s8;
+    long s9;
+    long s10;
+    long s11;
+    #elif defined(__x86_64__)
+    long rbp;
+    long rbx;
+    long r12;
+    long r13;
+    long r14;
+    long r15;
+    long rsp;
+    long rip;
+    #elif
+    #error "Unsupported architecture"
+    #endif
+
+    int restore_mask;
+    // TODO: Signal mask, etc.
+};
+
+// This needs to be an array type, because of setjmp/longjmp signature
+typedef struct __sigjmp_buf_tag sigjmp_buf[1];
+typedef sigjmp_buf jmp_buf;
+
+#ifdef __cplusplus
+#define _NORETURN [[noreturn]]
+#else
+#define _NORETURN _Noreturn
+#endif
+
+
 #if defined(__cplusplus)
 extern "C" {
 #endif
 
-// TODO: Signal saving & stuff
-typedef void* jmp_buf[5];
+int    _setjmp(jmp_buf);
+int    setjmp(jmp_buf);
+int    sigsetjmp(sigjmp_buf, int);
 
-#define setjmp __builtin_setjmp;
+_NORETURN void _longjmp(jmp_buf, int);
+_NORETURN void longjmp(jmp_buf, int);
+_NORETURN void siglongjmp(sigjmp_buf, int);
 
 #if defined(__cplusplus)
 } /* extern "C" */
 #endif
 
-#if defined(__cplusplus)
+#undef _NORETURN
 
-extern "C" [[noreturn]] void longjmp(jmp_buf env, int val);
+// #if defined(__cplusplus)
 
-#else
-// This cannot be a macro
-_Noreturn void longjmp(jmp_buf env, int val);
-#endif
+// extern "C" [[noreturn]] void longjmp(jmp_buf env, int val);
+
+// #else
+// // This cannot be a macro
+// _Noreturn void longjmp(jmp_buf env, int val);
+// #endif
 
 
 #endif // __SETJMP_H

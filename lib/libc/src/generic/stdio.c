@@ -155,6 +155,35 @@ fail:
     return NULL;
 }
 
+FILE *fopen(const char * filename, const char * mode)
+{
+    int fd = -1;
+    fd = open(filename, to_posix_mode(mode), 0);
+    if (fd < 0)
+        goto fail;
+
+    FILE * f = fdopen(fd, mode);
+    if (!f)
+        goto fail;
+
+    return f;
+
+fail:
+    if (fd >= 0)
+        close(fd);
+    return NULL;
+}
+
+void flockfile(FILE * file)
+{
+    LOCK(&file->lock);
+}
+
+void funlockfile(FILE * file)
+{
+    UNLOCK_FILE(&file->lock);
+}
+
 int setvbuf(FILE * stream, char * buffer, int mode, size_t size)
 {
     if (mode == _IONBF) {
@@ -636,6 +665,23 @@ size_t fread ( void * ptr, size_t size, size_t count, FILE * stream )
     return -1;
 
     return __read_internal((long int)stream, ptr, size*count, true, 0);
+}
+
+int getc_unlocked(FILE *stream)
+{
+    // Not implemented
+    errno = ENOSYS;
+    return -1;
+
+    char c = 0;
+    int ret = fread(&c, 1, 1, stream);
+    if (ret < 0) return ret;
+    return c;
+}
+
+int getchar_unlocked(void)
+{
+    return getc_unlocked(stdin);
 }
 
 int getc(FILE *stream)

@@ -82,20 +82,20 @@ int main() {
     //sleep(1);
     printf("Starting tests...\n");
 
-    for (size_t i = 0; i < 10; i++) {
-        threads.push_back(std::thread(thread_func, nullptr));
-    }
+    // for (size_t i = 0; i < 10; i++) {
+    //     threads.push_back(std::thread(thread_func, nullptr));
+    // }
 
-    for (auto & t : threads) {
-        t.join();
-    }
+    // for (auto & t : threads) {
+    //     t.join();
+    // }
 
     printf("Count: %li\n", (uint64_t)count);
 
     //test_qsort();
 
     // Allow other thread to run
-    pthread_exit(nullptr);
+    //pthread_exit(nullptr);
 
     return 0;
 }

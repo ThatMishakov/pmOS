@@ -104,7 +104,7 @@ void ns16550_init()
 {   
     // Request a high priority, since we are a driver
     // TODO: There is a bug where setting a priority makes the task disappear after some time :)
-    //request_priority(4);
+    request_priority(4);
 
     IPC_Request_Serial request = {
         .type = IPC_Request_Serial_NUM,

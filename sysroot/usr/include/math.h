@@ -280,6 +280,8 @@ long double fmal(long double x, long double y, long double z);
 #define islessgreater(x, y) (__builtin_islessgreater(x, y))
 #define isunordered(x, y) (__builtin_isunordered(x, y))
 
+#define isnan(x) (__builtin_isnan(x))
+
 /**
  * @brief Check if a floating-point number is infinite.
  *

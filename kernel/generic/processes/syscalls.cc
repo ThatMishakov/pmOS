@@ -409,9 +409,10 @@ void syscall_set_priority(u64 priority, u64, u64, u64, u64, u64)
         throw (Kern_Exception(ERROR_NOT_SUPPORTED, "priority outside of queue levels"));
     }
 
-    Auto_Lock_Scope lock(current_task->sched_lock);
-
-    current_task->priority = priority;
+    {
+        Auto_Lock_Scope lock(current_task->sched_lock);
+        current_task->priority = priority;
+    }
 
     reschedule();
 }

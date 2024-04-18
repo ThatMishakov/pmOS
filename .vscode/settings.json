@@ -138,7 +138,9 @@
         "vector.h": "c",
         "pci.h": "c",
         "libc-header-start.h": "c",
-        "serial.h": "c"
+        "serial.h": "c",
+        "features.h": "c",
+        "internal.h": "c"
     },
     "cmake.configureOnOpen": false
 }
