@@ -28,6 +28,7 @@
 
 #include <pthread.h>
 #include <errno.h>
+#include <pmos/system.h>
 
 int pthread_spin_trylock(pthread_spinlock_t* lock) {
     if (__sync_lock_test_and_set(lock, 1) == 0) {
@@ -41,6 +42,11 @@ int pthread_spin_trylock(pthread_spinlock_t* lock) {
 
 int sched_yield(void)
 {
+    result_t res = pmos_yield();
+    if (res != SUCCESS) {
+        errno = -res;
+        return -1;
+    }
     return 0;
 }
 

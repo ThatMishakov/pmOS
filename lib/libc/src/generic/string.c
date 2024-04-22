@@ -106,6 +106,14 @@ int strncmp(const char *s1, const char *s2, size_t size)
     return 1; 
 }
 
+int strcasecmp(const char *s1, const char *s2)
+{
+    size_t i = 0;
+    while (tolower(s1[i]) == tolower(s2[i]) && s1[i]) ++i;
+
+    return tolower(s1[i]) - tolower(s2[i]);
+}
+
 void *memcpy(void *dest, const void * src, size_t n)
 {
     void* k = dest;

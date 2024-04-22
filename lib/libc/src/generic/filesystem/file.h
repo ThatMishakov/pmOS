@@ -63,4 +63,8 @@ static struct Filesystem_Adaptor __file_adaptor = {
 /// @return 0 on success, -1 on error setting errno
 int __open_file(const char * path, int flags, mode_t mode, void * file_data, uint64_t consumer_id);
 
+/// @brief Gets the reply port for the filesystem commands
+/// @return Reply port if it is available, INVALID_PORT on error
+__attribute__((visibility("hidden"))) uint64_t __get_fs_cmd_reply_port();
+
 #endif // FILESYSTEM_FILE_H

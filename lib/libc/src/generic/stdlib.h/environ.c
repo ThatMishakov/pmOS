@@ -32,13 +32,10 @@
 #include <errno.h>
 #include <string.h>
 
-struct env {
-    char *name;
-    char *value;
-};
+static char *environ_dummy = NULL;
 
 // Sorted array of pointers to environment variables.
-static struct env *environ = NULL;
+char **environ = &environ_dummy;
 
 // Size of the environ array.
 static size_t environ_size = 0;
@@ -46,6 +43,23 @@ static size_t environ_size = 0;
 // Number of environment variables.
 static size_t environ_count = 0;
 
+// Compare environment variable (up to '=' symbol) with a string
+static int strenvcmp(const char * env, const char * right) {
+    while (*env != '=' && *right != '\0') {
+        if (*env != *right) {
+            return *env - *right;
+        }
+        env++;
+        right++;
+    }
+
+    if (*env == '=') {
+        return '\0' - *right;
+    }
+
+    return *env - '\0';
+}
+    
 
 // Return lower bound of environ array for the given name.
 static size_t env_lower_bound(const char *name) {
@@ -53,7 +67,7 @@ static size_t env_lower_bound(const char *name) {
     size_t upper = environ_count;
     while (lower < upper) {
         size_t mid = lower + (upper - lower) / 2;
-        if (strcmp(name, environ[mid].name) <= 0) {
+        if (strenvcmp(environ[mid], name) >= 0) {
             upper = mid;
         } else {
             lower = mid + 1;
@@ -78,29 +92,35 @@ int setenv(const char *name, const char *value, int overwrite) {
     }
 
     // If the environment variable exists, update it.
-    if (index < environ_count && strcmp(environ[index].name, name) == 0) {
-        struct env *env = &environ[index];
+    if (index < environ_count && strenvcmp(environ[index], name) == 0) {
+        char **env = &environ[index];
 
         if (overwrite && value == NULL) {
             // Remove the environment variable.
-            free(env->name);
-            free(env->value);
+            free(env);
 
             // Move the environment variables after the removed one.
-            memmove(&environ[index], &environ[index + 1], (environ_count - index - 1) * sizeof(struct env));
+            memmove(&environ[index], &environ[index + 1], (environ_count - index - 1) * sizeof(*environ));
 
             environ_count--;
             return 0;
         }
 
-        if (overwrite && strcmp(env->value, value) != 0) {
-            char * new_val = strdup(value);
+        size_t name_len = 0;
+        if (overwrite && strcmp(*env + 1 + (name_len=strlen(name)), value) != 0) {
+            size_t value_len = strlen(value);
+            char * new_val = malloc(name_len + 1 + value_len + 1);
             if (!new_val) {
                 errno = ENOMEM;
                 return -1;
             }
-            free(env->value);
-            env->value = new_val;
+            free(*env);
+
+            memcpy(new_val, name, name_len);
+            new_val[name_len] = '=';
+            memcpy(new_val + name_len + 1, value, value_len + 1);
+
+            *env = new_val;
         }
 
         return 0;
@@ -111,7 +131,12 @@ int setenv(const char *name, const char *value, int overwrite) {
     if (environ_count == environ_size) {
         // Double the size of the environ array.
         size_t new_environ_size = environ_size ? environ_size * 2 : 16;
-        struct env *new_environ = realloc(environ, new_environ_size * sizeof(struct env));
+        char **new_environ = NULL;
+        if (environ == &environ_dummy) {
+            new_environ = malloc(new_environ_size * sizeof(*environ));
+        } else {
+            new_environ = realloc(environ, new_environ_size * sizeof(*environ));
+        }
         if (!new_environ) {
             errno = ENOMEM;
             return -1;
@@ -120,25 +145,24 @@ int setenv(const char *name, const char *value, int overwrite) {
         environ_size = new_environ_size;
     }
 
+    const size_t name_len = strlen(name);
+    const size_t value_len = strlen(value);
+
+    // Copy the new environment variable.
+    char * new_val = malloc(name_len + 1 + value_len + 1);
+    if (!new_val) {
+        errno = ENOMEM;
+        return -1;
+    }
+    memcpy(new_val, name, name_len);
+    new_val[name_len] = '=';
+    memcpy(new_val + name_len + 1, value, value_len + 1);
+
     // Move the environment variables after the insertion point.
-    memmove(&environ[index + 1], &environ[index], (environ_count - index) * sizeof(struct env));
-
-    char *name_copy = strdup(name);
-    if (!name_copy) {
-        errno = ENOMEM;
-        return -1;
-    }
-
-    char *value_copy = strdup(value);
-    if (!value_copy) {
-        free(name_copy);
-        errno = ENOMEM;
-        return -1;
-    }
+    memmove(&environ[index + 1], &environ[index], (environ_count - index) * sizeof(*environ));
 
     // Insert the new environment variable.
-    environ[index].name = name_copy;
-    environ[index].value = value_copy;
+    environ[index] = new_val;
 
     environ_count++;
     return 0;
@@ -146,8 +170,8 @@ int setenv(const char *name, const char *value, int overwrite) {
 
 char *getenv(const char *name) {
     size_t index = env_lower_bound(name);
-    if (index < environ_count && strcmp(environ[index].name, name) == 0) {
-        return environ[index].value;
+    if (index < environ_count && strenvcmp(environ[index], name) == 0) {
+        return environ[index] + strlen(name) + 1;
     }
     return NULL;
 }

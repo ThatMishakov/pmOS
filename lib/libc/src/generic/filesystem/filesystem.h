@@ -52,7 +52,6 @@ union File_Data {
 
 struct File_Descriptor {
     bool used;
-    bool reserved;
     uint8_t flags;
     uint8_t type;
     off_t offset;
@@ -71,6 +70,7 @@ struct Filesystem_Data {
     struct File_Descriptor *descriptors_vector;
     size_t count;
     size_t capacity;
+    size_t reserved_count;
 
     uint64_t fs_consumer_id;
 

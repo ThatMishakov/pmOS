@@ -46,10 +46,29 @@
 // schemes
 static _Thread_local pmos_port_t fs_cmd_reply_port = INVALID_PORT;
 
+__attribute__((visibility("hidden"))) pmos_port_t __get_fs_cmd_reply_port()
+{
+    // Check if reply port exists
+    if (fs_cmd_reply_port == INVALID_PORT) {
+        // Create a new port for the current thread
+        ports_request_t port_request = create_port(PID_SELF, 0);
+        if (port_request.result != SUCCESS) {
+            // Handle error: Failed to create the port
+            errno = EIO; // Set errno to appropriate error code
+            return INVALID_PORT;
+        }
+
+        // Save the created port in the thread-local variable
+        fs_cmd_reply_port = port_request.port;
+    }
+
+    return fs_cmd_reply_port;
+} 
+
 // Variable to cache the filesystem port
 // It could be global but it doesn't really matter and having it
 // this way helps avoid obscure concurrency issues
-static __thread pmos_port_t fs_port = INVALID_PORT;
+__thread pmos_port_t fs_port = INVALID_PORT;
 
 static pmos_port_t get_vfs_port() {
     // Global thread-local variable to cache the filesystem port
@@ -70,7 +89,7 @@ static pmos_port_t request_filesystem_port()
     return port_req.port;
 }
 
-static int vfsd_send_persistant(size_t msg_size, const void *message)
+int __vfsd_send_persistant(size_t msg_size, const void *message)
 {
     result_t k_result = fs_port != INVALID_PORT ? 
         send_message_port(fs_port, msg_size, (char *)message) 

@@ -140,7 +140,8 @@
         "libc-header-start.h": "c",
         "serial.h": "c",
         "features.h": "c",
-        "internal.h": "c"
+        "internal.h": "c",
+        "helpers.h": "c"
     },
     "cmake.configureOnOpen": false
 }

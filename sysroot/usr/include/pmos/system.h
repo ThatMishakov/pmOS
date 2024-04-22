@@ -282,6 +282,16 @@ syscall_r is_task_group_member(uint64_t task_id, uint64_t group_id);
  */
 syscall_r set_task_group_notifier_mask(uint64_t task_group_id, pmos_port_t port_id, uint64_t new_mask);
 
+/**
+ * @brief Yields the CPU to the next task
+ * 
+ * This system call executes the kernel's scheduler, which potentially selects and runs a different task, putting the caller
+ * into the ready queue.
+ * 
+ * @return result_t result of the operation
+ */
+result_t pmos_yield();
+
 #endif
 
 #if defined(__cplusplus)

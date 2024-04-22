@@ -281,6 +281,80 @@ typedef struct IPC_Write_Reply {
     uint64_t bytes_written;
 };
 
+#define IPC_Stat_NUM 0x56
+/// Message sent by the user process to VFS daemon get file stats
+typedef struct IPC_Stat {
+    /// Message type (must be IPC_Stat_NUMº)
+    uint32_t num;
+
+    /// Flags changing the behavior of the open operation
+    uint32_t flags;
+
+    /// Port where the reply will be sent
+    pmos_port_t reply_port;
+
+    /// ID of the file system consumer
+    uint64_t fs_consumer_id;
+
+    /// Path of the file
+    char path[];
+} IPC_Stat;
+
+#define IPC_Stat_Reply_NUM 0x57
+/// Reply to the IPC_Stat message from the vfs daemon
+typedef struct IPC_Stat_Reply {
+    /// Message type (must be IPC_Stat_Reply_NUM)
+    uint32_t num;
+
+    /// Flags
+    uint16_t flags;
+
+    /// Result code (0 on success, -errno otherwise)
+    int16_t result;
+
+    /// Device ID
+    uint64_t st_dev;
+
+    /// File serial number
+    uint64_t ino_t;
+
+    /// Mode of the file
+    uint64_t st_mode;
+
+    /// Number of hard links to the file
+    uint64_t st_nlink;
+
+    /// User ID of the file
+    uint64_t st_uid;
+
+    /// Group ID of the file
+    uint64_t st_gid;
+
+    /// Device ID
+    uint64_t st_rdev;
+
+    /// File size
+    uint64_t st_size;
+
+    /// Time of last access
+    uint64_t st_atim_tv_sec;
+    uint64_t st_atim_tv_nsec;
+
+    /// Time of last modification
+    uint64_t st_mtim_tv_sec;
+    uint64_t st_mtim_tv_nsec;
+
+    /// Time of last status change
+    uint64_t st_ctim_tv_sec;
+    uint64_t st_ctim_tv_nsec;
+
+    /// Block size
+    uint64_t st_blksize;
+    
+    /// Number of blocks allocated
+    uint64_t st_blocks;
+} IPC_Stat_Reply;
+
 #define IPC_Open_NUM 0x58
 /// Message sent by the user process to VFS daemon to open a file
 typedef struct IPC_Open {

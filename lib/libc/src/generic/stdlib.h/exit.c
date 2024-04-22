@@ -46,3 +46,13 @@ __attribute__((noreturn)) void exit(int status)
     __close_files_on_exit();
     _syscall_exit(status);
 }
+
+__attribute__((noreturn)) void _exit(int status)
+{
+    _syscall_exit(status);
+}
+
+__attribute__((noreturn)) void _Exit(int status)
+{
+    _exit(status);
+}

@@ -209,3 +209,8 @@ result_t complete_interrupt(uint32_t intno)
 {
     return pmos_syscall(SYSCALL_COMPLETE_INTERRUPT, intno).result;
 }
+
+result_t pmos_yield()
+{
+    return pmos_syscall(SYSCALL_YIELD).result;
+}

@@ -53,7 +53,7 @@
 #endif
 
 using syscall_function = void (*)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t);
-klib::array<syscall_function, 40> syscall_table = {
+klib::array<syscall_function, 41> syscall_table = {
     syscall_exit,
     getpid,
     syscall_create_process,
@@ -98,6 +98,7 @@ klib::array<syscall_function, 40> syscall_table = {
     syscall_request_timer,
     syscall_set_affinity,
     syscall_complete_interrupt,
+    syscall_yield,
 };
 
 extern "C" void syscall_handler()
@@ -939,5 +940,11 @@ void syscall_set_affinity(u64 pid, u64 affinity, u64 flags, u64, u64, u64)
         task->cpu_affinity = cpu;
     }
 
+    reschedule();
+}
+
+void syscall_yield(u64, u64, u64, u64, u64, u64)
+{
+    syscall_ret_low(get_current_task()) = SUCCESS;
     reschedule();
 }
