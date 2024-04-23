@@ -69,8 +69,11 @@ ReturnStr<u64> block_current_task(const klib::shared_ptr<Generic_Port>& ptr)
     //t_print_bochs("Blocking %i (%s) by port\n", task->pid, task->name.c_str());
 
     Auto_Lock_Scope scope_lock(task->sched_lock);
+    // If the task is dying, don't block it
+    if (task->status == TaskStatus::TASK_DYING)
+        return {SUCCESS, 0};
 
-    task->status = Process_Status::PROCESS_BLOCKED;
+    task->status = TaskStatus::TASK_BLOCKED;
     task->blocked_by = ptr;
     task->parent_queue = &blocked;
 
@@ -88,13 +91,16 @@ ReturnStr<u64> block_current_task(const klib::shared_ptr<Generic_Port>& ptr)
 
 void TaskDescriptor::atomic_block_by_page(u64 page, sched_queue *blocked_ptr)
 {
-    assert(status != PROCESS_BLOCKED && "task cannot be blocked twice");
+    assert(status != TaskStatus::TASK_BLOCKED && "task cannot be blocked twice");
 
     // t_print_bochs("Blocking %i (%s) by page. CPU %i\n", this->pid, this->name.c_str(), get_cpu_struct()->cpu_id);
 
     Auto_Lock_Scope scope_lock(sched_lock);
+    // If the task is dying, don't actually block it
+    if (status == TaskStatus::TASK_DYING)
+        return;
     
-    status = Process_Status::PROCESS_BLOCKED;
+    status = TaskStatus::TASK_BLOCKED;
     page_blocked_by = page;
 
     klib::shared_ptr<TaskDescriptor> self = weak_self.lock();
@@ -152,7 +158,10 @@ void TaskDescriptor::switch_to()
     c->current_task->before_task_switch();
 
     // Switch task task
-    status = Process_Status::PROCESS_RUNNING;
+    if (status != TaskStatus::TASK_DYING)
+        // If the task is dying, don't change its status and let the scheduler handle it when returning from the kernel
+        status = TaskStatus::TASK_RUNNING;
+
     c->current_task_priority = priority;
     c->current_task = weak_self.lock();
 
@@ -165,7 +174,7 @@ bool TaskDescriptor::atomic_try_unblock_by_page(u64 page)
 {
     Auto_Lock_Scope scope_lock(sched_lock);
 
-    if (status != PROCESS_BLOCKED)
+    if (status != TaskStatus::TASK_BLOCKED)
         return false;
 
     if (page_blocked_by != page)
@@ -181,7 +190,7 @@ bool TaskDescriptor::atomic_unblock_if_needed(const klib::shared_ptr<Generic_Por
     bool unblocked = false;
     Auto_Lock_Scope scope_lock(sched_lock);
 
-    if (status != PROCESS_BLOCKED)
+    if (status != TaskStatus::TASK_BLOCKED)
         return unblocked;
 
     if (page_blocked_by != 0)
@@ -254,7 +263,9 @@ void TaskDescriptor::unblock() noexcept
 
 void push_ready(const klib::shared_ptr<TaskDescriptor>& p)
 {
-    p->status = PROCESS_READY;
+    if (p->status != TaskStatus::TASK_DYING)
+        // Carry dying status, set to ready otherwise
+        p->status = TaskStatus::TASK_READY;
 
     const auto priority = p->priority;
     const priority_t priority_lim = global_sched_queues.size();
@@ -286,8 +297,6 @@ void sched_periodic()
 
     if (next) {
         Auto_Lock_Scope_Double lock(current->sched_lock, next->sched_lock);
-
-        current->status = Process_Status::PROCESS_READY;
 
         next->switch_to();
 

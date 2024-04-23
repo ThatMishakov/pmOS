@@ -36,6 +36,7 @@
 #include <kernel/elf.h>
 #include <pmos/tls.h>
 #include <pmos/load_data.h>
+#include <assert.h>
 
 
 klib::shared_ptr<TaskDescriptor> TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel level)
@@ -140,7 +141,7 @@ void init_idle()
 
 bool TaskDescriptor::is_uninited() const
 {
-    return status == PROCESS_UNINIT;
+    return status == TaskStatus::TASK_UNINIT;
 }
 
 void TaskDescriptor::init()
@@ -160,35 +161,26 @@ void TaskDescriptor::init()
     }
 }
 
-void TaskDescriptor::atomic_kill() // TODO: UNIX Signals
+void TaskDescriptor::atomic_kill()
 {
     klib::shared_ptr<TaskDescriptor> self = weak_self.lock();
 
     Auto_Lock_Scope scope_lock(sched_lock);
+    const bool is_blocked = status == TaskStatus::TASK_BLOCKED;
+    status = TaskStatus::TASK_DYING;
+    if (is_blocked)
+        unblock();
 
-    sched_queue* task_queue = parent_queue;
-    if (task_queue != nullptr) {
-        Auto_Lock_Scope queue_lock(task_queue->lock);
-
-        task_queue->erase(self);
-        parent_queue = nullptr;
-    }
-
-    // Task switch if it's a current process
-    CPU_Info* cpu_str = get_cpu_struct();
-    if (cpu_str->current_task == self) {
-        find_new_process();
-    }
-
-    status = PROCESS_DEAD;
-    parent_queue = NULL;
+    // Let the scheduler stumble upon this task and kill it
+    // This is done this way so that if a task is bound to a particular CPU, the the destructors
+    // (in particular, interrupt mappings) will be called on that CPU
 }
 
 void TaskDescriptor::create_new_page_table()
 {
     Auto_Lock_Scope scope_lock(sched_lock);
 
-    if (status != PROCESS_UNINIT)
+    if (status != TaskStatus::TASK_UNINIT)
         throw Kern_Exception(ERROR_PROCESS_INITED, "Process is already inited");
 
     if (page_table)
@@ -203,7 +195,7 @@ void TaskDescriptor::create_new_page_table()
 
 void TaskDescriptor::register_page_table(klib::shared_ptr<Arch_Page_Table> table)
 {
-    if (status != PROCESS_UNINIT)
+    if (status != TaskStatus::TASK_UNINIT)
         throw Kern_Exception(ERROR_PROCESS_INITED, "Process is already inited");
 
     if (page_table)
@@ -225,7 +217,7 @@ bool TaskDescriptor::load_elf(klib::shared_ptr<Mem_Object> elf, klib::string nam
 {
     Auto_Lock_Scope scope_lock(sched_lock);
 
-    if (status != PROCESS_UNINIT)
+    if (status != TaskStatus::TASK_UNINIT)
         throw Kern_Exception(ERROR_PROCESS_INITED, "Process is already inited");
 
     if (page_table)
@@ -413,6 +405,22 @@ bool TaskDescriptor::load_elf(klib::shared_ptr<Mem_Object> elf, klib::string nam
     init();
 
     return true;
+}
+
+void TaskDescriptor::cleanup_and_release()
+{
+    auto c = get_cpu_struct();
+
+    assert(status == TaskStatus::TASK_DYING);
+    assert(c->current_task.get() == this);
+
+    #ifdef __riscv
+    for (auto interr: interrupt_handlers) {
+        c->int_handlers.remove_handler(interr->interrupt_number);
+    }
+    #endif
+
+    find_new_process();
 }
 
 // TODO: Arch-specific!!!

@@ -56,14 +56,15 @@ using PID = u64;
 struct TaskPermissions {
 };
 
-enum Process_Status: u64 {
-    PROCESS_RUNNING = 0,
-    PROCESS_RUNNING_IN_SYSTEM = 1,
-    PROCESS_READY,
-    PROCESS_BLOCKED,
-    PROCESS_UNINIT,
-    PROCESS_SPECIAL, // Would be used by idle or system tasks
-    PROCESS_DEAD
+enum class TaskStatus: u64 {
+    TASK_RUNNING = 0,
+    TASK_RUNNING_IN_SYSTEM = 1,
+    TASK_READY,
+    TASK_BLOCKED,
+    TASK_UNINIT,
+    TASK_SPECIAL, // Would be used by idle or system tasks
+    TASK_DYING,
+    TASK_DEAD
 };
 
 struct Task_Attributes {
@@ -99,7 +100,7 @@ public:
     klib::shared_ptr<TaskDescriptor> queue_next = nullptr;
     klib::shared_ptr<TaskDescriptor> queue_prev = nullptr;
     sched_queue *parent_queue = nullptr;
-    Process_Status status = PROCESS_UNINIT;
+    TaskStatus status = TaskStatus::TASK_UNINIT;
     priority_t priority = 8;
     u32 cpu_affinity = 0;
     Spinlock sched_lock;
@@ -234,13 +235,17 @@ public:
         regs.clear_syscall_restart();
     }
 
-    // Creates a process structure and returns its pid
+    /// Creates a process structure and returns its pid
     static klib::shared_ptr<TaskDescriptor> create_process(PrivilegeLevel level = PrivilegeLevel::User);
 
-    // Loads ELF into the task from the given memory object
-    // Returns true if the ELF was loaded successfully, false if the memory object data is not immediately available
-    // Throws on errors
+    /// Loads ELF into the task from the given memory object
+    /// Returns true if the ELF was loaded successfully, false if the memory object data is not immediately available
+    /// Throws on errors
     bool load_elf(klib::shared_ptr<Mem_Object> obj, klib::string name = "", const klib::vector<klib::unique_ptr<load_tag_generic>>& tags = {});
+
+    /// Cleans up the task when detected that it is dead ("tombstoning")
+    /// This function is called when the dead task has been scheduled to run and is needed to clean up CPU-specific data
+    void cleanup_and_release(); 
 protected:
     TaskDescriptor() = default;
 

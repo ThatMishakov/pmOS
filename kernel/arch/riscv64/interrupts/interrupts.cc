@@ -291,6 +291,10 @@ void handle_interrupt()
         }
     }
 
+    while (c->current_task->status == TaskStatus::TASK_DYING) {
+        c->current_task->cleanup_and_release();
+    }
+
     while (c->current_task->regs.syscall_restart != 0) {
         syscall_handler();
     }
