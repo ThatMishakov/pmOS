@@ -53,7 +53,7 @@ static pmos_port_t get_sleep_port() {
 
 // int pmos_request_timer(pmos_port_t port, size_t ms) {
 //     if (sleep_reply_port == INVALID_PORT) {
-//         ports_request_t port_request = create_port(PID_SELF, 0);
+//         ports_request_t port_request = create_port(TASK_ID_SELF, 0);
 //         if (port_request.result != SUCCESS) {
 //             errno = port_request.result;
 //             return -1;

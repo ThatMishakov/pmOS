@@ -41,11 +41,11 @@ const char* ps2d_port_name = "/pmos/ps2d";
 
 int main()
 {
-    printf("Hello from PS2d! My PID: %li\n", getpid());
+    printf("Hello from PS2d! My PID: %li\n", get_task_id());
     {
         ports_request_t req;
 
-        req = create_port(PID_SELF, 0);
+        req = create_port(TASK_ID_SELF, 0);
         if (req.result != SUCCESS) {
             printf("[PS2d] Error creating port %li\n", req.result);
             return 0;

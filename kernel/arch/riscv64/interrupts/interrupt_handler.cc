@@ -30,7 +30,7 @@ void Interrupt_Handler_Table::add_handler(u64 interrupt_number, const klib::shar
     auto handler = klib::make_unique<Interrupt_Handler>();
     handler->interrupt_number = interrupt_number;
     handler->port = port;
-    handler->task_id = owner->pid;
+    handler->task_id = owner->task_id;
     handler->active = true;
 
     auto handler_ptr = handler.get();

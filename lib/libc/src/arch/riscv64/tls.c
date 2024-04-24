@@ -43,7 +43,7 @@ void __release_tls(struct uthread * u)
     if (u == NULL)
         return;
 
-    release_region(PID_SELF, u);
+    release_region(TASK_ID_SELF, u);
 }
 
 struct uthread *__get_tls()

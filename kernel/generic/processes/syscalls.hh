@@ -42,7 +42,7 @@ extern "C" void syscall_handler();
 //#pragma GCC diagnostic pop
 
 // Gets the pid of the current process
-void getpid(u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */);
+void get_task_id(u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */);
 
 // Creates an empty process
 void syscall_create_process(u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */);
@@ -58,7 +58,7 @@ void syscall_create_phys_map_region(u64 pid, u64 addr_start, u64 size, u64 acces
 void syscall_start_process(u64 pid, u64 start, u64 arg1, u64 arg2, u64 arg3, u64 = 0 /* unused */);
 
 
-// Gets an index of the processes' page table. PID 0 can be used as PID_SELF
+// Gets an index of the processes' page table. PID 0 can be used as TASK_ID_SELF
 void syscall_get_page_table(u64 pid, u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */);
 
 // Exits (kills the process at the end of its execution)

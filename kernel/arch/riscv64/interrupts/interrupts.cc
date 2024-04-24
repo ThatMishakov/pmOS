@@ -105,8 +105,8 @@ void page_fault(u64 virt_addr, u64 scause)
         } else
             throw Kern_Exception(ERROR_PAGE_NOT_ALLOCATED, "pagefault in unknown region");
     } catch (const Kern_Exception& e) {
-        serial_logger.printf("Warning: Pagefault %h pid %i (%s) rip %h error %h -> %i killing process...\n", virt_addr, task->pid, task->name.c_str(), task->regs.pc, scause, e.err_code);
-        global_logger.printf("Warning: Pagefault %h pid %i (%s) pc %h error %h -> %i killing process...\n", virt_addr, task->pid, task->name.c_str(), task->regs.pc, scause, e.err_code);
+        serial_logger.printf("Warning: Pagefault %h pid %i (%s) rip %h error %h -> %i killing process...\n", virt_addr, task->task_id, task->name.c_str(), task->regs.pc, scause, e.err_code);
+        global_logger.printf("Warning: Pagefault %h pid %i (%s) pc %h error %h -> %i killing process...\n", virt_addr, task->task_id, task->name.c_str(), task->regs.pc, scause, e.err_code);
         task->atomic_kill();
     }
 }
@@ -171,8 +171,8 @@ void illegal_instruction(u32 instruction)
             throw Kern_Exception(ERROR_BAD_INSTRUCTION, "Illegal instruction");
         }
     } catch (const Kern_Exception& e) {
-        serial_logger.printf("Warning: %s pid %i (%s) pc %h instr 0x%h -> %i killing process...\n", e.err_message, task->pid, task->name.c_str(), task->regs.pc, instruction, e.err_code);
-        global_logger.printf("Warning: %s pid %i (%s) pc %h instr 0x%h -> %i killing process...\n", e.err_message, task->pid, task->name.c_str(), task->regs.pc, instruction, e.err_code);
+        serial_logger.printf("Warning: %s pid %i (%s) pc %h instr 0x%h -> %i killing process...\n", e.err_message, task->task_id, task->name.c_str(), task->regs.pc, instruction, e.err_code);
+        global_logger.printf("Warning: %s pid %i (%s) pc %h instr 0x%h -> %i killing process...\n", e.err_message, task->task_id, task->name.c_str(), task->regs.pc, instruction, e.err_code);
         task->atomic_kill();
     }
 }
@@ -235,7 +235,7 @@ void handle_interrupt()
     u64 scause, stval;
     get_scause_stval(&scause, &stval);
 
-    //serial_logger.printf("Recieved an interrupt! scause: 0x%x stval: 0x%x pc 0x%x task %i (%s)\n", scause, stval, get_cpu_struct()->current_task->regs.program_counter(), get_cpu_struct()->current_task->pid, get_cpu_struct()->current_task->name.c_str());
+    //serial_logger.printf("Recieved an interrupt! scause: 0x%x stval: 0x%x pc 0x%x task %i (%s)\n", scause, stval, get_cpu_struct()->current_task->regs.program_counter(), get_cpu_struct()->current_task->task_id, get_cpu_struct()->current_task->name.c_str());
 
     auto c = get_cpu_struct();
     if (c->nested_level > 1) {

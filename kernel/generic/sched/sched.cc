@@ -54,14 +54,6 @@ size_t get_cpu_count() noexcept
     return cpus.size();
 }
 
-PID pid = 1;
-
-PID assign_pid()
-{
-   PID pid_p = __atomic_fetch_add(&pid, 1, __ATOMIC_SEQ_CST);
-   return pid_p; 
-}
-
 ReturnStr<u64> block_current_task(const klib::shared_ptr<Generic_Port>& ptr)
 {
     const klib::shared_ptr<TaskDescriptor>& task = get_cpu_struct()->current_task;

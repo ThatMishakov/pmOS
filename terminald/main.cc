@@ -128,7 +128,7 @@ void init_screen()
     size_t end = (start + size + 0xfff)&~0xfffUL;
     size_t size_alligned = end - start;
 
-    mem_request_ret_t map_request = create_phys_map_region(PID_SELF, 0, size_alligned, PROT_READ|PROT_WRITE, (void*)start);
+    mem_request_ret_t map_request = create_phys_map_region(TASK_ID_SELF, 0, size_alligned, PROT_READ|PROT_WRITE, (void*)start);
     if (map_request.result != SUCCESS)
         exit(7);
 
@@ -163,7 +163,7 @@ void react_named_port_notification(char *msg_buff, size_t size)
         .flags = 0,
         .reply_port = main_port,
         .log_port = main_port,
-        .task_id = getpid(),
+        .task_id = get_task_id(),
     };
 
     send_message_port(log_port, sizeof(reg), &reg);
@@ -171,7 +171,7 @@ void react_named_port_notification(char *msg_buff, size_t size)
 
 int main() {
     ports_request_t req;
-    req = create_port(PID_SELF, 0);
+    req = create_port(TASK_ID_SELF, 0);
     if (req.result != SUCCESS) {
         write_screen("Error creating configuration port ");
         print_hex(req.result);
@@ -183,7 +183,7 @@ int main() {
     const char msg[] = "Initialized framebuffer...\n";
     flanterm_write(ft_ctx, msg, sizeof(msg));
 
-    req = create_port(PID_SELF, 0);
+    req = create_port(TASK_ID_SELF, 0);
     if (req.result != SUCCESS) {
         write_screen("Error creating main port ");
         print_hex(req.result);

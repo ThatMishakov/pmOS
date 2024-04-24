@@ -66,7 +66,7 @@ syscall_r pmos_syscall(uint64_t call_n, ...);
  * 
  * @return uint64_t PID of the process
  */
-uint64_t getpid();
+uint64_t get_task_id();
 
 /**
  * @brief Creates a new process
@@ -185,7 +185,7 @@ result_t request_priority(uint64_t priority);
  * This system call allows to bind a given task to the given CPU. Additionally, NO_CPU can be passed to unbind the task from any concrete CPU and allow
  * kernel to freely schedule it across processors. Also, CURRENT_CPU can be passed to bind the task to the CPU where the task is currently running.
  * 
- * @param tid ID of the task to bind. Takes PID_SELF (0). Currently, only the current task can be bound.
+ * @param tid ID of the task to bind. Takes TASK_ID_SELF (0). Currently, only the current task can be bound.
  * @param cpu_id ID of the CPU to bind the task to. NO_CPU unbinds the task, CURRENT_CPU binds the task to the current CPU. If the task is not bound to
  *              any CPU and is not running, the kernel will bind it to the CPU of the system call caller.
  * @param flags Flags for the operation. Currently unused, must be set to 0.
@@ -218,7 +218,7 @@ syscall_r create_task_group();
  * This syscall adds the task to the task group. If the task is already in the group, the syscall returns ERROR_ALREADY_IN_GROUP. If the same task
  * is added or removed from the same group by multiple threads at the same time, the return value might not reflect the actual state of the task group.
  * 
- * @param task_id ID of the task to be added. Takes PID_SELF (0)
+ * @param task_id ID of the task to be added. Takes TASK_ID_SELF (0)
  * @param group_id ID of the group where the task should be added
  * @return result_t Result of the operation. If the result is SUCCESS, the task was added to the group.
  */
@@ -230,7 +230,7 @@ result_t add_task_to_group(uint64_t task_id, uint64_t group_id);
  * This syscall removes the task from the task group. If the task is not in the group, the syscall returns ERROR_NOT_IN_GROUP.
  * The task groups with no members are automatically destroyed by the kernel.
  * 
- * @param task_id ID of the task. Takes PID_SELF (0)
+ * @param task_id ID of the task. Takes TASK_ID_SELF (0)
  * @param group_id ID of the group
  * @return result_t result of the operation. If the result is SUCCESS, the task was removed from the group.
  * @see create_task_group() add_task_to_group() is_task_group_member()

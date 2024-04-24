@@ -13,7 +13,7 @@ std::list<pmos_port_t> log_output_ports;
 
 pmos_port_t main_port = []() -> auto
 {
-    ports_request_t request = create_port(PID_SELF, 0);
+    ports_request_t request = create_port(TASK_ID_SELF, 0);
     if (request.result != SUCCESS)
         throw std::runtime_error("Failed to create port");
     return request.port;

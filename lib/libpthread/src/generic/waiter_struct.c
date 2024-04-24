@@ -33,7 +33,7 @@
 #include "spin_pause.h"
 
 int __init_waiter_struct(struct __pthread_waiter * waiter_struct) {
-    ports_request_t request = create_port(PID_SELF, 0);
+    ports_request_t request = create_port(TASK_ID_SELF, 0);
     if (request.result != SUCCESS) {
         errno = request.result;
         return -1;

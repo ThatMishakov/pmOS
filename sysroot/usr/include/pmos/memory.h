@@ -36,9 +36,9 @@
 extern "C" {
 #endif
 
-#ifndef PID_SELF
+#ifndef TASK_ID_SELF
 /// Parameter used in some function calls to indicate the current tasks PID should be used
-#define PID_SELF 0
+#define TASK_ID_SELF 0
 #endif
 
 /***
@@ -64,7 +64,7 @@ typedef unsigned long mem_object_t;
 /// the kernel, but normally the page allocation would be delayed untill the memory is actually accessed. The memory
 /// can be safely unallocated using release_region() syscall
 ///
-/// @param pid PID of the process holding where the region should be allocated. Takes PID_SELF (0)
+/// @param pid PID of the process holding where the region should be allocated. Takes TASK_ID_SELF (0)
 /// @param addr_start The suggestion for the virutal address of the new region. The parameter must be page-alligned,
 ///                   otherwise will ignore it (as if NULL was passed). If the address is
 ///                   not occupied, the kernel will try and place the new region there. Otherwise,
@@ -106,7 +106,7 @@ mem_request_ret_t create_phys_map_region(uint64_t pid, void *addr_start, size_t 
 mem_request_ret_t transfer_region(uint64_t to_page_table, void * region, void * dest, uint64_t flags);
 
 /// @brief Releases memory region
-/// @param pid PID of the process holding the region that should be released. Takes PID_SELF (0)
+/// @param pid PID of the process holding the region that should be released. Takes TASK_ID_SELF (0)
 /// @param region The start of the region that should be released.
 /// @return SUCCESS if successfull, generic error otherwise
 result_t release_region(uint64_t pid, void *region);
@@ -120,7 +120,7 @@ typedef struct page_table_req_ret_t {
 /**
  * @brief Get the kernel page table object id for the process identified by PID.
  *        The process must have some page table asigned, otherwise an error will be returned.
- * @param pid The PID of the process. Can take PID_SELF (0)
+ * @param pid The PID of the process. Can take TASK_ID_SELF (0)
  * @return page_table_req_ret_t has the result and the page table. If the result is not SUCCESSm then
  *         page_table does not hold a meaningful value.
  */
@@ -130,7 +130,7 @@ page_table_req_ret_t get_page_table(uint64_t pid);
  * @brief Sets the segment registers of the task indicated by PID. If setting for the other process,
  *        it must not be running at the time. Otherwise, the behaviour is undefined.
  * 
- * @param pid The PID of the target task. Can take PID_SELF (0).
+ * @param pid The PID of the target task. Can take TASK_ID_SELF (0).
  * @param segment The desired segment, defined by SEGMENT_FS and SEGMENT_GS constants
  * @param addr The pointer to which the segment should be set.
  * @return result_t The result of the operation.
@@ -142,7 +142,7 @@ result_t set_segment(uint64_t pid, unsigned segment, void * addr);
  *        it must not be running at the time. Otherwise, the behaviour is undefined. Requesting the
  *        segment for self is always allowed.
  * 
- * @param pid The PID of the target task. Can take PID_SELF (0).
+ * @param pid The PID of the target task. Can take TASK_ID_SELF (0).
  * @param segment The desired segment, defined by SEGMENT_FS and SEGMENT_GS constants
  * @return syscall_r The result of the operation. If the result is SUCCESS, the value of the segment is stored in the *value* field.
  */

@@ -37,7 +37,7 @@ int pmos_request_io_permission()
     // TODO: Since kernel doesn't support permissions yet, I can just make a syscall
     // for it but this will need to be changes once that is implemented
 
-    pid_t my_pid = getpid();
+    pid_t my_pid = get_task_id();
 
     uint64_t result = pmos_syscall(SYSCALL_SET_ATTR, my_pid, ATTR_ALLOW_PORT, 1).result;
     return result ? -1 : 0;

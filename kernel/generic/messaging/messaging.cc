@@ -136,7 +136,7 @@ bool Port::send_from_user(const klib::shared_ptr<TaskDescriptor>& sender, const 
     if (not result)
         return result;
 
-    klib::shared_ptr<Message> ptr = klib::make_shared<Message>(sender, sender->pid, klib::forward<klib::vector<char>>(message));
+    klib::shared_ptr<Message> ptr = klib::make_shared<Message>(sender, sender->task_id, klib::forward<klib::vector<char>>(message));
 
     enqueue(ptr);
 
@@ -151,7 +151,7 @@ bool Port::atomic_send_from_user(const klib::shared_ptr<TaskDescriptor>& sender,
     if (not result)
         return result;
 
-    klib::shared_ptr<Message> ptr = klib::make_shared<Message>(sender, sender->pid, klib::forward<klib::vector<char>>(message));
+    klib::shared_ptr<Message> ptr = klib::make_shared<Message>(sender, sender->task_id, klib::forward<klib::vector<char>>(message));
 
     Auto_Lock_Scope scope_lock(lock);
 

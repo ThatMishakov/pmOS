@@ -51,8 +51,6 @@
 struct Interrupt_Handler;
 #endif
 
-using PID = u64;
-
 struct TaskPermissions {
 };
 
@@ -77,12 +75,14 @@ class Mem_Object;
 
 class TaskDescriptor {
 public:
+    using TaskID = u64;
+
     // Basic process stuff
     Task_Regs regs; // 200 on x86_64
     #ifdef __riscv
     u64 is_system = 0; // 0 if user space task, 1 if kernel task
     #endif
-    PID pid;
+    TaskID task_id;
 
     // Permissions
     TaskPermissions perm;
@@ -246,6 +246,9 @@ public:
     /// Cleans up the task when detected that it is dead ("tombstoning")
     /// This function is called when the dead task has been scheduled to run and is needed to clean up CPU-specific data
     void cleanup_and_release(); 
+
+    /// Gets an unused task ID
+    static TaskID get_new_task_id();
 protected:
     TaskDescriptor() = default;
 
@@ -259,12 +262,9 @@ using task_ptr = klib::shared_ptr<TaskDescriptor>;
 void init_idle();
 
 // A map of all the tasks
-using sched_map = klib::splay_tree_map<PID, klib::weak_ptr<TaskDescriptor>>;
+using sched_map = klib::splay_tree_map<TaskDescriptor::TaskID, klib::weak_ptr<TaskDescriptor>>;
 extern sched_map tasks_map;
 extern Spinlock tasks_map_lock;
-
-// Assigns unused PID
-PID assign_pid();
 
 // Returns true if the process with pid exists, false otherwise
 inline bool exists_process(u64 pid)
@@ -305,5 +305,5 @@ inline klib::shared_ptr<TaskDescriptor> get_task_throw(u64 pid)
 inline TaskDescriptor::~TaskDescriptor() noexcept
 {
     Auto_Lock_Scope scope_lock(tasks_map_lock);
-    tasks_map.erase(pid);
+    tasks_map.erase(task_id);
 }

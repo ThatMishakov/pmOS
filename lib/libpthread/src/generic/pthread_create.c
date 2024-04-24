@@ -88,7 +88,7 @@ int pthread_create(pthread_t * thread, const pthread_attr_t * attr, void *(*star
     // Set the stack
     syscall_r r_result = init_stack(thread_task_id, (void *)stack_top);
     if (r_result.result != SUCCESS) {
-        release_region(PID_SELF, stack.virt_addr);
+        release_region(TASK_ID_SELF, stack.virt_addr);
         // TODO: Kill process
         errno = -r_result.result;
         return -1;
@@ -97,7 +97,7 @@ int pthread_create(pthread_t * thread, const pthread_attr_t * attr, void *(*star
     // Prepare TLS
     struct uthread *u = __prepare_tls((void *)stack_top, stack_size);
     if (u == NULL) {
-        release_region(PID_SELF, stack.virt_addr);
+        release_region(TASK_ID_SELF, stack.virt_addr);
         // TODO: Kill process
         // errno should be set by prepare_tls
         return -1;
@@ -106,7 +106,7 @@ int pthread_create(pthread_t * thread, const pthread_attr_t * attr, void *(*star
     result_t s_result = set_segment(thread_task_id, SEGMENT_FS, __thread_pointer_from_uthread(u));
     // This should never fail but just in case
     if (s_result != SUCCESS) {
-        release_region(PID_SELF, stack.virt_addr);
+        release_region(TASK_ID_SELF, stack.virt_addr);
         __release_tls(u);
         // TODO: Kill process
         errno = -s_result;
@@ -119,7 +119,7 @@ int pthread_create(pthread_t * thread, const pthread_attr_t * attr, void *(*star
     s_result = syscall_start_process(thread_task_id, (u64)__pthread_entry_point, (u64)start_routine, (u64)arg, 0);
     if (s_result != 0) {
         __atomic_fetch_sub(&__active_threads, 1, __ATOMIC_SEQ_CST);
-        release_region(PID_SELF, stack.virt_addr);
+        release_region(TASK_ID_SELF, stack.virt_addr);
         __release_tls(u);
         // TODO: Kill process
         errno = -s_result;

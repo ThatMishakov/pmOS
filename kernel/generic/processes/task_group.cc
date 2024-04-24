@@ -95,7 +95,7 @@ void TaskGroup::atomic_register_task(klib::shared_ptr<TaskDescriptor> task)
 
     Auto_Lock_Scope lock(tasks_lock);
     try {
-        tasks.insert({task->pid, task});
+        tasks.insert({task->task_id, task});
     } catch (...) {
         Auto_Lock_Scope lock(task->task_groups_lock);
         task->task_groups.erase(shared_from_this());
@@ -113,7 +113,7 @@ void TaskGroup::atomic_register_task(klib::shared_ptr<TaskDescriptor> task)
                         .flags = 0,
                         .event_type = Event_Group_Task_Added_NUM,
                         .task_group_id = id,
-                        .task_id = task->pid,
+                        .task_id = task->task_id,
                     };
 
                     try {
@@ -144,10 +144,10 @@ void TaskGroup::atomic_remove_task(const klib::shared_ptr<TaskDescriptor>& task)
 {
     {
         Auto_Lock_Scope lock(tasks_lock);
-        if (tasks.count(task->pid) == 0)
+        if (tasks.count(task->task_id) == 0)
             throw Kern_Exception(ERROR_PORT_DOESNT_EXIST, "Task not in group");
 
-        tasks.erase(task->pid);
+        tasks.erase(task->task_id);
     }
 
     Auto_Lock_Scope lock(task->task_groups_lock);
@@ -164,7 +164,7 @@ void TaskGroup::atomic_remove_task(const klib::shared_ptr<TaskDescriptor>& task)
                         .flags = 0,
                         .event_type = Event_Group_Task_Removed_NUM,
                         .task_group_id = id,
-                        .task_id = task->pid,
+                        .task_id = task->task_id,
                     };
 
                     try {

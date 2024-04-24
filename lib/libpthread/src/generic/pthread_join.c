@@ -43,7 +43,7 @@ __thread pmos_port_t join_notify_port = INVALID_PORT;
 
 static int prepare_join_notify_port()
 {
-    ports_request_t new_port = create_port(PID_SELF, 0);
+    ports_request_t new_port = create_port(TASK_ID_SELF, 0);
     if (new_port.result != SUCCESS)
         return -1;
 

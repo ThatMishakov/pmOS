@@ -45,6 +45,6 @@ void signal_handler(int signum) {
 
 int main(int, char**) {
   signal(SIGUSR1, signal_handler);
-  kill(getpid(), SIGUSR1);
+  kill(get_task_id(), SIGUSR1);
   return -2;
 }

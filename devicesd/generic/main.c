@@ -66,7 +66,7 @@ pmos_port_t configuration_port = 0;
 const char *devicesd_port_name = "/pmos/devicesd";
 
 int main(int argc, char** argv) {
-    printf("Hello from devicesd!. My PID: %lx\n", getpid());
+    printf("Hello from devicesd!. My PID: %lx\n", get_task_id());
     
     // parse_args(argc, argv);
 
@@ -75,14 +75,14 @@ int main(int argc, char** argv) {
 
     {
         ports_request_t req;
-        req = create_port(PID_SELF, 0);
+        req = create_port(TASK_ID_SELF, 0);
         if (req.result != SUCCESS) {
             printf("Error creating port %li\n", req.result);
             return 0;
         }
         configuration_port = req.port;
 
-        req = create_port(PID_SELF, 0);
+        req = create_port(TASK_ID_SELF, 0);
         if (req.result != SUCCESS) {
             printf("Error creating port %li\n", req.result);
             return 0;

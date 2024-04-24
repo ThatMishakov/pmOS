@@ -57,7 +57,7 @@ Test tt("Global constructor test");
 double count = 0;
 std::mutex count_mutex;
 
-thread_local auto pid = getpid();
+thread_local auto pid = get_task_id();
 
 
 void thread_func(void *) {

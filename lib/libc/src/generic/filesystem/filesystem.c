@@ -418,7 +418,7 @@ struct Filesystem_Data *init_filesystem() {
     // Check if reply port exists
     if (fs_cmd_reply_port == INVALID_PORT) {
         // Create a new port for the current thread
-        ports_request_t port_request = create_port(PID_SELF, 0);
+        ports_request_t port_request = create_port(TASK_ID_SELF, 0);
         if (port_request.result != SUCCESS) {
             // Handle error: Failed to create the port
             return NULL;
@@ -783,7 +783,7 @@ int __clone_fs_data(struct Filesystem_Data ** new_data, uint64_t for_task, bool 
     // Check if reply port exists
     if (fs_cmd_reply_port == INVALID_PORT) {
         // Create a new port for the current thread
-        ports_request_t port_request = create_port(PID_SELF, 0);
+        ports_request_t port_request = create_port(TASK_ID_SELF, 0);
         if (port_request.result != SUCCESS) {
             // Handle error: Failed to create the port
             return -1;
@@ -865,7 +865,7 @@ int __clone_fs_data(struct Filesystem_Data ** new_data, uint64_t for_task, bool 
         if (result != SUCCESS) {
             // Handle error
             remove_task_from_group(for_task, new_fs_data->fs_consumer_id);
-            remove_task_from_group(PID_SELF, new_fs_data->fs_consumer_id);
+            remove_task_from_group(TASK_ID_SELF, new_fs_data->fs_consumer_id);
             destroy_filesystem(new_fs_data);
 
             if (!exclusive)
@@ -886,7 +886,7 @@ int __clone_fs_data(struct Filesystem_Data ** new_data, uint64_t for_task, bool 
         pthread_spin_unlock(&fs_data->lock);
 
     // Remove self from the group
-    remove_task_from_group(PID_SELF, new_fs_data->fs_consumer_id);
+    remove_task_from_group(TASK_ID_SELF, new_fs_data->fs_consumer_id);
 
     *new_data = new_fs_data;
     return 0;

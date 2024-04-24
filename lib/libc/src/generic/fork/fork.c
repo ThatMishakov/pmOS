@@ -46,7 +46,7 @@ uint64_t __libc_fork_inner(struct fork_for_child * child_data)
     uint64_t child_tid = r.value;
 
     // Transfer segments
-    r = get_segment(PID_SELF, SEGMENT_GS);
+    r = get_segment(TASK_ID_SELF, SEGMENT_GS);
     if (r.result != 0) {
         // TODO: Kill process
         errno = -r.result;
@@ -59,7 +59,7 @@ uint64_t __libc_fork_inner(struct fork_for_child * child_data)
         return -1;
     }
 
-    r = get_segment(PID_SELF, SEGMENT_FS);
+    r = get_segment(TASK_ID_SELF, SEGMENT_FS);
     if (r.result != 0) {
         // TODO: Kill process
         errno = -r.result;

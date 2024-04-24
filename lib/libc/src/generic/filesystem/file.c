@@ -51,7 +51,7 @@ __attribute__((visibility("hidden"))) pmos_port_t __get_fs_cmd_reply_port()
     // Check if reply port exists
     if (fs_cmd_reply_port == INVALID_PORT) {
         // Create a new port for the current thread
-        ports_request_t port_request = create_port(PID_SELF, 0);
+        ports_request_t port_request = create_port(TASK_ID_SELF, 0);
         if (port_request.result != SUCCESS) {
             // Handle error: Failed to create the port
             errno = EIO; // Set errno to appropriate error code
@@ -125,7 +125,7 @@ ssize_t __file_read(void * file_data, uint64_t consumer_id, void * buf, size_t s
     // Check if reply port exists
     if (fs_cmd_reply_port == INVALID_PORT) {
         // Create a new port for the current thread
-        ports_request_t port_request = create_port(PID_SELF, 0);
+        ports_request_t port_request = create_port(TASK_ID_SELF, 0);
         if (port_request.result != SUCCESS) {
             // Handle error: Failed to create the port
             return -1;
@@ -200,7 +200,7 @@ ssize_t __file_read(void * file_data, uint64_t consumer_id, void * buf, size_t s
 //     // Check if reply port exists
 //     if (fs_cmd_reply_port == INVALID_PORT) {
 //         // Create a new port for the current thread
-//         ports_request_t port_request = create_port(PID_SELF, 0);
+//         ports_request_t port_request = create_port(TASK_ID_SELF, 0);
 //         if (port_request.result != SUCCESS) {
 //             // Handle error: Failed to create the port
 //             return -1;
@@ -484,7 +484,7 @@ int __open_file(const char * path, int flags, mode_t mode, void * file_data, uin
     // Check if reply port exists
     if (fs_cmd_reply_port == INVALID_PORT) {
         // Create a new port for the current thread
-        ports_request_t port_request = create_port(PID_SELF, 0);
+        ports_request_t port_request = create_port(TASK_ID_SELF, 0);
         if (port_request.result != SUCCESS) {
             // Handle error: Failed to create the port
             errno = EIO; // Set errno to appropriate error code

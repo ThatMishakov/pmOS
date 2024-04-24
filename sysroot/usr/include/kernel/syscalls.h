@@ -32,7 +32,7 @@
 #define PMOS_SYSCALL_INT              0xf8
 
 #define SYSCALL_EXIT                   0
-#define SYSCALL_GETPID                 1
+#define SYSCALL_GET_TASK_ID            1
 #define SYSCALL_CREATE_PROCESS         2
 #define SYSCALL_START_PROCESS          3
 #define SYSCALL_INIT_STACK             4

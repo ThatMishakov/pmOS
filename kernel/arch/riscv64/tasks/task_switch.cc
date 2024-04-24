@@ -44,13 +44,13 @@ void TaskDescriptor::before_task_switch() {
     case FloatingPointState::Initial:
         this->fp_state = FloatingPointState::Initial;
         this->last_fp_hart_id = c->hart_id;
-        c->last_fp_task = pid;
+        c->last_fp_task = task_id;
         c->last_fp_state = FloatingPointState::Initial;
         break;
     case FloatingPointState::Clean:
         this->fp_state = FloatingPointState::Clean;
         this->last_fp_hart_id = c->hart_id;
-        c->last_fp_task = pid;
+        c->last_fp_task = task_id;
         c->last_fp_state = FloatingPointState::Clean;
         break;
     case FloatingPointState::Dirty:
@@ -61,7 +61,7 @@ void TaskDescriptor::before_task_switch() {
         save_fp_registers(fp_registers.get());
         this->fp_state = FloatingPointState::Clean;
         this->last_fp_hart_id = c->hart_id;
-        c->last_fp_task = pid;
+        c->last_fp_task = this->task_id;
         c->last_fp_state = FloatingPointState::Clean;
         break;
     }
@@ -76,7 +76,7 @@ void TaskDescriptor::after_task_switch() {
         return;
     }
 
-    if (c->last_fp_task == pid and last_fp_hart_id == c->hart_id) {
+    if (c->last_fp_task == task_id and last_fp_hart_id == c->hart_id) {
         set_fp_state(FloatingPointState::Clean);
         return;
     }

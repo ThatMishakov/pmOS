@@ -80,7 +80,7 @@ void __release_tls(struct uthread * u)
     // size_t alloc_size = alignup(memsz, align) + sizeof(struct uthread);
     // size_t size_all = alignup(alloc_size, 4096);
 
-    release_region(PID_SELF, (void *)u - alignup(memsz, align));
+    release_region(TASK_ID_SELF, (void *)u - alignup(memsz, align));
 }
 
 void * __thread_pointer_from_uthread(struct uthread * uthread)

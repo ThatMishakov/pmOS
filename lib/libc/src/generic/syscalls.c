@@ -56,9 +56,9 @@ result_t syscall_get_message_info(Message_Descriptor* descr, u64 port, uint32_t 
     return pmos_syscall(SYSCALL_GET_MSG_INFO, descr, port, flags).result;
 }
 
-u64 getpid()
+u64 get_task_id()
 {
-    return pmos_syscall(SYSCALL_GETPID).value;
+    return pmos_syscall(SYSCALL_GET_TASK_ID).value;
 }
 
 result_t request_priority(uint64_t priority)

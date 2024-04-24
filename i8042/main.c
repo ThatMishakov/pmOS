@@ -58,7 +58,7 @@ pmos_port_t ps2d_port = 0;
 uint8_t get_interrupt_number(uint32_t intnum, uint64_t int_port)
 {
     uint8_t int_vector = 0;
-    unsigned long mypid = getpid();
+    unsigned long mypid = get_task_id();
 
     IPC_Reg_Int m = {IPC_Reg_Int_NUM, IPC_Reg_Int_FLAG_EXT_INTS, intnum, 0, mypid, int_port, configuration_port};
     result_t result = send_message_port(devicesd_port, sizeof(m), (char*)&m);
@@ -282,14 +282,14 @@ int main()
 {
     {
         ports_request_t req;
-        req = create_port(PID_SELF, 0);
+        req = create_port(TASK_ID_SELF, 0);
         if (req.result != SUCCESS) {
             printf("[i8042] Error creating port %li\n", req.result);
             return 0;
         }
         configuration_port = req.port;
 
-        req = create_port(PID_SELF, 0);
+        req = create_port(TASK_ID_SELF, 0);
         if (req.result != SUCCESS) {
             printf("[i8042] Error creating port %li\n", req.result);
             return 0;

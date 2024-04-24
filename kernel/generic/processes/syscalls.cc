@@ -55,7 +55,7 @@
 using syscall_function = void (*)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t);
 klib::array<syscall_function, 41> syscall_table = {
     syscall_exit,
-    getpid,
+    get_task_id,
     syscall_create_process,
     syscall_start_process,
     syscall_init_stack,
@@ -111,14 +111,14 @@ extern "C" void syscall_handler()
     u64 arg4 = syscall_arg4(task);
     u64 arg5 = syscall_arg5(task);
     
-    //serial_logger.printf("syscall_handler: task: %d (%s) call_n: %x, arg1: %x, arg2: %x, arg3: %x, arg4: %x, arg5: %x\n", task->pid, task->name.c_str(), call_n, arg1, arg2, arg3, arg4, arg5);
+    //serial_logger.printf("syscall_handler: task: %d (%s) call_n: %x, arg1: %x, arg2: %x, arg3: %x, arg4: %x, arg5: %x\n", task->task_id, task->name.c_str(), call_n, arg1, arg2, arg3, arg4, arg5);
 
     // TODO: check permissions
 
-    //t_print_bochs("Debug: syscall %h pid %h (%s) ", call_n, get_cpu_struct()->current_task->pid, get_cpu_struct()->current_task->name.c_str());
+    //t_print_bochs("Debug: syscall %h pid %h (%s) ", call_n, get_cpu_struct()->current_task->task_id, get_cpu_struct()->current_task->name.c_str());
     //t_print_bochs(" %h %h %h %h %h ", arg1, arg2, arg3, arg4, arg5);
     if (task->attr.debug_syscalls) {
-        global_logger.printf("Debug: syscall %h pid %h\n", call_n, get_cpu_struct()->current_task->pid);
+        global_logger.printf("Debug: syscall %h pid %h\n", call_n, get_cpu_struct()->current_task->task_id);
     }
 
     try {
@@ -128,7 +128,7 @@ extern "C" void syscall_handler()
         syscall_table[call_n](arg1, arg2, arg3, arg4, arg5, 0);
     } catch (Kern_Exception &e) {
         syscall_ret_low(task) = e.err_code;
-        t_print_bochs("Debug: syscall %h pid %h (%s) ", call_n, task->pid, task->name.c_str());
+        t_print_bochs("Debug: syscall %h pid %h (%s) ", call_n, task->task_id, task->name.c_str());
         t_print_bochs(" -> %h (%s)\n", e.err_code, e.err_message);
         return;
     } catch (...) {
@@ -142,19 +142,19 @@ extern "C" void syscall_handler()
     //t_print_bochs(" -> SUCCESS\n");
 }
 
-void getpid(u64, u64, u64, u64, u64, u64)
+void get_task_id(u64, u64, u64, u64, u64, u64)
 {
     const task_ptr& task = get_cpu_struct()->current_task;
 
     syscall_ret_low(task) = SUCCESS;
-    syscall_ret_high(task) = task->pid;
+    syscall_ret_high(task) = task->task_id;
 }
 
 void syscall_create_process(u64, u64, u64, u64, u64, u64)
 {
     auto task = get_current_task();
     syscall_ret_low(task) = SUCCESS;
-    syscall_ret_high(task) = TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel::User)->pid;
+    syscall_ret_high(task) = TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel::User)->task_id;
 }
 
 void syscall_start_process(u64 pid, u64 start, u64 arg1, u64 arg2, u64 arg3, u64)
@@ -335,7 +335,7 @@ void syscall_get_message_info(u64 message_struct, u64 portno, u64 flags, u64, u6
 
     u64 msg_struct_size = sizeof(Message_Descriptor);
     Message_Descriptor desc = {
-        .sender = msg->pid_from,
+        .sender = msg->task_id_from,
         .channel = 0,
         .size = msg->size(),
     };
@@ -355,7 +355,7 @@ void syscall_set_attribute(u64 pid, u64 attribute, u64 value, u64, u64, u64)
 
     // TODO: This is *very* x86-specific and is a bad idea in general
 
-    // klib::shared_ptr<TaskDescriptor> process = pid == task->pid ? task : get_task_throw(pid);
+    // klib::shared_ptr<TaskDescriptor> process = pid == task->task_id ? task : get_task_throw(pid);
     // Interrupt_Stackframe* current_frame = &process->regs.e;
 
     // switch (attribute) {
@@ -452,7 +452,7 @@ void syscall_create_port(u64 owner, u64, u64, u64, u64, u64)
 
     klib::shared_ptr<TaskDescriptor> t;
 
-    if (owner == 0 or task->pid == owner) {
+    if (owner == 0 or task->task_id == owner) {
         t = task;
     } else {
         t = get_task_throw(owner);
@@ -481,7 +481,7 @@ void syscall_complete_interrupt(u64 intno, u64, u64, u64, u64, u64)
     auto c = get_cpu_struct();
     const task_ptr& task = c->current_task;
 
-    c->int_handlers.ack_interrupt(intno, task->pid);
+    c->int_handlers.ack_interrupt(intno, task->task_id);
     syscall_ret_low(task) = SUCCESS;
 }
 
@@ -638,7 +638,7 @@ void syscall_create_normal_region(u64 pid, u64 addr_start, u64 size, u64 access,
 
     klib::shared_ptr<TaskDescriptor> dest_task = nullptr;
 
-    if (pid == 0 or current->pid == pid)
+    if (pid == 0 or current->task_id == pid)
         dest_task = current;
 
     if (not dest_task)
@@ -660,7 +660,7 @@ void syscall_create_phys_map_region(u64 pid, u64 addr_start, u64 size, u64 acces
 
     klib::shared_ptr<TaskDescriptor> dest_task = nullptr;
 
-    if (pid == 0 or current->pid == pid)
+    if (pid == 0 or current->task_id == pid)
         dest_task = current;
 
     if (not dest_task)
@@ -683,7 +683,7 @@ void syscall_get_page_table(u64 pid, u64, u64, u64, u64, u64)
 
     klib::shared_ptr<TaskDescriptor> target{};
 
-    if (pid == 0 or current->pid == pid)
+    if (pid == 0 or current->task_id == pid)
         target = current;
     else
         target = get_task_throw(pid);
@@ -706,7 +706,7 @@ void syscall_set_segment(u64 pid, u64 segment_type, u64 ptr, u64, u64, u64)
 
     klib::shared_ptr<TaskDescriptor> target{};
 
-    if (pid == 0 or current->pid == pid)
+    if (pid == 0 or current->task_id == pid)
         target = current;
     else
         target = get_task_throw(pid);
@@ -741,7 +741,7 @@ void syscall_get_segment(u64 pid, u64 segment_type, u64, u64, u64, u64)
     klib::shared_ptr<TaskDescriptor> target{};
     u64 segment = 0;
 
-    if (pid == 0 or current->pid == pid)
+    if (pid == 0 or current->task_id == pid)
         target = current;
     else
         target = get_task_throw(pid);
@@ -835,7 +835,7 @@ void syscall_delete_region(u64 tid, u64 region_start, u64, u64, u64, u64)
 {
     syscall_ret_low(get_current_task()) = SUCCESS;
 
-    // 0 is PID_SELF
+    // 0 is TASK_ID_SELF
     const auto task = tid == 0 ? get_cpu_struct()->current_task : get_task_throw(tid);
     const auto &page_table = task->page_table;
 
@@ -872,7 +872,7 @@ void syscall_is_in_task_group(u64 pid, u64 group, u64, u64, u64, u64)
 {
     syscall_ret_low(get_current_task()) = SUCCESS;
 
-    const u64 current_pid = pid == 0 ? get_current_task()->pid : pid;
+    const u64 current_pid = pid == 0 ? get_current_task()->task_id : pid;
     const auto group_ptr = TaskGroup::get_task_group_throw(group);
 
     const bool has_task = group_ptr->atomic_has_task(current_pid);

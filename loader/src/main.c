@@ -244,7 +244,7 @@ void main()
 
     init_acpi(multiboot_info_str);
 
-    syscall_r r = syscall(SYSCALL_CREATE_PORT, getpid());
+    syscall_r r = syscall(SYSCALL_CREATE_PORT, get_task_id());
     loader_port = r.value; 
     if (r.result != SUCCESS) {
         print_str("Loader: could not create a port. Error: ");

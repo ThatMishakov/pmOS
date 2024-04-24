@@ -45,7 +45,7 @@ int create_main_port()
     if (main_port != 0)
         return 0;
 
-    ports_request_t request = create_port(PID_SELF, 0);
+    ports_request_t request = create_port(TASK_ID_SELF, 0);
     if (request.result != SUCCESS) {
         printf("Error creating port %li\n", request.result);
         return -1;
@@ -69,7 +69,7 @@ int name_main_port()
 
 int main()
 {
-    printf("Hello from VFSd! My PID: %li\n", getpid());
+    printf("Hello from VFSd! My PID: %li\n", get_task_id());
 
     // Create the main port
     int result = create_main_port();

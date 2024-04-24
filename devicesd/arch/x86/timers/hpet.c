@@ -63,7 +63,7 @@ int hpet_init_int_ioapic(volatile HPET_TIMER* timer)
 
     unsigned ioapic_input = 0;
     unsigned int_vec = 0;
-    struct int_task_descriptor desc = {getpid(), main_port};
+    struct int_task_descriptor desc = {get_task_id(), main_port};
 
     for (int i = 23; i >= 0; --i) {
         if (conf_tmr0.bits.INT_ROUTE_CAP & (0x01 << i)) {

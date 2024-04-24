@@ -2658,7 +2658,7 @@ bool UnwindCursor<A, R>::setInfoForSigReturn(Registers_arm64 &) {
   struct iovec local_iov = {&instructions, sizeof instructions};
   struct iovec remote_iov = {reinterpret_cast<void *>(pc), sizeof instructions};
   long bytesRead =
-      syscall(SYS_process_vm_readv, getpid(), &local_iov, 1, &remote_iov, 1, 0);
+      syscall(SYS_process_vm_readv, get_task_id(), &local_iov, 1, &remote_iov, 1, 0);
   // Look for instructions: mov x8, #0x8b; svc #0x0
   if (bytesRead != sizeof instructions || instructions[0] != 0xd2801168 ||
       instructions[1] != 0xd4000001)
@@ -2721,7 +2721,7 @@ bool UnwindCursor<A, R>::setInfoForSigReturn(Registers_s390x &) {
   uint16_t inst;
   struct iovec local_iov = {&inst, sizeof inst};
   struct iovec remote_iov = {reinterpret_cast<void *>(pc), sizeof inst};
-  long bytesRead = process_vm_readv(getpid(), &local_iov, 1, &remote_iov, 1, 0);
+  long bytesRead = process_vm_readv(get_task_id(), &local_iov, 1, &remote_iov, 1, 0);
   if (bytesRead == sizeof inst && (inst == 0x0a77 || inst == 0x0aad)) {
     _info = {};
     _info.start_ip = pc;

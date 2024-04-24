@@ -46,7 +46,7 @@ struct Generic_Port {
 
 struct Message {
     klib::weak_ptr<TaskDescriptor> task_from;
-    u64 pid_from = 0;
+    u64 task_id_from = 0;
     klib::vector<char> content;
 
     inline size_t size() const

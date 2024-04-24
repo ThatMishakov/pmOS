@@ -38,8 +38,8 @@
 extern "C" {
 #endif
 
-#ifndef PID_SELF
-#define PID_SELF 0
+#ifndef TASK_ID_SELF
+#define TASK_ID_SELF 0
 #endif
 
 typedef uint64_t pmos_port_t;
@@ -60,7 +60,7 @@ typedef struct ports_request_t
  * It is planned to destroy the ports automatically if the owner gets destroyed, however in current implementation it is not the case
  * and the ports do not get destroyed automatically.
  * 
- * @param owner The owner of the new port. Takes PID_SELF
+ * @param owner The owner of the new port. Takes TASK_ID_SELF
  * @param flags Currently unused. Must be set to 0.
  * @return ports_request_t the result of the operation and the id of the new port. If the operation was not successfull, *port* does
  *         not hols a meningful value.

@@ -62,11 +62,11 @@ klib::shared_ptr<TaskDescriptor> TaskDescriptor::create_process(TaskDescriptor::
     #endif
 
     // Assign a pid
-    n->pid = assign_pid();
+    n->task_id = get_new_task_id();
 
     // Add to the map of processes and to uninit list
     Auto_Lock_Scope l(tasks_map_lock);
-    tasks_map.insert({n->pid, n});
+    tasks_map.insert({n->task_id, n});
 
     Auto_Lock_Scope uninit_lock(uninit.lock);
     uninit.push_back(n);
@@ -421,6 +421,12 @@ void TaskDescriptor::cleanup_and_release()
     #endif
 
     find_new_process();
+}
+
+TaskDescriptor::TaskID TaskDescriptor::get_new_task_id()
+{
+    static TaskID next_id = 1;
+    return __atomic_fetch_add(&next_id, 1, __ATOMIC_RELAXED);
 }
 
 // TODO: Arch-specific!!!

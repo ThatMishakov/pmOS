@@ -37,7 +37,7 @@ bool have_interrupts = false;
 
 pmos_port_t serial_port = []() -> auto
 {
-    ports_request_t request = create_port(PID_SELF, 0);
+    ports_request_t request = create_port(TASK_ID_SELF, 0);
     return request.port;
 }();
 
@@ -85,14 +85,14 @@ void set_up_interrupt()
         return;
 
     // Bind to the current CPU
-    auto r = set_affinity(PID_SELF, CURRENT_CPU, 0);
+    auto r = set_affinity(TASK_ID_SELF, CURRENT_CPU, 0);
     if (r != SUCCESS)
         return;
 
     // Request interrupt from kernel
     r = set_interrupt(serial_port, gsi_num, 0);
     if (r != SUCCESS) {
-        set_affinity(PID_SELF, NO_CPU, 0);
+        set_affinity(TASK_ID_SELF, NO_CPU, 0);
         return;
     }
 
@@ -155,7 +155,7 @@ void ns16550_init()
         terminal_base, access_type, interface_type, baud_rate, parity, stop_bits, flow_control, terminal_type, interrupt_type_mask, gsi_num, pc_irq);
 
     if (access_type == 0x0) { // System memory
-        auto result = create_phys_map_region(PID_SELF, nullptr, 0x1000, PROT_READ|PROT_WRITE, reinterpret_cast<void*>(terminal_base));
+        auto result = create_phys_map_region(TASK_ID_SELF, nullptr, 0x1000, PROT_READ|PROT_WRITE, reinterpret_cast<void*>(terminal_base));
         if (result.result != SUCCESS)
             throw std::runtime_error("Failed to map serial port");
 
@@ -365,7 +365,7 @@ void react_named_port_notification(char *msg_buff, size_t size)
         .flags = 0,
         .reply_port = serial_port,
         .log_port = serial_port,
-        .task_id = getpid(),
+        .task_id = get_task_id(),
     };
 
     send_message_port(log_port, sizeof(reg), &reg);

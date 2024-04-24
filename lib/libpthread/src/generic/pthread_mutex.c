@@ -61,8 +61,8 @@ int sched_yield();
 /// @brief Gets the thread ID of the current thread
 /// @return The thread ID of the current thread
 static uint64_t get_thread_id() {
-    // Since getpid() returns the task ID instead of PID (which is tecnically wrong), use it for now
-    return getpid();
+    // Since get_task_id() returns the task ID instead of PID (which is tecnically wrong), use it for now
+    return get_task_id();
 }
 
 

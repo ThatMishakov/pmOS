@@ -195,7 +195,7 @@ void start_executables()
 
 void service_ports()
 {
-    syscall_r r = pmos_syscall(SYSCALL_CREATE_PORT, getpid());
+    syscall_r r = pmos_syscall(SYSCALL_CREATE_PORT, get_task_id());
     loader_port = r.value; 
     if (r.result != SUCCESS) {
         print_str("Loader: could not create a port. Error: ");
