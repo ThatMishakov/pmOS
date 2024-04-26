@@ -33,6 +33,8 @@
 #include <lib/list.hh>
 #include <lib/splay_tree_map.hh>
 #include "page_descriptor.hh"
+#include <memory/paging.hh>
+#include <memory/mem_protection.hh>
 
 class Page_Table;
 class Generic_Mem_Region;
@@ -84,7 +86,7 @@ public:
      * @param take_ownership Whether the region should take the ownership of the pages
      * @return klib::shared_ptr<Mem_Object> Newly created object
      */
-    static klib::shared_ptr<Mem_Object> create_from_phys(u64 phys_addr, u64 size_bytes, bool take_ownership);
+    static klib::shared_ptr<Mem_Object> create_from_phys(u64 phys_addr, u64 size_bytes, bool take_ownership, u32 max_user_access_perm = Protection::Readable | Protection::Writeable | Protection::Executable);
 
     /**
      * @brief Gets the memory object by its id. If the object is not found, a null pointer is returned
@@ -164,13 +166,21 @@ public:
     /// Returns true if the operation was successful, false if the operation can't be completed immediately and needs to be repeated
     /// Throws on errors
     bool read_to_kernel(u64 offset, void *buffer, u64 size);
+
+    /// Maps the memory object into the kernel space
+    /// Returns the pointer to the mapped memory. If the pointer is null, the operation can't be completed immediately and needs to be repeated
+    /// Throws on errors
+    void *map_to_kernel(u64 offset, u64 size, Page_Table_Argumments args);
+
+    using Protection = ::Protection;
 protected:
     Mem_Object() = delete;
 
     /// @brief Constructs an object
     /// @param page_size_log log2 of the size of page
     /// @param size_pages Size of the memory in pages. Creates the pages vector of this size
-    Mem_Object(u64 page_size_log, u64 size_pages);
+    /// @param max_user_permission Maximum user permission that can be granted to user space mapping the pages
+    Mem_Object(u64 page_size_log, u64 size_pages, u32 max_user_permission);
 
     /**
      * @brief Id of the memory region
@@ -268,6 +278,8 @@ protected:
     {
         return ptr >> page_size_log;
     }
+
+    u32 max_user_access_perm = 0;
 
 public:
     /**

@@ -35,6 +35,7 @@
 #include <paging/arch_paging.hh>
 #include <memory/mem_object.hh>
 #include <processes/tasks.hh>
+#include <dtb/dtb.hh>
 
 extern "C" void limine_main();
 extern "C" void _limine_entry();
@@ -634,6 +635,26 @@ void init_acpi() {
         rsdp = addr;
 }
 
+limine_dtb_request dtb_request = {
+    .id = LIMINE_DTB_REQUEST,
+    .revision = 0,
+    .response = nullptr,
+};
+
+void init_dtb() {
+    if (dtb_request.response == nullptr) {
+        return;
+    }
+
+    limine_dtb_response resp;
+    copy_from_phys((u64)dtb_request.response - hhdm_offset, &resp, sizeof(resp));
+
+    u64 addr = (u64)resp.dtb_ptr - hhdm_offset;
+    serial_logger.printf("DTB found at 0x%x\n", addr);
+
+    init_dtb((u64)addr);
+}
+
 
 void limine_main() {
     if (LIMINE_BASE_REVISION_SUPPORTED == false) {
@@ -652,6 +673,7 @@ void limine_main() {
 
     try {
         init_acpi();
+        init_dtb();
 
         // Init idle task page table
         idle_page_table = Arch_Page_Table::capture_initial(kernel_ptable_top);

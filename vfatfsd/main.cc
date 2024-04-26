@@ -70,7 +70,7 @@ void thread_func(void *) {
 
     std::lock_guard<std::mutex> lock(count_mutex);
     count += p;
-    // printf("Count: %li p: %li\n", (uint64_t)count, (uint64_t)p);
+    printf("Count: %li p: %li\n", (uint64_t)count, (uint64_t)p);
 }
 
 std::list<std::thread> threads;

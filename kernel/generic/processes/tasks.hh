@@ -56,7 +56,6 @@ struct TaskPermissions {
 
 enum class TaskStatus: u64 {
     TASK_RUNNING = 0,
-    TASK_RUNNING_IN_SYSTEM = 1,
     TASK_READY,
     TASK_BLOCKED,
     TASK_UNINIT,

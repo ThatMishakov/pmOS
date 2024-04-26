@@ -6,6 +6,8 @@
 #include <memory/paging.hh>
 #include <acpi/acpi.h>
 #include <sched/sched.hh>
+#include <dtb/dtb.hh>
+#include <smoldtb.h>
 
 u32 plic_read(const PLIC &plic, u32 offset)
 {
@@ -63,13 +65,13 @@ void * map_plic(u64 base, size_t size)
 // TODO: Support more than 1 PLIC
 PLIC system_plic;
 
-void init_plic()
+bool acpi_init_plic()
 {
     // TODO: Only one PLIC is supported at the moment
+
     MADT_PLIC_entry *e = get_plic_entry();
     if (e == nullptr) {
-        serial_logger.printf("Error: could not initialize PLIC. MADT PLIC entry in MADT table not found\n");
-        return;
+        return false;
     }
 
     const auto base = e->plic_address;
@@ -83,9 +85,70 @@ void init_plic()
     system_plic.plic_id = e->plic_id;
     system_plic.max_priority = e->max_priority;
 
+    return true;
+}
+
+dtb_node * dtb_get_plic_node();
+
+bool dtb_init_plic()
+{
+    if (not have_dtb())
+        return false;
+
+    auto plic = dtb_get_plic_node();
+    if (plic == nullptr)
+        return false;
+
+    auto prop = dtb_find_prop(plic, "reg");
+    if (not prop) {
+        serial_logger.printf("Could not find prop \"reg\" in DTB plic node\n");
+        return false;
+    }
+    dtb_pair reg;
+    dtb_read_prop_pairs(prop, {2, 2}, &reg);
+
+    prop = dtb_find_prop(plic, "riscv,ndev");
+    if (not prop) {
+        serial_logger.printf("Could not find prop \"riscv,ndev\" in DTB plic node\n");
+        return false;
+    }
+    size_t ndev = 0;
+    dtb_read_prop_values(prop, 1, &ndev);
+
+    const u64 base = reg.a;
+    const u64 size = reg.b;
+    const auto virt_base = map_plic(base, size);
+    serial_logger.printf("Mapping PLIC at %x size %x -> %x\n", base, size, virt_base);
+
+    system_plic.virt_base = reinterpret_cast<volatile u32 *>(virt_base);
+    system_plic.hardware_id = 0;
+    system_plic.gsi_base = 0; // TODO: Don't know if it's 0 or it's has to be read from DTB
+    system_plic.external_interrupt_sources = ndev;
+    system_plic.plic_id = 0;
+    system_plic.max_priority = -1; // TODO: Have to take a look at it again
+
+    return true;
+}
+
+void init_plic()
+{
+    bool initialized_plic = false;
+    do {
+        initialized_plic = acpi_init_plic();
+        if (initialized_plic)
+            continue;
+
+        initialized_plic = dtb_init_plic();
+    } while (0);
+
+    if (not initialized_plic) {
+        serial_logger.printf("Failed to initialize PLIC\n");
+        return;
+    }
+
     // Print debug information
     serial_logger.printf("PLIC: base: 0x%lx, size: 0x%lx, virt_base: 0x%lx, hardware_id: %d, gsi_base: %d, external_interrupt_sources: %d, plic_id: %d, max_priority: %d\n",
-                         base, size, (u64)virt_base, system_plic.hardware_id, system_plic.gsi_base, system_plic.external_interrupt_sources, system_plic.plic_id, system_plic.max_priority);
+                         0, 0, (u64)system_plic.virt_base, system_plic.hardware_id, system_plic.gsi_base, system_plic.external_interrupt_sources, system_plic.plic_id, system_plic.max_priority);
 }
 
 void plic_interrupt_enable(u32 interrupt_id)

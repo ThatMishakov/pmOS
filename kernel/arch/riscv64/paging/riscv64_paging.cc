@@ -512,7 +512,7 @@ void RISCV64_Page_Table::free_user_pages()
 
     for (u64 i = 0; i < 256; ++i) {
         RISCV64_PTE *entry = &active_pt[i];
-        if (entry->valid) {
+        if (entry->valid and not entry->is_special()) {
             assert(not entry->is_leaf());
             free_pages_in_level(entry->ppn << 12, riscv64_paging_levels - 1);
             kernel_pframe_allocator.free_ppn(entry->ppn);

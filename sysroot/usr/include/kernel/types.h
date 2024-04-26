@@ -39,6 +39,8 @@ typedef signed short i16;
 typedef signed int i32;
 typedef signed long i64;
 
+typedef unsigned long ulong;
+
 #define KB(x) ((u64)(x) << 10)
 #define MB(x) ((u64)(x) << 20)
 #define GB(x) ((u64)(x) << 30)

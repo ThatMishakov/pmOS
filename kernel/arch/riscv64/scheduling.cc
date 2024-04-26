@@ -41,6 +41,9 @@
 #include <cpus/floating_point.hh>
 #include <interrupts/plic.hh>
 
+#include <dtb/dtb.hh>
+#include <smoldtb.h>
+
 extern klib::shared_ptr<Arch_Page_Table> idle_page_table;
 
 extern "C" void set_cpu_struct(CPU_Info *);
@@ -85,16 +88,43 @@ RCHT * get_rhct()
 void initialize_timer()
 {
     if (timer_needs_initialization()) {
-        RCHT * rhct = get_rhct();
-        if (rhct == nullptr) {
-            serial_logger.printf("Error: could not initialize timer. RHCT table not found\n");
+        u64 time_base_frequency = 0;
+
+        do {
+            RCHT * rhct = get_rhct();
+            if (rhct != nullptr) {
+                time_base_frequency = rhct->time_base_frequency;
+            } else if (have_dtb()) {
+                auto node = dtb_find("/cpus");
+                if (!node) {
+                    serial_logger.printf("Could not find /cpus DTB node\n");
+                    continue;
+                }
+
+                auto prop = dtb_find_prop(node, "timebase-frequency");
+                if (!prop) {
+                    serial_logger.printf("Could not find timebase-frequency property\n");
+                    continue;
+                }
+
+                size_t freq = 0;
+                dtb_read_prop_values(prop, 1, &freq);
+                time_base_frequency = freq;
+            } else {
+                serial_logger.printf("Could not get RHCT or DTB\n");
+                break;
+            }
+        } while (false);
+
+        if (time_base_frequency == 0) {
+            serial_logger.printf("Could not get time base frequency\n");
             return;
         }
 
-        global_logger.printf("[Kernel] Info: time base frequency: %i\n", rhct->time_base_frequency);
-        serial_logger.printf("Info: time base frequency: %i\n", rhct->time_base_frequency);
+        global_logger.printf("[Kernel] Info: time base frequency: %i\n", time_base_frequency);
+        serial_logger.printf("Info: time base frequency: %i\n", time_base_frequency);
 
-        set_timer_frequency(rhct->time_base_frequency);
+        set_timer_frequency(time_base_frequency);
     }
 }
 
@@ -120,7 +150,7 @@ MADT * get_madt()
     return rhct_virt;
 }
 
-MADT_RINTC_entry * get_hart_rtnic(u64 hart_id)
+MADT_RINTC_entry * acpi_get_hart_rtnic(u64 hart_id)
 {
     MADT * m = get_madt();
     if (m == nullptr)
@@ -140,9 +170,119 @@ MADT_RINTC_entry * get_hart_rtnic(u64 hart_id)
     return nullptr;
 }
 
+static dtb_node *find_cpu(u32 hart_id)
+{
+    auto node = dtb_find("/cpus");
+    if (!node)
+        return nullptr;
+
+    auto child = dtb_get_child(node);
+    while (child) {
+        // TODO: Potentially, it might be necessary to check the compatible property
+        // TODO: Instead of iterating, cpu@<reg> should be used
+
+        size_t reg = 0;
+        auto prop = dtb_find_prop(child, "reg");
+        if (prop) {
+            dtb_read_prop_values(prop, 1, &reg);
+            if (reg == hart_id)
+                return child;
+        }
+
+        child = dtb_get_sibling(child);
+    }
+
+    return nullptr;
+}
+
+// TODO: Move this to somewhere else...
+dtb_node * dtb_get_plic_node()
+{
+    auto plic = dtb_find_compatible(nullptr, "sifive,plic-1.0.0");
+    if (plic == nullptr)
+        plic = dtb_find_compatible(nullptr, "riscv,plic0");
+
+    return plic;
+}
+
+ReturnStr<u32> dtb_get_hart_rtnic_id(u64 hart_id)
+{
+    if (not have_dtb())
+        return {ERROR_GENERAL, 0};
+
+    auto cpu = find_cpu(hart_id);
+    if (cpu == nullptr) {
+        serial_logger.printf("Could not find CPU DTB node for hart id %i\n", hart_id);
+        return {ERROR_GENERAL, 0};
+    }
+    
+    auto intc = dtb_find_child(cpu, "interrupt-controller");
+    if (intc == nullptr) {
+        serial_logger.printf("Could not find interrupt-controller node for hart id %i\n", hart_id);
+        return {ERROR_GENERAL, 0};
+    }
+
+    // I have no idea if I am doing it right, but from reading Linux source and from what I could find
+    // this is what has to be done...
+    u32 phandle = 0;
+    auto prop = dtb_find_prop(intc, "phandle");
+    if (prop == nullptr) {
+        serial_logger.printf("Could not find phandle property for interrupt-controller node\n");
+        return {ERROR_GENERAL, 0};
+    }
+    dtb_read_prop_values(prop, 1, (size_t *)&phandle);
+
+
+    auto plic = dtb_get_plic_node();
+
+    if (plic == nullptr) {
+        serial_logger.printf("Could not find PLIC node for hart id %i\n", hart_id);
+        return {ERROR_GENERAL, 0};
+    }
+
+    prop = dtb_find_prop(plic, "#interrupt-cells");
+    if (prop == nullptr) {
+        serial_logger.printf("Could not find #interrupt-cells property for PLIC node\n");
+        return {ERROR_GENERAL, 0};
+    }
+
+    u32 cells = 0;
+    dtb_read_prop_values(prop, 1, (size_t *)&cells);
+    if (cells != 1) {
+        // cells > 1 might be right, but I have no idea what its meaning would be
+        serial_logger.printf("Unexpected #interrupt-cells value: %i (wanted 1)\n", cells);
+        return {ERROR_GENERAL, 0};
+    }
+
+    prop = dtb_find_prop(plic, "interrupts-extended");
+    if (prop == nullptr) {
+        serial_logger.printf("Could not find interrupts-extended property for PLIC node\n");
+        return {ERROR_GENERAL, 0};
+    }
+
+    size_t count = dtb_read_prop_pairs(prop, {1, 1}, nullptr);
+    klib::unique_ptr<dtb_pair[]> pairs(new dtb_pair[count]);
+    dtb_read_prop_pairs(prop, {1, 1}, pairs.get());
+    for (size_t i = 0; i < count; ++i)
+        if (pairs[i].a == phandle and pairs[i].b == IRQ_S_EXT)
+            return {SUCCESS, (u32)i};
+
+    return {ERROR_GENERAL, 0};
+}
+
+
+ReturnStr<u32> get_hart_rtnic_id(u64 hart_id)
+{
+    auto e = acpi_get_hart_rtnic(hart_id);
+    if (e)
+        return {SUCCESS, e->external_interrupt_controller_id};
+
+    return dtb_get_hart_rtnic_id(hart_id);
+}
+
 ReturnStr<u32> get_apic_processor_uid(u64 hart_id)
 {
-    auto e = get_hart_rtnic(hart_id);
+    auto e = acpi_get_hart_rtnic(hart_id);
     if (e)
         return {SUCCESS, e->acpi_processor_id};
 
@@ -150,7 +290,7 @@ ReturnStr<u32> get_apic_processor_uid(u64 hart_id)
 }
 
 // TODO: Think about return type
-ReturnStr<klib::string> get_isa_string(u64 hart_id)
+ReturnStr<klib::string> acpi_get_isa_string(u64 hart_id)
 {
     auto apic_id = get_apic_processor_uid(hart_id);
     if (apic_id.result != SUCCESS)
@@ -192,6 +332,38 @@ ReturnStr<klib::string> get_isa_string(u64 hart_id)
 
     serial_logger.printf("Could not find ISA string for ACPI processor UID %i\n", apic_id.val);
     return {ERROR_GENERAL, {}};
+}
+
+ReturnStr<klib::string> dtb_get_isa_string(u64 hart_id)
+{
+    if (not have_dtb())
+        return {ERROR_GENERAL, {}};
+
+    auto cpu = find_cpu(hart_id);
+    if (cpu == nullptr) {
+        serial_logger.printf("Could not find CPU DTB node for hart id %i\n", hart_id);
+        return {ERROR_GENERAL, {}};
+    }
+
+    auto prop = dtb_find_prop(cpu, "riscv,isa");
+    if (prop == nullptr) {
+        serial_logger.printf("Could not find ISA string property for hart id %i\n", hart_id);
+        return {ERROR_GENERAL, {}};
+    }
+
+    auto str = dtb_read_string(prop, 0);
+    return {SUCCESS, klib::string(str)};
+}
+
+ReturnStr<klib::string> get_isa_string(u64 hart_id)
+{
+    ReturnStr<klib::string> ret;
+    ret = acpi_get_isa_string(hart_id);
+    if (ret.result == SUCCESS)
+        return ret;
+
+    ret = dtb_get_isa_string(hart_id);
+    return ret;
 }
 
 void initialize_fp(const klib::string & isa_string)
@@ -260,11 +432,11 @@ void init_scheduling()
     }
 
     // Set EIC ID
-    auto e = get_hart_rtnic(hart_id);
-    if (!e) {
-        serial_logger.printf("Could not get EIC ID\n");
+    auto e = get_hart_rtnic_id(hart_id);
+    if (e.result != SUCCESS) {
+        serial_logger.printf("Could not get EIC ID: %i\n", e.result);
     } else {
-        i->eic_id = e->external_interrupt_controller_id;
+        i->eic_id = e.val;
         global_logger.printf("[Kernel] EIC ID: %i\n", i->eic_id);
         serial_logger.printf("EIC ID: %i\n", i->eic_id);
     }
@@ -285,7 +457,7 @@ void init_scheduling()
     init_plic();
 
     // Enable all interrupts
-    plic_set_threshold(0);
+    //plic_set_threshold(0);
 
     serial_logger.printf("Scheduling initialized\n");
 }

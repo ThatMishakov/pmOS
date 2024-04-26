@@ -89,7 +89,7 @@ u64 TaskDescriptor::init_stack()
     this->page_table->atomic_create_normal_region(
         stack_page_start, 
         stack_size, 
-        Page_Table::Writeable | Page_Table::Readable, 
+        Page_Table::Protection::Writeable | Page_Table::Protection::Readable, 
         true,
         stack_region_name, 
         -1);
@@ -276,9 +276,9 @@ bool TaskDescriptor::load_elf(klib::shared_ptr<Mem_Object> elf, klib::string nam
             const u64 file_offset = ph.p_offset & ~0xFFFUL;
             const u64 size = (ph.p_memsz + 0xFFF) & ~0xFFFUL;
             
-            u8 protection_mask = (ph.flags & ELF_FLAG_EXECUTABLE) ? Page_Table::Executable : 0;
-               protection_mask |= (ph.flags & ELF_FLAG_READABLE) ? Page_Table::Readable : 0;
-               protection_mask |= (ph.flags & ELF_FLAG_WRITABLE) ? Page_Table::Writeable : 0;
+            u8 protection_mask = (ph.flags & ELF_FLAG_EXECUTABLE) ? Page_Table::Protection::Executable : 0;
+               protection_mask |= (ph.flags & ELF_FLAG_READABLE) ? Page_Table::Protection::Readable : 0;
+               protection_mask |= (ph.flags & ELF_FLAG_WRITABLE) ? Page_Table::Protection::Writeable : 0;
 
             table->atomic_create_mem_object_region(
                 region_start, 
@@ -300,9 +300,9 @@ bool TaskDescriptor::load_elf(klib::shared_ptr<Mem_Object> elf, klib::string nam
             const u64 file_size = ph.p_filesz;
             const u64 object_start_offset = ph.p_vaddr - region_start;
 
-            u8 protection_mask = (ph.flags & ELF_FLAG_EXECUTABLE) ? Page_Table::Executable : 0;
-               protection_mask |= (ph.flags & ELF_FLAG_READABLE) ? Page_Table::Readable : 0;
-               protection_mask |= (ph.flags & ELF_FLAG_WRITABLE) ? Page_Table::Writeable : 0;
+            u8 protection_mask = (ph.flags & ELF_FLAG_EXECUTABLE) ? Page_Table::Protection::Executable : 0;
+               protection_mask |= (ph.flags & ELF_FLAG_READABLE) ? Page_Table::Protection::Readable : 0;
+               protection_mask |= (ph.flags & ELF_FLAG_WRITABLE) ? Page_Table::Protection::Writeable : 0;
 
             table->atomic_create_mem_object_region(
                 region_start, 
@@ -339,7 +339,7 @@ bool TaskDescriptor::load_elf(klib::shared_ptr<Mem_Object> elf, klib::string nam
         u64 tls_virt = table->atomic_create_normal_region(
             0,
             pa_size,
-            Page_Table::Readable | Page_Table::Writeable,
+            Page_Table::Protection::Readable | Page_Table::Protection::Writeable,
             false,
             name + "_tls",
             0);
@@ -390,7 +390,7 @@ bool TaskDescriptor::load_elf(klib::shared_ptr<Mem_Object> elf, klib::string nam
     const u64 pos = table->atomic_create_normal_region(
         0,
         tag_size_page,
-        Page_Table::Readable | Page_Table::Writeable,
+        Page_Table::Protection::Readable | Page_Table::Protection::Writeable,
         false,
         name + "_load_tags",
         0

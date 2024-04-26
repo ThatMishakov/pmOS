@@ -185,7 +185,7 @@ bool prepare_user_buff_rd(const char* buff, size_t size)
 
         for (u64 i = addr_start; i < end; ++i) {
             u64 page = i & ~0xfffULL;
-            bool result = current_task->page_table->prepare_user_page(page, Page_Table::Readable);
+            bool result = current_task->page_table->prepare_user_page(page, Page_Table::Protection::Readable);
             if (not result)
                 current_task->atomic_block_by_page(page, &current_task->page_table->blocked_tasks);
             if (not result)
@@ -218,7 +218,7 @@ bool prepare_user_buff_wr(char* buff, size_t size)
         current_task->request_repeat_syscall();
         for (u64 i = addr_start; i < end and avail; ++i) {
             u64 page = i & ~0xfffULL;
-            avail = current_task->page_table->prepare_user_page(page, Page_Table::Writeable);
+            avail = current_task->page_table->prepare_user_page(page, Page_Table::Protection::Writeable);
             if (not avail)
                 current_task->atomic_block_by_page(page, &current_task->page_table->blocked_tasks);
         }

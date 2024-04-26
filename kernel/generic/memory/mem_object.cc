@@ -34,9 +34,10 @@
 #include <exceptions.hh>
 #include "paging.hh"
 #include "temp_mapper.hh"
+#include "virtmem.hh"
 
-Mem_Object::Mem_Object(u64 page_size_log, u64 size_pages):
-        page_size_log(page_size_log), pages(size_pages), pages_size(size_pages) {};
+Mem_Object::Mem_Object(u64 page_size_log, u64 size_pages, u32 max_user_permissions):
+        page_size_log(page_size_log), pages(size_pages), pages_size(size_pages), max_user_access_perm(max_user_permissions) {};
 
 Mem_Object::~Mem_Object()
 {
@@ -49,7 +50,7 @@ Mem_Object::~Mem_Object()
 klib::shared_ptr<Mem_Object> Mem_Object::create(u64 page_size_log, u64 size_pages)
 {
     // Create new object
-    klib::shared_ptr<Mem_Object> ptr(new Mem_Object(page_size_log, size_pages));
+    klib::shared_ptr<Mem_Object> ptr(new Mem_Object(page_size_log, size_pages, Protection::Readable | Protection::Writeable | Protection::Executable));
 
     // Atomically insert into the object storage
     atomic_push_global_storage(ptr);
@@ -57,14 +58,14 @@ klib::shared_ptr<Mem_Object> Mem_Object::create(u64 page_size_log, u64 size_page
     return ptr;
 }
 
-klib::shared_ptr<Mem_Object> Mem_Object::create_from_phys(u64 phys_addr, u64 size_bytes, bool take_ownership)
+klib::shared_ptr<Mem_Object> Mem_Object::create_from_phys(u64 phys_addr, u64 size_bytes, bool take_ownership, u32 max_user_permissions)
 {
     const u64 size_alligned = (size_bytes + 0xFFF) & ~0xFFFUL;
     const u64 start_alligned = phys_addr & ~0xFFFUL;
     const u64 pages_count = size_alligned >> 12;
     
     // Create new object
-    klib::shared_ptr<Mem_Object> ptr(new Mem_Object(12, pages_count));
+    klib::shared_ptr<Mem_Object> ptr(new Mem_Object(12, pages_count, max_user_permissions));
 
     // Lock the object so nobody overwrites it while the pages are inserted
     Auto_Lock_Scope l(ptr->lock);
@@ -141,7 +142,7 @@ Page_Descriptor Mem_Object::atomic_request_page(u64 offset)
 Page_Descriptor Mem_Object::request_page(u64 offset)
 {
     const auto index = offset >> page_size_log;
-        
+
     if (pages_size <= index)
         throw Kern_Exception(ERROR_OUT_OF_RANGE, "Trying to access to memory out of the Page Descriptor's range");
 
@@ -286,4 +287,52 @@ bool Mem_Object::read_to_kernel(u64 offset, void *buffer, u64 size)
     }
 
     return true;
+}
+
+void *Mem_Object::map_to_kernel(u64 offset, u64 size, Page_Table_Argumments args)
+{
+    // Lock might be needed here?
+    // Also, TODO: magic numbers everywhere
+    u64 object_size_bytes = pages_size*4096;
+
+    assert((offset&0xfff) == 0);
+    assert(size > 0 && (size&0xfff) == 0);
+    assert(offset + size <= object_size_bytes);
+
+    const size_t size_pages = size >> 12;
+
+    // Make sure all pages are allocated
+    for (size_t i = 0; i < size; i += 4096) {
+        auto p = atomic_request_page(offset + i);
+        if (not p.available)
+            return nullptr;
+    }
+
+    void * mem_virt = kernel_space_allocator.virtmem_alloc(size >> 12);
+    if (mem_virt == nullptr)
+        throw Kern_Exception(ERROR_GENERAL, "could not get virtual memory for mapping an object");
+
+
+    size_t i = 0;
+    try {
+        for (i = 0; i < size; i += 4096) {
+            auto p = atomic_request_page(offset + i);
+            assert(!p.owning);
+            Page_Table_Argumments arg = args;
+            arg.extra |= PAGING_FLAG_NOFREE;
+            
+            const u64 phys_addr = p.page_ptr;
+            void * const virt_addr = (void *)(ulong(mem_virt) + i);
+            map_kernel_page(phys_addr, virt_addr, arg);
+        }
+    } catch (...) {
+        for (size_t ii = 0; ii < i; ++ii) {
+            void * const virt_addr = (void *)(ulong(mem_virt) + ii);
+            unmap_kernel_page(virt_addr);
+        }
+
+        kernel_space_allocator.virtmem_free(mem_virt, size_pages);
+    }
+
+    return mem_virt;
 }

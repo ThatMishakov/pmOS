@@ -149,7 +149,7 @@ void TaskDescriptor::switch_to()
 
     c->current_task->before_task_switch();
 
-    // Switch task task
+    // Switch task
     if (status != TaskStatus::TASK_DYING)
         // If the task is dying, don't change its status and let the scheduler handle it when returning from the kernel
         status = TaskStatus::TASK_RUNNING;

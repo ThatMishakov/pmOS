@@ -28,6 +28,7 @@
 
 #pragma once
 #include <types.hh>
+#include <memory/mem_object.hh>
 
 struct fdt_header {
     u32 magic;
@@ -41,3 +42,14 @@ struct fdt_header {
     u32 size_dt_strings;
     u32 size_dt_struct;
 };
+
+constexpr u32 FDT_MAGIC = 0xD00DFEED;
+
+void init_dtb(unsigned long dtb_phys_addr);
+
+bool have_dtb();
+
+// Where did it come from? arch/riscv/include/asm/csr.h in the Linux kernel source code
+constexpr u32 IRQ_S_EXT = 9;
+
+extern klib::shared_ptr<Mem_Object> dtb_object;

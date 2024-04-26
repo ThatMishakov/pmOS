@@ -37,6 +37,7 @@
 #include <lib/splay_tree_map.hh>
 #include "mem_object.hh"
 #include <sched/sched_queue.hh>
+#include "mem_protection.hh"
 
 /// TODO: I don't use this anymore but it still comes up in a couple of places and needs to be removed
 #define PAGE_NORMAL  0
@@ -114,11 +115,7 @@ public:
     }
 
     /// ORable flags that can be used to indicate different protection levels.
-    enum Protection {
-        Readable = 0x01,
-        Writeable = 0x02,
-        Executable = 0x04,
-    };
+    using Protection = ::Protection;
 
     /// Flags used by regions properties and creation
     enum Flags {
