@@ -97,37 +97,58 @@ void init_modules()
 
 uint64_t rsdp_desc = 0;
 
+struct fdt_descriptor {
+    uint64_t memory_object;
+    uint32_t start_offset;
+    uint32_t mem_object_size;
+} fdt_desc = {};
+
 void init_misc()
 {
-    struct load_tag_generic * t = get_load_tag(LOAD_TAG_FRAMEBUFFER, __load_data_kernel, __load_data_size_kernel);
-    if (t == NULL)
-        return;
+    do {
+        struct load_tag_generic * t = get_load_tag(LOAD_TAG_FRAMEBUFFER, __load_data_kernel, __load_data_size_kernel);
+        if (t == NULL)
+            continue;
 
-    fb = malloc(sizeof(struct framebuffer));
-    if (fb == NULL)
-        return;
+        fb = malloc(sizeof(struct framebuffer));
+        if (fb == NULL)
+            continue;
 
-    struct load_tag_framebuffer *tt = (struct load_tag_framebuffer*)t;
+        struct load_tag_framebuffer *tt = (struct load_tag_framebuffer*)t;
 
-    fb->framebuffer_addr = tt->framebuffer_addr;
-    fb->framebuffer_width = tt->framebuffer_width;
-    fb->framebuffer_height = tt->framebuffer_height;
-    fb->framebuffer_pitch = tt->framebuffer_pitch;
-    fb->framebuffer_bpp = tt->framebuffer_bpp;
-    fb->framebuffer_memory_model = tt->memory_model;
-    fb->framebuffer_red_mask_size = tt->red_mask_size;
-    fb->framebuffer_red_mask_shift = tt->red_mask_shift;
-    fb->framebuffer_green_mask_size = tt->green_mask_size;
-    fb->framebuffer_green_mask_shift = tt->green_mask_shift;
-    fb->framebuffer_blue_mask_size = tt->blue_mask_size;
-    fb->framebuffer_blue_mask_shift = tt->blue_mask_shift;
+        fb->framebuffer_addr = tt->framebuffer_addr;
+        fb->framebuffer_width = tt->framebuffer_width;
+        fb->framebuffer_height = tt->framebuffer_height;
+        fb->framebuffer_pitch = tt->framebuffer_pitch;
+        fb->framebuffer_bpp = tt->framebuffer_bpp;
+        fb->framebuffer_memory_model = tt->memory_model;
+        fb->framebuffer_red_mask_size = tt->red_mask_size;
+        fb->framebuffer_red_mask_shift = tt->red_mask_shift;
+        fb->framebuffer_green_mask_size = tt->green_mask_size;
+        fb->framebuffer_green_mask_shift = tt->green_mask_shift;
+        fb->framebuffer_blue_mask_size = tt->blue_mask_size;
+        fb->framebuffer_blue_mask_shift = tt->blue_mask_shift;
+    } while (0);
 
+    do {
+        struct load_tag_rsdp * tr = (struct load_tag_rsdp *)get_load_tag(LOAD_TAG_RSDP, __load_data_kernel, __load_data_size_kernel);
+        if (tr == NULL)
+            continue;
 
-    struct load_tag_rsdp * tr = (struct load_tag_rsdp *)get_load_tag(LOAD_TAG_RSDP, __load_data_kernel, __load_data_size_kernel);
-    if (tr == NULL)
-        return;
+        rsdp_desc = tr->rsdp;
+    } while (0);
 
-    rsdp_desc = tr->rsdp;
+    do {
+        struct load_tag_fdt * tr = (struct load_tag_fdt *)get_load_tag(LOAD_TAG_FDT, __load_data_kernel, __load_data_size_kernel);
+        if (tr == NULL)
+            continue;
+
+        fdt_desc = (struct fdt_descriptor){
+            .memory_object = tr->fdt_memory_object,
+            .start_offset = tr->start_offset,
+            .mem_object_size = tr->mem_object_size
+        };
+    }
 }
 
 void provide_framebuffer(pmos_port_t port, uint32_t flags)
@@ -239,12 +260,13 @@ void service_ports()
             IPC_ACPI_RSDT_Reply reply = {};
 
             reply.type = 0x61;
-            reply.result = 0;
+            reply.result = -ENOSYS;
             reply.descriptor = 0;
 
             if (rsdp_desc != 0) {
-                reply.result = 1;
-                reply.descriptor = (uint64_t *)rsdp_desc;
+                reply.result = 0;
+                reply.descriptor = (void *)rsdp_desc;
+                print_str("********************************************\n");
             }
 
             pmos_syscall(SYSCALL_SEND_MSG_PORT, ptr->reply_channel, sizeof(reply), &reply);

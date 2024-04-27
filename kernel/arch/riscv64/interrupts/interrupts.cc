@@ -69,6 +69,11 @@ extern "C" void print_stack_trace()
     print_stack_trace_fp();
 }
 
+void print_stack_trace(Logger& logger)
+{
+    print_stack_trace_fp();
+}
+
 void page_fault(u64 virt_addr, u64 scause)
 {
     const u64 page = virt_addr & ~0xfffUL;

@@ -99,13 +99,30 @@ bool dtb_init_plic()
     if (plic == nullptr)
         return false;
 
-    auto prop = dtb_find_prop(plic, "reg");
+    size_t address_cells, size_cells;
+    auto parent = dtb_get_parent(plic);
+
+    auto prop = dtb_find_prop(parent, "#address-cells");
+    if (prop == nullptr) {
+        serial_logger.printf("Could not find prop \"#address-cells\" in DTB plic node\n");
+        return false;
+    }
+    dtb_read_prop_values(prop, 1, &address_cells);
+
+    prop = dtb_find_prop(parent, "#size-cells");
+    if (prop == nullptr) {
+        serial_logger.printf("Could not find prop \"#size-cells\" in DTB plic node\n");
+        return false;
+    }
+    dtb_read_prop_values(prop, 1, &size_cells);
+
+    prop = dtb_find_prop(plic, "reg");
     if (not prop) {
         serial_logger.printf("Could not find prop \"reg\" in DTB plic node\n");
         return false;
     }
     dtb_pair reg;
-    dtb_read_prop_pairs(prop, {2, 2}, &reg);
+    dtb_read_prop_pairs(prop, {address_cells, size_cells}, &reg);
 
     prop = dtb_find_prop(plic, "riscv,ndev");
     if (not prop) {
@@ -190,6 +207,9 @@ void plic_set_threshold(u32 threshold)
 {
     const auto c = get_cpu_struct();
     const u16 context_id = c->eic_id & 0xffff;
+
+    if (system_plic.virt_base == nullptr)
+        return;
 
     const u32 offset = PLIC_THRESHOLD_OFFSET + (context_id * PLIC_THRESHOLD_CONTEXT_STRIDE);
     plic_write(system_plic, offset, threshold);

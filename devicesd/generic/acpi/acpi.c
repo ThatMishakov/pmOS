@@ -137,8 +137,8 @@ void request_acpi_tables()
         return;
     }
 
-    if (reply->result == 0) {
-        printf("Warning: Did not get RSDT table\n");
+    if (reply->result != 0) {
+        printf("Warning: Did not get RSDT table: %i\n", reply->result);
     } else {
         rsdp_desc = (RSDP_descriptor20 *)reply->descriptor;
     }

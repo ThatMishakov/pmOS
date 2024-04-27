@@ -130,6 +130,7 @@ extern "C" void syscall_handler()
         syscall_ret_low(task) = e.err_code;
         t_print_bochs("Debug: syscall %h pid %h (%s) ", call_n, task->task_id, task->name.c_str());
         t_print_bochs(" -> %h (%s)\n", e.err_code, e.err_message);
+        task->pop_repeat_syscall();
         return;
     } catch (...) {
         t_print_bochs("[Kernel] Caught unknown exception\n");

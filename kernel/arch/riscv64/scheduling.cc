@@ -457,7 +457,7 @@ void init_scheduling()
     init_plic();
 
     // Enable all interrupts
-    //plic_set_threshold(0);
+    plic_set_threshold(0);
 
     serial_logger.printf("Scheduling initialized\n");
 }

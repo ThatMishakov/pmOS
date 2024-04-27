@@ -569,6 +569,22 @@ klib::unique_ptr<load_tag_generic> construct_load_tag_rsdp()
     return tag;
 }
 
+klib::unique_ptr<load_tag_generic> construct_load_tag_fdt()
+{
+    if (not dtb_object)
+        return nullptr;
+
+    klib::unique_ptr<load_tag_generic> tag = (load_tag_generic *) new load_tag_fdt;
+
+    auto t = (load_tag_fdt *)tag.get();
+    t->header = LOAD_TAG_FDT_HEADER;
+    t->fdt_memory_object = dtb_object->get_id();
+    t->start_offset = 0; // TODO?
+    t->mem_object_size = dtb_object->size_bytes();
+
+    return tag;
+}
+
 
 klib::shared_ptr<Arch_Page_Table> idle_page_table = nullptr;
 
@@ -599,6 +615,10 @@ void init_task1()
     klib::vector<klib::unique_ptr<load_tag_generic>> tags;
     tags = construct_load_tag_framebuffer();
     auto t = construct_load_tag_rsdp();
+    if (t)
+        tags.push_back(klib::move(t));
+
+    t = construct_load_tag_fdt();
     if (t)
         tags.push_back(klib::move(t));
     tags.push_back(construct_load_tag_for_modules());

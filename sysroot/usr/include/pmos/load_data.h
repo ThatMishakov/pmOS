@@ -39,6 +39,7 @@ enum {
     LOAD_TAG_LOAD_MODULES = 5,
     LOAD_TAG_FRAMEBUFFER = 6,
     LOAD_TAG_RSDP = 7,
+    LOAD_TAG_FDT = 8,
 };
 
 /// @brief Header for a load tag
@@ -120,6 +121,22 @@ struct load_tag_rsdp {
     uint64_t rsdp; //< Pointer to the RSDP in the physical memory
 };
 #define LOAD_TAG_RSDP_HEADER {LOAD_TAG_RSDP, 0, sizeof(struct load_tag_rsdp)}
+
+/// @brief FDT tag
+///
+/// This tag passes the memory object containing the read-only flat device tree, passed by the bootloader
+struct load_tag_fdt {
+    struct load_tag_generic header;
+    /// Memory object containing the flat binary tree
+    uint64_t fdt_memory_object;
+
+    /// Start offset inside the memory object
+    uint32_t start_offset;
+
+    /// Size of the memory object in bytes
+    uint32_t mem_object_size;
+};
+#define LOAD_TAG_FDT_HEADER {LOAD_TAG_FDT, 0, sizeof(struct load_tag_fdt)}
 
 /// @brief Gets the first tag of the specified type
 ///

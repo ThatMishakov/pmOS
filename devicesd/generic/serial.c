@@ -16,6 +16,24 @@ void init_serial() {
     SPCR * t = (SPCR *)get_table("SPCR", 0);
     if (!t) {
         printf("SPCR table not found\n");
+
+        // Hardcoded values!
+        port = malloc(sizeof *port);
+        port->interface_type = 0;
+        port->base_address = 0x10000000;
+        port->interrupt = 0x10;
+        port->pc_intno = 0;
+        port->gsi = 10;
+        port->baud_rate = 115200;
+        port->parity = 0;
+        port->stop_bits = 1;
+        port->flow_control = 0;
+        port->terminal_type = 0;
+        port->access_type = 0;
+        port->access_width = 1;
+
+        serial_port = port;
+
         return;
     }
 

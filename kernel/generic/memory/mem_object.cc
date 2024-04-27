@@ -336,3 +336,8 @@ void *Mem_Object::map_to_kernel(u64 offset, u64 size, Page_Table_Argumments args
 
     return mem_virt;
 }
+
+size_t Mem_Object::size_bytes() const noexcept
+{
+    return pages_size << page_size_log;
+}

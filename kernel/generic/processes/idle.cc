@@ -31,7 +31,7 @@
 
 void idle()
 {
-    serial_logger.printf("Idle task entered for the first time!\n");
+    //serial_logger.printf("[Kernel] Idle task entered for the first time!\n");
 
     while (1) {
         halt();
