@@ -5,36 +5,19 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
+#include <stdbool.h>
+#include <smoldtb.h>
 
 struct serial_port * serial_port = NULL;
 
-void init_serial() {
+bool init_serial_acpi()
+{
     struct serial_port * port = NULL;
-
-    printf("Searching for serial devices...\n");
 
     SPCR * t = (SPCR *)get_table("SPCR", 0);
     if (!t) {
         printf("SPCR table not found\n");
-
-        // Hardcoded values!
-        port = malloc(sizeof *port);
-        port->interface_type = 0;
-        port->base_address = 0x10000000;
-        port->interrupt = 0x10;
-        port->pc_intno = 0;
-        port->gsi = 10;
-        port->baud_rate = 115200;
-        port->parity = 0;
-        port->stop_bits = 1;
-        port->flow_control = 0;
-        port->terminal_type = 0;
-        port->access_type = 0;
-        port->access_width = 1;
-
-        serial_port = port;
-
-        return;
+        goto error;
     }
 
     printf("Found SPCR table\n");
@@ -42,7 +25,7 @@ void init_serial() {
     port = malloc(sizeof *port);
     if (!port) {
         fprintf(stderr, "Failed to allocate memory for serial port\n");
-        return;
+        goto error;
     }
 
     port->access_type = t->address.AddressSpace;
@@ -83,9 +66,11 @@ void init_serial() {
             port->baud_rate = 115200;
             break;
         default:
-            fprintf(stderr, "SPCR Invalid baud rate %i\n", t->configured_baud_rate);
-            goto error;
+            fprintf(stderr, "SPCR Invalid baud rate %i. Setting 115200\n", t->configured_baud_rate);
+            port->baud_rate = 115200;
     }
+
+    printf("Serial port found. ACPI version: %i\n", t->h.revision);
 
     port->parity = t->parity;
     port->stop_bits = t->stop_bits;	
@@ -94,26 +79,168 @@ void init_serial() {
 
     serial_port = port;
 
-    printf("Serial port found:\n");
-    printf("ACPI version: %i\n", t->h.revision);
-    printf("Access type: %s\n", port->access_type == 0 ? "mmio" : "io");
-    printf("Access width: %i\n", port->access_width);
-    printf("Interface type: %i\n", port->interface_type);
-    printf("Base address: %lx\n", port->base_address);
-    printf("Interrupt type: %i\n", port->interrupt);
-    printf("PC-AT interrupt number: %i\n", port->pc_intno);
-    printf("Global System Interrupt: %i\n", port->gsi);
-    printf("Baud rate: %i\n", port->baud_rate);
-    printf("Parity: %i\n", port->parity);
-    printf("Stop bits: %i\n", port->stop_bits);
-    printf("Flow control: %i\n", port->flow_control);
-    printf("Terminal type: %i\n", port->terminal_type);
-
-    return;
+    return true;
 
 error:
     free(port);
-    return;
+    return false;
+}
+
+bool init_serial_dtb()
+{
+    struct serial_port * port = NULL;
+
+    const char *serial_compatible_list[] = {
+        "ns16550a"
+    };
+
+    dtb_node *n = NULL;
+    for (size_t i = 0; (i < sizeof(serial_compatible_list)/sizeof(serial_compatible_list[0])) && (n == NULL); ++i) {
+        n = dtb_find_compatible(NULL, serial_compatible_list[i]);
+    }
+
+    if (n == NULL) {
+        fprintf(stderr, "Could not find a compatible ns16550a serial controller in FDT\n");
+        goto error;
+    }
+
+    // Find the registers size
+    dtb_node *soc = dtb_get_parent(n);
+    if (!soc) {
+        fprintf(stderr, "Could not find the parent DTB node of the serial controller\n");
+        goto error;
+    }
+
+    size_t address_cells = 0;
+    dtb_prop *prop = dtb_find_prop(soc, "#address-cells");
+    size_t i = dtb_read_prop_values(prop, 1, &address_cells);
+    if (i != 1) {
+        fprintf(stderr, "Could not read the #address-cells property in the parent DTB node\n");
+        goto error;
+    }
+
+    size_t size_cells = 0;
+    prop = dtb_find_prop(soc, "#size-cells");
+    i = dtb_read_prop_values(prop, 1, &size_cells);
+    if (i != 1) {
+        fprintf(stderr, "Could not read the #size-cells property in the parent DTB node\n");
+        goto error;
+    }
+
+
+    // Find the address and size of the registers
+    prop = dtb_find_prop(n, "reg");
+    dtb_pair reg;
+    i = dtb_read_prop_pairs(prop, (dtb_pair){address_cells, size_cells}, &reg);
+    if (i != 1) {
+        fprintf(stderr, "Could not read the reg property in the serial controller node\n");
+        goto error;
+    }
+
+    size_t serial_address = reg.a;
+    size_t serial_size = reg.b;
+    (void)serial_size; // Unused
+
+    // Find the interrupt property
+    size_t interrupt = 0;
+    prop = dtb_find_prop(n, "interrupts");
+    i = dtb_read_prop_values(prop, 1, &interrupt);
+    if (i != 1) {
+        fprintf(stderr, "Could not read the interrupts property in the serial controller node\n");
+    }
+
+    size_t current_speed = 0;
+    prop = dtb_find_prop(n, "current-speed");
+    // current-speed is optional
+    dtb_read_prop_values(prop, 1, &current_speed);
+
+    port = calloc(1, sizeof *port);
+
+    port->interface_type = 0;
+    port->base_address = serial_address;
+
+    port->gsi = interrupt;
+    #ifdef __riscv
+    port->interrupt = port->gsi == 0 ? 0x0 : 0x10;
+    #endif 
+    port->interface_type = 0;
+    port->pc_intno = 0;
+    port->baud_rate = current_speed;
+    port->parity = 0;
+    port->stop_bits = 1;
+    // TODO: Flow control
+    port->flow_control = 0;
+    port->terminal_type = 0;
+    port->access_type = 0;
+    port->access_width = 1;
+
+    serial_port = port;
+
+    printf("Serial port found in FDT\n");
+
+    return true;
+error:
+    free(port);
+    return false;
+}
+
+bool init_serial_hardcoded()
+{
+    printf("Using hardcoded serial port values\n");
+
+    // Hardcoded values!
+    struct serial_port * port = malloc(sizeof *port);
+    port->interface_type = 0;
+    port->base_address = 0x10000000;
+    port->interrupt = 0x10;
+    port->pc_intno = 0;
+    port->gsi = 10;
+    port->baud_rate = 115200;
+    port->parity = 0;
+    port->stop_bits = 1;
+    port->flow_control = 0;
+    port->terminal_type = 0;
+    port->access_type = 0;
+    port->access_width = 1;
+
+    serial_port = port;
+
+    return true;
+}
+
+void init_serial()
+{
+    printf("Searching for serial devices...\n");
+
+    do {
+        if (init_serial_acpi()) {
+            break;
+        }
+
+        if (init_serial_dtb()) {
+            break;
+        }
+
+        if (init_serial_hardcoded()) {
+            break;
+        }
+
+        fprintf(stderr, "No serial port found\n");
+        return;
+    } while (0);
+
+    printf("Access type: %s\n", serial_port->access_type == 0 ? "mmio" : "io");
+    printf("Access width: %i\n", serial_port->access_width);
+    printf("Interface type: %i\n", serial_port->interface_type);
+    printf("Base address: %lx\n", serial_port->base_address);
+    printf("Interrupt type: %i\n", serial_port->interrupt);
+    printf("PC-AT interrupt number: %i\n", serial_port->pc_intno);
+    printf("Global System Interrupt: %i\n", serial_port->gsi);
+    printf("Baud rate: %i\n", serial_port->baud_rate);
+    printf("Parity: %i\n", serial_port->parity);
+    printf("Stop bits: %i\n", serial_port->stop_bits);
+    printf("Flow control: %i\n", serial_port->flow_control);
+    printf("Terminal type: %i\n", serial_port->terminal_type);
 }
 
 void request_serial(Message_Descriptor *d, IPC_Request_Serial *m)

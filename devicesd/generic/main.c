@@ -46,6 +46,7 @@
 #include <pmos/ipc.h>
 #include <pmos/ports.h>
 #include <serial.h>
+#include <dtb/dtb.h>
 
 char* exec = NULL;
 
@@ -91,6 +92,7 @@ int main(int argc, char** argv) {
     }
 
     init_acpi();
+    init_dtb();
     init_pci();
     init_serial();
 

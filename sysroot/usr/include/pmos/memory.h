@@ -88,6 +88,19 @@ mem_request_ret_t create_normal_region(uint64_t pid, void *addr_start, size_t si
 mem_request_ret_t create_phys_map_region(uint64_t pid, void *addr_start, size_t size, uint64_t access, void* phys_addr);
 
 /**
+ * @brief Maps a memory object to the new region.
+ * @param page_table_id ID of the page table where the new region should be created. Takes PAGE_TABLE_SELF (0) for the current process.
+ * @param addr_start The suggestion for the virutal address of the new region. The parameter must be page-alligned.
+ * @param size The size in bytes of the new region. The size must be page-alligned and not 0, otherwise the error will be returned
+ * @param access An OR-conjugated list of the argument. Takes PROT_READ, PROT_WRITE and PROT_EXEC as access bytes and CREATE_FLAG_FIXED, and FLAG_COW
+ * @param object_id ID of the memory object that should be mapped to the new region.
+ * @param offset Offset in the memory object where the mapping should start. The offset must be page-alligned.
+ * @returns mem_request_ret_t structure. Result indicated if the operation was successfull and error otherwise. If the operation was successfull,
+ *         virt_addr contains the address of the new virtual region.
+ */
+mem_request_ret_t map_mem_object(uint64_t page_table_id, void *addr_start, size_t size, uint64_t access, mem_object_t object_id, size_t offset);
+
+/**
  * @brief Transfers a memory region to the new page table.
  * 
  * This system call transfers the given region to the new process, conserving its size and properties. This function is very

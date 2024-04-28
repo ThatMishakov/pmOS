@@ -77,6 +77,7 @@
 #define SYSCALL_SET_AFFINITY           38
 #define SYSCALL_COMPLETE_INTERRUPT     39
 #define SYSCALL_YIELD                  40
+#define SYSCALL_MAP_MEM_OBJECT         41
 
 
 

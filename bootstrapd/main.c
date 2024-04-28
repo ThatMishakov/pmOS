@@ -148,7 +148,7 @@ void init_misc()
             .start_offset = tr->start_offset,
             .mem_object_size = tr->mem_object_size
         };
-    }
+    } while (0);
 }
 
 void provide_framebuffer(pmos_port_t port, uint32_t flags)
@@ -267,6 +267,25 @@ void service_ports()
                 reply.result = 0;
                 reply.descriptor = (void *)rsdp_desc;
                 print_str("********************************************\n");
+            }
+
+            pmos_syscall(SYSCALL_SEND_MSG_PORT, ptr->reply_channel, sizeof(reply), &reply);
+        }
+            break;
+        case IPC_FDT_Request_NUM: {
+            IPC_FDT_Reply reply = {
+                .type = IPC_FDT_Reply_NUM,
+                .result = -ENOSYS,
+                .fdt_mem_object_id = 0,
+                .object_offset = 0,
+                .object_size = 0
+            };
+
+            if (fdt_desc.memory_object != 0) {
+                reply.result = 0;
+                reply.fdt_mem_object_id = fdt_desc.memory_object;
+                reply.object_offset = fdt_desc.start_offset;
+                reply.object_size = fdt_desc.mem_object_size;
             }
 
             pmos_syscall(SYSCALL_SEND_MSG_PORT, ptr->reply_channel, sizeof(reply), &reply);

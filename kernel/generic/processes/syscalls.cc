@@ -53,7 +53,7 @@
 #endif
 
 using syscall_function = void (*)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t);
-klib::array<syscall_function, 41> syscall_table = {
+klib::array<syscall_function, 42> syscall_table = {
     syscall_exit,
     get_task_id,
     syscall_create_process,
@@ -99,6 +99,7 @@ klib::array<syscall_function, 41> syscall_table = {
     syscall_set_affinity,
     syscall_complete_interrupt,
     syscall_yield,
+    syscall_map_mem_object,
 };
 
 extern "C" void syscall_handler()
@@ -830,6 +831,27 @@ void syscall_create_mem_object(u64 size_bytes, u64, u64, u64, u64, u64)
     current_page_table->atomic_pin_memory_object(ptr);
 
     syscall_ret_high(current_task) = ptr->get_id();
+}
+
+void syscall_map_mem_object(u64 page_table_id, u64 addr_start, u64 size_bytes, u64 access, u64 object_id, u64 offset)
+{
+    const auto &current_task = get_current_task();
+    auto table = page_table_id == 0 ? current_task->page_table : Arch_Page_Table::get_page_table_throw(page_table_id);
+    const auto &current_page_table = current_task->page_table;
+
+    if ((size_bytes == 0) or (size_bytes&0xfff != 0))
+        throw Kern_Exception(ERROR_UNALLIGNED, "size not page aligned");
+
+    if (offset&0xfff)
+        throw Kern_Exception(ERROR_UNALLIGNED, "offset not page aligned");
+
+    const auto object = Mem_Object::get_object(object_id);
+
+    if (object->size_bytes() < offset+size_bytes)
+        throw Kern_Exception(ERROR_OUT_OF_RANGE, "size is out of range");
+
+    syscall_ret_low(current_task) = SUCCESS;
+    syscall_ret_high(current_task) = table->atomic_create_mem_object_region(addr_start, size_bytes, access&0x7, access&0x8, "object map", object, access&0x10, 0, offset, size_bytes);
 }
 
 void syscall_delete_region(u64 tid, u64 region_start, u64, u64, u64, u64)

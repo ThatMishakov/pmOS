@@ -164,6 +164,9 @@ void syscall_complete_interrupt(u64 intno, u64, u64, u64, u64, u64);
 // In other words, reschedule()s
 void syscall_yield(u64, u64, u64, u64, u64, u64);
 
+// Maps a memory object to the task's address space
+void syscall_map_mem_object(u64 page_table_id, u64 addr_start, u64 size_bytes, u64 access, u64 object_id, u64 offset);
+
 inline u64& syscall_arg1(const klib::shared_ptr<TaskDescriptor>& task)
 {
     return task->regs.syscall_arg1();

@@ -121,6 +121,13 @@ mem_request_ret_t transfer_region(uint64_t to_page_table, void * region, void * 
     return t;
 }
 
+mem_request_ret_t map_mem_object(uint64_t page_table_id, void *addr_start, size_t size, uint64_t access, mem_object_t object_id, size_t offset)
+{
+    syscall_r r = pmos_syscall(SYSCALL_MAP_MEM_OBJECT, page_table_id, addr_start, size, access, object_id, offset);
+    mem_request_ret_t t = {r.result, (void *)r.value};
+    return t;
+}
+
 result_t release_region(uint64_t tid, void * region)
 {
     return pmos_syscall(SYSCALL_DELETE_REGION, tid, region).result;

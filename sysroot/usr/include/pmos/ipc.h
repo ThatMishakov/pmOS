@@ -498,6 +498,21 @@ typedef struct IPC_ACPI_RSDT_Reply {
     ACPI_RSDP_descriptor *descriptor;
 } IPC_ACPI_RSDT_Reply;
 
+#define IPC_FDT_Request_NUM 0x62
+typedef struct IPC_FDT_Request {
+    uint32_t type;
+    uint64_t reply_channel;
+} IPC_FDT_Request;
+
+#define IPC_FDT_Reply_NUM 0x63
+typedef struct IPC_FDT_Reply {
+    uint32_t type;
+    int32_t result;
+    uint64_t fdt_mem_object_id;
+    uint32_t object_offset;
+    uint32_t object_size;
+} IPC_FDT_Reply;
+
 
 // Structure used for registering a new PS/2 port by its driver
 #define IPC_PS2_Reg_Port_NUM 0x80
