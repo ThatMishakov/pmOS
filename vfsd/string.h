@@ -54,6 +54,8 @@ struct String {
     size_t capacity;
 };
 
+#define INIT_STRING {NULL, 0, 0}
+
 
 /**
  * @brief Initializes an empty string.

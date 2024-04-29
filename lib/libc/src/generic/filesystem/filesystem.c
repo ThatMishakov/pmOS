@@ -50,15 +50,27 @@
 static struct Filesystem_Data * fs_data = NULL;
 static pthread_spinlock_t fs_data_lock;
 
+__attribute__((visibility("hidden"))) const struct Filesystem_Adaptor __file_adaptor = {
+    .read = &__file_read,
+    .write = &__file_write,
+    .clone = &__file_clone,
+    .close = &__file_close,
+    .fstat = &__file_fstat,
+    .isatty = &__file_isatty,
+    .isseekable = &__file_isseekable,
+    .filesize = &__file_filesize,
+    .free = __file_free,
+};
+
 // Creates and initializes new Filesystem_Data. Returns its pointer on success, NULL otherwise, setting errno to the appropriate code.
 struct Filesystem_Data *init_filesystem();
 
 // Reserves a file descriptor and returns its id. Returns -1 on error.
-static int64_t reserve_descriptor(struct Filesystem_Data* fs_data) {
+static int64_t reserve_descriptors(struct Filesystem_Data* fs_data, size_t count) {
     pthread_spin_lock(&fs_data->lock);
 
     // Check if the descriptors vector needs to be resized
-    if (fs_data->count + fs_data->reserved_count == fs_data->capacity) {
+    if (fs_data->count + fs_data->reserved_count + count > fs_data->capacity) {
         // Double the capacity of the descriptors vector
         size_t new_capacity = (fs_data->capacity == 0) ? 4 : fs_data->capacity * 2;
         struct File_Descriptor* new_vector = realloc(fs_data->descriptors_vector, new_capacity * sizeof(struct File_Descriptor));
@@ -75,14 +87,18 @@ static int64_t reserve_descriptor(struct Filesystem_Data* fs_data) {
         fs_data->capacity = new_capacity;
     }
 
-    fs_data->reserved_count++;
+    fs_data->reserved_count += count;
 
     pthread_spin_unlock(&fs_data->lock);
     return 0;
 }
 
+static int reserve_descriptor(struct Filesystem_Data *fs_data) {
+    return reserve_descriptors(fs_data, 1);
+}
+
 // Releases a reserved descriptor. Returns 0 on success and -1 on error.
-static int release_descriptor(struct Filesystem_Data *fs_data) {
+static int release_descriptors(struct Filesystem_Data *fs_data, size_t count) {
     if (fs_data == NULL) {
         // Invalid fs_data or descriptor index
         return -1;
@@ -91,12 +107,17 @@ static int release_descriptor(struct Filesystem_Data *fs_data) {
     // Lock the descriptor to ensure thread-safety
     pthread_spin_lock(&fs_data->lock);
 
-    fs_data->reserved_count--;
+    assert(fs_data->reserved_count >= count);
+    fs_data->reserved_count -= count;
 
     // Unlock the descriptor
     pthread_spin_unlock(&fs_data->lock);
 
     return 0;
+}
+
+static int release_descriptor(struct Filesystem_Data *fs_data) {
+    return release_descriptors(fs_data, 1);
 }
 
 // Requests a port of the filesystem daemon
@@ -219,6 +240,77 @@ int open(const char* path, int flags) {
 
     // Return the file descriptor
     return descriptor;
+}
+
+int pipe(int pipefd[2])
+{
+    // Double-checked locking to initialize fs_data if it is NULL
+    if (fs_data == NULL) {
+        pthread_spin_lock(&fs_data_lock);
+        if (fs_data == NULL) {
+            struct Filesystem_Data *new_data = init_filesystem();
+            if (new_data == NULL) {
+                pthread_spin_unlock(&fs_data_lock);
+                return -1;
+            }
+            fs_data = new_data;
+        }
+        pthread_spin_unlock(&fs_data_lock);
+    }
+
+    int result = reserve_descriptors(fs_data, 2);
+    if (result < 0) {
+        errno = ENFILE; // Set errno to appropriate error code
+        return -1;
+    }
+
+    const struct Filesystem_Adaptor * file_adaptor = &__file_adaptor;
+    union File_Data data[2];
+    int result_code = __create_pipe(data, fs_data->fs_consumer_id);
+    if (result_code < 0) {
+        release_descriptors(fs_data, 2);
+        errno = -result_code;
+        return -1;
+    }
+
+    result_code = pthread_spin_lock(&fs_data->lock);
+    if (result_code != SUCCESS) {
+        release_descriptors(fs_data, 2);
+        file_adaptor->close(&data[0], fs_data->fs_consumer_id);
+        file_adaptor->free(&data[0], fs_data->fs_consumer_id);
+        file_adaptor->close(&data[1], fs_data->fs_consumer_id);
+        file_adaptor->free(&data[1], fs_data->fs_consumer_id);
+        errno = result_code;
+        return -1;
+    }
+
+    for (int i = 0; i < 2; ++i) {
+        int descriptor = -1;
+        for (size_t j = 0; j < fs_data->capacity; ++j) {
+            if (!fs_data->descriptors_vector[j].used) {
+                descriptor = j;
+                break;
+            }
+        }
+        assert(descriptor >= 0);
+
+        fs_data->count++;
+        fs_data->reserved_count--;
+
+        fs_data->descriptors_vector[descriptor] = (struct File_Descriptor) {
+            .type = DESCRIPTOR_FILE,
+            .used = true,
+            .flags = 0,
+            .offset = 0,
+            .adaptor = file_adaptor,
+            .data = data[i]
+        };
+
+        pipefd[i] = descriptor;
+    }
+
+    pthread_spin_unlock(&fs_data->lock);
+    return 0;
 }
 
 int stat(const char *restrict name, struct stat *restrict stat)
@@ -604,7 +696,7 @@ int dup2(int oldfd, int newfd) {
     int result = newfd;
     union File_Data new_data = {};
     union File_Data old_data = {};
-    struct Filesystem_Adaptor *old_adaptor = NULL;
+    const struct Filesystem_Adaptor *old_adaptor = NULL;
     bool free_old_data = true;
 
     pthread_spin_lock(&fs_data->lock);

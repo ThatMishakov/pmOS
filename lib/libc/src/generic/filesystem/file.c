@@ -323,8 +323,8 @@ int __file_clone(void * file_data, uint64_t consumer_id, void * new_data, uint64
     // Read the result code from the reply message
     IPC_Dup_Reply* reply = (IPC_Dup_Reply*)reply_msg;
     if (reply->result_code < 0) {
-        free(reply_msg);
         errno = -reply->result_code;
+        free(reply_msg);
         return -1;
     }
 
@@ -420,7 +420,6 @@ ssize_t __file_filesize(void * file_data, uint64_t consumer_id) {
 }
 
 int __file_close(void * file_data, uint64_t consumer_id) {
-    int result;
     struct File *file = (struct File *)file_data;
 
     IPC_Close message = {
@@ -433,29 +432,10 @@ int __file_close(void * file_data, uint64_t consumer_id) {
 
 
     // Send the IPC_Close message to the filesystem daemon
-    result_t k_result = fs_port != INVALID_PORT ? send_message_port(fs_port, sizeof(message), (const char*)&message) : ERROR_PORT_DOESNT_EXIST;
-
-    int fail_count = 0;
-    // Do this in a loop to allow VFSd to restart and re-register the port without
-    // everything depending on it immediately crashing as a result
-    while (result == ERROR_PORT_DOESNT_EXIST && fail_count < 5) {
-        // Request the port of the filesystem daemon
-        pmos_port_t fs_port = request_filesystem_port();
-        if (fs_port == INVALID_PORT) {
-            // Handle error: Failed to obtain the filesystem port
-            errno = EIO; // Set errno to appropriate error code
-            return -1;
-        }
-
-        // Retry sending IPC_Open message to the filesystem daemon
-        result = send_message_port(fs_port, sizeof(message), (const char*)&message);
-        ++fail_count;
-    }
-
-
-    if (result != SUCCESS) {
-        // Handle error: Failed to send the IPC_Close message
-        errno = -result; // Set errno to appropriate error code
+    result_t k_result = send_message_port(file->fs_port, sizeof(message), (const char*)&message);
+    if (k_result != SUCCESS) {
+        // Failed to send the IPC_Close message
+        errno = -k_result;
         return -1;
     }
 
@@ -577,5 +557,96 @@ int __open_file(const char * path, int flags, mode_t mode, void * file_data, uin
 
     free(reply_msg);
     
+    return 0;
+}
+
+pmos_port_t get_pipe_port()
+{
+    static const char pipe_port_name[] = "/pmos/piped";
+    static pmos_port_t pipe_port = INVALID_PORT;
+    if (pipe_port == INVALID_PORT) {
+        ports_request_t port_req = get_port_by_name(pipe_port_name, strlen(pipe_port_name), 0);
+        if (port_req.result != SUCCESS) {
+            // Handle error
+            return INVALID_PORT;
+        }
+
+        pipe_port = port_req.port;
+    }
+
+    return pipe_port;
+}
+
+pmos_port_t prepare_reply_port()
+{
+    if (fs_cmd_reply_port == INVALID_PORT) {
+        // Create a new port for the current thread
+        ports_request_t port_request = create_port(TASK_ID_SELF, 0);
+        if (port_request.result != SUCCESS)
+            errno = EIO;
+        else
+            fs_cmd_reply_port = port_request.port;
+    }
+
+    return fs_cmd_reply_port;
+}
+
+int __create_pipe(void *file_data, uint64_t consumer_id)
+{
+    struct File (*file)[2] = (struct File (*)[2])file_data;
+
+    pmos_port_t reply_port = prepare_reply_port();
+    if (reply_port == INVALID_PORT) {
+        return -1;
+    }
+
+    pmos_port_t pipe_port = get_pipe_port();
+    if (pipe_port == INVALID_PORT) {
+        return -1;
+    }
+
+    IPC_Pipe_Open message = {
+        .type = IPC_Pipe_Open_NUM,
+        .flags = 0,
+        .reply_port = reply_port,
+        .fs_consumer_id = consumer_id,
+    };
+
+    result_t k_result = send_message_port(pipe_port, sizeof(message), (const char *)&message);
+    if (k_result != SUCCESS) {
+        errno = EIO;
+        return -1;
+    }
+
+    Message_Descriptor reply_descr;
+    IPC_Generic_Msg *reply_msg;
+    k_result = get_message(&reply_descr, (unsigned char **)&reply_msg, reply_port);
+    if (k_result != SUCCESS) {
+        errno = EIO;
+        return -1;
+    }
+
+    if (reply_msg->type != IPC_Pipe_Open_Reply_NUM) {
+        errno = EIO;
+        free(reply_msg);
+        return -1;
+    }
+
+    IPC_Pipe_Open_Reply *reply = (IPC_Pipe_Open_Reply *)reply_msg;
+    if (reply->result_code < 0) {
+        errno = -reply->result_code;
+        free(reply_msg);
+        return -1;
+    }
+
+    file[0]->file_id = reply->reader_id;
+    file[0]->filesystem_id = reply->filesystem_id;
+    file[0]->fs_port = reply->pipe_port;
+
+    file[1]->file_id = reply->writer_id;
+    file[1]->filesystem_id = reply->filesystem_id;
+    file[1]->fs_port = reply->pipe_port;
+
+    free(reply_msg);
     return 0;
 }

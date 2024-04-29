@@ -847,6 +847,45 @@ typedef struct IPC_FS_Dup_Reply {
     uint64_t operation_id;
 } IPC_FS_Dup_Reply;
 
+#define IPC_Pipe_Open_NUM 0xE0
+typedef struct IPC_Pipe_Open {
+    /// Message type (must be IPC_Pipe_Open_NUM)
+    uint32_t type;
+
+    /// Flags changing the behaviour
+    uint32_t flags;
+
+    /// Port where the reply will be sent
+    pmos_port_t reply_port;
+
+    /// ID of the file system consumer
+    uint64_t fs_consumer_id;
+} IPC_Pipe_Open;
+
+#define IPC_Pipe_Open_Reply_NUM 0xE1
+typedef struct IPC_Pipe_Open_Reply {
+    /// Message type (must be IPC_Pipe_Open_Reply_NUM)
+    uint32_t type;
+
+    /// Flags
+    uint16_t flags;
+
+    /// Result code indicating the outcome of the open operation
+    int16_t result_code;
+
+    /// ID of the file system
+    uint64_t filesystem_id;
+
+    /// ID of the reader end of the pipe
+    uint64_t reader_id;
+
+    /// ID of the writer end of the pipe
+    uint64_t writer_id;
+
+    /// Port associated with the pipe
+    pmos_port_t pipe_port;
+} IPC_Pipe_Open_Reply;
+
 #define IPC_Thread_Finished_NUM 0x100
 /// @brief Message sent by the thread to the one calling pthread_join() when notifing that it has finished.
 typedef struct IPC_Thread_Finished {

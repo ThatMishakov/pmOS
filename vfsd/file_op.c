@@ -610,21 +610,6 @@ int process_request(struct File_Request * request)
                     break;
                 }
 
-                result = reference_open_filesystem(request->consumer, active_node->owner_mountpoint->fs, 1);
-                if (result != 0) {
-                    IPC_Open_Reply reply = {
-                        .type = IPC_Open_Reply_NUM,
-                        .result_code = result,
-                        .fs_flags = 0,
-                        .filesystem_id = 0,
-                        .file_id = 0,
-                        .fs_port = 0,
-                    };
-
-                    result = -send_message_port(request->reply_port, sizeof(reply), (char *)&reply);
-                    break;
-                }
-
                 IPC_FS_Open msg_request = {
                     .type = IPC_FS_Open_NUM,
                     .flags = 0,
@@ -637,9 +622,6 @@ int process_request(struct File_Request * request)
                 result = -send_message_port(active_node->owner_mountpoint->fs->command_port, sizeof(msg_request), (char *)&msg_request);
                 if (result == 0)
                     return 0;
-                else {
-                    unreference_open_filesystem(request->consumer, active_node->owner_mountpoint->fs, 1);
-                }
 
                 break;
             } break;
@@ -775,7 +757,6 @@ void fail_and_destroy_request(struct File_Request *request, int error_code)
         break;
     }
     case REQUEST_TYPE_OPEN_FILE_RESOLVED: {
-        unreference_open_filesystem(request->consumer, request->filesystem, 1);
         break;
     }
     case REQUEST_TYPE_RESOLVE_PATH: {
@@ -1110,9 +1091,7 @@ int react_ipc_fs_open_reply(struct IPC_FS_Open_Reply *message, size_t sender, ui
     };
 
     result_t send_result = send_message_port(request->reply_port, sizeof(reply_msg), (char *)&reply_msg);
-    if (send_result != SUCCESS || reply_msg.result_code < 0)
-        unreference_open_filesystem(request->consumer, request->filesystem, 1);
-        
+
     // TODO: Send Close if the file was oppened but the reply failed
 
     remove_request_from_map(&global_requests_map, request);
@@ -1158,8 +1137,7 @@ int react_ipc_fs_dup_reply(struct IPC_FS_Dup_Reply *message, size_t sender, uint
     };
 
     result_t send_result = send_message_port(request->reply_port, sizeof(reply_msg), (char *)&reply_msg);
-    if (send_result != SUCCESS || reply_msg.result_code < 0)
-        unreference_open_filesystem(request->consumer, request->filesystem, 1);
+    // TODO
 
     remove_request_from_map(&global_requests_map, request);
     unregister_request_from_parent(request);
@@ -1274,14 +1252,6 @@ int react_ipc_dup(struct IPC_Dup *message, size_t sender, uint64_t message_lengt
         return ipc_dup_send_fail(message->reply_port, result);
     }
 
-    result = reference_open_filesystem(request->consumer, fs, 1);
-    if (result != 0) {
-        remove_request_from_map(&global_requests_map, request);
-        unregister_request_from_parent(request);
-        free(request);
-        return ipc_dup_send_fail(message->reply_port, result);
-    }
-
     IPC_FS_Dup msg_request = {
         .type = IPC_FS_Dup_NUM,
         .flags = message->flags,
@@ -1297,7 +1267,6 @@ int react_ipc_dup(struct IPC_Dup *message, size_t sender, uint64_t message_lengt
     if (result == 0)
         return 0;
     else {
-        unreference_open_filesystem(request->consumer, fs, 1);
         remove_request_from_map(&global_requests_map, request);
         unregister_request_from_parent(request);
         free(request);
@@ -1328,8 +1297,6 @@ int react_ipc_close(struct IPC_Close *message, size_t sender, uint64_t message_l
     if (fs == NULL)
         // It's an error, but the reply is not sent
         return 0;
-
-    unreference_open_filesystem(consumer, fs, 1);
 
     IPC_FS_Close close_message = {
         .type = IPC_FS_Close_NUM,

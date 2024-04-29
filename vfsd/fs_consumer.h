@@ -53,16 +53,6 @@ struct fs_consumer {
     struct File_Request *requests_head, *requests_tail;
     size_t requests_count;
 
-    // Map of filesystems containing filesystem with some open files
-    // Hash table
-    struct consumer_fs_map_node **open_filesystem;
-    size_t open_filesystem_size;
-    size_t open_filesystem_count;
-    #define OPEN_FILESYSTEM_INITIAL_SIZE    16
-    #define OPEN_FILESYSTEM_SIZE_MULTIPLIER 2
-    #define OPEN_FILESYSTEM_MAX_LOAD_FACTOR 3/4
-    #define OPEN_FILESYSTEM_SHRINK_FACTOR   1/4
-
     struct String path;
 };
 
@@ -112,34 +102,6 @@ extern struct fs_consumer_map {
 } global_fs_consumers;
 
 /**
- * @brief References a filesystem with the fs consumer.
- * 
- * This function references an open file within a filesystem, by increasing the open file count. If
- * the filesystem is not already referenced, it will be added to the fs consumer's open filesystem
- * with an open file count of open_count.
- * 
- * @param fs_consumer The fs consumer to reference the filesystem with.
- * @param fs The filesystem to reference.
- * @param open_count The number of open files within the filesystem.
- * @return int 0 on success, -1 on failure.
-*/
-int reference_open_filesystem(struct fs_consumer *fs_consumer, struct Filesystem *fs, uint64_t open_count);
-
-/**
- * @brief Unreferences a filesystem from the fs consumer
- * 
- * This function is similar to the reference_open_filesystem, except that the open file count is decreased
- * instead and when reached 0, the filesystem is unlinked from the consumer. If the filesystem is not
- * referenced by the consumer, nothing happens.
- * 
- * @param fs_consumer The fs consumer to unreference the filesystem from
- * @param fs The filesystem to unreference
- * @param close_count The number of files closed with the filesystem
- * @see reference_open_filesystem
- */
-void unreference_open_filesystem(struct fs_consumer *fs_consumer, struct Filesystem *fs, uint64_t close_count);
-
-/**
  * @brief Create a filesystem consumer
  * 
  * @param request Request message
@@ -148,7 +110,5 @@ void unreference_open_filesystem(struct fs_consumer *fs_consumer, struct Filesys
  * @return int 0 on success, negative on failure
  */
 int create_consumer(const IPC_Create_Consumer *request, uint64_t sender_task_id, size_t request_size);
-
-void remove_consumer_from_filesystem(struct Filesystem *fs, uint64_t open_files_count, struct fs_consumer *consumer);
 
 #endif // FS_CONSUMER_H

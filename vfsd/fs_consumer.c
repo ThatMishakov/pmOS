@@ -48,30 +48,17 @@ void remove_fs_consumer_global(struct fs_consumer *fs_consumer);
 
 struct fs_consumer * create_fs_consumer(uint64_t consumer_task_group)
 {
+    struct String path = INIT_STRING;
     struct fs_consumer *fs_consumer = malloc(sizeof(struct fs_consumer));
     if (fs_consumer == NULL) {
         // Could not allocate memory
         return NULL;
     }
 
-    // Initialize the list of filesystems with open files
-    fs_consumer->open_filesystem = calloc(sizeof(struct open_filesystem *), OPEN_FILESYSTEM_INITIAL_SIZE);
-    if (fs_consumer->open_filesystem == NULL) {
+    int result = init_null_string(&path);
+    if (result != 0)
         // Could not allocate memory
-        free(fs_consumer);
-        return NULL;
-    }
-
-    int result = init_null_string(&fs_consumer->path);
-    if (result != 0) {
-        // Could not allocate memory
-        free(fs_consumer->open_filesystem);
-        free(fs_consumer);
-        return NULL;
-    }
-
-    fs_consumer->open_filesystem_size = OPEN_FILESYSTEM_INITIAL_SIZE;
-    fs_consumer->open_filesystem_count = 0;
+        goto error;
 
     fs_consumer->requests_head = NULL;
     fs_consumer->requests_tail = NULL;
@@ -80,166 +67,26 @@ struct fs_consumer * create_fs_consumer(uint64_t consumer_task_group)
     fs_consumer->id = consumer_task_group;
 
     result = register_global_fs_consumer(fs_consumer);
-    if (result != 0) {
-        // Could not register the consumer
-        free(fs_consumer->open_filesystem);
-        destroy_string(&fs_consumer->path);
-        free(fs_consumer);
-        return NULL;
-    }
+    if (result != 0)
+        goto error;
 
     syscall_r r = set_task_group_notifier_mask(consumer_task_group, main_port, NOTIFICATION_MASK_DESTROYED);
-    if (r.result != SUCCESS) {
+    if (r.result != SUCCESS)
         // Could not set up notifier
-        remove_fs_consumer_global(fs_consumer);
-        free(fs_consumer->open_filesystem);
-        destroy_string(&fs_consumer->path);
-        free(fs_consumer);
-        return NULL;
-    }
+        goto error;
 
+    fs_consumer->path = path;
     return fs_consumer;
+error:
+    remove_fs_consumer_global(fs_consumer);
+    free(fs_consumer);
+    destroy_string(&path);
+    return NULL;
 }
 
 void free_buffers_fs_consumer(struct fs_consumer *fs_consumer)
 {
-    if (fs_consumer->open_filesystem != NULL)
-        free(fs_consumer->open_filesystem);
-
     destroy_string(&fs_consumer->path);
-}
-
-// This code is problematic because of potential divisions by zero
-int reference_open_filesystem(struct fs_consumer *fs_consumer, struct Filesystem *fs, uint64_t open_count)
-{
-    if (fs_consumer == NULL || fs == NULL)
-        return -1;
-
-    // Find the filesystem in the open map
-    size_t index = fs->id % fs_consumer->open_filesystem_size;
-    struct consumer_fs_map_node *node = fs_consumer->open_filesystem[index];
-    while (node != NULL && node->fs != fs)
-        node = node->next;
-
-    if (node != NULL) {
-        // Found the filesystem, increment the open count
-        node->open_files_count += open_count;
-        return 0;
-    }
-
-    // The filesystem was not found, add it to the map
-
-    // Resize the hash table as needed
-    if (fs_consumer->open_filesystem_count > fs_consumer->open_filesystem_size * OPEN_FILESYSTEM_MAX_LOAD_FACTOR) {
-        // Resize the hash table
-        size_t new_size = fs_consumer->open_filesystem_size * OPEN_FILESYSTEM_SIZE_MULTIPLIER;
-        struct consumer_fs_map_node **new_open_filesystem = malloc(sizeof(struct consumer_fs_map_node *) * new_size);
-        if (new_open_filesystem == NULL) {
-            // Could not allocate memory
-            return -1;
-        }
-
-        // Rehash the filesystems
-        for (size_t i = 0; i < fs_consumer->open_filesystem_size; i++) {
-            node = fs_consumer->open_filesystem[i];
-            while (node != NULL) {
-                struct consumer_fs_map_node *next = node->next;
-
-                // Rehash the filesystem
-                size_t new_index = node->fs->id % new_size;
-                node->next = new_open_filesystem[new_index];
-                new_open_filesystem[new_index] = node;
-
-                node = next;
-            }
-        }
-
-        free(fs_consumer->open_filesystem);
-
-        fs_consumer->open_filesystem = new_open_filesystem;
-        fs_consumer->open_filesystem_size = new_size;
-
-        index = fs->id % fs_consumer->open_filesystem_size;
-    }
-
-    // Allocate a new node
-    node = malloc(sizeof(struct consumer_fs_map_node));
-    if (node == NULL) {
-        // Could not allocate memory
-        return -1;
-    }
-
-    node->fs = fs;
-    node->open_files_count = open_count;
-    
-    // Add the node to the hash table
-    node->next = fs_consumer->open_filesystem[index];
-    fs_consumer->open_filesystem[index] = node;
-    fs_consumer->open_filesystem_count++;
-
-    return 0;
-}
-
-void unreference_open_filesystem(struct fs_consumer *fs_consumer, struct Filesystem *fs, uint64_t close_count)
-{
-    assert(fs_consumer != NULL && fs != NULL);
-    assert(close_count > 0);
-
-    if (fs_consumer->open_filesystem_size == 0)
-        return;
-
-    size_t index = fs->id % fs_consumer->open_filesystem_size;
-
-    struct consumer_fs_map_node *node = fs_consumer->open_filesystem[index], *prev = NULL;
-    while (node != NULL && node->fs != fs) {
-        prev = node;
-        node = node->next;
-    }
-
-    if (node == NULL)
-        return;
-
-    if (node->open_files_count < close_count)
-        close_count = node->open_files_count;
-
-    node->open_files_count -= close_count;
-
-    if (node->open_files_count != 0)
-        return;
-        
-    prev == NULL ? (fs_consumer->open_filesystem[index] = node->next) : (prev->next = node->next);
-    fs_consumer->open_filesystem_count--;
-    free(node);
-
-    if (fs_consumer->open_filesystem_count < fs_consumer->open_filesystem_size * OPEN_FILESYSTEM_SHRINK_FACTOR) {
-        size_t new_size = fs_consumer->open_filesystem_size / OPEN_FILESYSTEM_SIZE_MULTIPLIER;
-        struct consumer_fs_map_node **new_open_filesystem = calloc(new_size, sizeof(struct consumer_fs_map_node *));
-
-        if (new_open_filesystem == NULL)
-            return;
-
-        // Rehash the filesystems
-        for (size_t i = 0; i < fs_consumer->open_filesystem_size; i++) {
-            node = fs_consumer->open_filesystem[i];
-            while (node != NULL) {
-                struct consumer_fs_map_node *next = node->next;
-
-                // Rehash the filesystem
-                size_t new_index = node->fs->id % new_size;
-                node->next = new_open_filesystem[new_index];
-                new_open_filesystem[new_index] = node;
-
-                node = next;
-            }
-        }
-
-        free(fs_consumer->open_filesystem);
-
-        fs_consumer->open_filesystem = new_open_filesystem;
-        fs_consumer->open_filesystem_size = new_size;
-
-        index = fs->id % fs_consumer->open_filesystem_size;
-    }
 }
 
 static int send_create_consumer_reply(pmos_port_t port, uint32_t flags, int32_t result)
@@ -372,20 +219,11 @@ void remove_fs_consumer_global(struct fs_consumer *fs_consumer)
 
 void destroy_fs_consumer(struct fs_consumer *fs_consumer)
 {
-    // Close all open files
-    for (size_t i = 0; i < fs_consumer->open_filesystem_size; i++) {
-        struct consumer_fs_map_node* node = fs_consumer->open_filesystem[i];
-        while (node != NULL) {
-            struct consumer_fs_map_node* next = node->next;
-            remove_consumer_from_filesystem(node->fs, node->open_files_count, fs_consumer);
-            free(node);
-            node = next;
-        }
-    }
-    free(fs_consumer->open_filesystem);
-
     // Remove the fs consumer from the global fs consumers
     remove_fs_consumer_global(fs_consumer);
+
+    // Free the buffers
+    free_buffers_fs_consumer(fs_consumer);
 
     free(fs_consumer);
 }
@@ -419,12 +257,6 @@ int create_consumer(const IPC_Create_Consumer *request, uint64_t sender_task_id,
 
     // Send reply
     return send_create_consumer_reply(request->reply_port, request->flags, 0);
-}
-
-void remove_consumer_from_filesystem(struct Filesystem *fs, uint64_t open_files_count, struct fs_consumer *consumer)
-{
-    // Not yet implemented
-    return;
 }
 
 struct fs_consumer *get_fs_consumer(uint64_t consumer_id)

@@ -42,17 +42,7 @@ extern isseekable_func __file_isseekable;
 extern filesize_func __file_filesize;
 extern free_func __file_free;
 
-static struct Filesystem_Adaptor __file_adaptor = {
-    .read = &__file_read,
-    .write = &__file_write,
-    .clone = &__file_clone,
-    .close = &__file_close,
-    .fstat = &__file_fstat,
-    .isatty = &__file_isatty,
-    .isseekable = &__file_isseekable,
-    .filesize = &__file_filesize,
-    .free = __file_free,
-};
+extern const struct Filesystem_Adaptor __file_adaptor;
 
 /// @brief Opens a file, filling in the descriptor structure
 /// @param path Null terminated string containing the path to the file
@@ -62,6 +52,12 @@ static struct Filesystem_Adaptor __file_adaptor = {
 /// @param consumer_id ID of the consumer for which the file is being opened
 /// @return 0 on success, -1 on error setting errno
 int __open_file(const char * path, int flags, mode_t mode, void * file_data, uint64_t consumer_id);
+
+/// @brief Creates an anonymous pipe
+/// @param file_data File descriptors to be filled in
+/// @param consumer_id ID of the consumer for which the pipe is being created
+/// @return 0 on success, -1 on error setting errno
+int __create_pipe(void *file_data, uint64_t consumer_id);
 
 /// @brief Gets the reply port for the filesystem commands
 /// @return Reply port if it is available, INVALID_PORT on error

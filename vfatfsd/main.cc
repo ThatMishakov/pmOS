@@ -34,6 +34,7 @@
 #include <thread>
 #include <list>
 #include <pthread.h>
+#include <pmos/system.h>
 
 class Test {
 public:
@@ -76,6 +77,12 @@ void thread_func(void *) {
 std::list<std::thread> threads;
 
 extern "C" void test_qsort();
+extern "C" void test_pipe();
+
+void run_tests() {
+    test_qsort();
+    test_pipe();
+}
 
 int main() {
     // Sleep is broken
@@ -93,6 +100,7 @@ int main() {
     printf("Count: %li\n", (uint64_t)count);
 
     //test_qsort();
+    test_pipe();
 
     // Allow other thread to run
     //pthread_exit(nullptr);

@@ -141,7 +141,7 @@ result_t syscall_get_message_info(Message_Descriptor* descr, pmos_port_t port, u
  * @param args Aguments. MSG_ARG_NOPOP: do not pop the message after executing the command
  * @return result of the execution. On success, buff should contain the message.
  */
-result_t get_first_message(char* buff, pmos_port_t port, uint64_t args);
+result_t get_first_message(char* buff, uint64_t args, pmos_port_t port);
 
 /**
  * @brief Sends the message to the port
