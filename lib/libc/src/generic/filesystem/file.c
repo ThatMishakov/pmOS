@@ -334,6 +334,10 @@ error:
 }
 
 int __file_clone(void * file_data, uint64_t consumer_id, void * new_data, uint64_t new_consumer_id) {
+    pmos_port_t fs_cmd_reply_port = prepare_reply_port();
+    if (fs_cmd_reply_port == INVALID_PORT) {
+        return -1;
+    }
     struct File *file = (struct File *)file_data;
     
     // Clone the entry in the filesystem daemon
@@ -357,7 +361,7 @@ int __file_clone(void * file_data, uint64_t consumer_id, void * new_data, uint64
     };
 
     // Send the IPC_Dup message to the filesystem daemon
-    int result = vfsd_send_persistant(sizeof(request), &request);
+    int result = send_message_port(file->fs_port, sizeof(request), (const char *)&request);
     if (result != 0) {
         return -2;
     }

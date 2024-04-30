@@ -41,7 +41,7 @@ TaskGroup::~TaskGroup() noexcept
                 IPC_Kernel_Group_Destroyed msg = {
                     .type = IPC_Kernel_Group_Destroyed_NUM,
                     .flags = 0,
-                    .port_group_id = id,
+                    .task_group_id = id,
                 };
 
                 try {

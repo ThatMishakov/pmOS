@@ -17,5 +17,43 @@ void register_pipe_with_consumer(uint64_t pipe_port, uint64_t consumer_id)
     }
 
     auto &c = it->second;
-    c.pipe_ports[consumer_id] = pipe_port;
+    c.pipe_ports.insert(pipe_port);
+}
+
+void unregister_pipe_with_consumer(uint64_t pipe_port, uint64_t consumer_id)
+{
+    auto it = fs_consumers.find(consumer_id);
+    if (it == fs_consumers.end())
+        return;
+
+    auto &c = it->second;
+    c.pipe_ports.erase(pipe_port);
+
+    if (c.pipe_ports.empty()) {
+        set_task_group_notifier_mask(consumer_id, main_port, 0);
+
+        fs_consumers.erase(it);
+    }
+}
+
+void notify_consumer_destroyed(pmos_port_t pipe_port, uint64_t consumer_id)
+{
+    try {
+        IPCNotifyConsumerDestroyed msg = {
+            .consumer_id = consumer_id,
+        };
+
+        send_message(pipe_port, msg);
+    } catch (...) {}
+}
+
+void handle_consumer_destroyed(uint64_t consumer_id)
+{
+    auto it = fs_consumers.find(consumer_id);
+    if (it == fs_consumers.end())
+        return;
+
+    auto &c = it->second;
+    for (auto p : c.pipe_ports)
+        notify_consumer_destroyed(p, consumer_id);
 }

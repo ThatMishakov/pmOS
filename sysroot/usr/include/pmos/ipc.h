@@ -172,7 +172,7 @@ typedef struct IPC_Kernel_Group_Destroyed {
     uint32_t flags;
 
     /// ID of the port group that had been destroyed
-    uint64_t port_group_id;
+    uint64_t task_group_id;
 } IPC_Kernel_Group_Destroyed;
 
 /// Notification of task being removed from a group

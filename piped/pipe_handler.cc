@@ -65,6 +65,9 @@ Pipe::ConsumerData &Pipe::register_new_consumer(uint64_t consumer_id, size_t rea
     c->reader_refcount += reader_refcount;
     c->writer_refcount += writer_refcount;
 
+    pipe_data.reader_refcount += reader_refcount;
+    pipe_data.writer_refcount += writer_refcount;
+
     return *c;
 }
 
@@ -368,6 +371,114 @@ void close_pipe(std::unique_ptr<char []> ipc_msg, Message_Descriptor desc)
         pipe_continue = false;
 }
 
+void dup_reply_error(uint64_t port, int errno_result)
+{
+    IPC_Dup_Reply r{
+        .type = IPC_Dup_Reply_NUM,
+        .result_code = static_cast<int16_t>(-errno_result),
+        .file_id = 0,
+        .filesystem_id = 0,
+        .fs_port = 0,
+    };
+    send_message(port, r);
+}
+
+void dup_pipe(std::unique_ptr<char []> ipc_msg, Message_Descriptor desc)
+{
+    try {
+        const auto msg_size = desc.size;
+        const auto sender_task_id = desc.sender;
+        auto &c = pipe_data.pipe_consumers;
+        if (msg_size < sizeof(IPC_Dup)) {
+            fprintf(stderr, "Error: IPC_Dup too small %li from task %li\n", msg_size, sender_task_id);
+            return;
+        }
+
+        const auto &d = *reinterpret_cast<IPC_Dup *>(ipc_msg.get());
+        if (d.file_id > 1) {
+            fprintf(stderr, "Error: IPC_Dup bogus file_id %li from task %li\n", d.file_id, sender_task_id);
+            return;
+        }
+
+        auto consumer_it = c.find(d.fs_consumer_id);
+        if (consumer_it == c.end()) {
+            dup_reply_error(d.reply_port, EPIPE);
+            return;
+        }
+
+        switch (d.file_id) {
+        case 0:
+            if (consumer_it->second->reader_refcount == 0) {
+                dup_reply_error(d.reply_port, EPIPE);
+                return;
+            }
+            break;
+        case 1:
+            if (consumer_it->second->writer_refcount == 0) {
+                dup_reply_error(d.reply_port, EPIPE);
+                return;
+            }
+            break;
+        default:
+            dup_reply_error(d.reply_port, EINVAL);
+            return;
+        }
+
+        const auto new_c_id = d.new_consumer_id;
+        auto new_consumer = c.find(new_c_id);
+        if (new_consumer != c.end()) {
+            IPC_Dup_Reply r{
+                .type = IPC_Dup_Reply_NUM,
+                .result_code = 0,
+                .file_id = d.file_id,
+                .filesystem_id = 0,
+                .fs_port = pipe_data.pipe_port,
+            };
+            send_message(d.reply_port, r);
+            switch (d.file_id) {
+            case 0:
+                new_consumer->second->reader_refcount++;
+                pipe_data.reader_refcount++;
+                break;
+            case 1:
+                new_consumer->second->writer_refcount++;
+                pipe_data.writer_refcount++;
+                break;
+            default:
+                assert(false);
+            }
+            return;
+        }
+
+        bool created_consumer = false;
+        try {
+            pipe_data.register_new_consumer(new_c_id, d.file_id == 0, d.file_id == 1);
+            created_consumer = true;
+            IPC_Dup_Reply r{
+                .type = IPC_Dup_Reply_NUM,
+                .result_code = 0,
+                .file_id = d.file_id,
+                .filesystem_id = 0,
+                .fs_port = pipe_data.pipe_port,
+            };
+            send_message(d.reply_port, r);
+        } catch (std::bad_alloc &e) {
+            if (created_consumer)
+                c.erase(new_c_id);
+            dup_reply_error(d.reply_port, ENOMEM);
+            return;
+        } catch (std::system_error &e) {
+            if (created_consumer)
+                c.erase(new_c_id);
+            dup_reply_error(d.reply_port, e.code().value());
+            return;
+        }
+    } catch (std::system_error &e) {
+        fprintf(stderr, "Error sending dup reply: %s\n", e.what());
+        return;
+    }
+}
+
 void cleanup_consumer(std::unique_ptr<char []> ipc_msg, Message_Descriptor desc)
 {
     const auto msg_size = desc.size;
@@ -446,9 +557,6 @@ void pipe_main(IPC_Pipe_Open o, Message_Descriptor /* desc */)
 
         pipe_data.register_new_consumer(o.fs_consumer_id, 1, 1);
 
-        pipe_data.reader_refcount = 1;
-        pipe_data.writer_refcount = 1;
-
         IPC_Pipe_Open_Reply r{
             .type = IPC_Pipe_Open_Reply_NUM,
             .flags = 0,
@@ -494,6 +602,10 @@ void pipe_main(IPC_Pipe_Open o, Message_Descriptor /* desc */)
         }
         case IPC_Close_NUM: {
             close_pipe(std::move(msg_buff), msg);
+            break;
+        }
+        case IPC_Dup_NUM: {
+            dup_pipe(std::move(msg_buff), msg);
             break;
         }
         case IPCNotifyConsumerDestroyedType: {

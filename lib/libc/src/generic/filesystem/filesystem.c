@@ -764,6 +764,101 @@ finish:
     return result;
 }
 
+int dup(int fd)
+{
+    if (fd < 0) {
+        errno = EBADF;
+        return -1;
+    }
+
+    if (fs_data == NULL) {
+        pthread_spin_lock(&fs_data_lock);
+        if (fs_data == NULL) {
+            struct Filesystem_Data *new_fs_data = init_filesystem();
+            if (new_fs_data == NULL) {
+                pthread_spin_unlock(&fs_data_lock);
+                return -1;
+            }
+            fs_data = new_fs_data;
+        }
+        pthread_spin_unlock(&fs_data_lock);
+    }
+
+    int result = -1;
+    union File_Data new_data = {};
+    const struct Filesystem_Adaptor *adaptor = NULL;
+
+    result = reserve_descriptor(fs_data);
+    if (result < 0) {
+        errno = ENFILE;
+        return -1;
+    }
+
+    result = pthread_spin_lock(&fs_data->lock);
+    if (result != SUCCESS) {
+        release_descriptor(fs_data);
+        errno = result;
+        return -1;
+    }
+
+    if (fd >= fs_data->capacity) {
+        pthread_spin_unlock(&fs_data->lock);
+        errno = EBADF;
+        return -1;
+    }
+
+    if (!fs_data->descriptors_vector[fd].used) {
+        pthread_spin_unlock(&fs_data->lock);
+        errno = EBADF;
+        return -1;
+    }
+
+    union File_Data old_data = fs_data->descriptors_vector[fd].data;
+    adaptor = fs_data->descriptors_vector[fd].adaptor;
+    const int type = fs_data->descriptors_vector[fd].type;
+    const size_t offset = fs_data->descriptors_vector[fd].offset;
+    const int flags = fs_data->descriptors_vector[fd].flags;
+
+    pthread_spin_unlock(&fs_data->lock);
+
+    result = adaptor->clone(&old_data, fs_data->fs_consumer_id, &new_data, fs_data->fs_consumer_id);
+    if (result < 0) {
+        release_descriptor(fs_data);
+        return -1;
+    }
+
+    result = pthread_spin_lock(&fs_data->lock);
+    if (result != SUCCESS) {
+        release_descriptor(fs_data);
+        adaptor->free(&new_data, fs_data->fs_consumer_id);
+        errno = result;
+        return -1;
+    }
+
+    int descriptor = -1;
+    for (size_t i = 0; i < fs_data->capacity; ++i) {
+        if (!fs_data->descriptors_vector[i].used) {
+            descriptor = i;
+            break;
+        }
+    }
+    assert(descriptor >= 0);
+    --fs_data->reserved_count;
+    ++fs_data->count;
+
+    fs_data->descriptors_vector[descriptor].type = type;
+    fs_data->descriptors_vector[descriptor].used = true;
+    fs_data->descriptors_vector[descriptor].flags = flags;
+    fs_data->descriptors_vector[descriptor].offset = offset;
+    fs_data->descriptors_vector[descriptor].adaptor = adaptor;
+    fs_data->descriptors_vector[descriptor].data = new_data;
+
+    result = descriptor;
+
+    pthread_spin_unlock(&fs_data->lock);
+    return result;
+}
+
 int close(int filedes) {
     return __close_internal(filedes);
 }
