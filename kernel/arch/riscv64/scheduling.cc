@@ -207,8 +207,10 @@ dtb_node * dtb_get_plic_node()
 
 ReturnStr<u32> dtb_get_hart_rtnic_id(u64 hart_id)
 {
-    if (not have_dtb())
+    if (not have_dtb()) {
+        serial_logger.printf("No DTB found\n");
         return {ERROR_GENERAL, 0};
+    }
 
     auto cpu = find_cpu(hart_id);
     if (cpu == nullptr) {
@@ -224,13 +226,14 @@ ReturnStr<u32> dtb_get_hart_rtnic_id(u64 hart_id)
 
     // I have no idea if I am doing it right, but from reading Linux source and from what I could find
     // this is what has to be done...
-    u32 phandle = 0;
+    size_t phandle = 0;
     auto prop = dtb_find_prop(intc, "phandle");
-    if (prop == nullptr) {
-        serial_logger.printf("Could not find phandle property for interrupt-controller node\n");
+    auto count = dtb_read_prop_values(prop, 1, &phandle);
+    if (count != 1) {
+        serial_logger.printf("Could not read phandle property for interrupt-controller node\n");
         return {ERROR_GENERAL, 0};
     }
-    dtb_read_prop_values(prop, 1, (size_t *)&phandle);
+    serial_logger.printf("My phandle: %i\n", phandle);
 
 
     auto plic = dtb_get_plic_node();
@@ -246,8 +249,8 @@ ReturnStr<u32> dtb_get_hart_rtnic_id(u64 hart_id)
         return {ERROR_GENERAL, 0};
     }
 
-    u32 cells = 0;
-    dtb_read_prop_values(prop, 1, (size_t *)&cells);
+    size_t cells = 0;
+    dtb_read_prop_values(prop, 1, &cells);
     if (cells != 1) {
         // cells > 1 might be right, but I have no idea what its meaning would be
         serial_logger.printf("Unexpected #interrupt-cells value: %i (wanted 1)\n", cells);
@@ -260,12 +263,14 @@ ReturnStr<u32> dtb_get_hart_rtnic_id(u64 hart_id)
         return {ERROR_GENERAL, 0};
     }
 
-    size_t count = dtb_read_prop_pairs(prop, {1, 1}, nullptr);
+    count = dtb_read_prop_pairs(prop, {1, 1}, nullptr);
     klib::unique_ptr<dtb_pair[]> pairs(new dtb_pair[count]);
     dtb_read_prop_pairs(prop, {1, 1}, pairs.get());
-    for (size_t i = 0; i < count; ++i)
+    for (size_t i = 0; i < count; ++i) {
+        serial_logger.printf("Pair: %i %i my %i\n", pairs[i].a, pairs[i].b, phandle);
         if (pairs[i].a == phandle and pairs[i].b == IRQ_S_EXT)
             return {SUCCESS, (u32)i};
+    }
 
     return {ERROR_GENERAL, 0};
 }

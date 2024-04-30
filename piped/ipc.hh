@@ -7,6 +7,13 @@
 extern pmos_port_t main_port;
 pmos_port_t create_port();
 
+void send_message(pmos_port_t port, auto *data, size_t size)
+{
+    auto r = send_message_port(port, size, reinterpret_cast<const void *>(data));
+    if (r != SUCCESS)
+        throw std::system_error(-r, std::system_category());
+}
+
 void send_message(pmos_port_t port, const auto &data)
 {
     auto r = send_message_port(port, sizeof(data), reinterpret_cast<const void *>(&data));
@@ -34,6 +41,12 @@ constexpr unsigned IPCNotifyUnregisterConsumerType = 0xff000002;
 struct IPCNotifyUnregisterConsumer {
     uint32_t type = IPCNotifyUnregisterConsumerType;
     pmos_port_t pipe_port = 0;
+    uint64_t consumer_id = 0;
+};
+
+constexpr unsigned IPCNotifyConsumerDestroyedType = 0xff000003;
+struct IPCNotifyConsumerDestroyed {
+    uint32_t type = IPCNotifyConsumerDestroyedType;
     uint64_t consumer_id = 0;
 };
 

@@ -234,6 +234,8 @@ typename set<K>::size_type set<K>::erase(const K& key)
 template<typename K>
 typename set<K>::iterator set<K>::erase(iterator it)
 {
+    if (it == end())
+        return end();
     node* n = next(it.ptr);
     erase_node(it.ptr);
     return n;

@@ -87,6 +87,9 @@ void register_log_output(const Message_Descriptor &, const IPC_Register_Log_Outp
 int main()
 {
     set_log_port(main_port, 0);
+    log("\033[1;32m" "Hello from logd! My PID: " + std::to_string(get_task_id()) + "\033[0m\n" "\n");
+
+    
 
     {
         result_t r = name_port(main_port, stdout_port_name.c_str(), stdout_port_name.length(), 0);

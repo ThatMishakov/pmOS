@@ -38,6 +38,8 @@
 #include <stddef.h>
 #include <stdlib.h>
 
+int vfsd_send_persistant(size_t msg_size, const void *message);
+
 // Per-thread port for communicating with the filesystem daemons
 // This is not global because messaging ports are currently
 // bound to tasks (threads) and not processes as a whole and
@@ -45,6 +47,20 @@
 // block on IO operations or invest in complex synchronization
 // schemes
 static _Thread_local pmos_port_t fs_cmd_reply_port = INVALID_PORT;
+
+pmos_port_t prepare_reply_port()
+{
+    if (fs_cmd_reply_port == INVALID_PORT) {
+        // Create a new port for the current thread
+        ports_request_t port_request = create_port(TASK_ID_SELF, 0);
+        if (port_request.result != SUCCESS)
+            errno = EIO;
+        else
+            fs_cmd_reply_port = port_request.port;
+    }
+
+    return fs_cmd_reply_port;
+}
 
 __attribute__((visibility("hidden"))) pmos_port_t __get_fs_cmd_reply_port()
 {
@@ -69,13 +85,6 @@ __attribute__((visibility("hidden"))) pmos_port_t __get_fs_cmd_reply_port()
 // It could be global but it doesn't really matter and having it
 // this way helps avoid obscure concurrency issues
 __thread pmos_port_t fs_port = INVALID_PORT;
-
-static pmos_port_t get_vfs_port() {
-    // Global thread-local variable to cache the filesystem port
-    static _Thread_local pmos_port_t fs_port = INVALID_PORT;
-
-    return fs_port;
-}
 
 static pmos_port_t request_filesystem_port()
 {
@@ -268,9 +277,60 @@ ssize_t __file_read(void * file_data, uint64_t consumer_id, void * buf, size_t s
 // }
 
 ssize_t __file_write(void * file_data, uint64_t consumer_id, const void * buf, size_t size, size_t offset) {
-    // Not yet implemented
-    errno = ENOSYS; // Function not implemented
-    return -1;
+    ssize_t count = -1;
+    IPC_Generic_Msg *reply_msg = NULL;
+    if (size > SSIZE_MAX) {
+        errno = EOVERFLOW;
+        return -1;
+    }
+
+    pmos_port_t reply_port = prepare_reply_port();
+    if (reply_port == INVALID_PORT) {
+        return -1;
+    }
+
+    struct File *file = (struct File *)file_data;
+    const size_t msg_size = sizeof(IPC_Write) + size;
+
+    uint64_t buff[1 + (msg_size - 1) / sizeof(uint64_t)];
+    IPC_Write *message = (void *)buff;
+    message->type = IPC_Write_NUM;
+    message->flags = 0;
+    message->file_id = file->file_id;
+    message->fs_consumer_id = consumer_id;
+    message->offset = offset;
+    message->reply_port = reply_port;
+
+    memcpy(message->data, buf, size);
+
+    result_t k_result = send_message_port(file->fs_port, msg_size, (const char *)message);
+    if (k_result != SUCCESS) {
+        errno = EIO;
+        goto error;
+    }
+
+    Message_Descriptor reply_descr;
+    k_result = get_message(&reply_descr, (unsigned char **)&reply_msg, reply_port);
+    if (k_result != SUCCESS) {
+        errno = EIO;
+        goto error;
+    }
+
+    if (reply_msg->type != IPC_Write_Reply_NUM) {
+        errno = EIO;
+        goto error;
+    }
+
+    IPC_Write_Reply *reply = (IPC_Write_Reply *)reply_msg;
+    if (reply->result_code < 0) {
+        errno = -reply->result_code;
+        goto error;
+    }
+
+    count = reply->bytes_written;
+error:
+    free(reply_msg);
+    return count;
 }
 
 int __file_clone(void * file_data, uint64_t consumer_id, void * new_data, uint64_t new_consumer_id) {
@@ -577,23 +637,9 @@ pmos_port_t get_pipe_port()
     return pipe_port;
 }
 
-pmos_port_t prepare_reply_port()
-{
-    if (fs_cmd_reply_port == INVALID_PORT) {
-        // Create a new port for the current thread
-        ports_request_t port_request = create_port(TASK_ID_SELF, 0);
-        if (port_request.result != SUCCESS)
-            errno = EIO;
-        else
-            fs_cmd_reply_port = port_request.port;
-    }
-
-    return fs_cmd_reply_port;
-}
-
 int __create_pipe(void *file_data, uint64_t consumer_id)
 {
-    struct File (*file)[2] = (struct File (*)[2])file_data;
+    union File_Data *file = file_data;
 
     pmos_port_t reply_port = prepare_reply_port();
     if (reply_port == INVALID_PORT) {
@@ -639,13 +685,13 @@ int __create_pipe(void *file_data, uint64_t consumer_id)
         return -1;
     }
 
-    file[0]->file_id = reply->reader_id;
-    file[0]->filesystem_id = reply->filesystem_id;
-    file[0]->fs_port = reply->pipe_port;
+    file[0].file.file_id = reply->reader_id;
+    file[0].file.filesystem_id = reply->filesystem_id;
+    file[0].file.fs_port = reply->pipe_port;
 
-    file[1]->file_id = reply->writer_id;
-    file[1]->filesystem_id = reply->filesystem_id;
-    file[1]->fs_port = reply->pipe_port;
+    file[1].file.file_id = reply->writer_id;
+    file[1].file.filesystem_id = reply->filesystem_id;
+    file[1].file.fs_port = reply->pipe_port;
 
     free(reply_msg);
     return 0;

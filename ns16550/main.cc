@@ -397,9 +397,11 @@ void react_interrupt()
 
 int main()
 {
-    printf("Hello from ns16550!\n");
+    printf("Hello from ns16550! My task id: %li\n", get_task_id());
 
     ns16550_init();
+
+    write_str("!! ns16550 task id: " + std::to_string(get_task_id()) + " !!\n");
 
     request_logger_port();
 

@@ -36,19 +36,17 @@
 
 static __thread pmos_port_t sleep_reply_port = INVALID_PORT;
 
-// TODO
 static pmos_port_t get_sleep_port() {
-    static pmos_port_t sleep_port = INVALID_PORT;
-    static const char sleep_port_name[] = "/pmos/devicesd";
-    if (sleep_port == INVALID_PORT) {
-        ports_request_t port_req = get_port_by_name(sleep_port_name, strlen(sleep_port_name), 0);
-        if (port_req.result != SUCCESS) {
-            // Handle error
+    if (sleep_reply_port == INVALID_PORT) {
+        ports_request_t port_request = create_port(TASK_ID_SELF, 0);
+        if (port_request.result != SUCCESS) {
+            errno = -port_request.result;
             return INVALID_PORT;
         }
-
-        return port_req.port;
+        sleep_reply_port = port_request.port;
     }
+
+    return sleep_reply_port;
 }
 
 // int pmos_request_timer(pmos_port_t port, size_t ms) {
@@ -100,6 +98,7 @@ int pmos_request_timer(pmos_port_t port, size_t ms) {
 }
 
 unsigned int sleep(unsigned int seconds) {
+    pmos_port_t sleep_reply_port = get_sleep_port();
     size_t ms = seconds * 1000;
     result_t result = pmos_request_timer(sleep_reply_port, ms);
     if (result != SUCCESS) {

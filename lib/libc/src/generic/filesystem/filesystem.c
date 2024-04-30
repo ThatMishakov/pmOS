@@ -354,7 +354,7 @@ int stat(const char *restrict name, struct stat *restrict stat)
         goto finish;
     }
 
-    request->num = IPC_Stat_NUM;
+    request->type = IPC_Stat_NUM;
     request->flags = 0;
     request->reply_port = reply_port;
     request->fs_consumer_id = fs_data->fs_consumer_id;
@@ -372,7 +372,7 @@ int stat(const char *restrict name, struct stat *restrict stat)
         goto finish;
     }
 
-    if (reply->num != IPC_Stat_Reply_NUM) {
+    if (reply->type != IPC_Stat_Reply_NUM) {
         errno = EIO;
         result_code = -1;
         goto finish;
@@ -1055,12 +1055,11 @@ ssize_t __write_internal(long int fd, const void * buf, size_t count, size_t _of
         return -1;
     }
 
-    size_t offset = inc_offset ? file_desc.offset : _offset;
     bool is_seekable = file_desc.adaptor->isseekable(&file_desc.data, fs_data->fs_consumer_id);
     bool seek = is_seekable && inc_offset;
     union File_Data data_copy = file_desc.data;
 
-    count = file_desc.adaptor->write(&file_desc.data, fs_data->fs_consumer_id, buf, count, offset);
+    count = file_desc.adaptor->write(&file_desc.data, fs_data->fs_consumer_id, buf, count, _offset);
 
     bool changed = memcmp(&data_copy, &file_desc.data, sizeof(union File_Data)) != 0;
 
@@ -1082,10 +1081,6 @@ ssize_t __write_internal(long int fd, const void * buf, size_t count, size_t _of
         pthread_spin_unlock(&fs_data->lock);
         return count;
     }
-
-    // Update the file descriptor's offset
-    if (seek)
-        fs_data->descriptors_vector[fd].offset = offset + count;
 
     if (changed)
         fs_data->descriptors_vector[fd].data = file_desc.data;

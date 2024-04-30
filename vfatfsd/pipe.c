@@ -2,11 +2,20 @@
 #include <stdio.h>
 #include <pthread.h>
 
-void writer_thread(void *arg)
+void *writer_thread(void *arg)
 {
     int *pipefd = (int *)arg;
-    write(pipefd[1], "hello", 5);
+    printf("Writing...\n");
+    for (int i = 0; i < 3; ++i) {
+        int result = write(pipefd[1], "hello!", 6);
+        printf("Wrote %d bytes\n", result);
+        if (result == -1) {
+            perror("write");
+        }
+        sleep(1);
+    }
     close(pipefd[1]);
+    return NULL;
 }
 
 void test_pipe()
@@ -23,12 +32,13 @@ void test_pipe()
     int nbytes;
 
     // Create a thread to write to the pipe
-    pthread_t writer_thread;
-    pthread_create(&writer_thread, NULL, writer_thread, pipefd);
+    pthread_t writer_thread_;
+    pthread_create(&writer_thread_, NULL, writer_thread, pipefd);
+    pthread_detach(writer_thread_);
 
     // Read from the pipe
-    nbytes = read(pipefd[0], buf, sizeof(buf));
+    while (nbytes = read(pipefd[0], buf, sizeof(buf))) {
+        printf("Read %d bytes: %s\n", nbytes, buf);
+    }
     close(pipefd[0]);
-
-    printf("Read %d bytes: %s\n", nbytes, buf);
 }

@@ -297,6 +297,8 @@ void handle_interrupt()
     }
 
     while (c->current_task->status == TaskStatus::TASK_DYING) {
+        // Hold onto the current task
+        auto cc = c->current_task;
         c->current_task->cleanup_and_release();
     }
 

@@ -223,12 +223,15 @@ typedef struct IPC_Write {
     /// Offset where the data should be written
     uint64_t offset;
 
-    /// Channel where the reply would be sent
-    uint64_t reply_chan;
+    /// Port where the reply would be sent
+    uint64_t reply_port;
+
+    /// ID of the filesystem consumer
+    uint64_t fs_consumer_id;
 
     /// Data to be written
     char data[0];
-};
+} IPC_Write;
 
 #define IPC_Read_NUM 0x42
 typedef struct IPC_Read {
@@ -272,20 +275,20 @@ typedef struct IPC_Read_Reply {
 #define IPC_Write_Reply_NUM 0x51
 typedef struct IPC_Write_Reply {
     /// Message type (must be IPC_Write_Reply_NUM)
-    uint32_t num;
+    uint32_t type;
 
     uint16_t flags;
 
-    int16_t result;
+    int16_t result_code;
 
     uint64_t bytes_written;
-};
+} IPC_Write_Reply;
 
 #define IPC_Stat_NUM 0x56
 /// Message sent by the user process to VFS daemon get file stats
 typedef struct IPC_Stat {
     /// Message type (must be IPC_Stat_NUMº)
-    uint32_t num;
+    uint32_t type;
 
     /// Flags changing the behavior of the open operation
     uint32_t flags;
@@ -304,7 +307,7 @@ typedef struct IPC_Stat {
 /// Reply to the IPC_Stat message from the vfs daemon
 typedef struct IPC_Stat_Reply {
     /// Message type (must be IPC_Stat_Reply_NUM)
-    uint32_t num;
+    uint32_t type;
 
     /// Flags
     uint16_t flags;
