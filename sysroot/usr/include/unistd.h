@@ -453,6 +453,31 @@ int          execvp(const char *, char *const []);
 void        _exit(int);
 int          fchown(int, uid_t, gid_t);
 
+char        *crypt(const char *, const char *);
+char        *ctermid(char *);
+void         encrypt(char[64], int);
+int          fchdir(int);
+int          fdatasync(int);
+int          fsync(int);
+long         gethostid(void);
+pid_t        getpgid(pid_t);
+pid_t        getsid(pid_t);
+char        *getwd(char *);
+int          lchown(const char *, uid_t, gid_t);
+int          lockf(int, int, off_t);
+int          nice(int);
+ssize_t      pread(int, void *, size_t, off_t);
+ssize_t      pwrite(int, const void *, size_t, off_t);
+pid_t        setpgrp(void);
+int          setregid(gid_t, gid_t);
+int          setreuid(uid_t, uid_t);
+void         swab(const void *_RESTRICT, void *_RESTRICT, ssize_t);
+void         sync(void);
+int          truncate(const char *, off_t);
+useconds_t   ualarm(useconds_t, useconds_t);
+int          usleep(useconds_t);
+pid_t        vfork(void);
+
 /**
  * @brief Create a new process (fork).
  *
@@ -569,6 +594,7 @@ int          tcsetpgrp(int, pid_t);
 char        *ttyname(int);
 int          ttyname_r(int, char *, size_t);
 int          unlink(const char *);
+int unlinkat(int fd, const char *path, int flag);
 
 /**
  * @brief Write data to a file descriptor.

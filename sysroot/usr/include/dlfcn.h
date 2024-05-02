@@ -33,6 +33,13 @@
 extern "C" {
 #endif
 
+typedef struct {
+    const char *dli_fname;
+    void       *dli_fbase;
+    const char *dli_sname;
+    void       *dli_saddr;
+} Dl_info;
+
 #ifdef __STDC_HOSTED__
 
 #define RTLD_LAZY 0x00
@@ -45,6 +52,9 @@ int dlclose(void *);
 char *dlerror(void);
 void *dlopen(const char *, int);
 void *dlsym(void *, const char *);
+
+int dladdr(const void *addr, Dl_info *info);
+int dladdr1(const void *addr, Dl_info *info, void **extra_info, int flags);
 
 #endif
 

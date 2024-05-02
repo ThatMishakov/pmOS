@@ -35,6 +35,7 @@
 
 #define __DECLARE_SIZE_T
 #define __DECLARE_WCHAR_T
+#define __DECLARE_LOCALE_T
 #include "__posix_types.h"
 
 /// Successful termination for exit()
@@ -163,7 +164,7 @@ void* realloc (void* ptr, size_t size);
  * @warning The `abort` function does not return to the caller and does not execute any
  *          registered exit handlers or cleanup functions.
  */
-void abort(void);
+_Noreturn void abort(void);
 
 /**
  * @brief Register a function to be called at program exit.
@@ -286,6 +287,46 @@ size_t wcstombs(char * s,
  */
 char *mktemp(char * t);
 // template can't be used as a variable name as it's a C++ keyword
+
+void *aligned_alloc( size_t alignment, size_t size );
+
+long strtol_l(const char * nptr, char ** endptr, int base, locale_t loc);
+long long strtoll_l(const char * nptr, char ** endptr, int base, locale_t loc);
+float strtof_l(const char * nptr, char ** endptr, locale_t loc);
+double strtod_l(const char * nptr, char ** endptr, locale_t loc);
+long double strtold_l(const char * nptr, char ** endptr, locale_t loc);
+unsigned long strtoul_l(const char * nptr, char ** endptr, int base, locale_t loc);
+unsigned long long strtoull_l(const char * nptr, char ** endptr, int base, locale_t loc);
+
+
+long          a64l(const char *);
+double        drand48(void);
+char         *ecvt(double, int, int *_RESTRICT, int *_RESTRICT);
+double        erand48(unsigned short[3]);
+char         *fcvt(double, int, int *_RESTRICT, int *_RESTRICT);
+char         *gcvt(double, int, char *);
+int           getsubopt(char **, char *const *, char **);
+int           grantpt(int);
+char         *initstate(unsigned, char *, size_t);
+long          jrand48(unsigned short[3]);
+char         *l64a(long);
+void          lcong48(unsigned short[7]);
+long          lrand48(void);
+char         *mktemp(char *);
+long          mrand48(void);
+long          nrand48(unsigned short[3]);
+int           posix_memalign(void **, size_t, size_t);
+int           posix_openpt(int);
+char         *ptsname(int);
+int           putenv(char *);
+int           rand_r(unsigned *);
+long          random(void);
+char         *realpath(const char *_RESTRICT, char *_RESTRICT);
+unsigned short seed48(unsigned short[3]);
+int           setenv(const char *, const char *, int);
+void          setkey(const char *);
+char         *setstate(const char *);
+
 
 #endif
 

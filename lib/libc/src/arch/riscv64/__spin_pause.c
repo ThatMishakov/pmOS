@@ -34,4 +34,5 @@ void __spin_pause(void)
     // wait for a spinlock. I believe I've seen that RISC-V has a similar NOP hint
     // for a CPU, but it doesn't really matter for now
     // TODO: Fix this
+    //__asm__ __volatile__("pause");
 }

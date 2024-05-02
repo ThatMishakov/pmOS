@@ -113,6 +113,8 @@ int vfprintf ( FILE * stream, const char * format, va_list arg );
 int vfscanf ( FILE * stream, const char * format, va_list arg );
 int vprintf ( const char * format, va_list arg );
 int vscanf ( const char * format, va_list arg );
+int asprintf(char **strp, const char *fmt, ...);
+int vasprintf(char **strp, const char *fmt, va_list ap); 
 
 /**
  * @brief Format a string with a maximum length, using a va_list.
@@ -285,6 +287,17 @@ void perror ( const char * str );
 FILE *fdopen(int fd, const char *mode);
 
 int      fileno(FILE *);
+
+char *ctermid(char *);
+FILE *fdopen(int, const char *);
+int fileno(FILE *);
+void flockfile(FILE *);
+int fseeko(FILE *, off_t, int);
+off_t ftello(FILE *);
+int pclose(FILE *);
+FILE *popen(const char *, const char *);
+char *tempnam(const char *, const char *);
+
 
 #define BUFSIZ 4096
 #define EOF -1

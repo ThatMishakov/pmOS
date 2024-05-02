@@ -26,14 +26,17 @@ list(REMOVE_ITEM SRC "${SRC_FOLDER}/arch/${TARGET_ARCH}/crti.S" "${SRC_FOLDER}/a
 set_source_files_properties(${SRC_FOLDER}/generic/malloc/malloc.c PROPERTIES COMPILE_FLAGS "-fno-builtin-malloc -fno-builtin-free -fno-builtin-calloc -fno-builtin-realloc")
 set_source_files_properties(${SRC_FOLDER}/generic/string.c PROPERTIES COMPILE_FLAGS "-fno-builtin")
 
-# Main library
-add_library(c STATIC ${SRC})
-set_target_properties(c PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/build)
+add_library(csrc OBJECT ${SRC})
+add_library(c STATIC $<TARGET_OBJECTS:csrc>)
+add_library(c_static SHARED $<TARGET_OBJECTS:csrc>)
+
+set_target_properties(c_static PROPERTIES OUTPUT_NAME c)
 
 # crti and crtn
 add_library(crtstuff OBJECT ${SRC_FOLDER}/arch/${TARGET_ARCH}/crti.S ${SRC_FOLDER}/arch/${TARGET_ARCH}/crtn.S ${SRC_FOLDER}/arch/${TARGET_ARCH}/crt0.S)
 
 set(INSTALL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../sysroot/usr/lib" CACHE PATH "Installation directory")
 install(TARGETS c ARCHIVE DESTINATION ${INSTALL_DIR})
+install(TARGETS c_static DESTINATION ${INSTALL_DIR})
 
 install(FILES $<TARGET_OBJECTS:crtstuff> DESTINATION ${INSTALL_DIR})

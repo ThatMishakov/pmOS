@@ -36,6 +36,7 @@
 typedef unsigned int wint_t;
 typedef unsigned int wctype_t;
 typedef unsigned int mbstate_t;
+typedef unsigned int wctrans_t;
 
 #define WCHAR_MAX (32767)
 #define WCHAR_MIN (-32768)
@@ -106,8 +107,10 @@ size_t            wcsspn(const wchar_t *, const wchar_t *);
 wchar_t          *wcsstr(const wchar_t *, const wchar_t *);
 double            wcstod(const wchar_t *, wchar_t **);
 wchar_t          *wcstok(wchar_t *, const wchar_t *, wchar_t **);
-long int          wcstol(const wchar_t *, wchar_t **, int);
-unsigned long int wcstoul(const wchar_t *, wchar_t **, int);
+long int          wcstol(const wchar_t *_RESTRICT nptr, wchar_t **_RESTRICT endptr, int);
+long long wcstoll(const wchar_t *_RESTRICT nptr, wchar_t **_RESTRICT endptr, int base);
+unsigned long int wcstoul(const wchar_t *_RESTRICT, wchar_t **_RESTRICT, int);
+unsigned long long wcstoull(const wchar_t *_RESTRICT, wchar_t **_RESTRICT, int);
 wchar_t          *wcswcs(const wchar_t *, const wchar_t *);
 int               wcswidth(const wchar_t *, size_t);
 size_t            wcsxfrm(wchar_t *, const wchar_t *, size_t);
@@ -121,6 +124,46 @@ wchar_t          *wmemmove(wchar_t *, const wchar_t *, size_t);
 wchar_t          *wmemset(wchar_t *, wchar_t, size_t);
 int               wprintf(const wchar_t *, ...);
 int               wscanf(const wchar_t *, ...);
+
+wchar_t *wcpcpy(wchar_t *_RESTRICT, const wchar_t *_RESTRICT);
+wchar_t *wcpncpy(wchar_t *_RESTRICT, const wchar_t *_RESTRICT, size_t);
+int wcscasecmp(const wchar_t *, const wchar_t *);
+int wcscasecmp_l(const wchar_t *, const wchar_t *, locale_t);
+int wcscoll_l(const wchar_t *, const wchar_t *, locale_t);
+wchar_t *wcsdup(const wchar_t *);
+int wcsncasecmp(const wchar_t *, const wchar_t *, size_t);
+int wcsncasecmp_l(const wchar_t *, const wchar_t *, size_t,locale_t);
+size_t wcsnlen(const wchar_t *, size_t);
+size_t wcsnrtombs(char *_RESTRICT, const wchar_t **_RESTRICT, size_t, size_t, mbstate_t *_RESTRICT);
+size_t wcsxfrm_l(wchar_t *_RESTRICT, const wchar_t *_RESTRICT, size_t, locale_t);
+size_t mbsnrtowcs(wchar_t *_RESTRICT, const char **_RESTRICT, size_t, size_t, mbstate_t *_RESTRICT);
+size_t mbsrtowcs(wchar_t *_RESTRICT, const char **_RESTRICT, size_t, mbstate_t *_RESTRICT);
+
+int       iswalnum_l(wint_t, locale_t);
+int       iswalpha_l(wint_t, locale_t);
+int       iswblank_l(wint_t, locale_t);
+int       iswcntrl_l(wint_t, locale_t);
+int       iswctype_l(wint_t, wctype_t, locale_t);
+int       iswdigit_l(wint_t, locale_t);
+int       iswgraph_l(wint_t, locale_t);
+int       iswlower_l(wint_t, locale_t);
+int       iswprint_l(wint_t, locale_t);
+int       iswpunct_l(wint_t, locale_t);
+int       iswspace_l(wint_t, locale_t);
+int       iswupper_l(wint_t, locale_t);
+int       iswxdigit_l(wint_t, locale_t);
+wint_t    towctrans_l(wint_t, wctrans_t, locale_t);
+wint_t    towlower_l(wint_t, locale_t);
+wint_t    towupper_l(wint_t, locale_t);
+wctrans_t wctrans_l(const char *, locale_t);
+wctype_t  wctype_l(const char *, locale_t);
+
+
+
+
+double wcstod(const wchar_t *_RESTRICT nptr, wchar_t **_RESTRICT endptr);
+float wcstof(const wchar_t *_RESTRICT nptr, wchar_t **_RESTRICT endptr);
+long double wcstold(const wchar_t *_RESTRICT nptr, wchar_t **_RESTRICT endptr);
 
 #if defined(__cplusplus)
 } /* extern "C" */

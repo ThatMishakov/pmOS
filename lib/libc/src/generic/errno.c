@@ -30,6 +30,6 @@
 
 int* __attribute__((weak)) __get_errno()
 {
-    static int __thread __errno = 0;
+    static __thread int __errno = 0;
     return &__errno;
 }

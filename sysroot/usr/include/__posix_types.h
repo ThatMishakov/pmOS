@@ -26,6 +26,14 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#if defined(__DECLARE_WCHAR_T) && !defined(__DECLARED_WCHAR_T)
+// wchar_t is a keyword in C++
+#ifndef __cplusplus
+typedef int wchar_t;
+#endif
+#define __DECLARED_WCHAR_T
+#endif
+
 #if defined(__DECLARE_NULL) && !defined(__DECLARED_NULL)
 #ifndef __cplusplus
 #define NULL ((void *)0)
@@ -34,11 +42,6 @@
 #define NULL 0
 #endif
 #define __DECLARED_NULL
-#endif
-
-#if defined(__DECLARE_WCHAR_T) && !defined(__DECLARED_WCHAR_T)
-typedef int wchar_t;
-#define __DECLARED_WCHAR_T
 #endif
 
 #if defined(__DECLARE_SIZE_T) && !defined(__DECLARED_SIZE_T)
@@ -252,4 +255,22 @@ typedef struct timespec {
     long tv_nsec;
 };
 #define __DECLARED_TIMESPEC
+#endif
+
+#if defined(__DECLARE_FSBLKCNT_T) && !defined(__DECLARED_FSBLKCNT_T)
+typedef unsigned long fsblkcnt_t;
+#define __DECLARED_FSBLKCNT_T
+#endif
+
+#if defined(__DECLARE_FSFILCNT_T) && !defined(__DECLARED_FSFILCNT_T)
+typedef unsigned long fsfilcnt_t;
+#define __DECLARED_FSFILCNT_T
+#endif
+
+#ifndef _RESTRICT
+#ifdef __cplusplus
+#define _RESTRICT __restrict
+#else
+#define _RESTRICT restrict
+#endif
 #endif

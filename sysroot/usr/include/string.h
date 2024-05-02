@@ -174,6 +174,12 @@ char *strndup(const char *str, size_t n);
 */
 char *stpncpy(char *dst, const char * src, size_t sz);
 
+int strcoll_l(const char *, const char *, locale_t);
+char *strerror_l(int, locale_t);
+int strerror_r(int, char *, size_t);
+char *strtok_r(char *_RESTRICT, const char *_RESTRICT, char **_RESTRICT);
+size_t strxfrm_l(char *_RESTRICT, const char *_RESTRICT, size_t, locale_t);
+
 #if defined(__cplusplus)
 } /* extern "C" */
 #endif

@@ -29,12 +29,16 @@
 #ifndef _CTYPE_H
 #define _CTYPE_H
 
+#define __DECLARE_LOCALE_T
+#include "__posix_types.h"
+
 #if defined(__cplusplus)
 extern "C" {
 #endif
 
 int isalnum(int c);
 int isalpha(int c);
+int isascii(int);
 
 /**
  * @brief Check if a character is a blank character.
@@ -89,6 +93,25 @@ int isupper(int c);
 int isxdigit(int c);
 int tolower(int c);
 int toupper(int c);
+int toascii(int);
+
+int isalnum_l(int, locale_t);
+int isalpha_l(int, locale_t);
+int isblank_l(int, locale_t);
+int iscntrl_l(int, locale_t);
+int isdigit_l(int, locale_t);
+int isgraph_l(int, locale_t);
+int islower_l(int, locale_t);
+int isprint_l(int, locale_t);
+int ispunct_l(int, locale_t);
+int isspace_l(int, locale_t);
+int isupper_l(int, locale_t);
+int isxdigit_l(int, locale_t);
+int tolower_l(int, locale_t);
+int toupper_l(int, locale_t);
+
+#define _toupper toupper
+#define _tolower tolower
 
 #if defined(__cplusplus)
 } /* extern "C" */
