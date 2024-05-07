@@ -45,15 +45,14 @@ void test_pipe()
     int nbytes;
 
     // Create a thread to write to the pipe
+    printf("Creating writer thread...\n");
     pthread_t writer_thread_;
     pthread_create(&writer_thread_, NULL, writer_thread, pipefd);
-    pthread_join(writer_thread_, NULL);
     pthread_detach(writer_thread_);
 
     // Read from the pipe
     while (nbytes = read(pipefd[0], buf, sizeof(buf))) {
         printf("Read %d bytes: %s\n", nbytes, buf);
-        sleep(2);
     }
     close(pipefd[0]);
 }

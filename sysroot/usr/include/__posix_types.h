@@ -274,3 +274,11 @@ typedef unsigned long fsfilcnt_t;
 #define _RESTRICT restrict
 #endif
 #endif
+
+#ifndef _NORETURN
+#ifdef __cplusplus
+#define _NORETURN [[noreturn]]
+#else
+#define _NORETURN _Noreturn
+#endif
+#endif

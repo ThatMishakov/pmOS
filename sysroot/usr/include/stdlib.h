@@ -164,7 +164,7 @@ void* realloc (void* ptr, size_t size);
  * @warning The `abort` function does not return to the caller and does not execute any
  *          registered exit handlers or cleanup functions.
  */
-_Noreturn void abort(void);
+_NORETURN void abort(void);
 
 /**
  * @brief Register a function to be called at program exit.

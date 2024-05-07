@@ -81,7 +81,7 @@ enum {
  * tls_data variable holds the end of the region which is used by the __thread variabled.
  * self must point to itself. In x86, self must be loaded into %gs or %fs registors depending on the architecture.
  */
-typedef struct uthread {
+struct uthread {
     unsigned char tls_data[0];
     struct uthread *self;
     void * stack_top;
@@ -91,6 +91,15 @@ typedef struct uthread {
     int thread_status;
     // TODO: Store errno here instead of __thread
     pmos_port_t join_notify_port; // Port used to notify the thread that does pthread_join() that the thread has exited
+
+    struct {
+        void *data_ptr;
+        size_t generation;
+    } *dtv;
+    size_t dtv_size;
+
+    pmos_port_t fs_port;
+    pmos_port_t cmd_reply_port;
 };
 
 /**

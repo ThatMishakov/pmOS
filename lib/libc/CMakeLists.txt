@@ -28,15 +28,15 @@ set_source_files_properties(${SRC_FOLDER}/generic/string.c PROPERTIES COMPILE_FL
 
 add_library(csrc OBJECT ${SRC})
 add_library(c STATIC $<TARGET_OBJECTS:csrc>)
-add_library(c_static SHARED $<TARGET_OBJECTS:csrc>)
+# add_library(c_static SHARED $<TARGET_OBJECTS:csrc>)
 
-set_target_properties(c_static PROPERTIES OUTPUT_NAME c)
+# set_target_properties(c_static PROPERTIES OUTPUT_NAME c)
 
 # crti and crtn
 add_library(crtstuff OBJECT ${SRC_FOLDER}/arch/${TARGET_ARCH}/crti.S ${SRC_FOLDER}/arch/${TARGET_ARCH}/crtn.S ${SRC_FOLDER}/arch/${TARGET_ARCH}/crt0.S)
 
 set(INSTALL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../sysroot/usr/lib" CACHE PATH "Installation directory")
 install(TARGETS c ARCHIVE DESTINATION ${INSTALL_DIR})
-install(TARGETS c_static DESTINATION ${INSTALL_DIR})
+# install(TARGETS c_static DESTINATION ${INSTALL_DIR})
 
 install(FILES $<TARGET_OBJECTS:crtstuff> DESTINATION ${INSTALL_DIR})

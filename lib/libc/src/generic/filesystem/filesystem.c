@@ -46,6 +46,7 @@
 #include "filesystem_struct.h"
 #include "file.h"
 #include "ipc_queue.h"
+#include <pmos/tls.h>
 
 static struct Filesystem_Data * fs_data = NULL;
 static pthread_spinlock_t fs_data_lock;
@@ -133,11 +134,8 @@ pmos_port_t request_filesystem_port()
     return port_req.port;
 }
 
-// Global thread-local variable to cache the filesystem port
-static __thread pmos_port_t fs_port = INVALID_PORT;
-
 // Global thread-local variable to save a reply port
-static __thread pmos_port_t fs_cmd_reply_port = INVALID_PORT;
+// static __thread pmos_port_t fs_cmd_reply_port = INVALID_PORT;
 
 pmos_port_t get_filesytem_port() {
     const char * port_name = "filesystem";
@@ -366,7 +364,7 @@ int stat(const char *restrict name, struct stat *restrict stat)
 
     
     Message_Descriptor reply_descr;
-    result_t result = get_message(&reply_descr, (unsigned char **)&reply, fs_cmd_reply_port);
+    result_t result = get_message(&reply_descr, (unsigned char **)&reply, reply_port);
     if (result != SUCCESS) {
         result_code = -1;
         goto finish;
@@ -507,19 +505,6 @@ static void free_descriptor(struct File_Descriptor *des) {
 }
 
 struct Filesystem_Data *init_filesystem() {
-    // Check if reply port exists
-    if (fs_cmd_reply_port == INVALID_PORT) {
-        // Create a new port for the current thread
-        ports_request_t port_request = create_port(TASK_ID_SELF, 0);
-        if (port_request.result != SUCCESS) {
-            // Handle error: Failed to create the port
-            return NULL;
-        }
-
-        // Save the created port in the thread-local variable
-        fs_cmd_reply_port = port_request.port;
-    }
-
     struct Filesystem_Data *new_fs_data = malloc(sizeof(struct Filesystem_Data));
     if (new_fs_data == NULL) {
         // Handle memory allocation error
@@ -936,8 +921,12 @@ off_t lseek(int fd, off_t offset, int whence) {
 
 int vfsd_send_persistant(size_t msg_size, const void *message)
 {
-    result_t k_result = fs_port != INVALID_PORT ? 
-        send_message_port(fs_port, msg_size, (char *)message) 
+    struct uthread *current = __get_tls();
+    if (!current)
+        return -1;
+
+    result_t k_result = current->fs_port != INVALID_PORT ? 
+        send_message_port(current->fs_port, msg_size, (char *)message) 
         : ERROR_PORT_DOESNT_EXIST;
 
     int fail_count = 0;
@@ -949,6 +938,7 @@ int vfsd_send_persistant(size_t msg_size, const void *message)
             errno = EIO; // Set errno to appropriate error code
             return -1;
         }
+        current->fs_port = fs_port;
 
         // Retry sending IPC_Open message to the filesystem daemon
         k_result = send_message_port(fs_port, msg_size, (char *)message);
@@ -965,19 +955,6 @@ int __clone_fs_data(struct Filesystem_Data ** new_data, uint64_t for_task, bool 
     if (fs_data == NULL) {
         *new_data = NULL;
         return 0;
-    }
-
-    // Check if reply port exists
-    if (fs_cmd_reply_port == INVALID_PORT) {
-        // Create a new port for the current thread
-        ports_request_t port_request = create_port(TASK_ID_SELF, 0);
-        if (port_request.result != SUCCESS) {
-            // Handle error: Failed to create the port
-            return -1;
-        }
-
-        // Save the created port in the thread-local variable
-        fs_cmd_reply_port = port_request.port;
     }
 
     struct Filesystem_Data * new_fs_data = init_filesystem();
@@ -1089,7 +1066,9 @@ void __libc_fixup_fs_post_fork(struct fork_for_child * child_data)
     fs_data = child_data->fs_data;
 
     // Fixup the reply port
-    fs_cmd_reply_port = INVALID_PORT;
+    struct uthread *current = __get_tls();
+    if (current != NULL)
+        current->fs_port = INVALID_PORT;
 }
 
 void __libc_fs_lock_pre_fork()
