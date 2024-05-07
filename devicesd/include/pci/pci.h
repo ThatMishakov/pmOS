@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -28,8 +28,8 @@
 
 #ifndef PCI_H
 #define PCI_H
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <vector.h>
 
 void init_pci();
@@ -39,12 +39,14 @@ uint16_t pci_readw(uint16_t seg, uint8_t bus, uint8_t slot, uint8_t fun, uint16_
 uint32_t pci_readl(uint16_t seg, uint8_t bus, uint8_t slot, uint8_t fun, uint16_t offset);
 
 void pci_writeb(uint16_t seg, uint8_t bus, uint8_t slot, uint8_t fun, uint16_t offset, uint8_t val);
-void pci_writew(uint16_t seg, uint8_t bus, uint8_t slot, uint8_t fun, uint16_t offset, uint16_t val);
-void pci_writel(uint16_t seg, uint8_t bus, uint8_t slot, uint8_t fun, uint16_t offset, uint32_t val);
+void pci_writew(uint16_t seg, uint8_t bus, uint8_t slot, uint8_t fun, uint16_t offset,
+                uint16_t val);
+void pci_writel(uint16_t seg, uint8_t bus, uint8_t slot, uint8_t fun, uint16_t offset,
+                uint32_t val);
 
 #define VENDOR_ID_NO_DEVICE 0xFFFF
 
-#define HEADER_TYPE_MASK 0x7f;
+#define HEADER_TYPE_MASK     0x7f;
 #define HEADER_MULTIFUNCTION 0x80;
 
 struct PCIGroup {
@@ -90,10 +92,11 @@ inline uint64_t pcie_config_space_start(uint64_t base, unsigned pci_start)
     return base + (pci_start << 20);
 }
 
-inline void *pcie_config_space_device(struct PCIGroup * group, unsigned bus, unsigned device, unsigned function)
+inline void *pcie_config_space_device(struct PCIGroup *group, unsigned bus, unsigned device,
+                                      unsigned function)
 {
     // config_space_virt is expected to point to the bus number 0, even if it is not mapped
-    void * config_space_virt = group->base_ptr;
+    void *config_space_virt = group->base_ptr;
 
     // https://wiki.osdev.org/PCI_Express
     const unsigned long offset = (bus << 20) | (device << 15) | (function << 12);
@@ -101,7 +104,7 @@ inline void *pcie_config_space_device(struct PCIGroup * group, unsigned bus, uns
     return (void *)((char *)config_space_virt + offset);
 }
 
-#define PCI_FUNCTIONS 8
+#define PCI_FUNCTIONS       8
 #define PCI_DEVICES_PER_BUS 32
 
 inline uint32_t pci_read_register(void *s, int id)
@@ -134,24 +137,12 @@ inline uint32_t pcie_device_id(void *s)
     return r >> 16;
 }
 
-inline uint8_t pcie_class_code(void *s)
-{
-    return pci_read_register(s, 2) >> 24;
-}
+inline uint8_t pcie_class_code(void *s) { return pci_read_register(s, 2) >> 24; }
 
-inline uint8_t pcie_subclass(void *s)
-{
-    return pci_read_register(s, 2) >> 16;
-}
+inline uint8_t pcie_subclass(void *s) { return pci_read_register(s, 2) >> 16; }
 
-inline bool pci_no_device(void *s)
-{
-    return pcie_vendor_id(s) == VENDOR_ID_NO_DEVICE;
-}
+inline bool pci_no_device(void *s) { return pcie_vendor_id(s) == VENDOR_ID_NO_DEVICE; }
 
-inline uint8_t pci_secondary_bus(void *s)
-{
-    return pci_read_register(s, 0x6) >> 8;
-}
+inline uint8_t pci_secondary_bus(void *s) { return pci_read_register(s, 0x6) >> 8; }
 
 #endif

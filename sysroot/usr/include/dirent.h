@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -40,25 +40,24 @@ typedef struct {
     unsigned long __pos;
 } DIR;
 
-#define DT_BLK 06
-#define DT_CHR 02
-#define DT_DIR 04
-#define DT_FIFO 01
-#define DT_LNK 012
-#define DT_REG 010
-#define DT_SOCK 014
+#define DT_BLK     06
+#define DT_CHR     02
+#define DT_DIR     04
+#define DT_FIFO    01
+#define DT_LNK     012
+#define DT_REG     010
+#define DT_SOCK    014
 #define DT_UNKNOWN 0
 
 struct dirent {
-    ino_t  d_ino; //< File serial number.
-    off_t   d_off; //< Offset to the next directory entry.
+    ino_t d_ino;             //< File serial number.
+    off_t d_off;             //< Offset to the next directory entry.
     unsigned short d_reclen; //< Length of this record.
-    unsigned short d_type; //< Type of file; not supported by all filesystem types.
+    unsigned short d_type;   //< Type of file; not supported by all filesystem types.
     unsigned short d_namlen; //< Length of string in d_name.
-    char   d_name[2048]; //< Null-terminated filename of length d_namlen. Maximum of NAME_MAX + 1 bytes.
+    char d_name[2048]; //< Null-terminated filename of length d_namlen. Maximum of NAME_MAX + 1
+                       //bytes.
 };
-
-
 
 #if defined(__cplusplus)
 extern "C" {
@@ -66,20 +65,18 @@ extern "C" {
 
 #ifdef __STDC_HOSTED__
 
-int            alphasort(const struct dirent **, const struct dirent **);
-int            closedir(DIR *);
-int            dirfd(DIR *);
-DIR           *fdopendir(int);
-DIR           *opendir(const char *);
+int alphasort(const struct dirent **, const struct dirent **);
+int closedir(DIR *);
+int dirfd(DIR *);
+DIR *fdopendir(int);
+DIR *opendir(const char *);
 struct dirent *readdir(DIR *);
-int            readdir_r(DIR *, struct dirent *, struct dirent **);
-void           rewinddir(DIR *);
-int            scandir(const char *, struct dirent ***,
-                   int (*)(const struct dirent *),
-                   int (*)(const struct dirent **,
-                   const struct dirent **));
-void           seekdir(DIR *, long int);
-long int       telldir(DIR *);
+int readdir_r(DIR *, struct dirent *, struct dirent **);
+void rewinddir(DIR *);
+int scandir(const char *, struct dirent ***, int (*)(const struct dirent *),
+            int (*)(const struct dirent **, const struct dirent **));
+void seekdir(DIR *, long int);
+long int telldir(DIR *);
 
 /**
  * @brief Get directory entries in a specified format.
@@ -103,11 +100,11 @@ long int       telldir(DIR *);
  * @note           The `getdents` function is not specified in POSIX, but is available
  *                 on many Unix-like systems. Thus the exact format of directory entries
  *                 and the behavior may vary on different systems.
- * 
+ *
  * @todo           This function seems inconvenient having in mind how directory tree
  *                 is stored in VFS daemon. Revisit it and consider adding a different
  *                 function.
- * 
+ *
  * @todo           getdents_posix() seems to be in a works. Consider adding it.
  */
 
@@ -141,7 +138,6 @@ ssize_t getdents(int fd, char *buf, size_t nbytes);
  *                 on different systems.
  */
 ssize_t getdirentries(int fd, char *buf, size_t nbytes, off_t *basep);
-
 
 #endif // __STDC_HOSTED__
 

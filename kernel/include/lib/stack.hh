@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -30,55 +30,30 @@
 #include "list.hh"
 #include "utility.hh"
 
-namespace klib {
-template <class T, class Container = list<T> >
-class stack {
+namespace klib
+{
+template<class T, class Container = list<T>> class stack
+{
 private:
     Container c;
+
 public:
-    inline bool empty() const
-    {
-        return c.empty();
-    }
+    inline bool empty() const { return c.empty(); }
 
-    inline size_t size() const
-    {
-        return c.size();
-    }
+    inline size_t size() const { return c.size(); }
 
-    inline T& top()
-    {
-        return c.back();
-    }
+    inline T &top() { return c.back(); }
 
-    inline const T& top() const
-    {
-        return c.back();
-    }
+    inline const T &top() const { return c.back(); }
 
-    inline void push(const T& t)
-    {
-        c.push_back(forward<T>(t));
-    }
+    inline void push(const T &t) { c.push_back(forward<T>(t)); }
 
-    inline void push(T&& t)
-    {
-        c.push_back(forward<T>(t));
-    }
+    inline void push(T &&t) { c.push_back(forward<T>(t)); }
 
-    inline void emplace(T&& t)
-    {
-        c.emplace_back(forward<T>(t));
-    }
+    inline void emplace(T &&t) { c.emplace_back(forward<T>(t)); }
 
-    inline void pop()
-    {
-        c.pop_back();
-    }
+    inline void pop() { c.pop_back(); }
 
-    inline void swap (stack& x)
-    {
-        c.swap(x.c);
-    }
+    inline void swap(stack &x) { c.swap(x.c); }
 };
-}
+} // namespace klib

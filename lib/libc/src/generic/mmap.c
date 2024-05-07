@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -26,11 +26,12 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <sys/mman.h>
 #include <errno.h>
 #include <pmos/memory.h>
+#include <sys/mman.h>
 
-void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset) {
+void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
+{
     // TODO: mmap can probably be fully implemented soon!
     (void)fd;
     (void)offset;
@@ -51,7 +52,8 @@ void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
     size_t aligned_length = (length + 4095) & ~4095UL;
 
     // TODO: Get rid of magic numbers
-    mem_request_ret_t req = create_normal_region(0, addr, aligned_length, (prot&0x07) | (flags & MAP_FIXED ? 0x08 : 0));
+    mem_request_ret_t req = create_normal_region(0, addr, aligned_length,
+                                                 (prot & 0x07) | (flags & MAP_FIXED ? 0x08 : 0));
     if (req.result != SUCCESS) {
         errno = ENOMEM;
         return MAP_FAILED;
@@ -71,7 +73,8 @@ void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 //     return 0;
 // }
 
-int munmap(void *addr, size_t length) {
+int munmap(void *addr, size_t length)
+{
     (void)addr;
     (void)length;
 

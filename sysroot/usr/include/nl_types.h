@@ -4,9 +4,8 @@
 typedef void *nl_catd;
 typedef void *nl_item;
 
-#define NL_SETD 1
+#define NL_SETD       1
 #define NL_CAT_LOCALE 1
-
 
 int catclose(nl_catd);
 char *catgets(nl_catd, int, int, const char *);

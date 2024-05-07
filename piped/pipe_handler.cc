@@ -1,30 +1,32 @@
 #include "pipe_handler.hh"
+
+#include "ipc.hh"
+
+#include <cassert>
+#include <cstring>
+#include <errno.h>
 #include <pmos/ipc.h>
 #include <pmos/system.h>
 #include <stdio.h>
-#include <errno.h>
 #include <system_error>
 #include <thread>
-#include "ipc.hh"
-#include <cassert>
-#include <cstring>
 
 extern pmos_port_t main_port;
 
 thread_local Pipe pipe_data;
-thread_local auto service_port = create_port();
+thread_local auto service_port  = create_port();
 thread_local bool pipe_continue = true;
 
 void pipe_reply_error(uint64_t port, int errno_result)
 {
-    IPC_Pipe_Open_Reply r{
-        .type = IPC_Pipe_Open_Reply_NUM,
-        .flags = 0,
-        .result_code = static_cast<int16_t>(-errno_result),
+    IPC_Pipe_Open_Reply r {
+        .type          = IPC_Pipe_Open_Reply_NUM,
+        .flags         = 0,
+        .result_code   = static_cast<int16_t>(-errno_result),
         .filesystem_id = 0,
-        .reader_id = 0,
-        .writer_id = 0,
-        .pipe_port = 0,
+        .reader_id     = 0,
+        .writer_id     = 0,
+        .pipe_port     = 0,
     };
 
     send_message_port(port, sizeof r, reinterpret_cast<void *>(&r));
@@ -38,13 +40,14 @@ pmos_port_t create_pipe_port()
     return r.port;
 }
 
-Pipe::ConsumerData &Pipe::register_new_consumer(uint64_t consumer_id, size_t reader_refcount, size_t writer_refcount)
+Pipe::ConsumerData &Pipe::register_new_consumer(uint64_t consumer_id, size_t reader_refcount,
+                                                size_t writer_refcount)
 {
     auto &c = pipe_consumers[consumer_id] = std::make_unique<ConsumerData>();
 
-    IPCPipeRegisterConsumer r{
-        .reply_port = service_port,
-        .pipe_port = pipe_port,
+    IPCPipeRegisterConsumer r {
+        .reply_port  = service_port,
+        .pipe_port   = pipe_port,
         .consumer_id = consumer_id,
     };
     send_message(main_port, r);
@@ -73,22 +76,23 @@ Pipe::ConsumerData &Pipe::register_new_consumer(uint64_t consumer_id, size_t rea
 
 void read_reply_error(uint64_t port, int errno_result)
 {
-    IPC_Read_Reply r{
-        .type = IPC_Read_Reply_NUM,
-        .flags = 0,
+    IPC_Read_Reply r {
+        .type        = IPC_Read_Reply_NUM,
+        .flags       = 0,
         .result_code = static_cast<int16_t>(-errno_result),
     };
     send_message_port(port, sizeof r, reinterpret_cast<void *>(&r));
 }
 
-void read_pipe(std::unique_ptr<char []> ipc_msg, Message_Descriptor desc)
+void read_pipe(std::unique_ptr<char[]> ipc_msg, Message_Descriptor desc)
 {
     try {
-        const auto msg_size = desc.size;
+        const auto msg_size       = desc.size;
         const auto sender_task_id = desc.sender;
 
         if (msg_size < sizeof(IPC_Read)) {
-            fprintf(stderr, "Error: IPC_Read too small %li from task %li\n", msg_size, sender_task_id);
+            fprintf(stderr, "Error: IPC_Read too small %li from task %li\n", msg_size,
+                    sender_task_id);
             return;
         }
 
@@ -128,10 +132,10 @@ void read_pipe(std::unique_ptr<char []> ipc_msg, Message_Descriptor desc)
             }
 
             try {
-                pipe_data.pending_readers.push_back(Pipe::PendingReader{
+                pipe_data.pending_readers.push_back(Pipe::PendingReader {
                     .consumer_id = r.fs_consumer_id,
-                    .max_bytes = r.max_size,
-                    .reply_port = r.reply_port,
+                    .max_bytes   = r.max_size,
+                    .reply_port  = r.reply_port,
                 });
 
                 consumer.pending_count++;
@@ -142,8 +146,8 @@ void read_pipe(std::unique_ptr<char []> ipc_msg, Message_Descriptor desc)
             return;
         }
 
-        const auto bytes_to_read = std::min(r.max_size, pipe_data.buffered_bytes);        
-        std::unique_ptr<char []> reply_buff;
+        const auto bytes_to_read = std::min(r.max_size, pipe_data.buffered_bytes);
+        std::unique_ptr<char[]> reply_buff;
         try {
             reply_buff = std::make_unique<char[]>(sizeof(IPC_Read_Reply) + bytes_to_read);
         } catch (std::bad_alloc &e) {
@@ -151,12 +155,12 @@ void read_pipe(std::unique_ptr<char []> ipc_msg, Message_Descriptor desc)
             read_reply_error(r.reply_port, ENOMEM);
             return;
         }
-        auto *reply = reinterpret_cast<IPC_Read_Reply *>(reply_buff.get());
-        reply->type = IPC_Read_Reply_NUM;
-        reply->flags = 0;
+        auto *reply        = reinterpret_cast<IPC_Read_Reply *>(reply_buff.get());
+        reply->type        = IPC_Read_Reply_NUM;
+        reply->flags       = 0;
         reply->result_code = 0;
 
-        unsigned char * data = reply->data;
+        unsigned char *data = reply->data;
         pipe_data.fill_data(data, bytes_to_read);
 
         send_message(r.reply_port, reply, sizeof(IPC_Read_Reply) + bytes_to_read);
@@ -171,16 +175,19 @@ void read_pipe(std::unique_ptr<char []> ipc_msg, Message_Descriptor desc)
 void unlock_readers()
 {
     while (pipe_data.buffered_bytes > 0 and not pipe_data.pending_readers.empty()) {
-        auto &consumer = pipe_data.pending_readers.front();
+        auto &consumer           = pipe_data.pending_readers.front();
         const auto bytes_to_read = std::min(consumer.max_bytes, pipe_data.buffered_bytes);
         try {
-            const auto size = sizeof(IPC_Read_Reply) + bytes_to_read;
-            std::unique_ptr<char []> reply_buff = std::make_unique<char[]>(size);
-            auto *reply = reinterpret_cast<IPC_Read_Reply *>(reply_buff.get());
-            reply->type = IPC_Read_Reply_NUM;
-            reply->flags = 0;
+            const auto size                    = sizeof(IPC_Read_Reply) + bytes_to_read;
+            std::unique_ptr<char[]> reply_buff = std::make_unique<char[]>(size);
+            auto *reply        = reinterpret_cast<IPC_Read_Reply *>(reply_buff.get());
+            reply->type        = IPC_Read_Reply_NUM;
+            reply->flags       = 0;
             reply->result_code = 0;
-            memcpy(reply->data, pipe_data.buffered_messages.front().message.get() + pipe_data.buffered_messages.front().start_position, bytes_to_read);
+            memcpy(reply->data,
+                   pipe_data.buffered_messages.front().message.get() +
+                       pipe_data.buffered_messages.front().start_position,
+                   bytes_to_read);
             send_message(consumer.reply_port, reply, size);
         } catch (std::system_error &e) {
             fprintf(stderr, "Error sending read reply: %s\n", e.what());
@@ -194,22 +201,23 @@ void unlock_readers()
 
 void write_reply_error(uint64_t port, int errno_result)
 {
-    IPC_Write_Reply r{
-        .type = IPC_Write_Reply_NUM,
-        .flags = 0,
-        .result_code = static_cast<int16_t>(-errno_result),
+    IPC_Write_Reply r {
+        .type          = IPC_Write_Reply_NUM,
+        .flags         = 0,
+        .result_code   = static_cast<int16_t>(-errno_result),
         .bytes_written = 0,
     };
     send_message_port(port, sizeof r, reinterpret_cast<void *>(&r));
 }
 
-void write_pipe(std::unique_ptr<char []> ipc_msg, Message_Descriptor desc)
+void write_pipe(std::unique_ptr<char[]> ipc_msg, Message_Descriptor desc)
 {
     try {
-        const auto msg_size = desc.size;
+        const auto msg_size       = desc.size;
         const auto sender_task_id = desc.sender;
         if (msg_size < sizeof(IPC_Write)) {
-            fprintf(stderr, "Error: IPC_Write too small %li from task %li\n", msg_size, sender_task_id);
+            fprintf(stderr, "Error: IPC_Write too small %li from task %li\n", msg_size,
+                    sender_task_id);
             return;
         }
 
@@ -248,10 +256,10 @@ void write_pipe(std::unique_ptr<char []> ipc_msg, Message_Descriptor desc)
         }
 
         try {
-            pipe_data.buffered_messages.push_back(MessageBuffer{
-                .message = std::move(ipc_msg),
+            pipe_data.buffered_messages.push_back(MessageBuffer {
+                .message        = std::move(ipc_msg),
                 .start_position = sizeof(IPC_Write),
-                .size = desc.size,
+                .size           = desc.size,
             });
         } catch (std::bad_alloc &e) {
             write_reply_error(r.reply_port, ENOMEM);
@@ -261,10 +269,10 @@ void write_pipe(std::unique_ptr<char []> ipc_msg, Message_Descriptor desc)
         pipe_data.buffered_bytes += data_size;
         unlock_readers();
 
-        IPC_Write_Reply reply{
-            .type = IPC_Write_Reply_NUM,
-            .flags = 0,
-            .result_code = 0,
+        IPC_Write_Reply reply {
+            .type          = IPC_Write_Reply_NUM,
+            .flags         = 0,
+            .result_code   = 0,
             .bytes_written = data_size,
         };
         send_message(r.reply_port, reply);
@@ -276,12 +284,13 @@ void write_pipe(std::unique_ptr<char []> ipc_msg, Message_Descriptor desc)
 
 void fail_consumer_readers(uint64_t consumer_id)
 {
-    for (auto it = pipe_data.pending_readers.begin(); it != pipe_data.pending_readers.end(); ) {
+    for (auto it = pipe_data.pending_readers.begin(); it != pipe_data.pending_readers.end();) {
         auto c = it++;
         if (c->consumer_id == consumer_id) {
             try {
                 read_reply_error(c->reply_port, 0);
-            } catch (...) {}
+            } catch (...) {
+            }
             pipe_data.pending_readers.erase(c);
         }
     }
@@ -289,11 +298,12 @@ void fail_consumer_readers(uint64_t consumer_id)
 
 void pop_all_readers()
 {
-    for (auto it = pipe_data.pending_readers.begin(); it != pipe_data.pending_readers.end(); ) {
+    for (auto it = pipe_data.pending_readers.begin(); it != pipe_data.pending_readers.end();) {
         auto c = it++;
         try {
             read_reply_error(c->reply_port, 0);
-        } catch (...) {}
+        } catch (...) {
+        }
         pipe_data.pending_readers.erase(c);
     }
 }
@@ -304,9 +314,9 @@ void clear_buffered_messages()
     pipe_data.buffered_bytes = 0;
 }
 
-void close_pipe(std::unique_ptr<char []> ipc_msg, Message_Descriptor desc)
+void close_pipe(std::unique_ptr<char[]> ipc_msg, Message_Descriptor desc)
 {
-    const auto msg_size = desc.size;
+    const auto msg_size       = desc.size;
     const auto sender_task_id = desc.sender;
     if (msg_size < sizeof(IPC_Close)) {
         fprintf(stderr, "Error: IPC_Close too small %li from task %li\n", msg_size, sender_task_id);
@@ -315,7 +325,8 @@ void close_pipe(std::unique_ptr<char []> ipc_msg, Message_Descriptor desc)
 
     const auto &c = *reinterpret_cast<IPC_Close *>(ipc_msg.get());
     if (c.file_id > 1) {
-        fprintf(stderr, "Error: IPC_Close bogus file_id %li from task %li\n", c.file_id, sender_task_id);
+        fprintf(stderr, "Error: IPC_Close bogus file_id %li from task %li\n", c.file_id,
+                sender_task_id);
         return;
     }
 
@@ -342,12 +353,13 @@ void close_pipe(std::unique_ptr<char []> ipc_msg, Message_Descriptor desc)
     }
 
     if (consumer.reader_refcount == 0 and c.file_id == 0) {
-        for (auto it = pipe_data.pending_readers.begin(); it != pipe_data.pending_readers.end(); ) {
+        for (auto it = pipe_data.pending_readers.begin(); it != pipe_data.pending_readers.end();) {
             auto c = it++;
             if (c->consumer_id == consumer_it->first) {
                 try {
                     read_reply_error(c->reply_port, 0);
-                } catch (...) {}
+                } catch (...) {
+                }
                 pipe_data.pending_readers.erase(c);
             }
         }
@@ -373,30 +385,32 @@ void close_pipe(std::unique_ptr<char []> ipc_msg, Message_Descriptor desc)
 
 void dup_reply_error(uint64_t port, int errno_result)
 {
-    IPC_Dup_Reply r{
-        .type = IPC_Dup_Reply_NUM,
-        .result_code = static_cast<int16_t>(-errno_result),
-        .file_id = 0,
+    IPC_Dup_Reply r {
+        .type          = IPC_Dup_Reply_NUM,
+        .result_code   = static_cast<int16_t>(-errno_result),
+        .file_id       = 0,
         .filesystem_id = 0,
-        .fs_port = 0,
+        .fs_port       = 0,
     };
     send_message(port, r);
 }
 
-void dup_pipe(std::unique_ptr<char []> ipc_msg, Message_Descriptor desc)
+void dup_pipe(std::unique_ptr<char[]> ipc_msg, Message_Descriptor desc)
 {
     try {
-        const auto msg_size = desc.size;
+        const auto msg_size       = desc.size;
         const auto sender_task_id = desc.sender;
-        auto &c = pipe_data.pipe_consumers;
+        auto &c                   = pipe_data.pipe_consumers;
         if (msg_size < sizeof(IPC_Dup)) {
-            fprintf(stderr, "Error: IPC_Dup too small %li from task %li\n", msg_size, sender_task_id);
+            fprintf(stderr, "Error: IPC_Dup too small %li from task %li\n", msg_size,
+                    sender_task_id);
             return;
         }
 
         const auto &d = *reinterpret_cast<IPC_Dup *>(ipc_msg.get());
         if (d.file_id > 1) {
-            fprintf(stderr, "Error: IPC_Dup bogus file_id %li from task %li\n", d.file_id, sender_task_id);
+            fprintf(stderr, "Error: IPC_Dup bogus file_id %li from task %li\n", d.file_id,
+                    sender_task_id);
             return;
         }
 
@@ -425,14 +439,14 @@ void dup_pipe(std::unique_ptr<char []> ipc_msg, Message_Descriptor desc)
         }
 
         const auto new_c_id = d.new_consumer_id;
-        auto new_consumer = c.find(new_c_id);
+        auto new_consumer   = c.find(new_c_id);
         if (new_consumer != c.end()) {
-            IPC_Dup_Reply r{
-                .type = IPC_Dup_Reply_NUM,
-                .result_code = 0,
-                .file_id = d.file_id,
+            IPC_Dup_Reply r {
+                .type          = IPC_Dup_Reply_NUM,
+                .result_code   = 0,
+                .file_id       = d.file_id,
                 .filesystem_id = 0,
-                .fs_port = pipe_data.pipe_port,
+                .fs_port       = pipe_data.pipe_port,
             };
             send_message(d.reply_port, r);
             switch (d.file_id) {
@@ -454,12 +468,12 @@ void dup_pipe(std::unique_ptr<char []> ipc_msg, Message_Descriptor desc)
         try {
             pipe_data.register_new_consumer(new_c_id, d.file_id == 0, d.file_id == 1);
             created_consumer = true;
-            IPC_Dup_Reply r{
-                .type = IPC_Dup_Reply_NUM,
-                .result_code = 0,
-                .file_id = d.file_id,
+            IPC_Dup_Reply r {
+                .type          = IPC_Dup_Reply_NUM,
+                .result_code   = 0,
+                .file_id       = d.file_id,
                 .filesystem_id = 0,
-                .fs_port = pipe_data.pipe_port,
+                .fs_port       = pipe_data.pipe_port,
             };
             send_message(d.reply_port, r);
         } catch (std::bad_alloc &e) {
@@ -479,9 +493,9 @@ void dup_pipe(std::unique_ptr<char []> ipc_msg, Message_Descriptor desc)
     }
 }
 
-void cleanup_consumer(std::unique_ptr<char []> ipc_msg, Message_Descriptor desc)
+void cleanup_consumer(std::unique_ptr<char[]> ipc_msg, Message_Descriptor desc)
 {
-    const auto msg_size = desc.size;
+    const auto msg_size       = desc.size;
     const auto sender_task_id = desc.sender;
     assert(msg_size == sizeof(IPCNotifyConsumerDestroyed));
 
@@ -489,7 +503,7 @@ void cleanup_consumer(std::unique_ptr<char []> ipc_msg, Message_Descriptor desc)
     (void)sender_task_id;
 
     const auto &c = *reinterpret_cast<IPCNotifyConsumerDestroyed *>(ipc_msg.get());
-    auto it = pipe_data.pipe_consumers.find(c.consumer_id);
+    auto it       = pipe_data.pipe_consumers.find(c.consumer_id);
     if (it == pipe_data.pipe_consumers.end())
         // Consumer already closed
         return;
@@ -518,15 +532,15 @@ void cleanup_consumer(std::unique_ptr<char []> ipc_msg, Message_Descriptor desc)
     if (pipe_data.pipe_consumers.empty())
         // Exit
         pipe_continue = false;
-}    
+}
 
-
-void Pipe::fill_data(unsigned char * data, size_t bytes_to_read) noexcept
+void Pipe::fill_data(unsigned char *data, size_t bytes_to_read) noexcept
 {
     size_t bytes_read = 0;
     for (size_t i = 0; i < buffered_messages.size(); i++) {
         auto &msg = buffered_messages[i];
-        const auto bytes_to_copy = std::min(bytes_to_read - bytes_read, msg.size - msg.start_position);
+        const auto bytes_to_copy =
+            std::min(bytes_to_read - bytes_read, msg.size - msg.start_position);
         memcpy(data + bytes_read, msg.message.get() + msg.start_position, bytes_to_copy);
         bytes_read += bytes_to_copy;
         if (bytes_read == bytes_to_read)
@@ -539,7 +553,8 @@ void Pipe::pop_read_data(size_t bytes_to_pop) noexcept
     size_t bytes_popped = 0;
     while (bytes_popped < bytes_to_pop) {
         auto &msg = buffered_messages.front();
-        const auto bytes_to_pop_from_msg = std::min(bytes_to_pop - bytes_popped, msg.size - msg.start_position);
+        const auto bytes_to_pop_from_msg =
+            std::min(bytes_to_pop - bytes_popped, msg.size - msg.start_position);
         msg.start_position += bytes_to_pop_from_msg;
         bytes_popped += bytes_to_pop_from_msg;
         if (msg.start_position == msg.size)
@@ -552,19 +567,19 @@ void pipe_main(IPC_Pipe_Open o, Message_Descriptor /* desc */)
 {
     try {
         // This can probably throw when initializing pipe_data
-        pipe_data.task_id = get_task_id();
+        pipe_data.task_id   = get_task_id();
         pipe_data.pipe_port = create_pipe_port();
 
         pipe_data.register_new_consumer(o.fs_consumer_id, 1, 1);
 
-        IPC_Pipe_Open_Reply r{
-            .type = IPC_Pipe_Open_Reply_NUM,
-            .flags = 0,
-            .result_code = 0,
+        IPC_Pipe_Open_Reply r {
+            .type          = IPC_Pipe_Open_Reply_NUM,
+            .flags         = 0,
+            .result_code   = 0,
             .filesystem_id = o.fs_consumer_id,
-            .reader_id = 0,
-            .writer_id = 1,
-            .pipe_port = pipe_data.pipe_port,
+            .reader_id     = 0,
+            .writer_id     = 1,
+            .pipe_port     = pipe_data.pipe_port,
         };
         send_message(o.reply_port, r);
     } catch (std::system_error &e) {
@@ -588,7 +603,7 @@ void pipe_main(IPC_Pipe_Open o, Message_Descriptor /* desc */)
             fprintf(stderr, "Warning: recieved very small message\n");
             break;
         }
-        
+
         IPC_Generic_Msg *ipc_msg = reinterpret_cast<IPC_Generic_Msg *>(msg_buff.get());
 
         switch (ipc_msg->type) {
@@ -613,18 +628,22 @@ void pipe_main(IPC_Pipe_Open o, Message_Descriptor /* desc */)
             break;
         }
         default:
-            fprintf(stderr, ("Pipe " + std::to_string(pipe_data.pipe_port) + ": Unknown message type " + std::to_string(ipc_msg->type) + " from task " + std::to_string(msg.sender) + "\n").c_str());
+            fprintf(stderr, ("Pipe " + std::to_string(pipe_data.pipe_port) +
+                             ": Unknown message type " + std::to_string(ipc_msg->type) +
+                             " from task " + std::to_string(msg.sender) + "\n")
+                                .c_str());
             break;
         }
     }
 }
 
-void open_pipe(std::unique_ptr<char []> ipc_msg, Message_Descriptor desc)
+void open_pipe(std::unique_ptr<char[]> ipc_msg, Message_Descriptor desc)
 {
-    const auto msg_size = desc.size;
+    const auto msg_size       = desc.size;
     const auto sender_task_id = desc.sender;
     if (msg_size < sizeof(IPC_Pipe_Open)) {
-        fprintf(stderr, "Error: IPC_Pipe_Open too small %li from task %li\n", msg_size, sender_task_id);
+        fprintf(stderr, "Error: IPC_Pipe_Open too small %li from task %li\n", msg_size,
+                sender_task_id);
         return;
     }
 
@@ -648,8 +667,8 @@ void open_pipe(std::unique_ptr<char []> ipc_msg, Message_Descriptor desc)
 
 void Pipe::notify_unregister(uint64_t consumer_id)
 {
-    IPCNotifyUnregisterConsumer n{
-        .pipe_port = pipe_port,
+    IPCNotifyUnregisterConsumer n {
+        .pipe_port   = pipe_port,
         .consumer_id = consumer_id,
     };
     send_message(main_port, n);

@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -51,19 +51,19 @@ struct sockaddr_storage {
 };
 
 struct msghdr {
-    void * msg_name; //< Optional address.
+    void *msg_name;        //< Optional address.
     socklen_t msg_namelen; //< Size of address.
-    struct iovec * msg_iov; //< Scatter/gather array.
-    size_t msg_iovlen; //< Members in msg_iov.
-    void * msg_control; //< Ancillary data.
+    struct iovec *msg_iov; //< Scatter/gather array.
+    size_t msg_iovlen;     //< Members in msg_iov.
+    void *msg_control;     //< Ancillary data.
     size_t msg_controllen; //< Ancillary data buffer length.
-    int msg_flags; //< Flags on received message.
+    int msg_flags;         //< Flags on received message.
 };
 
 struct cmsghdr {
     socklen_t cmsg_len; //< Length of the message, including header.
-    int cmsg_level; //< Protocol level of the message.
-    int cmsg_type; //< Protocol-specific type of the message.
+    int cmsg_level;     //< Protocol level of the message.
+    int cmsg_type;      //< Protocol-specific type of the message.
 };
 
 enum {
@@ -71,30 +71,30 @@ enum {
 };
 
 /// Returns the pointer to the data portion of a cmsghdr.
-#define CMSG_DATA(cmsg) ((void *) ((char *) (cmsg) + sizeof(struct cmsghdr)))
+#define CMSG_DATA(cmsg) ((void *)((char *)(cmsg) + sizeof(struct cmsghdr)))
 
 /// Returns the pointer to the next cmsghdr or NULL if the structure is the last one.
-#define CMSG_NXTHDR(mhdr, cmsg) \
-    ((cmsg)->cmsg_len == 0 ? NULL : \
-        (struct cmsghdr *) ((char *) (cmsg) + \
-            (((cmsg)->cmsg_len + sizeof(size_t) - 1) & ~(sizeof(size_t) - 1))))
+#define CMSG_NXTHDR(mhdr, cmsg)                \
+    ((cmsg)->cmsg_len == 0                     \
+         ? NULL                                \
+         : (struct cmsghdr *)((char *)(cmsg) + \
+                              (((cmsg)->cmsg_len + sizeof(size_t) - 1) & ~(sizeof(size_t) - 1))))
 
 /// Returns the pointer to the first cmsghdr in the message or NULL if there is none.
-#define CMSG_FIRSTHDR(mhdr) \
-    ((mhdr)->msg_controllen >= sizeof(struct cmsghdr) ? \
-        (struct cmsghdr *) (mhdr)->msg_control : \
-        (struct cmsghdr *) NULL)
+#define CMSG_FIRSTHDR(mhdr)                                                                   \
+    ((mhdr)->msg_controllen >= sizeof(struct cmsghdr) ? (struct cmsghdr *)(mhdr)->msg_control \
+                                                      : (struct cmsghdr *)NULL)
 
 struct linger {
-    int l_onoff; //< Non-zero to linger on close.
+    int l_onoff;  //< Non-zero to linger on close.
     int l_linger; //< Time to linger.
 };
 
 enum {
-    SOCK_DGRAM = 1, //< Datagram socket.
-    SOCK_RAW = 2, //< Raw-protocol interface.
+    SOCK_DGRAM     = 1, //< Datagram socket.
+    SOCK_RAW       = 2, //< Raw-protocol interface.
     SOCK_SEQPACKET = 3, //< Sequenced packet stream.
-    SOCK_STREAM = 4, //< Stream socket.
+    SOCK_STREAM    = 4, //< Stream socket.
 };
 
 enum {
@@ -103,33 +103,36 @@ enum {
 
 enum {
     SO_ACCEPTCONN = 0, //< Reports whether socket listening is enabled.
-    SO_BROADCAST = 1, //< Permits sending of broadcast messages.
-    SO_DEBUG = 2, //< Enables recording of debugging information.
+    SO_BROADCAST  = 1, //< Permits sending of broadcast messages.
+    SO_DEBUG      = 2, //< Enables recording of debugging information.
     SO_DONTRROUTE = 3, //< Disables local routing.
-    SO_ERROR = 4, //< Reports and clears error status.
-    SO_KEEPALIVE = 5, //< Keeps connections active by enabling the periodic transmission of messages.
-    SO_LINGER = 6, //< Lingers on close if data is present.
-    SO_OOBINLINE = 7, //< Leaves received out-of-band data (data marked urgent) inline.
-    SO_RCVBUF = 8, //< Sets receive buffer size.
-    SO_RCVLOWAT = 9, //< Sets the minimum number of bytes to process for socket input operations.
-    SO_RCVTIMEO = 10, //< Sets the timeout value that specifies the maximum amount of time an input function waits until it completes.
+    SO_ERROR      = 4, //< Reports and clears error status.
+    SO_KEEPALIVE =
+        5, //< Keeps connections active by enabling the periodic transmission of messages.
+    SO_LINGER    = 6,  //< Lingers on close if data is present.
+    SO_OOBINLINE = 7,  //< Leaves received out-of-band data (data marked urgent) inline.
+    SO_RCVBUF    = 8,  //< Sets receive buffer size.
+    SO_RCVLOWAT  = 9,  //< Sets the minimum number of bytes to process for socket input operations.
+    SO_RCVTIMEO  = 10, //< Sets the timeout value that specifies the maximum amount of time an input
+                       //function waits until it completes.
     SO_REUSEADDR = 11, //< Allows the socket to be bound to an address that is already in use.
-    SO_SNDBUF = 12, //< Sets send buffer size.
-    SO_SNDLOWAT = 13, //< Sets the minimum number of bytes to process for socket output operations.
-    SO_SNDTIMEO = 14, //< Sets the timeout value specifying the amount of time that an output function blocks because flow control prevents data from being sent.
-    SO_TYPE = 15, //< Reports the socket type.
+    SO_SNDBUF    = 12, //< Sets send buffer size.
+    SO_SNDLOWAT  = 13, //< Sets the minimum number of bytes to process for socket output operations.
+    SO_SNDTIMEO  = 14, //< Sets the timeout value specifying the amount of time that an output
+                       //function blocks because flow control prevents data from being sent.
+    SO_TYPE      = 15, //< Reports the socket type.
 };
 
 enum {
     AF_UNSPEC = 0, //< Unspecified.
-    AF_INET = 1, //< IPv4 Internet protocols.
-    AF_INET6 = 2, //< IPv6 Internet protocols.
-    AF_UNIX = 3, //< Unix domain sockets.
+    AF_INET   = 1, //< IPv4 Internet protocols.
+    AF_INET6  = 2, //< IPv6 Internet protocols.
+    AF_UNIX   = 3, //< Unix domain sockets.
 };
 
 enum {
-    SHUT_RD = 0x1, //< Disables further receive operations.
-    SHUT_WR = 0x2, //< Disables further send operations.
+    SHUT_RD   = 0x1, //< Disables further receive operations.
+    SHUT_WR   = 0x2, //< Disables further send operations.
     SHUT_RDWR = 0x3, //< Disables further send and receive operations.
 };
 
@@ -143,26 +146,24 @@ extern "C" {
 
 #ifdef __STDC_HOSTED__
 
-int     accept(int, struct sockaddr *, socklen_t *);
-int     bind(int, const struct sockaddr *, socklen_t);
-int     connect(int, const struct sockaddr *, socklen_t);
-int     getpeername(int, struct sockaddr *, socklen_t *);
-int     getsockname(int, struct sockaddr *, socklen_t *);
-int     getsockopt(int, int, int, void *, socklen_t *);
-int     listen(int, int);
+int accept(int, struct sockaddr *, socklen_t *);
+int bind(int, const struct sockaddr *, socklen_t);
+int connect(int, const struct sockaddr *, socklen_t);
+int getpeername(int, struct sockaddr *, socklen_t *);
+int getsockname(int, struct sockaddr *, socklen_t *);
+int getsockopt(int, int, int, void *, socklen_t *);
+int listen(int, int);
 ssize_t recv(int, void *, size_t, int);
-ssize_t recvfrom(int, void *, size_t, int,
-        struct sockaddr *, socklen_t *);
+ssize_t recvfrom(int, void *, size_t, int, struct sockaddr *, socklen_t *);
 ssize_t recvmsg(int, struct msghdr *, int);
 ssize_t send(int, const void *, size_t, int);
 ssize_t sendmsg(int, const struct msghdr *, int);
-ssize_t sendto(int, const void *, size_t, int, const struct sockaddr *,
-        socklen_t);
-int     setsockopt(int, int, int, const void *, socklen_t);
-int     shutdown(int, int);
-int     sockatmark(int);
-int     socket(int, int, int);
-int     socketpair(int, int, int, int [2]);
+ssize_t sendto(int, const void *, size_t, int, const struct sockaddr *, socklen_t);
+int setsockopt(int, int, int, const void *, socklen_t);
+int shutdown(int, int);
+int sockatmark(int);
+int socket(int, int, int);
+int socketpair(int, int, int, int[2]);
 
 /**
  * @brief Accept an incoming network connection with additional options.
@@ -213,7 +214,8 @@ int accept4(int sockfd, struct sockaddr *addr, socklen_t *addrlen, int flags);
  *                  It also allows specifying a signal mask to block certain signals
  *                  while waiting for a connection.
  */
-int paccept(int sockfd, struct sockaddr *addr, socklen_t *addrlen, const sigset_t *sigmask, int flags);
+int paccept(int sockfd, struct sockaddr *addr, socklen_t *addrlen, const sigset_t *sigmask,
+            int flags);
 
 /**
  * @brief Send a file to a socket.
@@ -236,8 +238,8 @@ int paccept(int sockfd, struct sockaddr *addr, socklen_t *addrlen, const sigset_
  * @note This function is not standard and is only generally present on BSD systems.
  *       Since pmOS is not BSD, its behavior might be slightly different.
  */
-int sendfile(int fd, int s, off_t offset, size_t nbytes, struct sf_hdtr *hdtr,
-             off_t *sbytes, int flags);
+int sendfile(int fd, int s, off_t offset, size_t nbytes, struct sf_hdtr *hdtr, off_t *sbytes,
+             int flags);
 
 #endif
 

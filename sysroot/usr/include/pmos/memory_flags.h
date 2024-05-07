@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -30,16 +30,16 @@
 #define _PMOS_MEMORY_FLAGS_H
 
 /// Access flag indicating read permission
-#define PROT_READ     0x01
+#define PROT_READ 0x01
 
 /// Access flag indicating write permission
-#define PROT_WRITE    0x02
+#define PROT_WRITE 0x02
 
 /// Access flag indicating execution permission
-#define PROT_EXEC     0x04
+#define PROT_EXEC 0x04
 
 /// Access flag indicating no permissions
-#define PROT_NONE     0x00
+#define PROT_NONE 0x00
 
 #define MAP_SHARED    0x01
 #define MAP_PRIVATE   0x02
@@ -50,7 +50,7 @@
 #define MS_SYNC       0x02
 #define MS_INVALIDATE 0x04
 
-#define MCL_CURRENT   0x01
-#define MCL_FUTURE    0x02
+#define MCL_CURRENT 0x01
+#define MCL_FUTURE  0x02
 
 #endif

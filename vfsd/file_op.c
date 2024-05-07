@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -27,17 +27,19 @@
  */
 
 #include "file_op.h"
-#include "string.h"
-#include "fs_consumer.h"
-#include <pmos/ipc.h>
-#include <stdlib.h>
-#include <errno.h>
-#include "path_node.h"
-#include <pmos/system.h>
-#include <string.h>
+
 #include "filesystem.h"
+#include "fs_consumer.h"
+#include "path_node.h"
+#include "string.h"
+
 #include <assert.h>
+#include <errno.h>
+#include <pmos/ipc.h>
+#include <pmos/system.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 static int ipc_dup_send_fail(pmos_port_t reply_port, int result);
 
@@ -55,12 +57,12 @@ uint64_t get_next_request_id()
 int open_file_send_fail(const struct IPC_Open *request, int error)
 {
     IPC_Open_Reply reply = {
-        .type = IPC_Open_Reply_NUM,
-        .result_code = -error,
-        .fs_flags = 0,
+        .type          = IPC_Open_Reply_NUM,
+        .result_code   = -error,
+        .fs_flags      = 0,
         .filesystem_id = 0,
-        .file_id = 0,
-        .fs_port = 0,
+        .file_id       = 0,
+        .fs_port       = 0,
     };
 
     result_t result = send_message_port(request->reply_port, sizeof(reply), (char *)&reply);
@@ -83,20 +85,18 @@ int init_open_request(struct File_Request *request)
 
     request->consumer_req_next = NULL;
     request->consumer_req_prev = NULL;
-    request->consumer = NULL;
+    request->consumer          = NULL;
 
     request->fs_req_next = NULL;
     request->fs_req_prev = NULL;
-    request->filesystem = NULL;
+    request->filesystem  = NULL;
 
     request->reply_port = 0;
-    
-    
 
     request->next_path_node_index = 0;
-    request->active_node = NULL;
+    request->active_node          = NULL;
 
-    request->request_id = get_next_request_id();
+    request->request_id   = get_next_request_id();
     request->request_type = REQUEST_TYPE_OPEN_FILE;
 
     return 0;
@@ -114,7 +114,7 @@ struct File_Request *create_mount_request()
         return NULL;
     }
 
-    new_request->request_id = get_next_request_id();
+    new_request->request_id   = get_next_request_id();
     new_request->request_type = REQUEST_TYPE_MOUNT;
 
     return new_request;
@@ -143,7 +143,7 @@ int open_file(const struct IPC_Open *request, uint64_t sender, uint64_t request_
 
     bool register_if_not_found = request->flags & IPC_FLAG_REGISTER_IF_NOT_FOUND;
 
-    uint64_t filesystem_id = request->fs_consumer_id;
+    uint64_t filesystem_id       = request->fs_consumer_id;
     struct fs_consumer *consumer = get_fs_consumer(filesystem_id);
     if (consumer == NULL && register_if_not_found) {
         consumer = create_fs_consumer(request->fs_consumer_id);
@@ -176,7 +176,8 @@ int open_file(const struct IPC_Open *request, uint64_t sender, uint64_t request_
     }
     uint64_t path_length = request_length - sizeof(struct IPC_Open);
 
-    result = prepare_filename(open_request, consumer->path.data, consumer->path.capacity, request->path, path_length);
+    result = prepare_filename(open_request, consumer->path.data, consumer->path.capacity,
+                              request->path, path_length);
     if (result != 0) {
         open_file_send_fail(request, -result);
         free_buffers_file_request(open_request);
@@ -211,12 +212,12 @@ int mount_filesystem(const struct IPC_Mount_FS *request, uint64_t sender, uint64
     if (request == NULL)
         return -EINVAL;
 
-    uint64_t filesystem_id = request->filesystem_id;
+    uint64_t filesystem_id        = request->filesystem_id;
     struct Filesystem *filesystem = get_filesystem(filesystem_id);
     if (filesystem == NULL) {
         IPC_Mount_FS_Reply reply = {
-            .type = IPC_Mount_FS_Reply_NUM,
-            .result_code = -ENOENT,
+            .type          = IPC_Mount_FS_Reply_NUM,
+            .result_code   = -ENOENT,
             .mountpoint_id = 0,
         };
 
@@ -228,8 +229,8 @@ int mount_filesystem(const struct IPC_Mount_FS *request, uint64_t sender, uint64
     if (task == NULL) {
         // Task is not registered with the filesystem
         IPC_Mount_FS_Reply reply = {
-            .type = IPC_Mount_FS_Reply_NUM,
-            .result_code = -EPERM,
+            .type          = IPC_Mount_FS_Reply_NUM,
+            .result_code   = -EPERM,
             .mountpoint_id = 0,
         };
 
@@ -240,8 +241,8 @@ int mount_filesystem(const struct IPC_Mount_FS *request, uint64_t sender, uint64
     struct File_Request *mount_request = create_mount_request();
     if (request == NULL) {
         IPC_Mount_FS_Reply reply = {
-            .type = IPC_Mount_FS_Reply_NUM,
-            .result_code = -ENOMEM,
+            .type          = IPC_Mount_FS_Reply_NUM,
+            .result_code   = -ENOMEM,
             .mountpoint_id = 0,
         };
 
@@ -251,16 +252,17 @@ int mount_filesystem(const struct IPC_Mount_FS *request, uint64_t sender, uint64
 
     mount_request->reply_port = request->reply_port;
 
-    size_t path_length = request_length - sizeof(struct IPC_Mount_FS);
-    const char * fs_path = "/";
-    int result = prepare_filename(mount_request, fs_path, strlen(fs_path), request->mount_path, path_length);
+    size_t path_length  = request_length - sizeof(struct IPC_Mount_FS);
+    const char *fs_path = "/";
+    int result =
+        prepare_filename(mount_request, fs_path, strlen(fs_path), request->mount_path, path_length);
     if (result != 0) {
         free_buffers_file_request(mount_request);
         free(mount_request);
 
         IPC_Mount_FS_Reply reply = {
-            .type = IPC_Mount_FS_Reply_NUM,
-            .result_code = -result,
+            .type          = IPC_Mount_FS_Reply_NUM,
+            .result_code   = -result,
             .mountpoint_id = 0,
         };
 
@@ -274,8 +276,8 @@ int mount_filesystem(const struct IPC_Mount_FS *request, uint64_t sender, uint64
         free(mount_request);
 
         IPC_Mount_FS_Reply reply = {
-            .type = IPC_Mount_FS_Reply_NUM,
-            .result_code = -result,
+            .type          = IPC_Mount_FS_Reply_NUM,
+            .result_code   = -result,
             .mountpoint_id = 0,
         };
 
@@ -298,7 +300,7 @@ int bind_request_to_root(struct File_Request *request)
     if (result != 0)
         return result;
 
-    request->active_node = &root;
+    request->active_node          = &root;
     request->next_path_node_index = 0;
 
     return 0;
@@ -321,7 +323,7 @@ int register_request_with_consumer(struct File_Request *request, struct fs_consu
     } else {
         request->consumer_req_prev = consumer->requests_tail;
         request->consumer_req_next = NULL;
-        consumer->requests_tail = request;
+        consumer->requests_tail    = request;
     }
     consumer->requests_count++;
 
@@ -344,8 +346,8 @@ int register_request_with_filesystem(struct File_Request *request, struct Filesy
         request->fs_req_prev = NULL;
         request->fs_req_next = NULL;
     } else {
-        request->fs_req_prev = filesystem->requests_tail;
-        request->fs_req_next = NULL;
+        request->fs_req_prev      = filesystem->requests_tail;
+        request->fs_req_next      = NULL;
         filesystem->requests_tail = request;
     }
     filesystem->requests_count++;
@@ -353,7 +355,9 @@ int register_request_with_filesystem(struct File_Request *request, struct Filesy
     return 0;
 }
 
-int prepare_filename(struct File_Request *request, const char *consumer_path_data, size_t consumer_path_length, const char *file_path, size_t path_length) {
+int prepare_filename(struct File_Request *request, const char *consumer_path_data,
+                     size_t consumer_path_length, const char *file_path, size_t path_length)
+{
     if (request == NULL) {
         return -EINVAL;
     }
@@ -398,15 +402,13 @@ int prepare_filename(struct File_Request *request, const char *consumer_path_dat
     return 0; // Success
 }
 
-static int destroy_and_reply_mount_request(struct File_Request * mount_request, int status_code, uint64_t mountpoint_id)
+static int destroy_and_reply_mount_request(struct File_Request *mount_request, int status_code,
+                                           uint64_t mountpoint_id)
 {
     assert(mount_request->request_type == REQUEST_TYPE_MOUNT);
 
     IPC_Mount_FS_Reply reply = {
-        .type = IPC_Mount_FS_Reply_NUM,
-        .result_code = status_code,
-        .mountpoint_id = mountpoint_id
-    };
+        .type = IPC_Mount_FS_Reply_NUM, .result_code = status_code, .mountpoint_id = mountpoint_id};
     pmos_port_t reply_port = mount_request->reply_port;
 
     unregister_request_from_parent(mount_request);
@@ -414,12 +416,11 @@ static int destroy_and_reply_mount_request(struct File_Request * mount_request, 
     free_buffers_file_request(mount_request);
     free(mount_request);
 
-
     result_t result = send_message_port(reply_port, sizeof(reply), (char *)&reply);
     return -result;
 }
 
-int process_request(struct File_Request * request)
+int process_request(struct File_Request *request)
 {
     struct Path_Node *active_node = request->active_node;
     if (active_node != NULL)
@@ -432,217 +433,221 @@ int process_request(struct File_Request * request)
         assert(active_node != NULL);
 
         switch (active_node->file_type) {
-            case NODE_UNRESOLVED: {
-                // Push request to the node's unresolved requests list
-                result = add_request_to_path_node(request, active_node);
-                if (result != 0) {
-                    // Failed to register request
-                    IPC_Open_Reply reply = {
-                        .type = IPC_Open_Reply_NUM,
-                        .result_code = result,
-                        .fs_flags = 0,
-                        .filesystem_id = 0,
-                        .file_id = 0,
-                        .fs_port = 0,
-                    };
-
-                    pmos_port_t reply_port = request->reply_port;
-                    result = -send_message_port(reply_port, sizeof(reply), (char *)&reply);
-                    break;
-                }
-
-                // Wait for the request to be resolved
-                return 0;
-            } break;
-            case NODE_DIRECTORY: {
-                // Advance to the node
-                size_t path_index = request->next_path_node_index;
-                while (path_index < request->path.length && request->path.data[path_index] == '/')
-                    path_index++;
-
-                if (path_index == request->path.length) {
-                    // Reached the end of the path
-                    // This is a directory and the file was wanted, so fail
-                    IPC_Open_Reply reply = {
-                        .type = IPC_Open_Reply_NUM,
-                        .result_code = -EISDIR,
-                        .fs_flags = 0,
-                        .filesystem_id = 0,
-                        .file_id = 0,
-                        .fs_port = 0,
-                    };
-
-                    uint64_t reply_port = request->reply_port;
-                    result = -send_message_port(reply_port, sizeof(reply), (char *)&reply);
-                    break;
-                }
-
-                // Advance to the next node
-                size_t next_index = path_index + 1;
-
-                while (next_index < request->path.length && request->path.data[next_index] != '/')
-                    next_index++;
-
-                size_t node_name_length = next_index - path_index;
-
-                if (node_name_length == 1 && memcmp(request->path.data + path_index, ".", 1) == 0) {
-                    // Reference to the current directory
-                    request->next_path_node_index = next_index;
-                    result = add_request_to_path_node(request, active_node);
-                    if (result != 0) {
-                        IPC_Open_Reply reply = {
-                            .type = IPC_Open_Reply_NUM,
-                            .result_code = result,
-                            .fs_flags = 0,
-                            .filesystem_id = 0,
-                            .file_id = 0,
-                            .fs_port = 0,
-                        };
-
-                        result = -send_message_port(request->reply_port, sizeof(reply), (char *)&reply);
-                        break;
-                    }
-                    
-                    return process_request(request);
-                } else if (node_name_length == 2 && memcmp(request->path.data + path_index, "..", 2) == 0) {
-                    // Reference to a parent directory
-                    assert(active_node->parent != NULL);
-
-                    request->next_path_node_index = next_index;
-                    result = add_request_to_path_node(request, active_node->parent);
-                    if (result != 0) {
-                        IPC_Open_Reply reply = {
-                            .type = IPC_Open_Reply_NUM,
-                            .result_code = -EISDIR,
-                            .fs_flags = 0,
-                            .filesystem_id = 0,
-                            .file_id = 0,
-                            .fs_port = 0,
-                        };
-
-                        result = -send_message_port(request->reply_port, sizeof(reply), (char *)&reply);
-                        break;
-                    }
-
-                    return process_request(request);
-                } else {
-                    // Resolve the child node
-                    Path_Node *child_node = NULL;
-                    result = path_node_resolve_child(&child_node, active_node, (unsigned char *)request->path.data + path_index, node_name_length);
-                    if (result != 0) {
-                        IPC_Open_Reply reply = {
-                            .type = IPC_Open_Reply_NUM,
-                            .result_code = result,
-                            .fs_flags = 0,
-                            .filesystem_id = 0,
-                            .file_id = 0,
-                            .fs_port = 0,
-                        };
-
-                        result = -send_message_port(request->reply_port, sizeof(reply), (char *)&reply);
-                        break;
-                    }
-
-                    request->next_path_node_index = next_index;
-                    result = add_request_to_path_node(request, child_node);
-                    if (result != 0) {
-                        IPC_Open_Reply reply = {
-                            .type = IPC_Open_Reply_NUM,
-                            .result_code = result,
-                            .fs_flags = 0,
-                            .filesystem_id = 0,
-                            .file_id = 0,
-                            .fs_port = 0,
-                        };
-
-                        result = -send_message_port(request->reply_port, sizeof(reply), (char *)&reply);
-                        break;
-                    }
-
-                    return process_request(request);
-                }
-            } break;
-            case NODE_FILE: {
-                // Reached the end of the path
-                if (request->next_path_node_index != request->path.length) {
-                    // This is a file and the directory was wanted, so fail
-                    IPC_Open_Reply reply = {
-                        .type = IPC_Open_Reply_NUM,
-                        .result_code = -ENOENT,
-                        .fs_flags = 0,
-                        .filesystem_id = 0,
-                        .file_id = 0,
-                        .fs_port = 0,
-                    };
-
-                    result = -send_message_port(request->reply_port, sizeof(reply), (char *)&reply);
-                    break;
-                }
-
-                result = register_request_with_filesystem(request, active_node->owner_mountpoint->fs);
-                if (result != 0) {
-                    IPC_Open_Reply reply = {
-                        .type = IPC_Open_Reply_NUM,
-                        .result_code = result,
-                        .fs_flags = 0,
-                        .filesystem_id = 0,
-                        .file_id = 0,
-                        .fs_port = 0,
-                    };
-
-                    result = -send_message_port(request->reply_port, sizeof(reply), (char *)&reply);
-                    break;
-                }
-
-                request->request_type = REQUEST_TYPE_OPEN_FILE_RESOLVED;
-                result = add_request_to_map(&global_requests_map, request);
-                if (result != 0) {
-                    IPC_Open_Reply reply = {
-                        .type = IPC_Open_Reply_NUM,
-                        .result_code = result,
-                        .fs_flags = 0,
-                        .filesystem_id = 0,
-                        .file_id = 0,
-                        .fs_port = 0,
-                    };
-
-                    result = -send_message_port(request->reply_port, sizeof(reply), (char *)&reply);
-                    break;
-                }
-
-                IPC_FS_Open msg_request = {
-                    .type = IPC_FS_Open_NUM,
-                    .flags = 0,
-                    .reply_port = main_port,
-                    .fs_consumer_id = request->consumer->id,
-                    .file_id = active_node->file_id,
-                    .operation_id = request->request_id,
-                };
-                    
-                result = -send_message_port(active_node->owner_mountpoint->fs->command_port, sizeof(msg_request), (char *)&msg_request);
-                if (result == 0)
-                    return 0;
-
-                break;
-            } break;
-                default: {
-                // Not implemented
-
+        case NODE_UNRESOLVED: {
+            // Push request to the node's unresolved requests list
+            result = add_request_to_path_node(request, active_node);
+            if (result != 0) {
+                // Failed to register request
                 IPC_Open_Reply reply = {
-                    .type = IPC_Open_Reply_NUM,
-                    .result_code = -ENOSYS,
-                    .fs_flags = 0,
+                    .type          = IPC_Open_Reply_NUM,
+                    .result_code   = result,
+                    .fs_flags      = 0,
                     .filesystem_id = 0,
-                    .file_id = 0,
-                    .fs_port = 0,
+                    .file_id       = 0,
+                    .fs_port       = 0,
                 };
 
                 pmos_port_t reply_port = request->reply_port;
                 result = -send_message_port(reply_port, sizeof(reply), (char *)&reply);
                 break;
-            } break;
+            }
+
+            // Wait for the request to be resolved
+            return 0;
+        } break;
+        case NODE_DIRECTORY: {
+            // Advance to the node
+            size_t path_index = request->next_path_node_index;
+            while (path_index < request->path.length && request->path.data[path_index] == '/')
+                path_index++;
+
+            if (path_index == request->path.length) {
+                // Reached the end of the path
+                // This is a directory and the file was wanted, so fail
+                IPC_Open_Reply reply = {
+                    .type          = IPC_Open_Reply_NUM,
+                    .result_code   = -EISDIR,
+                    .fs_flags      = 0,
+                    .filesystem_id = 0,
+                    .file_id       = 0,
+                    .fs_port       = 0,
+                };
+
+                uint64_t reply_port = request->reply_port;
+                result              = -send_message_port(reply_port, sizeof(reply), (char *)&reply);
+                break;
+            }
+
+            // Advance to the next node
+            size_t next_index = path_index + 1;
+
+            while (next_index < request->path.length && request->path.data[next_index] != '/')
+                next_index++;
+
+            size_t node_name_length = next_index - path_index;
+
+            if (node_name_length == 1 && memcmp(request->path.data + path_index, ".", 1) == 0) {
+                // Reference to the current directory
+                request->next_path_node_index = next_index;
+                result                        = add_request_to_path_node(request, active_node);
+                if (result != 0) {
+                    IPC_Open_Reply reply = {
+                        .type          = IPC_Open_Reply_NUM,
+                        .result_code   = result,
+                        .fs_flags      = 0,
+                        .filesystem_id = 0,
+                        .file_id       = 0,
+                        .fs_port       = 0,
+                    };
+
+                    result = -send_message_port(request->reply_port, sizeof(reply), (char *)&reply);
+                    break;
+                }
+
+                return process_request(request);
+            } else if (node_name_length == 2 &&
+                       memcmp(request->path.data + path_index, "..", 2) == 0) {
+                // Reference to a parent directory
+                assert(active_node->parent != NULL);
+
+                request->next_path_node_index = next_index;
+                result = add_request_to_path_node(request, active_node->parent);
+                if (result != 0) {
+                    IPC_Open_Reply reply = {
+                        .type          = IPC_Open_Reply_NUM,
+                        .result_code   = -EISDIR,
+                        .fs_flags      = 0,
+                        .filesystem_id = 0,
+                        .file_id       = 0,
+                        .fs_port       = 0,
+                    };
+
+                    result = -send_message_port(request->reply_port, sizeof(reply), (char *)&reply);
+                    break;
+                }
+
+                return process_request(request);
+            } else {
+                // Resolve the child node
+                Path_Node *child_node = NULL;
+                result                = path_node_resolve_child(&child_node, active_node,
+                                                                (unsigned char *)request->path.data + path_index,
+                                                                node_name_length);
+                if (result != 0) {
+                    IPC_Open_Reply reply = {
+                        .type          = IPC_Open_Reply_NUM,
+                        .result_code   = result,
+                        .fs_flags      = 0,
+                        .filesystem_id = 0,
+                        .file_id       = 0,
+                        .fs_port       = 0,
+                    };
+
+                    result = -send_message_port(request->reply_port, sizeof(reply), (char *)&reply);
+                    break;
+                }
+
+                request->next_path_node_index = next_index;
+                result                        = add_request_to_path_node(request, child_node);
+                if (result != 0) {
+                    IPC_Open_Reply reply = {
+                        .type          = IPC_Open_Reply_NUM,
+                        .result_code   = result,
+                        .fs_flags      = 0,
+                        .filesystem_id = 0,
+                        .file_id       = 0,
+                        .fs_port       = 0,
+                    };
+
+                    result = -send_message_port(request->reply_port, sizeof(reply), (char *)&reply);
+                    break;
+                }
+
+                return process_request(request);
+            }
+        } break;
+        case NODE_FILE: {
+            // Reached the end of the path
+            if (request->next_path_node_index != request->path.length) {
+                // This is a file and the directory was wanted, so fail
+                IPC_Open_Reply reply = {
+                    .type          = IPC_Open_Reply_NUM,
+                    .result_code   = -ENOENT,
+                    .fs_flags      = 0,
+                    .filesystem_id = 0,
+                    .file_id       = 0,
+                    .fs_port       = 0,
+                };
+
+                result = -send_message_port(request->reply_port, sizeof(reply), (char *)&reply);
+                break;
+            }
+
+            result = register_request_with_filesystem(request, active_node->owner_mountpoint->fs);
+            if (result != 0) {
+                IPC_Open_Reply reply = {
+                    .type          = IPC_Open_Reply_NUM,
+                    .result_code   = result,
+                    .fs_flags      = 0,
+                    .filesystem_id = 0,
+                    .file_id       = 0,
+                    .fs_port       = 0,
+                };
+
+                result = -send_message_port(request->reply_port, sizeof(reply), (char *)&reply);
+                break;
+            }
+
+            request->request_type = REQUEST_TYPE_OPEN_FILE_RESOLVED;
+            result                = add_request_to_map(&global_requests_map, request);
+            if (result != 0) {
+                IPC_Open_Reply reply = {
+                    .type          = IPC_Open_Reply_NUM,
+                    .result_code   = result,
+                    .fs_flags      = 0,
+                    .filesystem_id = 0,
+                    .file_id       = 0,
+                    .fs_port       = 0,
+                };
+
+                result = -send_message_port(request->reply_port, sizeof(reply), (char *)&reply);
+                break;
+            }
+
+            IPC_FS_Open msg_request = {
+                .type           = IPC_FS_Open_NUM,
+                .flags          = 0,
+                .reply_port     = main_port,
+                .fs_consumer_id = request->consumer->id,
+                .file_id        = active_node->file_id,
+                .operation_id   = request->request_id,
+            };
+
+            result = -send_message_port(active_node->owner_mountpoint->fs->command_port,
+                                        sizeof(msg_request), (char *)&msg_request);
+            if (result == 0)
+                return 0;
+
+            break;
+        } break;
+        default: {
+            // Not implemented
+
+            IPC_Open_Reply reply = {
+                .type          = IPC_Open_Reply_NUM,
+                .result_code   = -ENOSYS,
+                .fs_flags      = 0,
+                .filesystem_id = 0,
+                .file_id       = 0,
+                .fs_port       = 0,
+            };
+
+            pmos_port_t reply_port = request->reply_port;
+            result                 = -send_message_port(reply_port, sizeof(reply), (char *)&reply);
+            break;
+        } break;
         }
-        
+
         break;
     }
     case REQUEST_TYPE_MOUNT: {
@@ -655,13 +660,13 @@ int process_request(struct File_Request * request)
 
         // Bind to root node
         if (active_node == NULL) {
-            active_node = &root;
+            active_node             = &root;
             request->path_node_next = 0;
         }
         uint64_t file_id = request->file_id;
 
-        // Root node is a special case: it's assumed it's always present, so if no root filesystem is mounted,
-        // its status is unresolved.
+        // Root node is a special case: it's assumed it's always present, so if no root filesystem
+        // is mounted, its status is unresolved.
         if (active_node->file_type != NODE_UNRESOLVED) {
             // Root is already mounted
             return destroy_and_reply_mount_request(request, -EEXIST, 0);
@@ -679,8 +684,8 @@ int process_request(struct File_Request * request)
         }
 
         active_node->owner_mountpoint = mountpoint;
-        active_node->file_type = NODE_DIRECTORY;
-        active_node->file_id = file_id;
+        active_node->file_type        = NODE_DIRECTORY;
+        active_node->file_id          = file_id;
 
         return process_requests_of_node(active_node);
     }
@@ -697,7 +702,7 @@ int process_request(struct File_Request * request)
     remove_request_from_global_map(request);
 
     unregister_request_from_parent(request);
-    
+
     free_buffers_file_request(request);
     free(request);
 
@@ -731,12 +736,12 @@ void fail_and_destroy_request(struct File_Request *request, int error_code)
     switch (request->request_type) {
     case REQUEST_TYPE_OPEN_FILE: {
         IPC_Open_Reply reply = {
-            .type = IPC_Open_Reply_NUM,
-            .result_code = error_code,
-            .fs_flags = 0,
+            .type          = IPC_Open_Reply_NUM,
+            .result_code   = error_code,
+            .fs_flags      = 0,
             .filesystem_id = 0,
-            .file_id = 0,
-            .fs_port = 0,
+            .file_id       = 0,
+            .fs_port       = 0,
         };
 
         pmos_port_t reply_port = request->reply_port;
@@ -746,10 +751,7 @@ void fail_and_destroy_request(struct File_Request *request, int error_code)
     }
     case REQUEST_TYPE_MOUNT: {
         IPC_Mount_FS_Reply reply = {
-            .type = IPC_Mount_FS_Reply_NUM,
-            .result_code = error_code,
-            .mountpoint_id = 0
-        };
+            .type = IPC_Mount_FS_Reply_NUM, .result_code = error_code, .mountpoint_id = 0};
 
         pmos_port_t reply_port = request->reply_port;
 
@@ -776,7 +778,7 @@ void fail_and_destroy_request(struct File_Request *request, int error_code)
     remove_request_from_global_map(request);
 
     unregister_request_from_parent(request);
-    
+
     free_buffers_file_request(request);
     free(request);
 }
@@ -792,7 +794,8 @@ void unregister_request_from_parent(struct File_Request *request)
             assert(consumer->requests_head == request);
             consumer->requests_head = request->consumer_req_next;
         } else {
-            assert(consumer->requests_head != request && request->consumer_req_prev != NULL && request->consumer_req_prev->consumer_req_next == request);
+            assert(consumer->requests_head != request && request->consumer_req_prev != NULL &&
+                   request->consumer_req_prev->consumer_req_next == request);
             request->consumer_req_prev->consumer_req_next = request->consumer_req_next;
         }
 
@@ -800,7 +803,8 @@ void unregister_request_from_parent(struct File_Request *request)
             assert(consumer->requests_tail == request);
             consumer->requests_tail = request->consumer_req_prev;
         } else {
-            assert(consumer->requests_tail != request && request->consumer_req_next != NULL && request->consumer_req_next->consumer_req_prev == request);
+            assert(consumer->requests_tail != request && request->consumer_req_next != NULL &&
+                   request->consumer_req_next->consumer_req_prev == request);
             request->consumer_req_next->consumer_req_prev = request->consumer_req_prev;
         }
 
@@ -814,7 +818,8 @@ void unregister_request_from_parent(struct File_Request *request)
             assert(fs->requests_head == request);
             fs->requests_head = request->fs_req_next;
         } else {
-            assert(fs->requests_head != request && request->fs_req_prev != NULL && request->fs_req_prev->fs_req_next == request);
+            assert(fs->requests_head != request && request->fs_req_prev != NULL &&
+                   request->fs_req_prev->fs_req_next == request);
             request->fs_req_prev->fs_req_next = request->fs_req_next;
         }
 
@@ -822,7 +827,8 @@ void unregister_request_from_parent(struct File_Request *request)
             assert(fs->requests_tail == request);
             fs->requests_tail = request->fs_req_prev;
         } else {
-            assert(fs->requests_tail != request && request->fs_req_next != NULL && request->fs_req_next->fs_req_prev == request);
+            assert(fs->requests_tail != request && request->fs_req_next != NULL &&
+                   request->fs_req_next->fs_req_prev == request);
             request->fs_req_next->fs_req_prev = request->fs_req_prev;
         }
 
@@ -847,8 +853,8 @@ int add_request_to_path_node(struct File_Request *request, struct Path_Node *n)
     } else {
         assert(n->requests_tail != NULL);
         n->requests_tail->path_node_next = request;
-        request->path_node_prev = n->requests_tail;
-        n->requests_tail = request;
+        request->path_node_prev          = n->requests_tail;
+        n->requests_tail                 = request;
     }
 
     request->active_node = n;
@@ -895,12 +901,12 @@ void remove_request_from_map(struct File_Request_Map *map, struct File_Request *
     if (map->hash_vector == NULL || map->vector_size == 0)
         return;
 
-    size_t index = request->request_id % map->vector_size;
+    size_t index                   = request->request_id % map->vector_size;
     struct File_Request_Node *node = map->hash_vector[index];
     while (node != NULL) {
         if (node->next != NULL && node->next->request == request) {
             struct File_Request_Node *next = node->next;
-            node->next = next->next;
+            node->next                     = next->next;
             free(next);
             map->nodes_count--;
             break;
@@ -908,9 +914,11 @@ void remove_request_from_map(struct File_Request_Map *map, struct File_Request *
         node = node->next;
     }
 
-    if (map->vector_size > FILE_REQUEST_HASH_INITIAL_SIZE && map->nodes_count < map->vector_size * FILE_REQUEST_HASH_SHRINK_THRESHOLD) {
+    if (map->vector_size > FILE_REQUEST_HASH_INITIAL_SIZE &&
+        map->nodes_count < map->vector_size * FILE_REQUEST_HASH_SHRINK_THRESHOLD) {
         size_t new_size = map->vector_size / 2;
-        struct File_Request_Node **new_vector = calloc(new_size, sizeof(struct File_Request_Node *));
+        struct File_Request_Node **new_vector =
+            calloc(new_size, sizeof(struct File_Request_Node *));
         if (new_vector == NULL)
             return;
 
@@ -918,10 +926,10 @@ void remove_request_from_map(struct File_Request_Map *map, struct File_Request *
             struct File_Request_Node *node = map->hash_vector[i];
             while (node != NULL) {
                 struct File_Request_Node *next = node->next;
-                size_t new_index = node->request->request_id % new_size;
-                node->next = new_vector[new_index];
-                new_vector[new_index] = node;
-                node = next;
+                size_t new_index               = node->request->request_id % new_size;
+                node->next                     = new_vector[new_index];
+                new_vector[new_index]          = node;
+                node                           = next;
             }
         }
 
@@ -938,7 +946,7 @@ struct File_Request *create_resolve_path_request(struct Path_Node *child_node)
         return NULL;
 
     new_request->request_type = REQUEST_TYPE_RESOLVE_PATH;
-    new_request->request_id = get_next_request_id();
+    new_request->request_id   = get_next_request_id();
 
     int result = add_request_to_map(&global_requests_map, new_request);
     if (result < 0) {
@@ -946,7 +954,8 @@ struct File_Request *create_resolve_path_request(struct Path_Node *child_node)
         return NULL;
     }
 
-    result = register_request_with_filesystem(new_request, child_node->parent->owner_mountpoint->fs);
+    result =
+        register_request_with_filesystem(new_request, child_node->parent->owner_mountpoint->fs);
     if (result < 0) {
         remove_request_from_map(&global_requests_map, new_request);
         free(new_request);
@@ -969,9 +978,12 @@ int add_request_to_map(struct File_Request_Map *map, struct File_Request *reques
     if (map == NULL || request == NULL)
         return -EINVAL;
 
-    if (map->hash_vector == NULL || map->vector_size < FILE_REQUEST_HASH_INITIAL_SIZE || map->vector_size * FILE_REQUEST_HASH_LOAD_FACTOR < map->nodes_count) {
-        size_t new_size = map->vector_size == 0 ? FILE_REQUEST_HASH_INITIAL_SIZE : map->vector_size * 2;
-        struct File_Request_Node **new_vector = calloc(new_size, sizeof(struct File_Request_Node *));
+    if (map->hash_vector == NULL || map->vector_size < FILE_REQUEST_HASH_INITIAL_SIZE ||
+        map->vector_size * FILE_REQUEST_HASH_LOAD_FACTOR < map->nodes_count) {
+        size_t new_size =
+            map->vector_size == 0 ? FILE_REQUEST_HASH_INITIAL_SIZE : map->vector_size * 2;
+        struct File_Request_Node **new_vector =
+            calloc(new_size, sizeof(struct File_Request_Node *));
         if (new_vector == NULL)
             return -ENOMEM;
 
@@ -979,10 +991,10 @@ int add_request_to_map(struct File_Request_Map *map, struct File_Request *reques
             struct File_Request_Node *node = map->hash_vector[i];
             while (node != NULL) {
                 struct File_Request_Node *next = node->next;
-                size_t new_index = node->request->request_id % new_size;
-                node->next = new_vector[new_index];
-                new_vector[new_index] = node;
-                node = next;
+                size_t new_index               = node->request->request_id % new_size;
+                node->next                     = new_vector[new_index];
+                new_vector[new_index]          = node;
+                node                           = next;
             }
         }
 
@@ -995,16 +1007,17 @@ int add_request_to_map(struct File_Request_Map *map, struct File_Request *reques
     if (new_node == NULL)
         return -ENOMEM;
 
-    size_t index = request->request_id % map->vector_size;
-    new_node->next = map->hash_vector[index];
-    new_node->request = request;
+    size_t index            = request->request_id % map->vector_size;
+    new_node->next          = map->hash_vector[index];
+    new_node->request       = request;
     map->hash_vector[index] = new_node;
     map->nodes_count++;
 
     return 0;
 }
 
-int react_resolve_path_reply(struct IPC_FS_Resolve_Path_Reply *message, size_t sender, uint64_t message_length)
+int react_resolve_path_reply(struct IPC_FS_Resolve_Path_Reply *message, size_t sender,
+                             uint64_t message_length)
 {
     if (message == NULL)
         return -EINVAL;
@@ -1014,14 +1027,18 @@ int react_resolve_path_reply(struct IPC_FS_Resolve_Path_Reply *message, size_t s
 
     struct File_Request *request = get_request_from_global_map(message->operation_id);
     if (request == NULL) {
-        printf("[VFSd] Warning: recieved IPC_FS_Resolve_Path_Reply from task %ld with unknown request ID %ld\n", sender, message->operation_id);
+        printf("[VFSd] Warning: recieved IPC_FS_Resolve_Path_Reply from task %ld with unknown "
+               "request ID %ld\n",
+               sender, message->operation_id);
         return -ENOENT;
     }
 
     // Check that the sender is the part of the filesystem that we expect
     bool is_registered = is_task_registered_with_filesystem(request->filesystem, sender);
     if (!is_registered) {
-        printf("[VFSd] Warning: recieved IPC_FS_Resolve_Path_Reply from task %ld that is not registered with the filesystem %ld\n", sender, request->filesystem->id);
+        printf("[VFSd] Warning: recieved IPC_FS_Resolve_Path_Reply from task %ld that is not "
+               "registered with the filesystem %ld\n",
+               sender, request->filesystem->id);
         return -EPERM;
     }
 
@@ -1034,7 +1051,7 @@ int react_resolve_path_reply(struct IPC_FS_Resolve_Path_Reply *message, size_t s
         }
 
         request->active_node->file_type = message->file_type;
-        request->active_node->file_id = message->file_id;
+        request->active_node->file_id   = message->file_id;
         // TODO: File size
 
         struct Path_Node *node = request->active_node;
@@ -1055,7 +1072,8 @@ fail:
     return 0;
 }
 
-int react_ipc_fs_open_reply(struct IPC_FS_Open_Reply *message, size_t sender, uint64_t message_length)
+int react_ipc_fs_open_reply(struct IPC_FS_Open_Reply *message, size_t sender,
+                            uint64_t message_length)
 {
     if (message == NULL)
         return -EINVAL;
@@ -1065,32 +1083,39 @@ int react_ipc_fs_open_reply(struct IPC_FS_Open_Reply *message, size_t sender, ui
 
     struct File_Request *request = get_request_from_global_map(message->operation_id);
     if (request == NULL) {
-        printf("[VFSd] Warning: recieved IPC_FS_Open_Reply from task %ld with unknown request ID %ld\n", sender, message->operation_id);
+        printf("[VFSd] Warning: recieved IPC_FS_Open_Reply from task %ld with unknown request ID "
+               "%ld\n",
+               sender, message->operation_id);
         return -ENOENT;
     }
 
     if (request->request_type != REQUEST_TYPE_OPEN_FILE_RESOLVED) {
-        printf("[VFSd] Warning: recieved IPC_FS_Open_Reply from task %ld with request ID %ld that is not of type REQUEST_TYPE_OPEN_FILE_RESOLVED\n", sender, message->operation_id);
+        printf("[VFSd] Warning: recieved IPC_FS_Open_Reply from task %ld with request ID %ld that "
+               "is not of type REQUEST_TYPE_OPEN_FILE_RESOLVED\n",
+               sender, message->operation_id);
         return -EINVAL;
     }
 
     // Check that the sender is the part of the filesystem that we expect
     bool is_registered = is_task_registered_with_filesystem(request->filesystem, sender);
     if (!is_registered) {
-        printf("[VFSd] Warning: recieved IPC_FS_Open_Reply from task %ld that is not registered with the filesystem %ld\n", sender, request->filesystem->id);
+        printf("[VFSd] Warning: recieved IPC_FS_Open_Reply from task %ld that is not registered "
+               "with the filesystem %ld\n",
+               sender, request->filesystem->id);
         return -EPERM;
     }
 
     IPC_Open_Reply reply_msg = {
-        .type = IPC_Open_Reply_NUM,
-        .result_code = message->result_code,
-        .file_id = message->file_id,
+        .type          = IPC_Open_Reply_NUM,
+        .result_code   = message->result_code,
+        .file_id       = message->file_id,
         .filesystem_id = message->result_code < 0 ? 0 : request->filesystem->id,
-        .fs_port = message->file_port,
-        .fs_flags = 0,
+        .fs_port       = message->file_port,
+        .fs_flags      = 0,
     };
 
-    result_t send_result = send_message_port(request->reply_port, sizeof(reply_msg), (char *)&reply_msg);
+    result_t send_result =
+        send_message_port(request->reply_port, sizeof(reply_msg), (char *)&reply_msg);
 
     // TODO: Send Close if the file was oppened but the reply failed
 
@@ -1112,31 +1137,38 @@ int react_ipc_fs_dup_reply(struct IPC_FS_Dup_Reply *message, size_t sender, uint
 
     struct File_Request *request = get_request_from_global_map(message->operation_id);
     if (request == NULL) {
-        printf("[VFSd] Warning: recieved IPC_FS_Dup_Reply from task %ld with unknown request ID %ld\n", sender, message->operation_id);
+        printf(
+            "[VFSd] Warning: recieved IPC_FS_Dup_Reply from task %ld with unknown request ID %ld\n",
+            sender, message->operation_id);
         return -ENOENT;
     }
 
     if (request->request_type != REQUEST_TYPE_DUP) {
-        printf("[VFSd] Warning: recieved IPC_FS_Dup_Reply from task %ld with request ID %ld that is not of type REQUEST_TYPE_DUP\n", sender, message->operation_id);
+        printf("[VFSd] Warning: recieved IPC_FS_Dup_Reply from task %ld with request ID %ld that "
+               "is not of type REQUEST_TYPE_DUP\n",
+               sender, message->operation_id);
         return -EINVAL;
     }
 
     // Check that the sender is the part of the filesystem that we expect
     bool is_registered = is_task_registered_with_filesystem(request->filesystem, sender);
     if (!is_registered) {
-        printf("[VFSd] Warning: recieved IPC_FS_Dup_Reply from task %ld that is not registered with the filesystem %ld\n", sender, request->filesystem->id);
+        printf("[VFSd] Warning: recieved IPC_FS_Dup_Reply from task %ld that is not registered "
+               "with the filesystem %ld\n",
+               sender, request->filesystem->id);
         return -EPERM;
     }
 
     IPC_Dup_Reply reply_msg = {
-        .type = IPC_Dup_Reply_NUM,
-        .result_code = message->result_code,
-        .file_id = message->result_code < 0 ? 0 : request->filesystem->id,
-        .fs_port = message->file_port,
+        .type          = IPC_Dup_Reply_NUM,
+        .result_code   = message->result_code,
+        .file_id       = message->result_code < 0 ? 0 : request->filesystem->id,
+        .fs_port       = message->file_port,
         .filesystem_id = message->result_code < 0 ? 0 : request->filesystem->id,
     };
 
-    result_t send_result = send_message_port(request->reply_port, sizeof(reply_msg), (char *)&reply_msg);
+    result_t send_result =
+        send_message_port(request->reply_port, sizeof(reply_msg), (char *)&reply_msg);
     // TODO
 
     remove_request_from_map(&global_requests_map, request);
@@ -1162,7 +1194,7 @@ struct File_Request *get_request_from_map(struct File_Request_Map *map, uint64_t
 
     assert(map->hash_vector != NULL && map->vector_size > 0);
 
-    size_t index = id % map->vector_size;
+    size_t index                   = id % map->vector_size;
     struct File_Request_Node *node = map->hash_vector[index];
     while (node != NULL) {
         if (node->request->request_id == id)
@@ -1176,10 +1208,10 @@ struct File_Request *get_request_from_map(struct File_Request_Map *map, uint64_t
 static int ipc_dup_send_fail(pmos_port_t reply_port, int result)
 {
     IPC_Dup_Reply reply = {
-        .type = IPC_Dup_Reply_NUM,
-        .result_code = result,
-        .file_id = 0,
-        .fs_port = 0,
+        .type          = IPC_Dup_Reply_NUM,
+        .result_code   = result,
+        .file_id       = 0,
+        .fs_port       = 0,
         .filesystem_id = 0,
     };
 
@@ -1228,8 +1260,8 @@ int react_ipc_dup(struct IPC_Dup *message, size_t sender, uint64_t message_lengt
         return ipc_dup_send_fail(message->reply_port, -errno);
 
     request->request_type = REQUEST_TYPE_DUP;
-    request->request_id = get_next_request_id();
-    request->reply_port = message->reply_port;
+    request->request_id   = get_next_request_id();
+    request->reply_port   = message->reply_port;
 
     int result = add_request_to_map(&global_requests_map, request);
     if (result < 0) {
@@ -1253,14 +1285,14 @@ int react_ipc_dup(struct IPC_Dup *message, size_t sender, uint64_t message_lengt
     }
 
     IPC_FS_Dup msg_request = {
-        .type = IPC_FS_Dup_NUM,
-        .flags = message->flags,
-        .reply_port = main_port,
-        .file_id = message->file_id,
-        .fs_consumer_id = from_consumer->id,
+        .type            = IPC_FS_Dup_NUM,
+        .flags           = message->flags,
+        .reply_port      = main_port,
+        .file_id         = message->file_id,
+        .fs_consumer_id  = from_consumer->id,
         .new_consumer_id = to_consumer->id,
-        .operation_id = request->request_id,
-        .filesystem_id = fs->id,
+        .operation_id    = request->request_id,
+        .filesystem_id   = fs->id,
     };
 
     result = -send_message_port(fs->command_port, sizeof(msg_request), (char *)&msg_request);
@@ -1289,7 +1321,9 @@ int react_ipc_close(struct IPC_Close *message, size_t sender, uint64_t message_l
 
     bool is_consumer = is_fs_consumer(consumer, sender);
     if (!is_consumer) {
-        printf("[VFSd] Warning: recieved IPC_Close from task %ld that is not registered with the consumer %ld\n", sender, consumer->id);
+        printf("[VFSd] Warning: recieved IPC_Close from task %ld that is not registered with the "
+               "consumer %ld\n",
+               sender, consumer->id);
         return 0;
     }
 
@@ -1299,10 +1333,10 @@ int react_ipc_close(struct IPC_Close *message, size_t sender, uint64_t message_l
         return 0;
 
     IPC_FS_Close close_message = {
-        .type = IPC_FS_Close_NUM,
-        .flags = message->flags,
+        .type          = IPC_FS_Close_NUM,
+        .flags         = message->flags,
         .filesystem_id = message->filesystem_id,
-        .file_id = message->file_id,
+        .file_id       = message->file_id,
     };
 
     return -send_message_port(fs->command_port, sizeof(close_message), (char *)&close_message);

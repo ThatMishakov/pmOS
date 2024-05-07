@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -27,36 +27,40 @@
  */
 
 #include "../include/string.h"
-#include <stdlib.h>
-#include <errno.h>
 
-size_t strlen(const char* str)
+#include <errno.h>
+#include <stdlib.h>
+
+size_t strlen(const char *str)
 {
     size_t size = 0;
-    for(;str[size] != '\0'; ++size);
+    for (; str[size] != '\0'; ++size)
+        ;
 
     return size;
 }
 
-char * strcpy ( char * destination, const char * source )
+char *strcpy(char *destination, const char *source)
 {
-    char* p = destination;
+    char *p = destination;
     while (*source != '\0') {
         *p = *source;
-        ++p; ++source;
+        ++p;
+        ++source;
     }
 
     *p = '\0';
     return destination;
 }
 
-char * strncpy ( char * destination, const char * source, size_t num )
+char *strncpy(char *destination, const char *source, size_t num)
 {
-    char* p = destination;
-    
+    char *p = destination;
+
     while (num > 0 && *source != '\0') {
         *p = *source;
-        ++p; ++source;
+        ++p;
+        ++source;
         --num;
     }
 
@@ -68,12 +72,13 @@ char * strncpy ( char * destination, const char * source, size_t num )
     return destination;
 }
 
-char *stpncpy(char *dst, const char * src, size_t sz)
+char *stpncpy(char *dst, const char *src, size_t sz)
 {
     char *d = dst;
     while (sz > 0 && *src != '\0') {
         *d = *src;
-        ++d; ++src;
+        ++d;
+        ++src;
         --sz;
     }
 
@@ -83,34 +88,39 @@ char *stpncpy(char *dst, const char * src, size_t sz)
     }
 
     return dst;
-
 }
 
 int strcmp(const char *s1, const char *s2)
 {
     size_t i = 0;
-    while (s1[i] == s2[i] && s1[i]) ++i;
+    while (s1[i] == s2[i] && s1[i])
+        ++i;
 
-    if (!s1[i] && !s2[i]) return 0;
-    if (s1[i] < s2[i]) return -1;
-    return 1; 
+    if (!s1[i] && !s2[i])
+        return 0;
+    if (s1[i] < s2[i])
+        return -1;
+    return 1;
 }
 
 int strncmp(const char *s1, const char *s2, size_t size)
 {
     size_t i = 0;
-    while (i < size && s1[i] == s2[i] && s1[i]) ++i;
+    while (i < size && s1[i] == s2[i] && s1[i])
+        ++i;
 
-    if (i == size || (!s1[i] && !s2[i])) return 0;
-    if (s1[i] < s2[i]) return -1;
-    return 1; 
+    if (i == size || (!s1[i] && !s2[i]))
+        return 0;
+    if (s1[i] < s2[i])
+        return -1;
+    return 1;
 }
 
-void *memcpy(void *dest, const void * src, size_t n)
+void *memcpy(void *dest, const void *src, size_t n)
 {
-    void* k = dest;
+    void *k = dest;
     while (n--) {
-        *((char*)dest++) = *((char*)src++);
+        *((char *)dest++) = *((char *)src++);
     }
 
     return k;
@@ -120,7 +130,7 @@ void *memset(void *s, int c, size_t n)
 {
     void *k = s;
     while (n--) {
-        *((unsigned char*)(s)++) = (unsigned char)c;
+        *((unsigned char *)(s)++) = (unsigned char)c;
     }
 
     return k;
@@ -129,15 +139,18 @@ void *memset(void *s, int c, size_t n)
 int memcmp(const void *s1, const void *s2, size_t n)
 {
     size_t k = 0;
-    for (; k < n && ((unsigned char*)s1)[k] == ((unsigned char*)s2)[k]; ++k) ;
+    for (; k < n && ((unsigned char *)s1)[k] == ((unsigned char *)s2)[k]; ++k)
+        ;
 
-    if (k == n) return 0;
+    if (k == n)
+        return 0;
 
-    return ((unsigned char*)s1)[k] < ((unsigned char*)s2)[k] ? -1 : 1; 
+    return ((unsigned char *)s1)[k] < ((unsigned char *)s2)[k] ? -1 : 1;
 }
 
-void *memmove(void *dest, const void *src, size_t n) {
-    unsigned char *d = (unsigned char *)dest;
+void *memmove(void *dest, const void *src, size_t n)
+{
+    unsigned char *d       = (unsigned char *)dest;
     const unsigned char *s = (const unsigned char *)src;
 
     // Check for overlap
@@ -154,7 +167,8 @@ void *memmove(void *dest, const void *src, size_t n) {
     return dest;
 }
 
-char *strchr(const char *str, int c) {
+char *strchr(const char *str, int c)
+{
     char ch = (char)c;
     while (*str != '\0') {
         if (*str == ch) {
@@ -171,8 +185,9 @@ char *strchr(const char *str, int c) {
     return NULL;
 }
 
-char *strrchr(const char *str, int c) {
-    char ch = (char)c;
+char *strrchr(const char *str, int c)
+{
+    char ch                     = (char)c;
     const char *last_occurrence = NULL;
 
     while (*str != '\0') {
@@ -190,63 +205,66 @@ char *strrchr(const char *str, int c) {
     return (char *)last_occurrence;
 }
 
-char *strtok_r(char *str, const char *delim, char **saveptr) {
+char *strtok_r(char *str, const char *delim, char **saveptr)
+{
     if (str == NULL && *saveptr == NULL) {
-        return NULL;  // No more tokens, and no saved context
+        return NULL; // No more tokens, and no saved context
     }
 
     if (str != NULL) {
-        *saveptr = str;  // Set the initial context
+        *saveptr = str; // Set the initial context
     }
 
     // Find the start of the next token
     char *token_start = *saveptr;
-    char *delim_pos = strpbrk(token_start, delim);
+    char *delim_pos   = strpbrk(token_start, delim);
 
     if (delim_pos != NULL) {
         *delim_pos = '\0';          // Replace delimiter with null character
-        *saveptr = delim_pos + 1;   // Update the context for the next call
+        *saveptr   = delim_pos + 1; // Update the context for the next call
     } else {
-        *saveptr = NULL;  // No more tokens, clear the context
+        *saveptr = NULL; // No more tokens, clear the context
     }
 
     return token_start;
 }
 
-char *strtok(char *str, const char *delim) {
-    static char *saveptr = NULL;  // Static variable to store the context
-    
+char *strtok(char *str, const char *delim)
+{
+    static char *saveptr = NULL; // Static variable to store the context
+
     if (str != NULL) {
-        saveptr = str;  // Set the initial context
+        saveptr = str; // Set the initial context
     } else if (saveptr == NULL) {
-        return NULL;  // No more tokens, and no saved context
+        return NULL; // No more tokens, and no saved context
     }
 
     // Skip leading delimiters
     char *token_start = saveptr + strspn(saveptr, delim);
     if (*token_start == '\0') {
-        saveptr = NULL;  // No more tokens, clear the context
+        saveptr = NULL; // No more tokens, clear the context
         return NULL;
     }
 
     // Find the end of the token
     char *delim_pos = strpbrk(token_start, delim);
     if (delim_pos != NULL) {
-        *delim_pos = '\0';  // Replace delimiter with null character
-        saveptr = delim_pos + 1;  // Update the context for the next call
+        *delim_pos = '\0';          // Replace delimiter with null character
+        saveptr    = delim_pos + 1; // Update the context for the next call
     } else {
-        saveptr = NULL;  // No more tokens, clear the context
+        saveptr = NULL; // No more tokens, clear the context
     }
 
     return token_start;
 }
 
-size_t strspn ( const char * str1, const char * str2 ) {
+size_t strspn(const char *str1, const char *str2)
+{
     size_t i = 0;
     while (str1[i] != '\0') {
-        const char * s = str2;
+        const char *s = str2;
         while (*s != '\0') {
-            if (str1[i] == *s) 
+            if (str1[i] == *s)
                 return i;
             ++s;
         }
@@ -262,7 +280,7 @@ size_t strcspn(const char *s1, const char *s2)
     while (s1[i] != '\0') {
         const char *s = s2;
         while (*s != '\0') {
-            if (s1[i] == *s) 
+            if (s1[i] == *s)
                 return i;
             ++s;
         }
@@ -272,7 +290,8 @@ size_t strcspn(const char *s1, const char *s2)
     return i;
 }
 
-char *strpbrk(const char *str, const char *charset) {
+char *strpbrk(const char *str, const char *charset)
+{
     const char *s1 = str;
     const char *s2;
 
@@ -280,18 +299,19 @@ char *strpbrk(const char *str, const char *charset) {
         s2 = charset;
         while (*s2 != '\0') {
             if (*s1 == *s2) {
-                return (char *)s1;  // Found a match, return the pointer to the matching character
+                return (char *)s1; // Found a match, return the pointer to the matching character
             }
             s2++;
         }
         s1++;
     }
 
-    return NULL;  // No match found, return NULL
+    return NULL; // No match found, return NULL
 }
 
-char *strdup(const char *str) {
-    size_t length = strlen(str) + 1;
+char *strdup(const char *str)
+{
+    size_t length   = strlen(str) + 1;
     char *duplicate = malloc(length);
 
     if (duplicate != NULL) {
@@ -301,7 +321,8 @@ char *strdup(const char *str) {
     return duplicate;
 }
 
-char *strndup(const char *str, size_t s) {
+char *strndup(const char *str, size_t s)
+{
     size_t length = strlen(str);
     if (length > s)
         length = s;
@@ -315,7 +336,8 @@ char *strndup(const char *str, size_t s) {
     return duplicate;
 }
 
-size_t strnlen(const char *str, size_t maxlen) {
+size_t strnlen(const char *str, size_t maxlen)
+{
     size_t length = 0;
 
     while (length < maxlen && str[length] != '\0') {
@@ -325,37 +347,40 @@ size_t strnlen(const char *str, size_t maxlen) {
     return length;
 }
 
-void *memccpy(void *dest, const void *src, int c, size_t n) {
-    unsigned char *d = (unsigned char *)dest;
+void *memccpy(void *dest, const void *src, int c, size_t n)
+{
+    unsigned char *d       = (unsigned char *)dest;
     const unsigned char *s = (const unsigned char *)src;
 
     while (n > 0) {
         *d = *s;
         if (*s == (unsigned char)c) {
-            return d + 1;  // Found the character, return pointer to next byte
+            return d + 1; // Found the character, return pointer to next byte
         }
         d++;
         s++;
         n--;
     }
 
-    return NULL;  // Character not found within n bytes, return NULL
+    return NULL; // Character not found within n bytes, return NULL
 }
 
-void *memchr(const void *s, int c, size_t n) {
+void *memchr(const void *s, int c, size_t n)
+{
     const unsigned char *p = (const unsigned char *)s;
 
     for (size_t i = 0; i < n; ++i) {
         if (*p == (unsigned char)c) {
-            return (void *)p;  // Found the character, return pointer to it
+            return (void *)p; // Found the character, return pointer to it
         }
         ++p;
     }
 
-    return NULL;  // Character not found within n bytes, return NULL
+    return NULL; // Character not found within n bytes, return NULL
 }
 
-char *strstr(const char *s, const char *cc) {
+char *strstr(const char *s, const char *cc)
+{
     const char *c = cc;
     if (*c == '\0') {
         return (char *)s;
@@ -381,163 +406,164 @@ char *strstr(const char *s, const char *cc) {
 }
 
 // missing const is a mistake in a standard and callers cannot change the string
-char *strerror(int errnum) {
+char *strerror(int errnum)
+{
     switch (errnum) {
-        case 0:
-            return "No error";
-        case E2BIG:
-            return "Argument list too long";
-        case EACCES:
-            return "Permission denied";
-        case EADDRINUSE:
-            return "Address already in use";
-        case EADDRNOTAVAIL:
-            return "Cannot assign requested address";
-        case EAFNOSUPPORT:
-            return "Address family not supported";
-        case EAGAIN:
-            return "Resource temporarily unavailable";
-        case EALREADY:
-            return "Operation already in progress";
-        case EBADF:
-            return "Bad file descriptor";
-        case EBADMSG:
-            return "Bad message";
-        case EBUSY:
-            return "Device or resource busy";
-        case ECANCELED:
-            return "Operation canceled";
-        case ECHILD:
-            return "No child processes";
-        case ECONNABORTED:
-            return "Connection aborted";
-        case ECONNREFUSED:
-            return "Connection refused";
-        case ECONNRESET:
-            return "Connection reset";
-        case EDEADLK:
-            return "Resource deadlock would occur";
-        case EDESTADDRREQ:
-            return "Destination address required";
-        case EDOM:
-            return "Mathematics argument out of domain of function";
-        case EDQUOT:
-            return "Disk quota exceeded";
-        case EEXIST:
-            return "File exists";
-        case EFAULT:
-            return "Bad address";
-        case EFBIG:
-            return "File too large";
-        case EHOSTUNREACH:
-            return "Host is unreachable";
-        case EIDRM:
-            return "Identifier removed";
-        case EILSEQ:
-            return "Illegal byte sequence";
-        case EINPROGRESS:
-            return "Operation in progress";
-        case EINTR:
-            return "Interrupted function";
-        case EINVAL:
-            return "Invalid argument";
-        case EIO:
-            return "Input/output error";
-        case EISCONN:
-            return "Socket is already connected";
-        case EISDIR:
-            return "Is a directory";
-        case ELOOP:
-            return "Too many levels of symbolic links";
-        case EMFILE:
-            return "Too many open files";
-        case EMLINK:
-            return "Too many links";
-        case EMSGSIZE:
-            return "Message too large";
-        case EMULTIHOP:
-            return "Reserved";
-        case ENAMETOOLONG:
-            return "File name too long";
-        case ENETDOWN:
-            return "Network is down";
-        case ENETRESET:
-            return "Connection aborted by network";
-        case ENETUNREACH:
-            return "Network unreachable";
-        case ENFILE:
-            return "Too many files open in system";
-        case ENOBUFS:
-            return "No buffer space available";
-        case ENODEV:
-            return "No such device";
-        case ENOENT:
-            return "No such file or directory";
-        case ENOEXEC:
-            return "Exec format error";
-        case ENOLCK:
-            return "No locks available";
-        case ENOMEM:
-            return "Not enough memory";
-        case ENOMSG:
-            return "No message of the desired type";
-        case ENOPROTOOPT:
-            return "Protocol not available";
-        case ENOSPC:
-            return "No space left on device";
-        case ENOSYS:
-            return "Functionality not supported";
-        case ENOTCONN:
-            return "Socket is not connected";
-        case ENOTDIR:
-            return "Not a directory";
-        case ENOTEMPTY:
-            return "Directory not empty";
-        case ENOTRECOVERABLE:
-            return "State not recoverable";
-        case ENOTSOCK:
-            return "Not a socket";
-        case ENOTSUP:
-            return "Not supported";
-        case ENOTTY:
-            return "Inappropriate I/O control operation";
-        case ENXIO:
-            return "No such device or address";
-        case EOPNOTSUPP:
-            return "Operation not supported on socket";
-        case EOVERFLOW:
-            return "Value too large for defined data type";
-        case EOWNERDEAD:
-            return "Previous owner died";
-        case EPERM:
-            return "Operation not permitted";
-        case EPIPE:
-            return "Broken pipe";
-        case EPROTO:
-            return "Protocol error";
-        case EPROTONOSUPPORT:
-            return "Protocol not supported";
-        case EPROTOTYPE:
-            return "Protocol wrong type for socket";
-        case ERANGE:
-            return "Result out of range";
-        case EROFS:
-            return "Read-only file system";
-        case ESPIPE:
-            return "Invalid seek";
-        case ESRCH:
-            return "No such process";
-        case ESTALE:
-            return "Reserved";
-        case ETIMEDOUT:
-            return "Connection timed out";
-        case ETXTBSY:
-            return "Text file busy";
-        case EWOULDBLOCK:
-            return "Operation would block";
-        case EXDEV:
-            return "Cross-device link";
-        default:
-            return "Unknown error";
+    case 0:
+        return "No error";
+    case E2BIG:
+        return "Argument list too long";
+    case EACCES:
+        return "Permission denied";
+    case EADDRINUSE:
+        return "Address already in use";
+    case EADDRNOTAVAIL:
+        return "Cannot assign requested address";
+    case EAFNOSUPPORT:
+        return "Address family not supported";
+    case EAGAIN:
+        return "Resource temporarily unavailable";
+    case EALREADY:
+        return "Operation already in progress";
+    case EBADF:
+        return "Bad file descriptor";
+    case EBADMSG:
+        return "Bad message";
+    case EBUSY:
+        return "Device or resource busy";
+    case ECANCELED:
+        return "Operation canceled";
+    case ECHILD:
+        return "No child processes";
+    case ECONNABORTED:
+        return "Connection aborted";
+    case ECONNREFUSED:
+        return "Connection refused";
+    case ECONNRESET:
+        return "Connection reset";
+    case EDEADLK:
+        return "Resource deadlock would occur";
+    case EDESTADDRREQ:
+        return "Destination address required";
+    case EDOM:
+        return "Mathematics argument out of domain of function";
+    case EDQUOT:
+        return "Disk quota exceeded";
+    case EEXIST:
+        return "File exists";
+    case EFAULT:
+        return "Bad address";
+    case EFBIG:
+        return "File too large";
+    case EHOSTUNREACH:
+        return "Host is unreachable";
+    case EIDRM:
+        return "Identifier removed";
+    case EILSEQ:
+        return "Illegal byte sequence";
+    case EINPROGRESS:
+        return "Operation in progress";
+    case EINTR:
+        return "Interrupted function";
+    case EINVAL:
+        return "Invalid argument";
+    case EIO:
+        return "Input/output error";
+    case EISCONN:
+        return "Socket is already connected";
+    case EISDIR:
+        return "Is a directory";
+    case ELOOP:
+        return "Too many levels of symbolic links";
+    case EMFILE:
+        return "Too many open files";
+    case EMLINK:
+        return "Too many links";
+    case EMSGSIZE:
+        return "Message too large";
+    case EMULTIHOP:
+        return "Reserved";
+    case ENAMETOOLONG:
+        return "File name too long";
+    case ENETDOWN:
+        return "Network is down";
+    case ENETRESET:
+        return "Connection aborted by network";
+    case ENETUNREACH:
+        return "Network unreachable";
+    case ENFILE:
+        return "Too many files open in system";
+    case ENOBUFS:
+        return "No buffer space available";
+    case ENODEV:
+        return "No such device";
+    case ENOENT:
+        return "No such file or directory";
+    case ENOEXEC:
+        return "Exec format error";
+    case ENOLCK:
+        return "No locks available";
+    case ENOMEM:
+        return "Not enough memory";
+    case ENOMSG:
+        return "No message of the desired type";
+    case ENOPROTOOPT:
+        return "Protocol not available";
+    case ENOSPC:
+        return "No space left on device";
+    case ENOSYS:
+        return "Functionality not supported";
+    case ENOTCONN:
+        return "Socket is not connected";
+    case ENOTDIR:
+        return "Not a directory";
+    case ENOTEMPTY:
+        return "Directory not empty";
+    case ENOTRECOVERABLE:
+        return "State not recoverable";
+    case ENOTSOCK:
+        return "Not a socket";
+    case ENOTSUP:
+        return "Not supported";
+    case ENOTTY:
+        return "Inappropriate I/O control operation";
+    case ENXIO:
+        return "No such device or address";
+    case EOPNOTSUPP:
+        return "Operation not supported on socket";
+    case EOVERFLOW:
+        return "Value too large for defined data type";
+    case EOWNERDEAD:
+        return "Previous owner died";
+    case EPERM:
+        return "Operation not permitted";
+    case EPIPE:
+        return "Broken pipe";
+    case EPROTO:
+        return "Protocol error";
+    case EPROTONOSUPPORT:
+        return "Protocol not supported";
+    case EPROTOTYPE:
+        return "Protocol wrong type for socket";
+    case ERANGE:
+        return "Result out of range";
+    case EROFS:
+        return "Read-only file system";
+    case ESPIPE:
+        return "Invalid seek";
+    case ESRCH:
+        return "No such process";
+    case ESTALE:
+        return "Reserved";
+    case ETIMEDOUT:
+        return "Connection timed out";
+    case ETXTBSY:
+        return "Text file busy";
+    case EWOULDBLOCK:
+        return "Operation would block";
+    case EXDEV:
+        return "Cross-device link";
+    default:
+        return "Unknown error";
     }
 }

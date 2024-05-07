@@ -1,23 +1,24 @@
+#include "smoldtb.h"
+
 #include <dtb/dtb.h>
-#include <pmos/ipc.h>
 #include <main.h>
+#include <pmos/helpers.h>
+#include <pmos/ipc.h>
 #include <pmos/memory.h>
 #include <stdlib.h>
 #include <string.h>
-#include <pmos/helpers.h>
-#include "smoldtb.h"
 
-static const char* loader_port_name = "/pmos/loader";
+static const char *loader_port_name = "/pmos/loader";
 
-void * fdt_ptr = NULL;
+void *fdt_ptr = NULL;
 
 uint64_t fdt_object = 0;
 uint32_t fdt_offset = 0;
-uint32_t fdt_size = 0;
+uint32_t fdt_size   = 0;
 
 static void smoldtb_free(void *ptr, size_t size)
 {
-    (void) size;
+    (void)size;
     free(ptr);
 }
 
@@ -29,7 +30,7 @@ static void smoldtb_panic(const char *msg)
 
 void init_dtb()
 {
-    unsigned char* message = NULL;
+    unsigned char *message = NULL;
 
     printf("Info: Initializing DTB...\n");
 
@@ -41,14 +42,14 @@ void init_dtb()
         goto end;
     }
 
-    result_t result = send_message_port(loader_port.port, sizeof(request), (char*)&request);
+    result_t result = send_message_port(loader_port.port, sizeof(request), (char *)&request);
     if (result != SUCCESS) {
         printf("Warning: Could not send message to get the RSDT\n");
         goto end;
     }
 
     Message_Descriptor desc = {};
-    result = get_message(&desc, &message, configuration_port);
+    result                  = get_message(&desc, &message, configuration_port);
 
     if (result != SUCCESS) {
         printf("Warning: Could not get message\n");
@@ -60,7 +61,7 @@ void init_dtb()
         goto end;
     }
 
-    IPC_FDT_Reply* reply = (IPC_FDT_Reply*)message;
+    IPC_FDT_Reply *reply = (IPC_FDT_Reply *)message;
 
     if (reply->type != IPC_FDT_Reply_NUM) {
         printf("Warning: Recieved unexepcted message type\n");
@@ -72,21 +73,18 @@ void init_dtb()
     } else {
         fdt_object = reply->fdt_mem_object_id;
         fdt_offset = reply->object_offset;
-        fdt_size = reply->object_size;
+        fdt_size   = reply->object_size;
 
-        mem_request_ret_t req = map_mem_object(0, NULL, fdt_size+fdt_offset, PROT_READ, fdt_object, 0);
+        mem_request_ret_t req =
+            map_mem_object(0, NULL, fdt_size + fdt_offset, PROT_READ, fdt_object, 0);
         if (req.result != SUCCESS) {
             printf("Warning: Could not map FDT memory object: %li\n", req.result);
             goto end;
         }
 
-        fdt_ptr = (void*) ((char *)req.virt_addr + fdt_offset);
+        fdt_ptr = (void *)((char *)req.virt_addr + fdt_offset);
 
-        dtb_ops ops = {
-            .malloc = malloc,
-            .free = smoldtb_free,
-            .on_error = smoldtb_panic
-        };
+        dtb_ops ops = {.malloc = malloc, .free = smoldtb_free, .on_error = smoldtb_panic};
         dtb_init((uintptr_t)fdt_ptr, ops);
     }
 

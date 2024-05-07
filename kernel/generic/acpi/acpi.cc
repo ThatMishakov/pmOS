@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -26,15 +26,14 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <types.hh>
 #include <acpi/acpi.h>
-#include <utils.hh>
 #include <exceptions.hh>
+#include <kern_logger/kern_logger.hh>
 #include <kernel/errors.h>
 #include <lib/splay_tree_map.hh>
 #include <string.h>
-
-#include <kern_logger/kern_logger.hh>
+#include <types.hh>
+#include <utils.hh>
 
 struct ACPITable {
     u64 phys_addr;
@@ -44,10 +43,7 @@ struct ACPITable {
 using ACPISignature = u32;
 klib::splay_tree_map<ACPISignature, ACPITable> acpi_tables;
 
-u64 get_table(u32 signature)
-{
-    return acpi_tables.get_copy_or_default(signature).phys_addr;
-}
+u64 get_table(u32 signature) { return acpi_tables.get_copy_or_default(signature).phys_addr; }
 
 bool enumerate_tables_from_rsdt(u64 rsdt_desc_phys)
 {
@@ -77,7 +73,7 @@ bool enumerate_tables_from_rsdt(u64 rsdt_desc_phys)
         ACPISDTHeader header;
         copy_from_phys((u64)pointers[i], &header, sizeof(header));
 
-        acpi_tables.insert({*(u32*)header.signature, {pointers[i], header.length}});
+        acpi_tables.insert({*(u32 *)header.signature, {pointers[i], header.length}});
     }
 
     return true;
@@ -111,7 +107,7 @@ bool enumerate_tables_from_xsdt(u64 xsdt_desc_phys)
         ACPISDTHeader header;
         copy_from_phys(pointers[i], &header, sizeof(header));
 
-        acpi_tables.insert({*(u32*)header.signature, {pointers[i], header.length}});
+        acpi_tables.insert({*(u32 *)header.signature, {pointers[i], header.length}});
     }
 
     return true;

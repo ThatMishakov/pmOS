@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -26,49 +26,49 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <pmos/tls.h>
-#include <stdbool.h>
+#include <assert.h>
 #include <pmos/memory.h>
 #include <pmos/memory_flags.h>
-#include <assert.h>
+#include <pmos/tls.h>
+#include <stdbool.h>
 #include <string.h>
 
-void __init_uthread(struct uthread * u, void * stack_top, size_t stack_size);
+void __init_uthread(struct uthread *u, void *stack_top, size_t stack_size);
 
-#define max(x, y) ((x) > (y) ? (x) : (y)) 
-#define alignup(size, alignment) (size%alignment ? size + (alignment - size%alignment) : size)
+#define max(x, y)                ((x) > (y) ? (x) : (y))
+#define alignup(size, alignment) (size % alignment ? size + (alignment - size % alignment) : size)
 
-struct uthread * __prepare_tls(void * stack_top, size_t stack_size)
+struct uthread *__prepare_tls(void *stack_top, size_t stack_size)
 {
     bool has_tls = __global_tls_data != NULL;
 
-    size_t memsz = has_tls ? __global_tls_data->memsz : 0;
-    size_t align = has_tls ? __global_tls_data->align : 0;
+    size_t memsz  = has_tls ? __global_tls_data->memsz : 0;
+    size_t align  = has_tls ? __global_tls_data->align : 0;
     size_t filesz = has_tls ? __global_tls_data->filesz : 0;
     assert(memsz >= filesz && "TLS memsz must be greater than or equal to TLS filesz");
 
-    align = max(align, _Alignof(struct uthread));
+    align                = max(align, _Alignof(struct uthread));
     size_t memsz_aligned = alignup(memsz, align);
-    size_t alloc_size = memsz_aligned + sizeof(struct uthread);
+    size_t alloc_size    = memsz_aligned + sizeof(struct uthread);
 
     size_t size_all = alignup(alloc_size, 4096);
 
-    mem_request_ret_t res = create_normal_region(0, 0, size_all, PROT_READ|PROT_WRITE);
+    mem_request_ret_t res = create_normal_region(0, 0, size_all, PROT_READ | PROT_WRITE);
     if (res.result != SUCCESS)
         return NULL;
 
-    unsigned char * tls = (unsigned char *)res.virt_addr + memsz_aligned;
+    unsigned char *tls = (unsigned char *)res.virt_addr + memsz_aligned;
 
     if (memsz > 0) {
         memcpy(tls - memsz_aligned, __global_tls_data->data, filesz);
     }
-    
+
     __init_uthread((struct uthread *)tls, stack_top, stack_size);
 
     return (struct uthread *)tls;
 }
 
-void __release_tls(struct uthread * u)
+void __release_tls(struct uthread *u)
 {
     if (u == NULL)
         return;
@@ -83,7 +83,4 @@ void __release_tls(struct uthread * u)
     release_region(TASK_ID_SELF, (void *)u - alignup(memsz, align));
 }
 
-void * __thread_pointer_from_uthread(struct uthread * uthread)
-{
-    return uthread;
-}
+void *__thread_pointer_from_uthread(struct uthread *uthread) { return uthread; }

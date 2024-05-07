@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -27,19 +27,21 @@
  */
 
 #include "path_node.h"
-#include <stdbool.h>
-#include <stdlib.h>
-#include <errno.h>
+
 #include "file_op.h"
 #include "filesystem.h"
-#include <assert.h>
-#include <string.h>
+
 #include <alloca.h>
 #include <assert.h>
+#include <errno.h>
+#include <stdbool.h>
+#include <stdlib.h>
+#include <string.h>
 
 extern pmos_port_t main_port;
 
-size_t sdbm_hash(const unsigned char * str, size_t length) {
+size_t sdbm_hash(const unsigned char *str, size_t length)
+{
     size_t hash = 0;
     for (size_t i = 0; i < length; i++) {
         hash = str[i] + (hash << 6) + (hash << 16) - hash;
@@ -47,21 +49,23 @@ size_t sdbm_hash(const unsigned char * str, size_t length) {
     return hash;
 }
 
-void insert_node_into_linked_list(struct Path_Hash_Vector *vector, struct Path_Node *node) {
+void insert_node_into_linked_list(struct Path_Hash_Vector *vector, struct Path_Node *node)
+{
     if (vector->head == NULL) {
         vector->head = node;
         vector->tail = node;
     } else {
-        node->ll_previous = vector->tail;
+        node->ll_previous     = vector->tail;
         vector->tail->ll_next = node;
-        vector->tail = node;
+        vector->tail          = node;
     }
 
     node->ll_next = NULL;
     vector->nodes_count++;
 }
 
-void delete_node_from_linked_list(struct Path_Hash_Vector *vector, struct Path_Node *node) {
+void delete_node_from_linked_list(struct Path_Hash_Vector *vector, struct Path_Node *node)
+{
     if (node->ll_previous == NULL) {
         assert(node == vector->head);
         vector->head = node->ll_next;
@@ -81,7 +85,8 @@ void delete_node_from_linked_list(struct Path_Hash_Vector *vector, struct Path_N
     vector->nodes_count--;
 }
 
-int insert_node(struct Path_Hash_Map *map, struct Path_Node *node) {
+int insert_node(struct Path_Hash_Map *map, struct Path_Node *node)
+{
     if (map == NULL || node == NULL) {
         return -1;
     }
@@ -92,7 +97,8 @@ int insert_node(struct Path_Hash_Map *map, struct Path_Node *node) {
     if (map->nodes_count >= map->vector_size * PATH_NODE_HASH_LOAD_FACTOR) {
         // Resize the hash table
         size_t new_vector_size = map->vector_size * 2;
-        struct Path_Hash_Vector *new_hash_vector = calloc(new_vector_size, sizeof(struct Path_Hash_Vector));
+        struct Path_Hash_Vector *new_hash_vector =
+            calloc(new_vector_size, sizeof(struct Path_Hash_Vector));
         if (new_hash_vector == NULL) {
             rehashing_failed = true;
         } else {
@@ -102,7 +108,8 @@ int insert_node(struct Path_Hash_Map *map, struct Path_Node *node) {
                 while (current_node != NULL) {
                     struct Path_Node *next_node = current_node->ll_next;
 
-                    size_t index = sdbm_hash(current_node->name, current_node->name_length) % new_vector_size;
+                    size_t index =
+                        sdbm_hash(current_node->name, current_node->name_length) % new_vector_size;
                     struct Path_Hash_Vector *vector = &(new_hash_vector[index]);
 
                     insert_node_into_linked_list(vector, current_node);
@@ -119,7 +126,7 @@ int insert_node(struct Path_Hash_Map *map, struct Path_Node *node) {
         }
     }
 
-    size_t index = sdbm_hash(node->name, node->name_length) % map->vector_size;
+    size_t index                    = sdbm_hash(node->name, node->name_length) % map->vector_size;
     struct Path_Hash_Vector *vector = &(map->hash_vector[index]);
 
     insert_node_into_linked_list(vector, node);
@@ -138,16 +145,18 @@ void path_node_delete(struct Path_Hash_Map *map, struct Path_Node *node)
         return;
     }
 
-    size_t index = sdbm_hash(node->name, node->name_length) % map->vector_size;
+    size_t index                    = sdbm_hash(node->name, node->name_length) % map->vector_size;
     struct Path_Hash_Vector *vector = &(map->hash_vector[index]);
 
     delete_node_from_linked_list(vector, node);
     map->nodes_count--;
 
-    if (map->vector_size > PATH_NODE_HASH_INITIAL_SIZE && map->nodes_count < map->vector_size * PATH_NODE_HASH_LOAD_FACTOR / 2) {
+    if (map->vector_size > PATH_NODE_HASH_INITIAL_SIZE &&
+        map->nodes_count < map->vector_size * PATH_NODE_HASH_LOAD_FACTOR / 2) {
         // Resize the hash table
         size_t new_vector_size = map->vector_size / 2;
-        struct Path_Hash_Vector *new_hash_vector = calloc(new_vector_size, sizeof(struct Path_Hash_Vector));
+        struct Path_Hash_Vector *new_hash_vector =
+            calloc(new_vector_size, sizeof(struct Path_Hash_Vector));
         if (new_hash_vector == NULL) {
             return;
         }
@@ -158,7 +167,8 @@ void path_node_delete(struct Path_Hash_Map *map, struct Path_Node *node)
             while (current_node != NULL) {
                 struct Path_Node *next_node = current_node->ll_next;
 
-                size_t index = sdbm_hash(current_node->name, current_node->name_length) % new_vector_size;
+                size_t index =
+                    sdbm_hash(current_node->name, current_node->name_length) % new_vector_size;
                 struct Path_Hash_Vector *vector = &(new_hash_vector[index]);
 
                 insert_node_into_linked_list(vector, current_node);
@@ -176,12 +186,13 @@ void path_node_delete(struct Path_Hash_Map *map, struct Path_Node *node)
 }
 
 Path_Node root = {
-    .parent = &root,
+    .parent      = &root,
     .name_length = 1,
-    .name = "/",
-    // Root is a special case: it is always assumed it is mounted. If it is not, it is "unresolved". This allows
-    // to processes to asynchronously fire open requests before the root filesystem has been initialized and mounted.
-    .file_type = NODE_UNRESOLVED,
+    .name        = "/",
+    // Root is a special case: it is always assumed it is mounted. If it is not, it is "unresolved".
+    // This allows to processes to asynchronously fire open requests before the root filesystem has
+    // been initialized and mounted.
+    .file_type   = NODE_UNRESOLVED,
 };
 
 static struct Path_Node *find_leaf(struct Path_Node *node)
@@ -204,11 +215,11 @@ static struct Path_Node *find_leaf(struct Path_Node *node)
 
 /**
  * @brief Destroy a leaf path node
- * 
+ *
  * This function destroys a node that is a leaf in the path tree. It does not
  * destroy any of its children, if it has them. If the parent node is not null
  * or self, it removes the node from the parent's children map.
- * 
+ *
  * @param node Node to be destroyed
  */
 static void destroy_path_node_leaf(struct Path_Node *node, int error)
@@ -244,8 +255,8 @@ static void destroy_path_node_leaf(struct Path_Node *node, int error)
     }
 }
 
- void destroy_path_node(struct Path_Node *node)
- {
+void destroy_path_node(struct Path_Node *node)
+{
     if (node == NULL) {
         return;
     }
@@ -263,7 +274,7 @@ static void destroy_path_node_leaf(struct Path_Node *node, int error)
 
     // At this point, node is a leaf
     destroy_path_node_leaf(node, -EAGAIN);
- }
+}
 
 void destroy_path_node_with_error(struct Path_Node *node, int error_code)
 {
@@ -286,8 +297,8 @@ void destroy_path_node_with_error(struct Path_Node *node, int error_code)
     destroy_path_node_leaf(node, error_code);
 }
 
- struct Path_Node *path_node_get_front_child(struct Path_Node *node)
- {
+struct Path_Node *path_node_get_front_child(struct Path_Node *node)
+{
     if (node == NULL)
         return NULL;
 
@@ -297,7 +308,7 @@ void destroy_path_node_with_error(struct Path_Node *node, int error_code)
     if (node->children_nodes_map->nodes_count == 0)
         return NULL;
 
-    for (size_t i = 0 ; i < node->children_nodes_map->vector_size ; i++) {
+    for (size_t i = 0; i < node->children_nodes_map->vector_size; i++) {
         struct Path_Node *child = node->children_nodes_map->hash_vector[i].head;
         if (child != NULL) {
             return child;
@@ -306,7 +317,7 @@ void destroy_path_node_with_error(struct Path_Node *node, int error_code)
 
     // Should never happen but just in case
     return NULL;
- }
+}
 
 void destroy_path_node_map(struct Path_Hash_Map *map)
 {
@@ -343,7 +354,8 @@ void remove_request_from_path_node(struct File_Request *request)
     request->active_node = NULL;
 }
 
-int path_node_resolve_child(struct Path_Node **node, struct Path_Node *parent, const unsigned char *name, size_t name_length)
+int path_node_resolve_child(struct Path_Node **node, struct Path_Node *parent,
+                            const unsigned char *name, size_t name_length)
 {
     if (node == NULL || parent == NULL || name == NULL || name_length == 0)
         return -EINVAL;
@@ -361,7 +373,7 @@ int path_node_resolve_child(struct Path_Node **node, struct Path_Node *parent, c
     if (child == NULL)
         return -ENOMEM;
 
-    child->file_type = NODE_UNRESOLVED;
+    child->file_type        = NODE_UNRESOLVED;
     child->owner_mountpoint = parent->owner_mountpoint;
 
     memcpy(child->name, name, name_length);
@@ -380,18 +392,16 @@ int path_node_resolve_child(struct Path_Node **node, struct Path_Node *parent, c
         return -ENOMEM;
     }
 
-    size_t message_size = sizeof(IPC_FS_Resolve_Path) + name_length;
+    size_t message_size          = sizeof(IPC_FS_Resolve_Path) + name_length;
     IPC_FS_Resolve_Path *message = alloca(message_size);
-    
-    message->type = IPC_FS_Resolve_Path_NUM,
-    message->flags = 0,
-    message->reply_port = main_port,
+
+    message->type = IPC_FS_Resolve_Path_NUM, message->flags = 0, message->reply_port = main_port,
     message->filesystem_id = parent->owner_mountpoint->fs->id,
-    message->parent_dir_id = parent->file_id,
-    message->operation_id = request->request_id,
+    message->parent_dir_id = parent->file_id, message->operation_id = request->request_id,
     memcpy(message->path_name, name, name_length);
 
-    result = -send_message_port(parent->owner_mountpoint->fs->command_port, message_size, (char *)message);
+    result = -send_message_port(parent->owner_mountpoint->fs->command_port, message_size,
+                                (char *)message);
     if (result != 0) {
         fail_and_destroy_request(request, result);
         destroy_path_node(child);
@@ -439,7 +449,8 @@ struct Path_Hash_Map *create_path_map()
     return new_map;
 }
 
-struct Path_Node *path_map_find(struct Path_Hash_Map *map, const unsigned char *name, size_t name_length)
+struct Path_Node *path_map_find(struct Path_Hash_Map *map, const unsigned char *name,
+                                size_t name_length)
 {
     if (map == NULL || name == NULL || name_length == 0)
         return NULL;
@@ -448,7 +459,7 @@ struct Path_Node *path_map_find(struct Path_Hash_Map *map, const unsigned char *
         return NULL;
 
     size_t index = sdbm_hash(name, name_length) % map->vector_size;
-    Path_Node * p = map->hash_vector[index].head;
+    Path_Node *p = map->hash_vector[index].head;
     while (p != NULL) {
         if (p->name_length == name_length && memcmp(p->name, name, name_length) == 0) {
             return p;
@@ -463,10 +474,10 @@ struct Path_Node *path_map_find(struct Path_Hash_Map *map, const unsigned char *
 bool is_file_type_valid(int type)
 {
     switch (type) {
-        case NODE_FILE:
-        case NODE_DIRECTORY:
-            return true;
-        default:
-            return false;
+    case NODE_FILE:
+    case NODE_DIRECTORY:
+        return true;
+    default:
+        return false;
     }
 }

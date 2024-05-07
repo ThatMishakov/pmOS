@@ -1,8 +1,8 @@
 #pragma once
+#include <cstdint>
 #include <pmos/ipc.h>
 #include <pmos/ports.h>
 #include <system_error>
-#include <cstdint>
 
 extern pmos_port_t main_port;
 pmos_port_t create_port();
@@ -25,28 +25,27 @@ void recieve_message(pmos_port_t port);
 
 constexpr unsigned IPCRegisterConsumerType = 0xff000000;
 struct IPCPipeRegisterConsumer {
-    uint32_t type = IPCRegisterConsumerType;
-    uint64_t reply_port = 0;
-    uint64_t pipe_port = 0;
+    uint32_t type        = IPCRegisterConsumerType;
+    uint64_t reply_port  = 0;
+    uint64_t pipe_port   = 0;
     uint64_t consumer_id = 0;
 };
 
 constexpr unsigned IPCPipeRegisterConsReplyType = 0xff000001;
 struct IPCPipeRegisterConsReply {
-    uint32_t type = IPCPipeRegisterConsReplyType;
+    uint32_t type  = IPCPipeRegisterConsReplyType;
     int32_t result = 0;
 };
 
 constexpr unsigned IPCNotifyUnregisterConsumerType = 0xff000002;
 struct IPCNotifyUnregisterConsumer {
-    uint32_t type = IPCNotifyUnregisterConsumerType;
+    uint32_t type         = IPCNotifyUnregisterConsumerType;
     pmos_port_t pipe_port = 0;
-    uint64_t consumer_id = 0;
+    uint64_t consumer_id  = 0;
 };
 
 constexpr unsigned IPCNotifyConsumerDestroyedType = 0xff000003;
 struct IPCNotifyConsumerDestroyed {
-    uint32_t type = IPCNotifyConsumerDestroyedType;
+    uint32_t type        = IPCNotifyConsumerDestroyedType;
     uint64_t consumer_id = 0;
 };
-

@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -30,108 +30,96 @@
 #include "pair.hh"
 #include "utility.hh"
 
-namespace klib {
+namespace klib
+{
 
-template<typename K>
-class set {
+template<typename K> class set
+{
 private:
     struct node {
         K key;
-        node* left = &NIL;
-        node* right = &NIL;
-        node* parent = &NIL;
-        bool red = false;
+        node *left   = &NIL;
+        node *right  = &NIL;
+        node *parent = &NIL;
+        bool red     = false;
     };
 
     size_t elements = 0;
-    node* root = &NIL;
+    node *root      = &NIL;
     static node NIL;
 
-    void erase_node(node*);
-    void insert_node(node*);
-    void rotate_left(node*);
-    void rotate_right(node*);
-    void transplant_node(node*,node*);
-    void erase_fix(node*);
-    void insert_fix(node*);
-    node* search(const K&);
-    
-    static node* min(node*);
-    static node* next(node*);
+    void erase_node(node *);
+    void insert_node(node *);
+    void rotate_left(node *);
+    void rotate_right(node *);
+    void transplant_node(node *, node *);
+    void erase_fix(node *);
+    void insert_fix(node *);
+    node *search(const K &);
 
-    static node* max(node*);
-    static node* prev(node*);
+    static node *min(node *);
+    static node *next(node *);
+
+    static node *max(node *);
+    static node *prev(node *);
+
 public:
     typedef size_t size_type;
     friend class iterator;
 
-    class iterator {
+    class iterator
+    {
         friend class set;
+
     private:
-        node* ptr = &NIL;
-        constexpr iterator(node* n): ptr(n) {};
+        node *ptr = &NIL;
+        constexpr iterator(node *n): ptr(n) {};
+
     public:
         iterator() = default;
 
-        iterator& operator++();
+        iterator &operator++();
         iterator operator++(int);
 
-        iterator& operator--();
+        iterator &operator--();
         iterator operator--(int);
 
-        const K& operator*()
-        {
-            return ptr->key;
-        }
+        const K &operator*() { return ptr->key; }
 
-        const K* operator->()
-        {
-            return &ptr->key;
-        }
+        const K *operator->() { return &ptr->key; }
 
-        bool operator==(iterator k)
-        {
-            return this->ptr == k.ptr;
-        }
+        bool operator==(iterator k) { return this->ptr == k.ptr; }
     };
 
-    constexpr set():
-        elements(0), root(&NIL) {};
-    set(const set&);
-    set(set&&);
+    constexpr set(): elements(0), root(&NIL) {};
+    set(const set &);
+    set(set &&);
 
-    set& operator=(const set&);
-    set& operator=(set&&);
+    set &operator=(const set &);
+    set &operator=(set &&);
     ~set();
 
-    bool empty() const noexcept
-    {
-        return elements == 0;
-    }
+    bool empty() const noexcept { return elements == 0; }
 
-    size_t size() const noexcept
-    {
-        return elements;
-    }
+    size_t size() const noexcept { return elements; }
 
-    pair<iterator,bool> insert(const K&);
-    pair<iterator,bool> insert(K&&);
-    pair<iterator,bool> emplace(K&&);
+    pair<iterator, bool> insert(const K &);
+    pair<iterator, bool> insert(K &&);
+    pair<iterator, bool> emplace(K &&);
 
-    iterator  erase (iterator position);
-    size_type erase(const K&);
+    iterator erase(iterator position);
+    size_type erase(const K &);
 
-    void swap(set&);
+    void swap(set &);
     void clear() noexcept;
 
-    size_t count(const K&);
+    size_t count(const K &);
 
     iterator begin() const noexcept;
     iterator end() const noexcept;
 };
 
-template<typename K>
-set<K>::set(const set& s)
+template<typename K> set<K>::set(const set &s)
 {
     if (&s == this)
         return;
@@ -144,44 +132,40 @@ set<K>::set(const set& s)
     swap(new_set);
 }
 
-template<typename K>
-set<K>::set(set&& s)
+template<typename K> set<K>::set(set &&s)
 {
     this->elements = s.elements;
-    this->root = s.root;
+    this->root     = s.root;
 
     s.elements = 0;
-    s.root = &NIL;
+    s.root     = &NIL;
 }
 
-template<typename K>
-set<K>& set<K>::operator=(set&& s)
+template<typename K> set<K> &set<K>::operator=(set &&s)
 {
     this->~set();
 
     this->elements = s.elements;
-    this->root = s.root;
+    this->root     = s.root;
 
     s.elements = 0;
-    s.root = &NIL;
+    s.root     = &NIL;
 
     return *this;
 }
 
-template<typename K>
-set<K>::~set()
+template<typename K> set<K>::~set()
 {
     while (root != &NIL)
         erase_node(root);
 }
 
-template<typename K>
-typename set<K>::node* set<K>::search(const K& key)
+template<typename K> typename set<K>::node *set<K>::search(const K &key)
 {
-    node* p = root;
+    node *p = root;
 
     while (p != &NIL and p->key != key) {
-        if (key < p->key) 
+        if (key < p->key)
             p = p->left;
         else
             p = p->right;
@@ -190,8 +174,7 @@ typename set<K>::node* set<K>::search(const K& key)
     return p;
 }
 
-template<typename K>
-typename set<K>::node* set<K>::min(node* n)
+template<typename K> typename set<K>::node *set<K>::min(node *n)
 {
     while (n->left != &NIL)
         n = n->left;
@@ -199,13 +182,12 @@ typename set<K>::node* set<K>::min(node* n)
     return n;
 }
 
-template<typename K>
-typename set<K>::node* set<K>::next(node* n)
+template<typename K> typename set<K>::node *set<K>::next(node *n)
 {
     if (n->right != &NIL)
         return min(n->right);
 
-    node* p = n->parent;
+    node *p = n->parent;
     while (p != &NIL and n == p->right) {
         n = p;
         p = p->parent;
@@ -214,37 +196,33 @@ typename set<K>::node* set<K>::next(node* n)
     return p;
 }
 
-template<typename K>
-size_t set<K>::count(const K& key)
+template<typename K> size_t set<K>::count(const K &key)
 {
-    node* p = search(key);
+    node *p = search(key);
     return p != &NIL;
 }
 
-template<typename K>
-typename set<K>::size_type set<K>::erase(const K& key)
+template<typename K> typename set<K>::size_type set<K>::erase(const K &key)
 {
-    node* p = search(key);
+    node *p = search(key);
     if (p == end())
         return 0;
     erase_node(p);
     return 1;
 }
 
-template<typename K>
-typename set<K>::iterator set<K>::erase(iterator it)
+template<typename K> typename set<K>::iterator set<K>::erase(iterator it)
 {
     if (it == end())
         return end();
-    node* n = next(it.ptr);
+    node *n = next(it.ptr);
     erase_node(it.ptr);
     return n;
 }
 
-template<class K>
-void set<K>::rotate_left(set<K>::node* p)
+template<class K> void set<K>::rotate_left(set<K>::node *p)
 {
-    node* n = p->right;
+    node *n  = p->right;
     p->right = n->left;
     if (n->left != &NIL) {
         n->left->parent = p;
@@ -257,14 +235,13 @@ void set<K>::rotate_left(set<K>::node* p)
     } else { // x is right child
         p->parent->right = n;
     }
-    n->left = p;
+    n->left   = p;
     p->parent = n;
 }
 
-template<class K>
-void set<K>::rotate_right(set<K>::node* p)
+template<class K> void set<K>::rotate_right(set<K>::node *p)
 {
-    node* n = p->left;
+    node *n = p->left;
     p->left = n->right;
     if (n->right != &NIL) {
         n->right->parent = p;
@@ -277,12 +254,11 @@ void set<K>::rotate_right(set<K>::node* p)
     } else {
         p->parent->left = n;
     }
-    n->right = p;
+    n->right  = p;
     p->parent = n;
 }
 
-template<class K>
-void set<K>::transplant_node(node* n, node* p)
+template<class K> void set<K>::transplant_node(node *n, node *p)
 {
     if (n->parent == &NIL) {
         root = p;
@@ -295,13 +271,12 @@ void set<K>::transplant_node(node* n, node* p)
     p->parent = n->parent;
 }
 
-template<class K>
-void set<K>::erase_node(node* n)
+template<class K> void set<K>::erase_node(node *n)
 {
     --elements;
-    node* y = n;
+    node *y           = n;
     bool original_red = n->red;
-    node* x;
+    node *x;
 
     if (n->left == &NIL) {
         x = n->right;
@@ -310,20 +285,20 @@ void set<K>::erase_node(node* n)
         x = n->left;
         transplant_node(n, n->left);
     } else {
-        y = min(n->right);
+        y            = min(n->right);
         original_red = y->red;
-        x = y->right;
+        x            = y->right;
         if (y->parent == n)
             x->parent = y;
         else {
             transplant_node(y, y->right);
-            y->right = n->right;
+            y->right         = n->right;
             y->right->parent = y;
         }
         transplant_node(n, y);
-        y->left = n->left;
+        y->left         = n->left;
         y->left->parent = y;
-        y->red = n->red;
+        y->red          = n->red;
     }
 
     delete n;
@@ -332,14 +307,13 @@ void set<K>::erase_node(node* n)
         erase_fix(x);
 }
 
-template<class K>
-void set<K>::erase_fix(node* x)
+template<class K> void set<K>::erase_fix(node *x)
 {
     while (x != root and not x->red) {
         if (x == x->parent->left) {
-            node* w = x->parent->right;
+            node *w = x->parent->right;
             if (w->red) {
-                w->red = false;
+                w->red         = false;
                 x->parent->red = true;
                 rotate_left(x->parent);
                 w = x->parent->right;
@@ -347,25 +321,25 @@ void set<K>::erase_fix(node* x)
 
             if (not w->left->red and not w->right->red) {
                 w->red = true;
-                x = x->parent;
+                x      = x->parent;
             } else {
                 if (not w->right->red) {
                     w->left->red = false;
-                    w->red = true;
+                    w->red       = true;
                     rotate_right(w);
                     w = x->parent->right;
                 }
 
-                w->red = x->parent->red;
+                w->red         = x->parent->red;
                 x->parent->red = false;
-                w->right->red = false;
+                w->right->red  = false;
                 rotate_left(x->parent);
                 x = root;
             }
         } else {
-            node* w = x->parent->left;
+            node *w = x->parent->left;
             if (w->red) {
-                w->red = false;
+                w->red         = false;
                 x->parent->red = true;
                 rotate_right(x->parent);
                 w = x->parent->left;
@@ -373,18 +347,18 @@ void set<K>::erase_fix(node* x)
 
             if (not w->left->red and not w->right->red) {
                 w->red = true;
-                x = x->parent;
+                x      = x->parent;
             } else {
                 if (not w->left->red) {
                     w->right->red = false;
-                    w->red = true;
+                    w->red        = true;
                     rotate_left(w);
                     w = x->parent->left;
                 }
 
-                w->red = x->parent->red;
+                w->red         = x->parent->red;
                 x->parent->red = false;
-                w->left->red = false;
+                w->left->red   = false;
                 rotate_right(x->parent);
                 x = root;
             }
@@ -393,40 +367,39 @@ void set<K>::erase_fix(node* x)
     x->red = false;
 }
 
-template<class K>
-pair<typename set<K>::iterator,bool> set<K>::insert(const K& k)
+template<class K> pair<typename set<K>::iterator, bool> set<K>::insert(const K &k)
 {
-    node* n = new node({k, &NIL, &NIL, &NIL, true});
+    node *n = new node({k, &NIL, &NIL, &NIL, true});
     insert_node(n);
 
     return {n, true};
 }
 
-template<class K>
-pair<typename set<K>::iterator,bool> set<K>::insert(K&& k)
+template<class K> pair<typename set<K>::iterator, bool> set<K>::insert(K &&k)
 {
-    node* n = new node({forward<K>(k), &NIL, &NIL, &NIL, true});
+    node *n = new node({forward<K>(k), &NIL, &NIL, &NIL, true});
     insert_node(n);
 
     return {n, true};
 }
 
-template<class K>
-pair<typename set<K>::iterator,bool> set<K>::emplace(K&& k)
+template<class K> pair<typename set<K>::iterator, bool> set<K>::emplace(K &&k)
 {
-    node* n = new node({forward<K>(k), &NIL, &NIL, &NIL, true});
+    node *n = new node({forward<K>(k), &NIL, &NIL, &NIL, true});
     insert_node(n);
 
     return {n, true};
 }
 
-template<class T> class set<T>::node set<T>::NIL = {{}, &NIL, &NIL, &NIL, false};
-
-template<class K>
-void set<K>::insert_node(node* n)
+template<class T> class set<T>::node set<T>::NIL =
 {
-    node* y = &NIL;
-    node* temp = root;
+    {}, &NIL, &NIL, &NIL, false
+};
+
+template<class K> void set<K>::insert_node(node *n)
+{
+    node *y    = &NIL;
+    node *temp = root;
 
     while (temp != &NIL) {
         y = temp;
@@ -445,46 +418,45 @@ void set<K>::insert_node(node* n)
         y->right = n;
 
     ++elements;
-    insert_fix(n);    
+    insert_fix(n);
 }
 
-template<class K>
-void set<K>::insert_fix(node* n)
+template<class K> void set<K>::insert_fix(node *n)
 {
     while (n->parent->red) {
         if (n->parent == n->parent->parent->left) {
-            node* y = n->parent->parent->right;
+            node *y = n->parent->parent->right;
 
             if (y->red) {
-                n->parent->red = false;
-                y->red = false;
+                n->parent->red         = false;
+                y->red                 = false;
                 n->parent->parent->red = true;
-                n = n->parent->parent;
+                n                      = n->parent->parent;
             } else {
                 if (n == n->parent->right) {
                     n = n->parent;
                     rotate_left(n);
                 }
 
-                n->parent->red = false;
+                n->parent->red         = false;
                 n->parent->parent->red = true;
                 rotate_right(n->parent->parent);
             }
         } else {
-            node* y = n->parent->parent->left;
+            node *y = n->parent->parent->left;
 
             if (y->red) {
-                n->parent->red = false;
-                y->red = false;
+                n->parent->red         = false;
+                y->red                 = false;
                 n->parent->parent->red = true;
-                n = n->parent->parent;
+                n                      = n->parent->parent;
             } else {
                 if (n == n->parent->left) {
                     n = n->parent;
                     rotate_right(n);
                 }
 
-                n->parent->red = false;
+                n->parent->red         = false;
                 n->parent->parent->red = true;
                 rotate_left(n);
             }
@@ -493,47 +465,35 @@ void set<K>::insert_fix(node* n)
     root->red = false;
 }
 
-template<class K>
-typename set<K>::iterator set<K>::begin() const noexcept
-{
-    return min(root);
-}
+template<class K> typename set<K>::iterator set<K>::begin() const noexcept { return min(root); }
 
-template<class K>
-typename set<K>::iterator set<K>::end() const noexcept
-{
-    return &NIL;
-}
+template<class K> typename set<K>::iterator set<K>::end() const noexcept { return &NIL; }
 
-template<class K>
-void set<K>::swap(set<K>& swap_with)
+template<class K> void set<K>::swap(set<K> &swap_with)
 {
-    set tmp = move(*this);
-    *this = move(swap_with);
+    set tmp   = move(*this);
+    *this     = move(swap_with);
     swap_with = move(tmp);
 }
 
-template<class K>
-void set<K>::clear() noexcept
+template<class K> void set<K>::clear() noexcept
 {
     iterator it = begin();
     while (it != end())
         it = erase(it);
 }
 
-template<class K>
-typename set<K>::iterator& set<K>::iterator::operator++()
+template<class K> typename set<K>::iterator &set<K>::iterator::operator++()
 {
     ptr = next(ptr);
     return *this;
 }
 
-template<class K>
-typename set<K>::iterator set<K>::iterator::operator++(int)
+template<class K> typename set<K>::iterator set<K>::iterator::operator++(int)
 {
-    node* tmp_ptr = ptr;
-    ptr = next(ptr);
+    node *tmp_ptr = ptr;
+    ptr           = next(ptr);
     return tmp_ptr;
 }
 
-}
+} // namespace klib

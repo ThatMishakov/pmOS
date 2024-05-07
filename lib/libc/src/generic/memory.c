@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -31,11 +31,11 @@
 void *__request_mem_b(size_t bytes)
 {
     // dlmalloc does 2 MORECORE calls, the second one is to check if the first one was successful
-    static void* next = NULL;
+    static void *next = NULL;
     if (bytes == 0)
         return next;
 
-    size_t aligned_up = (bytes + 4095) & ~4095UL;
+    size_t aligned_up     = (bytes + 4095) & ~4095UL;
     mem_request_ret_t req = create_normal_region(0, NULL, aligned_up, PROT_READ | PROT_WRITE);
     if (req.result != SUCCESS) {
         next = NULL;

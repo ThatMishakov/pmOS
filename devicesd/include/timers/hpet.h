@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -28,9 +28,9 @@
 
 #ifndef HPET_H
 #define HPET_H
-#include <stdint.h>
 #include <interrupts/interrupts.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 typedef struct HPET_TIMER {
     union HPET_Timer_Conf_cap {
@@ -76,13 +76,13 @@ typedef union {
     uint64_t aslong;
     struct {
         uint8_t REV_ID;
-        uint8_t NUM_TIM_CAP: 5;
+        uint8_t NUM_TIM_CAP : 5;
         uint8_t COUNT_SIZE_CAP : 1;
         uint8_t Reserved : 1;
         uint8_t LEG_RT_CAP : 1;
         uint16_t VENDOR_ID;
         uint32_t COUNTER_CLK_PERIOD;
-    }  __attribute__((packed)) bits;
+    } __attribute__((packed)) bits;
 } __attribute__((packed)) HPET_General_Cap_And_Id;
 
 typedef union {
@@ -90,7 +90,7 @@ typedef union {
     struct {
         uint8_t ENABLE_CNF : 1;
         uint8_t LEG_RT_CNF : 1;
-        uint8_t reserved0  : 6;
+        uint8_t reserved0 : 6;
         uint8_t reserved_non_os;
         uint64_t reserved2 : 48;
     } bits;
@@ -107,10 +107,9 @@ typedef union {
     } bits;
 } __attribute__((packed)) HPET_General_Int_Status;
 
-typedef struct HPET
-{
+typedef struct HPET {
 
-    HPET_General_Cap_And_Id General_Cap_And_Id; 
+    HPET_General_Cap_And_Id General_Cap_And_Id;
     uint64_t reserved0;
     HPET_General_Conf General_Conf;
     uint64_t reserved1;
@@ -127,22 +126,22 @@ typedef struct HPET
     HPET_TIMER timers[0];
 } __attribute__((packed)) HPET;
 
-extern volatile HPET* hpet_virt;
+extern volatile HPET *hpet_virt;
 extern bool hpet_is_functional;
 extern unsigned short max_timer;
 extern uint32_t hpet_clock_period;
 extern uint64_t hpet_frequency;
 extern uint64_t hpet_ticks_per_ms;
 
-int hpet_init_int_msi(volatile HPET_TIMER* hpet_virt);
-int hpet_init_int_ioapic(volatile HPET_TIMER* hpet_virt);
+int hpet_init_int_msi(volatile HPET_TIMER *hpet_virt);
+int hpet_init_int_ioapic(volatile HPET_TIMER *hpet_virt);
 int init_hpet();
 void hpet_int();
 
 uint64_t hpet_calculate_ticks(uint64_t millis);
 extern uint64_t hpet_get_ticks();
 
-void hpet_update_system_ticks(uint64_t* system_ticks);
+void hpet_update_system_ticks(uint64_t *system_ticks);
 void hpet_start_oneshot(uint64_t ticks);
 
 void hpet_program_periodic(uint64_t ticks);

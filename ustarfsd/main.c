@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -28,22 +28,23 @@
 
 #define _POSIX_C_SOURCE 200809L
 
-#include <assert.h>
-#include <stdio.h>
-#include <fcntl.h>
-#include "header.h"
-#include <unistd.h>
 #include "file.h"
+#include "header.h"
+
+#include <assert.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <errno.h>
+#include <unistd.h>
 
-char *get_filename(int argc, char *argv[]) {
+char *get_filename(int argc, char *argv[])
+{
     return "./sysroot.tar";
 
     if (argc < 2) {
         // Prepare for the worst
-        const char * name = argc > 0 && argv != NULL ? argv[0] : NULL;
+        const char *name = argc > 0 && argv != NULL ? argv[0] : NULL;
 
         fprintf(stderr, "Usage: %s <filename>\n", name);
         return NULL;
@@ -51,12 +52,14 @@ char *get_filename(int argc, char *argv[]) {
     return argv[1];
 }
 
-int parse_archive(int fd, struct File ***file_pointer_array, size_t *file_count, size_t *file_capacity) {
+int parse_archive(int fd, struct File ***file_pointer_array, size_t *file_count,
+                  size_t *file_capacity)
+{
     TARHeader header;
     ssize_t bytesRead;
     uint64_t next_header_offset = 0;
-    off_t offset = 0;
-    struct File *root = NULL;  // Global root directory
+    off_t offset                = 0;
+    struct File *root           = NULL; // Global root directory
 
     while ((bytesRead = pread(fd, &header, sizeof(TARHeader), offset)) == sizeof(TARHeader)) {
         int result;
@@ -77,11 +80,12 @@ int parse_archive(int fd, struct File ***file_pointer_array, size_t *file_count,
                 *file_capacity += 100;
 
                 // Reallocate the file_pointer_array with the new capacity
-                struct File **temp = realloc(*file_pointer_array, *file_capacity * sizeof(struct File *));
+                struct File **temp =
+                    realloc(*file_pointer_array, *file_capacity * sizeof(struct File *));
                 if (temp == NULL) {
                     perror("Failed to reallocate memory for file_pointer_array");
-                    free_file_buffers(file);  // Free the buffers of the allocated file struct
-                    free(file);  // Free the allocated file struct
+                    free_file_buffers(file); // Free the buffers of the allocated file struct
+                    free(file);              // Free the allocated file struct
                     return -1;
                 }
                 *file_pointer_array = temp;
@@ -100,17 +104,19 @@ int parse_archive(int fd, struct File ***file_pointer_array, size_t *file_count,
             // Resolve the parent directory
             struct File *parent = resolve_parent_dir(file);
             if (parent == NULL) {
-                fprintf(stderr, "Failed to resolve parent directory for file: %s, path: %s\n", file->name, file->path == NULL? "NULL" : file->path);
-                free_file_buffers(file);  // Free the buffers of the allocated file struct
-                free(file);  // Free the allocated file struct
+                fprintf(stderr, "Failed to resolve parent directory for file: %s, path: %s\n",
+                        file->name, file->path == NULL ? "NULL" : file->path);
+                free_file_buffers(file); // Free the buffers of the allocated file struct
+                free(file);              // Free the allocated file struct
                 return -1;
             }
 
             // Add the file to the parent directory's child array
             if (add_child_to_directory(parent, file) != 0) {
-                fprintf(stderr, "Failed to add child to parent directory for file: %s\n", file->name);
-                free_file_buffers(file);  // Free the buffers of the allocated file struct
-                free(file);  // Free the allocated file struct
+                fprintf(stderr, "Failed to add child to parent directory for file: %s\n",
+                        file->name);
+                free_file_buffers(file); // Free the buffers of the allocated file struct
+                free(file);              // Free the allocated file struct
                 return -1;
             }
 
@@ -123,8 +129,8 @@ int parse_archive(int fd, struct File ***file_pointer_array, size_t *file_count,
         } else {
             // Failed to parse the header
             fprintf(stderr, "Failed to parse the header.\n");
-            free_file_buffers(file);  // Free the buffers of the allocated file struct
-            free(file);  // Free the allocated file struct
+            free_file_buffers(file); // Free the buffers of the allocated file struct
+            free(file);              // Free the allocated file struct
             return -1;
         }
 
@@ -135,7 +141,7 @@ int parse_archive(int fd, struct File ***file_pointer_array, size_t *file_count,
     if (bytesRead != 0) {
         if (bytesRead < 0)
             fprintf(stderr, "pread() failed: %s\n", strerror(errno));
-        
+
         printf("bytesRead: %i\n", bytesRead);
         fprintf(stderr, "Archive ended unexpectedly.\n");
         return -1;
@@ -144,7 +150,8 @@ int parse_archive(int fd, struct File ***file_pointer_array, size_t *file_count,
     return 0;
 }
 
-void print_tree(const struct File *file, int indentation) {
+void print_tree(const struct File *file, int indentation)
+{
     if (file == NULL) {
         return;
     }
@@ -163,7 +170,8 @@ void print_tree(const struct File *file, int indentation) {
     }
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[])
+{
     char *filename = get_filename(argc, argv);
     if (filename == NULL) {
         return 1;
@@ -178,8 +186,8 @@ int main(int argc, char *argv[]) {
     printf("[USTARFSd] Info: open(%s, O_RDONLY) = %d\n", filename, fd);
 
     struct File **file_pointer_array = NULL; // Array of pointers to File structs
-    size_t file_count = 0;
-    size_t file_capacity = 0;
+    size_t file_count                = 0;
+    size_t file_capacity             = 0;
 
     int result = parse_archive(fd, &file_pointer_array, &file_count, &file_capacity);
 
@@ -226,4 +234,3 @@ int main(int argc, char *argv[]) {
 
     return result;
 }
-

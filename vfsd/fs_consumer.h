@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -29,12 +29,13 @@
 #ifndef FS_CONSUMER_H
 #define FS_CONSUMER_H
 
+#include "string.h"
+
+#include <pmos/ipc.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <sys/types.h>
-#include <stdbool.h>
-#include "string.h"
-#include <pmos/ipc.h>
 
 struct Filesystem;
 
@@ -62,7 +63,7 @@ struct fs_consumer {
 /// It does not check if a fs consumer with the given task group already exists.
 /// @param consumer_task_group The task group of the consumer
 /// @return The created fs consumer, or NULL on failure.
-struct fs_consumer * create_fs_consumer(uint64_t consumer_task_group);
+struct fs_consumer *create_fs_consumer(uint64_t consumer_task_group);
 
 /// @brief Initializes a fs consumer.
 /// @param fs_consumer The fs consumer to initialize.
@@ -73,7 +74,7 @@ int init_fs_consumer(struct fs_consumer *fs_consumer);
 /// @param fs_consumer The fs_consumer which's buffers to free.
 void free_buffers_fs_consumer(struct fs_consumer *fs_consumer);
 
-/// @brief Gets a fs consumer by its ID.    
+/// @brief Gets a fs consumer by its ID.
 /// @param consumer_id The ID of the fs consumer.
 /// @return The fs consumer with the given ID, or NULL if no such fs consumer exists.
 struct fs_consumer *get_fs_consumer(uint64_t consumer_id);
@@ -94,21 +95,22 @@ extern struct fs_consumer_map {
     struct fs_consumer_node **table;
     size_t size;
     size_t count;
-    #define FS_CONSUMER_INITIAL_SIZE 16
-    #define FS_CONSUMER_SIZE_MULTIPLIER 2
-    #define FS_CONSUMER_MAX_LOAD_FACTOR 3/4
-    #define FS_CONSUMER_SHRINK_THRESHOLD 1/4
-    #define FS_CONSUMER_SHRINK_FACTOR 1/2
+#define FS_CONSUMER_INITIAL_SIZE     16
+#define FS_CONSUMER_SIZE_MULTIPLIER  2
+#define FS_CONSUMER_MAX_LOAD_FACTOR  3 / 4
+#define FS_CONSUMER_SHRINK_THRESHOLD 1 / 4
+#define FS_CONSUMER_SHRINK_FACTOR    1 / 2
 } global_fs_consumers;
 
 /**
  * @brief Create a filesystem consumer
- * 
+ *
  * @param request Request message
  * @param sender_task_id Sender of the message
  * @param request_size Size of the message
  * @return int 0 on success, negative on failure
  */
-int create_consumer(const IPC_Create_Consumer *request, uint64_t sender_task_id, size_t request_size);
+int create_consumer(const IPC_Create_Consumer *request, uint64_t sender_task_id,
+                    size_t request_size);
 
 #endif // FS_CONSUMER_H

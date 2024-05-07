@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -26,15 +26,15 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <stdlib.h>
-#include <limits.h>
 #include <ctype.h>
 #include <errno.h>
+#include <limits.h>
+#include <stdlib.h>
 
-unsigned long int strtoul(const char * nptr, char ** endptr ,int base)
+unsigned long int strtoul(const char *nptr, char **endptr, int base)
 {
-    const char* s = nptr;
-    int neg = 0;
+    const char *s = nptr;
+    int neg       = 0;
     int c;
 
     do {
@@ -43,7 +43,7 @@ unsigned long int strtoul(const char * nptr, char ** endptr ,int base)
 
     if (c == '-') {
         neg = 1;
-        c = *s++;
+        c   = *s++;
     } else if (c == '+') {
         c = *s++;
     }
@@ -55,13 +55,13 @@ unsigned long int strtoul(const char * nptr, char ** endptr ,int base)
     }
 
     if (base == 0) {
-        base = c == '0' ? 8 : 10; 
+        base = c == '0' ? 8 : 10;
     }
 
-    long int cutoff = ULONG_MAX/base;
-    long int cutlim = ULONG_MAX%base;
+    long int cutoff = ULONG_MAX / base;
+    long int cutlim = ULONG_MAX % base;
 
-    int k = 0;
+    int k           = 0;
     long int result = 0;
     while (c) {
         if (isdigit(c)) {
@@ -95,13 +95,14 @@ unsigned long int strtoul(const char * nptr, char ** endptr ,int base)
     }
 
     if (endptr != 0) {
-        *endptr = (char*)(k ? s - 1 : nptr);
+        *endptr = (char *)(k ? s - 1 : nptr);
     }
 
     return result;
 }
 
-long int strtol(const char *str, char **endptr, int base) {
+long int strtol(const char *str, char **endptr, int base)
+{
     // Skip leading whitespace
     while (isspace((unsigned char)*str)) {
         str++;
@@ -137,7 +138,7 @@ long int strtol(const char *str, char **endptr, int base) {
 
     // Initialize variables
     long int result = 0;
-    int overflow = 0;
+    int overflow    = 0;
     int digit;
 
     // Process digits
@@ -164,7 +165,7 @@ long int strtol(const char *str, char **endptr, int base) {
     }
 
     // Check for errors
-    if (str == (const char *)endptr) {  // Cast endptr to const char*
+    if (str == (const char *)endptr) { // Cast endptr to const char*
         errno = EINVAL;
         return 0;
     } else if (overflow) {
@@ -183,7 +184,4 @@ long int strtol(const char *str, char **endptr, int base) {
     return sign * result;
 }
 
-int atoi(const char *str)
-{
-    return (int)strtol(str, (char **)NULL, 10);
-}
+int atoi(const char *str) { return (int)strtol(str, (char **)NULL, 10); }

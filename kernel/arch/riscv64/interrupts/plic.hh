@@ -5,13 +5,13 @@
 void init_plic();
 
 struct PLIC {
-    volatile u32 * virt_base = nullptr;
-    u64 hardware_id = 0;
-    u32 gsi_base = 0;
+    volatile u32 *virt_base = nullptr;
+    u64 hardware_id         = 0;
+    u32 gsi_base            = 0;
 
-    u16 max_priority = 0;
+    u16 max_priority               = 0;
     u16 external_interrupt_sources = 0;
-    u8 plic_id = 0;
+    u8 plic_id                     = 0;
 };
 
 // Read PLIC register
@@ -39,15 +39,15 @@ u32 plic_claim();
 // Complete the interrupt
 void plic_complete(u32 interrupt_id);
 
-constexpr int PLIC_IE_OFFSET = 0x02000;
+constexpr int PLIC_IE_OFFSET         = 0x02000;
 constexpr int PLIC_IE_CONTEXT_STRIDE = 0x80;
 
-constexpr int PLIC_THRESHOLD_OFFSET = 0x200000;
+constexpr int PLIC_THRESHOLD_OFFSET         = 0x200000;
 constexpr int PLIC_THRESHOLD_CONTEXT_STRIDE = 0x1000;
 
-constexpr int PLIC_CLAIM_OFFSET = 0x200004;
-constexpr int PLIC_COMPLETE_OFFSET = 0x200004;
+constexpr int PLIC_CLAIM_OFFSET            = 0x200004;
+constexpr int PLIC_COMPLETE_OFFSET         = 0x200004;
 constexpr int PLIC_COMPLETE_CONTEXT_STRIDE = 0x1000;
 
-constexpr int PLIC_PRIORITY_OFFSET = 0x00000;
+constexpr int PLIC_PRIORITY_OFFSET        = 0x00000;
 constexpr int PLIC_PRIORITY_SOURCE_STRIDE = 0x4;

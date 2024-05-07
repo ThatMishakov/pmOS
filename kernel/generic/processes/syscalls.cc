@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -26,30 +26,31 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <processes/syscalls.hh>
-#include <utils.hh>
-#include <kernel/com.h>
-#include <memory/paging.hh>
-#include <sched/sched.hh>
-#include <lib/vector.hh>
-#include <messaging/messaging.hh>
-#include <kernel/messaging.h>
-#include <kernel/block.h>
 #include <kernel/attributes.h>
+#include <kernel/block.h>
+#include <kernel/com.h>
 #include <kernel/flags.h>
-//#include <cpus/cpus.hh>
+#include <kernel/messaging.h>
+#include <lib/vector.hh>
+#include <memory/paging.hh>
+#include <messaging/messaging.hh>
+#include <processes/syscalls.hh>
 #include <sched/sched.hh>
-#include <lib/string.hh>
-#include <messaging/named_ports.hh>
-#include <kern_logger/kern_logger.hh>
-#include <exceptions.hh>
-#include <lib/utility.hh>
-#include <memory/mem_object.hh>
-#include <assert.h>
+#include <utils.hh>
+// #include <cpus/cpus.hh>
 #include "task_group.hh"
 
+#include <assert.h>
+#include <exceptions.hh>
+#include <kern_logger/kern_logger.hh>
+#include <lib/string.hh>
+#include <lib/utility.hh>
+#include <memory/mem_object.hh>
+#include <messaging/named_ports.hh>
+#include <sched/sched.hh>
+
 #ifdef __x86_64__
-#include <sched/segments.hh>
+    #include <sched/segments.hh>
 #endif
 
 using syscall_function = void (*)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t);
@@ -105,21 +106,25 @@ klib::array<syscall_function, 42> syscall_table = {
 extern "C" void syscall_handler()
 {
     klib::shared_ptr<TaskDescriptor> task = get_cpu_struct()->current_task;
-    u64 call_n = task->regs.syscall_number();
-    u64 arg1 = syscall_arg1(task);
-    u64 arg2 = syscall_arg2(task);
-    u64 arg3 = syscall_arg3(task);
-    u64 arg4 = syscall_arg4(task);
-    u64 arg5 = syscall_arg5(task);
-    
-    //serial_logger.printf("syscall_handler: task: %d (%s) call_n: %x, arg1: %x, arg2: %x, arg3: %x, arg4: %x, arg5: %x\n", task->task_id, task->name.c_str(), call_n, arg1, arg2, arg3, arg4, arg5);
+    u64 call_n                            = task->regs.syscall_number();
+    u64 arg1                              = syscall_arg1(task);
+    u64 arg2                              = syscall_arg2(task);
+    u64 arg3                              = syscall_arg3(task);
+    u64 arg4                              = syscall_arg4(task);
+    u64 arg5                              = syscall_arg5(task);
+
+    // serial_logger.printf("syscall_handler: task: %d (%s) call_n: %x, arg1: %x, arg2: %x, arg3:
+    // %x, arg4: %x, arg5: %x\n", task->task_id, task->name.c_str(), call_n, arg1, arg2, arg3, arg4,
+    // arg5);
 
     // TODO: check permissions
 
-    //t_print_bochs("Debug: syscall %h pid %h (%s) ", call_n, get_cpu_struct()->current_task->task_id, get_cpu_struct()->current_task->name.c_str());
-    //t_print_bochs(" %h %h %h %h %h ", arg1, arg2, arg3, arg4, arg5);
+    // t_print_bochs("Debug: syscall %h pid %h (%s) ", call_n,
+    // get_cpu_struct()->current_task->task_id, get_cpu_struct()->current_task->name.c_str());
+    // t_print_bochs(" %h %h %h %h %h ", arg1, arg2, arg3, arg4, arg5);
     if (task->attr.debug_syscalls) {
-        global_logger.printf("Debug: syscall %h pid %h\n", call_n, get_cpu_struct()->current_task->task_id);
+        global_logger.printf("Debug: syscall %h pid %h\n", call_n,
+                             get_cpu_struct()->current_task->task_id);
     }
 
     try {
@@ -139,24 +144,25 @@ extern "C" void syscall_handler()
         return;
     }
 
-    //t_print_bochs("SUCCESS %h\n", syscall_ret_high(task));
-    
-    //t_print_bochs(" -> SUCCESS\n");
+    // t_print_bochs("SUCCESS %h\n", syscall_ret_high(task));
+
+    // t_print_bochs(" -> SUCCESS\n");
 }
 
 void get_task_id(u64, u64, u64, u64, u64, u64)
 {
-    const task_ptr& task = get_cpu_struct()->current_task;
+    const task_ptr &task = get_cpu_struct()->current_task;
 
-    syscall_ret_low(task) = SUCCESS;
+    syscall_ret_low(task)  = SUCCESS;
     syscall_ret_high(task) = task->task_id;
 }
 
 void syscall_create_process(u64, u64, u64, u64, u64, u64)
 {
-    auto task = get_current_task();
+    auto task             = get_current_task();
     syscall_ret_low(task) = SUCCESS;
-    syscall_ret_high(task) = TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel::User)->task_id;
+    syscall_ret_high(task) =
+        TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel::User)->task_id;
 }
 
 void syscall_start_process(u64 pid, u64 start, u64 arg1, u64 arg2, u64 arg3, u64)
@@ -186,7 +192,8 @@ void syscall_start_process(u64 pid, u64 start, u64 arg1, u64 arg2, u64 arg3, u64
     t->init();
 }
 
-void syscall_load_executable(u64 task_id, u64 object_id, u64 flags, u64 /* unused */, u64 /* unused */, u64 /* unused */)
+void syscall_load_executable(u64 task_id, u64 object_id, u64 flags, u64 /* unused */,
+                             u64 /* unused */, u64 /* unused */)
 {
     task_ptr task = get_current_task();
     // TODO: Check permissions
@@ -212,7 +219,7 @@ void syscall_load_executable(u64 task_id, u64 object_id, u64 flags, u64 /* unuse
 
 void syscall_init_stack(u64 pid, u64 esp, u64, u64, u64, u64)
 {
-    const task_ptr& task = get_current_task();
+    const task_ptr &task = get_current_task();
 
     // TODO: Check permissions
 
@@ -228,7 +235,7 @@ void syscall_init_stack(u64 pid, u64 esp, u64, u64, u64, u64)
     } else {
         t->regs.stack_pointer() = esp;
 
-        syscall_ret_low(task) = SUCCESS;
+        syscall_ret_low(task)  = SUCCESS;
         syscall_ret_high(task) = esp;
     }
 }
@@ -270,7 +277,7 @@ void syscall_get_first_message(u64 buff, u64 args, u64 portno, u64, u64, u64)
 
         top_message = port->get_front();
 
-        bool result = top_message->copy_to_user_buff((char*)buff);
+        bool result = top_message->copy_to_user_buff((char *)buff);
 
         if (not result)
             return;
@@ -321,10 +328,11 @@ void syscall_get_message_info(u64 message_struct, u64 portno, u64 flags, u64, u6
     {
         Auto_Lock_Scope lock(port->lock);
         if (port->is_empty()) {
-            constexpr unsigned FLAG_NOBLOCK= 0x01;
+            constexpr unsigned FLAG_NOBLOCK = 0x01;
 
             if (flags & FLAG_NOBLOCK) {
-                throw(Kern_Exception(ERROR_NO_MESSAGES, "FLAG_NOBLOCK is set and the process has no messages"));
+                throw(Kern_Exception(ERROR_NO_MESSAGES,
+                                     "FLAG_NOBLOCK is set and the process has no messages"));
 
             } else {
                 task->request_repeat_syscall();
@@ -335,17 +343,17 @@ void syscall_get_message_info(u64 message_struct, u64 portno, u64 flags, u64, u6
         msg = port->get_front();
     }
 
-    u64 msg_struct_size = sizeof(Message_Descriptor);
+    u64 msg_struct_size     = sizeof(Message_Descriptor);
     Message_Descriptor desc = {
-        .sender = msg->task_id_from,
+        .sender  = msg->task_id_from,
         .channel = 0,
-        .size = msg->size(),
+        .size    = msg->size(),
     };
 
     bool b = copy_to_user((char *)&desc, (char *)message_struct, msg_struct_size);
     if (not b)
         assert(!"blocking by page is not yet implemented");
-    
+
     syscall_ret_low(task) = SUCCESS;
 }
 
@@ -370,8 +378,8 @@ void syscall_set_attribute(u64 pid, u64 attribute, u64 value, u64, u64, u64)
     //     break;
 
     // default:
-    //     throw(Kern_Exception(ERROR_NOT_IMPLEMENTED, "syscall_set_attribute with given request is not implemented"));
-    //     break;
+    //     throw(Kern_Exception(ERROR_NOT_IMPLEMENTED, "syscall_set_attribute with given request is
+    //     not implemented")); break;
     // }
 
     throw(Kern_Exception(ERROR_NOT_IMPLEMENTED, "syscall_set_attribute is not implemented"));
@@ -383,20 +391,21 @@ void syscall_configure_system(u64 type, u64 arg1, u64 arg2, u64, u64, u64)
     // TODO: Check permissions
 
     switch (type) {
-    // case SYS_CONF_LAPIC:
-    //      syscall_ret_high(get_current_task()) = lapic_configure(arg1, arg2);
-    //     break;
+        // case SYS_CONF_LAPIC:
+        //      syscall_ret_high(get_current_task()) = lapic_configure(arg1, arg2);
+        //     break;
 
-    // case SYS_CONF_CPU:
-    //     syscall_ret_high(get_current_task()) = cpu_configure(arg1, arg2);
-    //     break;
+        // case SYS_CONF_CPU:
+        //     syscall_ret_high(get_current_task()) = cpu_configure(arg1, arg2);
+        //     break;
 
-    // case SYS_CONF_SLEEP10:
-    //     pit_sleep_100us(arg1);
-    //     break;
+        // case SYS_CONF_SLEEP10:
+        //     pit_sleep_100us(arg1);
+        //     break;
 
     default:
-        throw (Kern_Exception(ERROR_NOT_IMPLEMENTED, "syscall_configure_system with unknown parameter"));
+        throw(Kern_Exception(ERROR_NOT_IMPLEMENTED,
+                             "syscall_configure_system with unknown parameter"));
         break;
     };
 }
@@ -409,7 +418,7 @@ void syscall_set_priority(u64 priority, u64, u64, u64, u64, u64)
     syscall_ret_low(current_task) = SUCCESS;
 
     if (priority >= sched_queues_levels) {
-        throw (Kern_Exception(ERROR_NOT_SUPPORTED, "priority outside of queue levels"));
+        throw(Kern_Exception(ERROR_NOT_SUPPORTED, "priority outside of queue levels"));
     }
 
     {
@@ -424,17 +433,17 @@ void syscall_get_lapic_id(u64, u64, u64, u64, u64, u64)
 {
     // Not available on RISC-V
     // TODO: This should be hart id
-    //syscall_ret_high(get_current_task()) = get_cpu_struct()->lapic_id;
+    // syscall_ret_high(get_current_task()) = get_cpu_struct()->lapic_id;
     throw Kern_Exception(ERROR_NOT_IMPLEMENTED, "syscall_get_lapic_id is not implemented");
 }
 
 void syscall_set_task_name(u64 pid, u64 /* const char* */ string, u64 length, u64, u64, u64)
 {
-    const task_ptr& current = get_cpu_struct()->current_task;
+    const task_ptr &current = get_cpu_struct()->current_task;
 
     task_ptr t = get_task_throw(pid);
 
-    auto str = klib::string::fill_from_user(reinterpret_cast<const char*>(string), length);
+    auto str = klib::string::fill_from_user(reinterpret_cast<const char *>(string), length);
 
     if (not str.first) {
         return;
@@ -448,7 +457,7 @@ void syscall_set_task_name(u64 pid, u64 /* const char* */ string, u64 length, u6
 
 void syscall_create_port(u64 owner, u64, u64, u64, u64, u64)
 {
-    const task_ptr& task = get_current_task();
+    const task_ptr &task = get_current_task();
 
     // TODO: Check permissions
 
@@ -460,14 +469,14 @@ void syscall_create_port(u64 owner, u64, u64, u64, u64, u64)
         t = get_task_throw(owner);
     }
 
-    syscall_ret_low(task) = SUCCESS;
+    syscall_ret_low(task)  = SUCCESS;
     syscall_ret_high(task) = Port::atomic_create_port(t)->portno;
 }
 
 void syscall_set_interrupt(uint64_t port, u64 intno, u64 flags, u64, u64, u64)
 {
-    auto c = get_cpu_struct();
-    const task_ptr& task = c->current_task;
+    auto c               = get_cpu_struct();
+    const task_ptr &task = c->current_task;
 
     auto port_ptr = Port::atomic_get_port_throw(port);
     if (task != port_ptr->owner.lock()) {
@@ -480,8 +489,8 @@ void syscall_set_interrupt(uint64_t port, u64 intno, u64 flags, u64, u64, u64)
 
 void syscall_complete_interrupt(u64 intno, u64, u64, u64, u64, u64)
 {
-    auto c = get_cpu_struct();
-    const task_ptr& task = c->current_task;
+    auto c               = get_cpu_struct();
+    const task_ptr &task = c->current_task;
 
     c->int_handlers.ack_interrupt(intno, task->task_id);
     syscall_ret_low(task) = SUCCESS;
@@ -489,10 +498,9 @@ void syscall_complete_interrupt(u64 intno, u64, u64, u64, u64, u64)
 
 void syscall_name_port(u64 portnum, u64 /*const char* */ name, u64 length, u64 flags, u64, u64)
 {
-    const task_ptr& task = get_current_task();
+    const task_ptr &task = get_current_task();
 
-
-    auto str = klib::string::fill_from_user(reinterpret_cast<const char*>(name), length);
+    auto str = klib::string::fill_from_user(reinterpret_cast<const char *>(name), length);
     if (not str.first) {
         return;
     }
@@ -502,7 +510,8 @@ void syscall_name_port(u64 portnum, u64 /*const char* */ name, u64 length, u64 f
     Auto_Lock_Scope scope_lock(port->lock);
     Auto_Lock_Scope scope_lock2(global_named_ports.lock);
 
-    klib::shared_ptr<Named_Port_Desc> named_port = global_named_ports.storage.get_copy_or_default(str.second);
+    klib::shared_ptr<Named_Port_Desc> named_port =
+        global_named_ports.storage.get_copy_or_default(str.second);
 
     if (named_port) {
         if (not named_port->parent_port.expired()) {
@@ -510,16 +519,16 @@ void syscall_name_port(u64 portnum, u64 /*const char* */ name, u64 length, u64 f
         }
 
         named_port->parent_port = port;
-        syscall_ret_low(task) = SUCCESS;
+        syscall_ret_low(task)   = SUCCESS;
 
-
-        for (const auto& t : named_port->actions) {
+        for (const auto &t: named_port->actions) {
             t->do_action(port, str.second);
         }
 
         named_port->actions.clear();
     } else {
-        const klib::shared_ptr<Named_Port_Desc> new_desc = klib::make_shared<Named_Port_Desc>(klib::move(str.second), port);
+        const klib::shared_ptr<Named_Port_Desc> new_desc =
+            klib::make_shared<Named_Port_Desc>(klib::move(str.second), port);
 
         global_named_ports.storage.insert({new_desc->name, new_desc});
         syscall_ret_low(task) = SUCCESS;
@@ -528,12 +537,13 @@ void syscall_name_port(u64 portnum, u64 /*const char* */ name, u64 length, u64 f
 
 void syscall_get_port_by_name(u64 /* const char * */ name, u64 length, u64 flags, u64, u64, u64)
 {
-    // --------------------- TODO: shared pointers *will* explode if the TaskDescriptor is deleted -------------------------------------
+    // --------------------- TODO: shared pointers *will* explode if the TaskDescriptor is deleted
+    // -------------------------------------
     constexpr unsigned flag_noblock = 0x01;
 
     task_ptr task = get_current_task();
 
-    auto str = klib::string::fill_from_user(reinterpret_cast<const char*>(name), length);
+    auto str = klib::string::fill_from_user(reinterpret_cast<const char *>(name), length);
     if (not str.first) {
         return;
     }
@@ -555,16 +565,18 @@ void syscall_get_port_by_name(u64 /* const char * */ name, u64 length, u64 flags
             if (not ptr) {
                 throw(Kern_Exception(ERROR_GENERAL, "named port parent is expired"));
             } else {
-                syscall_ret_low(task) = SUCCESS;
-                syscall_ret_high(task) = ptr->portno;                
+                syscall_ret_low(task)  = SUCCESS;
+                syscall_ret_high(task) = ptr->portno;
             }
             return;
         } else {
             if (flags & flag_noblock) {
-                throw(Kern_Exception(ERROR_PORT_DOESNT_EXIST, "requested named port does not exist"));
+                throw(
+                    Kern_Exception(ERROR_PORT_DOESNT_EXIST, "requested named port does not exist"));
                 return;
             } else {
-                named_port->actions.push_back(klib::make_unique<Notify_Task>(task, klib::shared_ptr<Generic_Port>(named_port)));
+                named_port->actions.push_back(klib::make_unique<Notify_Task>(
+                    task, klib::shared_ptr<Generic_Port>(named_port)));
 
                 task->request_repeat_syscall();
                 block_current_task(named_port);
@@ -574,7 +586,8 @@ void syscall_get_port_by_name(u64 /* const char * */ name, u64 length, u64 flags
         if (flags & flag_noblock) {
             throw(Kern_Exception(ERROR_PORT_DOESNT_EXIST, "requested named port does not exist"));
         } else {
-            const klib::shared_ptr<Named_Port_Desc> new_desc = klib::make_shared<Named_Port_Desc>(klib::move(str.second), klib::shared_ptr<Port>(nullptr));
+            const klib::shared_ptr<Named_Port_Desc> new_desc = klib::make_shared<Named_Port_Desc>(
+                klib::move(str.second), klib::shared_ptr<Port>(nullptr));
 
             global_named_ports.storage.insert({new_desc->name, new_desc});
             new_desc->actions.push_back(klib::make_unique<Notify_Task>(task, new_desc));
@@ -587,9 +600,9 @@ void syscall_get_port_by_name(u64 /* const char * */ name, u64 length, u64 flags
 
 void syscall_request_named_port(u64 string_ptr, u64 length, u64 reply_port, u64 flags, u64, u64)
 {
-    const task_ptr& task = get_current_task();
+    const task_ptr &task = get_current_task();
 
-    auto str = klib::string::fill_from_user(reinterpret_cast<char*>(string_ptr), length);
+    auto str = klib::string::fill_from_user(reinterpret_cast<char *>(string_ptr), length);
     if (not str.first) {
         return;
     }
@@ -598,7 +611,8 @@ void syscall_request_named_port(u64 string_ptr, u64 length, u64 reply_port, u64 
 
     Auto_Lock_Scope scope_lock(global_named_ports.lock);
 
-    klib::shared_ptr<Named_Port_Desc> named_port = global_named_ports.storage.get_copy_or_default(str.second);
+    klib::shared_ptr<Named_Port_Desc> named_port =
+        global_named_ports.storage.get_copy_or_default(str.second);
 
     if (named_port) {
         if (not named_port->parent_port.expired()) {
@@ -614,7 +628,8 @@ void syscall_request_named_port(u64 string_ptr, u64 length, u64 reply_port, u64 
             named_port->actions.push_back(klib::make_unique<Send_Message>(port_ptr));
         }
     } else {
-        const klib::shared_ptr<Named_Port_Desc> new_desc = klib::make_shared<Named_Port_Desc>( Named_Port_Desc(klib::move(str.second), nullptr) );
+        const klib::shared_ptr<Named_Port_Desc> new_desc =
+            klib::make_shared<Named_Port_Desc>(Named_Port_Desc(klib::move(str.second), nullptr));
 
         auto it = global_named_ports.storage.insert({new_desc->name, new_desc});
         it.first->second->actions.push_back(klib::make_unique<Send_Message>(port_ptr));
@@ -626,7 +641,7 @@ void syscall_request_named_port(u64 string_ptr, u64 length, u64 reply_port, u64 
 
 void syscall_set_log_port(u64 port, u64 flags, u64, u64, u64, u64)
 {
-    const task_ptr& task = get_current_task();
+    const task_ptr &task = get_current_task();
 
     klib::shared_ptr<Port> port_ptr = Port::atomic_get_port_throw(port);
 
@@ -636,7 +651,7 @@ void syscall_set_log_port(u64 port, u64 flags, u64, u64, u64, u64)
 
 void syscall_create_normal_region(u64 pid, u64 addr_start, u64 size, u64 access, u64, u64)
 {
-    const klib::shared_ptr<TaskDescriptor>& current = get_cpu_struct()->current_task;
+    const klib::shared_ptr<TaskDescriptor> &current = get_cpu_struct()->current_task;
 
     klib::shared_ptr<TaskDescriptor> dest_task = nullptr;
 
@@ -652,13 +667,15 @@ void syscall_create_normal_region(u64 pid, u64 addr_start, u64 size, u64 access,
         return;
     }
 
-    syscall_ret_low(current) = SUCCESS;
-    syscall_ret_high(current) = dest_task->page_table->atomic_create_normal_region(addr_start, size, access & 0x07, access & 0x08, "anonymous region", 0);
+    syscall_ret_low(current)  = SUCCESS;
+    syscall_ret_high(current) = dest_task->page_table->atomic_create_normal_region(
+        addr_start, size, access & 0x07, access & 0x08, "anonymous region", 0);
 }
 
-void syscall_create_phys_map_region(u64 pid, u64 addr_start, u64 size, u64 access, u64 phys_addr, u64)
+void syscall_create_phys_map_region(u64 pid, u64 addr_start, u64 size, u64 access, u64 phys_addr,
+                                    u64)
 {
-    const klib::shared_ptr<TaskDescriptor>& current = get_cpu_struct()->current_task;
+    const klib::shared_ptr<TaskDescriptor> &current = get_cpu_struct()->current_task;
 
     klib::shared_ptr<TaskDescriptor> dest_task = nullptr;
 
@@ -674,16 +691,17 @@ void syscall_create_phys_map_region(u64 pid, u64 addr_start, u64 size, u64 acces
         return;
     }
 
-    syscall_ret_low(current) = SUCCESS;
-    syscall_ret_high(current) = dest_task->page_table->atomic_create_phys_region(addr_start, size, access & 0x07, access & 0x08, klib::string(), phys_addr);
+    syscall_ret_low(current)  = SUCCESS;
+    syscall_ret_high(current) = dest_task->page_table->atomic_create_phys_region(
+        addr_start, size, access & 0x07, access & 0x08, klib::string(), phys_addr);
 }
 
 void syscall_get_page_table(u64 pid, u64, u64, u64, u64, u64)
 {
-    const klib::shared_ptr<TaskDescriptor>& current = get_cpu_struct()->current_task;
-    syscall_ret_low(current) = SUCCESS;
+    const klib::shared_ptr<TaskDescriptor> &current = get_cpu_struct()->current_task;
+    syscall_ret_low(current)                        = SUCCESS;
 
-    klib::shared_ptr<TaskDescriptor> target{};
+    klib::shared_ptr<TaskDescriptor> target {};
 
     if (pid == 0 or current->task_id == pid)
         target = current;
@@ -695,28 +713,29 @@ void syscall_get_page_table(u64 pid, u64, u64, u64, u64, u64)
     if (not target->page_table) {
         throw(Kern_Exception(ERROR_HAS_NO_PAGE_TABLE, "process has no page table"));
     }
-    
+
     syscall_ret_high(current) = target->page_table->id;
 }
 
-// TODO: This should be renamed, as %fs and %gs segments are x86-64 specific thing, used to hold thread-local storage
-// and stuff. Other architectures also store thread and global pointers somewhere, so this syscall is essentially that
+// TODO: This should be renamed, as %fs and %gs segments are x86-64 specific thing, used to hold
+// thread-local storage and stuff. Other architectures also store thread and global pointers
+// somewhere, so this syscall is essentially that
 void syscall_set_segment(u64 pid, u64 segment_type, u64 ptr, u64, u64, u64)
 {
-    const klib::shared_ptr<TaskDescriptor>& current = get_cpu_struct()->current_task;
-    syscall_ret_low(current) = SUCCESS;
+    const klib::shared_ptr<TaskDescriptor> &current = get_cpu_struct()->current_task;
+    syscall_ret_low(current)                        = SUCCESS;
 
-    klib::shared_ptr<TaskDescriptor> target{};
+    klib::shared_ptr<TaskDescriptor> target {};
 
     if (pid == 0 or current->task_id == pid)
         target = current;
     else
         target = get_task_throw(pid);
 
-    #ifdef __x86_64__
+#ifdef __x86_64__
     if (target == current)
         save_segments(target.get());
-    #endif
+#endif
 
     switch (segment_type) {
     case 1:
@@ -729,18 +748,18 @@ void syscall_set_segment(u64 pid, u64 segment_type, u64 ptr, u64, u64, u64)
         throw Kern_Exception(ERROR_OUT_OF_RANGE, "invalid segment in syscall_set_segment");
     }
 
-    #ifdef __x86_64__
+#ifdef __x86_64__
     if (target == current)
-       restore_segments(target.get());
-    #endif
+        restore_segments(target.get());
+#endif
 }
 
 void syscall_get_segment(u64 pid, u64 segment_type, u64, u64, u64, u64)
 {
-    const klib::shared_ptr<TaskDescriptor>& current = get_cpu_struct()->current_task;
-    syscall_ret_low(current) = SUCCESS;
+    const klib::shared_ptr<TaskDescriptor> &current = get_cpu_struct()->current_task;
+    syscall_ret_low(current)                        = SUCCESS;
 
-    klib::shared_ptr<TaskDescriptor> target{};
+    klib::shared_ptr<TaskDescriptor> target {};
     u64 segment = 0;
 
     if (pid == 0 or current->task_id == pid)
@@ -764,23 +783,23 @@ void syscall_get_segment(u64 pid, u64 segment_type, u64, u64, u64, u64)
 
 void syscall_transfer_region(u64 to_page_table, u64 region, u64 dest, u64 flags, u64, u64)
 {
-    const klib::shared_ptr<TaskDescriptor>& current = get_current_task();
-    
+    const klib::shared_ptr<TaskDescriptor> &current = get_current_task();
+
     klib::shared_ptr<Arch_Page_Table> pt = Arch_Page_Table::get_page_table_throw(to_page_table);
 
     bool fixed = flags & 0x08;
 
     const auto result = current->page_table->atomic_transfer_region(pt, region, dest, flags, fixed);
 
-    syscall_ret_low(current) = SUCCESS;
+    syscall_ret_low(current)  = SUCCESS;
     syscall_ret_high(current) = result;
 }
 
 void syscall_asign_page_table(u64 pid, u64 page_table, u64 flags, u64, u64, u64)
 {
-    const klib::shared_ptr<TaskDescriptor>& current = get_current_task();
-    const klib::shared_ptr<TaskDescriptor> dest = get_task_throw(pid);
-    syscall_ret_low(current) = SUCCESS;
+    const klib::shared_ptr<TaskDescriptor> &current = get_current_task();
+    const klib::shared_ptr<TaskDescriptor> dest     = get_task_throw(pid);
+    syscall_ret_low(current)                        = SUCCESS;
 
     switch (flags) {
     case 1: // PAGE_TABLE_CREATE
@@ -788,24 +807,24 @@ void syscall_asign_page_table(u64 pid, u64 page_table, u64 flags, u64, u64, u64)
         syscall_ret_high(current) = dest->page_table->id;
         break;
     case 2: // PAGE_TABLE_ASIGN
-        {
-            klib::shared_ptr<Arch_Page_Table> t;
-            if (page_table == 0 or page_table == current->page_table->id)
-                t = current->page_table;
-            else
-                t = Arch_Page_Table::get_page_table_throw(page_table);
+    {
+        klib::shared_ptr<Arch_Page_Table> t;
+        if (page_table == 0 or page_table == current->page_table->id)
+            t = current->page_table;
+        else
+            t = Arch_Page_Table::get_page_table_throw(page_table);
 
-            dest->atomic_register_page_table(klib::forward<klib::shared_ptr<Arch_Page_Table>>(t));
-            syscall_ret_high(current) = dest->page_table->id;
-            break;
-        }
+        dest->atomic_register_page_table(klib::forward<klib::shared_ptr<Arch_Page_Table>>(t));
+        syscall_ret_high(current) = dest->page_table->id;
+        break;
+    }
     case 3: // PAGE_TABLE_CLONE
-        {
-            klib::shared_ptr<Arch_Page_Table> t = current->page_table->create_clone();
-            dest->atomic_register_page_table(klib::forward<klib::shared_ptr<Arch_Page_Table>>(t));
-            syscall_ret_high(current) = dest->page_table->id;
-            break;
-        }
+    {
+        klib::shared_ptr<Arch_Page_Table> t = current->page_table->create_clone();
+        dest->atomic_register_page_table(klib::forward<klib::shared_ptr<Arch_Page_Table>>(t));
+        syscall_ret_high(current) = dest->page_table->id;
+        break;
+    }
     default:
         throw Kern_Exception(ERROR_NOT_SUPPORTED, "value of flags parameter is not supported");
     }
@@ -813,9 +832,9 @@ void syscall_asign_page_table(u64 pid, u64 page_table, u64 flags, u64, u64, u64)
 
 void syscall_create_mem_object(u64 size_bytes, u64, u64, u64, u64, u64)
 {
-    const auto &current_task = get_current_task();
+    const auto &current_task       = get_current_task();
     const auto &current_page_table = current_task->page_table;
-    syscall_ret_low(current_task) = SUCCESS;
+    syscall_ret_low(current_task)  = SUCCESS;
 
     // TODO: Remove hard-coded page sizes
 
@@ -824,7 +843,7 @@ void syscall_create_mem_object(u64 size_bytes, u64, u64, u64, u64, u64)
         throw Kern_Exception(ERROR_UNALLIGNED, "arguments are not page aligned");
 
     const auto page_size_log = 12; // 2^12 = 4096 bytes
-    const auto size_pages = size_bytes/4096;
+    const auto size_pages    = size_bytes / 4096;
 
     const auto ptr = Mem_Object::create(page_size_log, size_pages);
 
@@ -833,25 +852,29 @@ void syscall_create_mem_object(u64 size_bytes, u64, u64, u64, u64, u64)
     syscall_ret_high(current_task) = ptr->get_id();
 }
 
-void syscall_map_mem_object(u64 page_table_id, u64 addr_start, u64 size_bytes, u64 access, u64 object_id, u64 offset)
+void syscall_map_mem_object(u64 page_table_id, u64 addr_start, u64 size_bytes, u64 access,
+                            u64 object_id, u64 offset)
 {
-    const auto &current_task = get_current_task();
-    auto table = page_table_id == 0 ? current_task->page_table : Arch_Page_Table::get_page_table_throw(page_table_id);
+    const auto &current_task       = get_current_task();
+    auto table                     = page_table_id == 0 ? current_task->page_table
+                                                        : Arch_Page_Table::get_page_table_throw(page_table_id);
     const auto &current_page_table = current_task->page_table;
 
-    if ((size_bytes == 0) or (size_bytes&0xfff != 0))
+    if ((size_bytes == 0) or (size_bytes & 0xfff != 0))
         throw Kern_Exception(ERROR_UNALLIGNED, "size not page aligned");
 
-    if (offset&0xfff)
+    if (offset & 0xfff)
         throw Kern_Exception(ERROR_UNALLIGNED, "offset not page aligned");
 
     const auto object = Mem_Object::get_object(object_id);
 
-    if (object->size_bytes() < offset+size_bytes)
+    if (object->size_bytes() < offset + size_bytes)
         throw Kern_Exception(ERROR_OUT_OF_RANGE, "size is out of range");
 
-    syscall_ret_low(current_task) = SUCCESS;
-    syscall_ret_high(current_task) = table->atomic_create_mem_object_region(addr_start, size_bytes, access&0x7, access&0x8, "object map", object, access&0x10, 0, offset, size_bytes);
+    syscall_ret_low(current_task)  = SUCCESS;
+    syscall_ret_high(current_task) = table->atomic_create_mem_object_region(
+        addr_start, size_bytes, access & 0x7, access & 0x8, "object map", object, access & 0x10, 0,
+        offset, size_bytes);
 }
 
 void syscall_delete_region(u64 tid, u64 region_start, u64, u64, u64, u64)
@@ -859,7 +882,7 @@ void syscall_delete_region(u64 tid, u64 region_start, u64, u64, u64, u64)
     syscall_ret_low(get_current_task()) = SUCCESS;
 
     // 0 is TASK_ID_SELF
-    const auto task = tid == 0 ? get_cpu_struct()->current_task : get_task_throw(tid);
+    const auto task        = tid == 0 ? get_cpu_struct()->current_task : get_task_throw(tid);
     const auto &page_table = task->page_table;
 
     // TODO: Contemplate about adding a check to see if it's inside the kernels address space
@@ -879,9 +902,9 @@ void syscall_remove_from_task_group(u64 pid, u64 group, u64, u64, u64, u64)
     group_ptr->atomic_remove_task(task);
 }
 
-void syscall_create_task_group(u64, u64 , u64 , u64 , u64 , u64)
+void syscall_create_task_group(u64, u64, u64, u64, u64, u64)
 {
-    const auto &current_task = get_current_task();
+    const auto &current_task  = get_current_task();
     const auto new_task_group = TaskGroup::create();
 
     syscall_ret_low(current_task) = SUCCESS;
@@ -896,9 +919,9 @@ void syscall_is_in_task_group(u64 pid, u64 group, u64, u64, u64, u64)
     syscall_ret_low(get_current_task()) = SUCCESS;
 
     const u64 current_pid = pid == 0 ? get_current_task()->task_id : pid;
-    const auto group_ptr = TaskGroup::get_task_group_throw(group);
+    const auto group_ptr  = TaskGroup::get_task_group_throw(group);
 
-    const bool has_task = group_ptr->atomic_has_task(current_pid);
+    const bool has_task                  = group_ptr->atomic_has_task(current_pid);
     syscall_ret_high(get_current_task()) = has_task;
 }
 
@@ -914,20 +937,20 @@ void syscall_add_to_task_group(u64 pid, u64 group, u64, u64, u64, u64)
 }
 
 void syscall_set_notify_mask(u64 task_group, u64 port_id, u64 new_mask, u64, u64, u64)
-{    
+{
     const auto group = TaskGroup::get_task_group_throw(task_group);
-    const auto port = Port::atomic_get_port_throw(port_id);
+    const auto port  = Port::atomic_get_port_throw(port_id);
 
     u64 old_mask = group->atomic_change_notifier_mask(port, new_mask);
 
-    syscall_ret_low(get_current_task()) = SUCCESS;
+    syscall_ret_low(get_current_task())  = SUCCESS;
     syscall_ret_high(get_current_task()) = old_mask;
 }
 
 void syscall_request_timer(u64 port, u64 timeout, u64, u64, u64, u64)
 {
-    const auto port_ptr = Port::atomic_get_port_throw(port);
-    auto c = get_cpu_struct();
+    const auto port_ptr              = Port::atomic_get_port_throw(port);
+    auto c                           = get_cpu_struct();
     syscall_ret_low(c->current_task) = SUCCESS;
 
     u64 core_time_ms = c->ticks_after_ms(timeout);
@@ -937,11 +960,12 @@ void syscall_request_timer(u64 port, u64 timeout, u64, u64, u64, u64)
 void syscall_set_affinity(u64 pid, u64 affinity, u64 flags, u64, u64, u64)
 {
     const auto current_cpu = get_cpu_struct();
-    const auto task = pid == 0 ? current_cpu->current_task : get_task_throw(pid);
-    const auto cpu = affinity == -1UL ? current_cpu->cpu_id + 1 : affinity;
+    const auto task        = pid == 0 ? current_cpu->current_task : get_task_throw(pid);
+    const auto cpu         = affinity == -1UL ? current_cpu->cpu_id + 1 : affinity;
 
     if (task != current_cpu->current_task) {
-        throw Kern_Exception(ERROR_NO_PERMISSION, "setting affinity for another task is not implemented");
+        throw Kern_Exception(ERROR_NO_PERMISSION,
+                             "setting affinity for another task is not implemented");
     }
 
     const auto cpu_count = get_cpu_count();
@@ -950,7 +974,8 @@ void syscall_set_affinity(u64 pid, u64 affinity, u64 flags, u64, u64, u64)
     }
 
     if (cpu == 0 or cpu != (current_cpu->cpu_id + 1)) {
-        throw Kern_Exception(ERROR_NOT_SUPPORTED, "binding affinity to a different CPU is not implemented");
+        throw Kern_Exception(ERROR_NOT_SUPPORTED,
+                             "binding affinity to a different CPU is not implemented");
     }
 
     if (not task->can_be_rebound())

@@ -1,18 +1,17 @@
-#include <deque>
-#include <string>
-#include <list>
 #include <cstring>
+#include <deque>
+#include <list>
 #include <memory>
 #include <pmos/ipc.h>
 #include <pmos/ports.h>
+#include <string>
 
 constexpr size_t buffer_size = 8192;
 std::deque<std::string> log_buffer;
 
 std::list<pmos_port_t> log_output_ports;
 
-pmos_port_t main_port = []() -> auto
-{
+pmos_port_t main_port = []() -> auto {
     ports_request_t request = create_port(TASK_ID_SELF, 0);
     if (request.result != SUCCESS)
         throw std::runtime_error("Failed to create port");
@@ -26,7 +25,8 @@ const std::string log_port_name = "/pmos/logd";
 
 void send_log_port(const std::string &message, pmos_port_t port)
 {
-    std::unique_ptr<char[]> write = std::make_unique<char[]>(sizeof(IPC_Write_Plain) + message.size());
+    std::unique_ptr<char[]> write =
+        std::make_unique<char[]>(sizeof(IPC_Write_Plain) + message.size());
     IPC_Write_Plain *write_msg = reinterpret_cast<IPC_Write_Plain *>(write.get());
 
     write_msg->type = IPC_Write_Plain_NUM;
@@ -38,14 +38,15 @@ void send_log_port(const std::string &message, pmos_port_t port)
     }
 }
 
-void log(std::string message) {
+void log(std::string message)
+{
     log_buffer.push_back(std::move(message));
     if (log_buffer.size() > buffer_size)
         log_buffer.pop_front();
 
     auto &m = log_buffer.back();
 
-    for (auto p = log_output_ports.begin(); p != log_output_ports.end(); ){
+    for (auto p = log_output_ports.begin(); p != log_output_ports.end();) {
         try {
             send_log_port(m, *p);
             p++;
@@ -62,8 +63,8 @@ void register_log_output(const Message_Descriptor &, const IPC_Register_Log_Outp
     log_output_ports.push_back(reg.log_port);
 
     IPC_Log_Output_Reply reply = {
-        .type = IPC_Log_Output_Reply_NUM,
-        .flags = 0,
+        .type        = IPC_Log_Output_Reply_NUM,
+        .flags       = 0,
         .result_code = 0,
     };
 
@@ -75,7 +76,7 @@ void register_log_output(const Message_Descriptor &, const IPC_Register_Log_Outp
     }
 
     try {
-        for (const auto &message : log_buffer) {
+        for (const auto &message: log_buffer) {
             send_log_port(message, reg.log_port);
         }
     } catch (const std::exception &e) {
@@ -87,9 +88,11 @@ void register_log_output(const Message_Descriptor &, const IPC_Register_Log_Outp
 int main()
 {
     set_log_port(main_port, 0);
-    log("\033[1;32m" "Hello from logd! My PID: " + std::to_string(get_task_id()) + "\033[0m\n" "\n");
-
-    
+    log("\033[1;32m"
+        "Hello from logd! My PID: " +
+        std::to_string(get_task_id()) +
+        "\033[0m\n"
+        "\n");
 
     {
         result_t r = name_port(main_port, stdout_port_name.c_str(), stdout_port_name.length(), 0);
@@ -111,12 +114,11 @@ int main()
         }
     }
 
-    while (1)
-    {
+    while (1) {
         Message_Descriptor msg;
         syscall_get_message_info(&msg, main_port, 0);
 
-        std::unique_ptr<char[]> msg_buff = std::make_unique<char[]>(msg.size+1);
+        std::unique_ptr<char[]> msg_buff = std::make_unique<char[]>(msg.size + 1);
 
         get_first_message(msg_buff.get(), 0, main_port);
 
@@ -126,7 +128,7 @@ int main()
             log("Warning: recieved very small message\n");
             break;
         }
-        
+
         IPC_Generic_Msg *ipc_msg = reinterpret_cast<IPC_Generic_Msg *>(msg_buff.get());
 
         switch (ipc_msg->type) {
@@ -145,7 +147,8 @@ int main()
             break;
         }
         default:
-            log("Warning: Unknown message type " + std::to_string(ipc_msg->type) + " from task " + std::to_string(msg.sender) + "\n");
+            log("Warning: Unknown message type " + std::to_string(ipc_msg->type) + " from task " +
+                std::to_string(msg.sender) + "\n");
             break;
         }
     }

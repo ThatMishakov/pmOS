@@ -1,9 +1,10 @@
+#include <ctype.h>
 #include <errno.h>
 #include <limits.h>
 #include <stdlib.h>
-#include <ctype.h>
 
-long long int strtoll(const char *str, char **endptr, int base) {
+long long int strtoll(const char *str, char **endptr, int base)
+{
     // Skip leading whitespace
     while (isspace((unsigned char)*str)) {
         str++;
@@ -39,7 +40,7 @@ long long int strtoll(const char *str, char **endptr, int base) {
 
     // Initialize variables
     long long int result = 0;
-    int overflow = 0;
+    int overflow         = 0;
     int digit;
 
     // Process digits
@@ -66,7 +67,7 @@ long long int strtoll(const char *str, char **endptr, int base) {
     }
 
     // Check for errors
-    if (str == (const char *)endptr) {  // Cast endptr to const char*
+    if (str == (const char *)endptr) { // Cast endptr to const char*
         errno = EINVAL;
         return 0;
     } else if (overflow) {

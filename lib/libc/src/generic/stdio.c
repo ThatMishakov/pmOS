@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -26,19 +26,19 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <stdio.h>
-#include <stdarg.h>
-#include <stdint.h>
-#include <stdio_internal.h>
-#include <pmos/system.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <kernel/errors.h>
-#include <string.h>
-#include <stdlib.h>
 #include <pmos/ipc.h>
 #include <pmos/ports.h>
-#include <errno.h>
+#include <pmos/system.h>
+#include <stdarg.h>
 #include <stdbool.h>
-#include <fcntl.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdio_internal.h>
+#include <stdlib.h>
+#include <string.h>
 
 const char default_terminal_port_name[] = "/pmos/terminald";
 
@@ -48,20 +48,23 @@ const char default_terminal_port_name[] = "/pmos/terminald";
 #define PRINTF_FLAG_HASH   0x08
 #define PRINTF_FLAG_ZERO   0x10
 
-typedef ssize_t (*write_str_f) (void * arg, const char * str, size_t size);
+typedef ssize_t (*write_str_f)(void *arg, const char *str, size_t size);
 
 // Defined in filesystem.c
-ssize_t __write_internal(long int fd, const void * buf, size_t count, size_t offset, bool inc_offset);
+ssize_t __write_internal(long int fd, const void *buf, size_t count, size_t offset,
+                         bool inc_offset);
 ssize_t __read_internal(long int fd, void *buf, size_t count, bool should_seek, size_t offset);
 off_t __lseek_internal(long int fd, off_t offset, int whence);
 int __close_internal(long int fd);
 
-int __check_fd_internal(long int fd, int posix_mode) {
+int __check_fd_internal(long int fd, int posix_mode)
+{
     // TODO
     return 0;
 }
 
-static int to_posix_mode(const char * mode) {
+static int to_posix_mode(const char *mode)
+{
     int posix_mode = 0;
     if (mode[0] == 'r') {
         posix_mode |= O_RDONLY;
@@ -85,12 +88,13 @@ static int to_posix_mode(const char * mode) {
 }
 
 static FILE *open_files = NULL;
-int file_lock = 0;
+int file_lock           = 0;
 
-void __close_files_on_exit() {
-    FILE * file = open_files;
+void __close_files_on_exit()
+{
+    FILE *file = open_files;
     while (file) {
-        FILE * next = file->next;
+        FILE *next = file->next;
         fclose(file);
         file = next;
     }
@@ -100,8 +104,9 @@ FILE *stdin;
 FILE *stdout;
 FILE *stderr;
 
-void __init_stdio() {
-    stdin = fdopen(0, "r");
+void __init_stdio()
+{
+    stdin  = fdopen(0, "r");
     stdout = fdopen(1, "w");
     stderr = fdopen(2, "w");
 
@@ -113,28 +118,28 @@ void __init_stdio() {
 }
 
 void __pause();
-#define LOCK(v) \
+#define LOCK(v)                                   \
     while (__sync_lock_test_and_set(v, 1) != 0) { \
-        while (*v) \
-            __pause();}
-#define UNLOCK_FILE(v) \
-    __sync_lock_release(v);
+        while (*v)                                \
+            __pause();                            \
+    }
+#define UNLOCK_FILE(v) __sync_lock_release(v);
 
-FILE * fdopen(int fd, const char * mode)
+FILE *fdopen(int fd, const char *mode)
 {
-    FILE * file = malloc(sizeof *file);
+    FILE *file = malloc(sizeof *file);
     if (!file)
         goto fail;
-    
+
     memset(file, 0, sizeof(*file));
     file->fd = fd;
-    
-    file->buf_size = BUFSIZ;
+
+    file->buf_size  = BUFSIZ;
     file->buf_flags = _FILE_FLAG_FLUSHNEWLINE;
     // The buffer is gonna be malloc'ed on the first access
 
     int posix_mode = to_posix_mode(mode);
-    file->mode = posix_mode;
+    file->mode     = posix_mode;
 
     int ret = __check_fd_internal(fd, posix_mode);
     if (ret < 0) {
@@ -155,14 +160,14 @@ fail:
     return NULL;
 }
 
-FILE *fopen(const char * filename, const char * mode)
+FILE *fopen(const char *filename, const char *mode)
 {
     int fd = -1;
-    fd = open(filename, to_posix_mode(mode), 0);
+    fd     = open(filename, to_posix_mode(mode), 0);
     if (fd < 0)
         goto fail;
 
-    FILE * f = fdopen(fd, mode);
+    FILE *f = fdopen(fd, mode);
     if (!f)
         goto fail;
 
@@ -174,24 +179,18 @@ fail:
     return NULL;
 }
 
-void flockfile(FILE * file)
-{
-    LOCK(&file->lock);
-}
+void flockfile(FILE *file) { LOCK(&file->lock); }
 
-void funlockfile(FILE * file)
-{
-    UNLOCK_FILE(&file->lock);
-}
+void funlockfile(FILE *file) { UNLOCK_FILE(&file->lock); }
 
-int setvbuf(FILE * stream, char * buffer, int mode, size_t size)
+int setvbuf(FILE *stream, char *buffer, int mode, size_t size)
 {
     if (mode == _IONBF) {
-        stream->buf = NULL;
+        stream->buf      = NULL;
         stream->buf_size = 0;
     } else if (mode == _IOLBF || mode == _IOFBF) {
-        stream->buf = buffer;
-        stream->buf_size = size == 0 ? BUFSIZ : size;
+        stream->buf       = buffer;
+        stream->buf_size  = size == 0 ? BUFSIZ : size;
         stream->buf_flags = mode == _IOLBF ? _FILE_FLAG_FLUSHNEWLINE : 0;
     } else {
         errno = EINVAL;
@@ -201,21 +200,22 @@ int setvbuf(FILE * stream, char * buffer, int mode, size_t size)
     return 0;
 }
 
-static ssize_t flush_buffer(FILE * stream)
+static ssize_t flush_buffer(FILE *stream)
 {
     if (stream->buf_pos == 0)
         return 0;
 
     ssize_t ret = __write_internal(stream->fd, stream->buf, stream->buf_pos, 0, true);
-    if (ret < 0) return ret;
+    if (ret < 0)
+        return ret;
     stream->buf_pos = 0;
     return 0;
 }
 
-static ssize_t write_file(void * arg, const char * str, size_t size)
+static ssize_t write_file(void *arg, const char *str, size_t size)
 {
-    FILE * stream = (FILE*)arg;
-    size_t t = size;
+    FILE *stream = (FILE *)arg;
+    size_t t     = size;
 
     // Callee is expected to lock the file
 
@@ -244,55 +244,58 @@ static ssize_t write_file(void * arg, const char * str, size_t size)
 
     size_t i = size;
     for (; i > 0; i--) {
-        if (str[i-1] == '\n' && stream->buf_flags & _FILE_FLAG_FLUSHNEWLINE) {
+        if (str[i - 1] == '\n' && stream->buf_flags & _FILE_FLAG_FLUSHNEWLINE) {
             ssize_t ret = flush_buffer(stream);
-            if (ret < 0) return ret;
+            if (ret < 0)
+                return ret;
 
             ret = __write_internal(stream->fd, str, i, 0, true);
-            if (ret < 0) return ret;
+            if (ret < 0)
+                return ret;
             str += i;
             size -= i;
             break;
         }
     }
-    
+
     memcpy(stream->buf + stream->buf_pos, str, size);
     stream->buf_pos += size;
     return t;
 }
 
-static int flush_file(FILE * stream)
+static int flush_file(FILE *stream)
 {
     ssize_t ret = flush_buffer(stream);
-    if (ret < 0) return ret;
+    if (ret < 0)
+        return ret;
     return 0;
 }
 
 struct string_descriptor {
-    char * buffer;
+    char *buffer;
     size_t size;
     size_t pos;
     char flags;
 };
 
-static ssize_t write_string(void * arg, const char * str, size_t size)
+static ssize_t write_string(void *arg, const char *str, size_t size)
 {
-    struct string_descriptor * stream = (struct string_descriptor*)arg;
-    size_t max_size = stream->size - stream->pos;
-    size_t size_s = size > max_size ? max_size : size;
+    struct string_descriptor *stream = (struct string_descriptor *)arg;
+    size_t max_size                  = stream->size - stream->pos;
+    size_t size_s                    = size > max_size ? max_size : size;
     memcpy(&stream->buffer[stream->pos], str, size_s);
     stream->pos += size_s;
     return size_s;
 }
 
-static int int_to_string(long int n, uint8_t base, char* str)
+static int int_to_string(long int n, uint8_t base, char *str)
 {
     char temp_str[65];
-    int length = 0;
+    int length    = 0;
     char negative = 0;
     if (n < 0) {
         negative = 1;
-        str[0] = '-';
+        str[0]   = '-';
         n *= -1;
     }
     if (n == 0) {
@@ -300,24 +303,25 @@ static int int_to_string(long int n, uint8_t base, char* str)
         ++length;
     }
     while (n != 0) {
-        int tmp = n%base;
+        int tmp = n % base;
         n /= base;
         if (tmp < 10)
             temp_str[length] = tmp + '0';
         else
             temp_str[length] = tmp + 'A' - 10;
-        
+
         ++length;
     }
     for (int i = 0; i < length; ++i) {
         str[i + negative] = temp_str[length - i - 1];
     }
-    if (negative) ++length;
+    if (negative)
+        ++length;
     str[length] = 0;
     return length;
 }
 
-static int uint_to_string(unsigned long int n, uint8_t base, char* str, int hex_base)
+static int uint_to_string(unsigned long int n, uint8_t base, char *str, int hex_base)
 {
     char temp_str[65];
     int length = 0;
@@ -326,13 +330,13 @@ static int uint_to_string(unsigned long int n, uint8_t base, char* str, int hex_
         ++length;
     }
     while (n != 0) {
-        unsigned int tmp = n%base;
+        unsigned int tmp = n % base;
         n /= base;
         if (tmp > 9)
             temp_str[length] = tmp + hex_base - 10;
         else
             temp_str[length] = tmp + '0';
-        
+
         ++length;
     }
     for (int i = 0; i < length; ++i) {
@@ -342,15 +346,13 @@ static int uint_to_string(unsigned long int n, uint8_t base, char* str, int hex_
     return length;
 }
 
-static inline int max_(int a, int b)
-{
-    return a > b ? a : b;
-}
+static inline int max_(int a, int b) { return a > b ? a : b; }
 
-static ssize_t __va_printf_closure(write_str_f puts, void * puts_arg, va_list arg, const char * format)
+static ssize_t __va_printf_closure(write_str_f puts, void *puts_arg, va_list arg,
+                                   const char *format)
 {
     size_t chars_transmitted = 0;
-    ssize_t buffdiff = 0;
+    ssize_t buffdiff         = 0;
 
     int i = 0;
     while (format && format[i] != '\0') {
@@ -360,23 +362,24 @@ static ssize_t __va_printf_closure(write_str_f puts, void * puts_arg, va_list ar
         } else {
             if (buffdiff > 0) {
                 ssize_t p = puts(puts_arg, &format[i - buffdiff], buffdiff);
-                if (p < 0) return p;
+                if (p < 0)
+                    return p;
                 chars_transmitted += buffdiff;
                 buffdiff = 0;
             }
 
             ++i;
-            char flags = 0;
+            char flags              = 0;
             unsigned long int width = 0;
-            int precision = 0;
-            char rpt = 1;
-            int is_long = 0;
-            int hex_base = 'a';
+            int precision           = 0;
+            char rpt                = 1;
+            int is_long             = 0;
+            int hex_base            = 'a';
             while (rpt)
                 switch (format[i]) {
                 case '%': {
                     buffdiff = 1;
-                    
+
                     rpt = 0;
                     ++i;
                     break;
@@ -401,7 +404,7 @@ static ssize_t __va_printf_closure(write_str_f puts, void * puts_arg, va_list ar
                     flags |= PRINTF_FLAG_ZERO;
                     ++i;
                     break;
-                
+
                 case '1':
                 case '2':
                 case '3':
@@ -411,8 +414,8 @@ static ssize_t __va_printf_closure(write_str_f puts, void * puts_arg, va_list ar
                 case '7':
                 case '8':
                 case '9': { // TODO: Broken!
-                    char* endptr = NULL;
-                    width = strtoul(&(format[i]), &endptr, 10);
+                    char *endptr = NULL;
+                    width        = strtoul(&(format[i]), &endptr, 10);
                     i += &(format[i]) - endptr;
                     break;
                 }
@@ -425,14 +428,16 @@ static ssize_t __va_printf_closure(write_str_f puts, void * puts_arg, va_list ar
                     // TODO
                     break;
                 case 'i':
-                case 'd':{                    
+                case 'd': {
                     long t;
-                    if (is_long) t = va_arg(arg, long);
-                    else t = va_arg(arg, int);
+                    if (is_long)
+                        t = va_arg(arg, long);
+                    else
+                        t = va_arg(arg, int);
 
-                    char* s_buff = malloc(max_(24, width+1));
-                    int j = int_to_string(t, 10, s_buff);
-                    j = puts(puts_arg, s_buff, j);
+                    char *s_buff = malloc(max_(24, width + 1));
+                    int j        = int_to_string(t, 10, s_buff);
+                    j            = puts(puts_arg, s_buff, j);
                     if (j < 0) {
                         chars_transmitted = j;
                         goto end;
@@ -442,14 +447,16 @@ static ssize_t __va_printf_closure(write_str_f puts, void * puts_arg, va_list ar
                     ++i;
                     break;
                 }
-                case 'u': {                    
+                case 'u': {
                     unsigned long t;
-                    if (is_long) t = va_arg(arg, unsigned long);
-                    else t = va_arg(arg, unsigned int);
+                    if (is_long)
+                        t = va_arg(arg, unsigned long);
+                    else
+                        t = va_arg(arg, unsigned int);
 
-                    char *s_buff = malloc(max_(24, width+1));
-                    int j = uint_to_string(t, 10, s_buff, hex_base);
-                    j = puts(puts_arg, s_buff, j);
+                    char *s_buff = malloc(max_(24, width + 1));
+                    int j        = uint_to_string(t, 10, s_buff, hex_base);
+                    j            = puts(puts_arg, s_buff, j);
                     if (j < 0) {
                         chars_transmitted = j;
                         goto end;
@@ -461,12 +468,14 @@ static ssize_t __va_printf_closure(write_str_f puts, void * puts_arg, va_list ar
                 }
                 case 'o': {
                     unsigned long t;
-                    if (is_long) t = va_arg(arg, unsigned long);
-                    else t = va_arg(arg, unsigned int);
+                    if (is_long)
+                        t = va_arg(arg, unsigned long);
+                    else
+                        t = va_arg(arg, unsigned int);
 
-                    char *s_buff = malloc(max_(24, width+1));
-                    int j = uint_to_string(t, 8, s_buff, hex_base);
-                    j = puts(puts_arg, s_buff, j);
+                    char *s_buff = malloc(max_(24, width + 1));
+                    int j        = uint_to_string(t, 8, s_buff, hex_base);
+                    j            = puts(puts_arg, s_buff, j);
                     if (j < 0) {
                         chars_transmitted = j;
                         goto end;
@@ -481,12 +490,14 @@ static ssize_t __va_printf_closure(write_str_f puts, void * puts_arg, va_list ar
                     __attribute__((fallthrough));
                 case 'x': {
                     unsigned long t;
-                    if (is_long) t = va_arg(arg, unsigned long);
-                    else t = va_arg(arg, unsigned int);
+                    if (is_long)
+                        t = va_arg(arg, unsigned long);
+                    else
+                        t = va_arg(arg, unsigned int);
 
-                    char* s_buff = malloc(max_(24, width+1));
-                    int j = uint_to_string(t, 16, s_buff, hex_base);
-                    j = puts(puts_arg, s_buff, j);
+                    char *s_buff = malloc(max_(24, width + 1));
+                    int j        = uint_to_string(t, 16, s_buff, hex_base);
+                    j            = puts(puts_arg, s_buff, j);
                     if (j < 0) {
                         chars_transmitted = j;
                         goto end;
@@ -498,18 +509,19 @@ static ssize_t __va_printf_closure(write_str_f puts, void * puts_arg, va_list ar
                 }
                 case 'c': {
                     int c = va_arg(arg, int);
-                    int k = puts(puts_arg, (char*)&c, 1);
-                    if (k < 0) return k;
+                    int k = puts(puts_arg, (char *)&c, 1);
+                    if (k < 0)
+                        return k;
                     chars_transmitted += 1;
-                    
+
                     rpt = 0;
                     ++i;
                     break;
                 }
                 case 's': {
-                    const char * str = va_arg(arg, const char*);
-                    str = str ? str : "(null)";
-                    size_t size = width;
+                    const char *str = va_arg(arg, const char *);
+                    str             = str ? str : "(null)";
+                    size_t size     = width;
                     if (size == 0)
                         size = strlen(str);
                     ssize_t k = puts(puts_arg, str, size);
@@ -522,11 +534,11 @@ static ssize_t __va_printf_closure(write_str_f puts, void * puts_arg, va_list ar
                     ++i;
                     break;
                 }
-                //case 'n':  // TODO!
-                //    *va_arg(arg, int*) = j;
-                //    ++i;
-                //    rpt = 0;
-                //    break;
+                // case 'n':  // TODO!
+                //     *va_arg(arg, int*) = j;
+                //     ++i;
+                //     rpt = 0;
+                //     break;
                 case 'h':
                     is_long = 0;
                     ++i;
@@ -545,36 +557,33 @@ static ssize_t __va_printf_closure(write_str_f puts, void * puts_arg, va_list ar
 
 end:
     if (/* chars_transmitted >= 0 && */ buffdiff > 0) {
-            int p = puts(puts_arg, &format[i - buffdiff], buffdiff);
-            if (p < 0) return p;
-            chars_transmitted += buffdiff;
+        int p = puts(puts_arg, &format[i - buffdiff], buffdiff);
+        if (p < 0)
+            return p;
+        chars_transmitted += buffdiff;
     }
     return chars_transmitted;
 }
 
-int fputc ( int character, FILE * stream )
+int fputc(int character, FILE *stream)
 {
     LOCK(&stream->lock);
-    int t = write_file(stream, (char*)&character, 1);
+    int t = write_file(stream, (char *)&character, 1);
     UNLOCK_FILE(&stream->lock);
     return t;
 }
 
-int putchar(int c)
-{
-    return fputc(c, stdout);
-}
+int putchar(int c) { return fputc(c, stdout); }
 
-int putc(int c, FILE * stream)
-{
-    return fputc(c, stream);
-}
+int putc(int c, FILE *stream) { return fputc(c, stream); }
 
-int fseek(FILE *stream, long offset, int origin) {
+int fseek(FILE *stream, long offset, int origin)
+{
     return __lseek_internal((long int)stream, offset, origin);
 }
 
-int fclose(FILE *stream) {
+int fclose(FILE *stream)
+{
     LOCK(&file_lock);
     if (stream->prev)
         stream->prev->next = stream->next;
@@ -585,7 +594,7 @@ int fclose(FILE *stream) {
     UNLOCK_FILE(&file_lock);
     fflush(stream);
     int t = __close_internal(stream->fd);
-    
+
     if (stream->buf_flags & _FILE_FLAG_MYBUF)
         free(stream->buf);
     free(stream);
@@ -593,7 +602,8 @@ int fclose(FILE *stream) {
     return t;
 }
 
-long ftell(FILE *stream) {
+long ftell(FILE *stream)
+{
     errno = ENOSYS;
     return -1;
 
@@ -602,24 +612,21 @@ long ftell(FILE *stream) {
 
 const char endline[] = "\n";
 
-int fputs(const char* string, FILE* stream)
+int fputs(const char *string, FILE *stream)
 {
     LOCK(&stream->lock);
     size_t size = strlen(string);
-    int t = write_file(stream, string, size) + write_file(stream, endline, strlen(endline));
+    int t       = write_file(stream, string, size) + write_file(stream, endline, strlen(endline));
     UNLOCK_FILE(&stream->lock);
     return t;
 }
 
-int puts(const char* str)
-{
-    return fputs(str, stdout);
-}
+int puts(const char *str) { return fputs(str, stdout); }
 
-int fprintf(FILE * stream, const char * format, ...)
+int fprintf(FILE *stream, const char *format, ...)
 {
     va_list arg;
-    va_start(arg,format);
+    va_start(arg, format);
 
     LOCK(&stream->lock);
     int t = __va_printf_closure(write_file, stream, arg, format);
@@ -630,10 +637,10 @@ int fprintf(FILE * stream, const char * format, ...)
     return t;
 }
 
-int sprintf(char * str, const char * format, ...)
+int sprintf(char *str, const char *format, ...)
 {
     va_list arg;
-    va_start(arg,format);
+    va_start(arg, format);
 
     struct string_descriptor desc = {str, -1, 0, 0};
 
@@ -644,10 +651,10 @@ int sprintf(char * str, const char * format, ...)
     return ret;
 }
 
-int snprintf(char * str, size_t size, const char * format, ...)
+int snprintf(char *str, size_t size, const char *format, ...)
 {
     va_list arg;
-    va_start(arg,format);
+    va_start(arg, format);
 
     struct string_descriptor desc = {str, size, 0, 0};
 
@@ -658,13 +665,13 @@ int snprintf(char * str, size_t size, const char * format, ...)
     return ret;
 }
 
-size_t fread ( void * ptr, size_t size, size_t count, FILE * stream )
+size_t fread(void *ptr, size_t size, size_t count, FILE *stream)
 {
     // Not implemented
     errno = ENOSYS;
     return -1;
 
-    return __read_internal((long int)stream, ptr, size*count, true, 0);
+    return __read_internal((long int)stream, ptr, size * count, true, 0);
 }
 
 int getc_unlocked(FILE *stream)
@@ -673,37 +680,37 @@ int getc_unlocked(FILE *stream)
     errno = ENOSYS;
     return -1;
 
-    char c = 0;
+    char c  = 0;
     int ret = fread(&c, 1, 1, stream);
-    if (ret < 0) return ret;
+    if (ret < 0)
+        return ret;
     return c;
 }
 
-int getchar_unlocked(void)
-{
-    return getc_unlocked(stdin);
-}
+int getchar_unlocked(void) { return getc_unlocked(stdin); }
 
 int getc(FILE *stream)
 {
-    char c = 0;
+    char c  = 0;
     int ret = fread(&c, 1, 1, stream);
-    if (ret < 0) return ret;
+    if (ret < 0)
+        return ret;
     return c;
 }
 
 int fgetc(FILE *stream)
 {
-    char c = 0;
+    char c  = 0;
     int ret = fread(&c, 1, 1, stream);
-    if (ret < 0) return ret;
+    if (ret < 0)
+        return ret;
     return c;
 }
 
-int printf(const char* format, ...)
+int printf(const char *format, ...)
 {
     va_list arg;
-    va_start(arg,format);
+    va_start(arg, format);
 
     LOCK(&stdout->lock);
     int t = __va_printf_closure(write_file, stdout, arg, format);
@@ -722,15 +729,16 @@ int vsnprintf(char *str, size_t size, const char *format, va_list ap)
     return ret;
 }
 
-size_t fwrite ( const void * ptr, size_t size, size_t count, FILE * stream )
+size_t fwrite(const void *ptr, size_t size, size_t count, FILE *stream)
 {
     LOCK(&stream->lock);
-    size_t i = write_file(stream, ptr, size*count);
+    size_t i = write_file(stream, ptr, size * count);
     UNLOCK_FILE(&stream->lock);
     return i;
 }
 
-void perror(const char *message) {
+void perror(const char *message)
+{
     if (message != NULL && message[0] != '\0') {
         fprintf(stderr, "%s: ", message);
     }
@@ -738,7 +746,7 @@ void perror(const char *message) {
     fprintf(stderr, "%s\n", strerror(errno));
 }
 
-int fflush(FILE * stream)
+int fflush(FILE *stream)
 {
     LOCK(&stream->lock);
     int i = flush_file(stream);

@@ -1,8 +1,8 @@
 #pragma once
+#include <cstdint>
 #include <memory>
 #include <set>
 #include <unordered_map>
-#include <cstdint>
 
 class Pipe;
 struct FsConsumer {

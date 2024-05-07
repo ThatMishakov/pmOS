@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -29,24 +29,23 @@
 #ifndef __MATH_H
 #define __MATH_H
 
-#define INFINITY (__builtin_inff ())
-#define HUGE_VAL ( __builtin_huge_val ())
+#define INFINITY  (__builtin_inff())
+#define HUGE_VAL  (__builtin_huge_val())
 #define HUGE_VALF (__builtin_huge_valf())
 #define HUGE_VALL (__builtin_huge_vall())
-#define NAN (__builtin_nanf (""))
+#define NAN       (__builtin_nanf(""))
 
-#define FP_NORMAL 0
-#define FP_INFINITE 1
-#define FP_ZERO 2
+#define FP_NORMAL    0
+#define FP_INFINITE  1
+#define FP_ZERO      2
 #define FP_SUBNORMAL 3
-#define FP_NAN 4
+#define FP_NAN       4
 
-#define MATH_ERRNO 1
+#define MATH_ERRNO     1
 #define MATH_ERREXCEPT 2
 
 typedef float float_t;
 typedef double double_t;
-
 
 #if defined(__cplusplus)
 extern "C" {
@@ -277,14 +276,14 @@ double fma(double x, double y, double z);
 float fmaf(float x, float y, float z);
 long double fmal(long double x, long double y, long double z);
 
-#define isgreater(x, y) (__builtin_isgreater(x,y))
+#define isgreater(x, y)      (__builtin_isgreater(x, y))
 #define isgreaterequal(x, y) (__builtin_isgreaterequal(x, y))
 
-#define isless(x, y) (__builtin_isless(x, y))
+#define isless(x, y)      (__builtin_isless(x, y))
 #define islessequal(x, y) (__builtin_islessequal(x, y))
 
 #define islessgreater(x, y) (__builtin_islessgreater(x, y))
-#define isunordered(x, y) (__builtin_isunordered(x, y))
+#define isunordered(x, y)   (__builtin_isunordered(x, y))
 
 #define isnan(x) (__builtin_isnan(x))
 

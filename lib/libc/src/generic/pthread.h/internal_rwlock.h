@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -39,8 +39,8 @@
 // how quickly threads can terminate, and it's better to have something simple with
 // a guarantee that destructors could be called even when everything is on fire.
 
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 // https://en.wikipedia.org/wiki/Readers%E2%80%93writer_lock#Using_two_mutexes
 struct internal_rwlock {
@@ -49,7 +49,10 @@ struct internal_rwlock {
     uint64_t readers_count;
 };
 
-#define __INTERNAL_RWLOCK_INITIALIZER { 0, 0, 0 }
+#define __INTERNAL_RWLOCK_INITIALIZER \
+    {                                 \
+        0, 0, 0                       \
+    }
 
 void __internal_rwlock_spinlock(uint32_t *lock);
 void __internal_rwlock_spinunlock(uint32_t *lock);

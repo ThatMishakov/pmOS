@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -27,26 +27,27 @@
  */
 
 #include "args.h"
+
 #include <string.h>
 
-void push_arg(Args_List_Header* header, const char* param)
+void push_arg(Args_List_Header *header, const char *param)
 {
-    args_list_node* p;
+    args_list_node *p;
 
     if (header->p == 0) {
-        header->p = (args_list_node*)sizeof(Args_List_Header);
-        p = (args_list_node*)((uint64_t)header + (uint64_t)header->p);        
+        header->p = (args_list_node *)sizeof(Args_List_Header);
+        p         = (args_list_node *)((uint64_t)header + (uint64_t)header->p);
     } else {
-        p = (args_list_node*)((uint64_t)header + (uint64_t)header->p);
+        p = (args_list_node *)((uint64_t)header + (uint64_t)header->p);
         while (p->next != 0) {
-            p = (args_list_node*)((uint64_t)p + (uint64_t)p->next);
+            p = (args_list_node *)((uint64_t)p + (uint64_t)p->next);
         }
         uint64_t size_alligned = (p->size & ~0b111) + ((p->size & 0b111) ? 0b1000 : 0);
-        p->next = (args_list_node*)(sizeof(args_list_node) + size_alligned);
-        p = (args_list_node*)((uint64_t)p + (uint64_t)p->next);
+        p->next                = (args_list_node *)(sizeof(args_list_node) + size_alligned);
+        p                      = (args_list_node *)((uint64_t)p + (uint64_t)p->next);
     }
     p->size = strlen(param);
-    memcpy((char*)((uint64_t)(p)+sizeof(args_list_node)), param, p->size);
+    memcpy((char *)((uint64_t)(p) + sizeof(args_list_node)), param, p->size);
     p->next = 0;
     ++header->size;
 }

@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -29,8 +29,9 @@
 #ifndef FILESYSTEM_FILE_H
 #define FILESYSTEM_FILE_H
 
-#include <stdint.h>
 #include "filesystem_struct.h"
+
+#include <stdint.h>
 
 extern read_func __file_read;
 extern write_func __file_write;
@@ -51,7 +52,7 @@ extern const struct Filesystem_Adaptor __file_adaptor;
 /// @param descriptor File descriptor to be filled in
 /// @param consumer_id ID of the consumer for which the file is being opened
 /// @return 0 on success, -1 on error setting errno
-int __open_file(const char * path, int flags, mode_t mode, void * file_data, uint64_t consumer_id);
+int __open_file(const char *path, int flags, mode_t mode, void *file_data, uint64_t consumer_id);
 
 /// @brief Creates an anonymous pipe
 /// @param file_data File descriptors to be filled in

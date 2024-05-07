@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -30,60 +30,41 @@
 #include <stddef.h>
 namespace klib
 {
-    
-template<class T, size_t N>
-struct array {
+
+template<class T, size_t N> struct array {
     T elem[N];
 
     using size_type = size_t;
 
-    constexpr T& operator[](size_t p)
-    {
-        return elem[p];
-    }
+    constexpr T &operator[](size_t p) { return elem[p]; }
 
-    constexpr const T& operator[](size_t p) const
-    {
-        return elem[p];
-    }
+    constexpr const T &operator[](size_t p) const { return elem[p]; }
 
-    constexpr size_type size() const noexcept
-    {
-        return N;
-    }
+    constexpr size_type size() const noexcept { return N; }
 
-    class iterator {
+    class iterator
+    {
         friend array;
+
     private:
-        T* ptr;
-        constexpr iterator(T* n): ptr(n) {};
+        T *ptr;
+        constexpr iterator(T *n): ptr(n) {};
 
     public:
-        iterator& operator++() {
+        iterator &operator++()
+        {
             ptr++;
             return *this;
         }
 
-        T& operator*()
-        {
-            return *ptr;
-        }
+        T &operator*() { return *ptr; }
 
-        bool operator==(iterator k)
-        {
-            return this->ptr == k.ptr;
-        }
+        bool operator==(iterator k) { return this->ptr == k.ptr; }
     };
 
-    constexpr iterator begin() noexcept
-    {
-        return &elem[0];
-    }
+    constexpr iterator begin() noexcept { return &elem[0]; }
 
-    constexpr iterator end() noexcept
-    {
-        return &elem[N];
-    }
+    constexpr iterator end() noexcept { return &elem[N]; }
 };
 
 } // namespace klib

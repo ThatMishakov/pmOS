@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -26,18 +26,19 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <pmos/ipc.h>
-#include <stdio.h>
-#include <pmos/ports.h>
 #include "ports.h"
-#include <string.h>
-#include <pmos/helpers.h>
-#include <stdlib.h>
 
-pmos_port_t main_port = 0;
+#include <pmos/helpers.h>
+#include <pmos/ipc.h>
+#include <pmos/ports.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+pmos_port_t main_port     = 0;
 pmos_port_t devicesd_port = 0;
 
-const char* ps2d_port_name = "/pmos/ps2d";
+const char *ps2d_port_name = "/pmos/ps2d";
 
 int main()
 {
@@ -62,10 +63,12 @@ int main()
     }
 
     {
-        static const char* devicesd_port_name = "/pmos/devicesd";
-        ports_request_t devicesd_port_req = get_port_by_name(devicesd_port_name, strlen(devicesd_port_name), 0);
+        static const char *devicesd_port_name = "/pmos/devicesd";
+        ports_request_t devicesd_port_req =
+            get_port_by_name(devicesd_port_name, strlen(devicesd_port_name), 0);
         if (devicesd_port_req.result != SUCCESS) {
-            printf("[i8042] Warning: Could not get devicesd port. Error %li\n", devicesd_port_req.result);
+            printf("[i8042] Warning: Could not get devicesd port. Error %li\n",
+                   devicesd_port_req.result);
             return 0;
         }
         devicesd_port = devicesd_port_req.port;
@@ -75,8 +78,8 @@ int main()
         result_t result;
 
         Message_Descriptor desc = {};
-        unsigned char* message = NULL;
-        result = get_message(&desc, &message, main_port);
+        unsigned char *message  = NULL;
+        result                  = get_message(&desc, &message, main_port);
 
         if (result != SUCCESS) {
             fprintf(stderr, "[PS2d] Error: Could not get message\n");
@@ -87,11 +90,11 @@ int main()
             free(message);
         }
 
-
         switch (IPC_TYPE(message)) {
-        case IPC_Timer_Reply_NUM:{
+        case IPC_Timer_Reply_NUM: {
             if (desc.size < sizeof(IPC_Timer_Reply)) {
-                fprintf(stderr, "[PS2d] Warning: Recieved IPC_Timer_Reply of unexpected size %lx\n", desc.size);
+                fprintf(stderr, "[PS2d] Warning: Recieved IPC_Timer_Reply of unexpected size %lx\n",
+                        desc.size);
                 break;
             }
 
@@ -100,11 +103,13 @@ int main()
             react_timer(tmr);
 
             break;
-            }
-        
+        }
+
         case IPC_PS2_Reg_Port_NUM: {
             if (desc.size < sizeof(IPC_PS2_Reg_Port)) {
-                fprintf(stderr, "[PS2d] Warning: Recieved IPC_PS2_Reg_Port of unexpected size %lx\n", desc.size);
+                fprintf(stderr,
+                        "[PS2d] Warning: Recieved IPC_PS2_Reg_Port of unexpected size %lx\n",
+                        desc.size);
                 break;
             }
 
@@ -113,14 +118,16 @@ int main()
             bool result = register_port(d, desc.sender);
 
             if (result)
-                printf("[PS2d] Info: Task %li registered port %li\n", desc.sender, d->internal_id);        
+                printf("[PS2d] Info: Task %li registered port %li\n", desc.sender, d->internal_id);
 
             break;
-            }
+        }
 
         case IPC_PS2_Notify_Data_NUM: {
             if (desc.size < sizeof(IPC_PS2_Notify_Data)) {
-                fprintf(stderr, "[PS2d] Warning: Recieved IPC_PS2_Notify_Data of unexpected size %lx\n", desc.size);
+                fprintf(stderr,
+                        "[PS2d] Warning: Recieved IPC_PS2_Notify_Data of unexpected size %lx\n",
+                        desc.size);
                 break;
             }
 
@@ -129,10 +136,11 @@ int main()
             react_message(d, desc.sender, desc.size);
 
             break;
-            }
+        }
 
         default:
-            fprintf(stderr, "[PS2d] Warning: Recieved message of unknown type %x\n", IPC_TYPE(message));
+            fprintf(stderr, "[PS2d] Warning: Recieved message of unknown type %x\n",
+                    IPC_TYPE(message));
             break;
         }
 

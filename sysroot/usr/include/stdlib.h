@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -28,10 +28,10 @@
 
 #ifndef _STDLIB_H
 #define _STDLIB_H 1
-#include <stddef.h>
 #include <limits.h>
-#include <sys/wait.h>
 #include <math.h>
+#include <stddef.h>
+#include <sys/wait.h>
 
 #define __DECLARE_SIZE_T
 #define __DECLARE_WCHAR_T
@@ -44,7 +44,6 @@
 /// Unsuccessful termination for exit()
 #define EXIT_FAILURE 1
 
-
 /// Maximum value returned by rand()
 #define RAND_MAX 32767
 
@@ -56,22 +55,22 @@ extern "C" {
 #endif
 
 typedef struct {
-  int quot;
-  int rem;
+    int quot;
+    int rem;
 } div_t;
 
 typedef struct {
-  long int quot;
-  long int rem;
+    long int quot;
+    long int rem;
 } ldiv_t;
 
 typedef struct {
-  long long quot;
-  long long rem;
+    long long quot;
+    long long rem;
 } lldiv_t;
 
 /* String conversion */
-double atof (const char* str);
+double atof(const char *str);
 
 int atoi(const char *nptr);
 long int atol(const char *nptr);
@@ -83,15 +82,16 @@ long long int atoll(const char *nptr);
  * The `strtod` function converts the initial portion of the string pointed to by `str`
  * to a `double` representation. It stops when the first unrecognized character is encountered.
  * If `endptr` is not a null pointer, the function stores the address of the first invalid character
- * in `*endptr`. If `str` does not point to a valid floating-point number, or if no digits were found,
- * `strtod` returns 0.0. If the converted value is outside the range of representable values for `double`,
- * the result is undefined, and `HUGE_VAL` or `HUGE_VALF` may be returned. The function recognizes
- * an optional initial whitespace, an optional sign (+ or -), an optional prefix (0x for hexadecimal
- * numbers), decimal digits, and an optional decimal point.
+ * in `*endptr`. If `str` does not point to a valid floating-point number, or if no digits were
+ * found, `strtod` returns 0.0. If the converted value is outside the range of representable values
+ * for `double`, the result is undefined, and `HUGE_VAL` or `HUGE_VALF` may be returned. The
+ * function recognizes an optional initial whitespace, an optional sign (+ or -), an optional prefix
+ * (0x for hexadecimal numbers), decimal digits, and an optional decimal point.
  *
  * @param str Pointer to the null-terminated string to be converted.
  * @param endptr Pointer to a pointer that will be updated to point to the first invalid character.
- * @return The converted double-precision floating-point number, or 0.0 if no valid digits were found.
+ * @return The converted double-precision floating-point number, or 0.0 if no valid digits were
+ * found.
  */
 double strtod(const char *str, char **endptr);
 
@@ -106,7 +106,7 @@ double strtod(const char *str, char **endptr);
  *               the address of the first character after the numerical value.
  * @return The converted floating-point number.
  */
-float strtof(const char* nptr, char** endptr);
+float strtof(const char *nptr, char **endptr);
 
 /**
  * @brief Converts a string to a long double.
@@ -119,38 +119,25 @@ float strtof(const char* nptr, char** endptr);
  *               the address of the first character after the numerical value.
  * @return The converted long double value.
  */
-long double strtold(const char* nptr, char** endptr);
+long double strtold(const char *nptr, char **endptr);
 
-long int strtol(
-                const char * nptr,
-                char ** endptr,
-                int base);
-long long int strtoll(
-                const char * nptr,
-                char ** endptr,
-                int base);
-unsigned long int strtoul(
-                const char * nptr,
-                char ** endptr,
-                int base);
-unsigned long long int strtoull(
-                const char * nptr,
-                char ** endptr,
-                int base);
+long int strtol(const char *nptr, char **endptr, int base);
+long long int strtoll(const char *nptr, char **endptr, int base);
+unsigned long int strtoul(const char *nptr, char **endptr, int base);
+unsigned long long int strtoull(const char *nptr, char **endptr, int base);
 
 /* Pseudo-random */
-int rand (void);
+int rand(void);
 
-void srand (unsigned int seed);
-
+void srand(unsigned int seed);
 
 #ifdef __STDC_HOSTED__
 
 /* Dynamic memory */
-void* calloc (size_t num, size_t size);
+void *calloc(size_t num, size_t size);
 void *malloc(size_t size);
-void free(void*);
-void* realloc (void* ptr, size_t size);
+void free(void *);
+void *realloc(void *ptr, size_t size);
 
 /**
  * @brief Terminate the program abnormally.
@@ -210,7 +197,7 @@ char *getenv(const char *name);
  *
  * @note          The `setenv` function is typically used to modify or create
  *                environment variables within a process.
- * 
+ *
  * @note          NULL may be passed as the `value` parameter to remove the
  *                variable from the environment. This is not a standard POSIX
  *                feature and should be avoided in portable applications.
@@ -243,9 +230,7 @@ int system(const char *string);
 void *bsearch(const void *key, const void *base, size_t nel, size_t width,
               int (*cmp)(const void *keyval, const void *datum));
 
-
-void qsort(void *base, size_t nmemb, size_t size,
-            int (*compar)(const void *, const void *));
+void qsort(void *base, size_t nmemb, size_t size, int (*compar)(const void *, const void *));
 
 int abs(int j);
 long int labs(long int j);
@@ -255,17 +240,11 @@ ldiv_t ldiv(long int numer, long int denom);
 lldiv_t lldiv(long long int numer, long long int denom);
 
 int mblen(const char *s, size_t n);
-int mbtowc(wchar_t * pwc,
-            const char * s,
-            size_t n);
+int mbtowc(wchar_t *pwc, const char *s, size_t n);
 int wctomb(char *s, wchar_t wc);
 
-size_t mbstowcs(wchar_t * pwcs,
-                const char * s,
-                size_t n);
-size_t wcstombs(char * s,
-                const wchar_t * pwcs,
-                size_t n);
+size_t mbstowcs(wchar_t *pwcs, const char *s, size_t n);
+size_t wcstombs(char *s, const wchar_t *pwcs, size_t n);
 
 /**
  * @brief Create a unique temporary filename.
@@ -285,48 +264,46 @@ size_t wcstombs(char * s,
  * @return A pointer to the modified `template` with a unique filename, or NULL
  * if an error occurs.
  */
-char *mktemp(char * t);
+char *mktemp(char *t);
 // template can't be used as a variable name as it's a C++ keyword
 
-void *aligned_alloc( size_t alignment, size_t size );
+void *aligned_alloc(size_t alignment, size_t size);
 
-long strtol_l(const char * nptr, char ** endptr, int base, locale_t loc);
-long long strtoll_l(const char * nptr, char ** endptr, int base, locale_t loc);
-float strtof_l(const char * nptr, char ** endptr, locale_t loc);
-double strtod_l(const char * nptr, char ** endptr, locale_t loc);
-long double strtold_l(const char * nptr, char ** endptr, locale_t loc);
-unsigned long strtoul_l(const char * nptr, char ** endptr, int base, locale_t loc);
-unsigned long long strtoull_l(const char * nptr, char ** endptr, int base, locale_t loc);
+long strtol_l(const char *nptr, char **endptr, int base, locale_t loc);
+long long strtoll_l(const char *nptr, char **endptr, int base, locale_t loc);
+float strtof_l(const char *nptr, char **endptr, locale_t loc);
+double strtod_l(const char *nptr, char **endptr, locale_t loc);
+long double strtold_l(const char *nptr, char **endptr, locale_t loc);
+unsigned long strtoul_l(const char *nptr, char **endptr, int base, locale_t loc);
+unsigned long long strtoull_l(const char *nptr, char **endptr, int base, locale_t loc);
 
-
-long          a64l(const char *);
-double        drand48(void);
-char         *ecvt(double, int, int *_RESTRICT, int *_RESTRICT);
-double        erand48(unsigned short[3]);
-char         *fcvt(double, int, int *_RESTRICT, int *_RESTRICT);
-char         *gcvt(double, int, char *);
-int           getsubopt(char **, char *const *, char **);
-int           grantpt(int);
-char         *initstate(unsigned, char *, size_t);
-long          jrand48(unsigned short[3]);
-char         *l64a(long);
-void          lcong48(unsigned short[7]);
-long          lrand48(void);
-char         *mktemp(char *);
-long          mrand48(void);
-long          nrand48(unsigned short[3]);
-int           posix_memalign(void **, size_t, size_t);
-int           posix_openpt(int);
-char         *ptsname(int);
-int           putenv(char *);
-int           rand_r(unsigned *);
-long          random(void);
-char         *realpath(const char *_RESTRICT, char *_RESTRICT);
+long a64l(const char *);
+double drand48(void);
+char *ecvt(double, int, int *_RESTRICT, int *_RESTRICT);
+double erand48(unsigned short[3]);
+char *fcvt(double, int, int *_RESTRICT, int *_RESTRICT);
+char *gcvt(double, int, char *);
+int getsubopt(char **, char *const *, char **);
+int grantpt(int);
+char *initstate(unsigned, char *, size_t);
+long jrand48(unsigned short[3]);
+char *l64a(long);
+void lcong48(unsigned short[7]);
+long lrand48(void);
+char *mktemp(char *);
+long mrand48(void);
+long nrand48(unsigned short[3]);
+int posix_memalign(void **, size_t, size_t);
+int posix_openpt(int);
+char *ptsname(int);
+int putenv(char *);
+int rand_r(unsigned *);
+long random(void);
+char *realpath(const char *_RESTRICT, char *_RESTRICT);
 unsigned short seed48(unsigned short[3]);
-int           setenv(const char *, const char *, int);
-void          setkey(const char *);
-char         *setstate(const char *);
-
+int setenv(const char *, const char *, int);
+void setkey(const char *);
+char *setstate(const char *);
 
 #endif
 

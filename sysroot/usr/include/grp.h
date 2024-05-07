@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,29 +35,27 @@
 
 struct group {
     char *gr_name; //< Group name.
-    gid_t gr_gid; //< Numerical group ID.
+    gid_t gr_gid;  //< Numerical group ID.
     char **gr_mem; //< Pointer to a null-terminated array of character pointers to member names.
 };
 
 #ifdef __STDC_HOSTED__
 
-#ifdef __cplusplus
+    #ifdef __cplusplus
 extern "C" {
-#endif
+    #endif
 
-void           endgrent(void);
-struct group  *getgrent(void);
-struct group  *getgrgid(gid_t);
-int            getgrgid_r(gid_t, struct group *, char *,
-                   size_t, struct group **);
-struct group  *getgrnam(const char *);
-int            getgrnam_r(const char *, struct group *, char *,
-                   size_t , struct group **);
-void           setgrent(void);
+void endgrent(void);
+struct group *getgrent(void);
+struct group *getgrgid(gid_t);
+int getgrgid_r(gid_t, struct group *, char *, size_t, struct group **);
+struct group *getgrnam(const char *);
+int getgrnam_r(const char *, struct group *, char *, size_t, struct group **);
+void setgrent(void);
 
-#ifdef __cplusplus
+    #ifdef __cplusplus
 } /* extern "C" */
-#endif
+    #endif
 
 #endif // __STDC_HOSTED__
 

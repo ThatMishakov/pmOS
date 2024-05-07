@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -37,7 +37,7 @@ extern "C" {
 
 /**
  * @brief Generic system call function.
- * 
+ *
  * This is a generic system call function, present for compatibility with
  * other UNIX-like operating systems and libraries that expect it. It is
  * not used by the standard library. Since the System-V ABI specifies
@@ -47,7 +47,7 @@ extern "C" {
  * ignores the second value, and only returns the result code. If the result is
  * wanted (and for better compatibility in general), the native pmos_syscall()
  * function should be used instead.
- * 
+ *
  * @param number System call number
  * @param ... System call arguments. The number and types of arguments
  *            depend on the system call, and could be up to 6 64-bit values.

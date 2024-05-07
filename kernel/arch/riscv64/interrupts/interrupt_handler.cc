@@ -1,12 +1,14 @@
 #include "interrupt_handler.hh"
+
+#include "plic.hh"
+
+#include <assert.h>
 #include <exceptions.hh>
 #include <kernel/errors.h>
 #include <processes/tasks.hh>
-#include "plic.hh"
 #include <sched/sched.hh>
-#include <assert.h>
 
-void Interrupt_Handler_Table::add_handler(u64 interrupt_number, const klib::shared_ptr<Port>& port)
+void Interrupt_Handler_Table::add_handler(u64 interrupt_number, const klib::shared_ptr<Port> &port)
 {
     auto c = get_cpu_struct();
     assert(this == &c->int_handlers);
@@ -27,11 +29,11 @@ void Interrupt_Handler_Table::add_handler(u64 interrupt_number, const klib::shar
     if (interrupt_number >= plic_interrupt_limit())
         throw Kern_Exception(ERROR_GENERAL, "Invalid interrupt number");
 
-    auto handler = klib::make_unique<Interrupt_Handler>();
+    auto handler              = klib::make_unique<Interrupt_Handler>();
     handler->interrupt_number = interrupt_number;
-    handler->port = port;
-    handler->task_id = owner->task_id;
-    handler->active = true;
+    handler->port             = port;
+    handler->task_id          = owner->task_id;
+    handler->active           = true;
 
     auto handler_ptr = handler.get();
 
@@ -73,7 +75,7 @@ Interrupt_Handler *Interrupt_Handler_Table::get_handler(u64 interrupt_number)
 size_t Interrupt_Handler_Table::get_handler_index(u64 interrupt_number)
 {
     // Binary search
-    size_t left = 0;
+    size_t left  = 0;
     size_t right = handlers.size();
     while (left < right) {
         size_t mid = (left + right) / 2;

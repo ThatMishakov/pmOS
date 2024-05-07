@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -43,15 +43,17 @@ typedef unsigned long locale_t;
 /**
  * @brief Copy memory area with limited length, stopping after a specific character is found.
  *
- * The `memccpy` function copies bytes from the source memory area `src` to the destination memory area `dest`,
- * up to a maximum of `n` bytes. The copying stops and the function returns a pointer to the byte immediately
- * following the copied character `c` if it is found in `src`, or `NULL` if `c` is not found within `n` bytes.
+ * The `memccpy` function copies bytes from the source memory area `src` to the destination memory
+ * area `dest`, up to a maximum of `n` bytes. The copying stops and the function returns a pointer
+ * to the byte immediately following the copied character `c` if it is found in `src`, or `NULL` if
+ * `c` is not found within `n` bytes.
  *
  * @param dest Pointer to the destination memory area.
  * @param src Pointer to the source memory area.
  * @param c The character to search for.
  * @param n The maximum number of bytes to copy.
- * @return A pointer to the byte immediately following the copied character `c` if found, or `NULL` otherwise.
+ * @return A pointer to the byte immediately following the copied character `c` if found, or `NULL`
+ * otherwise.
  */
 void *memccpy(void *dest, const void *src, int c, size_t n);
 
@@ -97,7 +99,6 @@ int memcmp(const void *s1, const void *s2, size_t n);
  */
 void *memcpy(void *dest, const void *src, size_t n);
 
-
 /**
  * @brief Copy a block of memory, handling possible overlap.
  *
@@ -110,7 +111,6 @@ void *memcpy(void *dest, const void *src, size_t n);
  * @return A pointer to the destination memory area (`dest`).
  */
 void *memmove(void *dest, const void *src, size_t n);
-
 
 /**
  * @brief Fill a block of memory with a specified value.
@@ -133,26 +133,26 @@ void *memset(void *s, int c, size_t n);
  *
  * @param dest Pointer to the destination string.
  * @param src Pointer to the source string.
- * @return A pointer to the terminating null character of the copied string (`dest` + length of `src`).
+ * @return A pointer to the terminating null character of the copied string (`dest` + length of
+ * `src`).
  */
 char *stpcpy(char *dest, const char *src);
-
 
 /**
  * @brief Copy a limited length of a string and return a pointer to the terminating null character.
  *
  * The `stpncpy` function copies at most `n` characters from the string `src` to the memory
  * location `dest` and returns a pointer to the terminating null character of the copied string.
- * If the length of `src` is less than `n`, the remaining characters in `dest` are filled with null bytes.
+ * If the length of `src` is less than `n`, the remaining characters in `dest` are filled with null
+ * bytes.
  *
  * @param dest Pointer to the destination string.
  * @param src Pointer to the source string.
  * @param n The maximum number of characters to copy.
- * @return A pointer to the terminating null character of the copied string (`dest` + length of `src`
- *         or `n`, whichever is smaller).
+ * @return A pointer to the terminating null character of the copied string (`dest` + length of
+ * `src` or `n`, whichever is smaller).
  */
 char *stpncpy(char *dest, const char *src, size_t n);
-
 
 /**
  * @brief Concatenate two strings.
@@ -180,7 +180,6 @@ char *strcat(char *dest, const char *src);
  */
 char *strchr(const char *s, int c);
 
-
 /**
  * @brief Compare two strings.
  *
@@ -194,7 +193,6 @@ char *strchr(const char *s, int c);
  *         less than, equal to, or greater than `s2`, respectively.
  */
 int strcmp(const char *s1, const char *s2);
-
 
 /**
  * @brief Compare two strings using the locale-specific collation order.
@@ -228,7 +226,6 @@ int strcoll(const char *s1, const char *s2);
  */
 int strcoll_l(const char *s1, const char *s2, locale_t locale);
 
-
 /**
  * @brief Copy a string.
  *
@@ -242,9 +239,9 @@ int strcoll_l(const char *s1, const char *s2, locale_t locale);
  */
 char *strcpy(char *dest, const char *src);
 
-
 /**
- * @brief Calculate the length of the initial segment of a string that does not contain any characters from a given set.
+ * @brief Calculate the length of the initial segment of a string that does not contain any
+ * characters from a given set.
  *
  * The `strcspn` function calculates the length of the initial segment of the string `str`
  * that consists of characters not found in the string `reject`. It returns the number of
@@ -256,7 +253,6 @@ char *strcpy(char *dest, const char *src);
  * @return The length of the initial segment of `str` without any characters from `reject`.
  */
 size_t strcspn(const char *str, const char *reject);
-
 
 /**
  * @brief Duplicate a string.
@@ -280,7 +276,6 @@ char *strdup(const char *s);
  */
 char *strerror(int errnum);
 
-
 /**
  * @brief Get the locale-specific error message string corresponding to an error number.
  *
@@ -293,7 +288,6 @@ char *strerror(int errnum);
  * @return A pointer to the locale-specific error message string.
  */
 char *strerror_l(int errnum, locale_t locale);
-
 
 /**
  * @brief Get the error message string corresponding to an error number, thread-safe version.
@@ -309,7 +303,6 @@ char *strerror_l(int errnum, locale_t locale);
  */
 char *strerror_r(int errnum, char *buf, size_t buflen);
 
-
 /**
  * @brief Get the length of a string.
  *
@@ -320,7 +313,6 @@ char *strerror_r(int errnum, char *buf, size_t buflen);
  * @return The length of the string.
  */
 size_t strlen(const char *s);
-
 
 /**
  * @brief Concatenate a limited number of characters from a string to another string.
@@ -351,7 +343,6 @@ char *strncat(char *dest, const char *src, size_t n);
  */
 int strncmp(const char *s1, const char *s2, size_t n);
 
-
 /**
  * @brief Copy a limited number of characters from a string to another string.
  *
@@ -368,7 +359,6 @@ int strncmp(const char *s1, const char *s2, size_t n);
  */
 char *strncpy(char *dest, const char *src, size_t n);
 
-
 /**
  * @brief Duplicate a string up to a specified length.
  *
@@ -384,7 +374,6 @@ char *strncpy(char *dest, const char *src, size_t n);
  */
 char *strndup(const char *s, size_t n);
 
-
 /**
  * @brief Get the length of a string up to a specified maximum length.
  *
@@ -398,7 +387,6 @@ char *strndup(const char *s, size_t n);
  * @return The length of the string up to the first null character or the maximum length specified.
  */
 size_t strnlen(const char *s, size_t maxlen);
-
 
 /**
  * @brief Locate the first occurrence of any character from a set in a string.
@@ -414,7 +402,6 @@ size_t strnlen(const char *s, size_t maxlen);
  */
 char *strpbrk(const char *str, const char *charset);
 
-
 /**
  * @brief Locate the last occurrence of a character in a string.
  *
@@ -426,7 +413,6 @@ char *strpbrk(const char *str, const char *charset);
  * @return A pointer to the last occurrence of `c` in `s`, or `NULL` if `c` is not found.
  */
 char *strrchr(const char *s, int c);
-
 
 /**
  * @brief Get the string representation of a signal number.
@@ -440,9 +426,9 @@ char *strrchr(const char *s, int c);
  */
 char *strsignal(int signum);
 
-
 /**
- * @brief Get the length of the initial segment of a string that consists of only certain characters.
+ * @brief Get the length of the initial segment of a string that consists of only certain
+ * characters.
  *
  * The `strspn` function calculates the length of the initial segment of the string `str`
  * that consists entirely of characters found in the string `accept`. It returns the number
@@ -454,19 +440,19 @@ char *strsignal(int signum);
  */
 size_t strspn(const char *str, const char *accept);
 
-
 /**
  * @brief Find the first occurrence of a substring within a string.
  *
  * The `strstr` function finds the first occurrence of the substring `s2` within the string `s1`.
- * It returns a pointer to the beginning of the located substring or a null pointer if the substring is not found.
+ * It returns a pointer to the beginning of the located substring or a null pointer if the substring
+ * is not found.
  *
  * @param s1 Pointer to the string to search in.
  * @param s2 Pointer to the substring to search for.
- * @return A pointer to the beginning of the located substring, or `NULL` if the substring is not found.
+ * @return A pointer to the beginning of the located substring, or `NULL` if the substring is not
+ * found.
  */
 char *strstr(const char *s1, const char *s2);
-
 
 /**
  * @brief Split a string into tokens.
@@ -499,7 +485,6 @@ char *strtok(char *str, const char *delim);
  */
 char *strtok_r(char *str, const char *delim, char **saveptr);
 
-
 #ifdef __STDC_WANT_LIB_EXT1__
 typedef rsize_t size_t;
 /**
@@ -525,15 +510,14 @@ char *strtok_s(char *s1, rsize_t *s1max, const char *s2, char **ptr);
  *
  * The `strsep` function is similar to `strtok` and breaks the string `str` into a series of tokens
  * using the delimiter characters specified in `delim`. However, unlike `strtok`, `strsep` does not
- * require the caller to provide context for subsequent calls. Each call to `strsep` returns the next
- * token found in `str`, and updates `str` to point to the remaining portion of the string.
+ * require the caller to provide context for subsequent calls. Each call to `strsep` returns the
+ * next token found in `str`, and updates `str` to point to the remaining portion of the string.
  *
  * @param str The string to be tokenized.
  * @param delim The set of delimiter characters.
  * @return A pointer to the next token found in `str`, or NULL if there are no more tokens.
  */
 char *strsep(char **str, const char *delim);
-
 
 /**
  * @brief Transform a string according to the current locale.
@@ -551,7 +535,6 @@ char *strsep(char **str, const char *delim);
  *         that would have been written to `dest` if there were no size restrictions.
  */
 size_t strxfrm(char *dest, const char *src, size_t n);
-
 
 /**
  * @brief Transform a string according to a specified locale.

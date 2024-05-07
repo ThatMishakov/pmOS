@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -34,13 +34,13 @@ struct source_location {
     u32 line;
     u32 column;
 };
- 
+
 struct type_descriptor {
     u16 kind;
     u16 info;
     char name[1];
 };
- 
+
 struct type_mismatch_info {
     source_location location;
     type_descriptor *type;
@@ -49,12 +49,12 @@ struct type_mismatch_info {
 };
 
 struct type_mismatch_data_v1 {
-	struct source_location location;
-	struct type_descriptor *type;
-	unsigned char log_alignment;
-	unsigned char type_check_kind;
+    struct source_location location;
+    struct type_descriptor *type;
+    unsigned char log_alignment;
+    unsigned char type_check_kind;
 };
- 
+
 struct out_of_bounds_info {
     source_location location;
     type_descriptor left_type;
@@ -62,6 +62,6 @@ struct out_of_bounds_info {
 };
 
 struct overflow_data {
-	struct source_location location;
-	struct type_descriptor *type;
+    struct source_location location;
+    struct type_descriptor *type;
 };

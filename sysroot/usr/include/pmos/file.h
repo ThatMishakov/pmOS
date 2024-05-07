@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -41,16 +41,20 @@ struct pmOS_File {
 
 /**
  * @brief Opens a file
- * 
- * This function sends a request to the VFS server and opens a file descriptor. The file is an abstract type which, among other things,
- * might point to a file, folder, block device or others. '\' is used as a file deliminer.
- * 
- * @param desc File descriptor to be filled. If the execution is not successfull, it shall not change.
- * @param name Name of the file. This string can contain any characters and '\0' is not considered to be a string terminator.
+ *
+ * This function sends a request to the VFS server and opens a file descriptor. The file is an
+ * abstract type which, among other things, might point to a file, folder, block device or others.
+ * '\' is used as a file deliminer.
+ *
+ * @param desc File descriptor to be filled. If the execution is not successfull, it shall not
+ * change.
+ * @param name Name of the file. This string can contain any characters and '\0' is not considered
+ * to be a string terminator.
  * @param length Length of the string.
  * @param flags Flags for opening the file.
- * @return Result of the execution. SUCCESS macro indicates that the operation was successfull. Otherwise, the returned number indicates the error number.
+ * @return Result of the execution. SUCCESS macro indicates that the operation was successfull.
+ * Otherwise, the returned number indicates the error number.
  */
-result_t pmos_open_file(pmOS_File *desc, const unsigned char * name, size_t length, uint64_t flags);
+result_t pmos_open_file(pmOS_File *desc, const unsigned char *name, size_t length, uint64_t flags);
 
 #endif

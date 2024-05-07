@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -26,25 +26,27 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <pthread.h>
-#include <pmos/memory.h>
 #include <errno.h>
+#include <pmos/memory.h>
 #include <pmos/tls.h>
+#include <pthread.h>
 
 // Defined in libc/src/pthread/threads.c
 extern uint64_t __active_threads;
 
 // Defined in libc/src/libc_helpers.c
-extern struct uthread * __prepare_tls(void * stack_top, size_t stack_size);
-extern void __release_tls(struct uthread * u);
+extern struct uthread *__prepare_tls(void *stack_top, size_t stack_size);
+extern void __release_tls(struct uthread *u);
 
 // Defined in ./pthread_entry.S
-extern void __pthread_entry_point(void *(*start_routine) (void *), void * arg) __attribute__((noreturn));
+extern void __pthread_entry_point(void *(*start_routine)(void *), void *arg)
+    __attribute__((noreturn));
 
 // Defined in libc/src/filesystem.c
 extern int __share_fs_data(uint64_t tid);
 
-int pthread_create(pthread_t * thread, const pthread_attr_t * attr, void *(*start_routine) (void *), void * arg)
+int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_routine)(void *),
+                   void *arg)
 {
     // Create new task
     syscall_r r = syscall_new_process(3);
@@ -55,7 +57,8 @@ int pthread_create(pthread_t * thread, const pthread_attr_t * attr, void *(*star
     uint64_t thread_task_id = r.value;
 
     // Assign a page table
-    page_table_req_ret_t thread_table = asign_page_table(thread_task_id, PAGE_TABLE_SELF, PAGE_TABLE_ASIGN);
+    page_table_req_ret_t thread_table =
+        asign_page_table(thread_task_id, PAGE_TABLE_SELF, PAGE_TABLE_ASIGN);
     if (thread_table.result != 0) {
         // TODO: Kill process
         errno = -thread_table.result;
@@ -73,7 +76,7 @@ int pthread_create(pthread_t * thread, const pthread_attr_t * attr, void *(*star
     // When the thread exits, the kernel will remove the task from the group
 
     // Create stack
-    size_t stack_size = 0x200000; // 2 MiB; TODO: Respect attr
+    size_t stack_size       = 0x200000; // 2 MiB; TODO: Respect attr
     mem_request_ret_t stack = create_normal_region(0, NULL, 0x200000, 1 | 2);
     if (stack.result != SUCCESS) {
         // TODO: Kill process
@@ -81,9 +84,10 @@ int pthread_create(pthread_t * thread, const pthread_attr_t * attr, void *(*star
         return -1;
     }
     uintptr_t stack_top = (uintptr_t)stack.virt_addr + stack_size;
-    // The stack is not freed by release_tls() since the thread goes stackless and releases it itself when it exits
-    // after releasing the TLS (when pthread is not detached; since it can't be done without the stack).
-    // The kernel does not manage stacks, so on error, the stack needs to be freed manually.
+    // The stack is not freed by release_tls() since the thread goes stackless and releases it
+    // itself when it exits after releasing the TLS (when pthread is not detached; since it can't be
+    // done without the stack). The kernel does not manage stacks, so on error, the stack needs to
+    // be freed manually.
 
     // Set the stack
     syscall_r r_result = init_stack(thread_task_id, (void *)stack_top);
@@ -116,7 +120,8 @@ int pthread_create(pthread_t * thread, const pthread_attr_t * attr, void *(*star
     __atomic_fetch_add(&__active_threads, 1, __ATOMIC_SEQ_CST);
 
     // Fire the task!
-    s_result = syscall_start_process(thread_task_id, (u64)__pthread_entry_point, (u64)start_routine, (u64)arg, 0);
+    s_result = syscall_start_process(thread_task_id, (u64)__pthread_entry_point, (u64)start_routine,
+                                     (u64)arg, 0);
     if (s_result != 0) {
         __atomic_fetch_sub(&__active_threads, 1, __ATOMIC_SEQ_CST);
         release_region(TASK_ID_SELF, stack.virt_addr);
@@ -132,9 +137,6 @@ int pthread_create(pthread_t * thread, const pthread_attr_t * attr, void *(*star
     return 0;
 }
 
-extern void __pthread_exit(void * retval) __attribute__((noreturn));
+extern void __pthread_exit(void *retval) __attribute__((noreturn));
 
-__attribute__((noreturn)) void pthread_exit(void * retval)
-{
-    __pthread_exit(retval);
-}
+__attribute__((noreturn)) void pthread_exit(void *retval) { __pthread_exit(retval); }

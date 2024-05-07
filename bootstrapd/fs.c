@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -27,24 +27,26 @@
  */
 
 #include "fs.h"
+
 #include "io.h"
-#include <stdlib.h>
-#include <string.h>
+#include "task_list.h"
+
+#include <alloca.h>
+#include <assert.h>
 #include <filesystem/errors.h>
 #include <filesystem/types.h>
-#include <pmos/system.h>
 #include <pmos/ports.h>
-#include <assert.h>
-#include <alloca.h>
-#include "task_list.h"
+#include <pmos/system.h>
+#include <stdlib.h>
+#include <string.h>
 
 struct fs_data filesystem_data = {0};
 
 extern uint64_t loader_port;
 
-uint64_t filesystem_id = 0;
+uint64_t filesystem_id   = 0;
 uint64_t filesystem_port = 0;
-uint64_t mountpoint_id = 0;
+uint64_t mountpoint_id   = 0;
 
 int init_consumer_open_files(struct fs_consumer *consumer)
 {
@@ -58,7 +60,7 @@ int init_consumer_open_files(struct fs_consumer *consumer)
     if (consumer->open_files == NULL)
         return -1;
 
-    consumer->open_files_size = OPEN_FILE_BUCKET_START_SIZE;
+    consumer->open_files_size  = OPEN_FILE_BUCKET_START_SIZE;
     consumer->open_files_count = 0;
 
     return 0;
@@ -88,7 +90,8 @@ int insert_open_file(struct fs_consumer *consumer, struct open_file *file)
     // Grow hash table if needed according to load factor
     if (consumer->open_files_count >= consumer->open_files_size * OPEN_FILE_LOAD_FACTOR) {
         size_t new_size = consumer->open_files_size * OPEN_FILE_GROWTH_FACTOR;
-        struct open_file_bucket **new_buckets = malloc(sizeof(struct open_file_bucket *) * new_size);
+        struct open_file_bucket **new_buckets =
+            malloc(sizeof(struct open_file_bucket *) * new_size);
         if (new_buckets == NULL) {
             free(bucket);
             return -1;
@@ -102,8 +105,8 @@ int insert_open_file(struct fs_consumer *consumer, struct open_file *file)
             while (bucket != NULL) {
                 struct open_file_bucket *next = bucket->next;
 
-                size_t new_index = bucket->file->file_id % new_size;
-                bucket->next = new_buckets[new_index];
+                size_t new_index       = bucket->file->file_id % new_size;
+                bucket->next           = new_buckets[new_index];
                 new_buckets[new_index] = bucket;
 
                 bucket = next;
@@ -111,13 +114,13 @@ int insert_open_file(struct fs_consumer *consumer, struct open_file *file)
         }
 
         free(consumer->open_files);
-        consumer->open_files = new_buckets;
+        consumer->open_files      = new_buckets;
         consumer->open_files_size = new_size;
     }
 
     // Insert bucket into hash table
-    size_t index = file->file_id % consumer->open_files_size;
-    bucket->next = consumer->open_files[index];
+    size_t index                = file->file_id % consumer->open_files_size;
+    bucket->next                = consumer->open_files[index];
     consumer->open_files[index] = bucket;
 
     consumer->open_files_count++;
@@ -133,9 +136,9 @@ int remove_open_file(struct fs_consumer *consumer, struct open_file *file)
     if (consumer->open_files == NULL)
         return -1;
 
-    size_t index = file->file_id % consumer->open_files_size;
+    size_t index                    = file->file_id % consumer->open_files_size;
     struct open_file_bucket *bucket = consumer->open_files[index];
-    struct open_file_bucket *prev = NULL;
+    struct open_file_bucket *prev   = NULL;
 
     while (bucket != NULL) {
         if (bucket->file == file) {
@@ -152,9 +155,11 @@ int remove_open_file(struct fs_consumer *consumer, struct open_file *file)
             consumer->open_files_count--;
 
             // Check if we need to shrink the hash table
-            if (consumer->open_files_count < consumer->open_files_size * OPEN_FILE_SHRINK_FACTOR && consumer->open_files_size > OPEN_FILE_BUCKET_START_SIZE) {
+            if (consumer->open_files_count < consumer->open_files_size * OPEN_FILE_SHRINK_FACTOR &&
+                consumer->open_files_size > OPEN_FILE_BUCKET_START_SIZE) {
                 size_t new_size = consumer->open_files_size / OPEN_FILE_GROWTH_FACTOR;
-                struct open_file_bucket **new_buckets = malloc(sizeof(struct open_file_bucket *) * new_size);
+                struct open_file_bucket **new_buckets =
+                    malloc(sizeof(struct open_file_bucket *) * new_size);
                 if (new_buckets == NULL)
                     // Failed to shrink hash table
                     return 0;
@@ -167,8 +172,8 @@ int remove_open_file(struct fs_consumer *consumer, struct open_file *file)
                     while (bucket != NULL) {
                         struct open_file_bucket *next = bucket->next;
 
-                        size_t new_index = bucket->file->file_id % new_size;
-                        bucket->next = new_buckets[new_index];
+                        size_t new_index       = bucket->file->file_id % new_size;
+                        bucket->next           = new_buckets[new_index];
                         new_buckets[new_index] = bucket;
 
                         bucket = next;
@@ -176,14 +181,14 @@ int remove_open_file(struct fs_consumer *consumer, struct open_file *file)
                 }
 
                 free(consumer->open_files);
-                consumer->open_files = new_buckets;
+                consumer->open_files      = new_buckets;
                 consumer->open_files_size = new_size;
             }
 
             return 0;
         }
 
-        prev = bucket;
+        prev   = bucket;
         bucket = bucket->next;
     }
 
@@ -202,7 +207,7 @@ int add_consumer(struct fs_consumer *consumer, uint64_t task_id)
             return -1;
 
         consumer->task_capacity = TASKS_START_SIZE;
-        consumer->task_count = 0;
+        consumer->task_count    = 0;
     }
 
     // Grow tasks if needed
@@ -213,14 +218,14 @@ int add_consumer(struct fs_consumer *consumer, uint64_t task_id)
         if (new_tasks == NULL)
             return -1;
 
-        consumer->tasks = new_tasks;
+        consumer->tasks         = new_tasks;
         consumer->task_capacity = new_capacity;
     }
 
     // Insert task ID using binary insertion
 
     // Search for the first task ID that is greater than the given task ID
-    size_t low = 0;
+    size_t low  = 0;
     size_t high = consumer->task_count;
     while (low < high) {
         size_t mid = (low + high) / 2;
@@ -231,7 +236,8 @@ int add_consumer(struct fs_consumer *consumer, uint64_t task_id)
     }
 
     // Shift all elements after the insertion point to the right and insert the task ID
-    memmove(consumer->tasks + low + 1, consumer->tasks + low, sizeof(uint64_t) * (consumer->task_count - low));
+    memmove(consumer->tasks + low + 1, consumer->tasks + low,
+            sizeof(uint64_t) * (consumer->task_count - low));
     consumer->tasks[low] = task_id;
 
     consumer->task_count++;
@@ -248,7 +254,7 @@ bool is_consumer(struct fs_consumer *consumer, uint64_t task_id)
         return false;
 
     // Binary search for task ID
-    size_t low = 0;
+    size_t low  = 0;
     size_t high = consumer->task_count;
     while (low < high) {
         size_t mid = (low + high) / 2;
@@ -261,7 +267,7 @@ bool is_consumer(struct fs_consumer *consumer, uint64_t task_id)
     return low < consumer->task_count && consumer->tasks[low] == task_id;
 }
 
-struct fs_entry *get_file(struct fs_data * data, uint64_t file_id)
+struct fs_entry *get_file(struct fs_data *data, uint64_t file_id)
 {
     if (file_id > data->entries_size)
         return NULL;
@@ -317,7 +323,7 @@ int register_open_request(IPC_FS_Open *msg, IPC_FS_Open_Reply *reply)
     }
 
     struct fs_consumer *consumer = get_fs_consumer(&filesystem_data, msg->fs_consumer_id);
-    bool new_consumer = false;
+    bool new_consumer            = false;
 
     if (consumer == NULL) {
         // Create new consumer
@@ -329,16 +335,18 @@ int register_open_request(IPC_FS_Open *msg, IPC_FS_Open_Reply *reply)
 
         memset(consumer, 0, sizeof(struct fs_consumer));
 
-        consumer->id = msg->fs_consumer_id;
+        consumer->id              = msg->fs_consumer_id;
         consumer->open_files_size = OPEN_FILE_BUCKET_START_SIZE;
-        consumer->open_files = malloc(sizeof(struct open_file_bucket *) * consumer->open_files_size);
+        consumer->open_files =
+            malloc(sizeof(struct open_file_bucket *) * consumer->open_files_size);
         if (consumer->open_files == NULL) {
             free(consumer);
             reply->result_code = FS_ERROR_OUT_OF_MEMORY;
             return 0;
         }
 
-        memset(consumer->open_files, 0, sizeof(struct open_file_bucket *) * consumer->open_files_size);
+        memset(consumer->open_files, 0,
+               sizeof(struct open_file_bucket *) * consumer->open_files_size);
 
         new_consumer = true;
 
@@ -365,9 +373,9 @@ int register_open_request(IPC_FS_Open *msg, IPC_FS_Open_Reply *reply)
     }
 
     // Initialize open_file
-    open_file->file_id = filesystem_data.next_open_file_id++;
+    open_file->file_id  = filesystem_data.next_open_file_id++;
     open_file->seek_pos = 0;
-    open_file->file = file;
+    open_file->file     = file;
     open_file->consumer = consumer;
 
     // Insert open_file into the global open file table
@@ -402,9 +410,9 @@ int register_open_request(IPC_FS_Open *msg, IPC_FS_Open_Reply *reply)
     }
 
     reply->result_code = FS_SUCCESS;
-    reply->file_id = open_file->file_id;
-    reply->fs_flags = 0;
-    reply->file_port = loader_port;
+    reply->file_id     = open_file->file_id;
+    reply->fs_flags    = 0;
+    reply->file_port   = loader_port;
 
     return 0;
 }
@@ -420,8 +428,8 @@ void fs_react_dup(IPC_FS_Dup *msg, uint64_t message_size, size_t sender)
     }
 
     IPC_FS_Dup_Reply reply = {0};
-    reply.operation_id = msg->operation_id;
-    reply.type = IPC_FS_Dup_Reply_NUM;
+    reply.operation_id     = msg->operation_id;
+    reply.type             = IPC_FS_Dup_Reply_NUM;
 
     struct open_file *file = fs_data_get_open_file(&filesystem_data, msg->file_id);
     if (file == NULL) {
@@ -439,7 +447,7 @@ void fs_react_dup(IPC_FS_Dup *msg, uint64_t message_size, size_t sender)
 
     // Get new consumer
     struct fs_consumer *new_consumer = get_fs_consumer(&filesystem_data, msg->new_consumer_id);
-    bool is_new_consumer = false;
+    bool is_new_consumer             = false;
 
     if (new_consumer == NULL) {
         // Create new consumer
@@ -450,9 +458,10 @@ void fs_react_dup(IPC_FS_Dup *msg, uint64_t message_size, size_t sender)
             return;
         }
 
-        new_consumer->id = msg->new_consumer_id;
+        new_consumer->id              = msg->new_consumer_id;
         new_consumer->open_files_size = OPEN_FILE_BUCKET_START_SIZE;
-        new_consumer->open_files = calloc(1, sizeof(struct open_file_bucket *) * new_consumer->open_files_size);
+        new_consumer->open_files =
+            calloc(1, sizeof(struct open_file_bucket *) * new_consumer->open_files_size);
         if (new_consumer->open_files == NULL) {
             free(new_consumer);
             reply.result_code = FS_ERROR_OUT_OF_MEMORY;
@@ -487,9 +496,9 @@ void fs_react_dup(IPC_FS_Dup *msg, uint64_t message_size, size_t sender)
     }
 
     // Initialize open_file
-    new_open_file->file_id = filesystem_data.next_open_file_id++;
+    new_open_file->file_id  = filesystem_data.next_open_file_id++;
     new_open_file->seek_pos = file->seek_pos;
-    new_open_file->file = file->file;
+    new_open_file->file     = file->file;
     new_open_file->consumer = new_consumer;
 
     // Insert open_file into the global open file table
@@ -526,9 +535,9 @@ void fs_react_dup(IPC_FS_Dup *msg, uint64_t message_size, size_t sender)
     }
 
     reply.result_code = FS_SUCCESS;
-    reply.file_id = new_open_file->file_id;
-    reply.fs_flags = 0;
-    reply.file_port = loader_port;
+    reply.file_id     = new_open_file->file_id;
+    reply.fs_flags    = 0;
+    reply.file_port   = loader_port;
 
     result = send_message_port(msg->reply_port, sizeof(IPC_FS_Dup_Reply), &reply);
     if (result != SUCCESS) {
@@ -552,8 +561,11 @@ int fs_data_add_open_file(struct fs_data *data, struct open_file *file)
         return -1;
 
     // Check if the open file table needs to be resized
-    if (data->fs_open_files == NULL || data->open_files_table_size * OPEN_FILE_LOAD_FACTOR >= data->open_files_count) {
-        size_t new_size = data->open_files_table_size > 0 ? data->open_files_table_size * OPEN_FILE_GROWTH_FACTOR : OPEN_FILE_BUCKET_START_SIZE;
+    if (data->fs_open_files == NULL ||
+        data->open_files_table_size * OPEN_FILE_LOAD_FACTOR >= data->open_files_count) {
+        size_t new_size                     = data->open_files_table_size > 0
+                                                  ? data->open_files_table_size * OPEN_FILE_GROWTH_FACTOR
+                                                  : OPEN_FILE_BUCKET_START_SIZE;
         struct open_file_bucket **new_table = malloc(sizeof(struct open_file_bucket *) * new_size);
 
         if (new_table == NULL)
@@ -567,8 +579,8 @@ int fs_data_add_open_file(struct fs_data *data, struct open_file *file)
             while (bucket != NULL) {
                 struct open_file_bucket *next = bucket->next;
 
-                size_t new_index = bucket->file->file_id % new_size;
-                bucket->next = new_table[new_index];
+                size_t new_index     = bucket->file->file_id % new_size;
+                bucket->next         = new_table[new_index];
                 new_table[new_index] = bucket;
 
                 bucket = next;
@@ -576,7 +588,7 @@ int fs_data_add_open_file(struct fs_data *data, struct open_file *file)
         }
 
         free(data->fs_open_files);
-        data->fs_open_files = new_table;
+        data->fs_open_files         = new_table;
         data->open_files_table_size = new_size;
     }
 
@@ -586,10 +598,10 @@ int fs_data_add_open_file(struct fs_data *data, struct open_file *file)
         return -1;
 
     bucket->file = file;
-    
+
     // Insert the bucket into the table
-    uint64_t index = file->file_id % data->open_files_table_size;
-    bucket->next = data->fs_open_files[index];
+    uint64_t index             = file->file_id % data->open_files_table_size;
+    bucket->next               = data->fs_open_files[index];
     data->fs_open_files[index] = bucket;
 
     data->open_files_count++;
@@ -605,7 +617,7 @@ struct fs_consumer *get_fs_consumer(struct fs_data *data, uint64_t id)
     if (data->consumers == NULL || data->consumer_table_size == 0)
         return NULL;
 
-    uint64_t index = id % data->consumer_table_size;
+    uint64_t index                    = id % data->consumer_table_size;
     struct fs_consumer_bucket *bucket = data->consumers[index];
 
     while (bucket != NULL) {
@@ -624,9 +636,13 @@ int fs_data_add_consumer(struct fs_data *data, struct fs_consumer *consumer)
         return -1;
 
     // Check if the consumer table needs to be resized
-    if (data->consumers == NULL || data->consumer_table_size * CONSUMER_LOAD_FACTOR >= data->consumer_count) {
-        size_t new_size = data->consumer_table_size > 0 ? data->consumer_table_size * CONSUMER_GROWTH_FACTOR : CONSUMER_BUCKET_START_SIZE;
-        struct fs_consumer_bucket **new_table = malloc(sizeof(struct fs_consumer_bucket *) * new_size);
+    if (data->consumers == NULL ||
+        data->consumer_table_size * CONSUMER_LOAD_FACTOR >= data->consumer_count) {
+        size_t new_size = data->consumer_table_size > 0
+                              ? data->consumer_table_size * CONSUMER_GROWTH_FACTOR
+                              : CONSUMER_BUCKET_START_SIZE;
+        struct fs_consumer_bucket **new_table =
+            malloc(sizeof(struct fs_consumer_bucket *) * new_size);
 
         if (new_table == NULL)
             return -1;
@@ -639,8 +655,8 @@ int fs_data_add_consumer(struct fs_data *data, struct fs_consumer *consumer)
             while (bucket != NULL) {
                 struct fs_consumer_bucket *next = bucket->next;
 
-                size_t new_index = bucket->consumer->id % new_size;
-                bucket->next = new_table[new_index];
+                size_t new_index     = bucket->consumer->id % new_size;
+                bucket->next         = new_table[new_index];
                 new_table[new_index] = bucket;
 
                 bucket = next;
@@ -648,7 +664,7 @@ int fs_data_add_consumer(struct fs_data *data, struct fs_consumer *consumer)
         }
 
         free(data->consumers);
-        data->consumers = new_table;
+        data->consumers           = new_table;
         data->consumer_table_size = new_size;
     }
 
@@ -660,8 +676,8 @@ int fs_data_add_consumer(struct fs_data *data, struct fs_consumer *consumer)
     bucket->consumer = consumer;
 
     // Insert the bucket into the table
-    uint64_t index = consumer->id % data->consumer_table_size;
-    bucket->next = data->consumers[index];
+    uint64_t index         = consumer->id % data->consumer_table_size;
+    bucket->next           = data->consumers[index];
     data->consumers[index] = bucket;
 
     data->consumer_count++;
@@ -674,9 +690,9 @@ void fs_data_remove_open_file(struct fs_data *data, struct open_file *file)
     if (data == NULL || file == NULL)
         return;
 
-    uint64_t index = file->file_id % data->open_files_table_size;
+    uint64_t index                  = file->file_id % data->open_files_table_size;
     struct open_file_bucket *bucket = data->fs_open_files[index];
-    struct open_file_bucket *prev = NULL;
+    struct open_file_bucket *prev   = NULL;
 
     while (bucket != NULL) {
         if (bucket->file == file) {
@@ -690,13 +706,14 @@ void fs_data_remove_open_file(struct fs_data *data, struct open_file *file)
             break;
         }
 
-        prev = bucket;
+        prev   = bucket;
         bucket = bucket->next;
     }
 
     // Shrink the table if needed
-    if (data->open_files_table_size > OPEN_FILE_BUCKET_START_SIZE && data->open_files_table_size * OPEN_FILE_SHRINK_FACTOR >= data->open_files_count) {
-        size_t new_size = data->open_files_table_size / OPEN_FILE_GROWTH_FACTOR;
+    if (data->open_files_table_size > OPEN_FILE_BUCKET_START_SIZE &&
+        data->open_files_table_size * OPEN_FILE_SHRINK_FACTOR >= data->open_files_count) {
+        size_t new_size                     = data->open_files_table_size / OPEN_FILE_GROWTH_FACTOR;
         struct open_file_bucket **new_table = malloc(sizeof(struct open_file_bucket *) * new_size);
 
         if (new_table == NULL)
@@ -710,8 +727,8 @@ void fs_data_remove_open_file(struct fs_data *data, struct open_file *file)
             while (bucket != NULL) {
                 struct open_file_bucket *next = bucket->next;
 
-                size_t new_index = bucket->file->file_id % new_size;
-                bucket->next = new_table[new_index];
+                size_t new_index     = bucket->file->file_id % new_size;
+                bucket->next         = new_table[new_index];
                 new_table[new_index] = bucket;
 
                 bucket = next;
@@ -719,7 +736,7 @@ void fs_data_remove_open_file(struct fs_data *data, struct open_file *file)
         }
 
         free(data->fs_open_files);
-        data->fs_open_files = new_table;
+        data->fs_open_files         = new_table;
         data->open_files_table_size = new_size;
     }
 }
@@ -729,9 +746,9 @@ void fs_data_remove_consumer(struct fs_data *data, struct fs_consumer *consumer)
     if (data == NULL || consumer == NULL)
         return;
 
-    uint64_t index = consumer->id % data->consumer_table_size;
+    uint64_t index                    = consumer->id % data->consumer_table_size;
     struct fs_consumer_bucket *bucket = data->consumers[index];
-    struct fs_consumer_bucket *prev = NULL;
+    struct fs_consumer_bucket *prev   = NULL;
 
     while (bucket != NULL) {
         if (bucket->consumer == consumer) {
@@ -745,14 +762,16 @@ void fs_data_remove_consumer(struct fs_data *data, struct fs_consumer *consumer)
             break;
         }
 
-        prev = bucket;
+        prev   = bucket;
         bucket = bucket->next;
     }
 
     // Shrink the table if needed
-    if (data->consumer_table_size > CONSUMER_BUCKET_START_SIZE && data->consumer_table_size * CONSUMER_SHRINK_FACTOR >= data->consumer_count) {
+    if (data->consumer_table_size > CONSUMER_BUCKET_START_SIZE &&
+        data->consumer_table_size * CONSUMER_SHRINK_FACTOR >= data->consumer_count) {
         size_t new_size = data->consumer_table_size / CONSUMER_GROWTH_FACTOR;
-        struct fs_consumer_bucket **new_table = malloc(sizeof(struct fs_consumer_bucket *) * new_size);
+        struct fs_consumer_bucket **new_table =
+            malloc(sizeof(struct fs_consumer_bucket *) * new_size);
 
         if (new_table == NULL)
             return;
@@ -765,8 +784,8 @@ void fs_data_remove_consumer(struct fs_data *data, struct fs_consumer *consumer)
             while (bucket != NULL) {
                 struct fs_consumer_bucket *next = bucket->next;
 
-                size_t new_index = bucket->consumer->id % new_size;
-                bucket->next = new_table[new_index];
+                size_t new_index     = bucket->consumer->id % new_size;
+                bucket->next         = new_table[new_index];
                 new_table[new_index] = bucket;
 
                 bucket = next;
@@ -774,7 +793,7 @@ void fs_data_remove_consumer(struct fs_data *data, struct fs_consumer *consumer)
         }
 
         free(data->consumers);
-        data->consumers = new_table;
+        data->consumers           = new_table;
         data->consumer_table_size = new_size;
     }
 }
@@ -796,20 +815,19 @@ void initialize_filesystem(pmos_port_t vfsd_port)
     }
     // Fallthrough
     case FS_DATA_INITIALIZED: {
-        const char * const fs_name = "loader_fs";
-        size_t message_size = sizeof(struct IPC_Register_FS) + strlen(fs_name);
+        const char *const fs_name = "loader_fs";
+        size_t message_size       = sizeof(struct IPC_Register_FS) + strlen(fs_name);
 
-
-        IPC_Register_FS * request = alloca(message_size);
+        IPC_Register_FS *request = alloca(message_size);
         if (request == NULL) {
             print_str("Loader: Failed to allocate a message for the filesystem request\n");
             return;
         }
 
-        request->num = IPC_Register_FS_NUM;
-        request->flags = 0;
+        request->num        = IPC_Register_FS_NUM;
+        request->flags      = 0;
         request->reply_port = loader_port;
-        request->fs_port = loader_port;
+        request->fs_port    = loader_port;
         memcpy(request->name, fs_name, strlen(fs_name));
 
         result_t result = send_message_port(vfsd_port, message_size, (char *)request);
@@ -821,11 +839,12 @@ void initialize_filesystem(pmos_port_t vfsd_port)
         }
 
         filesystem_data.status = FS_DATA_REGISTERING;
-        filesystem_port = vfsd_port;
+        filesystem_port        = vfsd_port;
         break;
     }
     default: {
-        print_str("Loader: Failed to register the filesystem with the VFS: Filesystem already registered\n");
+        print_str("Loader: Failed to register the filesystem with the VFS: Filesystem already "
+                  "registered\n");
         return;
     }
     }
@@ -845,10 +864,10 @@ int fs_react_register_reply(IPC_Register_FS_Reply *reply, size_t reply_size, uin
     }
 
     filesystem_data.status = FS_DATA_REGISTERED;
-    filesystem_id = reply->filesystem_id;
+    filesystem_id          = reply->filesystem_id;
 
-    const char * root_path = "/";
-    size_t message_size = sizeof(IPC_Mount_FS) + strlen(root_path);
+    const char *root_path = "/";
+    size_t message_size   = sizeof(IPC_Mount_FS) + strlen(root_path);
 
     IPC_Mount_FS *mount_request = alloca(message_size);
     if (mount_request == NULL) {
@@ -856,11 +875,11 @@ int fs_react_register_reply(IPC_Register_FS_Reply *reply, size_t reply_size, uin
         return -ENOMEM;
     }
 
-    mount_request->num = IPC_Mount_FS_NUM;
-    mount_request->flags = 0;
-    mount_request->reply_port = loader_port;
+    mount_request->num           = IPC_Mount_FS_NUM;
+    mount_request->flags         = 0;
+    mount_request->reply_port    = loader_port;
     mount_request->filesystem_id = filesystem_id;
-    mount_request->root_fd = 0;
+    mount_request->root_fd       = 0;
     memcpy(mount_request->mount_path, root_path, strlen(root_path));
 
     result_t result = send_message_port(filesystem_port, message_size, (char *)mount_request);
@@ -893,7 +912,7 @@ int fs_react_mount_reply(IPC_Mount_FS_Reply *reply, size_t reply_size, uint64_t 
     }
 
     filesystem_data.status = FS_DATA_MOUNTED;
-    mountpoint_id = reply->mountpoint_id;
+    mountpoint_id          = reply->mountpoint_id;
 
     print_str("Loader: Successfully registered and mounted the filesystem! Filesystem ID: ");
     print_hex(filesystem_id);
@@ -911,13 +930,13 @@ int init_fs()
     if (root == NULL)
         return -1;
 
-    root->name = "/";
+    root->name      = "/";
     root->name_size = 1;
-    root->id = 0;
+    root->id        = 0;
 
-    root->type = FS_DIRECTORY;
-    root->directory.entries = NULL;
-    root->directory.entry_count = 0;
+    root->type                     = FS_DIRECTORY;
+    root->directory.entries        = NULL;
+    root->directory.entry_count    = 0;
     root->directory.entry_capacity = 0;
 
     int result = fs_data_push_entry(&filesystem_data, root);
@@ -929,7 +948,7 @@ int init_fs()
     // ------------------------------------------------------------------------
     // TODO
     // ------------------------------------------------------------------------
-    
+
     // // Parse modules and add them to the filesystem
     // struct task_list_node *p = modules_list;
     // while (p != NULL) {
@@ -995,13 +1014,13 @@ void destroy_fs_entry(struct fs_entry *entry)
         return;
 
     switch (entry->type) {
-        case FS_FILE_REGULAR:
-            break;
-        case FS_DIRECTORY:
-            free(entry->directory.entries);
-            break;
-        default:
-            break;
+    case FS_FILE_REGULAR:
+        break;
+    case FS_DIRECTORY:
+        free(entry->directory.entries);
+        break;
+    default:
+        break;
     }
 }
 
@@ -1013,11 +1032,12 @@ int fs_data_push_entry(struct fs_data *data, struct fs_entry *entry)
     // Check if the entries array needs to be resized
     if (data->entries_size == data->entries_capacity) {
         size_t new_capacity = data->entries_capacity == 0 ? 4 : data->entries_capacity * 2;
-        struct fs_entry **new_entries = realloc(data->entries, sizeof(struct fs_entry *) * new_capacity);
+        struct fs_entry **new_entries =
+            realloc(data->entries, sizeof(struct fs_entry *) * new_capacity);
         if (new_entries == NULL)
             return -1;
 
-        data->entries = new_entries;
+        data->entries          = new_entries;
         data->entries_capacity = new_capacity;
     }
 
@@ -1037,12 +1057,14 @@ int fs_entry_add_child(struct fs_entry *directory, struct fs_entry *entry)
 
     // Check if the directory's entries array needs to be resized
     if (directory->directory.entry_count == directory->directory.entry_capacity) {
-        size_t new_capacity = directory->directory.entry_capacity == 0 ? 4 : directory->directory.entry_capacity * 2;
-        struct fs_entry **new_entries = realloc(directory->directory.entries, sizeof(struct fs_entry *) * new_capacity);
+        size_t new_capacity =
+            directory->directory.entry_capacity == 0 ? 4 : directory->directory.entry_capacity * 2;
+        struct fs_entry **new_entries =
+            realloc(directory->directory.entries, sizeof(struct fs_entry *) * new_capacity);
         if (new_entries == NULL)
             return -1;
 
-        directory->directory.entries = new_entries;
+        directory->directory.entries        = new_entries;
         directory->directory.entry_capacity = new_capacity;
     }
 
@@ -1062,8 +1084,8 @@ void fs_data_clear(struct fs_data *data)
             destroy_fs_entry(data->entries[i]);
 
         free(data->entries);
-        data->entries = NULL;
-        data->entries_size = 0;
+        data->entries          = NULL;
+        data->entries_size     = 0;
         data->entries_capacity = 0;
     }
 
@@ -1080,9 +1102,9 @@ void fs_data_clear(struct fs_data *data)
         }
 
         free(data->consumers);
-        data->consumers = NULL;
+        data->consumers           = NULL;
         data->consumer_table_size = 0;
-        data->consumer_count = 0;
+        data->consumer_count      = 0;
     }
 
     if (data->fs_open_files != NULL) {
@@ -1097,9 +1119,9 @@ void fs_data_clear(struct fs_data *data)
         }
 
         free(data->fs_open_files);
-        data->fs_open_files = NULL;
+        data->fs_open_files         = NULL;
         data->open_files_table_size = 0;
-        data->open_files_count = 0;
+        data->open_files_count      = 0;
     }
 }
 
@@ -1120,12 +1142,12 @@ void fs_react_resolve_path(IPC_FS_Resolve_Path *msg, uint64_t message_size, size
     uint64_t parent_id = msg->parent_dir_id;
     if (parent_id >= filesystem_data.entries_size) {
         IPC_FS_Resolve_Path_Reply reply = {
-            .type = IPC_FS_Resolve_Path_Reply_NUM,
-            .flags = 0,
-            .result_code = -ENOENT,
-            .file_id = 0,
+            .type         = IPC_FS_Resolve_Path_Reply_NUM,
+            .flags        = 0,
+            .result_code  = -ENOENT,
+            .file_id      = 0,
             .operation_id = msg->operation_id,
-            .file_type = 0,
+            .file_type    = 0,
         };
 
         result_t result = send_message_port(msg->reply_port, sizeof(reply), (char *)&reply);
@@ -1141,12 +1163,12 @@ void fs_react_resolve_path(IPC_FS_Resolve_Path *msg, uint64_t message_size, size
     struct fs_entry *parent = filesystem_data.entries[parent_id];
     if (parent->type != FS_DIRECTORY) {
         IPC_FS_Resolve_Path_Reply reply = {
-            .type = IPC_FS_Resolve_Path_Reply_NUM,
-            .flags = 0,
-            .result_code = -ENOTDIR,
-            .file_id = 0,
+            .type         = IPC_FS_Resolve_Path_Reply_NUM,
+            .flags        = 0,
+            .result_code  = -ENOTDIR,
+            .file_id      = 0,
             .operation_id = msg->operation_id,
-            .file_type = 0,
+            .file_type    = 0,
         };
 
         result_t result = send_message_port(msg->reply_port, sizeof(reply), (char *)&reply);
@@ -1163,16 +1185,17 @@ void fs_react_resolve_path(IPC_FS_Resolve_Path *msg, uint64_t message_size, size
 
     for (size_t i = 0; i < parent->directory.entry_count; ++i) {
         struct fs_entry *entry = parent->directory.entries[i];
-        if (entry->name_size != msg_name_size || memcmp(entry->name, msg->path_name, msg_name_size) != 0)
+        if (entry->name_size != msg_name_size ||
+            memcmp(entry->name, msg->path_name, msg_name_size) != 0)
             continue;
 
         IPC_FS_Resolve_Path_Reply reply = {
-            .type = IPC_FS_Resolve_Path_Reply_NUM,
-            .flags = 0,
-            .result_code = 0,
-            .file_id = entry->id,
+            .type         = IPC_FS_Resolve_Path_Reply_NUM,
+            .flags        = 0,
+            .result_code  = 0,
+            .file_id      = entry->id,
             .operation_id = msg->operation_id,
-            .file_type = entry->type,
+            .file_type    = entry->type,
         };
 
         result_t result = send_message_port(msg->reply_port, sizeof(reply), (char *)&reply);
@@ -1186,12 +1209,12 @@ void fs_react_resolve_path(IPC_FS_Resolve_Path *msg, uint64_t message_size, size
     }
 
     IPC_FS_Resolve_Path_Reply reply = {
-        .type = IPC_FS_Resolve_Path_Reply_NUM,
-        .flags = 0,
-        .result_code = -ENOENT,
-        .file_id = 0,
+        .type         = IPC_FS_Resolve_Path_Reply_NUM,
+        .flags        = 0,
+        .result_code  = -ENOENT,
+        .file_id      = 0,
         .operation_id = msg->operation_id,
-        .file_type = 0,
+        .file_type    = 0,
     };
 
     result_t result = send_message_port(msg->reply_port, sizeof(reply), (char *)&reply);
@@ -1208,11 +1231,11 @@ void fs_react_read(IPC_Read *msg, uint64_t message_size, size_t sender)
 {
     // Check that the sender is part of the filesystem consumer group
     uint64_t consumer_group = msg->fs_consumer_id;
-    syscall_r r = is_task_group_member(sender, consumer_group);
+    syscall_r r             = is_task_group_member(sender, consumer_group);
     if (r.result != 0 || r.value != 1) {
         IPC_Read_Reply reply = {
-            .type = IPC_Read_Reply_NUM,
-            .flags = 0,
+            .type        = IPC_Read_Reply_NUM,
+            .flags       = 0,
             .result_code = -EPERM,
         };
 
@@ -1228,8 +1251,8 @@ void fs_react_read(IPC_Read *msg, uint64_t message_size, size_t sender)
     struct open_file *file = fs_data_get_open_file(&filesystem_data, msg->file_id);
     if (file == NULL) {
         IPC_Read_Reply reply = {
-            .type = IPC_Read_Reply_NUM,
-            .flags = 0,
+            .type        = IPC_Read_Reply_NUM,
+            .flags       = 0,
             .result_code = -EBADF,
         };
 
@@ -1244,8 +1267,8 @@ void fs_react_read(IPC_Read *msg, uint64_t message_size, size_t sender)
 
     if (file->consumer->id != consumer_group) {
         IPC_Read_Reply reply = {
-            .type = IPC_Read_Reply_NUM,
-            .flags = 0,
+            .type        = IPC_Read_Reply_NUM,
+            .flags       = 0,
             .result_code = -EPERM,
         };
 
@@ -1266,19 +1289,20 @@ void fs_react_read(IPC_Read *msg, uint64_t message_size, size_t sender)
     } reply;
 
     size_t start = msg->start_offset;
-    size_t size = buffer_size > msg->max_size ? msg->max_size : buffer_size;
-    size_t end = start + size;
+    size_t size  = buffer_size > msg->max_size ? msg->max_size : buffer_size;
+    size_t end   = start + size;
 
-    size_t file_size = file->file->file.file_size;
+    size_t file_size    = file->file->file.file_size;
     size_t actual_start = file_size > start ? start : file_size;
-    size_t actual_end = file_size > end ? end : file_size;
-    size_t actual_size = actual_end - actual_start;
+    size_t actual_end   = file_size > end ? end : file_size;
+    size_t actual_size  = actual_end - actual_start;
 
-    reply.reply.type = IPC_Read_Reply_NUM;
-    reply.reply.flags = 0;
+    reply.reply.type        = IPC_Read_Reply_NUM;
+    reply.reply.flags       = 0;
     reply.reply.result_code = 0;
     memcpy(reply.data, file->file->file.data + actual_start, actual_size);
-    result_t result = send_message_port(msg->reply_port, sizeof(reply.reply) + actual_size, (char *)&reply);
+    result_t result =
+        send_message_port(msg->reply_port, sizeof(reply.reply) + actual_size, (char *)&reply);
     if (result != SUCCESS) {
         print_str("[Loader] Failed to send IPC_Read_Reply message: ");
         print_hex(result);
@@ -1294,7 +1318,7 @@ struct open_file *fs_data_get_open_file(struct fs_data *data, uint64_t id)
     if (data->open_files_count == 0)
         return NULL;
 
-    size_t index = id % data->open_files_table_size;
+    size_t index                  = id % data->open_files_table_size;
     struct open_file_bucket *file = data->fs_open_files[index];
     while (file != NULL) {
         if (file->file->file_id == id)

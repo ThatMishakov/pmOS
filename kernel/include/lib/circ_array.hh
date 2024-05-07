@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -27,68 +27,55 @@
  */
 
 #pragma once
-#include <stdint.h>
-#include <stddef.h>
 #include "../memory/malloc.hh"
 
-template<typename T>
-class Circ_Array {
+#include <stddef.h>
+#include <stdint.h>
+
+template<typename T> class Circ_Array
+{
 private:
     static const size_t default_size = 16;
-    T** ptr_array;
+    T **ptr_array;
     size_t array_size;
     size_t index_start;
     size_t elements;
+
 public:
     Circ_Array();
     Circ_Array(size_t);
-    Circ_Array(const Circ_Array&);
-    Circ_Array(size_t, T&);
+    Circ_Array(const Circ_Array &);
+    Circ_Array(size_t, T &);
     ~Circ_Array();
 
     size_t size() const;
-    T& operator[](size_t n);
-    const T& operator[](size_t n) const;
-    
-    T& front();
-    const T& front() const;
+    T &operator[](size_t n);
+    const T &operator[](size_t n) const;
 
-    T& back();
-    const T& back() const;
+    T &front();
+    const T &front() const;
 
-    T* data();
-    const T* data() const;
+    T &back();
+    const T &back() const;
 
-    void push_back(const T&);
+    T *data();
+    const T *data() const;
+
+    void push_back(const T &);
     void pop_back();
 
-    void push_front(const T&);
+    void push_front(const T &);
     void pop_front();
 
     void clear();
 
     void reserve();
 
-    inline bool empty() const
-    {
-        return size() == 0;
-    }
-
+    inline bool empty() const { return size() == 0; }
 };
 
-template<typename T>
-size_t Circ_Array<T>::size() const
-{
-    return elements;
-}
+template<typename T> size_t Circ_Array<T>::size() const { return elements; }
 
-template<typename T>
-Circ_Array<t>::~Circ_Array()
-{
-    delete[] ptr_array;
-}
+template<typename T> Circ_Array<t>::~Circ_Array() { delete[] ptr_array; }
 
-Circ_Array()
-{
-    
-}
+Circ_Array() {}

@@ -1,32 +1,33 @@
-#include <stdio.h>
-#include <cstdint>
-#include <pmos/ipc.h>
-#include <pmos/system.h>
-#include <pmos/ports.h>
-#include <pmos/helpers.h>
-#include <pmos/memory.h>
-#include <memory>
-#include <string>
 #include "ns16550.hh"
-#include <queue>
+
+#include <cstdint>
 #include <cstring>
+#include <memory>
+#include <pmos/helpers.h>
 #include <pmos/interrupts.h>
+#include <pmos/ipc.h>
+#include <pmos/memory.h>
+#include <pmos/ports.h>
+#include <pmos/system.h>
+#include <queue>
+#include <stdio.h>
+#include <string>
 
 // Either physcial memory base or I/O port base
 uint64_t terminal_base = 0x0;
 // 0x0 = MMIO, 0x1 = PIO
-uint8_t access_type = 0x0;
+uint8_t access_type    = 0x0;
 uint8_t interface_type = 0x0;
 
 unsigned baud_rate = 0;
-int parity = 0;
-int stop_bits = 0;
-int flow_control = 0;
-int terminal_type = 0;
+int parity         = 0;
+int stop_bits      = 0;
+int flow_control   = 0;
+int terminal_type  = 0;
 
 int interrupt_type_mask = 0;
-int gsi_num = 0;
-int pc_irq = 0;
+int gsi_num             = 0;
+int pc_irq              = 0;
 
 // TODO: Don't assume it, apparently it's not always that
 unsigned clock_frequency = 1843200;
@@ -35,16 +36,15 @@ volatile uint8_t *serial_mapped = nullptr;
 
 bool have_interrupts = false;
 
-pmos_port_t serial_port = []() -> auto
-{
+pmos_port_t serial_port = []() -> auto {
     ports_request_t request = create_port(TASK_ID_SELF, 0);
     return request.port;
 }();
 
 constexpr std::string devicesd_port_name = "/pmos/devicesd";
-pmos_port_t devicesd_port = []() -> auto
-{
-    ports_request_t request = get_port_by_name(devicesd_port_name.c_str(), devicesd_port_name.length(), 0);
+pmos_port_t devicesd_port                = []() -> auto {
+    ports_request_t request =
+        get_port_by_name(devicesd_port_name.c_str(), devicesd_port_name.length(), 0);
     return request.port;
 }();
 
@@ -54,10 +54,7 @@ auto read_register(int index) -> uint8_t
     return *(serial_mapped + index);
 }
 
-void write_register(int index, uint8_t value)
-{
-    *(serial_mapped + index) = value;
-}
+void write_register(int index, uint8_t value) { *(serial_mapped + index) = value; }
 
 void poll();
 
@@ -77,7 +74,7 @@ void clear_register(int index, uint8_t mask)
 
 void set_up_interrupt()
 {
-    #ifdef __riscv
+#ifdef __riscv
     printf("Initializing interrupts... Mask: %x\n", interrupt_type_mask);
 
     // Check if interrupts are supported
@@ -97,30 +94,31 @@ void set_up_interrupt()
     }
 
     have_interrupts = true;
-    #endif
+#endif
 }
 
 void ns16550_init()
-{   
+{
     // Request a high priority, since we are a driver
     // TODO: There is a bug where setting a priority makes the task disappear after some time :)
     request_priority(4);
 
     IPC_Request_Serial request = {
-        .type = IPC_Request_Serial_NUM,
-        .flags = 0,
+        .type       = IPC_Request_Serial_NUM,
+        .flags      = 0,
         .reply_port = serial_port,
-        .serial_id = 0,
+        .serial_id  = 0,
     };
 
-    result_t result = send_message_port(devicesd_port, sizeof(request), static_cast<void*>(&request));
+    result_t result =
+        send_message_port(devicesd_port, sizeof(request), static_cast<void *>(&request));
     if (result != SUCCESS) {
         printf("Failed to send message to devicesd port %lx: %lx\n", devicesd_port, result);
         return;
     }
 
     Message_Descriptor desc;
-    uint8_t* message;
+    uint8_t *message;
     result = get_message(&desc, &message, serial_port);
     if (result != SUCCESS) {
         printf("Failed to get message from devicesd\n");
@@ -128,7 +126,7 @@ void ns16550_init()
     }
     std::unique_ptr<unsigned char[]> message_ptr(message);
 
-    IPC_Serial_Reply* reply = reinterpret_cast<IPC_Serial_Reply*>(message_ptr.get());
+    IPC_Serial_Reply *reply = reinterpret_cast<IPC_Serial_Reply *>(message_ptr.get());
     if (reply->type != IPC_Serial_Reply_NUM) {
         printf("Invalid reply type: %i\n", reply->type);
         return;
@@ -139,27 +137,31 @@ void ns16550_init()
         return;
     }
 
-    terminal_base = reply->base_address;
-    access_type = reply->access_type;
-    interface_type = reply->interface_type;
-    baud_rate = reply->baud_rate;
-    parity = reply->parity;
-    stop_bits = reply->stop_bits;
-    flow_control = reply->flow_control;
-    terminal_type = reply->terminal_type;
+    terminal_base       = reply->base_address;
+    access_type         = reply->access_type;
+    interface_type      = reply->interface_type;
+    baud_rate           = reply->baud_rate;
+    parity              = reply->parity;
+    stop_bits           = reply->stop_bits;
+    flow_control        = reply->flow_control;
+    terminal_type       = reply->terminal_type;
     interrupt_type_mask = reply->interrupt_type;
-    gsi_num = reply->gsi_number;
-    pc_irq = reply->pc_int_number;
+    gsi_num             = reply->gsi_number;
+    pc_irq              = reply->pc_int_number;
 
-    printf("Initialized ns16550 with base address 0x%lx, access type %i, interface type %i, baud rate %u, parity %i, stop bits %i, flow control %i, terminal type %i, interrupt type mask %i, gsi num %i, pc irq %i\n",
-        terminal_base, access_type, interface_type, baud_rate, parity, stop_bits, flow_control, terminal_type, interrupt_type_mask, gsi_num, pc_irq);
+    printf("Initialized ns16550 with base address 0x%lx, access type %i, interface type %i, baud "
+           "rate %u, parity %i, stop bits %i, flow control %i, terminal type %i, interrupt type "
+           "mask %i, gsi num %i, pc irq %i\n",
+           terminal_base, access_type, interface_type, baud_rate, parity, stop_bits, flow_control,
+           terminal_type, interrupt_type_mask, gsi_num, pc_irq);
 
     if (access_type == 0x0) { // System memory
-        auto result = create_phys_map_region(TASK_ID_SELF, nullptr, 0x1000, PROT_READ|PROT_WRITE, reinterpret_cast<void*>(terminal_base));
+        auto result = create_phys_map_region(TASK_ID_SELF, nullptr, 0x1000, PROT_READ | PROT_WRITE,
+                                             reinterpret_cast<void *>(terminal_base));
         if (result.result != SUCCESS)
             throw std::runtime_error("Failed to map serial port");
 
-        serial_mapped = reinterpret_cast<volatile uint8_t*>(result.virt_addr);
+        serial_mapped = reinterpret_cast<volatile uint8_t *>(result.virt_addr);
     } else if (access_type != 0x1) { // Not system memory and serial port
         throw std::runtime_error("Invalid access type");
     }
@@ -175,15 +177,15 @@ void ns16550_init()
         set_register(LCR, DLAB_MASK);
 
         uint8_t prescaler_division = 0;
-        uint16_t divisor_constant = 0;
+        uint16_t divisor_constant  = 0;
         if (baud_rate > clock_frequency) {
             prescaler_division = baud_rate / clock_frequency;
-            divisor_constant = 1;
+            divisor_constant   = 1;
 
             if (prescaler_division >= (1 << 4))
                 throw std::runtime_error("Clock too high");
         } else {
-            divisor_constant = clock_frequency/baud_rate;
+            divisor_constant = clock_frequency / baud_rate;
         }
 
         write_register(DLL, divisor_constant);
@@ -232,9 +234,8 @@ void ns16550_init()
     set_register(FCR, FIFO_ENABLE | RX_FIFO_RESET | TX_FIFO_RESET | TRIGGER_8CHAR);
 }
 
-int buff_length = 0;
+int buff_length             = 0;
 constexpr int buff_capacity = 16;
-
 
 bool writing = false;
 struct buffer {
@@ -247,19 +248,17 @@ std::queue<buffer> write_queue;
 
 buffer active_buffer;
 
-void write_str(const char * str)
+void write_str(const char *str)
 {
     while (*str != '\0') {
-        while ((read_register(LSR) & LSR_TX_EMPTY) == 0);
+        while ((read_register(LSR) & LSR_TX_EMPTY) == 0)
+            ;
         write_register(THR, *str);
         str++;
     }
 }
 
-void write_str(const std::string & str)
-{
-    write_str(str.c_str());
-}
+void write_str(const std::string &str) { write_str(str.c_str()); }
 
 void write_blind(const char *str, size_t size)
 {
@@ -344,12 +343,13 @@ void react_timer_msg()
 }
 
 constexpr std::string log_port_name = "/pmos/logd";
-pmos_port_t log_port = 0;
+pmos_port_t log_port                = 0;
 
 void request_logger_port()
 {
     // TODO: Add a syscall for this
-    pmos_syscall(SYSCALL_REQUEST_NAMED_PORT, log_port_name.c_str(), log_port_name.length(), serial_port, 0);
+    pmos_syscall(SYSCALL_REQUEST_NAMED_PORT, log_port_name.c_str(), log_port_name.length(),
+                 serial_port, 0);
 }
 
 void react_named_port_notification(char *msg_buff, size_t size)
@@ -357,15 +357,15 @@ void react_named_port_notification(char *msg_buff, size_t size)
     IPC_Kernel_Named_Port_Notification *msg = (IPC_Kernel_Named_Port_Notification *)msg_buff;
     if (size < sizeof(IPC_Kernel_Named_Port_Notification))
         return;
-    
+
     log_port = msg->port_num;
 
     IPC_Register_Log_Output reg = {
-        .type = IPC_Register_Log_Output_NUM,
-        .flags = 0,
+        .type       = IPC_Register_Log_Output_NUM,
+        .flags      = 0,
         .reply_port = serial_port,
-        .log_port = serial_port,
-        .task_id = get_task_id(),
+        .log_port   = serial_port,
+        .task_id    = get_task_id(),
     };
 
     send_message_port(log_port, sizeof(reg), &reg);
@@ -405,8 +405,7 @@ int main()
 
     request_logger_port();
 
-    while (1)
-    {
+    while (1) {
         Message_Descriptor msg;
         syscall_get_message_info(&msg, serial_port, 0);
 
@@ -418,7 +417,7 @@ int main()
             write_str("Warning: recieved very small message\n");
             break;
         }
-        
+
         IPC_Generic_Msg *ipc_msg = reinterpret_cast<IPC_Generic_Msg *>(msg_buff.get());
 
         switch (ipc_msg->type) {
@@ -437,8 +436,7 @@ int main()
             });
             if (!writing)
                 check_tx();
-        }
-            break;
+        } break;
         case IPC_Log_Output_Reply_NUM:
             // Ignore it :)
             // (TODO)
@@ -450,8 +448,9 @@ int main()
             react_interrupt();
             break;
         default:
-            write_str("Warning: Unknown message type " + std::to_string(ipc_msg->type) + " from task " + std::to_string(msg.sender) + "\n");
+            write_str("Warning: Unknown message type " + std::to_string(ipc_msg->type) +
+                      " from task " + std::to_string(msg.sender) + "\n");
             break;
-        } 
+        }
     }
 }

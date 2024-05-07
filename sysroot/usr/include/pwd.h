@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,19 +35,19 @@
 #include "__posix_types.h"
 
 struct passwd {
-    char *pw_name; //< User's login name.
-    uid_t pw_uid; //< Numerical user ID.
-    gid_t pw_gid; //< Numerical group ID.
-    char *pw_dir; //< Initial working directory.
+    char *pw_name;  //< User's login name.
+    uid_t pw_uid;   //< Numerical user ID.
+    gid_t pw_gid;   //< Numerical group ID.
+    char *pw_dir;   //< Initial working directory.
     char *pw_shell; //< Program to use as shell.
     char *pw_gecos; //< Real name.
 };
 
 #ifdef __STDC_HOSTED__
 
-#ifdef __cplusplus
+    #ifdef __cplusplus
 extern "C" {
-#endif
+    #endif
 
 /**
  * @brief Get user account information.
@@ -114,41 +114,42 @@ void endpwent(void);
 
 /**
  * @brief Get user account information.
- * 
+ *
  * The `getpwnam_r` function searches the user database for an entry with a matching
  * `name` field.
- * 
+ *
  * @param name  The login name to search for.
  * @param pwd   A pointer to a `passwd` structure to be filled with the user account information.
  * @param buf   A pointer to a buffer to store the user account information in.
  * @param buflen The size of the buffer.
  * @param result A pointer to a `passwd` structure to be filled with the user account information.
  * @return      If the function succeeds, it returns `0`. Otherwise, it returns an error number.
- * 
+ *
  * @note        The `getpwnam_r` function is a cancellation point.
  */
-int getpwnam_r(const char *name, struct passwd *pwd, char *buf, size_t buflen, struct passwd **result);
+int getpwnam_r(const char *name, struct passwd *pwd, char *buf, size_t buflen,
+               struct passwd **result);
 
 /**
  * @brief Get user account information.
- * 
+ *
  * The `getpwuid_r` function searches the user database for an entry with a matching
  * `uid` field.
- * 
+ *
  * @param uid   The user ID to search for.
  * @param pwd   A pointer to a `passwd` structure to be filled with the user account information.
  * @param buf   A pointer to a buffer to store the user account information in.
  * @param buflen The size of the buffer.
  * @param result A pointer to a `passwd` structure to be filled with the user account information.
  * @return      If the function succeeds, it returns `0`. Otherwise, it returns an error number.
- * 
+ *
  * @note        The `getpwuid_r` function is a cancellation point.
  */
 int getpwuid_r(uid_t uid, struct passwd *pwd, char *buf, size_t buflen, struct passwd **result);
 
-#ifdef __cplusplus
+    #ifdef __cplusplus
 } /* extern "C" */
-#endif
+    #endif
 
 #endif /* __STDC_HOSTED__ */
 

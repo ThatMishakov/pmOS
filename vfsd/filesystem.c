@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -27,15 +27,18 @@
  */
 
 #include "filesystem.h"
-#include <stdlib.h>
-#include <string.h>
-#include <errno.h>
-#include <stdbool.h>
-#include <pmos/ipc.h>
-#include <pmos/system.h>
+
 #include "path_node.h"
 
-struct filesystem_map global_filesystem_map = {.filesystems = 0, .filesystems_count = 0, .filesystems_capacity = 0};
+#include <errno.h>
+#include <pmos/ipc.h>
+#include <pmos/system.h>
+#include <stdbool.h>
+#include <stdlib.h>
+#include <string.h>
+
+struct filesystem_map global_filesystem_map = {
+    .filesystems = 0, .filesystems_count = 0, .filesystems_capacity = 0};
 struct fs_task_map global_task_map = {.tasks = 0, .tasks_count = 0, .tasks_capacity = 0};
 
 struct fs_mountpoints_set global_mountpoints_set = {};
@@ -46,12 +49,12 @@ uint64_t get_next_filesystem_id()
     return __atomic_fetch_add(&next_filesystem_id, 1, __ATOMIC_SEQ_CST);
 }
 
-struct Filesystem * create_filesystem(const char * name, size_t name_length)
+struct Filesystem *create_filesystem(const char *name, size_t name_length)
 {
-    struct Filesystem * filesystem = (struct Filesystem *)calloc(sizeof(struct Filesystem), 1);
+    struct Filesystem *filesystem = (struct Filesystem *)calloc(sizeof(struct Filesystem), 1);
     if (filesystem == NULL)
         return NULL;
-    
+
     if (init_null_string(&filesystem->name) != 0) {
         free(filesystem);
         return NULL;
@@ -83,7 +86,7 @@ struct Filesystem * create_filesystem(const char * name, size_t name_length)
     return filesystem;
 }
 
-void destroy_filesystem(struct Filesystem * filesystem)
+void destroy_filesystem(struct Filesystem *filesystem)
 {
     if (filesystem == NULL)
         return;
@@ -103,17 +106,19 @@ int add_task_to_filesystem(struct Filesystem *fs, struct fs_task *task)
         return -EINVAL;
 
     if (fs->tasks_count == fs->tasks_capacity) {
-        size_t new_capacity = (fs->tasks_capacity == 0) ? TASKS_INITIAL_CAPACITY : fs->tasks_capacity * 2;
-        struct fs_task **new_tasks = (struct fs_task **)realloc(fs->tasks, new_capacity * sizeof(struct fs_task *));
+        size_t new_capacity =
+            (fs->tasks_capacity == 0) ? TASKS_INITIAL_CAPACITY : fs->tasks_capacity * 2;
+        struct fs_task **new_tasks =
+            (struct fs_task **)realloc(fs->tasks, new_capacity * sizeof(struct fs_task *));
         if (new_tasks == NULL)
             return -errno;
-        
-        fs->tasks = new_tasks;
+
+        fs->tasks          = new_tasks;
         fs->tasks_capacity = new_capacity;
     }
 
     // Binary search for the right place to insert the task
-    size_t left = 0;
+    size_t left  = 0;
     size_t right = fs->tasks_count;
     while (left < right) {
         size_t middle = (left + right) / 2;
@@ -128,7 +133,8 @@ int add_task_to_filesystem(struct Filesystem *fs, struct fs_task *task)
         return -EEXIST;
 
     // Insert the task
-    memmove(fs->tasks + left + 1, fs->tasks + left, (fs->tasks_count - left) * sizeof(struct fs_task *));
+    memmove(fs->tasks + left + 1, fs->tasks + left,
+            (fs->tasks_count - left) * sizeof(struct fs_task *));
     fs->tasks[left] = task;
     fs->tasks_count++;
 
@@ -141,7 +147,7 @@ void remove_task_from_filesystem(struct Filesystem *fs, struct fs_task *task)
         return;
 
     // Binary search for the task
-    size_t left = 0;
+    size_t left  = 0;
     size_t right = fs->tasks_count;
     while (left < right) {
         size_t middle = (left + right) / 2;
@@ -156,23 +162,25 @@ void remove_task_from_filesystem(struct Filesystem *fs, struct fs_task *task)
         return;
 
     // Remove the task
-    memmove(fs->tasks + left, fs->tasks + left + 1, (fs->tasks_count - left - 1) * sizeof(struct fs_task *));
+    memmove(fs->tasks + left, fs->tasks + left + 1,
+            (fs->tasks_count - left - 1) * sizeof(struct fs_task *));
     fs->tasks_count--;
 
     // Shrink the array if it's too big
     if (fs->tasks_count * 4 < fs->tasks_capacity && fs->tasks_capacity > TASKS_INITIAL_CAPACITY) {
         size_t new_capacity = fs->tasks_capacity / 2;
-        struct fs_task **new_tasks = (struct fs_task **)realloc(fs->tasks, new_capacity * sizeof(struct fs_task *));
+        struct fs_task **new_tasks =
+            (struct fs_task **)realloc(fs->tasks, new_capacity * sizeof(struct fs_task *));
         if (new_tasks != NULL) {
-            fs->tasks = new_tasks;
+            fs->tasks          = new_tasks;
             fs->tasks_capacity = new_capacity;
         }
     }
 }
 
-struct fs_task * create_fs_task(uint64_t task_id)
+struct fs_task *create_fs_task(uint64_t task_id)
 {
-    struct fs_task * task = (struct fs_task *)calloc(sizeof(struct fs_task), 1);
+    struct fs_task *task = (struct fs_task *)calloc(sizeof(struct fs_task), 1);
     if (task == NULL)
         return NULL;
 
@@ -187,7 +195,7 @@ struct fs_task * create_fs_task(uint64_t task_id)
     return task;
 }
 
-void destroy_fs_task(struct fs_task * task)
+void destroy_fs_task(struct fs_task *task)
 {
     if (task == NULL)
         return;
@@ -206,17 +214,19 @@ int add_filesystem_to_task(struct fs_task *task, struct Filesystem *fs)
         return -EINVAL;
 
     if (task->filesystems_count == task->filesystems_capacity) {
-        size_t new_capacity = (task->filesystems_capacity == 0) ? FILESYSTEMS_INITIAL_CAPACITY : task->filesystems_capacity * 2;
-        struct Filesystem **new_filesystems = (struct Filesystem **)realloc(task->filesystems, new_capacity * sizeof(struct Filesystem *));
+        size_t new_capacity = (task->filesystems_capacity == 0) ? FILESYSTEMS_INITIAL_CAPACITY
+                                                                : task->filesystems_capacity * 2;
+        struct Filesystem **new_filesystems = (struct Filesystem **)realloc(
+            task->filesystems, new_capacity * sizeof(struct Filesystem *));
         if (new_filesystems == NULL)
             return -errno;
-        
-        task->filesystems = new_filesystems;
+
+        task->filesystems          = new_filesystems;
         task->filesystems_capacity = new_capacity;
     }
 
     // Binary search for the right place to insert the filesystem
-    size_t left = 0;
+    size_t left  = 0;
     size_t right = task->filesystems_count;
     while (left < right) {
         size_t middle = (left + right) / 2;
@@ -231,7 +241,8 @@ int add_filesystem_to_task(struct fs_task *task, struct Filesystem *fs)
         return -EEXIST;
 
     // Insert the filesystem
-    memmove(task->filesystems + left + 1, task->filesystems + left, (task->filesystems_count - left) * sizeof(struct Filesystem *));
+    memmove(task->filesystems + left + 1, task->filesystems + left,
+            (task->filesystems_count - left) * sizeof(struct Filesystem *));
     task->filesystems[left] = fs;
     task->filesystems_count++;
 
@@ -244,7 +255,7 @@ void remove_filesystem_from_task(struct fs_task *task, struct Filesystem *fs)
         return;
 
     // Binary search for the filesystem
-    size_t left = 0;
+    size_t left  = 0;
     size_t right = task->filesystems_count;
     while (left < right) {
         size_t middle = (left + right) / 2;
@@ -259,15 +270,18 @@ void remove_filesystem_from_task(struct fs_task *task, struct Filesystem *fs)
         return;
 
     // Remove the filesystem
-    memmove(task->filesystems + left, task->filesystems + left + 1, (task->filesystems_count - left - 1) * sizeof(struct Filesystem *));
+    memmove(task->filesystems + left, task->filesystems + left + 1,
+            (task->filesystems_count - left - 1) * sizeof(struct Filesystem *));
     task->filesystems_count--;
 
     // Shrink the array if it's too big
-    if (task->filesystems_count * 4 < task->filesystems_capacity && task->filesystems_capacity > FILESYSTEMS_INITIAL_CAPACITY) {
-        size_t new_capacity = task->filesystems_capacity / 2;
-        struct Filesystem **new_filesystems = (struct Filesystem **)realloc(task->filesystems, new_capacity * sizeof(struct Filesystem *));
+    if (task->filesystems_count * 4 < task->filesystems_capacity &&
+        task->filesystems_capacity > FILESYSTEMS_INITIAL_CAPACITY) {
+        size_t new_capacity                 = task->filesystems_capacity / 2;
+        struct Filesystem **new_filesystems = (struct Filesystem **)realloc(
+            task->filesystems, new_capacity * sizeof(struct Filesystem *));
         if (new_filesystems != NULL) {
-            task->filesystems = new_filesystems;
+            task->filesystems          = new_filesystems;
             task->filesystems_capacity = new_capacity;
         }
     }
@@ -300,8 +314,8 @@ void unregister_task_from_filesystem(struct Filesystem *fs, struct fs_task *task
 static int register_fs_reply(uint64_t reply_port, int result, uint64_t filesystem_id)
 {
     IPC_Register_FS_Reply reply = {
-        .type = IPC_Register_FS_Reply_NUM,
-        .result_code = result,
+        .type          = IPC_Register_FS_Reply_NUM,
+        .result_code   = result,
         .filesystem_id = filesystem_id,
     };
 
@@ -313,7 +327,7 @@ int register_fs(IPC_Register_FS *msg, uint64_t sender, size_t size)
     if (size < sizeof(IPC_Register_FS))
         return -EINVAL;
 
-    bool new_task = false;
+    bool new_task        = false;
     struct fs_task *task = find_task_in_map(&global_task_map, sender);
     if (task == NULL) {
         task = create_fs_task(sender);
@@ -322,8 +336,7 @@ int register_fs(IPC_Register_FS *msg, uint64_t sender, size_t size)
         new_task = true;
     }
 
-
-    size_t name_length = size - sizeof(IPC_Register_FS);
+    size_t name_length    = size - sizeof(IPC_Register_FS);
     struct Filesystem *fs = create_filesystem(msg->name, name_length);
     if (fs == NULL) {
         if (new_task)
@@ -359,8 +372,11 @@ int add_task_to_map(struct fs_task_map *map, struct fs_task *task)
         return -EINVAL;
 
     if (map->tasks_count == 0 || map->tasks_count > map->tasks_capacity * TASKS_LOAD_FACTOR) {
-        size_t new_capacity = (map->tasks_capacity == 0) ? TASKS_INITIAL_CAPACITY : map->tasks_capacity * TASKS_CAPACITY_MULTIPLIER;
-        struct fs_task **new_tasks = (struct fs_task **)calloc(sizeof(struct fs_task *), new_capacity);
+        size_t new_capacity = (map->tasks_capacity == 0)
+                                  ? TASKS_INITIAL_CAPACITY
+                                  : map->tasks_capacity * TASKS_CAPACITY_MULTIPLIER;
+        struct fs_task **new_tasks =
+            (struct fs_task **)calloc(sizeof(struct fs_task *), new_capacity);
         if (new_tasks == NULL)
             return -errno;
 
@@ -377,7 +393,7 @@ int add_task_to_map(struct fs_task_map *map, struct fs_task *task)
 
         free(map->tasks);
 
-        map->tasks = new_tasks;
+        map->tasks          = new_tasks;
         map->tasks_capacity = new_capacity;
     }
 
@@ -396,7 +412,7 @@ void remove_task_from_map(struct fs_task_map *map, struct fs_task *task)
         return;
 
     size_t start_index = task->id % map->tasks_capacity;
-    size_t index = start_index;
+    size_t index       = start_index;
     do {
         if (map->tasks[index] == task) {
             map->tasks[index] = NULL;
@@ -411,9 +427,11 @@ void remove_task_from_map(struct fs_task_map *map, struct fs_task *task)
         return;
 
     // Shrink the array if it's too big
-    if (map->tasks_count * 4 < map->tasks_capacity && map->tasks_capacity > TASKS_INITIAL_CAPACITY) {
+    if (map->tasks_count * 4 < map->tasks_capacity &&
+        map->tasks_capacity > TASKS_INITIAL_CAPACITY) {
         size_t new_capacity = map->tasks_capacity / 2;
-        struct fs_task **new_tasks = (struct fs_task **)calloc(sizeof(struct fs_task *), new_capacity);
+        struct fs_task **new_tasks =
+            (struct fs_task **)calloc(sizeof(struct fs_task *), new_capacity);
         if (new_tasks == NULL)
             return;
 
@@ -430,18 +448,18 @@ void remove_task_from_map(struct fs_task_map *map, struct fs_task *task)
 
         free(map->tasks);
 
-        map->tasks = new_tasks;
+        map->tasks          = new_tasks;
         map->tasks_capacity = new_capacity;
     }
 }
 
-struct fs_task * find_task_in_map(struct fs_task_map *map, uint64_t task_id)
+struct fs_task *find_task_in_map(struct fs_task_map *map, uint64_t task_id)
 {
     if (map == NULL || map->tasks_count == 0)
         return NULL;
 
     size_t start_index = task_id % map->tasks_capacity;
-    size_t index = start_index;
+    size_t index       = start_index;
     do {
         if (map->tasks[index] != NULL && map->tasks[index]->id == task_id)
             return map->tasks[index];
@@ -451,13 +469,13 @@ struct fs_task * find_task_in_map(struct fs_task_map *map, uint64_t task_id)
     return NULL;
 }
 
-struct Filesystem * find_filesystem_in_map(struct filesystem_map *map, uint64_t fs_id)
+struct Filesystem *find_filesystem_in_map(struct filesystem_map *map, uint64_t fs_id)
 {
     if (map == NULL || map->filesystems_count == 0)
         return NULL;
 
     size_t start_index = fs_id % map->filesystems_capacity;
-    size_t index = start_index;
+    size_t index       = start_index;
     do {
         if (map->filesystems[index] != NULL && map->filesystems[index]->id == fs_id)
             return map->filesystems[index];
@@ -472,9 +490,13 @@ int add_filesystem_to_map(struct filesystem_map *map, struct Filesystem *fs)
     if (map == NULL || fs == NULL)
         return -EINVAL;
 
-    if (map->filesystems_count == 0 || map->filesystems_count > map->filesystems_capacity * FILESYSTEMS_MAP_LOAD_FACTOR) {
-        size_t new_capacity = (map->filesystems_capacity == 0) ? FILESYSTEMS_INITIAL_CAPACITY : map->filesystems_capacity * FILESYSTEMS_MAP_CAPACITY_MULTIPLIER;
-        struct Filesystem **new_filesystems = (struct Filesystem **)calloc(sizeof(struct Filesystem *), new_capacity);
+    if (map->filesystems_count == 0 ||
+        map->filesystems_count > map->filesystems_capacity * FILESYSTEMS_MAP_LOAD_FACTOR) {
+        size_t new_capacity = (map->filesystems_capacity == 0)
+                                  ? FILESYSTEMS_INITIAL_CAPACITY
+                                  : map->filesystems_capacity * FILESYSTEMS_MAP_CAPACITY_MULTIPLIER;
+        struct Filesystem **new_filesystems =
+            (struct Filesystem **)calloc(sizeof(struct Filesystem *), new_capacity);
         if (new_filesystems == NULL)
             return -errno;
 
@@ -491,7 +513,7 @@ int add_filesystem_to_map(struct filesystem_map *map, struct Filesystem *fs)
 
         free(map->filesystems);
 
-        map->filesystems = new_filesystems;
+        map->filesystems          = new_filesystems;
         map->filesystems_capacity = new_capacity;
     }
 
@@ -510,7 +532,7 @@ void remove_filesystem_from_map(struct filesystem_map *map, struct Filesystem *f
         return;
 
     size_t start_index = fs->id % map->filesystems_capacity;
-    size_t index = start_index;
+    size_t index       = start_index;
     // Find the key
     do {
         if (map->filesystems[index] == fs)
@@ -533,7 +555,7 @@ void remove_filesystem_from_map(struct filesystem_map *map, struct Filesystem *f
         if ((next_index > index && (target_index <= index || target_index > next_index)) ||
             (next_index < index && (target_index <= index && target_index > next_index))) {
             map->filesystems[index] = map->filesystems[next_index];
-            index = next_index;
+            index                   = next_index;
         }
         next_index = (next_index + 1) % map->filesystems_capacity;
     }
@@ -542,12 +564,13 @@ void remove_filesystem_from_map(struct filesystem_map *map, struct Filesystem *f
     map->filesystems[index] = NULL;
 
     map->filesystems_count--;
-    
 
     // Shrink the array if it's too big
-    if (map->filesystems_count * 4 < map->filesystems_capacity && map->filesystems_capacity > FILESYSTEMS_INITIAL_CAPACITY) {
+    if (map->filesystems_count * 4 < map->filesystems_capacity &&
+        map->filesystems_capacity > FILESYSTEMS_INITIAL_CAPACITY) {
         size_t new_capacity = map->filesystems_capacity / 2;
-        struct Filesystem **new_filesystems = (struct Filesystem **)calloc(sizeof(struct Filesystem *), new_capacity);
+        struct Filesystem **new_filesystems =
+            (struct Filesystem **)calloc(sizeof(struct Filesystem *), new_capacity);
         if (new_filesystems == NULL)
             return;
 
@@ -564,18 +587,18 @@ void remove_filesystem_from_map(struct filesystem_map *map, struct Filesystem *f
 
         free(map->filesystems);
 
-        map->filesystems = new_filesystems;
+        map->filesystems          = new_filesystems;
         map->filesystems_capacity = new_capacity;
     }
 }
 
-struct fs_task * get_task_from_filesystem(struct Filesystem *fs, uint64_t task_id)
+struct fs_task *get_task_from_filesystem(struct Filesystem *fs, uint64_t task_id)
 {
     if (fs == NULL)
         return NULL;
 
     // Binary search
-    struct fs_task * task = NULL;
+    struct fs_task *task = NULL;
 
     size_t left = 0, right = fs->tasks_count;
     while (left < right) {
@@ -593,7 +616,7 @@ struct fs_task * get_task_from_filesystem(struct Filesystem *fs, uint64_t task_i
     return task;
 }
 
-struct Filesystem * get_filesystem(uint64_t fs_id)
+struct Filesystem *get_filesystem(uint64_t fs_id)
 {
     return find_filesystem_in_map(&global_filesystem_map, fs_id);
 }
@@ -609,8 +632,8 @@ struct fs_mountpoint *create_mountpoint(struct Filesystem *fs, struct Path_Node 
 
     static uint64_t next_mountpoint_id = 1;
     mountpoint->mountpoint_id = __atomic_fetch_add(&next_mountpoint_id, 1, __ATOMIC_SEQ_CST);
-    mountpoint->node = node;
-    mountpoint->fs = fs;
+    mountpoint->node          = node;
+    mountpoint->fs            = fs;
 
     int result = add_mountpoint_to_set(&global_mountpoints_set, mountpoint);
     if (result != 0) {
@@ -658,9 +681,9 @@ void mountpoints_set_free_buffers(struct fs_mountpoints_set *set)
 
     free(set->mountpooints);
 
-    set->mountpooints = NULL;
+    set->mountpooints         = NULL;
     set->mountpoints_capacity = 0;
-    set->mountpoints_count = 0;
+    set->mountpoints_count    = 0;
 }
 
 int init_moiuntpoints_set(struct fs_mountpoints_set *set)
@@ -668,9 +691,9 @@ int init_moiuntpoints_set(struct fs_mountpoints_set *set)
     if (set == NULL)
         return -EINVAL;
 
-    set->mountpooints = NULL;
+    set->mountpooints         = NULL;
     set->mountpoints_capacity = 0;
-    set->mountpoints_count = 0;
+    set->mountpoints_count    = 0;
 
     if (MOUNTPOINTS_INITIAL_CAPACITY == 0)
         return 0;
@@ -689,28 +712,33 @@ int add_mountpoint_to_set(struct fs_mountpoints_set *set, struct fs_mountpoint *
         return -EINVAL;
 
     if (set->mountpoints_capacity == set->mountpoints_count) {
-        size_t new_capacity = set->mountpoints_capacity > 0 ? set->mountpoints_capacity * MOUNTPOINTS_CAPACITY_MULTIPLIER : MOUNTPOINTS_INITIAL_CAPACITY;
-        struct fs_mountpoint **new_set = realloc(set->mountpooints, new_capacity * sizeof(struct fs_mountpoint *));
+        size_t new_capacity = set->mountpoints_capacity > 0
+                                  ? set->mountpoints_capacity * MOUNTPOINTS_CAPACITY_MULTIPLIER
+                                  : MOUNTPOINTS_INITIAL_CAPACITY;
+        struct fs_mountpoint **new_set =
+            realloc(set->mountpooints, new_capacity * sizeof(struct fs_mountpoint *));
         if (new_set == NULL)
             return -errno;
 
         set->mountpoints_capacity = new_capacity;
-        set->mountpooints = new_set;
+        set->mountpooints         = new_set;
     }
 
     size_t left = 0, right = set->mountpoints_count;
     while (left < right) {
-        size_t middle = (left + right)/2;
+        size_t middle = (left + right) / 2;
         if (set->mountpooints[middle]->mountpoint_id < mountpoint->mountpoint_id)
             left = middle + 1;
         else
             right = middle;
     }
 
-    if (left < set->mountpoints_count && set->mountpooints[left]->mountpoint_id == mountpoint->mountpoint_id)
+    if (left < set->mountpoints_count &&
+        set->mountpooints[left]->mountpoint_id == mountpoint->mountpoint_id)
         return -EEXIST;
 
-    memmove(set->mountpooints + left + 1, set->mountpooints + left, (set->mountpoints_count - left) * sizeof(struct fs_mountpoint *));
+    memmove(set->mountpooints + left + 1, set->mountpooints + left,
+            (set->mountpoints_count - left) * sizeof(struct fs_mountpoint *));
 
     set->mountpooints[left] = mountpoint;
     set->mountpoints_count++;
@@ -725,25 +753,29 @@ void remove_mountpoint_from_set(struct fs_mountpoints_set *set, struct fs_mountp
 
     size_t left = 0, right = set->mountpoints_count;
     while (left < right) {
-        size_t middle = (left + right)/2;
+        size_t middle = (left + right) / 2;
         if (set->mountpooints[middle]->mountpoint_id < mountpoint->mountpoint_id)
             left = middle + 1;
         else
             right = middle;
     }
 
-    if (left > set->mountpoints_count || set->mountpooints[left]->mountpoint_id != mountpoint->mountpoint_id)
+    if (left > set->mountpoints_count ||
+        set->mountpooints[left]->mountpoint_id != mountpoint->mountpoint_id)
         return;
 
-    memmove(set->mountpooints + left, set->mountpooints + left + 1, (set->mountpoints_count - left - 1) * sizeof(struct fs_mountpoint *));
+    memmove(set->mountpooints + left, set->mountpooints + left + 1,
+            (set->mountpoints_count - left - 1) * sizeof(struct fs_mountpoint *));
     set->mountpoints_count--;
 
-    if (set->mountpoints_capacity > MOUNTPOINTS_INITIAL_CAPACITY && set->mountpoints_capacity * MOUNTPOINTS_SHRINK_THRESHOLD > set->mountpoints_count) {
+    if (set->mountpoints_capacity > MOUNTPOINTS_INITIAL_CAPACITY &&
+        set->mountpoints_capacity * MOUNTPOINTS_SHRINK_THRESHOLD > set->mountpoints_count) {
         size_t new_capacity = set->mountpoints_capacity / MOUNTPOINTS_CAPACITY_MULTIPLIER;
-        struct fs_mountpoint **new_set = realloc(set->mountpooints, new_capacity * sizeof(struct fs_mountpoint *));
+        struct fs_mountpoint **new_set =
+            realloc(set->mountpooints, new_capacity * sizeof(struct fs_mountpoint *));
         if (new_set != NULL) {
             set->mountpoints_capacity = new_capacity;
-            set->mountpooints = new_set;
+            set->mountpooints         = new_set;
         }
     }
 }
@@ -755,7 +787,7 @@ bool is_task_registered_with_filesystem(struct Filesystem *fs, uint64_t task_id)
 
     size_t left = 0, right = fs->tasks_count;
     while (left < right) {
-        size_t middle = (left + right)/2;
+        size_t middle = (left + right) / 2;
         if (fs->tasks[middle]->id < task_id)
             left = middle + 1;
         else

@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -27,36 +27,38 @@
  */
 
 #pragma once
-#include <lib/vector.hh>
-#include <messaging/messaging.hh>
-#include <lib/splay_tree_map.hh>
-#include <types.hh>
-#include <lib/stack.hh>
-#include <lib/array.hh>
-#include <lib/memory.hh>
-#include <processes/tasks.hh>
 #include "defs.hh"
-#include <memory/temp_mapper.hh>
 #include "sched_queue.hh"
 
+#include <lib/array.hh>
+#include <lib/memory.hh>
+#include <lib/splay_tree_map.hh>
+#include <lib/stack.hh>
+#include <lib/vector.hh>
+#include <memory/temp_mapper.hh>
+#include <messaging/messaging.hh>
+#include <processes/tasks.hh>
+#include <types.hh>
+
 #ifdef __x86_64__
-#include <paging/x86_temp_mapper.hh>
-#include <interrupts/gdt.hh>
-#elif  defined(__riscv)
-#include <paging/riscv64_temp_mapper.hh>
-#include <cpus/floating_point.hh>
-#include <interrupts/interrupt_handler.hh>
+    #include <interrupts/gdt.hh>
+    #include <paging/x86_temp_mapper.hh>
+#elif defined(__riscv)
+    #include <cpus/floating_point.hh>
+    #include <interrupts/interrupt_handler.hh>
+    #include <paging/riscv64_temp_mapper.hh>
 #endif
 
 // Checks the mask and unblocks the task if needed
 // This function needs to be axed
-inline bool unblock_if_needed(const klib::shared_ptr<TaskDescriptor>& p, const klib::shared_ptr<Generic_Port>& compare_blocked_by)
+inline bool unblock_if_needed(const klib::shared_ptr<TaskDescriptor> &p,
+                              const klib::shared_ptr<Generic_Port> &compare_blocked_by)
 {
     return p->atomic_unblock_if_needed(compare_blocked_by);
 }
 
 // Blocks current task, setting blocked_by to *ptr*.
-ReturnStr<u64> block_current_task(const klib::shared_ptr<Generic_Port>& ptr);
+ReturnStr<u64> block_current_task(const klib::shared_ptr<Generic_Port> &ptr);
 
 extern sched_queue blocked;
 extern sched_queue uninit;
@@ -64,90 +66,90 @@ extern sched_queue uninit;
 inline klib::array<sched_queue, sched_queues_levels> global_sched_queues;
 
 struct CPU_Info {
-    CPU_Info* self = this; // 0
-    u64* kernel_stack_top = nullptr; // 8
-    u64 temp_var = 0; // 16
-    u64 nested_level = 1; // 24
+    CPU_Info *self                                = this;                               // 0
+    u64 *kernel_stack_top                         = nullptr;                            // 8
+    u64 temp_var                                  = 0;                                  // 16
+    u64 nested_level                              = 1;                                  // 24
     klib::shared_ptr<TaskDescriptor> current_task = klib::shared_ptr<TaskDescriptor>(); // 32
-    u64 jumpto_from = 0;  // 48
-    u64 jumpto_to   = 0;  // 56
-    Task_Regs nested_int_regs; // 64
+    u64 jumpto_from                               = 0;                                  // 48
+    u64 jumpto_to                                 = 0;                                  // 56
+    Task_Regs nested_int_regs;                                                          // 64
 
     klib::array<sched_queue, sched_queues_levels> sched_queues;
     klib::shared_ptr<TaskDescriptor> idle_task = klib::shared_ptr<TaskDescriptor>();
 
     u32 timer_val = 0;
 
-    u64 pagefault_cr2 = 0;
+    u64 pagefault_cr2   = 0;
     u64 pagefault_error = 0;
 
     Kernel_Stack_Pointer kernel_stack;
     Kernel_Stack_Pointer idle_stack;
 
-    #ifdef __x86_64__
+#ifdef __x86_64__
     // x86-specific
     Kernel_Stack_Pointer debug_stack;
     Kernel_Stack_Pointer nmi_stack;
     Kernel_Stack_Pointer machine_check_stack;
     Kernel_Stack_Pointer double_fault_stack;
     GDT cpu_gdt;
-    #endif
+#endif
 
-    klib::shared_ptr<TaskDescriptor> atomic_pick_highest_priority(priority_t min = sched_queues_levels - 1);
+    klib::shared_ptr<TaskDescriptor>
+        atomic_pick_highest_priority(priority_t min = sched_queues_levels - 1);
     klib::shared_ptr<TaskDescriptor> atomic_get_front_priority(priority_t);
 
-    // Temporary memory mapper; This is arch specific
-    #ifdef __x86_64__
+// Temporary memory mapper; This is arch specific
+#ifdef __x86_64__
     x86_PAE_Temp_Mapper temp_mapper;
-    #elif defined(__riscv)
+#elif defined(__riscv)
     RISCV64_Temp_Mapper temp_mapper;
-    #endif
+#endif
 
-    constexpr static unsigned pthread_once_size = 16;
+    constexpr static unsigned pthread_once_size                       = 16;
     klib::array<const void *, pthread_once_size> pthread_once_storage = {};
 
     u32 cpu_id = 0;
 
-    #ifdef __x86_64__
+#ifdef __x86_64__
     u32 lapic_id = 0;
-    #endif
+#endif
 
-
-    #ifdef __riscv
+#ifdef __riscv
     u64 hart_id = 0;
     // External interrupt controller ID
     // Bits [31:24] PLIC ID or APLIC ID
     // Bits [23:16] Reserved
     // Bits [15:0]  PLIC S-Mode context ID or APLIC IDC ID
-    u32 eic_id = 0;
+    u32 eic_id  = 0;
 
     klib::string isa_string;
 
-    u64 last_fp_task = 0;
+    u64 last_fp_task                 = 0;
     FloatingPointState last_fp_state = FloatingPointState::Disabled;
-    #endif
+#endif
 
-    // ISRs in userspace
-    #ifdef __riscv
+// ISRs in userspace
+#ifdef __riscv
     Interrupt_Handler_Table int_handlers;
-    #endif
+#endif
 
     // IMHO this is better than protecting current_task pointer with spinlock
     priority_t current_task_priority = sched_queues_levels;
 
     void ipi_reschedule(); // nothrow ?
 
-    klib::splay_tree_map<u64 /* next clock tick */ , klib::weak_ptr<Port>> timer_queue;
+    klib::splay_tree_map<u64 /* next clock tick */, klib::weak_ptr<Port>> timer_queue;
     Spinlock timer_lock;
 
     // Adds a new timer to the timer queue
-    void atomic_timer_queue_push(u64 fire_on_core_ticks, const klib::shared_ptr<Port>&);
+    void atomic_timer_queue_push(u64 fire_on_core_ticks, const klib::shared_ptr<Port> &);
 
     // Returns the number of ticks after the given number of milliseconds
     u64 ticks_after_ms(u64 ms);
 };
 
-extern klib::vector<CPU_Info*> cpus;
+extern klib::vector<CPU_Info *> cpus;
 
 size_t get_cpu_count() noexcept;
 
@@ -158,10 +160,10 @@ extern klib::vector<CPU_Info *> cpus;
 
 quantum_t assign_quantum_on_priority(priority_t);
 
-u32 calculate_timer_ticks(const klib::shared_ptr<TaskDescriptor>& task);
+u32 calculate_timer_ticks(const klib::shared_ptr<TaskDescriptor> &task);
 
 // static CPU_Info* const GSRELATIVE per_cpu = 0; // clang ignores GSRELATIVE for no apparent reason
-extern "C" CPU_Info* get_cpu_struct();
+extern "C" CPU_Info *get_cpu_struct();
 
 inline klib::shared_ptr<TaskDescriptor> get_current_task()
 {
@@ -169,7 +171,7 @@ inline klib::shared_ptr<TaskDescriptor> get_current_task()
 }
 
 // Adds the task to the appropriate ready queue
-void push_ready(const klib::shared_ptr<TaskDescriptor>& p);
+void push_ready(const klib::shared_ptr<TaskDescriptor> &p);
 
 // Initializes scheduling structures during the kernel initialization
 void init_scheduling();
@@ -187,7 +189,7 @@ void sched_periodic();
 void start_scheduler();
 
 // Pushes current processos to the back of sheduling queues
-void evict(const klib::shared_ptr<TaskDescriptor>&);
+void evict(const klib::shared_ptr<TaskDescriptor> &);
 
 // Reschedules the tasks
 extern "C" void reschedule();

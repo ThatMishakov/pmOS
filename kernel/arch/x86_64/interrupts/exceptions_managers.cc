@@ -2,41 +2,43 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
- * 1. Redistributions of source code must retain the above copyright notice, this
- *    list of conditions and the following disclaimer.
- * 
+ *
+ * 1. Redistributions of source code must retain the above copyright notice,
+ * this list of conditions and the following disclaimer.
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
- * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
- * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
- * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
- * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
  */
 
 #include "exceptions_managers.hh"
-#include <utils.hh>
-#include <x86_asm.hh>
+
+#include <cpus/sse.hh>
+#include <kern_logger/kern_logger.hh>
 #include <memory/paging.hh>
 #include <processes/syscalls.hh>
 #include <processes/tasks.hh>
-#include <cpus/sse.hh>
-#include <kern_logger/kern_logger.hh>
 #include <stdlib.h>
+#include <utils.hh>
+#include <x86_asm.hh>
 
-void print_registers(const Task_Regs& regs, Logger& logger)
+void print_registers(const Task_Regs &regs, Logger &logger)
 {
     logger.printf(" => %%rdi: 0x%h\n", regs.scratch_r.rdi);
     logger.printf(" => %%rsi: 0x%h\n", regs.scratch_r.rsi);
@@ -67,7 +69,7 @@ void print_registers(const Task_Regs& regs, Logger& logger)
     logger.printf(" Error code: 0x%h\n", regs.int_err);
 }
 
-void print_registers(const klib::shared_ptr<TaskDescriptor>& task, Logger& logger)
+void print_registers(const klib::shared_ptr<TaskDescriptor> &task, Logger &logger)
 {
     if (not task)
         return;
@@ -81,25 +83,29 @@ extern "C" void dbg_main()
 {
     t_print_bochs("Error! Kernel interrupt!\n");
     print_registers(kernel_interrupt_regs, bochs_logger);
-    while (1) ;
+    while (1)
+        ;
 }
 
-void print_stack_trace(const klib::shared_ptr<TaskDescriptor>& task, Logger& logger)
+void print_stack_trace(const klib::shared_ptr<TaskDescriptor> &task, Logger &logger)
 {
     if (not task)
         return;
 
     logger.printf("Stack trace:\n");
-    u64* rbp = (u64*)task->regs.preserved_r.rbp;
+    u64 *rbp = (u64 *)task->regs.preserved_r.rbp;
     while (rbp) {
         logger.printf(" => 0x%h\n", rbp[1]);
-        rbp = (u64*)rbp[0];
+        rbp = (u64 *)rbp[0];
     }
 }
 
 extern "C" void deal_with_pagefault_in_kernel()
 {
-    t_print_bochs("Error: Pagefault inside the kernel! Instr %h %%cr2 0x%h  error 0x%h CPU %i\n", get_cpu_struct()->jumpto_from, get_cpu_struct()->pagefault_cr2, get_cpu_struct()->pagefault_error, get_cpu_struct()->cpu_id);
+    t_print_bochs("Error: Pagefault inside the kernel! Instr %h %%cr2 0x%h  "
+                  "error 0x%h CPU %i\n",
+                  get_cpu_struct()->jumpto_from, get_cpu_struct()->pagefault_cr2,
+                  get_cpu_struct()->pagefault_error, get_cpu_struct()->cpu_id);
     print_registers(get_cpu_struct()->current_task, bochs_logger);
     print_stack_trace(bochs_logger);
 
@@ -108,45 +114,42 @@ extern "C" void deal_with_pagefault_in_kernel()
 
 void kernel_jump_to(void (*function)(void))
 {
-    CPU_Info *c = get_cpu_struct();
+    CPU_Info *c    = get_cpu_struct();
     c->jumpto_from = c->nested_int_regs.e.rip;
     c->jumpto_to   = (u64)function;
 
     c->nested_int_regs.e.rip = (u64)&jumpto_func;
 }
 
-void print_pt_chain(u64 page, Logger& logger)
+void print_pt_chain(u64 page, Logger &logger)
 {
-    PML4E* pml4e = get_pml4e(page, rec_map_index);
+    PML4E *pml4e = get_pml4e(page, rec_map_index);
     logger.printf("PML4E: %h\n", *((u64 *)pml4e));
     if (not pml4e->present)
         return;
 
-    PDPTE* pdpte = get_pdpe(page, rec_map_index);
+    PDPTE *pdpte = get_pdpe(page, rec_map_index);
     logger.printf("PDPTE: %h\n", *((u64 *)pdpte));
     if (not pdpte->present)
         return;
 
-    PDE* pde = get_pde(page, rec_map_index);
+    PDE *pde = get_pde(page, rec_map_index);
     logger.printf("PDE: %h\n", *((u64 *)pde));
     if (not pde->present)
         return;
 
-    PTE* pte = get_pte(page, rec_map_index);
+    PTE *pte = get_pte(page, rec_map_index);
     logger.printf("PTE: %h\n", *((u64 *)pte));
 }
 
-bool is_protection_violation(u64 err_code) noexcept
-{
-    return err_code & 0x01;
-}
+bool is_protection_violation(u64 err_code) noexcept { return err_code & 0x01; }
 
 extern "C" void pagefault_manager()
 {
     CPU_Info *c = get_cpu_struct();
 
     if (c->nested_level) {
-        c->pagefault_cr2 = getCR2();
+        c->pagefault_cr2   = getCR2();
         c->pagefault_error = c->nested_int_regs.int_err;
 
         kernel_jump_to(deal_with_pagefault_in_kernel);
@@ -154,12 +157,13 @@ extern "C" void pagefault_manager()
     }
 
     klib::shared_ptr<TaskDescriptor> task = c->current_task;
-    u64 err = task->regs.int_err;
+    u64 err                               = task->regs.int_err;
 
     // Get the memory location which has caused the fault
     u64 virtual_addr = getCR2();
 
-    //t_print_bochs("Debug: Pagefault %h pid %i (%s) rip %h error %h\n", virtual_addr, task->pid, task->name.c_str(), task->regs.e.rip, err);
+    // t_print_bochs("Debug: Pagefault %h pid %i (%s) rip %h error %h\n",
+    // virtual_addr, task->pid, task->name.c_str(), task->regs.e.rip, err);
 
     try {
         if (is_protection_violation(err))
@@ -167,14 +171,14 @@ extern "C" void pagefault_manager()
 
         Auto_Lock_Scope scope_lock(task->page_table->lock);
 
-        auto& regions = task->page_table->paging_regions;
-        const auto it = regions.get_smaller_or_equal(virtual_addr);
+        auto &regions       = task->page_table->paging_regions;
+        const auto it       = regions.get_smaller_or_equal(virtual_addr);
         const auto addr_all = virtual_addr & ~07777;
 
         // Reads can't really be checked on x86, so don't set read flag
-        u64 access_mask =
-              (err & 0x002) ? Generic_Mem_Region::Writeable : 0
-            | (err & 0x010) ? Generic_Mem_Region::Executable : 0;
+        u64 access_mask = (err & 0x002)       ? Generic_Mem_Region::Writeable
+                          : 0 | (err & 0x010) ? Generic_Mem_Region::Executable
+                                              : 0;
 
         if (it != regions.end() and it->second->is_in_range(virtual_addr)) {
             auto r = it->second->on_page_fault(access_mask, virtual_addr);
@@ -184,10 +188,15 @@ extern "C" void pagefault_manager()
             throw Kern_Exception(ERROR_PAGE_NOT_ALLOCATED, "pagefault in unknown region");
         }
 
-    } catch (const Kern_Exception& e) {
-        t_print_bochs("Debug: Pagefault %h pid %i rip %h error %h returned error %i (%s)\n", virtual_addr, task->pid, task->regs.e.rip, err, e.err_code, e.err_message);
-        global_logger.printf("Warning: Pagefault %h pid %i (%s) rip %h error %h -> %i killing process...\n", virtual_addr, task->pid, task->name.c_str(), task->regs.e.rip, err, e.err_code);
-        
+    } catch (const Kern_Exception &e) {
+        t_print_bochs("Debug: Pagefault %h pid %i rip %h error %h returned "
+                      "error %i (%s)\n",
+                      virtual_addr, task->pid, task->regs.e.rip, err, e.err_code, e.err_message);
+        global_logger.printf("Warning: Pagefault %h pid %i (%s) rip %h error "
+                             "%h -> %i killing process...\n",
+                             virtual_addr, task->pid, task->name.c_str(), task->regs.e.rip, err,
+                             e.err_code);
+
         print_pt_chain(virtual_addr, global_logger);
         print_registers(task, global_logger);
         print_stack_trace(task, global_logger);
@@ -205,8 +214,11 @@ extern "C" void sse_exception_manager()
 extern "C" void general_protection_fault_manager()
 {
     task_ptr task = get_cpu_struct()->current_task;
-    //t_print_bochs("!!! General Protection Fault (GP) error %h\n", err);
-    global_logger.printf("!!! General Protection Fault (GP) error (segment) %h PID %i (%s) RIP %h CS %h... Killing the process\n", task->regs.int_err, task->pid, task->name.c_str(), task->regs.e.rip, task->regs.e.cs);
+    // t_print_bochs("!!! General Protection Fault (GP) error %h\n", err);
+    global_logger.printf("!!! General Protection Fault (GP) error (segment) %h "
+                         "PID %i (%s) RIP %h CS %h... Killing the process\n",
+                         task->regs.int_err, task->pid, task->name.c_str(), task->regs.e.rip,
+                         task->regs.e.cs);
     print_registers(get_cpu_struct()->current_task, global_logger);
     print_stack_trace(task, global_logger);
     task->atomic_kill();
@@ -215,23 +227,30 @@ extern "C" void general_protection_fault_manager()
 extern "C" void invalid_opcode_manager()
 {
     task_ptr task = get_cpu_struct()->current_task;
-    global_logger.printf("!!! Invalid op-code (UD) instr %h\n", get_cpu_struct()->current_task->regs.e.rip);
+    global_logger.printf("!!! Invalid op-code (UD) instr %h\n",
+                         get_cpu_struct()->current_task->regs.e.rip);
     task->atomic_kill();
 }
 
 extern "C" void stack_segment_fault_manager()
 {
     task_ptr task = get_cpu_struct()->current_task;
-    t_print_bochs("!!! Stack-Segment Fault error %h RIP %h RSP %h PID %h (%s)\n", task->regs.int_err, task->regs.e.rip, task->regs.e.rsp, task->pid, task->name.c_str());
-    global_logger.printf("!!! Stack-Segment Fault error %h RIP %h RSP %h\n", task->regs.int_err, task->regs.e.rip, task->regs.e.rsp);
+    t_print_bochs("!!! Stack-Segment Fault error %h RIP %h RSP %h PID %h (%s)\n",
+                  task->regs.int_err, task->regs.e.rip, task->regs.e.rsp, task->pid,
+                  task->name.c_str());
+    global_logger.printf("!!! Stack-Segment Fault error %h RIP %h RSP %h\n", task->regs.int_err,
+                         task->regs.e.rip, task->regs.e.rsp);
     task->atomic_kill();
 }
 
 extern "C" void double_fault_manager()
 {
     task_ptr task = get_cpu_struct()->current_task;
-    t_print_bochs("!!! Double Fault error %h RIP %h RSP %h PID %h (%s)\n", task->regs.int_err, task->regs.e.rip, task->regs.e.rsp, task->pid, task->name.c_str());
-    global_logger.printf("!!! Double Fault error %h RIP %h RSP %h PID %h (%s)\n", task->regs.int_err, task->regs.e.rip, task->regs.e.rsp, task->pid, task->name.c_str());
+    t_print_bochs("!!! Double Fault error %h RIP %h RSP %h PID %h (%s)\n", task->regs.int_err,
+                  task->regs.e.rip, task->regs.e.rsp, task->pid, task->name.c_str());
+    global_logger.printf("!!! Double Fault error %h RIP %h RSP %h PID %h (%s)\n",
+                         task->regs.int_err, task->regs.e.rip, task->regs.e.rsp, task->pid,
+                         task->name.c_str());
     task->atomic_kill();
 }
 

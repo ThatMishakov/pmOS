@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -28,13 +28,12 @@
 
 #pragma once
 #include <lib/list.hh>
+#include <lib/memory.hh>
 #include <lib/queue.hh>
-#include <utils.hh>
+#include <lib/splay_tree_map.hh>
 #include <lib/vector.hh>
 #include <types.hh>
-#include <lib/splay_tree_map.hh>
-#include <types.hh>
-#include <lib/memory.hh>
+#include <utils.hh>
 
 extern Spinlock messaging_ports;
 
@@ -49,13 +48,10 @@ struct Message {
     u64 task_id_from = 0;
     klib::vector<char> content;
 
-    inline size_t size() const
-    {
-        return content.size();
-    }
+    inline size_t size() const { return content.size(); }
 
     // Returns true if done successfully, false otherwise (e.g. when syscall needs to be repeated)
-    bool copy_to_user_buff(char* buff);
+    bool copy_to_user_buff(char *buff);
 };
 
 #define MSG_ATTR_PRESENT   0x01ULL
@@ -64,7 +60,8 @@ struct Message {
 
 class TaskGroup;
 
-class Port: public Generic_Port {
+class Port: public Generic_Port
+{
 public:
     klib::weak_ptr<TaskDescriptor> owner;
     klib::weak_ptr<Port> self;
@@ -72,31 +69,35 @@ public:
     Spinlock lock;
     u64 portno;
 
-    Port(const klib::shared_ptr<TaskDescriptor>& owner, u64 portno);
+    Port(const klib::shared_ptr<TaskDescriptor> &owner, u64 portno);
 
+    void enqueue(const klib::shared_ptr<Message> &msg);
 
-    void enqueue(const klib::shared_ptr<Message>& msg);
+    void send_from_system(klib::vector<char> &&msg);
+    void send_from_system(const char *msg, size_t size);
 
-    void send_from_system(klib::vector<char>&& msg);
-    void send_from_system(const char* msg, size_t size);
+    // Returns true if successfully sent, false otherwise (e.g. when it is needed to repeat the
+    // syscall). Throws on crytical errors
+    bool send_from_user(const klib::shared_ptr<TaskDescriptor> &sender, const char *unsafe_user_ptr,
+                        size_t msg_size);
+    void atomic_send_from_system(const char *msg, size_t size);
 
-    // Returns true if successfully sent, false otherwise (e.g. when it is needed to repeat the syscall). Throws on crytical errors
-    bool send_from_user(const klib::shared_ptr<TaskDescriptor>& sender, const char *unsafe_user_ptr, size_t msg_size);
-    void atomic_send_from_system(const char* msg, size_t size);
+    // Returns true if successfully sent, false otherwise (e.g. when it is needed to repeat the
+    // syscall). Throws on crytical errors
+    bool atomic_send_from_user(const klib::shared_ptr<TaskDescriptor> &sender,
+                               const char *unsafe_user_message, size_t msg_size);
 
-    // Returns true if successfully sent, false otherwise (e.g. when it is needed to repeat the syscall). Throws on crytical errors
-    bool atomic_send_from_user(const klib::shared_ptr<TaskDescriptor>& sender, const char* unsafe_user_message, size_t msg_size);
+    void change_return_upon_unblock(const klib::shared_ptr<TaskDescriptor> &task);
 
-    void change_return_upon_unblock(const klib::shared_ptr<TaskDescriptor>& task);
-
-    klib::shared_ptr<Message>& get_front();
+    klib::shared_ptr<Message> &get_front();
     void pop_front() noexcept;
     bool is_empty() const noexcept;
 
     /**
      * @brief Destructor of port
-     * 
-     * This destructor cleans up the port and does other misc stuff such as sending not-delivered acknowledgements
+     *
+     * This destructor cleans up the port and does other misc stuff such as sending not-delivered
+     * acknowledgements
      */
     virtual ~Port() noexcept override;
 
@@ -113,7 +114,8 @@ public:
     /**
      * @brief Creates a new port with *task* as its owner
      */
-    static klib::shared_ptr<Port> atomic_create_port(const klib::shared_ptr<TaskDescriptor>& task);
+    static klib::shared_ptr<Port> atomic_create_port(const klib::shared_ptr<TaskDescriptor> &task);
+
 protected:
     using Message_storage = klib::list<klib::shared_ptr<Message>>;
     Message_storage msg_queue;

@@ -1,3 +1,4 @@
-void __pause() {
+void __pause()
+{
     // asm volatile("wfi");
 }

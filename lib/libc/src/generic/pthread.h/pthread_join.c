@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -26,18 +26,18 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <pthread.h>
-#include <pmos/ports.h>
-#include <pmos/tls.h>
-#include <pmos/system.h>
-#include <pmos/ipc.h>
-#include <pmos/helpers.h>
-#include <errno.h>
-#include <stdlib.h>
 #include <assert.h>
+#include <errno.h>
+#include <pmos/helpers.h>
+#include <pmos/ipc.h>
+#include <pmos/ports.h>
+#include <pmos/system.h>
+#include <pmos/tls.h>
+#include <pthread.h>
 #include <stdbool.h>
+#include <stdlib.h>
 
-void __release_tls(struct uthread * u);
+void __release_tls(struct uthread *u);
 
 __thread pmos_port_t join_notify_port = INVALID_PORT;
 
@@ -51,16 +51,14 @@ static int prepare_join_notify_port()
     return 0;
 }
 
-
-
-int pthread_join(pthread_t thread, void ** retval)
+int pthread_join(pthread_t thread, void **retval)
 {
     if (thread == NULL) {
         errno = EINVAL;
         return -1;
     }
 
-    struct uthread * u = thread;
+    struct uthread *u = thread;
     if (u->thread_status == __THREAD_STATUS_DETACHED) {
         errno = EINVAL;
         return -1;
@@ -80,7 +78,8 @@ int pthread_join(pthread_t thread, void ** retval)
 
     u->join_notify_port = join_notify_port;
 
-    bool is_running = __sync_bool_compare_and_swap(&u->thread_status, __THREAD_STATUS_RUNNING, __THREAD_STATUS_JOINING);
+    bool is_running = __sync_bool_compare_and_swap(&u->thread_status, __THREAD_STATUS_RUNNING,
+                                                   __THREAD_STATUS_JOINING);
     if (!is_running) {
         // The thread is already finished
         assert(u->thread_status == __THREAD_STATUS_FINISHED);
@@ -92,7 +91,7 @@ int pthread_join(pthread_t thread, void ** retval)
     // Wait for the thread to finish
 
     Message_Descriptor reply_desc;
-    IPC_Thread_Finished * reply;
+    IPC_Thread_Finished *reply;
     result_t result = get_message(&reply_desc, (unsigned char **)&reply, join_notify_port);
     if (result != SUCCESS) {
         errno = ESRCH;

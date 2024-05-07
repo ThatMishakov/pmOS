@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -26,17 +26,18 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <pthread.h>
+#include "waiter_struct.h"
+
+#include <assert.h>
 #include <errno.h>
 #include <pmos/ipc.h>
 #include <pmos/system.h>
-#include <assert.h>
-
-#include "waiter_struct.h"
+#include <pthread.h>
 
 __thread struct __pthread_waiter cond_waiter_struct = {0, NULL};
 
-int pthread_cond_init(pthread_cond_t* cond, const pthread_condattr_t* attr) {
+int pthread_cond_init(pthread_cond_t *cond, const pthread_condattr_t *attr)
+{
     // Check if attr is NULL and if not, its type
     // TODO: Condattr are not implemented yet
     // if (attr != NULL) {
@@ -49,7 +50,8 @@ int pthread_cond_init(pthread_cond_t* cond, const pthread_condattr_t* attr) {
     return 0;
 }
 
-int pthread_cond_wait(pthread_cond_t* cond, pthread_mutex_t* mutex) {
+int pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex)
+{
     // Check if mutex is NULL
     if (mutex == NULL) {
         errno = EINVAL;
@@ -76,13 +78,12 @@ int pthread_cond_wait(pthread_cond_t* cond, pthread_mutex_t* mutex) {
     // Unlock the mutex
     pthread_mutex_unlock(mutex);
 
-
-
     // Wait for an unlock message
     IPC_Mutex_Unlock unlock_signal;
     Message_Descriptor reply_descriptor;
 
-    result_t result = syscall_get_message_info(&reply_descriptor, cond_waiter_struct.notification_port, 0);
+    result_t result =
+        syscall_get_message_info(&reply_descriptor, cond_waiter_struct.notification_port, 0);
 
     // This should never fail
     assert(result == SUCCESS);
@@ -90,42 +91,42 @@ int pthread_cond_wait(pthread_cond_t* cond, pthread_mutex_t* mutex) {
     // Check if the message is the unlock signal
     assert(reply_descriptor.size >= sizeof(IPC_Mutex_Unlock));
 
-    result = get_first_message((char *)&unlock_signal, sizeof(IPC_Mutex_Unlock), cond_waiter_struct.notification_port);
+    result = get_first_message((char *)&unlock_signal, sizeof(IPC_Mutex_Unlock),
+                               cond_waiter_struct.notification_port);
 
     // Again, this should never fail
     assert(result == SUCCESS);
 
     assert(unlock_signal.type == IPC_Mutex_Unlock_NUM);
 
-
-
     // We've been woken up. Lock the mutex again
     int lock_result = pthread_mutex_lock(mutex);
 
-    // In theory, mutex can only fail the first time it is locked, so if it does something screwy is going on
+    // In theory, mutex can only fail the first time it is locked, so if it does something screwy is
+    // going on
     assert(lock_result == 0);
 
     return 0;
 }
 
-static void simple_lock(int * lock) {
+static void simple_lock(int *lock)
+{
     do {
         if (*lock == 1) {
             sched_yield();
             continue;
         }
-        
+
         if (__atomic_compare_exchange_n(lock, 0, 1, 0, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)) {
             return;
         }
     } while (1);
 }
 
-static void simple_unlock(int * lock) {
-    __atomic_store_n(lock, 0, __ATOMIC_SEQ_CST);
-}
+static void simple_unlock(int *lock) { __atomic_store_n(lock, 0, __ATOMIC_SEQ_CST); }
 
-int pthread_cond_broadcast(pthread_cond_t* cond) {
+int pthread_cond_broadcast(pthread_cond_t *cond)
+{
     // Check if cond is NULL
     if (cond == NULL) {
         errno = EINVAL;
@@ -148,13 +149,15 @@ int pthread_cond_broadcast(pthread_cond_t* cond) {
     // implementation of enqueue
 
     simple_lock(&cond->pop_spinlock);
-    struct __pthread_waiter* waiter = __try_pop_waiter(&cond->waiters_list_head, &cond->waiters_list_tail);
+    struct __pthread_waiter *waiter =
+        __try_pop_waiter(&cond->waiters_list_head, &cond->waiters_list_tail);
     simple_unlock(&cond->pop_spinlock);
-    
+
     int fail_count = 0;
 
     while (waiter != NULL) {
-        result_t result = send_message_port(waiter->notification_port, sizeof(IPC_Mutex_Unlock), (char *)&unlock_signal);
+        result_t result = send_message_port(waiter->notification_port, sizeof(IPC_Mutex_Unlock),
+                                            (char *)&unlock_signal);
 
         if (result != SUCCESS) {
             fail_count++;
@@ -167,7 +170,8 @@ int pthread_cond_broadcast(pthread_cond_t* cond) {
         }
 
         simple_lock(&cond->pop_spinlock);
-        struct __pthread_waiter* waiter = __try_pop_waiter(&cond->waiters_list_head, &cond->waiters_list_tail);
+        struct __pthread_waiter *waiter =
+            __try_pop_waiter(&cond->waiters_list_head, &cond->waiters_list_tail);
         simple_unlock(&cond->pop_spinlock);
     }
 

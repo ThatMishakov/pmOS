@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -26,11 +26,12 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <pthread.h>
 #include <errno.h>
 #include <pmos/system.h>
+#include <pthread.h>
 
-int pthread_spin_trylock(pthread_spinlock_t* lock) {
+int pthread_spin_trylock(pthread_spinlock_t *lock)
+{
     if (__sync_lock_test_and_set(lock, 1) == 0) {
         // Acquired the lock
         return 0;
@@ -50,7 +51,8 @@ int sched_yield(void)
     return 0;
 }
 
-int pthread_spin_lock(pthread_spinlock_t* lock) {
+int pthread_spin_lock(pthread_spinlock_t *lock)
+{
     while (__sync_lock_test_and_set(lock, 1) != 0) {
         // Spin until the lock is acquired
         while (*lock) {
@@ -61,31 +63,34 @@ int pthread_spin_lock(pthread_spinlock_t* lock) {
     return 0;
 }
 
-int pthread_spin_unlock(pthread_spinlock_t* lock) {
+int pthread_spin_unlock(pthread_spinlock_t *lock)
+{
     __sync_lock_release(lock);
     return 0;
 }
 
-int pthread_spin_init(pthread_spinlock_t *lock, int pshared) {
+int pthread_spin_init(pthread_spinlock_t *lock, int pshared)
+{
     if (lock == NULL) {
-        return EINVAL;  // Invalid lock pointer
+        return EINVAL; // Invalid lock pointer
     }
 
     if (pshared != PTHREAD_PROCESS_PRIVATE && pshared != PTHREAD_PROCESS_SHARED) {
-        return EINVAL;  // Invalid pshared value
+        return EINVAL; // Invalid pshared value
     }
 
-    *lock = 0;  // Initialize the spinlock to an unlocked state
+    *lock = 0; // Initialize the spinlock to an unlocked state
 
     return 0;
 }
 
-int pthread_spin_destroy(pthread_spinlock_t *lock) {
+int pthread_spin_destroy(pthread_spinlock_t *lock)
+{
     if (lock == NULL) {
-        return EINVAL;  // Invalid lock pointer
+        return EINVAL; // Invalid lock pointer
     }
 
-    *lock = 0;  // Reset the lock variable
+    *lock = 0; // Reset the lock variable
 
     return 0;
 }

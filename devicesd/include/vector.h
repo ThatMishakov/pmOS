@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -31,57 +31,60 @@
 
 #include <stdlib.h>
 
-#define VECTOR(type) \
-    struct { \
-        type *data; \
-        size_t size; \
+#define VECTOR(type)     \
+    struct {             \
+        type *data;      \
+        size_t size;     \
         size_t capacity; \
     }
 
-#define VECTOR_TYPEDEF(type, name) \
-    typedef VECTOR(type) name
+#define VECTOR_TYPEDEF(type, name) typedef VECTOR(type) name
 
-#define VECTOR_INIT { NULL, 0, 0 }
+#define VECTOR_INIT \
+    {               \
+        NULL, 0, 0  \
+    }
 
-#define VECTOR_PUSH_BACK(vec, value) \
-    do { \
-        if ((vec).size == (vec).capacity) { \
-            (vec).capacity = (vec).capacity == 0 ? 1 : (vec).capacity * 2; \
-            (vec).data = realloc((vec).data, (vec).capacity * sizeof((vec).data[0])); \
-        } \
-        (vec).data[(vec).size++] = value; \
+#define VECTOR_PUSH_BACK(vec, value)                                                      \
+    do {                                                                                  \
+        if ((vec).size == (vec).capacity) {                                               \
+            (vec).capacity = (vec).capacity == 0 ? 1 : (vec).capacity * 2;                \
+            (vec).data     = realloc((vec).data, (vec).capacity * sizeof((vec).data[0])); \
+        }                                                                                 \
+        (vec).data[(vec).size++] = value;                                                 \
     } while (0)
 
-#define VECTOR_PUSH_BACK_CHECKED(vec, value, result) \
-    do { \
-        if ((vec).size == (vec).capacity) { \
-            (vec).capacity = (vec).capacity == 0 ? 4 : (vec).capacity * 2; \
+#define VECTOR_PUSH_BACK_CHECKED(vec, value, result)                                      \
+    do {                                                                                  \
+        if ((vec).size == (vec).capacity) {                                               \
+            (vec).capacity = (vec).capacity == 0 ? 4 : (vec).capacity * 2;                \
             void *new_data = realloc((vec).data, (vec).capacity * sizeof((vec).data[0])); \
-            if (!new_data) { \
-                result = -1; \
-                break; \
-            } \
-            (vec).data = new_data; \
-        } \
-        (vec).data[(vec).size++] = value; \
-        result = 0; \
+            if (!new_data) {                                                              \
+                result = -1;                                                              \
+                break;                                                                    \
+            }                                                                             \
+            (vec).data = new_data;                                                        \
+        }                                                                                 \
+        (vec).data[(vec).size++] = value;                                                 \
+        result                   = 0;                                                     \
     } while (0)
 
 #define VECTOR_FOREACH(vec, var) \
     for (size_t i = 0; i < (vec).size && ((var) = (vec).data[i], 1); ++i)
 
-#define VECTOR_FREE(vec) \
-    do { \
-        free((vec).data); \
-        (vec).data = NULL; \
-        (vec).size = 0; \
-        (vec).capacity = 0; \
+#define VECTOR_FREE(vec)       \
+    do {                       \
+        free((vec).data);      \
+        (vec).data     = NULL; \
+        (vec).size     = 0;    \
+        (vec).capacity = 0;    \
     } while (0)
 
-#define VECTOR_SIZE(vec) ((vec).size)
+#define VECTOR_SIZE(vec)  ((vec).size)
 #define VECTOR_EMPTY(vec) ((vec).size == 0)
 
 #define VECTOR_SORT(vec, cmp) qsort((vec).data, (vec).size, sizeof((vec).data[0]), cmp)
-#define VECTOR_BSEARCH(vec, key, cmp) bsearch(&(key), (vec).data, (vec).size, sizeof((vec).data[0]), cmp)
+#define VECTOR_BSEARCH(vec, key, cmp) \
+    bsearch(&(key), (vec).data, (vec).size, sizeof((vec).data[0]), cmp)
 
 #endif // VECTOR_H

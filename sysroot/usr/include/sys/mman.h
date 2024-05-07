@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -30,13 +30,14 @@
 #define _MMAN_H
 
 #include "../pmos/memory_flags.h"
+
 #include <sys/types.h>
 
 #if defined(__cplusplus)
 extern "C" {
 #endif
 
-#define MAP_FAILED    ((void*)0)
+#define MAP_FAILED ((void *)0)
 
 #define POSIX_MADV_NORMAL     0
 #define POSIX_MADV_SEQUENTIAL 1
@@ -48,35 +49,34 @@ extern "C" {
 #define POSIX_TYPED_MEM_ALLOCATE_CONTIG 0x02
 #define POSIX_TYPED_MEM_MAP_ALLOCATABLE 0x04
 
-static const size_t  posix_tmi_length = -1;
+static const size_t posix_tmi_length = -1;
 
 #ifdef __STDC_HOSTED__
 
+int mlock(const void *, size_t);
 
-int    mlock(const void *, size_t);
+int mlockall(int);
 
-int    mlockall(int);
+void *mmap(void *, size_t, int, int, int, off_t);
+int munmap(void *, size_t);
 
-void  *mmap(void *, size_t, int, int, int, off_t);
-int    munmap(void *, size_t);
+int mprotect(void *, size_t, int);
 
-int    mprotect(void *, size_t, int);
+int msync(void *, size_t, int);
 
-int    msync(void *, size_t, int);
+int munlock(const void *, size_t);
 
-int    munlock(const void *, size_t);
+int munlockall(void);
 
-int    munlockall(void);
+int posix_madvise(void *, size_t, int);
 
-int    posix_madvise(void *, size_t, int);
+int posix_mem_offset(const void *restrict, size_t, off_t *restrict, size_t *restrict,
+                     int *restrict);
+int posix_typed_mem_get_info(int, struct posix_typed_mem_info *);
+int posix_typed_mem_open(const char *, int, int);
 
-int    posix_mem_offset(const void *restrict, size_t, off_t *restrict,
-           size_t *restrict, int *restrict);
-int    posix_typed_mem_get_info(int, struct posix_typed_mem_info *);
-int    posix_typed_mem_open(const char *, int, int);
-
-int    shm_open(const char *, int, mode_t);
-int    shm_unlink(const char *);
+int shm_open(const char *, int, mode_t);
+int shm_unlink(const char *);
 
 #endif /* __STDC_HOSTED__ */
 

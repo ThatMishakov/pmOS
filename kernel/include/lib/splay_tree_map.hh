@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -28,109 +28,106 @@
 
 #pragma once
 #include "pair.hh"
-#include "utility.hh"
 #include "stdexcept.hh"
+#include "utility.hh"
 
-namespace klib {
+namespace klib
+{
 
-template<typename K, typename T>
-class splay_tree_map {
+template<typename K, typename T> class splay_tree_map
+{
 public:
     typedef pair<const K, T> value_type;
-    typedef value_type& reference;
+    typedef value_type &reference;
     typedef K key_type;
+
 private:
     struct node {
-        node* left = nullptr;
-        node* right = nullptr;
-        node* parent = nullptr;
+        node *left   = nullptr;
+        node *right  = nullptr;
+        node *parent = nullptr;
         value_type key_data;
 
         node() = default;
         constexpr node(K key, T data): left(nullptr), right(nullptr), key_data({key, data}) {};
-        constexpr node(value_type p): left(nullptr), right(nullptr), key_data(klib::forward<value_type>(p)) {};
+        constexpr node(value_type p)
+            : left(nullptr), right(nullptr), key_data(klib::forward<value_type>(p)) {};
     };
 
     size_t elements;
-    mutable node* root;
+    mutable node *root;
 
-    void splay(node* n) const;
-    void rotate_left(node*) const;
-    void rotate_right(node*) const;
-    void delete_node(node*);
+    void splay(node *n) const;
+    void rotate_left(node *) const;
+    void rotate_right(node *) const;
+    void delete_node(node *);
 
-    static bool is_left_child(node*);
+    static bool is_left_child(node *);
 
-    static node *max(node*);
-    static node *min(node*);
+    static node *max(node *);
+    static node *min(node *);
 
-    static node *next(node*);
+    static node *next(node *);
 
-    static node* smaller(node*, const key_type&);
-    static node* eq_or_smaller(node*, const key_type&);
-    static node* eq_or_larger(node*, const key_type&);
-    static node* larger(node*, const key_type&);
+    static node *smaller(node *, const key_type &);
+    static node *eq_or_smaller(node *, const key_type &);
+    static node *eq_or_larger(node *, const key_type &);
+    static node *larger(node *, const key_type &);
+
 public:
     friend class iterator;
-    class iterator {
+    class iterator
+    {
         friend class splay_tree_map;
-    private:
-        node* ptr = nullptr;
 
-        constexpr iterator(node* n): ptr(n) {};
+    private:
+        node *ptr = nullptr;
+
+        constexpr iterator(node *n): ptr(n) {};
+
     public:
         iterator() = default;
-        
-        constexpr bool operator==(iterator it) const
-        {
-            return ptr == it.ptr;
-        }
 
-        constexpr reference operator*() const
-        {
-            return ptr->key_data;
-        }
+        constexpr bool operator==(iterator it) const { return ptr == it.ptr; }
 
-        constexpr value_type* operator->() const
-        {
-            return &ptr->key_data;
-        }
+        constexpr reference operator*() const { return ptr->key_data; }
+
+        constexpr value_type *operator->() const { return &ptr->key_data; }
 
         iterator operator++() noexcept;
 
         iterator operator++(int) noexcept;
     };
 
-    constexpr splay_tree_map() noexcept:
-        elements(0), root(nullptr) {};
-    splay_tree_map(const splay_tree_map&);
-    splay_tree_map(splay_tree_map&&);
+    constexpr splay_tree_map() noexcept: elements(0), root(nullptr) {};
+    splay_tree_map(const splay_tree_map &);
+    splay_tree_map(splay_tree_map &&);
     ~splay_tree_map();
 
     void clear() noexcept;
 
-    pair<iterator,bool> insert(const value_type&);
-    pair<iterator,bool> insert(value_type&&);
+    pair<iterator, bool> insert(const value_type &);
+    pair<iterator, bool> insert(value_type &&);
 
-    pair<iterator,bool> emplace(value_type&&);
+    pair<iterator, bool> emplace(value_type &&);
 
-    size_t erase(const K&);
+    size_t erase(const K &);
     void erase(iterator it) noexcept;
-    void erase_if_exists(const K&) noexcept;
+    void erase_if_exists(const K &) noexcept;
 
     constexpr size_t size() const noexcept;
     constexpr bool empty() const noexcept;
 
-    size_t count(const K&) const noexcept;
+    size_t count(const K &) const noexcept;
 
-    T& operator[](const K& k);
+    T &operator[](const K &k);
 
-    const T& at(const K&) const;
-    T& at(const K&);
+    const T &at(const K &) const;
+    T &at(const K &);
 
     K largest() const;
 
-    T get_copy_or_default(const K&) noexcept;
+    T get_copy_or_default(const K &) noexcept;
 
     iterator begin() const noexcept
     {
@@ -140,20 +137,16 @@ public:
         return root;
     }
 
-    constexpr iterator end() const noexcept
-    {
-        return nullptr;
-    } 
+    constexpr iterator end() const noexcept { return nullptr; }
 
-    iterator find (const key_type& k) noexcept;
-    iterator lower_bound (const key_type& k) noexcept;
-    iterator upper_bound (const key_type& k) noexcept;
+    iterator find(const key_type &k) noexcept;
+    iterator lower_bound(const key_type &k) noexcept;
+    iterator upper_bound(const key_type &k) noexcept;
 
-    iterator get_smaller_or_equal(const key_type& k) noexcept;
+    iterator get_smaller_or_equal(const key_type &k) noexcept;
 };
 
-template<class K, class T>
-void splay_tree_map<K,T>::splay(splay_tree_map<K,T>::node* n) const
+template<class K, class T> void splay_tree_map<K, T>::splay(splay_tree_map<K, T>::node *n) const
 {
     while (n->parent != nullptr) {
         if (n->parent == root) {
@@ -163,10 +156,10 @@ void splay_tree_map<K,T>::splay(splay_tree_map<K,T>::node* n) const
                 rotate_left(n->parent);
             }
         } else {
-            node* p = n->parent;
-            node* g = p->parent;
+            node *p = n->parent;
+            node *g = p->parent;
 
-            if  (p->left == n and g->left == p) {
+            if (p->left == n and g->left == p) {
                 rotate_right(g);
                 rotate_right(p);
             } else if (p->left == n and g->right == p) {
@@ -184,9 +177,9 @@ void splay_tree_map<K,T>::splay(splay_tree_map<K,T>::node* n) const
 }
 
 template<class K, class T>
-void splay_tree_map<K,T>::rotate_left(splay_tree_map<K,T>::node* p) const
+void splay_tree_map<K, T>::rotate_left(splay_tree_map<K, T>::node *p) const
 {
-    node* n = p->right;
+    node *n  = p->right;
     p->right = n->left;
     if (n->left != nullptr) {
         n->left->parent = p;
@@ -199,14 +192,14 @@ void splay_tree_map<K,T>::rotate_left(splay_tree_map<K,T>::node* p) const
     } else { // x is right child
         p->parent->right = n;
     }
-    n->left = p;
+    n->left   = p;
     p->parent = n;
 }
 
 template<class K, class T>
-void splay_tree_map<K,T>::rotate_right(splay_tree_map<K,T>::node* p) const
+void splay_tree_map<K, T>::rotate_right(splay_tree_map<K, T>::node *p) const
 {
-    node* n = p->left;
+    node *n = p->left;
     p->left = n->right;
     if (n->right != nullptr) {
         n->right->parent = p;
@@ -219,15 +212,16 @@ void splay_tree_map<K,T>::rotate_right(splay_tree_map<K,T>::node* p) const
     } else {
         p->parent->left = n;
     }
-    n->right = p;
+    n->right  = p;
     p->parent = n;
 }
 
 template<class K, class T>
-pair<typename splay_tree_map<K,T>::iterator,bool> splay_tree_map<K,T>::insert(const typename splay_tree_map<K,T>::value_type& pair)
+pair<typename splay_tree_map<K, T>::iterator, bool>
+    splay_tree_map<K, T>::insert(const typename splay_tree_map<K, T>::value_type &pair)
 {
-    node *n = nullptr;
-    node* temp = root;
+    node *n    = nullptr;
+    node *temp = root;
     while (temp != nullptr) {
         n = temp;
         if (temp->key > pair.first) {
@@ -241,15 +235,15 @@ pair<typename splay_tree_map<K,T>::iterator,bool> splay_tree_map<K,T>::insert(co
         }
     }
 
-    node* c = new node(pair);
+    node *c = new node(pair);
 
     if (n == nullptr) {
         root = c;
     } else if (pair.first < n->key) {
-        n->left = c;
+        n->left   = c;
         c->parent = n;
     } else {
-        n->right = c;
+        n->right  = c;
         c->parent = n;
     }
 
@@ -261,10 +255,11 @@ pair<typename splay_tree_map<K,T>::iterator,bool> splay_tree_map<K,T>::insert(co
 }
 
 template<typename K, typename T>
-pair<typename splay_tree_map<K,T>::iterator, bool> splay_tree_map<K,T>::insert(typename splay_tree_map<K,T>::value_type&& pair)
+pair<typename splay_tree_map<K, T>::iterator, bool>
+    splay_tree_map<K, T>::insert(typename splay_tree_map<K, T>::value_type &&pair)
 {
-    node *n = nullptr;
-    node* temp = root;
+    node *n    = nullptr;
+    node *temp = root;
     while (temp != nullptr) {
         n = temp;
         if (pair.first < temp->key_data.first) {
@@ -278,17 +273,17 @@ pair<typename splay_tree_map<K,T>::iterator, bool> splay_tree_map<K,T>::insert(t
         }
     }
 
-    node* c = new node(forward<value_type>(pair));
+    node *c = new node(forward<value_type>(pair));
     // c->data = forward<T>(pair.second);
     // c->key = pair.first;
 
     if (n == nullptr) {
         root = c;
     } else if (pair.first < n->key_data.first) {
-        n->left = c;
+        n->left   = c;
         c->parent = n;
     } else {
-        n->right = c;
+        n->right  = c;
         c->parent = n;
     }
 
@@ -300,27 +295,25 @@ pair<typename splay_tree_map<K,T>::iterator, bool> splay_tree_map<K,T>::insert(t
 }
 
 template<typename K, typename T>
-pair<typename splay_tree_map<K,T>::iterator, bool> splay_tree_map<K,T>::emplace(typename splay_tree_map<K,T>::value_type&& pair)
+pair<typename splay_tree_map<K, T>::iterator, bool>
+    splay_tree_map<K, T>::emplace(typename splay_tree_map<K, T>::value_type &&pair)
 {
     return insert(klib::move(pair));
 }
 
-template<class K, class T>
-constexpr size_t splay_tree_map<K,T>::size() const noexcept
+template<class K, class T> constexpr size_t splay_tree_map<K, T>::size() const noexcept
 {
     return elements;
 }
 
-template<class K, class T>
-constexpr bool splay_tree_map<K,T>::empty() const noexcept
+template<class K, class T> constexpr bool splay_tree_map<K, T>::empty() const noexcept
 {
     return size() == 0;
 }
 
-template<class K, class T>
-size_t splay_tree_map<K,T>::count(const K& key) const noexcept
+template<class K, class T> size_t splay_tree_map<K, T>::count(const K &key) const noexcept
 {
-    node* n = root;
+    node *n = root;
     while (n != nullptr and n->key_data.first != key) {
         if (n->key_data.first < key) {
             n = n->right;
@@ -338,7 +331,7 @@ size_t splay_tree_map<K,T>::count(const K& key) const noexcept
 }
 
 template<class K, class T>
-typename splay_tree_map<K,T>::node* splay_tree_map<K,T>::max(splay_tree_map<K,T>::node* p)
+typename splay_tree_map<K, T>::node *splay_tree_map<K, T>::max(splay_tree_map<K, T>::node *p)
 {
     while (p->right != nullptr) {
         p = p->right;
@@ -347,7 +340,7 @@ typename splay_tree_map<K,T>::node* splay_tree_map<K,T>::max(splay_tree_map<K,T>
 }
 
 template<class K, class T>
-typename splay_tree_map<K,T>::node* splay_tree_map<K,T>::min(splay_tree_map<K,T>::node* p)
+typename splay_tree_map<K, T>::node *splay_tree_map<K, T>::min(splay_tree_map<K, T>::node *p)
 {
     while (p->left != nullptr) {
         p = p->left;
@@ -356,7 +349,7 @@ typename splay_tree_map<K,T>::node* splay_tree_map<K,T>::min(splay_tree_map<K,T>
 }
 
 template<class K, class T>
-typename splay_tree_map<K,T>::node* splay_tree_map<K,T>::next(splay_tree_map<K,T>::node* p)
+typename splay_tree_map<K, T>::node *splay_tree_map<K, T>::next(splay_tree_map<K, T>::node *p)
 {
     if (p->right != nullptr)
         return min(p->right);
@@ -366,15 +359,13 @@ typename splay_tree_map<K,T>::node* splay_tree_map<K,T>::next(splay_tree_map<K,T
 
     if (p == nullptr)
         return p;
-    
+
     return p->parent;
 }
 
-
-template<class K, class T>
-size_t splay_tree_map<K,T>::erase(const K& key)
+template<class K, class T> size_t splay_tree_map<K, T>::erase(const K &key)
 {
-    node* n = root;
+    node *n = root;
 
     while (n != nullptr and n->key_data.first != key) {
         if (n->key_data.first < key) {
@@ -391,8 +382,7 @@ size_t splay_tree_map<K,T>::erase(const K& key)
     return 1;
 }
 
-template<class K, class T>
-void splay_tree_map<K,T>::erase(iterator it) noexcept
+template<class K, class T> void splay_tree_map<K, T>::erase(iterator it) noexcept
 {
     node *n = it.ptr;
 
@@ -400,10 +390,9 @@ void splay_tree_map<K,T>::erase(iterator it) noexcept
         delete_node(it.ptr);
 }
 
-template<class K, class T>
-void splay_tree_map<K,T>::erase_if_exists(const K& key) noexcept
+template<class K, class T> void splay_tree_map<K, T>::erase_if_exists(const K &key) noexcept
 {
-    node* n = root;
+    node *n = root;
 
     while (n != nullptr and n->key_data.first != key) {
         if (n->key_data.first < key) {
@@ -417,23 +406,22 @@ void splay_tree_map<K,T>::erase_if_exists(const K& key) noexcept
         delete_node(n);
 }
 
-template<class K, class T>
-splay_tree_map<K,T>::~splay_tree_map()
+template<class K, class T> splay_tree_map<K, T>::~splay_tree_map()
 {
-    while (root != nullptr) delete_node(root);
+    while (root != nullptr)
+        delete_node(root);
 }
 
-template<class K, class T>
-void splay_tree_map<K,T>::delete_node(splay_tree_map<K,T>::node* p)
+template<class K, class T> void splay_tree_map<K, T>::delete_node(splay_tree_map<K, T>::node *p)
 {
     splay(p);
 
-    node* left = root->left;
+    node *left = root->left;
     if (left != nullptr) {
         left->parent = nullptr;
     }
 
-    node* right = root->right;
+    node *right = root->right;
     if (right != nullptr) {
         right->parent = nullptr;
     }
@@ -442,20 +430,20 @@ void splay_tree_map<K,T>::delete_node(splay_tree_map<K,T>::node* p)
     --elements;
 
     if (left != nullptr) {
-        root = left;
-        node* p = max(root);
+        root     = left;
+        node *p  = max(root);
         p->right = right;
-        if (right != nullptr) right->parent = p;
+        if (right != nullptr)
+            right->parent = p;
         splay(p);
     } else {
         root = right;
     }
 }
 
-template<class K, class T>
-T splay_tree_map<K,T>::get_copy_or_default(const K& key) noexcept
+template<class K, class T> T splay_tree_map<K, T>::get_copy_or_default(const K &key) noexcept
 {
-    node* n = root;
+    node *n = root;
 
     while (n != nullptr and n->key_data.first != key) {
         if (n->key_data.first < key) {
@@ -465,17 +453,17 @@ T splay_tree_map<K,T>::get_copy_or_default(const K& key) noexcept
         }
     }
 
-    if (n == nullptr) return T();
+    if (n == nullptr)
+        return T();
 
     splay(n);
 
     return n->key_data.second;
 }
 
-template<class K, class T>
-T& splay_tree_map<K,T>::operator[](const K& key)
+template<class K, class T> T &splay_tree_map<K, T>::operator[](const K &key)
 {
-    node* n = root;
+    node *n = root;
 
     while (n != nullptr and n->key_data.first != key) {
         if (n->key_data.first < key) {
@@ -485,7 +473,7 @@ T& splay_tree_map<K,T>::operator[](const K& key)
         }
     }
 
-    if (n == nullptr) 
+    if (n == nullptr)
         return insert({key, T()}).first->second;
 
     splay(n);
@@ -493,10 +481,9 @@ T& splay_tree_map<K,T>::operator[](const K& key)
     return n->key_data.second;
 }
 
-template<class K, class T>
-T& splay_tree_map<K,T>::at(const K& key)
+template<class K, class T> T &splay_tree_map<K, T>::at(const K &key)
 {
-    node* n = root;
+    node *n = root;
 
     while (n != nullptr and n->key_data.first != key) {
         if (n->key_data.first < key) {
@@ -506,7 +493,7 @@ T& splay_tree_map<K,T>::at(const K& key)
         }
     }
 
-    if (n == nullptr) 
+    if (n == nullptr)
         throw std::out_of_range("splay_three_map::at");
 
     splay(n);
@@ -515,9 +502,9 @@ T& splay_tree_map<K,T>::at(const K& key)
 }
 
 template<class K, class T>
-splay_tree_map<K,T>::iterator splay_tree_map<K,T>::find(const K& key) noexcept
+splay_tree_map<K, T>::iterator splay_tree_map<K, T>::find(const K &key) noexcept
 {
-    node* n = root;
+    node *n = root;
 
     while (n != nullptr and n->key_data.first != key) {
         if (n->key_data.first < key) {
@@ -532,10 +519,9 @@ splay_tree_map<K,T>::iterator splay_tree_map<K,T>::find(const K& key) noexcept
     return n;
 }
 
-template<class K, class T>
-K splay_tree_map<K,T>::largest() const
+template<class K, class T> K splay_tree_map<K, T>::largest() const
 {
-    node* n = root;
+    node *n = root;
     while (n->right != nullptr)
         n = n->right;
 
@@ -543,15 +529,15 @@ K splay_tree_map<K,T>::largest() const
 }
 
 template<class K, class T>
-splay_tree_map<K,T>::node* splay_tree_map<K,T>::smaller(node* n, const key_type& k)
+splay_tree_map<K, T>::node *splay_tree_map<K, T>::smaller(node *n, const key_type &k)
 {
-    node* result = nullptr;
+    node *result = nullptr;
     while (n != nullptr) {
-        if (not (n->key_data.first < k)) {
+        if (not(n->key_data.first < k)) {
             n = n->left;
         } else {
             result = n;
-            n = n->right;
+            n      = n->right;
         }
     }
 
@@ -559,15 +545,15 @@ splay_tree_map<K,T>::node* splay_tree_map<K,T>::smaller(node* n, const key_type&
 }
 
 template<class K, class T>
-splay_tree_map<K,T>::node* splay_tree_map<K,T>::eq_or_smaller(node* n, const key_type& k)
+splay_tree_map<K, T>::node *splay_tree_map<K, T>::eq_or_smaller(node *n, const key_type &k)
 {
-    node* result = nullptr;
+    node *result = nullptr;
     while (n != nullptr) {
         if (k < n->key_data.first) {
             n = n->left;
         } else {
             result = n;
-            n = n->right;
+            n      = n->right;
         }
     }
 
@@ -575,13 +561,13 @@ splay_tree_map<K,T>::node* splay_tree_map<K,T>::eq_or_smaller(node* n, const key
 }
 
 template<class K, class T>
-splay_tree_map<K,T>::node* splay_tree_map<K,T>::eq_or_larger(node* n, const key_type& k)
+splay_tree_map<K, T>::node *splay_tree_map<K, T>::eq_or_larger(node *n, const key_type &k)
 {
-    node* result = nullptr;
+    node *result = nullptr;
     while (n != nullptr) {
-        if (not (n->key_data.first < k)) {
+        if (not(n->key_data.first < k)) {
             result = n;
-            n = n->left;
+            n      = n->left;
         } else {
             n = n->right;
         }
@@ -591,36 +577,36 @@ splay_tree_map<K,T>::node* splay_tree_map<K,T>::eq_or_larger(node* n, const key_
 }
 
 template<class K, class T>
-splay_tree_map<K,T>::iterator splay_tree_map<K,T>::lower_bound (const key_type& k) noexcept
+splay_tree_map<K, T>::iterator splay_tree_map<K, T>::lower_bound(const key_type &k) noexcept
 {
-    node* n = eq_or_larger(root, k);
-    
+    node *n = eq_or_larger(root, k);
+
     if (n != nullptr)
         splay(n);
-    
+
     return n;
 }
 
-template<class K, class T>
-void splay_tree_map<K,T>::clear () noexcept
+template<class K, class T> void splay_tree_map<K, T>::clear() noexcept
 {
     while (root != nullptr)
         delete_node(root);
 }
 
 template<class K, class T>
-splay_tree_map<K,T>::iterator splay_tree_map<K,T>::get_smaller_or_equal(const key_type& k) noexcept
+splay_tree_map<K, T>::iterator
+    splay_tree_map<K, T>::get_smaller_or_equal(const key_type &k) noexcept
 {
-    node* n = eq_or_smaller(root, k);
-    
+    node *n = eq_or_smaller(root, k);
+
     if (n != nullptr)
         splay(n);
-    
+
     return n;
 }
 
 template<class K, class T>
-splay_tree_map<K,T>::iterator splay_tree_map<K,T>::iterator::operator++() noexcept
+splay_tree_map<K, T>::iterator splay_tree_map<K, T>::iterator::operator++() noexcept
 {
     ptr = next(ptr);
 
@@ -628,11 +614,11 @@ splay_tree_map<K,T>::iterator splay_tree_map<K,T>::iterator::operator++() noexce
 }
 
 template<class K, class T>
-splay_tree_map<K,T>::iterator splay_tree_map<K,T>::iterator::operator++(int) noexcept
+splay_tree_map<K, T>::iterator splay_tree_map<K, T>::iterator::operator++(int) noexcept
 {
     iterator temp = *this;
     ++*this;
     return temp;
 }
 
-}
+} // namespace klib

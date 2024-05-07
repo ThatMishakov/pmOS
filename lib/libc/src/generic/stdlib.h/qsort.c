@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -41,15 +41,14 @@ static void swap(void *a, void *b, size_t size)
     memcpy(b, t, size);
 }
 
-static size_t partition(void *base, size_t elem_size, size_t l, size_t r, int (*compar)(const void *, const void *))
+static size_t partition(void *base, size_t elem_size, size_t l, size_t r,
+                        int (*compar)(const void *, const void *))
 {
     void *pivot = (char *)base + r * elem_size;
-    size_t i = l;
+    size_t i    = l;
 
-    for (size_t j = l; j < r; j++)
-    {
-        if (compar((char *)base + j * elem_size, pivot) < 0)
-        {
+    for (size_t j = l; j < r; j++) {
+        if (compar((char *)base + j * elem_size, pivot) < 0) {
             swap((char *)base + i * elem_size, (char *)base + j * elem_size, elem_size);
             i++;
         }
@@ -59,13 +58,14 @@ static size_t partition(void *base, size_t elem_size, size_t l, size_t r, int (*
     return i;
 }
 
-static void qsort_i(void *base, size_t elem_size, size_t l, size_t r, int (*compar)(const void *, const void *))
+static void qsort_i(void *base, size_t elem_size, size_t l, size_t r,
+                    int (*compar)(const void *, const void *))
 {
     size_t p = partition(base, elem_size, l, r, compar);
 
-    if (p > l+1)
+    if (p > l + 1)
         qsort_i(base, elem_size, l, p - 1, compar);
-    if (p+1 < r)
+    if (p + 1 < r)
         qsort_i(base, elem_size, p + 1, r, compar);
 }
 
@@ -74,4 +74,3 @@ void qsort(void *base, size_t nmemb, size_t size, int (*compar)(const void *, co
     if (nmemb > 2)
         qsort_i(base, size, 0, nmemb - 1, compar);
 }
-

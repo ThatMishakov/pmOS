@@ -1,5 +1,6 @@
 // File taken from the smoldtb project, which is licensed under the MIT license.
 // https://codeberg.org/r4/smoldtb
+// clang-format off
 
 #include "smoldtb.h"
 

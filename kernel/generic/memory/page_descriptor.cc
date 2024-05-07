@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -27,42 +27,41 @@
  */
 
 #include "page_descriptor.hh"
-#include "mem.hh"
-#include <assert.h>
-#include "temp_mapper.hh"
-#include <utils.hh>
-#include <sched/sched.hh>
 
-Page_Descriptor::~Page_Descriptor() noexcept
-{
-    try_free_page();
-}
+#include "mem.hh"
+#include "temp_mapper.hh"
+
+#include <assert.h>
+#include <sched/sched.hh>
+#include <utils.hh>
+
+Page_Descriptor::~Page_Descriptor() noexcept { try_free_page(); }
 
 void Page_Descriptor::try_free_page() noexcept
 {
     if (owning) {
         assert(alignment_log == 12 && "Only 4K pages are currently supported");
 
-        kernel_pframe_allocator.free((void*)page_ptr);
-    }    
+        kernel_pframe_allocator.free((void *)page_ptr);
+    }
 }
 
-Page_Descriptor& Page_Descriptor::operator=(Page_Descriptor &&p) noexcept
+Page_Descriptor &Page_Descriptor::operator=(Page_Descriptor &&p) noexcept
 {
     if (this == &p)
         return *this;
 
     try_free_page();
 
-    available = p.available;
-    owning = p.owning;
+    available     = p.available;
+    owning        = p.owning;
     alignment_log = p.alignment_log;
-    page_ptr = p.page_ptr;
+    page_ptr      = p.page_ptr;
 
-    p.available = false;
-    p.owning = false;
+    p.available     = false;
+    p.owning        = false;
     p.alignment_log = 0;
-    p.page_ptr = 0;
+    p.page_ptr      = 0;
 
     return *this;
 }
@@ -70,14 +69,13 @@ Page_Descriptor& Page_Descriptor::operator=(Page_Descriptor &&p) noexcept
 Page_Descriptor Page_Descriptor::create_copy() const
 {
     assert(available && "page must be available");
-    
+
     assert(alignment_log && "only 4K pages are supported");
 
-    Page_Descriptor new_page (
-        true, // available
-        true, // owning
-        alignment_log, // alignment_log
-        (u64)kernel_pframe_allocator.alloc_page() // page_ptr
+    Page_Descriptor new_page(true,                                     // available
+                             true,                                     // owning
+                             alignment_log,                            // alignment_log
+                             (u64)kernel_pframe_allocator.alloc_page() // page_ptr
     );
 
     Temp_Mapper_Obj<char> this_mapping(request_temp_mapper());
@@ -98,7 +96,7 @@ klib::pair<u64 /* page_ppn */, bool /* owning reference */> Page_Descriptor::tak
     const klib::pair<u64, bool> p = {page_ptr, available};
 
     owning = false;
-    *this = Page_Descriptor();
+    *this  = Page_Descriptor();
 
     return p;
 }

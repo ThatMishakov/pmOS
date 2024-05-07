@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -26,16 +26,16 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <stddef.h>
-#include <pmos/tls.h>
 #include <errno.h>
+#include <pmos/tls.h>
+#include <stddef.h>
 #include <stdlib.h>
 
 struct uthread *__get_tls();
 
 void __call_thread_atexit()
 {
-    struct uthread * u = __get_tls();
+    struct uthread *u = __get_tls();
     if (u == NULL)
         return;
 
@@ -48,10 +48,10 @@ void __call_thread_atexit()
     }
 }
 
-int __cxa_thread_atexit_impl(void (*func) (void *), void * arg, void * dso_handle)
+int __cxa_thread_atexit_impl(void (*func)(void *), void *arg, void *dso_handle)
 {
     // TODO: This will need to be revised when we have dynamic linking
-    struct uthread * u = __get_tls();
+    struct uthread *u = __get_tls();
     if (u == NULL) {
         errno = EINVAL;
         return -1;
@@ -66,9 +66,9 @@ int __cxa_thread_atexit_impl(void (*func) (void *), void * arg, void * dso_handl
 
     *entry = (struct __atexit_list_entry) {
         .destructor_func = func,
-        .arg = arg,
-        .dso_handle = dso_handle,
-        .next = u->atexit_list_head,
+        .arg             = arg,
+        .dso_handle      = dso_handle,
+        .next            = u->atexit_list_head,
     };
 
     u->atexit_list_head = entry;

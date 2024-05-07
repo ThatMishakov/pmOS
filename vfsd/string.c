@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -27,33 +27,38 @@
  */
 
 #include "string.h"
+
 #include <stdlib.h>
 #include <string.h>
 
-int init_null_string(struct String *string) {
-    string->data = NULL;
-    string->length = 0;
+int init_null_string(struct String *string)
+{
+    string->data     = NULL;
+    string->length   = 0;
     string->capacity = 0;
     return 0;
 }
 
-void destroy_string(struct String *string) {
+void destroy_string(struct String *string)
+{
     if (string->data != NULL)
         free(string->data);
-    
-    string->data = NULL;
-    string->length = 0;
+
+    string->data     = NULL;
+    string->length   = 0;
     string->capacity = 0;
 }
 
-int append_string(struct String *string, const char *data, size_t length) {
+int append_string(struct String *string, const char *data, size_t length)
+{
     size_t required_capacity = string->length + length + 1;
     if (required_capacity > string->capacity) {
-        size_t new_capacity = (required_capacity > string->capacity * 2) ? required_capacity : string->capacity * 2;
+        size_t new_capacity =
+            (required_capacity > string->capacity * 2) ? required_capacity : string->capacity * 2;
         char *new_data = (char *)realloc(string->data, new_capacity);
         if (new_data == NULL)
             return -1;
-        string->data = new_data;
+        string->data     = new_data;
         string->capacity = new_capacity;
     }
     memcpy(string->data + string->length, data, length);
@@ -62,7 +67,8 @@ int append_string(struct String *string, const char *data, size_t length) {
     return 0;
 }
 
-void erase_string(struct String *string, size_t start, size_t count) {
+void erase_string(struct String *string, size_t start, size_t count)
+{
     if (start >= string->length)
         return;
     if (start + count > string->length)

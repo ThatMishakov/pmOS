@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -28,17 +28,17 @@
 
 #ifndef TASK_LIST_H
 #define TASK_LIST_H
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 struct task_list_node {
     struct task_list_node *next;
-    char * name;
-    char * path;
-    char * cmdline;
-    void * file_virt_addr;
+    char *name;
+    char *path;
+    char *cmdline;
+    void *file_virt_addr;
     uint64_t page_table;
-    void * tls_virt;
+    void *tls_virt;
     bool executable;
     uint64_t stack_top;
     uint64_t stack_size;

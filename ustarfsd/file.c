@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -27,31 +27,30 @@
  */
 
 #include "file.h"
+
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-struct File root_directory = {
-    .name = "/",
-    .file_size = 0,
-    .last_modified_time = 0,
-    .type = TYPE_DIRECTORY,
-    .file_mode = 0755,
-    .owner_uid = 0,
-    .owner_gid = 0,
-    .device_major = 0,
-    .device_minor = 0,
-    .header_offset = 0,
-    .child_size = 0,
-    .child_array = NULL,
-    .child_capacity = 0,
-    .refcount = 0,
-    .index = 0
-};
+struct File root_directory = {.name               = "/",
+                              .file_size          = 0,
+                              .last_modified_time = 0,
+                              .type               = TYPE_DIRECTORY,
+                              .file_mode          = 0755,
+                              .owner_uid          = 0,
+                              .owner_gid          = 0,
+                              .device_major       = 0,
+                              .device_minor       = 0,
+                              .header_offset      = 0,
+                              .child_size         = 0,
+                              .child_array        = NULL,
+                              .child_capacity     = 0,
+                              .refcount           = 0,
+                              .index              = 0};
 
-
-static bool is_extended_size(const int8_t *size_field) {
+static bool is_extended_size(const int8_t *size_field)
+{
     // Check if the size field contains the extended size indicator
     for (size_t i = 0; i < 12; ++i) {
         if (size_field[i] != 0xFF)
@@ -60,7 +59,8 @@ static bool is_extended_size(const int8_t *size_field) {
     return true;
 }
 
-static uint64_t parse_extended_size(const int8_t *size_field) {
+static uint64_t parse_extended_size(const int8_t *size_field)
+{
     uint64_t size = 0;
     for (size_t i = 0; i < 12; ++i) {
         size <<= 8;
@@ -69,7 +69,9 @@ static uint64_t parse_extended_size(const int8_t *size_field) {
     return size;
 }
 
-int parse_header(const TARHeader *header, struct File *file, uint64_t *next_header_offset, uint64_t absolute_header_offset) {
+int parse_header(const TARHeader *header, struct File *file, uint64_t *next_header_offset,
+                 uint64_t absolute_header_offset)
+{
     // Calculate the checksum of the header
     int header_checksum = calculate_checksum(header);
 
@@ -80,11 +82,11 @@ int parse_header(const TARHeader *header, struct File *file, uint64_t *next_head
     if (header_checksum != header_checksum_field) {
         if (is_empty_header(header)) {
             *next_header_offset = 0;
-            return -2;  // End of archive
+            return -2; // End of archive
         }
         fprintf(stderr, "Header checksum verification failed.\n");
 
-        char * read_str = strndup((const char *)header, 512);
+        char *read_str = strndup((const char *)header, 512);
         fprintf(stderr, "Read: %s\n", read_str);
         free(read_str);
         return -1;
@@ -120,8 +122,8 @@ int parse_header(const TARHeader *header, struct File *file, uint64_t *next_head
 
     // Calculate the length of the filename, accounting for the null terminator
     size_t filename_length = strnlen(header->file_name, sizeof(header->file_name));
-    size_t prefix_length = strnlen(header->filename_prefix, sizeof(header->filename_prefix));
-    size_t name_length = filename_length + prefix_length;
+    size_t prefix_length   = strnlen(header->filename_prefix, sizeof(header->filename_prefix));
+    size_t name_length     = filename_length + prefix_length;
 
     // Allocate memory for the name
     char *name = malloc(name_length + 1);
@@ -157,16 +159,16 @@ int parse_header(const TARHeader *header, struct File *file, uint64_t *next_head
     free(name);
 
     // Initialize child size, child array, and child capacity
-    file->child_size = 0;
-    file->child_array = NULL;
+    file->child_size     = 0;
+    file->child_array    = NULL;
     file->child_capacity = 0;
 
     // Calculate the size of the header (including padding)
     size_t header_size = sizeof(TARHeader);
-    size_t padding = (512 - (header_size % 512)) % 512;
+    size_t padding     = (512 - (header_size % 512)) % 512;
 
     // Calculate the size of the file content (including padding)
-    size_t file_content_size = file->file_size;
+    size_t file_content_size    = file->file_size;
     size_t file_content_padding = (512 - (file_content_size % 512)) % 512;
 
     // Calculate the offset to the next header (accounting for padding)
@@ -178,7 +180,8 @@ int parse_header(const TARHeader *header, struct File *file, uint64_t *next_head
     return 0;
 }
 
-void free_file_buffers(struct File *file) {
+void free_file_buffers(struct File *file)
+{
     if (file == NULL) {
         return;
     }
@@ -186,7 +189,7 @@ void free_file_buffers(struct File *file) {
     // Free the name buffer
     free(file->name);
 
-    //Free the path buffer
+    // Free the path buffer
     free(file->path);
 
     // Free the child array and its contents
@@ -198,16 +201,17 @@ void free_file_buffers(struct File *file) {
     }
 
     // Reset the child-related fields
-    file->child_size = 0;
+    file->child_size     = 0;
     file->child_capacity = 0;
-    file->child_array = NULL;
+    file->child_array    = NULL;
 
     // Reset the parent and refcount
-    file->parent = NULL;
+    file->parent   = NULL;
     file->refcount = 0;
 }
 
-void release_file(struct File *file) {
+void release_file(struct File *file)
+{
     if (file == NULL) {
         return;
     }
@@ -221,7 +225,8 @@ void release_file(struct File *file) {
     }
 }
 
-size_t binarySearchUpperBound(struct File **array, size_t low, size_t high, const char *name) {
+size_t binarySearchUpperBound(struct File **array, size_t low, size_t high, const char *name)
+{
     while (low < high) {
         size_t mid = low + (high - low) / 2;
         if (strcmp(name, array[mid]->name) >= 0) {
@@ -233,7 +238,8 @@ size_t binarySearchUpperBound(struct File **array, size_t low, size_t high, cons
     return low;
 }
 
-int add_child_to_directory(struct File *parent, struct File *child) {
+int add_child_to_directory(struct File *parent, struct File *child)
+{
     if (parent == NULL) {
         fprintf(stderr, "Error: Parent directory is NULL.\n");
         return -1;
@@ -248,7 +254,8 @@ int add_child_to_directory(struct File *parent, struct File *child) {
     if (parent->child_size == parent->child_capacity) {
         parent->child_capacity += CHILD_ARRAY_INCREMENT;
 
-        struct File **temp = realloc(parent->child_array, parent->child_capacity * sizeof(struct File *));
+        struct File **temp =
+            realloc(parent->child_array, parent->child_capacity * sizeof(struct File *));
         if (temp == NULL) {
             perror("Failed to reallocate memory for child_array");
             return -1;
@@ -256,12 +263,13 @@ int add_child_to_directory(struct File *parent, struct File *child) {
         parent->child_array = temp;
     }
 
-    // Find the upper bound index where the child should be inserted based on name using binary search
-    size_t insertIndex = binarySearchUpperBound(parent->child_array, 0, parent->child_size, child->name);
+    // Find the upper bound index where the child should be inserted based on name using binary
+    // search
+    size_t insertIndex =
+        binarySearchUpperBound(parent->child_array, 0, parent->child_size, child->name);
 
     // Shift existing elements to the right to make space for the new child
-    memmove(parent->child_array + insertIndex + 1,
-            parent->child_array + insertIndex,
+    memmove(parent->child_array + insertIndex + 1, parent->child_array + insertIndex,
             (parent->child_size - insertIndex) * sizeof(struct File *));
 
     // Insert the child file at the correct index
@@ -274,12 +282,13 @@ int add_child_to_directory(struct File *parent, struct File *child) {
     return 0;
 }
 
-struct File *resolve_parent_dir(const struct File *file) {
+struct File *resolve_parent_dir(const struct File *file)
+{
     if (file == NULL) {
         return NULL;
     }
 
-    const char *filepath = file->path;
+    const char *filepath    = file->path;
     struct File *currentDir = &root_directory;
 
     // Check if the filepath is NULL (file in the root directory)
@@ -306,10 +315,10 @@ struct File *resolve_parent_dir(const struct File *file) {
             const char *fileName = filepath;
 
             // Binary search for the file in the sorted child_array of the current directory
-            size_t left = 0;
+            size_t left  = 0;
             size_t right = currentDir->child_size;
             while (left < right) {
-                size_t mid = left + (right - left) / 2;
+                size_t mid         = left + (right - left) / 2;
                 struct File *child = currentDir->child_array[mid];
 
                 int comparison = strcmp(child->name, fileName);
@@ -331,11 +340,11 @@ struct File *resolve_parent_dir(const struct File *file) {
         size_t dirNameLength = nextSlash - filepath;
 
         // Binary search for the directory in the sorted child_array of the current directory
-        size_t left = 0;
-        size_t right = currentDir->child_size;
+        size_t left          = 0;
+        size_t right         = currentDir->child_size;
         struct File *nextDir = NULL;
         while (left < right) {
-            size_t mid = left + (right - left) / 2;
+            size_t mid         = left + (right - left) / 2;
             struct File *child = currentDir->child_array[mid];
 
             int comparison = strncmp(child->name, filepath, dirNameLength);
@@ -357,14 +366,15 @@ struct File *resolve_parent_dir(const struct File *file) {
 
         // Update currentDir and filepath for the next iteration
         currentDir = nextDir;
-        filepath = nextSlash + 1;
+        filepath   = nextSlash + 1;
     }
 
     // Parent directory not found
     return NULL;
 }
 
-void cleanup_root_buffers() {
+void cleanup_root_buffers()
+{
     if (root_directory.child_array != NULL) {
         for (size_t i = 0; i < root_directory.child_size; i++) {
             release_file(root_directory.child_array[i]);
@@ -373,19 +383,20 @@ void cleanup_root_buffers() {
     }
 
     // Reset the child-related fields
-    root_directory.child_size = 0;
+    root_directory.child_size     = 0;
     root_directory.child_capacity = 0;
-    root_directory.child_array = NULL;
+    root_directory.child_array    = NULL;
 }
 
-int resolve_filename(char *filename) {
+int resolve_filename(char *filename)
+{
     // Check if the filename is empty
     if (filename == NULL || filename[0] == '\0') {
         return -1;
     }
 
     char *resolved = filename;
-    char *current = resolved;
+    char *current  = resolved;
     char *previous = resolved;
 
     while (*current != '\0') {
@@ -439,10 +450,11 @@ int resolve_filename(char *filename) {
     return 0;
 }
 
-int split_filename_path(const char *filename, char **path, char **name) {
+int split_filename_path(const char *filename, char **path, char **name)
+{
     size_t len = strlen(filename);
-    *path = NULL;
-    *name = NULL;
+    *path      = NULL;
+    *name      = NULL;
 
     // Find the last occurrence of '/' in the filename
     const char *last_slash = strrchr(filename, '/');
@@ -457,7 +469,7 @@ int split_filename_path(const char *filename, char **path, char **name) {
     } else {
         // Path component exists
         size_t path_length = last_slash - filename + 1;
-        *path = malloc(path_length + 1);
+        *path              = malloc(path_length + 1);
         if (*path == NULL) {
             // Memory allocation failed
             return -1;
@@ -466,7 +478,7 @@ int split_filename_path(const char *filename, char **path, char **name) {
         (*path)[path_length] = '\0';
 
         size_t name_length = len - path_length;
-        *name = malloc(name_length + 1);
+        *name              = malloc(name_length + 1);
         if (*name == NULL) {
             // Memory allocation failed
             free(*path);

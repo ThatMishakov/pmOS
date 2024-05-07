@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -28,21 +28,21 @@
 
 #ifndef _PMOS_IPC_H
 #define _PMOS_IPC_H
-#include <stdint.h>
 #include "acpi.h"
+
+#include <stdint.h>
 
 #if defined(__cplusplus)
 extern "C" {
 #endif
 
-typedef struct IPC_Generic_Msg
-{
+typedef struct IPC_Generic_Msg {
     uint32_t type;
 } IPC_Generic_Msg;
 
-#define IPC_MIN_SIZE (sizeof(IPC_Generic_Msg))
+#define IPC_MIN_SIZE         (sizeof(IPC_Generic_Msg))
 #define IPC_RIGHT_SIZE(type) (sizeof(type))
-#define IPC_TYPE(ptr) (((IPC_Generic_Msg*)ptr)->type)
+#define IPC_TYPE(ptr)        (((IPC_Generic_Msg *)ptr)->type)
 
 // Registers an interrupt handler for the process
 #define IPC_Reg_Int_NUM 0x01
@@ -199,8 +199,7 @@ typedef struct IPC_Kernel_Group_Task_Changed {
     uint64_t task_id;
 } IPC_Kernel_Group_Task_Changed;
 
-
-#define IPC_Write_Plain_NUM     0x40
+#define IPC_Write_Plain_NUM 0x40
 typedef struct IPC_Write_Plain {
     uint32_t type;
     char data[0];
@@ -353,7 +352,7 @@ typedef struct IPC_Stat_Reply {
 
     /// Block size
     uint64_t st_blksize;
-    
+
     /// Number of blocks allocated
     uint64_t st_blocks;
 } IPC_Stat_Reply;
@@ -486,8 +485,6 @@ typedef struct IPC_Close {
     uint64_t file_id;
 } IPC_Close;
 
-
-
 #define IPC_ACPI_Request_RSDT_NUM 0x60
 typedef struct IPC_ACPI_Request_RSDT {
     uint32_t type;
@@ -516,18 +513,17 @@ typedef struct IPC_FDT_Reply {
     uint32_t object_size;
 } IPC_FDT_Reply;
 
-
 // Structure used for registering a new PS/2 port by its driver
 #define IPC_PS2_Reg_Port_NUM 0x80
-typedef struct IPC_PS2_Reg_Port
-{
+typedef struct IPC_PS2_Reg_Port {
     // Message type (must be equal to IPC_PS2_Reg_Port_NUM)
     uint32_t type;
 
     // Configuration flags
     uint32_t flags;
 
-    // Internal ID of the port, decided by its driver (used for identification when driver registers more than one port)
+    // Internal ID of the port, decided by its driver (used for identification when driver registers
+    // more than one port)
     uint64_t internal_id;
 
     // Port used for sending commands to the port
@@ -555,7 +551,8 @@ typedef struct IPC_PS2_Config {
     // Result or command
     uint64_t result_cmd;
 } IPC_PS2_Config;
-#define IPC_PS2_Config_Reg_Port   1 // Indicates the chanel where ps/2 driver should send the data and requests or 0 on failure
+#define IPC_PS2_Config_Reg_Port \
+    1 // Indicates the chanel where ps/2 driver should send the data and requests or 0 on failure
 
 // Structure used for communicating new data recieved by PS/2 drivers to PS2d
 #define IPC_PS2_Notify_Data_NUM 0x82
@@ -581,7 +578,7 @@ typedef struct IPC_PS2_Send_Data {
 
     // Configuration flags
     uint32_t flags;
-    
+
     // Internal ID of the port
     uint64_t internal_id;
 
@@ -705,9 +702,9 @@ typedef struct IPC_FS_Resolve_Path {
 
 #define IPC_FS_Dup_NUM 0xC5
 /// @brief Message sent by a user process to VFS daemon to duplicate a file.
-///        This function is used by dup2() or similar functions where fs_consumer_id == new_consumer_id
-///        and during the fork() operation or similar, where the file is reopened/duplicated into the
-///        new filesystem consumer.
+///        This function is used by dup2() or similar functions where fs_consumer_id ==
+///        new_consumer_id and during the fork() operation or similar, where the file is
+///        reopened/duplicated into the new filesystem consumer.
 typedef struct IPC_FS_Dup {
     /// Message type (must be IPC_FS_Dup_NUM)
     uint32_t type;
@@ -771,7 +768,6 @@ typedef struct IPC_FS_Open_Reply {
     uint64_t operation_id;
 } IPC_FS_Open_Reply;
 
-
 #define IPC_Register_FS_Reply_NUM 0xD1
 typedef struct IPC_Register_FS_Reply {
     /// Message type (must be IPC_REGISTER_FS_REPLY_NUM)
@@ -784,9 +780,8 @@ typedef struct IPC_Register_FS_Reply {
     uint64_t filesystem_id;
 } IPC_Register_FS_Reply;
 
-
 #define IPC_Mount_FS_Reply_NUM 0xD2
-typedef struct IPC_Mount_FS_Reply{
+typedef struct IPC_Mount_FS_Reply {
     /// Message type (must be IPC_MOUNT_FS_REPLY_NUM)
     uint32_t type;
 
@@ -797,7 +792,6 @@ typedef struct IPC_Mount_FS_Reply{
     uint64_t mountpoint_id;
 } IPC_Mount_FS_Reply;
 
-
 #define IPC_UNMOUNT_FS_REPLY_NUM 0xD3
 typedef struct IPC_Unmount_FS_Reply {
     /// Message type (must be IPC_UNMOUNT_FS_REPLY_NUM)
@@ -806,7 +800,6 @@ typedef struct IPC_Unmount_FS_Reply {
     /// Result code indicating the outcome of the unmount operation
     int32_t result_code;
 } IPC_Unmount_FS_Reply;
-
 
 #define IPC_FS_Resolve_Path_Reply_NUM 0xD4
 typedef struct IPC_FS_Resolve_Path_Reply {
@@ -890,7 +883,8 @@ typedef struct IPC_Pipe_Open_Reply {
 } IPC_Pipe_Open_Reply;
 
 #define IPC_Thread_Finished_NUM 0x100
-/// @brief Message sent by the thread to the one calling pthread_join() when notifing that it has finished.
+/// @brief Message sent by the thread to the one calling pthread_join() when notifing that it has
+/// finished.
 typedef struct IPC_Thread_Finished {
     /// Message type (must be IPC_Thread_Finished_NUM)
     uint32_t type;
@@ -901,8 +895,6 @@ typedef struct IPC_Thread_Finished {
     /// ID of the thread that has finished
     uint64_t thread_id;
 } IPC_Thread_Finished;
-
-
 
 #define IPC_Framebuffer_Request_NUM 0x120
 /// @brief Request of the framebuffer to the bootstrap server or devices driver
@@ -942,7 +934,7 @@ typedef struct IPC_Framebuffer_Reply {
     uint8_t framebuffer_green_mask_shift;
     uint8_t framebuffer_blue_mask_size;
     uint8_t framebuffer_blue_mask_shift;
-}  IPC_Framebuffer_Reply;
+} IPC_Framebuffer_Reply;
 
 #define IPC_Register_Log_Output_NUM 0x140
 typedef struct IPC_Register_Log_Output {

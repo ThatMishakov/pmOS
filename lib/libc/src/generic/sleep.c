@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -26,17 +26,18 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <unistd.h>
+#include <assert.h>
+#include <errno.h>
 #include <pmos/ipc.h>
 #include <pmos/ports.h>
 #include <pmos/system.h>
-#include <errno.h>
-#include <assert.h>
 #include <string.h>
+#include <unistd.h>
 
 static __thread pmos_port_t sleep_reply_port = INVALID_PORT;
 
-static pmos_port_t get_sleep_port() {
+static pmos_port_t get_sleep_port()
+{
     if (sleep_reply_port == INVALID_PORT) {
         ports_request_t port_request = create_port(TASK_ID_SELF, 0);
         if (port_request.result != SUCCESS) {
@@ -81,12 +82,13 @@ static pmos_port_t get_sleep_port() {
 //     return 0;
 // }
 
-int pmos_request_timer(pmos_port_t port, size_t ms) {
+int pmos_request_timer(pmos_port_t port, size_t ms)
+{
     // Request a timer from the kernel
     // Initially, this was implemented using HPET in the userspace, on x86.
     // However, other arches (RISC-V) don't have a global timer and even on x86,
     // it might be better to do this in kernel and use LAPIC timer, freeing HPET
-    // for other 
+    // for other
 
     syscall_r r = pmos_syscall(SYSCALL_REQUEST_TIMER, port, ms);
     if (r.result != SUCCESS) {
@@ -97,10 +99,11 @@ int pmos_request_timer(pmos_port_t port, size_t ms) {
     return 0;
 }
 
-unsigned int sleep(unsigned int seconds) {
+unsigned int sleep(unsigned int seconds)
+{
     pmos_port_t sleep_reply_port = get_sleep_port();
-    size_t ms = seconds * 1000;
-    result_t result = pmos_request_timer(sleep_reply_port, ms);
+    size_t ms                    = seconds * 1000;
+    result_t result              = pmos_request_timer(sleep_reply_port, ms);
     if (result != SUCCESS) {
         errno = result;
         return seconds;
@@ -122,7 +125,6 @@ unsigned int sleep(unsigned int seconds) {
     assert(result == SUCCESS);
 
     assert(reply.type == IPC_Timer_Reply_NUM);
-
 
     if (reply.status < 0) {
         errno = -reply.status;

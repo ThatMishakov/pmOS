@@ -1,8 +1,8 @@
 #ifndef SERIAL_H
 #define SERIAL_H
-#include <stdint.h>
 #include <kernel/messaging.h>
 #include <pmos/ipc.h>
+#include <stdint.h>
 
 struct serial_port {
     // 0 - mmio, 1 - io
@@ -20,7 +20,6 @@ struct serial_port {
     // if interface_type is mmio, then pointer to physical memory
     // Otherwise, io port (e.g. 0x3F8 for COM1 on x86)
     uint64_t base_address;
-
 
     // Interrupt types bitmask
     // 0: dual-8259 IRQ

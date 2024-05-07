@@ -2,10 +2,7 @@
 
 static unsigned long next = 1;
 
-void srand(unsigned seed)
-{
-    next = seed;
-}
+void srand(unsigned seed) { next = seed; }
 
 int rand()
 {

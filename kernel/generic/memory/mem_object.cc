@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -27,17 +27,20 @@
  */
 
 #include "mem_object.hh"
-#include <assert.h>
-#include <pmos/ipc.h>
-#include <messaging/messaging.hh>
+
 #include "mem.hh"
-#include <exceptions.hh>
 #include "paging.hh"
 #include "temp_mapper.hh"
 #include "virtmem.hh"
 
-Mem_Object::Mem_Object(u64 page_size_log, u64 size_pages, u32 max_user_permissions):
-        page_size_log(page_size_log), pages(size_pages), pages_size(size_pages), max_user_access_perm(max_user_permissions) {};
+#include <assert.h>
+#include <exceptions.hh>
+#include <messaging/messaging.hh>
+#include <pmos/ipc.h>
+
+Mem_Object::Mem_Object(u64 page_size_log, u64 size_pages, u32 max_user_permissions)
+    : page_size_log(page_size_log), pages(size_pages), pages_size(size_pages),
+      max_user_access_perm(max_user_permissions) {};
 
 Mem_Object::~Mem_Object()
 {
@@ -50,7 +53,9 @@ Mem_Object::~Mem_Object()
 klib::shared_ptr<Mem_Object> Mem_Object::create(u64 page_size_log, u64 size_pages)
 {
     // Create new object
-    klib::shared_ptr<Mem_Object> ptr(new Mem_Object(page_size_log, size_pages, Protection::Readable | Protection::Writeable | Protection::Executable));
+    klib::shared_ptr<Mem_Object> ptr(
+        new Mem_Object(page_size_log, size_pages,
+                       Protection::Readable | Protection::Writeable | Protection::Executable));
 
     // Atomically insert into the object storage
     atomic_push_global_storage(ptr);
@@ -58,12 +63,14 @@ klib::shared_ptr<Mem_Object> Mem_Object::create(u64 page_size_log, u64 size_page
     return ptr;
 }
 
-klib::shared_ptr<Mem_Object> Mem_Object::create_from_phys(u64 phys_addr, u64 size_bytes, bool take_ownership, u32 max_user_permissions)
+klib::shared_ptr<Mem_Object> Mem_Object::create_from_phys(u64 phys_addr, u64 size_bytes,
+                                                          bool take_ownership,
+                                                          u32 max_user_permissions)
 {
-    const u64 size_alligned = (size_bytes + 0xFFF) & ~0xFFFUL;
+    const u64 size_alligned  = (size_bytes + 0xFFF) & ~0xFFFUL;
     const u64 start_alligned = phys_addr & ~0xFFFUL;
-    const u64 pages_count = size_alligned >> 12;
-    
+    const u64 pages_count    = size_alligned >> 12;
+
     // Create new object
     klib::shared_ptr<Mem_Object> ptr(new Mem_Object(12, pages_count, max_user_permissions));
 
@@ -77,22 +84,20 @@ klib::shared_ptr<Mem_Object> Mem_Object::create_from_phys(u64 phys_addr, u64 siz
     // This can't fail
     for (u64 i = 0; i < pages_count; ++i)
         ptr->pages[i] = {
-            .present = true,
+            .present     = true,
             .dont_delete = !take_ownership,
-            .requested = false,
+            .requested   = false,
             // Shift right by 10 because of x86 reasons...
             // No further explanation will be given :)
-            // (In retrospect, I think this is somewhat stupid and needs to be changed, but whatever for now...)
-            .ppn = (start_alligned + (i << 12)) >> 10,
+            // (In retrospect, I think this is somewhat stupid and needs to be changed, but whatever
+            // for now...)
+            .ppn         = (start_alligned + (i << 12)) >> 10,
         };
 
     return ptr;
 }
 
-Mem_Object::id_type Mem_Object::get_id() const noexcept
-{
-    return id;
-}
+Mem_Object::id_type Mem_Object::get_id() const noexcept { return id; }
 
 void Mem_Object::atomic_push_global_storage(klib::shared_ptr<Mem_Object> o)
 {
@@ -138,15 +143,15 @@ Page_Descriptor Mem_Object::atomic_request_page(u64 offset)
     return request_page(offset);
 }
 
-
 Page_Descriptor Mem_Object::request_page(u64 offset)
 {
     const auto index = offset >> page_size_log;
 
     if (pages_size <= index)
-        throw Kern_Exception(ERROR_OUT_OF_RANGE, "Trying to access to memory out of the Page Descriptor's range");
+        throw Kern_Exception(ERROR_OUT_OF_RANGE,
+                             "Trying to access to memory out of the Page Descriptor's range");
 
-    auto& p = pages[index];
+    auto &p = pages[index];
 
     do {
         // Page is already present
@@ -160,18 +165,19 @@ Page_Descriptor Mem_Object::request_page(u64 offset)
             continue;
         }
 
-        // Page not present, there is a pager and the page was already requested once -> do not request the page again
+        // Page not present, there is a pager and the page was already requested once -> do not
+        // request the page again
         if (p.requested)
             continue;
 
         // Request a page
         IPC_Kernel_Request_Page request {
-            .type = IPC_Kernel_Request_Page_NUM,
-            .flags = 0,
+            .type          = IPC_Kernel_Request_Page_NUM,
+            .flags         = 0,
             .mem_object_id = id,
-            .page_offset = offset,
+            .page_offset   = offset,
         };
-        pager_port->atomic_send_from_system(reinterpret_cast<char*>(&request), sizeof(request));
+        pager_port->atomic_send_from_system(reinterpret_cast<char *>(&request), sizeof(request));
 
         p.requested = true;
     } while (false);
@@ -192,14 +198,14 @@ void Mem_Object::atomic_resize(u64 new_size_pages)
 
     u64 old_size;
 
-
     {
         Auto_Lock_Scope l(lock);
 
-        // Firstly, change the pages_size before resizing the vector. This is needed because even though the
-        // object has been shrunk, there might still be regions referencing pages in it, so notify page tables
-        // of the change before shrinking the vector and releasing pages to stop people from writing to the pages that were freed.
-        old_size = pages_size;
+        // Firstly, change the pages_size before resizing the vector. This is needed because even
+        // though the object has been shrunk, there might still be regions referencing pages in it,
+        // so notify page tables of the change before shrinking the vector and releasing pages to
+        // stop people from writing to the pages that were freed.
+        old_size   = pages_size;
         pages_size = new_size_pages;
 
         // If the new size is larger, there is no need to shrink memory regions
@@ -216,12 +222,12 @@ void Mem_Object::atomic_resize(u64 new_size_pages)
 
     // This should never throw... but who knows
     try {
-        const auto self = shared_from_this();
+        const auto self           = shared_from_this();
         const auto new_size_bytes = new_size_pages << page_size_log;
 
         {
             Auto_Lock_Scope l(pinned_lock);
-            for (const auto &a : pined_by) {
+            for (const auto &a: pined_by) {
                 const auto ptr = a.lock();
                 if (ptr)
                     ptr->atomic_shrink_regions(self, new_size_bytes);
@@ -260,7 +266,7 @@ void Mem_Object::try_free_page(Page_Storage &p, u8 page_size_log) noexcept
     assert(page_size_log == 12 && "Only 4K pages are supported");
 
     if (p.present and not p.dont_delete) {
-        kernel_pframe_allocator.free(reinterpret_cast<void*>(p.get_page()));
+        kernel_pframe_allocator.free(reinterpret_cast<void *>(p.get_page()));
         p = Page_Storage();
     }
 }
@@ -273,17 +279,17 @@ bool Mem_Object::read_to_kernel(u64 offset, void *buffer, u64 size)
     Auto_Lock_Scope l(lock);
 
     Temp_Mapper_Obj<char> mapper(request_temp_mapper());
-    for (u64 i = offset&~0xfffUL; i < offset+size; i += 0x1000) {
+    for (u64 i = offset & ~0xfffUL; i < offset + size; i += 0x1000) {
         const auto page = request_page(i);
         if (not page.available)
             return false;
 
-        char * ptr = mapper.map(page.page_ptr);
+        char *ptr = mapper.map(page.page_ptr);
 
         const u64 start = i < offset ? offset : i;
-        const u64 end = i + 0x1000 < offset + size ? i + 0x1000 : offset + size;
-        const u64 len = end - start;
-        memcpy(reinterpret_cast<char*>(buffer) + start - offset, ptr + (start & 0xfff), len);
+        const u64 end   = i + 0x1000 < offset + size ? i + 0x1000 : offset + size;
+        const u64 len   = end - start;
+        memcpy(reinterpret_cast<char *>(buffer) + start - offset, ptr + (start & 0xfff), len);
     }
 
     return true;
@@ -293,10 +299,10 @@ void *Mem_Object::map_to_kernel(u64 offset, u64 size, Page_Table_Argumments args
 {
     // Lock might be needed here?
     // Also, TODO: magic numbers everywhere
-    u64 object_size_bytes = pages_size*4096;
+    u64 object_size_bytes = pages_size * 4096;
 
-    assert((offset&0xfff) == 0);
-    assert(size > 0 && (size&0xfff) == 0);
+    assert((offset & 0xfff) == 0);
+    assert(size > 0 && (size & 0xfff) == 0);
     assert(offset + size <= object_size_bytes);
 
     const size_t size_pages = size >> 12;
@@ -308,10 +314,9 @@ void *Mem_Object::map_to_kernel(u64 offset, u64 size, Page_Table_Argumments args
             return nullptr;
     }
 
-    void * mem_virt = kernel_space_allocator.virtmem_alloc(size >> 12);
+    void *mem_virt = kernel_space_allocator.virtmem_alloc(size >> 12);
     if (mem_virt == nullptr)
         throw Kern_Exception(ERROR_GENERAL, "could not get virtual memory for mapping an object");
-
 
     size_t i = 0;
     try {
@@ -320,14 +325,14 @@ void *Mem_Object::map_to_kernel(u64 offset, u64 size, Page_Table_Argumments args
             assert(!p.owning);
             Page_Table_Argumments arg = args;
             arg.extra |= PAGING_FLAG_NOFREE;
-            
-            const u64 phys_addr = p.page_ptr;
-            void * const virt_addr = (void *)(ulong(mem_virt) + i);
+
+            const u64 phys_addr   = p.page_ptr;
+            void *const virt_addr = (void *)(ulong(mem_virt) + i);
             map_kernel_page(phys_addr, virt_addr, arg);
         }
     } catch (...) {
         for (size_t ii = 0; ii < i; ++ii) {
-            void * const virt_addr = (void *)(ulong(mem_virt) + ii);
+            void *const virt_addr = (void *)(ulong(mem_virt) + ii);
             unmap_kernel_page(virt_addr);
         }
 
@@ -337,7 +342,4 @@ void *Mem_Object::map_to_kernel(u64 offset, u64 size, Page_Table_Argumments args
     return mem_virt;
 }
 
-size_t Mem_Object::size_bytes() const noexcept
-{
-    return pages_size << page_size_log;
-}
+size_t Mem_Object::size_bytes() const noexcept { return pages_size << page_size_log; }

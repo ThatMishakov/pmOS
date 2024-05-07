@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -27,13 +27,15 @@
  */
 
 #include "named_ports.hh"
-#include <processes/syscalls.hh>
+
 #include <kernel/block.h>
 #include <pmos/ipc.h>
+#include <processes/syscalls.hh>
 
 Named_Port_Storage global_named_ports;
 
-void Notify_Task::do_action(const klib::shared_ptr<Port>& port, [[maybe_unused]] const klib::string& name)
+void Notify_Task::do_action(const klib::shared_ptr<Port> &port,
+                            [[maybe_unused]] const klib::string &name)
 {
     if (not did_action) {
         klib::shared_ptr<TaskDescriptor> ptr = task.lock();
@@ -45,7 +47,7 @@ void Notify_Task::do_action(const klib::shared_ptr<Port>& port, [[maybe_unused]]
     }
 }
 
-void Send_Message::do_action(const klib::shared_ptr<Port>& p, const klib::string& name)
+void Send_Message::do_action(const klib::shared_ptr<Port> &p, const klib::string &name)
 {
     kresult_t result = SUCCESS;
     if (not did_action) {
@@ -55,12 +57,13 @@ void Send_Message::do_action(const klib::shared_ptr<Port>& p, const klib::string
             size_t msg_size = sizeof(IPC_Kernel_Named_Port_Notification) + name.length();
 
             klib::vector<char> vec(msg_size);
-            IPC_Kernel_Named_Port_Notification* ipc_ptr = (IPC_Kernel_Named_Port_Notification *)&vec.front();
+            IPC_Kernel_Named_Port_Notification *ipc_ptr =
+                (IPC_Kernel_Named_Port_Notification *)&vec.front();
 
-            ipc_ptr->type = IPC_Kernel_Named_Port_Notification_NUM;
+            ipc_ptr->type     = IPC_Kernel_Named_Port_Notification_NUM;
             ipc_ptr->reserved = 0;
             ipc_ptr->port_num = p->portno;
-            
+
             memcpy(ipc_ptr->port_name, name.c_str(), name.length());
 
             Auto_Lock_Scope scope_lock(ptr->lock);
@@ -70,5 +73,5 @@ void Send_Message::do_action(const klib::shared_ptr<Port>& p, const klib::string
         }
 
         did_action = true;
-    }        
+    }
 }

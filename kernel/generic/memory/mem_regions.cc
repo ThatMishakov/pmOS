@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -27,22 +27,24 @@
  */
 
 #include "mem_regions.hh"
-#include "paging.hh"
-#include <kernel/errors.h>
+
 #include "mem.hh"
-#include <pmos/ipc.h>
-#include <processes/tasks.hh>
-#include <assert.h>
 #include "mem_object.hh"
+#include "paging.hh"
 #include "temp_mapper.hh"
 
+#include <assert.h>
 #include <kern_logger/kern_logger.hh>
+#include <kernel/errors.h>
+#include <pmos/ipc.h>
+#include <processes/tasks.hh>
 u64 counter = 1;
 
 bool Generic_Mem_Region::on_page_fault(u64 access_type, u64 pagefault_addr)
 {
     if (not has_access(access_type))
-        throw Kern_Exception(ERROR_PROTECTION_VIOLATION, "task has no permission to do the operation");
+        throw Kern_Exception(ERROR_PROTECTION_VIOLATION,
+                             "task has no permission to do the operation");
 
     if (owner->is_mapped(pagefault_addr)) {
         // Some CPUs supposedly remember invalid pages.
@@ -57,7 +59,7 @@ bool Generic_Mem_Region::on_page_fault(u64 access_type, u64 pagefault_addr)
 bool Generic_Mem_Region::prepare_page(u64 access_mode, u64 page_addr)
 {
     if (not has_access(access_mode))
-        throw (Kern_Exception(ERROR_OUT_OF_RANGE, "process has no access to the page"));
+        throw(Kern_Exception(ERROR_OUT_OF_RANGE, "process has no access to the page"));
 
     if (owner->is_mapped(page_addr))
         return true;
@@ -72,14 +74,14 @@ Page_Table_Argumments Private_Normal_Region::craft_arguments() const
         !!(access_type & Writeable),
         true,
         false,
-        !(access_type & Executable) ,
+        !(access_type & Executable),
         0b000,
     };
 }
 
 bool Private_Normal_Region::alloc_page(u64 ptr_addr)
 {
-    void* new_page = kernel_pframe_allocator.alloc_page();
+    void *new_page = kernel_pframe_allocator.alloc_page();
     clear_page((u64)new_page, pattern);
 
     Page_Table_Argumments args = craft_arguments();
@@ -103,7 +105,7 @@ Page_Table_Argumments Phys_Mapped_Region::craft_arguments() const
         !!(access_type & Writeable),
         true,
         false,
-        !(access_type & Executable) ,
+        !(access_type & Executable),
         0b010,
         // TODO: This is temporary, make it a flag
         Memory_Type::IONoCache,
@@ -122,14 +124,15 @@ bool Phys_Mapped_Region::alloc_page(u64 ptr_addr)
     return true;
 }
 
-void Generic_Mem_Region::move_to(const klib::shared_ptr<Page_Table>& new_table, u64 base_addr, u64 new_access)
+void Generic_Mem_Region::move_to(const klib::shared_ptr<Page_Table> &new_table, u64 base_addr,
+                                 u64 new_access)
 {
     auto self = shared_from_this();
 
     new_table->paging_regions.insert({base_addr, self});
 
     try {
-        Page_Table * const old_owner = owner;
+        Page_Table *const old_owner = owner;
 
         old_owner->move_pages(new_table, start_addr, base_addr, size, new_access);
 
@@ -138,33 +141,35 @@ void Generic_Mem_Region::move_to(const klib::shared_ptr<Page_Table>& new_table, 
         owner = new_table.get();
 
         access_type = new_access;
-        start_addr = base_addr;
+        start_addr  = base_addr;
     } catch (...) {
         new_table->paging_regions.erase(base_addr);
         throw;
     }
 }
 
-void Phys_Mapped_Region::clone_to(const klib::shared_ptr<Page_Table>& new_table, u64 base_addr, u64 new_access)
+void Phys_Mapped_Region::clone_to(const klib::shared_ptr<Page_Table> &new_table, u64 base_addr,
+                                  u64 new_access)
 {
     auto copy = klib::make_shared<Phys_Mapped_Region>(*this);
 
-    copy->owner = new_table.get();
-    copy->id = __atomic_add_fetch(&counter, 1, 0);
+    copy->owner       = new_table.get();
+    copy->id          = __atomic_add_fetch(&counter, 1, 0);
     copy->access_type = new_access;
-    copy->start_addr = base_addr;
+    copy->start_addr  = base_addr;
 
     new_table->paging_regions.insert({base_addr, copy});
 }
 
-void Private_Normal_Region::clone_to(const klib::shared_ptr<Page_Table>& new_table, u64 base_addr, u64 new_access)
+void Private_Normal_Region::clone_to(const klib::shared_ptr<Page_Table> &new_table, u64 base_addr,
+                                     u64 new_access)
 {
     auto copy = klib::make_shared<Private_Normal_Region>(*this);
 
-    copy->owner = new_table.get();
-    copy->id = __atomic_add_fetch(&counter, 1, 0);
+    copy->owner       = new_table.get();
+    copy->id          = __atomic_add_fetch(&counter, 1, 0);
     copy->access_type = new_access;
-    copy->start_addr = base_addr;
+    copy->start_addr  = base_addr;
 
     new_table->paging_regions.insert({base_addr, copy});
 
@@ -191,19 +196,21 @@ Page_Table_Argumments Mem_Object_Reference::craft_arguments() const
 bool Mem_Object_Reference::alloc_page(u64 ptr_addr)
 {
     if (cow) {
-        const auto reg_addr = (ptr_addr&~0xfffUL) - start_addr;
+        const auto reg_addr = (ptr_addr & ~0xfffUL) - start_addr;
 
-        if (reg_addr+0x1000 <= start_offset_bytes or reg_addr >= start_offset_bytes + object_size_bytes) { 
+        if (reg_addr + 0x1000 <= start_offset_bytes or
+            reg_addr >= start_offset_bytes + object_size_bytes) {
             // Out of object range. Allocate an empty page
             auto page = Page_Descriptor::allocate_page(12);
-            
+
             clear_page(page.page_ptr, 0);
 
             owner->map(klib::move(page), ptr_addr, craft_arguments());
             return true;
         }
 
-        auto page = references->atomic_request_page(reg_addr - start_offset_bytes + object_offset_bytes);
+        auto page =
+            references->atomic_request_page(reg_addr - start_offset_bytes + object_offset_bytes);
 
         if (not page.available)
             return false;
@@ -212,7 +219,8 @@ bool Mem_Object_Reference::alloc_page(u64 ptr_addr)
 
         // Partially zero the page, if needed
 
-        if (reg_addr >= start_offset_bytes and reg_addr + 0x1000 <= start_offset_bytes + object_size_bytes) {
+        if (reg_addr >= start_offset_bytes and
+            reg_addr + 0x1000 <= start_offset_bytes + object_size_bytes) {
             // Whole page; just map it
             owner->map(klib::move(page), ptr_addr, craft_arguments());
             return true;
@@ -223,14 +231,16 @@ bool Mem_Object_Reference::alloc_page(u64 ptr_addr)
         void *pageptr = mapper.map(page.page_ptr);
 
         // Zero the start of the page
-        const u64 start_offset_size = reg_addr < start_offset_bytes ? start_offset_bytes - reg_addr : 0;
-        memset((char*)pageptr, 0, start_offset_size);
+        const u64 start_offset_size =
+            reg_addr < start_offset_bytes ? start_offset_bytes - reg_addr : 0;
+        memset((char *)pageptr, 0, start_offset_size);
 
         // Zero the end of the page
         const u64 obj_limit = start_offset_bytes + object_size_bytes;
-        const u64 end_offset_size = reg_addr + 0x1000 > obj_limit ? reg_addr + 0x1000 - obj_limit : 0;
+        const u64 end_offset_size =
+            reg_addr + 0x1000 > obj_limit ? reg_addr + 0x1000 - obj_limit : 0;
         const u64 end_offset_start = 0x1000 - end_offset_size;
-        memset((char*)pageptr + end_offset_start, 0, end_offset_size);
+        memset((char *)pageptr + end_offset_start, 0, end_offset_size);
 
         owner->map(klib::move(page), ptr_addr, craft_arguments());
         return true;
@@ -249,14 +259,18 @@ bool Mem_Object_Reference::alloc_page(u64 ptr_addr)
     }
 }
 
-void Mem_Object_Reference::move_to(const klib::shared_ptr<Page_Table>& new_table, u64 base_addr, u64 new_access)
+void Mem_Object_Reference::move_to(const klib::shared_ptr<Page_Table> &new_table, u64 base_addr,
+                                   u64 new_access)
 {
-    throw Kern_Exception(ERROR_NOT_IMPLEMENTED, "move_to of Mem_Object_Reference was not yet implemented");
+    throw Kern_Exception(ERROR_NOT_IMPLEMENTED,
+                         "move_to of Mem_Object_Reference was not yet implemented");
 }
 
-void Mem_Object_Reference::clone_to(const klib::shared_ptr<Page_Table>& new_table, u64 base_addr, u64 new_access)
+void Mem_Object_Reference::clone_to(const klib::shared_ptr<Page_Table> &new_table, u64 base_addr,
+                                    u64 new_access)
 {
-    throw Kern_Exception(ERROR_NOT_IMPLEMENTED, "move_to of Mem_Object_Reference was not yet implemented");
+    throw Kern_Exception(ERROR_NOT_IMPLEMENTED,
+                         "move_to of Mem_Object_Reference was not yet implemented");
 }
 
 void Generic_Mem_Region::prepare_deletion() noexcept
@@ -269,18 +283,23 @@ void Mem_Object_Reference::prepare_deletion() noexcept
     owner->unreference_object(references, this);
 }
 
-Mem_Object_Reference::Mem_Object_Reference(u64 start_addr, u64 size, klib::string name, Page_Table *owner, u8 access,
-                         klib::shared_ptr<Mem_Object> references, u64 object_offset_bytes, bool copy_on_write, u64 start_offset_bytes, u64 object_size_bytes):
-        Generic_Mem_Region(start_addr, size, klib::forward<klib::string>(name), owner, access), 
-        references(klib::forward<klib::shared_ptr<Mem_Object>>(references)), start_offset_bytes(start_offset_bytes), 
-        object_offset_bytes(object_offset_bytes), object_size_bytes(object_size_bytes), cow(copy_on_write)
-        {
-            if (not cow and start_offset_bytes != 0)
-                throw Kern_Exception(ERROR_OUT_OF_RANGE, "non-CoW region cannot have start offset");
+Mem_Object_Reference::Mem_Object_Reference(u64 start_addr, u64 size, klib::string name,
+                                           Page_Table *owner, u8 access,
+                                           klib::shared_ptr<Mem_Object> references,
+                                           u64 object_offset_bytes, bool copy_on_write,
+                                           u64 start_offset_bytes, u64 object_size_bytes)
+    : Generic_Mem_Region(start_addr, size, klib::forward<klib::string>(name), owner, access),
+      references(klib::forward<klib::shared_ptr<Mem_Object>>(references)),
+      start_offset_bytes(start_offset_bytes), object_offset_bytes(object_offset_bytes),
+      object_size_bytes(object_size_bytes), cow(copy_on_write)
+{
+    if (not cow and start_offset_bytes != 0)
+        throw Kern_Exception(ERROR_OUT_OF_RANGE, "non-CoW region cannot have start offset");
 
-            if (not cow and object_size_bytes != size)
-                throw Kern_Exception(ERROR_OUT_OF_RANGE, "non-CoW region cannot have size different from the object size");
+    if (not cow and object_size_bytes != size)
+        throw Kern_Exception(ERROR_OUT_OF_RANGE,
+                             "non-CoW region cannot have size different from the object size");
 
-            if ((object_offset_bytes&0xfff) != (start_offset_bytes&0xfff))
-                throw Kern_Exception(ERROR_OUT_OF_RANGE, "Object page-misaligned with region");
-        };
+    if ((object_offset_bytes & 0xfff) != (start_offset_bytes & 0xfff))
+        throw Kern_Exception(ERROR_OUT_OF_RANGE, "Object page-misaligned with region");
+};

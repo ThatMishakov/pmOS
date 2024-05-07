@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -44,9 +44,9 @@
 #define __DECLARE_NULL
 #include "__posix_types.h"
 
-extern int    daylight;
-extern long   timezone;
-extern char  *tzname[];
+extern int daylight;
+extern long timezone;
+extern char *tzname[];
 
 #if defined(__cplusplus)
 extern "C" {
@@ -75,14 +75,14 @@ unsigned long pmos_clocks_per_sec(void);
 
 struct tm {
     int tm_sec;
-    int tm_min; 
+    int tm_min;
     int tm_hour;
     int tm_mday;
     int tm_mon;
     int tm_year;
     int tm_wday;
     int tm_yday;
-    int tm_isdst; 
+    int tm_isdst;
 };
 
 #ifdef __STDC_HOSTED__
@@ -107,9 +107,9 @@ int timespec_get(struct timespec *ts, int base);
 
 /* Time conversion */
 char *asctime(const struct tm *timeptr);
-char      *asctime_r(const struct tm *, char *);
+char *asctime_r(const struct tm *, char *);
 char *ctime(const time_t *timer);
-char      *ctime_r(const time_t *, char *);
+char *ctime_r(const time_t *, char *);
 
 /**
  * @brief Convert time_t to UTC time structure.
@@ -168,41 +168,30 @@ struct tm *localtime_r(const time_t *timep, struct tm *result);
  */
 struct tm *localtime(const time_t *timep);
 
-size_t strftime(char * s,
-                size_t maxsize,
-                const char * format,
-                const struct tm * timeptr);
-size_t     strftime_l(char *, size_t, const char *,
-               const struct tm *, locale_t);
+size_t strftime(char *s, size_t maxsize, const char *format, const struct tm *timeptr);
+size_t strftime_l(char *, size_t, const char *, const struct tm *, locale_t);
 
-int        clock_getres(clockid_t, struct timespec *);
-int        clock_gettime(clockid_t, struct timespec *);
-int        clock_nanosleep(clockid_t, int, const struct timespec *,
-               struct timespec *);
-int        clock_settime(clockid_t, const struct timespec *);
+int clock_getres(clockid_t, struct timespec *);
+int clock_gettime(clockid_t, struct timespec *);
+int clock_nanosleep(clockid_t, int, const struct timespec *, struct timespec *);
+int clock_settime(clockid_t, const struct timespec *);
 
-int        clock_getcpuclockid(pid_t, clockid_t *);
+int clock_getcpuclockid(pid_t, clockid_t *);
 
-double     difftime(time_t, time_t);
+double difftime(time_t, time_t);
 struct tm *getdate(const char *);
 
+int nanosleep(const struct timespec *, struct timespec *);
+char *strptime(const char *, const char *, struct tm *);
 
-int        nanosleep(const struct timespec *, struct timespec *);
-char      *strptime(const char *, const char *,
-               struct tm *);
-
-int        timer_create(clockid_t, struct sigevent *,
-               timer_t *);
-int        timer_delete(timer_t);
-int        timer_getoverrun(timer_t);
-int        timer_gettime(timer_t, struct itimerspec *);
-int        timer_settime(timer_t, int, const struct itimerspec *,
-               struct itimerspec *);
-void       tzset(void);
-
+int timer_create(clockid_t, struct sigevent *, timer_t *);
+int timer_delete(timer_t);
+int timer_getoverrun(timer_t);
+int timer_gettime(timer_t, struct itimerspec *);
+int timer_settime(timer_t, int, const struct itimerspec *, struct itimerspec *);
+void tzset(void);
 
 #endif
-
 
 #if defined(__cplusplus)
 } /* extern "C" */

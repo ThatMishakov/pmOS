@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -27,26 +27,29 @@
  */
 
 #include "task_group.hh"
+
 #include "tasks.hh"
+
 #include <pmos/ipc.h>
 
 TaskGroup::~TaskGroup() noexcept
 {
     atomic_remove_from_global_map();
 
-    for (const auto & p : notifier_ports) {
+    for (const auto &p: notifier_ports) {
         const auto &ptr = p.second.port.lock();
         if (ptr) {
             if (p.second.action_mask & NotifierPort::ACTION_MASK_ON_DESTROY) {
                 IPC_Kernel_Group_Destroyed msg = {
-                    .type = IPC_Kernel_Group_Destroyed_NUM,
-                    .flags = 0,
+                    .type          = IPC_Kernel_Group_Destroyed_NUM,
+                    .flags         = 0,
                     .task_group_id = id,
                 };
 
                 try {
                     ptr->atomic_send_from_system(reinterpret_cast<char *>(&msg), sizeof(msg));
-                } catch (...) {}
+                } catch (...) {
+                }
             }
 
             Auto_Lock_Scope l(ptr->notifier_ports_lock);
@@ -104,21 +107,22 @@ void TaskGroup::atomic_register_task(klib::shared_ptr<TaskDescriptor> task)
 
     {
         Auto_Lock_Scope lock(notifier_ports_lock);
-        for (const auto &p : notifier_ports) {
+        for (const auto &p: notifier_ports) {
             if (p.second.action_mask & NotifierPort::ACTION_MASK_ON_ADD_TASK) {
                 const auto &ptr = p.second.port.lock();
                 if (ptr) {
                     IPC_Kernel_Group_Task_Changed msg = {
-                        .type = IPC_Kernel_Group_Task_Changed_NUM,
-                        .flags = 0,
-                        .event_type = Event_Group_Task_Added_NUM,
+                        .type          = IPC_Kernel_Group_Task_Changed_NUM,
+                        .flags         = 0,
+                        .event_type    = Event_Group_Task_Added_NUM,
                         .task_group_id = id,
-                        .task_id = task->task_id,
+                        .task_id       = task->task_id,
                     };
 
                     try {
                         ptr->atomic_send_from_system(reinterpret_cast<char *>(&msg), sizeof(msg));
-                    } catch (...) {}
+                    } catch (...) {
+                    }
                 }
             }
         }
@@ -132,15 +136,15 @@ klib::shared_ptr<TaskGroup> TaskGroup::get_task_group_throw(u64 groupno)
     try {
         const auto group = global_map.at(groupno).lock();
         if (not group)
-            throw (Kern_Exception(ERROR_PORT_DOESNT_EXIST, "requested task group does not exist"));
+            throw(Kern_Exception(ERROR_PORT_DOESNT_EXIST, "requested task group does not exist"));
 
         return group;
-    } catch (const std::out_of_range&) {
-        throw (Kern_Exception(ERROR_PORT_DOESNT_EXIST, "requested task group does not exist"));
+    } catch (const std::out_of_range &) {
+        throw(Kern_Exception(ERROR_PORT_DOESNT_EXIST, "requested task group does not exist"));
     }
 }
 
-void TaskGroup::atomic_remove_task(const klib::shared_ptr<TaskDescriptor>& task)
+void TaskGroup::atomic_remove_task(const klib::shared_ptr<TaskDescriptor> &task)
 {
     {
         Auto_Lock_Scope lock(tasks_lock);
@@ -155,30 +159,31 @@ void TaskGroup::atomic_remove_task(const klib::shared_ptr<TaskDescriptor>& task)
 
     {
         Auto_Lock_Scope lock(notifier_ports_lock);
-        for (const auto &p : notifier_ports) {
+        for (const auto &p: notifier_ports) {
             if (p.second.action_mask & NotifierPort::ACTION_MASK_ON_REMOVE_TASK) {
                 const auto &ptr = p.second.port.lock();
                 if (ptr) {
                     IPC_Kernel_Group_Task_Changed msg = {
-                        .type = IPC_Kernel_Group_Task_Changed_NUM,
-                        .flags = 0,
-                        .event_type = Event_Group_Task_Removed_NUM,
+                        .type          = IPC_Kernel_Group_Task_Changed_NUM,
+                        .flags         = 0,
+                        .event_type    = Event_Group_Task_Removed_NUM,
                         .task_group_id = id,
-                        .task_id = task->task_id,
+                        .task_id       = task->task_id,
                     };
 
                     try {
                         ptr->atomic_send_from_system(reinterpret_cast<char *>(&msg), sizeof(msg));
-                    } catch (...) {}
+                    } catch (...) {
+                    }
                 }
             }
         }
     }
 }
 
-u64 TaskGroup::atomic_change_notifier_mask(const klib::shared_ptr<Port>& port, u64 mask)
+u64 TaskGroup::atomic_change_notifier_mask(const klib::shared_ptr<Port> &port, u64 mask)
 {
-    u64 old_mask = 0;
+    u64 old_mask      = 0;
     const u64 port_id = port->portno;
 
     mask &= NotifierPort::ACTION_MASK_ALL;
@@ -203,8 +208,8 @@ u64 TaskGroup::atomic_change_notifier_mask(const klib::shared_ptr<Port>& port, u
                 throw;
             }
         } else {
-            auto& p = notifier_ports.at(port_id);
-            old_mask = p.action_mask;
+            auto &p       = notifier_ports.at(port_id);
+            old_mask      = p.action_mask;
             p.action_mask = mask;
 
             if (mask == 0) {
