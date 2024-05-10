@@ -637,6 +637,7 @@ void init_task1()
 
     // Create new task and load ELF into it
     auto task = TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel::User);
+    serial_logger.printf("Loading ELF...\n");
     bool p    = task->load_elf(task1->object, task1->path, tags);
     if (!p) {
         serial_logger.printf("Failed to load ELF\n");

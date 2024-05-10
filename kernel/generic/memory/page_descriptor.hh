@@ -27,40 +27,60 @@
  */
 
 #pragma once
+#include <cstddef>
 #include <lib/pair.hh>
 #include <types.hh>
 
+typedef void (*rcu_func_t)(void *self);
+struct RCU_Head {
+    void *rcu_next;
+    rcu_func_t rcu_func;
+};
+
+struct Page {
+    using page_addr_t = u64;
+
+    struct Mem_Object_LL_Head {
+        Page *next;
+        u64 offset;
+    };
+
+    union {
+        RCU_Head rcu_h;
+        Mem_Object_LL_Head l;
+    };
+
+    Page *hashmap_next = nullptr;
+
+    u64 page_ptr    = (u64)-1Ul;
+    size_t refcount = 0;
+
+    static void rcu_callback(void *self) noexcept;
+    Page() noexcept = default;
+
+    bool has_physical_page() const noexcept { return page_ptr != (u64)-1UL; }
+};
+
+void release_page(Page *) noexcept;
+void insert_global_pages_list(Page *) noexcept;
+void remove_global_pages_list(Page *) noexcept;
+
 /// Structure describing a page. If it owns a page, the destructor automatically dealocates it
 struct Page_Descriptor {
-    bool available   = false;
-    bool owning      = false;
-    u8 alignment_log = 0;
-    u64 page_ptr     = 0;
+    Page *page_struct_ptr = nullptr;
 
     Page_Descriptor() noexcept = default;
-    Page_Descriptor(bool available, bool owning, u8 alignment_log, u64 page_ptr) noexcept
-        : available(available), owning(owning), alignment_log(alignment_log), page_ptr(page_ptr)
-    {
-    }
-
-    Page_Descriptor(const Page_Descriptor &) = delete;
-
-    Page_Descriptor(Page_Descriptor &&r) noexcept
-        : available(r.available), owning(r.owning), alignment_log(r.alignment_log),
-          page_ptr(r.page_ptr)
-    {
-        r.available = false, r.owning = false, r.alignment_log = 0, r.page_ptr = 0;
-    }
+    constexpr Page_Descriptor(Page *p) noexcept: page_struct_ptr(p) {};
 
     Page_Descriptor &operator=(Page_Descriptor &&) noexcept;
-
+    Page_Descriptor(Page_Descriptor &&) noexcept;
     ~Page_Descriptor() noexcept;
-
-    /// Takes the page out of the descriptor
-    klib::pair<u64 /* page_ppn */, bool /* owning reference */> takeout_page() noexcept;
 
     /// Allocates a new page and copies current page into it
     Page_Descriptor create_copy() const;
+
+    /// Creates another reference to the page
+    Page_Descriptor duplicate() const noexcept;
 
     /// Frees the page that is held by the descriptor if it is managed
     void try_free_page() noexcept;
@@ -69,4 +89,30 @@ struct Page_Descriptor {
     /// @param alignment_log Logarithm of the alignment of the page (e.g. 12 for 4096 bytes)
     /// @return Newly allocated page. Throws on error
     static Page_Descriptor allocate_page(u8 alignment_log);
+
+    /// Creates a page descriptor, allocating a new page struct, taking ownership of the given page
+    static Page_Descriptor create_from_allocated(Page::page_addr_t phys_addr);
+
+    /// Creates an empty page struct
+    static Page_Descriptor create_empty() noexcept;
+
+    /// Returns the descriptor with page_ptr == nullptr if the page was not found
+    static Page_Descriptor find_page_struct(u64 page_base_phys) noexcept;
+
+    /// Takes the page out of the descriptor, keeping its reference count
+    /// Used in the page mapping functions
+    Page::page_addr_t takeout_page() noexcept;
+
+    /// Releases a page, that was previously taken out (mapped into a page table)
+    void release_taken_out_page();
+
+    /// Returns the physical address of the page pointer by this page descriptor
+    Page::page_addr_t get_phys_addr() noexcept;
+
+    /// Creates a page descriptor from the pointer to the page, taking ownerhip of it
+    static Page_Descriptor from_raw_ptr(Page *p) noexcept { return Page_Descriptor(p); }
+
+    static Page_Descriptor dup_from_raw_ptr(Page *p) noexcept;
+
+    static Page_Descriptor none() { return Page_Descriptor(nullptr); }
 };

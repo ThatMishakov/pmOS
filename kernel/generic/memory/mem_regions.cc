@@ -81,21 +81,10 @@ Page_Table_Argumments Private_Normal_Region::craft_arguments() const
 
 bool Private_Normal_Region::alloc_page(u64 ptr_addr)
 {
-    void *new_page = kernel_pframe_allocator.alloc_page();
-    clear_page((u64)new_page, pattern);
-
-    Page_Table_Argumments args = craft_arguments();
-
-    u64 page_addr = (u64)ptr_addr & ~07777UL;
-
-    try {
-        owner->map((u64)new_page, page_addr, args);
-
-        return true;
-    } catch (...) {
-        kernel_pframe_allocator.free(new_page);
-        throw;
-    }
+    auto page = Page_Descriptor::allocate_page(12);
+    clear_page(page.page_struct_ptr->page_ptr, 0);
+    owner->map(klib::move(page), ptr_addr, craft_arguments());
+    return true;
 }
 
 Page_Table_Argumments Phys_Mapped_Region::craft_arguments() const
@@ -203,7 +192,7 @@ bool Mem_Object_Reference::alloc_page(u64 ptr_addr)
             // Out of object range. Allocate an empty page
             auto page = Page_Descriptor::allocate_page(12);
 
-            clear_page(page.page_ptr, 0);
+            clear_page(page.page_struct_ptr->page_ptr, 0);
 
             owner->map(klib::move(page), ptr_addr, craft_arguments());
             return true;
@@ -212,7 +201,7 @@ bool Mem_Object_Reference::alloc_page(u64 ptr_addr)
         auto page =
             references->atomic_request_page(reg_addr - start_offset_bytes + object_offset_bytes);
 
-        if (not page.available)
+        if (not page.page_struct_ptr)
             return false;
 
         page = page.create_copy();
@@ -228,7 +217,7 @@ bool Mem_Object_Reference::alloc_page(u64 ptr_addr)
 
         // Zero the page
         Temp_Mapper_Obj<void> mapper(request_temp_mapper());
-        void *pageptr = mapper.map(page.page_ptr);
+        void *pageptr = mapper.map(page.page_struct_ptr->page_ptr);
 
         // Zero the start of the page
         const u64 start_offset_size =
@@ -250,7 +239,7 @@ bool Mem_Object_Reference::alloc_page(u64 ptr_addr)
 
         auto page = references->atomic_request_page(reg_addr);
 
-        if (not page.available)
+        if (not page.page_struct_ptr)
             return false;
 
         owner->map(klib::move(page), ptr_addr, craft_arguments());

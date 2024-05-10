@@ -364,9 +364,7 @@ Page_Descriptor Page_Table::Page_Info::create_copy() const
     if (not is_allocated)
         return {};
 
-    if (nofree)
-        // Return a reference
-        return Page_Descriptor(true, false, page_addr, 12);
+    assert(!nofree);
 
     // Return a copy
     Page_Descriptor new_page = Page_Descriptor::allocate_page(12);
@@ -375,7 +373,7 @@ Page_Descriptor Page_Table::Page_Info::create_copy() const
     Temp_Mapper_Obj<char> new_mapping(request_temp_mapper());
 
     this_mapping.map(page_addr);
-    new_mapping.map(new_page.page_ptr);
+    new_mapping.map(new_page.page_struct_ptr->page_ptr);
 
     const auto page_size_bytes = 4096;
 

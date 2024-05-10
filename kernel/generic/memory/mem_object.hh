@@ -217,38 +217,6 @@ protected:
     }
 
     /**
-     * @brief Structrue holding information about pages
-     *
-     * This structure holds the necessary information needed to allocate the pages.
-     */
-    struct Page_Storage {
-        bool present : 1     = false;
-        bool dont_delete : 1 = false;
-        bool requested : 1   = false;
-        u64 ppn : 54         = 0;
-
-        constexpr u64 get_page() const noexcept { return ppn << (64 - 54); }
-
-        static Page_Storage from_allocated(void *page) noexcept
-        {
-            return {
-                true,
-                false,
-                false,
-                ((u64)(page)) >> 10,
-            };
-        }
-    } PACKED ALIGNED(8);
-
-    /**
-     * @brief Tries to free page if it is present
-     *
-     * @param p Pointer to the page
-     * @param page_size_log Log2 of the size of the page
-     */
-    static void try_free_page(Page_Storage &p, u8 page_size_log) noexcept;
-
-    /**
      * @brief Size of the single page
      *
      * This number can be used to get the page size by shifting 2 by this number. This allows for
@@ -257,13 +225,9 @@ protected:
      */
     u8 page_size_log = 12;
 
-    /**
-     * @brief Storage for the pages
-     *
-     * This structure holds the pages referenced by the structure. page_vec_index() function can be
-     * used to get the right index according to the page size.
-     */
-    klib::vector<Page_Storage> pages;
+    // Storage for the pages, in form of a linked list
+    // TODO: Replace this with a hash table
+    Page *pages_storage = nullptr;
 
     /// Size of the pages vector.
     /// This might be smaller than pages.size() for a short time during the this->atomic_resize()
@@ -272,14 +236,6 @@ protected:
 
     /// Lock that must be acquired when resizing the memory object
     Spinlock resize_lock;
-
-    /**
-     * @brief Allocates a page
-     *
-     * @param size_log log2 size of the page
-     * @return Page_Storage Newly allocated page. The new page is automatically zero-initialized
-     */
-    static Page_Storage allocate_page(u8 size_log);
 
     /**
      * @brief Finds the index for the pointer

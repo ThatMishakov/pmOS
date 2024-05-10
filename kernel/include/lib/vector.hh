@@ -295,6 +295,7 @@ template<typename T> void vector<T>::expand(size_t new_capacity)
     for (size_t i = 0; i < a_size; ++i)
         ptr[i].~T();
 
+    a_capacity = new_capacity;
     free(ptr);
     ptr = temp_ptr;
 }

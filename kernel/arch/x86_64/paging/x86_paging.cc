@@ -614,11 +614,12 @@ void x86_4level_Page_Table::map(u64 physical_addr, u64 virtual_addr, Page_Table_
 
 void x86_4level_Page_Table::map(Page_Descriptor page, u64 virtual_addr, Page_Table_Argumments arg)
 {
-    if (page.page_ptr >> 48)
+    auto p = page.page_struct_ptr;
+    assert(p && "page must be present");
+
+    if (p->page_ptr >> 48)
         throw(Kern_Exception(ERROR_OUT_OF_RANGE,
                              "x86_4level_Page_Table::map physical page out of range"));
-
-    assert(page.available && "Page is not available");
 
     Temp_Mapper_Obj<x86_PAE_Entry> mapper(request_temp_mapper());
     mapper.map((u64)pml4_phys);
@@ -676,8 +677,8 @@ void x86_4level_Page_Table::map(Page_Descriptor page, u64 virtual_addr, Page_Tab
     pte->present     = 1;
     pte->user_access = arg.user_access;
     pte->writeable   = arg.writeable;
-    pte->avl         = page.owning ? 0 : PAGING_FLAG_NOFREE;
-    u64 page_ppn     = page.takeout_page().first >> 12;
+    pte->avl         = PAGING_FLAG_STRUCT_PAGE;
+    u64 page_ppn     = page.takeout_page() >> 12;
     pte->page_ppn    = page_ppn;
 
     if (nx_bit_enabled)
@@ -753,7 +754,16 @@ void x86_PAE_Entry::clear_nofree() { *this = {}; }
 
 void x86_PAE_Entry::clear_auto()
 {
-    if (present and not(avl & PAGING_FLAG_NOFREE))
+    if (not present) {
+        *this = x86_PAE_Entry();
+        return;
+    }
+
+    if (avl & PAGING_FLAG_STRUCT_PAGE) {
+        auto p = Page_Descriptor::find_page_struct(page_ppn << 12);
+        assert(p.page_struct_ptr && "page struct must be present");
+        p.release_taken_out_page();
+    } else if (not (avl & PAGING_FLAG_NOFREE))
         kernel_pframe_allocator.free((void *)(page_ppn << 12));
 
     *this = x86_PAE_Entry();

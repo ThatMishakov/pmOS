@@ -103,6 +103,7 @@ typedef struct {
     u8 execution_disabled : 1;
 } PACKED PTE;
 
+#define PAGING_FLAG_STRUCT_PAGE 0x01
 #define PAGING_FLAG_NOFREE 0x02
 
 typedef struct {

@@ -39,15 +39,21 @@
 #include <pmos/ipc.h>
 
 Mem_Object::Mem_Object(u64 page_size_log, u64 size_pages, u32 max_user_permissions)
-    : page_size_log(page_size_log), pages(size_pages), pages_size(size_pages),
+    : page_size_log(page_size_log), pages_storage(nullptr), pages_size(size_pages),
       max_user_access_perm(max_user_permissions) {};
 
 Mem_Object::~Mem_Object()
 {
     atomic_erase_gloabl_storage(id);
 
-    for (size_t i = 0; i < pages.size(); ++i)
-        try_free_page(pages[i], page_size_log);
+    auto current_page = pages_storage;
+    while (current_page) {
+        auto p       = current_page;
+        current_page = current_page->l.next;
+
+        // This should RAII free the page
+        Page_Descriptor::from_raw_ptr(p);
+    }
 }
 
 klib::shared_ptr<Mem_Object> Mem_Object::create(u64 page_size_log, u64 size_pages)
@@ -71,6 +77,8 @@ klib::shared_ptr<Mem_Object> Mem_Object::create_from_phys(u64 phys_addr, u64 siz
     const u64 start_alligned = phys_addr & ~0xFFFUL;
     const u64 pages_count    = size_alligned >> 12;
 
+    assert(take_ownership && "not taking ownership is not implemented");
+
     // Create new object
     klib::shared_ptr<Mem_Object> ptr(new Mem_Object(12, pages_count, max_user_permissions));
 
@@ -82,17 +90,14 @@ klib::shared_ptr<Mem_Object> Mem_Object::create_from_phys(u64 phys_addr, u64 siz
 
     // Provide the pages
     // This can't fail
-    for (u64 i = 0; i < pages_count; ++i)
-        ptr->pages[i] = {
-            .present     = true,
-            .dont_delete = !take_ownership,
-            .requested   = false,
-            // Shift right by 10 because of x86 reasons...
-            // No further explanation will be given :)
-            // (In retrospect, I think this is somewhat stupid and needs to be changed, but whatever
-            // for now...)
-            .ppn         = (start_alligned + (i << 12)) >> 10,
-        };
+    for (u64 i = 0; i < pages_count; ++i) {
+        auto page = Page_Descriptor::create_from_allocated(start_alligned + i * 0x1000);
+        auto c    = page.page_struct_ptr;
+        page.takeout_page();
+        c->l.offset        = i * 0x1000;
+        c->l.next          = ptr->pages_storage;
+        ptr->pages_storage = c;
+    }
 
     return ptr;
 }
@@ -151,26 +156,31 @@ Page_Descriptor Mem_Object::request_page(u64 offset)
         throw Kern_Exception(ERROR_OUT_OF_RANGE,
                              "Trying to access to memory out of the Page Descriptor's range");
 
-    auto &p = pages[index];
+    offset &= ~0xfffUL;
+    auto page = pages_storage;
+    while (page and page->l.offset != offset)
+        page = page->l.next;
 
-    do {
-        // Page is already present
-        if (p.present)
-            continue;
-
-        const auto pager_port = pager.lock();
-        // Page not present and there is no pager -> alocate zeroed page
-        if (not pager_port) {
-            p = allocate_page(page_size_log);
-            continue;
+    if (page) {
+        if (page->has_physical_page()) {
+            return Page_Descriptor::dup_from_raw_ptr(page);
         }
 
-        // Page not present, there is a pager and the page was already requested once -> do not
-        // request the page again
-        if (p.requested)
-            continue;
+        return Page_Descriptor::none();
+    } else {
+        auto pager_port = pager.lock();
+        if (not pager_port) {
+            auto p                      = Page_Descriptor::allocate_page(page_size_log);
+            auto p2                     = p.duplicate();
+            p.page_struct_ptr->l.offset = offset;
+            p.page_struct_ptr->l.next   = pages_storage;
+            pages_storage               = p.page_struct_ptr;
+            p.takeout_page();
+            return klib::move(p2);
+        }
 
-        // Request a page
+        auto p = Page_Descriptor::create_empty();
+
         IPC_Kernel_Request_Page request {
             .type          = IPC_Kernel_Request_Page_NUM,
             .flags         = 0,
@@ -179,17 +189,14 @@ Page_Descriptor Mem_Object::request_page(u64 offset)
         };
         pager_port->atomic_send_from_system(reinterpret_cast<char *>(&request), sizeof(request));
 
-        p.requested = true;
-    } while (false);
+        p.page_struct_ptr->l.offset = offset;
+        p.page_struct_ptr->l.next   = pages_storage;
+        pages_storage               = p.page_struct_ptr;
+        p.takeout_page();
+        return Page_Descriptor::none();
+    }
 
-    return Page_Descriptor(true, false, page_size_log, p.get_page());
-}
-
-Mem_Object::Page_Storage Mem_Object::allocate_page(u8 size_log)
-{
-    assert(size_log == 12 && "only 4K pages are supported");
-
-    return Page_Storage::from_allocated(kernel_pframe_allocator.alloc_page());
+    assert(false);
 }
 
 void Mem_Object::atomic_resize(u64 new_size_pages)
@@ -210,12 +217,6 @@ void Mem_Object::atomic_resize(u64 new_size_pages)
 
         // If the new size is larger, there is no need to shrink memory regions
         if (old_size <= new_size_pages) {
-            try {
-                pages.resize(new_size_pages);
-            } catch (...) {
-                pages_size = old_size;
-                throw;
-            }
             return;
         }
     }
@@ -233,19 +234,38 @@ void Mem_Object::atomic_resize(u64 new_size_pages)
                     ptr->atomic_shrink_regions(self, new_size_bytes);
             }
         }
-
-        {
-            Auto_Lock_Scope l(lock);
-
-            for (size_t i = new_size_pages; i < old_size; ++i)
-                try_free_page(pages[i], page_size_log);
-
-            pages.resize(new_size_pages);
-        }
     } catch (...) {
         Auto_Lock_Scope l(lock);
         pages_size = old_size;
         throw;
+    }
+
+    Page *pages = nullptr;
+
+    {
+        Auto_Lock_Scope l(lock);
+
+        Page **erase_ptr_head = &pages_storage;
+        while (*erase_ptr_head) {
+            Page *current = *erase_ptr_head;
+
+            if (current->l.offset >= new_size_pages) {
+                *erase_ptr_head = current->l.next;
+                current->l.next = pages;
+                pages           = current;
+            } else {
+                if (current->l.next == nullptr)
+                    break;
+
+                erase_ptr_head = &current->l.next;
+            }
+        }
+    }
+
+    while (pages) {
+        Page *next = pages->l.next;
+        pages      = next;
+        Page_Descriptor::from_raw_ptr(pages);
     }
 }
 
@@ -261,16 +281,6 @@ klib::shared_ptr<Mem_Object> Mem_Object::get_object(u64 object_id)
     return p;
 }
 
-void Mem_Object::try_free_page(Page_Storage &p, u8 page_size_log) noexcept
-{
-    assert(page_size_log == 12 && "Only 4K pages are supported");
-
-    if (p.present and not p.dont_delete) {
-        kernel_pframe_allocator.free(reinterpret_cast<void *>(p.get_page()));
-        p = Page_Storage();
-    }
-}
-
 bool Mem_Object::read_to_kernel(u64 offset, void *buffer, u64 size)
 {
     if (size == 0)
@@ -281,10 +291,10 @@ bool Mem_Object::read_to_kernel(u64 offset, void *buffer, u64 size)
     Temp_Mapper_Obj<char> mapper(request_temp_mapper());
     for (u64 i = offset & ~0xfffUL; i < offset + size; i += 0x1000) {
         const auto page = request_page(i);
-        if (not page.available)
+        if (not page.page_struct_ptr)
             return false;
 
-        char *ptr = mapper.map(page.page_ptr);
+        char *ptr = mapper.map(page.page_struct_ptr->page_ptr);
 
         const u64 start = i < offset ? offset : i;
         const u64 end   = i + 0x1000 < offset + size ? i + 0x1000 : offset + size;
@@ -310,7 +320,7 @@ void *Mem_Object::map_to_kernel(u64 offset, u64 size, Page_Table_Argumments args
     // Make sure all pages are allocated
     for (size_t i = 0; i < size; i += 4096) {
         auto p = atomic_request_page(offset + i);
-        if (not p.available)
+        if (not p.page_struct_ptr)
             return nullptr;
     }
 
@@ -322,11 +332,11 @@ void *Mem_Object::map_to_kernel(u64 offset, u64 size, Page_Table_Argumments args
     try {
         for (i = 0; i < size; i += 4096) {
             auto p = atomic_request_page(offset + i);
-            assert(!p.owning);
+            assert(p.page_struct_ptr);
             Page_Table_Argumments arg = args;
-            arg.extra |= PAGING_FLAG_NOFREE;
+            arg.extra |= PAGING_FLAG_STRUCT_PAGE;
 
-            const u64 phys_addr   = p.page_ptr;
+            const u64 phys_addr   = p.page_struct_ptr->page_ptr;
             void *const virt_addr = (void *)(ulong(mem_virt) + i);
             map_kernel_page(phys_addr, virt_addr, arg);
         }
