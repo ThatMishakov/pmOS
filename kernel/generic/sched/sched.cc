@@ -220,9 +220,13 @@ void TaskDescriptor::unblock() noexcept
         klib::shared_ptr<TaskDescriptor> current_task = get_cpu_struct()->current_task;
 
         if (current_task->priority > priority) {
+            if (status == TaskStatus::TASK_DYING) {
+                cleanup();
+                return;
+            }
+
             {
                 Auto_Lock_Scope scope_l(current_task->sched_lock);
-
                 switch_to();
             }
 
@@ -297,6 +301,12 @@ void sched_periodic()
     } else {
         start_timer(assign_quantum_on_priority(current->priority));
     }
+
+    while (current->status == TaskStatus::TASK_DYING) {
+        current->cleanup();
+
+        find_new_process();
+    }
 }
 
 void start_scheduler()
@@ -321,6 +331,13 @@ void reschedule()
 
         new_task->switch_to();
         push_ready(current_task);
+    }
+
+    while (cpu_str->current_task->status == TaskStatus::TASK_DYING) {
+        auto t = cpu_str->current_task;
+        t->cleanup();
+
+        find_new_process();
     }
 }
 
@@ -362,6 +379,11 @@ void find_new_process()
     CPU_Info &cpu_str = *get_cpu_struct();
 
     klib::shared_ptr<TaskDescriptor> next_task = cpu_str.atomic_pick_highest_priority();
+
+    while (next_task and next_task->status == TaskStatus::TASK_DYING) {
+        next_task->cleanup();
+        next_task = cpu_str.atomic_pick_highest_priority();
+    }
 
     if (not next_task)
         next_task = cpu_str.idle_task;

@@ -516,7 +516,7 @@ klib::shared_ptr<x86_4level_Page_Table> x86_4level_Page_Table::create_empty()
         new_page_m.ptr[511] = current_page_m.ptr[511];
 
         // TODO: I've switch almost everything to use temporary mappings, but
-        // recursive mapping is still used in some places This should be removed
+        // recursive mapping is still used in some places. This should be removed
         // but doesn't matter for now... Also, RISC-V functions fine without it
         new_page_m.ptr[rec_map_index]             = x86_PAE_Entry();
         new_page_m.ptr[rec_map_index].present     = 1;

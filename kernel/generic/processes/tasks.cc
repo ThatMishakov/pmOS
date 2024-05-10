@@ -165,6 +165,8 @@ void TaskDescriptor::atomic_kill()
     status                = TaskStatus::TASK_DYING;
     if (is_blocked)
         unblock();
+    else
+        reschedule();
 
     // Let the scheduler stumble upon this task and kill it
     // This is done this way so that if a task is bound to a particular CPU, the the destructors
@@ -380,20 +382,16 @@ bool TaskDescriptor::load_elf(klib::shared_ptr<Mem_Object> elf, klib::string nam
     return true;
 }
 
-void TaskDescriptor::cleanup_and_release()
+void TaskDescriptor::cleanup()
 {
+    cleaned_up = true;
+
     auto c = get_cpu_struct();
-
-    assert(status == TaskStatus::TASK_DYING);
-    assert(c->current_task.get() == this);
-
 #ifdef __riscv
     for (auto interr: interrupt_handlers) {
         c->int_handlers.remove_handler(interr->interrupt_number);
     }
 #endif
-
-    find_new_process();
 }
 
 TaskDescriptor::TaskID TaskDescriptor::get_new_task_id()

@@ -41,6 +41,7 @@
 #include <registers.hh>
 #include <sched/defs.hh>
 #include <types.hh>
+#include <assert.h>
 
 #ifdef __x86_64__
     #include <cpus/sse.hh>
@@ -200,6 +201,9 @@ public:
     inline bool can_be_rebound() { return interrupt_handlers.empty(); }
 #endif
 
+    // Debugging
+    bool cleaned_up = false;
+
     Spinlock name_lock;
     klib::string name = "";
 
@@ -231,7 +235,7 @@ public:
     /// Cleans up the task when detected that it is dead ("tombstoning")
     /// This function is called when the dead task has been scheduled to run and is needed to clean
     /// up CPU-specific data
-    void cleanup_and_release();
+    void cleanup();
 
     /// Gets an unused task ID
     static TaskID get_new_task_id();
@@ -291,6 +295,8 @@ inline klib::shared_ptr<TaskDescriptor> get_task_throw(u64 pid)
 
 inline TaskDescriptor::~TaskDescriptor() noexcept
 {
+    assert(status == TaskStatus::TASK_UNINIT or (status == TaskStatus::TASK_DYING and cleaned_up));
+
     Auto_Lock_Scope scope_lock(tasks_map_lock);
     tasks_map.erase(task_id);
 }
