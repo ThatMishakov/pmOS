@@ -29,6 +29,7 @@
 
 #ifndef GDT_HH
 #define GDT_HH
+#include <types.hh>
 
 struct TSS {
     u32 reserved0 = 0;

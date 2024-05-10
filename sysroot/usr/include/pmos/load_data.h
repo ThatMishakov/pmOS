@@ -29,6 +29,7 @@
 #ifndef PMOS_LOAD_DATA_H
 #define PMOS_LOAD_DATA_H
 #include <stdint.h>
+#include <stddef.h>
 
 enum {
     LOAD_TAG_CLOSE            = 0,

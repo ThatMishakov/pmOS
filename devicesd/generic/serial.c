@@ -219,9 +219,9 @@ void init_serial()
             break;
         }
 
-        if (init_serial_hardcoded()) {
-            break;
-        }
+        // if (init_serial_hardcoded()) {
+        //     break;
+        // }
 
         fprintf(stderr, "No serial port found\n");
         return;

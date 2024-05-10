@@ -114,7 +114,7 @@ void ns16550_init()
         send_message_port(devicesd_port, sizeof(request), static_cast<void *>(&request));
     if (result != SUCCESS) {
         printf("Failed to send message to devicesd port %lx: %lx\n", devicesd_port, result);
-        return;
+        throw std::runtime_error("Failed to send message to devicesd");
     }
 
     Message_Descriptor desc;
@@ -122,19 +122,19 @@ void ns16550_init()
     result = get_message(&desc, &message, serial_port);
     if (result != SUCCESS) {
         printf("Failed to get message from devicesd\n");
-        return;
+        throw std::runtime_error("Failed to get message from devicesd");
     }
     std::unique_ptr<unsigned char[]> message_ptr(message);
 
     IPC_Serial_Reply *reply = reinterpret_cast<IPC_Serial_Reply *>(message_ptr.get());
     if (reply->type != IPC_Serial_Reply_NUM) {
         printf("Invalid reply type: %i\n", reply->type);
-        return;
+        throw std::runtime_error("Invalid reply type");
     }
 
     if (reply->result < 0) {
         printf("Failed to initialize ns16550: recieved error %i\n", -reply->result);
-        return;
+        throw std::runtime_error("Failed to initialize ns16550");
     }
 
     terminal_base       = reply->base_address;

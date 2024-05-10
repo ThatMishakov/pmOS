@@ -74,7 +74,7 @@ void print_registers(const klib::shared_ptr<TaskDescriptor> &task, Logger &logge
     if (not task)
         return;
 
-    logger.printf("Registers for task %i (%s)\n", task->pid, task->name.c_str());
+    logger.printf("Registers for task %i (%s)\n", task->task_id, task->name.c_str());
     print_registers(task->regs, logger);
 }
 
@@ -163,7 +163,7 @@ extern "C" void pagefault_manager()
     u64 virtual_addr = getCR2();
 
     // t_print_bochs("Debug: Pagefault %h pid %i (%s) rip %h error %h\n",
-    // virtual_addr, task->pid, task->name.c_str(), task->regs.e.rip, err);
+    // virtual_addr, task->task_id, task->name.c_str(), task->regs.e.rip, err);
 
     try {
         if (is_protection_violation(err))
@@ -191,10 +191,11 @@ extern "C" void pagefault_manager()
     } catch (const Kern_Exception &e) {
         t_print_bochs("Debug: Pagefault %h pid %i rip %h error %h returned "
                       "error %i (%s)\n",
-                      virtual_addr, task->pid, task->regs.e.rip, err, e.err_code, e.err_message);
+                      virtual_addr, task->task_id, task->regs.e.rip, err, e.err_code,
+                      e.err_message);
         global_logger.printf("Warning: Pagefault %h pid %i (%s) rip %h error "
                              "%h -> %i killing process...\n",
-                             virtual_addr, task->pid, task->name.c_str(), task->regs.e.rip, err,
+                             virtual_addr, task->task_id, task->name.c_str(), task->regs.e.rip, err,
                              e.err_code);
 
         print_pt_chain(virtual_addr, global_logger);
@@ -217,7 +218,7 @@ extern "C" void general_protection_fault_manager()
     // t_print_bochs("!!! General Protection Fault (GP) error %h\n", err);
     global_logger.printf("!!! General Protection Fault (GP) error (segment) %h "
                          "PID %i (%s) RIP %h CS %h... Killing the process\n",
-                         task->regs.int_err, task->pid, task->name.c_str(), task->regs.e.rip,
+                         task->regs.int_err, task->task_id, task->name.c_str(), task->regs.e.rip,
                          task->regs.e.cs);
     print_registers(get_cpu_struct()->current_task, global_logger);
     print_stack_trace(task, global_logger);
@@ -236,7 +237,7 @@ extern "C" void stack_segment_fault_manager()
 {
     task_ptr task = get_cpu_struct()->current_task;
     t_print_bochs("!!! Stack-Segment Fault error %h RIP %h RSP %h PID %h (%s)\n",
-                  task->regs.int_err, task->regs.e.rip, task->regs.e.rsp, task->pid,
+                  task->regs.int_err, task->regs.e.rip, task->regs.e.rsp, task->task_id,
                   task->name.c_str());
     global_logger.printf("!!! Stack-Segment Fault error %h RIP %h RSP %h\n", task->regs.int_err,
                          task->regs.e.rip, task->regs.e.rsp);
@@ -247,9 +248,9 @@ extern "C" void double_fault_manager()
 {
     task_ptr task = get_cpu_struct()->current_task;
     t_print_bochs("!!! Double Fault error %h RIP %h RSP %h PID %h (%s)\n", task->regs.int_err,
-                  task->regs.e.rip, task->regs.e.rsp, task->pid, task->name.c_str());
+                  task->regs.e.rip, task->regs.e.rsp, task->task_id, task->name.c_str());
     global_logger.printf("!!! Double Fault error %h RIP %h RSP %h PID %h (%s)\n",
-                         task->regs.int_err, task->regs.e.rip, task->regs.e.rsp, task->pid,
+                         task->regs.int_err, task->regs.e.rip, task->regs.e.rsp, task->task_id,
                          task->name.c_str());
     task->atomic_kill();
 }

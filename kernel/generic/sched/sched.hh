@@ -78,8 +78,6 @@ struct CPU_Info {
     klib::array<sched_queue, sched_queues_levels> sched_queues;
     klib::shared_ptr<TaskDescriptor> idle_task = klib::shared_ptr<TaskDescriptor>();
 
-    u32 timer_val = 0;
-
     u64 pagefault_cr2   = 0;
     u64 pagefault_error = 0;
 
@@ -93,6 +91,9 @@ struct CPU_Info {
     Kernel_Stack_Pointer machine_check_stack;
     Kernel_Stack_Pointer double_fault_stack;
     GDT cpu_gdt;
+
+    u64 system_timer_val = 0;
+    u32 timer_val = 0;
 #endif
 
     klib::shared_ptr<TaskDescriptor>

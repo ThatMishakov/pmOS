@@ -29,6 +29,7 @@
 #pragma once
 #include "task_group.hh"
 
+#include <assert.h>
 #include <exceptions.hh>
 #include <interrupts/stack.hh>
 #include <lib/memory.hh>
@@ -41,7 +42,6 @@
 #include <registers.hh>
 #include <sched/defs.hh>
 #include <types.hh>
-#include <assert.h>
 
 #ifdef __x86_64__
     #include <cpus/sse.hh>
@@ -179,6 +179,7 @@ public:
 #ifdef __x86_64__
     // SSE data on x86_64 CPUs (floating point, vector registers)
     SSE_Data sse_data;
+    inline bool can_be_rebound() { return true; }
 #elif defined(__riscv)
     // Floating point data on RISC-V CPUs
 
@@ -291,12 +292,4 @@ inline klib::shared_ptr<TaskDescriptor> get_task_throw(u64 pid)
     } catch (const std::out_of_range &) {
         throw Kern_Exception(ERROR_NO_SUCH_PROCESS, "Requested process does not exist");
     }
-}
-
-inline TaskDescriptor::~TaskDescriptor() noexcept
-{
-    assert(status == TaskStatus::TASK_UNINIT or (status == TaskStatus::TASK_DYING and cleaned_up));
-
-    Auto_Lock_Scope scope_lock(tasks_map_lock);
-    tasks_map.erase(task_id);
 }

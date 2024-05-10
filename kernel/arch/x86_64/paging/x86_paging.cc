@@ -34,6 +34,7 @@
 #include <exceptions.hh>
 #include <kern_logger/kern_logger.hh>
 #include <memory/mem.hh>
+#include <memory/mem_object.hh>
 #include <memory/temp_mapper.hh>
 #include <processes/tasks.hh>
 #include <x86_asm.hh>

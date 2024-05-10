@@ -475,6 +475,7 @@ void syscall_create_port(u64 owner, u64, u64, u64, u64, u64)
 
 void syscall_set_interrupt(uint64_t port, u64 intno, u64 flags, u64, u64, u64)
 {
+#ifdef __riscv
     auto c               = get_cpu_struct();
     const task_ptr &task = c->current_task;
 
@@ -485,15 +486,26 @@ void syscall_set_interrupt(uint64_t port, u64 intno, u64 flags, u64, u64, u64)
 
     syscall_ret_low(task) = SUCCESS;
     c->int_handlers.add_handler(intno, port_ptr);
+#elif defined(__x86_64__)
+    throw Kern_Exception(ERROR_NOT_IMPLEMENTED, "interrupts on x86 are not implemented");
+#else
+    #error Unknown architecture
+#endif
 }
 
 void syscall_complete_interrupt(u64 intno, u64, u64, u64, u64, u64)
 {
+#ifdef __riscv
     auto c               = get_cpu_struct();
     const task_ptr &task = c->current_task;
 
     c->int_handlers.ack_interrupt(intno, task->task_id);
     syscall_ret_low(task) = SUCCESS;
+#elif defined(__x86_64__)
+    throw Kern_Exception(ERROR_NOT_IMPLEMENTED, "interrupts on x86 are not implemented");
+#else
+    #error Unknown architecture
+#endif
 }
 
 void syscall_name_port(u64 portnum, u64 /*const char* */ name, u64 length, u64 flags, u64, u64)

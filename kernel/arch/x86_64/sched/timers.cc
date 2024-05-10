@@ -32,8 +32,11 @@
 
 void start_timer_ticks(u32 ticks)
 {
+    auto t = apic_get_remaining_ticks();
     apic_one_shot_ticks(ticks);
-    get_cpu_struct()->timer_val = ticks;
+    auto c = get_cpu_struct();
+    c->system_timer_val += c->timer_val - t;
+    c->timer_val = ticks;
 }
 
 void start_timer(u32 ms)
@@ -41,3 +44,11 @@ void start_timer(u32 ms)
     u32 ticks = ticks_per_1_ms * ms;
     start_timer_ticks(ticks);
 }
+
+u64 get_current_time_ticks()
+{
+    auto c = get_cpu_struct();
+    return c->system_timer_val + c->timer_val - apic_get_remaining_ticks();
+}
+
+u64 CPU_Info::ticks_after_ms(u64 ms) { return get_current_time_ticks() + ms * ticks_per_1_ms; }

@@ -415,3 +415,11 @@ TaskDescriptor::TaskID TaskDescriptor::get_new_task_id()
 //         regs.entry_type = regs.saved_entry_type;
 //     }
 // }
+
+TaskDescriptor::~TaskDescriptor() noexcept
+{
+    assert(status == TaskStatus::TASK_UNINIT or (status == TaskStatus::TASK_DYING and cleaned_up));
+
+    Auto_Lock_Scope scope_lock(tasks_map_lock);
+    tasks_map.erase(task_id);
+}

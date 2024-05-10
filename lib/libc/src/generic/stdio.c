@@ -117,11 +117,11 @@ void __init_stdio()
     setvbuf(stdout, NULL, _IOLBF, 0);
 }
 
-void __pause();
+void __spin_pause();
 #define LOCK(v)                                   \
     while (__sync_lock_test_and_set(v, 1) != 0) { \
         while (*v)                                \
-            __pause();                            \
+            __spin_pause();                       \
     }
 #define UNLOCK_FILE(v) __sync_lock_release(v);
 

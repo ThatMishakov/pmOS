@@ -290,8 +290,6 @@ void sched_periodic()
     klib::shared_ptr<TaskDescriptor> current = c->current_task;
     klib::shared_ptr<TaskDescriptor> next    = c->atomic_pick_highest_priority(current->priority);
 
-    service_timer_ports();
-
     if (next) {
         Auto_Lock_Scope_Double lock(current->sched_lock, next->sched_lock);
 
@@ -307,6 +305,11 @@ void sched_periodic()
 
         find_new_process();
     }
+
+    // Funny bug, that took 1 monts to find and fix: if this is done between when the copy of the
+    // current task is made and the task switch, the current task might disappear, since
+    // `service_timer_ports()` can reschedule and current task will no longer be running
+    service_timer_ports();
 }
 
 void start_scheduler()
