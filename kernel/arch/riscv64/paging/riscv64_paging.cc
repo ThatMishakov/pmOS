@@ -35,6 +35,7 @@
 #include <memory/mem.hh>
 #include <memory/temp_mapper.hh>
 #include <processes/tasks.hh>
+#include <memory/mem_object.hh>
 
 void flush_page(void *virt) noexcept { asm volatile("sfence.vma %0, x0" : : "r"(virt) : "memory"); }
 
@@ -139,8 +140,8 @@ void RISCV64_Page_Table::map(Page_Descriptor page, u64 virt_addr, Page_Table_Arg
     pte.writeable   = arg.writeable;
     pte.readable    = arg.readable;
     pte.executable  = not arg.execution_disabled;
-    pte.available   = page.owning ? 0 : PAGING_FLAG_NOFREE;
-    pte.ppn         = page.takeout_page().first >> 12;
+    pte.available   = PAGING_FLAG_STRUCT_PAGE;
+    pte.ppn         = page.takeout_page() >> 12;
     pte.pbmt        = pbmt_type(arg);
 
     entry = pte;
@@ -166,10 +167,7 @@ void riscv_unmap_page(u64 pt_top_phys, void *virt_addr)
             }
 
             RISCV64_PTE entry = active_pt[index];
-            if (not entry.is_special()) {
-                // Free the page
-                kernel_pframe_allocator.free_ppn(entry.ppn);
-            }
+            entry.clear_auto();
             entry            = RISCV64_PTE();
             active_pt[index] = entry;
             flush_page(virt_addr);
@@ -209,6 +207,8 @@ void RISCV64_Page_Table::invalidate(u64 virt_addr, bool free) noexcept
                 if (free and not entry->is_special()) {
                     // Free the page
                     kernel_pframe_allocator.free_ppn(entry->ppn);
+                } else {
+                    entry->clear_auto();
                 }
                 *entry      = RISCV64_PTE();
                 invalidated = true;
@@ -525,6 +525,11 @@ void RISCV64_PTE::clear_auto()
 {
     if (valid and not is_special())
         kernel_pframe_allocator.free_ppn(ppn);
+    else if (valid and (available & PAGING_FLAG_STRUCT_PAGE)) {
+        auto p = Page_Descriptor::find_page_struct(ppn << 12);
+        assert(p.page_struct_ptr && "page struct must be present");
+        p.release_taken_out_page();
+    }
 
     *this = RISCV64_PTE();
 }
