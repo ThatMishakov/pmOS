@@ -35,6 +35,7 @@
 #include <lib/splay_tree_map.hh>
 #include <lib/stack.hh>
 #include <lib/vector.hh>
+#include <memory/rcu.hh>
 #include <memory/temp_mapper.hh>
 #include <messaging/messaging.hh>
 #include <processes/tasks.hh>
@@ -65,6 +66,8 @@ extern sched_queue uninit;
 
 inline klib::array<sched_queue, sched_queues_levels> global_sched_queues;
 
+extern RCU paging_rcu;
+
 struct CPU_Info {
     CPU_Info *self                                = this;                               // 0
     u64 *kernel_stack_top                         = nullptr;                            // 8
@@ -93,7 +96,7 @@ struct CPU_Info {
     GDT cpu_gdt;
 
     u64 system_timer_val = 0;
-    u32 timer_val = 0;
+    u32 timer_val        = 0;
 #endif
 
     klib::shared_ptr<TaskDescriptor>
@@ -111,6 +114,8 @@ struct CPU_Info {
     klib::array<const void *, pthread_once_size> pthread_once_storage = {};
 
     u32 cpu_id = 0;
+
+    RCU_CPU paging_rcu_cpu;
 
 #ifdef __x86_64__
     u32 lapic_id = 0;

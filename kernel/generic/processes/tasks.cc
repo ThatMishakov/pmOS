@@ -160,13 +160,19 @@ void TaskDescriptor::atomic_kill()
 {
     klib::shared_ptr<TaskDescriptor> self = weak_self.lock();
 
-    Auto_Lock_Scope scope_lock(sched_lock);
-    const bool is_blocked = status == TaskStatus::TASK_BLOCKED;
-    status                = TaskStatus::TASK_DYING;
-    if (is_blocked)
-        unblock();
-    else
-        reschedule();
+    bool reschedule = false;
+
+    {
+        Auto_Lock_Scope scope_lock(sched_lock);
+        const bool is_blocked = status == TaskStatus::TASK_BLOCKED;
+        status                = TaskStatus::TASK_DYING;
+        if (is_blocked)
+            unblock();
+        else
+            reschedule = true;
+    }
+    if (reschedule)
+        ::reschedule();
 
     // Let the scheduler stumble upon this task and kill it
     // This is done this way so that if a task is bound to a particular CPU, the the destructors

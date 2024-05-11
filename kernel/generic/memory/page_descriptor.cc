@@ -161,11 +161,22 @@ void Page_Descriptor::release_taken_out_page()
 void release_page(Page *page) noexcept
 {
     auto p = page->page_ptr;
-    if (p != -1UL) {
+    if (p == -1UL) {
+        delete page;
+    } else {
         remove_global_pages_list(page);
-        kernel_pframe_allocator.free((void *)p);
-    }
+        RCU_Head &rcu = page->rcu_h;
+        rcu.rcu_func = Page::rcu_callback;
+        rcu.rcu_next = nullptr;
 
+        get_cpu_struct()->paging_rcu_cpu.push(&rcu);
+    }
+}
+
+void Page::rcu_callback(void *ptr) noexcept
+{
+    auto page = reinterpret_cast<Page *>((char *)ptr - offsetof(Page, rcu_h));
+    kernel_pframe_allocator.free((void *)page->page_ptr);
     delete page;
 }
 

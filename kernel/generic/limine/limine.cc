@@ -135,6 +135,8 @@ u64 bitmap_size_pages = 0;
 
 u64 hhdm_offset = 0;
 
+size_t number_of_cpus = 1;
+
 void init_memory()
 {
     limine_memmap_response *resp = memory_request.response;

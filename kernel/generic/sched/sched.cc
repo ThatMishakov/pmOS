@@ -49,6 +49,8 @@ sched_queue uninit;
 Spinlock tasks_map_lock;
 sched_map tasks_map;
 
+RCU paging_rcu;
+
 klib::vector<CPU_Info *> cpus;
 
 size_t get_cpu_count() noexcept { return cpus.size(); }
@@ -140,9 +142,10 @@ void TaskDescriptor::switch_to()
 {
     CPU_Info *c = get_cpu_struct();
     if (c->current_task->page_table != page_table) {
-        c->current_task->page_table->atomic_active_sum(-1);
         page_table->atomic_active_sum(1);
+        c->current_task->page_table->atomic_active_sum(-1);
         page_table->apply();
+        c->paging_rcu_cpu.quiet(paging_rcu, c->cpu_id);
     }
 
     c->current_task->before_task_switch();

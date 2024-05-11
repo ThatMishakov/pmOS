@@ -1,0 +1,108 @@
+/* Copyright (c) 2024, Mikhail Kovalev
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ *
+ * 3. Neither the name of the copyright holder nor the names of its
+ *    contributors may be used to endorse or promote products derived from
+ *    this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
+#pragma once
+#include <assert.h>
+#include <lib/vector.hh>
+#include <types.hh>
+
+typedef void (*rcu_func_t)(void *self);
+struct RCU_Head {
+    RCU_Head *rcu_next;
+    rcu_func_t rcu_func;
+};
+
+extern size_t number_of_cpus;
+
+class RCU
+{
+private:
+    Spinlock lock;
+    klib::vector<u64> bitmask {(number_of_cpus + 63) / 64, 0};
+
+    u64 generation         = 0;
+    u64 highest_generation = 0;
+
+    bool cpu_bit_set(size_t cpu_id) noexcept;
+    void silence_cpu(size_t cpu_id) noexcept;
+    bool generation_complete() noexcept;
+    void start_generation() noexcept;
+
+    friend struct RCU_CPU;
+};
+
+struct RCU_CPU {
+    RCU_Head *current_callbacks = nullptr, *next_callbacks = nullptr;
+    u64 generation = 0;
+
+    void push(RCU_Head *head)
+    {
+        head->rcu_next = next_callbacks;
+        next_callbacks = head;
+    }
+
+    void quiet(RCU &parent, size_t my_cpu_id)
+    {
+        if (parent.cpu_bit_set(my_cpu_id)) {
+            Auto_Lock_Scope l(parent.lock);
+
+            parent.silence_cpu(my_cpu_id);
+            if (parent.generation_complete()) {
+                parent.generation++;
+
+                if (parent.generation <= parent.highest_generation) {
+                    parent.start_generation();
+                }
+            }
+        }
+
+        if (current_callbacks and (parent.generation > generation)) {
+            while (current_callbacks) {
+                // TODO: This can be delayed, e.g. to be executed while the CPU is idling
+                RCU_Head *next = current_callbacks->rcu_next;
+                current_callbacks->rcu_func(current_callbacks);
+                current_callbacks = next;
+            }
+        }
+
+        if ((!current_callbacks) and next_callbacks) {
+            current_callbacks = next_callbacks;
+            next_callbacks    = nullptr;
+
+            Auto_Lock_Scope l(parent.lock);
+            generation = parent.generation + 1;
+
+            if (!parent.generation_complete()) {
+                assert(parent.highest_generation <= generation);
+                parent.highest_generation = generation + 1;
+            } else {
+                parent.start_generation();
+            }
+        }
+    }
+};

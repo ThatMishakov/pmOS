@@ -27,15 +27,11 @@
  */
 
 #pragma once
+#include "rcu.hh"
+
 #include <cstddef>
 #include <lib/pair.hh>
 #include <types.hh>
-
-typedef void (*rcu_func_t)(void *self);
-struct RCU_Head {
-    void *rcu_next;
-    rcu_func_t rcu_func;
-};
 
 struct Page {
     using page_addr_t = u64;
