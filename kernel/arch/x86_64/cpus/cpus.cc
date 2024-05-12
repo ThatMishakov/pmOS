@@ -37,6 +37,7 @@
 #include <kern_logger/kern_logger.hh>
 #include <kernel/errors.h>
 #include <memory/palloc.hh>
+#include <memory/virtmem.hh>
 #include <processes/syscalls.hh>
 #include <sched/sched.hh>
 #include <sched/timers.hh>
@@ -45,7 +46,7 @@
 void program_syscall()
 {
     write_msr(0xC0000081, ((u64)(R0_CODE_SEGMENT) << 32) | ((u64)(R3_LEGACY_CODE_SEGMENT) << 48));
-                                                // STAR (segments for user and kernel code)
+    // STAR (segments for user and kernel code)
     write_msr(0xC0000082, (u64)&syscall_entry); // LSTAR (64 bit entry point)
     write_msr(0xC0000084, (u32)~0x0);           // SFMASK (mask for %rflags)
 
@@ -62,6 +63,9 @@ void program_syscall()
     //     IA32_SYSENTER_EIP
     // }
 }
+
+extern "C" void _cpu_entry(u64 limine_struct);
+void *get_cpu_start_func() { return (void *)_cpu_entry; }
 
 void init_per_cpu()
 {
@@ -97,42 +101,84 @@ void init_per_cpu()
 
     serial_logger.printf("Initializing idle task\n");
 
-    init_idle();
+    init_idle(c);
     c->current_task = c->idle_task;
 
     program_syscall();
     set_idt();
     enable_apic();
     enable_sse();
+
+    void *temp_mapper_start = kernel_space_allocator.virtmem_alloc_aligned(16, 4);
+    c->temp_mapper          = x86_PAE_Temp_Mapper(temp_mapper_start, getCR3());
 }
 
-extern "C" void cpu_start_routine()
+u64 bootstrap_cr3 = 0;
+klib::vector<u64> initialize_cpus(const klib::vector<u64> &lapic_ids)
 {
-    init_per_cpu();
+    bootstrap_cr3 = getCR3();
 
+    klib::vector<u64> ret;
+    for (const auto &id: lapic_ids) {
+        CPU_Info *c               = new CPU_Info;
+        TSS *tss                  = new TSS();
+        c->cpu_gdt.tss_descriptor = System_Segment_Descriptor((u64)tss, sizeof(TSS), 0x89, 0x02);
+
+        c->kernel_stack_top = c->kernel_stack.get_stack_top();
+
+        c->cpu_gdt.tss_descriptor.tss()->ist7 = (u64)c->double_fault_stack.get_stack_top();
+        c->cpu_gdt.tss_descriptor.tss()->ist6 = (u64)c->nmi_stack.get_stack_top();
+        c->cpu_gdt.tss_descriptor.tss()->ist5 = (u64)c->machine_check_stack.get_stack_top();
+        c->cpu_gdt.tss_descriptor.tss()->ist2 = (u64)c->debug_stack.get_stack_top();
+        c->cpu_gdt.tss_descriptor.tss()->ist1 = (u64)c->kernel_stack.get_stack_top();
+        c->cpu_gdt.tss_descriptor.tss()->rsp0 = (u64)c->kernel_stack.get_stack_top();
+
+        c->lapic_id = id;
+        cpus.push_back(c);
+        c->cpu_id = cpus.size();
+
+        init_idle(c);
+        c->current_task = c->idle_task;
+
+        void *temp_mapper_start = kernel_space_allocator.virtmem_alloc_aligned(16, 4);
+        c->temp_mapper          = x86_PAE_Temp_Mapper(temp_mapper_start, getCR3());
+
+        c->kernel_stack_top[-1] = (u64)c;
+        ret.push_back((u64)c->kernel_stack_top);
+    }
+
+    return ret;
+}
+
+Spinlock l;
+extern "C" void cpu_start_routine(CPU_Info *c)
+{
+    loadGDT(&c->cpu_gdt);
+    write_msr(0xC0000101, (u64)c);
+    loadTSS(TSS_OFFSET);
+    program_syscall();
     set_idt();
     enable_apic();
-
-    get_cpu_struct()->lapic_id = get_lapic_id();
-
     enable_sse();
 
-    // IMO this is ugly
     const auto &idle               = get_cpu_struct()->idle_task;
     get_cpu_struct()->current_task = idle;
     const auto idle_pt             = klib::dynamic_pointer_cast<x86_Page_Table>(idle->page_table);
     idle_pt->atomic_active_sum(1);
-    setCR3(idle_pt->get_cr3());
     get_cpu_struct()->current_task->switch_to();
     reschedule();
 
-    global_logger.printf("[Kernel] Initialized CPU %h\n", get_lapic_id());
+    u32 lapic_id = get_lapic_id() >> 24;
+    assert(c->lapic_id == lapic_id);
+    global_logger.printf("[Kernel] Initialized CPU %h\n", lapic_id);
 }
 
 extern "C" u64 *get_kern_stack_top() { return get_cpu_struct()->kernel_stack.get_stack_top(); }
 
-void init_scheduling()
+void init_scheduling(u64 bootstap_apic_id)
 {
+    (void)bootstap_apic_id;
+
     serial_logger.printf("Initializing APIC\n");
     prepare_apic();
 

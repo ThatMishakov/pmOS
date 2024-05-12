@@ -54,3 +54,29 @@ _limine_entry:
     movq $0, %gs:24
 
     jmp start_first_process
+
+
+    .section .text
+    .globl _cpu_entry
+    .type _cpu_entry, @function
+_cpu_entry:
+    # Switch to stack from the limine structure
+    movq 24(%rdi), %rsp
+
+    # Switch to in-kernel page table
+    movq bootstrap_cr3(%rip), %rax
+    movq %rax, %cr3
+
+    # Pass CPU struct
+    movq -8(%rsp), %rdi
+
+    # Init stack frame
+    pushq $0
+    pushq $0
+
+    # Call kernel entry
+    call cpu_start_routine
+
+    movq $0, %gs:24
+
+    jmp start_first_process

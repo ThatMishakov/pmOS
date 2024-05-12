@@ -2,7 +2,7 @@ EXEC = vfatfsd.elf
 
 export PATH := $(ROOTDIR)/bin/cross/bin:$(PATH)
 
-ARCH = riscv64
+ARCH = x86_64
 
 CC = $(ARCH)-pmos-gcc
 CPP = $(ARCH)-pmos-gcc
@@ -14,14 +14,14 @@ INTERNALCFLAGS  :=       \
 	-static
 
 #USERCFLAGS := -march=rv64gc -mabi=lp64d -O3
-USERCFLAGS := -O3 -march=rv64gc -mabi=lp64d
+USERCFLAGS := -O3
 
 CFLAGS = -std=gnu2x $(INCLUDEFLAGS) -g
 CXXFLAGS = -std=c++20 $(INCLUDEFLAGS) -g
 CPPFLAGS = $(INTERNALCFLAGS) $(USERCFLAGS) -MMD -MP $(INCLUDEFLAGS)
 GOFLAGS = $(INTERNALCFLAGS) $(USERCFLAGS) -MMD -MP $(INCLUDEFLAGS)
 ASMFLAGS = -I$(INCLUDEDIR)
-LDFLAGS = $(INTERNALLDFLAGS) -static -g -pthread -O3 -march=rv64gc -mabi=lp64d
+LDFLAGS = $(INTERNALLDFLAGS) -static -g -pthread -O3 # -march=rv64gc -mabi=lp64d
 
 
 CCFILES := $(shell find ./ -type f -name '*.cc')

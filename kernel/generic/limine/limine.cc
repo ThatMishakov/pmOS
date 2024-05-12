@@ -701,7 +701,7 @@ struct limine_smp_request smp_request = {
     .flags = 0,
 };
 
-u64 bsp_hart_id = 0;
+u64 bsp_cpu_id = 0;
 
 void init_smp()
 {
@@ -720,10 +720,9 @@ void init_smp()
     for (auto &info: smp_info) {
         limine_smp_info i;
         copy_from_phys((u64)info - hhdm_offset, &i, sizeof(i));
-        if (i.hartid == bsp_hart_id)
+        if (i.hartid == bsp_cpu_id)
             continue;
         hartids.push_back(i.hartid);
-        serial_logger.printf("SMP info: hartid %i\n", i.hartid);
     }
 
     auto v = initialize_cpus(hartids);
@@ -735,7 +734,7 @@ void init_smp()
     for (auto &info: smp_info) {
         limine_smp_info i;
         copy_from_phys((u64)info - hhdm_offset, &i, sizeof(i));
-        if (i.hartid == bsp_hart_id)
+        if (i.hartid == bsp_cpu_id)
             continue;
         
         u64 offset = ((u64)info - hhdm_offset + offsetof(limine_smp_info, extra_argument))&0xfff;
@@ -752,8 +751,50 @@ void init_smp()
 
         ++iter;
     }
+    #elif defined(__x86_64__)
+    limine_smp_response r;
+    copy_from_phys((u64)smp_request.response - hhdm_offset, &r, sizeof(r));
+
+    klib::vector<limine_smp_info *> smp_info(r.cpu_count);
+    copy_from_phys((u64)r.cpus - hhdm_offset, smp_info.data(), r.cpu_count * sizeof(limine_smp_info *));
+
+    // Store as 64 bit ints to be inline with RISC-V
+    klib::vector<u64> lapic_ids;
+    for (auto &info: smp_info) {
+        limine_smp_info i;
+        copy_from_phys((u64)info - hhdm_offset, &i, sizeof(i));
+        if (i.lapic_id == bsp_cpu_id)
+            continue;
+        
+        lapic_ids.push_back(i.lapic_id);
+    }
+
+    auto v = initialize_cpus(lapic_ids);
+    auto iter = v.begin();
+    auto jump_func = get_cpu_start_func();
+    for (auto &info: smp_info) {
+        limine_smp_info i;
+        copy_from_phys((u64)info - hhdm_offset, &i, sizeof(i));
+        if (i.lapic_id == bsp_cpu_id)
+            continue;
+        
+        u64 offset = ((u64)info - hhdm_offset + offsetof(limine_smp_info, extra_argument))&0xfff;
+        u64 addr = ((u64)info - hhdm_offset + offsetof(limine_smp_info, extra_argument))&~0xfffUL;
+        Temp_Mapper_Obj<u64> mapper(request_temp_mapper());
+        mapper.map(addr);
+        u64 *stack = (u64 *)((size_t)mapper.ptr + offset);
+        *stack = *iter;
+
+        offset = ((u64)info - hhdm_offset + offsetof(limine_smp_info, goto_address))&0xfff;
+        addr = ((u64)info - hhdm_offset + offsetof(limine_smp_info, goto_address))&~0xfffUL;
+        mapper.map(addr);
+        void **func = (void **)((size_t)mapper.ptr + offset);
+        *func = jump_func;
+
+        ++iter;
+    }
     #elif
-    #error Unknown architecture
+    #error "Unsupported architecture"
     #endif
 }
 
@@ -766,8 +807,13 @@ void limine_main()
     serial_logger.printf("Hello from pmOS kernel!\n");
 
     if (smp_request.response != nullptr) {
+        #ifdef __riscv
         number_of_cpus = smp_request.response->cpu_count;
-        bsp_hart_id = smp_request.response->bsp_hartid;
+        bsp_cpu_id = smp_request.response->bsp_hartid;
+        #elif defined(__x86_64__)
+        number_of_cpus = smp_request.response->cpu_count;
+        bsp_cpu_id = smp_request.response->bsp_lapic_id;
+        #endif
     }
 
     init_memory();
@@ -785,7 +831,7 @@ void limine_main()
         // Init idle task page table
         idle_page_table = Arch_Page_Table::capture_initial(kernel_ptable_top);
 
-        init_scheduling(bsp_hart_id);
+        init_scheduling(bsp_cpu_id);
 
         // Switch to CPU-local temp mapper
         global_temp_mapper = nullptr;

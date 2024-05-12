@@ -26,6 +26,10 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+// Credits/inspiration:
+// https://www.kernel.org/doc/ols/2001/read-copy.pdf
+// https://github.com/Keyronex/Keyronex/blob/master/kernel/nanokern/rcu.c
+
 #pragma once
 #include <assert.h>
 #include <lib/vector.hh>

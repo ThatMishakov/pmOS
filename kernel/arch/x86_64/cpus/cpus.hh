@@ -38,8 +38,9 @@
  */
 void init_per_cpu();
 
+struct CPU_Info;
 // A routine for starting a CPU
-extern "C" void cpu_start_routine();
+extern "C" void cpu_start_routine(CPU_Info *c);
 extern "C" void cpu_startup_entry();
 
 u64 cpu_configure(u64, u64);
