@@ -398,12 +398,9 @@ void initialize_fp(const klib::string &isa_string)
     max_supported_fp_level = max;
 }
 
-void init_scheduling()
+void init_scheduling(u64 hart_id)
 {
-    // TODO
-    u64 hart_id = 0;
-
-    serial_logger.printf("Initializing scheduling\n");
+    serial_logger.printf("Initializing scheduling. Bootstrap hart: %i\n", hart_id);
 
     CPU_Info *i         = new CPU_Info();
     i->kernel_stack_top = i->kernel_stack.get_stack_top();
@@ -450,12 +447,12 @@ void init_scheduling()
     set_fp_state(FloatingPointState::Disabled);
 
     // Enable interrupts
-    const u64 mask = (1 << TIMER_INTERRUPT) | (1 << EXTERNAL_INTERRUPT);
+    const u64 mask = (1 << TIMER_INTERRUPT) | (1 << EXTERNAL_INTERRUPT) | (1 << SOFTWARE_INTERRUPT);
     asm volatile("csrs sie, %0" : : "r"(mask) : "memory");
 
     serial_logger.printf("Initializing idle task\n");
 
-    init_idle();
+    init_idle(i);
     i->current_task = i->idle_task;
 
     serial_logger.printf("Initializing PLIC...\n");
@@ -465,4 +462,78 @@ void init_scheduling()
     plic_set_threshold(0);
 
     serial_logger.printf("Scheduling initialized\n");
+}
+
+u64 satp_bootstrap_value = 0;
+
+klib::vector<u64> initialize_cpus(const klib::vector<u64> &hartids)
+{
+    u64 satp;
+    asm volatile("csrr %0, satp" : "=r"(satp));
+    satp_bootstrap_value = satp;
+
+    klib::vector<u64> temp_vals;
+
+    for (auto hart_id: hartids) {
+        CPU_Info *i         = new CPU_Info();
+        i->kernel_stack_top = i->kernel_stack.get_stack_top();
+        i->hart_id          = hart_id;
+
+        void *temp_mapper_start = kernel_space_allocator.virtmem_alloc_aligned(16, 4);
+        i->temp_mapper = RISCV64_Temp_Mapper(temp_mapper_start, idle_page_table->get_root());
+
+        cpus.push_back(i);
+        i->cpu_id = cpus.size() - 1;
+
+        auto s = get_isa_string(hart_id);
+        if (s.result == SUCCESS) {
+            i->isa_string = klib::forward<klib::string>(s.val);
+            global_logger.printf("[Kernel] ISA string: %s\n", i->isa_string.c_str());
+            serial_logger.printf("ISA string: %s\n", i->isa_string.c_str());
+        }
+
+        auto e = get_hart_rtnic_id(hart_id);
+        if (e.result != SUCCESS) {
+            serial_logger.printf("Could not get EIC ID: %i\n", e.result);
+        } else {
+            i->eic_id = e.val;
+            global_logger.printf("[Kernel] EIC ID: %i\n", i->eic_id);
+            serial_logger.printf("EIC ID: %i\n", i->eic_id);
+        }
+
+        init_idle(i);
+        i->current_task = i->idle_task;
+
+        u64 *stack_top = (u64 *)i->kernel_stack.get_stack_top();
+        stack_top[-1]  = (u64)i;
+
+        temp_vals.push_back((u64)stack_top);
+    }
+
+    return temp_vals;
+}
+
+extern "C" void _cpu_bootstrap_entry(void *limine_data);
+
+void *get_cpu_start_func() { return (void *)_cpu_bootstrap_entry; }
+
+extern "C" void bootstrap_entry(CPU_Info *i)
+{
+    set_cpu_struct(i);
+
+    set_sscratch((u64)i);
+
+    program_stvec();
+
+    // Enable interrupts
+    const u64 mask = (1 << TIMER_INTERRUPT) | (1 << EXTERNAL_INTERRUPT) | (1 << SOFTWARE_INTERRUPT);
+    asm volatile("csrs sie, %0" : : "r"(mask) : "memory");
+
+    plic_set_threshold(0);
+
+    // Start the timer (otherwise, the CPU will likely idle forever)
+    start_timer(10 /* ms */);
+    reschedule();
+
+    serial_logger.printf("CPU %i (hart %i) initialized!\n", i->cpu_id, i->hart_id);
 }

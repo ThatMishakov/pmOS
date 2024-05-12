@@ -28,9 +28,10 @@
  */
 
 #include <sched/sched.hh>
+#include <sbi/sbi.hh>
 
 void CPU_Info::ipi_reschedule()
 {
-    // Send IPI to the target CPU
-    // TODO: Not implemented
+    __atomic_or_fetch(&ipi_mask, IPI_RESCHEDULE, __ATOMIC_ACQUIRE);
+    sbi_send_ipi(0x1, hart_id);
 }

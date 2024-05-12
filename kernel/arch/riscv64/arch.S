@@ -39,3 +39,10 @@ disallow_access_user:
     li t0, 0x40000
     csrc sstatus, t0
     ret
+
+    .globl clear_soft_interrupt
+    .type clear_soft_interrupt, @function
+clear_soft_interrupt:
+    li t0, 0x2
+    csrc sip, t0
+    ret

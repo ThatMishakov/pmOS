@@ -245,16 +245,25 @@ void plic_service_interrupt()
     }
 }
 
+extern "C" void clear_soft_interrupt();
+
+void service_software_interrupt()
+{
+    // The software interrupt is not cleared automatically
+    clear_soft_interrupt();
+
+    auto c = get_cpu_struct();
+
+    u32 m = __atomic_fetch_and(&c->ipi_mask, ~CPU_Info::IPI_RESCHEDULE, __ATOMIC_SEQ_CST);
+    if (m & CPU_Info::IPI_RESCHEDULE) {
+        reschedule();
+    }
+}
+
 void handle_interrupt()
 {
     u64 scause, stval;
     get_scause_stval(&scause, &stval);
-
-    // serial_logger.printf("Recieved an interrupt! scause: 0x%x stval: 0x%x pc
-    // 0x%x task %i (%s)\n", scause, stval,
-    // get_cpu_struct()->current_task->regs.program_counter(),
-    // get_cpu_struct()->current_task->task_id,
-    // get_cpu_struct()->current_task->name.c_str());
 
     auto c = get_cpu_struct();
     if (c->nested_level > 1) {
@@ -272,6 +281,9 @@ void handle_interrupt()
         // Clear last bit
         u64 intno = scause & ~(1UL << 63);
         switch (intno) {
+        case SOFTWARE_INTERRUPT:
+            service_software_interrupt();
+            break;
         case TIMER_INTERRUPT:
             service_timer_interrupt();
             break;

@@ -37,5 +37,7 @@ inline bool timer_needs_initialization() { return ticks_per_ms == 0; }
 
 inline void set_timer_frequency(u64 frequency) { ticks_per_ms = frequency / 1000; }
 
+void start_timer(u32 ms);
+
 // Returns the current value of the timer
 u64 get_current_timer_val();

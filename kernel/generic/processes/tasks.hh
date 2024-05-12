@@ -250,8 +250,9 @@ protected:
 
 using task_ptr = klib::shared_ptr<TaskDescriptor>;
 
+struct CPU_Info;
 // Inits an idle process
-void init_idle();
+void init_idle(CPU_Info *cpu);
 
 // A map of all the tasks
 using sched_map = klib::splay_tree_map<TaskDescriptor::TaskID, klib::weak_ptr<TaskDescriptor>>;

@@ -42,3 +42,11 @@ sbi_set_timer:
     li a7, 0x54494D45
     ecall
     ret
+
+    .globl sbi_send_ipi
+    .type sbi_send_ipi, @function
+sbi_send_ipi:
+    li a6, 0
+    li a7, 0x735049
+    ecall
+    ret

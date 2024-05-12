@@ -66,43 +66,5 @@ struct RCU_CPU {
         next_callbacks = head;
     }
 
-    void quiet(RCU &parent, size_t my_cpu_id)
-    {
-        if (parent.cpu_bit_set(my_cpu_id)) {
-            Auto_Lock_Scope l(parent.lock);
-
-            parent.silence_cpu(my_cpu_id);
-            if (parent.generation_complete()) {
-                parent.generation++;
-
-                if (parent.generation <= parent.highest_generation) {
-                    parent.start_generation();
-                }
-            }
-        }
-
-        if (current_callbacks and (parent.generation > generation)) {
-            while (current_callbacks) {
-                // TODO: This can be delayed, e.g. to be executed while the CPU is idling
-                RCU_Head *next = current_callbacks->rcu_next;
-                current_callbacks->rcu_func(current_callbacks);
-                current_callbacks = next;
-            }
-        }
-
-        if ((!current_callbacks) and next_callbacks) {
-            current_callbacks = next_callbacks;
-            next_callbacks    = nullptr;
-
-            Auto_Lock_Scope l(parent.lock);
-            generation = parent.generation + 1;
-
-            if (!parent.generation_complete()) {
-                assert(parent.highest_generation <= generation);
-                parent.highest_generation = generation + 1;
-            } else {
-                parent.start_generation();
-            }
-        }
-    }
+    void quiet(RCU &parent, size_t my_cpu_id);
 };

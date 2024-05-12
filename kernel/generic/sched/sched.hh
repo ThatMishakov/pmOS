@@ -140,6 +140,10 @@ struct CPU_Info {
     Interrupt_Handler_Table int_handlers;
 #endif
 
+    static constexpr int IPI_RESCHEDULE = 0x1;
+    static constexpr int IPI_TLB_FLUSH  = 0x2;
+    u32 ipi_mask = 0;
+
     // IMHO this is better than protecting current_task pointer with spinlock
     priority_t current_task_priority = sched_queues_levels;
 
@@ -180,7 +184,7 @@ inline klib::shared_ptr<TaskDescriptor> get_current_task()
 void push_ready(const klib::shared_ptr<TaskDescriptor> &p);
 
 // Initializes scheduling structures during the kernel initialization
-void init_scheduling();
+void init_scheduling(u64 boot_cpu_id);
 
 // Finds a ready process and switches to it
 void task_switch();

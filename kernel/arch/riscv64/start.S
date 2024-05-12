@@ -52,3 +52,28 @@ _limine_entry:
 
     # Return to userspace
     j return_from_kernel
+
+    .text
+    .globl _cpu_bootstrap_entry
+    .type _cpu_bootstrap_entry, @function
+_cpu_bootstrap_entry:
+    # Entry to the hart bootstrap code
+
+    # Load the stack, since limine struct will not be available once the page table is switched
+    ld sp, 32(a0)
+
+    # Switch to the kernel page table
+    la t0, satp_bootstrap_value
+    ld t1, 0(t0)
+
+    # Switch to the kernel page table
+    csrw satp, t1
+
+    # Pass CPU struct to the kernel
+    ld a0, -8(sp)
+
+    # Jump to C
+    call bootstrap_entry
+
+    # Return to userspace
+    j return_from_kernel

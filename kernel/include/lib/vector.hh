@@ -87,6 +87,8 @@ public:
         const T &operator*() const { return *ptr; }
 
         bool operator==(const_iterator k) const { return this->ptr == k.ptr; }
+
+        const_iterator &operator++(int) { return *ptr++; }
     };
 
     vector();

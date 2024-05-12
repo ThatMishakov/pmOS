@@ -603,7 +603,9 @@ klib::unique_ptr<load_tag_generic> construct_load_tag_fdt()
 klib::shared_ptr<Arch_Page_Table> idle_page_table = nullptr;
 
 void init(void);
-void init_scheduling();
+void init_scheduling(u64 boot_cpu_id);
+klib::vector<u64> initialize_cpus(const klib::vector<u64> &hartids);
+void *get_cpu_start_func();
 
 void init_task1()
 {
@@ -692,6 +694,69 @@ void init_dtb()
     init_dtb((u64)addr);
 }
 
+struct limine_smp_request smp_request = {
+    .id       = LIMINE_SMP_REQUEST,
+    .revision = 0,
+    .response = nullptr,
+    .flags = 0,
+};
+
+u64 bsp_hart_id = 0;
+
+void init_smp()
+{
+    if (smp_request.response == nullptr) {
+        return;
+    }
+
+    #ifdef __riscv
+    limine_smp_response r;
+    copy_from_phys((u64)smp_request.response - hhdm_offset, &r, sizeof(r));
+    
+    klib::vector<limine_smp_info *> smp_info(r.cpu_count);
+    copy_from_phys((u64)r.cpus - hhdm_offset, smp_info.data(), r.cpu_count * sizeof(limine_smp_info *));
+
+    klib::vector<u64> hartids;
+    for (auto &info: smp_info) {
+        limine_smp_info i;
+        copy_from_phys((u64)info - hhdm_offset, &i, sizeof(i));
+        if (i.hartid == bsp_hart_id)
+            continue;
+        hartids.push_back(i.hartid);
+        serial_logger.printf("SMP info: hartid %i\n", i.hartid);
+    }
+
+    auto v = initialize_cpus(hartids);
+    auto iter = v.begin();
+    auto jump_func = get_cpu_start_func();
+
+    Temp_Mapper_Obj<u64> mapper(request_temp_mapper());
+
+    for (auto &info: smp_info) {
+        limine_smp_info i;
+        copy_from_phys((u64)info - hhdm_offset, &i, sizeof(i));
+        if (i.hartid == bsp_hart_id)
+            continue;
+        
+        u64 offset = ((u64)info - hhdm_offset + offsetof(limine_smp_info, extra_argument))&0xfff;
+        u64 addr = ((u64)info - hhdm_offset + offsetof(limine_smp_info, extra_argument))&~0xfffUL;
+        mapper.map(addr);
+        u64 *stack = (u64 *)((size_t)mapper.ptr + offset);
+        *stack = *iter;
+
+        offset = ((u64)info - hhdm_offset + offsetof(limine_smp_info, goto_address))&0xfff;
+        addr = ((u64)info - hhdm_offset + offsetof(limine_smp_info, goto_address))&~0xfffUL;
+        mapper.map(addr);
+        void **func = (void **)((size_t)mapper.ptr + offset);
+        *func = jump_func;
+
+        ++iter;
+    }
+    #elif
+    #error Unknown architecture
+    #endif
+}
+
 void limine_main()
 {
     if (LIMINE_BASE_REVISION_SUPPORTED == false) {
@@ -699,6 +764,11 @@ void limine_main()
     }
 
     serial_logger.printf("Hello from pmOS kernel!\n");
+
+    if (smp_request.response != nullptr) {
+        number_of_cpus = smp_request.response->cpu_count;
+        bsp_hart_id = smp_request.response->bsp_hartid;
+    }
 
     init_memory();
     construct_paging();
@@ -715,7 +785,12 @@ void limine_main()
         // Init idle task page table
         idle_page_table = Arch_Page_Table::capture_initial(kernel_ptable_top);
 
-        init_scheduling();
+        init_scheduling(bsp_hart_id);
+
+        // Switch to CPU-local temp mapper
+        global_temp_mapper = nullptr;
+
+        init_smp();
 
         init_modules();
         init_task1();

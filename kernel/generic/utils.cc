@@ -240,6 +240,9 @@ extern "C" void disallow_access_user();
 
 bool copy_from_user(char *to, const char *from, size_t size)
 {
+    auto current_task = get_current_task();
+    Auto_Lock_Scope l(current_task->page_table->lock);
+
     bool result = prepare_user_buff_rd(from, size);
     if (result) {
         allow_access_user();
@@ -252,6 +255,9 @@ bool copy_from_user(char *to, const char *from, size_t size)
 
 bool copy_to_user(const char *from, char *to, size_t size)
 {
+    auto current_task = get_current_task();
+    Auto_Lock_Scope l(current_task->page_table->lock);
+
     bool result = prepare_user_buff_wr(to, size);
     if (result) {
         allow_access_user();
@@ -429,11 +435,9 @@ int fprintf(FILE *, const char *format, ...)
 }
 
 // Arch-specific spinlock functions
-extern "C" {
 void acquire_lock_spin(u32 *lock) noexcept;
 void release_lock(u32 *lock) noexcept;
 bool try_lock(u32 *lock) noexcept;
-}
 
 void lock_var(unsigned *var) { acquire_lock_spin(var); }
 

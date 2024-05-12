@@ -100,7 +100,7 @@ u64 TaskDescriptor::init_stack()
 
 extern klib::shared_ptr<Arch_Page_Table> idle_page_table;
 
-void init_idle()
+void init_idle(CPU_Info *cpu_str)
 {
     try {
         klib::shared_ptr<TaskDescriptor> i =
@@ -116,7 +116,6 @@ void init_idle()
             idle_parent_queue->erase(i);
         }
 
-        CPU_Info *cpu_str  = get_cpu_struct();
         cpu_str->idle_task = i;
 
         // Idle has the same stack pointer as the kernel

@@ -31,13 +31,22 @@
 #include <types.hh>
 #include <utils.hh>
 
-extern "C" {
-void acquire_lock_spin(u32 *lock) noexcept;
-void release_lock(u32 *lock) noexcept;
-bool try_lock(u32 *lock) noexcept;
-}
+void acquire_lock_spin(u32 *lock) noexcept
+{
+    while (true) {
+        while (*lock)
+            ;
 
-void Spinlock::lock() noexcept { acquire_lock_spin(&locked); }
+        if (__sync_bool_compare_and_swap(lock, 0, 1))
+            return;
+    }
+}
+void release_lock(u32 *lock) noexcept { __sync_lock_release(lock); }
+bool try_lock(u32 *lock) noexcept { return __sync_bool_compare_and_swap(lock, 0, 1); }
+
+void Spinlock::lock() noexcept { 
+    acquire_lock_spin(&locked);
+}
 
 void Spinlock::unlock() noexcept { release_lock(&locked); }
 
