@@ -56,3 +56,4 @@ u64 get_current_time_ticks()
 }
 
 u64 CPU_Info::ticks_after_ms(u64 ms) { return get_current_time_ticks() + ms * ticks_per_1_ms; }
+u64 CPU_Info::ticks_after_ns(u64 ns) { return get_current_time_ticks() + ns * ticks_per_1_ms / 1000000; }

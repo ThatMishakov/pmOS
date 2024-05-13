@@ -618,7 +618,6 @@ uacpi_status uacpi_kernel_install_interrupt_handler(
     assert(msg.size == sizeof(struct IPC_ISR_Reply));
     struct IPC_ISR_Reply *reply = (struct IPC_ISR_Reply *)message;
     assert(reply->type == IPC_ISR_Reply_NUM);
-
     if (reply->status != UACPI_STATUS_OK) {
         pthread_detach(data->isr_thread);
         free(data);

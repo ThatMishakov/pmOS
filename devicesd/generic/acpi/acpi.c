@@ -154,7 +154,7 @@ int acpi_init(uacpi_phys_addr rsdp_phys_addr) {
         .rsdp = rsdp_phys_addr,
         .rt_params = {
             .flags = 0,
-            .log_level = UACPI_LOG_DEBUG,
+            .log_level = UACPI_LOG_TRACE,
         },
     };
 

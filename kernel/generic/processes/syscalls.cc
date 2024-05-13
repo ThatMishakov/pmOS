@@ -47,8 +47,8 @@
 #include <lib/utility.hh>
 #include <memory/mem_object.hh>
 #include <messaging/named_ports.hh>
-#include <sched/sched.hh>
 #include <pmos/system.h>
+#include <sched/sched.hh>
 
 #ifdef __x86_64__
     #include <sched/segments.hh>
@@ -368,24 +368,27 @@ void syscall_set_attribute(u64 pid, u64 attribute, u64 value, u64, u64, u64)
 
     // TODO: This is *very* x86-specific and is a bad idea in general
 
-    // klib::shared_ptr<TaskDescriptor> process = pid == task->task_id ? task : get_task_throw(pid);
-    // Interrupt_Stackframe* current_frame = &process->regs.e;
+#ifdef __x86_64__
+    klib::shared_ptr<TaskDescriptor> process = pid == task->task_id ? task : get_task_throw(pid);
+    Interrupt_Stackframe *current_frame      = &process->regs.e;
 
-    // switch (attribute) {
-    // case ATTR_ALLOW_PORT:
-    //     current_frame->rflags.bits.iopl = value ? 3 : 0;
-    //     break;
+    switch (attribute) {
+    case ATTR_ALLOW_PORT:
+        current_frame->rflags.bits.iopl = value ? 3 : 0;
+        break;
 
-    // case ATTR_DEBUG_SYSCALLS:
-    //     process->attr.debug_syscalls = value;
-    //     break;
+    case ATTR_DEBUG_SYSCALLS:
+        process->attr.debug_syscalls = value;
+        break;
 
-    // default:
-    //     throw(Kern_Exception(ERROR_NOT_IMPLEMENTED, "syscall_set_attribute with given request is
-    //     not implemented")); break;
-    // }
-
+    default:
+        throw(Kern_Exception(ERROR_NOT_IMPLEMENTED,
+                             "syscall_set_attribute with given request is not implemented"));
+        break;
+    }
+#else
     throw(Kern_Exception(ERROR_NOT_IMPLEMENTED, "syscall_set_attribute is not implemented"));
+#endif
 }
 
 void syscall_configure_system(u64 type, u64 arg1, u64 arg2, u64, u64, u64)
@@ -487,7 +490,7 @@ void syscall_set_interrupt(uint64_t port, u64 intno, u64 flags, u64, u64, u64)
         throw(Kern_Exception(ERROR_NO_PERMISSION, "Caller is not a port owner"));
     }
 
-    syscall_ret_low(task) = SUCCESS;
+    syscall_ret_low(task)  = SUCCESS;
     syscall_ret_high(task) = intno;
     c->int_handlers.add_handler(intno, port_ptr);
 #elif defined(__x86_64__)
@@ -1019,7 +1022,7 @@ void syscall_get_time(u64 mode, u64, u64, u64, u64, u64)
 
     switch (mode) {
     case GET_TIME_TICKS_SINCE_BOOTUP:
-        syscall_ret_low(current_task) = SUCCESS;
+        syscall_ret_low(current_task)  = SUCCESS;
         syscall_ret_high(current_task) = ticks_since_bootup;
         break;
     default:

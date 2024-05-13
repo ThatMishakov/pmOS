@@ -416,7 +416,7 @@ static ssize_t __va_printf_closure(write_str_f puts, void *puts_arg, va_list arg
                 case '9': { // TODO: Broken!
                     char *endptr = NULL;
                     width        = strtoul(&(format[i]), &endptr, 10);
-                    i += &(format[i]) - endptr;
+                    i += endptr - &(format[i]);
                     break;
                 }
                 case '*':
@@ -424,8 +424,18 @@ static ssize_t __va_printf_closure(write_str_f puts, void *puts_arg, va_list arg
                     ++i;
                     break;
                 case '.':
-                    // Precision
-                    // TODO
+                    ++i;
+                    if (format[i] == '*') {
+                        precision = va_arg(arg, int);
+                        ++i;
+                        break;
+                    }
+
+                    char *start = (char *)&format[i];
+                    char *end   = NULL;
+                    precision =
+                        strtoul(start, &end, 0);
+                    i += end - start;
                     break;
                 case 'i':
                 case 'd': {
@@ -522,12 +532,20 @@ static ssize_t __va_printf_closure(write_str_f puts, void *puts_arg, va_list arg
                     const char *str = va_arg(arg, const char *);
                     str             = str ? str : "(null)";
                     size_t size     = width;
+                    size_t length  = precision ? strnlen(str, precision) : strlen(str);
                     if (size == 0)
-                        size = strlen(str);
-                    ssize_t k = puts(puts_arg, str, size);
+                        size = length;
+                    ssize_t k = puts(puts_arg, str, length);
                     if (k < 1) {
                         chars_transmitted = k;
                         goto end;
+                    }
+                    if (length < size) {
+                        k = puts(puts_arg, " ", 1);
+                        if (k < 1) {
+                            chars_transmitted = k;
+                            goto end;
+                        }
                     }
                     chars_transmitted += k;
                     rpt = 0;
@@ -545,6 +563,10 @@ static ssize_t __va_printf_closure(write_str_f puts, void *puts_arg, va_list arg
                     break;
                 case 'l':
                     is_long = 1;
+                    ++i;
+                    break;
+                case 'z':
+                    is_long = sizeof(size_t) == sizeof(long);
                     ++i;
                     break;
                 default:
