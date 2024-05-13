@@ -407,7 +407,7 @@ int pthread_mutexattr_settype(pthread_mutexattr_t *attr, int type);
  * `pthread_mutex_init`.
  *
  * @param mutex A pointer to the mutex object to be destroyed.
- * @return 0 on success, or a positive error code on failure.
+ * @return 0 on success, or an error code on failure.
  */
 int pthread_mutex_destroy(pthread_mutex_t *mutex);
 

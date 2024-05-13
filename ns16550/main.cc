@@ -72,6 +72,8 @@ void clear_register(int index, uint8_t mask)
     write_register(index, val);
 }
 
+u32 int_vec = 0;
+
 void set_up_interrupt()
 {
 #ifdef __riscv
@@ -87,11 +89,12 @@ void set_up_interrupt()
         return;
 
     // Request interrupt from kernel
-    r = set_interrupt(serial_port, gsi_num, 0);
-    if (r != SUCCESS) {
+    auto v = set_interrupt(serial_port, gsi_num, 0);
+    if (v.result != SUCCESS) {
         set_affinity(TASK_ID_SELF, NO_CPU, 0);
         return;
     }
+    int_vec = v.value;
 
     have_interrupts = true;
 #endif
@@ -392,7 +395,7 @@ void react_interrupt()
         }
     } // else: Spurious interrupt
 
-    complete_interrupt(gsi_num);
+    complete_interrupt(int_vec);
 }
 
 int main()

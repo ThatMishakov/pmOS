@@ -76,9 +76,9 @@ ports_request_t get_port_by_name(const char *name, u64 length, u32 flags)
     return t;
 }
 
-result_t set_interrupt(pmos_port_t port, uint32_t intno, uint32_t flags)
+syscall_r set_interrupt(pmos_port_t port, uint32_t intno, uint32_t flags)
 {
-    return pmos_syscall(SYSCALL_SET_INTERRUPT, port, intno, flags).result;
+    return pmos_syscall(SYSCALL_SET_INTERRUPT, port, intno, flags);
 }
 
 result_t name_port(pmos_port_t portnum, const char *name, size_t length, u32 flags)
@@ -212,3 +212,8 @@ result_t complete_interrupt(uint32_t intno)
 }
 
 result_t pmos_yield() { return pmos_syscall(SYSCALL_YIELD).result; }
+
+syscall_r pmos_get_time(uint64_t mode)
+{
+    return pmos_syscall(SYSCALL_GET_TIME, mode);
+}

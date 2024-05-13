@@ -78,5 +78,7 @@
 #define SYSCALL_COMPLETE_INTERRUPT 39
 #define SYSCALL_YIELD              40
 #define SYSCALL_MAP_MEM_OBJECT     41
+#define SYSCALL_UNSET_INTERRUPT    42
+#define SYSCALL_GET_TIME           43
 
 #endif

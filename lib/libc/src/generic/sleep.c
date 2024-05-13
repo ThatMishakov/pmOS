@@ -33,22 +33,7 @@
 #include <pmos/system.h>
 #include <string.h>
 #include <unistd.h>
-
-static __thread pmos_port_t sleep_reply_port = INVALID_PORT;
-
-static pmos_port_t get_sleep_port()
-{
-    if (sleep_reply_port == INVALID_PORT) {
-        ports_request_t port_request = create_port(TASK_ID_SELF, 0);
-        if (port_request.result != SUCCESS) {
-            errno = -port_request.result;
-            return INVALID_PORT;
-        }
-        sleep_reply_port = port_request.port;
-    }
-
-    return sleep_reply_port;
-}
+#include <time.h>
 
 // int pmos_request_timer(pmos_port_t port, size_t ms) {
 //     if (sleep_reply_port == INVALID_PORT) {
@@ -101,35 +86,11 @@ int pmos_request_timer(pmos_port_t port, size_t ms)
 
 unsigned int sleep(unsigned int seconds)
 {
-    pmos_port_t sleep_reply_port = get_sleep_port();
-    size_t ms                    = seconds * 1000;
-    result_t result              = pmos_request_timer(sleep_reply_port, ms);
-    if (result != SUCCESS) {
-        errno = result;
-        return seconds;
+    struct timespec req = {.tv_sec = seconds, .tv_nsec = 0};
+    struct timespec rem = {.tv_sec = 0, .tv_nsec = 0};
+    int ret            = nanosleep(&req, &rem);
+    if (ret == -1) {
+        return rem.tv_sec + (rem.tv_nsec > 0);
     }
-
-    IPC_Timer_Reply reply;
-    Message_Descriptor reply_descriptor;
-    result = syscall_get_message_info(&reply_descriptor, sleep_reply_port, 0);
-
-    // This should never fail
-    assert(result == SUCCESS);
-
-    // Check if the message size is correct
-    assert(reply_descriptor.size == sizeof(IPC_Timer_Reply));
-
-    result = get_first_message((char *)&reply, sizeof(reply), sleep_reply_port);
-
-    // This should never fail
-    assert(result == SUCCESS);
-
-    assert(reply.type == IPC_Timer_Reply_NUM);
-
-    if (reply.status < 0) {
-        errno = -reply.status;
-        return seconds;
-    }
-
     return 0;
 }

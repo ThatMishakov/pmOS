@@ -37,6 +37,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 
 int acpi_revision = -1;
 
@@ -146,6 +147,44 @@ void request_acpi_tables()
     free(message);
 }
 
+#include <uacpi/uacpi.h>
+#include <uacpi/event.h>
+int acpi_init(uacpi_phys_addr rsdp_phys_addr) {
+    uacpi_init_params init_params = {
+        .rsdp = rsdp_phys_addr,
+        .rt_params = {
+            .flags = 0,
+            .log_level = UACPI_LOG_DEBUG,
+        },
+    };
+
+    uacpi_status ret = uacpi_initialize(&init_params);
+    if (uacpi_unlikely_error(ret)) {
+        fprintf(stderr, "uacpi_initialize error: %s", uacpi_status_to_string(ret));
+        return -ENODEV;
+    }
+
+    ret = uacpi_namespace_load();
+    if (uacpi_unlikely_error(ret)) {
+        fprintf(stderr, "uacpi_namespace_load error: %s", uacpi_status_to_string(ret));
+        return -ENODEV;
+    }
+
+    ret = uacpi_namespace_initialize();
+    if (uacpi_unlikely_error(ret)) {
+        fprintf(stderr, "uacpi_namespace_initialize error: %s", uacpi_status_to_string(ret));
+        return -ENODEV;
+    }
+
+    ret = uacpi_finalize_gpe_initialization();
+    if (uacpi_unlikely_error(ret)) {
+        fprintf(stderr, "uACPI GPE initialization error: %s", uacpi_status_to_string(ret));
+        return -ENODEV;
+    }
+
+    return 0;
+}
+
 void init_acpi()
 {
     printf("Info: Initializing ACPI...\n");
@@ -158,6 +197,8 @@ void init_acpi()
         printf("Warning: Did not initialize ACPI\n");
         return;
     }
+
+    acpi_init((uacpi_phys_addr)rsdp_desc);
 
     printf("Walked ACPI tables! ACPI revision: %i\n", acpi_revision);
 }

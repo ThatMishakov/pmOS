@@ -157,7 +157,16 @@ struct CPU_Info {
 
     // Returns the number of ticks after the given number of milliseconds
     u64 ticks_after_ms(u64 ms);
+    u64 ticks_after_ns(u64 ns);
+
+    inline bool is_bootstap_cpu() const noexcept
+    {
+        return cpu_id == 0;
+    }
 };
+
+extern u64 ticks_since_bootup;
+u64 get_ticks_since_bootup();
 
 extern klib::vector<CPU_Info *> cpus;
 

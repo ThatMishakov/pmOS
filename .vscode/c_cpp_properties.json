@@ -14,13 +14,22 @@
         {
             "name": "pmOS",
             "includePath": [
-                "${workspaceFolder}/**"
+                "/home/misha/pmos/**"
             ],
             "defines": [],
-            "compilerPath": "/home/misha/cross/bin/riscv64-pmos-gcc",
+            "compilerPath": "/home/misha/cross/bin/x86_64-pmos-gcc",
             "cStandard": "c17",
             "cppStandard": "c++20",
-            "intelliSenseMode": "linux-gcc-x64"
+            "intelliSenseMode": "linux-gcc-x64",
+            "compilerPathInCppPropertiesJson": "/home/misha/cross/bin/riscv64-pmos-gcc",
+            "mergeConfigurations": false,
+            "browse": {
+                "path": [
+                    "/home/misha/pmos/**",
+                    "${workspaceFolder}"
+                ],
+                "limitSymbolsToIncludedHeaders": true
+            }
         }
     ],
     "version": 4

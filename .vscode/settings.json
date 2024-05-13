@@ -142,7 +142,9 @@
         "features.h": "c",
         "internal.h": "c",
         "helpers.h": "c",
-        "unistd.h": "c"
+        "unistd.h": "c",
+        "assert.h": "c",
+        "event.h": "c"
     },
     "cmake.configureOnOpen": false
 }

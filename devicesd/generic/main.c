@@ -72,7 +72,9 @@ int main(int argc, char **argv)
 
     // parse_args(argc, argv);
 
+    #ifdef __x86_64__
     pmos_request_io_permission();
+    #endif
     request_priority(0);
 
     {

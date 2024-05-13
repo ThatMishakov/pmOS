@@ -61,6 +61,8 @@ struct PCIGroup {
     unsigned end_bus_number;
 };
 
+struct PCIGroup *pci_group_find(unsigned group_number);
+
 struct PCIDevice {
     uint16_t group;
     uint8_t bus;
@@ -111,6 +113,12 @@ inline uint32_t pci_read_register(void *s, int id)
 {
     volatile uint32_t *r = (volatile uint32_t *)s;
     return r[id];
+}
+
+inline void pci_write_register(void *s, int id, uint32_t value)
+{
+    volatile uint32_t *r = (volatile uint32_t *)s;
+    r[id] = value;
 }
 
 inline uint8_t pcie_header_type(void *s)

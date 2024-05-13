@@ -30,6 +30,7 @@
 #include <interrupts/apic.hh>
 #include <sched/sched.hh>
 
+u64 ticks_since_bootup = 0;
 void start_timer_ticks(u32 ticks)
 {
     auto t = apic_get_remaining_ticks();
@@ -37,6 +38,9 @@ void start_timer_ticks(u32 ticks)
     auto c = get_cpu_struct();
     c->system_timer_val += c->timer_val - t;
     c->timer_val = ticks;
+
+    if (c->is_bootstap_cpu())
+        ticks_since_bootup = c->system_timer_val;
 }
 
 void start_timer(u32 ms)

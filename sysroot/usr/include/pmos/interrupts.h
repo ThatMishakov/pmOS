@@ -37,7 +37,9 @@ extern "C" {
 
 #ifdef __STDC_HOSTED__
 
-result_t set_interrupt(pmos_port_t port, uint32_t intno, uint32_t flags);
+syscall_r set_interrupt(pmos_port_t port, uint32_t intno, uint32_t flags);
+
+syscall_r unregister_interrupt(uint32_t int_vector);
 
 result_t complete_interrupt(uint32_t intno);
 

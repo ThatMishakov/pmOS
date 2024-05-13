@@ -44,14 +44,19 @@ u64 get_current_timer_val()
 
 int fire_timer_at(u64 next_value) { return sbi_set_timer(next_value).error; }
 
+u64 ticks_since_bootup = 0;
 void start_timer(u32 ms)
 {
     const u64 ticks         = ms * ticks_per_ms;
     const u64 current_value = get_current_timer_val();
     const u64 next_value    = current_value + ticks;
     fire_timer_at(next_value);
+    if (get_cpu_struct()->is_bootstap_cpu()) {
+        ticks_since_bootup = ticks;
+    }
 }
 
 u64 get_current_time_ticks() { return get_current_timer_val(); }
 
 u64 CPU_Info::ticks_after_ms(u64 ms) { return get_current_time_ticks() + ms * ticks_per_ms; }
+u64 CPU_Info::ticks_after_ns(u64 ns) { return get_current_time_ticks() + ns / 1000000 * ticks_per_ms; }

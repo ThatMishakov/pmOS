@@ -637,6 +637,14 @@ int fprintf(FILE *stream, const char *format, ...)
     return t;
 }
 
+int vfprintf(FILE *stream, const char *format, va_list arg)
+{
+    LOCK(&stream->lock);
+    int t = __va_printf_closure(write_file, stream, arg, format);
+    UNLOCK_FILE(&stream->lock);
+    return t;
+}
+
 int sprintf(char *str, const char *format, ...)
 {
     va_list arg;

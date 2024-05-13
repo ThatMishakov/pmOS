@@ -52,7 +52,7 @@ int pthread_mutex_init(pthread_mutex_t *mutex, const pthread_mutexattr_t *attr)
     mutex->blocking_thread_id   = 0;
     mutex->waiters_list_head    = NULL;
     mutex->recursive_lock_count = 0;
-    mutex->type                 = *attr;
+    mutex->type                 = attr ? *attr : PTHREAD_MUTEX_DEFAULT;
     mutex->block_count          = 0;
     mutex->waiters_list_tail    = NULL;
     return 0;
@@ -322,5 +322,16 @@ int pthread_mutexattr_destroy(pthread_mutexattr_t *attr)
     }
 
     *attr = 0;
+    return 0;
+}
+
+int pthread_mutex_destroy(pthread_mutex_t *mutex)
+{
+    if (mutex == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    // Do nothing
     return 0;
 }

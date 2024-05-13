@@ -182,6 +182,16 @@ void init_pci()
     VECTOR_SORT(pci_devices, pcicdevice_compare);
 }
 
+struct PCIGroup *pci_group_find(unsigned group_number)
+{
+    for (struct PCIGroup *g = groups; g; g = g->next) {
+        if (g->group_number == group_number)
+            return g;
+    }
+
+    return NULL;
+}
+
 int pcicdevice_compare(const void *aa, const void *bb)
 {
     const struct PCIDevice *a = aa, *b = bb;

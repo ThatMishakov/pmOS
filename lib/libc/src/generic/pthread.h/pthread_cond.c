@@ -139,7 +139,10 @@ int pthread_cond_broadcast(pthread_cond_t *cond)
     }
 
     // Send unlock messages to all waiters
-    IPC_Mutex_Unlock unlock_signal = {IPC_Mutex_Unlock_NUM};
+    IPC_Mutex_Unlock unlock_signal = {
+        .type = IPC_Mutex_Unlock_NUM,
+        .flags = 0,
+    };
 
     // Only one thread can call pop at the time, so protect it with a spinlock.
     // Originally, I was planning to use N producers/N consumers lock-free queue, but
@@ -173,7 +176,67 @@ int pthread_cond_broadcast(pthread_cond_t *cond)
         struct __pthread_waiter *waiter =
             __try_pop_waiter(&cond->waiters_list_head, &cond->waiters_list_tail);
         simple_unlock(&cond->pop_spinlock);
+        assert(waiter != NULL);
     }
 
     return 0;
 }
+
+int pthread_cond_signal(pthread_cond_t *cond)
+{
+    // Check if cond is NULL
+    if (cond == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    // Check if cond has any waiters
+    if (cond->waiters_list_head == NULL) {
+        return 0;
+    }
+
+    // Send unlock message to the first waiter
+    IPC_Mutex_Unlock unlock_signal = {
+        .type = IPC_Mutex_Unlock_NUM,
+        .flags = 0
+    };
+
+    simple_lock(&cond->pop_spinlock);
+    struct __pthread_waiter *waiter =
+        __try_pop_waiter(&cond->waiters_list_head, &cond->waiters_list_tail);
+    simple_unlock(&cond->pop_spinlock);
+
+    if (waiter == NULL) {
+        return 0;
+    }
+
+    result_t result = send_message_port(waiter->notification_port, sizeof(IPC_Mutex_Unlock),
+                                        (char *)&unlock_signal);
+
+    if (result != SUCCESS) {
+        __atomic_add_waiter(&cond->waiters_list_head, &cond->waiters_list_tail, waiter);
+        errno = EAGAIN;
+        return -1;
+    }
+
+    return 0;
+}
+
+
+int pthread_cond_destroy(pthread_cond_t *cond)
+{
+    // Check if cond is NULL
+    if (cond == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    // Check if cond has any waiters
+    if (cond->waiters_list_head != NULL) {
+        errno = EBUSY;
+        return -1;
+    }
+
+    return 0;
+}
+

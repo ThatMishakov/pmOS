@@ -48,13 +48,14 @@
 #include <memory/mem_object.hh>
 #include <messaging/named_ports.hh>
 #include <sched/sched.hh>
+#include <pmos/system.h>
 
 #ifdef __x86_64__
     #include <sched/segments.hh>
 #endif
 
 using syscall_function = void (*)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t);
-klib::array<syscall_function, 42> syscall_table = {
+klib::array<syscall_function, 44> syscall_table = {
     syscall_exit,
     get_task_id,
     syscall_create_process,
@@ -101,6 +102,8 @@ klib::array<syscall_function, 42> syscall_table = {
     syscall_complete_interrupt,
     syscall_yield,
     syscall_map_mem_object,
+    nullptr,
+    syscall_get_time,
 };
 
 extern "C" void syscall_handler()
@@ -485,6 +488,7 @@ void syscall_set_interrupt(uint64_t port, u64 intno, u64 flags, u64, u64, u64)
     }
 
     syscall_ret_low(task) = SUCCESS;
+    syscall_ret_high(task) = intno;
     c->int_handlers.add_handler(intno, port_ptr);
 #elif defined(__x86_64__)
     throw Kern_Exception(ERROR_NOT_IMPLEMENTED, "interrupts on x86 are not implemented");
@@ -965,7 +969,7 @@ void syscall_request_timer(u64 port, u64 timeout, u64, u64, u64, u64)
     auto c                           = get_cpu_struct();
     syscall_ret_low(c->current_task) = SUCCESS;
 
-    u64 core_time_ms = c->ticks_after_ms(timeout);
+    u64 core_time_ms = c->ticks_after_ns(timeout);
     c->atomic_timer_queue_push(core_time_ms, port_ptr);
 }
 
@@ -1007,4 +1011,18 @@ void syscall_yield(u64, u64, u64, u64, u64, u64)
 {
     syscall_ret_low(get_current_task()) = SUCCESS;
     reschedule();
+}
+
+void syscall_get_time(u64 mode, u64, u64, u64, u64, u64)
+{
+    const auto current_task = get_current_task();
+
+    switch (mode) {
+    case GET_TIME_TICKS_SINCE_BOOTUP:
+        syscall_ret_low(current_task) = SUCCESS;
+        syscall_ret_high(current_task) = ticks_since_bootup;
+        break;
+    default:
+        throw Kern_Exception(ERROR_NOT_SUPPORTED, "unknown mode in syscall_get_time");
+    }
 }
