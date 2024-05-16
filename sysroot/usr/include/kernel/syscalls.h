@@ -80,5 +80,6 @@
 #define SYSCALL_MAP_MEM_OBJECT     41
 #define SYSCALL_UNSET_INTERRUPT    42
 #define SYSCALL_GET_TIME           43
+#define SYSCALL_GET_SYSTEM_INFO    44
 
 #endif

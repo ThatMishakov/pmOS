@@ -29,6 +29,7 @@
 #include <errno.h>
 #include <pmos/memory.h>
 #include <sys/mman.h>
+#include <stdio.h>
 
 void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 {
@@ -39,6 +40,7 @@ void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
     if (!(flags & MAP_ANONYMOUS)) {
         // Not supported
         // (although infrastructure for it is mostly there :) )
+        fprintf(stderr, "pmOS libc: mmap: MAP_ANONYMOUS is the only supported flag. Flags: 0x%u\n", flags);
         errno = ENOTSUP;
         return MAP_FAILED;
     }

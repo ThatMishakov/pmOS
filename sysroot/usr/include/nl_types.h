@@ -2,7 +2,7 @@
 #define _NL_TYPES_H
 
 typedef void *nl_catd;
-typedef void *nl_item;
+typedef int nl_item;
 
 #define NL_SETD       1
 #define NL_CAT_LOCALE 1

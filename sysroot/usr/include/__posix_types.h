@@ -273,9 +273,10 @@ typedef unsigned long fsfilcnt_t;
 #endif
 
 #ifndef _NORETURN
-    #ifdef __cplusplus
-        #define _NORETURN [[noreturn]]
-    #else
-        #define _NORETURN _Noreturn
-    #endif
+    // #ifdef __cplusplus
+    //     #define _NORETURN [[noreturn]]
+    // #else
+    //     #define _NORETURN _Noreturn
+    // #endif
+    #define _NORETURN __attribute__((noreturn))
 #endif

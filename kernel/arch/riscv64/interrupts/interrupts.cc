@@ -70,6 +70,43 @@ extern "C" void print_stack_trace() { print_stack_trace_fp(); }
 
 void print_stack_trace(Logger &logger) { print_stack_trace_fp(); }
 
+void print_registers(const klib::shared_ptr<TaskDescriptor> &task, Logger &logger)
+{
+    logger.printf("Task %i registers:\n", task->task_id);
+    logger.printf("  ra 0x%x\n", task->regs.ra);
+    logger.printf("  sp 0x%x\n", task->regs.sp);
+    logger.printf("  gp 0x%x\n", task->regs.gp);
+    logger.printf("  tp 0x%x\n", task->regs.tp);
+    logger.printf("  t0 0x%x\n", task->regs.t0);
+    logger.printf("  t1 0x%x\n", task->regs.t1);
+    logger.printf("  t2 0x%x\n", task->regs.t2);
+    logger.printf("  s0 0x%x\n", task->regs.s0);
+    logger.printf("  s1 0x%x\n", task->regs.s1);
+    logger.printf("  a0 0x%x\n", task->regs.a0);
+    logger.printf("  a1 0x%x\n", task->regs.a1);
+    logger.printf("  a2 0x%x\n", task->regs.a2);
+    logger.printf("  a3 0x%x\n", task->regs.a3);
+    logger.printf("  a4 0x%x\n", task->regs.a4);
+    logger.printf("  a5 0x%x\n", task->regs.a5);
+    logger.printf("  a6 0x%x\n", task->regs.a6);
+    logger.printf("  a7 0x%x\n", task->regs.a7);
+    logger.printf("  s2 0x%x\n", task->regs.s2);
+    logger.printf("  s3 0x%x\n", task->regs.s3);
+    logger.printf("  s4 0x%x\n", task->regs.s4);
+    logger.printf("  s5 0x%x\n", task->regs.s5);
+    logger.printf("  s6 0x%x\n", task->regs.s6);
+    logger.printf("  s7 0x%x\n", task->regs.s7);
+    logger.printf("  s8 0x%x\n", task->regs.s8);
+    logger.printf("  s9 0x%x\n", task->regs.s9);
+    logger.printf("  s10 0x%x\n", task->regs.s10);
+    logger.printf("  s11 0x%x\n", task->regs.s11);
+    logger.printf("  t3 0x%x\n", task->regs.t3);
+    logger.printf("  t4 0x%x\n", task->regs.t4);
+    logger.printf("  t5 0x%x\n", task->regs.t5);
+    logger.printf("  t6 0x%x\n", task->regs.t6);
+    logger.printf("  pc 0x%x\n", task->regs.pc);
+}
+
 void page_fault(u64 virt_addr, u64 scause)
 {
     const u64 page = virt_addr & ~0xfffUL;
@@ -115,6 +152,7 @@ void page_fault(u64 virt_addr, u64 scause)
                              "-> %i killing process...\n",
                              virt_addr, task->task_id, task->name.c_str(), task->regs.pc, scause,
                              e.err_code);
+        print_registers(task, serial_logger);
         task->atomic_kill();
     }
 }

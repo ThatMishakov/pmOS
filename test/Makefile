@@ -16,7 +16,7 @@ CXXFLAGS = -std=c++20 $(INCLUDEFLAGS) -g
 CPPFLAGS = $(INTERNALCFLAGS) $(USERCFLAGS) -MMD -MP $(INCLUDEFLAGS)
 GOFLAGS = $(INTERNALCFLAGS) $(USERCFLAGS) -MMD -MP $(INCLUDEFLAGS) -O3
 ASMFLAGS = -I$(INCLUDEDIR)
-LDFLAGS = $(INTERNALLDFLAGS) -g -pthread -O3
+LDFLAGS = $(INTERNALLDFLAGS) -g -pthread -O3 -static -Wl,--unresolved-symbols=ignore-in-object-files
 
 
 CCFILES := $(shell find ./ -type f -name '*.cc')

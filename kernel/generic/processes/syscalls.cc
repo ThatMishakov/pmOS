@@ -29,6 +29,7 @@
 #include <kernel/attributes.h>
 #include <kernel/block.h>
 #include <kernel/com.h>
+#include <kernel/sysinfo.h>
 #include <kernel/flags.h>
 #include <kernel/messaging.h>
 #include <lib/vector.hh>
@@ -55,7 +56,7 @@
 #endif
 
 using syscall_function = void (*)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t);
-klib::array<syscall_function, 44> syscall_table = {
+klib::array<syscall_function, 45> syscall_table = {
     syscall_exit,
     get_task_id,
     syscall_create_process,
@@ -104,6 +105,7 @@ klib::array<syscall_function, 44> syscall_table = {
     syscall_map_mem_object,
     nullptr,
     syscall_get_time,
+    syscall_system_info,
 };
 
 extern "C" void syscall_handler()
@@ -1021,11 +1023,26 @@ void syscall_get_time(u64 mode, u64, u64, u64, u64, u64)
     const auto current_task = get_current_task();
 
     switch (mode) {
-    case GET_TIME_TICKS_SINCE_BOOTUP:
+    case GET_TIME_NANOSECONDS_SINCE_BOOTUP:
         syscall_ret_low(current_task)  = SUCCESS;
-        syscall_ret_high(current_task) = ticks_since_bootup;
+        syscall_ret_high(current_task) = get_ns_since_bootup();
         break;
     default:
         throw Kern_Exception(ERROR_NOT_SUPPORTED, "unknown mode in syscall_get_time");
+    }
+}
+
+void syscall_system_info(u64 param, u64, u64, u64, u64, u64)
+{
+    const auto current_task = get_current_task();
+
+    switch (param) {
+    case SYSINFO_NPROCS:
+    case SYSINFO_NPROCS_CONF:
+        syscall_ret_low(current_task)  = SUCCESS;
+        syscall_ret_high(current_task) = get_cpu_count();
+        break;
+    default:
+        throw Kern_Exception(ERROR_NOT_SUPPORTED, "unknown param in syscall_system_info");
     }
 }

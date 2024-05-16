@@ -481,7 +481,7 @@ void uacpi_kernel_stall(uacpi_u8 usec)
 
 uacpi_u64 uacpi_kernel_get_ticks(void)
 {
-    return pmos_get_time(GET_TIME_TICKS_SINCE_BOOTUP).value;
+    return pmos_get_time(GET_TIME_NANOSECONDS_SINCE_BOOTUP).value;
 }
 
 struct isr_data {

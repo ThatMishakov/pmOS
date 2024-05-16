@@ -329,12 +329,12 @@ syscall_r set_task_group_notifier_mask(uint64_t task_group_id, pmos_port_t port_
  */
 result_t pmos_yield();
 
-#define GET_TIME_TICKS_SINCE_BOOTUP 0
+#define GET_TIME_NANOSECONDS_SINCE_BOOTUP 0
 /**
  * @brief Gets the system time
  * 
  * This function gets the system time, according to the mode parameter. The following modes are supported:
- * - GET_TIME_TICKS_SINCE_BOOTUP: Returns the number of ticks since the bootup of the system
+ * - GET_TIME_NANOSECONDS_SINCE_BOOTUP: Returns the number of ticks since the bootup of the system
  * @param mode Mode of the operation
  * @return syscall_r result of the operation. If the result is SUCCESS, the value contains the time
 */

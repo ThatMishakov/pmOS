@@ -166,7 +166,7 @@ struct CPU_Info {
 };
 
 extern u64 ticks_since_bootup;
-u64 get_ticks_since_bootup();
+u64 get_ns_since_bootup();
 
 extern klib::vector<CPU_Info *> cpus;
 

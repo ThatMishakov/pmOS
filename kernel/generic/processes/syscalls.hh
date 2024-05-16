@@ -202,6 +202,8 @@ void syscall_map_mem_object(u64 page_table_id, u64 addr_start, u64 size_bytes, u
 
 void syscall_get_time(u64 mode, u64, u64, u64, u64, u64);
 
+void syscall_system_info(u64 info_type, u64, u64, u64, u64, u64);
+
 inline u64 &syscall_arg1(const klib::shared_ptr<TaskDescriptor> &task)
 {
     return task->regs.syscall_arg1();

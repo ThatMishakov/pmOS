@@ -38,7 +38,7 @@
 #define LC_NUMERIC  3
 #define LC_TIME     4
 #define LC_MESSAGES 5
-#define LC_ALL      0
+#define LC_ALL      6
 
 #define LC_CTYPE_MASK    (1 << LC_CTYPE)
 #define LC_NUMERIC_MASK  (1 << LC_NUMERIC)

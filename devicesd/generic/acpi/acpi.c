@@ -38,6 +38,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <uacpi/event.h>
 
 int acpi_revision = -1;
 
@@ -185,6 +186,24 @@ int acpi_init(uacpi_phys_addr rsdp_phys_addr) {
     return 0;
 }
 
+static uacpi_interrupt_ret handle_power_button(uacpi_handle ctx) {
+    printf("Power button pressed\n");
+    return UACPI_INTERRUPT_HANDLED;
+}
+ 
+int power_button_init(void) {
+    uacpi_status ret = uacpi_install_fixed_event_handler(
+        UACPI_FIXED_EVENT_POWER_BUTTON,
+	handle_power_button, UACPI_NULL
+    );
+    if (uacpi_unlikely_error(ret)) {
+        fprintf(stderr, "failed to install power button event callback: %s\n", uacpi_status_to_string(ret));
+        return -ENODEV;
+    }
+ 
+    return 0;
+}
+
 void init_acpi()
 {
     printf("Info: Initializing ACPI...\n");
@@ -198,7 +217,12 @@ void init_acpi()
         return;
     }
 
-    acpi_init((uacpi_phys_addr)rsdp_desc);
+    int i = acpi_init((uacpi_phys_addr)rsdp_desc);
+    if (i != 0) {
+        printf("Warning: Could not initialize uACPI\n");
+        return;
+    }
+    power_button_init();
 
     printf("Walked ACPI tables! ACPI revision: %i\n", acpi_revision);
 }
