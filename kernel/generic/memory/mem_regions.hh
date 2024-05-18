@@ -55,12 +55,13 @@ struct Page_Table_Argumments;
  * pagers/memory managers/programs which like to interract with kernel too much for no aparent
  * reason, depending on how the region is configured.
  */
-struct Generic_Mem_Region: RedBlackTree<Generic_Mem_Region> {
+struct Generic_Mem_Region {
     virtual ~Generic_Mem_Region() = default;
+
+    RBTreeNode<Generic_Mem_Region> bst_head;
 
     union {
         RCU_Head rcu_head;
-        RBTreeNode bst_head;
     };
 
     /// Asigns the ID sequentially upon region creation.

@@ -80,7 +80,8 @@ public:
     /// Map containing user space memory regions. If the address is not covered by any of the
     /// regions, it is unallocated. Otherwise, the region controlls the actual allocation and
     /// protection of the memory.
-    Generic_Mem_Region::RBTreeHead paging_regions;
+    using RegionsRBTree = RedBlackTree<Generic_Mem_Region, &Generic_Mem_Region::bst_head>;
+    RegionsRBTree::RBTreeHead paging_regions;
 
     /// List of the tasks that own the page table. Task_Descriptor should contain a page_table
     /// pointer which should point to this page table. The kernel does not have special structures
@@ -496,7 +497,7 @@ protected:
     void unblock_tasks_rage(u64 blocked_by_page, u64 size_bytes);
 
     /// Gets the region for the page. Returns end() if no region exists
-    Generic_Mem_Region::RBTreeIterator get_region(u64 page);
+    RegionsRBTree::RBTreeIterator get_region(u64 page);
 
     /// Storage for the pointers to the pinned memory objects
     klib::splay_tree_map<klib::shared_ptr<Mem_Object>, Mem_Object_Data> mem_objects;

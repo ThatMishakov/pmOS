@@ -136,7 +136,7 @@ u64 Page_Table::atomic_create_mem_object_region(u64 page_aligned_start, u64 page
     return start_addr;
 }
 
-Generic_Mem_Region::RBTreeIterator Page_Table::get_region(u64 page)
+Page_Table::RegionsRBTree::RBTreeIterator Page_Table::get_region(u64 page)
 {
     auto it = paging_regions.get_smaller_or_equal(page);
     if (it == paging_regions.end() or not it->is_in_range(page))
