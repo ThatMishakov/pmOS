@@ -134,11 +134,11 @@ void page_fault(u64 virt_addr, u64 scause)
         Auto_Lock_Scope lock(page_table->lock);
 
         auto &regions = page_table->paging_regions;
-        const auto it = regions.get_smaller_or_equal(page);
-        if (it != regions.end() and it->second->is_in_range(virt_addr)) {
+        auto it = regions.get_smaller_or_equal(page);
+        if (it != regions.end() and it->is_in_range(virt_addr)) {
             // serial_logger.printf("Pagefault in region %s\n",
-            // it->second->name.c_str());
-            auto r = it->second->on_page_fault(access_type, virt_addr);
+            // it->name.c_str());
+            auto r = it->on_page_fault(access_type, virt_addr);
             if (not r)
                 task->atomic_block_by_page(page, &task->page_table->blocked_tasks);
         } else

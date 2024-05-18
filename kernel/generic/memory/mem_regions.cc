@@ -38,6 +38,7 @@
 #include <kernel/errors.h>
 #include <pmos/ipc.h>
 #include <processes/tasks.hh>
+#include <sched/sched.hh>
 u64 counter = 1;
 
 bool Generic_Mem_Region::on_page_fault(u64 access_type, u64 pagefault_addr)
@@ -116,58 +117,44 @@ bool Phys_Mapped_Region::alloc_page(u64 ptr_addr)
 void Generic_Mem_Region::move_to(const klib::shared_ptr<Page_Table> &new_table, u64 base_addr,
                                  u64 new_access)
 {
-    auto self = shared_from_this();
+    Page_Table *const old_owner = owner;
 
-    new_table->paging_regions.insert({base_addr, self});
+    old_owner->move_pages(new_table, start_addr, base_addr, size, new_access);
 
-    try {
-        Page_Table *const old_owner = owner;
+    old_owner->paging_regions.erase(this);
+    new_table->paging_regions.insert(this);
 
-        old_owner->move_pages(new_table, start_addr, base_addr, size, new_access);
+    owner = new_table.get();
 
-        old_owner->paging_regions.erase(start_addr);
-
-        owner = new_table.get();
-
-        access_type = new_access;
-        start_addr  = base_addr;
-    } catch (...) {
-        new_table->paging_regions.erase(base_addr);
-        throw;
-    }
+    access_type = new_access;
+    start_addr  = base_addr;
 }
 
 void Phys_Mapped_Region::clone_to(const klib::shared_ptr<Page_Table> &new_table, u64 base_addr,
                                   u64 new_access)
 {
-    auto copy = klib::make_shared<Phys_Mapped_Region>(*this);
+    auto copy = new Phys_Mapped_Region(*this);
 
     copy->owner       = new_table.get();
     copy->id          = __atomic_add_fetch(&counter, 1, 0);
     copy->access_type = new_access;
     copy->start_addr  = base_addr;
 
-    new_table->paging_regions.insert({base_addr, copy});
+    new_table->paging_regions.insert(copy);
 }
 
 void Private_Normal_Region::clone_to(const klib::shared_ptr<Page_Table> &new_table, u64 base_addr,
                                      u64 new_access)
 {
-    auto copy = klib::make_shared<Private_Normal_Region>(*this);
+    auto copy = klib::make_unique<Private_Normal_Region>(*this);
 
     copy->owner       = new_table.get();
     copy->id          = __atomic_add_fetch(&counter, 1, 0);
     copy->access_type = new_access;
     copy->start_addr  = base_addr;
 
-    new_table->paging_regions.insert({base_addr, copy});
-
-    try {
-        owner->copy_pages(new_table, start_addr, base_addr, size, new_access);
-    } catch (...) {
-        new_table->paging_regions.erase(base_addr);
-        throw;
-    }
+    owner->copy_pages(new_table, start_addr, base_addr, size, new_access);
+    new_table->paging_regions.insert(copy.release());
 }
 
 Page_Table_Argumments Mem_Object_Reference::craft_arguments() const
@@ -269,7 +256,7 @@ void Generic_Mem_Region::prepare_deletion() noexcept
 
 void Mem_Object_Reference::prepare_deletion() noexcept
 {
-    owner->unreference_object(references, this);
+    // owner->unreference_object(references, this);
 }
 
 Mem_Object_Reference::Mem_Object_Reference(u64 start_addr, u64 size, klib::string name,
@@ -292,3 +279,20 @@ Mem_Object_Reference::Mem_Object_Reference(u64 start_addr, u64 size, klib::strin
     if ((object_offset_bytes & 0xfff) != (start_offset_bytes & 0xfff))
         throw Kern_Exception(ERROR_OUT_OF_RANGE, "Object page-misaligned with region");
 };
+
+void Generic_Mem_Region::rcu_free() noexcept
+{
+    RCU_Head &rcu = rcu_head;
+    rcu.rcu_func  = rcu_callback;
+    rcu.rcu_next  = nullptr;
+
+    get_cpu_struct()->paging_rcu_cpu.push(&rcu);
+}
+
+void Generic_Mem_Region::rcu_callback(void *ptr)
+{
+    auto region = reinterpret_cast<Generic_Mem_Region *>((char *)ptr -
+                                                         offsetof(Generic_Mem_Region, rcu_head));
+
+    delete region;
+}

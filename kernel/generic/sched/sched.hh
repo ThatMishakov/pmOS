@@ -67,6 +67,7 @@ extern sched_queue uninit;
 inline klib::array<sched_queue, sched_queues_levels> global_sched_queues;
 
 extern RCU paging_rcu;
+extern RCU heap_rcu;
 
 struct CPU_Info {
     CPU_Info *self                                = this;                               // 0
@@ -116,6 +117,7 @@ struct CPU_Info {
     u32 cpu_id = 0;
 
     RCU_CPU paging_rcu_cpu;
+    RCU_CPU heap_rcu_cpu;
 
 #ifdef __x86_64__
     u32 lapic_id = 0;

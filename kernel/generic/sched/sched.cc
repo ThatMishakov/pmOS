@@ -50,6 +50,7 @@ Spinlock tasks_map_lock;
 sched_map tasks_map;
 
 RCU paging_rcu;
+RCU heap_rcu;
 
 klib::vector<CPU_Info *> cpus;
 
@@ -285,10 +286,14 @@ void push_ready(const klib::shared_ptr<TaskDescriptor> &p)
 
 void sched_periodic()
 {
+    CPU_Info *c = get_cpu_struct();
+
+    // Quiet RCU
+    // Since this function is called from the timer interrupt, no context is held here
+    c->heap_rcu_cpu.quiet(heap_rcu, c->cpu_id);
+
     // TODO: Replace with more sophisticated algorithm. Will definitely need to be redone once we
     // have multi-cpu support
-
-    CPU_Info *c = get_cpu_struct();
 
     klib::shared_ptr<TaskDescriptor> current = c->current_task;
     klib::shared_ptr<TaskDescriptor> next    = c->atomic_pick_highest_priority(current->priority);

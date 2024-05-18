@@ -77,13 +77,10 @@ struct Mem_Object_Data {
 class Page_Table: public klib::enable_shared_from_this<Page_Table>
 {
 public:
-    /// Storage method for the memory region. They are currently stored a splay tree.
-    using pagind_regions_map = klib::splay_tree_map<u64, klib::shared_ptr<Generic_Mem_Region>>;
-
-    /// Map containing user space memory region. If the address is not covered by any of the
+    /// Map containing user space memory regions. If the address is not covered by any of the
     /// regions, it is unallocated. Otherwise, the region controlls the actual allocation and
     /// protection of the memory.
-    pagind_regions_map paging_regions;
+    Generic_Mem_Region::RBTreeHead paging_regions;
 
     /// List of the tasks that own the page table. Task_Descriptor should contain a page_table
     /// pointer which should point to this page table. The kernel does not have special structures
@@ -499,7 +496,7 @@ protected:
     void unblock_tasks_rage(u64 blocked_by_page, u64 size_bytes);
 
     /// Gets the region for the page. Returns end() if no region exists
-    pagind_regions_map::iterator get_region(u64 page);
+    Generic_Mem_Region::RBTreeIterator get_region(u64 page);
 
     /// Storage for the pointers to the pinned memory objects
     klib::splay_tree_map<klib::shared_ptr<Mem_Object>, Mem_Object_Data> mem_objects;

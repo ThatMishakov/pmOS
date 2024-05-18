@@ -27,7 +27,9 @@
  */
 
 #pragma once
+#include "intrusive_bst.hh"
 #include "page_descriptor.hh"
+#include "rcu.hh"
 
 #include <lib/memory.hh>
 #include <lib/string.hh>
@@ -53,14 +55,34 @@ struct Page_Table_Argumments;
  * pagers/memory managers/programs which like to interract with kernel too much for no aparent
  * reason, depending on how the region is configured.
  */
-struct Generic_Mem_Region: public klib::enable_shared_from_this<Generic_Mem_Region> {
+struct Generic_Mem_Region: RedBlackTree<Generic_Mem_Region> {
     virtual ~Generic_Mem_Region() = default;
+
+    union {
+        RCU_Head rcu_head;
+        RBTreeNode bst_head;
+    };
 
     /// Asigns the ID sequentially upon region creation.
     Generic_Mem_Region(): id(__atomic_add_fetch(&counter, 1, 0)) {}
 
+    void rcu_free() noexcept;
+    static void rcu_callback(void *head);
+
     /// Page aligned start of the region
     u64 start_addr = 0;
+
+    constexpr bool operator<(const Generic_Mem_Region &other) const
+    {
+        return this->start_addr < other.start_addr;
+    }
+    constexpr bool operator==(const Generic_Mem_Region &other) const
+    {
+        return this->start_addr == other.start_addr;
+    }
+
+    constexpr bool operator>(u64 addr) const { return start_addr > addr; }
+    constexpr bool operator<(u64 addr) const { return start_addr < addr; }
 
     /// Page aligned size
     u64 size = 0;

@@ -45,13 +45,20 @@
 
 Page_Table::~Page_Table()
 {
-    for (const auto &i: paging_regions)
-        i.second->prepare_deletion();
-
-    paging_regions.clear();
+    for (auto &i: paging_regions)
+        i.prepare_deletion();
 
     for (const auto &p: mem_objects)
         p.first->atomic_unregister_pined(weak_from_this());
+
+    auto it = paging_regions.begin();
+    while (it != paging_regions.end()) {
+        auto next = it;
+        ++next;
+        paging_regions.erase(it);
+        it->rcu_free();
+        it = next;
+    }
 }
 
 u64 Page_Table::atomic_create_normal_region(u64 page_aligned_start, u64 page_aligned_size,
@@ -62,10 +69,8 @@ u64 Page_Table::atomic_create_normal_region(u64 page_aligned_start, u64 page_ali
 
     u64 start_addr = find_region_spot(page_aligned_start, page_aligned_size, fixed);
 
-    paging_regions.insert(
-        {start_addr, klib::make_shared<Private_Normal_Region>(start_addr, page_aligned_size,
-                                                              klib::forward<klib::string>(name),
-                                                              this, access, pattern)});
+    paging_regions.insert(new Private_Normal_Region(
+        start_addr, page_aligned_size, klib::forward<klib::string>(name), this, access, pattern));
 
     return start_addr;
 }
@@ -81,8 +86,8 @@ u64 Page_Table::atomic_transfer_region(const klib::shared_ptr<Page_Table> &to, u
         if (prefered_to & 07777)
             prefered_to = 0;
 
-        u64 start_addr = to->find_region_spot(prefered_to, reg->size, fixed);
-        reg->move_to(to, start_addr, access);
+        u64 start_addr = to->find_region_spot(prefered_to, reg.size, fixed);
+        reg.move_to(to, start_addr, access);
         return start_addr;
     } catch (std::out_of_range &r) {
         throw Kern_Exception(ERROR_OUT_OF_RANGE, "atomic_transfer_region source not found");
@@ -103,10 +108,9 @@ u64 Page_Table::atomic_create_phys_region(u64 page_aligned_start, u64 page_align
 
     u64 start_addr = find_region_spot(page_aligned_start, page_aligned_size, fixed);
 
-    paging_regions.insert(
-        {start_addr, klib::make_shared<Phys_Mapped_Region>(start_addr, page_aligned_size,
-                                                           klib::forward<klib::string>(name), this,
-                                                           access, phys_addr_start)});
+    paging_regions.insert(new Phys_Mapped_Region(start_addr, page_aligned_size,
+                                                 klib::forward<klib::string>(name), this, access,
+                                                 phys_addr_start));
 
     return start_addr;
 }
@@ -121,21 +125,21 @@ u64 Page_Table::atomic_create_mem_object_region(u64 page_aligned_start, u64 page
 
     u64 start_addr = find_region_spot(page_aligned_start, page_aligned_size, fixed);
 
-    auto region = klib::make_shared<Mem_Object_Reference>(
+    auto region = klib::make_unique<Mem_Object_Reference>(
         start_addr, page_aligned_size, klib::forward<klib::string>(name), this, access, object,
         object_offset_bytes, cow, start_offset_bytes, object_size_bytes);
 
     mem_objects[object].regions.insert(region.get());
 
-    paging_regions.insert({start_addr, region});
+    paging_regions.insert(region.release());
 
     return start_addr;
 }
 
-Page_Table::pagind_regions_map::iterator Page_Table::get_region(u64 page)
+Generic_Mem_Region::RBTreeIterator Page_Table::get_region(u64 page)
 {
     auto it = paging_regions.get_smaller_or_equal(page);
-    if (it == paging_regions.end() or not it->second->is_in_range(page))
+    if (it == paging_regions.end() or not it->is_in_range(page))
         return paging_regions.end();
 
     return it;
@@ -144,10 +148,10 @@ Page_Table::pagind_regions_map::iterator Page_Table::get_region(u64 page)
 bool Page_Table::can_takeout_page(u64 page_addr) noexcept
 {
     auto it = paging_regions.get_smaller_or_equal(page_addr);
-    if (it == paging_regions.end() or not it->second->is_in_range(page_addr))
+    if (it == paging_regions.end() or not it->is_in_range(page_addr))
         return false;
 
-    return it->second->can_takeout_page();
+    return it->can_takeout_page();
 }
 
 u64 Page_Table::find_region_spot(u64 desired_start, u64 size, bool fixed)
@@ -158,13 +162,13 @@ u64 Page_Table::find_region_spot(u64 desired_start, u64 size, bool fixed)
 
     if (region_ok) {
         auto it = paging_regions.get_smaller_or_equal(desired_start);
-        if (it != paging_regions.end() and it->second->is_in_range(desired_start))
+        if (it != paging_regions.end() and it->is_in_range(desired_start))
             region_ok = false;
     }
 
     if (region_ok) {
         auto it = paging_regions.lower_bound(desired_start);
-        if (it != paging_regions.end() and it->first < end)
+        if (it != paging_regions.end() and it->start_addr < end)
             region_ok = false;
     }
 
@@ -181,10 +185,10 @@ u64 Page_Table::find_region_spot(u64 desired_start, u64 size, bool fixed)
         while (it != paging_regions.end()) {
             u64 end = addr + size;
 
-            if (it->first > end and end <= user_addr_max())
+            if (*it > end and end <= user_addr_max())
                 return addr;
 
-            addr = it->second->addr_end();
+            addr = it->addr_end();
             ++it;
         }
 
@@ -199,12 +203,10 @@ bool Page_Table::prepare_user_page(u64 virt_addr, unsigned access_type)
 {
     auto it = paging_regions.get_smaller_or_equal(virt_addr);
 
-    if (it == paging_regions.end() or not it->second->is_in_range(virt_addr))
+    if (it == paging_regions.end() or not it->is_in_range(virt_addr))
         throw(Kern_Exception(ERROR_OUT_OF_RANGE, "user provided parameter is unallocated"));
 
-    Generic_Mem_Region &reg = *it->second;
-
-    return reg.prepare_page(access_type, virt_addr);
+    return it->prepare_page(access_type, virt_addr);
 }
 
 void Page_Table::unblock_tasks(u64 page)
@@ -219,7 +221,7 @@ void Page_Table::map(u64 page_addr, u64 virt_addr)
     if (it == paging_regions.end())
         throw(Kern_Exception(ERROR_PAGE_NOT_ALLOCATED, "map no region found"));
 
-    map(page_addr, virt_addr, it->second->craft_arguments());
+    map(page_addr, virt_addr, it->craft_arguments());
 }
 
 u64 Page_Table::phys_addr_limit()
@@ -316,7 +318,8 @@ void Page_Table::atomic_shrink_regions(const klib::shared_ptr<Mem_Object> &id,
 
             if (change_size_to == 0) { // Delete region
                 reg->prepare_deletion();
-                paging_regions.erase(reg->start_addr);
+                paging_regions.erase(reg);
+                reg->rcu_free();
             } else { // Resize region
                 reg->size = change_size_to;
             }
@@ -335,10 +338,11 @@ void Page_Table::atomic_delete_region(u64 region_start)
     if (region == paging_regions.end())
         throw Kern_Exception(ERROR_PAGE_NOT_ALLOCATED, "memory region was not found");
 
-    auto region_size = region->second->size;
+    auto region_size = region->size;
 
-    region->second->prepare_deletion();
+    region->prepare_deletion();
     paging_regions.erase(region);
+    region->rcu_free();
     // paging_regions.erase(region_start);
 
     invalidate_range(region_start, region_size, true);
