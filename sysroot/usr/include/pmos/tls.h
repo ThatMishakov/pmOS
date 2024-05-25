@@ -31,6 +31,9 @@
 #include <pmos/ports.h>
 #include <stdint.h>
 
+#define __DECLARE_STACK_T
+#include "../__posix_types.h"
+
 /**
  * @brief Internal TLS structure
  *
@@ -105,6 +108,9 @@ struct uthread {
 
     pmos_port_t fs_port;
     pmos_port_t cmd_reply_port;
+
+    int signal_stack_spinlock;
+    stack_t signal_stack;
 };
 
 /**

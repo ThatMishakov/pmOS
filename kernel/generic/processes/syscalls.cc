@@ -508,7 +508,12 @@ void syscall_complete_interrupt(u64 intno, u64, u64, u64, u64, u64)
     auto c               = get_cpu_struct();
     const task_ptr &task = c->current_task;
 
-    c->int_handlers.ack_interrupt(intno, task->task_id);
+    try {
+        c->int_handlers.ack_interrupt(intno, task->task_id);
+    } catch (Kern_Exception &e) {
+        serial_logger.printf("Error acking interrupt: %s, task %i intno %i CPU %i\n", e.err_message, task->task_id, intno, c->cpu_id);
+        throw e;
+    }
     syscall_ret_low(task) = SUCCESS;
 #elif defined(__x86_64__)
     throw Kern_Exception(ERROR_NOT_IMPLEMENTED, "interrupts on x86 are not implemented");
@@ -1008,6 +1013,8 @@ void syscall_set_affinity(u64 pid, u64 affinity, u64 flags, u64, u64, u64)
         Auto_Lock_Scope lock(task->sched_lock);
         task->cpu_affinity = cpu;
     }
+
+    //serial_logger.printf("Task %d (%s) affinity set to %d\n", task->task_id, task->name.c_str(), cpu);
 
     reschedule();
 }
