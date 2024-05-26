@@ -68,6 +68,10 @@ struct uthread *__prepare_tls(void *stack_top, size_t stack_size)
     return (struct uthread *)tls;
 }
 
+extern int pthread_list_spinlock;
+// Worker thread is the list head
+extern struct uthread *worker_thread;
+
 void __release_tls(struct uthread *u)
 {
     if (u == NULL)
@@ -79,6 +83,12 @@ void __release_tls(struct uthread *u)
     align = max(align, _Alignof(struct uthread));
     // size_t alloc_size = alignup(memsz, align) + sizeof(struct uthread);
     // size_t size_all = alignup(alloc_size, 4096);
+
+    pthread_spin_lock(&pthread_list_spinlock);
+    u->prev->next = u->next;
+    u->next->prev = u->prev;
+    pthread_spin_unlock(&pthread_list_spinlock);
+
 
     release_region(TASK_ID_SELF, (void *)u - alignup(memsz, align));
 }

@@ -56,6 +56,8 @@ void __init_uthread(struct uthread *u, void *stack_top, size_t stack_size)
     u->atexit_list_head = NULL;
     u->thread_status    = __THREAD_STATUS_RUNNING;
     u->join_notify_port = INVALID_PORT;
+    u->next             = u;
+    u->prev             = u;
 }
 
 void __thread_exit_destroy_tls()
@@ -117,7 +119,7 @@ static void init_tls_first_time(void *load_data, size_t load_data_size, TLS_Data
         return; // TODO: Panic
 
     void *thread_pointer = __thread_pointer_from_uthread(u);
-    set_segment(0, SEGMENT_FS, thread_pointer);
+    set_registers(0, SEGMENT_FS, thread_pointer);
 
     if (__libc_init_hook)
         __libc_init_hook();

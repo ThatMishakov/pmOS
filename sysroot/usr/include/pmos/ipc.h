@@ -966,6 +966,21 @@ typedef struct IPC_Log_Output_Reply {
     int64_t result_code;
 } IPC_Log_Output_Reply;
 
+#define IPC_Exit_NUM 0x160
+typedef struct IPC_Exit {
+    /// Message type (must be IPC_Exit_NUM)
+    uint32_t type;
+
+    /// Exit type
+    uint32_t exit_type;
+    #define IPC_EXIT_TYPE_NORMAL   0
+    #define IPC_EXIT_TYPE_PTHREAD  1
+    #define IPC_EXIT_TYPE_ABNORMAL 2
+
+    /// Exit code
+    void *exit_code;
+} IPC_Exit;
+
 #if defined(__cplusplus)
 } /* extern "C" */
 #endif

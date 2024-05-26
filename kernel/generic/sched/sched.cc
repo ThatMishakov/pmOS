@@ -139,13 +139,18 @@ void CPU_Info::atomic_timer_queue_push(u64 fire_on_core_ticks, const klib::share
     timer_queue[fire_on_core_ticks] = port;
 }
 
+extern klib::shared_ptr<Arch_Page_Table> idle_page_table;
+
 void TaskDescriptor::switch_to()
 {
     CPU_Info *c = get_cpu_struct();
     if (c->current_task->page_table != page_table) {
         page_table->atomic_active_sum(1);
         c->current_task->page_table->atomic_active_sum(-1);
-        page_table->apply();
+
+        auto new_page_table = page_table ? page_table : idle_page_table;
+
+        new_page_table->apply();
         c->paging_rcu_cpu.quiet(paging_rcu, c->cpu_id);
     }
 
@@ -308,8 +313,8 @@ void sched_periodic()
         start_timer(assign_quantum_on_priority(current->priority));
     }
 
-    while (current->status == TaskStatus::TASK_DYING) {
-        current->cleanup();
+    while (c->current_task->status == TaskStatus::TASK_DYING) {
+        c->current_task->cleanup();
 
         find_new_process();
     }

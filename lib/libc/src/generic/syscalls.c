@@ -147,9 +147,9 @@ page_table_req_ret_t asign_page_table(uint64_t pid, uint64_t page_table, uint64_
     return t;
 }
 
-result_t set_segment(uint64_t pid, unsigned segment, void *addr)
+result_t set_registers(uint64_t pid, unsigned segment, void *addr)
 {
-    return pmos_syscall(SYSCALL_SET_SEGMENT, pid, segment, addr).result;
+    return pmos_syscall(SYSCALL_SET_REGISTERS, pid, segment, addr).result;
 }
 
 syscall_r create_task_group() { return pmos_syscall(SYSCALL_CREATE_TASK_GROUP); }
@@ -169,9 +169,9 @@ syscall_r is_task_group_member(uint64_t task_id, uint64_t group_id)
     return pmos_syscall(SYSCALL_CHECK_IF_TASK_IN_GROUP, task_id, group_id);
 }
 
-syscall_r get_segment(uint64_t pid, unsigned segment)
+result_t get_registers(uint64_t pid, unsigned segment, void *addr)
 {
-    return pmos_syscall(SYSCALL_GET_SEGMENT, pid, segment);
+    return pmos_syscall(SYSCALL_GET_REGISTERS, pid, segment, addr).result;
 }
 
 result_t syscall_start_process(uint64_t pid, uint64_t entry, uint64_t arg1, uint64_t arg2,
@@ -216,4 +216,9 @@ result_t pmos_yield() { return pmos_syscall(SYSCALL_YIELD).result; }
 syscall_r pmos_get_time(uint64_t mode)
 {
     return pmos_syscall(SYSCALL_GET_TIME, mode);
+}
+
+result_t syscall_kill_task(uint64_t tid)
+{
+    return pmos_syscall(SYSCALL_KILL_TASK, tid).result;
 }

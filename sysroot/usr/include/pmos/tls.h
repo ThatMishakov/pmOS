@@ -111,6 +111,10 @@ struct uthread {
 
     int signal_stack_spinlock;
     stack_t signal_stack;
+
+    uint64_t thread_task_id;
+
+    struct uthread *next, *prev;
 };
 
 /**

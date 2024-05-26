@@ -36,6 +36,8 @@ void _atexit_pop_all();
 void __call_destructors(void);
 void __call_thread_atexit();
 void __close_files_on_exit();
+void __thread_exit_destroy_tls();
+void __notify_exit(int status, int type);
 
 __attribute__((noreturn)) void exit(int status)
 {
@@ -43,10 +45,22 @@ __attribute__((noreturn)) void exit(int status)
     __call_thread_atexit();
     _atexit_pop_all();
     __call_destructors();
-    __close_files_on_exit();
+    __thread_exit_destroy_tls();
+
+    // Normal exit
+    __notify_exit(status, 0);
     _syscall_exit(status);
 }
 
-__attribute__((noreturn)) void _exit(int status) { _syscall_exit(status); }
+__attribute__((noreturn)) void _exit(int status)
+{
+    __thread_exit_destroy_tls();
+    __notify_exit(status, 0);
+    _syscall_exit(status);
+}
 
-__attribute__((noreturn)) void _Exit(int status) { _exit(status); }
+__attribute__((noreturn)) void _Exit(int status) {
+    __thread_exit_destroy_tls();
+    __notify_exit(status, 0);
+    _exit(status);
+}

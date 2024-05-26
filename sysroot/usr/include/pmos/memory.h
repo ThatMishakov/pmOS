@@ -56,6 +56,42 @@ typedef unsigned long mem_object_t;
 
 #define SEGMENT_FS 1
 #define SEGMENT_GS 2
+#define GENERAL_REGS 3
+
+struct task_register_set {
+    uint64_t pc;
+    uint64_t ra;
+    uint64_t sp;
+    uint64_t gp;
+    uint64_t tp;
+    uint64_t t0;
+    uint64_t t1;
+    uint64_t t2;
+    uint64_t s0;
+    uint64_t s1;
+    uint64_t a0;
+    uint64_t a1;
+    uint64_t a2;
+    uint64_t a3;
+    uint64_t a4;
+    uint64_t a5;
+    uint64_t a6;
+    uint64_t a7;
+    uint64_t s2;
+    uint64_t s3;
+    uint64_t s4;
+    uint64_t s5;
+    uint64_t s6;
+    uint64_t s7;
+    uint64_t s8;
+    uint64_t s9;
+    uint64_t s10;
+    uint64_t s11;
+    uint64_t t3;
+    uint64_t t4;
+    uint64_t t5;
+    uint64_t t6;
+};
 
 #define CREATE_FLAG_FIXED 0x08
 
@@ -162,23 +198,24 @@ page_table_req_ret_t get_page_table(uint64_t pid);
  *        it must not be running at the time. Otherwise, the behaviour is undefined.
  *
  * @param pid The PID of the target task. Can take TASK_ID_SELF (0).
- * @param segment The desired segment, defined by SEGMENT_FS and SEGMENT_GS constants
- * @param addr The pointer to which the segment should be set.
+ * @param register_set The desired registers, defined by SEGMENT_FS and SEGMENT_GS and GENERAL_REGS constants
+ * @param addr The pointer to the segment, or to the array holding the registers.
  * @return result_t The result of the operation.
  */
-result_t set_segment(uint64_t pid, unsigned segment, void *addr);
+result_t set_registers(uint64_t pid, unsigned register_set, void *addr);
 
 /**
- * @brief Gets the segment registers of the task indicated by PID. If getting for the other process,
+ * @brief Gets the registers of the task indicated by PID. If getting for the other process,
  *        it must not be running at the time. Otherwise, the behaviour is undefined. Requesting the
  *        segment for self is always allowed.
  *
  * @param pid The PID of the target task. Can take TASK_ID_SELF (0).
- * @param segment The desired segment, defined by SEGMENT_FS and SEGMENT_GS constants
+ * @param register_set The desired set of registers, defined by SEGMENT_FS and SEGMENT_GS and GENERAL_REGS constants
+ * @param addr The pointer to the segment, or to the array where the registers should be stored.
  * @return syscall_r The result of the operation. If the result is SUCCESS, the value of the segment
  * is stored in the *value* field.
  */
-syscall_r get_segment(uint64_t pid, unsigned segment);
+result_t get_registers(uint64_t pid, unsigned register_set, void *addr);
 
     #define PAGE_TABLE_SELF 0
 

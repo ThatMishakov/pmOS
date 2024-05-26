@@ -3,6 +3,7 @@
 #include <pmos/memory_flags.h>
 #include <pmos/tls.h>
 #include <stdbool.h>
+#include <pthread.h>
 #include <string.h>
 
 void __init_uthread(struct uthread *u, void *stack_top, size_t stack_size);
@@ -38,10 +39,19 @@ struct uthread *__prepare_tls(void *stack_top, size_t stack_size)
     return (struct uthread *)tls;
 }
 
+extern int pthread_list_spinlock;
+// Worker thread is the list head
+extern struct uthread *worker_thread;
+
 void __release_tls(struct uthread *u)
 {
     if (u == NULL)
         return;
+
+    pthread_spin_lock(&pthread_list_spinlock);
+    u->prev->next = u->next;
+    u->next->prev = u->prev;
+    pthread_spin_unlock(&pthread_list_spinlock);
 
     release_region(TASK_ID_SELF, u);
 }

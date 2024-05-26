@@ -83,6 +83,14 @@ uint64_t get_task_id();
 syscall_r syscall_new_process();
 
 /**
+ * @brief Kills the task
+ * 
+ * @param tid ID of the task to kill
+ * @return result_t result of the operation
+ */
+result_t syscall_kill_task(uint64_t tid);
+
+/**
  * @brief Starts the execution of the process
  *
  * This system call starts the execution of the process with the given PID. The process must be in

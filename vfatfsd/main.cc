@@ -94,7 +94,7 @@ int main() {
     // }
 
     // for (auto & t : threads) {
-    //     t.join();
+    //     t.detach();
     // }
 
     // printf("Count: %li\n", (uint64_t)count);

@@ -56,7 +56,7 @@
 #endif
 
 using syscall_function = void (*)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t);
-klib::array<syscall_function, 45> syscall_table = {
+klib::array<syscall_function, 46> syscall_table = {
     syscall_exit,
     get_task_id,
     syscall_create_process,
@@ -106,6 +106,7 @@ klib::array<syscall_function, 45> syscall_table = {
     nullptr,
     syscall_get_time,
     syscall_system_info,
+    syscall_kill_task,
 };
 
 extern "C" void syscall_handler()
@@ -256,6 +257,15 @@ void syscall_exit(u64 arg1, u64 arg2, u64, u64, u64, u64)
     syscall_ret_low(task) = SUCCESS;
     // Kill the process
     task->atomic_kill();
+}
+
+void syscall_kill_task(u64 task_id, u64, u64, u64, u64, u64)
+{
+    klib::shared_ptr<TaskDescriptor> task = get_current_task();
+    klib::shared_ptr<TaskDescriptor> t    = get_task_throw(task_id);
+
+    syscall_ret_low(task) = SUCCESS;
+    t->atomic_kill();
 }
 
 void syscall_get_first_message(u64 buff, u64 args, u64 portno, u64, u64, u64)

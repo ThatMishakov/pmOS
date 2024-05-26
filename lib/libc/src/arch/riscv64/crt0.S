@@ -52,22 +52,9 @@ _start:
     # Initialize libc
     call init_std_lib
 
-    # C++ (or others) constructors
-    call __call_init_functions
-
-    # Get argc and argv
-    call prepare_args
-    # This function returns struct { long argc; char **argv; };
-    # in a0 and a1, as per RISC-V calling convention.
-    # Conveniently, these are also the first function arguments
-    # Thus, main should recieve those with no register moving
-    # like on x86
-    call main
-
-    # Call exit
-    # The return value of main is also the first argument to function
-    # calls.
-    call exit
+    # Call main function of the worker
+    # This is the first function that runs, and it spawns a thread for the actual main
+    call worker_main
 
     # This should never be reached
     # UNIMP should always cause an illegal instruction exception

@@ -29,9 +29,12 @@
 #include "pthread_key.h"
 
 #include <stdint.h>
+#include <stddef.h>
 
 void _atexit_pop_all();
 void __call_destructors(void);
+void __thread_exit_destroy_tls();
+void __notify_exit(void *exit_code, int type);
 
 // Defined in cxa_thread_atexit.c
 void __call_thread_atexit();
@@ -49,9 +52,12 @@ void __thread_exit_fire_destructors()
     __call_thread_atexit();
 
     uint64_t remaining_count = __atomic_sub_fetch(&__active_threads, 1, __ATOMIC_SEQ_CST);
-    if (remaining_count == 0) {
+    if (remaining_count <= 1) {
         // Last thread, call atexit() stuff
         _atexit_pop_all();
         __call_destructors();
     }
+
+    __thread_exit_destroy_tls();
+    __notify_exit(0, remaining_count > 1);
 }
