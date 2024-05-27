@@ -5,10 +5,11 @@
 #include <errno.h>
 #include <pmos/tls.h>
 #include <assert.h>
+#include <pmos/__internal.h>
 
 int pmos_request_timer(pmos_port_t port, size_t ms);
 
-pmos_port_t get_sleep_port()
+pmos_port_t _HIDDEN __get_cmd_reply_port()
 {
     struct uthread *ut = __get_tls();
     if (ut->cmd_reply_port == INVALID_PORT) {
@@ -22,12 +23,18 @@ pmos_port_t get_sleep_port()
     return ut->cmd_reply_port;
 }
 
+void _HIDDEN __return_cmd_reply_port(pmos_port_t)
+{
+    // Do nothing for now
+}
+
 int nanosleep(const struct timespec *req, struct timespec *rem)
 {
-    pmos_port_t sleep_reply_port = get_sleep_port();
+    pmos_port_t sleep_reply_port = __get_cmd_reply_port();
     size_t ns                    = req->tv_sec * 1000000000 + req->tv_nsec;
     result_t result              = pmos_request_timer(sleep_reply_port, ns);
     if (result != SUCCESS) {
+        __return_cmd_reply_port(sleep_reply_port);
         errno = result;
         *rem  = *req;
         return -1;
@@ -44,6 +51,8 @@ int nanosleep(const struct timespec *req, struct timespec *rem)
     assert(reply_descriptor.size == sizeof(IPC_Timer_Reply));
 
     result = get_first_message((char *)&reply, sizeof(reply), sleep_reply_port);
+
+    __return_cmd_reply_port(sleep_reply_port);
 
     // This should never fail
     assert(result == SUCCESS);

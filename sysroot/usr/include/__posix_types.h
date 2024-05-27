@@ -136,7 +136,7 @@ typedef unsigned long uid_t;
 #endif
 
 #if defined(__DECLARE_PID_T) && !defined(__DECLARED_PID_T)
-typedef unsigned long pid_t;
+typedef long pid_t;
     #define __DECLARED_PID_T
 #endif
 

@@ -1018,13 +1018,45 @@ typedef struct IPC_Register_Process_Reply {
 
     /// Flags
     uint32_t flags;
+    #define REGISTER_PROCESS_REPLY_FLAG_EXISITING 0x01
 
     /// Result code
     int64_t result;
 
     /// PID
-    uint64_t pid;
+    int64_t pid;
 } IPC_Register_Process_Reply;
+
+#define IPC_PID_For_Task_NUM 0x182
+typedef struct IPC_PID_For_Task {
+    /// Message type (must be IPC_PID_For_Task_NUM)
+    uint32_t type;
+
+    /// Flags
+    uint32_t flags;
+    #define PID_FOR_TASK_WAIT_TO_APPEAR 0x01
+
+    /// Port for the reply
+    pmos_port_t reply_port;
+
+    /// Task ID (takes TASK_ID_SELF)
+    uint64_t task_id;
+} IPC_PID_For_Task;
+
+#define IPC_PID_For_Task_Reply_NUM 0x183
+typedef struct IPC_PID_For_Task_Reply {
+    /// Message type (must be IPC_PID_For_Task_Reply_NUM)
+    uint32_t type;
+
+    /// Flags
+    uint32_t flags;
+
+    /// Result code
+    int64_t result;
+
+    /// PID
+    int64_t pid;
+} IPC_PID_For_Task_Reply;
 
 #if defined(__cplusplus)
 } /* extern "C" */

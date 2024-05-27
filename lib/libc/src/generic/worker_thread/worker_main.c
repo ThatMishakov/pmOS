@@ -7,6 +7,7 @@
 #include <alloca.h>
 #include <pmos/tls.h>
 #include <string.h>
+#include <pmos/__internal.h>
 
 pmos_port_t worker_port;
 __attribute__((noreturn)) void _syscall_exit(int status);
@@ -18,11 +19,29 @@ struct uthread *worker_thread;
 void __close_files_on_exit();
 void __terminate_threads();
 
-const char *processd_port_name = "/pmos/processd";
-pmos_port_t processd_port = 0;
+static const char *processd_port_name = "/pmos/processd";
+static pmos_port_t processd_port = 0;
+
+pmos_port_t __get_processd_port()
+{
+    if (processd_port != 0) {
+        return processd_port;
+    }
+
+    ports_request_t port_req =
+        get_port_by_name(processd_port_name, strlen(processd_port_name), 0);
+    if (port_req.result != SUCCESS) {
+        // Handle error
+        return INVALID_PORT;
+    }
+
+    return port_req.port;
+}
 
 uint64_t process_task_group = 0;
 bool registering_process = false;
+
+pid_t _HIDDEN __pid_cached = 0;
 
 int __register_process()
 {
@@ -130,6 +149,7 @@ void worker_main()
                     running = false;
                 }
                 registering_process = false;
+                __pid_cached = reply->pid;
                 break;
             }
             default:

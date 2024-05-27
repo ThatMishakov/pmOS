@@ -89,6 +89,9 @@ int main() {
     //sleep(1);
     printf("Starting tests...\n");
 
+    pid_t pid = getpid();
+    printf("PID: %i\n", pid);
+
     // for (size_t i = 0; i < 10; i++) {
     //     threads.push_back(std::thread(thread_func, nullptr));
     // }
