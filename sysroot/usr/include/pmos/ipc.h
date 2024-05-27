@@ -1058,6 +1058,39 @@ typedef struct IPC_PID_For_Task_Reply {
     int64_t pid;
 } IPC_PID_For_Task_Reply;
 
+#define IPC_Set_Process_Group_NUM 0x184
+typedef struct IPC_Set_Process_Group {
+    /// Message type (must be IPC_Set_Process_Group_NUM)
+    uint32_t type;
+
+    /// Flags
+    uint32_t flags;
+
+    /// Port for the reply
+    pmos_port_t reply_port;
+
+    /// PID (accepts 0)
+    int64_t pid;
+
+    /// Process group ID (if 0, the same as the PID is used)
+    int64_t pgid;
+} IPC_Set_Process_Group;
+
+#define IPC_Set_Process_Group_Reply_NUM 0x185
+typedef struct IPC_Set_Process_Group_Reply {
+    /// Message type (must be IPC_Set_Process_Group_Reply_NUM)
+    uint32_t type;
+
+    /// Flags
+    uint32_t flags;
+
+    /// Result code
+    int64_t result;
+
+    /// Group ID
+    int64_t group_id;
+} IPC_Set_Process_Group_Reply;
+
 #if defined(__cplusplus)
 } /* extern "C" */
 #endif
