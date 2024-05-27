@@ -73,7 +73,7 @@ struct fs_consumer *create_fs_consumer(uint64_t consumer_task_group)
         goto error;
 
     syscall_r r =
-        set_task_group_notifier_mask(consumer_task_group, main_port, NOTIFICATION_MASK_DESTROYED);
+        set_task_group_notifier_mask(consumer_task_group, main_port, NOTIFICATION_MASK_DESTROYED, 0);
     if (r.result != SUCCESS)
         // Could not set up notifier
         goto error;

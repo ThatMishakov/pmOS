@@ -241,6 +241,36 @@ public:
     /// Gets an unused task ID
     static TaskID get_new_task_id();
 
+    struct NotifierPort {
+        klib::weak_ptr<Port> port;
+        u64 action_mask = 0;
+
+        static constexpr int NOTIFY_EXIT       = 1;
+        static constexpr int NOTIFY_SEGFAULT   = 2;
+        static constexpr int NOTIFY_BREAKPOINT = 4;
+    };
+
+    klib::splay_tree_map<u64, NotifierPort> notifier_ports;
+    mutable Spinlock notifier_ports_lock;
+
+    /**
+     * @brief Changes the notifier port to the new mask. Setting mask to 0 effectively removes the
+     * port from the notifiers map
+     *
+     * @param port Port whose mask is to be changed. Must not be nullptr.
+     * @param mask New mask
+     * @return u64 Old mask
+     */
+    u64 atomic_change_notifier_mask(const klib::shared_ptr<Port> &port, u64 mask);
+
+    /**
+     * @brief Gets the notification mask of the port. If the mask is 0, then the port is not in the
+     * notifiers map.
+     *
+     * @param port_id ID of the port whose mask is to be checked
+     * @return u64 Mas of the port
+     */
+    u64 atomic_get_notifier_mask(u64 port_id);
 protected:
     TaskDescriptor() = default;
 

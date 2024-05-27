@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <alloca.h>
 #include <pmos/tls.h>
+#include <string.h>
 
 pmos_port_t worker_port;
 __attribute__((noreturn)) void _syscall_exit(int status);
@@ -17,9 +18,43 @@ struct uthread *worker_thread;
 void __close_files_on_exit();
 void __terminate_threads();
 
+const char *processd_port_name = "/pmos/processd";
+pmos_port_t processd_port = 0;
+
+uint64_t process_task_group = 0;
+bool registering_process = false;
+
+int __register_process()
+{
+    IPC_Register_Process msg = {
+        .type = IPC_Register_Process_NUM,
+        .flags = 0,
+        .task_group_id = process_task_group, 
+        .reply_port = worker_port,
+        .signal_port = worker_port,
+        .worker_task_id = TASK_ID_SELF,
+    };
+
+    result_t r = send_message_port(processd_port, sizeof(msg), &msg);
+    if (r != SUCCESS) {
+        return -1;
+    }
+
+    registering_process = true;
+
+    return 0;
+}
+
 void worker_main()
 {
     worker_thread = __get_tls();
+
+    syscall_r sys_result = create_task_group();
+    if (sys_result.result != SUCCESS) {
+        fprintf(stderr, "pmOS libC: Failed to create task group\n");
+        _syscall_exit(1);
+    }
+    process_task_group = sys_result.value;
 
     ports_request_t new_port = create_port(TASK_ID_SELF, 0);
     if (new_port.result != SUCCESS) {
@@ -27,6 +62,12 @@ void worker_main()
         _syscall_exit(1);
     }
     worker_port = new_port.port;
+
+    result_t r = request_named_port(processd_port_name, strlen(processd_port_name), worker_port, 0);
+    if (r != SUCCESS) {
+        fprintf(stderr, "pmOS libC: Failed to request processd port. Result: %li\n", r);
+        _syscall_exit(1);
+    }
 
     // Run main function
     pthread_t main_thread;
@@ -68,6 +109,27 @@ void worker_main()
                     abnormal_termination = exit_msg->exit_type == IPC_EXIT_TYPE_ABNORMAL;
                     running = false;
                 }
+                break;
+            }
+            case IPC_Kernel_Named_Port_Notification_NUM: {
+                IPC_Kernel_Named_Port_Notification *notification = (IPC_Kernel_Named_Port_Notification *)ipc_msg;
+                size_t len = msg.size - sizeof(IPC_Kernel_Named_Port_Notification);
+                if (len == strlen(processd_port_name) && strncmp(notification->port_name, processd_port_name, len) == 0) {
+                    processd_port = notification->port_num;
+                    if (__register_process() < 0) {
+                        fprintf(stderr, "pmOS libC: Failed to register process\n");
+                        running = false;
+                    }
+                }
+                break;
+            }
+            case IPC_Register_Process_Reply_NUM: {
+                IPC_Register_Process_Reply *reply = (IPC_Register_Process_Reply *)ipc_msg;
+                if (reply->result != 0) {
+                    fprintf(stderr, "pmOS libC: Failed to register process\n");
+                    running = false;
+                }
+                registering_process = false;
                 break;
             }
             default:

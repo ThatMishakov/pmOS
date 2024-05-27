@@ -76,6 +76,9 @@ typedef unsigned long sig_atomic_t;
 #define SIGXCPU   26
 #define SIGXFSZ   27
 #define SIGABRT   28
+#define SIGWINCH  29
+#define SIGPWR    30
+#define SIGINFO   31
 
 #define SIG_HOLD (void (*)(int) 3)
 
@@ -197,7 +200,7 @@ void (*bsd_signal(int, void (*)(int)))(int);
 int kill(pid_t, int);
 int killpg(pid_t, int);
 int pthread_kill(pthread_t, int);
-int pthread_sigmask(int, const sigset_t *, sigset_t *);
+int pthread_sigmask(int, const sigset_t * _RESTRICT, sigset_t * _RESTRICT);
 int raise(int);
 int sigaction(int, const struct sigaction *, struct sigaction *);
 int sigaddset(sigset_t *, int);
@@ -212,7 +215,7 @@ int sigismember(const sigset_t *, int);
 void (*signal(int, void (*)(int)))(int);
 int sigpause(int);
 int sigpending(sigset_t *);
-int sigprocmask(int, const sigset_t *, sigset_t *);
+int sigprocmask(int, const sigset_t * _RESTRICT, sigset_t * _RESTRICT);
 int sigqueue(pid_t, int, const union sigval);
 int sigrelse(int);
 void (*sigset(int, void (*)(int)))(int);

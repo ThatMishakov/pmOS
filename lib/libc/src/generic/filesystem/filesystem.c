@@ -69,6 +69,25 @@ __attribute__((visibility("hidden"))) const struct Filesystem_Adaptor __file_ada
 // setting errno to the appropriate code.
 struct Filesystem_Data *init_filesystem();
 
+static int ensure_fs_initialization()
+{
+    // Double-checked locking to initialize fs_data if it is NULL
+    if (fs_data == NULL) {
+        pthread_spin_lock(&fs_data_lock);
+        if (fs_data == NULL) {
+            struct Filesystem_Data *new_data = init_filesystem();
+            if (new_data == NULL) {
+                pthread_spin_unlock(&fs_data_lock);
+                return -1;
+            }
+            fs_data = new_data;
+        }
+        pthread_spin_unlock(&fs_data_lock);
+    }
+
+    return 0;
+}
+
 // Reserves a file descriptor and returns its id. Returns -1 on error.
 static int64_t reserve_descriptors(struct Filesystem_Data *fs_data, size_t count)
 {
@@ -161,19 +180,8 @@ pmos_port_t get_filesytem_port()
 
 int __share_fs_data(uint64_t tid)
 {
-    // Double-checked locking to initialize fs_data if it is NULL
-    if (fs_data == NULL) {
-        pthread_spin_lock(&fs_data_lock);
-        if (fs_data == NULL) {
-            struct Filesystem_Data *new_data = init_filesystem();
-            if (new_data == NULL) {
-                pthread_spin_unlock(&fs_data_lock);
-                return -1;
-            }
-            fs_data = new_data;
-        }
-        pthread_spin_unlock(&fs_data_lock);
-    }
+    if (ensure_fs_initialization() < 0) 
+        return -1;
 
     result_t r = add_task_to_group(tid, fs_data->fs_consumer_id);
     if (r != SUCCESS) {
@@ -186,19 +194,8 @@ int __share_fs_data(uint64_t tid)
 
 int open(const char *path, int flags)
 {
-    // Double-checked locking to initialize fs_data if it is NULL
-    if (fs_data == NULL) {
-        pthread_spin_lock(&fs_data_lock);
-        if (fs_data == NULL) {
-            struct Filesystem_Data *new_data = init_filesystem();
-            if (new_data == NULL) {
-                pthread_spin_unlock(&fs_data_lock);
-                return -1;
-            }
-            fs_data = new_data;
-        }
-        pthread_spin_unlock(&fs_data_lock);
-    }
+    if (ensure_fs_initialization() < 0) 
+        return -1;
 
     int result = reserve_descriptor(fs_data);
     if (result < 0) {
@@ -254,18 +251,8 @@ int open(const char *path, int flags)
 
 int pipe(int pipefd[2])
 {
-    // Double-checked locking to initialize fs_data if it is NULL
-    if (fs_data == NULL) {
-        pthread_spin_lock(&fs_data_lock);
-        if (fs_data == NULL) {
-            struct Filesystem_Data *new_data = init_filesystem();
-            if (new_data == NULL) {
-                pthread_spin_unlock(&fs_data_lock);
-                return -1;
-            }
-            fs_data = new_data;
-        }
-        pthread_spin_unlock(&fs_data_lock);
+    if (ensure_fs_initialization() < 0) {
+        return -1;
     }
 
     int result = reserve_descriptors(fs_data, 2);
@@ -327,19 +314,8 @@ int stat(const char *restrict name, struct stat *restrict stat)
     struct IPC_Stat_Reply *reply = NULL;
     int result_code              = 0;
 
-    // Double-checked locking to initialize fs_data if it is NULL
-    if (fs_data == NULL) {
-        pthread_spin_lock(&fs_data_lock);
-        if (fs_data == NULL) {
-            struct Filesystem_Data *new_data = init_filesystem();
-            if (new_data == NULL) {
-                pthread_spin_unlock(&fs_data_lock);
-                return -1;
-            }
-            fs_data = new_data;
-        }
-        pthread_spin_unlock(&fs_data_lock);
-    }
+    if (ensure_fs_initialization() < 0) 
+        return -1;
 
     pmos_port_t reply_port = __get_fs_cmd_reply_port();
     if (reply_port == INVALID_PORT) {
@@ -400,13 +376,10 @@ finish:
     return result_code;
 }
 
-ssize_t __read_internal(long int fd, void *buf, size_t count, bool should_seek, size_t _offset)
+ssize_t __read_internal(long int fd, void *buf, size_t c, bool should_seek, size_t _offset)
 {
-    // Double-checked locking to initialize fs_data if it is NULL
-    if (fs_data == NULL) {
-        errno = EBADF; // Bad file descriptor
+    if (ensure_fs_initialization() < 0) 
         return -1;
-    }
 
     // Lock the file descriptor to ensure thread-safety
     pthread_spin_lock(&fs_data->lock);
@@ -433,7 +406,7 @@ ssize_t __read_internal(long int fd, void *buf, size_t count, bool should_seek, 
     size_t offset    = should_seek ? file_desc.offset : _offset;
     bool is_seekable = file_desc.adaptor->isseekable(&file_desc.data, fs_data->fs_consumer_id);
 
-    count = file_desc.adaptor->read(&file_desc.data, fs_data->fs_consumer_id, buf, count, offset);
+    ssize_t count = file_desc.adaptor->read(&file_desc.data, fs_data->fs_consumer_id, buf, c, offset);
 
     if (count < 0)
         // Error
@@ -632,10 +605,8 @@ int __close_internal(long int filedes)
         return -1;
     }
 
-    if (fs_data == NULL) {
-        errno = EBADF;
+    if (ensure_fs_initialization() < 0) 
         return -1;
-    }
 
     int result = pthread_spin_lock(&fs_data->lock);
     if (result != SUCCESS) {
@@ -682,18 +653,8 @@ int dup2(int oldfd, int newfd)
         return newfd;
     }
 
-    if (fs_data == NULL) {
-        pthread_spin_lock(&fs_data_lock);
-        if (fs_data == NULL) {
-            struct Filesystem_Data *new_fs_data = init_filesystem();
-            if (new_fs_data == NULL) {
-                pthread_spin_unlock(&fs_data_lock);
-                return -1;
-            }
-            fs_data = new_fs_data;
-        }
-        pthread_spin_unlock(&fs_data_lock);
-    }
+    if (ensure_fs_initialization() < 0) 
+        return -1;
 
     int result                                   = newfd;
     union File_Data new_data                     = {};
@@ -776,18 +737,8 @@ int dup(int fd)
         return -1;
     }
 
-    if (fs_data == NULL) {
-        pthread_spin_lock(&fs_data_lock);
-        if (fs_data == NULL) {
-            struct Filesystem_Data *new_fs_data = init_filesystem();
-            if (new_fs_data == NULL) {
-                pthread_spin_unlock(&fs_data_lock);
-                return -1;
-            }
-            fs_data = new_fs_data;
-        }
-        pthread_spin_unlock(&fs_data_lock);
-    }
+    if (ensure_fs_initialization() < 0) 
+        return -1;
 
     int result                               = -1;
     union File_Data new_data                 = {};
@@ -866,13 +817,55 @@ int dup(int fd)
 
 int close(int filedes) { return __close_internal(filedes); }
 
-off_t __lseek_internal(long int fd, off_t offset, int whence)
+int isatty(int fd)
 {
-    if (fs_data == NULL) {
-        // Filesystem is not initialized; No files opened
+    if (ensure_fs_initialization() < 0) 
+        return -1;
+
+    pthread_spin_lock(&fs_data->lock);
+    if (fd < 0 || fd >= fs_data->capacity) {
+        errno = EBADF;
+        return 0;
+    }
+
+    struct File_Descriptor file_desc = fs_data->descriptors_vector[fd];
+    pthread_spin_unlock(&fs_data->lock);
+
+    if (!file_desc.used) {
+        errno = EBADF;
+        return 0;
+    }
+
+    return file_desc.adaptor->isatty(&file_desc.data, fs_data->fs_consumer_id);
+}
+
+int fstat(int fd, struct stat *stat)
+{
+    if (ensure_fs_initialization() < 0) 
+        return -1;
+
+    pthread_spin_lock(&fs_data->lock);
+    if (fd < 0 || fd >= fs_data->capacity) {
         errno = EBADF;
         return -1;
     }
+
+    struct File_Descriptor file_desc = fs_data->descriptors_vector[fd];
+    pthread_spin_unlock(&fs_data->lock);
+
+    if (!file_desc.used) {
+        errno = EBADF;
+        return -1;
+    }
+
+    return file_desc.adaptor->fstat(&file_desc.data, fs_data->fs_consumer_id, stat);
+}
+
+
+off_t __lseek_internal(long int fd, off_t offset, int whence)
+{
+    if (ensure_fs_initialization() < 0) 
+        return -1;
 
     int result = pthread_spin_lock(&fs_data->lock);
     if (result != SUCCESS) {
@@ -1110,7 +1103,7 @@ void __libc_fs_unlock_post_fork()
         pthread_spin_unlock(&fs_data->lock);
 }
 
-ssize_t __write_internal(long int fd, const void *buf, size_t count, size_t _offset,
+ssize_t __write_internal(long int fd, const void *buf, size_t c, size_t _offset,
                          bool inc_offset)
 {
     // Double-checked locking to initialize fs_data if it is NULL
@@ -1152,7 +1145,7 @@ ssize_t __write_internal(long int fd, const void *buf, size_t count, size_t _off
     bool seek        = is_seekable && inc_offset;
     union File_Data data_copy = file_desc.data;
 
-    count = file_desc.adaptor->write(&file_desc.data, fs_data->fs_consumer_id, buf, count, _offset);
+    ssize_t count = file_desc.adaptor->write(&file_desc.data, fs_data->fs_consumer_id, buf, c, _offset);
 
     bool changed = memcmp(&data_copy, &file_desc.data, sizeof(union File_Data)) != 0;
 

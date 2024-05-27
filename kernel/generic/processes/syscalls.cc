@@ -534,7 +534,7 @@ void syscall_complete_interrupt(u64 intno, u64, u64, u64, u64, u64)
 
 void syscall_name_port(u64 portnum, u64 /*const char* */ name, u64 length, u64 flags, u64, u64)
 {
-    const task_ptr &task = get_current_task();
+    const task_ptr task = get_current_task();
 
     auto str = klib::string::fill_from_user(reinterpret_cast<const char *>(name), length);
     if (not str.first) {
@@ -972,12 +972,12 @@ void syscall_add_to_task_group(u64 pid, u64 group, u64, u64, u64, u64)
     group_ptr->atomic_register_task(task);
 }
 
-void syscall_set_notify_mask(u64 task_group, u64 port_id, u64 new_mask, u64, u64, u64)
+void syscall_set_notify_mask(u64 task_group, u64 port_id, u64 new_mask, u64 flags, u64, u64)
 {
     const auto group = TaskGroup::get_task_group_throw(task_group);
     const auto port  = Port::atomic_get_port_throw(port_id);
 
-    u64 old_mask = group->atomic_change_notifier_mask(port, new_mask);
+    u64 old_mask = group->atomic_change_notifier_mask(port, new_mask, flags);
 
     syscall_ret_low(get_current_task())  = SUCCESS;
     syscall_ret_high(get_current_task()) = old_mask;

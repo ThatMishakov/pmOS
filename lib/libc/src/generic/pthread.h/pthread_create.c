@@ -46,6 +46,8 @@ extern void __pthread_entry_point(void *(*start_routine)(void *), void *arg)
 // Defined in libc/src/filesystem.c
 extern int __share_fs_data(uint64_t tid);
 
+extern uint64_t process_task_group;
+
 int pthread_list_spinlock = 0;
 // Worker thread is also the list head
 extern struct uthread *worker_thread;
@@ -105,6 +107,16 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
     worker_thread->prev       = u;
 
     pthread_spin_unlock(&pthread_list_spinlock);
+
+    // Add to the process task group
+    result_t add_result = add_task_to_group(u->thread_task_id, process_task_group);
+    if (add_result != SUCCESS) {
+        syscall_kill_task(u->thread_task_id);
+        release_region(TASK_ID_SELF, stack.virt_addr);
+        __release_tls(u);
+        errno = -add_result;
+        return -1;
+    }
 
     // Assign a page table
     page_table_req_ret_t thread_table =

@@ -7,15 +7,15 @@ export PATH := $(ROOTDIR)/bin/cross/bin:$(PATH)
 # It is highly recommended to use a custom built cross toolchain to build a kernel.
 # We are only using "cc" as a placeholder here. It may work by using
 # the host system's toolchain, but this is not guaranteed.
-CC = x86_64-pmos-gcc
-CPP = x86_64-pmos-gcc
-CXX = x86_64-pmos-g++
+CC = riscv64-pmos-gcc
+CPP = riscv64-pmos-gcc
+CXX = riscv64-pmos-g++
 
 # User controllable CFLAGS.
 USERCFLAGS = -Wall -Wextra -O2 -pipe
 
 CFLAGS = -std=c17
-CXXFLAGS = -std=c++17
+CXXFLAGS = -std=c++20
 CPPFLAGS = $(INTERNALCFLAGS) $(USERCFLAGS) -MMD -MP
 ASMFLAGS = -I$(INCLUDEDIR)
 LDFLAGS = $(INTERNALLDFLAGS)
@@ -28,9 +28,7 @@ INTERNALLDFLAGS :=     \
 # Internal C flags that should not be changed by the user.
 INTERNALCFLAGS  :=       \
 	-static \
-	-fPIE \
-	-fno-exceptions -fno-rtti
- 
+	-fPIE 
 # Use find to glob all *.c files in the directory and extract the object names.
 CCFILES := $(shell find ./ -type f -name '*.cc')
 CFILES := $(shell find ./ -type f -name '*.c')
@@ -40,7 +38,7 @@ DEP    := $(OBJ:.o=.d)
 all: $(EXEC)
 
 $(EXEC): $(OBJ) libc
-	$(CC) $(LDFLAGS) $(OBJ) -o $@
+	$(CXX) $(LDFLAGS) $(OBJ) -o $@
 	
 clean:
 	$(RM) $(EXEC) $(OBJ)

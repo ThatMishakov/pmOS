@@ -108,7 +108,7 @@ public:
      * @param mask New mask
      * @return u64 Old mask
      */
-    u64 atomic_change_notifier_mask(const klib::shared_ptr<Port> &port, u64 mask);
+    u64 atomic_change_notifier_mask(const klib::shared_ptr<Port> &port, u64 mask, u64 flags);
 
     /**
      * @brief Gets the notification mask of the port. If the mask is 0, then the port is not in the

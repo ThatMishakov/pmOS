@@ -981,6 +981,51 @@ typedef struct IPC_Exit {
     void *exit_code;
 } IPC_Exit;
 
+#define IPC_Refresh_Signals_NUM 0x170
+typedef struct IPC_Refresh_Signals {
+    /// Message type (must be IPC_Updated_Signals_NUM)
+    uint32_t type;
+
+    /// Flags
+    uint32_t flags;
+} IPC_Refresh_Signals;
+
+#define IPC_Register_Process_NUM 0x180
+typedef struct IPC_Register_Process {
+    /// Message type (must be IPC_Register_Process_NUM)
+    uint32_t type;
+
+    /// Flags
+    uint32_t flags;
+
+    /// Port for the reply
+    pmos_port_t reply_port;
+
+    /// Port for signals and notifications
+    pmos_port_t signal_port;
+
+    /// Task group ID
+    uint64_t task_group_id;
+
+    /// Worker task ID
+    uint64_t worker_task_id;
+} IPC_Register_Process;
+
+#define IPC_Register_Process_Reply_NUM 0x181
+typedef struct IPC_Register_Process_Reply {
+    /// Message type (must be IPC_Register_Process_Reply_NUM)
+    uint32_t type;
+
+    /// Flags
+    uint32_t flags;
+
+    /// Result code
+    int64_t result;
+
+    /// PID
+    uint64_t pid;
+} IPC_Register_Process_Reply;
+
 #if defined(__cplusplus)
 } /* extern "C" */
 #endif

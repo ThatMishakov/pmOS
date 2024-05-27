@@ -181,9 +181,9 @@ result_t syscall_start_process(uint64_t pid, uint64_t entry, uint64_t arg1, uint
 }
 
 syscall_r set_task_group_notifier_mask(uint64_t task_group_id, pmos_port_t port_id,
-                                       uint64_t new_mask)
+                                       uint64_t new_mask, uint64_t flags)
 {
-    return pmos_syscall(SYSCALL_SET_NOTIFY_MASK, task_group_id, port_id, new_mask);
+    return pmos_syscall(SYSCALL_SET_NOTIFY_MASK, task_group_id, port_id, new_mask, flags);
 }
 
 int _syscall_exit(unsigned long status1, unsigned long status2)
@@ -221,4 +221,9 @@ syscall_r pmos_get_time(uint64_t mode)
 result_t syscall_kill_task(uint64_t tid)
 {
     return pmos_syscall(SYSCALL_KILL_TASK, tid).result;
+}
+
+result_t request_named_port(const char *name, size_t name_length, pmos_port_t reply_port, uint64_t flags)
+{
+    return pmos_syscall(SYSCALL_REQUEST_NAMED_PORT, name, name_length, reply_port, flags).result;
 }

@@ -12,7 +12,7 @@ void register_pipe_with_consumer(uint64_t pipe_port, uint64_t consumer_id)
 
     if (it == fs_consumers.end()) {
         syscall_r r =
-            set_task_group_notifier_mask(consumer_id, main_port, NOTIFICATION_MASK_DESTROYED);
+            set_task_group_notifier_mask(consumer_id, main_port, NOTIFICATION_MASK_DESTROYED, 0);
         if (r.result != SUCCESS)
             throw std::system_error(-r.result, std::system_category());
 
@@ -33,7 +33,7 @@ void unregister_pipe_with_consumer(uint64_t pipe_port, uint64_t consumer_id)
     c.pipe_ports.erase(pipe_port);
 
     if (c.pipe_ports.empty()) {
-        set_task_group_notifier_mask(consumer_id, main_port, 0);
+        set_task_group_notifier_mask(consumer_id, main_port, 0, 0);
 
         fs_consumers.erase(it);
     }

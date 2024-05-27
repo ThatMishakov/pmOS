@@ -157,6 +157,8 @@ void TaskGroup::atomic_remove_task(const klib::shared_ptr<TaskDescriptor> &task)
     Auto_Lock_Scope lock(task->task_groups_lock);
     task->task_groups.erase(shared_from_this());
 
+    // TODO: It looks like this doesn't work
+
     {
         Auto_Lock_Scope lock(notifier_ports_lock);
         for (const auto &p: notifier_ports) {
@@ -181,7 +183,7 @@ void TaskGroup::atomic_remove_task(const klib::shared_ptr<TaskDescriptor> &task)
     }
 }
 
-u64 TaskGroup::atomic_change_notifier_mask(const klib::shared_ptr<Port> &port, u64 mask)
+u64 TaskGroup::atomic_change_notifier_mask(const klib::shared_ptr<Port> &port, u64 mask, u64 flags)
 {
     u64 old_mask      = 0;
     const u64 port_id = port->portno;
@@ -220,5 +222,27 @@ u64 TaskGroup::atomic_change_notifier_mask(const klib::shared_ptr<Port> &port, u
         }
     }
 
+    if (flags & 0x01) {
+
+        Auto_Lock_Scope tasks_l(tasks_lock);
+
+        for (const auto &t: tasks) {
+            auto task = t.second.lock();
+            if (not task)
+                continue;
+            IPC_Kernel_Group_Task_Changed msg = {
+                .type          = IPC_Kernel_Group_Task_Changed_NUM,
+                .flags         = 0,
+                .event_type    = Event_Group_Task_Added_NUM,
+                .task_group_id = id,
+                .task_id       = task->task_id,
+            };
+
+            try {
+                port->atomic_send_from_system(reinterpret_cast<char *>(&msg), sizeof(msg));
+            } catch (...) {
+            }
+        }
+    }
     return old_mask;
 }

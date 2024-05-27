@@ -144,7 +144,8 @@
         "helpers.h": "c",
         "unistd.h": "c",
         "assert.h": "c",
-        "event.h": "c"
+        "event.h": "c",
+        "stat.h": "c"
     },
     "cmake.configureOnOpen": false
 }

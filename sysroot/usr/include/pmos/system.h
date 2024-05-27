@@ -294,6 +294,8 @@ syscall_r is_task_group_member(uint64_t task_id, uint64_t group_id);
     /// Mask bit for when a task is added to the task group
     #define NOTIFICATION_MASK_ON_ADD_TASK 0x03
 
+    /// Flag to notify for the existing tasks
+    #define NOTIFY_FOR_EXISTING_TASKS 0x01
 /**
  * @brief Sets the notification mask for the given task group
  *
@@ -321,11 +323,13 @@ syscall_r is_task_group_member(uint64_t task_id, uint64_t group_id);
  * @param port_id ID of the port where the notifications must be sent
  * @param new_mask New mask of the notifier, which replaces the old one. 0 removes the port from the
  * watchers list.
+ * @param flags Flags for the operation. Can take NOTIFY_FOR_EXISTING_TASKS to send the notifications
+ * for the tasks that are already in the group.
  * @return syscall_r result. If the result is SUCCESS, the value contains the old mask. Otherwise,
  * the value is undefined.
  */
 syscall_r set_task_group_notifier_mask(uint64_t task_group_id, pmos_port_t port_id,
-                                       uint64_t new_mask);
+                                       uint64_t new_mask, uint64_t flags);
 
 /**
  * @brief Yields the CPU to the next task
@@ -347,6 +351,8 @@ result_t pmos_yield();
  * @return syscall_r result of the operation. If the result is SUCCESS, the value contains the time
 */
 syscall_r pmos_get_time(uint64_t mode);
+
+result_t request_named_port(const char *name, size_t name_length, pmos_port_t reply_port, uint64_t flags);
 
 #endif
 
