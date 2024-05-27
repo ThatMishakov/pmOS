@@ -1035,6 +1035,7 @@ typedef struct IPC_PID_For_Task {
     /// Flags
     uint32_t flags;
     #define PID_FOR_TASK_WAIT_TO_APPEAR 0x01
+    #define PID_FOR_TASK_PARENT_PID    0x02
 
     /// Port for the reply
     pmos_port_t reply_port;

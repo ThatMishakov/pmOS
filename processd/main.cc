@@ -36,6 +36,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <variant>
 #include <vector>
 
 void send_message(pmos_port_t port, const auto &data)
@@ -59,7 +60,12 @@ struct Task {
     uint64_t task_id        = 0;
     bool present            = false;
     Process *parent_process = nullptr;
-    std::unordered_set<pmos_port_t> waiting_ports;
+
+    struct PIDRequest {
+        pmos_port_t reply_port;
+        bool parent_pid;
+    };
+    std::vector<PIDRequest> waiting_ports;
 
     struct SetGroupRequest {
         pmos_port_t reply_port;
@@ -78,7 +84,7 @@ struct Process {
     Group *parent_group = nullptr;
 
     std::unordered_set<Process *> children;
-    Process *parent = nullptr;
+    Process *parent  = nullptr;
     pid_t parent_pid = 1; // Save the parent pid for when the parent is destroyed
 
     bool is_group_leader() const;
@@ -100,10 +106,10 @@ void erase_process_from_group(Process *p)
     group->processes.erase(p);
     if (p->is_group_leader()) {
         group->leader = nullptr;
-        
+
         // TODO: Send signals to the group, etc.
     }
-    
+
     if (group->processes.empty()) {
         groups.erase(group->group_id);
     }
@@ -311,17 +317,18 @@ void register_process(IPC_Register_Process *msg, uint64_t sender)
 
                 for (auto port: it->second->waiting_ports) {
                     try {
+                        pid_t pid = port.parent_pid ? pp->parent_pid : pp->process_id;
                         IPC_PID_For_Task_Reply reply;
                         reply.type   = IPC_PID_For_Task_Reply_NUM;
                         reply.flags  = 0;
                         reply.result = 0;
-                        reply.pid    = pp->process_id;
+                        reply.pid    = pid;
 
-                        send_message(port, reply);
+                        send_message(port.reply_port, reply);
                     } catch (std::system_error &e) {
                         printf(
                             "processd: Error %d sending message to port %lu for waiting task %lu\n",
-                            e.code().value(), port, it->second->task_id);
+                            e.code().value(), port.reply_port, it->second->task_id);
                     }
                 }
                 it->second->waiting_ports.clear();
@@ -412,19 +419,25 @@ void add_task_to_process(uint64_t task_group_id, uint64_t task_id)
 
             for (auto port: it2->second->waiting_ports) {
                 try {
+                    pid_t pid = port.parent_pid ? it->second->parent_pid : it->second->process_id;
                     IPC_PID_For_Task_Reply reply;
                     reply.type   = IPC_PID_For_Task_Reply_NUM;
                     reply.flags  = 0;
                     reply.result = 0;
-                    reply.pid    = it->second->process_id;
+                    reply.pid    = pid;
 
-                    send_message(port, reply);
+                    send_message(port.reply_port, reply);
                 } catch (std::system_error &e) {
                     printf("processd: Error %d sending message to port %lu for waiting task %lu\n",
-                           e.code().value(), port, it2->second->task_id);
+                           e.code().value(), port.reply_port, it2->second->task_id);
                 }
             }
             it2->second->waiting_ports.clear();
+
+            for (auto &req: it2->second->set_group_requests) {
+                process_set_group(req, it2->second.get());
+            }
+            it2->second->set_group_requests.clear();
         } else if (it2->second->parent_process != it->second) {
             printf("processd: Task %lu already belongs to another process\n", task_id);
         }
@@ -446,7 +459,7 @@ void pid_for_task(IPC_PID_For_Task *m, uint64_t sender_task_id)
             task->present  = false;
             tasks[task_id] = std::move(task);
 
-            tp->waiting_ports.insert(m->reply_port);
+            tp->waiting_ports.push_back({m->reply_port, !!(m->flags & PID_FOR_TASK_PARENT_PID)});
         } else {
             IPC_PID_For_Task_Reply reply;
             reply.type   = IPC_PID_For_Task_Reply_NUM;
@@ -458,15 +471,18 @@ void pid_for_task(IPC_PID_For_Task *m, uint64_t sender_task_id)
         }
     } else {
         if (it->second->present) {
+            auto task = it->second.get();
+            pid_t pid = (m->flags & PID_FOR_TASK_PARENT_PID) ? task->parent_process->parent_pid
+                                                             : task->parent_process->process_id;
             IPC_PID_For_Task_Reply reply;
             reply.type   = IPC_PID_For_Task_Reply_NUM;
             reply.flags  = 0;
             reply.result = 0;
-            reply.pid    = it->second->parent_process->process_id;
+            reply.pid    = pid;
 
             send_message(m->reply_port, reply);
         } else {
-            it->second->waiting_ports.insert(m->reply_port);
+            it->second->waiting_ports.push_back({m->reply_port, !!(m->flags & PID_FOR_TASK_PARENT_PID)});
         }
     }
 }
