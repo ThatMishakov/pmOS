@@ -1036,6 +1036,7 @@ typedef struct IPC_PID_For_Task {
     uint32_t flags;
     #define PID_FOR_TASK_WAIT_TO_APPEAR 0x01
     #define PID_FOR_TASK_PARENT_PID    0x02
+    #define PID_FOR_TASK_GROUP_ID      0x04
 
     /// Port for the reply
     pmos_port_t reply_port;
@@ -1091,6 +1092,69 @@ typedef struct IPC_Set_Process_Group_Reply {
     /// Group ID
     int64_t group_id;
 } IPC_Set_Process_Group_Reply;
+
+#define IPC_Kill_NUM 0x186
+typedef struct IPC_Kill {
+    /// Message type (must be IPC_Kill_NUM)
+    uint32_t type;
+
+    /// Flags
+    uint32_t flags;
+
+    /// Port for the reply
+    pmos_port_t reply_port;
+
+    /// PID
+    int64_t pid;
+
+    /// Signal
+    int64_t signal;
+} IPC_Kill;
+
+#define IPC_Kill_Reply_NUM 0x187
+typedef struct IPC_Kill_Reply {
+    /// Message type (must be IPC_Kill_Reply_NUM)
+    uint32_t type;
+
+    /// Flags
+    uint32_t flags;
+
+    /// Result code
+    int64_t result;
+} IPC_Kill_Reply;
+
+// Message sent to the signal thread (either with raise() or from the processd
+// server) to raise a signal, either globally or to a specific thread
+#define IPC_Raise_Signal_NUM 0x188
+typedef struct IPC_Raise_Signal {
+    /// Message type (must be IPC_Raise_Signal_NUM)
+    uint32_t type;
+
+    /// Flags
+    uint32_t flags;
+    #define RAISE_SIGNAL_DONT_REPLY 0x01
+
+    /// Port for the reply
+    pmos_port_t reply_port;
+
+    /// Signal number
+    int64_t signal;
+
+    /// TID
+    int64_t tid;
+} IPC_Raise_Signal;
+
+#define IPC_Raise_Signal_Reply_NUM 0x189
+typedef struct IPC_Raise_Signal_Reply {
+    /// Message type (must be IPC_Raise_Signal_Reply_NUM)
+    uint32_t type;
+
+    /// Flags
+    uint32_t flags;
+
+    /// Result code
+    int64_t result;
+} IPC_Raise_Signal_Reply;
 
 #if defined(__cplusplus)
 } /* extern "C" */
