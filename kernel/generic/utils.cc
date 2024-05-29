@@ -31,7 +31,6 @@
 #include "types.hh"
 
 #include <kern_logger/kern_logger.hh>
-#include <kernel/errors.h>
 #include <lib/string.hh>
 #include <libunwind.h>
 #include <memory/paging.hh>
@@ -39,6 +38,7 @@
 #include <sched/sched.hh>
 #include <stdarg.h>
 #include <stdio.h>
+#include <errno.h>
 
 void int_to_string(long int n, u8 base, char *str, int &length)
 {
@@ -179,7 +179,7 @@ bool prepare_user_buff_rd(const char *buff, size_t size)
 
     if (addr_start > current_task->page_table->user_addr_max() or
         end > current_task->page_table->user_addr_max() or addr_start > end)
-        throw(Kern_Exception(ERROR_OUT_OF_RANGE, "user parameter is out of range"));
+        throw(Kern_Exception(-EFAULT, "user parameter is out of range"));
 
     try {
         current_task->request_repeat_syscall();
@@ -214,7 +214,7 @@ bool prepare_user_buff_wr(char *buff, size_t size)
     u64 kern_addr_start                           = current_task->page_table->user_addr_max();
 
     if (addr_start > kern_addr_start or end > kern_addr_start or addr_start > end)
-        throw(Kern_Exception(ERROR_OUT_OF_RANGE, "prepare_user_buff_wr outside userspace"));
+        throw(Kern_Exception(-EFAULT, "prepare_user_buff_wr outside userspace"));
 
     try {
         current_task->request_repeat_syscall();

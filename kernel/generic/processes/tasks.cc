@@ -29,7 +29,6 @@
 #include "tasks.hh"
 
 #include "idle.hh"
-#include "kernel/errors.h"
 
 #include <assert.h>
 #include <exceptions.hh>
@@ -199,10 +198,10 @@ void TaskDescriptor::create_new_page_table()
     Auto_Lock_Scope scope_lock(sched_lock);
 
     if (status != TaskStatus::TASK_UNINIT)
-        throw Kern_Exception(ERROR_PROCESS_INITED, "Process is already inited");
+        throw Kern_Exception(-EEXIST, "Process is already inited");
 
     if (page_table)
-        throw Kern_Exception(ERROR_HAS_PAGE_TABLE, "Process already has a page table");
+        throw Kern_Exception(-EEXIST, "Process already has a page table");
 
     klib::shared_ptr<Arch_Page_Table> table = Arch_Page_Table::create_empty();
 
@@ -214,10 +213,10 @@ void TaskDescriptor::create_new_page_table()
 void TaskDescriptor::register_page_table(klib::shared_ptr<Arch_Page_Table> table)
 {
     if (status != TaskStatus::TASK_UNINIT)
-        throw Kern_Exception(ERROR_PROCESS_INITED, "Process is already inited");
+        throw Kern_Exception(-EEXIST, "Process is already inited");
 
     if (page_table)
-        throw Kern_Exception(ERROR_HAS_PAGE_TABLE, "Process already has a page table");
+        throw Kern_Exception(-EEXIST, "Process already has a page table");
 
     Auto_Lock_Scope page_table_lock(table->lock);
     table->owner_tasks.insert(weak_self);
@@ -237,10 +236,10 @@ bool TaskDescriptor::load_elf(klib::shared_ptr<Mem_Object> elf, klib::string nam
     Auto_Lock_Scope scope_lock(sched_lock);
 
     if (status != TaskStatus::TASK_UNINIT)
-        throw Kern_Exception(ERROR_PROCESS_INITED, "Process is already inited");
+        throw Kern_Exception(-EEXIST, "Process is already inited");
 
     if (page_table)
-        throw Kern_Exception(ERROR_NOT_IMPLEMENTED, "Process has a page table");
+        throw Kern_Exception(-EEXIST, "Process has a page table");
 
     ELF_64bit header;
     bool r = elf->read_to_kernel(0, (u8 *)&header, sizeof(ELF_64bit));
@@ -249,24 +248,24 @@ bool TaskDescriptor::load_elf(klib::shared_ptr<Mem_Object> elf, klib::string nam
         return false;
 
     if (header.magic != ELF_MAGIC)
-        throw Kern_Exception(ERROR_BAD_FORMAT, "Not an ELF file");
+        throw Kern_Exception(-ENOEXEC, "Not an ELF file");
 
     if (header.bitness != ELF_BITNESS)
-        throw Kern_Exception(ERROR_BAD_FORMAT, "Not a 64-bit ELF file");
+        throw Kern_Exception(-ENOEXEC, "Not a 64-bit ELF file");
 
     if (header.endianness != ELF_ENDIANNESS)
-        throw Kern_Exception(ERROR_BAD_FORMAT, "Wrong endianness ELF file");
+        throw Kern_Exception(-ENOEXEC, "Wrong endianness ELF file");
 
     if (header.type != ELF_EXEC)
-        throw Kern_Exception(ERROR_BAD_FORMAT, "Not an executable ELF file");
+        throw Kern_Exception(-ENOEXEC, "Not an executable ELF file");
 
     if (header.instr_set != ELF_INSTR_SET)
-        throw Kern_Exception(ERROR_BAD_FORMAT, "Wrong instruction set ELF file");
+        throw Kern_Exception(-ENOEXEC, "Wrong instruction set ELF file");
 
     // Parse program headers
     using phreader = ELF_PHeader_64;
     if (header.prog_header_size != sizeof(phreader))
-        throw Kern_Exception(ERROR_BAD_FORMAT, "Wrong program header size");
+        throw Kern_Exception(-ENOEXEC, "Wrong program header size");
 
     const u64 ph_count = header.program_header_entries;
     klib::vector<phreader> phs(ph_count);
@@ -286,7 +285,7 @@ bool TaskDescriptor::load_elf(klib::shared_ptr<Mem_Object> elf, klib::string nam
             continue;
 
         if ((ph.p_vaddr & 0xfff) != (ph.p_offset & 0xfff))
-            throw Kern_Exception(ERROR_BAD_FORMAT, "Unaligned segment");
+            throw Kern_Exception(-ENOEXEC, "Unaligned segment");
 
         if (!(ph.flags & ELF_FLAG_WRITABLE)) {
             // Direct map the region

@@ -39,8 +39,8 @@
  */
 
 #include <assert.h>
-#include <kernel/errors.h>
 #include <types.hh>
+#include <errno.h>
 
 struct VirtmemBoundaryTag {
     // The fist 2 members must match VirtMemFreelist, to construct a circular linked list.
@@ -285,7 +285,7 @@ template<int Q, int M> void *VirtMem<Q, M>::virtmem_alloc_aligned(u64 npages, u6
     // I don't anticipate this function to be used frequently, so just implement best fit for now
 
     // Make sure there are 2 boundary tags, as this operation might split a segment in 3
-    if (virtmem_ensure_tags(2) != SUCCESS)
+    if (virtmem_ensure_tags(2) != 0)
         return nullptr;
 
     const u64 alignup_mask = (1UL << alignment) - 1;
@@ -356,7 +356,7 @@ found:
 template<int Q, int M> void *VirtMem<Q, M>::virtmem_alloc(u64 npages, VirtmemAllocPolicy policy)
 {
     // Make sure there is 1 free boundary tag available, in case the segment needs to be split
-    if (virtmem_ensure_tags(1) != SUCCESS)
+    if (virtmem_ensure_tags(1) != 0)
         return nullptr;
 
     // Calculate the size of the segment in bytes

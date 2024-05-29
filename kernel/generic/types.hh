@@ -29,7 +29,7 @@
 #pragma once
 #include <kernel/types.h>
 
-using kresult_t = u64;
+using kresult_t = i64;
 
 template<class T> struct ReturnStr {
     kresult_t result;

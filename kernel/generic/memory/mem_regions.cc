@@ -35,7 +35,7 @@
 
 #include <assert.h>
 #include <kern_logger/kern_logger.hh>
-#include <kernel/errors.h>
+#include <errno.h>
 #include <pmos/ipc.h>
 #include <processes/tasks.hh>
 #include <sched/sched.hh>
@@ -44,7 +44,7 @@ u64 counter = 1;
 bool Generic_Mem_Region::on_page_fault(u64 access_type, u64 pagefault_addr)
 {
     if (not has_access(access_type))
-        throw Kern_Exception(ERROR_PROTECTION_VIOLATION,
+        throw Kern_Exception(-EFAULT,
                              "task has no permission to do the operation");
 
     if (owner->is_mapped(pagefault_addr)) {
@@ -60,7 +60,7 @@ bool Generic_Mem_Region::on_page_fault(u64 access_type, u64 pagefault_addr)
 bool Generic_Mem_Region::prepare_page(u64 access_mode, u64 page_addr)
 {
     if (not has_access(access_mode))
-        throw(Kern_Exception(ERROR_OUT_OF_RANGE, "process has no access to the page"));
+        throw(Kern_Exception(-EFAULT, "process has no access to the page"));
 
     if (owner->is_mapped(page_addr))
         return true;
@@ -238,14 +238,14 @@ bool Mem_Object_Reference::alloc_page(u64 ptr_addr)
 void Mem_Object_Reference::move_to(const klib::shared_ptr<Page_Table> &new_table, u64 base_addr,
                                    u64 new_access)
 {
-    throw Kern_Exception(ERROR_NOT_IMPLEMENTED,
+    throw Kern_Exception(-ENOSYS,
                          "move_to of Mem_Object_Reference was not yet implemented");
 }
 
 void Mem_Object_Reference::clone_to(const klib::shared_ptr<Page_Table> &new_table, u64 base_addr,
                                     u64 new_access)
 {
-    throw Kern_Exception(ERROR_NOT_IMPLEMENTED,
+    throw Kern_Exception(-ENOSYS,
                          "move_to of Mem_Object_Reference was not yet implemented");
 }
 
@@ -270,14 +270,14 @@ Mem_Object_Reference::Mem_Object_Reference(u64 start_addr, u64 size, klib::strin
       object_size_bytes(object_size_bytes), cow(copy_on_write)
 {
     if (not cow and start_offset_bytes != 0)
-        throw Kern_Exception(ERROR_OUT_OF_RANGE, "non-CoW region cannot have start offset");
+        throw Kern_Exception(-EINVAL, "non-CoW region cannot have start offset");
 
     if (not cow and object_size_bytes != size)
-        throw Kern_Exception(ERROR_OUT_OF_RANGE,
+        throw Kern_Exception(-EINVAL,
                              "non-CoW region cannot have size different from the object size");
 
     if ((object_offset_bytes & 0xfff) != (start_offset_bytes & 0xfff))
-        throw Kern_Exception(ERROR_OUT_OF_RANGE, "Object page-misaligned with region");
+        throw Kern_Exception(-EINVAL, "Object page-misaligned with region");
 };
 
 void Generic_Mem_Region::rcu_free() noexcept

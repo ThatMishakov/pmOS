@@ -30,7 +30,7 @@
 
 #include "paging.hh"
 
-#include <kernel/errors.h>
+#include <errno.h>
 #include <kernel/memory.h>
 #include <misc.hh>
 #include <utils.hh>
@@ -39,7 +39,7 @@ PFrameAllocator kernel_pframe_allocator;
 
 void *PFrameAllocator::alloc_page()
 {
-    u64 found_page = ERROR_OUT_OF_MEMORY;
+    u64 found_page = -ENOMEM;
     u64 page       = 0;
 
     Auto_Lock_Scope scope_lock(lock);
@@ -50,7 +50,7 @@ void *PFrameAllocator::alloc_page()
             for (int j = 0; j < 64; ++j) {
                 if (bitmap_read_bit(i * 64 + j, bitmap)) {
                     smallest   = i;
-                    found_page = SUCCESS;
+                    found_page = 0;
                     page       = i * 64 + j;
                     goto skip;
                 }
@@ -58,7 +58,7 @@ void *PFrameAllocator::alloc_page()
     }
 skip:
 
-    if (found_page != SUCCESS)
+    if (found_page != 0)
         throw(Kern_Exception(found_page, "alloc_page no free frames"));
 
     bitmap_mark_bit(page, false, bitmap);

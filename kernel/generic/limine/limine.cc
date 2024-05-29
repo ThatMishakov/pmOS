@@ -279,7 +279,7 @@ void construct_paging()
     serial_logger.printf("Using %i paging levels\n", riscv64_paging_levels);
 #endif
 
-    kresult_t result = SUCCESS;
+    kresult_t result = 0;
 
     const u64 kernel_start_virt = (u64)&_kernel_start & ~0xfff;
 
@@ -384,7 +384,7 @@ void construct_paging()
     const u64 rodata_virt   = kernel_start_virt + rodata_offset;
     args                    = {true, false, false, true, true, 0};
     map_pages(kernel_ptable_top, rodata_phys, rodata_virt, rodata_size, args);
-    if (result != SUCCESS)
+    if (result != 0)
         hcf();
 
     const u64 data_start  = (u64)(&_data_start) & ~0xfffUL;

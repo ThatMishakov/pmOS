@@ -42,6 +42,7 @@
 #include <registers.hh>
 #include <sched/defs.hh>
 #include <types.hh>
+#include <errno.h>
 
 #ifdef __x86_64__
     #include <cpus/sse.hh>
@@ -331,11 +332,11 @@ inline klib::shared_ptr<TaskDescriptor> get_task_throw(u64 pid)
         const auto ptr = t.lock();
 
         if (!ptr) {
-            throw Kern_Exception(ERROR_NO_SUCH_PROCESS, "Requested process does not exist");
+            throw Kern_Exception(-ESRCH, "Requested process does not exist");
         }
 
         return ptr;
     } catch (const std::out_of_range &) {
-        throw Kern_Exception(ERROR_NO_SUCH_PROCESS, "Requested process does not exist");
+        throw Kern_Exception(-ESRCH, "Requested process does not exist");
     }
 }

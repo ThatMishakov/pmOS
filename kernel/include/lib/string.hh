@@ -28,7 +28,6 @@
 
 #pragma once
 #include "initializer_list"
-#include "kernel/errors.h"
 #include "memory.hh"
 #include "pair.hh"
 #include "utility.hh"
@@ -37,6 +36,7 @@
 #include <stdint.h>
 #include <types.hh>
 #include <utils.hh>
+#include <errno.h>
 
 namespace klib
 {

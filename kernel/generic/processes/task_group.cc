@@ -94,7 +94,7 @@ void TaskGroup::atomic_register_task(klib::shared_ptr<TaskDescriptor> task)
     }
 
     if (not inserted)
-        throw Kern_Exception(ERROR_NAME_EXISTS, "Task already in group");
+        throw Kern_Exception(-EEXIST, "Task already in group");
 
     Auto_Lock_Scope lock(tasks_lock);
     try {
@@ -136,11 +136,11 @@ klib::shared_ptr<TaskGroup> TaskGroup::get_task_group_throw(u64 groupno)
     try {
         const auto group = global_map.at(groupno).lock();
         if (not group)
-            throw(Kern_Exception(ERROR_PORT_DOESNT_EXIST, "requested task group does not exist"));
+            throw(Kern_Exception(-ENOENT, "requested task group does not exist"));
 
         return group;
     } catch (const std::out_of_range &) {
-        throw(Kern_Exception(ERROR_PORT_DOESNT_EXIST, "requested task group does not exist"));
+        throw(Kern_Exception(-ENOENT, "requested task group does not exist"));
     }
 }
 
@@ -149,7 +149,7 @@ void TaskGroup::atomic_remove_task(const klib::shared_ptr<TaskDescriptor> &task)
     {
         Auto_Lock_Scope lock(tasks_lock);
         if (tasks.count(task->task_id) == 0)
-            throw Kern_Exception(ERROR_PORT_DOESNT_EXIST, "Task not in group");
+            throw Kern_Exception(-ENOENT, "Task not in group");
 
         tasks.erase(task->task_id);
     }

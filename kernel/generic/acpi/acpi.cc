@@ -29,11 +29,11 @@
 #include <acpi/acpi.h>
 #include <exceptions.hh>
 #include <kern_logger/kern_logger.hh>
-#include <kernel/errors.h>
 #include <lib/splay_tree_map.hh>
 #include <string.h>
 #include <types.hh>
 #include <utils.hh>
+#include <errno.h>
 
 struct ACPITable {
     u64 phys_addr;

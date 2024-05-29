@@ -32,9 +32,9 @@
 #include "timers.hh"
 
 #include <assert.h>
+#include <errno.h>
 #include <kernel/block.h>
 #include <kernel/com.h>
-#include <kernel/errors.h>
 #include <lib/memory.hh>
 #include <linker.hh>
 #include <memory/paging.hh>
@@ -59,6 +59,7 @@ size_t get_cpu_count() noexcept { return cpus.size(); }
 
 ReturnStr<u64> block_current_task(const klib::shared_ptr<Generic_Port> &ptr)
 {
+    // TODO: This function has a strange return value
     const klib::shared_ptr<TaskDescriptor> &task = get_cpu_struct()->current_task;
 
     // t_print_bochs("Blocking %i (%s) by port\n", task->pid, task->name.c_str());
@@ -66,7 +67,7 @@ ReturnStr<u64> block_current_task(const klib::shared_ptr<Generic_Port> &ptr)
     Auto_Lock_Scope scope_lock(task->sched_lock);
     // If the task is dying, don't block it
     if (task->status == TaskStatus::TASK_DYING)
-        return {SUCCESS, 0};
+        return {0, 0};
 
     task->status       = TaskStatus::TASK_BLOCKED;
     task->blocked_by   = ptr;
@@ -80,7 +81,7 @@ ReturnStr<u64> block_current_task(const klib::shared_ptr<Generic_Port> &ptr)
     // Task switch
     find_new_process();
 
-    return {SUCCESS, 0};
+    return {0, 0};
 }
 
 void TaskDescriptor::atomic_block_by_page(u64 page, sched_queue *blocked_ptr)

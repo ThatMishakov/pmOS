@@ -31,6 +31,7 @@
 #include <kernel/block.h>
 #include <pmos/ipc.h>
 #include <processes/syscalls.hh>
+#include <kern_logger/kern_logger.hh>
 
 Named_Port_Storage global_named_ports;
 
@@ -49,7 +50,6 @@ void Notify_Task::do_action(const klib::shared_ptr<Port> &port,
 
 void Send_Message::do_action(const klib::shared_ptr<Port> &p, const klib::string &name)
 {
-    kresult_t result = SUCCESS;
     if (not did_action) {
         klib::shared_ptr<Port> ptr = port.lock();
 
@@ -69,7 +69,7 @@ void Send_Message::do_action(const klib::shared_ptr<Port> &p, const klib::string
             Auto_Lock_Scope scope_lock(ptr->lock);
             ptr->send_from_system(klib::move(vec));
         } else {
-            result = ERROR_PORT_CLOSED;
+            serial_logger.printf("Send_Message::do_action: port is dead\n");
         }
 
         did_action = true;

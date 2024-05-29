@@ -27,7 +27,6 @@
  */
 
 #pragma once
-#include <kernel/errors.h>
 #include <kernel/syscalls.h>
 #include <processes/tasks.hh>
 #include <sched/sched.hh>
@@ -235,7 +234,7 @@ inline u64 &syscall_arg5(const klib::shared_ptr<TaskDescriptor> &task)
     return task->regs.syscall_arg5();
 }
 
-inline kresult_t &syscall_ret_low(const klib::shared_ptr<TaskDescriptor> &task)
+inline u64 &syscall_ret_low(const klib::shared_ptr<TaskDescriptor> &task)
 {
     return task->regs.syscall_retval_low();
 }

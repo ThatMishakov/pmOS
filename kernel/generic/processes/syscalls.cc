@@ -138,7 +138,7 @@ extern "C" void syscall_handler()
     try {
         // TODO: This crashes if the syscall is not implemented
         if (call_n > syscall_table.size() or syscall_table[call_n] == nullptr)
-            throw Kern_Exception(ERROR_NOT_SUPPORTED, "syscall is not supported");
+            throw Kern_Exception(-ENOTSUP, "syscall is not supported");
 
         syscall_table[call_n](arg1, arg2, arg3, arg4, arg5, 0);
     } catch (Kern_Exception &e) {
@@ -149,7 +149,7 @@ extern "C" void syscall_handler()
         return;
     } catch (...) {
         t_print_bochs("[Kernel] Caught unknown exception\n");
-        syscall_ret_low(task) = ERROR_GENERAL;
+        syscall_ret_low(task) = -ENOTSUP;
         return;
     }
 
@@ -185,7 +185,7 @@ void syscall_start_process(u64 pid, u64 start, u64 arg1, u64 arg2, u64 arg3, u64
 
     // If the process is running, you can't start it again
     if (not t->is_uninited())
-        throw(Kern_Exception(ERROR_PROCESS_INITED, "Process is not in UNINIT state"));
+        throw(Kern_Exception(-EINVAL, "Process is not in UNINIT state"));
 
     // Set entry
     t->set_entry_point(start);
@@ -220,7 +220,7 @@ void syscall_load_executable(u64 task_id, u64 object_id, u64 flags, u64 /* unuse
     auto b = t->load_elf(object, name);
     // Blocking is not implemented. Return error
     if (!b)
-        throw Kern_Exception(ERROR_GENERAL, "pages not available immediately");
+        throw Kern_Exception(-ENOSYS, "pages not available immediately");
 
     // TODO: This will race once blocking is to be implemented
     syscall_ret_low(task) = SUCCESS;
@@ -237,7 +237,7 @@ void syscall_init_stack(u64 pid, u64 esp, u64, u64, u64, u64)
 
     // If the process is running, you can't start it again
     if (not t->is_uninited())
-        throw(Kern_Exception(ERROR_PROCESS_INITED, "Process is not in UNINIT state"));
+        throw(Kern_Exception(-EINVAL, "Process is not in UNINIT state"));
 
     if (esp == 0) { // If ESP == 0 use default kernel's stack policy
         syscall_ret_high(task) = t->init_stack();
@@ -288,10 +288,10 @@ void syscall_get_first_message(u64 buff, u64 args, u64 portno, u64, u64, u64)
         Auto_Lock_Scope scope_lock(port->lock);
 
         if (current != port->owner.lock())
-            throw(Kern_Exception(ERROR_NO_PERMISSION, "Callee is not a port owner"));
+            throw(Kern_Exception(-EPERM, "Callee is not a port owner"));
 
         if (port->is_empty())
-            throw(Kern_Exception(ERROR_NO_MESSAGES, "Port queue is empty"));
+            throw(Kern_Exception(-EAGAIN, "Port queue is empty"));
 
         top_message = port->get_front();
 
@@ -349,7 +349,7 @@ void syscall_get_message_info(u64 message_struct, u64 portno, u64 flags, u64, u6
             constexpr unsigned FLAG_NOBLOCK = 0x01;
 
             if (flags & FLAG_NOBLOCK) {
-                throw(Kern_Exception(ERROR_NO_MESSAGES,
+                throw(Kern_Exception(-EAGAIN,
                                      "FLAG_NOBLOCK is set and the process has no messages"));
 
             } else {
@@ -397,12 +397,12 @@ void syscall_set_attribute(u64 pid, u64 attribute, u64 value, u64, u64, u64)
         break;
 
     default:
-        throw(Kern_Exception(ERROR_NOT_IMPLEMENTED,
+        throw(Kern_Exception(-ENOSYS,
                              "syscall_set_attribute with given request is not implemented"));
         break;
     }
 #else
-    throw(Kern_Exception(ERROR_NOT_IMPLEMENTED, "syscall_set_attribute is not implemented"));
+    throw(Kern_Exception(-ENOSYS, "syscall_set_attribute is not implemented"));
 #endif
 }
 
@@ -425,7 +425,7 @@ void syscall_configure_system(u64 type, u64 arg1, u64 arg2, u64, u64, u64)
         //     break;
 
     default:
-        throw(Kern_Exception(ERROR_NOT_IMPLEMENTED,
+        throw(Kern_Exception(-ENOSYS,
                              "syscall_configure_system with unknown parameter"));
         break;
     };
@@ -439,7 +439,7 @@ void syscall_set_priority(u64 priority, u64, u64, u64, u64, u64)
     syscall_ret_low(current_task) = SUCCESS;
 
     if (priority >= sched_queues_levels) {
-        throw(Kern_Exception(ERROR_NOT_SUPPORTED, "priority outside of queue levels"));
+        throw(Kern_Exception(-ENOTSUP, "priority outside of queue levels"));
     }
 
     {
@@ -455,7 +455,7 @@ void syscall_get_lapic_id(u64, u64, u64, u64, u64, u64)
     // Not available on RISC-V
     // TODO: This should be hart id
     // syscall_ret_high(get_current_task()) = get_cpu_struct()->lapic_id;
-    throw Kern_Exception(ERROR_NOT_IMPLEMENTED, "syscall_get_lapic_id is not implemented");
+    throw Kern_Exception(-ENOSYS, "syscall_get_lapic_id is not implemented");
 }
 
 void syscall_set_task_name(u64 pid, u64 /* const char* */ string, u64 length, u64, u64, u64)
@@ -502,14 +502,14 @@ void syscall_set_interrupt(uint64_t port, u64 intno, u64 flags, u64, u64, u64)
 
     auto port_ptr = Port::atomic_get_port_throw(port);
     if (task != port_ptr->owner.lock()) {
-        throw(Kern_Exception(ERROR_NO_PERMISSION, "Caller is not a port owner"));
+        throw(Kern_Exception(-EPERM, "Caller is not a port owner"));
     }
 
     syscall_ret_low(task)  = SUCCESS;
     syscall_ret_high(task) = intno;
     c->int_handlers.add_handler(intno, port_ptr);
 #elif defined(__x86_64__)
-    throw Kern_Exception(ERROR_NOT_IMPLEMENTED, "interrupts on x86 are not implemented");
+    throw Kern_Exception(-ENOSYS, "interrupts on x86 are not implemented");
 #else
     #error Unknown architecture
 #endif
@@ -530,7 +530,7 @@ void syscall_complete_interrupt(u64 intno, u64, u64, u64, u64, u64)
     }
     syscall_ret_low(task) = SUCCESS;
 #elif defined(__x86_64__)
-    throw Kern_Exception(ERROR_NOT_IMPLEMENTED, "interrupts on x86 are not implemented");
+    throw Kern_Exception(-ENOSYS, "interrupts on x86 are not implemented");
 #else
     #error Unknown architecture
 #endif
@@ -555,7 +555,7 @@ void syscall_name_port(u64 portnum, u64 /*const char* */ name, u64 length, u64 f
 
     if (named_port) {
         if (not named_port->parent_port.expired()) {
-            throw(Kern_Exception(ERROR_NAME_EXISTS, "Named port with a given name already exists"));
+            throw(Kern_Exception(-EEXIST, "Named port with a given name already exists"));
         }
 
         named_port->parent_port = port;
@@ -603,7 +603,7 @@ void syscall_get_port_by_name(u64 /* const char * */ name, u64 length, u64 flags
         if (not named_port->parent_port.expired()) {
             klib::shared_ptr<Port> ptr = named_port->parent_port.lock();
             if (not ptr) {
-                throw(Kern_Exception(ERROR_GENERAL, "named port parent is expired"));
+                throw(Kern_Exception(-ENOENT, "named port parent is expired"));
             } else {
                 syscall_ret_low(task)  = SUCCESS;
                 syscall_ret_high(task) = ptr->portno;
@@ -612,7 +612,7 @@ void syscall_get_port_by_name(u64 /* const char * */ name, u64 length, u64 flags
         } else {
             if (flags & flag_noblock) {
                 throw(
-                    Kern_Exception(ERROR_PORT_DOESNT_EXIST, "requested named port does not exist"));
+                    Kern_Exception(-ENOENT, "requested named port does not exist"));
                 return;
             } else {
                 named_port->actions.push_back(klib::make_unique<Notify_Task>(
@@ -624,7 +624,7 @@ void syscall_get_port_by_name(u64 /* const char * */ name, u64 length, u64 flags
         }
     } else {
         if (flags & flag_noblock) {
-            throw(Kern_Exception(ERROR_PORT_DOESNT_EXIST, "requested named port does not exist"));
+            throw(Kern_Exception(-ENOENT, "requested named port does not exist"));
         } else {
             const klib::shared_ptr<Named_Port_Desc> new_desc = klib::make_shared<Named_Port_Desc>(
                 klib::move(str.second), klib::shared_ptr<Port>(nullptr));
@@ -661,7 +661,7 @@ void syscall_request_named_port(u64 string_ptr, u64 length, u64 reply_port, u64 
         if (not named_port->parent_port.expired()) {
             klib::shared_ptr<Port> ptr = named_port->parent_port.lock();
             if (not ptr) {
-                throw(Kern_Exception(ERROR_GENERAL, "named port parent is expired"));
+                throw(Kern_Exception(-ENOENT, "named port parent is expired"));
             } else {
                 Send_Message msg(port_ptr);
                 msg.do_action(ptr, str.second);
@@ -703,7 +703,7 @@ void syscall_create_normal_region(u64 pid, u64 addr_start, u64 size, u64 access,
 
     // Syscall must be page aligned
     if (addr_start & 07777 or size & 07777) {
-        throw(Kern_Exception(ERROR_UNALLIGNED, "arguments are not page aligned"));
+        throw(Kern_Exception(-EINVAL, "arguments are not page aligned"));
         return;
     }
 
@@ -727,7 +727,7 @@ void syscall_create_phys_map_region(u64 pid, u64 addr_start, u64 size, u64 acces
 
     // Syscall must be page aligned
     if (addr_start & 07777 or size & 07777) {
-        throw(Kern_Exception(ERROR_UNALLIGNED, "arguments are not page aligned"));
+        throw(Kern_Exception(-EINVAL, "arguments are not page aligned"));
         return;
     }
 
@@ -751,7 +751,7 @@ void syscall_get_page_table(u64 pid, u64, u64, u64, u64, u64)
     Auto_Lock_Scope target_lock(target->sched_lock);
 
     if (not target->page_table) {
-        throw(Kern_Exception(ERROR_HAS_NO_PAGE_TABLE, "process has no page table"));
+        throw(Kern_Exception(-ENOENT, "process has no page table"));
     }
 
     syscall_ret_high(current) = target->page_table->id;
@@ -789,7 +789,7 @@ void syscall_set_segment(u64 pid, u64 segment_type, u64 ptr, u64, u64, u64)
         break;
     }
     default:
-        throw Kern_Exception(ERROR_OUT_OF_RANGE, "invalid segment in syscall_set_segment");
+        throw Kern_Exception(-ENOTSUP, "invalid segment in syscall_set_segment");
     }
 
 #ifdef __x86_64__
@@ -827,7 +827,7 @@ void syscall_get_segment(u64 pid, u64 segment_type, u64, u64, u64, u64)
         break;
     }
     default:
-        throw Kern_Exception(ERROR_OUT_OF_RANGE, "invalid segment in syscall_set_segment");
+        throw Kern_Exception(-ENOTSUP, "invalid segment in syscall_set_segment");
     }
 
     syscall_ret_high(current) = segment;
@@ -878,7 +878,7 @@ void syscall_asign_page_table(u64 pid, u64 page_table, u64 flags, u64, u64, u64)
         break;
     }
     default:
-        throw Kern_Exception(ERROR_NOT_SUPPORTED, "value of flags parameter is not supported");
+        throw Kern_Exception(-ENOTSUP, "value of flags parameter is not supported");
     }
 }
 
@@ -892,7 +892,7 @@ void syscall_create_mem_object(u64 size_bytes, u64, u64, u64, u64, u64)
 
     // Syscall must be page aligned
     if (size_bytes & 07777)
-        throw Kern_Exception(ERROR_UNALLIGNED, "arguments are not page aligned");
+        throw Kern_Exception(-EINVAL, "arguments are not page aligned");
 
     const auto page_size_log = 12; // 2^12 = 4096 bytes
     const auto size_pages    = size_bytes / 4096;
@@ -913,15 +913,15 @@ void syscall_map_mem_object(u64 page_table_id, u64 addr_start, u64 size_bytes, u
     const auto &current_page_table = current_task->page_table;
 
     if ((size_bytes == 0) or (size_bytes & 0xfff != 0))
-        throw Kern_Exception(ERROR_UNALLIGNED, "size not page aligned");
+        throw Kern_Exception(-EINVAL, "size not page aligned");
 
     if (offset & 0xfff)
-        throw Kern_Exception(ERROR_UNALLIGNED, "offset not page aligned");
+        throw Kern_Exception(-EINVAL, "offset not page aligned");
 
     const auto object = Mem_Object::get_object(object_id);
 
     if (object->size_bytes() < offset + size_bytes)
-        throw Kern_Exception(ERROR_OUT_OF_RANGE, "size is out of range");
+        throw Kern_Exception(-EFBIG, "size is out of range");
 
     syscall_ret_low(current_task)  = SUCCESS;
     syscall_ret_high(current_task) = table->atomic_create_mem_object_region(
@@ -1016,22 +1016,22 @@ void syscall_set_affinity(u64 pid, u64 affinity, u64 flags, u64, u64, u64)
     const auto cpu         = affinity == -1UL ? current_cpu->cpu_id + 1 : affinity;
 
     if (task != current_cpu->current_task) {
-        throw Kern_Exception(ERROR_NO_PERMISSION,
+        throw Kern_Exception(-EPERM,
                              "setting affinity for another task is not implemented");
     }
 
     const auto cpu_count = get_cpu_count();
     if (cpu > cpu_count) {
-        throw Kern_Exception(ERROR_OUT_OF_RANGE, "cpu id is out of range");
+        throw Kern_Exception(-ENOENT, "cpu id is out of range");
     }
 
     if (cpu == 0 or cpu != (current_cpu->cpu_id + 1)) {
-        throw Kern_Exception(ERROR_NOT_SUPPORTED,
+        throw Kern_Exception(-ENOTSUP,
                              "binding affinity to a different CPU is not implemented");
     }
 
     if (not task->can_be_rebound())
-        throw Kern_Exception(ERROR_NO_PERMISSION, "task can't be rebound");
+        throw Kern_Exception(-EPERM, "task can't be rebound");
 
     syscall_ret_low(task) = SUCCESS;
 
@@ -1062,7 +1062,7 @@ void syscall_get_time(u64 mode, u64, u64, u64, u64, u64)
         syscall_ret_high(current_task) = get_ns_since_bootup();
         break;
     default:
-        throw Kern_Exception(ERROR_NOT_SUPPORTED, "unknown mode in syscall_get_time");
+        throw Kern_Exception(-ENOTSUP, "unknown mode in syscall_get_time");
     }
 }
 
@@ -1077,7 +1077,7 @@ void syscall_system_info(u64 param, u64, u64, u64, u64, u64)
         syscall_ret_high(current_task) = get_cpu_count();
         break;
     default:
-        throw Kern_Exception(ERROR_NOT_SUPPORTED, "unknown param in syscall_system_info");
+        throw Kern_Exception(-ENOTSUP, "unknown param in syscall_system_info");
     }
 }
 
@@ -1089,7 +1089,7 @@ void syscall_pause_task(u64 task_id, u64, u64, u64, u64, u64)
 
     const auto task = task_id == 0 ? current_task : get_task_throw(task_id);
     if (task->is_kernel_task())
-        throw Kern_Exception(ERROR_NO_PERMISSION, "can't pause system task");
+        throw Kern_Exception(-EPERM, "can't pause system task");
 
     Auto_Lock_Scope lock(task->sched_lock);
     switch (task->status) {
@@ -1109,7 +1109,7 @@ void syscall_pause_task(u64 task_id, u64, u64, u64, u64, u64)
             {
                 Auto_Lock_Scope lock(current_task->sched_lock);
                 if (current_task->status == TaskStatus::TASK_DYING)
-                    throw Kern_Exception(ERROR_GENERAL, "can't block dying task");
+                    throw Kern_Exception(-EINVAL, "can't block dying task");
 
                 current_task->request_repeat_syscall();
 
@@ -1143,12 +1143,12 @@ void syscall_pause_task(u64 task_id, u64, u64, u64, u64, u64)
         break;
     }
     case TaskStatus::TASK_UNINIT:
-        throw Kern_Exception(ERROR_PROCESS_INITED, "process is not in UNINIT state");
+        throw Kern_Exception(-EINVAL, "process is not in UNINIT state");
     case TaskStatus::TASK_SPECIAL:
-        throw Kern_Exception(ERROR_NO_PERMISSION, "can't pause special task");
+        throw Kern_Exception(-EPERM, "can't pause special task");
     case TaskStatus::TASK_DYING:
     case TaskStatus::TASK_DEAD:
-        throw Kern_Exception(ERROR_GENERAL, "can't pause dead task");
+        throw Kern_Exception(-EINVAL, "can't pause dead task");
     case TaskStatus::TASK_BLOCKED: {
         if (task->regs.syscall_pending_restart())
             task->interrupt_restart_syscall();
@@ -1180,6 +1180,6 @@ void syscall_resume_task(u64 task_id, u64, u64, u64, u64, u64)
     else if (task->status == TaskStatus::TASK_RUNNING)
         return;
     else
-        throw Kern_Exception(ERROR_GENERAL, "can't resume task");
+        throw Kern_Exception(-EINVAL, "can't resume task");
 }
 

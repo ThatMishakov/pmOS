@@ -4,9 +4,8 @@
 
 #include <assert.h>
 #include <exceptions.hh>
-#include <kernel/errors.h>
-#include <processes/tasks.hh>
 #include <sched/sched.hh>
+#include <errno.h>
 
 void Interrupt_Handler_Table::add_handler(u64 interrupt_number, const klib::shared_ptr<Port> &port)
 {
@@ -14,20 +13,20 @@ void Interrupt_Handler_Table::add_handler(u64 interrupt_number, const klib::shar
     assert(this == &c->int_handlers);
     auto owner = port->owner.lock();
     if (!owner) {
-        throw Kern_Exception(ERROR_GENERAL, "Port orphaned");
+        throw Kern_Exception(-EIDRM, "Port orphaned");
     }
 
     if (owner->cpu_affinity != c->cpu_id + 1) {
-        throw Kern_Exception(ERROR_GENERAL, "Task not bound to CPU");
+        throw Kern_Exception(-EINVAL, "Task not bound to CPU");
     }
 
     // Check that there isn't a handler already
     if (get_handler(interrupt_number)) {
-        throw Kern_Exception(ERROR_GENERAL, "Handler already exists");
+        throw Kern_Exception(-EEXIST, "Handler already exists");
     }
 
     if (interrupt_number >= plic_interrupt_limit())
-        throw Kern_Exception(ERROR_GENERAL, "Invalid interrupt number");
+        throw Kern_Exception(-EINVAL, "Invalid interrupt number");
 
     auto handler              = klib::make_unique<Interrupt_Handler>();
     handler->interrupt_number = interrupt_number;
@@ -97,7 +96,7 @@ void Interrupt_Handler_Table::remove_handler(u64 interrupt_number)
     assert(this == &c->int_handlers);
     auto handler = get_handler(interrupt_number);
     if (!handler) {
-        throw Kern_Exception(ERROR_GENERAL, "Handler does not exist");
+        throw Kern_Exception(-ESRCH, "Handler does not exist");
     }
 
     auto owner = get_task(handler->task_id);
@@ -122,13 +121,13 @@ void Interrupt_Handler_Table::ack_interrupt(u64 interrupt_number, u64 task)
 {
     auto handler = get_handler(interrupt_number);
     if (!handler)
-        throw Kern_Exception(ERROR_GENERAL, "Handler does not exist");
+        throw Kern_Exception(-ESRCH, "Handler does not exist");
 
     if (handler->task_id != task)
-        throw Kern_Exception(ERROR_GENERAL, "Task does not own handler");
+        throw Kern_Exception(-EPERM, "Task does not own handler");
 
     if (!handler->active)
-        throw Kern_Exception(ERROR_GENERAL, "Handler not active");
+        throw Kern_Exception(-EBADF, "Handler not active");
 
     handler->active = false;
     plic_complete(interrupt_number);

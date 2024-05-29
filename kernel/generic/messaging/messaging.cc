@@ -29,8 +29,8 @@
 #include "messaging.hh"
 
 #include <assert.h>
+#include <errno.h>
 #include <kernel/block.h>
-#include <kernel/errors.h>
 #include <lib/utility.hh>
 #include <processes/syscalls.hh>
 #include <processes/task_group.hh>
@@ -84,7 +84,7 @@ klib::shared_ptr<Port> Port::atomic_get_port_throw(u64 portno)
     const auto ptr = ports.get_copy_or_default(portno).lock();
 
     if (not ptr)
-        throw(Kern_Exception(ERROR_PORT_DOESNT_EXIST, "requested port does not exist"));
+        throw(Kern_Exception(-ENOENT, "requested port does not exist"));
 
     return ptr;
 }
@@ -103,7 +103,7 @@ void Port::enqueue(const klib::shared_ptr<Message> &msg)
     klib::shared_ptr<TaskDescriptor> t = owner.lock();
 
     if (not t)
-        throw(Kern_Exception(ERROR_GENERAL, "port owner does not exist"));
+        throw(Kern_Exception(-ENOENT, "port owner does not exist"));
 
     msg_queue.push_back(msg);
     unblock_if_needed(t, self.lock());

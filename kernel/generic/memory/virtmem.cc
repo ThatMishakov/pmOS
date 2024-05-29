@@ -32,7 +32,7 @@
 #include "paging.hh"
 
 #include <assert.h>
-#include <kernel/errors.h>
+#include <errno.h>
 
 void virtmem_fill_initial_tags()
 {
@@ -90,13 +90,13 @@ void virtmem_init(u64 virtmem_base, u64 virtmem_size)
 u64 virtmem_ensure_tags(u64 size)
 {
     if (virtmem_available_tags_count >= size)
-        return SUCCESS;
+        return 0;
 
     // Allocate a page and slice it into boundary tags
     // Find the smallest tag and take the first page out of it
     if (kernel_space_allocator.virtmem_freelist_bitmap == 0)
         // No free tags
-        return ERROR_OUT_OF_MEMORY;
+        return -ENOMEM;
 
     int idx    = __builtin_ffsl(kernel_space_allocator.virtmem_freelist_bitmap) - 1;
     auto &list = kernel_space_allocator.virtmem_freelists[idx];
@@ -121,7 +121,7 @@ u64 virtmem_ensure_tags(u64 size)
         if (page_phys != -1UL)
             kernel_pframe_allocator.free((void *)page_phys);
 
-        return ERROR_OUT_OF_MEMORY;
+        return -ENOMEM;
     }
 
     // Slice the page into boundary tags

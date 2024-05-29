@@ -72,7 +72,7 @@ void riscv_map_page(u64 pt_top_phys, u64 phys_addr, void *virt_addr, Page_Table_
             // Leaf page table
 
             if (entry->valid) {
-                throw Kern_Exception(ERROR_PAGE_PRESENT, "Page already present");
+                throw Kern_Exception(-EEXIST, "Page already present");
             }
 
             RISCV64_PTE new_entry = RISCV64_PTE();
@@ -103,7 +103,7 @@ void riscv_map_page(u64 pt_top_phys, u64 phys_addr, void *virt_addr, Page_Table_
                 next_level_phys = new_pt_phys << 12;
                 clear_page(next_level_phys);
             } else if (entry->is_leaf()) {
-                throw Kern_Exception(ERROR_HUGE_PAGE, "Huge page encountered");
+                throw Kern_Exception(-EEXIST, "Huge page encountered");
             } else {
                 next_level_phys = entry->ppn << 12;
             }
@@ -132,7 +132,7 @@ void RISCV64_Page_Table::map(Page_Descriptor page, u64 virt_addr, Page_Table_Arg
 
     auto &entry = active_pt[index];
     if (entry.valid)
-        throw Kern_Exception(ERROR_PAGE_PRESENT, "Page already present");
+        throw Kern_Exception(-EEXIST, "Page already present");
 
     RISCV64_PTE pte = RISCV64_PTE();
     pte.valid       = true;
@@ -163,7 +163,7 @@ void riscv_unmap_page(u64 pt_top_phys, void *virt_addr)
             // Leaf page table
 
             if (not entry->valid) {
-                throw Kern_Exception(ERROR_PAGE_NOT_PRESENT, "Page not present");
+                throw Kern_Exception(-EFAULT, "Page not present");
             }
 
             RISCV64_PTE entry = active_pt[index];
@@ -176,9 +176,9 @@ void riscv_unmap_page(u64 pt_top_phys, void *virt_addr)
             // Non-leaf page table
             u64 next_level_phys;
             if (not entry->valid) {
-                throw Kern_Exception(ERROR_PAGE_NOT_PRESENT, "Page not present");
+                throw Kern_Exception(-EFAULT, "Page not present");
             } else if (entry->is_leaf()) {
-                throw Kern_Exception(ERROR_HUGE_PAGE, "Huge page encountered");
+                throw Kern_Exception(-ENOSYS, "Huge page encountered");
             } else {
                 next_level_phys = entry->ppn << 12;
             }
@@ -356,7 +356,7 @@ u64 prepare_leaf_pt_for(void *virt_addr, Page_Table_Argumments /* unused */, u64
             next_level_phys = new_pt_phys << 12;
             clear_page(next_level_phys);
         } else if (entry->is_leaf()) {
-            throw Kern_Exception(ERROR_HUGE_PAGE, "Huge page encountered");
+            throw Kern_Exception(-EEXIST, "Huge page encountered");
         } else {
             next_level_phys = entry->ppn << 12;
         }
@@ -441,14 +441,14 @@ klib::shared_ptr<RISCV64_Page_Table> RISCV64_Page_Table::get_page_table_throw(u6
     try {
         return global_page_tables.at(id).lock();
     } catch (const std::out_of_range &) {
-        throw Kern_Exception(ERROR_OBJECT_DOESNT_EXIST, "requested page table doesn't exist");
+        throw Kern_Exception(-EBADF, "requested page table doesn't exist");
     }
 }
 
 klib::shared_ptr<RISCV64_Page_Table> RISCV64_Page_Table::create_clone()
 {
     // Not implemented
-    throw Kern_Exception(ERROR_NOT_IMPLEMENTED,
+    throw Kern_Exception(-ENOSYS,
                          "Cloning RISC-V page tables is not yet implemented");
 }
 

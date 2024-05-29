@@ -153,7 +153,7 @@ Page_Descriptor Mem_Object::request_page(u64 offset)
     const auto index = offset >> page_size_log;
 
     if (pages_size <= index)
-        throw Kern_Exception(ERROR_OUT_OF_RANGE,
+        throw Kern_Exception(-EINVAL,
                              "Trying to access to memory out of the Page Descriptor's range");
 
     offset &= ~0xfffUL;
@@ -276,7 +276,7 @@ klib::shared_ptr<Mem_Object> Mem_Object::get_object(u64 object_id)
     auto p = objects_storage.get_copy_or_default(object_id).lock();
 
     if (not p)
-        throw Kern_Exception(ERROR_OBJECT_DOESNT_EXIST, "memory object not found");
+        throw Kern_Exception(-ENOENT, "memory object not found");
 
     return p;
 }
@@ -326,7 +326,7 @@ void *Mem_Object::map_to_kernel(u64 offset, u64 size, Page_Table_Argumments args
 
     void *mem_virt = kernel_space_allocator.virtmem_alloc(size >> 12);
     if (mem_virt == nullptr)
-        throw Kern_Exception(ERROR_GENERAL, "could not get virtual memory for mapping an object");
+        throw Kern_Exception(-ENOMEM, "could not get virtual memory for mapping an object");
 
     size_t i = 0;
     try {

@@ -129,7 +129,7 @@ void page_fault(u64 virt_addr, u64 scause)
 
     try {
         if (scause == 7)
-            throw Kern_Exception(ERROR_GENERAL, "Dodgy userspace");
+            throw Kern_Exception(-EIO, "Dodgy userspace");
 
         Auto_Lock_Scope lock(page_table->lock);
 
@@ -142,7 +142,7 @@ void page_fault(u64 virt_addr, u64 scause)
             if (not r)
                 task->atomic_block_by_page(page, &task->page_table->blocked_tasks);
         } else
-            throw Kern_Exception(ERROR_PAGE_NOT_ALLOCATED, "pagefault in unknown region");
+            throw Kern_Exception(-EFAULT, "pagefault in unknown region");
     } catch (const Kern_Exception &e) {
         serial_logger.printf("Warning: Pagefault %h pid %i (%s) rip %h error "
                              "%h -> %i killing process...\n",
@@ -200,22 +200,22 @@ void illegal_instruction(u32 instruction)
 
         if (instruction_is_fp_csr(instruction)) {
             if (not fp_is_supported())
-                throw Kern_Exception(ERROR_INSTRUCTION_UNAVAILABLE, "Floating point not supported");
+                throw Kern_Exception(-ENOTSUP, "Floating point not supported");
 
             restore_fp_state(task.get());
         } else if (instruction_is_fp_op(instruction) or instruction_is_fp_ld_st(instruction)) {
             if (not fp_is_supported())
-                throw Kern_Exception(ERROR_INSTRUCTION_UNAVAILABLE, "Floating point not supported");
+                throw Kern_Exception(-ENOTSUP, "Floating point not supported");
 
             if (get_fp_state() != FloatingPointState::Disabled) // FP is enabled but instruction
                                                                 // is illegal -> not supported
-                throw Kern_Exception(ERROR_INSTRUCTION_UNAVAILABLE,
+                throw Kern_Exception(-ENOTSUP,
                                      "Floating point width not supported");
 
             restore_fp_state(task.get());
         } else {
             // What is this
-            throw Kern_Exception(ERROR_BAD_INSTRUCTION, "Illegal instruction");
+            throw Kern_Exception(-ENOTSUP, "Illegal instruction");
         }
     } catch (const Kern_Exception &e) {
         serial_logger.printf("Warning: %s pid %i (%s) pc %h instr 0x%h -> %i "

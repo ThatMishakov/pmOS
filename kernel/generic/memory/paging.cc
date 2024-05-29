@@ -33,9 +33,9 @@
 #include "mem_object.hh"
 #include "temp_mapper.hh"
 
+#include <errno.h>
 #include <kern_logger/kern_logger.hh>
 #include <kernel/com.h>
-#include <kernel/errors.h>
 #include <kernel/memory.h>
 #include <lib/memory.hh>
 #include <processes/tasks.hh>
@@ -90,7 +90,7 @@ u64 Page_Table::atomic_transfer_region(const klib::shared_ptr<Page_Table> &to, u
         reg.move_to(to, start_addr, access);
         return start_addr;
     } catch (std::out_of_range &r) {
-        throw Kern_Exception(ERROR_OUT_OF_RANGE, "atomic_transfer_region source not found");
+        throw Kern_Exception(-ENOENT, "atomic_transfer_region source not found");
     }
 }
 
@@ -103,7 +103,7 @@ u64 Page_Table::atomic_create_phys_region(u64 page_aligned_start, u64 page_align
     if (phys_addr_start >= phys_addr_limit() or
         phys_addr_start + page_aligned_size >= phys_addr_limit() or
         phys_addr_start > phys_addr_start + page_aligned_size)
-        throw(Kern_Exception(ERROR_OUT_OF_RANGE,
+        throw(Kern_Exception(-ENOTSUP,
                              "atomic_create_phys_region phys_addr outside the supported by x86"));
 
     u64 start_addr = find_region_spot(page_aligned_start, page_aligned_size, fixed);
@@ -178,7 +178,7 @@ u64 Page_Table::find_region_spot(u64 desired_start, u64 size, bool fixed)
 
     } else {
         if (fixed)
-            throw(Kern_Exception(ERROR_REGION_OCCUPIED, "find_region_spot fixed region overlaps"));
+            throw(Kern_Exception(-EINVAL, "find_region_spot fixed region overlaps"));
 
         u64 addr = 0x1000;
         auto it  = paging_regions.begin();
@@ -193,7 +193,7 @@ u64 Page_Table::find_region_spot(u64 desired_start, u64 size, bool fixed)
         }
 
         if (addr + size > user_addr_max())
-            throw(Kern_Exception(ERROR_NO_FREE_REGION, "find_region_spot no free region found"));
+            throw(Kern_Exception(-ENOMEM, "find_region_spot no free region found"));
 
         return addr;
     }
@@ -204,7 +204,7 @@ bool Page_Table::prepare_user_page(u64 virt_addr, unsigned access_type)
     auto it = paging_regions.get_smaller_or_equal(virt_addr);
 
     if (it == paging_regions.end() or not it->is_in_range(virt_addr))
-        throw(Kern_Exception(ERROR_OUT_OF_RANGE, "user provided parameter is unallocated"));
+        throw(Kern_Exception(-EFAULT, "user provided parameter is unallocated"));
 
     return it->prepare_page(access_type, virt_addr);
 }
@@ -219,7 +219,7 @@ void Page_Table::map(u64 page_addr, u64 virt_addr)
 {
     auto it = get_region(virt_addr);
     if (it == paging_regions.end())
-        throw(Kern_Exception(ERROR_PAGE_NOT_ALLOCATED, "map no region found"));
+        throw(Kern_Exception(-EFAULT, "map no region found"));
 
     map(page_addr, virt_addr, it->craft_arguments());
 }
@@ -286,7 +286,7 @@ void Page_Table::atomic_pin_memory_object(klib::shared_ptr<Mem_Object> object)
     bool inserted = mem_objects.insert({object, Mem_Object_Data()}).second;
 
     if (not inserted)
-        throw Kern_Exception(ERROR_PAGE_PRESENT, "memory object is already referenced");
+        throw Kern_Exception(-EEXIST, "memory object is already referenced");
 
     try {
         Auto_Lock_Scope object_lock(object->pinned_lock);
@@ -336,7 +336,7 @@ void Page_Table::atomic_delete_region(u64 region_start)
 
     auto region = get_region(region_start);
     if (region == paging_regions.end())
-        throw Kern_Exception(ERROR_PAGE_NOT_ALLOCATED, "memory region was not found");
+        throw Kern_Exception(-ENOENT, "memory region was not found");
 
     auto region_size = region->size;
 

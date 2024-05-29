@@ -208,19 +208,19 @@ ReturnStr<u32> dtb_get_hart_rtnic_id(u64 hart_id)
 {
     if (not have_dtb()) {
         serial_logger.printf("No DTB found\n");
-        return {ERROR_GENERAL, 0};
+        return {-ENOTSUP, 0};
     }
 
     auto cpu = find_cpu(hart_id);
     if (cpu == nullptr) {
         serial_logger.printf("Could not find CPU DTB node for hart id %i\n", hart_id);
-        return {ERROR_GENERAL, 0};
+        return {-ENOTSUP, 0};
     }
 
     auto intc = dtb_find_child(cpu, "interrupt-controller");
     if (intc == nullptr) {
         serial_logger.printf("Could not find interrupt-controller node for hart id %i\n", hart_id);
-        return {ERROR_GENERAL, 0};
+        return {-ENOTSUP, 0};
     }
 
     // I have no idea if I am doing it right, but from reading Linux source and
@@ -230,7 +230,7 @@ ReturnStr<u32> dtb_get_hart_rtnic_id(u64 hart_id)
     auto count     = dtb_read_prop_values(prop, 1, &phandle);
     if (count != 1) {
         serial_logger.printf("Could not read phandle property for interrupt-controller node\n");
-        return {ERROR_GENERAL, 0};
+        return {-ENOTSUP, 0};
     }
     serial_logger.printf("My phandle: %i\n", phandle);
 
@@ -238,13 +238,13 @@ ReturnStr<u32> dtb_get_hart_rtnic_id(u64 hart_id)
 
     if (plic == nullptr) {
         serial_logger.printf("Could not find PLIC node for hart id %i\n", hart_id);
-        return {ERROR_GENERAL, 0};
+        return {-ENOTSUP, 0};
     }
 
     prop = dtb_find_prop(plic, "#interrupt-cells");
     if (prop == nullptr) {
         serial_logger.printf("Could not find #interrupt-cells property for PLIC node\n");
-        return {ERROR_GENERAL, 0};
+        return {-ENOTSUP, 0};
     }
 
     size_t cells = 0;
@@ -253,13 +253,13 @@ ReturnStr<u32> dtb_get_hart_rtnic_id(u64 hart_id)
         // cells > 1 might be right, but I have no idea what its meaning would
         // be
         serial_logger.printf("Unexpected #interrupt-cells value: %i (wanted 1)\n", cells);
-        return {ERROR_GENERAL, 0};
+        return {-ENOTSUP, 0};
     }
 
     prop = dtb_find_prop(plic, "interrupts-extended");
     if (prop == nullptr) {
         serial_logger.printf("Could not find interrupts-extended property for PLIC node\n");
-        return {ERROR_GENERAL, 0};
+        return {-ENOTSUP, 0};
     }
 
     count = dtb_read_prop_pairs(prop, {1, 1}, nullptr);
@@ -268,17 +268,17 @@ ReturnStr<u32> dtb_get_hart_rtnic_id(u64 hart_id)
     for (size_t i = 0; i < count; ++i) {
         serial_logger.printf("Pair: %i %i my %i\n", pairs[i].a, pairs[i].b, phandle);
         if (pairs[i].a == phandle and pairs[i].b == IRQ_S_EXT)
-            return {SUCCESS, (u32)i};
+            return {0, (u32)i};
     }
 
-    return {ERROR_GENERAL, 0};
+    return {-ENOTSUP, 0};
 }
 
 ReturnStr<u32> get_hart_rtnic_id(u64 hart_id)
 {
     auto e = acpi_get_hart_rtnic(hart_id);
     if (e)
-        return {SUCCESS, e->external_interrupt_controller_id};
+        return {0, e->external_interrupt_controller_id};
 
     return dtb_get_hart_rtnic_id(hart_id);
 }
@@ -287,22 +287,22 @@ ReturnStr<u32> get_apic_processor_uid(u64 hart_id)
 {
     auto e = acpi_get_hart_rtnic(hart_id);
     if (e)
-        return {SUCCESS, e->acpi_processor_id};
+        return {0, e->acpi_processor_id};
 
-    return {ERROR_GENERAL, 0};
+    return {-ENOTSUP, 0};
 }
 
 // TODO: Think about return type
 ReturnStr<klib::string> acpi_get_isa_string(u64 hart_id)
 {
     auto apic_id = get_apic_processor_uid(hart_id);
-    if (apic_id.result != SUCCESS)
+    if (apic_id.result != 0)
         return {apic_id.result, {}};
 
     RCHT *rhct = get_rhct();
     if (rhct == nullptr) {
         serial_logger.printf("Could not get rhct\n");
-        return {ERROR_GENERAL, {}};
+        return {-ENOTSUP, {}};
     }
 
     const u32 size = rhct->h.length;
@@ -323,47 +323,47 @@ ReturnStr<klib::string> acpi_get_isa_string(u64 hart_id)
     if (n == nullptr) {
         serial_logger.printf("Could not find hart node info for ACPI processor UID %i\n",
                              apic_id.val);
-        return {ERROR_GENERAL, {}};
+        return {-ENOTSUP, {}};
     }
 
     // Find ISA string
     for (u16 i = 0; i < n->offsets_count; ++i) {
         RCHT_ISA_STRING_node *node = (RCHT_ISA_STRING_node *)((char *)rhct + n->offsets[i]);
         if (node->header.type == RHCT_ISA_STRING_NODE) {
-            return {SUCCESS, klib::string(node->string, node->string_length)};
+            return {0, klib::string(node->string, node->string_length)};
         }
     }
 
     serial_logger.printf("Could not find ISA string for ACPI processor UID %i\n", apic_id.val);
-    return {ERROR_GENERAL, {}};
+    return {-ENOTSUP, {}};
 }
 
 ReturnStr<klib::string> dtb_get_isa_string(u64 hart_id)
 {
     if (not have_dtb())
-        return {ERROR_GENERAL, {}};
+        return {-ENOTSUP, {}};
 
     auto cpu = find_cpu(hart_id);
     if (cpu == nullptr) {
         serial_logger.printf("Could not find CPU DTB node for hart id %i\n", hart_id);
-        return {ERROR_GENERAL, {}};
+        return {-ENOTSUP, {}};
     }
 
     auto prop = dtb_find_prop(cpu, "riscv,isa");
     if (prop == nullptr) {
         serial_logger.printf("Could not find ISA string property for hart id %i\n", hart_id);
-        return {ERROR_GENERAL, {}};
+        return {-ENOTSUP, {}};
     }
 
     auto str = dtb_read_string(prop, 0);
-    return {SUCCESS, klib::string(str)};
+    return {0, klib::string(str)};
 }
 
 ReturnStr<klib::string> get_isa_string(u64 hart_id)
 {
     ReturnStr<klib::string> ret;
     ret = acpi_get_isa_string(hart_id);
-    if (ret.result == SUCCESS)
+    if (ret.result == 0)
         return ret;
 
     ret = dtb_get_isa_string(hart_id);
@@ -427,7 +427,7 @@ void init_scheduling(u64 hart_id)
     // Set ISA string
     // hart id 0 should always be present
     auto s = get_isa_string(hart_id);
-    if (s.result == SUCCESS) {
+    if (s.result == 0) {
         i->isa_string = klib::forward<klib::string>(s.val);
         global_logger.printf("[Kernel] ISA string: %s\n", i->isa_string.c_str());
         serial_logger.printf("ISA string: %s\n", i->isa_string.c_str());
@@ -435,7 +435,7 @@ void init_scheduling(u64 hart_id)
 
     // Set EIC ID
     auto e = get_hart_rtnic_id(hart_id);
-    if (e.result != SUCCESS) {
+    if (e.result != 0) {
         serial_logger.printf("Could not get EIC ID: %i\n", e.result);
     } else {
         i->eic_id = e.val;
@@ -486,14 +486,14 @@ klib::vector<u64> initialize_cpus(const klib::vector<u64> &hartids)
         i->cpu_id = cpus.size() - 1;
 
         auto s = get_isa_string(hart_id);
-        if (s.result == SUCCESS) {
+        if (s.result == 0) {
             i->isa_string = klib::forward<klib::string>(s.val);
             global_logger.printf("[Kernel] ISA string: %s\n", i->isa_string.c_str());
             serial_logger.printf("ISA string: %s\n", i->isa_string.c_str());
         }
 
         auto e = get_hart_rtnic_id(hart_id);
-        if (e.result != SUCCESS) {
+        if (e.result != 0) {
             serial_logger.printf("Could not get EIC ID: %i\n", e.result);
         } else {
             i->eic_id = e.val;
