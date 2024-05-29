@@ -41,15 +41,9 @@ void test_pipe()
         perror("pipe");
         return;
     }
-
     char buf[100];
     int nbytes;
 
-    // Create a thread to write to the pipe
-    printf("Creating writer thread...\n");
-    pthread_t writer_thread_;
-    // pthread_create(&writer_thread_, NULL, writer_thread, pipefd);
-    // pthread_detach(writer_thread_);
     pid_t pid = fork();
     if (pid == 0) {
         printf("Child: my pid: %li\n", getpid());
@@ -59,7 +53,6 @@ void test_pipe()
 
         int fd2 = dup(pipefd[1]);
         if (fd2 == -1) {
-            printf("Error: %i %i\n", fd2, errno);
             perror("dup");
             return;
         }
@@ -77,8 +70,8 @@ void test_pipe()
             }
             sleep(1);
         }
-        close(pipefd[1]);
-        close(fd2);
+        // close(pipefd[1]);
+        // close(fd2);
         return;
     } else if (pid == -1) {
         perror("fork");
@@ -93,4 +86,10 @@ void test_pipe()
         printf("Read %d bytes: %s\n", nbytes, buf);
     }
     close(pipefd[0]);
+
+    // Create a thread to write to the pipe
+    // printf("Creating writer thread...\n");
+    // pthread_t writer_thread_;
+    // pthread_create(&writer_thread_, NULL, writer_thread, pipefd);
+    // pthread_detach(writer_thread_);
 }

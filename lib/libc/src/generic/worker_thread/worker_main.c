@@ -111,7 +111,7 @@ void worker_main()
             continue;
         }
 
-        char *msg_buff = (char *)alloca(msg.size);
+        void *msg_buff = alloca(msg.size);
 
         r = get_first_message(msg_buff, 0, worker_port);
         if (r != SUCCESS) {
@@ -161,7 +161,7 @@ void worker_main()
             }
             default:
                 // TODO: Handle messages
-                printf("pmOS libC: Received message %i from task 0x%lx\n", ipc_msg->type, msg.sender);
+                printf("pmOS libC: Received message %i from task 0x%lx PID (cached) %li\n", ipc_msg->type, msg.sender, __pid_cached);
                 break;
         }
     }
