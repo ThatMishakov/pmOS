@@ -341,6 +341,10 @@ void syscall_get_message_info(u64 message_struct, u64 portno, u64 flags, u64, u6
         port = Port::atomic_get_port_throw(portno);
     }
 
+    if (port->owner.lock() != task) {
+        throw(Kern_Exception(-EPERM, "Callee is not a port owner"));
+    }
+
     klib::shared_ptr<Message> msg;
 
     {
@@ -349,8 +353,8 @@ void syscall_get_message_info(u64 message_struct, u64 portno, u64 flags, u64, u6
             constexpr unsigned FLAG_NOBLOCK = 0x01;
 
             if (flags & FLAG_NOBLOCK) {
-                throw(Kern_Exception(-EAGAIN,
-                                     "FLAG_NOBLOCK is set and the process has no messages"));
+                throw(
+                    Kern_Exception(-EAGAIN, "FLAG_NOBLOCK is set and the process has no messages"));
 
             } else {
                 task->request_repeat_syscall();
@@ -397,8 +401,8 @@ void syscall_set_attribute(u64 pid, u64 attribute, u64 value, u64, u64, u64)
         break;
 
     default:
-        throw(Kern_Exception(-ENOSYS,
-                             "syscall_set_attribute with given request is not implemented"));
+        throw(
+            Kern_Exception(-ENOSYS, "syscall_set_attribute with given request is not implemented"));
         break;
     }
 #else
@@ -425,8 +429,7 @@ void syscall_configure_system(u64 type, u64 arg1, u64 arg2, u64, u64, u64)
         //     break;
 
     default:
-        throw(Kern_Exception(-ENOSYS,
-                             "syscall_configure_system with unknown parameter"));
+        throw(Kern_Exception(-ENOSYS, "syscall_configure_system with unknown parameter"));
         break;
     };
 }
@@ -611,8 +614,7 @@ void syscall_get_port_by_name(u64 /* const char * */ name, u64 length, u64 flags
             return;
         } else {
             if (flags & flag_noblock) {
-                throw(
-                    Kern_Exception(-ENOENT, "requested named port does not exist"));
+                throw(Kern_Exception(-ENOENT, "requested named port does not exist"));
                 return;
             } else {
                 named_port->actions.push_back(klib::make_unique<Notify_Task>(
@@ -777,6 +779,7 @@ void syscall_set_segment(u64 pid, u64 segment_type, u64 ptr, u64, u64, u64)
 
     switch (segment_type) {
     case 1:
+        // TODO: Make segments and registers consistent
         target->regs.thread_pointer() = ptr;
         break;
     case 2:
@@ -799,7 +802,7 @@ void syscall_set_segment(u64 pid, u64 segment_type, u64 ptr, u64, u64, u64)
     syscall_ret_low(current) = SUCCESS;
 }
 
-void syscall_get_segment(u64 pid, u64 segment_type, u64, u64, u64, u64)
+void syscall_get_segment(u64 pid, u64 segment_type, u64 ptr, u64, u64, u64)
 {
     const klib::shared_ptr<TaskDescriptor> &current = get_cpu_struct()->current_task;
     syscall_ret_low(current)                        = SUCCESS;
@@ -813,15 +816,22 @@ void syscall_get_segment(u64 pid, u64 segment_type, u64, u64, u64, u64)
         target = get_task_throw(pid);
 
     switch (segment_type) {
-    case 1:
+    case 1: {
         segment = target->regs.thread_pointer();
+        auto b = copy_to_user((char *)&current->regs.thread_pointer(), (char *)ptr, sizeof(segment));
+        if (not b)
+            return;
         break;
-    case 2:
+    }
+    case 2: {
         segment = target->regs.global_pointer();
+        auto b = copy_to_user((char *)&current->regs.global_pointer(), (char *)ptr, sizeof(segment));
+        if (not b)
+            return;
         break;
+    }
     case 3: {
-        auto b = copy_to_user((char *)&target->regs, (char *)current->regs.global_pointer(),
-                              sizeof(target->regs));
+        auto b = copy_to_user((char *)&target->regs, (char *)ptr, sizeof(target->regs));
         if (not b)
             return;
         break;
@@ -829,8 +839,6 @@ void syscall_get_segment(u64 pid, u64 segment_type, u64, u64, u64, u64)
     default:
         throw Kern_Exception(-ENOTSUP, "invalid segment in syscall_set_segment");
     }
-
-    syscall_ret_high(current) = segment;
 }
 
 void syscall_transfer_region(u64 to_page_table, u64 region, u64 dest, u64 flags, u64, u64)
@@ -1016,8 +1024,7 @@ void syscall_set_affinity(u64 pid, u64 affinity, u64 flags, u64, u64, u64)
     const auto cpu         = affinity == -1UL ? current_cpu->cpu_id + 1 : affinity;
 
     if (task != current_cpu->current_task) {
-        throw Kern_Exception(-EPERM,
-                             "setting affinity for another task is not implemented");
+        throw Kern_Exception(-EPERM, "setting affinity for another task is not implemented");
     }
 
     const auto cpu_count = get_cpu_count();
@@ -1026,8 +1033,7 @@ void syscall_set_affinity(u64 pid, u64 affinity, u64 flags, u64, u64, u64)
     }
 
     if (cpu == 0 or cpu != (current_cpu->cpu_id + 1)) {
-        throw Kern_Exception(-ENOTSUP,
-                             "binding affinity to a different CPU is not implemented");
+        throw Kern_Exception(-ENOTSUP, "binding affinity to a different CPU is not implemented");
     }
 
     if (not task->can_be_rebound())
@@ -1123,7 +1129,8 @@ void syscall_pause_task(u64 task_id, u64, u64, u64, u64, u64)
                 find_new_process();
             }
 
-            __atomic_or_fetch(&task->sched_pending_mask, TaskDescriptor::SCHED_PENDING_PAUSE, __ATOMIC_RELEASE);
+            __atomic_or_fetch(&task->sched_pending_mask, TaskDescriptor::SCHED_PENDING_PAUSE,
+                              __ATOMIC_RELEASE);
             // TODO: IPI other CPU
         }
         break;
@@ -1182,4 +1189,3 @@ void syscall_resume_task(u64 task_id, u64, u64, u64, u64, u64)
     else
         throw Kern_Exception(-EINVAL, "can't resume task");
 }
-

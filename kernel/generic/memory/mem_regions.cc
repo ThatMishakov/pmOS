@@ -34,8 +34,8 @@
 #include "temp_mapper.hh"
 
 #include <assert.h>
-#include <kern_logger/kern_logger.hh>
 #include <errno.h>
+#include <kern_logger/kern_logger.hh>
 #include <pmos/ipc.h>
 #include <processes/tasks.hh>
 #include <sched/sched.hh>
@@ -44,8 +44,7 @@ u64 counter = 1;
 bool Generic_Mem_Region::on_page_fault(u64 access_type, u64 pagefault_addr)
 {
     if (not has_access(access_type))
-        throw Kern_Exception(-EFAULT,
-                             "task has no permission to do the operation");
+        throw Kern_Exception(-EFAULT, "task has no permission to do the operation");
 
     if (owner->is_mapped(pagefault_addr)) {
         // Some CPUs supposedly remember invalid pages.
@@ -238,15 +237,27 @@ bool Mem_Object_Reference::alloc_page(u64 ptr_addr)
 void Mem_Object_Reference::move_to(const klib::shared_ptr<Page_Table> &new_table, u64 base_addr,
                                    u64 new_access)
 {
-    throw Kern_Exception(-ENOSYS,
-                         "move_to of Mem_Object_Reference was not yet implemented");
+    throw Kern_Exception(-ENOSYS, "move_to of Mem_Object_Reference was not yet implemented");
 }
 
 void Mem_Object_Reference::clone_to(const klib::shared_ptr<Page_Table> &new_table, u64 base_addr,
                                     u64 new_access)
 {
-    throw Kern_Exception(-ENOSYS,
-                         "move_to of Mem_Object_Reference was not yet implemented");
+    auto copy = klib::make_unique<Mem_Object_Reference>(*this);
+
+    copy->owner       = new_table.get();
+    copy->id          = __atomic_add_fetch(&counter, 1, 0);
+    copy->access_type = new_access;
+    copy->start_addr  = base_addr;
+
+    if (cow) {
+        owner->copy_pages(new_table, start_addr, base_addr, size, new_access);
+    }
+
+    // TODO: This is problematic
+    new_table->mem_objects[copy->references].regions.insert(copy.get());
+
+    new_table->paging_regions.insert(copy.release());
 }
 
 void Generic_Mem_Region::prepare_deletion() noexcept

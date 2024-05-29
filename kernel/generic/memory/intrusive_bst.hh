@@ -396,6 +396,10 @@ template<typename T, RBTreeNode<T> T::*bst_head>
 RedBlackTree<T, bst_head>::RBTreeIterator RedBlackTree<T, bst_head>::RBTreeHead::begin() noexcept
 {
     T *current = root;
+    if (!current) {
+        return RBTreeIterator {nullptr};
+    }
+
     while ((current->*bst_head).left) {
         current = (current->*bst_head).left;
     }

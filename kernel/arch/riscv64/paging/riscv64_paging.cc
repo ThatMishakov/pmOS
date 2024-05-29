@@ -142,7 +142,7 @@ void RISCV64_Page_Table::map(Page_Descriptor page, u64 virt_addr, Page_Table_Arg
     pte.executable  = not arg.execution_disabled;
     pte.available   = PAGING_FLAG_STRUCT_PAGE;
     pte.ppn         = page.takeout_page() >> 12;
-    pte.pbmt        = pbmt_type(arg);
+    pte.pbmt = 0;
 
     entry = pte;
 }
@@ -447,9 +447,59 @@ klib::shared_ptr<RISCV64_Page_Table> RISCV64_Page_Table::get_page_table_throw(u6
 
 klib::shared_ptr<RISCV64_Page_Table> RISCV64_Page_Table::create_clone()
 {
-    // Not implemented
-    throw Kern_Exception(-ENOSYS,
-                         "Cloning RISC-V page tables is not yet implemented");
+    klib::shared_ptr<RISCV64_Page_Table> new_table = create_empty();
+
+    Auto_Lock_Scope_Double(this->lock, new_table->lock);
+
+    if (new_table->mem_objects.size() != 0)
+        // Somebody has messed with the page table while it was being created
+        // I don't know if it's the best solution to not block the tables
+        // immediately but I believe it's better to block them for shorter time
+        // and abort the operation when someone tries to mess with the paging,
+        // which would either be very poor coding or a bug anyways
+        throw Kern_Exception(-EAGAIN, "page table is already cloned");
+
+    try {
+        for (auto &reg: this->mem_objects) {
+            new_table->mem_objects.insert({reg.first,
+                                           {
+                                               .max_privilege_mask = reg.second.max_privilege_mask,
+                                               .regions            = {},
+                                           }});
+
+            Auto_Lock_Scope reg_lock(reg.first->pinned_lock);
+            reg.first->register_pined(new_table->weak_from_this());
+        }
+
+        for (auto &reg: this->paging_regions) {
+            reg.clone_to(new_table, reg.start_addr, reg.access_type);
+        }
+    } catch (...) {
+        // Remove all the regions and objects. It might not be necessary, since
+        // it should be handled by the destructor but in case somebody from
+        // userspace specultively does weird stuff with the
+        // not-yet-fully-constructed page table, it's better to give them an
+        // empty table
+        for (const auto &reg: new_table->mem_objects)
+            reg.first->atomic_unregister_pined(new_table->weak_from_this());
+
+        auto it = new_table->paging_regions.begin();
+        while (it != new_table->paging_regions.end()) {
+            auto region_start = it->start_addr;
+            auto region_size  = it->size;
+
+            it->prepare_deletion();
+            new_table->paging_regions.erase(it);
+
+            new_table->invalidate_range(region_start, region_size, true);
+
+            it = new_table->paging_regions.begin();
+        }
+
+        throw;
+    }
+
+    return new_table;
 }
 
 klib::shared_ptr<RISCV64_Page_Table> RISCV64_Page_Table::capture_initial(u64 root)

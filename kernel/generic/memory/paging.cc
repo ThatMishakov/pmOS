@@ -265,8 +265,14 @@ void Page_Table::copy_pages(const klib::shared_ptr<Page_Table> &to, u64 from_add
             auto info = get_page_mapping(from_addr + offset);
             if (info.is_allocated) {
                 Page_Table_Argumments arg = {
-                    !!(access & Writeable),   info.user_access, 0,
-                    not(access & Executable), info.flags,
+                    .readable = !!(access & Readable),
+                    .writeable = !!(access & Writeable),
+                    .user_access = info.user_access,
+                    .global = false,
+                    .execution_disabled = not(access & Executable),
+                    .extra = info.flags,
+                    // TODO: Fix this
+                    .cache_policy = Memory_Type::Normal,
                 };
 
                 to->map(info.create_copy(), to_addr + offset, arg);

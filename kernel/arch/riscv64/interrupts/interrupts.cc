@@ -139,8 +139,9 @@ void page_fault(u64 virt_addr, u64 scause)
             // serial_logger.printf("Pagefault in region %s\n",
             // it->name.c_str());
             auto r = it->on_page_fault(access_type, virt_addr);
-            if (not r)
+            if (not r) {
                 task->atomic_block_by_page(page, &task->page_table->blocked_tasks);
+            }
         } else
             throw Kern_Exception(-EFAULT, "pagefault in unknown region");
     } catch (const Kern_Exception &e) {

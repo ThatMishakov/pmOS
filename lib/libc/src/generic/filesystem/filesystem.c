@@ -35,7 +35,6 @@
 
 #include <assert.h>
 #include <errno.h>
-#include <kernel/errors.h>
 #include <pmos/helpers.h>
 #include <pmos/ipc.h>
 #include <pmos/ports.h>
@@ -936,10 +935,10 @@ int vfsd_send_persistant(size_t msg_size, const void *message)
 
     result_t k_result = current->fs_port != INVALID_PORT
                             ? send_message_port(current->fs_port, msg_size, (char *)message)
-                            : ERROR_PORT_DOESNT_EXIST;
+                            : -ENOENT;
 
     int fail_count = 0;
-    while (k_result == ERROR_PORT_DOESNT_EXIST && fail_count < 5) {
+    while (k_result == -ENOENT && fail_count < 5) {
         // Request the port of the filesystem daemon
         pmos_port_t fs_port = request_filesystem_port();
         if (fs_port == INVALID_PORT) {

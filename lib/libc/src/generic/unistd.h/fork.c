@@ -2,6 +2,7 @@
 #include <pmos/ipc.h>
 #include <pmos/ports.h>
 #include <pmos/system.h>
+#include <pmos/tls.h>
 #include <errno.h>
 #include <stdio.h>
 
@@ -32,37 +33,48 @@ pid_t fork(void)
         goto error;
     }
 
-    IPC_Request_Fork_Reply reply;
-    Message_Descriptor reply_descriptor;
-    result = syscall_get_message_info(&reply_descriptor, reply_port, 0);
-    if (result != 0) {
-        errno = -result;
-        goto error;
-    }
+    struct uthread *ut = __get_tls();
+    while (1) {
+        reply_port = ut->cmd_reply_port;
 
-    if (reply_descriptor.size != sizeof(IPC_Request_Fork_Reply)) {
-        fprintf(stderr, "pmOS libC: fork() Invalid message size %ld\n", reply_descriptor.size);
-        errno = EAGAIN;
-        goto error;
-    }
+        IPC_Request_Fork_Reply reply;
+        Message_Descriptor reply_descriptor;
+        result = syscall_get_message_info(&reply_descriptor, reply_port, 0);
+        if (result == -EINTR) {
+            continue;
+        } else if (result == -EPERM || result == -ENOENT) {
+            if (reply_port == INVALID_PORT) {
+                fprintf(stderr, "pmOS libC: fork() Interrupted\n");
+                errno = EINTR;
+                goto error;
+            } else {
+                continue;
+            }
+        } 
 
-    result = get_first_message((char *)&reply, sizeof(reply), reply_port);
-    if (result != 0) {
-        errno = -result;
-        goto error;
-    }
+        if (reply_descriptor.size != sizeof(IPC_Request_Fork_Reply)) {
+            fprintf(stderr, "pmOS libC: fork() Invalid message size %ld\n", reply_descriptor.size);
+            errno = EAGAIN;
+            goto error;
+        }
 
-    if (reply.result < 0) {
-        errno = -reply.result;
-        goto error;
-    }
+        result = get_first_message((char *)&reply, sizeof(reply), reply_port);
+        if (result != 0) {
+            continue;
+        }
 
-    if (reply.result == 0) {
-        __libc_post_fork_child();
-        return 0;
-    } else {
-        __libc_post_fork_parent();
-        return reply.result;
+        if (reply.result < 0) {
+            errno = -reply.result;
+            goto error;
+        }
+
+        if (reply.result == 0) {
+            __libc_post_fork_child();
+            return 0;
+        } else {
+            __libc_post_fork_parent();
+            return reply.result;
+        }
     }
 
 error:

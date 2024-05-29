@@ -28,7 +28,6 @@
 
 #include <errno.h>
 #include <fcntl.h>
-#include <kernel/errors.h>
 #include <pmos/ipc.h>
 #include <pmos/ports.h>
 #include <pmos/system.h>

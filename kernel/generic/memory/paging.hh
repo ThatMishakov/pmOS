@@ -501,6 +501,9 @@ protected:
 
     /// Storage for the pointers to the pinned memory objects
     klib::splay_tree_map<klib::shared_ptr<Mem_Object>, Mem_Object_Data> mem_objects;
+
+    // TODO: This is not good
+    friend class Mem_Object_Reference;
 };
 
 // Arch-generic pointer to the physical address of the top-level page table

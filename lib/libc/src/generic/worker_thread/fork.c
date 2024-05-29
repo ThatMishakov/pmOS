@@ -104,7 +104,7 @@ void __libc_fork_inner(uint64_t requester, pmos_port_t reply_port, unsigned long
         fork_reply(reply_port, -r.result);
         return;
     }
-    r.result = set_registers(child_tid, SEGMENT_FS, (void *)r.value);
+    r.result = set_registers(child_tid, SEGMENT_FS, (void *)segment);
     if (r.result != 0) {
         syscall_kill_task(child_tid);
         fork_reply(reply_port, -r.result);
@@ -189,6 +189,9 @@ end:
 extern uint64_t process_task_group;
 extern pmos_port_t worker_port;
 
+// Defined in libc/src/filesystem.c
+extern int __share_fs_data(uint64_t tid);
+
 void __libc_fork_child()
 {
     __fixup_worker_uthread();
@@ -222,6 +225,7 @@ void __libc_fork_child()
     }
 
     // Create child task
+    // TODO: The function does not do what its name says
     r = syscall_new_process();
     if (r.result != 0) {
         fprintf(stderr, "pmOS libC: Failed to create child task in fork: %li\n", r.result);
@@ -237,21 +241,30 @@ void __libc_fork_child()
 
     r.result = set_registers(r.value, SEGMENT_FS, (void *)child_segment);
     if (r.result != 0) {
+        // This shouldn't fail
         _syscall_exit(-r.result);
     }
 
     // Set page table
     r.result = asign_page_table(r.value, PAGE_TABLE_SELF, PAGE_TABLE_ASIGN).result;
     if (r.result != 0) {
+        fprintf(stderr, "pmOS libC: Failed to set page table in fork: %li\n", r.result);
         _syscall_exit(-r.result);
     }
 
-    resume_task(r.value);
+    // Share filesystem data
+    result = __share_fs_data(r.value);
+    if (result != 0) {
+        fprintf(stderr, "pmOS libC: Failed to share filesystem data in fork: %i\n", result);
+        _syscall_exit(-result);
+    }
 
     assert(__fork_fix_thread(child_uthread, thread_tid) != -1);
 
+    resume_task(r.value);
+
     // Reply to child and resume it
-    fork_reply(child_uthread->cmd_reply_port, r.value);
+    fork_reply(child_uthread->cmd_reply_port, 0);
 }
 
 atfork_fn __static_pre_fork[] = {};

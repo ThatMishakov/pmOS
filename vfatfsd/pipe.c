@@ -79,11 +79,13 @@ void test_pipe()
     } else if (pid == -1) {
         perror("fork");
         return;
+    } else {
+        printf("Forked! Child PID: %i\n", pid);
     }
     close(pipefd[1]);
 
     // Read from the pipe
-    while (nbytes = read(pipefd[0], buf, sizeof(buf))) {
+    while ((nbytes = read(pipefd[0], buf, sizeof(buf))) > 0) {
         printf("Read %d bytes: %s\n", nbytes, buf);
     }
     close(pipefd[0]);

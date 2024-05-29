@@ -2,24 +2,26 @@
     .globl __do_fork
     .type __do_fork, @function
 __do_fork:
-    addi sp, sp, -112
-    sd ra, 104(sp)
-    sd fp, 96(sp)
-    addi fp, sp, 112
+    addi sp, sp, -120
+    sd ra, 112(sp)
+    sd fp, 104(sp)
+    addi fp, sp, 120
 
     # Save saved registers
-    sd s0, 0(sp)
-    sd s1, 8(sp)
-    sd s2, 16(sp)
-    sd s3, 24(sp)
-    sd s4, 32(sp)
-    sd s5, 40(sp)
-    sd s6, 48(sp)
-    sd s7, 56(sp)
-    sd s8, 64(sp)
-    sd s9, 72(sp)
-    sd s10, 80(sp)
-    sd s11, 88(sp)
+    sd s0, 8(sp)
+    sd s1, 16(sp)
+    sd s2, 24(sp)
+    sd s3, 32(sp)
+    sd s4, 40(sp)
+    sd s5, 48(sp)
+    sd s6, 56(sp)
+    sd s7, 64(sp)
+    sd s8, 72(sp)
+    sd s9, 80(sp)
+    sd s10, 88(sp)
+    sd s11, 96(sp)
+
+    sd gp, (sp)
 
     # Pass the stack pointer as the third argument to C
     mv a2, sp
@@ -28,9 +30,9 @@ __do_fork:
     call __libc_fork_inner
 
     # The saved registers are only needed for the child process
-    ld ra, 104(sp)
-    ld s0, 96(sp)
-    addi sp, sp, 112
+    ld ra, 112(sp)
+    ld s0, 104(sp)
+    addi sp, sp, 120
 
     # Return from the function
     ret
@@ -39,7 +41,7 @@ __do_fork:
     .type __fork_child_entry_point, @function
 __fork_child_entry_point:
     mv sp, a0
-    addi fp, sp, -112
+    addi fp, sp, -120
 
     # Restore saved registers
     ld s0, 0(sp)
@@ -56,14 +58,14 @@ __fork_child_entry_point:
     ld s11, 88(sp)
 
     # Set global pointer
-    la gp, __global_pointer$
+    ld gp, (sp)
 
     # Call the C function
     call __libc_fork_child
 
     # Exit the child process
-    ld ra, 104(sp)
-    ld s0, 96(sp)
-    addi sp, sp, 112
+    ld ra, 112(sp)
+    ld s0, 104(sp)
+    addi sp, sp, 120
 
     ret
