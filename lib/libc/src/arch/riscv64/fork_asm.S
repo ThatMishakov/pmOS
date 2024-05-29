@@ -44,18 +44,18 @@ __fork_child_entry_point:
     addi fp, sp, -120
 
     # Restore saved registers
-    ld s0, 0(sp)
-    ld s1, 8(sp)
-    ld s2, 16(sp)
-    ld s3, 24(sp)
-    ld s4, 32(sp)
-    ld s5, 40(sp)
-    ld s6, 48(sp)
-    ld s7, 56(sp)
-    ld s8, 64(sp)
-    ld s9, 72(sp)
-    ld s10, 80(sp)
-    ld s11, 88(sp)
+    ld s0, 8(sp)
+    ld s1, 16(sp)
+    ld s2, 24(sp)
+    ld s3, 32(sp)
+    ld s4, 40(sp)
+    ld s5, 48(sp)
+    ld s6, 56(sp)
+    ld s7, 64(sp)
+    ld s8, 72(sp)
+    ld s9, 80(sp)
+    ld s10, 88(sp)
+    ld s11, 96(sp)
 
     # Set global pointer
     ld gp, (sp)

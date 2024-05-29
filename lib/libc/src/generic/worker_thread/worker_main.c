@@ -122,47 +122,47 @@ void worker_main()
 
         IPC_Generic_Msg *ipc_msg = (IPC_Generic_Msg *)msg_buff;
 
-        switch (ipc_msg->type) {
-            case IPC_Exit_NUM: {
-                IPC_Exit *exit_msg = (IPC_Exit *)ipc_msg;
-                if (exit_msg->exit_type == IPC_EXIT_TYPE_NORMAL || exit_msg->exit_type == IPC_EXIT_TYPE_ABNORMAL) {
-                    exit_code = exit_msg->exit_code;
-                    abnormal_termination = exit_msg->exit_type == IPC_EXIT_TYPE_ABNORMAL;
-                    running = false;
-                }
-                break;
+switch (ipc_msg->type) {
+    case IPC_Exit_NUM: {
+        IPC_Exit *exit_msg = (IPC_Exit *)ipc_msg;
+        if (exit_msg->exit_type == IPC_EXIT_TYPE_NORMAL || exit_msg->exit_type == IPC_EXIT_TYPE_ABNORMAL) {
+            exit_code = exit_msg->exit_code;
+            abnormal_termination = exit_msg->exit_type == IPC_EXIT_TYPE_ABNORMAL;
+            running = false;
+        }
+        break;
+    }
+    case IPC_Request_Fork_NUM: {
+        IPC_Request_Fork *fork_msg = (IPC_Request_Fork *)ipc_msg;
+        __do_fork(msg.sender, fork_msg->reply_port);
+        break;
+    }
+    case IPC_Kernel_Named_Port_Notification_NUM: {
+        IPC_Kernel_Named_Port_Notification *notification = (IPC_Kernel_Named_Port_Notification *)ipc_msg;
+        size_t len = msg.size - sizeof(IPC_Kernel_Named_Port_Notification);
+        if (len == strlen(processd_port_name) && strncmp(notification->port_name, processd_port_name, len) == 0) {
+            processd_port = notification->port_num;
+            if (__register_process() < 0) {
+                fprintf(stderr, "pmOS libC: Failed to register process\n");
+                running = false;
             }
-            case IPC_Request_Fork_NUM: {
-                IPC_Request_Fork *fork_msg = (IPC_Request_Fork *)ipc_msg;
-                __do_fork(msg.sender, fork_msg->reply_port);
-                break;
-            }
-            case IPC_Kernel_Named_Port_Notification_NUM: {
-                IPC_Kernel_Named_Port_Notification *notification = (IPC_Kernel_Named_Port_Notification *)ipc_msg;
-                size_t len = msg.size - sizeof(IPC_Kernel_Named_Port_Notification);
-                if (len == strlen(processd_port_name) && strncmp(notification->port_name, processd_port_name, len) == 0) {
-                    processd_port = notification->port_num;
-                    if (__register_process() < 0) {
-                        fprintf(stderr, "pmOS libC: Failed to register process\n");
-                        running = false;
-                    }
-                }
-                break;
-            }
-            case IPC_Register_Process_Reply_NUM: {
-                IPC_Register_Process_Reply *reply = (IPC_Register_Process_Reply *)ipc_msg;
-                if (reply->result != 0) {
-                    fprintf(stderr, "pmOS libC: Failed to register process\n");
-                    running = false;
-                }
-                registering_process = false;
-                __pid_cached = reply->pid;
-                break;
-            }
-            default:
-                // TODO: Handle messages
-                printf("pmOS libC: Received message %i from task 0x%lx PID (cached) %li\n", ipc_msg->type, msg.sender, __pid_cached);
-                break;
+        }
+        break;
+    }
+    case IPC_Register_Process_Reply_NUM: {
+        IPC_Register_Process_Reply *reply = (IPC_Register_Process_Reply *)ipc_msg;
+        if (reply->result != 0) {
+            fprintf(stderr, "pmOS libC: Failed to register process\n");
+            running = false;
+        }
+        registering_process = false;
+        __pid_cached = reply->pid;
+        break;
+    }
+    default:
+        // TODO: Handle messages
+        printf("pmOS libC: Received message %i from task 0x%lx PID (cached) %li\n", ipc_msg->type, msg.sender, __pid_cached);
+        break;
         }
     }
 

@@ -70,8 +70,8 @@ void test_pipe()
             }
             sleep(1);
         }
-        // close(pipefd[1]);
-        // close(fd2);
+        close(pipefd[1]);
+        close(fd2);
         return;
     } else if (pid == -1) {
         perror("fork");
