@@ -227,3 +227,7 @@ result_t request_named_port(const char *name, size_t name_length, pmos_port_t re
 {
     return pmos_syscall(SYSCALL_REQUEST_NAMED_PORT, name, name_length, reply_port, flags).result;
 }
+
+result_t pause_task(uint64_t tid) { return pmos_syscall(SYSCALL_PAUSE_TASK, tid).result; }
+
+result_t resume_task(uint64_t tid) { return pmos_syscall(SYSCALL_RESUME_TASK, tid).result; }

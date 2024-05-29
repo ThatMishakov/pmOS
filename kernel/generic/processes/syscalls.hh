@@ -200,11 +200,15 @@ void syscall_yield(u64, u64, u64, u64, u64, u64);
 void syscall_map_mem_object(u64 page_table_id, u64 addr_start, u64 size_bytes, u64 access,
                             u64 object_id, u64 offset);
 
+void syscall_pause_task(u64 task_id, u64, u64, u64, u64, u64);
+
 void syscall_get_time(u64 mode, u64, u64, u64, u64, u64);
 
 void syscall_system_info(u64 info_type, u64, u64, u64, u64, u64);
 
 void syscall_kill_task(u64 task_id, u64, u64, u64, u64, u64);
+
+void syscall_resume_task(u64 task_id, u64, u64, u64, u64, u64);
 
 inline u64 &syscall_arg1(const klib::shared_ptr<TaskDescriptor> &task)
 {

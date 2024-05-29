@@ -537,3 +537,8 @@ extern "C" void bootstrap_entry(CPU_Info *i)
 
     serial_logger.printf("CPU %i (hart %i) initialized!\n", i->cpu_id, i->hart_id);
 }
+
+bool TaskDescriptor::is_kernel_task() const
+{
+    return is_system;
+}

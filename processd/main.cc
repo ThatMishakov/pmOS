@@ -485,11 +485,11 @@ void pid_for_task(IPC_PID_For_Task *m, uint64_t sender_task_id)
             tasks[task_id] = std::move(task);
 
             if (m->flags & PID_FOR_TASK_PARENT_PID) {
-                tp->waiting_ports.push_back({Task::ParentPIDRequest{m->reply_port}});
+                tp->waiting_ports.push_back({Task::ParentPIDRequest {m->reply_port}});
             } else if (m->flags & PID_FOR_TASK_GROUP_ID) {
-                tp->waiting_ports.push_back({Task::PgroupRequest{m->reply_port}});
+                tp->waiting_ports.push_back({Task::PgroupRequest {m->reply_port}});
             } else {
-                tp->waiting_ports.push_back({Task::PIDRequest{m->reply_port}});
+                tp->waiting_ports.push_back({Task::PIDRequest {m->reply_port}});
             }
         } else {
             IPC_PID_For_Task_Reply reply;
@@ -519,11 +519,11 @@ void pid_for_task(IPC_PID_For_Task *m, uint64_t sender_task_id)
             send_message(m->reply_port, reply);
         } else {
             if (m->flags & PID_FOR_TASK_PARENT_PID)
-                it->second->waiting_ports.push_back(Task::ParentPIDRequest{m->reply_port});
+                it->second->waiting_ports.push_back(Task::ParentPIDRequest {m->reply_port});
             else if (m->flags & PID_FOR_TASK_GROUP_ID)
-                it->second->waiting_ports.push_back(Task::PgroupRequest{m->reply_port});
+                it->second->waiting_ports.push_back(Task::PgroupRequest {m->reply_port});
             else
-                it->second->waiting_ports.push_back(Task::PIDRequest{m->reply_port});
+                it->second->waiting_ports.push_back(Task::PIDRequest {m->reply_port});
         }
     }
 }
@@ -562,14 +562,82 @@ void set_group(IPC_Set_Process_Group *m, uint64_t task_id)
         task->present        = false;
         task->parent_process = nullptr;
 
-        tp->waiting_ports.push_back(Task::SetGroupRequest{m->reply_port, m->pid, m->pgid});
+        tp->waiting_ports.push_back(Task::SetGroupRequest {m->reply_port, m->pid, m->pgid});
     } else {
         if (it->second->present) {
             process_set_group({m->reply_port, m->pid, m->pgid}, it->second.get());
         } else {
-            it->second->waiting_ports.push_back(Task::SetGroupRequest{m->reply_port, m->pid, m->pgid});
+            it->second->waiting_ports.push_back(
+                Task::SetGroupRequest {m->reply_port, m->pid, m->pgid});
         }
     }
+}
+
+void preregister_process_try_reply(pmos_port_t reply_port, unsigned flags, pid_t result)
+{
+    IPC_Preregister_Process_Reply reply;
+    reply.type   = IPC_Preregister_Process_Reply_NUM;
+    reply.flags  = flags;
+    reply.result = result;
+
+    try {
+        send_message(reply_port, reply);
+    } catch (std::system_error &e) {
+        printf("processd: Error %d sending message to port %lu for preregister_process\n",
+               e.code().value(), reply_port);
+    }
+}
+
+void preregister_process(IPC_Preregister_Process *m, uint64_t sender_task)
+{
+    auto it = tasks.find(sender_task);
+    if (it == tasks.end()) {
+        preregister_process_try_reply(m->reply_port, 0, -ENOENT);
+        return;
+    }
+
+    auto current = it->second.get();
+    auto parent  = current->parent_process;
+    if (!current->present) {
+        preregister_process_try_reply(m->reply_port, 0, -ENOENT);
+        return;
+    }
+
+    pid_t parent_pid = m->parent_pid == 0 ? parent->process_id : m->parent_pid;
+    if ((parent_pid <= 0) || (uint64_t)parent_pid != parent->process_id) {
+        preregister_process_try_reply(m->reply_port, 0, -EPERM);
+        return;
+    }
+
+    it = tasks.find(m->worker_task_id);
+    if (it == tasks.end()) {
+        it                  = tasks.emplace(m->worker_task_id, std::make_unique<Task>()).first;
+        it->second->task_id = m->worker_task_id;
+    } else if (it->second->present) {
+        preregister_process_try_reply(m->reply_port, 0, -EEXIST);
+        return;
+    }
+    auto task = it->second.get();
+
+    auto process                   = std::make_unique<Process>();
+    auto pp                        = process.get();
+    process->process_id            = next_process_id++;
+    processes[process->process_id] = std::move(process);
+
+    pp->parent_pid = parent_pid;
+    pp->parent     = parent;
+    parent->children.insert(pp);
+
+    pp->parent_group = parent->parent_group;
+    pp->parent_group->processes.insert(pp);
+
+    pp->tasks.insert(task);
+    task->parent_process = pp;
+    task->present        = true;
+
+    preregister_process_try_reply(m->reply_port, 0, pp->process_id);
+
+    process_requests(task);
 }
 
 int main()
@@ -634,6 +702,19 @@ int main()
 
             IPC_Set_Process_Group *m = reinterpret_cast<IPC_Set_Process_Group *>(ipc_msg);
             set_group(m, msg.sender);
+            break;
+        }
+        case IPC_Preregister_Process_NUM: {
+            if (msg.size < sizeof(IPC_Preregister_Process)) {
+                printf("processd: Recieved IPC_Preregister_Process that is too small from task %li "
+                       "of size "
+                       "%li\n",
+                       msg.sender, msg.size);
+                break;
+            }
+
+            IPC_Preregister_Process *m = reinterpret_cast<IPC_Preregister_Process *>(ipc_msg);
+            preregister_process(m, msg.sender);
             break;
         }
         case IPC_Kernel_Group_Task_Changed_NUM: {

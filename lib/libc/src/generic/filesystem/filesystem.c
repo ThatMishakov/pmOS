@@ -28,7 +28,7 @@
 
 #include "filesystem.h"
 
-#include "../fork/fork.h"
+#include "../worker_thread/fork.h"
 #include "file.h"
 #include "filesystem_struct.h"
 #include "ipc_queue.h"
@@ -1066,14 +1066,14 @@ int __clone_fs_data(struct Filesystem_Data **new_data, uint64_t for_task, bool e
     return 0;
 }
 
-void __libc_fixup_fs_post_fork(struct fork_for_child *child_data)
+void __libc_fixup_fs_post_fork(struct Filesystem_Data *child_data)
 {
     if (fs_data != NULL)
         destroy_filesystem(fs_data);
     else
         pthread_spin_unlock(&fs_data_lock);
 
-    fs_data = child_data->fs_data;
+    fs_data = child_data;
 
     // Fixup the reply port
     struct uthread *current = __get_tls();

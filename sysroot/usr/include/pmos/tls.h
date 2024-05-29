@@ -128,6 +128,8 @@ struct uthread {
  */
 void *__thread_pointer_from_uthread(struct uthread *uthread);
 
+struct uthread *__find_uthread(uint64_t tid);
+
 /**
  * Returns TLS uthread pointer for the current thread
  */

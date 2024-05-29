@@ -354,6 +354,10 @@ syscall_r pmos_get_time(uint64_t mode);
 
 result_t request_named_port(const char *name, size_t name_length, pmos_port_t reply_port, uint64_t flags);
 
+result_t pause_task(uint64_t tid);
+
+result_t resume_task(uint64_t tid);
+
 #endif
 
 #if defined(__cplusplus)

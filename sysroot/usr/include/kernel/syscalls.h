@@ -82,5 +82,7 @@
 #define SYSCALL_GET_TIME           43
 #define SYSCALL_GET_SYSTEM_INFO    44
 #define SYSCALL_KILL_TASK          45
+#define SYSCALL_PAUSE_TASK         46
+#define SYSCALL_RESUME_TASK        47
 
 #endif

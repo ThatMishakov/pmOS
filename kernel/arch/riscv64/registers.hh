@@ -118,6 +118,8 @@ struct RiscV64Regs {
 
     inline void request_syscall_restart() { syscall_restart = 1; }
     inline void clear_syscall_restart() { syscall_restart = 0; }
+
+    inline bool syscall_pending_restart() const { return syscall_restart; }
 };
 
 // Generic Task registers, for all architectures

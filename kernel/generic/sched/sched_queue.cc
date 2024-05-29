@@ -44,6 +44,13 @@ klib::shared_ptr<TaskDescriptor> sched_queue::pop_front() noexcept
     return ptr;
 }
 
+klib::shared_ptr<TaskDescriptor> sched_queue::front() const noexcept
+{
+    assert(lock.is_locked() and "Queue is not locked!");
+
+    return first;
+}
+
 void sched_queue::push_back(const klib::shared_ptr<TaskDescriptor> &desc) noexcept
 {
     assert(lock.is_locked() and "Queue is not locked!");

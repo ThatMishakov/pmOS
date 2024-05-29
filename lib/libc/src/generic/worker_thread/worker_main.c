@@ -64,6 +64,8 @@ int __register_process()
     return 0;
 }
 
+void __do_fork(uint64_t requester, pmos_port_t reply_port);
+
 void worker_main()
 {
     worker_thread = __get_tls();
@@ -128,6 +130,11 @@ void worker_main()
                     abnormal_termination = exit_msg->exit_type == IPC_EXIT_TYPE_ABNORMAL;
                     running = false;
                 }
+                break;
+            }
+            case IPC_Request_Fork_NUM: {
+                IPC_Request_Fork *fork_msg = (IPC_Request_Fork *)ipc_msg;
+                __do_fork(msg.sender, fork_msg->reply_port);
                 break;
             }
             case IPC_Kernel_Named_Port_Notification_NUM: {

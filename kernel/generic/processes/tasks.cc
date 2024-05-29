@@ -40,6 +40,7 @@
 #include <pmos/tls.h>
 #include <sched/defs.hh>
 #include <sched/sched.hh>
+#include <errno.h>
 
 klib::shared_ptr<TaskDescriptor>
     TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel level)
@@ -170,6 +171,21 @@ void TaskDescriptor::atomic_kill()
         else
             reschedule = true;
     }
+
+    bool cont = true;
+    while (cont) {
+        klib::shared_ptr<TaskDescriptor> t;
+        {
+            Auto_Lock_Scope scope_lock(waiting_to_pause.lock);
+            t = waiting_to_pause.front();
+        }
+        if (!t)
+            cont = false;
+        else {
+            t->atomic_try_unblock();
+        }
+    }
+
     if (reschedule)
         ::reschedule();
 
@@ -427,4 +443,10 @@ TaskDescriptor::~TaskDescriptor() noexcept
 
     Auto_Lock_Scope scope_lock(tasks_map_lock);
     tasks_map.erase(task_id);
+}
+
+void TaskDescriptor::interrupt_restart_syscall()
+{
+    pop_repeat_syscall();
+    regs.syscall_retval_low() = -EINTR;
 }

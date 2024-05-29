@@ -45,6 +45,7 @@
 
 sched_queue blocked;
 sched_queue uninit;
+sched_queue paused;
 
 Spinlock tasks_map_lock;
 sched_map tasks_map;
@@ -216,6 +217,16 @@ void TaskDescriptor::atomic_erase_from_queue(sched_queue *q) noexcept
     unblock();
 }
 
+void TaskDescriptor::atomic_try_unblock()
+{
+    Auto_Lock_Scope scope_lock(sched_lock);
+
+    if (status != TaskStatus::TASK_BLOCKED)
+        return;
+
+    unblock();
+}
+
 void TaskDescriptor::unblock() noexcept
 {
     const auto self = weak_self.lock();
@@ -354,6 +365,39 @@ void reschedule()
         t->cleanup();
 
         find_new_process();
+    }
+
+    while (cpu_str->current_task->sched_pending_mask & TaskDescriptor::SCHED_PENDING_PAUSE) {
+        auto current_task = cpu_str->current_task;
+
+        {
+            Auto_Lock_Scope l(current_task->sched_lock);
+            if (current_task->status != TaskStatus::TASK_DYING) {
+                current_task->status = TaskStatus::TASK_PAUSED;
+
+                current_task->parent_queue = &paused;
+                {
+                    Auto_Lock_Scope l(paused.lock);
+                    paused.push_back(current_task);
+                }
+                find_new_process();
+            }
+
+            bool cont = true;
+            while (cont) {
+                klib::shared_ptr<TaskDescriptor> t;
+                {
+                    // TODO: This is potentially a race condition
+                    Auto_Lock_Scope scope_lock(current_task->waiting_to_pause.lock);
+                    t = current_task->waiting_to_pause.front();
+                }
+                if (!t)
+                    cont = false;
+                else {
+                    t->atomic_try_unblock();
+                }
+            }
+        }
     }
 }
 

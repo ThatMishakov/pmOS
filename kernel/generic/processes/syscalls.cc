@@ -29,9 +29,9 @@
 #include <kernel/attributes.h>
 #include <kernel/block.h>
 #include <kernel/com.h>
-#include <kernel/sysinfo.h>
 #include <kernel/flags.h>
 #include <kernel/messaging.h>
+#include <kernel/sysinfo.h>
 #include <lib/vector.hh>
 #include <memory/paging.hh>
 #include <messaging/messaging.hh>
@@ -56,7 +56,7 @@
 #endif
 
 using syscall_function = void (*)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t);
-klib::array<syscall_function, 46> syscall_table = {
+klib::array<syscall_function, 48> syscall_table = {
     syscall_exit,
     get_task_id,
     syscall_create_process,
@@ -107,6 +107,8 @@ klib::array<syscall_function, 46> syscall_table = {
     syscall_get_time,
     syscall_system_info,
     syscall_kill_task,
+    syscall_pause_task,
+    syscall_resume_task,
 };
 
 extern "C" void syscall_handler()
@@ -134,6 +136,7 @@ extern "C" void syscall_handler()
     }
 
     try {
+        // TODO: This crashes if the syscall is not implemented
         if (call_n > syscall_table.size() or syscall_table[call_n] == nullptr)
             throw Kern_Exception(ERROR_NOT_SUPPORTED, "syscall is not supported");
 
@@ -521,7 +524,8 @@ void syscall_complete_interrupt(u64 intno, u64, u64, u64, u64, u64)
     try {
         c->int_handlers.ack_interrupt(intno, task->task_id);
     } catch (Kern_Exception &e) {
-        serial_logger.printf("Error acking interrupt: %s, task %i intno %i CPU %i\n", e.err_message, task->task_id, intno, c->cpu_id);
+        serial_logger.printf("Error acking interrupt: %s, task %i intno %i CPU %i\n", e.err_message,
+                             task->task_id, intno, c->cpu_id);
         throw e;
     }
     syscall_ret_low(task) = SUCCESS;
@@ -636,12 +640,15 @@ void syscall_get_port_by_name(u64 /* const char * */ name, u64 length, u64 flags
 
 void syscall_request_named_port(u64 string_ptr, u64 length, u64 reply_port, u64 flags, u64, u64)
 {
-    const task_ptr &task = get_current_task();
+    const task_ptr task = get_current_task();
 
     auto str = klib::string::fill_from_user(reinterpret_cast<char *>(string_ptr), length);
     if (not str.first) {
         return;
     }
+
+    // From this point on, the process can't block
+    syscall_ret_low(task) = SUCCESS;
 
     klib::shared_ptr<Port> port_ptr = Port::atomic_get_port_throw(reply_port);
 
@@ -670,9 +677,6 @@ void syscall_request_named_port(u64 string_ptr, u64 length, u64 reply_port, u64 
         auto it = global_named_ports.storage.insert({new_desc->name, new_desc});
         it.first->second->actions.push_back(klib::make_unique<Send_Message>(port_ptr));
     }
-
-    // This is a race condition on SMP
-    syscall_ret_low(task) = SUCCESS;
 }
 
 void syscall_set_log_port(u64 port, u64 flags, u64, u64, u64, u64)
@@ -758,9 +762,7 @@ void syscall_get_page_table(u64 pid, u64, u64, u64, u64, u64)
 // somewhere, so this syscall is essentially that
 void syscall_set_segment(u64 pid, u64 segment_type, u64 ptr, u64, u64, u64)
 {
-    const klib::shared_ptr<TaskDescriptor> &current = get_cpu_struct()->current_task;
-    syscall_ret_low(current)                        = SUCCESS;
-
+    const klib::shared_ptr<TaskDescriptor> current = get_cpu_struct()->current_task;
     klib::shared_ptr<TaskDescriptor> target {};
 
     if (pid == 0 or current->task_id == pid)
@@ -780,6 +782,12 @@ void syscall_set_segment(u64 pid, u64 segment_type, u64 ptr, u64, u64, u64)
     case 2:
         target->regs.global_pointer() = ptr;
         break;
+    case 3: {
+        auto b = copy_from_user((char *)&target->regs, (char *)ptr, sizeof(target->regs));
+        if (not b)
+            return;
+        break;
+    }
     default:
         throw Kern_Exception(ERROR_OUT_OF_RANGE, "invalid segment in syscall_set_segment");
     }
@@ -788,6 +796,7 @@ void syscall_set_segment(u64 pid, u64 segment_type, u64 ptr, u64, u64, u64)
     if (target == current)
         restore_segments(target.get());
 #endif
+    syscall_ret_low(current) = SUCCESS;
 }
 
 void syscall_get_segment(u64 pid, u64 segment_type, u64, u64, u64, u64)
@@ -810,6 +819,13 @@ void syscall_get_segment(u64 pid, u64 segment_type, u64, u64, u64, u64)
     case 2:
         segment = target->regs.global_pointer();
         break;
+    case 3: {
+        auto b = copy_to_user((char *)&target->regs, (char *)current->regs.global_pointer(),
+                              sizeof(target->regs));
+        if (not b)
+            return;
+        break;
+    }
     default:
         throw Kern_Exception(ERROR_OUT_OF_RANGE, "invalid segment in syscall_set_segment");
     }
@@ -1024,7 +1040,8 @@ void syscall_set_affinity(u64 pid, u64 affinity, u64 flags, u64, u64, u64)
         task->cpu_affinity = cpu;
     }
 
-    //serial_logger.printf("Task %d (%s) affinity set to %d\n", task->task_id, task->name.c_str(), cpu);
+    // serial_logger.printf("Task %d (%s) affinity set to %d\n", task->task_id, task->name.c_str(),
+    // cpu);
 
     reschedule();
 }
@@ -1063,3 +1080,106 @@ void syscall_system_info(u64 param, u64, u64, u64, u64, u64)
         throw Kern_Exception(ERROR_NOT_SUPPORTED, "unknown param in syscall_system_info");
     }
 }
+
+void syscall_pause_task(u64 task_id, u64, u64, u64, u64, u64)
+{
+    const auto current_task = get_current_task();
+    if (current_task->regs.syscall_pending_restart())
+        current_task->pop_repeat_syscall();
+
+    const auto task = task_id == 0 ? current_task : get_task_throw(task_id);
+    if (task->is_kernel_task())
+        throw Kern_Exception(ERROR_NO_PERMISSION, "can't pause system task");
+
+    Auto_Lock_Scope lock(task->sched_lock);
+    switch (task->status) {
+    case TaskStatus::TASK_RUNNING: {
+        if (current_task == task) {
+            task->status = TaskStatus::TASK_PAUSED;
+
+            syscall_ret_low(current_task) = SUCCESS;
+
+            task->parent_queue = &paused;
+            {
+                Auto_Lock_Scope lock(paused.lock);
+                paused.push_back(task);
+            }
+            find_new_process();
+        } else {
+            {
+                Auto_Lock_Scope lock(current_task->sched_lock);
+                if (current_task->status == TaskStatus::TASK_DYING)
+                    throw Kern_Exception(ERROR_GENERAL, "can't block dying task");
+
+                current_task->request_repeat_syscall();
+
+                current_task->status       = TaskStatus::TASK_BLOCKED;
+                current_task->blocked_by   = nullptr;
+                current_task->parent_queue = &task->waiting_to_pause;
+                {
+                    Auto_Lock_Scope lock(current_task->waiting_to_pause.lock);
+                    task->waiting_to_pause.push_back(current_task);
+                }
+                find_new_process();
+            }
+
+            __atomic_or_fetch(&task->sched_pending_mask, TaskDescriptor::SCHED_PENDING_PAUSE, __ATOMIC_RELEASE);
+            // TODO: IPI other CPU
+        }
+        break;
+    }
+    case TaskStatus::TASK_PAUSED:
+        syscall_ret_low(current_task) = SUCCESS;
+        return;
+    case TaskStatus::TASK_READY: {
+        task->status = TaskStatus::TASK_PAUSED;
+        task->parent_queue->atomic_erase(task);
+
+        syscall_ret_low(current_task) = SUCCESS;
+
+        task->parent_queue = &paused;
+        Auto_Lock_Scope lock(paused.lock);
+        paused.push_back(task);
+        break;
+    }
+    case TaskStatus::TASK_UNINIT:
+        throw Kern_Exception(ERROR_PROCESS_INITED, "process is not in UNINIT state");
+    case TaskStatus::TASK_SPECIAL:
+        throw Kern_Exception(ERROR_NO_PERMISSION, "can't pause special task");
+    case TaskStatus::TASK_DYING:
+    case TaskStatus::TASK_DEAD:
+        throw Kern_Exception(ERROR_GENERAL, "can't pause dead task");
+    case TaskStatus::TASK_BLOCKED: {
+        if (task->regs.syscall_pending_restart())
+            task->interrupt_restart_syscall();
+
+        task->status = TaskStatus::TASK_PAUSED;
+        task->parent_queue->atomic_erase(task);
+
+        syscall_ret_low(current_task) = SUCCESS;
+
+        task->parent_queue = &paused;
+        Auto_Lock_Scope lock(paused.lock);
+        paused.push_back(task);
+        break;
+    }
+    }
+}
+
+void syscall_resume_task(u64 task_id, u64, u64, u64, u64, u64)
+{
+    // TODO: Start task syscall is redundant
+    const auto current_task = get_current_task();
+    const auto task         = get_task_throw(task_id);
+
+    Auto_Lock_Scope lock(task->sched_lock);
+    syscall_ret_low(current_task) = SUCCESS;
+
+    if (task->is_uninited() or task->status == TaskStatus::TASK_PAUSED)
+        task->init();
+    else if (task->status == TaskStatus::TASK_RUNNING)
+        return;
+    else
+        throw Kern_Exception(ERROR_GENERAL, "can't resume task");
+}
+

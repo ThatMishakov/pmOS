@@ -63,6 +63,7 @@ enum class TaskStatus : u64 {
     TASK_UNINIT,
     TASK_SPECIAL, // Would be used by idle or system tasks
     TASK_DYING,
+    TASK_PAUSED,
     TASK_DEAD
 };
 
@@ -103,9 +104,14 @@ public:
     klib::shared_ptr<TaskDescriptor> queue_prev = nullptr;
     sched_queue *parent_queue                   = nullptr;
     TaskStatus status                           = TaskStatus::TASK_UNINIT;
+    u32 sched_pending_mask                      = 0;
     priority_t priority                         = 8;
     u32 cpu_affinity                            = 0;
     Spinlock sched_lock;
+
+    static constexpr int SCHED_PENDING_PAUSE = 1;
+
+    sched_queue waiting_to_pause;
 
     klib::weak_ptr<TaskDescriptor> weak_self;
 
@@ -271,6 +277,15 @@ public:
      * @return u64 Mas of the port
      */
     u64 atomic_get_notifier_mask(u64 port_id);
+
+    // Returns true if the task is a kernel task
+    bool is_kernel_task() const;
+
+    // Interrupts restarting syscall, setting the return value to interrupted error
+    void interrupt_restart_syscall();
+
+    // Unblocks the task if it is not already blocked
+    void atomic_try_unblock();
 protected:
     TaskDescriptor() = default;
 

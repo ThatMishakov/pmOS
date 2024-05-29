@@ -981,6 +981,32 @@ typedef struct IPC_Exit {
     void *exit_code;
 } IPC_Exit;
 
+#define IPC_Request_Fork_NUM 0x161
+typedef struct IPC_Request_Fork {
+    /// Message type (must be IPC_Request_Fork_NUM)
+    uint32_t type;
+
+    /// Flags
+    uint32_t flags;
+
+    /// Port for the reply
+    pmos_port_t reply_port;
+
+    // The task that sends the message requests the fork
+} IPC_Request_Fork;
+
+#define IPC_Request_Fork_Reply_NUM 0x162
+typedef struct IPC_Request_Fork_Reply {
+    /// Message type (must be IPC_Request_Fork_Reply_NUM)
+    uint32_t type;
+
+    /// Flags
+    uint32_t flags;
+
+    /// Result code (0 for child, positive for parent, -errno for error)
+    int64_t result;
+} IPC_Request_Fork_Reply;
+
 #define IPC_Refresh_Signals_NUM 0x170
 typedef struct IPC_Refresh_Signals {
     /// Message type (must be IPC_Updated_Signals_NUM)
@@ -1155,6 +1181,36 @@ typedef struct IPC_Raise_Signal_Reply {
     /// Result code
     int64_t result;
 } IPC_Raise_Signal_Reply;
+
+#define IPC_Preregister_Process_NUM 0x18a
+typedef struct IPC_Preregister_Process {
+    /// Message type (must be IPC_Register_Process_NUM)
+    uint32_t type;
+
+    /// Flags
+    uint32_t flags;
+
+    /// Port for the reply
+    pmos_port_t reply_port;
+
+    /// Worker task ID of the new process
+    uint64_t worker_task_id;
+
+    /// PID of the parrent (0 for self)
+    int64_t parent_pid;
+} IPC_Preregister_Process;
+
+#define IPC_Preregister_Process_Reply_NUM 0x18b
+typedef struct IPC_Preregister_Process_Reply {
+    /// Message type (must be IPC_Register_Process_Reply_NUM)
+    uint32_t type;
+
+    /// Flags
+    uint32_t flags;
+    
+    /// Result code (if negative) or PID (if positive)
+    int64_t result;
+} IPC_Preregister_Process_Reply;
 
 #if defined(__cplusplus)
 } /* extern "C" */

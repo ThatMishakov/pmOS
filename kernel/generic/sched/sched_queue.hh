@@ -96,6 +96,9 @@ public:
     /// Queue destructor. Before the destruction, deletes all the tasks from the queue
     virtual ~sched_queue() noexcept;
 
+    /// Returns the first task in the queue
+    klib::shared_ptr<TaskDescriptor> front() const noexcept;
+
 protected:
     klib::shared_ptr<TaskDescriptor> first;
     klib::shared_ptr<TaskDescriptor> last;

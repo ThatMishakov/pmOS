@@ -145,7 +145,8 @@
         "unistd.h": "c",
         "assert.h": "c",
         "event.h": "c",
-        "stat.h": "c"
+        "stat.h": "c",
+        "__internal.h": "c"
     },
     "cmake.configureOnOpen": false
 }
