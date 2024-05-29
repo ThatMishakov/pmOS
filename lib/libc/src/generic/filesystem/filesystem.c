@@ -316,7 +316,7 @@ int stat(const char *restrict name, struct stat *restrict stat)
     if (ensure_fs_initialization() < 0) 
         return -1;
 
-    pmos_port_t reply_port = __get_fs_cmd_reply_port();
+    pmos_port_t reply_port = prepare_reply_port();
     if (reply_port == INVALID_PORT) {
         result_code = -1;
         goto finish;
@@ -811,6 +811,7 @@ int dup(int fd)
     result = descriptor;
 
     pthread_spin_unlock(&fs_data->lock);
+
     return result;
 }
 

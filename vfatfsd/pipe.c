@@ -31,6 +31,7 @@
 //     return NULL;
 // }
 
+#include <errno.h>
 void test_pipe()
 {
     printf("Testing pipe...\n");
@@ -51,11 +52,14 @@ void test_pipe()
     // pthread_detach(writer_thread_);
     pid_t pid = fork();
     if (pid == 0) {
+        printf("Child: my pid: %li\n", getpid());
+        // TODO: investigate getppid() and getpgrp() not working
         printf("Writing...\n");
         close(pipefd[0]);
 
         int fd2 = dup(pipefd[1]);
         if (fd2 == -1) {
+            printf("Error: %i %i\n", fd2, errno);
             perror("dup");
             return;
         }

@@ -7,6 +7,8 @@
 extern int pthread_list_spinlock;
 extern struct uthread *worker_thread;
 
+extern uint64_t process_task_group;
+
 int __fork_fix_thread(struct uthread *child_uthread, uint64_t thread_tid)
 {
     child_uthread->thread_task_id = thread_tid;
@@ -17,6 +19,12 @@ int __fork_fix_thread(struct uthread *child_uthread, uint64_t thread_tid)
         return -1;
     }
     child_uthread->cmd_reply_port = r.port;
+
+    result_t rr = add_task_to_group(thread_tid, process_task_group);
+    if (rr != SUCCESS) {
+        errno = -rr;
+        return -1;
+    }
 
     pthread_spin_lock(&pthread_list_spinlock);
     child_uthread->next = worker_thread;

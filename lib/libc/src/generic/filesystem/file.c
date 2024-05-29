@@ -38,48 +38,24 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pmos/tls.h>
 
 int vfsd_send_persistant(size_t msg_size, const void *message);
 
-// Per-thread port for communicating with the filesystem daemons
-// This is not global because messaging ports are currently
-// bound to tasks (threads) and not processes as a whole and
-// also having a port per thread allows others to not have to
-// block on IO operations or invest in complex synchronization
-// schemes
-static _Thread_local pmos_port_t fs_cmd_reply_port = INVALID_PORT;
-
+// TODO: Change to other function
 pmos_port_t prepare_reply_port()
 {
-    if (fs_cmd_reply_port == INVALID_PORT) {
+    struct uthread *ut = __get_tls();
+    if (ut->cmd_reply_port == INVALID_PORT) {
         // Create a new port for the current thread
         ports_request_t port_request = create_port(TASK_ID_SELF, 0);
         if (port_request.result != SUCCESS)
             errno = EIO;
         else
-            fs_cmd_reply_port = port_request.port;
+            ut->cmd_reply_port = port_request.port;
     }
 
-    return fs_cmd_reply_port;
-}
-
-__attribute__((visibility("hidden"))) pmos_port_t __get_fs_cmd_reply_port()
-{
-    // Check if reply port exists
-    if (fs_cmd_reply_port == INVALID_PORT) {
-        // Create a new port for the current thread
-        ports_request_t port_request = create_port(TASK_ID_SELF, 0);
-        if (port_request.result != SUCCESS) {
-            // Handle error: Failed to create the port
-            errno = EIO; // Set errno to appropriate error code
-            return INVALID_PORT;
-        }
-
-        // Save the created port in the thread-local variable
-        fs_cmd_reply_port = port_request.port;
-    }
-
-    return fs_cmd_reply_port;
+    return ut->cmd_reply_port;
 }
 
 // Variable to cache the filesystem port
@@ -134,17 +110,9 @@ ssize_t __file_read(void *file_data, uint64_t consumer_id, void *buf, size_t siz
         return -1;
     }
 
-    // Check if reply port exists
+    pmos_port_t fs_cmd_reply_port = prepare_reply_port();
     if (fs_cmd_reply_port == INVALID_PORT) {
-        // Create a new port for the current thread
-        ports_request_t port_request = create_port(TASK_ID_SELF, 0);
-        if (port_request.result != SUCCESS) {
-            // Handle error: Failed to create the port
-            return -1;
-        }
-
-        // Save the created port in the thread-local variable
-        fs_cmd_reply_port = port_request.port;
+        return -1;
     }
 
     struct File *file = (struct File *)file_data;
@@ -164,7 +132,6 @@ ssize_t __file_read(void *file_data, uint64_t consumer_id, void *buf, size_t siz
 
     // Send the IPC_Read message to the filesystem daemon
     result_t result = send_message_port(file->fs_port, message_size, (const char *)&message);
-
     if (result != SUCCESS) {
         errno = EIO; // I/O error
         return -1;
@@ -370,6 +337,7 @@ int __file_clone(void *file_data, uint64_t consumer_id, void *new_data, uint64_t
     // Send the IPC_Dup message to the filesystem daemon
     int result = send_message_port(file->fs_port, sizeof(request), (const char *)&request);
     if (result != 0) {
+        errno = -result;
         return -2;
     }
 
@@ -535,18 +503,9 @@ int __open_file(const char *path, int flags, mode_t mode, void *file_data, uint6
         }
     }
 
-    // Check if reply port exists
+    uint64_t fs_cmd_reply_port = prepare_reply_port();
     if (fs_cmd_reply_port == INVALID_PORT) {
-        // Create a new port for the current thread
-        ports_request_t port_request = create_port(TASK_ID_SELF, 0);
-        if (port_request.result != SUCCESS) {
-            // Handle error: Failed to create the port
-            errno = EIO; // Set errno to appropriate error code
-            return -1;
-        }
-
-        // Save the created port in the thread-local variable
-        fs_cmd_reply_port = port_request.port;
+        return -1;
     }
 
     // Calculate the required size for the IPC_Open message (including the variable-sized path and
