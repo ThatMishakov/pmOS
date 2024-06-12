@@ -178,6 +178,8 @@ mem_request_ret_t transfer_region(uint64_t to_page_table, void *region, void *de
 /// @return SUCCESS if successfull, generic error otherwise
 result_t release_region(uint64_t pid, void *region);
 
+result_t release_memory_range(uint64_t pid, void *start, size_t len);
+
 typedef uint64_t pmos_pagetable_t;
 typedef struct page_table_req_ret_t {
     result_t result;
