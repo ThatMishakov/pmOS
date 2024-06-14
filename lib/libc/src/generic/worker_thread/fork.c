@@ -43,7 +43,7 @@
 
 static struct task_register_set child_registers;
 static struct uthread *child_uthread;
-static struct Filesystem_Data *child_fs_data;
+static struct Filesystem_Data *child_fs_data = NULL;
 static long child_segment;
 
 extern void __fork_child_entry_point();
@@ -52,6 +52,7 @@ pid_t __fork_preregister_child(uint64_t tid);
 int __register_process();
 __attribute__((noreturn)) void _syscall_exit(int status);
 int __fork_fix_thread(struct uthread *child_uthread, uint64_t thread_tid);
+void __destroy_fs_data(struct Filesystem_Data *fs_data);
 
 void fork_reply(pmos_port_t reply_port, pid_t result)
 {
@@ -69,6 +70,8 @@ void fork_reply(pmos_port_t reply_port, pid_t result)
 
 void __libc_fork_inner(uint64_t requester, pmos_port_t reply_port, unsigned long sp)
 {
+    child_fs_data = NULL;
+
     // Create new process
     syscall_r r = syscall_new_process();
     if (r.result != 0) {
@@ -181,6 +184,8 @@ end:
     __libc_malloc_post_fork_parent();
 
     __libc_fs_unlock_post_fork();
+
+    __destroy_fs_data(child_fs_data);
 
     fork_reply(reply_port, child_pid);
     resume_task(requester);

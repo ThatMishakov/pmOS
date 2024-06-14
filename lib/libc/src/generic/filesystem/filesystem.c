@@ -48,6 +48,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <pmos/__internal.h>
 
 static struct Filesystem_Data *fs_data = NULL;
 static pthread_spinlock_t fs_data_lock;
@@ -596,6 +597,12 @@ static void destroy_filesystem(struct Filesystem_Data *fs_data)
 
     free(fs_data);
 }
+
+_HIDDEN void __destroy_fs_data(struct Filesystem_Data *fs_data)
+{
+    destroy_filesystem(fs_data);
+};
+
 
 int __close_internal(long int filedes)
 {
