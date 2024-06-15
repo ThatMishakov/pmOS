@@ -292,7 +292,7 @@ syscall_r is_task_group_member(uint64_t task_id, uint64_t group_id);
     /// Mask bit for when a task is removed from the task group
     #define NOTIFICATION_MASK_ON_REMOVE_TASK 0x02
     /// Mask bit for when a task is added to the task group
-    #define NOTIFICATION_MASK_ON_ADD_TASK 0x03
+    #define NOTIFICATION_MASK_ON_ADD_TASK 0x04
 
     /// Flag to notify for the existing tasks
     #define NOTIFY_FOR_EXISTING_TASKS 0x01
@@ -351,6 +351,8 @@ result_t pmos_yield();
  * @return syscall_r result of the operation. If the result is SUCCESS, the value contains the time
 */
 syscall_r pmos_get_time(uint64_t mode);
+
+result_t request_timer(pmos_port_t port, size_t after_ns);
 
 result_t request_named_port(const char *name, size_t name_length, pmos_port_t reply_port, uint64_t flags);
 

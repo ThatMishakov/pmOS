@@ -46,8 +46,7 @@ void test_pipe()
 
     pid_t pid = fork();
     if (pid == 0) {
-        printf("Child: my pid: %li\n", getpid());
-        // TODO: investigate getppid() and getpgrp() not working
+        printf("Child: my pid: %li, parent: %li, group: %li\n", getpid(), getppid(), getpgrp());
         printf("Writing...\n");
         close(pipefd[0]);
 
@@ -77,7 +76,7 @@ void test_pipe()
         perror("fork");
         return;
     } else {
-        printf("Forked! Child PID: %i\n", pid);
+        printf("Forked! Child PID: %li my PID %li pgroup %li\n", pid, getpid(), getpgrp());
     }
     close(pipefd[1]);
 
