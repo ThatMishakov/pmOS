@@ -666,6 +666,11 @@ void init_acpi()
     limine_rsdp_response resp;
     copy_from_phys((u64)rsdp_request.response - hhdm_offset, &resp, sizeof(resp));
 
+    if (resp.address == 0) {
+        serial_logger.printf("RSDP not found\n");
+        return;
+    }
+
     u64 addr = (u64)resp.address - hhdm_offset;
     serial_logger.printf("RSDP found at 0x%x\n", addr);
     const bool b = enumerate_tables(addr);

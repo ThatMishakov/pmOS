@@ -232,7 +232,6 @@ ReturnStr<u32> dtb_get_hart_rtnic_id(u64 hart_id)
         serial_logger.printf("Could not read phandle property for interrupt-controller node\n");
         return {-ENOTSUP, 0};
     }
-    serial_logger.printf("My phandle: %i\n", phandle);
 
     auto plic = dtb_get_plic_node();
 
@@ -266,7 +265,6 @@ ReturnStr<u32> dtb_get_hart_rtnic_id(u64 hart_id)
     klib::unique_ptr<dtb_pair[]> pairs(new dtb_pair[count]);
     dtb_read_prop_pairs(prop, {1, 1}, pairs.get());
     for (size_t i = 0; i < count; ++i) {
-        serial_logger.printf("Pair: %i %i my %i\n", pairs[i].a, pairs[i].b, phandle);
         if (pairs[i].a == phandle and pairs[i].b == IRQ_S_EXT)
             return {0, (u32)i};
     }
@@ -439,8 +437,8 @@ void init_scheduling(u64 hart_id)
         serial_logger.printf("Could not get EIC ID: %i\n", e.result);
     } else {
         i->eic_id = e.val;
-        global_logger.printf("[Kernel] EIC ID: %i\n", i->eic_id);
-        serial_logger.printf("EIC ID: %i\n", i->eic_id);
+        // global_logger.printf("[Kernel] EIC ID: %i\n", i->eic_id);
+        // serial_logger.printf("EIC ID: %i\n", i->eic_id);
     }
 
     initialize_fp(i->isa_string);
@@ -497,8 +495,8 @@ klib::vector<u64> initialize_cpus(const klib::vector<u64> &hartids)
             serial_logger.printf("Could not get EIC ID: %i\n", e.result);
         } else {
             i->eic_id = e.val;
-            global_logger.printf("[Kernel] EIC ID: %i\n", i->eic_id);
-            serial_logger.printf("EIC ID: %i\n", i->eic_id);
+            // global_logger.printf("[Kernel] EIC ID: %i\n", i->eic_id);
+            // serial_logger.printf("EIC ID: %i\n", i->eic_id);
         }
 
         init_idle(i);
