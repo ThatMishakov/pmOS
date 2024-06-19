@@ -32,7 +32,6 @@
 #include <interrupts/interrupts.h>
 #include <ioapic/ioapic.h>
 #include <kernel/block.h>
-#include <kernel/errors.h>
 #include <kernel/types.h>
 #include <pci/pci.h>
 #include <pmos/ipc.h>

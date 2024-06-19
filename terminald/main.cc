@@ -28,7 +28,6 @@
 
 #include <stdlib.h>
 #include <kernel/types.h>
-#include <kernel/errors.h>
 #include <kernel/block.h>
 #include <string.h>
 #include <pmos/system.h>

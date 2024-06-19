@@ -26,7 +26,6 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <kernel/errors.h>
 #include <kernel/flags.h>
 #include <phys_map/phys_map.h>
 #include <pmos/memory.h>

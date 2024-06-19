@@ -1,4 +1,5 @@
 /pmOS.iso
 /isodir
+/limine
 !.gitignore
 *.[oas]
