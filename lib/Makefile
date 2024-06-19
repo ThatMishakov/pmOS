@@ -10,7 +10,5 @@ build/CMakeCache.txt: CMakeLists.txt
 	mkdir -p build
 	cd build && cmake ..
 
-../sysroot/lib/libc.a: build/CMakeCache.txt
+../sysroot/lib/libc.a: build/CMakeCache.txt 
 	make -C build install
-
-.PHONY: all clean ../sysroot/lib/libc.a

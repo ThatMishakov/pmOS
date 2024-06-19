@@ -197,6 +197,8 @@ extern pmos_port_t worker_port;
 // Defined in libc/src/filesystem.c
 extern int __share_fs_data(uint64_t tid);
 
+extern pid_t __pid_cached;
+
 void __libc_fork_child()
 {
     __fixup_worker_uthread();
@@ -221,6 +223,7 @@ void __libc_fork_child()
     }
     worker_port = new_port.port;
 
+    __pid_cached = 0;
 
     // Register child with processd
     int result = __register_process();
