@@ -35,6 +35,7 @@
 #include <list>
 #include <pthread.h>
 #include <pmos/system.h>
+#include <time.h>
 
 class Test {
 public:
@@ -58,11 +59,9 @@ Test tt("Global constructor test");
 double count = 0;
 std::mutex count_mutex;
 
-thread_local auto pid = get_task_id();
-
-
+thread_local auto tid = get_task_id();
 void thread_func(void *) {
-    //printf("Hello from a pthread! My PID: %i\n", pid);
+    printf("Hello from a pthread! My TID: %i\n", tid);
     double p = 0;
     for (size_t i = 0; i < 100000000; ++i) {
         asm volatile ("");
@@ -75,6 +74,19 @@ void thread_func(void *) {
 }
 
 std::list<std::thread> threads;
+
+void test_threads()
+{
+    for (size_t i = 0; i < 10; i++) {
+        threads.push_back(std::thread(thread_func, nullptr));
+    }
+
+    for (auto & t : threads) {
+        t.join();
+    }
+
+    printf("Threads finished. Count: %li\n", (uint64_t)count);
+}
 
 extern "C" void test_qsort();
 extern "C" void test_pipe();
@@ -91,16 +103,7 @@ int main() {
 
     pid_t pid = getpid();
     printf("PID: %i\n", pid);
-
-    // for (size_t i = 0; i < 10; i++) {
-    //     threads.push_back(std::thread(thread_func, nullptr));
-    // }
-
-    // for (auto & t : threads) {
-    //     t.detach();
-    // }
-
-    // printf("Count: %li\n", (uint64_t)count);
+    test_threads();
 
     //test_qsort();
     test_pipe();

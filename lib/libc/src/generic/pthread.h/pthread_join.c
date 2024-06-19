@@ -94,7 +94,7 @@ int pthread_join(pthread_t thread, void **retval)
     IPC_Thread_Finished *reply;
     result_t result = get_message(&reply_desc, (unsigned char **)&reply, join_notify_port);
     if (result != SUCCESS) {
-        errno = ESRCH;
+        errno = -result;
         return -1;
     }
 
@@ -117,6 +117,8 @@ int pthread_join(pthread_t thread, void **retval)
 
     if (retval != NULL)
         *retval = u->return_value;
+
+    __release_tls(u);
 
     return 0;
 }
