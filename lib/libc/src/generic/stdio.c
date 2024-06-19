@@ -227,7 +227,7 @@ static ssize_t write_file(void *arg, const char *str, size_t size)
         stream->buf_flags |= _FILE_FLAG_MYBUF;
     }
 
-    if (stream->buf_size != 0 && (size > stream->buf_size - stream->buf_pos)) {
+    if (stream->buf_size != 0 && (size > (stream->buf_size - stream->buf_pos))) {
         ssize_t ret = flush_buffer(stream);
         if (ret < 0)
             return ret;
@@ -243,12 +243,10 @@ static ssize_t write_file(void *arg, const char *str, size_t size)
 
     size_t i = size;
     for (; i > 0; i--) {
-        if (str[i - 1] == '\n' && stream->buf_flags & _FILE_FLAG_FLUSHNEWLINE) {
+        if (str[i - 1] == '\n' && (stream->buf_flags & _FILE_FLAG_FLUSHNEWLINE)) {
+            memcpy(stream->buf + stream->buf_pos, str, i);
+            stream->buf_pos += i;
             ssize_t ret = flush_buffer(stream);
-            if (ret < 0)
-                return ret;
-
-            ret = __write_internal(stream->fd, str, i, 0, true);
             if (ret < 0)
                 return ret;
             str += i;
