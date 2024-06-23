@@ -1,5 +1,6 @@
 all: ../sysroot/lib/libc.a
 libc: ../sysroot/lib/libc.a
+lib: libc
 
 clean:
 	rm -rf build

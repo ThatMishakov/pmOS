@@ -33,9 +33,9 @@
 #include <exceptions.hh>
 #include <kern_logger/kern_logger.hh>
 #include <memory/mem.hh>
+#include <memory/mem_object.hh>
 #include <memory/temp_mapper.hh>
 #include <processes/tasks.hh>
-#include <memory/mem_object.hh>
 
 void flush_page(void *virt) noexcept { asm volatile("sfence.vma %0, x0" : : "r"(virt) : "memory"); }
 
@@ -142,7 +142,7 @@ void RISCV64_Page_Table::map(Page_Descriptor page, u64 virt_addr, Page_Table_Arg
     pte.executable  = not arg.execution_disabled;
     pte.available   = PAGING_FLAG_STRUCT_PAGE;
     pte.ppn         = page.takeout_page() >> 12;
-    pte.pbmt = 0;
+    pte.pbmt        = 0;
 
     entry = pte;
 }
@@ -264,6 +264,78 @@ bool RISCV64_Page_Table::is_mapped(u64 virt_addr) const noexcept
     }
 
     return false;
+}
+
+void RISCV64_Page_Table::copy_to_recursive(const klib::shared_ptr<Page_Table> &to,
+                                           u64 phys_page_level, u64 absolute_start, u64 to_addr,
+                                           u64 size_bytes, u64 new_access, u64 current_copy_from,
+                                           int level, u64 &upper_bound_offset)
+{
+    const u8 offset = 12 + (level - 1) * 9;
+
+    Temp_Mapper_Obj<RISCV64_PTE> mapper(request_temp_mapper());
+    mapper.map(phys_page_level);
+
+    u64 mask = (1UL << offset) - 1;
+    u64 max         = (absolute_start + size_bytes + mask) & ~mask;
+    u64 end_index   = (current_copy_from >> (offset + 9)) == (max >> (offset + 9))
+                          ? (max >> offset) & 0x1ff
+                          : 512;
+    u64 start_index = (current_copy_from >> offset) & 0x1ff;
+
+    for (u64 i = start_index; i < end_index; ++i) {
+        auto pte = mapper.ptr[i];
+        if (!pte.valid)
+            continue;
+
+        if (level == 1) {
+            assert(pte.readable or pte.writeable or pte.executable);
+
+            auto p = Page_Descriptor::find_page_struct(pte.ppn << 12);
+            assert(p.page_struct_ptr && "page struct must be present");
+
+            u64 copy_from = ((i - start_index) << offset) + current_copy_from;
+            u64 copy_to   = copy_from - absolute_start + to_addr;
+
+            Page_Table_Argumments arg = {
+                .readable           = !!(new_access & Readable),
+                .writeable          = !!(new_access & Writeable),
+                .user_access        = true,
+                .global             = false,
+                .execution_disabled = not(new_access & Executable),
+                .extra              = 0,
+                // TODO: Fix this
+                .cache_policy       = Memory_Type::Normal,
+            };
+            to->map(p.create_copy(), copy_to, arg);
+
+            upper_bound_offset = copy_from - absolute_start + 4096;
+        } else {
+            assert(!pte.readable and !pte.writeable and !pte.executable);
+
+            u64 next_level_phys = pte.ppn << 12;
+            u64 current         = ((i - start_index) << offset) + current_copy_from;
+            if (i != start_index)
+                current &= ~mask;
+            copy_to_recursive(to, next_level_phys, absolute_start, to_addr, size_bytes, new_access,
+                              current, level - 1, upper_bound_offset);
+        }
+    }
+}
+
+void RISCV64_Page_Table::copy_pages(const klib::shared_ptr<Page_Table> &to, u64 from_addr,
+                                    u64 to_addr, u64 size_bytes, u8 access)
+{
+    u64 offset = 0;
+
+    try {
+        copy_to_recursive(to, table_root, from_addr, to_addr, size_bytes, access, to_addr,
+                          riscv64_paging_levels, offset);
+    } catch (...) {
+        to->invalidate_range(to_addr, offset, true);
+
+        throw;
+    }
 }
 
 // TODO: This function had great possibilities, but now seems weird

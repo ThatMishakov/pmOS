@@ -390,7 +390,7 @@ public:
      * @param new_access The protections that the pages should have after being moved to the new
      * page table
      */
-    void copy_pages(const klib::shared_ptr<Page_Table> &to, u64 from_addr, u64 to_addr,
+    virtual void copy_pages(const klib::shared_ptr<Page_Table> &to, u64 from_addr, u64 to_addr,
                     u64 size_bytes, u8 new_access);
 
     struct Page_Info {
@@ -477,9 +477,6 @@ public:
      */
     virtual bool atomic_copy_to_user(u64 to, const void *from, u64 size) = 0;
 
-protected:
-    Page_Table() = default;
-
     /// @brief Checks if the pages exists and invalidates it, invalidating TLB entries if needed
     /// @param virt_addr Virtual address of the page
     /// @param free Indicates whether the page should be freed or not after invalidating
@@ -490,6 +487,9 @@ protected:
     /// @param size_bytes Size of the regions in bytes
     /// @param free Indicates whether the pages should be freed after being invalidated
     virtual void invalidate_range(u64 virt_addr, u64 size_bytes, bool free) = 0;
+
+protected:
+    Page_Table() = default;
 
     /// @brief Unblocks the tasks blocked by the given page
     /// @param blocked_by_page Virtuall address of the page that has blocked the tasks

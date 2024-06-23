@@ -196,11 +196,15 @@ public:
 
     bool atomic_copy_to_user(u64 to, const void *from, u64 size);
 
+    virtual void copy_pages(const klib::shared_ptr<Page_Table> &to, u64 from_addr, u64 to_addr,
+                    u64 size_bytes, u8 new_access);
 protected:
     /// Root node/top level of paging structures
     u64 table_root = 0;
 
     RISCV64_Page_Table() = default;
+
+    static void copy_to_recursive(const klib::shared_ptr<Page_Table> &to, u64 phys_page_level, u64 start, u64 to_offset, u64 max_size, u64 new_access, u64 i, int level, u64 &last_copied);
 
 private:
     // There is an interesting pattern for this:
