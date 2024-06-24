@@ -146,6 +146,9 @@ extern klib::shared_ptr<Arch_Page_Table> idle_page_table;
 void TaskDescriptor::switch_to()
 {
     CPU_Info *c = get_cpu_struct();
+
+    assert(cpu_affinity == 0 or (cpu_affinity - 1) == c->cpu_id);
+
     if (c->current_task->page_table != page_table) {
         page_table->atomic_active_sum(1);
         c->current_task->page_table->atomic_active_sum(-1);
@@ -237,7 +240,7 @@ void TaskDescriptor::unblock() noexcept
 
     auto &local_cpu = *get_cpu_struct();
 
-    if (cpu_affinity == 0 or cpu_affinity == local_cpu.cpu_id) {
+    if (cpu_affinity == 0 or cpu_affinity - 1 == local_cpu.cpu_id) {
         klib::shared_ptr<TaskDescriptor> current_task = get_cpu_struct()->current_task;
 
         if (current_task->priority > priority) {

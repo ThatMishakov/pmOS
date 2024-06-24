@@ -56,7 +56,10 @@ void test_pipe()
             return;
         }
         for (int i = 0; i < 3; ++i) {
-            int result = write(pipefd[1], "hello1!", 6);
+            //int result = write(pipefd[1], "hello1!", 6);
+            FILE *f = fdopen(pipefd[1], "w");
+            int result = fprintf(f, "Hello from iteration %i", i);
+            fflush(f);
             printf("Wrote %d bytes\n", result);
             if (result == -1) {
                 perror("write");
@@ -81,7 +84,8 @@ void test_pipe()
     close(pipefd[1]);
 
     // Read from the pipe
-    while ((nbytes = read(pipefd[0], buf, sizeof(buf))) > 0) {
+    while ((nbytes = read(pipefd[0], buf, sizeof(buf) - 1)) > 0) {
+        buf[nbytes] = '\0';
         printf("Read %d bytes: %s\n", nbytes, buf);
     }
     close(pipefd[0]);

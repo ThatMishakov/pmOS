@@ -635,7 +635,7 @@ int __create_pipe(void *file_data, uint64_t consumer_id)
 
     result_t k_result = send_message_port(pipe_port, sizeof(message), (const char *)&message);
     if (k_result != SUCCESS) {
-        errno = EIO;
+        errno = -k_result;
         return -1;
     }
 
@@ -643,7 +643,7 @@ int __create_pipe(void *file_data, uint64_t consumer_id)
     IPC_Generic_Msg *reply_msg;
     k_result = get_message(&reply_descr, (unsigned char **)&reply_msg, reply_port);
     if (k_result != SUCCESS) {
-        errno = EIO;
+        errno = -k_result;
         return -1;
     }
 

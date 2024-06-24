@@ -100,9 +100,7 @@ int main() {
     // Sleep is broken
     //sleep(1);
     printf("Starting tests...\n");
-
-    pid_t pid = getpid();
-    printf("PID: %i\n", pid);
+    
     test_threads();
 
     //test_qsort();

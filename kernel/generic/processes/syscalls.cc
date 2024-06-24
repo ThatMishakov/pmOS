@@ -527,8 +527,8 @@ void syscall_complete_interrupt(u64 intno, u64, u64, u64, u64, u64)
     try {
         c->int_handlers.ack_interrupt(intno, task->task_id);
     } catch (Kern_Exception &e) {
-        serial_logger.printf("Error acking interrupt: %s, task %i intno %i CPU %i\n", e.err_message,
-                             task->task_id, intno, c->cpu_id);
+        serial_logger.printf("Error acking interrupt: %s, task %i intno %i CPU %i task CPU %i\n", e.err_message,
+                             task->task_id, intno, c->cpu_id, task->cpu_affinity-1);
         throw e;
     }
     syscall_ret_low(task) = SUCCESS;

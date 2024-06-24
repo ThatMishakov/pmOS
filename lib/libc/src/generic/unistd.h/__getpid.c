@@ -45,6 +45,7 @@ pid_t __getpid(int type)
     result_t result = send_message_port(processd_port, sizeof(request), &request);
     if (result != SUCCESS) {
         __return_cmd_reply_port(reply_port);
+        errno = -result;
         return -1;
     }
 
