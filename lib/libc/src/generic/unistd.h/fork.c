@@ -5,6 +5,7 @@
 #include <pmos/tls.h>
 #include <errno.h>
 #include <stdio.h>
+#include <string.h>
 
 extern pmos_port_t worker_port;
 pmos_port_t __get_cmd_reply_port();
@@ -50,7 +51,11 @@ pid_t fork(void)
             } else {
                 continue;
             }
-        } 
+        } else if (result != 0) {
+            fprintf(stderr, "pmOS libC: fork() Failed to get message info: %s\n", strerror(-result));
+            errno = -result;
+            goto error;
+        }
 
         if (reply_descriptor.size != sizeof(IPC_Request_Fork_Reply)) {
             fprintf(stderr, "pmOS libC: fork() Invalid message size %ld\n", reply_descriptor.size);
@@ -61,6 +66,12 @@ pid_t fork(void)
         result = get_first_message((char *)&reply, sizeof(reply), reply_port);
         if (result != 0) {
             continue;
+        }
+
+        if (reply.type != IPC_Request_Fork_Reply_NUM) {
+            fprintf(stderr, "pmOS libC: fork() Unexpected reply type %d\n", reply.type);
+            errno = EAGAIN;
+            goto error;
         }
 
         if (reply.result < 0) {

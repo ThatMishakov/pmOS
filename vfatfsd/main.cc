@@ -103,6 +103,21 @@ int main() {
     
     test_threads();
 
+    // long p;
+    // for (int i = 0; i < 5; ++i)
+    //     switch (p = fork())
+    //     {
+    //     case 0:
+    //         printf("Forked - child. PID: %li task %lx\n", getpid(), get_task_id());
+    //         break;
+    //     case -1:
+    //         printf("Fork failed. Error: %i task %lx\n", errno, get_task_id());
+    //         perror("fork");
+    //     default:
+    //         printf("Forked - parent. Child: %li task %lx\n", p, get_task_id());
+    //         break;
+    //     }
+
     //test_qsort();
     test_pipe();
 

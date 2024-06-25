@@ -39,6 +39,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <pmos/tls.h>
+#include <stdio.h>
 
 int vfsd_send_persistant(size_t msg_size, const void *message);
 
@@ -49,9 +50,10 @@ pmos_port_t prepare_reply_port()
     if (ut->cmd_reply_port == INVALID_PORT) {
         // Create a new port for the current thread
         ports_request_t port_request = create_port(TASK_ID_SELF, 0);
-        if (port_request.result != SUCCESS)
+        if (port_request.result != SUCCESS) {
+            fprintf(stderr, "pmOS libC: prepare_reply_port() failed to create port: %s\n", strerror(-port_request.result));
             errno = EIO;
-        else
+        } else
             ut->cmd_reply_port = port_request.port;
     }
 
@@ -648,6 +650,7 @@ int __create_pipe(void *file_data, uint64_t consumer_id)
     }
 
     if (reply_msg->type != IPC_Pipe_Open_Reply_NUM) {
+        fprintf(stderr, "pmOS libC: Unexpected reply message type: %x task %lx sender %lx port %lx\n", reply_msg->type, get_task_id(), reply_descr.sender, reply_port);
         errno = EIO;
         free(reply_msg);
         return -1;

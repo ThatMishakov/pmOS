@@ -818,14 +818,14 @@ void syscall_get_segment(u64 pid, u64 segment_type, u64 ptr, u64, u64, u64)
     switch (segment_type) {
     case 1: {
         segment = target->regs.thread_pointer();
-        auto b = copy_to_user((char *)&current->regs.thread_pointer(), (char *)ptr, sizeof(segment));
+        auto b = copy_to_user((char *)&segment, (char *)ptr, sizeof(segment));
         if (not b)
             return;
         break;
     }
     case 2: {
         segment = target->regs.global_pointer();
-        auto b = copy_to_user((char *)&current->regs.global_pointer(), (char *)ptr, sizeof(segment));
+        auto b = copy_to_user((char *)&segment, (char *)ptr, sizeof(segment));
         if (not b)
             return;
         break;

@@ -38,6 +38,7 @@ void test_pipe()
 
     int pipefd[2];
     if (pipe(pipefd) == -1) {
+        printf("Pipe errno: %i\n", errno);
         perror("pipe");
         return;
     }

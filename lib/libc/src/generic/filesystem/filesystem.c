@@ -266,7 +266,6 @@ int pipe(int pipefd[2])
     int result_code = __create_pipe(data, fs_data->fs_consumer_id);
     if (result_code < 0) {
         release_descriptors(fs_data, 2);
-        errno = -result_code;
         return -1;
     }
 
@@ -277,7 +276,6 @@ int pipe(int pipefd[2])
         file_adaptor->free(&data[0], fs_data->fs_consumer_id);
         file_adaptor->close(&data[1], fs_data->fs_consumer_id);
         file_adaptor->free(&data[1], fs_data->fs_consumer_id);
-        errno = result_code;
         return -1;
     }
 

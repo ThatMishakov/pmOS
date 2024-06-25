@@ -59,11 +59,12 @@ void fork_reply(pmos_port_t reply_port, pid_t result)
     IPC_Request_Fork_Reply reply = {
         .type = IPC_Request_Fork_Reply_NUM,
         .result = result,
+        .flags = 0,
     };
 
     result_t r = send_message_port(reply_port, sizeof(reply), &reply);
     if (r != 0) {
-        fprintf(stderr, "Failed to send fork reply to task %ld: %ld\n", reply_port, r);
+        fprintf(stderr, "pmOS libc: Failed to send fork reply to task %ld: %ld\n", reply_port, r);
     }
 }
 
@@ -82,6 +83,7 @@ void __libc_fork_inner(uint64_t requester, pmos_port_t reply_port, unsigned long
 
     pid_t child_pid = __fork_preregister_child(child_tid);
     if (child_pid < 0) {
+        fprintf(stderr, "pmOS libC: Failed to preregister child\n");
         fork_reply(reply_port, -errno);
         return;
     }
@@ -130,7 +132,10 @@ void __libc_fork_inner(uint64_t requester, pmos_port_t reply_port, unsigned long
         return;
     }
 
-    r.result = get_registers(requester, SEGMENT_FS, &child_segment);
+    // TODO: For some reason, this is broken
+    uint64_t c;
+    r.result = get_registers(requester, SEGMENT_FS, &c);
+    child_segment = c;
     if (r.result != 0) {
         resume_task(requester);
         syscall_kill_task(child_tid);
@@ -153,6 +158,7 @@ void __libc_fork_inner(uint64_t requester, pmos_port_t reply_port, unsigned long
     // Prepare filesystem
     int result = __clone_fs_data(&child_fs_data, child_tid, true);
     if (result != 0) {
+        fprintf(stderr, "pmOS libC: Failed to clone filesystem data\n");
         child_pid = result;
         __libc_malloc_pre_fork();
         // Even though an error ocurred, lock malloc to be unlocked later
