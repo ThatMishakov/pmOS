@@ -299,6 +299,8 @@ struct Mem_Object_Reference final: Generic_Mem_Region {
     /// Indicates whether the pages should be copied on access
     bool cow = false;
 
+    RBTreeNode<Mem_Object_Reference> object_bst_head;
+
     Mem_Object_Reference(u64 start_addr, u64 size, klib::string name, Page_Table *owner, u8 access,
                          klib::shared_ptr<Mem_Object> references, u64 object_offset_bytes,
                          bool copy_on_write, u64 start_offset_bytes, u64 object_size_bytes);

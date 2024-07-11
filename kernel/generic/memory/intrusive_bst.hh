@@ -57,6 +57,9 @@ public:
 
         bool operator==(const RBTreeIterator &other) const noexcept;
         bool operator!=(const RBTreeIterator &other) const noexcept;
+
+        // I don't know if it's a good idea
+        operator T *() const noexcept { return node; }
     };
 
     class RBTreeHead

@@ -311,7 +311,7 @@ void Page_Table::atomic_shrink_regions(const klib::shared_ptr<Mem_Object> &id,
     auto p  = mem_objects.at(id);
     auto it = p.regions.begin();
     while (it != p.regions.end()) {
-        const auto &reg = *it;
+        const auto reg = it;
         ++it;
 
         const auto object_end = reg->object_up_to();

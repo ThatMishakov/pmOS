@@ -64,7 +64,9 @@ struct Page_Table_Argumments {
 class Mem_Object;
 struct Mem_Object_Data {
     u8 max_privilege_mask = 0;
-    klib::set<Mem_Object_Reference *> regions;
+    RedBlackTree<Mem_Object_Reference, &Mem_Object_Reference::object_bst_head,
+                 detail::TreeCmp<Mem_Object_Reference, u64, &Mem_Object_Reference::start_addr> >::RBTreeHead
+        regions;
 };
 
 /**
