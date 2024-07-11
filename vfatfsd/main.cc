@@ -96,11 +96,22 @@ void run_tests() {
     test_pipe();
 }
 
+void tick()
+{
+    if (fork() == 0) {
+        int i = 0;
+        while (true) {
+            printf("Tick %i\n", ++i);
+            sleep(5);
+        }
+    }
+}
+
 int main() {
-    // Sleep is broken
-    //sleep(1);
+    sleep(1);
     printf("Starting tests...\n");
-    
+    tick();
+
     test_threads();
 
     // long p;
@@ -118,7 +129,6 @@ int main() {
     //         break;
     //     }
 
-    //test_qsort();
     test_pipe();
 
     // Allow other thread to run

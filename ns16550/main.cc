@@ -319,7 +319,9 @@ void check_rx()
 {
     while ((read_register(LSR) & LSR_DATA_READY) != 0) {
         auto t = read_register(THR);
-        putc(t, stdout);
+        
+        //putc(t, stdout);
+        printf("\033[1;36m" "ns16550: Received letter %c" "\033[0m" "\n", t);
     }
     fflush(stdout);
 }

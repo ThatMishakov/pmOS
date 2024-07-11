@@ -2,6 +2,30 @@
 #include <cstdint>
 #include <lib/stdexcept.hh>
 
+namespace detail
+{
+template<typename T, auto T::*...ff> static constexpr bool Cmp(const T *a, const T *b)
+{
+    return ((a->*ff < b->*ff) || ... || (a < b));
+}
+
+template<typename T, typename Key, auto T::*f> static constexpr bool Cmp(const Key &a, const T *b)
+{
+    return a < b->*f;
+}
+
+template<typename T, typename Key, auto T::*f> static constexpr bool Cmp(const T *a, const Key &b)
+{
+    return a->*f < b;
+}
+
+template<typename T, typename Key, auto T::*...f> struct TreeCmp {
+    constexpr bool operator()(const T &a, const T &b) const { return Cmp<T, f...>(&a, &b); }
+    constexpr bool operator()(const Key &a, const T &b) const { return Cmp<T, Key, f...>(a, &b); }
+    constexpr bool operator()(const T &a, const Key &b) const { return Cmp<T, Key, f...>(&b, a); }
+};
+} // namespace detail
+
 template<typename T> struct RBTreeNode {
     // Bit 0 is the color of the node
     T *parent = nullptr;
@@ -17,7 +41,7 @@ template<typename T> struct RBTreeNode {
     void set_parent(T *parent);
 };
 
-template<typename T, RBTreeNode<T> T::*head_ptr> class RedBlackTree final
+template<typename T, RBTreeNode<T> T::*head_ptr, class Compare> class RedBlackTree final
 {
 public:
     struct RBTreeIterator {
@@ -102,14 +126,15 @@ template<typename T> void RBTreeNode<T>::set_parent(T *p)
                                    reinterpret_cast<uintptr_t>(p));
 }
 
-template<typename T, RBTreeNode<T> T::*bst_head>
-T *RedBlackTree<T, bst_head>::find(T *root, const T &value)
+template<typename T, RBTreeNode<T> T::*bst_head, class Compare>
+T *RedBlackTree<T, bst_head, Compare>::find(T *root, const T &value)
 {
+    Compare cmp {};
     T *current = root;
     while (current) {
-        if (value < *current) {
+        if (cmp(value, *current)) {
             current = (current->*bst_head).left;
-        } else if (*current < value) {
+        } else if (cmp(*current, value)) {
             current = (current->*bst_head).right;
         } else {
             return current;
@@ -119,14 +144,14 @@ T *RedBlackTree<T, bst_head>::find(T *root, const T &value)
     return nullptr;
 }
 
-template<typename T, RBTreeNode<T> T::*bst_head>
-T *RedBlackTree<T, bst_head>::find(T *root, const auto &value)
+template<typename T, RBTreeNode<T> T::*bst_head, class Compare>
+T *RedBlackTree<T, bst_head, Compare>::find(T *root, const auto &value)
 {
     T *current = root;
     while (current) {
-        if (*current > value) {
+        if (cmp(value, *current)) {
             current = (current->*bst_head).left;
-        } else if (*current < value) {
+        } else if (cmp(*current, value)) {
             current = (current->*bst_head).right;
         } else {
             return current;
@@ -136,8 +161,8 @@ T *RedBlackTree<T, bst_head>::find(T *root, const auto &value)
     return nullptr;
 }
 
-template<typename T, RBTreeNode<T> T::*bst_head>
-void RedBlackTree<T, bst_head>::insert(T *&root, T *node)
+template<typename T, RBTreeNode<T> T::*bst_head, class Compare>
+void RedBlackTree<T, bst_head, Compare>::insert(T *&root, T *node)
 {
     T *current = root;
     T *parent  = nullptr;
@@ -148,7 +173,7 @@ void RedBlackTree<T, bst_head>::insert(T *&root, T *node)
 
     while (current) {
         parent = current;
-        if (*node < *current) {
+        if (cmp(*node, *current)) {
             current = (current->*bst_head).left;
         } else {
             current = (current->*bst_head).right;
@@ -160,7 +185,7 @@ void RedBlackTree<T, bst_head>::insert(T *&root, T *node)
     if (!parent) {
         root = node;
         (node->*bst_head).set_color(false);
-    } else if (*node < *parent) {
+    } else if (cmp(*node, *parent)) {
         (parent->*bst_head).left = node;
     } else {
         (parent->*bst_head).right = node;
@@ -169,8 +194,8 @@ void RedBlackTree<T, bst_head>::insert(T *&root, T *node)
     fix_insert(root, node);
 }
 
-template<typename T, RBTreeNode<T> T::*bst_head>
-void RedBlackTree<T, bst_head>::fix_insert(T *&root, T *new_node)
+template<typename T, RBTreeNode<T> T::*bst_head, class Compare>
+void RedBlackTree<T, bst_head, Compare>::fix_insert(T *&root, T *new_node)
 {
     while ((new_node->*bst_head).get_parent() and
            ((new_node->*bst_head).get_parent()->*bst_head).is_red()) {
@@ -217,8 +242,8 @@ void RedBlackTree<T, bst_head>::fix_insert(T *&root, T *new_node)
     (root->*bst_head).set_color(false);
 }
 
-template<typename T, RBTreeNode<T> T::*bst_head>
-void RedBlackTree<T, bst_head>::transplant(T *&root, T *u, T *v)
+template<typename T, RBTreeNode<T> T::*bst_head, class Compare>
+void RedBlackTree<T, bst_head, Compare>::transplant(T *&root, T *u, T *v)
 {
     if (!(u->*bst_head).get_parent()) {
         root = v;
@@ -232,8 +257,8 @@ void RedBlackTree<T, bst_head>::transplant(T *&root, T *u, T *v)
         (v->*bst_head).set_parent((u->*bst_head).get_parent());
 }
 
-template<typename T, RBTreeNode<T> T::*bst_head>
-void RedBlackTree<T, bst_head>::rotate_left(T *&root, T *node)
+template<typename T, RBTreeNode<T> T::*bst_head, class Compare>
+void RedBlackTree<T, bst_head, Compare>::rotate_left(T *&root, T *node)
 {
     T *right                = (node->*bst_head).right;
     (node->*bst_head).right = (right->*bst_head).left;
@@ -254,8 +279,8 @@ void RedBlackTree<T, bst_head>::rotate_left(T *&root, T *node)
     (node->*bst_head).set_parent(right);
 }
 
-template<typename T, RBTreeNode<T> T::*bst_head>
-void RedBlackTree<T, bst_head>::rotate_right(T *&root, T *node)
+template<typename T, RBTreeNode<T> T::*bst_head, class Compare>
+void RedBlackTree<T, bst_head, Compare>::rotate_right(T *&root, T *node)
 {
     T *left                = (node->*bst_head).left;
     (node->*bst_head).left = (left->*bst_head).right;
@@ -276,8 +301,8 @@ void RedBlackTree<T, bst_head>::rotate_right(T *&root, T *node)
     (node->*bst_head).set_parent(left);
 }
 
-template<typename T, RBTreeNode<T> T::*bst_head>
-void RedBlackTree<T, bst_head>::remove(T *&root, T *node)
+template<typename T, RBTreeNode<T> T::*bst_head, class Compare>
+void RedBlackTree<T, bst_head, Compare>::remove(T *&root, T *node)
 {
     T *current          = node;
     T *child            = nullptr;
@@ -320,8 +345,8 @@ void RedBlackTree<T, bst_head>::remove(T *&root, T *node)
     }
 }
 
-template<typename T, RBTreeNode<T> T::*bst_head>
-void RedBlackTree<T, bst_head>::fix_remove(T *&root, T *node, T *parent)
+template<typename T, RBTreeNode<T> T::*bst_head, class Compare>
+void RedBlackTree<T, bst_head, Compare>::fix_remove(T *&root, T *node, T *parent)
 {
     while (node != root and (!node or !(node->*bst_head).is_red())) {
         if (node == (parent->*bst_head).left) {
@@ -392,8 +417,9 @@ void RedBlackTree<T, bst_head>::fix_remove(T *&root, T *node, T *parent)
     }
 }
 
-template<typename T, RBTreeNode<T> T::*bst_head>
-RedBlackTree<T, bst_head>::RBTreeIterator RedBlackTree<T, bst_head>::RBTreeHead::begin() noexcept
+template<typename T, RBTreeNode<T> T::*bst_head, class Compare>
+RedBlackTree<T, bst_head, Compare>::RBTreeIterator
+    RedBlackTree<T, bst_head, Compare>::RBTreeHead::begin() noexcept
 {
     T *current = root;
     if (!current) {
@@ -407,66 +433,66 @@ RedBlackTree<T, bst_head>::RBTreeIterator RedBlackTree<T, bst_head>::RBTreeHead:
     return RBTreeIterator {current};
 }
 
-template<typename T, RBTreeNode<T> T::*bst_head>
-constexpr RedBlackTree<T, bst_head>::RBTreeIterator
-    RedBlackTree<T, bst_head>::RBTreeHead::end() noexcept
+template<typename T, RBTreeNode<T> T::*bst_head, class Compare>
+constexpr RedBlackTree<T, bst_head, Compare>::RBTreeIterator
+    RedBlackTree<T, bst_head, Compare>::RBTreeHead::end() noexcept
 {
     return RBTreeIterator {nullptr};
 }
 
-template<typename T, RBTreeNode<T> T::*bst_head>
-bool RedBlackTree<T, bst_head>::RBTreeHead::empty() const noexcept
+template<typename T, RBTreeNode<T> T::*bst_head, class Compare>
+bool RedBlackTree<T, bst_head, Compare>::RBTreeHead::empty() const noexcept
 {
     return root == nullptr;
 }
 
-template<typename T, RBTreeNode<T> T::*bst_head>
-void RedBlackTree<T, bst_head>::RBTreeHead::insert(T *node)
+template<typename T, RBTreeNode<T> T::*bst_head, class Compare>
+void RedBlackTree<T, bst_head, Compare>::RBTreeHead::insert(T *node)
 {
-    RedBlackTree<T, bst_head>::insert(root, node);
+    RedBlackTree<T, bst_head, Compare>::insert(root, node);
 }
 
-template<typename T, RBTreeNode<T> T::*bst_head>
-void RedBlackTree<T, bst_head>::RBTreeHead::erase(T *node)
+template<typename T, RBTreeNode<T> T::*bst_head, class Compare>
+void RedBlackTree<T, bst_head, Compare>::RBTreeHead::erase(T *node)
 {
-    RedBlackTree<T, bst_head>::remove(root, node);
+    RedBlackTree<T, bst_head, Compare>::remove(root, node);
 }
 
-template<typename T, RBTreeNode<T> T::*bst_head>
-void RedBlackTree<T, bst_head>::RBTreeHead::erase(RBTreeIterator it)
+template<typename T, RBTreeNode<T> T::*bst_head, class Compare>
+void RedBlackTree<T, bst_head, Compare>::RBTreeHead::erase(RBTreeIterator it)
 {
-    RedBlackTree<T, bst_head>::remove(root, it.node);
+    RedBlackTree<T, bst_head, Compare>::remove(root, it.node);
 }
 
-template<typename T, RBTreeNode<T> T::*bst_head>
-T *RedBlackTree<T, bst_head>::RBTreeIterator::operator->() const noexcept
+template<typename T, RBTreeNode<T> T::*bst_head, class Compare>
+T *RedBlackTree<T, bst_head, Compare>::RBTreeIterator::operator->() const noexcept
 {
     return node;
 }
 
-template<typename T, RBTreeNode<T> T::*bst_head>
-T &RedBlackTree<T, bst_head>::RBTreeIterator::operator*() const noexcept
+template<typename T, RBTreeNode<T> T::*bst_head, class Compare>
+T &RedBlackTree<T, bst_head, Compare>::RBTreeIterator::operator*() const noexcept
 {
     return *node;
 }
 
-template<typename T, RBTreeNode<T> T::*bst_head>
-bool RedBlackTree<T, bst_head>::RBTreeIterator::operator==(
+template<typename T, RBTreeNode<T> T::*bst_head, class Compare>
+bool RedBlackTree<T, bst_head, Compare>::RBTreeIterator::operator==(
     const RBTreeIterator &other) const noexcept
 {
     return node == other.node;
 }
 
-template<typename T, RBTreeNode<T> T::*bst_head>
-bool RedBlackTree<T, bst_head>::RBTreeIterator::operator!=(
+template<typename T, RBTreeNode<T> T::*bst_head, class Compare>
+bool RedBlackTree<T, bst_head, Compare>::RBTreeIterator::operator!=(
     const RBTreeIterator &other) const noexcept
 {
     return node != other.node;
 }
 
-template<typename T, RBTreeNode<T> T::*bst_head>
-RedBlackTree<T, bst_head>::RBTreeIterator &
-    RedBlackTree<T, bst_head>::RBTreeIterator::operator++() noexcept
+template<typename T, RBTreeNode<T> T::*bst_head, class Compare>
+RedBlackTree<T, bst_head, Compare>::RBTreeIterator &
+    RedBlackTree<T, bst_head, Compare>::RBTreeIterator::operator++() noexcept
 {
     if ((node->*bst_head).right) {
         node = (node->*bst_head).right;
@@ -485,9 +511,9 @@ RedBlackTree<T, bst_head>::RBTreeIterator &
     return *this;
 }
 
-template<typename T, RBTreeNode<T> T::*bst_head>
-RedBlackTree<T, bst_head>::RBTreeIterator &
-    RedBlackTree<T, bst_head>::RBTreeIterator::operator--() noexcept
+template<typename T, RBTreeNode<T> T::*bst_head, class Compare>
+RedBlackTree<T, bst_head, Compare>::RBTreeIterator &
+    RedBlackTree<T, bst_head, Compare>::RBTreeIterator::operator--() noexcept
 {
     if ((node->*bst_head).left) {
         node = (node->*bst_head).left;
@@ -506,25 +532,26 @@ RedBlackTree<T, bst_head>::RBTreeIterator &
     return *this;
 }
 
-template<typename T, RBTreeNode<T> T::*bst_head>
-RedBlackTree<T, bst_head>::RBTreeIterator
-    RedBlackTree<T, bst_head>::RBTreeHead::find(const auto &value)
+template<typename T, RBTreeNode<T> T::*bst_head, class Compare>
+RedBlackTree<T, bst_head, Compare>::RBTreeIterator
+    RedBlackTree<T, bst_head, Compare>::RBTreeHead::find(const auto &value)
 {
-    return RBTreeIterator {RedBlackTree<T, bst_head>::find(root, value)};
+    return RBTreeIterator {RedBlackTree<T, bst_head, Compare>::find(root, value)};
 }
 
-template<typename T, RBTreeNode<T> T::*bst_head>
-RedBlackTree<T, bst_head>::RBTreeIterator
-    RedBlackTree<T, bst_head>::RBTreeHead::get_smaller_or_equal(const auto &value)
+template<typename T, RBTreeNode<T> T::*bst_head, class Compare>
+RedBlackTree<T, bst_head, Compare>::RBTreeIterator
+    RedBlackTree<T, bst_head, Compare>::RBTreeHead::get_smaller_or_equal(const auto &value)
 {
+    Compare cmp {};
     T *current = root;
     T *result  = nullptr;
 
     while (current) {
-        if (*current < value) {
+        if (cmp(*current, value)) {
             result  = current;
             current = (current->*bst_head).right;
-        } else if (*current > value) {
+        } else if (cmp(value, *current)) {
             current = (current->*bst_head).left;
         } else {
             return RBTreeIterator {current};
@@ -534,17 +561,17 @@ RedBlackTree<T, bst_head>::RBTreeIterator
     return RBTreeIterator {result};
 }
 
-template<typename T, RBTreeNode<T> T::*bst_head>
-RedBlackTree<T, bst_head>::RBTreeIterator
-    RedBlackTree<T, bst_head>::RBTreeHead::lower_bound(const auto &value)
+template<typename T, RBTreeNode<T> T::*bst_head, class Compare>
+RedBlackTree<T, bst_head, Compare>::RBTreeIterator
+    RedBlackTree<T, bst_head, Compare>::RBTreeHead::lower_bound(const auto &value)
 {
     T *current = root;
     T *result  = nullptr;
 
     while (current) {
-        if (*current < value) {
+        if (cmp(*current, value)) {
             current = (current->*bst_head).right;
-        } else if (*current > value) {
+        } else if (cmp(value, *current)) {
             result  = current;
             current = (current->*bst_head).left;
         } else {
@@ -555,8 +582,8 @@ RedBlackTree<T, bst_head>::RBTreeIterator
     return RBTreeIterator {result};
 }
 
-template<typename T, RBTreeNode<T> T::*bst_head>
-T &RedBlackTree<T, bst_head>::RBTreeHead::at(const auto &value)
+template<typename T, RBTreeNode<T> T::*bst_head, class Compare>
+T &RedBlackTree<T, bst_head, Compare>::RBTreeHead::at(const auto &value)
 {
     auto result = find(value);
     if (result == end()) {

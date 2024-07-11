@@ -38,7 +38,6 @@ void test_pipe()
 
     int pipefd[2];
     if (pipe(pipefd) == -1) {
-        printf("Pipe errno: %i\n", errno);
         perror("pipe");
         return;
     }
@@ -56,7 +55,7 @@ void test_pipe()
             perror("dup");
             return;
         }
-        for (int i = 0; i < 3; ++i) {
+        for (int i = 0; i < 10; ++i) {
             //int result = write(pipefd[1], "hello1!", 6);
             FILE *f = fdopen(pipefd[1], "w");
             int result = fprintf(f, "Hello from iteration %i", i);
@@ -88,8 +87,11 @@ void test_pipe()
     while ((nbytes = read(pipefd[0], buf, sizeof(buf) - 1)) > 0) {
         buf[nbytes] = '\0';
         printf("Read %d bytes: %s\n", nbytes, buf);
+        //sleep(2);
     }
     close(pipefd[0]);
+
+    printf("Pipe finished\n");
 
     // Create a thread to write to the pipe
     // printf("Creating writer thread...\n");
