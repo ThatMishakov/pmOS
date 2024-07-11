@@ -73,15 +73,6 @@ struct Generic_Mem_Region {
     /// Page aligned start of the region
     u64 start_addr = 0;
 
-    constexpr bool operator<(const Generic_Mem_Region &other) const
-    {
-        return this->start_addr < other.start_addr;
-    }
-    constexpr bool operator==(const Generic_Mem_Region &other) const
-    {
-        return this->start_addr == other.start_addr;
-    }
-
     constexpr bool operator>(u64 addr) const { return start_addr > addr; }
     constexpr bool operator<(u64 addr) const { return start_addr < addr; }
 

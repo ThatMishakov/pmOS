@@ -80,7 +80,7 @@ public:
     /// Map containing user space memory regions. If the address is not covered by any of the
     /// regions, it is unallocated. Otherwise, the region controlls the actual allocation and
     /// protection of the memory.
-    using RegionsRBTree = RedBlackTree<Generic_Mem_Region, &Generic_Mem_Region::bst_head, detail::TreeCmp<Generic_Mem_Region, u64, &Generic_Mem_Region::start_addr>>;
+    using RegionsRBTree = RedBlackTree<Generic_Mem_Region, &Generic_Mem_Region::bst_head, detail::TreeCmp<Generic_Mem_Region, u64, &Generic_Mem_Region::start_addr> >;
     RegionsRBTree::RBTreeHead paging_regions;
 
     /// List of the tasks that own the page table. Task_Descriptor should contain a page_table

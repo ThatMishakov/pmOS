@@ -4,25 +4,27 @@
 
 namespace detail
 {
-template<typename T, auto T::*...ff> static constexpr bool Cmp(const T *a, const T *b)
+template<typename T, auto... ff> static constexpr bool Cmp(const T *a, const T *b)
 {
-    return ((a->*ff < b->*ff) || ... || (a < b));
+    return ((a->*ff < b->*ff) || ...);
 }
 
-template<typename T, typename Key, auto T::*f> static constexpr bool Cmp(const Key &a, const T *b)
+// Should be template<typename T, typename Key, auto T::*f>, but
+// https://gcc.gnu.org/bugzilla/show_bug.cgi?id=83417
+template<typename T, typename Key, auto f> static constexpr bool Cmp(const Key &a, const T *b)
 {
     return a < b->*f;
 }
 
-template<typename T, typename Key, auto T::*f> static constexpr bool Cmp(const T *a, const Key &b)
+template<typename T, typename Key, auto f> static constexpr bool Cmp(const T *a, const Key &b)
 {
     return a->*f < b;
 }
 
-template<typename T, typename Key, auto T::*...f> struct TreeCmp {
+template<typename T, typename Key, auto... f> struct TreeCmp {
     constexpr bool operator()(const T &a, const T &b) const { return Cmp<T, f...>(&a, &b); }
     constexpr bool operator()(const Key &a, const T &b) const { return Cmp<T, Key, f...>(a, &b); }
-    constexpr bool operator()(const T &a, const Key &b) const { return Cmp<T, Key, f...>(&b, a); }
+    constexpr bool operator()(const T &a, const Key &b) const { return Cmp<T, Key, f...>(&a, b); }
 };
 } // namespace detail
 
@@ -147,6 +149,7 @@ T *RedBlackTree<T, bst_head, Compare>::find(T *root, const T &value)
 template<typename T, RBTreeNode<T> T::*bst_head, class Compare>
 T *RedBlackTree<T, bst_head, Compare>::find(T *root, const auto &value)
 {
+    Compare cmp {};
     T *current = root;
     while (current) {
         if (cmp(value, *current)) {
@@ -164,6 +167,7 @@ T *RedBlackTree<T, bst_head, Compare>::find(T *root, const auto &value)
 template<typename T, RBTreeNode<T> T::*bst_head, class Compare>
 void RedBlackTree<T, bst_head, Compare>::insert(T *&root, T *node)
 {
+    Compare cmp {};
     T *current = root;
     T *parent  = nullptr;
 
@@ -565,6 +569,7 @@ template<typename T, RBTreeNode<T> T::*bst_head, class Compare>
 RedBlackTree<T, bst_head, Compare>::RBTreeIterator
     RedBlackTree<T, bst_head, Compare>::RBTreeHead::lower_bound(const auto &value)
 {
+    Compare cmp {};
     T *current = root;
     T *result  = nullptr;
 
