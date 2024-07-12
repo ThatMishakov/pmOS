@@ -68,11 +68,60 @@ u64 Page_Table::atomic_create_normal_region(u64 page_aligned_start, u64 page_ali
     Auto_Lock_Scope scope_lock(lock);
 
     u64 start_addr = find_region_spot(page_aligned_start, page_aligned_size, fixed);
+    klib::unique_ptr<Generic_Mem_Region> region = new Private_Normal_Region(
+        start_addr, page_aligned_size, klib::forward<klib::string>(name), this, access, pattern);
 
-    paging_regions.insert(new Private_Normal_Region(
-        start_addr, page_aligned_size, klib::forward<klib::string>(name), this, access, pattern));
+    if (fixed)
+        release_in_range(start_addr, page_aligned_size);
+
+    paging_regions.insert(region.release());
 
     return start_addr;
+}
+
+void Page_Table::release_in_range(u64 start_addr, u64 size)
+{
+    bool clean_pages = false;
+    // Special case: One large region needs to be split in two, from the middle
+    auto it          = paging_regions.get_smaller_or_equal(start_addr);
+    if (it != paging_regions.end() and it->start_addr < start_addr and
+        it->addr_end() > (start_addr + size)) {
+        // This is the case when the region needs to be split
+        // it is the only case that may fail because the system may not have enough memory to
+        // allocate a second region
+
+        it->punch_hole(start_addr, size);
+
+        clean_pages = true;
+    } else {
+        auto it = paging_regions.get_smaller_or_equal(start_addr);
+        if (it == paging_regions.end())
+            it = paging_regions.begin();
+
+        u64 end_addr = start_addr + size;
+        while (it != paging_regions.end() and it->start_addr < end_addr) {
+            auto i = it++;
+
+            // 1 region can be before the one to be released
+            if (not i->is_in_range(start_addr))
+                continue;
+
+            if (i->start_addr < start_addr) {
+                i->trim(i->start_addr, start_addr - i->start_addr);
+            } else if (i->addr_end() > end_addr) {
+                i->trim(end_addr, i->addr_end() - end_addr);
+            } else {
+                i->prepare_deletion();
+                paging_regions.erase(i);
+                i->rcu_free();
+            }
+
+            clean_pages = true;
+        }
+    }
+
+    if (clean_pages)
+        invalidate_range(start_addr, size, true);
 }
 
 u64 Page_Table::atomic_transfer_region(const klib::shared_ptr<Page_Table> &to, u64 region_orig,
@@ -107,10 +156,14 @@ u64 Page_Table::atomic_create_phys_region(u64 page_aligned_start, u64 page_align
                              "atomic_create_phys_region phys_addr outside the supported by x86"));
 
     u64 start_addr = find_region_spot(page_aligned_start, page_aligned_size, fixed);
+    klib::unique_ptr<Generic_Mem_Region> region =
+        new Phys_Mapped_Region(start_addr, page_aligned_size, klib::forward<klib::string>(name),
+                               this, access, phys_addr_start);
 
-    paging_regions.insert(new Phys_Mapped_Region(start_addr, page_aligned_size,
-                                                 klib::forward<klib::string>(name), this, access,
-                                                 phys_addr_start));
+    if (fixed)
+        release_in_range(start_addr, page_aligned_size);
+
+    paging_regions.insert(region.release());
 
     return start_addr;
 }
@@ -129,8 +182,10 @@ u64 Page_Table::atomic_create_mem_object_region(u64 page_aligned_start, u64 page
         start_addr, page_aligned_size, klib::forward<klib::string>(name), this, access, object,
         object_offset_bytes, cow, start_offset_bytes, object_size_bytes);
 
-    mem_objects[object].regions.insert(region.get());
+    if (fixed)
+        release_in_range(start_addr, page_aligned_size);
 
+    mem_objects[object].regions.insert(region.get());
     paging_regions.insert(region.release());
 
     return start_addr;
@@ -177,8 +232,10 @@ u64 Page_Table::find_region_spot(u64 desired_start, u64 size, bool fixed)
         return desired_start;
 
     } else {
-        if (fixed)
-            throw(Kern_Exception(-EINVAL, "find_region_spot fixed region overlaps"));
+        if (fixed && desired_start == 0x0)
+            throw(Kern_Exception(-EINVAL, "find_region_spot fixed region at NULL"));
+        else if (fixed)
+            return desired_start;
 
         u64 addr = 0x1000;
         auto it  = paging_regions.begin();
@@ -265,14 +322,14 @@ void Page_Table::copy_pages(const klib::shared_ptr<Page_Table> &to, u64 from_add
             auto info = get_page_mapping(from_addr + offset);
             if (info.is_allocated) {
                 Page_Table_Argumments arg = {
-                    .readable = !!(access & Readable),
-                    .writeable = !!(access & Writeable),
-                    .user_access = info.user_access,
-                    .global = false,
+                    .readable           = !!(access & Readable),
+                    .writeable          = !!(access & Writeable),
+                    .user_access        = info.user_access,
+                    .global             = false,
                     .execution_disabled = not(access & Executable),
-                    .extra = info.flags,
+                    .extra              = info.flags,
                     // TODO: Fix this
-                    .cache_policy = Memory_Type::Normal,
+                    .cache_policy       = Memory_Type::Normal,
                 };
 
                 to->map(info.create_copy(), to_addr + offset, arg);

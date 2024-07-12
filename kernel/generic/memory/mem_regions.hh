@@ -222,6 +222,10 @@ struct Generic_Mem_Region {
      *
      */
     virtual void prepare_deletion() noexcept;
+
+    virtual void trim(u64 new_start_addr, u64 new_size_bytes) noexcept = 0;
+
+    virtual void punch_hole(u64 hole_start, u64 hole_size_bytes) = 0;
 };
 
 /**
@@ -252,6 +256,9 @@ struct Phys_Mapped_Region final: Generic_Mem_Region {
                        u64 phys_addr_start)
         : Generic_Mem_Region(start_addr, size, klib::forward<klib::string>(name), owner, access),
           phys_addr_start(phys_addr_start) {};
+
+    void trim(u64 new_start_addr, u64 new_size_bytes) noexcept override;
+    void punch_hole(u64 hole_addr_start, u64 hole_size_bytes) override;
 };
 
 // Normal region. On page fault, attempts to allocate the page and fills it with specified pattern
@@ -277,6 +284,9 @@ struct Private_Normal_Region final: Generic_Mem_Region {
                           u64 pattern)
         : Generic_Mem_Region(start_addr, size, klib::forward<klib::string>(name), owner, access),
           pattern(pattern) {};
+
+    void trim(u64 new_start_addr, u64 new_size_bytes) noexcept override;
+    void punch_hole(u64 hole_addr_start, u64 hole_size_bytes) override;
 };
 
 class Mem_Object;
@@ -322,4 +332,7 @@ struct Mem_Object_Reference final: Generic_Mem_Region {
     virtual void prepare_deletion() noexcept override;
 
     constexpr bool can_takeout_page() const noexcept override { return false; }
+
+    void trim(u64 new_start_addr, u64 new_size_bytes) noexcept override;
+    void punch_hole(u64 hole_addr_start, u64 hole_size_bytes) override;
 };

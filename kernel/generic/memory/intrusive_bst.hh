@@ -49,8 +49,11 @@ public:
     struct RBTreeIterator {
         T *node = nullptr;
 
-        RBTreeIterator &operator++() noexcept;
-        RBTreeIterator &operator--() noexcept;
+        RBTreeIterator operator++() noexcept;
+        RBTreeIterator operator--() noexcept;
+
+        RBTreeIterator operator++(int) noexcept;
+        RBTreeIterator operator--(int) noexcept;
 
         T &operator*() const noexcept;
         T *operator->() const noexcept;
@@ -498,7 +501,7 @@ bool RedBlackTree<T, bst_head, Compare>::RBTreeIterator::operator!=(
 }
 
 template<typename T, RBTreeNode<T> T::*bst_head, class Compare>
-RedBlackTree<T, bst_head, Compare>::RBTreeIterator &
+RedBlackTree<T, bst_head, Compare>::RBTreeIterator
     RedBlackTree<T, bst_head, Compare>::RBTreeIterator::operator++() noexcept
 {
     if ((node->*bst_head).right) {
@@ -519,7 +522,16 @@ RedBlackTree<T, bst_head, Compare>::RBTreeIterator &
 }
 
 template<typename T, RBTreeNode<T> T::*bst_head, class Compare>
-RedBlackTree<T, bst_head, Compare>::RBTreeIterator &
+RedBlackTree<T, bst_head, Compare>::RBTreeIterator
+    RedBlackTree<T, bst_head, Compare>::RBTreeIterator::operator++(int) noexcept
+{
+    auto it = *this;
+    ++*this;
+    return it;
+}
+
+template<typename T, RBTreeNode<T> T::*bst_head, class Compare>
+RedBlackTree<T, bst_head, Compare>::RBTreeIterator
     RedBlackTree<T, bst_head, Compare>::RBTreeIterator::operator--() noexcept
 {
     if ((node->*bst_head).left) {

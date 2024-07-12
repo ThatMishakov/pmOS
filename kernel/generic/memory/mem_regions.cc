@@ -142,6 +142,17 @@ void Phys_Mapped_Region::clone_to(const klib::shared_ptr<Page_Table> &new_table,
     new_table->paging_regions.insert(copy);
 }
 
+void Phys_Mapped_Region::trim(u64 new_start, u64 new_size) noexcept
+{
+    assert(new_start >= start_addr);
+    if (new_start != start_addr) {
+        phys_addr_start += new_start - start_addr;
+        start_addr = new_start;
+    }
+
+    size = new_size;
+}
+
 void Private_Normal_Region::clone_to(const klib::shared_ptr<Page_Table> &new_table, u64 base_addr,
                                      u64 new_access)
 {
@@ -154,6 +165,80 @@ void Private_Normal_Region::clone_to(const klib::shared_ptr<Page_Table> &new_tab
 
     owner->copy_pages(new_table, start_addr, base_addr, size, new_access);
     new_table->paging_regions.insert(copy.release());
+}
+
+void Private_Normal_Region::trim(u64 new_start, u64 new_size) noexcept
+{
+    assert(new_start >= start_addr);
+
+    start_addr = new_start;
+    size       = new_size;
+}
+
+void Mem_Object_Reference::trim(u64 new_start, u64 new_size) noexcept
+{
+    assert(new_start >= start_addr);
+
+    if (new_start != start_addr) {
+        u64 diff = new_start - start_addr;
+
+        if (diff <= start_offset_bytes) {
+            start_offset_bytes -= diff;
+            object_offset_bytes += diff;
+            object_size_bytes = object_size_bytes < diff ? 0 : object_size_bytes - diff;
+        } else {
+            // Round down to the page boundary
+            u64 t = start_offset_bytes & 0xfff;
+            start_offset_bytes -= t;
+            object_offset_bytes -= t;
+            object_size_bytes += t;
+
+            start_offset_bytes = start_offset_bytes < diff ? 0 : start_offset_bytes - diff;
+            object_offset_bytes += diff;
+            object_size_bytes = object_size_bytes < diff ? 0 : object_size_bytes - diff;
+        }
+    }
+
+    size = new_size;
+    if (size < start_offset_bytes + object_size_bytes)
+        object_size_bytes = size - start_offset_bytes;
+}
+
+void Private_Normal_Region::punch_hole(u64 hole_addr_start, u64 hole_size_bytes)
+{
+    assert(start_addr < hole_addr_start and start_addr + size > hole_addr_start + hole_size_bytes);
+
+    auto ptr = new Private_Normal_Region(*this);
+    ptr->size -= hole_addr_start + hole_size_bytes - start_addr;
+    ptr->start_addr = hole_addr_start + hole_size_bytes;
+    owner->paging_regions.insert(ptr);
+    size = hole_addr_start - start_addr;
+}
+
+void Phys_Mapped_Region::punch_hole(u64 hole_addr_start, u64 hole_size_bytes)
+{
+    assert(start_addr < hole_addr_start and start_addr + size > hole_addr_start + hole_size_bytes);
+
+    auto ptr = new Phys_Mapped_Region(*this);
+    ptr->size -= hole_addr_start + hole_size_bytes - start_addr;
+    ptr->start_addr = hole_addr_start + hole_size_bytes;
+    ptr->phys_addr_start += ptr->start_addr - start_addr;
+    owner->paging_regions.insert(ptr);
+    size = hole_addr_start - start_addr;
+}
+
+void Mem_Object_Reference::punch_hole(u64 hole_addr_start, u64 hole_size_bytes)
+{
+    assert(start_addr < hole_addr_start and start_addr + size > hole_addr_start + hole_size_bytes);
+
+    const u64 new_start = hole_addr_start + hole_size_bytes;
+
+    auto ptr = new Mem_Object_Reference(*this);
+    ptr->trim(new_start, size - (new_start - start_addr));
+    owner->paging_regions.insert(ptr);
+    owner->mem_objects[references].regions.insert(ptr);
+
+    trim(start_addr, hole_addr_start - start_addr);
 }
 
 Page_Table_Argumments Mem_Object_Reference::craft_arguments() const
@@ -267,7 +352,9 @@ void Generic_Mem_Region::prepare_deletion() noexcept
 
 void Mem_Object_Reference::prepare_deletion() noexcept
 {
-    // owner->unreference_object(references, this);
+    auto p = owner->mem_objects.find(references);
+    if (p != owner->mem_objects.end())
+        p->second.regions.erase(this);
 }
 
 Mem_Object_Reference::Mem_Object_Reference(u64 start_addr, u64 size, klib::string name,

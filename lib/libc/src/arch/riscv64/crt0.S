@@ -59,3 +59,11 @@ _start:
     # This should never be reached
     # UNIMP should always cause an illegal instruction exception
     unimp
+
+    .section .text
+    .type __main, @function
+    .global __main
+    # Linker order weirdness/hack
+    # This needs to be fixed, but for now, this works
+__main:
+    j main

@@ -10,10 +10,12 @@ int main(int argc, char **argv);
 void exit(int status);
 void __call_init_functions();
 
+int __main(int argc, char **argv);
+
 void *main_trampoline(void *)
 {
     __call_init_functions();
     Args_Ret args = prepare_args(0, 0);
-    int result = main(args.argc, args.argv);
+    int result = __main(args.argc, args.argv);
     exit(result);
 }

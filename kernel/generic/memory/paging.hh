@@ -65,8 +65,8 @@ class Mem_Object;
 struct Mem_Object_Data {
     u8 max_privilege_mask = 0;
     RedBlackTree<Mem_Object_Reference, &Mem_Object_Reference::object_bst_head,
-                 detail::TreeCmp<Mem_Object_Reference, u64, &Mem_Object_Reference::start_addr> >::RBTreeHead
-        regions;
+                 detail::TreeCmp<Mem_Object_Reference, u64,
+                                 &Mem_Object_Reference::start_addr>>::RBTreeHead regions;
 };
 
 /**
@@ -82,7 +82,9 @@ public:
     /// Map containing user space memory regions. If the address is not covered by any of the
     /// regions, it is unallocated. Otherwise, the region controlls the actual allocation and
     /// protection of the memory.
-    using RegionsRBTree = RedBlackTree<Generic_Mem_Region, &Generic_Mem_Region::bst_head, detail::TreeCmp<Generic_Mem_Region, u64, &Generic_Mem_Region::start_addr> >;
+    using RegionsRBTree =
+        RedBlackTree<Generic_Mem_Region, &Generic_Mem_Region::bst_head,
+                     detail::TreeCmp<Generic_Mem_Region, u64, &Generic_Mem_Region::start_addr>>;
     RegionsRBTree::RBTreeHead paging_regions;
 
     /// List of the tasks that own the page table. Task_Descriptor should contain a page_table
@@ -148,6 +150,10 @@ public:
      * successfull.
      */
     u64 find_region_spot(u64 desired_start, u64 size, bool fixed);
+
+    // Releases the memory regions in the given range (and their memory). If in the middle of the
+    // region, it is split
+    void release_in_range(u64 start, u64 size);
 
     /**
      * @brief Creates a normal memory region
@@ -393,7 +399,7 @@ public:
      * page table
      */
     virtual void copy_pages(const klib::shared_ptr<Page_Table> &to, u64 from_addr, u64 to_addr,
-                    u64 size_bytes, u8 new_access);
+                            u64 size_bytes, u8 new_access);
 
     struct Page_Info {
         u8 flags          = 0;
