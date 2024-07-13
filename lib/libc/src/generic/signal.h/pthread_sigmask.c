@@ -9,6 +9,8 @@ uint64_t global_pending_signals = 0;
 
 int pthread_sigmask(int how, const sigset_t *restrict set, sigset_t *restrict oldset)
 {
+    printf("pthread_sigmask %i %lx %lx\n", how, set, oldset);
+
     struct uthread *u = __get_tls();
 
     if (oldset != NULL)

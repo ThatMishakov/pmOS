@@ -46,20 +46,11 @@ typedef struct {
 } mcontext_t; // TODO
 #elif defined(__riscv)
 typedef struct {
-    unsigned long s0;
-    unsigned long s1;
-    unsigned long s2;
-    unsigned long s3;
-    unsigned long s4;
-    unsigned long s5;
-    unsigned long s6;
-    unsigned long s7;
-    unsigned long s8;
-    unsigned long s9;
-    unsigned long s10;
-    unsigned long s11;
+    unsigned long pc;
+    unsigned long regs[31];
 
-    unsigned long sp;
+    // True if the context was not saved by a signal. Avoids trip to kernel
+    int /* bool */ partial;
 } mcontext_t;
 #endif
 

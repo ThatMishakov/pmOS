@@ -42,7 +42,12 @@ typedef struct {
 
 Args_Ret prepare_args(u64 argtype, u64 ptr)
 {
-    Args_Ret p = {0, 0};
+    int argc = 0;
+    char **argv = malloc(sizeof(*argv) * (argc + 1));
+
+    // TODO
+
+    argv[argc] = NULL;
 
     // TODO: Needs fixing after completely changing memory syscalls
 
@@ -73,5 +78,5 @@ Args_Ret prepare_args(u64 argtype, u64 ptr)
     //     break;
     // };
 
-    return p;
+    return (Args_Ret){argc, argv};
 }
