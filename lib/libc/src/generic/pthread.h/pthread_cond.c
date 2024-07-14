@@ -109,6 +109,8 @@ int pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex)
     return 0;
 }
 
+static const int simple_lock_expected = 0;
+
 static void simple_lock(int *lock)
 {
     do {
@@ -117,7 +119,7 @@ static void simple_lock(int *lock)
             continue;
         }
 
-        if (__atomic_compare_exchange_n(lock, 0, 1, 0, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)) {
+        if (__atomic_compare_exchange_n(lock, &simple_lock_expected, 1, 0, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)) {
             return;
         }
     } while (1);

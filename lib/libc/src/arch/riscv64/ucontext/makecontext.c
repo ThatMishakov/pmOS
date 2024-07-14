@@ -23,10 +23,8 @@ static void push_stack(unsigned long **stack, unsigned long value)
 void makecontext(ucontext_t *ucp, void (*func)(), int argc, ...)
 {
     va_list ap;
-    unsigned long *sp;
 
-    printf("makecontext ss_sp %lx ss_size %lx ucp %lx\n", ucp->uc_stack.ss_sp, ucp->uc_stack.ss_size, ucp);
-    sp = (unsigned long *)ucp->uc_stack.ss_sp + ucp->uc_stack.ss_size / sizeof(unsigned long);
+    unsigned long *sp = (unsigned long *)ucp->uc_stack.ss_sp + ucp->uc_stack.ss_size / sizeof(unsigned long);
     if (argc > RISCV_PARAM_REGS && argc % 2 != 0) {
         // Align stack
         push_stack(&sp, 0);

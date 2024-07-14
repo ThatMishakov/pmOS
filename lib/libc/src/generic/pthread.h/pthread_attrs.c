@@ -29,6 +29,23 @@
 #include <errno.h>
 #include <pthread.h>
 
+int pthread_attr_init(pthread_attr_t *attr)
+{
+    if (!attr) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    attr->stackaddr = 0;
+    attr->stacksize = 0;
+    attr->guardsize = 0;
+    attr->scope = 0;
+    attr->detachstate = PTHREAD_CREATE_JOINABLE;
+    attr->inheritsched = 0;
+    attr->schedpolicy = 0;
+    return 0;
+}
+
 int pthread_attr_destroy(pthread_attr_t *) { return 0; }
 
 int pthread_attr_getdetachstate(const pthread_attr_t *attrs_ptr, int *detachstate)

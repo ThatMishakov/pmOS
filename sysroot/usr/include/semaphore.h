@@ -29,10 +29,18 @@
 #ifndef _SEMAPHORE_H
 #define _SEMAPHORE_H 1
 
+#define __DECLARE_PTHREAD_MUTEX_T
+#define __DECLARE_PTHREAD_COND_T
+#include "__posix_types.h"
+
 #include <fcntl.h>
 #include <time.h>
 
-typedef int sem_t;
+typedef struct {
+    pthread_mutex_t lock;
+    pthread_cond_t cond;
+    int value;
+} sem_t;
 
 #define SEM_FAILED ((sem_t *)0)
 
