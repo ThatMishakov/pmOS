@@ -35,6 +35,7 @@
 #include <thread>
 #include <time.h>
 #include <unistd.h>
+#include <sys/mman.h>
 
 class Test
 {

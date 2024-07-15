@@ -86,7 +86,7 @@ klib::array<syscall_function, 48> syscall_table = {
     syscall_get_segment,
     syscall_create_phys_map_region,
     syscall_delete_region,
-    nullptr,
+    syscall_unmap_range,
     nullptr,
     syscall_set_segment,
 
@@ -919,7 +919,6 @@ void syscall_map_mem_object(u64 page_table_id, u64 addr_start, u64 size_bytes, u
     const auto &current_task       = get_current_task();
     auto table                     = page_table_id == 0 ? current_task->page_table
                                                         : Arch_Page_Table::get_page_table_throw(page_table_id);
-    const auto &current_page_table = current_task->page_table;
 
     if ((size_bytes == 0) or (size_bytes & 0xfff != 0))
         throw Kern_Exception(-EINVAL, "size not page aligned");
@@ -950,6 +949,19 @@ void syscall_delete_region(u64 tid, u64 region_start, u64, u64, u64, u64)
 
     // TODO: This is completely untested and knowing me is probably utterly broken
     page_table->atomic_delete_region(region_start);
+}
+
+void syscall_unmap_range(u64 task_id, u64 addr_start, u64 size, u64, u64, u64)
+{
+    syscall_ret_low(get_current_task()) = SUCCESS;
+
+    const auto task        = task_id == 0 ? get_cpu_struct()->current_task : get_task_throw(task_id);
+    const auto &page_table = task->page_table;
+
+    // TODO: Passing misaligned pointers might potentially break the kernel (or not)
+    // Investigate this
+
+    page_table->atomic_release_in_range(addr_start, size);
 }
 
 void syscall_remove_from_task_group(u64 pid, u64 group, u64, u64, u64, u64)

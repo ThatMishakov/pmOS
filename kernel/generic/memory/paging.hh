@@ -155,6 +155,8 @@ public:
     // region, it is split
     void release_in_range(u64 start, u64 size);
 
+    void atomic_release_in_range(u64 start, u64 size);
+
     /**
      * @brief Creates a normal memory region
      *

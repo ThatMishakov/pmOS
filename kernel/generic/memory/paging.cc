@@ -124,6 +124,12 @@ void Page_Table::release_in_range(u64 start_addr, u64 size)
         invalidate_range(start_addr, size, true);
 }
 
+void Page_Table::atomic_release_in_range(u64 start, u64 size)
+{
+    Auto_Lock_Scope l(lock);
+    release_in_range(start, size);
+}
+
 u64 Page_Table::atomic_transfer_region(const klib::shared_ptr<Page_Table> &to, u64 region_orig,
                                        u64 prefered_to, u64 access, bool fixed)
 {

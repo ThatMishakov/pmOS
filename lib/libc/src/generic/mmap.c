@@ -77,10 +77,10 @@ void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 
 int munmap(void *addr, size_t length)
 {
-    (void)addr;
-    (void)length;
+    result_t r = release_memory_range(0, addr, length);
+    if (r == SUCCESS)
+        return 0;
 
-    // Not supported
-    errno = ENOTSUP;
+    errno = -r;
     return -1;
 }

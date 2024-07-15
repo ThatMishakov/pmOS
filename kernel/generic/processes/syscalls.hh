@@ -209,6 +209,8 @@ void syscall_kill_task(u64 task_id, u64, u64, u64, u64, u64);
 
 void syscall_resume_task(u64 task_id, u64, u64, u64, u64, u64);
 
+void syscall_unmap_range(u64 task_id, u64 addr_start, u64 size, u64, u64, u64);
+
 inline u64 &syscall_arg1(const klib::shared_ptr<TaskDescriptor> &task)
 {
     return task->regs.syscall_arg1();

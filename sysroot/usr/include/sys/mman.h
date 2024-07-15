@@ -70,8 +70,8 @@ int munlockall(void);
 
 int posix_madvise(void *, size_t, int);
 
-int posix_mem_offset(const void *restrict, size_t, off_t *restrict, size_t *restrict,
-                     int *restrict);
+int posix_mem_offset(const void *_RESTRICT, size_t, off_t *_RESTRICT, size_t *_RESTRICT,
+                     int *_RESTRICT);
 int posix_typed_mem_get_info(int, struct posix_typed_mem_info *);
 int posix_typed_mem_open(const char *, int, int);
 

@@ -231,3 +231,8 @@ result_t request_named_port(const char *name, size_t name_length, pmos_port_t re
 result_t pause_task(uint64_t tid) { return pmos_syscall(SYSCALL_PAUSE_TASK, tid).result; }
 
 result_t resume_task(uint64_t tid) { return pmos_syscall(SYSCALL_RESUME_TASK, tid).result; }
+
+result_t release_memory_range(uint64_t task_id, void *start, size_t size)
+{
+    return pmos_syscall(SYSCALL_UNMAP_RANGE, task_id, start, size).result;
+}
