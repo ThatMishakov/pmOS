@@ -40,6 +40,7 @@
 #include <utils.hh>
 // #include <cpus/cpus.hh>
 #include "task_group.hh"
+#include <clock.hh>
 
 #include <assert.h>
 #include <exceptions.hh>
@@ -1066,6 +1067,10 @@ void syscall_get_time(u64 mode, u64, u64, u64, u64, u64)
     case GET_TIME_NANOSECONDS_SINCE_BOOTUP:
         syscall_ret_low(current_task)  = SUCCESS;
         syscall_ret_high(current_task) = get_ns_since_bootup();
+        break;
+    case GET_TIME_REALTIME_NANOSECONDS:
+        syscall_ret_low(current_task) = SUCCESS;
+        syscall_ret_high(current_task) = unix_time_bootup*1000000000 + get_ns_since_bootup();
         break;
     default:
         throw Kern_Exception(-ENOTSUP, "unknown mode in syscall_get_time");

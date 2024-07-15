@@ -50,6 +50,12 @@ int pthread_cond_init(pthread_cond_t *cond, const pthread_condattr_t *attr)
     return 0;
 }
 
+int pthread_cond_timedwait(pthread_cond_t *cond, pthread_mutex_t *mutex, const struct timespec *)
+{
+    // Sorry not sorry
+    return pthread_cond_wait(cond, mutex);
+}
+
 int pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex)
 {
     // Check if mutex is NULL
@@ -109,10 +115,10 @@ int pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex)
     return 0;
 }
 
-static const int simple_lock_expected = 0;
-
 static void simple_lock(int *lock)
 {
+    static int simple_lock_expected = 0;
+
     do {
         if (*lock == 1) {
             sched_yield();

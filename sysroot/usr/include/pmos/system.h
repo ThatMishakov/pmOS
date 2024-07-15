@@ -342,6 +342,7 @@ syscall_r set_task_group_notifier_mask(uint64_t task_group_id, pmos_port_t port_
 result_t pmos_yield();
 
 #define GET_TIME_NANOSECONDS_SINCE_BOOTUP 0
+#define GET_TIME_REALTIME_NANOSECONDS     1
 /**
  * @brief Gets the system time
  * 

@@ -2,18 +2,18 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice, this
  *    list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
  *    and/or other materials provided with the distribution.
- * 
+ *
  * 3. Neither the name of the copyright holder nor the names of its
  *    contributors may be used to endorse or promote products derived from
  *    this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -27,28 +27,22 @@
  */
 
 #include <cstdio>
-#include <string>
-#include <unistd.h>
-#include <pmos/debug.h>
-#include <pthread.h>
-#include <thread>
 #include <list>
-#include <pthread.h>
+#include <pmos/debug.h>
 #include <pmos/system.h>
+#include <pthread.h>
+#include <string>
+#include <thread>
 #include <time.h>
+#include <unistd.h>
 
-class Test {
+class Test
+{
 public:
-    Test(const std::string & msg) {
-        printf("Test::Test(char * msg): %s\n", msg.c_str());
-    }
+    Test(const std::string &msg) { printf("Test::Test(char * msg): %s\n", msg.c_str()); }
 
-    Test() {
-        printf("Test::Test()\n");
-    }
-    ~Test() {
-        printf("Test::~Test()\n");
-    }
+    Test() { printf("Test::Test()\n"); }
+    ~Test() { printf("Test::~Test()\n"); }
 };
 
 // Check global constructors
@@ -60,11 +54,12 @@ double count = 0;
 std::mutex count_mutex;
 
 thread_local auto tid = get_task_id();
-void thread_func(void *) {
+void thread_func(void *)
+{
     printf("Hello from a pthread! My TID: %i\n", tid);
     double p = 0;
     for (size_t i = 0; i < 100000000; ++i) {
-        asm volatile ("");
+        asm volatile("");
         p += i;
     }
 
@@ -77,11 +72,12 @@ std::list<std::thread> threads;
 
 void test_threads()
 {
+
     for (size_t i = 0; i < 10; i++) {
         threads.push_back(std::thread(thread_func, nullptr));
     }
 
-    for (auto & t : threads) {
+    for (auto &t: threads) {
         t.join();
     }
 
@@ -91,23 +87,28 @@ void test_threads()
 extern "C" void test_qsort();
 extern "C" void test_pipe();
 
-void run_tests() {
+void run_tests()
+{
     test_qsort();
     test_pipe();
 }
 
 void tick()
 {
-    if (fork() == 0) {
+    pid_t p = fork();
+    if (p == 0) {
         int i = 0;
         while (true) {
             printf("Tick %i\n", ++i);
             sleep(5);
         }
+    } else if (p == -1) {
+        perror("fork");
     }
 }
 
-int main() {
+int main()
+{
     sleep(1);
     printf("Starting tests...\n");
     tick();
@@ -132,7 +133,7 @@ int main() {
     test_pipe();
 
     // Allow other thread to run
-    //pthread_exit(nullptr);
+    // pthread_exit(nullptr);
 
     return 0;
 }

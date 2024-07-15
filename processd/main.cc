@@ -128,16 +128,17 @@ bool Process::is_group_leader() const { return parent_group->leader == this; }
 
 Group *get_default_group()
 {
-    auto it = groups.find(1);
+    Group *gp = nullptr;
+    auto it   = groups.find(1);
     if (it == groups.end()) {
         auto group      = std::make_unique<Group>();
-        auto gp         = group.get();
+        gp              = group.get();
         group->group_id = 1;
         groups[1]       = std::move(group);
-        return gp;
     } else {
-        return it->second.get();
+        gp = it->second.get();
     }
+    return gp;
 }
 
 void register_process_reply(pmos_port_t reply_port, unsigned flags, int result, uint64_t process_id)
@@ -336,6 +337,7 @@ void register_process(IPC_Register_Process *msg, uint64_t sender)
             process->process_task_group_id = msg->task_group_id;
             processes[process->process_id] = std::move(process);
             pp->parent_group               = group;
+            group->processes.insert(pp);
 
             process_for_task_group[msg->task_group_id] = pp;
 
@@ -706,7 +708,8 @@ int main()
         }
         case IPC_Preregister_Process_NUM: {
             if (msg.size < sizeof(IPC_Preregister_Process)) {
-                printf("processd: Recieved IPC_Preregister_Process that is too small from task %li "
+                printf("processd: Recieved IPC_Preregister_Process that is too small from task "
+                       "%li "
                        "of size "
                        "%li\n",
                        msg.sender, msg.size);
