@@ -53,3 +53,10 @@ _start:
     movq %rax, %rdi
     call exit
     .size _start, . - _start
+
+    .section .text
+    .type __main, @function
+    .global __main
+    # See riscv64/crt0.S for more information
+__main:
+    jmp main

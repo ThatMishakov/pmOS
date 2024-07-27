@@ -25,53 +25,40 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-    .globl fork
-    .type fork, @function
-fork:
-    # Save the caller's frame pointer.
-    pushq   %rbp
-    movq    %rsp, %rbp
+    .text
+    .globl __do_fork
+    .type __do_fork, @function
+__do_fork:
+    pushq %rbp
+    movq %rsp, %rbp
+
+    # Align stack
+    subq $8, %rsp
 
     # Save the caller's registers for child to restore.
-    pushq   %rbx
-    pushq   %r12
-    pushq   %r13
-    pushq   %r14
-    pushq   %r15
+    pushq %rbx
+    pushq %r12
+    pushq %r13
+    pushq %r14
+    pushq %r15
 
-    # Reserve space for the child information structure.
-    subq    $24, %rsp
+    # Pass the stack pointer as the third argument to C
+    movq %rsp, %rdx
 
-    # Save the return frame pointer to child_data->return_rbp
-    movq    %rbp, %rax
-    movq    %rax, (%rsp)
-
-    # Pass the pointer to the 
-    movq %rsp,  %rdi
-
-    # Call inner fork function.
-    call    __libc_fork_inner
+    # Call inner fork function
+    call __libc_fork_inner
 
     # Don't restore registers in child.
     movq    %rbp, %rsp
     popq    %rbp
+
+    # Return from the function
     ret
 
     .globl __fork_child_entry_point
 __fork_child_entry_point:
     # Restore stack pointer
-    movq    (%rdi), %rbp
-    movq    %rbp, %rsp
-    subq    $64, %rsp
-
-    # Pass pointer to child data to function
-    movq    %rsp, %rdi
-
-    # Call the child function
-    call __libc_fork_child
-
-    # Restore registers
-    addq    $24, %rsp
+    movq    %rdi, %rsp
 
     popq    %r15
     popq    %r14
@@ -79,7 +66,14 @@ __fork_child_entry_point:
     popq    %r12
     popq    %rbx
 
+    addq    $8, %rsp
+
+    movq    %rsp, %rbp
+
+    # Call the child function
+    call __libc_fork_child
+
     # Return!
-    movq    %rbp, %rsp # Not really necessary
+    # movq    %rbp, %rsp # Not really necessary
     popq    %rbp
     ret
