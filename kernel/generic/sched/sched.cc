@@ -143,10 +143,11 @@ void CPU_Info::atomic_timer_queue_push(u64 fire_on_core_ticks, const klib::share
 
 extern klib::shared_ptr<Arch_Page_Table> idle_page_table;
 
+
+#include <kern_logger/kern_logger.hh>
 void TaskDescriptor::switch_to()
 {
     CPU_Info *c = get_cpu_struct();
-
     assert(cpu_affinity == 0 or (cpu_affinity - 1) == c->cpu_id);
 
     if (c->current_task->page_table != page_table) {
@@ -240,7 +241,7 @@ void TaskDescriptor::unblock() noexcept
 
     auto &local_cpu = *get_cpu_struct();
 
-    if (cpu_affinity == 0 or cpu_affinity - 1 == local_cpu.cpu_id) {
+    if (cpu_affinity == 0 or ((cpu_affinity - 1) == local_cpu.cpu_id)) {
         klib::shared_ptr<TaskDescriptor> current_task = get_cpu_struct()->current_task;
 
         if (current_task->priority > priority) {
@@ -265,6 +266,7 @@ void TaskDescriptor::unblock() noexcept
         // one and not execute it immediately Not a big deal for now, but better approach is
         // probably needed...
         auto remote_cpu = cpus[cpu_affinity - 1];
+        assert(remote_cpu->cpu_id == cpu_affinity - 1);
         if (remote_cpu->current_task_priority > priority)
             remote_cpu->ipi_reschedule();
     }

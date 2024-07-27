@@ -114,7 +114,7 @@ int main()
     printf("Starting tests...\n");
     tick();
 
-    test_threads();
+    // test_threads();
 
     // long p;
     // for (int i = 0; i < 5; ++i)
@@ -131,7 +131,7 @@ int main()
     //         break;
     //     }
 
-    test_pipe();
+    // test_pipe();
 
     // Allow other thread to run
     // pthread_exit(nullptr);

@@ -204,6 +204,13 @@ int power_button_init(void) {
     return 0;
 }
 
+void find_com();
+
+void find_acpi_devices()
+{
+    find_com();
+}
+
 void init_acpi()
 {
     printf("Info: Initializing ACPI...\n");
@@ -222,6 +229,7 @@ void init_acpi()
         printf("Warning: Could not initialize uACPI\n");
         return;
     }
+    find_acpi_devices();
     power_button_init();
 
     printf("Walked ACPI tables! ACPI revision: %i\n", acpi_revision);

@@ -96,7 +96,7 @@ void init_per_cpu()
     // TODO: Think of something
 
     cpus.push_back(c);
-    c->cpu_id = cpus.size();
+    c->cpu_id = cpus.size() - 1;
 
     serial_logger.printf("Initializing idle task\n");
 
@@ -134,7 +134,7 @@ klib::vector<u64> initialize_cpus(const klib::vector<u64> &lapic_ids)
 
         c->lapic_id = id;
         cpus.push_back(c);
-        c->cpu_id = cpus.size();
+        c->cpu_id = cpus.size() - 1;
 
         init_idle(c);
         c->current_task = c->idle_task;

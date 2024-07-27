@@ -77,6 +77,8 @@ void push_table(ACPISDTHeader *acpi_table_virt)
     node->right     = NULL;
     node->virt_addr = acpi_table_virt;
 
+    // printf("Adding table %.4s\n", acpi_table_virt->signature);
+
     if (!root) {
         root = node;
     } else {

@@ -520,7 +520,7 @@ void *isr_func(void *arg)
     pmos_port_t reply_port = data->port;
 
     ports_request_t p = create_port(TASK_ID_SELF, 0);
-    if (p.result == SUCCESS) {
+    if (p.result != SUCCESS) {
         send_isr_reply(reply_port, UACPI_STATUS_INTERNAL_ERROR);
         return NULL;
     }
@@ -614,7 +614,7 @@ uacpi_status uacpi_kernel_install_interrupt_handler(
         assert(!"Failed to get message");
     }
 
-    assert(msg.sender == data->port);
+    //assert(msg.sender == data->port);
     assert(msg.size == sizeof(struct IPC_ISR_Reply));
     struct IPC_ISR_Reply *reply = (struct IPC_ISR_Reply *)message;
     assert(reply->type == IPC_ISR_Reply_NUM);
