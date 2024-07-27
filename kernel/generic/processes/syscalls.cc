@@ -832,6 +832,7 @@ void syscall_get_segment(u64 pid, u64 segment_type, u64 ptr, u64, u64, u64)
         break;
     }
     case 3: {
+        // This is very bad (it overwrites user memory that is not supposed to be)...
         auto b = copy_to_user((char *)&target->regs, (char *)ptr, sizeof(target->regs));
         if (not b)
             return;

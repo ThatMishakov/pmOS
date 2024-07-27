@@ -64,26 +64,25 @@ __pthread_exit:
     pushq %rbp
     movq %rsp, %rbp
 
-    # Align stack to 16 before push (required by x86 calling convention)
-    pushq $0
-    # Save %rax
-    pushq %r15
-    movq %rax, %r15
-
-    # Call __cxa_thread_atexit destructors and stuff
-    # This function is defined somewhere in libc
-    callq __thread_exit_fire_destructors
+    # Save saved registers (doesn't matter since this function exits)
+    # pushq %r15
+    # pushq %r14
+    # pushq %r13
 
     # The TLS struct with explanations is declared in sysroot/usr/include/pmos/tls.h
     # Save the return value to the TLS
-    movq %r15, %fs:0x18 # void * return_value
+    movq %rax, %fs:0x18 # void * return_value
+    movq %rax, %r15 # return_value
+
     # Save the stack data into a protected registers (so that it can be used after destroying TLS)
     movq %fs:0x8, %r14 # void * stack_top
     movq %fs:0x10, %r13 # size_t stack_size
 
-
-    # Destroy the TLS (the function decides whether to free it or not)
-    callq __thread_exit_destroy_tls
+    # Call __cxa_thread_atexit destructors and stuff
+    # This function is defined somewhere in libc
+    # New! This also destroys TLS if the thread is not detached
+    callq __thread_exit_fire_destructors
+    
 
     # Free the stack!
     # Since the is no stack, syscalls have to be done manually from here on

@@ -56,7 +56,9 @@ $(ISO): ../kernel/build/kernel ../bootstrapd/bootstrapd.elf ../devicesd/devicesd
 	cp limine.cfg isodir/boot/limine/
 	cp -v limine/limine-uefi-cd.bin isodir/boot/limine/
 	cp -v limine/limine-bios-cd.bin isodir/boot/limine/
+	cp -v limine/limine-bios.sys isodir/boot/limine/
 	cp -v limine/BOOTRISCV64.EFI isodir/EFI/BOOT/
+	cp -v limine/BOOTX64.EFI isodir/EFI/BOOT/
 
 	cp -v ../kernel/build/kernel isodir/kernel
 

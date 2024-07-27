@@ -2,11 +2,13 @@ EXEC = test.elf
 
 export PATH := $(ROOTDIR)/bin/cross/bin:$(PATH)
 
-CC = riscv64-pmos-gcc
-CPP = riscv64-pmos-gcc
-CXX = riscv64-pmos-g++
-LD = riscv64-pmos-gccgo
-GO = riscv64-pmos-gccgo
+ARCH = x86_64
+
+CC = $(ARCH)-pmos-gcc
+CPP = $(ARCH)-pmos-gcc
+CXX = $(ARCH)-pmos-g++
+LD = $(ARCH)-pmos-gccgo
+GO = $(ARCH)-pmos-gccgo
 
 INTERNALCFLAGS  :=       \
 	-static

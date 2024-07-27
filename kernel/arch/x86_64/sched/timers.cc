@@ -55,5 +55,10 @@ u64 get_current_time_ticks()
     return c->system_timer_val + c->timer_val - apic_get_remaining_ticks();
 }
 
+u64 get_ns_since_bootup() { return ticks_since_bootup * 1000000 / ticks_per_1_ms; }
+
 u64 CPU_Info::ticks_after_ms(u64 ms) { return get_current_time_ticks() + ms * ticks_per_1_ms; }
-u64 CPU_Info::ticks_after_ns(u64 ns) { return get_current_time_ticks() + ns * ticks_per_1_ms / 1000000; }
+u64 CPU_Info::ticks_after_ns(u64 ns)
+{
+    return get_current_time_ticks() + ns * ticks_per_1_ms / 1000000;
+}

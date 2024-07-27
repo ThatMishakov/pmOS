@@ -165,6 +165,8 @@ struct X86_64Regs {                         // 208 bytes
         entry_type       = saved_entry_type;
         saved_entry_type = 0;
     }
+
+    inline bool syscall_pending_restart() const { return entry_type == ENTRY_NESTED; }
 };
 
 using Task_Regs = X86_64Regs;

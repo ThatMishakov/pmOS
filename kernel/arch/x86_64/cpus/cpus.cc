@@ -35,7 +35,6 @@
 #include <interrupts/gdt.hh>
 #include <interrupts/interrupts.hh>
 #include <kern_logger/kern_logger.hh>
-#include <kernel/errors.h>
 #include <memory/palloc.hh>
 #include <memory/virtmem.hh>
 #include <processes/syscalls.hh>

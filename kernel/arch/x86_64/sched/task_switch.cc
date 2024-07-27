@@ -29,6 +29,7 @@
 
 #include <cpus/sse.hh>
 #include <processes/tasks.hh>
+#include <interrupts/gdt.hh>
 #include <x86_asm.hh>
 
 void save_segments(TaskDescriptor *task)
@@ -56,3 +57,8 @@ void TaskDescriptor::before_task_switch()
 }
 
 void TaskDescriptor::after_task_switch() { restore_segments(this); }
+
+bool TaskDescriptor::is_kernel_task() const
+{
+    return regs.e.cs == R0_CODE_SEGMENT;
+}

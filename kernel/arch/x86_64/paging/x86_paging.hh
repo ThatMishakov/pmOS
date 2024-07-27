@@ -197,7 +197,7 @@ protected:
 const u16 rec_map_index = 509;
 
 // Tries to assign a page using recursive mappings. Returns result
-u64 kernel_get_page(u64 virtual_addr, Page_Table_Argumments arg);
+kresult_t kernel_get_page(u64 virtual_addr, Page_Table_Argumments arg);
 u64 kernel_get_page_zeroed(u64 virtual_addr, Page_Table_Argumments arg);
 
 // Return true if mapped the page successfully
@@ -211,7 +211,7 @@ u64 prepare_pt_for(u64 virt_addr, Page_Table_Argumments arg, u64 pt_top_phys);
 u64 get_pt_ppn(u64 virt_addr, u64 pt_top_phys);
 
 // Invalidades a page entry using recursive mappings
-u64 invalidade(u64 virtual_addr);
+kresult_t invalidade(u64 virtual_addr);
 
 struct TaskDescriptor;
 

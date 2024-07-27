@@ -167,7 +167,7 @@ extern "C" void pagefault_manager()
 
     try {
         if (is_protection_violation(err))
-            throw Kern_Exception(ERROR_PROTECTION_VIOLATION, "Page protection violation");
+            throw Kern_Exception(-EFAULT, "Page protection violation");
 
         Auto_Lock_Scope scope_lock(task->page_table->lock);
 
@@ -180,12 +180,12 @@ extern "C" void pagefault_manager()
                           : 0 | (err & 0x010) ? Generic_Mem_Region::Executable
                                               : 0;
 
-        if (it != regions.end() and it->second->is_in_range(virtual_addr)) {
-            auto r = it->second->on_page_fault(access_mask, virtual_addr);
+        if (it != regions.end() and it->is_in_range(virtual_addr)) {
+            auto r = it->on_page_fault(access_mask, virtual_addr);
             if (not r)
                 task->atomic_block_by_page(addr_all, &task->page_table->blocked_tasks);
         } else {
-            throw Kern_Exception(ERROR_PAGE_NOT_ALLOCATED, "pagefault in unknown region");
+            throw Kern_Exception(-EFAULT, "pagefault in unknown region");
         }
 
     } catch (const Kern_Exception &e) {

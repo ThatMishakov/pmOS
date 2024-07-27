@@ -34,7 +34,6 @@
 
 #include <exceptions.hh>
 #include <kern_logger/kern_logger.hh>
-#include <kernel/errors.h>
 #include <memory/paging.hh>
 #include <memory/virtmem.hh>
 #include <utils.hh>
@@ -168,7 +167,7 @@ u64 lapic_configure(u64 opt, u64 arg)
         send_ipi_fixed(arg >> 8, arg);
         break;
     default:
-        throw(Kern_Exception(ERROR_NOT_SUPPORTED, "lapic_configure with unsupported parameter\n"));
+        throw(Kern_Exception(ENOSYS, "lapic_configure with unsupported parameter\n"));
     };
     return result;
 }

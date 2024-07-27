@@ -23,6 +23,8 @@ ovmf-riscv64/OVMF.fd:
 	mkdir -p ovmf-riscv64
 	cd ovmf-riscv64 && curl -o OVMF.fd https://retrage.github.io/edk2-nightly/bin/RELEASERISCV64_VIRT_CODE.fd && dd if=/dev/zero of=OVMF.fd bs=1 count=0 seek=33554432
 
+qemu-x86: $(ISO)
+	qemu-system-x86_64 -cdrom $(ISO) -M q35  -no-shutdown -d cpu_reset -smp 4 -serial stdio
 
 qemu: $(ISO) ovmf-riscv64
 	qemu-system-riscv64 -M virt -cpu rv64 -device ramfb -device virtio-keyboard -device qemu-xhci -device usb-kbd -m 2G -drive if=pflash,unit=0,format=raw,file=ovmf-riscv64/OVMF.fd -device virtio-scsi-pci,id=scsi -device scsi-cd,drive=cd0 -drive id=cd0,format=raw,file=$(ISO) -serial stdio -smp 8

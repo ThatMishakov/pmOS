@@ -91,6 +91,7 @@ void __thread_exit_destroy_tls()
         break;
     }
     default:
+        fprintf(stderr, "pmOS libC: Invalid thread status: %i\n", u->thread_status);
         assert(false && "Invalid thread status");
         break;
     }
