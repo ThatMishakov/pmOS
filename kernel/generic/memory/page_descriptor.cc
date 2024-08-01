@@ -138,16 +138,13 @@ void Page_Descriptor::try_free_page() noexcept
     page_struct_ptr = nullptr;
 }
 
-// Page_Descriptor Page_Descriptor::create_from_allocated(Page::page_addr_t phys_addr)
-// {
-//     klib::unique_ptr<Page> new_page_struct = klib::make_unique<Page>();
-//     new_page_struct->page_ptr              = phys_addr;
-//     new_page_struct->refcount              = 1;
-
-//     insert_global_pages_list(new_page_struct.get());
-
-//     return Page_Descriptor(new_page_struct.release());
-// }
+// TODO: This name is somewhat bad, since the page isn't actually allocated...
+Page_Descriptor Page_Descriptor::create_from_allocated(Page::page_addr_t phys_addr)
+{
+    auto s = find_page_struct(phys_addr);
+    __atomic_sub_fetch(&s.page_struct_ptr->l.refcount, 1, __ATOMIC_SEQ_CST);
+    return s;
+}
 
 Page_Descriptor Page_Descriptor::create_empty() noexcept
 {

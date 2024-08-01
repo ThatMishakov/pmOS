@@ -101,10 +101,10 @@ void riscv_map_page(u64 pt_top_phys, u64 phys_addr, void *virt_addr, Page_Table_
 
                 RISCV64_PTE new_entry = RISCV64_PTE();
                 new_entry.valid       = true;
-                new_entry.ppn         = new_pt_phys;
+                new_entry.ppn         = new_pt_phys >> 12;
                 *entry                = new_entry;
 
-                next_level_phys = new_pt_phys << 12;
+                next_level_phys = new_pt_phys;
                 clear_page(next_level_phys);
             } else if (entry->is_leaf()) {
                 throw Kern_Exception(-EEXIST, "Huge page encountered");
@@ -428,10 +428,10 @@ u64 prepare_leaf_pt_for(void *virt_addr, Page_Table_Argumments /* unused */, u64
 
             RISCV64_PTE new_entry = RISCV64_PTE();
             new_entry.valid       = true;
-            new_entry.ppn         = new_pt_phys;
+            new_entry.ppn         = new_pt_phys >> 12;
             *entry                = new_entry;
 
-            next_level_phys = new_pt_phys << 12;
+            next_level_phys = new_pt_phys;
             clear_page(next_level_phys);
         } else if (entry->is_leaf()) {
             throw Kern_Exception(-EEXIST, "Huge page encountered");

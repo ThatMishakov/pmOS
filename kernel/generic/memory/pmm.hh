@@ -63,7 +63,10 @@ namespace pmm
     // Sorted array of memory regions by start_addr
     extern klib::vector<PageArrayDescriptor> phys_memory_regions;
 
-    using PageLL = CircularDoubleList<Page, &Page::free_region_head.list>;
+    using PageLL = CircularDoubleList<Page, &Page::free_region_list>;
+
+    inline constexpr auto page_lists = 30 - PAGE_ORDER; // 1GB max allocation
+    extern PageLL free_pages_list[page_lists];
 
 } // namespace pmm
 } // namespace kernel

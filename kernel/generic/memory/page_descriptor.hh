@@ -45,6 +45,7 @@ struct Page {
         Free = 0,
         PendingFree,
         Allocated,
+        AllocatedPending, // Page has been allocated, but not mapped (or used) yet
         Reserved, // First and last pages of regions
     };
 
@@ -57,6 +58,7 @@ struct Page {
     struct PendingAllocHead {
         Page *next;
         page_addr_t phys_addr;
+        u64 size_pages;
     };
 
     struct FreeRegionHead {
@@ -73,6 +75,7 @@ struct Page {
         RCUState rcu_state;
         Mem_Object_LL_Head l;
         PendingAllocHead pending_alloc_head;
+        DoubleListHead<Page> free_region_list; // This is a bit of a workaround
         FreeRegionHead free_region_head;
     };
 

@@ -113,3 +113,10 @@ struct Lock_Guard_Simul {
 
 inline constexpr auto PAGE_ORDER = 12;
 inline constexpr auto PAGE_SIZE = 4096;
+
+inline constexpr auto MAX_PHYS_ADDR_ORDER = 56;
+
+inline int log2(u64 n) noexcept
+{
+    return sizeof(n) * 8 - __builtin_clzl(n) - 1;
+}

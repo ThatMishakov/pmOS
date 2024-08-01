@@ -33,28 +33,34 @@ public:
     // Make init() function explicit to have a trivial constructor
     void init() noexcept { head.next = head.prev = &head; }
 
-    void insert(T *p) noexcept;
+    void push_front(T *p) noexcept;
     static void remove(T *p) noexcept;
     bool empty() const noexcept;
 
     iterator begin() noexcept;
     iterator end() noexcept;
+
+    T &front() noexcept;
+    T &back() noexcept;
+
+    const T &front() const noexcept;
+    const T &back() const noexcept;
 };
 
 template<typename T, DoubleListHead<T> T::*Head>
-void CircularDoubleList<T, Head>::insert(T *p) noexcept
+void CircularDoubleList<T, Head>::push_front(T *p) noexcept
 {
-    p->*Head.next         = head.next;
-    p->*Head.prev         = &head;
-    head.next->*Head.prev = p;
-    head.next             = p;
+    (p->*Head).next = head.next;
+    (p->*Head).prev = &head;
+    head.next->prev = &(p->*Head);
+    head.next       = &(p->*Head);
 }
 
 template<typename T, DoubleListHead<T> T::*Head>
 void CircularDoubleList<T, Head>::remove(T *p) noexcept
 {
-    p->*Head.prev->*Head.next = p->*Head.next;
-    p->*Head.next->*Head.prev = p->*Head.prev;
+    (p->*Head).prev->next = (p->*Head).next;
+    (p->*Head).next->prev = (p->*Head).prev;
 }
 
 template<typename T, DoubleListHead<T> T::*Head>
@@ -100,9 +106,9 @@ typename CircularDoubleList<T, Head>::iterator
 template<typename T, DoubleListHead<T> T::*Head>
 T &CircularDoubleList<T, Head>::iterator::operator*() const noexcept
 {
-    // Use offset to the Head member to get the address of the object
-    // Don't use offsetof() directly, as it doesn't work
-    return *reinterpret_cast<T *>(reinterpret_cast<char *>(current) - (reinterpret_cast<char *>(&((T *)nullptr->*Head) - nullptr)));
+    return *reinterpret_cast<T *>(reinterpret_cast<char *>(current) -
+                                  (reinterpret_cast<char *>(&(reinterpret_cast<T *>(0)->*Head)) -
+                                   reinterpret_cast<char *>(0)));
 }
 
 template<typename T, DoubleListHead<T> T::*Head>
@@ -135,4 +141,9 @@ template<typename T, DoubleListHead<T> T::*Head>
 typename CircularDoubleList<T, Head>::iterator CircularDoubleList<T, Head>::end() noexcept
 {
     return iterator(&head);
+}
+
+template<typename T, DoubleListHead<T> T::*Head> T &CircularDoubleList<T, Head>::front() noexcept
+{
+    return *begin();
 }

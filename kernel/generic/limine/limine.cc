@@ -122,6 +122,17 @@ u64 temp_alloc_base = 0;
 u64 temp_alloc_size = 0;
 u64 temp_alloc_reserved = 0;
 
+Page::page_addr_t alloc_pages_from_temp_pool(size_t pages) noexcept
+{
+    size_t size_bytes = pages * 4096;
+    if (temp_alloc_reserved + size_bytes > temp_alloc_size)
+        assert(!"Not enough memory in the temp pool");
+
+    Page::page_addr_t addr = temp_alloc_base + temp_alloc_reserved;
+    temp_alloc_reserved += size_bytes;
+    return addr;
+}
+
 extern void *_kernel_start;
 
 extern void *_text_start;
