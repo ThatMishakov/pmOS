@@ -29,7 +29,6 @@
 #include "paging.hh"
 
 #include "assert.h"
-#include "mem.hh"
 #include "mem_object.hh"
 #include "temp_mapper.hh"
 
@@ -430,27 +429,4 @@ void Page_Table::unreference_object(const klib::shared_ptr<Mem_Object> &object,
 void Page_Table::unblock_tasks_rage(u64 blocked_by_page, u64 size_bytes)
 {
     // TODO
-}
-
-Page_Descriptor Page_Table::Page_Info::create_copy() const
-{
-    if (not is_allocated)
-        return {};
-
-    assert(!nofree);
-
-    // Return a copy
-    Page_Descriptor new_page = Page_Descriptor::allocate_page(12);
-
-    Temp_Mapper_Obj<char> this_mapping(request_temp_mapper());
-    Temp_Mapper_Obj<char> new_mapping(request_temp_mapper());
-
-    this_mapping.map(page_addr);
-    new_mapping.map(new_page.page_struct_ptr->page_ptr);
-
-    const auto page_size_bytes = 4096;
-
-    memcpy(new_mapping.ptr, this_mapping.ptr, page_size_bytes);
-
-    return new_page;
 }

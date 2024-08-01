@@ -68,7 +68,7 @@ struct Generic_Mem_Region {
     Generic_Mem_Region(): id(__atomic_add_fetch(&counter, 1, 0)) {}
 
     void rcu_free() noexcept;
-    static void rcu_callback(void *head);
+    static void rcu_callback(void *head, bool chained);
 
     /// Page aligned start of the region
     u64 start_addr = 0;

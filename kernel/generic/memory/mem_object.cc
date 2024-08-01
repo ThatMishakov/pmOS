@@ -28,7 +28,7 @@
 
 #include "mem_object.hh"
 
-#include "mem.hh"
+#include "pmm.hh"
 #include "paging.hh"
 #include "temp_mapper.hh"
 #include "virtmem.hh"
@@ -294,7 +294,7 @@ bool Mem_Object::read_to_kernel(u64 offset, void *buffer, u64 size)
         if (not page.page_struct_ptr)
             return false;
 
-        char *ptr = mapper.map(page.page_struct_ptr->page_ptr);
+        char *ptr = mapper.map(page.page_struct_ptr->get_phys_addr());
 
         const u64 start = i < offset ? offset : i;
         const u64 end   = i + 0x1000 < offset + size ? i + 0x1000 : offset + size;
@@ -336,7 +336,8 @@ void *Mem_Object::map_to_kernel(u64 offset, u64 size, Page_Table_Argumments args
             Page_Table_Argumments arg = args;
             arg.extra |= PAGING_FLAG_STRUCT_PAGE;
 
-            const u64 phys_addr   = p.page_struct_ptr->page_ptr;
+            // TODO: This is weird business and doesn't do refcounting
+            const u64 phys_addr   = p.page_struct_ptr->get_phys_addr();
             void *const virt_addr = (void *)(ulong(mem_virt) + i);
             map_kernel_page(phys_addr, virt_addr, arg);
         }

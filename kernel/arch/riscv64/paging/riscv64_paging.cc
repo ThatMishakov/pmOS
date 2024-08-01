@@ -32,10 +32,12 @@
 #include <assert.h>
 #include <exceptions.hh>
 #include <kern_logger/kern_logger.hh>
-#include <memory/mem.hh>
+#include <memory/pmm.hh>
 #include <memory/mem_object.hh>
 #include <memory/temp_mapper.hh>
 #include <processes/tasks.hh>
+
+using namespace kernel;
 
 void flush_page(void *virt) noexcept { asm volatile("sfence.vma %0, x0" : : "r"(virt) : "memory"); }
 
@@ -93,7 +95,9 @@ void riscv_map_page(u64 pt_top_phys, u64 phys_addr, void *virt_addr, Page_Table_
             u64 next_level_phys;
             if (not entry->valid) {
                 // Allocate a new page table
-                u64 new_pt_phys = kernel_pframe_allocator.alloc_page_ppn();
+                u64 new_pt_phys = pmm::get_memory_for_kernel(1);
+                if (pmm::alloc_failure(new_pt_phys))
+                    throw Kern_Exception(-ENOMEM, "Out of memory");
 
                 RISCV64_PTE new_entry = RISCV64_PTE();
                 new_entry.valid       = true;
@@ -206,7 +210,7 @@ void RISCV64_Page_Table::invalidate(u64 virt_addr, bool free) noexcept
             if (entry->valid) {
                 if (free and not entry->is_special()) {
                     // Free the page
-                    kernel_pframe_allocator.free_ppn(entry->ppn);
+                    pmm::free_memory_for_kernel(entry->ppn << 12, 1);
                 } else {
                     entry->clear_auto();
                 }
@@ -418,7 +422,9 @@ u64 prepare_leaf_pt_for(void *virt_addr, Page_Table_Argumments /* unused */, u64
         u64 next_level_phys;
         if (not entry->valid) {
             // Allocate a new page table
-            u64 new_pt_phys = kernel_pframe_allocator.alloc_page_ppn();
+            u64 new_pt_phys = pmm::get_memory_for_kernel(1);
+            if (pmm::alloc_failure(new_pt_phys))
+                throw Kern_Exception(-ENOMEM, "Out of memory");
 
             RISCV64_PTE new_entry = RISCV64_PTE();
             new_entry.valid       = true;
@@ -607,7 +613,7 @@ void RISCV64_Page_Table::invalidate_range(u64 virt_addr, u64 size_bytes, bool fr
 RISCV64_Page_Table::~RISCV64_Page_Table()
 {
     free_user_pages();
-    kernel_pframe_allocator.free((void *)table_root);
+    pmm::free_memory_for_kernel(table_root, 1);
 }
 
 void free_pages_in_level(u64 pt_phys, u64 level)
@@ -638,7 +644,7 @@ void RISCV64_Page_Table::free_user_pages()
         if (entry->valid and not entry->is_special()) {
             assert(not entry->is_leaf());
             free_pages_in_level(entry->ppn << 12, riscv64_paging_levels - 1);
-            kernel_pframe_allocator.free_ppn(entry->ppn);
+            pmm::free_memory_for_kernel(entry->ppn << 12, 1);
         }
     }
 }
@@ -646,7 +652,7 @@ void RISCV64_Page_Table::free_user_pages()
 void RISCV64_PTE::clear_auto()
 {
     if (valid and not is_special())
-        kernel_pframe_allocator.free_ppn(ppn);
+        pmm::free_memory_for_kernel(ppn << 12, 1);
     else if (valid and (available & PAGING_FLAG_STRUCT_PAGE)) {
         auto p = Page_Descriptor::find_page_struct(ppn << 12);
         assert(p.page_struct_ptr && "page struct must be present");
@@ -661,7 +667,12 @@ klib::shared_ptr<RISCV64_Page_Table> RISCV64_Page_Table::create_empty()
     klib::shared_ptr<RISCV64_Page_Table> new_table =
         klib::unique_ptr<RISCV64_Page_Table>(new RISCV64_Page_Table());
 
-    new_table->table_root = kernel_pframe_allocator.alloc_page_ppn() << 12;
+    auto n = pmm::get_memory_for_kernel(1);
+    if (pmm::alloc_failure(new_table->table_root))
+        throw Kern_Exception(-ENOMEM, "Out of memory");
+
+    new_table->table_root = n;
+
     clear_page(new_table->table_root);
 
     Temp_Mapper_Obj<RISCV64_PTE> new_pt_mapper(request_temp_mapper());
@@ -681,7 +692,8 @@ klib::shared_ptr<RISCV64_Page_Table> RISCV64_Page_Table::create_empty()
     try {
         new_table->insert_global_page_tables(new_table);
     } catch (...) {
-        kernel_pframe_allocator.free_ppn(new_table->table_root >> 12);
+        // TODO: This might be a bug
+        pmm::free_memory_for_kernel(new_table->table_root, 1);
         throw;
     }
 

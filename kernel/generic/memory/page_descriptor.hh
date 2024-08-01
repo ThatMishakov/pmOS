@@ -30,36 +30,63 @@
 #include "rcu.hh"
 
 #include <cstddef>
-#include <lib/pair.hh>
 #include <types.hh>
+#include "intrusive_list.hh"
+
+using phys_page_t = u64;
 
 struct Page {
+    static void rcu_callback(void *self, bool chained) noexcept;
+    Page() noexcept = default;
+
     using page_addr_t = u64;
+
+    enum class PageType {
+        Free = 0,
+        PendingFree,
+        Allocated,
+        Reserved, // First and last pages of regions
+    };
 
     struct Mem_Object_LL_Head {
         Page *next;
         u64 offset;
+        size_t refcount;
+    };
+
+    struct PendingAllocHead {
+        Page *next;
+        page_addr_t phys_addr;
+    };
+
+    struct FreeRegionHead {
+        DoubleListHead<Page> list;
+        u64 size;
+    };
+
+    struct RCUState {
+        RCU_Head rcu_h;
+        size_t pages_to_free;
     };
 
     union {
-        RCU_Head rcu_h;
+        RCUState rcu_state;
         Mem_Object_LL_Head l;
+        PendingAllocHead pending_alloc_head;
+        FreeRegionHead free_region_head;
     };
 
-    Page *hashmap_next = nullptr;
+    PageType type = PageType::Free;
+    int flags     = 0;
 
-    u64 page_ptr    = (u64)-1Ul;
-    size_t refcount = 0;
+    static constexpr int FLAG_NO_PAGE = 1 << 0;
 
-    static void rcu_callback(void *self) noexcept;
-    Page() noexcept = default;
+    bool has_physical_page() const noexcept { return !(flags & FLAG_NO_PAGE); }
 
-    bool has_physical_page() const noexcept { return page_ptr != (u64)-1UL; }
+    page_addr_t get_phys_addr() const noexcept;
 };
 
 void release_page(Page *) noexcept;
-void insert_global_pages_list(Page *) noexcept;
-void remove_global_pages_list(Page *) noexcept;
 
 /// Structure describing a page. If it owns a page, the destructor automatically dealocates it
 struct Page_Descriptor {
@@ -85,6 +112,8 @@ struct Page_Descriptor {
     /// @param alignment_log Logarithm of the alignment of the page (e.g. 12 for 4096 bytes)
     /// @return Newly allocated page. Throws on error
     static Page_Descriptor allocate_page(u8 alignment_log);
+
+    static Page_Descriptor allocate_page_zeroed(u8 alignment_log);
 
     /// Creates a page descriptor, allocating a new page struct, taking ownership of the given page
     static Page_Descriptor create_from_allocated(Page::page_addr_t phys_addr);

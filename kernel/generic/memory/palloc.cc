@@ -28,12 +28,14 @@
 
 #include "palloc.hh"
 
-#include "mem.hh"
+#include "pmm.hh"
 #include "paging.hh"
 #include "virtmem.hh"
 
 #include <exceptions.hh>
 #include <kern_logger/kern_logger.hh>
+
+using namespace kernel;
 
 void *palloc(size_t number)
 {
@@ -42,15 +44,17 @@ void *palloc(size_t number)
     if (ptr == nullptr)
         return nullptr;
 
+    auto phys_addr = pmm::get_memory_for_kernel(number);
+    if (phys_addr == 0) {
+        kernel_space_allocator.virtmem_free(ptr, number);
+        return nullptr;
+    }
+
     // Allocate and try to map memory
     size_t i = 0;
     for (; i < number; ++i) {
         void *page        = nullptr;
-        bool alloced_page = false;
         try {
-            void *page   = kernel_pframe_allocator.alloc_page();
-            alloced_page = true;
-
             void *virt_addr                        = (void *)((u64)ptr + i * 4096);
             static const Page_Table_Argumments arg = {
                 .readable           = true,
@@ -58,13 +62,12 @@ void *palloc(size_t number)
                 .user_access        = false,
                 .global             = false,
                 .execution_disabled = true,
-                .extra              = 0,
+                .extra              = PAGING_FLAG_STRUCT_PAGE,
             };
 
-            map_kernel_page((u64)page, virt_addr, arg);
+            map_kernel_page((u64)phys_addr + i, virt_addr, arg);
         } catch (Kern_Exception &e) {
-            if (alloced_page)
-                kernel_pframe_allocator.free(page);
+            pmm::free_memory_for_kernel(phys_addr + i*4096, number - i);
 
             // Unmap and free the allocated pages
             for (size_t j = 0; j < i; ++j) {

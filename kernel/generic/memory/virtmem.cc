@@ -28,11 +28,13 @@
 
 #include "virtmem.hh"
 
-#include "mem.hh"
+#include "pmm.hh"
 #include "paging.hh"
 
 #include <assert.h>
 #include <errno.h>
+
+using namespace kernel;
 
 void virtmem_fill_initial_tags()
 {
@@ -106,7 +108,9 @@ u64 virtmem_ensure_tags(u64 size)
     const auto addr = tag->base;
     u64 page_phys   = -1UL;
     try {
-        page_phys = (u64)kernel_pframe_allocator.alloc_page();
+        page_phys = pmm::get_memory_for_kernel(1);
+        if (page_phys == -1UL)
+            return -ENOMEM;
 
         Page_Table_Argumments pta = {
             .readable           = true,
@@ -118,8 +122,7 @@ u64 virtmem_ensure_tags(u64 size)
         };
         map_kernel_page(page_phys, (void *)addr, pta);
     } catch (...) {
-        if (page_phys != -1UL)
-            kernel_pframe_allocator.free((void *)page_phys);
+        pmm::free_memory_for_kernel(page_phys, 1);
 
         return -ENOMEM;
     }

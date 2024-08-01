@@ -28,7 +28,7 @@
 
 #include "limine.h"
 
-#include "../memory/mem.hh"
+#include "../memory/pmm.hh"
 #include "../memory/paging.hh"
 #include "../memory/temp_mapper.hh"
 #include "../memory/virtmem.hh"
@@ -38,6 +38,8 @@
 #include <memory/mem_object.hh>
 #include <paging/arch_paging.hh>
 #include <processes/tasks.hh>
+
+using namespace kernel;
 
 extern "C" void limine_main();
 extern "C" void _limine_entry();
@@ -99,24 +101,6 @@ static void hcf(void)
         ;
 }
 
-inline void bitmap_set(uint64_t *bitmap, uint64_t bit) { bitmap[bit / 64] |= (1 << (bit % 64)); }
-
-void bitmap_set_range(uint64_t *bitmap, uint64_t start, uint64_t end)
-{
-    for (uint64_t i = start; i < end; i++) {
-        bitmap_set(bitmap, i);
-    }
-}
-
-inline void bitmap_clear(uint64_t *bitmap, uint64_t bit) { bitmap[bit / 64] &= ~(1 << (bit % 64)); }
-
-void bitmap_clear_range(uint64_t *bitmap, uint64_t start, uint64_t end)
-{
-    for (uint64_t i = start; i < end; i++) {
-        bitmap_clear(bitmap, i);
-    }
-}
-
 Direct_Mapper init_mapper;
 
 // Temporary temporary mapper
@@ -130,123 +114,13 @@ using Arch_Temp_Mapper = RISCV64_Temp_Mapper;
 
 Arch_Temp_Mapper temp_temp_mapper;
 
-u64 bitmap_phys       = 0;
-u64 bitmap_size_pages = 0;
-
 u64 hhdm_offset = 0;
 
 size_t number_of_cpus = 1;
 
-void init_memory()
-{
-    limine_memmap_response *resp = memory_request.response;
-    if (resp == nullptr) {
-        hcf();
-    }
-
-    hhdm_offset = hhdm_request.response->offset;
-
-    serial_logger.printf("Initializing memory bitmap\n");
-
-    uint64_t top_physical_address = 0;
-    for (uint64_t i = 0; i < resp->entry_count; i++) {
-        uint64_t type = resp->entries[i]->type;
-        if (type == LIMINE_MEMMAP_USABLE || type == LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE) {
-            uint64_t end = resp->entries[i]->base + resp->entries[i]->length;
-            if (end > top_physical_address) {
-                top_physical_address = end;
-            }
-        }
-    }
-    // Align the top physical address to a page boundary
-    // Not sure if it's necessary, but doesn't hurt
-    top_physical_address = (top_physical_address + 0xfff) & ~0xfff;
-
-    // Allocate physical memory for the free pages bitmap
-    uint64_t bitmap_size  = (top_physical_address / 0x1000) / 8;
-    uint64_t bitmap_pages = (bitmap_size + 0xfff) / 0x1000;
-
-    // Allocate the bitmap
-    // Try and allocate the memory from the topmost free memory
-    uint64_t bitmap_base_phys = 0;
-    for (long long i = resp->entry_count - 1; i >= 0; i--) {
-        if (resp->entries[i]->type == LIMINE_MEMMAP_USABLE &&
-            resp->entries[i]->length >= bitmap_pages * 0x1000) {
-            bitmap_base_phys =
-                resp->entries[i]->base + resp->entries[i]->length - bitmap_pages * 0x1000;
-            break;
-        }
-    }
-
-    if (bitmap_base_phys == 0) {
-        hcf();
-    }
-
-    uint64_t *bitmap_base_virt = (uint64_t *)(bitmap_base_phys + hhdm_request.response->offset);
-
-    serial_logger.printf(
-        "Bitmap base: 0x%x, phys: 0x%x, bitmap size: 0x%x pages 0x%x top address 0x%x\n",
-        bitmap_base_virt, bitmap_base_phys, bitmap_size, bitmap_pages, top_physical_address);
-
-    // Init the bitmap
-    uint64_t last_free_base = 0;
-    for (uint64_t i = 0; i < resp->entry_count; i++) {
-        serial_logger.printf("memmap entry %i: base: 0x%x, length: 0x%x, type: %i\n", i,
-                             resp->entries[i]->base, resp->entries[i]->length,
-                             resp->entries[i]->type);
-
-        if (resp->entries[i]->type == LIMINE_MEMMAP_USABLE) {
-            uint64_t base   = resp->entries[i]->base;
-            uint64_t length = resp->entries[i]->length;
-
-            // Everything between the last free base and the start of this entry is unusable
-            uint64_t last_free_page = last_free_base / 0x1000;
-            uint64_t this_free_page = base / 0x1000;
-            uint64_t this_last_page = (base + length) / 0x1000;
-            bitmap_clear_range(bitmap_base_virt, last_free_page, this_free_page);
-            bitmap_set_range(bitmap_base_virt, this_free_page, this_last_page);
-            last_free_base = base + length;
-        }
-    }
-    {
-        uint64_t last_free_page        = last_free_base / 0x1000;
-        uint64_t bitmap_pages_capacity = bitmap_pages * 0x1000 * 8;
-        bitmap_clear_range(bitmap_base_virt, last_free_page, bitmap_pages_capacity);
-    }
-
-    // Reserve unusable regions and bitmap itself
-    uint64_t bitmap_base_page = bitmap_base_phys / 0x1000;
-    bitmap_clear_range(bitmap_base_virt, bitmap_base_page, bitmap_base_page + bitmap_pages);
-    for (uint64_t i = 0; i < resp->entry_count; i++) {
-        auto entry = resp->entries[i];
-        if (entry->type == LIMINE_MEMMAP_RESERVED ||
-            entry->type == LIMINE_MEMMAP_ACPI_RECLAIMABLE ||
-            entry->type == LIMINE_MEMMAP_ACPI_NVS || entry->type == LIMINE_MEMMAP_BAD_MEMORY ||
-            entry->type == LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE) {
-            uint64_t base     = entry->base;
-            uint64_t length   = entry->length;
-            uint64_t end_addr = base + length;
-            if (end_addr > top_physical_address) {
-                end_addr = top_physical_address;
-            }
-            uint64_t start_page = base / 0x1000;
-            uint64_t end_page   = (end_addr + 0xfff) / 0x1000;
-            bitmap_clear_range(bitmap_base_virt, start_page, end_page);
-        }
-    }
-
-    bitmap_phys       = bitmap_base_phys;
-    bitmap_size_pages = bitmap_pages;
-
-    // Install the bitmap, as a physical address for now, since the kernel doesn't use its own
-    // paging yet
-    kernel_pframe_allocator.init(bitmap_base_virt, bitmap_pages * 0x1000 / 8);
-
-    init_mapper.virt_offset = hhdm_request.response->offset;
-    global_temp_mapper      = &init_mapper;
-
-    serial_logger.printf("Memory bitmap initialized. Top address: %u\n", top_physical_address);
-}
+u64 temp_alloc_base = 0;
+u64 temp_alloc_size = 0;
+u64 temp_alloc_reserved = 0;
 
 extern void *_kernel_start;
 
@@ -271,6 +145,30 @@ ptable_top_ptr_t kernel_ptable_top = 0;
 
 void construct_paging()
 {
+    serial_logger.printf("Finding the largest memory region...\n");
+    limine_memmap_response *resp = memory_request.response;
+    if (resp == nullptr) {
+        hcf();
+    }
+
+    hhdm_offset = hhdm_request.response->offset;
+
+    for (uint64_t i = 0; i < resp->entry_count; i++) {
+        uint64_t type = resp->entries[i]->type;
+        if (type == LIMINE_MEMMAP_USABLE) {
+            if (temp_alloc_size < resp->entries[i]->length) {
+                temp_alloc_base = resp->entries[i]->base;
+                temp_alloc_size = resp->entries[i]->length;
+            }
+        }
+    }
+
+    serial_logger.printf("Found the largest memory region at 0x%h, size 0x%h\n", temp_alloc_base,
+                         temp_alloc_size);
+
+    init_mapper.virt_offset = hhdm_request.response->offset;
+    global_temp_mapper      = &init_mapper;
+
     serial_logger.printf("Initializing paging...\n");
 
 #ifdef __riscv
@@ -295,27 +193,13 @@ void construct_paging()
     const u64 heap_addr_size   = 1UL << heap_space_shift;
     virtmem_init(heap_space_start, heap_addr_size);
 
-    kernel_ptable_top = (u64)kernel_pframe_allocator.alloc_page();
+    kernel_ptable_top = pmm::get_memory_for_kernel(1);
     clear_page(kernel_ptable_top);
 
     // Init temp mapper with direct map, while it is still available
     void *temp_mapper_start = kernel_space_allocator.virtmem_alloc_aligned(
         16, 4); // 16 pages aligned to 16 pages boundary
     temp_temp_mapper = Arch_Temp_Mapper(temp_mapper_start, kernel_ptable_top);
-
-    // Map bitmap
-    void *bitmap_virt = kernel_space_allocator.virtmem_alloc(bitmap_size_pages);
-    if (bitmap_virt == nullptr)
-        hcf();
-    const Page_Table_Argumments bitmap_args = {
-        .writeable          = true,
-        .user_access        = false,
-        .global             = true,
-        .execution_disabled = true,
-        .extra              = 0,
-    };
-    map_pages(kernel_ptable_top, bitmap_phys, (u64)bitmap_virt, bitmap_size_pages * 0x1000,
-              bitmap_args);
 
     // Map kernel pages
     //
@@ -413,7 +297,11 @@ void construct_paging()
 
     // Set up the right mapper (since there is no direct map anymore) and bitmap
     global_temp_mapper = &temp_temp_mapper;
-    kernel_pframe_allocator.init((u64 *)bitmap_virt, bitmap_size_pages * 0x1000 / 8);
+
+
+    // Allocate Page structs
+
+    // TODO
 }
 
 limine_module_request module_request = {
@@ -821,7 +709,6 @@ void limine_main()
         #endif
     }
 
-    init_memory();
     construct_paging();
 
     serial_logger.printf("Calling global constructors...\n");

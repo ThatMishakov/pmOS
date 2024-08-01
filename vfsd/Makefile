@@ -4,7 +4,7 @@ EXEC = vfsd.elf
 ROOTDIR = $(realpath .)/..
 export PATH := $(ROOTDIR)/bin/cross/bin:$(PATH)
 
-ARCH = x86_64
+ARCH = riscv64
 
 # It is highly recommended to use a custom built cross toolchain to build a kernel.
 # We are only using "cc" as a placeholder here. It may work by using

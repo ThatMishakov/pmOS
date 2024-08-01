@@ -51,7 +51,7 @@ void RCU_CPU::quiet(RCU &parent, size_t my_cpu_id)
         while (current_callbacks) {
             // TODO: This can be delayed, e.g. to be executed while the CPU is idling
             RCU_Head *next = current_callbacks->rcu_next;
-            current_callbacks->rcu_func(current_callbacks);
+            current_callbacks->rcu_func(current_callbacks, next and (next->rcu_func == current_callbacks->rcu_func));
             current_callbacks = next;
         }
     }

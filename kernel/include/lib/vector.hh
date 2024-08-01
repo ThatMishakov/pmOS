@@ -65,7 +65,50 @@ public:
             return *this;
         }
 
+        iterator operator++(int)
+        {
+            iterator temp = *this;
+            ptr++;
+            return temp;
+        }
+
+        iterator &operator--()
+        {
+            ptr--;
+            return *this;
+        }
+
+        iterator operator--(int)
+        {
+            iterator temp = *this;
+            ptr--;
+            return temp;
+        }
+
+        iterator &operator+=(size_t n)
+        {
+            ptr += n;
+            return *this;
+        }
+
+        iterator &operator-=(size_t n)
+        {
+            ptr -= n;
+            return *this;
+        }
+
+        long operator-(iterator k) const { return this->ptr - k.ptr; }
+
+        iterator operator+(long n) const { return iterator(ptr + n); }
+        iterator operator-(long n) const { return iterator(ptr - n); }
+
+        bool operator!=(iterator k) const { return this->ptr != k.ptr; }
+        bool operator<(iterator k) const { return this->ptr < k.ptr; }
+
         T &operator*() { return *ptr; }
+        const T &operator*() const { return *ptr; }
+
+        T *operator->() { return ptr; }
 
         bool operator==(iterator k) const { return this->ptr == k.ptr; }
     };

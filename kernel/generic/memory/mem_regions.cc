@@ -28,7 +28,7 @@
 
 #include "mem_regions.hh"
 
-#include "mem.hh"
+#include "pmm.hh"
 #include "mem_object.hh"
 #include "paging.hh"
 #include "temp_mapper.hh"
@@ -81,8 +81,7 @@ Page_Table_Argumments Private_Normal_Region::craft_arguments() const
 
 bool Private_Normal_Region::alloc_page(u64 ptr_addr)
 {
-    auto page = Page_Descriptor::allocate_page(12);
-    clear_page(page.page_struct_ptr->page_ptr, 0);
+    auto page = Page_Descriptor::allocate_page_zeroed(12);
     owner->map(klib::move(page), ptr_addr, craft_arguments());
     return true;
 }
@@ -261,10 +260,7 @@ bool Mem_Object_Reference::alloc_page(u64 ptr_addr)
         if (reg_addr + 0x1000 <= start_offset_bytes or
             reg_addr >= start_offset_bytes + object_size_bytes) {
             // Out of object range. Allocate an empty page
-            auto page = Page_Descriptor::allocate_page(12);
-
-            clear_page(page.page_struct_ptr->page_ptr, 0);
-
+            auto page = Page_Descriptor::allocate_page_zeroed(12);
             owner->map(klib::move(page), ptr_addr, craft_arguments());
             return true;
         }
@@ -288,7 +284,7 @@ bool Mem_Object_Reference::alloc_page(u64 ptr_addr)
 
         // Zero the page
         Temp_Mapper_Obj<void> mapper(request_temp_mapper());
-        void *pageptr = mapper.map(page.page_struct_ptr->page_ptr);
+        void *pageptr = mapper.map(page.page_struct_ptr->get_phys_addr());
 
         // Zero the start of the page
         const u64 start_offset_size =
@@ -387,7 +383,7 @@ void Generic_Mem_Region::rcu_free() noexcept
     get_cpu_struct()->paging_rcu_cpu.push(&rcu);
 }
 
-void Generic_Mem_Region::rcu_callback(void *ptr)
+void Generic_Mem_Region::rcu_callback(void *ptr, bool)
 {
     auto region = reinterpret_cast<Generic_Mem_Region *>((char *)ptr -
                                                          offsetof(Generic_Mem_Region, rcu_head));

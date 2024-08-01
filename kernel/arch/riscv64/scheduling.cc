@@ -36,7 +36,6 @@
 #include <interrupts/plic.hh>
 #include <kern_logger/kern_logger.hh>
 #include <memory/malloc.hh>
-#include <memory/mem.hh>
 #include <memory/virtmem.hh>
 #include <paging/riscv64_paging.hh>
 #include <sched/sched.hh>

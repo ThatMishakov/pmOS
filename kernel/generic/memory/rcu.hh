@@ -35,7 +35,15 @@
 #include <lib/vector.hh>
 #include <types.hh>
 
-typedef void (*rcu_func_t)(void *self);
+/**
+ * @brief RCU function type
+ * 
+ * This function gets called when the RCU is done with the current generation
+ * 
+ * @param self Pointer to the object that the RCU is done with
+ * @param chained True if the next RCU callback has the same function pointer (for example, when releasing a list of pages)
+ */
+typedef void (*rcu_func_t)(void *self, bool chained);
 struct RCU_Head {
     RCU_Head *rcu_next;
     rcu_func_t rcu_func;

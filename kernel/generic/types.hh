@@ -110,3 +110,6 @@ struct Lock_Guard_Simul {
             b.unlock();
     }
 };
+
+inline constexpr auto PAGE_ORDER = 12;
+inline constexpr auto PAGE_SIZE = 4096;
