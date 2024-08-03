@@ -310,7 +310,7 @@ public:
      * @param virt_addr Virtual address to where the page shall be mapped
      * @param arg Arguments and protections with which the page should be mapped.
      */
-    virtual void map(Page_Descriptor page, u64 virt_addr, Page_Table_Argumments arg) = 0;
+    virtual void map(kernel::pmm::Page_Descriptor page, u64 virt_addr, Page_Table_Argumments arg) = 0;
 
     // /// Return structure used with check_if_allocated_and_set_flag()
     // struct Check_Return_Str {
@@ -411,7 +411,7 @@ public:
         bool nofree       = 0;
         u64 page_addr     = 0;
 
-        Page_Descriptor create_copy() const;
+        kernel::pmm::Page_Descriptor create_copy() const;
     };
 
     /// Gets information for the page mapping.

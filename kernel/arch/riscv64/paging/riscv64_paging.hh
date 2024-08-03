@@ -187,7 +187,7 @@ public:
 
     virtual void map(u64 page_addr, u64 virt_addr, Page_Table_Argumments arg) override;
 
-    virtual void map(Page_Descriptor page, u64 virt_addr, Page_Table_Argumments arg) override;
+    virtual void map(kernel::pmm::Page_Descriptor page, u64 virt_addr, Page_Table_Argumments arg) override;
 
     virtual ~RISCV64_Page_Table() override;
 

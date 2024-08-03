@@ -31,7 +31,7 @@
 #include "../memory/paging.hh"
 #include "../memory/pmm.hh"
 #include "../memory/temp_mapper.hh"
-#include "../memory/virtmem.hh"
+#include "../memory/vmm.hh"
 
 #include <dtb/dtb.hh>
 #include <kern_logger/kern_logger.hh>
@@ -40,6 +40,7 @@
 #include <processes/tasks.hh>
 
 using namespace kernel;
+using namespace kernel::pmm;
 
 extern "C" void limine_main();
 extern "C" void _limine_entry();
@@ -123,7 +124,7 @@ u64 temp_alloc_size     = 0;
 u64 temp_alloc_reserved = 0;
 u64 temp_alloc_entry_id = 0;
 
-Page::page_addr_t alloc_pages_from_temp_pool(size_t pages) noexcept
+pmm::Page::page_addr_t alloc_pages_from_temp_pool(size_t pages) noexcept
 {
     size_t size_bytes = pages * 4096;
     if (temp_alloc_reserved + size_bytes > temp_alloc_size)
@@ -210,13 +211,13 @@ void construct_paging()
 
     const u64 heap_space_start = (-1UL) << (heap_space_shift + 8);
     const u64 heap_addr_size   = 1UL << heap_space_shift;
-    virtmem_init(heap_space_start, heap_addr_size);
+    vmm::virtmem_init(heap_space_start, heap_addr_size);
 
     kernel_ptable_top = pmm::get_memory_for_kernel(1);
     clear_page(kernel_ptable_top);
 
     // Init temp mapper with direct map, while it is still available
-    void *temp_mapper_start = kernel_space_allocator.virtmem_alloc_aligned(
+    void *temp_mapper_start = vmm::kernel_space_allocator.virtmem_alloc_aligned(
         16, 4); // 16 pages aligned to 16 pages boundary
     temp_temp_mapper = Arch_Temp_Mapper(temp_mapper_start, kernel_ptable_top);
 
@@ -368,7 +369,7 @@ void construct_paging()
         }
 
         // Reserve virtual memory
-        auto virt_addr = kernel_space_allocator.virtmem_alloc(page_struct_page_size / PAGE_SIZE);
+        auto virt_addr = vmm::kernel_space_allocator.virtmem_alloc(page_struct_page_size / PAGE_SIZE);
 
         // Map the memory
         Page_Table_Argumments args = {

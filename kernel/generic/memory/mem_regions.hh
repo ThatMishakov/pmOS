@@ -28,7 +28,7 @@
 
 #pragma once
 #include "intrusive_bst.hh"
-#include "page_descriptor.hh"
+#include "pmm.hh"
 #include "rcu.hh"
 
 #include <lib/memory.hh>

@@ -33,7 +33,7 @@
 
 /** Kernel's virtual memory allocator
  *
- * virtmem is a virtual memory allocator for the kernel. It is inspired by vmem algorithm created by
+ * virtmem/vmm is a virtual memory allocator for the kernel. It is inspired by vmem algorithm created by
  * Bonwick and Adams but it currently is a very simple implementation since having a more complete
  * and efficient one is not a priority at the moment.
  */
@@ -43,6 +43,9 @@
 #include <assert.h>
 #include <errno.h>
 #include <types.hh>
+
+namespace kernel::vmm
+{
 
 struct VirtmemBoundaryTag {
     // Either a double linked list of free sigments of a given size
@@ -439,3 +442,5 @@ template<int Q, int M> void VirtMem<Q, M>::init()
         i.init();
     virtmem_hashtable = virtmem_initial_hash;
 }
+
+}; // namespace kernel::vmm

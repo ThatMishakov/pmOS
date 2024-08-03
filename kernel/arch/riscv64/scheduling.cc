@@ -36,11 +36,13 @@
 #include <interrupts/plic.hh>
 #include <kern_logger/kern_logger.hh>
 #include <memory/malloc.hh>
-#include <memory/virtmem.hh>
+#include <memory/vmm.hh>
 #include <paging/riscv64_paging.hh>
 #include <sched/sched.hh>
 #include <smoldtb.h>
 #include <types.hh>
+
+using namespace kernel;
 
 extern klib::shared_ptr<Arch_Page_Table> idle_page_table;
 
@@ -400,7 +402,7 @@ void init_scheduling(u64 hart_id)
     CPU_Info *i         = new CPU_Info();
     i->kernel_stack_top = i->kernel_stack.get_stack_top();
     i->hart_id          = hart_id;
-    void *temp_mapper_start = kernel_space_allocator.virtmem_alloc_aligned(16, 4);
+    void *temp_mapper_start = vmm::kernel_space_allocator.virtmem_alloc_aligned(16, 4);
     i->temp_mapper          = RISCV64_Temp_Mapper(temp_mapper_start, idle_page_table->get_root());
 
     set_cpu_struct(i);
@@ -473,7 +475,7 @@ klib::vector<u64> initialize_cpus(const klib::vector<u64> &hartids)
         i->kernel_stack_top = i->kernel_stack.get_stack_top();
         i->hart_id          = hart_id;
 
-        void *temp_mapper_start = kernel_space_allocator.virtmem_alloc_aligned(16, 4);
+        void *temp_mapper_start = vmm::kernel_space_allocator.virtmem_alloc_aligned(16, 4);
         i->temp_mapper = RISCV64_Temp_Mapper(temp_mapper_start, idle_page_table->get_root());
 
         cpus.push_back(i);

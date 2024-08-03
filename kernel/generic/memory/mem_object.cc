@@ -31,12 +31,14 @@
 #include "pmm.hh"
 #include "paging.hh"
 #include "temp_mapper.hh"
-#include "virtmem.hh"
+#include "vmm.hh"
 
 #include <assert.h>
 #include <exceptions.hh>
 #include <messaging/messaging.hh>
 #include <pmos/ipc.h>
+
+using namespace kernel;
 
 Mem_Object::Mem_Object(u64 page_size_log, u64 size_pages, u32 max_user_permissions)
     : page_size_log(page_size_log), pages_storage(nullptr), pages_size(size_pages),
@@ -52,7 +54,7 @@ Mem_Object::~Mem_Object()
         current_page = current_page->l.next;
 
         // This should RAII free the page
-        Page_Descriptor::from_raw_ptr(p);
+        pmm::Page_Descriptor::from_raw_ptr(p);
     }
 }
 
@@ -91,7 +93,7 @@ klib::shared_ptr<Mem_Object> Mem_Object::create_from_phys(u64 phys_addr, u64 siz
     // Provide the pages
     // This can't fail
     for (u64 i = 0; i < pages_count; ++i) {
-        auto page = Page_Descriptor::create_from_allocated(start_alligned + i * 0x1000);
+        auto page = pmm::Page_Descriptor::create_from_allocated(start_alligned + i * 0x1000);
         auto c    = page.page_struct_ptr;
         page.takeout_page();
         c->l.offset        = i * 0x1000;
@@ -142,13 +144,13 @@ void Mem_Object::unregister_pined(const klib::weak_ptr<Page_Table> &pined_by) no
     this->pined_by.erase(pined_by);
 }
 
-Page_Descriptor Mem_Object::atomic_request_page(u64 offset)
+pmm::Page_Descriptor Mem_Object::atomic_request_page(u64 offset)
 {
     Auto_Lock_Scope l(lock);
     return request_page(offset);
 }
 
-Page_Descriptor Mem_Object::request_page(u64 offset)
+pmm::Page_Descriptor Mem_Object::request_page(u64 offset)
 {
     const auto index = offset >> page_size_log;
 
@@ -163,14 +165,14 @@ Page_Descriptor Mem_Object::request_page(u64 offset)
 
     if (page) {
         if (page->has_physical_page()) {
-            return Page_Descriptor::dup_from_raw_ptr(page);
+            return pmm::Page_Descriptor::dup_from_raw_ptr(page);
         }
 
-        return Page_Descriptor::none();
+        return pmm::Page_Descriptor::none();
     } else {
         auto pager_port = pager.lock();
         if (not pager_port) {
-            auto p                      = Page_Descriptor::allocate_page(page_size_log);
+            auto p                      = pmm::Page_Descriptor::allocate_page(page_size_log);
             auto p2                     = p.duplicate();
             p.page_struct_ptr->l.offset = offset;
             p.page_struct_ptr->l.next   = pages_storage;
@@ -179,7 +181,7 @@ Page_Descriptor Mem_Object::request_page(u64 offset)
             return klib::move(p2);
         }
 
-        auto p = Page_Descriptor::create_empty();
+        auto p = pmm::Page_Descriptor::create_empty();
 
         IPC_Kernel_Request_Page request {
             .type          = IPC_Kernel_Request_Page_NUM,
@@ -193,7 +195,7 @@ Page_Descriptor Mem_Object::request_page(u64 offset)
         p.page_struct_ptr->l.next   = pages_storage;
         pages_storage               = p.page_struct_ptr;
         p.takeout_page();
-        return Page_Descriptor::none();
+        return pmm::Page_Descriptor::none();
     }
 
     assert(false);
@@ -240,14 +242,14 @@ void Mem_Object::atomic_resize(u64 new_size_pages)
         throw;
     }
 
-    Page *pages = nullptr;
+    pmm::Page *pages = nullptr;
 
     {
         Auto_Lock_Scope l(lock);
 
-        Page **erase_ptr_head = &pages_storage;
+        pmm::Page **erase_ptr_head = &pages_storage;
         while (*erase_ptr_head) {
-            Page *current = *erase_ptr_head;
+            pmm::Page *current = *erase_ptr_head;
 
             if (current->l.offset >= new_size_pages) {
                 *erase_ptr_head = current->l.next;
@@ -263,9 +265,9 @@ void Mem_Object::atomic_resize(u64 new_size_pages)
     }
 
     while (pages) {
-        Page *next = pages->l.next;
+        pmm::Page *next = pages->l.next;
         pages      = next;
-        Page_Descriptor::from_raw_ptr(pages);
+        pmm::Page_Descriptor::from_raw_ptr(pages);
     }
 }
 
@@ -324,7 +326,7 @@ void *Mem_Object::map_to_kernel(u64 offset, u64 size, Page_Table_Argumments args
             return nullptr;
     }
 
-    void *mem_virt = kernel_space_allocator.virtmem_alloc(size >> 12);
+    void *mem_virt = vmm::kernel_space_allocator.virtmem_alloc(size >> 12);
     if (mem_virt == nullptr)
         throw Kern_Exception(-ENOMEM, "could not get virtual memory for mapping an object");
 
@@ -347,7 +349,7 @@ void *Mem_Object::map_to_kernel(u64 offset, u64 size, Page_Table_Argumments args
             unmap_kernel_page(virt_addr);
         }
 
-        kernel_space_allocator.virtmem_free(mem_virt, size_pages);
+        vmm::kernel_space_allocator.virtmem_free(mem_virt, size_pages);
     }
 
     return mem_virt;

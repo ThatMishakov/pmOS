@@ -124,7 +124,7 @@ void RISCV64_Page_Table::map(u64 page_addr, u64 virt_addr, Page_Table_Argumments
     riscv_map_page(table_root, page_addr, (void *)virt_addr, arg);
 }
 
-void RISCV64_Page_Table::map(Page_Descriptor page, u64 virt_addr, Page_Table_Argumments arg)
+void RISCV64_Page_Table::map(pmm::Page_Descriptor page, u64 virt_addr, Page_Table_Argumments arg)
 {
     u64 pte_phys = prepare_leaf_pt_for((void *)virt_addr, arg, table_root);
 
@@ -294,7 +294,7 @@ void RISCV64_Page_Table::copy_to_recursive(const klib::shared_ptr<Page_Table> &t
         if (level == 1) {
             assert(pte.readable or pte.writeable or pte.executable);
 
-            auto p = Page_Descriptor::find_page_struct(pte.ppn << 12);
+            auto p = pmm::Page_Descriptor::find_page_struct(pte.ppn << 12);
             assert(p.page_struct_ptr && "page struct must be present");
 
             u64 copy_from = ((i - start_index) << offset) + current_copy_from;
@@ -653,7 +653,7 @@ void RISCV64_PTE::clear_auto()
     if (valid and not is_special())
         pmm::free_memory_for_kernel(ppn << 12, 1);
     else if (valid and (available & PAGING_FLAG_STRUCT_PAGE)) {
-        auto p = Page_Descriptor::find_page_struct(ppn << 12);
+        auto p = pmm::Page_Descriptor::find_page_struct(ppn << 12);
         assert(p.page_struct_ptr && "page struct must be present");
         p.release_taken_out_page();
     }

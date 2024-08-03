@@ -26,15 +26,18 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "virtmem.hh"
+#include "vmm.hh"
 
-#include "pmm.hh"
 #include "paging.hh"
+#include "pmm.hh"
 
 #include <assert.h>
 #include <errno.h>
 
 using namespace kernel;
+
+namespace kernel::vmm
+{
 
 void virtmem_fill_initial_tags()
 {
@@ -88,7 +91,7 @@ u64 virtmem_ensure_tags(u64 size)
 
     int idx    = __builtin_ffsl(kernel_space_allocator.virtmem_freelist_bitmap) - 1;
     auto &list = kernel_space_allocator.virtmem_freelists[idx];
-    auto tag  = &*list.begin();
+    auto tag   = &*list.begin();
 
     // Allocate a page and try and map it
     const auto addr = tag->base;
@@ -169,3 +172,5 @@ void virtmem_unlink_tag(VirtmemBoundaryTag *tag)
     tag->segment_prev->segment_next = tag->segment_next;
     tag->segment_next->segment_prev = tag->segment_prev;
 }
+
+} // namespace kernel::vmm

@@ -30,7 +30,7 @@
 
 #include "paging.hh"
 #include "pmm.hh"
-#include "virtmem.hh"
+#include "vmm.hh"
 
 #include <exceptions.hh>
 #include <kern_logger/kern_logger.hh>
@@ -40,13 +40,13 @@ using namespace kernel;
 void *palloc(size_t number)
 {
     // Find the suitable memory region
-    void *ptr = kernel_space_allocator.virtmem_alloc(number);
+    void *ptr = vmm::kernel_space_allocator.virtmem_alloc(number);
     if (ptr == nullptr)
         return nullptr;
 
     auto phys_addr = pmm::get_memory_for_kernel(number);
     if (phys_addr == 0) {
-        kernel_space_allocator.virtmem_free(ptr, number);
+        vmm::kernel_space_allocator.virtmem_free(ptr, number);
         return nullptr;
     }
 
@@ -74,7 +74,7 @@ void *palloc(size_t number)
                 void *virt_addr = (void *)((u64)ptr + j * PAGE_SIZE);
                 unmap_kernel_page(virt_addr);
             }
-            kernel_space_allocator.virtmem_free(ptr, number);
+            vmm::kernel_space_allocator.virtmem_free(ptr, number);
             throw e;
         }
     }

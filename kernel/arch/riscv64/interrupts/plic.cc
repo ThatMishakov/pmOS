@@ -4,11 +4,13 @@
 #include <dtb/dtb.hh>
 #include <kern_logger/kern_logger.hh>
 #include <memory/paging.hh>
-#include <memory/virtmem.hh>
+#include <memory/vmm.hh>
 #include <sched/sched.hh>
 #include <scheduling.hh>
 #include <smoldtb.h>
 #include <types.hh>
+
+using namespace kernel;
 
 u32 plic_read(const PLIC &plic, u32 offset) { return plic.virt_base[offset >> 2]; }
 
@@ -36,7 +38,7 @@ MADT_PLIC_entry *get_plic_entry(int index = 0)
 
 void *map_plic(u64 base, size_t size)
 {
-    void *const virt_base = kernel_space_allocator.virtmem_alloc(size >> 12);
+    void *const virt_base = vmm::kernel_space_allocator.virtmem_alloc(size >> 12);
     if (virt_base == nullptr) {
         serial_logger.printf("Error: could not allocate memory for PLIC\n");
         return nullptr;

@@ -41,6 +41,8 @@
 #include <sched/sched.hh>
 u64 counter = 1;
 
+using namespace kernel;
+
 bool Generic_Mem_Region::on_page_fault(u64 access_type, u64 pagefault_addr)
 {
     if (not has_access(access_type))
@@ -81,7 +83,7 @@ Page_Table_Argumments Private_Normal_Region::craft_arguments() const
 
 bool Private_Normal_Region::alloc_page(u64 ptr_addr)
 {
-    auto page = Page_Descriptor::allocate_page_zeroed(12);
+    auto page = pmm::Page_Descriptor::allocate_page_zeroed(12);
     owner->map(klib::move(page), ptr_addr, craft_arguments());
     return true;
 }
@@ -260,7 +262,7 @@ bool Mem_Object_Reference::alloc_page(u64 ptr_addr)
         if (reg_addr + 0x1000 <= start_offset_bytes or
             reg_addr >= start_offset_bytes + object_size_bytes) {
             // Out of object range. Allocate an empty page
-            auto page = Page_Descriptor::allocate_page_zeroed(12);
+            auto page = pmm::Page_Descriptor::allocate_page_zeroed(12);
             owner->map(klib::move(page), ptr_addr, craft_arguments());
             return true;
         }

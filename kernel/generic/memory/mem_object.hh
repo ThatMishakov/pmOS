@@ -27,7 +27,7 @@
  */
 
 #pragma once
-#include "page_descriptor.hh"
+#include "pmm.hh"
 
 #include <lib/list.hh>
 #include <lib/memory.hh>
@@ -150,8 +150,8 @@ public:
      * available. second - pointer to the start of the page at the offset. If the first is not true,
      * this value is meaningless and should be ignored.
      */
-    Page_Descriptor request_page(u64 offset);
-    Page_Descriptor atomic_request_page(u64 offser);
+    kernel::pmm::Page_Descriptor request_page(u64 offset);
+    kernel::pmm::Page_Descriptor atomic_request_page(u64 offser);
 
     /**
      * @brief Atomically resizes the memory region
@@ -227,7 +227,7 @@ protected:
 
     // Storage for the pages, in form of a linked list
     // TODO: Replace this with a hash table
-    Page *pages_storage = nullptr;
+    kernel::pmm::Page *pages_storage = nullptr;
 
     /// Size of the pages vector.
     /// This might be smaller than pages.size() for a short time during the this->atomic_resize()
