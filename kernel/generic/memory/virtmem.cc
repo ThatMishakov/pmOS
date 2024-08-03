@@ -43,34 +43,20 @@ void virtmem_fill_initial_tags()
     }
 }
 
-void virtmem_add_to_list(VirtMemFreelist *list, VirtmemBoundaryTag *tag)
-{
-    tag->ll_next           = list->ll_next;
-    tag->ll_prev           = (VirtmemBoundaryTag *)list;
-    list->ll_next->ll_prev = tag;
-    list->ll_next          = tag;
-}
-
-void virtmem_remove_from_list(VirtmemBoundaryTag *tag)
-{
-    tag->ll_prev->ll_next = tag->ll_next;
-    tag->ll_next->ll_prev = tag->ll_prev;
-}
-
 VirtmemBoundaryTag *virtmem_get_free_tag()
 {
-    if (virtmem_available_tags_list.is_empty())
+    if (virtmem_available_tags_list.empty())
         return nullptr;
 
-    VirtmemBoundaryTag *tag = virtmem_available_tags_list.ll_next;
-    virtmem_remove_from_list(tag);
+    VirtmemBoundaryTag *tag = &*virtmem_available_tags_list.begin();
+    VirtMemFreelist::remove(tag);
     virtmem_available_tags_count--;
     return tag;
 }
 
 void virtmem_return_tag(VirtmemBoundaryTag *tag)
 {
-    virtmem_add_to_list(&virtmem_available_tags_list, tag);
+    virtmem_available_tags_list.push_front(tag);
     virtmem_available_tags_count++;
 }
 
@@ -78,7 +64,7 @@ void virtmem_init(u64 virtmem_base, u64 virtmem_size)
 {
     kernel_space_allocator.init();
 
-    virtmem_available_tags_list.init_empty();
+    virtmem_available_tags_list.init();
 
     virtmem_fill_initial_tags();
     auto tag   = virtmem_get_free_tag();
@@ -102,7 +88,7 @@ u64 virtmem_ensure_tags(u64 size)
 
     int idx    = __builtin_ffsl(kernel_space_allocator.virtmem_freelist_bitmap) - 1;
     auto &list = kernel_space_allocator.virtmem_freelists[idx];
-    auto &tag  = list.ll_next;
+    auto tag  = &*list.begin();
 
     // Allocate a page and try and map it
     const auto addr = tag->base;
@@ -136,8 +122,8 @@ u64 virtmem_ensure_tags(u64 size)
     // Add a new boundary tag
     if (tag->size == 4096) {
         // Boundary tag is an exact fit. Take it out of free and mark as used
-        virtmem_remove_from_list(tag);
-        if (list.ll_next == (VirtmemBoundaryTag *)&list)
+        VirtMemFreelist::remove(tag);
+        if (list.empty())
             // Mark the list as empty
             kernel_space_allocator.virtmem_freelist_bitmap &= ~(1UL << idx);
 
@@ -157,8 +143,8 @@ u64 virtmem_ensure_tags(u64 size)
         // If the old tag freelist index is different, move it
         int new_idx = kernel_space_allocator.virtmem_freelist_index(tag->size);
         if (new_idx != idx) {
-            virtmem_remove_from_list(tag);
-            if (list.ll_next == (VirtmemBoundaryTag *)&list)
+            VirtMemFreelist::remove(tag);
+            if (list.empty())
                 // Mark the list as empty
                 kernel_space_allocator.virtmem_freelist_bitmap &= ~(1UL << idx);
 

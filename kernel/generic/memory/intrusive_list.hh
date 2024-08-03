@@ -28,6 +28,9 @@ public:
 
         bool operator==(const iterator &other) const noexcept;
         bool operator!=(const iterator &other) const noexcept;
+
+        // Potentially a very bad idea
+        operator T *() const noexcept { return &**this; }
     };
 
     // Make init() function explicit to have a trivial constructor
@@ -35,6 +38,7 @@ public:
 
     void push_front(T *p) noexcept;
     static void remove(T *p) noexcept;
+    static void remove(iterator it) noexcept;
     bool empty() const noexcept;
 
     iterator begin() noexcept;
@@ -61,6 +65,12 @@ void CircularDoubleList<T, Head>::remove(T *p) noexcept
 {
     (p->*Head).prev->next = (p->*Head).next;
     (p->*Head).next->prev = (p->*Head).prev;
+}
+
+template<typename T, DoubleListHead<T> T::*Head>
+void CircularDoubleList<T, Head>::remove(iterator it) noexcept
+{
+    remove(&*it);
 }
 
 template<typename T, DoubleListHead<T> T::*Head>

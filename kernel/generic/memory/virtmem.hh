@@ -38,19 +38,16 @@
  * and efficient one is not a priority at the moment.
  */
 
+#include "intrusive_list.hh"
+
 #include <assert.h>
-#include <types.hh>
 #include <errno.h>
+#include <types.hh>
 
 struct VirtmemBoundaryTag {
-    // The fist 2 members must match VirtMemFreelist, to construct a circular linked list.
-    // C++ inheritance can't be used because the stadard gives no guarantees of any specific
-    // memory layout of derived classes and structs with dynamic data.
-
     // Either a double linked list of free sigments of a given size
     // or a links of the hash table of allocated segments
-    VirtmemBoundaryTag *ll_next = nullptr;
-    VirtmemBoundaryTag *ll_prev = nullptr;
+    DoubleListHead<VirtmemBoundaryTag> ll = {};
 
     // Base address of the segment
     u64 base = 0;
@@ -75,26 +72,13 @@ struct VirtmemBoundaryTag {
     constexpr bool has_next() const { return segment_next != nullptr; }
 };
 
-struct VirtMemFreelist {
-    // Circular list is used here since it is supposedly very efficient and easy to implement.
-    // This is used for both free segments storage and hash table of allocated segments.
-
-    // Circular doubly linked list of segments, depending on what the list head is used for
-    VirtmemBoundaryTag *ll_next = nullptr; // Head
-    VirtmemBoundaryTag *ll_prev = nullptr; // Tail
-
-    bool is_empty() const { return ll_next == (VirtmemBoundaryTag *)this; }
-
-    // Point the list to itself, initializing it to the empty state
-    // This has to be called manually as in the rellocatable executables, the address is not known
-    // at the compile time, so the constructor has to be called. This is problematic, since these
-    // lists are used before the global constructors are called.
-    void init_empty()
-    {
-        ll_next = (VirtmemBoundaryTag *)this;
-        ll_prev = (VirtmemBoundaryTag *)this;
-    }
-};
+// Use circular lists for both free segments and allocated segments (hash table)
+// This is prefered because of the fast removal and addition of elements
+//
+// The initializer must be called manually, since the list must point to itself, and the address
+// might not be known at compile time (on PIE executables). While this could be done by C++
+// global constructors, the vmm might be initialized before they are called.
+using VirtMemFreelist = CircularDoubleList<VirtmemBoundaryTag, &VirtmemBoundaryTag::ll>;
 
 static const u64 virtmem_initial_segments = 16;
 // Static array of initial boundary tags, used during the initialization of the kernel
@@ -217,11 +201,6 @@ void virtmem_link_tag(VirtmemBoundaryTag *preceeding, VirtmemBoundaryTag *new_ta
 // Unlinks the boundary tag from the list of tags sorted by address
 void virtmem_unlink_tag(VirtmemBoundaryTag *tag);
 
-// Adds a boundary tag to a given freelist
-void virtmem_add_to_list(VirtMemFreelist *list, VirtmemBoundaryTag *tag);
-// Removes a boundary tag from the parent list
-void virtmem_remove_from_list(VirtmemBoundaryTag *tag);
-
 template<int Q, int M> void VirtMem<Q, M>::virtmem_free(void *ptr, u64 npages)
 {
     // Find the tag that corresponds to the base of the segment
@@ -229,7 +208,7 @@ template<int Q, int M> void VirtMem<Q, M>::virtmem_free(void *ptr, u64 npages)
     u64 idx                 = virtmem_hashtable_index(base);
     auto head               = &virtmem_hashtable[idx];
     VirtmemBoundaryTag *tag = nullptr;
-    for (auto i = head->ll_next; i != (VirtmemBoundaryTag *)head; i = i->ll_next) {
+    for (auto i = head->begin(); i != head->end(); i++) {
         if (tag->base == base) {
             // Found the tag
             tag = i;
@@ -242,7 +221,7 @@ template<int Q, int M> void VirtMem<Q, M>::virtmem_free(void *ptr, u64 npages)
     assert(tag->size == npages);
 
     // Take the tag out of the hashtable
-    virtmem_remove_from_list(tag);
+    VirtMemFreelist::remove(tag);
 
     // Mark the tag as free
     tag->state = VirtmemBoundaryTag::State::FREE;
@@ -250,7 +229,7 @@ template<int Q, int M> void VirtMem<Q, M>::virtmem_free(void *ptr, u64 npages)
     // Merge the tag with the previous and next tags if they are free
     if (tag->segment_prev->state == VirtmemBoundaryTag::State::FREE) {
         auto prev = tag->segment_prev;
-        virtmem_remove_from_list(prev);
+        VirtMemFreelist::remove(prev);
         tag->base = prev->base;
         tag->size += prev->size;
         virtmem_unlink_tag(prev);
@@ -259,7 +238,7 @@ template<int Q, int M> void VirtMem<Q, M>::virtmem_free(void *ptr, u64 npages)
 
     if (tag->segment_next->state == VirtmemBoundaryTag::State::FREE) {
         auto next = tag->segment_next;
-        virtmem_remove_from_list(next);
+        VirtMemFreelist::remove(next);
         tag->size += next->size;
         virtmem_unlink_tag(next);
         virtmem_return_tag(next);
@@ -275,9 +254,8 @@ template<int Q, int M> void VirtMem<Q, M>::virtmem_save_to_alloc_hashtable(Virtm
     // But for now, it is not a priority and the the performance hit is
     // not a concern compared to other parts of the kernel.
 
-    u64 idx   = virtmem_hashtable_index(tag->base);
-    auto head = &virtmem_hashtable[idx];
-    virtmem_add_to_list(head, tag);
+    u64 idx = virtmem_hashtable_index(tag->base);
+    virtmem_hashtable[idx].push_front(tag);
 }
 
 template<int Q, int M> void *VirtMem<Q, M>::virtmem_alloc_aligned(u64 npages, u64 alignment)
@@ -303,7 +281,7 @@ template<int Q, int M> void *VirtMem<Q, M>::virtmem_alloc_aligned(u64 npages, u6
         // __builtin_ffsl returns the index of the first set bit + 1, or 0 if there are none
         int idx    = __builtin_ffsl(wanted_mask) - 1;
         auto &list = virtmem_freelists[idx];
-        for (auto tag = list.ll_next; tag != (VirtmemBoundaryTag *)&list; tag = tag->ll_next) {
+        for (auto tag = list.begin(); tag != list.end(); tag++) {
             u64 base    = tag->base;
             u64 alignup = (base + alignup_mask) & ~alignup_mask;
             u64 all_end = alignup + size;
@@ -373,11 +351,11 @@ template<int Q, int M> void *VirtMem<Q, M>::virtmem_alloc(u64 npages, VirtmemAll
         // Before going to larger ones
         auto &list    = virtmem_freelists[l];
         free_list_idx = l;
-        for (auto tag = list.ll_next; tag != (VirtmemBoundaryTag *)&list; tag = tag->ll_next) {
+        for (auto tag = list.begin(); tag != list.end(); tag++) {
             if (tag->size == npages) {
                 // The exact fit has been found. Use it directly
-                virtmem_remove_from_list(tag);
-                if (list.ll_next == (VirtmemBoundaryTag *)&list)
+                VirtMemFreelist::remove(tag);
+                if (list.empty())
                     // Mark the list as empty
                     virtmem_freelist_bitmap &= ~(1UL << l);
 
@@ -407,15 +385,15 @@ template<int Q, int M> void *VirtMem<Q, M>::virtmem_alloc(u64 npages, VirtmemAll
         // __builtin_ffsl returns the index of the first set bit + 1, or 0 if there are none
         int idx       = __builtin_ffsl(wanted_mask) - 1;
         auto &list    = virtmem_freelists[idx];
-        best          = list.ll_next;
+        best          = &list.front();
         free_list_idx = idx;
     }
 
     if (best->size == size) {
         // The segment is an exact fit
-        virtmem_remove_from_list(best);
+        VirtMemFreelist::remove(best);
         auto &list = virtmem_freelists[free_list_idx];
-        if (list.ll_next == (VirtmemBoundaryTag *)&list)
+        if (list.empty())
             // Mark the list as empty
             virtmem_freelist_bitmap &= ~(1UL << free_list_idx);
 
@@ -443,7 +421,7 @@ template<int Q, int M> void VirtMem<Q, M>::virtmem_add_to_free_list(VirtmemBound
 {
     int idx    = virtmem_freelist_index(tag->size);
     auto &list = virtmem_freelists[idx];
-    virtmem_add_to_list(&list, tag);
+    list.push_front(tag);
     virtmem_freelist_bitmap |= (1UL << idx);
 }
 
@@ -456,8 +434,8 @@ template<int Q, int M> void VirtMem<Q, M>::init()
     // Init lists
     // See VirtMemFreelist::init_empty() for the explanation
     for (auto &i: virtmem_freelists)
-        i.init_empty();
+        i.init();
     for (auto &i: virtmem_initial_hash)
-        i.init_empty();
+        i.init();
     virtmem_hashtable = virtmem_initial_hash;
 }
