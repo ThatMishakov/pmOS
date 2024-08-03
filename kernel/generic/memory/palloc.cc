@@ -28,8 +28,8 @@
 
 #include "palloc.hh"
 
-#include "pmm.hh"
 #include "paging.hh"
+#include "pmm.hh"
 #include "virtmem.hh"
 
 #include <exceptions.hh>
@@ -53,9 +53,9 @@ void *palloc(size_t number)
     // Allocate and try to map memory
     size_t i = 0;
     for (; i < number; ++i) {
-        void *page        = nullptr;
+        void *page = nullptr;
         try {
-            void *virt_addr                        = (void *)((u64)ptr + i * 4096);
+            void *virt_addr                        = (void *)((u64)ptr + i * PAGE_SIZE);
             static const Page_Table_Argumments arg = {
                 .readable           = true,
                 .writeable          = true,
@@ -65,13 +65,13 @@ void *palloc(size_t number)
                 .extra              = PAGING_FLAG_STRUCT_PAGE,
             };
 
-            map_kernel_page((u64)phys_addr + i, virt_addr, arg);
+            map_kernel_page((u64)phys_addr + i * PAGE_SIZE, virt_addr, arg);
         } catch (Kern_Exception &e) {
-            pmm::free_memory_for_kernel(phys_addr + i*4096, number - i);
+            pmm::free_memory_for_kernel(phys_addr + i * PAGE_SIZE, number - i);
 
             // Unmap and free the allocated pages
             for (size_t j = 0; j < i; ++j) {
-                void *virt_addr = (void *)((u64)ptr + j * 4096);
+                void *virt_addr = (void *)((u64)ptr + j * PAGE_SIZE);
                 unmap_kernel_page(virt_addr);
             }
             kernel_space_allocator.virtmem_free(ptr, number);

@@ -28,8 +28,8 @@
 
 #include "limine.h"
 
-#include "../memory/pmm.hh"
 #include "../memory/paging.hh"
+#include "../memory/pmm.hh"
 #include "../memory/temp_mapper.hh"
 #include "../memory/virtmem.hh"
 
@@ -118,9 +118,10 @@ u64 hhdm_offset = 0;
 
 size_t number_of_cpus = 1;
 
-u64 temp_alloc_base = 0;
-u64 temp_alloc_size = 0;
+u64 temp_alloc_base     = 0;
+u64 temp_alloc_size     = 0;
 u64 temp_alloc_reserved = 0;
+u64 temp_alloc_entry_id = 0;
 
 Page::page_addr_t alloc_pages_from_temp_pool(size_t pages) noexcept
 {
@@ -157,21 +158,28 @@ ptable_top_ptr_t kernel_ptable_top = 0;
 void construct_paging()
 {
     serial_logger.printf("Finding the largest memory region...\n");
-    limine_memmap_response *resp = memory_request.response;
-    if (resp == nullptr) {
+    limine_memmap_response *r = memory_request.response;
+    if (r == nullptr) {
         hcf();
     }
+    limine_memmap_response resp = *r;
 
     hhdm_offset = hhdm_request.response->offset;
 
-    for (uint64_t i = 0; i < resp->entry_count; i++) {
-        uint64_t type = resp->entries[i]->type;
+    for (uint64_t i = 0; i < resp.entry_count; i++) {
+        uint64_t type = resp.entries[i]->type;
         if (type == LIMINE_MEMMAP_USABLE) {
-            if (temp_alloc_size < resp->entries[i]->length) {
-                temp_alloc_base = resp->entries[i]->base;
-                temp_alloc_size = resp->entries[i]->length;
+            if (temp_alloc_size < resp.entries[i]->length) {
+                temp_alloc_base     = resp.entries[i]->base;
+                temp_alloc_size     = resp.entries[i]->length;
+                temp_alloc_entry_id = i;
             }
         }
+
+        // Print memory map
+        serial_logger.printf(" Memory map region %i: 0x%h - 0x%h, type %i\n", i,
+                             resp.entries[i]->base, resp.entries[i]->base + resp.entries[i]->length,
+                             resp.entries[i]->type);
     }
 
     serial_logger.printf("Found the largest memory region at 0x%h, size 0x%h\n", temp_alloc_base,
@@ -183,8 +191,8 @@ void construct_paging()
     serial_logger.printf("Initializing paging...\n");
 
 #ifdef __riscv
-    auto r                = paging_request.response;
-    riscv64_paging_levels = r->mode + 3;
+    auto rr               = paging_request.response;
+    riscv64_paging_levels = rr->mode + 3;
     serial_logger.printf("Using %i paging levels\n", riscv64_paging_levels);
 #endif
 
@@ -266,7 +274,7 @@ void construct_paging()
         .user_access        = false,
         .global             = true,
         .execution_disabled = false,
-        .extra              = 0,
+        .extra              = PAGING_FLAG_STRUCT_PAGE,
     };
 
     map_pages(kernel_ptable_top, text_phys, text_virt, text_size, args);
@@ -277,7 +285,7 @@ void construct_paging()
     const u64 rodata_offset = rodata_start - kernel_start_virt;
     const u64 rodata_phys   = kernel_phys + rodata_offset;
     const u64 rodata_virt   = kernel_start_virt + rodata_offset;
-    args                    = {true, false, false, true, true, 0};
+    args                    = {true, false, false, true, true, PAGING_FLAG_STRUCT_PAGE};
     map_pages(kernel_ptable_top, rodata_phys, rodata_virt, rodata_size, args);
     if (result != 0)
         hcf();
@@ -289,7 +297,7 @@ void construct_paging()
     const u64 data_offset = data_start - kernel_start_virt;
     const u64 data_phys   = kernel_phys + data_offset;
     const u64 data_virt   = kernel_start_virt + data_offset;
-    args                  = {true, true, false, true, true, 0};
+    args                  = {true, true, false, true, true, PAGING_FLAG_STRUCT_PAGE};
     map_pages(kernel_ptable_top, data_phys, data_virt, data_size, args);
 
     const u64 eh_frame_start  = (u64)(&__eh_frame_start) & ~0xfff;
@@ -299,7 +307,7 @@ void construct_paging()
     const u64 eh_frame_offset = eh_frame_start - kernel_start_virt;
     const u64 eh_frame_phys   = kernel_phys + eh_frame_offset;
     const u64 eh_frame_virt   = kernel_start_virt + eh_frame_offset;
-    args                      = {true, false, false, true, true, 0};
+    args                      = {true, false, false, true, true, PAGING_FLAG_STRUCT_PAGE};
     map_pages(kernel_ptable_top, eh_frame_phys, eh_frame_virt, eh_frame_size, args);
 
     serial_logger.printf("Switching to in-kernel page table...\n");
@@ -309,10 +317,189 @@ void construct_paging()
     // Set up the right mapper (since there is no direct map anymore) and bitmap
     global_temp_mapper = &temp_temp_mapper;
 
-
     // Allocate Page structs
+    for (auto &i: kernel::pmm::free_pages_list)
+        i.init();
 
-    // TODO
+    klib::vector<limine_memmap_entry *> regions(resp.entry_count);
+    copy_from_phys((u64)resp.entries - hhdm_offset, regions.data(),
+                   resp.entry_count * sizeof(limine_memmap_entry *));
+
+    klib::vector<limine_memmap_entry> regions_data(resp.entry_count);
+    for (size_t i = 0; i < resp.entry_count; i++) {
+        copy_from_phys((u64)regions[i] - hhdm_offset, &regions_data[i],
+                       sizeof(limine_memmap_entry));
+    }
+
+    auto region_last_addr = [&](long index) -> u64 {
+        return regions_data[index].base + regions_data[index].length;
+    };
+
+    auto new_region_func = [&](long first_index, long last_index) {
+        auto base_addr = regions_data[first_index].base & ~0xfffUL;
+        auto end_addr  = region_last_addr(last_index);
+
+        serial_logger.printf("Setting up PMM region 0x%h - 0x%h\n", base_addr, end_addr);
+
+        // Calculate memory for the Page structs
+        auto range                 = (end_addr - base_addr + 0xfff) & ~0xfffUL;
+        auto entries               = range / PAGE_SIZE + 2; // Reserved entries
+        auto page_struct_page_size = (entries * sizeof(Page) + 0xfff) & ~0xfffUL;
+
+        // Try and allocate memory from the pool itself
+        long alloc_index = -1;
+        for (auto i = first_index; i <= last_index; ++i) {
+            if (i == (long)temp_alloc_entry_id)
+                continue;
+
+            if (regions_data[i].type == LIMINE_MEMMAP_USABLE and
+                regions_data[i].length <= page_struct_page_size) {
+                alloc_index = i;
+                break;
+            }
+        }
+
+        u64 phys_addr = 0;
+        if (alloc_index != -1) {
+            phys_addr = regions_data[alloc_index].base;
+        } else {
+            // Allocate memory from the temp pool
+            phys_addr = alloc_pages_from_temp_pool(page_struct_page_size / PAGE_SIZE);
+        }
+
+        // Reserve virtual memory
+        auto virt_addr = kernel_space_allocator.virtmem_alloc(page_struct_page_size / PAGE_SIZE);
+
+        // Map the memory
+        Page_Table_Argumments args = {
+            .readable           = true,
+            .writeable          = true,
+            .user_access        = false,
+            .global             = true,
+            .execution_disabled = true,
+            .extra              = PAGING_FLAG_STRUCT_PAGE,
+        };
+        map_pages(kernel_ptable_top, phys_addr, (u64)virt_addr, page_struct_page_size, args);
+
+        Page *pages             = (Page *)virt_addr;
+        // Reserve first and last page
+        pages[0].type           = Page::PageType::Reserved;
+        pages[entries - 1].type = Page::PageType::Reserved;
+
+        // Map from the first page
+        pages++;
+
+        for (long i = first_index; i <= last_index; i++) {
+            if (regions_data[i].type == LIMINE_MEMMAP_USABLE) {
+                if ((size_t)i == temp_alloc_entry_id) {
+                    // Mark as allocated and continue
+                    Page *p   = pages + (regions_data[i].base - base_addr) / PAGE_SIZE;
+                    Page *end = p + regions_data[i].length / PAGE_SIZE;
+
+                    p->type       = Page::PageType::Allocated;
+                    p->flags      = 0;
+                    p->l.refcount = 1;
+
+                    end[-1].type       = Page::PageType::Allocated;
+                    end[-1].flags      = 0;
+                    end[-1].l.refcount = 1;
+
+                    continue;
+                }
+
+                if (i == alloc_index) {
+                    if (regions_data[i].length <= page_struct_page_size)
+                        continue;
+
+                    auto occupied_pages  = page_struct_page_size / PAGE_SIZE;
+                    auto base_page_index = (regions_data[i].base - base_addr) / PAGE_SIZE;
+                    for (size_t j = base_page_index; j < base_page_index + occupied_pages; j++) {
+                        pages[j].type       = Page::PageType::Allocated;
+                        pages[j].flags      = 0;
+                        pages[j].l.refcount = 1;
+                        pages[j].l.next     = nullptr;
+                    }
+
+                    auto free_index = base_page_index + occupied_pages;
+                    auto end_index =
+                        free_index + (regions_data[i].length - page_struct_page_size) / PAGE_SIZE;
+
+                    // Mark end page as reserved so it doesn't get coalesced with uninitialized
+                    // memory
+                    pages[end_index].type = Page::PageType::Reserved;
+
+                    Page *to_add_to_free                    = pages + free_index;
+                    to_add_to_free->type                    = Page::PageType::PendingFree;
+                    to_add_to_free->rcu_state.pages_to_free = end_index - free_index;
+                    pmm::free_page(to_add_to_free);
+                } else {
+                    auto base_page_index = (regions_data[i].base - base_addr) / PAGE_SIZE;
+                    auto pages_count     = regions_data[i].length / PAGE_SIZE;
+
+                    pages[base_page_index + pages_count].type = Page::PageType::Reserved;
+
+                    pages[base_page_index].type                    = Page::PageType::PendingFree;
+                    pages[base_page_index].rcu_state.pages_to_free = pages_count;
+                    pmm::free_page(pages + base_page_index);
+                }
+            } else {
+                auto base_page_index = (regions_data[i].base - base_addr) / PAGE_SIZE;
+                auto pages_count     = regions_data[i].length / PAGE_SIZE;
+
+                for (size_t j = base_page_index; j < base_page_index + pages_count; j++) {
+                    pages[j].type       = Page::PageType::Allocated;
+                    pages[j].flags      = 0;
+                    pages[j].l.refcount = 1;
+                    pages[j].l.next     = nullptr;
+                }
+            }
+        }
+
+        // Add the region to the PMM
+        auto r = pmm::add_page_array(base_addr, entries - 2, pages);
+        if (!r)
+            assert(!"Failed to add region to PMM");
+    };
+
+    long first_index_of_range = -1;
+    for (size_t i = 0; i < resp.entry_count; i++) {
+        if (regions_data[i].type == LIMINE_MEMMAP_USABLE ||
+            regions_data[i].type == LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE ||
+            regions_data[i].type == LIMINE_MEMMAP_ACPI_RECLAIMABLE ||
+            regions_data[i].type == LIMINE_MEMMAP_KERNEL_AND_MODULES) {
+            if (first_index_of_range == -1) {
+                first_index_of_range = i;
+            } else if (region_last_addr(i - 1) < regions_data[i].base) {
+                new_region_func(first_index_of_range, i - 1);
+                first_index_of_range = i;
+            }
+            if (i == resp.entry_count - 1) {
+                new_region_func(first_index_of_range, i);
+            }
+        } else if (first_index_of_range != -1) {
+            new_region_func(first_index_of_range, i - 1);
+            first_index_of_range = -1;
+        }
+    }
+
+    // Add the temporary region
+    Page *temp_region_page = pmm::find_page(temp_alloc_base);
+    auto reserved_count    = temp_alloc_reserved / PAGE_SIZE;
+    for (size_t i = 0; i < reserved_count; i++) {
+        temp_region_page[i].type       = Page::PageType::Allocated;
+        temp_region_page[i].flags      = 0;
+        temp_region_page[i].l.refcount = 1;
+    }
+
+    auto size                            = temp_alloc_size / PAGE_SIZE;
+    auto free_region                     = temp_region_page + reserved_count;
+    free_region->type                    = Page::PageType::PendingFree;
+    free_region->rcu_state.pages_to_free = size - reserved_count;
+
+    pmm::free_page(free_region);
+    pmm::pmm_fully_initialized = true;
+
+    serial_logger.printf("PMM initialized!\n");
 }
 
 limine_module_request module_request = {
@@ -541,7 +728,7 @@ void init_task1()
     // Create new task and load ELF into it
     auto task = TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel::User);
     serial_logger.printf("Loading ELF...\n");
-    bool p    = task->load_elf(task1->object, task1->path, tags);
+    bool p = task->load_elf(task1->object, task1->path, tags);
     if (!p) {
         serial_logger.printf("Failed to load ELF\n");
         hcf();
@@ -602,7 +789,7 @@ struct limine_smp_request smp_request = {
     .id       = LIMINE_SMP_REQUEST,
     .revision = 0,
     .response = nullptr,
-    .flags = 0,
+    .flags    = 0,
 };
 
 u64 bsp_cpu_id = 0;
@@ -613,12 +800,13 @@ void init_smp()
         return;
     }
 
-    #ifdef __riscv
+#ifdef __riscv
     limine_smp_response r;
     copy_from_phys((u64)smp_request.response - hhdm_offset, &r, sizeof(r));
-    
+
     klib::vector<limine_smp_info *> smp_info(r.cpu_count);
-    copy_from_phys((u64)r.cpus - hhdm_offset, smp_info.data(), r.cpu_count * sizeof(limine_smp_info *));
+    copy_from_phys((u64)r.cpus - hhdm_offset, smp_info.data(),
+                   r.cpu_count * sizeof(limine_smp_info *));
 
     klib::vector<u64> hartids;
     for (auto &info: smp_info) {
@@ -629,8 +817,8 @@ void init_smp()
         hartids.push_back(i.hartid);
     }
 
-    auto v = initialize_cpus(hartids);
-    auto iter = v.begin();
+    auto v         = initialize_cpus(hartids);
+    auto iter      = v.begin();
     auto jump_func = get_cpu_start_func();
 
     Temp_Mapper_Obj<u64> mapper(request_temp_mapper());
@@ -640,27 +828,28 @@ void init_smp()
         copy_from_phys((u64)info - hhdm_offset, &i, sizeof(i));
         if (i.hartid == bsp_cpu_id)
             continue;
-        
-        u64 offset = ((u64)info - hhdm_offset + offsetof(limine_smp_info, extra_argument))&0xfff;
-        u64 addr = ((u64)info - hhdm_offset + offsetof(limine_smp_info, extra_argument))&~0xfffUL;
+
+        u64 offset = ((u64)info - hhdm_offset + offsetof(limine_smp_info, extra_argument)) & 0xfff;
+        u64 addr = ((u64)info - hhdm_offset + offsetof(limine_smp_info, extra_argument)) & ~0xfffUL;
         mapper.map(addr);
         u64 *stack = (u64 *)((size_t)mapper.ptr + offset);
-        *stack = *iter;
+        *stack     = *iter;
 
-        offset = ((u64)info - hhdm_offset + offsetof(limine_smp_info, goto_address))&0xfff;
-        addr = ((u64)info - hhdm_offset + offsetof(limine_smp_info, goto_address))&~0xfffUL;
+        offset = ((u64)info - hhdm_offset + offsetof(limine_smp_info, goto_address)) & 0xfff;
+        addr   = ((u64)info - hhdm_offset + offsetof(limine_smp_info, goto_address)) & ~0xfffUL;
         mapper.map(addr);
         void **func = (void **)((size_t)mapper.ptr + offset);
-        *func = jump_func;
+        *func       = jump_func;
 
         ++iter;
     }
-    #elif defined(__x86_64__)
+#elif defined(__x86_64__)
     limine_smp_response r;
     copy_from_phys((u64)smp_request.response - hhdm_offset, &r, sizeof(r));
 
     klib::vector<limine_smp_info *> smp_info(r.cpu_count);
-    copy_from_phys((u64)r.cpus - hhdm_offset, smp_info.data(), r.cpu_count * sizeof(limine_smp_info *));
+    copy_from_phys((u64)r.cpus - hhdm_offset, smp_info.data(),
+                   r.cpu_count * sizeof(limine_smp_info *));
 
     // Store as 64 bit ints to be inline with RISC-V
     klib::vector<u64> lapic_ids;
@@ -669,37 +858,37 @@ void init_smp()
         copy_from_phys((u64)info - hhdm_offset, &i, sizeof(i));
         if (i.lapic_id == bsp_cpu_id)
             continue;
-        
+
         lapic_ids.push_back(i.lapic_id);
     }
 
-    auto v = initialize_cpus(lapic_ids);
-    auto iter = v.begin();
+    auto v         = initialize_cpus(lapic_ids);
+    auto iter      = v.begin();
     auto jump_func = get_cpu_start_func();
     for (auto &info: smp_info) {
         limine_smp_info i;
         copy_from_phys((u64)info - hhdm_offset, &i, sizeof(i));
         if (i.lapic_id == bsp_cpu_id)
             continue;
-        
-        u64 offset = ((u64)info - hhdm_offset + offsetof(limine_smp_info, extra_argument))&0xfff;
-        u64 addr = ((u64)info - hhdm_offset + offsetof(limine_smp_info, extra_argument))&~0xfffUL;
+
+        u64 offset = ((u64)info - hhdm_offset + offsetof(limine_smp_info, extra_argument)) & 0xfff;
+        u64 addr = ((u64)info - hhdm_offset + offsetof(limine_smp_info, extra_argument)) & ~0xfffUL;
         Temp_Mapper_Obj<u64> mapper(request_temp_mapper());
         mapper.map(addr);
         u64 *stack = (u64 *)((size_t)mapper.ptr + offset);
-        *stack = *iter;
+        *stack     = *iter;
 
-        offset = ((u64)info - hhdm_offset + offsetof(limine_smp_info, goto_address))&0xfff;
-        addr = ((u64)info - hhdm_offset + offsetof(limine_smp_info, goto_address))&~0xfffUL;
+        offset = ((u64)info - hhdm_offset + offsetof(limine_smp_info, goto_address)) & 0xfff;
+        addr   = ((u64)info - hhdm_offset + offsetof(limine_smp_info, goto_address)) & ~0xfffUL;
         mapper.map(addr);
         void **func = (void **)((size_t)mapper.ptr + offset);
-        *func = jump_func;
+        *func       = jump_func;
 
         ++iter;
     }
-    #elif
+#elif
     #error "Unsupported architecture"
-    #endif
+#endif
 }
 
 void limine_main()
@@ -711,13 +900,13 @@ void limine_main()
     serial_logger.printf("Hello from pmOS kernel!\n");
 
     if (smp_request.response != nullptr) {
-        #ifdef __riscv
+#ifdef __riscv
         number_of_cpus = smp_request.response->cpu_count;
-        bsp_cpu_id = smp_request.response->bsp_hartid;
-        #elif defined(__x86_64__)
+        bsp_cpu_id     = smp_request.response->bsp_hartid;
+#elif defined(__x86_64__)
         number_of_cpus = smp_request.response->cpu_count;
-        bsp_cpu_id = smp_request.response->bsp_lapic_id;
-        #endif
+        bsp_cpu_id     = smp_request.response->bsp_lapic_id;
+#endif
     }
 
     construct_paging();

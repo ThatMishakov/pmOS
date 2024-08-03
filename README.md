@@ -34,7 +34,7 @@ These are the features that are planned to be had in the OS:
     - [x] Mapping (anonymous mmap)
     - [x] Lazy allocations
     - [x] Full unmapping
-    - [ ] Partial and overlaping unmapping (munmap)
+    - [x] Partial and overlaping unmapping (munmap)
     - [ ] memprotect and changing permissions
     - [x] Acccess to physical memory
     - [x] Mapping of memory objects
@@ -56,8 +56,8 @@ These are the features that are planned to be had in the OS:
 - [ ] Interrupts and exceptions
   - [x] Very basic exception handling
   - [x] Syscalls
-  - [ ] Interrupt dispatching to drivers
-    - I had something working on x86, but it needs rewriting and doesn't work on RISC-V at all
+  - [x] Interrupt dispatching to drivers
+    - Works on RISC-V, but is broken on x86_64
 
 - [x] IPC and messaging
   - [x] Buffered string messages
@@ -66,8 +66,8 @@ These are the features that are planned to be had in the OS:
   - [ ] Quicker messaging
   
 - [ ] Permissions
-- [ ] Multi CPU support
-  Most of the kernel should work (and was working at some point), but memory unmapping among thread needs to be rewritten
+- [ ] Multi CPU support (works but kinda may be broken)
+  Memory unmapping among thread needs to be rewritten
 
 #### RISC-V specific features:
 
@@ -75,7 +75,7 @@ These are the features that are planned to be had in the OS:
 - [x] Exceptions
 - [x] Timer interrupt
 - [x] Userspace/U mode
-- [ ] Multi hart support
+- [x] Multi hart support
 
 #### x86_64 specific features:
 
@@ -86,9 +86,7 @@ These are the features that are planned to be had in the OS:
 - [x] LAPIC
   Untested, but was working before
 - [x] Userspace/Ring 3
-- [ ] Multi CPU support
-  Was working at some point, but needs rewriting after switching to limine + paging and threads need to be fixed
-
+- [x] Multi CPU support
 
 
 **Core utilities and daemons**

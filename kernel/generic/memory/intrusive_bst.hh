@@ -78,6 +78,7 @@ public:
         RBTreeIterator get_smaller_or_equal(const auto &value);
 
         RBTreeIterator lower_bound(const auto &value);
+        RBTreeIterator less_or_equal(const auto &value);
 
         void insert(T *node);
         void erase(T *node);
@@ -596,6 +597,26 @@ RedBlackTree<T, bst_head, Compare>::RBTreeIterator
             current = (current->*bst_head).left;
         } else {
             return RBTreeIterator {current};
+        }
+    }
+
+    return RBTreeIterator {result};
+}
+
+template<typename T, RBTreeNode<T> T::*bst_head, class Compare>
+RedBlackTree<T, bst_head, Compare>::RBTreeIterator
+    RedBlackTree<T, bst_head, Compare>::RBTreeHead::less_or_equal(const auto &value)
+{
+    Compare cmp {};
+    T *current = root;
+    T *result  = nullptr;
+
+    while (current) {
+        if (cmp(value, *current)) {
+            current = (current->*bst_head).left;
+        } else if (cmp(*current, value)) {
+            result  = current;
+            current = (current->*bst_head).right;
         }
     }
 

@@ -46,12 +46,27 @@ namespace pmm
      */
     void free_memory_for_kernel(phys_page_t page, size_t number_of_pages) noexcept;
 
+    /**
+     * Adds a page to the free list. It must be PendingFree or AllocatedPending. In the second case,
+     * the whole chain is freed.
+     *
+     * @param p Pages to free
+     */
+    void free_page(Page *p) noexcept;
+
     struct PageArrayDescriptor {
         RBTreeNode<PageArrayDescriptor> by_address_tree;
         Page *pages;
         Page::page_addr_t start_addr;
         u64 size;
     };
+
+    // Add a memory region to the PMM
+    // Does not add it to the BST
+    // Returns false on allocation failure
+    bool add_page_array(Page::page_addr_t start_addr, u64 size, Page *pages) noexcept;
+
+    Page *find_page(Page::page_addr_t addr) noexcept;
 
     // BST by pages pointer as a key
     using RegionsTree = RedBlackTree<
@@ -61,12 +76,16 @@ namespace pmm
     extern RegionsTree::RBTreeHead memory_regions;
 
     // Sorted array of memory regions by start_addr
-    extern klib::vector<PageArrayDescriptor> phys_memory_regions;
+    extern PageArrayDescriptor *phys_memory_regions;
+    extern size_t phys_memory_regions_count;
+    extern size_t phys_memory_regions_capacity;
 
     using PageLL = CircularDoubleList<Page, &Page::free_region_list>;
 
     inline constexpr auto page_lists = 30 - PAGE_ORDER; // 1GB max allocation
     extern PageLL free_pages_list[page_lists];
+
+    extern bool pmm_fully_initialized;
 
 } // namespace pmm
 } // namespace kernel

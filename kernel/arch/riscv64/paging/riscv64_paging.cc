@@ -31,7 +31,6 @@
 
 #include <assert.h>
 #include <exceptions.hh>
-#include <kern_logger/kern_logger.hh>
 #include <memory/pmm.hh>
 #include <memory/mem_object.hh>
 #include <memory/temp_mapper.hh>

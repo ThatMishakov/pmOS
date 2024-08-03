@@ -87,8 +87,8 @@ Page_Descriptor Page_Descriptor::allocate_page(u8 alignment_log)
     if (p == nullptr)
         throw Kern_Exception(-ENOMEM, "Failed to allocate page");
 
-    p->type = Page::PageType::Allocated;
-    p->l = {};
+    p->type       = Page::PageType::Allocated;
+    p->l          = {};
     p->l.refcount = 1;
 
     return Page_Descriptor(p);
@@ -102,8 +102,8 @@ Page_Descriptor Page_Descriptor::allocate_page_zeroed(u8 alignment_log)
     if (p == nullptr)
         throw Kern_Exception(-ENOMEM, "Failed to allocate page");
 
-    p->type = Page::PageType::Allocated;
-    p->l = {};
+    p->type       = Page::PageType::Allocated;
+    p->l          = {};
     p->l.refcount = 1;
 
     Temp_Mapper_Obj<char> mapping(request_temp_mapper());
@@ -113,11 +113,7 @@ Page_Descriptor Page_Descriptor::allocate_page_zeroed(u8 alignment_log)
     return Page_Descriptor(p);
 }
 
-
-Page_Descriptor::~Page_Descriptor()
-{
-    try_free_page();
-}
+Page_Descriptor::~Page_Descriptor() { try_free_page(); }
 
 Page_Descriptor::Page_Descriptor(Page_Descriptor &&p) noexcept: page_struct_ptr(p.page_struct_ptr)
 {
@@ -142,6 +138,7 @@ void Page_Descriptor::try_free_page() noexcept
 Page_Descriptor Page_Descriptor::create_from_allocated(Page::page_addr_t phys_addr)
 {
     auto s = find_page_struct(phys_addr);
+    assert(s.page_struct_ptr);
     __atomic_sub_fetch(&s.page_struct_ptr->l.refcount, 1, __ATOMIC_SEQ_CST);
     return s;
 }
@@ -151,10 +148,10 @@ Page_Descriptor Page_Descriptor::create_empty() noexcept
     klib::unique_ptr<Page> new_page_struct = klib::make_unique<Page>();
     if (!new_page_struct)
         return Page_Descriptor::none();
-    
-    new_page_struct->type                  = Page::PageType::Allocated;
-    new_page_struct->flags = Page::FLAG_NO_PAGE;
-    new_page_struct->l.refcount              = 1;
+
+    new_page_struct->type       = Page::PageType::Allocated;
+    new_page_struct->flags      = Page::FLAG_NO_PAGE;
+    new_page_struct->l.refcount = 1;
 
     return Page_Descriptor(new_page_struct.release());
 }
@@ -184,9 +181,10 @@ void release_page(Page *page) noexcept
     if (not page->has_physical_page()) {
         delete page;
     } else {
-        RCU_Head &rcu = page->rcu_state.rcu_h;
-        rcu.rcu_func = Page::rcu_callback;
-        rcu.rcu_next = nullptr;
+        page->type                    = Page::PageType::PendingFree;
+        RCU_Head &rcu                 = page->rcu_state.rcu_h;
+        rcu.rcu_func                  = Page::rcu_callback;
+        rcu.rcu_next                  = nullptr;
         page->rcu_state.pages_to_free = 1;
 
         get_cpu_struct()->paging_rcu_cpu.push(&rcu);
