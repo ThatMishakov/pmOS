@@ -96,7 +96,7 @@ protected:
 class x86_4level_Page_Table: public x86_Page_Table
 {
 public:
-    x86_PAE_Entry *pml4_phys = nullptr;
+    u64 pml4_phys = -1UL;
 
     virtual u64 get_cr3() const override { return (u64)pml4_phys; }
 
@@ -113,7 +113,7 @@ public:
     // Maps the page with the appropriate permissions
     virtual void map(u64 page_addr, u64 virt_addr, Page_Table_Argumments arg) override;
 
-    virtual void map(Page_Descriptor page, u64 virt_addr, Page_Table_Argumments arg) override;
+    virtual void map(kernel::pmm::Page_Descriptor page, u64 virt_addr, Page_Table_Argumments arg) override;
 
     virtual void invalidate(u64 virt_addr, bool free) override;
 
@@ -195,10 +195,6 @@ protected:
 };
 
 const u16 rec_map_index = 509;
-
-// Tries to assign a page using recursive mappings. Returns result
-kresult_t kernel_get_page(u64 virtual_addr, Page_Table_Argumments arg);
-u64 kernel_get_page_zeroed(u64 virtual_addr, Page_Table_Argumments arg);
 
 // Return true if mapped the page successfully
 void map(u64 cr3, u64 physical_addr, u64 virtual_addr, Page_Table_Argumments arg);

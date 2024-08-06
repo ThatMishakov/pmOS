@@ -35,16 +35,18 @@
 #include <exceptions.hh>
 #include <kern_logger/kern_logger.hh>
 #include <memory/paging.hh>
-#include <memory/virtmem.hh>
+#include <memory/vmm.hh>
 #include <utils.hh>
 #include <x86_asm.hh>
 #include <x86_utils.hh>
+
+using namespace kernel;
 
 void *apic_mapped_addr = nullptr;
 
 void map_apic()
 {
-    apic_mapped_addr = kernel_space_allocator.virtmem_alloc(1);
+    apic_mapped_addr = vmm::kernel_space_allocator.virtmem_alloc(1);
     map_kernel_page(apic_base, apic_mapped_addr, {1, 1, 0, 0, 0, PAGE_SPECIAL});
 }
 

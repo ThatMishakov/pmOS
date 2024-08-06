@@ -239,20 +239,21 @@ bool kernel::pmm::add_page_array(Page::page_addr_t start_addr, u64 size, Page *p
 }
 
 template<typename RandomIterator, class T, class Compare>
-static RandomIterator lower_or_equal(RandomIterator begin, RandomIterator end, T val, Compare cmp) noexcept
+static RandomIterator lower_or_equal(RandomIterator begin, RandomIterator end, T val,
+                                     Compare cmp) noexcept
 {
-    RandomIterator left = begin;
+    RandomIterator left  = begin;
     RandomIterator right = end;
 
     RandomIterator result = begin;
 
     while (left < right) {
         RandomIterator mid = left + (right - left) / 2;
-        if (cmp(*mid, val)) {
-            result = mid;
-            left = mid + 1;
-        } else {
+        if (cmp(val, *mid)) {
             right = mid;
+        } else {
+            result = mid;
+            left   = mid + 1;
         }
     }
 
@@ -295,17 +296,17 @@ void kernel::pmm::free_page(Page *p) noexcept
     }
 
     // Create free entry
-    p->type = Page::PageType::Free;
-    p->free_region_head    = {};
+    p->type                  = Page::PageType::Free;
+    p->free_region_head      = {};
     p->free_region_head.size = num_of_pages;
-    p->flags = 0;
+    p->flags                 = 0;
 
     // Coalesce region before the pages
     size_t coalesce_old_size = -1UL;
     auto region_before       = p - 1;
     if (region_before->type == Page::PageType::Free) {
         p -= region_before->free_region_head.size;
-        
+
         assert(p->type == Page::PageType::Free);
         assert(p->free_region_head.size == region_before->free_region_head.size);
 
@@ -327,7 +328,7 @@ void kernel::pmm::free_page(Page *p) noexcept
 
     // I am certainly not very good at naming variables
     if (coalesce_old_size == -1UL) {
-        auto order               = log2(p->free_region_head.size);
+        auto order = log2(p->free_region_head.size);
         if (order >= page_lists)
             order = page_lists - 1;
         free_pages_list[order].push_front(p);
@@ -340,8 +341,7 @@ void kernel::pmm::free_page(Page *p) noexcept
         if (new_order >= page_lists)
             new_order = page_lists - 1;
 
-        if (old_order != (page_lists - 1) and
-            old_order < new_order) {
+        if (old_order != (page_lists - 1) and old_order < new_order) {
 
             free_pages_list[old_order].remove(p);
             free_pages_list[new_order].push_front(p);
@@ -370,7 +370,7 @@ Page *kernel::pmm::find_page(Page::page_addr_t addr) noexcept
         return nullptr;
 
     auto it = lower_or_equal(phys_memory_regions_begin(), phys_memory_regions_end(), addr,
-                          [](const auto &a, const auto &b) { return a.start_addr < b; });
+                             [](const auto &a, const auto &b) { return a < b.start_addr; });
     if (it == phys_memory_regions_end())
         --it;
 
@@ -413,6 +413,8 @@ Page::page_addr_t alloc_pages_from_temp_pool(size_t pages) noexcept;
 
 Page::page_addr_t kernel::pmm::get_memory_for_kernel(size_t pages) noexcept
 {
+    assert(pages > 0);
+
     if (!pmm_fully_initialized) [[unlikely]] {
         return alloc_pages_from_temp_pool(pages);
     }
@@ -462,7 +464,7 @@ Page *kernel::pmm::alloc_pages(size_t count, bool /* contiguous */) noexcept
             auto p = &free_pages_list[i].front();
             if (p->free_region_head.size > count) {
                 p->free_region_head.size -= count;
-                auto t                   = p + p->free_region_head.size - 1;
+                auto t = p + p->free_region_head.size - 1;
 
                 t->free_region_head.size = p->free_region_head.size;
                 t->type                  = Page::PageType::Free;
@@ -480,6 +482,7 @@ Page *kernel::pmm::alloc_pages(size_t count, bool /* contiguous */) noexcept
             }
 
             p->type                          = Page::PageType::AllocatedPending;
+            p->flags                         = 0;
             p->pending_alloc_head.size_pages = count;
             p->pending_alloc_head.phys_addr  = p->get_phys_addr();
             p->pending_alloc_head.next       = nullptr;

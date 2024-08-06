@@ -36,11 +36,13 @@
 #include <interrupts/interrupts.hh>
 #include <kern_logger/kern_logger.hh>
 #include <memory/palloc.hh>
-#include <memory/virtmem.hh>
+#include <memory/vmm.hh>
 #include <processes/syscalls.hh>
 #include <sched/sched.hh>
 #include <sched/timers.hh>
 #include <x86_asm.hh>
+
+using namespace kernel;
 
 void program_syscall()
 {
@@ -108,7 +110,7 @@ void init_per_cpu()
     enable_apic();
     enable_sse();
 
-    void *temp_mapper_start = kernel_space_allocator.virtmem_alloc_aligned(16, 4);
+    void *temp_mapper_start = vmm::kernel_space_allocator.virtmem_alloc_aligned(16, 4);
     c->temp_mapper          = x86_PAE_Temp_Mapper(temp_mapper_start, getCR3());
 }
 
@@ -139,7 +141,7 @@ klib::vector<u64> initialize_cpus(const klib::vector<u64> &lapic_ids)
         init_idle(c);
         c->current_task = c->idle_task;
 
-        void *temp_mapper_start = kernel_space_allocator.virtmem_alloc_aligned(16, 4);
+        void *temp_mapper_start = vmm::kernel_space_allocator.virtmem_alloc_aligned(16, 4);
         c->temp_mapper          = x86_PAE_Temp_Mapper(temp_mapper_start, getCR3());
 
         c->kernel_stack_top[-1] = (u64)c;

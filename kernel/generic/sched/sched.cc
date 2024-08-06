@@ -143,8 +143,6 @@ void CPU_Info::atomic_timer_queue_push(u64 fire_on_core_ticks, const klib::share
 
 extern klib::shared_ptr<Arch_Page_Table> idle_page_table;
 
-
-#include <kern_logger/kern_logger.hh>
 void TaskDescriptor::switch_to()
 {
     CPU_Info *c = get_cpu_struct();
