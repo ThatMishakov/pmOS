@@ -221,8 +221,10 @@ void init_acpi()
 
     if (acpi_revision == -1) {
         printf("Warning: Did not initialize ACPI\n");
-        return;
     }
+
+    init_pci();
+
 
     int i = acpi_init((uacpi_phys_addr)rsdp_desc);
     if (i != 0) {

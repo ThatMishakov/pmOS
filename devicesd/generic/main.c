@@ -93,9 +93,8 @@ int main(int argc, char **argv)
         main_port = req.port;
     }
 
-    init_acpi();
     init_dtb();
-    init_pci();
+    init_acpi();
     init_serial();
 
     // init_ioapic();
