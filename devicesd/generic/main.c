@@ -160,6 +160,12 @@ int main(int argc, char **argv)
                 IPC_Request_Serial *m = (IPC_Request_Serial *)msg_buff;
                 request_serial(&msg, m);
                 break;
+            case IPC_Request_PCI_Devices_NUM:
+                request_pci_devices(&msg, (IPC_Request_PCI_Devices *)msg_buff);
+                break;
+            case IPC_Request_PCI_Device_NUM:
+                request_pci_device(&msg, (IPC_Request_PCI_Device *)msg_buff);
+                break;
             default:
                 printf("[devicesd] Warning: Recieved unknown message %x from PID %li\n",
                        ((IPC_Generic_Msg *)msg_buff)->type, msg.sender);

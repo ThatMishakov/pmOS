@@ -136,6 +136,66 @@ typedef struct IPC_Serial_Reply {
     uint8_t reserved[7];
 } IPC_Serial_Reply;
 
+#define IPC_Request_PCI_Devices_NUM 0x08
+
+// Descriptor for PCI device
+// 0xffff means wildcard, otherwise the values are compared
+struct IPC_PCIDevice {
+    uint16_t vendor_id;
+    uint16_t device_id;
+    uint8_t class_code;
+    uint8_t subclass;
+    uint8_t prog_if;
+    uint8_t reserved;
+};
+
+typedef struct IPC_Request_PCI_Devices {
+    uint32_t type; // IPC_Request_PCI_Devices_NUM
+    uint32_t flags;
+    uint64_t reply_port;
+    struct IPC_PCIDevice devices[];
+} IPC_Request_PCI_Devices;
+
+#define IPC_Request_PCI_Devices_Reply_NUM 0x09
+
+struct IPC_PCIDeviceLocation {
+    uint16_t group;
+    uint8_t bus;
+    uint8_t device;
+    uint8_t function;
+    uint8_t reserved;
+};
+
+typedef struct IPC_Request_PCI_Devices_Reply {
+    uint32_t type; // IPC_Request_PCI_Devices_Reply_NUM
+    uint32_t flags;
+    int64_t result_num_of_devices; // Negative value on error, number of devices otherwise
+    struct IPC_PCIDeviceLocation devices[];
+} IPC_Request_PCI_Devices_Reply;
+
+#define IPC_Request_PCI_Device_NUM 0x0A
+typedef struct IPC_Request_PCI_Device {
+    uint32_t type; // IPC_Request_PCI_Device_NUM
+    uint32_t flags;
+    uint64_t reply_port;
+    uint16_t group;
+    uint8_t bus;
+    uint8_t device;
+    uint8_t function;
+    uint8_t reserved;
+} IPC_Request_PCI_Device;
+
+#define IPC_Request_PCI_Device_Reply_NUM 0x0B
+typedef struct IPC_Request_PCI_Device_Reply {
+    uint32_t type; // IPC_Request_PCI_Device_Reply_NUM
+    uint16_t flags;
+    int16_t type_error; // Negative value on error, type of the device otherwise
+    #define IPC_PCI_ACCESS_TYPE_MMIO 0x01
+    #define IPC_PCI_ACCESS_TYPE_IO   0x02
+
+    uint64_t base_address;
+} IPC_Request_PCI_Device_Reply;
+
 #define IPC_Kernel_Interrupt_NUM 0x20
 typedef struct IPC_Kernel_Interrupt {
     uint32_t type;

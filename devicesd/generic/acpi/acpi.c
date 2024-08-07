@@ -226,13 +226,13 @@ void init_acpi()
     init_pci();
 
 
-    int i = acpi_init((uacpi_phys_addr)rsdp_desc);
-    if (i != 0) {
-        printf("Warning: Could not initialize uACPI\n");
-        return;
-    }
-    find_acpi_devices();
-    power_button_init();
+    // int i = acpi_init((uacpi_phys_addr)rsdp_desc);
+    // if (i != 0) {
+    //     printf("Warning: Could not initialize uACPI\n");
+    //     return;
+    // }
+    // find_acpi_devices();
+    // power_button_init();
 
     printf("Walked ACPI tables! ACPI revision: %i\n", acpi_revision);
 }

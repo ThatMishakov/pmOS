@@ -35,6 +35,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <vector.h>
+#include <pmos/ipc.h>
+#include <string.h>
 
 PCIDeviceVector pci_devices = VECTOR_INIT;
 
@@ -171,6 +173,7 @@ void init_pci()
         g->next = groups;
         groups  = g;
 
+        g->base_addr        = ecam_base;
         g->base_ptr         = ptr;
         g->group_number     = b->group_number;
         g->start_bus_number = b->start_bus_number;
@@ -203,4 +206,105 @@ int pcicdevice_compare(const void *aa, const void *bb)
     if (a->device != b->device)
         return a->device - b->device;
     return a->function - b->function;
+}
+
+void request_pci_device(Message_Descriptor *desc, IPC_Request_PCI_Device *d)
+{
+    int error = 0;
+
+    struct PCIGroup *g = pci_group_find(d->group);
+    if (!g) {
+        error = -ENOENT;
+        goto err;
+    }
+
+    // Calculate the offset of the device in the configuration space
+    const unsigned long offset = (d->bus << 20) | (d->device << 15) | (d->function << 12);
+
+    IPC_Request_PCI_Device_Reply reply_success = {
+        .type        = IPC_Request_PCI_Device_Reply_NUM,
+        .flags       = 0,
+        .type_error  = IPC_PCI_ACCESS_TYPE_MMIO,
+        .base_address = g->base_addr + offset,
+    };
+
+    result_t result = send_message_port(d->reply_port, sizeof(reply_success), (char *)&reply_success);
+    if (result != 0)
+        printf("Failed to send message in request_pci_device: %li\n", result);
+    return;
+err:
+    IPC_Request_PCI_Device_Reply reply = {
+        .type      = IPC_Request_PCI_Device_Reply_NUM,
+        .flags     = 0,
+        .type_error = error,
+        .base_address = 0,
+    };
+
+    send_message_port(d->reply_port, sizeof(reply), (char *)&reply);
+}
+
+void request_pci_devices(Message_Descriptor *desc, IPC_Request_PCI_Devices *d)
+{
+    size_t requests = (desc->size - sizeof(IPC_Request_PCI_Devices)) / sizeof(struct PCIDevice);
+
+    VECTOR(struct IPC_PCIDeviceLocation) devices = VECTOR_INIT;
+
+    struct PCIDevice dd;
+    int result = 0;
+    VECTOR_FOREACH(pci_devices, dd) {
+        for (int i = 0; i < requests; ++i) {
+            if (d->devices[i].vendor_id != 0xffff &&
+                d->devices[i].vendor_id != dd.vendor_id)
+                continue;
+
+            if (d->devices[i].device_id != 0xffff &&
+                d->devices[i].device_id != dd.device_id)
+                continue;
+
+            if (d->devices[i].class_code != 0xff &&
+                d->devices[i].class_code != dd.class_code)
+                continue;
+
+            if (d->devices[i].subclass != 0xff &&
+                d->devices[i].subclass != dd.subclass)
+                continue;
+
+            // if (d->devices[i].prog_if != 0xff &&
+            //     d->devices[i].prog_if != dd.prog_if)
+            //     continue;
+
+            VECTOR_PUSH_BACK_CHECKED(devices, ((struct IPC_PCIDeviceLocation){
+                                          .group    = dd.group,
+                                          .bus      = dd.bus,
+                                          .device   = dd.device,
+                                          .function = dd.function,
+                                      }), result);
+            if (result != 0)
+                goto error;
+            break;
+        }
+    }
+
+    size_t reply_size = sizeof(IPC_Request_PCI_Devices_Reply) + devices.size * sizeof(struct IPC_PCIDeviceLocation);
+    IPC_Request_PCI_Devices_Reply *reply = alloca(reply_size);
+
+    reply->type = IPC_Request_PCI_Devices_NUM;
+    reply->flags = 0;
+    reply->result_num_of_devices = devices.size;
+    memcpy(reply->devices, devices.data, devices.size * sizeof(struct IPC_PCIDeviceLocation));
+
+    send_message_port(d->reply_port, reply_size, (char *)reply);
+    return;
+error:
+    int e = -errno;
+
+    fprintf(stderr, "Error: Could not allocate IPC_PCIDeviceLocation: %i\n", errno);
+
+    IPC_Request_PCI_Devices_Reply reply_e = {
+        .type                = IPC_Request_PCI_Devices_NUM,
+        .flags               = 0,
+        .result_num_of_devices = e,
+    };
+
+    send_message_port(d->reply_port, sizeof(reply_e), (char *)&reply_e);
 }
