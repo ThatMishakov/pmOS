@@ -123,6 +123,13 @@ static constexpr uint32_t AHCI_BOHC_SOOE = 1 << 2;
 static constexpr uint32_t AHCI_BOHC_OOC  = 1 << 3;
 static constexpr uint32_t AHCI_BOHC_BB   = 1 << 4;
 
+static constexpr uint32_t SATA_SIG_ATA   = 0x00000101;
+static constexpr uint32_t SATA_SIG_ATAPI = 0xEB140101;
+static constexpr uint32_t SATA_SIG_PM    = 0x96690101;
+static constexpr uint32_t SATA_SIG_SEMB  = 0xC33C0101;
+
+static constexpr uint32_t AHCI_MAX_PORTS = 32;
+
 void reset_controller()
 {
     printf("Resetting AHCI controller\n");
@@ -147,6 +154,44 @@ void reset_controller()
 
     printf("AHCI controller reset\n");
 }
+
+int num_slots       = 0;
+int interface_speed = 0;
+
+static constexpr uint32_t FIS_RECIEVE_AREA_SIZE = 0x1000;
+
+static constexpr uint32_t PRDT_OFFSET           = 0x80;
+static constexpr uint32_t PRDT_SIZE_BYTES       = 0x10;
+static constexpr uint32_t COMMAND_TABLE_ENTRIES = 8;
+static constexpr uint32_t COMMAND_TABLE_SIZE    = // 0x100
+    PRDT_OFFSET + PRDT_SIZE_BYTES * COMMAND_TABLE_ENTRIES;
+
+struct CommandListStructure {
+    // 4.2.2 of AHCI spec
+    uint32_t descriptor_information;
+    uint32_t PRDBC; // Physical Region Descriptor Byte Count
+    uint32_t command_table_base_low;
+    uint32_t command_table_base_high;
+
+    uint32_t reserved[4];
+};
+
+struct AHCIPort {
+    int index;
+    uint64_t dma_phys_base           = -1;
+    volatile uint32_t *dma_virt_base = nullptr;
+
+    static constexpr uint32_t recieved_fis_offset = 0x0;
+    // Put it here for FIS-based switching
+    static constexpr uint32_t command_list_offset = 0x1000;
+
+    // 1 command table per command list, with 8 entries max
+    static constexpr uint32_t command_table_offset = 0x1000 + 0x400;
+
+    volatile uint32_t *get_port_register();
+};
+
+std::vector<AHCIPort> ports;
 
 void ahci_handle(PCIDescriptor d)
 {
@@ -173,7 +218,8 @@ void ahci_handle(PCIDescriptor d)
 
     bar5 &= 0xfffffff0;
 
-    auto mem_req = create_phys_map_region(0, nullptr, 8192, PROT_READ | PROT_WRITE, (void *)(size_t)bar5);
+    auto mem_req =
+        create_phys_map_region(0, nullptr, 8192, PROT_READ | PROT_WRITE, (void *)(size_t)bar5);
     if (mem_req.result != SUCCESS) {
         printf("Failed to map AHCI controller's memory\n");
         return;
@@ -188,11 +234,19 @@ void ahci_handle(PCIDescriptor d)
     uint32_t cap = ahci_virt_base[0];
     printf("AHCI Capabilities: 0x%x\n", cap);
 
+    bool s64a = !!(cap & (1 << 31));
+    if (!s64a) {
+        printf("AHCI controller does not support 64-bit addressing\n");
+        return;
+    }
+
+    uint32_t cap2 = ahci_virt_base[9];
+    printf("AHCI Capabilities 2: 0x%x\n", cap2);
+
     uint32_t ahci_version = ahci_virt_base[4];
     printf("AHCI Version: 0x%x\n", ahci_version);
 
     // BIOS handoff
-    uint32_t cap2 = ahci_virt_base[9];
     if (cap2 & AHCI_CAP2_BOH) {
         // 10.6.3 of AHCI spec
         printf("BIOS handoff supported... performing it\n");
@@ -235,9 +289,60 @@ void ahci_handle(PCIDescriptor d)
     ghc |= AHCI_GHC_IE;
     ahci_virt_base[1] = ghc;
 
+    cap = ahci_virt_base[0];
+
+    num_slots       = (cap >> 8) & 0x1f;
+    interface_speed = (cap >> 20) & 0xf;
+
     printf("AHCI controller initialized\n");
 
     // TODO: Initialize ports
+    uint32_t pi = ahci_virt_base[4];
+    printf("AHCI Ports Implemented: 0x%x\n", pi);
+
+    for (unsigned i = 0; i < AHCI_MAX_PORTS; ++i) {
+        if (pi & (1 << i)) {
+            printf("Port %i implemented\n", i);
+            ports.push_back({.index = (int)i});
+        }
+    }
+
+    for (auto &port: ports) {
+        size_t mem_size = port.command_table_offset + num_slots * COMMAND_TABLE_SIZE;
+        // TODO: Align to page size constants
+        mem_size        = (mem_size + 0xfff) & ~0xfff;
+
+        auto request =
+            create_normal_region(0, nullptr, mem_size, PROT_READ | PROT_WRITE | CREATE_FLAG_DMA);
+        if ((long)request.result < 0) {
+            printf("Failed to allocate memory for AHCI: %li (%s)\n", request.result,
+                   strerror(-request.result));
+            exit(1);
+        }
+
+        auto phys_addr = get_page_phys_address(0, request.virt_addr, 0);
+        if ((long)phys_addr.result < 0) {
+            printf("Could not get physical address for AHCI: %li (%s)\n", phys_addr.result,
+                   strerror(-request.result));
+            exit(1);
+        }
+
+        port.dma_phys_base = phys_addr.phys_addr;
+        port.dma_virt_base = reinterpret_cast<volatile uint32_t*>(request.virt_addr);
+
+        printf("Allocated memory for port %i: 0x%lx - 0x%lx -> 0x%lx\n", port.index, port.dma_phys_base, port.dma_phys_base + mem_size, port.dma_virt_base);
+
+        for (int i = 0; i < num_slots; ++i) {
+            auto &command_list = reinterpret_cast<volatile CommandListStructure *>(
+                port.dma_virt_base + port.command_list_offset / sizeof(uint32_t))[i];
+            command_list.descriptor_information = 0x80000000;
+            command_list.PRDBC                  = 0;
+            uint64_t command_table_phys_base =
+                port.dma_phys_base + port.command_table_offset + i * COMMAND_TABLE_SIZE;
+            command_list.command_table_base_low  = command_table_phys_base & 0xffffffff;
+            command_list.command_table_base_high = command_table_phys_base >> 32;
+        }
+    }
 }
 
 int main()

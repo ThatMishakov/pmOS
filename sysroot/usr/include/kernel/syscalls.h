@@ -85,4 +85,6 @@
 #define SYSCALL_PAUSE_TASK         46
 #define SYSCALL_RESUME_TASK        47
 
+#define SYSCALL_GET_PAGE_ADDRESS  48
+
 #endif

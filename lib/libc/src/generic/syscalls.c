@@ -236,3 +236,10 @@ result_t release_memory_range(uint64_t task_id, void *start, size_t size)
 {
     return pmos_syscall(SYSCALL_UNMAP_RANGE, task_id, start, size).result;
 }
+
+phys_addr_request_t get_page_phys_address(uint64_t task_id, void *region, uint64_t flags)
+{
+    syscall_r r           = pmos_syscall(SYSCALL_GET_PAGE_ADDRESS, task_id, region, flags);
+    phys_addr_request_t t = {r.result, r.value};
+    return t;
+}

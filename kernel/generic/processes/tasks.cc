@@ -31,6 +31,7 @@
 #include "idle.hh"
 
 #include <assert.h>
+#include <errno.h>
 #include <exceptions.hh>
 #include <kern_logger/kern_logger.hh>
 #include <kernel/elf.h>
@@ -39,7 +40,6 @@
 #include <pmos/tls.h>
 #include <sched/defs.hh>
 #include <sched/sched.hh>
-#include <errno.h>
 
 klib::shared_ptr<TaskDescriptor>
     TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel level)
@@ -90,7 +90,7 @@ u64 TaskDescriptor::init_stack()
     this->page_table->atomic_create_normal_region(stack_page_start, stack_size,
                                                   Page_Table::Protection::Writeable |
                                                       Page_Table::Protection::Readable,
-                                                  true, stack_region_name, -1);
+                                                  true, false, stack_region_name, -1);
 
     // Set new rsp
     this->regs.stack_pointer() = stack_end;
@@ -342,7 +342,7 @@ bool TaskDescriptor::load_elf(klib::shared_ptr<Mem_Object> elf, klib::string nam
         const u64 pa_size = (size + 0xFFF) & ~0xFFFUL;
         u64 tls_virt      = table->atomic_create_normal_region(
             0, pa_size, Page_Table::Protection::Readable | Page_Table::Protection::Writeable, false,
-            name + "_tls", 0);
+            false, name + "_tls", 0);
 
         auto r = table->atomic_copy_to_user(tls_virt, tls_data, size);
         if (!r)
@@ -389,7 +389,7 @@ bool TaskDescriptor::load_elf(klib::shared_ptr<Mem_Object> elf, klib::string nam
 
     const u64 pos = table->atomic_create_normal_region(
         0, tag_size_page, Page_Table::Protection::Readable | Page_Table::Protection::Writeable,
-        false, name + "_load_tags", 0);
+        false, false, name + "_load_tags", 0);
     auto b = table->atomic_copy_to_user(pos, &(load_stack[0]), size);
     if (!b)
         return false;

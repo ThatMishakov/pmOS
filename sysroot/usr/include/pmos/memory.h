@@ -51,6 +51,11 @@ typedef struct mem_request_ret_t {
                      ///< was not successfull.
 } mem_request_ret_t;
 
+typedef struct phys_addr_request_t {
+    result_t result;
+    uint64_t phys_addr; // Physical (page) address of the request
+} phys_addr_request_t;
+
 /// pmOS memory object identificator
 typedef unsigned long mem_object_t;
 
@@ -94,6 +99,8 @@ struct task_register_set {
 };
 
 #define CREATE_FLAG_FIXED 0x08
+// Allocates contiguous memory suitable for DMA, and maps it as NC
+#define CREATE_FLAG_DMA   0x10
 
 #ifdef __STDC_HOSTED__
 /// @brief Creates a normal page region
@@ -113,7 +120,7 @@ struct task_register_set {
 /// @param size The size in bytes of the new region. The size must be page-alligned and not 0,
 /// otherwise the error will be returned
 /// @param access An OR-conjugated list of the argument. Takes PROT_READ, PROT_WRITE and PROT_EXEC
-/// as access bytes and CREATE_FLAG_FIXED
+/// as access bytes, CREATE_FLAG_FIXED and CREATE_FLAG_DMA
 ///               if addr_start should always be obeyed.
 /// @returns mem_request_ret_t structure. Result indicated if the operation was successfull and
 /// error otherwise. If the operation was successfull,
@@ -179,6 +186,8 @@ mem_request_ret_t transfer_region(uint64_t to_page_table, void *region, void *de
 result_t release_region(uint64_t pid, void *region);
 
 result_t release_memory_range(uint64_t pid, void *start, size_t len);
+
+phys_addr_request_t get_page_phys_address(uint64_t task_id, void *region, uint64_t flags);
 
 typedef uint64_t pmos_pagetable_t;
 typedef struct page_table_req_ret_t {

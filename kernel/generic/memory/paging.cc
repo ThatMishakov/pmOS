@@ -42,6 +42,8 @@
 #include <types.hh>
 #include <utils.hh>
 
+using namespace kernel;
+
 Page_Table::~Page_Table()
 {
     for (auto &i: paging_regions)
@@ -61,19 +63,75 @@ Page_Table::~Page_Table()
 }
 
 u64 Page_Table::atomic_create_normal_region(u64 page_aligned_start, u64 page_aligned_size,
-                                            unsigned access, bool fixed, klib::string name,
-                                            u64 pattern)
+                                            unsigned access, bool fixed, bool dma,
+                                            klib::string name, u64 pattern)
 {
     Auto_Lock_Scope scope_lock(lock);
 
     u64 start_addr = find_region_spot(page_aligned_start, page_aligned_size, fixed);
     klib::unique_ptr<Generic_Mem_Region> region = new Private_Normal_Region(
         start_addr, page_aligned_size, klib::forward<klib::string>(name), this, access, pattern);
+    auto r = region.get();
 
     if (fixed)
         release_in_range(start_addr, page_aligned_size);
 
     paging_regions.insert(region.release());
+
+    if (dma) {
+        size_t count    = page_aligned_size / PAGE_SIZE;
+        pmm::Page *page = pmm::alloc_pages(count, true);
+        if (page == nullptr) {
+            r->prepare_deletion();
+            paging_regions.erase(r);
+            r->rcu_free();
+            throw Kern_Exception(-ENOMEM, "atomic_create_normal_region no memory");
+        }
+
+        assert(page->type == pmm::Page::PageType::AllocatedPending);
+        assert(page->pending_alloc_head.size_pages == count);
+        assert(!(page->flags & pmm::Page::FLAG_NO_PAGE));
+
+        Page_Table_Argumments pta = {
+            .readable           = !!(access & Generic_Mem_Region::Readable),
+            .writeable          = !!(access & Generic_Mem_Region::Writeable),
+            .user_access        = true,
+            .global             = false,
+            .execution_disabled = !(access & Generic_Mem_Region::Executable),
+            .extra              = PAGING_FLAG_STRUCT_PAGE,
+            .cache_policy       = Memory_Type::MemoryNoCache,
+        };
+
+        size_t i = 0;
+        try {
+            for (; i < count; i++) {
+                pmm::Page *n = page;
+                ++page;
+                *page = *n;
+                page->pending_alloc_head.size_pages--;
+                page->pending_alloc_head.phys_addr += PAGE_SIZE;
+
+                n->type       = pmm::Page::PageType::Allocated;
+                n->l.refcount = 1;
+
+                auto pp = pmm::Page_Descriptor(n);
+
+                map(klib::move(pp), start_addr + i * PAGE_SIZE, pta);
+            }
+        } catch (...) {
+            size_t size_to_invalidate = i * PAGE_SIZE;
+            invalidate_range(start_addr + size_to_invalidate,
+                             page_aligned_size - size_to_invalidate, true);
+
+            r->prepare_deletion();
+            paging_regions.erase(r);
+            r->rcu_free();
+
+            pmm::release_page(page);
+
+            throw;
+        }
+    }
 
     return start_addr;
 }

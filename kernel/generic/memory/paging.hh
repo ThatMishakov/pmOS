@@ -177,7 +177,7 @@ public:
      * @see find_region_spot()
      */
     u64 /* page_start */ atomic_create_normal_region(u64 page_aligned_start, u64 page_aligned_size,
-                                                     unsigned access, bool fixed, klib::string name,
+                                                     unsigned access, bool fixed, bool dma, klib::string name,
                                                      u64 pattern);
 
     /**

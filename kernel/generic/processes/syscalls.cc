@@ -57,7 +57,7 @@
 #endif
 
 using syscall_function = void (*)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t);
-klib::array<syscall_function, 48> syscall_table = {
+klib::array<syscall_function, 49> syscall_table = {
     syscall_exit,
     get_task_id,
     syscall_create_process,
@@ -110,6 +110,7 @@ klib::array<syscall_function, 48> syscall_table = {
     syscall_kill_task,
     syscall_pause_task,
     syscall_resume_task,
+    syscall_get_page_address,
 };
 
 extern "C" void syscall_handler()
@@ -712,7 +713,7 @@ void syscall_create_normal_region(u64 pid, u64 addr_start, u64 size, u64 access,
 
     syscall_ret_low(current)  = SUCCESS;
     syscall_ret_high(current) = dest_task->page_table->atomic_create_normal_region(
-        addr_start, size, access & 0x07, access & 0x08, "anonymous region", 0);
+        addr_start, size, access & 0x07, access & 0x08, access & 0x10, "anonymous region", 0);
 }
 
 void syscall_create_phys_map_region(u64 pid, u64 addr_start, u64 size, u64 access, u64 phys_addr,
@@ -1206,4 +1207,30 @@ void syscall_resume_task(u64 task_id, u64, u64, u64, u64, u64)
         return;
     else
         throw Kern_Exception(-EINVAL, "can't resume task");
+}
+
+void syscall_get_page_address(u64 task_id, u64 page_base, u64 flags, u64, u64, u64)
+{
+    if (page_base & (PAGE_SIZE - 1))
+        throw Kern_Exception(-EINVAL, "page_base is not page aligned");
+
+    auto task = task_id == 0 ? get_current_task() : get_task_throw(task_id);
+
+    if (task->status == TaskStatus::TASK_UNINIT)
+        throw Kern_Exception(-EINVAL, "task is not initialized");
+
+    syscall_ret_low(task) = SUCCESS;
+
+    auto table = task->page_table;
+    if (not table)
+        throw Kern_Exception(-ENOENT, "task has no page table");
+    
+    Auto_Lock_Scope lock(table->lock);
+
+    auto b = table->prepare_user_page(page_base, 0);
+    if (not b)
+        return;
+
+    auto mapping = table->get_page_mapping(page_base);
+    syscall_ret_high(task) = mapping.page_addr;
 }
