@@ -86,27 +86,36 @@ std::vector<PCIDescriptor> get_ahci_controllers()
     auto reply = (IPC_Request_PCI_Devices_Reply *)message;
     if (reply->type != IPC_Request_PCI_Devices_NUM) {
         printf("Invalid reply type\n");
+        free(message);
         return {};
     }
 
     if (reply->result_num_of_devices < 0) {
         printf("Failed to get PCI devices: %li (%s)\n", reply->result_num_of_devices,
                strerror(-reply->result_num_of_devices));
+        free(message);
         return {};
     }
 
-    std::vector<PCIDescriptor> controllers;
-    for (int i = 0; i < reply->result_num_of_devices; ++i) {
-        auto &device = reply->devices[i];
-        controllers.push_back({
-            .group    = device.group,
-            .bus      = device.bus,
-            .device   = device.device,
-            .function = device.function,
-        });
+    try {
+        std::vector<PCIDescriptor> controllers;
+        for (int i = 0; i < reply->result_num_of_devices; ++i) {
+            auto &device = reply->devices[i];
+            controllers.push_back({
+                .group    = device.group,
+                .bus      = device.bus,
+                .device   = device.device,
+                .function = device.function,
+            });
+        }
+        return controllers;
+    } catch (...) {
+        free(message);
+        throw;
     }
 
-    return controllers;
+    free(message);
+    return {};
 }
 
 std::unique_ptr<PCIDevice> ahci_controller = nullptr;
@@ -134,6 +143,7 @@ static constexpr uint32_t SATA_SIG_PM    = 0x96690101;
 static constexpr uint32_t SATA_SIG_SEMB  = 0xC33C0101;
 
 static constexpr uint32_t AHCI_CMD_INDEX = 6;
+static constexpr uint32_t AHCI_TFD_INDEX = 8;
 
 static constexpr uint32_t AHCI_PORT_CMD_ST    = 1 << 0;
 static constexpr uint32_t AHCI_PORT_CMD_SUD   = 1 << 1;
@@ -222,6 +232,7 @@ struct AHCIPort {
         WaitingForIdle1,
         WaitingForIdle2,
         WaitingForReset,
+        WaitingForReady,
     };
 
     State state = State::Unknown;
@@ -246,7 +257,53 @@ struct AHCIPort {
     void wait(int time_ms);
     void react_timer();
     void port_reset_hard();
+
+    void detect_drive();
+
+    enum class DeviceType {
+        None,
+        ATA,
+        ATAPI,
+        PM,
+        SEMB,
+    };
+
+    DeviceType classify_device();
 };
+
+AHCIPort::DeviceType AHCIPort::classify_device()
+{
+    auto port = get_port_register();
+    auto sig  = port[9];
+
+    // According to Linux, only look at the LBA high and mid bits
+    uint8_t lba_high = (sig >> 24) & 0xff;
+    uint8_t lba_mid  = (sig >> 16) & 0xff;
+
+    if (lba_high == 0x96 && lba_mid == 0x69) {
+        return DeviceType::PM;
+    } else if (lba_high == 0xc3 && lba_mid == 0x3c) {
+        return DeviceType::SEMB;
+    } else if (lba_high == 0x00 && lba_mid == 0x00) {
+        return DeviceType::ATA;
+    } else if (lba_high == 0xeb && lba_mid == 0x14) {
+        return DeviceType::ATAPI;
+    } else {
+        return DeviceType::None;
+    }
+
+    return DeviceType::None;
+}
+
+void AHCIPort::detect_drive()
+{
+    // TODO: Move this to a separate ATA library/driver since it's doesn't directly have to do with
+    // AHCI
+
+    state     = State::WaitingForReady;
+    timer_max = pmos_get_time(GET_TIME_NANOSECONDS_SINCE_BOOTUP).value + 30'000'000'000;
+    wait(100);
+}
 
 volatile uint32_t *AHCIPort::get_port_register()
 {
@@ -296,6 +353,38 @@ void AHCIPort::react_timer()
             wait(10);
         }
         break;
+    case State::WaitingForReady: {
+        auto port = get_port_register();
+        auto tfd  = port[AHCI_TFD_INDEX];
+
+        if (tfd & 0x89) {
+            if (timer_max < timer_time) {
+                printf("Drive not ready timed out. TFD: 0x%x\n", tfd);
+            } else {
+                wait(100);
+            }
+        } else {
+            printf("Drive ready at port %i: ", index);
+            auto type = classify_device();
+            switch (type) {
+            case DeviceType::ATA:
+                printf("ATA device\n");
+                break;
+            case DeviceType::ATAPI:
+                printf("ATAPI device\n");
+                break;
+            case DeviceType::PM:
+                printf("Port Multiplier\n");
+                break;
+            case DeviceType::SEMB:
+                printf("Serial Enclosure Management Bridge\n");
+                break;
+            case DeviceType::None:
+                printf("Unknown device\n");
+                break;
+            }
+        }
+    } break;
     default:
         break;
     }
@@ -342,16 +431,11 @@ void AHCIPort::enable_port()
     cmd |= AHCI_PORT_CMD_FRE;
     addr[AHCI_CMD_INDEX] = cmd;
 
-    // Clear PxSERR
-    addr[12] = 0xffffffff;
-
     // Enable interrupts
     // Clear PxIS
     addr[4] = 0xffffffff;
     // Enable all interrupts
     addr[5] = 0xffffffff;
-
-    state = State::Idle;
 
     printf("Port %i in minimal configuration\n", index);
 
@@ -360,15 +444,23 @@ void AHCIPort::enable_port()
         addr[AHCI_CMD_INDEX] = cmd;
     }
 
-    usleep(1000);
+    state = State::Idle;
+
+    // SATA spec 7.2.2:
+    // "wait up to 10 ms for SStatus.DET field = 3h ..."
+    usleep(10'000);
 
     auto det = addr[10] & AHCI_PORT_SSTS_DET_MASK;
     if (det == 0) {
         printf("No device detected on port %i\n", index);
         return;
-    } else {
-        printf("Device detected on port %i\n", index);
     }
+
+    // Clear PxSERR
+    addr[12] = 0xffffffff;
+
+    printf("Device detected on port %i\n", index);
+    detect_drive();
 }
 
 void AHCIPort::port_reset_hard()
@@ -446,17 +538,63 @@ void AHCIPort::wait(int time_ms)
         return;
     }
 
-    timer_time = time.value + time_ms * 1000000;
+    timer_time = time.value + time_ms * 1'000'000;
     timer_tree.insert(this);
 
     if (timer_tree.begin() == this) {
         next_timer_time = timer_time;
-        pmos_request_timer(ahci_port, time_ms);
+        pmos_request_timer(ahci_port, time_ms * 1'000'000);
     } else {
         TimerTree::RBTreeIterator it;
         while ((it = timer_tree.begin())->timer_time < time.value) {
             timer_tree.erase(it);
             it->react_timer();
+        }
+    }
+}
+
+void react_timer()
+{
+    auto current_time = pmos_get_time(GET_TIME_NANOSECONDS_SINCE_BOOTUP);
+    auto it           = timer_tree.begin();
+    while (it != timer_tree.end() && it->timer_time < current_time.value) {
+        timer_tree.erase(it);
+        it->react_timer();
+        it = timer_tree.begin();
+    }
+
+    if (it != timer_tree.end()) {
+        next_timer_time = it->timer_time;
+        int t           = pmos_request_timer(ahci_port, next_timer_time - current_time.value);
+        if (t != 0) {
+            printf("Failed to request timer\n");
+        }
+    }
+}
+
+void ahci_controller_main()
+{
+    while (1) {
+        Message_Descriptor desc;
+        uint8_t *message;
+        auto result = get_message(&desc, &message, ahci_port);
+        if (result != 0) {
+            printf("Failed to get message\n");
+            return;
+        }
+
+        auto request = (IPC_Generic_Msg *)message;
+        std::unique_ptr<IPC_Generic_Msg> request_ptr(request);
+
+        switch (request->type) {
+        case IPC_Timer_Reply_NUM: {
+            // auto reply = (IPC_Timer_Reply *)request;
+            react_timer();
+        } break;
+
+        default:
+            printf("AHCId unknown message type: %i\n", request->type);
+            break;
         }
     }
 }
@@ -618,6 +756,8 @@ void ahci_handle(PCIDescriptor d)
 
         port.init_port();
     }
+
+    ahci_controller_main();
 }
 
 int main()
