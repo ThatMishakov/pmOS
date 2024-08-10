@@ -2,6 +2,7 @@
 
 #include <alloca.h>
 #include <memory>
+#include <pmos/containers/intrusive_bst.hh>
 #include <pmos/helpers.h>
 #include <pmos/interrupts.h>
 #include <pmos/ipc.h>
@@ -32,6 +33,7 @@ pmos_port_t _create_port()
 }
 
 pmos_port_t cmd_port = _create_port();
+pmos_port_t ahci_port;
 
 struct PCIDescriptor {
     int group;
@@ -115,6 +117,9 @@ static constexpr uint32_t AHCI_GHC_IE   = 1 << 1;
 static constexpr uint32_t AHCI_GHC_MRSM = 1 << 2;
 static constexpr uint32_t AHCI_GHC_AE   = 1 << 31;
 
+static constexpr uint32_t AHCI_CAP_S64A = 1 << 31;
+static constexpr uint32_t AHCI_CAP_SSS  = 1 << 27;
+
 static constexpr uint32_t AHCI_CAP2_BOH = 1 << 0;
 
 static constexpr uint32_t AHCI_BOHC_BOS  = 1 << 0;
@@ -127,6 +132,35 @@ static constexpr uint32_t SATA_SIG_ATA   = 0x00000101;
 static constexpr uint32_t SATA_SIG_ATAPI = 0xEB140101;
 static constexpr uint32_t SATA_SIG_PM    = 0x96690101;
 static constexpr uint32_t SATA_SIG_SEMB  = 0xC33C0101;
+
+static constexpr uint32_t AHCI_CMD_INDEX = 6;
+
+static constexpr uint32_t AHCI_PORT_CMD_ST    = 1 << 0;
+static constexpr uint32_t AHCI_PORT_CMD_SUD   = 1 << 1;
+static constexpr uint32_t AHCI_PORT_CMD_POD   = 1 << 2;
+static constexpr uint32_t AHCI_PORT_CMD_CLO   = 1 << 3;
+static constexpr uint32_t AHCI_PORT_CMD_FRE   = 1 << 4;
+static constexpr uint32_t AHCI_PORT_CMD_CCS   = 1 << 8;
+static constexpr uint32_t AHCI_PORT_CMD_MSS   = 1 << 13;
+static constexpr uint32_t AHCI_PORT_CMD_FR    = 1 << 14;
+static constexpr uint32_t AHCI_PORT_CMD_CR    = 1 << 15;
+static constexpr uint32_t AHCI_PORT_CMD_CPS   = 1 << 16;
+static constexpr uint32_t AHCI_PORT_CMD_PMA   = 1 << 17;
+static constexpr uint32_t AHCI_PORT_CMD_HPCP  = 1 << 18;
+static constexpr uint32_t AHCI_PORT_CMD_MPSP  = 1 << 19;
+static constexpr uint32_t AHCI_PORT_CMD_CPD   = 1 << 20;
+static constexpr uint32_t AHCI_PORT_CMD_ESP   = 1 << 21;
+static constexpr uint32_t AHCI_PORT_CMD_FBSCP = 1 << 22;
+static constexpr uint32_t AHCI_PORT_CMD_APSTE = 1 << 23;
+static constexpr uint32_t AHCI_PORT_CMD_ATAPI = 1 << 24;
+static constexpr uint32_t AHCI_PORT_CMD_DLAE  = 1 << 25;
+static constexpr uint32_t AHCI_PORT_CMD_ALPE  = 1 << 26;
+static constexpr uint32_t AHCI_PORT_CMD_ASP   = 1 << 27;
+static constexpr uint32_t AHCI_PORT_CMD_ICC   = 1 << 28;
+
+static constexpr uint32_t AHCI_PORT_SSTS_DET_MASK = 0xf;
+
+static constexpr uint32_t AHCI_PORT_SCTL_DET_MASK = 0xf;
 
 static constexpr uint32_t AHCI_MAX_PORTS = 32;
 
@@ -155,8 +189,9 @@ void reset_controller()
     printf("AHCI controller reset\n");
 }
 
-int num_slots       = 0;
-int interface_speed = 0;
+int num_slots         = 0;
+int interface_speed   = 0;
+bool staggered_spinup = false;
 
 static constexpr uint32_t FIS_RECIEVE_AREA_SIZE = 0x1000;
 
@@ -181,6 +216,20 @@ struct AHCIPort {
     uint64_t dma_phys_base           = -1;
     volatile uint32_t *dma_virt_base = nullptr;
 
+    enum class State {
+        Unknown = 0,
+        Idle,
+        WaitingForIdle1,
+        WaitingForIdle2,
+        WaitingForReset,
+    };
+
+    State state = State::Unknown;
+
+    pmos::containers::RBTreeNode<AHCIPort> timer_node = {};
+    uint64_t timer_time                               = 0;
+    uint64_t timer_max                                = 0;
+
     static constexpr uint32_t recieved_fis_offset = 0x0;
     // Put it here for FIS-based switching
     static constexpr uint32_t command_list_offset = 0x1000;
@@ -189,9 +238,228 @@ struct AHCIPort {
     static constexpr uint32_t command_table_offset = 0x1000 + 0x400;
 
     volatile uint32_t *get_port_register();
+
+    void init_port();
+    void enable_port();
+    void port_idle();
+    void port_idle2();
+    void wait(int time_ms);
+    void react_timer();
+    void port_reset_hard();
 };
 
+volatile uint32_t *AHCIPort::get_port_register()
+{
+    return ahci_virt_base + (0x100 + index * 0x80) / sizeof(uint32_t);
+}
+
+using TimerTree =
+    pmos::containers::RedBlackTree<AHCIPort, &AHCIPort::timer_node,
+                                   detail::TreeCmp<AHCIPort, uint64_t, &AHCIPort::timer_time>>;
+
+TimerTree::RBTreeHead timer_tree;
+uint64_t next_timer_time = 0;
+
 std::vector<AHCIPort> ports;
+
+void AHCIPort::react_timer()
+{
+    switch (state) {
+    case State::WaitingForIdle1: {
+        auto port = get_port_register();
+        auto cmd  = port[AHCI_CMD_INDEX];
+        if (!(cmd & AHCI_PORT_CMD_CR)) {
+            port_idle2();
+            return;
+        }
+    }
+
+        if (timer_max < timer_time) {
+            port_reset_hard();
+        } else {
+            wait(10);
+        }
+        break;
+    case State::WaitingForIdle2: {
+        auto port = get_port_register();
+        auto cmd  = port[AHCI_CMD_INDEX];
+        if (!(cmd & AHCI_PORT_CMD_FR)) {
+            state = State::Idle;
+            enable_port();
+            return;
+        }
+    }
+
+        if (timer_max < timer_time) {
+            port_reset_hard();
+        } else {
+            wait(10);
+        }
+        break;
+    default:
+        break;
+    }
+}
+
+void AHCIPort::init_port()
+{
+    auto port = get_port_register();
+
+    printf("Port %i cmd: 0x%x\n", index, port[AHCI_CMD_INDEX]);
+
+    auto cmd = port[AHCI_CMD_INDEX];
+    // "If PxCMD.ST, PxCMD.CR, PxCMD.FRE and PxCMD.FR are all cleared, the port is in an idle state"
+    if ((cmd & (AHCI_PORT_CMD_ST | AHCI_PORT_CMD_CR | AHCI_PORT_CMD_FRE | AHCI_PORT_CMD_FR)) == 0) {
+        state = State::Idle;
+
+        enable_port();
+        return;
+    }
+
+    printf("Port %i is not in idle state. P%iCMD: 0x%x\n", index, index, cmd);
+
+    // Switch to idle state
+    port_idle();
+}
+
+void AHCIPort::enable_port()
+{
+    // AHCI spec 10.1.2
+
+    auto addr = get_port_register();
+
+    // Set command list base
+    auto cmd_list_base = dma_phys_base + FIS_RECIEVE_AREA_SIZE;
+    addr[0]            = cmd_list_base & 0xffffffff;
+    addr[1]            = cmd_list_base >> 32;
+
+    // Set FIS base
+    addr[2] = dma_phys_base & 0xffffffff;
+    addr[3] = dma_phys_base >> 32;
+
+    // Set PxCMD.FRE to 1
+    auto cmd = addr[AHCI_CMD_INDEX];
+    cmd |= AHCI_PORT_CMD_FRE;
+    addr[AHCI_CMD_INDEX] = cmd;
+
+    // Clear PxSERR
+    addr[12] = 0xffffffff;
+
+    // Enable interrupts
+    // Clear PxIS
+    addr[4] = 0xffffffff;
+    // Enable all interrupts
+    addr[5] = 0xffffffff;
+
+    state = State::Idle;
+
+    printf("Port %i in minimal configuration\n", index);
+
+    if (staggered_spinup) {
+        cmd |= AHCI_PORT_CMD_SUD;
+        addr[AHCI_CMD_INDEX] = cmd;
+    }
+
+    usleep(1000);
+
+    auto det = addr[10] & AHCI_PORT_SSTS_DET_MASK;
+    if (det == 0) {
+        printf("No device detected on port %i\n", index);
+        return;
+    } else {
+        printf("Device detected on port %i\n", index);
+    }
+}
+
+void AHCIPort::port_reset_hard()
+{
+    auto port = get_port_register();
+
+    // "In systems that support staggered spin-up ... the  two register fields must be set correctly
+    // in order to avoid illegal combinations of the two values."
+    if (staggered_spinup) {
+        // Set PxCMD.SUD to 1
+        auto cmd = port[AHCI_CMD_INDEX];
+        cmd |= AHCI_PORT_CMD_SUD;
+        port[AHCI_CMD_INDEX] = cmd;
+    }
+
+    // "Software causes a port reset (COMRESET) by writing 1h to the PxSCTL.DET"
+    auto sctl = port[11];
+    sctl &= ~AHCI_PORT_SCTL_DET_MASK;
+    sctl |= 1;
+    port[11] = sctl;
+
+    // "Software shall wait at least 1ms before clearing PxSCTL.DET to 0"
+    usleep(1000);
+
+    sctl &= ~AHCI_PORT_SCTL_DET_MASK;
+    port[11] = sctl;
+
+    enable_port();
+}
+
+void AHCIPort::port_idle()
+{
+    auto port = get_port_register();
+
+    // Set port to idle
+    auto cmd = port[AHCI_CMD_INDEX];
+    cmd &= ~AHCI_PORT_CMD_ST;
+    port[AHCI_CMD_INDEX] = cmd;
+
+    // Wait for 500ms
+    state = State::WaitingForIdle1;
+
+    auto time = pmos_get_time(GET_TIME_NANOSECONDS_SINCE_BOOTUP);
+    timer_max = time.value + 500'000'000;
+    wait(10);
+}
+
+void AHCIPort::port_idle2()
+{
+    auto port = get_port_register();
+
+    // "If PxCMD.FRE is set to ‘1’, software should clear it to ‘0’ and wait at least 500
+    // milliseconds for PxCMD.FR to return ‘0’ when read."
+    auto cmd = port[6];
+    if (cmd & AHCI_PORT_CMD_FRE) {
+        cmd &= ~AHCI_PORT_CMD_FRE;
+        port[AHCI_CMD_INDEX] = cmd;
+
+        state = State::WaitingForIdle2;
+
+        auto time = pmos_get_time(GET_TIME_NANOSECONDS_SINCE_BOOTUP);
+        timer_max = time.value + 500'000'000;
+        wait(10);
+    } else {
+        state = State::Idle;
+        enable_port();
+    }
+}
+
+void AHCIPort::wait(int time_ms)
+{
+    auto time = pmos_get_time(GET_TIME_NANOSECONDS_SINCE_BOOTUP);
+    if (time.result != 0) {
+        printf("Failed to get time\n");
+        return;
+    }
+
+    timer_time = time.value + time_ms * 1000000;
+    timer_tree.insert(this);
+
+    if (timer_tree.begin() == this) {
+        next_timer_time = timer_time;
+        pmos_request_timer(ahci_port, time_ms);
+    } else {
+        TimerTree::RBTreeIterator it;
+        while ((it = timer_tree.begin())->timer_time < time.value) {
+            timer_tree.erase(it);
+            it->react_timer();
+        }
+    }
+}
 
 void ahci_handle(PCIDescriptor d)
 {
@@ -291,13 +559,17 @@ void ahci_handle(PCIDescriptor d)
 
     cap = ahci_virt_base[0];
 
-    num_slots       = (cap >> 8) & 0x1f;
-    interface_speed = (cap >> 20) & 0xf;
+    num_slots        = (cap >> 8) & 0x1f;
+    interface_speed  = (cap >> 20) & 0xf;
+    staggered_spinup = !!(cap & AHCI_CAP_SSS);
+    if (staggered_spinup) {
+        printf("Staggered spinup supported\n");
+    }
 
     printf("AHCI controller initialized\n");
 
     // TODO: Initialize ports
-    uint32_t pi = ahci_virt_base[4];
+    uint32_t pi = ahci_virt_base[3];
     printf("AHCI Ports Implemented: 0x%x\n", pi);
 
     for (unsigned i = 0; i < AHCI_MAX_PORTS; ++i) {
@@ -328,9 +600,10 @@ void ahci_handle(PCIDescriptor d)
         }
 
         port.dma_phys_base = phys_addr.phys_addr;
-        port.dma_virt_base = reinterpret_cast<volatile uint32_t*>(request.virt_addr);
+        port.dma_virt_base = reinterpret_cast<volatile uint32_t *>(request.virt_addr);
 
-        printf("Allocated memory for port %i: 0x%lx - 0x%lx -> 0x%lx\n", port.index, port.dma_phys_base, port.dma_phys_base + mem_size, port.dma_virt_base);
+        printf("Allocated memory for port %i: 0x%lx - 0x%lx -> 0x%lx\n", port.index,
+               port.dma_phys_base, port.dma_phys_base + mem_size, port.dma_virt_base);
 
         for (int i = 0; i < num_slots; ++i) {
             auto &command_list = reinterpret_cast<volatile CommandListStructure *>(
@@ -342,6 +615,8 @@ void ahci_handle(PCIDescriptor d)
             command_list.command_table_base_low  = command_table_phys_base & 0xffffffff;
             command_list.command_table_base_high = command_table_phys_base >> 32;
         }
+
+        port.init_port();
     }
 }
 
@@ -361,7 +636,8 @@ int main()
 
         auto r = fork();
         if (r == 0) {
-            cmd_port = _create_port();
+            cmd_port  = _create_port();
+            ahci_port = _create_port();
             ahci_handle(controller);
             return 0;
         } else if (r < 0) {

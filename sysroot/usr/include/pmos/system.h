@@ -361,6 +361,8 @@ result_t pause_task(uint64_t tid);
 
 result_t resume_task(uint64_t tid);
 
+int pmos_request_timer(pmos_port_t port, size_t ns);
+
 #endif
 
 #if defined(__cplusplus)
