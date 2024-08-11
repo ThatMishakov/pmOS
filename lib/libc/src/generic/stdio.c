@@ -285,16 +285,20 @@ static ssize_t write_string(void *arg, const char *str, size_t size)
     return size_s;
 }
 
-static int int_to_string(long int n, uint8_t base, char *str)
+static int int_to_string(long int n, uint8_t base, char *str, int flags, int width)
 {
     char temp_str[65];
     int length    = 0;
-    char negative = 0;
+    char prefix   = 0;
+
     if (n < 0) {
-        negative = 1;
-        str[0]   = '-';
-        n *= -1;
+        prefix = '-';
+    } else if ((n > 0) && (flags & PRINTF_FLAG_P_PLUS)) {
+        prefix = '+';
+    } else if ((n > 0) && (flags & PRINTF_FLAG_SPACE)) {
+        prefix = ' ';
     }
+
     if (n == 0) {
         temp_str[length] = '0';
         ++length;
@@ -309,22 +313,99 @@ static int int_to_string(long int n, uint8_t base, char *str)
 
         ++length;
     }
-    for (int i = 0; i < length; ++i) {
-        str[i + negative] = temp_str[length - i - 1];
+
+    if (flags & PRINTF_FLAG_LEFT_J) {
+        int chars_count = 0;
+        if (prefix) {
+            str[0] = prefix;
+            chars_count = 1;
+        }
+
+        for (int i = 0; i < length; ++i) {
+            str[i + chars_count] = temp_str[length - i - 1];
+        }
+        chars_count += length;
+
+        int to_fill = width - length - chars_count;
+        if (to_fill < 0)
+            to_fill = 0;
+        for (int i = 0; i < to_fill; ++i) {
+            str[i + chars_count] = ' ';
+        }
+        chars_count += to_fill;
+
+        str[chars_count] = 0;
+        return chars_count;
+    } else if (flags & PRINTF_FLAG_ZERO) {
+        int chars_count = 0;
+        if (prefix) {
+            str[0] = prefix;
+            chars_count = 1;
+        }
+
+        int to_fill = width - length - chars_count;
+        if (to_fill < 0)
+            to_fill = 0;
+        for (int i = 0; i < to_fill; ++i) {
+            str[i + chars_count] = '0';
+        }
+        chars_count += to_fill;
+
+
+        for (int i = 0; i < length; ++i) {
+            str[i + chars_count] = temp_str[length - i - 1];
+        }
+        chars_count += length;
+        
+        str[chars_count] = 0;
+        return chars_count;
+    } else {
+        int l = length + (prefix ? 1 : 0);
+        int chars_count = 0;
+
+        int to_fill = width - l;
+        if (to_fill < 0)
+            to_fill = 0;
+        for (int i = 0; i < to_fill; ++i) {
+            str[i] = ' ';
+        }
+        chars_count += to_fill;
+
+        if (prefix) {
+            str[chars_count] = prefix;
+            ++chars_count;
+        }
+
+        for (int i = 0; i < length; ++i) {
+            str[i + chars_count] = temp_str[length - i - 1];
+        }
+        chars_count += length;
+
+        str[chars_count] = 0;
+        return chars_count;
     }
-    if (negative)
-        ++length;
-    str[length] = 0;
-    return length;
 }
 
-static int uint_to_string(unsigned long int n, uint8_t base, char *str, int hex_base)
+static int uint_to_string(unsigned long int n, uint8_t base, char *str, int hex_base, int flags, int width)
 {
     char temp_str[65];
     int length = 0;
+
+    int prefix_len = 0;
+    char prefix[2];
+
     if (n == 0) {
         temp_str[length] = '0';
         ++length;
+    } else if (flags & PRINTF_FLAG_HASH) {
+        if (base == 16) {
+            prefix[0] = '0';
+            prefix[1] = 'X' - 'A' + hex_base;
+            prefix_len = 2;
+        } else if (base == 8) {
+            prefix[0] = '0';
+            prefix_len = 1;
+        }
     }
     while (n != 0) {
         unsigned int tmp = n % base;
@@ -336,11 +417,77 @@ static int uint_to_string(unsigned long int n, uint8_t base, char *str, int hex_
 
         ++length;
     }
-    for (int i = 0; i < length; ++i) {
-        str[i] = temp_str[length - i - 1];
+
+    if (flags & PRINTF_FLAG_LEFT_J) {
+        int chars_count = 0;
+        for (int i = 0; i < prefix_len; ++i) {
+            str[i] = prefix[i];
+        }
+        chars_count += prefix_len;
+
+        for (int i = 0; i < length; ++i) {
+            str[i + chars_count] = temp_str[length - i - 1];
+        }
+        chars_count += length;
+
+        int to_fill = width - length - chars_count;
+        if (to_fill < 0)
+            to_fill = 0;
+        for (int i = 0; i < to_fill; ++i) {
+            str[i + chars_count] = ' ';
+        }
+        chars_count += to_fill;
+
+        str[chars_count] = 0;
+        return chars_count;
+    } else if (flags & PRINTF_FLAG_ZERO) {
+        int chars_count = 0;
+        for (int i = 0; i < prefix_len; ++i) {
+            str[i] = prefix[i];
+        }
+        chars_count += prefix_len;
+
+        int to_fill = width - length - chars_count;
+        if (to_fill < 0)
+            to_fill = 0;
+        for (int i = 0; i < to_fill; ++i) {
+            str[i + chars_count] = '0';
+        }
+        chars_count += to_fill;
+
+
+        for (int i = 0; i < length; ++i) {
+            str[i + chars_count] = temp_str[length - i - 1];
+        }
+        chars_count += length;
+        
+        str[chars_count] = 0;
+        return chars_count;
+    } else {
+        int l = length + prefix_len;
+        int chars_count = 0;
+
+        int to_fill = width - l;
+        if (to_fill < 0)
+            to_fill = 0;
+        for (int i = 0; i < to_fill; ++i) {
+            str[i] = ' ';
+        }
+        chars_count += to_fill;
+
+        for (int i = 0; i < prefix_len; ++i) {
+            str[i + chars_count] = prefix[i];
+        }
+        chars_count += prefix_len;
+
+        for (int i = 0; i < length; ++i) {
+            str[i + chars_count] = temp_str[length - i - 1];
+        }
+        chars_count += length;
+
+        str[chars_count] = 0;
+        return chars_count;
     }
-    str[length] = 0;
-    return length;
 }
 
 static inline int max_(int a, int b) { return a > b ? a : b; }
@@ -443,7 +590,7 @@ static ssize_t __va_printf_closure(write_str_f puts, void *puts_arg, va_list arg
                         t = va_arg(arg, int);
 
                     char *s_buff = malloc(max_(24, width + 1));
-                    int j        = int_to_string(t, 10, s_buff);
+                    int j        = int_to_string(t, 10, s_buff, flags, width);
                     j            = puts(puts_arg, s_buff, j);
                     if (j < 0) {
                         chars_transmitted = j;
@@ -462,7 +609,7 @@ static ssize_t __va_printf_closure(write_str_f puts, void *puts_arg, va_list arg
                         t = va_arg(arg, unsigned int);
 
                     char *s_buff = malloc(max_(24, width + 1));
-                    int j        = uint_to_string(t, 10, s_buff, hex_base);
+                    int j        = uint_to_string(t, 10, s_buff, hex_base, flags, width);
                     j            = puts(puts_arg, s_buff, j);
                     if (j < 0) {
                         chars_transmitted = j;
@@ -481,7 +628,7 @@ static ssize_t __va_printf_closure(write_str_f puts, void *puts_arg, va_list arg
                         t = va_arg(arg, unsigned int);
 
                     char *s_buff = malloc(max_(24, width + 1));
-                    int j        = uint_to_string(t, 8, s_buff, hex_base);
+                    int j        = uint_to_string(t, 8, s_buff, hex_base, flags, width);
                     j            = puts(puts_arg, s_buff, j);
                     if (j < 0) {
                         chars_transmitted = j;
@@ -503,7 +650,23 @@ static ssize_t __va_printf_closure(write_str_f puts, void *puts_arg, va_list arg
                         t = va_arg(arg, unsigned int);
 
                     char *s_buff = malloc(max_(24, width + 1));
-                    int j        = uint_to_string(t, 16, s_buff, hex_base);
+                    int j        = uint_to_string(t, 16, s_buff, hex_base, flags, width);
+                    j            = puts(puts_arg, s_buff, j);
+                    if (j < 0) {
+                        chars_transmitted = j;
+                        goto end;
+                    }
+                    chars_transmitted += j;
+                    rpt = 0;
+                    ++i;
+                    break;
+                }
+                case 'p': {
+                    void *t = va_arg(arg, void *);
+                    unsigned long n = (unsigned long)t;
+
+                    char *s_buff = malloc(max_(24, width + 1));
+                    int j        = uint_to_string(n, 16, s_buff, 'a', flags, width);
                     j            = puts(puts_arg, s_buff, j);
                     if (j < 0) {
                         chars_transmitted = j;

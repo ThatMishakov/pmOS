@@ -144,6 +144,9 @@ static constexpr uint32_t SATA_SIG_SEMB  = 0xC33C0101;
 
 static constexpr uint32_t AHCI_CMD_INDEX = 6;
 static constexpr uint32_t AHCI_TFD_INDEX = 8;
+static constexpr uint32_t AHCI_SSTS_INDEX = 10;
+static constexpr uint32_t AHCI_SCTL_INDEX = 11;
+static constexpr uint32_t AHCI_SERR_INDEX = 12;
 
 static constexpr uint32_t AHCI_PORT_CMD_ST    = 1 << 0;
 static constexpr uint32_t AHCI_PORT_CMD_SUD   = 1 << 1;
@@ -359,7 +362,8 @@ void AHCIPort::react_timer()
 
         if (tfd & 0x89) {
             if (timer_max < timer_time) {
-                printf("Drive not ready timed out. TFD: 0x%x\n", tfd);
+                auto serr = port[AHCI_SERR_INDEX];
+                printf("Drive not ready timed out. TFD: 0x%x; SERR: 0x%x\n", tfd, serr);
             } else {
                 wait(100);
             }
@@ -455,10 +459,10 @@ void AHCIPort::enable_port()
         printf("No device detected on port %i\n", index);
         return;
     }
-    printf("Port %i SStatus.DET: 0x%x\n", index, det);
+    printf("Port %i SStatus.DET: %#x\n", index, det);
 
     // Clear PxSERR
-    addr[12] = 0xffffffff;
+    addr[AHCI_SERR_INDEX] = 0xffffffff;
 
     printf("Device detected on port %i\n", index);
     detect_drive();
@@ -621,7 +625,7 @@ void ahci_handle(PCIDescriptor d)
 
     // Get BAR5
     uint32_t bar5 = ahci_controller->readl(0x24);
-    printf("ACHI BAR5: 0x%x\n", bar5);
+    printf("ACHI BAR5: %#x\n", bar5);
 
     bar5 &= 0xfffffff0;
 
@@ -648,10 +652,10 @@ void ahci_handle(PCIDescriptor d)
     }
 
     uint32_t cap2 = ahci_virt_base[9];
-    printf("AHCI Capabilities 2: 0x%x\n", cap2);
+    printf("AHCI Capabilities 2: %#x\n", cap2);
 
     uint32_t ahci_version = ahci_virt_base[4];
-    printf("AHCI Version: 0x%x\n", ahci_version);
+    printf("AHCI Version: %#x\n", ahci_version);
 
     // BIOS handoff
     if (cap2 & AHCI_CAP2_BOH) {
@@ -741,7 +745,7 @@ void ahci_handle(PCIDescriptor d)
         port.dma_phys_base = phys_addr.phys_addr;
         port.dma_virt_base = reinterpret_cast<volatile uint32_t *>(request.virt_addr);
 
-        printf("Allocated memory for port %i: 0x%lx - 0x%lx -> 0x%lx\n", port.index,
+        printf("Allocated memory for port %i: %#lx - %#lx -> 0x%p\n", port.index,
                port.dma_phys_base, port.dma_phys_base + mem_size, port.dma_virt_base);
 
         for (int i = 0; i < num_slots; ++i) {
