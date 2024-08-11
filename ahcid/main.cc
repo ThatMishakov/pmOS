@@ -363,7 +363,10 @@ void AHCIPort::react_timer()
         if (tfd & 0x89) {
             if (timer_max < timer_time) {
                 auto serr = port[AHCI_SERR_INDEX];
-                printf("Drive not ready timed out. TFD: 0x%x; SERR: 0x%x\n", tfd, serr);
+                auto cmd  = port[AHCI_CMD_INDEX];
+                auto fis_base = port[2];
+                auto fis_base_upper = port[3];
+                printf("Drive not ready timed out. TFD: %#x; SERR: %#x, CMD: %#x, FBU %#x FB %#x\n", tfd, serr, cmd, fis_base_upper, fis_base);
             } else {
                 wait(100);
             }
@@ -438,8 +441,8 @@ void AHCIPort::enable_port()
     // Enable interrupts
     // Clear PxIS
     addr[4] = 0xffffffff;
-    // Enable all interrupts
-    addr[5] = 0xffffffff;
+    // Disable all interrupts
+    addr[5] = 0x0;
 
     printf("Port %i in minimal configuration\n", index);
 
@@ -619,9 +622,9 @@ void ahci_handle(PCIDescriptor d)
            vendor_id, device_id, class_code, subclass, prog_if);
 
     // Enable DMA and memory space access
-    uint32_t command = ahci_controller->readb(0x4);
+    uint32_t command = ahci_controller->readw(0x4);
     command |= 0x06;
-    ahci_controller->writeb(0x4, command);
+    ahci_controller->writew(0x4, command);
 
     // Get BAR5
     uint32_t bar5 = ahci_controller->readl(0x24);

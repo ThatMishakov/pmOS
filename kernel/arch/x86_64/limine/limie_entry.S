@@ -38,6 +38,10 @@ stack:
     .globl _limine_entry
     .type _limine_entry, @function
 _limine_entry:
+1:
+    hlt
+    jmp 1b
+
     # Switch to in-kernel stack, since Limine can't be used because
     # of how how the paging is set up by the kernel
     leaq (stack+STACK_SIZE)(%rip), %rsp

@@ -46,7 +46,7 @@ iso: $(ISO)
 limine: limine/.git
 
 limine/.git:
-	git clone https://github.com/limine-bootloader/limine.git --branch=v7.7.2-binary --depth=1
+	git clone https://github.com/limine-bootloader/limine.git --branch=v8.x-binary --depth=1
 
 # isodir/boot/pmos/sysroot.tar: ../sysroot
 # 	mkdir -p isodir/boot/pmos

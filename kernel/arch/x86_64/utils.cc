@@ -59,50 +59,45 @@ static inline void outb(uint16_t port, uint8_t val)
 
 int is_transmit_empty() { return inb(PORT + 5) & 0x20; }
 
+void dbg_uart_init()
+{
+    __asm__ __volatile__(
+        "movw $0x3f9, %%dx;"
+        "xorb %%al, %%al;outb %%al, %%dx;"               /* IER int off */
+        "movb $0x80, %%al;addb $2,%%dl;outb %%al, %%dx;" /* LCR set divisor mode */
+        "movb $1, %%al;subb $3,%%dl;outb %%al, %%dx;"    /* DLL divisor lo 115200 */
+        "xorb %%al, %%al;incb %%dl;outb %%al, %%dx;"     /* DLH divisor hi */
+        "incb %%dl;outb %%al, %%dx;"                     /* FCR fifo off */
+        "movb $0x43, %%al;incb %%dl;outb %%al, %%dx;"    /* LCR 8N1, break on */
+        "movb $0x8, %%al;incb %%dl;outb %%al, %%dx;"     /* MCR Aux out 2 */
+        "xorb %%al, %%al;subb $4,%%dl;inb %%dx, %%al"    /* clear receiver/transmitter */
+        ::
+            : "rax", "rdx");
+}
+
 static int init_serial()
 {
     serial_initiated = true;
 
-    outb(PORT + 1, 0x00); // Disable all interrupts
-    outb(PORT + 3, 0x80); // Enable DLAB (set baud rate divisor)
-    outb(PORT + 0, 0x0C); // Set divisor to 12 (lo byte) 9600 baud
-    outb(PORT + 1, 0x00); //                  (hi byte)
-    outb(PORT + 3, 0x03); // 8 bits, no parity, one stop bit
-    outb(PORT + 2, 0xC7); // Enable FIFO, clear them, with 14-byte threshold
-    outb(PORT + 4, 0x0B); // IRQs enabled, RTS/DSR set
-    // outb(PORT + 4, 0x1E); // Set in loopback mode, test the serial chip
-    // outb(PORT + 0, 0xAE); // Test serial chip (send byte 0xAE and check if serial returns same byte)
-
-    // // Check if serial is faulty (i.e: not same byte as sent)
-    // if (inb(PORT + 0) != 0xAE) {
-    //     return 1;
-    // }
-
-    serial_functional = true;
-
-    // If serial is not faulty set it in normal operation mode
-    // (not-loopback with IRQs enabled and OUT#1 and OUT#2 bits enabled)
-    outb(PORT + 4, 0x0F);
+    dbg_uart_init();
     return 0;
 }
 
-void printc(int c)
+extern "C" void dbg_uart_putc(unsigned int c)
 {
-    Auto_Lock_Scope l(serial_lock);
-
     if (!serial_initiated)
         init_serial();
 
-    if (!serial_functional)
-        return;
-
-    while (is_transmit_empty() == 0)
-        ;
-
-    outb(PORT, c);
+    __asm__ __volatile__("movl $10000,%%ecx;movw $0x3fd,%%dx;"
+                         "1:inb %%dx, %%al;pause;"
+                         "cmpb $0xff,%%al;je 2f;"
+                         "dec %%ecx;jz 2f;"
+                         "andb $0x20,%%al;jz 1b;"
+                         "subb $5,%%dl;movb %%bl, %%al;outb %%al, %%dx;2:" ::"b"(c)
+                         : "rax", "rcx", "rdx");
 }
 
-extern "C" void dbg_uart_putc(char c) { printc(c); }
+void printc(int c) { dbg_uart_putc(c); }
 
 struct stack_frame {
     stack_frame *next;
