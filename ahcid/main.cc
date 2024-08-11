@@ -642,7 +642,7 @@ void ahci_handle(PCIDescriptor d)
 
     uint32_t ghc = ahci_virt_base[1];
     // Enable AHCI
-    ghc |= 0x80000000;
+    ghc |= AHCI_GHC_AE;
     ahci_virt_base[1] = ghc;
 
     uint32_t cap = ahci_virt_base[0];
@@ -700,7 +700,7 @@ void ahci_handle(PCIDescriptor d)
 
     // Enable ACPI again
     ghc = ahci_virt_base[1];
-    ghc |= AHCI_GHC_IE;
+    ghc |= AHCI_GHC_AE;
     ahci_virt_base[1] = ghc;
 
     cap = ahci_virt_base[0];
