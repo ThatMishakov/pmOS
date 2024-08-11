@@ -455,6 +455,7 @@ void AHCIPort::enable_port()
         printf("No device detected on port %i\n", index);
         return;
     }
+    printf("Port %i SStatus.DET: 0x%x\n", index, det);
 
     // Clear PxSERR
     addr[12] = 0xffffffff;

@@ -116,6 +116,7 @@ kresult_t map(u64 physical_addr, u64 virtual_addr, Page_Table_Argumments arg, u6
     pte.user_access = arg.user_access;
     pte.writeable   = arg.writeable;
     pte.avl         = arg.extra;
+    pte.cache_disabled = arg.cache_policy != Memory_Type::Normal;
     if (nx_bit_enabled)
         pte.execution_disabled = arg.execution_disabled;
     return 0;
@@ -613,6 +614,7 @@ void x86_4level_Page_Table::map(u64 physical_addr, u64 virtual_addr, Page_Table_
     pte->user_access = arg.user_access;
     pte->writeable   = arg.writeable;
     pte->avl         = arg.extra;
+    pte->cache_disabled = arg.cache_policy != Memory_Type::Normal;
     if (nx_bit_enabled)
         pte->execution_disabled = arg.execution_disabled;
 }
@@ -688,6 +690,7 @@ void x86_4level_Page_Table::map(pmm::Page_Descriptor page, u64 virtual_addr, Pag
     pte->user_access = arg.user_access;
     pte->writeable   = arg.writeable;
     pte->avl         = PAGING_FLAG_STRUCT_PAGE;
+    pte->cache_disabled = arg.cache_policy != Memory_Type::Normal;
     u64 page_ppn     = page.takeout_page() >> 12;
     pte->page_ppn    = page_ppn;
 
