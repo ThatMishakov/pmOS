@@ -74,11 +74,16 @@ struct PCIDevice {
 
     uint8_t class_code;
     uint8_t subclass;
+
+    struct PCIDevice *associated_bridge;
+
+    int pcie : 1;
+    int downstream : 1;
 };
 
 int pcicdevice_compare(const void *a, const void *b);
 
-VECTOR_TYPEDEF(struct PCIDevice, PCIDeviceVector);
+VECTOR_TYPEDEF(struct PCIDevice *, PCIDeviceVector);
 extern PCIDeviceVector pci_devices;
 
 inline unsigned long pcie_config_space_size(unsigned pci_start, unsigned pci_end)
@@ -113,6 +118,26 @@ inline uint32_t pci_read_register(void *s, int id)
 {
     volatile uint32_t *r = (volatile uint32_t *)s;
     return r[id];
+}
+
+inline uint16_t pci_read_word(void *s, int ptr)
+{
+    return pci_read_register(s, ptr / 4) >> ((ptr % 4) * 8);
+}
+
+inline uint16_t pcie_status(void *s)
+{
+    return (pci_read_register(s, 1) >> 16) & 0xffff;
+}
+
+inline int pcie_capability_pointer(void *s)
+{
+    if (!(pcie_status(s) & 0x10)) {
+        return 0;
+    }
+
+    // TODO: PCI-to-CardBus Bridge ???
+    return pci_read_register(s, 0x34/4) & 0xfc;
 }
 
 inline void pci_write_register(void *s, int id, uint32_t value)

@@ -171,6 +171,8 @@ int acpi_init(uacpi_phys_addr rsdp_phys_addr) {
         return -ENODEV;
     }
 
+    return 0;
+
     ret = uacpi_namespace_initialize();
     if (uacpi_unlikely_error(ret)) {
         fprintf(stderr, "uacpi_namespace_initialize error: %s", uacpi_status_to_string(ret));
@@ -211,6 +213,8 @@ void find_acpi_devices()
     find_com();
 }
 
+
+void acpi_pci_init();
 void init_acpi()
 {
     printf("Info: Initializing ACPI...\n");
@@ -223,16 +227,19 @@ void init_acpi()
         printf("Warning: Did not initialize ACPI\n");
     }
 
-    init_pci();
 
+    int i = acpi_init((uacpi_phys_addr)rsdp_desc);
+    if (i != 0) {
+        printf("Warning: Could not initialize uACPI\n");
+        return;
+    }
 
-    // int i = acpi_init((uacpi_phys_addr)rsdp_desc);
-    // if (i != 0) {
-    //     printf("Warning: Could not initialize uACPI\n");
-    //     return;
-    // }
-    // find_acpi_devices();
-    // power_button_init();
+    acpi_pci_init();
+
+    //init_pci();
+
+    find_acpi_devices();
+    power_button_init();
 
     printf("Walked ACPI tables! ACPI revision: %i\n", acpi_revision);
 }
