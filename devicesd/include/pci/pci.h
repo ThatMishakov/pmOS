@@ -31,6 +31,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <vector.h>
+#include <uacpi/event.h>
 
 void init_pci();
 
@@ -49,6 +50,17 @@ void pci_writel(uint16_t seg, uint8_t bus, uint8_t slot, uint8_t fun, uint16_t o
 #define HEADER_TYPE_MASK     0x7f;
 #define HEADER_MULTIFUNCTION 0x80;
 
+struct PCIGroupInterruptEntry {
+    uint8_t bus;
+    uint8_t device;
+    uint8_t pin;
+
+    bool active_low: 1;
+    bool level_trigger: 1;
+
+    uint32_t gsi;
+};
+
 struct PCIGroup {
     struct PCIGroup *next;
     uint64_t base_addr;
@@ -59,6 +71,8 @@ struct PCIGroup {
     unsigned group_number;
     unsigned start_bus_number;
     unsigned end_bus_number;
+
+    VECTOR(struct PCIGroupInterruptEntry) interrupt_entries;
 };
 
 struct PCIGroup *pci_group_find(unsigned group_number);

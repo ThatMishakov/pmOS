@@ -81,7 +81,7 @@ void discover_apic_freq()
     p    = (p & 0xfd) | 1;
     outb(0x61, p);
 
-    outb(PIT_MODE_REG, 0b10'11'001'0);
+    outb(PIT_MODE_REG, 0b10'11'000'0);
     set_pit_count(0x2e9b, 2);
 
     // Start timer 2

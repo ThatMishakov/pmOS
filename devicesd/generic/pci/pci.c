@@ -38,12 +38,42 @@
 #include <pmos/ipc.h>
 #include <string.h>
 #include <uacpi/event.h>
+#include <uacpi/utilities.h>
+#include <uacpi/resources.h>
+#include <alloca.h>
 
 PCIDeviceVector pci_devices = VECTOR_INIT;
 
-void check_bus(struct PCIGroup *g, uint8_t bus, struct PCIDevice *parent_bridge);
+void check_bus(struct PCIGroup *g, uint8_t bus, struct PCIDevice *parent_bridge, uacpi_namespace_node *bridge_node);
 
-void check_function(struct PCIGroup *g, uint8_t bus, uint8_t device, uint8_t function, struct PCIDevice *parent_bridge)
+struct DeviceSearchCtx {
+    uint64_t addr;
+    uacpi_namespace_node *out_node;
+};
+
+uacpi_ns_iteration_decision find_pci_device(void *param, uacpi_namespace_node *node)
+{
+    struct DeviceSearchCtx *ctx = param;
+    uint64_t addr = 0;
+
+    uacpi_object *obj = uacpi_namespace_node_get_object(node);
+    if (obj == NULL || obj->type != UACPI_OBJECT_DEVICE)
+        return UACPI_NS_ITERATION_DECISION_CONTINUE;
+
+    uacpi_status ret = uacpi_eval_integer(node, "_ADR", UACPI_NULL, &addr);
+    if (ret != UACPI_STATUS_OK && ret != UACPI_STATUS_NOT_FOUND)
+        return UACPI_NS_ITERATION_DECISION_CONTINUE;
+
+    if (addr == ctx->addr) {
+        printf("!!!!!!!!!!!!!!Found PCI device %lx\n", addr);
+        ctx->out_node = node;
+        return UACPI_NS_ITERATION_DECISION_BREAK;
+    }
+
+    return UACPI_NS_ITERATION_DECISION_CONTINUE;
+}
+
+void check_function(struct PCIGroup *g, uint8_t bus, uint8_t device, uint8_t function, struct PCIDevice *parent_bridge, uacpi_namespace_node *node)
 {
     void *c = pcie_config_space_device(g, bus, device, function);
     printf("!! PCI group %i bus %i device %i function %i vendor %x device %x", g->group_number, bus,
@@ -131,31 +161,46 @@ void check_function(struct PCIGroup *g, uint8_t bus, uint8_t device, uint8_t fun
     uint8_t class    = pcie_class_code(c);
     uint8_t subclass = pcie_subclass(c);
     if (class == 0x06 && subclass == 0x04) { // Host bridge
+        struct DeviceSearchCtx ctx = {
+            .addr = d->device << 16 | d->function,
+            .out_node = NULL,
+        };
+        uacpi_namespace_for_each_node_depth_first(node, find_pci_device, &ctx);
+
+        uacpi_pci_routing_table *pci_routes;
+        uacpi_status ret = uacpi_get_pci_routing_table(ctx.out_node, &pci_routes);
+        if (ret != UACPI_STATUS_OK) {
+            fprintf(stderr, "Warning: Could not get PCI routing for root bridge bus %0x: %i\n", bus, ret);
+        } else {
+            parse_interrupt_table(g, bus, pci_routes);
+            uacpi_free_pci_routing_table(pci_routes);
+        }
+
         uint8_t secondary_bus = pci_secondary_bus(c);
         printf("PCI secondary bus %x\n", secondary_bus);
-        check_bus(g, secondary_bus, d);
+        check_bus(g, secondary_bus, d, ctx.out_node);
     }
 }
 
-void check_device(struct PCIGroup *g, uint8_t bus, uint8_t device, struct PCIDevice *parent_bridge)
+void check_device(struct PCIGroup *g, uint8_t bus, uint8_t device, struct PCIDevice *parent_bridge, uacpi_namespace_node *parent_node)
 {
     void *c            = pcie_config_space_device(g, bus, device, 0);
     uint16_t vendor_id = pcie_vendor_id(c);
     if (vendor_id == VENDOR_ID_NO_DEVICE)
         return;
 
-    check_function(g, bus, device, 0, parent_bridge);
+    check_function(g, bus, device, 0, parent_bridge, parent_node);
     if (pcie_multifunction(c)) {
         for (int function = 1; function < PCI_FUNCTIONS; ++function) {
             union PCIConfigSpace *c = pcie_config_space_device(g, bus, device, function);
             uint16_t vendor_id      = pcie_vendor_id(c);
             if (vendor_id != VENDOR_ID_NO_DEVICE)
-                check_function(g, bus, device, function, parent_bridge);
+                check_function(g, bus, device, function, parent_bridge, parent_node);
         }
     }
 }
 
-void check_bus(struct PCIGroup *g, uint8_t bus, struct PCIDevice *parent_bridge)
+void check_bus(struct PCIGroup *g, uint8_t bus, struct PCIDevice *parent_bridge, uacpi_namespace_node *node)
 {
     int devices = PCI_DEVICES_PER_BUS;
 
@@ -167,15 +212,73 @@ void check_bus(struct PCIGroup *g, uint8_t bus, struct PCIDevice *parent_bridge)
     }
 
     for (int i = 0; i < devices; ++i) {
-        check_device(g, bus, i, parent_bridge);
+        check_device(g, bus, i, parent_bridge, node);
     }
 }
 
-void check_root(struct PCIGroup *g, int bus)
+void parse_interrupt_table(struct PCIGroup *g, int bus, uacpi_pci_routing_table *pci_routes)
 {
+    for (size_t i = 0; i < pci_routes->num_entries; ++i) {
+        uacpi_pci_routing_table_entry *entry = &pci_routes->entries[i];
+        printf("PCI routing: %x %x %x %x\n", entry->address, entry->index, entry->source, entry->pin);
+
+        struct PCIGroupInterruptEntry e = {
+            .bus = bus,
+            .device = entry->address >> 16,
+            .pin = entry->pin,
+            .active_low = false,
+            .level_trigger = false,
+            .gsi = entry->index,
+        };
+
+        if (entry->source) {
+            uacpi_resources *resources;
+            uacpi_status ret = uacpi_get_current_resources(entry->source, &resources);
+            if (ret != UACPI_STATUS_OK) {
+                fprintf(stderr, "Warning: Could not get resources for source: %i\n", ret);
+            }
+
+            switch (resources->entries[0].type)
+            {
+                case ACPI_RESOURCE_IRQ: {
+                    uacpi_resource_irq *irq = &resources->entries[0].irq;
+                    
+                    if (irq->triggering == UACPI_GPE_TRIGGERING_EDGE)
+                        e.level_trigger = false;
+                    if (irq->polarity == UACPI_POLARITY_ACTIVE_HIGH)
+                        e.active_low = false;
+                }
+                    break;
+                case UACPI_RESOURCE_TYPE_EXTENDED_IRQ: {
+                    uacpi_resource_extended_irq *irq = &resources->entries[0].extended_irq;
+                    if (irq->triggering == UACPI_GPE_TRIGGERING_EDGE)
+                        e.level_trigger = false;
+                    if (irq->polarity == UACPI_POLARITY_ACTIVE_HIGH)
+                        e.active_low = false;
+                }
+                    break;
+                default:
+                    fprintf(stderr, "Warning: Unexpected resource type: %i\n", resources->entries[0].type);
+                    break;
+            }
+        }
+    }
+}
+
+void check_root(struct PCIGroup *g, int bus, uacpi_namespace_node *node)
+{
+    uacpi_pci_routing_table *pci_routes;
+    uacpi_status ret = uacpi_get_pci_routing_table(node, &pci_routes);
+    if (ret != UACPI_STATUS_OK) {
+        fprintf(stderr, "Warning: Could not get PCI routing for root bridge bus %0x: %i\n", bus, ret);
+    } else {
+        parse_interrupt_table(g, bus, pci_routes);
+        uacpi_free_pci_routing_table(pci_routes);
+    }
+
     void *c     = pcie_config_space_device(g, bus, 0, 0);
     if (!pcie_multifunction(c)) {
-        check_bus(g, bus, NULL);
+        check_bus(g, bus, NULL, node);
     } else {
         printf("Root %i Multifunction\n", bus);
         for (int function = 0; function < PCI_FUNCTIONS; ++function) {
@@ -184,7 +287,7 @@ void check_root(struct PCIGroup *g, int bus)
             if (vendor_id == VENDOR_ID_NO_DEVICE)
                 break;
 
-            check_bus(g, function, NULL);
+            check_bus(g, function, NULL, node);
         }
     }
 }
@@ -203,7 +306,7 @@ void init_pci()
 
     int c = MCFG_list_size(t);
     for (int i = 0; i < c; ++i) {
-        struct PCIGroup *g = malloc(sizeof(*g));
+        struct PCIGroup *g = calloc(sizeof(*g), 1);
         if (!g) {
             fprintf(stderr, "Error: Could not allocate PCIGroup: %i\n", errno);
         }
@@ -250,14 +353,14 @@ void init_pci()
 struct PCIGroup *get_group(int segment)
 {
     for (struct PCIGroup *g = groups; g; g = g->next) {
-        if (g->group_number == segment)
+        if (g->group_number == (uint32_t)segment)
             return g;
     }
 
     return NULL;
 }
 
-void enumerate_pci_bus(int segment, int bus)
+void enumerate_pci_bus(int segment, int bus, uacpi_namespace_node *node)
 {
     struct PCIGroup *g = get_group(segment);
 
@@ -267,17 +370,18 @@ void enumerate_pci_bus(int segment, int bus)
     }
 
     printf("Enumerating PCI bus %i\n", bus);
-    check_root(g, bus);
+    check_root(g, bus, node);
 }
 
-void pci_check_acpi_root(void *user, uacpi_namespace_node *node)
+uacpi_ns_iteration_decision pci_check_acpi_root(void *, uacpi_namespace_node *node)
 {
     uint64_t seg = 0, bus = 0;
 
     uacpi_eval_integer(node, "_SEG", NULL, &seg);
     uacpi_eval_integer(node, "_BBN", NULL, &bus);
 
-    enumerate_pci_bus(seg, bus);
+    enumerate_pci_bus(seg, bus, node);
+    return UACPI_NS_ITERATION_DECISION_CONTINUE;
 }
 
 void acpi_pci_init()
@@ -309,7 +413,7 @@ struct PCIGroup *pci_group_find(unsigned group_number)
 
 int pcicdevice_compare(const void *aa, const void *bb)
 {
-    const struct PCIDevice **a = aa, **b = bb;
+    const struct PCIDevice * const * const a = aa, * const * const b = bb;
 
     if ((*a)->group != (*b)->group)
         return (*a)->group - (*b)->group;
@@ -323,6 +427,11 @@ int pcicdevice_compare(const void *aa, const void *bb)
 void request_pci_device(Message_Descriptor *desc, IPC_Request_PCI_Device *d)
 {
     int error = 0;
+
+    if (desc->size < sizeof(IPC_Request_PCI_Device)) {
+        error = -EINVAL;
+        goto err;
+    }
 
     struct PCIGroup *g = pci_group_find(d->group);
     if (!g) {
@@ -363,7 +472,7 @@ void request_pci_devices(Message_Descriptor *desc, IPC_Request_PCI_Devices *d)
     struct PCIDevice *dd;
     int result = 0;
     VECTOR_FOREACH(pci_devices, dd) {
-        for (int i = 0; i < requests; ++i) {
+        for (size_t i = 0; i < requests; ++i) {
             if (d->devices[i].vendor_id != 0xffff &&
                 d->devices[i].vendor_id != dd->vendor_id)
                 continue;

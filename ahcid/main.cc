@@ -44,6 +44,8 @@ struct PCIDescriptor {
 
 std::vector<PCIDescriptor> get_ahci_controllers()
 {
+    return {};
+
     auto struct_size = sizeof(IPC_Request_PCI_Devices) + sizeof(IPC_PCIDevice) * 2;
     auto request     = (IPC_Request_PCI_Devices *)alloca(struct_size);
 
