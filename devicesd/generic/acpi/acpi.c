@@ -39,6 +39,7 @@
 #include <string.h>
 #include <errno.h>
 #include <uacpi/event.h>
+#include <uacpi/utilities.h>
 
 int acpi_revision = -1;
 
@@ -171,6 +172,16 @@ int acpi_init(uacpi_phys_addr rsdp_phys_addr) {
         return -ENODEV;
     }
 
+    #ifdef __x86_64__
+    ret = uacpi_set_interrupt_model(UACPI_INTERRUPT_MODEL_IOAPIC);
+    if (uacpi_unlikely_error(ret)) {
+        fprintf(stderr, "uacpi_set_interrupt_model error: %s", uacpi_status_to_string(ret));
+        return -ENODEV;
+    }
+    #endif
+
+    acpi_pci_init();
+
     return 0;
 
     ret = uacpi_namespace_initialize();
@@ -184,6 +195,9 @@ int acpi_init(uacpi_phys_addr rsdp_phys_addr) {
         fprintf(stderr, "uACPI GPE initialization error: %s", uacpi_status_to_string(ret));
         return -ENODEV;
     }
+
+    find_acpi_devices();
+    power_button_init();
 
     return 0;
 }
@@ -215,6 +229,7 @@ void find_acpi_devices()
 
 
 void acpi_pci_init();
+void init_pci();
 void init_acpi()
 {
     printf("Info: Initializing ACPI...\n");
@@ -227,6 +242,7 @@ void init_acpi()
         printf("Warning: Did not initialize ACPI\n");
     }
 
+    init_pci();
 
     int i = acpi_init((uacpi_phys_addr)rsdp_desc);
     if (i != 0) {
@@ -234,12 +250,7 @@ void init_acpi()
         return;
     }
 
-    acpi_pci_init();
-
     //init_pci();
-
-    find_acpi_devices();
-    power_button_init();
 
     printf("Walked ACPI tables! ACPI revision: %i\n", acpi_revision);
 }

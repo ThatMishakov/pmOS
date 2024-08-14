@@ -353,8 +353,8 @@ void construct_paging()
             if (i == (long)temp_alloc_entry_id)
                 continue;
 
-            if (regions_data[i].type == LIMINE_MEMMAP_USABLE and
-                regions_data[i].length <= page_struct_page_size) {
+            if ((regions_data[i].type == LIMINE_MEMMAP_USABLE) and
+                (regions_data[i].length >= page_struct_page_size)) {
                 alloc_index = i;
                 break;
             }
@@ -409,7 +409,8 @@ void construct_paging()
                 }
 
                 if (i == alloc_index) {
-                    if (regions_data[i].length <= page_struct_page_size)
+                    assert(regions_data[i].length >= page_struct_page_size);
+                    if (regions_data[i].length == page_struct_page_size)
                         continue;
 
                     auto occupied_pages  = page_struct_page_size / PAGE_SIZE;

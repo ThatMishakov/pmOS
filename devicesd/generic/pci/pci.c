@@ -73,6 +73,8 @@ uacpi_ns_iteration_decision find_pci_device(void *param, uacpi_namespace_node *n
     return UACPI_NS_ITERATION_DECISION_CONTINUE;
 }
 
+void parse_interrupt_table(struct PCIGroup *g, int bus, uacpi_pci_routing_table *pci_routes);
+
 void check_function(struct PCIGroup *g, uint8_t bus, uint8_t device, uint8_t function, struct PCIDevice *parent_bridge, uacpi_namespace_node *node)
 {
     void *c = pcie_config_space_device(g, bus, device, function);
@@ -167,17 +169,18 @@ void check_function(struct PCIGroup *g, uint8_t bus, uint8_t device, uint8_t fun
         };
         uacpi_namespace_for_each_node_depth_first(node, find_pci_device, &ctx);
 
+        uint8_t secondary_bus = pci_secondary_bus(c);
+        printf("PCI secondary bus %x\n", secondary_bus);
+
         uacpi_pci_routing_table *pci_routes;
         uacpi_status ret = uacpi_get_pci_routing_table(ctx.out_node, &pci_routes);
         if (ret != UACPI_STATUS_OK) {
             fprintf(stderr, "Warning: Could not get PCI routing for root bridge bus %0x: %i\n", bus, ret);
         } else {
-            parse_interrupt_table(g, bus, pci_routes);
+            parse_interrupt_table(g, secondary_bus, pci_routes);
             uacpi_free_pci_routing_table(pci_routes);
         }
 
-        uint8_t secondary_bus = pci_secondary_bus(c);
-        printf("PCI secondary bus %x\n", secondary_bus);
         check_bus(g, secondary_bus, d, ctx.out_node);
     }
 }
@@ -220,7 +223,6 @@ void parse_interrupt_table(struct PCIGroup *g, int bus, uacpi_pci_routing_table 
 {
     for (size_t i = 0; i < pci_routes->num_entries; ++i) {
         uacpi_pci_routing_table_entry *entry = &pci_routes->entries[i];
-        printf("PCI routing: %x %x %x %x\n", entry->address, entry->index, entry->source, entry->pin);
 
         struct PCIGroupInterruptEntry e = {
             .bus = bus,
@@ -232,6 +234,11 @@ void parse_interrupt_table(struct PCIGroup *g, int bus, uacpi_pci_routing_table 
         };
 
         if (entry->source) {
+            if (entry->index != 0) {
+                printf("Warning: Unexpected index: %x\n", entry->index);
+                return;
+            }
+
             uacpi_resources *resources;
             uacpi_status ret = uacpi_get_current_resources(entry->source, &resources);
             if (ret != UACPI_STATUS_OK) {
@@ -240,7 +247,7 @@ void parse_interrupt_table(struct PCIGroup *g, int bus, uacpi_pci_routing_table 
 
             switch (resources->entries[0].type)
             {
-                case ACPI_RESOURCE_IRQ: {
+                case UACPI_RESOURCE_TYPE_IRQ: {
                     uacpi_resource_irq *irq = &resources->entries[0].irq;
                     
                     if (irq->triggering == UACPI_GPE_TRIGGERING_EDGE)
@@ -262,6 +269,8 @@ void parse_interrupt_table(struct PCIGroup *g, int bus, uacpi_pci_routing_table 
                     break;
             }
         }
+
+        printf("PCI interrupt: BUS %#x DEVICE %#x PIN %#x GSI %#i %s %s\n", e.bus, e.device, e.pin, e.gsi, e.active_low ? "Active Low" : "Active High", e.level_trigger ? "Level" : "Edge");
     }
 }
 
@@ -386,7 +395,6 @@ uacpi_ns_iteration_decision pci_check_acpi_root(void *, uacpi_namespace_node *no
 
 void acpi_pci_init()
 {
-    init_pci();
     static const char *pciRootIds[] = {
         "PNP0A03",
         "PNP0A08",
