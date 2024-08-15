@@ -34,8 +34,8 @@
 
 struct IOAPICID_struct {
     uint32_t reserved0 : 24;
-    uint8_t id : 4;
-    uint8_t reserved1 : 4;
+    uint8_t id : 8;
+    //uint8_t reserved1 : 4;
 } __attribute__((packed));
 
 typedef union {

@@ -30,9 +30,9 @@ ASMFLAGS = -I$(INCLUDEDIR)
 LDFLAGS = $(INTERNALLDFLAGS) -g
  
 # Use find to glob all *.c files in the directory and extract the object names.
-CCFILES := $(shell find ./generic/ -type f -name '*.cc')
-CFILES := $(shell find ./generic/ -type f -name '*.c')
-ASMFILES := $(shell find ./generic/ -type f -name '*.S')
+CCFILES := $(shell find ./generic/ -type f -name '*.cc') $(shell find ./arch/$(ARCH)/ -type f -name '*.cc') 
+CFILES := $(shell find ./generic/ -type f -name '*.c') $(shell find ./arch/$(ARCH)/ -type f -name '*.c') 
+ASMFILES := $(shell find ./generic/ -type f -name '*.S') $(shell find ./arch/$(ARCH)/ -type f -name '*.S') 
 OBJ    := $(CCFILES:.cc=.o) $(ASMFILES:.S=.o) $(CFILES:.c=.o)
 DEP    := $(OBJ:.o=.d)
 all: $(EXEC)

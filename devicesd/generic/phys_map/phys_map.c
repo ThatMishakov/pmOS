@@ -32,6 +32,7 @@
 #include <pmos/special.h>
 #include <pmos/system.h>
 #include <stdint.h>
+#include <sys/mman.h>
 
 void *map_phys(void *phys_addr, size_t bytes)
 {
@@ -57,5 +58,5 @@ void unmap_phys(void *virt_addr, size_t bytes)
     end_alligned = (end_alligned & ~(uint64_t)0777) + (end_alligned & (uint64_t)0777 ? 01000 : 0);
     size_t size_pages = (end_alligned - addr_alligned) >> 12;
 
-    // TODO
+    munmap(addr_alligned, size_pages);
 }

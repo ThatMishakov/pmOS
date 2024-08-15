@@ -34,6 +34,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <uacpi/acpi.h>
 
 ioapic_list *ioapic_list_root = NULL;
 
@@ -67,10 +68,10 @@ void init_ioapic_at(uint16_t id, uint64_t address, uint32_t base)
 {
     uint32_t *ioapic = map_phys((void *)address, 0x20);
 
-    // IOAPICID i = ioapic_read_ioapicid(ioapic);
-    // if (i.bits.id != id) {
-    //     printf("Warning: IOAPIC id does not match! (expected 0x%x got 0x%x)\n", id, i.bits.id);
-    // }
+    IOAPICID i = ioapic_read_ioapicid(ioapic);
+    if (i.bits.id != id) {
+        printf("Warning: IOAPIC id does not match! (expected 0x%x got 0x%x)\n", id, i.bits.id);
+    }
 
     ioapic_list *node    = malloc(sizeof(ioapic_list));
     node->next           = NULL;
@@ -94,6 +95,8 @@ void init_ioapic_at(uint16_t id, uint64_t address, uint32_t base)
 
     for (unsigned int i = 0; i < node->desc.max_int; ++i)
         ioapic_mask_int(ioapic, i);
+
+    printf("IOAPIC %i at 0x%X base %i max %i\n", id, address, base, node->desc.max_int);
 }
 
 ioapic_descriptor *get_ioapic_for_int(uint32_t intno)
