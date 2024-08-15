@@ -196,6 +196,29 @@ typedef struct IPC_Request_PCI_Device_Reply {
     uint64_t base_address;
 } IPC_Request_PCI_Device_Reply;
 
+
+#define IPC_Request_PCI_Device_GSI_NUM 0x0C
+typedef struct IPC_Request_PCI_Device_GSI {
+    uint32_t type; // IPC_Request_PCI_Device_GSI_NUM
+    uint32_t flags;
+    uint64_t reply_port;
+
+    uint32_t group; // uint32_t for alignment to 8 bytes
+    uint8_t bus;
+    uint8_t device;
+    uint8_t function;
+    // 0 for INTA, 1 for INTB, 2 for INTC, 3 for INTD
+    uint8_t pin;
+} IPC_Request_PCI_Device_GSI;
+
+#define IPC_Request_PCI_Device_GSI_Reply_NUM 0x0D
+typedef struct IPC_Request_PCI_Device_GSI_Reply {
+    uint32_t type; // IPC_Request_PCI_Device_GSI_Reply_NUM
+    uint32_t flags;
+    int32_t result; // Negative value on error, 0 on success
+    uint32_t gsi;
+} IPC_Request_PCI_Device_GSI_Reply;
+
 #define IPC_Kernel_Interrupt_NUM 0x20
 typedef struct IPC_Kernel_Interrupt {
     uint32_t type;

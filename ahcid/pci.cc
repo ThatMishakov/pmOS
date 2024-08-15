@@ -7,6 +7,7 @@
 #include <string.h>
 #include <sys/mman.h>
 #include <system_error>
+#include <errno.h>
 
 extern pmos_port_t devicesd_port;
 extern pmos_port_t cmd_port;
@@ -15,6 +16,7 @@ void send_devicesd(auto &request)
 {
     auto r = send_message_port(devicesd_port, sizeof(request), (void *)&request);
     if (r != 0) {
+        // TODO: Eventually don't throw
         printf("Failed to send message to devicesd: %li (%s)\n", r, strerror(-r));
         throw std::system_error(r, std::generic_category(), "Failed to send message to devicesd");
     }
@@ -51,22 +53,26 @@ PCIDevice::PCIDevice(uint16_t group, uint8_t bus, uint8_t device, uint8_t functi
     auto *reply = (IPC_Request_PCI_Device_Reply *)message;
     if (reply->type != IPC_Request_PCI_Device_Reply_NUM) {
         printf("Unexpected message type\n");
+        free(message);
         throw std::runtime_error("Unexpected message type");
     }
 
     if (reply->type_error < 0) {
         printf("Failed to get PCI device: %i (%s)\n", reply->type_error,
                strerror(-reply->type_error));
+        free(message);
         throw std::system_error(reply->type_error, std::generic_category(),
                                 "Failed to get PCI device");
     }
 
     if (reply->type_error != IPC_PCI_ACCESS_TYPE_MMIO) {
         printf("PCI device does not support MMIO\n");
+        free(message);
         throw std::runtime_error("PCI device does not support MMIO");
     }
 
     auto base_phys = reply->base_address;
+    free(message);
 
     // Map the PCI device's configuration space
     auto mem_req =
@@ -105,4 +111,63 @@ void PCIDevice::writew(uint16_t offset, uint16_t val)
 void PCIDevice::writel(uint16_t offset, uint32_t val)
 {
     *((volatile uint32_t *)(virt_addr + offset)) = val;
+}
+
+char PCIDevice::interrupt_pin() noexcept
+{
+    return readb(0x3d);
+}
+
+int PCIDevice::gsi(uint32_t &gsi_result) noexcept
+{
+    auto pin = interrupt_pin();
+    if (pin < 1 or pin > 4) {
+        errno = ENOENT;
+        return -1;
+    }
+
+    IPC_Request_PCI_Device_GSI request = {
+        .type       = IPC_Request_PCI_Device_GSI_NUM,
+        .flags      = 0,
+        .reply_port = cmd_port,
+        .group      = group,
+        .bus        = bus,
+        .device     = device,
+        .function   = function,
+        .pin        = (uint8_t)(pin - 1),
+    };
+
+    try {
+        send_devicesd(request);
+    } catch (std::system_error &e) {
+        errno = e.code().value();
+        return -1;
+    }
+
+    Message_Descriptor desc;
+    uint8_t *message;
+
+    result_t result = get_message(&desc, &message, cmd_port);
+    if (result != 0) {
+        errno = result;
+        return -1;
+    }
+
+    auto *reply = (IPC_Request_PCI_Device_GSI_Reply *)message;
+    if (reply->type != IPC_Request_PCI_Device_GSI_Reply_NUM) {
+        free(message);
+        errno = EPROTO;
+        return -1;
+    }
+
+    if (reply->result < 0) {
+        errno = -reply->result;
+        free(message);
+        return -1;
+    }
+
+    gsi_result = reply->gsi;
+    free(message);
+
+    return 0;
 }

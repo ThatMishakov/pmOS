@@ -65,7 +65,6 @@ uacpi_ns_iteration_decision find_pci_device(void *param, uacpi_namespace_node *n
         return UACPI_NS_ITERATION_DECISION_CONTINUE;
 
     if (addr == ctx->addr) {
-        printf("!!!!!!!!!!!!!!Found PCI device %lx\n", addr);
         ctx->out_node = node;
         return UACPI_NS_ITERATION_DECISION_BREAK;
     }
@@ -249,7 +248,12 @@ void parse_interrupt_table(struct PCIGroup *g, int bus, uacpi_pci_routing_table 
             {
                 case UACPI_RESOURCE_TYPE_IRQ: {
                     uacpi_resource_irq *irq = &resources->entries[0].irq;
-                    
+                    if (irq->num_irqs < 1) {
+                        fprintf(stderr, "Warning: Unexpected number of IRQs: %i\n", irq->num_irqs);
+                        break;
+                    }
+                    e.gsi = irq->irqs[0];
+
                     if (irq->triggering == UACPI_GPE_TRIGGERING_EDGE)
                         e.level_trigger = false;
                     if (irq->polarity == UACPI_POLARITY_ACTIVE_HIGH)
@@ -258,6 +262,12 @@ void parse_interrupt_table(struct PCIGroup *g, int bus, uacpi_pci_routing_table 
                     break;
                 case UACPI_RESOURCE_TYPE_EXTENDED_IRQ: {
                     uacpi_resource_extended_irq *irq = &resources->entries[0].extended_irq;
+                    if (irq->num_irqs < 1) {
+                        fprintf(stderr, "Warning: Unexpected number of IRQs: %i\n", irq->num_irqs);
+                        break;
+                    }
+                    e.gsi = irq->irqs[0];
+
                     if (irq->triggering == UACPI_GPE_TRIGGERING_EDGE)
                         e.level_trigger = false;
                     if (irq->polarity == UACPI_POLARITY_ACTIVE_HIGH)
@@ -271,6 +281,11 @@ void parse_interrupt_table(struct PCIGroup *g, int bus, uacpi_pci_routing_table 
         }
 
         printf("PCI interrupt: BUS %#x DEVICE %#x PIN %#x GSI %#i %s %s\n", e.bus, e.device, e.pin, e.gsi, e.active_low ? "Active Low" : "Active High", e.level_trigger ? "Level" : "Edge");
+        int ret = 0;
+        VECTOR_PUSH_BACK_CHECKED(g->interrupt_entries, e, ret);
+        if (ret != 0) {
+            fprintf(stderr, "Error: Could not allocate PCIGroupInterruptEntry: %i\n", errno);
+        }
     }
 }
 
@@ -369,6 +384,20 @@ struct PCIGroup *get_group(int segment)
     return NULL;
 }
 
+int interrupt_entry_compare(const void *l, const void *r)
+{
+    struct PCIGroupInterruptEntry const *a = l, *b = r;
+
+    if (a->bus != b->bus)
+        return a->bus - b->bus;
+    if (a->device != b->device)
+        return a->device - b->device;
+    if (a->pin != b->pin)
+        return a->pin - b->pin;
+
+    return 0;
+}
+
 void enumerate_pci_bus(int segment, int bus, uacpi_namespace_node *node)
 {
     struct PCIGroup *g = get_group(segment);
@@ -380,6 +409,8 @@ void enumerate_pci_bus(int segment, int bus, uacpi_namespace_node *node)
 
     printf("Enumerating PCI bus %i\n", bus);
     check_root(g, bus, node);
+
+    VECTOR_SORT(g->interrupt_entries, interrupt_entry_compare);
 }
 
 uacpi_ns_iteration_decision pci_check_acpi_root(void *, uacpi_namespace_node *node)
@@ -535,4 +566,94 @@ error:
     };
 
     send_message_port(d->reply_port, sizeof(reply_e), (char *)&reply_e);
+}
+
+struct PCIDevice *find_pci_device_descriptor(struct PCIGroup *g, uint8_t bus, uint8_t device, uint8_t function)
+{
+    struct PCIDevice *d;
+    // TODO: bsearch
+    VECTOR_FOREACH(pci_devices, d) {
+        if (d->group == g->group_number &&
+            d->bus == bus &&
+            d->device == device &&
+            d->function == function)
+            return d;
+    }
+
+    return NULL;
+}
+
+int resolve_gsi_for(struct PCIGroup *g, uint8_t bus, uint8_t device, uint8_t function, uint8_t pin, uint32_t *gsi, struct PCIDevice *d)
+{
+    struct PCIGroupInterruptEntry key = {
+        .bus = bus,
+        .device = device,
+        .pin = pin,
+    };
+
+    struct PCIGroupInterruptEntry *e = bsearch(&key, g->interrupt_entries.data, g->interrupt_entries.size,
+                                               sizeof(struct PCIGroupInterruptEntry), interrupt_entry_compare);
+    if (e) {
+        *gsi = e->gsi;
+        printf("devicesd: PCI device %i:%i:%i:%i pin %i GSI %i\n", g->group_number, bus, device, function, pin, *gsi);
+        return 0;
+    }
+
+    if (!d) {
+        // Find PCI device
+        d = find_pci_device_descriptor(g, bus, device, function);
+        if (!d)
+            return -ENOENT;
+    }
+
+    // Find the parent bridge
+    struct PCIDevice *bridge = d->associated_bridge;
+    if (!bridge)
+        return -ENOENT;
+
+    // Calculate pin of the parent bridge
+    uint8_t bridge_pin = (device + pin) % 4;
+
+    printf("devicesd: PCI device %i:%i:%i:%i parent bridge %i:%i:%i:%i pin %i\n", g->group_number, bus, device, function, bridge->group, bridge->bus, bridge->device, bridge->function, bridge_pin);
+
+    return resolve_gsi_for(g, bridge->bus, bridge->device, bridge->function, bridge_pin, gsi, bridge);
+}
+
+void request_pci_device_gsi(Message_Descriptor *desc, IPC_Request_PCI_Device_GSI *d)
+{
+    if (desc->size < sizeof(IPC_Request_PCI_Device_GSI)) {
+        IPC_Request_PCI_Device_GSI_Reply reply = {
+            .type = IPC_Request_PCI_Device_GSI_Reply_NUM,
+            .flags = 0,
+            .result = -EINVAL,
+            .gsi = 0,
+        };
+
+        send_message_port(d->reply_port, sizeof(reply), (char *)&reply);
+        return;
+    }
+
+    struct PCIGroup *g = pci_group_find(d->group);
+    if (!g) {
+        IPC_Request_PCI_Device_GSI_Reply reply = {
+            .type = IPC_Request_PCI_Device_GSI_Reply_NUM,
+            .flags = 0,
+            .result = -ENOENT,
+            .gsi = 0,
+        };
+
+        send_message_port(d->reply_port, sizeof(reply), (char *)&reply);
+        return;
+    }
+
+    uint32_t gsi = 0;
+    int ret = resolve_gsi_for(g, d->bus, d->device, d->function, d->pin, &gsi, NULL);
+    IPC_Request_PCI_Device_GSI_Reply reply = {
+        .type = IPC_Request_PCI_Device_GSI_Reply_NUM,
+        .flags = 0,
+        .result = ret,
+        .gsi = gsi,
+    };
+
+    send_message_port(d->reply_port, sizeof(reply), (char *)&reply);
 }

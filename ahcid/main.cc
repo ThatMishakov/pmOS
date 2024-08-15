@@ -44,8 +44,6 @@ struct PCIDescriptor {
 
 std::vector<PCIDescriptor> get_ahci_controllers()
 {
-    return {};
-
     auto struct_size = sizeof(IPC_Request_PCI_Devices) + sizeof(IPC_PCIDevice) * 2;
     auto request     = (IPC_Request_PCI_Devices *)alloca(struct_size);
 
@@ -765,6 +763,16 @@ void ahci_handle(PCIDescriptor d)
         }
 
         port.init_port();
+    }
+
+    // Attach interrupt
+    // TODO
+    uint32_t gsi;
+    int r = ahci_controller->gsi(gsi);
+    if (r < 0) {
+        printf("GSI error: %i (%s)\n", errno, strerror(errno));
+    } else {
+        printf("AHCI controller GSI: %u\n", gsi);
     }
 
     ahci_controller_main();

@@ -40,6 +40,7 @@
 #include <errno.h>
 #include <uacpi/event.h>
 #include <uacpi/utilities.h>
+#include <uacpi/sleep.h>
 
 int acpi_revision = -1;
 
@@ -149,6 +150,9 @@ void request_acpi_tables()
     free(message);
 }
 
+void acpi_pci_init();
+void init_pci();
+
 #include <uacpi/uacpi.h>
 #include <uacpi/event.h>
 int acpi_init(uacpi_phys_addr rsdp_phys_addr) {
@@ -182,8 +186,6 @@ int acpi_init(uacpi_phys_addr rsdp_phys_addr) {
 
     acpi_pci_init();
 
-    return 0;
-
     ret = uacpi_namespace_initialize();
     if (uacpi_unlikely_error(ret)) {
         fprintf(stderr, "uacpi_namespace_initialize error: %s", uacpi_status_to_string(ret));
@@ -206,6 +208,44 @@ static uacpi_interrupt_ret handle_power_button(uacpi_handle ctx) {
     printf("Power button pressed\n");
     return UACPI_INTERRUPT_HANDLED;
 }
+
+int system_shutdown(void) {
+    /*
+     * Prepare the system for shutdown.
+     * This will run the \_PTS & \_SST methods, if they exist, as well as
+     * some work to fetch the \_S5 and \_S0 values to make system wake
+     * possible later on.
+     */
+    uacpi_status ret = uacpi_prepare_for_sleep_state(UACPI_SLEEP_STATE_S5);
+    if (uacpi_unlikely_error(ret)) {
+        fprintf(stderr, "failed to prepare for sleep: %s", uacpi_status_to_string(ret));
+        return -EIO;
+    }
+
+    /*
+     * This is where we disable interrupts to prevent anything from
+     * racing with our shutdown sequence below.
+     */
+    //disable_interrupts();
+
+    /*
+     * Actually do the work of entering the sleep state by writing to the hardware
+     * registers with the values we fetched during preparation.
+     * This will also disable runtime events and enable only those that are
+     * needed for wake.
+     */
+    ret = uacpi_enter_sleep_state(UACPI_SLEEP_STATE_S5);
+    if (uacpi_unlikely_error(ret)) {
+        fprintf(stderr, "failed to enter sleep: %s", uacpi_status_to_string(ret));
+        return -EIO;
+    }
+
+    /*
+     * Technically unreachable code, but leave it here to prevent the compiler
+     * from complaining.
+     */
+    return 0;
+}
  
 int power_button_init(void) {
     uacpi_status ret = uacpi_install_fixed_event_handler(
@@ -227,9 +267,6 @@ void find_acpi_devices()
     find_com();
 }
 
-
-void acpi_pci_init();
-void init_pci();
 void init_acpi()
 {
     printf("Info: Initializing ACPI...\n");
