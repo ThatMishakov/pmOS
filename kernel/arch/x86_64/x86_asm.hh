@@ -51,3 +51,6 @@ extern "C" void setCR3(u64 cr3);
 
 extern "C" u64 getCR4();
 extern "C" void setCR4(u64 cr4);
+
+extern "C" u64 getCR8();
+extern "C" void setCR8(u64 cr8);

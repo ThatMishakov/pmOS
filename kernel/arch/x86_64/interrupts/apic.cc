@@ -41,6 +41,7 @@
 #include <utils.hh>
 #include <x86_asm.hh>
 #include <x86_utils.hh>
+#include <x86_asm.hh>
 
 using namespace kernel;
 
@@ -209,9 +210,9 @@ void smart_eoi(u8 intno)
         apic_eoi();
 }
 
-void apic_tp(int priority)
+void apic_pp(int priority)
 {
-    apic_write_reg(APIC_REG_TPR, priority << 4);
+    apic_write_reg(APIC_REG_PPR, priority << 4);
 }
 
 void lvt0_int_routine() {}
@@ -220,10 +221,9 @@ void lvt1_int_routine() {}
 
 void interrupt_complete(u32 intno)
 {
-    assert(intno >= 255);
-    serial_logger.printf("[Kernel] Info: Completing interrupt %h\n", intno);
+    assert(intno < 256);
     smart_eoi(intno);
-    apic_tp(0);
+    setCR8(0);
 }
 
 u32 interrupt_min() { return 48; }
@@ -231,8 +231,6 @@ u32 interrupt_max() { return 239; }
 
 extern "C" void programmable_interrupt(u32 intno)
 {
-    serial_logger.printf("[Kernel] Info: Interrupt %h\n", intno);
-
     auto c = get_cpu_struct();
 
     auto handler = c->int_handlers.get_handler(intno);
@@ -263,7 +261,7 @@ extern "C" void programmable_interrupt(u32 intno)
         handler->active = true;
         // Disable reception of other interrupts from peripheral devices until this one is
         // handled
-        apic_tp(14);
+        setCR8(15);
     }
 }
 

@@ -89,3 +89,12 @@ int assign_int_vector(int *cpu_id_out, uint8_t *vector_out)
     *vector_out = d->interrupt_number--;
     return 0;
 }
+
+uint32_t lapic_id_for_cpu(int cpu_id)
+{
+    if (cpu_id < 0 || cpu_id >= cpus.size) {
+        return -EINVAL;
+    }
+
+    return cpus.data[cpu_id].lapic_id;
+}

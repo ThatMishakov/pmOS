@@ -12,6 +12,7 @@
 #include <pmos/ipc.h>
 #include <assert.h>
 #include <interrupts.h>
+#include <pmos/special.h>
 
 void *uacpi_kernel_alloc(uacpi_size size)
 {
@@ -533,6 +534,14 @@ void *isr_func(void *arg)
         send_isr_reply(reply_port, UACPI_STATUS_INTERNAL_ERROR);
         return NULL;
     }
+
+    #ifdef __x86_64__
+    int result = pmos_request_io_permission();
+    if (result != SUCCESS) {
+        send_isr_reply(reply_port, UACPI_STATUS_INTERNAL_ERROR);
+        return NULL;
+    }
+    #endif
 
     send_isr_reply(reply_port, UACPI_STATUS_OK);
 

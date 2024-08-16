@@ -280,6 +280,7 @@ void push_mapping(struct InterruptMapping *m)
 }
 
 int assign_int_vector(int *cpu_id_out, uint8_t *vector_out);
+uint32_t lapic_id_for_cpu(int cpu_id);
 
 pthread_mutex_t int_vector_mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -332,7 +333,7 @@ int get_interrupt_vector(uint32_t gsi, bool active_low, bool level_trig, int *cp
     i.bits.INTPOL      = active_low;
     i.bits.TRIGMOD     = level_trig;
     i.bits.mask        = 0;
-    i.bits.destination = *cpu_id_out;
+    i.bits.destination = lapic_id_for_cpu(*cpu_id_out);
 
     ioapic_write_redir_reg(ioapic, ioapic_base, i);
 
