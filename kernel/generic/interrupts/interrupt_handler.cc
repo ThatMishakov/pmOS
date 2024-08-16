@@ -1,7 +1,5 @@
 #include "interrupt_handler.hh"
 
-#include "plic.hh"
-
 #include <assert.h>
 #include <exceptions.hh>
 #include <sched/sched.hh>
@@ -25,7 +23,7 @@ void Interrupt_Handler_Table::add_handler(u64 interrupt_number, const klib::shar
         throw Kern_Exception(-EEXIST, "Handler already exists");
     }
 
-    if (interrupt_number >= plic_interrupt_limit())
+    if (interrupt_number > interrupt_max() || interrupt_number < interrupt_min())
         throw Kern_Exception(-EINVAL, "Invalid interrupt number");
 
     auto handler              = klib::make_unique<Interrupt_Handler>();
@@ -58,7 +56,7 @@ void Interrupt_Handler_Table::add_handler(u64 interrupt_number, const klib::shar
     handlers[i] = klib::move(handler);
 
     // Enable the interrupt
-    plic_interrupt_enable(interrupt_number);
+    interrupt_enable(interrupt_number);
 }
 
 Interrupt_Handler *Interrupt_Handler_Table::get_handler(u64 interrupt_number)
@@ -105,7 +103,7 @@ void Interrupt_Handler_Table::remove_handler(u64 interrupt_number)
         owner->interrupt_handlers.erase(handler);
 
     // Disable the interrupt
-    plic_interrupt_disable(interrupt_number);
+    interrupt_disable(interrupt_number);
 
     // Find the handler index
     auto handler_index = get_handler_index(interrupt_number);
@@ -130,5 +128,5 @@ void Interrupt_Handler_Table::ack_interrupt(u64 interrupt_number, u64 task)
         throw Kern_Exception(-EBADF, "Handler not active");
 
     handler->active = false;
-    plic_complete(interrupt_number);
+    interrupt_complete(interrupt_number);
 }

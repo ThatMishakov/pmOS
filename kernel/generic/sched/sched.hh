@@ -40,13 +40,14 @@
 #include <messaging/messaging.hh>
 #include <processes/tasks.hh>
 #include <types.hh>
+#include <interrupts/interrupt_handler.hh>
+
 
 #ifdef __x86_64__
     #include <interrupts/gdt.hh>
     #include <paging/x86_temp_mapper.hh>
 #elif defined(__riscv)
     #include <cpus/floating_point.hh>
-    #include <interrupts/interrupt_handler.hh>
     #include <paging/riscv64_temp_mapper.hh>
 #endif
 
@@ -139,9 +140,7 @@ struct CPU_Info {
 #endif
 
 // ISRs in userspace
-#ifdef __riscv
     Interrupt_Handler_Table int_handlers;
-#endif
 
     static constexpr int IPI_RESCHEDULE = 0x1;
     static constexpr int IPI_TLB_FLUSH  = 0x2;

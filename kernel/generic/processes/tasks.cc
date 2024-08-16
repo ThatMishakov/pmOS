@@ -407,11 +407,9 @@ void TaskDescriptor::cleanup()
     cleaned_up = true;
 
     auto c = get_cpu_struct();
-#ifdef __riscv
     for (auto interr: interrupt_handlers) {
         c->int_handlers.remove_handler(interr->interrupt_number);
     }
-#endif
 }
 
 TaskDescriptor::TaskID TaskDescriptor::get_new_task_id()

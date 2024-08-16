@@ -186,20 +186,20 @@ int acpi_init(uacpi_phys_addr rsdp_phys_addr) {
 
     acpi_pci_init();
 
-    // ret = uacpi_namespace_initialize();
-    // if (uacpi_unlikely_error(ret)) {
-    //     fprintf(stderr, "uacpi_namespace_initialize error: %s", uacpi_status_to_string(ret));
-    //     return -ENODEV;
-    // }
+    ret = uacpi_namespace_initialize();
+    if (uacpi_unlikely_error(ret)) {
+        fprintf(stderr, "uacpi_namespace_initialize error: %s", uacpi_status_to_string(ret));
+        return -ENODEV;
+    }
 
-    // ret = uacpi_finalize_gpe_initialization();
-    // if (uacpi_unlikely_error(ret)) {
-    //     fprintf(stderr, "uACPI GPE initialization error: %s", uacpi_status_to_string(ret));
-    //     return -ENODEV;
-    // }
+    ret = uacpi_finalize_gpe_initialization();
+    if (uacpi_unlikely_error(ret)) {
+        fprintf(stderr, "uACPI GPE initialization error: %s", uacpi_status_to_string(ret));
+        return -ENODEV;
+    }
 
-    // find_acpi_devices();
-    // power_button_init();
+    find_acpi_devices();
+    power_button_init();
 
     return 0;
 }

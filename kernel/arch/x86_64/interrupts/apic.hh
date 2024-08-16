@@ -32,6 +32,7 @@
 
 #define APIC_REG_LAPIC_ID     0x20
 #define APIC_REG_TPR          0x80
+#define APIC_REG_PPR          0xa0
 #define APIC_REG_EOI          0xb0
 #define APIC_REG_LDR          0xd0
 #define APIC_REG_DFR          0xe0

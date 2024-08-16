@@ -35,7 +35,7 @@
 #include <assert.h>
 #include <string.h>
 
-unsigned char interrupt_number = 245;
+unsigned char interrupt_number = 239;
 
 uint8_t get_free_interrupt() { return interrupt_number--; }
 
@@ -61,7 +61,7 @@ void init_cpus()
         int r = 0;
         struct CPUDescriptor d = {
             .lapic_id = (uint32_t)a.value,
-            .interrupt_number = 245,
+            .interrupt_number = 239,
         };
 
         VECTOR_PUSH_BACK_CHECKED(cpus, d, r);

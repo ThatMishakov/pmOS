@@ -36,6 +36,8 @@
 #include <kern_logger/kern_logger.hh>
 #include <memory/paging.hh>
 #include <memory/vmm.hh>
+#include <pmos/ipc.h>
+#include <sched/sched.hh>
 #include <utils.hh>
 #include <x86_asm.hh>
 #include <x86_utils.hh>
@@ -207,6 +209,63 @@ void smart_eoi(u8 intno)
         apic_eoi();
 }
 
+void apic_tp(int priority)
+{
+    apic_write_reg(APIC_REG_TPR, priority << 4);
+}
+
 void lvt0_int_routine() {}
 
 void lvt1_int_routine() {}
+
+void interrupt_complete(u32 intno)
+{
+    assert(intno >= 255);
+    serial_logger.printf("[Kernel] Info: Completing interrupt %h\n", intno);
+    smart_eoi(intno);
+    apic_tp(0);
+}
+
+u32 interrupt_min() { return 48; }
+u32 interrupt_max() { return 239; }
+
+extern "C" void programmable_interrupt(u32 intno)
+{
+    serial_logger.printf("[Kernel] Info: Interrupt %h\n", intno);
+
+    auto c = get_cpu_struct();
+
+    auto handler = c->int_handlers.get_handler(intno);
+    if (!handler) {
+        global_logger.printf("[Kernel] Error: No handler for interrupt %h\n", intno);
+        apic_eoi();
+        return;
+    }
+
+    auto port = handler->port.lock();
+    bool sent = false;
+    try {
+        if (port) {
+            IPC_Kernel_Interrupt kmsg = {IPC_Kernel_Interrupt_NUM, intno, c->cpu_id};
+            port->atomic_send_from_system(reinterpret_cast<char *>(&kmsg), sizeof(kmsg));
+        }
+
+        sent = true;
+    } catch (const Kern_Exception &e) {
+        serial_logger.printf("Error: %s\n", e.err_message);
+    }
+
+    if (not sent) {
+        apic_eoi();
+
+        c->int_handlers.remove_handler(intno);
+    } else {
+        handler->active = true;
+        // Disable reception of other interrupts from peripheral devices until this one is
+        // handled
+        apic_tp(14);
+    }
+}
+
+void interrupt_enable(u32) {}
+void interrupt_disable(u32) {}

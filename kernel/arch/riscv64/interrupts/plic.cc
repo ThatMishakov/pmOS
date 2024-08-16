@@ -167,6 +167,8 @@ void init_plic()
                          system_plic.plic_id, system_plic.max_priority);
 }
 
+void interrupt_enable(u32 interrupt_id) { plic_interrupt_enable(interrupt_id); }
+
 void plic_interrupt_enable(u32 interrupt_id)
 {
     // Set priority 1 (will do for now)
@@ -184,6 +186,8 @@ void plic_interrupt_enable(u32 interrupt_id)
     plic_write(system_plic, offset, reg | mask);
 }
 
+void interrupt_disable(u32 interrupt_id) { plic_interrupt_disable(interrupt_id); }
+
 void plic_interrupt_disable(u32 interrupt_id)
 {
     const auto c         = get_cpu_struct();
@@ -199,6 +203,9 @@ void plic_interrupt_disable(u32 interrupt_id)
 }
 
 u32 plic_interrupt_limit() { return system_plic.external_interrupt_sources; }
+
+u32 interrupt_min() { return 0; }
+u32 interrupt_max() { return plic_interrupt_limit() - 1; }
 
 void plic_set_threshold(u32 threshold)
 {
@@ -226,6 +233,8 @@ u32 plic_claim()
     const u32 offset = PLIC_CLAIM_OFFSET + (context_id * PLIC_COMPLETE_CONTEXT_STRIDE);
     return plic_read(system_plic, offset);
 }
+
+void interrupt_complete(u32 interrupt_id) { plic_complete(interrupt_id); }
 
 void plic_complete(u32 interrupt_id)
 {

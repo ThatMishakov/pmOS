@@ -50,9 +50,9 @@
 
 #ifdef __riscv
     #include <cpus/floating_point.hh>
+#endif
 
 struct Interrupt_Handler;
-#endif
 
 struct TaskPermissions {
 };
@@ -186,7 +186,6 @@ public:
 #ifdef __x86_64__
     // SSE data on x86_64 CPUs (floating point, vector registers)
     SSE_Data sse_data;
-    inline bool can_be_rebound() { return true; }
 #elif defined(__riscv)
     // Floating point data on RISC-V CPUs
 
@@ -203,11 +202,10 @@ public:
 
     /// Last hart id that used the floating point unit
     u64 last_fp_hart_id = 0;
-
+#endif
     // Interrupts handlers
     klib::set<Interrupt_Handler *> interrupt_handlers;
     inline bool can_be_rebound() { return interrupt_handlers.empty(); }
-#endif
 
     // Debugging
     bool cleaned_up = false;

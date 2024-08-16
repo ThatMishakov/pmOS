@@ -517,7 +517,7 @@ void syscall_create_port(u64 owner, u64, u64, u64, u64, u64)
 
 void syscall_set_interrupt(uint64_t port, u64 intno, u64 flags, u64, u64, u64)
 {
-#ifdef __riscv
+#if defined(__riscv) || defined(__x86_64__)
     auto c               = get_cpu_struct();
     const task_ptr &task = c->current_task;
 
@@ -529,8 +529,6 @@ void syscall_set_interrupt(uint64_t port, u64 intno, u64 flags, u64, u64, u64)
     syscall_ret_low(task)  = SUCCESS;
     syscall_ret_high(task) = intno;
     c->int_handlers.add_handler(intno, port_ptr);
-#elif defined(__x86_64__)
-    throw Kern_Exception(-ENOSYS, "interrupts on x86 are not implemented");
 #else
     #error Unknown architecture
 #endif
@@ -538,7 +536,7 @@ void syscall_set_interrupt(uint64_t port, u64 intno, u64 flags, u64, u64, u64)
 
 void syscall_complete_interrupt(u64 intno, u64, u64, u64, u64, u64)
 {
-#ifdef __riscv
+#if defined(__riscv) || defined(__x86_64__)
     auto c               = get_cpu_struct();
     const task_ptr &task = c->current_task;
 
@@ -551,8 +549,6 @@ void syscall_complete_interrupt(u64 intno, u64, u64, u64, u64, u64)
         throw e;
     }
     syscall_ret_low(task) = SUCCESS;
-#elif defined(__x86_64__)
-    throw Kern_Exception(-ENOSYS, "interrupts on x86 are not implemented");
 #else
     #error Unknown architecture
 #endif

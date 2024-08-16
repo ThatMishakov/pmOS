@@ -25,3 +25,11 @@ struct Interrupt_Handler_Table {
     Interrupt_Handler *get_handler(u64 interrupt_number);
     size_t get_handler_index(u64 interrupt_number);
 };
+
+// Arch-specific functions
+void interrupt_enable(u32 interrupt_id);
+void interrupt_disable(u32 interrupt_id);
+void interrupt_complete(u32 interrupt_id);
+
+u32 interrupt_min();
+u32 interrupt_max();
