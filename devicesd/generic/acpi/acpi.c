@@ -280,6 +280,7 @@ void init_acpi()
         printf("Warning: Did not initialize ACPI\n");
     }
 
+    init_ioapic();
     init_pci();
 
     int i = acpi_init((uacpi_phys_addr)rsdp_desc);
@@ -292,5 +293,4 @@ void init_acpi()
 
     printf("Walked ACPI tables! ACPI revision: %i\n", acpi_revision);
 
-    init_ioapic();
 }

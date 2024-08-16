@@ -60,7 +60,7 @@ result_t request_priority(uint64_t priority)
     return pmos_syscall(SYSCALL_SET_PRIORITY, priority).value;
 }
 
-u64 get_lapic_id() { return pmos_syscall(SYSCALL_GET_LAPIC_ID).value; }
+syscall_r get_lapic_id(uint64_t cpu_id) { return pmos_syscall(SYSCALL_GET_LAPIC_ID, cpu_id); }
 
 ports_request_t create_port(pid_t owner, uint64_t flags)
 {

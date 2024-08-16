@@ -11,6 +11,7 @@
 #include <pmos/interrupts.h>
 #include <pmos/ipc.h>
 #include <assert.h>
+#include <interrupts.h>
 
 void *uacpi_kernel_alloc(uacpi_size size)
 {
@@ -526,16 +527,9 @@ void *isr_func(void *arg)
     }
     data->port = p.port;
 
-    result_t r = set_affinity(TASK_ID_SELF, CURRENT_CPU, 0);
-    if (r != SUCCESS) {
-        send_isr_reply(reply_port, UACPI_STATUS_INTERNAL_ERROR);
-        return NULL;
-    }
-
-    // Request interrupt from kernel
-    syscall_r rr = set_interrupt(p.port, data->irq, 0);
-    if (r != SUCCESS) {
-        fprintf(stderr, "Failed to set interrupt\n");
+    uint32_t int_vector = 0;
+    int r = install_isa_interrupt(data->irq, 0, p.port, &int_vector);
+    if (r < 0) {
         send_isr_reply(reply_port, UACPI_STATUS_INTERNAL_ERROR);
         return NULL;
     }
@@ -555,7 +549,7 @@ void *isr_func(void *arg)
         IPC_Generic_Msg *ipc_msg = (IPC_Generic_Msg *)message;
         if (ipc_msg->type == IPC_Kernel_Interrupt_NUM) {
             data->handler(data->ctx);
-            complete_interrupt(rr.value);
+            complete_interrupt(int_vector);
         } else if (ipc_msg->type == IPC_ISR_Unregister_NUM) {
             break;
         } else {

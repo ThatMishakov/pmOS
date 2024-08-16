@@ -40,9 +40,9 @@
 #include <utils.hh>
 // #include <cpus/cpus.hh>
 #include "task_group.hh"
-#include <clock.hh>
 
 #include <assert.h>
+#include <clock.hh>
 #include <exceptions.hh>
 #include <kern_logger/kern_logger.hh>
 #include <lib/string.hh>
@@ -455,12 +455,28 @@ void syscall_set_priority(u64 priority, u64, u64, u64, u64, u64)
     reschedule();
 }
 
-void syscall_get_lapic_id(u64, u64, u64, u64, u64, u64)
+void syscall_get_lapic_id(u64 cpu_id, u64, u64, u64, u64, u64)
 {
+#ifdef __x86_64__
+
+    CPU_Info *i;
+    if (cpu_id == 0) {
+        i = get_cpu_struct();
+    } else if (cpu_id > cpus.size())
+        throw Kern_Exception(-EINVAL, "CPU ID is out of range");
+    else
+        i = cpus[cpu_id - 1];
+
+    syscall_ret_low(get_current_task())  = SUCCESS;
+    // TODO: Store lapic_id withouth shifting it
+    syscall_ret_high(get_current_task()) = i->lapic_id << 24;
+
+#else
     // Not available on RISC-V
     // TODO: This should be hart id
     // syscall_ret_high(get_current_task()) = get_cpu_struct()->lapic_id;
     throw Kern_Exception(-ENOSYS, "syscall_get_lapic_id is not implemented");
+#endif
 }
 
 void syscall_set_task_name(u64 pid, u64 /* const char* */ string, u64 length, u64, u64, u64)
@@ -529,8 +545,9 @@ void syscall_complete_interrupt(u64 intno, u64, u64, u64, u64, u64)
     try {
         c->int_handlers.ack_interrupt(intno, task->task_id);
     } catch (Kern_Exception &e) {
-        serial_logger.printf("Error acking interrupt: %s, task %i intno %i CPU %i task CPU %i\n", e.err_message,
-                             task->task_id, intno, c->cpu_id, task->cpu_affinity-1);
+        serial_logger.printf("Error acking interrupt: %s, task %i intno %i CPU %i task CPU %i\n",
+                             e.err_message, task->task_id, intno, c->cpu_id,
+                             task->cpu_affinity - 1);
         throw e;
     }
     syscall_ret_low(task) = SUCCESS;
@@ -820,14 +837,16 @@ void syscall_get_segment(u64 pid, u64 segment_type, u64 ptr, u64, u64, u64)
     switch (segment_type) {
     case 1: {
         segment = target->regs.thread_pointer();
-        auto b = copy_to_user((char *)&current->regs.thread_pointer(), (char *)ptr, sizeof(segment));
+        auto b =
+            copy_to_user((char *)&current->regs.thread_pointer(), (char *)ptr, sizeof(segment));
         if (not b)
             return;
         break;
     }
     case 2: {
         segment = target->regs.global_pointer();
-        auto b = copy_to_user((char *)&current->regs.global_pointer(), (char *)ptr, sizeof(segment));
+        auto b =
+            copy_to_user((char *)&current->regs.global_pointer(), (char *)ptr, sizeof(segment));
         if (not b)
             return;
         break;
@@ -918,9 +937,9 @@ void syscall_create_mem_object(u64 size_bytes, u64, u64, u64, u64, u64)
 void syscall_map_mem_object(u64 page_table_id, u64 addr_start, u64 size_bytes, u64 access,
                             u64 object_id, u64 offset)
 {
-    const auto &current_task       = get_current_task();
-    auto table                     = page_table_id == 0 ? current_task->page_table
-                                                        : Arch_Page_Table::get_page_table_throw(page_table_id);
+    const auto &current_task = get_current_task();
+    auto table               = page_table_id == 0 ? current_task->page_table
+                                                  : Arch_Page_Table::get_page_table_throw(page_table_id);
 
     if ((size_bytes == 0) or (size_bytes & 0xfff != 0))
         throw Kern_Exception(-EINVAL, "size not page aligned");
@@ -957,13 +976,15 @@ void syscall_unmap_range(u64 task_id, u64 addr_start, u64 size, u64, u64, u64)
 {
     syscall_ret_low(get_current_task()) = SUCCESS;
 
-    const auto task        = task_id == 0 ? get_cpu_struct()->current_task : get_task_throw(task_id);
+    const auto task = task_id == 0 ? get_cpu_struct()->current_task : get_task_throw(task_id);
     const auto &page_table = task->page_table;
 
-    // TODO: Passing misaligned pointers might potentially break the kernel (or not)
-    // Investigate this
+    // Maybe EINVAL if unaligned?
+    auto offset             = addr_start & (PAGE_SIZE - 1);
+    auto addr_start_aligned = addr_start - offset;
+    auto size_aligned       = (size + offset + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
 
-    page_table->atomic_release_in_range(addr_start, size);
+    page_table->atomic_release_in_range(addr_start_aligned, size_aligned);
 }
 
 void syscall_remove_from_task_group(u64 pid, u64 group, u64, u64, u64, u64)
@@ -1038,27 +1059,47 @@ void syscall_set_affinity(u64 pid, u64 affinity, u64 flags, u64, u64, u64)
     const auto task        = pid == 0 ? current_cpu->current_task : get_task_throw(pid);
     const auto cpu         = affinity == -1UL ? current_cpu->cpu_id + 1 : affinity;
 
-    if (task != current_cpu->current_task) {
-        throw Kern_Exception(-EPERM, "setting affinity for another task is not implemented");
-    }
-
     const auto cpu_count = get_cpu_count();
     if (cpu > cpu_count) {
         throw Kern_Exception(-ENOENT, "cpu id is out of range");
     }
 
-    if (cpu == 0 or cpu != (current_cpu->cpu_id + 1)) {
-        throw Kern_Exception(-ENOTSUP, "binding affinity to a different CPU is not implemented");
-    }
-
-    if (not task->can_be_rebound())
-        throw Kern_Exception(-EPERM, "task can't be rebound");
-
-    syscall_ret_low(task) = SUCCESS;
-
-    {
+    if (task != current_cpu->current_task) {
         Auto_Lock_Scope lock(task->sched_lock);
-        task->cpu_affinity = cpu;
+        if (task->status != TaskStatus::TASK_PAUSED)
+            throw Kern_Exception(-EBUSY, "task is not paused");
+
+        if (not task->can_be_rebound())
+            throw Kern_Exception(-EPERM, "task can't be rebound");
+
+        syscall_ret_low(current_cpu->current_task) = SUCCESS;
+        syscall_ret_high(task)                     = task->cpu_affinity;
+        task->cpu_affinity                         = cpu;
+    } else {
+        if (not task->can_be_rebound())
+            throw Kern_Exception(-EPERM, "task can't be rebound");
+
+        if (cpu != (current_cpu->cpu_id + 1)) {
+            syscall_ret_low(task) = SUCCESS;
+            find_new_process();
+
+            {
+                Auto_Lock_Scope lock(task->sched_lock);
+                syscall_ret_high(task) = task->cpu_affinity;
+                task->cpu_affinity     = cpu;
+                push_ready(task);
+            }
+
+            auto remote_cpu = cpus[cpu - 1];
+            assert(remote_cpu->cpu_id == cpu - 1);
+            if (remote_cpu->current_task_priority > task->priority)
+                remote_cpu->ipi_reschedule();
+        } else {
+            syscall_ret_low(task) = SUCCESS;
+            Auto_Lock_Scope lock(task->sched_lock);
+            syscall_ret_high(task) = task->cpu_affinity;
+            task->cpu_affinity     = cpu;
+        }
     }
 
     // serial_logger.printf("Task %d (%s) affinity set to %d\n", task->task_id, task->name.c_str(),
@@ -1083,8 +1124,8 @@ void syscall_get_time(u64 mode, u64, u64, u64, u64, u64)
         syscall_ret_high(current_task) = get_ns_since_bootup();
         break;
     case GET_TIME_REALTIME_NANOSECONDS:
-        syscall_ret_low(current_task) = SUCCESS;
-        syscall_ret_high(current_task) = unix_time_bootup*1000000000 + get_ns_since_bootup();
+        syscall_ret_low(current_task)  = SUCCESS;
+        syscall_ret_high(current_task) = unix_time_bootup * 1000000000 + get_ns_since_bootup();
         break;
     default:
         throw Kern_Exception(-ENOTSUP, "unknown mode in syscall_get_time");
@@ -1224,13 +1265,13 @@ void syscall_get_page_address(u64 task_id, u64 page_base, u64 flags, u64, u64, u
     auto table = task->page_table;
     if (not table)
         throw Kern_Exception(-ENOENT, "task has no page table");
-    
+
     Auto_Lock_Scope lock(table->lock);
 
     auto b = table->prepare_user_page(page_base, 0);
     if (not b)
         return;
 
-    auto mapping = table->get_page_mapping(page_base);
+    auto mapping           = table->get_page_mapping(page_base);
     syscall_ret_high(task) = mapping.page_addr;
 }

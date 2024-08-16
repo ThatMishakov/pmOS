@@ -226,7 +226,10 @@ result_t request_priority(uint64_t priority);
 result_t set_affinity(uint64_t tid, uint64_t cpu_id, uint64_t flags);
 
 /// Returns the LAPIC id the process is running on when calling the process
-u64 get_lapic_id();
+/// This value is not shifted left, so in non-X2APIC it would be lapic id << 24
+/// @param cpu_num Index of the CPU (assigned by the kernel during its initialization).
+///                0 counts as the CPU the caller is executing on.
+syscall_r get_lapic_id(uint64_t cpu_id);
 
 /// Type for the task group ID
 typedef uint64_t task_group_t;

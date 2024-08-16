@@ -76,7 +76,6 @@ u32 int_vec = 0;
 
 void set_up_interrupt()
 {
-#ifdef __riscv
     printf("Initializing interrupts... Mask: %x\n", interrupt_type_mask);
 
     // Check if interrupts are supported
@@ -97,7 +96,6 @@ void set_up_interrupt()
     int_vec = v.value;
 
     have_interrupts = true;
-#endif
 }
 
 void ns16550_init()

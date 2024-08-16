@@ -147,7 +147,8 @@
         "event.h": "c",
         "stat.h": "c",
         "__internal.h": "c",
-        "variant": "cpp"
+        "variant": "cpp",
+        "sysinfo.h": "c"
     },
     "cmake.configureOnOpen": false
 }

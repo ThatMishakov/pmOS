@@ -64,8 +64,8 @@ struct __attribute__((packed)) IOREDTBL_struct {
     uint8_t REM_IRR : 1;
     uint8_t TRIGMOD : 1;
     uint8_t mask : 1;
-    uint64_t reserved : 39;
-    uint8_t destination : 8;
+    uint16_t reserved : 15;
+    uint32_t destination;
 };
 
 typedef union {

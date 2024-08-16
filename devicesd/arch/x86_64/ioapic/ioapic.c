@@ -35,6 +35,10 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <uacpi/acpi.h>
+#include <errno.h>
+#include <pthread.h>
+#include <interrupts.h>
+#include <string.h>
 
 ioapic_list *ioapic_list_root = NULL;
 
@@ -96,7 +100,7 @@ void init_ioapic_at(uint16_t id, uint64_t address, uint32_t base)
     for (unsigned int i = 0; i < node->desc.max_int; ++i)
         ioapic_mask_int(ioapic, i);
 
-    printf("IOAPIC %i at 0x%X base %i max %i\n", id, address, base, node->desc.max_int);
+    printf("IOAPIC %i at %#lX base %i max %i\n", id, address, base, node->desc.max_int);
 }
 
 ioapic_descriptor *get_ioapic_for_int(uint32_t intno)
@@ -115,8 +119,11 @@ ioapic_descriptor *get_ioapic_for_int(uint32_t intno)
 
 ioapic_descriptor *get_first_ioapic() { return get_ioapic_for_int(0); }
 
+void init_cpus();
+
 void init_ioapic()
 {
+    init_cpus();
     MADT *madt = (MADT *)get_table("APIC", 0);
 
     if (madt == NULL) {
@@ -204,7 +211,7 @@ bool program_ioapic(uint8_t cpu_int_vector, uint32_t ext_int_vector)
     i.bits.INTPOL      = desc.active_low;
     i.bits.TRIGMOD     = desc.level_trig;
     i.bits.mask        = 0;
-    i.bits.destination = get_lapic_id();
+    i.bits.destination = get_lapic_id(0).value;
 
     ioapic_write_redir_reg(ioapic, ioapic_base, i);
 
@@ -228,7 +235,7 @@ bool program_ioapic_manual(uint8_t cpu_int_vector, uint32_t ext_int_vector, bool
     i.bits.INTPOL      = active_low;
     i.bits.TRIGMOD     = level_trig;
     i.bits.mask        = 0;
-    i.bits.destination = get_lapic_id();
+    i.bits.destination = get_lapic_id(0).value;
 
     ioapic_write_redir_reg(ioapic, ioapic_base, i);
 
@@ -244,16 +251,157 @@ void ioapic_mask_int(volatile uint32_t *ioapic, uint32_t intno)
     ioapic_write_redir_reg(ioapic, intno, i);
 }
 
-// TODO
-uint8_t ioapic_get_int(struct int_task_descriptor desc, uint8_t line, bool active_low,
-                       bool level_trig, bool check_free)
+struct InterruptMapping {
+    struct InterruptMapping *next;
+    uint32_t gsi;
+
+    int cpu_id;
+    uint8_t vector;
+};
+
+struct InterruptMapping *mappings = NULL;
+
+struct InterruptMapping *get_mapping(uint32_t gsi)
 {
-    uint8_t cpu_int_vector = get_free_interrupt();
+    struct InterruptMapping *m = mappings;
+    while (m)
+    {
+        if (m->gsi == gsi)
+            break;
+        ++m;
+    }
+    return m;
+}
 
-    result_t kern_result = set_interrupt(desc.channel, cpu_int_vector, 0);
-    if (kern_result != SUCCESS)
+void push_mapping(struct InterruptMapping *m)
+{
+    m->next = mappings;
+    mappings = m;
+}
+
+int assign_int_vector(int *cpu_id_out, uint8_t *vector_out);
+
+pthread_mutex_t int_vector_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+int get_interrupt_vector(uint32_t gsi, bool active_low, bool level_trig, int *cpu_id_out, uint8_t *vector_out)
+{
+    pthread_mutex_lock(&int_vector_mutex);
+    struct InterruptMapping *m = get_mapping(gsi);
+    if (m) {
+        *cpu_id_out = m->cpu_id;
+        *vector_out = m->vector;
+        pthread_mutex_unlock(&int_vector_mutex);
         return 0;
+    }
 
-    bool result = program_ioapic_manual(cpu_int_vector, line, active_low, level_trig);
-    return result ? cpu_int_vector : 0;
+    ioapic_descriptor *ioapic_desc = get_ioapic_for_int(gsi);
+    if (!ioapic_desc) {
+        fprintf(stderr, "Error: Could not find IOAPIC for interrupt %u\n", gsi);
+        pthread_mutex_unlock(&int_vector_mutex);
+        return -EINVAL;
+    }
+
+    struct InterruptMapping *new_mapping = malloc(sizeof(*new_mapping));
+    if (!new_mapping) {
+        printf("Error: Could not allocate memory for new interrupt mapping\n");
+        pthread_mutex_unlock(&int_vector_mutex);
+        return -ENOMEM;
+    }
+
+    int result = assign_int_vector(cpu_id_out, vector_out);
+    if (result < 0) {
+        free(new_mapping);
+        pthread_mutex_unlock(&int_vector_mutex);
+        return result;
+    }
+
+    new_mapping->gsi = gsi;
+    new_mapping->cpu_id = *cpu_id_out;
+    new_mapping->vector = *vector_out;
+    push_mapping(new_mapping);
+
+
+    // Program IOAPIC
+    volatile uint32_t *ioapic = ioapic_desc->virt_addr;
+    uint32_t ioapic_base      = gsi - ioapic_desc->int_base;
+
+    IOREDTBL i         = ioapic_read_redir_reg(ioapic, ioapic_base);
+    i.bits.int_vector  = *vector_out;
+    i.bits.DELMOD      = 0b000;
+    i.bits.DESTMOD     = 0;
+    i.bits.INTPOL      = active_low;
+    i.bits.TRIGMOD     = level_trig;
+    i.bits.mask        = 0;
+    i.bits.destination = *cpu_id_out;
+
+    ioapic_write_redir_reg(ioapic, ioapic_base, i);
+
+    pthread_mutex_unlock(&int_vector_mutex);
+
+    printf("New interrupt mapping: GSI %u -> CPU %d, vector %u\n", gsi, *cpu_id_out, *vector_out);
+
+    return 0;
+}
+
+int set_up_gsi(uint32_t gsi, bool active_low, bool level_trig, uint64_t task, pmos_port_t port, uint32_t *vector_out)
+{
+    int cpu_id = 0;
+    uint8_t vector = 0;
+
+    int result = get_interrupt_vector(gsi, active_low, level_trig, &cpu_id, &vector);
+    if (result < 0) {
+        fprintf(stderr, "Error: Could not get interrupt vector for GSI %u: %s\n", gsi, strerror(-result));
+        return result;
+    }
+
+    result = register_interrupt(cpu_id, vector, task, port);
+    if (result < 0) {
+        fprintf(stderr, "Error: Could not register interrupt for GSI %u: %s\n", gsi, strerror(-result));
+    }
+
+    if (vector_out)
+        *vector_out = vector;
+    
+    return result;
+}
+
+int install_isa_interrupt(uint32_t isa_pin, uint64_t task, pmos_port_t port, uint32_t *vector)
+{
+    int_redirect_descriptor desc = get_for_int(isa_pin);
+    return set_up_gsi(desc.destination, desc.active_low, desc.level_trig, task, port, vector);
+}
+
+void configure_interrupts_for(Message_Descriptor *desc, IPC_Reg_Int *m)
+{
+    uint32_t gsi = 0;
+    bool active_low = false;
+    bool level_trig = false;
+    int result = 0;
+
+    uint32_t vector = 0;
+
+    if (m->flags & IPC_Reg_Int_FLAG_EXT_INTS) {
+        int_redirect_descriptor desc = get_for_int(m->intno);
+        gsi = desc.destination;
+        active_low = desc.active_low;
+        level_trig = desc.level_trig;
+    } else {
+        result = -ENOSYS;
+        goto finish;
+    }
+
+    if (m->dest_task == 0) {
+        result = -EINVAL;
+        goto finish;
+    }
+
+    result = set_up_gsi(gsi, active_low, level_trig, m->dest_task, m->reply_chan, &vector);
+finish:
+    IPC_Reg_Int_Reply reply;
+    reply.type = IPC_Reg_Int_Reply_NUM;
+    reply.status = result;
+    reply.intno = vector;
+    result = send_message_port(m->reply_chan, sizeof(reply), (char*)&reply);
+    if (result < 0)
+        fprintf(stderr, "Warning could not reply to task %#lx port %#lx in configure_interrupts_for: %i (%s)\n", desc->sender, m->reply_chan, result, strerror(-result));
 }
