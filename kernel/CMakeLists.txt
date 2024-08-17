@@ -13,7 +13,7 @@ project(kernel C CXX ASM)
 include(arch/arch.cmake)
 LOAD_PLATFORM(${TARGET_ARCH})
 
-set(CMAKE_C_FLAGS "${PLATFORM_C_FLAGS} -Og -static -ffreestanding -fpie -Wall -Wextra -g -fno-omit-frame-pointer -fasynchronous-unwind-tables  -fexceptions")
+set(CMAKE_C_FLAGS "${PLATFORM_C_FLAGS} -Og -static -ffreestanding -fPIE -Wall -Wextra -g -fno-omit-frame-pointer -fasynchronous-unwind-tables  -fexceptions")
 set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} ${PLATFORM_CXX_FLAGS}")
 set(CMAKE_ASM_FLAGS "${CMAKE_C_FLAGS} ${PLATFORM_ASM_FLAGS}")
 
@@ -32,7 +32,7 @@ add_executable(kernel ${PLATFORM_SRCS} ${GENERIC_SRC})
 
 set_target_properties(kernel PROPERTIES CXX_STANDARD 20)
 set_target_properties(kernel PROPERTIES LINK_FLAGS 
-  "-nostdlib -ffreestanding -static -T${CMAKE_CURRENT_SOURCE_DIR}/linker.ld -pie -lgcc -z max-page-size=0x1000 -Wl,--eh-frame-hdr -Wl,--demangle")
+  "-nostdlib -ffreestanding -static -T${CMAKE_CURRENT_SOURCE_DIR}/linker.ld -pie -lgcc -z max-page-size=0x1000 -Wl,--eh-frame-hdr -Wl,--demangle -Wl,-pie")
 
 target_include_directories(kernel PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_include_directories(kernel PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/arch/${TARGET_ARCH}")

@@ -171,7 +171,8 @@ syscall_entry:
     # Check that and change return method if that's the case
     movq %gs:32, %r15
     movq 176(%r15), %r15
-    jmpq *return_table(,%r15, 8)
+    leaq return_table(%rip), %r14
+    jmpq *(%r14,%r15, 8)
 
     .globl ret_from_syscall
 ret_from_syscall:
@@ -203,7 +204,8 @@ sysenter_entry:
     # Jmp to the right return method (in case there was a task switch)
     movq %gs:32, %r15
     movq 176(%r15), %r15
-    jmpq *return_table(,%r15, 8)
+    leaq return_table(%rip), %r14
+    jmpq *(%r14,%r15, 8)
 
 
     .globl ret_from_sysenter
@@ -240,7 +242,8 @@ syscall_int_entry:
     # Jmp to the right return method (in case there was a task switch)
     movq %gs:32, %r15
     movq 176(%r15), %r15
-    jmpq *return_table(,%r15, 8)
+    leaq return_table(%rip), %r14
+    jmpq *(%r14,%r15, 8)
 
 
     .globl ret_repeat_syscall
@@ -259,4 +262,5 @@ ret_repeat_syscall:
     # Jmp to the right return method (in case there was a task switch)
     movq %gs:32, %r15
     movq 176(%r15), %r15
-    jmpq *return_table(,%r15, 8)
+    leaq return_table(%rip), %r14
+    jmpq *(%r14,%r15, 8)

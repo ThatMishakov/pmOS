@@ -191,47 +191,47 @@ jumpto_func:
     .type dbg_saveregs, @function
     .globl dbg_saveregs
 dbg_saveregs:
-    movq    %rdi, kernel_interrupt_regs + 0
-    movq    %rsi, kernel_interrupt_regs + 8
-    movq    %rdx, kernel_interrupt_regs + 16
-    movq    %rcx, kernel_interrupt_regs + 24
-    movq    %r8, kernel_interrupt_regs + 32
-    movq    %r9, kernel_interrupt_regs + 40
-    movq    %rax, kernel_interrupt_regs + 48
-    movq    %r10, kernel_interrupt_regs + 56
-    movq    %r11, kernel_interrupt_regs + 64
+    movq    %rdi, kernel_interrupt_regs + 0(%rip)
+    movq    %rsi, kernel_interrupt_regs + 8(%rip)
+    movq    %rdx, kernel_interrupt_regs + 16(%rip)
+    movq    %rcx, kernel_interrupt_regs + 24(%rip)
+    movq    %r8, kernel_interrupt_regs + 32(%rip)
+    movq    %r9, kernel_interrupt_regs + 40(%rip)
+    movq    %rax, kernel_interrupt_regs + 48(%rip)
+    movq    %r10, kernel_interrupt_regs + 56(%rip)
+    movq    %r11, kernel_interrupt_regs + 64(%rip)
     movq 16(%rsp), %rax # %rip
-    movq %rax, kernel_interrupt_regs + 72
+    movq %rax, kernel_interrupt_regs + 72(%rip)
     movq 32(%rsp), %rax # rflags
-    movq %rax, kernel_interrupt_regs + 88
+    movq %rax, kernel_interrupt_regs + 88(%rip)
     movq 40(%rsp), %rax # %rsp
-    movq %rax, kernel_interrupt_regs + 96
+    movq %rax, kernel_interrupt_regs + 96(%rip)
     movq 8(%rsp), %rax # exception number
-    movq %rax, kernel_interrupt_regs + 184
-    movq %rbx, kernel_interrupt_regs + 112
-    movq %rbp, kernel_interrupt_regs + 120
-    movq %r12, kernel_interrupt_regs + 128
-    movq %r13, kernel_interrupt_regs + 136
-    movq %r14, kernel_interrupt_regs + 144
-    movq %r15, kernel_interrupt_regs + 152
+    movq %rax, kernel_interrupt_regs + 184(%rip)
+    movq %rbx, kernel_interrupt_regs + 112(%rip)
+    movq %rbp, kernel_interrupt_regs + 120(%rip)
+    movq %r12, kernel_interrupt_regs + 128(%rip)
+    movq %r13, kernel_interrupt_regs + 136(%rip)
+    movq %r14, kernel_interrupt_regs + 144(%rip)
+    movq %r15, kernel_interrupt_regs + 152(%rip)
     retq
 
     .type dbg_loadregs, @function
     .globl dbg_loadregs
 dbg_loadregs:
-    movq kernel_interrupt_regs + 0, %rdi
-    movq kernel_interrupt_regs + 8, %rsi
-    movq kernel_interrupt_regs + 16, %rdx
-    movq kernel_interrupt_regs + 24, %rcx
-    movq kernel_interrupt_regs + 32, %r8
-    movq kernel_interrupt_regs + 40, %r9
-    movq kernel_interrupt_regs + 48, %rax
-    movq kernel_interrupt_regs + 56, %r10
-    movq kernel_interrupt_regs + 64, %r11
-    movq kernel_interrupt_regs + 112, %rbx
-    movq kernel_interrupt_regs + 120, %rbp
-    movq kernel_interrupt_regs + 128, %r12
-    movq kernel_interrupt_regs + 136, %r13
-    movq kernel_interrupt_regs + 144, %r14
-    movq kernel_interrupt_regs + 152, %r15
+    movq kernel_interrupt_regs + 0(%rip), %rdi
+    movq kernel_interrupt_regs + 8(%rip), %rsi
+    movq kernel_interrupt_regs + 16(%rip), %rdx
+    movq kernel_interrupt_regs + 24(%rip), %rcx
+    movq kernel_interrupt_regs + 32(%rip), %r8
+    movq kernel_interrupt_regs + 40(%rip), %r9
+    movq kernel_interrupt_regs + 48(%rip), %rax
+    movq kernel_interrupt_regs + 56(%rip), %r10
+    movq kernel_interrupt_regs + 64(%rip), %r11
+    movq kernel_interrupt_regs + 112(%rip), %rbx
+    movq kernel_interrupt_regs + 120(%rip), %rbp
+    movq kernel_interrupt_regs + 128(%rip), %r12
+    movq kernel_interrupt_regs + 136(%rip), %r13
+    movq kernel_interrupt_regs + 144(%rip), %r14
+    movq kernel_interrupt_regs + 152(%rip), %r15
     retq

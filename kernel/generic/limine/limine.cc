@@ -900,6 +900,7 @@ void limine_main()
     }
 
     serial_logger.printf("Hello from pmOS kernel!\n");
+    serial_logger.printf("Kernel start: 0x%h\n", &_kernel_start);
 
     if (smp_request.response != nullptr) {
 #ifdef __riscv

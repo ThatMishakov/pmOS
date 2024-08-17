@@ -86,14 +86,16 @@
     jne  ret_nested_exception
     movq %gs:32, %r15
     movq 176(%r15), %r15
-    jmpq *return_table(,%r15, 8)
+    leaq return_table(%rip), %r14
+    jmpq *(%r14,%r15, 8)
     .endm
 
 
     .macro auto_return
     movq %gs:32, %r15
     movq 176(%r15), %r15
-    jmpq *return_table(,%r15, 8)
+    leaq return_table(%rip), %r14
+    jmpq *(%r14,%r15, 8)
     .endm
 
     # Macro indicating code needed for calling mini debugger
@@ -107,7 +109,7 @@
     addq $8, %rsp
     movq $\intno, %rdi
     call dbg_main
-    movq    kernel_interrupt_regs + 72, %rax   # update the return address
+    movq    kernel_interrupt_regs + 72(%rip), %rax   # update the return address
     movq    %rax, (%rsp)
     call dbg_loadregs
     iretq
