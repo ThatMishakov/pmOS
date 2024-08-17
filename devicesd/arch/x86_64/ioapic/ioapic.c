@@ -123,7 +123,6 @@ void init_cpus();
 
 void init_ioapic()
 {
-    init_cpus();
     MADT *madt = (MADT *)get_table("APIC", 0);
 
     if (madt == NULL) {
@@ -373,39 +372,4 @@ int install_isa_interrupt(uint32_t isa_pin, uint64_t task, pmos_port_t port, uin
 {
     int_redirect_descriptor desc = get_for_int(isa_pin);
     return set_up_gsi(desc.destination, desc.active_low, desc.level_trig, task, port, vector);
-}
-
-void configure_interrupts_for(Message_Descriptor *desc, IPC_Reg_Int *m)
-{
-    uint32_t gsi = 0;
-    bool active_low = false;
-    bool level_trig = false;
-    int result = 0;
-
-    uint32_t vector = 0;
-
-    if (m->flags & IPC_Reg_Int_FLAG_EXT_INTS) {
-        int_redirect_descriptor desc = get_for_int(m->intno);
-        gsi = desc.destination;
-        active_low = desc.active_low;
-        level_trig = desc.level_trig;
-    } else {
-        result = -ENOSYS;
-        goto finish;
-    }
-
-    if (m->dest_task == 0) {
-        result = -EINVAL;
-        goto finish;
-    }
-
-    result = set_up_gsi(gsi, active_low, level_trig, m->dest_task, m->reply_chan, &vector);
-finish:
-    IPC_Reg_Int_Reply reply;
-    reply.type = IPC_Reg_Int_Reply_NUM;
-    reply.status = result;
-    reply.intno = vector;
-    result = send_message_port(m->reply_chan, sizeof(reply), (char*)&reply);
-    if (result < 0)
-        fprintf(stderr, "Warning could not reply to task %#lx port %#lx in configure_interrupts_for: %i (%s)\n", desc->sender, m->reply_chan, result, strerror(-result));
 }

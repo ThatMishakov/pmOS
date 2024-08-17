@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.22)
 
-set(TARGET_ARCH "x86_64" CACHE STRING "Target architecture (x86_64 or riscv64)")
+if(NOT DEFINED TARGET_ARCH)
+  set(TARGET_ARCH "x86_64" CACHE STRING "Target architecture (x86_64 or riscv64)")
+endif()
+
 set(TOOLCHAIN_PREFIX "${TARGET_ARCH}-pmos-")
 
 set(CMAKE_C_COMPILER "${TOOLCHAIN_PREFIX}gcc")

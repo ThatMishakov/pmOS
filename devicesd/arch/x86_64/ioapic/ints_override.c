@@ -64,3 +64,8 @@ int_redirect_descriptor get_for_int(uint32_t intno)
         return desc;
     }
 }
+
+int_redirect_descriptor isa_gsi_mapping(uint32_t intno)
+{
+    return get_for_int(intno);
+}

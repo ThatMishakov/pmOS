@@ -82,18 +82,51 @@ void set_up_interrupt()
     if ((interrupt_type_mask & 0x10) == 0)
         return;
 
-    // Bind to the current CPU
-    auto r = set_affinity(TASK_ID_SELF, CURRENT_CPU, 0);
-    if (r != SUCCESS)
-        return;
+    IPC_Reg_Int r = {
+        .type = IPC_Reg_Int_NUM,
+        .flags = 0,
+        .intno = (uint32_t)gsi_num,
+        .int_flags = 0, // TODO
+        .dest_task = get_task_id(),
+        .dest_chan = serial_port,
+        .reply_chan = serial_port,
+    };
 
-    // Request interrupt from kernel
-    auto v = set_interrupt(serial_port, gsi_num, 0);
-    if (v.result != SUCCESS) {
-        set_affinity(TASK_ID_SELF, NO_CPU, 0);
+    result_t result = send_message_port(devicesd_port, sizeof(r), static_cast<void *>(&r));
+    if (result != SUCCESS) {
+        printf("Failed to send message to set up interrupt: %li (%s)\n", result, strerror(-result));
         return;
     }
-    int_vec = v.value;
+
+    Message_Descriptor desc;
+    uint8_t *message;
+    for (int i = 0; i < 5; ++i) {
+        result = get_message(&desc, &message, serial_port);
+        if ((int)result == -EINTR)
+            continue;
+        break;
+    }
+    if (result != SUCCESS) {
+        printf("Failed to get message from devicesd: %li (%s)\n", result, strerror(-result));
+        return;
+    }
+
+    std::unique_ptr<unsigned char> message_ptr(message);
+
+    IPC_Reg_Int_Reply *reply = reinterpret_cast<IPC_Reg_Int_Reply *>(message_ptr.get());
+    if (reply->type != IPC_Reg_Int_Reply_NUM) {
+        printf("Invalid reply type: %i\n", reply->type);
+        return;
+    }
+
+    if (reply->status < 0) {
+        printf("Failed to set up interrupt: recieved error %i\n", -reply->status);
+        return;
+    }
+
+    int_vec = reply->intno;
+
+    printf("ns16550d: Interrupt set up successfully, intno: %i\n", int_vec);
 
     have_interrupts = true;
 }
@@ -125,7 +158,7 @@ void ns16550_init()
         printf("Failed to get message from devicesd\n");
         throw std::runtime_error("Failed to get message from devicesd");
     }
-    std::unique_ptr<unsigned char[]> message_ptr(message);
+    std::unique_ptr<unsigned char> message_ptr(message);
 
     IPC_Serial_Reply *reply = reinterpret_cast<IPC_Serial_Reply *>(message_ptr.get());
     if (reply->type != IPC_Serial_Reply_NUM) {

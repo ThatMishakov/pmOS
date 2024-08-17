@@ -292,7 +292,10 @@ void init_acpi()
         printf("Warning: Did not initialize ACPI\n");
     }
 
+    init_cpus();
+    #ifdef __x86_64__
     init_ioapic();
+    #endif
     init_pci();
 
     int i = acpi_init((uacpi_phys_addr)rsdp_desc);

@@ -2,7 +2,7 @@ EXEC = vfatfsd.elf
 
 export PATH := $(ROOTDIR)/bin/cross/bin:$(PATH)
 
-ARCH = x86_64
+ARCH ?= x86_64
 
 CC = $(ARCH)-pmos-gcc
 CPP = $(ARCH)-pmos-gcc

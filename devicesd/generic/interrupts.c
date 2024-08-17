@@ -2,6 +2,7 @@
 #include <pmos/system.h>
 #include <pmos/interrupts.h>
 #include <errno.h>
+#include <pmos/ipc.h>
 
 int register_interrupt(uint32_t cpu_id, uint32_t vector, uint64_t task, pmos_port_t port)
 {
@@ -53,4 +54,45 @@ int register_interrupt(uint32_t cpu_id, uint32_t vector, uint64_t task, pmos_por
     }
 
     return 0;
+}
+
+int_redirect_descriptor isa_gsi_mapping(uint32_t intno)
+{
+    return (int_redirect_descriptor){intno, intno, 0, 0};
+}
+
+void configure_interrupts_for(Message_Descriptor *desc, IPC_Reg_Int *m)
+{
+    uint32_t gsi = 0;
+    bool active_low = false;
+    bool level_trig = false;
+    int result = 0;
+
+    uint32_t vector = 0;
+
+    if (m->flags & IPC_Reg_Int_FLAG_EXT_INTS) {
+        int_redirect_descriptor desc = isa_gsi_mapping(m->intno);
+        gsi = desc.destination;
+        active_low = desc.active_low;
+        level_trig = desc.level_trig;
+    } else {
+        gsi = m->intno;
+        // active_low = m->active_low;
+        // level_trig = m->level_trig;
+    }
+
+    if (m->dest_task == 0) {
+        result = -EINVAL;
+        goto finish;
+    }
+
+    result = set_up_gsi(gsi, active_low, level_trig, m->dest_task, m->reply_chan, &vector);
+finish:
+    IPC_Reg_Int_Reply reply;
+    reply.type = IPC_Reg_Int_Reply_NUM;
+    reply.status = result;
+    reply.intno = vector;
+    result = send_message_port(m->reply_chan, sizeof(reply), (char*)&reply);
+    if (result < 0)
+        fprintf(stderr, "Warning could not reply to task %#lx port %#lx in configure_interrupts_for: %i (%s)\n", desc->sender, m->reply_chan, result, strerror(-result));
 }

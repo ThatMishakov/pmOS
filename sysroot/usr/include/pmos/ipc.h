@@ -50,7 +50,9 @@ typedef struct IPC_Reg_Int {
     uint32_t type;
     uint32_t flags;
     uint32_t intno;
-    uint32_t reserved;
+    uint32_t int_flags;
+    #define INTERRUPT_FLAG_LEVEL_TRIGGERED 0x1
+    #define INTERRUPT_FLAG_ACTIVE_LOW      0x2
     uint64_t dest_task;
     uint64_t dest_chan;
     uint64_t reply_chan;
