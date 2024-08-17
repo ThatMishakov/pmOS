@@ -280,7 +280,7 @@ void parse_interrupt_table(struct PCIGroup *g, int bus, uacpi_pci_routing_table 
             }
         }
 
-        printf("PCI interrupt: BUS %#x DEVICE %#x PIN %#x GSI %#i %s %s\n", e.bus, e.device, e.pin, e.gsi, e.active_low ? "Active Low" : "Active High", e.level_trigger ? "Level" : "Edge");
+        printf("PCI interrupt: BUS %#x DEVICE %#x PIN %#x GSI %u %s %s\n", e.bus, e.device, e.pin, e.gsi, e.active_low ? "Active Low" : "Active High", e.level_trigger ? "Level" : "Edge");
         int ret = 0;
         VECTOR_PUSH_BACK_CHECKED(g->interrupt_entries, e, ret);
         if (ret != 0) {
@@ -583,7 +583,7 @@ struct PCIDevice *find_pci_device_descriptor(struct PCIGroup *g, uint8_t bus, ui
     return NULL;
 }
 
-int resolve_gsi_for(struct PCIGroup *g, uint8_t bus, uint8_t device, uint8_t function, uint8_t pin, uint32_t *gsi, struct PCIDevice *d)
+int resolve_gsi_for(struct PCIGroup *g, uint8_t bus, uint8_t device, uint8_t function, uint8_t pin, uint32_t *gsi, bool *active_low, bool *level_trig, struct PCIDevice *d)
 {
     struct PCIGroupInterruptEntry key = {
         .bus = bus,
@@ -595,6 +595,8 @@ int resolve_gsi_for(struct PCIGroup *g, uint8_t bus, uint8_t device, uint8_t fun
                                                sizeof(struct PCIGroupInterruptEntry), interrupt_entry_compare);
     if (e) {
         *gsi = e->gsi;
+        *active_low = e->active_low;
+        *level_trig = e->level_trigger;
         printf("devicesd: PCI device %i:%i:%i:%i pin %i GSI %i\n", g->group_number, bus, device, function, pin, *gsi);
         return 0;
     }
@@ -602,21 +604,25 @@ int resolve_gsi_for(struct PCIGroup *g, uint8_t bus, uint8_t device, uint8_t fun
     if (!d) {
         // Find PCI device
         d = find_pci_device_descriptor(g, bus, device, function);
-        if (!d)
+        if (!d) {
+            printf("devicesd: PCI device %i:%i:%i:%i not found\n", g->group_number, bus, device, function);
             return -ENOENT;
+        }
     }
 
     // Find the parent bridge
     struct PCIDevice *bridge = d->associated_bridge;
-    if (!bridge)
+    if (!bridge) {
+        printf("devicesd: PCI device %i:%i:%i:%i has no parent bridge\n", g->group_number, bus, device, function);
         return -ENOENT;
+    }
 
     // Calculate pin of the parent bridge
     uint8_t bridge_pin = (device + pin) % 4;
 
-    printf("devicesd: PCI device %i:%i:%i:%i parent bridge %i:%i:%i:%i pin %i\n", g->group_number, bus, device, function, bridge->group, bridge->bus, bridge->device, bridge->function, bridge_pin);
+    //printf("devicesd: PCI device %i:%i:%i:%i parent bridge %i:%i:%i:%i pin %i\n", g->group_number, bus, device, function, bridge->group, bridge->bus, bridge->device, bridge->function, bridge_pin);
 
-    return resolve_gsi_for(g, bridge->bus, bridge->device, bridge->function, bridge_pin, gsi, bridge);
+    return resolve_gsi_for(g, bridge->bus, bridge->device, bridge->function, bridge_pin, gsi, active_low, level_trig, bridge);
 }
 
 void request_pci_device_gsi(Message_Descriptor *desc, IPC_Request_PCI_Device_GSI *d)
@@ -647,7 +653,9 @@ void request_pci_device_gsi(Message_Descriptor *desc, IPC_Request_PCI_Device_GSI
     }
 
     uint32_t gsi = 0;
-    int ret = resolve_gsi_for(g, d->bus, d->device, d->function, d->pin, &gsi, NULL);
+    bool active_low = false;
+    bool level_trig = false;
+    int ret = resolve_gsi_for(g, d->bus, d->device, d->function, d->pin, &gsi, &active_low, &level_trig, NULL);
     IPC_Request_PCI_Device_GSI_Reply reply = {
         .type = IPC_Request_PCI_Device_GSI_Reply_NUM,
         .flags = 0,
@@ -656,4 +664,47 @@ void request_pci_device_gsi(Message_Descriptor *desc, IPC_Request_PCI_Device_GSI
     };
 
     send_message_port(d->reply_port, sizeof(reply), (char *)&reply);
+}
+
+int set_up_gsi(uint32_t gsi, bool active_low, bool level_trig, uint64_t task, pmos_port_t port, uint32_t *vector_out);
+
+void register_pci_interrupt(Message_Descriptor *msg, IPC_Register_PCI_Interrupt *desc)
+{
+    int result = 0;
+    uint32_t vector = 0;
+    bool active_low = false;
+    bool level_trig = false;
+
+    if (msg->size != sizeof(IPC_Register_PCI_Interrupt)) {
+        result = -EINVAL;
+        goto end;
+    }
+
+    struct PCIGroup *g = pci_group_find(desc->group);
+    if (!g) {
+        result = -ENOENT;
+        goto end;
+    }
+
+    result = resolve_gsi_for(g, desc->bus, desc->device, desc->function, desc->pin, &vector, &active_low, &level_trig, NULL);
+    if (result != 0)
+        goto end;
+
+    if (desc->dest_task == 0 || desc->dest_port == 0) {
+        result = -EINVAL;
+        goto end;
+    }
+
+    result = set_up_gsi(vector, active_low, level_trig, desc->dest_task, desc->dest_port, &vector);
+end:
+    IPC_Reg_Int_Reply reply = {
+        .type = IPC_Reg_Int_Reply_NUM,
+        .flags = 0,
+        .status = result,
+        .intno = vector,
+    };
+
+    result = send_message_port(desc->reply_port, sizeof(reply), (char *)&reply);
+    if (result != 0)
+        printf("Failed to send message in register_pci_interrupt: %i (%s)\n", result, strerror(-result));
 }

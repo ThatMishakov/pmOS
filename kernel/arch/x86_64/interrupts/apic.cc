@@ -261,7 +261,7 @@ extern "C" void programmable_interrupt(u32 intno)
         handler->active = true;
         // Disable reception of other interrupts from peripheral devices until this one is
         // handled
-        setCR8(15);
+        setCR8(14);
     }
 }
 

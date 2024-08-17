@@ -120,6 +120,7 @@ std::vector<PCIDescriptor> get_ahci_controllers()
 
 std::unique_ptr<PCIDevice> ahci_controller = nullptr;
 volatile uint32_t *ahci_virt_base          = nullptr;
+uint32_t ahci_int_vec                      = 0;
 
 static constexpr uint32_t AHCI_GHC_HR   = 1 << 0;
 static constexpr uint32_t AHCI_GHC_IE   = 1 << 1;
@@ -142,8 +143,8 @@ static constexpr uint32_t SATA_SIG_ATAPI = 0xEB140101;
 static constexpr uint32_t SATA_SIG_PM    = 0x96690101;
 static constexpr uint32_t SATA_SIG_SEMB  = 0xC33C0101;
 
-static constexpr uint32_t AHCI_CMD_INDEX = 6;
-static constexpr uint32_t AHCI_TFD_INDEX = 8;
+static constexpr uint32_t AHCI_CMD_INDEX  = 6;
+static constexpr uint32_t AHCI_TFD_INDEX  = 8;
 static constexpr uint32_t AHCI_SSTS_INDEX = 10;
 static constexpr uint32_t AHCI_SCTL_INDEX = 11;
 static constexpr uint32_t AHCI_SERR_INDEX = 12;
@@ -362,11 +363,12 @@ void AHCIPort::react_timer()
 
         if (tfd & 0x89) {
             if (timer_max < timer_time) {
-                auto serr = port[AHCI_SERR_INDEX];
-                auto cmd  = port[AHCI_CMD_INDEX];
-                auto fis_base = port[2];
+                auto serr           = port[AHCI_SERR_INDEX];
+                auto cmd            = port[AHCI_CMD_INDEX];
+                auto fis_base       = port[2];
                 auto fis_base_upper = port[3];
-                printf("Drive not ready timed out. TFD: %#x; SERR: %#x, CMD: %#x, FBU %#x FB %#x\n", tfd, serr, cmd, fis_base_upper, fis_base);
+                printf("Drive not ready timed out. TFD: %#x; SERR: %#x, CMD: %#x, FBU %#x FB %#x\n",
+                       tfd, serr, cmd, fis_base_upper, fis_base);
             } else {
                 wait(100);
             }
@@ -441,8 +443,8 @@ void AHCIPort::enable_port()
     // Enable interrupts
     // Clear PxIS
     addr[4] = 0xffffffff;
-    // Disable all interrupts
-    addr[5] = 0x0;
+    // Enable all interrupts
+    addr[5] = 0xffffffff;
 
     printf("Port %i in minimal configuration\n", index);
 
@@ -580,6 +582,23 @@ void react_timer()
     }
 }
 
+void react_interrupt()
+{
+    uint32_t is = ahci_virt_base[2];
+    for (int i = 0; i < 32; ++i) {
+        if (is & (1 << i)) {
+            printf("Interrupt on port %i\n", i);
+
+            auto port     = ports[i].get_port_register();
+            auto *port_is = &port[4];
+            printf("Port %i interrupt status: %#x\n", i, *port_is);
+            *port_is = 0xffffffff;
+
+            ahci_virt_base[2] = 1 << i;
+        }
+    }
+}
+
 void ahci_controller_main()
 {
     while (1) {
@@ -598,6 +617,12 @@ void ahci_controller_main()
         case IPC_Timer_Reply_NUM: {
             // auto reply = (IPC_Timer_Reply *)request;
             react_timer();
+        } break;
+        case IPC_Kernel_Interrupt_NUM: {
+            auto kmsg = (IPC_Kernel_Interrupt *)request;
+            printf("Kernel interrupt: %i\n", kmsg->intno);
+            react_interrupt();
+            complete_interrupt(kmsg->intno);
         } break;
 
         default:
@@ -766,13 +791,16 @@ void ahci_handle(PCIDescriptor d)
     }
 
     // Attach interrupt
-    // TODO
-    uint32_t gsi;
-    int r = ahci_controller->gsi(gsi);
+    int r = ahci_controller->register_interrupt(ahci_int_vec, 0, ahci_port);
     if (r < 0) {
-        printf("GSI error: %i (%s)\n", errno, strerror(errno));
+        printf("Failed to register interrupt: %i (%s)\n", -r, strerror(-r));
     } else {
-        printf("AHCI controller GSI: %u\n", gsi);
+        printf("Interrupt registered. Vector: %u\n", ahci_int_vec);
+
+        // Enable interrupts
+        ghc = ahci_virt_base[1];
+        ghc |= AHCI_GHC_IE;
+        ahci_virt_base[1] = ghc;
     }
 
     ahci_controller_main();

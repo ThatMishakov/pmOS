@@ -5,6 +5,7 @@
 #include <sched/sched.hh>
 #include <errno.h>
 
+#include <kern_logger/kern_logger.hh>
 void Interrupt_Handler_Table::add_handler(u64 interrupt_number, const klib::shared_ptr<Port> &port)
 {
     auto c = get_cpu_struct();
@@ -23,8 +24,10 @@ void Interrupt_Handler_Table::add_handler(u64 interrupt_number, const klib::shar
         throw Kern_Exception(-EEXIST, "Handler already exists");
     }
 
-    if (interrupt_number > interrupt_max() || interrupt_number < interrupt_min())
+    if (interrupt_number > interrupt_max() || interrupt_number < interrupt_min()) {
+        serial_logger.printf("Interrupt number: %d\n", interrupt_number);
         throw Kern_Exception(-EINVAL, "Invalid interrupt number");
+    }
 
     auto handler              = klib::make_unique<Interrupt_Handler>();
     handler->interrupt_number = interrupt_number;

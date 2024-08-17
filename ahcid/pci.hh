@@ -27,6 +27,10 @@ public:
     // Resolves the device's interrupt line to GSI
     // Returns 0 on success, otherwise -1 setting errno to the error code
     int gsi(uint32_t &gsi_result) noexcept;
+
+    // Registers the interrupt for the device
+    // Returns 0 on success, otherwise -errno
+    int register_interrupt(uint32_t &int_vector_result, uint64_t task, uint64_t port) noexcept;
 private:
     PCIDevice();
 

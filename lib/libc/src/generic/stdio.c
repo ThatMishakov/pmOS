@@ -293,6 +293,7 @@ static int int_to_string(long int n, uint8_t base, char *str, int flags, int wid
 
     if (n < 0) {
         prefix = '-';
+        n      = -n;
     } else if ((n > 0) && (flags & PRINTF_FLAG_P_PLUS)) {
         prefix = '+';
     } else if ((n > 0) && (flags & PRINTF_FLAG_SPACE)) {
@@ -696,7 +697,7 @@ static ssize_t __va_printf_closure(write_str_f puts, void *puts_arg, va_list arg
                     if (size == 0)
                         size = length;
                     ssize_t k = puts(puts_arg, str, length);
-                    if (k < 1) {
+                    if (k < 0) {
                         chars_transmitted = k;
                         goto end;
                     }

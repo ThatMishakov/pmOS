@@ -268,7 +268,7 @@ struct InterruptMapping *get_mapping(uint32_t gsi)
     {
         if (m->gsi == gsi)
             break;
-        ++m;
+        m = m->next;
     }
     return m;
 }
@@ -289,6 +289,7 @@ int get_interrupt_vector(uint32_t gsi, bool active_low, bool level_trig, int *cp
     pthread_mutex_lock(&int_vector_mutex);
     struct InterruptMapping *m = get_mapping(gsi);
     if (m) {
+        printf("Found existing mapping for GSI %u: CPU %d, vector %u\n", gsi, m->cpu_id, m->vector);
         *cpu_id_out = m->cpu_id;
         *vector_out = m->vector;
         pthread_mutex_unlock(&int_vector_mutex);
@@ -354,6 +355,8 @@ int set_up_gsi(uint32_t gsi, bool active_low, bool level_trig, uint64_t task, pm
         fprintf(stderr, "Error: Could not get interrupt vector for GSI %u: %s\n", gsi, strerror(-result));
         return result;
     }
+
+    printf("Got vector %u for GSI %u\n", vector, gsi);
 
     result = register_interrupt(cpu_id, vector, task, port);
     if (result < 0) {

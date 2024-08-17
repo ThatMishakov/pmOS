@@ -41,6 +41,7 @@
 #include <uacpi/event.h>
 #include <uacpi/utilities.h>
 #include <uacpi/sleep.h>
+#include <pthread.h>
 
 int acpi_revision = -1;
 
@@ -204,11 +205,6 @@ int acpi_init(uacpi_phys_addr rsdp_phys_addr) {
     return 0;
 }
 
-static uacpi_interrupt_ret handle_power_button(uacpi_handle ctx) {
-    printf("Power button pressed\n");
-    return UACPI_INTERRUPT_HANDLED;
-}
-
 int system_shutdown(void) {
     /*
      * Prepare the system for shutdown.
@@ -246,7 +242,23 @@ int system_shutdown(void) {
      */
     return 0;
 }
- 
+
+void *shutdown_thread(void *) {
+    pmos_request_io_permission();
+    printf("Shutting down in 3 seconds...\n");
+    sleep(3);
+    system_shutdown();
+    return NULL;
+}
+
+static uacpi_interrupt_ret handle_power_button(uacpi_handle ctx) {
+    printf("Power button pressed\n");
+    pthread_t thread;
+    pthread_create(&thread, NULL, shutdown_thread, NULL);
+    pthread_detach(thread);
+    return UACPI_INTERRUPT_HANDLED;
+}
+
 int power_button_init(void) {
     uacpi_status ret = uacpi_install_fixed_event_handler(
         UACPI_FIXED_EVENT_POWER_BUTTON,
@@ -256,7 +268,7 @@ int power_button_init(void) {
         fprintf(stderr, "failed to install power button event callback: %s\n", uacpi_status_to_string(ret));
         return -ENODEV;
     }
- 
+
     return 0;
 }
 

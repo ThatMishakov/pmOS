@@ -5,7 +5,6 @@
 
 int register_interrupt(uint32_t cpu_id, uint32_t vector, uint64_t task, pmos_port_t port)
 {
-    printf("Register interrupt %d on CPU %d task %lu port %lu\n", vector, cpu_id, task, port);
     uint64_t self = get_task_id();
     task = task == 0 ? self : task;
 
@@ -20,9 +19,7 @@ int register_interrupt(uint32_t cpu_id, uint32_t vector, uint64_t task, pmos_por
 
             // Bind the task to the CPU
             result = set_affinity(task, cpu_id + 1, 0);
-            if (result == -EBUSY)
-                continue;
-            if (result != 0)
+            if (result != -EBUSY)
                 break;
         }
         if (result != 0) {
@@ -49,7 +46,7 @@ int register_interrupt(uint32_t cpu_id, uint32_t vector, uint64_t task, pmos_por
 
     // Bind to all CPUs if not self
     if (task != self) {
-        r = set_affinity(task, 0, 0);
+        r = set_affinity(self, 0, 0);
         if (r != 0) {
             return r;
         }

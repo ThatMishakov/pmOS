@@ -61,7 +61,7 @@ typedef struct IPC_Reg_Int {
 typedef struct IPC_Reg_Int_Reply {
     uint32_t type;
     uint32_t flags;
-    uint32_t status;
+    int32_t status;
     uint32_t intno;
 } IPC_Reg_Int_Reply;
 
@@ -218,6 +218,23 @@ typedef struct IPC_Request_PCI_Device_GSI_Reply {
     int32_t result; // Negative value on error, 0 on success
     uint32_t gsi;
 } IPC_Request_PCI_Device_GSI_Reply;
+
+// Replies with IPC_Reg_Int_Reply
+#define IPC_Register_PCI_Interrupt_NUM 0x0E
+typedef struct IPC_Register_PCI_Interrupt {
+    uint32_t type;
+    uint16_t flags;
+    
+    uint16_t group;
+    uint8_t bus;
+    uint8_t device;
+    uint8_t function;
+    uint8_t pin;
+
+    uint64_t dest_task;
+    uint64_t dest_port;
+    uint64_t reply_port;
+} IPC_Register_PCI_Interrupt;
 
 #define IPC_Kernel_Interrupt_NUM 0x20
 typedef struct IPC_Kernel_Interrupt {

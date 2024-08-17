@@ -12,6 +12,8 @@
 extern pmos_port_t devicesd_port;
 extern pmos_port_t cmd_port;
 
+// TODO: pthread stuff
+
 void send_devicesd(auto &request)
 {
     auto r = send_message_port(devicesd_port, sizeof(request), (void *)&request);
@@ -169,5 +171,63 @@ int PCIDevice::gsi(uint32_t &gsi_result) noexcept
     gsi_result = reply->gsi;
     free(message);
 
+    return 0;
+}
+
+int PCIDevice::register_interrupt(uint32_t &int_vector_result, uint64_t task, uint64_t port) noexcept
+{
+    auto int_pin = interrupt_pin();
+    if (int_pin < 1 or int_pin > 4) {
+        return -ENOENT;
+    }
+
+    IPC_Register_PCI_Interrupt request = {
+        .type       = IPC_Register_PCI_Interrupt_NUM,
+        .flags      = 0,
+        .group      = group,
+        .bus        = bus,
+        .device     = device,
+        .function   = function,
+        .pin        = (uint8_t)(int_pin - 1),
+        .dest_task       = task == 0 ? get_task_id() : task,
+        .dest_port       = port,
+        .reply_port      = cmd_port,
+    };
+
+    try {
+        send_devicesd(request);
+    } catch (std::system_error &e) {
+        return -e.code().value();
+    }
+
+    Message_Descriptor desc;
+    uint8_t *message;
+    for (int i = 0; i < 5; ++i) {
+        result_t result = get_message(&desc, &message, cmd_port);
+        // The affinity may be changed, which can interrupt the system call
+        // This is not an error, so retry a few times
+        if ((int)result == -EINTR)
+            continue;
+
+        if (result != 0) {
+            return result;
+        }
+        break;
+    }
+
+    auto *reply = (IPC_Reg_Int_Reply *)message;
+    if (reply->type != IPC_Reg_Int_Reply_NUM) {
+        free(message);
+        return -EPROTO;
+    }
+
+    if (reply->status < 0) {
+        int err = reply->status;
+        free(message);
+        return err;
+    }
+
+    int_vector_result = reply->intno;
+    free(message);
     return 0;
 }

@@ -135,6 +135,15 @@ int main(int argc, char **argv)
                 configure_interrupts_for(&msg, m);
             }
                 break;
+            case IPC_Register_PCI_Interrupt_NUM: {
+                if (msg.size != sizeof(IPC_Register_PCI_Interrupt))
+                    printf("[devicesd] Warning: Message from PID %lx does no have the right size"
+                    "(%lx)\n", msg.sender, msg.size);
+
+                IPC_Register_PCI_Interrupt* m = (IPC_Register_PCI_Interrupt*)msg_buff;
+                register_pci_interrupt(&msg, m);
+            }
+                break;
             // case IPC_Start_Timer_NUM: {
             //     if (msg.size != sizeof(IPC_Start_Timer))
             //         printf("[devicesd] Warning: Message from PID %lx does no have the right size

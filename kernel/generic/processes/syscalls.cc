@@ -522,9 +522,6 @@ void syscall_set_interrupt(uint64_t port, u64 intno, u64 flags, u64, u64, u64)
     const task_ptr &task = c->current_task;
 
     auto port_ptr = Port::atomic_get_port_throw(port);
-    if (task != port_ptr->owner.lock()) {
-        throw(Kern_Exception(-EPERM, "Caller is not a port owner"));
-    }
 
     syscall_ret_low(task)  = SUCCESS;
     syscall_ret_high(task) = intno;
@@ -1075,7 +1072,7 @@ void syscall_set_affinity(u64 pid, u64 affinity, u64 flags, u64, u64, u64)
         if (not task->can_be_rebound())
             throw Kern_Exception(-EPERM, "task can't be rebound");
 
-        if (cpu != (current_cpu->cpu_id + 1)) {
+        if (cpu != 0 && cpu != (current_cpu->cpu_id + 1)) {
             syscall_ret_low(task) = SUCCESS;
             find_new_process();
 
