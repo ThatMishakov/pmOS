@@ -1,6 +1,8 @@
+#include "ata.hh"
 #include "pci.hh"
 
 #include <alloca.h>
+#include <cassert>
 #include <memory>
 #include <pmos/containers/intrusive_bst.hh>
 #include <pmos/helpers.h>
@@ -148,6 +150,7 @@ static constexpr uint32_t AHCI_TFD_INDEX  = 8;
 static constexpr uint32_t AHCI_SSTS_INDEX = 10;
 static constexpr uint32_t AHCI_SCTL_INDEX = 11;
 static constexpr uint32_t AHCI_SERR_INDEX = 12;
+static constexpr uint32_t AHCI_CI_INDEX   = 14;
 
 static constexpr uint32_t AHCI_PORT_CMD_ST    = 1 << 0;
 static constexpr uint32_t AHCI_PORT_CMD_SUD   = 1 << 1;
@@ -214,6 +217,7 @@ static constexpr uint32_t PRDT_SIZE_BYTES       = 0x10;
 static constexpr uint32_t COMMAND_TABLE_ENTRIES = 8;
 static constexpr uint32_t COMMAND_TABLE_SIZE    = // 0x100
     PRDT_OFFSET + PRDT_SIZE_BYTES * COMMAND_TABLE_ENTRIES;
+static constexpr uint32_t SCRATCH_SIZE = 0x400;
 
 struct CommandListStructure {
     // 4.2.2 of AHCI spec
@@ -253,6 +257,9 @@ struct AHCIPort {
     static constexpr uint32_t command_table_offset = 0x1000 + 0x400;
 
     volatile uint32_t *get_port_register();
+    volatile CommandListEntry *get_command_list_ptr(int index);
+    volatile uint32_t *get_command_table_entry(int index);
+    uint64_t get_command_table_phys(int index);
 
     void init_port();
     void enable_port();
@@ -261,8 +268,16 @@ struct AHCIPort {
     void wait(int time_ms);
     void react_timer();
     void port_reset_hard();
+    void init_drive();
+    void init_ata_device();
+    void dump_state();
 
     void detect_drive();
+
+    uint32_t scratch_offet();
+
+    volatile void *scratch_virt();
+    uint64_t scratch_phys();
 
     enum class DeviceType {
         None,
@@ -274,6 +289,134 @@ struct AHCIPort {
 
     DeviceType classify_device();
 };
+
+uint32_t AHCIPort::scratch_offet() { return command_table_offset + COMMAND_TABLE_SIZE; }
+
+volatile void *AHCIPort::scratch_virt()
+{
+    return reinterpret_cast<volatile void *>(dma_virt_base + scratch_offet() / sizeof(uint32_t));
+}
+
+uint64_t AHCIPort::scratch_phys() { return dma_phys_base + scratch_offet(); }
+
+void AHCIPort::dump_state()
+{
+    printf(" --- Port %i ---\n", index);
+    printf("Port %i state dma_phys: %#lx virt 0x%p\n", index, dma_phys_base, dma_virt_base);
+    auto port = get_port_register();
+    printf(" P%iCLB: %#x P%iCLBU: %#x\n", index, port[0], index, port[1]);
+    printf(" P%iFB: %#x P%iFBU: %#x\n", index, port[2], index, port[3]);
+    printf(" P%iIS: %#x P%iIE: %#x\n", index, port[4], index, port[5]);
+    printf(" P%iCMD: %#x\n", index, port[6]);
+    printf(" P%iTFD: %#x\n", index, port[8]);
+    printf(" P%iSIG: %#x\n", index, port[9]);
+    printf(" P%iSSTS: %#x\n", index, port[10]);
+    printf(" P%iSCTL: %#x\n", index, port[11]);
+    printf(" P%iSERR: %#x\n", index, port[12]);
+    printf(" P%iSACT: %#x\n", index, port[13]);
+    printf(" P%iCI: %#x\n", index, port[14]);
+    printf(" P%iSNTF: %#x\n", index, port[15]);
+    printf(" P%iFBS: %#x\n", index, port[16]);
+    printf(" P%iDEVSLP: %#x\n", index, port[17]);
+    printf(" --- End Port %i ---\n", index);
+}
+
+uint64_t AHCIPort::get_command_table_phys(int index)
+{
+    return dma_phys_base + command_table_offset + index * COMMAND_TABLE_SIZE;
+}
+
+volatile CommandListEntry *AHCIPort::get_command_list_ptr(int index)
+{
+    return reinterpret_cast<volatile CommandListEntry *>(
+        dma_virt_base + (command_list_offset + index * 0x100) / sizeof(uint32_t));
+}
+
+void AHCIPort::init_ata_device()
+{
+    // Start the port
+    auto port = get_port_register();
+    auto cmdp = port[AHCI_CMD_INDEX];
+    cmdp |= AHCI_PORT_CMD_ST; // Start
+    port[AHCI_CMD_INDEX] = cmdp;
+
+    // Request IDENTIFY DEVICE
+
+    // Send IDENTIFY command
+    FIS_Host_To_Device str = {};
+    str.fis_type           = FIS_TYPE_REG_H2D;
+    str.command            = 0xEC; // IDENTIFY DEVICE
+    str.c                  = 1;
+    str.device             = 1 << 6; // LBA
+    str.countl             = 0;
+
+    auto *fis = reinterpret_cast<volatile uint32_t *>(dma_virt_base +
+                                                      command_table_offset / sizeof(uint32_t));
+    printf("FIS: %p virt: %p\n", fis, dma_virt_base);
+    auto *fis_ptr = reinterpret_cast<uint32_t *>(&str);
+    for (unsigned i = 0; i < sizeof(FIS_Host_To_Device) / sizeof(uint32_t); ++i) {
+        fis[i] = fis_ptr[i];
+    }
+
+    auto *prdt    = reinterpret_cast<volatile uint32_t *>(fis + PRDT_OFFSET / sizeof(uint32_t));
+    PRDT prd      = {.data_base               = scratch_phys(),
+                     .rsv0                    = 0,
+                     .data_base_count         = 512 - 1,
+                     .rsv1                    = 0,
+                     .interrupt_on_completion = 1};
+    auto *prd_ptr = reinterpret_cast<uint32_t *>(&prd);
+    for (unsigned i = 0; i < sizeof(PRDT) / sizeof(uint32_t); ++i) {
+        prdt[i] = prd_ptr[i];
+    }
+
+    CommandListEntry cmd   = {};
+    cmd.command_fis_length = sizeof(FIS_Host_To_Device) / sizeof(uint32_t);
+    cmd.command_table_base = get_command_table_phys(0);
+    cmd.prdt_length        = 1;
+    printf("Command table base: %#lx dma phys %#lx\n", cmd.command_table_base, dma_phys_base);
+
+    auto list = get_command_list_ptr(0);
+    printf("List: %p\n", list);
+    auto *list_ptr = reinterpret_cast<volatile uint32_t *>(list);
+    auto *cmd_ptr  = reinterpret_cast<uint32_t *>(&cmd);
+    for (unsigned i = 0; i < sizeof(CommandListEntry) / sizeof(uint32_t); ++i) {
+        list_ptr[i] = cmd_ptr[i];
+    }
+
+    // Issue command
+    port[AHCI_CI_INDEX] = 1 << 0;
+
+    printf("Command issued. CI: %#x\n", port[AHCI_CI_INDEX]);
+
+    sleep(10);
+
+    printf("Command finished. CI: %#x\n", port[AHCI_CI_INDEX]);
+    dump_state();
+}
+
+void AHCIPort::init_drive()
+{
+    printf("Drive ready at port %i: ", index);
+    auto type = classify_device();
+    switch (type) {
+    case DeviceType::ATA:
+        printf("ATA device\n");
+        init_ata_device();
+        break;
+    case DeviceType::ATAPI:
+        printf("ATAPI device\n");
+        break;
+    case DeviceType::PM:
+        printf("Port Multiplier\n");
+        break;
+    case DeviceType::SEMB:
+        printf("Serial Enclosure Management Bridge\n");
+        break;
+    case DeviceType::None:
+        printf("Unknown device\n");
+        break;
+    }
+}
 
 AHCIPort::DeviceType AHCIPort::classify_device()
 {
@@ -373,25 +516,7 @@ void AHCIPort::react_timer()
                 wait(100);
             }
         } else {
-            printf("Drive ready at port %i: ", index);
-            auto type = classify_device();
-            switch (type) {
-            case DeviceType::ATA:
-                printf("ATA device\n");
-                break;
-            case DeviceType::ATAPI:
-                printf("ATAPI device\n");
-                break;
-            case DeviceType::PM:
-                printf("Port Multiplier\n");
-                break;
-            case DeviceType::SEMB:
-                printf("Serial Enclosure Management Bridge\n");
-                break;
-            case DeviceType::None:
-                printf("Unknown device\n");
-                break;
-            }
+            init_drive();
         }
     } break;
     default:
@@ -751,7 +876,7 @@ void ahci_handle(PCIDescriptor d)
     }
 
     for (auto &port: ports) {
-        size_t mem_size = port.command_table_offset + num_slots * COMMAND_TABLE_SIZE;
+        size_t mem_size = port.command_table_offset + num_slots * COMMAND_TABLE_SIZE + SCRATCH_SIZE;
         // TODO: Align to page size constants
         mem_size        = (mem_size + 0xfff) & ~0xfff;
 
@@ -762,6 +887,8 @@ void ahci_handle(PCIDescriptor d)
                    strerror(-request.result));
             exit(1);
         }
+
+        memset(reinterpret_cast<void *>(request.virt_addr), 0, mem_size);
 
         auto phys_addr = get_page_phys_address(0, request.virt_addr, 0);
         if ((long)phys_addr.result < 0) {
