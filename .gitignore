@@ -1,6 +1,7 @@
 !.gitignore
 /bochsout.txt
 /ovmf-riscv64
+/ovmf-x86
 /bx_enh_dbg.ini
 /bin
 /tmp*

@@ -5,9 +5,8 @@ static const uint8_t FIS_TYPE_REG_H2D = 0x27;
 struct FIS_Host_To_Device {
     uint8_t fis_type {};
     uint8_t pmport : 4 {};
-    uint8_t rsv0 : 2 {};
+    uint8_t rsv0 : 3 {};
     uint8_t c : 1 {};
-    uint8_t i : 1 {};
     uint8_t command {};
     uint8_t featurel {};
 
@@ -33,8 +32,7 @@ static const uint8_t FIS_TYPE_REG_D2H = 0x34;
 struct [[gnu::packed]] FIS_Device_To_Host {
     uint8_t fis_type;
     uint8_t pmport : 4;
-    uint8_t rsv0 : 1;
-    uint8_t d : 1;
+    uint8_t rsv0 : 2;
     uint8_t i : 1;
     uint8_t rsv1 : 1;
     uint8_t status;

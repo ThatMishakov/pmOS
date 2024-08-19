@@ -347,50 +347,33 @@ void AHCIPort::init_ata_device()
     str.fis_type           = FIS_TYPE_REG_H2D;
     str.command            = 0xEC; // IDENTIFY DEVICE
     str.c                  = 1;
-    str.device             = 1 << 6; // LBA
-    str.countl             = 0;
 
-    auto *fis = reinterpret_cast<volatile uint32_t *>(dma_virt_base +
-                                                      command_table_offset / sizeof(uint32_t));
-    printf("FIS: %p virt: %p\n", fis, dma_virt_base);
-    auto *fis_ptr = reinterpret_cast<uint32_t *>(&str);
-    for (unsigned i = 0; i < sizeof(FIS_Host_To_Device) / sizeof(uint32_t); ++i) {
-        fis[i] = fis_ptr[i];
-    }
+    auto *fis = (FIS_Host_To_Device *)(dma_virt_base + command_table_offset / sizeof(uint32_t));
+    *fis      = str;
 
-    auto *prdt    = reinterpret_cast<volatile uint32_t *>(fis + PRDT_OFFSET / sizeof(uint32_t));
-    PRDT prd      = {.data_base               = scratch_phys(),
-                     .rsv0                    = 0,
-                     .data_base_count         = 512 - 1,
-                     .rsv1                    = 0,
-                     .interrupt_on_completion = 1};
-    auto *prd_ptr = reinterpret_cast<uint32_t *>(&prd);
-    for (unsigned i = 0; i < sizeof(PRDT) / sizeof(uint32_t); ++i) {
-        prdt[i] = prd_ptr[i];
-    }
+    auto *prdt = (PRDT *)(fis + PRDT_OFFSET / sizeof(uint32_t));
+    *prdt      = {.data_base               = scratch_phys(),
+                  .rsv0                    = 0,
+                  .data_base_count         = 512 - 1,
+                  .rsv1                    = 0,
+                  .interrupt_on_completion = 1};
 
     CommandListEntry cmd   = {};
     cmd.command_fis_length = sizeof(FIS_Host_To_Device) / sizeof(uint32_t);
     cmd.command_table_base = get_command_table_phys(0);
     cmd.prdt_length        = 1;
-    printf("Command table base: %#lx dma phys %#lx\n", cmd.command_table_base, dma_phys_base);
-
-    auto list = get_command_list_ptr(0);
-    printf("List: %p\n", list);
-    auto *list_ptr = reinterpret_cast<volatile uint32_t *>(list);
-    auto *cmd_ptr  = reinterpret_cast<uint32_t *>(&cmd);
-    for (unsigned i = 0; i < sizeof(CommandListEntry) / sizeof(uint32_t); ++i) {
-        list_ptr[i] = cmd_ptr[i];
-    }
+    cmd.clear_busy         = 1;
+    auto list              = (CommandListEntry *)get_command_list_ptr(0);
+    *list                  = cmd;
 
     // Issue command
     port[AHCI_CI_INDEX] = 1 << 0;
 
     printf("Command issued. CI: %#x\n", port[AHCI_CI_INDEX]);
 
-    sleep(10);
+    sleep(1);
 
-    printf("Command finished. CI: %#x\n", port[AHCI_CI_INDEX]);
+    printf("Command completed. CI: %#x\n", port[AHCI_CI_INDEX]);
     dump_state();
 }
 

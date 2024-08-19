@@ -56,11 +56,6 @@ int register_interrupt(uint32_t cpu_id, uint32_t vector, uint64_t task, pmos_por
     return 0;
 }
 
-int_redirect_descriptor isa_gsi_mapping(uint32_t intno)
-{
-    return (int_redirect_descriptor){intno, intno, 0, 0};
-}
-
 void configure_interrupts_for(Message_Descriptor *desc, IPC_Reg_Int *m)
 {
     uint32_t gsi = 0;

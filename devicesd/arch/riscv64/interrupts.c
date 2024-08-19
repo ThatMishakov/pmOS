@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <string.h>
 #include <assert.h>
+#include <interrupts.h>
 
 struct CPU {
     uint32_t allocated_interrupts;
@@ -114,4 +115,9 @@ int set_up_gsi(uint32_t gsi, bool active_low, bool level_trig, uint64_t task, pm
 int install_isa_interrupt(uint32_t isa_pin, uint64_t task, pmos_port_t port, uint32_t *vector)
 {
     return set_up_gsi(isa_pin, false, false, task, port, vector);
+}
+
+int_redirect_descriptor isa_gsi_mapping(uint32_t intno)
+{
+    return (int_redirect_descriptor){intno, intno, 0, 0};
 }

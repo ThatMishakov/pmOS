@@ -23,7 +23,13 @@ ovmf-riscv64/OVMF.fd:
 	mkdir -p ovmf-riscv64
 	cd ovmf-riscv64 && curl -o OVMF.fd https://retrage.github.io/edk2-nightly/bin/RELEASERISCV64_VIRT_CODE.fd && dd if=/dev/zero of=OVMF.fd bs=1 count=0 seek=33554432
 
-qemu-x86: $(ISO)
+ovmf-x86: ovmf-x86/OVMF.fd
+
+ovmf-x86/OVMF.fd:
+	mkdir -p ovmf-x86
+	cd ovmf-x86 && curl -o OVMF.fd https://retrage.github.io/edk2-nightly/bin/RELEASEX64_OVMF.fd
+
+qemu-x86: $(ISO) ovmf-x86
 	qemu-system-x86_64 \
 		-device pcie-root-port,id=root_port1,port=0x10,chassis=1,multifunction=on,slot=1,bus=pcie.0,addr=0x10 \
 		-device x3130-upstream,id=switch_upstream,bus=root_port1,addr=0x0 \
@@ -31,11 +37,13 @@ qemu-x86: $(ISO)
 		-device xio3130-downstream,id=switch_downstream2,bus=switch_upstream,chassis=4,addr=0x2 \
 		-device pcie-pci-bridge,id=pci_bridge1,bus=switch_downstream1,addr=0x0 \
 		-device pcie-pci-bridge,id=pci_bridge2,bus=switch_downstream2,addr=0x0 \
-		-device ahci,id=ahci,bus=pci_bridge1,addr=0x0 \
 		-device e1000e,id=nic1,bus=pci_bridge2,addr=0x0 \
-		-drive file=$(ISO),media=cdrom,if=none,id=cdrom0\
-    	-device ide-cd,drive=cdrom0,bus=ahci.0 \
+		-drive file=$(ISO),if=none,id=hdd0\
+    	-device ide-hd,drive=hdd0 \
+		-trace ahci_* -trace handle_cmd_* \
 		-M q35\
+		-smbios type=0,uefi=on -bios ovmf-x86/OVMF.fd\
+		-m 2G\
 	       	-d cpu_reset\
 	       	-smp 4\
 	       	-serial stdio
