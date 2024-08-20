@@ -40,13 +40,14 @@ qemu-x86: $(ISO) ovmf-x86
 		-device e1000e,id=nic1,bus=pci_bridge2,addr=0x0 \
 		-drive file=$(ISO),if=none,id=hdd0\
     	-device ide-hd,drive=hdd0 \
-		-trace ahci_* -trace handle_cmd_* \
 		-M q35\
 		-smbios type=0,uefi=on -bios ovmf-x86/OVMF.fd\
 		-m 2G\
 	       	-d cpu_reset\
 	       	-smp 4\
 	       	-serial stdio
+		# -trace ahci_* -trace handle_cmd_* \
+
 
 qemu: $(ISO) ovmf-riscv64
 	qemu-system-riscv64 -M virt -cpu rv64 -device ramfb -device virtio-keyboard -device qemu-xhci -device usb-kbd -m 2G -drive if=pflash,unit=0,format=raw,file=ovmf-riscv64/OVMF.fd -device ahci,id=ahci -device ide-hd,drive=cd0,bus=ahci.0 -drive id=cd0,format=raw,file=limine/pmOS.iso -serial stdio -smp 8

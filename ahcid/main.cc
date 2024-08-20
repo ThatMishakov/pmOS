@@ -321,13 +321,32 @@ void AHCIPort::dump_state()
     printf(" --- End Port %i ---\n", index);
 }
 
+void dump_controller()
+{
+    printf("AHCI controller registers\n");
+    printf(" CAP: %#x\n", ahci_virt_base[0]);
+    printf(" GHC: %#x\n", ahci_virt_base[1]);
+    printf(" IS: %#x\n", ahci_virt_base[2]);
+    printf(" PI: %#x\n", ahci_virt_base[3]);
+    printf(" VS: %#x\n", ahci_virt_base[4]);
+    printf(" CCC_CTL: %#x\n", ahci_virt_base[5]);
+    printf(" CCC_PORTS: %#x\n", ahci_virt_base[6]);
+    printf(" EM_LOC: %#x\n", ahci_virt_base[7]);
+    printf(" EM_CTL: %#x\n", ahci_virt_base[8]);
+    printf(" CAP2: %#x\n", ahci_virt_base[9]);
+    printf(" BOHC: %#x\n", ahci_virt_base[10]);
+
+    printf(" --- PCI config space ---\n");
+    printf(" Status+Command: %#x\n", ahci_controller->readl(0x4));
+}
+
 uint64_t AHCIPort::get_command_table_phys(int index)
 {
     return dma_phys_base + command_table_offset + index * COMMAND_TABLE_SIZE;
 }
 
 volatile CommandListEntry *AHCIPort::get_command_list_ptr(int index)
-{
+{   
     return reinterpret_cast<volatile CommandListEntry *>(
         dma_virt_base + (command_list_offset + index * 0x100) / sizeof(uint32_t));
 }
@@ -375,6 +394,7 @@ void AHCIPort::init_ata_device()
 
     printf("Command completed. CI: %#x\n", port[AHCI_CI_INDEX]);
     dump_state();
+    dump_controller();
 }
 
 void AHCIPort::init_drive()
@@ -554,6 +574,7 @@ void AHCIPort::enable_port()
     // Enable all interrupts
     addr[5] = 0xffffffff;
 
+
     printf("Port %i in minimal configuration\n", index);
 
     if (staggered_spinup) {
@@ -693,14 +714,15 @@ void react_timer()
 void react_interrupt()
 {
     uint32_t is = ahci_virt_base[2];
+    ahci_virt_base[2] = is;
     for (int i = 0; i < 32; ++i) {
         if (is & (1 << i)) {
             printf("Interrupt on port %i\n", i);
 
             auto port     = ports[i].get_port_register();
-            auto *port_is = &port[4];
-            printf("Port %i interrupt status: %#x\n", i, *port_is);
-            *port_is = 0xffffffff;
+            auto port_is = port[4];
+            printf("Port %i interrupt status: %#x\n", i, port_is);
+            port[4] = port_is;
 
             ahci_virt_base[2] = 1 << i;
         }
@@ -855,8 +877,36 @@ void ahci_handle(PCIDescriptor d)
         if (pi & (1 << i)) {
             printf("Port %i implemented\n", i);
             ports.push_back({.index = (int)i});
+            // Clear interrupts while we're at it
+            auto port = ports.back().get_port_register();
+            port[4]   = 0xffffffff;
         }
     }
+
+    // Attach PCI interrupt
+    int r = ahci_controller->register_interrupt(ahci_int_vec, 0, ahci_port);
+    if (r < 0) {
+        printf("Failed to register interrupt: %i (%s)\n", -r, strerror(-r));
+    } else {
+        printf("Interrupt registered. Vector: %u\n", ahci_int_vec);
+
+        // Clear 'interrupt disable' bit
+        auto command = ahci_controller->readw(0x4);
+        command &= ~(1 << 10);
+        printf("Command: %#x\n", command);
+        ahci_controller->writew(0x4, command);
+
+        // Clear interrupt status
+        ahci_virt_base[2] = 0xffffffff;
+
+        // Enable interrupts
+        ghc = ahci_virt_base[1];
+        ghc |= AHCI_GHC_IE;
+        ahci_virt_base[1] = ghc;
+    }
+
+
+    dump_controller();
 
     for (auto &port: ports) {
         size_t mem_size = port.command_table_offset + num_slots * COMMAND_TABLE_SIZE + SCRATCH_SIZE;
@@ -898,19 +948,6 @@ void ahci_handle(PCIDescriptor d)
         }
 
         port.init_port();
-    }
-
-    // Attach interrupt
-    int r = ahci_controller->register_interrupt(ahci_int_vec, 0, ahci_port);
-    if (r < 0) {
-        printf("Failed to register interrupt: %i (%s)\n", -r, strerror(-r));
-    } else {
-        printf("Interrupt registered. Vector: %u\n", ahci_int_vec);
-
-        // Enable interrupts
-        ghc = ahci_virt_base[1];
-        ghc |= AHCI_GHC_IE;
-        ahci_virt_base[1] = ghc;
     }
 
     ahci_controller_main();
