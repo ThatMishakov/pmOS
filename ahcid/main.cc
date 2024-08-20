@@ -16,6 +16,7 @@
 #include <string>
 #include <unistd.h>
 #include <vector>
+#include <algorithm>
 
 constexpr std::string devicesd_port_name = "/pmos/devicesd";
 pmos_port_t devicesd_port                = []() -> auto {
@@ -393,8 +394,6 @@ void AHCIPort::init_ata_device()
     sleep(1);
 
     printf("Command completed. CI: %#x\n", port[AHCI_CI_INDEX]);
-    dump_state();
-    dump_controller();
 }
 
 void AHCIPort::init_drive()
@@ -468,6 +467,17 @@ TimerTree::RBTreeHead timer_tree;
 uint64_t next_timer_time = 0;
 
 std::vector<AHCIPort> ports;
+AHCIPort &find_port(int i)
+{
+    auto it = std::lower_bound(ports.begin(), ports.end(), i,
+                               [](auto port, auto i) { return port.index < i; });
+    
+    if (it == ports.end() || it->index != i) {
+        throw std::runtime_error("Port not found");
+    }
+
+    return *it;
+}
 
 void AHCIPort::react_timer()
 {
@@ -714,12 +724,11 @@ void react_timer()
 void react_interrupt()
 {
     uint32_t is = ahci_virt_base[2];
-    ahci_virt_base[2] = is;
     for (int i = 0; i < 32; ++i) {
         if (is & (1 << i)) {
             printf("Interrupt on port %i\n", i);
 
-            auto port     = ports[i].get_port_register();
+            auto port     = find_port(i).get_port_register();
             auto port_is = port[4];
             printf("Port %i interrupt status: %#x\n", i, port_is);
             port[4] = port_is;
@@ -904,9 +913,6 @@ void ahci_handle(PCIDescriptor d)
         ghc |= AHCI_GHC_IE;
         ahci_virt_base[1] = ghc;
     }
-
-
-    dump_controller();
 
     for (auto &port: ports) {
         size_t mem_size = port.command_table_offset + num_slots * COMMAND_TABLE_SIZE + SCRATCH_SIZE;

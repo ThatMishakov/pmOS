@@ -68,7 +68,7 @@ void program_syscall()
 extern "C" void _cpu_entry(u64 limine_struct);
 void *get_cpu_start_func() { return (void *)_cpu_entry; }
 
-void init_per_cpu()
+void init_per_cpu(uint32_t lapic_id)
 {
     CPU_Info *c = new CPU_Info;
     loadGDT(&c->cpu_gdt);
@@ -89,7 +89,8 @@ void init_per_cpu()
 
     loadTSS(TSS_OFFSET);
 
-    c->lapic_id = get_lapic_id();
+    c->lapic_id = lapic_id;
+    assert(lapic_id == (get_lapic_id() >> 24));
 
     // This creates a *fat* use-after-free race condition (which hopefully
     // shouldn't lead to a lot of crashes because current malloc is not that
@@ -178,8 +179,6 @@ extern "C" u64 *get_kern_stack_top() { return get_cpu_struct()->kernel_stack.get
 
 void init_scheduling(u64 bootstap_apic_id)
 {
-    (void)bootstap_apic_id;
-
     serial_logger.printf("Initializing APIC\n");
     prepare_apic();
 
@@ -187,7 +186,7 @@ void init_scheduling(u64 bootstap_apic_id)
     init_interrupts();
 
     serial_logger.printf("Initializing per-CPU structures\n");
-    init_per_cpu();
+    init_per_cpu(bootstap_apic_id);
 
     serial_logger.printf("Scheduling initialized\n");
 }

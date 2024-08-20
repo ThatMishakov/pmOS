@@ -233,8 +233,6 @@ extern "C" void programmable_interrupt(u32 intno)
 {
     auto c = get_cpu_struct();
 
-    serial_logger.printf("[Kernel] Info: Interrupt %h CPU %h\n", intno, c->cpu_id);
-
     auto handler = c->int_handlers.get_handler(intno);
     if (!handler) {
         global_logger.printf("[Kernel] Error: No handler for interrupt %h\n", intno);

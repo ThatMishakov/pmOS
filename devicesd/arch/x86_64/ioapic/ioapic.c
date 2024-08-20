@@ -339,7 +339,7 @@ int get_interrupt_vector(uint32_t gsi, bool active_low, bool level_trig, int *cp
 
     pthread_mutex_unlock(&int_vector_mutex);
 
-    printf("New interrupt mapping: GSI %u -> CPU %d, vector %u\n", gsi, *cpu_id_out, *vector_out);
+    printf("New interrupt mapping: GSI %u <%s %s> -> CPU %d, vector %u\n", gsi, active_low ? "Active low" : "Active high", level_trig ? "Level" : "Edge", *cpu_id_out, *vector_out);
 
     return 0;
 }

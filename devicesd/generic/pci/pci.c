@@ -227,8 +227,8 @@ void parse_interrupt_table(struct PCIGroup *g, int bus, uacpi_pci_routing_table 
             .bus = bus,
             .device = entry->address >> 16,
             .pin = entry->pin,
-            .active_low = false,
-            .level_trigger = false,
+            .active_low = true,
+            .level_trigger = true,
             .gsi = entry->index,
         };
 
@@ -254,7 +254,7 @@ void parse_interrupt_table(struct PCIGroup *g, int bus, uacpi_pci_routing_table 
                     }
                     e.gsi = irq->irqs[0];
 
-                    if (irq->triggering == UACPI_GPE_TRIGGERING_EDGE)
+                    if (irq->triggering == UACPI_TRIGGERING_EDGE)
                         e.level_trigger = false;
                     if (irq->polarity == UACPI_POLARITY_ACTIVE_HIGH)
                         e.active_low = false;
@@ -268,7 +268,7 @@ void parse_interrupt_table(struct PCIGroup *g, int bus, uacpi_pci_routing_table 
                     }
                     e.gsi = irq->irqs[0];
 
-                    if (irq->triggering == UACPI_GPE_TRIGGERING_EDGE)
+                    if (irq->triggering == UACPI_TRIGGERING_EDGE)
                         e.level_trigger = false;
                     if (irq->polarity == UACPI_POLARITY_ACTIVE_HIGH)
                         e.active_low = false;
