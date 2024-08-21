@@ -38,6 +38,7 @@
 #include <unordered_set>
 #include <variant>
 #include <vector>
+#include <system_error>
 
 void send_message(pmos_port_t port, const auto &data)
 {

@@ -3,6 +3,7 @@
 #include <pmos/interrupts.h>
 #include <errno.h>
 #include <pmos/ipc.h>
+#include <string.h>
 
 int register_interrupt(uint32_t cpu_id, uint32_t vector, uint64_t task, pmos_port_t port)
 {
@@ -78,11 +79,10 @@ void configure_interrupts_for(Message_Descriptor *desc, IPC_Reg_Int *m)
 
     if (m->dest_task == 0) {
         result = -EINVAL;
-        goto finish;
+    } else {
+        result = set_up_gsi(gsi, active_low, level_trig, m->dest_task, m->reply_chan, &vector);
     }
-
-    result = set_up_gsi(gsi, active_low, level_trig, m->dest_task, m->reply_chan, &vector);
-finish:
+    
     IPC_Reg_Int_Reply reply;
     reply.type = IPC_Reg_Int_Reply_NUM;
     reply.status = result;

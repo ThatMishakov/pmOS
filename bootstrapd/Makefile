@@ -9,18 +9,20 @@ ARCH ?= x86_64
 # It is highly recommended to use a custom built cross toolchain to build a kernel.
 # We are only using "cc" as a placeholder here. It may work by using
 # the host system's toolchain, but this is not guaranteed.
-CC = $(ARCH)-pmos-gcc
-CPP = $(ARCH)-pmos-gcc
-CXX = $(ARCH)-pmos-g++
+CC = clang
+CPP = clang
+CXX = clang++
+
+TARGETFLAGS = --target=$(ARCH)-pmos --sysroot=$(ROOTDIR)/sysroot
 
 # User controllable CFLAGS.
 USERCFLAGS = -Wall -Wextra -O2 -pipe
 
-CFLAGS = -std=c17 -g
-CXXFLAGS = -std=c++17 -g
-CPPFLAGS = $(INTERNALCFLAGS) $(USERCFLAGS) -MMD -MP
-ASMFLAGS = -I$(INCLUDEDIR)
-LDFLAGS = $(INTERNALLDFLAGS)
+CFLAGS = -std=c17 -g $(TARGETFLAGS)
+CXXFLAGS = -std=c++17 -g $(TARGETFLAGS)
+CPPFLAGS = $(INTERNALCFLAGS) $(USERCFLAGS) -MMD -MP $(TARGETFLAGS)
+ASMFLAGS = -I$(INCLUDEDIR) $(TARGETFLAGS)
+LDFLAGS = $(INTERNALLDFLAGS) $(TARGETFLAGS)
 
 # Internal link flags that should not be changed by the user.
 INTERNALLDFLAGS :=

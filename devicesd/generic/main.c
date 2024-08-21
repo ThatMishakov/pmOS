@@ -65,6 +65,10 @@ pmos_port_t configuration_port = 0;
 
 const char *devicesd_port_name = "/pmos/devicesd";
 
+void request_pci_devices(Message_Descriptor *desc, IPC_Request_PCI_Devices *d);
+void request_pci_device(Message_Descriptor *desc, IPC_Request_PCI_Device *d);
+void request_pci_device_gsi(Message_Descriptor *desc, IPC_Request_PCI_Device_GSI *d);
+
 int main(int argc, char **argv)
 {
     printf("Hello from devicesd!. My PID: %lx\n", get_task_id());
@@ -159,9 +163,10 @@ int main(int argc, char **argv)
 
             //     hpet_int();
             //     break;
-            case IPC_Request_Serial_NUM:
+            case IPC_Request_Serial_NUM:{
                 IPC_Request_Serial *m = (IPC_Request_Serial *)msg_buff;
                 request_serial(&msg, m);
+            }
                 break;
             case IPC_Request_PCI_Devices_NUM:
                 request_pci_devices(&msg, (IPC_Request_PCI_Devices *)msg_buff);

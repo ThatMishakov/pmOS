@@ -42,6 +42,7 @@
 #include <uacpi/utilities.h>
 #include <uacpi/sleep.h>
 #include <pthread.h>
+#include <pmos/special.h>
 
 int acpi_revision = -1;
 
@@ -153,6 +154,8 @@ void request_acpi_tables()
 
 void acpi_pci_init();
 void init_pci();
+void find_acpi_devices();
+int power_button_init();
 
 #include <uacpi/uacpi.h>
 #include <uacpi/event.h>
@@ -274,6 +277,7 @@ int power_button_init(void) {
 
 void find_com();
 void init_ioapic();
+void init_cpus();
 
 void find_acpi_devices()
 {

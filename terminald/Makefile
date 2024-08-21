@@ -5,17 +5,19 @@ export PATH := $(ROOTDIR)/bin/cross/bin:$(PATH)
 
 ARCH ?= x86_64
 
-CC = $(ARCH)-pmos-gcc
-CPP = $(ARCH)-pmos-gcc
-CXX = $(ARCH)-pmos-g++
+CC = clang
+CPP = clang
+CXX = clang++
 
 INCLUDEDIR =
 
 USERCFLAGS = -Wall -Wextra -Og -g -pipe -I.
 
-CPPFLAGS = $(INTERNALCFLAGS) $(USERCFLAGS) -MMD -MP -DFLANTERM_FB_DISABLE_BUMP_ALLOC -DFLANTERM_FB_SUPPORT_BPP
-ASMFLAGS = -I$(INCLUDEDIR)
-LDFLAGS = $(INTERNALLDFLAGS)
+TARGETFLAGS = --target=$(ARCH)-pmos --sysroot=$(ROOTDIR)/sysroot
+
+CPPFLAGS = $(INTERNALCFLAGS) $(USERCFLAGS) -MMD -MP -DFLANTERM_FB_DISABLE_BUMP_ALLOC -DFLANTERM_FB_SUPPORT_BPP $(TARGETFLAGS)
+ASMFLAGS = -I$(INCLUDEDIR) $(TARGETFLAGS)
+LDFLAGS = $(INTERNALLDFLAGS) $(TARGETFLAGS)
 
 # Internal link flags that should not be changed by the user.
 INTERNALLDFLAGS := -static

@@ -466,6 +466,7 @@ int pcicdevice_compare(const void *aa, const void *bb)
 void request_pci_device(Message_Descriptor *desc, IPC_Request_PCI_Device *d)
 {
     int error = 0;
+    IPC_Request_PCI_Device_Reply reply;
 
     if (desc->size < sizeof(IPC_Request_PCI_Device)) {
         error = -EINVAL;
@@ -493,7 +494,7 @@ void request_pci_device(Message_Descriptor *desc, IPC_Request_PCI_Device *d)
         printf("Failed to send message in request_pci_device: %li\n", result);
     return;
 err:
-    IPC_Request_PCI_Device_Reply reply = {
+    reply = (IPC_Request_PCI_Device_Reply){
         .type      = IPC_Request_PCI_Device_Reply_NUM,
         .flags     = 0,
         .type_error = error,
@@ -505,6 +506,7 @@ err:
 
 void request_pci_devices(Message_Descriptor *desc, IPC_Request_PCI_Devices *d)
 {
+    int e;
     size_t requests = (desc->size - sizeof(IPC_Request_PCI_Devices)) / sizeof(struct IPC_PCIDevice);
     VECTOR(struct IPC_PCIDeviceLocation) devices = VECTOR_INIT;
 
@@ -555,7 +557,7 @@ void request_pci_devices(Message_Descriptor *desc, IPC_Request_PCI_Devices *d)
     send_message_port(d->reply_port, reply_size, (char *)reply);
     return;
 error:
-    int e = -errno;
+    e = -errno;
 
     fprintf(stderr, "Error: Could not allocate IPC_PCIDeviceLocation: %i\n", errno);
 
@@ -670,6 +672,7 @@ int set_up_gsi(uint32_t gsi, bool active_low, bool level_trig, uint64_t task, pm
 
 void register_pci_interrupt(Message_Descriptor *msg, IPC_Register_PCI_Interrupt *desc)
 {
+    IPC_Reg_Int_Reply reply;
     int result = 0;
     uint32_t vector = 0;
     bool active_low = false;
@@ -697,7 +700,7 @@ void register_pci_interrupt(Message_Descriptor *msg, IPC_Register_PCI_Interrupt 
 
     result = set_up_gsi(vector, active_low, level_trig, desc->dest_task, desc->dest_port, &vector);
 end:
-    IPC_Reg_Int_Reply reply = {
+    reply = (IPC_Reg_Int_Reply){
         .type = IPC_Reg_Int_Reply_NUM,
         .flags = 0,
         .status = result,

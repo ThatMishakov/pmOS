@@ -18,7 +18,7 @@
 #include <vector>
 #include <algorithm>
 
-constexpr std::string devicesd_port_name = "/pmos/devicesd";
+std::string devicesd_port_name = "/pmos/devicesd";
 pmos_port_t devicesd_port                = []() -> auto {
     ports_request_t request =
         get_port_by_name(devicesd_port_name.c_str(), devicesd_port_name.length(), 0);

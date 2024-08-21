@@ -8,10 +8,11 @@
 #include <pmos/ports.h>
 #include <stdio.h>
 #include <string>
+#include <system_error>
 
 pmos_port_t main_port = create_port();
 
-constexpr std::string piped_port_name = "/pmos/piped";
+std::string piped_port_name = "/pmos/piped";
 
 int main()
 {

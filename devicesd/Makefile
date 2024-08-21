@@ -6,9 +6,11 @@ export PATH := $(ROOTDIR)/bin/cross/bin:$(PATH)
 
 ARCH ?= x86_64
 
-CC = $(ARCH)-pmos-gcc
-CPP = $(ARCH)-pmos-gcc
-CXX = $(ARCH)-pmos-g++
+CC = clang
+CPP = clang
+CXX = clang++
+
+TARGETFLAGS = --target=$(ARCH)-pmos --sysroot=$(ROOTDIR)/sysroot
 
 USERCFLAGS = -Wall -Wextra -O2 -pipe
 
@@ -23,11 +25,11 @@ INTERNALCFLAGS  :=       \
 	-static \
 	-fno-exceptions
 
-CFLAGS = -std=gnu17 $(INCLUDEFLAGS) -g
-CXXFLAGS = -std=c++17 $(INCLUDEFLAGS) -g
-CPPFLAGS = $(INTERNALCFLAGS) $(USERCFLAGS) -MMD -MP $(INCLUDEFLAGS)
-ASMFLAGS = -I$(INCLUDEDIR)
-LDFLAGS = $(INTERNALLDFLAGS) -g
+CFLAGS = -std=gnu17 $(INCLUDEFLAGS) -g $(TARGETFLAGS)
+CXXFLAGS = -std=c++20 $(INCLUDEFLAGS) -g $(TARGETFLAGS)
+CPPFLAGS = $(INTERNALCFLAGS) $(USERCFLAGS) -MMD -MP $(INCLUDEFLAGS) $(TARGETFLAGS)
+ASMFLAGS = -I$(INCLUDEDIR) $(TARGETFLAGS)
+LDFLAGS = $(INTERNALLDFLAGS) -g $(TARGETFLAGS)
  
 # Use find to glob all *.c files in the directory and extract the object names.
 CCFILES := $(shell find ./generic/ -type f -name '*.cc') $(shell find ./arch/$(ARCH)/ -type f -name '*.cc') 

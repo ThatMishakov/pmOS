@@ -6,25 +6,23 @@ export PATH := $(ROOTDIR)/bin/cross/bin:$(PATH)
 
 ARCH ?= x86_64
 
-CC = $(ARCH)-pmos-gcc
-CPP = $(ARCH)-pmos-gcc
-CXX = $(ARCH)-pmos-g++
+CC = clang
+CPP = clang
+CXX = clang++
 
 USERCFLAGS = -Wall -Wextra -O2 -pipe
 
-CFLAGS = -std=c17 -g
-CXXFLAGS = -std=c++20 -g
-CPPFLAGS = $(INTERNALCFLAGS) $(USERCFLAGS) -MMD -MP
+CFLAGS = -std=c17 -g --target=$(ARCH)-pmos --sysroot=$(ROOTDIR)/sysroot
+CXXFLAGS = -std=c++20 -g --target=$(ARCH)-pmos --sysroot=$(ROOTDIR)/sysroot
+CPPFLAGS = $(INTERNALCFLAGS) $(USERCFLAGS)
 ASMFLAGS = -I$(INCLUDEDIR)
-LDFLAGS = $(INTERNALLDFLAGS)
+LDFLAGS = $(INTERNALLDFLAGS) --target=$(ARCH)-pmos --sysroot=$(ROOTDIR)/sysroot -static
 
 # Internal link flags that should not be changed by the user.
 INTERNALLDFLAGS :=
  
 # Internal C flags that should not be changed by the user.
 INTERNALCFLAGS  :=       \
-	-MMD -MP \
-	-static \
 	-fPIE
  
 # Use find to glob all *.c files in the directory and extract the object names.

@@ -1,5 +1,6 @@
 #include <uacpi/utilities.h>
 #include <uacpi/resources.h>
+#include <stdio.h>
 
 #define PC_COM_PNP_ID "PNP0500"
 #define NS16550A_PNP_ID "PNP0501"

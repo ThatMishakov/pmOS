@@ -43,7 +43,7 @@ void *map_phys(void *phys_addr, size_t bytes)
     size_t size = end_aligned - addr_aligned;
 
     mem_request_ret_t t =
-        create_phys_map_region(0, NULL, size, PROT_READ | PROT_WRITE, addr_aligned);
+        create_phys_map_region(0, NULL, size, PROT_READ | PROT_WRITE, (void *)addr_aligned);
 
     if (t.result != SUCCESS)
         return NULL;
@@ -58,5 +58,5 @@ void unmap_phys(void *virt_addr, size_t bytes)
     end_alligned = (end_alligned & ~(uint64_t)0777) + (end_alligned & (uint64_t)0777 ? 01000 : 0);
     size_t size_pages = (end_alligned - addr_alligned) >> 12;
 
-    munmap(addr_alligned, size_pages);
+    munmap((void *)addr_alligned, size_pages);
 }

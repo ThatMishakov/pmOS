@@ -41,8 +41,8 @@ pmos_port_t serial_port = []() -> auto {
     return request.port;
 }();
 
-constexpr std::string devicesd_port_name = "/pmos/devicesd";
-pmos_port_t devicesd_port                = []() -> auto {
+std::string devicesd_port_name = "/pmos/devicesd";
+pmos_port_t devicesd_port      = []() -> auto {
     ports_request_t request =
         get_port_by_name(devicesd_port_name.c_str(), devicesd_port_name.length(), 0);
     return request.port;
@@ -83,12 +83,12 @@ void set_up_interrupt()
         return;
 
     IPC_Reg_Int r = {
-        .type = IPC_Reg_Int_NUM,
-        .flags = 0,
-        .intno = (uint32_t)gsi_num,
-        .int_flags = 0, // TODO
-        .dest_task = get_task_id(),
-        .dest_chan = serial_port,
+        .type       = IPC_Reg_Int_NUM,
+        .flags      = 0,
+        .intno      = (uint32_t)gsi_num,
+        .int_flags  = 0, // TODO
+        .dest_task  = get_task_id(),
+        .dest_chan  = serial_port,
         .reply_chan = serial_port,
     };
 
@@ -350,9 +350,13 @@ void check_rx()
 {
     while ((read_register(LSR) & LSR_DATA_READY) != 0) {
         auto t = read_register(THR);
-        
-        //putc(t, stdout);
-        printf("\033[1;36m" "ns16550: Received letter %c" "\033[0m" "\n", t);
+
+        // putc(t, stdout);
+        printf("\033[1;36m"
+               "ns16550: Received letter %c"
+               "\033[0m"
+               "\n",
+               t);
     }
     fflush(stdout);
 }
@@ -378,8 +382,8 @@ void react_timer_msg()
     check_buffers();
 }
 
-constexpr std::string log_port_name = "/pmos/logd";
-pmos_port_t log_port                = 0;
+std::string log_port_name = "/pmos/logd";
+pmos_port_t log_port      = 0;
 
 void request_logger_port()
 {
