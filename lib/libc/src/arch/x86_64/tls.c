@@ -32,6 +32,7 @@
 #include <pmos/tls.h>
 #include <stdbool.h>
 #include <string.h>
+#include <pthread.h>
 
 void __init_uthread(struct uthread *u, void *stack_top, size_t stack_size);
 

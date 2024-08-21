@@ -34,6 +34,10 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+static int isinf_(double x) {
+    return x == HUGE_VAL || x == -HUGE_VAL;
+}
+
 double strtod(const char *str, char **endptr)
 {
     // Skip leading whitespace
@@ -106,7 +110,7 @@ double strtod(const char *str, char **endptr)
     }
 
     // Check for errors
-    if (errno == ERANGE || isinf(result)) {
+    if (errno == ERANGE || isinf_(result)) {
         errno = ERANGE;
         return (negative) ? -HUGE_VAL : HUGE_VAL;
     } else if (errno == EINVAL) {
@@ -190,7 +194,7 @@ float strtof(const char *str, char **endptr)
     }
 
     // Check for errors
-    if (errno == ERANGE || isinf(result)) {
+    if (errno == ERANGE || isinf_(result)) {
         errno = ERANGE;
         return (negative) ? -HUGE_VALF : HUGE_VALF;
     } else if (errno == EINVAL) {
@@ -274,7 +278,7 @@ long double strtold(const char *str, char **endptr)
     }
 
     // Check for errors
-    if (errno == ERANGE || isinf(result)) {
+    if (errno == ERANGE || isinf_(result)) {
         errno = ERANGE;
         return (negative) ? -HUGE_VALL : HUGE_VALL;
     } else if (errno == EINVAL) {

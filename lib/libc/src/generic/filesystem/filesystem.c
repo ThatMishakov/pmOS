@@ -52,6 +52,8 @@
 
 static struct Filesystem_Data *fs_data = NULL;
 static pthread_spinlock_t fs_data_lock;
+pmos_port_t prepare_reply_port();
+int vfsd_send_persistant(size_t msg_size, const void *message);
 
 __attribute__((visibility("hidden"))) const struct Filesystem_Adaptor __file_adaptor = {
     .read       = &__file_read,
