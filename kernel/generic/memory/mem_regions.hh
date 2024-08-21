@@ -238,7 +238,7 @@ struct Generic_Mem_Region {
  */
 struct Phys_Mapped_Region final: Generic_Mem_Region {
     // Allocated a new page, pointing to the corresponding physical address.
-    virtual bool alloc_page(u64 ptr_addr);
+    virtual bool alloc_page(u64 ptr_addr) override;
 
     u64 phys_addr_start = 0;
     constexpr bool can_takeout_page() const noexcept override { return false; }
@@ -246,7 +246,7 @@ struct Phys_Mapped_Region final: Generic_Mem_Region {
     virtual void clone_to(const klib::shared_ptr<Page_Table> &new_table, u64 base_addr,
                           u64 new_access) override;
 
-    virtual Page_Table_Argumments craft_arguments() const;
+    virtual Page_Table_Argumments craft_arguments() const override;
 
     // Constructs a region with virtual address starting at *aligned_virt* of size *size* pointing
     // to *aligned_phys*
@@ -273,12 +273,12 @@ struct Private_Normal_Region final: Generic_Mem_Region {
                           u64 new_access) override;
 
     // Attempt to allocate a new page
-    virtual bool alloc_page(u64 ptr_addr);
+    virtual bool alloc_page(u64 ptr_addr) override;
 
     // Tries to preallocate all the pages
     void prefill();
 
-    virtual Page_Table_Argumments craft_arguments() const;
+    virtual Page_Table_Argumments craft_arguments() const override;
 
     Private_Normal_Region(u64 start_addr, u64 size, klib::string name, Page_Table *owner, u8 access,
                           u64 pattern)

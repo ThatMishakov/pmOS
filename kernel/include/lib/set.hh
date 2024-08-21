@@ -391,7 +391,7 @@ template<class K> pair<typename set<K>::iterator, bool> set<K>::emplace(K &&k)
     return {n, true};
 }
 
-template<class T> class set<T>::node set<T>::NIL =
+template<class T> struct set<T>::node set<T>::NIL =
 {
     {}, &NIL, &NIL, &NIL, false
 };

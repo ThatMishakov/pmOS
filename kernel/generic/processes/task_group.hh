@@ -156,5 +156,5 @@ private:
 
     static inline u64 next_id = 1;
 
-    friend Port::~Port();
+    friend Port::~Port() noexcept;
 };

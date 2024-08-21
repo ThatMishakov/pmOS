@@ -38,7 +38,7 @@
 #include <memory/paging.hh>
 
 class Page_Table;
-class Generic_Mem_Region;
+struct Generic_Mem_Region;
 class Port;
 
 /**

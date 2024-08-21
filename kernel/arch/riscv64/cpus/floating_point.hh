@@ -84,7 +84,7 @@ inline FloatingPointState get_fp_state()
     return static_cast<FloatingPointState>((sstatus >> 13) & 0b11);
 }
 
-struct TaskDescriptor;
+class TaskDescriptor;
 
 // Restores the floating point state from the given task
 void restore_fp_state(TaskDescriptor *task);

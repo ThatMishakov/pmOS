@@ -90,7 +90,7 @@ Page_Descriptor Page_Descriptor::allocate_page_zeroed(u8 alignment_log)
     return Page_Descriptor(p);
 }
 
-Page_Descriptor::~Page_Descriptor() { try_free_page(); }
+Page_Descriptor::~Page_Descriptor() noexcept { try_free_page(); }
 
 Page_Descriptor::Page_Descriptor(Page_Descriptor &&p) noexcept: page_struct_ptr(p.page_struct_ptr)
 {

@@ -583,7 +583,7 @@ protected:
     enable_shared_from_this(enable_shared_from_this<T> &&obj) noexcept      = delete;
     ~enable_shared_from_this()                                              = default;
 
-    enable_shared_from_this<T> &operator=(const enable_shared_from_this<T> &obj) noexcept
+    enable_shared_from_this<T> &operator=(const enable_shared_from_this<T> &) noexcept
     {
         return *this;
     }

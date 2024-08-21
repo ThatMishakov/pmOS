@@ -30,7 +30,7 @@
 #include <lib/memory.hh>
 #include <types.hh>
 
-struct TaskDescriptor;
+class TaskDescriptor;
 
 /**
  * @brief Sheduler queue of tasks

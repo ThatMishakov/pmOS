@@ -75,6 +75,6 @@ template<class A> const A &max(const A &a, const A &b) noexcept
 
 template<class A> const A &min(const A &a, const A &b) noexcept { return a < b ? a : b; }
 
-class Logger;
+struct Logger;
 
 void print_stack_trace(Logger &logger);

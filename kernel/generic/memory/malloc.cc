@@ -75,13 +75,13 @@ void *operator new[](size_t size)
     return ptr;
 }
 
-void operator delete(void *p) { free(p); }
+void operator delete(void *p) noexcept { free(p); }
 
-void operator delete[](void *p) { free(p); }
+void operator delete[](void *p) noexcept { free(p); }
 
-void operator delete(void *p, UNUSED size_t s) { free(p); }
+void operator delete(void *p, UNUSED size_t s) noexcept { free(p); }
 
-void operator delete[](void *p, UNUSED size_t s) { free(p); }
+void operator delete[](void *p, UNUSED size_t s) noexcept { free(p); }
 
 void *operator new(size_t, void *p) noexcept { return p; }
 void *operator new[](size_t, void *p) noexcept { return p; }

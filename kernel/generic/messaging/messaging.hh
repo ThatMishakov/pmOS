@@ -37,7 +37,7 @@
 
 extern Spinlock messaging_ports;
 
-struct TaskDescriptor;
+class TaskDescriptor;
 
 struct Generic_Port {
     virtual ~Generic_Port() noexcept = default;

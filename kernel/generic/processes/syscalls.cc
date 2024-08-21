@@ -934,7 +934,7 @@ void syscall_map_mem_object(u64 page_table_id, u64 addr_start, u64 size_bytes, u
     auto table               = page_table_id == 0 ? current_task->page_table
                                                   : Arch_Page_Table::get_page_table_throw(page_table_id);
 
-    if ((size_bytes == 0) or (size_bytes & 0xfff != 0))
+    if ((size_bytes == 0) or ((size_bytes & 0xfff) != 0))
         throw Kern_Exception(-EINVAL, "size not page aligned");
 
     if (offset & 0xfff)

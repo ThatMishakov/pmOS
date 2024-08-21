@@ -52,7 +52,7 @@ struct Gate_Descriptor {
 
     Gate_Descriptor() = default;
 
-    constexpr Gate_Descriptor(isr offset, u8 gate_type, u8 ist, u8 privilege_level,
+    Gate_Descriptor(isr offset, u8 gate_type, u8 ist, u8 privilege_level,
                               u16 segment_selector = R0_CODE_SEGMENT)
         : offset_1((u64)(offset)), segment_selector(segment_selector), ist(ist), reserved(0),
           gate_type(gate_type), zero(0), dpl(privilege_level), present(1),
@@ -65,7 +65,7 @@ struct Gate_Descriptor {
 struct IDT {
     Gate_Descriptor entries[256];
 
-    constexpr void register_isr(u16 intno, isr isr_routine, u8 gate_type, u8 ist,
+    void register_isr(u16 intno, isr isr_routine, u8 gate_type, u8 ist,
                                 u8 allowed_privilege_level)
     {
         entries[intno] = {isr_routine, gate_type, ist, allowed_privilege_level};

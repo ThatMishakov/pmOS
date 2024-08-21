@@ -153,7 +153,7 @@ public:
 
     klib::shared_ptr<x86_4level_Page_Table> create_clone();
 
-    virtual bool atomic_copy_to_user(u64 to, const void *from, u64 size);
+    virtual bool atomic_copy_to_user(u64 to, const void *from, u64 size) override;
 
     constexpr static u64 l4_align = 4096UL * 512 * 512 * 512;
     constexpr static u64 l3_align = 4096UL * 512 * 512;
@@ -178,13 +178,13 @@ protected:
     static page_table_map global_page_tables;
     static Spinlock page_table_index_lock;
 
-    virtual void invalidate_range(u64 virt_addr, u64 size_bytes, bool free);
+    virtual void invalidate_range(u64 virt_addr, u64 size_bytes, bool free) override;
 
     virtual u64 get_page_frame(u64 virt_addr) override;
     x86_4level_Page_Table() = default;
 
     // Frees user pages
-    void free_user_pages();
+    void free_user_pages() override;
 
     void free_pt(u64 pt_phys);
     void free_pd(u64 pd_phys);
@@ -209,7 +209,7 @@ u64 get_pt_ppn(u64 virt_addr, u64 pt_top_phys);
 // Invalidades a page entry using recursive mappings
 kresult_t invalidade(u64 virtual_addr);
 
-struct TaskDescriptor;
+class TaskDescriptor;
 
 // Invalidade a single page using recursive mappings
 void invalidade_noerr(u64 virtual_addr);

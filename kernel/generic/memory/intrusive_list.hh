@@ -15,7 +15,6 @@ public:
         friend CircularDoubleList;
         DoubleListHead<T> *current;
         iterator(DoubleListHead<T> *p) noexcept: current(p) {}
-
     public:
         iterator &operator++() noexcept;
         iterator &operator--() noexcept;
@@ -117,8 +116,7 @@ template<typename T, DoubleListHead<T> T::*Head>
 T &CircularDoubleList<T, Head>::iterator::operator*() const noexcept
 {
     return *reinterpret_cast<T *>(reinterpret_cast<char *>(current) -
-                                  (reinterpret_cast<char *>(&(reinterpret_cast<T *>(0)->*Head)) -
-                                   reinterpret_cast<char *>(0)));
+                                  reinterpret_cast<size_t>(&(reinterpret_cast<T *>(0)->*Head)));
 }
 
 template<typename T, DoubleListHead<T> T::*Head>

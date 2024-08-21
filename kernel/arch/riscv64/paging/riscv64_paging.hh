@@ -229,5 +229,5 @@ private:
 
     /// Frees user space pages. Should be called when deleting the page table
     /// pointer
-    void free_user_pages();
+    void free_user_pages() override;
 };
