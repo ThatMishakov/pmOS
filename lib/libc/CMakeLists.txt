@@ -12,9 +12,12 @@ set(SRC_FOLDER "src")
 
 file(GLOB_RECURSE GENERIC_SRC "${SRC_FOLDER}/generic/*.c" "${SRC_FOLDER}/generic/*.S")
 file(GLOB_RECURSE ARCH_SRC "${SRC_FOLDER}/arch/${TARGET_ARCH}/*.c" "${SRC_FOLDER}/arch/${TARGET_ARCH}/*.S")
-set(SRC ${GENERIC_SRC} ${ARCH_SRC})
 
-list(REMOVE_ITEM SRC "${SRC_FOLDER}/arch/${TARGET_ARCH}/crti.S" "${SRC_FOLDER}/arch/${TARGET_ARCH}/crtn.S" "${SRC_FOLDER}/arch/${TARGET_ARCH}/crt0.S")
+list(FILTER ARCH_SRC EXCLUDE REGEX ".*/crti\.S$")
+list(FILTER ARCH_SRC EXCLUDE REGEX ".*/crtn\.S$")
+list(FILTER ARCH_SRC EXCLUDE REGEX ".*/crt0\.S$")
+
+set(SRC ${GENERIC_SRC} ${ARCH_SRC})
 
 # GCC shenanigans
 # https://gcc.gnu.org/bugzilla/show_bug.cgi?id=67618
@@ -28,7 +31,7 @@ set_source_files_properties(${SRC_FOLDER}/generic/string.c PROPERTIES COMPILE_FL
 
 add_library(csrc OBJECT ${SRC})
 add_library(c STATIC $<TARGET_OBJECTS:csrc>)
-# add_library(c_static SHARED $<TARGET_OBJECTS:csrc>)
+add_library(c_static SHARED $<TARGET_OBJECTS:csrc>)
 
 # set_target_properties(c_static PROPERTIES OUTPUT_NAME c)
 

@@ -934,6 +934,7 @@ DLMALLOC_EXPORT void* dlrealloc_in_place(void*, size_t);
   Overreliance on memalign is a sure way to fragment space.
 */
 DLMALLOC_EXPORT void* dlmemalign(size_t, size_t);
+DLMALLOC_EXPORT void* aligned_alloc(size_t, size_t);
 
 /*
   int posix_memalign(void** pp, size_t alignment, size_t n);
@@ -5293,6 +5294,9 @@ void* dlmemalign(size_t alignment, size_t bytes) {
   }
   return internal_memalign(gm, alignment, bytes);
 }
+
+void* aligned_alloc(size_t alignment, size_t bytes)
+  __attribute__((alias("memalign")));
 
 int dlposix_memalign(void** pp, size_t alignment, size_t bytes) {
   void* mem = 0;

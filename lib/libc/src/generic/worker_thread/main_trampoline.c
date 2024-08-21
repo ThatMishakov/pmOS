@@ -10,7 +10,7 @@ int main(int argc, char **argv);
 void exit(int status);
 void __call_init_functions();
 
-int __main(int argc, char **argv);
+int __main(int argc, char **argv) __attribute__((weak));
 
 void *main_trampoline(void *)
 {
