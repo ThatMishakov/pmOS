@@ -1,14 +1,16 @@
 EXEC = vfatfsd.elf
 
+ROOTDIR = $(realpath .)/..
 export PATH := $(ROOTDIR)/bin/cross/bin:$(PATH)
 
 ARCH ?= x86_64
 
-CC = $(ARCH)-pmos-gcc
-CPP = $(ARCH)-pmos-gcc
-CXX = $(ARCH)-pmos-g++
-LD = $(ARCH)-pmos-g++
-GO = $(ARCH)-pmos-gccgo
+CC = clang
+CPP = clang
+CXX = clang++
+LD = clang++
+
+TARGETFLAGS = --target=$(ARCH)-pmos --sysroot=$(ROOTDIR)/sysroot
 
 INTERNALCFLAGS  :=       \
 	-static
@@ -16,12 +18,12 @@ INTERNALCFLAGS  :=       \
 #USERCFLAGS := -march=rv64gc -mabi=lp64d -O3
 USERCFLAGS := -O3
 
-CFLAGS = -std=gnu2x $(INCLUDEFLAGS) -g
-CXXFLAGS = -std=c++20 $(INCLUDEFLAGS) -g
-CPPFLAGS = $(INTERNALCFLAGS) $(USERCFLAGS) -MMD -MP $(INCLUDEFLAGS)
-GOFLAGS = $(INTERNALCFLAGS) $(USERCFLAGS) -MMD -MP $(INCLUDEFLAGS)
-ASMFLAGS = -I$(INCLUDEDIR)
-LDFLAGS = $(INTERNALLDFLAGS) -static -g -pthread -O3 # -march=rv64gc -mabi=lp64d
+CFLAGS = -std=gnu2x $(INCLUDEFLAGS) -g $(TARGETFLAGS)
+CXXFLAGS = -std=c++20 $(INCLUDEFLAGS) -g $(TARGETFLAGS)
+CPPFLAGS = $(INTERNALCFLAGS) $(USERCFLAGS) $(INCLUDEFLAGS) $(TARGETFLAGS)
+GOFLAGS = $(INTERNALCFLAGS) $(USERCFLAGS) $(INCLUDEFLAGS) $(TARGETFLAGS)
+ASMFLAGS = -I$(INCLUDEDIR) $(TARGETFLAGS)
+LDFLAGS = $(INTERNALLDFLAGS) -static -g -O3 $(TARGETFLAGS) # -march=rv64gc -mabi=lp64d$
 
 
 CCFILES := $(shell find ./ -type f -name '*.cc')

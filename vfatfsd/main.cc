@@ -57,7 +57,7 @@ std::mutex count_mutex;
 thread_local auto tid = get_task_id();
 void thread_func(void *)
 {
-    printf("Hello from a pthread! My TID: %i\n", tid);
+    printf("Hello from a pthread! My TID: %lu\n", tid);
     double p = 0;
     for (size_t i = 0; i < 100000000; ++i) {
         asm volatile("");
@@ -114,7 +114,7 @@ int main()
     printf("Starting tests...\n");
     tick();
 
-    //test_threads();
+    test_threads();
 
     // long p;
     // for (int i = 0; i < 5; ++i)
