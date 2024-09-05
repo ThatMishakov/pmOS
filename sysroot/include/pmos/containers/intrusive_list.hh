@@ -1,11 +1,14 @@
 #pragma once
 #include <stddef.h>
 
+namespace pmos::containers
+{
+
 template<typename T> struct DoubleListHead {
     DoubleListHead<T> *next, *prev;
 };
 
-template<typename T, DoubleListHead<T> T::*Head> class CircularDoubleList
+template<typename T, DoubleListHead<T> T:: *Head> class CircularDoubleList
 {
 public:
     DoubleListHead<T> head = {nullptr, nullptr};
@@ -15,6 +18,7 @@ public:
         friend CircularDoubleList;
         DoubleListHead<T> *current;
         iterator(DoubleListHead<T> *p) noexcept: current(p) {}
+
     public:
         iterator &operator++() noexcept;
         iterator &operator--() noexcept;
@@ -36,6 +40,7 @@ public:
     void init() noexcept { head.next = head.prev = &head; }
 
     void push_front(T *p) noexcept;
+    void push_back(T *p) noexcept;
     static void remove(T *p) noexcept;
     static void remove(iterator it) noexcept;
     bool empty() const noexcept;
@@ -50,7 +55,7 @@ public:
     const T &back() const noexcept;
 };
 
-template<typename T, DoubleListHead<T> T::*Head>
+template<typename T, DoubleListHead<T> T:: *Head>
 void CircularDoubleList<T, Head>::push_front(T *p) noexcept
 {
     (p->*Head).next = head.next;
@@ -59,26 +64,35 @@ void CircularDoubleList<T, Head>::push_front(T *p) noexcept
     head.next       = &(p->*Head);
 }
 
-template<typename T, DoubleListHead<T> T::*Head>
+template<typename T, DoubleListHead<T> T:: *Head>
+void CircularDoubleList<T, Head>::push_back(T *p) noexcept
+{
+    (p->*Head).prev = head.prev;
+    (p->*Head).next = &head;
+    head.prev->next = &(p->*Head);
+    head.prev       = &(p->*Head);
+}
+
+template<typename T, DoubleListHead<T> T:: *Head>
 void CircularDoubleList<T, Head>::remove(T *p) noexcept
 {
     (p->*Head).prev->next = (p->*Head).next;
     (p->*Head).next->prev = (p->*Head).prev;
 }
 
-template<typename T, DoubleListHead<T> T::*Head>
+template<typename T, DoubleListHead<T> T:: *Head>
 void CircularDoubleList<T, Head>::remove(iterator it) noexcept
 {
     remove(&*it);
 }
 
-template<typename T, DoubleListHead<T> T::*Head>
+template<typename T, DoubleListHead<T> T:: *Head>
 bool CircularDoubleList<T, Head>::empty() const noexcept
 {
     return head.next == &head;
 }
 
-template<typename T, DoubleListHead<T> T::*Head>
+template<typename T, DoubleListHead<T> T:: *Head>
 typename CircularDoubleList<T, Head>::iterator &
     CircularDoubleList<T, Head>::iterator::operator++() noexcept
 {
@@ -86,7 +100,7 @@ typename CircularDoubleList<T, Head>::iterator &
     return *this;
 }
 
-template<typename T, DoubleListHead<T> T::*Head>
+template<typename T, DoubleListHead<T> T:: *Head>
 typename CircularDoubleList<T, Head>::iterator &
     CircularDoubleList<T, Head>::iterator::operator--() noexcept
 {
@@ -94,7 +108,7 @@ typename CircularDoubleList<T, Head>::iterator &
     return *this;
 }
 
-template<typename T, DoubleListHead<T> T::*Head>
+template<typename T, DoubleListHead<T> T:: *Head>
 typename CircularDoubleList<T, Head>::iterator
     CircularDoubleList<T, Head>::iterator::operator++(int) noexcept
 {
@@ -103,7 +117,7 @@ typename CircularDoubleList<T, Head>::iterator
     return tmp;
 }
 
-template<typename T, DoubleListHead<T> T::*Head>
+template<typename T, DoubleListHead<T> T:: *Head>
 typename CircularDoubleList<T, Head>::iterator
     CircularDoubleList<T, Head>::iterator::operator--(int) noexcept
 {
@@ -112,46 +126,48 @@ typename CircularDoubleList<T, Head>::iterator
     return tmp;
 }
 
-template<typename T, DoubleListHead<T> T::*Head>
+template<typename T, DoubleListHead<T> T:: *Head>
 T &CircularDoubleList<T, Head>::iterator::operator*() const noexcept
 {
     return *reinterpret_cast<T *>(reinterpret_cast<char *>(current) -
                                   reinterpret_cast<size_t>(&(reinterpret_cast<T *>(0)->*Head)));
 }
 
-template<typename T, DoubleListHead<T> T::*Head>
+template<typename T, DoubleListHead<T> T:: *Head>
 T *CircularDoubleList<T, Head>::iterator::operator->() const noexcept
 {
     return &**this;
 }
 
-template<typename T, DoubleListHead<T> T::*Head>
+template<typename T, DoubleListHead<T> T:: *Head>
 bool CircularDoubleList<T, Head>::iterator::operator==(
     const CircularDoubleList<T, Head>::iterator &other) const noexcept
 {
     return current == other.current;
 }
 
-template<typename T, DoubleListHead<T> T::*Head>
+template<typename T, DoubleListHead<T> T:: *Head>
 bool CircularDoubleList<T, Head>::iterator::operator!=(
     const CircularDoubleList<T, Head>::iterator &other) const noexcept
 {
     return !(*this == other);
 }
 
-template<typename T, DoubleListHead<T> T::*Head>
+template<typename T, DoubleListHead<T> T:: *Head>
 typename CircularDoubleList<T, Head>::iterator CircularDoubleList<T, Head>::begin() noexcept
 {
     return iterator(head.next);
 }
 
-template<typename T, DoubleListHead<T> T::*Head>
+template<typename T, DoubleListHead<T> T:: *Head>
 typename CircularDoubleList<T, Head>::iterator CircularDoubleList<T, Head>::end() noexcept
 {
     return iterator(&head);
 }
 
-template<typename T, DoubleListHead<T> T::*Head> T &CircularDoubleList<T, Head>::front() noexcept
+template<typename T, DoubleListHead<T> T:: *Head> T &CircularDoubleList<T, Head>::front() noexcept
 {
     return *begin();
 }
+
+} // namespace pmos::containers

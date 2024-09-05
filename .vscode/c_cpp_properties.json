@@ -1,27 +1,11 @@
 {
     "configurations": [
         {
-            "name": "Linux",
-            "includePath": [
-                "${workspaceFolder}/**"
-            ],
-            "defines": [],
-            "compilerPath": "/usr/bin/clang",
-            "cStandard": "c17",
-            "cppStandard": "c++14",
-            "intelliSenseMode": "linux-clang-x64"
-        },
-        {
             "name": "pmOS",
-            "includePath": [
-                "/home/misha/pmos/**"
-            ],
             "defines": [],
-            "compilerPath": "/home/misha/cross/bin/x86_64-pmos-gcc",
             "cStandard": "c17",
             "cppStandard": "c++20",
-            "intelliSenseMode": "gcc-x64",
-            "compilerPathInCppPropertiesJson": "/home/misha/cross/bin/x86_64-pmos-gcc",
+            "intelliSenseMode": "clang-x64",
             "mergeConfigurations": false,
             "browse": {
                 "path": [
@@ -29,7 +13,12 @@
                     "${workspaceFolder}"
                 ],
                 "limitSymbolsToIncludedHeaders": true
-            }
+            },
+            "compilerArgs": [
+                "--sysroot",
+                "$HOME/pmos/sysroot",
+                "--target=x86_64-pmos"
+            ]
         }
     ],
     "version": 4

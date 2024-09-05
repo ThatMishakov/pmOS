@@ -2,7 +2,7 @@
 
 #include "rcu.hh"
 #include "intrusive_bst.hh"
-#include "intrusive_list.hh"
+#include <pmos/containers/intrusive_list.hh>
 
 #include <types.hh>
 
@@ -38,7 +38,7 @@ struct Page {
     };
 
     struct FreeRegionHead {
-        DoubleListHead<Page> list;
+        pmos::containers::DoubleListHead<Page> list;
         u64 size;
     };
 
@@ -51,7 +51,7 @@ struct Page {
         RCUState rcu_state;
         Mem_Object_LL_Head l;
         PendingAllocHead pending_alloc_head;
-        DoubleListHead<Page> free_region_list; // This is a bit of a workaround
+        pmos::containers::DoubleListHead<Page> free_region_list; // This is a bit of a workaround
         FreeRegionHead free_region_head;
     };
 
@@ -192,7 +192,7 @@ extern PageArrayDescriptor *phys_memory_regions;
 extern size_t phys_memory_regions_count;
 extern size_t phys_memory_regions_capacity;
 
-using PageLL = CircularDoubleList<Page, &Page::free_region_list>;
+using PageLL = pmos::containers::CircularDoubleList<Page, &Page::free_region_list>;
 
 inline constexpr auto page_lists = 30 - PAGE_ORDER; // 1GB max allocation
 extern PageLL free_pages_list[page_lists];

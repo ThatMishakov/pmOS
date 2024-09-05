@@ -38,7 +38,7 @@
  * and efficient one is not a priority at the moment.
  */
 
-#include "intrusive_list.hh"
+#include <pmos/containers/intrusive_list.hh>
 
 #include <assert.h>
 #include <errno.h>
@@ -50,7 +50,7 @@ namespace kernel::vmm
 struct VirtmemBoundaryTag {
     // Either a double linked list of free sigments of a given size
     // or a links of the hash table of allocated segments
-    DoubleListHead<VirtmemBoundaryTag> ll = {};
+    pmos::containers::DoubleListHead<VirtmemBoundaryTag> ll = {};
 
     // Base address of the segment
     u64 base = 0;
@@ -81,7 +81,7 @@ struct VirtmemBoundaryTag {
 // The initializer must be called manually, since the list must point to itself, and the address
 // might not be known at compile time (on PIE executables). While this could be done by C++
 // global constructors, the vmm might be initialized before they are called.
-using VirtMemFreelist = CircularDoubleList<VirtmemBoundaryTag, &VirtmemBoundaryTag::ll>;
+using VirtMemFreelist = pmos::containers::CircularDoubleList<VirtmemBoundaryTag, &VirtmemBoundaryTag::ll>;
 
 static const u64 virtmem_initial_segments = 16;
 // Static array of initial boundary tags, used during the initialization of the kernel

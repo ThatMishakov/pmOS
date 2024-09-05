@@ -148,7 +148,29 @@
         "stat.h": "c",
         "__internal.h": "c",
         "variant": "cpp",
-        "sysinfo.h": "c"
+        "sysinfo.h": "c",
+        "coroutine": "cpp",
+        "__bit_reference": "cpp",
+        "__config": "cpp",
+        "__debug": "cpp",
+        "__errc": "cpp",
+        "__hash_table": "cpp",
+        "__locale": "cpp",
+        "__mutex_base": "cpp",
+        "__node_handle": "cpp",
+        "__split_buffer": "cpp",
+        "__threading_support": "cpp",
+        "__verbose_abort": "cpp",
+        "bitset": "cpp",
+        "charconv": "cpp",
+        "ios": "cpp",
+        "queue": "cpp",
+        "span": "cpp",
+        "__tree": "cpp",
+        "codecvt": "cpp",
+        "iomanip": "cpp",
+        "stack": "cpp"
     },
-    "cmake.configureOnOpen": false
+    "cmake.configureOnOpen": false,
+    "C_Cpp.default.compilerPath": "/home/misha/cross/bin/clang"
 }

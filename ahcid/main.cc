@@ -1,10 +1,11 @@
 #include "ata.hh"
 #include "pci.hh"
+#include "port.hh"
+#include "device.hh"
 
 #include <alloca.h>
 #include <cassert>
 #include <memory>
-#include <pmos/containers/intrusive_bst.hh>
 #include <pmos/helpers.h>
 #include <pmos/interrupts.h>
 #include <pmos/ipc.h>
@@ -230,67 +231,6 @@ struct CommandListStructure {
     uint32_t reserved[4];
 };
 
-struct AHCIPort {
-    int index;
-    uint64_t dma_phys_base           = -1;
-    volatile uint32_t *dma_virt_base = nullptr;
-
-    enum class State {
-        Unknown = 0,
-        Idle,
-        WaitingForIdle1,
-        WaitingForIdle2,
-        WaitingForReset,
-        WaitingForReady,
-    };
-
-    State state = State::Unknown;
-
-    pmos::containers::RBTreeNode<AHCIPort> timer_node = {};
-    uint64_t timer_time                               = 0;
-    uint64_t timer_max                                = 0;
-
-    static constexpr uint32_t recieved_fis_offset = 0x0;
-    // Put it here for FIS-based switching
-    static constexpr uint32_t command_list_offset = 0x1000;
-
-    // 1 command table per command list, with 8 entries max
-    static constexpr uint32_t command_table_offset = 0x1000 + 0x400;
-
-    volatile uint32_t *get_port_register();
-    volatile CommandListEntry *get_command_list_ptr(int index);
-    volatile uint32_t *get_command_table_entry(int index);
-    uint64_t get_command_table_phys(int index);
-
-    void init_port();
-    void enable_port();
-    void port_idle();
-    void port_idle2();
-    void wait(int time_ms);
-    void react_timer();
-    void port_reset_hard();
-    void init_drive();
-    void init_ata_device();
-    void dump_state();
-
-    void detect_drive();
-
-    uint32_t scratch_offet();
-
-    volatile void *scratch_virt();
-    uint64_t scratch_phys();
-
-    enum class DeviceType {
-        None,
-        ATA,
-        ATAPI,
-        PM,
-        SEMB,
-    };
-
-    DeviceType classify_device();
-};
-
 uint32_t AHCIPort::scratch_offet() { return command_table_offset + COMMAND_TABLE_SIZE; }
 
 volatile void *AHCIPort::scratch_virt()
@@ -354,46 +294,7 @@ volatile CommandListEntry *AHCIPort::get_command_list_ptr(int index)
 
 void AHCIPort::init_ata_device()
 {
-    // Start the port
-    auto port = get_port_register();
-    auto cmdp = port[AHCI_CMD_INDEX];
-    cmdp |= AHCI_PORT_CMD_ST; // Start
-    port[AHCI_CMD_INDEX] = cmdp;
-
-    // Request IDENTIFY DEVICE
-
-    // Send IDENTIFY command
-    FIS_Host_To_Device str = {};
-    str.fis_type           = FIS_TYPE_REG_H2D;
-    str.command            = 0xEC; // IDENTIFY DEVICE
-    str.c                  = 1;
-
-    auto *fis = (FIS_Host_To_Device *)(dma_virt_base + command_table_offset / sizeof(uint32_t));
-    *fis      = str;
-
-    auto *prdt = (PRDT *)(fis + PRDT_OFFSET / sizeof(uint32_t));
-    *prdt      = {.data_base               = scratch_phys(),
-                  .rsv0                    = 0,
-                  .data_base_count         = 512 - 1,
-                  .rsv1                    = 0,
-                  .interrupt_on_completion = 1};
-
-    CommandListEntry cmd   = {};
-    cmd.command_fis_length = sizeof(FIS_Host_To_Device) / sizeof(uint32_t);
-    cmd.command_table_base = get_command_table_phys(0);
-    cmd.prdt_length        = 1;
-    cmd.clear_busy         = 1;
-    auto list              = (CommandListEntry *)get_command_list_ptr(0);
-    *list                  = cmd;
-
-    // Issue command
-    port[AHCI_CI_INDEX] = 1 << 0;
-
-    printf("Command issued. CI: %#x\n", port[AHCI_CI_INDEX]);
-
-    sleep(1);
-
-    printf("Command completed. CI: %#x\n", port[AHCI_CI_INDEX]);
+    handle_device(*this);
 }
 
 void AHCIPort::init_drive()
@@ -952,6 +853,8 @@ void ahci_handle(PCIDescriptor d)
             command_list.command_table_base_low  = command_table_phys_base & 0xffffffff;
             command_list.command_table_base_high = command_table_phys_base >> 32;
         }
+
+        port.cmd_bitmap = std::vector<bool>(num_slots, false);
 
         port.init_port();
     }
