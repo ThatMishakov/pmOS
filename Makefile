@@ -30,7 +30,7 @@ ovmf-x86/OVMF.fd:
 	cd ovmf-x86 && curl -o OVMF.fd https://retrage.github.io/edk2-nightly/bin/RELEASEX64_OVMF.fd
 
 qemu-x86: $(ISO) ovmf-x86
-	qemu-system-x86_64 \
+	sudo qemu-system-x86_64 -enable-kvm \
 		-device pcie-root-port,id=root_port1,port=0x10,chassis=1,multifunction=on,slot=1,bus=pcie.0,addr=0x10 \
 		-device x3130-upstream,id=switch_upstream,bus=root_port1,addr=0x0 \
 		-device xio3130-downstream,id=switch_downstream1,bus=switch_upstream,chassis=3,addr=0x1 \

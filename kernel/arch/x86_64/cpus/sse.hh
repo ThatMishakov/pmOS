@@ -51,12 +51,52 @@
  * modified by other processes between the task switches.
  */
 struct SSE_Data {
-    char fxsave_region[512] ALIGNED(16) = {0};
+    u8 data[0];
+    u16 fcw        = 0x37F;
+    u16 fsw        = 0x0;
+    u8 ftw         = 0x0;
+    u8 reserved    = 0x0;
+    u16 fop        = 0x0;
+    u32 fpu_ip     = 0x0;
+    u16 fpu_cs     = 0x0;
+    u16 reserved1  = 0x0;
+    u32 fpu_dp     = 0x0;
+    u16 fpu_ds     = 0x0;
+    u16 reserved2  = 0x0;
+    u32 mxcsr      = 0x1F80;
+    u32 mxcsr_mask = 0xFFFF;
 
-    inline void save_sse() { asm volatile(" fxsave %0 " ::"m"(fxsave_region)); }
+    u8 mm0[16] = {0};
+    u8 mm1[16] = {0};
+    u8 mm2[16] = {0};
+    u8 mm3[16] = {0};
+    u8 mm4[16] = {0};
+    u8 mm5[16] = {0};
+    u8 mm6[16] = {0};
+    u8 mm7[16] = {0};
 
-    inline void restore_sse() { asm volatile(" fxrstor %0 " ::"m"(fxsave_region)); }
-};
+    u8 xmm0[16]  = {0};
+    u8 xmm1[16]  = {0};
+    u8 xmm2[16]  = {0};
+    u8 xmm3[16]  = {0};
+    u8 xmm4[16]  = {0};
+    u8 xmm5[16]  = {0};
+    u8 xmm6[16]  = {0};
+    u8 xmm7[16]  = {0};
+    u8 xmm8[16]  = {0};
+    u8 xmm9[16]  = {0};
+    u8 xmm10[16] = {0};
+    u8 xmm11[16] = {0};
+    u8 xmm12[16] = {0};
+    u8 xmm13[16] = {0};
+    u8 xmm14[16] = {0};
+    u8 xmm15[16] = {0};
+
+    u8 reserved3[96] = {0};
+
+    inline void save_sse() { asm volatile(" fxsave %0 " ::"m"(data)); }
+    inline void restore_sse() { asm volatile(" fxrstor %0 " ::"m"(data)); }
+} ALIGNED(16);
 
 /**
  * \brief Sets the appropriate bits in the registers to allow the processes to

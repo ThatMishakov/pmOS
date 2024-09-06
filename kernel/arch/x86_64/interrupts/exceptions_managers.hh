@@ -50,6 +50,10 @@ constexpr u8 breakpoint_num = 0x03;
 extern "C" void breakpoint_isr();
 extern "C" void breakpoint_manager();
 
+constexpr u8 overflow_num = 0x4;
+extern "C" void overflow_isr();
+extern "C" void overflow_manager();
+
 constexpr u8 invalid_opcode_num = 0x6;
 extern "C" void invalid_opcode_isr();
 extern "C" void invalid_opcode_manager();
@@ -73,6 +77,10 @@ extern "C" void general_protection_fault_manager();
 constexpr u8 pagefault_num = 0xE;
 extern "C" void pagefault_isr();
 extern "C" void pagefault_manager();
+
+constexpr u8 simd_fp_exception_num = 0x13;
+extern "C" void simd_fp_exception_isr();
+extern "C" void simd_fp_exception_manager();
 
 // Jumpto functions. This change the return %RIP address in a way that upon
 // returning from the kernel exception, *function* is executed. Used for

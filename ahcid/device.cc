@@ -17,6 +17,12 @@ pmos::async::detached_task handle_device(AHCIPort &parent)
 
     auto result = co_await cmd.execute(0xEC, 30'000);
 
+    if (result == Command::Result::Success) {
+        printf("Device is ready\n");
+    } else {
+        printf("Device timed out\n");
+    }
+
     co_return;
 }
 

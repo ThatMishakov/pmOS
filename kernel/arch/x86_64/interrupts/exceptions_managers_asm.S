@@ -182,6 +182,34 @@ stack_segment_fault_isr:
     auto_return_cond
 
 
+    .type overflow_isr, @function
+    .globl overflow_isr
+overflow_isr:
+    swapgs
+
+    call save_context
+
+    movq $0, %rbp
+    movq $0,   176(%r11)
+
+    call overflow_manager
+
+    auto_return
+
+    .type simd_fp_exception_isr, @function
+    .globl simd_fp_exception_isr
+simd_fp_exception_isr:
+    swapgs
+
+    call save_context
+
+    movq $0, %rbp
+    movq $0, 176(%r11)
+
+    call simd_fp_exception_manager
+
+    auto_return
+
 
     .type double_fault_isr, @function
     .globl double_fault_isr

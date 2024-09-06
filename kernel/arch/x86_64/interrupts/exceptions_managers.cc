@@ -225,6 +225,30 @@ extern "C" void general_protection_fault_manager()
     task->atomic_kill();
 }
 
+extern "C" void overflow_manager()
+{
+    task_ptr task = get_cpu_struct()->current_task;
+    serial_logger.printf("!!! Overflow error %h RIP %h RSP %h PID %h (%s)\n",
+                         task->regs.int_err, task->regs.e.rip, task->regs.e.rsp, task->task_id,
+                         task->name.c_str());
+    global_logger.printf("!!! Overflow error %h RIP %h RSP %h PID %h (%s)\n",
+                         task->regs.int_err, task->regs.e.rip, task->regs.e.rsp, task->task_id,
+                         task->name.c_str());
+    task->atomic_kill();
+}
+
+extern "C" void simd_fp_exception_manager()
+{
+    task_ptr task = get_cpu_struct()->current_task;
+    t_print_bochs("!!! SIMD FP Exception error %h RIP %h RSP %h PID %h (%s)\n",
+                  task->regs.int_err, task->regs.e.rip, task->regs.e.rsp, task->task_id,
+                  task->name.c_str());
+    global_logger.printf("!!! SIMD FP Exception error %h RIP %h RSP %h PID %h (%s)\n",
+                         task->regs.int_err, task->regs.e.rip, task->regs.e.rsp, task->task_id,
+                         task->name.c_str());
+    task->atomic_kill();
+}
+
 extern "C" void invalid_opcode_manager()
 {
     task_ptr task = get_cpu_struct()->current_task;
