@@ -10,10 +10,10 @@ CC = clang
 CPP = clang
 CXX = clang++
 
-USERCFLAGS = -Wall -Wextra -O2 -pipe
+USERCFLAGS = -Wall -Wextra -Og -pipe
 
-CFLAGS = -std=c17 -g --target=$(ARCH)-pmos --sysroot=$(ROOTDIR)/sysroot
-CXXFLAGS = -std=c++20 -g --target=$(ARCH)-pmos --sysroot=$(ROOTDIR)/sysroot
+CFLAGS = -std=c17 -g --target=$(ARCH)-pmos --sysroot=$(ROOTDIR)/sysroot -MMD -MP
+CXXFLAGS = -std=c++20 -g --target=$(ARCH)-pmos --sysroot=$(ROOTDIR)/sysroot -MMD -MP
 CPPFLAGS = $(INTERNALCFLAGS) $(USERCFLAGS)
 ASMFLAGS = -I$(INCLUDEDIR)
 LDFLAGS = $(INTERNALLDFLAGS) --target=$(ARCH)-pmos --sysroot=$(ROOTDIR)/sysroot -static

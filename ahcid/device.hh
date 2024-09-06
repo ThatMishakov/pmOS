@@ -2,22 +2,10 @@
 #include <coroutine>
 #include <exception>
 #include <pmos/containers/intrusive_list.hh>
+#include <pmos/async/coroutines.hh>
 #include "port.hh"
 
 struct AHCIPort;
-
-struct AHCIDeviceReturnObject {
-    struct promise_type {
-        AHCIDeviceReturnObject get_return_object() { return AHCIDeviceReturnObject {}; }
-        std::suspend_never initial_suspend() { return {}; }
-        std::suspend_never final_suspend() noexcept { return {}; }
-        void return_void() {}
-        void unhandled_exception() { std::terminate(); }
-    };
-
-    std::coroutine_handle<promise_type> h_;
-    operator std::coroutine_handle<promise_type>() const { return h_; }
-};
 
 struct GetCmdIndex : CmdPortWaiter {
     AHCIPort &parent;
@@ -33,4 +21,4 @@ struct GetCmdIndex : CmdPortWaiter {
     int await_resume();
 };
 
-AHCIDeviceReturnObject handle_device(AHCIPort &parent);
+pmos::async::detached_task handle_device(AHCIPort &parent);

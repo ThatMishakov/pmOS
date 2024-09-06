@@ -1,8 +1,9 @@
 #include "ata.hh"
+#include "device.hh"
 #include "pci.hh"
 #include "port.hh"
-#include "device.hh"
 
+#include <algorithm>
 #include <alloca.h>
 #include <cassert>
 #include <memory>
@@ -17,10 +18,9 @@
 #include <string>
 #include <unistd.h>
 #include <vector>
-#include <algorithm>
 
 std::string devicesd_port_name = "/pmos/devicesd";
-pmos_port_t devicesd_port                = []() -> auto {
+pmos_port_t devicesd_port      = []() -> auto {
     ports_request_t request =
         get_port_by_name(devicesd_port_name.c_str(), devicesd_port_name.length(), 0);
     return request.port;
@@ -126,57 +126,6 @@ std::unique_ptr<PCIDevice> ahci_controller = nullptr;
 volatile uint32_t *ahci_virt_base          = nullptr;
 uint32_t ahci_int_vec                      = 0;
 
-static constexpr uint32_t AHCI_GHC_HR   = 1 << 0;
-static constexpr uint32_t AHCI_GHC_IE   = 1 << 1;
-static constexpr uint32_t AHCI_GHC_MRSM = 1 << 2;
-static constexpr uint32_t AHCI_GHC_AE   = 1 << 31;
-
-static constexpr uint32_t AHCI_CAP_S64A = 1 << 31;
-static constexpr uint32_t AHCI_CAP_SSS  = 1 << 27;
-
-static constexpr uint32_t AHCI_CAP2_BOH = 1 << 0;
-
-static constexpr uint32_t AHCI_BOHC_BOS  = 1 << 0;
-static constexpr uint32_t AHCI_BOHC_OOS  = 1 << 1;
-static constexpr uint32_t AHCI_BOHC_SOOE = 1 << 2;
-static constexpr uint32_t AHCI_BOHC_OOC  = 1 << 3;
-static constexpr uint32_t AHCI_BOHC_BB   = 1 << 4;
-
-static constexpr uint32_t SATA_SIG_ATA   = 0x00000101;
-static constexpr uint32_t SATA_SIG_ATAPI = 0xEB140101;
-static constexpr uint32_t SATA_SIG_PM    = 0x96690101;
-static constexpr uint32_t SATA_SIG_SEMB  = 0xC33C0101;
-
-static constexpr uint32_t AHCI_CMD_INDEX  = 6;
-static constexpr uint32_t AHCI_TFD_INDEX  = 8;
-static constexpr uint32_t AHCI_SSTS_INDEX = 10;
-static constexpr uint32_t AHCI_SCTL_INDEX = 11;
-static constexpr uint32_t AHCI_SERR_INDEX = 12;
-static constexpr uint32_t AHCI_CI_INDEX   = 14;
-
-static constexpr uint32_t AHCI_PORT_CMD_ST    = 1 << 0;
-static constexpr uint32_t AHCI_PORT_CMD_SUD   = 1 << 1;
-static constexpr uint32_t AHCI_PORT_CMD_POD   = 1 << 2;
-static constexpr uint32_t AHCI_PORT_CMD_CLO   = 1 << 3;
-static constexpr uint32_t AHCI_PORT_CMD_FRE   = 1 << 4;
-static constexpr uint32_t AHCI_PORT_CMD_CCS   = 1 << 8;
-static constexpr uint32_t AHCI_PORT_CMD_MSS   = 1 << 13;
-static constexpr uint32_t AHCI_PORT_CMD_FR    = 1 << 14;
-static constexpr uint32_t AHCI_PORT_CMD_CR    = 1 << 15;
-static constexpr uint32_t AHCI_PORT_CMD_CPS   = 1 << 16;
-static constexpr uint32_t AHCI_PORT_CMD_PMA   = 1 << 17;
-static constexpr uint32_t AHCI_PORT_CMD_HPCP  = 1 << 18;
-static constexpr uint32_t AHCI_PORT_CMD_MPSP  = 1 << 19;
-static constexpr uint32_t AHCI_PORT_CMD_CPD   = 1 << 20;
-static constexpr uint32_t AHCI_PORT_CMD_ESP   = 1 << 21;
-static constexpr uint32_t AHCI_PORT_CMD_FBSCP = 1 << 22;
-static constexpr uint32_t AHCI_PORT_CMD_APSTE = 1 << 23;
-static constexpr uint32_t AHCI_PORT_CMD_ATAPI = 1 << 24;
-static constexpr uint32_t AHCI_PORT_CMD_DLAE  = 1 << 25;
-static constexpr uint32_t AHCI_PORT_CMD_ALPE  = 1 << 26;
-static constexpr uint32_t AHCI_PORT_CMD_ASP   = 1 << 27;
-static constexpr uint32_t AHCI_PORT_CMD_ICC   = 1 << 28;
-
 static constexpr uint32_t AHCI_PORT_SSTS_DET_MASK = 0xf;
 
 static constexpr uint32_t AHCI_PORT_SCTL_DET_MASK = 0xf;
@@ -211,15 +160,6 @@ void reset_controller()
 int num_slots         = 0;
 int interface_speed   = 0;
 bool staggered_spinup = false;
-
-static constexpr uint32_t FIS_RECIEVE_AREA_SIZE = 0x1000;
-
-static constexpr uint32_t PRDT_OFFSET           = 0x80;
-static constexpr uint32_t PRDT_SIZE_BYTES       = 0x10;
-static constexpr uint32_t COMMAND_TABLE_ENTRIES = 8;
-static constexpr uint32_t COMMAND_TABLE_SIZE    = // 0x100
-    PRDT_OFFSET + PRDT_SIZE_BYTES * COMMAND_TABLE_ENTRIES;
-static constexpr uint32_t SCRATCH_SIZE = 0x400;
 
 struct CommandListStructure {
     // 4.2.2 of AHCI spec
@@ -287,13 +227,19 @@ uint64_t AHCIPort::get_command_table_phys(int index)
 }
 
 volatile CommandListEntry *AHCIPort::get_command_list_ptr(int index)
-{   
+{
     return reinterpret_cast<volatile CommandListEntry *>(
         dma_virt_base + (command_list_offset + index * 0x100) / sizeof(uint32_t));
 }
 
 void AHCIPort::init_ata_device()
 {
+    // Start the port
+    auto port = get_port_register();
+    auto cmdp = port[AHCI_CMD_INDEX];
+    cmdp |= AHCI_PORT_CMD_ST; // Start
+    port[AHCI_CMD_INDEX] = cmdp;
+
     handle_device(*this);
 }
 
@@ -361,8 +307,8 @@ volatile uint32_t *AHCIPort::get_port_register()
 }
 
 using TimerTree =
-    pmos::containers::RedBlackTree<AHCIPort, &AHCIPort::timer_node,
-                                   detail::TreeCmp<AHCIPort, uint64_t, &AHCIPort::timer_time>>;
+    pmos::containers::RedBlackTree<TimerWaiter, &TimerWaiter::timer_node,
+                                   detail::TreeCmp<TimerWaiter, uint64_t, &TimerWaiter::timer_time>>;
 
 TimerTree::RBTreeHead timer_tree;
 uint64_t next_timer_time = 0;
@@ -372,7 +318,7 @@ AHCIPort &find_port(int i)
 {
     auto it = std::lower_bound(ports.begin(), ports.end(), i,
                                [](auto port, auto i) { return port.index < i; });
-    
+
     if (it == ports.end() || it->index != i) {
         throw std::runtime_error("Port not found");
     }
@@ -485,7 +431,6 @@ void AHCIPort::enable_port()
     // Enable all interrupts
     addr[5] = 0xffffffff;
 
-
     printf("Port %i in minimal configuration\n", index);
 
     if (staggered_spinup) {
@@ -580,7 +525,7 @@ void AHCIPort::port_idle2()
     }
 }
 
-void AHCIPort::wait(int time_ms)
+void TimerWaiter::wait(int time_ms)
 {
     auto time = pmos_get_time(GET_TIME_NANOSECONDS_SINCE_BOOTUP);
     if (time.result != 0) {
@@ -629,11 +574,7 @@ void react_interrupt()
         if (is & (1 << i)) {
             printf("Interrupt on port %i\n", i);
 
-            auto port     = find_port(i).get_port_register();
-            auto port_is = port[4];
-            printf("Port %i interrupt status: %#x\n", i, port_is);
-            port[4] = port_is;
-
+            find_port(i).react_interrupt();
             ahci_virt_base[2] = 1 << i;
         }
     }
@@ -786,7 +727,7 @@ void ahci_handle(PCIDescriptor d)
     for (unsigned i = 0; i < AHCI_MAX_PORTS; ++i) {
         if (pi & (1 << i)) {
             printf("Port %i implemented\n", i);
-            ports.push_back({.index = (int)i});
+            ports.push_back(AHCIPort((int)i));
             // Clear interrupts while we're at it
             auto port = ports.back().get_port_register();
             port[4]   = 0xffffffff;
@@ -854,6 +795,7 @@ void ahci_handle(PCIDescriptor d)
             command_list.command_table_base_high = command_table_phys_base >> 32;
         }
 
+        port.callbacks = std::vector<WaitCommandCompletion *>(num_slots, nullptr);
         port.cmd_bitmap = std::vector<bool>(num_slots, false);
 
         port.init_port();
