@@ -169,7 +169,13 @@
         "__tree": "cpp",
         "codecvt": "cpp",
         "iomanip": "cpp",
-        "stack": "cpp"
+        "stack": "cpp",
+        "barrier": "cpp",
+        "future": "cpp",
+        "latch": "cpp",
+        "regex": "cpp",
+        "__memory": "cpp",
+        "scoped_allocator": "cpp"
     },
     "cmake.configureOnOpen": false,
     "C_Cpp.default.compilerPath": "/home/misha/cross/bin/clang"

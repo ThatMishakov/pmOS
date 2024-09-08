@@ -533,7 +533,7 @@ void TimerWaiter::wait(int time_ms)
         return;
     }
 
-    timer_time = time.value + time_ms * 1'000'000;
+    timer_time = time.value + (uint64_t)time_ms * 1'000'000;
     timer_tree.insert(this);
 
     if (timer_tree.begin() == this) {
@@ -541,7 +541,7 @@ void TimerWaiter::wait(int time_ms)
         pmos_request_timer(ahci_port, time_ms * 1'000'000);
     } else {
         TimerTree::RBTreeIterator it;
-        while ((it = timer_tree.begin())->timer_time < time.value) {
+        while (!timer_tree.empty() and ((it = timer_tree.begin())->timer_time < time.value)) {
             timer_tree.erase(it);
             it->react_timer();
         }
@@ -552,7 +552,7 @@ void react_timer()
 {
     auto current_time = pmos_get_time(GET_TIME_NANOSECONDS_SINCE_BOOTUP);
     auto it           = timer_tree.begin();
-    while (it != timer_tree.end() && it->timer_time < current_time.value) {
+    while ((it != timer_tree.end()) && (it->timer_time < current_time.value)) {
         timer_tree.erase(it);
         it->react_timer();
         it = timer_tree.begin();
@@ -562,7 +562,6 @@ void react_timer()
         next_timer_time = it->timer_time;
         int t           = pmos_request_timer(ahci_port, next_timer_time - current_time.value);
         if (t != 0) {
-            printf("Failed to request timer\n");
         }
     }
 }
@@ -570,12 +569,11 @@ void react_timer()
 void react_interrupt()
 {
     uint32_t is = ahci_virt_base[2];
+    ahci_virt_base[2] = is;
     for (int i = 0; i < 32; ++i) {
         if (is & (1 << i)) {
             printf("Interrupt on port %i\n", i);
-
             find_port(i).react_interrupt();
-            ahci_virt_base[2] = 1 << i;
         }
     }
 }

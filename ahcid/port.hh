@@ -45,12 +45,20 @@ inline static constexpr uint32_t SATA_SIG_ATAPI = 0xEB140101;
 inline static constexpr uint32_t SATA_SIG_PM    = 0x96690101;
 inline static constexpr uint32_t SATA_SIG_SEMB  = 0xC33C0101;
 
-inline static constexpr uint32_t AHCI_CMD_INDEX  = 6;
-inline static constexpr uint32_t AHCI_TFD_INDEX  = 8;
-inline static constexpr uint32_t AHCI_SSTS_INDEX = 10;
-inline static constexpr uint32_t AHCI_SCTL_INDEX = 11;
-inline static constexpr uint32_t AHCI_SERR_INDEX = 12;
-inline static constexpr uint32_t AHCI_CI_INDEX   = 14;
+inline static constexpr uint32_t AHCI_PORT_IS_INDEX = 4;
+inline static constexpr uint32_t AHCI_PORT_IE_INDEX = 5;
+
+inline static constexpr uint32_t AHCI_CMD_INDEX     = 6;
+inline static constexpr uint32_t AHCI_TFD_INDEX     = 8;
+inline static constexpr uint32_t AHCI_SSTS_INDEX    = 10;
+inline static constexpr uint32_t AHCI_SCTL_INDEX    = 11;
+inline static constexpr uint32_t AHCI_SERR_INDEX    = 12;
+inline static constexpr uint32_t AHCI_CI_INDEX      = 14;
+
+inline static constexpr uint32_t AHCI_PORT_IS_DPS = 1 << 5;
+
+inline static constexpr uint32_t AHCI_TFD_INDEX_DRQ = 1 << 3;
+inline static constexpr uint32_t AHCI_TFD_INDEX_BSY = 1 << 7;
 
 inline static constexpr uint32_t AHCI_PORT_CMD_ST    = 1 << 0;
 inline static constexpr uint32_t AHCI_PORT_CMD_SUD   = 1 << 1;
@@ -196,7 +204,8 @@ struct WaitCommandCompletion: TimerWaiter {
         Timer,
         Interrupt,
         Ready,
-    } unblocked_by;
+        Unknown,
+    } unblocked_by = UnblockedBy::Unknown;
 
     inline WaitCommandCompletion(AHCIPort *parent, int cmd_index, int timeout_ms)
         : parent(parent), cmd_index(cmd_index), timeout_ms(timeout_ms)
@@ -210,9 +219,9 @@ struct WaitCommandCompletion: TimerWaiter {
     void interrupt();
 };
 
-using TimerTree =
-    pmos::containers::RedBlackTree<TimerWaiter, &TimerWaiter::timer_node,
-                                   detail::TreeCmp<TimerWaiter, uint64_t, &TimerWaiter::timer_time>>;
+using TimerTree = pmos::containers::RedBlackTree<
+    TimerWaiter, &TimerWaiter::timer_node,
+    detail::TreeCmp<TimerWaiter, uint64_t, &TimerWaiter::timer_time>>;
 
 extern TimerTree::RBTreeHead timer_tree;
 extern uint64_t next_timer_time;

@@ -64,6 +64,7 @@ pmos::async::task<Command::Result> Command::execute(uint8_t command, int timeout
     FIS_Host_To_Device str = {};
     str.fis_type           = FIS_TYPE_REG_H2D;
     str.command            = command;
+    str.device             = 1 << 6;
     str.c                  = 1;
 
     auto *fis = (FIS_Host_To_Device *)(parent->dma_virt_base +
@@ -74,15 +75,19 @@ pmos::async::task<Command::Result> Command::execute(uint8_t command, int timeout
     cmd.command_fis_length = sizeof(FIS_Host_To_Device) / sizeof(uint32_t);
     cmd.command_table_base = parent->get_command_table_phys(cmd_index);
     cmd.prdt_length        = prdt_index;
-    cmd.clear_busy         = 1;
     auto list              = (CommandListEntry *)parent->get_command_list_ptr(cmd_index);
     *list                  = cmd;
 
     auto port = parent->get_port_register();
 
+    // Wait for the port to be ready
+    while (port[AHCI_TFD_INDEX] & (AHCI_TFD_INDEX_DRQ | AHCI_TFD_INDEX_BSY))
+        sched_yield();
+
     port[AHCI_CI_INDEX] = 1 << cmd_index;
 
-    co_await WaitCommandCompletion(parent, cmd_index, timeout_ms);
+    auto t = co_await WaitCommandCompletion(parent, cmd_index, timeout_ms);
+    printf("Command %d completed with %d\n", cmd_index, t);
 
     if (port[AHCI_CI_INDEX] & (1 << cmd_index)) {
         co_return Result::Timeout;
@@ -93,7 +98,8 @@ pmos::async::task<Command::Result> Command::execute(uint8_t command, int timeout
 
 bool WaitCommandCompletion::await_ready() noexcept
 {
-    auto ready = !(parent->get_port_register()[AHCI_CI_INDEX] & (1 << cmd_index));
+    return false;
+    bool ready = !((parent->get_port_register()[AHCI_CI_INDEX]) & (1 << cmd_index));
     if (ready)
         unblocked_by = UnblockedBy::Ready;
     return ready;
@@ -108,6 +114,7 @@ void WaitCommandCompletion::await_suspend(std::coroutine_handle<> h)
 
 void WaitCommandCompletion::react_timer()
 {
+    printf("Timer expired\n");
     unblocked_by                 = UnblockedBy::Timer;
     parent->callbacks[cmd_index] = nullptr;
     h_.resume();
@@ -125,15 +132,17 @@ WaitCommandCompletion::UnblockedBy WaitCommandCompletion::await_resume() { retur
 
 void AHCIPort::react_interrupt()
 {
-    auto port = get_port_register();
+    auto port    = get_port_register();
     auto port_is = port[4];
+    port[4]      = port_is;
+
     printf("Port %i interrupt status: %#x\n", index, port_is);
-    auto command = port[AHCI_CI_INDEX];
-    for (int i = 0; i < num_slots; ++i) {
-        if (!(command & (1 << i)) && callbacks[i] && cmd_bitmap[i]) {
-            callbacks[i]->interrupt();
+    if (port_is & AHCI_PORT_IS_DPS) {
+        auto command = port[AHCI_CI_INDEX];
+        for (int i = 0; i < num_slots; ++i) {
+            if (!(command & (1 << i)) && callbacks[i] && cmd_bitmap[i]) {
+                callbacks[i]->interrupt();
+            }
         }
     }
-
-    port[4] = port_is;
 }

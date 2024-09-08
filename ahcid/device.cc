@@ -1,27 +1,44 @@
 #include "device.hh"
+#include "misc.hh"
 
 #include "port.hh"
 
 #include <cassert>
 #include <stdio.h>
 #include <utility>
+#include <pmos/memory.h>
+#include <sys/mman.h>
 
 pmos::async::detached_task handle_device(AHCIPort &parent)
 {
+    constexpr size_t dma_size = 4096;
+    auto req = create_normal_region(0, nullptr, dma_size, PROT_READ | PROT_WRITE | CREATE_FLAG_DMA);
+    auto guard_ = make_scope_guard([&] { munmap(req.virt_addr, dma_size); });
+    auto phys_addr = get_page_phys_address(0, req.virt_addr, 0);
+    if (phys_addr.result < 0) {
+        printf("Could not get physical address for AHCI: %li\n", phys_addr.result);
+        co_return;
+    }
+    memset(req.virt_addr, 0, dma_size);
+
     Command cmd = co_await Command::prepare(parent);
-    cmd.prdt_push({.data_base               = parent.scratch_phys(),
+    cmd.prdt_push({.data_base               = phys_addr.phys_addr,
                    .rsv0                    = 0,
-                   .data_base_count         = 512 - 1,
+                   .data_base_count         = sizeof(IDENTIFYData) - 1,
                    .rsv1                    = 0,
                    .interrupt_on_completion = 1});
 
     auto result = co_await cmd.execute(0xEC, 30'000);
 
-    if (result == Command::Result::Success) {
-        printf("Device is ready\n");
-    } else {
-        printf("Device timed out\n");
+    if (result != Command::Result::Success) {
+        printf("Drive timed out\n");
+        co_return;
     }
+
+    auto *s = reinterpret_cast<IDENTIFYData *>(req.virt_addr);
+    char model[41];
+    ata_string_to_cstring(s->model_number, model);
+    printf("Port %i hard drive model: %s\n", parent.index, model);
 
     co_return;
 }

@@ -1176,7 +1176,7 @@ void syscall_pause_task(u64 task_id, u64, u64, u64, u64, u64)
                 current_task->blocked_by   = nullptr;
                 current_task->parent_queue = &task->waiting_to_pause;
                 {
-                    Auto_Lock_Scope lock(current_task->waiting_to_pause.lock);
+                    Auto_Lock_Scope lock(task->waiting_to_pause.lock);
                     task->waiting_to_pause.push_back(current_task);
                 }
                 find_new_process();
