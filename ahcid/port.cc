@@ -9,14 +9,12 @@ pmos::async::task<Command> Command::prepare(AHCIPort &port)
 {
     Command cmd(port);
     cmd.cmd_index = co_await GetCmdIndex {port};
-    printf("Got command index: %d\n", cmd.cmd_index);
     co_return cmd;
 }
 
 Command::~Command() noexcept
 {
     if (parent && cmd_index != -1) {
-        printf("Releasing command index: %d\n", cmd_index);
         parent->active_cmd_slots &= ~(1 << cmd_index);
         parent->active_cmd_slots--;
     }
@@ -54,8 +52,9 @@ Command &Command::operator=(Command &&other) noexcept
 void Command::prdt_push(PRDT entry)
 {
     assert(prdt_index < 8);
-    auto *prdt         = (PRDT *)(parent->dma_virt_base +
-                          (parent->command_table_offset + PRDT_OFFSET) / sizeof(uint32_t));
+    auto *prdt = (PRDT *)(parent->dma_virt_base + (parent->command_table_offset + PRDT_OFFSET +
+                                                   cmd_index * COMMAND_TABLE_SIZE) /
+                                                      sizeof(uint32_t));
     prdt[prdt_index++] = entry;
 }
 
@@ -68,7 +67,8 @@ pmos::async::task<Command::Result> Command::execute(uint8_t command, int timeout
     str.c                  = 1;
 
     auto *fis = (FIS_Host_To_Device *)(parent->dma_virt_base +
-                                       parent->command_table_offset / sizeof(uint32_t));
+                                       parent->command_table_offset / sizeof(uint32_t) +
+                                       cmd_index * COMMAND_TABLE_SIZE / sizeof(uint32_t));
     *fis      = str;
 
     CommandListEntry cmd   = {};
@@ -86,8 +86,7 @@ pmos::async::task<Command::Result> Command::execute(uint8_t command, int timeout
 
     port[AHCI_CI_INDEX] = 1 << cmd_index;
 
-    auto t = co_await WaitCommandCompletion(parent, cmd_index, timeout_ms);
-    printf("Command %d completed with %d\n", cmd_index, t);
+    co_await WaitCommandCompletion(parent, cmd_index, timeout_ms);
 
     if (port[AHCI_CI_INDEX] & (1 << cmd_index)) {
         co_return Result::Timeout;
@@ -98,7 +97,6 @@ pmos::async::task<Command::Result> Command::execute(uint8_t command, int timeout
 
 bool WaitCommandCompletion::await_ready() noexcept
 {
-    return false;
     bool ready = !((parent->get_port_register()[AHCI_CI_INDEX]) & (1 << cmd_index));
     if (ready)
         unblocked_by = UnblockedBy::Ready;
@@ -114,7 +112,6 @@ void WaitCommandCompletion::await_suspend(std::coroutine_handle<> h)
 
 void WaitCommandCompletion::react_timer()
 {
-    printf("Timer expired\n");
     unblocked_by                 = UnblockedBy::Timer;
     parent->callbacks[cmd_index] = nullptr;
     h_.resume();
@@ -137,12 +134,10 @@ void AHCIPort::react_interrupt()
     port[4]      = port_is;
 
     printf("Port %i interrupt status: %#x\n", index, port_is);
-    if (port_is & AHCI_PORT_IS_DPS) {
-        auto command = port[AHCI_CI_INDEX];
-        for (int i = 0; i < num_slots; ++i) {
-            if (!(command & (1 << i)) && callbacks[i] && cmd_bitmap[i]) {
-                callbacks[i]->interrupt();
-            }
+    auto command = port[AHCI_CI_INDEX];
+    for (int i = 0; i < num_slots; ++i) {
+        if (!(command & (1 << i)) && callbacks[i] && cmd_bitmap[i]) {
+            callbacks[i]->interrupt();
         }
     }
 }

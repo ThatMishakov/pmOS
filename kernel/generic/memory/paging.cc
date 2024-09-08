@@ -37,6 +37,7 @@
 #include <kernel/com.h>
 #include <kernel/memory.h>
 #include <lib/memory.hh>
+#include <pmos/utility/scope_guard.hh>
 #include <processes/tasks.hh>
 #include <sched/sched.hh>
 #include <types.hh>
@@ -103,22 +104,9 @@ u64 Page_Table::atomic_create_normal_region(u64 page_aligned_start, u64 page_ali
         };
 
         size_t i = 0;
-        try {
-            for (; i < count; i++) {
-                pmm::Page *n = page;
-                ++page;
-                *page = *n;
-                page->pending_alloc_head.size_pages--;
-                page->pending_alloc_head.phys_addr += PAGE_SIZE;
 
-                n->type       = pmm::Page::PageType::Allocated;
-                n->l.refcount = 1;
-
-                auto pp = pmm::Page_Descriptor(n);
-
-                map(klib::move(pp), start_addr + i * PAGE_SIZE, pta);
-            }
-        } catch (...) {
+        // This will be called on error
+        auto guard_ = pmos::utility::make_scope_guard([&]() {
             size_t size_to_invalidate = i * PAGE_SIZE;
             invalidate_range(start_addr + size_to_invalidate,
                              page_aligned_size - size_to_invalidate, true);
@@ -127,10 +115,28 @@ u64 Page_Table::atomic_create_normal_region(u64 page_aligned_start, u64 page_ali
             paging_regions.erase(r);
             r->rcu_free();
 
-            pmm::release_page(page);
+            if (i < count)
+                pmm::release_page(page);
+        });
 
-            throw;
+        for (; i < count; i++) {
+            pmm::Page *n = page;
+            ++page;
+            if (i + 1 < count) {
+                *page = *n;
+                page->pending_alloc_head.size_pages--;
+                page->pending_alloc_head.phys_addr += PAGE_SIZE;
+            }
+
+            n->type       = pmm::Page::PageType::Allocated;
+            n->l.refcount = 1;
+
+            auto pp = pmm::Page_Descriptor(n);
+
+            map(klib::move(pp), start_addr + i * PAGE_SIZE, pta);
         }
+
+        guard_.dismiss();
     }
 
     return start_addr;
@@ -360,8 +366,13 @@ void Page_Table::move_pages(const klib::shared_ptr<Page_Table> &to, u64 from_add
             auto info = get_page_mapping(from_addr + offset);
             if (info.is_allocated) {
                 Page_Table_Argumments arg = {
-                    !!(access & Writeable),   info.user_access, 0,
-                    not(access & Executable), info.flags,
+                    .readable           = !!(access & Readable),
+                    .writeable          = !!(access & Writeable),
+                    .user_access        = info.user_access,
+                    .global             = 0,
+                    .execution_disabled = !(access & Executable),
+                    .extra              = info.flags,
+                    .cache_policy       = Memory_Type::Normal // TODO: Fix this
                 };
                 to->map(info.page_addr, to_addr + offset, arg);
             }

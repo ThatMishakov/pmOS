@@ -608,6 +608,8 @@ void x86_4level_Page_Table::map(u64 physical_addr, u64 virtual_addr, Page_Table_
     if (pte->present)
         throw(Kern_Exception(-EEXIST, "map page is present"));
 
+    assert(!(arg.extra & PAGING_FLAG_STRUCT_PAGE) || pmm::Page_Descriptor::find_page_struct(physical_addr));
+
     *pte             = x86_PAE_Entry();
     pte->page_ppn    = physical_addr / KB(4);
     pte->present     = 1;
@@ -623,6 +625,7 @@ void x86_4level_Page_Table::map(pmm::Page_Descriptor page, u64 virtual_addr, Pag
 {
     auto p = page.page_struct_ptr;
     assert(p && "page must be present");
+    assert(p->type == pmm::Page::PageType::Allocated);
 
     if (page.page_struct_ptr->get_phys_addr() >> 48)
         throw(Kern_Exception(-ERANGE, "x86_4level_Page_Table::map physical page out of range"));

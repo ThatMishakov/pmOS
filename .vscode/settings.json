@@ -175,7 +175,18 @@
         "latch": "cpp",
         "regex": "cpp",
         "__memory": "cpp",
-        "scoped_allocator": "cpp"
+        "scoped_allocator": "cpp",
+        "cfenv": "cpp",
+        "csetjmp": "cpp",
+        "csignal": "cpp",
+        "cuchar": "cpp",
+        "execution": "cpp",
+        "print": "cpp",
+        "shared_mutex": "cpp",
+        "source_location": "cpp",
+        "strstream": "cpp",
+        "syncstream": "cpp",
+        "typeindex": "cpp"
     },
     "cmake.configureOnOpen": false,
     "C_Cpp.default.compilerPath": "/home/misha/cross/bin/clang"

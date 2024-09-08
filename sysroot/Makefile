@@ -10,12 +10,12 @@ all: $(HEADERS_DEST)
 
 # Target to copy each header to the sysroot directory
 $(HEADER_DEST)/%.h: $(HEADER_SRC)/%.h
-	@mkdir -p $(HEADER_DEST)
-	@cp $< $@
+	@mkdir -p $(dir $@)
+	cp $< $@
 
 $(HEADER_DEST)/%.hh: $(HEADER_SRC)/%.hh
-	@mkdir -p $(HEADER_DEST)
-	@cp $< $@
+	@mkdir -p $(dir $@)
+	cp $< $@
 
 # Optional: Clean up the headers from the sysroot directory
 clean:

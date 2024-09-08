@@ -78,6 +78,9 @@ struct Page_Descriptor {
     Page_Descriptor(Page_Descriptor &&) noexcept;
     ~Page_Descriptor() noexcept;
 
+    /// @brief Checks if the descriptor holds a page
+    operator bool() const noexcept;
+
     /// Allocates a new page and copies current page into it
     Page_Descriptor create_copy() const;
 

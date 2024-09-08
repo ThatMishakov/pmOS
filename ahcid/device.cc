@@ -8,12 +8,13 @@
 #include <utility>
 #include <pmos/memory.h>
 #include <sys/mman.h>
+#include <pmos/utility/scope_guard.hh>
 
 pmos::async::detached_task handle_device(AHCIPort &parent)
 {
     constexpr size_t dma_size = 4096;
     auto req = create_normal_region(0, nullptr, dma_size, PROT_READ | PROT_WRITE | CREATE_FLAG_DMA);
-    auto guard_ = make_scope_guard([&] { munmap(req.virt_addr, dma_size); });
+    auto guard_ = pmos::utility::make_scope_guard([&] { munmap(req.virt_addr, dma_size); });
     auto phys_addr = get_page_phys_address(0, req.virt_addr, 0);
     if (phys_addr.result < 0) {
         printf("Could not get physical address for AHCI: %li\n", phys_addr.result);

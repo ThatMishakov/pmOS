@@ -50,6 +50,7 @@ Page::page_addr_t Page_Descriptor::takeout_page() noexcept
 {
     assert(page_struct_ptr);
     assert(page_struct_ptr->has_physical_page());
+    assert(page_struct_ptr->type == Page::PageType::Allocated);
 
     auto p          = page_struct_ptr->get_phys_addr();
     page_struct_ptr = nullptr;
@@ -155,6 +156,9 @@ void Page_Descriptor::release_taken_out_page()
 
 void pmm::release_page(Page *page) noexcept
 {
+    if (!page)
+        return;
+
     if (not page->has_physical_page()) {
         delete page;
     } else {
@@ -382,11 +386,21 @@ Page *kernel::pmm::find_page(Page::page_addr_t addr) noexcept
     return nullptr;
 }
 
+#include <kern_logger/kern_logger.hh>
+
 Page_Descriptor Page_Descriptor::find_page_struct(Page::page_addr_t addr) noexcept
 {
     auto p = find_page(addr);
     if (!p) [[unlikely]]
         return Page_Descriptor();
+
+    if (p->type != Page::PageType::Allocated) [[unlikely]] {
+        serial_logger.printf("!!! Page %p at addr %h is not allocated !!!. Type: %i\n", p, addr,
+                             p->type);
+        for (size_t i = 0; i < sizeof(Page); i++)
+            serial_logger.printf("%h ", ((u8 *)p)[i]);
+        serial_logger.printf("\n");
+    }
 
     assert(p->type == Page::PageType::Allocated);
 
@@ -496,3 +510,5 @@ Page *kernel::pmm::alloc_pages(size_t count, bool /* contiguous */) noexcept
 
     return nullptr;
 }
+
+Page_Descriptor::operator bool() const noexcept { return page_struct_ptr != nullptr; }
