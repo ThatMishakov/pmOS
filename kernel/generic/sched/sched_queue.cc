@@ -32,30 +32,30 @@
 
 #include <processes/tasks.hh>
 
-klib::shared_ptr<TaskDescriptor> sched_queue::pop_front() noexcept
+TaskDescriptor * sched_queue::pop_front() noexcept
 {
     assert(lock.is_locked() and "Queue is not locked!");
 
-    klib::shared_ptr<TaskDescriptor> ptr = first;
+    TaskDescriptor *ptr = first;
 
-    if (first != klib::shared_ptr<TaskDescriptor>(nullptr))
+    if (first != nullptr)
         erase(ptr);
 
     return ptr;
 }
 
-klib::shared_ptr<TaskDescriptor> sched_queue::front() const noexcept
+TaskDescriptor * sched_queue::front() const noexcept
 {
     assert(lock.is_locked() and "Queue is not locked!");
 
     return first;
 }
 
-void sched_queue::push_back(const klib::shared_ptr<TaskDescriptor> &desc) noexcept
+void sched_queue::push_back(TaskDescriptor *desc) noexcept
 {
     assert(lock.is_locked() and "Queue is not locked!");
 
-    if (first == klib::shared_ptr<TaskDescriptor>(nullptr)) {
+    if (!first) {
         first            = desc;
         last             = desc;
         desc->queue_prev = nullptr;
@@ -69,11 +69,11 @@ void sched_queue::push_back(const klib::shared_ptr<TaskDescriptor> &desc) noexce
     desc->parent_queue = this;
 }
 
-void sched_queue::push_front(const klib::shared_ptr<TaskDescriptor> &desc) noexcept
+void sched_queue::push_front(TaskDescriptor *desc) noexcept
 {
     assert(lock.is_locked() and "Queue is not locked!");
 
-    if (first == klib::shared_ptr<TaskDescriptor>(nullptr)) {
+    if (!first) {
         first            = desc;
         last             = desc;
         desc->queue_next = nullptr;
@@ -87,9 +87,13 @@ void sched_queue::push_front(const klib::shared_ptr<TaskDescriptor> &desc) noexc
     desc->parent_queue = this;
 }
 
-void sched_queue::erase(const klib::shared_ptr<TaskDescriptor> &desc) noexcept
+void sched_queue::erase(TaskDescriptor *desc) noexcept
 {
     assert(lock.is_locked() and "Queue is not locked!");
+    assert(desc and "Task is null!");
+    assert(desc->parent_queue == this and "Task is not in this queue!");
+    assert(desc->queue_prev or desc->queue_next or first == desc or last == desc and
+           "Task is not in the queue!");
 
     if (desc->queue_prev) {
         desc->queue_prev->queue_next = desc->queue_next;
@@ -108,7 +112,7 @@ void sched_queue::erase(const klib::shared_ptr<TaskDescriptor> &desc) noexcept
     desc->parent_queue = nullptr;
 }
 
-void sched_queue::atomic_erase(const klib::shared_ptr<TaskDescriptor> &desc) noexcept
+void sched_queue::atomic_erase(TaskDescriptor *desc) noexcept
 {
     {
         Auto_Lock_Scope l(lock);

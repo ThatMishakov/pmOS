@@ -74,12 +74,12 @@ public:
 
     virtual void do_action(const klib::shared_ptr<Port> &port, const klib::string &name) override;
 
-    Notify_Task(const klib::shared_ptr<TaskDescriptor> &t,
+    Notify_Task(TaskDescriptor *t,
                 const klib::shared_ptr<Generic_Port> &parent_port)
         : task(t), parent_port(parent_port) {};
 
 private:
-    klib::weak_ptr<TaskDescriptor> task;
+    TaskDescriptor *task;
     klib::weak_ptr<Generic_Port> parent_port;
     bool did_action = false;
 };

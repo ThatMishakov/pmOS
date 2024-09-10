@@ -44,7 +44,6 @@ struct Generic_Port {
 };
 
 struct Message {
-    klib::weak_ptr<TaskDescriptor> task_from;
     u64 task_id_from = 0;
     klib::vector<char> content;
 
@@ -63,13 +62,13 @@ class TaskGroup;
 class Port: public Generic_Port
 {
 public:
-    klib::weak_ptr<TaskDescriptor> owner;
+    TaskDescriptor *owner;
     klib::weak_ptr<Port> self;
 
     Spinlock lock;
     u64 portno;
 
-    Port(const klib::shared_ptr<TaskDescriptor> &owner, u64 portno);
+    Port(TaskDescriptor *owner, u64 portno);
 
     void enqueue(const klib::shared_ptr<Message> &msg);
 
@@ -78,16 +77,16 @@ public:
 
     // Returns true if successfully sent, false otherwise (e.g. when it is needed to repeat the
     // syscall). Throws on crytical errors
-    bool send_from_user(const klib::shared_ptr<TaskDescriptor> &sender, const char *unsafe_user_ptr,
+    bool send_from_user(TaskDescriptor *sender, const char *unsafe_user_ptr,
                         size_t msg_size);
     void atomic_send_from_system(const char *msg, size_t size);
 
     // Returns true if successfully sent, false otherwise (e.g. when it is needed to repeat the
     // syscall). Throws on crytical errors
-    bool atomic_send_from_user(const klib::shared_ptr<TaskDescriptor> &sender,
+    bool atomic_send_from_user(TaskDescriptor *sender,
                                const char *unsafe_user_message, size_t msg_size);
 
-    void change_return_upon_unblock(const klib::shared_ptr<TaskDescriptor> &task);
+    void change_return_upon_unblock(TaskDescriptor *task);
 
     klib::shared_ptr<Message> &get_front();
     void pop_front() noexcept;
@@ -114,7 +113,7 @@ public:
     /**
      * @brief Creates a new port with *task* as its owner
      */
-    static klib::shared_ptr<Port> atomic_create_port(const klib::shared_ptr<TaskDescriptor> &task);
+    static klib::shared_ptr<Port> atomic_create_port(TaskDescriptor *task);
 
 protected:
     using Message_storage = klib::list<klib::shared_ptr<Message>>;

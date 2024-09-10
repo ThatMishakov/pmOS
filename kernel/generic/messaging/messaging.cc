@@ -44,7 +44,7 @@ bool Message::copy_to_user_buff(char *buff)
     return copy_to_user(&content.front(), buff, content.size());
 }
 
-klib::shared_ptr<Port> Port::atomic_create_port(const klib::shared_ptr<TaskDescriptor> &task)
+klib::shared_ptr<Port> Port::atomic_create_port(TaskDescriptor *task)
 {
     assert(task);
 
@@ -61,7 +61,9 @@ klib::shared_ptr<Port> Port::atomic_create_port(const klib::shared_ptr<TaskDescr
 
     try {
         Auto_Lock_Scope local_lock(task->messaging_lock);
-        task->owned_ports.insert(new_port_ptr);
+        auto result = task->owned_ports.insert_noexcept(new_port_ptr);
+        if (result.first == task->owned_ports.end())
+            throw(Kern_Exception(-ENOMEM, "failed to insert port into task's owned ports"));
     } catch (...) {
         Auto_Lock_Scope local_lock(ports_lock);
         ports.erase(new_port);
@@ -100,23 +102,16 @@ void Port::enqueue(const klib::shared_ptr<Message> &msg)
 {
     assert(lock.is_locked() && "Spinlock not locked!");
 
-    klib::shared_ptr<TaskDescriptor> t = owner.lock();
-
-    if (not t)
-        throw(Kern_Exception(-ENOENT, "port owner does not exist"));
-
     msg_queue.push_back(msg);
-    unblock_if_needed(t, self.lock());
+    unblock_if_needed(owner, self.lock());
 }
 
 void Port::send_from_system(klib::vector<char> &&v)
 {
     assert(lock.is_locked() && "Spinlock not locked!");
 
-    klib::shared_ptr<TaskDescriptor> task_ptr = nullptr;
-
     klib::shared_ptr<Message> ptr =
-        klib::make_shared<Message>(task_ptr, 0, klib::forward<klib::vector<char>>(v));
+        klib::make_shared<Message>(0, klib::forward<klib::vector<char>>(v));
 
     enqueue(ptr);
 }
@@ -128,7 +123,7 @@ void Port::send_from_system(const char *msg_ptr, uint64_t size)
     send_from_system(klib::move(message));
 }
 
-bool Port::send_from_user(const klib::shared_ptr<TaskDescriptor> &sender,
+bool Port::send_from_user(TaskDescriptor *sender,
                           const char *unsafe_user_ptr, size_t msg_size)
 {
     assert(lock.is_locked() && "Spinlock not locked!");
@@ -140,14 +135,14 @@ bool Port::send_from_user(const klib::shared_ptr<TaskDescriptor> &sender,
         return result;
 
     klib::shared_ptr<Message> ptr = klib::make_shared<Message>(
-        sender, sender->task_id, klib::forward<klib::vector<char>>(message));
+        sender->task_id, klib::forward<klib::vector<char>>(message));
 
     enqueue(ptr);
 
     return true;
 }
 
-bool Port::atomic_send_from_user(const klib::shared_ptr<TaskDescriptor> &sender,
+bool Port::atomic_send_from_user(TaskDescriptor *sender,
                                  const char *unsafe_user_message, size_t msg_size)
 {
     klib::vector<char> message(msg_size);
@@ -157,7 +152,7 @@ bool Port::atomic_send_from_user(const klib::shared_ptr<TaskDescriptor> &sender,
         return result;
 
     klib::shared_ptr<Message> ptr = klib::make_shared<Message>(
-        sender, sender->task_id, klib::forward<klib::vector<char>>(message));
+        sender->task_id, klib::forward<klib::vector<char>>(message));
 
     Auto_Lock_Scope scope_lock(lock);
 
@@ -201,6 +196,6 @@ Port::~Port() noexcept
     ports.erase(portno);
 }
 
-Port::Port(const klib::shared_ptr<TaskDescriptor> &owner, u64 portno): owner(owner), portno(portno)
+Port::Port(TaskDescriptor *owner, u64 portno): owner(owner), portno(portno)
 {
 }

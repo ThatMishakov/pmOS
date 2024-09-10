@@ -115,13 +115,13 @@ klib::array<syscall_function, 49> syscall_table = {
 
 extern "C" void syscall_handler()
 {
-    klib::shared_ptr<TaskDescriptor> task = get_cpu_struct()->current_task;
-    u64 call_n                            = task->regs.syscall_number();
-    u64 arg1                              = syscall_arg1(task);
-    u64 arg2                              = syscall_arg2(task);
-    u64 arg3                              = syscall_arg3(task);
-    u64 arg4                              = syscall_arg4(task);
-    u64 arg5                              = syscall_arg5(task);
+    TaskDescriptor *task = get_cpu_struct()->current_task;
+    u64 call_n           = task->regs.syscall_number();
+    u64 arg1             = syscall_arg1(task);
+    u64 arg2             = syscall_arg2(task);
+    u64 arg3             = syscall_arg3(task);
+    u64 arg4             = syscall_arg4(task);
+    u64 arg5             = syscall_arg5(task);
 
     // serial_logger.printf("syscall_handler: task: %d (%s) call_n: %x, arg1: %x, arg2: %x, arg3:
     // %x, arg4: %x, arg5: %x\n", task->task_id, task->name.c_str(), call_n, arg1, arg2, arg3, arg4,
@@ -181,7 +181,7 @@ void syscall_start_process(u64 pid, u64 start, u64 arg1, u64 arg2, u64 arg3, u64
     task_ptr task = get_current_task();
     // TODO: Check permissions
 
-    klib::shared_ptr<TaskDescriptor> t = get_task_throw(pid);
+    TaskDescriptor *t = get_task_throw(pid);
 
     Auto_Lock_Scope scope_sched_lock(t->sched_lock);
 
@@ -209,7 +209,7 @@ void syscall_load_executable(u64 task_id, u64 object_id, u64 flags, u64 /* unuse
     task_ptr task = get_current_task();
     // TODO: Check permissions
 
-    klib::shared_ptr<TaskDescriptor> t = get_task_throw(task_id);
+    TaskDescriptor *t = get_task_throw(task_id);
 
     klib::shared_ptr<Mem_Object> object = Mem_Object::get_object(object_id);
 
@@ -234,7 +234,7 @@ void syscall_init_stack(u64 pid, u64 esp, u64, u64, u64, u64)
 
     // TODO: Check permissions
 
-    klib::shared_ptr<TaskDescriptor> t = get_task_throw(pid);
+    TaskDescriptor *t = get_task_throw(pid);
     Auto_Lock_Scope scope_sched_lock(t->sched_lock);
 
     // If the process is running, you can't start it again
@@ -253,7 +253,7 @@ void syscall_init_stack(u64 pid, u64 esp, u64, u64, u64, u64)
 
 void syscall_exit(u64 arg1, u64 arg2, u64, u64, u64, u64)
 {
-    klib::shared_ptr<TaskDescriptor> task = get_cpu_struct()->current_task;
+    TaskDescriptor *task = get_cpu_struct()->current_task;
 
     // Record exit code
     task->ret_hi = arg2;
@@ -266,8 +266,8 @@ void syscall_exit(u64 arg1, u64 arg2, u64, u64, u64, u64)
 
 void syscall_kill_task(u64 task_id, u64, u64, u64, u64, u64)
 {
-    klib::shared_ptr<TaskDescriptor> task = get_current_task();
-    klib::shared_ptr<TaskDescriptor> t    = get_task_throw(task_id);
+    TaskDescriptor *task = get_current_task();
+    TaskDescriptor *t    = get_task_throw(task_id);
 
     syscall_ret_low(task) = SUCCESS;
     t->atomic_kill();
@@ -275,7 +275,7 @@ void syscall_kill_task(u64 task_id, u64, u64, u64, u64, u64)
 
 void syscall_get_first_message(u64 buff, u64 args, u64 portno, u64, u64, u64)
 {
-    klib::shared_ptr<TaskDescriptor> current = get_cpu_struct()->current_task;
+    TaskDescriptor *current = get_cpu_struct()->current_task;
     klib::shared_ptr<Port> port;
 
     // Optimization: Try last blocked-by port
@@ -289,7 +289,7 @@ void syscall_get_first_message(u64 buff, u64 args, u64 portno, u64, u64, u64)
     {
         Auto_Lock_Scope scope_lock(port->lock);
 
-        if (current != port->owner.lock())
+        if (current != port->owner)
             throw(Kern_Exception(-EPERM, "Callee is not a port owner"));
 
         if (port->is_empty())
@@ -312,7 +312,7 @@ void syscall_get_first_message(u64 buff, u64 args, u64 portno, u64, u64, u64)
 
 void syscall_send_message_port(u64 port_num, size_t size, u64 message, u64, u64, u64)
 {
-    klib::shared_ptr<TaskDescriptor> current = get_cpu_struct()->current_task;
+    TaskDescriptor *current = get_cpu_struct()->current_task;
 
     // TODO: Check permissions
 
@@ -343,7 +343,7 @@ void syscall_get_message_info(u64 message_struct, u64 portno, u64 flags, u64, u6
         port = Port::atomic_get_port_throw(portno);
     }
 
-    if (port->owner.lock() != task) {
+    if (port->owner != task) {
         throw(Kern_Exception(-EPERM, "Callee is not a port owner"));
     }
 
@@ -390,8 +390,8 @@ void syscall_set_attribute(u64 pid, u64 attribute, u64 value, u64, u64, u64)
     // TODO: This is *very* x86-specific and is a bad idea in general
 
 #ifdef __x86_64__
-    klib::shared_ptr<TaskDescriptor> process = pid == task->task_id ? task : get_task_throw(pid);
-    Interrupt_Stackframe *current_frame      = &process->regs.e;
+    TaskDescriptor *process             = pid == task->task_id ? task : get_task_throw(pid);
+    Interrupt_Stackframe *current_frame = &process->regs.e;
 
     switch (attribute) {
     case ATTR_ALLOW_PORT:
@@ -503,7 +503,7 @@ void syscall_create_port(u64 owner, u64, u64, u64, u64, u64)
 
     // TODO: Check permissions
 
-    klib::shared_ptr<TaskDescriptor> t;
+    TaskDescriptor *t;
 
     if (owner == 0 or task->task_id == owner) {
         t = task;
@@ -705,9 +705,8 @@ void syscall_set_log_port(u64 port, u64 flags, u64, u64, u64, u64)
 
 void syscall_create_normal_region(u64 pid, u64 addr_start, u64 size, u64 access, u64, u64)
 {
-    const klib::shared_ptr<TaskDescriptor> &current = get_cpu_struct()->current_task;
-
-    klib::shared_ptr<TaskDescriptor> dest_task = nullptr;
+    TaskDescriptor *current   = get_cpu_struct()->current_task;
+    TaskDescriptor *dest_task = nullptr;
 
     if (pid == 0 or current->task_id == pid)
         dest_task = current;
@@ -729,9 +728,8 @@ void syscall_create_normal_region(u64 pid, u64 addr_start, u64 size, u64 access,
 void syscall_create_phys_map_region(u64 pid, u64 addr_start, u64 size, u64 access, u64 phys_addr,
                                     u64)
 {
-    const klib::shared_ptr<TaskDescriptor> &current = get_cpu_struct()->current_task;
-
-    klib::shared_ptr<TaskDescriptor> dest_task = nullptr;
+    TaskDescriptor *current   = get_cpu_struct()->current_task;
+    TaskDescriptor *dest_task = nullptr;
 
     if (pid == 0 or current->task_id == pid)
         dest_task = current;
@@ -752,10 +750,10 @@ void syscall_create_phys_map_region(u64 pid, u64 addr_start, u64 size, u64 acces
 
 void syscall_get_page_table(u64 pid, u64, u64, u64, u64, u64)
 {
-    const klib::shared_ptr<TaskDescriptor> &current = get_cpu_struct()->current_task;
-    syscall_ret_low(current)                        = SUCCESS;
+    TaskDescriptor *current  = get_cpu_struct()->current_task;
+    syscall_ret_low(current) = SUCCESS;
 
-    klib::shared_ptr<TaskDescriptor> target {};
+    TaskDescriptor *target {};
 
     if (pid == 0 or current->task_id == pid)
         target = current;
@@ -776,8 +774,8 @@ void syscall_get_page_table(u64 pid, u64, u64, u64, u64, u64)
 // somewhere, so this syscall is essentially that
 void syscall_set_segment(u64 pid, u64 segment_type, u64 ptr, u64, u64, u64)
 {
-    const klib::shared_ptr<TaskDescriptor> current = get_cpu_struct()->current_task;
-    klib::shared_ptr<TaskDescriptor> target {};
+    TaskDescriptor *current = get_cpu_struct()->current_task;
+    TaskDescriptor *target {};
 
     if (pid == 0 or current->task_id == pid)
         target = current;
@@ -786,7 +784,7 @@ void syscall_set_segment(u64 pid, u64 segment_type, u64 ptr, u64, u64, u64)
 
 #ifdef __x86_64__
     if (target == current)
-        save_segments(target.get());
+        save_segments(target);
 #endif
 
     switch (segment_type) {
@@ -809,17 +807,17 @@ void syscall_set_segment(u64 pid, u64 segment_type, u64 ptr, u64, u64, u64)
 
 #ifdef __x86_64__
     if (target == current)
-        restore_segments(target.get());
+        restore_segments(target);
 #endif
     syscall_ret_low(current) = SUCCESS;
 }
 
 void syscall_get_segment(u64 pid, u64 segment_type, u64 ptr, u64, u64, u64)
 {
-    const klib::shared_ptr<TaskDescriptor> &current = get_cpu_struct()->current_task;
-    syscall_ret_low(current)                        = SUCCESS;
+    TaskDescriptor *current  = get_cpu_struct()->current_task;
+    syscall_ret_low(current) = SUCCESS;
 
-    klib::shared_ptr<TaskDescriptor> target {};
+    TaskDescriptor *target {};
     u64 segment = 0;
 
     if (pid == 0 or current->task_id == pid)
@@ -858,7 +856,7 @@ void syscall_get_segment(u64 pid, u64 segment_type, u64 ptr, u64, u64, u64)
 
 void syscall_transfer_region(u64 to_page_table, u64 region, u64 dest, u64 flags, u64, u64)
 {
-    const klib::shared_ptr<TaskDescriptor> &current = get_current_task();
+    TaskDescriptor *current = get_current_task();
 
     klib::shared_ptr<Arch_Page_Table> pt = Arch_Page_Table::get_page_table_throw(to_page_table);
 
@@ -872,9 +870,9 @@ void syscall_transfer_region(u64 to_page_table, u64 region, u64 dest, u64 flags,
 
 void syscall_asign_page_table(u64 pid, u64 page_table, u64 flags, u64, u64, u64)
 {
-    const klib::shared_ptr<TaskDescriptor> &current = get_current_task();
-    const klib::shared_ptr<TaskDescriptor> dest     = get_task_throw(pid);
-    syscall_ret_low(current)                        = SUCCESS;
+    TaskDescriptor *current  = get_current_task();
+    TaskDescriptor *dest     = get_task_throw(pid);
+    syscall_ret_low(current) = SUCCESS;
 
     switch (flags) {
     case 1: // PAGE_TABLE_CREATE

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "rcu.hh"
-#include "intrusive_bst.hh"
+#include <pmos/containers/intrusive_bst.hh>
 #include <pmos/containers/intrusive_list.hh>
 
 #include <types.hh>
@@ -170,7 +170,7 @@ void free_memory_for_kernel(phys_page_t page, size_t number_of_pages) noexcept;
 void free_page(Page *p) noexcept;
 
 struct PageArrayDescriptor {
-    RBTreeNode<PageArrayDescriptor> by_address_tree;
+    pmos::containers::RBTreeNode<PageArrayDescriptor> by_address_tree;
     Page *pages;
     Page::page_addr_t start_addr;
     u64 size;
@@ -184,7 +184,7 @@ bool add_page_array(Page::page_addr_t start_addr, u64 size, Page *pages) noexcep
 Page *find_page(Page::page_addr_t addr) noexcept;
 
 // BST by pages pointer as a key
-using RegionsTree = RedBlackTree<
+using RegionsTree = pmos::containers::RedBlackTree<
     PageArrayDescriptor, &PageArrayDescriptor::by_address_tree,
     detail::TreeCmp<PageArrayDescriptor, const Page *const, &PageArrayDescriptor::pages>>;
 

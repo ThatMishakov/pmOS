@@ -64,7 +64,7 @@ struct Page_Table_Argumments {
 class Mem_Object;
 struct Mem_Object_Data {
     u8 max_privilege_mask = 0;
-    RedBlackTree<Mem_Object_Reference, &Mem_Object_Reference::object_bst_head,
+    pmos::containers::RedBlackTree<Mem_Object_Reference, &Mem_Object_Reference::object_bst_head,
                  detail::TreeCmp<Mem_Object_Reference, u64,
                                  &Mem_Object_Reference::start_addr>>::RBTreeHead regions;
 };
@@ -83,14 +83,14 @@ public:
     /// regions, it is unallocated. Otherwise, the region controlls the actual allocation and
     /// protection of the memory.
     using RegionsRBTree =
-        RedBlackTree<Generic_Mem_Region, &Generic_Mem_Region::bst_head,
+        pmos::containers::RedBlackTree<Generic_Mem_Region, &Generic_Mem_Region::bst_head,
                      detail::TreeCmp<Generic_Mem_Region, u64, &Generic_Mem_Region::start_addr>>;
     RegionsRBTree::RBTreeHead paging_regions;
 
     /// List of the tasks that own the page table. Task_Descriptor should contain a page_table
     /// pointer which should point to this page table. The kernel does not have special structures
     /// for the threads, so they are achieved by a page table and using IPC for synchronization.
-    klib::set<klib::weak_ptr<TaskDescriptor>> owner_tasks;
+    klib::set<TaskDescriptor*> owner_tasks;
 
     /// Queue of the tasks blocked by the page table
     blocked_sched_queue blocked_tasks;
@@ -270,7 +270,7 @@ public:
 
     /// Provides a page to a new page table
     /// @todo redo the function
-    static bool atomic_provide_page(const klib::shared_ptr<TaskDescriptor> &from_task,
+    static bool atomic_provide_page(TaskDescriptor *from_task,
                                     const klib::shared_ptr<Page_Table> &to, u64 page_from,
                                     u64 page_to, u64 flags);
 

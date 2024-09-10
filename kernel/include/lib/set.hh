@@ -479,8 +479,10 @@ template<class K> void set<K>::swap(set<K> &swap_with)
 template<class K> void set<K>::clear() noexcept
 {
     iterator it = begin();
-    while (it != end())
-        it = erase(it);
+    while (it != end()) {
+        erase(it);
+        it = begin();
+    }
 }
 
 template<class K> typename set<K>::iterator &set<K>::iterator::operator++()

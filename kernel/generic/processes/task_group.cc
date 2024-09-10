@@ -85,7 +85,7 @@ klib::shared_ptr<TaskGroup> TaskGroup::create()
     return group;
 }
 
-void TaskGroup::atomic_register_task(klib::shared_ptr<TaskDescriptor> task)
+void TaskGroup::atomic_register_task(TaskDescriptor * task)
 {
     bool inserted = false;
     {
@@ -144,7 +144,7 @@ klib::shared_ptr<TaskGroup> TaskGroup::get_task_group_throw(u64 groupno)
     }
 }
 
-void TaskGroup::atomic_remove_task(const klib::shared_ptr<TaskDescriptor> &task)
+void TaskGroup::atomic_remove_task(TaskDescriptor * task)
 {
     {
         Auto_Lock_Scope lock(tasks_lock);
@@ -227,7 +227,7 @@ u64 TaskGroup::atomic_change_notifier_mask(const klib::shared_ptr<Port> &port, u
         Auto_Lock_Scope tasks_l(tasks_lock);
 
         for (const auto &t: tasks) {
-            auto task = t.second.lock();
+            auto task = t.second;
             if (not task)
                 continue;
             IPC_Kernel_Group_Task_Changed msg = {

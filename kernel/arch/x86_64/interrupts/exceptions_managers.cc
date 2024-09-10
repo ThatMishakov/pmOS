@@ -69,7 +69,7 @@ void print_registers(const Task_Regs &regs, Logger &logger)
     logger.printf(" Error code: 0x%h\n", regs.int_err);
 }
 
-void print_registers(const klib::shared_ptr<TaskDescriptor> &task, Logger &logger)
+void print_registers(TaskDescriptor *task, Logger &logger)
 {
     if (not task)
         return;
@@ -79,15 +79,27 @@ void print_registers(const klib::shared_ptr<TaskDescriptor> &task, Logger &logge
 }
 
 Task_Regs kernel_interrupt_regs;
+
+void print_kernel_int_stack_trace(Logger &logger)
+{
+    logger.printf("Kernel stack trace:\n");
+    u64 *rbp = (u64 *)kernel_interrupt_regs.preserved_r.rbp;
+    while (rbp) {
+        logger.printf(" => 0x%h\n", rbp[1]);
+        rbp = (u64 *)rbp[0];
+    }
+}
+
 extern "C" void dbg_main()
 {
     t_print_bochs("Error! Kernel interrupt!\n");
     print_registers(kernel_interrupt_regs, bochs_logger);
+    print_kernel_int_stack_trace(bochs_logger);
     while (1)
         ;
 }
 
-void print_stack_trace(const klib::shared_ptr<TaskDescriptor> &task, Logger &logger)
+void print_stack_trace(TaskDescriptor *task, Logger &logger)
 {
     if (not task)
         return;
@@ -156,7 +168,7 @@ extern "C" void pagefault_manager()
         return;
     }
 
-    klib::shared_ptr<TaskDescriptor> task = c->current_task;
+    TaskDescriptor * task = c->current_task;
     u64 err                               = task->regs.int_err;
 
     // Get the memory location which has caused the fault

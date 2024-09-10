@@ -198,18 +198,16 @@ u64 Page_Table::atomic_transfer_region(const klib::shared_ptr<Page_Table> &to, u
 {
     Auto_Lock_Scope_Double scope_lock(lock, to->lock);
 
-    try {
-        auto &reg = paging_regions.at(region_orig);
-
-        if (prefered_to & 07777)
-            prefered_to = 0;
-
-        u64 start_addr = to->find_region_spot(prefered_to, reg.size, fixed);
-        reg.move_to(to, start_addr, access);
-        return start_addr;
-    } catch (std::out_of_range &r) {
+    auto reg = paging_regions.find(region_orig);
+    if (!reg)
         throw Kern_Exception(-ENOENT, "atomic_transfer_region source not found");
-    }
+
+    if (prefered_to & 07777)
+        prefered_to = 0;
+
+    u64 start_addr = to->find_region_spot(prefered_to, reg->size, fixed);
+    reg->move_to(to, start_addr, access);
+    return start_addr;
 }
 
 u64 Page_Table::atomic_create_phys_region(u64 page_aligned_start, u64 page_aligned_size,
@@ -338,7 +336,7 @@ bool Page_Table::prepare_user_page(u64 virt_addr, unsigned access_type)
 void Page_Table::unblock_tasks(u64 page)
 {
     for (const auto &it: owner_tasks)
-        it.lock()->atomic_try_unblock_by_page(page);
+        it->atomic_try_unblock_by_page(page);
 }
 
 void Page_Table::map(u64 page_addr, u64 virt_addr)
@@ -439,7 +437,7 @@ void Page_Table::atomic_shrink_regions(const klib::shared_ptr<Mem_Object> &id,
 {
     Auto_Lock_Scope l(lock);
 
-    auto p  = mem_objects.at(id);
+    auto &p  = mem_objects.at(id);
     auto it = p.regions.begin();
     while (it != p.regions.end()) {
         const auto reg = it;

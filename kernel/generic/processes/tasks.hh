@@ -30,19 +30,22 @@
 #include "task_group.hh"
 
 #include <assert.h>
+#include <errno.h>
 #include <exceptions.hh>
 #include <interrupts/stack.hh>
 #include <lib/memory.hh>
 #include <lib/set.hh>
 #include <lib/string.hh>
 #include <memory/paging.hh>
+#include <memory/rcu.hh>
 #include <messaging/messaging.hh>
 #include <paging/arch_paging.hh>
 #include <pmos/load_data.h>
 #include <registers.hh>
 #include <sched/defs.hh>
 #include <types.hh>
-#include <errno.h>
+
+#include <pmos/containers/set.hh>
 
 #ifdef __x86_64__
     #include <cpus/sse.hh>
@@ -95,26 +98,29 @@ public:
     Task_Attributes attr;
 
     // Messaging
-    klib::set<klib::shared_ptr<Generic_Port>> owned_ports;
+    pmos::containers::set<klib::shared_ptr<Generic_Port>> owned_ports;
     klib::weak_ptr<Generic_Port> blocked_by;
     klib::weak_ptr<Generic_Port> sender_hint;
     Spinlock messaging_lock;
 
     // Scheduling info
-    klib::shared_ptr<TaskDescriptor> queue_next = nullptr;
-    klib::shared_ptr<TaskDescriptor> queue_prev = nullptr;
-    sched_queue *parent_queue                   = nullptr;
-    TaskStatus status                           = TaskStatus::TASK_UNINIT;
-    u32 sched_pending_mask                      = 0;
-    priority_t priority                         = 8;
-    u32 cpu_affinity                            = 0;
+    TaskDescriptor *queue_next = nullptr;
+    TaskDescriptor *queue_prev = nullptr;
+    sched_queue *parent_queue  = nullptr;
+    TaskStatus status          = TaskStatus::TASK_UNINIT;
+    u32 sched_pending_mask     = 0;
+    priority_t priority        = 8;
+    u32 cpu_affinity           = 0;
     Spinlock sched_lock;
+
+    union {
+        RCU_Head rcu_head;
+        pmos::containers::RBTreeNode<TaskDescriptor> task_tree_head = {};
+    };
 
     static constexpr int SCHED_PENDING_PAUSE = 1;
 
     sched_queue waiting_to_pause;
-
-    klib::weak_ptr<TaskDescriptor> weak_self;
 
     // Paging
     klib::shared_ptr<Arch_Page_Table> page_table;
@@ -213,15 +219,6 @@ public:
     Spinlock name_lock;
     klib::string name = "";
 
-    klib::shared_ptr<TaskDescriptor> get_ptr() { return weak_self.lock(); }
-
-    static klib::shared_ptr<TaskDescriptor> create()
-    {
-        klib::shared_ptr<TaskDescriptor> p = klib::shared_ptr<TaskDescriptor>(new TaskDescriptor());
-        p->weak_self                       = p;
-        return p;
-    }
-
     ~TaskDescriptor() noexcept;
 
     // Changes the *task* to repeat the syscall upon reentering the system
@@ -229,8 +226,7 @@ public:
     inline void pop_repeat_syscall() noexcept { regs.clear_syscall_restart(); }
 
     /// Creates a process structure and returns its pid
-    static klib::shared_ptr<TaskDescriptor>
-        create_process(PrivilegeLevel level = PrivilegeLevel::User);
+    static TaskDescriptor *create_process(PrivilegeLevel level = PrivilegeLevel::User);
 
     /// Loads ELF into the task from the given memory object
     /// Returns true if the ELF was loaded successfully, false if the memory object data is not
@@ -285,6 +281,7 @@ public:
 
     // Unblocks the task if it is not already blocked
     void atomic_try_unblock();
+
 protected:
     TaskDescriptor() = default;
 
@@ -292,14 +289,16 @@ protected:
     void unblock() noexcept;
 };
 
-using task_ptr = klib::shared_ptr<TaskDescriptor>;
+using task_ptr = TaskDescriptor *;
 
 struct CPU_Info;
 // Inits an idle process
 void init_idle(CPU_Info *cpu);
 
 // A map of all the tasks
-using sched_map = klib::splay_tree_map<TaskDescriptor::TaskID, klib::weak_ptr<TaskDescriptor>>;
+using sched_map =
+    pmos::containers::RedBlackTree<TaskDescriptor, &TaskDescriptor::task_tree_head,
+                 detail::TreeCmp<TaskDescriptor, u64, &TaskDescriptor::task_id>>::RBTreeHead;
 extern sched_map tasks_map;
 extern Spinlock tasks_map_lock;
 
@@ -307,34 +306,31 @@ extern Spinlock tasks_map_lock;
 inline bool exists_process(u64 pid)
 {
     tasks_map_lock.lock();
-    bool exists = tasks_map.count(pid) == 1;
+    auto it = tasks_map.find(pid);
     tasks_map_lock.unlock();
-    return exists;
+    return it;
 }
 
 // Gets a task descriptor of the process with pid
-inline klib::shared_ptr<TaskDescriptor> get_task(u64 pid)
+inline TaskDescriptor *get_task(u64 pid)
 {
     Auto_Lock_Scope scope_lock(tasks_map_lock);
-    return tasks_map.get_copy_or_default(pid).lock();
+    auto it = tasks_map.find(pid);
+    if (!it)
+        throw Kern_Exception(-ESRCH, "Requested process does not exist");
+    return it;
 }
 
 // Gets a task descriptor of the process with pid *pid*. Throws
-inline klib::shared_ptr<TaskDescriptor> get_task_throw(u64 pid)
+inline TaskDescriptor *get_task_throw(u64 pid)
 {
     Auto_Lock_Scope scope_lock(tasks_map_lock);
 
-    try {
-        const auto &t = tasks_map.at(pid);
+    auto ptr = tasks_map.find(pid);
 
-        const auto ptr = t.lock();
-
-        if (!ptr) {
-            throw Kern_Exception(-ESRCH, "Requested process does not exist");
-        }
-
-        return ptr;
-    } catch (const std::out_of_range &) {
+    if (!ptr) {
         throw Kern_Exception(-ESRCH, "Requested process does not exist");
     }
+
+    return ptr;
 }

@@ -70,7 +70,7 @@ extern "C" void print_stack_trace() { print_stack_trace_fp(); }
 
 void print_stack_trace(Logger &logger) { print_stack_trace_fp(); }
 
-void print_registers(const klib::shared_ptr<TaskDescriptor> &task, Logger &logger)
+void print_registers(TaskDescriptor *task, Logger &logger)
 {
     logger.printf("Task %i registers:\n", task->task_id);
     logger.printf("  ra 0x%x\n", task->regs.ra);
@@ -134,7 +134,7 @@ void page_fault(u64 virt_addr, u64 scause)
         Auto_Lock_Scope lock(page_table->lock);
 
         auto &regions = page_table->paging_regions;
-        auto it = regions.get_smaller_or_equal(page);
+        auto it       = regions.get_smaller_or_equal(page);
         if (it != regions.end() and it->is_in_range(virt_addr)) {
             // serial_logger.printf("Pagefault in region %s\n",
             // it->name.c_str());
@@ -210,8 +210,7 @@ void illegal_instruction(u32 instruction)
 
             if (get_fp_state() != FloatingPointState::Disabled) // FP is enabled but instruction
                                                                 // is illegal -> not supported
-                throw Kern_Exception(-ENOTSUP,
-                                     "Floating point width not supported");
+                throw Kern_Exception(-ENOTSUP, "Floating point width not supported");
 
             restore_fp_state(task.get());
         } else {

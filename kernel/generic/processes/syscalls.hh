@@ -213,37 +213,37 @@ void syscall_unmap_range(u64 task_id, u64 addr_start, u64 size, u64, u64, u64);
 
 void syscall_get_page_address(u64 task_id, u64 page_base, u64 flags, u64, u64, u64);
 
-inline u64 &syscall_arg1(const klib::shared_ptr<TaskDescriptor> &task)
+inline u64 &syscall_arg1(TaskDescriptor *task)
 {
     return task->regs.syscall_arg1();
 }
 
-inline u64 &syscall_arg2(const klib::shared_ptr<TaskDescriptor> &task)
+inline u64 &syscall_arg2(TaskDescriptor *task)
 {
     return task->regs.syscall_arg2();
 }
 
-inline u64 &syscall_arg3(const klib::shared_ptr<TaskDescriptor> &task)
+inline u64 &syscall_arg3(TaskDescriptor *task)
 {
     return task->regs.syscall_arg3();
 }
 
-inline u64 &syscall_arg4(const klib::shared_ptr<TaskDescriptor> &task)
+inline u64 &syscall_arg4(TaskDescriptor *task)
 {
     return task->regs.syscall_arg4();
 }
 
-inline u64 &syscall_arg5(const klib::shared_ptr<TaskDescriptor> &task)
+inline u64 &syscall_arg5(TaskDescriptor *task)
 {
     return task->regs.syscall_arg5();
 }
 
-inline u64 &syscall_ret_low(const klib::shared_ptr<TaskDescriptor> &task)
+inline u64 &syscall_ret_low(TaskDescriptor *task)
 {
     return task->regs.syscall_retval_low();
 }
 
-inline u64 &syscall_ret_high(const klib::shared_ptr<TaskDescriptor> &task)
+inline u64 &syscall_ret_high(TaskDescriptor *task)
 {
     return task->regs.syscall_retval_high();
 }

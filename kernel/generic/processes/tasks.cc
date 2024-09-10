@@ -31,6 +31,7 @@
 #include "idle.hh"
 
 #include <assert.h>
+#include <cstddef>
 #include <errno.h>
 #include <exceptions.hh>
 #include <kern_logger/kern_logger.hh>
@@ -41,11 +42,11 @@
 #include <sched/defs.hh>
 #include <sched/sched.hh>
 
-klib::shared_ptr<TaskDescriptor>
-    TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel level)
+TaskDescriptor *TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel level)
 {
     // Create the structure
-    klib::shared_ptr<TaskDescriptor> n = TaskDescriptor::create();
+    TaskDescriptor *n = new TaskDescriptor();
+    // This throws on failure
 
 #ifdef __x86_64__
     // Assign cs and ss
@@ -68,7 +69,7 @@ klib::shared_ptr<TaskDescriptor>
 
     // Add to the map of processes and to uninit list
     Auto_Lock_Scope l(tasks_map_lock);
-    tasks_map.insert({n->task_id, n});
+    tasks_map.insert(n);
 
     Auto_Lock_Scope uninit_lock(uninit.lock);
     uninit.push_back(n);
@@ -102,8 +103,9 @@ extern klib::shared_ptr<Arch_Page_Table> idle_page_table;
 
 void init_idle(CPU_Info *cpu_str)
 {
+    // This would not work outside of kernel initialization
     try {
-        klib::shared_ptr<TaskDescriptor> i =
+        klib::unique_ptr<TaskDescriptor> i =
             TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel::Kernel);
         i->atomic_register_page_table(idle_page_table);
 
@@ -112,24 +114,23 @@ void init_idle(CPU_Info *cpu_str)
         sched_queue *idle_parent_queue = i->parent_queue;
         if (idle_parent_queue != nullptr) {
             Auto_Lock_Scope q_lock(idle_parent_queue->lock);
-
-            idle_parent_queue->erase(i);
+            idle_parent_queue->erase(i.get());
         }
 
-        cpu_str->idle_task = i;
+        cpu_str->idle_task = i.release();
 
         // Idle has the same stack pointer as the kernel
         // Also, one idle is created per CPU
-        i->regs.thread_pointer() = (u64)cpu_str;
+        cpu_str->idle_task->regs.thread_pointer() = (u64)cpu_str;
 
         // Init stack
-        i->regs.stack_pointer() = (u64)cpu_str->idle_stack.get_stack_top();
+        cpu_str->idle_task->regs.stack_pointer() = (u64)cpu_str->idle_stack.get_stack_top();
 
-        i->regs.program_counter() = (u64)&idle;
-        i->type                   = TaskDescriptor::Type::Idle;
+        cpu_str->idle_task->regs.program_counter() = (u64)&idle;
+        cpu_str->idle_task->type                   = TaskDescriptor::Type::Idle;
 
-        i->priority = idle_priority;
-        i->name     = "idle";
+        cpu_str->idle_task->priority = idle_priority;
+        cpu_str->idle_task->name     = "idle";
     } catch (const Kern_Exception &e) {
         t_print_bochs("Error creating idle process: %i (%s)\n", e.err_code, e.err_message);
         throw e;
@@ -140,25 +141,23 @@ bool TaskDescriptor::is_uninited() const { return status == TaskStatus::TASK_UNI
 
 void TaskDescriptor::init()
 {
-    klib::shared_ptr<TaskDescriptor> task = weak_self.lock();
-    task->parent_queue->atomic_erase(task);
+    // TODO: This function has a race condition
+    parent_queue->atomic_erase(this);
 
-    klib::shared_ptr<TaskDescriptor> current_task = get_cpu_struct()->current_task;
-    if (current_task->priority > task->priority) {
+    TaskDescriptor *current_task = get_cpu_struct()->current_task;
+    if (current_task->priority > priority) {
         Auto_Lock_Scope scope_l(current_task->sched_lock);
 
-        task->switch_to();
+        switch_to();
 
         push_ready(current_task);
     } else {
-        push_ready(task);
+        push_ready(this);
     }
 }
 
 void TaskDescriptor::atomic_kill()
 {
-    klib::shared_ptr<TaskDescriptor> self = weak_self.lock();
-
     bool reschedule = false;
 
     {
@@ -169,11 +168,16 @@ void TaskDescriptor::atomic_kill()
             unblock();
         else
             reschedule = true;
+
+        if (page_table) {
+            Auto_Lock_Scope page_table_lock(page_table->lock);
+            page_table->owner_tasks.erase(this);
+        }
     }
 
     bool cont = true;
     while (cont) {
-        klib::shared_ptr<TaskDescriptor> t;
+        TaskDescriptor *t;
         {
             Auto_Lock_Scope scope_lock(waiting_to_pause.lock);
             t = waiting_to_pause.front();
@@ -206,7 +210,7 @@ void TaskDescriptor::create_new_page_table()
     klib::shared_ptr<Arch_Page_Table> table = Arch_Page_Table::create_empty();
 
     Auto_Lock_Scope page_table_lock(table->lock);
-    table->owner_tasks.insert(weak_self);
+    table->owner_tasks.insert(this);
     page_table = table;
 }
 
@@ -219,7 +223,7 @@ void TaskDescriptor::register_page_table(klib::shared_ptr<Arch_Page_Table> table
         throw Kern_Exception(-EEXIST, "Process already has a page table");
 
     Auto_Lock_Scope page_table_lock(table->lock);
-    table->owner_tasks.insert(weak_self);
+    table->owner_tasks.insert(this);
     page_table = table;
 }
 
@@ -406,10 +410,25 @@ void TaskDescriptor::cleanup()
 {
     cleaned_up = true;
 
+    Auto_Lock_Scope scope_lock(tasks_map_lock);
+    tasks_map.erase(this);
+
     auto c = get_cpu_struct();
     for (auto interr: interrupt_handlers) {
         c->int_handlers.remove_handler(interr->interrupt_number);
     }
+
+    {
+        Auto_Lock_Scope scope_lock(messaging_lock);
+        owned_ports.clear();
+    }
+
+    rcu_head.rcu_func = [](void *self, bool) {
+        TaskDescriptor *t = reinterpret_cast<TaskDescriptor *>(reinterpret_cast<char *>(self) -
+                                                               offsetof(TaskDescriptor, rcu_head));
+        delete t;
+    };
+    get_cpu_struct()->heap_rcu_cpu.push(&rcu_head);
 }
 
 TaskDescriptor::TaskID TaskDescriptor::get_new_task_id()
@@ -438,8 +457,10 @@ TaskDescriptor::~TaskDescriptor() noexcept
 {
     assert(status == TaskStatus::TASK_UNINIT or (status == TaskStatus::TASK_DYING and cleaned_up));
 
-    Auto_Lock_Scope scope_lock(tasks_map_lock);
-    tasks_map.erase(task_id);
+    if (status == TaskStatus::TASK_UNINIT) {
+        Auto_Lock_Scope scope_lock(tasks_map_lock);
+        tasks_map.erase(this);
+    }
 }
 
 void TaskDescriptor::interrupt_restart_syscall()

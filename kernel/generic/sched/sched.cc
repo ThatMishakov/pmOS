@@ -60,7 +60,7 @@ size_t get_cpu_count() noexcept { return cpus.size(); }
 ReturnStr<u64> block_current_task(const klib::shared_ptr<Generic_Port> &ptr)
 {
     // TODO: This function has a strange return value
-    const klib::shared_ptr<TaskDescriptor> &task = get_cpu_struct()->current_task;
+    TaskDescriptor *task = get_cpu_struct()->current_task;
 
     // t_print_bochs("Blocking %i (%s) by port\n", task->pid, task->name.c_str());
 
@@ -99,18 +99,16 @@ void TaskDescriptor::atomic_block_by_page(u64 page, sched_queue *blocked_ptr)
     status          = TaskStatus::TASK_BLOCKED;
     page_blocked_by = page;
 
-    klib::shared_ptr<TaskDescriptor> self = weak_self.lock();
-
-    if (get_cpu_struct()->current_task == self) {
+    if (get_cpu_struct()->current_task == this) {
         find_new_process();
     } else if (parent_queue) {
         Auto_Lock_Scope scope_l(parent_queue->lock);
-        parent_queue->erase(self);
+        parent_queue->erase(this);
     }
 
     {
         Auto_Lock_Scope scope_l(blocked_ptr->lock);
-        blocked_ptr->push_back(self);
+        blocked_ptr->push_back(this);
     }
 }
 
@@ -167,7 +165,7 @@ void TaskDescriptor::switch_to()
         status = TaskStatus::TASK_RUNNING;
 
     c->current_task_priority = priority;
-    c->current_task          = weak_self.lock();
+    c->current_task          = this;
 
     this->after_task_switch();
 
@@ -232,15 +230,13 @@ void TaskDescriptor::atomic_try_unblock()
 
 void TaskDescriptor::unblock() noexcept
 {
-    const auto self = weak_self.lock();
-
     auto *const p_queue = parent_queue;
-    p_queue->atomic_erase(self);
+    p_queue->atomic_erase(this);
 
     auto &local_cpu = *get_cpu_struct();
 
     if (cpu_affinity == 0 or ((cpu_affinity - 1) == local_cpu.cpu_id)) {
-        klib::shared_ptr<TaskDescriptor> current_task = get_cpu_struct()->current_task;
+        TaskDescriptor *current_task = get_cpu_struct()->current_task;
 
         if (current_task->priority > priority) {
             if (status == TaskStatus::TASK_DYING) {
@@ -255,13 +251,13 @@ void TaskDescriptor::unblock() noexcept
 
             push_ready(current_task);
         } else {
-            push_ready(self);
+            push_ready(this);
         }
     } else {
-        push_ready(self);
+        push_ready(this);
 
         // TODO: If other CPU is switching to a lower priority task, it might miss the newly pushed
-        // one and not execute it immediately Not a big deal for now, but better approach is
+        // one and not execute it immediately. Not a big deal for now, but better approach is
         // probably needed...
         auto remote_cpu = cpus[cpu_affinity - 1];
         assert(remote_cpu->cpu_id == cpu_affinity - 1);
@@ -281,7 +277,7 @@ void TaskDescriptor::unblock() noexcept
 //     return 0;
 // }
 
-void push_ready(const klib::shared_ptr<TaskDescriptor> &p)
+void push_ready(TaskDescriptor *p)
 {
     if (p->status != TaskStatus::TASK_DYING)
         // Carry dying status, set to ready otherwise
@@ -315,8 +311,8 @@ void sched_periodic()
     // TODO: Replace with more sophisticated algorithm. Will definitely need to be redone once we
     // have multi-cpu support
 
-    klib::shared_ptr<TaskDescriptor> current = c->current_task;
-    klib::shared_ptr<TaskDescriptor> next    = c->atomic_pick_highest_priority(current->priority);
+    TaskDescriptor *current = c->current_task;
+    TaskDescriptor *next    = c->atomic_pick_highest_priority(current->priority);
 
     if (next) {
         Auto_Lock_Scope_Double lock(current->sched_lock, next->sched_lock);
@@ -342,8 +338,8 @@ void sched_periodic()
 
 void start_scheduler()
 {
-    CPU_Info *s                               = get_cpu_struct();
-    const klib::shared_ptr<TaskDescriptor> &t = s->current_task;
+    CPU_Info *s       = get_cpu_struct();
+    TaskDescriptor *t = s->current_task;
 
     start_timer(assign_quantum_on_priority(t->priority));
 }
@@ -389,7 +385,7 @@ void reschedule()
 
             bool cont = true;
             while (cont) {
-                klib::shared_ptr<TaskDescriptor> t;
+                TaskDescriptor *t;
                 {
                     // TODO: This is potentially a race condition
                     Auto_Lock_Scope scope_lock(current_task->waiting_to_pause.lock);
@@ -405,13 +401,13 @@ void reschedule()
     }
 }
 
-klib::shared_ptr<TaskDescriptor> CPU_Info::atomic_pick_highest_priority(priority_t min)
+TaskDescriptor *CPU_Info::atomic_pick_highest_priority(priority_t min)
 {
     const priority_t max_priority = sched_queues.size() - 1;
     const priority_t to_priority  = min > max_priority ? max_priority : min;
 
     for (priority_t i = 0; i <= to_priority; ++i) {
-        klib::shared_ptr<TaskDescriptor> task;
+        TaskDescriptor *task;
         {
             auto &queue = sched_queues[i];
 
@@ -420,7 +416,7 @@ klib::shared_ptr<TaskDescriptor> CPU_Info::atomic_pick_highest_priority(priority
             task = queue.pop_front();
         }
 
-        if (task != klib::shared_ptr<TaskDescriptor>(nullptr))
+        if (task)
             return task;
 
         {
@@ -431,7 +427,7 @@ klib::shared_ptr<TaskDescriptor> CPU_Info::atomic_pick_highest_priority(priority
             task = queue.pop_front();
         }
 
-        if (task != klib::shared_ptr<TaskDescriptor>(nullptr))
+        if (task)
             return task;
     }
 
@@ -442,7 +438,7 @@ void find_new_process()
 {
     CPU_Info &cpu_str = *get_cpu_struct();
 
-    klib::shared_ptr<TaskDescriptor> next_task = cpu_str.atomic_pick_highest_priority();
+    TaskDescriptor *next_task = cpu_str.atomic_pick_highest_priority();
 
     while (next_task and next_task->status == TaskStatus::TASK_DYING) {
         next_task->cleanup();
@@ -470,7 +466,7 @@ quantum_t assign_quantum_on_priority(priority_t priority)
     return 100;
 }
 
-klib::shared_ptr<TaskDescriptor> CPU_Info::atomic_get_front_priority(priority_t priority)
+TaskDescriptor *CPU_Info::atomic_get_front_priority(priority_t priority)
 {
     const priority_t priority_lim = sched_queues.size();
 

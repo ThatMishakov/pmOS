@@ -57,19 +57,19 @@ public:
      * The function does not check if the task is in other queue. Caller should first make sure it
      * isn't to not corrupt other queue's state.
      */
-    void push_front(const klib::shared_ptr<TaskDescriptor> &desc) noexcept;
+    void push_front(TaskDescriptor *desc) noexcept;
 
     /**
      * Same as push_front(), except that the task is pushed to the back of the queue.
      *
      * @see push_front()
      */
-    void push_back(const klib::shared_ptr<TaskDescriptor> &desc) noexcept;
+    void push_back(TaskDescriptor *desc) noexcept;
 
     /**
      * Erases the descriptor from the queue. Set's descriptor's *parent_queue* to nullptr.
      */
-    void erase(const klib::shared_ptr<TaskDescriptor> &desc) noexcept;
+    void erase(TaskDescriptor *desc) noexcept;
 
     /**
      * @brief Erases *desc* from the given queue
@@ -79,10 +79,10 @@ public:
      * @param desc Task to be erased from the queue. Must be valid and pertain to the queue. Does
      * not do errors checking
      */
-    void atomic_erase(const klib::shared_ptr<TaskDescriptor> &desc) noexcept;
+    void atomic_erase(TaskDescriptor *desc) noexcept;
 
     // Returns front task or null pointer if empty
-    klib::shared_ptr<TaskDescriptor> pop_front() noexcept;
+    TaskDescriptor * pop_front() noexcept;
 
     /// Returns true if the queue is empty
     bool is_empty() noexcept;
@@ -97,11 +97,11 @@ public:
     virtual ~sched_queue() noexcept;
 
     /// Returns the first task in the queue
-    klib::shared_ptr<TaskDescriptor> front() const noexcept;
+    TaskDescriptor * front() const noexcept;
 
 protected:
-    klib::shared_ptr<TaskDescriptor> first;
-    klib::shared_ptr<TaskDescriptor> last;
+    TaskDescriptor * first = nullptr;
+    TaskDescriptor * last = nullptr;
 
     /// Delete copy constructor. Copying of the queue is most likely an error
     sched_queue(const sched_queue &) = delete;

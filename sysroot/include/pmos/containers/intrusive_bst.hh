@@ -1,6 +1,5 @@
 #pragma once
 #include <cstdint>
-//#include <lib/stdexcept.hh>
 
 namespace detail
 {
@@ -85,21 +84,22 @@ public:
 
         void insert(T *node);
         void erase(T *node);
-        void erase(RBTreeIterator it);
+        RBTreeIterator erase(RBTreeIterator it);
+
+        RBTreeHead() noexcept = default;
+        RBTreeHead(const RBTreeHead &) = delete;
+        RBTreeHead &operator=(const RBTreeHead &) = delete;
+
+        RBTreeHead(RBTreeHead &&) noexcept = default;
+        RBTreeHead &operator=(RBTreeHead &&) noexcept = default;
+
+        ~RBTreeHead() noexcept = default;
 
         T &at(const auto &value);
         const T &at(const auto &value) const;
     };
 
     static RBTreeIterator self(T &) noexcept;
-
-    // Methods for the red-black tree
-    static T *find(T *root, const T &value);
-    static T *find(T *root, const auto &value);
-
-    static void insert(T *&root, T *node);
-    static void remove(T *&root, T *node);
-
 private:
     static void fix_insert(T *&root, T *node);
     static void fix_remove(T *&root, T *node, T *parent);
@@ -107,6 +107,13 @@ private:
 
     static void rotate_left(T *&root, T *node);
     static void rotate_right(T *&root, T *node);
+
+    // Methods for the red-black tree
+    static T *find(T *root, const T &value);
+    static T *find(T *root, const auto &value);
+
+    static void insert(T *&root, T *node);
+    static void remove(T *&root, T *node);
 
     RedBlackTree() = delete;
 };
@@ -473,9 +480,12 @@ void RedBlackTree<T, bst_head, Compare>::RBTreeHead::erase(T *node)
 }
 
 template<typename T, RBTreeNode<T> T::*bst_head, class Compare>
-void RedBlackTree<T, bst_head, Compare>::RBTreeHead::erase(RBTreeIterator it)
+RedBlackTree<T, bst_head, Compare>::RBTreeIterator RedBlackTree<T, bst_head, Compare>::RBTreeHead::erase(RBTreeIterator it)
 {
+    auto next = it;
+    if (next) next++;
     RedBlackTree<T, bst_head, Compare>::remove(root, it.node);
+    return next;
 }
 
 template<typename T, RBTreeNode<T> T::*bst_head, class Compare>
@@ -626,15 +636,15 @@ RedBlackTree<T, bst_head, Compare>::RBTreeIterator
     return RBTreeIterator {result};
 }
 
-template<typename T, RBTreeNode<T> T::*bst_head, class Compare>
-T &RedBlackTree<T, bst_head, Compare>::RBTreeHead::at(const auto &value)
-{
-    auto result = find(value);
-    if (result == end()) {
-        throw std::out_of_range("Value not found in the tree");
-    }
+// template<typename T, RBTreeNode<T> T::*bst_head, class Compare>
+// T &RedBlackTree<T, bst_head, Compare>::RBTreeHead::at(const auto &value)
+// {
+//     auto result = find(value);
+//     if (result == end()) {
+//         throw std::out_of_range("Value not found in the tree");
+//     }
 
-    return *result;
-}
+//     return *result;
+// }
 
 } // namespace pmos::containers

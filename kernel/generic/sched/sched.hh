@@ -30,6 +30,7 @@
 #include "defs.hh"
 #include "sched_queue.hh"
 
+#include <interrupts/interrupt_handler.hh>
 #include <lib/array.hh>
 #include <lib/memory.hh>
 #include <lib/splay_tree_map.hh>
@@ -40,8 +41,6 @@
 #include <messaging/messaging.hh>
 #include <processes/tasks.hh>
 #include <types.hh>
-#include <interrupts/interrupt_handler.hh>
-
 
 #ifdef __x86_64__
     #include <interrupts/gdt.hh>
@@ -53,7 +52,7 @@
 
 // Checks the mask and unblocks the task if needed
 // This function needs to be axed
-inline bool unblock_if_needed(const klib::shared_ptr<TaskDescriptor> &p,
+inline bool unblock_if_needed(TaskDescriptor *p,
                               const klib::shared_ptr<Generic_Port> &compare_blocked_by)
 {
     return p->atomic_unblock_if_needed(compare_blocked_by);
@@ -72,17 +71,17 @@ extern RCU paging_rcu;
 extern RCU heap_rcu;
 
 struct CPU_Info {
-    CPU_Info *self                                = this;                               // 0
-    u64 *kernel_stack_top                         = nullptr;                            // 8
-    u64 temp_var                                  = 0;                                  // 16
-    u64 nested_level                              = 1;                                  // 24
-    klib::shared_ptr<TaskDescriptor> current_task = klib::shared_ptr<TaskDescriptor>(); // 32
-    u64 jumpto_from                               = 0;                                  // 48
-    u64 jumpto_to                                 = 0;                                  // 56
-    Task_Regs nested_int_regs;                                                          // 64
+    CPU_Info *self               = this;    // 0
+    u64 *kernel_stack_top        = nullptr; // 8
+    u64 temp_var                 = 0;       // 16
+    u64 nested_level             = 1;       // 24
+    TaskDescriptor *current_task = nullptr; // 32
+    TaskDescriptor *idle_task    = nullptr; // 40
+    u64 jumpto_from              = 0;       // 48
+    u64 jumpto_to                = 0;       // 56
+    Task_Regs nested_int_regs;              // 64
 
     klib::array<sched_queue, sched_queues_levels> sched_queues;
-    klib::shared_ptr<TaskDescriptor> idle_task = klib::shared_ptr<TaskDescriptor>();
 
     u64 pagefault_cr2   = 0;
     u64 pagefault_error = 0;
@@ -102,9 +101,8 @@ struct CPU_Info {
     u32 timer_val        = 0;
 #endif
 
-    klib::shared_ptr<TaskDescriptor>
-        atomic_pick_highest_priority(priority_t min = sched_queues_levels - 1);
-    klib::shared_ptr<TaskDescriptor> atomic_get_front_priority(priority_t);
+    TaskDescriptor *atomic_pick_highest_priority(priority_t min = sched_queues_levels - 1);
+    TaskDescriptor *atomic_get_front_priority(priority_t);
 
 // Temporary memory mapper; This is arch specific
 #ifdef __x86_64__
@@ -139,12 +137,12 @@ struct CPU_Info {
     FloatingPointState last_fp_state = FloatingPointState::Disabled;
 #endif
 
-// ISRs in userspace
+    // ISRs in userspace
     Interrupt_Handler_Table int_handlers;
 
     static constexpr int IPI_RESCHEDULE = 0x1;
     static constexpr int IPI_TLB_FLUSH  = 0x2;
-    u32 ipi_mask = 0;
+    u32 ipi_mask                        = 0;
 
     // IMHO this is better than protecting current_task pointer with spinlock
     priority_t current_task_priority = sched_queues_levels;
@@ -161,10 +159,7 @@ struct CPU_Info {
     u64 ticks_after_ms(u64 ms);
     u64 ticks_after_ns(u64 ns);
 
-    inline bool is_bootstap_cpu() const noexcept
-    {
-        return cpu_id == 0;
-    }
+    inline bool is_bootstap_cpu() const noexcept { return cpu_id == 0; }
 };
 
 extern u64 ticks_since_bootup;
@@ -181,18 +176,15 @@ extern klib::vector<CPU_Info *> cpus;
 
 quantum_t assign_quantum_on_priority(priority_t);
 
-u32 calculate_timer_ticks(const klib::shared_ptr<TaskDescriptor> &task);
+u32 calculate_timer_ticks(TaskDescriptor *task);
 
 // static CPU_Info* const GSRELATIVE per_cpu = 0; // clang ignores GSRELATIVE for no apparent reason
 extern "C" CPU_Info *get_cpu_struct();
 
-inline klib::shared_ptr<TaskDescriptor> get_current_task()
-{
-    return get_cpu_struct()->current_task;
-}
+inline TaskDescriptor *get_current_task() { return get_cpu_struct()->current_task; }
 
 // Adds the task to the appropriate ready queue
-void push_ready(const klib::shared_ptr<TaskDescriptor> &p);
+void push_ready(TaskDescriptor *p);
 
 // Initializes scheduling structures during the kernel initialization
 void init_scheduling(u64 boot_cpu_id);
@@ -210,7 +202,7 @@ void sched_periodic();
 void start_scheduler();
 
 // Pushes current processos to the back of sheduling queues
-void evict(const klib::shared_ptr<TaskDescriptor> &);
+void evict(const TaskDescriptor *);
 
 // Reschedules the tasks
 extern "C" void reschedule();

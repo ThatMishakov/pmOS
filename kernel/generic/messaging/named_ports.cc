@@ -28,22 +28,19 @@
 
 #include "named_ports.hh"
 
+#include <kern_logger/kern_logger.hh>
 #include <kernel/block.h>
 #include <pmos/ipc.h>
 #include <processes/syscalls.hh>
-#include <kern_logger/kern_logger.hh>
 
 Named_Port_Storage global_named_ports;
 
 void Notify_Task::do_action(const klib::shared_ptr<Port> &port,
                             [[maybe_unused]] const klib::string &name)
 {
+    // TODO: This is probably a race condition
     if (not did_action) {
-        klib::shared_ptr<TaskDescriptor> ptr = task.lock();
-
-        if (ptr) {
-            unblock_if_needed(ptr, parent_port.lock());
-        }
+        unblock_if_needed(task, parent_port.lock());
         did_action = true;
     }
 }

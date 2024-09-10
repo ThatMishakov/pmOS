@@ -75,14 +75,14 @@ public:
      *
      * @param task Task to register
      */
-    void atomic_register_task(klib::shared_ptr<TaskDescriptor> task);
+    void atomic_register_task(TaskDescriptor * task);
 
     /**
      * @brief Removes the task from the group, throwing if not in the group
      *
      * @param task Task to remove
      */
-    void atomic_remove_task(const klib::shared_ptr<TaskDescriptor> &task);
+    void atomic_remove_task(TaskDescriptor *task);
 
     /**
      * @brief Removes a task from the group. If the task is not in the group, does nothing
@@ -122,7 +122,7 @@ public:
 private:
     id_type id = __atomic_fetch_add(&next_id, 1, __ATOMIC_SEQ_CST);
 
-    klib::splay_tree_map<u64, klib::weak_ptr<TaskDescriptor>> tasks;
+    klib::splay_tree_map<u64, TaskDescriptor*> tasks;
     mutable Spinlock tasks_lock;
 
     static inline klib::splay_tree_map<u64, klib::weak_ptr<TaskGroup>> global_map;

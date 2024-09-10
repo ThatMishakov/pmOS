@@ -1,1 +1,1 @@
-set(PLATFORM_C_FLAGS "-mno-red-zone -mno-80387 -msoft-float -mno-fp-ret-in-387 -mgeneral-regs-only")
+set(PLATFORM_C_FLAGS "-mno-red-zone -msoft-float -mno-sse")

@@ -10,7 +10,7 @@ void Interrupt_Handler_Table::add_handler(u64 interrupt_number, const klib::shar
 {
     auto c = get_cpu_struct();
     assert(this == &c->int_handlers);
-    auto owner = port->owner.lock();
+    auto owner = port->owner;
     if (!owner) {
         throw Kern_Exception(-EIDRM, "Port orphaned");
     }

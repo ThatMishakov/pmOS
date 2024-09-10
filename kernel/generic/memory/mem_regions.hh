@@ -27,7 +27,7 @@
  */
 
 #pragma once
-#include "intrusive_bst.hh"
+#include "pmos/containers/intrusive_bst.hh"
 #include "pmm.hh"
 #include "rcu.hh"
 
@@ -58,7 +58,7 @@ struct Page_Table_Argumments;
 struct Generic_Mem_Region {
     virtual ~Generic_Mem_Region() = default;
 
-    RBTreeNode<Generic_Mem_Region> bst_head;
+    pmos::containers::RBTreeNode<Generic_Mem_Region> bst_head;
 
     union {
         RCU_Head rcu_head;
@@ -309,7 +309,7 @@ struct Mem_Object_Reference final: Generic_Mem_Region {
     /// Indicates whether the pages should be copied on access
     bool cow = false;
 
-    RBTreeNode<Mem_Object_Reference> object_bst_head;
+    pmos::containers::RBTreeNode<Mem_Object_Reference> object_bst_head;
 
     Mem_Object_Reference(u64 start_addr, u64 size, klib::string name, Page_Table *owner, u8 access,
                          klib::shared_ptr<Mem_Object> references, u64 object_offset_bytes,
