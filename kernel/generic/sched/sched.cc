@@ -57,7 +57,7 @@ klib::vector<CPU_Info *> cpus;
 
 size_t get_cpu_count() noexcept { return cpus.size(); }
 
-ReturnStr<u64> block_current_task(const klib::shared_ptr<Generic_Port> &ptr)
+ReturnStr<u64> block_current_task(Generic_Port *ptr)
 {
     // TODO: This function has a strange return value
     TaskDescriptor *task = get_cpu_struct()->current_task;
@@ -119,7 +119,7 @@ void service_timer_ports()
     Auto_Lock_Scope l(c->timer_lock);
 
     for (auto t = c->timer_queue.begin(); t != c->timer_queue.end() and t->first < current_time;) {
-        klib::shared_ptr<Port> port = t->second.lock();
+        auto port = Port::atomic_get_port(t->second);
         if (port) {
             IPC_Timer_Reply r = {
                 IPC_Timer_Reply_NUM,
@@ -132,11 +132,11 @@ void service_timer_ports()
     }
 }
 
-void CPU_Info::atomic_timer_queue_push(u64 fire_on_core_ticks, const klib::shared_ptr<Port> &port)
+void CPU_Info::atomic_timer_queue_push(u64 fire_on_core_ticks, Port *port)
 {
     Auto_Lock_Scope l(timer_lock);
 
-    timer_queue[fire_on_core_ticks] = port;
+    timer_queue[fire_on_core_ticks] = port->portno;
 }
 
 extern klib::shared_ptr<Arch_Page_Table> idle_page_table;
@@ -187,7 +187,7 @@ bool TaskDescriptor::atomic_try_unblock_by_page(u64 page)
     return true;
 }
 
-bool TaskDescriptor::atomic_unblock_if_needed(const klib::shared_ptr<Generic_Port> &ptr)
+bool TaskDescriptor::atomic_unblock_if_needed(Generic_Port *ptr)
 {
     bool unblocked = false;
     Auto_Lock_Scope scope_lock(sched_lock);
@@ -198,7 +198,7 @@ bool TaskDescriptor::atomic_unblock_if_needed(const klib::shared_ptr<Generic_Por
     if (page_blocked_by != 0)
         return unblocked;
 
-    if (ptr and blocked_by.lock() == ptr) {
+    if (ptr and blocked_by == ptr) {
         unblocked = true;
 
         unblock();

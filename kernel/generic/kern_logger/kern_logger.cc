@@ -156,9 +156,14 @@ void Buffered_Logger::log_nolock(const char *c, size_t size)
 {
     constexpr size_t buff_size = 508;
 
-    klib::shared_ptr<Port> ptr;
-
-    if (ptr = messaging_port.lock()) {
+    Port* ptr = Port::atomic_get_port(messaging_port_id);
+    bool alive = false;
+    if (ptr) {
+        Auto_Lock_Scope port_lock(ptr->lock);
+        alive = ptr->alive;
+        // Check this since port might linger after getting deleted
+    }
+    if (alive) {
         struct Msg {
             u32 type = 0x40;
             char buff[buff_size];
@@ -177,11 +182,11 @@ void Buffered_Logger::log_nolock(const char *c, size_t size)
     }
 }
 
-void Buffered_Logger::set_port(const klib::shared_ptr<Port> &port, uint32_t /* flags */)
+void Buffered_Logger::set_port(Port *port, uint32_t /* flags */)
 {
     Auto_Lock_Scope scope_lock(logger_lock);
 
-    messaging_port = port;
+    messaging_port_id = port->portno;
 
     Auto_Lock_Scope port_lock(port->lock);
 

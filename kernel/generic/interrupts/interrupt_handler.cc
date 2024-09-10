@@ -1,23 +1,16 @@
 #include "interrupt_handler.hh"
 
 #include <assert.h>
-#include <exceptions.hh>
-#include <sched/sched.hh>
 #include <errno.h>
-
+#include <exceptions.hh>
 #include <kern_logger/kern_logger.hh>
-void Interrupt_Handler_Table::add_handler(u64 interrupt_number, const klib::shared_ptr<Port> &port)
+#include <pmos/utility/scope_guard.hh>
+#include <sched/sched.hh>
+void Interrupt_Handler_Table::add_handler(u64 interrupt_number, Port *port)
 {
     auto c = get_cpu_struct();
     assert(this == &c->int_handlers);
     auto owner = port->owner;
-    if (!owner) {
-        throw Kern_Exception(-EIDRM, "Port orphaned");
-    }
-
-    if (owner->cpu_affinity != c->cpu_id + 1) {
-        throw Kern_Exception(-EINVAL, "Task not bound to CPU");
-    }
 
     // Check that there isn't a handler already
     if (get_handler(interrupt_number)) {
@@ -37,15 +30,28 @@ void Interrupt_Handler_Table::add_handler(u64 interrupt_number, const klib::shar
 
     auto handler_ptr = handler.get();
 
-    // Register the handler with the owner
-    owner->interrupt_handlers.insert(handler_ptr);
+    {
+        Auto_Lock_Scope lock(owner->sched_lock);
+        if (owner->status == TaskStatus::TASK_DYING || owner->status == TaskStatus::TASK_DEAD) {
+            throw Kern_Exception(-ESRCH, "Task is dying or dead");
+        }
 
-    try {
-        handlers.push_back(nullptr);
-    } catch (...) {
-        owner->interrupt_handlers.erase(handler_ptr);
-        throw;
+        if (owner->cpu_affinity != c->cpu_id + 1) {
+            throw Kern_Exception(-EINVAL, "Task not bound to CPU");
+        }
+
+        // Register the handler with the owner
+        auto result = owner->interrupt_handlers.insert_noexcept(handler_ptr);
+        if (!result.first)
+            throw Kern_Exception(-ENOMEM, "not enough memory to insert the interrupt handler");
     }
+
+    auto on_error = pmos::utility::make_scope_guard([&] {
+        Auto_Lock_Scope lock(owner->sched_lock);
+        owner->interrupt_handlers.erase(handler_ptr);
+    });
+
+    handlers.push_back(nullptr);
 
     size_t i = handlers.size() - 1;
     for (; i > 0; i--) {
@@ -57,6 +63,8 @@ void Interrupt_Handler_Table::add_handler(u64 interrupt_number, const klib::shar
     }
 
     handlers[i] = klib::move(handler);
+
+    on_error.dismiss();
 
     // Enable the interrupt
     interrupt_enable(interrupt_number);

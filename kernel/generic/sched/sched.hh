@@ -53,13 +53,13 @@
 // Checks the mask and unblocks the task if needed
 // This function needs to be axed
 inline bool unblock_if_needed(TaskDescriptor *p,
-                              const klib::shared_ptr<Generic_Port> &compare_blocked_by)
+                              Generic_Port *compare_blocked_by)
 {
     return p->atomic_unblock_if_needed(compare_blocked_by);
 }
 
 // Blocks current task, setting blocked_by to *ptr*.
-ReturnStr<u64> block_current_task(const klib::shared_ptr<Generic_Port> &ptr);
+ReturnStr<u64> block_current_task(Generic_Port *ptr);
 
 extern sched_queue blocked;
 extern sched_queue uninit;
@@ -149,11 +149,11 @@ struct CPU_Info {
 
     void ipi_reschedule(); // nothrow ?
 
-    klib::splay_tree_map<u64 /* next clock tick */, klib::weak_ptr<Port>> timer_queue;
+    klib::splay_tree_map<u64 /* next clock tick */, u64 /* port id */> timer_queue;
     Spinlock timer_lock;
 
     // Adds a new timer to the timer queue
-    void atomic_timer_queue_push(u64 fire_on_core_ticks, const klib::shared_ptr<Port> &);
+    void atomic_timer_queue_push(u64 fire_on_core_ticks, Port *);
 
     // Returns the number of ticks after the given number of milliseconds
     u64 ticks_after_ms(u64 ms);

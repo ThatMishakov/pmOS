@@ -170,7 +170,8 @@ pmm::Page_Descriptor Mem_Object::request_page(u64 offset)
 
         return pmm::Page_Descriptor::none();
     } else {
-        auto pager_port = pager.lock();
+        // TODO
+        auto pager_port = pager;
         if (not pager_port) {
             auto p                      = pmm::Page_Descriptor::allocate_page(page_size_log);
             auto p2                     = p.duplicate();

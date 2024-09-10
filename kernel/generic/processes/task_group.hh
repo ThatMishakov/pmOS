@@ -108,7 +108,7 @@ public:
      * @param mask New mask
      * @return u64 Old mask
      */
-    u64 atomic_change_notifier_mask(const klib::shared_ptr<Port> &port, u64 mask, u64 flags);
+    u64 atomic_change_notifier_mask(Port *port, u64 mask, u64 flags);
 
     /**
      * @brief Gets the notification mask of the port. If the mask is 0, then the port is not in the
@@ -129,7 +129,6 @@ private:
     static inline Spinlock global_map_lock;
 
     struct NotifierPort {
-        klib::weak_ptr<Port> port;
         u64 action_mask = 0;
 
         static constexpr u64 ACTION_MASK_ON_DESTROY     = 0x01;
@@ -156,5 +155,5 @@ private:
 
     static inline u64 next_id = 1;
 
-    friend Port::~Port() noexcept;
+    friend bool Port::delete_self() noexcept;
 };

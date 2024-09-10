@@ -34,9 +34,15 @@
 
 void acquire_lock_spin(u32 *lock) noexcept
 {
+    size_t count = 0;
     while (true) {
-        while (*lock)
-            ;
+        while (*lock) {
+            if (count++ > 1000000) {
+                count = 0;
+                serial_logger.printf("Warning: spinlock is busy\n");
+                print_stack_trace(serial_logger);
+            }
+        }
 
         if (__sync_bool_compare_and_swap(lock, 0, 1))
             return;

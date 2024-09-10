@@ -410,17 +410,26 @@ void TaskDescriptor::cleanup()
 {
     cleaned_up = true;
 
-    Auto_Lock_Scope scope_lock(tasks_map_lock);
-    tasks_map.erase(this);
+    {
+        Auto_Lock_Scope scope_lock(tasks_map_lock);
+        tasks_map.erase(this);
+    }
 
     auto c = get_cpu_struct();
-    for (auto interr: interrupt_handlers) {
+    for (auto &interr: interrupt_handlers) {
         c->int_handlers.remove_handler(interr->interrupt_number);
     }
 
-    {
-        Auto_Lock_Scope scope_lock(messaging_lock);
-        owned_ports.clear();
+    auto get_first_port = [&]() -> Port * {
+        Auto_Lock_Scope scope_lock(sched_lock);
+        auto it = owned_ports.begin();
+        return it == owned_ports.end() ? nullptr : &*it;
+    };
+
+    Port *port;
+    while ((port = get_first_port())) {
+        serial_logger.printf("Deleting port %h\n", port);
+        port->delete_self();
     }
 
     rcu_head.rcu_func = [](void *self, bool) {

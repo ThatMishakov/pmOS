@@ -44,57 +44,42 @@ bool Message::copy_to_user_buff(char *buff)
     return copy_to_user(&content.front(), buff, content.size());
 }
 
-klib::shared_ptr<Port> Port::atomic_create_port(TaskDescriptor *task)
+Port *Port::atomic_create_port(TaskDescriptor *task) noexcept
 {
     assert(task);
 
     u64 new_port = __atomic_add_fetch(&biggest_port, 1, __ATOMIC_SEQ_CST);
 
-    klib::shared_ptr<Port> new_port_ptr = klib::make_shared<Port>(task, new_port);
+    klib::unique_ptr<Port> new_port_ptr = new Port(task, new_port);
+    // nothrow?
+
+    // Lock it here so that alive is as it is
+    Auto_Lock_Scope scope_lock(new_port_ptr->lock);
 
     {
-        Auto_Lock_Scope local_lock(ports_lock);
-        ports.insert({new_port, new_port_ptr});
+        Auto_Lock_Scope scope_lock(task->sched_lock);
+        if (task->status == TaskStatus::TASK_DYING || task->status == TaskStatus::TASK_DEAD)
+            return nullptr;
+        task->owned_ports.insert(new_port_ptr.get());
     }
 
-    new_port_ptr->self = new_port_ptr;
-
-    try {
-        Auto_Lock_Scope local_lock(task->messaging_lock);
-        auto result = task->owned_ports.insert_noexcept(new_port_ptr);
-        if (result.first == task->owned_ports.end())
-            throw(Kern_Exception(-ENOMEM, "failed to insert port into task's owned ports"));
-    } catch (...) {
-        Auto_Lock_Scope local_lock(ports_lock);
-        ports.erase(new_port);
-        throw;
+    {
+        Auto_Lock_Scope scope_lock(ports_lock);
+        ports.insert(new_port_ptr.get());
     }
 
-    return new_port_ptr;
+    return new_port_ptr.release();
 }
 
-klib::shared_ptr<Port> Port::atomic_get_port(u64 portno) noexcept
+Port *Port::atomic_get_port(u64 portno) noexcept
 {
-    Auto_Lock_Scope scope_lock(ports_lock);
-
-    return ports.get_copy_or_default(portno).lock();
-}
-
-klib::shared_ptr<Port> Port::atomic_get_port_throw(u64 portno)
-{
-    Auto_Lock_Scope scope_lock(ports_lock);
-    const auto ptr = ports.get_copy_or_default(portno).lock();
-
-    if (not ptr)
-        throw(Kern_Exception(-ENOENT, "requested port does not exist"));
-
-    return ptr;
+    Auto_Lock_Scope lock(ports_lock);
+    return ports.find(portno);
 }
 
 void Port::atomic_send_from_system(const char *msg_ptr, uint64_t size)
 {
     Auto_Lock_Scope scope_lock(lock);
-
     send_from_system(msg_ptr, size);
 }
 
@@ -103,7 +88,7 @@ void Port::enqueue(const klib::shared_ptr<Message> &msg)
     assert(lock.is_locked() && "Spinlock not locked!");
 
     msg_queue.push_back(msg);
-    unblock_if_needed(owner, self.lock());
+    unblock_if_needed(owner, this);
 }
 
 void Port::send_from_system(klib::vector<char> &&v)
@@ -123,8 +108,7 @@ void Port::send_from_system(const char *msg_ptr, uint64_t size)
     send_from_system(klib::move(message));
 }
 
-bool Port::send_from_user(TaskDescriptor *sender,
-                          const char *unsafe_user_ptr, size_t msg_size)
+bool Port::send_from_user(TaskDescriptor *sender, const char *unsafe_user_ptr, size_t msg_size)
 {
     assert(lock.is_locked() && "Spinlock not locked!");
 
@@ -134,16 +118,16 @@ bool Port::send_from_user(TaskDescriptor *sender,
     if (not result)
         return result;
 
-    klib::shared_ptr<Message> ptr = klib::make_shared<Message>(
-        sender->task_id, klib::forward<klib::vector<char>>(message));
+    klib::shared_ptr<Message> ptr =
+        klib::make_shared<Message>(sender->task_id, klib::forward<klib::vector<char>>(message));
 
     enqueue(ptr);
 
     return true;
 }
 
-bool Port::atomic_send_from_user(TaskDescriptor *sender,
-                                 const char *unsafe_user_message, size_t msg_size)
+bool Port::atomic_send_from_user(TaskDescriptor *sender, const char *unsafe_user_message,
+                                 size_t msg_size)
 {
     klib::vector<char> message(msg_size);
 
@@ -151,8 +135,8 @@ bool Port::atomic_send_from_user(TaskDescriptor *sender,
     if (not result)
         return result;
 
-    klib::shared_ptr<Message> ptr = klib::make_shared<Message>(
-        sender->task_id, klib::forward<klib::vector<char>>(message));
+    klib::shared_ptr<Message> ptr =
+        klib::make_shared<Message>(sender->task_id, klib::forward<klib::vector<char>>(message));
 
     Auto_Lock_Scope scope_lock(lock);
 
@@ -182,8 +166,25 @@ klib::shared_ptr<Message> &Port::get_front()
     return msg_queue.front();
 }
 
-Port::~Port() noexcept
+bool Port::delete_self() noexcept
 {
+    {
+        Auto_Lock_Scope scope_lock(lock);
+        if (not alive)
+            return false;
+        alive = false;
+    }
+
+    {
+        Auto_Lock_Scope scope_lock(owner->sched_lock);
+        owner->owned_ports.erase(this);
+    }
+
+    {
+        Auto_Lock_Scope scope_lock(ports_lock);
+        ports.erase(this);
+    }
+
     for (const auto &p: notifier_ports) {
         const auto &ptr = p.second.lock();
         if (ptr) {
@@ -192,10 +193,14 @@ Port::~Port() noexcept
         }
     }
 
-    Auto_Lock_Scope scope_lock(ports_lock);
-    ports.erase(portno);
+    rcu_head.rcu_func = [](void *self, bool) {
+        Port *t =
+            reinterpret_cast<Port *>(reinterpret_cast<char *>(self) - offsetof(Port, rcu_head));
+        delete t;
+    };
+    get_cpu_struct()->heap_rcu_cpu.push(&rcu_head);
 }
 
-Port::Port(TaskDescriptor *owner, u64 portno): owner(owner), portno(portno)
-{
-}
+Port::~Port() noexcept {}
+
+Port::Port(TaskDescriptor *owner, u64 portno): owner(owner), portno(portno) {}

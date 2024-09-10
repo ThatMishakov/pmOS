@@ -40,12 +40,11 @@
 #include <memory/rcu.hh>
 #include <messaging/messaging.hh>
 #include <paging/arch_paging.hh>
+#include <pmos/containers/set.hh>
 #include <pmos/load_data.h>
 #include <registers.hh>
 #include <sched/defs.hh>
 #include <types.hh>
-
-#include <pmos/containers/set.hh>
 
 #ifdef __x86_64__
     #include <cpus/sse.hh>
@@ -98,10 +97,12 @@ public:
     Task_Attributes attr;
 
     // Messaging
-    pmos::containers::set<klib::shared_ptr<Generic_Port>> owned_ports;
-    klib::weak_ptr<Generic_Port> blocked_by;
-    klib::weak_ptr<Generic_Port> sender_hint;
-    Spinlock messaging_lock;
+    using ports_tree =
+        pmos::containers::RedBlackTree<Port, &Port::bst_head_owner,
+                                       detail::TreeCmp<Port, u64, &Port::portno>>;
+    ports_tree::RBTreeHead owned_ports;
+    Generic_Port *blocked_by;
+    Generic_Port *sender_hint;
 
     // Scheduling info
     TaskDescriptor *queue_next = nullptr;
@@ -157,7 +158,7 @@ public:
     u64 check_unblock_immediately(u64 reason, u64 extra);
 
     // Checks if the process is blocked by the port and unblocks it if needed
-    bool atomic_unblock_if_needed(const klib::shared_ptr<Generic_Port> &compare_blocked_by);
+    bool atomic_unblock_if_needed(Generic_Port *compare_blocked_by);
 
     // Sets the entry point to the task
     inline void set_entry_point(u64 entry) { this->regs.program_counter() = entry; }
@@ -210,7 +211,7 @@ public:
     u64 last_fp_hart_id = 0;
 #endif
     // Interrupts handlers
-    klib::set<Interrupt_Handler *> interrupt_handlers;
+    pmos::containers::set<Interrupt_Handler *> interrupt_handlers;
     inline bool can_be_rebound() { return interrupt_handlers.empty(); }
 
     // Debugging
@@ -243,7 +244,6 @@ public:
     static TaskID get_new_task_id();
 
     struct NotifierPort {
-        klib::weak_ptr<Port> port;
         u64 action_mask = 0;
 
         static constexpr int NOTIFY_EXIT       = 1;
@@ -262,7 +262,7 @@ public:
      * @param mask New mask
      * @return u64 Old mask
      */
-    u64 atomic_change_notifier_mask(const klib::shared_ptr<Port> &port, u64 mask);
+    u64 atomic_change_notifier_mask(Port *port, u64 mask);
 
     /**
      * @brief Gets the notification mask of the port. If the mask is 0, then the port is not in the
@@ -296,9 +296,9 @@ struct CPU_Info;
 void init_idle(CPU_Info *cpu);
 
 // A map of all the tasks
-using sched_map =
-    pmos::containers::RedBlackTree<TaskDescriptor, &TaskDescriptor::task_tree_head,
-                 detail::TreeCmp<TaskDescriptor, u64, &TaskDescriptor::task_id>>::RBTreeHead;
+using sched_map = pmos::containers::RedBlackTree<
+    TaskDescriptor, &TaskDescriptor::task_tree_head,
+    detail::TreeCmp<TaskDescriptor, u64, &TaskDescriptor::task_id>>::RBTreeHead;
 extern sched_map tasks_map;
 extern Spinlock tasks_map_lock;
 

@@ -59,7 +59,7 @@
  * @see programmable_interrupt()
  */
 struct Prog_Int_Descriptor {
-    klib::weak_ptr<Port> port;
+    Port *port;
     Spinlock lock;
 };
 

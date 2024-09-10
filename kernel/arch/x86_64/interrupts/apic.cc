@@ -240,7 +240,7 @@ extern "C" void programmable_interrupt(u32 intno)
         return;
     }
 
-    auto port = handler->port.lock();
+    auto port = handler->port;
     bool sent = false;
     try {
         if (port) {

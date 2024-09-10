@@ -276,13 +276,10 @@ void syscall_kill_task(u64 task_id, u64, u64, u64, u64, u64)
 void syscall_get_first_message(u64 buff, u64 args, u64 portno, u64, u64, u64)
 {
     TaskDescriptor *current = get_cpu_struct()->current_task;
-    klib::shared_ptr<Port> port;
 
-    // Optimization: Try last blocked-by port
-    port = klib::dynamic_pointer_cast<Port>(current->blocked_by.lock());
-
-    if (not port or port->portno != portno)
-        port = Port::atomic_get_port_throw(portno);
+    auto port = Port::atomic_get_port(portno);
+    if (!port)
+        throw Kern_Exception(-ENOENT, "port not found");
 
     klib::shared_ptr<Message> top_message;
 
@@ -290,7 +287,7 @@ void syscall_get_first_message(u64 buff, u64 args, u64 portno, u64, u64, u64)
         Auto_Lock_Scope scope_lock(port->lock);
 
         if (current != port->owner)
-            throw(Kern_Exception(-EPERM, "Callee is not a port owner"));
+            throw Kern_Exception(-EPERM, "Caller is not a port owner");
 
         if (port->is_empty())
             throw(Kern_Exception(-EAGAIN, "Port queue is empty"));
@@ -316,14 +313,9 @@ void syscall_send_message_port(u64 port_num, size_t size, u64 message, u64, u64,
 
     // TODO: Check permissions
 
-    klib::shared_ptr<Port> port;
-
-    // Optimization: Try hint
-    port = klib::dynamic_pointer_cast<Port>(current->blocked_by.lock());
-
-    if (not port or port->portno != port_num) {
-        port = Port::atomic_get_port_throw(port_num);
-    }
+    auto port = Port::atomic_get_port(port_num);
+    if (!port)
+        throw Kern_Exception(-ENOENT, "port not found");
 
     syscall_ret_low(current) = SUCCESS;
 
@@ -334,17 +326,12 @@ void syscall_get_message_info(u64 message_struct, u64 portno, u64 flags, u64, u6
 {
     task_ptr task = get_current_task();
 
-    klib::shared_ptr<Port> port;
-
-    // Optimization: Try last blocked-by port
-    port = klib::dynamic_pointer_cast<Port>(task->blocked_by.lock());
-
-    if (not port or port->portno != portno) {
-        port = Port::atomic_get_port_throw(portno);
-    }
+    auto port = Port::atomic_get_port(portno);
+    if (!port)
+        throw Kern_Exception(-ENOENT, "port not found");
 
     if (port->owner != task) {
-        throw(Kern_Exception(-EPERM, "Callee is not a port owner"));
+        throw(Kern_Exception(-EPERM, "Caller is not a port owner"));
     }
 
     klib::shared_ptr<Message> msg;
@@ -511,8 +498,12 @@ void syscall_create_port(u64 owner, u64, u64, u64, u64, u64)
         t = get_task_throw(owner);
     }
 
-    syscall_ret_low(task)  = SUCCESS;
-    syscall_ret_high(task) = Port::atomic_create_port(t)->portno;
+    syscall_ret_low(task) = SUCCESS;
+    auto new_port         = Port::atomic_create_port(t);
+    if (!new_port)
+        throw Kern_Exception(-ENOMEM, "Could not create a port");
+
+    syscall_ret_high(task) = new_port->portno;
 }
 
 void syscall_set_interrupt(uint64_t port, u64 intno, u64 flags, u64, u64, u64)
@@ -521,7 +512,9 @@ void syscall_set_interrupt(uint64_t port, u64 intno, u64 flags, u64, u64, u64)
     auto c               = get_cpu_struct();
     const task_ptr &task = c->current_task;
 
-    auto port_ptr = Port::atomic_get_port_throw(port);
+    auto port_ptr = Port::atomic_get_port(port);
+    if (!port_ptr)
+        throw Kern_Exception(-ENOENT, "could not find the port");
 
     syscall_ret_low(task)  = SUCCESS;
     syscall_ret_high(task) = intno;
@@ -560,21 +553,31 @@ void syscall_name_port(u64 portnum, u64 /*const char* */ name, u64 length, u64 f
         return;
     }
 
-    klib::shared_ptr<Port> port = Port::atomic_get_port_throw(portnum);
+    Port *port = Port::atomic_get_port(portnum);
+    if (not port) {
+        throw(Kern_Exception(-ENOENT, "Port not found"));
+    }
 
-    Auto_Lock_Scope scope_lock(port->lock);
     Auto_Lock_Scope scope_lock2(global_named_ports.lock);
 
-    klib::shared_ptr<Named_Port_Desc> named_port =
-        global_named_ports.storage.get_copy_or_default(str.second);
+    Named_Port_Desc *named_port = global_named_ports.storage.find(str.second);
 
     if (named_port) {
-        if (not named_port->parent_port.expired()) {
-            throw(Kern_Exception(-EEXIST, "Named port with a given name already exists"));
+        auto parent_port = Port::atomic_get_port(named_port->parent_port_id);
+        if (parent_port) {
+            Auto_Lock_Scope lock(parent_port->lock);
+            if (parent_port->alive)
+                throw(Kern_Exception(-EEXIST, "Named port with a given name already exists"));
         }
 
-        named_port->parent_port = port;
-        syscall_ret_low(task)   = SUCCESS;
+        {
+            Auto_Lock_Scope scope_lock(port->lock);
+            if (!port->alive)
+                throw(Kern_Exception(-ENOENT, "Port is not alive"));
+            named_port->parent_port_id = port->portno;
+        }
+
+        syscall_ret_low(task) = SUCCESS;
 
         for (const auto &t: named_port->actions) {
             t->do_action(port, str.second);
@@ -582,10 +585,17 @@ void syscall_name_port(u64 portnum, u64 /*const char* */ name, u64 length, u64 f
 
         named_port->actions.clear();
     } else {
-        const klib::shared_ptr<Named_Port_Desc> new_desc =
-            klib::make_shared<Named_Port_Desc>(klib::move(str.second), port);
+        klib::unique_ptr<Named_Port_Desc> new_desc =
+            new Named_Port_Desc(klib::move(str.second), port);
 
-        global_named_ports.storage.insert({new_desc->name, new_desc});
+        {
+            Auto_Lock_Scope scope_lock(port->lock);
+            if (!port->alive)
+                throw(Kern_Exception(-ENOENT, "Port is not alive"));
+
+            global_named_ports.storage.insert(new_desc.release());
+        }
+
         syscall_ret_low(task) = SUCCESS;
     }
 }
@@ -604,24 +614,18 @@ void syscall_get_port_by_name(u64 /* const char * */ name, u64 length, u64 flags
     }
 
     Auto_Lock_Scope scope_lock(global_named_ports.lock);
-
-    klib::shared_ptr<Named_Port_Desc> named_port;
-
-    // Optimization: Try last blocked-by port
-    named_port = klib::dynamic_pointer_cast<Named_Port_Desc>(task->blocked_by.lock());
-
-    if (not named_port or named_port->name != str.second) {
-        named_port = global_named_ports.storage.get_copy_or_default(str.second);
-    }
+    auto named_port = global_named_ports.storage.find(str.second);
 
     if (named_port) {
-        if (not named_port->parent_port.expired()) {
-            klib::shared_ptr<Port> ptr = named_port->parent_port.lock();
-            if (not ptr) {
+        auto parent_port = Port::atomic_get_port(named_port->parent_port_id);
+        if (parent_port) {
+            serial_logger.printf("named port parent port id: %d\n", named_port->parent_port_id);
+            Auto_Lock_Scope lock(parent_port->lock);
+            if (!parent_port->alive) {
                 throw(Kern_Exception(-ENOENT, "named port parent is expired"));
             } else {
                 syscall_ret_low(task)  = SUCCESS;
-                syscall_ret_high(task) = ptr->portno;
+                syscall_ret_high(task) = parent_port->portno;
             }
             return;
         } else {
@@ -629,8 +633,7 @@ void syscall_get_port_by_name(u64 /* const char * */ name, u64 length, u64 flags
                 throw(Kern_Exception(-ENOENT, "requested named port does not exist"));
                 return;
             } else {
-                named_port->actions.push_back(klib::make_unique<Notify_Task>(
-                    task, klib::shared_ptr<Generic_Port>(named_port)));
+                named_port->actions.push_back(klib::make_unique<Notify_Task>(task, named_port));
 
                 task->request_repeat_syscall();
                 block_current_task(named_port);
@@ -640,14 +643,13 @@ void syscall_get_port_by_name(u64 /* const char * */ name, u64 length, u64 flags
         if (flags & flag_noblock) {
             throw(Kern_Exception(-ENOENT, "requested named port does not exist"));
         } else {
-            const klib::shared_ptr<Named_Port_Desc> new_desc = klib::make_shared<Named_Port_Desc>(
-                klib::move(str.second), klib::shared_ptr<Port>(nullptr));
+            auto new_desc = klib::make_unique<Named_Port_Desc>(klib::move(str.second), nullptr);
 
-            global_named_ports.storage.insert({new_desc->name, new_desc});
-            new_desc->actions.push_back(klib::make_unique<Notify_Task>(task, new_desc));
+            new_desc->actions.push_back(klib::make_unique<Notify_Task>(task, new_desc.get()));
+            global_named_ports.storage.insert(new_desc.get());
 
             task->request_repeat_syscall();
-            block_current_task(new_desc);
+            block_current_task(new_desc.release());
         }
     }
 }
@@ -664,32 +666,37 @@ void syscall_request_named_port(u64 string_ptr, u64 length, u64 reply_port, u64 
     // From this point on, the process can't block
     syscall_ret_low(task) = SUCCESS;
 
-    klib::shared_ptr<Port> port_ptr = Port::atomic_get_port_throw(reply_port);
+    Port *port_ptr = Port::atomic_get_port(reply_port);
+    if (not port_ptr) {
+        throw(Kern_Exception(-ENOENT, "port not found"));
+    }
 
     Auto_Lock_Scope scope_lock(global_named_ports.lock);
 
-    klib::shared_ptr<Named_Port_Desc> named_port =
-        global_named_ports.storage.get_copy_or_default(str.second);
-
+    Named_Port_Desc *named_port = global_named_ports.storage.find(str.second);
     if (named_port) {
-        if (not named_port->parent_port.expired()) {
-            klib::shared_ptr<Port> ptr = named_port->parent_port.lock();
-            if (not ptr) {
-                throw(Kern_Exception(-ENOENT, "named port parent is expired"));
-            } else {
-                Send_Message msg(port_ptr);
-                msg.do_action(ptr, str.second);
+        auto parent_port = Port::atomic_get_port(named_port->parent_port_id);
+        if (parent_port) {
+            bool alive = false;
+            {
+                Auto_Lock_Scope lock(parent_port->lock);
+                alive = parent_port->alive;
             }
-            return;
-        } else {
-            named_port->actions.push_back(klib::make_unique<Send_Message>(port_ptr));
-        }
-    } else {
-        const klib::shared_ptr<Named_Port_Desc> new_desc =
-            klib::make_shared<Named_Port_Desc>(Named_Port_Desc(klib::move(str.second), nullptr));
 
-        auto it = global_named_ports.storage.insert({new_desc->name, new_desc});
-        it.first->second->actions.push_back(klib::make_unique<Send_Message>(port_ptr));
+            if (alive) {
+                Send_Message msg(port_ptr);
+                msg.do_action(parent_port, str.second);
+                return;
+            }
+        }
+        named_port->actions.push_back(klib::make_unique<Send_Message>(port_ptr));
+    } else {
+        auto new_desc =
+            klib::make_unique<Named_Port_Desc>(Named_Port_Desc(klib::move(str.second), nullptr));
+
+        new_desc->actions.push_back(klib::make_unique<Send_Message>(port_ptr));
+
+        global_named_ports.storage.insert(new_desc.release());
     }
 }
 
@@ -697,7 +704,9 @@ void syscall_set_log_port(u64 port, u64 flags, u64, u64, u64, u64)
 {
     const task_ptr &task = get_current_task();
 
-    klib::shared_ptr<Port> port_ptr = Port::atomic_get_port_throw(port);
+    Port *port_ptr = Port::atomic_get_port(port);
+    if (not port_ptr)
+        throw(Kern_Exception(-ENOENT, "port not found"));
 
     global_logger.set_port(port_ptr, flags);
     syscall_ret_low(task) = SUCCESS;
@@ -1026,7 +1035,9 @@ void syscall_add_to_task_group(u64 pid, u64 group, u64, u64, u64, u64)
 void syscall_set_notify_mask(u64 task_group, u64 port_id, u64 new_mask, u64 flags, u64, u64)
 {
     const auto group = TaskGroup::get_task_group_throw(task_group);
-    const auto port  = Port::atomic_get_port_throw(port_id);
+    const auto port  = Port::atomic_get_port(port_id);
+    if (!port)
+        throw Kern_Exception(-ENOENT, "port not found");
 
     u64 old_mask = group->atomic_change_notifier_mask(port, new_mask, flags);
 
@@ -1036,7 +1047,9 @@ void syscall_set_notify_mask(u64 task_group, u64 port_id, u64 new_mask, u64 flag
 
 void syscall_request_timer(u64 port, u64 timeout, u64, u64, u64, u64)
 {
-    const auto port_ptr              = Port::atomic_get_port_throw(port);
+    const auto port_ptr = Port::atomic_get_port(port);
+    if (!port_ptr)
+        throw Kern_Exception(-ENOENT, "port not found");
     auto c                           = get_cpu_struct();
     syscall_ret_low(c->current_task) = SUCCESS;
 

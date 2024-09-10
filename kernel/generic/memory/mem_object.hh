@@ -276,7 +276,7 @@ protected:
      * pager has not been able to provide the page, an attempt to allocate a zero-filled page will
      * be made.
      */
-    klib::weak_ptr<Port> pager;
+    Port *pager;
 
 private:
     /// @brief Global storage of the memory objects accessible by ID

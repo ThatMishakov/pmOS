@@ -32,6 +32,8 @@
 #include <lib/queue.hh>
 #include <lib/splay_tree_map.hh>
 #include <lib/vector.hh>
+#include <memory/rcu.hh>
+#include <pmos/containers/intrusive_bst.hh>
 #include <types.hh>
 #include <utils.hh>
 
@@ -63,10 +65,10 @@ class Port: public Generic_Port
 {
 public:
     TaskDescriptor *owner;
-    klib::weak_ptr<Port> self;
 
     Spinlock lock;
     u64 portno;
+    bool alive = true;
 
     Port(TaskDescriptor *owner, u64 portno);
 
@@ -77,14 +79,13 @@ public:
 
     // Returns true if successfully sent, false otherwise (e.g. when it is needed to repeat the
     // syscall). Throws on crytical errors
-    bool send_from_user(TaskDescriptor *sender, const char *unsafe_user_ptr,
-                        size_t msg_size);
+    bool send_from_user(TaskDescriptor *sender, const char *unsafe_user_ptr, size_t msg_size);
     void atomic_send_from_system(const char *msg, size_t size);
 
     // Returns true if successfully sent, false otherwise (e.g. when it is needed to repeat the
     // syscall). Throws on crytical errors
-    bool atomic_send_from_user(TaskDescriptor *sender,
-                               const char *unsafe_user_message, size_t msg_size);
+    bool atomic_send_from_user(TaskDescriptor *sender, const char *unsafe_user_message,
+                               size_t msg_size);
 
     void change_return_upon_unblock(TaskDescriptor *task);
 
@@ -103,28 +104,36 @@ public:
     /**
      * @brief Gets the port or NULL if it doesn't exist
      */
-    static klib::shared_ptr<Port> atomic_get_port(u64 portno) noexcept;
-
-    /**
-     * @brief Gets the port. Throws ERROR_PORT_DOESNT_EXIST if there is no port
-     */
-    static klib::shared_ptr<Port> atomic_get_port_throw(u64 portno);
+    static Port *atomic_get_port(u64 portno) noexcept;
 
     /**
      * @brief Creates a new port with *task* as its owner
      */
-    static klib::shared_ptr<Port> atomic_create_port(TaskDescriptor *task);
+    static Port *atomic_create_port(TaskDescriptor *task) noexcept;
 
+    /// Deletes the port. Returns false if the port is already deleted
+    bool delete_self() noexcept;
 protected:
     using Message_storage = klib::list<klib::shared_ptr<Message>>;
     Message_storage msg_queue;
 
+    union {
+        pmos::containers::RBTreeNode<Port> bst_head_global;
+        RCU_Head rcu_head;
+    };
+    pmos::containers::RBTreeNode<Port> bst_head_owner;
+
     klib::splay_tree_map<u64, klib::weak_ptr<TaskGroup>> notifier_ports;
     mutable Spinlock notifier_ports_lock;
 
+    using global_ports_tree =
+        pmos::containers::RedBlackTree<Port, &Port::bst_head_global,
+                                       detail::TreeCmp<Port, u64, &Port::portno>>;
+
     static inline u64 biggest_port = 1;
-    static inline klib::splay_tree_map<u64, klib::weak_ptr<Port>> ports;
+    static inline global_ports_tree::RBTreeHead ports;
     static inline Spinlock ports_lock;
 
     friend class TaskGroup;
+    friend class TaskDescriptor;
 };

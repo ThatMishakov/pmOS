@@ -33,35 +33,38 @@
 #include <lib/set.hh>
 #include <lib/splay_tree_map.hh>
 #include <lib/string.hh>
+#include <pmos/containers/intrusive_bst.hh>
 
 class Named_Port_Action
 {
 public:
     virtual ~Named_Port_Action() = default;
 
-    virtual void do_action(const klib::shared_ptr<Port> &port, const klib::string &name) = 0;
+    virtual void do_action(Port *port, const klib::string &name) = 0;
 };
 
 struct Named_Port_Desc: public Generic_Port {
-    Named_Port_Desc(const klib::string &name, const klib::shared_ptr<Port> parent_port)
-        : name(name), parent_port(parent_port)
+    Named_Port_Desc(const klib::string &name, Port *parent_port)
+        : name(name), parent_port_id(parent_port ? parent_port->portno : 0)
     {
     }
-    Named_Port_Desc(klib::string &&name, const klib::shared_ptr<Port> parent_port)
-        : name(klib::forward<klib::string>(name)), parent_port(parent_port)
+    Named_Port_Desc(klib::string &&name, Port *parent_port)
+        : name(klib::forward<klib::string>(name)), parent_port_id(parent_port ? parent_port->portno : 0)
     {
     }
 
     const klib::string name;
-    klib::weak_ptr<Port> parent_port;
+    uint64_t parent_port_id;
     klib::vector<klib::unique_ptr<Named_Port_Action>> actions;
+
+    pmos::containers::RBTreeNode<Named_Port_Desc> bst_node;
 };
 
 using named_ports_map =
-    klib::splay_tree_map<const klib::string &, klib::shared_ptr<Named_Port_Desc>>;
+    pmos::containers::RedBlackTree<Named_Port_Desc, &Named_Port_Desc::bst_node, detail::TreeCmp<Named_Port_Desc, klib::string, &Named_Port_Desc::name>>;
 
 struct Named_Port_Storage {
-    named_ports_map storage;
+    named_ports_map::RBTreeHead storage;
     Spinlock lock;
 };
 
@@ -72,15 +75,13 @@ class Notify_Task: public Named_Port_Action
 public:
     virtual ~Notify_Task() override { do_action(nullptr, klib::string()); }
 
-    virtual void do_action(const klib::shared_ptr<Port> &port, const klib::string &name) override;
+    virtual void do_action(Port *port, const klib::string &name) override;
 
-    Notify_Task(TaskDescriptor *t,
-                const klib::shared_ptr<Generic_Port> &parent_port)
-        : task(t), parent_port(parent_port) {};
+    Notify_Task(TaskDescriptor *t, Generic_Port *parent_port) noexcept;
 
 private:
-    TaskDescriptor *task;
-    klib::weak_ptr<Generic_Port> parent_port;
+    uint64_t task_id;
+    Generic_Port *parent_port;
     bool did_action = false;
 };
 
@@ -89,11 +90,11 @@ class Send_Message: public Named_Port_Action
 public:
     virtual ~Send_Message() override { do_action(nullptr, klib::string()); }
 
-    virtual void do_action(const klib::shared_ptr<Port> &port, const klib::string &name) override;
+    virtual void do_action(Port *port, const klib::string &name) override;
 
-    Send_Message(const klib::shared_ptr<Port> &t): port(t) {};
+    Send_Message(Port *t): port_id(t->portno) {};
 
 private:
-    klib::weak_ptr<Port> port;
+    uint64_t port_id;
     bool did_action = false;
 };

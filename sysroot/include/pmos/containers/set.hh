@@ -13,15 +13,14 @@ private:
         T value;
         RBTreeNode<Node> bst_head;
 
-        Node(T &&value) : value(value) {}
+        Node(T &&value): value(value) {}
     };
 
-    using tree_type = RedBlackTree < Node, &Node::bst_head,
-          detail::TreeCmp<Node, T, &Node::value>>;
+    using tree_type = RedBlackTree<Node, &Node::bst_head, detail::TreeCmp<Node, T, &Node::value>>;
     tree_type::RBTreeHead tree;
 
     // Prepare for Alloc template
-    Node *alloc(T && value);
+    Node *alloc(T &&value);
     void dealloc(Node *node);
 
 public:
@@ -33,7 +32,15 @@ public:
     // Returns empty set on allocation failure
     set clone() noexcept;
 
-    using iterator   = typename tree_type::RBTreeIterator;
+    struct iterator: public tree_type::RBTreeIterator {
+        T &operator*() noexcept { return this->node->value; }
+        T *operator->() noexcept { return &this->node->value; }
+
+        // Upcast from RBTreeIterator to iterator
+        iterator() = default;
+        iterator(tree_type::RBTreeIterator it): tree_type::RBTreeIterator(it) {}
+    };
+
     using size_type  = size_t;
     using key_type   = T;
     using value_type = T;
@@ -48,6 +55,7 @@ public:
 
     void clear() noexcept;
     // first == nullptr, second == false => allocation failed
+    pair<iterator, bool> insert_noexcept(const value_type &value) noexcept;
     pair<iterator, bool> insert_noexcept(value_type &&value) noexcept;
     iterator erase(iterator pos) noexcept;
     size_type erase(const key_type &key) noexcept;
@@ -62,38 +70,23 @@ public:
     bool contains(const key_type &key) const noexcept;
 };
 
-template<typename T>
-set<T>::~set() noexcept
-{
-    clear();
-}
+template<typename T> set<T>::~set() noexcept { clear(); }
 
-template<typename T>
-set<T>::iterator set<T>::begin() noexcept
-{
-    return tree.begin();
-}
+template<typename T> set<T>::iterator set<T>::begin() noexcept { return tree.begin(); }
 
-template<typename T>
-set<T>::iterator set<T>::end() noexcept
-{
-    return tree.end();
-}
+template<typename T> set<T>::iterator set<T>::end() noexcept { return tree.end(); }
 
-template<typename T>
-set<T>::iterator set<T>::find(const key_type &key) noexcept
+template<typename T> set<T>::iterator set<T>::find(const key_type &key) noexcept
 {
     return tree.find(key);
 }
 
-template<typename T>
-set<T>::iterator set<T>::erase(set<T>::iterator pos) noexcept
+template<typename T> set<T>::iterator set<T>::erase(set<T>::iterator pos) noexcept
 {
     return tree.erase(pos);
 }
 
-template<typename T>
-void set<T>::clear() noexcept
+template<typename T> void set<T>::clear() noexcept
 {
     iterator it;
     while ((it = begin()) != end()) {
@@ -102,18 +95,13 @@ void set<T>::clear() noexcept
     }
 }
 
-template<typename T>
-set<T>::Node *set<T>::alloc(T &&value)
+template<typename T> set<T>::Node *set<T>::alloc(T &&value)
 {
     // This could be copying, investigate
     return new Node(pmos::utility::move(value));
 }
 
-template<typename T>
-void set<T>::dealloc(Node *n)
-{
-    delete n;
-}
+template<typename T> void set<T>::dealloc(Node *n) { delete n; }
 
 template<typename T>
 pair<typename set<T>::iterator, bool> set<T>::insert_noexcept(set<T>::value_type &&value) noexcept
@@ -129,8 +117,28 @@ pair<typename set<T>::iterator, bool> set<T>::insert_noexcept(set<T>::value_type
         return {end(), false};
     }
 
-    tree.insert(n);
-    return {n, true};
+    return {tree.insert(n), true};
 }
+
+template<typename T>
+pair<typename set<T>::iterator, bool> set<T>::insert_noexcept(const set<T>::value_type &value) noexcept
+{
+    return insert_noexcept(T {value});
+}
+
+template<typename T>
+set<T>::size_type set<T>::erase(const key_type &key) noexcept
+{
+    auto it = find(key);
+    if (it == end()) {
+        return 0;
+    }
+
+    erase(it);
+    dealloc(it);
+    return 1;
+}
+
+template<typename T> bool set<T>::empty() const noexcept { return tree.empty(); }
 
 } // namespace pmos::containers

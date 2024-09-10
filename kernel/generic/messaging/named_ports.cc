@@ -32,23 +32,25 @@
 #include <kernel/block.h>
 #include <pmos/ipc.h>
 #include <processes/syscalls.hh>
+#include <processes/tasks.hh>
 
 Named_Port_Storage global_named_ports;
 
-void Notify_Task::do_action(const klib::shared_ptr<Port> &port,
-                            [[maybe_unused]] const klib::string &name)
+void Notify_Task::do_action(Port *, [[maybe_unused]] const klib::string &name)
 {
     // TODO: This is probably a race condition
     if (not did_action) {
-        unblock_if_needed(task, parent_port.lock());
+        auto task = get_task(task_id);
+        if (task)
+            unblock_if_needed(task, parent_port);
         did_action = true;
     }
 }
 
-void Send_Message::do_action(const klib::shared_ptr<Port> &p, const klib::string &name)
+void Send_Message::do_action(Port *p, const klib::string &name)
 {
     if (not did_action) {
-        klib::shared_ptr<Port> ptr = port.lock();
+        auto ptr = Port::atomic_get_port(port_id);
 
         if (ptr) {
             size_t msg_size = sizeof(IPC_Kernel_Named_Port_Notification) + name.length();
@@ -72,3 +74,6 @@ void Send_Message::do_action(const klib::shared_ptr<Port> &p, const klib::string
         did_action = true;
     }
 }
+
+Notify_Task::Notify_Task(TaskDescriptor *t, Generic_Port *parent_port) noexcept
+    : task_id(t->task_id), parent_port(parent_port) {};

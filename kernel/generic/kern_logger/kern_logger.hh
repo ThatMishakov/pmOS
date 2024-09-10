@@ -65,11 +65,11 @@ struct Logger {
  */
 struct Buffered_Logger: Logger {
     klib::string log_buffer;
-    klib::weak_ptr<Port> messaging_port;
+    u64 messaging_port_id = 0;
 
     virtual void log_nolock(const char *c, size_t size) override;
 
-    void set_port(const klib::shared_ptr<Port> &port, uint32_t flags);
+    void set_port(Port *port, uint32_t flags);
 };
 extern Buffered_Logger global_logger;
 

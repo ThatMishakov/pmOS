@@ -37,7 +37,7 @@ TaskGroup::~TaskGroup() noexcept
     atomic_remove_from_global_map();
 
     for (const auto &p: notifier_ports) {
-        const auto &ptr = p.second.port.lock();
+        auto ptr = Port::atomic_get_port(p.first);
         if (ptr) {
             if (p.second.action_mask & NotifierPort::ACTION_MASK_ON_DESTROY) {
                 IPC_Kernel_Group_Destroyed msg = {
@@ -109,7 +109,7 @@ void TaskGroup::atomic_register_task(TaskDescriptor * task)
         Auto_Lock_Scope lock(notifier_ports_lock);
         for (const auto &p: notifier_ports) {
             if (p.second.action_mask & NotifierPort::ACTION_MASK_ON_ADD_TASK) {
-                const auto &ptr = p.second.port.lock();
+                auto ptr = Port::atomic_get_port(p.first);
                 if (ptr) {
                     IPC_Kernel_Group_Task_Changed msg = {
                         .type          = IPC_Kernel_Group_Task_Changed_NUM,
@@ -163,7 +163,7 @@ void TaskGroup::atomic_remove_task(TaskDescriptor * task)
         Auto_Lock_Scope lock(notifier_ports_lock);
         for (const auto &p: notifier_ports) {
             if (p.second.action_mask & NotifierPort::ACTION_MASK_ON_REMOVE_TASK) {
-                const auto &ptr = p.second.port.lock();
+                auto ptr = Port::atomic_get_port(p.first);
                 if (ptr) {
                     IPC_Kernel_Group_Task_Changed msg = {
                         .type          = IPC_Kernel_Group_Task_Changed_NUM,
@@ -183,7 +183,7 @@ void TaskGroup::atomic_remove_task(TaskDescriptor * task)
     }
 }
 
-u64 TaskGroup::atomic_change_notifier_mask(const klib::shared_ptr<Port> &port, u64 mask, u64 flags)
+u64 TaskGroup::atomic_change_notifier_mask(Port *port, u64 mask, u64 flags)
 {
     u64 old_mask      = 0;
     const u64 port_id = port->portno;
@@ -193,7 +193,7 @@ u64 TaskGroup::atomic_change_notifier_mask(const klib::shared_ptr<Port> &port, u
     {
         Auto_Lock_Scope l(notifier_ports_lock);
 
-        const auto count = notifier_ports.count(port->portno);
+        const auto count = notifier_ports.count(port_id);
 
         if (count == 0) {
             // No port. Insert it
@@ -201,7 +201,7 @@ u64 TaskGroup::atomic_change_notifier_mask(const klib::shared_ptr<Port> &port, u
             if (mask == 0)
                 return old_mask;
 
-            auto t = notifier_ports.insert({port_id, {port, mask}});
+            auto t = notifier_ports.insert({port_id, {mask}});
             try {
                 Auto_Lock_Scope l(port->notifier_ports_lock);
                 port->notifier_ports.insert({id, weak_from_this()});

@@ -69,7 +69,6 @@ public:
     // TODO: Remap would be nice
 
     Temp_Mapper()                    = default;
-    Temp_Mapper(const Temp_Mapper &) = delete;
 };
 
 /**
