@@ -428,7 +428,6 @@ void TaskDescriptor::cleanup()
 
     Port *port;
     while ((port = get_first_port())) {
-        serial_logger.printf("Deleting port %h\n", port);
         port->delete_self();
     }
 

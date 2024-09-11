@@ -619,7 +619,6 @@ void syscall_get_port_by_name(u64 /* const char * */ name, u64 length, u64 flags
     if (named_port) {
         auto parent_port = Port::atomic_get_port(named_port->parent_port_id);
         if (parent_port) {
-            serial_logger.printf("named port parent port id: %d\n", named_port->parent_port_id);
             Auto_Lock_Scope lock(parent_port->lock);
             if (!parent_port->alive) {
                 throw(Kern_Exception(-ENOENT, "named port parent is expired"));

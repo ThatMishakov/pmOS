@@ -85,7 +85,7 @@ klib::shared_ptr<TaskGroup> TaskGroup::create()
     return group;
 }
 
-void TaskGroup::atomic_register_task(TaskDescriptor * task)
+void TaskGroup::atomic_register_task(TaskDescriptor *task)
 {
     bool inserted = false;
     {
@@ -144,7 +144,7 @@ klib::shared_ptr<TaskGroup> TaskGroup::get_task_group_throw(u64 groupno)
     }
 }
 
-void TaskGroup::atomic_remove_task(TaskDescriptor * task)
+void TaskGroup::atomic_remove_task(TaskDescriptor *task)
 {
     {
         Auto_Lock_Scope lock(tasks_lock);
@@ -204,7 +204,9 @@ u64 TaskGroup::atomic_change_notifier_mask(Port *port, u64 mask, u64 flags)
             auto t = notifier_ports.insert({port_id, {mask}});
             try {
                 Auto_Lock_Scope l(port->notifier_ports_lock);
-                port->notifier_ports.insert({id, weak_from_this()});
+                auto res = port->notifier_ports.insert_noexcept({id, weak_from_this()});
+                if (not res.second)
+                    throw Kern_Exception(-EEXIST, "Port already in the group");
             } catch (...) {
                 notifier_ports.erase(t.first);
                 throw;

@@ -16,7 +16,7 @@ private:
         Node(T &&value): value(value) {}
     };
 
-    using tree_type = RedBlackTree<Node, &Node::bst_head, detail::TreeCmp<Node, T, &Node::value>>;
+    using tree_type = RedBlackTree<Node, &Node::bst_head, ::detail::TreeCmp<Node, T, &Node::value>>;
     tree_type::RBTreeHead tree;
 
     // Prepare for Alloc template
@@ -36,7 +36,6 @@ public:
         T &operator*() noexcept { return this->node->value; }
         T *operator->() noexcept { return &this->node->value; }
 
-        // Upcast from RBTreeIterator to iterator
         iterator() = default;
         iterator(tree_type::RBTreeIterator it): tree_type::RBTreeIterator(it) {}
     };

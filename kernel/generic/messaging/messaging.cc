@@ -186,7 +186,7 @@ bool Port::delete_self() noexcept
     }
 
     for (const auto &p: notifier_ports) {
-        const auto &ptr = p.second.lock();
+        const auto ptr = p.second.lock();
         if (ptr) {
             Auto_Lock_Scope l(ptr->notifier_ports_lock);
             ptr->notifier_ports.erase(portno);
@@ -199,6 +199,8 @@ bool Port::delete_self() noexcept
         delete t;
     };
     get_cpu_struct()->heap_rcu_cpu.push(&rcu_head);
+
+    return true;
 }
 
 Port::~Port() noexcept {}
