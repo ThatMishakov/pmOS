@@ -10,6 +10,6 @@ double floor(double x) {
     return __internal_floor(x);
 }
 
-long double floorl(long double x) {
-    return __internal_floorl(x);
-}
+// long double floorl(long double x) {
+//     return __internal_floorl(x);
+// }

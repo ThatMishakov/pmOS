@@ -203,7 +203,7 @@ void illegal_instruction(u32 instruction)
             if (not fp_is_supported())
                 throw Kern_Exception(-ENOTSUP, "Floating point not supported");
 
-            restore_fp_state(task.get());
+            restore_fp_state(task);
         } else if (instruction_is_fp_op(instruction) or instruction_is_fp_ld_st(instruction)) {
             if (not fp_is_supported())
                 throw Kern_Exception(-ENOTSUP, "Floating point not supported");
@@ -212,7 +212,7 @@ void illegal_instruction(u32 instruction)
                                                                 // is illegal -> not supported
                 throw Kern_Exception(-ENOTSUP, "Floating point width not supported");
 
-            restore_fp_state(task.get());
+            restore_fp_state(task);
         } else {
             // What is this
             throw Kern_Exception(-ENOTSUP, "Illegal instruction");
@@ -258,7 +258,7 @@ void plic_service_interrupt()
     }
 
     // Send the interrupt to the port
-    auto port = handler->port.lock();
+    auto port = handler->port;
     bool sent = false;
     try {
         if (port) {

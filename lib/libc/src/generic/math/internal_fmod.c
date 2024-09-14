@@ -57,16 +57,16 @@ float __internal_fmodf(float x, float y) {
     return remainder;
 }
 
-long double __internal_fmodl(long double x, long double y) {
-    if (y == 0.0L) {
-        // Handling division by zero; you can choose your own error handling here.
-        // Returning NaN as an example.
-        return 0.0L / 0.0L; // NaN
-    }
+// long double __internal_fmodl(long double x, long double y) {
+//     if (y == 0.0L) {
+//         // Handling division by zero; you can choose your own error handling here.
+//         // Returning NaN as an example.
+//         return 0.0L / 0.0L; // NaN
+//     }
 
-    long double quotient = x / y;
-    long double whole_part = __internal_floorl(quotient); // Get the integer part of the quotient
-    long double remainder = x - (whole_part * y);
+//     long double quotient = x / y;
+//     long double whole_part = __internal_floorl(quotient); // Get the integer part of the quotient
+//     long double remainder = x - (whole_part * y);
 
-    return remainder;
-}
+//     return remainder;
+// }

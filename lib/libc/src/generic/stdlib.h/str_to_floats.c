@@ -206,86 +206,91 @@ float strtof(const char *str, char **endptr)
     return result;
 }
 
+// This should be working, but I'm commenting it out so it doesn't require compiler_rt on RISC-V
 long double strtold(const char *str, char **endptr)
 {
-    // Skip leading whitespace
-    while (isspace((unsigned char)*str)) {
-        str++;
-    }
-
-    // Handle optional sign
-    bool negative = false;
-    if (*str == '-') {
-        negative = true;
-        str++;
-    } else if (*str == '+') {
-        str++;
-    }
-
-    // Process digits before the decimal point
-    long double result = 0.0L;
-    while (isdigit((unsigned char)*str)) {
-        result = result * 10.0L + (*str - '0');
-        str++;
-    }
-
-    // Process digits after the decimal point
-    if (*str == '.') {
-        str++;
-        long double decimal_multiplier = 0.1L;
-        while (isdigit((unsigned char)*str)) {
-            result += (*str - '0') * decimal_multiplier;
-            decimal_multiplier *= 0.1L;
-            str++;
-        }
-    }
-
-    // Handle exponent (if present)
-    if (tolower((unsigned char)*str) == 'e') {
-        str++;
-        bool exp_negative = false;
-        if (*str == '-') {
-            exp_negative = true;
-            str++;
-        } else if (*str == '+') {
-            str++;
-        }
-
-        int exponent = 0;
-        while (isdigit((unsigned char)*str)) {
-            exponent = exponent * 10 + (*str - '0');
-            str++;
-        }
-
-        if (exp_negative) {
-            exponent = -exponent;
-        }
-
-        // Adjust the result based on the exponent
-        if (exponent != 0) {
-            result *= __internal_powl(10.0L, exponent);
-        }
-    }
-
-    // Set endptr if provided
-    if (endptr != NULL) {
-        *endptr = (char *)str;
-    }
-
-    // Adjust the result for negative numbers
-    if (negative) {
-        result = -result;
-    }
-
-    // Check for errors
-    if (errno == ERANGE || isinf_(result)) {
-        errno = ERANGE;
-        return (negative) ? -HUGE_VALL : HUGE_VALL;
-    } else if (errno == EINVAL) {
-        // Invalid input
-        return 0.0L;
-    }
-
-    // Return the final result
-    return result;
+    return 0;
 }
+// long double strtold(const char *str, char **endptr)
+// {
+//     // Skip leading whitespace
+//     while (isspace((unsigned char)*str)) {
+//         str++;
+//     }
+
+//     // Handle optional sign
+//     bool negative = false;
+//     if (*str == '-') {
+//         negative = true;
+//         str++;
+//     } else if (*str == '+') {
+//         str++;
+//     }
+
+//     // Process digits before the decimal point
+//     long double result = 0.0L;
+//     while (isdigit((unsigned char)*str)) {
+//         result = result * 10.0L + (*str - '0');
+//         str++;
+//     }
+
+//     // Process digits after the decimal point
+//     if (*str == '.') {
+//         str++;
+//         long double decimal_multiplier = 0.1L;
+//         while (isdigit((unsigned char)*str)) {
+//             result += (*str - '0') * decimal_multiplier;
+//             decimal_multiplier *= 0.1L;
+//             str++;
+//         }
+//     }
+
+//     // Handle exponent (if present)
+//     if (tolower((unsigned char)*str) == 'e') {
+//         str++;
+//         bool exp_negative = false;
+//         if (*str == '-') {
+//             exp_negative = true;
+//             str++;
+//         } else if (*str == '+') {
+//             str++;
+//         }
+
+//         int exponent = 0;
+//         while (isdigit((unsigned char)*str)) {
+//             exponent = exponent * 10 + (*str - '0');
+//             str++;
+//         }
+
+//         if (exp_negative) {
+//             exponent = -exponent;
+//         }
+
+//         // Adjust the result based on the exponent
+//         if (exponent != 0) {
+//             result *= __internal_powl(10.0L, exponent);
+//         }
+//     }
+
+//     // Set endptr if provided
+//     if (endptr != NULL) {
+//         *endptr = (char *)str;
+//     }
+
+//     // Adjust the result for negative numbers
+//     if (negative) {
+//         result = -result;
+//     }
+
+//     // Check for errors
+//     if (errno == ERANGE || isinf_(result)) {
+//         errno = ERANGE;
+//         return (negative) ? -HUGE_VALL : HUGE_VALL;
+//     } else if (errno == EINVAL) {
+//         // Invalid input
+//         return 0.0L;
+//     }
+
+//     // Return the final result
+//     return result;
+// }

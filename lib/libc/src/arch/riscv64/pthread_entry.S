@@ -24,6 +24,12 @@
 # CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+    
+    .section data
+    .globl __libc_gp
+    .hidden __libc_gp
+__libc_gp:
+    .quad 0
 
 
     .section .text
@@ -43,11 +49,12 @@ __pthread_entry_point:
     sd ra, 8(sp)
     addi fp, sp, 16
 
-    # Set global pointer
-    # https://five-embeddev.com/quickref/global_pointer.html
+    # This is kinda bad but it's ok for now, everyone can pretend it's not here...
+    # (this gets set in the crt0)
     .option push
 	.option norelax
-	la gp, __global_pointer$
+	la t0, __libc_gp
+    ld gp, 0(t0)
 	.option pop
 
     # Move the arguments in the right registers

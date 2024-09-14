@@ -7,6 +7,7 @@
 #include <string.h>
 #include <assert.h>
 #include <interrupts.h>
+#include <sys/sysinfo.h>
 
 struct CPU {
     uint32_t allocated_interrupts;

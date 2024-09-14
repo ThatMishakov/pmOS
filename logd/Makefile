@@ -28,6 +28,10 @@ INTERNALCFLAGS  :=       \
 	-MMD -MP \
 	-static \
 	-fPIE
+
+ifeq ($(ARCH), riscv64)
+	INTERNALCFLAGS += -march=rva20u64 -mabi=lp64d
+endif
  
 # Use find to glob all *.c files in the directory and extract the object names.
 CCFILES := $(shell find ./ -type f -name '*.cc')
@@ -38,7 +42,7 @@ DEP    := $(OBJ:.o=.d)
 all: $(EXEC)
 
 $(EXEC): $(OBJ) libc
-	$(CXX) $(LDFLAGS) $(OBJ) -o $@ -pthread -static
+	$(CXX) $(LDFLAGS) $(OBJ) -o $@ -static
 	
 clean:
 	$(RM) $(EXEC) $(OBJ) $(DEP)

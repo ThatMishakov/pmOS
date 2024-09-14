@@ -10,6 +10,6 @@ float fmodf(float x, float y) {
     return __internal_fmodf(x, y);
 }
 
-long double fmodl(long double x, long double y) {
-    return __internal_fmodl(x, y);
-}
+// long double fmodl(long double x, long double y) {
+//     return __internal_fmodl(x, y);
+// }

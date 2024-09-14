@@ -25,6 +25,10 @@ INTERNALLDFLAGS := -static
 # Internal C flags that should not be changed by the user.
 INTERNALCFLAGS  := -static
  
+ifeq ($(ARCH), riscv64)
+	INTERNALCFLAGS += -march=rva20u64 -mabi=lp64d
+endif
+
 # Use find to glob all *.c files in the directory and extract the object names.
 CCFILES := $(shell find ./ -type f -name '*.cc')
 CFILES := $(shell find ./ -type f -name '*.c')

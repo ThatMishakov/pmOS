@@ -49,6 +49,14 @@ _start:
 	la gp, __global_pointer$
 	.option pop
 
+    # This is casually hacky...
+    # (and will casually break with dynamic linking)
+    .option push
+	.option norelax
+    la t0, __libc_gp
+    sd gp, 0(t0)
+    .option pop
+
     # Initialize libc
     call init_std_lib
 

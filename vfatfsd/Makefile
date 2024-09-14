@@ -15,6 +15,10 @@ TARGETFLAGS = --target=$(ARCH)-pmos --sysroot=$(ROOTDIR)/sysroot
 INTERNALCFLAGS  :=       \
 	-static
 
+ifeq ($(ARCH), riscv64)
+	INTERNALCFLAGS += -march=rva20u64 -mabi=lp64d
+endif
+
 #USERCFLAGS := -march=rv64gc -mabi=lp64d -O3
 USERCFLAGS := -O3
 

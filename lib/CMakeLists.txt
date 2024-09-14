@@ -20,6 +20,11 @@ get_filename_component(ABSPATH "${CMAKE_CURRENT_LIST_FILE}" PATH)
 set(SYSROOT "${ABSPATH}/../sysroot")
 
 set(CMAKE_C_FLAGS "-Wall -Wextra -O2 -g -nostdlib -fPIC --sysroot=${SYSROOT}")
+
+if (${TARGET_ARCH} STREQUAL "riscv64")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=rva20u64 -mabi=lp64d")
+endif()
+
 set(CMAKE_ASM_FLAGS ${CMAKE_C_FLAGS})
 
 add_subdirectory(libc)
