@@ -69,6 +69,8 @@ struct Mem_Object_Data {
                                  &Mem_Object_Reference::start_addr>>::RBTreeHead regions;
 };
 
+struct Mem_Object_Reference;
+
 /**
  * @brief Generic Page Table class
  *
@@ -232,10 +234,10 @@ public:
      * @return The start virtual address of the new memory region.
      * @see find_region_spot()
      */
-    u64 /* page_start */ atomic_create_mem_object_region(
+    [[nodiscard]] ReturnStr<Mem_Object_Reference *> atomic_create_mem_object_region(
         u64 page_aligned_start, u64 page_aligned_size, unsigned access, bool fixed,
         klib::string name, klib::shared_ptr<Mem_Object> object, bool cow, u64 start_offset_bytes,
-        u64 object_offset_bytes, u64 object_size_bytes);
+        u64 object_offset_bytes, u64 object_size_bytes) noexcept;
 
     /**
      * @brief Prepares user page for being accessed by the kernel.

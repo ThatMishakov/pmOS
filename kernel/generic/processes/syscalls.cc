@@ -952,9 +952,13 @@ void syscall_map_mem_object(u64 page_table_id, u64 addr_start, u64 size_bytes, u
         throw Kern_Exception(-EFBIG, "size is out of range");
 
     syscall_ret_low(current_task)  = SUCCESS;
-    syscall_ret_high(current_task) = table->atomic_create_mem_object_region(
+    auto res = table->atomic_create_mem_object_region(
         addr_start, size_bytes, access & 0x7, access & 0x8, "object map", object, access & 0x10, 0,
         offset, size_bytes);
+    
+    if (!res.success())
+        throw Kern_Exception(res.result, "error in atomic_create_mem_object_region");
+    syscall_ret_high(current_task) = res.val->start_addr;
 }
 
 void syscall_delete_region(u64 tid, u64 region_start, u64, u64, u64, u64)

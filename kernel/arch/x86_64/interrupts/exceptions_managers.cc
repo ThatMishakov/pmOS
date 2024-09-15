@@ -79,13 +79,17 @@ void print_registers(TaskDescriptor *task, Logger &logger)
 }
 
 Task_Regs kernel_interrupt_regs;
+extern void *_kernel_start;
+constexpr static u64 kernel_static = 0xFFFFFFFF80000000;
 
 void print_kernel_int_stack_trace(Logger &logger)
 {
     logger.printf("Kernel stack trace:\n");
     u64 *rbp = (u64 *)kernel_interrupt_regs.preserved_r.rbp;
     while (rbp) {
-        logger.printf(" => 0x%h\n", rbp[1]);
+        auto a    = rbp[1];
+        auto filt = (u64)a - (u64)&_kernel_start + kernel_static;
+        logger.printf(" => 0x%h (0x%h)\n", a, filt);
         rbp = (u64 *)rbp[0];
     }
 }
@@ -168,8 +172,8 @@ extern "C" void pagefault_manager()
         return;
     }
 
-    TaskDescriptor * task = c->current_task;
-    u64 err                               = task->regs.int_err;
+    TaskDescriptor *task = c->current_task;
+    u64 err              = task->regs.int_err;
 
     // Get the memory location which has caused the fault
     u64 virtual_addr = getCR2();
@@ -240,21 +244,18 @@ extern "C" void general_protection_fault_manager()
 extern "C" void overflow_manager()
 {
     task_ptr task = get_cpu_struct()->current_task;
-    serial_logger.printf("!!! Overflow error %h RIP %h RSP %h PID %h (%s)\n",
-                         task->regs.int_err, task->regs.e.rip, task->regs.e.rsp, task->task_id,
-                         task->name.c_str());
-    global_logger.printf("!!! Overflow error %h RIP %h RSP %h PID %h (%s)\n",
-                         task->regs.int_err, task->regs.e.rip, task->regs.e.rsp, task->task_id,
-                         task->name.c_str());
+    serial_logger.printf("!!! Overflow error %h RIP %h RSP %h PID %h (%s)\n", task->regs.int_err,
+                         task->regs.e.rip, task->regs.e.rsp, task->task_id, task->name.c_str());
+    global_logger.printf("!!! Overflow error %h RIP %h RSP %h PID %h (%s)\n", task->regs.int_err,
+                         task->regs.e.rip, task->regs.e.rsp, task->task_id, task->name.c_str());
     task->atomic_kill();
 }
 
 extern "C" void simd_fp_exception_manager()
 {
     task_ptr task = get_cpu_struct()->current_task;
-    t_print_bochs("!!! SIMD FP Exception error %h RIP %h RSP %h PID %h (%s)\n",
-                  task->regs.int_err, task->regs.e.rip, task->regs.e.rsp, task->task_id,
-                  task->name.c_str());
+    t_print_bochs("!!! SIMD FP Exception error %h RIP %h RSP %h PID %h (%s)\n", task->regs.int_err,
+                  task->regs.e.rip, task->regs.e.rsp, task->task_id, task->name.c_str());
     global_logger.printf("!!! SIMD FP Exception error %h RIP %h RSP %h PID %h (%s)\n",
                          task->regs.int_err, task->regs.e.rip, task->regs.e.rsp, task->task_id,
                          task->name.c_str());

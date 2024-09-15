@@ -27,6 +27,7 @@
  */
 
 #pragma once
+#include <assert.h>
 #include <kernel/types.h>
 
 using kresult_t = i64;
@@ -34,7 +35,26 @@ using kresult_t = i64;
 template<class T> struct ReturnStr {
     kresult_t result;
     T val;
+
+    ReturnStr() = default;
+    ReturnStr(kresult_t result, T val): result(result), val(val) {};
+
+    template<class O> ReturnStr<O> propagate() { return {result, {}}; }
+
+    bool success() { return result == 0; }
+
+    static ReturnStr error(kresult_t result)
+    {
+        assert(result != 0);
+        return {result, {}};
+    }
+
+    // TODO: move this...
+    static ReturnStr success(T val) { return {0, val}; }
 };
+
+template<typename T> ReturnStr<T> Success(T r) { return ReturnStr<T>::success(r); }
+template<typename T> ReturnStr<T> Error(kresult_t result) { return ReturnStr<T>::error(result); }
 
 extern "C" void t_print_bochs(const char *str, ...);
 
@@ -112,11 +132,8 @@ struct Lock_Guard_Simul {
 };
 
 inline constexpr auto PAGE_ORDER = 12;
-inline constexpr auto PAGE_SIZE = 4096;
+inline constexpr auto PAGE_SIZE  = 4096;
 
 inline constexpr auto MAX_PHYS_ADDR_ORDER = 56;
 
-inline int log2(u64 n) noexcept
-{
-    return sizeof(n) * 8 - __builtin_clzl(n) - 1;
-}
+inline int log2(u64 n) noexcept { return sizeof(n) * 8 - __builtin_clzl(n) - 1; }

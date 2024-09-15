@@ -304,15 +304,15 @@ bool Mem_Object_Reference::alloc_page(u64 ptr_addr)
         return true;
     } else {
         // Find the actual address of the page inside the object
-        const auto reg_addr = ptr_addr - start_addr + start_offset_bytes;
-
+        const auto addr_aligned = ptr_addr & ~0xfffUL;
+        const auto reg_addr = addr_aligned - start_addr + object_offset_bytes;
         auto page = references->atomic_request_page(reg_addr);
 
         if (not page.page_struct_ptr)
             return false;
-
-        owner->map(klib::move(page), ptr_addr, craft_arguments());
-
+        
+        owner->map(klib::move(page), addr_aligned, craft_arguments());
+        
         return true;
     }
 }

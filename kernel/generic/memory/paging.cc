@@ -235,27 +235,33 @@ u64 Page_Table::atomic_create_phys_region(u64 page_aligned_start, u64 page_align
     return start_addr;
 }
 
-u64 Page_Table::atomic_create_mem_object_region(u64 page_aligned_start, u64 page_aligned_size,
+ReturnStr<Mem_Object_Reference *> Page_Table::atomic_create_mem_object_region(u64 page_aligned_start, u64 page_aligned_size,
                                                 unsigned access, bool fixed, klib::string name,
                                                 klib::shared_ptr<Mem_Object> object, bool cow,
                                                 u64 start_offset_bytes, u64 object_offset_bytes,
-                                                u64 object_size_bytes)
+                                                u64 object_size_bytes) noexcept
 {
     Auto_Lock_Scope scope_lock(lock);
 
+    // TODO: This throws
     u64 start_addr = find_region_spot(page_aligned_start, page_aligned_size, fixed);
 
     auto region = klib::make_unique<Mem_Object_Reference>(
         start_addr, page_aligned_size, klib::forward<klib::string>(name), this, access, object,
         object_offset_bytes, cow, start_offset_bytes, object_size_bytes);
 
+    if (!region)
+        return {-ENOMEM, nullptr};
+
     if (fixed)
         release_in_range(start_addr, page_aligned_size);
 
     mem_objects[object].regions.insert(region.get());
-    paging_regions.insert(region.release());
 
-    return start_addr;
+    auto ptr = region.release();
+    paging_regions.insert(ptr);
+
+    return Success(ptr);
 }
 
 Page_Table::RegionsRBTree::RBTreeIterator Page_Table::get_region(u64 page)

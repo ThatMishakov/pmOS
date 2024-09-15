@@ -52,11 +52,11 @@ limine/.git:
 # 	mkdir -p isodir/boot/pmos
 # 	tar -cf isodir/boot/pmos/sysroot.tar -C ../sysroot .
 
-$(ISO): ../kernel/build/kernel ../bootstrapd/bootstrapd.elf ../devicesd/devicesd.elf ../logd/logd.elf ../ns16550/ns16550.elf ../piped/piped.elf ../processd/processd.elf ../terminald/terminald.elf ../vfsd/vfsd.elf ../vfatfsd/vfatfsd.elf ../ahcid/ahcid.elf limine.cfg limine
+$(ISO): ../kernel/build/kernel ../bootstrapd/bootstrapd.elf ../devicesd/devicesd.elf ../logd/logd.elf ../ns16550/ns16550.elf ../piped/piped.elf ../processd/processd.elf ../terminald/terminald.elf ../vfsd/vfsd.elf ../vfatfsd/vfatfsd.elf ../ahcid/ahcid.elf limine.conf limine
 	mkdir -p isodir/boot/limine
 	mkdir -p isodir/EFI/BOOT
 
-	cp limine.cfg isodir/boot/limine/
+	cp limine.conf isodir/boot/limine/
 	cp -v limine/limine-uefi-cd.bin isodir/boot/limine/
 	cp -v limine/limine-bios-cd.bin isodir/boot/limine/
 	cp -v limine/limine-bios.sys isodir/boot/limine/

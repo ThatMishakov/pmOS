@@ -295,7 +295,7 @@ bool TaskDescriptor::load_elf(klib::shared_ptr<Mem_Object> elf, klib::string nam
             // Direct map the region
             const u64 region_start = ph.p_vaddr & ~0xFFFUL;
             const u64 file_offset  = ph.p_offset & ~0xFFFUL;
-            const u64 size         = (ph.p_memsz + 0xFFF) & ~0xFFFUL;
+            const u64 size         = ((ph.p_vaddr & 0xFFFUL) + ph.p_memsz + 0xFFF) & ~0xFFFUL;
 
             u8 protection_mask =
                 (ph.flags & ELF_FLAG_EXECUTABLE) ? Page_Table::Protection::Executable : 0;
@@ -304,14 +304,16 @@ bool TaskDescriptor::load_elf(klib::shared_ptr<Mem_Object> elf, klib::string nam
             protection_mask |=
                 (ph.flags & ELF_FLAG_WRITABLE) ? Page_Table::Protection::Writeable : 0;
 
-            table->atomic_create_mem_object_region(region_start, size, protection_mask, true, name,
-                                                   elf, false, 0, file_offset, size);
+            auto res = table->atomic_create_mem_object_region(
+                region_start, size, protection_mask, true, name, elf, false, 0, file_offset, size);
+            if (!res.success())
+                throw Kern_Exception(res.result, "Error in atomic_create_mem_object_region");
         } else {
             // Copy the region on access
-            const u64 region_start        = ph.p_vaddr & ~0xFFFUL;
-            const u64 size                = (ph.p_memsz + 0xFFF) & ~0xFFFUL;
-            const u64 file_offset         = ph.p_offset;
-            const u64 file_size           = ph.p_filesz;
+            const u64 region_start = ph.p_vaddr & ~0xFFFUL;
+            const u64 size         = ((ph.p_vaddr & 0xFFFUL) + ph.p_memsz + 0xFFF) & ~0xFFFUL;
+            const u64 file_offset  = ph.p_offset;
+            const u64 file_size    = ph.p_filesz;
             const u64 object_start_offset = ph.p_vaddr - region_start;
 
             u8 protection_mask =
@@ -321,9 +323,12 @@ bool TaskDescriptor::load_elf(klib::shared_ptr<Mem_Object> elf, klib::string nam
             protection_mask |=
                 (ph.flags & ELF_FLAG_WRITABLE) ? Page_Table::Protection::Writeable : 0;
 
-            table->atomic_create_mem_object_region(region_start, size, protection_mask, true, name,
-                                                   elf, true, object_start_offset, file_offset,
-                                                   file_size);
+            auto res = table->atomic_create_mem_object_region(
+                region_start, size, protection_mask, true, name, elf, true, object_start_offset,
+                file_offset, file_size);
+
+            if (!res.success())
+                throw Kern_Exception(res.result, "Error in atomic_create_mem_object_region");
         }
     }
 
