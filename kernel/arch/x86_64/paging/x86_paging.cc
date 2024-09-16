@@ -110,12 +110,12 @@ kresult_t map(u64 physical_addr, u64 virtual_addr, Page_Table_Argumments arg, u6
     if (pte.present)
         return -EEXIST;
 
-    pte             = {};
-    pte.page_ppn    = physical_addr / KB(4);
-    pte.present     = 1;
-    pte.user_access = arg.user_access;
-    pte.writeable   = arg.writeable;
-    pte.avl         = arg.extra;
+    pte                = {};
+    pte.page_ppn       = physical_addr / KB(4);
+    pte.present        = 1;
+    pte.user_access    = arg.user_access;
+    pte.writeable      = arg.writeable;
+    pte.avl            = arg.extra;
     pte.cache_disabled = arg.cache_policy != Memory_Type::Normal;
     if (nx_bit_enabled)
         pte.execution_disabled = arg.execution_disabled;
@@ -141,24 +141,27 @@ u64 get_pt_ppn(u64 virtual_addr, u64 pt_phys)
     return pde.page_ppn;
 }
 
-void map_pages(u64 cr3, u64 phys_addr, u64 virt_addr, u64 size_bytes, Page_Table_Argumments args)
+kresult_t map_pages(u64 cr3, u64 phys_addr, u64 virt_addr, u64 size_bytes,
+                    Page_Table_Argumments args)
 {
     u64 result = 0;
     u64 i      = 0;
+
+    // TODO: Unmap on failure
+
     for (; i < size_bytes; i += 0x1000) {
         result = map(phys_addr + i, virt_addr + i, args, cr3);
+        if (result)
+            return result;
     }
 
-    // TODO: It would probably be better to unmap the pages on error
-    // Doesn't matter now
-    // catch (...) {
-    //     ...
+    return result;
 }
 
-void map_kernel_page(u64 phys_addr, void *virt_addr, Page_Table_Argumments arg)
+kresult_t map_kernel_page(u64 phys_addr, void *virt_addr, Page_Table_Argumments arg)
 {
     const u64 cr3 = getCR3();
-    map(phys_addr, (u64)virt_addr, arg, cr3);
+    return map(phys_addr, (u64)virt_addr, arg, cr3);
 }
 
 u64 prepare_pt_for(u64 virtual_addr, Page_Table_Argumments arg, u64 pt_phys)
@@ -545,10 +548,10 @@ x86_4level_Page_Table::~x86_4level_Page_Table()
     }
 }
 
-void x86_4level_Page_Table::map(u64 physical_addr, u64 virtual_addr, Page_Table_Argumments arg)
+kresult_t x86_4level_Page_Table::map(u64 physical_addr, u64 virtual_addr,
+                                     Page_Table_Argumments arg) noexcept
 {
-    if (physical_addr >> 48)
-        throw(Kern_Exception(-ERANGE, "x86_4level_Page_Table::map physical page out of range"));
+    assert(!(physical_addr >> 48) && "x86_4level_Page_Table::map physical page out of range");
 
     Temp_Mapper_Obj<x86_PAE_Entry> mapper(request_temp_mapper());
     mapper.map((u64)pml4_phys);
@@ -557,7 +560,7 @@ void x86_4level_Page_Table::map(u64 physical_addr, u64 virtual_addr, Page_Table_
     if (not pml4e->present) {
         auto p = pmm::get_memory_for_kernel(1);
         if (pmm::alloc_failure(p))
-            throw Kern_Exception(-ENOMEM, "could not allocate memory for page tables");
+            return -ENOMEM;
 
         *pml4e             = x86_PAE_Entry();
         pml4e->page_ppn    = p >> 12;
@@ -570,12 +573,12 @@ void x86_4level_Page_Table::map(u64 physical_addr, u64 virtual_addr, Page_Table_
     mapper.map(pml4e->page_ppn << 12);
     x86_PAE_Entry *pdpte = &mapper.ptr[pdpt_index(virtual_addr)];
     if (pdpte->pat_size) // 1GB page is already present
-        throw(Kern_Exception(-EEXIST, "map 1G page is present"));
+        return -EEXIST;
 
     if (not pdpte->present) {
         auto p = pmm::get_memory_for_kernel(1);
         if (pmm::alloc_failure(p))
-            throw Kern_Exception(-ENOMEM, "could not allocate memory for page tables");
+            return -ENOMEM;
 
         *pdpte             = x86_PAE_Entry();
         pdpte->page_ppn    = p >> 12;
@@ -588,12 +591,12 @@ void x86_4level_Page_Table::map(u64 physical_addr, u64 virtual_addr, Page_Table_
     mapper.map(pdpte->page_ppn << 12);
     x86_PAE_Entry *pde = &mapper.ptr[pd_index(virtual_addr)];
     if (pde->pat_size)
-        throw(Kern_Exception(-EEXIST, "map 2M page is present"));
+        return -EEXIST;
 
     if (not pde->present) {
         auto p = pmm::get_memory_for_kernel(1);
         if (pmm::alloc_failure(p))
-            throw Kern_Exception(-ENOMEM, "could not allocate memory for page tables");
+            return -ENOMEM;
 
         *pde             = x86_PAE_Entry();
         pde->page_ppn    = p >> 12;
@@ -606,29 +609,33 @@ void x86_4level_Page_Table::map(u64 physical_addr, u64 virtual_addr, Page_Table_
     mapper.map(pde->page_ppn << 12);
     x86_PAE_Entry *pte = &mapper.ptr[pt_index(virtual_addr)];
     if (pte->present)
-        throw(Kern_Exception(-EEXIST, "map page is present"));
+        return -EEXIST;
 
-    assert(!(arg.extra & PAGING_FLAG_STRUCT_PAGE) || pmm::Page_Descriptor::find_page_struct(physical_addr));
+    assert(!(arg.extra & PAGING_FLAG_STRUCT_PAGE) ||
+           pmm::Page_Descriptor::find_page_struct(physical_addr));
 
-    *pte             = x86_PAE_Entry();
-    pte->page_ppn    = physical_addr / KB(4);
-    pte->present     = 1;
-    pte->user_access = arg.user_access;
-    pte->writeable   = arg.writeable;
-    pte->avl         = arg.extra;
+    *pte                = x86_PAE_Entry();
+    pte->page_ppn       = physical_addr / KB(4);
+    pte->present        = 1;
+    pte->user_access    = arg.user_access;
+    pte->writeable      = arg.writeable;
+    pte->avl            = arg.extra;
     pte->cache_disabled = arg.cache_policy != Memory_Type::Normal;
     if (nx_bit_enabled)
         pte->execution_disabled = arg.execution_disabled;
+
+    return 0;
 }
 
-void x86_4level_Page_Table::map(pmm::Page_Descriptor page, u64 virtual_addr, Page_Table_Argumments arg)
+kresult_t x86_4level_Page_Table::map(pmm::Page_Descriptor page, u64 virtual_addr,
+                                     Page_Table_Argumments arg) noexcept
 {
     auto p = page.page_struct_ptr;
     assert(p && "page must be present");
     assert(p->type == pmm::Page::PageType::Allocated);
 
     if (page.page_struct_ptr->get_phys_addr() >> 48)
-        throw(Kern_Exception(-ERANGE, "x86_4level_Page_Table::map physical page out of range"));
+        assert(false && "x86_4level_Page_Table::map physical page out of range");
 
     Temp_Mapper_Obj<x86_PAE_Entry> mapper(request_temp_mapper());
     mapper.map((u64)pml4_phys);
@@ -637,7 +644,7 @@ void x86_4level_Page_Table::map(pmm::Page_Descriptor page, u64 virtual_addr, Pag
     if (not pml4e->present) {
         auto p = pmm::get_memory_for_kernel(1);
         if (pmm::alloc_failure(p))
-            throw Kern_Exception(-ENOMEM, "could not allocate memory for page tables");
+            return -ENOMEM;
 
         *pml4e             = x86_PAE_Entry();
         pml4e->page_ppn    = p >> 12;
@@ -650,12 +657,12 @@ void x86_4level_Page_Table::map(pmm::Page_Descriptor page, u64 virtual_addr, Pag
     mapper.map(pml4e->page_ppn << 12);
     x86_PAE_Entry *pdpte = &mapper.ptr[pdpt_index(virtual_addr)];
     if (pdpte->pat_size) // 1GB page is already present
-        throw(Kern_Exception(-EEXIST, "map 1G page is present"));
+        return -EEXIST;
 
     if (not pdpte->present) {
         auto p = pmm::get_memory_for_kernel(1);
         if (pmm::alloc_failure(p))
-            throw Kern_Exception(-ENOMEM, "could not allocate memory for page tables");
+            return -ENOMEM;
 
         *pdpte             = x86_PAE_Entry();
         pdpte->page_ppn    = p >> 12;
@@ -668,12 +675,12 @@ void x86_4level_Page_Table::map(pmm::Page_Descriptor page, u64 virtual_addr, Pag
     mapper.map(pdpte->page_ppn << 12);
     x86_PAE_Entry *pde = &mapper.ptr[pd_index(virtual_addr)];
     if (pde->pat_size)
-        throw(Kern_Exception(-EEXIST, "map 2M page is present"));
+        return -EEXIST;
 
     if (not pde->present) {
         auto p = pmm::get_memory_for_kernel(1);
         if (pmm::alloc_failure(p))
-            throw Kern_Exception(-ENOMEM, "could not allocate memory for page tables");
+            return -ENOMEM;
 
         *pde             = x86_PAE_Entry();
         pde->page_ppn    = p >> 12;
@@ -686,19 +693,21 @@ void x86_4level_Page_Table::map(pmm::Page_Descriptor page, u64 virtual_addr, Pag
     mapper.map(pde->page_ppn << 12);
     x86_PAE_Entry *pte = &mapper.ptr[pt_index(virtual_addr)];
     if (pte->present)
-        throw(Kern_Exception(-EEXIST, "map page is present"));
+        return -EEXIST;
 
-    *pte             = x86_PAE_Entry();
-    pte->present     = 1;
-    pte->user_access = arg.user_access;
-    pte->writeable   = arg.writeable;
-    pte->avl         = PAGING_FLAG_STRUCT_PAGE;
+    *pte                = x86_PAE_Entry();
+    pte->present        = 1;
+    pte->user_access    = arg.user_access;
+    pte->writeable      = arg.writeable;
+    pte->avl            = PAGING_FLAG_STRUCT_PAGE;
     pte->cache_disabled = arg.cache_policy != Memory_Type::Normal;
-    u64 page_ppn     = page.takeout_page() >> 12;
-    pte->page_ppn    = page_ppn;
+    u64 page_ppn        = page.takeout_page() >> 12;
+    pte->page_ppn       = page_ppn;
 
     if (nx_bit_enabled)
         pte->execution_disabled = arg.execution_disabled;
+
+    return 0;
 }
 
 void x86_4level_Page_Table::free_pt(u64 pt_phys)
@@ -812,7 +821,9 @@ klib::shared_ptr<x86_4level_Page_Table> x86_4level_Page_Table::create_clone()
         }
 
         for (auto &reg: this->paging_regions) {
-            reg.clone_to(new_table, reg.start_addr, reg.access_type);
+            auto r = reg.clone_to(new_table, reg.start_addr, reg.access_type);
+            if (r)
+                throw Kern_Exception(r, "error in clone_to");
         }
     } catch (...) {
         // Remove all the regions and objects. It might not be necessary, since
@@ -882,7 +893,10 @@ bool x86_4level_Page_Table::atomic_copy_to_user(u64 to, const void *from, u64 si
     Temp_Mapper_Obj<char> mapper(request_temp_mapper());
     for (u64 i = to & ~0xfffUL; i < to + size; i += 0x1000) {
         const auto b = prepare_user_page(i, Writeable);
-        if (not b)
+        if (!b.success())
+            throw Kern_Exception(b.val, "error in prepare_user_page");
+
+        if (not b.val)
             return false;
 
         const auto page = get_page_mapping(i);

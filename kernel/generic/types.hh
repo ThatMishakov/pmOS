@@ -29,19 +29,33 @@
 #pragma once
 #include <assert.h>
 #include <kernel/types.h>
+#include <lib/utility.hh>
 
 using kresult_t = i64;
+
+struct Error {
+    kresult_t result {0};
+
+    Error() = default;
+    inline Error(kresult_t result): result(result) {};
+};
 
 template<class T> struct ReturnStr {
     kresult_t result;
     T val;
 
     ReturnStr() = default;
-    ReturnStr(kresult_t result, T val): result(result), val(val) {};
+    ReturnStr(kresult_t result, T val): result(result), val(klib::move(val)) {};
+    ReturnStr(Error e): result {e.result}, val {} {};
+    ReturnStr(T val): result {0}, val(klib::move(val)) {};
 
-    template<class O> ReturnStr<O> propagate() { return {result, {}}; }
+    Error propagate() const
+    {
+        assert(result);
+        return {result};
+    }
 
-    bool success() { return result == 0; }
+    bool success() const { return result == 0; }
 
     static ReturnStr error(kresult_t result)
     {
@@ -50,11 +64,10 @@ template<class T> struct ReturnStr {
     }
 
     // TODO: move this...
-    static ReturnStr success(T val) { return {0, val}; }
+    static ReturnStr success(T val) { return {0, klib::move(val)}; }
 };
 
 template<typename T> ReturnStr<T> Success(T r) { return ReturnStr<T>::success(r); }
-template<typename T> ReturnStr<T> Error(kresult_t result) { return ReturnStr<T>::error(result); }
 
 extern "C" void t_print_bochs(const char *str, ...);
 

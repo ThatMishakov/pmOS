@@ -150,8 +150,8 @@ public:
      * available. second - pointer to the start of the page at the offset. If the first is not true,
      * this value is meaningless and should be ignored.
      */
-    kernel::pmm::Page_Descriptor request_page(u64 offset);
-    kernel::pmm::Page_Descriptor atomic_request_page(u64 offser);
+    ReturnStr<kernel::pmm::Page_Descriptor> request_page(u64 offset) noexcept;
+    ReturnStr<kernel::pmm::Page_Descriptor> atomic_request_page(u64 offser) noexcept;
 
     /**
      * @brief Atomically resizes the memory region
@@ -176,12 +176,12 @@ public:
     /// Reads from the memory object into the kernel buffer
     /// Returns true if the operation was successful, false if the operation can't be completed
     /// immediately and needs to be repeated Throws on errors
-    bool read_to_kernel(u64 offset, void *buffer, u64 size);
+    ReturnStr<bool> read_to_kernel(u64 offset, void *buffer, u64 size);
 
     /// Maps the memory object into the kernel space
     /// Returns the pointer to the mapped memory. If the pointer is null, the operation can't be
     /// completed immediately and needs to be repeated Throws on errors
-    void *map_to_kernel(u64 offset, u64 size, Page_Table_Argumments args);
+    ReturnStr<void *> map_to_kernel(u64 offset, u64 size, Page_Table_Argumments args);
 
     using Protection = ::Protection;
 

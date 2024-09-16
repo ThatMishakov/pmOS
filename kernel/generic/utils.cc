@@ -30,6 +30,7 @@
 
 #include "types.hh"
 
+#include <errno.h>
 #include <kern_logger/kern_logger.hh>
 #include <lib/string.hh>
 #include <libunwind.h>
@@ -38,7 +39,6 @@
 #include <sched/sched.hh>
 #include <stdarg.h>
 #include <stdio.h>
-#include <errno.h>
 
 void int_to_string(long int n, u8 base, char *str, int &length)
 {
@@ -175,7 +175,7 @@ bool prepare_user_buff_rd(const char *buff, size_t size)
     u64 addr_start = (u64)buff;
     u64 end        = addr_start + size;
 
-    TaskDescriptor* current_task = get_current_task();
+    TaskDescriptor *current_task = get_current_task();
 
     if (addr_start > current_task->page_table->user_addr_max() or
         end > current_task->page_table->user_addr_max() or addr_start > end)
@@ -186,12 +186,15 @@ bool prepare_user_buff_rd(const char *buff, size_t size)
 
         for (u64 i = addr_start; i < end; ++i) {
             u64 page = i & ~0xfffULL;
-            bool result =
+            auto result =
                 current_task->page_table->prepare_user_page(page, Page_Table::Protection::Readable);
-            if (not result)
+            if (!result.success())
+                throw(Kern_Exception(result.result, "prepare_user_buff_rd failed"));
+            if (not result.val)
                 current_task->atomic_block_by_page(page, &current_task->page_table->blocked_tasks);
-            if (not result)
-                return result;
+            // horrible code...
+            if (not result.val)
+                return result.val;
         }
 
         current_task->pop_repeat_syscall();
@@ -210,8 +213,8 @@ bool prepare_user_buff_wr(char *buff, size_t size)
 
     bool avail = true;
 
-    TaskDescriptor* current_task = get_current_task();
-    u64 kern_addr_start                           = current_task->page_table->user_addr_max();
+    TaskDescriptor *current_task = get_current_task();
+    u64 kern_addr_start          = current_task->page_table->user_addr_max();
 
     if (addr_start > kern_addr_start or end > kern_addr_start or addr_start > end)
         throw(Kern_Exception(-EFAULT, "prepare_user_buff_wr outside userspace"));
@@ -220,8 +223,11 @@ bool prepare_user_buff_wr(char *buff, size_t size)
         current_task->request_repeat_syscall();
         for (u64 i = addr_start; i < end and avail; ++i) {
             u64 page = i & ~0xfffULL;
-            avail    = current_task->page_table->prepare_user_page(page,
+            auto t   = current_task->page_table->prepare_user_page(page,
                                                                    Page_Table::Protection::Writeable);
+            if (!t.success())
+                throw(Kern_Exception(t.result, "prepare_user_buff_wr failed"));
+            avail = t.val;
             if (not avail)
                 current_task->atomic_block_by_page(page, &current_task->page_table->blocked_tasks);
         }

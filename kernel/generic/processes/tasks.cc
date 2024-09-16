@@ -88,10 +88,13 @@ u64 TaskDescriptor::init_stack()
 
     static const klib::string stack_region_name = "default_stack";
 
-    this->page_table->atomic_create_normal_region(stack_page_start, stack_size,
+    auto r = this->page_table->atomic_create_normal_region(stack_page_start, stack_size,
                                                   Page_Table::Protection::Writeable |
                                                       Page_Table::Protection::Readable,
                                                   true, false, stack_region_name, -1);
+
+    if (!r.success())
+        throw Kern_Exception(r.result, "Error creating stack region");
 
     // Set new rsp
     this->regs.stack_pointer() = stack_end;
@@ -246,8 +249,11 @@ bool TaskDescriptor::load_elf(klib::shared_ptr<Mem_Object> elf, klib::string nam
         throw Kern_Exception(-EEXIST, "Process has a page table");
 
     ELF_64bit header;
-    bool r = elf->read_to_kernel(0, (u8 *)&header, sizeof(ELF_64bit));
-    if (!r)
+    auto r = elf->read_to_kernel(0, (u8 *)&header, sizeof(ELF_64bit));
+    if (!r.success())
+        throw Kern_Exception(r.result, "Error reading ELF header");
+
+    if (!r.val)
         // ELF header can't be read immediately
         return false;
 
@@ -274,7 +280,10 @@ bool TaskDescriptor::load_elf(klib::shared_ptr<Mem_Object> elf, klib::string nam
     const u64 ph_count = header.program_header_entries;
     klib::vector<phreader> phs(ph_count);
     r = elf->read_to_kernel(header.program_header, (u8 *)phs.data(), ph_count * sizeof(phreader));
-    if (!r)
+    if (!r.success())
+        throw Kern_Exception(r.result, "Error reading ELF program headers");
+
+    if (!r.val)
         // Program headers can't be read immediately
         return false;
 
@@ -349,15 +358,18 @@ bool TaskDescriptor::load_elf(klib::shared_ptr<Mem_Object> elf, klib::string nam
         r                 = elf->read_to_kernel(ph.p_offset, tls_data->data, ph.p_filesz);
         // Install memory region
         const u64 pa_size = (size + 0xFFF) & ~0xFFFUL;
-        u64 tls_virt      = table->atomic_create_normal_region(
+        auto tls_virt      = table->atomic_create_normal_region(
             0, pa_size, Page_Table::Protection::Readable | Page_Table::Protection::Writeable, false,
             false, name + "_tls", 0);
 
-        auto r = table->atomic_copy_to_user(tls_virt, tls_data, size);
+        if (!tls_virt.success())
+            throw Kern_Exception(tls_virt.result, "Error creating TLS region");
+
+        auto r = table->atomic_copy_to_user(tls_virt.val->start_addr, tls_data, size);
         if (!r)
             return false;
 
-        regs.arg3() = tls_virt;
+        regs.arg3() = tls_virt.val->start_addr;
     }
 
     register_page_table(table);
@@ -396,9 +408,13 @@ bool TaskDescriptor::load_elf(klib::shared_ptr<Mem_Object> elf, klib::string nam
 
     const u64 tag_size_page = (size + 0xFFF) & ~0xFFFUL;
 
-    const u64 pos = table->atomic_create_normal_region(
+    auto pos_p = table->atomic_create_normal_region(
         0, tag_size_page, Page_Table::Protection::Readable | Page_Table::Protection::Writeable,
         false, false, name + "_load_tags", 0);
+    if (!pos_p.success())
+        throw Kern_Exception(pos_p.result, "Error creating load tags region");
+    auto pos = pos_p.val->start_addr;
+
     auto b = table->atomic_copy_to_user(pos, &(load_stack[0]), size);
     if (!b)
         return false;

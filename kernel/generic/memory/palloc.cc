@@ -65,6 +65,7 @@ void *palloc(size_t number)
                 .extra              = PAGING_FLAG_STRUCT_PAGE,
             };
 
+            auto result = 
             map_kernel_page((u64)phys_addr + i * PAGE_SIZE, virt_addr, arg);
         } catch (Kern_Exception &e) {
             pmm::free_memory_for_kernel(phys_addr + i * PAGE_SIZE, number - i);

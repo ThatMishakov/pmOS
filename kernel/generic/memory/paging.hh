@@ -64,12 +64,14 @@ struct Page_Table_Argumments {
 class Mem_Object;
 struct Mem_Object_Data {
     u8 max_privilege_mask = 0;
-    pmos::containers::RedBlackTree<Mem_Object_Reference, &Mem_Object_Reference::object_bst_head,
-                 detail::TreeCmp<Mem_Object_Reference, u64,
-                                 &Mem_Object_Reference::start_addr>>::RBTreeHead regions;
+    pmos::containers::RedBlackTree<
+        Mem_Object_Reference, &Mem_Object_Reference::object_bst_head,
+        detail::TreeCmp<Mem_Object_Reference, u64, &Mem_Object_Reference::start_addr>>::RBTreeHead
+        regions;
 };
 
 struct Mem_Object_Reference;
+struct Private_Normal_Region;
 
 /**
  * @brief Generic Page Table class
@@ -84,15 +86,15 @@ public:
     /// Map containing user space memory regions. If the address is not covered by any of the
     /// regions, it is unallocated. Otherwise, the region controlls the actual allocation and
     /// protection of the memory.
-    using RegionsRBTree =
-        pmos::containers::RedBlackTree<Generic_Mem_Region, &Generic_Mem_Region::bst_head,
-                     detail::TreeCmp<Generic_Mem_Region, u64, &Generic_Mem_Region::start_addr>>;
+    using RegionsRBTree = pmos::containers::RedBlackTree<
+        Generic_Mem_Region, &Generic_Mem_Region::bst_head,
+        detail::TreeCmp<Generic_Mem_Region, u64, &Generic_Mem_Region::start_addr>>;
     RegionsRBTree::RBTreeHead paging_regions;
 
     /// List of the tasks that own the page table. Task_Descriptor should contain a page_table
     /// pointer which should point to this page table. The kernel does not have special structures
     /// for the threads, so they are achieved by a page table and using IPC for synchronization.
-    klib::set<TaskDescriptor*> owner_tasks;
+    klib::set<TaskDescriptor *> owner_tasks;
 
     /// Queue of the tasks blocked by the page table
     blocked_sched_queue blocked_tasks;
@@ -139,7 +141,7 @@ public:
      * address should be returned. If, however, it is not large enough or the parameter is NULL, the
      * behaviour will depend upon the fixed variable. If it is set, the exception would be thrown.
      * Otherwise, the kernel shall walk the memory regions untill user_addr_max(). If a free spot
-     * was found, then that address would be returned. Otherwise, an exception would be thrown.
+     * was found, then that address would be returned. Otherwise, an error is returned.
      *
      * @param desired_start Page-aligned hint that shall be used to place the new region. If
      * starting at *desired_addr* there are no regions which it might intersect it, that address
@@ -148,10 +150,10 @@ public:
      * @param size Page-aligned size in bytes.
      * @param fixed Parameter indicating the behaviour in case the desired_start hint cannot be
      * honoured. If true, an exception would be thrown. If false, the new region should be found.
-     * @return the beggining address where to place the new region if the execution has been
-     * successfull.
+     * @return the beggining address where to place the new region.
      */
-    u64 find_region_spot(u64 desired_start, u64 size, bool fixed);
+    ReturnStr<phys_addr_t> find_region_spot(phys_addr_t desired_start, phys_addr_t size,
+                                            bool fixed);
 
     // Releases the memory regions in the given range (and their memory). If in the middle of the
     // region, it is split
@@ -178,16 +180,17 @@ public:
      * @return The start virtual address of the new memory region.
      * @see find_region_spot()
      */
-    u64 /* page_start */ atomic_create_normal_region(u64 page_aligned_start, u64 page_aligned_size,
-                                                     unsigned access, bool fixed, bool dma, klib::string name,
-                                                     u64 pattern);
+    [[nodiscard]] ReturnStr<Private_Normal_Region *> /* page_start */
+        atomic_create_normal_region(ulong page_aligned_start, ulong page_aligned_size,
+                                    unsigned access, bool fixed, bool dma, klib::string name,
+                                    u64 pattern);
 
     /**
      * @brief Creates a memory region mapping to the physical memory.
      *
      * This function creates a memory region which lazilly maps physical memory to the processe's
      * virtual memory. The kernel does not check if this memory is used or not and does not reserve
-     * the pages automatically, so the callee should make sure other processes will not overwrite it
+     * the pages automatically, so the caller should make sure other processes will not overwrite it
      * or do damage.
      *
      * @param page_aligned_start A page-aligned hint indicating where to place the new region. This
@@ -203,9 +206,10 @@ public:
      * @return The start virtual address of the new memory region.
      * @see find_region_spot()
      */
-    u64 /* page_start */ atomic_create_phys_region(u64 page_aligned_start, u64 page_aligned_size,
-                                                   unsigned access, bool fixed, klib::string name,
-                                                   u64 phys_addr_start);
+    [[nodiscard]] ReturnStr<Phys_Mapped_Region *> /* page_start */
+        atomic_create_phys_region(ulong page_aligned_start, ulong page_aligned_size,
+                                  unsigned access, bool fixed, klib::string name,
+                                  phys_addr_t phys_addr_start);
 
     /**
      * @brief Creates a memory region referencing the memory object
@@ -255,7 +259,7 @@ public:
      * available and the task has been blocked. The action might need to be repeated once the page
      * becomes available and the task is unblocked.
      */
-    bool prepare_user_page(u64 virt_addr, unsigned access_type);
+    [[nodiscard]] ReturnStr<bool> prepare_user_page(u64 virt_addr, unsigned access_type);
     // bool prepare_user_buffer(u64 virt_addr, unsigned access_type);
 
     /// @brief Indicates if the page can be taken out and used without copying to provide for the
@@ -285,8 +289,9 @@ public:
      *
      * @param page_addr Physical address of the page
      * @param virt_addr Virtual address to where the page shall be mapped
+     * @return Error code
      */
-    virtual void map(u64 page_addr, u64 virt_addr);
+    [[nodiscard]] virtual kresult_t map(u64 page_addr, u64 virt_addr) noexcept;
 
     /**
      * @brief Maps the page to the virtual address
@@ -299,7 +304,8 @@ public:
      * @param virt_addr Virtual address to where the page shall be mapped
      * @param arg Arguments and protections with which the page should be mapped.
      */
-    virtual void map(u64 page_addr, u64 virt_addr, Page_Table_Argumments arg) = 0;
+    [[nodiscard]] virtual kresult_t map(u64 page_addr, u64 virt_addr,
+                                        Page_Table_Argumments arg) = 0;
 
     /**
      * @brief Maps the page to the virtual address
@@ -312,7 +318,8 @@ public:
      * @param virt_addr Virtual address to where the page shall be mapped
      * @param arg Arguments and protections with which the page should be mapped.
      */
-    virtual void map(kernel::pmm::Page_Descriptor page, u64 virt_addr, Page_Table_Argumments arg) = 0;
+    [[nodiscard]] virtual kresult_t map(kernel::pmm::Page_Descriptor page, u64 virt_addr,
+                                        Page_Table_Argumments arg) noexcept = 0;
 
     // /// Return structure used with check_if_allocated_and_set_flag()
     // struct Check_Return_Str {
@@ -375,8 +382,8 @@ public:
      * exception will be thrown. Otherwise, the new region would be found.
      * @return The location of the region in the new page table.
      */
-    u64 atomic_transfer_region(const klib::shared_ptr<Page_Table> &to, u64 region_orig,
-                               u64 prefered_to, u64 access, bool fixed);
+    ReturnStr<size_t> atomic_transfer_region(const klib::shared_ptr<Page_Table> &to, size_t region_orig,
+                               size_t prefered_to, ulong access, bool fixed);
 
     /**
      * @brief  Moves the mapped pages from the old region to a new region, invaludating the old page
@@ -389,8 +396,8 @@ public:
      * @param new_access The protections that the pages should have after being moved to the new
      * page table
      */
-    void move_pages(const klib::shared_ptr<Page_Table> &to, u64 from_addr, u64 to_addr,
-                    u64 size_bytes, u8 new_access);
+    [[nodiscard]] kresult_t move_pages(const klib::shared_ptr<Page_Table> &to, size_t from_addr,
+                                       size_t to_addr, size_t size_bytes, u8 new_access) noexcept;
 
     /**
      * @brief  Copiest the mapped pages from the old region to a new region.
@@ -402,7 +409,7 @@ public:
      * @param new_access The protections that the pages should have after being moved to the new
      * page table
      */
-    virtual void copy_pages(const klib::shared_ptr<Page_Table> &to, u64 from_addr, u64 to_addr,
+    virtual kresult_t copy_pages(const klib::shared_ptr<Page_Table> &to, u64 from_addr, u64 to_addr,
                             u64 size_bytes, u8 new_access);
 
     struct Page_Info {
@@ -525,13 +532,13 @@ using ptable_top_ptr_t = u64;
 void map_page(ptable_top_ptr_t page_table, u64 phys_addr, u64 virt_addr, Page_Table_Argumments arg);
 
 // Generic functions to map and release pages in kernel, using the active page table
-void map_kernel_page(u64 phys_addr, void *virt_addr, Page_Table_Argumments arg);
+kresult_t map_kernel_page(u64 phys_addr, void *virt_addr, Page_Table_Argumments arg);
 void unmap_kernel_page(void *virt_addr);
 
 // Generic function to map multiple pages
-void map_pages(ptable_top_ptr_t page_table, u64 phys_addr, u64 virt_addr, u64 size_bytes,
+kresult_t map_pages(ptable_top_ptr_t page_table, u64 phys_addr, u64 virt_addr, u64 size_bytes,
                Page_Table_Argumments arg);
-void map_kernel_pages(u64 phys_addr, u64 virt_addr, u64 size, Page_Table_Argumments arg);
+kresult_t map_kernel_pages(u64 phys_addr, u64 virt_addr, u64 size, Page_Table_Argumments arg);
 
 // Generic function to apply the page table to the current CPU
 void apply_page_table(ptable_top_ptr_t page_table);

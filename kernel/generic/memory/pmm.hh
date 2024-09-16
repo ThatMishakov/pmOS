@@ -82,7 +82,7 @@ struct Page_Descriptor {
     operator bool() const noexcept;
 
     /// Allocates a new page and copies current page into it
-    Page_Descriptor create_copy() const;
+    ReturnStr<Page_Descriptor> create_copy() const noexcept;
 
     /// Creates another reference to the page
     Page_Descriptor duplicate() const noexcept;
@@ -93,9 +93,9 @@ struct Page_Descriptor {
     /// @brief Allocates a page
     /// @param alignment_log Logarithm of the alignment of the page (e.g. 12 for 4096 bytes)
     /// @return Newly allocated page. Throws on error
-    static Page_Descriptor allocate_page(u8 alignment_log);
+    static ReturnStr<Page_Descriptor> allocate_page(u8 alignment_log);
 
-    static Page_Descriptor allocate_page_zeroed(u8 alignment_log);
+    static ReturnStr<Page_Descriptor> allocate_page_zeroed(u8 alignment_log);
 
     /// Creates a page descriptor, allocating a new page struct, taking ownership of the given page
     static Page_Descriptor create_from_allocated(Page::page_addr_t phys_addr);

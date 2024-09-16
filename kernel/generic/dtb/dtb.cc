@@ -56,7 +56,9 @@ void init_dtb(u64 phys_addr)
         .extra              = 0,
         .cache_policy       = Memory_Type::Normal,
     };
-    void *const virt_base = dtb_object->map_to_kernel(0, total_size, args);
+    auto t = dtb_object->map_to_kernel(0, total_size, args);
+    assert(t.success());
+    void *const virt_base = t.val;
     if (virt_base == nullptr) {
         serial_logger.printf("Error: could not map FDT object\n");
         return;

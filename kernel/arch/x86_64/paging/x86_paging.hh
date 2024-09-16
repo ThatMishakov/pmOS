@@ -111,9 +111,9 @@ public:
     static klib::shared_ptr<x86_4level_Page_Table> create_empty();
 
     // Maps the page with the appropriate permissions
-    virtual void map(u64 page_addr, u64 virt_addr, Page_Table_Argumments arg) override;
+    virtual kresult_t map(u64 page_addr, u64 virt_addr, Page_Table_Argumments arg) noexcept override;
 
-    virtual void map(kernel::pmm::Page_Descriptor page, u64 virt_addr, Page_Table_Argumments arg) override;
+    virtual kresult_t map(kernel::pmm::Page_Descriptor page, u64 virt_addr, Page_Table_Argumments arg) noexcept override;
 
     virtual void invalidate(u64 virt_addr, bool free) override;
 

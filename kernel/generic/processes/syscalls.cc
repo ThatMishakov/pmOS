@@ -728,9 +728,12 @@ void syscall_create_normal_region(u64 pid, u64 addr_start, u64 size, u64 access,
         return;
     }
 
-    syscall_ret_low(current)  = SUCCESS;
-    syscall_ret_high(current) = dest_task->page_table->atomic_create_normal_region(
+    syscall_ret_low(current) = SUCCESS;
+    auto result              = dest_task->page_table->atomic_create_normal_region(
         addr_start, size, access & 0x07, access & 0x08, access & 0x10, "anonymous region", 0);
+    if (!result.success())
+        throw(Kern_Exception(result.result, "could not create region"));
+    syscall_ret_high(current) = result.val->start_addr;
 }
 
 void syscall_create_phys_map_region(u64 pid, u64 addr_start, u64 size, u64 access, u64 phys_addr,
@@ -751,9 +754,13 @@ void syscall_create_phys_map_region(u64 pid, u64 addr_start, u64 size, u64 acces
         return;
     }
 
-    syscall_ret_low(current)  = SUCCESS;
-    syscall_ret_high(current) = dest_task->page_table->atomic_create_phys_region(
+    syscall_ret_low(current) = SUCCESS;
+    auto result              = dest_task->page_table->atomic_create_phys_region(
         addr_start, size, access & 0x07, access & 0x08, klib::string(), phys_addr);
+    if (!result.success())
+        throw(Kern_Exception(result.result, "could not create region"));
+
+    syscall_ret_high(current) = result.val->start_addr;
 }
 
 void syscall_get_page_table(u64 pid, u64, u64, u64, u64, u64)
@@ -871,9 +878,11 @@ void syscall_transfer_region(u64 to_page_table, u64 region, u64 dest, u64 flags,
     bool fixed = flags & 0x08;
 
     const auto result = current->page_table->atomic_transfer_region(pt, region, dest, flags, fixed);
+    if (!result.success())
+        throw Kern_Exception(result.result, "could not transfer region");
 
     syscall_ret_low(current)  = SUCCESS;
-    syscall_ret_high(current) = result;
+    syscall_ret_high(current) = result.val;
 }
 
 void syscall_asign_page_table(u64 pid, u64 page_table, u64 flags, u64, u64, u64)
@@ -951,11 +960,11 @@ void syscall_map_mem_object(u64 page_table_id, u64 addr_start, u64 size_bytes, u
     if (object->size_bytes() < offset + size_bytes)
         throw Kern_Exception(-EFBIG, "size is out of range");
 
-    syscall_ret_low(current_task)  = SUCCESS;
-    auto res = table->atomic_create_mem_object_region(
-        addr_start, size_bytes, access & 0x7, access & 0x8, "object map", object, access & 0x10, 0,
-        offset, size_bytes);
-    
+    syscall_ret_low(current_task) = SUCCESS;
+    auto res = table->atomic_create_mem_object_region(addr_start, size_bytes, access & 0x7,
+                                                      access & 0x8, "object map", object,
+                                                      access & 0x10, 0, offset, size_bytes);
+
     if (!res.success())
         throw Kern_Exception(res.result, "error in atomic_create_mem_object_region");
     syscall_ret_high(current_task) = res.val->start_addr;
@@ -1276,7 +1285,10 @@ void syscall_get_page_address(u64 task_id, u64 page_base, u64 flags, u64, u64, u
     Auto_Lock_Scope lock(table->lock);
 
     auto b = table->prepare_user_page(page_base, 0);
-    if (not b)
+    if (!b.success())
+        throw Kern_Exception(b.result, "could not prepare user page");
+
+    if (not b.val)
         return;
 
     auto mapping           = table->get_page_mapping(page_base);

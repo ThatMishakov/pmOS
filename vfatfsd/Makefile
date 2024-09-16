@@ -20,14 +20,14 @@ ifeq ($(ARCH), riscv64)
 endif
 
 #USERCFLAGS := -march=rv64gc -mabi=lp64d -O3
-USERCFLAGS := -O3
+USERCFLAGS := -O3 -flto
 
 CFLAGS = -std=gnu2x $(INCLUDEFLAGS) -g $(TARGETFLAGS)
 CXXFLAGS = -std=c++20 $(INCLUDEFLAGS) -g $(TARGETFLAGS)
 CPPFLAGS = $(INTERNALCFLAGS) $(USERCFLAGS) $(INCLUDEFLAGS) $(TARGETFLAGS)
 GOFLAGS = $(INTERNALCFLAGS) $(USERCFLAGS) $(INCLUDEFLAGS) $(TARGETFLAGS)
 ASMFLAGS = -I$(INCLUDEDIR) $(TARGETFLAGS)
-LDFLAGS = $(INTERNALLDFLAGS) -static -g -O3 $(TARGETFLAGS) # -march=rv64gc -mabi=lp64d$
+LDFLAGS = $(INTERNALLDFLAGS) -static -g -O3 -flto $(TARGETFLAGS) # -march=rv64gc -mabi=lp64d$
 
 
 CCFILES := $(shell find ./ -type f -name '*.cc')

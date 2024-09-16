@@ -63,19 +63,27 @@ Page_Table::~Page_Table()
     }
 }
 
-u64 Page_Table::atomic_create_normal_region(u64 page_aligned_start, u64 page_aligned_size,
+ReturnStr<Private_Normal_Region *>
+    Page_Table::atomic_create_normal_region(ulong page_aligned_start, ulong page_aligned_size,
                                             unsigned access, bool fixed, bool dma,
                                             klib::string name, u64 pattern)
 {
     Auto_Lock_Scope scope_lock(lock);
 
-    u64 start_addr = find_region_spot(page_aligned_start, page_aligned_size, fixed);
-    klib::unique_ptr<Generic_Mem_Region> region = new Private_Normal_Region(
-        start_addr, page_aligned_size, klib::forward<klib::string>(name), this, access, pattern);
+    auto start_addr = find_region_spot(page_aligned_start, page_aligned_size, fixed);
+    if (!start_addr.success())
+        return start_addr.propagate();
+
+    klib::unique_ptr<Private_Normal_Region> region =
+        new Private_Normal_Region(start_addr.val, page_aligned_size,
+                                  klib::forward<klib::string>(name), this, access, pattern);
+    if (!region)
+        return Error(-ENOMEM);
+
     auto r = region.get();
 
     if (fixed)
-        release_in_range(start_addr, page_aligned_size);
+        release_in_range(start_addr.val, page_aligned_size);
 
     paging_regions.insert(region.release());
 
@@ -86,7 +94,7 @@ u64 Page_Table::atomic_create_normal_region(u64 page_aligned_start, u64 page_ali
             r->prepare_deletion();
             paging_regions.erase(r);
             r->rcu_free();
-            throw Kern_Exception(-ENOMEM, "atomic_create_normal_region no memory");
+            return Error(-ENOMEM);
         }
 
         assert(page->type == pmm::Page::PageType::AllocatedPending);
@@ -108,7 +116,7 @@ u64 Page_Table::atomic_create_normal_region(u64 page_aligned_start, u64 page_ali
         // This will be called on error
         auto guard_ = pmos::utility::make_scope_guard([&]() {
             size_t size_to_invalidate = i * PAGE_SIZE;
-            invalidate_range(start_addr + size_to_invalidate,
+            invalidate_range(start_addr.val + size_to_invalidate,
                              page_aligned_size - size_to_invalidate, true);
 
             r->prepare_deletion();
@@ -133,13 +141,15 @@ u64 Page_Table::atomic_create_normal_region(u64 page_aligned_start, u64 page_ali
 
             auto pp = pmm::Page_Descriptor(n);
 
-            map(klib::move(pp), start_addr + i * PAGE_SIZE, pta);
+            auto res = map(klib::move(pp), start_addr.val + i * PAGE_SIZE, pta);
+            if (res)
+                return Error(res);
         }
 
         guard_.dismiss();
     }
 
-    return start_addr;
+    return r;
 }
 
 void Page_Table::release_in_range(u64 start_addr, u64 size)
@@ -193,69 +203,84 @@ void Page_Table::atomic_release_in_range(u64 start, u64 size)
     release_in_range(start, size);
 }
 
-u64 Page_Table::atomic_transfer_region(const klib::shared_ptr<Page_Table> &to, u64 region_orig,
-                                       u64 prefered_to, u64 access, bool fixed)
+ReturnStr<size_t> Page_Table::atomic_transfer_region(const klib::shared_ptr<Page_Table> &to,
+                                                     size_t region_orig, size_t prefered_to,
+                                                     ulong access, bool fixed)
 {
     Auto_Lock_Scope_Double scope_lock(lock, to->lock);
 
     auto reg = paging_regions.find(region_orig);
     if (!reg)
-        throw Kern_Exception(-ENOENT, "atomic_transfer_region source not found");
+        return Error(-ENOENT);
 
     if (prefered_to & 07777)
         prefered_to = 0;
 
-    u64 start_addr = to->find_region_spot(prefered_to, reg->size, fixed);
-    reg->move_to(to, start_addr, access);
-    return start_addr;
+    auto start_addr = to->find_region_spot(prefered_to, reg->size, fixed);
+    if (!start_addr.success())
+        return start_addr.propagate();
+
+    auto result = reg->move_to(to, start_addr.val, access);
+    if (result)
+        return result;
+
+    return start_addr.val;
 }
 
-u64 Page_Table::atomic_create_phys_region(u64 page_aligned_start, u64 page_aligned_size,
-                                          unsigned access, bool fixed, klib::string name,
-                                          u64 phys_addr_start)
+ReturnStr<Phys_Mapped_Region *> Page_Table::atomic_create_phys_region(ulong page_aligned_start,
+                                                                      ulong page_aligned_size,
+                                                                      unsigned access, bool fixed,
+                                                                      klib::string name,
+                                                                      phys_addr_t phys_addr_start)
 {
     Auto_Lock_Scope scope_lock(lock);
 
     if (phys_addr_start >= phys_addr_limit() or
         phys_addr_start + page_aligned_size >= phys_addr_limit() or
         phys_addr_start > phys_addr_start + page_aligned_size)
-        throw(Kern_Exception(-ENOTSUP,
-                             "atomic_create_phys_region phys_addr outside the supported by x86"));
+        return Error(-ENOTSUP);
 
-    u64 start_addr = find_region_spot(page_aligned_start, page_aligned_size, fixed);
-    klib::unique_ptr<Generic_Mem_Region> region =
-        new Phys_Mapped_Region(start_addr, page_aligned_size, klib::forward<klib::string>(name),
+    auto start_addr = find_region_spot(page_aligned_start, page_aligned_size, fixed);
+    if (!start_addr.success())
+        return start_addr.propagate();
+
+    klib::unique_ptr<Phys_Mapped_Region> region =
+        new Phys_Mapped_Region(start_addr.val, page_aligned_size, klib::forward<klib::string>(name),
                                this, access, phys_addr_start);
 
+    if (!region)
+        return Error(-ENOMEM);
+
     if (fixed)
-        release_in_range(start_addr, page_aligned_size);
+        release_in_range(start_addr.val, page_aligned_size);
 
-    paging_regions.insert(region.release());
+    paging_regions.insert(region.get());
 
-    return start_addr;
+    return region.release();
 }
 
-ReturnStr<Mem_Object_Reference *> Page_Table::atomic_create_mem_object_region(u64 page_aligned_start, u64 page_aligned_size,
-                                                unsigned access, bool fixed, klib::string name,
-                                                klib::shared_ptr<Mem_Object> object, bool cow,
-                                                u64 start_offset_bytes, u64 object_offset_bytes,
-                                                u64 object_size_bytes) noexcept
+ReturnStr<Mem_Object_Reference *> Page_Table::atomic_create_mem_object_region(
+    u64 page_aligned_start, u64 page_aligned_size, unsigned access, bool fixed, klib::string name,
+    klib::shared_ptr<Mem_Object> object, bool cow, u64 start_offset_bytes, u64 object_offset_bytes,
+    u64 object_size_bytes) noexcept
 {
     Auto_Lock_Scope scope_lock(lock);
 
-    // TODO: This throws
-    u64 start_addr = find_region_spot(page_aligned_start, page_aligned_size, fixed);
+    auto start_addr = find_region_spot(page_aligned_start, page_aligned_size, fixed);
+    if (!start_addr.success())
+        return start_addr.propagate();
 
     auto region = klib::make_unique<Mem_Object_Reference>(
-        start_addr, page_aligned_size, klib::forward<klib::string>(name), this, access, object,
+        start_addr.val, page_aligned_size, klib::forward<klib::string>(name), this, access, object,
         object_offset_bytes, cow, start_offset_bytes, object_size_bytes);
 
     if (!region)
-        return {-ENOMEM, nullptr};
+        return Error(-ENOMEM);
 
     if (fixed)
-        release_in_range(start_addr, page_aligned_size);
+        release_in_range(start_addr.val, page_aligned_size);
 
+    // This throws...
     mem_objects[object].regions.insert(region.get());
 
     auto ptr = region.release();
@@ -282,9 +307,9 @@ bool Page_Table::can_takeout_page(u64 page_addr) noexcept
     return it->can_takeout_page();
 }
 
-u64 Page_Table::find_region_spot(u64 desired_start, u64 size, bool fixed)
+ReturnStr<ulong> Page_Table::find_region_spot(ulong desired_start, ulong size, bool fixed)
 {
-    u64 end = desired_start + size;
+    ulong end = desired_start + size;
 
     bool region_ok = desired_start != 0;
 
@@ -306,14 +331,15 @@ u64 Page_Table::find_region_spot(u64 desired_start, u64 size, bool fixed)
 
     } else {
         if (fixed && desired_start == 0x0)
-            throw(Kern_Exception(-EINVAL, "find_region_spot fixed region at NULL"));
+            return Error(-EINVAL);
+
         else if (fixed)
             return desired_start;
 
-        u64 addr = 0x1000;
-        auto it  = paging_regions.begin();
+        ulong addr = 0x1000;
+        auto it    = paging_regions.begin();
         while (it != paging_regions.end()) {
-            u64 end = addr + size;
+            ulong end = addr + size;
 
             if (*it > end and end <= user_addr_max())
                 return addr;
@@ -323,18 +349,18 @@ u64 Page_Table::find_region_spot(u64 desired_start, u64 size, bool fixed)
         }
 
         if (addr + size > user_addr_max())
-            throw(Kern_Exception(-ENOMEM, "find_region_spot no free region found"));
+            return Error(-ENOMEM);
 
         return addr;
     }
 }
 
-bool Page_Table::prepare_user_page(u64 virt_addr, unsigned access_type)
+ReturnStr<bool> Page_Table::prepare_user_page(u64 virt_addr, unsigned access_type)
 {
     auto it = paging_regions.get_smaller_or_equal(virt_addr);
 
     if (it == paging_regions.end() or not it->is_in_range(virt_addr))
-        throw(Kern_Exception(-EFAULT, "user provided parameter is unallocated"));
+        return Error(-EFAULT);
 
     return it->prepare_page(access_type, virt_addr);
 }
@@ -345,13 +371,13 @@ void Page_Table::unblock_tasks(u64 page)
         it->atomic_try_unblock_by_page(page);
 }
 
-void Page_Table::map(u64 page_addr, u64 virt_addr)
+kresult_t Page_Table::map(u64 page_addr, u64 virt_addr) noexcept
 {
     auto it = get_region(virt_addr);
     if (it == paging_regions.end())
-        throw(Kern_Exception(-EFAULT, "map no region found"));
+        return -EFAULT;
 
-    map(page_addr, virt_addr, it->craft_arguments());
+    return map(page_addr, virt_addr, it->craft_arguments());
 }
 
 u64 Page_Table::phys_addr_limit()
@@ -360,64 +386,67 @@ u64 Page_Table::phys_addr_limit()
     return 0x01UL << 48;
 }
 
-void Page_Table::move_pages(const klib::shared_ptr<Page_Table> &to, u64 from_addr, u64 to_addr,
-                            u64 size_bytes, u8 access)
+kresult_t Page_Table::move_pages(const klib::shared_ptr<Page_Table> &to, size_t from_addr,
+                                 size_t to_addr, size_t size_bytes, u8 access) noexcept
 {
-    u64 offset = 0;
+    size_t offset = 0;
+    pmos::utility::scope_guard guard([&]() { to->invalidate_range(to_addr, offset, false); });
 
-    try {
-        for (; offset < size_bytes; offset += 4096) {
-            auto info = get_page_mapping(from_addr + offset);
-            if (info.is_allocated) {
-                Page_Table_Argumments arg = {
-                    .readable           = !!(access & Readable),
-                    .writeable          = !!(access & Writeable),
-                    .user_access        = info.user_access,
-                    .global             = 0,
-                    .execution_disabled = !(access & Executable),
-                    .extra              = info.flags,
-                    .cache_policy       = Memory_Type::Normal // TODO: Fix this
-                };
-                to->map(info.page_addr, to_addr + offset, arg);
-            }
+    for (; offset < size_bytes; offset += 4096) {
+        auto info = get_page_mapping(from_addr + offset);
+        if (info.is_allocated) {
+            Page_Table_Argumments arg = {
+                .readable           = !!(access & Readable),
+                .writeable          = !!(access & Writeable),
+                .user_access        = info.user_access,
+                .global             = 0,
+                .execution_disabled = !(access & Executable),
+                .extra              = info.flags,
+                .cache_policy       = Memory_Type::Normal // TODO: Fix this
+            };
+            auto res = to->map(info.page_addr, to_addr + offset, arg);
+            if (res)
+                return res;
         }
-
-        invalidate_range(from_addr, size_bytes, false);
-    } catch (...) {
-        to->invalidate_range(to_addr, offset, false);
-
-        throw;
     }
+    invalidate_range(from_addr, size_bytes, false);
+
+    guard.dismiss();
+
+    return 0;
 }
 
-void Page_Table::copy_pages(const klib::shared_ptr<Page_Table> &to, u64 from_addr, u64 to_addr,
-                            u64 size_bytes, u8 access)
+kresult_t Page_Table::copy_pages(const klib::shared_ptr<Page_Table> &to, u64 from_addr, u64 to_addr,
+                                 u64 size_bytes, u8 access)
 {
     u64 offset = 0;
 
-    try {
-        for (; offset < size_bytes; offset += 4096) {
-            auto info = get_page_mapping(from_addr + offset);
-            if (info.is_allocated) {
-                Page_Table_Argumments arg = {
-                    .readable           = !!(access & Readable),
-                    .writeable          = !!(access & Writeable),
-                    .user_access        = info.user_access,
-                    .global             = false,
-                    .execution_disabled = not(access & Executable),
-                    .extra              = info.flags,
-                    // TODO: Fix this
-                    .cache_policy       = Memory_Type::Normal,
-                };
+    auto guard =
+        pmos::utility::make_scope_guard([&]() { to->invalidate_range(to_addr, offset, true); });
 
-                to->map(info.create_copy(), to_addr + offset, arg);
-            }
+    for (; offset < size_bytes; offset += 4096) {
+        auto info = get_page_mapping(from_addr + offset);
+        if (info.is_allocated) {
+            Page_Table_Argumments arg = {
+                .readable           = !!(access & Readable),
+                .writeable          = !!(access & Writeable),
+                .user_access        = info.user_access,
+                .global             = false,
+                .execution_disabled = not(access & Executable),
+                .extra              = info.flags,
+                // TODO: Fix this
+                .cache_policy       = Memory_Type::Normal,
+            };
+
+            auto result = to->map(info.create_copy(), to_addr + offset, arg);
+            if (result)
+                return result;
         }
-    } catch (...) {
-        to->invalidate_range(to_addr, offset, true);
-
-        throw;
     }
+
+    guard.dismiss();
+
+    return 0;
 }
 
 void Page_Table::atomic_pin_memory_object(klib::shared_ptr<Mem_Object> object)
@@ -443,7 +472,7 @@ void Page_Table::atomic_shrink_regions(const klib::shared_ptr<Mem_Object> &id,
 {
     Auto_Lock_Scope l(lock);
 
-    auto &p  = mem_objects.at(id);
+    auto &p = mem_objects.at(id);
     auto it = p.regions.begin();
     while (it != p.regions.end()) {
         const auto reg = it;

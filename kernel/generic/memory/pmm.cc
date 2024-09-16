@@ -27,17 +27,19 @@ Page_Descriptor &Page_Descriptor::operator=(Page_Descriptor &&p) noexcept
     return *this;
 }
 
-Page_Descriptor Page_Descriptor::create_copy() const
+ReturnStr<Page_Descriptor> Page_Descriptor::create_copy() const noexcept
 {
     assert(page_struct_ptr);
 
     auto new_page = allocate_page(12);
+    if (!new_page.success())
+        return new_page.propagate();
 
     Temp_Mapper_Obj<char> this_mapping(request_temp_mapper());
     Temp_Mapper_Obj<char> new_mapping(request_temp_mapper());
 
     this_mapping.map(page_struct_ptr->get_phys_addr());
-    new_mapping.map(new_page.page_struct_ptr->get_phys_addr());
+    new_mapping.map(new_page.val.page_struct_ptr->get_phys_addr());
 
     const auto page_size_bytes = 4096;
 
@@ -57,13 +59,13 @@ Page::page_addr_t Page_Descriptor::takeout_page() noexcept
     return p;
 }
 
-Page_Descriptor Page_Descriptor::allocate_page(u8 alignment_log)
+ReturnStr<Page_Descriptor> Page_Descriptor::allocate_page(u8 alignment_log)
 {
     assert(alignment_log == 12 && "Only 4K pages are currently supported");
 
     Page *p = pmm::alloc_pages(1);
     if (p == nullptr)
-        throw Kern_Exception(-ENOMEM, "Failed to allocate page");
+        return Error(-ENOMEM);
 
     p->type       = Page::PageType::Allocated;
     p->l          = {};
@@ -72,13 +74,13 @@ Page_Descriptor Page_Descriptor::allocate_page(u8 alignment_log)
     return Page_Descriptor(p);
 }
 
-Page_Descriptor Page_Descriptor::allocate_page_zeroed(u8 alignment_log)
+ReturnStr<Page_Descriptor> Page_Descriptor::allocate_page_zeroed(u8 alignment_log)
 {
     assert(alignment_log == 12 && "Only 4K pages are currently supported");
 
     Page *p = pmm::alloc_pages(1);
     if (p == nullptr)
-        throw Kern_Exception(-ENOMEM, "Failed to allocate page");
+        return Error(-ENOMEM);
 
     p->type       = Page::PageType::Allocated;
     p->l          = {};
@@ -189,19 +191,21 @@ Page_Descriptor Page_Table::Page_Info::create_copy() const
     assert(!nofree);
 
     // Return a copy
-    Page_Descriptor new_page = Page_Descriptor::allocate_page(12);
+    auto new_page = Page_Descriptor::allocate_page(12);
+    if (!new_page.success())
+        return {};
 
     Temp_Mapper_Obj<char> this_mapping(request_temp_mapper());
     Temp_Mapper_Obj<char> new_mapping(request_temp_mapper());
 
     this_mapping.map(page_addr);
-    new_mapping.map(new_page.page_struct_ptr->get_phys_addr());
+    new_mapping.map(new_page.val.page_struct_ptr->get_phys_addr());
 
     const auto page_size_bytes = 4096;
 
     memcpy(new_mapping.ptr, this_mapping.ptr, page_size_bytes);
 
-    return new_page;
+    return klib::move(new_page.val);
 }
 
 bool phys_memory_regions_empty() noexcept { return phys_memory_regions_count == 0; }

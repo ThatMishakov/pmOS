@@ -27,8 +27,8 @@
  */
 
 #pragma once
-#include "pmos/containers/intrusive_bst.hh"
 #include "pmm.hh"
+#include "pmos/containers/intrusive_bst.hh"
 #include "rcu.hh"
 
 #include <lib/memory.hh>
@@ -106,7 +106,7 @@ struct Generic_Mem_Region {
      * @param ptr_addr The address which needs to be allocated/has caused the petition.
      * @return true if the page is avaiable, false otherwise.
      */
-    virtual bool alloc_page(u64 ptr_addr) = 0;
+    [[nodiscard]] virtual ReturnStr<bool> alloc_page(u64 ptr_addr) = 0;
 
     /**
      * @brief Checks if a page from the region can be taken out by provide_page() syscall
@@ -127,7 +127,7 @@ struct Generic_Mem_Region {
      * the operation is needed to be repeated again once it becomes available.
      * @see alloc_page()
      */
-    bool prepare_page(u64 access_mode, u64 page_addr);
+    [[nodiscard]] ReturnStr<bool> prepare_page(u64 access_mode, u64 page_addr);
 
     // /**
     //  * @brief Function to be executed upon a page fault.
@@ -150,9 +150,8 @@ struct Generic_Mem_Region {
      * @param fault_addr Address of the pagefault
      * @return true Execution was successfull and the page is immediately available
      * @return false Execution was successfull but the page is not immediately available
-     * @throw Kern_Exception If the access mode is not allowed
      */
-    bool on_page_fault(u64 access_mode, u64 fault_addr);
+    ReturnStr<bool> on_page_fault(u64 access_mode, u64 fault_addr);
 
     Generic_Mem_Region(u64 start_addr, u64 size, klib::string name, Page_Table *owner, u8 access)
         : start_addr(start_addr), size(size), name(klib::forward<klib::string>(name)),
@@ -201,8 +200,8 @@ struct Generic_Mem_Region {
      * @param base_addr Base address in the new page table
      * @param new_access New access specifier to be had in the new page table
      */
-    virtual void move_to(const klib::shared_ptr<Page_Table> &new_table, u64 base_addr,
-                         u64 new_access);
+    [[nodiscard]] virtual kresult_t move_to(const klib::shared_ptr<Page_Table> &new_table,
+                                            ulong base_addr, u64 new_access);
 
     /**
      * @brief Clones the region to the new page table
@@ -211,8 +210,8 @@ struct Generic_Mem_Region {
      * @param base_addr Base address in the new page table
      * @param new_access New access specifier to be had in the new page table
      */
-    virtual void clone_to(const klib::shared_ptr<Page_Table> &new_table, u64 base_addr,
-                          u64 new_access) = 0;
+    [[nodiscard]] virtual kresult_t clone_to(const klib::shared_ptr<Page_Table> &new_table,
+                                            size_t base_addr, size_t new_access) = 0;
 
     /**
      * @brief Prepares a region for being deleted
@@ -238,12 +237,12 @@ struct Generic_Mem_Region {
  */
 struct Phys_Mapped_Region final: Generic_Mem_Region {
     // Allocated a new page, pointing to the corresponding physical address.
-    virtual bool alloc_page(u64 ptr_addr) override;
+    virtual ReturnStr<bool> alloc_page(u64 ptr_addr) override;
 
     u64 phys_addr_start = 0;
     constexpr bool can_takeout_page() const noexcept override { return false; }
 
-    virtual void clone_to(const klib::shared_ptr<Page_Table> &new_table, u64 base_addr,
+    virtual kresult_t clone_to(const klib::shared_ptr<Page_Table> &new_table, u64 base_addr,
                           u64 new_access) override;
 
     virtual Page_Table_Argumments craft_arguments() const override;
@@ -269,11 +268,11 @@ struct Private_Normal_Region final: Generic_Mem_Region {
 
     constexpr bool can_takeout_page() const noexcept override { return true; }
 
-    virtual void clone_to(const klib::shared_ptr<Page_Table> &new_table, u64 base_addr,
+    virtual kresult_t clone_to(const klib::shared_ptr<Page_Table> &new_table, u64 base_addr,
                           u64 new_access) override;
 
     // Attempt to allocate a new page
-    virtual bool alloc_page(u64 ptr_addr) override;
+    virtual ReturnStr<bool> alloc_page(u64 ptr_addr) override;
 
     // Tries to preallocate all the pages
     void prefill();
@@ -315,11 +314,11 @@ struct Mem_Object_Reference final: Generic_Mem_Region {
                          klib::shared_ptr<Mem_Object> references, u64 object_offset_bytes,
                          bool copy_on_write, u64 start_offset_bytes, u64 object_size_bytes);
 
-    virtual bool alloc_page(u64 ptr_addr) override;
+    virtual ReturnStr<bool> alloc_page(u64 ptr_addr) override;
 
-    virtual void move_to(const klib::shared_ptr<Page_Table> &new_table, u64 base_addr,
-                         u64 new_access) override;
-    virtual void clone_to(const klib::shared_ptr<Page_Table> &new_table, u64 base_addr,
+    virtual kresult_t move_to(const klib::shared_ptr<Page_Table> &new_table, ulong base_addr,
+                              u64 new_access) override;
+    virtual kresult_t clone_to(const klib::shared_ptr<Page_Table> &new_table, u64 base_addr,
                           u64 new_access) override;
 
     virtual Page_Table_Argumments craft_arguments() const override;

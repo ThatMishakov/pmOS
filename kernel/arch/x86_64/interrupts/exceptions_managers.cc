@@ -198,7 +198,9 @@ extern "C" void pagefault_manager()
 
         if (it != regions.end() and it->is_in_range(virtual_addr)) {
             auto r = it->on_page_fault(access_mask, virtual_addr);
-            if (not r)
+            if (!r.success())
+                throw Kern_Exception(r.result, "error in on page fault");
+            if (!r.val)
                 task->atomic_block_by_page(addr_all, &task->page_table->blocked_tasks);
         } else {
             throw Kern_Exception(-EFAULT, "pagefault in unknown region");
