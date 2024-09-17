@@ -37,11 +37,12 @@
 
 /**
  * @brief RCU function type
- * 
+ *
  * This function gets called when the RCU is done with the current generation
- * 
+ *
  * @param self Pointer to the object that the RCU is done with
- * @param chained True if the next RCU callback has the same function pointer (for example, when releasing a list of pages)
+ * @param chained True if the next RCU callback has the same function pointer (for example, when
+ * releasing a list of pages)
  */
 typedef void (*rcu_func_t)(void *self, bool chained);
 struct RCU_Head {
@@ -53,9 +54,14 @@ extern size_t number_of_cpus;
 
 class RCU
 {
+public:
+    inline RCU() { assert(bitmask.resize((number_of_cpus + 63) / 64, 0)); }
+
+    ~RCU() = default;
+
 private:
     Spinlock lock;
-    klib::vector<u64> bitmask {(number_of_cpus + 63) / 64, 0};
+    klib::vector<u64> bitmask;
 
     u64 generation         = 0;
     u64 highest_generation = 0;

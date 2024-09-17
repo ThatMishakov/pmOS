@@ -103,7 +103,12 @@ void Port::send_from_system(klib::vector<char> &&v)
 
 void Port::send_from_system(const char *msg_ptr, uint64_t size)
 {
-    klib::vector<char> message(size);
+    assert(size > 0);
+
+    klib::vector<char> message;
+    if (!message.resize(size))
+        throw Kern_Exception(-ENOMEM, "Failed to reserve memory for message");
+
     memcpy(&message.front(), msg_ptr, size);
     send_from_system(klib::move(message));
 }
@@ -112,7 +117,9 @@ bool Port::send_from_user(TaskDescriptor *sender, const char *unsafe_user_ptr, s
 {
     assert(lock.is_locked() && "Spinlock not locked!");
 
-    klib::vector<char> message(msg_size);
+    klib::vector<char> message;
+    if (!message.resize(msg_size))
+        throw Kern_Exception(-ENOMEM, "Failed to reserve memory for message");
 
     kresult_t result = copy_from_user(&message.front(), (char *)unsafe_user_ptr, msg_size);
     if (not result)
@@ -129,7 +136,9 @@ bool Port::send_from_user(TaskDescriptor *sender, const char *unsafe_user_ptr, s
 bool Port::atomic_send_from_user(TaskDescriptor *sender, const char *unsafe_user_message,
                                  size_t msg_size)
 {
-    klib::vector<char> message(msg_size);
+    klib::vector<char> message;
+    if (!message.resize(msg_size))
+        throw Kern_Exception(-ENOMEM, "Failed to reserve memory for message");
 
     bool result = copy_from_user(&message.front(), (char *)unsafe_user_message, msg_size);
     if (not result)

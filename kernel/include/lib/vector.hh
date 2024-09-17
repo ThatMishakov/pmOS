@@ -44,7 +44,8 @@ private:
     size_t a_capacity = 0;
     size_t a_size     = 0;
 
-    void expand(size_t to);
+    bool expand(size_t to);
+    size_t next_capacity() const;
 
 public:
     typedef T value_type;
@@ -134,15 +135,11 @@ public:
         const_iterator &operator++(int) { return *ptr++; }
     };
 
-    vector();
-    vector(size_t);
-    vector(size_t, const T &);
-    vector(const vector &);
-    vector(vector<T> &&);
-    ~vector();
+    vector() noexcept;
+    vector(vector<T> &&) noexcept;
+    ~vector() noexcept;
 
-    vector<T> &operator=(const vector<T> &a);
-    vector<T> &operator=(vector<T> &&from);
+    vector<T> &operator=(vector<T> &&from) noexcept;
     T &operator*();
     const T &operator*() const;
 
@@ -160,14 +157,14 @@ public:
     T *data();
     const T *data() const;
 
-    void push_back(const T &);
-    void push_back(T &&);
-    void emplace_back(T &&);
-    void pop_back();
+    bool push_back(const T &) noexcept;
+    bool push_back(T &&) noexcept;
+    bool emplace_back(T &&) noexcept;
+    void pop_back() noexcept;
 
-    void clear();
+    void clear() noexcept;
 
-    void reserve(size_t);
+    [[nodiscard]] bool reserve(size_t) noexcept;
 
     inline bool empty() const { return a_size == 0; }
 
@@ -177,18 +174,23 @@ public:
     const_iterator begin() const;
     const_iterator end() const;
 
-    void resize(size_type n);
-    void resize(size_type n, const value_type &val);
+    [[nodiscard]] bool resize(size_type n) noexcept;
+    [[nodiscard]] bool resize(size_type n, const value_type &val) noexcept;
+
+    size_t capacity() const { return a_capacity; }
 };
 
-template<typename T> vector<T>::vector()
+template<typename T> vector<T>::vector() noexcept: ptr(nullptr), a_capacity(0), a_size(0) {};
+
+template<typename T> size_t vector<T>::next_capacity() const
 {
-    a_size     = 0;
-    a_capacity = start_size;
-    ptr        = (T *)malloc(sizeof(T) * a_capacity);
+    if (a_capacity < start_size)
+        return start_size;
+
+    return a_capacity * 2;
 }
 
-template<typename T> vector<T>::~vector()
+template<typename T> vector<T>::~vector() noexcept
 {
     for (size_t i = 0; i < a_size; ++i) {
         ptr[i].~T();
@@ -197,7 +199,7 @@ template<typename T> vector<T>::~vector()
     free(ptr);
 }
 
-template<typename T> vector<T>::vector(vector<T> &&from)
+template<typename T> vector<T>::vector(vector<T> &&from) noexcept
 {
     ptr        = from.ptr;
     a_capacity = from.a_capacity;
@@ -208,35 +210,7 @@ template<typename T> vector<T>::vector(vector<T> &&from)
     from.a_size     = 0;
 }
 
-template<typename T> vector<T>::vector(size_t t): ptr(new T[t]), a_capacity(t), a_size(t) {};
-
-template<typename T>
-vector<T>::vector(size_t t, const T &e): ptr(new T[t]), a_capacity(t), a_size(t)
-{
-    for (size_t i = 0; i < t; ++i) {
-        ptr[i] = e;
-    }
-}
-
-template<typename T> vector<T> &vector<T>::operator=(const vector<T> &from)
-{
-    if (this == &from)
-        return *this;
-
-    this->~vector<T>();
-
-    this->a_capacity = from.a_size;
-    this->a_size     = from.a_size;
-    this->ptr        = new T[this->a_size];
-
-    for (size_t i = 0; i < this->a_size; ++i) {
-        this->ptr[i] = from.ptr[i];
-    }
-
-    return *this;
-}
-
-template<typename T> vector<T> &vector<T>::operator=(vector<T> &&from)
+template<typename T> vector<T> &vector<T>::operator=(vector<T> &&from) noexcept
 {
     if (this == &from)
         return *this;
@@ -285,55 +259,87 @@ template<typename T> const T &vector<T>::operator[](size_t p) const { return ptr
 
 template<typename T> T &vector<T>::operator[](size_t p) { return ptr[p]; }
 
-template<typename T> void vector<T>::push_back(T &&p)
+template<typename T> bool vector<T>::push_back(T &&p) noexcept
 {
-    if (a_size >= a_capacity)
-        expand(a_capacity * 2);
+    if ((a_size >= a_capacity) && !expand(next_capacity()))
+        return false;
 
     new (&ptr[a_size++]) T(forward<T>(p));
+    return true;
 }
 
-template<typename T> void vector<T>::resize(size_t new_size)
+template<typename T> bool vector<T>::resize(size_t new_size) noexcept
 {
     if (a_size > new_size) {
         for (auto i = a_size; i > new_size; --i) {
             ptr[i - 1].~T();
         }
+        a_size = new_size;
     } else if (a_size < new_size) {
-        if (new_size < a_capacity)
-            expand(new_size);
+        if ((new_size > a_capacity) && !expand(new_size))
+            return false;
 
         auto i = a_size;
 
-        try {
-            for (; i < new_size; ++i)
-                new (&ptr[i]) T();
-        } catch (...) {
-            for (; i > a_size; --i)
-                ptr[i - 1].~T();
-            throw;
-        }
+        for (; i < new_size; ++i)
+            new (&ptr[i]) T();
 
         a_size = new_size;
     }
+
+    return true;
 }
 
-template<typename T> void vector<T>::push_back(const T &p)
+template<typename T> bool vector<T>::resize(size_t new_size, const T& t) noexcept
 {
-    if (a_size >= a_capacity)
-        expand(a_capacity * 2);
+    if (a_size > new_size) {
+        for (auto i = a_size; i > new_size; --i) {
+            ptr[i - 1].~T();
+        }
+        a_size = new_size;
+    } else if (a_size < new_size) {
+        if ((new_size > a_capacity) && !expand(new_size))
+            return false;
 
-    new (&ptr[a_size++]) T(p);
+        auto i = a_size;
+
+        for (; i < new_size; ++i)
+            new (&ptr[i]) T(t);
+
+        a_size = new_size;
+    }
+
+    return true;
 }
 
-template<typename T> void vector<T>::emplace_back(T &&p) { return push_back(forward<T>(p)); }
-
-template<typename T> void vector<T>::expand(size_t new_capacity)
+template<typename T> bool vector<T>::reserve(size_t new_capacity) noexcept
 {
     if (new_capacity <= a_capacity)
-        return;
+        return true;
+
+    return expand(new_capacity);
+}
+
+template<typename T> bool vector<T>::push_back(const T &p) noexcept
+{
+    if ((a_size >= a_capacity) && !expand(next_capacity()))
+        return false;
+
+    new (&ptr[a_size++]) T(p);
+    return true;
+}
+
+template<typename T> bool vector<T>::emplace_back(T &&p) noexcept { return push_back(forward<T>(p)); }
+
+template<typename T> bool vector<T>::expand(size_t new_capacity)
+{
+    if (new_capacity <= a_capacity)
+        return true;
 
     T *temp_ptr = (T *)malloc(sizeof(T) * new_capacity);
+    if (!temp_ptr)
+        return false;
+
     for (size_t i = 0; i < a_size; ++i)
         new (&temp_ptr[i]) T(move(ptr[i]));
 
@@ -343,15 +349,16 @@ template<typename T> void vector<T>::expand(size_t new_capacity)
     a_capacity = new_capacity;
     free(ptr);
     ptr = temp_ptr;
+    return true;
 }
 
-template<typename T> void vector<T>::pop_back()
+template<typename T> void vector<T>::pop_back() noexcept
 {
     ptr[a_size - 1].~T();
     --a_size;
 }
 
-template<typename T> void vector<T>::clear()
+template<typename T> void vector<T>::clear() noexcept
 {
     for (size_t i = 0; i < a_size; ++i)
         ptr[i].~T();

@@ -34,6 +34,7 @@
 
 #include <exceptions.hh>
 #include <kern_logger/kern_logger.hh>
+#include <pmos/utility/scope_guard.hh>
 
 using namespace kernel;
 
@@ -51,34 +52,36 @@ void *palloc(size_t number)
     }
 
     // Allocate and try to map memory
-    size_t i = 0;
-    for (; i < number; ++i) {
-        void *page = nullptr;
-        try {
-            void *virt_addr                        = (void *)((u64)ptr + i * PAGE_SIZE);
-            static const Page_Table_Argumments arg = {
-                .readable           = true,
-                .writeable          = true,
-                .user_access        = false,
-                .global             = false,
-                .execution_disabled = true,
-                .extra              = PAGING_FLAG_STRUCT_PAGE,
-            };
+    size_t i   = 0;
+    auto guard = pmos::utility::make_scope_guard([&]() {
+        pmm::free_memory_for_kernel(phys_addr + i * PAGE_SIZE, number - i);
 
-            auto result = 
-            map_kernel_page((u64)phys_addr + i * PAGE_SIZE, virt_addr, arg);
-        } catch (Kern_Exception &e) {
-            pmm::free_memory_for_kernel(phys_addr + i * PAGE_SIZE, number - i);
-
-            // Unmap and free the allocated pages
-            for (size_t j = 0; j < i; ++j) {
-                void *virt_addr = (void *)((u64)ptr + j * PAGE_SIZE);
-                unmap_kernel_page(virt_addr);
-            }
-            vmm::kernel_space_allocator.virtmem_free(ptr, number);
-            throw e;
+        // Unmap and free the allocated pages
+        for (size_t j = 0; j < i; ++j) {
+            void *virt_addr = (void *)((u64)ptr + j * PAGE_SIZE);
+            unmap_kernel_page(virt_addr);
         }
+        vmm::kernel_space_allocator.virtmem_free(ptr, number);
+    });
+
+    for (; i < number; ++i) {
+        void *virt_addr = (void *)((u64)ptr + i * PAGE_SIZE);
+
+        static const Page_Table_Argumments arg = {
+            .readable           = true,
+            .writeable          = true,
+            .user_access        = false,
+            .global             = false,
+            .execution_disabled = true,
+            .extra              = PAGING_FLAG_STRUCT_PAGE,
+        };
+
+        auto result = map_kernel_page((u64)phys_addr + i * PAGE_SIZE, virt_addr, arg);
+        if (result)
+            return nullptr;
     }
+
+    guard.dismiss();
 
     return ptr;
 }

@@ -322,11 +322,19 @@ void construct_paging()
     for (auto &i: kernel::pmm::free_pages_list)
         i.init();
 
-    klib::vector<limine_memmap_entry *> regions(resp.entry_count);
+    serial_logger.printf("Paging initialized!\n");
+
+    klib::vector<limine_memmap_entry *> regions;
+    if (!regions.resize(resp.entry_count))
+        panic("Failed to reserve memory for regions");
+
     copy_from_phys((u64)resp.entries - hhdm_offset, regions.data(),
                    resp.entry_count * sizeof(limine_memmap_entry *));
 
-    klib::vector<limine_memmap_entry> regions_data(resp.entry_count);
+    klib::vector<limine_memmap_entry> regions_data;
+    if (!regions_data.resize(resp.entry_count))
+        panic("Failed to reserve memory for regions_data");
+
     for (size_t i = 0; i < resp.entry_count; i++) {
         copy_from_phys((u64)regions[i] - hhdm_offset, &regions_data[i],
                        sizeof(limine_memmap_entry));
@@ -534,9 +542,15 @@ void init_modules()
     limine_module_response r;
     copy_from_phys(resp_phys, &r, sizeof(r));
 
-    klib::vector<limine_file *> modules(r.module_count);
+    klib::vector<limine_file *> modules;
+    if (!modules.resize(r.module_count))
+        panic("Failed to reserve memory for modules");
+
     const u64 files_phys = (u64)r.modules - hhdm_offset;
     copy_from_phys(files_phys, modules.data(), r.module_count * sizeof(limine_file *));
+
+    if (!::modules.reserve(r.module_count))
+        panic("Failed to reserve memory for modules");
 
     for (auto &mm: modules) {
         limine_file f;
@@ -624,6 +638,8 @@ klib::vector<klib::unique_ptr<load_tag_generic>> construct_load_tag_framebuffer(
                    r.framebuffer_count * sizeof(limine_framebuffer *));
 
     klib::vector<klib::unique_ptr<load_tag_generic>> tags;
+    if (!tags.reserve(r.framebuffer_count))
+        panic("Failed to reserve memory for tags");
 
     for (size_t i = 0; i < r.framebuffer_count; i++) {
         limine_framebuffer fb;
@@ -718,13 +734,15 @@ void init_task1()
     // Pass the modules to the task
     klib::vector<klib::unique_ptr<load_tag_generic>> tags;
     tags   = construct_load_tag_framebuffer();
+
     auto t = construct_load_tag_rsdp();
-    if (t)
-        tags.push_back(klib::move(t));
+    if (t && !tags.push_back(klib::move(t)))
+        panic("Failed to add RSDP tag");
 
     t = construct_load_tag_fdt();
-    if (t)
-        tags.push_back(klib::move(t));
+    if (t && !tags.push_back(klib::move(t)))
+        panic("Failed to add FDT tag");
+    
     tags.push_back(construct_load_tag_for_modules());
 
     // Create new task and load ELF into it
@@ -849,7 +867,10 @@ void init_smp()
     limine_smp_response r;
     copy_from_phys((u64)smp_request.response - hhdm_offset, &r, sizeof(r));
 
-    klib::vector<limine_smp_info *> smp_info(r.cpu_count);
+    klib::vector<limine_smp_info *> smp_info;
+    if (!smp_info.resize(r.cpu_count))
+        panic("Failed to reserve memory for smp_info");
+
     copy_from_phys((u64)r.cpus - hhdm_offset, smp_info.data(),
                    r.cpu_count * sizeof(limine_smp_info *));
 

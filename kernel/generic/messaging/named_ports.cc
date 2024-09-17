@@ -55,7 +55,10 @@ void Send_Message::do_action(Port *p, const klib::string &name)
         if (ptr) {
             size_t msg_size = sizeof(IPC_Kernel_Named_Port_Notification) + name.length();
 
-            klib::vector<char> vec(msg_size);
+            klib::vector<char> vec;
+            if (!vec.resize(msg_size))
+                throw Kern_Exception(-ENOMEM, "Send_Message::do_action: failed to reserve memory");
+
             IPC_Kernel_Named_Port_Notification *ipc_ptr =
                 (IPC_Kernel_Named_Port_Notification *)&vec.front();
 

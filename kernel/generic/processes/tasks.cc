@@ -89,9 +89,9 @@ u64 TaskDescriptor::init_stack()
     static const klib::string stack_region_name = "default_stack";
 
     auto r = this->page_table->atomic_create_normal_region(stack_page_start, stack_size,
-                                                  Page_Table::Protection::Writeable |
-                                                      Page_Table::Protection::Readable,
-                                                  true, false, stack_region_name, -1);
+                                                           Page_Table::Protection::Writeable |
+                                                               Page_Table::Protection::Readable,
+                                                           true, false, stack_region_name, -1);
 
     if (!r.success())
         throw Kern_Exception(r.result, "Error creating stack region");
@@ -278,7 +278,10 @@ bool TaskDescriptor::load_elf(klib::shared_ptr<Mem_Object> elf, klib::string nam
         throw Kern_Exception(-ENOEXEC, "Wrong program header size");
 
     const u64 ph_count = header.program_header_entries;
-    klib::vector<phreader> phs(ph_count);
+    klib::vector<phreader> phs;
+    if (!phs.resize(ph_count))
+        throw Kern_Exception(-ENOMEM, "Error allocating memory for ELF program headers");
+
     r = elf->read_to_kernel(header.program_header, (u8 *)phs.data(), ph_count * sizeof(phreader));
     if (!r.success())
         throw Kern_Exception(r.result, "Error reading ELF program headers");
@@ -358,7 +361,7 @@ bool TaskDescriptor::load_elf(klib::shared_ptr<Mem_Object> elf, klib::string nam
         r                 = elf->read_to_kernel(ph.p_offset, tls_data->data, ph.p_filesz);
         // Install memory region
         const u64 pa_size = (size + 0xFFF) & ~0xFFFUL;
-        auto tls_virt      = table->atomic_create_normal_region(
+        auto tls_virt     = table->atomic_create_normal_region(
             0, pa_size, Page_Table::Protection::Readable | Page_Table::Protection::Writeable, false,
             false, name + "_tls", 0);
 

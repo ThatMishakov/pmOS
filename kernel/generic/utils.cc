@@ -403,6 +403,16 @@ extern "C" void abort(void)
         ;
 }
 
+void panic(const char *msg, ...)
+{
+    va_list args;
+    va_start(args, msg);
+    serial_logger.vprintf(msg, args);
+    va_end(args);
+
+    abort();
+}
+
 extern "C" void _assert_fail(const char *condition, const char *file, unsigned int line)
 {
     serial_logger.printf("Assert fail %s in file %s at line %i\n", condition, file, line);

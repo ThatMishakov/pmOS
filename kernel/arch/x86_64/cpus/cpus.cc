@@ -41,6 +41,7 @@
 #include <sched/sched.hh>
 #include <sched/timers.hh>
 #include <x86_asm.hh>
+#include <stdlib.h>
 
 using namespace kernel;
 
@@ -98,7 +99,7 @@ void init_per_cpu(uint32_t lapic_id)
     // lock here
     // TODO: Think of something
 
-    cpus.push_back(c);
+    assert(cpus.push_back(c));
     c->cpu_id = cpus.size() - 1;
 
     serial_logger.printf("Initializing idle task\n");
@@ -120,7 +121,23 @@ klib::vector<u64> initialize_cpus(const klib::vector<u64> &lapic_ids)
 {
     bootstrap_cr3 = getCR3();
 
+    if (!cpus.reserve(lapic_ids.size())){
+        serial_logger.printf("Failed to reserve memory for cpus vector in initialize_cpus()\n");
+        abort();
+    }
+
+
     klib::vector<u64> ret;
+    if (!ret.reserve(lapic_ids.size())) {
+        serial_logger.printf("Failed to reserve memory for ret vector in initialize_cpus()\n");
+        abort();
+    }
+
+    if (!cpus.reserve(cpus.size() + lapic_ids.size())) {
+        serial_logger.printf("Failed to reserve memory for cpus vector in initialize_cpus()\n");
+        abort();
+    }
+    
     for (const auto &id: lapic_ids) {
         CPU_Info *c               = new CPU_Info;
         TSS *tss                  = new TSS();

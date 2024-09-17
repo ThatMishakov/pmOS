@@ -78,3 +78,5 @@ template<class A> const A &min(const A &a, const A &b) noexcept { return a < b ?
 struct Logger;
 
 void print_stack_trace(Logger &logger);
+
+void panic(const char *msg, ...);

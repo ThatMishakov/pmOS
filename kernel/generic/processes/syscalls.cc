@@ -518,7 +518,9 @@ void syscall_set_interrupt(uint64_t port, u64 intno, u64 flags, u64, u64, u64)
 
     syscall_ret_low(task)  = SUCCESS;
     syscall_ret_high(task) = intno;
-    c->int_handlers.add_handler(intno, port_ptr);
+    auto result            = c->int_handlers.add_handler(intno, port_ptr);
+    if (result < 0)
+        throw Kern_Exception(result, "could not add interrupt handler");
 #else
     #error Unknown architecture
 #endif
@@ -530,13 +532,11 @@ void syscall_complete_interrupt(u64 intno, u64, u64, u64, u64, u64)
     auto c               = get_cpu_struct();
     const task_ptr &task = c->current_task;
 
-    try {
-        c->int_handlers.ack_interrupt(intno, task->task_id);
-    } catch (Kern_Exception &e) {
-        serial_logger.printf("Error acking interrupt: %s, task %i intno %i CPU %i task CPU %i\n",
-                             e.err_message, task->task_id, intno, c->cpu_id,
-                             task->cpu_affinity - 1);
-        throw e;
+    auto result = c->int_handlers.ack_interrupt(intno, task->task_id);
+    if (result < 0) {
+        serial_logger.printf("Error acking interrupt: %i, task %i intno %i CPU %i task CPU %i\n",
+                             result, task->task_id, intno, c->cpu_id, task->cpu_affinity - 1);
+        throw Kern_Exception(result, "could not ack interrupt");
     }
     syscall_ret_low(task) = SUCCESS;
 #else
@@ -632,7 +632,11 @@ void syscall_get_port_by_name(u64 /* const char * */ name, u64 length, u64 flags
                 throw(Kern_Exception(-ENOENT, "requested named port does not exist"));
                 return;
             } else {
-                named_port->actions.push_back(klib::make_unique<Notify_Task>(task, named_port));
+                auto ptr = klib::make_unique<Notify_Task>(task, named_port);
+                if (!ptr)
+                    throw(Kern_Exception(-ENOMEM, "could not allocate memory for Notify_Task"));
+                if (!named_port->actions.push_back(klib::move(ptr)))
+                    throw(Kern_Exception(-ENOMEM, "could not add Notify_Task to named port"));
 
                 task->request_repeat_syscall();
                 block_current_task(named_port);
@@ -643,8 +647,12 @@ void syscall_get_port_by_name(u64 /* const char * */ name, u64 length, u64 flags
             throw(Kern_Exception(-ENOENT, "requested named port does not exist"));
         } else {
             auto new_desc = klib::make_unique<Named_Port_Desc>(klib::move(str.second), nullptr);
+            if (!new_desc)
+                throw(Kern_Exception(-ENOMEM, "could not allocate memory for Named_Port_Desc"));
 
-            new_desc->actions.push_back(klib::make_unique<Notify_Task>(task, new_desc.get()));
+            if (!new_desc->actions.push_back(klib::make_unique<Notify_Task>(task, new_desc.get())))
+                throw(Kern_Exception(-ENOMEM, "could not add Notify_Task to named port"));
+
             global_named_ports.storage.insert(new_desc.get());
 
             task->request_repeat_syscall();
@@ -688,12 +696,16 @@ void syscall_request_named_port(u64 string_ptr, u64 length, u64 reply_port, u64 
                 return;
             }
         }
-        named_port->actions.push_back(klib::make_unique<Send_Message>(port_ptr));
+        if (!named_port->actions.push_back(klib::make_unique<Send_Message>(port_ptr)))
+            throw(Kern_Exception(-ENOMEM, "could not add Send_Message to named port"));
     } else {
         auto new_desc =
             klib::make_unique<Named_Port_Desc>(Named_Port_Desc(klib::move(str.second), nullptr));
+        if (!new_desc)
+            throw(Kern_Exception(-ENOMEM, "could not allocate memory for Named_Port_Desc"));
 
-        new_desc->actions.push_back(klib::make_unique<Send_Message>(port_ptr));
+        if (!new_desc->actions.push_back(klib::make_unique<Send_Message>(port_ptr)))
+            throw(Kern_Exception(-ENOMEM, "could not add Send_Message to named port"));
 
         global_named_ports.storage.insert(new_desc.release());
     }

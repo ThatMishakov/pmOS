@@ -204,7 +204,11 @@ int main() {
         msg_buff[msg.size] = '\0';
 
         if (msg.size < sizeof(IPC_Write_Plain)-1) {
-            write_screen("Warning: recieved very small message\n");
+            write_screen("Warning: recieved very small message from ");
+            print_hex(msg.sender);
+            write_screen(" of size ");
+            print_hex(msg.size);
+            write_screen("\n");
             free(msg_buff);
             break;
         }
