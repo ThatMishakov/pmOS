@@ -298,10 +298,11 @@ void x86_4level_Page_Table::invalidate(u64 virt_addr, bool free)
     ::invalidate(virt_addr, free, (u64)pml4_phys);
 }
 
-void unmap_kernel_page(void *virt_addr)
+kresult_t unmap_kernel_page(void *virt_addr)
 {
     const u64 cr3 = getCR3();
     invalidate((u64)virt_addr, true, cr3);
+    return 0;
 }
 
 bool x86_Page_Table::is_used_by_others() const { return (active_count - is_active()) != 0; }

@@ -131,6 +131,11 @@ void __init_stdio();
 // defined in pthread/threads.c
 extern uint64_t __active_threads;
 
+#ifdef __riscv
+long __get_gp();
+long __libc_gp = 0;
+#endif
+
 /// @brief Initializes the standard library
 ///
 /// This function initializes the standard library and is the first thing called in _start function
@@ -143,6 +148,10 @@ extern uint64_t __active_threads;
 /// @param d Page containing the TLS data
 void init_std_lib(void *load_data, size_t load_data_size, TLS_Data *d)
 {
+    #ifdef __riscv
+    __libc_gp = __get_gp();
+    #endif
+
     init_tls_first_time(load_data, load_data_size, d);
 
     __active_threads = 1;

@@ -56,9 +56,11 @@ void __release_tls(struct uthread *u)
     release_region(TASK_ID_SELF, u);
 }
 
+void *__get_tp();
+
 struct uthread *__get_tls()
 {
-    register char *tls asm("tp");
+    register char *tls = __get_tp();
 
     size_t align       = __global_tls_data ? __global_tls_data->align : 0;
     size_t alloc_start = alignup(sizeof(struct uthread), align);

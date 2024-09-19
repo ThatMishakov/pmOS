@@ -31,7 +31,7 @@ set_source_files_properties(${SRC_FOLDER}/generic/string.c PROPERTIES COMPILE_FL
 
 add_library(csrc OBJECT ${SRC})
 add_library(c STATIC $<TARGET_OBJECTS:csrc>)
-add_library(c_static SHARED $<TARGET_OBJECTS:csrc>)
+# add_library(c_static SHARED $<TARGET_OBJECTS:csrc>)
 
 # set_target_properties(c_static PROPERTIES OUTPUT_NAME c)
 

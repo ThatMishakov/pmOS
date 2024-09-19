@@ -119,7 +119,7 @@ public:
     {
         if (n > small_size) {
             long_string.ptr  = new char[n + 1];
-            if (long_string.ptr)
+            if (!long_string.ptr)
                 return;
 
             s_capacity       = n;

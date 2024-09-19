@@ -329,7 +329,8 @@ ReturnStr<klib::string> acpi_get_isa_string(u64 hart_id)
     for (u16 i = 0; i < n->offsets_count; ++i) {
         RCHT_ISA_STRING_node *node = (RCHT_ISA_STRING_node *)((char *)rhct + n->offsets[i]);
         if (node->header.type == RHCT_ISA_STRING_NODE) {
-            return {0, klib::string(node->string, node->string_length)};
+            auto s = klib::string(node->string, node->string_length);
+            return {0, klib::move(s)};
         }
     }
 

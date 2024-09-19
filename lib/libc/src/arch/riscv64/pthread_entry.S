@@ -24,15 +24,22 @@
 # CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-    
-    .section data
-    .globl __libc_gp
-    .hidden __libc_gp
-__libc_gp:
-    .quad 0
-
 
     .section .text
+    .type __get_gp, @function
+    .globl __get_gp
+    .hidden __get_gp
+__get_gp:
+    mv a0, gp
+    ret
+
+    .type __get_tp, @function
+    .globl __get_tp
+    .hidden __get_tp
+__get_tp:
+    mv a0, tp
+    ret    
+
     .type __pthread_entry_point, @function
     .globl __pthread_entry_point
     # C function declaration:

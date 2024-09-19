@@ -147,7 +147,7 @@ extern "C" void syscall_handler()
 
     syscall_table[call_n](arg1, arg2, arg3, arg4, arg5, 0);
 
-    if (syscall_ret_low(task) != SUCCESS) {
+    if (syscall_ret_low(task) != SUCCESS && !task->regs.syscall_pending_restart()) {
         t_print_bochs("Debug: syscall %h pid %h (%s) ", call_n, task->task_id, task->name.c_str());
         t_print_bochs(" -> %i (%s)\n", syscall_ret_low(task), "syscall failed");
     }

@@ -94,4 +94,15 @@ void __release_tls(struct uthread *u)
     release_region(TASK_ID_SELF, (void *)u - alignup(memsz, align));
 }
 
+void *__get_tp()
+{
+    if (__global_tls_data == NULL)
+        return NULL;
+
+    size_t memsz = __global_tls_data->memsz;
+    size_t align = __global_tls_data->align;
+
+    return (char *)__get_tls() - alignup(memsz, align);
+}
+
 void *__thread_pointer_from_uthread(struct uthread *uthread) { return uthread; }

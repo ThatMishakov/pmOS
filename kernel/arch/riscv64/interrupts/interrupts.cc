@@ -152,6 +152,9 @@ void page_fault(u64 virt_addr, u64 scause)
     }();
 
     if (result) {
+        static Spinlock print_lock;
+        Auto_Lock_Scope lock(print_lock);
+
         serial_logger.printf("Warning: Pagefault %h pid %i (%s) rip %h error "
                              "%h -> %i killing process...\n",
                              virt_addr, task->task_id, task->name.c_str(), task->regs.pc, scause,
