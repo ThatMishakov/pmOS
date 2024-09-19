@@ -529,11 +529,11 @@ protected:
 using ptable_top_ptr_t = u64;
 
 // Generic function to map a page
-void map_page(ptable_top_ptr_t page_table, u64 phys_addr, u64 virt_addr, Page_Table_Argumments arg);
+kresult_t map_page(ptable_top_ptr_t page_table, u64 phys_addr, u64 virt_addr, Page_Table_Argumments arg);
 
 // Generic functions to map and release pages in kernel, using the active page table
 kresult_t map_kernel_page(u64 phys_addr, void *virt_addr, Page_Table_Argumments arg);
-void unmap_kernel_page(void *virt_addr);
+kresult_t unmap_kernel_page(void *virt_addr);
 
 // Generic function to map multiple pages
 kresult_t map_pages(ptable_top_ptr_t page_table, u64 phys_addr, u64 virt_addr, u64 size_bytes,

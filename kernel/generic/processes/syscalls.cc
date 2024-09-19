@@ -140,7 +140,7 @@ extern "C" void syscall_handler()
     // TODO: This crashes if the syscall is not implemented
     if (call_n >= syscall_table.size() or syscall_table[call_n] == nullptr) {
         t_print_bochs("Debug: syscall %h pid %h (%s) ", call_n, task->task_id, task->name.c_str());
-        t_print_bochs(" -> %h (%s)\n", -ENOTSUP, "syscall not implemented");
+        t_print_bochs(" -> %i (%s)\n", -ENOTSUP, "syscall not implemented");
         syscall_ret_low(task) = -ENOTSUP;
         return;
     }
@@ -149,7 +149,7 @@ extern "C" void syscall_handler()
 
     if (syscall_ret_low(task) != SUCCESS) {
         t_print_bochs("Debug: syscall %h pid %h (%s) ", call_n, task->task_id, task->name.c_str());
-        t_print_bochs(" -> %h (%s)\n", syscall_ret_low(task), "syscall failed");
+        t_print_bochs(" -> %i (%s)\n", syscall_ret_low(task), "syscall failed");
     }
 
     // t_print_bochs("SUCCESS %h\n", syscall_ret_high(task));
@@ -541,7 +541,7 @@ void syscall_get_lapic_id(u64 cpu_id, u64, u64, u64, u64, u64)
     // Not available on RISC-V
     // TODO: This should be hart id
     // syscall_ret_high(get_current_task()) = get_cpu_struct()->lapic_id;
-    throw Kern_Exception(-ENOSYS, "syscall_get_lapic_id is not implemented");
+    syscall_ret_low(current_task) = -ENOSYS;
 #endif
 }
 

@@ -143,6 +143,9 @@ public:
 
 template<class K, class T> void splay_tree_map<K, T>::splay(splay_tree_map<K, T>::node *n) const
 {
+    if (!n)
+        return;
+
     while (n->parent != nullptr) {
         if (n->parent == root) {
             if (n == n->parent->left) {

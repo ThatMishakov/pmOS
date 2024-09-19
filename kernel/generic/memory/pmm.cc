@@ -414,6 +414,7 @@ Page_Descriptor Page_Descriptor::find_page_struct(Page::page_addr_t addr) noexce
 
 void kernel::pmm::free_memory_for_kernel(phys_page_t page, size_t number_of_pages) noexcept
 {
+    // TODO: This function can crash kernel if allocation fails early in the boot
     auto p = find_page(page);
     assert(p);
 
@@ -439,7 +440,7 @@ Page::page_addr_t kernel::pmm::get_memory_for_kernel(size_t pages) noexcept
 
     Page *p = alloc_pages(pages, true);
     if (!p) [[unlikely]]
-        return -1;
+        return -1UL;
 
     for (size_t i = 0; i < pages; i++) {
         p[i].type       = Page::PageType::Allocated;

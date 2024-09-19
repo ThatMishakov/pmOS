@@ -93,17 +93,17 @@ void flush_page(void *virt_addr) noexcept;
 
 // Prepares a leaf PT for a given virtual address. This function is used during
 // temp mapper initialization.
-u64 prepare_leaf_pt_for(void *virt_addr, Page_Table_Argumments arg, u64 pt_ptr);
+ReturnStr<u64> prepare_leaf_pt_for(void *virt_addr, Page_Table_Argumments arg, u64 pt_ptr);
 
 // Maps a page to a given virtual address, using the available temporary maper.
 // riscv64_paging_levels is used to determine the number of levels of the page
 // table This function can allocate pages for leaf entries, if not already
 // installed
-void riscv_map_page(u64 pt_top_phys, void *virt_addr, u64 phys_addr, Page_Table_Argumments arg);
+kresult_t riscv_map_page(u64 pt_top_phys, void *virt_addr, u64 phys_addr, Page_Table_Argumments arg);
 
 // Unmaps the page from the given virtual address, using the available temporary
 // maper. If the page is not special, it's freed
-void riscv_unmap_page(u64 pt_top_phys, void *virt_addr);
+kresult_t riscv_unmap_page(u64 pt_top_phys, void *virt_addr);
 
 // Gets the top level page table pointer for the current hart
 u64 get_current_hart_pt() noexcept;
@@ -114,7 +114,6 @@ class RISCV64_Page_Table final: public Page_Table
 public:
     // Gets the page table by its ID
     static klib::shared_ptr<RISCV64_Page_Table> get_page_table(u64 id) noexcept;
-    static klib::shared_ptr<RISCV64_Page_Table> get_page_table_throw(u64 id);
 
     /**
      * @brief Creates an initial page table, capturing pointer to the root level
@@ -185,26 +184,25 @@ public:
 
     virtual void invalidate_range(u64 virt_addr, u64 size_bytes, bool free) override;
 
-    virtual void map(u64 page_addr, u64 virt_addr, Page_Table_Argumments arg) override;
-
-    virtual void map(kernel::pmm::Page_Descriptor page, u64 virt_addr, Page_Table_Argumments arg) override;
+    virtual kresult_t map(u64 page_addr, u64 virt_addr, Page_Table_Argumments arg) override;
+    virtual kresult_t map(kernel::pmm::Page_Descriptor page, u64 virt_addr, Page_Table_Argumments arg) override;
 
     virtual ~RISCV64_Page_Table() override;
 
     // Clears the TLB cache for the given page
     void invalidate_tlb(u64 page) override;
 
-    bool atomic_copy_to_user(u64 to, const void *from, u64 size);
+    ReturnStr<bool> atomic_copy_to_user(u64 to, const void *from, u64 size) override;
 
-    virtual void copy_pages(const klib::shared_ptr<Page_Table> &to, u64 from_addr, u64 to_addr,
-                    u64 size_bytes, u8 new_access);
+    virtual kresult_t copy_pages(const klib::shared_ptr<Page_Table> &to, u64 from_addr, u64 to_addr,
+                    u64 size_bytes, u8 new_access) override;
 protected:
     /// Root node/top level of paging structures
     u64 table_root = 0;
 
     RISCV64_Page_Table() = default;
 
-    static void copy_to_recursive(const klib::shared_ptr<Page_Table> &to, u64 phys_page_level, u64 start, u64 to_offset, u64 max_size, u64 new_access, u64 i, int level, u64 &last_copied);
+    static kresult_t copy_to_recursive(const klib::shared_ptr<Page_Table> &to, u64 phys_page_level, u64 start, u64 to_offset, u64 max_size, u64 new_access, u64 i, int level, u64 &last_copied);
 
 private:
     // There is an interesting pattern for this:
@@ -212,7 +210,7 @@ private:
     // But it seems to be very clunky with shared pointers, so I'm not using it
 
     /// @brief Inserts the page table into the map of the page tables
-    static void insert_global_page_tables(klib::shared_ptr<RISCV64_Page_Table> table);
+    static kresult_t insert_global_page_tables(klib::shared_ptr<RISCV64_Page_Table> table);
 
     /// @brief Takes out this page table from the map of the page tables
     void takeout_global_page_tables();

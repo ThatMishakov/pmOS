@@ -299,6 +299,7 @@ ReturnStr<Mem_Object_Reference *> Page_Table::atomic_create_mem_object_region(
     }
 
     auto it = mem_objects.find(object);
+
     if (it == mem_objects.end()) {
         auto result = mem_objects.insert({object, Mem_Object_Data()});
         if (result.first == mem_objects.end())

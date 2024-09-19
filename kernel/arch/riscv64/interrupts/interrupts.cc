@@ -127,9 +127,9 @@ void page_fault(u64 virt_addr, u64 scause)
     auto task       = get_cpu_struct()->current_task;
     auto page_table = task->page_table;
 
-    try {
+    auto result = [&]() -> kresult_t {
         if (scause == 7)
-            throw Kern_Exception(-EIO, "Dodgy userspace");
+            return -EIO;
 
         Auto_Lock_Scope lock(page_table->lock);
 
@@ -139,20 +139,27 @@ void page_fault(u64 virt_addr, u64 scause)
             // serial_logger.printf("Pagefault in region %s\n",
             // it->name.c_str());
             auto r = it->on_page_fault(access_type, virt_addr);
-            if (not r) {
+            if (!r.success())
+                return r.result;
+
+            if (not r.val) {
                 task->atomic_block_by_page(page, &task->page_table->blocked_tasks);
             }
+
+            return 0;
         } else
-            throw Kern_Exception(-EFAULT, "pagefault in unknown region");
-    } catch (const Kern_Exception &e) {
+            return -EFAULT;
+    }();
+
+    if (result) {
         serial_logger.printf("Warning: Pagefault %h pid %i (%s) rip %h error "
                              "%h -> %i killing process...\n",
                              virt_addr, task->task_id, task->name.c_str(), task->regs.pc, scause,
-                             e.err_code);
+                             result);
         global_logger.printf("Warning: Pagefault %h pid %i (%s) pc %h error %h "
                              "-> %i killing process...\n",
                              virt_addr, task->task_id, task->name.c_str(), task->regs.pc, scause,
-                             e.err_code);
+                             result);
         print_registers(task, serial_logger);
         task->atomic_kill();
     }
@@ -189,43 +196,49 @@ void illegal_instruction(u32 instruction)
 {
     auto task = get_cpu_struct()->current_task;
 
-    try {
+    auto result = [&]() -> kresult_t {
         if (instruction == 0) {
-            bool b =
+            auto b =
                 copy_from_user((char *)&instruction, (char *)task->regs.pc, sizeof(instruction));
-            if (not b) {
+
+            if (!b.success())
+                return b.result;
+
+            if (not b.val) {
                 task->atomic_block_by_page(task->regs.pc, &task->page_table->blocked_tasks);
-                return;
+                return 0;
             }
         }
 
         if (instruction_is_fp_csr(instruction)) {
             if (not fp_is_supported())
-                throw Kern_Exception(-ENOTSUP, "Floating point not supported");
+                return -ENOTSUP;
 
             restore_fp_state(task);
         } else if (instruction_is_fp_op(instruction) or instruction_is_fp_ld_st(instruction)) {
             if (not fp_is_supported())
-                throw Kern_Exception(-ENOTSUP, "Floating point not supported");
+                return -ENOTSUP;
 
             if (get_fp_state() != FloatingPointState::Disabled) // FP is enabled but instruction
                                                                 // is illegal -> not supported
-                throw Kern_Exception(-ENOTSUP, "Floating point width not supported");
+                return -ENOTSUP;
 
             restore_fp_state(task);
         } else {
             // What is this
-            throw Kern_Exception(-ENOTSUP, "Illegal instruction");
+            return -ENOTSUP;
         }
-    } catch (const Kern_Exception &e) {
-        serial_logger.printf("Warning: %s pid %i (%s) pc %h instr 0x%h -> %i "
+
+        return 0;
+    }();
+
+    if (result) {
+        serial_logger.printf("Warning: pid %i (%s) pc %h instr 0x%h -> %i "
                              "killing process...\n",
-                             e.err_message, task->task_id, task->name.c_str(), task->regs.pc,
-                             instruction, e.err_code);
-        global_logger.printf("Warning: %s pid %i (%s) pc %h instr 0x%h -> %i "
+                             task->task_id, task->name.c_str(), task->regs.pc, instruction, result);
+        global_logger.printf("Warning: pid %i (%s) pc %h instr 0x%h -> %i "
                              "killing process...\n",
-                             e.err_message, task->task_id, task->name.c_str(), task->regs.pc,
-                             instruction, e.err_code);
+                             task->task_id, task->name.c_str(), task->regs.pc, instruction, result);
         task->atomic_kill();
     }
 }
@@ -260,15 +273,14 @@ void plic_service_interrupt()
     // Send the interrupt to the port
     auto port = handler->port;
     bool sent = false;
-    try {
-        if (port) {
-            IPC_Kernel_Interrupt kmsg = {IPC_Kernel_Interrupt_NUM, irq, c->cpu_id};
-            port->atomic_send_from_system(reinterpret_cast<char *>(&kmsg), sizeof(kmsg));
-        }
+    if (port) {
+        IPC_Kernel_Interrupt kmsg = {IPC_Kernel_Interrupt_NUM, irq, c->cpu_id};
+        auto result = port->atomic_send_from_system(reinterpret_cast<char *>(&kmsg), sizeof(kmsg));
 
-        sent = true;
-    } catch (const Kern_Exception &e) {
-        serial_logger.printf("Error: %s\n", e.err_message);
+        if (result == 0)
+            sent = true;
+        else
+            serial_logger.printf("Error: %i\n", result);
     }
 
     if (not sent) {

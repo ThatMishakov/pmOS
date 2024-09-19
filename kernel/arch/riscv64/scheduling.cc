@@ -355,7 +355,8 @@ ReturnStr<klib::string> dtb_get_isa_string(u64 hart_id)
     }
 
     auto str = dtb_read_string(prop, 0);
-    return {0, klib::string(str)};
+    auto s = klib::string(str);
+    return {0, klib::move(s)};
 }
 
 ReturnStr<klib::string> get_isa_string(u64 hart_id)
@@ -400,6 +401,9 @@ void initialize_fp(const klib::string &isa_string)
 void init_scheduling(u64 hart_id)
 {
     CPU_Info *i         = new CPU_Info();
+    if (!i)
+        panic("Could not allocate CPU_Info struct\n");
+
     i->kernel_stack_top = i->kernel_stack.get_stack_top();
     i->hart_id          = hart_id;
     void *temp_mapper_start = vmm::kernel_space_allocator.virtmem_alloc_aligned(16, 4);
@@ -416,7 +420,8 @@ void init_scheduling(u64 hart_id)
 
     program_stvec();
 
-    cpus.push_back(i);
+    if (!cpus.push_back(i))
+        panic("Could not add CPU_Info struct to cpus vector\n");
 
     initialize_timer();
 
@@ -448,7 +453,10 @@ void init_scheduling(u64 hart_id)
 
     serial_logger.printf("Initializing idle task\n");
 
-    init_idle(i);
+    auto idle = init_idle(i);
+    if (idle != 0)
+        panic("Failed to initialize idle task: %i\n", idle);
+    
     i->current_task = i->idle_task;
 
     serial_logger.printf("Initializing PLIC...\n");
@@ -468,10 +476,18 @@ klib::vector<u64> initialize_cpus(const klib::vector<u64> &hartids)
     asm volatile("csrr %0, satp" : "=r"(satp));
     satp_bootstrap_value = satp;
 
+    if (!cpus.reserve(hartids.size() + 1))
+        panic("Failed to reserve memory for cpus vector in initialize_cpus()\n");
+
     klib::vector<u64> temp_vals;
+    if (!temp_vals.reserve(hartids.size()))
+        panic("Failed to reserve memory for temp_vals vector\n");
 
     for (auto hart_id: hartids) {
         CPU_Info *i         = new CPU_Info();
+        if (!i)
+            panic("Could not allocate CPU_Info struct\n");
+        
         i->kernel_stack_top = i->kernel_stack.get_stack_top();
         i->hart_id          = hart_id;
 
@@ -497,7 +513,10 @@ klib::vector<u64> initialize_cpus(const klib::vector<u64> &hartids)
             // serial_logger.printf("EIC ID: %i\n", i->eic_id);
         }
 
-        init_idle(i);
+        auto idle = init_idle(i);
+        if (idle != 0)
+            panic("Failed to initialize idle task: %i\n", idle);
+        
         i->current_task = i->idle_task;
 
         u64 *stack_top = (u64 *)i->kernel_stack.get_stack_top();

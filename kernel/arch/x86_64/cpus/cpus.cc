@@ -71,20 +71,12 @@ void *get_cpu_start_func() { return (void *)_cpu_entry; }
 
 void init_per_cpu(uint32_t lapic_id)
 {
-    serial_logger.printf("1234\n");
-    
     CPU_Info *c = new CPU_Info;
     if (!c)
         panic("Couldn't allocate memory for CPU_Info\n");
 
-    serial_logger.printf("1234\n");
-    
-
     loadGDT(&c->cpu_gdt);
-
     write_msr(0xC0000101, (u64)c);
-
-    serial_logger.printf("1234\n");
 
     TSS *tss                  = new TSS();
     if (!tss)
@@ -103,8 +95,6 @@ void init_per_cpu(uint32_t lapic_id)
 
     loadTSS(TSS_OFFSET);
 
-    serial_logger.printf("1234\n");
-
     c->lapic_id = lapic_id;
     assert(lapic_id == (get_lapic_id() >> 24));
 
@@ -114,11 +104,9 @@ void init_per_cpu(uint32_t lapic_id)
     // lock here
     // TODO: Think of something
 
-    if (cpus.push_back(c))
+    if (!cpus.push_back(c))
         panic("Failed to reserve memory for cpus vector in init_per_cpu()\n");
     
-    serial_logger.printf("1234\n");
-
     c->cpu_id = cpus.size() - 1;
 
     serial_logger.printf("Initializing idle task\n");

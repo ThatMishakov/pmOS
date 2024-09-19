@@ -31,10 +31,11 @@
 
 #include <assert.h>
 #include <exceptions.hh>
-#include <memory/pmm.hh>
 #include <memory/mem_object.hh>
+#include <memory/pmm.hh>
 #include <memory/temp_mapper.hh>
 #include <processes/tasks.hh>
+#include <pmos/utility/scope_guard.hh>
 
 using namespace kernel;
 
@@ -59,7 +60,7 @@ u8 pbmt_type(Page_Table_Argumments arg)
     return PBMT_PMA;
 }
 
-void riscv_map_page(u64 pt_top_phys, u64 phys_addr, void *virt_addr, Page_Table_Argumments arg)
+kresult_t riscv_map_page(u64 pt_top_phys, u64 phys_addr, void *virt_addr, Page_Table_Argumments arg)
 {
     Temp_Mapper_Obj<RISCV64_PTE> mapper(request_temp_mapper());
 
@@ -72,9 +73,8 @@ void riscv_map_page(u64 pt_top_phys, u64 phys_addr, void *virt_addr, Page_Table_
         if (i == 1) {
             // Leaf page table
 
-            if (entry->valid) {
-                throw Kern_Exception(-EEXIST, "Page already present");
-            }
+            if (entry->valid)
+                return -EEXIST;
 
             RISCV64_PTE new_entry = RISCV64_PTE();
             new_entry.valid       = true;
@@ -88,7 +88,7 @@ void riscv_map_page(u64 pt_top_phys, u64 phys_addr, void *virt_addr, Page_Table_
             new_entry.pbmt        = pbmt_type(arg);
 
             active_pt[index] = new_entry;
-            return;
+            return 0;
         } else {
             // Non-leaf page table
             u64 next_level_phys;
@@ -96,7 +96,7 @@ void riscv_map_page(u64 pt_top_phys, u64 phys_addr, void *virt_addr, Page_Table_
                 // Allocate a new page table
                 u64 new_pt_phys = pmm::get_memory_for_kernel(1);
                 if (pmm::alloc_failure(new_pt_phys))
-                    throw Kern_Exception(-ENOMEM, "Out of memory");
+                    return -ENOMEM;
 
                 RISCV64_PTE new_entry = RISCV64_PTE();
                 new_entry.valid       = true;
@@ -106,7 +106,7 @@ void riscv_map_page(u64 pt_top_phys, u64 phys_addr, void *virt_addr, Page_Table_
                 next_level_phys = new_pt_phys;
                 clear_page(next_level_phys);
             } else if (entry->is_leaf()) {
-                throw Kern_Exception(-EEXIST, "Huge page encountered");
+                return -EEXIST;
             } else {
                 next_level_phys = entry->ppn << 12;
             }
@@ -117,25 +117,29 @@ void riscv_map_page(u64 pt_top_phys, u64 phys_addr, void *virt_addr, Page_Table_
 
     // 0 paging levels???
     assert(!"0 paging levels");
+    return -ENOSYS;
 }
 
-void RISCV64_Page_Table::map(u64 page_addr, u64 virt_addr, Page_Table_Argumments arg)
+kresult_t RISCV64_Page_Table::map(u64 page_addr, u64 virt_addr, Page_Table_Argumments arg)
 {
-    riscv_map_page(table_root, page_addr, (void *)virt_addr, arg);
+    return riscv_map_page(table_root, page_addr, (void *)virt_addr, arg);
 }
 
-void RISCV64_Page_Table::map(pmm::Page_Descriptor page, u64 virt_addr, Page_Table_Argumments arg)
+kresult_t RISCV64_Page_Table::map(pmm::Page_Descriptor page, u64 virt_addr,
+                                  Page_Table_Argumments arg)
 {
-    u64 pte_phys = prepare_leaf_pt_for((void *)virt_addr, arg, table_root);
+    auto pte_phys = prepare_leaf_pt_for((void *)virt_addr, arg, table_root);
+    if (!pte_phys.success())
+        return pte_phys.result;
 
     const int index = (virt_addr >> 12) & 0x1FF;
 
     Temp_Mapper_Obj<RISCV64_PTE> mapper(request_temp_mapper());
-    RISCV64_PTE *active_pt = mapper.map(pte_phys);
+    RISCV64_PTE *active_pt = mapper.map(pte_phys.val);
 
     auto &entry = active_pt[index];
     if (entry.valid)
-        throw Kern_Exception(-EEXIST, "Page already present");
+        return -EEXIST;
 
     RISCV64_PTE pte = RISCV64_PTE();
     pte.valid       = true;
@@ -148,9 +152,11 @@ void RISCV64_Page_Table::map(pmm::Page_Descriptor page, u64 virt_addr, Page_Tabl
     pte.pbmt        = 0;
 
     entry = pte;
+
+    return 0;
 }
 
-void riscv_unmap_page(u64 pt_top_phys, void *virt_addr)
+kresult_t riscv_unmap_page(u64 pt_top_phys, void *virt_addr)
 {
     // TODO: Return values of this function make no sense...
 
@@ -165,23 +171,23 @@ void riscv_unmap_page(u64 pt_top_phys, void *virt_addr)
         if (i == 1) {
             // Leaf page table
 
-            if (not entry->valid) {
-                throw Kern_Exception(-EFAULT, "Page not present");
-            }
+            if (not entry->valid)
+                return -EFAULT;
 
             RISCV64_PTE entry = active_pt[index];
             entry.clear_auto();
             entry            = RISCV64_PTE();
             active_pt[index] = entry;
             flush_page(virt_addr);
-            return;
+
+            return 0;
         } else {
             // Non-leaf page table
             u64 next_level_phys;
             if (not entry->valid) {
-                throw Kern_Exception(-EFAULT, "Page not present");
+                return -EFAULT;
             } else if (entry->is_leaf()) {
-                throw Kern_Exception(-ENOSYS, "Huge page encountered");
+                return -ENOSYS;
             } else {
                 next_level_phys = entry->ppn << 12;
             }
@@ -191,6 +197,7 @@ void riscv_unmap_page(u64 pt_top_phys, void *virt_addr)
     }
 
     assert(!"0 paging levels");
+    return -ENOSYS;
 }
 
 void RISCV64_Page_Table::invalidate(u64 virt_addr, bool free) noexcept
@@ -269,17 +276,18 @@ bool RISCV64_Page_Table::is_mapped(u64 virt_addr) const noexcept
     return false;
 }
 
-void RISCV64_Page_Table::copy_to_recursive(const klib::shared_ptr<Page_Table> &to,
-                                           u64 phys_page_level, u64 absolute_start, u64 to_addr,
-                                           u64 size_bytes, u64 new_access, u64 current_copy_from,
-                                           int level, u64 &upper_bound_offset)
+kresult_t RISCV64_Page_Table::copy_to_recursive(const klib::shared_ptr<Page_Table> &to,
+                                                u64 phys_page_level, u64 absolute_start,
+                                                u64 to_addr, u64 size_bytes, u64 new_access,
+                                                u64 current_copy_from, int level,
+                                                u64 &upper_bound_offset)
 {
     const u8 offset = 12 + (level - 1) * 9;
 
     Temp_Mapper_Obj<RISCV64_PTE> mapper(request_temp_mapper());
     mapper.map(phys_page_level);
 
-    u64 mask = (1UL << offset) - 1;
+    u64 mask        = (1UL << offset) - 1;
     u64 max         = (absolute_start + size_bytes + mask) & ~mask;
     u64 end_index   = (current_copy_from >> (offset + 9)) == (max >> (offset + 9))
                           ? (max >> offset) & 0x1ff
@@ -300,6 +308,10 @@ void RISCV64_Page_Table::copy_to_recursive(const klib::shared_ptr<Page_Table> &t
             u64 copy_from = ((i - start_index) << offset) + current_copy_from;
             u64 copy_to   = copy_from - absolute_start + to_addr;
 
+            auto copy = p.create_copy();
+            if (!copy.success())
+                return copy.result;
+
             Page_Table_Argumments arg = {
                 .readable           = !!(new_access & Readable),
                 .writeable          = !!(new_access & Writeable),
@@ -310,7 +322,9 @@ void RISCV64_Page_Table::copy_to_recursive(const klib::shared_ptr<Page_Table> &t
                 // TODO: Fix this
                 .cache_policy       = Memory_Type::Normal,
             };
-            to->map(p.create_copy(), copy_to, arg);
+            auto result = to->map(klib::move(copy.val), copy_to, arg);
+            if (result)
+                return result;
 
             upper_bound_offset = copy_from - absolute_start + 4096;
         } else {
@@ -320,25 +334,24 @@ void RISCV64_Page_Table::copy_to_recursive(const klib::shared_ptr<Page_Table> &t
             u64 current         = ((i - start_index) << offset) + current_copy_from;
             if (i != start_index)
                 current &= ~mask;
-            copy_to_recursive(to, next_level_phys, absolute_start, to_addr, size_bytes, new_access,
-                              current, level - 1, upper_bound_offset);
+            return copy_to_recursive(to, next_level_phys, absolute_start, to_addr, size_bytes,
+                                     new_access, current, level - 1, upper_bound_offset);
         }
     }
+
+    return 0;
 }
 
-void RISCV64_Page_Table::copy_pages(const klib::shared_ptr<Page_Table> &to, u64 from_addr,
-                                    u64 to_addr, u64 size_bytes, u8 access)
+kresult_t RISCV64_Page_Table::copy_pages(const klib::shared_ptr<Page_Table> &to, u64 from_addr,
+                                         u64 to_addr, u64 size_bytes, u8 access)
 {
-    u64 offset = 0;
-
-    try {
-        copy_to_recursive(to, table_root, from_addr, to_addr, size_bytes, access, to_addr,
-                          riscv64_paging_levels, offset);
-    } catch (...) {
+    u64 offset  = 0;
+    auto result = copy_to_recursive(to, table_root, from_addr, to_addr, size_bytes, access, to_addr,
+                                    riscv64_paging_levels, offset);
+    if (result != 0)
         to->invalidate_range(to_addr, offset, true);
 
-        throw;
-    }
+    return result;
 }
 
 // TODO: This function had great possibilities, but now seems weird
@@ -383,22 +396,27 @@ RISCV64_Page_Table::Page_Info RISCV64_Page_Table::get_page_mapping(u64 virt_addr
     return Page_Info {};
 }
 
-void map_page(ptable_top_ptr_t page_table, u64 phys_addr, u64 virt_addr, Page_Table_Argumments arg)
+kresult_t map_page(ptable_top_ptr_t page_table, u64 phys_addr, u64 virt_addr,
+                   Page_Table_Argumments arg)
 {
-    riscv_map_page(page_table, phys_addr, (void *)virt_addr, arg);
+    return riscv_map_page(page_table, phys_addr, (void *)virt_addr, arg);
 }
 
-void map_pages(ptable_top_ptr_t page_table, u64 phys_addr, u64 virt_addr, u64 size,
-               Page_Table_Argumments arg)
+kresult_t map_pages(ptable_top_ptr_t page_table, u64 phys_addr, u64 virt_addr, u64 size,
+                    Page_Table_Argumments arg)
 {
+    kresult_t result = 0;
+
     // Don't overcomplicate things for now, just call map
     // This is *very* inefficient
-    for (u64 i = 0; i < size; i += 4096) {
-        map_page(page_table, phys_addr + i, virt_addr + i, arg);
+    for (u64 i = 0; i < size && (result == 0); i += 4096) {
+        result = map_page(page_table, phys_addr + i, virt_addr + i, arg);
     }
 
     // On failure, pages need to be unmapped here...
     // Leak memory for now :)
+
+    return result;
 }
 
 kresult_t map_kernel_pages(u64 phys_addr, u64 virt_addr, u64 size, Page_Table_Argumments arg)
@@ -407,7 +425,7 @@ kresult_t map_kernel_pages(u64 phys_addr, u64 virt_addr, u64 size, Page_Table_Ar
     return map_pages(pt_top, phys_addr, virt_addr, size, arg);
 }
 
-u64 prepare_leaf_pt_for(void *virt_addr, Page_Table_Argumments /* unused */, u64 pt_ptr)
+ReturnStr<u64> prepare_leaf_pt_for(void *virt_addr, Page_Table_Argumments /* unused */, u64 pt_ptr)
 {
     Temp_Mapper_Obj<RISCV64_PTE> mapper(request_temp_mapper());
 
@@ -423,7 +441,7 @@ u64 prepare_leaf_pt_for(void *virt_addr, Page_Table_Argumments /* unused */, u64
             // Allocate a new page table
             u64 new_pt_phys = pmm::get_memory_for_kernel(1);
             if (pmm::alloc_failure(new_pt_phys))
-                throw Kern_Exception(-ENOMEM, "Out of memory");
+                return Error(-ENOMEM);
 
             RISCV64_PTE new_entry = RISCV64_PTE();
             new_entry.valid       = true;
@@ -433,7 +451,7 @@ u64 prepare_leaf_pt_for(void *virt_addr, Page_Table_Argumments /* unused */, u64
             next_level_phys = new_pt_phys;
             clear_page(next_level_phys);
         } else if (entry->is_leaf()) {
-            throw Kern_Exception(-EEXIST, "Huge page encountered");
+            return Error(-EEXIST);
         } else {
             next_level_phys = entry->ppn << 12;
         }
@@ -455,10 +473,10 @@ kresult_t map_kernel_page(u64 phys_addr, void *virt_addr, Page_Table_Argumments 
     return riscv_map_page(pt_top, phys_addr, virt_addr, arg);
 }
 
-void unmap_kernel_page(void *virt_addr)
+kresult_t unmap_kernel_page(void *virt_addr)
 {
     const u64 pt_top = get_current_hart_pt();
-    riscv_unmap_page(pt_top, virt_addr);
+    return riscv_unmap_page(pt_top, virt_addr);
 }
 
 u64 get_current_hart_pt() noexcept
@@ -488,10 +506,14 @@ void RISCV64_Page_Table::takeout_global_page_tables()
     global_page_tables.erase_if_exists(this->id);
 }
 
-void RISCV64_Page_Table::insert_global_page_tables(klib::shared_ptr<RISCV64_Page_Table> table)
+kresult_t RISCV64_Page_Table::insert_global_page_tables(klib::shared_ptr<RISCV64_Page_Table> table)
 {
     Auto_Lock_Scope local_lock(page_table_index_lock);
-    global_page_tables.insert({table->id, table});
+    auto ret = global_page_tables.insert({table->id, table});
+    if (ret.first == global_page_tables.end())
+        return -ENOMEM;
+
+    return 0;
 }
 
 RISCV64_Page_Table::page_table_map RISCV64_Page_Table::global_page_tables;
@@ -507,24 +529,14 @@ void RISCV64_Page_Table::apply() noexcept { apply_page_table(table_root); }
 klib::shared_ptr<RISCV64_Page_Table> RISCV64_Page_Table::get_page_table(u64 id) noexcept
 {
     Auto_Lock_Scope scope_lock(page_table_index_lock);
-
     return global_page_tables.get_copy_or_default(id).lock();
-}
-
-klib::shared_ptr<RISCV64_Page_Table> RISCV64_Page_Table::get_page_table_throw(u64 id)
-{
-    Auto_Lock_Scope scope_lock(page_table_index_lock);
-
-    try {
-        return global_page_tables.at(id).lock();
-    } catch (const std::out_of_range &) {
-        throw Kern_Exception(-EBADF, "requested page table doesn't exist");
-    }
 }
 
 klib::shared_ptr<RISCV64_Page_Table> RISCV64_Page_Table::create_clone()
 {
     klib::shared_ptr<RISCV64_Page_Table> new_table = create_empty();
+    if (!new_table)
+        return nullptr;
 
     Auto_Lock_Scope_Double(this->lock, new_table->lock);
 
@@ -534,29 +546,16 @@ klib::shared_ptr<RISCV64_Page_Table> RISCV64_Page_Table::create_clone()
         // immediately but I believe it's better to block them for shorter time
         // and abort the operation when someone tries to mess with the paging,
         // which would either be very poor coding or a bug anyways
-        throw Kern_Exception(-EAGAIN, "page table is already cloned");
+        return nullptr; // "page table is already cloned"
 
-    try {
-        for (auto &reg: this->mem_objects) {
-            new_table->mem_objects.insert({reg.first,
-                                           {
-                                               .max_privilege_mask = reg.second.max_privilege_mask,
-                                               .regions            = {},
-                                           }});
-
-            Auto_Lock_Scope reg_lock(reg.first->pinned_lock);
-            reg.first->register_pined(new_table->weak_from_this());
-        }
-
-        for (auto &reg: this->paging_regions) {
-            reg.clone_to(new_table, reg.start_addr, reg.access_type);
-        }
-    } catch (...) {
+    // This gets called on error
+    auto guard = pmos::utility::make_scope_guard([&]() {
         // Remove all the regions and objects. It might not be necessary, since
         // it should be handled by the destructor but in case somebody from
         // userspace specultively does weird stuff with the
         // not-yet-fully-constructed page table, it's better to give them an
         // empty table
+
         for (const auto &reg: new_table->mem_objects)
             reg.first->atomic_unregister_pined(new_table->weak_from_this());
 
@@ -572,9 +571,31 @@ klib::shared_ptr<RISCV64_Page_Table> RISCV64_Page_Table::create_clone()
 
             it = new_table->paging_regions.begin();
         }
+    });
 
-        throw;
+    for (auto &reg: this->mem_objects) {
+        auto res =
+            new_table->mem_objects.insert({reg.first,
+                                           {
+                                               .max_privilege_mask = reg.second.max_privilege_mask,
+                                               .regions            = {},
+                                           }});
+        if (res.first == new_table->mem_objects.end())
+            return nullptr;
+
+        Auto_Lock_Scope reg_lock(reg.first->pinned_lock);
+        auto result = reg.first->register_pined(new_table->weak_from_this());
+        if (result)
+            return nullptr;
     }
+
+    for (auto &reg: this->paging_regions) {
+        auto result = reg.clone_to(new_table, reg.start_addr, reg.access_type);
+        if (result)
+            return nullptr;
+    }
+
+    guard.dismiss();
 
     return new_table;
 }
@@ -583,6 +604,9 @@ klib::shared_ptr<RISCV64_Page_Table> RISCV64_Page_Table::capture_initial(u64 roo
 {
     klib::shared_ptr<RISCV64_Page_Table> new_table =
         klib::unique_ptr<RISCV64_Page_Table>(new RISCV64_Page_Table());
+
+    if (!new_table)
+        return nullptr;
 
     new_table->table_root = root;
     insert_global_page_tables(new_table);
@@ -668,7 +692,7 @@ klib::shared_ptr<RISCV64_Page_Table> RISCV64_Page_Table::create_empty()
 
     auto n = pmm::get_memory_for_kernel(1);
     if (pmm::alloc_failure(new_table->table_root))
-        throw Kern_Exception(-ENOMEM, "Out of memory");
+        return nullptr;
 
     new_table->table_root = n;
 
@@ -688,27 +712,27 @@ klib::shared_ptr<RISCV64_Page_Table> RISCV64_Page_Table::create_empty()
     new_pt[510] = current_pt[510];
     new_pt[511] = current_pt[511];
 
-    try {
-        new_table->insert_global_page_tables(new_table);
-    } catch (...) {
-        // TODO: This might be a bug
-        pmm::free_memory_for_kernel(new_table->table_root, 1);
-        throw;
-    }
+    auto result = new_table->insert_global_page_tables(new_table);
 
-    return new_table;
+    if (result)
+        pmm::free_memory_for_kernel(new_table->table_root, 1);
+
+    return result ? nullptr : new_table;
 }
 
 void RISCV64_Page_Table::invalidate_tlb(u64 page) { flush_page((void *)page); }
 
-bool RISCV64_Page_Table::atomic_copy_to_user(u64 to, const void *from, u64 size)
+ReturnStr<bool> RISCV64_Page_Table::atomic_copy_to_user(u64 to, const void *from, u64 size)
 {
     Auto_Lock_Scope l(lock);
 
     Temp_Mapper_Obj<char> mapper(request_temp_mapper());
     for (u64 i = to & ~0xfffUL; i < to + size; i += 0x1000) {
         const auto b = prepare_user_page(i, Writeable);
-        if (not b)
+        if (not b.success())
+            return b.propagate();
+
+        if (not b.val)
             return false;
 
         const auto page = get_page_mapping(i);

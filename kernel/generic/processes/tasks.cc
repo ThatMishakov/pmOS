@@ -63,6 +63,14 @@ TaskDescriptor *TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel le
     }
 #elif defined(__riscv)
     n->is_system = level == PrivilegeLevel::Kernel;
+
+    // Allocate FPU state
+    if (level == PrivilegeLevel::User) {
+        n->fp_registers =
+            klib::unique_ptr<u64[]>(new u64[fp_register_size(max_supported_fp_level) * 2]);
+        if (!n->fp_registers)
+            return nullptr;
+    }
 #endif
 
     // Assign a pid
@@ -81,11 +89,9 @@ TaskDescriptor *TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel le
 ReturnStr<size_t> TaskDescriptor::init_stack()
 {
     // TODO: Check if page table exists and that task is uninited
-    {
-        Auto_Lock_Scope page_table_lock(sched_lock);
-        if (!page_table)
-            return Error(-EINVAL);
-    }
+    assert(sched_lock.is_locked());
+    if (!page_table)
+        return Error(-EINVAL);
 
     // Prealloc a page for the stack
     u64 stack_end        = page_table->user_addr_max(); //&_free_to_use;
@@ -225,7 +231,7 @@ kresult_t TaskDescriptor::create_new_page_table()
     Auto_Lock_Scope page_table_lock(table->lock);
     if (table->owner_tasks.insert_noexcept(this).first == table->owner_tasks.end())
         return -ENOMEM;
-    
+
     page_table = table;
 
     return 0;
@@ -242,7 +248,7 @@ kresult_t TaskDescriptor::register_page_table(klib::shared_ptr<Arch_Page_Table> 
     Auto_Lock_Scope page_table_lock(table->lock);
     if (table->owner_tasks.insert_noexcept(this).first == table->owner_tasks.end())
         return -ENOMEM;
-    
+
     page_table = table;
 
     return 0;
@@ -322,7 +328,7 @@ ReturnStr<bool>
             continue;
 
         if ((ph.p_vaddr & 0xfff) != (ph.p_offset & 0xfff))
-            return(-ENOEXEC);
+            return (-ENOEXEC);
 
         if (!(ph.flags & ELF_FLAG_WRITABLE)) {
             // Direct map the region
@@ -375,17 +381,17 @@ ReturnStr<bool>
         klib::unique_ptr<u64[]> t(new u64[size / sizeof(u64)]);
         if (!t)
             return Error(-ENOMEM);
-        
+
         TLS_Data *tls_data = (TLS_Data *)t.get();
 
         tls_data->memsz  = ph.p_memsz;
         tls_data->align  = ph.allignment;
         tls_data->filesz = ph.p_filesz;
 
-        r                 = elf->read_to_kernel(ph.p_offset, tls_data->data, ph.p_filesz);
+        r = elf->read_to_kernel(ph.p_offset, tls_data->data, ph.p_filesz);
         if (!r.success())
             return r.propagate();
-        
+
         if (!r.val)
             return false;
 
@@ -412,10 +418,11 @@ ReturnStr<bool>
     if (result != 0)
         return Error(result);
 
-    auto stack_top    = init_stack();
+    auto stack_top = init_stack();
+
     if (!stack_top.success())
         return stack_top.propagate();
-    
+
     regs.program_counter() = header.program_entry;
 
     // Push stack descriptor structure

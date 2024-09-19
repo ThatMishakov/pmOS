@@ -823,11 +823,17 @@ void init_smp()
     limine_smp_response r;
     copy_from_phys((u64)smp_request.response - hhdm_offset, &r, sizeof(r));
 
-    klib::vector<limine_smp_info *> smp_info(r.cpu_count);
+    klib::vector<limine_smp_info *> smp_info;
+    if (!smp_info.resize(r.cpu_count))
+        panic("Failed to reserve memory for smp_info");
+    
     copy_from_phys((u64)r.cpus - hhdm_offset, smp_info.data(),
                    r.cpu_count * sizeof(limine_smp_info *));
 
     klib::vector<u64> hartids;
+    if (!hartids.reserve(r.cpu_count))
+        panic("Failed to reserve memory for hartids");
+
     for (auto &info: smp_info) {
         limine_smp_info i;
         copy_from_phys((u64)info - hhdm_offset, &i, sizeof(i));

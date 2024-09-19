@@ -109,9 +109,9 @@ int virtmem_ensure_tags(size_t size)
         .extra              = 0,
     };
     auto result = map_kernel_page(page_phys, (void *)addr, pta);
-    if (!result) {
+    if (result) {
         pmm::free_memory_for_kernel(page_phys, 1);
-        return -ENOMEM;
+        return result;
     }
 
     // Slice the page into boundary tags

@@ -438,8 +438,8 @@ Mem_Object_Reference::Mem_Object_Reference(u64 start_addr, u64 size, klib::strin
       start_offset_bytes(start_offset_bytes), object_offset_bytes(object_offset_bytes),
       object_size_bytes(object_size_bytes), cow(copy_on_write)
 {
-    assert(cow or (start_offset_bytes != 0) or !"non-CoW region cannot have start offset");
-    assert(cow or (object_size_bytes != size) or
+    assert(cow or (start_offset_bytes == 0) or !"non-CoW region cannot have start offset");
+    assert(cow or (object_size_bytes == size) or
            !"non-CoW region cannot have size different from the object size");
     assert((object_offset_bytes & 0xfff) == (start_offset_bytes & 0xfff) or
            !"Object page-misaligned with region");

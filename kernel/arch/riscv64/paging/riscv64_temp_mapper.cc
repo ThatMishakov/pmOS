@@ -43,15 +43,18 @@ RISCV64_Temp_Mapper::RISCV64_Temp_Mapper(void *virt_addr, u64 pt_ptr)
 
     Page_Table_Argumments arg {1, 1, 0, 0, 1, 000};
 
-    u64 leaf_pt_phys = prepare_leaf_pt_for(virt_addr, arg, pt_ptr);
+    auto leaf_pt_phys = prepare_leaf_pt_for(virt_addr, arg, pt_ptr);
+    if (!leaf_pt_phys.success())
+        panic("Failed to prepare leaf page table for temp mapper");
+        
     Temp_Mapper_Obj<RISCV64_PTE> tm(request_temp_mapper());
-    RISCV64_PTE *pt = tm.map(leaf_pt_phys);
+    RISCV64_PTE *pt = tm.map(leaf_pt_phys.val);
 
     RISCV64_PTE pte = RISCV64_PTE();
     pte.valid       = true;
     pte.readable    = true;
     pte.writeable   = true;
-    pte.ppn         = leaf_pt_phys >> 12;
+    pte.ppn         = leaf_pt_phys.val >> 12;
     pt[start_index] = pte;
 
     min_index = start_index + 1;

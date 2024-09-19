@@ -56,15 +56,9 @@ extern "C" int munmap(void *addr, size_t length)
     // Can be implemented easilly, but not supported for now
 }
 
-void *operator new(size_t size)
-{
-    return malloc(size);
-}
+void *operator new(size_t size) { return malloc(size); }
 
-void *operator new[](size_t size)
-{
-    return malloc(size);
-}
+void *operator new[](size_t size) { return malloc(size); }
 
 void operator delete(void *p) noexcept { free(p); }
 
