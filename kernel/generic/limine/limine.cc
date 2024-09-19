@@ -377,7 +377,8 @@ void construct_paging()
         }
 
         // Reserve virtual memory
-        auto virt_addr = vmm::kernel_space_allocator.virtmem_alloc(page_struct_page_size / PAGE_SIZE);
+        auto virt_addr =
+            vmm::kernel_space_allocator.virtmem_alloc(page_struct_page_size / PAGE_SIZE);
 
         // Map the memory
         Page_Table_Argumments args = {
@@ -733,7 +734,7 @@ void init_task1()
 
     // Pass the modules to the task
     klib::vector<klib::unique_ptr<load_tag_generic>> tags;
-    tags   = construct_load_tag_framebuffer();
+    tags = construct_load_tag_framebuffer();
 
     auto t = construct_load_tag_rsdp();
     if (t && !tags.push_back(klib::move(t)))
@@ -742,17 +743,15 @@ void init_task1()
     t = construct_load_tag_fdt();
     if (t && !tags.push_back(klib::move(t)))
         panic("Failed to add FDT tag");
-    
+
     tags.push_back(construct_load_tag_for_modules());
 
     // Create new task and load ELF into it
     auto task = TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel::User);
     serial_logger.printf("Loading ELF...\n");
-    bool p = task->load_elf(task1->object, task1->path, tags);
-    if (!p) {
-        serial_logger.printf("Failed to load ELF\n");
-        hcf();
-    }
+    auto p = task->load_elf(task1->object, task1->path, tags);
+    if (!p.success() || !p.val)
+        panic("Failed to load task 1: %i", p.result);
 }
 
 #include <acpi/acpi.hh>
@@ -940,26 +939,20 @@ void limine_main()
     // Call global (C++) constructors
     init();
 
-    try {
-        init_acpi();
-        init_dtb();
+    init_acpi();
+    init_dtb();
 
-        // Init idle task page table
-        idle_page_table = Arch_Page_Table::capture_initial(kernel_ptable_top);
+    // Init idle task page table
+    idle_page_table = Arch_Page_Table::capture_initial(kernel_ptable_top);
 
-        init_scheduling(bsp_cpu_id);
+    init_scheduling(bsp_cpu_id);
 
-        // Switch to CPU-local temp mapper
-        global_temp_mapper = nullptr;
+    // Switch to CPU-local temp mapper
+    global_temp_mapper = nullptr;
 
-        init_smp();
+    init_smp();
 
-        init_modules();
-        init_task1();
-        serial_logger.printf("Loaded kernel...\n");
-    } catch (Kern_Exception &e) {
-        serial_logger.printf("Error loading kernel: code %i message %s\n", e.err_code,
-                             e.err_message);
-        throw;
-    }
+    init_modules();
+    init_task1();
+    serial_logger.printf("Loaded kernel...\n");
 }

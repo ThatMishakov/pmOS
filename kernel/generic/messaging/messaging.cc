@@ -39,7 +39,7 @@
 #include <types.hh>
 #include <utils.hh>
 
-bool Message::copy_to_user_buff(char *buff)
+ReturnStr<bool> Message::copy_to_user_buff(char *buff)
 {
     return copy_to_user(&content.front(), buff, content.size());
 }
@@ -77,79 +77,92 @@ Port *Port::atomic_get_port(u64 portno) noexcept
     return ports.find(portno);
 }
 
-void Port::atomic_send_from_system(const char *msg_ptr, uint64_t size)
+kresult_t Port::atomic_send_from_system(const char *msg_ptr, uint64_t size)
 {
     Auto_Lock_Scope scope_lock(lock);
-    send_from_system(msg_ptr, size);
+    return send_from_system(msg_ptr, size);
 }
 
-void Port::enqueue(const klib::shared_ptr<Message> &msg)
+kresult_t Port::enqueue(const klib::shared_ptr<Message> &msg)
 {
     assert(lock.is_locked() && "Spinlock not locked!");
 
-    msg_queue.push_back(msg);
+    if (msg_queue.push_back(msg) == msg_queue.end())
+        return -ENOMEM;
+
     unblock_if_needed(owner, this);
+    return 0;
 }
 
-void Port::send_from_system(klib::vector<char> &&v)
+kresult_t Port::send_from_system(klib::vector<char> &&v)
 {
     assert(lock.is_locked() && "Spinlock not locked!");
 
     klib::shared_ptr<Message> ptr =
         klib::make_shared<Message>(0, klib::forward<klib::vector<char>>(v));
+    if (!ptr)
+        return -ENOMEM;
 
-    enqueue(ptr);
+    return enqueue(ptr);
 }
 
-void Port::send_from_system(const char *msg_ptr, uint64_t size)
+kresult_t Port::send_from_system(const char *msg_ptr, uint64_t size)
 {
     assert(size > 0);
 
     klib::vector<char> message;
     if (!message.resize(size))
-        throw Kern_Exception(-ENOMEM, "Failed to reserve memory for message");
+        return -ENOMEM;
 
     memcpy(&message.front(), msg_ptr, size);
-    send_from_system(klib::move(message));
+    return send_from_system(klib::move(message));
 }
 
-bool Port::send_from_user(TaskDescriptor *sender, const char *unsafe_user_ptr, size_t msg_size)
+ReturnStr<bool> Port::send_from_user(TaskDescriptor *sender, const char *unsafe_user_ptr, size_t msg_size)
 {
     assert(lock.is_locked() && "Spinlock not locked!");
 
     klib::vector<char> message;
     if (!message.resize(msg_size))
-        throw Kern_Exception(-ENOMEM, "Failed to reserve memory for message");
+        return Error(-ENOMEM);
 
-    kresult_t result = copy_from_user(&message.front(), (char *)unsafe_user_ptr, msg_size);
-    if (not result)
+    auto result = copy_from_user(&message.front(), (char *)unsafe_user_ptr, msg_size);
+    if (!result.success() || !result.val)
         return result;
 
     klib::shared_ptr<Message> ptr =
         klib::make_shared<Message>(sender->task_id, klib::forward<klib::vector<char>>(message));
+    if (!ptr)
+        return Error(-ENOMEM);
 
-    enqueue(ptr);
+    auto r = enqueue(ptr);
+    if (not r)
+        return Error(r);
 
     return true;
 }
 
-bool Port::atomic_send_from_user(TaskDescriptor *sender, const char *unsafe_user_message,
+ReturnStr<bool> Port::atomic_send_from_user(TaskDescriptor *sender, const char *unsafe_user_message,
                                  size_t msg_size)
 {
     klib::vector<char> message;
     if (!message.resize(msg_size))
-        throw Kern_Exception(-ENOMEM, "Failed to reserve memory for message");
+        return Error(-ENOMEM);
 
-    bool result = copy_from_user(&message.front(), (char *)unsafe_user_message, msg_size);
-    if (not result)
+    auto result = copy_from_user(&message.front(), (char *)unsafe_user_message, msg_size);
+    if (!result.success() || !result.val)
         return result;
 
     klib::shared_ptr<Message> ptr =
         klib::make_shared<Message>(sender->task_id, klib::forward<klib::vector<char>>(message));
+    if (!ptr)
+        return Error(-ENOMEM);
 
     Auto_Lock_Scope scope_lock(lock);
 
-    enqueue(ptr);
+    auto r = enqueue(ptr);
+    if (not r)
+        return Error(r);
 
     return true;
 }

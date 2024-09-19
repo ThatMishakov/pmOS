@@ -53,7 +53,7 @@ struct Message {
     inline size_t size() const { return content.size(); }
 
     // Returns true if done successfully, false otherwise (e.g. when syscall needs to be repeated)
-    bool copy_to_user_buff(char *buff);
+    ReturnStr<bool> copy_to_user_buff(char *buff);
 };
 
 #define MSG_ATTR_PRESENT   0x01ULL
@@ -73,19 +73,19 @@ public:
 
     Port(TaskDescriptor *owner, u64 portno);
 
-    void enqueue(const klib::shared_ptr<Message> &msg);
+    kresult_t enqueue(const klib::shared_ptr<Message> &msg);
 
-    void send_from_system(klib::vector<char> &&msg);
-    void send_from_system(const char *msg, size_t size);
-
-    // Returns true if successfully sent, false otherwise (e.g. when it is needed to repeat the
-    // syscall). Throws on crytical errors
-    bool send_from_user(TaskDescriptor *sender, const char *unsafe_user_ptr, size_t msg_size);
-    void atomic_send_from_system(const char *msg, size_t size);
+    kresult_t send_from_system(klib::vector<char> &&msg);
+    kresult_t send_from_system(const char *msg, size_t size);
 
     // Returns true if successfully sent, false otherwise (e.g. when it is needed to repeat the
     // syscall). Throws on crytical errors
-    bool atomic_send_from_user(TaskDescriptor *sender, const char *unsafe_user_message,
+    ReturnStr<bool> send_from_user(TaskDescriptor *sender, const char *unsafe_user_ptr, size_t msg_size);
+    kresult_t atomic_send_from_system(const char *msg, size_t size);
+
+    // Returns true if successfully sent, false otherwise (e.g. when it is needed to repeat the
+    // syscall). Throws on crytical errors
+    ReturnStr<bool> atomic_send_from_user(TaskDescriptor *sender, const char *unsafe_user_message,
                                size_t msg_size);
 
     void change_return_upon_unblock(TaskDescriptor *task);

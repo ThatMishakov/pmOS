@@ -71,11 +71,9 @@ public:
     };
 
     constexpr list();
-    list(const list &);
     list(list &&);
     ~list();
 
-    list &operator=(const list &);
     list &operator=(list &&);
 
     T &front();
@@ -120,34 +118,6 @@ template<typename T> list<T>::~list()
     }
 }
 
-template<typename T> list<T>::list(const list<T> &from)
-{
-    this->l_size = from.l_size;
-
-    if (from.first == nullptr) {
-        this->first = nullptr;
-        this->last  = nullptr;
-    } else {
-        Node *p = new Node();
-        Node *c = from.first;
-
-        this->first = p;
-        p->data     = c->data;
-        c           = c->next;
-
-        while (c != nullptr) {
-            p->next       = new Node();
-            p->next->prev = p;
-            p->next->data = c->data;
-
-            c = c->next;
-            p = p->next;
-        }
-
-        this->last = p;
-    }
-}
-
 template<typename T> list<T>::list(list<T> &&from)
 {
     this->l_size = from.l_size;
@@ -157,38 +127,6 @@ template<typename T> list<T>::list(list<T> &&from)
     from.l_size = 0;
     from.first  = nullptr;
     from.last   = nullptr;
-}
-
-template<typename T> list<T> &list<T>::operator=(const list<T> &from)
-{
-    this->~list();
-
-    this->l_size = from.l_size;
-
-    if (from.first == nullptr) {
-        this->first = nullptr;
-        this->last  = nullptr;
-    } else {
-        Node *p = new Node();
-        Node *c = from.first;
-
-        this->first = p;
-        p->data     = c->data;
-        c           = c->next;
-
-        while (c != nullptr) {
-            p->next       = new Node;
-            p->next->prev = p;
-            p->next->data = c->data;
-
-            c = c->next;
-            p = p->next;
-        }
-
-        this->last = p;
-    }
-
-    return *this;
 }
 
 template<typename T> list<T> &list<T>::operator=(list<T> &&from)
@@ -208,6 +146,9 @@ template<typename T> list<T> &list<T>::operator=(list<T> &&from)
 template<typename T> list<T>::iterator list<T>::push_back(const T &k)
 {
     Node *n = new Node();
+    if (n == nullptr)
+        return iterator(nullptr);
+    
     n->data = k;
 
     if (last == nullptr) {
@@ -227,6 +168,9 @@ template<typename T> list<T>::iterator list<T>::push_back(const T &k)
 template<typename T> list<T>::iterator list<T>::push_front(const T &k)
 {
     Node *n = new Node();
+    if (n == nullptr)
+        return iterator(nullptr);
+    
     n->data = k;
 
     if (first == nullptr) {
@@ -246,6 +190,9 @@ template<typename T> list<T>::iterator list<T>::push_front(const T &k)
 template<typename T> list<T>::iterator list<T>::push_front(T &&k)
 {
     Node *n = new Node();
+    if (n == nullptr)
+        return iterator(nullptr);
+    
     n->data = forward<T>(k);
 
     if (first == nullptr) {
@@ -265,6 +212,9 @@ template<typename T> list<T>::iterator list<T>::push_front(T &&k)
 template<typename T> list<T>::iterator list<T>::push_back(T &&k)
 {
     Node *n = new Node();
+    if (n == nullptr)
+        return iterator(nullptr);
+    
     n->data = forward<T>(k);
 
     if (last == nullptr) {

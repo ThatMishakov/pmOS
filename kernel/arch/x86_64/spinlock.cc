@@ -60,5 +60,5 @@ void Spinlock::unlock() noexcept { release_lock(&locked); }
 
 bool Spinlock::try_lock() noexcept
 {
-    ::try_lock(&locked);
+    return ::try_lock(&locked);
 }

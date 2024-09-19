@@ -42,9 +42,6 @@ extern "C" void *mmap(void *, size_t length, int, int, int, long)
     // This function is (only) called by malloc
     // Only len is interesting
     void *p = palloc(length / 4096 + (length % 4096 ? 1 : 0));
-    if (p == nullptr)
-        return (void *)-1UL;
-
     return p;
 }
 
@@ -61,18 +58,12 @@ extern "C" int munmap(void *addr, size_t length)
 
 void *operator new(size_t size)
 {
-    void *ptr = malloc(size);
-    if (ptr == nullptr)
-        throw std::bad_alloc();
-    return ptr;
+    return malloc(size);
 }
 
 void *operator new[](size_t size)
 {
-    void *ptr = malloc(size);
-    if (ptr == nullptr)
-        throw std::bad_alloc();
-    return ptr;
+    return malloc(size);
 }
 
 void operator delete(void *p) noexcept { free(p); }

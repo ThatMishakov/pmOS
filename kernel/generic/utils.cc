@@ -33,7 +33,6 @@
 #include <errno.h>
 #include <kern_logger/kern_logger.hh>
 #include <lib/string.hh>
-#include <libunwind.h>
 #include <memory/paging.hh>
 #include <messaging/messaging.hh>
 #include <sched/sched.hh>
@@ -170,7 +169,7 @@ void t_print_bochs(const char *str, ...)
 
 void term_write(const klib::string &s) { global_logger.log(s); }
 
-bool prepare_user_buff_rd(const char *buff, size_t size)
+ReturnStr<bool> prepare_user_buff_rd(const char *buff, size_t size)
 {
     u64 addr_start = (u64)buff;
     u64 end        = addr_start + size;
@@ -179,78 +178,76 @@ bool prepare_user_buff_rd(const char *buff, size_t size)
 
     if (addr_start > current_task->page_table->user_addr_max() or
         end > current_task->page_table->user_addr_max() or addr_start > end)
-        throw(Kern_Exception(-EFAULT, "user parameter is out of range"));
+        return Error(-EFAULT);
 
-    try {
-        current_task->request_repeat_syscall();
+    current_task->request_repeat_syscall();
 
+    auto result = [&]() -> ReturnStr<bool> {
         for (u64 i = addr_start; i < end; ++i) {
             u64 page = i & ~0xfffULL;
             auto result =
                 current_task->page_table->prepare_user_page(page, Page_Table::Protection::Readable);
             if (!result.success())
-                throw(Kern_Exception(result.result, "prepare_user_buff_rd failed"));
-            if (not result.val)
+                return result.propagate();
+
+            if (not result.val) {
                 current_task->atomic_block_by_page(page, &current_task->page_table->blocked_tasks);
-            // horrible code...
-            if (not result.val)
-                return result.val;
+                return false;
+            }
         }
+        return true;
+    }();
 
+    if (!result.success() || result.val)
         current_task->pop_repeat_syscall();
-    } catch (...) {
-        current_task->pop_repeat_syscall();
-        throw;
-    }
 
-    return true;
+    return result;
 }
 
-bool prepare_user_buff_wr(char *buff, size_t size)
+ReturnStr<bool> prepare_user_buff_wr(char *buff, size_t size)
 {
     u64 addr_start = (u64)buff;
     u64 end        = addr_start + size;
-
-    bool avail = true;
 
     TaskDescriptor *current_task = get_current_task();
     u64 kern_addr_start          = current_task->page_table->user_addr_max();
 
     if (addr_start > kern_addr_start or end > kern_addr_start or addr_start > end)
-        throw(Kern_Exception(-EFAULT, "prepare_user_buff_wr outside userspace"));
+        return Error(-EFAULT);
 
-    try {
+    auto result = [&]() -> ReturnStr<bool> {
         current_task->request_repeat_syscall();
-        for (u64 i = addr_start; i < end and avail; ++i) {
+        for (u64 i = addr_start; i < end; ++i) {
             u64 page = i & ~0xfffULL;
             auto t   = current_task->page_table->prepare_user_page(page,
                                                                    Page_Table::Protection::Writeable);
             if (!t.success())
-                throw(Kern_Exception(t.result, "prepare_user_buff_wr failed"));
-            avail = t.val;
-            if (not avail)
-                current_task->atomic_block_by_page(page, &current_task->page_table->blocked_tasks);
-        }
-        if (avail)
-            current_task->pop_repeat_syscall();
-    } catch (...) {
-        current_task->pop_repeat_syscall();
-        throw;
-    }
+                return t.propagate();
 
-    return avail;
+            if (not t.val) {
+                current_task->atomic_block_by_page(page, &current_task->page_table->blocked_tasks);
+                return false;
+            }
+        }
+        return true;
+    }();
+
+    if (!result.success() || result.val)
+        current_task->pop_repeat_syscall();
+
+    return result;
 }
 
 extern "C" void allow_access_user();
 extern "C" void disallow_access_user();
 
-bool copy_from_user(char *to, const char *from, size_t size)
+ReturnStr<bool> copy_from_user(char *to, const char *from, size_t size)
 {
     auto current_task = get_current_task();
     Auto_Lock_Scope l(current_task->page_table->lock);
 
-    bool result = prepare_user_buff_rd(from, size);
-    if (result) {
+    auto result = prepare_user_buff_rd(from, size);
+    if (result.success() && result.val) {
         allow_access_user();
         memcpy(to, from, size);
         disallow_access_user();
@@ -259,13 +256,13 @@ bool copy_from_user(char *to, const char *from, size_t size)
     return result;
 }
 
-bool copy_to_user(const char *from, char *to, size_t size)
+ReturnStr<bool> copy_to_user(const char *from, char *to, size_t size)
 {
     auto current_task = get_current_task();
     Auto_Lock_Scope l(current_task->page_table->lock);
 
-    bool result = prepare_user_buff_wr(to, size);
-    if (result) {
+    auto result = prepare_user_buff_wr(to, size);
+    if (result.success() && result.val) {
         allow_access_user();
         memcpy(to, from, size);
         disallow_access_user();
@@ -660,4 +657,34 @@ extern "C" int fwrite(const void *ptr, size_t size, size_t count, FILE *)
 {
     serial_logger.log((char *)ptr, size * count);
     return count;
+}
+
+extern "C" void __cxa_pure_virtual() { panic("__cxa_pure_virtual()"); }
+
+using guard_type = u64;
+
+extern "C" int __cxa_guard_acquire(int64_t *guard_object)
+{
+    int32_t expected = 0;
+    auto asint       = reinterpret_cast<int32_t *>(guard_object);
+    while (true) {
+        if (asint[1])
+            continue;
+
+        if (__atomic_compare_exchange_n(asint, &expected, 1, false, __ATOMIC_ACQUIRE,
+                                        __ATOMIC_ACQUIRE)) {
+            if (*guard_object == 0)
+                return 1;
+
+            __atomic_store_n(asint, 0, __ATOMIC_RELEASE);
+            return 0;
+        }
+    }
+}
+
+extern "C" void __cxa_guard_release(int64_t *guard_object)
+{
+    auto asint = reinterpret_cast<int32_t *>(guard_object);
+    asint[0]   = 1;
+    __atomic_store_n(asint + 1, 0, __ATOMIC_RELEASE);
 }

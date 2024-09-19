@@ -43,7 +43,10 @@ x86_PAE_Temp_Mapper::x86_PAE_Temp_Mapper(void *virt_addr, u64 cr3)
 
     Page_Table_Argumments arg {1, 1, 0, 0, 1, 000};
 
-    u64 pt_phys = prepare_pt_for((u64)virt_addr, arg, cr3);
+    auto pt_phys = prepare_pt_for((u64)virt_addr, arg, cr3);
+    if (pt_phys == -1UL)
+        panic("Can't initialize temp mapper");
+
     Temp_Mapper_Obj<x86_PAE_Entry> tm(request_temp_mapper());
     x86_PAE_Entry *pt = tm.map(pt_phys);
 

@@ -132,14 +132,14 @@ public:
     Spinlock task_groups_lock;
 
     // Creates and assigns an emty valid page table
-    void create_new_page_table();
+    kresult_t create_new_page_table();
 
     // Registers a page table within a process, if it doesn't have any
-    void register_page_table(klib::shared_ptr<Arch_Page_Table>);
-    void atomic_register_page_table(klib::shared_ptr<Arch_Page_Table>);
+    [[nodiscard]] kresult_t register_page_table(klib::shared_ptr<Arch_Page_Table>);
+    [[nodiscard]] kresult_t atomic_register_page_table(klib::shared_ptr<Arch_Page_Table>);
 
     // Inits stack
-    u64 init_stack();
+    ReturnStr<size_t> init_stack();
 
     // Blocks the process by a page (for example in case of a pagefault)
     void atomic_block_by_page(u64 page, sched_queue *push_to_queue);
@@ -227,12 +227,12 @@ public:
     inline void pop_repeat_syscall() noexcept { regs.clear_syscall_restart(); }
 
     /// Creates a process structure and returns its pid
-    static TaskDescriptor *create_process(PrivilegeLevel level = PrivilegeLevel::User);
+    static TaskDescriptor *create_process(PrivilegeLevel level = PrivilegeLevel::User) noexcept;
 
     /// Loads ELF into the task from the given memory object
     /// Returns true if the ELF was loaded successfully, false if the memory object data is not
-    /// immediately available Throws on errors
-    bool load_elf(klib::shared_ptr<Mem_Object> obj, klib::string name = "",
+    /// immediately available
+    ReturnStr<bool> load_elf(klib::shared_ptr<Mem_Object> obj, klib::string name = "",
                   const klib::vector<klib::unique_ptr<load_tag_generic>> &tags = {});
 
     /// Cleans up the task when detected that it is dead ("tombstoning")
@@ -293,7 +293,7 @@ using task_ptr = TaskDescriptor *;
 
 struct CPU_Info;
 // Inits an idle process
-void init_idle(CPU_Info *cpu);
+kresult_t init_idle(CPU_Info *cpu);
 
 // A map of all the tasks
 using sched_map = pmos::containers::RedBlackTree<
@@ -315,22 +315,5 @@ inline bool exists_process(u64 pid)
 inline TaskDescriptor *get_task(u64 pid)
 {
     Auto_Lock_Scope scope_lock(tasks_map_lock);
-    auto it = tasks_map.find(pid);
-    if (!it)
-        throw Kern_Exception(-ESRCH, "Requested process does not exist");
-    return it;
-}
-
-// Gets a task descriptor of the process with pid *pid*. Throws
-inline TaskDescriptor *get_task_throw(u64 pid)
-{
-    Auto_Lock_Scope scope_lock(tasks_map_lock);
-
-    auto ptr = tasks_map.find(pid);
-
-    if (!ptr) {
-        throw Kern_Exception(-ESRCH, "Requested process does not exist");
-    }
-
-    return ptr;
+    return tasks_map.find(pid);
 }

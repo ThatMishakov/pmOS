@@ -50,13 +50,11 @@ extern "C" int printf(const char *str, ...);
 extern "C" void *memcpy(void *to, const void *from, size_t size);
 extern "C" void *memset(void *str, int c, size_t n);
 
-bool prepare_user_buff_rd(const char *buff, size_t size);
+ReturnStr<bool> prepare_user_buff_rd(const char *buff, size_t size);
+ReturnStr<bool> prepare_user_buff_wr(char *buff, size_t size);
 
-bool prepare_user_buff_wr(char *buff, size_t size);
-
-bool copy_from_user(char *to, const char *from, size_t size);
-
-bool copy_to_user(const char *from, char *to, size_t size);
+ReturnStr<bool> copy_from_user(char *to, const char *from, size_t size);
+ReturnStr<bool> copy_to_user(const char *from, char *to, size_t size);
 
 // Copies a frame (ppn)
 void copy_frame(u64 from, u64 to);

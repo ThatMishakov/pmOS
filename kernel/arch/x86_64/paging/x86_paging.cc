@@ -38,6 +38,7 @@
 #include <memory/temp_mapper.hh>
 #include <processes/tasks.hh>
 #include <x86_asm.hh>
+#include <pmos/utility/scope_guard.hh>
 
 using namespace kernel;
 
@@ -223,22 +224,6 @@ u64 prepare_pt_for(u64 virtual_addr, Page_Table_Argumments arg, u64 pt_phys)
     return pde.page_ppn << 12;
 }
 
-u64 x86_4level_Page_Table::get_page_frame(u64 virt_addr)
-{
-    u64 cr3       = getCR3();
-    u64 local_cr3 = reinterpret_cast<u64>(pml4_phys);
-    if (cr3 != local_cr3)
-        setCR3(local_cr3);
-
-    PTE &pte       = *get_pte(virt_addr, rec_map_index);
-    u64 page_frame = pte.page_ppn << 12;
-
-    if (cr3 != local_cr3)
-        setCR3(cr3);
-
-    return page_frame;
-}
-
 bool x86_4level_Page_Table::is_mapped(u64 virt_addr) const
 {
     bool allocated = false;
@@ -394,7 +379,7 @@ kresult_t invalidade(u64 virtual_addr)
     return 0;
 }
 
-u64 x86_4level_Page_Table::phys_addr_of(u64 virt) const
+ReturnStr<u64> x86_4level_Page_Table::phys_addr_of(u64 virt) const
 {
     Temp_Mapper_Obj<x86_PAE_Entry> mapper(request_temp_mapper());
 
@@ -402,25 +387,25 @@ u64 x86_4level_Page_Table::phys_addr_of(u64 virt) const
     mapper.map((u64)pml4_phys);
     unsigned pml4_i = pml4_index(virt);
     if (not mapper.ptr[pml4_i].present)
-        throw(Kern_Exception(-EFAULT, "phys_addr_of pml4e not allocated"));
+        return -EFAULT;
 
     // PDPT entry
     mapper.map(mapper.ptr[pml4_i].page_ppn << 12);
     unsigned pdpt_i = pdpt_index(virt);
     if (not mapper.ptr[pdpt_i].present)
-        throw(Kern_Exception(-EFAULT, "phys_addr_of pdpte not allocated"));
+        return -EFAULT;
 
     // PD entry
     mapper.map(mapper.ptr[pdpt_i].page_ppn << 12);
     unsigned pd_i = pd_index(virt);
     if (not mapper.ptr[pd_i].present)
-        throw(Kern_Exception(-EFAULT, "phys_addr_of pde not allocated"));
+        return -EFAULT;
 
     // PT entry
     mapper.map(mapper.ptr[pd_i].page_ppn << 12);
     unsigned pt_i = pt_index(virt);
     if (not mapper.ptr[pt_i].present)
-        throw(Kern_Exception(-EFAULT, "phys_addr_of pte not allocated"));
+        return -EFAULT;
 
     return (mapper.ptr[pt_i].page_ppn << 12) | (virt & (u64)0xfff);
 }
@@ -482,8 +467,13 @@ klib::shared_ptr<x86_4level_Page_Table> x86_4level_Page_Table::capture_initial(u
     klib::shared_ptr<x86_4level_Page_Table> t =
         klib::unique_ptr<x86_4level_Page_Table>(new x86_4level_Page_Table());
 
+    if (not t)
+        return nullptr;
+
     t->pml4_phys = cr3;
-    insert_global_page_tables(t);
+    auto r       = insert_global_page_tables(t);
+    if (r)
+        return nullptr;
 
     return t;
 }
@@ -493,47 +483,50 @@ klib::shared_ptr<x86_4level_Page_Table> x86_4level_Page_Table::create_empty()
     klib::shared_ptr<x86_4level_Page_Table> new_table =
         klib::unique_ptr<x86_4level_Page_Table>(new x86_4level_Page_Table());
 
+    if (not new_table)
+        return nullptr;
+
     // Get a free page
     pmm::Page::page_addr_t p = -1;
-    try {
-        p = pmm::get_memory_for_kernel(1);
-        if (pmm::alloc_failure(p))
-            throw Kern_Exception(-ENOMEM, "Could not allocate page to create a page table");
 
-        // Map pages
-        Temp_Mapper_Obj<x86_PAE_Entry> new_page_m(request_temp_mapper());
-        Temp_Mapper_Obj<x86_PAE_Entry> current_page_m(request_temp_mapper());
+    p = pmm::get_memory_for_kernel(1);
+    if (pmm::alloc_failure(p))
+        return nullptr;
 
-        new_page_m.map(p);
-        current_page_m.map(getCR3());
+    auto guard = pmos::utility::make_scope_guard([&]() { pmm::free_memory_for_kernel(p, 1); });
 
-        // Clear it as memory contains rubbish and it will cause weird paging
-        // bugs on real machines
-        page_clear((void *)new_page_m.ptr);
+    // Map pages
+    Temp_Mapper_Obj<x86_PAE_Entry> new_page_m(request_temp_mapper());
+    Temp_Mapper_Obj<x86_PAE_Entry> current_page_m(request_temp_mapper());
 
-        // Copy the last entries into the new page table as they are shared
-        // across all processes
-        new_page_m.ptr[256] = current_page_m.ptr[256];
-        new_page_m.ptr[510] = current_page_m.ptr[510];
-        new_page_m.ptr[511] = current_page_m.ptr[511];
+    new_page_m.map(p);
+    current_page_m.map(getCR3());
 
-        // TODO: I've switch almost everything to use temporary mappings, but
-        // recursive mapping is still used in some places. This should be removed
-        // but doesn't matter for now... Also, RISC-V functions fine without it
-        new_page_m.ptr[rec_map_index]             = x86_PAE_Entry();
-        new_page_m.ptr[rec_map_index].present     = 1;
-        new_page_m.ptr[rec_map_index].user_access = 0;
-        new_page_m.ptr[rec_map_index].page_ppn    = p / KB(4);
+    // Clear it as memory contains rubbish and it will cause weird paging
+    // bugs on real machines
+    page_clear((void *)new_page_m.ptr);
 
-        new_table->pml4_phys = p;
+    // Copy the last entries into the new page table as they are shared
+    // across all processes
+    new_page_m.ptr[256] = current_page_m.ptr[256];
+    new_page_m.ptr[510] = current_page_m.ptr[510];
+    new_page_m.ptr[511] = current_page_m.ptr[511];
 
-        insert_global_page_tables(new_table);
-    } catch (...) {
-        if (p != -1UL)
-            pmm::free_memory_for_kernel(p, 1);
+    // TODO: I've switch almost everything to use temporary mappings, but
+    // recursive mapping is still used in some places. This should be removed
+    // but doesn't matter for now... Also, RISC-V functions fine without it
+    new_page_m.ptr[rec_map_index]             = x86_PAE_Entry();
+    new_page_m.ptr[rec_map_index].present     = 1;
+    new_page_m.ptr[rec_map_index].user_access = 0;
+    new_page_m.ptr[rec_map_index].page_ppn    = p / KB(4);
 
-        throw;
-    }
+    new_table->pml4_phys = p;
+
+    auto r = insert_global_page_tables(new_table);
+    if (r)
+        return nullptr;
+
+    guard.dismiss();
 
     return new_table;
 }
@@ -797,6 +790,8 @@ void x86_PAE_Entry::clear_auto()
 klib::shared_ptr<x86_4level_Page_Table> x86_4level_Page_Table::create_clone()
 {
     klib::shared_ptr<x86_4level_Page_Table> new_table = create_empty();
+    if (not new_table)
+        return nullptr;
 
     Auto_Lock_Scope_Double(this->lock, new_table->lock);
 
@@ -806,31 +801,15 @@ klib::shared_ptr<x86_4level_Page_Table> x86_4level_Page_Table::create_clone()
         // immediately but I believe it's better to block them for shorter time
         // and abort the operation when someone tries to mess with the paging,
         // which would either be very poor coding or a bug anyways
-        throw Kern_Exception(-EEXIST, "page table is already cloned");
+        return nullptr;
 
-    try {
-        for (auto &reg: this->mem_objects) {
-            new_table->mem_objects.insert({reg.first,
-                                           {
-                                               .max_privilege_mask = reg.second.max_privilege_mask,
-                                               .regions            = {},
-                                           }});
-
-            Auto_Lock_Scope reg_lock(reg.first->pinned_lock);
-            reg.first->register_pined(new_table->weak_from_this());
-        }
-
-        for (auto &reg: this->paging_regions) {
-            auto r = reg.clone_to(new_table, reg.start_addr, reg.access_type);
-            if (r)
-                throw Kern_Exception(r, "error in clone_to");
-        }
-    } catch (...) {
+    auto guard = pmos::utility::make_scope_guard([&]() {
         // Remove all the regions and objects. It might not be necessary, since
         // it should be handled by the destructor but in case somebody from
         // userspace specultively does weird stuff with the
         // not-yet-fully-constructed page table, it's better to give them an
         // empty table
+
         for (const auto &reg: new_table->mem_objects)
             reg.first->atomic_unregister_pined(new_table->weak_from_this());
 
@@ -847,9 +826,31 @@ klib::shared_ptr<x86_4level_Page_Table> x86_4level_Page_Table::create_clone()
 
             it = new_table->paging_regions.begin();
         }
+    });
 
-        throw;
+    for (auto &reg: this->mem_objects) {
+        auto t =
+            new_table->mem_objects.insert({reg.first,
+                                           {
+                                               .max_privilege_mask = reg.second.max_privilege_mask,
+                                               .regions            = {},
+                                           }});
+        if (not t.second)
+            return nullptr;
+
+        Auto_Lock_Scope reg_lock(reg.first->pinned_lock);
+        auto r = reg.first->register_pined(new_table->weak_from_this());
+        if (r)
+            return nullptr;
     }
+
+    for (auto &reg: this->paging_regions) {
+        auto r = reg.clone_to(new_table, reg.start_addr, reg.access_type);
+        if (r)
+            return nullptr;
+    }
+
+    guard.dismiss();
 
     return new_table;
 }
@@ -857,21 +858,18 @@ klib::shared_ptr<x86_4level_Page_Table> x86_4level_Page_Table::create_clone()
 x86_4level_Page_Table::page_table_map x86_4level_Page_Table::global_page_tables;
 Spinlock x86_4level_Page_Table::page_table_index_lock;
 
-klib::shared_ptr<x86_4level_Page_Table> x86_4level_Page_Table::get_page_table_throw(u64 id)
-{
-    Auto_Lock_Scope scope_lock(page_table_index_lock);
-
-    try {
-        return global_page_tables.at(id).lock();
-    } catch (const std::out_of_range &) {
-        throw Kern_Exception(-ENOENT, "requested page table doesn't exist");
-    }
-}
-
-void x86_4level_Page_Table::insert_global_page_tables(klib::shared_ptr<x86_4level_Page_Table> table)
+kresult_t
+    x86_4level_Page_Table::insert_global_page_tables(klib::shared_ptr<x86_4level_Page_Table> table)
 {
     Auto_Lock_Scope local_lock(page_table_index_lock);
-    global_page_tables.insert({table->id, table});
+    auto p = global_page_tables.insert({table->id, table});
+    if (p.first == global_page_tables.end()) [[unlikely]]
+        return -ENOMEM;
+
+    if (not p.second) [[unlikely]]
+        return -EEXIST;
+
+    return 0;
 }
 
 void x86_4level_Page_Table::takeout_global_page_tables()
@@ -886,7 +884,7 @@ void apply_page_table(ptable_top_ptr_t page_table) { setCR3((u64)page_table); }
 
 void x86_Page_Table::invalidate_tlb(u64 addr) { invlpg(addr); }
 
-bool x86_4level_Page_Table::atomic_copy_to_user(u64 to, const void *from, u64 size)
+ReturnStr<bool> x86_4level_Page_Table::atomic_copy_to_user(u64 to, const void *from, u64 size)
 {
     Auto_Lock_Scope l(lock);
 
@@ -894,7 +892,7 @@ bool x86_4level_Page_Table::atomic_copy_to_user(u64 to, const void *from, u64 si
     for (u64 i = to & ~0xfffUL; i < to + size; i += 0x1000) {
         const auto b = prepare_user_page(i, Writeable);
         if (!b.success())
-            throw Kern_Exception(b.val, "error in prepare_user_page");
+            b.propagate();
 
         if (not b.val)
             return false;
@@ -909,4 +907,14 @@ bool x86_4level_Page_Table::atomic_copy_to_user(u64 to, const void *from, u64 si
     }
 
     return true;
+}
+
+klib::shared_ptr<x86_4level_Page_Table> x86_4level_Page_Table::get_page_table(u64 id)
+{
+    Auto_Lock_Scope local_lock(page_table_index_lock);
+    auto p = global_page_tables.find(id);
+    if (p == global_page_tables.end())
+        return nullptr;
+
+    return p->second.lock();
 }

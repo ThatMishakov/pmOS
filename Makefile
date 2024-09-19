@@ -11,8 +11,8 @@ $(SUBDIRS):
 
 ISO = limine/pmOS.iso
 
-# emul: $(ISO)
-# 	bochs-debugger -q -f .bochsrc
+emul: $(ISO)
+	bochs-debugger -q -f .bochsrc
 
 # bochs: $(ISO)
 # 	bochs -q -f .bochsrc

@@ -132,11 +132,15 @@ void service_timer_ports()
     }
 }
 
-void CPU_Info::atomic_timer_queue_push(u64 fire_on_core_ticks, Port *port)
+kresult_t CPU_Info::atomic_timer_queue_push(u64 fire_on_core_ticks, Port *port)
 {
     Auto_Lock_Scope l(timer_lock);
 
-    timer_queue[fire_on_core_ticks] = port->portno;
+    auto result = timer_queue.insert({fire_on_core_ticks, port->portno});
+    if (!result.second)
+        return -ENOMEM;
+
+    return 0;
 }
 
 extern klib::shared_ptr<Arch_Page_Table> idle_page_table;

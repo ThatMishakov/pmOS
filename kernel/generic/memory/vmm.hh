@@ -102,7 +102,7 @@ void virtmem_return_tag(VirtmemBoundaryTag *tag);
 
 // Makes sure that enough boundary tags are available
 // Returns SUCCESS (0) if the operation was successful or an error code otherwise
-u64 virtmem_ensure_tags(u64 size);
+int virtmem_ensure_tags(u64 size);
 
 // This function adds the initial tags to the freelist and shall be called during the initialization
 // of the allocator during the kernel boot.
@@ -193,7 +193,7 @@ protected:
     // This is used to simplify the code and avoid special cases when adding new segments
     VirtmemBoundaryTag segment_ll_dummy_head;
 
-    friend u64 virtmem_ensure_tags(u64 size);
+    friend int virtmem_ensure_tags(u64 size);
     friend void virtmem_init(u64 virtmem_base, u64 virtmem_size);
 };
 

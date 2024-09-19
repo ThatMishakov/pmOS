@@ -190,5 +190,9 @@
         "__availability": "cpp"
     },
     "cmake.configureOnOpen": false,
-    "C_Cpp.default.compilerPath": "/home/misha/cross/bin/clang"
+    "C_Cpp.default.compilerPath": "/home/misha/cross/bin/clang",
+    "C_Cpp.inlayHints.autoDeclarationTypes.enabled": true,
+    "C_Cpp.inlayHints.autoDeclarationTypes.showOnLeft": true,
+    "C_Cpp.inlayHints.parameterNames.enabled": true,
+    "C_Cpp.inlayHints.referenceOperator.enabled": true
 }

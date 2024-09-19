@@ -41,7 +41,6 @@
 #include <utils.hh>
 #include <x86_asm.hh>
 #include <x86_utils.hh>
-#include <x86_asm.hh>
 
 using namespace kernel;
 
@@ -155,28 +154,28 @@ void write_ICR(ICR i)
     apic_write_reg(APIC_ICR_LOW, ptr[0]);
 }
 
-u64 lapic_configure(u64 opt, u64 arg)
-{
-    u64 result = {0};
+// u64 lapic_configure(u64 opt, u64 arg)
+// {
+//     u64 result = {0};
 
-    switch (opt) {
-    case 0:
-        result = get_lapic_id();
-        break;
-    case 1:
-        broadcast_init_ipi();
-        break;
-    case 2:
-        broadcast_sipi(arg);
-        break;
-    case 3:
-        send_ipi_fixed(arg >> 8, arg);
-        break;
-    default:
-        throw(Kern_Exception(ENOSYS, "lapic_configure with unsupported parameter\n"));
-    };
-    return result;
-}
+//     switch (opt) {
+//     case 0:
+//         result = get_lapic_id();
+//         break;
+//     case 1:
+//         broadcast_init_ipi();
+//         break;
+//     case 2:
+//         broadcast_sipi(arg);
+//         break;
+//     case 3:
+//         send_ipi_fixed(arg >> 8, arg);
+//         break;
+//     default:
+//         throw(Kern_Exception(ENOSYS, "lapic_configure with unsupported parameter\n"));
+//     };
+//     return result;
+// }
 
 u32 get_lapic_id() { return apic_read_reg(APIC_REG_LAPIC_ID); }
 
@@ -210,10 +209,7 @@ void smart_eoi(u8 intno)
         apic_eoi();
 }
 
-void apic_pp(int priority)
-{
-    apic_write_reg(APIC_REG_PPR, priority << 4);
-}
+void apic_pp(int priority) { apic_write_reg(APIC_REG_PPR, priority << 4); }
 
 void lvt0_int_routine() {}
 
@@ -242,15 +238,15 @@ extern "C" void programmable_interrupt(u32 intno)
 
     auto port = handler->port;
     bool sent = false;
-    try {
-        if (port) {
-            IPC_Kernel_Interrupt kmsg = {IPC_Kernel_Interrupt_NUM, intno, c->cpu_id};
-            port->atomic_send_from_system(reinterpret_cast<char *>(&kmsg), sizeof(kmsg));
-        }
-
-        sent = true;
-    } catch (const Kern_Exception &e) {
-        serial_logger.printf("Error: %s\n", e.err_message);
+    if (port) {
+        IPC_Kernel_Interrupt kmsg = {IPC_Kernel_Interrupt_NUM, intno, c->cpu_id};
+        auto r = port->atomic_send_from_system(reinterpret_cast<char *>(&kmsg), sizeof(kmsg));
+        if (r < 0)
+            global_logger.printf(
+                "[Kernel] Error: Could not send interrupt %h to port %h error %i\n", intno,
+                port->portno, r);
+        else
+            sent = true;
     }
 
     if (not sent) {

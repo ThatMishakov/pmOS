@@ -42,11 +42,12 @@
 #include <sched/defs.hh>
 #include <sched/sched.hh>
 
-TaskDescriptor *TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel level)
+TaskDescriptor *TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel level) noexcept
 {
     // Create the structure
     TaskDescriptor *n = new TaskDescriptor();
-    // This throws on failure
+    if (!n)
+        return nullptr;
 
 #ifdef __x86_64__
     // Assign cs and ss
@@ -77,9 +78,14 @@ TaskDescriptor *TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel le
     return n;
 }
 
-u64 TaskDescriptor::init_stack()
+ReturnStr<size_t> TaskDescriptor::init_stack()
 {
     // TODO: Check if page table exists and that task is uninited
+    {
+        Auto_Lock_Scope page_table_lock(sched_lock);
+        if (!page_table)
+            return Error(-EINVAL);
+    }
 
     // Prealloc a page for the stack
     u64 stack_end        = page_table->user_addr_max(); //&_free_to_use;
@@ -94,7 +100,7 @@ u64 TaskDescriptor::init_stack()
                                                            true, false, stack_region_name, -1);
 
     if (!r.success())
-        throw Kern_Exception(r.result, "Error creating stack region");
+        return r.propagate();
 
     // Set new rsp
     this->regs.stack_pointer() = stack_end;
@@ -104,40 +110,42 @@ u64 TaskDescriptor::init_stack()
 
 extern klib::shared_ptr<Arch_Page_Table> idle_page_table;
 
-void init_idle(CPU_Info *cpu_str)
+kresult_t init_idle(CPU_Info *cpu_str)
 {
     // This would not work outside of kernel initialization
-    try {
-        klib::unique_ptr<TaskDescriptor> i =
-            TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel::Kernel);
-        i->atomic_register_page_table(idle_page_table);
+    klib::unique_ptr<TaskDescriptor> i =
+        TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel::Kernel);
+    if (!i) [[unlikely]]
+        return -ENOMEM;
 
-        Auto_Lock_Scope lock(i->sched_lock);
+    auto result = i->atomic_register_page_table(idle_page_table);
+    if (result != 0) [[unlikely]]
+        return result;
 
-        sched_queue *idle_parent_queue = i->parent_queue;
-        if (idle_parent_queue != nullptr) {
-            Auto_Lock_Scope q_lock(idle_parent_queue->lock);
-            idle_parent_queue->erase(i.get());
-        }
+    Auto_Lock_Scope lock(i->sched_lock);
 
-        cpu_str->idle_task = i.release();
-
-        // Idle has the same stack pointer as the kernel
-        // Also, one idle is created per CPU
-        cpu_str->idle_task->regs.thread_pointer() = (u64)cpu_str;
-
-        // Init stack
-        cpu_str->idle_task->regs.stack_pointer() = (u64)cpu_str->idle_stack.get_stack_top();
-
-        cpu_str->idle_task->regs.program_counter() = (u64)&idle;
-        cpu_str->idle_task->type                   = TaskDescriptor::Type::Idle;
-
-        cpu_str->idle_task->priority = idle_priority;
-        cpu_str->idle_task->name     = "idle";
-    } catch (const Kern_Exception &e) {
-        t_print_bochs("Error creating idle process: %i (%s)\n", e.err_code, e.err_message);
-        throw e;
+    sched_queue *idle_parent_queue = i->parent_queue;
+    if (idle_parent_queue != nullptr) {
+        Auto_Lock_Scope q_lock(idle_parent_queue->lock);
+        idle_parent_queue->erase(i.get());
     }
+
+    cpu_str->idle_task = i.release();
+
+    // Idle has the same stack pointer as the kernel
+    // Also, one idle is created per CPU
+    cpu_str->idle_task->regs.thread_pointer() = (u64)cpu_str;
+
+    // Init stack
+    cpu_str->idle_task->regs.stack_pointer() = (u64)cpu_str->idle_stack.get_stack_top();
+
+    cpu_str->idle_task->regs.program_counter() = (u64)&idle;
+    cpu_str->idle_task->type                   = TaskDescriptor::Type::Idle;
+
+    cpu_str->idle_task->priority = idle_priority;
+    cpu_str->idle_task->name     = "idle";
+
+    return 0;
 }
 
 bool TaskDescriptor::is_uninited() const { return status == TaskStatus::TASK_UNINIT; }
@@ -200,91 +208,102 @@ void TaskDescriptor::atomic_kill()
     // (in particular, interrupt mappings) will be called on that CPU
 }
 
-void TaskDescriptor::create_new_page_table()
+kresult_t TaskDescriptor::create_new_page_table()
 {
     Auto_Lock_Scope scope_lock(sched_lock);
 
     if (status != TaskStatus::TASK_UNINIT)
-        throw Kern_Exception(-EEXIST, "Process is already inited");
+        return -EEXIST;
 
     if (page_table)
-        throw Kern_Exception(-EEXIST, "Process already has a page table");
+        return -EEXIST;
 
     klib::shared_ptr<Arch_Page_Table> table = Arch_Page_Table::create_empty();
+    if (!table)
+        return -ENOMEM;
 
     Auto_Lock_Scope page_table_lock(table->lock);
-    table->owner_tasks.insert(this);
+    if (table->owner_tasks.insert_noexcept(this).first == table->owner_tasks.end())
+        return -ENOMEM;
+    
     page_table = table;
+
+    return 0;
 }
 
-void TaskDescriptor::register_page_table(klib::shared_ptr<Arch_Page_Table> table)
+kresult_t TaskDescriptor::register_page_table(klib::shared_ptr<Arch_Page_Table> table)
 {
     if (status != TaskStatus::TASK_UNINIT)
-        throw Kern_Exception(-EEXIST, "Process is already inited");
+        return -EEXIST;
 
     if (page_table)
-        throw Kern_Exception(-EEXIST, "Process already has a page table");
+        return -EEXIST;
 
     Auto_Lock_Scope page_table_lock(table->lock);
-    table->owner_tasks.insert(this);
+    if (table->owner_tasks.insert_noexcept(this).first == table->owner_tasks.end())
+        return -ENOMEM;
+    
     page_table = table;
+
+    return 0;
 }
 
-void TaskDescriptor::atomic_register_page_table(klib::shared_ptr<Arch_Page_Table> table)
+kresult_t TaskDescriptor::atomic_register_page_table(klib::shared_ptr<Arch_Page_Table> table)
 {
     Auto_Lock_Scope scope_lock(sched_lock);
 
-    register_page_table(klib::forward<klib::shared_ptr<Arch_Page_Table>>(table));
+    return register_page_table(klib::forward<klib::shared_ptr<Arch_Page_Table>>(table));
 }
 
-bool TaskDescriptor::load_elf(klib::shared_ptr<Mem_Object> elf, klib::string name,
-                              const klib::vector<klib::unique_ptr<load_tag_generic>> &tags)
+ReturnStr<bool>
+    TaskDescriptor::load_elf(klib::shared_ptr<Mem_Object> elf, klib::string name,
+                             const klib::vector<klib::unique_ptr<load_tag_generic>> &tags)
 {
     Auto_Lock_Scope scope_lock(sched_lock);
 
     if (status != TaskStatus::TASK_UNINIT)
-        throw Kern_Exception(-EEXIST, "Process is already inited");
+        return Error(-EEXIST);
 
     if (page_table)
-        throw Kern_Exception(-EEXIST, "Process has a page table");
+        return Error(-EEXIST);
 
     ELF_64bit header;
     auto r = elf->read_to_kernel(0, (u8 *)&header, sizeof(ELF_64bit));
     if (!r.success())
-        throw Kern_Exception(r.result, "Error reading ELF header");
+        return r.propagate();
 
     if (!r.val)
         // ELF header can't be read immediately
         return false;
 
     if (header.magic != ELF_MAGIC)
-        throw Kern_Exception(-ENOEXEC, "Not an ELF file");
+        return Error(-ENOEXEC);
 
     if (header.bitness != ELF_BITNESS)
-        throw Kern_Exception(-ENOEXEC, "Not a 64-bit ELF file");
+        return Error(-ENOEXEC);
 
     if (header.endianness != ELF_ENDIANNESS)
-        throw Kern_Exception(-ENOEXEC, "Wrong endianness ELF file");
+        return Error(-ENOEXEC);
 
     if (header.type != ELF_EXEC)
-        throw Kern_Exception(-ENOEXEC, "Not an executable ELF file");
+        return Error(-ENOEXEC);
 
     if (header.instr_set != ELF_INSTR_SET)
-        throw Kern_Exception(-ENOEXEC, "Wrong instruction set ELF file");
+        return Error(-ENOEXEC);
 
     // Parse program headers
     using phreader = ELF_PHeader_64;
     if (header.prog_header_size != sizeof(phreader))
-        throw Kern_Exception(-ENOEXEC, "Wrong program header size");
+        return Error(-ENOEXEC);
 
     const u64 ph_count = header.program_header_entries;
     klib::vector<phreader> phs;
     if (!phs.resize(ph_count))
-        throw Kern_Exception(-ENOMEM, "Error allocating memory for ELF program headers");
+        return Error(-ENOMEM);
 
     r = elf->read_to_kernel(header.program_header, (u8 *)phs.data(), ph_count * sizeof(phreader));
     if (!r.success())
-        throw Kern_Exception(r.result, "Error reading ELF program headers");
+        return r.propagate();
 
     if (!r.val)
         // Program headers can't be read immediately
@@ -292,6 +311,8 @@ bool TaskDescriptor::load_elf(klib::shared_ptr<Mem_Object> elf, klib::string nam
 
     // Create a new page table
     auto table = Arch_Page_Table::create_empty();
+    if (!table)
+        return Error(-ENOMEM);
 
     // Load the program header into the page table
     for (size_t i = 0; i < ph_count; ++i) {
@@ -301,7 +322,7 @@ bool TaskDescriptor::load_elf(klib::shared_ptr<Mem_Object> elf, klib::string nam
             continue;
 
         if ((ph.p_vaddr & 0xfff) != (ph.p_offset & 0xfff))
-            throw Kern_Exception(-ENOEXEC, "Unaligned segment");
+            return(-ENOEXEC);
 
         if (!(ph.flags & ELF_FLAG_WRITABLE)) {
             // Direct map the region
@@ -319,7 +340,7 @@ bool TaskDescriptor::load_elf(klib::shared_ptr<Mem_Object> elf, klib::string nam
             auto res = table->atomic_create_mem_object_region(
                 region_start, size, protection_mask, true, name, elf, false, 0, file_offset, size);
             if (!res.success())
-                throw Kern_Exception(res.result, "Error in atomic_create_mem_object_region");
+                return res.propagate();
         } else {
             // Copy the region on access
             const u64 region_start = ph.p_vaddr & ~0xFFFUL;
@@ -340,7 +361,7 @@ bool TaskDescriptor::load_elf(klib::shared_ptr<Mem_Object> elf, klib::string nam
                 file_offset, file_size);
 
             if (!res.success())
-                throw Kern_Exception(res.result, "Error in atomic_create_mem_object_region");
+                return res.propagate();
         }
     }
 
@@ -352,6 +373,9 @@ bool TaskDescriptor::load_elf(klib::shared_ptr<Mem_Object> elf, klib::string nam
 
         const size_t size = sizeof(TLS_Data) + ((ph.p_filesz + 7) & ~7UL);
         klib::unique_ptr<u64[]> t(new u64[size / sizeof(u64)]);
+        if (!t)
+            return Error(-ENOMEM);
+        
         TLS_Data *tls_data = (TLS_Data *)t.get();
 
         tls_data->memsz  = ph.p_memsz;
@@ -359,6 +383,12 @@ bool TaskDescriptor::load_elf(klib::shared_ptr<Mem_Object> elf, klib::string nam
         tls_data->filesz = ph.p_filesz;
 
         r                 = elf->read_to_kernel(ph.p_offset, tls_data->data, ph.p_filesz);
+        if (!r.success())
+            return r.propagate();
+        
+        if (!r.val)
+            return false;
+
         // Install memory region
         const u64 pa_size = (size + 0xFFF) & ~0xFFFUL;
         auto tls_virt     = table->atomic_create_normal_region(
@@ -366,17 +396,26 @@ bool TaskDescriptor::load_elf(klib::shared_ptr<Mem_Object> elf, klib::string nam
             false, name + "_tls", 0);
 
         if (!tls_virt.success())
-            throw Kern_Exception(tls_virt.result, "Error creating TLS region");
+            return tls_virt.propagate();
 
         auto r = table->atomic_copy_to_user(tls_virt.val->start_addr, tls_data, size);
-        if (!r)
+        if (!r.success())
+            return r.propagate();
+
+        if (!r.val)
             return false;
 
         regs.arg3() = tls_virt.val->start_addr;
     }
 
-    register_page_table(table);
-    const u64 stack_top    = init_stack();
+    auto result = register_page_table(table);
+    if (result != 0)
+        return Error(result);
+
+    auto stack_top    = init_stack();
+    if (!stack_top.success())
+        return stack_top.propagate();
+    
     regs.program_counter() = header.program_entry;
 
     // Push stack descriptor structure
@@ -391,7 +430,7 @@ bool TaskDescriptor::load_elf(klib::shared_ptr<Mem_Object> elf, klib::string nam
     load_tag_stack_descriptor *d = (load_tag_stack_descriptor *)&load_stack[current_offset / 8];
     *d                           = {
                                   .header     = LOAD_TAG_STACK_DESCRIPTOR_HEADER,
-                                  .stack_top  = stack_top,
+                                  .stack_top  = stack_top.val,
                                   .stack_size = GB(2),
                                   .guard_size = 0,
                                   .unused0    = 0,
@@ -415,11 +454,15 @@ bool TaskDescriptor::load_elf(klib::shared_ptr<Mem_Object> elf, klib::string nam
         0, tag_size_page, Page_Table::Protection::Readable | Page_Table::Protection::Writeable,
         false, false, name + "_load_tags", 0);
     if (!pos_p.success())
-        throw Kern_Exception(pos_p.result, "Error creating load tags region");
+        return pos_p.propagate();
+
     auto pos = pos_p.val->start_addr;
 
     auto b = table->atomic_copy_to_user(pos, &(load_stack[0]), size);
-    if (!b)
+    if (!b.success())
+        return b.propagate();
+
+    if (!b.val)
         return false;
 
     regs.arg1() = pos;

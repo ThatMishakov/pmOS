@@ -29,6 +29,7 @@
 #pragma once
 #include "mem_protection.hh"
 #include "mem_regions.hh"
+#include <pmos/containers/set.hh>
 
 #include <kernel/com.h>
 #include <kernel/memory.h>
@@ -94,7 +95,7 @@ public:
     /// List of the tasks that own the page table. Task_Descriptor should contain a page_table
     /// pointer which should point to this page table. The kernel does not have special structures
     /// for the threads, so they are achieved by a page table and using IPC for synchronization.
-    klib::set<TaskDescriptor *> owner_tasks;
+    pmos::containers::set<TaskDescriptor *> owner_tasks;
 
     /// Queue of the tasks blocked by the page table
     blocked_sched_queue blocked_tasks;
@@ -157,9 +158,8 @@ public:
 
     // Releases the memory regions in the given range (and their memory). If in the middle of the
     // region, it is split
-    void release_in_range(u64 start, u64 size);
-
-    void atomic_release_in_range(u64 start, u64 size);
+    kresult_t release_in_range(u64 start, u64 size);
+    kresult_t atomic_release_in_range(u64 start, u64 size);
 
     /**
      * @brief Creates a normal memory region
@@ -434,7 +434,7 @@ public:
      *
      * @param object A valid pointer to the object to be pinned.
      */
-    void atomic_pin_memory_object(klib::shared_ptr<Mem_Object> object);
+    kresult_t atomic_pin_memory_object(klib::shared_ptr<Mem_Object> object);
 
     /**
      * @brief Remove a reference to the memory object from the page table
@@ -462,7 +462,7 @@ public:
      * If the region exists, it is automatically deleted and the underlying memory is freed. If it
      * is not, an error is thrown
      */
-    void atomic_delete_region(u64 region_start);
+    kresult_t atomic_delete_region(u64 region_start);
 
     /**
      * @brief Unreferences memory region from memory object
@@ -494,7 +494,7 @@ public:
      * operation should be repeated once the pages are available.
      * @throw Kern_Exception If the operation is not successfull
      */
-    virtual bool atomic_copy_to_user(u64 to, const void *from, u64 size) = 0;
+    virtual ReturnStr<bool> atomic_copy_to_user(u64 to, const void *from, u64 size) = 0;
 
     /// @brief Checks if the pages exists and invalidates it, invalidating TLB entries if needed
     /// @param virt_addr Virtual address of the page

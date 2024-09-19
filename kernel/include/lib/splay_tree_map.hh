@@ -120,11 +120,6 @@ public:
 
     size_t count(const K &) const noexcept;
 
-    T &operator[](const K &k);
-
-    const T &at(const K &) const;
-    T &at(const K &);
-
     K largest() const;
 
     T get_copy_or_default(const K &) noexcept;
@@ -236,6 +231,8 @@ pair<typename splay_tree_map<K, T>::iterator, bool>
     }
 
     node *c = new node(pair);
+    if (!c)
+        return {nullptr, false};
 
     if (n == nullptr) {
         root = c;
@@ -274,8 +271,8 @@ pair<typename splay_tree_map<K, T>::iterator, bool>
     }
 
     node *c = new node(forward<value_type>(pair));
-    // c->data = forward<T>(pair.second);
-    // c->key = pair.first;
+    if (!c)
+        return {nullptr, false};
 
     if (n == nullptr) {
         root = c;
@@ -455,46 +452,6 @@ template<class K, class T> T splay_tree_map<K, T>::get_copy_or_default(const K &
 
     if (n == nullptr)
         return T();
-
-    splay(n);
-
-    return n->key_data.second;
-}
-
-template<class K, class T> T &splay_tree_map<K, T>::operator[](const K &key)
-{
-    node *n = root;
-
-    while (n != nullptr and n->key_data.first != key) {
-        if (n->key_data.first < key) {
-            n = n->right;
-        } else {
-            n = n->left;
-        }
-    }
-
-    if (n == nullptr)
-        return insert({key, T()}).first->second;
-
-    splay(n);
-
-    return n->key_data.second;
-}
-
-template<class K, class T> T &splay_tree_map<K, T>::at(const K &key)
-{
-    node *n = root;
-
-    while (n != nullptr and n->key_data.first != key) {
-        if (n->key_data.first < key) {
-            n = n->right;
-        } else {
-            n = n->left;
-        }
-    }
-
-    if (n == nullptr)
-        throw std::out_of_range("splay_three_map::at");
 
     splay(n);
 

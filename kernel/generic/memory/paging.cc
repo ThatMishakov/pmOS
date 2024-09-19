@@ -57,8 +57,10 @@ Page_Table::~Page_Table()
     while (it != paging_regions.end()) {
         auto next = it;
         ++next;
+
         paging_regions.erase(it);
         it->rcu_free();
+
         it = next;
     }
 }
@@ -152,7 +154,7 @@ ReturnStr<Private_Normal_Region *>
     return r;
 }
 
-void Page_Table::release_in_range(u64 start_addr, u64 size)
+kresult_t Page_Table::release_in_range(u64 start_addr, u64 size)
 {
     bool clean_pages = false;
     // Special case: One large region needs to be split in two, from the middle
@@ -163,7 +165,9 @@ void Page_Table::release_in_range(u64 start_addr, u64 size)
         // it is the only case that may fail because the system may not have enough memory to
         // allocate a second region
 
-        it->punch_hole(start_addr, size);
+        auto p = it->punch_hole(start_addr, size);
+        if (p)
+            return p;
 
         clean_pages = true;
     } else {
@@ -195,12 +199,14 @@ void Page_Table::release_in_range(u64 start_addr, u64 size)
 
     if (clean_pages)
         invalidate_range(start_addr, size, true);
+
+    return 0;
 }
 
-void Page_Table::atomic_release_in_range(u64 start, u64 size)
+kresult_t Page_Table::atomic_release_in_range(u64 start, u64 size)
 {
     Auto_Lock_Scope l(lock);
-    release_in_range(start, size);
+    return release_in_range(start, size);
 }
 
 ReturnStr<size_t> Page_Table::atomic_transfer_region(const klib::shared_ptr<Page_Table> &to,
@@ -270,6 +276,15 @@ ReturnStr<Mem_Object_Reference *> Page_Table::atomic_create_mem_object_region(
     if (!start_addr.success())
         return start_addr.propagate();
 
+    if (not cow and start_offset_bytes != 0)
+        return Error(-EINVAL);
+
+    if (not cow and object_size_bytes != page_aligned_size)
+        return Error(-EINVAL);
+
+    if ((object_offset_bytes & 0xfff) != (start_offset_bytes & 0xfff))
+        return Error(-EINVAL);
+
     auto region = klib::make_unique<Mem_Object_Reference>(
         start_addr.val, page_aligned_size, klib::forward<klib::string>(name), this, access, object,
         object_offset_bytes, cow, start_offset_bytes, object_size_bytes);
@@ -277,16 +292,24 @@ ReturnStr<Mem_Object_Reference *> Page_Table::atomic_create_mem_object_region(
     if (!region)
         return Error(-ENOMEM);
 
-    if (fixed)
-        release_in_range(start_addr.val, page_aligned_size);
+    if (fixed) {
+        auto r = release_in_range(start_addr.val, page_aligned_size);
+        if (r)
+            return Error(r);
+    }
 
-    // This throws...
-    mem_objects[object].regions.insert(region.get());
+    auto it = mem_objects.find(object);
+    if (it == mem_objects.end()) {
+        auto result = mem_objects.insert({object, Mem_Object_Data()});
+        if (result.first == mem_objects.end())
+            return Error(-ENOMEM);
 
-    auto ptr = region.release();
-    paging_regions.insert(ptr);
+        it = result.first;
+    }
+    it->second.regions.insert(region.get());
 
-    return Success(ptr);
+    paging_regions.insert(region.get());
+    return Success(region.release());
 }
 
 Page_Table::RegionsRBTree::RBTreeIterator Page_Table::get_region(u64 page)
@@ -449,22 +472,29 @@ kresult_t Page_Table::copy_pages(const klib::shared_ptr<Page_Table> &to, u64 fro
     return 0;
 }
 
-void Page_Table::atomic_pin_memory_object(klib::shared_ptr<Mem_Object> object)
+kresult_t Page_Table::atomic_pin_memory_object(klib::shared_ptr<Mem_Object> object)
 {
     // TODO: I have changed the order of locking, which might cause deadlocks elsewhere
     Auto_Lock_Scope l(lock);
-    bool inserted = mem_objects.insert({object, Mem_Object_Data()}).second;
+    auto inserted = mem_objects.insert({object, Mem_Object_Data()});
 
-    if (not inserted)
-        throw Kern_Exception(-EEXIST, "memory object is already referenced");
+    if (inserted.first == mem_objects.end())
+        return -ENOMEM;
+    if (not inserted.second)
+        return -EEXIST;
 
-    try {
+    pmos::utility::scope_guard guard([&]() { mem_objects.erase(object); });
+
+    {
         Auto_Lock_Scope object_lock(object->pinned_lock);
-        object->register_pined(weak_from_this());
-    } catch (...) {
-        mem_objects.erase(object);
-        throw;
+        auto result = object->register_pined(weak_from_this());
+        if (result)
+            return result;
     }
+
+    guard.dismiss();
+
+    return 0;
 }
 
 void Page_Table::atomic_shrink_regions(const klib::shared_ptr<Mem_Object> &id,
@@ -472,9 +502,12 @@ void Page_Table::atomic_shrink_regions(const klib::shared_ptr<Mem_Object> &id,
 {
     Auto_Lock_Scope l(lock);
 
-    auto &p = mem_objects.at(id);
-    auto it = p.regions.begin();
-    while (it != p.regions.end()) {
+    auto p = mem_objects.find(id);
+    if (p == mem_objects.end())
+        return;
+    
+    auto it = p->second.regions.begin();
+    while (it != p->second.regions.end()) {
         const auto reg = it;
         ++it;
 
@@ -500,23 +533,24 @@ void Page_Table::atomic_shrink_regions(const klib::shared_ptr<Mem_Object> &id,
     }
 }
 
-void Page_Table::atomic_delete_region(u64 region_start)
+kresult_t Page_Table::atomic_delete_region(u64 region_start)
 {
     Auto_Lock_Scope l(lock);
 
     auto region = get_region(region_start);
     if (region == paging_regions.end())
-        throw Kern_Exception(-ENOENT, "memory region was not found");
+        return -ENOENT;
 
     auto region_size = region->size;
 
     region->prepare_deletion();
     paging_regions.erase(region);
     region->rcu_free();
-    // paging_regions.erase(region_start);
 
     invalidate_range(region_start, region_size, true);
     unblock_tasks_rage(region_start, region_size);
+
+    return 0;
 }
 
 void Page_Table::unreference_object(const klib::shared_ptr<Mem_Object> &object,

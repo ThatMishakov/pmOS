@@ -57,7 +57,7 @@ void Send_Message::do_action(Port *p, const klib::string &name)
 
             klib::vector<char> vec;
             if (!vec.resize(msg_size))
-                throw Kern_Exception(-ENOMEM, "Send_Message::do_action: failed to reserve memory");
+                serial_logger.printf("Send_Message::do_action: failed to allocate memory\n");
 
             IPC_Kernel_Named_Port_Notification *ipc_ptr =
                 (IPC_Kernel_Named_Port_Notification *)&vec.front();
@@ -69,7 +69,9 @@ void Send_Message::do_action(Port *p, const klib::string &name)
             memcpy(ipc_ptr->port_name, name.c_str(), name.length());
 
             Auto_Lock_Scope scope_lock(ptr->lock);
-            ptr->send_from_system(klib::move(vec));
+            auto r = ptr->send_from_system(klib::move(vec));
+            if (r)
+                serial_logger.printf("Send_Message::do_action: failed to send message: %i\n", r);
         } else {
             serial_logger.printf("Send_Message::do_action: port is dead\n");
         }

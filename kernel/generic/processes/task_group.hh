@@ -56,7 +56,7 @@ public:
      * @param id Task group id
      * @throws out of range if the task group does not exist
      */
-    static klib::shared_ptr<TaskGroup> get_task_group_throw(u64 id);
+    static klib::shared_ptr<TaskGroup> get_task_group(u64 id);
 
     /**
      * @brief Checks if the task with the given id is in the group
@@ -75,14 +75,14 @@ public:
      *
      * @param task Task to register
      */
-    void atomic_register_task(TaskDescriptor * task);
+    [[nodiscard]] kresult_t atomic_register_task(TaskDescriptor * task);
 
     /**
      * @brief Removes the task from the group, throwing if not in the group
      *
      * @param task Task to remove
      */
-    void atomic_remove_task(TaskDescriptor *task);
+    [[nodiscard]] kresult_t atomic_remove_task(TaskDescriptor *task);
 
     /**
      * @brief Removes a task from the group. If the task is not in the group, does nothing
@@ -91,7 +91,7 @@ public:
      * @return true If the task was in the group
      * @return false If the task was not in the group
      */
-    bool atomic_remove_task(u64 id) noexcept;
+    [[nodiscard]] kresult_t atomic_remove_task(u64 id) noexcept;
 
     /**
      * @brief Get the id of this task group
@@ -108,7 +108,7 @@ public:
      * @param mask New mask
      * @return u64 Old mask
      */
-    u64 atomic_change_notifier_mask(Port *port, u64 mask, u64 flags);
+    ReturnStr<u32> atomic_change_notifier_mask(Port *port, u32 mask, u32 flags);
 
     /**
      * @brief Gets the notification mask of the port. If the mask is 0, then the port is not in the
@@ -117,7 +117,7 @@ public:
      * @param port_id ID of the port whose mask is to be checked
      * @return u64 Mas of the port
      */
-    u64 atomic_get_notifier_mask(u64 port_id);
+    ReturnStr<u32> atomic_get_notifier_mask(u64 port_id);
 
 private:
     id_type id = __atomic_fetch_add(&next_id, 1, __ATOMIC_SEQ_CST);

@@ -149,11 +149,12 @@ struct CPU_Info {
 
     void ipi_reschedule(); // nothrow ?
 
+    // TODO: Replace this with multimap
     klib::splay_tree_map<u64 /* next clock tick */, u64 /* port id */> timer_queue;
     Spinlock timer_lock;
 
     // Adds a new timer to the timer queue
-    void atomic_timer_queue_push(u64 fire_on_core_ticks, Port *);
+    kresult_t atomic_timer_queue_push(u64 fire_on_core_ticks, Port *);
 
     // Returns the number of ticks after the given number of milliseconds
     u64 ticks_after_ms(u64 ms);

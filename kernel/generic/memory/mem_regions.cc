@@ -228,41 +228,58 @@ void Mem_Object_Reference::trim(u64 new_start, u64 new_size) noexcept
         object_size_bytes = size - start_offset_bytes;
 }
 
-void Private_Normal_Region::punch_hole(u64 hole_addr_start, u64 hole_size_bytes)
+kresult_t Private_Normal_Region::punch_hole(u64 hole_addr_start, u64 hole_size_bytes)
 {
     assert(start_addr < hole_addr_start and start_addr + size > hole_addr_start + hole_size_bytes);
 
     auto ptr = new Private_Normal_Region(*this);
+    if (!ptr)
+        return -ENOMEM;
+
     ptr->size -= hole_addr_start + hole_size_bytes - start_addr;
     ptr->start_addr = hole_addr_start + hole_size_bytes;
     owner->paging_regions.insert(ptr);
     size = hole_addr_start - start_addr;
+
+    return 0;
 }
 
-void Phys_Mapped_Region::punch_hole(u64 hole_addr_start, u64 hole_size_bytes)
+kresult_t Phys_Mapped_Region::punch_hole(u64 hole_addr_start, u64 hole_size_bytes)
 {
     assert(start_addr < hole_addr_start and start_addr + size > hole_addr_start + hole_size_bytes);
 
     auto ptr = new Phys_Mapped_Region(*this);
+    if (!ptr)
+        return -ENOMEM;
+
     ptr->size -= hole_addr_start + hole_size_bytes - start_addr;
     ptr->start_addr = hole_addr_start + hole_size_bytes;
     ptr->phys_addr_start += ptr->start_addr - start_addr;
     owner->paging_regions.insert(ptr);
     size = hole_addr_start - start_addr;
+
+    return 0;
 }
 
-void Mem_Object_Reference::punch_hole(u64 hole_addr_start, u64 hole_size_bytes)
+kresult_t Mem_Object_Reference::punch_hole(u64 hole_addr_start, u64 hole_size_bytes)
 {
     assert(start_addr < hole_addr_start and start_addr + size > hole_addr_start + hole_size_bytes);
 
     const u64 new_start = hole_addr_start + hole_size_bytes;
 
     auto ptr = new Mem_Object_Reference(*this);
+    if (!ptr)
+        return -ENOMEM;
+
     ptr->trim(new_start, size - (new_start - start_addr));
     owner->paging_regions.insert(ptr);
-    owner->mem_objects[references].regions.insert(ptr);
+    auto it = owner->mem_objects.find(references);
+    assert(it != owner->mem_objects.end());
+    it->second.regions.insert(ptr);
 
     trim(start_addr, hole_addr_start - start_addr);
+
+    return 0;
 }
 
 Page_Table_Argumments Mem_Object_Reference::craft_arguments() const
@@ -360,17 +377,19 @@ ReturnStr<bool> Mem_Object_Reference::alloc_page(u64 ptr_addr)
     }
 }
 
-kresult_t Mem_Object_Reference::move_to(const klib::shared_ptr<Page_Table> &new_table, u64 base_addr,
-                                   u64 new_access)
+kresult_t Mem_Object_Reference::move_to(const klib::shared_ptr<Page_Table> &new_table,
+                                        u64 base_addr, u64 new_access)
 {
     return -ENOSYS;
-    //throw Kern_Exception(-ENOSYS, "move_to of Mem_Object_Reference was not yet implemented");
+    // throw Kern_Exception(-ENOSYS, "move_to of Mem_Object_Reference was not yet implemented");
 }
 
 kresult_t Mem_Object_Reference::clone_to(const klib::shared_ptr<Page_Table> &new_table,
                                          u64 base_addr, u64 new_access)
 {
     auto copy = klib::make_unique<Mem_Object_Reference>(*this);
+    if (!copy)
+        return -ENOMEM;
 
     copy->owner       = new_table.get();
     copy->id          = __atomic_add_fetch(&counter, 1, 0);
@@ -383,8 +402,15 @@ kresult_t Mem_Object_Reference::clone_to(const klib::shared_ptr<Page_Table> &new
             return result;
     }
 
-    // TODO: This is problematic
-    new_table->mem_objects[copy->references].regions.insert(copy.get());
+    auto it = new_table->mem_objects.find(copy->references);
+    if (it == new_table->mem_objects.end()) {
+        auto result = new_table->mem_objects.insert({copy->references, {}});
+        if (result.first == new_table->mem_objects.end())
+            return -ENOMEM;
+
+        it = result.first;
+    }
+    it->second.regions.insert(copy.get());
 
     new_table->paging_regions.insert(copy.release());
     return 0;
@@ -412,16 +438,12 @@ Mem_Object_Reference::Mem_Object_Reference(u64 start_addr, u64 size, klib::strin
       start_offset_bytes(start_offset_bytes), object_offset_bytes(object_offset_bytes),
       object_size_bytes(object_size_bytes), cow(copy_on_write)
 {
-    if (not cow and start_offset_bytes != 0)
-        throw Kern_Exception(-EINVAL, "non-CoW region cannot have start offset");
-
-    if (not cow and object_size_bytes != size)
-        throw Kern_Exception(-EINVAL,
-                             "non-CoW region cannot have size different from the object size");
-
-    if ((object_offset_bytes & 0xfff) != (start_offset_bytes & 0xfff))
-        throw Kern_Exception(-EINVAL, "Object page-misaligned with region");
-};
+    assert(cow or (start_offset_bytes != 0) or !"non-CoW region cannot have start offset");
+    assert(cow or (object_size_bytes != size) or
+           !"non-CoW region cannot have size different from the object size");
+    assert((object_offset_bytes & 0xfff) == (start_offset_bytes & 0xfff) or
+           !"Object page-misaligned with region");
+}
 
 void Generic_Mem_Region::rcu_free() noexcept
 {

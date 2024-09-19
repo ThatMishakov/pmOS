@@ -343,7 +343,10 @@ public:
 
         if (r) {
             new_refcount = make_unique<_smart_ptr_refcount_str>(_smart_ptr_refcount_str());
-            new_refcount->shared_refs++;
+            if (new_refcount)
+                new_refcount->shared_refs++;
+            else 
+                r = nullptr;
         }
 
         this->~shared_ptr();
@@ -604,6 +607,9 @@ template<class T> shared_ptr<T>::shared_ptr(unique_ptr<T> &&p)
 
     unique_ptr<_smart_ptr_refcount_str> refcount_new =
         make_unique<_smart_ptr_refcount_str>(_smart_ptr_refcount_str());
+    if (not refcount_new)
+        return;
+    
     ptr                   = p.release();
     refcount              = refcount_new.release();
     refcount->shared_refs = 1;

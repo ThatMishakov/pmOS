@@ -41,7 +41,7 @@ namespace kernel::vmm
 
 void virtmem_fill_initial_tags()
 {
-    for (u64 i = 0; i < virtmem_initial_segments; ++i) {
+    for (size_t i = 0; i < virtmem_initial_segments; ++i) {
         virtmem_return_tag(&virtmem_initial_tags[i]);
     }
 }
@@ -78,7 +78,7 @@ void virtmem_init(u64 virtmem_base, u64 virtmem_size)
     virtmem_link_tag(&kernel_space_allocator.segment_ll_dummy_head, tag);
 }
 
-u64 virtmem_ensure_tags(u64 size)
+int virtmem_ensure_tags(size_t size)
 {
     if (virtmem_available_tags_count >= size)
         return 0;
@@ -93,26 +93,24 @@ u64 virtmem_ensure_tags(u64 size)
     auto &list = kernel_space_allocator.virtmem_freelists[idx];
     auto tag   = &*list.begin();
 
-    // Allocate a page and try and map it
     const auto addr = tag->base;
-    u64 page_phys   = -1UL;
-    try {
-        page_phys = pmm::get_memory_for_kernel(1);
-        if (page_phys == -1UL)
-            return -ENOMEM;
+    phys_addr_t page_phys   = -1UL;
 
-        Page_Table_Argumments pta = {
-            .readable           = true,
-            .writeable          = true,
-            .user_access        = false,
-            .global             = false,
-            .execution_disabled = true,
-            .extra              = 0,
-        };
-        map_kernel_page(page_phys, (void *)addr, pta);
-    } catch (...) {
+    page_phys = pmm::get_memory_for_kernel(1);
+    if (page_phys == -1UL)
+        return -ENOMEM;
+
+    Page_Table_Argumments pta = {
+        .readable           = true,
+        .writeable          = true,
+        .user_access        = false,
+        .global             = false,
+        .execution_disabled = true,
+        .extra              = 0,
+    };
+    auto result = map_kernel_page(page_phys, (void *)addr, pta);
+    if (!result) {
         pmm::free_memory_for_kernel(page_phys, 1);
-
         return -ENOMEM;
     }
 

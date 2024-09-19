@@ -71,12 +71,25 @@ void *get_cpu_start_func() { return (void *)_cpu_entry; }
 
 void init_per_cpu(uint32_t lapic_id)
 {
+    serial_logger.printf("1234\n");
+    
     CPU_Info *c = new CPU_Info;
+    if (!c)
+        panic("Couldn't allocate memory for CPU_Info\n");
+
+    serial_logger.printf("1234\n");
+    
+
     loadGDT(&c->cpu_gdt);
 
     write_msr(0xC0000101, (u64)c);
 
+    serial_logger.printf("1234\n");
+
     TSS *tss                  = new TSS();
+    if (!tss)
+        panic("Couldn't allocate memory for TSS\n");
+    
     c->cpu_gdt.tss_descriptor = System_Segment_Descriptor((u64)tss, sizeof(TSS), 0x89, 0x02);
 
     c->kernel_stack_top = c->kernel_stack.get_stack_top();
@@ -90,6 +103,8 @@ void init_per_cpu(uint32_t lapic_id)
 
     loadTSS(TSS_OFFSET);
 
+    serial_logger.printf("1234\n");
+
     c->lapic_id = lapic_id;
     assert(lapic_id == (get_lapic_id() >> 24));
 
@@ -99,12 +114,18 @@ void init_per_cpu(uint32_t lapic_id)
     // lock here
     // TODO: Think of something
 
-    assert(cpus.push_back(c));
+    if (cpus.push_back(c))
+        panic("Failed to reserve memory for cpus vector in init_per_cpu()\n");
+    
+    serial_logger.printf("1234\n");
+
     c->cpu_id = cpus.size() - 1;
 
     serial_logger.printf("Initializing idle task\n");
 
-    init_idle(c);
+    auto r = init_idle(c);
+    if (r)
+        panic("Failed to initialize idle task: %i\n", r);
     c->current_task = c->idle_task;
 
     program_syscall();
@@ -113,6 +134,9 @@ void init_per_cpu(uint32_t lapic_id)
     enable_sse();
 
     void *temp_mapper_start = vmm::kernel_space_allocator.virtmem_alloc_aligned(16, 4);
+    if (!temp_mapper_start)
+        panic("Failed to allocate memory for temp_mapper_start\n");
+    
     c->temp_mapper          = x86_PAE_Temp_Mapper(temp_mapper_start, getCR3());
 }
 
@@ -156,7 +180,10 @@ klib::vector<u64> initialize_cpus(const klib::vector<u64> &lapic_ids)
         cpus.push_back(c);
         c->cpu_id = cpus.size() - 1;
 
-        init_idle(c);
+        auto t = init_idle(c);
+        if (t)
+            panic("Failed to initialize idle task: %i\n", t);
+        
         c->current_task = c->idle_task;
 
         void *temp_mapper_start = vmm::kernel_space_allocator.virtmem_alloc_aligned(16, 4);

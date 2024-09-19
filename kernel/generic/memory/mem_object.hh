@@ -163,11 +163,11 @@ public:
      *
      * @param new_size_pages New size of the object in pages. 0 is a valid size.
      */
-    void atomic_resize(u64 new_size_pages);
+    kresult_t atomic_resize(u64 new_size_pages);
 
     /// Registers a pined by page table
-    void register_pined(klib::weak_ptr<Page_Table> pined_by);
-    void atomic_register_pined(klib::weak_ptr<Page_Table> pined_by);
+    kresult_t register_pined(klib::weak_ptr<Page_Table> pined_by);
+    kresult_t atomic_register_pined(klib::weak_ptr<Page_Table> pined_by);
 
     /// Deletes a pined by page table
     void unregister_pined(const klib::weak_ptr<Page_Table> &pined_by) noexcept;
@@ -290,7 +290,7 @@ private:
      * @brief Saves the memory object in the map of the memory object
      *
      */
-    static void atomic_push_global_storage(klib::shared_ptr<Mem_Object> o);
+    static kresult_t atomic_push_global_storage(klib::shared_ptr<Mem_Object> o);
 
     /**
      * @brief Deletes the memory object from the map of the objects

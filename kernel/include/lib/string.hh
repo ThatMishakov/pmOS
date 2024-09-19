@@ -100,6 +100,9 @@ public:
 
         if (length > small_size) {
             long_string.ptr  = new char[length + 1];
+            if (long_string.ptr)
+                return;
+
             s_capacity       = length;
             long_string.size = length;
 
@@ -111,10 +114,14 @@ public:
             short_string[length] = '\0';
         }
     }
+
     string(const char *s, size_t n)
     {
         if (n > small_size) {
             long_string.ptr  = new char[n + 1];
+            if (long_string.ptr)
+                return;
+
             s_capacity       = n;
             long_string.size = n;
 
@@ -131,6 +138,9 @@ public:
     {
         if (n > small_size) {
             long_string.ptr  = new char[n + 1];
+            if (long_string.ptr)
+                return;
+
             s_capacity       = n;
             long_string.size = n;
 
@@ -146,7 +156,6 @@ public:
             short_string[n] = '\0';
         }
     }
-    // string (std::initializer_list<char> il);
 
     constexpr string(string &&str) noexcept
         : s_capacity(str.s_capacity), long_string(str.long_string)
@@ -162,56 +171,6 @@ public:
         }
     }
 
-    constexpr const string &operator=(const string &str)
-    {
-        if (this == &str)
-            return *this;
-
-        if (is_long())
-            delete[] long_string.ptr;
-
-        size_t length = str.length();
-
-        if (length > small_size) {
-            long_string.ptr  = new char[length + 1];
-            s_capacity       = length;
-            long_string.size = length;
-
-            memcpy(long_string.ptr, str.data(), length + 1);
-            long_string.ptr[length] = '\0';
-        } else {
-            s_capacity  = length;
-            long_string = str.long_string;
-        }
-
-        return *this;
-    }
-
-    string &operator=(const char *s)
-    {
-        if (c_str() == s)
-            return *this;
-
-        if (is_long())
-            delete[] long_string.ptr;
-
-        size_t length = strlen(s);
-
-        if (length > small_size) {
-            long_string.ptr  = new char[length + 1];
-            s_capacity       = length;
-            long_string.size = length;
-
-            memcpy(long_string.ptr, s, length);
-            long_string.ptr[length] = '\0';
-        } else {
-            s_capacity = length;
-            memcpy(short_string, s, length);
-            short_string[length] = '\0';
-        }
-
-        return *this;
-    }
     string &operator=(char c);
     // string& operator= (std::initializer_list<char> il);
     const string &operator=(string &&str) noexcept
@@ -422,40 +381,10 @@ public:
     int compare(size_t pos, size_t len, const char *s, size_t n) const;
 
     bool operator<(const string &s) const { return compare(s) < 0; }
-
     bool operator>(const string &s) const { return compare(s) > 0; }
-
     bool operator==(const string &s) const { return compare(s) == 0; }
 
-    static klib::pair<bool, string> fill_from_user(const char *ptr, size_t size)
-    {
-
-        klib::pair<bool, string> ret;
-
-        if (fits_in_short(size)) {
-            ret.first = copy_from_user(ret.second.short_string, ptr, size);
-
-            if (not ret.first)
-                return ret;
-
-            ret.second.s_capacity = size;
-        } else {
-            unique_ptr<char[]> p(new char[size + 1]);
-
-            ret.first = copy_from_user(p.get(), ptr, size);
-
-            if (not ret.first)
-                return ret;
-
-            p[size] = '\0';
-
-            ret.second.s_capacity       = size;
-            ret.second.long_string.size = size;
-            ret.second.long_string.ptr  = p.release();
-        }
-
-        return ret;
-    }
+    string clone() const { return string(*this); }
 };
 
 } // namespace klib

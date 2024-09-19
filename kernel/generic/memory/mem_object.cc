@@ -65,9 +65,13 @@ klib::shared_ptr<Mem_Object> Mem_Object::create(u64 page_size_log, u64 size_page
     klib::shared_ptr<Mem_Object> ptr(
         new Mem_Object(page_size_log, size_pages,
                        Protection::Readable | Protection::Writeable | Protection::Executable));
+    if (!ptr)
+        return nullptr;
 
     // Atomically insert into the object storage
-    atomic_push_global_storage(ptr);
+    auto e = atomic_push_global_storage(ptr);
+    if (e)
+        return nullptr;
 
     return ptr;
 }
@@ -84,12 +88,16 @@ klib::shared_ptr<Mem_Object> Mem_Object::create_from_phys(u64 phys_addr, u64 siz
 
     // Create new object
     klib::shared_ptr<Mem_Object> ptr(new Mem_Object(12, pages_count, max_user_permissions));
+    if (!ptr)
+        return nullptr;
 
     // Lock the object so nobody overwrites it while the pages are inserted
     Auto_Lock_Scope l(ptr->lock);
 
     // Atomically insert into the object storage
-    atomic_push_global_storage(ptr);
+    auto e = atomic_push_global_storage(ptr);
+    if (e)
+        return nullptr;
 
     // Provide the pages
     // This can't fail
@@ -107,14 +115,21 @@ klib::shared_ptr<Mem_Object> Mem_Object::create_from_phys(u64 phys_addr, u64 siz
 
 Mem_Object::id_type Mem_Object::get_id() const noexcept { return id; }
 
-void Mem_Object::atomic_push_global_storage(klib::shared_ptr<Mem_Object> o)
+kresult_t Mem_Object::atomic_push_global_storage(klib::shared_ptr<Mem_Object> o)
 {
     // RAII lock against concurrent changes to the map
     Auto_Lock_Scope l(object_storage_lock);
 
     auto id = o->get_id();
 
-    objects_storage.insert({klib::move(id), klib::move(o)});
+    auto p = objects_storage.insert({klib::move(id), klib::move(o)});
+    if (p.first == objects_storage.end()) [[unlikely]]
+        return -ENOMEM;
+
+    if (!p.second) [[unlikely]]
+        return -EEXIST;
+
+    return 0;
 }
 
 void Mem_Object::atomic_erase_gloabl_storage(id_type object_to_delete)
@@ -125,17 +140,24 @@ void Mem_Object::atomic_erase_gloabl_storage(id_type object_to_delete)
     objects_storage.erase(object_to_delete);
 }
 
-void Mem_Object::register_pined(klib::weak_ptr<Page_Table> pined_by)
+kresult_t Mem_Object::register_pined(klib::weak_ptr<Page_Table> pined_by)
 {
     assert(pinned_lock.is_locked() && "lock is not locked!");
 
-    this->pined_by.insert(pined_by);
+    auto t = this->pined_by.insert(pined_by);
+    if (t.first == this->pined_by.end())
+        return -ENOMEM;
+
+    if (not t.second)
+        return -EEXIST;
+
+    return 0;
 }
 
 void Mem_Object::atomic_unregister_pined(const klib::weak_ptr<Page_Table> &pined_by) noexcept
 {
     Auto_Lock_Scope l(pinned_lock);
-    unregister_pined(klib::move(pined_by));
+    return unregister_pined(klib::move(pined_by));
 }
 
 void Mem_Object::unregister_pined(const klib::weak_ptr<Page_Table> &pined_by) noexcept
@@ -196,7 +218,9 @@ ReturnStr<pmm::Page_Descriptor> Mem_Object::request_page(u64 offset) noexcept
             .mem_object_id = id,
             .page_offset   = offset,
         };
-        pager_port->atomic_send_from_system(reinterpret_cast<char *>(&request), sizeof(request));
+        auto result = pager_port->atomic_send_from_system(reinterpret_cast<char *>(&request), sizeof(request));
+        if (result)
+            return Error(result);
 
         p.page_struct_ptr->l.offset = offset;
         p.page_struct_ptr->l.next   = pages_storage;
@@ -208,7 +232,7 @@ ReturnStr<pmm::Page_Descriptor> Mem_Object::request_page(u64 offset) noexcept
     assert(false);
 }
 
-void Mem_Object::atomic_resize(u64 new_size_pages)
+kresult_t Mem_Object::atomic_resize(u64 new_size_pages)
 {
     Auto_Lock_Scope resize_l(resize_lock);
 
@@ -226,27 +250,20 @@ void Mem_Object::atomic_resize(u64 new_size_pages)
 
         // If the new size is larger, there is no need to shrink memory regions
         if (old_size <= new_size_pages) {
-            return;
+            return 0;
         }
     }
 
-    // This should never throw... but who knows
-    try {
-        const auto self           = shared_from_this();
-        const auto new_size_bytes = new_size_pages << page_size_log;
+    const auto self           = shared_from_this();
+    const auto new_size_bytes = new_size_pages << page_size_log;
 
-        {
-            Auto_Lock_Scope l(pinned_lock);
-            for (const auto &a: pined_by) {
-                const auto ptr = a.lock();
-                if (ptr)
-                    ptr->atomic_shrink_regions(self, new_size_bytes);
-            }
+    {
+        Auto_Lock_Scope l(pinned_lock);
+        for (const auto &a: pined_by) {
+            const auto ptr = a.lock();
+            if (ptr)
+                ptr->atomic_shrink_regions(self, new_size_bytes);
         }
-    } catch (...) {
-        Auto_Lock_Scope l(lock);
-        pages_size = old_size;
-        throw;
     }
 
     pmm::Page *pages = nullptr;
@@ -276,18 +293,14 @@ void Mem_Object::atomic_resize(u64 new_size_pages)
         pages           = next;
         pmm::Page_Descriptor::from_raw_ptr(pages);
     }
+
+    return 0;
 }
 
 klib::shared_ptr<Mem_Object> Mem_Object::get_object(u64 object_id)
 {
     Auto_Lock_Scope l(object_storage_lock);
-
-    auto p = objects_storage.get_copy_or_default(object_id).lock();
-
-    if (not p)
-        throw Kern_Exception(-ENOENT, "memory object not found");
-
-    return p;
+    return objects_storage.get_copy_or_default(object_id).lock();
 }
 
 ReturnStr<bool> Mem_Object::read_to_kernel(u64 offset, void *buffer, u64 size)

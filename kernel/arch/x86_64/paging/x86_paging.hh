@@ -87,7 +87,6 @@ public:
     virtual void invalidate_tlb(u64 page);
 
 protected:
-    virtual u64 get_page_frame(u64 virt_addr) = 0;
     virtual void free_user_pages()            = 0;
 
     volatile u64 active_count = 0;
@@ -123,7 +122,7 @@ public:
 
     constexpr u64 user_addr_max() const override { return 0x800000000000; }
 
-    u64 phys_addr_of(u64 virt) const;
+    ReturnStr<u64> phys_addr_of(u64 virt) const;
 
     static inline unsigned pt_index(u64 addr)
     {
@@ -153,20 +152,20 @@ public:
 
     klib::shared_ptr<x86_4level_Page_Table> create_clone();
 
-    virtual bool atomic_copy_to_user(u64 to, const void *from, u64 size) override;
+    virtual ReturnStr<bool> atomic_copy_to_user(u64 to, const void *from, u64 size) override;
 
     constexpr static u64 l4_align = 4096UL * 512 * 512 * 512;
     constexpr static u64 l3_align = 4096UL * 512 * 512;
     constexpr static u64 l2_align = 4096UL * 512;
     constexpr static u64 l1_align = 4096UL;
 
-    static klib::shared_ptr<x86_4level_Page_Table> get_page_table_throw(u64 id);
+    static klib::shared_ptr<x86_4level_Page_Table> get_page_table(u64 id);
 
     void apply() noexcept;
 
 protected:
     /// @brief Inserts the page table into the map of the page tables
-    static void insert_global_page_tables(klib::shared_ptr<x86_4level_Page_Table> table);
+    static kresult_t insert_global_page_tables(klib::shared_ptr<x86_4level_Page_Table> table);
 
     /// @brief Takes out this page table from the map of the page tables
     void takeout_global_page_tables();
@@ -180,7 +179,6 @@ protected:
 
     virtual void invalidate_range(u64 virt_addr, u64 size_bytes, bool free) override;
 
-    virtual u64 get_page_frame(u64 virt_addr) override;
     x86_4level_Page_Table() = default;
 
     // Frees user pages

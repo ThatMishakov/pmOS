@@ -181,9 +181,9 @@ extern "C" void pagefault_manager()
     // t_print_bochs("Debug: Pagefault %h pid %i (%s) rip %h error %h\n",
     // virtual_addr, task->task_id, task->name.c_str(), task->regs.e.rip, err);
 
-    try {
+    auto result = [&]() -> kresult_t {
         if (is_protection_violation(err))
-            throw Kern_Exception(-EFAULT, "Page protection violation");
+            return -EFAULT;
 
         Auto_Lock_Scope scope_lock(task->page_table->lock);
 
@@ -199,22 +199,23 @@ extern "C" void pagefault_manager()
         if (it != regions.end() and it->is_in_range(virtual_addr)) {
             auto r = it->on_page_fault(access_mask, virtual_addr);
             if (!r.success())
-                throw Kern_Exception(r.result, "error in on page fault");
+                return r.result;
             if (!r.val)
                 task->atomic_block_by_page(addr_all, &task->page_table->blocked_tasks);
-        } else {
-            throw Kern_Exception(-EFAULT, "pagefault in unknown region");
-        }
 
-    } catch (const Kern_Exception &e) {
+            return 0;
+        }
+        return -EFAULT;
+    }();
+
+    if (result) {
         t_print_bochs("Debug: Pagefault %h pid %i rip %h error %h returned "
-                      "error %i (%s)\n",
-                      virtual_addr, task->task_id, task->regs.e.rip, err, e.err_code,
-                      e.err_message);
+                      "error %i\n",
+                      virtual_addr, task->task_id, task->regs.e.rip, err, result);
         global_logger.printf("Warning: Pagefault %h pid %i (%s) rip %h error "
                              "%h -> %i killing process...\n",
                              virtual_addr, task->task_id, task->name.c_str(), task->regs.e.rip, err,
-                             e.err_code);
+                             result);
 
         print_pt_chain(virtual_addr, global_logger);
         print_registers(task, global_logger);
