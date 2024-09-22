@@ -144,7 +144,7 @@ struct X86_64Regs {                         // 208 bytes
     inline u64 &syscall_arg5() { return scratch_r.r9; }
 
     // Get syscall return value registers
-    inline u64 &syscall_retval_low() { return scratch_r.rax; }
+    inline i64 &syscall_retval_low() { return scratch_r.rax; }
     inline u64 &syscall_retval_high() { return scratch_r.rdx; }
 
     // Registers holding function arguments

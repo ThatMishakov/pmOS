@@ -31,19 +31,26 @@ size_t get_dtv_generation(size_t) { return 0; }
 
 void *dtv_allocate_get_addr(size_t *) { return NULL; }
 
+#ifdef __riscv
+#define TLS_DTV_OFFSET 0x800
+#else
+#define TLS_DTV_OFFSET 0
+#endif
+
 void *__tls_get_addr(size_t *v)
 {
     const size_t object = v[0];
     const size_t offset = v[1];
     struct uthread *self = __get_tls();
 
-    if ((self->dtv_size < object) && (resize_dtv(self, object) < 0))
-        return NULL;
+    // if ((self->dtv_size < object) && (resize_dtv(self, object) < 0))
+    //     return NULL;
 
-    const size_t generation = get_dtv_generation(object);
+    // const size_t generation = get_dtv_generation(object);
 
-    if (self->dtv[object].generation != generation)
-        return dtv_allocate_get_addr(v);
+    // if (self->dtv[object].generation != generation)
+    //     return dtv_allocate_get_addr(v);
 
-    return (void *)((size_t)self->dtv[object].data_ptr + offset);
+    // Since dynamic linking is not yet implemented...
+    return (char *)__get_tp() + offset + TLS_DTV_OFFSET;
 }

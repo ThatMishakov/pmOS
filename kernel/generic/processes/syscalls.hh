@@ -238,9 +238,9 @@ inline u64 &syscall_arg5(TaskDescriptor *task)
     return task->regs.syscall_arg5();
 }
 
-inline u64 &syscall_ret_low(TaskDescriptor *task)
+inline i64 &syscall_ret_low(TaskDescriptor *task)
 {
-    return task->regs.syscall_retval_low();
+    return (i64 &)task->regs.syscall_retval_low();
 }
 
 inline u64 &syscall_ret_high(TaskDescriptor *task)

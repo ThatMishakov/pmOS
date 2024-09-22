@@ -83,6 +83,12 @@ TaskDescriptor *TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel le
     Auto_Lock_Scope uninit_lock(uninit.lock);
     uninit.push_back(n);
 
+    if (level == PrivilegeLevel::User) {
+        auto name = get_current_task()->name.clone();
+        Auto_Lock_Scope scope_lock(n->name_lock);
+        n->name = klib::move(name);
+    }
+
     return n;
 }
 
