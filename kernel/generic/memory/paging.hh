@@ -29,7 +29,6 @@
 #pragma once
 #include "mem_protection.hh"
 #include "mem_regions.hh"
-#include <pmos/containers/set.hh>
 
 #include <kernel/com.h>
 #include <kernel/memory.h>
@@ -37,6 +36,7 @@
 #include <lib/pair.hh>
 #include <lib/set.hh>
 #include <lib/splay_tree_map.hh>
+#include <pmos/containers/set.hh>
 #include <sched/sched_queue.hh>
 #include <types.hh>
 
@@ -65,10 +65,6 @@ struct Page_Table_Argumments {
 class Mem_Object;
 struct Mem_Object_Data {
     u8 max_privilege_mask = 0;
-    pmos::containers::RedBlackTree<
-        Mem_Object_Reference, &Mem_Object_Reference::object_bst_head,
-        detail::TreeCmp<Mem_Object_Reference, u64, &Mem_Object_Reference::start_addr>>::RBTreeHead
-        regions;
 };
 
 struct Mem_Object_Reference;
@@ -382,8 +378,9 @@ public:
      * exception will be thrown. Otherwise, the new region would be found.
      * @return The location of the region in the new page table.
      */
-    ReturnStr<size_t> atomic_transfer_region(const klib::shared_ptr<Page_Table> &to, size_t region_orig,
-                               size_t prefered_to, ulong access, bool fixed);
+    ReturnStr<size_t> atomic_transfer_region(const klib::shared_ptr<Page_Table> &to,
+                                             size_t region_orig, size_t prefered_to, ulong access,
+                                             bool fixed);
 
     /**
      * @brief  Moves the mapped pages from the old region to a new region, invaludating the old page
@@ -410,7 +407,7 @@ public:
      * page table
      */
     virtual kresult_t copy_pages(const klib::shared_ptr<Page_Table> &to, u64 from_addr, u64 to_addr,
-                            u64 size_bytes, u8 new_access);
+                                 u64 size_bytes, u8 new_access);
 
     struct Page_Info {
         u8 flags          = 0;
@@ -521,6 +518,13 @@ protected:
     /// Storage for the pointers to the pinned memory objects
     klib::splay_tree_map<klib::shared_ptr<Mem_Object>, Mem_Object_Data> mem_objects;
 
+    using objects_set = pmos::containers::RedBlackTree<
+        Mem_Object_Reference, &Mem_Object_Reference::object_bst_head,
+        detail::TreeCmp<Mem_Object_Reference, u64, &Mem_Object_Reference::start_addr>>::RBTreeHead;
+
+    /// Storage for regions for memory objects
+    klib::splay_tree_map<Mem_Object *, objects_set> object_regions;
+
     // TODO: This is not good
     friend struct Mem_Object_Reference;
 };
@@ -529,7 +533,8 @@ protected:
 using ptable_top_ptr_t = u64;
 
 // Generic function to map a page
-kresult_t map_page(ptable_top_ptr_t page_table, u64 phys_addr, u64 virt_addr, Page_Table_Argumments arg);
+kresult_t map_page(ptable_top_ptr_t page_table, u64 phys_addr, u64 virt_addr,
+                   Page_Table_Argumments arg);
 
 // Generic functions to map and release pages in kernel, using the active page table
 kresult_t map_kernel_page(u64 phys_addr, void *virt_addr, Page_Table_Argumments arg);
@@ -537,7 +542,7 @@ kresult_t unmap_kernel_page(void *virt_addr);
 
 // Generic function to map multiple pages
 kresult_t map_pages(ptable_top_ptr_t page_table, u64 phys_addr, u64 virt_addr, u64 size_bytes,
-               Page_Table_Argumments arg);
+                    Page_Table_Argumments arg);
 kresult_t map_kernel_pages(u64 phys_addr, u64 virt_addr, u64 size, Page_Table_Argumments arg);
 
 // Generic function to apply the page table to the current CPU

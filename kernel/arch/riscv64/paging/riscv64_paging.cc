@@ -540,7 +540,7 @@ klib::shared_ptr<RISCV64_Page_Table> RISCV64_Page_Table::create_clone()
 
     Auto_Lock_Scope_Double(this->lock, new_table->lock);
 
-    if (new_table->mem_objects.size() != 0)
+    if (!new_table->mem_objects.empty() || !new_table->object_regions.empty() || !new_table->paging_regions.empty())
         // Somebody has messed with the page table while it was being created
         // I don't know if it's the best solution to not block the tables
         // immediately but I believe it's better to block them for shorter time
@@ -578,7 +578,6 @@ klib::shared_ptr<RISCV64_Page_Table> RISCV64_Page_Table::create_clone()
             new_table->mem_objects.insert({reg.first,
                                            {
                                                .max_privilege_mask = reg.second.max_privilege_mask,
-                                               .regions            = {},
                                            }});
         if (res.first == new_table->mem_objects.end())
             return nullptr;

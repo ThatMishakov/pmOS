@@ -298,16 +298,15 @@ ReturnStr<Mem_Object_Reference *> Page_Table::atomic_create_mem_object_region(
             return Error(r);
     }
 
-    auto it = mem_objects.find(object);
-
-    if (it == mem_objects.end()) {
-        auto result = mem_objects.insert({object, Mem_Object_Data()});
-        if (result.first == mem_objects.end())
+    auto it = object_regions.find(object.get());
+    if (it == object_regions.end()) {
+        auto result = object_regions.insert({object.get(), {}});
+        if (result.first == object_regions.end())
             return Error(-ENOMEM);
 
         it = result.first;
     }
-    it->second.regions.insert(region.get());
+    it->second.insert(region.get());
 
     paging_regions.insert(region.get());
     return Success(region.release());
@@ -503,12 +502,12 @@ void Page_Table::atomic_shrink_regions(const klib::shared_ptr<Mem_Object> &id,
 {
     Auto_Lock_Scope l(lock);
 
-    auto p = mem_objects.find(id);
-    if (p == mem_objects.end())
+    auto p = object_regions.find(id.get());
+    if (p == object_regions.end())
         return;
     
-    auto it = p->second.regions.begin();
-    while (it != p->second.regions.end()) {
+    auto it = p->second.begin();
+    while (it != p->second.end()) {
         const auto reg = it;
         ++it;
 
@@ -557,10 +556,10 @@ kresult_t Page_Table::atomic_delete_region(u64 region_start)
 void Page_Table::unreference_object(const klib::shared_ptr<Mem_Object> &object,
                                     Mem_Object_Reference *region) noexcept
 {
-    auto p = mem_objects.find(object);
+    auto p = object_regions.find(object.get());
 
-    if (p != mem_objects.end())
-        p->second.regions.erase(region);
+    if (p != object_regions.end())
+        p->second.erase(region);
 }
 
 void Page_Table::unblock_tasks_rage(u64 blocked_by_page, u64 size_bytes)
