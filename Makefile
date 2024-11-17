@@ -1,6 +1,6 @@
 TOPTARGETS := all clean
 
-SUBDIRS := bootstrapd devicesd kernel logd ns16550 piped processd terminald vfatfsd vfsd lib test ahcid
+SUBDIRS := sysroot lib bootstrapd devicesd kernel logd ns16550 piped processd terminald vfatfsd vfsd test ahcid
 
 limine/pmOS.iso:
 	$(MAKE) -C limine pmOS.iso

@@ -1,14 +1,50 @@
 # pmOS
 
+A small (hobby) operating for x86_64 and RISC-V, using a homemade microkernel, C library and userspace, partially developed as my end of degree project. The goal of the project is to make a general purpose operating system, with the objective of learning and being suitable for development and exploration of the RISC-V and X86 platforms. The microkernel is mostly written in C++, and the userspace is in a mixture of C and C++ (and ASM where needed). The [limine bootloader](https://limine-bootloader.org/) is used for booting the system.
 
-A hobbyist operating system for x86_64 and RISC-V written in C, C++ and ASM. The goal of the project is to learn about the OS development and ideally to develop a complex system with GUI and different conveniences you would expect out of one.
+## Screenshots
+RISC-V Execution:
+![RISC-V execution](screenshots/risc-v.png)
+
+Baremetal execution on an old x86 (AMD E450) laptop, discovering an internal SATA HDD:
+![Baremetal execution](screenshots/baremetal-x86.jpg)
+
+## Architecture
+
+The OS is based on a microkernel architecture, with the idea of running drivers and services in userspace. The kernel currently has physical and virtual memory managers, scheduling, interrupts, IPC and permissions managed inside it. Of the process management, the kernel only knows about threads (called "tasks" in the code), with (POSIX) processes and threads being an abstraction on top of it, managed in userspace. The rest is implemented in userspace, communicating through IPC message queues.
+
+The executables use ELF format.
+
+The system supports booting by the limine protocol. In the past, multiboot2 was used with a stage 2 bootloader, but it was replaced by limine, since it works on both x86_64 and RISC-V. The kernel is loaded by limine, which initializes itself and starts the first user space task from a module called "bootstrap". It then recieves some info from the kernel and list of modules, moved to memory objects and starts those up, and maps itself as a root filesystem.
+
+As such, the `kernel` directory contains the kernel, the `lib` contains userspace C libraries, `sysroot` contains system headers, `limine` contains the bootloader configs, and the rest of the directories contain different userspace programs, which make up the system. All of the drivers (including framebuffer) are run in userspace.
 
 ## Compilation and execution
 
-TODO
+The patched LLVM infrastructure (clang compiler and lld linker), targeting pmOS, is used for both the kernel and userspace. Before that, GCC and binutils were used, which probably still work, but I haven't been using/testing them. The build scritps expect to see the clang binaries targeting pmOS in the PATH. The ARCH environment variable controls the target architecture of build scripts (riscv64 or x86_64).
 
-Compile gcc-pmos and binutils-gdb-pmos and everything else with it
-The build system is broken after the recent changes and I compile everything manually
+The patched clang sources can be obtained from [https://gitlab.com/mishakov/llvm-pmos](https://gitlab.com/mishakov/llvm-pmos). The [https://llvm.org/docs/CMake.htm](https://llvm.org/docs/CMake.html) is an documentation for compiling LLVM.
+
+To compile the project, the following steps should be followed:
+1. Compile clang and lld from source
+2. Prepare the sysroot by executing `make sysroot` in the root of the project tree. Compile C libraries, executing `make lib` in the root of the project tree (this is necessary to link C++ libraries)
+3. Compile llvm runtimes (libcxx, libcxxabi, libunwind)
+4. Compile the rest of the system with `make all`
+
+After that, the output iso is produced in limine/pmOS.iso. The build script downloads and packages limine into iso when running the last step (`make all`). To run QEMU, use `make qemu` for RISC-V and `make qemu-x86` for x86.
+
+The following shorthands can be used to configure to configure llvm and runtimes:
+- `cmake -S ../llvm-pmos/llvm  -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_PROJECTS="clang;lld;lldb" -DLLVM_TARGETS_TO_BUILD="X86;RISCV" -DCMAKE_INSTALL_PREFIX=$HOME/cross/ -DLLVM_HOST_TRIPLE=x86_64-linux-gnueabihf -DLLVM_TARGET_TRIPLE=x86_64-pmos -DCLANG_DEFAULT_CXX_STDLIB=libc++ -DCLANG_DEFAULT_LINKER=lld` - configures clang and lld for RISC-V and x86, assuming $HOME/cross destination (you can then use `export PATH=$HOME/cross/bin:$PATH` to add them to the PATH)
+- `cmake -S ../llvm-pmos/runtimes -DLLVM_ENABLE_RUNTIMES="libcxx;libcxxabi;libunwind;compiler-rt"  -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$HOME/pmos/sysroot/usr/ -DLLVM_TARGET_TRIPLE=x86_64-pmos -DCMAKE_CXX_COMPILER_TARGET="x86_64-pmos" -DCMAKE_C_COMPILER="clang" -DCMAKE_CXX_COMPILER="clang++" -DCMAKE_C_COMPILER_TARGET="x86_64-pmos" -DCOMPILER_RT_BUILD_BUILTINS=ON -DCMAKE_C_FLAGS="--sysroot=$HOME/pmos/sysroot -nostartfiles" -DCMAKE_CXX_FLAGS="--sysroot=$HOME/pmos/sysroot -nostdlib" -DLIBCXXABI_USE_LLVM_UNWINDER=true -DLIBCXX_ENABLE_SHARED=OFF` - configures llvm runtimes for x86 (replace x86_64 with risc64 for RISC-V), assuming `$HOME/pmos/sysroot` the sysroot, installing the headers and libraries into `$HOME/pmos/sysroot/usr`.
+
+## Immediate plans
+
+1. Implement TLB shootdowns
+2. Unify memory objects and anonymous memory mappings. Implement memory object inheritance (and CoW with them).
+3. Implement working set for virtual memory (swap and page replacement)
+4. Implement AHCI driver reading and writing
+ - Work on doccumentation
+ - Improve project structure
 
 ## Features
 
@@ -49,6 +85,7 @@ These are the features that are planned to be had in the OS:
     - [ ] Memory object creation and management from userspace
   - [x] Delayed allocation
   - [x] Memory protections
+  - [ ] TLB shootdowns - not implemented yet
   - [ ] Swapping
   - [x] Accessing userspace memory
     - Implemented (and surprisingly works well), but is very slow, needs rewriting
@@ -57,7 +94,7 @@ These are the features that are planned to be had in the OS:
   - [x] Very basic exception handling
   - [x] Syscalls
   - [x] Interrupt dispatching to drivers
-    - Works on RISC-V, but is broken on x86_64
+  - [ ] Interrupt sharing
 
 - [x] IPC and messaging
   - [x] Buffered string messages
@@ -66,8 +103,7 @@ These are the features that are planned to be had in the OS:
   - [ ] Quicker messaging
   
 - [ ] Permissions
-- [ ] Multi CPU support (works but kinda may be broken)
-  Memory unmapping among thread needs to be rewritten
+- [x] Multi CPU support - Works, but I haven't implemented TLB shootdowns yet
 
 #### RISC-V specific features:
 
@@ -81,16 +117,14 @@ These are the features that are planned to be had in the OS:
 
 - [x] Virtual memory
 - [x] Exceptions
-- [ ] Timer interrupt
-  The infrastructure for it is there, but it's seemingly broken, after switching to limine
+- [x] Timer interrupt
 - [x] LAPIC
-  Untested, but was working before
 - [x] Userspace/Ring 3
 - [x] Multi CPU support
 
 
 **Core utilities and daemons**
-- [ ] Process management (processd)
+- [ ] Process management (processd) - Mostly unfinished, I plan it to route signals
 - [ ] Networking (networkd)
 - [ ] Filesystems
   - [ ] FAT32
@@ -109,43 +143,45 @@ These are the features that are planned to be had in the OS:
 
 **Drivers**
 - [X] PS/2
-  - [X] Keyboard
+  - [ ] Keyboard - was working, but is now broken after porting to RISC-V
   - [ ] Mouse
-- [x] i8042
-  - Probably works, but it's untested and disabled after recent changes
+- [ ] i8042
+  - Broken after porting to RISC-V
 - [ ] ATA/Bulk storage
+  - [ ] AHCI
+    - [X] Controller detection and initialization
+    - [X] Device detection
+    - [X] DMA
+    - [X] interrupts handling
+    - [ ] Reading and writing - Want to implement working set first to read directly to kernel cache
+    - [ ] NVMe
 - [ ] USB
-- [ ] Serial/Parallel
-- [ ] PCI/PCIe
+- [X] Serial/Parallel - ns16550 using interrupts for receiving and sending. Works on RISC-V, missing IO ports stuff and untested on x86.
+- [X] PCI/PCIe
+  - [x] Device detection
+  - [x] Legacy interrupt routing - Works on x86, broken on RISC-V, likely easy to fix
+  - [ ] MSI/MSI-X
 - [ ] Network cards
-- [ ] Timers
-  - [x] HPET
-    Untested, was working before
 - [ ] virtio
   - [ ] virtio-user-input
+- [X] ACPI (using uACPI)
+  - [X] Initialization
+  - [X] IRQ routing
+  - [X] Power button (interrupt) and shutting down
+  - [ ] EC driver - Needed for ACPI to work on a Macbook 😊
 
 
 **Userland**
 - [ ] Terminal
 - [ ] GUI
-- [ ] C Library
-  TODO: Enumerate what's done. Very incomplete, but enough stuff is implemented to compile GCC C++ library and stuff
+- [ ] C/POSIX Library - a buch of functions are implemented, but a lot more are missing
 
 **Languages/Runtimes**
+- [X] LLVM/Clang patch
 - [X] Hosted GCC cross-compiler
 - [X] C and its runtime (using homemade C/POSIX library)
 - [X] C++ and libstdc++ (and other) runtime(s) - Compiling and working but a lot of C library functions are missing
-- [X] Go and libgo runtime - Compiling, but untested and probably broken for now. Also, exec-stuff is missing
-
-
-## Architecture
-
-The OS is based on a microkernel architecture, with the idea of running drivers and services in the userspace. The kernel currently has physical and virtual memory managers, scheduling, interrupts, IPC and permissions managed inside it. Of the process management, the kernel only knows about tasks, with (POSIX) processes and threads being an
-abstraction on top of it, being managed in a userspace
-
-The executables in ELF format are used
-
-The system supports booting by the limine protocol. In the past, multiboot2 was used with a stage 2 bootloader, but it was replaced by limine, since it works on both x86_64 and RISC-V. The kernel is loaded by limine, which initializes itself and starts the first user space task from a module called "bootstrap". It then recieves some info from the kernel and list of modules, moved to memory objects and starts those up, and maps itself as a root filesystem.
+- [X] Go and libgo runtime with GCC - Compiling, but untested and probably broken for now. Also, exec-stuff is missing
 
 ## Known issues
 
@@ -161,6 +197,7 @@ The following libraries have been used in the project, possibly containing their
 - [smoldtb](/kernel/smoldtb/)
 - [flanterm](/terminald/flanterm/)
 - dlmalloc in libc and kernel
+- [uACPI](/devicesd/generic/uACPI/)
 
 ## License
 

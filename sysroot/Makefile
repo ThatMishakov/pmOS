@@ -8,6 +8,8 @@ HEADERS_DEST := $(patsubst $(HEADER_SRC)/%, $(HEADER_DEST)/%, $(HEADERS_SRC))
 # Default target
 all: $(HEADERS_DEST)
 
+sysroot: all
+
 # Target to copy each header to the sysroot directory
 $(HEADER_DEST)/%.h: $(HEADER_SRC)/%.h
 	@mkdir -p $(dir $@)
