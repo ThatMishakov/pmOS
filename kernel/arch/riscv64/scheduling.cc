@@ -533,6 +533,9 @@ extern "C" void _cpu_bootstrap_entry(void *limine_data);
 
 void *get_cpu_start_func() { return (void *)_cpu_bootstrap_entry; }
 
+extern size_t booted_cpus;
+extern bool boot_barrier_start;
+
 extern "C" void bootstrap_entry(CPU_Info *i)
 {
     set_cpu_struct(i);
@@ -552,6 +555,14 @@ extern "C" void bootstrap_entry(CPU_Info *i)
     reschedule();
 
     serial_logger.printf("CPU %i (hart %i) initialized!\n", i->cpu_id, i->hart_id);
+
+    __atomic_add_fetch(&booted_cpus, 1, __ATOMIC_SEQ_CST);
+
+    // Wait for bootstrap hart to do the final initialization
+    while (!__atomic_load_n(&boot_barrier_start, __ATOMIC_SEQ_CST))
+        ;
+
+    serial_logger.printf("CPU %i (hart %i) entering userspace/idle...\n", i->cpu_id, i->hart_id);
 }
 
 bool TaskDescriptor::is_kernel_task() const

@@ -184,6 +184,9 @@ klib::vector<u64> initialize_cpus(const klib::vector<u64> &lapic_ids)
     return ret;
 }
 
+extern size_t booted_cpus;
+extern bool boot_barrier_start;
+
 Spinlock l;
 extern "C" void cpu_start_routine(CPU_Info *c)
 {
@@ -205,6 +208,14 @@ extern "C" void cpu_start_routine(CPU_Info *c)
     u32 lapic_id = get_lapic_id() >> 24;
     assert(c->lapic_id == lapic_id);
     global_logger.printf("[Kernel] Initialized CPU %h\n", lapic_id);
+
+    __atomic_add_fetch(&booted_cpus, 1, __ATOMIC_SEQ_CST);
+
+    // Wait for bootstrap hart to do the final initialization
+    while (!__atomic_load_n(&boot_barrier_start, __ATOMIC_SEQ_CST))
+        ;
+
+    serial_logger.printf("CPU %h entering userspace/idle\n", lapic_id);
 }
 
 extern "C" u64 *get_kern_stack_top() { return get_cpu_struct()->kernel_stack.get_stack_top(); }

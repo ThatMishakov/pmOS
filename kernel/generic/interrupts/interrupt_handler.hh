@@ -13,6 +13,7 @@ struct Interrupt_Handler {
     bool active = false;
 };
 
+// Per-CPU
 struct Interrupt_Handler_Table {
     // Sorted by interrupt number
     klib::vector<klib::unique_ptr<Interrupt_Handler>> handlers;

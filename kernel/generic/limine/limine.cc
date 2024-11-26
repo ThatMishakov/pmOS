@@ -156,6 +156,8 @@ extern void *_gcc_except_table_end;
 
 ptable_top_ptr_t kernel_ptable_top = 0;
 
+static klib::vector<limine_memmap_entry> *limine_memory_regions = nullptr;
+
 void construct_paging()
 {
     serial_logger.printf("Finding the largest memory region...\n");
@@ -331,7 +333,11 @@ void construct_paging()
     copy_from_phys((u64)resp.entries - hhdm_offset, regions.data(),
                    resp.entry_count * sizeof(limine_memmap_entry *));
 
-    klib::vector<limine_memmap_entry> regions_data;
+    limine_memory_regions = new klib::vector<limine_memmap_entry> {};
+    if (!limine_memory_regions)
+        panic("Failed to allocate memory for memory_regions");
+
+    klib::vector<limine_memmap_entry> &regions_data = *limine_memory_regions;
     if (!regions_data.resize(resp.entry_count))
         panic("Failed to reserve memory for regions_data");
 
@@ -919,6 +925,9 @@ void init_smp()
 #endif
 }
 
+size_t booted_cpus = 0;
+bool boot_barrier_start = false;
+
 void limine_main()
 {
     if (LIMINE_BASE_REVISION_SUPPORTED == false) {
@@ -961,4 +970,27 @@ void limine_main()
     init_modules();
     init_task1();
     serial_logger.printf("Loaded kernel...\n");
+
+    __atomic_add_fetch(&booted_cpus, 1, __ATOMIC_RELAXED);
+
+    while (__atomic_load_n(&booted_cpus, __ATOMIC_ACQUIRE) < number_of_cpus)
+        ;
+    // All CPUs are booted
+
+    serial_logger.printf("All CPUs booted. Cleaning up...\n");
+
+    // Release bootloader-reserved memory
+    for (auto r: *limine_memory_regions) {
+        if (r.type == LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE) {
+            serial_logger.printf("Releasing bootloader reclaimable 0x%h - 0x%h\n", r.base, r.base + r.length);
+            kernel::pmm::free_memory_for_kernel(r.base, r.length/PAGE_SIZE);
+        }
+    }
+
+    delete limine_memory_regions;
+
+    bool tmp = true;
+    __atomic_store(&boot_barrier_start, &tmp, __ATOMIC_RELEASE);
+
+    serial_logger.printf("Bootstrap CPU entering userspace\n");
 }
