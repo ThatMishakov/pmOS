@@ -42,12 +42,14 @@ void acquire_lock_spin(u32 *lock) noexcept
     }
 }
 void release_lock(u32 *lock) noexcept { __sync_lock_release(lock); }
-bool try_lock(u32 *lock) noexcept { return __sync_bool_compare_and_swap(lock, 0, 1); }
 
-void Spinlock::lock() noexcept { 
+// TODO: Make it spin 32 times ?
+bool try_lock(u32 *lock) noexcept { return (lock == 0) and __sync_bool_compare_and_swap(lock, 0, 1); }
+
+void Spinlock_base::lock() noexcept { 
     acquire_lock_spin(&locked);
 }
 
-void Spinlock::unlock() noexcept { release_lock(&locked); }
+void Spinlock_base::unlock() noexcept { release_lock(&locked); }
 
-bool Spinlock::try_lock() noexcept { return ::try_lock(&locked); }
+bool Spinlock_base::try_lock() noexcept { return ::try_lock(&locked); }

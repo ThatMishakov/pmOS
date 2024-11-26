@@ -72,3 +72,23 @@ void *operator new(size_t, void *p) noexcept { return p; }
 void *operator new[](size_t, void *p) noexcept { return p; }
 void operator delete(void *, void *) noexcept {};
 void operator delete[](void *, void *) noexcept {};
+
+extern "C" int malloc_lock(unsigned int * l)
+{
+    // This might be UB but it seems to be working...
+    Spinlock *s = reinterpret_cast<Spinlock *>(l);
+    s->lock();
+    return 0;
+}
+
+extern "C" void malloc_unlock(unsigned int * l)
+{
+    Spinlock *s = reinterpret_cast<Spinlock *>(l);
+    s->unlock();
+}
+
+extern "C" int malloc_try_lock(unsigned int * l)
+{
+    Spinlock *s = reinterpret_cast<Spinlock *>(l);
+    return s->try_lock();
+}

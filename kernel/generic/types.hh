@@ -30,6 +30,7 @@
 #include <assert.h>
 #include <kernel/types.h>
 #include <lib/utility.hh>
+#include <concepts>
 
 using kresult_t = i64;
 
@@ -71,26 +72,50 @@ template<typename T> ReturnStr<T> Success(T r) { return ReturnStr<T>::success(r)
 
 extern "C" void t_print_bochs(const char *str, ...);
 
-struct Spinlock {
+class Spinlock_base {
+private:
     u32 locked = false;
-
+protected:
     void lock() noexcept;
-    /// Tries to lock the spinlock. True if lock has been ackquired, false otherwise
     bool try_lock() noexcept;
-
-    // Function to unlock the spinlock
     void unlock() noexcept;
-
-    bool operator==(const Spinlock &s) const noexcept { return this == &s; }
-
+public:
+    bool operator==(const Spinlock_base &s) const noexcept { return this == &s; }
     inline bool is_locked() const noexcept { return locked; }
 };
 
+class Spinlock: public Spinlock_base {
+public:
+    void lock() noexcept
+    {
+        Spinlock_base::lock();
+    }
+    /// Tries to lock the spinlock. True if lock has been ackquired, false otherwise
+    bool try_lock() noexcept
+    {
+        return Spinlock_base::try_lock();
+    }
+
+    // Function to unlock the spinlock
+    void unlock() noexcept
+    {
+        Spinlock_base::unlock();
+    }
+};
+
+template<typename T>
+concept spinlock_type = requires(T s) {
+    { s.lock() } -> std::same_as<void>;
+    { s.try_lock() } -> std::same_as<bool>;
+    { s.unlock() } -> std::same_as<void>;
+};
+
+template<spinlock_type T>
 struct Auto_Lock_Scope {
-    Spinlock &s;
+    T &s;
 
     Auto_Lock_Scope() = delete;
-    Auto_Lock_Scope(Spinlock &lock): s(lock) { s.lock(); }
+    Auto_Lock_Scope(T &lock): s(lock) { s.lock(); }
 
     ~Auto_Lock_Scope() { s.unlock(); }
 };

@@ -521,9 +521,19 @@ MAX_RELEASE_CHECK_RATE   default: 4095 unless not HAVE_MMAP
   improvement at the expense of carrying around more memory.
 */
 
-#define USE_LOCKS 1
-#define USE_SPIN_LOCKS 1
+#define USE_LOCKS 2
 #define FOOTERS 1
+
+#define MLOCK_T unsigned int
+extern int malloc_lock(unsigned int *);
+extern void malloc_unlock(unsigned int *);
+extern int malloc_try_lock(unsigned int *);
+#define ACQUIRE_LOCK(l) malloc_lock(l)
+#define RELEASE_LOCK(l) malloc_unlock(l)
+#define TRY_LOCK(l) malloc_try_lock(l)
+#define INITIAL_LOCK(l) (*l = 0)
+#define DESTROY_LOCK(l) (0)
+static MLOCK_T malloc_global_mutex = 0;
 
 void *sbrk(long size);
 #define MORECORE_CONTIGUOUS 0
