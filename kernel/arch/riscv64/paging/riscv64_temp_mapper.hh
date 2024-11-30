@@ -28,9 +28,10 @@
  */
 
 #pragma once
-#include "riscv64_paging.hh"
 
 #include <memory/temp_mapper.hh>
+
+struct RISCV64_PTE;
 
 /**
  * @brief Temp_Mapper for x86_64 CPUs

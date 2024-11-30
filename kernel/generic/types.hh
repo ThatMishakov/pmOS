@@ -103,6 +103,25 @@ public:
     }
 };
 
+class CriticalSpinlock: public Spinlock_base {
+public:
+    inline void lock() noexcept
+    {
+        Spinlock_base::lock();
+    }
+    /// Tries to lock the spinlock. True if lock has been ackquired, false otherwise
+    inline bool try_lock() noexcept
+    {
+        return Spinlock_base::try_lock();
+    }
+
+    // Function to unlock the spinlock
+    inline void unlock() noexcept
+    {
+        Spinlock_base::unlock();
+    }
+};
+
 template<typename T>
 concept spinlock_type = requires(T s) {
     { s.lock() } -> std::same_as<void>;
@@ -120,10 +139,11 @@ struct Auto_Lock_Scope {
     ~Auto_Lock_Scope() { s.unlock(); }
 };
 
+template<spinlock_type T>
 struct Auto_Lock_Scope_Double {
-    Spinlock &a;
-    Spinlock &b;
-    Auto_Lock_Scope_Double(Spinlock &a, Spinlock &b): a(&a < &b ? a : b), b(&a < &b ? b : a)
+    T &a;
+    T &b;
+    Auto_Lock_Scope_Double(T &a, T &b): a(&a < &b ? a : b), b(&a < &b ? b : a)
     {
         this->a.lock();
         if (a != b)
@@ -138,12 +158,13 @@ struct Auto_Lock_Scope_Double {
     }
 };
 
+template<spinlock_type T>
 struct Lock_Guard_Simul {
-    Spinlock &a;
-    Spinlock &b;
+    T &a;
+    T &b;
 
     Lock_Guard_Simul() = delete;
-    Lock_Guard_Simul(Spinlock &a, Spinlock &b): a(&a < &b ? a : b), b(&a < &b ? b : a)
+    Lock_Guard_Simul(T &a, T &b): a(&a < &b ? a : b), b(&a < &b ? b : a)
     {
         if (a == b) {
             a.lock();

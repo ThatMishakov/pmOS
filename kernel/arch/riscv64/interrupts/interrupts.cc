@@ -38,6 +38,7 @@
 #include <pmos/ipc.h>
 #include <sched/sched.hh>
 #include <utils.hh>
+#include <processes/tasks.hh>
 
 extern "C" void handle_interrupt();
 

@@ -41,6 +41,8 @@
 #include <sched/sched.hh>
 #include <smoldtb.h>
 #include <types.hh>
+#include <paging/arch_paging.hh>
+#include <processes/tasks.hh>
 
 using namespace kernel;
 
@@ -459,6 +461,7 @@ void init_scheduling(u64 hart_id)
         panic("Failed to initialize idle task: %i\n", idle);
     
     i->current_task = i->idle_task;
+    i->idle_task->page_table->apply_cpu(i);
 
     serial_logger.printf("Initializing PLIC...\n");
     init_plic();
@@ -539,10 +542,10 @@ extern bool boot_barrier_start;
 extern "C" void bootstrap_entry(CPU_Info *i)
 {
     set_cpu_struct(i);
-
     set_sscratch((u64)i);
-
     program_stvec();
+
+    i->idle_task->page_table->apply_cpu(i);
 
     // Enable interrupts
     const u64 mask = (1 << TIMER_INTERRUPT) | (1 << EXTERNAL_INTERRUPT) | (1 << SOFTWARE_INTERRUPT);

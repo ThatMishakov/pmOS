@@ -31,6 +31,7 @@
 #include "sched_queue.hh"
 
 #include <interrupts/interrupt_handler.hh>
+#include <interrupts/stack.hh>
 #include <lib/array.hh>
 #include <lib/memory.hh>
 #include <lib/splay_tree_map.hh>
@@ -39,7 +40,8 @@
 #include <memory/rcu.hh>
 #include <memory/temp_mapper.hh>
 #include <messaging/messaging.hh>
-#include <processes/tasks.hh>
+#include <pmos/containers/intrusive_list.hh>
+#include <registers.hh>
 #include <types.hh>
 
 #ifdef __x86_64__
@@ -52,11 +54,7 @@
 
 // Checks the mask and unblocks the task if needed
 // This function needs to be axed
-inline bool unblock_if_needed(TaskDescriptor *p,
-                              Generic_Port *compare_blocked_by)
-{
-    return p->atomic_unblock_if_needed(compare_blocked_by);
-}
+bool unblock_if_needed(TaskDescriptor *p, Generic_Port *compare_blocked_by);
 
 // Blocks current task, setting blocked_by to *ptr*.
 ReturnStr<u64> block_current_task(Generic_Port *ptr);
@@ -161,6 +159,9 @@ struct CPU_Info {
     u64 ticks_after_ns(u64 ns);
 
     inline bool is_bootstap_cpu() const noexcept { return cpu_id == 0; }
+
+    pmos::containers::DoubleListHead<CPU_Info> active_page_table;
+    int page_table_generation = -1;
 };
 
 extern u64 ticks_since_bootup;

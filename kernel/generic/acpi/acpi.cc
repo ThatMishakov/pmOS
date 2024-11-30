@@ -66,8 +66,12 @@ bool enumerate_tables_from_rsdt(u64 rsdt_desc_phys)
     }
 
     size_t entries = (size - sizeof(ACPISDTHeader)) / 4;
-    u32 pointers[entries];
-    copy_from_phys(rsdt_desc_phys + sizeof(ACPISDTHeader), pointers, entries * 4);
+    klib::vector<u32> pointers;
+    if (!pointers.resize(entries)) {
+        serial_logger.printf("Failed to allocate memory for ACPI entries!");
+        return false;
+    }
+    copy_from_phys(rsdt_desc_phys + sizeof(ACPISDTHeader), pointers.data(), entries * 4);
 
     for (size_t i = 0; i < entries; ++i) {
         ACPISDTHeader header;
@@ -100,8 +104,14 @@ bool enumerate_tables_from_xsdt(u64 xsdt_desc_phys)
     }
 
     size_t entries = (size - sizeof(ACPISDTHeader)) / 8;
-    u64 pointers[entries];
-    copy_from_phys(xsdt_desc_phys + sizeof(ACPISDTHeader), pointers, entries * 8);
+    klib::vector<u64> pointers;
+    if (!pointers.resize(entries)) {
+        serial_logger.printf("Failed to allocate memory for ACPI entries!");
+        return false;
+    }
+
+
+    copy_from_phys(xsdt_desc_phys + sizeof(ACPISDTHeader), pointers.data(), entries * 8);
 
     for (size_t i = 0; i < entries; ++i) {
         ACPISDTHeader header;

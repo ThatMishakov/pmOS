@@ -36,7 +36,9 @@
 #include <lib/pair.hh>
 #include <lib/set.hh>
 #include <lib/splay_tree_map.hh>
+#include <pmos/containers/intrusive_list.hh>
 #include <pmos/containers/set.hh>
+#include <sched/sched.hh>
 #include <sched/sched_queue.hh>
 #include <types.hh>
 
@@ -504,6 +506,9 @@ public:
     /// @param free Indicates whether the pages should be freed after being invalidated
     virtual void invalidate_range(u64 virt_addr, u64 size_bytes, bool free) = 0;
 
+    void /* generation */ apply_cpu(CPU_Info *cpu);
+    void unapply_cpu(CPU_Info *cpu);
+
 protected:
     Page_Table() = default;
 
@@ -527,6 +532,13 @@ protected:
 
     // TODO: This is not good
     friend struct Mem_Object_Reference;
+
+    CriticalSpinlock active_cpus_lock;
+    int paging_generation    = 0;
+    int active_cpus_count[2] = {0, 0};
+    using list =
+        pmos::containers::InitializedCircularDoubleList<CPU_Info, &CPU_Info::active_page_table>;
+    list active_cpus[2] = {};
 };
 
 // Arch-generic pointer to the physical address of the top-level page table

@@ -472,6 +472,33 @@ kresult_t Page_Table::copy_pages(const klib::shared_ptr<Page_Table> &to, u64 fro
     return 0;
 }
 
+void Page_Table::apply_cpu(CPU_Info *cpu)
+{
+    assert(cpu == get_cpu_struct());
+    assert(cpu->page_table_generation == -1); // Assert it is not in the list
+
+    Auto_Lock_Scope l(active_cpus_lock);
+    // Do it here so that waiter can check it without locking
+    auto count = __atomic_add_fetch(&active_cpus_count[paging_generation], 1, __ATOMIC_RELAXED);
+    assert(count > 0);
+
+    cpu->page_table_generation = paging_generation;
+    active_cpus[paging_generation].push_back(cpu);
+}
+
+void Page_Table::unapply_cpu(CPU_Info *cpu)
+{
+    assert(cpu == get_cpu_struct());
+    assert(cpu->page_table_generation != -1); // Assert it is in the list
+
+    Auto_Lock_Scope l(active_cpus_lock);
+    auto count = __atomic_sub_fetch(&active_cpus_count[paging_generation], 1, __ATOMIC_RELAXED);
+    assert(count >= 0);
+
+    cpu->page_table_generation = -1;
+    active_cpus[paging_generation].remove(cpu);
+}
+
 kresult_t Page_Table::atomic_pin_memory_object(klib::shared_ptr<Mem_Object> object)
 {
     // TODO: I have changed the order of locking, which might cause deadlocks elsewhere

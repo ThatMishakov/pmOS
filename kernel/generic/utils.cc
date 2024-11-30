@@ -38,6 +38,7 @@
 #include <sched/sched.hh>
 #include <stdarg.h>
 #include <stdio.h>
+#include <processes/tasks.hh>
 
 void int_to_string(long int n, u8 base, char *str, int &length)
 {

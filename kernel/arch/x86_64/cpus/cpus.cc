@@ -115,6 +115,7 @@ void init_per_cpu(uint32_t lapic_id)
     if (r)
         panic("Failed to initialize idle task: %i\n", r);
     c->current_task = c->idle_task;
+    c->idle_task->page_table->apply_cpu(c);
 
     program_syscall();
     set_idt();
@@ -199,8 +200,9 @@ extern "C" void cpu_start_routine(CPU_Info *c)
     enable_sse();
 
     const auto &idle               = get_cpu_struct()->idle_task;
-    get_cpu_struct()->current_task = idle;
+    c->current_task = idle;
     const auto idle_pt             = klib::dynamic_pointer_cast<x86_Page_Table>(idle->page_table);
+    idle_pt->apply_cpu(c);
     idle_pt->atomic_active_sum(1);
     get_cpu_struct()->current_task->switch_to();
     reschedule();
