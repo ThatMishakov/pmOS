@@ -478,6 +478,7 @@ public:
      * @param page Page to be invalidated
      */
     virtual void invalidate_tlb(u64 page) = 0;
+    virtual void invalidate_tlb(u64 start, u64 size) = 0;
 
     /**
      * @brief Copies the data from kernel to the user space
@@ -508,6 +509,7 @@ public:
 
     void /* generation */ apply_cpu(CPU_Info *cpu);
     void unapply_cpu(CPU_Info *cpu);
+    void trigger_shootdown(CPU_Info *cpu);
 
 protected:
     Page_Table() = default;
@@ -533,12 +535,19 @@ protected:
     // TODO: This is not good
     friend struct Mem_Object_Reference;
 
+    struct ShootdownDesc {
+        // In theory, 64 bit userspace can happen with 32 bit kernel (?)
+        uint64_t start;
+        uint64_t size;
+    };
+
     CriticalSpinlock active_cpus_lock;
     int paging_generation    = 0;
     int active_cpus_count[2] = {0, 0};
     using list =
         pmos::containers::InitializedCircularDoubleList<CPU_Info, &CPU_Info::active_page_table>;
     list active_cpus[2] = {};
+    ShootdownDesc *shootdown_descriptor = nullptr;
 };
 
 // Arch-generic pointer to the physical address of the top-level page table

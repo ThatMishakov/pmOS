@@ -401,6 +401,8 @@ void initialize_fp(const klib::string &isa_string)
     max_supported_fp_level = max;
 }
 
+extern bool cpu_struct_works;
+
 void init_scheduling(u64 hart_id)
 {
     CPU_Info *i         = new CPU_Info();
@@ -420,6 +422,8 @@ void init_scheduling(u64 hart_id)
     // gets swapped with the userspace or old thread pointer, the registers get
     // saved, and the kernel one gets loaded back.
     set_sscratch((u64)i);
+
+    cpu_struct_works = true;
 
     program_stvec();
 

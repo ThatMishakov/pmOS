@@ -492,3 +492,22 @@ bool unblock_if_needed(TaskDescriptor *p, Generic_Port *compare_blocked_by)
 {
     return p->atomic_unblock_if_needed(compare_blocked_by);
 }
+
+bool cpu_struct_works = false;
+
+void check_synchronous_ipis()
+{
+    if (!cpu_struct_works) [[unlikely]]
+        return;
+
+    CPU_Info *c = get_cpu_struct();
+
+    auto val = __atomic_load_n(&c->ipi_mask, __ATOMIC_CONSUME);
+    if (val & CPU_Info::ipi_synchronous_mask) {
+        if (val & CPU_Info::IPI_TLB_SHOOTDOWN) {
+            __atomic_and_fetch(&c->ipi_mask, ~CPU_Info::IPI_TLB_SHOOTDOWN, __ATOMIC_SEQ_CST);
+
+            c->current_task->page_table->trigger_shootdown(c);
+        }
+    }
+}

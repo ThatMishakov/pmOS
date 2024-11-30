@@ -86,15 +86,10 @@ public:
 
 class Spinlock: public Spinlock_base {
 public:
-    void lock() noexcept
-    {
-        Spinlock_base::lock();
-    }
+    void lock() noexcept;
+
     /// Tries to lock the spinlock. True if lock has been ackquired, false otherwise
-    bool try_lock() noexcept
-    {
-        return Spinlock_base::try_lock();
-    }
+    bool try_lock() noexcept;
 
     // Function to unlock the spinlock
     void unlock() noexcept

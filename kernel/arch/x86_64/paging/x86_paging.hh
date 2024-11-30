@@ -71,10 +71,6 @@ class x86_Page_Table: public Page_Table
 public:
     virtual u64 get_cr3() const = 0;
 
-    /// Automatically invalidates a page table entries, sending TLB shootdown
-    /// IPI if needed
-    void invalidate_tlb(u64 page, u64 size);
-
     /// True if the page table is used by the current task
     bool is_active() const;
 
@@ -85,6 +81,7 @@ public:
     void atomic_active_sum(u64 val) noexcept;
 
     virtual void invalidate_tlb(u64 page);
+    virtual void invalidate_tlb(u64 page, u64 size);
 
 protected:
     virtual void free_user_pages()            = 0;

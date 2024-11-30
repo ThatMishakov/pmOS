@@ -36,9 +36,9 @@
 #include <memory/mem_object.hh>
 #include <memory/pmm.hh>
 #include <memory/temp_mapper.hh>
+#include <pmos/utility/scope_guard.hh>
 #include <processes/tasks.hh>
 #include <x86_asm.hh>
-#include <pmos/utility/scope_guard.hh>
 
 using namespace kernel;
 
@@ -309,15 +309,27 @@ bool x86_Page_Table::is_used_by_others() const { return (active_count - is_activ
 
 bool x86_Page_Table::is_active() const { return ::getCR3() == get_cr3(); }
 
+// void x86_Page_Table::invalidate_tlb(u64 page, u64 size)
+// {
+//     if (is_active())
+//         for (u64 i = 0; i < size; i += 4096)
+//             invlpg(page + i);
+
+//     if (is_used_by_others())
+//         ::signal_tlb_shootdown();
+// }
+
 void x86_Page_Table::invalidate_tlb(u64 page, u64 size)
 {
-    if (is_active())
+    if (size / 4096 < 64)
         for (u64 i = 0; i < size; i += 4096)
             invlpg(page + i);
 
-    if (is_used_by_others())
-        ::signal_tlb_shootdown();
+    else
+        setCR3(get_cr3());
 }
+
+void x86_Page_Table::invalidate_tlb(u64 page, u64 size) {}
 
 void x86_Page_Table::atomic_active_sum(u64 val) noexcept
 {

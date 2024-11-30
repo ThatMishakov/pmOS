@@ -44,7 +44,13 @@ void acquire_lock_spin(u32 *lock) noexcept
 void release_lock(u32 *lock) noexcept { __sync_lock_release(lock); }
 
 // TODO: Make it spin 32 times ?
-bool try_lock(u32 *lock) noexcept { return (lock == 0) and __sync_bool_compare_and_swap(lock, 0, 1); }
+bool try_lock(u32 *lock) noexcept { 
+    for (int i = 0; i < 32; i++) {
+        if (__atomic_load_n(lock, __ATOMIC_ACQUIRE) == 0)
+            return __sync_bool_compare_and_swap(lock, 0, 1); 
+    }
+    return false;
+}
 
 void Spinlock_base::lock() noexcept { 
     acquire_lock_spin(&locked);

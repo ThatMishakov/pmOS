@@ -191,6 +191,7 @@ public:
 
     // Clears the TLB cache for the given page
     void invalidate_tlb(u64 page) override;
+    void invalidate_tlb(u64 start, u64 size) override;
 
     ReturnStr<bool> atomic_copy_to_user(u64 to, const void *from, u64 size) override;
 

@@ -69,6 +69,9 @@ void program_syscall()
 extern "C" void _cpu_entry(u64 limine_struct);
 void *get_cpu_start_func() { return (void *)_cpu_entry; }
 
+// TODO: Explain this variable
+extern bool cpu_struct_works;
+
 void init_per_cpu(uint32_t lapic_id)
 {
     CPU_Info *c = new CPU_Info;
@@ -77,6 +80,8 @@ void init_per_cpu(uint32_t lapic_id)
 
     loadGDT(&c->cpu_gdt);
     write_msr(0xC0000101, (u64)c);
+
+    cpu_struct_works = true;
 
     TSS *tss                  = new TSS();
     if (!tss)

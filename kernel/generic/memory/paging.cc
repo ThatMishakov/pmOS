@@ -499,6 +499,40 @@ void Page_Table::unapply_cpu(CPU_Info *cpu)
     active_cpus[paging_generation].remove(cpu);
 }
 
+void Page_Table::trigger_shootdown(CPU_Info *cpu)
+{
+    assert(cpu == get_cpu_struct());
+    assert(cpu->page_table_generation != -1);
+
+    Auto_Lock_Scope l(active_cpus_lock);
+    
+    if (paging_generation == cpu->page_table_generation)
+        return;
+
+    auto current_generation = cpu->page_table_generation;
+    auto next_generation    = current_generation == 0 ? 1 : 0;
+
+    assert(shootdown_descriptor != nullptr);
+    auto descriptor = *shootdown_descriptor;
+
+    invalidate_tlb(descriptor.start, descriptor.size);
+
+    // Make sure the invalidation is done before the generation change
+    __sync_synchronize();
+
+    // I think the order shouldn't matter
+    __atomic_add_fetch(&active_cpus_count[next_generation], active_cpus_count[current_generation],
+                       __ATOMIC_RELAXED);
+    
+    active_cpus[current_generation].remove(cpu);
+    active_cpus[next_generation].push_back(cpu);
+
+    // Not sure about the order here though
+    // TODO: ???
+    __atomic_sub_fetch(&active_cpus_count[current_generation], active_cpus_count[current_generation],
+                       __ATOMIC_RELEASE);
+}
+
 kresult_t Page_Table::atomic_pin_memory_object(klib::shared_ptr<Mem_Object> object)
 {
     // TODO: I have changed the order of locking, which might cause deadlocks elsewhere

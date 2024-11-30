@@ -40,6 +40,7 @@
 using namespace kernel;
 
 void flush_page(void *virt) noexcept { asm volatile("sfence.vma %0, x0" : : "r"(virt) : "memory"); }
+void flush_all() noexcept { asm volatile("sfence.vma x0, x0" : : : "memory"); }
 
 bool svpbmt_enabled = false;
 
@@ -720,6 +721,17 @@ klib::shared_ptr<RISCV64_Page_Table> RISCV64_Page_Table::create_empty()
 }
 
 void RISCV64_Page_Table::invalidate_tlb(u64 page) { flush_page((void *)page); }
+void RISCV64_Page_Table::invalidate_tlb(u64 page, u64 size) {
+    // At a certain threshold, flush all the pages
+    if (size/0x1000 > 128) {
+        flush_all();
+        return;
+    }
+
+    for (u64 i = page; i < page + size; i += 0x1000) {
+        flush_page((void *)i);
+    }
+}
 
 ReturnStr<bool> RISCV64_Page_Table::atomic_copy_to_user(u64 to, const void *from, u64 size)
 {

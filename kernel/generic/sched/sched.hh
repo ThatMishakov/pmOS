@@ -138,9 +138,11 @@ struct CPU_Info {
     // ISRs in userspace
     Interrupt_Handler_Table int_handlers;
 
-    static constexpr int IPI_RESCHEDULE = 0x1;
-    static constexpr int IPI_TLB_FLUSH  = 0x2;
-    u32 ipi_mask                        = 0;
+    static constexpr int IPI_RESCHEDULE    = 0x1;
+    static constexpr int IPI_TLB_SHOOTDOWN = 0x2;
+    u32 ipi_mask                           = 0;
+
+    constexpr static u32 ipi_synchronous_mask = IPI_TLB_SHOOTDOWN;
 
     // IMHO this is better than protecting current_task pointer with spinlock
     priority_t current_task_priority = sched_queues_levels;
