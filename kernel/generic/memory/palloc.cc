@@ -56,11 +56,15 @@ void *palloc(size_t number)
     auto guard = pmos::utility::make_scope_guard([&]() {
         pmm::free_memory_for_kernel(phys_addr + i * PAGE_SIZE, number - i);
 
-        // Unmap and free the allocated pages
-        for (size_t j = 0; j < i; ++j) {
-            void *virt_addr = (void *)((u64)ptr + j * PAGE_SIZE);
-            unmap_kernel_page(virt_addr);
+        {
+            auto ctx = TLBShootdownContext::create_kernel();
+            // Unmap and free the allocated pages
+            for (size_t j = 0; j < i; ++j) {
+                void *virt_addr = (void *)((u64)ptr + j * PAGE_SIZE);
+                unmap_kernel_page(ctx, virt_addr);
+            }
         }
+
         vmm::kernel_space_allocator.virtmem_free(ptr, number);
     });
 

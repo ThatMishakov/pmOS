@@ -330,6 +330,8 @@ void construct_paging()
     if (!regions.resize(resp.entry_count))
         panic("Failed to reserve memory for regions");
 
+    serial_logger.printf("Copying memory regions...\n");
+
     copy_from_phys((u64)resp.entries - hhdm_offset, regions.data(),
                    resp.entry_count * sizeof(limine_memmap_entry *));
 
@@ -819,8 +821,14 @@ struct limine_smp_request smp_request = {
 
 u64 bsp_cpu_id = 0;
 
+extern bool other_cpus_online;
+extern int kernel_pt_active_cpus_count[2];
+
 void init_smp()
 {
+    other_cpus_online              = true;
+    kernel_pt_active_cpus_count[0] = number_of_cpus;
+
     if (smp_request.response == nullptr) {
         return;
     }
@@ -832,7 +840,7 @@ void init_smp()
     klib::vector<limine_smp_info *> smp_info;
     if (!smp_info.resize(r.cpu_count))
         panic("Failed to reserve memory for smp_info");
-    
+
     copy_from_phys((u64)r.cpus - hhdm_offset, smp_info.data(),
                    r.cpu_count * sizeof(limine_smp_info *));
 
@@ -925,7 +933,7 @@ void init_smp()
 #endif
 }
 
-size_t booted_cpus = 0;
+size_t booted_cpus      = 0;
 bool boot_barrier_start = false;
 
 void limine_main()
@@ -974,6 +982,7 @@ void limine_main()
     __atomic_add_fetch(&booted_cpus, 1, __ATOMIC_RELAXED);
 
     while (__atomic_load_n(&booted_cpus, __ATOMIC_ACQUIRE) < number_of_cpus)
+        // TODO: this is a potential deadlock with the new TLB shootdown mechanism
         ;
     // All CPUs are booted
 
@@ -982,8 +991,9 @@ void limine_main()
     // Release bootloader-reserved memory
     for (auto r: *limine_memory_regions) {
         if (r.type == LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE) {
-            serial_logger.printf("Releasing bootloader reclaimable 0x%h - 0x%h\n", r.base, r.base + r.length);
-            kernel::pmm::free_memory_for_kernel(r.base, r.length/PAGE_SIZE);
+            serial_logger.printf("Releasing bootloader reclaimable 0x%h - 0x%h\n", r.base,
+                                 r.base + r.length);
+            kernel::pmm::free_memory_for_kernel(r.base, r.length / PAGE_SIZE);
         }
     }
 

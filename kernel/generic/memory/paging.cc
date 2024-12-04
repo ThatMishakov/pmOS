@@ -516,48 +516,70 @@ void Page_Table::unapply_cpu(CPU_Info *cpu)
     active_cpus[generation].remove(cpu);
 }
 
+static TLBShootdownContext *kernel_shootdown_desc = nullptr;
+int kernel_pt_generation                          = 0;
+int kernel_pt_active_cpus_count[2]                = {0, 0};
+
 void Page_Table::trigger_shootdown(CPU_Info *cpu)
 {
-    serial_logger.printf("Shooting down CPU %i\n", cpu->cpu_id);
+    if (kernel_pt_generation != cpu->kernel_pt_generation) {
+        // Kernel shootdown
 
-    assert(cpu == get_cpu_struct());
-    assert(cpu->page_table_generation != -1);
+        assert(kernel_shootdown_desc != nullptr);
+        auto &desc = *kernel_shootdown_desc;
 
-    Auto_Lock_Scope l(active_cpus_lock);
-
-    if (paging_generation == cpu->page_table_generation)
-        return;
-
-    auto current_generation = cpu->page_table_generation;
-    auto next_generation    = current_generation == 0 ? 1 : 0;
-
-    assert(shootdown_descriptor != nullptr);
-    auto &desc = *shootdown_descriptor;
-
-    if (desc.flush_all()) {
-        tlb_flush_all();
-    } else {
         for (auto page: desc.iterate_over_pages())
-            invalidate_tlb(page);
+            invalidate_tlb_kernel(page);
 
         for (auto range: desc.iterate_over_ranges())
-            invalidate_tlb(range.start, range.size);
+            invalidate_tlb_kernel(range.start, range.size);
+
+        int old_gen = cpu->kernel_pt_generation;
+        int new_gen = kernel_pt_generation;
+
+        __atomic_add_fetch(&kernel_pt_active_cpus_count[new_gen], 1, __ATOMIC_RELAXED);
+        __atomic_sub_fetch(&kernel_pt_active_cpus_count[old_gen], 1, __ATOMIC_RELEASE);
+
+    } else {
+        assert(cpu == get_cpu_struct());
+        assert(cpu->page_table_generation != -1);
+
+        Auto_Lock_Scope l(active_cpus_lock);
+
+        if (paging_generation == cpu->page_table_generation)
+            return;
+
+        auto current_generation = cpu->page_table_generation;
+        auto next_generation    = current_generation == 0 ? 1 : 0;
+
+        assert(shootdown_descriptor != nullptr);
+        auto &desc = *shootdown_descriptor;
+
+        if (desc.flush_all()) {
+            tlb_flush_all();
+        } else {
+            for (auto page: desc.iterate_over_pages())
+                invalidate_tlb(page);
+
+            for (auto range: desc.iterate_over_ranges())
+                invalidate_tlb(range.start, range.size);
+        }
+
+        // Make sure the invalidation is done before the generation change
+        __sync_synchronize();
+
+        // I think the order shouldn't matter
+        __atomic_add_fetch(&active_cpus_count[next_generation], 1, __ATOMIC_RELAXED);
+
+        active_cpus[current_generation].remove(cpu);
+        active_cpus[next_generation].push_back(cpu);
+
+        cpu->page_table_generation = next_generation;
+
+        // Not sure about the order here though
+        // TODO: ???
+        __atomic_sub_fetch(&active_cpus_count[current_generation], 1, __ATOMIC_RELEASE);
     }
-
-    // Make sure the invalidation is done before the generation change
-    __sync_synchronize();
-
-    // I think the order shouldn't matter
-    __atomic_add_fetch(&active_cpus_count[next_generation], 1, __ATOMIC_RELAXED);
-
-    active_cpus[current_generation].remove(cpu);
-    active_cpus[next_generation].push_back(cpu);
-
-    cpu->page_table_generation = next_generation;
-
-    // Not sure about the order here though
-    // TODO: ???
-    __atomic_sub_fetch(&active_cpus_count[current_generation], 1, __ATOMIC_RELEASE);
 }
 
 kresult_t Page_Table::atomic_pin_memory_object(klib::shared_ptr<Mem_Object> object)
@@ -683,6 +705,9 @@ TLBShootdownContext TLBShootdownContext::create_kernel()
 
 void TLBShootdownContext::invalidate_page(u64 page)
 {
+    if (pages_count == MAX_PAGES and for_kernel())
+        finalize();
+
     pages_count++;
     if (pages_count > MAX_PAGES)
         return;
@@ -696,52 +721,82 @@ bool TLBShootdownContext::flush_all() const
 }
 
 bool TLBShootdownContext::empty() const { return pages_count == 0 and ranges_count == 0; }
+bool TLBShootdownContext::for_kernel() const { return page_table == nullptr; }
+
+extern bool cpu_struct_works;
+extern bool other_cpus_online;
 
 void TLBShootdownContext::finalize()
 {
-    if (empty())
-        return;
-
-    assert(page_table != nullptr && "kernel shootdowns not yet implemented");
-
-    auto my_cpu = get_cpu_struct();
-
     // TODO: This can be removed later...
     static Spinlock barrier;
 
-    int old_generation;
+    if (empty())
+        return;
 
-    serial_logger.printf("----------------------------------- TLB shootdown for page table %p by CPU %i\n", page_table->id,
-                         get_cpu_struct()->cpu_id);
+    assert(for_kernel() || cpu_struct_works ||
+           !"CPU struct is not working (kernel uninitialized) and invalidating userspace pages");
 
-    Auto_Lock_Scope l(barrier);
+    if (for_kernel()) {
+        if (!cpu_struct_works || other_cpus_online) {
+            // Just flush the pages and call it a day
+            for (auto page: iterate_over_pages())
+                invalidate_tlb_kernel(page);
 
-    {
-        Auto_Lock_Scope l2(page_table->active_cpus_lock);
-        // flip generation and notify other CPUs
-        old_generation                   = page_table->paging_generation;
-        page_table->paging_generation    = page_table->paging_generation == 0 ? 1 : 0;
-        page_table->shootdown_descriptor = this;
+            for (auto range: iterate_over_ranges())
+                invalidate_tlb_kernel(range.start, range.size);
+        } else {
+            auto my_cpu = get_cpu_struct();
 
-        for (auto &cpu: page_table->active_cpus[old_generation]) {
-            if (&cpu == my_cpu)
-                continue;
-            cpu.ipi_tlb_shootdown();
-            serial_logger.printf("IPI TLB shootdown to CPU %d\n", cpu.cpu_id);
+            Auto_Lock_Scope l(barrier);
+
+            int old_generation   = kernel_pt_generation;
+            kernel_pt_generation = kernel_pt_generation == 0 ? 1 : 0;
+
+            __sync_synchronize();
+
+            for (auto cpu: cpus) {
+                if (cpu == my_cpu)
+                    continue;
+                cpu->ipi_tlb_shootdown();
+            }
+
+            page_table->trigger_shootdown(my_cpu);
+
+            while (__atomic_load_n(&kernel_pt_active_cpus_count[old_generation], __ATOMIC_ACQUIRE))
+                spin_pause();
+        }
+    } else {
+        auto my_cpu = get_cpu_struct();
+
+        int old_generation;
+
+        Auto_Lock_Scope l(barrier);
+        {
+            Auto_Lock_Scope l2(page_table->active_cpus_lock);
+            // flip generation and notify other CPUs
+            old_generation                   = page_table->paging_generation;
+            page_table->paging_generation    = page_table->paging_generation == 0 ? 1 : 0;
+            page_table->shootdown_descriptor = this;
+
+            for (auto &cpu: page_table->active_cpus[old_generation]) {
+                if (&cpu == my_cpu)
+                    continue;
+                cpu.ipi_tlb_shootdown();
+            }
+        }
+
+        // If this CPU has this page table, also flush it
+        if (my_cpu->current_task->page_table.get() == page_table)
+            page_table->trigger_shootdown(my_cpu);
+
+        // Wait for other CPUs
+        while (__atomic_load_n(&page_table->active_cpus_count[old_generation], __ATOMIC_ACQUIRE)) {
+            spin_pause();
         }
     }
 
-    serial_logger.printf("Checking myself...\n");
-
-    // If this CPU has this page table, also flush it
-    if (my_cpu->current_task->page_table.get() == page_table)
-        page_table->trigger_shootdown(my_cpu);
-
-    serial_logger.printf("Waiting for other CPUs\n");
-
-    // Wait for other CPUs
-    while (__atomic_load_n(&page_table->active_cpus_count[old_generation], __ATOMIC_ACQUIRE))
-        spin_pause();
-
-    serial_logger.printf("-------------------------------------- TLB shootdown done\n");
+    // Allow finalize() to be called again
+    pages_count  = 0;
+    ranges_count = 0;
 }

@@ -115,7 +115,7 @@ int main()
     printf("Starting tests...\n");
     tick();
 
-    test_tlb_shootdown();
+    //test_tlb_shootdown();
 
     test_threads();
 

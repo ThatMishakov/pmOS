@@ -92,6 +92,7 @@ public:
 
     bool flush_all() const;
     bool empty() const;
+    bool for_kernel() const;
 
     template<auto TLBShootdownContext:: *array, short TLBShootdownContext:: *count> struct iter {
         TLBShootdownContext &ctx;
@@ -109,6 +110,7 @@ public:
         return iter<&TLBShootdownContext::ranges, &TLBShootdownContext::ranges_count> {*this};
     }
 
+    void finalize();
 private:
     Page_Table *page_table = nullptr;
 
@@ -119,7 +121,6 @@ private:
     range ranges[MAX_RANGES] = {};
 
     TLBShootdownContext() = default;
-    void finalize();
 
     inline const Page_Table *context_for() const { return page_table; }
 
@@ -570,6 +571,8 @@ public:
 
     void /* generation */ apply_cpu(CPU_Info *cpu);
     void unapply_cpu(CPU_Info *cpu);
+
+    // TODO: Calling this on page table is weird
     void trigger_shootdown(CPU_Info *cpu);
 
 protected:
@@ -607,6 +610,8 @@ protected:
     friend class TLBShootdownContext;
 };
 
+extern int kernel_pt_generation;
+
 // Arch-generic pointer to the physical address of the top-level page table
 using ptable_top_ptr_t = u64;
 
@@ -616,7 +621,7 @@ kresult_t map_page(ptable_top_ptr_t page_table, u64 phys_addr, u64 virt_addr,
 
 // Generic functions to map and release pages in kernel, using the active page table
 kresult_t map_kernel_page(u64 phys_addr, void *virt_addr, Page_Table_Argumments arg);
-kresult_t unmap_kernel_page(void *virt_addr);
+kresult_t unmap_kernel_page(TLBShootdownContext &ctx, void *virt_addr);
 
 // Generic function to map multiple pages
 kresult_t map_pages(ptable_top_ptr_t page_table, u64 phys_addr, u64 virt_addr, u64 size_bytes,
@@ -625,3 +630,8 @@ kresult_t map_kernel_pages(u64 phys_addr, u64 virt_addr, u64 size, Page_Table_Ar
 
 // Generic function to apply the page table to the current CPU
 void apply_page_table(ptable_top_ptr_t page_table);
+
+// Functions to be defined by the architecture to invalidate the TLB entries for kernel pages
+// (i.e. those that have global bit set on x86)
+void invalidate_tlb_kernel(u64 start);
+void invalidate_tlb_kernel(u64 start, u64 size);

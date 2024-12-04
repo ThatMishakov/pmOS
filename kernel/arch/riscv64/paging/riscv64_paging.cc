@@ -157,7 +157,7 @@ kresult_t RISCV64_Page_Table::map(pmm::Page_Descriptor page, u64 virt_addr,
     return 0;
 }
 
-kresult_t riscv_unmap_page(u64 pt_top_phys, void *virt_addr)
+kresult_t riscv_unmap_page(TLBShootdownContext &ctx, u64 pt_top_phys, void *virt_addr)
 {
     // TODO: Return values of this function make no sense...
 
@@ -179,7 +179,7 @@ kresult_t riscv_unmap_page(u64 pt_top_phys, void *virt_addr)
             entry.clear_auto();
             entry            = RISCV64_PTE();
             active_pt[index] = entry;
-            flush_page(virt_addr);
+            ctx.invalidate_page((u64)virt_addr);
 
             return 0;
         } else {
@@ -476,10 +476,10 @@ kresult_t map_kernel_page(u64 phys_addr, void *virt_addr, Page_Table_Argumments 
     return riscv_map_page(pt_top, phys_addr, virt_addr, arg);
 }
 
-kresult_t unmap_kernel_page(void *virt_addr)
+kresult_t unmap_kernel_page(TLBShootdownContext &ctx, void *virt_addr)
 {
     const u64 pt_top = get_current_hart_pt();
-    return riscv_unmap_page(pt_top, virt_addr);
+    return riscv_unmap_page(ctx, pt_top, virt_addr);
 }
 
 u64 get_current_hart_pt() noexcept
@@ -726,12 +726,8 @@ klib::shared_ptr<RISCV64_Page_Table> RISCV64_Page_Table::create_empty()
     return result ? nullptr : new_table;
 }
 
-#include <kern_logger/kern_logger.hh>
-void RISCV64_Page_Table::invalidate_tlb(u64 page)
-{
-    serial_logger.printf("Invalidating TLB for page %p CPU %i\n", page, get_cpu_struct()->cpu_id);
-    flush_page((void *)page);
-}
+void RISCV64_Page_Table::invalidate_tlb(u64 page) { flush_page((void *)page); }
+void invalidate_tlb_kernel(u64 page) { flush_page((void *)page); }
 
 void RISCV64_Page_Table::invalidate_tlb(u64 page, u64 size)
 {
@@ -741,6 +737,13 @@ void RISCV64_Page_Table::invalidate_tlb(u64 page, u64 size)
         return;
     }
 
+    for (u64 i = page; i < page + size; i += 0x1000) {
+        flush_page((void *)i);
+    }
+}
+
+void invalidate_tlb_kernel(u64 page, u64 size)
+{
     for (u64 i = page; i < page + size; i += 0x1000) {
         flush_page((void *)i);
     }

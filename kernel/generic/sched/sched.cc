@@ -494,6 +494,7 @@ bool unblock_if_needed(TaskDescriptor *p, Generic_Port *compare_blocked_by)
 }
 
 bool cpu_struct_works = false;
+bool other_cpus_online = false;
 
 void check_synchronous_ipis()
 {

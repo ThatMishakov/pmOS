@@ -165,6 +165,7 @@ struct CPU_Info {
 
     pmos::containers::DoubleListHead<CPU_Info> active_page_table;
     int page_table_generation = -1;
+    int kernel_pt_generation  = 0;
 };
 
 extern u64 ticks_since_bootup;

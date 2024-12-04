@@ -105,6 +105,11 @@ extern "C" void dbg_uart_putc(unsigned int c)
     outb(PORT, c);
 }
 
+// extern "C" void dbg_uart_putc(unsigned int c)
+// {
+//     bochs_printc(c);
+// }
+
 void printc(int c) { dbg_uart_putc(c); }
 
 struct stack_frame {

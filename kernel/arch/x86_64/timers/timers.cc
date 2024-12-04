@@ -28,6 +28,7 @@
  */
 
 #include <interrupts/apic.hh>
+#include <processes/tasks.hh>
 #include <sched/sched.hh>
 
 u32 calculate_timer_ticks(TaskDescriptor *task)

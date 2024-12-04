@@ -80,8 +80,10 @@ public:
     /// Atomically incerement and decrement active counter
     void atomic_active_sum(u64 val) noexcept;
 
-    virtual void invalidate_tlb(u64 page);
-    virtual void invalidate_tlb(u64 page, u64 size);
+    virtual void invalidate_tlb(u64 page) override;
+    virtual void invalidate_tlb(u64 page, u64 size) override;
+
+    virtual void tlb_flush_all() override;
 
 protected:
     virtual void free_user_pages()            = 0;
@@ -111,7 +113,7 @@ public:
 
     virtual kresult_t map(kernel::pmm::Page_Descriptor page, u64 virt_addr, Page_Table_Argumments arg) noexcept override;
 
-    virtual void invalidate(u64 virt_addr, bool free) override;
+    virtual void invalidate(TLBShootdownContext &ctx, u64 virt_addr, bool free) override;
 
     bool is_mapped(u64 virt_addr) const override;
 
@@ -174,7 +176,7 @@ protected:
     static page_table_map global_page_tables;
     static Spinlock page_table_index_lock;
 
-    virtual void invalidate_range(u64 virt_addr, u64 size_bytes, bool free) override;
+    virtual void invalidate_range(TLBShootdownContext &ctx, u64 virt_addr, u64 size_bytes, bool free) override;
 
     x86_4level_Page_Table() = default;
 
@@ -201,13 +203,7 @@ u64 map_pages(u64 physical_address, u64 virtual_address, u64 size_bytes, Page_Ta
 u64 prepare_pt_for(u64 virt_addr, Page_Table_Argumments arg, u64 pt_top_phys);
 u64 get_pt_ppn(u64 virt_addr, u64 pt_top_phys);
 
-// Invalidades a page entry using recursive mappings
-kresult_t invalidade(u64 virtual_addr);
-
 class TaskDescriptor;
-
-// Invalidade a single page using recursive mappings
-void invalidade_noerr(u64 virtual_addr);
 
 // Releases cr3
 extern "C" void release_cr3(u64 cr3);
