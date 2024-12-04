@@ -84,8 +84,10 @@ ReturnStr<Private_Normal_Region *>
 
     auto r = region.get();
 
-    if (fixed)
-        release_in_range(start_addr.val, page_aligned_size);
+    if (fixed) {
+        auto ctx = TLBShootdownContext::create_userspace(*this);
+        release_in_range(ctx, start_addr.val, page_aligned_size);
+    }
 
     paging_regions.insert(region.release());
 
@@ -117,8 +119,9 @@ ReturnStr<Private_Normal_Region *>
 
         // This will be called on error
         auto guard_ = pmos::utility::make_scope_guard([&]() {
+            auto ctx                  = TLBShootdownContext::create_userspace(*this);
             size_t size_to_invalidate = i * PAGE_SIZE;
-            invalidate_range(start_addr.val + size_to_invalidate,
+            invalidate_range(ctx, start_addr.val + size_to_invalidate,
                              page_aligned_size - size_to_invalidate, true);
 
             r->prepare_deletion();
@@ -154,7 +157,7 @@ ReturnStr<Private_Normal_Region *>
     return r;
 }
 
-kresult_t Page_Table::release_in_range(u64 start_addr, u64 size)
+kresult_t Page_Table::release_in_range(TLBShootdownContext &ctx, u64 start_addr, u64 size)
 {
     bool clean_pages = false;
     // Special case: One large region needs to be split in two, from the middle
@@ -198,7 +201,7 @@ kresult_t Page_Table::release_in_range(u64 start_addr, u64 size)
     }
 
     if (clean_pages)
-        invalidate_range(start_addr, size, true);
+        invalidate_range(ctx, start_addr, size, true);
 
     return 0;
 }
@@ -206,7 +209,8 @@ kresult_t Page_Table::release_in_range(u64 start_addr, u64 size)
 kresult_t Page_Table::atomic_release_in_range(u64 start, u64 size)
 {
     Auto_Lock_Scope l(lock);
-    return release_in_range(start, size);
+    auto ctx = TLBShootdownContext::create_userspace(*this);
+    return release_in_range(ctx, start, size);
 }
 
 ReturnStr<size_t> Page_Table::atomic_transfer_region(const klib::shared_ptr<Page_Table> &to,
@@ -226,7 +230,8 @@ ReturnStr<size_t> Page_Table::atomic_transfer_region(const klib::shared_ptr<Page
     if (!start_addr.success())
         return start_addr.propagate();
 
-    auto result = reg->move_to(to, start_addr.val, access);
+    auto ctx    = TLBShootdownContext::create_userspace(*this);
+    auto result = reg->move_to(ctx, to, start_addr.val, access);
     if (result)
         return result;
 
@@ -257,8 +262,10 @@ ReturnStr<Phys_Mapped_Region *> Page_Table::atomic_create_phys_region(ulong page
     if (!region)
         return Error(-ENOMEM);
 
-    if (fixed)
-        release_in_range(start_addr.val, page_aligned_size);
+    if (fixed) {
+        auto ctx = TLBShootdownContext::create_userspace(*this);
+        release_in_range(ctx, start_addr.val, page_aligned_size);
+    }
 
     paging_regions.insert(region.get());
 
@@ -293,7 +300,8 @@ ReturnStr<Mem_Object_Reference *> Page_Table::atomic_create_mem_object_region(
         return Error(-ENOMEM);
 
     if (fixed) {
-        auto r = release_in_range(start_addr.val, page_aligned_size);
+        auto ctx = TLBShootdownContext::create_userspace(*this);
+        auto r   = release_in_range(ctx, start_addr.val, page_aligned_size);
         if (r)
             return Error(r);
     }
@@ -409,11 +417,16 @@ u64 Page_Table::phys_addr_limit()
     return 0x01UL << 48;
 }
 
-kresult_t Page_Table::move_pages(const klib::shared_ptr<Page_Table> &to, size_t from_addr,
-                                 size_t to_addr, size_t size_bytes, u8 access) noexcept
+kresult_t Page_Table::move_pages(TLBShootdownContext &ctx, const klib::shared_ptr<Page_Table> &to,
+                                 size_t from_addr, size_t to_addr, size_t size_bytes,
+                                 u8 access) noexcept
 {
     size_t offset = 0;
-    pmos::utility::scope_guard guard([&]() { to->invalidate_range(to_addr, offset, false); });
+
+    pmos::utility::scope_guard guard([&]() {
+        auto ctx = TLBShootdownContext::create_userspace(*to);
+        to->invalidate_range(ctx, to_addr, offset, false);
+    });
 
     for (; offset < size_bytes; offset += 4096) {
         auto info = get_page_mapping(from_addr + offset);
@@ -432,7 +445,8 @@ kresult_t Page_Table::move_pages(const klib::shared_ptr<Page_Table> &to, size_t 
                 return res;
         }
     }
-    invalidate_range(from_addr, size_bytes, false);
+
+    invalidate_range(ctx, from_addr, size_bytes, false);
 
     guard.dismiss();
 
@@ -444,8 +458,10 @@ kresult_t Page_Table::copy_pages(const klib::shared_ptr<Page_Table> &to, u64 fro
 {
     u64 offset = 0;
 
-    auto guard =
-        pmos::utility::make_scope_guard([&]() { to->invalidate_range(to_addr, offset, true); });
+    auto guard = pmos::utility::make_scope_guard([&]() {
+        auto ctx = TLBShootdownContext::create_userspace(*to);
+        to->invalidate_range(ctx, to_addr, offset, true);
+    });
 
     for (; offset < size_bytes; offset += 4096) {
         auto info = get_page_mapping(from_addr + offset);
@@ -470,6 +486,100 @@ kresult_t Page_Table::copy_pages(const klib::shared_ptr<Page_Table> &to, u64 fro
     guard.dismiss();
 
     return 0;
+}
+
+void Page_Table::apply_cpu(CPU_Info *cpu)
+{
+    assert(cpu == get_cpu_struct());
+    assert(cpu->page_table_generation == -1); // Assert it is not in the list
+
+    Auto_Lock_Scope l(active_cpus_lock);
+    // Do it here so that waiter can check it without locking
+    auto count = __atomic_add_fetch(&active_cpus_count[paging_generation], 1, __ATOMIC_RELAXED);
+    assert(count > 0);
+
+    cpu->page_table_generation = paging_generation;
+    active_cpus[paging_generation].push_back(cpu);
+}
+
+void Page_Table::unapply_cpu(CPU_Info *cpu)
+{
+    assert(cpu == get_cpu_struct());
+    assert(cpu->page_table_generation != -1); // Assert it is in the list
+
+    auto generation = cpu->page_table_generation;
+    Auto_Lock_Scope l(active_cpus_lock);
+    auto count = __atomic_sub_fetch(&active_cpus_count[generation], 1, __ATOMIC_RELAXED);
+    assert(count >= 0);
+
+    cpu->page_table_generation = -1;
+    active_cpus[generation].remove(cpu);
+}
+
+static TLBShootdownContext *kernel_shootdown_desc = nullptr;
+int kernel_pt_generation                          = 0;
+int kernel_pt_active_cpus_count[2]                = {0, 0};
+
+void Page_Table::trigger_shootdown(CPU_Info *cpu)
+{
+    if (kernel_pt_generation != cpu->kernel_pt_generation) {
+        // Kernel shootdown
+
+        assert(kernel_shootdown_desc != nullptr);
+        auto &desc = *kernel_shootdown_desc;
+
+        for (auto page: desc.iterate_over_pages())
+            invalidate_tlb_kernel(page);
+
+        for (auto range: desc.iterate_over_ranges())
+            invalidate_tlb_kernel(range.start, range.size);
+
+        int old_gen = cpu->kernel_pt_generation;
+        int new_gen = kernel_pt_generation;
+
+        __atomic_add_fetch(&kernel_pt_active_cpus_count[new_gen], 1, __ATOMIC_RELAXED);
+        __atomic_sub_fetch(&kernel_pt_active_cpus_count[old_gen], 1, __ATOMIC_RELEASE);
+
+    } else {
+        assert(cpu == get_cpu_struct());
+        assert(cpu->page_table_generation != -1);
+
+        Auto_Lock_Scope l(active_cpus_lock);
+
+        if (paging_generation == cpu->page_table_generation)
+            return;
+
+        auto current_generation = cpu->page_table_generation;
+        auto next_generation    = current_generation == 0 ? 1 : 0;
+
+        assert(shootdown_descriptor != nullptr);
+        auto &desc = *shootdown_descriptor;
+
+        if (desc.flush_all()) {
+            tlb_flush_all();
+        } else {
+            for (auto page: desc.iterate_over_pages())
+                invalidate_tlb(page);
+
+            for (auto range: desc.iterate_over_ranges())
+                invalidate_tlb(range.start, range.size);
+        }
+
+        // Make sure the invalidation is done before the generation change
+        __sync_synchronize();
+
+        // I think the order shouldn't matter
+        __atomic_add_fetch(&active_cpus_count[next_generation], 1, __ATOMIC_RELAXED);
+
+        active_cpus[current_generation].remove(cpu);
+        active_cpus[next_generation].push_back(cpu);
+
+        cpu->page_table_generation = next_generation;
+
+        // Not sure about the order here though
+        // TODO: ???
+        __atomic_sub_fetch(&active_cpus_count[current_generation], 1, __ATOMIC_RELEASE);
+    }
 }
 
 kresult_t Page_Table::atomic_pin_memory_object(klib::shared_ptr<Mem_Object> object)
@@ -501,11 +611,12 @@ void Page_Table::atomic_shrink_regions(const klib::shared_ptr<Mem_Object> &id,
                                        u64 new_size) noexcept
 {
     Auto_Lock_Scope l(lock);
+    auto ctx = TLBShootdownContext::create_userspace(*this);
 
     auto p = object_regions.find(id.get());
     if (p == object_regions.end())
         return;
-    
+
     auto it = p->second.begin();
     while (it != p->second.end()) {
         const auto reg = it;
@@ -527,7 +638,7 @@ void Page_Table::atomic_shrink_regions(const klib::shared_ptr<Mem_Object> &id,
                 reg->size = change_size_to;
             }
 
-            invalidate_range(free_from, free_size, true);
+            invalidate_range(ctx, free_from, free_size, true);
             unblock_tasks_rage(free_from, free_size);
         }
     }
@@ -547,7 +658,9 @@ kresult_t Page_Table::atomic_delete_region(u64 region_start)
     paging_regions.erase(region);
     region->rcu_free();
 
-    invalidate_range(region_start, region_size, true);
+    auto ctx = TLBShootdownContext::create_userspace(*this);
+
+    invalidate_range(ctx, region_start, region_size, true);
     unblock_tasks_rage(region_start, region_size);
 
     return 0;
@@ -565,4 +678,125 @@ void Page_Table::unreference_object(const klib::shared_ptr<Mem_Object> &object,
 void Page_Table::unblock_tasks_rage(u64 blocked_by_page, u64 size_bytes)
 {
     // TODO
+}
+
+TLBShootdownContext TLBShootdownContext::create_userspace(Page_Table &page_table)
+{
+    // TODO: Maybe couple this with lock?
+    assert(page_table.lock.is_locked());
+
+    TLBShootdownContext ctx;
+    ctx.page_table   = &page_table;
+    ctx.pages_count  = 0;
+    ctx.ranges_count = 0;
+
+    return ctx;
+}
+
+TLBShootdownContext TLBShootdownContext::create_kernel()
+{
+    TLBShootdownContext ctx;
+    ctx.page_table   = nullptr;
+    ctx.pages_count  = 0;
+    ctx.ranges_count = 0;
+
+    return ctx;
+}
+
+void TLBShootdownContext::invalidate_page(u64 page)
+{
+    if (pages_count == MAX_PAGES and for_kernel())
+        finalize();
+
+    pages_count++;
+    if (pages_count > MAX_PAGES)
+        return;
+
+    pages[pages_count - 1] = page;
+}
+
+bool TLBShootdownContext::flush_all() const
+{
+    return (pages_count > MAX_PAGES) or (ranges_count > MAX_RANGES);
+}
+
+bool TLBShootdownContext::empty() const { return pages_count == 0 and ranges_count == 0; }
+bool TLBShootdownContext::for_kernel() const { return page_table == nullptr; }
+
+extern bool cpu_struct_works;
+extern bool other_cpus_online;
+
+void TLBShootdownContext::finalize()
+{
+    // TODO: This can be removed later...
+    static Spinlock barrier;
+
+    if (empty())
+        return;
+
+    assert(for_kernel() || cpu_struct_works ||
+           !"CPU struct is not working (kernel uninitialized) and invalidating userspace pages");
+
+    if (for_kernel()) {
+        if (!cpu_struct_works || other_cpus_online) {
+            // Just flush the pages and call it a day
+            for (auto page: iterate_over_pages())
+                invalidate_tlb_kernel(page);
+
+            for (auto range: iterate_over_ranges())
+                invalidate_tlb_kernel(range.start, range.size);
+        } else {
+            auto my_cpu = get_cpu_struct();
+
+            Auto_Lock_Scope l(barrier);
+
+            int old_generation   = kernel_pt_generation;
+            kernel_pt_generation = kernel_pt_generation == 0 ? 1 : 0;
+
+            __sync_synchronize();
+
+            for (auto cpu: cpus) {
+                if (cpu == my_cpu)
+                    continue;
+                cpu->ipi_tlb_shootdown();
+            }
+
+            page_table->trigger_shootdown(my_cpu);
+
+            while (__atomic_load_n(&kernel_pt_active_cpus_count[old_generation], __ATOMIC_ACQUIRE))
+                spin_pause();
+        }
+    } else {
+        auto my_cpu = get_cpu_struct();
+
+        int old_generation;
+
+        Auto_Lock_Scope l(barrier);
+        {
+            Auto_Lock_Scope l2(page_table->active_cpus_lock);
+            // flip generation and notify other CPUs
+            old_generation                   = page_table->paging_generation;
+            page_table->paging_generation    = page_table->paging_generation == 0 ? 1 : 0;
+            page_table->shootdown_descriptor = this;
+
+            for (auto &cpu: page_table->active_cpus[old_generation]) {
+                if (&cpu == my_cpu)
+                    continue;
+                cpu.ipi_tlb_shootdown();
+            }
+        }
+
+        // If this CPU has this page table, also flush it
+        if (my_cpu->current_task->page_table.get() == page_table)
+            page_table->trigger_shootdown(my_cpu);
+
+        // Wait for other CPUs
+        while (__atomic_load_n(&page_table->active_cpus_count[old_generation], __ATOMIC_ACQUIRE)) {
+            spin_pause();
+        }
+    }
+
+    // Allow finalize() to be called again
+    pages_count  = 0;
+    ranges_count = 0;
 }

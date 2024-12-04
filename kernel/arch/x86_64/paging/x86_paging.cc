@@ -36,9 +36,9 @@
 #include <memory/mem_object.hh>
 #include <memory/pmm.hh>
 #include <memory/temp_mapper.hh>
+#include <pmos/utility/scope_guard.hh>
 #include <processes/tasks.hh>
 #include <x86_asm.hh>
-#include <pmos/utility/scope_guard.hh>
 
 using namespace kernel;
 
@@ -254,7 +254,7 @@ bool x86_4level_Page_Table::is_mapped(u64 virt_addr) const
     return allocated;
 }
 
-void invalidate(u64 virt_addr, bool free, u64 pml4_phys)
+void invalidate(TLBShootdownContext &ctx, u64 virt_addr, bool free, u64 pml4_phys)
 {
     bool invalidated = false;
 
@@ -290,18 +290,18 @@ void invalidate(u64 virt_addr, bool free, u64 pml4_phys)
     } while (false);
 
     if (invalidated)
-        invlpg(virt_addr);
+        ctx.invalidate_page(virt_addr);
 }
 
-void x86_4level_Page_Table::invalidate(u64 virt_addr, bool free)
+void x86_4level_Page_Table::invalidate(TLBShootdownContext &ctx, u64 virt_addr, bool free)
 {
-    ::invalidate(virt_addr, free, (u64)pml4_phys);
+    ::invalidate(ctx, virt_addr, free, (u64)pml4_phys);
 }
 
-kresult_t unmap_kernel_page(void *virt_addr)
+kresult_t unmap_kernel_page(TLBShootdownContext &ctx, void *virt_addr)
 {
     const u64 cr3 = getCR3();
-    invalidate((u64)virt_addr, true, cr3);
+    invalidate(ctx, (u64)virt_addr, true, cr3);
     return 0;
 }
 
@@ -309,15 +309,27 @@ bool x86_Page_Table::is_used_by_others() const { return (active_count - is_activ
 
 bool x86_Page_Table::is_active() const { return ::getCR3() == get_cr3(); }
 
+// void x86_Page_Table::invalidate_tlb(u64 page, u64 size)
+// {
+//     if (is_active())
+//         for (u64 i = 0; i < size; i += 4096)
+//             invlpg(page + i);
+
+//     if (is_used_by_others())
+//         ::signal_tlb_shootdown();
+// }
+
 void x86_Page_Table::invalidate_tlb(u64 page, u64 size)
 {
-    if (is_active())
+    if (size / 4096 < 64)
         for (u64 i = 0; i < size; i += 4096)
             invlpg(page + i);
 
-    if (is_used_by_others())
-        ::signal_tlb_shootdown();
+    else
+        setCR3(get_cr3());
 }
+
+void x86_Page_Table::tlb_flush_all() { setCR3(get_cr3()); }
 
 void x86_Page_Table::atomic_active_sum(u64 val) noexcept
 {
@@ -334,50 +346,6 @@ void print_pt(u64 addr)
 
     global_logger.printf("Paging indexes %h\'%h\'%h\'%h\'%h\n", upper, pml4e & 0777, pdpe & 0777,
                          pd_e & 0777, ptable_entry & 0777);
-}
-
-kresult_t invalidade(u64 virtual_addr)
-{
-    u64 addr = virtual_addr;
-    addr >>= 12;
-    // u64 page = addr;
-    u64 ptable_entry = addr & 0x1ff;
-    addr >>= 9;
-    u64 pdir_entry = addr & 0x1ff;
-    addr >>= 9;
-    u64 pdpt_entry = addr & 0x1ff;
-    addr >>= 9;
-    u64 pml4_entry = addr & 0x1ff;
-
-    // Check if PDPT is present
-    PML4E &pml4e = pml4(rec_map_index)->entries[pml4_entry];
-    if (not pml4e.present)
-        return -EFAULT;
-
-    // Check if PD is present
-    PDPTE &pdpte = pdpt_of(virtual_addr, rec_map_index)->entries[pdpt_entry];
-    if (pdpte.size)
-        return -EINVAL;
-    if (not pdpte.present)
-        return -EFAULT;
-
-    // Check if PT is present
-    PDE &pde = pd_of(virtual_addr, rec_map_index)->entries[pdir_entry];
-    if (pde.size)
-        return -EINVAL;
-    if (not pde.present)
-        return -EFAULT;
-
-    // Check if page is present
-    PTE &pte = pt_of(virtual_addr, rec_map_index)->entries[ptable_entry];
-    if (not pte.present)
-        return -EFAULT;
-
-    // Everything OK
-    pte = PTE();
-    invlpg(virtual_addr);
-
-    return 0;
 }
 
 ReturnStr<u64> x86_4level_Page_Table::phys_addr_of(u64 virt) const
@@ -455,12 +423,6 @@ ReturnStr<u64> phys_addr_of(u64 virt)
 
     // TODO: Error checking
     return {0, phys};
-}
-
-void invalidade_noerr(u64 virtual_addr)
-{
-    *get_pte(virtual_addr, rec_map_index) = PTE();
-    invlpg(virtual_addr);
 }
 
 klib::shared_ptr<x86_4level_Page_Table> x86_4level_Page_Table::capture_initial(u64 cr3)
@@ -761,12 +723,13 @@ void x86_4level_Page_Table::free_user_pages()
     }
 }
 
-void x86_4level_Page_Table::invalidate_range(u64 virt_addr, u64 size_bytes, bool free)
+void x86_4level_Page_Table::invalidate_range(TLBShootdownContext &ctx, u64 virt_addr,
+                                             u64 size_bytes, bool free)
 {
     // -------- CAN BE MADE MUCH FASTER ------------
     u64 end = virt_addr + size_bytes;
     for (u64 i = virt_addr; i < end; i += 4096)
-        invalidate(i, free);
+        invalidate(ctx, i, free);
 }
 
 void x86_PAE_Entry::clear_nofree() { *this = {}; }
@@ -807,12 +770,14 @@ klib::shared_ptr<x86_4level_Page_Table> x86_4level_Page_Table::create_clone()
     auto guard = pmos::utility::make_scope_guard([&]() {
         // Remove all the regions and objects. It might not be necessary, since
         // it should be handled by the destructor but in case somebody from
-        // userspace specultively does weird stuff with the
+        // userspace does weird stuff with the
         // not-yet-fully-constructed page table, it's better to give them an
         // empty table
 
         for (const auto &reg: new_table->mem_objects)
             reg.first->atomic_unregister_pined(new_table->weak_from_this());
+
+        auto ctx = TLBShootdownContext::create_userspace(*new_table);
 
         auto it = new_table->paging_regions.begin();
         while (it != new_table->paging_regions.end()) {
@@ -823,19 +788,19 @@ klib::shared_ptr<x86_4level_Page_Table> x86_4level_Page_Table::create_clone()
             paging_regions.erase(it);
             it->rcu_free();
 
-            invalidate_range(region_start, region_size, true);
+            invalidate_range(ctx, region_start, region_size, true);
 
             it = new_table->paging_regions.begin();
         }
     });
 
     for (auto &reg: this->mem_objects) {
-        auto t =
-            new_table->mem_objects.insert({reg.first,
-                                           {
-                                               .max_privilege_mask = reg.second.max_privilege_mask,
-                                               .regions            = {},
-                                           }});
+        auto t = new_table->mem_objects.insert(
+            klib::pair<const klib::shared_ptr<Mem_Object>, Mem_Object_Data> {
+                reg.first,
+                {
+                    .max_privilege_mask = reg.second.max_privilege_mask,
+                }});
         if (not t.second)
             return nullptr;
 
@@ -884,6 +849,13 @@ void x86_4level_Page_Table::apply() noexcept { setCR3((u64)pml4_phys); }
 void apply_page_table(ptable_top_ptr_t page_table) { setCR3((u64)page_table); }
 
 void x86_Page_Table::invalidate_tlb(u64 addr) { invlpg(addr); }
+void invalidate_tlb_kernel(u64 addr) { invlpg(addr); }
+
+void invalidate_tlb_kernel(u64 addr, u64 size)
+{
+    for (u64 i = 0; i < size; i += 4096)
+        invlpg(addr + i);
+}
 
 ReturnStr<bool> x86_4level_Page_Table::atomic_copy_to_user(u64 to, const void *from, u64 size)
 {

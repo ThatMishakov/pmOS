@@ -145,13 +145,15 @@ kresult_t CPU_Info::atomic_timer_queue_push(u64 fire_on_core_ticks, Port *port)
 
 extern klib::shared_ptr<Arch_Page_Table> idle_page_table;
 
-
 void TaskDescriptor::switch_to()
 {
     CPU_Info *c = get_cpu_struct();
     assert(cpu_affinity == 0 or (cpu_affinity - 1) == c->cpu_id);
 
     if (c->current_task->page_table != page_table) {
+        c->current_task->page_table->unapply_cpu(c);
+        page_table->apply_cpu(c);
+
         page_table->atomic_active_sum(1);
         c->current_task->page_table->atomic_active_sum(-1);
 
@@ -484,4 +486,29 @@ TaskDescriptor *CPU_Info::atomic_get_front_priority(priority_t priority)
     }
 
     return nullptr;
+}
+
+bool unblock_if_needed(TaskDescriptor *p, Generic_Port *compare_blocked_by)
+{
+    return p->atomic_unblock_if_needed(compare_blocked_by);
+}
+
+bool cpu_struct_works = false;
+bool other_cpus_online = false;
+
+void check_synchronous_ipis()
+{
+    if (!cpu_struct_works) [[unlikely]]
+        return;
+
+    CPU_Info *c = get_cpu_struct();
+
+    auto val = __atomic_load_n(&c->ipi_mask, __ATOMIC_CONSUME);
+    if (val & CPU_Info::ipi_synchronous_mask) {
+        if (val & CPU_Info::IPI_TLB_SHOOTDOWN) {
+            __atomic_and_fetch(&c->ipi_mask, ~CPU_Info::IPI_TLB_SHOOTDOWN, __ATOMIC_SEQ_CST);
+
+            c->current_task->page_table->trigger_shootdown(c);
+        }
+    }
 }

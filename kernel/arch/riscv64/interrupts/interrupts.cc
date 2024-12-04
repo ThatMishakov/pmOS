@@ -36,6 +36,7 @@
 #include <cpus/floating_point.hh>
 #include <kern_logger/kern_logger.hh>
 #include <pmos/ipc.h>
+#include <processes/tasks.hh>
 #include <sched/sched.hh>
 #include <utils.hh>
 
@@ -307,10 +308,13 @@ void service_software_interrupt()
 
     auto c = get_cpu_struct();
 
-    u32 m = __atomic_fetch_and(&c->ipi_mask, ~CPU_Info::IPI_RESCHEDULE, __ATOMIC_SEQ_CST);
-    if (m & CPU_Info::IPI_RESCHEDULE) {
+    u32 m = __atomic_fetch_and(
+        &c->ipi_mask, ~(CPU_Info::IPI_RESCHEDULE | CPU_Info::IPI_TLB_SHOOTDOWN), __ATOMIC_SEQ_CST);
+    if (m & CPU_Info::IPI_RESCHEDULE)
         reschedule();
-    }
+
+    if (m & CPU_Info::IPI_TLB_SHOOTDOWN)
+        c->current_task->page_table->trigger_shootdown(c);
 }
 
 void handle_interrupt()

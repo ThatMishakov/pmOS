@@ -31,6 +31,7 @@
 #include "sched_queue.hh"
 
 #include <interrupts/interrupt_handler.hh>
+#include <interrupts/stack.hh>
 #include <lib/array.hh>
 #include <lib/memory.hh>
 #include <lib/splay_tree_map.hh>
@@ -39,7 +40,8 @@
 #include <memory/rcu.hh>
 #include <memory/temp_mapper.hh>
 #include <messaging/messaging.hh>
-#include <processes/tasks.hh>
+#include <pmos/containers/intrusive_list.hh>
+#include <registers.hh>
 #include <types.hh>
 
 #ifdef __x86_64__
@@ -52,11 +54,7 @@
 
 // Checks the mask and unblocks the task if needed
 // This function needs to be axed
-inline bool unblock_if_needed(TaskDescriptor *p,
-                              Generic_Port *compare_blocked_by)
-{
-    return p->atomic_unblock_if_needed(compare_blocked_by);
-}
+bool unblock_if_needed(TaskDescriptor *p, Generic_Port *compare_blocked_by);
 
 // Blocks current task, setting blocked_by to *ptr*.
 ReturnStr<u64> block_current_task(Generic_Port *ptr);
@@ -140,14 +138,17 @@ struct CPU_Info {
     // ISRs in userspace
     Interrupt_Handler_Table int_handlers;
 
-    static constexpr int IPI_RESCHEDULE = 0x1;
-    static constexpr int IPI_TLB_FLUSH  = 0x2;
-    u32 ipi_mask                        = 0;
+    static constexpr int IPI_RESCHEDULE    = 0x1;
+    static constexpr int IPI_TLB_SHOOTDOWN = 0x2;
+    u32 ipi_mask                           = 0;
+
+    constexpr static u32 ipi_synchronous_mask = IPI_TLB_SHOOTDOWN;
 
     // IMHO this is better than protecting current_task pointer with spinlock
     priority_t current_task_priority = sched_queues_levels;
 
     void ipi_reschedule(); // nothrow ?
+    void ipi_tlb_shootdown();
 
     // TODO: Replace this with multimap
     klib::splay_tree_map<u64 /* next clock tick */, u64 /* port id */> timer_queue;
@@ -161,6 +162,10 @@ struct CPU_Info {
     u64 ticks_after_ns(u64 ns);
 
     inline bool is_bootstap_cpu() const noexcept { return cpu_id == 0; }
+
+    pmos::containers::DoubleListHead<CPU_Info> active_page_table;
+    int page_table_generation = -1;
+    int kernel_pt_generation  = 0;
 };
 
 extern u64 ticks_since_bootup;

@@ -39,10 +39,9 @@ The following shorthands can be used to configure to configure llvm and runtimes
 
 ## Immediate plans
 
-1. Implement TLB shootdowns
-2. Unify memory objects and anonymous memory mappings. Implement memory object inheritance (and CoW with them).
-3. Implement working set for virtual memory (swap and page replacement)
-4. Implement AHCI driver reading and writing
+1. Unify memory objects and anonymous memory mappings. Implement memory object inheritance (and CoW with them).
+2. Implement working set for virtual memory (swap and page replacement)
+3. Implement AHCI driver reading and writing
  - Work on doccumentation
  - Improve project structure
 
@@ -85,7 +84,7 @@ These are the features that are planned to be had in the OS:
     - [ ] Memory object creation and management from userspace
   - [x] Delayed allocation
   - [x] Memory protections
-  - [ ] TLB shootdowns - not implemented yet
+  - [x] TLB shootdowns
   - [ ] Swapping
   - [x] Accessing userspace memory
     - Implemented (and surprisingly works well), but is very slow, needs rewriting
@@ -103,7 +102,7 @@ These are the features that are planned to be had in the OS:
   - [ ] Quicker messaging
   
 - [ ] Permissions
-- [x] Multi CPU support - Works, but I haven't implemented TLB shootdowns yet
+- [x] Multi CPU support
 
 #### RISC-V specific features:
 

@@ -86,18 +86,32 @@ public:
 
 class Spinlock: public Spinlock_base {
 public:
-    void lock() noexcept
+    void lock() noexcept;
+
+    /// Tries to lock the spinlock. True if lock has been ackquired, false otherwise
+    bool try_lock() noexcept;
+
+    // Function to unlock the spinlock
+    void unlock() noexcept
+    {
+        Spinlock_base::unlock();
+    }
+};
+
+class CriticalSpinlock: public Spinlock_base {
+public:
+    inline void lock() noexcept
     {
         Spinlock_base::lock();
     }
     /// Tries to lock the spinlock. True if lock has been ackquired, false otherwise
-    bool try_lock() noexcept
+    inline bool try_lock() noexcept
     {
         return Spinlock_base::try_lock();
     }
 
     // Function to unlock the spinlock
-    void unlock() noexcept
+    inline void unlock() noexcept
     {
         Spinlock_base::unlock();
     }
@@ -120,10 +134,11 @@ struct Auto_Lock_Scope {
     ~Auto_Lock_Scope() { s.unlock(); }
 };
 
+template<spinlock_type T>
 struct Auto_Lock_Scope_Double {
-    Spinlock &a;
-    Spinlock &b;
-    Auto_Lock_Scope_Double(Spinlock &a, Spinlock &b): a(&a < &b ? a : b), b(&a < &b ? b : a)
+    T &a;
+    T &b;
+    Auto_Lock_Scope_Double(T &a, T &b): a(&a < &b ? a : b), b(&a < &b ? b : a)
     {
         this->a.lock();
         if (a != b)
@@ -138,12 +153,13 @@ struct Auto_Lock_Scope_Double {
     }
 };
 
+template<spinlock_type T>
 struct Lock_Guard_Simul {
-    Spinlock &a;
-    Spinlock &b;
+    T &a;
+    T &b;
 
     Lock_Guard_Simul() = delete;
-    Lock_Guard_Simul(Spinlock &a, Spinlock &b): a(&a < &b ? a : b), b(&a < &b ? b : a)
+    Lock_Guard_Simul(T &a, T &b): a(&a < &b ? a : b), b(&a < &b ? b : a)
     {
         if (a == b) {
             a.lock();
@@ -168,6 +184,10 @@ struct Lock_Guard_Simul {
             b.unlock();
     }
 };
+
+inline void spin_pause()
+{
+}
 
 inline constexpr auto PAGE_ORDER = 12;
 inline constexpr auto PAGE_SIZE  = 4096;

@@ -55,6 +55,14 @@ public:
     const T &back() const noexcept;
 };
 
+template<typename T, DoubleListHead<T> T:: *Head> class InitializedCircularDoubleList
+    : public CircularDoubleList<T, Head>
+{
+public:
+    InitializedCircularDoubleList() noexcept { this->init(); }
+    ~InitializedCircularDoubleList() noexcept = default;
+};
+
 template<typename T, DoubleListHead<T> T:: *Head>
 void CircularDoubleList<T, Head>::push_front(T *p) noexcept
 {

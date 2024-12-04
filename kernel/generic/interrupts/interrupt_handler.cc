@@ -5,7 +5,9 @@
 #include <exceptions.hh>
 #include <kern_logger/kern_logger.hh>
 #include <pmos/utility/scope_guard.hh>
+#include <processes/tasks.hh>
 #include <sched/sched.hh>
+
 kresult_t Interrupt_Handler_Table::add_handler(u64 interrupt_number, Port *port)
 {
     auto c = get_cpu_struct();
@@ -35,8 +37,8 @@ kresult_t Interrupt_Handler_Table::add_handler(u64 interrupt_number, Port *port)
             return -ESRCH;
 
         if (owner->cpu_affinity != c->cpu_id + 1) {
-            serial_logger.printf("Task %d (%s) is not bound to CPU %d\n", owner->task_id, owner->name.c_str(),
-                                 c->cpu_id);
+            serial_logger.printf("Task %d (%s) is not bound to CPU %d\n", owner->task_id,
+                                 owner->name.c_str(), c->cpu_id);
             return -EPERM;
         }
 

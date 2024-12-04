@@ -38,6 +38,7 @@
 #include <sched/sched.hh>
 #include <stdarg.h>
 #include <stdio.h>
+#include <processes/tasks.hh>
 
 void int_to_string(long int n, u8 base, char *str, int &length)
 {
@@ -687,4 +688,26 @@ extern "C" void __cxa_guard_release(int64_t *guard_object)
     auto asint = reinterpret_cast<int32_t *>(guard_object);
     asint[0]   = 1;
     __atomic_store_n(asint + 1, 0, __ATOMIC_RELEASE);
+}
+
+// Defined in sched/sched.cc
+void check_synchronous_ipis() noexcept;
+
+void Spinlock::lock() noexcept
+{
+    while (!Spinlock_base::try_lock()) {
+        // Since the current kernel spinlock situation is not very good, and the
+        // kernel can't preempt itself, if the lock fails to acquire, 
+        // check that other CPUs are not waiting for us to do something.
+        check_synchronous_ipis();
+    }
+}
+
+bool Spinlock::try_lock() noexcept
+{
+    auto result = Spinlock_base::try_lock();
+    if (!result) {
+        check_synchronous_ipis();
+    }
+    return result;
 }

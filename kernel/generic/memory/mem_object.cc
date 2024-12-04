@@ -360,10 +360,12 @@ ReturnStr<void *> Mem_Object::map_to_kernel(u64 offset, u64 size, Page_Table_Arg
 
     size_t i   = 0;
     auto guard = pmos::utility::make_scope_guard([&]() {
+        auto ctx = TLBShootdownContext::create_kernel();
         for (size_t ii = 0; ii < i; ++ii) {
             void *const virt_addr = (void *)(size_t(mem_virt) + ii);
-            unmap_kernel_page(virt_addr);
+            unmap_kernel_page(ctx, virt_addr);
         }
+        ctx.finalize();
 
         vmm::kernel_space_allocator.virtmem_free(mem_virt, size_pages);
     });

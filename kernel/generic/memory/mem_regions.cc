@@ -122,11 +122,11 @@ ReturnStr<bool> Phys_Mapped_Region::alloc_page(phys_addr_t ptr_addr)
     return true;
 }
 
-kresult_t Generic_Mem_Region::move_to(const klib::shared_ptr<Page_Table> &new_table,
+kresult_t Generic_Mem_Region::move_to(TLBShootdownContext &ctx, const klib::shared_ptr<Page_Table> &new_table,
                                       size_t base_addr, size_t new_access)
 {
     Page_Table *const old_owner = owner;
-    auto result = old_owner->move_pages(new_table, start_addr, base_addr, size, new_access);
+    auto result = old_owner->move_pages(ctx, new_table, start_addr, base_addr, size, new_access);
     if (result != 0)
         return result;
 
@@ -377,7 +377,7 @@ ReturnStr<bool> Mem_Object_Reference::alloc_page(u64 ptr_addr)
     }
 }
 
-kresult_t Mem_Object_Reference::move_to(const klib::shared_ptr<Page_Table> &new_table,
+kresult_t Mem_Object_Reference::move_to(TLBShootdownContext &ctx, const klib::shared_ptr<Page_Table> &new_table,
                                         u64 base_addr, u64 new_access)
 {
     return -ENOSYS;

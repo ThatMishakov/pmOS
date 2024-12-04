@@ -42,6 +42,8 @@ class Page_Table;
 extern u64 counter;
 struct Page_Table_Argumments;
 
+class TLBShootdownContext;
+
 /**
  * @brief Generic memory region class. Defines an action that needs to be executed when pagefault is
  * produced.
@@ -200,7 +202,7 @@ struct Generic_Mem_Region {
      * @param base_addr Base address in the new page table
      * @param new_access New access specifier to be had in the new page table
      */
-    [[nodiscard]] virtual kresult_t move_to(const klib::shared_ptr<Page_Table> &new_table,
+    [[nodiscard]] virtual kresult_t move_to(TLBShootdownContext &ctx, const klib::shared_ptr<Page_Table> &new_table,
                                             ulong base_addr, u64 new_access);
 
     /**
@@ -316,7 +318,7 @@ struct Mem_Object_Reference final: Generic_Mem_Region {
 
     virtual ReturnStr<bool> alloc_page(u64 ptr_addr) override;
 
-    virtual kresult_t move_to(const klib::shared_ptr<Page_Table> &new_table, ulong base_addr,
+    virtual kresult_t move_to(TLBShootdownContext &ctx, const klib::shared_ptr<Page_Table> &new_table, ulong base_addr,
                               u64 new_access) override;
     virtual kresult_t clone_to(const klib::shared_ptr<Page_Table> &new_table, u64 base_addr,
                           u64 new_access) override;

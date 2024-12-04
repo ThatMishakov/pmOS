@@ -36,7 +36,9 @@
 #include <lib/pair.hh>
 #include <lib/set.hh>
 #include <lib/splay_tree_map.hh>
+#include <pmos/containers/intrusive_list.hh>
 #include <pmos/containers/set.hh>
+#include <sched/sched.hh>
 #include <sched/sched_queue.hh>
 #include <types.hh>
 
@@ -65,6 +67,65 @@ struct Page_Table_Argumments {
 class Mem_Object;
 struct Mem_Object_Data {
     u8 max_privilege_mask = 0;
+};
+
+class Page_Table;
+
+class TLBShootdownContext
+{
+public:
+    using page_ptr = u64;
+    struct range {
+        page_ptr start;
+        page_ptr size;
+    };
+
+    static TLBShootdownContext create_userspace(Page_Table &page_table);
+    static TLBShootdownContext create_kernel();
+
+    inline ~TLBShootdownContext() { finalize(); }
+    void invalidate_range(page_ptr start, page_ptr size);
+    void invalidate_page(page_ptr page);
+
+    constexpr static short MAX_PAGES  = 512;
+    constexpr static short MAX_RANGES = 16;
+
+    bool flush_all() const;
+    bool empty() const;
+    bool for_kernel() const;
+
+    template<auto TLBShootdownContext:: *array, short TLBShootdownContext:: *count> struct iter {
+        TLBShootdownContext &ctx;
+        inline auto begin() { return ctx.*array; }
+        inline auto end() { return ctx.*array + ctx.*count; }
+    };
+
+    inline auto iterate_over_pages()
+    {
+        return iter<&TLBShootdownContext::pages, &TLBShootdownContext::pages_count> {*this};
+    }
+
+    inline auto iterate_over_ranges()
+    {
+        return iter<&TLBShootdownContext::ranges, &TLBShootdownContext::ranges_count> {*this};
+    }
+
+    void finalize();
+private:
+    Page_Table *page_table = nullptr;
+
+    short pages_count  = 0;
+    short ranges_count = 0;
+
+    page_ptr pages[MAX_PAGES]   = {};
+    range ranges[MAX_RANGES] = {};
+
+    TLBShootdownContext() = default;
+
+    inline const Page_Table *context_for() const { return page_table; }
+
+    TLBShootdownContext(const TLBShootdownContext &) = delete;
+    TLBShootdownContext(TLBShootdownContext &&)      = default;
 };
 
 struct Mem_Object_Reference;
@@ -154,7 +215,7 @@ public:
 
     // Releases the memory regions in the given range (and their memory). If in the middle of the
     // region, it is split
-    kresult_t release_in_range(u64 start, u64 size);
+    kresult_t release_in_range(TLBShootdownContext &ctx, u64 start, u64 size);
     kresult_t atomic_release_in_range(u64 start, u64 size);
 
     /**
@@ -393,7 +454,8 @@ public:
      * @param new_access The protections that the pages should have after being moved to the new
      * page table
      */
-    [[nodiscard]] kresult_t move_pages(const klib::shared_ptr<Page_Table> &to, size_t from_addr,
+    [[nodiscard]] kresult_t move_pages(TLBShootdownContext &ctx,
+                                       const klib::shared_ptr<Page_Table> &to, size_t from_addr,
                                        size_t to_addr, size_t size_bytes, u8 new_access) noexcept;
 
     /**
@@ -475,7 +537,9 @@ public:
      *
      * @param page Page to be invalidated
      */
-    virtual void invalidate_tlb(u64 page) = 0;
+    virtual void invalidate_tlb(u64 page)            = 0;
+    virtual void invalidate_tlb(u64 start, u64 size) = 0;
+    virtual void tlb_flush_all() = 0;
 
     /**
      * @brief Copies the data from kernel to the user space
@@ -496,13 +560,20 @@ public:
     /// @brief Checks if the pages exists and invalidates it, invalidating TLB entries if needed
     /// @param virt_addr Virtual address of the page
     /// @param free Indicates whether the page should be freed or not after invalidating
-    virtual void invalidate(u64 virt_addr, bool free) = 0;
+    virtual void invalidate(TLBShootdownContext &ctx, u64 virt_addr, bool free) = 0;
 
     /// @brief Invalidates the pages in the given range, also invalidating TLB entries as needed.
     /// @param virt_addr Virtual address of the start of the region that should be invalidated
     /// @param size_bytes Size of the regions in bytes
     /// @param free Indicates whether the pages should be freed after being invalidated
-    virtual void invalidate_range(u64 virt_addr, u64 size_bytes, bool free) = 0;
+    virtual void invalidate_range(TLBShootdownContext &ctx, u64 virt_addr, u64 size_bytes,
+                                  bool free) = 0;
+
+    void /* generation */ apply_cpu(CPU_Info *cpu);
+    void unapply_cpu(CPU_Info *cpu);
+
+    // TODO: Calling this on page table is weird
+    void trigger_shootdown(CPU_Info *cpu);
 
 protected:
     Page_Table() = default;
@@ -527,7 +598,19 @@ protected:
 
     // TODO: This is not good
     friend struct Mem_Object_Reference;
+
+    CriticalSpinlock active_cpus_lock;
+    int paging_generation    = 0;
+    int active_cpus_count[2] = {0, 0};
+    using list =
+        pmos::containers::InitializedCircularDoubleList<CPU_Info, &CPU_Info::active_page_table>;
+    list active_cpus[2]                       = {};
+    TLBShootdownContext *shootdown_descriptor = nullptr;
+
+    friend class TLBShootdownContext;
 };
+
+extern int kernel_pt_generation;
 
 // Arch-generic pointer to the physical address of the top-level page table
 using ptable_top_ptr_t = u64;
@@ -538,7 +621,7 @@ kresult_t map_page(ptable_top_ptr_t page_table, u64 phys_addr, u64 virt_addr,
 
 // Generic functions to map and release pages in kernel, using the active page table
 kresult_t map_kernel_page(u64 phys_addr, void *virt_addr, Page_Table_Argumments arg);
-kresult_t unmap_kernel_page(void *virt_addr);
+kresult_t unmap_kernel_page(TLBShootdownContext &ctx, void *virt_addr);
 
 // Generic function to map multiple pages
 kresult_t map_pages(ptable_top_ptr_t page_table, u64 phys_addr, u64 virt_addr, u64 size_bytes,
@@ -547,3 +630,8 @@ kresult_t map_kernel_pages(u64 phys_addr, u64 virt_addr, u64 size, Page_Table_Ar
 
 // Generic function to apply the page table to the current CPU
 void apply_page_table(ptable_top_ptr_t page_table);
+
+// Functions to be defined by the architecture to invalidate the TLB entries for kernel pages
+// (i.e. those that have global bit set on x86)
+void invalidate_tlb_kernel(u64 start);
+void invalidate_tlb_kernel(u64 start, u64 size);

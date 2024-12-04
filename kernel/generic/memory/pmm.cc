@@ -3,6 +3,7 @@
 #include "bsearch.hh"
 
 #include <sched/sched.hh>
+#include <memory/paging.hh>
 
 using namespace kernel;
 using namespace kernel::pmm;

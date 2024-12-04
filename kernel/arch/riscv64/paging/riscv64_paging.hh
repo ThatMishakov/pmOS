@@ -81,6 +81,8 @@ struct RISCV64_PTE {
     void clear_auto();
 } __attribute__((packed, aligned(8)));
 
+class TLBShootdownContext;
+
 // Active number of paging levels of the system, e.g. 4 for SV48.
 // At this moment, 4 is hardcoded, but this can be adjusted during the boot
 // tu support SV57 or SV39 on systems with little memory
@@ -103,7 +105,7 @@ kresult_t riscv_map_page(u64 pt_top_phys, void *virt_addr, u64 phys_addr, Page_T
 
 // Unmaps the page from the given virtual address, using the available temporary
 // maper. If the page is not special, it's freed
-kresult_t riscv_unmap_page(u64 pt_top_phys, void *virt_addr);
+kresult_t riscv_unmap_page(TLBShootdownContext &ctx, u64 pt_top_phys, void *virt_addr);
 
 // Gets the top level page table pointer for the current hart
 u64 get_current_hart_pt() noexcept;
@@ -175,14 +177,14 @@ public:
     /// allocator
     /// @param virt_addr Virtual address of the page
     /// @param free Whether the page needs to be freed
-    void invalidate(u64 virt_addr, bool free) noexcept override;
+    void invalidate(TLBShootdownContext &ctx, u64 virt_addr, bool free) noexcept override;
 
     /// Checks if the page is mapped
     bool is_mapped(u64 virt_addr) const noexcept override;
 
     Page_Info get_page_mapping(u64 virt_addr) const override;
 
-    virtual void invalidate_range(u64 virt_addr, u64 size_bytes, bool free) override;
+    virtual void invalidate_range(TLBShootdownContext &ctx, u64 virt_addr, u64 size_bytes, bool free) override;
 
     virtual kresult_t map(u64 page_addr, u64 virt_addr, Page_Table_Argumments arg) override;
     virtual kresult_t map(kernel::pmm::Page_Descriptor page, u64 virt_addr, Page_Table_Argumments arg) override;
@@ -191,6 +193,8 @@ public:
 
     // Clears the TLB cache for the given page
     void invalidate_tlb(u64 page) override;
+    void invalidate_tlb(u64 start, u64 size) override;
+    void tlb_flush_all() override;
 
     ReturnStr<bool> atomic_copy_to_user(u64 to, const void *from, u64 size) override;
 
