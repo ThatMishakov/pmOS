@@ -729,7 +729,7 @@ klib::shared_ptr<RISCV64_Page_Table> RISCV64_Page_Table::create_empty()
 #include <kern_logger/kern_logger.hh>
 void RISCV64_Page_Table::invalidate_tlb(u64 page)
 {
-    serial_logger.printf("Invalidating TLB for page %p\n", page);
+    serial_logger.printf("Invalidating TLB for page %p CPU %i\n", page, get_cpu_struct()->cpu_id);
     flush_page((void *)page);
 }
 

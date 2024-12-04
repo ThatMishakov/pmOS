@@ -507,12 +507,13 @@ void Page_Table::unapply_cpu(CPU_Info *cpu)
     assert(cpu == get_cpu_struct());
     assert(cpu->page_table_generation != -1); // Assert it is in the list
 
+    auto generation = cpu->page_table_generation;
     Auto_Lock_Scope l(active_cpus_lock);
-    auto count = __atomic_sub_fetch(&active_cpus_count[paging_generation], 1, __ATOMIC_RELAXED);
+    auto count = __atomic_sub_fetch(&active_cpus_count[generation], 1, __ATOMIC_RELAXED);
     assert(count >= 0);
 
     cpu->page_table_generation = -1;
-    active_cpus[paging_generation].remove(cpu);
+    active_cpus[generation].remove(cpu);
 }
 
 void Page_Table::trigger_shootdown(CPU_Info *cpu)
@@ -524,18 +525,14 @@ void Page_Table::trigger_shootdown(CPU_Info *cpu)
 
     Auto_Lock_Scope l(active_cpus_lock);
 
-    serial_logger.printf("CPU %i shootdown started\n", cpu->cpu_id);
-
     if (paging_generation == cpu->page_table_generation)
         return;
-
-    serial_logger.printf("Different generation\n");
 
     auto current_generation = cpu->page_table_generation;
     auto next_generation    = current_generation == 0 ? 1 : 0;
 
     assert(shootdown_descriptor != nullptr);
-    auto desc = *shootdown_descriptor;
+    auto &desc = *shootdown_descriptor;
 
     if (desc.flush_all()) {
         tlb_flush_all();
@@ -547,24 +544,20 @@ void Page_Table::trigger_shootdown(CPU_Info *cpu)
             invalidate_tlb(range.start, range.size);
     }
 
-    serial_logger.printf("CPU %i shootdown done\n", cpu->cpu_id);
-
     // Make sure the invalidation is done before the generation change
     __sync_synchronize();
 
     // I think the order shouldn't matter
-    __atomic_add_fetch(&active_cpus_count[next_generation], active_cpus_count[current_generation],
-                       __ATOMIC_RELAXED);
+    __atomic_add_fetch(&active_cpus_count[next_generation], 1, __ATOMIC_RELAXED);
 
     active_cpus[current_generation].remove(cpu);
     active_cpus[next_generation].push_back(cpu);
 
+    cpu->page_table_generation = next_generation;
+
     // Not sure about the order here though
     // TODO: ???
-    __atomic_sub_fetch(&active_cpus_count[current_generation],
-                       active_cpus_count[current_generation], __ATOMIC_RELEASE);
-
-    serial_logger.printf("Returning...\n");
+    __atomic_sub_fetch(&active_cpus_count[current_generation], 1, __ATOMIC_RELEASE);
 }
 
 kresult_t Page_Table::atomic_pin_memory_object(klib::shared_ptr<Mem_Object> object)
@@ -718,16 +711,17 @@ void TLBShootdownContext::finalize()
 
     int old_generation;
 
-    serial_logger.printf("TLB shootdown for page table %p by CPU %i\n", page_table->id, get_cpu_struct()->cpu_id);
+    serial_logger.printf("----------------------------------- TLB shootdown for page table %p by CPU %i\n", page_table->id,
+                         get_cpu_struct()->cpu_id);
 
     Auto_Lock_Scope l(barrier);
 
     {
         Auto_Lock_Scope l2(page_table->active_cpus_lock);
         // flip generation and notify other CPUs
-        old_generation                = page_table->paging_generation;
-        page_table->paging_generation = page_table->paging_generation == 0 ? 1 : 0;
-        page_table->shootdown_descriptor          = this;
+        old_generation                   = page_table->paging_generation;
+        page_table->paging_generation    = page_table->paging_generation == 0 ? 1 : 0;
+        page_table->shootdown_descriptor = this;
 
         for (auto &cpu: page_table->active_cpus[old_generation]) {
             if (&cpu == my_cpu)
@@ -749,5 +743,5 @@ void TLBShootdownContext::finalize()
     while (__atomic_load_n(&page_table->active_cpus_count[old_generation], __ATOMIC_ACQUIRE))
         spin_pause();
 
-    serial_logger.printf("TLB shootdown done\n");
+    serial_logger.printf("-------------------------------------- TLB shootdown done\n");
 }

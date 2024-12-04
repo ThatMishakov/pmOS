@@ -87,6 +87,7 @@ void test_threads()
 
 extern "C" void test_qsort();
 extern "C" void test_pipe();
+extern "C" void test_tlb_shootdown();
 
 void run_tests()
 {
@@ -113,6 +114,8 @@ int main()
     sleep(1);
     printf("Starting tests...\n");
     tick();
+
+    test_tlb_shootdown();
 
     test_threads();
 

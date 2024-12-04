@@ -122,6 +122,9 @@ private:
     void finalize();
 
     inline const Page_Table *context_for() const { return page_table; }
+
+    TLBShootdownContext(const TLBShootdownContext &) = delete;
+    TLBShootdownContext(TLBShootdownContext &&)      = default;
 };
 
 struct Mem_Object_Reference;
