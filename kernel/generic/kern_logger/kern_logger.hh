@@ -36,7 +36,8 @@
 /// @brief A generic logger object, which is then extended into different log handlers, available in
 /// different environments.
 struct Logger {
-    Spinlock logger_lock;
+    // deadlock on TLB shootdown ? (noting this to think about it later)
+    CriticalSpinlock logger_lock;
 
     /// C standart library-like printf, which prints to the logger. Locks logger_lock for thread
     /// safety.

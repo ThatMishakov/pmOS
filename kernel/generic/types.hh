@@ -185,6 +185,10 @@ struct Lock_Guard_Simul {
     }
 };
 
+inline void spin_pause()
+{
+}
+
 inline constexpr auto PAGE_ORDER = 12;
 inline constexpr auto PAGE_SIZE  = 4096;
 

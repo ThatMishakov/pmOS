@@ -34,8 +34,8 @@
 #include <memory/mem_object.hh>
 #include <memory/pmm.hh>
 #include <memory/temp_mapper.hh>
-#include <processes/tasks.hh>
 #include <pmos/utility/scope_guard.hh>
+#include <processes/tasks.hh>
 
 using namespace kernel;
 
@@ -201,7 +201,7 @@ kresult_t riscv_unmap_page(u64 pt_top_phys, void *virt_addr)
     return -ENOSYS;
 }
 
-void RISCV64_Page_Table::invalidate(u64 virt_addr, bool free) noexcept
+void RISCV64_Page_Table::invalidate(TLBShootdownContext &ctx, u64 virt_addr, bool free) noexcept
 {
     bool invalidated = false;
     Temp_Mapper_Obj<RISCV64_PTE> mapper(request_temp_mapper());
@@ -242,7 +242,7 @@ void RISCV64_Page_Table::invalidate(u64 virt_addr, bool free) noexcept
     }
 
     if (invalidated)
-        flush_page((void *)virt_addr);
+        ctx.invalidate_page(virt_addr);
 }
 
 bool RISCV64_Page_Table::is_mapped(u64 virt_addr) const noexcept
@@ -349,8 +349,10 @@ kresult_t RISCV64_Page_Table::copy_pages(const klib::shared_ptr<Page_Table> &to,
     u64 offset  = 0;
     auto result = copy_to_recursive(to, table_root, from_addr, to_addr, size_bytes, access, to_addr,
                                     riscv64_paging_levels, offset);
-    if (result != 0)
-        to->invalidate_range(to_addr, offset, true);
+    if (result != 0) {
+        auto ctx = TLBShootdownContext::create_userspace(*to);
+        to->invalidate_range(ctx, to_addr, offset, true);
+    }
 
     return result;
 }
@@ -541,7 +543,8 @@ klib::shared_ptr<RISCV64_Page_Table> RISCV64_Page_Table::create_clone()
 
     Auto_Lock_Scope_Double(this->lock, new_table->lock);
 
-    if (!new_table->mem_objects.empty() || !new_table->object_regions.empty() || !new_table->paging_regions.empty())
+    if (!new_table->mem_objects.empty() || !new_table->object_regions.empty() ||
+        !new_table->paging_regions.empty())
         // Somebody has messed with the page table while it was being created
         // I don't know if it's the best solution to not block the tables
         // immediately but I believe it's better to block them for shorter time
@@ -560,6 +563,8 @@ klib::shared_ptr<RISCV64_Page_Table> RISCV64_Page_Table::create_clone()
         for (const auto &reg: new_table->mem_objects)
             reg.first->atomic_unregister_pined(new_table->weak_from_this());
 
+        auto tlb_ctx = TLBShootdownContext::create_userspace(*new_table);
+
         auto it = new_table->paging_regions.begin();
         while (it != new_table->paging_regions.end()) {
             auto region_start = it->start_addr;
@@ -568,7 +573,7 @@ klib::shared_ptr<RISCV64_Page_Table> RISCV64_Page_Table::create_clone()
             it->prepare_deletion();
             new_table->paging_regions.erase(it);
 
-            new_table->invalidate_range(region_start, region_size, true);
+            new_table->invalidate_range(tlb_ctx, region_start, region_size, true);
 
             it = new_table->paging_regions.begin();
         }
@@ -625,12 +630,13 @@ u64 RISCV64_Page_Table::user_addr_max() const noexcept
     return 1UL << (12 + (riscv64_paging_levels * 9) - 1);
 }
 
-void RISCV64_Page_Table::invalidate_range(u64 virt_addr, u64 size_bytes, bool free)
+void RISCV64_Page_Table::invalidate_range(TLBShootdownContext &ctx, u64 virt_addr, u64 size_bytes,
+                                          bool free)
 {
     // Slow but doesn't matter for now
     u64 end = virt_addr + size_bytes;
     for (u64 i = virt_addr; i < end; i += 4096)
-        invalidate(i, free);
+        invalidate(ctx, i, free);
 }
 
 RISCV64_Page_Table::~RISCV64_Page_Table()
@@ -720,10 +726,17 @@ klib::shared_ptr<RISCV64_Page_Table> RISCV64_Page_Table::create_empty()
     return result ? nullptr : new_table;
 }
 
-void RISCV64_Page_Table::invalidate_tlb(u64 page) { flush_page((void *)page); }
-void RISCV64_Page_Table::invalidate_tlb(u64 page, u64 size) {
+#include <kern_logger/kern_logger.hh>
+void RISCV64_Page_Table::invalidate_tlb(u64 page)
+{
+    serial_logger.printf("Invalidating TLB for page %p\n", page);
+    flush_page((void *)page);
+}
+
+void RISCV64_Page_Table::invalidate_tlb(u64 page, u64 size)
+{
     // At a certain threshold, flush all the pages
-    if (size/0x1000 > 128) {
+    if (size / 0x1000 > 128) {
         flush_all();
         return;
     }
@@ -732,6 +745,7 @@ void RISCV64_Page_Table::invalidate_tlb(u64 page, u64 size) {
         flush_page((void *)i);
     }
 }
+void RISCV64_Page_Table::tlb_flush_all() { flush_all(); }
 
 ReturnStr<bool> RISCV64_Page_Table::atomic_copy_to_user(u64 to, const void *from, u64 size)
 {

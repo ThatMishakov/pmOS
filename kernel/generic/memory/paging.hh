@@ -69,6 +69,61 @@ struct Mem_Object_Data {
     u8 max_privilege_mask = 0;
 };
 
+class Page_Table;
+
+class TLBShootdownContext
+{
+public:
+    using page_ptr = u64;
+    struct range {
+        page_ptr start;
+        page_ptr size;
+    };
+
+    static TLBShootdownContext create_userspace(Page_Table &page_table);
+    static TLBShootdownContext create_kernel();
+
+    inline ~TLBShootdownContext() { finalize(); }
+    void invalidate_range(page_ptr start, page_ptr size);
+    void invalidate_page(page_ptr page);
+
+    constexpr static short MAX_PAGES  = 512;
+    constexpr static short MAX_RANGES = 16;
+
+    bool flush_all() const;
+    bool empty() const;
+
+    template<auto TLBShootdownContext:: *array, short TLBShootdownContext:: *count> struct iter {
+        TLBShootdownContext &ctx;
+        inline auto begin() { return ctx.*array; }
+        inline auto end() { return ctx.*array + ctx.*count; }
+    };
+
+    inline auto iterate_over_pages()
+    {
+        return iter<&TLBShootdownContext::pages, &TLBShootdownContext::pages_count> {*this};
+    }
+
+    inline auto iterate_over_ranges()
+    {
+        return iter<&TLBShootdownContext::ranges, &TLBShootdownContext::ranges_count> {*this};
+    }
+
+private:
+    Page_Table *page_table = nullptr;
+
+    short pages_count  = 0;
+    short ranges_count = 0;
+
+    page_ptr pages[MAX_PAGES]   = {};
+    range ranges[MAX_RANGES] = {};
+
+    TLBShootdownContext() = default;
+    void finalize();
+
+    inline const Page_Table *context_for() const { return page_table; }
+};
+
 struct Mem_Object_Reference;
 struct Private_Normal_Region;
 
@@ -156,7 +211,7 @@ public:
 
     // Releases the memory regions in the given range (and their memory). If in the middle of the
     // region, it is split
-    kresult_t release_in_range(u64 start, u64 size);
+    kresult_t release_in_range(TLBShootdownContext &ctx, u64 start, u64 size);
     kresult_t atomic_release_in_range(u64 start, u64 size);
 
     /**
@@ -395,7 +450,8 @@ public:
      * @param new_access The protections that the pages should have after being moved to the new
      * page table
      */
-    [[nodiscard]] kresult_t move_pages(const klib::shared_ptr<Page_Table> &to, size_t from_addr,
+    [[nodiscard]] kresult_t move_pages(TLBShootdownContext &ctx,
+                                       const klib::shared_ptr<Page_Table> &to, size_t from_addr,
                                        size_t to_addr, size_t size_bytes, u8 new_access) noexcept;
 
     /**
@@ -477,8 +533,9 @@ public:
      *
      * @param page Page to be invalidated
      */
-    virtual void invalidate_tlb(u64 page) = 0;
+    virtual void invalidate_tlb(u64 page)            = 0;
     virtual void invalidate_tlb(u64 start, u64 size) = 0;
+    virtual void tlb_flush_all() = 0;
 
     /**
      * @brief Copies the data from kernel to the user space
@@ -499,13 +556,14 @@ public:
     /// @brief Checks if the pages exists and invalidates it, invalidating TLB entries if needed
     /// @param virt_addr Virtual address of the page
     /// @param free Indicates whether the page should be freed or not after invalidating
-    virtual void invalidate(u64 virt_addr, bool free) = 0;
+    virtual void invalidate(TLBShootdownContext &ctx, u64 virt_addr, bool free) = 0;
 
     /// @brief Invalidates the pages in the given range, also invalidating TLB entries as needed.
     /// @param virt_addr Virtual address of the start of the region that should be invalidated
     /// @param size_bytes Size of the regions in bytes
     /// @param free Indicates whether the pages should be freed after being invalidated
-    virtual void invalidate_range(u64 virt_addr, u64 size_bytes, bool free) = 0;
+    virtual void invalidate_range(TLBShootdownContext &ctx, u64 virt_addr, u64 size_bytes,
+                                  bool free) = 0;
 
     void /* generation */ apply_cpu(CPU_Info *cpu);
     void unapply_cpu(CPU_Info *cpu);
@@ -535,19 +593,15 @@ protected:
     // TODO: This is not good
     friend struct Mem_Object_Reference;
 
-    struct ShootdownDesc {
-        // In theory, 64 bit userspace can happen with 32 bit kernel (?)
-        uint64_t start;
-        uint64_t size;
-    };
-
     CriticalSpinlock active_cpus_lock;
     int paging_generation    = 0;
     int active_cpus_count[2] = {0, 0};
     using list =
         pmos::containers::InitializedCircularDoubleList<CPU_Info, &CPU_Info::active_page_table>;
-    list active_cpus[2] = {};
-    ShootdownDesc *shootdown_descriptor = nullptr;
+    list active_cpus[2]                       = {};
+    TLBShootdownContext *shootdown_descriptor = nullptr;
+
+    friend class TLBShootdownContext;
 };
 
 // Arch-generic pointer to the physical address of the top-level page table

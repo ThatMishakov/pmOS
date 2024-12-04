@@ -148,6 +148,7 @@ struct CPU_Info {
     priority_t current_task_priority = sched_queues_levels;
 
     void ipi_reschedule(); // nothrow ?
+    void ipi_tlb_shootdown();
 
     // TODO: Replace this with multimap
     klib::splay_tree_map<u64 /* next clock tick */, u64 /* port id */> timer_queue;

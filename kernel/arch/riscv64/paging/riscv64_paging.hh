@@ -175,14 +175,14 @@ public:
     /// allocator
     /// @param virt_addr Virtual address of the page
     /// @param free Whether the page needs to be freed
-    void invalidate(u64 virt_addr, bool free) noexcept override;
+    void invalidate(TLBShootdownContext &ctx, u64 virt_addr, bool free) noexcept override;
 
     /// Checks if the page is mapped
     bool is_mapped(u64 virt_addr) const noexcept override;
 
     Page_Info get_page_mapping(u64 virt_addr) const override;
 
-    virtual void invalidate_range(u64 virt_addr, u64 size_bytes, bool free) override;
+    virtual void invalidate_range(TLBShootdownContext &ctx, u64 virt_addr, u64 size_bytes, bool free) override;
 
     virtual kresult_t map(u64 page_addr, u64 virt_addr, Page_Table_Argumments arg) override;
     virtual kresult_t map(kernel::pmm::Page_Descriptor page, u64 virt_addr, Page_Table_Argumments arg) override;
@@ -192,6 +192,7 @@ public:
     // Clears the TLB cache for the given page
     void invalidate_tlb(u64 page) override;
     void invalidate_tlb(u64 start, u64 size) override;
+    void tlb_flush_all() override;
 
     ReturnStr<bool> atomic_copy_to_user(u64 to, const void *from, u64 size) override;
 
