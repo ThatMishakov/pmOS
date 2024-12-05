@@ -1,13 +1,13 @@
 cmake_minimum_required(VERSION 3.22)
 
 if (NOT DEFINED TARGET_ARCH)
-    set(TARGET_ARCH "x86_64" CACHE STRING "Target architecture (x86_64 or riscv64)")
+    set(TARGET_ARCH "x86_64" CACHE STRING "Target architecture (x86_64, x86 or riscv64)")
 endif()
 set(TOOLCHAIN_PREFIX "${TARGET_ARCH}-pmos")
 
 set(CMAKE_C_COMPILER "clang")
 set(CMAKE_ASM_COMPILER "clang")
-set(CMAKE_AR "${TOOLCHAIN_PREFIX}-ar")
+set(CMAKE_AR "llvm-ar")
 
 SET(CMAKE_C_COMPILER_TARGET ${TOOLCHAIN_PREFIX})
 SET(CMAKE_ASM_COMPILER_TARGET ${TOOLCHAIN_PREFIX})

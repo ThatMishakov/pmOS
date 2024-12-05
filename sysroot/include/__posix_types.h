@@ -46,8 +46,12 @@ typedef int wchar_t;
 
 #if defined(__DECLARE_SIZE_T) && !defined(__DECLARED_SIZE_T)
 // && !defined(__SIZE_TYPE__) // GCC stddef.h craziness
-typedef long unsigned int size_t;
-    #define __DECLARED_SIZE_T
+#ifdef __i386__
+typedef unsigned int size_t;
+#else
+typedef unsigned long size_t;
+#endif
+#define __DECLARED_SIZE_T
 #endif
 
 #if defined(__DECLARE_SSIZE_T) && !defined(__DECLARED_SSIZE_T)

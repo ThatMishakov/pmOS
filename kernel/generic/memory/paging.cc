@@ -738,7 +738,7 @@ void TLBShootdownContext::finalize()
            !"CPU struct is not working (kernel uninitialized) and invalidating userspace pages");
 
     if (for_kernel()) {
-        if (!cpu_struct_works || other_cpus_online) {
+        if (!cpu_struct_works || !other_cpus_online) {
             // Just flush the pages and call it a day
             for (auto page: iterate_over_pages())
                 invalidate_tlb_kernel(page);
