@@ -60,8 +60,12 @@ typedef long ssize_t;
 #endif
 
 #if defined(__DECLARE_PTRDIFF_T) && !defined(__DECLARED_PTRDIFF_T)
+#ifdef __i386__
+typedef int ptrdiff_t;
+#else
 typedef long ptrdiff_t;
-    #define __DECLARED_PTRDIFF_T
+#endif
+#define __DECLARED_PTRDIFF_T
 #endif
 
 #if defined(__DECLARE_OFF_T) && !defined(__DECLARED_OFF_T)
