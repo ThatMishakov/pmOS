@@ -34,7 +34,7 @@ unsigned long long int wcstoull(const wchar_t *nptr, wchar_t **endptr, int base)
     long long int cutlim = ULLONG_MAX % base;
 
     int k           = 0;
-    long int result = 0;
+    long long int result = 0;
     while (c) {
         if (iswdigit(c)) {
             c -= L'0';

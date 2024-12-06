@@ -25,7 +25,7 @@ ASMFLAGS = -I$(INCLUDEDIR) $(TARGETFLAGS)
 LDFLAGS = $(INTERNALLDFLAGS) $(TARGETFLAGS)
 
 # Internal link flags that should not be changed by the user.
-INTERNALLDFLAGS :=
+INTERNALLDFLAGS := -lclang_rt.builtins-i386
  
 # Internal C flags that should not be changed by the user.
 INTERNALCFLAGS  :=       \

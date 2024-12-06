@@ -49,4 +49,9 @@ void _assert_fail(const char *condition, const char *file, unsigned int line);
         } while (0)
 #endif
 
+// static_assert before C23
+#if __STDC_VERSION__ < 202300L
+    #define static_assert _Static_assert
+#endif
+
 #endif /* _ASSERT_H */
