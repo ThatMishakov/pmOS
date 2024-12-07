@@ -472,7 +472,7 @@ int main()
             write_queue.push({
                 std::move(msg_buff),
                 sizeof(IPC_Write_Plain),
-                msg.size,
+                (size_t)msg.size,
             });
             if (!writing)
                 check_tx();

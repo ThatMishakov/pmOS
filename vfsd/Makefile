@@ -33,6 +33,8 @@ INTERNALCFLAGS  :=       \
 
 ifeq ($(ARCH), riscv64)
 	INTERNALCFLAGS += -march=rva20u64 -mabi=lp64d
+else ifneq ($(filter i%86 x86,$(ARCH)),)
+	LDFLAGS += -lclang_rt.builtins-i386
 endif
  
 # Use find to glob all *.c files in the directory and extract the object names.

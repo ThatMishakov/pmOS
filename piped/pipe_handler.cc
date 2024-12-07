@@ -134,7 +134,7 @@ void read_pipe(std::unique_ptr<char[]> ipc_msg, Message_Descriptor desc)
             try {
                 pipe_data.pending_readers.push_back(Pipe::PendingReader {
                     .consumer_id = r.fs_consumer_id,
-                    .max_bytes   = r.max_size,
+                    .max_bytes   = static_cast<size_t>(r.max_size),
                     .reply_port  = r.reply_port,
                 });
 
@@ -146,7 +146,7 @@ void read_pipe(std::unique_ptr<char[]> ipc_msg, Message_Descriptor desc)
             return;
         }
 
-        const auto bytes_to_read = std::min(r.max_size, pipe_data.buffered_bytes);
+        const auto bytes_to_read = std::min(static_cast<size_t>(r.max_size), pipe_data.buffered_bytes);
         std::unique_ptr<char[]> reply_buff;
         try {
             reply_buff = std::make_unique<char[]>(sizeof(IPC_Read_Reply) + bytes_to_read);
@@ -259,7 +259,7 @@ void write_pipe(std::unique_ptr<char[]> ipc_msg, Message_Descriptor desc)
             pipe_data.buffered_messages.push_back(MessageBuffer {
                 .message        = std::move(ipc_msg),
                 .start_position = sizeof(IPC_Write),
-                .size           = desc.size,
+                .size           = static_cast<size_t>(desc.size),
             });
         } catch (std::bad_alloc &e) {
             write_reply_error(r.reply_port, ENOMEM);
