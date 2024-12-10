@@ -13,4 +13,3 @@ debug: all
 
 clean:
 	rm $(TARGET)
-

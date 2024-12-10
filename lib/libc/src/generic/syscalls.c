@@ -45,12 +45,12 @@ result_t send_message_port(u64 port, size_t size, const void *message)
 
 result_t get_first_message(char *buff, u64 args, u64 port)
 {
-    return pmos_syscall(SYSCALL_GET_MESSAGE, buff, args, port).result;
+    return pmos_syscall(SYSCALL_GET_MESSAGE | args << 8, port, buff).result;
 }
 
 result_t syscall_get_message_info(Message_Descriptor *descr, u64 port, uint32_t flags)
 {
-    return pmos_syscall(SYSCALL_GET_MSG_INFO, descr, port, flags).result;
+    return pmos_syscall(SYSCALL_GET_MSG_INFO | (flags << 8), port, descr).result;
 }
 
 u64 get_task_id() { return pmos_syscall(SYSCALL_GET_TASK_ID).value; }
@@ -64,7 +64,7 @@ syscall_r get_lapic_id(uint64_t cpu_id) { return pmos_syscall(SYSCALL_GET_LAPIC_
 
 ports_request_t create_port(pid_t owner, uint64_t flags)
 {
-    syscall_r r       = pmos_syscall(SYSCALL_CREATE_PORT, owner, flags);
+    syscall_r r       = pmos_syscall(SYSCALL_CREATE_PORT | (flags << 8), owner);
     ports_request_t t = {r.result, r.value};
     return t;
 }
@@ -78,7 +78,7 @@ ports_request_t get_port_by_name(const char *name, u64 length, u32 flags)
 
 syscall_r set_interrupt(pmos_port_t port, uint32_t intno, uint32_t flags)
 {
-    return pmos_syscall(SYSCALL_SET_INTERRUPT, port, intno, flags);
+    return pmos_syscall(SYSCALL_SET_INTERRUPT | (flags << 8), port, intno);
 }
 
 result_t name_port(pmos_port_t portnum, const char *name, size_t length, u32 flags)
@@ -88,14 +88,14 @@ result_t name_port(pmos_port_t portnum, const char *name, size_t length, u32 fla
 
 result_t set_log_port(pmos_port_t port, uint32_t flags)
 {
-    return pmos_syscall(SYSCALL_SET_LOG_PORT, port, flags).result;
+    return pmos_syscall(SYSCALL_SET_LOG_PORT | (flags << 8), port).result;
 }
 
 mem_request_ret_t create_phys_map_region(uint64_t pid, void *addr_start, size_t size,
                                          uint64_t access, void *phys_addr)
 {
     syscall_r r =
-        pmos_syscall(SYSCALL_CREATE_PHYS_REGION, pid, addr_start, size, access, phys_addr);
+        pmos_syscall(SYSCALL_CREATE_PHYS_REGION | access << 8, pid, phys_addr, addr_start, size);
     mem_request_ret_t t = {r.result, (void *)r.value};
     return t;
 }
@@ -109,7 +109,7 @@ mem_request_ret_t create_normal_region(uint64_t pid, void *addr_start, size_t si
 
 mem_request_ret_t transfer_region(uint64_t to_page_table, void *region, void *dest, uint64_t flags)
 {
-    syscall_r r         = pmos_syscall(SYSCALL_TRANSFER_REGION, to_page_table, region, dest, flags);
+    syscall_r r         = pmos_syscall(SYSCALL_TRANSFER_REGION | (flags << 8), to_page_table, region, dest);
     mem_request_ret_t t = {r.result, (void *)r.value};
     return t;
 }
@@ -117,8 +117,7 @@ mem_request_ret_t transfer_region(uint64_t to_page_table, void *region, void *de
 mem_request_ret_t map_mem_object(uint64_t page_table_id, void *addr_start, size_t size,
                                  uint64_t access, mem_object_t object_id, size_t offset)
 {
-    syscall_r r = pmos_syscall(SYSCALL_MAP_MEM_OBJECT, page_table_id, addr_start, size, access,
-                               object_id, offset);
+    syscall_r r = pmos_syscall(SYSCALL_MAP_MEM_OBJECT | (access << 8), page_table_id, object_id, offset, addr_start, size);
     mem_request_ret_t t = {r.result, (void *)r.value};
     return t;
 }
@@ -142,7 +141,7 @@ page_table_req_ret_t get_page_table(uint64_t pid)
 
 page_table_req_ret_t asign_page_table(uint64_t pid, uint64_t page_table, uint64_t flags)
 {
-    syscall_r r            = pmos_syscall(SYSCALL_ASIGN_PAGE_TABLE, pid, page_table, flags);
+    syscall_r r            = pmos_syscall(SYSCALL_ASIGN_PAGE_TABLE | (flags << 8), pid, page_table);
     page_table_req_ret_t t = {r.result, r.value};
     return t;
 }
@@ -183,7 +182,7 @@ result_t syscall_start_process(uint64_t pid, uint64_t entry, uint64_t arg1, uint
 syscall_r set_task_group_notifier_mask(uint64_t task_group_id, pmos_port_t port_id,
                                        uint64_t new_mask, uint64_t flags)
 {
-    return pmos_syscall(SYSCALL_SET_NOTIFY_MASK, task_group_id, port_id, new_mask, flags);
+    return pmos_syscall(SYSCALL_SET_NOTIFY_MASK | (flags << 8), task_group_id, port_id, new_mask);
 }
 
 int _syscall_exit(unsigned long status1, unsigned long status2)
@@ -196,14 +195,14 @@ result_t syscall_set_task_name(uint64_t tid, const char *name, size_t name_lengt
     return pmos_syscall(SYSCALL_SET_TASK_NAME, tid, name, name_length).result;
 }
 
-result_t syscall_load_executable(uint64_t tid, uint64_t object_id, uint64_t flags)
+result_t syscall_load_executable(uint64_t tid, uint64_t object_id, unsigned flags)
 {
-    return pmos_syscall(SYSCALL_LOAD_EXECUTABLE, tid, object_id, flags).result;
+    return pmos_syscall(SYSCALL_LOAD_EXECUTABLE | (flags << 8), tid, object_id).result;
 }
 
-result_t set_affinity(uint64_t tid, uint64_t cpu_id, uint64_t flags)
+result_t set_affinity(uint64_t tid, uint32_t cpu_id, unsigned flags)
 {
-    return pmos_syscall(SYSCALL_SET_AFFINITY, tid, cpu_id, flags).result;
+    return pmos_syscall(SYSCALL_SET_AFFINITY | (flags << 8), tid, cpu_id).result;
 }
 
 result_t complete_interrupt(uint32_t intno)
@@ -223,9 +222,9 @@ result_t syscall_kill_task(uint64_t tid)
     return pmos_syscall(SYSCALL_KILL_TASK, tid).result;
 }
 
-result_t request_named_port(const char *name, size_t name_length, pmos_port_t reply_port, uint64_t flags)
+result_t request_named_port(const char *name, size_t name_length, pmos_port_t reply_port, unsigned flags)
 {
-    return pmos_syscall(SYSCALL_REQUEST_NAMED_PORT, name, name_length, reply_port, flags).result;
+    return pmos_syscall(SYSCALL_REQUEST_NAMED_PORT | (flags << 8), reply_port, name, name_length).result;
 }
 
 result_t pause_task(uint64_t tid) { return pmos_syscall(SYSCALL_PAUSE_TASK, tid).result; }

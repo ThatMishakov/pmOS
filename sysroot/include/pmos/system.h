@@ -124,7 +124,7 @@ result_t syscall_start_process(uint64_t pid, uint64_t entry, uint64_t arg1, uint
  * @see syscall_start_process()
  * @todo Think of a way to pass the arguments to the executable
  */
-result_t syscall_load_executable(uint64_t tid, uint64_t object_id, uint64_t flags);
+result_t syscall_load_executable(uint64_t tid, uint64_t object_id, uint32_t flags);
 
 /// Sets the name of the task
 result_t syscall_set_task_name(uint64_t tid, const char *name, size_t name_length);
@@ -223,7 +223,7 @@ result_t request_priority(uint64_t priority);
  * @param flags Flags for the operation. Currently unused, must be set to 0.
  * @return result_t result of the operation
  */
-result_t set_affinity(uint64_t tid, uint64_t cpu_id, uint64_t flags);
+result_t set_affinity(uint64_t tid, uint32_t cpu_id, uint32_t flags);
 
 /// Returns the LAPIC id the process is running on when calling the process
 /// This value is not shifted left, so in non-X2APIC it would be lapic id << 24
@@ -358,7 +358,7 @@ syscall_r pmos_get_time(uint64_t mode);
 
 result_t request_timer(pmos_port_t port, size_t after_ns);
 
-result_t request_named_port(const char *name, size_t name_length, pmos_port_t reply_port, uint64_t flags);
+result_t request_named_port(const char *name, size_t name_length, pmos_port_t reply_port, uint32_t flags);
 
 result_t pause_task(uint64_t tid);
 

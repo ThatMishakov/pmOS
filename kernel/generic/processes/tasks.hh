@@ -285,6 +285,8 @@ public:
     // Unblocks the task if it is not already blocked
     void atomic_try_unblock();
 
+    bool is_32bit() const;
+    
 protected:
     TaskDescriptor() = default;
 

@@ -13,4 +13,3 @@ build/kernel: build/CMakeCache.txt
 	make -C build
 
 .PHONY: build/kernel
-
