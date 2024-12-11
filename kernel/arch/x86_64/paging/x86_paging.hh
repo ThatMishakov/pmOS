@@ -106,7 +106,7 @@ public:
      */
     static klib::shared_ptr<x86_4level_Page_Table> capture_initial(u64 root);
 
-    static klib::shared_ptr<x86_4level_Page_Table> create_empty();
+    static klib::shared_ptr<x86_4level_Page_Table> create_empty(int flags = 0);
 
     // Maps the page with the appropriate permissions
     virtual kresult_t map(u64 page_addr, u64 virt_addr, Page_Table_Argumments arg) noexcept override;
@@ -119,7 +119,7 @@ public:
 
     virtual ~x86_4level_Page_Table();
 
-    constexpr u64 user_addr_max() const override { return 0x800000000000; }
+    constexpr u64 user_addr_max() const override { return (flags & FLAG_32BIT) ? 0x100000000 : 0x800000000000 ; }
 
     ReturnStr<u64> phys_addr_of(u64 virt) const;
 
@@ -162,6 +162,8 @@ public:
 
     void apply() noexcept;
 
+    bool is_32bit() const { return flags & FLAG_32BIT; }
+
 protected:
     /// @brief Inserts the page table into the map of the page tables
     static kresult_t insert_global_page_tables(klib::shared_ptr<x86_4level_Page_Table> table);
@@ -189,6 +191,8 @@ protected:
 
     static void map_return_rec_nofree(const x86_PAE_Entry *entry_virt, u64 alignment_log, u64 start,
                                       u64 end, u64 curr_start);
+
+    int flags = 0;
 };
 
 const u16 rec_map_index = 509;

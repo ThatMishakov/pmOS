@@ -183,6 +183,9 @@ public:
     /// ORable flags that can be used to indicate different protection levels.
     using Protection = ::Protection;
 
+    constexpr static int FLAG_32BIT = 1;
+
+
     /// Flags used by regions properties and creation
     enum Flags {
         Fixed   = 0x01,

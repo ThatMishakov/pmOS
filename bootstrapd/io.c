@@ -57,7 +57,7 @@ void set_print_syscalls(uint64_t port)
         unsigned size = length - i > 256 ? 256 : length - i;
         memcpy(msg_str.buff, &str[i], size);
 
-        pmos_syscall(SYSCALL_SEND_MSG_PORT, log_port, size + sizeof(uint32_t), &msg_str);
+        send_message_port(log_port, size + sizeof(uint32_t), &msg_str);
     }
 
     // syscall(SYSCALL_SEND_MSG_PORT, 1, buff_pos - buff_ack, &screen_buff[buff_ack]);
@@ -78,7 +78,7 @@ void print_str_n(char *str, int length)
             int size = length - i > 256 ? 256 : length - i;
             memcpy(msg_str.buff, &str[i], size);
 
-            pmos_syscall(SYSCALL_SEND_MSG_PORT, log_port, size + sizeof(uint32_t), &msg_str);
+            send_message_port(log_port, size + sizeof(uint32_t), &msg_str);
             // TODO: Error checking
         }
     }

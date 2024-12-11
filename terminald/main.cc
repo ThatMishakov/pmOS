@@ -146,7 +146,7 @@ pmos_port_t log_port = 0;
 void request_logger_port()
 {
     // TODO: Add a syscall for this
-    pmos_syscall(SYSCALL_REQUEST_NAMED_PORT, log_port_name, strlen(log_port_name), main_port, 0);
+    request_named_port(log_port_name, strlen(log_port_name), main_port, 0);
 }
 
 void react_named_port_notification(char *msg_buff, size_t size)

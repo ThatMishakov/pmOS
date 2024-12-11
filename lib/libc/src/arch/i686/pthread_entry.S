@@ -39,10 +39,10 @@ __pthread_entry_point:
 
     subl $8, %esp
     # Pass the arguments to the function
-    pushl %ebx
+    pushl %esi
 
     # Call the function
-    calll *%eax
+    calll *%edi
 
     addl $4, %esp
     # Pass the return value of the function to pthread_exit()

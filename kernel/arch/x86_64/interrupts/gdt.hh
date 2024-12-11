@@ -89,10 +89,10 @@ struct GDT {
     GDT_entry Null {}; // always null
     GDT_entry _64bit_kernel_code {0, 0, 0, 0x9a, 0xa2, 0};
     GDT_entry _64bit_kernel_data {0, 0, 0, 0x92, 0xa0, 0};
-    GDT_entry _32bit_user_code {0, 0, 0, 0xfa, 0xc0, 0};
-    GDT_entry user_data_1 {0, 0, 0, 0xf2, 0xa0, 0};
+    GDT_entry _32bit_user_code {0xffff, 0, 0, 0xfa, 0xcf, 0};
+    GDT_entry user_data_1 {0xffff, 0, 0, 0xf2, 0xcf, 0};
     GDT_entry _64bit_user_code {0, 0, 0, 0xfa, 0xa0, 0};
-    GDT_entry user_data_2 {0, 0, 0, 0xf2, 0xa0, 0};
+    GDT_entry user_data_2 {0xffff, 0, 0, 0xf2, 0xcf, 0};
     GDT_entry ring2_code {0, 0, 0, 0xda, 0xa0, 0};
     GDT_entry ring2_data {0, 0, 0, 0xd2, 0xa0, 0};
     System_Segment_Descriptor tss_descriptor;

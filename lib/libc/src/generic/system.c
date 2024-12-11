@@ -31,6 +31,8 @@
 #include <stdint.h>
 #include <unistd.h>
 
+syscall_r __pmos_syscall_set_attr(uint64_t pid, uint32_t attr, uint32_t value);
+
 int pmos_request_io_permission()
 {
     // TODO: Since kernel doesn't support permissions yet, I can just make a syscall
@@ -38,6 +40,6 @@ int pmos_request_io_permission()
 
     pid_t my_pid = get_task_id();
 
-    uint64_t result = pmos_syscall(SYSCALL_SET_ATTR, my_pid, ATTR_ALLOW_PORT, 1).result;
+    uint64_t result = __pmos_syscall_set_attr(my_pid, ATTR_ALLOW_PORT, 1).result;
     return result ? -1 : 0;
 }

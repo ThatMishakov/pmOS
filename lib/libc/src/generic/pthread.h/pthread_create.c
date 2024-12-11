@@ -152,7 +152,11 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
     }
     // When the thread exits, the kernel will remove the task from the group
 
+    #ifdef __i386__
+    result_t s_result = set_registers(u->thread_task_id, SEGMENT_GS, __thread_pointer_from_uthread(u));
+    #else
     result_t s_result = set_registers(u->thread_task_id, SEGMENT_FS, __thread_pointer_from_uthread(u));
+    #endif
     // This should never fail but just in case
     if (s_result != SUCCESS) {
         release_region(TASK_ID_SELF, stack.virt_addr);

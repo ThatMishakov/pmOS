@@ -38,9 +38,9 @@ _start:
     # Push arguments
     # Align stack to 16 bytes
     subl $12, %esp
-    pushl %ecx
     pushl %edx
-    pushl %ebx
+    pushl %esi
+    pushl %edi
 
     # Initialize the libc
     call init_std_lib

@@ -292,6 +292,8 @@ protected:
 
     // Unblocks the task from the blocked state
     void unblock() noexcept;
+
+    kresult_t set_32bit();
 };
 
 using task_ptr = TaskDescriptor *;

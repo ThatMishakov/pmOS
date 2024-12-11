@@ -52,6 +52,40 @@ typedef struct {
     uint16_t section_header_names_index;
 } ELF_64bit;
 
+typedef struct {
+    uint32_t magic;
+    uint8_t bitness;
+    uint8_t endianness;
+    uint8_t header_version;
+    uint8_t os_abi;
+    uint64_t padding;
+    uint16_t type;
+    uint16_t instr_set;
+    uint32_t elf_ver;
+    uint32_t program_entry;
+    uint32_t program_header;
+    uint32_t section_header;
+    uint32_t flags;
+    uint16_t header_size;
+    uint16_t prog_header_size;
+    uint16_t program_header_entries;
+    uint16_t section_header_entry_size;
+    uint16_t section_header_entries;
+    uint16_t section_header_names_index;
+} ELF_32bit;
+
+typedef struct {
+    uint32_t magic;
+    uint8_t bitness;
+    uint8_t endianness;
+    uint8_t header_version;
+    uint8_t os_abi;
+    uint64_t padding;
+    uint16_t type;
+    uint16_t instr_set;
+    uint32_t elf_ver;
+} ELF_Common;
+
 #define ELF_X86     3
 #define ELF_64BIT   2
 #define ELF_RISCV   0xF3
@@ -91,6 +125,17 @@ typedef struct {
     uint64_t allignment;
 } ELF_PHeader_64;
 
+typedef struct {
+    uint32_t type;
+    uint32_t p_offset;
+    uint32_t p_vaddr;
+    uint32_t undefined;
+    uint32_t p_filesz;
+    uint32_t p_memsz;
+    uint32_t flags;
+    uint32_t allignment;
+} ELF_PHeader_32;
+
 #define ELF_SEGMENT_LOAD    1
 #define ELF_SEGNEMT_DYNAMIC 2
 #define STT_TLS             6
@@ -99,5 +144,7 @@ typedef struct {
 #define ELF_FLAG_EXECUTABLE 1
 #define ELF_FLAG_WRITABLE   2
 #define ELF_FLAG_READABLE   4
+
+#define ELF_32BIT 1
 
 #endif

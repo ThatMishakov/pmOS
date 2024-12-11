@@ -2,12 +2,14 @@
 #include <kernel/syscalls.h>
 #include <kernel/sysinfo.h>
 
+syscall_r __pmos_get_system_info(uint32_t info);
+
 int get_nprocs(void)
 {
-    return pmos_syscall(SYSCALL_GET_SYSTEM_INFO, SYSINFO_NPROCS).value;
+    return __pmos_get_system_info(SYSINFO_NPROCS).value;
 }
 
 int get_nprocs_conf(void)
 {
-    return pmos_syscall(SYSCALL_GET_SYSTEM_INFO, SYSINFO_NPROCS_CONF).value;
+    return __pmos_get_system_info(SYSINFO_NPROCS_CONF).value;
 }

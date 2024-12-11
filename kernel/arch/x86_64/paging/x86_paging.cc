@@ -441,13 +441,15 @@ klib::shared_ptr<x86_4level_Page_Table> x86_4level_Page_Table::capture_initial(u
     return t;
 }
 
-klib::shared_ptr<x86_4level_Page_Table> x86_4level_Page_Table::create_empty()
+klib::shared_ptr<x86_4level_Page_Table> x86_4level_Page_Table::create_empty(int flags)
 {
     klib::shared_ptr<x86_4level_Page_Table> new_table =
         klib::unique_ptr<x86_4level_Page_Table>(new x86_4level_Page_Table());
 
     if (not new_table)
         return nullptr;
+
+    new_table->flags = flags;
 
     // Get a free page
     pmm::Page::page_addr_t p = -1;

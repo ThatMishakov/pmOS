@@ -115,6 +115,8 @@ klib::array<syscall_function, 49> syscall_table = {
 
 extern "C" void syscall_handler()
 {
+    serial_logger.printf("syscall_handler\n");
+
     TaskDescriptor *task = get_cpu_struct()->current_task;
 
     unsigned call_n = syscall_number(task);
@@ -126,6 +128,9 @@ extern "C" void syscall_handler()
         call_n = task->syscall_num;
     task->syscall_num = call_n;
 #endif
+
+    serial_logger.printf("syscall_handler: task: %d (%s) call_n: %x\n", task->task_id,
+                         task->name.c_str(), call_n);
 
     // serial_logger.printf("syscall_handler: task: %d (%s) call_n: %x, arg1: %x, arg2: %x, arg3:
     // %x, arg4: %x, arg5: %x\n", task->task_id, task->name.c_str(), call_n, arg1, arg2, arg3, arg4,
@@ -153,7 +158,8 @@ extern "C" void syscall_handler()
 
     if ((syscall_error(task) < 0) && !task->regs.syscall_pending_restart()) {
         t_print_bochs("Debug: syscall %h pid %h (%s) ", call_n, task->task_id, task->name.c_str());
-        t_print_bochs(" -> %i (%s)\n", syscall_error(task), "syscall failed");
+        i64 val = syscall_error(task);
+        t_print_bochs(" -> %i (%s)\n", val, "syscall failed");
     }
 
     // t_print_bochs("SUCCESS %h\n", syscall_ret_high(task));
@@ -297,7 +303,7 @@ void syscall_init_stack()
         }
     } else {
         t->regs.stack_pointer() = esp;
-        syscall_return(task) = esp;
+        syscall_return(task)    = esp;
     }
 }
 
@@ -365,7 +371,7 @@ void syscall_get_first_message()
         top_message = port->get_front();
 
         syscall_success(current);
-        auto result              = top_message->copy_to_user_buff((char *)buff);
+        auto result = top_message->copy_to_user_buff((char *)buff);
         if (!result.success()) {
             syscall_error(current) = result.result;
             return;
@@ -384,9 +390,9 @@ void syscall_send_message_port()
 {
     TaskDescriptor *current = get_cpu_struct()->current_task;
 
-    u64 port_num = syscall_arg64(current, 0);
-    size_t size  = syscall_arg(current, 1, 1);
-    ulong message  = syscall_arg64(current, 2);
+    u64 port_num  = syscall_arg64(current, 0);
+    size_t size   = syscall_arg(current, 1, 1);
+    ulong message = syscall_arg64(current, 2);
 
     // TODO: Check permissions
 
@@ -397,7 +403,7 @@ void syscall_send_message_port()
     }
 
     syscall_success(current);
-    auto result              = port->atomic_send_from_user(current, (char *)message, size);
+    auto result = port->atomic_send_from_user(current, (char *)message, size);
     if (!result.success()) {
         syscall_error(current) = result.result;
         return;
@@ -456,7 +462,7 @@ void syscall_get_message_info()
     };
 
     syscall_success(task);
-    auto b                = copy_to_user((char *)&desc, (char *)message_struct, msg_struct_size);
+    auto b = copy_to_user((char *)&desc, (char *)message_struct, msg_struct_size);
     if (!b.success()) {
         syscall_error(task) = b.result;
         return;
@@ -613,6 +619,7 @@ void syscall_create_port()
     const task_ptr &task = get_current_task();
 
     u64 owner = syscall_arg64(task, 0);
+    serial_logger.printf("Creating port for task %i\n", owner);
 
     // TODO: Check permissions
 
@@ -654,7 +661,7 @@ void syscall_set_interrupt()
     }
 
     syscall_return(task) = intno;
-    auto result            = c->int_handlers.add_handler(intno, port_ptr);
+    auto result          = c->int_handlers.add_handler(intno, port_ptr);
     if (result < 0)
         syscall_error(task) = result;
 #else
@@ -1440,7 +1447,7 @@ void syscall_is_in_task_group()
         return;
     }
 
-    const bool has_task            = group_ptr->atomic_has_task(current_pid);
+    const bool has_task          = group_ptr->atomic_has_task(current_pid);
     syscall_return(current_task) = has_task;
 }
 
@@ -1509,7 +1516,7 @@ void syscall_request_timer()
         return;
     }
 
-    u64 core_time_ms      = c->ticks_after_ns(timeout);
+    u64 core_time_ms    = c->ticks_after_ns(timeout);
     syscall_error(task) = c->atomic_timer_queue_push(core_time_ms, port_ptr);
 }
 
@@ -1547,8 +1554,8 @@ void syscall_set_affinity()
             return;
         }
 
-        syscall_return(task)        = task->cpu_affinity;
-        task->cpu_affinity            = cpu;
+        syscall_return(task) = task->cpu_affinity;
+        task->cpu_affinity   = cpu;
     } else {
         if (not task->can_be_rebound()) {
             syscall_return(current_task) = -EPERM;
@@ -1562,7 +1569,7 @@ void syscall_set_affinity()
             {
                 Auto_Lock_Scope lock(task->sched_lock);
                 syscall_return(task) = task->cpu_affinity;
-                task->cpu_affinity     = cpu;
+                task->cpu_affinity   = cpu;
                 push_ready(task);
             }
 
@@ -1573,7 +1580,7 @@ void syscall_set_affinity()
         } else {
             Auto_Lock_Scope lock(task->sched_lock);
             syscall_return(task) = task->cpu_affinity;
-            task->cpu_affinity     = cpu;
+            task->cpu_affinity   = cpu;
         }
     }
 
@@ -1786,6 +1793,6 @@ void syscall_get_page_address()
     if (not b.val)
         return;
 
-    auto mapping           = table->get_page_mapping(page_base);
+    auto mapping         = table->get_page_mapping(page_base);
     syscall_return(task) = mapping.page_addr;
 }

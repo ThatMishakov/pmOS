@@ -56,7 +56,7 @@ typedef unsigned long size_t;
 
 #if defined(__DECLARE_SSIZE_T) && !defined(__DECLARED_SSIZE_T)
 typedef long ssize_t;
-    #define __DECLARED_SSIZE_T
+#define __DECLARED_SSIZE_T
 #endif
 
 #if defined(__DECLARE_PTRDIFF_T) && !defined(__DECLARED_PTRDIFF_T)
@@ -68,48 +68,60 @@ typedef long ptrdiff_t;
 #define __DECLARED_PTRDIFF_T
 #endif
 
+#ifndef __PMOS64__
+#ifdef __i386__
+typedef long long __pmos64_t;
+typedef unsigned long long __pmos64u_t;
+#else
+typedef long __pmos64_t;
+typedef unsigned long __pmos64u_t;
+#endif
+#define __PMOS64__
+#endif
+
+
 #if defined(__DECLARE_OFF_T) && !defined(__DECLARED_OFF_T)
-typedef signed long off_t;
+typedef __pmos64_t off_t;
     #define __DECLARED_OFF_T
 #endif
 
 #if defined(__DECLARE_BLKCNT_T) && !defined(__DECLARED_BLKCNT_T)
-typedef unsigned long blkcnt_t;
+typedef __pmos64u_t blkcnt_t;
     #define __DECLARED_BLKCNT_T
 #endif
 
 #if defined(__DECLARE_BLKSIZE_T) && !defined(__DECLARED_BLKSIZE_T)
-typedef unsigned long blksize_t;
+typedef __pmos64u_t blksize_t;
     #define __DECLARED_BLKSIZE_T
 #endif
 
 #if defined(__DECLARE_CLOCK_T) && !defined(__DECLARED_CLOCK_T)
-typedef unsigned long clock_t;
+typedef __pmos64u_t clock_t;
     #define __DECLARED_CLOCK_T
 #endif
 
 #if defined(__DECLARE_CLOCKID_T) && !defined(__DECLARED_CLOCKID_T)
-typedef unsigned long clockid_t;
+typedef __pmos64u_t clockid_t;
     #define __DECLARED_CLOCKID_T
 #endif
 
 #if defined(__DECLARE_SUSECONDS_T) && !defined(__DECLARED_SUSECONDS_T)
-typedef unsigned long suseconds_t;
+typedef __pmos64u_t suseconds_t;
     #define __DECLARED_SUSECONDS_T
 #endif
 
 #if defined(__DECLARE_USECONDS_T) && !defined(__DECLARED_USECONDS_T)
-typedef unsigned long useconds_t;
+typedef __pmos64u_t useconds_t;
     #define __DECLARED_USECONDS_T
 #endif
 
 #if defined(__DECLARE_TIMER_T) && !defined(__DECLARED_TIMER_T)
-typedef unsigned long timer_t;
+typedef __pmos64u_t timer_t;
     #define __DECLARED_TIMER_T
 #endif
 
 #if (defined(__DECLARE_TIME_T) || defined(__DECLARE_TIMESPEC_T)) && !defined(__DECLARED_TIME_T)
-typedef long time_t;
+typedef __pmos64_t time_t;
     #define __DECLARED_TIME_T
 #endif
 
@@ -121,7 +133,7 @@ typedef unsigned short sa_family_t;
 #endif
 
 #if defined(__DECLARE_DEV_T) && !defined(__DECLARED_DEV_T)
-typedef unsigned long dev_t;
+typedef __pmos64u_t dev_t;
     #define __DECLARED_DEV_T
 #endif
 
@@ -129,44 +141,44 @@ typedef unsigned long dev_t;
 // typedef unsigned long fsfilcnt_t;
 
 #if defined(__DECLARE_ID_T) && !defined(__DECLARED_ID_T)
-typedef unsigned long id_t;
+typedef __pmos64u_t id_t;
     #define __DECLARED_ID_T
 #endif
 
 #if defined(__DECLARE_GID_T) && !defined(__DECLARED_GID_T)
-typedef unsigned long gid_t;
+typedef __pmos64u_t gid_t;
     #define __DECLARED_GID_T
 #endif
 
 #if defined(__DECLARE_UID_T) && !defined(__DECLARED_UID_T)
-typedef unsigned long uid_t;
+typedef __pmos64u_t uid_t;
     #define __DECLARED_UID_T
 #endif
 
 #if defined(__DECLARE_PID_T) && !defined(__DECLARED_PID_T)
-typedef long pid_t;
+typedef __pmos64_t pid_t;
     #define __DECLARED_PID_T
 #endif
 
 #if defined(__DECLARE_IDTYPE_T) && !defined(__DECLARED_IDTYPE_T)
-typedef unsigned long idtype_t;
+typedef __pmos64u_t idtype_t;
     #define __DECLARED_IDTYPE_T
 #endif
 
 #if defined(__DECLARE_INO_T) && !defined(__DECLARED_INO_T)
-typedef unsigned long ino_t;
+typedef __pmos64u_t ino_t;
     #define __DECLARED_INO_T
 #endif
 
 // typedef unsigned long key_t;
 
 #if defined(__DECLARE_MODE_T) && !defined(__DECLARED_MODE_T)
-typedef unsigned long mode_t;
+typedef __pmos64u_t mode_t;
     #define __DECLARED_MODE_T
 #endif
 
 #if defined(__DECLARE_NLINK_T) && !defined(__DECLARED_NLINK_T)
-typedef unsigned long nlink_t;
+typedef __pmos64u_t nlink_t;
     #define __DECLARED_NLINK_T
 #endif
 
@@ -208,7 +220,7 @@ typedef void *pthread_t;
 #if (defined(__DECLARE_PTHREAD_MUTEX_T) || defined(__DECLARE_PTHREAD_COND_T)) && \
     !defined(__DECLARED___PTHREAD_WAITER)
 struct __pthread_waiter {
-    unsigned long notification_port;
+    __pmos64u_t notification_port;
     struct __pthread_waiter *next;
 };
     #define __DECLARED___PTHREAD_WAITER
@@ -216,8 +228,8 @@ struct __pthread_waiter {
 
 #if defined(__DECLARE_PTHREAD_MUTEX_T) && !defined(__DECLARED_PTHREAD_MUTEX_T)
 typedef struct {
-    unsigned long block_count;
-    unsigned long blocking_thread_id;
+    __pmos64u_t block_count;
+    __pmos64u_t blocking_thread_id;
     struct __pthread_waiter *waiters_list_head;
     struct __pthread_waiter *waiters_list_tail;
     unsigned long recursive_lock_count;
@@ -263,12 +275,12 @@ typedef struct timespec {
 #endif
 
 #if defined(__DECLARE_FSBLKCNT_T) && !defined(__DECLARED_FSBLKCNT_T)
-typedef unsigned long fsblkcnt_t;
+typedef __pmos64u_t fsblkcnt_t;
     #define __DECLARED_FSBLKCNT_T
 #endif
 
 #if defined(__DECLARE_FSFILCNT_T) && !defined(__DECLARED_FSFILCNT_T)
-typedef unsigned long fsfilcnt_t;
+typedef __pmos64u_t fsfilcnt_t;
     #define __DECLARED_FSFILCNT_T
 #endif
 

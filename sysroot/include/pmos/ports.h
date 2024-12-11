@@ -68,7 +68,7 @@ typedef struct ports_request_t {
  * @todo Make the tasks own the ports and destroy them automatically when the task is destroyed.
  * Consider ports with queues other than FIFO as that sounds very interesting
  */
-ports_request_t create_port(pid_t owner, uint64_t flags);
+ports_request_t create_port(pid_t owner, uint32_t flags);
 
 /**
  * @brief Assigns a name to the unnamed port.
@@ -107,7 +107,7 @@ result_t name_port(pmos_port_t portnum, const char *name, size_t length, uint32_
  * @return ports_request_t Result of the operation. On success, *port* holds the ID of the port to
  * which the name is asigned.
  */
-ports_request_t get_port_by_name(const char *name, u64 length, u32 flags);
+ports_request_t get_port_by_name(const char *name, size_t length, uint32_t flags);
 
 /**
  * @brief Set the port to which the kernel sends its logs.

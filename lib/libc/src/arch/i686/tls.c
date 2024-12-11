@@ -55,8 +55,9 @@ struct uthread *__prepare_tls(void *stack_top, size_t stack_size)
     size_t size_all = alignup(alloc_size, 4096);
 
     mem_request_ret_t res = create_normal_region(0, 0, size_all, PROT_READ | PROT_WRITE);
-    if (res.result != SUCCESS)
+    if (res.result != SUCCESS) {
         return NULL;
+    }
 
     unsigned char *tls = (unsigned char *)res.virt_addr + memsz_aligned;
 
