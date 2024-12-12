@@ -72,9 +72,9 @@ u64 syscall_arg64(TaskDescriptor *task, int arg)
     if (task->is_32bit()) {
         switch (arg) {
         case 0:
-            return (task->regs.preserved_r.rbx & 0xffffffff) | task->regs.scratch_r.rcx << 32;
+            return (task->regs.preserved_r.rbx & 0xffffffff) | (task->regs.scratch_r.rcx << 32);
         case 1:
-            return (task->regs.scratch_r.rdx & 0xffffffff) | task->regs.preserved_r.rbp << 32;
+            return (task->regs.scratch_r.rdx & 0xffffffff) | (task->regs.preserved_r.rbp << 32);
         default:
             assert(!"Too many arguments");
         }
@@ -82,6 +82,61 @@ u64 syscall_arg64(TaskDescriptor *task, int arg)
         return syscall_arg(task, arg, 0);
     }
     return 0;
+}
+
+ReturnStr<bool> syscall_arg64_checked(TaskDescriptor *task, int arg, u64 &value)
+{
+    if (task->is_32bit()) {
+        switch (arg) {
+        case 0:
+            value = (task->regs.preserved_r.rbx & 0xffffffff) | (task->regs.scratch_r.rcx << 32);
+            break;
+        case 1:
+            value = (task->regs.scratch_r.rdx & 0xffffffff) | (task->regs.preserved_r.rbp << 32);
+            break;
+        default:
+            return copy_from_user((char *)&value, (char *)task->regs.e.rsp + (arg - 2) * 8, 8);
+        }
+    } else {
+        value = syscall_arg64(task, arg);
+    }
+    return Success(true);
+}
+
+ReturnStr<bool> syscall_args_checked(TaskDescriptor *task, int arg, int args64before, int count,
+                                     ulong *values)
+{
+    if (task->is_32bit()) {
+        int realargs = arg + args64before;
+
+        for (int i = realargs; i < 4 && i < (realargs + count); i++) {
+            values[i - realargs] = syscall_arg(task, i);
+        }
+
+        if (realargs + count >= 4) {
+            int start = realargs > 4 ? realargs : 4;
+            int end   = realargs + count;
+
+            unsigned args[16];
+            assert(end - start <= 16);
+
+            auto b = copy_from_user((char *)args, (char *)task->regs.e.rsp + (start - 4) * 4,
+                                    (end - start) * 4);
+            if (!b.success() || !b.val) {
+                return b;
+            }
+
+            int offset = realargs < 4 ? 4 - realargs : 0;
+            for (int i = 0; i < end - start; i++) {
+                values[i + offset] = args[i];
+            }
+        }
+    } else {
+        for (int i = 0; i < count; i++) {
+            values[i] = syscall_arg(task, arg + i, args64before);
+        }
+    }
+    return Success(true);
 }
 
 u64 SyscallRetval::operator=(u64 value)
@@ -98,10 +153,7 @@ i64 SyscallError::operator=(i64 value)
     return value;
 }
 
-SyscallError::operator int() const
-{
-    return task->regs.scratch_r.rax;
-}
+SyscallError::operator int() const { return task->regs.scratch_r.rax; }
 
 void syscall_success(TaskDescriptor *task) { syscall_ret_low(task, 0); }
 

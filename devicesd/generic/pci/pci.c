@@ -353,7 +353,7 @@ void init_pci()
         phys_end = (phys_end + PAGE_SIZE - 1) & page_mask;
 
         mem_request_ret_t t = create_phys_map_region(0, NULL, phys_end - phys_start,
-                                                     PROT_READ | PROT_WRITE, (void *)phys_start);
+                                                     PROT_READ | PROT_WRITE, phys_start);
         if (t.result != SUCCESS) {
             fprintf(stderr, "Error: could not map PCIe memory: %lx\n", t.result);
             free(g);

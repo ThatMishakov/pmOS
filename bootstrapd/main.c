@@ -291,7 +291,7 @@ void service_ports()
 
             if (rsdp_desc != 0) {
                 reply.result     = 0;
-                reply.descriptor = (void *)rsdp_desc;
+                reply.descriptor = rsdp_desc;
                 print_str("********************************************\n");
             }
 

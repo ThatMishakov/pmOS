@@ -138,7 +138,7 @@ mem_request_ret_t create_normal_region(uint64_t pid, void *addr_start, size_t si
  * @see create_normal_region()
  */
 mem_request_ret_t create_phys_map_region(uint64_t pid, void *addr_start, size_t size,
-                                         uint32_t access, void *phys_addr);
+                                         uint32_t access, uint64_t phys_addr);
 
 /**
  * @brief Maps a memory object to the new region.

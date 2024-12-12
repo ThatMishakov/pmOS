@@ -49,7 +49,7 @@ void *uacpi_kernel_map(uacpi_phys_addr addr, uacpi_size len)
     uint64_t page_offset = addr & 0xFFFUL;
     uint64_t size_alligned = (len + page_offset + 0xFFF) & ~0xFFFUL;
 
-    mem_request_ret_t r = create_phys_map_region(TASK_ID_SELF, NULL, size_alligned, PROT_READ | PROT_WRITE, (void *)page_alligned_addr);
+    mem_request_ret_t r = create_phys_map_region(TASK_ID_SELF, NULL, size_alligned, PROT_READ | PROT_WRITE, page_alligned_addr);
     if (r.result != SUCCESS)
         return NULL;
 

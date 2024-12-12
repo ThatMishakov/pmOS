@@ -39,6 +39,7 @@
 #include <pthread.h>
 #include <interrupts.h>
 #include <string.h>
+#include <inttypes.h>
 
 ioapic_list *ioapic_list_root = NULL;
 
@@ -70,7 +71,7 @@ IOAPICVER ioapic_read_ioapicver(volatile uint32_t *ioapic)
 
 void init_ioapic_at(uint16_t id, uint64_t address, uint32_t base)
 {
-    uint32_t *ioapic = map_phys((void *)address, 0x20);
+    uint32_t *ioapic = map_phys(address, 0x20);
 
     IOAPICID i = ioapic_read_ioapicid(ioapic);
     if (i.bits.id != id) {
@@ -100,7 +101,7 @@ void init_ioapic_at(uint16_t id, uint64_t address, uint32_t base)
     for (unsigned int i = 0; i < node->desc.max_int; ++i)
         ioapic_mask_int(ioapic, i);
 
-    printf("IOAPIC %i at %#lX base %i max %i\n", id, address, base, node->desc.max_int);
+    printf("IOAPIC %i at %#" PRIx64 " base %i max %i\n", id, address, base, node->desc.max_int);
 }
 
 ioapic_descriptor *get_ioapic_for_int(uint32_t intno)

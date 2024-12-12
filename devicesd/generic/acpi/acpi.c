@@ -44,12 +44,23 @@
 #include <pthread.h>
 #include <pmos/special.h>
 
+
+void init_acpi();
+
+extern uint64_t rsdp_desc;
+
+extern int acpi_revision;
+
+// Returns -1 on error or ACPI version otherwise
+int walk_acpi_tables();
+int check_table(ACPISDTHeader *header);
+
 int acpi_revision = -1;
 
-RSDP_descriptor20 *rsdp_desc = NULL;
+uint64_t rsdp_desc = 0;
 
 typedef struct acpi_mem_map_node {
-    void *phys;
+    uint64_t phys;
     size_t size_bytes;
     void *virt;
     struct acpi_mem_map_node *next;
@@ -63,7 +74,7 @@ void acpi_mem_map_list_push_front(acpi_mem_map_node *n)
     acpi_mem_map_list_dummy.next = n;
 }
 
-void *acpi_map_and_get_virt(void *phys, size_t size)
+void *acpi_map_and_get_virt(uint64_t phys, size_t size)
 {
     for (acpi_mem_map_node *p = acpi_mem_map_list_dummy.next; p != NULL; p = p->next) {
 
@@ -72,9 +83,15 @@ void *acpi_map_and_get_virt(void *phys, size_t size)
     }
 
     void *virt = map_phys(phys, size);
+    if (virt == NULL)
+        return NULL;
     // if (virt == NULL) panic("Panic: Could not map meory\n");
 
     acpi_mem_map_node *n = malloc(sizeof(acpi_mem_map_node));
+    if (n == NULL) {
+        unmap_phys(virt, size);
+        return NULL;
+    }
     // if (n == NULL) panic("Panic: Could not allocate memory\n");
 
     n->phys       = phys;
@@ -147,7 +164,7 @@ void request_acpi_tables()
     if (reply->result != 0) {
         printf("Warning: Did not get RSDT table: %i\n", reply->result);
     } else {
-        rsdp_desc = (RSDP_descriptor20 *)reply->descriptor;
+        rsdp_desc = reply->descriptor;
     }
     free(message);
 }

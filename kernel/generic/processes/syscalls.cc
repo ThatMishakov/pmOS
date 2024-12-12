@@ -115,8 +115,6 @@ klib::array<syscall_function, 49> syscall_table = {
 
 extern "C" void syscall_handler()
 {
-    serial_logger.printf("syscall_handler\n");
-
     TaskDescriptor *task = get_cpu_struct()->current_task;
 
     unsigned call_n = syscall_number(task);
@@ -128,9 +126,6 @@ extern "C" void syscall_handler()
         call_n = task->syscall_num;
     task->syscall_num = call_n;
 #endif
-
-    serial_logger.printf("syscall_handler: task: %d (%s) call_n: %x\n", task->task_id,
-                         task->name.c_str(), call_n);
 
     // serial_logger.printf("syscall_handler: task: %d (%s) call_n: %x, arg1: %x, arg2: %x, arg3:
     // %x, arg4: %x, arg5: %x\n", task->task_id, task->name.c_str(), call_n, arg1, arg2, arg3, arg4,
@@ -193,8 +188,17 @@ void syscall_start_process()
     u64 pid     = syscall_arg64(task, 0);
     ulong start = syscall_arg(task, 1, 1);
     ulong arg1  = syscall_arg(task, 2, 1);
-    ulong arg2  = syscall_arg(task, 3, 1);
-    ulong arg3  = syscall_arg(task, 4, 1);
+    ulong args[2];
+    auto result = syscall_args_checked(task, 3, 1, 2, args);
+    if (!result.success()) {
+        syscall_error(task) = result.result;
+        return;
+    }
+    if (!result.val) {
+        return;
+    }
+    ulong arg2 = args[0];
+    ulong arg3 = args[1];
 
     TaskDescriptor *t = get_task(pid);
     if (!t) {
@@ -392,7 +396,7 @@ void syscall_send_message_port()
 
     u64 port_num  = syscall_arg64(current, 0);
     size_t size   = syscall_arg(current, 1, 1);
-    ulong message = syscall_arg64(current, 2);
+    ulong message = syscall_arg(current, 2, 1);
 
     // TODO: Check permissions
 
@@ -425,7 +429,6 @@ void syscall_get_message_info()
 
     auto port = Port::atomic_get_port(portno);
     if (!port) {
-        serial_logger.printf("Error getting port %i\n", portno);
         syscall_error(task) = -ENOENT;
         return;
     }
@@ -619,7 +622,6 @@ void syscall_create_port()
     const task_ptr &task = get_current_task();
 
     u64 owner = syscall_arg64(task, 0);
-    serial_logger.printf("Creating port for task %i\n", owner);
 
     // TODO: Check permissions
 
@@ -971,9 +973,21 @@ void syscall_create_phys_map_region()
     TaskDescriptor *current = get_cpu_struct()->current_task;
     u64 pid                 = syscall_arg64(current, 0);
     u64 phys_addr           = syscall_arg64(current, 1);
-    ulong addr_start        = syscall_arg(current, 2, 2);
-    ulong size              = syscall_arg(current, 3, 2);
-    ulong access            = syscall_flags(current);
+
+    ulong args[2];
+    {
+        auto result = syscall_args_checked(current, 2, 2, 2, args);
+        if (!result.success()) {
+            syscall_error(current) = result.result;
+            return;
+        }
+        if (!result.val) {
+            return;
+        }
+    }
+    ulong addr_start = args[0];
+    ulong size       = args[1];
+    ulong access     = syscall_flags(current);
 
     TaskDescriptor *dest_task = nullptr;
 
@@ -1290,11 +1304,27 @@ void syscall_map_mem_object()
     const auto &current_task = get_current_task();
     u64 page_table_id        = syscall_arg64(current_task, 0);
     u64 object_id            = syscall_arg64(current_task, 1);
-    u64 offset               = syscall_arg64(current_task, 2);
+    u64 offset;
+    auto result = syscall_arg64_checked(current_task, 2, offset);
+    if (!result.success()) {
+        syscall_error(current_task) = result.result;
+        return;
+    }
+    if (!result.val)
+        return;
 
-    ulong addr_start = syscall_arg(current_task, 3, 3);
-    ulong size_bytes = syscall_arg(current_task, 4, 3);
-    ulong access     = syscall_flags(current_task);
+    ulong args[3];
+    result = syscall_args_checked(current_task, 3, 3, 3, args);
+    if (!result.success()) {
+        syscall_error(current_task) = result.result;
+        return;
+    }
+    if (!result.val)
+        return;
+
+    ulong addr_start = args[0];
+    ulong size_bytes = args[1];
+    ulong access     = args[2];
 
     auto table = page_table_id == 0 ? current_task->page_table
                                     : Arch_Page_Table::get_page_table(page_table_id);
@@ -1479,7 +1509,16 @@ void syscall_set_notify_mask()
 
     u64 task_group = syscall_arg64(current_task, 0);
     u64 port_id    = syscall_arg64(current_task, 1);
-    ulong new_mask = syscall_arg(current_task, 2, 2);
+    ulong new_mask;
+    {
+        auto result = syscall_args_checked(current_task, 2, 2, 1, &new_mask);
+        if (!result.success()) {
+            syscall_error(current_task) = result.result;
+            return;
+        }
+        if (!result.val)
+            return;
+    }
     ulong flags    = syscall_flags(current_task);
 
     const auto group = TaskGroup::get_task_group(task_group);

@@ -78,7 +78,7 @@ PCIDevice::PCIDevice(uint16_t group, uint8_t bus, uint8_t device, uint8_t functi
 
     // Map the PCI device's configuration space
     auto mem_req =
-        create_phys_map_region(0, nullptr, 4096, PROT_READ | PROT_WRITE, (void *)base_phys);
+        create_phys_map_region(0, nullptr, 4096, PROT_READ | PROT_WRITE, base_phys);
     if (mem_req.result != SUCCESS)
         throw std::system_error(mem_req.result, std::generic_category(),
                                 "Failed to map PCI device's configuration space");

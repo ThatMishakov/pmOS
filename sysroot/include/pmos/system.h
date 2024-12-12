@@ -106,8 +106,8 @@ result_t syscall_kill_task(uint64_t tid);
  * @return result_t Result of the call. If the result != SUCCESS, the process was not started.
  * @see init_stack() syscall_new_process() asign_page_table()
  */
-result_t syscall_start_process(uint64_t pid, uint64_t entry, uint64_t arg1, uint64_t arg2,
-                               uint64_t arg3);
+result_t syscall_start_process(uint64_t pid, unsigned long entry, unsigned long arg1, unsigned long arg2,
+                               unsigned long arg3);
 
 /**
  * @brief Loads an executable from the memory object into the address space of a task

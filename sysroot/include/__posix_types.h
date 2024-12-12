@@ -234,7 +234,11 @@ typedef struct {
     struct __pthread_waiter *waiters_list_tail;
     unsigned long recursive_lock_count;
     int type;
+#ifdef __i386__
+} pthread_mutex_t __attribute__((aligned(64)));
+#else
 } pthread_mutex_t;
+#endif
     #define __DECLARED_PTHREAD_MUTEX_T
 #endif
 

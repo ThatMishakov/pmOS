@@ -34,7 +34,7 @@
 #include <stdint.h>
 #include <sys/mman.h>
 
-void *map_phys(void *phys_addr, size_t bytes)
+void *map_phys(uint64_t phys_addr, size_t bytes)
 {
     uint64_t addr_aligned = (uint64_t)phys_addr & ~(uint64_t)07777;
     uint64_t addr_offset  = (uint64_t)phys_addr - addr_aligned;
@@ -43,7 +43,7 @@ void *map_phys(void *phys_addr, size_t bytes)
     size_t size = end_aligned - addr_aligned;
 
     mem_request_ret_t t =
-        create_phys_map_region(0, NULL, size, PROT_READ | PROT_WRITE, (void *)addr_aligned);
+        create_phys_map_region(0, NULL, size, PROT_READ | PROT_WRITE, addr_aligned);
 
     if (t.result != SUCCESS)
         return NULL;

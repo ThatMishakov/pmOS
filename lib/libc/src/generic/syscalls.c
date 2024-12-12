@@ -51,7 +51,7 @@ syscall_r syscall_new_process() {
     #endif
 }
 
-syscall_r start_process(u64 pid, ulong entry)
+syscall_r start_process(uint64_t pid, ulong entry)
 {
     #ifdef __i386__
     return __pmos_syscall32_3words(SYSCALL_START_PROCESS, pid, entry);
@@ -60,7 +60,7 @@ syscall_r start_process(u64 pid, ulong entry)
     #endif
 }
 
-result_t send_message_port(u64 port, size_t size, const void *message)
+result_t send_message_port(uint64_t port, size_t size, const void *message)
 {
     #ifdef __i386__
     return __pmos_syscall32_4words(SYSCALL_SEND_MSG_PORT, port, size, (unsigned)message).result;
@@ -69,7 +69,7 @@ result_t send_message_port(u64 port, size_t size, const void *message)
     #endif
 }
 
-result_t get_first_message(char *buff, uint32_t args, u64 port)
+result_t get_first_message(char *buff, uint32_t args, uint64_t port)
 {
     #ifdef __i386__
     return __pmos_syscall32_3words(SYSCALL_GET_MESSAGE | (args << 8), port, (unsigned)buff).result;
@@ -78,7 +78,7 @@ result_t get_first_message(char *buff, uint32_t args, u64 port)
     #endif
 }
 
-result_t syscall_get_message_info(Message_Descriptor *descr, u64 port, uint32_t flags)
+result_t syscall_get_message_info(Message_Descriptor *descr, uint64_t port, uint32_t flags)
 {
     #ifdef __i386__
     return __pmos_syscall32_3words(SYSCALL_GET_MSG_INFO | (flags << 8), port, (unsigned)descr).result;
@@ -87,7 +87,7 @@ result_t syscall_get_message_info(Message_Descriptor *descr, u64 port, uint32_t 
     #endif
 }
 
-u64 get_task_id() {
+uint64_t get_task_id() {
     #ifdef __i386__
     return __pmos_syscall32_0words(SYSCALL_GET_TASK_ID).value;
     #else
@@ -190,7 +190,7 @@ result_t set_log_port(pmos_port_t port, uint32_t flags)
 }
 
 mem_request_ret_t create_phys_map_region(uint64_t pid, void *addr_start, size_t size,
-                                         uint32_t access, void *phys_addr)
+                                         uint32_t access, uint64_t phys_addr)
 {
     #ifdef __i386__
     syscall_r r = __pmos_syscall32_6words(SYSCALL_CREATE_PHYS_REGION | (access << 8), pid, phys_addr, addr_start, size);
@@ -329,8 +329,8 @@ result_t get_registers(uint64_t pid, unsigned segment, void *addr)
     #endif
 }
 
-result_t syscall_start_process(uint64_t pid, uint64_t entry, uint64_t arg1, uint64_t arg2,
-                               uint64_t arg3)
+result_t syscall_start_process(uint64_t pid, unsigned long entry, unsigned long arg1, unsigned long arg2,
+                               unsigned long arg3)
 {
     #ifdef __i386__
     return __pmos_syscall32_6words(SYSCALL_START_PROCESS, pid, entry, arg1, arg2, arg3).result;
