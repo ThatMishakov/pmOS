@@ -165,6 +165,7 @@ void request_acpi_tables()
         printf("Warning: Did not get RSDT table: %i\n", reply->result);
     } else {
         rsdp_desc = reply->descriptor;
+        printf("RSDT table found at 0x%llx\n", rsdp_desc);
     }
     free(message);
 }
@@ -176,16 +177,15 @@ int power_button_init();
 
 #include <uacpi/uacpi.h>
 #include <uacpi/event.h>
-int acpi_init(uacpi_phys_addr rsdp_phys_addr) {
-    uacpi_init_params init_params = {
-        .rsdp = rsdp_phys_addr,
-        .rt_params = {
-            .flags = 0,
-            .log_level = UACPI_LOG_TRACE,
-        },
-    };
 
-    uacpi_status ret = uacpi_initialize(&init_params);
+uacpi_status uacpi_kernel_get_rsdp(uacpi_phys_addr *out_rdsp_address)
+{
+    *out_rdsp_address = rsdp_desc;
+    return UACPI_STATUS_OK;
+}
+
+int acpi_init() {
+    uacpi_status ret = uacpi_initialize(0);
     if (uacpi_unlikely_error(ret)) {
         fprintf(stderr, "uacpi_initialize error: %s", uacpi_status_to_string(ret));
         return -ENODEV;
@@ -197,7 +197,7 @@ int acpi_init(uacpi_phys_addr rsdp_phys_addr) {
         return -ENODEV;
     }
 
-    #ifdef __x86_64__
+    #if defined(__x86_64__) || defined(__i386__) 
     ret = uacpi_set_interrupt_model(UACPI_INTERRUPT_MODEL_IOAPIC);
     if (uacpi_unlikely_error(ret)) {
         fprintf(stderr, "uacpi_set_interrupt_model error: %s", uacpi_status_to_string(ret));
@@ -311,15 +311,17 @@ void init_acpi()
 
     if (acpi_revision == -1) {
         printf("Warning: Did not initialize ACPI\n");
+    } else {
+        printf("Info: ACPI revision: %i\n", acpi_revision);
     }
 
     init_cpus();
-    #ifdef __x86_64__
+    #if defined(__x86_64__) || defined(__i386__)
     init_ioapic();
     #endif
     init_pci();
 
-    int i = acpi_init((uacpi_phys_addr)rsdp_desc);
+    int i = acpi_init();
     if (i != 0) {
         printf("Warning: Could not initialize uACPI\n");
         return;

@@ -491,6 +491,157 @@ static int uint_to_string(unsigned long int n, uint8_t base, char *str, int hex_
     }
 }
 
+static int ull_to_string(unsigned long long n, uint8_t base, char *str, int hex_base, int flags, int width)
+{
+    char temp_str[65];
+    int length = 0;
+
+    int prefix_len = 0;
+    char prefix[2];
+
+    if (n == 0) {
+        temp_str[length++] = '0';
+    } else if (flags & PRINTF_FLAG_HASH) {
+        if (base == 16) {
+            prefix[0] = '0';
+            prefix[1] = 'X' - 'A' + hex_base;
+            prefix_len = 2;
+        } else if (base == 8) {
+            prefix[0] = '0';
+            prefix_len = 1;
+        }
+    }
+    while (n != 0) {
+        unsigned int tmp = n % base;
+        n /= base;
+        if (tmp > 9)
+            temp_str[length++] = tmp + hex_base - 10;
+        else
+            temp_str[length++] = tmp + '0';
+    }
+
+    int chars_count = 0;
+
+    if (flags & PRINTF_FLAG_LEFT_J) {
+        for (int i = 0; i < prefix_len; ++i) {
+            str[chars_count++] = prefix[i];
+        }
+
+        for (int i = length - 1; i >= 0; --i) {
+            str[chars_count++] = temp_str[i];
+        }
+
+        int to_fill = width - length - prefix_len;
+        for (int i = 0; i < to_fill; ++i) {
+            str[chars_count++] = ' ';
+        }
+    } else if (flags & PRINTF_FLAG_ZERO) {
+        for (int i = 0; i < prefix_len; ++i) {
+            str[chars_count++] = prefix[i];
+        }
+
+        int to_fill = width - length - prefix_len;
+        for (int i = 0; i < to_fill; ++i) {
+            str[chars_count++] = '0';
+        }
+
+        for (int i = length - 1; i >= 0; --i) {
+            str[chars_count++] = temp_str[i];
+        }
+    } else {
+        int to_fill = width - length - prefix_len;
+        for (int i = 0; i < to_fill; ++i) {
+            str[chars_count++] = ' ';
+        }
+
+        for (int i = 0; i < prefix_len; ++i) {
+            str[chars_count++] = prefix[i];
+        }
+
+        for (int i = length - 1; i >= 0; --i) {
+            str[chars_count++] = temp_str[i];
+        }
+    }
+
+    str[chars_count] = '\0';
+    return chars_count;
+}
+
+static int ll_to_string(long long int n, uint8_t base, char *str, int flags, int width)
+{
+    char temp_str[65];
+    int length = 0;
+    char prefix = 0;
+
+    if (n < 0) {
+        prefix = '-';
+        n = -n;
+    } else if ((n > 0) && (flags & PRINTF_FLAG_P_PLUS)) {
+        prefix = '+';
+    } else if ((n > 0) && (flags & PRINTF_FLAG_SPACE)) {
+        prefix = ' ';
+    }
+
+    if (n == 0) {
+        temp_str[length++] = '0';
+    }
+
+    while (n != 0) {
+        int tmp = n % base;
+        n /= base;
+        if (tmp < 10)
+            temp_str[length++] = tmp + '0';
+        else
+            temp_str[length++] = tmp + 'A' - 10;
+    }
+
+    int chars_count = 0;
+
+    if (flags & PRINTF_FLAG_LEFT_J) {
+        if (prefix) {
+            str[chars_count++] = prefix;
+        }
+
+        for (int i = length - 1; i >= 0; --i) {
+            str[chars_count++] = temp_str[i];
+        }
+
+        int to_fill = width - length - (prefix ? 1 : 0);
+        for (int i = 0; i < to_fill; ++i) {
+            str[chars_count++] = ' ';
+        }
+    } else if (flags & PRINTF_FLAG_ZERO) {
+        if (prefix) {
+            str[chars_count++] = prefix;
+        }
+
+        int to_fill = width - length - (prefix ? 1 : 0);
+        for (int i = 0; i < to_fill; ++i) {
+            str[chars_count++] = '0';
+        }
+
+        for (int i = length - 1; i >= 0; --i) {
+            str[chars_count++] = temp_str[i];
+        }
+    } else {
+        int to_fill = width - length - (prefix ? 1 : 0);
+        for (int i = 0; i < to_fill; ++i) {
+            str[chars_count++] = ' ';
+        }
+
+        if (prefix) {
+            str[chars_count++] = prefix;
+        }
+
+        for (int i = length - 1; i >= 0; --i) {
+            str[chars_count++] = temp_str[i];
+        }
+    }
+
+    str[chars_count] = '\0';
+    return chars_count;
+}
+
 static inline int max_(int a, int b) { return a > b ? a : b; }
 
 static ssize_t __va_printf_closure(write_str_f puts, void *puts_arg, va_list arg,
@@ -518,8 +669,10 @@ static ssize_t __va_printf_closure(write_str_f puts, void *puts_arg, va_list arg
             unsigned long int width = 0;
             int precision           = 0;
             char rpt                = 1;
-            int is_long             = 0;
+            int long_count          = 0;
             int hex_base            = 'a';
+            int short_count         = 0;
+            int base                = 10;
             while (rpt)
                 switch (format[i]) {
                 case '%': {
@@ -584,53 +737,23 @@ static ssize_t __va_printf_closure(write_str_f puts, void *puts_arg, va_list arg
                     break;
                 case 'i':
                 case 'd': {
-                    long t;
-                    if (is_long)
-                        t = va_arg(arg, long);
-                    else
-                        t = va_arg(arg, int);
+                    int j;
+                    if (long_count < 2) {
+                        long t;
+                        if (long_count)
+                            t = va_arg(arg, long);
+                        else
+                            t = va_arg(arg, int);
 
-                    char *s_buff = malloc(max_(24, width + 1));
-                    int j        = int_to_string(t, 10, s_buff, flags, width);
-                    j            = puts(puts_arg, s_buff, j);
-                    if (j < 0) {
-                        chars_transmitted = j;
-                        goto end;
+                        char s_buff[max_(24, width + 1)];
+                        j = int_to_string(t, 10, s_buff, flags, width);
+                        j = puts(puts_arg, s_buff, j);
+                    } else {
+                        long long t = va_arg(arg, long long);
+                        char s_buff[max_(24, width + 1)];
+                        j = ll_to_string(t, 10, s_buff, flags, width);
+                        j = puts(puts_arg, s_buff, j);
                     }
-                    chars_transmitted += j;
-                    rpt = 0;
-                    ++i;
-                    break;
-                }
-                case 'u': {
-                    unsigned long t;
-                    if (is_long)
-                        t = va_arg(arg, unsigned long);
-                    else
-                        t = va_arg(arg, unsigned int);
-
-                    char *s_buff = malloc(max_(24, width + 1));
-                    int j        = uint_to_string(t, 10, s_buff, hex_base, flags, width);
-                    j            = puts(puts_arg, s_buff, j);
-                    if (j < 0) {
-                        chars_transmitted = j;
-                        goto end;
-                    }
-                    chars_transmitted += j;
-                    rpt = 0;
-                    ++i;
-                    break;
-                }
-                case 'o': {
-                    unsigned long t;
-                    if (is_long)
-                        t = va_arg(arg, unsigned long);
-                    else
-                        t = va_arg(arg, unsigned int);
-
-                    char *s_buff = malloc(max_(24, width + 1));
-                    int j        = uint_to_string(t, 8, s_buff, hex_base, flags, width);
-                    j            = puts(puts_arg, s_buff, j);
                     if (j < 0) {
                         chars_transmitted = j;
                         goto end;
@@ -643,16 +766,32 @@ static ssize_t __va_printf_closure(write_str_f puts, void *puts_arg, va_list arg
                 case 'X':
                     hex_base = 'A';
                     __attribute__((fallthrough));
-                case 'x': {
-                    unsigned long t;
-                    if (is_long)
-                        t = va_arg(arg, unsigned long);
-                    else
-                        t = va_arg(arg, unsigned int);
+                case 'x':
+                    base = 16;
+                    goto unsigned_int;
+                case 'o':
+                    base = 8;
+                    goto unsigned_int;
+                unsigned_int:
+                case 'u': {
+                    int j;
+                    if (long_count < 2) {
+                        unsigned long t;
+                        if (long_count)
+                            t = va_arg(arg, unsigned long);
+                        else
+                            t = va_arg(arg, unsigned int);
 
-                    char *s_buff = malloc(max_(24, width + 1));
-                    int j        = uint_to_string(t, 16, s_buff, hex_base, flags, width);
-                    j            = puts(puts_arg, s_buff, j);
+                        char s_buff[max_(24, width + 1)];
+                        j = uint_to_string(t, base, s_buff, hex_base, flags, width);
+                        j = puts(puts_arg, s_buff, j);
+                    } else {
+                        unsigned long long t = va_arg(arg, unsigned long long);
+
+                        char s_buff[max_(24, width + 1)];
+                        j = ull_to_string(t, base, s_buff, hex_base, flags, width);
+                        j = puts(puts_arg, s_buff, j);
+                    }
                     if (j < 0) {
                         chars_transmitted = j;
                         goto end;
@@ -719,15 +858,15 @@ static ssize_t __va_printf_closure(write_str_f puts, void *puts_arg, va_list arg
                 //     rpt = 0;
                 //     break;
                 case 'h':
-                    is_long = 0;
+                    short_count += 0;
                     ++i;
                     break;
                 case 'l':
-                    is_long = 1;
+                    long_count += 1;
                     ++i;
                     break;
                 case 'z':
-                    is_long = sizeof(size_t) == sizeof(long);
+                    long_count = sizeof(size_t) == sizeof(long);
                     ++i;
                     break;
                 default:

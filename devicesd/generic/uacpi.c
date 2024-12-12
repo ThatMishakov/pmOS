@@ -35,12 +35,9 @@ void uacpi_kernel_vlog(enum uacpi_log_level ll, const char* fmt, uacpi_va_list l
     vfprintf(stderr, fmt, l);
 }
 
-void uacpi_kernel_log(enum uacpi_log_level ll, const char* fmt, ...)
+void uacpi_kernel_log(enum uacpi_log_level ll, const char* log)
 {
-    va_list l;
-    va_start(l, fmt);
-    uacpi_kernel_vlog(ll, fmt, l);
-    va_end(l);
+    fprintf(stderr, "[uACPI Log %i] %s\n", ll, log);
 }
 
 void *uacpi_kernel_map(uacpi_phys_addr addr, uacpi_size len)
@@ -78,7 +75,7 @@ void uacpi_kernel_free_mutex(uacpi_handle handle)
     free(handle);
 }
 
-uacpi_bool uacpi_kernel_acquire_mutex(uacpi_handle mutex, uacpi_u16 timeout)
+uacpi_status uacpi_kernel_acquire_mutex(uacpi_handle mutex, uacpi_u16 timeout)
 {
     // if (timeout == 0xFFFF)
     //     return pthread_mutex_lock((pthread_mutex_t *)mutex) == 0 ? UACPI_TRUE : UACPI_FALSE;
@@ -90,7 +87,11 @@ uacpi_bool uacpi_kernel_acquire_mutex(uacpi_handle mutex, uacpi_u16 timeout)
     // return pthread_mutex_timedlock((pthread_mutex_t *)mutex, &ts) == 0 ? UACPI_TRUE : UACPI_FALSE;
 
     // Timed mutex lock is not yet implemented
-    return pthread_mutex_lock((pthread_mutex_t *)mutex) == 0 ? UACPI_TRUE : UACPI_FALSE;
+    int result = pthread_mutex_lock((pthread_mutex_t *)mutex);
+    if (!result)
+        return UACPI_STATUS_OK;
+
+    return UACPI_STATUS_INTERNAL_ERROR;
 }
 
 void uacpi_kernel_release_mutex(uacpi_handle mutex)
@@ -111,13 +112,18 @@ void uacpi_kernel_free_spinlock(uacpi_handle handle)
     free(handle);
 }
 
-uacpi_cpu_flags uacpi_kernel_spinlock_lock(uacpi_handle spinlock)
+uacpi_thread_id uacpi_kernel_get_thread_id(void)
+{
+    return pthread_self();
+}
+
+uacpi_cpu_flags uacpi_kernel_lock_spinlock(uacpi_handle spinlock)
 {
     pthread_spin_lock((pthread_spinlock_t *)spinlock);
     return 0;
 }
 
-void uacpi_kernel_spinlock_unlock(uacpi_handle spinlock, uacpi_cpu_flags flags)
+void uacpi_kernel_unlock_spinlock(uacpi_handle spinlock, uacpi_cpu_flags flags)
 {
     (void)flags;
     pthread_spin_unlock((pthread_spinlock_t *)spinlock);
@@ -345,7 +351,7 @@ uacpi_status uacpi_kernel_pci_write(
 
 uacpi_status uacpi_kernel_raw_io_read(uacpi_io_addr address, uacpi_u8 byte_width, uacpi_u64 *out_value)
 {
-    #ifdef __x86_64__
+    #if defined(__x86_64__) || defined(__i386__) 
     switch (byte_width) {
         case 1:
             *out_value = io_in8(address);
@@ -368,7 +374,7 @@ uacpi_status uacpi_kernel_raw_io_read(uacpi_io_addr address, uacpi_u8 byte_width
 
 uacpi_status uacpi_kernel_raw_io_write(uacpi_io_addr address, uacpi_u8 byte_width, uacpi_u64 value)
 {
-    #ifdef __x86_64__
+    #if defined(__x86_64__) || defined(__i386__)
     switch (byte_width) {
         case 1:
             io_out8(address, value);
@@ -481,9 +487,9 @@ void uacpi_kernel_stall(uacpi_u8 usec)
     usleep(usec);
 }
 
-uacpi_u64 uacpi_kernel_get_ticks(void)
+uacpi_u64 uacpi_kernel_get_nanoseconds_since_boot(void)
 {
-    return pmos_get_time(GET_TIME_NANOSECONDS_SINCE_BOOTUP).value/100;
+    return pmos_get_time(GET_TIME_NANOSECONDS_SINCE_BOOTUP).value;
 }
 
 struct isr_data {
@@ -530,13 +536,15 @@ void *isr_func(void *arg)
 
     uint32_t int_vector = 0;
     int r = install_isa_interrupt(data->irq, 0, p.port, &int_vector);
+    printf("Installed interrupt %i\n", int_vector);
     if (r < 0) {
         send_isr_reply(reply_port, UACPI_STATUS_INTERNAL_ERROR);
         return NULL;
     }
 
-    #ifdef __x86_64__
+    #if defined(__x86_64__) || defined(__i386__)
     int result = pmos_request_io_permission();
+    printf("Requested IO permission: %i\n", result);
     if (result != SUCCESS) {
         send_isr_reply(reply_port, UACPI_STATUS_INTERNAL_ERROR);
         return NULL;

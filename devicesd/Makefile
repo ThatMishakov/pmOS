@@ -14,7 +14,7 @@ TARGETFLAGS = --target=$(ARCH)-pmos --sysroot=$(ROOTDIR)/sysroot
 
 USERCFLAGS = -Wall -Wextra -O2 -pipe
 
-INCLUDEFLAGS = -I$(PROGDIR)/include
+INCLUDEFLAGS = -I$(PROGDIR)/include -I$(PROGDIR)/uACPI/include
 
 # Internal link flags that should not be changed by the user.
 INTERNALLDFLAGS :=     \
@@ -42,9 +42,9 @@ else
 endif
  
 # Use find to glob all *.c files in the directory and extract the object names.
-CCFILES := $(shell find ./generic/ -type f -name '*.cc') $(shell find ./arch/$(ARCHDIR)/ -type f -name '*.cc') 
-CFILES := $(shell find ./generic/ -type f -name '*.c') $(shell find ./arch/$(ARCHDIR)/ -type f -name '*.c') 
-ASMFILES := $(shell find ./generic/ -type f -name '*.S') $(shell find ./arch/$(ARCHDIR)/ -type f -name '*.S') 
+CCFILES := $(shell find ./generic/ -type f -name '*.cc') $(shell find ./arch/$(ARCHDIR)/ -type f -name '*.cc') $(shell find ./uACPI/source/ -type f -name '*.cc')
+CFILES := $(shell find ./generic/ -type f -name '*.c') $(shell find ./arch/$(ARCHDIR)/ -type f -name '*.c') $(shell find ./uACPI/source/ -type f -name '*.c')
+ASMFILES := $(shell find ./generic/ -type f -name '*.S') $(shell find ./arch/$(ARCHDIR)/ -type f -name '*.S') $(shell find ./uACPI/source/ -type f -name '*.S')
 
 
 OBJ    := $(CCFILES:.cc=.o) $(ASMFILES:.S=.o) $(CFILES:.c=.o)

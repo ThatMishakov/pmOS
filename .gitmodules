@@ -11,3 +11,6 @@
 [submodule "terminald/flanterm"]
 	path = terminald/flanterm
 	url = https://github.com/mintsuki/flanterm
+[submodule "devicesd/uACPI"]
+	path = devicesd/uACPI
+	url = https://github.com/UltraOS/uACPI.git

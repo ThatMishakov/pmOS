@@ -356,7 +356,7 @@ result_t pmos_yield();
 */
 syscall_r pmos_get_time(unsigned mode);
 
-result_t request_timer(pmos_port_t port, size_t after_ns);
+result_t request_timer(pmos_port_t port, uint64_t after_ns);
 
 result_t request_named_port(const char *name, size_t name_length, pmos_port_t reply_port, uint32_t flags);
 
@@ -364,7 +364,7 @@ result_t pause_task(uint64_t tid);
 
 result_t resume_task(uint64_t tid);
 
-int pmos_request_timer(pmos_port_t port, size_t ns);
+int pmos_request_timer(pmos_port_t port, uint64_t ns);
 
 #endif
 

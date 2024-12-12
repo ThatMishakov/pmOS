@@ -7,8 +7,6 @@
 #include <assert.h>
 #include <pmos/__internal.h>
 
-int pmos_request_timer(pmos_port_t port, size_t ms);
-
 pmos_port_t _HIDDEN __get_cmd_reply_port()
 {
     struct uthread *ut = __get_tls();

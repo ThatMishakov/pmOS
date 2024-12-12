@@ -126,7 +126,7 @@ __pthread_exit:
     # for C functions...
 
     # Syscall ID
-    li a0, 25 # SYSCALL_DELETE_REGION
+    li a0, 26 # SYSCALL_UNMAP_RANGE
     # uint64_t pid (TID in reality, but I digress)
     mv a1, zero # PID_SELF
     # void * region_start

@@ -90,7 +90,7 @@ __pthread_exit:
     # This is calling release_region() syscall, declared in <pmos/memory.h>
     # TODO: %rax is a convention but it's not used in pmOS
     # Syscall ID
-    movq $25, %rdi # SYSCALL_DELETE_REGION
+    movq $26, %rdi # SYSCALL_UNMAP_RANGE
     # uint64_t pid
     movq $0, %rsi # PID_SELF
     # void * region

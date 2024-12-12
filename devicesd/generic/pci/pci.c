@@ -26,6 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <uacpi/namespace.h>
 #include <acpi/acpi.h>
 #include <assert.h>
 #include <errno.h>
@@ -41,6 +42,7 @@
 #include <uacpi/utilities.h>
 #include <uacpi/resources.h>
 #include <alloca.h>
+#include <inttypes.h>
 
 PCIDeviceVector pci_devices = VECTOR_INIT;
 
@@ -51,25 +53,22 @@ struct DeviceSearchCtx {
     uacpi_namespace_node *out_node;
 };
 
-uacpi_ns_iteration_decision find_pci_device(void *param, uacpi_namespace_node *node)
+uacpi_iteration_decision find_pci_device(void *param, uacpi_namespace_node *node, uint32_t depth)
 {
     struct DeviceSearchCtx *ctx = param;
     uint64_t addr = 0;
-
-    uacpi_object *obj = uacpi_namespace_node_get_object(node);
-    if (obj == NULL || obj->type != UACPI_OBJECT_DEVICE)
-        return UACPI_NS_ITERATION_DECISION_CONTINUE;
+    (void)depth;
 
     uacpi_status ret = uacpi_eval_integer(node, "_ADR", UACPI_NULL, &addr);
     if (ret != UACPI_STATUS_OK && ret != UACPI_STATUS_NOT_FOUND)
-        return UACPI_NS_ITERATION_DECISION_CONTINUE;
+        return UACPI_ITERATION_DECISION_CONTINUE;
 
     if (addr == ctx->addr) {
         ctx->out_node = node;
-        return UACPI_NS_ITERATION_DECISION_BREAK;
+        return UACPI_ITERATION_DECISION_BREAK;
     }
 
-    return UACPI_NS_ITERATION_DECISION_CONTINUE;
+    return UACPI_ITERATION_DECISION_CONTINUE;
 }
 
 void parse_interrupt_table(struct PCIGroup *g, int bus, uacpi_pci_routing_table *pci_routes);
@@ -166,7 +165,7 @@ void check_function(struct PCIGroup *g, uint8_t bus, uint8_t device, uint8_t fun
             .addr = d->device << 16 | d->function,
             .out_node = NULL,
         };
-        uacpi_namespace_for_each_node_depth_first(node, find_pci_device, &ctx);
+        uacpi_namespace_for_each_child(node, find_pci_device, UACPI_NULL, UACPI_OBJECT_DEVICE_BIT, UACPI_MAX_DEPTH_ANY, &ctx);
 
         uint8_t secondary_bus = pci_secondary_bus(c);
         printf("PCI secondary bus %x\n", secondary_bus);
@@ -336,7 +335,7 @@ void init_pci()
         }
 
         MCFGBase *b = &t->structs_list[i];
-        printf("Table %i base addr %lx group %i start %i end %i\n", i, b->base_addr,
+        printf("Table %i base addr %" PRIx64 " group %i start %i end %i\n", i, b->base_addr,
                b->group_number, b->start_bus_number, b->end_bus_number);
 
         assert(b->start_bus_number <= b->end_bus_number);
@@ -355,7 +354,7 @@ void init_pci()
         mem_request_ret_t t = create_phys_map_region(0, NULL, phys_end - phys_start,
                                                      PROT_READ | PROT_WRITE, phys_start);
         if (t.result != SUCCESS) {
-            fprintf(stderr, "Error: could not map PCIe memory: %lx\n", t.result);
+            fprintf(stderr, "Error: could not map PCIe memory: %" PRIi64 "\n", t.result);
             free(g);
             continue;
         }
@@ -413,7 +412,7 @@ void enumerate_pci_bus(int segment, int bus, uacpi_namespace_node *node)
     VECTOR_SORT(g->interrupt_entries, interrupt_entry_compare);
 }
 
-uacpi_ns_iteration_decision pci_check_acpi_root(void *, uacpi_namespace_node *node)
+uacpi_iteration_decision pci_check_acpi_root(void *, uacpi_namespace_node *node, uint32_t /*depth*/)
 {
     uint64_t seg = 0, bus = 0;
 
@@ -421,7 +420,7 @@ uacpi_ns_iteration_decision pci_check_acpi_root(void *, uacpi_namespace_node *no
     uacpi_eval_integer(node, "_BBN", NULL, &bus);
 
     enumerate_pci_bus(seg, bus, node);
-    return UACPI_NS_ITERATION_DECISION_CONTINUE;
+    return UACPI_ITERATION_DECISION_CONTINUE;
 }
 
 void acpi_pci_init()

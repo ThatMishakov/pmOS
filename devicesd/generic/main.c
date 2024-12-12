@@ -69,13 +69,15 @@ void request_pci_devices(Message_Descriptor *desc, IPC_Request_PCI_Devices *d);
 void request_pci_device(Message_Descriptor *desc, IPC_Request_PCI_Device *d);
 void request_pci_device_gsi(Message_Descriptor *desc, IPC_Request_PCI_Device_GSI *d);
 
+void init_acpi();
+
 int main(int argc, char **argv)
 {
     printf("Hello from devicesd!. My PID: %lx\n", get_task_id());
 
     // parse_args(argc, argv);
 
-    #ifdef __x86_64__
+    #if defined(__x86_64__) || defined(__i386__)
     pmos_request_io_permission();
     #endif
     request_priority(0);

@@ -1,6 +1,6 @@
 #include <io.h>
 
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__i386__)
 uint8_t io_in8(uint16_t port) {
     uint8_t data;
     __asm__ volatile("inb %1, %0" : "=a"(data) : "d"(port));

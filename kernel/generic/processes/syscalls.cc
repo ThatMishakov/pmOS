@@ -152,7 +152,7 @@ extern "C" void syscall_handler()
     syscall_table[call_n]();
 
     if ((syscall_error(task) < 0) && !task->regs.syscall_pending_restart()) {
-        t_print_bochs("Debug: syscall %h pid %h (%s) ", call_n, task->task_id, task->name.c_str());
+        t_print_bochs("Debug: syscall %h (%i) pid %h (%s) ", call_n, call_n, task->task_id, task->name.c_str());
         i64 val = syscall_error(task);
         t_print_bochs(" -> %i (%s)\n", val, "syscall failed");
     }
@@ -487,7 +487,7 @@ void syscall_set_attribute()
 
     // TODO: This is *very* x86-specific and is a bad idea in general
 
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__i386__)
     TaskDescriptor *process = pid == task->task_id ? task : get_task(pid);
     if (!process) {
         syscall_error(task) = -ESRCH;
@@ -653,7 +653,7 @@ void syscall_set_interrupt()
     const task_ptr &task = c->current_task;
 
     u64 port    = syscall_arg64(task, 0);
-    ulong intno = syscall_arg(task, 1, 0);
+    ulong intno = syscall_arg(task, 1, 1);
     ulong flags = syscall_flags(task);
 
     auto port_ptr = Port::atomic_get_port(port);
@@ -1565,7 +1565,7 @@ void syscall_set_affinity()
     auto current_task      = current_cpu->current_task;
 
     auto pid       = syscall_arg64(current_task, 0);
-    ulong affinity = syscall_arg64(current_task, 1);
+    ulong affinity = syscall_arg(current_task, 1, 1);
     ulong flags    = syscall_flags(current_task);
 
     const auto task = pid == 0 ? current_cpu->current_task : get_task(pid);

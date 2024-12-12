@@ -77,7 +77,7 @@ __pthread_exit:
 
     # Save the stack data into a protected registers (so that it can be used after destroying TLS)
     movl %gs:0x4, %edi # void * stack_top
-    movl %fs:0x8, %esi # size_t stack_size
+    movl %gs:0x8, %esi # size_t stack_size
 
     # Call __cxa_thread_atexit destructors and stuff
     # This function is defined somewhere in libc
@@ -91,26 +91,26 @@ __pthread_exit:
     # This is calling release_region() syscall, declared in <pmos/memory.h>
     # TODO: %rax is a convention but it's not used in pmOS
     # Syscall ID
-    movl $25, %eax # SYSCALL_DELETE_REGION
+    movl $26, %eax # SYSCALL_UNMAP_RANGE
     # uint64_t pid
     movl $0, %ebx # PID_SELF
+    movl $0, %ecx # (as int64_t)
     # void * region
-    movl %edi, %ecx # stack_top
-    subl %esi, %ecx # stack_top - stack_size = stack_bottom -> start of the memory region
+    movl %edi, %edx # stack_top
+    subl %esi, %ebp # stack_top - stack_size = stack_bottom -> start of the memory region
     # The rest of registers are not used. Zero them out for future compatibility and whatnot
-    xorl %edx, %edx # %r10 is used instead of %rcx because syscall instruction owerwrites it
     xorl %esi, %esi
     xorl %edi, %esi
 
     # zap the stack!
-    int $0xca
+    int $0xf8
     # It doesn't really matter if it succeeds or not, since the thread is exiting anyway
 
 
     # Exit the task
     movl $0, %eax # SYSCALL_EXIT
     movl %ebx, %ebx # return_value
-    int $0xca
+    int $0xf8
     # The task is dead, long live the task!
 
     # Crash the task if the exit syscall fails
