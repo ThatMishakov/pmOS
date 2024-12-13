@@ -78,3 +78,27 @@ struct Logger;
 void print_stack_trace(Logger &logger);
 
 void panic(const char *msg, ...);
+
+// Taken from https://github.com/managarm/managarm/blob/master/kernel/thor/generic/thor-internal/util.hpp#L14
+inline int ceil_log2(unsigned long x) { return 8 * sizeof(unsigned long) - __builtin_clzl(x); }
+
+struct FreqFraction {
+	explicit operator bool () {
+		return f;
+	}
+
+	uint64_t operator*(uint64_t rhs) {
+		auto product = (static_cast<__uint128_t>(f) * static_cast<__uint128_t>(rhs)) >> s;
+		assert(!(product >> 64));
+		return static_cast<uint64_t>(product);
+	}
+
+	uint64_t f{0};
+	int s{0};
+};
+
+inline FreqFraction computeFreqFraction(uint64_t num, uint64_t denom) {
+	auto s = 63 - ceil_log2(num);
+	auto f = (num << s) / denom;
+	return FreqFraction{f, s};
+}

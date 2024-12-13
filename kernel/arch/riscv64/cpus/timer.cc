@@ -58,7 +58,9 @@ void start_timer(u32 ms)
     }
 }
 
-u64 get_ns_since_bootup() { return ticks_since_bootup * 1000000 / ticks_per_ms; }
+u64 get_ns_since_bootup() { 
+    return ticks_since_bootup * 1000000 / ticks_per_ms;
+}
 
 u64 get_current_time_ticks() { return get_current_timer_val(); }
 

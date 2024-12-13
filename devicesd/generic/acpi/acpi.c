@@ -266,8 +266,12 @@ int system_shutdown(void) {
 void *shutdown_thread(void *) {
     pmos_request_io_permission();
     printf("Shutting down in 3 seconds...\n");
+    uint64_t start = pmos_get_time(GET_TIME_NANOSECONDS_SINCE_BOOTUP).value;
     sleep(3);
-    system_shutdown();
+    uint64_t end = pmos_get_time(GET_TIME_NANOSECONDS_SINCE_BOOTUP).value;
+    printf("Sorry not sorry, not shutting down :)\n");
+    printf("Time elapsed in 3 seconds in nanoseconds: %lu (%lu - %lu)\n", end - start, end, start);
+    //system_shutdown();
     return NULL;
 }
 

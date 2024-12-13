@@ -37,7 +37,7 @@ void uacpi_kernel_vlog(enum uacpi_log_level ll, const char* fmt, uacpi_va_list l
 
 void uacpi_kernel_log(enum uacpi_log_level ll, const char* log)
 {
-    fprintf(stderr, "[uACPI Log %i] %s\n", ll, log);
+    fprintf(stderr, "[uACPI Log %i] %s", ll, log);
 }
 
 void *uacpi_kernel_map(uacpi_phys_addr addr, uacpi_size len)

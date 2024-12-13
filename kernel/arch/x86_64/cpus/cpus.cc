@@ -42,6 +42,7 @@
 #include <sched/timers.hh>
 #include <x86_asm.hh>
 #include <stdlib.h>
+#include <x86_utils.hh>
 
 using namespace kernel;
 

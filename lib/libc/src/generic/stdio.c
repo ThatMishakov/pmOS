@@ -805,9 +805,9 @@ static ssize_t __va_printf_closure(write_str_f puts, void *puts_arg, va_list arg
                     void *t = va_arg(arg, void *);
                     unsigned long n = (unsigned long)t;
 
-                    char *s_buff = malloc(max_(24, width + 1));
-                    int j        = uint_to_string(n, 16, s_buff, 'a', flags, width);
-                    j            = puts(puts_arg, s_buff, j);
+                    char s_buff[max_(24, width + 1)];
+                    int j = uint_to_string(n, 16, s_buff, 'a', flags, width);
+                    j = puts(puts_arg, s_buff, j);
                     if (j < 0) {
                         chars_transmitted = j;
                         goto end;

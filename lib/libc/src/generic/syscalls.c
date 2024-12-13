@@ -151,7 +151,7 @@ result_t __pmos_request_timer(pmos_port_t port, uint64_t ns)
     #endif
 }
 
-ports_request_t get_port_by_name(const char *name, uint32_t length, uint32_t flags)
+ports_request_t get_port_by_name(const char *name, size_t length, uint32_t flags)
 {
     #ifdef __i386__
     syscall_r r = __pmos_syscall32_2words(SYSCALL_GET_PORT_BY_NAME | (flags << 8), (unsigned)name, length);
