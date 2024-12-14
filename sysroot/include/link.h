@@ -26,17 +26,10 @@ struct dl_phdr_info {
     const char *dlpi_name;
     const Elf_Phdr *dlpi_phdr;
     Elf_Half dlpi_phnum;
-    unsigned long long int dlpi_adds;
-    unsigned long long int dlpi_subs;
-    size_t dlpi_tls_modid;
-    void *dlpi_tls_data;
-};
-
-struct link_map {
-    Elf_Addr l_addr;
-    char *l_name;
-    Elf_Dyn *l_ld;
-    struct link_map *l_next, *l_prev;
+    // unsigned long long int dlpi_adds;
+    // unsigned long long int dlpi_subs;
+    // size_t dlpi_tls_modid;
+    // void *dlpi_tls_data;
 };
 
 int dl_iterate_phdr(int (*callback)(struct dl_phdr_info *info, size_t size, void *data),

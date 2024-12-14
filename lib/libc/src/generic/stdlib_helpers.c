@@ -140,6 +140,8 @@ long __get_gp();
 long __libc_gp = 0;
 #endif
 
+void __libc_init_dyn();
+
 /// @brief Initializes the standard library
 ///
 /// This function initializes the standard library and is the first thing called in _start function
@@ -161,6 +163,8 @@ void init_std_lib(void *load_data, size_t load_data_size, TLS_Data *d)
     __active_threads = 1;
 
     __init_stdio();
+
+    __libc_init_dyn();
 }
 
 struct load_tag_generic *get_load_tag(uint32_t tag, void *load_data, size_t load_data_size)

@@ -41,6 +41,7 @@ enum {
     LOAD_TAG_FRAMEBUFFER      = 6,
     LOAD_TAG_RSDP             = 7,
     LOAD_TAG_FDT              = 8,
+    LOAD_TAG_ELF_PHDR         = 9,
 };
 
 /// @brief Header for a load tag
@@ -157,6 +158,20 @@ struct load_tag_fdt {
 #define LOAD_TAG_FDT_HEADER                          \
     {                                                \
         LOAD_TAG_FDT, 0, sizeof(struct load_tag_fdt) \
+    }
+
+/// @brief ELF program header tag
+///
+struct load_tag_elf_phdr {
+    struct load_tag_generic header;
+    uint64_t dlpi_addr; //< The base address of the object
+    uint64_t phdr_addr; //< Address of the program header table
+    uint32_t phdr_num;  //< Number of entries in the program header table
+    uint32_t phdr_size; //< Size of each entry in the program header table
+};
+#define LOAD_TAG_ELF_PHDR_HEADER                          \
+    {                                                     \
+        LOAD_TAG_ELF_PHDR, 0, sizeof(struct load_tag_elf_phdr) \
     }
 
 /// @brief Gets the first tag of the specified type

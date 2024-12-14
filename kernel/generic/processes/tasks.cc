@@ -318,6 +318,8 @@ ReturnStr<bool>
 
     klib::shared_ptr<Arch_Page_Table> table;
     ulong program_entry;
+    load_tag_elf_phdr phdr_tag = {LOAD_TAG_ELF_PHDR_HEADER, 0, 0, 0};
+    size_t load_count          = 0;
 
     if (header.bitness == ELF_32BIT) {
         using phreader = ELF_PHeader_32;
@@ -335,6 +337,10 @@ ReturnStr<bool>
         if (!phs.resize(ph_count))
             return Error(-ENOMEM);
 
+        unsigned pheader_size = ph_count * sizeof(phreader);
+        phdr_tag.phdr_num     = ph_count;
+        phdr_tag.phdr_size    = sizeof(phreader);
+
         r = elf->read_to_kernel(header.program_header, (u8 *)phs.data(),
                                 ph_count * sizeof(phreader));
         if (!r.success())
@@ -348,7 +354,6 @@ ReturnStr<bool>
         table = Arch_Page_Table::create_empty(paging_flags);
         if (!table)
             return Error(-ENOMEM);
-        
 
         ulong stack_ptr  = 0;
         ulong stack_size = 0;
@@ -362,6 +367,12 @@ ReturnStr<bool>
 
             if ((ph.p_vaddr & 0xfff) != (ph.p_offset & 0xfff))
                 return Error(-ENOEXEC);
+
+            // If pheader is inside this segment, set its virtual address
+            if (ph.p_offset <= header.program_header &&
+                header.program_header + pheader_size <= ph.p_offset + ph.p_filesz) {
+                phdr_tag.phdr_addr = ph.p_vaddr + header.program_header - ph.p_offset;
+            }
 
             if (!(ph.flags & ELF_FLAG_WRITABLE)) {
                 // Direct map the region
@@ -464,6 +475,10 @@ ReturnStr<bool>
         if (header.prog_header_size != sizeof(phreader))
             return Error(-ENOEXEC);
 
+        u64 pheader_size   = header.program_header_entries * sizeof(phreader);
+        phdr_tag.phdr_num  = header.program_header_entries;
+        phdr_tag.phdr_size = sizeof(phreader);
+
         const u64 ph_count = header.program_header_entries;
         klib::vector<phreader> phs;
         if (!phs.resize(ph_count))
@@ -492,6 +507,11 @@ ReturnStr<bool>
 
             if ((ph.p_vaddr & 0xfff) != (ph.p_offset & 0xfff))
                 return (-ENOEXEC);
+
+            if (ph.p_offset <= header.program_header &&
+                header.program_header + pheader_size <= ph.p_offset + ph.p_filesz) {
+                phdr_tag.phdr_addr = ph.p_vaddr + header.program_header - ph.p_offset;
+            }
 
             if (!(ph.flags & ELF_FLAG_WRITABLE)) {
                 // Direct map the region
@@ -581,6 +601,11 @@ ReturnStr<bool>
         program_entry = header.program_entry;
     }
 
+    if (phdr_tag.phdr_addr == 0) {
+        serial_logger.printf("load_elf error -> phdr not mapped into the program's memory\n");
+        return Error(-ENOEXEC);
+    }
+
     auto result = register_page_table(table);
     if (result != 0)
         return Error(result);
@@ -593,7 +618,8 @@ ReturnStr<bool>
     regs.program_counter() = program_entry;
 
     // Push stack descriptor structure
-    u64 size = sizeof(load_tag_stack_descriptor) + sizeof(load_tag_close);
+    u64 size =
+        sizeof(load_tag_stack_descriptor) + sizeof(load_tag_elf_phdr) + sizeof(load_tag_close);
     // Add other tags
     for (auto &tag: tags) {
         size += tag->offset_to_next;
@@ -611,6 +637,10 @@ ReturnStr<bool>
     };
 
     current_offset += sizeof(*d);
+
+    memcpy((char *)(load_stack) + current_offset, (char *)&phdr_tag, sizeof(phdr_tag));
+    current_offset += sizeof(phdr_tag);
+
     for (auto &tag: tags) {
         auto ptr = load_stack + current_offset / 8;
         current_offset += tag->offset_to_next;

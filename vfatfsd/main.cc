@@ -109,14 +109,23 @@ void tick()
     }
 }
 
+void test_exception()
+{
+    try {
+        throw std::runtime_error("Test exception");
+    } catch (const std::exception &e) {
+        printf("Caught exception: %s\n", e.what());
+    }
+}
+
 int main()
 {
     sleep(1);
     printf("Starting tests...\n");
     tick();
+    test_exception();
 
     //test_tlb_shootdown();
-
     test_threads();
 
     // long p;
