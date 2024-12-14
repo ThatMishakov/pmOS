@@ -209,10 +209,9 @@ public:
 
     /// Last hart id that used the floating point unit
     u64 last_fp_hart_id = 0;
-
-    /// RISC-V shenanigans hack
-    u64 syscall_num = 0;
 #endif
+    u64 syscall_num = 0;
+
     // Interrupts handlers
     pmos::containers::set<Interrupt_Handler *> interrupt_handlers;
     inline bool can_be_rebound() { return interrupt_handlers.empty(); }
