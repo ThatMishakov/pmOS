@@ -151,7 +151,7 @@ public:
      * @return klib::shared_ptr<RISCV64_Page_Table> A pointer to the new page
      * table
      */
-    static klib::shared_ptr<RISCV64_Page_Table> create_empty();
+    static klib::shared_ptr<RISCV64_Page_Table> create_empty(int flags = 0);
 
     /// @brief Atomically add to the active_counter
     ///
@@ -200,6 +200,8 @@ public:
 
     virtual kresult_t copy_pages(const klib::shared_ptr<Page_Table> &to, u64 from_addr, u64 to_addr,
                     u64 size_bytes, u8 new_access) override;
+
+    bool is_32bit() const noexcept { return false; }
 protected:
     /// Root node/top level of paging structures
     u64 table_root = 0;

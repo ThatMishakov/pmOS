@@ -691,8 +691,10 @@ void RISCV64_PTE::clear_auto()
     *this = RISCV64_PTE();
 }
 
-klib::shared_ptr<RISCV64_Page_Table> RISCV64_Page_Table::create_empty()
+klib::shared_ptr<RISCV64_Page_Table> RISCV64_Page_Table::create_empty(int flags)
 {
+    // TODO: Support 32 bit userspace as well??
+
     klib::shared_ptr<RISCV64_Page_Table> new_table =
         klib::unique_ptr<RISCV64_Page_Table>(new RISCV64_Page_Table());
 
