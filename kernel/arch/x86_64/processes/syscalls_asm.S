@@ -227,7 +227,6 @@ ret_from_sysenter:
 
     .globl syscall_int_entry
 syscall_int_entry:
-
     # It will always be from other rings to ring 0
     swapgs
 

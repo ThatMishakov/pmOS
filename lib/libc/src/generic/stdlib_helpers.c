@@ -120,7 +120,11 @@ static void init_tls_first_time(void *load_data, size_t load_data_size, TLS_Data
         return; // TODO: Panic
 
     void *thread_pointer = __thread_pointer_from_uthread(u);
+    #ifdef __i386__
+    set_registers(0, SEGMENT_GS, thread_pointer);
+    #else
     set_registers(0, SEGMENT_FS, thread_pointer);
+    #endif
 
     if (__libc_init_hook)
         __libc_init_hook();

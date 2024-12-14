@@ -106,8 +106,8 @@ result_t syscall_kill_task(uint64_t tid);
  * @return result_t Result of the call. If the result != SUCCESS, the process was not started.
  * @see init_stack() syscall_new_process() asign_page_table()
  */
-result_t syscall_start_process(uint64_t pid, uint64_t entry, uint64_t arg1, uint64_t arg2,
-                               uint64_t arg3);
+result_t syscall_start_process(uint64_t pid, unsigned long entry, unsigned long arg1, unsigned long arg2,
+                               unsigned long arg3);
 
 /**
  * @brief Loads an executable from the memory object into the address space of a task
@@ -124,7 +124,7 @@ result_t syscall_start_process(uint64_t pid, uint64_t entry, uint64_t arg1, uint
  * @see syscall_start_process()
  * @todo Think of a way to pass the arguments to the executable
  */
-result_t syscall_load_executable(uint64_t tid, uint64_t object_id, uint64_t flags);
+result_t syscall_load_executable(uint64_t tid, uint64_t object_id, uint32_t flags);
 
 /// Sets the name of the task
 result_t syscall_set_task_name(uint64_t tid, const char *name, size_t name_length);
@@ -162,7 +162,7 @@ result_t syscall_get_message_info(Message_Descriptor *descr, pmos_port_t port, u
  * @param args Aguments. MSG_ARG_NOPOP: do not pop the message after executing the command
  * @return result of the execution. On success, buff should contain the message.
  */
-result_t get_first_message(char *buff, uint64_t args, pmos_port_t port);
+result_t get_first_message(char *buff, uint32_t args, pmos_port_t port);
 
 /**
  * @brief Sends the message to the port
@@ -205,7 +205,7 @@ result_t send_message_port(pmos_port_t port, size_t size, const void *message);
  * @todo Setting the lower than current priority is currently semi-broken (though not
  * catastriphically) as I have not yet implemented the logic for that
  */
-result_t request_priority(uint64_t priority);
+result_t request_priority(uint32_t priority);
 
 /**
  * @brief Sets the affinity of the task to the given CPU
@@ -223,13 +223,13 @@ result_t request_priority(uint64_t priority);
  * @param flags Flags for the operation. Currently unused, must be set to 0.
  * @return result_t result of the operation
  */
-result_t set_affinity(uint64_t tid, uint64_t cpu_id, uint64_t flags);
+result_t set_affinity(uint64_t tid, uint32_t cpu_id, uint32_t flags);
 
 /// Returns the LAPIC id the process is running on when calling the process
 /// This value is not shifted left, so in non-X2APIC it would be lapic id << 24
 /// @param cpu_num Index of the CPU (assigned by the kernel during its initialization).
 ///                0 counts as the CPU the caller is executing on.
-syscall_r get_lapic_id(uint64_t cpu_id);
+syscall_r get_lapic_id(uint32_t cpu_id);
 
 /// Type for the task group ID
 typedef uint64_t task_group_t;
@@ -332,7 +332,7 @@ syscall_r is_task_group_member(uint64_t task_id, uint64_t group_id);
  * the value is undefined.
  */
 syscall_r set_task_group_notifier_mask(uint64_t task_group_id, pmos_port_t port_id,
-                                       uint64_t new_mask, uint64_t flags);
+                                       uint32_t new_mask, uint32_t flags);
 
 /**
  * @brief Yields the CPU to the next task
@@ -354,17 +354,17 @@ result_t pmos_yield();
  * @param mode Mode of the operation
  * @return syscall_r result of the operation. If the result is SUCCESS, the value contains the time
 */
-syscall_r pmos_get_time(uint64_t mode);
+syscall_r pmos_get_time(unsigned mode);
 
-result_t request_timer(pmos_port_t port, size_t after_ns);
+result_t request_timer(pmos_port_t port, uint64_t after_ns);
 
-result_t request_named_port(const char *name, size_t name_length, pmos_port_t reply_port, uint64_t flags);
+result_t request_named_port(const char *name, size_t name_length, pmos_port_t reply_port, uint32_t flags);
 
 result_t pause_task(uint64_t tid);
 
 result_t resume_task(uint64_t tid);
 
-int pmos_request_timer(pmos_port_t port, size_t ns);
+int pmos_request_timer(pmos_port_t port, uint64_t ns);
 
 #endif
 

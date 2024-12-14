@@ -54,3 +54,10 @@ extern "C" void setCR4(u64 cr4);
 
 extern "C" u64 getCR8();
 extern "C" void setCR8(u64 cr8);
+
+inline u64 rdtsc()
+{
+    u64 rax, rdx;
+    asm volatile("rdtsc" : "=a"(rax), "=d"(rdx));
+    return (rdx << 32) | rax;
+}

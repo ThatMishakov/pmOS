@@ -107,6 +107,7 @@ Direct_Mapper init_mapper;
 // Temporary temporary mapper
 #ifdef __x86_64__
     #include <paging/x86_temp_mapper.hh>
+    #include <x86_asm.hh>
 using Arch_Temp_Mapper = x86_PAE_Temp_Mapper;
 #elif defined(__riscv)
     #include <paging/riscv64_temp_mapper.hh>
@@ -756,6 +757,7 @@ void init_task1()
 
     // Create new task and load ELF into it
     auto task = TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel::User);
+    task->name = "bootstrap";
     serial_logger.printf("Loading ELF...\n");
     auto p = task->load_elf(task1->object, task1->path, tags);
     if (!p.success() || !p.val)
@@ -936,11 +938,19 @@ void init_smp()
 size_t booted_cpus      = 0;
 bool boot_barrier_start = false;
 
+#if defined(__x86_64__)
+extern u64 boot_tsc;
+#endif
+
 void limine_main()
 {
     if (LIMINE_BASE_REVISION_SUPPORTED == false) {
         hcf();
     }
+
+    #ifdef __x86_64__
+    boot_tsc = rdtsc();
+    #endif
 
     serial_logger.printf("Hello from pmOS kernel!\n");
     serial_logger.printf("Kernel start: 0x%h\n", &_kernel_start);

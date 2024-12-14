@@ -31,7 +31,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-void *map_phys(void *phys_addr, size_t bytes);
+void *map_phys(uint64_t phys_addr, size_t bytes);
 void unmap_phys(void *virt_addr, size_t bytes);
 
 #endif

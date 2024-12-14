@@ -127,7 +127,7 @@ void init_screen()
     size_t end = (start + size + 0xfff)&~0xfffUL;
     size_t size_alligned = end - start;
 
-    mem_request_ret_t map_request = create_phys_map_region(TASK_ID_SELF, 0, size_alligned, PROT_READ|PROT_WRITE, (void*)start);
+    mem_request_ret_t map_request = create_phys_map_region(TASK_ID_SELF, 0, size_alligned, PROT_READ|PROT_WRITE, start);
     if (map_request.result != SUCCESS)
         exit(7);
 
@@ -146,7 +146,7 @@ pmos_port_t log_port = 0;
 void request_logger_port()
 {
     // TODO: Add a syscall for this
-    pmos_syscall(SYSCALL_REQUEST_NAMED_PORT, log_port_name, strlen(log_port_name), main_port, 0);
+    request_named_port(log_port_name, strlen(log_port_name), main_port, 0);
 }
 
 void react_named_port_notification(char *msg_buff, size_t size)

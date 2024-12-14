@@ -597,7 +597,7 @@ typedef struct IPC_ACPI_Request_RSDT {
 typedef struct IPC_ACPI_RSDT_Reply {
     uint32_t type;
     int32_t result;
-    ACPI_RSDP_descriptor *descriptor;
+    uint64_t descriptor;
 } IPC_ACPI_RSDT_Reply;
 
 #define IPC_FDT_Request_NUM 0x62

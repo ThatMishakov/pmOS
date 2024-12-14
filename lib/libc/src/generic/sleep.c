@@ -67,7 +67,9 @@
 //     return 0;
 // }
 
-int pmos_request_timer(pmos_port_t port, size_t ns)
+result_t __pmos_request_timer(pmos_port_t port, uint64_t ns);
+
+int pmos_request_timer(pmos_port_t port, uint64_t ns)
 {
     // Request a timer from the kernel
     // Initially, this was implemented using HPET in the userspace, on x86.
@@ -75,9 +77,9 @@ int pmos_request_timer(pmos_port_t port, size_t ns)
     // it might be better to do this in kernel and use LAPIC timer, freeing HPET
     // for other
 
-    syscall_r r = pmos_syscall(SYSCALL_REQUEST_TIMER, port, ns);
-    if (r.result != SUCCESS) {
-        errno = r.result;
+    result_t r = __pmos_request_timer(port, ns);
+    if (r != SUCCESS) {
+        errno = r;
         return -1;
     }
 

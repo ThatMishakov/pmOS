@@ -30,6 +30,9 @@
 #include <pmos/system.h>
 #include <stdint.h>
 #include <unistd.h>
+#include <errno.h>
+
+syscall_r __pmos_syscall_set_attr(uint64_t pid, uint32_t attr, uint32_t value);
 
 int pmos_request_io_permission()
 {
@@ -38,6 +41,10 @@ int pmos_request_io_permission()
 
     pid_t my_pid = get_task_id();
 
-    uint64_t result = pmos_syscall(SYSCALL_SET_ATTR, my_pid, ATTR_ALLOW_PORT, 1).result;
-    return result ? -1 : 0;
+    int64_t result = __pmos_syscall_set_attr(my_pid, ATTR_ALLOW_PORT, 1).result;
+    if (result < 0) {
+        errno = -result;
+        return -1;
+    }
+    return 0;
 }

@@ -273,16 +273,20 @@
 #define LLONG_MAX 9223372036854775807LL
 
 /// Minimum value of long long
-#define LLONG_MIN (-9223372036854775808LL)
+#define LLONG_MIN (-LLONG_MAX - 1LL)
 
 /// Number of bits in a type long
 #define LONG_BIT 64
 
 /// Maximum value of long
+#ifdef __LP64__
 #define LONG_MAX 9223372036854775807L
+#else
+#define LONG_MAX 2147483647L
+#endif
 
 /// Minimum value of long
-#define LONG_MIN (-9223372036854775808L)
+#define LONG_MIN (-LONG_MAX - 1L)
 
 /// Maximum bytes in a multibyte character, for any locale
 #define MB_LEN_MAX 4
@@ -309,7 +313,7 @@
 #define UINT_MAX 4294967295U
 
 /// Maximum value of unsigned long
-#define ULONG_MAX 18446744073709551615UL
+#define ULONG_MAX LONG_MAX *2UL+1UL
 
 /// Maximum value of unsigned long long
 #define ULLONG_MAX 18446744073709551615ULL
@@ -318,7 +322,7 @@
 #define USHRT_MAX 65535
 
 /// Maximum value of size_t
-#define SIZE_MAX 18446744073709551615UL
+#define SIZE_MAX ULONG_MAX
 
 /// Number of bytes in int
 #define WORD_BIT 32

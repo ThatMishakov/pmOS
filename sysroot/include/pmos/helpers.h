@@ -61,7 +61,7 @@ result_t get_message(Message_Descriptor *desc, unsigned char **message, pmos_por
  * @param ms Time in milliseconds
  * @return int 0 on success, -1 on failure. Sets errno on error
  */
-int pmos_request_timer(pmos_port_t port, size_t ms);
+int pmos_request_timer(pmos_port_t port, uint64_t ms);
 
 #endif
 

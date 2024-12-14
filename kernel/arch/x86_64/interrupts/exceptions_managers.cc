@@ -94,9 +94,9 @@ void print_kernel_int_stack_trace(Logger &logger)
     }
 }
 
-extern "C" void dbg_main()
+extern "C" void dbg_main(long code)
 {
-    t_print_bochs("Error! Kernel interrupt!\n");
+    t_print_bochs("Error! Kernel interrupt! %i\n", code);
     print_registers(kernel_interrupt_regs, bochs_logger);
     print_kernel_int_stack_trace(bochs_logger);
     while (1)
@@ -219,7 +219,7 @@ extern "C" void pagefault_manager()
 
         print_pt_chain(virtual_addr, global_logger);
         print_registers(task, global_logger);
-        print_stack_trace(task, global_logger);
+        //print_stack_trace(task, global_logger);
 
         task->atomic_kill();
     }
@@ -234,13 +234,18 @@ extern "C" void sse_exception_manager()
 extern "C" void general_protection_fault_manager()
 {
     task_ptr task = get_cpu_struct()->current_task;
-    // t_print_bochs("!!! General Protection Fault (GP) error %h\n", err);
+    serial_logger.printf("!!! General Protection Fault (GP) error (segment) %h "
+                         "PID %i (%s) RIP %h CS %h... Killing the process\n",
+                         task->regs.int_err, task->task_id, task->name.c_str(), task->regs.e.rip,
+                         task->regs.e.cs);
+    print_registers(get_cpu_struct()->current_task, serial_logger);
+
     global_logger.printf("!!! General Protection Fault (GP) error (segment) %h "
                          "PID %i (%s) RIP %h CS %h... Killing the process\n",
                          task->regs.int_err, task->task_id, task->name.c_str(), task->regs.e.rip,
                          task->regs.e.cs);
     print_registers(get_cpu_struct()->current_task, global_logger);
-    print_stack_trace(task, global_logger);
+    //print_stack_trace(task, global_logger);
     task->atomic_kill();
 }
 

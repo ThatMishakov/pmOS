@@ -637,7 +637,7 @@ void ahci_handle(PCIDescriptor d)
     bar5 &= 0xfffffff0;
 
     auto mem_req =
-        create_phys_map_region(0, nullptr, 8192, PROT_READ | PROT_WRITE, (void *)(size_t)bar5);
+        create_phys_map_region(0, nullptr, 8192, PROT_READ | PROT_WRITE, bar5);
     if (mem_req.result != SUCCESS) {
         printf("Failed to map AHCI controller's memory\n");
         return;

@@ -38,6 +38,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/syscall.h>
+#include <pmos/ports.h>
 
 uint64_t loader_port = 0;
 
@@ -218,8 +219,8 @@ void start_executables()
 
 void service_ports()
 {
-    syscall_r r = pmos_syscall(SYSCALL_CREATE_PORT, get_task_id());
-    loader_port = r.value;
+    ports_request_t r = create_port(0, 0);
+    loader_port = r.port;
     if (r.result != SUCCESS) {
         print_str("Loader: could not create a port. Error: ");
         print_hex(r.result);
@@ -228,25 +229,50 @@ void service_ports()
     }
 
     char *log_port_name = "/pmos/terminald";
-    pmos_syscall(SYSCALL_REQUEST_NAMED_PORT, log_port_name, strlen(log_port_name), loader_port, 0);
+    result_t res = request_named_port(log_port_name, strlen(log_port_name), loader_port, 0);
+    if (res != SUCCESS) {
+        print_str("Loader: could not request log port. Error: ");
+        print_hex(res);
+        print_str("\n");
+        goto exit;
+    }
 
     char *vfsd_port_name = "/pmos/vfsd";
-    pmos_syscall(SYSCALL_REQUEST_NAMED_PORT, vfsd_port_name, strlen(vfsd_port_name), loader_port,
-                 0);
+    res = request_named_port(vfsd_port_name, strlen(vfsd_port_name), loader_port, 0);
+    if (res != SUCCESS) {
+        print_str("Loader: could not request vfsd port. Error: ");
+        print_hex(res);
+        print_str("\n");
+        goto exit;
+    }
 
     char *loader_port_name = "/pmos/loader";
-    pmos_syscall(SYSCALL_NAME_PORT, loader_port, loader_port_name, strlen(loader_port_name));
+    res = name_port(loader_port, loader_port_name, strlen(loader_port_name), 0);
+    if (res != SUCCESS) {
+        print_str("Loader: could not name loader port. Error: ");
+        print_hex(res);
+        print_str("\n");
+        goto exit;
+    }
 
     while (1) {
         Message_Descriptor desc;
-        syscall_r s = pmos_syscall(SYSCALL_GET_MSG_INFO, &desc, loader_port, 0);
+        result_t r = syscall_get_message_info(&desc, loader_port, 0);
 
-        if (s.result != SUCCESS) {
+        if (r != SUCCESS) {
+            print_str("Loader: Could not get message info. Error: ");
+            print_hex(r);
+            print_str("\n");
+            break;
         }
 
         char buff[desc.size];
-        s = pmos_syscall(SYSCALL_GET_MESSAGE, buff, 0, loader_port);
-        if (s.result != SUCCESS) {
+        r = get_first_message(buff, 0, loader_port);
+        if (r != SUCCESS) {
+            print_str("Loader: Could not get message. Error: ");
+            print_hex(r);
+            print_str("\n");
+            break;
         }
 
         if (desc.size < 4) {
@@ -265,11 +291,11 @@ void service_ports()
 
             if (rsdp_desc != 0) {
                 reply.result     = 0;
-                reply.descriptor = (void *)rsdp_desc;
+                reply.descriptor = rsdp_desc;
                 print_str("********************************************\n");
             }
 
-            pmos_syscall(SYSCALL_SEND_MSG_PORT, ptr->reply_channel, sizeof(reply), &reply);
+            send_message_port(ptr->reply_channel, sizeof(reply), &reply);
         } break;
         case IPC_FDT_Request_NUM: {
             IPC_FDT_Reply reply = {.type              = IPC_FDT_Reply_NUM,
@@ -285,7 +311,7 @@ void service_ports()
                 reply.object_size       = fdt_desc.mem_object_size;
             }
 
-            pmos_syscall(SYSCALL_SEND_MSG_PORT, ptr->reply_channel, sizeof(reply), &reply);
+            send_message_port(ptr->reply_channel, sizeof(reply), &reply);
         } break;
         case 0x21: {
             IPC_Kernel_Named_Port_Notification *notif = (IPC_Kernel_Named_Port_Notification *)ptr;
@@ -343,7 +369,7 @@ void service_ports()
                 if (result != 0) {
                     reply.result_code = result;
                 }
-                pmos_syscall(SYSCALL_SEND_MSG_PORT, ptr->reply_channel, sizeof(reply), &reply);
+                send_message_port(ptr->reply_channel, sizeof(reply), &reply);
             } else {
                 print_str("Loader: Recieved IPC_FS_Open of unexpected size 0x");
                 print_hex(desc.size);

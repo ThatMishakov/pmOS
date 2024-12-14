@@ -54,7 +54,14 @@ struct __sigjmp_buf_tag {
     long r15;
     long rsp;
     long rip;
-#elif
+#elif defined(__i386__)
+    long ebx;
+    long ebp;
+    long edi;
+    long esi;
+    long esp;
+    long eip;
+#else
     #error "Unsupported architecture"
 #endif
 

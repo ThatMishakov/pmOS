@@ -127,7 +127,7 @@ struct task_register_set {
 ///          virt_addr contains the address of the new virtual region.
 /// @see release_region()
 mem_request_ret_t create_normal_region(uint64_t pid, void *addr_start, size_t size,
-                                       uint64_t access);
+                                       uint32_t access);
 
 /**
  * @brief Create a physically mapped memory region. The functioning is very similar to
@@ -138,7 +138,7 @@ mem_request_ret_t create_normal_region(uint64_t pid, void *addr_start, size_t si
  * @see create_normal_region()
  */
 mem_request_ret_t create_phys_map_region(uint64_t pid, void *addr_start, size_t size,
-                                         uint64_t access, void *phys_addr);
+                                         uint32_t access, uint64_t phys_addr);
 
 /**
  * @brief Maps a memory object to the new region.
@@ -158,7 +158,7 @@ mem_request_ret_t create_phys_map_region(uint64_t pid, void *addr_start, size_t 
  * region.
  */
 mem_request_ret_t map_mem_object(uint64_t page_table_id, void *addr_start, size_t size,
-                                 uint64_t access, mem_object_t object_id, size_t offset);
+                                 uint32_t access, mem_object_t object_id, size_t offset);
 
 /**
  * @brief Transfers a memory region to the new page table.
@@ -177,7 +177,7 @@ mem_request_ret_t map_mem_object(uint64_t page_table_id, void *addr_start, size_
  * meaningless if the result is not SUCCESS
  * @see create_normal_region()
  */
-mem_request_ret_t transfer_region(uint64_t to_page_table, void *region, void *dest, uint64_t flags);
+mem_request_ret_t transfer_region(uint64_t to_page_table, void *region, void *dest, uint32_t flags);
 
 /// @brief Releases memory region
 /// @param pid PID of the process holding the region that should be released. Takes TASK_ID_SELF (0)

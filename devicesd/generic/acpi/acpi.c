@@ -44,12 +44,23 @@
 #include <pthread.h>
 #include <pmos/special.h>
 
+
+void init_acpi();
+
+extern uint64_t rsdp_desc;
+
+extern int acpi_revision;
+
+// Returns -1 on error or ACPI version otherwise
+int walk_acpi_tables();
+int check_table(ACPISDTHeader *header);
+
 int acpi_revision = -1;
 
-RSDP_descriptor20 *rsdp_desc = NULL;
+uint64_t rsdp_desc = 0;
 
 typedef struct acpi_mem_map_node {
-    void *phys;
+    uint64_t phys;
     size_t size_bytes;
     void *virt;
     struct acpi_mem_map_node *next;
@@ -63,7 +74,7 @@ void acpi_mem_map_list_push_front(acpi_mem_map_node *n)
     acpi_mem_map_list_dummy.next = n;
 }
 
-void *acpi_map_and_get_virt(void *phys, size_t size)
+void *acpi_map_and_get_virt(uint64_t phys, size_t size)
 {
     for (acpi_mem_map_node *p = acpi_mem_map_list_dummy.next; p != NULL; p = p->next) {
 
@@ -72,9 +83,15 @@ void *acpi_map_and_get_virt(void *phys, size_t size)
     }
 
     void *virt = map_phys(phys, size);
+    if (virt == NULL)
+        return NULL;
     // if (virt == NULL) panic("Panic: Could not map meory\n");
 
     acpi_mem_map_node *n = malloc(sizeof(acpi_mem_map_node));
+    if (n == NULL) {
+        unmap_phys(virt, size);
+        return NULL;
+    }
     // if (n == NULL) panic("Panic: Could not allocate memory\n");
 
     n->phys       = phys;
@@ -147,7 +164,8 @@ void request_acpi_tables()
     if (reply->result != 0) {
         printf("Warning: Did not get RSDT table: %i\n", reply->result);
     } else {
-        rsdp_desc = (RSDP_descriptor20 *)reply->descriptor;
+        rsdp_desc = reply->descriptor;
+        printf("RSDT table found at 0x%llx\n", rsdp_desc);
     }
     free(message);
 }
@@ -159,16 +177,15 @@ int power_button_init();
 
 #include <uacpi/uacpi.h>
 #include <uacpi/event.h>
-int acpi_init(uacpi_phys_addr rsdp_phys_addr) {
-    uacpi_init_params init_params = {
-        .rsdp = rsdp_phys_addr,
-        .rt_params = {
-            .flags = 0,
-            .log_level = UACPI_LOG_TRACE,
-        },
-    };
 
-    uacpi_status ret = uacpi_initialize(&init_params);
+uacpi_status uacpi_kernel_get_rsdp(uacpi_phys_addr *out_rdsp_address)
+{
+    *out_rdsp_address = rsdp_desc;
+    return UACPI_STATUS_OK;
+}
+
+int acpi_init() {
+    uacpi_status ret = uacpi_initialize(0);
     if (uacpi_unlikely_error(ret)) {
         fprintf(stderr, "uacpi_initialize error: %s", uacpi_status_to_string(ret));
         return -ENODEV;
@@ -180,7 +197,7 @@ int acpi_init(uacpi_phys_addr rsdp_phys_addr) {
         return -ENODEV;
     }
 
-    #ifdef __x86_64__
+    #if defined(__x86_64__) || defined(__i386__) 
     ret = uacpi_set_interrupt_model(UACPI_INTERRUPT_MODEL_IOAPIC);
     if (uacpi_unlikely_error(ret)) {
         fprintf(stderr, "uacpi_set_interrupt_model error: %s", uacpi_status_to_string(ret));
@@ -249,8 +266,12 @@ int system_shutdown(void) {
 void *shutdown_thread(void *) {
     pmos_request_io_permission();
     printf("Shutting down in 3 seconds...\n");
+    uint64_t start = pmos_get_time(GET_TIME_NANOSECONDS_SINCE_BOOTUP).value;
     sleep(3);
-    system_shutdown();
+    uint64_t end = pmos_get_time(GET_TIME_NANOSECONDS_SINCE_BOOTUP).value;
+    printf("Sorry not sorry, not shutting down :)\n");
+    printf("Time elapsed in 3 seconds in nanoseconds: %lu (%lu - %lu)\n", end - start, end, start);
+    //system_shutdown();
     return NULL;
 }
 
@@ -294,15 +315,17 @@ void init_acpi()
 
     if (acpi_revision == -1) {
         printf("Warning: Did not initialize ACPI\n");
+    } else {
+        printf("Info: ACPI revision: %i\n", acpi_revision);
     }
 
     init_cpus();
-    #ifdef __x86_64__
+    #if defined(__x86_64__) || defined(__i386__)
     init_ioapic();
     #endif
     init_pci();
 
-    int i = acpi_init((uacpi_phys_addr)rsdp_desc);
+    int i = acpi_init();
     if (i != 0) {
         printf("Warning: Could not initialize uACPI\n");
         return;

@@ -31,6 +31,9 @@
 #include <phys_map/phys_map.h>
 #include <stdio.h>
 #include <string.h>
+#include <inttypes.h>
+
+extern uint64_t rsdp_desc;
 
 typedef struct ACPITreeNode {
     ACPISDTHeader *virt_addr;
@@ -108,7 +111,7 @@ void push_table(ACPISDTHeader *acpi_table_virt)
 
 // Allocates virtual address (of the right size) from physical address of the table
 // Returns NULL is checksum is not valid or couldn't map to process memory
-ACPISDTHeader *check_get_virt_from_phys(ACPISDTHeader *phys)
+ACPISDTHeader *check_get_virt_from_phys(uint64_t phys)
 {
     ACPISDTHeader *virt_small = map_phys(phys, sizeof(ACPISDTHeader *));
     uint32_t size             = virt_small->length;
@@ -131,12 +134,12 @@ ACPISDTHeader *check_get_virt_from_phys(ACPISDTHeader *phys)
     return NULL;
 }
 
-RSDT *get_rsdt_from_desc(RSDP_descriptor *rsdp_desc_phys)
+RSDT *get_rsdt_from_desc(uint64_t rsdp_desc_phys)
 {
     RSDP_descriptor *rsdp_virt = map_phys(rsdp_desc_phys, sizeof(RSDP_descriptor));
-
     if (rsdp_virt == NULL) {
-        // panic("Could not map rsdp\n");
+        fprintf(stderr, "Warning: Could not map rsdp\n");
+        return NULL;
     }
 
     unsigned char sum = 0;
@@ -148,10 +151,8 @@ RSDT *get_rsdt_from_desc(RSDP_descriptor *rsdp_desc_phys)
         return NULL;
     }
 
-    ACPISDTHeader *rsdt_phys =
-        (ACPISDTHeader *)(uint64_t)
-            rsdp_virt->rsdt_address; // TODO: Will need to be changed when porting to 32 bit
-    RSDT *rsdt_virt = (RSDT *)check_get_virt_from_phys(rsdt_phys);
+
+    RSDT *rsdt_virt = (RSDT *)check_get_virt_from_phys((uint64_t)rsdp_virt->rsdt_address);
 
     if (!rsdt_virt || strncmp("RSDT", rsdt_virt->h.signature, 4)) {
         fprintf(stderr, "Warning: RSDT pointed by RSDP not valid\n");
@@ -161,7 +162,7 @@ RSDT *get_rsdt_from_desc(RSDP_descriptor *rsdp_desc_phys)
     return rsdt_virt;
 }
 
-XSDT *get_xsdt_from_desc(RSDP_descriptor20 *rsdp_desc_phys)
+XSDT *get_xsdt_from_desc(uint64_t rsdp_desc_phys)
 {
     RSDP_descriptor20 *rsdp_virt = map_phys(rsdp_desc_phys, sizeof(RSDP_descriptor20));
 
@@ -185,10 +186,8 @@ XSDT *get_xsdt_from_desc(RSDP_descriptor20 *rsdp_desc_phys)
     if (rsdp_virt->firstPart.revision < 2)
         return NULL; // ACPI ver. 1
 
-    ACPISDTHeader *xsdt_phys =
-        (ACPISDTHeader *)(uint64_t)
-            rsdp_virt->xsdt_address; // TODO: Will need to be changed when porting to 32 bit
-    XSDT *xsdt_virt = (XSDT *)check_get_virt_from_phys(xsdt_phys);
+    XSDT *xsdt_virt = (XSDT *)check_get_virt_from_phys((uint64_t)
+            rsdp_virt->xsdt_address);
 
     if (!xsdt_virt || strncmp("XSDT", xsdt_virt->h.signature, 4)) {
         fprintf(stderr, "Warning: XSDT pointed by RSDP not valid\n");
@@ -203,20 +202,20 @@ void parse_fadt(FADT *fadt_virt)
     uint8_t revision = fadt_virt->h.revision;
 
     // TODO: FACS
-    ACPISDTHeader *dsdt_phys = NULL;
+    uint64_t dsdt_phys = 0;
 
     if (revision < 2) {
-        dsdt_phys = (ACPISDTHeader *)(uint64_t)fadt_virt->dsdt_phys;
+        dsdt_phys = (uint64_t)fadt_virt->dsdt_phys;
     } else {
-        dsdt_phys = (ACPISDTHeader *)fadt_virt->X_DSDT;
+        dsdt_phys = fadt_virt->X_DSDT;
     }
 
     DSDT *dsdt_virt = (DSDT *)check_get_virt_from_phys(dsdt_phys);
     if (dsdt_virt == NULL || strncmp(dsdt_virt->h.signature, "DSDT", 4)) {
         fprintf(stderr,
-                "Panic: Weird DSDT table pointer in FADT table, dsdt_phys %lx dsdt_virt: %lx "
+                "Panic: Weird DSDT table pointer in FADT table, dsdt_phys %" PRIx64 " dsdt_virt: %p "
                 "revision: %i\n",
-                (uint64_t)dsdt_phys, (uint64_t)dsdt_virt, revision);
+                (uint64_t)dsdt_phys, dsdt_virt, revision);
         exit(2);
     }
 
@@ -228,10 +227,10 @@ int walk_acpi_tables()
 {
     int revision         = -1;
     char xsdt_enumerated = 0;
-    if (rsdp_desc != NULL) { // TODO
+    if (rsdp_desc != 0) { // TODO
         XSDT *xsdt = get_xsdt_from_desc(rsdp_desc);
         if (xsdt == NULL) {
-            fprintf(stderr, "Warning: could not validade XSDT table %lX\n", (uint64_t)xsdt);
+            fprintf(stderr, "Warning: could not validade XSDT table %" PRIx64 "\n", (uint64_t)xsdt);
         } else {
             xsdt_enumerated = 1;
             push_table((ACPISDTHeader *)xsdt);
@@ -239,18 +238,18 @@ int walk_acpi_tables()
             uint32_t entries = (length - sizeof(xsdt->h)) / sizeof(uint64_t);
             for (uint32_t i = 0; i < entries; ++i) {
                 ACPISDTHeader *h =
-                    check_get_virt_from_phys((ACPISDTHeader *)xsdt->PointerToOtherSDT[i]);
+                    check_get_virt_from_phys(xsdt->PointerToOtherSDT[i]);
                 if (h != NULL)
                     push_table(h);
             }
         }
     }
 
-    if (rsdp_desc != NULL) {
-        RSDT *rsdt = get_rsdt_from_desc(&rsdp_desc->firstPart);
+    if (rsdp_desc != 0) {
+        RSDT *rsdt = get_rsdt_from_desc(rsdp_desc);
         if (rsdt == NULL) {
             // panic
-            fprintf(stderr, "Warning: could not validade RSDT table %lX\n", (uint64_t)rsdt);
+            fprintf(stderr, "Warning: could not validade RSDT table %" PRIx64 "\n", (uint64_t)rsdt);
             exit(2);
         } else {
             push_table((ACPISDTHeader *)rsdt);
@@ -260,7 +259,7 @@ int walk_acpi_tables()
                 uint32_t entries = (length - sizeof(rsdt->h)) / sizeof(uint32_t);
                 for (uint32_t i = 0; i < entries; ++i) {
                     ACPISDTHeader *h = check_get_virt_from_phys(
-                        (ACPISDTHeader *)(uint64_t)rsdt->PointerToOtherSDT[i]);
+                        (uint64_t)rsdt->PointerToOtherSDT[i]);
                     if (h != NULL)
                         push_table(h);
                 }

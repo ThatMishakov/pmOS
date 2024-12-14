@@ -99,9 +99,10 @@ ReturnStr<size_t> TaskDescriptor::init_stack()
     if (!page_table)
         return Error(-EINVAL);
 
+    ulong stack_size = is_32bit() ? MB(32) : GB(2);
+
     // Prealloc a page for the stack
     u64 stack_end        = page_table->user_addr_max(); //&_free_to_use;
-    u64 stack_size       = GB(2);
     u64 stack_page_start = stack_end - stack_size;
 
     static const klib::string stack_region_name = "default_stack";
@@ -251,6 +252,12 @@ kresult_t TaskDescriptor::register_page_table(klib::shared_ptr<Arch_Page_Table> 
     if (page_table)
         return -EEXIST;
 
+    if (table->is_32bit()) {
+        auto result = set_32bit();
+        if (result != 0)
+            return result;
+    }
+
     Auto_Lock_Scope page_table_lock(table->lock);
     if (table->owner_tasks.insert_noexcept(this).first == table->owner_tasks.end())
         return -ENOMEM;
@@ -279,7 +286,7 @@ ReturnStr<bool>
     if (page_table)
         return Error(-EEXIST);
 
-    ELF_64bit header;
+    ELF_Common header;
     auto r = elf->read_to_kernel(0, (u8 *)&header, sizeof(ELF_64bit));
     if (!r.success())
         return r.propagate();
@@ -291,133 +298,287 @@ ReturnStr<bool>
     if (header.magic != ELF_MAGIC)
         return Error(-ENOEXEC);
 
-    if (header.bitness != ELF_BITNESS)
-        return Error(-ENOEXEC);
-
     if (header.endianness != ELF_ENDIANNESS)
         return Error(-ENOEXEC);
 
     if (header.type != ELF_EXEC)
         return Error(-ENOEXEC);
 
+    int paging_flags = 0;
+#ifdef __x86_64__
+    if (header.instr_set != ELF_X86_64 && header.instr_set != ELF_X86)
+        return Error(-ENOEXEC);
+
+    if (header.instr_set != ELF_X86_64)
+        paging_flags |= Page_Table::FLAG_32BIT;
+#else
     if (header.instr_set != ELF_INSTR_SET)
         return Error(-ENOEXEC);
+#endif
 
-    // Parse program headers
-    using phreader = ELF_PHeader_64;
-    if (header.prog_header_size != sizeof(phreader))
-        return Error(-ENOEXEC);
+    klib::shared_ptr<Arch_Page_Table> table;
+    ulong program_entry;
 
-    const u64 ph_count = header.program_header_entries;
-    klib::vector<phreader> phs;
-    if (!phs.resize(ph_count))
-        return Error(-ENOMEM);
+    if (header.bitness == ELF_32BIT) {
+        using phreader = ELF_PHeader_32;
 
-    r = elf->read_to_kernel(header.program_header, (u8 *)phs.data(), ph_count * sizeof(phreader));
-    if (!r.success())
-        return r.propagate();
+        ELF_32bit header;
+        auto r = elf->read_to_kernel(0, (u8 *)&header, sizeof(ELF_32bit));
+        if (!r.success())
+            return r.propagate();
 
-    if (!r.val)
-        // Program headers can't be read immediately
-        return false;
+        if (header.prog_header_size != sizeof(phreader))
+            return Error(-ENOEXEC);
 
-    // Create a new page table
-    auto table = Arch_Page_Table::create_empty();
-    if (!table)
-        return Error(-ENOMEM);
-
-    // Load the program header into the page table
-    for (size_t i = 0; i < ph_count; ++i) {
-        const phreader &ph = phs[i];
-
-        if (ph.type != ELF_SEGMENT_LOAD)
-            continue;
-
-        if ((ph.p_vaddr & 0xfff) != (ph.p_offset & 0xfff))
-            return (-ENOEXEC);
-
-        if (!(ph.flags & ELF_FLAG_WRITABLE)) {
-            // Direct map the region
-            const u64 region_start = ph.p_vaddr & ~0xFFFUL;
-            const u64 file_offset  = ph.p_offset & ~0xFFFUL;
-            const u64 size         = ((ph.p_vaddr & 0xFFFUL) + ph.p_memsz + 0xFFF) & ~0xFFFUL;
-
-            u8 protection_mask =
-                (ph.flags & ELF_FLAG_EXECUTABLE) ? Page_Table::Protection::Executable : 0;
-            protection_mask |=
-                (ph.flags & ELF_FLAG_READABLE) ? Page_Table::Protection::Readable : 0;
-            protection_mask |=
-                (ph.flags & ELF_FLAG_WRITABLE) ? Page_Table::Protection::Writeable : 0;
-
-            auto res = table->atomic_create_mem_object_region(
-                region_start, size, protection_mask, true, name, elf, false, 0, file_offset, size);
-            if (!res.success())
-                return res.propagate();
-        } else {
-            // Copy the region on access
-            const u64 region_start = ph.p_vaddr & ~0xFFFUL;
-            const u64 size         = ((ph.p_vaddr & 0xFFFUL) + ph.p_memsz + 0xFFF) & ~0xFFFUL;
-            const u64 file_offset  = ph.p_offset;
-            const u64 file_size    = ph.p_filesz;
-            const u64 object_start_offset = ph.p_vaddr - region_start;
-
-            u8 protection_mask =
-                (ph.flags & ELF_FLAG_EXECUTABLE) ? Page_Table::Protection::Executable : 0;
-            protection_mask |=
-                (ph.flags & ELF_FLAG_READABLE) ? Page_Table::Protection::Readable : 0;
-            protection_mask |=
-                (ph.flags & ELF_FLAG_WRITABLE) ? Page_Table::Protection::Writeable : 0;
-
-            auto res = table->atomic_create_mem_object_region(
-                region_start, size, protection_mask, true, name, elf, true, object_start_offset,
-                file_offset, file_size);
-
-            if (!res.success())
-                return res.propagate();
-        }
-    }
-
-    for (size_t i = 0; i < ph_count; ++i) {
-        const phreader &ph = phs[i];
-
-        if (ph.type != PT_TLS)
-            continue;
-
-        const size_t size = sizeof(TLS_Data) + ((ph.p_filesz + 7) & ~7UL);
-        klib::unique_ptr<u64[]> t(new u64[size / sizeof(u64)]);
-        if (!t)
+        const u32 ph_count = header.program_header_entries;
+        klib::vector<phreader> phs;
+        if (!phs.resize(ph_count))
             return Error(-ENOMEM);
 
-        TLS_Data *tls_data = (TLS_Data *)t.get();
-
-        tls_data->memsz  = ph.p_memsz;
-        tls_data->align  = ph.allignment;
-        tls_data->filesz = ph.p_filesz;
-
-        r = elf->read_to_kernel(ph.p_offset, tls_data->data, ph.p_filesz);
+        r = elf->read_to_kernel(header.program_header, (u8 *)phs.data(),
+                                ph_count * sizeof(phreader));
         if (!r.success())
             return r.propagate();
 
         if (!r.val)
+            // Program headers can't be read immediately
             return false;
 
-        // Install memory region
-        const u64 pa_size = (size + 0xFFF) & ~0xFFFUL;
-        auto tls_virt     = table->atomic_create_normal_region(
-            0, pa_size, Page_Table::Protection::Readable | Page_Table::Protection::Writeable, false,
-            false, name + "_tls", 0);
+        // Create a new page table
+        table = Arch_Page_Table::create_empty(paging_flags);
+        if (!table)
+            return Error(-ENOMEM);
+        
 
-        if (!tls_virt.success())
-            return tls_virt.propagate();
+        ulong stack_ptr  = 0;
+        ulong stack_size = 0;
 
-        auto r = table->atomic_copy_to_user(tls_virt.val->start_addr, tls_data, size);
+        // Load the program header into the page table
+        for (size_t i = 0; i < ph_count; ++i) {
+            const phreader &ph = phs[i];
+
+            if (ph.type != ELF_SEGMENT_LOAD)
+                continue;
+
+            if ((ph.p_vaddr & 0xfff) != (ph.p_offset & 0xfff))
+                return Error(-ENOEXEC);
+
+            if (!(ph.flags & ELF_FLAG_WRITABLE)) {
+                // Direct map the region
+                const u32 region_start = ph.p_vaddr & ~0xFFFUL;
+                const u32 file_offset  = ph.p_offset & ~0xFFFUL;
+                const u32 size         = ((ph.p_vaddr & 0xFFFUL) + ph.p_memsz + 0xFFF) & ~0xFFFUL;
+
+                u8 protection_mask =
+                    (ph.flags & ELF_FLAG_EXECUTABLE) ? Page_Table::Protection::Executable : 0;
+                protection_mask |=
+                    (ph.flags & ELF_FLAG_READABLE) ? Page_Table::Protection::Readable : 0;
+                protection_mask |=
+                    (ph.flags & ELF_FLAG_WRITABLE) ? Page_Table::Protection::Writeable : 0;
+
+                auto res = table->atomic_create_mem_object_region(region_start, size,
+                                                                  protection_mask, true, name, elf,
+                                                                  false, 0, file_offset, size);
+                if (!res.success())
+                    return res.propagate();
+            } else {
+                // Copy the region on access
+                const u32 region_start = ph.p_vaddr & ~0xFFFUL;
+                const u32 size =
+                    ((ph.p_vaddr & (u32)0xFFF) + ph.p_memsz + (u32)0xFFF) & ~(u32)0xFFF;
+                const u32 file_offset         = ph.p_offset;
+                const u32 file_size           = ph.p_filesz;
+                const u32 object_start_offset = ph.p_vaddr - region_start;
+
+                u8 protection_mask =
+                    (ph.flags & ELF_FLAG_EXECUTABLE) ? Page_Table::Protection::Executable : 0;
+                protection_mask |=
+                    (ph.flags & ELF_FLAG_READABLE) ? Page_Table::Protection::Readable : 0;
+                protection_mask |=
+                    (ph.flags & ELF_FLAG_WRITABLE) ? Page_Table::Protection::Writeable : 0;
+
+                auto res = table->atomic_create_mem_object_region(
+                    region_start, size, protection_mask, true, name, elf, true, object_start_offset,
+                    file_offset, file_size);
+
+                if (!res.success())
+                    return res.propagate();
+            }
+        }
+
+        for (size_t i = 0; i < ph_count; ++i) {
+            const phreader &ph = phs[i];
+
+            if (ph.type != PT_TLS)
+                continue;
+
+            const size_t size = sizeof(TLS_Data) + ((ph.p_filesz + 7) & ~7UL);
+            klib::unique_ptr<u32[]> t(new u32[size / sizeof(u32)]);
+            if (!t)
+                return Error(-ENOMEM);
+
+            TLS_Data *tls_data = (TLS_Data *)t.get();
+
+            tls_data->memsz  = ph.p_memsz;
+            tls_data->align  = ph.allignment;
+            tls_data->filesz = ph.p_filesz;
+
+            if (ph.p_filesz) {
+                r = elf->read_to_kernel(ph.p_offset, tls_data->data, ph.p_filesz);
+                if (!r.success())
+                    return r.propagate();
+            }
+
+            if (!r.val)
+                return false;
+
+            // Install memory region
+            const u32 pa_size = (size + 0xFFF) & ~0xFFF;
+            auto tls_virt     = table->atomic_create_normal_region(
+                0, pa_size, Page_Table::Protection::Readable | Page_Table::Protection::Writeable,
+                false, false, name + "_tls", 0);
+
+            if (!tls_virt.success())
+                return tls_virt.propagate();
+
+            auto r = table->atomic_copy_to_user(tls_virt.val->start_addr, tls_data, size);
+            if (!r.success())
+                return r.propagate();
+
+            if (!r.val)
+                return false;
+
+            regs.arg3() = tls_virt.val->start_addr;
+        }
+
+        program_entry = header.program_entry;
+    } else {
+        // Parse program headers
+        using phreader = ELF_PHeader_64;
+
+        ELF_64bit header;
+        auto r = elf->read_to_kernel(0, (u8 *)&header, sizeof(ELF_64bit));
+        if (!r.success())
+            return r.propagate();
+
+        if (header.prog_header_size != sizeof(phreader))
+            return Error(-ENOEXEC);
+
+        const u64 ph_count = header.program_header_entries;
+        klib::vector<phreader> phs;
+        if (!phs.resize(ph_count))
+            return Error(-ENOMEM);
+
+        r = elf->read_to_kernel(header.program_header, (u8 *)phs.data(),
+                                ph_count * sizeof(phreader));
         if (!r.success())
             return r.propagate();
 
         if (!r.val)
+            // Program headers can't be read immediately
             return false;
 
-        regs.arg3() = tls_virt.val->start_addr;
+        // Create a new page table
+        table = Arch_Page_Table::create_empty(paging_flags);
+        if (!table)
+            return Error(-ENOMEM);
+
+        // Load the program header into the page table
+        for (size_t i = 0; i < ph_count; ++i) {
+            const phreader &ph = phs[i];
+
+            if (ph.type != ELF_SEGMENT_LOAD)
+                continue;
+
+            if ((ph.p_vaddr & 0xfff) != (ph.p_offset & 0xfff))
+                return (-ENOEXEC);
+
+            if (!(ph.flags & ELF_FLAG_WRITABLE)) {
+                // Direct map the region
+                const u64 region_start = ph.p_vaddr & ~0xFFFUL;
+                const u64 file_offset  = ph.p_offset & ~0xFFFUL;
+                const u64 size         = ((ph.p_vaddr & 0xFFFUL) + ph.p_memsz + 0xFFF) & ~0xFFFUL;
+
+                u8 protection_mask =
+                    (ph.flags & ELF_FLAG_EXECUTABLE) ? Page_Table::Protection::Executable : 0;
+                protection_mask |=
+                    (ph.flags & ELF_FLAG_READABLE) ? Page_Table::Protection::Readable : 0;
+                protection_mask |=
+                    (ph.flags & ELF_FLAG_WRITABLE) ? Page_Table::Protection::Writeable : 0;
+
+                auto res = table->atomic_create_mem_object_region(region_start, size,
+                                                                  protection_mask, true, name, elf,
+                                                                  false, 0, file_offset, size);
+                if (!res.success())
+                    return res.propagate();
+            } else {
+                // Copy the region on access
+                const u64 region_start = ph.p_vaddr & ~0xFFFUL;
+                const u64 size         = ((ph.p_vaddr & 0xFFFUL) + ph.p_memsz + 0xFFF) & ~0xFFFUL;
+                const u64 file_offset  = ph.p_offset;
+                const u64 file_size    = ph.p_filesz;
+                const u64 object_start_offset = ph.p_vaddr - region_start;
+
+                u8 protection_mask =
+                    (ph.flags & ELF_FLAG_EXECUTABLE) ? Page_Table::Protection::Executable : 0;
+                protection_mask |=
+                    (ph.flags & ELF_FLAG_READABLE) ? Page_Table::Protection::Readable : 0;
+                protection_mask |=
+                    (ph.flags & ELF_FLAG_WRITABLE) ? Page_Table::Protection::Writeable : 0;
+
+                auto res = table->atomic_create_mem_object_region(
+                    region_start, size, protection_mask, true, name, elf, true, object_start_offset,
+                    file_offset, file_size);
+
+                if (!res.success())
+                    return res.propagate();
+            }
+        }
+
+        for (size_t i = 0; i < ph_count; ++i) {
+            const phreader &ph = phs[i];
+
+            if (ph.type != PT_TLS)
+                continue;
+
+            const size_t size = sizeof(TLS_Data) + ((ph.p_filesz + 7) & ~7UL);
+            klib::unique_ptr<u64[]> t(new u64[size / sizeof(u64)]);
+            if (!t)
+                return Error(-ENOMEM);
+
+            TLS_Data *tls_data = (TLS_Data *)t.get();
+
+            tls_data->memsz  = ph.p_memsz;
+            tls_data->align  = ph.allignment;
+            tls_data->filesz = ph.p_filesz;
+
+            r = elf->read_to_kernel(ph.p_offset, tls_data->data, ph.p_filesz);
+            if (!r.success())
+                return r.propagate();
+
+            if (!r.val)
+                return false;
+
+            // Install memory region
+            const u64 pa_size = (size + 0xFFF) & ~0xFFFUL;
+            auto tls_virt     = table->atomic_create_normal_region(
+                0, pa_size, Page_Table::Protection::Readable | Page_Table::Protection::Writeable,
+                false, false, name + "_tls", 0);
+
+            if (!tls_virt.success())
+                return tls_virt.propagate();
+
+            auto r = table->atomic_copy_to_user(tls_virt.val->start_addr, tls_data, size);
+            if (!r.success())
+                return r.propagate();
+
+            if (!r.val)
+                return false;
+
+            regs.arg3() = tls_virt.val->start_addr;
+        }
+
+        program_entry = header.program_entry;
     }
 
     auto result = register_page_table(table);
@@ -429,7 +590,7 @@ ReturnStr<bool>
     if (!stack_top.success())
         return stack_top.propagate();
 
-    regs.program_counter() = header.program_entry;
+    regs.program_counter() = program_entry;
 
     // Push stack descriptor structure
     u64 size = sizeof(load_tag_stack_descriptor) + sizeof(load_tag_close);
@@ -444,7 +605,7 @@ ReturnStr<bool>
     *d                           = {
                                   .header     = LOAD_TAG_STACK_DESCRIPTOR_HEADER,
                                   .stack_top  = stack_top.val,
-                                  .stack_size = GB(2),
+                                  .stack_size = is_32bit() ? MB(32) : GB(2),
                                   .guard_size = 0,
                                   .unused0    = 0,
     };

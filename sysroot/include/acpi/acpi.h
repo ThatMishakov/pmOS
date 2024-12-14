@@ -170,10 +170,6 @@ typedef struct MADT {
     MADT_entry entries[0];
 } __attribute__((packed)) MADT;
 
-void init_acpi();
-
-extern RSDP_descriptor20 *rsdp_desc;
-
 typedef struct GenericAddressStructure {
     uint8_t AddressSpace;
     uint8_t BitWidth;
@@ -397,12 +393,5 @@ typedef struct SPCR {
     char namespace_string[0];
 } __attribute__((packed)) SPCR;
 
-extern int acpi_revision;
-
-// Returns -1 on error or ACPI version otherwise
-int walk_acpi_tables();
-int check_table(ACPISDTHeader *header);
-
-void init_lai();
 
 #endif

@@ -170,7 +170,7 @@ void load_multiboot_module(struct multiboot_tag_module * mod)
     uint64_t nb_pages = (phys_end - phys_start) >> 12;
     if (phys_end & 0xfff) nb_pages += 1;
 
-    mem_request_ret_t result = create_phys_map_region(0, NULL, nb_pages*4096, PROT_READ, (void *)phys_start);
+    mem_request_ret_t result = create_phys_map_region(0, NULL, nb_pages*4096, PROT_READ, phys_start);
     if (result.result != SUCCESS) {
         asm ("xchgw %bx, %bx");
     }

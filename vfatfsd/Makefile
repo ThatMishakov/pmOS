@@ -15,10 +15,6 @@ TARGETFLAGS = --target=$(ARCH)-pmos --sysroot=$(ROOTDIR)/sysroot
 INTERNALCFLAGS  :=       \
 	-static
 
-ifeq ($(ARCH), riscv64)
-	INTERNALCFLAGS += -march=rva20u64 -mabi=lp64d
-endif
-
 #USERCFLAGS := -march=rv64gc -mabi=lp64d -O3
 USERCFLAGS := -O3 -flto
 
@@ -29,6 +25,11 @@ GOFLAGS = $(INTERNALCFLAGS) $(USERCFLAGS) $(INCLUDEFLAGS) $(TARGETFLAGS)
 ASMFLAGS = -I$(INCLUDEDIR) $(TARGETFLAGS)
 LDFLAGS = $(INTERNALLDFLAGS) -static -g -O3 -flto $(TARGETFLAGS) # -march=rv64gc -mabi=lp64d$
 
+ifeq ($(ARCH), riscv64)
+	INTERNALCFLAGS += -march=rva20u64 -mabi=lp64d
+else ifneq ($(filter i%86 x86,$(ARCH)),)
+	LDFLAGS += -lclang_rt.builtins-i386
+endif
 
 CCFILES := $(shell find ./ -type f -name '*.cc')
 CFILES := $(shell find ./ -type f -name '*.c')

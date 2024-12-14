@@ -40,110 +40,111 @@ extern "C" void syscall_handler();
 // #pragma GCC diagnostic pop
 
 // Gets the pid of the current process
-void get_task_id(u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */,
-                 u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */);
+void syscall_get_task_id();
+// No parameters
 
 // Creates an empty process
-void syscall_create_process(u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */,
-                            u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */);
+void syscall_create_process();
+// No parameters
 
-// Creates a normal (dellayed allocation region)
-void syscall_create_normal_region(u64 pid, u64 addr_start, u64 size, u64 access_flags,
-                                  u64 = 0 /* unused */, u64 = 0 /* unused */);
+// Creates a normal (delayed allocation region)
+void syscall_create_normal_region();
+// Parameters: u64 pid, u64 addr_start, u64 size, u64 access_flags
 
 // Creates a region mapped to phys_addr
-void syscall_create_phys_map_region(u64 pid, u64 addr_start, u64 size, u64 access, u64 phys_addr,
-                                    u64 = 0 /* unused */);
+void syscall_create_phys_map_region();
+// Parameters: u64 pid, u64 addr_start, u64 size, u64 access, u64 phys_addr
 
 // Starts a process with PID pid at starting point start
-void syscall_start_process(u64 pid, u64 start, u64 arg1, u64 arg2, u64 arg3, u64 = 0 /* unused */);
+void syscall_start_process();
+// Parameters: u64 pid, u64 start, u64 arg1, u64 arg2, u64 arg3
 
 // Gets an index of the processes' page table. PID 0 can be used as TASK_ID_SELF
-void syscall_get_page_table(u64 pid, u64 = 0 /* unused */, u64 = 0 /* unused */,
-                            u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */);
+void syscall_get_page_table();
+// Parameters: u64 pid
 
 // Exits (kills the process at the end of its execution)
-void syscall_exit(u64 arg1, u64 arg2, u64 = 0 /* unused */, u64 = 0 /* unused */,
-                  u64 = 0 /* unused */, u64 = 0 /* unused */);
+void syscall_exit();
+// Parameters: u64 arg1, u64 arg2
 
 // Get info about the last message
-void syscall_get_message_info(u64 message_struct, u64 portno, u64 flags, u64 = 0 /* unused */,
-                              u64 = 0 /* unused */, u64 = 0 /* unused */);
+void syscall_get_message_info();
+// Parameters: u64 message_struct, u64 portno, u64 flags
 
 // Gets first message in the messaging queue
-void syscall_get_first_message(u64 buff, u64 args, u64 portno, u64 = 0 /* unused */,
-                               u64 = 0 /* unused */, u64 = 0 /* unused */);
+void syscall_get_first_message();
+// Parameters: u64 buff, u64 args, u64 portno
 
 // Sends a message to the port
-void syscall_send_message_port(u64 port, size_t size, u64 message, u64 = 0 /* unused */,
-                               u64 = 0 /* unused */, u64 = 0 /* unused */);
+void syscall_send_message_port();
+// Parameters: u64 port, size_t size, u64 message
 
 // Sets a task's port
-void syscall_set_port(u64 pid, u64 port, u64 dest_pid, u64 dest_chan, u64 = 0 /* unused */,
-                      u64 = 0 /* unused */, u64 = 0 /* unused */);
+void syscall_set_port();
+// Parameters: u64 pid, u64 port, u64 dest_pid, u64 dest_chan
 
 // Sets task's attributes
-void syscall_set_attribute(u64 pid, u64 attribute, u64 value, u64 = 0 /* unused */,
-                           u64 = 0 /* unused */, u64 = 0 /* unused */);
+void syscall_set_attribute();
+// Parameters: u64 pid, u64 attribute, u64 value
 
-// Inits task's stack
-void syscall_init_stack(u64 pid, u64 esp, u64 = 0 /* unused */, u64 = 0 /* unused */,
-                        u64 = 0 /* unused */, u64 = 0 /* unused */);
+// Initializes task's stack
+void syscall_init_stack();
+// Parameters: u64 pid, u64 esp
 
 // Checks if the page is allocated for user process
-void syscall_is_page_allocated(u64 page, u64 = 0 /* unused */, u64 = 0 /* unused */,
-                               u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */);
+void syscall_is_page_allocated();
+// Parameters: u64 page
 
 // Returns LAPIC id of the current CPU
-void syscall_get_lapic_id(u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */,
-                          u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */);
+void syscall_get_lapic_id();
+// No parameters
 
 // Programs interrupt to send the message to the right port
-void syscall_set_interrupt(uint64_t port, u64 intno, u64 flags, u64 = 0 /* unused */,
-                           u64 = 0 /* unused */, u64 = 0 /* unused */);
+void syscall_set_interrupt();
+// Parameters: uint64_t port, u64 intno, u64 flags
 
 // Assigns a name to port
-void syscall_name_port(u64 port, u64 /* const char* */ name, u64 length, u64 flags,
-                       u64 = 0 /* unused */, u64 = 0 /* unused */);
+void syscall_name_port();
+// Parameters: u64 port, const char* name, u64 length, u64 flags
 
 // Gets port by its name
-void syscall_get_port_by_name(u64 /* const char * */ name, u64 length, u64 flags,
-                              u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */);
+void syscall_get_port_by_name();
+// Parameters: const char* name, u64 length, u64 flags
 
 // Sets the kernel's log port
-void syscall_set_log_port(u64 port, u64 flags, u64 = 0 /* unused */, u64 = 0 /* unused */,
-                          u64 = 0 /* unused */, u64 = 0 /* unused */);
+void syscall_set_log_port();
+// Parameters: u64 port, u64 flags
 
 // Requests a port by its name in a non-blocking way and sends a message with the descriptor when it
 // becomes available
-void syscall_request_named_port(u64 string_ptr, u64 length, u64 reply_chan, u64 flags,
-                                u64 = 0 /* unused */, u64 = 0 /* unused */);
+void syscall_request_named_port();
+// Parameters: const char* string_ptr, u64 length, u64 reply_chan, u64 flags
 
 // Transfers a memory region to a new page table
-void syscall_transfer_region(u64 to_page_table, u64 region, u64 dest, u64 flags,
-                             u64 = 0 /* unused */, u64 = 0 /* unused */);
+void syscall_transfer_region();
+// Parameters: u64 to_page_table, u64 region, u64 dest, u64 flags
 
 // Sets segment registers for the task
-void syscall_set_segment(u64 pid, u64 segment_type, u64 ptr, u64 = 0 /* unused */,
-                         u64 = 0 /* unused */, u64 = 0 /* unused */);
+void syscall_set_segment();
+// Parameters: u64 pid, u64 segment_type, u64 ptr
 
-// Gests segment registers for the task
-void syscall_get_segment(u64 pid, u64 segment_type, u64 = 0, u64 = 0 /* unused */,
-                         u64 = 0 /* unused */, u64 = 0 /* unused */);
+// Gets segment registers for the task
+void syscall_get_segment();
+// Parameters: u64 pid, u64 segment_type
 
-void syscall_asign_page_table(u64 pid, u64 page_table, u64 flags, u64 = 0 /* unused */,
-                              u64 = 0 /* unused */, u64 = 0 /* unused */);
+void syscall_asign_page_table();
+// Parameters: u64 pid, u64 page_table, u64 flags
 
-void syscall_create_mem_object(u64 size_bytes, u64 = 0 /* unused */, u64 = 0 /* unused */,
-                               u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */);
+void syscall_create_mem_object();
+// Parameters: u64 size_bytes
 
 // Deletes a region identified by region_start
-void syscall_delete_region(u64 region_start, u64 = 0 /* unused */, u64 = 0 /* unused */,
-                           u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */);
+void syscall_delete_region();
+// Parameters: u64 region_start
 
-// Loads the elf executable into the task
-void syscall_load_executable(u64 task_id, u64 object_id, u64 flags, u64 /* unused */,
-                             u64 /* unused */, u64 /* unused */);
+// Loads the ELF executable into the task
+void syscall_load_executable();
+// Parameters: u64 task_id, u64 object_id, u64 flags
 
 #define SYS_CONF_IOAPIC  0x01
 #define SYS_CONF_LAPIC   0x02
@@ -151,110 +152,111 @@ void syscall_load_executable(u64 task_id, u64 object_id, u64 flags, u64 /* unuse
 #define SYS_CONF_SLEEP10 0x04
 
 // Configures a system
-void syscall_configure_system(u64 type, u64 arg1, u64 arg2, u64 = 0 /* unused */,
-                              u64 = 0 /* unused */, u64 = 0 /* unused */);
+void syscall_configure_system();
+// Parameters: u64 type, u64 arg1, u64 arg2
 
-void syscall_set_priority(u64 priority, u64 = 0 /* unused */, u64 = 0 /* unused */,
-                          u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */);
+void syscall_set_priority();
+// Parameters: u64 priority
 
-void syscall_set_task_name(u64 pid, u64 /* const char* */ string, u64 length, u64 = 0 /* unused */,
-                           u64 = 0 /* unused */, u64 = 0 /* unused */);
+void syscall_set_task_name();
+// Parameters: u64 pid, const char* string, u64 length
 
-void syscall_create_port(u64 owner, u64 = 0 /* unused */, u64 = 0 /* unused */,
-                         u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */);
+void syscall_create_port();
+// Parameters: u64 owner
 
 // Creates a new task group. Adds current task to it.
-void syscall_create_task_group(u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */,
-                               u64 = 0 /* unused */, u64 = 0 /* unused */, u64 = 0 /* unused */);
+void syscall_create_task_group();
+// No parameters
 
 // Adds a task to a task group
-void syscall_add_to_task_group(u64 pid, u64 group, u64 = 0 /* unused */, u64 = 0 /* unused */,
-                               u64 = 0 /* unused */, u64 = 0 /* unused */);
+void syscall_add_to_task_group();
+// Parameters: u64 pid, u64 group
 
 // Removes a task from a task group
-void syscall_remove_from_task_group(u64 pid, u64 group, u64 = 0 /* unused */, u64 = 0 /* unused */,
-                                    u64 = 0 /* unused */, u64 = 0 /* unused */);
+void syscall_remove_from_task_group();
+// Parameters: u64 pid, u64 group
 
 // Checks if a task is in a task group
-void syscall_is_in_task_group(u64 pid, u64 group, u64 = 0 /* unused */, u64 = 0 /* unused */,
-                              u64 = 0 /* unused */, u64 = 0 /* unused */);
+void syscall_is_in_task_group();
+// Parameters: u64 pid, u64 group
 
 // Sets up the notification mask for the given task group for the port
-void syscall_set_notify_mask(u64 task_group, u64 port_id, u64 new_mask, u64, u64, u64);
+void syscall_set_notify_mask();
+// Parameters: u64 task_group, u64 port_id, u64 new_mask
 
 // Requests a timer notification on a given port after a given timeout
-void syscall_request_timer(u64 port, u64 timeout, u64, u64, u64, u64);
+void syscall_request_timer();
+// Parameters: u64 port, u64 timeout
 
 // Sets the task's affinity
-void syscall_set_affinity(u64 task_id, u64 cpu, u64 flags, u64, u64, u64);
+void syscall_set_affinity();
+// Parameters: u64 task_id, u64 cpu, u64 flags
 
 // Completes an interrupt, dispatched to the user space
-void syscall_complete_interrupt(u64 intno, u64, u64, u64, u64, u64);
+void syscall_complete_interrupt();
+// Parameters: u64 intno
 
 // Yields to the next task (if there is some)
 // In other words, reschedule()s
-void syscall_yield(u64, u64, u64, u64, u64, u64);
+void syscall_yield();
+// No parameters
 
 // Maps a memory object to the task's address space
-void syscall_map_mem_object(u64 page_table_id, u64 addr_start, u64 size_bytes, u64 access,
-                            u64 object_id, u64 offset);
+void syscall_map_mem_object();
+// Parameters: u64 page_table_id, u64 addr_start, u64 size_bytes, u64 access, u64 object_id, u64
+// offset
 
-void syscall_pause_task(u64 task_id, u64, u64, u64, u64, u64);
+void syscall_pause_task();
+// Parameters: u64 task_id
 
-void syscall_get_time(u64 mode, u64, u64, u64, u64, u64);
+void syscall_get_time();
+// Parameters: u64 mode
 
-void syscall_system_info(u64 info_type, u64, u64, u64, u64, u64);
+void syscall_system_info();
+// Parameters: u64 info_type
 
-void syscall_kill_task(u64 task_id, u64, u64, u64, u64, u64);
+void syscall_kill_task();
+// Parameters: u64 task_id
 
-void syscall_resume_task(u64 task_id, u64, u64, u64, u64, u64);
+void syscall_resume_task();
+// Parameters: u64 task_id
 
-void syscall_unmap_range(u64 task_id, u64 addr_start, u64 size, u64, u64, u64);
+void syscall_unmap_range();
+// Parameters: u64 task_id, u64 addr_start, u64 size
 
-void syscall_get_page_address(u64 task_id, u64 page_base, u64 flags, u64, u64, u64);
+void syscall_get_page_address();
+// Parameters: u64 task_id, u64 page_base, u64 flags
 
-inline u64 &syscall_arg1(TaskDescriptor *task)
-{
-    return task->regs.syscall_arg1();
-}
+struct SyscallRetval {
+    TaskDescriptor *task;
+    u64 operator=(u64 value);
+    operator u64() const;
+};
+struct SyscallError {
+    TaskDescriptor *task;
+    i64 operator=(i64 value);
+    operator int() const;
+};
+inline SyscallError syscall_error(TaskDescriptor *task) { return {task}; }
+inline SyscallRetval syscall_return(TaskDescriptor *task) { return {task}; }
 
-inline u64 &syscall_arg2(TaskDescriptor *task)
-{
-    return task->regs.syscall_arg2();
-}
+ulong syscall_flags(TaskDescriptor *task);
+unsigned syscall_number(TaskDescriptor *task);
+ulong syscall_arg(TaskDescriptor *task, int arg, int args64before = 0);
+u64 syscall_arg64(TaskDescriptor *task, int arg);
+void syscall_success(TaskDescriptor *task);
 
-inline u64 &syscall_arg3(TaskDescriptor *task)
-{
-    return task->regs.syscall_arg3();
-}
+ReturnStr<bool> syscall_arg64_checked(TaskDescriptor *task, int arg, u64 &value);
+ReturnStr<bool> syscall_arg_checked(TaskDescriptor *task, int arg, int args64before, ulong &value);
+ReturnStr<bool> syscall_args_checked(TaskDescriptor *task, int arg, int args64before, int count, ulong *values);
 
-inline u64 &syscall_arg4(TaskDescriptor *task)
-{
-    return task->regs.syscall_arg4();
-}
-
-inline u64 &syscall_arg5(TaskDescriptor *task)
-{
-    return task->regs.syscall_arg5();
-}
-
-inline i64 &syscall_ret_low(TaskDescriptor *task)
-{
-    return (i64 &)task->regs.syscall_retval_low();
-}
-
-inline u64 &syscall_ret_high(TaskDescriptor *task)
-{
-    return task->regs.syscall_retval_high();
-}
-
-// Entry point for when userpsace calls SYSCALL instruction
+// Entry point for when userspace calls SYSCALL instruction
 extern "C" void syscall_entry();
 
-// Entry point for when userpsace calls SYSENTER instruction
+// Entry point for when userspace calls SYSENTER instruction
 extern "C" void sysenter_entry();
 
-// Entry point for when userpsace calls software interrupt
+// Entry point for when userspace calls software interrupt
 extern "C" void syscall_int_entry();
 
 // Enables SYSCALL instruction

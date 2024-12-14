@@ -47,10 +47,19 @@ static inline u8 inb(u16 port)
     return ret;
 }
 
-static inline u64 cpuid(u32 p)
+struct CPUIDoutput
 {
-    int eax = 0;
-    int edx = 0;
-    asm volatile("cpuid" : "=a"(eax), "=d"(edx) : "0"(p) : "ebx", "ecx");
-    return eax | (u64)edx << 32;
+    u32 eax;
+    u32 ebx;
+    u32 ecx;
+    u32 edx;
+};
+
+static inline CPUIDoutput cpuid(u32 p)
+{   
+    CPUIDoutput out;
+    asm volatile("cpuid"
+                 : "=a"(out.eax), "=b"(out.ebx), "=c"(out.ecx), "=d"(out.edx)
+                 : "a"(p));
+    return out;
 }

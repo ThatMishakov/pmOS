@@ -52,6 +52,21 @@ typedef struct {
     // True if the context was not saved by a signal. Avoids trip to kernel
     int /* bool */ partial;
 } mcontext_t;
+#elif defined(__i386__)
+typedef struct {
+    unsigned long eip;
+    unsigned long eax;
+    unsigned long ebx;
+    unsigned long ecx;
+    unsigned long edx;
+    unsigned long esi;
+    unsigned long edi;
+    unsigned long esp;
+    unsigned long ebp;
+    unsigned long eflags;
+
+    int /* bool */ partial;
+} mcontext_t;
 #endif
 
 typedef struct ucontext_t {

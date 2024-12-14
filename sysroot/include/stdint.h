@@ -33,43 +33,67 @@
 typedef unsigned char uint8_t;
 typedef unsigned short uint16_t;
 typedef unsigned int uint32_t;
+#ifdef __ILP32__
+typedef unsigned long long uint64_t;
+#else
 typedef unsigned long uint64_t;
+#endif
 
 // intN_t
 typedef signed char int8_t;
 typedef signed short int16_t;
 typedef signed int int32_t;
+#ifdef __ILP32__
+typedef signed long long int64_t;
+#else
 typedef signed long int64_t;
+#endif
 
 // uint_leastN_t
 typedef unsigned char uint_least8_t;
 typedef unsigned short uint_least16_t;
 typedef unsigned int uint_least32_t;
+#ifdef __ILP32__
+typedef unsigned long long uint_least64_t;
+#else
 typedef unsigned long uint_least64_t;
+#endif
 
 // int_leastN_t
 typedef signed char int_least8_t;
 typedef signed short int_least16_t;
 typedef signed int int_least32_t;
+#ifdef __ILP32__
+typedef signed long long int_least64_t;
+#else
 typedef signed long int_least64_t;
+#endif
 
 // uint_fastN_t
 typedef unsigned int uint_fast8_t;
 typedef unsigned int uint_fast16_t;
 typedef unsigned int uint_fast32_t;
+#ifdef __ILP32__
+typedef unsigned long long uint_fast64_t;
+#else
 typedef unsigned long uint_fast64_t;
+#endif
 
 // int_fastN_t
 typedef signed int int_fast8_t;
 typedef signed int int_fast16_t;
 typedef signed int int_fast32_t;
+#ifdef __ILP32__
+typedef signed long long int_fast64_t;
+#else
 typedef signed long int_fast64_t;
+#endif
 
 typedef unsigned long uintptr_t;
 typedef long intptr_t;
 
-typedef long intmax_t;
-typedef unsigned long uintmax_t;
+typedef long long intmax_t;
+typedef unsigned long long uintmax_t;
 
 #define INT8_MIN  (-128)
 #define INT16_MIN (-32768)
@@ -144,14 +168,14 @@ typedef unsigned long uintmax_t;
 #define INT8_C(x)  ((int8_t)x)
 #define INT16_C(x) ((int16_t)x)
 #define INT32_C(x) ((int32_t)x)
-#define INT64_C(x) ((int64_t)x##L)
+#define INT64_C(x) ((int64_t)x##LL)
 
 #define UINT8_C(x)  ((uint8_t)x)
 #define UINT16_C(x) ((uint16_t)x)
 #define UINT32_C(x) ((uint32_t)x##U)
-#define UINT64_C(x) ((uint64_t)x##UL)
+#define UINT64_C(x) ((uint64_t)x##ULL)
 
-#define INTMAX_C(x)  ((intmax_t)x##L)
-#define UINTMAX_C(x) ((uintmax_t)x##UL)
+#define INTMAX_C(x)  ((intmax_t)x##LL)
+#define UINTMAX_C(x) ((uintmax_t)x##ULL)
 
 #endif // _STDINT_H

@@ -69,8 +69,35 @@ void prepare_apic()
     map_apic();
 }
 
+FreqFraction apic_freq;
+FreqFraction tsc_freq;
+
+FreqFraction apic_inverted_freq;
+FreqFraction tsc_inverted_freq;
+
+bool have_invariant_tsc = false;
+u64 boot_tsc            = 0;
+static void check_tsc()
+{
+    auto c = cpuid(0x80000007);
+    serial_logger.printf("[Kernel] Info: CPUID 0x80000007: %h %h %h %h\n", c.eax, c.ebx, c.ecx,
+                         c.edx);
+    if (c.edx & (1 << 8)) {
+        global_logger.printf("[Kernel] Info: TSC Invariant bit is set\n");
+        serial_logger.printf("[Kernel] Info: TSC Invariant bit is set\n");
+        have_invariant_tsc = true;
+    } else {
+        global_logger.printf("[Kernel] Warning: TSC Invariant bit is not set\n");
+        serial_logger.printf("[Kernel] Warning: TSC Invariant bit is not set\n");
+    }
+}
+
 void discover_apic_freq()
 {
+    check_tsc();
+    // While we're here, also measure TSC frequency
+    u64 tsc_start;
+
     // Enable APIC Timer and map to dummy ISR
     apic_write_reg(APIC_REG_LVT_TMR, APIC_DUMMY_ISR);
 
@@ -92,6 +119,7 @@ void discover_apic_freq()
     outb(0x61, p);     // Gate LOW
     outb(0x61, p | 1); // Gate HIGH
 
+    tsc_start = rdtsc();
     // Reset APIC counter
     apic_write_reg(APIC_REG_TMRINITCNT, (u32)-1);
 
@@ -99,20 +127,32 @@ void discover_apic_freq()
     while (not(inb(0x61) & 0x20))
         ;
 
+    u64 tsc_end = rdtsc();
+
     // Stop APIC timer
     apic_write_reg(APIC_REG_LVT_TMR, APIC_LVT_MASK);
 
     // Get how many ticks have passed
-    u32 ticks = apic_read_reg(APIC_REG_TMRCURRCNT);
+    u32 ticks   = -apic_read_reg(APIC_REG_TMRCURRCNT);
+    u64 divisor = 1'000'000; // 1ms
 
-    ticks_per_1_ms = (0 - ticks) * 16 / 10;
-    global_logger.printf("[Kernel] Info: APIC timer ticks per 1ms: %h\n", ticks_per_1_ms);
-    serial_logger.printf("[Kernel] Info: APIC timer ticks per 1ms: %h\n", ticks_per_1_ms);
+    // frequency is in nHz
+    apic_freq          = computeFreqFraction(ticks, divisor);
+    apic_inverted_freq = computeFreqFraction(divisor, ticks);
+    auto l = apic_freq*1'000'000'000;
+    global_logger.printf("[Kernel] Info: APIC timer ticks per 1ms: %i\n", l);
+    serial_logger.printf("[Kernel] Info: APIC timer ticks per 1ms: %i\n", l);
+
+    tsc_freq          = computeFreqFraction(tsc_end - tsc_start, divisor);
+    tsc_inverted_freq = computeFreqFraction(divisor, tsc_end - tsc_start);
+    global_logger.printf("[Kernel] Info: TSC ticks per 1ms: %i\n", tsc_freq*1'000'000'000);
+    serial_logger.printf("[Kernel] Info: TSC ticks per 1s: %i %i\n", tsc_freq*1'000'000'000, (tsc_end - tsc_start)*1000);
 }
 
 void apic_one_shot(u32 ms)
 {
-    u32 ticks = ticks_per_1_ms * ms / 16;
+    u64 time_nanoseconds = ms * 1'000'000;
+    u32 ticks = apic_freq * time_nanoseconds;
     apic_write_reg(APIC_REG_TMRDIV, 0x3);           // Divide by 16
     apic_write_reg(APIC_REG_LVT_TMR, APIC_TMR_INT); // Init in one-shot mode
     apic_write_reg(APIC_REG_TMRINITCNT, ticks);
@@ -140,8 +180,6 @@ u32 apic_read_reg(u16 index)
     volatile u32 *reg = (volatile u32 *)((u64)apic_mapped_addr + index);
     return *reg;
 }
-
-u32 ticks_per_1_ms = 0;
 
 void apic_eoi() { apic_write_reg(APIC_REG_EOI, 0); }
 

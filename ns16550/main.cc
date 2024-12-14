@@ -191,7 +191,7 @@ void ns16550_init()
 
     if (access_type == 0x0) { // System memory
         auto result = create_phys_map_region(TASK_ID_SELF, nullptr, 0x1000, PROT_READ | PROT_WRITE,
-                                             reinterpret_cast<void *>(terminal_base));
+                                             terminal_base);
         if (result.result != SUCCESS)
             throw std::runtime_error("Failed to map serial port");
 
@@ -388,8 +388,7 @@ pmos_port_t log_port      = 0;
 void request_logger_port()
 {
     // TODO: Add a syscall for this
-    pmos_syscall(SYSCALL_REQUEST_NAMED_PORT, log_port_name.c_str(), log_port_name.length(),
-                 serial_port, 0);
+    request_named_port(log_port_name.c_str(), log_port_name.length(), serial_port, 0);
 }
 
 void react_named_port_notification(char *msg_buff, size_t size)
@@ -472,7 +471,7 @@ int main()
             write_queue.push({
                 std::move(msg_buff),
                 sizeof(IPC_Write_Plain),
-                msg.size,
+                (size_t)msg.size,
             });
             if (!writing)
                 check_tx();

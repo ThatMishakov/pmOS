@@ -89,6 +89,14 @@ typedef struct elf64_phdr {
 } Elf64_Phdr;
 
 typedef struct {
+    Elf32_Sword d_tag;
+    union {
+        Elf32_Word d_val;
+        Elf32_Addr d_ptr;
+    } d_un;
+} Elf32_Dyn;
+
+typedef struct {
     Elf64_Sxword d_tag;
     union {
         Elf64_Xword d_val;

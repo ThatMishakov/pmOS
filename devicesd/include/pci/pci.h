@@ -26,8 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef PCI_H
-#define PCI_H
+#pragma once
 #include <stdbool.h>
 #include <stdint.h>
 #include <vector.h>
@@ -191,5 +190,3 @@ inline uint8_t pcie_subclass(void *s) { return pci_read_register(s, 2) >> 16; }
 inline bool pci_no_device(void *s) { return pcie_vendor_id(s) == VENDOR_ID_NO_DEVICE; }
 
 inline uint8_t pci_secondary_bus(void *s) { return pci_read_register(s, 0x6) >> 8; }
-
-#endif

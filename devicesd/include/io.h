@@ -2,7 +2,7 @@
 #define IO_H
 #include <stdint.h>
 
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__i386__) 
 uint8_t io_in8(uint16_t port);
 void io_out8(uint16_t port, uint8_t data);
 
