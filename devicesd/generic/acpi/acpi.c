@@ -184,6 +184,9 @@ uacpi_status uacpi_kernel_get_rsdp(uacpi_phys_addr *out_rdsp_address)
     return UACPI_STATUS_OK;
 }
 
+void init_ec();
+void ec_finalize();
+
 int acpi_init() {
     uacpi_status ret = uacpi_initialize(0);
     if (uacpi_unlikely_error(ret)) {
@@ -206,6 +209,7 @@ int acpi_init() {
     #endif
 
     acpi_pci_init();
+    init_ec();
 
     ret = uacpi_namespace_initialize();
     if (uacpi_unlikely_error(ret)) {
@@ -219,6 +223,7 @@ int acpi_init() {
         return -ENODEV;
     }
 
+    ec_finalize();
     find_acpi_devices();
     power_button_init();
 
@@ -269,9 +274,7 @@ void *shutdown_thread(void *) {
     uint64_t start = pmos_get_time(GET_TIME_NANOSECONDS_SINCE_BOOTUP).value;
     sleep(3);
     uint64_t end = pmos_get_time(GET_TIME_NANOSECONDS_SINCE_BOOTUP).value;
-    printf("Sorry not sorry, not shutting down :)\n");
-    printf("Time elapsed in 3 seconds in nanoseconds: %lu (%lu - %lu)\n", end - start, end, start);
-    //system_shutdown();
+    system_shutdown();
     return NULL;
 }
 
