@@ -272,10 +272,11 @@ void *shutdown_thread(void *) {
     pmos_request_io_permission();
     printf("Shutting down in 3 seconds...\n");
     set_affinity(TASK_ID_SELF, -1, 0);
-    uint64_t start = pmos_get_time(GET_TIME_NANOSECONDS_SINCE_BOOTUP).value;
+    //uint64_t start = pmos_get_time(GET_TIME_NANOSECONDS_SINCE_BOOTUP).value;
     sleep(3);
-    uint64_t end = pmos_get_time(GET_TIME_NANOSECONDS_SINCE_BOOTUP).value;
-    printf("Time difference: %llu\n", end - start);
+    //uint64_t end = pmos_get_time(GET_TIME_NANOSECONDS_SINCE_BOOTUP).value;
+    //printf("Time difference: %llu\n", end - start);
+    system_shutdown();
 
     return NULL;
 }

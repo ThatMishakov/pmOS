@@ -12,13 +12,13 @@ CXX = clang++
 
 TARGETFLAGS = --target=$(ARCH)-pmos --sysroot=$(ROOTDIR)/sysroot
 
-USERCFLAGS = -Wall -Wextra -O2 -pipe -ggdb3
+USERCFLAGS = -Wall -Wextra -O3 -pipe -ggdb3
 
 INCLUDEFLAGS = -I$(PROGDIR)/include -I$(PROGDIR)/uACPI/include
 
 # Internal link flags that should not be changed by the user.
 INTERNALLDFLAGS :=     \
-	-static
+	-static -flto
 
 # Internal C flags that should not be changed by the user.
 INTERNALCFLAGS  :=       \

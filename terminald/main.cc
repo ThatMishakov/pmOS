@@ -135,7 +135,7 @@ void init_screen()
 
     ft_ctx = flanterm_fb_init(malloc, flanterm_free, (uint32_t *)framebuffer_ptr, r->framebuffer_width, r->framebuffer_height, r->framebuffer_pitch,
         r->framebuffer_red_mask_size, r->framebuffer_red_mask_shift, r->framebuffer_green_mask_size, r->framebuffer_green_mask_shift, r->framebuffer_blue_mask_size, r->framebuffer_blue_mask_shift,
-        nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, 0, 1, 1, 1, 1, 1, 0);
+        nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, 0, 1, 1, 1, 0, 0, 0);
 
     free(message);
 }
