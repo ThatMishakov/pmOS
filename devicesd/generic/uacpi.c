@@ -140,10 +140,17 @@ struct uacpi_work {
 
 static void *uacpi_work(void *arg)
 {
+    printf("uacpi_work\n");
     struct uacpi_work *work = arg;
+    printf("uacpi_work: %i\n", work->type);
     if (work->type == UACPI_WORK_GPE_EXECUTION)
         set_affinity(TASK_ID_SELF, 1, 0);
 
+    #if defined(__x86_64__) || defined(__i386__)
+    pmos_request_io_permission();
+    #endif
+
+    printf("uacpi_work: calling handler at %p ctx %p\n", work->handler, work->ctx);
     work->handler(work->ctx);
 
     return NULL;
@@ -167,11 +174,15 @@ uacpi_status uacpi_kernel_schedule_work(uacpi_work_type type, uacpi_work_handler
     work->ctx = ctx;
     work->next = NULL;
 
+    printf("creating thread\n");
+
     int t = pthread_create(&work->thread, NULL, uacpi_work, work);
     if (t != 0) {
         free(work);
         return UACPI_STATUS_INTERNAL_ERROR;
     }
+    
+    printf("thread created\n");
 
     pthread_spin_lock(&work_queue_lock);
     if (work_queue_start == NULL) {

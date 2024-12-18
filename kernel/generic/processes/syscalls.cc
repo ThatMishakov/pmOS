@@ -1540,6 +1540,8 @@ void syscall_set_notify_mask()
     }
 }
 
+u64 get_current_time_ticks();
+
 void syscall_request_timer()
 {
     auto c    = get_cpu_struct();
@@ -1564,7 +1566,7 @@ void syscall_set_affinity()
     auto current_task      = current_cpu->current_task;
 
     auto pid       = syscall_arg64(current_task, 0);
-    ulong affinity = syscall_arg(current_task, 1, 1);
+    uint32_t affinity = syscall_arg(current_task, 1, 1);
     ulong flags    = syscall_flags(current_task);
 
     const auto task = pid == 0 ? current_cpu->current_task : get_task(pid);
@@ -1573,7 +1575,7 @@ void syscall_set_affinity()
         return;
     }
 
-    const auto cpu       = affinity == -1UL ? current_cpu->cpu_id + 1 : affinity;
+    const auto cpu       = affinity == -1U ? current_cpu->cpu_id + 1 : affinity;
     const auto cpu_count = get_cpu_count();
     if (cpu > cpu_count) {
         syscall_error(current_task) = -EINVAL;

@@ -44,6 +44,7 @@ void ipi_invalidate_tlb_routine()
         __atomic_and_fetch(&c->ipi_mask, ~CPU_Info::IPI_TLB_SHOOTDOWN, __ATOMIC_SEQ_CST);
         c->current_task->page_table->trigger_shootdown(c);
     }
+    apic_eoi();
 }
 
 void signal_tlb_shootdown() { send_ipi_fixed_others(ipi_invalidate_tlb_int_vec); }
@@ -54,7 +55,9 @@ void reschedule_isr()
     apic_eoi();
 }
 
-void CPU_Info::ipi_reschedule() { send_ipi_fixed(ipi_reschedule_int_vec, lapic_id); }
+void CPU_Info::ipi_reschedule() { 
+    send_ipi_fixed(ipi_reschedule_int_vec, lapic_id);
+}
 void CPU_Info::ipi_tlb_shootdown()
 {
     __atomic_or_fetch(&ipi_mask, IPI_TLB_SHOOTDOWN, __ATOMIC_ACQUIRE);

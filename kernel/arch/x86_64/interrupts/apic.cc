@@ -134,7 +134,7 @@ void discover_apic_freq()
 
     // Get how many ticks have passed
     u32 ticks   = -apic_read_reg(APIC_REG_TMRCURRCNT);
-    u64 divisor = 1'000'000; // 1ms
+    u64 divisor = 10'000'000; // 10ms
 
     // frequency is in nHz
     apic_freq          = computeFreqFraction(ticks, divisor);
@@ -146,7 +146,7 @@ void discover_apic_freq()
     tsc_freq          = computeFreqFraction(tsc_end - tsc_start, divisor);
     tsc_inverted_freq = computeFreqFraction(divisor, tsc_end - tsc_start);
     global_logger.printf("[Kernel] Info: TSC ticks per 1ms: %i\n", tsc_freq*1'000'000'000);
-    serial_logger.printf("[Kernel] Info: TSC ticks per 1s: %i %i\n", tsc_freq*1'000'000'000, (tsc_end - tsc_start)*1000);
+    serial_logger.printf("[Kernel] Info: TSC ticks per 1s: %i %i\n", tsc_freq*1'000'000'000, (tsc_end - tsc_start)*100);
 }
 
 void apic_one_shot(u32 ms)
@@ -160,7 +160,7 @@ void apic_one_shot(u32 ms)
 
 void apic_one_shot_ticks(u32 ticks)
 {
-    apic_write_reg(APIC_REG_TMRDIV, 0b1011);        // Divide by 1
+    apic_write_reg(APIC_REG_TMRDIV, 0x3);        // Divide by 1
     apic_write_reg(APIC_REG_LVT_TMR, APIC_TMR_INT); // Init in one-shot mode
     apic_write_reg(APIC_REG_TMRINITCNT, ticks);
 }

@@ -195,37 +195,43 @@ static void ec_wait_for_bit(struct acpi_gas *reg, uint8_t bit, bool set)
 
 static void ec_burst_enable(struct ECDevice *device)
 {
+    ec_wait_for_bit(&device->control, EC_IBF, false);
     write_reg(&device->control, BD_EC);
+    ec_wait_for_bit(&device->control, EC_OBF, true);
+    uint8_t status = read_reg(&device->data);
+    if (status != BURST_ACK)
+        printf("Failed to enable EC burst mode. Out: %hhx\n", status);
 }
 
 static void ec_burst_disable(struct ECDevice *device)
 {
+    ec_wait_for_bit(&device->control, EC_IBF, false);
     write_reg(&device->control, QR_EC);
-    ec_wait_for_bit(&device->control, EC_IBF, true);
+    ec_wait_for_bit(&device->control, EC_OBF, true);
     uint8_t status = read_reg(&device->data);
     if (status != BURST_ACK)
-        printf("Failed to disable EC burst mode\n");
+        printf("Failed to disable EC burst mode. Out: %hhx\n", status);
 }
 
 static uint8_t ec_read(struct ECDevice *device, uint8_t offset)
 {
     printf("Reading EC register %i\n", offset);
-    ec_wait_for_bit(&device->control, EC_OBF, false);
+    ec_wait_for_bit(&device->control, EC_IBF, false);
     write_reg(&device->control, RD_EC);
-    ec_wait_for_bit(&device->control, EC_OBF, false);
+    ec_wait_for_bit(&device->control, EC_IBF, false);
     write_reg(&device->data, offset);
-    ec_wait_for_bit(&device->control, EC_IBF, true);
+    ec_wait_for_bit(&device->control, EC_OBF, true);
     return read_reg(&device->data);
 }
 
 static void ec_write(struct ECDevice *device, uint8_t offset, uint8_t value)
 {
     printf("Writing EC register %i with value %i\n", offset, value);
-    ec_wait_for_bit(&device->control, EC_OBF, false);
+    ec_wait_for_bit(&device->control, EC_IBF, false);
     write_reg(&device->control, WR_EC);
-    ec_wait_for_bit(&device->control, EC_OBF, false);
+    ec_wait_for_bit(&device->control, EC_IBF, false);
     write_reg(&device->data, offset);
-    ec_wait_for_bit(&device->control, EC_OBF, false);
+    ec_wait_for_bit(&device->control, EC_IBF, false);
     write_reg(&device->data, value);
 }
 
@@ -314,6 +320,7 @@ static void to_method_name(char *name, uint8_t event)
 
 static void ec_handle_query(uacpi_handle opaque)
 {
+    printf("Handling EC event\n");
     struct ec_event *event = opaque;
     struct ECDevice *device = event->device;
     uint8_t ec_event = event->event;
@@ -365,6 +372,14 @@ static uacpi_interrupt_ret handle_ec_event(uacpi_handle ctx, uacpi_namespace_nod
         goto ret;
     }
 
+    printf("malloced ec_event\n");
+
+    if (device->requires_lock)
+        uacpi_release_global_lock(global_lock_out_seq);
+    pthread_spin_unlock(&device->lock);
+
+    printf("released lock\n");
+
     ec_event->device = device;
     ec_event->event = event;
 
@@ -374,7 +389,10 @@ static uacpi_interrupt_ret handle_ec_event(uacpi_handle ctx, uacpi_namespace_nod
         free(ec_event);
         ret = UACPI_INTERRUPT_NOT_HANDLED;
     }
+    printf("scheduled work\n");
+
     ret = UACPI_INTERRUPT_HANDLED;
+    return ret;
 
 ret:
     if (device->requires_lock)
