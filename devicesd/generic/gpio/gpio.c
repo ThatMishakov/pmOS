@@ -418,15 +418,11 @@ static uacpi_iteration_decision match_amd_gpio(void *cc, uacpi_namespace_node *n
     device->refcount = 1;
     device->node = node;
 
-    uacpi_resources *resources;
-    uacpi_status result = uacpi_get_current_resources(node, &resources);
+    uacpi_status result = uacpi_for_each_device_resource(node, "_CRS", find_amd_gpio_resources, device);
     if (result != UACPI_STATUS_OK) {
         printf("Failed to get resources for AMD GPIO device\n");
         goto fail;
     }
-
-    uacpi_for_each_resource(resources, find_amd_gpio_resources, device);
-    uacpi_free_resources(resources);
 
     if (!device->fixed_memory_base || !device->gsi) {
         printf("AMD GPIO device didn't find needed resources\n");

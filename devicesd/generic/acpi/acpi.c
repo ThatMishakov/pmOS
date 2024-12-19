@@ -44,6 +44,7 @@
 #include <pthread.h>
 #include <pmos/special.h>
 #include <uacpi/osi.h>
+#include <uacpi/notify.h>
 
 
 void init_acpi();
@@ -285,6 +286,7 @@ void *shutdown_thread(void *) {
 }
 
 static uacpi_interrupt_ret handle_power_button(uacpi_handle ctx) {
+    (void)ctx;
     printf("Power button pressed\n");
     pthread_t thread;
     pthread_create(&thread, NULL, shutdown_thread, NULL);
@@ -292,15 +294,41 @@ static uacpi_interrupt_ret handle_power_button(uacpi_handle ctx) {
     return UACPI_INTERRUPT_HANDLED;
 }
 
+static uacpi_status handle_power_button_event(uacpi_handle ctx, uacpi_namespace_node* node, uacpi_u64 value) {
+    (void)ctx;
+    (void)node;
+
+    if (value != 0x80) {
+        printf("Unknown power button event: %llu\n", value);
+        return UACPI_STATUS_OK;
+    }
+
+    printf("Power button event\n");
+
+    handle_power_button(NULL);
+}
+
+static uacpi_iteration_decision power_button_uacpi_stuff(void* ctx, uacpi_namespace_node *node, uint32_t depth) {
+    (void)depth;
+    (void)ctx;
+
+    uacpi_install_notify_handler(node, handle_power_button_event, NULL);
+    return UACPI_ITERATION_DECISION_CONTINUE;
+}
+
+#define ACPI_HID_POWER_BUTTON "PNP0C0C"
+
 int power_button_init(void) {
     uacpi_status ret = uacpi_install_fixed_event_handler(
         UACPI_FIXED_EVENT_POWER_BUTTON,
-	handle_power_button, UACPI_NULL
+	    handle_power_button, UACPI_NULL
     );
     if (uacpi_unlikely_error(ret)) {
         fprintf(stderr, "failed to install power button event callback: %s\n", uacpi_status_to_string(ret));
         return -ENODEV;
     }
+
+    uacpi_find_devices(ACPI_HID_POWER_BUTTON, power_button_uacpi_stuff, NULL);
 
     return 0;
 }
