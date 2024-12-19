@@ -277,6 +277,8 @@ void parse_interrupt_table(struct PCIGroup *g, int bus, uacpi_pci_routing_table 
                     fprintf(stderr, "Warning: Unexpected resource type: %i\n", resources->entries[0].type);
                     break;
             }
+
+            uacpi_free_resources(resources);
         }
 
         printf("PCI interrupt: BUS %#x DEVICE %#x PIN %#x GSI %u %s %s\n", e.bus, e.device, e.pin, e.gsi, e.active_low ? "Active Low" : "Active High", e.level_trigger ? "Level" : "Edge");

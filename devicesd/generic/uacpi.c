@@ -540,7 +540,6 @@ void *isr_func(void *arg)
 
     uint32_t int_vector = 0;
     int r = install_isa_interrupt(data->irq, 0, p.port, &int_vector);
-    printf("Installed interrupt %i\n", int_vector);
     if (r < 0) {
         send_isr_reply(reply_port, UACPI_STATUS_INTERNAL_ERROR);
         return NULL;
@@ -548,7 +547,6 @@ void *isr_func(void *arg)
 
     #if defined(__x86_64__) || defined(__i386__)
     int result = pmos_request_io_permission();
-    printf("Requested IO permission: %i\n", result);
     if (result != SUCCESS) {
         send_isr_reply(reply_port, UACPI_STATUS_INTERNAL_ERROR);
         return NULL;

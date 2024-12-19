@@ -43,6 +43,7 @@
 #include <uacpi/sleep.h>
 #include <pthread.h>
 #include <pmos/special.h>
+#include <uacpi/osi.h>
 
 
 void init_acpi();
@@ -173,6 +174,7 @@ void request_acpi_tables()
 void acpi_pci_init();
 void init_pci();
 void find_acpi_devices();
+void gpio_initialize();
 int power_button_init();
 
 #include <uacpi/uacpi.h>
@@ -224,6 +226,7 @@ int acpi_init() {
     }
 
     ec_finalize();
+    gpio_initialize();
     find_acpi_devices();
     power_button_init();
 
