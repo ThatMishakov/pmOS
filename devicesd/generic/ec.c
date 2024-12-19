@@ -259,11 +259,9 @@ static void ec_write(struct ECDevice *device, uint8_t offset, uint8_t value)
 static uacpi_status ec_do_rw(uacpi_region_op op, uacpi_region_rw_data *data)
 {
     struct ECDevice *device = data->handler_context;
-    if (!device->initialized) {
-        return UACPI_STATUS_INVALID_ARGUMENT;
-    }
 
     if (data->byte_width != 1) {
+        printf("ec_do_rw: Invalid byte width %i\n", data->byte_width);
         return UACPI_STATUS_INVALID_ARGUMENT;
     }
 
@@ -288,6 +286,7 @@ static uacpi_status ec_do_rw(uacpi_region_op op, uacpi_region_rw_data *data)
         ec_write(device, data->offset, data->value);
         break;
     default:
+        printf("ec_do_rw: Invalid operation %i\n", op);
         result = UACPI_STATUS_INVALID_ARGUMENT;
     }
 
