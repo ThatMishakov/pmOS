@@ -240,7 +240,7 @@ public:
      * @return The start virtual address of the new memory region.
      * @see find_region_spot()
      */
-    [[nodiscard]] ReturnStr<Private_Normal_Region *> /* page_start */
+    [[nodiscard]] ReturnStr<Mem_Object_Reference *> /* page_start */
         atomic_create_normal_region(ulong page_aligned_start, ulong page_aligned_size,
                                     unsigned access, bool fixed, bool dma, klib::string name,
                                     u64 pattern);

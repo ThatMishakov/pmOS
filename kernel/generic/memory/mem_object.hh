@@ -56,6 +56,9 @@ class Port;
 class Mem_Object: public klib::enable_shared_from_this<Mem_Object>
 {
 public:
+    static constexpr int FLAG_ANONYMOUS = 1 << 0;
+    static constexpr int FLAG_DMA       = 1 << 1;
+
     /// Type for identifying memory objectrs
     using id_type = u64;
 
@@ -73,7 +76,7 @@ public:
      * @param size_pages Size of the object in the number of pages
      * @return klib::shared_ptr<Mem_Object> newly created object
      */
-    static klib::shared_ptr<Mem_Object> create(u64 page_size_log, u64 size_pages);
+    static klib::shared_ptr<Mem_Object> create(u64 page_size_log, u64 size_pages, int flags = 0);
 
     /**
      * @brief Creates a new memory object, taking ownership of the given physical memory region
@@ -150,8 +153,8 @@ public:
      * available. second - pointer to the start of the page at the offset. If the first is not true,
      * this value is meaningless and should be ignored.
      */
-    ReturnStr<kernel::pmm::Page_Descriptor> request_page(u64 offset) noexcept;
-    ReturnStr<kernel::pmm::Page_Descriptor> atomic_request_page(u64 offser) noexcept;
+    ReturnStr<kernel::pmm::Page_Descriptor> request_page(u64 offset, bool write) noexcept;
+    ReturnStr<kernel::pmm::Page_Descriptor> atomic_request_page(u64 offser, bool write) noexcept;
 
     /**
      * @brief Atomically resizes the memory region
@@ -185,6 +188,11 @@ public:
 
     using Protection = ::Protection;
 
+    bool is_anonymous() const
+    {
+        return flags & FLAG_ANONYMOUS;
+    }
+
 protected:
     Mem_Object() = delete;
 
@@ -193,7 +201,7 @@ protected:
     /// @param size_pages Size of the memory in pages. Creates the pages vector of this size
     /// @param max_user_permission Maximum user permission that can be granted to user space mapping
     /// the pages
-    Mem_Object(u64 page_size_log, u64 size_pages, u32 max_user_permission);
+    Mem_Object(u64 page_size_log, u64 size_pages, u32 max_user_permission, int flags);
 
     /**
      * @brief Id of the memory region
@@ -233,6 +241,8 @@ protected:
     /// This might be smaller than pages.size() for a short time during the this->atomic_resize()
     /// operation
     u64 pages_size = 0;
+
+    int flags = 0;
 
     /// Lock that must be acquired when resizing the memory object
     Spinlock resize_lock;
@@ -276,7 +286,7 @@ protected:
      * pager has not been able to provide the page, an attempt to allocate a zero-filled page will
      * be made.
      */
-    Port *pager;
+    Port *pager = nullptr;
 
 private:
     /// @brief Global storage of the memory objects accessible by ID

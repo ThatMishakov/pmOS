@@ -41,8 +41,8 @@
 
 using namespace kernel;
 
-Mem_Object::Mem_Object(u64 page_size_log, u64 size_pages, u32 max_user_permissions)
-    : page_size_log(page_size_log), pages_storage(nullptr), pages_size(size_pages),
+Mem_Object::Mem_Object(u64 page_size_log, u64 size_pages, u32 max_user_permissions, int flags)
+    : page_size_log(page_size_log), pages_storage(nullptr), pages_size(size_pages), flags(flags),
       max_user_access_perm(max_user_permissions) {};
 
 Mem_Object::~Mem_Object()
@@ -59,14 +59,35 @@ Mem_Object::~Mem_Object()
     }
 }
 
-klib::shared_ptr<Mem_Object> Mem_Object::create(u64 page_size_log, u64 size_pages)
+klib::shared_ptr<Mem_Object> Mem_Object::create(u64 page_size_log, u64 size_pages, int flags)
 {
     // Create new object
-    klib::shared_ptr<Mem_Object> ptr(
-        new Mem_Object(page_size_log, size_pages,
-                       Protection::Readable | Protection::Writeable | Protection::Executable));
+    klib::shared_ptr<Mem_Object> ptr(new Mem_Object(
+        page_size_log, size_pages,
+        Protection::Readable | Protection::Writeable | Protection::Executable, flags));
     if (!ptr)
         return nullptr;
+
+    if (flags & FLAG_DMA) {
+        auto count      = size_pages;
+        pmm::Page *page = pmm::alloc_pages(count, true);
+        if (page == nullptr)
+            return nullptr;
+
+        assert(page->type == pmm::Page::PageType::AllocatedPending);
+        assert(page->pending_alloc_head.size_pages == count);
+        assert(!(page->flags & pmm::Page::FLAG_NO_PAGE));
+
+        for (size_t i = 0; i < count; ++i) {
+            auto current = page + i;
+
+            current->type       = pmm::Page::PageType::Allocated;
+            current->l.refcount = 1;
+            current->l.offset   = i * PAGE_SIZE;
+            current->l.next     = ptr->pages_storage;
+            ptr->pages_storage  = current;
+        }
+    }
 
     // Atomically insert into the object storage
     auto e = atomic_push_global_storage(ptr);
@@ -87,7 +108,7 @@ klib::shared_ptr<Mem_Object> Mem_Object::create_from_phys(u64 phys_addr, u64 siz
     assert(take_ownership && "not taking ownership is not implemented");
 
     // Create new object
-    klib::shared_ptr<Mem_Object> ptr(new Mem_Object(12, pages_count, max_user_permissions));
+    klib::shared_ptr<Mem_Object> ptr(new Mem_Object(12, pages_count, max_user_permissions, 0));
     if (!ptr)
         return nullptr;
 
@@ -167,13 +188,13 @@ void Mem_Object::unregister_pined(const klib::weak_ptr<Page_Table> &pined_by) no
     this->pined_by.erase(pined_by);
 }
 
-ReturnStr<pmm::Page_Descriptor> Mem_Object::atomic_request_page(u64 offset) noexcept
+ReturnStr<pmm::Page_Descriptor> Mem_Object::atomic_request_page(u64 offset, bool write) noexcept
 {
     Auto_Lock_Scope l(lock);
-    return request_page(offset);
+    return request_page(offset, write);
 }
 
-ReturnStr<pmm::Page_Descriptor> Mem_Object::request_page(u64 offset) noexcept
+ReturnStr<pmm::Page_Descriptor> Mem_Object::request_page(u64 offset, bool write) noexcept
 {
     const auto index = offset >> page_size_log;
 
@@ -195,7 +216,7 @@ ReturnStr<pmm::Page_Descriptor> Mem_Object::request_page(u64 offset) noexcept
         // TODO
         auto pager_port = pager;
         if (not pager_port) {
-            auto pp = pmm::Page_Descriptor::allocate_page(page_size_log);
+            auto pp = pmm::Page_Descriptor::allocate_page_zeroed(page_size_log);
             if (!pp.success())
                 return pp.propagate();
 
@@ -218,7 +239,8 @@ ReturnStr<pmm::Page_Descriptor> Mem_Object::request_page(u64 offset) noexcept
             .mem_object_id = id,
             .page_offset   = offset,
         };
-        auto result = pager_port->atomic_send_from_system(reinterpret_cast<char *>(&request), sizeof(request));
+        auto result = pager_port->atomic_send_from_system(reinterpret_cast<char *>(&request),
+                                                          sizeof(request));
         if (result)
             return Error(result);
 
@@ -312,7 +334,7 @@ ReturnStr<bool> Mem_Object::read_to_kernel(u64 offset, void *buffer, u64 size)
 
     Temp_Mapper_Obj<char> mapper(request_temp_mapper());
     for (u64 i = offset & ~0xfffUL; i < offset + size; i += 0x1000) {
-        const auto page = request_page(i);
+        const auto page = request_page(i, false);
         if (!page.success())
             return page.propagate();
 
@@ -346,7 +368,7 @@ ReturnStr<void *> Mem_Object::map_to_kernel(u64 offset, u64 size, Page_Table_Arg
 
     // Make sure all pages are allocated
     for (size_t i = 0; i < size; i += 4096) {
-        auto p = atomic_request_page(offset + i);
+        auto p = atomic_request_page(offset + i, args.writeable);
         if (!p.success())
             return p.propagate();
 
@@ -371,7 +393,7 @@ ReturnStr<void *> Mem_Object::map_to_kernel(u64 offset, u64 size, Page_Table_Arg
     });
 
     for (i = 0; i < size; i += 4096) {
-        auto p = atomic_request_page(offset + i);
+        auto p = atomic_request_page(offset + i, true);
         assert(p.success());
 
         assert(p.val.page_struct_ptr);

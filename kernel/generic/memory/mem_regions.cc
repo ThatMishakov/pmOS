@@ -314,7 +314,7 @@ ReturnStr<bool> Mem_Object_Reference::alloc_page(u64 ptr_addr)
         }
 
         auto page =
-            references->atomic_request_page(reg_addr - start_offset_bytes + object_offset_bytes);
+            references->atomic_request_page(reg_addr - start_offset_bytes + object_offset_bytes, false);
         if (!page.success())
             return page.propagate();
 
@@ -362,7 +362,8 @@ ReturnStr<bool> Mem_Object_Reference::alloc_page(u64 ptr_addr)
         // Find the actual address of the page inside the object
         const auto addr_aligned = ptr_addr & ~0xfffUL;
         const auto reg_addr     = addr_aligned - start_addr + object_offset_bytes;
-        auto page               = references->atomic_request_page(reg_addr);
+        // TODO
+        auto page               = references->atomic_request_page(reg_addr, true);
         if (!page.success())
             return page.propagate();
 

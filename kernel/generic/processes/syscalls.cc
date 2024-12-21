@@ -1349,6 +1349,11 @@ void syscall_map_mem_object()
         return;
     }
 
+    if (object->is_anonymous()) {
+        syscall_error(current_task) = -EPERM;
+        return;
+    }
+
     if (object->size_bytes() < offset + size_bytes) {
         syscall_error(current_task) = -EFBIG;
         return;
