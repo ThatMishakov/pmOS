@@ -28,6 +28,7 @@
 
 #include "kern_logger.hh"
 
+#include <flanterm.h>
 #include <messaging/messaging.hh>
 #include <stdarg.h>
 #include <types.hh>
@@ -234,8 +235,15 @@ void Buffered_Logger::set_port(ipc::Port *port, uint32_t /* flags */)
     log_buffer.clear();
 }
 
+void printc(int c);
+extern "C" void dbg_uart_putc(int c) { printc(c); }
+
+extern flanterm_context *ft_ctx;
+
 void Serial_Logger::log_nolock(const char *c, size_t size)
 {
+    if (ft_ctx)
+        flanterm_write(ft_ctx, c, size);
     for (size_t i = 0; i < size; ++i) {
         const char cc = c[i];
         if (cc == '\n')
