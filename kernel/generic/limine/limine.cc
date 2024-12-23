@@ -33,7 +33,9 @@
 #include "../memory/temp_mapper.hh"
 #include "../memory/vmm.hh"
 
+#include <backends/fb.h>
 #include <dtb/dtb.hh>
+#include <flanterm.h>
 #include <kern_logger/kern_logger.hh>
 #include <memory/mem_object.hh>
 #include <paging/arch_paging.hh>
@@ -158,6 +160,61 @@ extern void *_gcc_except_table_end;
 ptable_top_ptr_t kernel_ptable_top = 0;
 
 static klib::vector<limine_memmap_entry> *limine_memory_regions = nullptr;
+
+flanterm_context *ft_ctx = nullptr;
+uint32_t *fb_virt        = nullptr;
+
+struct limine_framebuffer_request fb_req = {
+    .id       = LIMINE_FRAMEBUFFER_REQUEST,
+    .revision = 0,
+    .response = nullptr,
+};
+
+void init_fb()
+{
+    struct limine_framebuffer_response r;
+    copy_from_phys((u64)fb_req.response - hhdm_offset, &r, sizeof(r));
+
+    limine_framebuffer *framebuffers[r.framebuffer_count];
+    copy_from_phys((u64)r.framebuffers - hhdm_offset, framebuffers,
+                   r.framebuffer_count * sizeof(limine_framebuffer *));
+
+    if (r.framebuffer_count != 0) {
+        limine_framebuffer fb;
+        copy_from_phys((u64)framebuffers[0] - hhdm_offset, &fb, sizeof(fb));
+
+        size_t fb_size   = fb.pitch * fb.height;
+        size_t fb_offset = size_t(fb_size) & 0xFFF;
+        fb_size          = (fb_size + fb_offset + 0xFFF) & ~0xFFF;
+        fb_virt          = (uint32_t *)vmm::kernel_space_allocator.virtmem_alloc(fb_size / PAGE_SIZE);
+        if (!fb_virt)
+            return;
+
+        Page_Table_Argumments args = {
+            .readable           = true,
+            .writeable          = true,
+            .user_access        = false,
+            .global             = true,
+            .execution_disabled = true,
+            .extra              = 0,
+        };
+
+        uint64_t phys_addr_all = (uint64_t)fb.address - hhdm_offset - fb_offset;
+        auto result =
+            map_kernel_pages(phys_addr_all, (uint64_t)fb_virt, fb_size, args);
+        if (result != 0) {
+            serial_logger.printf("Failed to map framebuffer\n");
+            vmm::kernel_space_allocator.virtmem_free((void *)fb_virt, fb_size / PAGE_SIZE);
+            return;
+        }
+
+        ft_ctx = flanterm_fb_init(
+            malloc, [](void *ptr, size_t) { free(ptr); }, fb_virt, fb.width, fb.height,
+            fb.pitch, fb.red_mask_size, fb.red_mask_shift, fb.green_mask_size, fb.green_mask_shift,
+            fb.blue_mask_size, fb.blue_mask_shift, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+            0, 0, 1, 0, 0, 0);
+    }
+}
 
 void construct_paging()
 {
@@ -326,6 +383,8 @@ void construct_paging()
         i.init();
 
     serial_logger.printf("Paging initialized!\n");
+
+    init_fb();
 
     klib::vector<limine_memmap_entry *> regions;
     if (!regions.resize(resp.entry_count))
@@ -629,12 +688,6 @@ klib::unique_ptr<load_tag_generic> construct_load_tag_for_modules()
     return tag;
 }
 
-struct limine_framebuffer_request fb_req = {
-    .id       = LIMINE_FRAMEBUFFER_REQUEST,
-    .revision = 0,
-    .response = nullptr,
-};
-
 klib::vector<klib::unique_ptr<load_tag_generic>> construct_load_tag_framebuffer()
 {
     if (fb_req.response == nullptr)
@@ -756,7 +809,7 @@ void init_task1()
     tags.push_back(construct_load_tag_for_modules());
 
     // Create new task and load ELF into it
-    auto task = TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel::User);
+    auto task  = TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel::User);
     task->name = "bootstrap";
     serial_logger.printf("Loading ELF...\n");
     auto p = task->load_elf(task1->object, task1->path, tags);
@@ -948,9 +1001,9 @@ void limine_main()
         hcf();
     }
 
-    #ifdef __x86_64__
+#ifdef __x86_64__
     boot_tsc = rdtsc();
-    #endif
+#endif
 
     serial_logger.printf("Hello from pmOS kernel!\n");
     serial_logger.printf("Kernel start: 0x%h\n", &_kernel_start);

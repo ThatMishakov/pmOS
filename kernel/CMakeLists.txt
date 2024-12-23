@@ -39,7 +39,12 @@ file(GLOB_RECURSE GENERIC_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/generic/*.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/generic/*.S")
 
-add_executable(kernel ${PLATFORM_SRCS} ${GENERIC_SRC})
+file(GLOB_RECURSE FLANTERM_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/flanterm/*.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/flanterm/*.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/flanterm/*.S")
+
+add_executable(kernel ${PLATFORM_SRCS} ${GENERIC_SRC} ${FLANTERM_SRC})
 
 set_target_properties(kernel PROPERTIES CXX_STANDARD 20)
 set_target_properties(kernel PROPERTIES LINK_FLAGS 
@@ -48,6 +53,7 @@ set_target_properties(kernel PROPERTIES LINK_FLAGS
 target_include_directories(kernel PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_include_directories(kernel PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/arch/${TARGET_ARCH}")
 target_include_directories(kernel PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/generic")
+target_include_directories(kernel PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/flanterm")
 
 add_subdirectory(smoldtb)
 

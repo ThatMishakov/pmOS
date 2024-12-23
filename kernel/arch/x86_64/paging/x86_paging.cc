@@ -44,6 +44,12 @@ using namespace kernel;
 
 bool nx_bit_enabled = false;
 
+kresult_t map_kernel_pages(u64 phys_addr, u64 virt_addr, u64 size, Page_Table_Argumments arg)
+{
+    const u64 pt_top = getCR3();
+    return map_pages(pt_top, phys_addr, virt_addr, size, arg);
+}
+
 kresult_t map(u64 physical_addr, u64 virtual_addr, Page_Table_Argumments arg, u64 pt_phys)
 {
     Temp_Mapper_Obj<x86_PAE_Entry> mapper(request_temp_mapper());

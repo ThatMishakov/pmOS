@@ -28,6 +28,7 @@
 
 #include "kern_logger.hh"
 
+#include <flanterm.h>
 #include <messaging/messaging.hh>
 #include <stdarg.h>
 #include <types.hh>
@@ -156,7 +157,7 @@ void Buffered_Logger::log_nolock(const char *c, size_t size)
 {
     constexpr size_t buff_size = 508;
 
-    Port* ptr = Port::atomic_get_port(messaging_port_id);
+    Port *ptr  = Port::atomic_get_port(messaging_port_id);
     bool alive = false;
     if (ptr) {
         Auto_Lock_Scope port_lock(ptr->lock);
@@ -213,8 +214,12 @@ void Buffered_Logger::set_port(Port *port, uint32_t /* flags */)
 
 extern "C" void dbg_uart_putc(unsigned int c);
 
+extern flanterm_context *ft_ctx;
+
 void Serial_Logger::log_nolock(const char *c, size_t size)
 {
+    if (ft_ctx)
+        flanterm_write(ft_ctx, c, size);
     for (size_t i = 0; i < size; ++i) {
         const char cc = c[i];
         if (cc == '\n')

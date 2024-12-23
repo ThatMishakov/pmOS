@@ -80,7 +80,7 @@ int main(int argc, char **argv)
     #if defined(__x86_64__) || defined(__i386__)
     pmos_request_io_permission();
     #endif
-    request_priority(0);
+    //request_priority(0);
 
     {
         ports_request_t req;
