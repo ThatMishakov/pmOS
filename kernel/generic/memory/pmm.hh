@@ -1,10 +1,12 @@
 #pragma once
 
 #include "rcu.hh"
+
 #include <pmos/containers/intrusive_bst.hh>
 #include <pmos/containers/intrusive_list.hh>
-
 #include <types.hh>
+
+class Mem_Object;
 
 namespace kernel::pmm
 {
@@ -27,6 +29,7 @@ struct Page {
 
     struct Mem_Object_LL_Head {
         Page *next;
+        Mem_Object *owner;
         u64 offset;
         size_t refcount;
     };
@@ -58,11 +61,14 @@ struct Page {
     PageType type = PageType::Free;
     int flags     = 0;
 
-    static constexpr int FLAG_NO_PAGE = 1 << 0;
+    static constexpr int FLAG_NO_PAGE   = 1 << 0;
+    static constexpr int FLAG_ANONYMOUS = 1 << 1;
 
     bool has_physical_page() const noexcept { return !(flags & FLAG_NO_PAGE); }
 
     page_addr_t get_phys_addr() const noexcept;
+
+    bool is_anonymous() const { return flags & FLAG_ANONYMOUS; }
 };
 
 void release_page(Page *) noexcept;

@@ -96,8 +96,8 @@ __pthread_exit:
     # void * region
     movq %r14, %rdx # stack_top
     subq %r13, %rdx # stack_top - stack_size = stack_bottom -> start of the memory region
+    movq %r13, %r10 # stack_size; %r10 is used instead of %rcx because syscall instruction owerwrites it
     # The rest of registers are not used. Zero them out for future compatibility and whatnot
-    xorq %r10, %r10 # %r10 is used instead of %rcx because syscall instruction owerwrites it
     xorq %r8, %r8
     xorq %r9, %r9
 

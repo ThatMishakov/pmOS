@@ -111,14 +111,15 @@ public:
     }
 
     void finalize();
+
 private:
     Page_Table *page_table = nullptr;
 
     short pages_count  = 0;
     short ranges_count = 0;
 
-    page_ptr pages[MAX_PAGES]   = {};
-    range ranges[MAX_RANGES] = {};
+    page_ptr pages[MAX_PAGES] = {};
+    range ranges[MAX_RANGES]  = {};
 
     TLBShootdownContext() = default;
 
@@ -130,6 +131,22 @@ private:
 
 struct Mem_Object_Reference;
 struct Private_Normal_Region;
+
+/// Generic struct, holding information about page mapping
+struct Page_Info {
+    u8 flags              = 0;
+    bool is_allocated : 1 = 0;
+    bool dirty : 1        = 0;
+    bool user_access : 1  = 0;
+    bool nofree : 1       = 0;
+    bool writeable : 1    = 0;
+    bool executable : 1   = 0;
+    u64 page_addr         = 0;
+
+    kernel::pmm::Page_Descriptor create_copy() const;
+
+    kernel::pmm::Page *get_page() const;
+};
 
 /**
  * @brief Generic Page Table class
@@ -148,6 +165,7 @@ public:
         Generic_Mem_Region, &Generic_Mem_Region::bst_head,
         detail::TreeCmp<Generic_Mem_Region, u64, &Generic_Mem_Region::start_addr>>;
     RegionsRBTree::RBTreeHead paging_regions;
+    using Page_Info = ::Page_Info;
 
     /// List of the tasks that own the page table. Task_Descriptor should contain a page_table
     /// pointer which should point to this page table. The kernel does not have special structures
@@ -184,7 +202,6 @@ public:
     using Protection = ::Protection;
 
     constexpr static int FLAG_32BIT = 1;
-
 
     /// Flags used by regions properties and creation
     enum Flags {
@@ -243,7 +260,7 @@ public:
     [[nodiscard]] ReturnStr<Mem_Object_Reference *> /* page_start */
         atomic_create_normal_region(ulong page_aligned_start, ulong page_aligned_size,
                                     unsigned access, bool fixed, bool dma, klib::string name,
-                                    u64 pattern);
+                                    u64 pattern, bool cow);
 
     /**
      * @brief Creates a memory region mapping to the physical memory.
@@ -270,6 +287,9 @@ public:
         atomic_create_phys_region(ulong page_aligned_start, ulong page_aligned_size,
                                   unsigned access, bool fixed, klib::string name,
                                   phys_addr_t phys_addr_start);
+
+    /// Copies anonymous page at the given address
+    [[nodiscard]] virtual kresult_t resolve_anonymous_page(u64 virt_addr, u64 access_type) = 0;
 
     /**
      * @brief Creates a memory region referencing the memory object
@@ -474,17 +494,6 @@ public:
     virtual kresult_t copy_pages(const klib::shared_ptr<Page_Table> &to, u64 from_addr, u64 to_addr,
                                  u64 size_bytes, u8 new_access);
 
-    struct Page_Info {
-        u8 flags          = 0;
-        bool is_allocated = 0;
-        bool dirty        = 0;
-        bool user_access  = 0;
-        bool nofree       = 0;
-        u64 page_addr     = 0;
-
-        kernel::pmm::Page_Descriptor create_copy() const;
-    };
-
     /// Gets information for the page mapping.
     virtual Page_Info get_page_mapping(u64 virt_addr) const = 0;
 
@@ -542,7 +551,7 @@ public:
      */
     virtual void invalidate_tlb(u64 page)            = 0;
     virtual void invalidate_tlb(u64 start, u64 size) = 0;
-    virtual void tlb_flush_all() = 0;
+    virtual void tlb_flush_all()                     = 0;
 
     /**
      * @brief Copies the data from kernel to the user space

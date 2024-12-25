@@ -54,7 +54,7 @@ void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
     size_t aligned_length = (length + 4095) & ~4095UL;
 
     // TODO: Get rid of magic numbers
-    mem_request_ret_t req = create_normal_region(0, addr, aligned_length,
+    mem_request_ret_t req = create_normal_region(0, addr, aligned_length, CREATE_FLAG_COW |
                                                  (prot & 0x07) | (flags & MAP_FIXED ? 0x08 : 0));
     if (req.result != SUCCESS) {
         errno = ENOMEM;

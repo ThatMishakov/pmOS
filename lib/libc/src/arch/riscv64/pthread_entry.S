@@ -114,7 +114,7 @@ __pthread_exit:
     # Load stack pointer into saved registers, to be accessible after
     # destroying TLS
     ld s2, 0x08(s3) # void * stack_top
-    ld t0, 0x10(s3) # void * stack_size
+    ld s3, 0x10(s3) # void * stack_size
 
     # Take care of destructors
     # This should also destroy the TLS
@@ -130,7 +130,9 @@ __pthread_exit:
     # uint64_t pid (TID in reality, but I digress)
     mv a1, zero # PID_SELF
     # void * region_start
-    sub a2, s2, t0 # a2 = stack_top - stack_size
+    sub a2, s2, s3 # a2 = stack_top - stack_size
+    # size_t region_size
+    mv a3, s3
     # Zero out the rest of registers
     mv a3, zero
     mv a4, zero

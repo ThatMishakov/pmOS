@@ -959,7 +959,7 @@ void syscall_create_normal_region()
     klib::string region_name("anonymous region");
 
     auto result = dest_task->page_table->atomic_create_normal_region(
-        addr_start, size, access & 0x07, access & 0x08, access & 0x10, klib::move(region_name), 0);
+        addr_start, size, access & 0x07, access & 0x08, access & 0x10, klib::move(region_name), 0, access & 0x20);
     if (!result.success()) {
         syscall_error(current) = result.result;
     } else {
@@ -1361,7 +1361,7 @@ void syscall_map_mem_object()
 
     auto res = table->atomic_create_mem_object_region(addr_start, size_bytes, access & 0x7,
                                                       access & 0x8, "object map", object,
-                                                      access & 0x10, 0, offset, size_bytes);
+                                                      access & 0x20, 0, offset, size_bytes);
 
     if (!res.success()) {
         syscall_error(current_task) = res.result;
@@ -1425,7 +1425,7 @@ void syscall_unmap_range()
     // Maybe EINVAL if unaligned?
     auto offset             = addr_start & (PAGE_SIZE - 1);
     auto addr_start_aligned = addr_start - offset;
-    auto size_aligned       = (size + offset + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+    auto size_aligned       = (size + offset + PAGE_SIZE - 1) & ~ulong(PAGE_SIZE - 1);
 
     syscall_error(current_task) =
         page_table->atomic_release_in_range(addr_start_aligned, size_aligned);

@@ -148,13 +148,28 @@ public:
      *
      * @param offset Offset to the start of the page in byte. This function does not do bounds
      * checking
+     * @param write If the page is mapped for writing
+     * @param cow_region If the region is CoW. This enables extra "optimizations", where CoW
+     * (private mapping) regions requesting pages from anonymous objects would directly recieve
+     * anonymous pages, instead of allocating them inside the object and copying them, never to be
+     * used.
      * @return first - page is immediately available and can be maped. Otherwise, the request to
      * allocate the page has been made and the process should be blocked before the page is
      * available. second - pointer to the start of the page at the offset. If the first is not true,
      * this value is meaningless and should be ignored.
      */
-    ReturnStr<kernel::pmm::Page_Descriptor> request_page(u64 offset, bool write) noexcept;
-    ReturnStr<kernel::pmm::Page_Descriptor> atomic_request_page(u64 offser, bool write) noexcept;
+    ReturnStr<kernel::pmm::Page_Descriptor> request_page(u64 offset, bool write, bool cow) noexcept;
+    ReturnStr<kernel::pmm::Page_Descriptor> atomic_request_page(u64 offset, bool write,
+                                                                bool cow_region = false) noexcept;
+
+    /// @brief Requests anonymous page, storing reference inside the memory object
+    ///
+    /// The reference is stored in object for faster physical-virtual lookups
+    /// @param offset Offset of the page inside of the object. Can be past the object size
+    /// @param empty If the page should be cleared when requested. If it is not set, the page is
+    /// copied from the object (if it is not past its size), requesting the page from the pager, and
+    /// so on. Otherwise, an "optimization" is applied and it is not requested.
+    ReturnStr<kernel::pmm::Page_Descriptor> atomic_request_anonymous_page(u64 offset, bool clear);
 
     /**
      * @brief Atomically resizes the memory region
@@ -188,11 +203,10 @@ public:
 
     using Protection = ::Protection;
 
-    bool is_anonymous() const
-    {
-        return flags & FLAG_ANONYMOUS;
-    }
+    bool is_anonymous() const { return flags & FLAG_ANONYMOUS; }
+    bool is_dma() const { return flags & FLAG_DMA; }
 
+    void atomic_remove_anonymous_page(kernel::pmm::Page *page);	
 protected:
     Mem_Object() = delete;
 
@@ -235,7 +249,8 @@ protected:
 
     // Storage for the pages, in form of a linked list
     // TODO: Replace this with a hash table
-    kernel::pmm::Page *pages_storage = nullptr;
+    kernel::pmm::Page *pages_storage      = nullptr;
+    kernel::pmm::Page *anon_pages_storage = nullptr;
 
     /// Size of the pages vector.
     /// This might be smaller than pages.size() for a short time during the this->atomic_resize()
@@ -287,6 +302,8 @@ protected:
      * be made.
      */
     Port *pager = nullptr;
+
+    kresult_t push_anonymous_page(kernel::pmm::Page *page);
 
 private:
     /// @brief Global storage of the memory objects accessible by ID

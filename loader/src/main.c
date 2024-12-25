@@ -101,7 +101,7 @@ int send_and_close_load_data_array(struct load_data_array *a, struct task_list_n
     size_t needed_size = a->size + sizeof(struct load_tag_close);
     needed_size = alignup(needed_size, 4096); // PAGE_SIZE
 
-    mem_request_ret_t req = create_normal_region(0, 0, needed_size, 1 | 2);
+    mem_request_ret_t req = create_normal_region(0, 0, needed_size, 1 | 2 | CREATE_FLAG_COW);
     if (req.result != SUCCESS) {
         free(a->data);
         return -1;

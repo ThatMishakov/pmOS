@@ -53,10 +53,8 @@ void *map_phys(uint64_t phys_addr, size_t bytes)
 
 void unmap_phys(void *virt_addr, size_t bytes)
 {
-    uint64_t addr_alligned = (uint64_t)virt_addr & ~(uint64_t)0777;
+    uint64_t addr_alligned = (uint64_t)virt_addr & ~(uint64_t)07777;
     uint64_t end_alligned  = (uint64_t)virt_addr + bytes;
-    end_alligned = (end_alligned & ~(uint64_t)0777) + (end_alligned & (uint64_t)0777 ? 01000 : 0);
-    size_t size_pages = (end_alligned - addr_alligned) >> 12;
-
-    munmap((void *)addr_alligned, size_pages);
+    end_alligned = (end_alligned & ~(uint64_t)07777) + (end_alligned & (uint64_t)07777 ? 010000 : 0);
+    munmap((void *)addr_alligned, end_alligned - addr_alligned);
 }

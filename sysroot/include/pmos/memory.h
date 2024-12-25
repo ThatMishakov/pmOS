@@ -101,6 +101,7 @@ struct task_register_set {
 #define CREATE_FLAG_FIXED 0x08
 // Allocates contiguous memory suitable for DMA, and maps it as NC
 #define CREATE_FLAG_DMA   0x10
+#define CREATE_FLAG_COW   0x20
 
 #ifdef __STDC_HOSTED__
 /// @brief Creates a normal page region

@@ -231,7 +231,7 @@ int pthread_mutex_unlock(pthread_mutex_t *mutex)
     }
 
     // Atomically decrement mutex->block_count
-    uint64_t block_count = __atomic_fetch_sub(&mutex->block_count, 1, __ATOMIC_SEQ_CST);
+    uint64_t block_count = __atomic_sub_fetch(&mutex->block_count, 1, __ATOMIC_SEQ_CST);
     if (block_count == 0) {
         // No waiters
         return 0;

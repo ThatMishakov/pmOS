@@ -85,6 +85,7 @@ klib::shared_ptr<Mem_Object> Mem_Object::create(u64 page_size_log, u64 size_page
             current->l.refcount = 1;
             current->l.offset   = i * PAGE_SIZE;
             current->l.next     = ptr->pages_storage;
+            current->l.owner    = ptr.get();
             ptr->pages_storage  = current;
         }
     }
@@ -188,14 +189,103 @@ void Mem_Object::unregister_pined(const klib::weak_ptr<Page_Table> &pined_by) no
     this->pined_by.erase(pined_by);
 }
 
-ReturnStr<pmm::Page_Descriptor> Mem_Object::atomic_request_page(u64 offset, bool write) noexcept
+ReturnStr<pmm::Page_Descriptor> Mem_Object::atomic_request_page(u64 offset, bool write,
+                                                                bool cow) noexcept
 {
     Auto_Lock_Scope l(lock);
-    return request_page(offset, write);
+    return request_page(offset, write, cow);
 }
 
-ReturnStr<pmm::Page_Descriptor> Mem_Object::request_page(u64 offset, bool write) noexcept
+kresult_t Mem_Object::push_anonymous_page(kernel::pmm::Page *page)
 {
+    assert(page);
+    assert(page->l.owner == nullptr);
+    page->l.owner      = this;
+    page->l.next       = anon_pages_storage;
+    page->flags        = pmm::Page::FLAG_ANONYMOUS;
+    anon_pages_storage = page;
+
+    return 0;
+}
+
+void Mem_Object::atomic_remove_anonymous_page(pmm::Page *p)
+{
+    assert(p);
+    assert(p->l.owner == this);
+
+    if (anon_pages_storage == p) {
+        anon_pages_storage = p->l.next;
+        p->l.next          = nullptr;
+        p->l.owner         = nullptr;
+        return;
+    }
+
+    auto ptr = anon_pages_storage;
+    while (ptr and ptr->l.next != p)
+        ptr = ptr->l.next;
+
+    assert(ptr->l.next == p);
+    ptr->l.next = p->l.next;
+    p->l.next   = nullptr;
+    p->l.owner  = nullptr;
+}
+
+ReturnStr<pmm::Page_Descriptor> Mem_Object::atomic_request_anonymous_page(u64 offset, bool empty)
+{
+    if (empty or (flags & FLAG_ANONYMOUS)) {
+        // TODO: Play with uninitialized pages?
+        auto pp = pmm::Page_Descriptor::allocate_page_zeroed(page_size_log);
+        if (!pp.success())
+            return pp.propagate();
+
+        pp.val.page_struct_ptr->l.offset = offset;
+
+        {
+            Auto_Lock_Scope l(lock);
+            auto result = push_anonymous_page(pp.val.page_struct_ptr);
+            if (result)
+                return Error(result);
+        }
+
+        return ReturnStr<pmm::Page_Descriptor>::success(klib::move(pp.val));
+    }
+
+    auto page = atomic_request_page(offset, false);
+    if (!page.success())
+        return page.propagate();
+
+    if (not page.val.page_struct_ptr)
+        return page;
+
+    auto clone = page.val.create_copy();
+    if (!clone.success())
+        return clone.propagate();
+
+    {
+        Auto_Lock_Scope l(lock);
+        auto result = push_anonymous_page(clone.val.page_struct_ptr);
+        if (result)
+            return Error(result);
+    }
+
+    return clone;
+}
+
+ReturnStr<pmm::Page_Descriptor> Mem_Object::request_page(u64 offset, bool write, bool cow) noexcept
+{
+    if ((flags & FLAG_ANONYMOUS) and cow) {
+        auto pp = pmm::Page_Descriptor::allocate_page_zeroed(page_size_log);
+        if (!pp.success())
+            return pp.propagate();
+
+        pp.val.page_struct_ptr->l.offset = offset;
+        auto result                      = push_anonymous_page(pp.val.page_struct_ptr);
+        if (result)
+            return Error(result);
+
+        return pp;
+    }
+
     const auto index = offset >> page_size_log;
 
     if (pages_size <= index)
@@ -224,6 +314,7 @@ ReturnStr<pmm::Page_Descriptor> Mem_Object::request_page(u64 offset, bool write)
             auto p2                     = p.duplicate();
             p.page_struct_ptr->l.offset = offset;
             p.page_struct_ptr->l.next   = pages_storage;
+            p.page_struct_ptr->l.owner  = this;
             pages_storage               = p.page_struct_ptr;
             p.takeout_page();
             return klib::move(p2);
@@ -332,9 +423,11 @@ ReturnStr<bool> Mem_Object::read_to_kernel(u64 offset, void *buffer, u64 size)
 
     Auto_Lock_Scope l(lock);
 
+    assert(!(flags & FLAG_ANONYMOUS));
+
     Temp_Mapper_Obj<char> mapper(request_temp_mapper());
     for (u64 i = offset & ~0xfffUL; i < offset + size; i += 0x1000) {
-        const auto page = request_page(i, false);
+        const auto page = request_page(i, false, false);
         if (!page.success())
             return page.propagate();
 

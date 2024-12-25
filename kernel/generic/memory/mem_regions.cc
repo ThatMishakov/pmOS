@@ -43,19 +43,39 @@ u64 counter = 1;
 
 using namespace kernel;
 
+static bool mapped_right_perm(Page_Table::Page_Info info, u64 access_type)
+{
+    if (!info.is_allocated)
+        return false;
+
+    // if (access_type & Readable and not info.readable)
+    //     return false;
+
+    if (access_type & Writeable and not info.writeable)
+        return false;
+
+    if (access_type & Executable and not info.executable)
+        return false;
+
+    return true;
+}
+
+static bool reading(u64 access_type) { return access_type & Writeable; }
+
 ReturnStr<bool> Generic_Mem_Region::on_page_fault(u64 access_type, u64 pagefault_addr)
 {
     if (not has_access(access_type))
         return Error(-EFAULT);
 
-    if (owner->is_mapped(pagefault_addr)) {
+    auto mapping = owner->get_page_mapping(pagefault_addr);
+    if (mapped_right_perm(mapping, access_type)) {
         // Some CPUs supposedly remember invalid pages.
         // RISC-V spec in particular says that unallocated pages can be cached
         owner->invalidate_tlb(pagefault_addr);
         return true;
     }
 
-    return alloc_page(pagefault_addr);
+    return alloc_page(pagefault_addr, mapping, access_type);
 }
 
 ReturnStr<bool> Generic_Mem_Region::prepare_page(u64 access_mode, u64 page_addr)
@@ -63,10 +83,11 @@ ReturnStr<bool> Generic_Mem_Region::prepare_page(u64 access_mode, u64 page_addr)
     if (not has_access(access_mode))
         return Error(-EFAULT);
 
-    if (owner->is_mapped(page_addr))
+    auto mapping = owner->get_page_mapping(page_addr);
+    if (mapped_right_perm(mapping, access_type))
         return true;
 
-    return alloc_page(page_addr);
+    return alloc_page(page_addr, mapping, access_mode);
 }
 
 Page_Table_Argumments Private_Normal_Region::craft_arguments() const
@@ -81,7 +102,7 @@ Page_Table_Argumments Private_Normal_Region::craft_arguments() const
     };
 }
 
-ReturnStr<bool> Private_Normal_Region::alloc_page(u64 ptr_addr)
+ReturnStr<bool> Private_Normal_Region::alloc_page(u64 ptr_addr, Page_Info, u64)
 {
     auto page = pmm::Page_Descriptor::allocate_page_zeroed(12);
     if (!page.success())
@@ -108,7 +129,7 @@ Page_Table_Argumments Phys_Mapped_Region::craft_arguments() const
     };
 }
 
-ReturnStr<bool> Phys_Mapped_Region::alloc_page(phys_addr_t ptr_addr)
+ReturnStr<bool> Phys_Mapped_Region::alloc_page(phys_addr_t ptr_addr, Page_Info, u64)
 {
     Page_Table_Argumments args = craft_arguments();
 
@@ -122,7 +143,8 @@ ReturnStr<bool> Phys_Mapped_Region::alloc_page(phys_addr_t ptr_addr)
     return true;
 }
 
-kresult_t Generic_Mem_Region::move_to(TLBShootdownContext &ctx, const klib::shared_ptr<Page_Table> &new_table,
+kresult_t Generic_Mem_Region::move_to(TLBShootdownContext &ctx,
+                                      const klib::shared_ptr<Page_Table> &new_table,
                                       size_t base_addr, size_t new_access)
 {
     Page_Table *const old_owner = owner;
@@ -294,15 +316,26 @@ Page_Table_Argumments Mem_Object_Reference::craft_arguments() const
     };
 }
 
-ReturnStr<bool> Mem_Object_Reference::alloc_page(u64 ptr_addr)
+ReturnStr<bool> Mem_Object_Reference::alloc_page(u64 ptr_addr, Page_Table::Page_Info mapping,
+                                                 u64 access_type)
 {
+    // TODO: mprotect
+    if (mapping.is_allocated) {
+        auto p = mapping.get_page();
+        assert(p);
+        if (p->is_anonymous()) {
+            return owner->resolve_anonymous_page(ptr_addr, access_type);
+        }
+    }
+
     if (cow) {
         const auto reg_addr = (ptr_addr & ~0xfffUL) - start_addr;
 
         if (reg_addr + 0x1000 <= start_offset_bytes or
             reg_addr >= start_offset_bytes + object_size_bytes) {
             // Out of object range. Allocate an empty page
-            auto page = pmm::Page_Descriptor::allocate_page_zeroed(12);
+            auto page = references->atomic_request_anonymous_page(
+                reg_addr - start_offset_bytes + object_offset_bytes, true);
             if (!page.success())
                 return page.propagate();
 
@@ -313,19 +346,38 @@ ReturnStr<bool> Mem_Object_Reference::alloc_page(u64 ptr_addr)
             return true;
         }
 
-        auto page =
-            references->atomic_request_page(reg_addr - start_offset_bytes + object_offset_bytes, false);
+        if (reg_addr >= start_offset_bytes and
+            reg_addr + 0x1000 <= start_offset_bytes + object_size_bytes and !reading(access_type)) {
+            i64 addr = reg_addr - start_offset_bytes + object_offset_bytes;
+            // TODO
+            assert(addr >= 0);
+            auto page = references->atomic_request_page(
+                reg_addr - start_offset_bytes + object_offset_bytes, false, true);
+            if (!page.success())
+                return page.propagate();
+
+            if (not page.val.page_struct_ptr)
+                return false;
+
+            // TODO
+            auto addr_aligned = ptr_addr & ~0xffful;
+            auto args         = craft_arguments();
+            args.writeable &= not page.val.page_struct_ptr->is_anonymous();
+
+            auto result = owner->map(klib::move(page.val), addr_aligned, args);
+            if (result)
+                return Error(result);
+
+            return true;
+        }
+
+        auto page = references->atomic_request_anonymous_page(
+            reg_addr - start_offset_bytes + object_offset_bytes, false);
         if (!page.success())
             return page.propagate();
 
         if (not page.val.page_struct_ptr)
             return false;
-
-        page = page.val.create_copy();
-        if (!page.success())
-            return page.propagate();
-
-        // Partially zero the page, if needed
 
         if (reg_addr >= start_offset_bytes and
             reg_addr + 0x1000 <= start_offset_bytes + object_size_bytes) {
@@ -378,7 +430,8 @@ ReturnStr<bool> Mem_Object_Reference::alloc_page(u64 ptr_addr)
     }
 }
 
-kresult_t Mem_Object_Reference::move_to(TLBShootdownContext &ctx, const klib::shared_ptr<Page_Table> &new_table,
+kresult_t Mem_Object_Reference::move_to(TLBShootdownContext &ctx,
+                                        const klib::shared_ptr<Page_Table> &new_table,
                                         u64 base_addr, u64 new_access)
 {
     return -ENOSYS;
@@ -427,7 +480,7 @@ void Mem_Object_Reference::prepare_deletion() noexcept
     auto p = owner->object_regions.find(references.get());
     if (p != owner->object_regions.end())
         p->second.erase(this);
-    
+
     if (p->second.empty())
         owner->object_regions.erase(p);
 }

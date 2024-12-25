@@ -110,7 +110,7 @@ ReturnStr<size_t> TaskDescriptor::init_stack()
     auto r = this->page_table->atomic_create_normal_region(stack_page_start, stack_size,
                                                            Page_Table::Protection::Writeable |
                                                                Page_Table::Protection::Readable,
-                                                           true, false, stack_region_name, -1);
+                                                           true, false, stack_region_name, -1, true);
 
     if (!r.success())
         return r.propagate();
@@ -447,7 +447,7 @@ ReturnStr<bool>
             const u32 pa_size = (size + 0xFFF) & ~0xFFF;
             auto tls_virt     = table->atomic_create_normal_region(
                 0, pa_size, Page_Table::Protection::Readable | Page_Table::Protection::Writeable,
-                false, false, name + "_tls", 0);
+                false, false, name + "_tls", 0, true);
 
             if (!tls_virt.success())
                 return tls_virt.propagate();
@@ -583,7 +583,7 @@ ReturnStr<bool>
             const u64 pa_size = (size + 0xFFF) & ~0xFFFUL;
             auto tls_virt     = table->atomic_create_normal_region(
                 0, pa_size, Page_Table::Protection::Readable | Page_Table::Protection::Writeable,
-                false, false, name + "_tls", 0);
+                false, false, name + "_tls", 0, true);
 
             if (!tls_virt.success())
                 return tls_virt.propagate();
@@ -656,7 +656,7 @@ ReturnStr<bool>
 
     auto pos_p = table->atomic_create_normal_region(
         0, tag_size_page, Page_Table::Protection::Readable | Page_Table::Protection::Writeable,
-        false, false, name + "_load_tags", 0);
+        false, false, name + "_load_tags", 0, true);
     if (!pos_p.success())
         return pos_p.propagate();
 

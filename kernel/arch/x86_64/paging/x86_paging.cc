@@ -408,6 +408,8 @@ x86_4level_Page_Table::Page_Info x86_4level_Page_Table::get_page_mapping(u64 vir
     unsigned pt_i  = pt_index(virt_addr);
     i.flags        = mapper.ptr[pt_i].avl;
     i.is_allocated = mapper.ptr[pt_i].present;
+    i.writeable    = mapper.ptr[pt_i].writeable;
+    i.executable   = not mapper.ptr[pt_i].execution_disabled;
     i.dirty        = mapper.ptr[pt_i].dirty;
     i.user_access  = mapper.ptr[pt_i].user_access;
     i.page_addr    = mapper.ptr[pt_i].page_ppn << 12;
@@ -664,6 +666,75 @@ kresult_t x86_4level_Page_Table::map(pmm::Page_Descriptor page, u64 virtual_addr
 
     if (nx_bit_enabled)
         pte->execution_disabled = arg.execution_disabled;
+
+    return 0;
+}
+
+kresult_t x86_4level_Page_Table::resolve_anonymous_page(u64 virt_addr, u64 access_type)
+{
+    assert(access_type & Writeable);
+
+    Temp_Mapper_Obj<x86_PAE_Entry> mapper(request_temp_mapper());
+    mapper.map(pml4_phys);
+    for (int i = 3; i > 0; --i) {
+        int offset      = 12 + i * 9;
+        int index       = (virt_addr >> offset) & 0x1ff;
+        x86_PAE_Entry p = mapper.ptr[index];
+        assert(p.present && "page must be present");
+        mapper.map(p.page_ppn << 12);
+    }
+
+    x86_PAE_Entry p = mapper.ptr[pt_index(virt_addr)];
+    assert(p.present && "page must be present");
+    assert(p.avl & PAGING_FLAG_STRUCT_PAGE && "page must be a struct page");
+    assert(!p.writeable && "page must be read-only");
+
+    auto page = pmm::Page_Descriptor::find_page_struct(p.page_ppn << 12);
+    assert(page.page_struct_ptr && "page struct not found");
+
+    if (__atomic_load_n(&page.page_struct_ptr->l.refcount, __ATOMIC_SEQ_CST) == 2) {
+        // only owner of the page
+        p.writeable                     = 1;
+        mapper.ptr[pt_index(virt_addr)] = p;
+        return 0;
+    }
+
+    auto owner = page.page_struct_ptr->l.owner;
+    assert(owner && "page owner not found");
+
+    auto new_descriptor =
+        owner->atomic_request_anonymous_page(page.page_struct_ptr->l.offset, true);
+    if (!new_descriptor.success())
+        return new_descriptor.result;
+
+    p.present                       = 0;
+    mapper.ptr[pt_index(virt_addr)] = p;
+    // Fun!
+    {
+        auto tlb_ctx = TLBShootdownContext::create_userspace(*this);
+        tlb_ctx.invalidate_page(virt_addr);
+    }
+
+    u64 new_page_phys = new_descriptor.val.takeout_page();
+
+    // Good code
+    struct _page {
+        u64 contents[512];
+    } __attribute__((aligned(4096)));
+
+    Temp_Mapper_Obj<_page> old_page(request_temp_mapper());
+    old_page.map(p.page_ppn << 12);
+    Temp_Mapper_Obj<_page> new_page(request_temp_mapper());
+    new_page.map(new_page_phys);
+
+    *new_page.ptr = *old_page.ptr;
+
+    page.release_taken_out_page();
+
+    p.page_ppn                      = new_page_phys >> 12;
+    p.writeable                     = 1;
+    p.present                       = 1;
+    mapper.ptr[pt_index(virt_addr)] = p;
 
     return 0;
 }

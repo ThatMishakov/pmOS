@@ -418,8 +418,10 @@ void construct_paging()
                     p->type       = Page::PageType::Allocated;
                     p->flags      = 0;
                     p->l.refcount = 1;
+                    p->l.owner   = nullptr; // Kernel memory
 
                     end[-1].type       = Page::PageType::Allocated;
+                    end[-1].l.owner    = nullptr;
                     end[-1].flags      = 0;
                     end[-1].l.refcount = 1;
 
@@ -435,6 +437,7 @@ void construct_paging()
                     auto base_page_index = (regions_data[i].base - base_addr) / PAGE_SIZE;
                     for (size_t j = base_page_index; j < base_page_index + occupied_pages; j++) {
                         pages[j].type       = Page::PageType::Allocated;
+                        pages[j].l.owner    = nullptr;
                         pages[j].flags      = 0;
                         pages[j].l.refcount = 1;
                         pages[j].l.next     = nullptr;
@@ -468,6 +471,7 @@ void construct_paging()
 
                 for (size_t j = base_page_index; j < base_page_index + pages_count; j++) {
                     pages[j].type       = Page::PageType::Allocated;
+                    pages[j].l.owner    = nullptr;
                     pages[j].flags      = 0;
                     pages[j].l.refcount = 1;
                     pages[j].l.next     = nullptr;
@@ -507,6 +511,7 @@ void construct_paging()
     auto reserved_count    = temp_alloc_reserved / PAGE_SIZE;
     for (size_t i = 0; i < reserved_count; i++) {
         temp_region_page[i].type       = Page::PageType::Allocated;
+        temp_region_page[i].l.owner    = nullptr;
         temp_region_page[i].flags      = 0;
         temp_region_page[i].l.refcount = 1;
     }
@@ -756,7 +761,7 @@ void init_task1()
     tags.push_back(construct_load_tag_for_modules());
 
     // Create new task and load ELF into it
-    auto task = TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel::User);
+    auto task  = TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel::User);
     task->name = "bootstrap";
     serial_logger.printf("Loading ELF...\n");
     auto p = task->load_elf(task1->object, task1->path, tags);
@@ -948,9 +953,9 @@ void limine_main()
         hcf();
     }
 
-    #ifdef __x86_64__
+#ifdef __x86_64__
     boot_tsc = rdtsc();
-    #endif
+#endif
 
     serial_logger.printf("Hello from pmOS kernel!\n");
     serial_logger.printf("Kernel start: 0x%h\n", &_kernel_start);

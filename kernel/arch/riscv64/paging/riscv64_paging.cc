@@ -374,6 +374,8 @@ RISCV64_Page_Table::Page_Info RISCV64_Page_Table::get_page_mapping(u64 virt_addr
                 Page_Info i {};
                 i.flags        = entry->available;
                 i.is_allocated = entry->valid;
+                i.writeable    = entry->writeable;
+                i.executable   = entry->executable;
                 i.dirty        = entry->dirty;
                 i.user_access  = entry->user;
                 i.page_addr    = entry->ppn << 12;

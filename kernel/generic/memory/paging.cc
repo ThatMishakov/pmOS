@@ -68,7 +68,7 @@ Page_Table::~Page_Table()
 ReturnStr<Mem_Object_Reference *>
     Page_Table::atomic_create_normal_region(ulong page_aligned_start, ulong page_aligned_size,
                                             unsigned access, bool fixed, bool dma,
-                                            klib::string name, u64 pattern)
+                                            klib::string name, u64 pattern, bool cow)
 {
     unsigned flags = Mem_Object::FLAG_ANONYMOUS;
     if (dma)
@@ -78,7 +78,7 @@ ReturnStr<Mem_Object_Reference *>
         return Error(-ENOMEM);
 
     return atomic_create_mem_object_region(page_aligned_start, page_aligned_size, access & 0x7,
-                                           access & 0x8, "anonymous memory", object, false, 0, 0,
+                                           access & 0x8, "anonymous memory", object, cow, 0, 0,
                                            page_aligned_size);
 }
 
@@ -203,6 +203,9 @@ ReturnStr<Mem_Object_Reference *> Page_Table::atomic_create_mem_object_region(
     u64 object_size_bytes) noexcept
 {
     Auto_Lock_Scope scope_lock(lock);
+
+    if (cow and object->is_dma())
+        return Error(-EINVAL);
 
     auto start_addr = find_region_spot(page_aligned_start, page_aligned_size, fixed);
     if (!start_addr.success())

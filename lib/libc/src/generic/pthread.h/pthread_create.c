@@ -58,7 +58,7 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
 {
     // Create stack
     size_t stack_size       = 0x200000; // 2 MiB; TODO: Respect attr
-    mem_request_ret_t stack = create_normal_region(0, NULL, 0x200000, 1 | 2);
+    mem_request_ret_t stack = create_normal_region(0, NULL, 0x200000, 1 | 2 | CREATE_FLAG_COW);
     if (stack.result != SUCCESS) {
         errno = -stack.result;
         return -1;

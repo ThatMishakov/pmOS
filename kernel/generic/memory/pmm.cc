@@ -4,6 +4,7 @@
 
 #include <sched/sched.hh>
 #include <memory/paging.hh>
+#include "mem_object.hh"
 
 using namespace kernel;
 using namespace kernel::pmm;
@@ -49,6 +50,12 @@ ReturnStr<Page_Descriptor> Page_Descriptor::create_copy() const noexcept
     return new_page;
 }
 
+Page *Page_Info::get_page() const
+{
+    assert(is_allocated);
+    return find_page(page_addr);
+}
+
 Page::page_addr_t Page_Descriptor::takeout_page() noexcept
 {
     assert(page_struct_ptr);
@@ -70,6 +77,7 @@ ReturnStr<Page_Descriptor> Page_Descriptor::allocate_page(u8 alignment_log)
 
     p->type       = Page::PageType::Allocated;
     p->l          = {};
+    p->l.owner    = nullptr;
     p->l.refcount = 1;
 
     return Page_Descriptor(p);
@@ -85,6 +93,7 @@ ReturnStr<Page_Descriptor> Page_Descriptor::allocate_page_zeroed(u8 alignment_lo
 
     p->type       = Page::PageType::Allocated;
     p->l          = {};
+    p->l.owner    = nullptr;
     p->l.refcount = 1;
 
     Temp_Mapper_Obj<char> mapping(request_temp_mapper());
@@ -132,6 +141,7 @@ Page_Descriptor Page_Descriptor::create_empty() noexcept
 
     new_page_struct->type       = Page::PageType::Allocated;
     new_page_struct->flags      = Page::FLAG_NO_PAGE;
+    new_page_struct->l.owner    = nullptr;
     new_page_struct->l.refcount = 1;
 
     return Page_Descriptor(new_page_struct.release());
@@ -165,6 +175,10 @@ void pmm::release_page(Page *page) noexcept
     if (not page->has_physical_page()) {
         delete page;
     } else {
+        assert(page->type == Page::PageType::Allocated);
+        if (page->is_anonymous() and page->l.owner != nullptr)
+            page->l.owner->atomic_remove_anonymous_page(page);
+
         page->type                    = Page::PageType::PendingFree;
         RCU_Head &rcu                 = page->rcu_state.rcu_h;
         rcu.rcu_func                  = Page::rcu_callback;
@@ -446,6 +460,7 @@ Page::page_addr_t kernel::pmm::get_memory_for_kernel(size_t pages) noexcept
     for (size_t i = 0; i < pages; i++) {
         p[i].type       = Page::PageType::Allocated;
         p[i].flags      = 0;
+        p[i].l.owner    = nullptr;
         p[i].l.refcount = 1;
     }
 
