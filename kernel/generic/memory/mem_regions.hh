@@ -263,34 +263,6 @@ struct Phys_Mapped_Region final: Generic_Mem_Region {
     kresult_t punch_hole(u64 hole_addr_start, u64 hole_size_bytes) override;
 };
 
-// Normal region. On page fault, attempts to allocate the page and fills it with specified pattern
-// (e.g. zeroing) if successfull
-struct Private_Normal_Region final: Generic_Mem_Region {
-    // This pattern is used to fill the newly allocated pages
-    u64 pattern = 0;
-
-    constexpr bool can_takeout_page() const noexcept override { return true; }
-
-    virtual kresult_t clone_to(const klib::shared_ptr<Page_Table> &new_table, u64 base_addr,
-                          u64 new_access) override;
-
-    // Attempt to allocate a new page
-    virtual ReturnStr<bool> alloc_page(u64 ptr_addr, Page_Info info, u64 access_type) override;
-
-    // Tries to preallocate all the pages
-    void prefill();
-
-    virtual Page_Table_Argumments craft_arguments() const override;
-
-    Private_Normal_Region(u64 start_addr, u64 size, klib::string name, Page_Table *owner, u8 access,
-                          u64 pattern)
-        : Generic_Mem_Region(start_addr, size, klib::forward<klib::string>(name), owner, access),
-          pattern(pattern) {};
-
-    void trim(u64 new_start_addr, u64 new_size_bytes) noexcept override;
-    kresult_t punch_hole(u64 hole_addr_start, u64 hole_size_bytes) override;
-};
-
 class Mem_Object;
 
 /// Memory region which references memory object

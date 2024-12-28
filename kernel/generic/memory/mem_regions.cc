@@ -90,31 +90,6 @@ ReturnStr<bool> Generic_Mem_Region::prepare_page(u64 access_mode, u64 page_addr)
     return alloc_page(page_addr, mapping, access_mode);
 }
 
-Page_Table_Argumments Private_Normal_Region::craft_arguments() const
-{
-    return {
-        !!(access_type & Readable),
-        !!(access_type & Writeable),
-        true,
-        false,
-        !(access_type & Executable),
-        0b000,
-    };
-}
-
-ReturnStr<bool> Private_Normal_Region::alloc_page(u64 ptr_addr, Page_Info, u64)
-{
-    auto page = pmm::Page_Descriptor::allocate_page_zeroed(12);
-    if (!page.success())
-        return page.propagate();
-
-    auto result = owner->map(klib::move(page.val), ptr_addr, craft_arguments());
-    if (result)
-        return Error(result);
-
-    return true;
-}
-
 Page_Table_Argumments Phys_Mapped_Region::craft_arguments() const
 {
     return {
@@ -193,34 +168,6 @@ void Phys_Mapped_Region::trim(u64 new_start, u64 new_size) noexcept
     size = new_size;
 }
 
-kresult_t Private_Normal_Region::clone_to(const klib::shared_ptr<Page_Table> &new_table,
-                                          size_t base_addr, u64 new_access)
-{
-    auto copy = klib::make_unique<Private_Normal_Region>(*this);
-    if (!copy)
-        return -ENOMEM;
-
-    copy->owner       = new_table.get();
-    copy->id          = __atomic_add_fetch(&counter, 1, 0);
-    copy->access_type = new_access;
-    copy->start_addr  = base_addr;
-
-    auto result = owner->copy_pages(new_table, start_addr, base_addr, size, new_access);
-    if (result)
-        return result;
-
-    new_table->paging_regions.insert(copy.release());
-    return 0;
-}
-
-void Private_Normal_Region::trim(u64 new_start, u64 new_size) noexcept
-{
-    assert(new_start >= start_addr);
-
-    start_addr = new_start;
-    size       = new_size;
-}
-
 void Mem_Object_Reference::trim(u64 new_start, u64 new_size) noexcept
 {
     assert(new_start >= start_addr);
@@ -248,22 +195,6 @@ void Mem_Object_Reference::trim(u64 new_start, u64 new_size) noexcept
     size = new_size;
     if (size < start_offset_bytes + object_size_bytes)
         object_size_bytes = size - start_offset_bytes;
-}
-
-kresult_t Private_Normal_Region::punch_hole(u64 hole_addr_start, u64 hole_size_bytes)
-{
-    assert(start_addr < hole_addr_start and start_addr + size > hole_addr_start + hole_size_bytes);
-
-    auto ptr = new Private_Normal_Region(*this);
-    if (!ptr)
-        return -ENOMEM;
-
-    ptr->size -= hole_addr_start + hole_size_bytes - start_addr;
-    ptr->start_addr = hole_addr_start + hole_size_bytes;
-    owner->paging_regions.insert(ptr);
-    size = hole_addr_start - start_addr;
-
-    return 0;
 }
 
 kresult_t Phys_Mapped_Region::punch_hole(u64 hole_addr_start, u64 hole_size_bytes)
