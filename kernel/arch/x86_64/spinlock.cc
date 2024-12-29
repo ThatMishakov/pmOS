@@ -48,10 +48,9 @@ void acquire_lock_spin(u32 *lock) noexcept
             return;
     }
 }
-void release_lock(u32 *lock) noexcept { __sync_lock_release(lock); }
+void release_lock(u32 *lock) noexcept { __atomic_store_n(lock, 0, __ATOMIC_RELEASE); }
 
 constexpr int max_spins = 32;
-// TODO: Make it spin 32 times ?
 bool try_lock(u32 *lock) noexcept { 
     for (int i = 0; i < 32; i++) {
         if (__atomic_load_n(lock, __ATOMIC_RELAXED))

@@ -189,6 +189,8 @@ public:
     virtual kresult_t map(u64 page_addr, u64 virt_addr, Page_Table_Argumments arg) override;
     virtual kresult_t map(kernel::pmm::Page_Descriptor page, u64 virt_addr, Page_Table_Argumments arg) override;
 
+    kresult_t resolve_anonymous_page(u64 virt_addr, u64 access_type) override;
+
     virtual ~RISCV64_Page_Table() override;
 
     // Clears the TLB cache for the given page
@@ -198,7 +200,7 @@ public:
 
     ReturnStr<bool> atomic_copy_to_user(u64 to, const void *from, u64 size) override;
 
-    virtual kresult_t copy_pages(const klib::shared_ptr<Page_Table> &to, u64 from_addr, u64 to_addr,
+    virtual kresult_t copy_anonymous_pages(const klib::shared_ptr<Page_Table> &to, u64 from_addr, u64 to_addr,
                     u64 size_bytes, u8 new_access) override;
 
     bool is_32bit() const noexcept { return false; }
@@ -208,7 +210,7 @@ protected:
 
     RISCV64_Page_Table() = default;
 
-    static kresult_t copy_to_recursive(const klib::shared_ptr<Page_Table> &to, u64 phys_page_level, u64 start, u64 to_offset, u64 max_size, u64 new_access, u64 i, int level, u64 &last_copied);
+    static kresult_t copy_to_recursive(const klib::shared_ptr<Page_Table> &to, u64 phys_page_level, u64 start, u64 to_offset, u64 max_size, u64 new_access, u64 i, int level, u64 &last_copied, TLBShootdownContext &ctx);
 
 private:
     // There is an interesting pattern for this:

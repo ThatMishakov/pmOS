@@ -33,21 +33,32 @@
 
 void acquire_lock_spin(u32 *lock) noexcept
 {
+    //size_t count = 0;
     while (true) {
-        while (*lock)
-            ;
+        while (__atomic_load_n(lock, __ATOMIC_RELAXED)) {
+            // if (count++ > 1000000) {
+            //     count = 0;
+            //     serial_logger.printf("Warning: spinlock is busy\n");
+            //     print_stack_trace(serial_logger);
+            // }
+        }
 
-        if (__sync_bool_compare_and_swap(lock, 0, 1))
+        if (!__atomic_exchange_n(lock, 1, __ATOMIC_ACQUIRE))
             return;
     }
 }
-void release_lock(u32 *lock) noexcept { __sync_lock_release(lock); }
+void release_lock(u32 *lock) noexcept { __atomic_store_n(lock, 0, __ATOMIC_RELEASE); }
 
-// TODO: Make it spin 32 times ?
+constexpr int max_spins = 32;
 bool try_lock(u32 *lock) noexcept { 
-    for (int i = 0; i < 32; i++) {
-        if (__atomic_load_n(lock, __ATOMIC_ACQUIRE) == 0)
-            return __sync_bool_compare_and_swap(lock, 0, 1); 
+    for (int i = 0; i < max_spins; i++) {
+        if (__atomic_load_n(lock, __ATOMIC_RELAXED))
+            continue;
+
+        if (__atomic_exchange_n(lock, 1, __ATOMIC_ACQUIRE))
+            continue;
+
+        return true;
     }
     return false;
 }
