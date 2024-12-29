@@ -684,7 +684,8 @@ kresult_t x86_4level_Page_Table::resolve_anonymous_page(u64 virt_addr, u64 acces
         mapper.map(p.page_ppn << 12);
     }
 
-    x86_PAE_Entry p = mapper.ptr[pt_index(virt_addr)];
+    auto i          = pt_index(virt_addr);
+    x86_PAE_Entry p = mapper.ptr[i];
     assert(p.present && "page must be present");
     assert(p.avl & PAGING_FLAG_STRUCT_PAGE && "page must be a struct page");
     assert(!p.writeable && "page must be read-only");
@@ -692,10 +693,10 @@ kresult_t x86_4level_Page_Table::resolve_anonymous_page(u64 virt_addr, u64 acces
     auto page = pmm::Page_Descriptor::find_page_struct(p.page_ppn << 12);
     assert(page.page_struct_ptr && "page struct not found");
 
-    if (__atomic_load_n(&page.page_struct_ptr->l.refcount, __ATOMIC_SEQ_CST) == 2) {
+    if (__atomic_load_n(&page.page_struct_ptr->l.refcount, __ATOMIC_ACQUIRE) == 2) {
         // only owner of the page
-        p.writeable                     = 1;
-        mapper.ptr[pt_index(virt_addr)] = p;
+        p.writeable   = 1;
+        mapper.ptr[i] = p;
         return 0;
     }
 
@@ -707,34 +708,29 @@ kresult_t x86_4level_Page_Table::resolve_anonymous_page(u64 virt_addr, u64 acces
     if (!new_descriptor.success())
         return new_descriptor.result;
 
-    p.present                       = 0;
-    mapper.ptr[pt_index(virt_addr)] = p;
+    p.present     = 0;
+    mapper.ptr[i] = p;
     // Fun!
     {
         auto tlb_ctx = TLBShootdownContext::create_userspace(*this);
-        tlb_ctx.invalidate_page(virt_addr);
+        tlb_ctx.invalidate_page(virt_addr & ~0xffful);
     }
 
     u64 new_page_phys = new_descriptor.val.takeout_page();
 
-    // Good code
-    struct _page {
-        u64 contents[512];
-    } __attribute__((aligned(4096)));
-
-    Temp_Mapper_Obj<_page> old_page(request_temp_mapper());
+    Temp_Mapper_Obj<void> old_page(request_temp_mapper());
     old_page.map(p.page_ppn << 12);
-    Temp_Mapper_Obj<_page> new_page(request_temp_mapper());
+    Temp_Mapper_Obj<void> new_page(request_temp_mapper());
     new_page.map(new_page_phys);
 
-    *new_page.ptr = *old_page.ptr;
+    __builtin_memcpy(new_page.ptr, old_page.ptr, 4096);
 
     page.release_taken_out_page();
 
-    p.page_ppn                      = new_page_phys >> 12;
-    p.writeable                     = 1;
-    p.present                       = 1;
-    mapper.ptr[pt_index(virt_addr)] = p;
+    p.page_ppn    = new_page_phys >> 12;
+    p.writeable   = 1;
+    p.present     = 1;
+    mapper.ptr[i] = p;
 
     return 0;
 }
@@ -830,7 +826,7 @@ klib::shared_ptr<x86_4level_Page_Table> x86_4level_Page_Table::create_clone()
     if (not new_table)
         return nullptr;
 
-    Auto_Lock_Scope_Double(this->lock, new_table->lock);
+    Auto_Lock_Scope_Double lock_guard(this->lock, new_table->lock);
 
     if (new_table->mem_objects.size() != 0)
         // Somebody has messed with the page table while it was being created
@@ -963,4 +959,102 @@ klib::shared_ptr<x86_4level_Page_Table> x86_4level_Page_Table::get_page_table(u6
         return nullptr;
 
     return p->second.lock();
+}
+
+kresult_t x86_4level_Page_Table::copy_to_recursive(const klib::shared_ptr<Page_Table> &to,
+                                                   u64 phys_page_level, u64 absolute_start,
+                                                   u64 to_addr, u64 size_bytes, u64 new_access,
+                                                   u64 current_copy_from, int level,
+                                                   u64 &upper_bound_offset,
+                                                   TLBShootdownContext &ctx)
+{
+    const u8 offset = 12 + (level - 1) * 9;
+
+    Temp_Mapper_Obj<x86_PAE_Entry> mapper(request_temp_mapper());
+    mapper.map(phys_page_level);
+
+    u64 mask        = (1UL << offset) - 1;
+    u64 max         = (absolute_start + size_bytes + mask) & ~mask;
+    u64 end_index   = (current_copy_from >> (offset + 9)) == (max >> (offset + 9))
+                          ? (max >> offset) & 0x1ff
+                          : 512;
+    u64 start_index = (current_copy_from >> offset) & 0x1ff;
+
+    for (u64 i = start_index; i < end_index; ++i) {
+        auto p = mapper.ptr[i];
+        if (not p.present)
+            continue;
+
+        if (level == 1) {
+            auto pp = pmm::Page_Descriptor::find_page_struct(p.page_ppn << 12);
+            assert(pp.page_struct_ptr && "page struct must be present");
+            if (!pp.page_struct_ptr->is_anonymous())
+                continue;
+
+            u64 copy_from = ((i - start_index) << offset) + current_copy_from;
+            u64 copy_to   = copy_from - absolute_start + to_addr;
+
+            // Spelling mistake?
+            Page_Table_Argumments arg = {
+                .readable           = true,
+                .writeable          = false,
+                .user_access        = p.user_access,
+                .global             = p.global,
+                .execution_disabled = p.execution_disabled,
+                .extra              = p.avl,
+                .cache_policy = p.cache_disabled ? Memory_Type::IONoCache : Memory_Type::Normal,
+            };
+
+            if (p.writeable) {
+                p.writeable   = 0;
+                mapper.ptr[i] = p;
+                ctx.invalidate_page(copy_from);
+            }
+
+            auto result = to->map(klib::move(pp), copy_to, arg);
+            if (result)
+                return result;
+
+            upper_bound_offset = copy_from - absolute_start + 4096;
+        } else {
+            assert(p.pat_size == 0 && "huge pages are not supported");
+
+            u64 new_page_phys = p.page_ppn << 12;
+            u64 current       = ((i - start_index) << offset) + current_copy_from;
+            if (i != start_index)
+                current &= ~mask;
+            auto result =
+                copy_to_recursive(to, new_page_phys, absolute_start, to_addr, size_bytes,
+                                  new_access, current, level - 1, upper_bound_offset, ctx);
+            if (result)
+                return result;
+        }
+    }
+
+    return 0;
+}
+
+kresult_t x86_4level_Page_Table::copy_anonymous_pages(const klib::shared_ptr<Page_Table> &to,
+                                                      u64 from_addr, u64 to_addr, u64 size_bytes,
+                                                      u8 access)
+{
+    u64 offset = 0;
+
+    auto guard = pmos::utility::make_scope_guard([&]() {
+        auto ctx = TLBShootdownContext::create_userspace(*to);
+        to->invalidate_range(ctx, to_addr, offset, true);
+    });
+
+    kresult_t result;
+
+    {
+        TLBShootdownContext ctx = TLBShootdownContext::create_userspace(*this);
+        result = copy_to_recursive(to, pml4_phys, from_addr, to_addr, size_bytes, access, from_addr,
+                                   4, offset, ctx);
+    }
+
+    if (result == 0)
+        guard.dismiss();
+
+    return result;
 }

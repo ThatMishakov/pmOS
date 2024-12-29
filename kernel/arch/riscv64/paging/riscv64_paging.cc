@@ -335,8 +335,10 @@ kresult_t RISCV64_Page_Table::copy_to_recursive(const klib::shared_ptr<Page_Tabl
             u64 current         = ((i - start_index) << offset) + current_copy_from;
             if (i != start_index)
                 current &= ~mask;
-            return copy_to_recursive(to, next_level_phys, absolute_start, to_addr, size_bytes,
+            auto result = copy_to_recursive(to, next_level_phys, absolute_start, to_addr, size_bytes,
                                      new_access, current, level - 1, upper_bound_offset);
+            if (result)
+                return result;
         }
     }
 

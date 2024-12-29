@@ -74,7 +74,7 @@ extern "C" void t_print_bochs(const char *str, ...);
 
 class Spinlock_base {
 private:
-    u32 locked = false;
+    u32 locked = 0;
 protected:
     void lock() noexcept;
     bool try_lock() noexcept;
@@ -141,14 +141,14 @@ struct Auto_Lock_Scope_Double {
     Auto_Lock_Scope_Double(T &a, T &b): a(&a < &b ? a : b), b(&a < &b ? b : a)
     {
         this->a.lock();
-        if (a != b)
+        if (&a != &b)
             this->b.lock();
     }
 
     ~Auto_Lock_Scope_Double()
     {
         a.unlock();
-        if (a != b)
+        if (&a != &b)
             b.unlock();
     }
 };
@@ -161,7 +161,7 @@ struct Lock_Guard_Simul {
     Lock_Guard_Simul() = delete;
     Lock_Guard_Simul(T &a, T &b): a(&a < &b ? a : b), b(&a < &b ? b : a)
     {
-        if (a == b) {
+        if (&a == &b) {
             a.lock();
             return;
         }
@@ -180,7 +180,7 @@ struct Lock_Guard_Simul {
     ~Lock_Guard_Simul()
     {
         a.unlock();
-        if (a != b)
+        if (&a != &b)
             b.unlock();
     }
 };

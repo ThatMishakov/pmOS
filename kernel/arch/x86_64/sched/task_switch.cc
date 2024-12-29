@@ -53,10 +53,19 @@ void TaskDescriptor::before_task_switch()
         // c->current_task->pid);
         sse_data.save_sse();
         invalidate_sse();
+        holds_sse_data = true;
     }
 }
 
-void TaskDescriptor::after_task_switch() { restore_segments(this); }
+void TaskDescriptor::after_task_switch() {
+    if (holds_sse_data) {
+        // t_print_bochs("Restoring SSE registers for PID %h\n",
+        // c->current_task->pid);
+        validate_sse();
+        sse_data.restore_sse();
+    }
+    restore_segments(this);
+}
 
 bool TaskDescriptor::is_kernel_task() const
 {

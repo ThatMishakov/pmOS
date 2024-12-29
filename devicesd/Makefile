@@ -12,7 +12,8 @@ CXX = clang++
 
 TARGETFLAGS = --target=$(ARCH)-pmos --sysroot=$(ROOTDIR)/sysroot
 
-USERCFLAGS = -Wall -Wextra -O3 -pipe -ggdb3
+USERCFLAGS = -Wall -Wextra -O3 -pipe -ggdb3 \
+	-DUACPI_OVERRIDE_LIBC
 
 INCLUDEFLAGS = -I$(PROGDIR)/include -I$(PROGDIR)/uACPI/include
 

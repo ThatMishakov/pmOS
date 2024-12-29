@@ -158,8 +158,6 @@ void print_pt_chain(u64 page, Logger &logger)
     logger.printf("PTE: %h\n", *((u64 *)pte));
 }
 
-bool is_protection_violation(u64 err_code) noexcept { return err_code & 0x01; }
-
 extern "C" void pagefault_manager()
 {
     CPU_Info *c = get_cpu_struct();
@@ -182,9 +180,6 @@ extern "C" void pagefault_manager()
     // virtual_addr, task->task_id, task->name.c_str(), task->regs.e.rip, err);
 
     auto result = [&]() -> kresult_t {
-        if (is_protection_violation(err))
-            return -EFAULT;
-
         Auto_Lock_Scope scope_lock(task->page_table->lock);
 
         auto &regions       = task->page_table->paging_regions;

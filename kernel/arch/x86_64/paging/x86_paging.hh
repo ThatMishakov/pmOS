@@ -86,7 +86,7 @@ public:
     virtual void tlb_flush_all() override;
 
 protected:
-    virtual void free_user_pages()            = 0;
+    virtual void free_user_pages() = 0;
 
     volatile u64 active_count = 0;
 };
@@ -108,10 +108,15 @@ public:
 
     static klib::shared_ptr<x86_4level_Page_Table> create_empty(int flags = 0);
 
-    // Maps the page with the appropriate permissions
-    virtual kresult_t map(u64 page_addr, u64 virt_addr, Page_Table_Argumments arg) noexcept override;
+    virtual kresult_t copy_anonymous_pages(const klib::shared_ptr<Page_Table> &to, u64 from_addr,
+                                          u64 to_addr, u64 size_bytes, u8 new_access) override;
 
-    virtual kresult_t map(kernel::pmm::Page_Descriptor page, u64 virt_addr, Page_Table_Argumments arg) noexcept override;
+    // Maps the page with the appropriate permissions
+    virtual kresult_t map(u64 page_addr, u64 virt_addr,
+                          Page_Table_Argumments arg) noexcept override;
+
+    virtual kresult_t map(kernel::pmm::Page_Descriptor page, u64 virt_addr,
+                          Page_Table_Argumments arg) noexcept override;
 
     virtual void invalidate(TLBShootdownContext &ctx, u64 virt_addr, bool free) override;
 
@@ -119,7 +124,10 @@ public:
 
     virtual ~x86_4level_Page_Table();
 
-    constexpr u64 user_addr_max() const override { return (flags & FLAG_32BIT) ? 0x100000000 : 0x800000000000 ; }
+    constexpr u64 user_addr_max() const override
+    {
+        return (flags & FLAG_32BIT) ? 0x100000000 : 0x800000000000;
+    }
 
     ReturnStr<u64> phys_addr_of(u64 virt) const;
 
@@ -180,7 +188,8 @@ protected:
     static page_table_map global_page_tables;
     static Spinlock page_table_index_lock;
 
-    virtual void invalidate_range(TLBShootdownContext &ctx, u64 virt_addr, u64 size_bytes, bool free) override;
+    virtual void invalidate_range(TLBShootdownContext &ctx, u64 virt_addr, u64 size_bytes,
+                                  bool free) override;
 
     x86_4level_Page_Table() = default;
 
@@ -195,6 +204,10 @@ protected:
                                       u64 end, u64 curr_start);
 
     int flags = 0;
+
+    kresult_t copy_to_recursive(const klib::shared_ptr<Page_Table> &to, u64 phys_page_level,
+                                u64 absolute_start, u64 to_addr, u64 size_bytes, u64 new_access,
+                                u64 current_copy_from, int level, u64 &upper_bound_offset, TLBShootdownContext &ctx);
 };
 
 const u16 rec_map_index = 509;

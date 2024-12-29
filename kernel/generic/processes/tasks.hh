@@ -193,6 +193,7 @@ public:
 #ifdef __x86_64__
     // SSE data on x86_64 CPUs (floating point, vector registers)
     SSE_Data sse_data;
+    bool holds_sse_data = false;
 #elif defined(__riscv)
     // Floating point data on RISC-V CPUs
 

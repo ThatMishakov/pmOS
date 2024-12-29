@@ -381,41 +381,6 @@ kresult_t Page_Table::move_pages(TLBShootdownContext &ctx, const klib::shared_pt
     return 0;
 }
 
-kresult_t Page_Table::copy_pages(const klib::shared_ptr<Page_Table> &to, u64 from_addr, u64 to_addr,
-                                 u64 size_bytes, u8 access)
-{
-    u64 offset = 0;
-
-    auto guard = pmos::utility::make_scope_guard([&]() {
-        auto ctx = TLBShootdownContext::create_userspace(*to);
-        to->invalidate_range(ctx, to_addr, offset, true);
-    });
-
-    for (; offset < size_bytes; offset += 4096) {
-        auto info = get_page_mapping(from_addr + offset);
-        if (info.is_allocated) {
-            Page_Table_Argumments arg = {
-                .readable           = !!(access & Readable),
-                .writeable          = !!(access & Writeable),
-                .user_access        = info.user_access,
-                .global             = false,
-                .execution_disabled = not(access & Executable),
-                .extra              = info.flags,
-                // TODO: Fix this
-                .cache_policy       = Memory_Type::Normal,
-            };
-
-            auto result = to->map(info.create_copy(), to_addr + offset, arg);
-            if (result)
-                return result;
-        }
-    }
-
-    guard.dismiss();
-
-    return 0;
-}
-
 void Page_Table::apply_cpu(CPU_Info *cpu)
 {
     assert(cpu == get_cpu_struct());

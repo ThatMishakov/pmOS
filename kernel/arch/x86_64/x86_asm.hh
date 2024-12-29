@@ -35,7 +35,7 @@ extern "C" void tlb_flush();
 extern "C" void page_clear(void *page);
 extern "C" void loadTSS(u16 selector);
 extern "C" void set_segment_regs(u16);
-extern "C" void invlpg(u64 virtual_addr);
+inline void invlpg(u64 virtual_addr) { asm volatile("invlpg (%0)" ::"r"(virtual_addr) : "memory"); }
 
 extern "C" u64 read_msr(u32 msr);
 extern "C" void write_msr(u32 msr, u64 val);

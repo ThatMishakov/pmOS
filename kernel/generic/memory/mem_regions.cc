@@ -255,7 +255,10 @@ ReturnStr<bool> Mem_Object_Reference::alloc_page(u64 ptr_addr, Page_Table::Page_
         auto p = mapping.get_page();
         assert(p);
         if (p->is_anonymous()) {
-            return owner->resolve_anonymous_page(ptr_addr, access_type);
+            kresult_t result = owner->resolve_anonymous_page(ptr_addr, access_type);
+            if (result)
+                return Error(result);
+            return true;
         }
     }
 
@@ -382,7 +385,8 @@ kresult_t Mem_Object_Reference::clone_to(const klib::shared_ptr<Page_Table> &new
     copy->start_addr  = base_addr;
 
     if (cow) {
-        auto result = owner->copy_pages(new_table, start_addr, base_addr, size, new_access);
+        auto result =
+            owner->copy_anonymous_pages(new_table, start_addr, base_addr, size, new_access);
         if (result)
             return result;
     }

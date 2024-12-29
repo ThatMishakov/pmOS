@@ -105,7 +105,7 @@ template<typename P = void> struct Temp_Mapper_Obj {
     P *map(u64 phys_frame)
     {
         if (ptr != nullptr)
-            parent.return_map(reinterpret_cast<void *>(ptr));
+            parent.return_map((void *)(ptr));
 
         ptr = reinterpret_cast<P *>(parent.kern_map(phys_frame));
         return ptr;
@@ -119,7 +119,7 @@ template<typename P = void> struct Temp_Mapper_Obj {
     void clear()
     {
         if (ptr != nullptr) {
-            parent.return_map(reinterpret_cast<void *>(ptr));
+            parent.return_map((void *)(ptr));
             ptr = nullptr;
         }
     }
