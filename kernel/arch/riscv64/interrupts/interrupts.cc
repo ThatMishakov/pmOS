@@ -54,17 +54,22 @@ u64 get_fp()
     return fp;
 }
 
+extern "C" void allow_access_user();
+extern "C" void disallow_access_user();
+
 void print_stack_trace_fp(u64 fp = get_fp())
 {
+    allow_access_user();
     fp_s *current = (fp_s *)((char *)fp - 16);
     serial_logger.printf("Stack trace:\n");
-    while (1) {
+    for (int i = 0; i < 20; i++) {
         serial_logger.printf("  0x%x fp 0x%x\n", current->ra, current->fp);
         if (current->fp == 0 or ((i64)current->fp > 0)) {
             break;
         }
         current = (fp_s *)current->fp - 1;
     }
+    disallow_access_user();
 }
 
 extern "C" void print_stack_trace() { print_stack_trace_fp(); }

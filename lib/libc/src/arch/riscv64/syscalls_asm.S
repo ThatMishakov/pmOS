@@ -29,9 +29,18 @@
     .globl pmos_syscall
     .type pmos_syscall, @function
 pmos_syscall:
+    addi sp, sp, -16
+    sd ra, 8(sp)
+    sd fp, 0(sp)
+    addi fp, sp, 16
+
     # Linux sets syscall number in a7
     # Don't overcomplicate things and pass the number in a0, as the
     # function is called.
     # Might be changed later.
     ecall
+
+    ld ra, 8(sp)
+    ld fp, 0(sp)
+    addi sp, sp, 16
     ret

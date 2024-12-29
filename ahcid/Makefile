@@ -10,7 +10,7 @@ CC = clang
 CPP = clang
 CXX = clang++
 
-USERCFLAGS = -Wall -Wextra -Og -pipe
+USERCFLAGS = -Wall -Wextra -Og -pipe -O3
 
 CFLAGS = -std=c17 -g --target=$(ARCH)-pmos --sysroot=$(ROOTDIR)/sysroot -MMD -MP
 CXXFLAGS = -std=c++20 -g --target=$(ARCH)-pmos --sysroot=$(ROOTDIR)/sysroot -MMD -MP
@@ -23,7 +23,7 @@ INTERNALLDFLAGS :=
  
 # Internal C flags that should not be changed by the user.
 INTERNALCFLAGS  :=       \
-	-fPIE
+	-fPIE -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer
 
 ifeq ($(ARCH), riscv64)
 	INTERNALCFLAGS += -march=rva20u64 -mabi=lp64d

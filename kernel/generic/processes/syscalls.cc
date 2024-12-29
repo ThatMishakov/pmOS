@@ -125,7 +125,6 @@ extern "C" void syscall_handler()
         call_n = task->syscall_num;
     task->syscall_num = call_n;
 
-
     // serial_logger.printf("syscall_handler: task: %d (%s) call_n: %x, arg1: %x, arg2: %x, arg3:
     // %x, arg4: %x, arg5: %x\n", task->task_id, task->name.c_str(), call_n, arg1, arg2, arg3, arg4,
     // arg5);

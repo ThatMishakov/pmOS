@@ -29,6 +29,7 @@
 
 #pragma once
 
+#include <errno.h>
 #include <types.hh>
 
 // RiscV64 registers

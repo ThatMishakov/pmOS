@@ -16,7 +16,7 @@ INTERNALCFLAGS  :=       \
 	-static
 
 #USERCFLAGS := -march=rv64gc -mabi=lp64d -O3
-USERCFLAGS := -O3 -flto
+USERCFLAGS := -O3 -flto -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer
 
 CFLAGS = -std=gnu2x $(INCLUDEFLAGS) -g $(TARGETFLAGS)
 CXXFLAGS = -std=c++20 $(INCLUDEFLAGS) -g $(TARGETFLAGS)
