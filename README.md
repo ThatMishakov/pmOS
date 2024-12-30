@@ -39,9 +39,8 @@ The following shorthands can be used to configure to configure llvm and runtimes
 
 ## Immediate plans
 
-1. Unify memory objects and anonymous memory mappings. Implement memory object inheritance (and CoW with them).
-2. Implement working set for virtual memory (swap and page replacement)
-3. Implement AHCI driver reading and writing
+1. Implement working set for virtual memory (swap and page replacement)
+2. Implement AHCI driver reading and writing
  - Work on doccumentation
  - Improve project structure
 
@@ -65,7 +64,7 @@ These are the features that are planned to be had in the OS:
   - [x] Kernel virtual memory manager
   - [x] kmalloc
   - [x] Allocating memory to userspace
-  - [ ] Userspace memory regions
+  - [x] Userspace memory regions
     - [x] Mapping (anonymous mmap)
     - [x] Lazy allocations
     - [x] Full unmapping
@@ -73,6 +72,7 @@ These are the features that are planned to be had in the OS:
     - [ ] memprotect and changing permissions
     - [x] Acccess to physical memory
     - [x] Mapping of memory objects
+    - [x] Copy-on-write
   - [x] Memory mapping
   - [x] Releasing used pages
   - [ ] Memory objects
@@ -81,7 +81,7 @@ These are the features that are planned to be had in the OS:
     - [ ] Blocking tasks on memory object access in kernel
       - Need to make changes in scheduler
     - [x] Memory object mapping to userspace
-    - [ ] Memory object creation and management from userspace
+    - [x] Memory object creation and management from userspace
   - [x] Delayed allocation
   - [x] Memory protections
   - [x] TLB shootdowns
@@ -167,7 +167,8 @@ These are the features that are planned to be had in the OS:
   - [X] Initialization
   - [X] IRQ routing
   - [X] Power button (interrupt) and shutting down
-  - [ ] EC driver - Needed for ACPI to work on a Macbook 😊
+  - [X] EC driver
+  - [X] AMG GPIO driver
 
 
 **Userland**
