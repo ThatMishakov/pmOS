@@ -58,8 +58,8 @@ unsigned long int strtoul(const char *nptr, char **endptr, int base)
         base = c == '0' ? 8 : 10;
     }
 
-    long int cutoff = ULONG_MAX / base;
-    long int cutlim = ULONG_MAX % base;
+    unsigned long int cutoff = ULONG_MAX / base;
+    unsigned long int cutlim = ULONG_MAX % base;
 
     int k           = 0;
     long int result = 0;
