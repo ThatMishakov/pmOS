@@ -287,7 +287,7 @@ ReturnStr<bool>
         return Error(-EEXIST);
 
     ELF_Common header;
-    auto r = elf->read_to_kernel(0, (u8 *)&header, sizeof(ELF_64bit));
+    auto r = elf->read_to_kernel(0, (u8 *)&header, sizeof(header));
     if (!r.success())
         return r.propagate();
 
