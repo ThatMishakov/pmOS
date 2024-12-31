@@ -383,6 +383,7 @@ extern "C" size_t strlen(const char *start)
 
 extern "C" void dbg_uart_init();
 
+extern void hcf();
 extern "C" void abort(void)
 {
     t_print_bochs("Error: abort() was called. Hint: use debugger on COM1\n");
@@ -397,8 +398,7 @@ extern "C" void abort(void)
 
     // breakpoint;
 
-    while (1)
-        ;
+    hcf();
 }
 
 void panic(const char *msg, ...)

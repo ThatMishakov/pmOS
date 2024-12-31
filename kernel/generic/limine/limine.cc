@@ -45,40 +45,40 @@ using namespace kernel::pmm;
 extern "C" void limine_main();
 extern "C" void _limine_entry();
 
-LIMINE_BASE_REVISION(1)
+__attribute__((used)) LIMINE_BASE_REVISION(1)
 
-limine_bootloader_info_request boot_request = {
+__attribute__((used)) limine_bootloader_info_request boot_request = {
     .id       = LIMINE_BOOTLOADER_INFO_REQUEST,
     .revision = 0,
     .response = nullptr,
 };
 
-limine_memmap_request memory_request = {
+__attribute__((used)) limine_memmap_request memory_request = {
     .id       = LIMINE_MEMMAP_REQUEST,
     .revision = 0,
     .response = nullptr,
 };
 
-limine_entry_point_request entry_point_request = {
+__attribute__((used)) limine_entry_point_request entry_point_request = {
     .id       = LIMINE_ENTRY_POINT_REQUEST,
     .revision = 0,
     .response = nullptr,
     .entry    = _limine_entry,
 };
 
-limine_kernel_address_request kernel_address_request = {
+__attribute__((used)) limine_kernel_address_request kernel_address_request = {
     .id       = LIMINE_KERNEL_ADDRESS_REQUEST,
     .revision = 0,
     .response = nullptr,
 };
 
-limine_hhdm_request hhdm_request = {
+__attribute__((used)) limine_hhdm_request hhdm_request = {
     .id       = LIMINE_HHDM_REQUEST,
     .revision = 0,
     .response = nullptr,
 };
 
-limine_paging_mode_request paging_request = {
+__attribute__((used)) limine_paging_mode_request paging_request = {
     .id       = LIMINE_PAGING_MODE_REQUEST,
     .revision = 0,
     .response = nullptr,
@@ -91,15 +91,21 @@ limine_paging_mode_request paging_request = {
 };
 
 // Halt and catch fire function.
-static void hcf(void)
+void hcf(void)
 {
-    // asm ("cli");
-    // for (;;) {
-    //     asm ("hlt");
-    // }
+    #ifdef __x86_64__
+    asm ("cli");
+    for (;;) {
+        asm ("hlt");
+    }
+    #elif defined(__riscv)
+    asm volatile("wfi");
+    #endif
 
     while (1)
         ;
+
+    __builtin_unreachable();
 }
 
 Direct_Mapper init_mapper;
@@ -527,7 +533,7 @@ void construct_paging()
     serial_logger.printf("PMM initialized!\n");
 }
 
-limine_module_request module_request = {
+__attribute__((used)) limine_module_request module_request = {
     .id                    = LIMINE_MODULE_REQUEST,
     .revision              = 1,
     .response              = nullptr,
@@ -608,6 +614,11 @@ klib::unique_ptr<load_tag_generic> construct_load_tag_for_modules()
     // Allocate the tag
     // I think this is undefined behavior, but who cares :)
     klib::unique_ptr<load_tag_generic> tag = (load_tag_generic *)new u64[size / 8];
+    if (!tag) {
+        panic("Failed to allocate memory for load tag");
+        return nullptr;
+    }
+
     tag->tag                               = LOAD_TAG_LOAD_MODULES;
     tag->flags                             = 0;
     tag->offset_to_next                    = size;
@@ -634,7 +645,7 @@ klib::unique_ptr<load_tag_generic> construct_load_tag_for_modules()
     return tag;
 }
 
-struct limine_framebuffer_request fb_req = {
+__attribute__((used)) struct limine_framebuffer_request fb_req = {
     .id       = LIMINE_FRAMEBUFFER_REQUEST,
     .revision = 0,
     .response = nullptr,
@@ -661,6 +672,10 @@ klib::vector<klib::unique_ptr<load_tag_generic>> construct_load_tag_framebuffer(
         copy_from_phys((u64)framebuffers[i] - hhdm_offset, &fb, sizeof(fb));
 
         klib::unique_ptr<load_tag_generic> tag = (load_tag_generic *)new load_tag_framebuffer;
+        if (!tag) {
+            panic("Failed to allocate memory for framebuffer tag");
+            return {};
+        }
         tag->tag                               = LOAD_TAG_FRAMEBUFFER;
         tag->flags                             = 0;
         tag->offset_to_next                    = sizeof(load_tag_framebuffer);
@@ -758,7 +773,9 @@ void init_task1()
     if (t && !tags.push_back(klib::move(t)))
         panic("Failed to add FDT tag");
 
-    tags.push_back(construct_load_tag_for_modules());
+    t = construct_load_tag_for_modules();
+    if (t && !tags.push_back(klib::move(t)))
+        panic("Failed to add modules tag");
 
     // Create new task and load ELF into it
     auto task  = TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel::User);
@@ -770,7 +787,7 @@ void init_task1()
 }
 
 #include <acpi/acpi.hh>
-limine_rsdp_request rsdp_request = {
+__attribute__((used)) limine_rsdp_request rsdp_request = {
     .id       = LIMINE_RSDP_REQUEST,
     .revision = 0,
     .response = nullptr,
@@ -798,7 +815,7 @@ void init_acpi()
         rsdp = addr;
 }
 
-limine_dtb_request dtb_request = {
+__attribute__((used)) limine_dtb_request dtb_request = {
     .id       = LIMINE_DTB_REQUEST,
     .revision = 0,
     .response = nullptr,
@@ -819,9 +836,9 @@ void init_dtb()
     init_dtb((u64)addr);
 }
 
-struct limine_smp_request smp_request = {
+__attribute__((used)) struct limine_smp_request smp_request = {
     .id       = LIMINE_SMP_REQUEST,
-    .revision = 0,
+    .revision =  0,
     .response = nullptr,
     .flags    = 0,
 };

@@ -242,7 +242,7 @@ template<typename T> typename vector<T>::iterator vector<T>::begin() { return it
 
 template<typename T> typename vector<T>::iterator vector<T>::end()
 {
-    return iterator(&ptr[a_size]);
+    return iterator(ptr + a_size);
 }
 
 template<typename T> typename vector<T>::const_iterator vector<T>::begin() const
@@ -252,7 +252,7 @@ template<typename T> typename vector<T>::const_iterator vector<T>::begin() const
 
 template<typename T> typename vector<T>::const_iterator vector<T>::end() const
 {
-    return const_iterator(&ptr[a_size]);
+    return const_iterator(ptr + a_size);
 }
 
 template<typename T> const T &vector<T>::operator[](size_t p) const { return ptr[p]; }
@@ -290,7 +290,7 @@ template<typename T> bool vector<T>::resize(size_t new_size) noexcept
     return true;
 }
 
-template<typename T> bool vector<T>::resize(size_t new_size, const T& t) noexcept
+template<typename T> bool vector<T>::resize(size_t new_size, const T &t) noexcept
 {
     if (a_size > new_size) {
         for (auto i = a_size; i > new_size; --i) {
@@ -329,7 +329,10 @@ template<typename T> bool vector<T>::push_back(const T &p) noexcept
     return true;
 }
 
-template<typename T> bool vector<T>::emplace_back(T &&p) noexcept { return push_back(forward<T>(p)); }
+template<typename T> bool vector<T>::emplace_back(T &&p) noexcept
+{
+    return push_back(forward<T>(p));
+}
 
 template<typename T> bool vector<T>::expand(size_t new_capacity)
 {
