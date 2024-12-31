@@ -212,19 +212,20 @@ template<typename T> vector<T>::vector(vector<T> &&from) noexcept
 
 template<typename T> vector<T> &vector<T>::operator=(vector<T> &&from) noexcept
 {
-    if (this == &from)
-        return *this;
+    if (this != &from) {
+        for (size_t i = 0; i < a_size; ++i) {
+            ptr[i].~T();
+        }
+        free(ptr);
 
-    this->~vector<T>();
+        ptr        = from.ptr;
+        a_capacity = from.a_capacity;
+        a_size     = from.a_size;
 
-    this->ptr        = from.ptr;
-    this->a_capacity = from.a_capacity;
-    this->a_size     = from.a_size;
-
-    from.ptr        = nullptr;
-    from.a_size     = 0;
-    from.a_capacity = 0;
-
+        from.ptr        = nullptr;
+        from.a_capacity = 0;
+        from.a_size     = 0;
+    }
     return *this;
 }
 

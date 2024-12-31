@@ -123,6 +123,8 @@ void init_per_cpu(uint32_t lapic_id)
     c->current_task = c->idle_task;
     c->idle_task->page_table->apply_cpu(c);
 
+    serial_logger.printf("Idle task initialized\n");
+
     program_syscall();
     set_idt();
     enable_apic();

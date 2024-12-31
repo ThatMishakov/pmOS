@@ -318,7 +318,7 @@ ReturnStr<bool>
 
     klib::shared_ptr<Arch_Page_Table> table;
     ulong program_entry;
-    load_tag_elf_phdr phdr_tag = {LOAD_TAG_ELF_PHDR_HEADER, 0, 0, 0};
+    load_tag_elf_phdr phdr_tag = {LOAD_TAG_ELF_PHDR_HEADER, 0, 0, 0, 0};
     size_t load_count          = 0;
 
     if (header.bitness == ELF_32BIT) {

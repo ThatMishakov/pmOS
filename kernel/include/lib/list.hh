@@ -71,10 +71,11 @@ public:
     };
 
     constexpr list();
+    list(const list &) = delete;
     list(list &&);
     ~list();
 
-    list &operator=(list &&);
+    list &operator=(list);
 
     T &front();
     const T &front() const;
@@ -118,28 +119,15 @@ template<typename T> list<T>::~list()
     }
 }
 
-template<typename T> list<T>::list(list<T> &&from)
+template<typename T> list<T>::list(list<T> &&from):
+    list{}
 {
-    this->l_size = from.l_size;
-    this->first  = from.first;
-    this->last   = from.last;
-
-    from.l_size = 0;
-    from.first  = nullptr;
-    from.last   = nullptr;
+    swap(from);
 }
 
-template<typename T> list<T> &list<T>::operator=(list<T> &&from)
+template<typename T> list<T> &list<T>::operator=(list<T> from)
 {
-    this->~list();
-
-    this->l_size = from.l_size;
-    this->first  = from.first;
-    this->last   = from.last;
-
-    from.l_size = 0;
-    from.first  = nullptr;
-    from.last   = nullptr;
+    swap(from);
     return *this;
 }
 

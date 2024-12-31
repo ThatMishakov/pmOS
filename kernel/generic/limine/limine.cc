@@ -653,8 +653,10 @@ __attribute__((used)) struct limine_framebuffer_request fb_req = {
 
 klib::vector<klib::unique_ptr<load_tag_generic>> construct_load_tag_framebuffer()
 {
+    klib::vector<klib::unique_ptr<load_tag_generic>> tags {};
+
     if (fb_req.response == nullptr)
-        return {};
+        return tags;
 
     struct limine_framebuffer_response r;
     copy_from_phys((u64)fb_req.response - hhdm_offset, &r, sizeof(r));
@@ -663,7 +665,6 @@ klib::vector<klib::unique_ptr<load_tag_generic>> construct_load_tag_framebuffer(
     copy_from_phys((u64)r.framebuffers - hhdm_offset, framebuffers,
                    r.framebuffer_count * sizeof(limine_framebuffer *));
 
-    klib::vector<klib::unique_ptr<load_tag_generic>> tags;
     if (!tags.reserve(r.framebuffer_count))
         panic("Failed to reserve memory for tags");
 
@@ -674,7 +675,8 @@ klib::vector<klib::unique_ptr<load_tag_generic>> construct_load_tag_framebuffer(
         klib::unique_ptr<load_tag_generic> tag = (load_tag_generic *)new load_tag_framebuffer;
         if (!tag) {
             panic("Failed to allocate memory for framebuffer tag");
-            return {};
+            tags.clear();
+            return tags;
         }
         tag->tag                               = LOAD_TAG_FRAMEBUFFER;
         tag->flags                             = 0;
@@ -779,6 +781,8 @@ void init_task1()
 
     // Create new task and load ELF into it
     auto task  = TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel::User);
+    if (!task)
+        panic("Failed to create task");
     task->name = "bootstrap";
     serial_logger.printf("Loading ELF...\n");
     auto p = task->load_elf(task1->object, task1->path, tags);

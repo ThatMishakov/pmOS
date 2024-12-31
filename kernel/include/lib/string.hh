@@ -52,7 +52,7 @@ private:
     size_t s_capacity = 0;
     union {
         long_string_str long_string = {0, 0};
-        char short_string[16];
+        char short_string[sizeof(long_string_str)];
     };
 
     static constexpr size_t small_size = sizeof(long_string_str) - 1;
@@ -175,7 +175,8 @@ public:
     // string& operator= (std::initializer_list<char> il);
     const string &operator=(string &&str) noexcept
     {
-        this->~string();
+        if (is_long())
+            delete[] long_string.ptr;
 
         this->s_capacity  = str.s_capacity;
         this->long_string = str.long_string;

@@ -50,7 +50,13 @@ template<class T> class unique_ptr
 
 private:
     T *ptr = nullptr;
+    void _clear()
+    {
+        if (ptr != nullptr)
+            delete ptr;
 
+        ptr = nullptr;
+    }
 public:
     typedef T *pointer;
     typedef T element_type;
@@ -69,10 +75,7 @@ public:
 
     ~unique_ptr()
     {
-        if (ptr != nullptr)
-            delete ptr;
-
-        ptr = nullptr;
+        _clear();
     }
 
     unique_ptr operator=(const unique_ptr &) noexcept = delete;
@@ -92,7 +95,7 @@ public:
     }
     constexpr void reset(pointer p_ptr = pointer()) noexcept
     {
-        this->~unique_ptr();
+        _clear();
         this->ptr = p_ptr;
     }
 
@@ -123,6 +126,13 @@ template<class T> class unique_ptr<T[]>
 private:
     T *ptr;
 
+    void _clear()
+    {
+        if (ptr != nullptr)
+            delete[] ptr;
+    
+        ptr = nullptr;
+    }
 public:
     typedef T *pointer;
     typedef T element_type;
@@ -136,13 +146,12 @@ public:
 
     ~unique_ptr()
     {
-        if (ptr != nullptr)
-            delete[] ptr;
+        _clear();
     }
 
     template<class U> constexpr unique_ptr<T> &operator=(unique_ptr<U> &&r) noexcept
     {
-        this->~unique_ptr();
+        _clear();
 
         ptr   = r.ptr;
         r.ptr = nullptr;
@@ -151,7 +160,7 @@ public:
 
     unique_ptr &operator=(unique_ptr &&r) noexcept
     {
-        this->~unique_ptr();
+        _clear();
 
         ptr   = r.ptr;
         r.ptr = nullptr;
@@ -167,7 +176,7 @@ public:
 
     constexpr void reset(pointer p_ptr = pointer()) noexcept
     {
-        this->~unique_ptr();
+        _clear();
         this->ptr = p_ptr;
     }
 
@@ -209,6 +218,27 @@ private:
     T *ptr                            = nullptr;
     _smart_ptr_refcount_str *refcount = nullptr;
 
+    void _clear()
+    {
+        if (refcount == nullptr)
+            return;
+
+        unsigned long temp_shared_refs = -1;
+        unsigned long temp_weak_refs   = -1;
+
+        refcount->s.lock();
+        temp_shared_refs = --refcount->shared_refs;
+        temp_weak_refs   = refcount->weak_refs;
+        refcount->s.unlock();
+
+        if (temp_shared_refs == 0) {
+            delete ptr;
+
+            if (temp_weak_refs == 0) {
+                delete refcount;
+            }
+        }
+    }
 public:
     typedef T element_type;
 
@@ -249,24 +279,7 @@ public:
 
     ~shared_ptr()
     {
-        if (refcount == nullptr)
-            return;
-
-        unsigned long temp_shared_refs = -1;
-        unsigned long temp_weak_refs   = -1;
-
-        refcount->s.lock();
-        temp_shared_refs = --refcount->shared_refs;
-        temp_weak_refs   = refcount->weak_refs;
-        refcount->s.unlock();
-
-        if (temp_shared_refs == 0) {
-            delete ptr;
-
-            if (temp_weak_refs == 0) {
-                delete refcount;
-            }
-        }
+        _clear();
     }
 
     shared_ptr &operator=(const shared_ptr &r) noexcept
@@ -274,7 +287,7 @@ public:
         if (this == &r)
             return *this;
 
-        this->~shared_ptr();
+        _clear();
         this->ptr      = r.ptr;
         this->refcount = r.refcount;
 
@@ -292,7 +305,7 @@ public:
         if (this == &r)
             return *this;
 
-        this->~shared_ptr();
+        _clear();
         this->ptr      = r.ptr;
         this->refcount = r.refcount;
 
@@ -310,7 +323,7 @@ public:
         if (this == &r)
             return *this;
 
-        this->~shared_ptr();
+        _clear();
 
         this->ptr      = r.ptr;
         this->refcount = r.refcount;
@@ -326,7 +339,7 @@ public:
         if (this == &r)
             return *this;
 
-        this->~shared_ptr();
+        _clear();
 
         this->ptr      = r.ptr;
         this->refcount = r.refcount;
@@ -349,7 +362,7 @@ public:
                 r = nullptr;
         }
 
-        this->~shared_ptr();
+        _clear();
 
         this->ptr      = r.release();
         this->refcount = new_refcount.release();
@@ -453,7 +466,22 @@ auto operator<(const shared_ptr<T> &lhs, const shared_ptr<U> &rhs) noexcept
 template<class T> class weak_ptr
 {
     template<typename U> friend class weak_ptr;
+    void _clear()
+    {
+        if (refcount == nullptr)
+            return;
+        bool delete_refcount = false;
 
+        refcount->s.lock();
+        refcount->weak_refs--;
+        if (refcount->shared_refs == 0 and refcount->weak_refs == 0) {
+            delete_refcount = true;
+        }
+        refcount->s.unlock();
+
+        if (delete_refcount)
+            delete refcount;
+    }
 public:
     constexpr weak_ptr() noexcept = default;
     weak_ptr(const weak_ptr<T> &p) noexcept: ptr(p.ptr), refcount(p.refcount)
@@ -482,26 +510,14 @@ public:
 
     ~weak_ptr()
     {
-        if (refcount == nullptr)
-            return;
-        bool delete_refcount = false;
-
-        refcount->s.lock();
-        refcount->weak_refs--;
-        if (refcount->shared_refs == 0 and refcount->weak_refs == 0) {
-            delete_refcount = true;
-        }
-        refcount->s.unlock();
-
-        if (delete_refcount)
-            delete refcount;
+        _clear();
     }
 
     weak_ptr &operator=(const weak_ptr<T> &r) noexcept;
 
     weak_ptr &operator=(const shared_ptr<T> &r) noexcept
     {
-        this->~weak_ptr();
+        _clear();
         this->ptr      = r.ptr;
         this->refcount = r.refcount;
 
@@ -516,7 +532,7 @@ public:
 
     constexpr weak_ptr &operator=(weak_ptr<T> &&r) noexcept
     {
-        this->~weak_ptr();
+        _clear();
 
         ptr      = r.ptr;
         refcount = r.refcount;
