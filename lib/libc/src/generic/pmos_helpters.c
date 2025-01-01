@@ -28,6 +28,7 @@
 
 #include <pmos/helpers.h>
 #include <stdlib.h>
+#include <errno.h>
 
 result_t get_message(Message_Descriptor *desc, unsigned char **message, pmos_port_t port)
 {
@@ -37,7 +38,7 @@ result_t get_message(Message_Descriptor *desc, unsigned char **message, pmos_por
 
     *message = malloc(desc->size);
     if (*message == NULL) {
-        return 1; // This needs to be changed
+        return -ENOMEM; // This needs to be changed
     }
 
     result = get_first_message(*message, 0, port);

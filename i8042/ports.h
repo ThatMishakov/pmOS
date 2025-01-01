@@ -32,6 +32,7 @@
 #include <pmos/ports.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <pthread.h>
 
 extern bool first_port_works;
 extern bool second_port_works;
@@ -67,5 +68,7 @@ extern uint64_t last_polling_timer;
 extern Port ports[2];
 
 static const uint32_t alive_interval = 2000;
+
+extern pthread_mutex_t ports_mutex;
 
 #endif

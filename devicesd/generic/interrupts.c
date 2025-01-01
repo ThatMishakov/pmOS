@@ -80,7 +80,7 @@ void configure_interrupts_for(Message_Descriptor *desc, IPC_Reg_Int *m)
     if (m->dest_task == 0) {
         result = -EINVAL;
     } else {
-        result = set_up_gsi(gsi, active_low, level_trig, m->dest_task, m->reply_chan, &vector);
+        result = set_up_gsi(gsi, active_low, level_trig, m->dest_task, m->dest_chan, &vector);
     }
     
     IPC_Reg_Int_Reply reply;

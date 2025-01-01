@@ -41,6 +41,7 @@
 #include <pmos/tls.h>
 #include <sched/defs.hh>
 #include <sched/sched.hh>
+#include "syscalls.hh"
 
 TaskDescriptor *TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel level) noexcept
 {
@@ -760,5 +761,5 @@ TaskDescriptor::~TaskDescriptor() noexcept
 void TaskDescriptor::interrupt_restart_syscall()
 {
     pop_repeat_syscall();
-    regs.syscall_retval_low() = -EINTR;
+    syscall_error(this) = -EINTR;
 }

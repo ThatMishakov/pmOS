@@ -40,6 +40,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pmos/interrupts.h>
+#include <errno.h>
 
 bool has_second_channel = false;
 
@@ -55,13 +57,42 @@ pmos_port_t configuration_port = 0;
 pmos_port_t devicesd_port = 0;
 pmos_port_t ps2d_port     = 0;
 
+__thread pmos_port_t control_port = 0;
+pmos_port_t get_control_port()
+{
+    if (control_port == 0) {
+        ports_request_t req = create_port(TASK_ID_SELF, 0);
+        if (req.result != SUCCESS) {
+            printf("[i8042] Error creating port %li\n", req.result);
+            return 0;
+        }
+        control_port = req.port;
+    }
+
+    return control_port;
+}
+
+
 uint8_t get_interrupt_number(uint32_t intnum, uint64_t int_port)
 {
+    pmos_port_t control_port = get_control_port();
+    if (control_port == 0) {
+        printf("[i8042] Error: Could not get control port\n");
+        return 0;
+    }
+
     uint8_t int_vector  = 0;
     unsigned long mypid = get_task_id();
 
-    IPC_Reg_Int m   = {IPC_Reg_Int_NUM, IPC_Reg_Int_FLAG_EXT_INTS, intnum, 0, mypid,
-                       int_port,        configuration_port};
+    IPC_Reg_Int m   = {
+        .type = IPC_Reg_Int_NUM,
+        .flags = IPC_Reg_Int_FLAG_EXT_INTS,
+        .intno = intnum, 
+        .int_flags = 0, 
+        .dest_task = mypid,
+        .dest_chan = int_port,
+        .reply_chan = control_port
+    };
     result_t result = send_message_port(devicesd_port, sizeof(m), (char *)&m);
     if (result != SUCCESS) {
         printf("[i8042] Warning: Could not send message to get the interrupt\n");
@@ -70,15 +101,19 @@ uint8_t get_interrupt_number(uint32_t intnum, uint64_t int_port)
 
     Message_Descriptor desc = {};
     unsigned char *message  = NULL;
-    result                  = get_message(&desc, &message, configuration_port);
+    for (int i = 0; i < 10; i++) {
+        result = get_message(&desc, &message, control_port);
+        if ((int)result != -EINTR)
+            break;
+    }
 
     if (result != SUCCESS) {
-        printf("[i8042] Warning: Could not get message\n");
+        printf("[i8042] Warning: Could not get message %i (%s)\n", (int)-result, strerror(-result));
         return 0;
     }
 
     if (desc.size < sizeof(IPC_Reg_Int_Reply)) {
-        printf("[i8042] Warning: Recieved message which is too small\n");
+        printf("[i8042] Warning: Recieved message which is too small (%i expected %i)\n", (int)desc.size, (int)sizeof(IPC_Reg_Int_Reply));
         free(message);
         return 0;
     }
@@ -99,6 +134,105 @@ uint8_t get_interrupt_number(uint32_t intnum, uint64_t int_port)
     }
     free(message);
     return int_vector;
+}
+
+void *interrupt_thread(void *arg) {
+    ptrdiff_t port = (ptrdiff_t)arg;
+    ports_request_t req = create_port(TASK_ID_SELF, 0);
+    if (req.result != SUCCESS) {
+        printf("[i8042] Error creating port %li\n", req.result);
+        return 0;
+    }
+
+    pmos_port_t int_port = req.port;
+
+    int port_pin = port ? 2 : 12;
+    uint8_t int_vector = get_interrupt_number(port_pin, int_port);
+    if (int_vector == 0) {
+        printf("[i8042] Error: Could not get interrupt number\n");
+        return 0;
+    } else {
+        printf("[i8042] Info: Got interrupt number %i\n", int_vector);
+    }
+
+    while (1) {
+        result_t result;
+
+        Message_Descriptor desc = {};
+        unsigned char *message  = NULL;
+        result                  = get_message(&desc, &message, int_port);
+
+        if (result != SUCCESS) {
+            fprintf(stderr, "[i8042] Error: Could not get message %i %s\n", (int)-result, strerror(-result));
+        }
+
+        if (desc.size < IPC_MIN_SIZE) {
+            fprintf(stderr, "[i8042] Error: Message too small (size %li)\n", desc.size);
+            free(message);
+        }
+
+        if (IPC_TYPE(message) != IPC_Kernel_Interrupt_NUM) {
+            fprintf(stderr, "[i8042] Warning: Recieved message of unknown type %x\n",
+                    IPC_TYPE(message));
+            free(message);
+            continue;
+        }
+
+        IPC_Kernel_Interrupt *kmsg = (IPC_Kernel_Interrupt *)message;
+        if (kmsg->intno != int_vector) {
+            fprintf(stderr, "[i8042] Warning: Recieved interrupt of unknown number %i\n",
+                    kmsg->intno);
+            complete_interrupt(kmsg->intno);
+            free(message);
+            continue;
+        }
+
+        int mutex_result = pthread_mutex_lock(&ports_mutex);
+        if (mutex_result != 0) {
+            fprintf(stderr, "[i8042] Error: Could not lock mutex\n");
+            free(message);
+            continue;
+        } 
+
+        if (IPC_TYPE(message) != IPC_Kernel_Interrupt_NUM) {
+            fprintf(stderr, "[i8042] Warning: Recieved message of unknown type %x\n",
+                    IPC_TYPE(message));
+        } else {
+            if (port == 0)
+                react_port1_int();
+            else
+                react_port2_int();
+        }
+
+        mutex_result = pthread_mutex_unlock(&ports_mutex);
+        if (mutex_result != 0) {
+            fprintf(stderr, "[i8042] Error: Could not unlock mutex\n");
+            exit(mutex_result);
+        }
+        complete_interrupt(kmsg->intno);
+        free(message);
+    }
+}
+
+pthread_t thread1, thread2;
+
+void init_interrupts()
+{
+    if (first_port_works) {
+        int result = pthread_create(&thread1, NULL, interrupt_thread, (void *)0);
+        if (result < 0)
+            printf("[i8042] Could not create thread for port 1: %i\n", result);
+        else
+            pthread_detach(thread1);
+    }
+
+    if (second_port_works) {
+        int result = pthread_create(&thread2, NULL, interrupt_thread, (void *)1);
+        if (result < 0)
+            printf("[i8042] Could not create thread for port 2: %i\n", result);
+        else
+            pthread_detach(thread2);
+    }
 }
 
 pmos_port_t register_port(unsigned char id)
@@ -281,6 +415,8 @@ void enable_ports()
 uint8_t port1_int = 0;
 uint8_t port2_int = 0;
 
+pthread_mutex_t ports_mutex = PTHREAD_MUTEX_INITIALIZER;
+
 int main()
 {
     {
@@ -329,11 +465,7 @@ int main()
 
     register_ports();
 
-    // if (second_port_works)
-    //     port2_int = get_interrupt_number(12, main_port);
-
-    // if (first_port_works)
-    //     port1_int = get_interrupt_number(1, main_port);
+    init_interrupts();
 
     enable_ports();
 
@@ -353,6 +485,13 @@ int main()
         if (desc.size < IPC_MIN_SIZE) {
             fprintf(stderr, "[i8042] Error: Message too small (size %li)\n", desc.size);
             free(message);
+        }
+
+        int mutex_result = pthread_mutex_lock(&ports_mutex);
+        if (mutex_result != 0) {
+            fprintf(stderr, "[i8042] Error: Could not lock mutex\n");
+            free(message);
+            continue;
         }
 
         switch (IPC_TYPE(message)) {
@@ -411,6 +550,11 @@ int main()
             break;
         }
 
+        mutex_result = pthread_mutex_unlock(&ports_mutex);
+        if (mutex_result != 0) {
+            fprintf(stderr, "[i8042] Error: Could not unlock mutex\n");
+            exit(mutex_result);
+        }
         free(message);
     }
 
