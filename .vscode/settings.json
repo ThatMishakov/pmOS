@@ -187,7 +187,8 @@
         "strstream": "cpp",
         "syncstream": "cpp",
         "typeindex": "cpp",
-        "__availability": "cpp"
+        "__availability": "cpp",
+        "mdspan": "c"
     },
     "cmake.configureOnOpen": false,
     "C_Cpp.default.compilerPath": "/home/misha/cross/bin/clang",

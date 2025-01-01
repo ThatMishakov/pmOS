@@ -59,6 +59,9 @@ struct port_list_node {
     uint64_t owner_pid;
     uint64_t port_id;
 
+    // Internal index of the port
+    uint64_t index;
+
     // Port used for communications with the driver
     uint64_t com_port;
 
@@ -88,6 +91,9 @@ void list_take_out(struct port_list_node *n);
 
 // Get the node with the given owner_id and port_if. Return NULL if no node was found
 struct port_list_node *list_get(uint64_t owner_pid, uint64_t port_id);
+
+// Find the node with the given timer_id. Return NULL if no node was found
+struct port_list_node *list_find_by_timer(uint64_t timer_id);
 
 bool register_port(IPC_PS2_Reg_Port *message, uint64_t sender);
 void react_message(IPC_PS2_Notify_Data *message, uint64_t sender, uint64_t size);

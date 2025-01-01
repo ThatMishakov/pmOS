@@ -119,10 +119,12 @@ void service_timer_ports()
     Auto_Lock_Scope l(c->timer_lock);
 
     for (auto t = c->timer_queue.begin(); t != c->timer_queue.end() and t->first < current_time;) {
-        auto port = Port::atomic_get_port(t->second);
+        auto port = Port::atomic_get_port(t->second.port_id);
         if (port) {
             IPC_Timer_Reply r = {
                 IPC_Timer_Reply_NUM,
+                0,
+                t->second.extra,
             };
             port->atomic_send_from_system(reinterpret_cast<char *>(&r), sizeof(r));
         }
@@ -132,11 +134,11 @@ void service_timer_ports()
     }
 }
 
-kresult_t CPU_Info::atomic_timer_queue_push(u64 fire_on_core_ticks, Port *port)
+kresult_t CPU_Info::atomic_timer_queue_push(u64 fire_on_core_ticks, Port *port, u64 user_arg)
 {
     Auto_Lock_Scope l(timer_lock);
 
-    auto result = timer_queue.insert({fire_on_core_ticks, port->portno});
+    auto result = timer_queue.insert({fire_on_core_ticks, {port->portno, user_arg}});
     if (!result.second)
         return -ENOMEM;
 

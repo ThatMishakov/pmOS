@@ -30,7 +30,7 @@ int nanosleep(const struct timespec *req, struct timespec *rem)
 {
     pmos_port_t sleep_reply_port = __get_cmd_reply_port();
     size_t ns                    = req->tv_sec * 1000000000 + req->tv_nsec;
-    result_t result              = pmos_request_timer(sleep_reply_port, ns);
+    result_t result              = pmos_request_timer(sleep_reply_port, ns, 0);
     if (result != SUCCESS) {
         __return_cmd_reply_port(sleep_reply_port);
         errno = result;

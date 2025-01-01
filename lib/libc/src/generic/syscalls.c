@@ -142,12 +142,12 @@ syscall_r __pmos_syscall_set_attr(uint64_t pid, uint32_t attr, uint32_t value)
     #endif
 }
 
-result_t __pmos_request_timer(pmos_port_t port, uint64_t ns)
+result_t __pmos_request_timer(pmos_port_t port, uint64_t ns, uint64_t extra)
 {
     #ifdef __i386__
-    return __pmos_syscall32_4words(SYSCALL_REQUEST_TIMER, port, ns).result;
+    return __pmos_syscall32_6words(SYSCALL_REQUEST_TIMER, port, ns, extra).result;
     #else
-    return pmos_syscall(SYSCALL_REQUEST_TIMER, port, ns).result;
+    return pmos_syscall(SYSCALL_REQUEST_TIMER, port, ns, extra).result;
     #endif
 }
 

@@ -1553,6 +1553,7 @@ void syscall_request_timer()
 
     u64 port    = syscall_arg64(task, 0);
     u64 timeout = syscall_arg64(task, 1);
+    u64 user_arg = syscall_arg64(task, 2);
 
     const auto port_ptr = Port::atomic_get_port(port);
     if (!port_ptr) {
@@ -1561,7 +1562,7 @@ void syscall_request_timer()
     }
 
     u64 core_time_ms    = c->ticks_after_ns(timeout);
-    syscall_error(task) = c->atomic_timer_queue_push(core_time_ms, port_ptr);
+    syscall_error(task) = c->atomic_timer_queue_push(core_time_ms, port_ptr, user_arg);
 }
 
 void syscall_set_affinity()

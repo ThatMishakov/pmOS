@@ -538,7 +538,7 @@ void TimerWaiter::wait(int time_ms)
 
     if (timer_tree.begin() == this) {
         next_timer_time = timer_time;
-        pmos_request_timer(ahci_port, time_ms * 1'000'000);
+        pmos_request_timer(ahci_port, time_ms * 1'000'000, 0);
     } else {
         TimerTree::RBTreeIterator it;
         while (!timer_tree.empty() and ((it = timer_tree.begin())->timer_time < time.value)) {
@@ -560,7 +560,7 @@ void react_timer()
 
     if (it != timer_tree.end()) {
         next_timer_time = it->timer_time;
-        int t           = pmos_request_timer(ahci_port, next_timer_time - current_time.value);
+        int t           = pmos_request_timer(ahci_port, next_timer_time - current_time.value, 0);
         if (t != 0) {
         }
     }

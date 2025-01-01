@@ -59,9 +59,10 @@ result_t get_message(Message_Descriptor *desc, unsigned char **message, pmos_por
  *
  * @param port Port to receive the message
  * @param ms Time in milliseconds
+ * @param extra parameter, that get saved returned in the IPC_Timer_Reply
  * @return int 0 on success, -1 on failure. Sets errno on error
  */
-int pmos_request_timer(pmos_port_t port, uint64_t ms);
+int pmos_request_timer(pmos_port_t port, uint64_t ms, uint64_t extra);
 
 #endif
 

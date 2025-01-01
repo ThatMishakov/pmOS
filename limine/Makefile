@@ -40,6 +40,9 @@ iso: $(ISO)
 ../ahcid/ahcid.elf:
 	$(MAKE) -C ../ahcid ahcid.elf
 
+../ps2d/ps2d.elf:
+	$(MAKE) -C ../ps2d ps2d.elf
+
 ../test/test.elf:
 	$(MAKE) -C ../test test.elf
 
@@ -52,7 +55,7 @@ limine/.git:
 # 	mkdir -p isodir/boot/pmos
 # 	tar -cf isodir/boot/pmos/sysroot.tar -C ../sysroot .
 
-$(ISO): ../kernel/build/kernel ../bootstrapd/bootstrapd.elf ../devicesd/devicesd.elf ../logd/logd.elf ../ns16550/ns16550.elf ../piped/piped.elf ../processd/processd.elf ../terminald/terminald.elf ../vfsd/vfsd.elf ../vfatfsd/vfatfsd.elf ../ahcid/ahcid.elf limine.conf limine
+$(ISO): ../kernel/build/kernel ../bootstrapd/bootstrapd.elf ../devicesd/devicesd.elf ../logd/logd.elf ../ns16550/ns16550.elf ../piped/piped.elf ../processd/processd.elf ../terminald/terminald.elf ../vfsd/vfsd.elf ../vfatfsd/vfatfsd.elf ../ahcid/ahcid.elf ../ps2d/ps2d.elf limine.conf limine
 	mkdir -p isodir/boot/limine
 	mkdir -p isodir/EFI/BOOT
 
@@ -75,6 +78,7 @@ $(ISO): ../kernel/build/kernel ../bootstrapd/bootstrapd.elf ../devicesd/devicesd
 	cp -v ../vfsd/vfsd.elf isodir/
 	cp -v ../vfatfsd/vfatfsd.elf isodir/
 	cp -v ../ahcid/ahcid.elf isodir/
+	cp -v ../ps2d/ps2d.elf isodir/
 # cp -v ../test/test.elf isodir
 
 	xorriso -as mkisofs -b boot/limine/limine-bios-cd.bin -no-emul-boot -boot-load-size 4 -boot-info-table --efi-boot boot/limine/limine-uefi-cd.bin -efi-boot-part --efi-boot-image --protective-msdos-label isodir -o $(ISO) 

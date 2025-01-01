@@ -94,8 +94,11 @@ bool register_port(IPC_PS2_Reg_Port *message, uint64_t sender)
     if (ptr == NULL)
         return false;
 
+    static uint64_t port_index_counter = 0;
+    
     ptr->com_port       = message->cmd_port;
     ptr->last_timer     = 0;
+    ptr->index          = ++port_index_counter;
     ptr->owner_pid      = sender;
     ptr->state          = 0;
     ptr->port_id        = port_id;
@@ -106,7 +109,6 @@ bool register_port(IPC_PS2_Reg_Port *message, uint64_t sender)
     ptr->previous       = NULL;
 
     list_push_back(ptr);
-
     start_port(ptr);
 
     return true;
@@ -279,17 +281,7 @@ uint64_t tmr_index = 0;
 
 uint64_t port_start_timer(struct port_list_node *port, unsigned time_ms)
 {
-    IPC_Start_Timer tmr = {
-        .type       = IPC_Start_Timer_NUM,
-        .ms         = time_ms,
-        .reply_port = main_port,
-
-        .extra0 = port->owner_pid,
-        .extra1 = port->port_id,
-        .extra2 = tmr_index,
-    };
-
-    result_t result = send_message_port(devicesd_port, sizeof(tmr), (char *)&tmr);
+    int result = pmos_request_timer(main_port, time_ms * 1'000'000, tmr_index);
     if (result != SUCCESS) {
         printf("[PS2d] Warning: Could not send message to get the interrupt\n");
         return 0;
@@ -304,16 +296,12 @@ uint64_t port_start_timer(struct port_list_node *port, unsigned time_ms)
 
 void react_timer(IPC_Timer_Reply *tmr)
 {
-    struct port_list_node *ptr = list_get(tmr->extra0, tmr->extra1);
+    struct port_list_node *ptr = list_find_by_timer(tmr->timer_id);
 
-    if (ptr == NULL) {
-        fprintf(stderr,
-                "[PS2d] Warning: Recieved unrecognized timer message with data 0x%lx 0x%lx 0x%lx\n",
-                tmr->extra0, tmr->extra1, tmr->extra2);
+    if (ptr == NULL)
         return;
-    }
 
-    port_react_timer(ptr, tmr->extra2);
+    port_react_timer(ptr, tmr->timer_id);
 }
 
 void reset_port(struct port_list_node *n)

@@ -32,8 +32,6 @@ int pc_irq              = 0;
 // TODO: Don't assume it, apparently it's not always that
 unsigned clock_frequency = 1843200;
 
-volatile uint8_t *serial_mapped = nullptr;
-
 bool have_interrupts = false;
 
 pmos_port_t serial_port = []() -> auto {
@@ -48,28 +46,57 @@ pmos_port_t devicesd_port      = []() -> auto {
     return request.port;
 }();
 
-auto read_register(int index) -> uint8_t
+class IORW
 {
-    // TODO: IO access for x86
-    return *(serial_mapped + index);
-}
+public:
+    virtual void write_register(int index, uint8_t value) = 0;
+    virtual uint8_t read_register(int index)              = 0;
+    virtual ~IORW()                                       = default;
+};
 
-void write_register(int index, uint8_t value) { *(serial_mapped + index) = value; }
+class MMIO final: public IORW
+{
+public:
+    MMIO(uint64_t base)
+    {
+        auto result = create_phys_map_region(TASK_ID_SELF, nullptr, 0x1000, PROT_READ | PROT_WRITE,
+                                             base);
+        if (result.result != SUCCESS)
+            throw std::runtime_error("Failed to map serial port");
+
+        serial_mapped = reinterpret_cast<volatile uint8_t *>(result.virt_addr);
+    }
+
+    void write_register(int index, uint8_t value) override
+    {
+        *(reinterpret_cast<volatile uint8_t *>(serial_mapped) + index) = value;
+    }
+
+    uint8_t read_register(int index) override
+    {
+        return *(reinterpret_cast<volatile uint8_t *>(serial_mapped) + index);
+    }
+
+private:
+    volatile uint8_t *serial_mapped = nullptr;
+};
+
+std::unique_ptr<IORW> io_rw = nullptr;
 
 void poll();
 
 void set_register(int index, uint8_t mask)
 {
-    uint8_t val = read_register(index);
+    uint8_t val = io_rw->read_register(index);
     val |= mask;
-    write_register(index, val);
+    io_rw->write_register(index, val);
 }
 
 void clear_register(int index, uint8_t mask)
 {
-    uint8_t val = read_register(index);
+    uint8_t val = io_rw->read_register(index);
     val &= ~mask;
-    write_register(index, val);
+    io_rw->write_register(index, val);
 }
 
 u32 int_vec = 0;
@@ -190,12 +217,7 @@ void ns16550_init()
            terminal_type, interrupt_type_mask, gsi_num, pc_irq);
 
     if (access_type == 0x0) { // System memory
-        auto result = create_phys_map_region(TASK_ID_SELF, nullptr, 0x1000, PROT_READ | PROT_WRITE,
-                                             terminal_base);
-        if (result.result != SUCCESS)
-            throw std::runtime_error("Failed to map serial port");
-
-        serial_mapped = reinterpret_cast<volatile uint8_t *>(result.virt_addr);
+        io_rw = std::make_unique<MMIO>(terminal_base);
     } else if (access_type != 0x1) { // Not system memory and serial port
         throw std::runtime_error("Invalid access type");
     }
@@ -203,7 +225,7 @@ void ns16550_init()
     // Initialize the serial port
 
     // Disable interrupts
-    write_register(IER, 0x00);
+    io_rw->write_register(IER, 0x00);
 
     if (baud_rate != 0) { // Baud rate not set up by firmware
         // Set baud rate
@@ -222,9 +244,9 @@ void ns16550_init()
             divisor_constant = clock_frequency / baud_rate;
         }
 
-        write_register(DLL, divisor_constant);
-        write_register(DLM, divisor_constant >> 8);
-        write_register(PSD, prescaler_division);
+        io_rw->write_register(DLL, divisor_constant);
+        io_rw->write_register(DLM, divisor_constant >> 8);
+        io_rw->write_register(PSD, prescaler_division);
     }
 
     // Set DLAB = 0
@@ -251,7 +273,7 @@ void ns16550_init()
     }
 
     // Set LCR
-    write_register(LCR, lcr);
+    io_rw->write_register(LCR, lcr);
 
     // Set up interrupt
     set_up_interrupt();
@@ -285,9 +307,9 @@ buffer active_buffer;
 void write_str(const char *str)
 {
     while (*str != '\0') {
-        while ((read_register(LSR) & LSR_TX_EMPTY) == 0)
+        while ((io_rw->read_register(LSR) & LSR_TX_EMPTY) == 0)
             ;
-        write_register(THR, *str);
+        io_rw->write_register(THR, *str);
         str++;
     }
 }
@@ -297,12 +319,12 @@ void write_str(const std::string &str) { write_str(str.c_str()); }
 void write_blind(const char *str, size_t size)
 {
     for (size_t i = 0; i < size; ++i)
-        write_register(THR, str[i]);
+        io_rw->write_register(THR, str[i]);
 }
 
 void check_tx()
 {
-    if ((read_register(LSR) & LSR_TX_EMPTY) == 0)
+    if ((io_rw->read_register(LSR) & LSR_TX_EMPTY) == 0)
         return;
 
     if (not active_buffer.data and not write_queue.empty()) {
@@ -342,14 +364,14 @@ void write_interrupt()
             active_buffer = {};
     } else {
         writing = false;
-        read_register(ISR);
+        io_rw->read_register(ISR);
     }
 }
 
 void check_rx()
 {
-    while ((read_register(LSR) & LSR_DATA_READY) != 0) {
-        auto t = read_register(THR);
+    while ((io_rw->read_register(LSR) & LSR_DATA_READY) != 0) {
+        auto t = io_rw->read_register(THR);
 
         // putc(t, stdout);
         printf("\033[1;36m"
@@ -369,7 +391,7 @@ void check_buffers()
 
 void poll()
 {
-    auto r = pmos_request_timer(serial_port, 100);
+    auto r = pmos_request_timer(serial_port, 100, 0);
     if (r != 0) {
         printf("Failed to request timer\n");
         return;
@@ -412,12 +434,12 @@ void react_named_port_notification(char *msg_buff, size_t size)
 
 void react_interrupt()
 {
-    u8 interrupt_status = read_register(ISR);
+    u8 interrupt_status = io_rw->read_register(ISR);
     if ((interrupt_status & ISR_INT_PENDING) == 0) {
         switch (interrupt_status & ISR_MASK) {
         case 0b0110: // Receiver Line Status
             // Acknowledge by reading LSR
-            read_register(LSR);
+            io_rw->read_register(LSR);
             break;
         case 0b0100: // Received Data Available
             check_rx();
