@@ -245,6 +245,8 @@ void keyboard_react_scancode(struct port_list_node *port, uint64_t scancode)
         return;
 
     uint8_t byte = scancodes[first_byte];
-    if (byte)
+    if (byte) {
         putchar(byte);
+        fflush(stdout);
+    }
 }

@@ -107,10 +107,10 @@ ReturnStr<size_t> TaskDescriptor::init_stack()
 
     static const klib::string stack_region_name = "default_stack";
 
-    auto r = this->page_table->atomic_create_normal_region(stack_page_start, stack_size,
-                                                           Page_Table::Protection::Writeable |
-                                                               Page_Table::Protection::Readable,
-                                                           true, false, stack_region_name, -1, true);
+    auto r = this->page_table->atomic_create_normal_region(
+        stack_page_start, stack_size,
+        Page_Table::Protection::Writeable | Page_Table::Protection::Readable, true, false,
+        stack_region_name, -1, true);
 
     if (!r.success())
         return r.propagate();
@@ -165,11 +165,26 @@ bool TaskDescriptor::is_uninited() const { return status == TaskStatus::TASK_UNI
 
 void TaskDescriptor::init()
 {
+    assert(sched_lock.is_locked());
+
     // TODO: This function has a race condition
     parent_queue->atomic_erase(this);
+    auto cpu_struct = get_cpu_struct();
 
-    TaskDescriptor *current_task = get_cpu_struct()->current_task;
-    if (current_task->priority > priority) {
+    TaskDescriptor *current_task = cpu_struct->current_task;
+    if (cpu_affinity != 0 and (cpu_affinity - 1) != cpu_struct->cpu_id) {
+        auto cpu = cpu_affinity - 1;
+        push_ready(this);
+        assert(cpu < cpus.size());
+        auto remote_cpu = cpus[cpu];
+        assert(remote_cpu);
+        assert(remote_cpu->cpu_id == cpu);
+        assert(remote_cpu != cpu_struct);
+
+        // TODO: Give up the lock in here
+        if (remote_cpu->current_task_priority > priority)
+            remote_cpu->ipi_reschedule();
+    } else if (current_task->priority > priority) {
         Auto_Lock_Scope scope_l(current_task->sched_lock);
 
         switch_to();

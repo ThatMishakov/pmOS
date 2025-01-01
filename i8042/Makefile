@@ -4,21 +4,22 @@ EXEC = i8042.elf
 ROOTDIR = $(realpath .)/..
 export PATH := $(ROOTDIR)/bin/cross/bin:$(PATH)
 
-# It is highly recommended to use a custom built cross toolchain to build a kernel.
-# We are only using "cc" as a placeholder here. It may work by using
-# the host system's toolchain, but this is not guaranteed.
-CC = x86_64-pmos-gcc
-CPP = x86_64-pmos-gcc
-CXX = x86_64-pmos-g++
+ARCH ?= x86_64
+
+CC = clang
+CPP = clang
+CXX = clang++
+
+TARGETFLAGS = --target=$(ARCH)-pmos --sysroot=$(ROOTDIR)/sysroot
 
 # User controllable CFLAGS.
-USERCFLAGS = -Wall -Wextra -O2 -pipe
+USERCFLAGS = -Wall -Wextra -O3 -pipe -flto
 
-CFLAGS = -std=c17
-CXXFLAGS = -std=c++17
-CPPFLAGS = $(INTERNALCFLAGS) $(USERCFLAGS) -MMD -MP
-ASMFLAGS = -I$(INCLUDEDIR)
-LDFLAGS = $(INTERNALLDFLAGS)
+CFLAGS = $(TARGETFLAGS) -std=c17
+CXXFLAGS = $(TARGETFLAGS) -std=c++17
+CPPFLAGS = $(TARGETFLAGS) $(INTERNALCFLAGS) $(USERCFLAGS) -MMD -MP
+ASMFLAGS = $(TARGETFLAGS) -I$(INCLUDEDIR)
+LDFLAGS = $(TARGETFLAGS) $(INTERNALLDFLAGS)
 
 # Internal link flags that should not be changed by the user.
 INTERNALLDFLAGS :=

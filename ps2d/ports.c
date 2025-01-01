@@ -141,6 +141,15 @@ struct port_list_node *list_get(uint64_t owner_pid, uint64_t port_id)
     return ptr;
 }
 
+struct port_list_node *list_find_by_timer(uint64_t timer_id)
+{
+    struct port_list_node *ptr = first;
+    while (ptr != NULL && ptr->last_timer != timer_id)
+        ptr = ptr->next;
+
+    return ptr;
+}
+
 void list_push_back(struct port_list_node *n)
 {
     if (last != NULL) {
@@ -281,7 +290,7 @@ uint64_t tmr_index = 0;
 
 uint64_t port_start_timer(struct port_list_node *port, unsigned time_ms)
 {
-    int result = pmos_request_timer(main_port, time_ms * 1'000'000, tmr_index);
+    int result = pmos_request_timer(main_port, time_ms * 1000000, tmr_index);
     if (result != SUCCESS) {
         printf("[PS2d] Warning: Could not send message to get the interrupt\n");
         return 0;
@@ -298,8 +307,10 @@ void react_timer(IPC_Timer_Reply *tmr)
 {
     struct port_list_node *ptr = list_find_by_timer(tmr->timer_id);
 
-    if (ptr == NULL)
+    if (ptr == NULL) {
+        printf("[PS2d] Warning: Recieved timer reply %li for unknown port\n", tmr->timer_id);
         return;
+    }
 
     port_react_timer(ptr, tmr->timer_id);
 }

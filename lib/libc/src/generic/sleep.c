@@ -79,7 +79,7 @@ int pmos_request_timer(pmos_port_t port, uint64_t ns, uint64_t extra)
 
     result_t r = __pmos_request_timer(port, ns, extra);
     if (r != SUCCESS) {
-        errno = r;
+        errno = -r;
         return -1;
     }
 

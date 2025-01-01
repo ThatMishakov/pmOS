@@ -329,11 +329,11 @@ int main()
 
     register_ports();
 
-    if (second_port_works)
-        port2_int = get_interrupt_number(12, main_port);
+    // if (second_port_works)
+    //     port2_int = get_interrupt_number(12, main_port);
 
-    if (first_port_works)
-        port1_int = get_interrupt_number(1, main_port);
+    // if (first_port_works)
+    //     port1_int = get_interrupt_number(1, main_port);
 
     enable_ports();
 
@@ -396,7 +396,7 @@ int main()
                 break;
             }
 
-            react_timer(reply->extra0);
+            react_timer(reply->timer_id);
 
             break;
         }
