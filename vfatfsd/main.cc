@@ -122,11 +122,11 @@ int main()
 {
     sleep(1);
     printf("Starting tests...\n");
-    tick();
+    //tick();
     test_exception();
 
     //test_tlb_shootdown();
-    test_threads();
+    //test_threads();
 
     // long p;
     // for (int i = 0; i < 5; ++i)

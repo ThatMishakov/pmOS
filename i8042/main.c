@@ -329,7 +329,8 @@ void init_controller()
     // printf("PS/2 config value %x\n", config_byte);
 
     // Disables translation and enables first and second ports' interrupts
-    config_byte &= ~0x43;
+    config_byte &= ~0x50;
+    config_byte |= 0x03;
     outb(RW_PORT, CMD_CONFIG_WRITE);
     outb(DATA_PORT, config_byte);
 
