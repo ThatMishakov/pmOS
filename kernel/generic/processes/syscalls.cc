@@ -150,7 +150,8 @@ extern "C" void syscall_handler()
     syscall_table[call_n]();
 
     if ((syscall_error(task) < 0) && !task->regs.syscall_pending_restart()) {
-        t_print_bochs("Debug: syscall %h (%i) pid %h (%s) ", call_n, call_n, task->task_id, task->name.c_str());
+        t_print_bochs("Debug: syscall %h (%i) pid %h (%s) ", call_n, call_n, task->task_id,
+                      task->name.c_str());
         i64 val = syscall_error(task);
         t_print_bochs(" -> %i (%s)\n", val, "syscall failed");
     }
@@ -958,7 +959,8 @@ void syscall_create_normal_region()
     klib::string region_name("anonymous region");
 
     auto result = dest_task->page_table->atomic_create_normal_region(
-        addr_start, size, access & 0x07, access & 0x08, access & 0x10, klib::move(region_name), 0, access & 0x20);
+        addr_start, size, access & 0x07, access & 0x08, access & 0x10, klib::move(region_name), 0,
+        access & 0x20);
     if (!result.success()) {
         syscall_error(current) = result.result;
     } else {
@@ -1522,7 +1524,7 @@ void syscall_set_notify_mask()
         if (!result.val)
             return;
     }
-    ulong flags    = syscall_flags(current_task);
+    ulong flags = syscall_flags(current_task);
 
     const auto group = TaskGroup::get_task_group(task_group);
     if (!group) {
@@ -1551,8 +1553,8 @@ void syscall_request_timer()
     auto c    = get_cpu_struct();
     auto task = c->current_task;
 
-    u64 port    = syscall_arg64(task, 0);
-    u64 timeout = syscall_arg64(task, 1);
+    u64 port     = syscall_arg64(task, 0);
+    u64 timeout  = syscall_arg64(task, 1);
     u64 user_arg = syscall_arg64(task, 2);
 
     const auto port_ptr = Port::atomic_get_port(port);
@@ -1570,9 +1572,9 @@ void syscall_set_affinity()
     const auto current_cpu = get_cpu_struct();
     auto current_task      = current_cpu->current_task;
 
-    auto pid       = syscall_arg64(current_task, 0);
+    auto pid          = syscall_arg64(current_task, 0);
     uint32_t affinity = syscall_arg(current_task, 1, 1);
-    ulong flags    = syscall_flags(current_task);
+    ulong flags       = syscall_flags(current_task);
 
     const auto task = pid == 0 ? current_cpu->current_task : get_task(pid);
     if (!task) {
@@ -1599,7 +1601,7 @@ void syscall_set_affinity()
             return;
         }
 
-        syscall_return(task) = task->cpu_affinity;
+        syscall_return(current_task) = task->cpu_affinity;
         task->cpu_affinity   = cpu;
     } else {
         if (not task->can_be_rebound()) {
@@ -1608,7 +1610,7 @@ void syscall_set_affinity()
         }
 
         if (cpu != 0 && cpu != (current_cpu->cpu_id + 1)) {
-            syscall_success(task);
+            syscall_success(current_task);
             find_new_process();
 
             {
@@ -1624,7 +1626,7 @@ void syscall_set_affinity()
                 remote_cpu->ipi_reschedule();
         } else {
             Auto_Lock_Scope lock(task->sched_lock);
-            syscall_return(task) = task->cpu_affinity;
+            syscall_return(current_task) = task->cpu_affinity;
             task->cpu_affinity   = cpu;
         }
     }
@@ -1791,9 +1793,7 @@ void syscall_resume_task()
 
     if (task->is_uninited() or task->status == TaskStatus::TASK_PAUSED)
         task->init();
-    else if (task->status == TaskStatus::TASK_RUNNING)
-        return;
-    else {
+    else if (task->status != TaskStatus::TASK_RUNNING) {
         syscall_error(current_task) = -EBUSY;
         return;
     }

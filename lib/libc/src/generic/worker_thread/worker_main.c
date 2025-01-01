@@ -43,6 +43,11 @@ bool registering_process = false;
 
 pid_t _HIDDEN __pid_cached = 0;
 
+uint64_t pmos_process_task_group()
+{
+    return process_task_group;
+}
+
 int __register_process()
 {
     IPC_Register_Process msg = {

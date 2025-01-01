@@ -126,8 +126,8 @@ uint8_t get_interrupt_number(uint32_t intnum, uint64_t int_port)
         return 0;
     }
 
-    if (reply->status == 0) {
-        printf("[i8042] Warning: Did not assign the interrupt\n");
+    if (reply->status) {
+        printf("[i8042] Warning: Did not assign the interrupt, status: %i\n", (int)reply->status);
     } else {
         int_vector = reply->intno;
         printf("[i8042] Info: Assigned interrupt %i\n", int_vector);
@@ -238,13 +238,14 @@ void init_interrupts()
 pmos_port_t register_port(unsigned char id)
 {
     IPC_PS2_Reg_Port req = {
-        .type        = IPC_PS2_Reg_Port_NUM,
-        .flags       = 0,
-        .internal_id = id,
-        .cmd_port    = main_port,
-        .config_port = configuration_port,
+        .type          = IPC_PS2_Reg_Port_NUM,
+        .flags         = 0,
+        .internal_id   = id,
+        .cmd_port      = main_port,
+        .config_port   = configuration_port,
+        .task_group_id = pmos_process_task_group(),
     };
-
+ 
     result_t result = send_message_port(ps2d_port, sizeof(req), (char *)&req);
     if (result != SUCCESS) {
         printf("[i8042] Warning: Could not send message to register the port %i\n", id);

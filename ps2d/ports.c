@@ -37,6 +37,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 
 struct port_list_node *first = NULL;
 struct port_list_node *last  = NULL;
@@ -55,8 +56,9 @@ extern pmos_port_t devicesd_port;
 bool register_port(IPC_PS2_Reg_Port *message, uint64_t sender)
 {
     uint64_t port_id = message->internal_id;
+    uint64_t task_group = message->task_group_id;
 
-    struct port_list_node *ptr = list_get(sender, port_id);
+    struct port_list_node *ptr = list_get(task_group, port_id);
 
     if (ptr != NULL) {
         printf("Port already exists\n");
@@ -70,6 +72,21 @@ bool register_port(IPC_PS2_Reg_Port *message, uint64_t sender)
 
         send_message_port(message->config_port, sizeof(reply), (char *)&reply);
 
+        return false;
+    }
+
+    syscall_r is_member = is_task_group_member(sender, task_group);
+    if (is_member.result != SUCCESS || is_member.value == 0) {
+        printf("Task %li is not a member of task group %li\n", sender, task_group);
+        IPC_PS2_Config reply = {
+            .type         = IPC_PS2_Config_NUM,
+            .flags        = 0,
+            .internal_id  = port_id,
+            .request_type = IPC_PS2_Config_Reg_Port,
+            .result_cmd   = 0,
+        };
+
+        send_message_port(message->config_port, sizeof(reply), (char *)&reply);
         return false;
     }
 
@@ -90,7 +107,6 @@ bool register_port(IPC_PS2_Reg_Port *message, uint64_t sender)
     }
 
     ptr = malloc(sizeof(struct port_list_node));
-
     if (ptr == NULL)
         return false;
 
@@ -99,7 +115,7 @@ bool register_port(IPC_PS2_Reg_Port *message, uint64_t sender)
     ptr->com_port       = message->cmd_port;
     ptr->last_timer     = 0;
     ptr->index          = ++port_index_counter;
-    ptr->owner_pid      = sender;
+    ptr->owner_pid      = task_group;
     ptr->state          = 0;
     ptr->port_id        = port_id;
     ptr->state          = PORT_STATE_RESET;
@@ -167,11 +183,19 @@ void list_push_back(struct port_list_node *n)
 
 void react_message(IPC_PS2_Notify_Data *message, uint64_t sender, uint64_t message_size)
 {
-    struct port_list_node *ptr = list_get(sender, message->internal_id);
+    struct port_list_node *ptr = list_get(message->task_group_id, message->internal_id);
 
     if (ptr == NULL) {
         fprintf(stderr, "[PS2d] Warning: Recieved message from unregistered port %li task %li\n",
                 message->internal_id, sender);
+        return;
+    }
+
+    syscall_r is_member = is_task_group_member(sender, message->task_group_id);
+    if (is_member.result != SUCCESS || is_member.value == 0) {
+        fprintf(stderr, "[PS2d] Warning: Task %li is not a member of task group %li\n", sender,
+                message->task_group_id);
+        return;
     }
 
     react_data(ptr, message->data, message_size - sizeof(IPC_PS2_Notify_Data));

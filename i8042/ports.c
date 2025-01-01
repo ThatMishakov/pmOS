@@ -92,10 +92,11 @@ void react_data(uint8_t data, unsigned char port_num)
 
     IPC_PS2_Notify_Data *str = alloca(size);
 
-    str->type        = IPC_PS2_Notify_Data_NUM;
-    str->flags       = 0;
-    str->internal_id = port_num;
-    str->data[0]     = data;
+    str->type          = IPC_PS2_Notify_Data_NUM;
+    str->flags         = 0;
+    str->internal_id   = port_num;
+    str->task_group_id = pmos_process_task_group();
+    str->data[0]       = data;
 
     result_t result = send_message_port(ports[port_num].notification_port, size, (char *)str);
     if (result != SUCCESS) {

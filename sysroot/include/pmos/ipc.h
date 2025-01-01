@@ -633,6 +633,9 @@ typedef struct IPC_PS2_Reg_Port {
 
     // Port used for configuration
     uint64_t config_port;
+
+    // Task group ID of the driver
+    uint64_t task_group_id;
 } IPC_PS2_Reg_Port;
 
 // Structure that can be sent by both driver and PS2d for internal configuration
@@ -667,6 +670,9 @@ typedef struct IPC_PS2_Notify_Data {
 
     // Internal ID of the port, must be the same as used with IPC_PS2_Reg_Port
     uint64_t internal_id;
+
+    // Task group ID of the driver
+    uint64_t task_group_id;
 
     // Data recieved by the port; size of the array should be determined by the message size
     char data[0];
