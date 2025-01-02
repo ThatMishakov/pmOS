@@ -49,7 +49,8 @@ void unregister_keyboard(struct port_list_node *port);
 
 struct keyboard_cmd {
     unsigned char cmd[2];
-    unsigned char size;
+    unsigned char size: 4;
+    unsigned char acked_count: 4;
     bool complex_response;
 };
 
@@ -64,12 +65,16 @@ struct keyboard_state {
         STATUS_SENT_ECHO,
     } send_status;
 
+    enum {
+        STATUS_SCAN_CODE_REQUEST,
+    } operation_status;
+
     struct keyboard_cmd cmd_buffer[KBD_CMD_BUFF_SIZE];
     unsigned cmd_buffer_start;
     unsigned cmd_buffer_index;
 };
 
-struct keyboard_cmd keyboard_cmd_get_front(struct port_list_node *port);
+struct keyboard_cmd *keyboard_cmd_get_front(struct port_list_node *port);
 void keyboard_push_cmd(struct port_list_node *port, struct keyboard_cmd data);
 void keyboard_push_cmd_byte(struct port_list_node *port, unsigned char data);
 void keyboard_ack_cmd(struct port_list_node *port);

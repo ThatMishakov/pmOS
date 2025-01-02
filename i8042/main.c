@@ -191,6 +191,7 @@ void *interrupt_thread(void *arg) {
         if (mutex_result != 0) {
             fprintf(stderr, "[i8042] Error: Could not lock mutex\n");
             free(message);
+            complete_interrupt(kmsg->intno);
             continue;
         } 
 
@@ -207,6 +208,7 @@ void *interrupt_thread(void *arg) {
         mutex_result = pthread_mutex_unlock(&ports_mutex);
         if (mutex_result != 0) {
             fprintf(stderr, "[i8042] Error: Could not unlock mutex\n");
+            complete_interrupt(kmsg->intno);
             exit(mutex_result);
         }
         complete_interrupt(kmsg->intno);
@@ -308,6 +310,34 @@ void register_ports()
     }
 }
 
+void wait_output_set()
+{
+    uint8_t status;
+    do {
+        status = inb(RW_PORT);
+    } while (!(status & STATUS_MASK_OUTPUT_FULL));
+}
+void wait_input_clear()
+{
+    uint8_t status;
+    do {
+        status = inb(RW_PORT);
+    } while (status & STATUS_MASK_INPUT_FULL);
+}
+
+void write_wait(uint32_t port, uint8_t cmd)
+{
+    wait_input_clear();
+    outb(port, cmd);
+}
+
+uint8_t read_wait(uint32_t port)
+{
+    wait_output_set();
+    return inb(port);
+}
+
+
 void init_controller()
 {
     printf("[i8042] Initializing the controller...\n");
@@ -316,23 +346,24 @@ void init_controller()
     uint8_t config_byte;
 
     // Disable ports
-    outb(RW_PORT, DISABLE_FIRST_PORT);
-    outb(RW_PORT, DISABLE_SECOND_PORT);
+    write_wait(RW_PORT, DISABLE_FIRST_PORT);
+    write_wait(RW_PORT, DISABLE_SECOND_PORT);
+
+    printf("[i8042] Info: Ports disabled\n");
 
     // Clear output buffer
     data = inb(DATA_PORT);
 
     // Configure the controller
-    outb(RW_PORT, CMD_CONFIG_READ);
-    config_byte = inb(DATA_PORT);
+    write_wait(RW_PORT, CMD_CONFIG_READ);
+    config_byte = read_wait(DATA_PORT);
 
-    // printf("PS/2 config value %x\n", config_byte);
+    printf("PS/2 config value %x\n", config_byte);
 
     // Disables translation and enables first and second ports' interrupts
-    config_byte &= ~0x50;
-    config_byte |= 0x03;
-    outb(RW_PORT, CMD_CONFIG_WRITE);
-    outb(DATA_PORT, config_byte);
+    config_byte &= ~((1 << 6) | (1 << 4) | (0b11));
+    write_wait(RW_PORT, CMD_CONFIG_WRITE);
+    write_wait(DATA_PORT, config_byte);
 
     if (config_byte & 0x20) {
         has_second_channel = true;
@@ -340,37 +371,32 @@ void init_controller()
     }
 
     // Perform self-test
-    outb(RW_PORT, TEST_CONTROLLER);
-    do {
-        status = inb(RW_PORT);
-    } while (!(status & STATUS_MASK_OUTPUT_FULL));
-    data = inb(DATA_PORT);
+    write_wait(RW_PORT, TEST_CONTROLLER);
+    data = read_wait(DATA_PORT);
     if (data != 0x55) {
         printf("[i8042] Error: PS/2 controller did not pass self-test (status %x)\n", data);
         exit(1);
     }
 
     // Restore configuration bit
-    outb(RW_PORT, CMD_CONFIG_WRITE);
-    outb(DATA_PORT, config_byte);
+    write_wait(RW_PORT, CMD_CONFIG_WRITE);
+    write_wait(DATA_PORT, config_byte);
 
     // Test if the controller has second channel
     if (has_second_channel) {
-        outb(RW_PORT, ENABLE_SECOND_PORT);
-        data = inb(DATA_PORT);
+        write_wait(RW_PORT, ENABLE_SECOND_PORT);
+        write_wait(RW_PORT, CMD_CONFIG_READ);
+        data = read_wait(DATA_PORT);
 
         if (data & 0x20)
             has_second_channel = false;
         else {
-            outb(RW_PORT, DISABLE_SECOND_PORT);
+            write_wait(RW_PORT, DISABLE_SECOND_PORT);
         }
     }
 
-    outb(RW_PORT, TEST_FIRST_PORT);
-    do {
-        status = inb(RW_PORT);
-    } while (!(status & STATUS_MASK_OUTPUT_FULL));
-    data = inb(DATA_PORT);
+    write_wait(RW_PORT, TEST_FIRST_PORT);
+    data = read_wait(DATA_PORT);
     if (!data) {
         printf("[i8042] Info: Port 1 passed self-test\n");
         first_port_works = enable_first_channel;
@@ -379,11 +405,8 @@ void init_controller()
     }
 
     if (has_second_channel) {
-        outb(RW_PORT, TEST_SECOND_PORT);
-        do {
-            status = inb(RW_PORT);
-        } while (!(status & STATUS_MASK_OUTPUT_FULL));
-        data = inb(DATA_PORT);
+        write_wait(RW_PORT, TEST_SECOND_PORT);
+        data = read_wait(DATA_PORT);
         if (!data) {
             printf("[i8042] Info: Port 2 passed self-test\n");
             second_port_works = enable_second_channel;
@@ -395,23 +418,23 @@ void init_controller()
 
 void enable_ports()
 {
+    if (first_port_works)
+        write_wait(RW_PORT, ENABLE_FIRST_PORT);
+
+    if (second_port_works)
+        write_wait(RW_PORT, ENABLE_SECOND_PORT);
+
     uint8_t data;
-    outb(RW_PORT, CMD_CONFIG_READ);
-    data = inb(DATA_PORT);
+    write_wait(RW_PORT, CMD_CONFIG_READ);
+    data = read_wait(DATA_PORT);
 
     if (first_port_works)
         data |= 0x01;
     if (second_port_works)
         data |= 0x02;
 
-    outb(RW_PORT, CMD_CONFIG_WRITE);
-    outb(DATA_PORT, data);
-
-    if (first_port_works)
-        outb(RW_PORT, ENABLE_FIRST_PORT);
-
-    if (second_port_works)
-        outb(RW_PORT, ENABLE_SECOND_PORT);
+    write_wait(RW_PORT, CMD_CONFIG_WRITE);
+    write_wait(DATA_PORT, data);
 }
 
 uint8_t port1_int = 0;

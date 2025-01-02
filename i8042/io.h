@@ -42,4 +42,7 @@ static inline void outb(uint16_t port, uint8_t val)
     __asm__ volatile("outb %0, %1" : : "a"(val), "Nd"(port));
 }
 
+void write_wait(uint32_t port, uint8_t cmd);
+uint8_t read_wait(uint32_t port);
+
 #endif

@@ -104,6 +104,21 @@ void keyboard_react_timer(struct port_list_node *port)
     }
 }
 
+void keyboard_push_get_scancode(struct port_list_node *port)
+{
+    struct keyboard_cmd cmd = {
+        .cmd =
+            {
+                [0] = COMMAND_GET_SET_SCANCODE,
+                [1] = 0x00, // Get scan code
+            },
+        .complex_response = true,
+        .size             = 2,
+        .acked_count      = 0,
+    };
+    keyboard_push_cmd(port, cmd);
+}
+
 bool init_keyboard(struct port_list_node *port)
 {
     printf("[PS2d] Info: Found keyboard on port %lx PID %lx\n", port->port_id, port->owner_pid);
@@ -113,7 +128,7 @@ bool init_keyboard(struct port_list_node *port)
     port->managed_react_data        = &keyboard_react_data;
     port->managed_react_timer       = &keyboard_react_timer;
     port->state                     = PORT_STATE_MANAGED;
-    port->kb_state.send_status      = STATUS_NODATA;
+    port->kb_state.send_status      = STATUS_RECIEVED_DATA;
     port->kb_state.cmd_buffer_index = 0;
     port->kb_state.cmd_buffer_start = 0;
 
@@ -121,7 +136,9 @@ bool init_keyboard(struct port_list_node *port)
     port->kb_state.expected_bytes = 1;
     port->kb_state.shift_val      = 0;
 
-    keyboard_push_cmd_byte(port, COMMAND_ENABLE_SCANNING);
+    port->kb_state.operation_status = STATUS_SCAN_CODE_REQUEST;
+
+    keyboard_push_get_scancode(port);
     port_start_timer(port, 1000);
 
     return true;
@@ -133,9 +150,8 @@ void unregister_keyboard(struct port_list_node *port) {}
 
 void keyboard_send_front_cmd(struct port_list_node *port)
 {
-    struct keyboard_cmd cmd = keyboard_cmd_get_front(port);
-
-    send_data_port(port, cmd.cmd, cmd.size);
+    struct keyboard_cmd cmd = *keyboard_cmd_get_front(port);
+    send_data_port(port, cmd.cmd + cmd.acked_count, 1);
 }
 
 void keyboard_push_cmd_byte(struct port_list_node *port, unsigned char data)
@@ -148,6 +164,7 @@ void keyboard_push_cmd_byte(struct port_list_node *port, unsigned char data)
             },
         .complex_response = false,
         .size             = 1,
+        .acked_count      = 0,
     };
 
     keyboard_push_cmd(port, cmd);
@@ -155,9 +172,20 @@ void keyboard_push_cmd_byte(struct port_list_node *port, unsigned char data)
 
 void keyboard_ack_cmd(struct port_list_node *port)
 {
-    if (!keyboard_cmd_queue_empty(port))
-        keyboard_pop_front_cmd(port);
+    if (keyboard_cmd_queue_empty(port))
+        return;
 
+    struct keyboard_cmd *cmd = keyboard_cmd_get_front(port);
+    cmd->acked_count++;
+    if (cmd->acked_count < cmd->size) {
+        keyboard_send_front_cmd(port);
+        return;
+    }
+
+    if (cmd->complex_response)
+        return;
+
+    keyboard_pop_front_cmd(port);
     if (!keyboard_cmd_queue_empty(port))
         keyboard_send_front_cmd(port);
 }
@@ -167,9 +195,9 @@ bool keyboard_cmd_queue_empty(struct port_list_node *port)
     return port->kb_state.cmd_buffer_index == port->kb_state.cmd_buffer_start;
 }
 
-struct keyboard_cmd keyboard_cmd_get_front(struct port_list_node *port)
+struct keyboard_cmd *keyboard_cmd_get_front(struct port_list_node *port)
 {
-    return port->kb_state.cmd_buffer[port->kb_state.cmd_buffer_index];
+    return &port->kb_state.cmd_buffer[port->kb_state.cmd_buffer_index];
 }
 
 void keyboard_push_cmd(struct port_list_node *port, struct keyboard_cmd data)
@@ -201,8 +229,30 @@ void keyboard_pop_front_cmd(struct port_list_node *port)
         port->kb_state.cmd_buffer_index = 0;
 }
 
+void keyboard_react_command_response(struct port_list_node *port, unsigned char data)
+{
+    switch (port->kb_state.operation_status) {
+    case STATUS_SCAN_CODE_REQUEST:
+        printf("[PS2d] Info: Keyboard has scan code %x\n", data);
+        port->kb_state.send_status = STATUS_RECIEVED_DATA;
+        keyboard_push_cmd_byte(port, COMMAND_ENABLE_SCANNING);
+        break;
+    default:
+        break;
+    }
+
+    keyboard_pop_front_cmd(port);
+    if (!keyboard_cmd_queue_empty(port))
+        keyboard_send_front_cmd(port);
+}
 void keyboard_scan_byte(struct port_list_node *port, unsigned char data)
 {
+    struct keyboard_cmd *cmd = keyboard_cmd_get_front(port);
+    if (cmd && (cmd->acked_count == cmd->size) && cmd->complex_response) {
+        keyboard_react_command_response(port, data);
+        return;
+    }
+
     port->kb_state.scancode |= (uint64_t)data << port->kb_state.shift_val;
 
     port->kb_state.shift_val += 8;

@@ -46,23 +46,9 @@ bool send_data_port(uint8_t cmd, bool port_2)
     uint8_t status = 0;
 
     if (port_2) {
-        do {
-            status = inb(RW_PORT);
-            if (count++ > 1000)
-                return false;
-        } while (status & STATUS_MASK_OUTPUT_FULL);
-
-        outb(RW_PORT, SECOND_PORT);
+        write_wait(RW_PORT, SECOND_PORT);
     }
-
-    status = 0;
-    do {
-        status = inb(RW_PORT);
-        if (count++ > 1000)
-            return false;
-    } while (status & STATUS_MASK_OUTPUT_FULL);
-
-    outb(DATA_PORT, cmd);
+    write_wait(DATA_PORT, cmd);
     return true;
 }
 

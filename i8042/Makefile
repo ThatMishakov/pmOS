@@ -13,7 +13,7 @@ CXX = clang++
 TARGETFLAGS = --target=$(ARCH)-pmos --sysroot=$(ROOTDIR)/sysroot
 
 # User controllable CFLAGS.
-USERCFLAGS = -Wall -Wextra -O3 -pipe
+USERCFLAGS = -Wall -Wextra -O3 -pipe -g
 
 CFLAGS = $(TARGETFLAGS) -std=c17
 CXXFLAGS = $(TARGETFLAGS) -std=c++17
