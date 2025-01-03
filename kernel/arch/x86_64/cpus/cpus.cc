@@ -75,6 +75,8 @@ extern bool cpu_struct_works;
 
 void init_per_cpu(uint32_t lapic_id)
 {
+    detect_sse();
+
     CPU_Info *c = new CPU_Info;
     if (!c)
         panic("Couldn't allocate memory for CPU_Info\n");

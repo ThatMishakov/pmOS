@@ -46,7 +46,7 @@
 TaskDescriptor *TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel level) noexcept
 {
     // Create the structure
-    TaskDescriptor *n = new TaskDescriptor();
+    klib::unique_ptr<TaskDescriptor> n = new TaskDescriptor();
     if (!n)
         return nullptr;
 
@@ -62,6 +62,11 @@ TaskDescriptor *TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel le
         n->regs.e.ss = R3_DATA_SEGMENT;
         break;
     }
+
+    auto result = n->sse_data.init_on_thread_start();
+    if (result != 0)
+        return nullptr;
+
 #elif defined(__riscv)
     n->is_system = level == PrivilegeLevel::Kernel;
 
@@ -79,10 +84,10 @@ TaskDescriptor *TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel le
 
     // Add to the map of processes and to uninit list
     Auto_Lock_Scope l(tasks_map_lock);
-    tasks_map.insert(n);
+    tasks_map.insert(n.get());
 
     Auto_Lock_Scope uninit_lock(uninit.lock);
-    uninit.push_back(n);
+    uninit.push_back(n.get());
 
     if (level == PrivilegeLevel::User) {
         auto name = get_current_task()->name.clone();
@@ -90,7 +95,7 @@ TaskDescriptor *TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel le
         n->name = klib::move(name);
     }
 
-    return n;
+    return n.release();
 }
 
 ReturnStr<size_t> TaskDescriptor::init_stack()

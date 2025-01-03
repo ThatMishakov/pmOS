@@ -29,6 +29,13 @@
 
 #pragma once
 #include <types.hh>
+#include <lib/memory.hh>
+
+enum class SSECtxStyle {
+    FXSAVE,
+    XSAVE,
+    XSAVEOPT,
+};
 
 /**
  * @brief Structure holding SSE data for x86 CPUs
@@ -51,52 +58,17 @@
  * modified by other processes between the task switches.
  */
 struct SSE_Data {
-    u8 data[0];
-    u16 fcw        = 0x37F;
-    u16 fsw        = 0x0;
-    u8 ftw         = 0x0;
-    u8 reserved    = 0x0;
-    u16 fop        = 0x0;
-    u32 fpu_ip     = 0x0;
-    u16 fpu_cs     = 0x0;
-    u16 reserved1  = 0x0;
-    u32 fpu_dp     = 0x0;
-    u16 fpu_ds     = 0x0;
-    u16 reserved2  = 0x0;
-    u32 mxcsr      = 0x1F80;
-    u32 mxcsr_mask = 0xFFFF;
+    klib::unique_ptr<u8> data = nullptr;
+    bool holds_state = false;
 
-    u8 mm0[16] = {0};
-    u8 mm1[16] = {0};
-    u8 mm2[16] = {0};
-    u8 mm3[16] = {0};
-    u8 mm4[16] = {0};
-    u8 mm5[16] = {0};
-    u8 mm6[16] = {0};
-    u8 mm7[16] = {0};
+    /// \brief Initializes the SSE data structure
+    ///
+    /// @return 0 on success, error code otherwise (e.g. out of memory)
+    kresult_t init_on_thread_start();
 
-    u8 xmm0[16]  = {0};
-    u8 xmm1[16]  = {0};
-    u8 xmm2[16]  = {0};
-    u8 xmm3[16]  = {0};
-    u8 xmm4[16]  = {0};
-    u8 xmm5[16]  = {0};
-    u8 xmm6[16]  = {0};
-    u8 xmm7[16]  = {0};
-    u8 xmm8[16]  = {0};
-    u8 xmm9[16]  = {0};
-    u8 xmm10[16] = {0};
-    u8 xmm11[16] = {0};
-    u8 xmm12[16] = {0};
-    u8 xmm13[16] = {0};
-    u8 xmm14[16] = {0};
-    u8 xmm15[16] = {0};
-
-    u8 reserved3[96] = {0};
-
-    inline void save_sse() { asm volatile(" fxsave %0 " ::"m"(data)); }
-    inline void restore_sse() { asm volatile(" fxrstor %0 " ::"m"(data)); }
-} ALIGNED(16);
+    void save_sse();
+    void restore_sse();
+};
 
 /**
  * \brief Sets the appropriate bits in the registers to allow the processes to
@@ -104,6 +76,12 @@ struct SSE_Data {
  *
  */
 void enable_sse();
+
+/**
+ * \brief Detects the SSE instructions supported by the CPU (and what to use to save/restore the state)
+ * \see SSECtxStyle
+ */
+void detect_sse();
 
 /// Checks if SSE state is valid (CR0.TS == 0)
 bool sse_is_valid();

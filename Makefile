@@ -48,6 +48,9 @@ qemu-x86: $(ISO) ovmf-x86
 		# -d cpu_reset\
 # -trace ahci_* -trace handle_cmd_* \
 
+qemu-kvm: $(ISO)
+	qemu-system-x86_64 -serial stdio  -m 512M -cpu max,+hypervisor,+invtsc,+tsc-deadline -M q35 -accel kvm -cdrom limine/pmOS.iso -smp 1
+
 
 qemu: $(ISO) ovmf-riscv64
 	qemu-system-riscv64 -M virt -cpu rv64 -device ramfb -device virtio-keyboard -device qemu-xhci -device usb-kbd -m 2G -drive if=pflash,unit=0,format=raw,file=ovmf-riscv64/OVMF.fd -device ahci,id=ahci -device ide-hd,drive=hdd0 -drive file=$(ISO),if=none,id=hdd0 -serial stdio

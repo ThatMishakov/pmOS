@@ -40,7 +40,7 @@ size_t strlen(const char *str)
     return size;
 }
 
-char *strcpy(char *destination, const char *source)
+char *strcpy(char * restrict destination, const char * restrict source)
 {
     char *p = destination;
     while (*source != '\0') {
@@ -53,7 +53,7 @@ char *strcpy(char *destination, const char *source)
     return destination;
 }
 
-char *strncpy(char *destination, const char *source, size_t num)
+char *strncpy(char * restrict destination, const char *restrict source, size_t num)
 {
     char *p = destination;
 
@@ -72,7 +72,7 @@ char *strncpy(char *destination, const char *source, size_t num)
     return destination;
 }
 
-char *stpncpy(char *dst, const char *src, size_t sz)
+char *stpncpy(char * restrict dst, const char * restrict src, size_t sz)
 {
     char *d = dst;
     while (sz > 0 && *src != '\0') {
@@ -116,7 +116,7 @@ int strncmp(const char *s1, const char *s2, size_t size)
     return 1;
 }
 
-void *memcpy(void *dest, const void *src, size_t n)
+void *memcpy(void * restrict dest, const void * restrict src, size_t n)
 {
     void *k = dest;
     while (n--) {
@@ -148,7 +148,7 @@ int memcmp(const void *s1, const void *s2, size_t n)
     return ((unsigned char *)s1)[k] < ((unsigned char *)s2)[k] ? -1 : 1;
 }
 
-void *memmove(void *dest, const void *src, size_t n)
+void *memmove(void *restrict dest, const void *restrict src, size_t n)
 {
     unsigned char *d       = (unsigned char *)dest;
     const unsigned char *s = (const unsigned char *)src;
@@ -347,7 +347,7 @@ size_t strnlen(const char *str, size_t maxlen)
     return length;
 }
 
-void *memccpy(void *dest, const void *src, int c, size_t n)
+void *memccpy(void *restrict dest, const void *restrict src, int c, size_t n)
 {
     unsigned char *d       = (unsigned char *)dest;
     const unsigned char *s = (const unsigned char *)src;
