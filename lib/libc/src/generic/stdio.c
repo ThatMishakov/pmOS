@@ -976,6 +976,8 @@ int sprintf(char *str, const char *format, ...)
 
     int ret = __va_printf_closure(write_string, &desc, arg, format);
 
+    str[desc.pos] = '\0';
+
     va_end(arg);
 
     return ret;
@@ -1052,9 +1054,14 @@ int printf(const char *format, ...)
 
 int vsnprintf(char *str, size_t size, const char *format, va_list ap)
 {
-    struct string_descriptor desc = {str, size, 0, 0};
+    if (size < 1)
+        return 0;
+
+    struct string_descriptor desc = {str, size-1, 0, 0};
 
     int ret = __va_printf_closure(write_string, &desc, ap, format);
+
+    str[desc.pos] = '\0';
 
     return ret;
 }

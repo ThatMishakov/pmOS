@@ -45,6 +45,7 @@
 #include <pmos/special.h>
 #include <uacpi/osi.h>
 #include <uacpi/notify.h>
+#include <uacpi/context.h>
 
 
 void init_acpi();
@@ -196,6 +197,8 @@ int acpi_init() {
         fprintf(stderr, "uacpi_initialize error: %s", uacpi_status_to_string(ret));
         return -ENODEV;
     }
+
+    //uacpi_context_set_log_level(UACPI_LOG_DEBUG);
 
     ret = uacpi_namespace_load();
     if (uacpi_unlikely_error(ret)) {
