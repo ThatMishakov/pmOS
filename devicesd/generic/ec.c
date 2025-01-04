@@ -84,6 +84,7 @@ static void init_from_ecdt()
         if (result != UACPI_STATUS_OK) {
             printf("Failed to find EC device in namespace\n");
             free_ec_devices();
+            uacpi_table_unref(&edcd);
             return;
         }
 
@@ -91,6 +92,7 @@ static void init_from_ecdt()
         if (!device) {
             printf("Failed to allocate memory for EC device\n");
             free_ec_devices();
+            uacpi_table_unref(&edcd);
             return;
         }
 
