@@ -41,6 +41,7 @@
 #include <memory/temp_mapper.hh>
 #include <messaging/messaging.hh>
 #include <pmos/containers/intrusive_list.hh>
+#include <pmos/containers/intrusive_bst.hh>
 #include <registers.hh>
 #include <types.hh>
 
@@ -152,10 +153,13 @@ struct CPU_Info {
 
     // TODO: Replace this with multimap
     struct Timer {
+        pmos::containers::RBTreeNode<Timer> node;
+        u64 fire_on_core_ticks;
         u64 port_id;
         u64 extra;
     };
-    klib::splay_tree_map<u64 /* next clock tick */, Timer> timer_queue;
+    using timer_tree = pmos::containers::RedBlackTree<Timer, &Timer::node, detail::TreeCmp<Timer, u64, &Timer::fire_on_core_ticks>>;
+    timer_tree::RBTreeHead timer_queue;
     Spinlock timer_lock;
 
     // Adds a new timer to the timer queue

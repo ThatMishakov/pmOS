@@ -3,8 +3,8 @@
         {
             "name": "pmOS",
             "defines": [],
-            "cStandard": "c17",
-            "cppStandard": "c++20",
+            "cStandard": "c23",
+            "cppStandard": "c++23",
             "intelliSenseMode": "clang-x64",
             "mergeConfigurations": false,
             "browse": {
@@ -15,10 +15,13 @@
                 "limitSymbolsToIncludedHeaders": true
             },
             "compilerArgs": [
-                "--sysroot",
-                "$HOME/pmos/sysroot",
+                "--sysroot $HOME/pmos/sysroot",
                 "--target=x86_64-pmos"
-            ]
+            ],
+            "includePath": [
+                "/home/misha/pmos/sysroot/usr/include"
+            ],
+            "compilerPath": "/home/misha/cross/bin/clang++"
         }
     ],
     "version": 4

@@ -62,5 +62,7 @@ extern void (*return_table[4])(void);
 extern "C" void lvt0_int_isr();
 extern "C" void lvt1_int_isr();
 extern "C" void apic_timer_isr();
+extern "C" void apic_spurious_isr();
+extern "C" void apic_dummy_isr();
 
 extern "C" void dummy_isr();

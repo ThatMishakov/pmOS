@@ -1,6 +1,7 @@
 #pragma once
 #include <coroutine>
 #include <utility>
+#include <exception>
 
 namespace pmos::async
 {

@@ -1,4 +1,5 @@
 #include "ata.hh"
+#include "blockd.hh"
 #include "device.hh"
 #include "pci.hh"
 #include "port.hh"
@@ -6,6 +7,7 @@
 #include <algorithm>
 #include <alloca.h>
 #include <cassert>
+#include <inttypes.h>
 #include <memory>
 #include <pmos/helpers.h>
 #include <pmos/interrupts.h>
@@ -306,9 +308,9 @@ volatile uint32_t *AHCIPort::get_port_register()
     return ahci_virt_base + (0x100 + index * 0x80) / sizeof(uint32_t);
 }
 
-using TimerTree =
-    pmos::containers::RedBlackTree<TimerWaiter, &TimerWaiter::timer_node,
-                                   detail::TreeCmp<TimerWaiter, uint64_t, &TimerWaiter::timer_time>>;
+using TimerTree = pmos::containers::RedBlackTree<
+    TimerWaiter, &TimerWaiter::timer_node,
+    detail::TreeCmp<TimerWaiter, uint64_t, &TimerWaiter::timer_time>>;
 
 TimerTree::RBTreeHead timer_tree;
 uint64_t next_timer_time = 0;
@@ -568,7 +570,7 @@ void react_timer()
 
 void react_interrupt()
 {
-    uint32_t is = ahci_virt_base[2];
+    uint32_t is       = ahci_virt_base[2];
     ahci_virt_base[2] = is;
     for (int i = 0; i < 32; ++i) {
         if (is & (1 << i)) {
@@ -603,6 +605,26 @@ void ahci_controller_main()
             react_interrupt();
             complete_interrupt(kmsg->intno);
         } break;
+        case IPC_Kernel_Named_Port_Notification_NUM: {
+            auto kmsg = (IPC_Kernel_Named_Port_Notification *)request;
+            if (desc.sender != 0) {
+                printf("Named port notification not from kernel: %" PRIx64 "\n", desc.sender);
+                break;
+            }
+
+            auto len  = desc.size - offsetof(IPC_Kernel_Named_Port_Notification, port_name);
+            auto name = std::string_view(kmsg->port_name, len);
+            if (name == blockd_port_name) {
+                blockd_port_ready(kmsg->port_num);
+            } else {
+                printf("Unknown named port notification: %.*s\n", (int)len, kmsg->port_name);
+            }
+        } break;
+        case IPC_Disk_Register_Reply_NUM: {
+            // TODO: veryfy the sender
+            auto reply = (IPC_Disk_Register_Reply *)request;
+            handle_register_disk_reply(reply);
+        }
 
         default:
             printf("AHCId unknown message type: %i\n", request->type);
@@ -636,8 +658,7 @@ void ahci_handle(PCIDescriptor d)
 
     bar5 &= 0xfffffff0;
 
-    auto mem_req =
-        create_phys_map_region(0, nullptr, 8192, PROT_READ | PROT_WRITE, bar5);
+    auto mem_req = create_phys_map_region(0, nullptr, 8192, PROT_READ | PROT_WRITE, bar5);
     if (mem_req.result != SUCCESS) {
         printf("Failed to map AHCI controller's memory\n");
         return;
@@ -793,7 +814,7 @@ void ahci_handle(PCIDescriptor d)
             command_list.command_table_base_high = command_table_phys_base >> 32;
         }
 
-        port.callbacks = std::vector<WaitCommandCompletion *>(num_slots, nullptr);
+        port.callbacks  = std::vector<WaitCommandCompletion *>(num_slots, nullptr);
         port.cmd_bitmap = std::vector<bool>(num_slots, false);
 
         port.init_port();

@@ -148,3 +148,31 @@ lvt1_int_isr:
 dummy_isr:
     iretq
 
+
+    .type apic_spurious_isr, @function
+    .globl apic_spurious_isr
+apic_spurious_isr:
+    swapgs
+
+    call save_context
+
+    movq $0, %rbp
+    movq $0, 176(%r11)
+
+    call apic_spurious_int_routine
+
+    auto_return
+
+    .type apic_dummy_isr, @function
+    .globl apic_dummy_isr
+apic_dummy_isr:
+    swapgs
+
+    call save_context
+
+    movq $0, %rbp
+    movq $0, 176(%r11)
+
+    call apic_dummy_int_routine
+
+    auto_return

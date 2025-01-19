@@ -9,6 +9,7 @@
 #include <pmos/memory.h>
 #include <sys/mman.h>
 #include <pmos/utility/scope_guard.hh>
+#include "blockd.hh"
 
 pmos::async::detached_task handle_device(AHCIPort &parent)
 {
@@ -37,9 +38,21 @@ pmos::async::detached_task handle_device(AHCIPort &parent)
     }
 
     auto *s = reinterpret_cast<IDENTIFYData *>(req.virt_addr);
-    char model[41];
-    ata_string_to_cstring(s->model_number, model);
-    printf("Port %i hard drive model: %s\n", parent.index, model);
+    auto model = s->get_model();
+    printf("Port %i hard drive model: %s\n", parent.index, model.c_str());
+
+    auto [logical_sector_size, physical_sector_size] = s->get_sector_size();
+
+    printf("Port %i logical sector size: %i, physical sector size: %i\n", parent.index,
+           logical_sector_size, physical_sector_size);
+
+    auto sector_count = s->get_sector_count();
+
+    printf("Port %i sector count: %i\n", parent.index, sector_count);
+
+    auto disk = co_await register_disk(parent.index, sector_count, logical_sector_size, physical_sector_size);
+    
+    printf("Port %i disk registered: %li\n", parent.index, disk);
 
     co_return;
 }

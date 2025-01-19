@@ -990,6 +990,62 @@ typedef struct IPC_Pipe_Open_Reply {
     pmos_port_t pipe_port;
 } IPC_Pipe_Open_Reply;
 
+#define IPC_Disk_Register_NUM 0xF0
+// Disks are identified by task group ID and disk ID pair
+typedef struct IPC_Disk_Register {
+    /// Message type (must be IPC_Disk_Register_NUM)
+    uint32_t type;
+
+    /// Flags changing the behaviour
+    uint32_t flags;
+
+    /// Port where the reply will be sent
+    pmos_port_t reply_port;
+
+    /// Port associated with the disk
+    pmos_port_t disk_port;
+
+    /// ID of the disk
+    uint64_t disk_id;
+
+    /// Task group ID of the disk
+    uint64_t task_group_id;
+
+    /// Sector count of the disk
+    uint64_t sector_count;
+
+    /// Logical sector size of the disk in bytes
+    uint32_t logical_sector_size;
+
+    /// Physical sector size of the disk in bytes
+    uint32_t physical_sector_size;
+} IPC_Disk_Register;
+
+#define IPC_Disk_Read_NUM 0xF1
+#define IPC_Disk_Write_NUM 0xF2
+#define IPC_Disk_Notify_NUM 0xF3
+
+#define IPC_Disk_Register_Reply_NUM 0xF8
+typedef struct IPC_Disk_Register_Reply {
+    /// Message type (must be IPC_Disk_Register_Reply_NUM)
+    uint32_t type;
+
+    /// Flags
+    uint16_t flags;
+
+    /// Result code indicating the outcome of the registration
+    int16_t result_code;
+
+    /// ID of the disk (copied from the request)
+    uint64_t disk_id;
+
+    /// Port associated with the disk
+    pmos_port_t disk_port;
+
+    /// Task group ID for the port
+    uint64_t task_group_id;
+} IPC_Disk_Register_Reply;
+
 #define IPC_Thread_Finished_NUM 0x100
 /// @brief Message sent by the thread to the one calling pthread_join() when notifing that it has
 /// finished.

@@ -274,16 +274,17 @@ ReturnStr<bool> copy_to_user(const char *from, char *to, size_t size)
 
 extern "C" void print_stack_trace();
 
-void *memcpy(void *to, const void *from, size_t size)
+void *memcpy(void * __restrict d, const void * __restrict s, size_t n)
 {
-    // t_print_bochs("memcpy %h <- %h size %h\n", to, from, size);
-    // print_stack_trace();
+    char *dest = (char *)d;
+    const char *src = (const char *)s;
 
-    for (size_t i = 0; i < size; ++i) {
-        ((char *)to)[i] = ((const char *)from)[i];
+    void *k = dest;
+    while (n--) {
+        *((char *)dest++) = *((char *)src++);
     }
 
-    return to;
+    return k;
 }
 
 extern "C" int memcmp(const void *s1, const void *s2, size_t n)

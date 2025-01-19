@@ -53,7 +53,7 @@
 #define LVT_INT0          0xfd
 #define LVT_INT1          0xfe
 #define APIC_SPURIOUS_INT 0xff
-#define APIC_DUMMY_ISR    0xff
+#define APIC_DUMMY_ISR    0xf9
 
 #define APIC_LVT_MASK 0x10000
 
@@ -227,3 +227,6 @@ void send_ipi_fixed_others(u8 vector);
 
 extern "C" void lvt0_int_routine();
 extern "C" void lvt1_int_routine();
+
+extern "C" void apic_spurious_int_routine();
+extern "C" void apic_dummy_int_routine();

@@ -43,13 +43,13 @@ qemu-x86: $(ISO) ovmf-x86
 		-M q35\
 		-smbios type=0,uefi=on -bios ovmf-x86/OVMF.fd\
 		-m 2G\
-	       	-smp 12\
+	       	-smp 1\
 	       	-serial stdio
 		# -d cpu_reset\
 # -trace ahci_* -trace handle_cmd_* \
 
-qemu-kvm: $(ISO)
-	qemu-system-x86_64 -serial stdio  -m 512M -cpu max,+hypervisor,+invtsc,+tsc-deadline -M q35 -accel kvm -cdrom limine/pmOS.iso -smp 1
+qemu-kvm: $(ISO) ovmf-x86
+	qemu-system-x86_64 -serial stdio -bios ovmf-x86/OVMF.fd -m 512M -cpu max,+hypervisor,+invtsc,+tsc-deadline -M q35 -accel kvm -cdrom limine/pmOS.iso -smp 1
 
 
 qemu: $(ISO) ovmf-riscv64

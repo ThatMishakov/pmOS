@@ -1,5 +1,7 @@
 #pragma once
 #include <cstdint>
+#include <utility>
+#include <string>
 
 static const uint8_t FIS_TYPE_REG_H2D = 0x27;
 struct FIS_Host_To_Device {
@@ -242,6 +244,11 @@ struct IDENTIFYData {
     uint16_t current_media_serial[30];
     uint16_t rsv4[49];
     uint16_t integrity;
+
+    std::pair<size_t, size_t> get_sector_size() const;
+    std::string get_model() const;
+    bool supports_lba48() const;
+    uint64_t get_sector_count() const;
 };
 
 template<unsigned N>

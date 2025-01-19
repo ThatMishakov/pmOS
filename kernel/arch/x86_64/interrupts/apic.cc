@@ -129,12 +129,13 @@ void discover_apic_freq()
 
     u64 tsc_end = rdtsc();
 
-    // Stop APIC timer
-    apic_write_reg(APIC_REG_LVT_TMR, APIC_LVT_MASK);
-
     // Get how many ticks have passed
     u32 ticks   = -apic_read_reg(APIC_REG_TMRCURRCNT);
     u64 divisor = 10'000'000; // 10ms
+
+    // Stop APIC timer
+    apic_write_reg(APIC_REG_TMRINITCNT, 0);
+    apic_write_reg(APIC_REG_LVT_TMR, APIC_LVT_MASK);
 
     // frequency is in nHz
     apic_freq          = computeFreqFraction(ticks, divisor);
@@ -223,12 +224,14 @@ void broadcast_init_ipi() { apic_write_reg(APIC_ICR_LOW, 0x000C4500); }
 
 void send_ipi_fixed(u8 vector, u32 dest)
 {
+    serial_logger.printf("[Kernel] Info: Sending IPI to %h with vector %h\n", dest, vector);
     apic_write_reg(APIC_ICR_HIGH, dest);
-    apic_write_reg(APIC_ICR_LOW, vector | (0x01 << 14));
+    apic_write_reg(APIC_ICR_LOW, (u32)vector | (0x01 << 14));
 }
 
 void send_ipi_fixed_others(u8 vector)
 {
+    serial_logger.printf("[Kernel] Info: Sending IPI to others with vector %h\n", vector);
     apic_write_reg(APIC_ICR_HIGH, 0);
 
     // Send to *vector* vector with Assert level and All Excluding Self
@@ -249,9 +252,22 @@ void smart_eoi(u8 intno)
 
 void apic_pp(int priority) { apic_write_reg(APIC_REG_PPR, priority << 4); }
 
-void lvt0_int_routine() {}
+void lvt0_int_routine() {
+    smart_eoi(LVT_INT0);
+}
 
-void lvt1_int_routine() {}
+void lvt1_int_routine() {
+    smart_eoi(LVT_INT1);
+}
+
+void apic_spurious_int_routine() {
+    global_logger.printf("[Kernel] Info: Spurious LAPIC interrupt\n");
+    serial_logger.printf("[Kernel] Info: Spurious LAPIC interrupt\n");
+}
+
+void apic_dummy_int_routine() {
+    smart_eoi(APIC_DUMMY_ISR);
+}
 
 void interrupt_complete(u32 intno)
 {

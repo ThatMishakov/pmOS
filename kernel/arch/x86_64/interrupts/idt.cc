@@ -287,11 +287,11 @@ IDT k_idt = {{
     {&prog_int_246, interrupt_gate_type, 0, 0},
     {&prog_int_247, interrupt_gate_type, 0, 0},
     {&syscall_int_entry, interrupt_gate_type, 0, 3},
-    {},
+    {&apic_dummy_isr, interrupt_gate_type, 0, 0},
     {&ipi_reschedule_isr, interrupt_gate_type, 0, 0},
     {&ipi_invalidate_tlb_isr, interrupt_gate_type, 0, 0},
     {&apic_timer_isr, interrupt_gate_type, 0, 0},
     {&lvt0_int_isr, interrupt_gate_type, 0, 0},
     {&lvt1_int_isr, interrupt_gate_type, 0, 0},
-    {&dummy_isr, interrupt_gate_type, 0, 0},
+    {&apic_spurious_isr, interrupt_gate_type, 0, 0},
 }};
