@@ -1021,9 +1021,31 @@ typedef struct IPC_Disk_Register {
     uint32_t physical_sector_size;
 } IPC_Disk_Register;
 
-#define IPC_Disk_Read_NUM 0xF1
-#define IPC_Disk_Write_NUM 0xF2
-#define IPC_Disk_Notify_NUM 0xF3
+#define IPC_Disk_Open_NUM 0xF1
+typedef struct IPC_Disk_Open {
+    /// Message type (must be IPC_Disk_Open_NUM)
+    uint32_t type;
+
+    /// Flags changing the behaviour
+    uint32_t flags;
+    #define IPC_DISK_OPEN_FLAG_CLOSE 0x01
+
+    /// Port where the reply will be sent
+    pmos_port_t reply_port;
+
+    /// ID of the disk
+    uint64_t disk_id;
+
+    /// Task group ID of the disk
+    uint64_t task_group_id;
+
+    /// ID of the disk consumer
+    uint64_t disk_consumer_id;
+} IPC_Disk_Open;
+
+#define IPC_Disk_Read_NUM 0xF2
+#define IPC_Disk_Write_NUM 0xF3
+#define IPC_Disk_Notify_NUM 0xF4
 
 #define IPC_Disk_Register_Reply_NUM 0xF8
 typedef struct IPC_Disk_Register_Reply {
@@ -1045,6 +1067,30 @@ typedef struct IPC_Disk_Register_Reply {
     /// Task group ID for the port
     uint64_t task_group_id;
 } IPC_Disk_Register_Reply;
+
+#define IPC_Disk_Open_Reply_NUM 0xF9
+typedef struct IPC_Disk_Open_Reply {
+    /// Message type (must be IPC_Disk_Open_Reply_NUM)
+    uint32_t type;
+
+    /// Flags
+    uint16_t flags;
+
+    /// Result code indicating the outcome of the open operation
+    int16_t result_code;
+
+    /// ID of the disk
+    uint64_t disk_id;
+
+    /// Port associated with the disk
+    pmos_port_t disk_port;
+
+    /// Task group ID of the disk
+    uint64_t task_group_id;
+
+    /// ID of the disk consumer
+    uint64_t disk_consumer_id;
+} IPC_Disk_Open_Reply;
 
 #define IPC_Thread_Finished_NUM 0x100
 /// @brief Message sent by the thread to the one calling pthread_join() when notifing that it has

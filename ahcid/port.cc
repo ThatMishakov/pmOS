@@ -4,6 +4,7 @@
 
 #include <cassert>
 #include <stdio.h>
+#include <sched.h>
 
 pmos::async::task<Command> Command::prepare(AHCIPort &port)
 {

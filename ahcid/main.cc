@@ -1,6 +1,7 @@
 #include "ata.hh"
 #include "blockd.hh"
 #include "device.hh"
+#include "disk_handler.hh"
 #include "pci.hh"
 #include "port.hh"
 
@@ -621,11 +622,16 @@ void ahci_controller_main()
             }
         } break;
         case IPC_Disk_Register_Reply_NUM: {
-            // TODO: veryfy the sender
-            auto reply = (IPC_Disk_Register_Reply *)request;
-            handle_register_disk_reply(reply);
-        }
+            auto msg = (IPC_Disk_Register_Reply *)request;
+            // TODO: check the sender
 
+            handle_register_disk_reply(desc, msg);
+        } break;
+        case IPC_Disk_Open_NUM: {
+            auto msg = (IPC_Disk_Open *)request;
+
+            handle_disk_open(desc, msg);
+        } break;
         default:
             printf("AHCId unknown message type: %i\n", request->type);
             break;
