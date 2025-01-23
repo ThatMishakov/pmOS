@@ -1,7 +1,9 @@
+#include <cinttypes>
 #include <cstdio>
 #include <map>
 #include <pmos/async/coroutines.hh>
 #include <pmos/containers/intrusive_bst.hh>
+#include <pmos/containers/intrusive_list.hh>
 #include <pmos/ipc.h>
 #include <pmos/ports.h>
 #include <pmos/system.h>
@@ -48,14 +50,42 @@ struct DiskOpenAwaiter {
     uint64_t task_group_id;
 
     std::coroutine_handle<> h;
-    IPC_Disk_Open_Reply *reply;
+    const IPC_Disk_Open_Reply *reply;
 
     bool opened = false;
 
     bool await_ready() const noexcept { return false; }
     void await_suspend(std::coroutine_handle<> h_);
-    IPC_Disk_Open_Reply *await_resume() noexcept { return reply; }
+    const IPC_Disk_Open_Reply *await_resume() noexcept { return reply; }
 };
+
+using mem_object_id = uint64_t;
+struct ReadAwaiter {
+    std::coroutine_handle<> h {};
+    mem_object_id mem_object {};
+
+    Disk &disk;
+    uint64_t sector_start;
+    uint64_t sector_count;
+
+    uint64_t op_id;
+
+    pmos::containers::DoubleListHead<ReadAwaiter> list_node;
+    pmos::containers::RBTreeNode<ReadAwaiter> node;
+
+    ReadAwaiter(Disk &disk, uint64_t sector_start, uint64_t sector_count)
+        : disk(disk), sector_start(sector_start), sector_count(sector_count)
+    {
+    }
+
+    bool await_ready() noexcept { return false; }
+    void await_suspend(std::coroutine_handle<> h_);
+    uint64_t await_resume() { return mem_object; }
+};
+
+pmos::containers::RedBlackTree<
+    ReadAwaiter, &ReadAwaiter::node,
+    detail::TreeCmp<ReadAwaiter, uint64_t, &ReadAwaiter::op_id>>::RBTreeHead read_awaiters;
 
 DiskOpenAwaiter open_disk(Disk &disk, uint64_t task_group_id);
 
@@ -74,10 +104,20 @@ struct Disk {
     int physical_sector_size;
     uint64_t sector_count;
 
-    pmos::containers::RedBlackTree<
+    using tree = pmos::containers::RedBlackTree<
         DiskOpenAwaiter, &DiskOpenAwaiter::node,
-        detail::TreeCmp<DiskOpenAwaiter, uint64_t, &DiskOpenAwaiter::task_group_id>>::RBTreeHead
-        open_awaiters;
+        detail::TreeCmp<DiskOpenAwaiter, uint64_t, &DiskOpenAwaiter::task_group_id>>;
+
+    tree::RBTreeHead open_awaiters;
+    pmos::containers::InitializedCircularDoubleList<ReadAwaiter, &ReadAwaiter::list_node>
+        read_awaiters;
+
+    struct Partition {
+        uint64_t start_lba;
+        uint64_t end_lba;
+    };
+
+    std::vector<Partition> partitions;
 };
 
 std::vector<Disk> disks;
@@ -124,7 +164,7 @@ DiskOpenAwaiter open_disk(Disk &disk, uint64_t task_group_id)
         .reply_port       = main_port,
         .disk_id          = disk.driver_id,
         .task_group_id    = disk.driver_process_group,
-        .disk_consumer_id = pmos_process_task_group(),
+        .disk_consumer_id = task_group_id,
     };
 
     ipc_send(open_msg, disk.driver_port);
@@ -134,10 +174,79 @@ DiskOpenAwaiter open_disk(Disk &disk, uint64_t task_group_id)
     return awaiter;
 }
 
+uint64_t read_index = 0;
+void ReadAwaiter::await_suspend(std::coroutine_handle<> h_)
+{
+    h = h_;
+
+    auto idx = read_index++;
+
+    IPC_Disk_Read read = {
+        .type             = IPC_Disk_Read_NUM,
+        .flags            = 0,
+        .disk_id          = disk.driver_id,
+        .task_group_id    = disk.driver_process_group,
+        .disk_consumer_id = pmos_process_task_group(),
+        .start_sector     = sector_start,
+        .sector_count     = sector_count,
+        .reply_port       = main_port,
+        .user_arg         = idx,
+    };
+
+    ipc_send(read, disk.driver_port);
+
+    op_id = idx;
+
+    read_awaiters.insert(this);
+    disk.read_awaiters.push_back(this);
+}
+
+void disk_open_msg(const char *tt, Message_Descriptor desc)
+{
+    auto reply         = reinterpret_cast<const IPC_Disk_Open_Reply *>(tt);
+    auto task_group_id = reply->task_group_id;
+    auto disk_id       = reply->disk_id;
+
+    auto it = index_by_port.find({task_group_id, disk_id});
+    if (it == index_by_port.end()) {
+        printf("[blockd] Disk open reply for unknown disk %" PRIu64 " %" PRIu64 "\n", task_group_id,
+               disk_id);
+        return;
+    }
+
+    auto &disk = disks[it->second];
+
+    // TODO: Verify that the sender is the driver
+    (void)desc;
+
+    auto open_task_group = reply->disk_consumer_id;
+    Disk::tree::RBTreeIterator t;
+    while ((t = disk.open_awaiters.find(open_task_group)) != disk.open_awaiters.end()) {
+        t->reply  = reply;
+        t->opened = true;
+        disk.open_awaiters.erase(t);
+        t->h.resume();
+    }
+}
+
+ReadAwaiter read_disk(Disk &disk, uint64_t from_sector, uint64_t sector_count)
+{
+    return ReadAwaiter(disk, from_sector, sector_count);
+}
+
 void DiskOpenAwaiter::await_suspend(std::coroutine_handle<> h_)
 {
     h = h_;
     disk->open_awaiters.insert(this);
+}
+
+pmos::async::detached_task probe_partitions(size_t disk_idx)
+{
+    auto &disk  = disks[disk_idx];
+    // Read partition table
+    auto object = co_await read_disk(disk, 0, 2);
+
+    printf("Mem object: %lu\n", object);
 }
 
 pmos::async::detached_task register_disk(char *i, Message_Descriptor d)
@@ -188,9 +297,15 @@ pmos::async::detached_task register_disk(char *i, Message_Descriptor d)
 
         guard.dismiss();
 
-        auto open_reply = co_await open_disk(disk, group_id);
+        auto open_reply = co_await open_disk(disk, pmos_process_task_group());
 
-        printf("[blockd] Disk %lu opened: %i\n", disk_id, open_reply->result_code);
+        if (open_reply->result_code != 0) {
+            printf("[blockd] Disk %" PRIu64 " open failed: %i\n", disk_id, open_reply->result_code);
+            co_return;
+        }
+        printf("[blockd] Disk %" PRIu64 " opened\n", disk_id);
+
+        probe_partitions(index);
 
         co_return;
     } catch (std::system_error &e) {
@@ -218,6 +333,9 @@ int main()
         switch (ipc_msg->type) {
         case IPC_Disk_Register_NUM:
             register_disk(msg_buff.get(), msg);
+            break;
+        case IPC_Disk_Open_Reply_NUM:
+            disk_open_msg(msg_buff.get(), msg);
             break;
         default:
             printf("Received message of type %d\n", ipc_msg->type);
