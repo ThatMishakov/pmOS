@@ -34,6 +34,7 @@
 #include <lib/vector.hh>
 #include <memory/rcu.hh>
 #include <pmos/containers/intrusive_bst.hh>
+#include <pmos/containers/intrusive_list.hh>
 #include <pmos/containers/map.hh>
 #include <types.hh>
 #include <utils.hh>
@@ -47,8 +48,14 @@ struct Generic_Port {
 };
 
 struct Message {
+    pmos::containers::DoubleListHead<Message> list_node;
     u64 task_id_from = 0;
     klib::vector<char> content;
+
+    Message(u64 task_id_from, klib::vector<char> content)
+        : task_id_from(task_id_from), content(klib::move(content))
+    {
+    }
 
     inline size_t size() const { return content.size(); }
 
@@ -73,24 +80,25 @@ public:
 
     Port(TaskDescriptor *owner, u64 portno);
 
-    kresult_t enqueue(const klib::shared_ptr<Message> &msg);
+    kresult_t enqueue(klib::unique_ptr<Message> msg);
 
     kresult_t send_from_system(klib::vector<char> &&msg);
     kresult_t send_from_system(const char *msg, size_t size);
 
     // Returns true if successfully sent, false otherwise (e.g. when it is needed to repeat the
     // syscall). Throws on crytical errors
-    ReturnStr<bool> send_from_user(TaskDescriptor *sender, const char *unsafe_user_ptr, size_t msg_size);
+    ReturnStr<bool> send_from_user(TaskDescriptor *sender, const char *unsafe_user_ptr,
+                                   size_t msg_size);
     kresult_t atomic_send_from_system(const char *msg, size_t size);
 
     // Returns true if successfully sent, false otherwise (e.g. when it is needed to repeat the
     // syscall). Throws on crytical errors
     ReturnStr<bool> atomic_send_from_user(TaskDescriptor *sender, const char *unsafe_user_message,
-                               size_t msg_size);
+                                          size_t msg_size);
 
     void change_return_upon_unblock(TaskDescriptor *task);
 
-    klib::shared_ptr<Message> &get_front();
+    Message *get_front();
     void pop_front() noexcept;
     bool is_empty() const noexcept;
 
@@ -114,8 +122,10 @@ public:
 
     /// Deletes the port. Returns false if the port is already deleted
     bool delete_self() noexcept;
+
 protected:
-    using Message_storage = klib::list<klib::shared_ptr<Message>>;
+    using Message_storage =
+        pmos::containers::InitializedCircularDoubleList<Message, &Message::list_node>;
     Message_storage msg_queue;
 
     union {

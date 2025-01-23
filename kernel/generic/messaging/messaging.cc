@@ -83,12 +83,11 @@ kresult_t Port::atomic_send_from_system(const char *msg_ptr, uint64_t size)
     return send_from_system(msg_ptr, size);
 }
 
-kresult_t Port::enqueue(const klib::shared_ptr<Message> &msg)
+kresult_t Port::enqueue(klib::unique_ptr<Message> msg)
 {
     assert(lock.is_locked() && "Spinlock not locked!");
 
-    if (msg_queue.push_back(msg) == msg_queue.end())
-        return -ENOMEM;
+    msg_queue.push_back(msg.release());
 
     unblock_if_needed(owner, this);
     return 0;
@@ -98,12 +97,12 @@ kresult_t Port::send_from_system(klib::vector<char> &&v)
 {
     assert(lock.is_locked() && "Spinlock not locked!");
 
-    klib::shared_ptr<Message> ptr =
-        klib::make_shared<Message>(0, klib::forward<klib::vector<char>>(v));
+    auto ptr =
+        klib::make_unique<Message>(0, klib::forward<klib::vector<char>>(v));
     if (!ptr)
         return -ENOMEM;
 
-    return enqueue(ptr);
+    return enqueue(klib::move(ptr));
 }
 
 kresult_t Port::send_from_system(const char *msg_ptr, uint64_t size)
@@ -130,12 +129,12 @@ ReturnStr<bool> Port::send_from_user(TaskDescriptor *sender, const char *unsafe_
     if (!result.success() || !result.val)
         return result;
 
-    klib::shared_ptr<Message> ptr =
-        klib::make_shared<Message>(sender->task_id, klib::forward<klib::vector<char>>(message));
+    auto ptr =
+        klib::make_unique<Message>(sender->task_id, klib::forward<klib::vector<char>>(message));
     if (!ptr)
         return Error(-ENOMEM);
 
-    auto r = enqueue(ptr);
+    auto r = enqueue(klib::move(ptr));
     if (not r)
         return Error(r);
 
@@ -153,14 +152,14 @@ ReturnStr<bool> Port::atomic_send_from_user(TaskDescriptor *sender, const char *
     if (!result.success() || !result.val)
         return result;
 
-    klib::shared_ptr<Message> ptr =
-        klib::make_shared<Message>(sender->task_id, klib::forward<klib::vector<char>>(message));
+    auto ptr =
+        klib::make_unique<Message>(sender->task_id, klib::forward<klib::vector<char>>(message));
     if (!ptr)
         return Error(-ENOMEM);
 
     Auto_Lock_Scope scope_lock(lock);
 
-    auto r = enqueue(ptr);
+    auto r = enqueue(klib::move(ptr));
     if (not r)
         return Error(r);
 
@@ -170,8 +169,10 @@ ReturnStr<bool> Port::atomic_send_from_user(TaskDescriptor *sender, const char *
 void Port::pop_front() noexcept
 {
     assert(lock.is_locked() && "Spinlock not locked!");
-
-    return msg_queue.pop_front();
+    assert(not msg_queue.empty());
+    auto begin = msg_queue.begin();
+    msg_queue.remove(begin);
+    delete &*begin;
 }
 
 bool Port::is_empty() const noexcept
@@ -181,11 +182,11 @@ bool Port::is_empty() const noexcept
     return msg_queue.empty();
 }
 
-klib::shared_ptr<Message> &Port::get_front()
+Message *Port::get_front()
 {
     assert(lock.is_locked() && "Spinlock not locked!");
 
-    return msg_queue.front();
+    return &msg_queue.front();
 }
 
 bool Port::delete_self() noexcept

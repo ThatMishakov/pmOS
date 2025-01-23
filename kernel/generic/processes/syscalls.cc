@@ -356,7 +356,7 @@ void syscall_get_first_message()
         return;
     }
 
-    klib::shared_ptr<Message> top_message;
+    Message *top_message = nullptr;
 
     {
         Auto_Lock_Scope scope_lock(port->lock);
@@ -372,17 +372,20 @@ void syscall_get_first_message()
         }
 
         top_message = port->get_front();
+    }
 
-        syscall_success(current);
-        auto result = top_message->copy_to_user_buff((char *)buff);
-        if (!result.success()) {
-            syscall_error(current) = result.result;
-            return;
-        }
+    syscall_success(current);
+    auto result = top_message->copy_to_user_buff((char *)buff);
+    if (!result.success()) {
+        syscall_error(current) = result.result;
+        return;
+    }
 
-        if (not result.val)
-            return;
+    if (not result.val)
+        return;
 
+    {
+        Auto_Lock_Scope scope_lock(port->lock);
         if (!(args & MSG_ARG_NOPOP)) {
             port->pop_front();
         }
@@ -437,7 +440,7 @@ void syscall_get_message_info()
         return;
     }
 
-    klib::shared_ptr<Message> msg;
+    Message *msg{};
 
     {
         Auto_Lock_Scope lock(port->lock);
@@ -1602,7 +1605,7 @@ void syscall_set_affinity()
         }
 
         syscall_return(current_task) = task->cpu_affinity;
-        task->cpu_affinity   = cpu;
+        task->cpu_affinity           = cpu;
     } else {
         if (not task->can_be_rebound()) {
             syscall_return(current_task) = -EPERM;
@@ -1627,7 +1630,7 @@ void syscall_set_affinity()
         } else {
             Auto_Lock_Scope lock(task->sched_lock);
             syscall_return(current_task) = task->cpu_affinity;
-            task->cpu_affinity   = cpu;
+            task->cpu_affinity           = cpu;
         }
     }
 
