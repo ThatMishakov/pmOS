@@ -237,7 +237,7 @@ void handle_disk_read_error(pmos_port_t port, int result, uint64_t user_arg)
 
 pmos::async::detached_task handle_disk_read(const Message_Descriptor &d, IPC_Disk_Read request)
 {
-    if (!sender_is_of_group(request.task_group_id, d)) {
+    if (!sender_is_of_group(request.disk_consumer_id, d)) {
         handle_disk_read_error(request.reply_port, -EPERM, request.user_arg);
         co_return;
     }
@@ -251,7 +251,7 @@ pmos::async::detached_task handle_disk_read(const Message_Descriptor &d, IPC_Dis
         co_return;
     }
 
-    auto it = handler->task_group_tree.find(request.task_group_id);
+    auto it = handler->task_group_tree.find(request.disk_consumer_id);
     if (it == handler->task_group_tree.end()) {
         handle_disk_read_error(request.reply_port, -EPERM, request.user_arg);
         co_return;
@@ -265,7 +265,7 @@ pmos::async::detached_task handle_disk_read(const Message_Descriptor &d, IPC_Dis
         co_return;
     }
 
-    if (sector_start > handler->get_sector_count() || (sector_start <= UINT64_MAX - sector_count) ||
+    if (sector_start > handler->get_sector_count() || (sector_start > UINT64_MAX - sector_count) ||
         sector_start + sector_count > handler->get_sector_count()) {
         handle_disk_read_error(request.reply_port, -E2BIG, request.user_arg);
         co_return;
@@ -289,6 +289,7 @@ pmos::async::detached_task handle_disk_read(const Message_Descriptor &d, IPC_Dis
 
         auto [result, phys_addr] = get_page_phys_address_from_object(object, 0, 0);
         if (result != SUCCESS) {
+            printf("Error reading page from object\n");
             handle_disk_read_error(request.reply_port, -result, request.user_arg);
             co_return;
         }
@@ -363,10 +364,13 @@ pmos::async::detached_task handle_disk_read(const Message_Descriptor &d, IPC_Dis
                 handle_disk_read_error(request.reply_port, -EIO, request.user_arg);
                 co_return;
             }
+
+            bytes_read = pushed_max_offset;
         }
 
         printf("Disk read successfully\n");
     } catch (const std::system_error &e) {
+        printf("Error reading disk: %s\n", e.what());
         handle_disk_read_error(request.reply_port, -e.code().value(), request.user_arg);
     }
 }

@@ -188,7 +188,8 @@
         "syncstream": "cpp",
         "typeindex": "cpp",
         "__availability": "cpp",
-        "mdspan": "c"
+        "mdspan": "c",
+        "ranges": "cpp"
     },
     "cmake.configureOnOpen": false,
     "C_Cpp.default.compilerPath": "/home/misha/cross/bin/clang",
