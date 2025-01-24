@@ -309,6 +309,8 @@ static uacpi_status handle_power_button_event(uacpi_handle ctx, uacpi_namespace_
     printf("Power button event\n");
 
     handle_power_button(NULL);
+
+    return UACPI_STATUS_OK;
 }
 
 static uacpi_iteration_decision power_button_uacpi_stuff(void* ctx, uacpi_namespace_node *node, uint32_t depth) {
