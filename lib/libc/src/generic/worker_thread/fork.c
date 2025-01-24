@@ -178,8 +178,8 @@ void __libc_fork_inner(uint64_t requester, pmos_port_t reply_port, unsigned long
     }
 
     // Fire new process
-    r.result = syscall_start_process(child_tid, (uint64_t)&__fork_child_entry_point,
-                                     (uint64_t)sp, 0, 0);
+    r.result = syscall_start_process(child_tid, (unsigned long)&__fork_child_entry_point,
+                                     (unsigned long)sp, 0, 0);
     if (r.result != 0) {
         syscall_kill_task(child_tid);
         child_pid = r.result;

@@ -8,6 +8,7 @@
 #include <sys/mman.h>
 #include <system_error>
 #include <errno.h>
+#include <stdlib.h>
 
 extern pmos_port_t devicesd_port;
 extern pmos_port_t cmd_port;

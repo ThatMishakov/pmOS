@@ -235,7 +235,7 @@ typedef struct {
     unsigned long recursive_lock_count;
     int type;
 #ifdef __i386__
-} pthread_mutex_t __attribute__((aligned(64)));
+} pthread_mutex_t __attribute__((aligned(8)));
 #else
 } pthread_mutex_t;
 #endif

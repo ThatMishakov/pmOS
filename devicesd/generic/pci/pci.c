@@ -321,7 +321,7 @@ struct PCIGroup *groups = NULL;
 
 void init_pci()
 {
-    printf("Iitializing PCI...\n");
+    printf("Initializing PCI...\n");
 
     MCFG *t = (MCFG *)get_table("MCFG", 0);
     if (!t) {

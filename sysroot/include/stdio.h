@@ -43,7 +43,7 @@
 extern "C" {
 #endif
 
-typedef unsigned long pmos_port_t;
+typedef uint64_t pmos_port_t;
 
 // FILE * is actually POSIX file descriptor (int)
 typedef struct _FILE {

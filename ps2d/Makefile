@@ -24,6 +24,10 @@ CPPFLAGS = $(TARGETFLAGS) $(INTERNALCFLAGS) $(USERCFLAGS) -MMD -MP
 ASMFLAGS = $(TARGETFLAGS) -I$(INCLUDEDIR)
 LDFLAGS = $(TARGETFLAGS) $(INTERNALLDFLAGS)
 
+ifneq ($(filter i%86 x86,$(ARCH)),)
+	LDFLAGS += -lclang_rt.builtins-i386
+endif
+
 # Internal link flags that should not be changed by the user.
 INTERNALLDFLAGS :=
  

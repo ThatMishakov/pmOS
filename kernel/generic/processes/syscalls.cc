@@ -1561,7 +1561,12 @@ void syscall_request_timer()
 
     u64 port     = syscall_arg64(task, 0);
     u64 timeout  = syscall_arg64(task, 1);
-    u64 user_arg = syscall_arg64(task, 2);
+    u64 user_arg;
+    auto result = syscall_arg64_checked(task, 2, user_arg);
+    if (!result.success()) {
+        syscall_error(task) = result.result;
+        return;
+    }
 
     const auto port_ptr = Port::atomic_get_port(port);
     if (!port_ptr) {

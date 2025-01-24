@@ -52,11 +52,10 @@
 #define __DECLARE_PTHREAD_COND_T
 #define __DECLARE_INO_T
 #define __DECLARE_NLINK_T
+#define __DECLARE_FSFILCNT_T
+#define __DECLARE_FSBLKCNT_T
 
 #include "../__posix_types.h"
-
-typedef unsigned long fsblkcnt_t;
-typedef unsigned long fsfilcnt_t;
 
 typedef unsigned long key_t;
 

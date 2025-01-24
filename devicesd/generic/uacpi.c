@@ -279,7 +279,8 @@ void uacpi_kernel_reset_event(uacpi_handle handle)
     pthread_mutex_unlock(&event->mutex);
 }
 
-uacpi_status uacpi_kernel_pci_device_open(uacpi_pci_address address, uacpi_handle *out_handle) {
+uacpi_status uacpi_kernel_pci_device_open(uacpi_pci_address address, uacpi_handle *out_handle)
+{
     struct PCIGroup *g = pci_group_find(address.segment);
     if (g == NULL)
         return UACPI_STATUS_NOT_FOUND;
@@ -294,14 +295,14 @@ uacpi_status uacpi_kernel_pci_device_open(uacpi_pci_address address, uacpi_handl
 uacpi_status uacpi_kernel_pci_read8(uacpi_handle device, uacpi_size offset, uacpi_u8 *value)
 {
     uint32_t v = pci_read_register(device, offset / 4);
-    *value = (v >> ((offset % 4) * 8)) & 0xFF;
+    *value     = (v >> ((offset % 4) * 8)) & 0xFF;
     return UACPI_STATUS_OK;
 }
 
 uacpi_status uacpi_kernel_pci_read16(uacpi_handle device, uacpi_size offset, uacpi_u16 *value)
 {
     uint32_t v = pci_read_register(device, offset / 4);
-    *value = (v >> ((offset % 4) * 8)) & 0xFFFF;
+    *value     = (v >> ((offset % 4) * 8)) & 0xFFFF;
     return UACPI_STATUS_OK;
 }
 
@@ -386,6 +387,51 @@ uacpi_status uacpi_kernel_raw_io_write(uacpi_io_addr address, uacpi_u8 byte_widt
     (void)address, (void)byte_width, (void)value;
     return UACPI_STATUS_UNIMPLEMENTED;
 #endif
+}
+
+uacpi_status uacpi_kernel_pci_read(uacpi_handle c, uacpi_size offset,
+                                   uacpi_u8 byte_width, uacpi_u64 *value)
+{
+    uint32_t v = pci_read_register(c, offset / 4);
+    switch (byte_width) {
+    case 1:
+        *value = (v >> ((offset % 4) * 8)) & 0xFF;
+        break;
+    case 2:
+        *value = (v >> ((offset % 4) * 8)) & 0xFFFF;
+        break;
+    case 4:
+        *value = v;
+        break;
+    default:
+        return UACPI_STATUS_INVALID_ARGUMENT;
+    }
+
+    return UACPI_STATUS_OK;
+}
+
+uacpi_status uacpi_kernel_pci_write(uacpi_handle c, uacpi_size offset,
+                                    uacpi_u8 byte_width, uacpi_u64 value)
+{
+    uint32_t v = pci_read_register(c, offset / 4);
+    switch (byte_width) {
+    case 1:
+        v &= ~(0xFF << ((offset % 4) * 8));
+        v |= (value & 0xFF) << ((offset % 4) * 8);
+        break;
+    case 2:
+        v &= ~(0xFFFF << ((offset % 4) * 8));
+        v |= (value & 0xFFFF) << ((offset % 4) * 8);
+        break;
+    case 4:
+        v = value;
+        break;
+    default:
+        return UACPI_STATUS_INVALID_ARGUMENT;
+    }
+
+    pci_write_register(c, offset / 4, v);
+    return UACPI_STATUS_OK;
 }
 
 uacpi_status uacpi_kernel_io_map(uacpi_io_addr base, uacpi_size len, uacpi_handle *out_handle)

@@ -48,10 +48,7 @@
 
 #define PTHREAD_CANCELLED (-1)
 
-#define PTHREAD_COND_INITIALIZER \
-    {                            \
-        NULL, NULL, 0            \
-    }
+#define PTHREAD_COND_INITIALIZER {NULL, NULL, 0}
 
 #define PTHREAD_CREATE_JOINABLE (0x00)
 #define PTHREAD_CREATE_DETACHED (0x01)
@@ -59,8 +56,15 @@
 #define PTHREAD_INHERIT_SCHED  (0x01)
 #define PTHREAD_EXPLICIT_SCHED (0x02)
 
-#define PTHREAD_MUTEX_INITIALIZER ((pthread_mutex_t) {0x00})
-#define PTHREAD_ONCE_INIT         ((pthread_once_t)(0x00))
+#define PTHREAD_MUTEX_INITIALIZER                     \
+    ((pthread_mutex_t) {.block_count          = 0x00, \
+                        .blocking_thread_id   = 0,    \
+                        .waiters_list_head    = NULL, \
+                        .waiters_list_tail    = NULL, \
+                        .recursive_lock_count = 0,    \
+                        .type                 = 0})
+
+#define PTHREAD_ONCE_INIT ((pthread_once_t)(0x00))
 
 #define PTHREAD_MUTEX_NORMAL     (0x01)
 #define PTHREAD_MUTEX_ERRORCHECK (0x02)
@@ -74,11 +78,14 @@
 #define PTHREAD_PROCESS_PRIVATE (0x01)
 #define PTHREAD_PROCESS_SHARED  (0x02)
 
-#define PTHREAD_RWLOCK_INITIALIZER                           \
-    {                                                        \
-        PTHREAD_COND_INITIALIZER, PTHREAD_MUTEX_INITIALIZER, \
-                                                             \
-            0, 0, 0,                                         \
+#define PTHREAD_RWLOCK_INITIALIZER \
+    {                              \
+        PTHREAD_COND_INITIALIZER,  \
+        PTHREAD_MUTEX_INITIALIZER, \
+                                   \
+        0,                         \
+        0,                         \
+        0,                         \
     }
 
 #define PTHREAD_SCOPE_PROCESS (0x01);
