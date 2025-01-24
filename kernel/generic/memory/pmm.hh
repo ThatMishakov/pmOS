@@ -120,7 +120,7 @@ struct Page_Descriptor {
     void release_taken_out_page();
 
     /// Returns the physical address of the page pointer by this page descriptor
-    Page::page_addr_t get_phys_addr() noexcept;
+    Page::page_addr_t get_phys_addr() const noexcept;
 
     /// Creates a page descriptor from the pointer to the page, taking ownerhip of it
     static Page_Descriptor from_raw_ptr(Page *p) noexcept { return Page_Descriptor(p); }

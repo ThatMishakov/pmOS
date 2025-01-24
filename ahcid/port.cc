@@ -3,8 +3,8 @@
 #include "device.hh"
 
 #include <cassert>
-#include <stdio.h>
 #include <sched.h>
+#include <stdio.h>
 
 pmos::async::task<Command> Command::prepare(AHCIPort &port)
 {
@@ -66,6 +66,14 @@ pmos::async::task<Command::Result> Command::execute(uint8_t command, int timeout
     str.command            = command;
     str.device             = 1 << 6;
     str.c                  = 1;
+    str.countl             = sector_count & 0xff;
+    str.counth             = (sector_count >> 8) & 0xff;
+    str.lba0               = sector & 0xff;
+    str.lba1               = (sector >> 8) & 0xff;
+    str.lba2               = (sector >> 16) & 0xff;
+    str.lba3               = (sector >> 24) & 0xff;
+    str.lba4               = (sector >> 32) & 0xff;
+    str.lba5               = (sector >> 40) & 0xff;
 
     auto *fis = (FIS_Host_To_Device *)(parent->dma_virt_base +
                                        parent->command_table_offset / sizeof(uint32_t) +

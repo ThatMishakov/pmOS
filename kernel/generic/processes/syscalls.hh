@@ -227,6 +227,9 @@ void syscall_unmap_range();
 void syscall_get_page_address();
 // Parameters: u64 task_id, u64 page_base, u64 flags
 
+void syscall_get_page_address_from_object();
+// Parameters: u64 object_id, u64 offset, u64 flags
+
 struct SyscallRetval {
     TaskDescriptor *task;
     u64 operator=(u64 value);

@@ -69,8 +69,9 @@ klib::shared_ptr<Mem_Object> Mem_Object::create(u64 page_size_log, u64 size_page
         return nullptr;
 
     if (flags & FLAG_DMA) {
+        bool continuous = !(flags & FLAG_ALLOW_DISCONTINUOUS);
         auto count      = size_pages;
-        pmm::Page *page = pmm::alloc_pages(count, true);
+        pmm::Page *page = pmm::alloc_pages(count, continuous);
         if (page == nullptr)
             return nullptr;
 
@@ -78,8 +79,17 @@ klib::shared_ptr<Mem_Object> Mem_Object::create(u64 page_size_log, u64 size_page
         assert(page->pending_alloc_head.size_pages == count);
         assert(!(page->flags & pmm::Page::FLAG_NO_PAGE));
 
-        for (size_t i = 0; i < count; ++i) {
-            auto current = page + i;
+        for (u64 i = 0; i < count; ++i) {
+            auto current = page;
+            if (page->pending_alloc_head.size_pages > 1) {
+                auto next = page + 1;
+                *next = *page;
+                next->pending_alloc_head.size_pages--;
+                next->pending_alloc_head.phys_addr += PAGE_SIZE;
+                page = next;
+            } else {
+                page = page->pending_alloc_head.next;
+            }
 
             current->type       = pmm::Page::PageType::Allocated;
             current->l.refcount = 1;

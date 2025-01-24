@@ -51,8 +51,8 @@ typedef struct IPC_Reg_Int {
     uint32_t flags;
     uint32_t intno;
     uint32_t int_flags;
-    #define INTERRUPT_FLAG_LEVEL_TRIGGERED 0x1
-    #define INTERRUPT_FLAG_ACTIVE_LOW      0x2
+#define INTERRUPT_FLAG_LEVEL_TRIGGERED 0x1
+#define INTERRUPT_FLAG_ACTIVE_LOW      0x2
     uint64_t dest_task;
     uint64_t dest_chan;
     uint64_t reply_chan;
@@ -192,12 +192,11 @@ typedef struct IPC_Request_PCI_Device_Reply {
     uint32_t type; // IPC_Request_PCI_Device_Reply_NUM
     uint16_t flags;
     int16_t type_error; // Negative value on error, type of the device otherwise
-    #define IPC_PCI_ACCESS_TYPE_MMIO 0x01
-    #define IPC_PCI_ACCESS_TYPE_IO   0x02
+#define IPC_PCI_ACCESS_TYPE_MMIO 0x01
+#define IPC_PCI_ACCESS_TYPE_IO   0x02
 
     uint64_t base_address;
 } IPC_Request_PCI_Device_Reply;
-
 
 #define IPC_Request_PCI_Device_GSI_NUM 0x0C
 typedef struct IPC_Request_PCI_Device_GSI {
@@ -226,7 +225,7 @@ typedef struct IPC_Request_PCI_Device_GSI_Reply {
 typedef struct IPC_Register_PCI_Interrupt {
     uint32_t type;
     uint16_t flags;
-    
+
     uint16_t group;
     uint8_t bus;
     uint8_t device;
@@ -1028,7 +1027,7 @@ typedef struct IPC_Disk_Open {
 
     /// Flags changing the behaviour
     uint32_t flags;
-    #define IPC_DISK_OPEN_FLAG_CLOSE 0x01
+#define IPC_DISK_OPEN_FLAG_CLOSE 0x01
 
     /// Port where the reply will be sent
     pmos_port_t reply_port;
@@ -1043,8 +1042,37 @@ typedef struct IPC_Disk_Open {
     uint64_t disk_consumer_id;
 } IPC_Disk_Open;
 
-#define IPC_Disk_Read_NUM 0xF2
-#define IPC_Disk_Write_NUM 0xF3
+#define IPC_Disk_Read_NUM   0xF2
+typedef struct IPC_Disk_Read {
+    /// Message type (must be IPC_Disk_Read_NUM)
+    uint32_t type;
+
+    /// Flags changing the behaviour
+    uint32_t flags;
+
+    /// ID of the disk
+    uint64_t disk_id;
+
+    /// ID of the disk driver task group
+    uint64_t task_group_id;
+
+    /// ID of the disk consumer
+    uint64_t disk_consumer_id;
+
+    /// Starting sector
+    uint64_t start_sector;
+
+    /// Number of sectors to read
+    uint64_t sector_count;
+
+    /// Port where the reply will be sent
+    pmos_port_t reply_port;
+
+    /// User argument (sent back in the reply)
+    uint64_t user_arg;
+} IPC_Disk_Read;
+
+#define IPC_Disk_Write_NUM  0xF3
 #define IPC_Disk_Notify_NUM 0xF4
 
 #define IPC_Disk_Register_Reply_NUM 0xF8
@@ -1091,6 +1119,21 @@ typedef struct IPC_Disk_Open_Reply {
     /// ID of the disk consumer
     uint64_t disk_consumer_id;
 } IPC_Disk_Open_Reply;
+
+#define IPC_Disk_Read_Reply_NUM 0xFA
+typedef struct IPC_Disk_Read_Reply {
+    /// Message type (must be IPC_Disk_Read_Reply_NUM)
+    uint32_t type;
+
+    /// Flags
+    uint16_t flags;
+
+    /// Result code indicating the outcome of the read operation
+    int16_t result_code;
+
+    /// User argument (sent back in the reply)
+    uint64_t user_arg;
+} IPC_Disk_Read_Reply;
 
 #define IPC_Thread_Finished_NUM 0x100
 /// @brief Message sent by the thread to the one calling pthread_join() when notifing that it has
@@ -1183,9 +1226,9 @@ typedef struct IPC_Exit {
 
     /// Exit type
     uint32_t exit_type;
-    #define IPC_EXIT_TYPE_NORMAL   0
-    #define IPC_EXIT_TYPE_PTHREAD  1
-    #define IPC_EXIT_TYPE_ABNORMAL 2
+#define IPC_EXIT_TYPE_NORMAL   0
+#define IPC_EXIT_TYPE_PTHREAD  1
+#define IPC_EXIT_TYPE_ABNORMAL 2
 
     /// Exit code
     void *exit_code;
@@ -1254,7 +1297,7 @@ typedef struct IPC_Register_Process_Reply {
 
     /// Flags
     uint32_t flags;
-    #define REGISTER_PROCESS_REPLY_FLAG_EXISITING 0x01
+#define REGISTER_PROCESS_REPLY_FLAG_EXISITING 0x01
 
     /// Result code
     int64_t result;
@@ -1270,9 +1313,9 @@ typedef struct IPC_PID_For_Task {
 
     /// Flags
     uint32_t flags;
-    #define PID_FOR_TASK_WAIT_TO_APPEAR 0x01
-    #define PID_FOR_TASK_PARENT_PID    0x02
-    #define PID_FOR_TASK_GROUP_ID      0x04
+#define PID_FOR_TASK_WAIT_TO_APPEAR 0x01
+#define PID_FOR_TASK_PARENT_PID     0x02
+#define PID_FOR_TASK_GROUP_ID       0x04
 
     /// Port for the reply
     pmos_port_t reply_port;
@@ -1368,7 +1411,7 @@ typedef struct IPC_Raise_Signal {
 
     /// Flags
     uint32_t flags;
-    #define RAISE_SIGNAL_DONT_REPLY 0x01
+#define RAISE_SIGNAL_DONT_REPLY 0x01
 
     /// Port for the reply
     pmos_port_t reply_port;
@@ -1417,7 +1460,7 @@ typedef struct IPC_Preregister_Process_Reply {
 
     /// Flags
     uint32_t flags;
-    
+
     /// Result code (if negative) or PID (if positive)
     int64_t result;
 } IPC_Preregister_Process_Reply;

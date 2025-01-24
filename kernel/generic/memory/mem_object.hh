@@ -56,8 +56,9 @@ class Port;
 class Mem_Object: public klib::enable_shared_from_this<Mem_Object>
 {
 public:
-    static constexpr int FLAG_ANONYMOUS = 1 << 0;
-    static constexpr int FLAG_DMA       = 1 << 1;
+    static constexpr int FLAG_ANONYMOUS           = 1 << 0;
+    static constexpr int FLAG_DMA                 = 1 << 1;
+    static constexpr int FLAG_ALLOW_DISCONTINUOUS = 1 << 3;
 
     /// Type for identifying memory objectrs
     using id_type = u64;
@@ -206,7 +207,8 @@ public:
     bool is_anonymous() const { return flags & FLAG_ANONYMOUS; }
     bool is_dma() const { return flags & FLAG_DMA; }
 
-    void atomic_remove_anonymous_page(kernel::pmm::Page *page);	
+    void atomic_remove_anonymous_page(kernel::pmm::Page *page);
+
 protected:
     Mem_Object() = delete;
 

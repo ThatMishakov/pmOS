@@ -23,7 +23,7 @@ struct FIS_Host_To_Device {
     uint8_t featureh {};
 
     uint8_t countl {};
-    uint8_t count2 {};
+    uint8_t counth {};
     uint8_t icc {};
     uint8_t control {};
 
@@ -51,7 +51,7 @@ struct [[gnu::packed]] FIS_Device_To_Host {
     uint8_t rsv2;
 
     uint8_t countl;
-    uint8_t count2;
+    uint8_t counth;
     uint8_t rsv3[2];
 
     uint8_t rsv4[4];
@@ -176,6 +176,8 @@ struct PRDT {
     uint32_t data_base_count : 22 {};
     uint32_t rsv1 : 9 {};
     uint32_t interrupt_on_completion : 1 {};
+
+    static constexpr uint32_t MAX_BYTES = 1 << 23;
 };
 
 struct IDENTIFYData {

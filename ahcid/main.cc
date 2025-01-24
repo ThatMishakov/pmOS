@@ -632,6 +632,11 @@ void ahci_controller_main()
 
             handle_disk_open(desc, msg);
         } break;
+        case IPC_Disk_Read_NUM: {
+            auto msg = (IPC_Disk_Read *)request;
+
+            handle_disk_read(desc, *msg);
+        } break;
         default:
             printf("AHCId unknown message type: %i\n", request->type);
             break;

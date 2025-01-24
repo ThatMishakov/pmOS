@@ -533,3 +533,9 @@ Page *kernel::pmm::alloc_pages(size_t count, bool /* contiguous */) noexcept
 }
 
 Page_Descriptor::operator bool() const noexcept { return page_struct_ptr != nullptr; }
+
+Page::page_addr_t Page_Descriptor::get_phys_addr() const noexcept
+{
+    assert(page_struct_ptr);
+    return page_struct_ptr->get_phys_addr();
+}

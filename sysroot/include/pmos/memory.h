@@ -59,8 +59,13 @@ typedef struct phys_addr_request_t {
 /// pmOS memory object identificator
 typedef unsigned long mem_object_t;
 
-#define SEGMENT_FS 1
-#define SEGMENT_GS 2
+typedef struct mem_object_request_ret_t {
+    result_t result;
+    mem_object_t object_id;
+} mem_object_request_ret_t;
+
+#define SEGMENT_FS   1
+#define SEGMENT_GS   2
 #define GENERAL_REGS 3
 
 struct task_register_set {
@@ -100,8 +105,9 @@ struct task_register_set {
 
 #define CREATE_FLAG_FIXED 0x08
 // Allocates contiguous memory suitable for DMA, and maps it as NC
-#define CREATE_FLAG_DMA   0x10
-#define CREATE_FLAG_COW   0x20
+#define CREATE_FLAG_DMA                 0x10
+#define CREATE_FLAG_COW                 0x20
+#define CREATE_FLAG_ALLOW_DISCONTINUOUS 0x40
 
 #ifdef __STDC_HOSTED__
 /// @brief Creates a normal page region
@@ -140,6 +146,14 @@ mem_request_ret_t create_normal_region(uint64_t pid, void *addr_start, size_t si
  */
 mem_request_ret_t create_phys_map_region(uint64_t pid, void *addr_start, size_t size,
                                          uint32_t access, uint64_t phys_addr);
+
+/**
+ * @brief Creates a memory object
+ * @param size The size of the memory object in bytes. The size must be page-alligned.
+ * @param flags Flags for the memory object. Takes FLAG_ANONYMOUS, FLAG_DMA and
+ * FLAG_ALLOW_DISCONTINUOUS
+ */
+mem_object_request_ret_t create_mem_object(size_t size, uint32_t flags);
 
 /**
  * @brief Maps a memory object to the new region.
@@ -188,7 +202,11 @@ result_t release_region(uint64_t pid, void *region);
 
 result_t release_memory_range(uint64_t pid, void *start, size_t len);
 
+result_t release_mem_object(mem_object_t object_id, unsigned flags);
+
 phys_addr_request_t get_page_phys_address(uint64_t task_id, void *region, uint64_t flags);
+phys_addr_request_t get_page_phys_address_from_object(mem_object_t object_id, uint64_t offset,
+                                                      unsigned flags);
 
 typedef uint64_t pmos_pagetable_t;
 typedef struct page_table_req_ret_t {
@@ -210,7 +228,8 @@ page_table_req_ret_t get_page_table(uint64_t pid);
  *        it must not be running at the time. Otherwise, the behaviour is undefined.
  *
  * @param pid The PID of the target task. Can take TASK_ID_SELF (0).
- * @param register_set The desired registers, defined by SEGMENT_FS and SEGMENT_GS and GENERAL_REGS constants
+ * @param register_set The desired registers, defined by SEGMENT_FS and SEGMENT_GS and GENERAL_REGS
+ * constants
  * @param addr The pointer to the segment, or to the array holding the registers.
  * @return result_t The result of the operation.
  */
@@ -222,7 +241,8 @@ result_t set_registers(uint64_t pid, unsigned register_set, void *addr);
  *        segment for self is always allowed.
  *
  * @param pid The PID of the target task. Can take TASK_ID_SELF (0).
- * @param register_set The desired set of registers, defined by SEGMENT_FS and SEGMENT_GS and GENERAL_REGS constants
+ * @param register_set The desired set of registers, defined by SEGMENT_FS and SEGMENT_GS and
+ * GENERAL_REGS constants
  * @param addr The pointer to the segment, or to the array where the registers should be stored.
  * @return syscall_r The result of the operation. If the result is SUCCESS, the value of the segment
  * is stored in the *value* field.

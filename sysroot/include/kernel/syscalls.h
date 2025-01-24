@@ -85,6 +85,8 @@
 #define SYSCALL_PAUSE_TASK         46
 #define SYSCALL_RESUME_TASK        47
 
-#define SYSCALL_GET_PAGE_ADDRESS  48
+#define SYSCALL_GET_PAGE_ADDRESS            48
+#define RELEASE_MEM_OBJECT                  49
+#define SYSCALL_MEM_OBJECT_GET_PAGE_ADDRESS 50
 
 #endif

@@ -1,11 +1,15 @@
 #include "disk_handler.hh"
 
-#include <cinttypes>
-#include <memory>
-#include <unordered_map>
-#include <errno.h>
-#include <system_error>
+#include "port.hh"
+
 #include <cassert>
+#include <cinttypes>
+#include <errno.h>
+#include <memory>
+#include <pmos/memory.h>
+#include <pmos/utility/scope_guard.hh>
+#include <system_error>
+#include <unordered_map>
 
 extern pmos_port_t ahci_port;
 
@@ -16,6 +20,8 @@ auto new_id() { return id++; }
 
 using gptr = std::unique_ptr<TaskGroup>;
 std::unordered_map<uint64_t, gptr> groups;
+
+uint64_t align_to_page(uint64_t size) { return (size + 0xfff) & ~(uint64_t)0xfff; }
 
 DiskHandler *DiskHandler::create(int port, uint64_t sector_count, std::size_t logical_sector_size,
                                  std::size_t physical_sector_size)
@@ -180,7 +186,8 @@ TaskGroup *TaskGroup::get_or_create(uint64_t group_id)
     auto itn = groups.insert({group_id, std::make_unique<TaskGroup>(group_id)});
     assert(itn.second);
 
-    auto [result, _] = set_task_group_notifier_mask(group_id, ahci_port, NOTIFICATION_MASK_DESTROYED, 0);
+    auto [result, _] =
+        set_task_group_notifier_mask(group_id, ahci_port, NOTIFICATION_MASK_DESTROYED, 0);
     if (result != 0) {
         groups.erase(itn.first);
         throw std::system_error(-result, std::system_category());
@@ -200,4 +207,174 @@ void TaskGroup::remove()
 {
     set_task_group_notifier_mask(task_group_id, ahci_port, 0, 0);
     groups.erase(task_group_id);
+}
+
+void handle_disk_read(pmos_port_t port, uint64_t memory_object, int result, uint64_t user_arg)
+{
+    // TODO: Memory object handling
+    IPC_Disk_Read_Reply reply = {
+        .type        = IPC_Disk_Read_Reply_NUM,
+        .flags       = 0,
+        .result_code = static_cast<int16_t>(result),
+        .user_arg    = user_arg,
+    };
+
+    printf("Sending reply to disk read status %i\n", result);
+
+    auto r = send_message_port(port, sizeof(reply), (void *)&reply);
+    if (r != 0)
+        throw std::system_error(-r, std::system_category());
+}
+
+void handle_disk_read_error(pmos_port_t port, int result, uint64_t user_arg)
+{
+    try {
+        handle_disk_read(port, 0, -result, user_arg);
+    } catch (const std::exception &e) {
+        printf("Exception in handle_disk_read_error: %s\n", e.what());
+    }
+}
+
+pmos::async::detached_task handle_disk_read(const Message_Descriptor &d, IPC_Disk_Read request)
+{
+    if (!sender_is_of_group(request.task_group_id, d)) {
+        handle_disk_read_error(request.reply_port, -EPERM, request.user_arg);
+        co_return;
+    }
+
+    auto disk_id = request.disk_id;
+    DiskHandler *handler;
+    try {
+        handler = DiskHandler::get(disk_id);
+    } catch (const std::out_of_range &) {
+        handle_disk_read_error(request.reply_port, -ENOENT, request.user_arg);
+        co_return;
+    }
+
+    auto it = handler->task_group_tree.find(request.task_group_id);
+    if (it == handler->task_group_tree.end()) {
+        handle_disk_read_error(request.reply_port, -EPERM, request.user_arg);
+        co_return;
+    }
+
+    auto sector_start = request.start_sector;
+    auto sector_count = request.sector_count;
+
+    if (sector_count == 0) {
+        handle_disk_read_error(request.reply_port, -EINVAL, request.user_arg);
+        co_return;
+    }
+
+    if (sector_start > handler->get_sector_count() || (sector_start <= UINT64_MAX - sector_count) ||
+        sector_start + sector_count > handler->get_sector_count()) {
+        handle_disk_read_error(request.reply_port, -E2BIG, request.user_arg);
+        co_return;
+    }
+
+    auto size         = sector_count * handler->get_logical_sector_size();
+    auto size_aligned = align_to_page(size);
+
+    auto res = create_mem_object(size_aligned, CREATE_FLAG_DMA | CREATE_FLAG_ALLOW_DISCONTINUOUS);
+    if (res.result != SUCCESS) {
+        handle_disk_read_error(request.reply_port, res.result, request.user_arg);
+        co_return;
+    }
+
+    auto object = res.object_id;
+    pmos::utility::scope_guard guard {[=] { release_mem_object(object, 0); }};
+
+    try {
+        // Casually try to read the disk
+        uint64_t bytes_read = 0;
+
+        auto [result, phys_addr] = get_page_phys_address_from_object(object, 0, 0);
+        if (result != SUCCESS) {
+            handle_disk_read_error(request.reply_port, -result, request.user_arg);
+            co_return;
+        }
+
+        auto sector_size = handler->get_logical_sector_size();
+
+        auto page_size                = 4096; // TODO: don't hardcode this
+        phys_addr_t current_phys_addr = phys_addr;
+        uint64_t phys_addr_of_offset  = 0;
+        while (bytes_read < size) {
+            Command cmd = co_await Command::prepare(handler->get_port());
+
+            uint64_t offset            = phys_addr_of_offset;
+            uint64_t pushed_max_offset = offset;
+            uint64_t start_offset      = offset;
+            while (!cmd.prdt_full() and pushed_max_offset < size and
+                   (offset - start_offset) / sector_size < 0xffff) {
+                while (offset < size) {
+                    if (offset == phys_addr_of_offset && offset + page_size >= size) {
+                        cmd.prdt_push(
+                            {.data_base       = current_phys_addr,
+                             .rsv0            = 0,
+                             .data_base_count = static_cast<uint32_t>(size - pushed_max_offset - 1),
+                             .rsv1            = 0,
+                             .interrupt_on_completion = 1});
+                        pushed_max_offset = size;
+                        break;
+                    } else if (offset == phys_addr_of_offset) {
+                        offset += page_size;
+                    } else {
+                        auto [result, phys_addr] = get_page_phys_address_from_object(object, offset, 0);
+                        if (result != SUCCESS) {
+                            handle_disk_read_error(request.reply_port, result, request.user_arg);
+                            co_return;
+                        }
+
+                        bool too_much_for_prdt =
+                            offset - phys_addr_of_offset + page_size > PRDT::MAX_BYTES;
+                        // This part is questionable...
+                        bool too_many_sectors =
+                            (offset - start_offset) / handler->get_logical_sector_size() >= 0xffff;
+
+                        if (current_phys_addr + offset - phys_addr_of_offset == phys_addr &&
+                            !(too_much_for_prdt || too_many_sectors)) {
+                            offset += page_size;
+                            continue;
+                        }
+
+                        cmd.prdt_push({.data_base = current_phys_addr,
+                                       .rsv0      = 0,
+                                       .data_base_count =
+                                           static_cast<uint32_t>(offset - phys_addr_of_offset - 1),
+                                       .rsv1                    = 0,
+                                       .interrupt_on_completion = 1});
+
+                        current_phys_addr   = phys_addr;
+                        phys_addr_of_offset = offset;
+                        pushed_max_offset   = offset;
+                        break;
+                    }
+                }
+            }
+
+            auto sectors_count = (pushed_max_offset - start_offset) / sector_size;
+            auto start_sector  = start_offset / sector_size;
+
+            cmd.sector       = start_sector;
+            cmd.sector_count = sectors_count;
+
+            auto result = co_await cmd.execute(0x25, 30'000);
+            if (result != Command::Result::Success) {
+                handle_disk_read_error(request.reply_port, -EIO, request.user_arg);
+                co_return;
+            }
+        }
+
+        printf("Disk read successfully\n");
+    } catch (const std::system_error &e) {
+        handle_disk_read_error(request.reply_port, -e.code().value(), request.user_arg);
+    }
+}
+
+// This is horrible, why is it not in a header file?
+extern std::vector<AHCIPort> ports;
+
+AHCIPort &DiskHandler::get_port()
+{
+    return ports[port];
 }

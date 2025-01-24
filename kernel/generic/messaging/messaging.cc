@@ -226,6 +226,12 @@ bool Port::delete_self() noexcept
     return true;
 }
 
-Port::~Port() noexcept {}
+Port::~Port() noexcept {
+    while (!msg_queue.empty()) {
+        auto begin = msg_queue.begin();
+        msg_queue.remove(begin);
+        delete &*begin;
+    }
+}
 
 Port::Port(TaskDescriptor *owner, u64 portno): owner(owner), portno(portno) {}

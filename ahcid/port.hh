@@ -174,7 +174,11 @@ struct Command {
     int cmd_index    = -1;
     int prdt_index   = 0;
 
+    uint64_t sector = 0;
+    uint16_t sector_count = 0;
+
     void prdt_push(PRDT entry);
+    bool prdt_full() { return prdt_index >= 8; }
 
     Command() = default;
     Command(AHCIPort &parent): parent(&parent) {}

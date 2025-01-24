@@ -57,7 +57,7 @@
 #endif
 
 using syscall_function                          = void (*)();
-klib::array<syscall_function, 49> syscall_table = {
+klib::array<syscall_function, 51> syscall_table = {
     syscall_exit,
     syscall_get_task_id,
     syscall_create_process,
@@ -91,7 +91,7 @@ klib::array<syscall_function, 49> syscall_table = {
     syscall_set_segment,
 
     syscall_asign_page_table,
-    nullptr,
+    syscall_create_mem_object,
     syscall_create_task_group,
     syscall_add_to_task_group,
     syscall_remove_from_task_group,
@@ -111,6 +111,8 @@ klib::array<syscall_function, 49> syscall_table = {
     syscall_pause_task,
     syscall_resume_task,
     syscall_get_page_address,
+    nullptr,
+    syscall_get_page_address_from_object,
 };
 
 extern "C" void syscall_handler()
@@ -440,7 +442,7 @@ void syscall_get_message_info()
         return;
     }
 
-    Message *msg{};
+    Message *msg {};
 
     {
         Auto_Lock_Scope lock(port->lock);
@@ -1275,6 +1277,7 @@ void syscall_create_mem_object()
     const auto &current_page_table = current_task->page_table;
 
     ulong size_bytes = syscall_arg(current_task, 0, 0);
+    ulong flags      = syscall_flags(current_task);
 
     // TODO: Remove hard-coded page sizes
 
@@ -1287,7 +1290,7 @@ void syscall_create_mem_object()
     const auto page_size_log = 12; // 2^12 = 4096 bytes
     const auto size_pages    = size_bytes / 4096;
 
-    const auto ptr = Mem_Object::create(page_size_log, size_pages);
+    const auto ptr = Mem_Object::create(page_size_log, size_pages, flags);
     if (!ptr) {
         syscall_error(current_task) = -ENOMEM;
         return;
@@ -1843,4 +1846,37 @@ void syscall_get_page_address()
 
     auto mapping         = table->get_page_mapping(page_base);
     syscall_return(task) = mapping.page_addr;
+}
+
+void syscall_get_page_address_from_object()
+{
+    auto current_task = get_current_task();
+    auto object_id    = syscall_arg64(current_task, 0);
+    auto offset       = syscall_arg64(current_task, 1);
+
+    auto object = Mem_Object::get_object(object_id);
+    if (!object) {
+        syscall_error(current_task) = -ENOENT;
+        return;
+    }
+
+    if (object->is_anonymous()) {
+        syscall_error(current_task) = -EPERM;
+        return;
+    }
+
+    auto page = object->atomic_request_page(offset, true, false);
+    if (!page.success()) {
+        syscall_error(current_task) = page.result;
+        return;
+    }
+
+    if (!page.val) {
+        // TODO
+        serial_logger.printf("syscall_get_page_address_from_object hit unimpmemented stuff, failing...\n");
+        syscall_error(current_task) = -ENOSYS;
+        return;
+    }
+
+    syscall_return(current_task) = page.val.get_phys_addr();
 }
