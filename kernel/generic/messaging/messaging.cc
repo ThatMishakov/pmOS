@@ -96,8 +96,7 @@ kresult_t Port::send_from_system(klib::vector<char> &&v)
 {
     assert(lock.is_locked() && "Spinlock not locked!");
 
-    auto ptr =
-        klib::make_unique<Message>(0, klib::forward<klib::vector<char>>(v));
+    auto ptr = klib::make_unique<Message>(0, klib::forward<klib::vector<char>>(v));
     if (!ptr)
         return -ENOMEM;
 
@@ -117,7 +116,8 @@ kresult_t Port::send_from_system(const char *msg_ptr, uint64_t size)
     return send_from_system(klib::move(message));
 }
 
-ReturnStr<bool> Port::send_from_user(TaskDescriptor *sender, const char *unsafe_user_ptr, size_t msg_size)
+ReturnStr<bool> Port::send_from_user(TaskDescriptor *sender, const char *unsafe_user_ptr,
+                                     size_t msg_size)
 {
     assert(lock.is_locked() && "Spinlock not locked!");
 
@@ -139,7 +139,7 @@ ReturnStr<bool> Port::send_from_user(TaskDescriptor *sender, const char *unsafe_
 }
 
 ReturnStr<bool> Port::atomic_send_from_user(TaskDescriptor *sender, const char *unsafe_user_message,
-                                 size_t msg_size, u64 mem_object_id)
+                                            size_t msg_size, u64 mem_object_id)
 {
     klib::vector<char> message;
     if (!message.resize(msg_size))
@@ -149,8 +149,8 @@ ReturnStr<bool> Port::atomic_send_from_user(TaskDescriptor *sender, const char *
     if (!result.success() || !result.val)
         return result;
 
-    auto ptr =
-        klib::make_unique<Message>(sender->task_id, klib::forward<klib::vector<char>>(message), mem_object_id);
+    auto ptr = klib::make_unique<Message>(
+        sender->task_id, klib::forward<klib::vector<char>>(message), mem_object_id);
     if (!ptr)
         return Error(-ENOMEM);
 
@@ -227,7 +227,8 @@ bool Port::delete_self() noexcept
     return true;
 }
 
-Port::~Port() noexcept {
+Port::~Port() noexcept
+{
     while (!msg_queue.empty()) {
         auto begin = msg_queue.begin();
         msg_queue.remove(begin);

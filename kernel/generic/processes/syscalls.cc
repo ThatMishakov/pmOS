@@ -397,13 +397,13 @@ void syscall_get_first_message()
 void syscall_send_message_port()
 {
     static constexpr unsigned flag_send_extended = 1 << 8;
-    TaskDescriptor *current = get_cpu_struct()->current_task;
+    TaskDescriptor *current                      = get_cpu_struct()->current_task;
 
-    u64 port_num  = syscall_arg64(current, 0);
-    ulong size   = syscall_arg(current, 1, 1);
-    ulong message = syscall_arg(current, 2, 1);
+    u64 port_num   = syscall_arg64(current, 0);
+    ulong size     = syscall_arg(current, 1, 1);
+    ulong message  = syscall_arg(current, 2, 1);
     u64 mem_object = 0;
-    ulong flags   = syscall_flags(current);
+    ulong flags    = syscall_flags(current);
 
     if (flags & flag_send_extended) {
         mem_object = syscall_arg64(current, 1);
@@ -488,9 +488,9 @@ void syscall_get_message_info()
 
     u64 msg_struct_size     = sizeof(Message_Descriptor);
     Message_Descriptor desc = {
-        .sender  = msg->task_id_from,
+        .sender     = msg->task_id_from,
         .mem_object = msg->mem_object_id,
-        .size    = msg->size(),
+        .size       = msg->size(),
     };
 
     syscall_success(task);
@@ -1335,6 +1335,7 @@ void syscall_map_mem_object()
     const auto &current_task = get_current_task();
     u64 page_table_id        = syscall_arg64(current_task, 0);
     u64 object_id            = syscall_arg64(current_task, 1);
+    ulong access             = syscall_flags(current_task);
     u64 offset;
     auto result = syscall_arg64_checked(current_task, 2, offset);
     if (!result.success()) {
@@ -1344,8 +1345,8 @@ void syscall_map_mem_object()
     if (!result.val)
         return;
 
-    ulong args[3];
-    result = syscall_args_checked(current_task, 3, 3, 3, args);
+    ulong args[2];
+    result = syscall_args_checked(current_task, 3, 3, 2, args);
     if (!result.success()) {
         syscall_error(current_task) = result.result;
         return;
@@ -1355,7 +1356,6 @@ void syscall_map_mem_object()
 
     ulong addr_start = args[0];
     ulong size_bytes = args[1];
-    ulong access     = args[2];
 
     auto table = page_table_id == 0 ? current_task->page_table
                                     : Arch_Page_Table::get_page_table(page_table_id);
@@ -1584,8 +1584,8 @@ void syscall_request_timer()
     auto c    = get_cpu_struct();
     auto task = c->current_task;
 
-    u64 port     = syscall_arg64(task, 0);
-    u64 timeout  = syscall_arg64(task, 1);
+    u64 port    = syscall_arg64(task, 0);
+    u64 timeout = syscall_arg64(task, 1);
     u64 user_arg;
     auto result = syscall_arg64_checked(task, 2, user_arg);
     if (!result.success()) {
@@ -1903,7 +1903,8 @@ void syscall_get_page_address_from_object()
 
     if (!page.val) {
         // TODO
-        serial_logger.printf("syscall_get_page_address_from_object hit unimpmemented stuff, failing...\n");
+        serial_logger.printf(
+            "syscall_get_page_address_from_object hit unimpmemented stuff, failing...\n");
         syscall_error(current_task) = -ENOSYS;
         return;
     }

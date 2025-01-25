@@ -5,14 +5,17 @@
 #include <pmos/containers/intrusive_bst.hh>
 #include <pmos/containers/intrusive_list.hh>
 #include <pmos/ipc.h>
+#include <pmos/memory.h>
 #include <pmos/ports.h>
 #include <pmos/system.h>
 #include <pmos/utility/scope_guard.hh>
 #include <stdio.h>
 #include <string_view>
+#include <sys/mman.h>
 #include <system_error>
 #include <unistd.h>
 #include <vector>
+#include "partitions.hh"
 
 void ipc_send(const auto &data, pmos_port_t dest)
 {
@@ -229,6 +232,25 @@ void disk_open_msg(const char *tt, Message_Descriptor desc)
     }
 }
 
+void disk_read_msg(const char *tt, Message_Descriptor desc)
+{
+    auto reply = reinterpret_cast<const IPC_Disk_Read_Reply *>(tt);
+    auto user_arg = reply->user_arg;
+
+    auto it = read_awaiters.find(user_arg);
+    if (it == read_awaiters.end()) {
+        printf("[blockd] Disk read reply for unknown operation %" PRIu64 "\n", user_arg);
+        return;
+    }
+
+    auto &await = *it;
+    read_awaiters.erase(it);
+    await.disk.read_awaiters.remove(&await);
+
+    await.mem_object = desc.mem_object;
+    await.h.resume();
+}
+
 ReadAwaiter read_disk(Disk &disk, uint64_t from_sector, uint64_t sector_count)
 {
     return ReadAwaiter(disk, from_sector, sector_count);
@@ -240,13 +262,45 @@ void DiskOpenAwaiter::await_suspend(std::coroutine_handle<> h_)
     disk->open_awaiters.insert(this);
 }
 
+size_t align_to_page(size_t size)
+{
+    auto page_size = 4096; // TODO: don't hardcode this
+    return (size + page_size - 1) & ~(page_size - 1);
+}
+
 pmos::async::detached_task probe_partitions(size_t disk_idx)
 {
     auto &disk  = disks[disk_idx];
     // Read partition table
     auto object = co_await read_disk(disk, 0, 2);
-
     printf("Mem object: %lu\n", object);
+
+    if (object == 0) {
+        printf("Failed to read partition table off disk %" PRIi64 " %" PRIi64 "\n", disk.driver_id,
+               disk.driver_process_group);
+        co_return;
+    }
+
+    pmos::utility::scope_guard guard {[&] { release_mem_object(object, 0); }};
+    auto mbr_size          = align_to_page(disk.logical_sector_size * 2);
+    auto [result, mbr_ptr] = map_mem_object(0, nullptr, mbr_size, PROT_READ, object, 0);
+    if (result != SUCCESS) {
+        printf("Failed to map partition table %i (%s)\n", -(int)result, strerror(-result));
+        co_return;
+    }
+    pmos::utility::scope_guard guard2 {[&] { munmap(mbr_ptr, mbr_size); }};
+
+    auto *mbr = reinterpret_cast<MBR *>(mbr_ptr);
+    if (mbr->magic != mbr->MAGIC) {
+        printf("Invalid MBR magic\n");
+        co_return;
+    }
+
+    for (size_t i = 0; i < 4; ++i) {
+        auto &entry = mbr->partitions[i];
+        printf("Partition %zu: %u %u %u %u %u %u\n", i, entry.status, entry.type, entry.lba_start,
+               entry.num_sectors, entry.num_sectors * disk.logical_sector_size, entry.num_sectors * disk.physical_sector_size);
+    }
 }
 
 pmos::async::detached_task register_disk(char *i, Message_Descriptor d)
@@ -336,6 +390,9 @@ int main()
             break;
         case IPC_Disk_Open_Reply_NUM:
             disk_open_msg(msg_buff.get(), msg);
+            break;
+        case IPC_Disk_Read_Reply_NUM:
+            disk_read_msg(msg_buff.get(), msg);
             break;
         default:
             printf("Received message of type %d\n", ipc_msg->type);
