@@ -111,7 +111,7 @@ klib::array<syscall_function, 51> syscall_table = {
     syscall_pause_task,
     syscall_resume_task,
     syscall_get_page_address,
-    nullptr,
+    syscall_unreference_mem_object,
     syscall_get_page_address_from_object,
 };
 
@@ -1910,4 +1910,23 @@ void syscall_get_page_address_from_object()
     }
 
     syscall_return(current_task) = page.val.get_phys_addr();
+}
+
+void syscall_unreference_mem_object()
+{
+    auto current_task = get_current_task();
+    auto object_id    = syscall_arg64(current_task, 0);
+
+    auto object = Mem_Object::get_object(object_id);
+    if (!object) {
+        syscall_error(current_task) = -ENOENT;
+        return;
+    }
+
+    auto result = current_task->page_table->atomic_unpin_memory_object(object);
+    if (result) {
+        syscall_error(current_task) = result;
+        return;
+    }
+    syscall_success(current_task);
 }

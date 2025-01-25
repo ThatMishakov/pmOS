@@ -502,6 +502,23 @@ kresult_t Page_Table::atomic_pin_memory_object(klib::shared_ptr<Mem_Object> obje
     return 0;
 }
 
+kresult_t Page_Table::atomic_unpin_memory_object(klib::shared_ptr<Mem_Object> object)
+{
+    Auto_Lock_Scope l(lock);
+    auto it = mem_objects.find(object);
+    if (it == mem_objects.end())
+        return -ENOENT;
+
+    assert(it->second.handles_ref_count > 0);
+
+    if (--it->second.handles_ref_count == 0) {
+        mem_objects.erase(it);
+        object->atomic_unregister_pined(weak_from_this());
+    }
+
+    return 0;
+}
+
 kresult_t Page_Table::atomic_transfer_object(const klib::shared_ptr<Page_Table> &new_table, u64 memory_object_id)
 {
     auto object = Mem_Object::get_object(memory_object_id);
@@ -528,6 +545,7 @@ kresult_t Page_Table::atomic_transfer_object(const klib::shared_ptr<Page_Table> 
             return result;
     }
 
+    assert(it->second.handles_ref_count > 0);
     if (--it->second.handles_ref_count == 0) {
         mem_objects.erase(it);
         object->atomic_unregister_pined(weak_from_this());

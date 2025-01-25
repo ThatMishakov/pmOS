@@ -519,7 +519,7 @@ public:
      *
      * @param object Object to be removed
      */
-    void atomic_unpin_memory_object(klib::shared_ptr<Mem_Object> object);
+    kresult_t atomic_unpin_memory_object(klib::shared_ptr<Mem_Object> object);
 
     /**
      * @brief Shrink memory regions referencing *id*

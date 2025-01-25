@@ -230,6 +230,9 @@ void syscall_get_page_address();
 void syscall_get_page_address_from_object();
 // Parameters: u64 object_id, u64 offset, u64 flags
 
+void syscall_unreference_mem_object();
+// Parameters: u64 object_id
+
 struct SyscallRetval {
     TaskDescriptor *task;
     u64 operator=(u64 value);
