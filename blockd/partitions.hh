@@ -1,4 +1,6 @@
 #pragma once
+#include <stdint.h>
+#include <string>
 
 struct MBRPartition {
     uint8_t status;
@@ -37,5 +39,15 @@ struct GPTHeader {
     uint32_t partition_entry_array_crc32;
 };
 
-bool verify_gpt_header(const GPTHeader &header);
-bool verify_gpt_signature(const GPTHeader &header);
+struct GPTPartitionEntry {
+    uint8_t type_guid[16];
+    uint8_t partition_guid[16];
+    uint64_t first_lba;
+    uint64_t last_lba;
+    uint64_t attributes;
+    uint16_t name[36];
+};
+
+bool verify_gpt_checksum(const GPTHeader &header);
+bool guid_zero(const uint8_t *guid);
+std::string guid_to_string(const uint8_t *guid);

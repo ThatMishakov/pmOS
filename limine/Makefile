@@ -57,6 +57,9 @@ limine: limine/.git
 limine/.git:
 	git clone https://github.com/limine-bootloader/limine.git --branch=v8.x-binary --depth=1
 
+limine-binary: limine limine/limine
+	$(MAKE) -C limine
+
 # isodir/boot/pmos/sysroot.tar: ../sysroot
 # 	mkdir -p isodir/boot/pmos
 # 	tar -cf isodir/boot/pmos/sysroot.tar -C ../sysroot .
@@ -65,7 +68,7 @@ DISK_IMAGE := pmos.img
 BOOT_PARTITION := boot.img
 EXT2_PARTITION := ext2.img
 
-$(ISO): ../kernel/build/kernel ../bootstrapd/bootstrapd.elf ../devicesd/devicesd.elf ../logd/logd.elf ../ns16550/ns16550.elf ../piped/piped.elf ../processd/processd.elf ../terminald/terminald.elf ../vfsd/vfsd.elf ../vfatfsd/vfatfsd.elf ../ahcid/ahcid.elf ../ps2d/ps2d.elf ../i8042/i8042.elf ../blockd/blockd.elf limine.conf limine
+$(ISO): ../kernel/build/kernel ../bootstrapd/bootstrapd.elf ../devicesd/devicesd.elf ../logd/logd.elf ../ns16550/ns16550.elf ../piped/piped.elf ../processd/processd.elf ../terminald/terminald.elf ../vfsd/vfsd.elf ../vfatfsd/vfatfsd.elf ../ahcid/ahcid.elf ../ps2d/ps2d.elf ../i8042/i8042.elf ../blockd/blockd.elf limine.conf limine limine-binary
 	mkdir -p isodir/boot/limine
 	mkdir -p isodir/EFI/BOOT
 
@@ -137,7 +140,7 @@ $(ISO): ../kernel/build/kernel ../bootstrapd/bootstrapd.elf ../devicesd/devicesd
 	dd conv=notrunc if=$(EXT2_PARTITION) of=$(DISK_IMAGE) bs=512 seek=67584
 
 	# Install Limine stage 1
-	# limine/limine-sh $(DISK_IMAGE)
+	limine/limine bios-install $(DISK_IMAGE)
 
 
 .PHONY: ../kernel/build/kernel ../bootstrapd/bootstrapd.elf ../devicesd/devicesd.elf ../logd/logd.elf ../ns16550/ns16550.elf ../piped/piped.elf ../processd/processd.elf ../terminald/terminald.elf ../vfsd/vfsd.elf ../vfatfsd/vfatfsd.elf ../ahcid/ahcid.elf ../ps2d/ps2d.elf ../i8042/i8042.elf ../blockd/blockd.elf

@@ -1,3 +1,5 @@
+#include "partitions.hh"
+
 #include <cinttypes>
 #include <cstdio>
 #include <map>
@@ -15,7 +17,11 @@
 #include <system_error>
 #include <unistd.h>
 #include <vector>
-#include "partitions.hh"
+
+size_t alignup(size_t value, size_t alignment)
+{
+    return (value + alignment - 1) & ~(alignment - 1);
+}
 
 void ipc_send(const auto &data, pmos_port_t dest)
 {
@@ -234,7 +240,7 @@ void disk_open_msg(const char *tt, Message_Descriptor desc)
 
 void disk_read_msg(const char *tt, Message_Descriptor desc)
 {
-    auto reply = reinterpret_cast<const IPC_Disk_Read_Reply *>(tt);
+    auto reply    = reinterpret_cast<const IPC_Disk_Read_Reply *>(tt);
     auto user_arg = reply->user_arg;
 
     auto it = read_awaiters.find(user_arg);
@@ -296,10 +302,80 @@ pmos::async::detached_task probe_partitions(size_t disk_idx)
         co_return;
     }
 
-    for (size_t i = 0; i < 4; ++i) {
-        auto &entry = mbr->partitions[i];
-        printf("Partition %zu: %u %u %u %u %u %u\n", i, entry.status, entry.type, entry.lba_start,
-               entry.num_sectors, entry.num_sectors * disk.logical_sector_size, entry.num_sectors * disk.physical_sector_size);
+    if (mbr->partitions[0].type == 0) {
+        printf("No partitions\n");
+        co_return;
+    } else if (mbr->partitions[0].type == 0xee) {
+        printf("MBR protective partition found...\n");
+        auto gpt = reinterpret_cast<GPTHeader *>(reinterpret_cast<char *>(mbr) + disk.logical_sector_size);
+        if (std::memcmp(gpt->signature, "EFI PART", 8) != 0) {
+            printf("Invalid GPT signature\n");
+            co_return;
+        }
+
+        if (!verify_gpt_checksum(*gpt)) {
+            printf("Invalid GPT checksum\n");
+            co_return;
+        }
+
+        auto gpt_first_lba = gpt->first_usable_lba;
+        if (gpt_first_lba < 2) {
+            printf("Invalid GPT first LBA\n");
+            co_return;
+        }
+
+        auto gpt_entry_size = gpt->partition_entry_size;
+        auto gpt_entry_count = gpt->num_partition_entries;
+        auto gpt_partition_array_size = gpt_entry_size * gpt_entry_count;
+        if (gpt_partition_array_size > 0x100000) {
+            printf("GPT partition array too large\n");
+            co_return;
+        }
+
+        auto number_of_sectors = alignup(gpt_partition_array_size, disk.logical_sector_size) /
+                                 disk.logical_sector_size;
+        auto gpt_object = co_await read_disk(disk, gpt->partition_entry_lba, number_of_sectors);
+        if (gpt_object == 0) {
+            printf("Failed to read GPT partition array\n");
+            co_return;
+        }
+        pmos::utility::scope_guard guard3 {[&] { release_mem_object(gpt_object, 0); }};
+        auto array_size_aligned = align_to_page(gpt_partition_array_size);
+        auto [result, gpt_ptr] = map_mem_object(0, nullptr, array_size_aligned, PROT_READ,
+                                                gpt_object, 0);
+        if (result != SUCCESS) {
+            printf("Failed to map GPT partition array %i (%s)\n", -(int)result, strerror(-result));
+            co_return;
+        }
+        pmos::utility::scope_guard guard4 {[&] { munmap(gpt_ptr, array_size_aligned); }};
+
+
+        std::vector<Disk::Partition> partitions;
+        for (size_t offset = 0; offset < gpt_partition_array_size; offset += gpt_entry_size) {
+            auto *entry = reinterpret_cast<GPTPartitionEntry *>(reinterpret_cast<char *>(gpt_ptr) + offset);
+            if (guid_zero(entry->type_guid))
+                continue;
+
+            std::string guid = guid_to_string(entry->type_guid);
+            printf("GPT partition: type %s, start %" PRIu64 ", end %" PRIu64 "\n", guid.c_str(),
+                   entry->first_lba, entry->last_lba);
+            partitions.push_back({entry->first_lba, entry->last_lba});
+        }
+        disk.partitions = std::move(partitions);
+    } else {
+        printf("MBR partition table:\n");
+        std::vector<Disk::Partition> partitions;
+        for (int i = 0; i < 4; ++i) {
+            auto &part = mbr->partitions[i];
+            if (part.type == 0)
+                continue;
+
+            printf("Partition %i: type %x, start %" PRIu32 ", size %" PRIu32 "\n", i, part.type,
+                   part.lba_start, part.num_sectors);
+
+            partitions.push_back({part.lba_start, part.lba_start + part.num_sectors});
+        }
+        disk.partitions = std::move(partitions);
     }
 }
 
