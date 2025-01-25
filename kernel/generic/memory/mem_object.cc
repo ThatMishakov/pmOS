@@ -186,6 +186,12 @@ kresult_t Mem_Object::register_pined(klib::weak_ptr<Page_Table> pined_by)
     return 0;
 }
 
+kresult_t Mem_Object::atomic_register_pined(klib::weak_ptr<Page_Table> pined_by)
+{
+    Auto_Lock_Scope l(pinned_lock);
+    return register_pined(klib::move(pined_by));
+}
+
 void Mem_Object::atomic_unregister_pined(const klib::weak_ptr<Page_Table> &pined_by) noexcept
 {
     Auto_Lock_Scope l(pinned_lock);

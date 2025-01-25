@@ -49,11 +49,12 @@ struct Generic_Port {
 
 struct Message {
     pmos::containers::DoubleListHead<Message> list_node;
-    u64 task_id_from = 0;
+    u64 task_id_from  = 0;
+    u64 mem_object_id = 0;
     klib::vector<char> content;
 
-    Message(u64 task_id_from, klib::vector<char> content)
-        : task_id_from(task_id_from), content(klib::move(content))
+    Message(u64 task_id_from, klib::vector<char> content, u64 mem_object_id = 0)
+        : task_id_from(task_id_from), mem_object_id(mem_object_id), content(klib::move(content))
     {
     }
 
@@ -80,7 +81,7 @@ public:
 
     Port(TaskDescriptor *owner, u64 portno);
 
-    kresult_t enqueue(klib::unique_ptr<Message> msg);
+    void enqueue(klib::unique_ptr<Message> msg);
 
     kresult_t send_from_system(klib::vector<char> &&msg);
     kresult_t send_from_system(const char *msg, size_t size);
@@ -94,7 +95,7 @@ public:
     // Returns true if successfully sent, false otherwise (e.g. when it is needed to repeat the
     // syscall). Throws on crytical errors
     ReturnStr<bool> atomic_send_from_user(TaskDescriptor *sender, const char *unsafe_user_message,
-                                          size_t msg_size);
+                                          size_t msg_size, u64 mem_object_id);
 
     void change_return_upon_unblock(TaskDescriptor *task);
 

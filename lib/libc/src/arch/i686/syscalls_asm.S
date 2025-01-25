@@ -190,8 +190,7 @@ __pmos_syscall32_5words:
     pushl %esi
     pushl %eax
 
-    movl 28(%ebp), %eax
-    pushl %eax
+    pushl 28(%ebp)
 
     movl 8(%ebp), %eax
     movl 12(%ebp), %ebx
@@ -219,10 +218,8 @@ __pmos_syscall32_6words:
     pushl %esi
     pushl %eax
 
-    movl 32(%ebp), %eax
-    pushl %eax
-    movl 28(%ebp), %eax
-    pushl %eax
+    pushl 32(%ebp)
+    pushl 28(%ebp)
 
     movl 8(%ebp), %eax
     movl 12(%ebp), %ebx
@@ -250,12 +247,9 @@ __pmos_syscall32_7words:
     pushl %esi
     pushl %eax
 
-    movl 36(%ebp), %eax
-    pushl %eax
-    movl 32(%ebp), %eax
-    pushl %eax
-    movl 28(%ebp), %eax
-    pushl %eax
+    pushl 36(%ebp)
+    pushl 32(%ebp)
+    pushl 28(%ebp)
 
     movl 8(%ebp), %eax
     movl 12(%ebp), %ebx
@@ -283,14 +277,10 @@ __pmos_syscall32_8words:
     pushl %esi
     pushl %eax
 
-    movl 40(%ebp), %eax
-    pushl %eax
-    movl 36(%ebp), %eax
-    pushl %eax
-    movl 32(%ebp), %eax
-    pushl %eax
-    movl 28(%ebp), %eax
-    pushl %eax
+    pushl 40(%ebp)
+    pushl 36(%ebp)
+    pushl 32(%ebp)
+    pushl 28(%ebp)
 
     movl 8(%ebp), %eax
     movl 12(%ebp), %ebx

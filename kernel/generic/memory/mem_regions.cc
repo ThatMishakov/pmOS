@@ -51,10 +51,10 @@ static bool mapped_right_perm(Page_Table::Page_Info info, u64 access_type)
     // if (access_type & Readable and not info.readable)
     //     return false;
 
-    if (access_type & Writeable and not info.writeable)
+    if ((access_type & Writeable) and (not info.writeable))
         return false;
 
-    if (access_type & Executable and not info.executable)
+    if ((access_type & Executable) and (not info.executable))
         return false;
 
     return true;
@@ -84,7 +84,7 @@ ReturnStr<bool> Generic_Mem_Region::prepare_page(u64 access_mode, u64 page_addr)
         return Error(-EFAULT);
 
     auto mapping = owner->get_page_mapping(page_addr);
-    if (mapped_right_perm(mapping, access_type))
+    if (mapped_right_perm(mapping, access_mode))
         return true;
 
     return alloc_page(page_addr, mapping, access_mode);

@@ -34,7 +34,7 @@
 
 typedef struct {
     u64 sender;
-    u64 channel;
+    u64 mem_object;
     u64 size;
 } Message_Descriptor;
 

@@ -83,14 +83,13 @@ kresult_t Port::atomic_send_from_system(const char *msg_ptr, uint64_t size)
     return send_from_system(msg_ptr, size);
 }
 
-kresult_t Port::enqueue(klib::unique_ptr<Message> msg)
+void Port::enqueue(klib::unique_ptr<Message> msg)
 {
     assert(lock.is_locked() && "Spinlock not locked!");
 
     msg_queue.push_back(msg.release());
 
     unblock_if_needed(owner, this);
-    return 0;
 }
 
 kresult_t Port::send_from_system(klib::vector<char> &&v)
@@ -102,7 +101,8 @@ kresult_t Port::send_from_system(klib::vector<char> &&v)
     if (!ptr)
         return -ENOMEM;
 
-    return enqueue(klib::move(ptr));
+    enqueue(klib::move(ptr));
+    return 0;
 }
 
 kresult_t Port::send_from_system(const char *msg_ptr, uint64_t size)
@@ -134,15 +134,12 @@ ReturnStr<bool> Port::send_from_user(TaskDescriptor *sender, const char *unsafe_
     if (!ptr)
         return Error(-ENOMEM);
 
-    auto r = enqueue(klib::move(ptr));
-    if (not r)
-        return Error(r);
-
+    enqueue(klib::move(ptr));
     return true;
 }
 
 ReturnStr<bool> Port::atomic_send_from_user(TaskDescriptor *sender, const char *unsafe_user_message,
-                                 size_t msg_size)
+                                 size_t msg_size, u64 mem_object_id)
 {
     klib::vector<char> message;
     if (!message.resize(msg_size))
@@ -153,15 +150,19 @@ ReturnStr<bool> Port::atomic_send_from_user(TaskDescriptor *sender, const char *
         return result;
 
     auto ptr =
-        klib::make_unique<Message>(sender->task_id, klib::forward<klib::vector<char>>(message));
+        klib::make_unique<Message>(sender->task_id, klib::forward<klib::vector<char>>(message), mem_object_id);
     if (!ptr)
         return Error(-ENOMEM);
 
+    if (mem_object_id) {
+        auto result = sender->page_table->atomic_transfer_object(owner->page_table, mem_object_id);
+        if (result != 0)
+            return Error(result);
+    }
+
     Auto_Lock_Scope scope_lock(lock);
 
-    auto r = enqueue(klib::move(ptr));
-    if (not r)
-        return Error(r);
+    enqueue(klib::move(ptr));
 
     return true;
 }

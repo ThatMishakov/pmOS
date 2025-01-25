@@ -545,9 +545,9 @@ int main()
             unsigned expected_size = sizeof(IPC_Timer_Reply);
             if (desc.size != expected_size) {
                 fprintf(stderr,
-                        "[i8042] Warning: Recieved message of wrong size on channel %lx (expected "
+                        "[i8042] Warning: Recieved message of wrong size on port (expected "
                         "%x got %lx)\n",
-                        desc.channel, expected_size, desc.size);
+                        expected_size, desc.size);
                 break;
             }
 
@@ -555,8 +555,8 @@ int main()
 
             if (reply->type != IPC_Timer_Reply_NUM) {
                 fprintf(stderr,
-                        "[i8042] Warning: Recieved unexpected meesage of type %x on channel %lx\n",
-                        reply->type, desc.channel);
+                        "[i8042] Warning: Recieved unexpected meesage of type %x\n",
+                        reply->type);
                 break;
             }
 

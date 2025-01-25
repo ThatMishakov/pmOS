@@ -221,7 +221,7 @@ void handle_disk_read(pmos_port_t port, uint64_t memory_object, int result, uint
 
     printf("Sending reply to disk read status %i\n", result);
 
-    auto r = send_message_port(port, sizeof(reply), (void *)&reply);
+    auto r = send_message_port2(port, memory_object, sizeof(reply), (void *)&reply, 0);
     if (r != 0)
         throw std::system_error(-r, std::system_category());
 }
@@ -368,7 +368,8 @@ pmos::async::detached_task handle_disk_read(const Message_Descriptor &d, IPC_Dis
             bytes_read = pushed_max_offset;
         }
 
-        printf("Disk read successfully\n");
+        handle_disk_read(request.reply_port, object, 0, request.user_arg);
+        guard.dismiss();
     } catch (const std::system_error &e) {
         printf("Error reading disk: %s\n", e.what());
         handle_disk_read_error(request.reply_port, -e.code().value(), request.user_arg);

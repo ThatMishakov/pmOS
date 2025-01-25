@@ -483,12 +483,14 @@ kresult_t Page_Table::atomic_pin_memory_object(klib::shared_ptr<Mem_Object> obje
 
     if (inserted.first == mem_objects.end())
         return -ENOMEM;
-    if (not inserted.second)
-        return -EEXIST;
+    inserted.first->second.handles_ref_count++;
 
-    pmos::utility::scope_guard guard([&]() { mem_objects.erase(object); });
+    pmos::utility::scope_guard guard([&]() {
+        if (--inserted.first->second.handles_ref_count == 0)
+            mem_objects.erase(inserted.first);
+    });
 
-    {
+    if (inserted.second) {
         Auto_Lock_Scope object_lock(object->pinned_lock);
         auto result = object->register_pined(weak_from_this());
         if (result)
@@ -497,6 +499,40 @@ kresult_t Page_Table::atomic_pin_memory_object(klib::shared_ptr<Mem_Object> obje
 
     guard.dismiss();
 
+    return 0;
+}
+
+kresult_t Page_Table::atomic_transfer_object(const klib::shared_ptr<Page_Table> &new_table, u64 memory_object_id)
+{
+    auto object = Mem_Object::get_object(memory_object_id);
+    if (!object)
+        return -ENOENT;
+
+    Auto_Lock_Scope_Double l(lock, new_table->lock);
+    auto it = mem_objects.find(object);
+    if (it == mem_objects.end())
+        return -ENOENT;
+
+    if (this == new_table.get())
+        return 0;
+
+    auto inserted = new_table->mem_objects.insert({object, Mem_Object_Data()});
+    if (inserted.first == new_table->mem_objects.end())
+        return -ENOMEM;
+
+    inserted.first->second.max_privilege_mask |= it->second.max_privilege_mask;
+    inserted.first->second.handles_ref_count++;
+    if (inserted.second) {
+        auto result = object->atomic_register_pined(new_table);
+        if (result)
+            return result;
+    }
+
+    if (--it->second.handles_ref_count == 0) {
+        mem_objects.erase(it);
+        object->atomic_unregister_pined(weak_from_this());
+    }
+        
     return 0;
 }
 

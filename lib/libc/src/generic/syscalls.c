@@ -74,6 +74,19 @@ result_t send_message_port(uint64_t port, size_t size, const void *message)
 #endif
 }
 
+#define SEND_MESSAGE_EXTENDED (1 << 16)
+result_t send_message_port2(pmos_port_t port, mem_object_t object_id, size_t size, const void *message, unsigned flags)
+{
+    // Rationale behind this: pointer width changes between 32 and 64 bit systems, so the 64 bit object_id needs to
+    // be passed before the pointers and size. The second syscall is so that the first one can fit into registers
+    // on 32 bit x86.
+#ifdef __32BITSYSCALL
+    return __pmos_syscall32_6words(SYSCALL_SEND_MSG_PORT | SEND_MESSAGE_EXTENDED | (flags << 8), port, object_id, size, (unsigned)message).result;
+#else
+    return pmos_syscall(SYSCALL_SEND_MSG_PORT | SEND_MESSAGE_EXTENDED | (flags << 8), port, object_id, size, message).result;
+#endif
+}
+
 result_t get_first_message(char *buff, uint32_t args, uint64_t port)
 {
 #ifdef __32BITSYSCALL

@@ -396,11 +396,36 @@ void syscall_get_first_message()
 
 void syscall_send_message_port()
 {
+    static constexpr unsigned flag_send_extended = 1 << 8;
     TaskDescriptor *current = get_cpu_struct()->current_task;
 
     u64 port_num  = syscall_arg64(current, 0);
-    size_t size   = syscall_arg(current, 1, 1);
+    ulong size   = syscall_arg(current, 1, 1);
     ulong message = syscall_arg(current, 2, 1);
+    u64 mem_object = 0;
+    ulong flags   = syscall_flags(current);
+
+    if (flags & flag_send_extended) {
+        mem_object = syscall_arg64(current, 1);
+
+        auto result = syscall_args_checked(current, 2, 2, 1, &size);
+        if (!result.success()) {
+            syscall_error(current) = result.result;
+            return;
+        }
+        if (!result.val) {
+            return;
+        }
+
+        result = syscall_args_checked(current, 3, 2, 1, &message);
+        if (!result.success()) {
+            syscall_error(current) = result.result;
+            return;
+        }
+        if (!result.val) {
+            return;
+        }
+    }
 
     // TODO: Check permissions
 
@@ -411,7 +436,7 @@ void syscall_send_message_port()
     }
 
     syscall_success(current);
-    auto result = port->atomic_send_from_user(current, (char *)message, size);
+    auto result = port->atomic_send_from_user(current, (char *)message, size, mem_object);
     if (!result.success()) {
         syscall_error(current) = result.result;
         return;
@@ -464,7 +489,7 @@ void syscall_get_message_info()
     u64 msg_struct_size     = sizeof(Message_Descriptor);
     Message_Descriptor desc = {
         .sender  = msg->task_id_from,
-        .channel = 0,
+        .mem_object = msg->mem_object_id,
         .size    = msg->size(),
     };
 

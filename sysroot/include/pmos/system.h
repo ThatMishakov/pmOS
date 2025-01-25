@@ -45,6 +45,7 @@
 
 typedef uint64_t result_t;
 typedef uint64_t pmos_port_t;
+typedef uint64_t mem_object_t;
 
 typedef struct {
     result_t result;
@@ -176,6 +177,7 @@ result_t get_first_message(char *buff, uint32_t args, pmos_port_t port);
  * better idea to use shared memory or move the memory regions (read pages) around.
  *
  * @param port The destination port
+ * @param object_id ID of the memory object, that is sent with the message, if it is not 0
  * @param size Size of the message in bytes.
  * @param message Message content. Currently, there are no alignment requirements.
  * @return result_t Generic result of the operation
@@ -185,6 +187,7 @@ result_t get_first_message(char *buff, uint32_t args, pmos_port_t port);
  * with the messages.
  */
 result_t send_message_port(pmos_port_t port, size_t size, const void *message);
+result_t send_message_port2(pmos_port_t port, mem_object_t object_id, size_t size, const void *message, unsigned flags);
 
 /**
  * @brief Chages the tasks' scheduler priority

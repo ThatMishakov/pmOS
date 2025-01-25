@@ -66,6 +66,7 @@ struct Page_Table_Argumments {
 
 class Mem_Object;
 struct Mem_Object_Data {
+    size_t handles_ref_count = 0;
     u8 max_privilege_mask = 0;
 };
 
@@ -237,6 +238,9 @@ public:
     // region, it is split
     kresult_t release_in_range(TLBShootdownContext &ctx, u64 start, u64 size);
     kresult_t atomic_release_in_range(u64 start, u64 size);
+
+    /// Moves the memory object to the new page table
+    kresult_t atomic_transfer_object(const klib::shared_ptr<Page_Table> &new_table, u64 memory_object_id);
 
     /**
      * @brief Creates a normal memory region

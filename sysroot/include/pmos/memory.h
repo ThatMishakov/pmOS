@@ -57,7 +57,7 @@ typedef struct phys_addr_request_t {
 } phys_addr_request_t;
 
 /// pmOS memory object identificator
-typedef unsigned long mem_object_t;
+typedef uint64_t mem_object_t;
 
 typedef struct mem_object_request_ret_t {
     result_t result;
