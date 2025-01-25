@@ -37,7 +37,9 @@ struct GPTHeader {
     uint32_t num_partition_entries;
     uint32_t partition_entry_size;
     uint32_t partition_entry_array_crc32;
-};
+} __attribute__((packed));
+
+static_assert(sizeof(GPTHeader) == 92);
 
 struct GPTPartitionEntry {
     uint8_t type_guid[16];

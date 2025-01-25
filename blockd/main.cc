@@ -324,8 +324,13 @@ pmos::async::detached_task probe_partitions(size_t disk_idx)
             co_return;
         }
 
+        printf("Partition entry LBA: %" PRIu64 "\n", gpt->partition_entry_lba);
+
         auto gpt_entry_size = gpt->partition_entry_size;
         auto gpt_entry_count = gpt->num_partition_entries;
+
+        printf("GPT partition table: %i entries, %i bytes each\n", gpt_entry_count, gpt_entry_size);
+
         auto gpt_partition_array_size = gpt_entry_size * gpt_entry_count;
         if (gpt_partition_array_size > 0x100000) {
             printf("GPT partition array too large\n");
@@ -357,8 +362,8 @@ pmos::async::detached_task probe_partitions(size_t disk_idx)
                 continue;
 
             std::string guid = guid_to_string(entry->type_guid);
-            printf("GPT partition: type %s, start %" PRIu64 ", end %" PRIu64 "\n", guid.c_str(),
-                   entry->first_lba, entry->last_lba);
+            printf("GPT partition: type %s, start %" PRIu64 ", end %" PRIu64 " offset %" PRIu64 "\n", guid.c_str(),
+                   entry->first_lba, entry->last_lba, offset/gpt_entry_size);
             partitions.push_back({entry->first_lba, entry->last_lba});
         }
         disk.partitions = std::move(partitions);

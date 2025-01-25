@@ -356,7 +356,7 @@ pmos::async::detached_task handle_disk_read(const Message_Descriptor &d, IPC_Dis
             auto sectors_count = (pushed_max_offset - start_offset) / sector_size;
             auto start_sector  = start_offset / sector_size;
 
-            cmd.sector       = start_sector;
+            cmd.sector       = start_sector + sector_start;
             cmd.sector_count = sectors_count;
 
             auto result = co_await cmd.execute(0x25, 30'000);
