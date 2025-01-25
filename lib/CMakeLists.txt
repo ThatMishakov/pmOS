@@ -19,7 +19,7 @@ project(pmos-libraries VERSION 0.1)
 get_filename_component(ABSPATH "${CMAKE_CURRENT_LIST_FILE}" PATH)
 set(SYSROOT "${ABSPATH}/../sysroot")
 
-set(CMAKE_C_FLAGS "-Wall -Wextra -O3 -march=znver3 -g -nostdlib -fPIC --sysroot=${SYSROOT} -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer")
+set(CMAKE_C_FLAGS "-Wall -Wextra -O3 -g -nostdlib -fPIC --sysroot=${SYSROOT} -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer")
 
 if (${TARGET_ARCH} STREQUAL "riscv64")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=rva20u64 -mabi=lp64d")

@@ -116,8 +116,8 @@ extern "C" void dbg_main(long code)
     t_print_bochs(" => %%rip: 0x%h\n", kernel_interrupt_regs.e.rip);
     t_print_bochs(" => %%rsp: 0x%h\n", kernel_interrupt_regs.e.rsp);
     t_print_bochs(" => %%rflags: 0x%h\n", kernel_interrupt_regs.e.rflags.numb);
-    //print_registers(kernel_interrupt_regs, bochs_logger);
-    //print_kernel_int_stack_trace(bochs_logger);
+    // print_registers(kernel_interrupt_regs, bochs_logger);
+    // print_kernel_int_stack_trace(bochs_logger);
     abort();
 }
 
@@ -232,7 +232,7 @@ extern "C" void pagefault_manager()
 
         print_pt_chain(virtual_addr, global_logger);
         print_registers(task, global_logger);
-        //print_stack_trace(task, global_logger);
+        // print_stack_trace(task, global_logger);
 
         task->atomic_kill();
     }
@@ -258,7 +258,7 @@ extern "C" void general_protection_fault_manager()
                          task->regs.int_err, task->task_id, task->name.c_str(), task->regs.e.rip,
                          task->regs.e.cs);
     print_registers(get_cpu_struct()->current_task, global_logger);
-    //print_stack_trace(task, global_logger);
+    // print_stack_trace(task, global_logger);
     task->atomic_kill();
 }
 
@@ -286,6 +286,8 @@ extern "C" void simd_fp_exception_manager()
 extern "C" void invalid_opcode_manager()
 {
     task_ptr task = get_cpu_struct()->current_task;
+    serial_logger.printf("!!! Invalid op-code (UD) instr %h task %i (%s)\n",
+                         get_cpu_struct()->current_task->regs.e.rip, task->task_id, task->name.c_str());
     global_logger.printf("!!! Invalid op-code (UD) instr %h\n",
                          get_cpu_struct()->current_task->regs.e.rip);
     task->atomic_kill();
