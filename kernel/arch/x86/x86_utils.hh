@@ -29,5 +29,52 @@
 
 #pragma once
 
-#include <kernel/com.h>
-extern Kernel_Entry_Data *kdata;
+inline void halt()
+{
+    while (1) {
+        asm("hlt");
+    }
+}
+
+static inline void outb(u16 port, u8 data) { asm volatile("outb %0, %1" ::"a"(data), "Nd"(port)); }
+
+static inline void io_wait() { outb(0x80, 0); }
+
+static inline u8 inb(u16 port)
+{
+    u8 ret;
+    asm volatile("inb %1, %0" : "=a"(ret) : "Nd"(port));
+    return ret;
+}
+
+struct CPUIDoutput {
+    u32 eax;
+    u32 ebx;
+    u32 ecx;
+    u32 edx;
+};
+
+static inline CPUIDoutput cpuid(u32 p)
+{
+    CPUIDoutput out;
+    asm volatile("cpuid" : "=a"(out.eax), "=b"(out.ebx), "=c"(out.ecx), "=d"(out.edx) : "a"(p));
+    return out;
+}
+
+static inline CPUIDoutput cpuid2(u32 p, u32 q)
+{
+    CPUIDoutput out;
+    asm volatile("cpuid"
+                 : "=a"(out.eax), "=b"(out.ebx), "=c"(out.ecx), "=d"(out.edx)
+                 : "a"(p), "c"(q));
+    return out;
+}
+
+static inline void set_xcr(u32 reg, u64 val)
+{
+    ulong eax = val;
+    ulong ecx = reg;
+    ulong edx = val >> 32;
+
+    asm volatile("xsetbv" ::"a"(eax), "c"(ecx), "d"(edx));
+}

@@ -28,8 +28,6 @@
  */
 
 #pragma once
-#include "gdt.hh"
-#include "types.hh"
 
 #include <lib/memory.hh>
 #include <memory/palloc.hh>

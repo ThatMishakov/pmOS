@@ -40,7 +40,7 @@
 #include <stdio.h>
 #include <processes/tasks.hh>
 
-void int_to_string(long int n, u8 base, char *str, int &length)
+void int_to_string(i64 n, u8 base, char *str, int &length)
 {
     char temp_str[65];
     length        = 0;
@@ -72,7 +72,7 @@ void int_to_string(long int n, u8 base, char *str, int &length)
     str[length] = 0;
 }
 
-void uint_to_string(unsigned long int n, u8 base, char *str, int &length)
+void uint_to_string(u64 n, u8 base, char *str, int &length)
 {
     char temp_str[65];
     length = 0;
@@ -711,4 +711,24 @@ bool Spinlock::try_lock() noexcept
         check_synchronous_ipis();
     }
     return result;
+}
+
+
+// Halt and catch fire function.
+void hcf(void)
+{
+    // should be arch-specific, but whatever...
+    #if defined(__x86_64__) || defined(__i386__) 
+    asm ("cli");
+    for (;;) {
+        asm ("hlt");
+    }
+    #elif defined(__riscv)
+    asm volatile("wfi");
+    #endif
+
+    while (1)
+        ;
+
+    __builtin_unreachable();
 }

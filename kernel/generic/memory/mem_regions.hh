@@ -204,7 +204,7 @@ struct Generic_Mem_Region {
      * @param new_access New access specifier to be had in the new page table
      */
     [[nodiscard]] virtual kresult_t move_to(TLBShootdownContext &ctx, const klib::shared_ptr<Page_Table> &new_table,
-                                            ulong base_addr, u64 new_access);
+                                            ulong base_addr, unsigned new_access);
 
     /**
      * @brief Clones the region to the new page table
@@ -214,7 +214,7 @@ struct Generic_Mem_Region {
      * @param new_access New access specifier to be had in the new page table
      */
     [[nodiscard]] virtual kresult_t clone_to(const klib::shared_ptr<Page_Table> &new_table,
-                                            size_t base_addr, size_t new_access) = 0;
+                                            ulong base_addr, unsigned new_access) = 0;
 
     /**
      * @brief Prepares a region for being deleted
@@ -245,8 +245,8 @@ struct Phys_Mapped_Region final: Generic_Mem_Region {
     u64 phys_addr_start = 0;
     constexpr bool can_takeout_page() const noexcept override { return false; }
 
-    virtual kresult_t clone_to(const klib::shared_ptr<Page_Table> &new_table, u64 base_addr,
-                          u64 new_access) override;
+    virtual kresult_t clone_to(const klib::shared_ptr<Page_Table> &new_table, ulong base_addr,
+                          unsigned new_access) override;
 
     virtual Page_Table_Argumments craft_arguments() const override;
 
@@ -292,9 +292,9 @@ struct Mem_Object_Reference final: Generic_Mem_Region {
     virtual ReturnStr<bool> alloc_page(u64 ptr_addr, Page_Info info, u64 access_type) override;
 
     virtual kresult_t move_to(TLBShootdownContext &ctx, const klib::shared_ptr<Page_Table> &new_table, ulong base_addr,
-                              u64 new_access) override;
-    virtual kresult_t clone_to(const klib::shared_ptr<Page_Table> &new_table, u64 base_addr,
-                          u64 new_access) override;
+                              unsigned new_access) override;
+    virtual kresult_t clone_to(const klib::shared_ptr<Page_Table> &new_table, ulong base_addr,
+                          unsigned new_access) override;
 
     virtual Page_Table_Argumments craft_arguments() const override;
 

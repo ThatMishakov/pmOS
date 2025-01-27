@@ -523,11 +523,9 @@ void syscall_set_attribute()
         return;
     }
 
-    Interrupt_Stackframe *current_frame = &process->regs.e;
-
     switch (attribute) {
     case ATTR_ALLOW_PORT:
-        current_frame->rflags.bits.iopl = value ? 3 : 0;
+        process->regs.set_iopl(value ? 3 : 0);
         break;
 
     case ATTR_DEBUG_SYSCALLS:
@@ -677,7 +675,7 @@ void syscall_create_port()
 
 void syscall_set_interrupt()
 {
-#if defined(__riscv) || defined(__x86_64__)
+#if defined(__riscv) || defined(__x86_64__) || defined(__i386__)
     auto c               = get_cpu_struct();
     const task_ptr &task = c->current_task;
 
@@ -702,7 +700,7 @@ void syscall_set_interrupt()
 
 void syscall_complete_interrupt()
 {
-#if defined(__riscv) || defined(__x86_64__)
+#if defined(__riscv) || defined(__x86_64__) || defined(__i386__)
     auto c               = get_cpu_struct();
     const task_ptr &task = c->current_task;
 
@@ -1212,7 +1210,7 @@ void syscall_transfer_region()
     ulong dest        = syscall_arg(current, 2, 1);
     ulong flags       = syscall_flags(current);
 
-    klib::shared_ptr<Arch_Page_Table> pt = Arch_Page_Table::get_page_table(to_page_table);
+    auto pt = Arch_Page_Table::get_page_table(to_page_table);
     if (!pt) {
         syscall_error(current) = -ENOENT;
         return;
@@ -1357,7 +1355,7 @@ void syscall_map_mem_object()
     ulong addr_start = args[0];
     ulong size_bytes = args[1];
 
-    auto table = page_table_id == 0 ? current_task->page_table
+    klib::shared_ptr<Page_Table> table = page_table_id == 0 ? current_task->page_table
                                     : Arch_Page_Table::get_page_table(page_table_id);
 
     if (!table) {

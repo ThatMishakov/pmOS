@@ -39,6 +39,9 @@
 #include <paging/arch_paging.hh>
 #include <processes/tasks.hh>
 
+// Nice code!
+#if defined(__x86_64__) || defined(__riscv)
+
 using namespace kernel;
 using namespace kernel::pmm;
 
@@ -89,24 +92,6 @@ __attribute__((used)) limine_paging_mode_request paging_request = {
 #endif
     .flags = 0,
 };
-
-// Halt and catch fire function.
-void hcf(void)
-{
-    #ifdef __x86_64__
-    asm ("cli");
-    for (;;) {
-        asm ("hlt");
-    }
-    #elif defined(__riscv)
-    asm volatile("wfi");
-    #endif
-
-    while (1)
-        ;
-
-    __builtin_unreachable();
-}
 
 Direct_Mapper init_mapper;
 
@@ -1040,3 +1025,5 @@ void limine_main()
 
     serial_logger.printf("Bootstrap CPU entering userspace\n");
 }
+
+#endif

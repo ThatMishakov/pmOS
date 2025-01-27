@@ -342,7 +342,8 @@ kresult_t Page_Table::map(u64 page_addr, u64 virt_addr) noexcept
 u64 Page_Table::phys_addr_limit()
 {
     // TODO: This is arch-specific
-    return 0x01UL << 48;
+    // BIG TODO!!!
+    return (u64)0x01 << 48;
 }
 
 kresult_t Page_Table::move_pages(TLBShootdownContext &ctx, const klib::shared_ptr<Page_Table> &to,

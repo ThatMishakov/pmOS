@@ -231,7 +231,7 @@ public:
      * honoured. If true, an exception would be thrown. If false, the new region should be found.
      * @return the beggining address where to place the new region.
      */
-    ReturnStr<phys_addr_t> find_region_spot(phys_addr_t desired_start, phys_addr_t size,
+    ReturnStr<ulong> find_region_spot(ulong desired_start, ulong size,
                                             bool fixed);
 
     // Releases the memory regions in the given range (and their memory). If in the middle of the

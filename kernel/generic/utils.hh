@@ -87,11 +87,12 @@ struct FreqFraction {
 		return f;
 	}
 
-	uint64_t operator*(uint64_t rhs) {
-		auto product = (static_cast<__uint128_t>(f) * static_cast<__uint128_t>(rhs)) >> s;
-		assert(!(product >> 64));
-		return static_cast<uint64_t>(product);
-	}
+	uint64_t operator*(uint64_t rhs);
+	//  {
+	// 	auto product = (static_cast<__uint128_t>(f) * static_cast<__uint128_t>(rhs)) >> s;
+	// 	assert(!(product >> 64));
+	// 	return static_cast<uint64_t>(product);
+	// }
 
 	uint64_t f{0};
 	int s{0};

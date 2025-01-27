@@ -120,7 +120,7 @@ ReturnStr<bool> Phys_Mapped_Region::alloc_page(phys_addr_t ptr_addr, Page_Info, 
 
 kresult_t Generic_Mem_Region::move_to(TLBShootdownContext &ctx,
                                       const klib::shared_ptr<Page_Table> &new_table,
-                                      size_t base_addr, size_t new_access)
+                                      ulong base_addr, unsigned new_access)
 {
     Page_Table *const old_owner = owner;
     auto result = old_owner->move_pages(ctx, new_table, start_addr, base_addr, size, new_access);
@@ -141,7 +141,7 @@ kresult_t Generic_Mem_Region::move_to(TLBShootdownContext &ctx,
 }
 
 kresult_t Phys_Mapped_Region::clone_to(const klib::shared_ptr<Page_Table> &new_table,
-                                       size_t base_addr, u64 new_access)
+                                       ulong base_addr, unsigned new_access)
 {
     auto copy = new Phys_Mapped_Region(*this);
     if (!copy)
@@ -366,14 +366,14 @@ ReturnStr<bool> Mem_Object_Reference::alloc_page(u64 ptr_addr, Page_Table::Page_
 
 kresult_t Mem_Object_Reference::move_to(TLBShootdownContext &ctx,
                                         const klib::shared_ptr<Page_Table> &new_table,
-                                        u64 base_addr, u64 new_access)
+                                        ulong base_addr, unsigned new_access)
 {
     return -ENOSYS;
     // throw Kern_Exception(-ENOSYS, "move_to of Mem_Object_Reference was not yet implemented");
 }
 
 kresult_t Mem_Object_Reference::clone_to(const klib::shared_ptr<Page_Table> &new_table,
-                                         u64 base_addr, u64 new_access)
+                                         ulong base_addr, unsigned new_access)
 {
     auto copy = klib::make_unique<Mem_Object_Reference>(*this);
     if (!copy)

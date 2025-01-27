@@ -46,7 +46,7 @@
 #include <sched/defs.hh>
 #include <types.hh>
 
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__i386__)
     #include <cpus/sse.hh>
 #endif
 
@@ -190,7 +190,7 @@ public:
     u64 ret_hi = 0;
     u64 ret_lo = 0;
 
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__i386__)
     // SSE data on x86_64 CPUs (floating point, vector registers)
     SSE_Data sse_data;
     bool holds_sse_data = false;

@@ -269,11 +269,20 @@ void apic_dummy_int_routine() {
     smart_eoi(APIC_DUMMY_ISR);
 }
 
+void tpr_write(unsigned val)
+{
+    #ifdef __x86_64__
+    setCR8(val);
+    #else
+    apic_write_reg(APIC_REG_TPR, val << 4);
+    #endif
+}
+
 void interrupt_complete(u32 intno)
 {
     assert(intno < 256);
     smart_eoi(intno);
-    setCR8(0);
+    tpr_write(0);
 }
 
 u32 interrupt_min() { return 48; }
@@ -311,7 +320,7 @@ extern "C" void programmable_interrupt(u32 intno)
         handler->active = true;
         // Disable reception of other interrupts from peripheral devices until this one is
         // handled
-        setCR8(14);
+        tpr_write(14);
     }
 }
 

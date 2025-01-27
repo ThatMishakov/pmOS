@@ -32,17 +32,8 @@
 #include <interrupts/gdt.hh>
 #include <x86_asm.hh>
 
-void save_segments(TaskDescriptor *task)
-{
-    task->regs.seg.gs = read_msr(0xC0000102); // KernelGSBase
-    task->regs.seg.fs = read_msr(0xC0000100); // FSBase
-}
-
-void restore_segments(TaskDescriptor *task)
-{
-    write_msr(0xC0000102, task->regs.seg.gs); // KernelGSBase
-    write_msr(0xC0000100, task->regs.seg.fs); // FSBase
-}
+void save_segments(TaskDescriptor *task);
+void restore_segments(TaskDescriptor *task);
 
 void TaskDescriptor::before_task_switch()
 {
@@ -69,5 +60,5 @@ void TaskDescriptor::after_task_switch() {
 
 bool TaskDescriptor::is_kernel_task() const
 {
-    return regs.e.cs == R0_CODE_SEGMENT;
+    return regs.get_cs() == R0_CODE_SEGMENT;
 }

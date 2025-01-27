@@ -77,7 +77,7 @@ Port *Port::atomic_get_port(u64 portno) noexcept
     return ports.find(portno);
 }
 
-kresult_t Port::atomic_send_from_system(const char *msg_ptr, uint64_t size)
+kresult_t Port::atomic_send_from_system(const char *msg_ptr, size_t size)
 {
     Auto_Lock_Scope scope_lock(lock);
     return send_from_system(msg_ptr, size);
@@ -104,7 +104,7 @@ kresult_t Port::send_from_system(klib::vector<char> &&v)
     return 0;
 }
 
-kresult_t Port::send_from_system(const char *msg_ptr, uint64_t size)
+kresult_t Port::send_from_system(const char *msg_ptr, size_t size)
 {
     assert(size > 0);
 

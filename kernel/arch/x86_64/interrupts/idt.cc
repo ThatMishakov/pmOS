@@ -29,10 +29,10 @@
 
 #include "idt.hh"
 
-#include "apic.hh"
-#include "exceptions_managers.hh"
-#include "interrupts.hh"
-#include "programmable_ints_functs.hh"
+#include <interrupts/apic.hh>
+#include <interrupts/exceptions_managers.hh>
+#include <interrupts/interrupts.hh>
+#include <interrupts/programmable_ints_functs.hh>
 
 #include <cpus/ipi.hh>
 #include <processes/syscalls.hh>

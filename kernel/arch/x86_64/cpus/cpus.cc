@@ -29,7 +29,7 @@
 
 #include "cpus.hh"
 
-#include "sse.hh"
+#include <cpus/sse.hh>
 
 #include <interrupts/apic.hh>
 #include <interrupts/gdt.hh>
@@ -213,7 +213,6 @@ extern "C" void cpu_start_routine(CPU_Info *c)
     c->current_task = idle;
     const auto idle_pt             = klib::dynamic_pointer_cast<x86_Page_Table>(idle->page_table);
     idle_pt->apply_cpu(c);
-    idle_pt->atomic_active_sum(1);
     get_cpu_struct()->current_task->switch_to();
     reschedule();
 

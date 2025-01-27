@@ -31,8 +31,8 @@
 
 #include "apic.hh"
 #include "exceptions_managers.hh"
-#include "gdt.hh"
-#include "idt.hh"
+#include <interrupts/gdt.hh>
+#include <interrupts/idt.hh>
 
 #include <cpus/ipi.hh>
 #include <kernel/messaging.h>

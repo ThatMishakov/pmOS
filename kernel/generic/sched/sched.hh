@@ -45,7 +45,7 @@
 #include <registers.hh>
 #include <types.hh>
 
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__i386__)
     #include <interrupts/gdt.hh>
     #include <paging/x86_temp_mapper.hh>
 #elif defined(__riscv)
@@ -94,6 +94,8 @@ struct CPU_Info {
     Kernel_Stack_Pointer nmi_stack;
     Kernel_Stack_Pointer machine_check_stack;
     Kernel_Stack_Pointer double_fault_stack;
+#endif
+#if defined(__x86_64__) || defined(__i386__)
     GDT cpu_gdt;
 
     u64 system_timer_val = 0;
@@ -104,10 +106,14 @@ struct CPU_Info {
     TaskDescriptor *atomic_get_front_priority(priority_t);
 
 // Temporary memory mapper; This is arch specific
-#ifdef __x86_64__
+#ifdef __i386__
+    Temp_Mapper &get_temp_mapper();
+#elif defined(__x86_64__)
     x86_PAE_Temp_Mapper temp_mapper;
+    x86_PAE_Temp_Mapper &get_temp_mapper() { return temp_mapper; }
 #elif defined(__riscv)
     RISCV64_Temp_Mapper temp_mapper;
+    RISCV64_Temp_Mapper &get_temp_mapper() { return temp_mapper; }
 #endif
 
     constexpr static unsigned pthread_once_size                       = 16;
@@ -118,7 +124,7 @@ struct CPU_Info {
     RCU_CPU paging_rcu_cpu;
     RCU_CPU heap_rcu_cpu;
 
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__i386__) 
     u32 lapic_id = 0;
 #endif
 

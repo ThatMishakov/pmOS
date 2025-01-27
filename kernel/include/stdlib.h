@@ -33,7 +33,7 @@
 extern "C" {
 #endif
 
-typedef unsigned long size_t;
+typedef unsigned int size_t;
 
 void abort() __attribute__((noreturn));
 void free(void *ptr);
@@ -42,10 +42,6 @@ void *calloc(size_t nitems, size_t size);
 void *realloc(void *ptr, size_t size);
 
 #define alloca(x) __builtin_alloca(x)
-
-char *getenv(const char *name);
-
-inline int sched_yield(void) { return 0; }
 
 #ifdef __cplusplus
 }
