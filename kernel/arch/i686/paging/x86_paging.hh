@@ -32,3 +32,5 @@ public:
 protected:
     unsigned cr3 = 0;
 };
+
+u64 prepare_pt_for(void *virt_addr, Page_Table_Argumments arg, u32 pt_top_phys);

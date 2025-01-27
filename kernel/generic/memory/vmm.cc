@@ -89,7 +89,7 @@ int virtmem_ensure_tags(size_t size)
         // No free tags
         return -ENOMEM;
 
-    int idx    = __builtin_ffsl(kernel_space_allocator.virtmem_freelist_bitmap) - 1;
+    int idx    = kernel_space_allocator.first_bit(kernel_space_allocator.virtmem_freelist_bitmap) - 1;
     auto &list = kernel_space_allocator.virtmem_freelists[idx];
     auto tag   = &*list.begin();
 

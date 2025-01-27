@@ -189,7 +189,13 @@
         "typeindex": "cpp",
         "__availability": "cpp",
         "mdspan": "c",
-        "ranges": "cpp"
+        "ranges": "cpp",
+        "cassert": "cpp",
+        "cfloat": "cpp",
+        "climits": "cpp",
+        "filesystem": "cpp",
+        "cstdbool": "cpp",
+        "version": "cpp"
     },
     "cmake.configureOnOpen": false,
     "C_Cpp.default.compilerPath": "/home/misha/cross/bin/clang",

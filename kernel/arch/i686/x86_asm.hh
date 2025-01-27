@@ -16,7 +16,7 @@ inline unsigned long getCR2()
     return cr4;
 }
 
-inline void setCR3(unsigned long val) { asm("movl %0, %%cr3" : : "r"(val)); }
+inline void setCR3(unsigned long val) { asm("movl %0, %%cr3" : : "r"(val) : "memory"); }
 
 inline unsigned long getCR3()
 {
@@ -59,3 +59,5 @@ inline u64 rdtsc()
     asm volatile("rdtsc" : "=a"(eax), "=d"(edx));
     return ((u64)edx << 32) | (u64)eax;
 }
+
+inline void invlpg(void *m) { asm volatile("invlpg (%0)" : : "r"(m) : "memory"); }
