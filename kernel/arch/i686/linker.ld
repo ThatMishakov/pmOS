@@ -13,7 +13,7 @@ PHDRS
 SECTIONS
 {
     /* . = 0xFFFFFF0000000000; // 01777777760000000000000 */
-    . = 0;
+    . = 0xC0100000;
 
     /* Leave a symbol indicating the start of the kernel space */
     _kernel_start = .;

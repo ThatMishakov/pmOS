@@ -43,7 +43,7 @@ add_executable(kernel ${PLATFORM_SRCS} ${GENERIC_SRC})
 
 set_target_properties(kernel PROPERTIES CXX_STANDARD 20)
 set_target_properties(kernel PROPERTIES LINK_FLAGS 
-  "-nostdlib -ffreestanding -static -T${CMAKE_CURRENT_SOURCE_DIR}/arch/${TARGET_ARCH}/linker.ld -pie -z max-page-size=0x1000 -Wl,--eh-frame-hdr -Wl,--demangle -Wl,-pie")
+  "-nostdlib -ffreestanding -static -T${CMAKE_CURRENT_SOURCE_DIR}/arch/${TARGET_ARCH}/linker.ld -z max-page-size=0x1000 -Wl,--eh-frame-hdr -Wl,--demangle")
 
 target_include_directories(kernel PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_include_directories(kernel PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/arch/${TARGET_ARCH}")

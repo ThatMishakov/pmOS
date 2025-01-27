@@ -18,6 +18,13 @@ inline unsigned long getCR2()
 
 inline void setCR3(unsigned long val) { asm("movl %0, %%cr3" : : "r"(val)); }
 
+inline unsigned long getCR3()
+{
+    unsigned long val;
+    asm("movl %%cr3, %0" : "=r"(val));
+    return val;
+}
+
 inline unsigned long getCR4()
 {
     unsigned long cr4;

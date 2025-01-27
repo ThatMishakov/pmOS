@@ -35,10 +35,10 @@
 #include <lib/string.hh>
 #include <memory/paging.hh>
 #include <messaging/messaging.hh>
+#include <processes/tasks.hh>
 #include <sched/sched.hh>
 #include <stdarg.h>
 #include <stdio.h>
-#include <processes/tasks.hh>
 
 void int_to_string(i64 n, u8 base, char *str, int &length)
 {
@@ -274,9 +274,9 @@ ReturnStr<bool> copy_to_user(const char *from, char *to, size_t size)
 
 extern "C" void print_stack_trace();
 
-void *memcpy(void * __restrict d, const void * __restrict s, size_t n)
+void *memcpy(void *__restrict d, const void *__restrict s, size_t n)
 {
-    char *dest = (char *)d;
+    char *dest      = (char *)d;
     const char *src = (const char *)s;
 
     void *k = dest;
@@ -698,7 +698,7 @@ void Spinlock::lock() noexcept
 {
     while (!Spinlock_base::try_lock()) {
         // Since the current kernel spinlock situation is not very good, and the
-        // kernel can't preempt itself, if the lock fails to acquire, 
+        // kernel can't preempt itself, if the lock fails to acquire,
         // check that other CPUs are not waiting for us to do something.
         check_synchronous_ipis();
     }
@@ -713,22 +713,60 @@ bool Spinlock::try_lock() noexcept
     return result;
 }
 
-
 // Halt and catch fire function.
 void hcf(void)
 {
-    // should be arch-specific, but whatever...
-    #if defined(__x86_64__) || defined(__i386__) 
-    asm ("cli");
+// should be arch-specific, but whatever...
+#if defined(__x86_64__) || defined(__i386__)
+    asm("cli");
     for (;;) {
-        asm ("hlt");
+        asm("hlt");
     }
-    #elif defined(__riscv)
+#elif defined(__riscv)
     asm volatile("wfi");
-    #endif
+#endif
 
     while (1)
         ;
 
     __builtin_unreachable();
 }
+
+#ifndef __i386__
+u64 FreqFraction::operator*(u64 rhs)
+{
+    auto product = (static_cast<__uint128_t>(f) * static_cast<__uint128_t>(rhs)) >> s;
+    assert(!(product >> 64));
+    return static_cast<uint64_t>(product);
+}
+#else
+// I have no idea if this is correct
+uint64_t FreqFraction::operator*(uint64_t rhs)
+{
+    // Manually emulate 128-bit multiplication
+    uint64_t f_high   = f >> 32;
+    uint64_t f_low    = f & 0xFFFFFFFF;
+    uint64_t rhs_high = rhs >> 32;
+    uint64_t rhs_low  = rhs & 0xFFFFFFFF;
+
+    uint64_t high_high = f_high * rhs_high;
+    uint64_t high_low  = f_high * rhs_low;
+    uint64_t low_high  = f_low * rhs_high;
+    uint64_t low_low   = f_low * rhs_low;
+
+    // Combine parts and shift manually
+    uint64_t carry = (low_low >> 32) + (high_low & 0xFFFFFFFF) + (low_high & 0xFFFFFFFF);
+    uint64_t high  = high_high + (high_low >> 32) + (low_high >> 32) + (carry >> 32);
+    uint64_t low   = (carry << 32) | (low_low & 0xFFFFFFFF);
+
+    // Shift right by `s` bits
+    if (s >= 64) {
+        assert(high == 0); // Ensure no overflow into high bits
+        return low >> (s - 64);
+    } else {
+        uint64_t result = (high << (64 - s)) | (low >> s);
+        assert(!(result >> 64)); // Ensure result fits in 64 bits
+        return result;
+    }
+}
+#endif

@@ -40,8 +40,8 @@
 #include <memory/rcu.hh>
 #include <memory/temp_mapper.hh>
 #include <messaging/messaging.hh>
-#include <pmos/containers/intrusive_list.hh>
 #include <pmos/containers/intrusive_bst.hh>
+#include <pmos/containers/intrusive_list.hh>
 #include <registers.hh>
 #include <types.hh>
 
@@ -107,7 +107,8 @@ struct CPU_Info {
 
 // Temporary memory mapper; This is arch specific
 #ifdef __i386__
-    Temp_Mapper &get_temp_mapper();
+    klib::unique_ptr<Temp_Mapper> temp_mapper;
+    Temp_Mapper &get_temp_mapper() { return *temp_mapper; }
 #elif defined(__x86_64__)
     x86_PAE_Temp_Mapper temp_mapper;
     x86_PAE_Temp_Mapper &get_temp_mapper() { return temp_mapper; }
@@ -124,7 +125,7 @@ struct CPU_Info {
     RCU_CPU paging_rcu_cpu;
     RCU_CPU heap_rcu_cpu;
 
-#if defined(__x86_64__) || defined(__i386__) 
+#if defined(__x86_64__) || defined(__i386__)
     u32 lapic_id = 0;
 #endif
 
@@ -164,7 +165,9 @@ struct CPU_Info {
         u64 port_id;
         u64 extra;
     };
-    using timer_tree = pmos::containers::RedBlackTree<Timer, &Timer::node, detail::TreeCmp<Timer, u64, &Timer::fire_on_core_ticks>>;
+    using timer_tree =
+        pmos::containers::RedBlackTree<Timer, &Timer::node,
+                                       detail::TreeCmp<Timer, u64, &Timer::fire_on_core_ticks>>;
     timer_tree::RBTreeHead timer_queue;
     Spinlock timer_lock;
 
