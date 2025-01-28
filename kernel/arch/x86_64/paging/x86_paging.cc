@@ -301,7 +301,7 @@ void x86_4level_Page_Table::invalidate(TLBShootdownContext &ctx, u64 virt_addr, 
 kresult_t unmap_kernel_page(TLBShootdownContext &ctx, void *virt_addr)
 {
     const u64 cr3 = getCR3();
-    invalidate(ctx, (u64)virt_addr, true, cr3);
+    invalidate(ctx, (u64)virt_addr, false, cr3);
     return 0;
 }
 

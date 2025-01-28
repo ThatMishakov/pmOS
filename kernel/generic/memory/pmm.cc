@@ -406,7 +406,6 @@ Page *kernel::pmm::find_page(Page::page_addr_t addr) noexcept
 }
 
 #include <kern_logger/kern_logger.hh>
-
 Page_Descriptor Page_Descriptor::find_page_struct(Page::page_addr_t addr) noexcept
 {
     auto p = find_page(addr);
