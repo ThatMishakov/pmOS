@@ -642,7 +642,9 @@ klib::shared_ptr<RISCV64_Page_Table> RISCV64_Page_Table::capture_initial(u64 roo
         return nullptr;
 
     new_table->table_root = root;
-    insert_global_page_tables(new_table);
+    auto result = insert_global_page_tables(new_table);
+    if (result)
+        return nullptr;
 
     return new_table;
 }

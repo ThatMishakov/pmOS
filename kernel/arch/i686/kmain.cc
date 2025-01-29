@@ -1,10 +1,12 @@
 #include "ultra_protocol.h"
 
+#include <acpi/acpi.hh>
 #include <kern_logger/kern_logger.hh>
 #include <memory/paging.hh>
 #include <memory/pmm.hh>
 #include <memory/temp_mapper.hh>
 #include <memory/vmm.hh>
+#include <paging/x86_paging.hh>
 #include <types.hh>
 #include <utils.hh>
 
@@ -472,6 +474,23 @@ void init_memory(ultra_boot_context *ctx)
     pmm_create_regions(regions_data);
 }
 
+u64 rsdp = -1ULL;
+
+void init();
+void init_acpi(u64 rsdp_addr)
+{
+    if (rsdp_addr == 0) {
+        serial_logger.printf("Warning: ACPI RSDP addr is 0...");
+        return;
+    }
+
+    const bool b = enumerate_tables(rsdp_addr);
+    if (b)
+        rsdp = rsdp_addr;
+}
+
+extern klib::shared_ptr<IA32_Page_Table> idle_page_table;
+
 extern "C" void kmain(struct ultra_boot_context *ctx, uint32_t magic)
 {
     if (magic != 0x554c5442) {
@@ -480,7 +499,19 @@ extern "C" void kmain(struct ultra_boot_context *ctx, uint32_t magic)
 
     serial_logger.printf("Booted by Ultra. ctx: %p\n", ctx);
 
+    auto ptr = (ultra_platform_info_attribute *)find_attribute(ctx, ULTRA_ATTRIBUTE_PLATFORM_INFO);
+    if (!ptr)
+        panic("Could not find platform attribute!\n");
+    ultra_platform_info_attribute attr = *ptr;
+
     init_memory(ctx);
+
+    // Call global (C++) constructors
+    init();
+
+    init_acpi(attr.acpi_rsdp_address);
+
+    idle_page_table = IA32_Page_Table::capture_initial(idle_cr3);
 
     hcf();
 }

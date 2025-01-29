@@ -174,6 +174,9 @@ public:
 
     kresult_t resolve_anonymous_page(u64 virt_addr, u64 access_type) override;
 
+    // TODO: u64 instead of void* is dumb...
+    Page_Info get_page_mapping(u64 virt_addr) const override;
+
 protected:
     /// @brief Inserts the page table into the map of the page tables
     static kresult_t insert_global_page_tables(klib::shared_ptr<x86_4level_Page_Table> table);
