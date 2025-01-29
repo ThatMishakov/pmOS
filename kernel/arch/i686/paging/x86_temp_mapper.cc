@@ -1,6 +1,7 @@
 #include "x86_temp_mapper.hh"
 
 #include "x86_paging.hh"
+
 #include <x86_asm.hh>
 
 static x86_PAE_Temp_Mapper pae_mapper;
@@ -16,6 +17,15 @@ Temp_Mapper *get_temp_temp_mapper(void *addr, u32 kernel_cr3)
     } else {
         two_level_mapper = x86_2level_Mapper(addr, kernel_cr3);
         return &two_level_mapper;
+    }
+}
+
+Temp_Mapper *create_temp_mapper(void *virt_addr, u32 cr3)
+{
+    if (!use_pae) {
+        return new x86_2level_Mapper(virt_addr, cr3);
+    } else {
+        return new x86_PAE_Temp_Mapper(virt_addr, cr3);
     }
 }
 

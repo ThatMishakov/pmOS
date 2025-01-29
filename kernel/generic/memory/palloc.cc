@@ -46,7 +46,7 @@ void *palloc(size_t number)
         return nullptr;
 
     auto phys_addr = pmm::get_memory_for_kernel(number);
-    if (phys_addr == 0) {
+    if (phys_addr == -1UL) {
         vmm::kernel_space_allocator.virtmem_free(ptr, number);
         return nullptr;
     }

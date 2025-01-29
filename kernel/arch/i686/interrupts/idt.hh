@@ -2,7 +2,7 @@
 #include <types.hh>
 
 struct IDT {
-
+    u64 entries[256]{};
 };
 
 extern IDT k_idt;

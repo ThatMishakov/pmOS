@@ -1,6 +1,6 @@
     .bss
 bootstrap_stack_bottom:
-    .skip 4096
+    .skip 16384
 bootstrap_stack_top:
 
     .text

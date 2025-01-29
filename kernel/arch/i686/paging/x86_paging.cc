@@ -17,6 +17,8 @@ void IA32_Page_Table::apply() { apply_page_table(cr3); }
 bool use_pae    = false;
 bool support_nx = false;
 
+extern u32 idle_cr3;
+
 template<typename T> static T alignup(T input, unsigned alignment_log)
 {
     T i = 1;
@@ -154,8 +156,7 @@ bool IA32_Page_Table::is_mapped(u64 virt_addr) const
 kresult_t map_kernel_page(u64 phys_addr, void *virt_addr, Page_Table_Argumments arg)
 {
     assert(!arg.user_access);
-    const u32 cr3 = getCR3();
-    return ia32_map_page(cr3, phys_addr, virt_addr, arg);
+    return ia32_map_page(idle_cr3, phys_addr, virt_addr, arg);
 }
 
 kresult_t IA32_Page_Table::map(u64 page_addr, u64 virt_addr, Page_Table_Argumments arg)
@@ -299,8 +300,7 @@ static void x86_invalidate_pages(TLBShootdownContext &ctx, u32 cr3, void *virt_a
 
 kresult_t unmap_kernel_page(TLBShootdownContext &ctx, void *virt_addr)
 {
-    const u64 cr3 = getCR3();
-    x86_invalidate_page(ctx, virt_addr, false, cr3);
+    x86_invalidate_page(ctx, virt_addr, false, idle_cr3);
     return 0;
 }
 
@@ -616,3 +616,46 @@ void IA32_Page_Table::takeout_global_page_tables()
 }
 
 u64 IA32_Page_Table::user_addr_max() const { return 0xC0000000; }
+
+klib::shared_ptr<IA32_Page_Table> IA32_Page_Table::create_empty(unsigned)
+{
+    klib::shared_ptr<IA32_Page_Table> new_table =
+        klib::unique_ptr<IA32_Page_Table>(new IA32_Page_Table());
+
+    if (!new_table)
+        return nullptr;
+
+    if (!use_pae) {
+        auto cr3 = pmm::get_memory_for_kernel(1);
+        if (pmm::alloc_failure(cr3))
+            return nullptr;
+        auto guard = pmos::utility::make_scope_guard([&]() { pmm::free_memory_for_kernel(cr3, 1); });
+
+        Temp_Mapper_Obj<u32> new_page_m(request_temp_mapper());
+        Temp_Mapper_Obj<u32> current_page_m(request_temp_mapper());
+
+        auto new_page     = new_page_m.map(cr3);
+        auto current_page = current_page_m.map(idle_cr3);
+
+        // Clear new page
+        for (size_t i = 0; i < 768; ++i)
+            new_page[i] = 0;
+
+        // Copy kernel entries
+        for (size_t i = 768; i < 1024; ++i)
+            new_page[i] = current_page[i];
+
+        new_table->cr3 = cr3;
+
+        auto r = insert_global_page_tables(new_table);
+        if (r)
+            return nullptr;
+
+        guard.dismiss();
+
+        return new_table;
+    } else {
+        assert(!"not implemented");
+    }
+    return nullptr;
+}

@@ -2,11 +2,13 @@
 
 #include <acpi/acpi.hh>
 #include <kern_logger/kern_logger.hh>
+#include <memory/mem_object.hh>
 #include <memory/paging.hh>
 #include <memory/pmm.hh>
 #include <memory/temp_mapper.hh>
 #include <memory/vmm.hh>
 #include <paging/x86_paging.hh>
+#include <processes/tasks.hh>
 #include <types.hh>
 #include <utils.hh>
 
@@ -491,6 +493,215 @@ void init_acpi(u64 rsdp_addr)
 
 extern klib::shared_ptr<IA32_Page_Table> idle_page_table;
 
+void init_scheduling_on_bsp();
+
+size_t ultra_context_size(struct ultra_boot_context *ctx)
+{
+    struct ultra_attribute_header *limit = ctx->attributes;
+    for (unsigned i = 0; i < ctx->attribute_count; ++i)
+        limit = ULTRA_NEXT_ATTRIBUTE(limit);
+
+    return (char *)limit - (char *)ctx;
+}
+
+struct module {
+    klib::string path;
+    klib::string cmdline;
+
+    u64 phys_addr;
+    u64 size;
+
+    klib::shared_ptr<Mem_Object> object;
+};
+
+klib::vector<module> modules;
+
+char *strnchr(const char *s, size_t len, int c)
+{
+    for (size_t i = 0; i < len; ++i) {
+        if (s[i] == c)
+            return (char *)(s + i);
+    }
+
+    return nullptr;
+}
+
+klib::string module_path(const ultra_module_info_attribute *t)
+{
+    auto separator = strnchr(t->name, 64, ';');
+    if (!separator)
+        return klib::string(t->name, 64);
+
+    return klib::string(t->name, separator - t->name);
+}
+klib::string module_cmdline(const ultra_module_info_attribute *t)
+{
+    auto separator = strnchr(t->name, 64, ';');
+    if (!separator)
+        return "";
+
+    return klib::string(separator + 1, 64 - (separator - t->name) - 1);
+}
+
+void init_modules(ultra_boot_context *ctx)
+{
+    size_t i                  = 0;
+    ultra_attribute_header *h = ctx->attributes;
+    auto next_module          = [&]() -> ultra_module_info_attribute          *{
+        while (i < ctx->attribute_count) {
+            auto t = h;
+            h      = ULTRA_NEXT_ATTRIBUTE(h);
+            ++i;
+
+            if (t->type == ULTRA_ATTRIBUTE_MODULE_INFO)
+                return (ultra_module_info_attribute *)t;
+        }
+
+        return nullptr;
+    };
+
+    u64 page_mask = PAGE_SIZE - 1;
+
+    serial_logger.printf("Initializing modules...\n");
+
+    ultra_module_info_attribute *t;
+    while ((t = next_module())) {
+        if (t->type == ULTRA_MODULE_TYPE_FILE) {
+            serial_logger.printf("Ultra module at 0x%lx size %lx, name %s\n", t->address, t->size,
+                                 t->name);
+
+            auto path    = module_path(t);
+            auto cmdline = module_cmdline(t);
+
+            if (path == "") {
+                serial_logger.printf("Warning: Empty path for module\n");
+                continue;
+            }
+
+            if (cmdline == "") {
+                serial_logger.printf("Warning: Empty cmdline for module\n");
+            }
+
+            module m = {
+                .path      = klib::move(path),
+                .cmdline   = klib::move(cmdline),
+                .phys_addr = t->address,
+                .size      = t->size,
+                .object    = Mem_Object::create_from_phys(t->address,
+                                                          (t->size + page_mask) & ~page_mask, true),
+            };
+
+            if (!m.object)
+                panic("Failed to create memory object for module\n");
+
+            if (!modules.push_back(m))
+                panic("Failed to add module to modules\n");
+        }
+    }
+}
+
+klib::vector<klib::unique_ptr<load_tag_generic>>
+    construct_load_tag_framebuffer(ultra_boot_context *)
+{
+    return {};
+}
+
+klib::unique_ptr<load_tag_generic> construct_load_tag_rsdp(ultra_boot_context *) { return nullptr; }
+
+klib::unique_ptr<load_tag_generic> construct_load_tag_for_modules()
+{
+    // Calculate the size
+    u64 size = 0;
+
+    // Header
+    size += sizeof(load_tag_load_modules_descriptor);
+
+    // module_descriptor tags
+    size += sizeof(module_descriptor) * modules.size();
+    u64 string_offset = size;
+
+    // Strings
+    for (const auto &t: modules) {
+        size += t.path.size() + 1;
+        size += t.cmdline.size() + 1;
+    }
+
+    // Allign to u64
+    size = (size + 7) & ~7UL;
+
+    // Allocate the tag
+    // I think this is undefined behavior, but who cares :)
+    klib::unique_ptr<load_tag_generic> tag = (load_tag_generic *)new u64[size / 8];
+    if (!tag) {
+        panic("Failed to allocate memory for load tag");
+        return nullptr;
+    }
+
+    tag->tag            = LOAD_TAG_LOAD_MODULES;
+    tag->flags          = 0;
+    tag->offset_to_next = size;
+
+    load_tag_load_modules_descriptor *desc = (load_tag_load_modules_descriptor *)tag.get();
+
+    desc->modules_count = modules.size();
+
+    // Fill in the tags
+    for (size_t i = 0; i < modules.size(); i++) {
+        auto &module                = modules[i];
+        auto &descriptor            = desc->modules[i];
+        descriptor.memory_object_id = module.object->get_id();
+        descriptor.size             = module.size;
+        memcpy((char *)tag.get() + string_offset, module.path.c_str(), module.path.size() + 1);
+        descriptor.path_offset = string_offset;
+        string_offset += module.path.size() + 1;
+        memcpy((char *)tag.get() + string_offset, module.cmdline.c_str(),
+               module.cmdline.size() + 1);
+        descriptor.cmdline_offset = string_offset;
+        string_offset += module.cmdline.size() + 1;
+    }
+
+    return tag;
+}
+
+void init_task1(ultra_boot_context *ctx)
+{
+    module *task1                = nullptr;
+    const klib::string bootstrap = "bootstrap";
+    for (auto &m: modules) {
+        if (m.cmdline == bootstrap) {
+            task1 = &m;
+            break;
+        }
+    }
+
+    if (task1 == nullptr) {
+        serial_logger.printf("Task 1 not found\n");
+        hcf();
+    }
+
+    serial_logger.printf("Task 1 found: %s\n", task1->path.c_str());
+
+    klib::vector<klib::unique_ptr<load_tag_generic>> tags;
+    tags = construct_load_tag_framebuffer(ctx);
+
+    auto t = construct_load_tag_rsdp(ctx);
+    if (t && !tags.push_back(klib::move(t)))
+        panic("Failed to add RSDP tag");
+
+    t = construct_load_tag_for_modules();
+    if (t && !tags.push_back(klib::move(t)))
+        panic("Failed to add modules tag");
+
+    auto task = TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel::User);
+    if (!task)
+        panic("Failed to create task");
+    task->name = "bootstrap";
+    serial_logger.printf("Loading ELF...\n");
+    auto p = task->load_elf(task1->object, task1->path, tags);
+    if (!p.success() || !p.val)
+        panic("Failed to load task 1: %i", p.result);
+}
+
 extern "C" void kmain(struct ultra_boot_context *ctx, uint32_t magic)
 {
     if (magic != 0x554c5442) {
@@ -498,6 +709,9 @@ extern "C" void kmain(struct ultra_boot_context *ctx, uint32_t magic)
     }
 
     serial_logger.printf("Booted by Ultra. ctx: %p\n", ctx);
+
+    auto size = ultra_context_size(ctx);
+    serial_logger.printf("Ultra bootloade context size: %u\n", size);
 
     auto ptr = (ultra_platform_info_attribute *)find_attribute(ctx, ULTRA_ATTRIBUTE_PLATFORM_INFO);
     if (!ptr)
@@ -512,6 +726,26 @@ extern "C" void kmain(struct ultra_boot_context *ctx, uint32_t magic)
     init_acpi(attr.acpi_rsdp_address);
 
     idle_page_table = IA32_Page_Table::capture_initial(idle_cr3);
+
+    init_scheduling_on_bsp();
+
+    global_temp_mapper = nullptr;
+
+    // Init SMP... TODO
+
+    // Copy context to kernel...
+    klib::unique_ptr<char> cctx = klib::unique_ptr<char>(new char[size]);
+    if (!cctx)
+        panic("Couldn't allocate memory for Ultra modules...");
+
+    copy_from_phys((u32)ctx - 0xc0000000, (void *)cctx.get(), size);
+    auto new_ctx = (ultra_boot_context *)cctx.get();
+
+    init_modules(new_ctx);
+
+    init_task1(new_ctx);
+
+    serial_logger.printf("Entering userspace...\n");
 
     hcf();
 }

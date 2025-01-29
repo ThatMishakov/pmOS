@@ -761,8 +761,8 @@ uint64_t FreqFraction::operator*(uint64_t rhs)
 
     // Shift right by `s` bits
     if (s >= 64) {
-        assert(high == 0); // Ensure no overflow into high bits
-        return low >> (s - 64);
+        //assert(high == 0); // Ensure no overflow into high bits
+        return high >> (s - 64);
     } else {
         uint64_t result = (high << (64 - s)) | (low >> s);
         assert(!(result >> 64)); // Ensure result fits in 64 bits

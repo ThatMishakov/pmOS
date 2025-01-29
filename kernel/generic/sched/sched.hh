@@ -88,18 +88,22 @@ struct CPU_Info {
     Kernel_Stack_Pointer kernel_stack;
     Kernel_Stack_Pointer idle_stack;
 
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__i386__)
     // x86-specific
     Kernel_Stack_Pointer debug_stack;
     Kernel_Stack_Pointer nmi_stack;
     Kernel_Stack_Pointer machine_check_stack;
     Kernel_Stack_Pointer double_fault_stack;
-#endif
-#if defined(__x86_64__) || defined(__i386__)
+
     GDT cpu_gdt;
 
     u64 system_timer_val = 0;
     u32 timer_val        = 0;
+#endif
+#ifdef __i386__
+    TSS tss;
+    // TSS double_fault_tss;
+    // TODO...
 #endif
 
     TaskDescriptor *atomic_pick_highest_priority(priority_t min = sched_queues_levels - 1);
@@ -107,7 +111,7 @@ struct CPU_Info {
 
 // Temporary memory mapper; This is arch specific
 #ifdef __i386__
-    klib::unique_ptr<Temp_Mapper> temp_mapper;
+    Temp_Mapper *temp_mapper;
     Temp_Mapper &get_temp_mapper() { return *temp_mapper; }
 #elif defined(__x86_64__)
     x86_PAE_Temp_Mapper temp_mapper;

@@ -81,7 +81,7 @@ void panic(const char *msg, ...);
 
 // Taken from
 // https://github.com/managarm/managarm/blob/master/kernel/thor/generic/thor-internal/util.hpp#L14
-inline int ceil_log2(unsigned long x) { return 8 * sizeof(unsigned long) - __builtin_clzl(x); }
+inline int ceil_log2(unsigned long x) { return 8 * sizeof(unsigned long) - (x); }
 
 struct FreqFraction {
     explicit operator bool() { return f; }
