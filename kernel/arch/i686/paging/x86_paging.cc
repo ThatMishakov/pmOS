@@ -2,6 +2,7 @@
 
 #include <memory/mem_object.hh>
 #include <memory/pmm.hh>
+#include <pmos/utility/scope_guard.hh>
 #include <x86_asm.hh>
 
 IA32_Page_Table::page_table_map IA32_Page_Table::global_page_tables;
@@ -15,6 +16,14 @@ void IA32_Page_Table::apply() { apply_page_table(cr3); }
 
 bool use_pae    = false;
 bool support_nx = false;
+
+template<typename T> static T alignup(T input, unsigned alignment_log)
+{
+    T i = 1;
+    i <<= alignment_log;
+    T mask = i - 1;
+    return (input + mask) & ~mask;
+}
 
 kresult_t ia32_map_page(u32 cr3, u64 phys_addr, void *virt_addr, Page_Table_Argumments arg)
 {
@@ -244,6 +253,50 @@ void x86_invalidate_page(TLBShootdownContext &ctx, void *virt_addr, bool free, u
     }
 }
 
+static void x86_invalidate_pages(TLBShootdownContext &ctx, u32 cr3, void *virt_addr, size_t size,
+                                 bool free)
+{
+    if (!use_pae) {
+        u32 limit        = u32(virt_addr) + size;
+        u32 first_pd_idx = (u32(virt_addr) >> 22) & 0x3FF;
+        u32 end_aligned  = alignup((u32(virt_addr) + size), 22);
+        u32 last_idx     = (end_aligned >> 22) & 0x3FF;
+        if (last_idx == 0 && end_aligned != (u32)virt_addr)
+            last_idx = 1024;
+
+        Temp_Mapper_Obj<u32> mapper(request_temp_mapper());
+        u32 *active_pt = mapper.map(cr3);
+
+        for (u32 i = first_pd_idx; i < last_idx; ++i) {
+            auto pd_entry = active_pt[i];
+            if (!(pd_entry & PAGE_PRESENT))
+                continue;
+
+            Temp_Mapper_Obj<u32> pt_mapper(request_temp_mapper());
+            u32 *pt = pt_mapper.map(pd_entry & _32BIT_ADDR_MASK);
+
+            u32 addr_of_pd = i << 22;
+            u32 start_idx  = addr_of_pd > (u32)virt_addr ? 0 : ((u32)virt_addr >> 12) & 0x3FF;
+            u32 end_idx    = (addr_of_pd + 0x400000) == 0 || (addr_of_pd + 0x400000) < limit
+                                 ? 1024
+                                 : (limit >> 12) & 0x3FF;
+            for (unsigned j = start_idx; j < end_idx; ++j) {
+                auto pt_entry = pt[j];
+                if (!(pt_entry & PAGE_PRESENT))
+                    continue;
+
+                u32 entry_saved = pt_entry;
+                pt[j]           = 0;
+                ctx.invalidate_page((addr_of_pd + (j << 12)));
+                if (free)
+                    free_32bit_page(entry_saved);
+            }
+        }
+    } else {
+        assert(!"not implemented");
+    }
+}
+
 kresult_t unmap_kernel_page(TLBShootdownContext &ctx, void *virt_addr)
 {
     const u64 cr3 = getCR3();
@@ -251,11 +304,33 @@ kresult_t unmap_kernel_page(TLBShootdownContext &ctx, void *virt_addr)
     return 0;
 }
 
+void IA32_Page_Table::invalidate(TLBShootdownContext &ctx, u64 virt_addr, bool free)
+{
+    x86_invalidate_page(ctx, (void *)virt_addr, free, cr3);
+}
+
+void IA32_Page_Table::invalidate_range(TLBShootdownContext &ctx, u64 virt_addr, u64 size_bytes,
+                                       bool free)
+{
+    x86_invalidate_pages(ctx, cr3, (void *)virt_addr, size_bytes, free);
+}
+
 void invalidate_tlb_kernel(u64 addr) { invlpg((void *)addr); }
 void invalidate_tlb_kernel(u64 addr, u64 size)
 {
     for (u64 i = 0; i < size; i += 4096)
         invlpg((void *)(addr + i));
+}
+
+void IA32_Page_Table::invalidate_tlb(u64 addr) { invlpg((void *)addr); }
+void IA32_Page_Table::invalidate_tlb(u64 page, u64 size)
+{
+    if (size / 4096 < 64)
+        for (u64 i = 0; i < size; i += 4096)
+            invlpg((void *)(page + i));
+
+    else
+        setCR3(getCR3());
 }
 
 klib::shared_ptr<IA32_Page_Table> IA32_Page_Table::capture_initial(u32 cr3)
@@ -443,3 +518,101 @@ IA32_Page_Table::~IA32_Page_Table()
         }
     }
 }
+
+kresult_t IA32_Page_Table::copy_anonymous_pages(const klib::shared_ptr<Page_Table> &to,
+                                                u64 from_addr, u64 to_addr, u64 size_bytes,
+                                                u8 access)
+{
+    u32 offset = 0;
+
+    auto guard = pmos::utility::make_scope_guard([&]() {
+        auto ctx = TLBShootdownContext::create_userspace(*to);
+        to->invalidate_range(ctx, to_addr, offset, true);
+    });
+
+    kresult_t result;
+    {
+        TLBShootdownContext ctx = TLBShootdownContext::create_userspace(*this);
+        result                  = [&]() -> kresult_t {
+            if (!use_pae) {
+                u32 start_index     = (from_addr >> 22) & _32BIT_ADDR_MASK;
+                u32 limit           = from_addr + size_bytes;
+                u32 to_addr_aligned = alignup(limit, 22);
+                u32 end_index       = (to_addr_aligned >> 22) & _32BIT_ADDR_MASK;
+
+                Temp_Mapper_Obj<u32> mapper(request_temp_mapper());
+                auto pd = mapper.map(cr3);
+
+                Temp_Mapper_Obj<u32> pt_mapper(request_temp_mapper());
+
+                for (unsigned i = start_index; i < end_index; ++i) {
+                    auto pde = pd[i];
+                    if (!(pde & PAGE_PRESENT))
+                        continue;
+
+                    auto pt = pt_mapper.map(pde & _32BIT_ADDR_MASK);
+
+                    u32 addr_of_pd = (1 << 22) * i;
+                    u32 start_idx  = ((addr_of_pd > limit ? addr_of_pd : limit) >> 12) & 0x3ff;
+                    u32 end_of_pd  = (1 << 22) * (i + 1);
+                    u32 end_idx    = end_of_pd > limit ? 1024 : (limit >> 12) & 0x3ff;
+                    for (unsigned j = start_idx; j < end_idx; ++j) {
+                        auto pte = pt[j];
+
+                        if (!(pte & PAGE_PRESENT))
+                            continue;
+
+                        auto pp = pmm::Page_Descriptor::find_page_struct(pte & _32BIT_ADDR_MASK);
+                        assert(pp.page_struct_ptr && "page struct must be present");
+                        if (!pp.page_struct_ptr->is_anonymous())
+                            continue;
+
+                        u32 copy_from = (1 << 22) * i + (1 << 12) * j;
+                        u32 copy_to   = copy_from - from_addr + to_addr;
+
+                        Page_Table_Argumments arg = {
+                                             .readable           = !!(access & Readable),
+                                             .writeable          = false,
+                                             .user_access        = !!(pte & PAGE_USER),
+                                             .global             = !!(pte & PAGE_GLOBAL),
+                                             .execution_disabled = !(access & Executable),
+                                             .extra              = avl_from_page(pte),
+                                             .cache_policy =
+                                pte & PAGE_CD ? Memory_Type::IONoCache : Memory_Type::Normal,
+                        };
+
+                        if (pte & PAGE_WRITE) {
+                            pte &= ~PAGE_WRITE;
+                            pt[j] = pte;
+                            ctx.invalidate_page(copy_from);
+                        }
+
+                        auto result = to->map(klib::move(pp), copy_to, arg);
+                        if (result)
+                            return result;
+
+                        offset = copy_from - from_addr + PAGE_SIZE;
+                    }
+                }
+            } else {
+                // TODO
+                assert(false);
+            }
+
+            return 0;
+        }();
+    }
+
+    if (result == 0)
+        guard.dismiss();
+
+    return result;
+}
+
+void IA32_Page_Table::takeout_global_page_tables()
+{
+    Auto_Lock_Scope local_lock(page_table_index_lock);
+    global_page_tables.erase(this->id);
+}
+
+u64 IA32_Page_Table::user_addr_max() const { return 0xC0000000; }

@@ -574,7 +574,7 @@ public:
      * operation should be repeated once the pages are available.
      * @throw Kern_Exception If the operation is not successfull
      */
-    virtual ReturnStr<bool> atomic_copy_to_user(u64 to, const void *from, u64 size) = 0;
+    virtual ReturnStr<bool> atomic_copy_to_user(u64 to, const void *from, u64 size);
 
     /// @brief Checks if the pages exists and invalidates it, invalidating TLB entries if needed
     /// @param virt_addr Virtual address of the page

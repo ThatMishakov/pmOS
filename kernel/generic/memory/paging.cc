@@ -82,6 +82,33 @@ ReturnStr<Mem_Object_Reference *>
                                            page_aligned_size);
 }
 
+ReturnStr<bool> Page_Table::atomic_copy_to_user(u64 to, const void *from, u64 size)
+{
+    Auto_Lock_Scope l(lock);
+
+    const ulong PAGE_MASK = ~(PAGE_SIZE - 1);
+
+    Temp_Mapper_Obj<char> mapper(request_temp_mapper());
+    for (u64 i = to & PAGE_MASK; i < to + size; i += PAGE_SIZE) {
+        const auto b = prepare_user_page(i, Writeable);
+        if (!b.success())
+            b.propagate();
+
+        if (not b.val)
+            return false;
+
+        const auto page = get_page_mapping(i);
+        assert(page.is_allocated);
+
+        char *ptr       = mapper.map(page.page_addr);
+        const u64 start = i < to ? to : i;
+        const u64 end   = i + PAGE_SIZE < to + size ? i + PAGE_SIZE : to + size;
+        memcpy(ptr + (start - i), (const char *)from + (start - to), end - start);
+    }
+
+    return true;
+}
+
 kresult_t Page_Table::release_in_range(TLBShootdownContext &ctx, u64 start_addr, u64 size)
 {
     bool clean_pages = false;
@@ -520,7 +547,8 @@ kresult_t Page_Table::atomic_unpin_memory_object(klib::shared_ptr<Mem_Object> ob
     return 0;
 }
 
-kresult_t Page_Table::atomic_transfer_object(const klib::shared_ptr<Page_Table> &new_table, u64 memory_object_id)
+kresult_t Page_Table::atomic_transfer_object(const klib::shared_ptr<Page_Table> &new_table,
+                                             u64 memory_object_id)
 {
     auto object = Mem_Object::get_object(memory_object_id);
     if (!object)
@@ -551,7 +579,7 @@ kresult_t Page_Table::atomic_transfer_object(const klib::shared_ptr<Page_Table> 
         mem_objects.erase(it);
         object->atomic_unregister_pined(weak_from_this());
     }
-        
+
     return 0;
 }
 

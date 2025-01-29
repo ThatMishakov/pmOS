@@ -15,13 +15,13 @@ constexpr u32 PAGE_GLOBAL   = 1 << 8;
 constexpr u32 _32BIT_ADDR_MASK = ~0xfff;
 constexpr u64 PAE_ADDR_MASK = 0x7ffffffffffff000ULL;
 
-inline u32 avl_from_page(u32 page) { return (page >> 9) & 0x7; }
+inline u8 avl_from_page(u32 page) { return (page >> 9) & 0x7; }
 inline u32 avl_to_bits(u32 page) { return (page & 0x7) << 9; }
 
-class IA32_Page_Table: public Page_Table
+class IA32_Page_Table final: public Page_Table
 {
 public:
-    virtual klib::shared_ptr<IA32_Page_Table> create_clone();
+    klib::shared_ptr<IA32_Page_Table> create_clone();
     // TODO: Make a pointer...
     u64 user_addr_max() const override;
 
@@ -56,8 +56,6 @@ public:
                                   bool free) override;
 
     virtual Page_Info get_page_mapping(u64 virt_addr) const override;
-
-    virtual ReturnStr<bool> atomic_copy_to_user(u64 to, const void *from, u64 size) override;
 
 protected:
     unsigned cr3 = -1;
