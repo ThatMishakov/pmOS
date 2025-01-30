@@ -160,3 +160,19 @@ ret_from_sysenter:
 
     # Return
     sysretl
+
+    .type double_fault_isr, @function
+    .globl double_fault_isr
+double_fault_isr:
+    # Double fault is entered with Task Gate...
+
+    pushl $0
+    pushl $0
+    movl %esp, %ebp
+    subl $8, %esp
+
+    call double_fault_handler
+
+    addl $16, %esp
+
+    iretl

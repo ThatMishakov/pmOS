@@ -49,12 +49,12 @@ struct TSS {
     u32 ebp {};
     u32 esi {};
     u32 edi {};
-    u32 es {};
-    u32 cs {};
-    u32 ss {};
-    u32 ds {};
-    u32 fs {};
-    u32 gs {};
+    u32 es {0x10};
+    u32 cs {0x08};
+    u32 ss {0x10};
+    u32 ds {0x10};
+    u32 fs {0x10};
+    u32 gs {0x38};
     u32 ldt {};
     u16 trap {};
     u16 iomap_base {sizeof(TSS)};
@@ -73,6 +73,7 @@ u32 segment_to_base(u64 segment);
 u64 base_to_user_data_segment(u32 base);
 u64 base_to_kernel_data_segment(u32 base);
 u64 tss_to_base(TSS *tss);
+TSS *getTSS(u16 selector);
 
 void loadGDT(GDT *gdt);
 void loadTSS();

@@ -1,20 +1,24 @@
+#include <cpus/sse.hh>
 #include <interrupts/apic.hh>
+#include <interrupts/gdt.hh>
 #include <interrupts/interrupts.hh>
 #include <kern_logger/kern_logger.hh>
-#include <cpus/sse.hh>
-#include <sched/sched.hh>
+#include <memory/vmm.hh>
 #include <paging/x86_temp_mapper.hh>
 #include <processes/tasks.hh>
-#include <interrupts/gdt.hh>
+#include <sched/sched.hh>
 #include <x86_asm.hh>
-#include <memory/vmm.hh>
 
 using namespace kernel;
+
+extern "C" void double_fault_isr();
 
 void program_syscall()
 {
     // TODO I guess..?
 }
+
+extern u32 idle_cr3;
 
 bool setup_stacks(CPU_Info *c)
 {
@@ -25,6 +29,15 @@ bool setup_stacks(CPU_Info *c)
     c->tss.esp0         = (u32)c->kernel_stack_top;
 
     c->cpu_gdt.tss = tss_to_base(&c->tss);
+
+    if (!c->double_fault_stack)
+        return false;
+
+    c->double_fault_tss.esp = (u32)c->double_fault_stack.get_stack_top();
+    c->double_fault_tss.eip = (u32)double_fault_isr;
+    c->double_fault_tss.cr3 = idle_cr3;
+
+    c->cpu_gdt.double_fault_tss = tss_to_base(&c->double_fault_tss);
 
     return true;
 }

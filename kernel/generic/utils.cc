@@ -409,6 +409,7 @@ void panic(const char *msg, ...)
     serial_logger.vprintf(msg, args);
     va_end(args);
 
+    serial_logger.printf("\n");
     abort();
 }
 

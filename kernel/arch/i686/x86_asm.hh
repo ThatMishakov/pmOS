@@ -61,3 +61,10 @@ inline u64 rdtsc()
 }
 
 inline void invlpg(void *m) { asm volatile("invlpg (%0)" : : "r"(m) : "memory"); }
+
+inline u16 str()
+{
+    u16 val;
+    asm volatile("str %0" : "=rm"(val));
+    return val;
+}

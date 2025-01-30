@@ -102,6 +102,7 @@ struct CPU_Info {
 #endif
 #ifdef __i386__
     TSS tss;
+    TSS double_fault_tss;
     // TSS double_fault_tss;
     // TODO...
 #endif

@@ -29,6 +29,13 @@ u64 tss_to_base(TSS *tss)
            (u64)limit;
 }
 
+TSS *getTSS(u16 selector)
+{
+    auto cpu_struct = get_cpu_struct();
+    u64 *casual_ub  = (u64 *)&cpu_struct->cpu_gdt;
+    return (TSS *)segment_to_base(casual_ub[selector/8]);
+}
+
 struct GDTR {
     u16 limit;
     u32 base;
@@ -41,22 +48,21 @@ void loadGDT(GDT *gdt)
         .base  = (u32)gdt,
     };
 
-    asm volatile(
-        "lgdt %0\n"
-        "jmp $0x08, $1f\n"
-        "1:\n"
-        "movw $0x10, %%ax\n"
-        "movw %%ax, %%ss\n"
-        "movw $0x23, %%ax\n"
-        "movw %%ax, %%ds\n"
-        "movw %%ax, %%es\n"
-        "movw $0x38, %%ax\n" // Kernel %gs
-        "movw %%ax, %%gs\n"
-        "movw $0x33, %%ax\n"
-        "movw %%ax, %%fs\n" // User %fs
-        :
-        : "m"(gdtr)
-        : "memory", "eax");
+    asm volatile("lgdt %0\n"
+                 "jmp $0x08, $1f\n"
+                 "1:\n"
+                 "movw $0x10, %%ax\n"
+                 "movw %%ax, %%ss\n"
+                 "movw $0x23, %%ax\n"
+                 "movw %%ax, %%ds\n"
+                 "movw %%ax, %%es\n"
+                 "movw $0x38, %%ax\n" // Kernel %gs
+                 "movw %%ax, %%gs\n"
+                 "movw $0x33, %%ax\n"
+                 "movw %%ax, %%fs\n" // User %fs
+                 :
+                 : "m"(gdtr)
+                 : "memory", "eax");
 }
 
 void loadTSS() { asm volatile("ltr %w0" : : "r"(TSS_SEGMENT)); }
