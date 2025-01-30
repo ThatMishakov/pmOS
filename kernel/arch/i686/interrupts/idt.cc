@@ -8,7 +8,7 @@ constexpr u64 task_gate(u16 selector)
 
 constexpr u64 interrupt_gate(u32 function, u16 cpl)
 {
-    return 0x0000'8e00'0000'0000 | ((u64)function & 0xffff) | (u64(cpl) << 13) | (u64(function & 0xffff0000) << 16);
+    return 0x0000'8e00'0000'0000 | ((u64)function & 0xffff) | (u64(cpl) << 45) | (u64(function & 0xffff0000) << 32) | (R0_CODE_SEGMENT << 16);
 }
 
 constexpr unsigned DIVIDE_INT = 0;
@@ -35,6 +35,7 @@ constexpr unsigned VIRTUALIZATION_INT = 20;
 
 constexpr unsigned SYSCALL_INT = 0xf8;
 
+extern "C" void page_fault_isr();
 extern "C" void syscall_isr();
 
 static IDT init_idt()
@@ -50,13 +51,13 @@ static IDT init_idt()
     // u[BOUNDS_INT]
     // u[INVALID_OPCODE_INT]
     // u[DEVICE_NOT_AVAILABLE_INT]
-    u[DOUBLE_FAULT_INT] = task_gate(DOUBLE_FAULT_TSS_SEGMENT);
+    // u[DOUBLE_FAULT_INT] = task_gate(DOUBLE_FAULT_TSS_SEGMENT);
     // u[COPROCESSOR_SEGMENT_OVERRUN_INT]
     // u[INVALID_TSS_INT]
     // u[SEGMENT_NOT_PRESENT_INT]
     // u[STACK_SEGMENT_FAULT_INT] = task_gate(STACK_FAULT_TSS_SEGMENT);
     // u[GENERAL_PROTECTION_INT]
-    // u[PAGE_FAULT_INT]
+    u[PAGE_FAULT_INT] = interrupt_gate((u32)page_fault_isr, 0);
     // u[RESERVED_INT]
     // u[X87_FPU_FP_ERROR_INT]
     // u[ALIGNMENT_CHECK_INT]

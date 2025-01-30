@@ -188,8 +188,9 @@ double_fault_isr:
 save_registers:
     pushl %eax
     movw $0x1b, %ax
-    cmpw 8(%esp), %ax
+    cmpw 16(%esp), %ax
     jne 1f
+    # Userspace exception
     
     movw $0x38, %ax
     movl %ax, %gs
@@ -208,12 +209,13 @@ save_registers:
     movl %edx, 36(%eax)
     movl 20(%esp), %ecx # esp
     movl 4(%esp), %edx # error code
-    movl %ecx, 28(%esp)
+    movl %ecx, 28(%eax)
     xorl %ecx, %ecx
     movl %ecx, 52(%eax)
     xorl %eax, %eax
     ret
 1:
+    # Kernel thread exception
     movw $0x70, %ax
     cmpw 8(%esp), %ax
     jne 1f
@@ -241,8 +243,9 @@ save_registers:
     xorl %eax, %eax
     ret
 1:
-    xchgl %ecx, 4(%esp)
+    # Kernel exception
     xchgl %ecx, (%esp)
+    xchgl %ecx, 4(%esp)
     pushl %edx
     pushl %ebx
     pushl %ebp
@@ -262,11 +265,11 @@ page_fault_isr:
     pushl $0
     pushl $0
     movl %esp, %ebp
-    xorl $0xfffffff0, %esp
+    andl $0xfffffff0, %esp
     
     subl $8, %esp
-    pushl %eax
     pushl %edx
+    pushl %eax
 
     movl %eax, %edi
 
