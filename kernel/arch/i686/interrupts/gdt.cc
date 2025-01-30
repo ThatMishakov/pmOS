@@ -1,7 +1,7 @@
 #include "gdt.hh"
 
-#include <types.hh>
 #include <sched/sched.hh>
+#include <types.hh>
 
 u32 segment_to_base(u64 segment)
 {
@@ -16,7 +16,8 @@ u64 base_to_user_data_segment(u32 base)
 void gdt_set_cpulocal(CPU_Info *c)
 {
     auto &gdt = c->cpu_gdt;
-    gdt.kernel_gs = 0x00cf92000000ffff | (((u64)c & 0xffffff) << 16) | (((u64)c & 0xff000000) << 32);
+    gdt.kernel_gs =
+        0x00cf92000000ffff | (((u64)c & 0xffffff) << 16) | (((u64)c & 0xff000000) << 32);
 
     // TODO: TSS
 }
@@ -24,7 +25,8 @@ void gdt_set_cpulocal(CPU_Info *c)
 u64 tss_to_base(TSS *tss)
 {
     u32 limit = sizeof(TSS) - 1; // Maybe not -1?
-    return 0x0040890000000000 | (((u64)tss & 0xffffff) << 16) | (((u64)tss & 0xff000000) << 32) | (u64)limit;
+    return 0x0040890000000000 | (((u64)tss & 0xffffff) << 16) | (((u64)tss & 0xff000000) << 32) |
+           (u64)limit;
 }
 
 struct GDTR {
@@ -39,13 +41,15 @@ void loadGDT(GDT *gdt)
         .base  = (u32)gdt,
     };
 
-    asm volatile("lgdt %0\n"
+    asm volatile(
+        "lgdt %0\n"
         "jmp $0x08, $1f\n"
         "1:\n"
         "movw $0x10, %%ax\n"
+        "movw %%ax, %%ss\n"
+        "movw $0x23, %%ax\n"
         "movw %%ax, %%ds\n"
         "movw %%ax, %%es\n"
-        "movw %%ax, %%ss\n"
         "movw $0x38, %%ax\n" // Kernel %gs
         "movw %%ax, %%gs\n"
         "movw $0x33, %%ax\n"
@@ -55,7 +59,4 @@ void loadGDT(GDT *gdt)
         : "memory", "eax");
 }
 
-void loadTSS()
-{
-    asm volatile ("ltr %w0" : : "r"(TSS_SEGMENT));
-}
+void loadTSS() { asm volatile("ltr %w0" : : "r"(TSS_SEGMENT)); }

@@ -746,6 +746,4 @@ extern "C" void kmain(struct ultra_boot_context *ctx, uint32_t magic)
     init_task1(new_ctx);
 
     serial_logger.printf("Entering userspace...\n");
-
-    hcf();
 }

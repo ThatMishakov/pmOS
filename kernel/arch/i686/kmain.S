@@ -20,4 +20,4 @@ _kmain_entry:
 
     call kmain
 
-    # TODO: return to userspace
+    jmp return_from_kernel

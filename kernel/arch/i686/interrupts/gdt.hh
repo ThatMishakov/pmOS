@@ -3,24 +3,31 @@
 
 struct CPU_Info;
 
-#define R0_CODE_SEGMENT 0x08
-#define R0_DATA_SEGMENT 0x10
+#define R0_CODE_SEGMENT            0x08
+#define R0_DATA_SEGMENT            0x10
+#define R3_CODE_SEGMENT            0x1b
+#define R3_DATA_SEGMENT            0x23
+#define USER_GS_SEGMENT            0x2b
+#define USER_FS_SEGMENT            0x33
+#define KERNEL_GS_SEGMENT          0x38
+#define KERNEL_THREAD_CODE_SEGMENT 0x70
 
 struct GDT {
-    u64 null              = 0;
-    u64 kernel_code       = 0x00cf9a000000ffff;
-    u64 kernel_data       = 0x00cf92000000ffff;
-    u64 ring3_code        = 0x00cffa000000ffff;
-    u64 ring3_data        = 0x00cff2000000ffff;
-    u64 user_gs           = 0x00cff2000000ffff;
-    u64 user_fs           = 0x00cff2000000ffff;
-    u64 kernel_gs         = 0x00cff2000000ffff;
-    u64 tss               = 0;
-    u64 nmi_tss           = 0;
-    u64 double_fault_tss  = 0;
-    u64 machine_check_tss = 0;
-    u64 debug_tss         = 0;
-    u64 stack_fault_tss   = 0;
+    u64 null               = 0;
+    u64 kernel_code        = 0x00cf9a000000ffff;
+    u64 kernel_data        = 0x00cf92000000ffff;
+    u64 ring3_code         = 0x00cffa000000ffff;
+    u64 ring3_data         = 0x00cff2000000ffff;
+    u64 user_gs            = 0x00cff2000000ffff;
+    u64 user_fs            = 0x00cff2000000ffff;
+    u64 kernel_gs          = 0x00cff2000000ffff;
+    u64 tss                = 0;
+    u64 nmi_tss            = 0;
+    u64 double_fault_tss   = 0;
+    u64 machine_check_tss  = 0;
+    u64 debug_tss          = 0;
+    u64 stack_fault_tss    = 0;
+    u64 kernel_thread_code = 0x00cf9a000000ffff;
 };
 
 struct TSS {

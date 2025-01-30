@@ -6,6 +6,11 @@ constexpr u64 task_gate(u16 selector)
     return 0x0000'8500'0000'0000 | (u64(selector) << 16);
 }
 
+constexpr u64 interrupt_gate(u32 function, u16 cpl)
+{
+    return 0x0000'8e00'0000'0000 | ((u64)function & 0xffff) | (u64(cpl) << 13) | (u64(function & 0xffff0000) << 16);
+}
+
 constexpr unsigned DIVIDE_INT = 0;
 constexpr unsigned DEBUG_INT = 1;
 constexpr unsigned NMI_INT = 2;
@@ -28,8 +33,11 @@ constexpr unsigned MACHINE_CHECK_INT = 18;
 constexpr unsigned SIMD_FP_EXCEPTION_INT = 19;
 constexpr unsigned VIRTUALIZATION_INT = 20;
 
+constexpr unsigned SYSCALL_INT = 0xf8;
 
-constexpr IDT init_idt()
+extern "C" void syscall_isr();
+
+static IDT init_idt()
 {
     IDT idt = {};
     auto &u = idt.entries;
@@ -56,7 +64,9 @@ constexpr IDT init_idt()
     // u[SIMD_FP_EXCEPTION_INT]
     // u[VIRTUALIZATION_INT]
 
+    u[SYSCALL_INT] = interrupt_gate((u32)syscall_isr, 3);
+
     return idt;
 }
 
-constinit IDT k_idt = init_idt();
+IDT k_idt = init_idt();

@@ -1,4 +1,5 @@
 #pragma once
+#include <types.hh>
 
 #define ENTRY_INTERRUPT 0
 #define ENTRY_SYSCALL   1
@@ -6,22 +7,21 @@
 #define ENTRY_NESTED    3
 
 struct IA32Regs {
-    unsigned long eax {};
-    unsigned long ebx {};
-    unsigned long ecx {};
-    unsigned long edx {};
-    unsigned long esi {};
-    unsigned long edi {};
-    unsigned long ebp {};
-    unsigned long esp {};
-    unsigned long eip {};
-    unsigned long eflags {};
-    unsigned long fs {};
-    unsigned long gs {};
+    unsigned long eax {}; // 0
+    unsigned long ebx {}; // 4
+    unsigned long ecx {}; // 8
+    unsigned long edx {}; // 12
+    unsigned long esi {}; // 16
+    unsigned long edi {}; // 20
+    unsigned long ebp {}; // 24
+    unsigned long esp {}; // 28
+    unsigned long eip {}; // 32
+    unsigned long eflags {}; // 36
+    unsigned long cs {}; // 40
+    unsigned long fs {}; // 44
+    unsigned long gs {}; // 48
 
-    unsigned long cs {};
-
-    unsigned entry_type {};
+    unsigned entry_type {}; // 52
     unsigned saved_entry_type {};
 
     // This is slightly stupid, but whatever

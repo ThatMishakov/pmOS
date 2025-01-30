@@ -615,6 +615,15 @@ void IA32_Page_Table::takeout_global_page_tables()
     global_page_tables.erase(this->id);
 }
 
+klib::shared_ptr<IA32_Page_Table> IA32_Page_Table::get_page_table(u64 id)
+{
+    Auto_Lock_Scope scope_lock(page_table_index_lock);
+    auto it = global_page_tables.find(id);
+    if (it == global_page_tables.end())
+        return nullptr;
+    return it->second.lock();
+}
+
 u64 IA32_Page_Table::user_addr_max() const { return 0xC0000000; }
 
 klib::shared_ptr<IA32_Page_Table> IA32_Page_Table::create_empty(unsigned)
@@ -629,7 +638,8 @@ klib::shared_ptr<IA32_Page_Table> IA32_Page_Table::create_empty(unsigned)
         auto cr3 = pmm::get_memory_for_kernel(1);
         if (pmm::alloc_failure(cr3))
             return nullptr;
-        auto guard = pmos::utility::make_scope_guard([&]() { pmm::free_memory_for_kernel(cr3, 1); });
+        auto guard =
+            pmos::utility::make_scope_guard([&]() { pmm::free_memory_for_kernel(cr3, 1); });
 
         Temp_Mapper_Obj<u32> new_page_m(request_temp_mapper());
         Temp_Mapper_Obj<u32> current_page_m(request_temp_mapper());
@@ -658,4 +668,74 @@ klib::shared_ptr<IA32_Page_Table> IA32_Page_Table::create_empty(unsigned)
         assert(!"not implemented");
     }
     return nullptr;
+}
+
+klib::shared_ptr<IA32_Page_Table> IA32_Page_Table::create_clone()
+{
+    klib::shared_ptr<IA32_Page_Table> new_table = create_empty();
+    if (!new_table)
+        return nullptr;
+
+    Auto_Lock_Scope_Double scope_guard(this->lock, new_table->lock);
+
+    if (!new_table->mem_objects.empty() || !new_table->object_regions.empty() ||
+        !new_table->paging_regions.empty())
+        // Somebody has messed with the page table while it was being created
+        // I don't know if it's the best solution to not block the tables
+        // immediately but I believe it's better to block them for shorter time
+        // and abort the operation when someone tries to mess with the paging,
+        // which would either be very poor coding or a bug anyways
+        return nullptr; // "page table is already cloned"
+
+    // This gets called on error
+    auto guard = pmos::utility::make_scope_guard([&]() {
+        // Remove all the regions and objects. It might not be necessary, since
+        // it should be handled by the destructor but in case somebody from
+        // userspace specultively does weird stuff with the
+        // not-yet-fully-constructed page table, it's better to give them an
+        // empty table
+
+        for (const auto &reg: new_table->mem_objects)
+            reg.first->atomic_unregister_pined(new_table->weak_from_this());
+
+        auto tlb_ctx = TLBShootdownContext::create_userspace(*new_table);
+
+        auto it = new_table->paging_regions.begin();
+        while (it != new_table->paging_regions.end()) {
+            auto region_start = it->start_addr;
+            auto region_size  = it->size;
+
+            it->prepare_deletion();
+            new_table->paging_regions.erase(it);
+
+            new_table->invalidate_range(tlb_ctx, region_start, region_size, true);
+
+            it = new_table->paging_regions.begin();
+        }
+    });
+
+    for (auto &reg: this->mem_objects) {
+        auto res =
+            new_table->mem_objects.insert({reg.first,
+                                           {
+                                               .max_privilege_mask = reg.second.max_privilege_mask,
+                                           }});
+        if (res.first == new_table->mem_objects.end())
+            return nullptr;
+
+        Auto_Lock_Scope reg_lock(reg.first->pinned_lock);
+        auto result = reg.first->register_pined(new_table->weak_from_this());
+        if (result)
+            return nullptr;
+    }
+
+    for (auto &reg: this->paging_regions) {
+        auto result = reg.clone_to(new_table, reg.start_addr, reg.access_type);
+        if (result)
+            return nullptr;
+    }
+
+    guard.dismiss();
+
+    return new_table;
 }

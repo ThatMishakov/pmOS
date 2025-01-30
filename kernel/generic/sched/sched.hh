@@ -72,8 +72,8 @@ extern RCU heap_rcu;
 struct CPU_Info {
     CPU_Info *self               = this;    // 0
     u64 *kernel_stack_top        = nullptr; // 8
-    u64 temp_var                 = 0;       // 16
-    u64 nested_level             = 1;       // 24
+    ulong temp_var               = 0;       // 16
+    ulong nested_level           = 1;       // 24
     TaskDescriptor *current_task = nullptr; // 32
     TaskDescriptor *idle_task    = nullptr; // 40
     u64 jumpto_from              = 0;       // 48

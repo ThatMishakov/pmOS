@@ -29,6 +29,7 @@
 #include "tasks.hh"
 
 #include "idle.hh"
+#include "syscalls.hh"
 
 #include <assert.h>
 #include <cstddef>
@@ -41,7 +42,6 @@
 #include <pmos/tls.h>
 #include <sched/defs.hh>
 #include <sched/sched.hh>
-#include "syscalls.hh"
 
 TaskDescriptor *TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel level) noexcept
 {
@@ -60,6 +60,20 @@ TaskDescriptor *TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel le
     case PrivilegeLevel::User:
         n->regs.e.cs = R3_CODE_SEGMENT;
         n->regs.e.ss = R3_DATA_SEGMENT;
+        break;
+    }
+
+    auto result = n->sse_data.init_on_thread_start();
+    if (result != 0)
+        return nullptr;
+#elif defined(__i386__)
+    // Assign cs and ss
+    switch (level) {
+    case PrivilegeLevel::Kernel:
+        n->regs.cs = KERNEL_THREAD_CODE_SEGMENT;
+        break;
+    case PrivilegeLevel::User:
+        n->regs.cs = R3_CODE_SEGMENT;
         break;
     }
 
