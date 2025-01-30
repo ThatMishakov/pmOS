@@ -1,11 +1,18 @@
     .text
+    .type return_from_kernel, @function
     .globl return_from_kernel
 return_from_kernel:
     movl %gs:16, %eax
     movl 52(%eax), %edx # Entry type
     jmp *return_table(,%edx,4)
 
+    .macro return_from_kernel_macro
+    movl %gs:16, %eax
+    movl 52(%eax), %edx # Entry type
+    jmp *return_table(,%edx,4)
+    .endm
 
+    .type return_from_kernel, @function
     .globl ret_from_interrupt
 ret_from_interrupt:
     # Expecting task pointer to be in %eax...
@@ -176,3 +183,110 @@ double_fault_isr:
     addl $16, %esp
 
     iretl
+
+    .type save_registers, @function
+save_registers:
+    pushl %eax
+    movw $0x1b, %ax
+    cmpw 8(%esp), %ax
+    jne 1f
+    
+    movw $0x38, %ax
+    movl %ax, %gs
+    movl %gs:16, %eax
+    popl (%eax)
+    movl %ebx, 4(%eax)
+    movl %ecx, 8(%eax)
+    movl %edx, 12(%eax)
+    movl %esi, 16(%eax)
+    movl %edi, 20(%eax)
+    movl %ebp, 24(%eax)
+    
+    movl 8(%esp), %ecx # %eip
+    movl 16(%esp), %edx # eflags
+    movl %ecx, 32(%eax)
+    movl %edx, 36(%eax)
+    movl 20(%esp), %ecx # esp
+    movl 4(%esp), %edx # error code
+    movl %ecx, 28(%esp)
+    xorl %ecx, %ecx
+    movl %ecx, 52(%eax)
+    xorl %eax, %eax
+    ret
+1:
+    movw $0x70, %ax
+    cmpw 8(%esp), %ax
+    jne 1f
+
+    movl %gs:16, %eax
+    popl (%eax)
+    movl %ebx, 4(%eax)
+    movl %ecx, 8(%eax)
+    movl %edx, 12(%eax)
+    movl %esi, 16(%eax)
+    movl %edi, 20(%eax)
+    movl %ebp, 24(%eax)
+
+    popl %ecx
+    popl %edx
+    addl $4, %esp
+    popl 32(%eax)
+    addl $4, %esp
+    popl 36(%eax)
+    movl %esp, 28(%eax)
+    movl %gs:4, %esp
+    pushl %ecx
+    movl $4, %ecx
+    movl %ecx, 52(%eax)
+    xorl %eax, %eax
+    ret
+1:
+    xchgl %ecx, 4(%esp)
+    xchgl %ecx, (%esp)
+    pushl %edx
+    pushl %ebx
+    pushl %ebp
+    pushl %esi
+    pushl %edi
+
+    movl %esp, %eax
+    movl 28(%esp), %edx
+    jmp *%ecx
+
+
+    .type page_fault_isr, @function
+    .globl page_fault_isr
+page_fault_isr:
+    call save_registers
+
+    pushl $0
+    pushl $0
+    movl %esp, %ebp
+    xorl $0xfffffff0, %esp
+    
+    subl $8, %esp
+    pushl %eax
+    pushl %edx
+
+    movl %eax, %edi
+
+    call page_fault_handler
+
+    cmpl $0, %edi
+    je 1f
+
+    movl %ebp, %esp
+    addl $8, %esp
+
+    popl %edi
+    popl %esi
+    popl %ebp
+    popl %ebx
+    popl %edx
+    popl %ecx
+    popl %eax
+    addl $4, %esp
+    iretl
+
+1:
+    return_from_kernel_macro
