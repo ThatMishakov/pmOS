@@ -18,8 +18,8 @@ ret_from_interrupt:
     pushl 32(%eax) # eip
 
     # Switch to user gs
-    movw $0x2B, %ax
-    movw %ax, %gs
+    movw $0x2B, %cx
+    movw %cx, %gs
 
     # Restore registers
     movl 4(%eax), %ebx
