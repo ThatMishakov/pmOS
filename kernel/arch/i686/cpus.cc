@@ -42,6 +42,8 @@ bool setup_stacks(CPU_Info *c)
     return true;
 }
 
+extern bool cpu_struct_works;
+
 void init_per_cpu(u64 lapic_id)
 {
     detect_sse();
@@ -52,6 +54,8 @@ void init_per_cpu(u64 lapic_id)
 
     gdt_set_cpulocal(c);
     loadGDT(&c->cpu_gdt);
+
+    cpu_struct_works = true;
 
     if (!setup_stacks(c))
         panic("Failed to setup stacks\n");

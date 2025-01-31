@@ -89,11 +89,11 @@ extern "C" void page_fault_handler(kernel_registers_context *ctx, u32 err)
     }();
 
     if (result) {
-        serial_logger.printf("Debug: Pagefault %x pid %li rip %x error %x returned "
+        serial_logger.printf("Debug: Pagefault %x pid %li (%s) rip %x error %x returned "
                       "error %li\n",
-                      virtual_addr, task->task_id, task->regs.program_counter(), err, result);
-        global_logger.printf("Warning: Pagefault %h pid %i (%s) rip %h error "
-                             "%h -> %i killing process...\n",
+                      virtual_addr, task->task_id, task->name.c_str(), task->regs.program_counter(), err, result);
+        global_logger.printf("Warning: Pagefault %h pid %li (%s) rip %x error "
+                             "%x -> %i killing process...\n",
                              virtual_addr, task->task_id, task->name.c_str(),
                              task->regs.program_counter(), err, result);
 

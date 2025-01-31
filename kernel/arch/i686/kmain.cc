@@ -601,9 +601,81 @@ void init_modules(ultra_boot_context *ctx)
 }
 
 klib::vector<klib::unique_ptr<load_tag_generic>>
-    construct_load_tag_framebuffer(ultra_boot_context *)
+    construct_load_tag_framebuffer(ultra_boot_context *ctx)
 {
-    return {};
+    klib::vector<klib::unique_ptr<load_tag_generic>> tags {};
+    auto attrh = (ultra_framebuffer_attribute *)find_attribute(ctx, ULTRA_ATTRIBUTE_FRAMEBUFFER_INFO);
+    if (!attrh) {
+        serial_logger.printf("No framebuffer found\n");
+        return tags;
+    }
+    auto attr = &attrh->fb;
+
+    klib::unique_ptr<load_tag_generic> tag = (load_tag_generic *)new load_tag_framebuffer;
+    if (!tag) {
+        serial_logger.printf("Error: Couldn't allocate memory for framebuffer tag\n");
+        return tags;
+    }
+
+    tag->tag                   = LOAD_TAG_FRAMEBUFFER;
+    tag->flags                 = 0;
+    tag->offset_to_next        = sizeof(load_tag_framebuffer);
+    load_tag_framebuffer *desc = (load_tag_framebuffer *)tag.get();
+
+    desc->framebuffer_addr   = attr->physical_address;
+    desc->framebuffer_pitch  = attr->pitch;
+    desc->framebuffer_width  = attr->width;
+    desc->framebuffer_height = attr->height;
+    desc->framebuffer_bpp    = attr->bpp;
+
+    serial_logger.printf("Framebuffer: %dx%d, %d bpp, pitch %d at %lx\n", attr->width, attr->height,
+                         attr->bpp, attr->pitch, attr->physical_address);
+
+    switch (attr->format) {
+    case ULTRA_FB_FORMAT_RGB888:
+        desc->red_mask_size    = 8;
+        desc->red_mask_shift   = 16;
+        desc->green_mask_size  = 8;
+        desc->green_mask_shift = 8;
+        desc->blue_mask_size   = 8;
+        desc->blue_mask_shift  = 0;
+        break;
+    case ULTRA_FB_FORMAT_BGR888:
+        desc->red_mask_size    = 8;
+        desc->red_mask_shift   = 0;
+        desc->green_mask_size  = 8;
+        desc->green_mask_shift = 8;
+        desc->blue_mask_size   = 8;
+        desc->blue_mask_shift  = 16;
+        break;
+    case ULTRA_FB_FORMAT_RGBX8888:
+        desc->red_mask_size    = 8;
+        desc->red_mask_shift   = 24;
+        desc->green_mask_size  = 8;
+        desc->green_mask_shift = 16;
+        desc->blue_mask_size   = 8;
+        desc->blue_mask_shift  = 8;
+        break;
+    case ULTRA_FB_FORMAT_XRGB8888:
+        desc->red_mask_size    = 8;
+        desc->red_mask_shift   = 16;
+        desc->green_mask_size  = 8;
+        desc->green_mask_shift = 8;
+        desc->blue_mask_size   = 8;
+        desc->blue_mask_shift  = 0;
+        break;
+    default:
+        serial_logger.printf("Unknown framebuffer format: %d\n", attr->format);
+        break;
+    }
+
+    desc->unused[0]    = 0;
+    desc->memory_model = 1;
+
+    if (!tags.push_back(klib::move(tag)))
+        serial_logger.printf("Failed to add framebuffer tag\n");
+
+    return tags;
 }
 
 klib::unique_ptr<load_tag_generic> construct_load_tag_rsdp(ultra_boot_context *) { return nullptr; }

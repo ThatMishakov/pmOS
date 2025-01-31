@@ -137,6 +137,9 @@ void init_screen()
         r->framebuffer_red_mask_size, r->framebuffer_red_mask_shift, r->framebuffer_green_mask_size, r->framebuffer_green_mask_shift, r->framebuffer_blue_mask_size, r->framebuffer_blue_mask_shift,
         nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, 0, 1, 1, 1, 0, 0, 0);
 
+    if (ft_ctx == NULL)
+        exit(8);
+
     free(message);
 }
 
