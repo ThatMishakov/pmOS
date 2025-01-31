@@ -293,3 +293,18 @@ page_fault_isr:
 
 1:
     return_from_kernel_macro
+
+    .type sse_exception_isr, @function
+    .globl sse_exception_isr
+sse_exception_isr:
+    pushl $0 # fake error code
+    call save_registers
+
+    pushl $0
+    pushl $0
+    movl %esp, %ebp
+    andl $0xfffffff0, %esp
+
+    call sse_exception_manager
+
+    return_from_kernel_macro

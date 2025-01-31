@@ -62,8 +62,6 @@ extern "C" void page_fault_handler(kernel_registers_context *ctx, u32 err)
 
     auto virtual_addr = getCR2();
 
-    serial_logger.printf("Pagefault task %li addr %x error %x\n", task->task_id, virtual_addr, err);
-
     auto result = [&]() -> kresult_t {
         if (virtual_addr >= task->page_table->user_addr_max())
             return -EFAULT;
@@ -91,8 +89,8 @@ extern "C" void page_fault_handler(kernel_registers_context *ctx, u32 err)
     }();
 
     if (result) {
-        t_print_bochs("Debug: Pagefault %h pid %i rip %h error %h returned "
-                      "error %i\n",
+        serial_logger.printf("Debug: Pagefault %x pid %li rip %x error %x returned "
+                      "error %li\n",
                       virtual_addr, task->task_id, task->regs.program_counter(), err, result);
         global_logger.printf("Warning: Pagefault %h pid %i (%s) rip %h error "
                              "%h -> %i killing process...\n",

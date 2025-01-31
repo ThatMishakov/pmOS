@@ -41,7 +41,7 @@ struct IA32Regs {
         saved_entry_type = 0;
     }
 
-    inline bool syscall_pending_restart() const { return saved_entry_type; }
+    inline bool syscall_pending_restart() const { return entry_type == ENTRY_NESTED; }
 
     inline unsigned get_cs() const { return cs; }
     inline unsigned long xbp() const { return ebp; }

@@ -36,6 +36,7 @@ constexpr unsigned VIRTUALIZATION_INT = 20;
 constexpr unsigned SYSCALL_INT = 0xf8;
 
 extern "C" void page_fault_isr();
+extern "C" void sse_exception_isr();
 extern "C" void syscall_isr();
 
 static IDT init_idt()
@@ -50,7 +51,7 @@ static IDT init_idt()
     // u[OVERFLOW_INT]
     // u[BOUNDS_INT]
     // u[INVALID_OPCODE_INT]
-    // u[DEVICE_NOT_AVAILABLE_INT]
+    u[DEVICE_NOT_AVAILABLE_INT] = interrupt_gate((u32)sse_exception_isr, 0);
     // u[DOUBLE_FAULT_INT] = task_gate(DOUBLE_FAULT_TSS_SEGMENT);
     // u[COPROCESSOR_SEGMENT_OVERRUN_INT]
     // u[INVALID_TSS_INT]

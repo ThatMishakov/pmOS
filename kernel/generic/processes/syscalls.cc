@@ -52,7 +52,7 @@
 #include <pmos/system.h>
 #include <sched/sched.hh>
 
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__i386__)
     #include <sched/segments.hh>
 #endif
 
@@ -152,10 +152,10 @@ extern "C" void syscall_handler()
     syscall_table[call_n]();
 
     if ((syscall_error(task) < 0) && !task->regs.syscall_pending_restart()) {
-        t_print_bochs("Debug: syscall %h (%i) pid %h (%s) ", call_n, call_n, task->task_id,
+        serial_logger.printf("Debug: syscall %h (%i) pid %h (%s) ", call_n, call_n, task->task_id,
                       task->name.c_str());
-        i64 val = syscall_error(task);
-        t_print_bochs(" -> %i (%s)\n", val, "syscall failed");
+        int val = syscall_error(task);
+        serial_logger.printf(" -> %i (%s)\n", val, "syscall failed");
     }
 
     // t_print_bochs("SUCCESS %h\n", syscall_ret_high(task));
@@ -1126,7 +1126,7 @@ void syscall_set_segment()
         return;
     }
 
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__i386__)
     if (target == current)
         restore_segments(target);
 #endif

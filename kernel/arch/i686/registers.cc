@@ -34,7 +34,7 @@ i64 SyscallError::operator=(i64 value)
     return value;
 }
 
-SyscallError::operator int() const { return -(int)task->regs.eax; }
+SyscallError::operator int() const { return (int)task->regs.eax; }
 
 void syscall_success(TaskDescriptor *task) { syscall_ret_low(task, 0); }
 
