@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.22)
 set(CMAKE_TRY_COMPILE_TARGET_TYPE "STATIC_LIBRARY")
 
 if(NOT DEFINED TARGET_ARCH)
-  set(TARGET_ARCH "x86_64" CACHE STRING "Target architecture (x86_64 or riscv64)")
+  set(TARGET_ARCH "x86_64" CACHE STRING "Target architecture (x86_64, riscv64 or i686)")
 endif()
 
 set(TOOLCHAIN_PREFIX "${TARGET_ARCH}-pmos")
@@ -27,8 +27,9 @@ include(arch/arch.cmake)
 LOAD_PLATFORM(${TARGET_ARCH})
 
 set(CMAKE_C_FLAGS "${PLATFORM_C_FLAGS} -O3 -flto -static -ffreestanding -fPIE -Wall -Wextra -g -fno-omit-frame-pointer -fasynchronous-unwind-tables  -fexceptions --sysroot=${SYSROOT}")
-set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} ${PLATFORM_CXX_FLAGS} -fno-exceptions -fno-rtti -fcheck-new")
+set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} ${PLATFORM_CXX_FLAGS} -fno-exceptions -fno-rtti")
 set(CMAKE_ASM_FLAGS "${CMAKE_C_FLAGS} ${PLATFORM_ASM_FLAGS}")
+add_compile_options("-fcheck-new")
 
 set(LIBUNWIND_ENABLE_SHARED OFF)
 set(LIBUNWIND_IS_BAREMETAL ON)

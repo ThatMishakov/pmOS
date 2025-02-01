@@ -167,6 +167,81 @@ apic_timer_isr:
 
     return_from_kernel_macro
 
+    .type apic_dummy_isr, @function
+    .globl apic_dummy_isr
+apic_dummy_isr:
+    pushl $0
+    call save_registers
+
+    subl $4, %esp
+    pushl $0
+    pushl $0
+    movl %esp, %ebp
+
+    call apic_dummy_int_routine
+
+    return_from_kernel_macro
+
+    .type ipi_reschedule_isr, @function
+    .globl ipi_reschedule_isr
+ipi_reschedule_isr:
+    pushl $0
+    call save_registers
+
+    subl $4, %esp
+    pushl $0
+    pushl $0
+    movl %esp, %ebp
+
+    call reschedule_isr
+
+    return_from_kernel_macro
+
+    .type ipi_invalidate_tlb_isr, @function
+    .globl ipi_invalidate_tlb_isr
+ipi_invalidate_tlb_isr:
+    pushl $0
+    call save_registers
+
+    subl $4, %esp
+    pushl $0
+    pushl $0
+    movl %esp, %ebp
+
+    call ipi_invalidate_tlb_routine
+
+    return_from_kernel_macro
+
+    .type apic_lvt0_isr, @function
+    .globl apic_lvt0_isr
+apic_lvt0_isr:
+    pushl $0
+    call save_registers
+
+    subl $4, %esp
+    pushl $0
+    pushl $0
+    movl %esp, %ebp
+
+    call lvt0_int_routine
+
+    return_from_kernel_macro
+
+    .type apic_lvt1_isr, @function
+    .globl apic_lvt1_isr
+apic_lvt1_isr:
+    pushl $0
+    call save_registers
+
+    subl $4, %esp
+    pushl $0
+    pushl $0
+    movl %esp, %ebp
+
+    call lvt1_int_routine
+
+    return_from_kernel_macro
+
 
     .type ret_from_syscall, @function
     .globl ret_from_syscall

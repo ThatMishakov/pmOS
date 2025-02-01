@@ -32,15 +32,26 @@ constexpr unsigned MACHINE_CHECK_INT               = 18;
 constexpr unsigned SIMD_FP_EXCEPTION_INT           = 19;
 constexpr unsigned VIRTUALIZATION_INT              = 20;
 
-constexpr unsigned SYSCALL_INT    = 0xf8;
-constexpr unsigned APIC_TIMER_INT = 0xfc;
-constexpr unsigned APIC_SPURIOUS_INT = 0xff;
+constexpr unsigned SYSCALL_INT            = 0xf8;
+constexpr unsigned APIC_DUMMY_ISR         = 0xf9;
+constexpr unsigned IPI_RESCHEDULE_ISR     = 0xfa;
+constexpr unsigned IPI_INVALIDATE_TLB_ISR = 0xfb;
+constexpr unsigned APIC_TIMER_INT         = 0xfc;
+constexpr unsigned APIC_LVT0_ISR          = 0xfd;
+constexpr unsigned APIC_LVT1_ISR          = 0xfe;
+constexpr unsigned APIC_SPURIOUS_INT      = 0xff;
 
 extern "C" void general_protection_fault_isr();
 extern "C" void page_fault_isr();
 extern "C" void sse_exception_isr();
+
 extern "C" void syscall_isr();
+extern "C" void apic_dummy_isr();
+extern "C" void ipi_reschedule_isr();
+extern "C" void ipi_invalidate_tlb_isr();
 extern "C" void apic_timer_isr();
+extern "C" void apic_lvt0_isr();
+extern "C" void apic_lvt1_isr();
 extern "C" void apic_spurious_isr();
 
 static IDT init_idt()
@@ -70,9 +81,14 @@ static IDT init_idt()
     // u[SIMD_FP_EXCEPTION_INT]
     // u[VIRTUALIZATION_INT]
 
-    u[SYSCALL_INT] = interrupt_gate((u32)syscall_isr, 3);
-    u[APIC_TIMER_INT] = interrupt_gate((u32)apic_timer_isr, 0);
-    u[APIC_SPURIOUS_INT] = interrupt_gate((u32)apic_spurious_isr, 0);
+    u[SYSCALL_INT]            = interrupt_gate((u32)syscall_isr, 3);
+    u[APIC_DUMMY_ISR]         = interrupt_gate((u32)apic_dummy_isr, 0);
+    u[IPI_RESCHEDULE_ISR]     = interrupt_gate((u32)ipi_reschedule_isr, 0);
+    u[IPI_INVALIDATE_TLB_ISR] = interrupt_gate((u32)ipi_invalidate_tlb_isr, 0);
+    u[APIC_TIMER_INT]         = interrupt_gate((u32)apic_timer_isr, 0);
+    u[APIC_LVT0_ISR]          = interrupt_gate((u32)apic_lvt0_isr, 0);
+    u[APIC_LVT1_ISR]          = interrupt_gate((u32)apic_lvt1_isr, 0);
+    u[APIC_SPURIOUS_INT]      = interrupt_gate((u32)apic_spurious_isr, 0);
 
     return idt;
 }
