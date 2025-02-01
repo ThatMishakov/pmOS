@@ -40,6 +40,28 @@ ret_from_interrupt:
     # Return
     iretl
 
+    .type return_from_kernel_thread, @function
+    .globl return_from_kernel_thread
+return_from_kernel_thread:
+    # Switch to kernel thread stack
+    movl 28(%eax), %esp
+
+    # Push interrupt frame onto the thread's stack
+    pushl 36(%eax)
+    pushl 40(%eax)
+    pushl 32(%eax)
+
+    # Restore registers
+    movl  4(%eax), %ebx
+    movl  8(%eax), %ecx
+    movl 12(%eax), %esi
+    movl 16(%eax), %edi
+    movl 20(%eax), %ebp
+    movl  0(%eax), %eax
+
+    # Casually (being casual is important) return to the kernel thread...
+    iretl
+
     .globl syscall_isr
     .type syscall_isr, @function
 syscall_isr:
@@ -124,6 +146,28 @@ syscall_entry:
 
     jmp return_from_kernel
 
+    .type apic_spurious_isr, @function
+    .globl apic_spurious_isr
+apic_spurious_isr:
+    iret
+
+
+    .type apic_timer_isr, @function
+    .globl apic_timer_isr
+apic_timer_isr:
+    pushl $0 # dummy error code
+    call save_registers
+
+    subl $4, %esp
+    pushl $0
+    pushl $0
+    movl %esp, %ebp
+
+    call timer_interrupt
+
+    return_from_kernel_macro
+
+
     .type ret_from_syscall, @function
     .globl ret_from_syscall
 ret_from_syscall: # Best function naming conventions in the world...
@@ -188,13 +232,13 @@ double_fault_isr:
     .type save_registers, @function
 save_registers:
     pushl %eax
+    movw $0x38, %ax
+    movl %ax, %gs
+
     movw $0x1b, %ax
     cmpw 16(%esp), %ax
     jne 1f
     # Userspace exception
-    
-    movw $0x38, %ax
-    movl %ax, %gs
     movl %gs:16, %eax
     popl (%eax)
     movl %ebx, 4(%eax)
@@ -238,6 +282,7 @@ save_registers:
     popl 36(%eax)
     movl %esp, 28(%eax)
     movl %gs:4, %esp
+    pushl $0
     pushl %ecx
     movl $4, %ecx
     movl %ecx, 52(%eax)
@@ -249,12 +294,14 @@ save_registers:
     xchgl %ecx, 4(%esp)
     pushl %edx
     pushl %ebx
+    leal 16(%esp), %eax
+    pushl %eax
     pushl %ebp
     pushl %esi
     pushl %edi
 
     movl %esp, %eax
-    movl 28(%esp), %edx
+    movl 32(%esp), %edx
     jmp *%ecx
 
 
@@ -263,12 +310,11 @@ save_registers:
 page_fault_isr:
     call save_registers
 
+    subl $16, %esp
+    andl $0xfffffff0, %esp
     pushl $0
     pushl $0
     movl %esp, %ebp
-    andl $0xfffffff0, %esp
-    
-    subl $8, %esp
     pushl %edx
     pushl %eax
 
@@ -280,16 +326,9 @@ page_fault_isr:
     je 1f
 
     movl %ebp, %esp
-    addl $8, %esp
-
-    popl %edi
-    popl %esi
-    popl %ebp
-    popl %ebx
-    popl %edx
-    popl %ecx
-    popl %eax
-    addl $4, %esp
+    
+    popal
+    
     iretl
 
 1:

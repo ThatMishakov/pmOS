@@ -111,9 +111,10 @@ intno); halt(); break;
 }
 */
 
-void (*return_table[4])(void) = {
+void (*return_table[5])(void) = {
     ret_from_interrupt,
     ret_from_syscall,
     ret_from_sysenter,
     ret_repeat_syscall,
+    return_from_kernel_thread,
 };

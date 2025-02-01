@@ -1,10 +1,10 @@
 #include "gdt.hh"
 
 #include <kern_logger/kern_logger.hh>
+#include <processes/tasks.hh>
+#include <sched/sched.hh>
 #include <types.hh>
 #include <x86_asm.hh>
-#include <sched/sched.hh>
-#include <processes/tasks.hh>
 
 extern "C" void double_fault_handler()
 {
@@ -38,29 +38,53 @@ extern "C" void double_fault_handler()
 }
 
 struct kernel_registers_context {
-    u32 eax;
-    u32 ecx;
-    u32 edx;
-    u32 ebx;
-    u32 ebp;
-    u32 esi;
+    // Order of the (improvised) pushal
     u32 edi;
+    u32 esi;
+    u32 ebp;
+    u32 esp;
+    u32 ebx;
+    u32 edx;
+    u32 ecx;
+    u32 eax;
+
     u32 error_code;
     u32 eip;
     u32 cs;
     u32 eflags;
 };
 
+static void print_kernel_registers(kernel_registers_context *c)
+{
+    serial_logger.printf("Kernel registers:\n");
+    serial_logger.printf("  %eax: 0x%x\n"
+                         "  %ebx: 0x%x\n"
+                         "  %ecx: 0x%x\n"
+                         "  %edx: 0x%x\n"
+                         "  %esp: 0x%x\n"
+                         "  %ebp: 0x%x\n"
+                         "  %esi: 0x%x\n"
+                         "  %edi: 0x%x\n"
+                         "  error_code: 0x%x\n"
+                         "  eip: 0x%x\n"
+                         "  cs: 0x%x\n"
+                         "  eflags: 0x%x\n",
+                         c->eax, c->ebx, c->ecx + 16, c->edx, c->esp, c->ebp, c->esi, c->edi,
+                         c->error_code, c->eip, c->cs, c->eflags);
+}
+
 extern "C" void page_fault_handler(kernel_registers_context *ctx, u32 err)
 {
+    auto virtual_addr = getCR2();
+
     if (ctx) {
+        serial_logger.printf("Kernel page fault at 0x%x\n", virtual_addr);
+        print_kernel_registers(ctx);
         panic("Kernel pagefault");
     }
 
     CPU_Info *c          = get_cpu_struct();
     TaskDescriptor *task = c->current_task;
-
-    auto virtual_addr = getCR2();
 
     auto result = [&]() -> kresult_t {
         if (virtual_addr >= task->page_table->user_addr_max())
@@ -90,15 +114,16 @@ extern "C" void page_fault_handler(kernel_registers_context *ctx, u32 err)
 
     if (result) {
         serial_logger.printf("Debug: Pagefault %x pid %li (%s) rip %x error %x returned "
-                      "error %li\n",
-                      virtual_addr, task->task_id, task->name.c_str(), task->regs.program_counter(), err, result);
+                             "error %li\n",
+                             virtual_addr, task->task_id, task->name.c_str(),
+                             task->regs.program_counter(), err, result);
         global_logger.printf("Warning: Pagefault %h pid %li (%s) rip %x error "
                              "%x -> %i killing process...\n",
                              virtual_addr, task->task_id, task->name.c_str(),
                              task->regs.program_counter(), err, result);
 
-        //print_registers(task, global_logger);
-        // print_stack_trace(task, global_logger);
+        // print_registers(task, global_logger);
+        //  print_stack_trace(task, global_logger);
 
         task->atomic_kill();
     }
@@ -109,13 +134,13 @@ extern "C" void general_protection_fault_handler(kernel_registers_context *ctx, 
     if (ctx) {
         panic("Kernel general protection fault error %u", err);
     }
-    
+
     auto task = get_cpu_struct()->current_task;
     serial_logger.printf("!!! General Protection Fault (GP) error (segment) %h "
                          "PID %li (%s) RIP %h CS %h... Killing the process\n",
                          err, task->task_id, task->name.c_str(), task->regs.program_counter(),
                          task->regs.cs);
-    //print_registers(get_cpu_struct()->current_task, serial_logger);
+    // print_registers(get_cpu_struct()->current_task, serial_logger);
     global_logger.printf("!!! General Protection Fault (GP) error (segment) %h "
                          "PID %li (%s) RIP %h CS %h... Killing the process\n",
                          err, task->task_id, task->name.c_str(), task->regs.program_counter(),

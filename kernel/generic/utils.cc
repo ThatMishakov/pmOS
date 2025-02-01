@@ -387,15 +387,15 @@ extern "C" void dbg_uart_init();
 extern void hcf();
 extern "C" void abort(void)
 {
-    t_print_bochs("Error: abort() was called. Hint: use debugger on COM1\n");
+    t_print_bochs("Error: abort() was called.\n");
 
     print_stack_trace();
-    serial_logger.printf("Error: abort() was called.\n");
+    // serial_logger.printf("Error: abort() was called.\n");
 
     // print_stack_trace(bochs_logger);
     // print_stack_trace(serial_logger);
 
-    serial_logger.printf("Dropping into debugger...\n---------------\n");
+    // serial_logger.printf("Dropping into debugger...\n---------------\n");
 
     // breakpoint;
 

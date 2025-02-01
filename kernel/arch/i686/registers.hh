@@ -16,7 +16,7 @@ struct IA32Regs {
     unsigned long ebp {}; // 24
     unsigned long esp {}; // 28
     unsigned long eip {}; // 32
-    unsigned long eflags {}; // 36
+    unsigned long eflags {(1 << 9) | (1 << 21)}; // 36
     unsigned long cs {}; // 40
     unsigned long fs {}; // 44
     unsigned long gs {}; // 48

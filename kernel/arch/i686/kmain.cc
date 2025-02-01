@@ -476,6 +476,7 @@ void init_memory(ultra_boot_context *ctx)
     pmm_create_regions(regions_data);
 }
 
+constexpr u64 RSDP_INITIALIZER = -1ULL;
 u64 rsdp = -1ULL;
 
 void init();
@@ -604,7 +605,8 @@ klib::vector<klib::unique_ptr<load_tag_generic>>
     construct_load_tag_framebuffer(ultra_boot_context *ctx)
 {
     klib::vector<klib::unique_ptr<load_tag_generic>> tags {};
-    auto attrh = (ultra_framebuffer_attribute *)find_attribute(ctx, ULTRA_ATTRIBUTE_FRAMEBUFFER_INFO);
+    auto attrh =
+        (ultra_framebuffer_attribute *)find_attribute(ctx, ULTRA_ATTRIBUTE_FRAMEBUFFER_INFO);
     if (!attrh) {
         serial_logger.printf("No framebuffer found\n");
         return tags;
@@ -678,7 +680,21 @@ klib::vector<klib::unique_ptr<load_tag_generic>>
     return tags;
 }
 
-klib::unique_ptr<load_tag_generic> construct_load_tag_rsdp(ultra_boot_context *) { return nullptr; }
+klib::unique_ptr<load_tag_generic> construct_load_tag_rsdp(ultra_boot_context *)
+{
+    if (rsdp == RSDP_INITIALIZER)
+        return {};
+
+    klib::unique_ptr<load_tag_generic> tag = (load_tag_generic *)new load_tag_rsdp;
+    if (!tag)
+        return tag;
+
+    auto *t   = (load_tag_rsdp *)tag.get();
+    t->header = LOAD_TAG_RSDP_HEADER;
+    t->rsdp   = rsdp;
+
+    return tag;
+}
 
 klib::unique_ptr<load_tag_generic> construct_load_tag_for_modules()
 {
