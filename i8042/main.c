@@ -31,8 +31,12 @@
 #include "registers.h"
 #include "timers.h"
 
+#include <errno.h>
+#include <inttypes.h>
 #include <kernel/block.h>
+#include <pmos/special.h>
 #include <pmos/helpers.h>
+#include <pmos/interrupts.h>
 #include <pmos/ipc.h>
 #include <pmos/ports.h>
 #include <pmos/system.h>
@@ -40,8 +44,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <pmos/interrupts.h>
-#include <errno.h>
 
 bool has_second_channel = false;
 
@@ -63,7 +65,7 @@ pmos_port_t get_control_port()
     if (control_port == 0) {
         ports_request_t req = create_port(TASK_ID_SELF, 0);
         if (req.result != SUCCESS) {
-            printf("[i8042] Error creating port %li\n", req.result);
+            printf("[i8042] Error creating port %" PRIu64 "\n", req.result);
             return 0;
         }
         control_port = req.port;
@@ -71,7 +73,6 @@ pmos_port_t get_control_port()
 
     return control_port;
 }
-
 
 uint8_t get_interrupt_number(uint32_t intnum, uint64_t int_port)
 {
@@ -84,15 +85,13 @@ uint8_t get_interrupt_number(uint32_t intnum, uint64_t int_port)
     uint8_t int_vector  = 0;
     unsigned long mypid = get_task_id();
 
-    IPC_Reg_Int m   = {
-        .type = IPC_Reg_Int_NUM,
-        .flags = IPC_Reg_Int_FLAG_EXT_INTS,
-        .intno = intnum, 
-        .int_flags = 0, 
-        .dest_task = mypid,
-        .dest_chan = int_port,
-        .reply_chan = control_port
-    };
+    IPC_Reg_Int m   = {.type       = IPC_Reg_Int_NUM,
+                       .flags      = IPC_Reg_Int_FLAG_EXT_INTS,
+                       .intno      = intnum,
+                       .int_flags  = 0,
+                       .dest_task  = mypid,
+                       .dest_chan  = int_port,
+                       .reply_chan = control_port};
     result_t result = send_message_port(devicesd_port, sizeof(m), (char *)&m);
     if (result != SUCCESS) {
         printf("[i8042] Warning: Could not send message to get the interrupt\n");
@@ -113,7 +112,8 @@ uint8_t get_interrupt_number(uint32_t intnum, uint64_t int_port)
     }
 
     if (desc.size < sizeof(IPC_Reg_Int_Reply)) {
-        printf("[i8042] Warning: Recieved message which is too small (%i expected %i)\n", (int)desc.size, (int)sizeof(IPC_Reg_Int_Reply));
+        printf("[i8042] Warning: Recieved message which is too small (%i expected %i)\n",
+               (int)desc.size, (int)sizeof(IPC_Reg_Int_Reply));
         free(message);
         return 0;
     }
@@ -136,17 +136,18 @@ uint8_t get_interrupt_number(uint32_t intnum, uint64_t int_port)
     return int_vector;
 }
 
-void *interrupt_thread(void *arg) {
-    ptrdiff_t port = (ptrdiff_t)arg;
+void *interrupt_thread(void *arg)
+{
+    ptrdiff_t port      = (ptrdiff_t)arg;
     ports_request_t req = create_port(TASK_ID_SELF, 0);
     if (req.result != SUCCESS) {
-        printf("[i8042] Error creating port %li\n", req.result);
+        printf("[i8042] Error creating port %" PRIi64 "\n", req.result);
         return 0;
     }
 
     pmos_port_t int_port = req.port;
 
-    int port_pin = port ? 2 : 12;
+    int port_pin       = port ? 2 : 12;
     uint8_t int_vector = get_interrupt_number(port_pin, int_port);
     if (int_vector == 0) {
         printf("[i8042] Error: Could not get interrupt number\n");
@@ -163,11 +164,12 @@ void *interrupt_thread(void *arg) {
         result                  = get_message(&desc, &message, int_port);
 
         if (result != SUCCESS) {
-            fprintf(stderr, "[i8042] Error: Could not get message %i %s\n", (int)-result, strerror(-result));
+            fprintf(stderr, "[i8042] Error: Could not get message %i %s\n", (int)-result,
+                    strerror(-result));
         }
 
         if (desc.size < IPC_MIN_SIZE) {
-            fprintf(stderr, "[i8042] Error: Message too small (size %li)\n", desc.size);
+            fprintf(stderr, "[i8042] Error: Message too small (size %" PRIu64 ")\n", desc.size);
             free(message);
         }
 
@@ -193,7 +195,7 @@ void *interrupt_thread(void *arg) {
             free(message);
             complete_interrupt(kmsg->intno);
             continue;
-        } 
+        }
 
         if (IPC_TYPE(message) != IPC_Kernel_Interrupt_NUM) {
             fprintf(stderr, "[i8042] Warning: Recieved message of unknown type %x\n",
@@ -247,7 +249,7 @@ pmos_port_t register_port(unsigned char id)
         .config_port   = configuration_port,
         .task_group_id = pmos_process_task_group(),
     };
- 
+
     result_t result = send_message_port(ps2d_port, sizeof(req), (char *)&req);
     if (result != SUCCESS) {
         printf("[i8042] Warning: Could not send message to register the port %i\n", id);
@@ -337,11 +339,10 @@ uint8_t read_wait(uint32_t port)
     return inb(port);
 }
 
-
 void init_controller()
 {
     printf("[i8042] Initializing the controller...\n");
-    uint8_t status;
+    // uint8_t status;
     uint8_t data;
     uint8_t config_byte;
 
@@ -448,14 +449,14 @@ int main()
         ports_request_t req;
         req = create_port(TASK_ID_SELF, 0);
         if (req.result != SUCCESS) {
-            printf("[i8042] Error creating port %li\n", req.result);
+            printf("[i8042] Error creating port %" PRIi64 "\n", req.result);
             return 0;
         }
         configuration_port = req.port;
 
         req = create_port(TASK_ID_SELF, 0);
         if (req.result != SUCCESS) {
-            printf("[i8042] Error creating port %li\n", req.result);
+            printf("[i8042] Error creating port %" PRIi64 "\n", req.result);
             return 0;
         }
         main_port = req.port;
@@ -464,7 +465,7 @@ int main()
         ports_request_t devicesd_port_req =
             get_port_by_name(devicesd_port_name, strlen(devicesd_port_name), 0);
         if (devicesd_port_req.result != SUCCESS) {
-            printf("[i8042] Warning: Could not get devicesd port. Error %li\n",
+            printf("[i8042] Warning: Could not get devicesd port. Error %" PRIi64 "\n",
                    devicesd_port_req.result);
             return 0;
         }
@@ -473,13 +474,14 @@ int main()
         static const char *ps2d_port_name = "/pmos/ps2d";
         ports_request_t ps2d_port_req = get_port_by_name(ps2d_port_name, strlen(ps2d_port_name), 0);
         if (ps2d_port_req.result != SUCCESS) {
-            printf("[i8042] Warning: Could not get devicesd port. Error %li\n",
+            printf("[i8042] Warning: Could not get devicesd port. Error %" PRIi64 "\n",
                    ps2d_port_req.result);
             return 0;
         }
         ps2d_port = ps2d_port_req.port;
     }
 
+    pmos_request_io_permission();
     request_priority(1);
     init_controller();
 
@@ -508,7 +510,7 @@ int main()
         }
 
         if (desc.size < IPC_MIN_SIZE) {
-            fprintf(stderr, "[i8042] Error: Message too small (size %li)\n", desc.size);
+            fprintf(stderr, "[i8042] Error: Message too small (size %" PRIu64 ")\n", desc.size);
             free(message);
         }
 
@@ -522,7 +524,7 @@ int main()
         switch (IPC_TYPE(message)) {
         case IPC_Kernel_Interrupt_NUM: {
             if (desc.size < sizeof(IPC_Kernel_Interrupt)) {
-                printf("[i8042] Warning: message for type %i is too small (size %lx)\n",
+                printf("[i8042] Warning: message for type %i is too small (size %" PRIu64 ")\n",
                        IPC_Kernel_Interrupt_NUM, desc.size);
                 break;
             }
@@ -546,7 +548,7 @@ int main()
             if (desc.size != expected_size) {
                 fprintf(stderr,
                         "[i8042] Warning: Recieved message of wrong size on port (expected "
-                        "%x got %lx)\n",
+                        "%x got %" PRIu64 ")\n",
                         expected_size, desc.size);
                 break;
             }
@@ -554,8 +556,7 @@ int main()
             IPC_Timer_Reply *reply = (IPC_Timer_Reply *)message;
 
             if (reply->type != IPC_Timer_Reply_NUM) {
-                fprintf(stderr,
-                        "[i8042] Warning: Recieved unexpected meesage of type %x\n",
+                fprintf(stderr, "[i8042] Warning: Recieved unexpected meesage of type %x\n",
                         reply->type);
                 break;
             }

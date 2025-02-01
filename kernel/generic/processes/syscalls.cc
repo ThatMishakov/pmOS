@@ -143,7 +143,7 @@ extern "C" void syscall_handler()
 
     // TODO: This crashes if the syscall is not implemented
     if (call_n >= syscall_table.size() or syscall_table[call_n] == nullptr) {
-        t_print_bochs("Debug: syscall %h pid %h (%s) ", call_n, task->task_id, task->name.c_str());
+        t_print_bochs("Debug: syscall %h pid %li (%s) ", call_n, task->task_id, task->name.c_str());
         t_print_bochs(" -> %i (%s)\n", -ENOTSUP, "syscall not implemented");
         syscall_error(task) = -ENOTSUP;
         return;
@@ -592,7 +592,7 @@ void syscall_get_lapic_id()
 {
     auto current_task = get_current_task();
     ulong cpu_id      = syscall_arg(current_task, 0, 0);
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__i386__)
 
     CPU_Info *i;
     if (cpu_id == 0) {
@@ -604,7 +604,7 @@ void syscall_get_lapic_id()
         i = cpus[cpu_id - 1];
 
     // TODO: Store lapic_id withouth shifting it
-    syscall_return(current_task) = i->lapic_id << 24;
+    syscall_return(current_task) = i->lapic_id;
 
 #else
     // Not available on RISC-V

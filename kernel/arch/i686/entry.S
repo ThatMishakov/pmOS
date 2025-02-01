@@ -60,7 +60,8 @@ syscall_isr:
     popl 40(%eax) # cs
     popl 36(%eax) # eflags
     popl 28(%eax) # esp
-    popl 44(%eax) # ss
+    # popl 44(%eax) # ss
+    addl $4, %esp
 
     xorl %ecx, %ecx
     movl %ecx, 52(%eax) # Entry type
@@ -274,6 +275,43 @@ page_fault_isr:
     movl %eax, %edi
 
     call page_fault_handler
+
+    cmpl $0, %edi
+    je 1f
+
+    movl %ebp, %esp
+    addl $8, %esp
+
+    popl %edi
+    popl %esi
+    popl %ebp
+    popl %ebx
+    popl %edx
+    popl %ecx
+    popl %eax
+    addl $4, %esp
+    iretl
+
+1:
+    return_from_kernel_macro
+
+    .type general_protection_fault_isr, @function
+    .globl general_protection_fault_isr
+general_protection_fault_isr:
+    call save_registers
+
+    pushl $0
+    pushl $0
+    movl %esp, %ebp
+    andl $0xfffffff0, %esp
+    
+    subl $8, %esp
+    pushl %edx
+    pushl %eax
+
+    movl %eax, %edi
+
+    call general_protection_fault_handler
 
     cmpl $0, %edi
     je 1f

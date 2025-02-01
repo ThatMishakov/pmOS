@@ -50,6 +50,7 @@
 
 void init_acpi();
 
+bool have_rsdp = false;
 extern uint64_t rsdp_desc;
 
 extern int acpi_revision;
@@ -168,6 +169,7 @@ void request_acpi_tables()
         printf("Warning: Did not get RSDT table: %i\n", reply->result);
     } else {
         rsdp_desc = reply->descriptor;
+        have_rsdp = true;
         printf("RSDT table found at 0x%llx\n", rsdp_desc);
     }
     free(message);
@@ -184,6 +186,9 @@ int power_button_init();
 
 uacpi_status uacpi_kernel_get_rsdp(uacpi_phys_addr *out_rdsp_address)
 {
+    if (!have_rsdp)
+        return UACPI_STATUS_NOT_FOUND;
+
     *out_rdsp_address = rsdp_desc;
     return UACPI_STATUS_OK;
 }

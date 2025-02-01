@@ -141,13 +141,13 @@ void discover_apic_freq()
     apic_freq          = computeFreqFraction(ticks, divisor);
     apic_inverted_freq = computeFreqFraction(divisor, ticks);
     auto l = apic_freq*1'000'000'000;
-    global_logger.printf("[Kernel] Info: APIC timer ticks per 1ms: %i\n", l);
-    serial_logger.printf("[Kernel] Info: APIC timer ticks per 1ms: %i\n", l);
+    global_logger.printf("[Kernel] Info: APIC timer ticks per 1ms: %li\n", l);
+    serial_logger.printf("[Kernel] Info: APIC timer ticks per 1ms: %lu %u\n", l, ticks*100);
 
     tsc_freq          = computeFreqFraction(tsc_end - tsc_start, divisor);
     tsc_inverted_freq = computeFreqFraction(divisor, tsc_end - tsc_start);
-    global_logger.printf("[Kernel] Info: TSC ticks per 1ms: %i\n", tsc_freq*1'000'000'000);
-    serial_logger.printf("[Kernel] Info: TSC ticks per 1s: %i %i\n", tsc_freq*1'000'000'000, (tsc_end - tsc_start)*100);
+    global_logger.printf("[Kernel] Info: TSC ticks per 1ms: %li\n", tsc_freq*1'000'000'000);
+    serial_logger.printf("[Kernel] Info: TSC ticks per 1s: %li %li\n", tsc_freq*1'000'000'000, (tsc_end - tsc_start)*100);
 }
 
 void apic_one_shot(u32 ms)

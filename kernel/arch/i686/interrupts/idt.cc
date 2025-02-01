@@ -35,6 +35,7 @@ constexpr unsigned VIRTUALIZATION_INT = 20;
 
 constexpr unsigned SYSCALL_INT = 0xf8;
 
+extern "C" void general_protection_fault_isr();
 extern "C" void page_fault_isr();
 extern "C" void sse_exception_isr();
 extern "C" void syscall_isr();
@@ -57,7 +58,7 @@ static IDT init_idt()
     // u[INVALID_TSS_INT]
     // u[SEGMENT_NOT_PRESENT_INT]
     // u[STACK_SEGMENT_FAULT_INT] = task_gate(STACK_FAULT_TSS_SEGMENT);
-    // u[GENERAL_PROTECTION_INT]
+    u[GENERAL_PROTECTION_INT] = interrupt_gate((u32)general_protection_fault_isr, 0);
     u[PAGE_FAULT_INT] = interrupt_gate((u32)page_fault_isr, 0);
     // u[RESERVED_INT]
     // u[X87_FPU_FP_ERROR_INT]

@@ -103,3 +103,22 @@ extern "C" void page_fault_handler(kernel_registers_context *ctx, u32 err)
         task->atomic_kill();
     }
 }
+
+extern "C" void general_protection_fault_handler(kernel_registers_context *ctx, u32 err)
+{
+    if (ctx) {
+        panic("Kernel general protection fault error %u", err);
+    }
+    
+    auto task = get_cpu_struct()->current_task;
+    serial_logger.printf("!!! General Protection Fault (GP) error (segment) %h "
+                         "PID %li (%s) RIP %h CS %h... Killing the process\n",
+                         err, task->task_id, task->name.c_str(), task->regs.program_counter(),
+                         task->regs.cs);
+    //print_registers(get_cpu_struct()->current_task, serial_logger);
+    global_logger.printf("!!! General Protection Fault (GP) error (segment) %h "
+                         "PID %li (%s) RIP %h CS %h... Killing the process\n",
+                         err, task->task_id, task->name.c_str(), task->regs.program_counter(),
+                         task->regs.cs);
+    task->atomic_kill();
+}
