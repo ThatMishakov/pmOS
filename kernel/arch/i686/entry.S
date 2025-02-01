@@ -460,3 +460,40 @@ sse_exception_isr:
     call sse_exception_manager
 
     return_from_kernel_macro
+
+    .type external_int_isr, @function
+external_int_isr:
+    call save_registers
+
+    pushl $0
+    pushl $0
+    movl %esp, %ebp
+    pushl %edx
+
+    call programmable_interrupt
+
+    return_from_kernel_macro
+
+# -------------------------------------- Interrupts mess -----------------------------------
+    .altmacro
+    .macro prog_int num
+    .type prog_int_\num, @function
+    .globl prog_int_\num
+prog_int_\num:
+    pushl $\num
+    call external_int_isr
+    .endm
+
+    .macro fill funct, from, to
+    .local i
+    .set i, \from
+    .rept \to-\from+1
+    \funct %i
+    .set i, i+1
+    .endr
+    .endm
+
+
+    # Fun stuff
+    .section .text
+    fill prog_int,48,247
