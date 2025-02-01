@@ -1,6 +1,7 @@
 #include "gdt.hh"
 
 #include <kern_logger/kern_logger.hh>
+#include <paging/x86_paging.hh>
 #include <processes/tasks.hh>
 #include <sched/sched.hh>
 #include <types.hh>
@@ -48,13 +49,12 @@ struct kernel_registers_context {
     u32 ecx;
     u32 eax;
 
-    u32 error_code;
     u32 eip;
     u32 cs;
     u32 eflags;
 };
 
-static void print_kernel_registers(kernel_registers_context *c)
+static void print_kernel_registers(kernel_registers_context *c, u32 error_code)
 {
     serial_logger.printf("Kernel registers:\n");
     serial_logger.printf("  %eax: 0x%x\n"
@@ -70,16 +70,34 @@ static void print_kernel_registers(kernel_registers_context *c)
                          "  cs: 0x%x\n"
                          "  eflags: 0x%x\n",
                          c->eax, c->ebx, c->ecx + 16, c->edx, c->esp, c->ebp, c->esi, c->edi,
-                         c->error_code, c->eip, c->cs, c->eflags);
+                         error_code, c->eip, c->cs, c->eflags);
 }
+
+extern bool use_pae;
+extern u32 idle_cr3;
 
 extern "C" void page_fault_handler(kernel_registers_context *ctx, u32 err)
 {
     auto virtual_addr = getCR2();
 
     if (ctx) {
+        // attempt to resolve it
+        if (!use_pae) {
+            Temp_Mapper_Obj<u32> idle_mapper(request_temp_mapper());
+            u32 *idle_pd = idle_mapper.map(idle_cr3 & 0xfffff000);
+            Temp_Mapper_Obj<u32> cr3_mapper(request_temp_mapper());
+            u32 *cr3_pd = cr3_mapper.map(getCR3() & 0xfffff000);
+
+            auto idx = virtual_addr >> 22;
+            if ((idle_pd[idx] & PAGE_PRESENT) and not(cr3_pd[idx] & PAGE_PRESENT)) {
+                cr3_pd[idx] = idle_pd[idx];
+                return;
+            }
+        }
+
         serial_logger.printf("Kernel page fault at 0x%x\n", virtual_addr);
-        print_kernel_registers(ctx);
+        print_kernel_registers(ctx, err);
+
         panic("Kernel pagefault");
     }
 
@@ -132,7 +150,8 @@ extern "C" void page_fault_handler(kernel_registers_context *ctx, u32 err)
 extern "C" void general_protection_fault_handler(kernel_registers_context *ctx, u32 err)
 {
     if (ctx) {
-        panic("Kernel general protection fault error %u", err);
+        print_kernel_registers(ctx, err);
+        panic("Kernel general protection fault error 0x%x", err);
     }
 
     auto task = get_cpu_struct()->current_task;

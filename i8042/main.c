@@ -142,7 +142,13 @@ void *interrupt_thread(void *arg)
     ports_request_t req = create_port(TASK_ID_SELF, 0);
     if (req.result != SUCCESS) {
         printf("[i8042] Error creating port %" PRIi64 "\n", req.result);
-        return 0;
+        exit(1);
+    }
+
+    result_t result = pmos_request_io_permission();
+    if (result) {
+        printf("[i8042] Error: Could not request io permission %i\n", (int)result);
+        exit(1);
     }
 
     pmos_port_t int_port = req.port;
@@ -151,7 +157,7 @@ void *interrupt_thread(void *arg)
     uint8_t int_vector = get_interrupt_number(port_pin, int_port);
     if (int_vector == 0) {
         printf("[i8042] Error: Could not get interrupt number\n");
-        return 0;
+        exit(1);
     } else {
         printf("[i8042] Info: Got interrupt number %i\n", int_vector);
     }

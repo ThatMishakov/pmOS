@@ -328,10 +328,11 @@ save_registers:
     movl %ecx, 32(%eax)
     movl %edx, 36(%eax)
     movl 20(%esp), %ecx # esp
-    movl 4(%esp), %edx # error code
     movl %ecx, 28(%eax)
     xorl %ecx, %ecx
     movl %ecx, 52(%eax)
+    popl %edx
+    xchgl %edx, (%esp)
     xorl %eax, %eax
     ret
 1:
@@ -365,9 +366,9 @@ save_registers:
     ret
 1:
     # Kernel exception
-    xchgl %ecx, (%esp)
+    xchgl %edx, (%esp)
+    xchgl %edx, 8(%esp)
     xchgl %ecx, 4(%esp)
-    pushl %edx
     pushl %ebx
     leal 16(%esp), %eax
     pushl %eax
@@ -376,7 +377,6 @@ save_registers:
     pushl %edi
 
     movl %esp, %eax
-    movl 32(%esp), %edx
     jmp *%ecx
 
 
@@ -400,10 +400,8 @@ page_fault_isr:
     cmpl $0, %edi
     je 1f
 
-    movl %ebp, %esp
-    
+    movl %edi, %esp
     popal
-    
     iretl
 
 1:
@@ -414,12 +412,11 @@ page_fault_isr:
 general_protection_fault_isr:
     call save_registers
 
+    subl $16, %esp
+    andl $0xfffffff0, %esp
     pushl $0
     pushl $0
     movl %esp, %ebp
-    andl $0xfffffff0, %esp
-    
-    subl $8, %esp
     pushl %edx
     pushl %eax
 
@@ -430,17 +427,8 @@ general_protection_fault_isr:
     cmpl $0, %edi
     je 1f
 
-    movl %ebp, %esp
-    addl $8, %esp
-
-    popl %edi
-    popl %esi
-    popl %ebp
-    popl %ebx
-    popl %edx
-    popl %ecx
-    popl %eax
-    addl $4, %esp
+    movl %edi, %esp
+    popal
     iretl
 
 1:
@@ -481,7 +469,7 @@ external_int_isr:
     .globl prog_int_\num
 prog_int_\num:
     pushl $\num
-    call external_int_isr
+    jmp external_int_isr
     .endm
 
     .macro fill funct, from, to
