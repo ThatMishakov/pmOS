@@ -153,7 +153,7 @@ extern "C" void syscall_handler()
 
     if ((syscall_error(task) < 0) && !task->regs.syscall_pending_restart()) {
         serial_logger.printf("Debug: syscall %h (%i) pid %h (%s) ", call_n, call_n, task->task_id,
-                      task->name.c_str());
+                             task->name.c_str());
         int val = syscall_error(task);
         serial_logger.printf(" -> %i (%s)\n", val, "syscall failed");
     }
@@ -1355,8 +1355,9 @@ void syscall_map_mem_object()
     ulong addr_start = args[0];
     ulong size_bytes = args[1];
 
-    klib::shared_ptr<Page_Table> table = page_table_id == 0 ? current_task->page_table
-                                    : Arch_Page_Table::get_page_table(page_table_id);
+    klib::shared_ptr<Page_Table> table = page_table_id == 0
+                                             ? current_task->page_table
+                                             : Arch_Page_Table::get_page_table(page_table_id);
 
     if (!table) {
         syscall_error(current_task) = -ENOENT;

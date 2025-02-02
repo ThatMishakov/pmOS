@@ -135,26 +135,26 @@ void print_stack_trace(TaskDescriptor *task, Logger &logger)
     }
 }
 
-extern "C" void deal_with_pagefault_in_kernel()
-{
-    t_print_bochs("Error: Pagefault inside the kernel! Instr %h %%cr2 0x%h  "
-                  "error 0x%h CPU %i\n",
-                  get_cpu_struct()->jumpto_from, get_cpu_struct()->pagefault_cr2,
-                  get_cpu_struct()->pagefault_error, get_cpu_struct()->cpu_id);
-    print_registers(get_cpu_struct()->current_task, bochs_logger);
-    print_stack_trace(bochs_logger);
+// extern "C" void deal_with_pagefault_in_kernel()
+// {
+//     t_print_bochs("Error: Pagefault inside the kernel! Instr %h %%cr2 0x%h  "
+//                   "error 0x%h CPU %i\n",
+//                   get_cpu_struct()->jumpto_from, get_cpu_struct()->pagefault_cr2,
+//                   get_cpu_struct()->pagefault_error, get_cpu_struct()->cpu_id);
+//     print_registers(get_cpu_struct()->current_task, bochs_logger);
+//     print_stack_trace(bochs_logger);
 
-    abort();
-}
+//     abort();
+// }
 
-void kernel_jump_to(void (*function)(void))
-{
-    CPU_Info *c    = get_cpu_struct();
-    c->jumpto_from = c->nested_int_regs.program_counter();
-    c->jumpto_to   = (ulong)function;
+// void kernel_jump_to(void (*function)(void))
+// {
+//     CPU_Info *c    = get_cpu_struct();
+//     c->jumpto_from = c->nested_int_regs.program_counter();
+//     c->jumpto_to   = (ulong)function;
 
-    c->nested_int_regs.program_counter() = (ulong)&jumpto_func;
-}
+//     c->nested_int_regs.program_counter() = (ulong)&jumpto_func;
+// }
 
 extern "C" void pagefault_manager()
 {
@@ -162,9 +162,11 @@ extern "C" void pagefault_manager()
 
     if (c->nested_level) {
         c->pagefault_cr2   = getCR2();
-        c->pagefault_error = c->nested_int_regs.int_err;
+        panic("Pagefault in kernel");
 
-        kernel_jump_to(deal_with_pagefault_in_kernel);
+        // c->pagefault_error = c->nested_int_regs.int_err;
+
+        // kernel_jump_to(deal_with_pagefault_in_kernel);
         return;
     }
 

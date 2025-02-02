@@ -95,6 +95,15 @@ extern "C" void page_fault_handler(kernel_registers_context *ctx, u32 err)
             }
         }
 
+        CPU_Info *c = get_cpu_struct();
+        if (c->jumpto_func) {
+            // This pagefault is normal...
+            ctx->eip = (u32)c->jumpto_func;
+            ctx->eax = c->jumpto_arg;
+            ctx->ecx = virtual_addr;
+            return;
+        }
+
         serial_logger.printf("Kernel page fault at 0x%x\n", virtual_addr);
         print_kernel_registers(ctx, err);
 

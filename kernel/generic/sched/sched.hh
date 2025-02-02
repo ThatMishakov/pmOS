@@ -70,15 +70,17 @@ extern RCU paging_rcu;
 extern RCU heap_rcu;
 
 struct CPU_Info {
-    CPU_Info *self               = this;    // 0
-    u64 *kernel_stack_top        = nullptr; // 8
-    ulong temp_var               = 0;       // 16
-    ulong nested_level           = 1;       // 24
-    TaskDescriptor *current_task = nullptr; // 32
-    TaskDescriptor *idle_task    = nullptr; // 40
-    u64 jumpto_from              = 0;       // 48
-    u64 jumpto_to                = 0;       // 56
-    Task_Regs nested_int_regs;              // 64
+    CPU_Info *self               = this;    // 0  0
+    u64 *kernel_stack_top        = nullptr; // 8  4
+    ulong temp_var               = 0;       // 16 8
+    ulong nested_level           = 1;       // 24 12
+    TaskDescriptor *current_task = nullptr; // 32 16
+    TaskDescriptor *idle_task    = nullptr; // 40 20
+    void *jumpto_func            = nullptr; // 48 24
+    ulong jumpto_arg             = 0;       // 56 28
+    // u64 jumpto_from              = 0;       // 48 24
+    // u64 jumpto_to                = 0;       // 56 28
+    Task_Regs nested_int_regs; // 64 32
 
     klib::array<sched_queue, sched_queues_levels> sched_queues;
 

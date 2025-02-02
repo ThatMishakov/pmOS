@@ -88,6 +88,11 @@ syscall_isr:
     xorl %ecx, %ecx
     movl %ecx, 52(%eax) # Entry type
 
+    pushl $0
+    pushl $0
+    movl %esp, %ebp
+    subl $8, %esp
+
     call syscall_handler
 
     jmp return_from_kernel

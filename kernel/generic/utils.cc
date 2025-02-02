@@ -242,9 +242,18 @@ ReturnStr<bool> prepare_user_buff_wr(char *buff, size_t size)
 extern "C" void allow_access_user();
 extern "C" void disallow_access_user();
 
+extern "C" ReturnStr<bool> fast_copy_from_user(char *dest, const char *src, size_t size) __attribute__((weak));
 ReturnStr<bool> copy_from_user(char *to, const char *from, size_t size)
 {
     auto current_task = get_current_task();
+    auto max_addr = (uintptr_t)current_task->page_table->user_addr_max();
+    uintptr_t addr = (uintptr_t)from;
+    if (addr + size > max_addr or addr > (UINTPTR_MAX - size))
+        return Error(-EFAULT);
+
+    if (fast_copy_from_user)
+        return fast_copy_from_user(to, from, size);
+
     Auto_Lock_Scope l(current_task->page_table->lock);
 
     auto result = prepare_user_buff_rd(from, size);
@@ -257,9 +266,18 @@ ReturnStr<bool> copy_from_user(char *to, const char *from, size_t size)
     return result;
 }
 
+extern "C" ReturnStr<bool> fast_copy_to_user(char *dest, const char *src, size_t size) __attribute__((weak));
 ReturnStr<bool> copy_to_user(const char *from, char *to, size_t size)
 {
     auto current_task = get_current_task();
+    auto max_addr = (uintptr_t)current_task->page_table->user_addr_max();
+    uintptr_t addr = (uintptr_t)to;
+    if (addr + size > max_addr or addr > (UINTPTR_MAX - size))
+        return Error(-EFAULT);
+
+    if (fast_copy_to_user)
+        return fast_copy_to_user(to, from, size);
+
     Auto_Lock_Scope l(current_task->page_table->lock);
 
     auto result = prepare_user_buff_wr(to, size);
