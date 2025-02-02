@@ -589,6 +589,7 @@ typedef struct IPC_Close {
 #define IPC_ACPI_Request_RSDT_NUM 0x60
 typedef struct IPC_ACPI_Request_RSDT {
     uint32_t type;
+    uint32_t flags;
     uint64_t reply_channel;
 } IPC_ACPI_Request_RSDT;
 

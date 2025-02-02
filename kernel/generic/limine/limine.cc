@@ -93,6 +93,8 @@ __attribute__((used)) limine_paging_mode_request paging_request = {
     .flags = 0,
 };
 
+extern void hcf();
+
 Direct_Mapper init_mapper;
 
     // Temporary temporary mapper
@@ -109,7 +111,7 @@ Arch_Temp_Mapper temp_temp_mapper;
 
 u64 hhdm_offset = 0;
 
-size_t number_of_cpus = 1;
+extern size_t number_of_cpus;
 
 u64 temp_alloc_base     = 0;
 u64 temp_alloc_size     = 0;
@@ -722,7 +724,7 @@ klib::unique_ptr<load_tag_generic> construct_load_tag_fdt()
     return tag;
 }
 
-klib::shared_ptr<Arch_Page_Table> idle_page_table = nullptr;
+extern klib::shared_ptr<Arch_Page_Table> idle_page_table;
 
 void init(void);
 void init_scheduling(u64 boot_cpu_id);

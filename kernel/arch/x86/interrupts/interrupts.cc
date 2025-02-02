@@ -43,6 +43,7 @@
 #include <sched/sched.hh>
 #include <utils.hh>
 #include <x86_asm.hh>
+#include <utils.hh>
 
 void set_idt()
 {
@@ -53,7 +54,6 @@ void set_idt()
 void init_idt()
 {
     enable_apic();
-
     set_idt();
 }
 
@@ -118,3 +118,8 @@ void (*return_table[5])(void) = {
     ret_repeat_syscall,
     return_from_kernel_thread,
 };
+
+void return_from_kernel_thread()
+{
+    panic("return_from_kernel_thread");
+}

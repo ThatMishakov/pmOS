@@ -35,7 +35,7 @@ extern "C" {
 
 #define NULL 0
 
-typedef unsigned int size_t;
+typedef unsigned long size_t;
 
 // Locale is not yet supported
 typedef unsigned long locale_t;

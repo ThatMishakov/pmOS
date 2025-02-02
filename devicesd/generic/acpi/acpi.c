@@ -128,7 +128,7 @@ static const char *loader_port_name = "/pmos/loader";
 
 void request_acpi_tables()
 {
-    IPC_ACPI_Request_RSDT request = {IPC_ACPI_Request_RSDT_NUM, configuration_port};
+    IPC_ACPI_Request_RSDT request = {IPC_ACPI_Request_RSDT_NUM, 0, configuration_port};
 
     ports_request_t loader_port = get_port_by_name(loader_port_name, strlen(loader_port_name), 0);
     if (loader_port.result != SUCCESS) {

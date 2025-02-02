@@ -33,7 +33,7 @@
 extern "C" {
 #endif
 
-typedef unsigned int size_t;
+typedef unsigned long size_t;
 
 void abort() __attribute__((noreturn));
 void free(void *ptr);
