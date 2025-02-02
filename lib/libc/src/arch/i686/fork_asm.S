@@ -37,17 +37,16 @@ __do_fork:
     pushl %esi
     pushl %edi
 
-    # Align the stack to 16 bytes
     subl $8, %esp
     
     # Pass the stack pointer as the third argument to C
     pushl %esp
 
     # Pass 2 arguments to C
-    movl 8(%ebp), %eax
-    movl 12(%ebp), %ebx
-    pushl %ebx
-    pushl %eax
+    pushl 20(%ebp)
+    pushl 16(%ebp)
+    pushl 12(%ebp)
+    pushl 8(%ebp)
 
     # Call inner fork function
     call __libc_fork_inner
@@ -62,20 +61,19 @@ __do_fork:
     .globl __fork_child_entry_point
 __fork_child_entry_point:
     # Restore stack pointer
-    movl %eax, %esp
-    addl $8, %esp
+    leal 8(%edi), %esp
 
     popl %edi
     popl %esi
     popl %ebx
 
     movl %esp, %ebp
-    addl $8, %esp
+    subl $8, %esp
 
     # Call the child function
     call __libc_fork_child
 
     # Return!
-    # movl %ebp, %esp # Not really necessary
+    movl %ebp, %esp
     popl %ebp
     ret

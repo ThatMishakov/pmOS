@@ -535,10 +535,10 @@ kresult_t IA32_Page_Table::copy_anonymous_pages(const klib::shared_ptr<Page_Tabl
         TLBShootdownContext ctx = TLBShootdownContext::create_userspace(*this);
         result                  = [&]() -> kresult_t {
             if (!use_pae) {
-                u32 start_index     = (from_addr >> 22) & _32BIT_ADDR_MASK;
+                u32 start_index     = (from_addr >> 22) & 0x3FF;
                 u32 limit           = from_addr + size_bytes;
                 u32 to_addr_aligned = alignup(limit, 22);
-                u32 end_index       = (to_addr_aligned >> 22) & _32BIT_ADDR_MASK;
+                u32 end_index       = (to_addr_aligned >> 22) & 0x3FF;
 
                 Temp_Mapper_Obj<u32> mapper(request_temp_mapper());
                 auto pd = mapper.map(cr3);
@@ -553,9 +553,9 @@ kresult_t IA32_Page_Table::copy_anonymous_pages(const klib::shared_ptr<Page_Tabl
                     auto pt = pt_mapper.map(pde & _32BIT_ADDR_MASK);
 
                     u32 addr_of_pd = (1 << 22) * i;
-                    u32 start_idx  = ((addr_of_pd > limit ? addr_of_pd : limit) >> 12) & 0x3ff;
+                    u32 start_idx  = addr_of_pd > from_addr ? 0 : (from_addr >> 12) & 0x3ff;
                     u32 end_of_pd  = (1 << 22) * (i + 1);
-                    u32 end_idx    = end_of_pd > limit ? 1024 : (limit >> 12) & 0x3ff;
+                    u32 end_idx    = end_of_pd <= limit ? 1024 : (limit >> 12) & 0x3ff;
                     for (unsigned j = start_idx; j < end_idx; ++j) {
                         auto pte = pt[j];
 

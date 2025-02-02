@@ -252,7 +252,7 @@ mem_request_ret_t transfer_region(uint64_t to_page_table, void *region, void *de
 }
 
 mem_request_ret_t map_mem_object(uint64_t page_table_id, void *addr_start, size_t size,
-                                 uint32_t access, mem_object_t object_id, size_t offset)
+                                 uint32_t access, mem_object_t object_id, uint64_t offset)
 {
 #ifdef __32BITSYSCALL
     syscall_r r = __pmos_syscall32_8words(SYSCALL_MAP_MEM_OBJECT | (access << 8), page_table_id,

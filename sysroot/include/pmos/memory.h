@@ -173,7 +173,7 @@ mem_object_request_ret_t create_mem_object(size_t size, uint32_t flags);
  * region.
  */
 mem_request_ret_t map_mem_object(uint64_t page_table_id, void *addr_start, size_t size,
-                                 uint32_t access, mem_object_t object_id, size_t offset);
+                                 uint32_t access, mem_object_t object_id, uint64_t offset);
 
 /**
  * @brief Transfers a memory region to the new page table.
