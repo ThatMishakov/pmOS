@@ -155,15 +155,18 @@ void print_stack_trace(TaskDescriptor *task, Logger &logger)
 //     c->nested_int_regs.program_counter() = (ulong)&jumpto_func;
 // }
 
+extern ulong idle_cr3;
+
+bool page_mapped(void *pagefault_cr2, ulong err);
+
 extern "C" void pagefault_manager(NestedIntContext *kernel_ctx, ulong err)
 {
     CPU_Info *c = get_cpu_struct();
 
     if (kernel_ctx) {
-        auto pagefault_cr2   = (ulong)getCR2();
+        auto pagefault_cr2 = (ulong)getCR2();
 
         if (pagefault_cr2 > 0x8000000000000000) {
-            auto idle_cr3 = c->idle_task->page_table->get_cr3();
             Temp_Mapper_Obj<u64> idle_mapper(request_temp_mapper());
             u64 *idle_pd = idle_mapper.map(idle_cr3 & 0xfffffffffffff000UL);
             Temp_Mapper_Obj<u64> cr3_mapper(request_temp_mapper());
@@ -171,9 +174,14 @@ extern "C" void pagefault_manager(NestedIntContext *kernel_ctx, ulong err)
 
             auto paging_levels = 4;
             auto idx           = pagefault_cr2 >> (12 + 9 * (paging_levels - 1));
-            if ((idle_pd[idx] & 0x01) and not(cr3_pd[idx] & 0x01)) {
-                cr3_pd[idx] = idle_pd[idx];
-                return;
+            if ((idle_pd[idx] & 0x01)) {
+                if (not(cr3_pd[idx] & 0x01)) {
+                    cr3_pd[idx] = idle_pd[idx];
+                    return;
+                }
+
+                if (page_mapped((void *)pagefault_cr2, err))
+                    return;
             }
         } else {
             if (c->jumpto_func) {
@@ -181,7 +189,6 @@ extern "C" void pagefault_manager(NestedIntContext *kernel_ctx, ulong err)
                 kernel_ctx->rip = (ulong)c->jumpto_func;
                 kernel_ctx->rax = c->jumpto_arg;
                 kernel_ctx->rcx = pagefault_cr2;
-                asm ("xchgw %bx, %bx");
                 return;
             }
         }
@@ -232,8 +239,8 @@ extern "C" void pagefault_manager(NestedIntContext *kernel_ctx, ulong err)
                       virtual_addr, task->task_id, task->regs.program_counter(), err, result);
         global_logger.printf("Warning: Pagefault %h pid %i (%s) rip %h error "
                              "%h -> %i killing process...\n",
-                             virtual_addr, task->task_id, task->name.c_str(), task->regs.program_counter(), err,
-                             result);
+                             virtual_addr, task->task_id, task->name.c_str(),
+                             task->regs.program_counter(), err, result);
 
         print_registers(task, global_logger);
         // print_stack_trace(task, global_logger);
@@ -284,14 +291,15 @@ extern "C" void general_protection_fault_manager(NestedIntContext *kernel_ctx, u
     task_ptr task = get_cpu_struct()->current_task;
     serial_logger.printf("!!! General Protection Fault (GP) error (segment) %h "
                          "PID %i (%s) RIP %h CS %h... Killing the process\n",
-                         task->regs.int_err, task->task_id, task->name.c_str(), task->regs.program_counter(),
+                         task->regs.int_err, task->task_id, task->name.c_str(),
+                         task->regs.program_counter(),
                          1234); // task->regs.cs
     print_registers(get_cpu_struct()->current_task, serial_logger);
 
     global_logger.printf("!!! General Protection Fault (GP) error (segment) %h "
                          "PID %i (%s) RIP %h CS %h... Killing the process\n",
-                         task->regs.int_err, task->task_id, task->name.c_str(), task->regs.program_counter(),
-                         1234);
+                         task->regs.int_err, task->task_id, task->name.c_str(),
+                         task->regs.program_counter(), 1234);
     print_registers(get_cpu_struct()->current_task, global_logger);
     // print_stack_trace(task, global_logger);
     task->atomic_kill();
@@ -301,9 +309,11 @@ extern "C" void overflow_manager()
 {
     task_ptr task = get_cpu_struct()->current_task;
     serial_logger.printf("!!! Overflow error %h RIP %h RSP %h PID %h (%s)\n", task->regs.int_err,
-                         task->regs.program_counter(), task->regs.stack_pointer(), task->task_id, task->name.c_str());
+                         task->regs.program_counter(), task->regs.stack_pointer(), task->task_id,
+                         task->name.c_str());
     global_logger.printf("!!! Overflow error %h RIP %h RSP %h PID %h (%s)\n", task->regs.int_err,
-                         task->regs.program_counter(), task->regs.stack_pointer(), task->task_id, task->name.c_str());
+                         task->regs.program_counter(), task->regs.stack_pointer(), task->task_id,
+                         task->name.c_str());
     task->atomic_kill();
 }
 
@@ -311,10 +321,11 @@ extern "C" void simd_fp_exception_manager()
 {
     task_ptr task = get_cpu_struct()->current_task;
     t_print_bochs("!!! SIMD FP Exception error %h RIP %h RSP %h PID %h (%s)\n", task->regs.int_err,
-                  task->regs.program_counter(), task->regs.stack_pointer(), task->task_id, task->name.c_str());
+                  task->regs.program_counter(), task->regs.stack_pointer(), task->task_id,
+                  task->name.c_str());
     global_logger.printf("!!! SIMD FP Exception error %h RIP %h RSP %h PID %h (%s)\n",
-                         task->regs.int_err, task->regs.program_counter(), task->regs.stack_pointer(), task->task_id,
-                         task->name.c_str());
+                         task->regs.int_err, task->regs.program_counter(),
+                         task->regs.stack_pointer(), task->task_id, task->name.c_str());
     task->atomic_kill();
 }
 
@@ -333,8 +344,8 @@ extern "C" void stack_segment_fault_manager()
 {
     task_ptr task = get_cpu_struct()->current_task;
     t_print_bochs("!!! Stack-Segment Fault error %h RIP %h RSP %h PID %h (%s)\n",
-                  task->regs.int_err, task->regs.program_counter(), task->regs.stack_pointer(), task->task_id,
-                  task->name.c_str());
+                  task->regs.int_err, task->regs.program_counter(), task->regs.stack_pointer(),
+                  task->task_id, task->name.c_str());
     global_logger.printf("!!! Stack-Segment Fault error %h RIP %h RSP %h\n", task->regs.int_err,
                          task->regs.program_counter(), task->regs.stack_pointer());
     task->atomic_kill();
@@ -345,10 +356,11 @@ extern "C" void double_fault_manager(NestedIntContext *kernel_ctx, ulong err)
     panic("double fault!\n");
     task_ptr task = get_cpu_struct()->current_task;
     t_print_bochs("!!! Double Fault error %h RIP %h RSP %h PID %h (%s)\n", task->regs.int_err,
-                  task->regs.program_counter(), task->regs.stack_pointer(), task->task_id, task->name.c_str());
+                  task->regs.program_counter(), task->regs.stack_pointer(), task->task_id,
+                  task->name.c_str());
     global_logger.printf("!!! Double Fault error %h RIP %h RSP %h PID %h (%s)\n",
-                         task->regs.int_err, task->regs.program_counter(), task->regs.stack_pointer(), task->task_id,
-                         task->name.c_str());
+                         task->regs.int_err, task->regs.program_counter(),
+                         task->regs.stack_pointer(), task->task_id, task->name.c_str());
     task->atomic_kill();
 }
 

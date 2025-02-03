@@ -159,10 +159,11 @@ kresult_t map_pages(u64 cr3, u64 phys_addr, u64 virt_addr, u64 size_bytes,
     return result;
 }
 
+u64 idle_cr3 = 0;
+
 kresult_t map_kernel_page(u64 phys_addr, void *virt_addr, Page_Table_Argumments arg)
 {
-    const u64 cr3 = getCR3();
-    return map(phys_addr, (u64)virt_addr, arg, cr3);
+    return map(phys_addr, (u64)virt_addr, arg, idle_cr3);
 }
 
 u64 prepare_pt_for(u64 virtual_addr, Page_Table_Argumments arg, u64 pt_phys)
@@ -300,8 +301,7 @@ void x86_4level_Page_Table::invalidate(TLBShootdownContext &ctx, u64 virt_addr, 
 
 kresult_t unmap_kernel_page(TLBShootdownContext &ctx, void *virt_addr)
 {
-    const u64 cr3 = getCR3();
-    invalidate(ctx, (u64)virt_addr, false, cr3);
+    invalidate(ctx, (u64)virt_addr, false, idle_cr3);
     return 0;
 }
 
@@ -467,7 +467,7 @@ klib::shared_ptr<x86_4level_Page_Table> x86_4level_Page_Table::create_empty(int 
     Temp_Mapper_Obj<x86_PAE_Entry> current_page_m(request_temp_mapper());
 
     new_page_m.map(p);
-    current_page_m.map(getCR3());
+    current_page_m.map(idle_cr3);
 
     // Clear it as memory contains rubbish and it will cause weird paging
     // bugs on real machines
@@ -475,17 +475,7 @@ klib::shared_ptr<x86_4level_Page_Table> x86_4level_Page_Table::create_empty(int 
 
     // Copy the last entries into the new page table as they are shared
     // across all processes
-    new_page_m.ptr[256] = current_page_m.ptr[256];
-    new_page_m.ptr[510] = current_page_m.ptr[510];
-    new_page_m.ptr[511] = current_page_m.ptr[511];
-
-    // TODO: I've switch almost everything to use temporary mappings, but
-    // recursive mapping is still used in some places. This should be removed
-    // but doesn't matter for now... Also, RISC-V functions fine without it
-    new_page_m.ptr[rec_map_index]             = x86_PAE_Entry();
-    new_page_m.ptr[rec_map_index].present     = 1;
-    new_page_m.ptr[rec_map_index].user_access = 0;
-    new_page_m.ptr[rec_map_index].page_ppn    = p / KB(4);
+    memcpy(new_page_m.ptr + 256, current_page_m.ptr + 256, 256 * sizeof(x86_PAE_Entry));
 
     new_table->pml4_phys = p;
 
@@ -1057,4 +1047,41 @@ kresult_t x86_4level_Page_Table::copy_anonymous_pages(const klib::shared_ptr<Pag
         guard.dismiss();
 
     return result;
+}
+
+static bool check_level(void *ptr, unsigned level, u64 phys_page_level, ulong err)
+{
+    bool write = err & 0x02;
+    bool exec  = err & 0x10;
+    if (level == 0)
+        assert(!"level 0");
+
+    unsigned idx = ((ulong)ptr >> (12 + (level - 1) * 9)) & 0x1ff;
+    Temp_Mapper_Obj<x86_PAE_Entry> mapper(request_temp_mapper());
+    mapper.map(phys_page_level);
+
+    auto pte = mapper.ptr[idx];
+    if (!pte.present)
+        return false;
+
+    if (write && !pte.writeable)
+        return false;
+
+    if (exec && pte.execution_disabled)
+        return false;
+
+    if (level == 1)
+        return true;
+
+    return check_level(ptr, level - 1, pte.page_ppn << 12, err);
+}
+
+bool page_mapped(void *pagefault_cr2, ulong err)
+{
+
+    unsigned levels = 4; // TODO;
+
+    auto cr3 = getCR3();
+
+    return check_level(pagefault_cr2, levels, cr3, err);
 }

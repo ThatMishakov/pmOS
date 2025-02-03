@@ -152,6 +152,10 @@ ptable_top_ptr_t kernel_ptable_top = 0;
 
 static klib::vector<limine_memmap_entry> *limine_memory_regions = nullptr;
 
+#ifdef __x86_64__
+extern ulong idle_cr3;
+#endif
+
 void construct_paging()
 {
     serial_logger.printf("Finding the largest memory region...\n");
@@ -211,6 +215,9 @@ void construct_paging()
 
     kernel_ptable_top = pmm::get_memory_for_kernel(1);
     clear_page(kernel_ptable_top);
+    #ifdef __x86_64__
+    idle_cr3 = kernel_ptable_top;
+    #endif
 
     // Init temp mapper with direct map, while it is still available
     void *temp_mapper_start = vmm::kernel_space_allocator.virtmem_alloc_aligned(
