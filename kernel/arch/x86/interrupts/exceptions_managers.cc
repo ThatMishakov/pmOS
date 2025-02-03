@@ -80,7 +80,6 @@ void print_registers(TaskDescriptor *task, Logger &logger)
 
 Task_Regs kernel_interrupt_regs;
 extern void *_kernel_start;
-constexpr static u64 kernel_static = 0xFFFFFFFF80000000;
 
 void print_kernel_int_stack_trace(Logger &logger)
 {
@@ -156,11 +155,11 @@ void print_stack_trace(TaskDescriptor *task, Logger &logger)
 //     c->nested_int_regs.program_counter() = (ulong)&jumpto_func;
 // }
 
-extern "C" void pagefault_manager()
+extern "C" void pagefault_manager(NestedIntContext *kernel_ctx, ulong err)
 {
     CPU_Info *c = get_cpu_struct();
 
-    if (c->nested_level) {
+    if (kernel_ctx) {
         c->pagefault_cr2   = getCR2();
         panic("Pagefault in kernel");
 
@@ -171,7 +170,6 @@ extern "C" void pagefault_manager()
     }
 
     TaskDescriptor *task = c->current_task;
-    auto err             = task->regs.int_err;
 
     // Get the memory location which has caused the fault
     auto virtual_addr = getCR2();
@@ -225,8 +223,39 @@ extern "C" void sse_exception_manager()
     get_cpu_struct()->current_task->sse_data.restore_sse();
 }
 
-extern "C" void general_protection_fault_manager()
+void print_kernel_regs(NestedIntContext *kernel_ctx)
 {
+    serial_logger.printf("Kernel registers:\n");
+    serial_logger.printf(" => %%rax: 0x%lx\n", kernel_ctx->rax);
+    serial_logger.printf(" => %%rbx: 0x%lx\n", kernel_ctx->rbx);
+    serial_logger.printf(" => %%rcx: 0x%lx\n", kernel_ctx->rcx);
+    serial_logger.printf(" => %%rdx: 0x%lx\n", kernel_ctx->rdx);
+    serial_logger.printf(" => %%rsi: 0x%lx\n", kernel_ctx->rsi);
+    serial_logger.printf(" => %%rdi: 0x%lx\n", kernel_ctx->rdi);
+    serial_logger.printf(" => %%rbp: 0x%lx\n", kernel_ctx->rbp);
+    serial_logger.printf(" => %%r8: 0x%lx\n", kernel_ctx->r8);
+    serial_logger.printf(" => %%r9: 0x%lx\n", kernel_ctx->r9);
+    serial_logger.printf(" => %%r10: 0x%lx\n", kernel_ctx->r10);
+    serial_logger.printf(" => %%r11: 0x%lx\n", kernel_ctx->r11);
+    serial_logger.printf(" => %%r12: 0x%lx\n", kernel_ctx->r12);
+    serial_logger.printf(" => %%r13: 0x%lx\n", kernel_ctx->r13);
+    serial_logger.printf(" => %%r14: 0x%lx\n", kernel_ctx->r14);
+    serial_logger.printf(" => %%r15: 0x%lx\n", kernel_ctx->r15);
+    serial_logger.printf(" => %%rip: 0x%lx\n", kernel_ctx->rip);
+    serial_logger.printf(" => %%rsp: 0x%lx\n", kernel_ctx->rsp);
+    serial_logger.printf(" => %%rflags: 0x%lx\n", kernel_ctx->rflags);
+    serial_logger.printf(" => %%cs: 0x%lx\n", kernel_ctx->cs);
+    serial_logger.printf(" => %%ss: 0x%lx\n", kernel_ctx->ss);
+}
+
+extern "C" void general_protection_fault_manager(NestedIntContext *kernel_ctx, ulong err)
+{
+    if (kernel_ctx) {
+        print_kernel_regs(kernel_ctx);
+        panic("General protection fault in kernel, error %x\n", err);
+        return;
+    }
+
     task_ptr task = get_cpu_struct()->current_task;
     serial_logger.printf("!!! General Protection Fault (GP) error (segment) %h "
                          "PID %i (%s) RIP %h CS %h... Killing the process\n",
@@ -286,8 +315,9 @@ extern "C" void stack_segment_fault_manager()
     task->atomic_kill();
 }
 
-extern "C" void double_fault_manager()
+extern "C" void double_fault_manager(NestedIntContext *kernel_ctx, ulong err)
 {
+    panic("double fault!\n");
     task_ptr task = get_cpu_struct()->current_task;
     t_print_bochs("!!! Double Fault error %h RIP %h RSP %h PID %h (%s)\n", task->regs.int_err,
                   task->regs.program_counter(), task->regs.stack_pointer(), task->task_id, task->name.c_str());
@@ -297,7 +327,7 @@ extern "C" void double_fault_manager()
     task->atomic_kill();
 }
 
-void breakpoint_manager()
+void breakpoint_manager(NestedIntContext *kernel_ctx, ulong err)
 {
     global_logger.printf("Warning: hit a breakpoint but it's not implemented\n");
 }

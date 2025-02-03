@@ -252,10 +252,12 @@ void smart_eoi(u8 intno)
 void apic_pp(int priority) { apic_write_reg(APIC_REG_PPR, priority << 4); }
 
 void lvt0_int_routine() {
+    serial_logger.printf("[Kernel] Info: LVT0 interrupt\n");
     smart_eoi(LVT_INT0);
 }
 
 void lvt1_int_routine() {
+    serial_logger.printf("[Kernel] Info: LVT1 interrupt\n");
     smart_eoi(LVT_INT1);
 }
 

@@ -96,6 +96,7 @@ struct GDT {
     GDT_entry ring2_code {0, 0, 0, 0xda, 0xa0, 0};
     GDT_entry ring2_data {0, 0, 0, 0xd2, 0xa0, 0};
     System_Segment_Descriptor tss_descriptor;
+    GDT_entry kernel_thread_code {0, 0, 0, 0x9a, 0xa2, 0};
 
     constexpr u16 get_size() { return sizeof(GDT) - 1; }
 } PACKED ALIGNED(8);
@@ -108,6 +109,7 @@ struct GDT {
 #define R2_CODE_SEGMENT        (0x30 | 0x02)
 #define R2_DATA_SEGMENT        (0x38 | 0x02)
 #define TSS_OFFSET             (0x48)
+#define KERNEL_THREAD_CODE_SEGMENT (0x58)
 
 extern "C" void loadGDT(GDT *gdt, u16 size);
 void loadGDT(GDT *gdt);

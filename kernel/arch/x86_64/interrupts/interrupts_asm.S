@@ -26,20 +26,21 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 /* ------------------------------------------- MACROS --------------------------------------------- */
-    .include "interrupts/asm_macros.S"
+
+    .macro auto_return
+    movq %gs:32, %r15
+    movq 176(%r15), %r15
+    leaq return_table(%rip), %r14
+    jmp *(%r14,%r15, 8)
+    .endm
 
     .altmacro
     .macro prog_int num
     .type prog_int_\num, @function
     .globl prog_int_\num
 prog_int_\num:
-    swapgs
-    call save_context
-    movq $0, %rbp
-    movq $0, 176(%r11)
-    movq $\num , %rdi
-    call programmable_interrupt
-    auto_return
+    pushq $\num
+    jmp prog_int_common
     .endm
 
     .macro fill funct, from, to
@@ -68,14 +69,46 @@ start_first_process:
     .type ref_from_interrupt, @function
     .globl ret_from_interrupt
 ret_from_interrupt:
-    restore_context
+    .type return_from_kernel_thread, @function
+    .globl return_from_kernel_thread
+return_from_kernel_thread:
+    movq %gs:32, %r15
+    pushq      104(%r15)
+    pushq      96(%r15)
+    pushq      88(%r15)
+    pushq      80(%r15)
+    pushq      72(%r15)
+    movq       112(%r15), %rbx
+    movq       120(%r15), %rbp
+    movq       128(%r15), %r12
+    movq       136(%r15), %r13
+    movq       144(%r15), %r14
+
+    movq 0(%r15), %rdi
+    movq 8(%r15), %rsi
+    movq 16(%r15), %rdx
+    movq 24(%r15), %rcx
+    movq 32(%r15), %r8
+    movq 40(%r15), %r9
+    movq 48(%r15), %rax
+    movq 56(%r15), %r10
+    movq 64(%r15), %r11
+    movq 152(%r15), %r15
 
 	swapgs
     
     iretq
 
 
+    .type prog_int_common, @function
+prog_int_common:
+    swapgs
+    call save_context
+    movq %rdx, %rdi
 
+    movq $0, %rbp
+    call programmable_interrupt
+    auto_return
 
 /* ------------------------------------------ FUNCTIONS ---------------------------------------------- */
 
@@ -96,10 +129,10 @@ apic_timer_isr:
     # Will be when not in kernel
     swapgs
 
+    pushq $0
     call save_context
 
     movq $0, %rbp
-    movq $0, 176(%r11)
 
     call timer_interrupt
 
@@ -114,10 +147,10 @@ lvt0_int_isr:
     # Kernel is not preemptive
     swapgs
 
+    pushq $0
     call save_context
 
     movq $0, %rbp
-    movq $0, 176(%r11)
 
     call lvt0_int_routine
 
@@ -132,10 +165,10 @@ lvt1_int_isr:
     # Kernel is not preemptive
     swapgs
 
+    pushq $0
     call save_context
 
     movq $0, %rbp
-    movq $0, 176(%r11)
 
     call lvt1_int_routine
 
@@ -154,10 +187,10 @@ dummy_isr:
 apic_spurious_isr:
     swapgs
 
+    pushq $0
     call save_context
 
     movq $0, %rbp
-    movq $0, 176(%r11)
 
     call apic_spurious_int_routine
 
@@ -168,10 +201,10 @@ apic_spurious_isr:
 apic_dummy_isr:
     swapgs
 
+    pushq $0
     call save_context
 
     movq $0, %rbp
-    movq $0, 176(%r11)
 
     call apic_dummy_int_routine
 

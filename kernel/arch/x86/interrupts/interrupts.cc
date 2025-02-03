@@ -118,8 +118,3 @@ void (*return_table[5])(void) = {
     ret_repeat_syscall,
     return_from_kernel_thread,
 };
-
-void return_from_kernel_thread()
-{
-    panic("return_from_kernel_thread");
-}
