@@ -209,3 +209,37 @@ apic_dummy_isr:
     call apic_dummy_int_routine
 
     auto_return
+
+        .type ipi_reschedule_isr, @function
+    .globl ipi_reschedule_isr
+ipi_reschedule_isr:
+    
+    # Kernel is not preemptive
+    swapgs
+
+    pushq $0
+    call save_context
+
+    movq $0, %rbp
+
+    call reschedule_isr
+
+    auto_return
+
+
+
+    .type ipi_invalidate_tlb_isr, @function
+    .globl ipi_invalidate_tlb_isr
+ipi_invalidate_tlb_isr:
+    
+    # Kernel is not preemptive
+    swapgs
+
+    pushq $0
+    call save_context
+
+    movq $0, %rbp
+
+    call ipi_invalidate_tlb_routine
+
+    auto_return

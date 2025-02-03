@@ -25,8 +25,6 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-    .include "interrupts/asm_macros.S"
-    
     .macro save_regs
     # Save %r15 and load current_task pointer into %r15
     movq %r15, %gs:16

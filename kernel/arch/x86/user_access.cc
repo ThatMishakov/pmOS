@@ -7,7 +7,7 @@ extern "C" ReturnStr<bool> user_access_page_fault(unsigned access, const char *f
 {
     TaskDescriptor *current_task = get_current_task();
 
-    u32 page               = (u32)faulting_addr & ~0xfff;
+    ulong page               = (ulong)faulting_addr & ~0xfff;
     ReturnStr<bool> result = current_task->page_table->prepare_user_page(page, access);
     if (!result.success())
         return result;

@@ -160,8 +160,33 @@ extern "C" void pagefault_manager(NestedIntContext *kernel_ctx, ulong err)
     CPU_Info *c = get_cpu_struct();
 
     if (kernel_ctx) {
-        c->pagefault_cr2   = getCR2();
-        panic("Pagefault in kernel");
+        auto pagefault_cr2   = (ulong)getCR2();
+
+        if (pagefault_cr2 > 0x8000000000000000) {
+            auto idle_cr3 = c->idle_task->page_table->get_cr3();
+            Temp_Mapper_Obj<u64> idle_mapper(request_temp_mapper());
+            u64 *idle_pd = idle_mapper.map(idle_cr3 & 0xfffffffffffff000UL);
+            Temp_Mapper_Obj<u64> cr3_mapper(request_temp_mapper());
+            u64 *cr3_pd = cr3_mapper.map(getCR3() & 0xfffffffffffff000UL);
+
+            auto paging_levels = 4;
+            auto idx           = pagefault_cr2 >> (12 + 9 * (paging_levels - 1));
+            if ((idle_pd[idx] & 0x01) and not(cr3_pd[idx] & 0x01)) {
+                cr3_pd[idx] = idle_pd[idx];
+                return;
+            }
+        } else {
+            if (c->jumpto_func) {
+                // This pagefault is normal...
+                kernel_ctx->rip = (ulong)c->jumpto_func;
+                kernel_ctx->rax = c->jumpto_arg;
+                kernel_ctx->rcx = pagefault_cr2;
+                asm ("xchgw %bx, %bx");
+                return;
+            }
+        }
+
+        panic("Pagefault in kernel, error %x at %lx", err, pagefault_cr2);
 
         // c->pagefault_error = c->nested_int_regs.int_err;
 
