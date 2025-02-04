@@ -4,6 +4,7 @@
 #include <memory/pmm.hh>
 #include <pmos/utility/scope_guard.hh>
 #include <x86_asm.hh>
+#include <memory>
 
 IA32_Page_Table::page_table_map IA32_Page_Table::global_page_tables;
 Spinlock IA32_Page_Table::page_table_index_lock;
@@ -738,4 +739,83 @@ klib::shared_ptr<IA32_Page_Table> IA32_Page_Table::create_clone()
     guard.dismiss();
 
     return new_table;
+}
+
+bool page_mapped(void *pagefault_cr2, ulong err)
+{
+    bool write = err & 0x02;
+    bool exec  = err & 0x10;
+
+    if (!use_pae) {
+        Temp_Mapper_Obj<u32> mapper(request_temp_mapper());
+        auto pd = mapper.map(getCR3() & 0xFFFFF000);
+
+        auto pd_idx = (u32(pagefault_cr2) >> 22) & 0x3FF;
+        auto pt_idx = (u32(pagefault_cr2) >> 12) & 0x3FF;
+
+        auto pde = pd[pd_idx];
+        if (!(pde & PAGE_PRESENT))
+            return false;
+
+        if (write && !(pde & PAGE_WRITE))
+            return false;
+
+        Temp_Mapper_Obj<u32> pt_mapper(request_temp_mapper());
+        auto pt = pt_mapper.map(pde & 0xFFFFF000);
+
+        auto pte = pt[pt_idx];
+
+        if (!(pte & PAGE_PRESENT))
+            return false;
+
+        if (write && !(pte & PAGE_WRITE))
+            return false;
+
+        return true;
+    } else {
+        Temp_Mapper_Obj<u64> mapper(request_temp_mapper());
+        auto pdpt = mapper.map(getCR3() & 0xFFFFFFE0);
+
+        auto pdpt_idx = (u32(pagefault_cr2) >> 30) & 0x3;
+        auto pd_idx   = (u32(pagefault_cr2) >> 21) & 0x1FF;
+        auto pt_idx   = (u32(pagefault_cr2) >> 12) & 0x1FF;
+
+        auto pdpt_entry = __atomic_load_n(std::assume_aligned<8>(pdpt + pdpt_idx), __ATOMIC_RELAXED);
+        if (!(pdpt_entry & PAGE_PRESENT))
+            return false;
+
+        if (write && !(pdpt_entry & PAGE_WRITE))
+            return false;
+
+        if (exec && (pdpt_entry & PAGE_NX))
+            return false;
+
+        Temp_Mapper_Obj<u64> pd_mapper(request_temp_mapper());
+        auto pd = pd_mapper.map(pdpt_entry & PAE_ADDR_MASK);
+
+        auto pde = __atomic_load_n(std::assume_aligned<8>(pd + pd_idx), __ATOMIC_RELAXED);
+        if (!(pde & PAGE_PRESENT))
+            return false;
+
+        if (write && !(pde & PAGE_WRITE))
+            return false;
+
+        if (exec && (pde & PAGE_NX))
+            return false;
+
+        Temp_Mapper_Obj<u64> pt_mapper(request_temp_mapper());
+        auto pt = pt_mapper.map(pde & PAE_ADDR_MASK);
+
+        auto pte = __atomic_load_n(std::assume_aligned<8>(pt + pt_idx), __ATOMIC_RELAXED);
+        if (!(pte & PAGE_PRESENT))
+            return false;
+
+        if (write && !(pte & PAGE_WRITE))
+            return false;
+
+        if (exec && (pte & PAGE_NX))
+            return false;
+
+        return true;
+    }
 }

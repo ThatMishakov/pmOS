@@ -76,6 +76,8 @@ static void print_kernel_registers(kernel_registers_context *c, u32 error_code)
 extern bool use_pae;
 extern u32 idle_cr3;
 
+extern bool page_mapped(void *pagefault_cr2, ulong err);
+
 extern "C" void page_fault_handler(kernel_registers_context *ctx, u32 err)
 {
     auto virtual_addr = getCR2();
@@ -93,6 +95,9 @@ extern "C" void page_fault_handler(kernel_registers_context *ctx, u32 err)
                 cr3_pd[idx] = idle_pd[idx];
                 return;
             }
+
+            if (page_mapped((void *)virtual_addr, err))
+                return;
         }
 
         CPU_Info *c = get_cpu_struct();
@@ -174,4 +179,10 @@ extern "C" void general_protection_fault_handler(kernel_registers_context *ctx, 
                          err, task->task_id, task->name.c_str(), task->regs.program_counter(),
                          task->regs.cs);
     task->atomic_kill();
+}
+
+extern "C" void sse_exception_manager()
+{
+    validate_sse();
+    get_cpu_struct()->current_task->sse_data.restore_sse();
 }

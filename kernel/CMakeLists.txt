@@ -26,7 +26,7 @@ set(SYSROOT "${ABSPATH}/../sysroot")
 include(arch/arch.cmake)
 LOAD_PLATFORM(${TARGET_ARCH})
 
-set(CMAKE_C_FLAGS "${PLATFORM_C_FLAGS} -O3 -fPIE -flto -static -ffreestanding -fPIE -Wall -Wextra -g -fno-omit-frame-pointer -fasynchronous-unwind-tables  -fexceptions --sysroot=${SYSROOT}")
+set(CMAKE_C_FLAGS "${PLATFORM_C_FLAGS} -O3 -flto -static -ffreestanding -Wall -Wextra -g -fno-omit-frame-pointer -fasynchronous-unwind-tables  -fexceptions --sysroot=${SYSROOT}")
 set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} ${PLATFORM_CXX_FLAGS} -fno-exceptions -fno-rtti")
 set(CMAKE_ASM_FLAGS "${CMAKE_C_FLAGS} ${PLATFORM_ASM_FLAGS}")
 add_compile_options("-fcheck-new")
@@ -44,13 +44,18 @@ add_executable(kernel ${PLATFORM_SRCS} ${GENERIC_SRC})
 
 set_target_properties(kernel PROPERTIES CXX_STANDARD 20)
 set_target_properties(kernel PROPERTIES LINK_FLAGS 
-  "-nostdlib -ffreestanding -static -T${CMAKE_CURRENT_SOURCE_DIR}/arch/${TARGET_ARCH}/linker.ld -z max-page-size=0x1000 -Wl,--eh-frame-hdr -Wl,--demangle -Wl,-pie")
+  "-nostdlib -ffreestanding -static -T${CMAKE_CURRENT_SOURCE_DIR}/arch/${TARGET_ARCH}/linker.ld -z max-page-size=0x1000 -Wl,--eh-frame-hdr -Wl,--demangle")
 if (${TARGET_ARCH} STREQUAL "i686")
   set_property(TARGET kernel APPEND_STRING PROPERTY LINK_FLAGS " -lclang_rt.builtins-i386")
 endif()
 
 target_include_directories(kernel PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_include_directories(kernel PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/arch/${TARGET_ARCH}")
+
+if (!${TARGET_ARCH} STREQUAL "i686")
+  add_compile_options("-fPIE")
+  set_property(TARGET kernel APPEND_STRING PROPERTY LINK_FLAGS " -pie -Wl,-pie")
+endif()
 
 if(${TARGET_ARCH} STREQUAL "x86_64" OR ${TARGET_ARCH} STREQUAL "i686")
   target_include_directories(kernel PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/arch/x86")

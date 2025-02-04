@@ -12,8 +12,10 @@ constexpr u32 PAGE_DIRTY    = 1 << 6;
 constexpr u32 PAGE_PS       = 1 << 7;
 constexpr u32 PAGE_GLOBAL   = 1 << 8;
 
+constexpr u64 PAGE_NX = 1ULL << 63;
+
 constexpr u32 _32BIT_ADDR_MASK = ~0xfff;
-constexpr u64 PAE_ADDR_MASK = 0x7ffffffffffff000ULL;
+constexpr u64 PAE_ADDR_MASK    = 0x7ffffffffffff000ULL;
 
 inline u8 avl_from_page(u32 page) { return (page >> 9) & 0x7; }
 inline u32 avl_to_bits(u32 page) { return (page & 0x7) << 9; }

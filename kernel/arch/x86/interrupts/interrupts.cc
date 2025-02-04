@@ -30,7 +30,6 @@
 #include "interrupts.hh"
 
 #include "apic.hh"
-#include "exceptions_managers.hh"
 #include <interrupts/gdt.hh>
 #include <interrupts/idt.hh>
 

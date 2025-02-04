@@ -351,16 +351,16 @@ void kernel::pmm::free_page(Page *p) noexcept
 
     // I am certainly not very good at naming variables
     if (coalesce_old_size == -1UL) {
-        auto order = log2(p->free_region_head.size);
+        auto order = kernel::types::log2(p->free_region_head.size);
         if (order >= page_lists)
             order = page_lists - 1;
         free_pages_list[order].push_front(p);
     } else {
-        auto old_order = log2(coalesce_old_size);
+        auto old_order = kernel::types::log2(coalesce_old_size);
         if (old_order >= page_lists)
             old_order = page_lists - 1;
 
-        int new_order = log2(p->free_region_head.size);
+        int new_order = kernel::types::log2(p->free_region_head.size);
         if (new_order >= page_lists)
             new_order = page_lists - 1;
 
@@ -487,7 +487,7 @@ Page *kernel::pmm::alloc_pages(size_t count, bool /* contiguous */) noexcept
         // Again, this should not be hard to implement, but doesn't matter for now
         return nullptr;
 
-    auto order = log2(count);
+    auto order = kernel::types::log2(count);
     if ((1UL << order) < count)
         order++;
 
@@ -505,7 +505,7 @@ Page *kernel::pmm::alloc_pages(size_t count, bool /* contiguous */) noexcept
 
                 if (p->free_region_head.size < (1UL << i)) {
                     free_pages_list[i].remove(p);
-                    auto new_order = log2(p->free_region_head.size);
+                    auto new_order = kernel::types::log2(p->free_region_head.size);
                     assert((size_t)new_order < i);
                     free_pages_list[new_order].push_front(p);
                 }
