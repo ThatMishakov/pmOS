@@ -460,10 +460,6 @@ void init_memory(ultra_boot_context *ctx)
     serial_logger.printf("Switching to kernel page tables...\n");
     apply_page_table(idle_cr3);
 
-    // Allocate Page structs
-    for (auto &i: kernel::pmm::free_pages_list)
-        i.init();
-
     serial_logger.printf("Paging initialized!\n");
 
     klib::vector<ultra_memory_map_entry> regions_data;

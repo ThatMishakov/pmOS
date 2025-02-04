@@ -17,7 +17,7 @@ bool WaitForBlockdPort::await_ready() noexcept { return blockd_port != 0; }
 pmos_port_t WaitForBlockdPort::await_resume() noexcept { return blockd_port; }
 
 using list_type =
-    pmos::containers::InitializedCircularDoubleList<WaitForBlockdPort, &WaitForBlockdPort::l>;
+    pmos::containers::CircularDoubleList<WaitForBlockdPort, &WaitForBlockdPort::l>;
 static list_type waiters {};
 static bool blockd_port_requested = false;
 extern pmos_port_t ahci_port;

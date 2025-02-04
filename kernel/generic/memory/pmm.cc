@@ -10,7 +10,7 @@ using namespace kernel;
 using namespace kernel::pmm;
 
 RegionsTree::RBTreeHead kernel::pmm::memory_regions;
-PageLL kernel::pmm::free_pages_list[page_lists];
+constinit PageLL kernel::pmm::free_pages_list[page_lists];
 
 PageArrayDescriptor *kernel::pmm::phys_memory_regions = nullptr;
 size_t kernel::pmm::phys_memory_regions_count         = 0;

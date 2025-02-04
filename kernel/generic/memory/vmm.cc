@@ -67,8 +67,6 @@ void virtmem_init(u64 virtmem_base, u64 virtmem_size)
 {
     kernel_space_allocator.init();
 
-    virtmem_available_tags_list.init();
-
     virtmem_fill_initial_tags();
     auto tag   = virtmem_get_free_tag();
     tag->base  = virtmem_base;

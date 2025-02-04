@@ -92,7 +92,7 @@ static const u64 virtmem_initial_segments = 16;
 inline VirtmemBoundaryTag virtmem_initial_tags[virtmem_initial_segments];
 
 // The unsorted list of unused boundary tags
-inline VirtMemFreelist virtmem_available_tags_list;
+constinit inline VirtMemFreelist virtmem_available_tags_list;
 inline u64 virtmem_available_tags_count = 0;
 
 // Get an unused boundary tag from the list
@@ -215,7 +215,7 @@ protected:
     friend void virtmem_init(u64 virtmem_base, u64 virtmem_size);
 };
 
-inline VirtMem<12, 63> kernel_space_allocator;
+inline constinit VirtMem<12, 63> kernel_space_allocator;
 
 // Links the boundary tag with the list of tags sorted by address
 void virtmem_link_tag(VirtmemBoundaryTag *preceeding, VirtmemBoundaryTag *new_tag);
@@ -454,12 +454,12 @@ template<int Q, int M> void VirtMem<Q, M>::init()
     segment_ll_dummy_head.segment_prev = &segment_ll_dummy_head;
     segment_ll_dummy_head.state        = VirtmemBoundaryTag::State::LISTHEAD;
 
-    // Init lists
-    // See VirtMemFreelist::init_empty() for the explanation
-    for (auto &i: virtmem_freelists)
-        i.init();
-    for (auto &i: virtmem_initial_hash)
-        i.init();
+    // // Init lists
+    // // See VirtMemFreelist::init_empty() for the explanation
+    // for (auto &i: virtmem_freelists)
+    //     i.init();
+    // for (auto &i: virtmem_initial_hash)
+    //     i.init();
     virtmem_hashtable = virtmem_initial_hash;
 }
 

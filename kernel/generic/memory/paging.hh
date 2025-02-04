@@ -622,7 +622,7 @@ protected:
     int paging_generation    = 0;
     int active_cpus_count[2] = {0, 0};
     using list =
-        pmos::containers::InitializedCircularDoubleList<CPU_Info, &CPU_Info::active_page_table>;
+        pmos::containers::CircularDoubleList<CPU_Info, &CPU_Info::active_page_table>;
     list active_cpus[2]                       = {};
     TLBShootdownContext *shootdown_descriptor = nullptr;
 

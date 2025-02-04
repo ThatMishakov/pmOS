@@ -11,7 +11,7 @@ template<typename T> struct DoubleListHead {
 template<typename T, DoubleListHead<T> T:: *Head> class CircularDoubleList
 {
 public:
-    DoubleListHead<T> head = {nullptr, nullptr};
+    DoubleListHead<T> head = {&head, &head};
 
     class iterator
     {
@@ -36,9 +36,6 @@ public:
         operator T *() const noexcept { return &**this; }
     };
 
-    // Make init() function explicit to have a trivial constructor
-    void init() noexcept { head.next = head.prev = &head; }
-
     void push_front(T *p) noexcept;
     void push_back(T *p) noexcept;
     static void remove(T *p) noexcept;
@@ -53,14 +50,6 @@ public:
 
     const T &front() const noexcept;
     const T &back() const noexcept;
-};
-
-template<typename T, DoubleListHead<T> T:: *Head> class InitializedCircularDoubleList
-    : public CircularDoubleList<T, Head>
-{
-public:
-    InitializedCircularDoubleList() noexcept { this->init(); }
-    ~InitializedCircularDoubleList() noexcept = default;
 };
 
 template<typename T, DoubleListHead<T> T:: *Head>
