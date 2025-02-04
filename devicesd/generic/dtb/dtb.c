@@ -34,7 +34,7 @@ void init_dtb()
 
     printf("Info: Initializing DTB...\n");
 
-    IPC_FDT_Request request = {IPC_FDT_Request_NUM, configuration_port};
+    IPC_FDT_Request request = {IPC_FDT_Request_NUM, 0, configuration_port};
 
     ports_request_t loader_port = get_port_by_name(loader_port_name, strlen(loader_port_name), 0);
     if (loader_port.result != SUCCESS) {

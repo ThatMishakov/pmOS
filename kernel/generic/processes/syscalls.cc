@@ -143,8 +143,8 @@ extern "C" void syscall_handler()
 
     // TODO: This crashes if the syscall is not implemented
     if (call_n >= syscall_table.size() or syscall_table[call_n] == nullptr) {
-        t_print_bochs("Debug: syscall %h pid %li (%s) ", call_n, task->task_id, task->name.c_str());
-        t_print_bochs(" -> %i (%s)\n", -ENOTSUP, "syscall not implemented");
+        serial_logger.printf("Debug: syscall %h pid %li (%s) ", call_n, task->task_id, task->name.c_str());
+        serial_logger.printf(" -> %i (%s)\n", -ENOTSUP, "syscall not implemented");
         syscall_error(task) = -ENOTSUP;
         return;
     }
@@ -152,7 +152,7 @@ extern "C" void syscall_handler()
     syscall_table[call_n]();
 
     if ((syscall_error(task) < 0) && !task->regs.syscall_pending_restart()) {
-        serial_logger.printf("Debug: syscall %h (%i) pid %h (%s) ", call_n, call_n, task->task_id,
+        serial_logger.printf("Debug: syscall %h (%i) pid %li (%s) ", call_n, call_n, task->task_id,
                              task->name.c_str());
         int val = syscall_error(task);
         serial_logger.printf(" -> %i (%s)\n", val, "syscall failed");

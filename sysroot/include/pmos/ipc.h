@@ -603,6 +603,7 @@ typedef struct IPC_ACPI_RSDT_Reply {
 #define IPC_FDT_Request_NUM 0x62
 typedef struct IPC_FDT_Request {
     uint32_t type;
+    uint32_t flags;
     uint64_t reply_channel;
 } IPC_FDT_Request;
 
