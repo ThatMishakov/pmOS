@@ -248,6 +248,11 @@ void pmm_create_regions(const klib::vector<ultra_memory_map_entry> &regions_data
 
         pages++;
 
+        
+        auto r = pmm::add_page_array(first_addr, entries - 2, pages);
+        if (!r)
+            panic("Failed to add region to PMM");
+
         for (long i = first_index; i <= last_index; ++i) {
             auto region = regions_data[i];
             if (region.physical_address >= phys_memory_limit)
@@ -329,10 +334,6 @@ void pmm_create_regions(const klib::vector<ultra_memory_map_entry> &regions_data
                 }
             }
         }
-
-        auto r = pmm::add_page_array(first_addr, entries - 2, pages);
-        if (!r)
-            panic("Failed to add region to PMM");
     };
 
     serial_logger.printf("Creating PMM regions\n");
