@@ -153,7 +153,7 @@ u64 phys_memory_limit      = 0x100000000; // 4GB, if PAE is not enabled, otherwi
 u64 total_memory           = 0;
 const u64 MAX_TOTAL_MEMORY = 0x400000000; // 16GB
 
-void pmm_create_regions(const klib::vector<ultra_memory_map_entry> &regions_data)
+void pmm_create_regions(klib::vector<ultra_memory_map_entry> &regions_data)
 {
     if (use_pae)
         phys_memory_limit = 0;
@@ -248,7 +248,6 @@ void pmm_create_regions(const klib::vector<ultra_memory_map_entry> &regions_data
 
         pages++;
 
-        
         auto r = pmm::add_page_array(first_addr, entries - 2, pages);
         if (!r)
             panic("Failed to add region to PMM");
@@ -336,6 +335,60 @@ void pmm_create_regions(const klib::vector<ultra_memory_map_entry> &regions_data
         }
     };
 
+    auto split_into_regions = [&](long first_index, long last_index) -> void {
+        auto current_addr = regions_data[first_index].physical_address;
+        auto end_addr = regions_data[last_index].physical_address + regions_data[last_index].size;
+        auto current_index = first_index;
+
+        while (current_addr < end_addr) {
+            PMMRegion *region = PMMRegion::get(current_addr);
+            assert(region);
+
+            auto final_addr = region->start + region->size_bytes;
+            while (current_index != last_index and regions_data[current_index + 1].physical_address <= current_addr) {
+                current_index++;
+            }
+            auto i = current_index;
+
+            while (i <= last_index and
+                   (final_addr == 0 or regions_data[i].physical_address < final_addr)) {
+                i++;
+            }
+            assert(i > current_index);
+            auto last_index = i - 1;
+
+            auto saved_first = regions_data[current_index];
+            auto saved_last  = regions_data[last_index];
+
+            if (current_addr > regions_data[current_index].physical_address) {
+                auto diff = current_addr - regions_data[current_index].physical_address;
+                assert(diff < regions_data[current_index].size);
+                regions_data[current_index].size -= diff;
+                regions_data[current_index].physical_address = current_addr;
+            }
+            if (final_addr != 0 and
+                regions_data[last_index].physical_address + regions_data[last_index].size >
+                    final_addr) {
+                auto diff = regions_data[last_index].physical_address +
+                            regions_data[last_index].size - final_addr;
+                assert(diff > 0);
+                regions_data[last_index].size -= diff;
+            }
+
+            auto final_final_addr =
+                regions_data[last_index].physical_address + regions_data[last_index].size;
+            assert(final_final_addr != 0);
+
+            new_region_func(current_index, last_index);
+
+            regions_data[current_index] = saved_first;
+            regions_data[last_index]    = saved_last;
+
+            current_addr  = final_final_addr;
+            current_index = last_index;
+        }
+    };
+
     serial_logger.printf("Creating PMM regions\n");
 
     long first_index = -1;
@@ -347,13 +400,13 @@ void pmm_create_regions(const klib::vector<ultra_memory_map_entry> &regions_data
             if (first_index == -1) {
                 first_index = i;
             } else if (region_last_addr(i - 1) < regions_data[i].physical_address) {
-                new_region_func(first_index, i - 1);
+                split_into_regions(first_index, i - 1);
                 first_index = i;
             } else if (i == regions_data.size() - 1) {
-                new_region_func(first_index, i);
+                split_into_regions(first_index, i);
             }
         } else if (first_index != -1) {
-            new_region_func(first_index, i - 1);
+            split_into_regions(first_index, i - 1);
             first_index = -1;
         }
     }
@@ -362,11 +415,22 @@ void pmm_create_regions(const klib::vector<ultra_memory_map_entry> &regions_data
     Page *temp_region_page = pmm::find_page(temp_allocator_below_1gb);
     assert(temp_region_page);
     auto reserved_count = temp_allocated_bytes / PAGE_SIZE;
-    for (size_t i = 0; i < reserved_count; i++) {
-        temp_region_page[i].type       = Page::PageType::Allocated;
-        temp_region_page[i].l.owner    = nullptr;
-        temp_region_page[i].flags      = 0;
-        temp_region_page[i].l.refcount = 1;
+    for (size_t i = 0; i < reserved_count;) {
+        auto desc        = PageArrayDescriptor::find(temp_region_page + i);
+        size_t first_idx = temp_region_page - desc->pages;
+        size_t last_idx  = reserved_count - i + first_idx > desc->size ? desc->size - first_idx + i
+                                                                       : reserved_count;
+        for (; i < last_idx; ++i) {
+            temp_region_page[i].type       = Page::PageType::Allocated;
+            temp_region_page[i].l.owner    = nullptr;
+            temp_region_page[i].flags      = 0;
+            temp_region_page[i].l.refcount = 1;
+        }
+        if (i < reserved_count) {
+            auto next = desc->next();
+            assert(next);
+            temp_region_page = next->pages;
+        }
     }
 
     u64 below_1g_region_end =
@@ -474,7 +538,7 @@ void init_memory(ultra_boot_context *ctx)
 }
 
 constexpr u64 RSDP_INITIALIZER = -1ULL;
-u64 rsdp = -1ULL;
+u64 rsdp                       = -1ULL;
 
 void init();
 void init_acpi(u64 rsdp_addr)

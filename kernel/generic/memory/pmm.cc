@@ -566,7 +566,7 @@ static Page *alloc_pages_from(PMMRegion &region, size_t count)
     return nullptr;
 }
 
-static PMMRegion region_below_4gb = PMMRegion(0, 0x100000000);
+static PMMRegion region_below_4gb = PMMRegion(0x0, 0x100000000);
 static PMMRegion region_above_4gb = PMMRegion(0x100000000, (u64)0 - 0x100000000);
 
 Page *kernel::pmm::alloc_pages(size_t count, bool /* contiguous */, AllocPolicy policy) noexcept
