@@ -95,7 +95,7 @@ kresult_t ia32_map_page(u32 cr3, u64 phys_addr, void *virt_addr, Page_Table_Argu
 
             clear_page(new_pd_phys);
 
-            pdpt_entry = new_pd_phys | PAGE_PRESENT | PAGE_WRITE | PAGE_USER;
+            pdpt_entry = new_pd_phys | PAGE_PRESENT;
             __atomic_store_n(pdpt + pdpt_idx, pdpt_entry, __ATOMIC_RELAXED);
         }
 
@@ -320,7 +320,7 @@ u64 prepare_pt_for(void *virt_addr, Page_Table_Argumments, u32 cr3)
 
             clear_page(new_pd_phys);
 
-            pdpt_entry = new_pd_phys | PAGE_PRESENT | PAGE_WRITE | PAGE_USER;
+            pdpt_entry = new_pd_phys | PAGE_PRESENT;
             __atomic_store_n(pdpt + pdpt_idx, pdpt_entry, __ATOMIC_RELAXED);
         }
 

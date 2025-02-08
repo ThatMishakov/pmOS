@@ -63,7 +63,8 @@ continue:
     popl %edi
     popl %esi
     popl %ebp
-    ret
+    movl 4(%esp), %eax
+    ret $4
 
 on_failure:
     movl %eax, %esp
@@ -84,7 +85,6 @@ on_failure:
     
     leal -16(%ebp), %esp
 
-    movl 8(%ebp), %eax
     movl  (%eax), %ecx
     orl  4(%eax), %ecx
     jnz failure
@@ -100,4 +100,5 @@ failure:
     popl %edi
     popl %esi
     popl %ebp
-    ret
+    movl 4(%esp), %eax
+    ret $4

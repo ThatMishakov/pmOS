@@ -9,12 +9,12 @@
 using namespace kernel;
 using namespace kernel::pmm;
 
-RegionsTree::RBTreeHead kernel::pmm::memory_regions;
+constinit RegionsTree::RBTreeHead kernel::pmm::memory_regions;
 // constinit PageLL kernel::pmm::free_pages_list[page_lists];
 
-PageArrayDescriptor *kernel::pmm::phys_memory_regions = nullptr;
-size_t kernel::pmm::phys_memory_regions_count         = 0;
-size_t kernel::pmm::phys_memory_regions_capacity      = 0;
+constinit PageArrayDescriptor *kernel::pmm::phys_memory_regions = nullptr;
+constinit size_t kernel::pmm::phys_memory_regions_count         = 0;
+constinit size_t kernel::pmm::phys_memory_regions_capacity      = 0;
 
 Page_Descriptor &Page_Descriptor::operator=(Page_Descriptor &&p) noexcept
 {
@@ -230,11 +230,15 @@ PageArrayDescriptor *phys_memory_regions_end() noexcept
     return phys_memory_regions + phys_memory_regions_count;
 }
 
+#include <kern_logger/kern_logger.hh>
 bool kernel::pmm::add_page_array(Page::page_addr_t start_addr, u64 size, Page *pages) noexcept
 {
+    serial_logger.printf("Adding page array: %lx %lx %lx\n", start_addr, size, (u64)pages);
     auto pmm_region = PMMRegion::get(start_addr);
     assert(pmm_region);
     assert(start_addr >= pmm_region->start);
+    serial_logger.printf("Start addr %lx pmm_region start %lx size %lx\n", start_addr,
+                         pmm_region->start, pmm_region->size_bytes);
     assert(start_addr - pmm_region->start < pmm_region->size_bytes);
     auto new_array_size_bytes = size * PAGE_SIZE;
     assert(pmm_region->size_bytes >= new_array_size_bytes);
@@ -306,7 +310,7 @@ Page::page_addr_t Page::get_phys_addr() const noexcept
     return (Page::page_addr_t)diff * PAGE_SIZE + it->start_addr;
 }
 
-Spinlock pmm_lock;
+constinit Spinlock pmm_lock;
 
 void kernel::pmm::free_page(Page *p) noexcept
 {
@@ -480,7 +484,7 @@ void kernel::pmm::free_memory_for_kernel(phys_page_t page, size_t number_of_page
     get_cpu_struct()->paging_rcu_cpu.push(&r.rcu_h);
 }
 
-bool kernel::pmm::pmm_fully_initialized = false;
+constinit bool kernel::pmm::pmm_fully_initialized = false;
 Page::page_addr_t alloc_pages_from_temp_pool(size_t pages) noexcept;
 
 Page::page_addr_t kernel::pmm::get_memory_for_kernel(size_t pages, AllocPolicy policy) noexcept
@@ -566,8 +570,8 @@ static Page *alloc_pages_from(PMMRegion &region, size_t count)
     return nullptr;
 }
 
-static PMMRegion region_below_4gb = PMMRegion(0x0, 0x100000000);
-static PMMRegion region_above_4gb = PMMRegion(0x100000000, (u64)0 - 0x100000000);
+static constinit PMMRegion region_below_4gb = PMMRegion(0x0, 0x100000000);
+static constinit PMMRegion region_above_4gb = PMMRegion(0x100000000, (u64)0 - 0x100000000);
 
 Page *kernel::pmm::alloc_pages(size_t count, bool /* contiguous */, AllocPolicy policy) noexcept
 {

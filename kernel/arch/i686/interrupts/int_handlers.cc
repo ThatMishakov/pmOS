@@ -78,6 +78,9 @@ extern u32 idle_cr3;
 
 extern bool page_mapped(void *pagefault_cr2, ulong err);
 
+struct stack_frame;
+void print_stack_trace(Logger &logger, stack_frame *s);
+
 extern "C" void page_fault_handler(kernel_registers_context *ctx, u32 err)
 {
     auto virtual_addr = getCR2();
@@ -111,6 +114,8 @@ extern "C" void page_fault_handler(kernel_registers_context *ctx, u32 err)
 
         serial_logger.printf("Kernel page fault at 0x%x\n", virtual_addr);
         print_kernel_registers(ctx, err);
+
+        print_stack_trace(serial_logger, (stack_frame *)ctx->ebp);
 
         panic("Kernel pagefault");
     }

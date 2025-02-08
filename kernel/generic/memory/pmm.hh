@@ -186,7 +186,7 @@ struct PMMRegion {
     Page::page_addr_t start;
     u64 size_bytes;
 
-    PMMRegion(Page::page_addr_t start, u64 size_bytes) noexcept: start(start), size_bytes(size_bytes) {}
+    constexpr PMMRegion(Page::page_addr_t start, u64 size_bytes) noexcept: start(start), size_bytes(size_bytes) {}
 
     inline static constexpr auto page_lists = 30 - PAGE_ORDER; // 1GB max allocation
     PageLL free_pages_list[page_lists];

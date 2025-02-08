@@ -36,7 +36,7 @@ template<typename T> struct RBTreeNode {
     T *left   = nullptr;
     T *right  = nullptr;
 
-    RBTreeNode(): parent(nullptr), left(nullptr), right(nullptr) {}
+    constexpr RBTreeNode(): parent(nullptr), left(nullptr), right(nullptr) {}
 
     bool is_red() const;
     void set_color(bool red);

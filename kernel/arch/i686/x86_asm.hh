@@ -40,7 +40,7 @@ inline u64 read_msr(u32 reg)
     ulong ecx = reg;
     ulong edx;
 
-    asm volatile("rdmsr" : "=a"(eax), "=d"(edx) : "e"(ecx) : "memory");
+    asm volatile("rdmsr" : "=a"(eax), "=d"(edx) : "c"(ecx) : "memory");
 
     return eax | ((u64)edx << 32);
 }

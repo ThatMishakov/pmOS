@@ -108,7 +108,7 @@ ReturnStr<bool> Phys_Mapped_Region::alloc_page(phys_addr_t ptr_addr, Page_Info, 
 {
     Page_Table_Argumments args = craft_arguments();
 
-    phys_addr_t page_addr = (u64)ptr_addr & ~07777UL;
+    phys_addr_t page_addr = (u64)ptr_addr & ~07777ULL;
     phys_addr_t phys_addr = page_addr - start_addr + phys_addr_start;
 
     auto result = owner->map(phys_addr, page_addr, args);
