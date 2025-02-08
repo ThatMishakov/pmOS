@@ -204,14 +204,15 @@ void pmm_create_regions(klib::vector<ultra_memory_map_entry> &regions_data)
         long alloc_index = -1;
         for (long i = first_index; i <= last_index; ++i) {
             auto region = regions_data[i];
-            if (region.physical_address >= phys_memory_limit)
+            if (phys_memory_limit != 0 and region.physical_address >= phys_memory_limit)
                 break;
 
             if (i == temp_alloc_entry_id)
                 continue;
 
             if (region.type == ULTRA_MEMORY_TYPE_FREE and (region.size >= page_struct_page_size) and
-                (region.physical_address + page_struct_page_size <= phys_memory_limit)) {
+                (phys_memory_limit == 0 or
+                 (region.physical_address + page_struct_page_size <= phys_memory_limit))) {
                 alloc_index = i;
                 break;
             }
@@ -254,7 +255,7 @@ void pmm_create_regions(klib::vector<ultra_memory_map_entry> &regions_data)
 
         for (long i = first_index; i <= last_index; ++i) {
             auto region = regions_data[i];
-            if (region.physical_address >= phys_memory_limit)
+            if (phys_memory_limit != 0 and region.physical_address >= phys_memory_limit)
                 break;
 
             if (region.type == ULTRA_MEMORY_TYPE_FREE) {
@@ -276,7 +277,8 @@ void pmm_create_regions(klib::vector<ultra_memory_map_entry> &regions_data)
                     continue;
                 }
 
-                u64 length = region.physical_address + region.size > phys_memory_limit
+                u64 length = (region.physical_address + region.size > phys_memory_limit) and
+                                     (phys_memory_limit != 0)
                                  ? phys_memory_limit - region.physical_address
                                  : region.size;
 
@@ -319,10 +321,11 @@ void pmm_create_regions(klib::vector<ultra_memory_map_entry> &regions_data)
                 }
             } else {
                 auto base_page_index = (region.physical_address - first_addr) / PAGE_SIZE;
-                auto last_addr       = region.physical_address + region.size > phys_memory_limit
-                                           ? phys_memory_limit
-                                           : region.physical_address + region.size;
-                auto pages_count     = (last_addr - region.physical_address) / PAGE_SIZE;
+                u64 last_addr    = (region.physical_address + region.size > phys_memory_limit) and
+                                        (phys_memory_limit != 0)
+                                       ? phys_memory_limit
+                                       : region.physical_address + region.size;
+                auto pages_count = (last_addr - region.physical_address) / PAGE_SIZE;
 
                 for (size_t j = base_page_index; j < base_page_index + pages_count; j++) {
                     pages[j].type       = pmm::Page::PageType::Allocated;
@@ -336,16 +339,17 @@ void pmm_create_regions(klib::vector<ultra_memory_map_entry> &regions_data)
     };
 
     auto split_into_regions = [&](long first_index, long last_index) -> void {
-        auto current_addr = regions_data[first_index].physical_address;
-        auto end_addr = regions_data[last_index].physical_address + regions_data[last_index].size;
+        u64 current_addr = regions_data[first_index].physical_address;
+        u64 end_addr = regions_data[last_index].physical_address + regions_data[last_index].size;
         auto current_index = first_index;
 
         while (current_addr < end_addr) {
             PMMRegion *region = PMMRegion::get(current_addr);
             assert(region);
 
-            auto final_addr = region->start + region->size_bytes;
-            while (current_index != last_index and regions_data[current_index + 1].physical_address <= current_addr) {
+            u64 final_addr = region->start + region->size_bytes;
+            while (current_index != last_index and
+                   regions_data[current_index + 1].physical_address <= current_addr) {
                 current_index++;
             }
             auto i = current_index;
@@ -361,7 +365,7 @@ void pmm_create_regions(klib::vector<ultra_memory_map_entry> &regions_data)
             auto saved_last  = regions_data[last_index];
 
             if (current_addr > regions_data[current_index].physical_address) {
-                auto diff = current_addr - regions_data[current_index].physical_address;
+                u64 diff = current_addr - regions_data[current_index].physical_address;
                 assert(diff < regions_data[current_index].size);
                 regions_data[current_index].size -= diff;
                 regions_data[current_index].physical_address = current_addr;
@@ -369,13 +373,13 @@ void pmm_create_regions(klib::vector<ultra_memory_map_entry> &regions_data)
             if (final_addr != 0 and
                 regions_data[last_index].physical_address + regions_data[last_index].size >
                     final_addr) {
-                auto diff = regions_data[last_index].physical_address +
-                            regions_data[last_index].size - final_addr;
+                u64 diff = regions_data[last_index].physical_address +
+                           regions_data[last_index].size - final_addr;
                 assert(diff > 0);
                 regions_data[last_index].size -= diff;
             }
 
-            auto final_final_addr =
+            u64 final_final_addr =
                 regions_data[last_index].physical_address + regions_data[last_index].size;
             assert(final_final_addr != 0);
 
@@ -395,14 +399,16 @@ void pmm_create_regions(klib::vector<ultra_memory_map_entry> &regions_data)
     for (size_t i = 0; i < regions_data.size(); ++i) {
         auto type = regions_data[i].type;
         if (type == ULTRA_MEMORY_TYPE_FREE or type == ULTRA_MEMORY_TYPE_RECLAIMABLE or
-            type == 0xFFFF0001 or type == ULTRA_MEMORY_TYPE_MODULE or
+            type == ULTRA_MEMORY_TYPE_LOADER_RECLAIMABLE or type == ULTRA_MEMORY_TYPE_MODULE or
             type == ULTRA_MEMORY_TYPE_KERNEL_STACK or type == ULTRA_MEMORY_TYPE_KERNEL_BINARY) {
             if (first_index == -1) {
                 first_index = i;
             } else if (region_last_addr(i - 1) < regions_data[i].physical_address) {
                 split_into_regions(first_index, i - 1);
                 first_index = i;
-            } else if (i == regions_data.size() - 1) {
+            }
+
+            if (i == (regions_data.size() - 1)) {
                 split_into_regions(first_index, i);
             }
         } else if (first_index != -1) {
@@ -435,10 +441,11 @@ void pmm_create_regions(klib::vector<ultra_memory_map_entry> &regions_data)
 
     u64 below_1g_region_end =
         regions_data[temp_alloc_entry_id].physical_address + regions_data[temp_alloc_entry_id].size;
-    if (below_1g_region_end > phys_memory_limit)
+
+    if (phys_memory_limit != 0 and below_1g_region_end > phys_memory_limit)
         below_1g_region_end = phys_memory_limit;
 
-    assert(below_1g_region_end >= temp_allocator_below_1gb + temp_allocated_bytes);
+    assert(below_1g_region_end >= (temp_allocator_below_1gb + temp_allocated_bytes));
     u64 size          = below_1g_region_end - temp_allocator_below_1gb - temp_allocated_bytes;
     auto free_region  = temp_region_page + reserved_count;
     free_region->type = Page::PageType::PendingFree;
@@ -485,11 +492,11 @@ void init_memory(ultra_boot_context *ctx)
         if (mem->entries[i].physical_address >= 0x40000000)
             break;
 
-        auto end = mem->entries[i].physical_address + mem->entries[i].size;
+        u64 end = mem->entries[i].physical_address + mem->entries[i].size;
         if (end > 0x40000000)
             end = 0x40000000;
 
-        auto size = end - mem->entries[i].physical_address;
+        u64 size = end - mem->entries[i].physical_address;
         if (size > largest_size) {
             largest_size               = size;
             temp_allocator_below_1gb   = mem->entries[i].physical_address;
@@ -504,8 +511,16 @@ void init_memory(ultra_boot_context *ctx)
     serial_logger.printf("Allocating page tables from 0x%x - 0x%x...\n", temp_allocator_below_1gb,
                          temp_allocator_below_1gb + largest_size);
 
-    idle_cr3 = (u32)alloc_pages_from_temp_pool(1);
-    clear_page(idle_cr3, 0);
+    if (use_pae) {
+        idle_cr3 = new_pae_cr3();
+        if (idle_cr3 == -1U)
+            panic("Failed to allocate memory for idle_cr3\n");
+    } else {
+        idle_cr3 = (u32)alloc_pages_from_temp_pool(1);
+        if (idle_cr3 == 0)
+            panic("Failed to allocate memory for idle_cr3\n");
+        clear_page(idle_cr3, 0);
+    }
 
     u32 heap_space_start = (u32)&_free_after_kernel;
     u32 heap_space_size  = 0 - heap_space_start;
@@ -866,6 +881,8 @@ extern "C" void kmain(struct ultra_boot_context *ctx, uint32_t magic)
     if (!ptr)
         panic("Could not find platform attribute!\n");
     ultra_platform_info_attribute attr = *ptr;
+    use_pae                            = attr.page_table_depth == 3;
+    serial_logger.printf("PAE: %s\n", use_pae ? "enabled" : "disabled");
 
     init_memory(ctx);
 

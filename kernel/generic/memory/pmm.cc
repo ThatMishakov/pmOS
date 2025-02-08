@@ -483,7 +483,7 @@ void kernel::pmm::free_memory_for_kernel(phys_page_t page, size_t number_of_page
 bool kernel::pmm::pmm_fully_initialized = false;
 Page::page_addr_t alloc_pages_from_temp_pool(size_t pages) noexcept;
 
-Page::page_addr_t kernel::pmm::get_memory_for_kernel(size_t pages) noexcept
+Page::page_addr_t kernel::pmm::get_memory_for_kernel(size_t pages, AllocPolicy policy) noexcept
 {
     assert(pages > 0);
 
@@ -491,7 +491,7 @@ Page::page_addr_t kernel::pmm::get_memory_for_kernel(size_t pages) noexcept
         return alloc_pages_from_temp_pool(pages);
     }
 
-    Page *p = alloc_pages(pages, true);
+    Page *p = alloc_pages(pages, true, policy);
     if (!p) [[unlikely]]
         return -1UL;
 

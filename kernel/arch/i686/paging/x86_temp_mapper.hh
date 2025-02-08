@@ -19,6 +19,8 @@ private:
     unsigned start_index           = 0;
     unsigned min_index             = 1;
     constexpr static unsigned size = 16;
+
+    static u32 temp_mapper_get_index(u32 addr);
 };
 
 class x86_2level_Mapper final: public Temp_Mapper

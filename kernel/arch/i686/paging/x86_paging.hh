@@ -17,6 +17,24 @@ constexpr u64 PAGE_NX = 1ULL << 63;
 constexpr u32 _32BIT_ADDR_MASK = ~0xfff;
 constexpr u64 PAE_ADDR_MASK    = 0x7ffffffffffff000ULL;
 
+typedef uint64_t pae_entry_t [[gnu::aligned(8)]];
+
+struct PDPTd {
+    pae_entry_t entries[4];
+};
+
+struct PDPEPage {
+    PDPTd pdpts[127];
+    u32 next_phys;
+    u32 prev_phys;
+    u64 bitmap1;
+    u64 bitmap2;
+    u32 allocated_count;
+    u32 padding;
+};
+
+static_assert(sizeof(PDPEPage) == 4096, "PDPEPage size is not 4096");
+
 inline u8 avl_from_page(u32 page) { return (page >> 9) & 0x7; }
 inline u32 avl_to_bits(u32 page) { return (page & 0x7) << 9; }
 
@@ -73,3 +91,6 @@ protected:
 };
 
 u64 prepare_pt_for(void *virt_addr, Page_Table_Argumments arg, u32 pt_top_phys);
+
+void free_pae_cr3(u32 cr3);
+u32 new_pae_cr3();

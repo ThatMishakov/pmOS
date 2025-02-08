@@ -162,7 +162,7 @@ inline bool alloc_failure(phys_page_t p) noexcept { return p == (phys_page_t)-1;
  *
  * @return phys_page_t Physical address of the page. -1 if no page is available
  */
-phys_page_t get_memory_for_kernel(size_t number_of_pages) noexcept;
+phys_page_t get_memory_for_kernel(size_t number_of_pages, AllocPolicy policy = AllocPolicy::Normal) noexcept;
 
 /**
  * @brief Frees the contiguous pages allocated for the kernel
