@@ -303,7 +303,7 @@ Page::page_addr_t Page::get_phys_addr() const noexcept
 
     auto diff = this - it->pages;
     assert(diff < (long int)it->size);
-    return diff * PAGE_SIZE + it->start_addr;
+    return (Page::page_addr_t)diff * PAGE_SIZE + it->start_addr;
 }
 
 Spinlock pmm_lock;
@@ -438,7 +438,7 @@ Page *kernel::pmm::find_page(Page::page_addr_t addr) noexcept
 
     if (it->start_addr <= addr && addr < (it->start_addr + it->size * PAGE_SIZE)) [[likely]] {
         auto diff = addr - it->start_addr;
-        return it->pages + diff / PAGE_SIZE;
+        return it->pages + (Page::page_addr_t)diff / PAGE_SIZE;
     }
 
     return nullptr;
