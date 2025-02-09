@@ -10,6 +10,7 @@
 #include <sys/mman.h>
 #include <pmos/utility/scope_guard.hh>
 #include "blockd.hh"
+#include <cinttypes>
 
 pmos::async::detached_task handle_device(AHCIPort &parent)
 {
@@ -18,7 +19,7 @@ pmos::async::detached_task handle_device(AHCIPort &parent)
     auto guard_ = pmos::utility::make_scope_guard([&] { munmap(req.virt_addr, dma_size); });
     auto phys_addr = get_page_phys_address(0, req.virt_addr, 0);
     if (phys_addr.result < 0) {
-        printf("Could not get physical address for AHCI: %li\n", phys_addr.result);
+        printf("Could not get physical address for AHCI: %i\n", (int)phys_addr.result);
         co_return;
     }
     memset(req.virt_addr, 0, dma_size);
@@ -48,11 +49,11 @@ pmos::async::detached_task handle_device(AHCIPort &parent)
 
     auto sector_count = s->get_sector_count();
 
-    printf("Port %i sector count: %i\n", parent.index, sector_count);
+    printf("Port %i sector count: %" PRIu64 "\n", parent.index, sector_count);
 
-    auto disk = co_await register_disk(parent.index, sector_count, logical_sector_size, physical_sector_size);
+    auto disk = co_await register_disk(parent, sector_count, logical_sector_size, physical_sector_size);
     
-    printf("Port %i disk registered: %li\n", parent.index, disk);
+    printf("Port %i disk registered: %" PRIu64 "\n", parent.index, disk);
 
     co_return;
 }
@@ -74,6 +75,7 @@ void GetCmdIndex::available_callback(CmdPortWaiter *self)
 int GetCmdIndex::await_resume()
 {
     assert(parent.active_cmd_slots < num_slots);
+    assert((size_t)parent.cmd_bitmap.size() == (size_t)num_slots);
 
     for (int i = 0; i < num_slots; ++i)
         if (not parent.cmd_bitmap[i]) {

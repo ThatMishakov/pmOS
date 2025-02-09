@@ -23,16 +23,11 @@ std::unordered_map<uint64_t, gptr> groups;
 
 uint64_t align_to_page(uint64_t size) { return (size + 0xfff) & ~(uint64_t)0xfff; }
 
-DiskHandler *DiskHandler::create(int port, uint64_t sector_count, std::size_t logical_sector_size,
-                                 std::size_t physical_sector_size)
+DiskHandler *DiskHandler::create(AHCIPort &port, uint64_t sector_count,
+                                 std::size_t logical_sector_size, std::size_t physical_sector_size)
 {
-    auto d                  = dptr(new DiskHandler);
-    d->disk_id              = new_id();
-    d->sector_count         = sector_count;
-    d->logical_sector_size  = logical_sector_size;
-    d->physical_sector_size = physical_sector_size;
-    d->port                 = port;
-
+    auto d = dptr(
+        new DiskHandler(port, new_id(), sector_count, logical_sector_size, physical_sector_size));
     auto p = d.get();
 
     handlers.insert({d->disk_id, std::move(d)});
@@ -320,7 +315,8 @@ pmos::async::detached_task handle_disk_read(const Message_Descriptor &d, IPC_Dis
                     } else if (offset == phys_addr_of_offset) {
                         offset += page_size;
                     } else {
-                        auto [result, phys_addr] = get_page_phys_address_from_object(object, offset, 0);
+                        auto [result, phys_addr] =
+                            get_page_phys_address_from_object(object, offset, 0);
                         if (result != SUCCESS) {
                             handle_disk_read_error(request.reply_port, result, request.user_arg);
                             co_return;
@@ -378,8 +374,11 @@ pmos::async::detached_task handle_disk_read(const Message_Descriptor &d, IPC_Dis
 
 // This is horrible, why is it not in a header file?
 extern std::vector<AHCIPort> ports;
+AHCIPort &find_port(int i);
 
-AHCIPort &DiskHandler::get_port()
-{
-    return ports[port];
-}
+AHCIPort &DiskHandler::get_port() { return port; }
+
+DiskHandler::DiskHandler(AHCIPort &port, uint64_t disk_id, uint64_t sector_count, std::size_t logical_sector_size,
+    std::size_t physical_sector_size):
+    port(port), disk_id(disk_id), sector_count(sector_count), logical_sector_size(logical_sector_size),
+    physical_sector_size(physical_sector_size) {}

@@ -50,7 +50,7 @@ class DiskHandler
 public:
     uint64_t get_disk_id() const { return disk_id; }
 
-    static DiskHandler *create(int port, uint64_t sector_count, std::size_t logical_sector_size,
+    static DiskHandler *create(AHCIPort &port, uint64_t sector_count, std::size_t logical_sector_size,
                                std::size_t physical_sector_size);
     void destroy() noexcept;
     static DiskHandler *get(uint64_t id);
@@ -71,13 +71,13 @@ public:
     AHCIPort &get_port();
 
 protected:
-    DiskHandler() = default;
+    DiskHandler(AHCIPort &port, uint64_t disk_id, uint64_t sector_count, std::size_t logical_sector_size,
+                std::size_t physical_sector_size);
+    AHCIPort &port;
     uint64_t disk_id;
     uint64_t sector_count;
     std::size_t logical_sector_size;
     std::size_t physical_sector_size;
-
-    int port;
 };
 
 void handle_register_disk_reply(const Message_Descriptor &d, const IPC_Disk_Register_Reply *reply);

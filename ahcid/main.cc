@@ -98,7 +98,7 @@ std::vector<PCIDescriptor> get_ahci_controllers()
     }
 
     if (reply->result_num_of_devices < 0) {
-        printf("Failed to get PCI devices: %li (%s)\n", reply->result_num_of_devices,
+        printf("Failed to get PCI devices: %i (%s)\n", (int)reply->result_num_of_devices,
                strerror(-reply->result_num_of_devices));
         free(message);
         return {};
@@ -186,7 +186,7 @@ uint64_t AHCIPort::scratch_phys() { return dma_phys_base + scratch_offet(); }
 void AHCIPort::dump_state()
 {
     printf(" --- Port %i ---\n", index);
-    printf("Port %i state dma_phys: %#lx virt 0x%p\n", index, dma_phys_base, dma_virt_base);
+    printf("Port %i state dma_phys: %#" PRIx64 " virt 0x%p\n", index, dma_phys_base, dma_virt_base);
     auto port = get_port_register();
     printf(" P%iCLB: %#x P%iCLBU: %#x\n", index, port[0], index, port[1]);
     printf(" P%iFB: %#x P%iFBU: %#x\n", index, port[2], index, port[3]);
@@ -794,7 +794,7 @@ void ahci_handle(PCIDescriptor d)
         auto request =
             create_normal_region(0, nullptr, mem_size, PROT_READ | PROT_WRITE | CREATE_FLAG_DMA);
         if ((long)request.result < 0) {
-            printf("Failed to allocate memory for AHCI: %li (%s)\n", request.result,
+            printf("Failed to allocate memory for AHCI: %i (%s)\n", (int)request.result,
                    strerror(-request.result));
             exit(1);
         }
@@ -803,7 +803,7 @@ void ahci_handle(PCIDescriptor d)
 
         auto phys_addr = get_page_phys_address(0, request.virt_addr, 0);
         if ((long)phys_addr.result < 0) {
-            printf("Could not get physical address for AHCI: %li (%s)\n", phys_addr.result,
+            printf("Could not get physical address for AHCI: %i (%s)\n", (int)phys_addr.result,
                    strerror(-request.result));
             exit(1);
         }
@@ -811,7 +811,7 @@ void ahci_handle(PCIDescriptor d)
         port.dma_phys_base = phys_addr.phys_addr;
         port.dma_virt_base = reinterpret_cast<volatile uint32_t *>(request.virt_addr);
 
-        printf("Allocated memory for port %i: %#lx - %#lx -> 0x%p\n", port.index,
+        printf("Allocated memory for port %i: %#" PRIx64 " - %#" PRIx64 " -> 0x%p\n", port.index,
                port.dma_phys_base, port.dma_phys_base + mem_size, port.dma_virt_base);
 
         for (int i = 0; i < num_slots; ++i) {
@@ -836,7 +836,7 @@ void ahci_handle(PCIDescriptor d)
 
 int main()
 {
-    printf("Hello from AHCId! My PID: %li\n", getpid());
+    printf("Hello from AHCId! My PID: %" PRIi64 "\n", getpid());
 
     auto controllers = get_ahci_controllers();
     if (controllers.empty()) {

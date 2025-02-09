@@ -54,7 +54,7 @@ void RegisterDisk::await_suspend(std::coroutine_handle<> hh) { handler.h = hh; }
 
 void RegisterDisk::await_resume() {}
 
-pmos::async::task<uint64_t> register_disk(int port, uint64_t sector_count,
+pmos::async::task<uint64_t> register_disk(AHCIPort &port, uint64_t sector_count,
                                           size_t logical_sector_size, size_t physical_sector_size)
 {
     auto blockd_port = co_await WaitForBlockdPort {};
