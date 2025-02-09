@@ -1188,7 +1188,7 @@ bool page_mapped(void *pagefault_cr2, ulong err)
     }
 }
 
-u32 pae_free_list = -1U;
+static u32 pae_free_list = -1U;
 static void remove_from_freelist(PDPEPage *page)
 {
     if (page->prev_phys == -1U) {
@@ -1268,10 +1268,10 @@ u32 new_pae_cr3()
         page->bitmap1         = 1;
         page->bitmap2         = 1ULL << 63; // Reserved entry
 
-        pae_free_list = addr;
-
         page->next_phys = -1U;
         page->prev_phys = -1U;
+
+        add_to_freelist(page, addr);
 
         return addr;
     }
@@ -1280,7 +1280,7 @@ u32 new_pae_cr3()
     Temp_Mapper_Obj<PDPEPage> mapper(request_temp_mapper());
     PDPEPage *page = mapper.map(addr);
 
-    assert(page->allocated_count < 14);
+    assert(page->allocated_count <= 14);
     assert(page->allocated_count > 0);
     if (page->allocated_count == 14) {
         remove_from_freelist(page);

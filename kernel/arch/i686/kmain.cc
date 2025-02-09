@@ -163,9 +163,6 @@ void pmm_create_regions(klib::vector<ultra_memory_map_entry> &regions_data)
     };
 
     auto new_region_func = [&](long first_index, long last_index) -> void {
-        serial_logger.printf("Setting up PMM region %lh - %lh\n",
-                             regions_data[first_index].physical_address,
-                             region_last_addr(last_index));
         u64 first_addr = regions_data[first_index].physical_address;
         u64 last_addr  = region_last_addr(last_index);
         u64 size       = last_addr - first_addr;
@@ -190,6 +187,8 @@ void pmm_create_regions(klib::vector<ultra_memory_map_entry> &regions_data)
                     "Warning: Total physical memory exceeds 16GB, limiting to 16GB\n");
             }
         }
+
+        serial_logger.printf("Setting up PMM region %lh - %lh\n", first_addr, last_addr);
 
         if (size == 0)
             return;
@@ -882,7 +881,7 @@ extern "C" void kmain(struct ultra_boot_context *ctx, uint32_t magic)
         panic("Could not find platform attribute!\n");
     ultra_platform_info_attribute attr = *ptr;
     use_pae                            = attr.page_table_depth == 3;
-    serial_logger.printf("PAE: %s\n", use_pae ? "enabled" : "disabled");
+    serial_logger.printf("PAE: %s (page depth %i)\n", use_pae ? "enabled" : "disabled", attr.page_table_depth);
 
     init_memory(ctx);
 
