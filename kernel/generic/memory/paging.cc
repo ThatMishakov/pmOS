@@ -679,6 +679,7 @@ TLBShootdownContext TLBShootdownContext::create_kernel()
     return ctx;
 }
 
+
 void TLBShootdownContext::invalidate_page(u64 page)
 {
     if (pages_count == MAX_PAGES and for_kernel())

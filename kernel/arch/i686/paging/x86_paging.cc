@@ -4,8 +4,8 @@
 #include <memory/pmm.hh>
 #include <memory>
 #include <pmos/utility/scope_guard.hh>
-#include <x86_asm.hh>
 #include <utility>
+#include <x86_asm.hh>
 
 IA32_Page_Table::page_table_map IA32_Page_Table::global_page_tables;
 Spinlock IA32_Page_Table::page_table_index_lock;
@@ -443,7 +443,9 @@ static void x86_invalidate_pages(TLBShootdownContext &ctx, u32 cr3, void *virt_a
 
             u32 addr_of_pd = i << 22;
             u32 start_idx  = addr_of_pd > (u32)virt_addr ? 0 : ((u32)virt_addr >> 12) & 0x3FF;
-            u32 end_idx    = (addr_of_pd + 0x400000) == 0 || (addr_of_pd + 0x400000) < limit
+            u32 end_idx    = (limit == 0 && virt_addr != nullptr) or
+                                  (last_idx == 1024 and i != 1023) or
+                                  ((limit >= 0x400000) and (addr_of_pd >= limit - 0x400000))
                                  ? 1024
                                  : (limit >> 12) & 0x3FF;
             for (unsigned j = start_idx; j < end_idx; ++j) {
@@ -463,7 +465,7 @@ static void x86_invalidate_pages(TLBShootdownContext &ctx, u32 cr3, void *virt_a
         u32 first_pdpt  = (u32(virt_addr) >> 30) & 0x3;
         u32 end_aligned = alignup((u32(virt_addr) + size), 30);
         u32 last_pdpt   = (end_aligned >> 30) & 0x3;
-        if (last_pdpt == 0 && end_aligned != (u32)virt_addr)
+        if (last_pdpt == 0 && (u32)virt_addr != 0)
             last_pdpt = 4;
 
         auto [cr3_phys, cr3_offset] = cr3_pae_page_offset(cr3);
@@ -479,11 +481,19 @@ static void x86_invalidate_pages(TLBShootdownContext &ctx, u32 cr3, void *virt_a
             Temp_Mapper_Obj<pae_entry_t> pd_mapper(request_temp_mapper());
             pae_entry_t *pd = pd_mapper.map(pdpt_entry & PAE_ADDR_MASK);
 
+            u32 limit_end_aligned = alignup(limit, 21);
             u32 addr_of_pdpt = i << 30;
             u32 start_pd     = addr_of_pdpt > (u32)virt_addr ? 0 : ((u32)virt_addr >> 21) & 0x1FF;
-            u32 end_pd = (addr_of_pdpt + 0x40000000) == 0 || (addr_of_pdpt + 0x40000000) < limit
-                             ? 512
-                             : (limit >> 21) & 0x1FF;
+            u32 end_pd;
+            if (limit_end_aligned == 0 && virt_addr != nullptr)
+                end_pd = 512;
+            else if (last_pdpt == 4 && i != 3)
+                end_pd = 512;
+            else if ((limit_end_aligned >= 0x40000000) and addr_of_pdpt <= (limit_end_aligned - 0x40000000))
+                end_pd = 512;
+            else
+                end_pd = (limit_end_aligned >> 21) & 0x1FF;
+
             for (unsigned j = start_pd; j < end_pd; ++j) {
                 auto pd_entry = __atomic_load_n(pd + j, __ATOMIC_RELAXED);
                 if (!(pd_entry & PAGE_PRESENT))
@@ -494,9 +504,16 @@ static void x86_invalidate_pages(TLBShootdownContext &ctx, u32 cr3, void *virt_a
 
                 u32 addr_of_pd = addr_of_pdpt + (j << 21);
                 u32 start_idx  = addr_of_pd > (u32)virt_addr ? 0 : ((u32)virt_addr >> 12) & 0x1FF;
-                u32 end_idx    = (addr_of_pd + 0x200000) == 0 || (addr_of_pd + 0x200000) < limit
-                                     ? 512
-                                     : (limit >> 12) & 0x1FF;
+                u32 end_idx;
+                if (limit == 0 && virt_addr != nullptr)
+                    end_idx = 512;
+                else if (last_pdpt == 4 and i != 3)
+                    end_idx = 512;
+                else if ((limit >= 0x200000) and addr_of_pd <= (limit - 0x200000))
+                    end_idx = 512;
+                else
+                    end_idx = (limit >> 12) & 0x1FF;
+
                 for (unsigned k = start_idx; k < end_idx; ++k) {
                     auto pt_entry = __atomic_load_n(pt + k, __ATOMIC_RELAXED);
                     if (!(pt_entry & PAGE_PRESENT))
@@ -861,10 +878,11 @@ kresult_t IA32_Page_Table::copy_anonymous_pages(const klib::shared_ptr<Page_Tabl
 
                     pae_entry_t *pd = pd_mapper.map(pdpt_entry & PAE_ADDR_MASK);
 
+                    u32 to_pd_aligned = alignup(limit, 21);
                     u32 addr_of_pdpt = (1 << 30) * i;
                     u32 start_pd     = addr_of_pdpt > from_addr ? 0 : (from_addr >> 21) & 0x1FF;
                     u32 end_of_pdpt  = (1 << 30) * (i + 1);
-                    u32 end_pd       = end_of_pdpt <= limit ? 512 : (limit >> 21) & 0x1FF;
+                    u32 end_pd       = end_of_pdpt <= to_pd_aligned ? 512 : (to_pd_aligned >> 21) & 0x1FF;
                     for (unsigned j = start_pd; j < end_pd; ++j) {
                         pae_entry_t pde = __atomic_load_n(pd + j, __ATOMIC_RELAXED);
                         if (!(pde & PAGE_PRESENT))
@@ -1120,7 +1138,7 @@ bool page_mapped(void *pagefault_cr2, ulong err)
 
         return true;
     } else {
-        auto cr3 = getCR3();
+        auto cr3                    = getCR3();
         auto [cr3_phys, cr3_offset] = cr3_pae_page_offset(cr3);
 
         Temp_Mapper_Obj<pae_entry_t> mapper(request_temp_mapper());
@@ -1177,29 +1195,28 @@ static void remove_from_freelist(PDPEPage *page)
         pae_free_list = page->next_phys;
     } else {
         Temp_Mapper_Obj<PDPEPage> mapper(request_temp_mapper());
-        PDPEPage *prev = mapper.map(page->prev_phys);
+        PDPEPage *prev  = mapper.map(page->prev_phys);
         prev->next_phys = page->next_phys;
     }
 
     if (page->next_phys != -1U) {
         Temp_Mapper_Obj<PDPEPage> mapper(request_temp_mapper());
-        PDPEPage *next = mapper.map(page->next_phys);
+        PDPEPage *next  = mapper.map(page->next_phys);
         next->prev_phys = page->prev_phys;
     }
 }
 
-static void add_to_freelist(PDPEPage *page)
+static void add_to_freelist(PDPEPage *page, u32 addr)
 {
     page->next_phys = pae_free_list;
     page->prev_phys = -1U;
+    pae_free_list   = addr;
 
-    if (pae_free_list != -1U) {
+    if (page->next_phys != -1U) {
         Temp_Mapper_Obj<PDPEPage> mapper(request_temp_mapper());
-        PDPEPage *next = mapper.map(pae_free_list);
-        next->prev_phys = page->next_phys;
+        PDPEPage *next  = mapper.map(page->next_phys);
+        next->prev_phys = addr;
     }
-
-    pae_free_list = page->next_phys;
 }
 
 Spinlock pae_alloc_lock;
@@ -1209,7 +1226,7 @@ void free_pae_cr3(u32 cr3)
     Auto_Lock_Scope lock(pae_alloc_lock);
 
     u32 addr = cr3 & ~0xfff;
-    u32 idx = (cr3 & 0xfff) >> 5;
+    u32 idx  = (cr3 & 0xfff) >> 5;
 
     Temp_Mapper_Obj<PDPEPage> mapper(request_temp_mapper());
     PDPEPage *page = mapper.map(addr);
@@ -1227,7 +1244,7 @@ void free_pae_cr3(u32 cr3)
         remove_from_freelist(page);
         pmm::free_memory_for_kernel(addr, 1);
     } else if (page->allocated_count == 14) {
-        add_to_freelist(page);
+        add_to_freelist(page, addr);
     } else {
         assert(page->allocated_count < 14);
     }
@@ -1248,8 +1265,8 @@ u32 new_pae_cr3()
         __builtin_memset(page, 0, 4096);
 
         page->allocated_count = 1;
-        page->bitmap1 = 1;
-        page->bitmap2 = 1ULL << 63; // Reserved entry
+        page->bitmap1         = 1;
+        page->bitmap2         = 1ULL << 63; // Reserved entry
 
         pae_free_list = addr;
 
@@ -1278,7 +1295,7 @@ u32 new_pae_cr3()
         idx = __builtin_ffsll(~page->bitmap2) - 1;
         page->bitmap2 |= 1ULL << idx;
         idx += 64;
-    } 
+    }
 
     page->allocated_count++;
 

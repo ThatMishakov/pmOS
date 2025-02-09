@@ -35,7 +35,6 @@
 
 #include <assert.h>
 #include <errno.h>
-#include <kern_logger/kern_logger.hh>
 #include <pmos/ipc.h>
 #include <processes/tasks.hh>
 #include <sched/sched.hh>
@@ -109,6 +108,7 @@ ReturnStr<bool> Phys_Mapped_Region::alloc_page(phys_addr_t ptr_addr, Page_Info, 
     Page_Table_Argumments args = craft_arguments();
 
     phys_addr_t page_addr = (u64)ptr_addr & ~07777ULL;
+    assert(page_addr >= start_addr and page_addr < start_addr + size);
     phys_addr_t phys_addr = page_addr - start_addr + phys_addr_start;
 
     auto result = owner->map(phys_addr, page_addr, args);

@@ -2,15 +2,15 @@
 #include <memory/paging.hh>
 #include <pmos/containers/map.hh>
 
-constexpr u32 PAGE_PRESENT  = 1 << 0;
-constexpr u32 PAGE_WRITE    = 1 << 1;
-constexpr u32 PAGE_USER     = 1 << 2;
-constexpr u32 PAGE_WT       = 1 << 3;
-constexpr u32 PAGE_CD       = 1 << 4;
-constexpr u32 PAGE_ACCESSED = 1 << 5;
-constexpr u32 PAGE_DIRTY    = 1 << 6;
-constexpr u32 PAGE_PS       = 1 << 7;
-constexpr u32 PAGE_GLOBAL   = 1 << 8;
+constexpr u64 PAGE_PRESENT  = 1 << 0;
+constexpr u64 PAGE_WRITE    = 1 << 1;
+constexpr u64 PAGE_USER     = 1 << 2;
+constexpr u64 PAGE_WT       = 1 << 3;
+constexpr u64 PAGE_CD       = 1 << 4;
+constexpr u64 PAGE_ACCESSED = 1 << 5;
+constexpr u64 PAGE_DIRTY    = 1 << 6;
+constexpr u64 PAGE_PS       = 1 << 7;
+constexpr u64 PAGE_GLOBAL   = 1 << 8;
 
 constexpr u64 PAGE_NX = 1ULL << 63;
 

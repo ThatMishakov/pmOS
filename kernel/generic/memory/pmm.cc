@@ -230,15 +230,11 @@ PageArrayDescriptor *phys_memory_regions_end() noexcept
     return phys_memory_regions + phys_memory_regions_count;
 }
 
-#include <kern_logger/kern_logger.hh>
 bool kernel::pmm::add_page_array(Page::page_addr_t start_addr, u64 size, Page *pages) noexcept
 {
-    serial_logger.printf("Adding page array: %lx %lx %lx\n", start_addr, size, (u64)pages);
     auto pmm_region = PMMRegion::get(start_addr);
     assert(pmm_region);
     assert(start_addr >= pmm_region->start);
-    serial_logger.printf("Start addr %lx pmm_region start %lx size %lx\n", start_addr,
-                         pmm_region->start, pmm_region->size_bytes);
     assert(start_addr - pmm_region->start < pmm_region->size_bytes);
     auto new_array_size_bytes = size * PAGE_SIZE;
     assert(pmm_region->size_bytes >= new_array_size_bytes);
