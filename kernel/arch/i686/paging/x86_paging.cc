@@ -6,18 +6,36 @@
 #include <pmos/utility/scope_guard.hh>
 #include <utility>
 #include <x86_asm.hh>
+#include <x86_utils.hh>
 
 IA32_Page_Table::page_table_map IA32_Page_Table::global_page_tables;
 Spinlock IA32_Page_Table::page_table_index_lock;
 
 using namespace kernel;
 
-void apply_page_table(ptable_top_ptr_t page_table) { setCR3(page_table); }
-
 void IA32_Page_Table::apply() { apply_page_table(cr3); }
 
 bool use_pae    = false;
 bool support_nx = false;
+
+bool detect_nx()
+{
+    if (!use_pae)
+        return false;
+
+    auto c = cpuid(0x80000001);
+    support_nx = c.edx & (1 << 20);
+    return support_nx;
+}
+
+void apply_page_table(ptable_top_ptr_t page_table) {
+    if (support_nx) {
+        const unsigned msr = 0xC0000080;
+        write_msr(msr, read_msr(msr) | (1 << 11));
+    }
+
+    setCR3(page_table);
+}
 
 extern u32 idle_cr3;
 

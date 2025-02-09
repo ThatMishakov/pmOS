@@ -883,6 +883,9 @@ extern "C" void kmain(struct ultra_boot_context *ctx, uint32_t magic)
     use_pae                            = attr.page_table_depth == 3;
     serial_logger.printf("PAE: %s (page depth %i)\n", use_pae ? "enabled" : "disabled", attr.page_table_depth);
 
+    auto nx_enabled = detect_nx();
+    serial_logger.printf("NX: %s\n", nx_enabled ? "enabled" : "disabled");
+
     init_memory(ctx);
 
     // Call global (C++) constructors

@@ -94,3 +94,5 @@ u64 prepare_pt_for(void *virt_addr, Page_Table_Argumments arg, u32 pt_top_phys);
 
 void free_pae_cr3(u32 cr3);
 u32 new_pae_cr3();
+
+bool detect_nx();
