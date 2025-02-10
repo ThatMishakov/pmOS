@@ -226,13 +226,13 @@ void dump_controller()
 
 uint64_t AHCIPort::get_command_table_phys(int index)
 {
-    return dma_phys_base + command_table_offset + index * COMMAND_TABLE_SIZE;
+    return dma_phys_base + command_table_offset + (uint64_t)index * COMMAND_TABLE_SIZE;
 }
 
 volatile CommandListEntry *AHCIPort::get_command_list_ptr(int index)
 {
     return reinterpret_cast<volatile CommandListEntry *>(
-        dma_virt_base + (command_list_offset + index * 0x100) / sizeof(uint32_t));
+        dma_virt_base + (command_list_offset + index * 0x20) / sizeof(uint32_t));
 }
 
 void AHCIPort::init_ata_device()
@@ -575,7 +575,7 @@ void react_interrupt()
     ahci_virt_base[2] = is;
     for (int i = 0; i < 32; ++i) {
         if (is & (1 << i)) {
-            printf("Interrupt on port %i\n", i);
+            //printf("Interrupt on port %i\n", i);
             find_port(i).react_interrupt();
         }
     }
@@ -602,7 +602,7 @@ void ahci_controller_main()
         } break;
         case IPC_Kernel_Interrupt_NUM: {
             auto kmsg = (IPC_Kernel_Interrupt *)request;
-            printf("Kernel interrupt: %i\n", kmsg->intno);
+            //printf("Kernel interrupt: %i\n", kmsg->intno);
             react_interrupt();
             complete_interrupt(kmsg->intno);
         } break;

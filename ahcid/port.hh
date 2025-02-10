@@ -16,13 +16,16 @@ struct CmdPortWaiter {
     void (*wait_callback)(CmdPortWaiter *self) = nullptr;
 };
 
-inline static constexpr uint32_t FIS_RECIEVE_AREA_SIZE = 0x1000;
-inline static constexpr uint32_t PRDT_OFFSET           = 0x80;
-inline static constexpr uint32_t PRDT_SIZE_BYTES       = 0x10;
-inline static constexpr uint32_t COMMAND_TABLE_ENTRIES = 8;
-inline static constexpr uint32_t COMMAND_TABLE_SIZE    = // 0x100
+inline static constexpr uint64_t FIS_RECIEVE_AREA_SIZE = 0x1000;
+inline static constexpr uint64_t PRDT_OFFSET           = 0x80;
+inline static constexpr uint64_t PRDT_SIZE_BYTES       = 0x10;
+inline static constexpr uint64_t COMMAND_TABLE_ENTRIES = 8;
+
+inline static constexpr uint64_t COMMAND_TABLE_SIZE    = // 0x100
     PRDT_OFFSET + PRDT_SIZE_BYTES * COMMAND_TABLE_ENTRIES;
-inline static constexpr uint32_t SCRATCH_SIZE = 0x400;
+static_assert(COMMAND_TABLE_SIZE == 0x100, "Command table size is not 0x100");
+
+inline static constexpr uint64_t SCRATCH_SIZE = 0x400;
 
 inline static constexpr uint32_t AHCI_GHC_HR   = 1 << 0;
 inline static constexpr uint32_t AHCI_GHC_IE   = 1 << 1;
@@ -128,7 +131,7 @@ struct AHCIPort: TimerWaiter {
     static constexpr uint32_t command_list_offset = 0x1000;
 
     // 1 command table per command list, with 8 entries max
-    static constexpr uint32_t command_table_offset = 0x1000 + 0x400;
+    static constexpr uint64_t command_table_offset = 0x1000 + 0x400;
 
     volatile uint32_t *get_port_register();
     volatile CommandListEntry *get_command_list_ptr(int index);

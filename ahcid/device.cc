@@ -29,7 +29,7 @@ pmos::async::detached_task handle_device(AHCIPort &parent)
                    .rsv0                    = 0,
                    .data_base_count         = sizeof(IDENTIFYData) - 1,
                    .rsv1                    = 0,
-                   .interrupt_on_completion = 1});
+                   .interrupt_on_completion = 0});
 
     auto result = co_await cmd.execute(0xEC, 30'000);
 

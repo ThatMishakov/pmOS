@@ -214,7 +214,7 @@ void handle_disk_read(pmos_port_t port, uint64_t memory_object, int result, uint
         .user_arg    = user_arg,
     };
 
-    printf("Sending reply to disk read status %i\n", result);
+    // printf("Sending reply to disk read status %i\n", result);
 
     auto r = send_message_port2(port, memory_object, sizeof(reply), (void *)&reply, 0);
     if (r != 0)
@@ -309,7 +309,7 @@ pmos::async::detached_task handle_disk_read(const Message_Descriptor &d, IPC_Dis
                              .rsv0            = 0,
                              .data_base_count = static_cast<uint32_t>(size - pushed_max_offset - 1),
                              .rsv1            = 0,
-                             .interrupt_on_completion = 1});
+                             .interrupt_on_completion = 0});
                         pushed_max_offset = size;
                         break;
                     } else if (offset == phys_addr_of_offset) {
@@ -339,7 +339,7 @@ pmos::async::detached_task handle_disk_read(const Message_Descriptor &d, IPC_Dis
                                        .data_base_count =
                                            static_cast<uint32_t>(offset - phys_addr_of_offset - 1),
                                        .rsv1                    = 0,
-                                       .interrupt_on_completion = 1});
+                                       .interrupt_on_completion = 0});
 
                         current_phys_addr   = phys_addr;
                         phys_addr_of_offset = offset;
