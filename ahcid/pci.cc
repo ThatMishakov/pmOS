@@ -20,7 +20,7 @@ void send_devicesd(auto &request)
     auto r = send_message_port(devicesd_port, sizeof(request), (void *)&request);
     if (r != 0) {
         // TODO: Eventually don't throw
-        printf("Failed to send message to devicesd: %li (%s)\n", r, strerror(-r));
+        printf("Failed to send message to devicesd: %i (%s)\n", (int)r, strerror(-r));
         throw std::system_error(r, std::generic_category(), "Failed to send message to devicesd");
     }
 }

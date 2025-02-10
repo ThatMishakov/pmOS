@@ -52,7 +52,7 @@ void *map_plic(u64 base, size_t size)
                                        .extra              = 0,
                                        .cache_policy       = Memory_Type::IONoCache};
 
-    map_kernel_pages(base, (size_t)virt_base, size, arg);
+    map_kernel_pages(base, virt_base, size, arg);
 
     return virt_base;
 }

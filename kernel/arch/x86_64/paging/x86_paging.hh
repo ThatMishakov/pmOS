@@ -80,8 +80,8 @@ public:
     /// Atomically incerement and decrement active counter
     void atomic_active_sum(u64 val) noexcept;
 
-    virtual void invalidate_tlb(u64 page) override;
-    virtual void invalidate_tlb(u64 page, u64 size) override;
+    virtual void invalidate_tlb(void *page) override;
+    virtual void invalidate_tlb(void *page, size_t size) override;
 
     virtual void tlb_flush_all() override;
 
@@ -108,58 +108,57 @@ public:
 
     static klib::shared_ptr<x86_4level_Page_Table> create_empty(int flags = 0);
 
-    virtual kresult_t copy_anonymous_pages(const klib::shared_ptr<Page_Table> &to, u64 from_addr,
-                                          u64 to_addr, u64 size_bytes, u8 new_access) override;
+    virtual kresult_t copy_anonymous_pages(const klib::shared_ptr<Page_Table> &to, void *from_addr,
+                                           void *to_addr, size_t size_bytes,
+                                           unsigned new_access) override;
 
     // Maps the page with the appropriate permissions
-    virtual kresult_t map(u64 page_addr, u64 virt_addr,
+    virtual kresult_t map(u64 page_addr, void *virt_addr,
                           Page_Table_Argumments arg) noexcept override;
 
-    virtual kresult_t map(kernel::pmm::Page_Descriptor page, u64 virt_addr,
+    virtual kresult_t map(kernel::pmm::Page_Descriptor page, void *virt_addr,
                           Page_Table_Argumments arg) noexcept override;
 
-    virtual void invalidate(TLBShootdownContext &ctx, u64 virt_addr, bool free) override;
+    virtual void invalidate(TLBShootdownContext &ctx, void *virt_addr, bool free) override;
 
-    bool is_mapped(u64 virt_addr) const override;
+    bool is_mapped(void* virt_addr) const override;
 
     virtual ~x86_4level_Page_Table();
 
-    constexpr u64 user_addr_max() const override
+    void *user_addr_max() const override
     {
-        return (flags & FLAG_32BIT) ? 0x100000000 : 0x800000000000;
+        return (void *)((flags & FLAG_32BIT) ? 0x100000000 : 0x800000000000);
     }
 
-    ReturnStr<u64> phys_addr_of(u64 virt) const;
-
-    static inline unsigned pt_index(u64 addr)
+    static inline unsigned pt_index(void *addr)
     {
         u64 index = (u64)addr >> 12;
         return index & 0777;
     }
 
-    static inline unsigned pd_index(u64 addr)
+    static inline unsigned pd_index(void *addr)
     {
         u64 index = (u64)addr >> (12 + 9);
         return index & 0777;
     }
 
-    static inline unsigned pdpt_index(u64 addr)
+    static inline unsigned pdpt_index(void *addr)
     {
         u64 index = (u64)addr >> (12 + 9 + 9);
         return index & 0777;
     }
 
-    static inline unsigned pml4_index(u64 addr)
+    static inline unsigned pml4_index(void *addr)
     {
         u64 index = (u64)addr >> (12 + 9 + 9 + 9);
         return index & 0777;
     }
 
-    Page_Info get_page_mapping(u64 virt_addr) const override;
+    Page_Info get_page_mapping(void *virt_addr) const override;
 
     klib::shared_ptr<x86_4level_Page_Table> create_clone();
 
-    virtual ReturnStr<bool> atomic_copy_to_user(u64 to, const void *from, u64 size) override;
+    virtual ReturnStr<bool> atomic_copy_to_user(void *to, const void *from, size_t size) override;
 
     constexpr static u64 l4_align = 4096UL * 512 * 512 * 512;
     constexpr static u64 l3_align = 4096UL * 512 * 512;
@@ -172,7 +171,7 @@ public:
 
     bool is_32bit() const { return flags & FLAG_32BIT; }
 
-    kresult_t resolve_anonymous_page(u64 virt_addr, u64 access_type) override;
+    kresult_t resolve_anonymous_page(void *virt_addr, unsigned access_type) override;
 
 protected:
     /// @brief Inserts the page table into the map of the page tables
@@ -188,7 +187,7 @@ protected:
     static page_table_map global_page_tables;
     static Spinlock page_table_index_lock;
 
-    virtual void invalidate_range(TLBShootdownContext &ctx, u64 virt_addr, u64 size_bytes,
+    virtual void invalidate_range(TLBShootdownContext &ctx, void *virt_addr, size_t size_bytes,
                                   bool free) override;
 
     x86_4level_Page_Table() = default;
@@ -207,25 +206,23 @@ protected:
 
     kresult_t copy_to_recursive(const klib::shared_ptr<Page_Table> &to, u64 phys_page_level,
                                 u64 absolute_start, u64 to_addr, u64 size_bytes, u64 new_access,
-                                u64 current_copy_from, int level, u64 &upper_bound_offset, TLBShootdownContext &ctx);
+                                u64 current_copy_from, int level, u64 &upper_bound_offset,
+                                TLBShootdownContext &ctx);
 };
 
 const u16 rec_map_index = 509;
 
 // Return true if mapped the page successfully
-void map(u64 cr3, u64 physical_addr, u64 virtual_addr, Page_Table_Argumments arg);
+void map(u64 cr3, u64 physical_addr, void *virtual_addr, Page_Table_Argumments arg);
 
 // Maps the pages. Returns the result
-u64 map_pages(u64 physical_address, u64 virtual_address, u64 size_bytes, Page_Table_Argumments pta,
+u64 map_pages(u64 physical_address, void *virtual_address, size_t size_bytes, Page_Table_Argumments pta,
               u64 page_table_pointer);
 
-u64 prepare_pt_for(u64 virt_addr, Page_Table_Argumments arg, u64 pt_top_phys);
-u64 get_pt_ppn(u64 virt_addr, u64 pt_top_phys);
+u64 prepare_pt_for(void *virt_addr, Page_Table_Argumments arg, u64 pt_top_phys);
+u64 get_pt_ppn(void *virt_addr, u64 pt_top_phys);
 
 class TaskDescriptor;
 
 // Releases cr3
 extern "C" void release_cr3(u64 cr3);
-
-/// Returns physical address of the virt using recursive mappings
-ReturnStr<u64> phys_addr_of(u64 virt);

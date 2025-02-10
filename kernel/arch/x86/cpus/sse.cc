@@ -31,14 +31,15 @@
 
 #include <kern_logger/kern_logger.hh>
 #include <stdlib.h>
+#include <types.hh>
 #include <x86_asm.hh>
 #include <x86_utils.hh>
 
-static constexpr u64 CR4_OSXSAVE = 1 << 18;
+static constexpr ulong CR4_OSXSAVE = 1 << 18;
 
 static SSECtxStyle sse_ctx_style = SSECtxStyle::FXSAVE;
 static size_t sse_ctx_size       = 512;
-static u64 xcr0                  = 0;
+static ulong xcr0                = 0;
 static bool xsave_supported      = false;
 
 void detect_sse()
@@ -77,13 +78,13 @@ void detect_sse()
 
 void enable_sse()
 {
-    u64 cr0 = getCR0();
+    auto cr0 = getCR0();
     cr0 &= ~(0x01UL << 2); // CR0.EM
     cr0 |= (0x01 << 1);    // CR0.MP
     cr0 |= (0x01 << 3);    // CR0.TS (Lazy task switching)
     setCR0(cr0);
 
-    u64 cr4 = getCR4();
+    auto cr4 = getCR4();
     cr4 |= (0x01 << 9);  // CR4.OSFXSR (enable FXSAVE/FXRSTOR)
     cr4 |= (0x01 << 10); // CR4.OSXMMEXCPT (enable #XF exception)
     setCR4(cr4);
@@ -98,14 +99,14 @@ bool sse_is_valid() { return not(getCR0() & (0x01UL << 3)); }
 
 void invalidate_sse()
 {
-    u64 cr0 = getCR0();
+    auto cr0 = getCR0();
     cr0 |= (0x01 << 3); // CR0.TS
     setCR0(cr0);
 }
 
 void validate_sse()
 {
-    u64 cr0 = getCR0();
+    auto cr0 = getCR0();
     cr0 &= ~(0x01 << 3); // CR0.TS
     setCR0(cr0);
 }
@@ -128,6 +129,24 @@ kresult_t SSE_Data::init_on_thread_start()
     return 0;
 }
 
+#ifdef __i386__
+void SSE_Data::save_sse()
+{
+    switch (sse_ctx_style) {
+    case SSECtxStyle::FXSAVE:
+        asm("fxsave (%0)" : : "r"(data.get()));
+        break;
+    case SSECtxStyle::XSAVE:
+        asm("xsave (%0)" : : "r"(data.get()), "a"(0xFFFFFFFF), "d"(0xFFFFFFFF));
+        break;
+    case SSECtxStyle::XSAVEOPT:
+        asm("xsaveopt (%0)" : : "r"(data.get()), "a"(0xFFFFFFFF), "d"(0xFFFFFFFF));
+        break;
+    default:
+        assert(false);
+    }
+}
+#else
 void SSE_Data::save_sse()
 {
     switch (sse_ctx_style) {
@@ -144,7 +163,24 @@ void SSE_Data::save_sse()
         assert(false);
     }
 }
+#endif
 
+#ifdef __i386__
+void SSE_Data::restore_sse()
+{
+    switch (sse_ctx_style) {
+    case SSECtxStyle::FXSAVE:
+        asm("fxrstor (%0)" : : "r"(data.get()));
+        break;
+    case SSECtxStyle::XSAVE:
+    case SSECtxStyle::XSAVEOPT:
+        asm("xrstor (%0)" : : "r"(data.get()), "a"(0xFFFFFFFF), "d"(0xFFFFFFFF));
+        break;
+    default:
+        assert(false);
+    }
+}
+#else
 void SSE_Data::restore_sse()
 {
     switch (sse_ctx_style) {
@@ -159,3 +195,4 @@ void SSE_Data::restore_sse()
         assert(false);
     }
 }
+#endif

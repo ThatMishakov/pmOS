@@ -28,7 +28,6 @@
 
 #pragma once
 #include "pair.hh"
-#include "stdexcept.hh"
 #include "utility.hh"
 
 namespace klib

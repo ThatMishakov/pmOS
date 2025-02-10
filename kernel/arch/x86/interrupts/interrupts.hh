@@ -28,8 +28,6 @@
  */
 
 #pragma once
-#include "gdt.hh"
-#include "types.hh"
 
 #include <lib/memory.hh>
 #include <memory/palloc.hh>
@@ -57,7 +55,9 @@ extern "C" void ret_repeat_syscall(
                     ///< restores the previous context and reexecutes the last syscall
                     ///< that the process was issuing before blocking.
 
-extern void (*return_table[4])(void);
+extern "C" void return_from_kernel_thread(void) NORETURN;
+
+extern void (*return_table[5])(void);
 
 extern "C" void lvt0_int_isr();
 extern "C" void lvt1_int_isr();

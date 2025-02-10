@@ -52,7 +52,7 @@
 #include <pmos/system.h>
 #include <sched/sched.hh>
 
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__i386__)
     #include <sched/segments.hh>
 #endif
 
@@ -143,8 +143,9 @@ extern "C" void syscall_handler()
 
     // TODO: This crashes if the syscall is not implemented
     if (call_n >= syscall_table.size() or syscall_table[call_n] == nullptr) {
-        t_print_bochs("Debug: syscall %h pid %h (%s) ", call_n, task->task_id, task->name.c_str());
-        t_print_bochs(" -> %i (%s)\n", -ENOTSUP, "syscall not implemented");
+        serial_logger.printf("Debug: syscall %h pid %li (%s) ", call_n, task->task_id,
+                             task->name.c_str());
+        serial_logger.printf(" -> %i (%s)\n", -ENOTSUP, "syscall not implemented");
         syscall_error(task) = -ENOTSUP;
         return;
     }
@@ -152,10 +153,10 @@ extern "C" void syscall_handler()
     syscall_table[call_n]();
 
     if ((syscall_error(task) < 0) && !task->regs.syscall_pending_restart()) {
-        t_print_bochs("Debug: syscall %h (%i) pid %h (%s) ", call_n, call_n, task->task_id,
-                      task->name.c_str());
-        i64 val = syscall_error(task);
-        t_print_bochs(" -> %i (%s)\n", val, "syscall failed");
+        serial_logger.printf("Debug: syscall %h (%i) pid %li (%s) ", call_n, call_n, task->task_id,
+                             task->name.c_str());
+        int val = syscall_error(task);
+        serial_logger.printf(" -> %i (%s)\n", val, "syscall failed");
     }
 
     // t_print_bochs("SUCCESS %h\n", syscall_ret_high(task));
@@ -523,11 +524,9 @@ void syscall_set_attribute()
         return;
     }
 
-    Interrupt_Stackframe *current_frame = &process->regs.e;
-
     switch (attribute) {
     case ATTR_ALLOW_PORT:
-        current_frame->rflags.bits.iopl = value ? 3 : 0;
+        process->regs.set_iopl(value ? 3 : 0);
         break;
 
     case ATTR_DEBUG_SYSCALLS:
@@ -594,7 +593,7 @@ void syscall_get_lapic_id()
 {
     auto current_task = get_current_task();
     ulong cpu_id      = syscall_arg(current_task, 0, 0);
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__i386__)
 
     CPU_Info *i;
     if (cpu_id == 0) {
@@ -606,7 +605,7 @@ void syscall_get_lapic_id()
         i = cpus[cpu_id - 1];
 
     // TODO: Store lapic_id withouth shifting it
-    syscall_return(current_task) = i->lapic_id << 24;
+    syscall_return(current_task) = i->lapic_id;
 
 #else
     // Not available on RISC-V
@@ -677,7 +676,7 @@ void syscall_create_port()
 
 void syscall_set_interrupt()
 {
-#if defined(__riscv) || defined(__x86_64__)
+#if defined(__riscv) || defined(__x86_64__) || defined(__i386__)
     auto c               = get_cpu_struct();
     const task_ptr &task = c->current_task;
 
@@ -702,7 +701,7 @@ void syscall_set_interrupt()
 
 void syscall_complete_interrupt()
 {
-#if defined(__riscv) || defined(__x86_64__)
+#if defined(__riscv) || defined(__x86_64__) || defined(__i386__)
     auto c               = get_cpu_struct();
     const task_ptr &task = c->current_task;
 
@@ -989,12 +988,12 @@ void syscall_create_normal_region()
     klib::string region_name("anonymous region");
 
     auto result = dest_task->page_table->atomic_create_normal_region(
-        addr_start, size, access & 0x07, access & 0x08, access & 0x10, klib::move(region_name), 0,
-        access & 0x20);
+        (void *)addr_start, size, access & 0x07, access & 0x08, access & 0x10,
+        klib::move(region_name), 0, access & 0x20);
     if (!result.success()) {
         syscall_error(current) = result.result;
     } else {
-        syscall_return(current) = result.val->start_addr;
+        syscall_return(current) = (ulong)result.val->start_addr;
     }
 }
 
@@ -1039,11 +1038,11 @@ void syscall_create_phys_map_region()
     }
 
     auto result = dest_task->page_table->atomic_create_phys_region(
-        addr_start, size, access & 0x07, access & 0x08, klib::string(), phys_addr);
+        (void *)addr_start, size, access & 0x07, access & 0x08, klib::string(), phys_addr);
     if (!result.success()) {
         syscall_error(current) = result.result;
     } else {
-        syscall_return(current) = result.val->start_addr;
+        syscall_return(current) = (ulong)result.val->start_addr;
     }
 }
 
@@ -1128,7 +1127,7 @@ void syscall_set_segment()
         return;
     }
 
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__i386__)
     if (target == current)
         restore_segments(target);
 #endif
@@ -1212,7 +1211,7 @@ void syscall_transfer_region()
     ulong dest        = syscall_arg(current, 2, 1);
     ulong flags       = syscall_flags(current);
 
-    klib::shared_ptr<Arch_Page_Table> pt = Arch_Page_Table::get_page_table(to_page_table);
+    auto pt = Arch_Page_Table::get_page_table(to_page_table);
     if (!pt) {
         syscall_error(current) = -ENOENT;
         return;
@@ -1220,13 +1219,13 @@ void syscall_transfer_region()
 
     bool fixed = flags & 0x08;
 
-    const auto result = current->page_table->atomic_transfer_region(pt, region, dest, flags, fixed);
+    const auto result = current->page_table->atomic_transfer_region(pt, (void *)region, (void *)dest, flags, fixed);
     if (!result.success()) {
         syscall_error(current) = result.result;
         return;
     }
 
-    syscall_return(current) = result.val;
+    syscall_return(current) = (ulong)result.val;
 }
 
 void syscall_asign_page_table()
@@ -1357,8 +1356,9 @@ void syscall_map_mem_object()
     ulong addr_start = args[0];
     ulong size_bytes = args[1];
 
-    auto table = page_table_id == 0 ? current_task->page_table
-                                    : Arch_Page_Table::get_page_table(page_table_id);
+    klib::shared_ptr<Page_Table> table = page_table_id == 0
+                                             ? current_task->page_table
+                                             : Arch_Page_Table::get_page_table(page_table_id);
 
     if (!table) {
         syscall_error(current_task) = -ENOENT;
@@ -1391,7 +1391,7 @@ void syscall_map_mem_object()
         return;
     }
 
-    auto res = table->atomic_create_mem_object_region(addr_start, size_bytes, access & 0x7,
+    auto res = table->atomic_create_mem_object_region((void *)addr_start, size_bytes, access & 0x7,
                                                       access & 0x8, "object map", object,
                                                       access & 0x20, 0, offset, size_bytes);
 
@@ -1400,7 +1400,7 @@ void syscall_map_mem_object()
         return;
     }
 
-    syscall_return(current_task) = res.val->start_addr;
+    syscall_return(current_task) = (ulong)res.val->start_addr;
 }
 
 void syscall_delete_region()
@@ -1431,7 +1431,7 @@ void syscall_delete_region()
     // TODO: Contemplate about adding a check to see if it's inside the kernels address space
 
     // TODO: This is completely untested and knowing me is probably utterly broken
-    page_table->atomic_delete_region(region_start);
+    page_table->atomic_delete_region((void *)region_start);
 }
 
 void syscall_unmap_range()
@@ -1460,7 +1460,7 @@ void syscall_unmap_range()
     auto size_aligned       = (size + offset + PAGE_SIZE - 1) & ~ulong(PAGE_SIZE - 1);
 
     syscall_error(current_task) =
-        page_table->atomic_release_in_range(addr_start_aligned, size_aligned);
+        page_table->atomic_release_in_range((void *)addr_start_aligned, size_aligned);
 }
 
 void syscall_remove_from_task_group()
@@ -1865,7 +1865,7 @@ void syscall_get_page_address()
 
     Auto_Lock_Scope lock(table->lock);
 
-    auto b = table->prepare_user_page(page_base, 0);
+    auto b = table->prepare_user_page((void *)page_base, 0);
     if (!b.success()) {
         syscall_error(task) = b.result;
         return;
@@ -1874,7 +1874,7 @@ void syscall_get_page_address()
     if (not b.val)
         return;
 
-    auto mapping         = table->get_page_mapping(page_base);
+    auto mapping         = table->get_page_mapping((void *)page_base);
     syscall_return(task) = mapping.page_addr;
 }
 

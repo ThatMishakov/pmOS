@@ -4,6 +4,15 @@ function(LOAD_PLATFORM ARCH)
         ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/${ARCH}/*.cc
         ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/${ARCH}/*.S)
 
+    # Add x86 on amd64 and i686
+    if(${ARCH} STREQUAL "x86_64" OR ${ARCH} STREQUAL "i686")
+        file(GLOB_RECURSE X86_SRCS
+            ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/x86/*.c
+            ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/x86/*.cc
+            ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/x86/*.S)
+        set(PLATFORM_SRCS ${PLATFORM_SRCS} ${X86_SRCS})
+    endif()
+
     include(${CMAKE_CURRENT_FUNCTION_LIST_DIR}/${ARCH}/flags.cmake)
 
     set(PLATFORM_SRCS ${PLATFORM_SRCS} PARENT_SCOPE)

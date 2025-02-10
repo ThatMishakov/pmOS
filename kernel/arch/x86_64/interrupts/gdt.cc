@@ -29,9 +29,9 @@
 
 #include "gdt.hh"
 
-#include "interrupts.hh"
-#include "sched/sched.hh"
-#include "utils.hh"
+#include <interrupts/interrupts.hh>
+#include <sched/sched.hh>
+#include <utils.hh>
 
 TSS *System_Segment_Descriptor::tss()
 {

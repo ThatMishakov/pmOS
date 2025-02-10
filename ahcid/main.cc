@@ -98,7 +98,7 @@ std::vector<PCIDescriptor> get_ahci_controllers()
     }
 
     if (reply->result_num_of_devices < 0) {
-        printf("Failed to get PCI devices: %li (%s)\n", reply->result_num_of_devices,
+        printf("Failed to get PCI devices: %i (%s)\n", (int)reply->result_num_of_devices,
                strerror(-reply->result_num_of_devices));
         free(message);
         return {};
@@ -186,7 +186,7 @@ uint64_t AHCIPort::scratch_phys() { return dma_phys_base + scratch_offet(); }
 void AHCIPort::dump_state()
 {
     printf(" --- Port %i ---\n", index);
-    printf("Port %i state dma_phys: %#lx virt 0x%p\n", index, dma_phys_base, dma_virt_base);
+    printf("Port %i state dma_phys: %#" PRIx64 " virt 0x%p\n", index, dma_phys_base, dma_virt_base);
     auto port = get_port_register();
     printf(" P%iCLB: %#x P%iCLBU: %#x\n", index, port[0], index, port[1]);
     printf(" P%iFB: %#x P%iFBU: %#x\n", index, port[2], index, port[3]);
@@ -226,13 +226,13 @@ void dump_controller()
 
 uint64_t AHCIPort::get_command_table_phys(int index)
 {
-    return dma_phys_base + command_table_offset + index * COMMAND_TABLE_SIZE;
+    return dma_phys_base + command_table_offset + (uint64_t)index * COMMAND_TABLE_SIZE;
 }
 
 volatile CommandListEntry *AHCIPort::get_command_list_ptr(int index)
 {
     return reinterpret_cast<volatile CommandListEntry *>(
-        dma_virt_base + (command_list_offset + index * 0x100) / sizeof(uint32_t));
+        dma_virt_base + (command_list_offset + index * 0x20) / sizeof(uint32_t));
 }
 
 void AHCIPort::init_ata_device()
@@ -575,7 +575,7 @@ void react_interrupt()
     ahci_virt_base[2] = is;
     for (int i = 0; i < 32; ++i) {
         if (is & (1 << i)) {
-            printf("Interrupt on port %i\n", i);
+            //printf("Interrupt on port %i\n", i);
             find_port(i).react_interrupt();
         }
     }
@@ -602,7 +602,7 @@ void ahci_controller_main()
         } break;
         case IPC_Kernel_Interrupt_NUM: {
             auto kmsg = (IPC_Kernel_Interrupt *)request;
-            printf("Kernel interrupt: %i\n", kmsg->intno);
+            //printf("Kernel interrupt: %i\n", kmsg->intno);
             react_interrupt();
             complete_interrupt(kmsg->intno);
         } break;
@@ -794,7 +794,7 @@ void ahci_handle(PCIDescriptor d)
         auto request =
             create_normal_region(0, nullptr, mem_size, PROT_READ | PROT_WRITE | CREATE_FLAG_DMA);
         if ((long)request.result < 0) {
-            printf("Failed to allocate memory for AHCI: %li (%s)\n", request.result,
+            printf("Failed to allocate memory for AHCI: %i (%s)\n", (int)request.result,
                    strerror(-request.result));
             exit(1);
         }
@@ -803,7 +803,7 @@ void ahci_handle(PCIDescriptor d)
 
         auto phys_addr = get_page_phys_address(0, request.virt_addr, 0);
         if ((long)phys_addr.result < 0) {
-            printf("Could not get physical address for AHCI: %li (%s)\n", phys_addr.result,
+            printf("Could not get physical address for AHCI: %i (%s)\n", (int)phys_addr.result,
                    strerror(-request.result));
             exit(1);
         }
@@ -811,7 +811,7 @@ void ahci_handle(PCIDescriptor d)
         port.dma_phys_base = phys_addr.phys_addr;
         port.dma_virt_base = reinterpret_cast<volatile uint32_t *>(request.virt_addr);
 
-        printf("Allocated memory for port %i: %#lx - %#lx -> 0x%p\n", port.index,
+        printf("Allocated memory for port %i: %#" PRIx64 " - %#" PRIx64 " -> 0x%p\n", port.index,
                port.dma_phys_base, port.dma_phys_base + mem_size, port.dma_virt_base);
 
         for (int i = 0; i < num_slots; ++i) {
@@ -836,7 +836,7 @@ void ahci_handle(PCIDescriptor d)
 
 int main()
 {
-    printf("Hello from AHCId! My PID: %li\n", getpid());
+    printf("Hello from AHCId! My PID: %" PRIi64 "\n", getpid());
 
     auto controllers = get_ahci_controllers();
     if (controllers.empty()) {

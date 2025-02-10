@@ -33,15 +33,14 @@
 
 /** Kernel's virtual memory allocator
  *
- * virtmem/vmm is a virtual memory allocator for the kernel. It is inspired by vmem algorithm created by
- * Bonwick and Adams but it currently is a very simple implementation since having a more complete
- * and efficient one is not a priority at the moment.
+ * virtmem/vmm is a virtual memory allocator for the kernel. It is inspired by vmem algorithm
+ * created by Bonwick and Adams but it currently is a very simple implementation since having a more
+ * complete and efficient one is not a priority at the moment.
  */
-
-#include <pmos/containers/intrusive_list.hh>
 
 #include <assert.h>
 #include <errno.h>
+#include <pmos/containers/intrusive_list.hh>
 #include <types.hh>
 
 namespace kernel::vmm
@@ -81,7 +80,8 @@ struct VirtmemBoundaryTag {
 // The initializer must be called manually, since the list must point to itself, and the address
 // might not be known at compile time (on PIE executables). While this could be done by C++
 // global constructors, the vmm might be initialized before they are called.
-using VirtMemFreelist = pmos::containers::CircularDoubleList<VirtmemBoundaryTag, &VirtmemBoundaryTag::ll>;
+using VirtMemFreelist =
+    pmos::containers::CircularDoubleList<VirtmemBoundaryTag, &VirtmemBoundaryTag::ll>;
 
 static const u64 virtmem_initial_segments = 16;
 // Static array of initial boundary tags, used during the initialization of the kernel
@@ -92,7 +92,7 @@ static const u64 virtmem_initial_segments = 16;
 inline VirtmemBoundaryTag virtmem_initial_tags[virtmem_initial_segments];
 
 // The unsorted list of unused boundary tags
-inline VirtMemFreelist virtmem_available_tags_list;
+constinit inline VirtMemFreelist virtmem_available_tags_list;
 inline u64 virtmem_available_tags_count = 0;
 
 // Get an unused boundary tag from the list
@@ -102,7 +102,7 @@ void virtmem_return_tag(VirtmemBoundaryTag *tag);
 
 // Makes sure that enough boundary tags are available
 // Returns SUCCESS (0) if the operation was successful or an error code otherwise
-int virtmem_ensure_tags(u64 size);
+int virtmem_ensure_tags(size_t size);
 
 // This function adds the initial tags to the freelist and shall be called during the initialization
 // of the allocator during the kernel boot.
@@ -151,13 +151,31 @@ protected:
     // Array of free lists
     VirtMemFreelist virtmem_freelists[freelist_count];
 
+    // TODO: This probably shouldn't be here...
+    static int find_bit(u64 t)
+    {
+#ifndef __i386__
+        return sizeof(t) * 8 - __builtin_clzl(t);
+#else
+        return sizeof(t) * 8 - __builtin_clzll(t);
+#endif
+    }
+    static int first_bit(u64 t)
+    {
+#ifndef __i386__
+        return __builtin_ffsl(t);
+#else
+        return __builtin_ffsll(t);
+#endif
+    }
+
     // Find the index of the freelists array corresponding to the given size
     int virtmem_freelist_index(u64 size)
     {
         if (size < (1UL << freelist_quantum))
             return 0;
 
-        u64 l = sizeof(size) * 8 - __builtin_clzl(size);
+        u64 l = find_bit(size);
         return l - freelist_quantum;
     }
 
@@ -193,11 +211,11 @@ protected:
     // This is used to simplify the code and avoid special cases when adding new segments
     VirtmemBoundaryTag segment_ll_dummy_head;
 
-    friend int virtmem_ensure_tags(u64 size);
+    friend int virtmem_ensure_tags(size_t size);
     friend void virtmem_init(u64 virtmem_base, u64 virtmem_size);
 };
 
-inline VirtMem<12, 63> kernel_space_allocator;
+inline constinit VirtMem<12, 63> kernel_space_allocator;
 
 // Links the boundary tag with the list of tags sorted by address
 void virtmem_link_tag(VirtmemBoundaryTag *preceeding, VirtmemBoundaryTag *new_tag);
@@ -275,14 +293,14 @@ template<int Q, int M> void *VirtMem<Q, M>::virtmem_alloc_aligned(u64 npages, u6
     const u64 size = npages << 12;
 
     // Find the smallest list that can fit the requested size
-    int l = sizeof(npages) * 8 - __builtin_clzl(npages);
+    int l = find_bit(npages);
 
     VirtmemBoundaryTag *t = nullptr;
-    u64 mask              = ~((1UL << l) - 1);
+    u64 mask              = ~((1ULL << l) - 1);
     u64 wanted_mask       = mask & virtmem_freelist_bitmap;
     while (wanted_mask != 0) {
         // __builtin_ffsl returns the index of the first set bit + 1, or 0 if there are none
-        int idx    = __builtin_ffsl(wanted_mask) - 1;
+        int idx    = first_bit(wanted_mask) - 1;
         auto &list = virtmem_freelists[idx];
         for (auto tag = list.begin(); tag != list.end(); tag++) {
             u64 base    = tag->base;
@@ -297,6 +315,8 @@ template<int Q, int M> void *VirtMem<Q, M>::virtmem_alloc_aligned(u64 npages, u6
         mask <<= 1;
         wanted_mask = mask & virtmem_freelist_bitmap;
     }
+
+    t_print_bochs("No segment of wanted size and alignment is available\n");
 
     // No segment of wanted size and alignment is available
     return nullptr;
@@ -344,7 +364,7 @@ template<int Q, int M> void *VirtMem<Q, M>::virtmem_alloc(u64 npages, VirtmemAll
     u64 size = npages << 12;
 
     // Find the smallest list that can fit the requested size
-    int l = sizeof(npages) * 8 - __builtin_clzl(npages);
+    int l = find_bit(npages);
 
     VirtmemBoundaryTag *best = nullptr;
     u64 free_list_idx        = 0;
@@ -386,7 +406,7 @@ template<int Q, int M> void *VirtMem<Q, M>::virtmem_alloc(u64 npages, VirtmemAll
             return nullptr;
 
         // __builtin_ffsl returns the index of the first set bit + 1, or 0 if there are none
-        int idx       = __builtin_ffsl(wanted_mask) - 1;
+        int idx       = first_bit(wanted_mask) - 1;
         auto &list    = virtmem_freelists[idx];
         best          = &list.front();
         free_list_idx = idx;
@@ -434,12 +454,12 @@ template<int Q, int M> void VirtMem<Q, M>::init()
     segment_ll_dummy_head.segment_prev = &segment_ll_dummy_head;
     segment_ll_dummy_head.state        = VirtmemBoundaryTag::State::LISTHEAD;
 
-    // Init lists
-    // See VirtMemFreelist::init_empty() for the explanation
-    for (auto &i: virtmem_freelists)
-        i.init();
-    for (auto &i: virtmem_initial_hash)
-        i.init();
+    // // Init lists
+    // // See VirtMemFreelist::init_empty() for the explanation
+    // for (auto &i: virtmem_freelists)
+    //     i.init();
+    // for (auto &i: virtmem_initial_hash)
+    //     i.init();
     virtmem_hashtable = virtmem_initial_hash;
 }
 

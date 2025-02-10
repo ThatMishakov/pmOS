@@ -27,50 +27,40 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#pragma once
+#include "ipi.hh"
 
-inline void halt()
+#include <interrupts/apic.hh>
+#include <processes/tasks.hh>
+#include <sched/sched.hh>
+#include <types.hh>
+#include <x86_asm.hh>
+
+void ipi_invalidate_tlb_routine()
 {
-    while (1) {
-        asm("hlt");
+    auto c = get_cpu_struct();
+
+    auto val = __atomic_load_n(&c->ipi_mask, __ATOMIC_CONSUME);
+    if (val & CPU_Info::ipi_synchronous_mask) {
+        __atomic_and_fetch(&c->ipi_mask, ~CPU_Info::IPI_TLB_SHOOTDOWN, __ATOMIC_SEQ_CST);
+        c->current_task->page_table->trigger_shootdown(c);
     }
+    apic_eoi();
 }
 
-static inline void outb(u16 port, u8 data) { asm volatile("outb %0, %1" ::"a"(data), "Nd"(port)); }
+void signal_tlb_shootdown() { send_ipi_fixed_others(ipi_invalidate_tlb_int_vec); }
 
-static inline void io_wait() { outb(0x80, 0); }
-
-static inline u8 inb(u16 port)
+void reschedule_isr()
 {
-    u8 ret;
-    asm volatile("inb %1, %0" : "=a"(ret) : "Nd"(port));
-    return ret;
+    reschedule();
+    apic_eoi();
 }
 
-struct CPUIDoutput {
-    u32 eax;
-    u32 ebx;
-    u32 ecx;
-    u32 edx;
-};
-
-static inline CPUIDoutput cpuid(u32 p)
-{
-    CPUIDoutput out;
-    asm volatile("cpuid" : "=a"(out.eax), "=b"(out.ebx), "=c"(out.ecx), "=d"(out.edx) : "a"(p));
-    return out;
+void CPU_Info::ipi_reschedule() { 
+    send_ipi_fixed(ipi_reschedule_int_vec, lapic_id);
 }
 
-static inline CPUIDoutput cpuid2(u32 p, u32 q)
+void CPU_Info::ipi_tlb_shootdown()
 {
-    CPUIDoutput out;
-    asm volatile("cpuid"
-                 : "=a"(out.eax), "=b"(out.ebx), "=c"(out.ecx), "=d"(out.edx)
-                 : "a"(p), "c"(q));
-    return out;
-}
-
-static inline void set_xcr(u32 reg, u64 val)
-{
-    asm volatile("xsetbv" ::"a"(val), "c"(reg), "d"(val >> 32));
+    __atomic_or_fetch(&ipi_mask, IPI_TLB_SHOOTDOWN, __ATOMIC_ACQUIRE);
+    send_ipi_fixed(ipi_invalidate_tlb_int_vec, lapic_id);
 }

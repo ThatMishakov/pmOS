@@ -46,7 +46,7 @@
 #include <sched/defs.hh>
 #include <types.hh>
 
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__i386__)
     #include <cpus/sse.hh>
 #endif
 
@@ -125,7 +125,7 @@ public:
 
     // Paging
     klib::shared_ptr<Arch_Page_Table> page_table;
-    u64 page_blocked_by = 0;
+    void *page_blocked_by = nullptr;
 
     // Task groups
     klib::set<klib::shared_ptr<TaskGroup>> task_groups;
@@ -142,10 +142,10 @@ public:
     ReturnStr<size_t> init_stack();
 
     // Blocks the process by a page (for example in case of a pagefault)
-    void atomic_block_by_page(u64 page, sched_queue *push_to_queue);
+    void atomic_block_by_page(void *page, sched_queue *push_to_queue);
 
     // Unblocks the task when the page becomes available
-    bool atomic_try_unblock_by_page(u64 page);
+    bool atomic_try_unblock_by_page(void *page);
 
     /// Tries to atomically erase the task from the queue. If task's parrent queue is not equal to
     /// *queue*, does nothing
@@ -190,7 +190,7 @@ public:
     u64 ret_hi = 0;
     u64 ret_lo = 0;
 
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__i386__)
     // SSE data on x86_64 CPUs (floating point, vector registers)
     SSE_Data sse_data;
     bool holds_sse_data = false;

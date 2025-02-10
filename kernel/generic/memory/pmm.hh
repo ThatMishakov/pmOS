@@ -130,13 +130,18 @@ struct Page_Descriptor {
     static Page_Descriptor none() { return Page_Descriptor(nullptr); }
 };
 
+enum class AllocPolicy {
+    Normal,
+    Below4GB,
+};
+
 /**
  * @brief Allocates count pages and returns the first one, containing the rest in a linked list
  *
  * @param count Number of pages to allocate
  * @return Page* Pointer to the first page
  */
-Page *alloc_pages(size_t count, bool contiguous = true) noexcept;
+Page *alloc_pages(size_t count, bool contiguous = true, AllocPolicy policy = AllocPolicy::Normal) noexcept;
 
 /**
  * @brief Gets the physical address of a page structure
@@ -157,7 +162,7 @@ inline bool alloc_failure(phys_page_t p) noexcept { return p == (phys_page_t)-1;
  *
  * @return phys_page_t Physical address of the page. -1 if no page is available
  */
-phys_page_t get_memory_for_kernel(size_t number_of_pages) noexcept;
+phys_page_t get_memory_for_kernel(size_t number_of_pages, AllocPolicy policy = AllocPolicy::Normal) noexcept;
 
 /**
  * @brief Frees the contiguous pages allocated for the kernel
@@ -175,11 +180,34 @@ void free_memory_for_kernel(phys_page_t page, size_t number_of_pages) noexcept;
  */
 void free_page(Page *p) noexcept;
 
+using PageLL = pmos::containers::CircularDoubleList<Page, &Page::free_region_list>;
+
+struct PMMRegion {
+    Page::page_addr_t start;
+    u64 size_bytes;
+
+    constexpr PMMRegion(Page::page_addr_t start, u64 size_bytes) noexcept: start(start), size_bytes(size_bytes) {}
+
+    inline static constexpr auto page_lists = 30 - PAGE_ORDER; // 1GB max allocation
+    PageLL free_pages_list[page_lists];
+
+    static PMMRegion *get(Page::page_addr_t start_addr);
+};
+
 struct PageArrayDescriptor {
-    pmos::containers::RBTreeNode<PageArrayDescriptor> by_address_tree;
-    Page *pages;
     Page::page_addr_t start_addr;
     u64 size;
+    PMMRegion *parent_region;
+    pmos::containers::RBTreeNode<PageArrayDescriptor> by_address_tree;
+    Page *pages;
+
+    Page *end() const;
+
+    Page::page_addr_t end_phys() const;
+
+    static PageArrayDescriptor *find(Page::page_addr_t addr) noexcept;
+    static PageArrayDescriptor *find(Page *p) noexcept;
+    PageArrayDescriptor *next();
 };
 
 // Add a memory region to the PMM
@@ -200,11 +228,6 @@ extern RegionsTree::RBTreeHead memory_regions;
 extern PageArrayDescriptor *phys_memory_regions;
 extern size_t phys_memory_regions_count;
 extern size_t phys_memory_regions_capacity;
-
-using PageLL = pmos::containers::CircularDoubleList<Page, &Page::free_region_list>;
-
-inline constexpr auto page_lists = 30 - PAGE_ORDER; // 1GB max allocation
-extern PageLL free_pages_list[page_lists];
 
 extern bool pmm_fully_initialized;
 

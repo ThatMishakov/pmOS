@@ -30,9 +30,8 @@
 #include "interrupts.hh"
 
 #include "apic.hh"
-#include "exceptions_managers.hh"
-#include "gdt.hh"
-#include "idt.hh"
+#include <interrupts/gdt.hh>
+#include <interrupts/idt.hh>
 
 #include <cpus/ipi.hh>
 #include <kernel/messaging.h>
@@ -43,6 +42,7 @@
 #include <sched/sched.hh>
 #include <utils.hh>
 #include <x86_asm.hh>
+#include <utils.hh>
 
 void set_idt()
 {
@@ -53,7 +53,6 @@ void set_idt()
 void init_idt()
 {
     enable_apic();
-
     set_idt();
 }
 
@@ -111,9 +110,10 @@ intno); halt(); break;
 }
 */
 
-void (*return_table[4])(void) = {
+void (*return_table[5])(void) = {
     ret_from_interrupt,
     ret_from_syscall,
     ret_from_sysenter,
     ret_repeat_syscall,
+    return_from_kernel_thread,
 };

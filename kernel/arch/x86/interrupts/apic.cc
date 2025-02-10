@@ -59,7 +59,6 @@ void enable_apic()
     apic_write_reg(APIC_REG_LVT_TMR, APIC_LVT_MASK);
     apic_write_reg(APIC_REG_LVT_INT0, LVT_INT0);
     apic_write_reg(APIC_REG_LVT_INT1, LVT_INT1);
-    cpu_set_apic_base(cpu_get_apic_base());
     apic_write_reg(APIC_REG_SPURIOUS_INT, APIC_SPURIOUS_INT | 0x100);
 }
 
@@ -141,13 +140,13 @@ void discover_apic_freq()
     apic_freq          = computeFreqFraction(ticks, divisor);
     apic_inverted_freq = computeFreqFraction(divisor, ticks);
     auto l = apic_freq*1'000'000'000;
-    global_logger.printf("[Kernel] Info: APIC timer ticks per 1ms: %i\n", l);
-    serial_logger.printf("[Kernel] Info: APIC timer ticks per 1ms: %i\n", l);
+    global_logger.printf("[Kernel] Info: APIC timer ticks per 1ms: %li\n", l);
+    serial_logger.printf("[Kernel] Info: APIC timer ticks per 1ms: %lu %u\n", l, ticks*100);
 
     tsc_freq          = computeFreqFraction(tsc_end - tsc_start, divisor);
     tsc_inverted_freq = computeFreqFraction(divisor, tsc_end - tsc_start);
-    global_logger.printf("[Kernel] Info: TSC ticks per 1ms: %i\n", tsc_freq*1'000'000'000);
-    serial_logger.printf("[Kernel] Info: TSC ticks per 1s: %i %i\n", tsc_freq*1'000'000'000, (tsc_end - tsc_start)*100);
+    global_logger.printf("[Kernel] Info: TSC ticks per 1ms: %li\n", tsc_freq*1'000'000'000);
+    serial_logger.printf("[Kernel] Info: TSC ticks per 1s: %li %li\n", tsc_freq*1'000'000'000, (tsc_end - tsc_start)*100);
 }
 
 void apic_one_shot(u32 ms)
@@ -224,14 +223,14 @@ void broadcast_init_ipi() { apic_write_reg(APIC_ICR_LOW, 0x000C4500); }
 
 void send_ipi_fixed(u8 vector, u32 dest)
 {
-    serial_logger.printf("[Kernel] Info: Sending IPI to %h with vector %h\n", dest, vector);
+    // serial_logger.printf("[Kernel] Info: Sending IPI to %h with vector %h\n", dest, vector);
     apic_write_reg(APIC_ICR_HIGH, dest);
     apic_write_reg(APIC_ICR_LOW, (u32)vector | (0x01 << 14));
 }
 
 void send_ipi_fixed_others(u8 vector)
 {
-    serial_logger.printf("[Kernel] Info: Sending IPI to others with vector %h\n", vector);
+    // serial_logger.printf("[Kernel] Info: Sending IPI to others with vector %h\n", vector);
     apic_write_reg(APIC_ICR_HIGH, 0);
 
     // Send to *vector* vector with Assert level and All Excluding Self
@@ -253,10 +252,12 @@ void smart_eoi(u8 intno)
 void apic_pp(int priority) { apic_write_reg(APIC_REG_PPR, priority << 4); }
 
 void lvt0_int_routine() {
+    serial_logger.printf("[Kernel] Info: LVT0 interrupt\n");
     smart_eoi(LVT_INT0);
 }
 
 void lvt1_int_routine() {
+    serial_logger.printf("[Kernel] Info: LVT1 interrupt\n");
     smart_eoi(LVT_INT1);
 }
 
@@ -269,11 +270,20 @@ void apic_dummy_int_routine() {
     smart_eoi(APIC_DUMMY_ISR);
 }
 
+void tpr_write(unsigned val)
+{
+    #ifdef __x86_64__
+    setCR8(val);
+    #else
+    apic_write_reg(APIC_REG_TPR, val << 4);
+    #endif
+}
+
 void interrupt_complete(u32 intno)
 {
     assert(intno < 256);
     smart_eoi(intno);
-    setCR8(0);
+    tpr_write(0);
 }
 
 u32 interrupt_min() { return 48; }
@@ -311,7 +321,7 @@ extern "C" void programmable_interrupt(u32 intno)
         handler->active = true;
         // Disable reception of other interrupts from peripheral devices until this one is
         // handled
-        setCR8(14);
+        tpr_write(14);
     }
 }
 

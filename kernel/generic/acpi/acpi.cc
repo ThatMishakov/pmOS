@@ -125,7 +125,7 @@ bool enumerate_tables_from_xsdt(u64 xsdt_desc_phys)
 
 bool enumerate_tables(u64 rsdt_desc_phys)
 {
-    serial_logger.printf("Enumerating ACPI tables\n");
+    serial_logger.printf("Enumerating ACPI tables...");
 
     RSDP_descriptor desc;
     copy_from_phys(rsdt_desc_phys, &desc, sizeof(desc));
@@ -134,7 +134,7 @@ bool enumerate_tables(u64 rsdt_desc_phys)
     // Don't verify them
 
     if (memcmp(desc.signature, "RSD PTR ", 8) != 0) {
-        serial_logger.printf("Error: RSDP signature mismatch\n");
+        serial_logger.printf(" Error: RSDP signature mismatch\n");
         return false;
     }
 
@@ -149,7 +149,8 @@ bool enumerate_tables(u64 rsdt_desc_phys)
 
     bool b = enumerate_tables_from_rsdt(desc.rsdt_address);
     if (!b)
-        serial_logger.printf("Error: Failed to enumerate ACPI tables\n");
+        serial_logger.printf(" Error: Failed to enumerate ACPI tables\n");
 
+    serial_logger.printf(" Success!\n");
     return b;
 }

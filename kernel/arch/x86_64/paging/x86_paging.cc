@@ -44,11 +44,11 @@ using namespace kernel;
 
 bool nx_bit_enabled = false;
 
-kresult_t map(u64 physical_addr, u64 virtual_addr, Page_Table_Argumments arg, u64 pt_phys)
+kresult_t map(u64 physical_addr, void *virtual_addr, Page_Table_Argumments arg, u64 pt_phys)
 {
     Temp_Mapper_Obj<x86_PAE_Entry> mapper(request_temp_mapper());
 
-    u64 addr = virtual_addr;
+    u64 addr = (u64)virtual_addr;
     addr >>= 12;
     u64 ptable_entry = addr & 0x1ff;
     addr >>= 9;
@@ -56,7 +56,7 @@ kresult_t map(u64 physical_addr, u64 virtual_addr, Page_Table_Argumments arg, u6
     addr >>= 9;
     u64 pdpt_entry = addr & 0x1ff;
 
-    u64 pml4_entry       = (virtual_addr >> 39) & 0x1ff;
+    u64 pml4_entry       = ((u64)virtual_addr >> 39) & 0x1ff;
     x86_PAE_Entry *pml4  = mapper.map(pt_phys);
     x86_PAE_Entry &pml4e = pml4[pml4_entry];
     if (not pml4e.present) {
@@ -142,7 +142,7 @@ u64 get_pt_ppn(u64 virtual_addr, u64 pt_phys)
     return pde.page_ppn;
 }
 
-kresult_t map_pages(u64 cr3, u64 phys_addr, u64 virt_addr, u64 size_bytes,
+kresult_t map_pages(u64 cr3, u64 phys_addr, void *virt_addr, size_t size_bytes,
                     Page_Table_Argumments args)
 {
     u64 result = 0;
@@ -151,7 +151,7 @@ kresult_t map_pages(u64 cr3, u64 phys_addr, u64 virt_addr, u64 size_bytes,
     // TODO: Unmap on failure
 
     for (; i < size_bytes; i += 0x1000) {
-        result = map(phys_addr + i, virt_addr + i, args, cr3);
+        result = map(phys_addr + i, (char *)virt_addr + i, args, cr3);
         if (result)
             return result;
     }
@@ -159,17 +159,18 @@ kresult_t map_pages(u64 cr3, u64 phys_addr, u64 virt_addr, u64 size_bytes,
     return result;
 }
 
+u64 idle_cr3 = 0;
+
 kresult_t map_kernel_page(u64 phys_addr, void *virt_addr, Page_Table_Argumments arg)
 {
-    const u64 cr3 = getCR3();
-    return map(phys_addr, (u64)virt_addr, arg, cr3);
+    return map(phys_addr, virt_addr, arg, idle_cr3);
 }
 
-u64 prepare_pt_for(u64 virtual_addr, Page_Table_Argumments arg, u64 pt_phys)
+u64 prepare_pt_for(void *virtual_addr, Page_Table_Argumments arg, u64 pt_phys)
 {
     Temp_Mapper_Obj<x86_PAE_Entry> mapper(request_temp_mapper());
 
-    u64 pml4_entry       = (virtual_addr >> 39) & 0x1ff;
+    u64 pml4_entry       = ((u64)virtual_addr >> 39) & 0x1ff;
     x86_PAE_Entry *pml4  = mapper.map(pt_phys);
     x86_PAE_Entry &pml4e = pml4[pml4_entry];
     if (not pml4e.present) {
@@ -186,7 +187,7 @@ u64 prepare_pt_for(u64 virtual_addr, Page_Table_Argumments arg, u64 pt_phys)
     }
 
     x86_PAE_Entry *pdpt  = mapper.map(pml4e.page_ppn << 12);
-    u64 pdpt_entry       = (virtual_addr >> 30) & 0x1ff;
+    u64 pdpt_entry       = ((u64)virtual_addr >> 30) & 0x1ff;
     x86_PAE_Entry &pdpte = pdpt[pdpt_entry];
     if (pdpte.pat_size)
         return -1;
@@ -204,7 +205,7 @@ u64 prepare_pt_for(u64 virtual_addr, Page_Table_Argumments arg, u64 pt_phys)
     }
 
     x86_PAE_Entry *pd  = mapper.map(pdpte.page_ppn << 12);
-    u64 pd_entry       = (virtual_addr >> 21) & 0x1ff;
+    u64 pd_entry       = ((u64)virtual_addr >> 21) & 0x1ff;
     x86_PAE_Entry &pde = pd[pd_entry];
     if (pde.pat_size)
         return -1;
@@ -224,7 +225,7 @@ u64 prepare_pt_for(u64 virtual_addr, Page_Table_Argumments arg, u64 pt_phys)
     return pde.page_ppn << 12;
 }
 
-bool x86_4level_Page_Table::is_mapped(u64 virt_addr) const
+bool x86_4level_Page_Table::is_mapped(void *virt_addr) const
 {
     bool allocated = false;
 
@@ -254,7 +255,7 @@ bool x86_4level_Page_Table::is_mapped(u64 virt_addr) const
     return allocated;
 }
 
-void invalidate(TLBShootdownContext &ctx, u64 virt_addr, bool free, u64 pml4_phys)
+void invalidate(TLBShootdownContext &ctx, void *virt_addr, bool free, u64 pml4_phys)
 {
     bool invalidated = false;
 
@@ -290,18 +291,17 @@ void invalidate(TLBShootdownContext &ctx, u64 virt_addr, bool free, u64 pml4_phy
     } while (false);
 
     if (invalidated)
-        ctx.invalidate_page(virt_addr);
+        ctx.invalidate_page((void *)virt_addr);
 }
 
-void x86_4level_Page_Table::invalidate(TLBShootdownContext &ctx, u64 virt_addr, bool free)
+void x86_4level_Page_Table::invalidate(TLBShootdownContext &ctx, void *virt_addr, bool free)
 {
     ::invalidate(ctx, virt_addr, free, (u64)pml4_phys);
 }
 
 kresult_t unmap_kernel_page(TLBShootdownContext &ctx, void *virt_addr)
 {
-    const u64 cr3 = getCR3();
-    invalidate(ctx, (u64)virt_addr, true, cr3);
+    invalidate(ctx, virt_addr, false, idle_cr3);
     return 0;
 }
 
@@ -319,11 +319,11 @@ bool x86_Page_Table::is_active() const { return ::getCR3() == get_cr3(); }
 //         ::signal_tlb_shootdown();
 // }
 
-void x86_Page_Table::invalidate_tlb(u64 page, u64 size)
+void x86_Page_Table::invalidate_tlb(void *page, size_t size)
 {
     if (size / 4096 < 64)
         for (u64 i = 0; i < size; i += 4096)
-            invlpg(page + i);
+            invlpg((u64)page + i);
 
     else
         setCR3(get_cr3());
@@ -348,38 +348,7 @@ void print_pt(u64 addr)
                          pd_e & 0777, ptable_entry & 0777);
 }
 
-ReturnStr<u64> x86_4level_Page_Table::phys_addr_of(u64 virt) const
-{
-    Temp_Mapper_Obj<x86_PAE_Entry> mapper(request_temp_mapper());
-
-    // PML4 entry
-    mapper.map((u64)pml4_phys);
-    unsigned pml4_i = pml4_index(virt);
-    if (not mapper.ptr[pml4_i].present)
-        return -EFAULT;
-
-    // PDPT entry
-    mapper.map(mapper.ptr[pml4_i].page_ppn << 12);
-    unsigned pdpt_i = pdpt_index(virt);
-    if (not mapper.ptr[pdpt_i].present)
-        return -EFAULT;
-
-    // PD entry
-    mapper.map(mapper.ptr[pdpt_i].page_ppn << 12);
-    unsigned pd_i = pd_index(virt);
-    if (not mapper.ptr[pd_i].present)
-        return -EFAULT;
-
-    // PT entry
-    mapper.map(mapper.ptr[pd_i].page_ppn << 12);
-    unsigned pt_i = pt_index(virt);
-    if (not mapper.ptr[pt_i].present)
-        return -EFAULT;
-
-    return (mapper.ptr[pt_i].page_ppn << 12) | (virt & (u64)0xfff);
-}
-
-x86_4level_Page_Table::Page_Info x86_4level_Page_Table::get_page_mapping(u64 virt_addr) const
+x86_4level_Page_Table::Page_Info x86_4level_Page_Table::get_page_mapping(void *virt_addr) const
 {
     Page_Info i {};
 
@@ -415,16 +384,6 @@ x86_4level_Page_Table::Page_Info x86_4level_Page_Table::get_page_mapping(u64 vir
     i.page_addr    = mapper.ptr[pt_i].page_ppn << 12;
     i.nofree       = mapper.ptr[pt_i].avl & PAGING_FLAG_NOFREE;
     return i;
-}
-
-ReturnStr<u64> phys_addr_of(u64 virt)
-{
-    PTE *pte = get_pte(virt, rec_map_index);
-
-    u64 phys = (pte->page_ppn << 12) | (virt & (u64)0xfff);
-
-    // TODO: Error checking
-    return {0, phys};
 }
 
 klib::shared_ptr<x86_4level_Page_Table> x86_4level_Page_Table::capture_initial(u64 cr3)
@@ -467,7 +426,7 @@ klib::shared_ptr<x86_4level_Page_Table> x86_4level_Page_Table::create_empty(int 
     Temp_Mapper_Obj<x86_PAE_Entry> current_page_m(request_temp_mapper());
 
     new_page_m.map(p);
-    current_page_m.map(getCR3());
+    current_page_m.map(idle_cr3);
 
     // Clear it as memory contains rubbish and it will cause weird paging
     // bugs on real machines
@@ -475,17 +434,7 @@ klib::shared_ptr<x86_4level_Page_Table> x86_4level_Page_Table::create_empty(int 
 
     // Copy the last entries into the new page table as they are shared
     // across all processes
-    new_page_m.ptr[256] = current_page_m.ptr[256];
-    new_page_m.ptr[510] = current_page_m.ptr[510];
-    new_page_m.ptr[511] = current_page_m.ptr[511];
-
-    // TODO: I've switch almost everything to use temporary mappings, but
-    // recursive mapping is still used in some places. This should be removed
-    // but doesn't matter for now... Also, RISC-V functions fine without it
-    new_page_m.ptr[rec_map_index]             = x86_PAE_Entry();
-    new_page_m.ptr[rec_map_index].present     = 1;
-    new_page_m.ptr[rec_map_index].user_access = 0;
-    new_page_m.ptr[rec_map_index].page_ppn    = p / KB(4);
+    memcpy(new_page_m.ptr + 256, current_page_m.ptr + 256, 256 * sizeof(x86_PAE_Entry));
 
     new_table->pml4_phys = p;
 
@@ -508,7 +457,7 @@ x86_4level_Page_Table::~x86_4level_Page_Table()
     }
 }
 
-kresult_t x86_4level_Page_Table::map(u64 physical_addr, u64 virtual_addr,
+kresult_t x86_4level_Page_Table::map(u64 physical_addr, void *virtual_addr,
                                      Page_Table_Argumments arg) noexcept
 {
     assert(!(physical_addr >> 48) && "x86_4level_Page_Table::map physical page out of range");
@@ -587,7 +536,7 @@ kresult_t x86_4level_Page_Table::map(u64 physical_addr, u64 virtual_addr,
     return 0;
 }
 
-kresult_t x86_4level_Page_Table::map(pmm::Page_Descriptor page, u64 virtual_addr,
+kresult_t x86_4level_Page_Table::map(pmm::Page_Descriptor page, void *virtual_addr,
                                      Page_Table_Argumments arg) noexcept
 {
     auto p = page.page_struct_ptr;
@@ -670,7 +619,7 @@ kresult_t x86_4level_Page_Table::map(pmm::Page_Descriptor page, u64 virtual_addr
     return 0;
 }
 
-kresult_t x86_4level_Page_Table::resolve_anonymous_page(u64 virt_addr, u64 access_type)
+kresult_t x86_4level_Page_Table::resolve_anonymous_page(void *virt_addr, unsigned access_type)
 {
     assert(access_type & Writeable);
 
@@ -678,7 +627,7 @@ kresult_t x86_4level_Page_Table::resolve_anonymous_page(u64 virt_addr, u64 acces
     mapper.map(pml4_phys);
     for (int i = 3; i > 0; --i) {
         int offset      = 12 + i * 9;
-        int index       = (virt_addr >> offset) & 0x1ff;
+        int index       = ((u64)virt_addr >> offset) & 0x1ff;
         x86_PAE_Entry p = mapper.ptr[index];
         assert(p.present && "page must be present");
         mapper.map(p.page_ppn << 12);
@@ -713,7 +662,7 @@ kresult_t x86_4level_Page_Table::resolve_anonymous_page(u64 virt_addr, u64 acces
     // Fun!
     {
         auto tlb_ctx = TLBShootdownContext::create_userspace(*this);
-        tlb_ctx.invalidate_page(virt_addr & ~0xffful);
+        tlb_ctx.invalidate_page((void *)((u64)virt_addr & ~0xffful));
     }
 
     u64 new_page_phys = new_descriptor.val.takeout_page();
@@ -792,12 +741,12 @@ void x86_4level_Page_Table::free_user_pages()
     }
 }
 
-void x86_4level_Page_Table::invalidate_range(TLBShootdownContext &ctx, u64 virt_addr,
-                                             u64 size_bytes, bool free)
+void x86_4level_Page_Table::invalidate_range(TLBShootdownContext &ctx, void *virt_addr,
+                                             size_t size_bytes, bool free)
 {
     // -------- CAN BE MADE MUCH FASTER ------------
-    u64 end = virt_addr + size_bytes;
-    for (u64 i = virt_addr; i < end; i += 4096)
+    void *end = (char *)virt_addr + size_bytes;
+    for (auto i = virt_addr; i < end; i = (char *)i + 4096)
         invalidate(ctx, i, free);
 }
 
@@ -917,21 +866,21 @@ void x86_4level_Page_Table::apply() noexcept { setCR3((u64)pml4_phys); }
 
 void apply_page_table(ptable_top_ptr_t page_table) { setCR3((u64)page_table); }
 
-void x86_Page_Table::invalidate_tlb(u64 addr) { invlpg(addr); }
-void invalidate_tlb_kernel(u64 addr) { invlpg(addr); }
+void x86_Page_Table::invalidate_tlb(void *addr) { invlpg((u64)addr); }
+void invalidate_tlb_kernel(void *addr) { invlpg((u64)addr); }
 
-void invalidate_tlb_kernel(u64 addr, u64 size)
+void invalidate_tlb_kernel(void *addr, size_t size)
 {
     for (u64 i = 0; i < size; i += 4096)
-        invlpg(addr + i);
+        invlpg((u64)addr + i);
 }
 
-ReturnStr<bool> x86_4level_Page_Table::atomic_copy_to_user(u64 to, const void *from, u64 size)
+ReturnStr<bool> x86_4level_Page_Table::atomic_copy_to_user(void *to, const void *from, u64 size)
 {
     Auto_Lock_Scope l(lock);
 
     Temp_Mapper_Obj<char> mapper(request_temp_mapper());
-    for (u64 i = to & ~0xfffUL; i < to + size; i += 0x1000) {
+    for (char *i = (char *)((u64)to & ~0xfffUL); i < (char *)to + size; i += 0x1000) {
         const auto b = prepare_user_page(i, Writeable);
         if (!b.success())
             b.propagate();
@@ -943,9 +892,9 @@ ReturnStr<bool> x86_4level_Page_Table::atomic_copy_to_user(u64 to, const void *f
         assert(page.is_allocated);
 
         char *ptr       = mapper.map(page.page_addr);
-        const u64 start = i < to ? to : i;
-        const u64 end   = i + 0x1000 < to + size ? i + 0x1000 : to + size;
-        memcpy(ptr + (start - i), (const char *)from + (start - to), end - start);
+        char * start = i < to ? (char *)to : i;
+        char * end   = i + 0x1000 < (char *)to + size ? i + 0x1000 : (char *)to + size;
+        memcpy(ptr + (start - i), (const char *)from + (start - (char *)to), end - start);
     }
 
     return true;
@@ -1008,10 +957,10 @@ kresult_t x86_4level_Page_Table::copy_to_recursive(const klib::shared_ptr<Page_T
             if (p.writeable) {
                 p.writeable   = 0;
                 mapper.ptr[i] = p;
-                ctx.invalidate_page(copy_from);
+                ctx.invalidate_page((void *)copy_from);
             }
 
-            auto result = to->map(klib::move(pp), copy_to, arg);
+            auto result = to->map(klib::move(pp), (void *)copy_to, arg);
             if (result)
                 return result;
 
@@ -1035,21 +984,21 @@ kresult_t x86_4level_Page_Table::copy_to_recursive(const klib::shared_ptr<Page_T
 }
 
 kresult_t x86_4level_Page_Table::copy_anonymous_pages(const klib::shared_ptr<Page_Table> &to,
-                                                      u64 from_addr, u64 to_addr, u64 size_bytes,
-                                                      u8 access)
+                                                      void *from_addr, void *to_addr, size_t size_bytes,
+                                                      unsigned access)
 {
     u64 offset = 0;
 
     auto guard = pmos::utility::make_scope_guard([&]() {
         auto ctx = TLBShootdownContext::create_userspace(*to);
-        to->invalidate_range(ctx, to_addr, offset, true);
+        to->invalidate_range(ctx, (void *)to_addr, offset, true);
     });
 
     kresult_t result;
 
     {
         TLBShootdownContext ctx = TLBShootdownContext::create_userspace(*this);
-        result = copy_to_recursive(to, pml4_phys, from_addr, to_addr, size_bytes, access, from_addr,
+        result = copy_to_recursive(to, pml4_phys, (u64)from_addr, (u64)to_addr, size_bytes, access, (u64)from_addr,
                                    4, offset, ctx);
     }
 
@@ -1057,4 +1006,41 @@ kresult_t x86_4level_Page_Table::copy_anonymous_pages(const klib::shared_ptr<Pag
         guard.dismiss();
 
     return result;
+}
+
+static bool check_level(void *ptr, unsigned level, u64 phys_page_level, ulong err)
+{
+    bool write = err & 0x02;
+    bool exec  = err & 0x10;
+    if (level == 0)
+        assert(!"level 0");
+
+    unsigned idx = ((ulong)ptr >> (12 + (level - 1) * 9)) & 0x1ff;
+    Temp_Mapper_Obj<x86_PAE_Entry> mapper(request_temp_mapper());
+    mapper.map(phys_page_level);
+
+    auto pte = mapper.ptr[idx];
+    if (!pte.present)
+        return false;
+
+    if (write && !pte.writeable)
+        return false;
+
+    if (exec && pte.execution_disabled)
+        return false;
+
+    if (level == 1)
+        return true;
+
+    return check_level(ptr, level - 1, pte.page_ppn << 12, err);
+}
+
+bool page_mapped(void *pagefault_cr2, ulong err)
+{
+
+    unsigned levels = 4; // TODO;
+
+    auto cr3 = getCR3();
+
+    return check_level(pagefault_cr2, levels, cr3, err);
 }

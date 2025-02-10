@@ -40,12 +40,13 @@
 #include <memory/rcu.hh>
 #include <memory/temp_mapper.hh>
 #include <messaging/messaging.hh>
-#include <pmos/containers/intrusive_list.hh>
 #include <pmos/containers/intrusive_bst.hh>
+#include <pmos/containers/intrusive_list.hh>
 #include <registers.hh>
 #include <types.hh>
+#include <lib/string.hh>
 
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__i386__)
     #include <interrupts/gdt.hh>
     #include <paging/x86_temp_mapper.hh>
 #elif defined(__riscv)
@@ -70,15 +71,17 @@ extern RCU paging_rcu;
 extern RCU heap_rcu;
 
 struct CPU_Info {
-    CPU_Info *self               = this;    // 0
-    u64 *kernel_stack_top        = nullptr; // 8
-    u64 temp_var                 = 0;       // 16
-    u64 nested_level             = 1;       // 24
-    TaskDescriptor *current_task = nullptr; // 32
-    TaskDescriptor *idle_task    = nullptr; // 40
-    u64 jumpto_from              = 0;       // 48
-    u64 jumpto_to                = 0;       // 56
-    Task_Regs nested_int_regs;              // 64
+    CPU_Info *self               = this;    // 0  0
+    u64 *kernel_stack_top        = nullptr; // 8  4
+    ulong temp_var               = 0;       // 16 8
+    ulong nested_level           = 1;       // 24 12
+    TaskDescriptor *current_task = nullptr; // 32 16
+    TaskDescriptor *idle_task    = nullptr; // 40 20
+    void *jumpto_func            = nullptr; // 48 24
+    ulong jumpto_arg             = 0;       // 56 28
+    // u64 jumpto_from              = 0;       // 48 24
+    // u64 jumpto_to                = 0;       // 56 28
+    Task_Regs nested_int_regs; // 64 32
 
     klib::array<sched_queue, sched_queues_levels> sched_queues;
 
@@ -88,26 +91,38 @@ struct CPU_Info {
     Kernel_Stack_Pointer kernel_stack;
     Kernel_Stack_Pointer idle_stack;
 
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__i386__)
     // x86-specific
     Kernel_Stack_Pointer debug_stack;
     Kernel_Stack_Pointer nmi_stack;
     Kernel_Stack_Pointer machine_check_stack;
     Kernel_Stack_Pointer double_fault_stack;
+
     GDT cpu_gdt;
 
     u64 system_timer_val = 0;
     u32 timer_val        = 0;
+#endif
+#ifdef __i386__
+    TSS tss;
+    TSS double_fault_tss;
+    // TSS double_fault_tss;
+    // TODO...
 #endif
 
     TaskDescriptor *atomic_pick_highest_priority(priority_t min = sched_queues_levels - 1);
     TaskDescriptor *atomic_get_front_priority(priority_t);
 
 // Temporary memory mapper; This is arch specific
-#ifdef __x86_64__
+#ifdef __i386__
+    Temp_Mapper *temp_mapper;
+    Temp_Mapper &get_temp_mapper() { return *temp_mapper; }
+#elif defined(__x86_64__)
     x86_PAE_Temp_Mapper temp_mapper;
+    x86_PAE_Temp_Mapper &get_temp_mapper() { return temp_mapper; }
 #elif defined(__riscv)
     RISCV64_Temp_Mapper temp_mapper;
+    RISCV64_Temp_Mapper &get_temp_mapper() { return temp_mapper; }
 #endif
 
     constexpr static unsigned pthread_once_size                       = 16;
@@ -118,7 +133,7 @@ struct CPU_Info {
     RCU_CPU paging_rcu_cpu;
     RCU_CPU heap_rcu_cpu;
 
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__i386__)
     u32 lapic_id = 0;
 #endif
 
@@ -158,7 +173,9 @@ struct CPU_Info {
         u64 port_id;
         u64 extra;
     };
-    using timer_tree = pmos::containers::RedBlackTree<Timer, &Timer::node, detail::TreeCmp<Timer, u64, &Timer::fire_on_core_ticks>>;
+    using timer_tree =
+        pmos::containers::RedBlackTree<Timer, &Timer::node,
+                                       detail::TreeCmp<Timer, u64, &Timer::fire_on_core_ticks>>;
     timer_tree::RBTreeHead timer_queue;
     Spinlock timer_lock;
 

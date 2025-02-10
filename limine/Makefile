@@ -68,7 +68,54 @@ DISK_IMAGE := pmos.img
 BOOT_PARTITION := boot.img
 EXT2_PARTITION := ext2.img
 
-$(ISO): ../kernel/build/kernel ../bootstrapd/bootstrapd.elf ../devicesd/devicesd.elf ../logd/logd.elf ../ns16550/ns16550.elf ../piped/piped.elf ../processd/processd.elf ../terminald/terminald.elf ../vfsd/vfsd.elf ../vfatfsd/vfatfsd.elf ../ahcid/ahcid.elf ../ps2d/ps2d.elf ../i8042/i8042.elf ../blockd/blockd.elf limine.conf limine limine-binary
+HYPER_IMAGE := pmos-hyper.img
+
+Hyper/installer/hyper_install: Hyper
+	cd Hyper && ./build.py
+
+$(HYPER_IMAGE): ../kernel/build/kernel ../bootstrapd/bootstrapd.elf ../devicesd/devicesd.elf ../logd/logd.elf ../ns16550/ns16550.elf ../piped/piped.elf ../processd/processd.elf ../terminald/terminald.elf ../vfsd/vfsd.elf ../vfatfsd/vfatfsd.elf ../ahcid/ahcid.elf ../ps2d/ps2d.elf ../i8042/i8042.elf ../blockd/blockd.elf hyper.cfg Hyper/installer/hyper_install
+	dd if=/dev/zero of=$(HYPER_IMAGE) bs=1M count=128
+
+	# Create an MBR partition table
+	echo 'label: dos' | sfdisk $(HYPER_IMAGE)
+	echo '2048,130048,0x0C,*' | sfdisk --append $(HYPER_IMAGE)
+	echo '132096,130048,0x83' | sfdisk --append $(HYPER_IMAGE)
+
+	# Create a FAT32 filesystem for the boot partition
+	dd if=/dev/zero of=$(BOOT_PARTITION) bs=1M count=64
+	mformat -i $(BOOT_PARTITION) -h 32 -t 32 -n 64 -c 1
+
+	mcopy -i $(BOOT_PARTITION) hyper.cfg ::/hyper.cfg
+
+	mcopy -i $(BOOT_PARTITION) ../kernel/build/kernel ::/kernel
+	mcopy -i $(BOOT_PARTITION) ../bootstrapd/bootstrapd.elf ::/
+	mcopy -i $(BOOT_PARTITION) ../devicesd/devicesd.elf ::/
+	mcopy -i $(BOOT_PARTITION) ../logd/logd.elf ::/
+	mcopy -i $(BOOT_PARTITION) ../ns16550/ns16550.elf ::/
+	mcopy -i $(BOOT_PARTITION) ../piped/piped.elf ::/
+	mcopy -i $(BOOT_PARTITION) ../processd/processd.elf ::/
+	mcopy -i $(BOOT_PARTITION) ../terminald/terminald.elf ::/
+	mcopy -i $(BOOT_PARTITION) ../vfsd/vfsd.elf ::/
+	mcopy -i $(BOOT_PARTITION) ../vfatfsd/vfatfsd.elf ::/
+	mcopy -i $(BOOT_PARTITION) ../ahcid/ahcid.elf ::/
+	mcopy -i $(BOOT_PARTITION) ../ps2d/ps2d.elf ::/
+	mcopy -i $(BOOT_PARTITION) ../i8042/i8042.elf ::/
+	mcopy -i $(BOOT_PARTITION) ../blockd/blockd.elf ::/
+
+	# Create an ext2 filesystem for the root partition
+	dd if=/dev/zero of=$(EXT2_PARTITION) bs=1M count=64
+	mke2fs -d ../sysroot/usr -t ext2 $(EXT2_PARTITION)
+
+	# Copy partition images to the disk image
+	dd conv=notrunc if=$(BOOT_PARTITION) of=$(HYPER_IMAGE) bs=512 seek=2048
+	dd conv=notrunc if=$(EXT2_PARTITION) of=$(HYPER_IMAGE) bs=512 seek=132096
+
+	# Install hyper
+	Hyper/installer/hyper_install $(HYPER_IMAGE)
+
+
+
+$(DISK_IMAGE): ../kernel/build/kernel ../bootstrapd/bootstrapd.elf ../devicesd/devicesd.elf ../logd/logd.elf ../ns16550/ns16550.elf ../piped/piped.elf ../processd/processd.elf ../terminald/terminald.elf ../vfsd/vfsd.elf ../vfatfsd/vfatfsd.elf ../ahcid/ahcid.elf ../ps2d/ps2d.elf ../blockd/blockd.elf limine.conf limine limine-binary
 	mkdir -p isodir/boot/limine
 	mkdir -p isodir/EFI/BOOT
 
@@ -128,7 +175,7 @@ $(ISO): ../kernel/build/kernel ../bootstrapd/bootstrapd.elf ../devicesd/devicesd
 	mcopy -i $(BOOT_PARTITION) ../vfatfsd/vfatfsd.elf ::/
 	mcopy -i $(BOOT_PARTITION) ../ahcid/ahcid.elf ::/
 	mcopy -i $(BOOT_PARTITION) ../ps2d/ps2d.elf ::/
-	mcopy -i $(BOOT_PARTITION) ../i8042/i8042.elf ::/
+	# mcopy -i $(BOOT_PARTITION) ../i8042/i8042.elf ::/
 	mcopy -i $(BOOT_PARTITION) ../blockd/blockd.elf ::/
 
 	# Create an ext2 filesystem for the root partition
@@ -141,6 +188,30 @@ $(ISO): ../kernel/build/kernel ../bootstrapd/bootstrapd.elf ../devicesd/devicesd
 
 	# Install Limine stage 1
 	limine/limine bios-install $(DISK_IMAGE)
+
+isodir: ../kernel/build/kernel ../bootstrapd/bootstrapd.elf ../devicesd/devicesd.elf ../logd/logd.elf ../ns16550/ns16550.elf ../piped/piped.elf ../processd/processd.elf ../terminald/terminald.elf ../vfsd/vfsd.elf ../vfatfsd/vfatfsd.elf ../ahcid/ahcid.elf ../ps2d/ps2d.elf ../blockd/blockd.elf limine.conf hyper.cfg
+	mkdir -p isodir
+
+	cp -v limine.conf isodir/
+	cp -v hyper.cfg isodir/
+
+	cp Hyper/build-clang-i686-bios/loader/hyper_iso_boot isodir/
+
+	cp -v ../kernel/build/kernel isodir/kernel
+	cp -v ../bootstrapd/bootstrapd.elf isodir/
+	cp -v ../devicesd/devicesd.elf isodir/
+	cp -v ../logd/logd.elf isodir/
+	cp -v ../ns16550/ns16550.elf isodir/
+	cp -v ../piped/piped.elf isodir/
+	cp -v ../processd/processd.elf isodir/
+	cp -v ../terminald/terminald.elf isodir/
+	cp -v ../vfsd/vfsd.elf isodir/
+	cp -v ../vfatfsd/vfatfsd.elf isodir/
+	cp -v ../ahcid/ahcid.elf isodir/
+	cp -v ../ps2d/ps2d.elf isodir/
+	cp -v ../i8042/i8042.elf isodir/
+	cp -v ../blockd/blockd.elf isodir/
+	# cp -v ../test/test.elf isodir
 
 
 .PHONY: ../kernel/build/kernel ../bootstrapd/bootstrapd.elf ../devicesd/devicesd.elf ../logd/logd.elf ../ns16550/ns16550.elf ../piped/piped.elf ../processd/processd.elf ../terminald/terminald.elf ../vfsd/vfsd.elf ../vfatfsd/vfatfsd.elf ../ahcid/ahcid.elf ../ps2d/ps2d.elf ../i8042/i8042.elf ../blockd/blockd.elf

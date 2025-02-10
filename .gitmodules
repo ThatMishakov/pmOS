@@ -14,3 +14,6 @@
 [submodule "devicesd/uACPI"]
 	path = devicesd/uACPI
 	url = https://github.com/UltraOS/uACPI.git
+[submodule "limine/Hyper"]
+	path = limine/Hyper
+	url = https://github.com/UltraOS/Hyper.git

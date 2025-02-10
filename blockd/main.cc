@@ -118,7 +118,7 @@ struct Disk {
         detail::TreeCmp<DiskOpenAwaiter, uint64_t, &DiskOpenAwaiter::task_group_id>>;
 
     tree::RBTreeHead open_awaiters;
-    pmos::containers::InitializedCircularDoubleList<ReadAwaiter, &ReadAwaiter::list_node>
+    pmos::containers::CircularDoubleList<ReadAwaiter, &ReadAwaiter::list_node>
         read_awaiters;
 
     struct Partition {

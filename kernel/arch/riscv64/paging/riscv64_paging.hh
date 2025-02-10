@@ -170,38 +170,38 @@ public:
     /// @brief Maximum address that the user space is allowed to use
     /// @return u64 the number, addresses before which are allowed for user
     /// space
-    virtual u64 user_addr_max() const noexcept override;
+    virtual void *user_addr_max() const override;
 
     /// Invalidate (return) the page table entry for the given virtual address.
     /// If free is set to true, the page is also returned to the page frame
     /// allocator
     /// @param virt_addr Virtual address of the page
     /// @param free Whether the page needs to be freed
-    void invalidate(TLBShootdownContext &ctx, u64 virt_addr, bool free) noexcept override;
+    void invalidate(TLBShootdownContext &ctx, void *virt_addr, bool free) noexcept override;
 
     /// Checks if the page is mapped
-    bool is_mapped(u64 virt_addr) const noexcept override;
+    bool is_mapped(void *virt_addr) const noexcept override;
 
-    Page_Info get_page_mapping(u64 virt_addr) const override;
+    Page_Info get_page_mapping(void *virt_addr) const override;
 
-    virtual void invalidate_range(TLBShootdownContext &ctx, u64 virt_addr, u64 size_bytes, bool free) override;
+    virtual void invalidate_range(TLBShootdownContext &ctx, void *virt_addr, size_t size_bytes, bool free) override;
 
-    virtual kresult_t map(u64 page_addr, u64 virt_addr, Page_Table_Argumments arg) override;
-    virtual kresult_t map(kernel::pmm::Page_Descriptor page, u64 virt_addr, Page_Table_Argumments arg) override;
+    virtual kresult_t map(u64 page_addr, void *virt_addr, Page_Table_Argumments arg) override;
+    virtual kresult_t map(kernel::pmm::Page_Descriptor page, void *virt_addr, Page_Table_Argumments arg) override;
 
-    kresult_t resolve_anonymous_page(u64 virt_addr, u64 access_type) override;
+    kresult_t resolve_anonymous_page(void *virt_addr, unsigned access_type) override;
 
     virtual ~RISCV64_Page_Table() override;
 
     // Clears the TLB cache for the given page
-    void invalidate_tlb(u64 page) override;
-    void invalidate_tlb(u64 start, u64 size) override;
+    void invalidate_tlb(void *page) override;
+    void invalidate_tlb(void *start, size_t size) override;
     void tlb_flush_all() override;
 
-    ReturnStr<bool> atomic_copy_to_user(u64 to, const void *from, u64 size) override;
+    ReturnStr<bool> atomic_copy_to_user(void *to, const void *from, size_t size) override;
 
-    virtual kresult_t copy_anonymous_pages(const klib::shared_ptr<Page_Table> &to, u64 from_addr, u64 to_addr,
-                    u64 size_bytes, u8 new_access) override;
+    virtual kresult_t copy_anonymous_pages(const klib::shared_ptr<Page_Table> &to, void *from_addr, void *to_addr,
+                    size_t size_bytes, unsigned new_access) override;
 
     bool is_32bit() const noexcept { return false; }
 protected:

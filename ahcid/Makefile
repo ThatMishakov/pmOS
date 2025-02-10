@@ -10,7 +10,7 @@ CC = clang
 CPP = clang
 CXX = clang++
 
-USERCFLAGS = -Wall -Wextra -Og -pipe -O3
+USERCFLAGS = -Wall -Wextra -Og -pipe
 
 CFLAGS = -std=c23 -g --target=$(ARCH)-pmos --sysroot=$(ROOTDIR)/sysroot -MMD -MP
 CXXFLAGS = -std=c++23 -g --target=$(ARCH)-pmos --sysroot=$(ROOTDIR)/sysroot -MMD -MP

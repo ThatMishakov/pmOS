@@ -167,6 +167,10 @@ struct X86_64Regs {                         // 208 bytes
     }
 
     inline bool syscall_pending_restart() const { return entry_type == ENTRY_NESTED; }
+
+    inline unsigned long xbp() const { return preserved_r.rbp; }
+    inline unsigned long get_cs() const { return e.cs; }
+    void set_iopl(unsigned iopl) { e.rflags.bits.iopl = iopl; }
 };
 
 using Task_Regs = X86_64Regs;

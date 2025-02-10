@@ -28,9 +28,9 @@
 
 #pragma once
 #include <assert.h>
+#include <concepts>
 #include <kernel/types.h>
 #include <lib/utility.hh>
-#include <concepts>
 
 using kresult_t = i64;
 
@@ -72,19 +72,23 @@ template<typename T> ReturnStr<T> Success(T r) { return ReturnStr<T>::success(r)
 
 extern "C" void t_print_bochs(const char *str, ...);
 
-class Spinlock_base {
+class Spinlock_base
+{
 private:
     u32 locked = 0;
+
 protected:
     void lock() noexcept;
     bool try_lock() noexcept;
     void unlock() noexcept;
+
 public:
     bool operator==(const Spinlock_base &s) const noexcept { return this == &s; }
     inline bool is_locked() const noexcept { return locked; }
 };
 
-class Spinlock: public Spinlock_base {
+class Spinlock: public Spinlock_base
+{
 public:
     void lock() noexcept;
 
@@ -92,29 +96,18 @@ public:
     bool try_lock() noexcept;
 
     // Function to unlock the spinlock
-    void unlock() noexcept
-    {
-        Spinlock_base::unlock();
-    }
+    void unlock() noexcept { Spinlock_base::unlock(); }
 };
 
-class CriticalSpinlock: public Spinlock_base {
+class CriticalSpinlock: public Spinlock_base
+{
 public:
-    inline void lock() noexcept
-    {
-        Spinlock_base::lock();
-    }
+    inline void lock() noexcept { Spinlock_base::lock(); }
     /// Tries to lock the spinlock. True if lock has been ackquired, false otherwise
-    inline bool try_lock() noexcept
-    {
-        return Spinlock_base::try_lock();
-    }
+    inline bool try_lock() noexcept { return Spinlock_base::try_lock(); }
 
     // Function to unlock the spinlock
-    inline void unlock() noexcept
-    {
-        Spinlock_base::unlock();
-    }
+    inline void unlock() noexcept { Spinlock_base::unlock(); }
 };
 
 template<typename T>
@@ -124,8 +117,7 @@ concept spinlock_type = requires(T s) {
     { s.unlock() } -> std::same_as<void>;
 };
 
-template<spinlock_type T>
-struct Auto_Lock_Scope {
+template<spinlock_type T> struct Auto_Lock_Scope {
     T &s;
 
     Auto_Lock_Scope() = delete;
@@ -134,8 +126,7 @@ struct Auto_Lock_Scope {
     ~Auto_Lock_Scope() { s.unlock(); }
 };
 
-template<spinlock_type T>
-struct Auto_Lock_Scope_Double {
+template<spinlock_type T> struct Auto_Lock_Scope_Double {
     T &a;
     T &b;
     Auto_Lock_Scope_Double(T &a, T &b): a(&a < &b ? a : b), b(&a < &b ? b : a)
@@ -153,8 +144,7 @@ struct Auto_Lock_Scope_Double {
     }
 };
 
-template<spinlock_type T>
-struct Lock_Guard_Simul {
+template<spinlock_type T> struct Lock_Guard_Simul {
     T &a;
     T &b;
 
@@ -185,13 +175,15 @@ struct Lock_Guard_Simul {
     }
 };
 
-inline void spin_pause()
-{
-}
+inline void spin_pause() {}
 
 inline constexpr auto PAGE_ORDER = 12;
-inline constexpr auto PAGE_SIZE  = 4096;
+// inline constexpr auto PAGE_SIZE  = 4096;
+#define PAGE_SIZE 4096
 
 inline constexpr auto MAX_PHYS_ADDR_ORDER = 56;
 
-inline int log2(u64 n) noexcept { return sizeof(n) * 8 - __builtin_clzl(n) - 1; }
+namespace kernel::types
+{
+inline int log2(u64 n) noexcept { return sizeof(n) * 8 - __builtin_clzll(n) - 1; }
+} // namespace kernel::types

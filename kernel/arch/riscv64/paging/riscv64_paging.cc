@@ -135,19 +135,19 @@ kresult_t riscv_map_page(u64 pt_top_phys, u64 phys_addr, void *virt_addr, Page_T
     return -ENOSYS;
 }
 
-kresult_t RISCV64_Page_Table::map(u64 page_addr, u64 virt_addr, Page_Table_Argumments arg)
+kresult_t RISCV64_Page_Table::map(u64 page_addr, void *virt_addr, Page_Table_Argumments arg)
 {
-    return riscv_map_page(table_root, page_addr, (void *)virt_addr, arg);
+    return riscv_map_page(table_root, page_addr, virt_addr, arg);
 }
 
-kresult_t RISCV64_Page_Table::map(pmm::Page_Descriptor page, u64 virt_addr,
+kresult_t RISCV64_Page_Table::map(pmm::Page_Descriptor page, void *virt_addr,
                                   Page_Table_Argumments arg)
 {
-    auto pte_phys = prepare_leaf_pt_for((void *)virt_addr, arg, table_root);
+    auto pte_phys = prepare_leaf_pt_for(virt_addr, arg, table_root);
     if (!pte_phys.success())
         return pte_phys.result;
 
-    const int index = (virt_addr >> 12) & 0x1FF;
+    const int index = ((u64)virt_addr >> 12) & 0x1FF;
 
     Temp_Mapper_Obj<RISCV64_PTE> mapper(request_temp_mapper());
     RISCV64_PTE *active_pt = mapper.map(pte_phys.val);
@@ -193,7 +193,7 @@ kresult_t riscv_unmap_page(TLBShootdownContext &ctx, u64 pt_top_phys, void *virt
             entry.clear_auto();
             entry            = RISCV64_PTE();
             active_pt[index] = entry;
-            ctx.invalidate_page((u64)virt_addr);
+            ctx.invalidate_page(virt_addr);
 
             return 0;
         } else {
@@ -215,7 +215,7 @@ kresult_t riscv_unmap_page(TLBShootdownContext &ctx, u64 pt_top_phys, void *virt
     return -ENOSYS;
 }
 
-void RISCV64_Page_Table::invalidate(TLBShootdownContext &ctx, u64 virt_addr, bool free) noexcept
+void RISCV64_Page_Table::invalidate(TLBShootdownContext &ctx, void *virt_addr, bool free) noexcept
 {
     bool invalidated = false;
     Temp_Mapper_Obj<RISCV64_PTE> mapper(request_temp_mapper());
@@ -223,7 +223,7 @@ void RISCV64_Page_Table::invalidate(TLBShootdownContext &ctx, u64 virt_addr, boo
     RISCV64_PTE *active_pt = mapper.map(table_root);
     for (int i = riscv64_paging_levels; i > 0; --i) {
         const u8 offset = 12 + (i - 1) * 9;
-        const u64 index = (virt_addr >> offset) & 0x1FF;
+        const u64 index = ((u64)virt_addr >> offset) & 0x1FF;
 
         RISCV64_PTE *entry = &active_pt[index];
         if (i == 1) {
@@ -259,14 +259,14 @@ void RISCV64_Page_Table::invalidate(TLBShootdownContext &ctx, u64 virt_addr, boo
         ctx.invalidate_page(virt_addr);
 }
 
-bool RISCV64_Page_Table::is_mapped(u64 virt_addr) const noexcept
+bool RISCV64_Page_Table::is_mapped(void *virt_addr) const noexcept
 {
     Temp_Mapper_Obj<RISCV64_PTE> mapper(request_temp_mapper());
 
     RISCV64_PTE *active_pt = mapper.map(table_root);
     for (int i = riscv64_paging_levels; i > 0; --i) {
         const u8 offset = 12 + (i - 1) * 9;
-        const u64 index = (virt_addr >> offset) & 0x1FF;
+        const u64 index = ((u64)virt_addr >> offset) & 0x1FF;
 
         RISCV64_PTE *entry = &active_pt[index];
         if (i == 1) {
@@ -328,7 +328,7 @@ kresult_t RISCV64_Page_Table::copy_to_recursive(const klib::shared_ptr<Page_Tabl
             if (pte.writeable) {
                 pte.writeable = 0;
                 mapper.ptr[i] = pte;
-                ctx.invalidate_page(copy_from);
+                ctx.invalidate_page((void *)copy_from);
             }
 
             Page_Table_Argumments arg = {
@@ -340,7 +340,7 @@ kresult_t RISCV64_Page_Table::copy_to_recursive(const klib::shared_ptr<Page_Tabl
                 .extra              = pte.available,
                 .cache_policy       = pbmt_to_cache_policy(pte.pbmt),
             };
-            auto result = to->map(klib::move(p), copy_to, arg);
+            auto result = to->map(klib::move(p), (void *)copy_to, arg);
             if (result)
                 return result;
 
@@ -364,34 +364,34 @@ kresult_t RISCV64_Page_Table::copy_to_recursive(const klib::shared_ptr<Page_Tabl
 }
 
 kresult_t RISCV64_Page_Table::copy_anonymous_pages(const klib::shared_ptr<Page_Table> &to,
-                                                   u64 from_addr, u64 to_addr, u64 size_bytes,
-                                                   u8 access)
+                                                   void *from_addr, void *to_addr,
+                                                   size_t size_bytes, unsigned access)
 {
     u64 offset = 0;
     kresult_t result;
     {
         TLBShootdownContext ctx = TLBShootdownContext::create_userspace(*this);
-        result = copy_to_recursive(to, table_root, from_addr, to_addr, size_bytes, access,
-                                   from_addr, riscv64_paging_levels, offset, ctx);
+        result = copy_to_recursive(to, table_root, (u64)from_addr, (u64)to_addr, size_bytes, access,
+                                   (u64)from_addr, riscv64_paging_levels, offset, ctx);
     }
 
     if (result != 0) {
         auto ctx = TLBShootdownContext::create_userspace(*to);
-        to->invalidate_range(ctx, to_addr, offset, true);
+        to->invalidate_range(ctx, (void *)to_addr, offset, true);
     }
 
     return result;
 }
 
 // TODO: This function had great possibilities, but now seems weird
-RISCV64_Page_Table::Page_Info RISCV64_Page_Table::get_page_mapping(u64 virt_addr) const
+RISCV64_Page_Table::Page_Info RISCV64_Page_Table::get_page_mapping(void *virt_addr) const
 {
     Temp_Mapper_Obj<RISCV64_PTE> mapper(request_temp_mapper());
 
     RISCV64_PTE *active_pt = mapper.map(table_root);
     for (int i = riscv64_paging_levels; i > 0; --i) {
         const u8 offset = 12 + (i - 1) * 9;
-        const u64 index = (virt_addr >> offset) & 0x1FF;
+        const u64 index = ((u64)virt_addr >> offset) & 0x1FF;
 
         RISCV64_PTE *entry = &active_pt[index];
         if (i == 1) {
@@ -427,13 +427,13 @@ RISCV64_Page_Table::Page_Info RISCV64_Page_Table::get_page_mapping(u64 virt_addr
     return Page_Info {};
 }
 
-kresult_t map_page(ptable_top_ptr_t page_table, u64 phys_addr, u64 virt_addr,
+kresult_t map_page(ptable_top_ptr_t page_table, u64 phys_addr, void *virt_addr,
                    Page_Table_Argumments arg)
 {
-    return riscv_map_page(page_table, phys_addr, (void *)virt_addr, arg);
+    return riscv_map_page(page_table, phys_addr, virt_addr, arg);
 }
 
-kresult_t map_pages(ptable_top_ptr_t page_table, u64 phys_addr, u64 virt_addr, u64 size,
+kresult_t map_pages(ptable_top_ptr_t page_table, u64 phys_addr, void *virt_addr, size_t size,
                     Page_Table_Argumments arg)
 {
     kresult_t result = 0;
@@ -441,7 +441,7 @@ kresult_t map_pages(ptable_top_ptr_t page_table, u64 phys_addr, u64 virt_addr, u
     // Don't overcomplicate things for now, just call map
     // This is *very* inefficient
     for (u64 i = 0; i < size && (result == 0); i += 4096) {
-        result = map_page(page_table, phys_addr + i, virt_addr + i, arg);
+        result = map_page(page_table, phys_addr + i, (char *)virt_addr + i, arg);
     }
 
     // On failure, pages need to be unmapped here...
@@ -450,7 +450,7 @@ kresult_t map_pages(ptable_top_ptr_t page_table, u64 phys_addr, u64 virt_addr, u
     return result;
 }
 
-kresult_t map_kernel_pages(u64 phys_addr, u64 virt_addr, u64 size, Page_Table_Argumments arg)
+kresult_t map_kernel_pages(u64 phys_addr, void *virt_addr, size_t size, Page_Table_Argumments arg)
 {
     const u64 pt_top = get_current_hart_pt();
     return map_pages(pt_top, phys_addr, virt_addr, size, arg);
@@ -642,12 +642,14 @@ klib::shared_ptr<RISCV64_Page_Table> RISCV64_Page_Table::capture_initial(u64 roo
         return nullptr;
 
     new_table->table_root = root;
-    insert_global_page_tables(new_table);
+    auto result           = insert_global_page_tables(new_table);
+    if (result)
+        return nullptr;
 
     return new_table;
 }
 
-u64 RISCV64_Page_Table::user_addr_max() const noexcept
+void *RISCV64_Page_Table::user_addr_max() const
 {
     // Of the page tables, user space gets 256 entries in the root level + other
     // levels For example, in RV39, with 3 levels of paging, the following is
@@ -655,15 +657,15 @@ u64 RISCV64_Page_Table::user_addr_max() const noexcept
     // XXXXXXXXX 512 entries (9 bits) | XXXXXXXXX 512 entries (9 bits) | 4096
     // bytes in a page, 12 bits | 12 bits + levels * 9 bits - 1 bit (half of
     // virtual memory is used by kernel)
-    return 1UL << (12 + (riscv64_paging_levels * 9) - 1);
+    return (void *)(1UL << (12 + (riscv64_paging_levels * 9) - 1));
 }
 
-void RISCV64_Page_Table::invalidate_range(TLBShootdownContext &ctx, u64 virt_addr, u64 size_bytes,
+void RISCV64_Page_Table::invalidate_range(TLBShootdownContext &ctx, void *virt_addr, size_t size_bytes,
                                           bool free)
 {
     // Slow but doesn't matter for now
-    u64 end = virt_addr + size_bytes;
-    for (u64 i = virt_addr; i < end; i += 4096)
+    char *end = (char *)virt_addr + size_bytes;
+    for (char *i = (char *)virt_addr; i < end; i += 4096)
         invalidate(ctx, i, free);
 }
 
@@ -756,10 +758,10 @@ klib::shared_ptr<RISCV64_Page_Table> RISCV64_Page_Table::create_empty(int flags)
     return result ? nullptr : new_table;
 }
 
-void RISCV64_Page_Table::invalidate_tlb(u64 page) { flush_page((void *)page); }
-void invalidate_tlb_kernel(u64 page) { flush_page((void *)page); }
+void RISCV64_Page_Table::invalidate_tlb(void *page) { flush_page(page); }
+void invalidate_tlb_kernel(void *page) { flush_page(page); }
 
-void RISCV64_Page_Table::invalidate_tlb(u64 page, u64 size)
+void RISCV64_Page_Table::invalidate_tlb(void *page, size_t size)
 {
     // At a certain threshold, flush all the pages
     if (size / 0x1000 > 128) {
@@ -767,45 +769,45 @@ void RISCV64_Page_Table::invalidate_tlb(u64 page, u64 size)
         return;
     }
 
-    for (u64 i = page; i < page + size; i += 0x1000) {
-        flush_page((void *)i);
+    for (char *i = (char *)page; i < (char *)page + size; i += 0x1000) {
+        flush_page(i);
     }
 }
 
-void invalidate_tlb_kernel(u64 page, u64 size)
+void invalidate_tlb_kernel(void *page, size_t size)
 {
-    for (u64 i = page; i < page + size; i += 0x1000) {
-        flush_page((void *)i);
+    for (char *i = (char *)page; i < (char *)page + size; i += 0x1000) {
+        flush_page(i);
     }
 }
 void RISCV64_Page_Table::tlb_flush_all() { flush_all(); }
 
-ReturnStr<bool> RISCV64_Page_Table::atomic_copy_to_user(u64 to, const void *from, u64 size)
+ReturnStr<bool> RISCV64_Page_Table::atomic_copy_to_user(void *to, const void *from, u64 size)
 {
     Auto_Lock_Scope l(lock);
 
     Temp_Mapper_Obj<char> mapper(request_temp_mapper());
-    for (u64 i = to & ~0xfffUL; i < to + size; i += 0x1000) {
-        const auto b = prepare_user_page(i, Writeable);
+    for (u64 i = (u64)to & ~0xfffUL; i < (u64)to + size; i += 0x1000) {
+        const auto b = prepare_user_page((void *)i, Writeable);
         if (not b.success())
             return b.propagate();
 
         if (not b.val)
             return false;
 
-        const auto page = get_page_mapping(i);
+        const auto page = get_page_mapping((void *)i);
         assert(page.is_allocated);
 
         char *ptr       = mapper.map(page.page_addr);
-        const u64 start = i < to ? to : i;
-        const u64 end   = i + 0x1000 < to + size ? i + 0x1000 : to + size;
-        memcpy(ptr + (start - i), (const char *)from + (start - to), end - start);
+        const u64 start = i < (u64)to ? (u64)to : i;
+        const u64 end   = i + 0x1000 < (u64)to + size ? i + 0x1000 : (u64)to + size;
+        memcpy(ptr + (start - i), (const char *)from + (start - (u64)to), end - start);
     }
 
     return true;
 }
 
-kresult_t RISCV64_Page_Table::resolve_anonymous_page(u64 virt_addr, u64 access_type)
+kresult_t RISCV64_Page_Table::resolve_anonymous_page(void *virt_addr, unsigned access_type)
 {
     assert(access_type & Writeable);
 
@@ -813,7 +815,7 @@ kresult_t RISCV64_Page_Table::resolve_anonymous_page(u64 virt_addr, u64 access_t
     mapper.map(table_root);
     for (int i = riscv64_paging_levels; i > 1; --i) {
         const u8 offset = 12 + (i - 1) * 9;
-        const u64 index = (virt_addr >> offset) & 0x1FF;
+        const u64 index = ((u64)virt_addr >> offset) & 0x1FF;
 
         RISCV64_PTE *entry = &mapper.ptr[index];
         assert(entry->valid);
@@ -821,7 +823,7 @@ kresult_t RISCV64_Page_Table::resolve_anonymous_page(u64 virt_addr, u64 access_t
         mapper.map(entry->ppn << 12);
     }
 
-    const u64 index   = (virt_addr >> 12) & 0x1FF;
+    const u64 index   = ((u64)virt_addr >> 12) & 0x1FF;
     RISCV64_PTE entry = mapper.ptr[index];
     assert(entry.valid);
     assert(entry.available & PAGING_FLAG_STRUCT_PAGE);
@@ -851,7 +853,7 @@ kresult_t RISCV64_Page_Table::resolve_anonymous_page(u64 virt_addr, u64 access_t
 
     {
         auto tlb_ctx = TLBShootdownContext::create_userspace(*this);
-        tlb_ctx.invalidate_page(virt_addr & ~0xffful);
+        tlb_ctx.invalidate_page(virt_addr);
     }
 
     u64 new_page_phys = new_descriptor.val.takeout_page();

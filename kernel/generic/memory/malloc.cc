@@ -31,7 +31,6 @@
 #include "palloc.hh"
 
 #include <kern_logger/kern_logger.hh>
-#include <lib/new.hh>
 #include <utils.hh>
 
 size_t malloced = 0;
@@ -67,11 +66,6 @@ void operator delete[](void *p) noexcept { free(p); }
 void operator delete(void *p, UNUSED size_t s) noexcept { free(p); }
 
 void operator delete[](void *p, UNUSED size_t s) noexcept { free(p); }
-
-void *operator new(size_t, void *p) noexcept { return p; }
-void *operator new[](size_t, void *p) noexcept { return p; }
-void operator delete(void *, void *) noexcept {};
-void operator delete[](void *, void *) noexcept {};
 
 extern "C" int malloc_lock(unsigned int * l)
 {

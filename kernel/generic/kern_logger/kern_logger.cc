@@ -64,30 +64,45 @@ void Logger::vprintf(const char *str, va_list arg)
         int len     = 0;
         bool repeat = false;
         do {
-            repeat = false;
             switch (at) {
             case 'd':
             case 'i': { // signed integer
-                i64 casted_arg = va_arg(arg, i64);
+                i64 casted_arg;
+                if (!repeat)
+                    casted_arg = va_arg(arg, int);
+                else
+                    casted_arg = va_arg(arg, i64);
                 int_to_string(casted_arg, 10, int_str_buffer, len);
+                repeat = false;
                 break;
             }
             case 'u': { // unsigned integer
-                u64 casted_arg = va_arg(arg, u64);
+                u64 casted_arg;
+                if (!repeat)
+                    casted_arg = va_arg(arg, unsigned);
+                else
+                    casted_arg = va_arg(arg, u64);
                 uint_to_string(casted_arg, 10, int_str_buffer, len);
+                repeat = false;
                 break;
             }
             case 'x':
             case 'p':
             case 'h': { // hexa number
-                u64 casted_arg = va_arg(arg, u64);
+                u64 casted_arg;
+                if (!repeat)
+                    casted_arg = va_arg(arg, unsigned);
+                else
+                    casted_arg = va_arg(arg, u64);
                 uint_to_string(casted_arg, 16, int_str_buffer, len);
+                repeat = false;
                 break;
             }
             case 's': {
                 const char *ss = va_arg(arg, const char *);
                 log_nolock(ss, strlen(ss));
                 // t_write_bochs(ss, strlen(ss));
+                repeat = false;
                 break;
             }
             case 'l': {
@@ -98,10 +113,12 @@ void Logger::vprintf(const char *str, va_list arg)
             case 'c': {
                 char c = va_arg(arg, int);
                 log_nolock(&c, 1);
+                repeat = false;
                 break;
             }
             default:
                 log_nolock(&at, 1);
+                repeat = false;
                 break;
             }
         } while (repeat);
@@ -156,7 +173,7 @@ void Buffered_Logger::log_nolock(const char *c, size_t size)
 {
     constexpr size_t buff_size = 508;
 
-    Port* ptr = Port::atomic_get_port(messaging_port_id);
+    Port *ptr  = Port::atomic_get_port(messaging_port_id);
     bool alive = false;
     if (ptr) {
         Auto_Lock_Scope port_lock(ptr->lock);

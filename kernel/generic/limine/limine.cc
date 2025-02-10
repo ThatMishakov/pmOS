@@ -39,6 +39,9 @@
 #include <paging/arch_paging.hh>
 #include <processes/tasks.hh>
 
+// Nice code!
+#if defined(__x86_64__) || defined(__riscv)
+
 using namespace kernel;
 using namespace kernel::pmm;
 
@@ -47,10 +50,10 @@ extern "C" void _limine_entry();
 
 __attribute__((used)) LIMINE_BASE_REVISION(1)
 
-__attribute__((used)) limine_bootloader_info_request boot_request = {
-    .id       = LIMINE_BOOTLOADER_INFO_REQUEST,
-    .revision = 0,
-    .response = nullptr,
+    __attribute__((used)) limine_bootloader_info_request boot_request = {
+        .id       = LIMINE_BOOTLOADER_INFO_REQUEST,
+        .revision = 0,
+        .response = nullptr,
 };
 
 __attribute__((used)) limine_memmap_request memory_request = {
@@ -82,49 +85,33 @@ __attribute__((used)) limine_paging_mode_request paging_request = {
     .id       = LIMINE_PAGING_MODE_REQUEST,
     .revision = 0,
     .response = nullptr,
-#ifdef __riscv
+    #ifdef __riscv
     .mode = LIMINE_PAGING_MODE_RISCV_SV57,
-#else
+    #else
     .mode = LIMINE_PAGING_MODE_DEFAULT,
-#endif
+    #endif
     .flags = 0,
 };
 
-// Halt and catch fire function.
-void hcf(void)
-{
-    #ifdef __x86_64__
-    asm ("cli");
-    for (;;) {
-        asm ("hlt");
-    }
-    #elif defined(__riscv)
-    asm volatile("wfi");
-    #endif
-
-    while (1)
-        ;
-
-    __builtin_unreachable();
-}
+extern void hcf();
 
 Direct_Mapper init_mapper;
 
-// Temporary temporary mapper
-#ifdef __x86_64__
-    #include <paging/x86_temp_mapper.hh>
-    #include <x86_asm.hh>
+    // Temporary temporary mapper
+    #ifdef __x86_64__
+        #include <paging/x86_temp_mapper.hh>
+        #include <x86_asm.hh>
 using Arch_Temp_Mapper = x86_PAE_Temp_Mapper;
-#elif defined(__riscv)
-    #include <paging/riscv64_temp_mapper.hh>
+    #elif defined(__riscv)
+        #include <paging/riscv64_temp_mapper.hh>
 using Arch_Temp_Mapper = RISCV64_Temp_Mapper;
-#endif
+    #endif
 
 Arch_Temp_Mapper temp_temp_mapper;
 
 u64 hhdm_offset = 0;
 
-size_t number_of_cpus = 1;
+extern size_t number_of_cpus;
 
 u64 temp_alloc_base     = 0;
 u64 temp_alloc_size     = 0;
@@ -165,6 +152,10 @@ ptable_top_ptr_t kernel_ptable_top = 0;
 
 static klib::vector<limine_memmap_entry> *limine_memory_regions = nullptr;
 
+    #ifdef __x86_64__
+extern ulong idle_cr3;
+    #endif
+
 void construct_paging()
 {
     serial_logger.printf("Finding the largest memory region...\n");
@@ -187,12 +178,12 @@ void construct_paging()
         }
 
         // Print memory map
-        serial_logger.printf(" Memory map region %i: 0x%h - 0x%h, type %i\n", i,
+        serial_logger.printf(" Memory map region %li: 0x%lh - 0x%lh, type %li\n", i,
                              resp.entries[i]->base, resp.entries[i]->base + resp.entries[i]->length,
                              resp.entries[i]->type);
     }
 
-    serial_logger.printf("Found the largest memory region at 0x%h, size 0x%h\n", temp_alloc_base,
+    serial_logger.printf("Found the largest memory region at 0x%lh, size 0x%lh\n", temp_alloc_base,
                          temp_alloc_size);
 
     init_mapper.virt_offset = hhdm_request.response->offset;
@@ -200,23 +191,23 @@ void construct_paging()
 
     serial_logger.printf("Initializing paging...\n");
 
-#ifdef __riscv
+    #ifdef __riscv
     auto rr               = paging_request.response;
     riscv64_paging_levels = rr->mode + 3;
     serial_logger.printf("Using %i paging levels\n", riscv64_paging_levels);
-#endif
+    #endif
 
     kresult_t result = 0;
 
     const u64 kernel_start_virt = (u64)&_kernel_start & ~0xfff;
 
-// While we're here, initialize virtmem
-// Give it the first page of the root paging level
-#ifdef __riscv
+    // While we're here, initialize virtmem
+    // Give it the first page of the root paging level
+    #ifdef __riscv
     const u64 heap_space_shift = 12 + (riscv64_paging_levels - 1) * 9;
-#else
+    #else
     const u64 heap_space_shift = 12 + 27;
-#endif
+    #endif
 
     const u64 heap_space_start = (-1UL) << (heap_space_shift + 8);
     const u64 heap_addr_size   = 1UL << heap_space_shift;
@@ -224,6 +215,9 @@ void construct_paging()
 
     kernel_ptable_top = pmm::get_memory_for_kernel(1);
     clear_page(kernel_ptable_top);
+    #ifdef __x86_64__
+    idle_cr3 = kernel_ptable_top;
+    #endif
 
     // Init temp mapper with direct map, while it is still available
     void *temp_mapper_start = vmm::kernel_space_allocator.virtmem_alloc_aligned(
@@ -287,7 +281,7 @@ void construct_paging()
         .extra              = PAGING_FLAG_STRUCT_PAGE,
     };
 
-    map_pages(kernel_ptable_top, text_phys, text_virt, text_size, args);
+    map_pages(kernel_ptable_top, text_phys, (void *)text_virt, text_size, args);
 
     const u64 rodata_start  = (u64)(&_rodata_start) & ~0xfff;
     const u64 rodata_end    = ((u64)&_rodata_end + 0xfff) & ~0xfff;
@@ -296,7 +290,7 @@ void construct_paging()
     const u64 rodata_phys   = kernel_phys + rodata_offset;
     const u64 rodata_virt   = kernel_start_virt + rodata_offset;
     args                    = {true, false, false, true, true, PAGING_FLAG_STRUCT_PAGE};
-    map_pages(kernel_ptable_top, rodata_phys, rodata_virt, rodata_size, args);
+    map_pages(kernel_ptable_top, rodata_phys, (void *)rodata_virt, rodata_size, args);
     if (result != 0)
         hcf();
 
@@ -308,7 +302,7 @@ void construct_paging()
     const u64 data_phys   = kernel_phys + data_offset;
     const u64 data_virt   = kernel_start_virt + data_offset;
     args                  = {true, true, false, true, true, PAGING_FLAG_STRUCT_PAGE};
-    map_pages(kernel_ptable_top, data_phys, data_virt, data_size, args);
+    map_pages(kernel_ptable_top, data_phys, (void *)data_virt, data_size, args);
 
     const u64 eh_frame_start  = (u64)(&__eh_frame_start) & ~0xfff;
     // Same as with data; merge eh_frame and gcc_except_table
@@ -318,7 +312,7 @@ void construct_paging()
     const u64 eh_frame_phys   = kernel_phys + eh_frame_offset;
     const u64 eh_frame_virt   = kernel_start_virt + eh_frame_offset;
     args                      = {true, false, false, true, true, PAGING_FLAG_STRUCT_PAGE};
-    map_pages(kernel_ptable_top, eh_frame_phys, eh_frame_virt, eh_frame_size, args);
+    map_pages(kernel_ptable_top, eh_frame_phys, (void *)eh_frame_virt, eh_frame_size, args);
 
     serial_logger.printf("Switching to in-kernel page table...\n");
 
@@ -326,10 +320,6 @@ void construct_paging()
 
     // Set up the right mapper (since there is no direct map anymore) and bitmap
     global_temp_mapper = &temp_temp_mapper;
-
-    // Allocate Page structs
-    for (auto &i: kernel::pmm::free_pages_list)
-        i.init();
 
     serial_logger.printf("Paging initialized!\n");
 
@@ -363,7 +353,7 @@ void construct_paging()
         auto base_addr = regions_data[first_index].base & ~0xfffUL;
         auto end_addr  = region_last_addr(last_index);
 
-        serial_logger.printf("Setting up PMM region 0x%h - 0x%h\n", base_addr, end_addr);
+        serial_logger.printf("Adding PMM region 0x%lh - 0x%lh\n", base_addr, end_addr);
 
         // Calculate memory for the Page structs
         auto range                 = (end_addr - base_addr + 0xfff) & ~0xfffUL;
@@ -404,7 +394,7 @@ void construct_paging()
             .execution_disabled = true,
             .extra              = PAGING_FLAG_STRUCT_PAGE,
         };
-        map_pages(kernel_ptable_top, phys_addr, (u64)virt_addr, page_struct_page_size, args);
+        map_pages(kernel_ptable_top, phys_addr, (void *)virt_addr, page_struct_page_size, args);
 
         Page *pages             = (Page *)virt_addr;
         // Reserve first and last page
@@ -413,6 +403,11 @@ void construct_paging()
 
         // Map from the first page
         pages++;
+
+        // Add the region to the PMM
+        auto r = pmm::add_page_array(base_addr, entries - 2, pages);
+        if (!r)
+            assert(!"Failed to add region to PMM");
 
         for (long i = first_index; i <= last_index; i++) {
             if (regions_data[i].type == LIMINE_MEMMAP_USABLE) {
@@ -424,7 +419,7 @@ void construct_paging()
                     p->type       = Page::PageType::Allocated;
                     p->flags      = 0;
                     p->l.refcount = 1;
-                    p->l.owner   = nullptr; // Kernel memory
+                    p->l.owner    = nullptr; // Kernel memory
 
                     end[-1].type       = Page::PageType::Allocated;
                     end[-1].l.owner    = nullptr;
@@ -436,8 +431,6 @@ void construct_paging()
 
                 if (i == alloc_index) {
                     assert(regions_data[i].length >= page_struct_page_size);
-                    if (regions_data[i].length == page_struct_page_size)
-                        continue;
 
                     auto occupied_pages  = page_struct_page_size / PAGE_SIZE;
                     auto base_page_index = (regions_data[i].base - base_addr) / PAGE_SIZE;
@@ -448,6 +441,9 @@ void construct_paging()
                         pages[j].l.refcount = 1;
                         pages[j].l.next     = nullptr;
                     }
+
+                    if (regions_data[i].length == page_struct_page_size)
+                        continue;
 
                     auto free_index = base_page_index + occupied_pages;
                     auto end_index =
@@ -484,11 +480,61 @@ void construct_paging()
                 }
             }
         }
+    };
 
-        // Add the region to the PMM
-        auto r = pmm::add_page_array(base_addr, entries - 2, pages);
-        if (!r)
-            assert(!"Failed to add region to PMM");
+    auto split_into_regions = [&](long first_index, long last_index) -> void {
+        u64 current_addr = regions_data[first_index].base;
+        u64 end_addr = regions_data[last_index].base + regions_data[last_index].length;
+        auto current_index = first_index;
+
+        while (current_addr < end_addr) {
+            PMMRegion *region = PMMRegion::get(current_addr);
+            assert(region);
+
+            u64 final_addr = region->start + region->size_bytes;
+            while (current_index != last_index and
+                   regions_data[current_index + 1].base <= current_addr) {
+                current_index++;
+            }
+            auto i = current_index;
+
+            while (i <= last_index and
+                   (final_addr == 0 or regions_data[i].base < final_addr)) {
+                i++;
+            }
+            assert(i > current_index);
+            auto last_index = i - 1;
+
+            auto saved_first = regions_data[current_index];
+            auto saved_last  = regions_data[last_index];
+
+            if (current_addr > regions_data[current_index].base) {
+                u64 diff = current_addr - regions_data[current_index].base;
+                assert(diff < regions_data[current_index].length);
+                regions_data[current_index].length -= diff;
+                regions_data[current_index].base = current_addr;
+            }
+            if (final_addr != 0 and
+                regions_data[last_index].base + regions_data[last_index].length >
+                    final_addr) {
+                u64 diff = regions_data[last_index].base +
+                           regions_data[last_index].length - final_addr;
+                assert(diff > 0);
+                regions_data[last_index].length -= diff;
+            }
+
+            u64 final_final_addr =
+                regions_data[last_index].base + regions_data[last_index].length;
+            assert(final_final_addr != 0);
+
+            new_region_func(current_index, last_index);
+
+            regions_data[current_index] = saved_first;
+            regions_data[last_index]    = saved_last;
+
+            current_addr  = final_final_addr;
+            current_index = last_index;
+        }
     };
 
     long first_index_of_range = -1;
@@ -500,26 +546,38 @@ void construct_paging()
             if (first_index_of_range == -1) {
                 first_index_of_range = i;
             } else if (region_last_addr(i - 1) < regions_data[i].base) {
-                new_region_func(first_index_of_range, i - 1);
+                split_into_regions(first_index_of_range, i - 1);
                 first_index_of_range = i;
             }
             if (i == resp.entry_count - 1) {
-                new_region_func(first_index_of_range, i);
+                split_into_regions(first_index_of_range, i);
             }
         } else if (first_index_of_range != -1) {
-            new_region_func(first_index_of_range, i - 1);
+            split_into_regions(first_index_of_range, i - 1);
             first_index_of_range = -1;
         }
     }
 
     // Add the temporary region
     Page *temp_region_page = pmm::find_page(temp_alloc_base);
-    auto reserved_count    = temp_alloc_reserved / PAGE_SIZE;
+    assert(temp_region_page);
+    auto reserved_count = temp_alloc_reserved / PAGE_SIZE;
     for (size_t i = 0; i < reserved_count; i++) {
-        temp_region_page[i].type       = Page::PageType::Allocated;
-        temp_region_page[i].l.owner    = nullptr;
-        temp_region_page[i].flags      = 0;
-        temp_region_page[i].l.refcount = 1;
+        auto desc        = PageArrayDescriptor::find(temp_region_page + i);
+        size_t first_idx = temp_region_page - desc->pages;
+        size_t last_idx  = reserved_count - i + first_idx > desc->size ? desc->size - first_idx + i
+                                                                       : reserved_count;
+        for (; i < last_idx; ++i) {
+            temp_region_page[i].type       = Page::PageType::Allocated;
+            temp_region_page[i].l.owner    = nullptr;
+            temp_region_page[i].flags      = 0;
+            temp_region_page[i].l.refcount = 1;
+        }
+        if (i < reserved_count) {
+            auto next = desc->next();
+            assert(next);
+            temp_region_page = next->pages;
+        }
     }
 
     auto size                            = temp_alloc_size / PAGE_SIZE;
@@ -619,9 +677,9 @@ klib::unique_ptr<load_tag_generic> construct_load_tag_for_modules()
         return nullptr;
     }
 
-    tag->tag                               = LOAD_TAG_LOAD_MODULES;
-    tag->flags                             = 0;
-    tag->offset_to_next                    = size;
+    tag->tag            = LOAD_TAG_LOAD_MODULES;
+    tag->flags          = 0;
+    tag->offset_to_next = size;
 
     load_tag_load_modules_descriptor *desc = (load_tag_load_modules_descriptor *)tag.get();
 
@@ -678,9 +736,9 @@ klib::vector<klib::unique_ptr<load_tag_generic>> construct_load_tag_framebuffer(
             tags.clear();
             return tags;
         }
-        tag->tag                               = LOAD_TAG_FRAMEBUFFER;
-        tag->flags                             = 0;
-        tag->offset_to_next                    = sizeof(load_tag_framebuffer);
+        tag->tag            = LOAD_TAG_FRAMEBUFFER;
+        tag->flags          = 0;
+        tag->offset_to_next = sizeof(load_tag_framebuffer);
 
         load_tag_framebuffer *desc = (load_tag_framebuffer *)tag.get();
         desc->framebuffer_addr     = (u64)fb.address - hhdm_offset;
@@ -736,7 +794,7 @@ klib::unique_ptr<load_tag_generic> construct_load_tag_fdt()
     return tag;
 }
 
-klib::shared_ptr<Arch_Page_Table> idle_page_table = nullptr;
+extern klib::shared_ptr<Arch_Page_Table> idle_page_table;
 
 void init(void);
 void init_scheduling(u64 boot_cpu_id);
@@ -780,7 +838,7 @@ void init_task1()
         panic("Failed to add modules tag");
 
     // Create new task and load ELF into it
-    auto task  = TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel::User);
+    auto task = TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel::User);
     if (!task)
         panic("Failed to create task");
     task->name = "bootstrap";
@@ -790,7 +848,7 @@ void init_task1()
         panic("Failed to load task 1: %i", p.result);
 }
 
-#include <acpi/acpi.hh>
+    #include <acpi/acpi.hh>
 __attribute__((used)) limine_rsdp_request rsdp_request = {
     .id       = LIMINE_RSDP_REQUEST,
     .revision = 0,
@@ -842,7 +900,7 @@ void init_dtb()
 
 __attribute__((used)) struct limine_smp_request smp_request = {
     .id       = LIMINE_SMP_REQUEST,
-    .revision =  0,
+    .revision = 0,
     .response = nullptr,
     .flags    = 0,
 };
@@ -861,7 +919,7 @@ void init_smp()
         return;
     }
 
-#ifdef __riscv
+    #ifdef __riscv
     limine_smp_response r;
     copy_from_phys((u64)smp_request.response - hhdm_offset, &r, sizeof(r));
 
@@ -910,7 +968,7 @@ void init_smp()
 
         ++iter;
     }
-#elif defined(__x86_64__)
+    #elif defined(__x86_64__)
     limine_smp_response r;
     copy_from_phys((u64)smp_request.response - hhdm_offset, &r, sizeof(r));
 
@@ -956,17 +1014,17 @@ void init_smp()
 
         ++iter;
     }
-#elif
-    #error "Unsupported architecture"
-#endif
+    #elif
+        #error "Unsupported architecture"
+    #endif
 }
 
 size_t booted_cpus      = 0;
 bool boot_barrier_start = false;
 
-#if defined(__x86_64__)
+    #if defined(__x86_64__)
 extern u64 boot_tsc;
-#endif
+    #endif
 
 void limine_main()
 {
@@ -974,21 +1032,21 @@ void limine_main()
         hcf();
     }
 
-#ifdef __x86_64__
+    #ifdef __x86_64__
     boot_tsc = rdtsc();
-#endif
+    #endif
 
     serial_logger.printf("Hello from pmOS kernel!\n");
     serial_logger.printf("Kernel start: 0x%h\n", &_kernel_start);
 
     if (smp_request.response != nullptr) {
-#ifdef __riscv
+    #ifdef __riscv
         number_of_cpus = smp_request.response->cpu_count;
         bsp_cpu_id     = smp_request.response->bsp_hartid;
-#elif defined(__x86_64__)
+    #elif defined(__x86_64__)
         number_of_cpus = smp_request.response->cpu_count;
         bsp_cpu_id     = smp_request.response->bsp_lapic_id;
-#endif
+    #endif
     }
 
     construct_paging();
@@ -1040,3 +1098,5 @@ void limine_main()
 
     serial_logger.printf("Bootstrap CPU entering userspace\n");
 }
+
+#endif

@@ -53,7 +53,7 @@ Temp_Mapper &request_temp_mapper()
 {
     if (global_temp_mapper == nullptr) {
         // Use per-CPU mapper
-        return get_cpu_struct()->temp_mapper;
+        return get_cpu_struct()->get_temp_mapper();
     }
 
     // Use global mapper (typically during kernel initialization)

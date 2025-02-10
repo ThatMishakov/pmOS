@@ -17,7 +17,7 @@ bool WaitForBlockdPort::await_ready() noexcept { return blockd_port != 0; }
 pmos_port_t WaitForBlockdPort::await_resume() noexcept { return blockd_port; }
 
 using list_type =
-    pmos::containers::InitializedCircularDoubleList<WaitForBlockdPort, &WaitForBlockdPort::l>;
+    pmos::containers::CircularDoubleList<WaitForBlockdPort, &WaitForBlockdPort::l>;
 static list_type waiters {};
 static bool blockd_port_requested = false;
 extern pmos_port_t ahci_port;
@@ -54,7 +54,7 @@ void RegisterDisk::await_suspend(std::coroutine_handle<> hh) { handler.h = hh; }
 
 void RegisterDisk::await_resume() {}
 
-pmos::async::task<uint64_t> register_disk(int port, uint64_t sector_count,
+pmos::async::task<uint64_t> register_disk(AHCIPort &port, uint64_t sector_count,
                                           size_t logical_sector_size, size_t physical_sector_size)
 {
     auto blockd_port = co_await WaitForBlockdPort {};

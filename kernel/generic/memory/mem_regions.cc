@@ -35,7 +35,6 @@
 
 #include <assert.h>
 #include <errno.h>
-#include <kern_logger/kern_logger.hh>
 #include <pmos/ipc.h>
 #include <processes/tasks.hh>
 #include <sched/sched.hh>
@@ -43,7 +42,7 @@ u64 counter = 1;
 
 using namespace kernel;
 
-static bool mapped_right_perm(Page_Table::Page_Info info, u64 access_type)
+static bool mapped_right_perm(Page_Table::Page_Info info, unsigned access_type)
 {
     if (!info.is_allocated)
         return false;
@@ -60,9 +59,9 @@ static bool mapped_right_perm(Page_Table::Page_Info info, u64 access_type)
     return true;
 }
 
-static bool reading(u64 access_type) { return access_type & Writeable; }
+static bool reading(unsigned access_type) { return access_type & Writeable; }
 
-ReturnStr<bool> Generic_Mem_Region::on_page_fault(u64 access_type, u64 pagefault_addr)
+ReturnStr<bool> Generic_Mem_Region::on_page_fault(unsigned access_type, void *pagefault_addr)
 {
     if (not has_access(access_type))
         return Error(-EFAULT);
@@ -78,7 +77,7 @@ ReturnStr<bool> Generic_Mem_Region::on_page_fault(u64 access_type, u64 pagefault
     return alloc_page(pagefault_addr, mapping, access_type);
 }
 
-ReturnStr<bool> Generic_Mem_Region::prepare_page(u64 access_mode, u64 page_addr)
+ReturnStr<bool> Generic_Mem_Region::prepare_page(unsigned access_mode, void *page_addr)
 {
     if (not has_access(access_mode))
         return Error(-EFAULT);
@@ -104,14 +103,15 @@ Page_Table_Argumments Phys_Mapped_Region::craft_arguments() const
     };
 }
 
-ReturnStr<bool> Phys_Mapped_Region::alloc_page(phys_addr_t ptr_addr, Page_Info, u64)
+ReturnStr<bool> Phys_Mapped_Region::alloc_page(void *ptr_addr, Page_Info, unsigned)
 {
     Page_Table_Argumments args = craft_arguments();
 
-    phys_addr_t page_addr = (u64)ptr_addr & ~07777UL;
-    phys_addr_t phys_addr = page_addr - start_addr + phys_addr_start;
+    phys_addr_t page_addr = (u64)ptr_addr & ~07777ULL;
+    assert(page_addr >= (u64)start_addr and (u64)page_addr < (u64)start_addr + size);
+    phys_addr_t phys_addr = (u64)page_addr - (u64)start_addr + phys_addr_start;
 
-    auto result = owner->map(phys_addr, page_addr, args);
+    auto result = owner->map(phys_addr, (void *)page_addr, args);
     if (result)
         return Error(result);
 
@@ -120,7 +120,7 @@ ReturnStr<bool> Phys_Mapped_Region::alloc_page(phys_addr_t ptr_addr, Page_Info, 
 
 kresult_t Generic_Mem_Region::move_to(TLBShootdownContext &ctx,
                                       const klib::shared_ptr<Page_Table> &new_table,
-                                      size_t base_addr, size_t new_access)
+                                      void *base_addr, unsigned new_access)
 {
     Page_Table *const old_owner = owner;
     auto result = old_owner->move_pages(ctx, new_table, start_addr, base_addr, size, new_access);
@@ -141,7 +141,7 @@ kresult_t Generic_Mem_Region::move_to(TLBShootdownContext &ctx,
 }
 
 kresult_t Phys_Mapped_Region::clone_to(const klib::shared_ptr<Page_Table> &new_table,
-                                       size_t base_addr, u64 new_access)
+                                       void *base_addr, unsigned new_access)
 {
     auto copy = new Phys_Mapped_Region(*this);
     if (!copy)
@@ -157,23 +157,23 @@ kresult_t Phys_Mapped_Region::clone_to(const klib::shared_ptr<Page_Table> &new_t
     return 0;
 }
 
-void Phys_Mapped_Region::trim(u64 new_start, u64 new_size) noexcept
+void Phys_Mapped_Region::trim(void *new_start, size_t new_size) noexcept
 {
     assert(new_start >= start_addr);
     if (new_start != start_addr) {
-        phys_addr_start += new_start - start_addr;
+        phys_addr_start += (char *)new_start - (char *)start_addr;
         start_addr = new_start;
     }
 
     size = new_size;
 }
 
-void Mem_Object_Reference::trim(u64 new_start, u64 new_size) noexcept
+void Mem_Object_Reference::trim(void *new_start, size_t new_size) noexcept
 {
     assert(new_start >= start_addr);
 
     if (new_start != start_addr) {
-        u64 diff = new_start - start_addr;
+        u64 diff = (char *)new_start - (char *)start_addr;
 
         if (diff <= start_offset_bytes) {
             start_offset_bytes -= diff;
@@ -197,40 +197,40 @@ void Mem_Object_Reference::trim(u64 new_start, u64 new_size) noexcept
         object_size_bytes = size - start_offset_bytes;
 }
 
-kresult_t Phys_Mapped_Region::punch_hole(u64 hole_addr_start, u64 hole_size_bytes)
+kresult_t Phys_Mapped_Region::punch_hole(void *hole_addr_start, size_t hole_size_bytes)
 {
-    assert(start_addr < hole_addr_start and start_addr + size > hole_addr_start + hole_size_bytes);
+    assert(start_addr < hole_addr_start and (char *)start_addr + size > (char *)hole_addr_start + hole_size_bytes);
 
     auto ptr = new Phys_Mapped_Region(*this);
     if (!ptr)
         return -ENOMEM;
 
-    ptr->size -= hole_addr_start + hole_size_bytes - start_addr;
-    ptr->start_addr = hole_addr_start + hole_size_bytes;
-    ptr->phys_addr_start += ptr->start_addr - start_addr;
+    ptr->size -= (char *)hole_addr_start + hole_size_bytes - (char *)start_addr;
+    ptr->start_addr = (void *)((char *)hole_addr_start + hole_size_bytes);
+    ptr->phys_addr_start += (char *)ptr->start_addr - (char *)start_addr;
     owner->paging_regions.insert(ptr);
-    size = hole_addr_start - start_addr;
+    size = (char *)hole_addr_start - (char *)start_addr;
 
     return 0;
 }
 
-kresult_t Mem_Object_Reference::punch_hole(u64 hole_addr_start, u64 hole_size_bytes)
+kresult_t Mem_Object_Reference::punch_hole(void *hole_addr_start, size_t hole_size_bytes)
 {
-    assert(start_addr < hole_addr_start and start_addr + size > hole_addr_start + hole_size_bytes);
+    assert(start_addr < hole_addr_start and (char *)start_addr + size > (char *)hole_addr_start + hole_size_bytes);
 
-    const u64 new_start = hole_addr_start + hole_size_bytes;
+    void *new_start = (char *)hole_addr_start + hole_size_bytes;
 
     auto ptr = new Mem_Object_Reference(*this);
     if (!ptr)
         return -ENOMEM;
 
-    ptr->trim(new_start, size - (new_start - start_addr));
+    ptr->trim(new_start, size - ((char *)new_start - (char *)start_addr));
     owner->paging_regions.insert(ptr);
     auto it = owner->object_regions.find(references.get());
     assert(it != owner->object_regions.end());
     it->second.insert(ptr);
 
-    trim(start_addr, hole_addr_start - start_addr);
+    trim(start_addr, (char *)hole_addr_start - (char *)start_addr);
 
     return 0;
 }
@@ -247,8 +247,8 @@ Page_Table_Argumments Mem_Object_Reference::craft_arguments() const
     };
 }
 
-ReturnStr<bool> Mem_Object_Reference::alloc_page(u64 ptr_addr, Page_Table::Page_Info mapping,
-                                                 u64 access_type)
+ReturnStr<bool> Mem_Object_Reference::alloc_page(void *ptr_addr, Page_Table::Page_Info mapping,
+                                                 unsigned access_type)
 {
     // TODO: mprotect
     if (mapping.is_allocated) {
@@ -263,7 +263,7 @@ ReturnStr<bool> Mem_Object_Reference::alloc_page(u64 ptr_addr, Page_Table::Page_
     }
 
     if (cow) {
-        const auto reg_addr = (ptr_addr & ~0xfffUL) - start_addr;
+        const ulong reg_addr = (char*)((ulong)ptr_addr & ~0xfffUL) - (char*)start_addr;
 
         if (reg_addr + 0x1000 <= start_offset_bytes or
             reg_addr >= start_offset_bytes + object_size_bytes) {
@@ -282,7 +282,7 @@ ReturnStr<bool> Mem_Object_Reference::alloc_page(u64 ptr_addr, Page_Table::Page_
 
         if (reg_addr >= start_offset_bytes and
             reg_addr + 0x1000 <= start_offset_bytes + object_size_bytes and !reading(access_type)) {
-            i64 addr = reg_addr - start_offset_bytes + object_offset_bytes;
+            long addr = reg_addr - start_offset_bytes + object_offset_bytes;
             // TODO
             assert(addr >= 0);
             auto page = references->atomic_request_page(
@@ -294,11 +294,11 @@ ReturnStr<bool> Mem_Object_Reference::alloc_page(u64 ptr_addr, Page_Table::Page_
                 return false;
 
             // TODO
-            auto addr_aligned = ptr_addr & ~0xffful;
+            auto addr_aligned = (ulong)ptr_addr & ~0xffful;
             auto args         = craft_arguments();
             args.writeable &= not page.val.page_struct_ptr->is_anonymous();
 
-            auto result = owner->map(klib::move(page.val), addr_aligned, args);
+            auto result = owner->map(klib::move(page.val), (void *)addr_aligned, args);
             if (result)
                 return Error(result);
 
@@ -346,8 +346,8 @@ ReturnStr<bool> Mem_Object_Reference::alloc_page(u64 ptr_addr, Page_Table::Page_
         return true;
     } else {
         // Find the actual address of the page inside the object
-        const auto addr_aligned = ptr_addr & ~0xfffUL;
-        const auto reg_addr     = addr_aligned - start_addr + object_offset_bytes;
+        const auto addr_aligned = (ulong)ptr_addr & ~0xfffUL;
+        const auto reg_addr     = addr_aligned - (ulong)start_addr + object_offset_bytes;
         // TODO
         auto page               = references->atomic_request_page(reg_addr, true);
         if (!page.success())
@@ -356,7 +356,7 @@ ReturnStr<bool> Mem_Object_Reference::alloc_page(u64 ptr_addr, Page_Table::Page_
         if (not page.val.page_struct_ptr)
             return false;
 
-        auto result = owner->map(klib::move(page.val), addr_aligned, craft_arguments());
+        auto result = owner->map(klib::move(page.val), (void *)addr_aligned, craft_arguments());
         if (result)
             return Error(result);
 
@@ -366,14 +366,14 @@ ReturnStr<bool> Mem_Object_Reference::alloc_page(u64 ptr_addr, Page_Table::Page_
 
 kresult_t Mem_Object_Reference::move_to(TLBShootdownContext &ctx,
                                         const klib::shared_ptr<Page_Table> &new_table,
-                                        u64 base_addr, u64 new_access)
+                                        void *base_addr, unsigned new_access)
 {
     return -ENOSYS;
     // throw Kern_Exception(-ENOSYS, "move_to of Mem_Object_Reference was not yet implemented");
 }
 
 kresult_t Mem_Object_Reference::clone_to(const klib::shared_ptr<Page_Table> &new_table,
-                                         u64 base_addr, u64 new_access)
+                                         void *base_addr, unsigned new_access)
 {
     auto copy = klib::make_unique<Mem_Object_Reference>(*this);
     if (!copy)
@@ -420,8 +420,8 @@ void Mem_Object_Reference::prepare_deletion() noexcept
         owner->object_regions.erase(p);
 }
 
-Mem_Object_Reference::Mem_Object_Reference(u64 start_addr, u64 size, klib::string name,
-                                           Page_Table *owner, u8 access,
+Mem_Object_Reference::Mem_Object_Reference(void *start_addr, size_t size, klib::string name,
+                                           Page_Table *owner, unsigned access,
                                            klib::shared_ptr<Mem_Object> references,
                                            u64 object_offset_bytes, bool copy_on_write,
                                            u64 start_offset_bytes, u64 object_size_bytes)

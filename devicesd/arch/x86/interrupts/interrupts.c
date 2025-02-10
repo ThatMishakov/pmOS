@@ -34,6 +34,7 @@
 #include <errno.h>
 #include <assert.h>
 #include <string.h>
+#include <inttypes.h>
 
 unsigned char interrupt_number = 239;
 
@@ -54,7 +55,7 @@ void init_cpus()
     for (int i = 0; i < count; ++i) {
         syscall_r a = get_lapic_id(i + 1);
         if (a.result != 0) {
-            fprintf(stderr, "Warning: Could not get LAPIC ID for CPU %i: %li (%s)\n", i, a.result, strerror(-a.result));
+            fprintf(stderr, "Warning: Could not get LAPIC ID for CPU %i: %" PRIi64 " (%s)\n", i, a.result, strerror(-a.result));
             continue;
         }
 
@@ -63,6 +64,8 @@ void init_cpus()
             .lapic_id = (uint32_t)a.value,
             .interrupt_number = 239,
         };
+
+        printf("[devicesd] CPU %i has LAPIC ID %" PRIu32 "\n", i, d.lapic_id);
 
         VECTOR_PUSH_BACK_CHECKED(cpus, d, r);
         if (r != 0) {

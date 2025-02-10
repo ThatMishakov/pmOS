@@ -31,6 +31,7 @@
 
 #include <memory/malloc.hh>
 #include <stddef.h>
+#include <new>
 
 namespace klib
 {

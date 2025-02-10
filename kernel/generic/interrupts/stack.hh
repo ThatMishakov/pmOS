@@ -49,4 +49,5 @@ protected:
 
 public:
     inline u64 *get_stack_top() { return stack->get_stack_top(); }
+    operator bool() const { return bool{stack}; }
 };

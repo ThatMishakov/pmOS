@@ -3,6 +3,7 @@
 #include "device.hh"
 
 #include <cassert>
+#include <cinttypes>
 #include <sched.h>
 #include <stdio.h>
 
@@ -16,7 +17,7 @@ pmos::async::task<Command> Command::prepare(AHCIPort &port)
 Command::~Command() noexcept
 {
     if (parent && cmd_index != -1) {
-        parent->active_cmd_slots &= ~(1 << cmd_index);
+        parent->cmd_bitmap[cmd_index] = false;
         parent->active_cmd_slots--;
     }
 }
@@ -56,7 +57,7 @@ void Command::prdt_push(PRDT entry)
     auto *prdt = (PRDT *)(parent->dma_virt_base + (parent->command_table_offset + PRDT_OFFSET +
                                                    cmd_index * COMMAND_TABLE_SIZE) /
                                                       sizeof(uint32_t));
-    prdt[prdt_index++] = entry;
+    std::memcpy(&prdt[prdt_index++], &entry, sizeof(PRDT));
 }
 
 pmos::async::task<Command::Result> Command::execute(uint8_t command, int timeout_ms)
@@ -65,7 +66,7 @@ pmos::async::task<Command::Result> Command::execute(uint8_t command, int timeout
     str.fis_type           = FIS_TYPE_REG_H2D;
     str.command            = command;
     str.device             = 1 << 6;
-    str.c                  = 1;
+    str.info               = 1 << 7;
     str.countl             = sector_count & 0xff;
     str.counth             = (sector_count >> 8) & 0xff;
     str.lba0               = sector & 0xff;
@@ -75,17 +76,19 @@ pmos::async::task<Command::Result> Command::execute(uint8_t command, int timeout
     str.lba4               = (sector >> 32) & 0xff;
     str.lba5               = (sector >> 40) & 0xff;
 
-    auto *fis = (FIS_Host_To_Device *)(parent->dma_virt_base +
-                                       parent->command_table_offset / sizeof(uint32_t) +
-                                       cmd_index * COMMAND_TABLE_SIZE / sizeof(uint32_t));
-    *fis      = str;
+    auto *fis = (FIS_Host_To_Device *)(parent->dma_virt_base + parent->command_table_offset / sizeof(uint32_t) +
+                (cmd_index * COMMAND_TABLE_SIZE) / sizeof(uint32_t));
+    std::memcpy(fis, &str, sizeof(FIS_Host_To_Device));
 
     CommandListEntry cmd   = {};
     cmd.command_fis_length = sizeof(FIS_Host_To_Device) / sizeof(uint32_t);
     cmd.command_table_base = parent->get_command_table_phys(cmd_index);
     cmd.prdt_length        = prdt_index;
-    auto list              = (CommandListEntry *)parent->get_command_list_ptr(cmd_index);
-    *list                  = cmd;
+    cmd.prdb_count         = 0;
+    assert(!(parent->get_command_table_phys(cmd_index) & 0x7f));
+
+    auto list = (CommandListEntry *)parent->get_command_list_ptr(cmd_index);
+    std::memcpy(list, &cmd, sizeof(CommandListEntry));
 
     auto port = parent->get_port_register();
 
@@ -93,11 +96,15 @@ pmos::async::task<Command::Result> Command::execute(uint8_t command, int timeout
     while (port[AHCI_TFD_INDEX] & (AHCI_TFD_INDEX_DRQ | AHCI_TFD_INDEX_BSY))
         sched_yield();
 
+    __sync_synchronize();
+
     port[AHCI_CI_INDEX] = 1 << cmd_index;
 
     co_await WaitCommandCompletion(parent, cmd_index, timeout_ms);
 
     if (port[AHCI_CI_INDEX] & (1 << cmd_index)) {
+        printf("Command timed out\n");
+        parent->dump_state();
         co_return Result::Timeout;
     } else {
         co_return Result::Success;
@@ -142,7 +149,7 @@ void AHCIPort::react_interrupt()
     auto port_is = port[4];
     port[4]      = port_is;
 
-    printf("Port %i interrupt status: %#x\n", index, port_is);
+    //printf("Port %i interrupt status: %#x\n", index, port_is);
     auto command = port[AHCI_CI_INDEX];
     for (int i = 0; i < num_slots; ++i) {
         if (!(command & (1 << i)) && callbacks[i] && cmd_bitmap[i]) {

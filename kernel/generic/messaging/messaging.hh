@@ -126,7 +126,7 @@ public:
 
 protected:
     using Message_storage =
-        pmos::containers::InitializedCircularDoubleList<Message, &Message::list_node>;
+        pmos::containers::CircularDoubleList<Message, &Message::list_node>;
     Message_storage msg_queue;
 
     union {

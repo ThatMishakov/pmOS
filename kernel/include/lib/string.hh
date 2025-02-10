@@ -100,7 +100,7 @@ public:
 
         if (length > small_size) {
             long_string.ptr  = new char[length + 1];
-            if (long_string.ptr)
+            if (!long_string.ptr)
                 return;
 
             s_capacity       = length;
@@ -117,20 +117,28 @@ public:
 
     string(const char *s, size_t n)
     {
-        if (n > small_size) {
+        size_t ll = n;
+        for (size_t i = 0; i < n; ++i) {
+            if (s[i] == '\0') {
+                ll = i;
+                break;
+            }
+        }
+
+        if (ll > small_size) {
             long_string.ptr  = new char[n + 1];
             if (!long_string.ptr)
                 return;
 
-            s_capacity       = n;
-            long_string.size = n;
+            s_capacity       = ll;
+            long_string.size = ll;
 
-            memcpy(long_string.ptr, s, n);
-            long_string.ptr[n] = '\0';
+            memcpy(long_string.ptr, s, ll);
+            long_string.ptr[ll] = '\0';
         } else {
-            s_capacity = n;
-            memcpy(short_string, s, n);
-            short_string[n] = '\0';
+            s_capacity = ll;
+            memcpy(short_string, s, ll);
+            short_string[ll] = '\0';
         }
     }
 
@@ -138,7 +146,7 @@ public:
     {
         if (n > small_size) {
             long_string.ptr  = new char[n + 1];
-            if (long_string.ptr)
+            if (!long_string.ptr)
                 return;
 
             s_capacity       = n;

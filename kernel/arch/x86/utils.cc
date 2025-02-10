@@ -127,13 +127,21 @@ void print_stack_trace(Logger &logger, stack_frame *s)
 void print_stack_trace(Logger &logger)
 {
     struct stack_frame *s;
+    #ifdef __x86_64__
     __asm__ volatile("movq %%rbp, %0" : "=a"(s));
+    #else
+    __asm__ volatile("movl %%ebp, %0" : "=a"(s));
+    #endif
     print_stack_trace(logger, s);
 }
 
 extern "C" void print_stack_trace()
 {
     struct stack_frame *s;
+    #ifdef __x86_64__
     __asm__ volatile("movq %%rbp, %0" : "=a"(s));
+    #else
+    __asm__ volatile("movl %%ebp, %0" : "=a"(s));
+    #endif
     print_stack_trace(bochs_logger, s);
 }

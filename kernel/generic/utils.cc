@@ -35,12 +35,12 @@
 #include <lib/string.hh>
 #include <memory/paging.hh>
 #include <messaging/messaging.hh>
+#include <processes/tasks.hh>
 #include <sched/sched.hh>
 #include <stdarg.h>
 #include <stdio.h>
-#include <processes/tasks.hh>
 
-void int_to_string(long int n, u8 base, char *str, int &length)
+void int_to_string(i64 n, u8 base, char *str, int &length)
 {
     char temp_str[65];
     length        = 0;
@@ -72,7 +72,7 @@ void int_to_string(long int n, u8 base, char *str, int &length)
     str[length] = 0;
 }
 
-void uint_to_string(unsigned long int n, u8 base, char *str, int &length)
+void uint_to_string(u64 n, u8 base, char *str, int &length)
 {
     char temp_str[65];
     length = 0;
@@ -177,8 +177,8 @@ ReturnStr<bool> prepare_user_buff_rd(const char *buff, size_t size)
 
     TaskDescriptor *current_task = get_current_task();
 
-    if (addr_start > current_task->page_table->user_addr_max() or
-        end > current_task->page_table->user_addr_max() or addr_start > end)
+    if (buff > current_task->page_table->user_addr_max() or
+        (void *)end > current_task->page_table->user_addr_max() or buff > (void *)end)
         return Error(-EFAULT);
 
     current_task->request_repeat_syscall();
@@ -187,12 +187,12 @@ ReturnStr<bool> prepare_user_buff_rd(const char *buff, size_t size)
         for (u64 i = addr_start; i < end; ++i) {
             u64 page = i & ~0xfffULL;
             auto result =
-                current_task->page_table->prepare_user_page(page, Page_Table::Protection::Readable);
+                current_task->page_table->prepare_user_page((void *)page, Page_Table::Protection::Readable);
             if (!result.success())
                 return result.propagate();
 
             if (not result.val) {
-                current_task->atomic_block_by_page(page, &current_task->page_table->blocked_tasks);
+                current_task->atomic_block_by_page((void *)page, &current_task->page_table->blocked_tasks);
                 return false;
             }
         }
@@ -211,22 +211,22 @@ ReturnStr<bool> prepare_user_buff_wr(char *buff, size_t size)
     u64 end        = addr_start + size;
 
     TaskDescriptor *current_task = get_current_task();
-    u64 kern_addr_start          = current_task->page_table->user_addr_max();
+    void *kern_addr_start          = current_task->page_table->user_addr_max();
 
-    if (addr_start > kern_addr_start or end > kern_addr_start or addr_start > end)
+    if (buff > kern_addr_start or (void *)end > kern_addr_start or buff > (void *)end)
         return Error(-EFAULT);
 
     auto result = [&]() -> ReturnStr<bool> {
         current_task->request_repeat_syscall();
         for (u64 i = addr_start; i < end; ++i) {
             u64 page = i & ~0xfffULL;
-            auto t   = current_task->page_table->prepare_user_page(page,
+            auto t   = current_task->page_table->prepare_user_page((void *)page,
                                                                    Page_Table::Protection::Writeable);
             if (!t.success())
                 return t.propagate();
 
             if (not t.val) {
-                current_task->atomic_block_by_page(page, &current_task->page_table->blocked_tasks);
+                current_task->atomic_block_by_page((void *)page, &current_task->page_table->blocked_tasks);
                 return false;
             }
         }
@@ -242,9 +242,20 @@ ReturnStr<bool> prepare_user_buff_wr(char *buff, size_t size)
 extern "C" void allow_access_user();
 extern "C" void disallow_access_user();
 
+extern "C" ReturnStr<bool> fast_copy_from_user(char *dest, const char *src, size_t size) __attribute__((weak));
 ReturnStr<bool> copy_from_user(char *to, const char *from, size_t size)
 {
     auto current_task = get_current_task();
+    auto max_addr = (uintptr_t)current_task->page_table->user_addr_max();
+    uintptr_t addr = (uintptr_t)from;
+    if (addr + size > max_addr or addr > (UINTPTR_MAX - size))
+        return Error(-EFAULT);
+
+    #ifndef __riscv
+    if (fast_copy_from_user)
+        return fast_copy_from_user(to, from, size);
+    #endif
+
     Auto_Lock_Scope l(current_task->page_table->lock);
 
     auto result = prepare_user_buff_rd(from, size);
@@ -257,9 +268,20 @@ ReturnStr<bool> copy_from_user(char *to, const char *from, size_t size)
     return result;
 }
 
+extern "C" ReturnStr<bool> fast_copy_to_user(char *dest, const char *src, size_t size) __attribute__((weak));
 ReturnStr<bool> copy_to_user(const char *from, char *to, size_t size)
 {
     auto current_task = get_current_task();
+    auto max_addr = (uintptr_t)current_task->page_table->user_addr_max();
+    uintptr_t addr = (uintptr_t)to;
+    if (addr + size > max_addr or addr > (UINTPTR_MAX - size))
+        return Error(-EFAULT);
+
+    #ifndef __riscv
+    if (fast_copy_to_user)
+        return fast_copy_to_user(to, from, size);
+    #endif
+
     Auto_Lock_Scope l(current_task->page_table->lock);
 
     auto result = prepare_user_buff_wr(to, size);
@@ -274,9 +296,9 @@ ReturnStr<bool> copy_to_user(const char *from, char *to, size_t size)
 
 extern "C" void print_stack_trace();
 
-void *memcpy(void * __restrict d, const void * __restrict s, size_t n)
+void *memcpy(void *__restrict d, const void *__restrict s, size_t n)
 {
-    char *dest = (char *)d;
+    char *dest      = (char *)d;
     const char *src = (const char *)s;
 
     void *k = dest;
@@ -387,15 +409,15 @@ extern "C" void dbg_uart_init();
 extern void hcf();
 extern "C" void abort(void)
 {
-    t_print_bochs("Error: abort() was called. Hint: use debugger on COM1\n");
+    t_print_bochs("Error: abort() was called.\n");
 
     print_stack_trace();
-    serial_logger.printf("Error: abort() was called.\n");
+    // serial_logger.printf("Error: abort() was called.\n");
 
     // print_stack_trace(bochs_logger);
     // print_stack_trace(serial_logger);
 
-    serial_logger.printf("Dropping into debugger...\n---------------\n");
+    // serial_logger.printf("Dropping into debugger...\n---------------\n");
 
     // breakpoint;
 
@@ -409,6 +431,7 @@ void panic(const char *msg, ...)
     serial_logger.vprintf(msg, args);
     va_end(args);
 
+    serial_logger.printf("\n");
     abort();
 }
 
@@ -457,146 +480,6 @@ bool try_lock(u32 *lock) noexcept;
 void lock_var(unsigned *var) { acquire_lock_spin(var); }
 
 void unlock_var(unsigned *var) { release_lock(var); }
-
-#include <pthread.h>
-
-// https://en.wikipedia.org/wiki/Readers%E2%80%93writer_lock
-int pthread_rwlock_unlock(pthread_rwlock_t *rwlock)
-{
-    if (rwlock->b == 0) {
-        unlock_var(&rwlock->g);
-    } else {
-        lock_var(&rwlock->r);
-        rwlock->b = rwlock->b - 1;
-        if (rwlock->b == 0)
-            unlock_var(&rwlock->g);
-
-        unlock_var(&rwlock->r);
-    }
-    return 0;
-}
-
-int pthread_rwlock_rdlock(pthread_rwlock_t *rwlock)
-{
-    lock_var(&rwlock->r);
-    rwlock->b = rwlock->b + 1;
-    if (rwlock->b == 1)
-        lock_var(&rwlock->g);
-
-    unlock_var(&rwlock->r);
-    return 0;
-}
-
-int pthread_rwlock_wrlock(pthread_rwlock_t *rwlock)
-{
-    lock_var(&rwlock->g);
-    return 0;
-}
-
-extern "C" char *getenv(const char *name)
-{
-    // if (klib::string(name) == "LIBUNWIND_PRINT_UNWINDING")
-    //     return (char*)"1";
-    (void)name;
-
-    return NULL;
-}
-
-int pthread_mutex_lock(pthread_mutex_t *mutex)
-{
-    bool r = false;
-    do {
-        if (*mutex)
-            continue;
-
-        r = __sync_bool_compare_and_swap(mutex, 0, 1);
-    } while (not r);
-    __sync_synchronize();
-
-    return 0;
-}
-
-int pthread_mutex_unlock(pthread_mutex_t *mutex)
-{
-    *mutex = 0;
-
-    return 0;
-}
-
-// I have no idea if it works
-int pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex)
-{
-    pthread_mutex_unlock(mutex);
-
-    bool r = false;
-    do {
-        if (*cond == 0)
-            continue;
-
-        r = __sync_bool_compare_and_swap(cond, 1, 0);
-    } while (not r);
-    __sync_synchronize();
-
-    pthread_mutex_lock(mutex);
-
-    return 0;
-}
-
-int pthread_cond_signal(pthread_cond_t *cond)
-{
-    *cond = 1;
-
-    return 0;
-}
-
-struct Pthread_Once_Global_S {
-    void (*destructor)(void *) = nullptr;
-    bool valid                 = false;
-};
-
-klib::array<Pthread_Once_Global_S, CPU_Info::pthread_once_size> pthread_global = {};
-Spinlock pthread_key_lock;
-
-extern "C" int pthread_key_create(pthread_key_t *key, void (*destructor)(void *))
-{
-    Auto_Lock_Scope local_lock(pthread_key_lock);
-    for (unsigned i = 0; i < pthread_global.size(); ++i) {
-        auto &p = pthread_global[i];
-        if (not p.valid) {
-            p.valid      = true;
-            p.destructor = destructor;
-            *key         = i;
-            return 0;
-        }
-    }
-
-    return -1;
-}
-
-extern "C" void *pthread_getspecific(pthread_key_t key)
-{
-    return (void *)get_cpu_struct()->pthread_once_storage[key];
-}
-
-extern "C" int pthread_setspecific(pthread_key_t key, const void *data)
-{
-    get_cpu_struct()->pthread_once_storage[key] = data;
-
-    return 0;
-}
-
-extern "C" int pthread_once(pthread_once_t *once_control, void (*init_routine)(void))
-{
-    if (*once_control != 1) {
-        bool r = __sync_bool_compare_and_swap(once_control, 0, 1);
-
-        if (r) {
-            init_routine();
-        }
-    }
-
-    return 0;
-}
 
 extern "C" int strcmp(const char *str1, const char *str2)
 {
@@ -698,7 +581,7 @@ void Spinlock::lock() noexcept
 {
     while (!Spinlock_base::try_lock()) {
         // Since the current kernel spinlock situation is not very good, and the
-        // kernel can't preempt itself, if the lock fails to acquire, 
+        // kernel can't preempt itself, if the lock fails to acquire,
         // check that other CPUs are not waiting for us to do something.
         check_synchronous_ipis();
     }
@@ -711,4 +594,37 @@ bool Spinlock::try_lock() noexcept
         check_synchronous_ipis();
     }
     return result;
+}
+
+// Halt and catch fire function.
+void hcf(void)
+{
+// should be arch-specific, but whatever...
+#if defined(__x86_64__) || defined(__i386__)
+    asm("cli");
+    for (;;) {
+        asm("hlt");
+    }
+#elif defined(__riscv)
+    asm volatile("wfi");
+#endif
+
+    while (1)
+        ;
+
+    __builtin_unreachable();
+}
+
+#if UINT32_MAX == UINTPTR_MAX
+#define STACK_CHK_GUARD 0xe2dee396
+#else
+#define STACK_CHK_GUARD 0x595e9fbd94fda766
+#endif
+
+uintptr_t __stack_chk_guard = STACK_CHK_GUARD;
+
+__attribute__((noreturn))
+extern "C" void __stack_chk_fail(void)
+{
+    panic("Stack smashing detected");
 }

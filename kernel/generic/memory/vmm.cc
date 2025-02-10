@@ -67,8 +67,6 @@ void virtmem_init(u64 virtmem_base, u64 virtmem_size)
 {
     kernel_space_allocator.init();
 
-    virtmem_available_tags_list.init();
-
     virtmem_fill_initial_tags();
     auto tag   = virtmem_get_free_tag();
     tag->base  = virtmem_base;
@@ -89,7 +87,7 @@ int virtmem_ensure_tags(size_t size)
         // No free tags
         return -ENOMEM;
 
-    int idx    = __builtin_ffsl(kernel_space_allocator.virtmem_freelist_bitmap) - 1;
+    int idx    = kernel_space_allocator.first_bit(kernel_space_allocator.virtmem_freelist_bitmap) - 1;
     auto &list = kernel_space_allocator.virtmem_freelists[idx];
     auto tag   = &*list.begin();
 

@@ -6,9 +6,7 @@
 static const uint8_t FIS_TYPE_REG_H2D = 0x27;
 struct FIS_Host_To_Device {
     uint8_t fis_type {};
-    uint8_t pmport : 4 {};
-    uint8_t rsv0 : 3 {};
-    uint8_t c : 1 {};
+    uint8_t info {};
     uint8_t command {};
     uint8_t featurel {};
 
@@ -29,6 +27,8 @@ struct FIS_Host_To_Device {
 
     uint8_t rsv1[4] {};
 };
+
+static_assert(sizeof(FIS_Host_To_Device) == 20);
 
 static const uint8_t FIS_TYPE_REG_D2H = 0x34;
 struct [[gnu::packed]] FIS_Device_To_Host {
@@ -56,6 +56,8 @@ struct [[gnu::packed]] FIS_Device_To_Host {
 
     uint8_t rsv4[4];
 };
+
+static_assert(sizeof(FIS_Device_To_Host) == 20);
 
 static const uint8_t FIS_TYPE_DMA_ACT = 0x39;
 // ATA-8 16.5.4 DMA Activate - Device to Host FIS
@@ -151,24 +153,26 @@ struct [[gnu::packed]] AHCI_FIS {
 };
 
 struct CommandListEntry {
-    uint8_t command_fis_length : 5;
-    uint8_t atapi : 1;
-    uint8_t write : 1;
-    uint8_t prefetchable : 1;
+    uint8_t command_fis_length : 5 {};
+    uint8_t atapi : 1 {};
+    uint8_t write : 1 {};
+    uint8_t prefetchable : 1 {};
 
-    uint8_t reset : 1;
-    uint8_t bist : 1;
-    uint8_t clear_busy : 1;
-    uint8_t rsv0 : 1;
-    uint8_t port_multiplier_port : 4;
+    uint8_t reset : 1 {};
+    uint8_t bist : 1 {};
+    uint8_t clear_busy : 1 {};
+    uint8_t rsv0 : 1 {};
+    uint8_t port_multiplier_port : 4 {};
 
-    uint16_t prdt_length;
+    uint16_t prdt_length {};
 
-    uint32_t prdb_count;
+    uint32_t prdb_count {};
 
-    uint64_t command_table_base;
-    uint32_t rsv1[4];
+    uint64_t command_table_base {};
+    uint32_t rsv1[4] {};
 };
+
+static_assert(sizeof(CommandListEntry) == 32);
 
 struct PRDT {
     uint64_t data_base {};
@@ -179,6 +183,8 @@ struct PRDT {
 
     static constexpr uint32_t MAX_BYTES = 1 << 23;
 };
+
+static_assert(sizeof(PRDT) == 16);
 
 struct IDENTIFYData {
     uint16_t general_config;

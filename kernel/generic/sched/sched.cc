@@ -84,7 +84,7 @@ ReturnStr<u64> block_current_task(Generic_Port *ptr)
     return {0, 0};
 }
 
-void TaskDescriptor::atomic_block_by_page(u64 page, sched_queue *blocked_ptr)
+void TaskDescriptor::atomic_block_by_page(void *page, sched_queue *blocked_ptr)
 {
     assert(status != TaskStatus::TASK_BLOCKED && "task cannot be blocked twice");
 
@@ -152,9 +152,9 @@ kresult_t CPU_Info::atomic_timer_queue_push(u64 fire_on_core_ticks, Port *port, 
     return 0;
 }
 
-extern klib::shared_ptr<Arch_Page_Table> idle_page_table;
+klib::shared_ptr<Arch_Page_Table> idle_page_table;
+size_t number_of_cpus = 1;
 
-#include <kern_logger/kern_logger.hh>
 void TaskDescriptor::switch_to()
 {
     CPU_Info *c = get_cpu_struct();
@@ -163,9 +163,6 @@ void TaskDescriptor::switch_to()
     if (c->current_task->page_table != page_table) {
         c->current_task->page_table->unapply_cpu(c);
         page_table->apply_cpu(c);
-
-        page_table->atomic_active_sum(1);
-        c->current_task->page_table->atomic_active_sum(-1);
 
         auto new_page_table = page_table ? page_table : idle_page_table;
 
@@ -189,7 +186,7 @@ void TaskDescriptor::switch_to()
     start_timer(assign_quantum_on_priority(priority));
 }
 
-bool TaskDescriptor::atomic_try_unblock_by_page(u64 page)
+bool TaskDescriptor::atomic_try_unblock_by_page(void *page)
 {
     Auto_Lock_Scope scope_lock(sched_lock);
 
