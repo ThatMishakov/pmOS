@@ -152,9 +152,9 @@ ptable_top_ptr_t kernel_ptable_top = 0;
 
 static klib::vector<limine_memmap_entry> *limine_memory_regions = nullptr;
 
-#ifdef __x86_64__
+    #ifdef __x86_64__
 extern ulong idle_cr3;
-#endif
+    #endif
 
 void construct_paging()
 {
@@ -178,12 +178,12 @@ void construct_paging()
         }
 
         // Print memory map
-        serial_logger.printf(" Memory map region %i: 0x%h - 0x%h, type %i\n", i,
+        serial_logger.printf(" Memory map region %li: 0x%lh - 0x%lh, type %li\n", i,
                              resp.entries[i]->base, resp.entries[i]->base + resp.entries[i]->length,
                              resp.entries[i]->type);
     }
 
-    serial_logger.printf("Found the largest memory region at 0x%h, size 0x%h\n", temp_alloc_base,
+    serial_logger.printf("Found the largest memory region at 0x%lh, size 0x%lh\n", temp_alloc_base,
                          temp_alloc_size);
 
     init_mapper.virt_offset = hhdm_request.response->offset;
@@ -281,7 +281,7 @@ void construct_paging()
         .extra              = PAGING_FLAG_STRUCT_PAGE,
     };
 
-    map_pages(kernel_ptable_top, text_phys, text_virt, text_size, args);
+    map_pages(kernel_ptable_top, text_phys, (void *)text_virt, text_size, args);
 
     const u64 rodata_start  = (u64)(&_rodata_start) & ~0xfff;
     const u64 rodata_end    = ((u64)&_rodata_end + 0xfff) & ~0xfff;
@@ -290,7 +290,7 @@ void construct_paging()
     const u64 rodata_phys   = kernel_phys + rodata_offset;
     const u64 rodata_virt   = kernel_start_virt + rodata_offset;
     args                    = {true, false, false, true, true, PAGING_FLAG_STRUCT_PAGE};
-    map_pages(kernel_ptable_top, rodata_phys, rodata_virt, rodata_size, args);
+    map_pages(kernel_ptable_top, rodata_phys, (void *)rodata_virt, rodata_size, args);
     if (result != 0)
         hcf();
 
@@ -302,7 +302,7 @@ void construct_paging()
     const u64 data_phys   = kernel_phys + data_offset;
     const u64 data_virt   = kernel_start_virt + data_offset;
     args                  = {true, true, false, true, true, PAGING_FLAG_STRUCT_PAGE};
-    map_pages(kernel_ptable_top, data_phys, data_virt, data_size, args);
+    map_pages(kernel_ptable_top, data_phys, (void *)data_virt, data_size, args);
 
     const u64 eh_frame_start  = (u64)(&__eh_frame_start) & ~0xfff;
     // Same as with data; merge eh_frame and gcc_except_table
@@ -312,7 +312,7 @@ void construct_paging()
     const u64 eh_frame_phys   = kernel_phys + eh_frame_offset;
     const u64 eh_frame_virt   = kernel_start_virt + eh_frame_offset;
     args                      = {true, false, false, true, true, PAGING_FLAG_STRUCT_PAGE};
-    map_pages(kernel_ptable_top, eh_frame_phys, eh_frame_virt, eh_frame_size, args);
+    map_pages(kernel_ptable_top, eh_frame_phys, (void *)eh_frame_virt, eh_frame_size, args);
 
     serial_logger.printf("Switching to in-kernel page table...\n");
 
@@ -320,10 +320,6 @@ void construct_paging()
 
     // Set up the right mapper (since there is no direct map anymore) and bitmap
     global_temp_mapper = &temp_temp_mapper;
-
-    // Allocate Page structs
-    for (auto &i: kernel::pmm::free_pages_list)
-        i.init();
 
     serial_logger.printf("Paging initialized!\n");
 
@@ -398,7 +394,7 @@ void construct_paging()
             .execution_disabled = true,
             .extra              = PAGING_FLAG_STRUCT_PAGE,
         };
-        map_pages(kernel_ptable_top, phys_addr, (u64)virt_addr, page_struct_page_size, args);
+        map_pages(kernel_ptable_top, phys_addr, (void *)virt_addr, page_struct_page_size, args);
 
         Page *pages             = (Page *)virt_addr;
         // Reserve first and last page
@@ -407,6 +403,11 @@ void construct_paging()
 
         // Map from the first page
         pages++;
+
+        // Add the region to the PMM
+        auto r = pmm::add_page_array(base_addr, entries - 2, pages);
+        if (!r)
+            assert(!"Failed to add region to PMM");
 
         for (long i = first_index; i <= last_index; i++) {
             if (regions_data[i].type == LIMINE_MEMMAP_USABLE) {
@@ -479,11 +480,61 @@ void construct_paging()
                 }
             }
         }
+    };
 
-        // Add the region to the PMM
-        auto r = pmm::add_page_array(base_addr, entries - 2, pages);
-        if (!r)
-            assert(!"Failed to add region to PMM");
+    auto split_into_regions = [&](long first_index, long last_index) -> void {
+        u64 current_addr = regions_data[first_index].base;
+        u64 end_addr = regions_data[last_index].base + regions_data[last_index].length;
+        auto current_index = first_index;
+
+        while (current_addr < end_addr) {
+            PMMRegion *region = PMMRegion::get(current_addr);
+            assert(region);
+
+            u64 final_addr = region->start + region->size_bytes;
+            while (current_index != last_index and
+                   regions_data[current_index + 1].base <= current_addr) {
+                current_index++;
+            }
+            auto i = current_index;
+
+            while (i <= last_index and
+                   (final_addr == 0 or regions_data[i].base < final_addr)) {
+                i++;
+            }
+            assert(i > current_index);
+            auto last_index = i - 1;
+
+            auto saved_first = regions_data[current_index];
+            auto saved_last  = regions_data[last_index];
+
+            if (current_addr > regions_data[current_index].base) {
+                u64 diff = current_addr - regions_data[current_index].base;
+                assert(diff < regions_data[current_index].length);
+                regions_data[current_index].length -= diff;
+                regions_data[current_index].base = current_addr;
+            }
+            if (final_addr != 0 and
+                regions_data[last_index].base + regions_data[last_index].length >
+                    final_addr) {
+                u64 diff = regions_data[last_index].base +
+                           regions_data[last_index].length - final_addr;
+                assert(diff > 0);
+                regions_data[last_index].length -= diff;
+            }
+
+            u64 final_final_addr =
+                regions_data[last_index].base + regions_data[last_index].length;
+            assert(final_final_addr != 0);
+
+            new_region_func(current_index, last_index);
+
+            regions_data[current_index] = saved_first;
+            regions_data[last_index]    = saved_last;
+
+            current_addr  = final_final_addr;
+            current_index = last_index;
+        }
     };
 
     long first_index_of_range = -1;
@@ -495,26 +546,38 @@ void construct_paging()
             if (first_index_of_range == -1) {
                 first_index_of_range = i;
             } else if (region_last_addr(i - 1) < regions_data[i].base) {
-                new_region_func(first_index_of_range, i - 1);
+                split_into_regions(first_index_of_range, i - 1);
                 first_index_of_range = i;
             }
             if (i == resp.entry_count - 1) {
-                new_region_func(first_index_of_range, i);
+                split_into_regions(first_index_of_range, i);
             }
         } else if (first_index_of_range != -1) {
-            new_region_func(first_index_of_range, i - 1);
+            split_into_regions(first_index_of_range, i - 1);
             first_index_of_range = -1;
         }
     }
 
     // Add the temporary region
     Page *temp_region_page = pmm::find_page(temp_alloc_base);
-    auto reserved_count    = temp_alloc_reserved / PAGE_SIZE;
+    assert(temp_region_page);
+    auto reserved_count = temp_alloc_reserved / PAGE_SIZE;
     for (size_t i = 0; i < reserved_count; i++) {
-        temp_region_page[i].type       = Page::PageType::Allocated;
-        temp_region_page[i].l.owner    = nullptr;
-        temp_region_page[i].flags      = 0;
-        temp_region_page[i].l.refcount = 1;
+        auto desc        = PageArrayDescriptor::find(temp_region_page + i);
+        size_t first_idx = temp_region_page - desc->pages;
+        size_t last_idx  = reserved_count - i + first_idx > desc->size ? desc->size - first_idx + i
+                                                                       : reserved_count;
+        for (; i < last_idx; ++i) {
+            temp_region_page[i].type       = Page::PageType::Allocated;
+            temp_region_page[i].l.owner    = nullptr;
+            temp_region_page[i].flags      = 0;
+            temp_region_page[i].l.refcount = 1;
+        }
+        if (i < reserved_count) {
+            auto next = desc->next();
+            assert(next);
+            temp_region_page = next->pages;
+        }
     }
 
     auto size                            = temp_alloc_size / PAGE_SIZE;

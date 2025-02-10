@@ -204,7 +204,7 @@ extern "C" void pagefault_manager(NestedIntContext *kernel_ctx, ulong err)
     TaskDescriptor *task = c->current_task;
 
     // Get the memory location which has caused the fault
-    auto virtual_addr = getCR2();
+    auto virtual_addr = (void *)getCR2();
 
     // t_print_bochs("Debug: Pagefault %h pid %i (%s) rip %h error %h\n",
     // virtual_addr, task->task_id, task->name.c_str(), task->regs.program_counter(), err);
@@ -214,7 +214,7 @@ extern "C" void pagefault_manager(NestedIntContext *kernel_ctx, ulong err)
 
         auto &regions       = task->page_table->paging_regions;
         const auto it       = regions.get_smaller_or_equal(virtual_addr);
-        const auto addr_all = virtual_addr & ~07777;
+        const auto addr_all = (u64)virtual_addr & ~07777;
 
         // Reads can't really be checked on x86, so don't set read flag
         ulong access_mask = (err & 0x002)       ? Generic_Mem_Region::Writeable
@@ -226,7 +226,7 @@ extern "C" void pagefault_manager(NestedIntContext *kernel_ctx, ulong err)
             if (!r.success())
                 return r.result;
             if (!r.val)
-                task->atomic_block_by_page(addr_all, &task->page_table->blocked_tasks);
+                task->atomic_block_by_page((void *)addr_all, &task->page_table->blocked_tasks);
 
             return 0;
         }
