@@ -84,7 +84,7 @@ ReturnStr<u64> block_current_task(Generic_Port *ptr)
     return {0, 0};
 }
 
-void TaskDescriptor::atomic_block_by_page(u64 page, sched_queue *blocked_ptr)
+void TaskDescriptor::atomic_block_by_page(void *page, sched_queue *blocked_ptr)
 {
     assert(status != TaskStatus::TASK_BLOCKED && "task cannot be blocked twice");
 
@@ -186,7 +186,7 @@ void TaskDescriptor::switch_to()
     start_timer(assign_quantum_on_priority(priority));
 }
 
-bool TaskDescriptor::atomic_try_unblock_by_page(u64 page)
+bool TaskDescriptor::atomic_try_unblock_by_page(void *page)
 {
     Auto_Lock_Scope scope_lock(sched_lock);
 

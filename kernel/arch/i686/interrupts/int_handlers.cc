@@ -83,7 +83,7 @@ void print_stack_trace(Logger &logger, stack_frame *s);
 
 extern "C" void page_fault_handler(kernel_registers_context *ctx, u32 err)
 {
-    auto virtual_addr = getCR2();
+    auto virtual_addr = (void *)getCR2();
 
     if (ctx) {
         // attempt to resolve it
@@ -93,7 +93,7 @@ extern "C" void page_fault_handler(kernel_registers_context *ctx, u32 err)
             Temp_Mapper_Obj<u32> cr3_mapper(request_temp_mapper());
             u32 *cr3_pd = cr3_mapper.map(getCR3() & 0xfffff000);
 
-            auto idx = virtual_addr >> 22;
+            auto idx = (ulong)virtual_addr >> 22;
             if ((idle_pd[idx] & PAGE_PRESENT) and not(cr3_pd[idx] & PAGE_PRESENT)) {
                 cr3_pd[idx] = idle_pd[idx];
                 return;
@@ -108,7 +108,7 @@ extern "C" void page_fault_handler(kernel_registers_context *ctx, u32 err)
             // This pagefault is normal...
             ctx->eip = (u32)c->jumpto_func;
             ctx->eax = c->jumpto_arg;
-            ctx->ecx = virtual_addr;
+            ctx->ecx = (ulong)virtual_addr;
             return;
         }
 
@@ -131,7 +131,7 @@ extern "C" void page_fault_handler(kernel_registers_context *ctx, u32 err)
 
         auto &regions       = task->page_table->paging_regions;
         const auto it       = regions.get_smaller_or_equal(virtual_addr);
-        const auto addr_all = virtual_addr & ~07777;
+        const auto addr_all = (void *)((ulong)virtual_addr & ~07777);
 
         ulong access_mask = (err & 0x002)       ? Generic_Mem_Region::Writeable
                             : 0 | (err & 0x010) ? Generic_Mem_Region::Executable

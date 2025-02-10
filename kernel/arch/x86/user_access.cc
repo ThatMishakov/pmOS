@@ -7,13 +7,12 @@ extern "C" ReturnStr<bool> user_access_page_fault(unsigned access, const char *f
 {
     TaskDescriptor *current_task = get_current_task();
 
-    ulong page               = (ulong)faulting_addr & ~0xfff;
-    ReturnStr<bool> result = current_task->page_table->prepare_user_page(page, access);
+    ReturnStr<bool> result = current_task->page_table->prepare_user_page((void *)faulting_addr, access);
     if (!result.success())
         return result;
 
     if (!result.val) {
-        current_task->atomic_block_by_page(page, &current_task->page_table->blocked_tasks);
+        current_task->atomic_block_by_page((void *)faulting_addr, &current_task->page_table->blocked_tasks);
         return false;
     }
 

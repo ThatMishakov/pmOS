@@ -110,7 +110,7 @@ void map_kernel(ultra_boot_context *ctx)
         .extra              = PAGING_FLAG_STRUCT_PAGE,
     };
 
-    kresult_t result = map_pages(idle_cr3, text_phys, text_virt, text_size, args);
+    kresult_t result = map_pages(idle_cr3, text_phys, (void *)text_virt, text_size, args);
     if (result)
         panic("Couldn't map kernel text\n");
 
@@ -121,7 +121,7 @@ void map_kernel(ultra_boot_context *ctx)
     const u32 rodata_phys   = kernel_phys + rodata_offset;
     const u32 rodata_virt   = kernel_start_virt + rodata_offset;
     args                    = {true, false, false, true, true, PAGING_FLAG_STRUCT_PAGE};
-    result                  = map_pages(idle_cr3, rodata_phys, rodata_virt, rodata_size, args);
+    result                  = map_pages(idle_cr3, rodata_phys, (void *)rodata_virt, rodata_size, args);
     if (result != 0)
         hcf();
 
@@ -132,7 +132,7 @@ void map_kernel(ultra_boot_context *ctx)
     const u64 data_phys   = kernel_phys + data_offset;
     const u64 data_virt   = kernel_start_virt + data_offset;
     args                  = {true, true, false, true, true, PAGING_FLAG_STRUCT_PAGE};
-    result                = map_pages(idle_cr3, data_phys, data_virt, data_size, args);
+    result                = map_pages(idle_cr3, data_phys, (void *)data_virt, data_size, args);
     if (result)
         panic("Couldn't map kernel data\n");
 
@@ -144,7 +144,7 @@ void map_kernel(ultra_boot_context *ctx)
     const u64 eh_frame_phys   = kernel_phys + eh_frame_offset;
     const u64 eh_frame_virt   = kernel_start_virt + eh_frame_offset;
     args                      = {true, false, false, true, true, PAGING_FLAG_STRUCT_PAGE};
-    result = map_pages(idle_cr3, eh_frame_phys, eh_frame_virt, eh_frame_size, args);
+    result = map_pages(idle_cr3, eh_frame_phys, (void *)eh_frame_virt, eh_frame_size, args);
     if (result)
         panic("Couldn't map kernel eh_frame\n");
 }
@@ -237,7 +237,7 @@ void pmm_create_regions(klib::vector<ultra_memory_map_entry> &regions_data)
             .execution_disabled = true,
             .extra              = PAGING_FLAG_STRUCT_PAGE,
         };
-        auto result = map_pages(idle_cr3, phys_addr, (u64)virt_addr, page_struct_page_size, args);
+        auto result = map_pages(idle_cr3, phys_addr, virt_addr, page_struct_page_size, args);
         if (result)
             panic("Couldn't map page structs\n");
 

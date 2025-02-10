@@ -177,8 +177,8 @@ ReturnStr<bool> prepare_user_buff_rd(const char *buff, size_t size)
 
     TaskDescriptor *current_task = get_current_task();
 
-    if (addr_start > current_task->page_table->user_addr_max() or
-        end > current_task->page_table->user_addr_max() or addr_start > end)
+    if (buff > current_task->page_table->user_addr_max() or
+        (void *)end > current_task->page_table->user_addr_max() or buff > (void *)end)
         return Error(-EFAULT);
 
     current_task->request_repeat_syscall();
@@ -187,12 +187,12 @@ ReturnStr<bool> prepare_user_buff_rd(const char *buff, size_t size)
         for (u64 i = addr_start; i < end; ++i) {
             u64 page = i & ~0xfffULL;
             auto result =
-                current_task->page_table->prepare_user_page(page, Page_Table::Protection::Readable);
+                current_task->page_table->prepare_user_page((void *)page, Page_Table::Protection::Readable);
             if (!result.success())
                 return result.propagate();
 
             if (not result.val) {
-                current_task->atomic_block_by_page(page, &current_task->page_table->blocked_tasks);
+                current_task->atomic_block_by_page((void *)page, &current_task->page_table->blocked_tasks);
                 return false;
             }
         }
@@ -211,22 +211,22 @@ ReturnStr<bool> prepare_user_buff_wr(char *buff, size_t size)
     u64 end        = addr_start + size;
 
     TaskDescriptor *current_task = get_current_task();
-    u64 kern_addr_start          = current_task->page_table->user_addr_max();
+    void *kern_addr_start          = current_task->page_table->user_addr_max();
 
-    if (addr_start > kern_addr_start or end > kern_addr_start or addr_start > end)
+    if (buff > kern_addr_start or (void *)end > kern_addr_start or buff > (void *)end)
         return Error(-EFAULT);
 
     auto result = [&]() -> ReturnStr<bool> {
         current_task->request_repeat_syscall();
         for (u64 i = addr_start; i < end; ++i) {
             u64 page = i & ~0xfffULL;
-            auto t   = current_task->page_table->prepare_user_page(page,
+            auto t   = current_task->page_table->prepare_user_page((void *)page,
                                                                    Page_Table::Protection::Writeable);
             if (!t.success())
                 return t.propagate();
 
             if (not t.val) {
-                current_task->atomic_block_by_page(page, &current_task->page_table->blocked_tasks);
+                current_task->atomic_block_by_page((void *)page, &current_task->page_table->blocked_tasks);
                 return false;
             }
         }

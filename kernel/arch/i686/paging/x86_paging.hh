@@ -43,7 +43,7 @@ class IA32_Page_Table final: public Page_Table
 public:
     klib::shared_ptr<IA32_Page_Table> create_clone();
     // TODO: Make a pointer...
-    u64 user_addr_max() const override;
+    void *user_addr_max() const override;
 
     static klib::shared_ptr<IA32_Page_Table> get_page_table(u64 id);
     static bool is_32bit() { return true; }
@@ -55,27 +55,27 @@ public:
 
     virtual ~IA32_Page_Table();
 
-    virtual void invalidate_tlb(u64 page) override;
-    virtual void invalidate_tlb(u64 page, u64 size) override;
+    virtual void invalidate_tlb(void *page) override;
+    virtual void invalidate_tlb(void *page, size_t size) override;
 
     virtual void tlb_flush_all() override;
 
-    virtual kresult_t resolve_anonymous_page(u64 virt_addr, u64 access_type) override;
+    virtual kresult_t resolve_anonymous_page(void *virt_addr, unsigned access_type) override;
 
-    virtual kresult_t map(u64 page_addr, u64 virt_addr, Page_Table_Argumments arg) override;
-    virtual kresult_t map(kernel::pmm::Page_Descriptor page, u64 virt_addr,
+    virtual kresult_t map(u64 page_addr, void *virt_addr, Page_Table_Argumments arg) override;
+    virtual kresult_t map(kernel::pmm::Page_Descriptor page, void *virt_addr,
                           Page_Table_Argumments arg) override;
 
-    virtual kresult_t copy_anonymous_pages(const klib::shared_ptr<Page_Table> &to, u64 from_addr,
-                                           u64 to_addr, u64 size_bytes, u8 new_access) override;
+    virtual kresult_t copy_anonymous_pages(const klib::shared_ptr<Page_Table> &to, void *from_addr,
+                                           void *to_addr, size_t size_bytes, unsigned new_access) override;
 
-    virtual bool is_mapped(u64 addr) const override;
+    virtual bool is_mapped(void *addr) const override;
 
-    virtual void invalidate(TLBShootdownContext &ctx, u64 virt_addr, bool free) override;
-    virtual void invalidate_range(TLBShootdownContext &ctx, u64 virt_addr, u64 size_bytes,
+    virtual void invalidate(TLBShootdownContext &ctx, void *virt_addr, bool free) override;
+    virtual void invalidate_range(TLBShootdownContext &ctx, void *virt_addr, size_t size_bytes,
                                   bool free) override;
 
-    virtual Page_Info get_page_mapping(u64 virt_addr) const override;
+    virtual Page_Info get_page_mapping(void *virt_addr) const override;
 
 protected:
     unsigned cr3 = -1;

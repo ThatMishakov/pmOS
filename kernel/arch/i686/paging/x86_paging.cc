@@ -158,7 +158,7 @@ kresult_t ia32_map_page(u32 cr3, u64 phys_addr, void *virt_addr, Page_Table_Argu
     }
 }
 
-IA32_Page_Table::Page_Info IA32_Page_Table::get_page_mapping(u64 virt_addr) const
+IA32_Page_Table::Page_Info IA32_Page_Table::get_page_mapping(void *virt_addr) const
 {
     Page_Info i {};
     if (!use_pae) {
@@ -224,7 +224,7 @@ IA32_Page_Table::Page_Info IA32_Page_Table::get_page_mapping(u64 virt_addr) cons
     return i;
 }
 
-bool IA32_Page_Table::is_mapped(u64 virt_addr) const
+bool IA32_Page_Table::is_mapped(void *virt_addr) const
 {
     if (!use_pae) {
         Temp_Mapper_Obj<u32> mapper(request_temp_mapper());
@@ -276,26 +276,26 @@ kresult_t map_kernel_page(u64 phys_addr, void *virt_addr, Page_Table_Argumments 
     return ia32_map_page(idle_cr3, phys_addr, virt_addr, arg);
 }
 
-kresult_t IA32_Page_Table::map(u64 page_addr, u64 virt_addr, Page_Table_Argumments arg)
+kresult_t IA32_Page_Table::map(u64 page_addr, void *virt_addr, Page_Table_Argumments arg)
 {
-    return ia32_map_page(cr3, page_addr, (void *)virt_addr, arg);
+    return ia32_map_page(cr3, page_addr, virt_addr, arg);
 }
 
-kresult_t IA32_Page_Table::map(pmm::Page_Descriptor page, u64 virt_addr, Page_Table_Argumments arg)
+kresult_t IA32_Page_Table::map(pmm::Page_Descriptor page, void *virt_addr, Page_Table_Argumments arg)
 {
     auto page_phys = page.get_phys_addr();
     arg.extra      = PAGING_FLAG_STRUCT_PAGE;
-    auto result    = ia32_map_page(cr3, page_phys, (void *)virt_addr, arg);
+    auto result    = ia32_map_page(cr3, page_phys, virt_addr, arg);
     if (result == 0)
         page.takeout_page();
     return result;
 }
 
-kresult_t map_pages(ptable_top_ptr_t page_table, u64 phys_addr, u64 virt_addr, u64 size,
+kresult_t map_pages(ptable_top_ptr_t page_table, u64 phys_addr, void *virt_addr, size_t size,
                     Page_Table_Argumments arg)
 {
     for (u64 i = 0; i < size; i += 4096) {
-        auto result = ia32_map_page(page_table, phys_addr + i, (void *)(virt_addr + i), arg);
+        auto result = ia32_map_page(page_table, phys_addr + i, (void *)((char *)virt_addr + i), arg);
         if (result)
             return result;
     }
@@ -399,7 +399,7 @@ void x86_invalidate_page(TLBShootdownContext &ctx, void *virt_addr, bool free, u
 
         u32 entry_saved = pt_entry;
         pt_entry        = 0;
-        ctx.invalidate_page((u32)virt_addr);
+        ctx.invalidate_page(virt_addr);
         if (free)
             free_32bit_page(entry_saved);
     } else {
@@ -431,7 +431,7 @@ void x86_invalidate_page(TLBShootdownContext &ctx, void *virt_addr, bool free, u
             return;
 
         __atomic_store_n(pt + pt_idx, 0, __ATOMIC_RELEASE);
-        ctx.invalidate_page((u32)virt_addr);
+        ctx.invalidate_page(virt_addr);
         if (free)
             free_32bit_page(pt_entry);
     }
@@ -473,7 +473,7 @@ static void x86_invalidate_pages(TLBShootdownContext &ctx, u32 cr3, void *virt_a
 
                 u32 entry_saved = pt_entry;
                 pt[j]           = 0;
-                ctx.invalidate_page((addr_of_pd + (j << 12)));
+                ctx.invalidate_page((void *)(addr_of_pd + (j << 12)));
                 if (free)
                     free_32bit_page(entry_saved);
             }
@@ -538,7 +538,7 @@ static void x86_invalidate_pages(TLBShootdownContext &ctx, u32 cr3, void *virt_a
                         continue;
 
                     __atomic_store_n(pt + k, 0, __ATOMIC_RELEASE);
-                    ctx.invalidate_page((addr_of_pd + (k << 12)));
+                    ctx.invalidate_page((void *)(addr_of_pd + (k << 12)));
                     if (free)
                         free_32bit_page(pt_entry);
                 }
@@ -553,30 +553,30 @@ kresult_t unmap_kernel_page(TLBShootdownContext &ctx, void *virt_addr)
     return 0;
 }
 
-void IA32_Page_Table::invalidate(TLBShootdownContext &ctx, u64 virt_addr, bool free)
+void IA32_Page_Table::invalidate(TLBShootdownContext &ctx, void *virt_addr, bool free)
 {
-    x86_invalidate_page(ctx, (void *)virt_addr, free, cr3);
+    x86_invalidate_page(ctx, virt_addr, free, cr3);
 }
 
-void IA32_Page_Table::invalidate_range(TLBShootdownContext &ctx, u64 virt_addr, u64 size_bytes,
+void IA32_Page_Table::invalidate_range(TLBShootdownContext &ctx, void *virt_addr, size_t size_bytes,
                                        bool free)
 {
-    x86_invalidate_pages(ctx, cr3, (void *)virt_addr, size_bytes, free);
+    x86_invalidate_pages(ctx, cr3, virt_addr, size_bytes, free);
 }
 
-void invalidate_tlb_kernel(u64 addr) { invlpg((void *)addr); }
-void invalidate_tlb_kernel(u64 addr, u64 size)
+void invalidate_tlb_kernel(void *addr) { invlpg(addr); }
+void invalidate_tlb_kernel(void *addr, size_t size)
 {
     for (u64 i = 0; i < size; i += 4096)
-        invlpg((void *)(addr + i));
+        invlpg((void *)((char *)addr + i));
 }
 
-void IA32_Page_Table::invalidate_tlb(u64 addr) { invlpg((void *)addr); }
-void IA32_Page_Table::invalidate_tlb(u64 page, u64 size)
+void IA32_Page_Table::invalidate_tlb(void *addr) { invlpg(addr); }
+void IA32_Page_Table::invalidate_tlb(void *page, size_t size)
 {
     if (size / 4096 < 64)
-        for (u64 i = 0; i < size; i += 4096)
-            invlpg((void *)(page + i));
+        for (size_t i = 0; i < size; i += 4096)
+            invlpg((void *)((char *)page + i));
 
     else
         setCR3(getCR3());
@@ -672,7 +672,7 @@ void IA32_Page_Table::free_user_pages()
     }
 }
 
-kresult_t IA32_Page_Table::resolve_anonymous_page(u64 virt_addr, u64 access_type)
+kresult_t IA32_Page_Table::resolve_anonymous_page(void *virt_addr, unsigned access_type)
 {
     assert(access_type & Writeable);
 
@@ -714,7 +714,7 @@ kresult_t IA32_Page_Table::resolve_anonymous_page(u64 virt_addr, u64 access_type
 
         {
             auto tlb_ctx = TLBShootdownContext::create_userspace(*this);
-            tlb_ctx.invalidate_page(virt_addr & ~0xffful);
+            tlb_ctx.invalidate_page((void *)((u32)virt_addr & ~0xffful));
         }
 
         u64 new_page_phys = new_descriptor.val.takeout_page();
@@ -766,7 +766,7 @@ kresult_t IA32_Page_Table::resolve_anonymous_page(u64 virt_addr, u64 access_type
 
         {
             auto tlb_ctx = TLBShootdownContext::create_userspace(*this);
-            tlb_ctx.invalidate_page(virt_addr & ~0xffful);
+            tlb_ctx.invalidate_page((void *)((u32)virt_addr & ~0xffful));
         }
 
         u64 new_page_phys = new_descriptor.val.takeout_page();
@@ -801,8 +801,8 @@ IA32_Page_Table::~IA32_Page_Table()
 }
 
 kresult_t IA32_Page_Table::copy_anonymous_pages(const klib::shared_ptr<Page_Table> &to,
-                                                u64 from_addr, u64 to_addr, u64 size_bytes,
-                                                u8 access)
+                                                void *from_addr, void *to_addr, size_t size_bytes,
+                                                unsigned access)
 {
     u32 offset = 0;
 
@@ -816,8 +816,8 @@ kresult_t IA32_Page_Table::copy_anonymous_pages(const klib::shared_ptr<Page_Tabl
         TLBShootdownContext ctx = TLBShootdownContext::create_userspace(*this);
         result                  = [&]() -> kresult_t {
             if (!use_pae) {
-                u32 start_index     = (from_addr >> 22) & 0x3FF;
-                u32 limit           = from_addr + size_bytes;
+                u32 start_index     = ((u32)from_addr >> 22) & 0x3FF;
+                u32 limit           = (u32)from_addr + size_bytes;
                 u32 to_addr_aligned = alignup(limit, 22);
                 u32 end_index       = (to_addr_aligned >> 22) & 0x3FF;
 
@@ -834,7 +834,7 @@ kresult_t IA32_Page_Table::copy_anonymous_pages(const klib::shared_ptr<Page_Tabl
                     auto pt = pt_mapper.map(pde & _32BIT_ADDR_MASK);
 
                     u32 addr_of_pd = (1 << 22) * i;
-                    u32 start_idx  = addr_of_pd > from_addr ? 0 : (from_addr >> 12) & 0x3ff;
+                    u32 start_idx  = addr_of_pd > (u32)from_addr ? 0 : ((u32)from_addr >> 12) & 0x3ff;
                     u32 end_of_pd  = (1 << 22) * (i + 1);
                     u32 end_idx    = end_of_pd <= limit ? 1024 : (limit >> 12) & 0x3ff;
                     for (unsigned j = start_idx; j < end_idx; ++j) {
@@ -849,7 +849,7 @@ kresult_t IA32_Page_Table::copy_anonymous_pages(const klib::shared_ptr<Page_Tabl
                             continue;
 
                         u32 copy_from = (1 << 22) * i + (1 << 12) * j;
-                        u32 copy_to   = copy_from - from_addr + to_addr;
+                        u32 copy_to   = (u32)copy_from - (u32)from_addr + (u32)to_addr;
 
                         Page_Table_Argumments arg = {
                                              .readable           = !!(access & Readable),
@@ -865,19 +865,19 @@ kresult_t IA32_Page_Table::copy_anonymous_pages(const klib::shared_ptr<Page_Tabl
                         if (pte & PAGE_WRITE) {
                             pte &= ~PAGE_WRITE;
                             pt[j] = pte;
-                            ctx.invalidate_page(copy_from);
+                            ctx.invalidate_page((void *)copy_from);
                         }
 
-                        auto result = to->map(klib::move(pp), copy_to, arg);
+                        auto result = to->map(klib::move(pp), (void *)copy_to, arg);
                         if (result)
                             return result;
 
-                        offset = copy_from - from_addr + PAGE_SIZE;
+                        offset = (u32)copy_from - (u32)from_addr + PAGE_SIZE;
                     }
                 }
             } else {
-                u32 start_index     = (from_addr >> 30) & 0x3;
-                u32 limit           = from_addr + size_bytes;
+                u32 start_index     = ((u32)from_addr >> 30) & 0x3;
+                u32 limit           = (u32)from_addr + size_bytes;
                 u32 to_addr_aligned = alignup(limit, 30);
                 u32 end_index       = (to_addr_aligned >> 30) & 0x3;
 
@@ -898,7 +898,7 @@ kresult_t IA32_Page_Table::copy_anonymous_pages(const klib::shared_ptr<Page_Tabl
 
                     u32 to_pd_aligned = alignup(limit, 21);
                     u32 addr_of_pdpt = (1 << 30) * i;
-                    u32 start_pd     = addr_of_pdpt > from_addr ? 0 : (from_addr >> 21) & 0x1FF;
+                    u32 start_pd     = addr_of_pdpt > (u32)from_addr ? 0 : ((u32)from_addr >> 21) & 0x1FF;
                     u32 end_of_pdpt  = (1 << 30) * (i + 1);
                     u32 end_pd       = end_of_pdpt <= to_pd_aligned ? 512 : (to_pd_aligned >> 21) & 0x1FF;
                     for (unsigned j = start_pd; j < end_pd; ++j) {
@@ -909,7 +909,7 @@ kresult_t IA32_Page_Table::copy_anonymous_pages(const klib::shared_ptr<Page_Tabl
                         pae_entry_t *pt = pt_mapper.map(pde & PAE_ADDR_MASK);
 
                         u32 addr_of_pd = addr_of_pdpt + (1 << 21) * j;
-                        u32 start_idx  = addr_of_pd > from_addr ? 0 : (from_addr >> 12) & 0x1FF;
+                        u32 start_idx  = addr_of_pd > (u32)from_addr ? 0 : ((u32)from_addr >> 12) & 0x1FF;
                         u32 end_of_pd  = addr_of_pd + (1 << 21);
                         u32 end_idx    = end_of_pd <= limit ? 512 : (limit >> 12) & 0x1FF;
                         for (unsigned k = start_idx; k < end_idx; ++k) {
@@ -924,7 +924,7 @@ kresult_t IA32_Page_Table::copy_anonymous_pages(const klib::shared_ptr<Page_Tabl
                                 continue;
 
                             u32 copy_from = addr_of_pd + (1 << 12) * k;
-                            u32 copy_to   = copy_from - from_addr + to_addr;
+                            u32 copy_to   = (u32)copy_from - (u32)from_addr + (u32)to_addr;
 
                             Page_Table_Argumments arg = {
                                                  .readable           = !!(access & Readable),
@@ -940,14 +940,14 @@ kresult_t IA32_Page_Table::copy_anonymous_pages(const klib::shared_ptr<Page_Tabl
                             if (pte & PAGE_WRITE) {
                                 pte &= ~PAGE_WRITE;
                                 __atomic_store_n(pt + k, pte, __ATOMIC_RELEASE);
-                                ctx.invalidate_page(copy_from);
+                                ctx.invalidate_page((void *)copy_from);
                             }
 
-                            auto result = to->map(klib::move(pp), copy_to, arg);
+                            auto result = to->map(klib::move(pp), (void *)copy_to, arg);
                             if (result)
                                 return result;
 
-                            offset = copy_from - from_addr + PAGE_SIZE;
+                            offset = (u32)copy_from - (u32)from_addr + PAGE_SIZE;
                         }
                     }
                 }
@@ -978,7 +978,7 @@ klib::shared_ptr<IA32_Page_Table> IA32_Page_Table::get_page_table(u64 id)
     return it->second.lock();
 }
 
-u64 IA32_Page_Table::user_addr_max() const { return 0xC0000000; }
+void *IA32_Page_Table::user_addr_max() const { return (void *)0xC0000000; }
 
 klib::shared_ptr<IA32_Page_Table> IA32_Page_Table::create_empty(unsigned)
 {

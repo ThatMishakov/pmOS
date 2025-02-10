@@ -143,7 +143,8 @@ extern "C" void syscall_handler()
 
     // TODO: This crashes if the syscall is not implemented
     if (call_n >= syscall_table.size() or syscall_table[call_n] == nullptr) {
-        serial_logger.printf("Debug: syscall %h pid %li (%s) ", call_n, task->task_id, task->name.c_str());
+        serial_logger.printf("Debug: syscall %h pid %li (%s) ", call_n, task->task_id,
+                             task->name.c_str());
         serial_logger.printf(" -> %i (%s)\n", -ENOTSUP, "syscall not implemented");
         syscall_error(task) = -ENOTSUP;
         return;
@@ -987,12 +988,12 @@ void syscall_create_normal_region()
     klib::string region_name("anonymous region");
 
     auto result = dest_task->page_table->atomic_create_normal_region(
-        addr_start, size, access & 0x07, access & 0x08, access & 0x10, klib::move(region_name), 0,
-        access & 0x20);
+        (void *)addr_start, size, access & 0x07, access & 0x08, access & 0x10,
+        klib::move(region_name), 0, access & 0x20);
     if (!result.success()) {
         syscall_error(current) = result.result;
     } else {
-        syscall_return(current) = result.val->start_addr;
+        syscall_return(current) = (ulong)result.val->start_addr;
     }
 }
 
@@ -1037,11 +1038,11 @@ void syscall_create_phys_map_region()
     }
 
     auto result = dest_task->page_table->atomic_create_phys_region(
-        addr_start, size, access & 0x07, access & 0x08, klib::string(), phys_addr);
+        (void *)addr_start, size, access & 0x07, access & 0x08, klib::string(), phys_addr);
     if (!result.success()) {
         syscall_error(current) = result.result;
     } else {
-        syscall_return(current) = result.val->start_addr;
+        syscall_return(current) = (ulong)result.val->start_addr;
     }
 }
 
@@ -1218,13 +1219,13 @@ void syscall_transfer_region()
 
     bool fixed = flags & 0x08;
 
-    const auto result = current->page_table->atomic_transfer_region(pt, region, dest, flags, fixed);
+    const auto result = current->page_table->atomic_transfer_region(pt, (void *)region, (void *)dest, flags, fixed);
     if (!result.success()) {
         syscall_error(current) = result.result;
         return;
     }
 
-    syscall_return(current) = result.val;
+    syscall_return(current) = (ulong)result.val;
 }
 
 void syscall_asign_page_table()
@@ -1390,7 +1391,7 @@ void syscall_map_mem_object()
         return;
     }
 
-    auto res = table->atomic_create_mem_object_region(addr_start, size_bytes, access & 0x7,
+    auto res = table->atomic_create_mem_object_region((void *)addr_start, size_bytes, access & 0x7,
                                                       access & 0x8, "object map", object,
                                                       access & 0x20, 0, offset, size_bytes);
 
@@ -1399,7 +1400,7 @@ void syscall_map_mem_object()
         return;
     }
 
-    syscall_return(current_task) = res.val->start_addr;
+    syscall_return(current_task) = (ulong)res.val->start_addr;
 }
 
 void syscall_delete_region()
@@ -1430,7 +1431,7 @@ void syscall_delete_region()
     // TODO: Contemplate about adding a check to see if it's inside the kernels address space
 
     // TODO: This is completely untested and knowing me is probably utterly broken
-    page_table->atomic_delete_region(region_start);
+    page_table->atomic_delete_region((void *)region_start);
 }
 
 void syscall_unmap_range()
@@ -1459,7 +1460,7 @@ void syscall_unmap_range()
     auto size_aligned       = (size + offset + PAGE_SIZE - 1) & ~ulong(PAGE_SIZE - 1);
 
     syscall_error(current_task) =
-        page_table->atomic_release_in_range(addr_start_aligned, size_aligned);
+        page_table->atomic_release_in_range((void *)addr_start_aligned, size_aligned);
 }
 
 void syscall_remove_from_task_group()
@@ -1864,7 +1865,7 @@ void syscall_get_page_address()
 
     Auto_Lock_Scope lock(table->lock);
 
-    auto b = table->prepare_user_page(page_base, 0);
+    auto b = table->prepare_user_page((void *)page_base, 0);
     if (!b.success()) {
         syscall_error(task) = b.result;
         return;
@@ -1873,7 +1874,7 @@ void syscall_get_page_address()
     if (not b.val)
         return;
 
-    auto mapping         = table->get_page_mapping(page_base);
+    auto mapping         = table->get_page_mapping((void *)page_base);
     syscall_return(task) = mapping.page_addr;
 }
 

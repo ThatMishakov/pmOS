@@ -123,8 +123,8 @@ ReturnStr<size_t> TaskDescriptor::init_stack()
     ulong stack_size = is_32bit() ? MB(32) : GB(2);
 
     // Prealloc a page for the stack
-    u64 stack_end        = page_table->user_addr_max(); //&_free_to_use;
-    u64 stack_page_start = stack_end - stack_size;
+    void *stack_end        = page_table->user_addr_max(); //&_free_to_use;
+    void *stack_page_start = (char *)stack_end - stack_size;
 
     static const klib::string stack_region_name = "default_stack";
 
@@ -137,7 +137,7 @@ ReturnStr<size_t> TaskDescriptor::init_stack()
         return r.propagate();
 
     // Set new rsp
-    this->regs.stack_pointer() = stack_end;
+    this->regs.stack_pointer() = (ulong)stack_end;
 
     return this->regs.stack_pointer();
 }
@@ -423,7 +423,7 @@ ReturnStr<bool>
                 protection_mask |=
                     (ph.flags & ELF_FLAG_WRITABLE) ? Page_Table::Protection::Writeable : 0;
 
-                auto res = table->atomic_create_mem_object_region(region_start, size,
+                auto res = table->atomic_create_mem_object_region((void *)region_start, size,
                                                                   protection_mask, true, name, elf,
                                                                   false, 0, file_offset, size);
                 if (!res.success())
@@ -445,8 +445,8 @@ ReturnStr<bool>
                     (ph.flags & ELF_FLAG_WRITABLE) ? Page_Table::Protection::Writeable : 0;
 
                 auto res = table->atomic_create_mem_object_region(
-                    region_start, size, protection_mask, true, name, elf, true, object_start_offset,
-                    file_offset, file_size);
+                    (void *)region_start, size, protection_mask, true, name, elf, true,
+                    object_start_offset, file_offset, file_size);
 
                 if (!res.success())
                     return res.propagate();
@@ -495,7 +495,7 @@ ReturnStr<bool>
             if (!r.val)
                 return false;
 
-            regs.arg3() = tls_virt.val->start_addr;
+            regs.arg3() = (ulong)tls_virt.val->start_addr;
         }
 
         program_entry = header.program_entry;
@@ -562,7 +562,7 @@ ReturnStr<bool>
                 protection_mask |=
                     (ph.flags & ELF_FLAG_WRITABLE) ? Page_Table::Protection::Writeable : 0;
 
-                auto res = table->atomic_create_mem_object_region(region_start, size,
+                auto res = table->atomic_create_mem_object_region((void *)(ulong)region_start, size,
                                                                   protection_mask, true, name, elf,
                                                                   false, 0, file_offset, size);
                 if (!res.success())
@@ -583,8 +583,8 @@ ReturnStr<bool>
                     (ph.flags & ELF_FLAG_WRITABLE) ? Page_Table::Protection::Writeable : 0;
 
                 auto res = table->atomic_create_mem_object_region(
-                    region_start, size, protection_mask, true, name, elf, true, object_start_offset,
-                    file_offset, file_size);
+                    (void *)(ulong)region_start, size, protection_mask, true, name, elf, true,
+                    object_start_offset, file_offset, file_size);
 
                 if (!res.success())
                     return res.propagate();
@@ -631,7 +631,7 @@ ReturnStr<bool>
             if (!r.val)
                 return false;
 
-            regs.arg3() = tls_virt.val->start_addr;
+            regs.arg3() = (ulong)tls_virt.val->start_addr;
         }
 
         program_entry = header.program_entry;
@@ -705,7 +705,7 @@ ReturnStr<bool>
     if (!b.val)
         return false;
 
-    regs.arg1() = pos;
+    regs.arg1() = (ulong)pos;
     regs.arg2() = size;
 
     init();
