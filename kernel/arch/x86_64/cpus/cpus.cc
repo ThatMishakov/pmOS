@@ -73,6 +73,7 @@ void *get_cpu_start_func() { return (void *)_cpu_entry; }
 // TODO: Explain this variable
 extern bool cpu_struct_works;
 
+bool use_x2apic = false;
 void init_per_cpu(uint32_t lapic_id)
 {
     detect_sse();
@@ -103,8 +104,12 @@ void init_per_cpu(uint32_t lapic_id)
 
     loadTSS(TSS_OFFSET);
 
-    c->lapic_id = lapic_id;
-    assert(lapic_id == (get_lapic_id() >> 24));
+    if (use_x2apic)
+        c->lapic_id = lapic_id;
+    else
+        c->lapic_id = lapic_id << 24;
+    
+    assert(c->lapic_id == get_lapic_id());
 
     // This creates a *fat* use-after-free race condition (which hopefully
     // shouldn't lead to a lot of crashes because current malloc is not that
@@ -140,6 +145,7 @@ void init_per_cpu(uint32_t lapic_id)
 }
 
 u64 bootstrap_cr3 = 0;
+
 klib::vector<u64> initialize_cpus(const klib::vector<u64> &lapic_ids)
 {
     bootstrap_cr3 = getCR3();
@@ -148,7 +154,6 @@ klib::vector<u64> initialize_cpus(const klib::vector<u64> &lapic_ids)
         serial_logger.printf("Failed to reserve memory for cpus vector in initialize_cpus()\n");
         abort();
     }
-
 
     klib::vector<u64> ret;
     if (!ret.reserve(lapic_ids.size())) {
@@ -175,7 +180,11 @@ klib::vector<u64> initialize_cpus(const klib::vector<u64> &lapic_ids)
         c->cpu_gdt.tss_descriptor.tss()->ist1 = (u64)c->kernel_stack.get_stack_top();
         c->cpu_gdt.tss_descriptor.tss()->rsp0 = (u64)c->kernel_stack.get_stack_top();
 
-        c->lapic_id = id;
+        if (use_x2apic)
+            c->lapic_id = id;
+        else
+            c->lapic_id = id << 24;
+
         cpus.push_back(c);
         c->cpu_id = cpus.size() - 1;
 
@@ -216,7 +225,7 @@ extern "C" void cpu_start_routine(CPU_Info *c)
     get_cpu_struct()->current_task->switch_to();
     reschedule();
 
-    u32 lapic_id = get_lapic_id() >> 24;
+    u32 lapic_id = get_lapic_id();
     assert(c->lapic_id == lapic_id);
     global_logger.printf("[Kernel] Initialized CPU %h\n", lapic_id);
 

@@ -223,14 +223,14 @@ void broadcast_init_ipi() { apic_write_reg(APIC_ICR_LOW, 0x000C4500); }
 
 void send_ipi_fixed(u8 vector, u32 dest)
 {
-    serial_logger.printf("[Kernel] Info: Sending IPI to %h with vector %h\n", dest, vector);
+    // serial_logger.printf("[Kernel] Info: Sending IPI to %h with vector %h\n", dest, vector);
     apic_write_reg(APIC_ICR_HIGH, dest);
     apic_write_reg(APIC_ICR_LOW, (u32)vector | (0x01 << 14));
 }
 
 void send_ipi_fixed_others(u8 vector)
 {
-    serial_logger.printf("[Kernel] Info: Sending IPI to others with vector %h\n", vector);
+    // serial_logger.printf("[Kernel] Info: Sending IPI to others with vector %h\n", vector);
     apic_write_reg(APIC_ICR_HIGH, 0);
 
     // Send to *vector* vector with Assert level and All Excluding Self
