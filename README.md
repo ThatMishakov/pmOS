@@ -1,6 +1,6 @@
 # pmOS
 
-A small (hobby) operating for x86_64 and RISC-V, using a homemade microkernel, C library and userspace, partially developed as my end of degree project. The goal of the project is to make a general purpose operating system, with the objective of learning and being suitable for development and exploration of the RISC-V and X86 platforms. The microkernel is mostly written in C++, and the userspace is in a mixture of C and C++ (and ASM where needed). The [limine bootloader](https://limine-bootloader.org/) is used for booting the system.
+A small (hobby) operating for RISC-V and x86 (i686 and x86_64), using a homemade microkernel, C library and userspace, partially developed as my end of degree project. The goal of the project is to make a general purpose operating system, with the objective of learning and being suitable for development and exploration of the RISC-V and X86 platforms. The microkernel is mostly written in C++, and the userspace is in a mixture of C and C++ (and ASM where needed). The [limine bootloader](https://limine-bootloader.org/) and [Hyper bootloader](https://github.com/UltraOS/Hyper) are used for booting the system, depending on the architecture.
 
 ## Screenshots
 RISC-V Execution:
@@ -19,9 +19,11 @@ The system supports booting by the limine protocol. In the past, multiboot2 was 
 
 As such, the `kernel` directory contains the kernel, the `lib` contains userspace C libraries, `sysroot` contains system headers, `limine` contains the bootloader configs, and the rest of the directories contain different userspace programs, which make up the system. All of the drivers (including framebuffer) are run in userspace.
 
+The i686 port is using [Hyper](https://github.com/UltraOS/Hyper) bootloader and its Ultra protocol.
+
 ## Compilation and execution
 
-The patched LLVM infrastructure (clang compiler and lld linker), targeting pmOS, is used for both the kernel and userspace. Before that, GCC and binutils were used, which probably still work, but I haven't been using/testing them. The build scritps expect to see the clang binaries targeting pmOS in the PATH. The ARCH environment variable controls the target architecture of build scripts (riscv64 or x86_64).
+The patched LLVM infrastructure (clang compiler and lld linker), targeting pmOS, is used for both the kernel and userspace. Before that, GCC and binutils were used, which probably still work, but I haven't been using/testing them. The build scritps expect to see the clang binaries targeting pmOS in the PATH. The ARCH environment variable controls the target architecture of build scripts (riscv64, x86_64 or i686).
 
 The patched clang sources can be obtained from [https://gitlab.com/mishakov/llvm-pmos](https://gitlab.com/mishakov/llvm-pmos). The [https://llvm.org/docs/CMake.htm](https://llvm.org/docs/CMake.html) is an documentation for compiling LLVM.
 
@@ -61,6 +63,7 @@ These are the features that are planned to be had in the OS:
 
 - [ ] Memory
   - [x] Page frame allocator
+    - [x] Zone allocator - currently only splits memory into <4GB and >=4GB zones (for legacy devices)
   - [x] Kernel virtual memory manager
   - [x] kmalloc
   - [x] Allocating memory to userspace
@@ -99,14 +102,14 @@ These are the features that are planned to be had in the OS:
   - [x] Buffered string messages
   - [x] Ports
   - [x] Kernel messages
-  - [ ] Quicker messaging
+  - [x] Quicker messaging - only implemented on x86 for now
   
 - [ ] Permissions
 - [x] Multi CPU support
 
 #### RISC-V specific features:
 
-- [x] Virtual memory
+- [x] Virtual memory - 3 to 5 level page tables
 - [x] Exceptions
 - [x] Timer interrupt
 - [x] Userspace/U mode
@@ -120,6 +123,17 @@ These are the features that are planned to be had in the OS:
 - [x] LAPIC
 - [x] Userspace/Ring 3
 - [x] Multi CPU support
+
+#### i686 specific features:
+
+- [x] Virtual memory
+  - [x] 2 level page tables
+  - [x] PAE - supports and uses up to 16GB of RAM, if available
+- [x] Exceptions
+- [x] Timer interrupt
+- [x] LAPIC
+- [x] Userspace/Ring 3
+- [ ] Multi CPU support - should be easy to implement, but not yet done
 
 
 **Core utilities and daemons**
@@ -142,18 +156,19 @@ These are the features that are planned to be had in the OS:
 
 **Drivers**
 - [X] PS/2
-  - [ ] Keyboard - was working, but is now broken after porting to RISC-V
+  - [X] Keyboard - works, but needs something to funnel the input to
   - [ ] Mouse
-- [ ] i8042
-  - Broken after porting to RISC-V
+- [X] i8042
 - [ ] ATA/Bulk storage
   - [ ] AHCI
     - [X] Controller detection and initialization
     - [X] Device detection
     - [X] DMA
     - [X] interrupts handling
-    - [ ] Reading and writing - Want to implement working set first to read directly to kernel cache
-    - [ ] NVMe
+    - [X] Reading
+    - [ ] Writing - no filesystems yet
+  - [ ] NVMe
+  - [ ] Virtio block
 - [ ] USB
 - [X] Serial/Parallel - ns16550 using interrupts for receiving and sending. Works on RISC-V, missing IO ports stuff and untested on x86.
 - [X] PCI/PCIe
@@ -168,7 +183,7 @@ These are the features that are planned to be had in the OS:
   - [X] IRQ routing
   - [X] Power button (interrupt) and shutting down
   - [X] EC driver
-  - [X] AMG GPIO driver
+  - [X] AMD GPIO driver
 
 
 **Userland**
