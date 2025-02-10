@@ -113,9 +113,10 @@ void print_registers(TaskDescriptor *task, Logger &logger)
     logger.printf("  pc 0x%x\n", task->regs.pc);
 }
 
-void page_fault(u64 virt_addr, u64 scause)
+void page_fault(u64 addr, u64 scause)
 {
-    const u64 page = virt_addr & ~0xfffUL;
+    const u64 page = (u64)addr & ~0xfffUL;
+    void *virt_addr = (void *)addr;	
 
     u64 access_type = 0;
     switch (scause) {
@@ -140,7 +141,7 @@ void page_fault(u64 virt_addr, u64 scause)
         Auto_Lock_Scope lock(page_table->lock);
 
         auto &regions = page_table->paging_regions;
-        auto it       = regions.get_smaller_or_equal(page);
+        auto it       = regions.get_smaller_or_equal(virt_addr);
         if (it != regions.end() and it->is_in_range(virt_addr)) {
             // serial_logger.printf("Pagefault in region %s\n",
             // it->name.c_str());
@@ -149,7 +150,7 @@ void page_fault(u64 virt_addr, u64 scause)
                 return r.result;
 
             if (not r.val) {
-                task->atomic_block_by_page(page, &task->page_table->blocked_tasks);
+                task->atomic_block_by_page((void *)page, &task->page_table->blocked_tasks);
             }
 
             return 0;
@@ -214,7 +215,8 @@ void illegal_instruction(u32 instruction)
                 return b.result;
 
             if (not b.val) {
-                task->atomic_block_by_page(task->regs.pc, &task->page_table->blocked_tasks);
+                auto page_aligned = task->regs.pc & ~0xfffUL;
+                task->atomic_block_by_page((void *)page_aligned, &task->page_table->blocked_tasks);
                 return 0;
             }
         }

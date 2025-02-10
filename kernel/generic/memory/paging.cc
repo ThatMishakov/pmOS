@@ -681,6 +681,9 @@ TLBShootdownContext TLBShootdownContext::create_kernel()
 
 void TLBShootdownContext::invalidate_page(void *page)
 {
+    // TODO: Align this to page size
+    page = (void *)((ulong)page & ~0xfffULL);
+
     if (pages_count == MAX_PAGES and for_kernel())
         finalize();
 

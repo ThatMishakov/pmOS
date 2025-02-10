@@ -251,8 +251,10 @@ ReturnStr<bool> copy_from_user(char *to, const char *from, size_t size)
     if (addr + size > max_addr or addr > (UINTPTR_MAX - size))
         return Error(-EFAULT);
 
+    #ifndef __riscv
     if (fast_copy_from_user)
         return fast_copy_from_user(to, from, size);
+    #endif
 
     Auto_Lock_Scope l(current_task->page_table->lock);
 
@@ -275,8 +277,10 @@ ReturnStr<bool> copy_to_user(const char *from, char *to, size_t size)
     if (addr + size > max_addr or addr > (UINTPTR_MAX - size))
         return Error(-EFAULT);
 
+    #ifndef __riscv
     if (fast_copy_to_user)
         return fast_copy_to_user(to, from, size);
+    #endif
 
     Auto_Lock_Scope l(current_task->page_table->lock);
 

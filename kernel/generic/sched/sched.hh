@@ -44,6 +44,7 @@
 #include <pmos/containers/intrusive_list.hh>
 #include <registers.hh>
 #include <types.hh>
+#include <lib/string.hh>
 
 #if defined(__x86_64__) || defined(__i386__)
     #include <interrupts/gdt.hh>
