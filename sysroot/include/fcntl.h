@@ -30,22 +30,23 @@
 #define __FCNTL_H
 #include <sys/types.h>
 
-#define F_DUPFD  (0)
-#define F_GETFD  (1)
-#define F_SETFD  (2)
-#define F_GETFL  (3)
-#define F_SETFL  (4)
-#define F_GETLK  (5)
-#define F_SETLK  (6)
-#define F_SETLKW (7)
-#define F_GETOWN (8)
-#define F_SETOWN (9)
+#define F_DUPFD  (1)
+#define F_GETFD  (2)
+#define F_SETFD  (3)
+#define F_GETFL  (4)
+#define F_SETFL  (5)
+#define F_GETLK  (6)
+#define F_SETLK  (7)
+#define F_SETLKW (8)
+#define F_GETOWN (9)
+#define F_SETOWN (10)
+#define F_DUPFD_CLOEXEC (11)
 
-#define FD_CLOEXEC (0)
+#define FD_CLOEXEC (1)
 
-#define F_RDLCK (0)
-#define F_UNLCK (1)
-#define F_WRLCK (2)
+#define F_RDLCK (1)
+#define F_UNLCK (2)
+#define F_WRLCK (3)
 
 #define O_CREAT     (04)
 #define O_EXCL      (010)
@@ -62,12 +63,12 @@
 #define O_DSYNC    (020000)
 #define O_RSYNC    (04010000)
 
-#define O_ACCMODE (07)
+#define O_ACCMODE (03)
 
 #define O_SEARCH (00)
 #define O_RDONLY (01)
-#define O_RDWR   (02)
-#define O_WRONLY (03)
+#define O_RDWR   (03)
+#define O_WRONLY (02)
 
 #define AT_FDCWD (-1)
 

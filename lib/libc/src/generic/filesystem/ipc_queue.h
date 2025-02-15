@@ -35,6 +35,7 @@
 
 extern read_func __ipc_queue_read;
 extern write_func __ipc_queue_write;
+extern writev_func __ipc_queue_writev;
 extern clone_func __ipc_queue_clone;
 extern close_func __ipc_queue_close;
 extern fstat_func __ipc_queue_fstat;
@@ -46,6 +47,7 @@ extern free_func __ipc_queue_free;
 static struct Filesystem_Adaptor __ipc_queue_adaptor = {
     .read       = &__ipc_queue_read,
     .write      = &__ipc_queue_write,
+    .writev     = &__ipc_queue_writev,
     .clone      = &__ipc_queue_clone,
     .close      = &__ipc_queue_close,
     .fstat      = &__ipc_queue_fstat,

@@ -65,7 +65,7 @@ typedef struct {
     size_t generation;
 } pthread_key_t;
 
-typedef unsigned long pthread_mutexattr_t;
+typedef unsigned pthread_mutexattr_t;
 
 typedef volatile unsigned pthread_once_t;
 
@@ -78,6 +78,6 @@ typedef struct pthread_rwlock_t {
     unsigned long writer_active;
 } pthread_rwlock_t;
 
-typedef unsigned long pthread_rwlockattr_t;
+typedef unsigned pthread_rwlockattr_t;
 
 #endif

@@ -35,6 +35,7 @@
 
 extern read_func __file_read;
 extern write_func __file_write;
+extern writev_func __file_writev;
 extern clone_func __file_clone;
 extern close_func __file_close;
 extern fstat_func __file_fstat;

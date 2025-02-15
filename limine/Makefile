@@ -177,6 +177,7 @@ $(DISK_IMAGE): ../kernel/build/kernel ../bootstrapd/bootstrapd.elf ../devicesd/d
 	mcopy -i $(BOOT_PARTITION) ../ps2d/ps2d.elf ::/
 	# mcopy -i $(BOOT_PARTITION) ../i8042/i8042.elf ::/
 	mcopy -i $(BOOT_PARTITION) ../blockd/blockd.elf ::/
+	mcopy -i $(BOOT_PARTITION) ../ext2fsd/target/x86_64-unknown-pmos/debug/ext2fsd ::/
 
 	# Create an ext2 filesystem for the root partition
 	dd if=/dev/zero of=$(EXT2_PARTITION) bs=1M count=64

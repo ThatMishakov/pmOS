@@ -36,6 +36,14 @@
 extern "C" {
 #endif
 
+#define FIOCLEX 1
+#define FIONCLEX 2
+#define FIONREAD 3
+#define FIONBIO 4
+#define FIOASYNC 5
+#define FIOSETOWN 6
+#define FIOGETOWN 7
+
 #ifdef __STDC_HOSTED__
 
 int ioctl(int fd, unsigned long request, ...);

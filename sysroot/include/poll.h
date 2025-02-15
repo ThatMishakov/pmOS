@@ -29,6 +29,9 @@
 #ifndef _POLL_H
 #define _POLL_H
 
+#define __DECLARE_SIGSET_T
+#include <__posix_types.h>
+
 struct pollfd {
     int fd;        //< file descriptor
     short events;  //< requested events
@@ -58,6 +61,7 @@ extern "C" {
 #ifdef __STDC_HOSTED__
 
 int poll(struct pollfd *fds, nfds_t nfds, int timeout);
+int ppoll(struct pollfd[], nfds_t, const struct timespec *restrict, const sigset_t *_RESTRICT);
 
 #endif // __STDC_HOSTED__
 

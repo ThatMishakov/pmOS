@@ -248,3 +248,61 @@ int pthread_cond_destroy(pthread_cond_t *cond)
     return 0;
 }
 
+int pthread_condattr_init(pthread_condattr_t *attr)
+{
+    if (attr == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    *attr = 0;
+    return 0;
+}
+
+int pthread_condattr_destroy(pthread_condattr_t *attr)
+{
+    if (attr == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    return 0;
+}
+
+int pthread_condattr_setclock(pthread_condattr_t *attr, clockid_t clock_id)
+{
+    if (attr == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    switch (clock_id) {
+        case CLOCK_REALTIME:
+            *attr |= 0x01;
+            return 0;
+        case CLOCK_MONOTONIC:
+            *attr &= ~0x01;
+            return 0;
+        default:
+            errno = EINVAL;
+            return -1;
+    }
+
+    return 0;
+}
+
+int pthread_condattr_getclock(const pthread_condattr_t *attr, clockid_t *clock_id)
+{
+    if (attr == NULL || clock_id == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (*attr & 0x01) {
+        *clock_id = CLOCK_REALTIME;
+    } else {
+        *clock_id = CLOCK_MONOTONIC;
+    }
+
+    return 0;
+}

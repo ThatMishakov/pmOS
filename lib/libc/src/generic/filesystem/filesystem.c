@@ -35,6 +35,7 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <pmos/__internal.h>
 #include <pmos/helpers.h>
 #include <pmos/ipc.h>
 #include <pmos/ports.h>
@@ -48,7 +49,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <pmos/__internal.h>
 
 static struct Filesystem_Data *fs_data = NULL;
 static pthread_spinlock_t fs_data_lock;
@@ -58,6 +58,7 @@ int vfsd_send_persistant(size_t msg_size, const void *message);
 __attribute__((visibility("hidden"))) const struct Filesystem_Adaptor __file_adaptor = {
     .read       = &__file_read,
     .write      = &__file_write,
+    .writev     = &__file_writev,
     .clone      = &__file_clone,
     .close      = &__file_close,
     .fstat      = &__file_fstat,
@@ -182,7 +183,7 @@ pmos_port_t get_filesytem_port()
 
 int __share_fs_data(uint64_t tid)
 {
-    if (ensure_fs_initialization() < 0) 
+    if (ensure_fs_initialization() < 0)
         return -1;
 
     result_t r = add_task_to_group(tid, fs_data->fs_consumer_id);
@@ -196,7 +197,7 @@ int __share_fs_data(uint64_t tid)
 
 int open(const char *path, int flags)
 {
-    if (ensure_fs_initialization() < 0) 
+    if (ensure_fs_initialization() < 0)
         return -1;
 
     int result = reserve_descriptor(fs_data);
@@ -314,7 +315,7 @@ int stat(const char *restrict name, struct stat *restrict stat)
     struct IPC_Stat_Reply *reply = NULL;
     int result_code              = 0;
 
-    if (ensure_fs_initialization() < 0) 
+    if (ensure_fs_initialization() < 0)
         return -1;
 
     pmos_port_t reply_port = prepare_reply_port();
@@ -378,7 +379,7 @@ finish:
 
 ssize_t __read_internal(long int fd, void *buf, size_t c, bool should_seek, size_t _offset)
 {
-    if (ensure_fs_initialization() < 0) 
+    if (ensure_fs_initialization() < 0)
         return -1;
 
     // Lock the file descriptor to ensure thread-safety
@@ -406,7 +407,8 @@ ssize_t __read_internal(long int fd, void *buf, size_t c, bool should_seek, size
     size_t offset    = should_seek ? file_desc.offset : _offset;
     bool is_seekable = file_desc.adaptor->isseekable(&file_desc.data, fs_data->fs_consumer_id);
 
-    ssize_t count = file_desc.adaptor->read(&file_desc.data, fs_data->fs_consumer_id, buf, c, offset);
+    ssize_t count =
+        file_desc.adaptor->read(&file_desc.data, fs_data->fs_consumer_id, buf, c, offset);
 
     if (count < 0)
         // Error
@@ -598,11 +600,7 @@ static void destroy_filesystem(struct Filesystem_Data *fs_data)
     free(fs_data);
 }
 
-_HIDDEN void __destroy_fs_data(struct Filesystem_Data *fs_data)
-{
-    destroy_filesystem(fs_data);
-};
-
+_HIDDEN void __destroy_fs_data(struct Filesystem_Data *fs_data) { destroy_filesystem(fs_data); };
 
 int __close_internal(long int filedes)
 {
@@ -611,7 +609,7 @@ int __close_internal(long int filedes)
         return -1;
     }
 
-    if (ensure_fs_initialization() < 0) 
+    if (ensure_fs_initialization() < 0)
         return -1;
 
     int result = pthread_spin_lock(&fs_data->lock);
@@ -659,7 +657,7 @@ int dup2(int oldfd, int newfd)
         return newfd;
     }
 
-    if (ensure_fs_initialization() < 0) 
+    if (ensure_fs_initialization() < 0)
         return -1;
 
     int result                                   = newfd;
@@ -743,7 +741,7 @@ int dup(int fd)
         return -1;
     }
 
-    if (ensure_fs_initialization() < 0) 
+    if (ensure_fs_initialization() < 0)
         return -1;
 
     int result                               = -1;
@@ -826,7 +824,7 @@ int close(int filedes) { return __close_internal(filedes); }
 
 int isatty(int fd)
 {
-    if (ensure_fs_initialization() < 0) 
+    if (ensure_fs_initialization() < 0)
         return -1;
 
     pthread_spin_lock(&fs_data->lock);
@@ -848,7 +846,7 @@ int isatty(int fd)
 
 int fstat(int fd, struct stat *stat)
 {
-    if (ensure_fs_initialization() < 0) 
+    if (ensure_fs_initialization() < 0)
         return -1;
 
     pthread_spin_lock(&fs_data->lock);
@@ -868,10 +866,9 @@ int fstat(int fd, struct stat *stat)
     return file_desc.adaptor->fstat(&file_desc.data, fs_data->fs_consumer_id, stat);
 }
 
-
 off_t __lseek_internal(long int fd, off_t offset, int whence)
 {
-    if (ensure_fs_initialization() < 0) 
+    if (ensure_fs_initialization() < 0)
         return -1;
 
     int result = pthread_spin_lock(&fs_data->lock);
@@ -1110,8 +1107,7 @@ void __libc_fs_unlock_post_fork()
         pthread_spin_unlock(&fs_data->lock);
 }
 
-ssize_t __write_internal(long int fd, const void *buf, size_t c, size_t _offset,
-                         bool inc_offset)
+ssize_t __write_internal(long int fd, const void *buf, size_t c, size_t _offset, bool inc_offset)
 {
     // Double-checked locking to initialize fs_data if it is NULL
     if (fs_data == NULL) {
@@ -1151,8 +1147,10 @@ ssize_t __write_internal(long int fd, const void *buf, size_t c, size_t _offset,
     bool is_seekable = file_desc.adaptor->isseekable(&file_desc.data, fs_data->fs_consumer_id);
     bool seek        = is_seekable && inc_offset;
     union File_Data data_copy = file_desc.data;
+    size_t offset = seek ? file_desc.offset : _offset;
 
-    ssize_t count = file_desc.adaptor->write(&file_desc.data, fs_data->fs_consumer_id, buf, c, _offset);
+    ssize_t count =
+        file_desc.adaptor->write(&file_desc.data, fs_data->fs_consumer_id, buf, c, offset);
 
     bool changed = memcmp(&data_copy, &file_desc.data, sizeof(union File_Data)) != 0;
 
@@ -1179,6 +1177,9 @@ ssize_t __write_internal(long int fd, const void *buf, size_t c, size_t _offset,
     if (changed)
         fs_data->descriptors_vector[fd].data = file_desc.data;
 
+    if (seek)
+        fs_data->descriptors_vector[fd].offset = _offset + count;
+
     pthread_spin_unlock(&fs_data->lock);
 
     // Return the number of bytes read
@@ -1188,4 +1189,67 @@ ssize_t __write_internal(long int fd, const void *buf, size_t c, size_t _offset,
 ssize_t write(int fd, const void *buf, size_t count)
 {
     return __write_internal(fd, buf, count, 0, true);
+}
+
+ssize_t writev(int fd, const struct iovec *iov, int iovcnt)
+{
+    if (ensure_fs_initialization() < 0)
+        return -1;
+
+    pthread_spin_lock(&fs_data->lock);
+
+    // Check if the file descriptor is valid
+    if (fd < 0 || fd >= fs_data->capacity) {
+        errno = EBADF; // Bad file descriptor
+        return -1;
+    }
+
+    struct File_Descriptor file_desc = fs_data->descriptors_vector[fd];
+
+    pthread_spin_unlock(&fs_data->lock);
+
+    if (!file_desc.used) {
+        errno = EBADF; // Bad file descriptor
+        return -1;
+    }
+
+    bool is_seekable = file_desc.adaptor->isseekable(&file_desc.data, file_desc.offset);
+    bool seek        = is_seekable && true;
+    union File_Data data_copy = file_desc.data;
+
+    ssize_t count =
+        file_desc.adaptor->writev(&file_desc.data, fs_data->fs_consumer_id, iov, iovcnt, file_desc.offset);
+
+    bool changed = memcmp(&data_copy, &file_desc.data, sizeof(union File_Data)) != 0;
+
+    if (count < 0)
+        // Error
+        return -1;
+
+    if (!seek && !changed)
+        // Don't update the offset and port
+        return count;
+
+    // Add count to the file descriptor's offset
+    pthread_spin_lock(&fs_data->lock);
+
+    // Check if the file descriptor is valid
+    if (fd < 0 || fd >= fs_data->capacity ||
+        memcmp(&fs_data->descriptors_vector[fd], &file_desc, sizeof(struct File_Descriptor)) != 0) {
+        // POSIX says that the behavior is undefined if multiple threads use the same file
+        // descriptor Be nice and don't crash the program but don't update the offset
+        pthread_spin_unlock(&fs_data->lock);
+        return count;
+    }
+
+    if (changed)
+        fs_data->descriptors_vector[fd].data = file_desc.data;
+
+    if (seek)
+        fs_data->descriptors_vector[fd].offset += count;
+
+    pthread_spin_unlock(&fs_data->lock);
+
+    // Return the number of bytes read
+    return count;
 }

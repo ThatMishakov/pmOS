@@ -170,6 +170,11 @@ int setenv(const char *name, const char *value, int overwrite)
     return 0;
 }
 
+__attribute__((constructor)) static void init_environ()
+{
+    //setenv("RUST_BACKTRACE", "1", 1);
+}
+
 char *getenv(const char *name)
 {
     size_t index = env_lower_bound(name);

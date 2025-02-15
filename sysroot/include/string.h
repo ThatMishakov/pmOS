@@ -181,6 +181,9 @@ int strerror_r(int, char *, size_t);
 char *strtok_r(char *_RESTRICT, const char *_RESTRICT, char **_RESTRICT);
 size_t strxfrm_l(char *_RESTRICT, const char *_RESTRICT, size_t, locale_t);
 
+void bzero(void *b, size_t len);
+void explicit_bzero(void *b, size_t len);
+
 #if defined(__cplusplus)
 } /* extern "C" */
 #endif

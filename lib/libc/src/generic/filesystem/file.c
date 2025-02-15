@@ -35,11 +35,12 @@
 #include <pmos/helpers.h>
 #include <pmos/ipc.h>
 #include <pmos/ports.h>
+#include <pmos/tls.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <pmos/tls.h>
-#include <stdio.h>
+#include <sys/uio.h>
 
 int vfsd_send_persistant(size_t msg_size, const void *message);
 
@@ -51,7 +52,8 @@ pmos_port_t prepare_reply_port()
         // Create a new port for the current thread
         ports_request_t port_request = create_port(TASK_ID_SELF, 0);
         if (port_request.result != SUCCESS) {
-            fprintf(stderr, "pmOS libC: prepare_reply_port() failed to create port: %s\n", strerror(-port_request.result));
+            fprintf(stderr, "pmOS libC: prepare_reply_port() failed to create port: %s\n",
+                    strerror(-port_request.result));
             errno = EIO;
         } else
             ut->cmd_reply_port = port_request.port;
@@ -80,9 +82,8 @@ static pmos_port_t request_filesystem_port()
 
 int __vfsd_send_persistant(size_t msg_size, const void *message)
 {
-    result_t k_result = fs_port != INVALID_PORT
-                            ? send_message_port(fs_port, msg_size, (char *)message)
-                            : -ENOENT;
+    result_t k_result =
+        fs_port != INVALID_PORT ? send_message_port(fs_port, msg_size, (char *)message) : -ENOENT;
 
     int fail_count = 0;
     while (k_result == -ENOENT && fail_count < 5) {
@@ -305,6 +306,67 @@ ssize_t __file_write(void *file_data, uint64_t consumer_id, const void *buf, siz
     count = reply->bytes_written;
 error:
     free(reply_msg);
+    return count;
+}
+
+ssize_t __file_writev(void *file_data, uint64_t consumer_id, const struct iovec *iov, int iovcnt,
+                      size_t offset)
+{
+    ssize_t count              = -1;
+    IPC_Generic_Msg *reply_msg = NULL;
+
+    pmos_port_t reply_port = prepare_reply_port();
+    if (reply_port == INVALID_PORT) {
+        return -1;
+    }
+
+    // TODO: This is problematic...
+    struct File *file = (struct File *)file_data;
+    for (int i = 0; i < iovcnt; i++) {
+        const size_t msg_size = sizeof(IPC_Write) + iov[i].iov_len;
+
+        uint64_t buff[1 + (msg_size - 1) / sizeof(uint64_t)];
+        IPC_Write *message      = (void *)buff;
+        message->type           = IPC_Write_NUM;
+        message->flags          = 0;
+        message->file_id        = file->file_id;
+        message->fs_consumer_id = consumer_id;
+        message->offset         = offset + count;
+        message->reply_port     = reply_port;
+
+        memcpy(message->data, iov[i].iov_base, iov[i].iov_len);
+
+        result_t k_result = send_message_port(file->fs_port, msg_size, (const char *)message);
+        if (k_result != SUCCESS) {
+            errno = EIO;
+            goto error;
+        }
+
+        Message_Descriptor reply_descr;
+        k_result = get_message(&reply_descr, (unsigned char **)&reply_msg, reply_port);
+        if (k_result != SUCCESS) {
+            errno = EIO;
+            goto error;
+        }
+
+        if (reply_msg->type != IPC_Write_Reply_NUM) {
+            errno = EIO;
+            goto error;
+        }
+
+        IPC_Write_Reply *reply = (IPC_Write_Reply *)reply_msg;
+        if (reply->result_code < 0) {
+            errno = -reply->result_code;
+            goto error;
+        }
+
+        count += reply->bytes_written;
+        continue;
+    error:
+        free(reply_msg);
+        return count;
+    }
+
     return count;
 }
 
@@ -650,7 +712,9 @@ int __create_pipe(void *file_data, uint64_t consumer_id)
     }
 
     if (reply_msg->type != IPC_Pipe_Open_Reply_NUM) {
-        fprintf(stderr, "pmOS libC: Unexpected reply message type: %x task %lx sender %lx port %lx\n", reply_msg->type, get_task_id(), reply_descr.sender, reply_port);
+        fprintf(stderr,
+                "pmOS libC: Unexpected reply message type: %x task %lx sender %lx port %lx\n",
+                reply_msg->type, get_task_id(), reply_descr.sender, reply_port);
         errno = EIO;
         free(reply_msg);
         return -1;

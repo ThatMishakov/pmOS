@@ -68,6 +68,7 @@ typedef unsigned long sig_atomic_t;
 #define SIGUSR1   18
 #define SIGUSR2   19
 #define SIGPOLL   20
+#define SIGIO     20
 #define SIGPROF   21
 #define SIGSYS    22
 #define SIGTRAP   23
@@ -76,25 +77,27 @@ typedef unsigned long sig_atomic_t;
 #define SIGXCPU   26
 #define SIGXFSZ   27
 #define SIGABRT   28
+#define SIGIOT    28
 #define SIGWINCH  29
 #define SIGPWR    30
 #define SIGINFO   31
 
 #define SIG_HOLD (void (*)(int) 3)
 
-#define SA_NOCLDSTOP 0
 #define SIG_BLOCK    1
 #define SIG_UNBLOCK  2
 #define SIG_SETMASK  3
-#define SA_ONSTACK   4
-#define SA_RESETHAND 5
-#define SA_RESTART   6
-#define SA_SIGINFO   7
-#define SA_NOCLDWAIT 8
-#define SA_NODEFER   9
-#define SS_ONSTACK   10
-#define SS_DISABLE   11
-#define MINSIGSTKSZ  (2 * 4096)
+
+#define SA_NOCLDSTOP 0x00000001
+#define SA_ONSTACK   0x00000002
+#define SA_RESETHAND 0x00000004
+#define SA_RESTART   0x00000008
+#define SA_SIGINFO   0x00000010
+#define SA_NOCLDWAIT 0x00000020
+#define SA_NODEFER   0x00000040
+#define SS_ONSTACK   1
+#define SS_DISABLE   2
+#define MINSIGSTKSZ  (4 * 4096)
 #define SIGSTKSZ     (32 * 4096)
 
 #define SIGEV_NONE   0

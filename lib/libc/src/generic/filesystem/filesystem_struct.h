@@ -32,6 +32,7 @@
 #include <stdint.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/uio.h>
 
 typedef ssize_t(read_func)(void *file_data, uint64_t consumer_id, void *buf, size_t count,
                            size_t offset);
@@ -44,6 +45,9 @@ typedef int(fstat_func)(void *file_data, uint64_t consumer_id, struct stat *stat
 typedef int(isatty_func)(void *file_data, uint64_t consumer_id);
 typedef int(isseekable_func)(void *file_data, uint64_t consumer_id);
 typedef ssize_t(filesize_func)(void *file_data, uint64_t consumer_id);
+
+typedef ssize_t(writev_func)(void *file_data, uint64_t consumer_id, const struct iovec *iov,
+                             int iovcnt, size_t offset);
 
 /// @brief Function to free the file data.
 ///
@@ -64,6 +68,7 @@ typedef void(free_func)(void *file_data, uint64_t consumer_id);
 struct Filesystem_Adaptor {
     read_func *read;
     write_func *write;
+    writev_func *writev;
     clone_func *clone;
     close_func *close;
     fstat_func *fstat;

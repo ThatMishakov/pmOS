@@ -305,6 +305,10 @@ int setenv(const char *, const char *, int);
 void setkey(const char *);
 char *setstate(const char *);
 
+__pmos32u_t arc4random(void);
+void arc4random_buf(void *buf, size_t nbytes);
+__pmos32u_t arc4random_uniform(__pmos32u_t upper_bound);
+
 #endif
 
 #if defined(__cplusplus)

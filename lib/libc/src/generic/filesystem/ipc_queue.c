@@ -108,6 +108,39 @@ ssize_t __ipc_queue_write(void *file_data, uint64_t consumer_id, const void *buf
     return write_ipc_queue(queue_port, buf, count);
 }
 
+ssize_t __ipc_queue_writev(void *file_data, uint64_t consumer_id, const struct iovec *iov, int iovcnt, size_t /* offset */)
+{
+    struct IPC_Queue *q = (struct IPC_Queue *)file_data;
+
+    pmos_port_t queue_port = q->port;
+    const char *port_name  = q->name;
+    if (queue_port == INVALID_PORT) {
+        ports_request_t port_req = get_port_by_name(port_name, strlen(port_name), 0);
+        if (port_req.result != SUCCESS) {
+            errno = -port_req.result;
+            return -1;
+        }
+
+        queue_port = port_req.port;
+        q->port    = queue_port;
+    }
+
+    ssize_t count = 0;
+    for (int i = 0; i < iovcnt; i++) {
+        ssize_t k = write_ipc_queue(queue_port, iov[i].iov_base, iov[i].iov_len);
+        if (k < 0) {
+            if (count > 0) {
+                return count;
+            }
+
+            return k;
+        }
+
+        count += k;
+    }
+    return count;
+}
+
 int __ipc_queue_clone(void *file_data, uint64_t /* unused consumer_id */, void *new_data,
                       uint64_t /* unused new_new_consumer_id */)
 {

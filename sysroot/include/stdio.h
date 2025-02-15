@@ -302,10 +302,10 @@ char *tempnam(const char *, const char *);
 
     #define BUFSIZ       4096
     #define EOF          -1
-    #define FILENAME_MAX 65536
-    #define FOPEN_MAX    65536
-    #define L_tmpnam     1
-    #define TMP_MAX      65536
+    #define FILENAME_MAX 1023
+    #define FOPEN_MAX    65535
+    #define L_tmpnam     20
+    #define TMP_MAX      238328
 
 extern FILE *stdin;
 extern FILE *stdout;

@@ -52,12 +52,12 @@ extern "C" {
  *
  * @param fd    The file descriptor to read from.
  * @param buf   The buffer to read into.
- * @param count The maximum number of bytes to read.
+ * @param iovcnt The number of elements in the `iov` array.
  * @return      The number of bytes read, or `-1` if an error occurred.
  *
  * @note        The `read` function is a cancellation point.
  */
-ssize_t readv(int fd, const struct iovec *buf, size_t count);
+ssize_t readv(int fd, const struct iovec *buf, int iovcnt);
 
 /**
  * @brief Write data from a buffer to a file descriptor.
@@ -67,12 +67,12 @@ ssize_t readv(int fd, const struct iovec *buf, size_t count);
  *
  * @param fd    The file descriptor to write to.
  * @param buf   The buffer to write from.
- * @param count The maximum number of bytes to write.
+ * @param iovcnt The number of elements in the `iov` array.
  * @return      The number of bytes written, or `-1` if an error occurred.
  *
  * @note        The `write` function is a cancellation point.
  */
-ssize_t writev(int fd, const struct iovec *buf, size_t count);
+ssize_t writev(int fd, const struct iovec *buf, int iovcnt);
 
     #ifdef __cplusplus
 } /* extern "C" */

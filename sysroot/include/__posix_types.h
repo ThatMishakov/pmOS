@@ -72,9 +72,11 @@ typedef long ptrdiff_t;
 #ifdef __i386__
 typedef long long __pmos64_t;
 typedef unsigned long long __pmos64u_t;
+typedef unsigned __pmos32u_t;
 #else
 typedef long __pmos64_t;
 typedef unsigned long __pmos64u_t;
+typedef unsigned __pmos32u_t;
 #endif
 #define __PMOS64__
 #endif
@@ -91,7 +93,7 @@ typedef __pmos64u_t blkcnt_t;
 #endif
 
 #if defined(__DECLARE_BLKSIZE_T) && !defined(__DECLARED_BLKSIZE_T)
-typedef __pmos64u_t blksize_t;
+typedef __pmos32u_t blksize_t;
     #define __DECLARED_BLKSIZE_T
 #endif
 
@@ -173,7 +175,7 @@ typedef __pmos64u_t ino_t;
 // typedef unsigned long key_t;
 
 #if defined(__DECLARE_MODE_T) && !defined(__DECLARED_MODE_T)
-typedef __pmos64u_t mode_t;
+typedef __pmos32u_t mode_t;
     #define __DECLARED_MODE_T
 #endif
 

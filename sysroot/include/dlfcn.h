@@ -42,11 +42,11 @@ typedef struct {
 
 #ifdef __STDC_HOSTED__
 
-    #define RTLD_LAZY 0x00
-    #define RTLD_NOW  0x01
+    #define RTLD_LAZY 0x01
+    #define RTLD_NOW  0x02
 
     #define RTLD_GLOBAL 0x10
-    #define RTLD_LOCAL  0x20
+    #define RTLD_LOCAL  0x00
 
 int dlclose(void *);
 char *dlerror(void);

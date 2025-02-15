@@ -91,9 +91,6 @@
 #define PTHREAD_SCOPE_PROCESS (0x01);
 #define PTHREAD_SCOPE_SYSTEM  (0x02);
 
-#define PTHREAD_CREATE_JOINABLE (0)
-#define PTHREAD_CREATE_DETACHED (1)
-
 #if defined(__cplusplus)
 extern "C" {
 #endif
@@ -674,6 +671,9 @@ int pthread_atfork(void (*prepare)(void), void (*parent)(void), void (*child)(vo
  *         on failure.
  */
 int pthread_mutex_timedlock(pthread_mutex_t *mutex, const struct timespec *abstime);
+
+int pthread_setname_np(pthread_t *thread, const char *name);
+int pthread_getname_np(pthread_t *thread, const char *name, size_t len);
 
 #if defined(__cplusplus)
 } /* extern "C" */

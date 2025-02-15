@@ -29,6 +29,8 @@
 #ifndef _DLFCN_H
 #define _DLFCN_H
 
+#include <__posix_types.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -40,7 +42,20 @@ typedef struct {
     void *dli_saddr;
 } Dl_info;
 
-inline int dladdr(void *, Dl_info *) { return 0; }
+#define RTLD_LAZY   0
+#define RTLD_NOW    1
+
+#define RTLD_GLOBAL 0x10
+#define RTLD_LOCAL  0x20
+
+#define RTDL_DEFAULT    ((void *)0)
+#define RTDL_NEXT       ((void *)1)
+
+int dladdr(void *_RESTRICT, Dl_info *_RESTRICT);
+int dlclose(void *);
+char *dlerror(void);
+void *dlopen(const char *, int);
+void *dlsym(void *_RESTRICT, const char *_RESTRICT);
 
 #ifdef __cplusplus
 }

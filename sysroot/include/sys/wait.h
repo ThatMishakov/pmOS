@@ -51,7 +51,7 @@ enum {
 /// Returns the signal that stopped the child process.
 #define WSTOPSIG(status) (((status)&0xff00) >> 8)
 /// Returns the signal that terminated the child process.
-#define WTERMSIG(status) ((status)&0xff)
+#define WTERMSIG(status) ((status)&0x7f)
 
 /// Constants for the `waitid' function.
 enum {

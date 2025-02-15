@@ -53,9 +53,9 @@ struct dirent {
     ino_t d_ino;             //< File serial number.
     off_t d_off;             //< Offset to the next directory entry.
     unsigned short d_reclen; //< Length of this record.
-    unsigned short d_type;   //< Type of file; not supported by all filesystem types.
     unsigned short d_namlen; //< Length of string in d_name.
-    char d_name[2048]; //< Null-terminated filename of length d_namlen. Maximum of NAME_MAX + 1
+    unsigned char  d_type;   //< Type of file; not supported by all filesystem types.
+    char d_name[1024]; //< Null-terminated filename of length d_namlen. Maximum of NAME_MAX + 1
                        //bytes.
 };
 

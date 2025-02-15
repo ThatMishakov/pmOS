@@ -33,3 +33,8 @@ int *__attribute__((weak)) __get_errno()
     static __thread int __errno = 0;
     return &__errno;
 }
+
+int *__errno_location()
+{
+    return __get_errno();
+}

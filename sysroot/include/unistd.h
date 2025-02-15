@@ -650,6 +650,8 @@ ssize_t pread(int fd, void *buf, size_t count, off_t offset);
  */
 int getpagesize(void);
 
+int getdtablesize(void);
+
     #if defined(__cplusplus)
 } /* extern "C" */
     #endif

@@ -140,6 +140,12 @@ enum {
     SOMAXCONN = 1024, //< Maximum number of connections.
 };
 
+enum {
+    MSG_PEEK   = 0x01, //< Peek at incoming messages.
+    MSG_OOB    = 0x02, //< Process out-of-band data.
+    MSG_WAITALL = 0x04, //< Wait for full request or return error.
+};
+
 #ifdef __cplusplus
 extern "C" {
 #endif
