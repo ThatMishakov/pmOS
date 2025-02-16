@@ -9,8 +9,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f68f53c83ab957f72c32642f3868eec03eb974d1fb82e453128456482613d36"
 
 [[package]]
+name = "endian-num"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2b4a54dfedecb1dc004776a597db0c858cf6c31579296734511309291b8399ce"
+dependencies = [
+ "bitflags",
+]
+
+[[package]]
 name = "ext2fsd"
 version = "0.1.0"
 dependencies = [
  "bitflags",
+ "endian-num",
+ "libc",
 ]
+
+[[package]]
+name = "libc"
+version = "0.2.169"
+source = "git+https://gitlab.com/mishakov/libc-pmos.git?branch=libc-0.2#dc4039e1f56dfc3f367652e87e34901e25ef0b99"

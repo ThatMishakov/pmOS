@@ -70,6 +70,8 @@ typedef struct ports_request_t {
  */
 ports_request_t create_port(pid_t owner, uint32_t flags);
 
+result_t pmos_delete_port(pmos_port_t port);
+
 /**
  * @brief Assigns a name to the unnamed port.
  *

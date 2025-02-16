@@ -88,5 +88,6 @@
 #define SYSCALL_GET_PAGE_ADDRESS            48
 #define SYSCALL_RELEASE_MEM_OBJECT          49
 #define SYSCALL_MEM_OBJECT_GET_PAGE_ADDRESS 50
+#define SYSCALL_DELETE_PORT                 51
 
 #endif
