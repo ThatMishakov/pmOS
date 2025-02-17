@@ -186,6 +186,7 @@ bool init_serial_hardcoded()
 {
     printf("Using hardcoded serial port values\n");
 
+    #ifdef __riscv
     // Hardcoded values!
     struct serial_port *port = malloc(sizeof *port);
     port->interface_type     = 0;
@@ -200,10 +201,27 @@ bool init_serial_hardcoded()
     port->terminal_type      = 0;
     port->access_type        = 0;
     port->access_width       = 1;
-
     serial_port = port;
-
     return true;
+    #elif defined(__x86_64__) || defined(__i386__)
+    struct serial_port *port = malloc(sizeof *port);
+    port->interface_type     = 0;
+    port->base_address       = 0x3f8;
+    port->interrupt          = 0x0;
+    port->pc_intno           = 4;
+    port->gsi                = 0;
+    port->baud_rate          = 9600;
+    port->parity             = 0;
+    port->stop_bits          = 1;
+    port->flow_control       = 0;
+    port->terminal_type      = 0;
+    port->access_type        = 1;
+    port->access_width       = 1;
+    serial_port = port;
+    return true;
+    #endif
+
+    return false;
 }
 
 void init_serial()
@@ -219,9 +237,9 @@ void init_serial()
             break;
         }
 
-        // if (init_serial_hardcoded()) {
-        //     break;
-        // }
+        if (init_serial_hardcoded()) {
+            break;
+        }
 
         fprintf(stderr, "No serial port found\n");
         return;

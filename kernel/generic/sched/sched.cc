@@ -34,7 +34,6 @@
 #include <assert.h>
 #include <errno.h>
 #include <kernel/block.h>
-#include <kernel/com.h>
 #include <lib/memory.hh>
 #include <linker.hh>
 #include <memory/paging.hh>

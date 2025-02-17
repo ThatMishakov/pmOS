@@ -28,7 +28,6 @@
 
 #include <kernel/attributes.h>
 #include <kernel/block.h>
-#include <kernel/com.h>
 #include <kernel/flags.h>
 #include <kernel/messaging.h>
 #include <kernel/sysinfo.h>

@@ -30,7 +30,6 @@
 #include "mem_protection.hh"
 #include "mem_regions.hh"
 
-#include <kernel/com.h>
 #include <kernel/memory.h>
 #include <lib/memory.hh>
 #include <lib/pair.hh>

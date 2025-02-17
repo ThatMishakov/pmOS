@@ -12,6 +12,7 @@
 #include <queue>
 #include <stdio.h>
 #include <string>
+#include <pmos/special.h>
 
 // Either physcial memory base or I/O port base
 uint64_t terminal_base = 0x0;
@@ -59,8 +60,8 @@ class MMIO final: public IORW
 public:
     MMIO(uint64_t base)
     {
-        auto result = create_phys_map_region(TASK_ID_SELF, nullptr, 0x1000, PROT_READ | PROT_WRITE,
-                                             base);
+        auto result =
+            create_phys_map_region(TASK_ID_SELF, nullptr, 0x1000, PROT_READ | PROT_WRITE, base);
         if (result.result != SUCCESS)
             throw std::runtime_error("Failed to map serial port");
 
@@ -79,6 +80,47 @@ public:
 
 private:
     volatile uint8_t *serial_mapped = nullptr;
+};
+
+class PORTIO final: public IORW
+{
+public:
+    PORTIO(uint64_t base): base(base)
+    {
+#if defined(__i386__) || defined(__x86_64__)
+        auto result = pmos_request_io_permission();
+        if (result < 0)
+            throw std::runtime_error("Couldn't request io permission");
+#endif
+    }
+
+#if defined(__i386__) || defined(__x86_64__)
+    void write_register(int index, uint8_t value) override
+    {
+        int port = base + index;
+        __asm__ volatile("outb %b0, %w1" : : "a"(value), "Nd"(port));
+    }
+
+    uint8_t read_register(int index) override
+    {
+        uint8_t value;
+        int port = base + index;
+        __asm__ volatile("inb %w1, %b0" : "=a"(value) : "d"(port));
+        return value;
+    }
+#else
+    void write_register(int index, uint8_t value) override
+    {
+        throw std::runtime_error("IO not supported on the platform");
+    }
+
+    uint8_t read_register(int index) override
+    {
+        throw std::runtime_error("IO not supported on the platform");
+    }
+#endif
+private:
+    int base;
 };
 
 std::unique_ptr<IORW> io_rw = nullptr;
@@ -106,56 +148,105 @@ void set_up_interrupt()
     printf("Initializing interrupts... Mask: %x\n", interrupt_type_mask);
 
     // Check if interrupts are supported
-    if ((interrupt_type_mask & 0x10) == 0)
-        return;
+    if ((interrupt_type_mask & 0x10)) {
+        IPC_Reg_Int r = {
+            .type       = IPC_Reg_Int_NUM,
+            .flags      = 0,
+            .intno      = (uint32_t)gsi_num,
+            .int_flags  = 0, // TODO
+            .dest_task  = get_task_id(),
+            .dest_chan  = serial_port,
+            .reply_chan = serial_port,
+        };
 
-    IPC_Reg_Int r = {
-        .type       = IPC_Reg_Int_NUM,
-        .flags      = 0,
-        .intno      = (uint32_t)gsi_num,
-        .int_flags  = 0, // TODO
-        .dest_task  = get_task_id(),
-        .dest_chan  = serial_port,
-        .reply_chan = serial_port,
-    };
+        result_t result = send_message_port(devicesd_port, sizeof(r), static_cast<void *>(&r));
+        if (result != SUCCESS) {
+            printf("Failed to send message to set up interrupt: %li (%s)\n", result,
+                   strerror(-result));
+            return;
+        }
 
-    result_t result = send_message_port(devicesd_port, sizeof(r), static_cast<void *>(&r));
-    if (result != SUCCESS) {
-        printf("Failed to send message to set up interrupt: %li (%s)\n", result, strerror(-result));
-        return;
+        Message_Descriptor desc;
+        uint8_t *message;
+        for (int i = 0; i < 5; ++i) {
+            result = get_message(&desc, &message, serial_port);
+            if ((int)result == -EINTR)
+                continue;
+            break;
+        }
+        if (result != SUCCESS) {
+            printf("Failed to get message from devicesd: %li (%s)\n", result, strerror(-result));
+            return;
+        }
+
+        std::unique_ptr<unsigned char> message_ptr(message);
+
+        IPC_Reg_Int_Reply *reply = reinterpret_cast<IPC_Reg_Int_Reply *>(message_ptr.get());
+        if (reply->type != IPC_Reg_Int_Reply_NUM) {
+            printf("Invalid reply type: %i\n", reply->type);
+            return;
+        }
+
+        if (reply->status < 0) {
+            printf("Failed to set up interrupt: recieved error %i\n", -reply->status);
+            return;
+        }
+
+        int_vec = reply->intno;
+
+        printf("ns16550d: Interrupt set up successfully, intno: %i\n", int_vec);
+
+        have_interrupts = true;
+    } else if (interrupt_type_mask == 0) {
+        IPC_Reg_Int r = {
+            .type       = IPC_Reg_Int_NUM,
+            .flags      = IPC_Reg_Int_FLAG_EXT_INTS,
+            .intno      = static_cast<uint32_t>(pc_irq),
+            .int_flags  = 0, // TODO
+            .dest_task  = get_task_id(),
+            .dest_chan  = serial_port,
+            .reply_chan = serial_port,
+        };
+
+        result_t result = send_message_port(devicesd_port, sizeof(r), static_cast<void *>(&r));
+        if (result != SUCCESS) {
+            printf("Failed to send message to set up interrupt: %li (%s)\n", result,
+                   strerror(-result));
+            return;
+        }
+
+        Message_Descriptor desc;
+        uint8_t *message;
+        for (int i = 0; i < 5; ++i) {
+            result = get_message(&desc, &message, serial_port);
+            if ((int)result == -EINTR)
+                continue;
+            break;
+        }
+        if (result != SUCCESS) {
+            printf("Failed to get message from devicesd: %li (%s)\n", result, strerror(-result));
+            return;
+        }
+
+        std::unique_ptr<unsigned char> message_ptr(message);
+
+        IPC_Reg_Int_Reply *reply = reinterpret_cast<IPC_Reg_Int_Reply *>(message_ptr.get());
+        if (reply->type != IPC_Reg_Int_Reply_NUM) {
+            printf("Invalid reply type: %i\n", reply->type);
+            return;
+        }
+
+        if (reply->status < 0) {
+            printf("Failed to set up interrupt: recieved error %i\n", -reply->status);
+            return;
+        }
+
+        int_vec = reply->intno;
+
+        printf("ns16550d: Interrupt set up successfully, intno: %i\n", int_vec);
+
+        have_interrupts = true;
     }
-
-    Message_Descriptor desc;
-    uint8_t *message;
-    for (int i = 0; i < 5; ++i) {
-        result = get_message(&desc, &message, serial_port);
-        if ((int)result == -EINTR)
-            continue;
-        break;
-    }
-    if (result != SUCCESS) {
-        printf("Failed to get message from devicesd: %li (%s)\n", result, strerror(-result));
-        return;
-    }
-
-    std::unique_ptr<unsigned char> message_ptr(message);
-
-    IPC_Reg_Int_Reply *reply = reinterpret_cast<IPC_Reg_Int_Reply *>(message_ptr.get());
-    if (reply->type != IPC_Reg_Int_Reply_NUM) {
-        printf("Invalid reply type: %i\n", reply->type);
-        return;
-    }
-
-    if (reply->status < 0) {
-        printf("Failed to set up interrupt: recieved error %i\n", -reply->status);
-        return;
-    }
-
-    int_vec = reply->intno;
-
-    printf("ns16550d: Interrupt set up successfully, intno: %i\n", int_vec);
-
-    have_interrupts = true;
 }
 
 void ns16550_init()
@@ -218,7 +309,9 @@ void ns16550_init()
 
     if (access_type == 0x0) { // System memory
         io_rw = std::make_unique<MMIO>(terminal_base);
-    } else if (access_type != 0x1) { // Not system memory and serial port
+    } else if (access_type == 0x01) {
+        io_rw = std::make_unique<PORTIO>(terminal_base);
+    } else { // Not system memory and serial port
         throw std::runtime_error("Invalid access type");
     }
 
