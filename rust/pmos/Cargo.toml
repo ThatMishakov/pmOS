@@ -1,0 +1,9 @@
+[package]
+name = "pmos"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bitflags = "2.8.0"
+endian-num = { version = "0.2.0", features = ["linux-types", "bitflags"] }
+libc = { git = "https://gitlab.com/mishakov/libc-pmos.git", branch = "libc-0.2" }

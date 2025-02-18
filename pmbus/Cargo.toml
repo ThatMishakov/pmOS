@@ -1,0 +1,7 @@
+[package]
+name = "pmbus"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+pmos = { path = "../rust/pmos" }

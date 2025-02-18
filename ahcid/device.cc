@@ -51,9 +51,9 @@ pmos::async::detached_task handle_device(AHCIPort &parent)
 
     printf("Port %i sector count: %" PRIu64 "\n", parent.index, sector_count);
 
-    auto disk = co_await register_disk(parent, sector_count, logical_sector_size, physical_sector_size);
+    auto disk = co_await publish_disk(parent, sector_count, logical_sector_size, physical_sector_size);
     
-    printf("Port %i disk registered: %" PRIu64 "\n", parent.index, disk);
+    printf("Port %i disk published: %" PRIu64 "\n", parent.index, disk);
 
     co_return;
 }

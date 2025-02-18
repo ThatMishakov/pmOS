@@ -21,6 +21,7 @@ extern "C" {
     fn pmos_delete_port(port: Port) -> ResultT;
     fn syscall_get_message_info(descr: &mut MessageDescriptor, port: u64, flags: u32) -> ResultT;
     fn get_first_message(buff: *mut u8, args: u32, port: u64) -> ResultT;
+    fn name_port(port: u64, name: *const libc::c_char, length: usize, flags: u32) -> ResultT;
 }
 
 impl Drop for IPCPort {
@@ -75,6 +76,12 @@ impl IPCPort {
             sender: desc.sender,
             object: MemoryObject::from_message(desc.mem_object),
         }
+    }
+
+    pub fn name_port(&mut self, name: &str) {
+        unsafe { name_port(self.port, name.as_ptr() as *const i8, name.len(), 0) }
+            .result()
+            .unwrap();
     }
 }
 

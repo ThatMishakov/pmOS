@@ -281,7 +281,7 @@ void parse_interrupt_table(struct PCIGroup *g, int bus, uacpi_pci_routing_table 
             uacpi_free_resources(resources);
         }
 
-        printf("PCI interrupt: BUS %#x DEVICE %#x PIN %#x GSI %u %s %s\n", e.bus, e.device, e.pin, e.gsi, e.active_low ? "Active Low" : "Active High", e.level_trigger ? "Level" : "Edge");
+        // printf("PCI interrupt: BUS %#x DEVICE %#x PIN %#x GSI %u %s %s\n", e.bus, e.device, e.pin, e.gsi, e.active_low ? "Active Low" : "Active High", e.level_trigger ? "Level" : "Edge");
         int ret = 0;
         VECTOR_PUSH_BACK_CHECKED(g->interrupt_entries, e, ret);
         if (ret != 0) {

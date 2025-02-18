@@ -1467,6 +1467,71 @@ typedef struct IPC_Preregister_Process_Reply {
     int64_t result;
 } IPC_Preregister_Process_Reply;
 
+struct IPC_Object_Property {
+    // Also aligned to 8 I guess...
+    uint16_t length;
+    uint8_t type;
+    uint8_t data_start;
+    #define PROPERTY_TYPE_STRING 0x01
+    #define PROPERTY_TYPE_INTEGER 0x02
+    char name[];
+    // Null-terminated char array or uint64_t, after null-terminated name string
+};
+
+struct IPC_Bus_Object {
+    // Aligned to 8 bytes?
+    uint32_t size;
+    uint16_t name_length;
+    uint16_t properties_offset;
+    pmos_port_t handle_port;
+    uint64_t task_group;
+
+    /// Name, with '.' separator
+    /// for example, pmos.disks.pci_11_22_33_44_ahci_port0
+    char name[];
+};
+#define IPC_BUS_NEXT_OBJECT(ipc_object_ptr) (IPC_Bus_Object *)((char *)ipc_object_ptr + ipc_object_ptr->size)
+
+#define IPC_BUS_Publish_Object_NUM 0x1a0
+typedef struct IPC_BUS_Publish_Object {
+    /// Message type (must be IPC_BUS_Publish_Object_NUM)
+    uint32_t type;
+
+    /// Flags
+    uint32_t flags;
+
+    pmos_port_t reply_port;
+
+    // TODO: Implement handles so that this is not needed
+    uint64_t user_arg;
+
+    struct IPC_Bus_Object object;
+} IPC_BUS_Publish_Object;
+
+#define IPC_BUS_Publish_Object_Reply_NUM 0x1b0
+typedef struct IPC_BUS_Publish_Object_Reply {
+    /// Message type (must be IPC_BUS_Publish_Object_Reply)
+    uint32_t type;
+
+    /// Flags
+    uint32_t flags;
+
+    /// Result (negative -> error)
+    int32_t result;
+
+    /// Reserved (for alignment)
+    uint32_t reserved;
+
+    uint64_t user_arg;
+
+    /// Old sequence number (0 if the object was newly created)
+    uint64_t old_sequence_number;
+
+    /// New sequence number (starting with 1, shared globally)
+    uint64_t new_sequence_number;
+} IPC_BUS_Publish_Object_Reply;
+
+
 #if defined(__cplusplus)
 } /* extern "C" */
 #endif
