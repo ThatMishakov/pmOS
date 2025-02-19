@@ -172,7 +172,7 @@ int setenv(const char *name, const char *value, int overwrite)
 
 __attribute__((constructor)) static void init_environ()
 {
-    //setenv("RUST_BACKTRACE", "1", 1);
+    setenv("RUST_BACKTRACE", "full", 1);
 }
 
 char *getenv(const char *name)

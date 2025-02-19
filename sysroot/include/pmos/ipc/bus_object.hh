@@ -140,7 +140,7 @@ inline std::vector<uint8_t> BUSObject::serialize(pmos_port_t handle_port, uint64
     IPC_Bus_Object object = {
         .size = sizeof(object) + properties.size() + name_size_aligned,
         .name_length = name.size(),
-        .properties_offset = name_size_aligned,
+        .properties_offset = name_size_aligned + sizeof(object),
         .handle_port = handle_port,
         .task_group = task_group,
     };

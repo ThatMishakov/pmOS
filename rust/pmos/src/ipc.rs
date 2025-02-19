@@ -121,3 +121,9 @@ pub fn send_message<T>(msg: &T, port: u64, object: Option<MemoryObject>) -> Resu
     }
     Ok(())
 }
+
+impl Message {
+    pub fn get_known_id(&self) -> Option<u32> {
+        Some(u32::from_ne_bytes(self.data.get(0..4)?.try_into().ok()?))
+    }
+}
