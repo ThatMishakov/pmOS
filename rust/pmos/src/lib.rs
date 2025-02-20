@@ -6,6 +6,7 @@ pub mod system;
 pub mod error;
 pub mod mem_object;
 pub mod pmbus;
+pub mod task_group;
 
 // #[cfg(test)]
 // mod tests {

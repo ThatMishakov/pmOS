@@ -621,11 +621,11 @@ void ahci_controller_main()
                 printf("Unknown named port notification: %.*s\n", (int)len, kmsg->port_name);
             }
         } break;
-        case IPC_Disk_Register_Reply_NUM: {
-            auto msg = (IPC_Disk_Register_Reply *)request;
+        case IPC_BUS_Publish_Object_Reply_NUM: {
+            auto msg = (IPC_BUS_Publish_Object_Reply *)request;
             // TODO: check the sender
 
-            handle_register_disk_reply(desc, msg);
+            handle_publish_object_reply(msg);
         } break;
         case IPC_Disk_Open_NUM: {
             auto msg = (IPC_Disk_Open *)request;
@@ -644,8 +644,11 @@ void ahci_controller_main()
     }
 }
 
+std::string pci_string;
+
 void ahci_handle(PCIDescriptor d)
 {
+    pci_string = "pci_" + std::to_string(d.group) + "_" + std::to_string(d.bus) + "_" + std::to_string(d.device) + "_" + std::to_string(d.function);
     ahci_controller = std::make_unique<PCIDevice>(d.group, d.bus, d.device, d.function);
 
     printf("AHCI controller created\n");

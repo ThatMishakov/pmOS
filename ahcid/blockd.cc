@@ -56,6 +56,8 @@ void PublishDisk::await_suspend(std::coroutine_handle<> hh) { handler.h = hh; }
 
 void PublishDisk::await_resume() {}
 
+extern std::string pci_string;
+
 pmos::async::task<uint64_t> publish_disk(AHCIPort &port, uint64_t sector_count, size_t logical_sector_size,
                   size_t physical_sector_size)
 {
@@ -66,7 +68,7 @@ pmos::async::task<uint64_t> publish_disk(AHCIPort &port, uint64_t sector_count, 
     pmos::utility::scope_guard guard {[=] { handler->destroy(); }};
 
     pmos::ipc::BUSObject object;
-    object.set_name("system.disk.todo_n" + std::to_string(port.index));
+    object.set_name("system.disk." + pci_string + "_port" + std::to_string(port.index));
     object.set_property("sector_count", sector_count);
     object.set_property("logical_sector_size", logical_sector_size);
     object.set_property("physical_sector_size", physical_sector_size);
@@ -119,14 +121,12 @@ pmos::async::task<uint64_t> publish_disk(AHCIPort &port, uint64_t sector_count, 
 //     co_return handler->get_disk_id();
 // }
 
-void handle_register_disk_reply(const IPC_Disk_Register_Reply *reply)
+void handle_publish_object_reply(const IPC_BUS_Publish_Object_Reply *reply)
 {
     try {
-        auto id                       = reply->disk_id;
+        auto id                       = reply->user_arg;
         auto handler                  = DiskHandler::get(id);
-        handler->diskd_event_port     = reply->disk_port;
-        handler->blockd_task_group_id = reply->task_group_id;
-        handler->error_code           = reply->result_code;
+        handler->error_code           = reply->result;
 
         handler->h.resume();
     } catch (std::exception &e) {

@@ -1524,11 +1524,8 @@ typedef struct IPC_BUS_Publish_Object_Reply {
 
     uint64_t user_arg;
 
-    /// Old sequence number (0 if the object was newly created)
-    uint64_t old_sequence_number;
-
     /// New sequence number (starting with 1, shared globally)
-    uint64_t new_sequence_number;
+    uint64_t sequence_number;
 } IPC_BUS_Publish_Object_Reply;
 
 

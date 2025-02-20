@@ -109,14 +109,15 @@ extern "C" {
     ) -> ResultT;
 }
 
-pub fn send_message<T>(msg: &T, port: u64, object: Option<MemoryObject>) -> Result<(), Error> {
-    let size = mem::size_of::<T>();
+pub fn send_message(msg: &impl super::ipc_msgs::Serializable, port: u64, object: Option<MemoryObject>) -> Result<(), Error> {
+    let data = msg.serialize();
+    let size = data.len();
     if let Some(object) = object {
-        unsafe { send_message_port2(port, object.id(), size, msg as *const T as *const u8, 0) }
+        unsafe { send_message_port2(port, object.id(), size, data.as_ptr(), 0) }
             .result()?;
         mem::forget(object);
     } else {
-        unsafe { send_message_port(port, size, msg as *const T as *const u8 as *const u8) }
+        unsafe { send_message_port(port, size, data.as_ptr()) }
             .result()?
     }
     Ok(())

@@ -5,3 +5,4 @@ edition = "2021"
 
 [dependencies]
 pmos = { path = "../rust/pmos" }
+libc = { git = "https://gitlab.com/mishakov/libc-pmos.git", branch = "libc-0.2" }

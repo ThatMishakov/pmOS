@@ -43,14 +43,6 @@ version = "0.2.169"
 source = "git+https://gitlab.com/mishakov/libc-pmos.git?branch=libc-0.2#dc4039e1f56dfc3f367652e87e34901e25ef0b99"
 
 [[package]]
-name = "pmbus"
-version = "0.1.0"
-dependencies = [
- "libc",
- "pmos",
-]
-
-[[package]]
 name = "pmos"
 version = "0.1.0"
 dependencies = [

@@ -31,12 +31,17 @@ public:
     // Registers the interrupt for the device
     // Returns 0 on success, otherwise -errno
     int register_interrupt(uint32_t &int_vector_result, uint64_t task, uint64_t port) noexcept;
+
+    uint16_t group() const;
+    uint8_t bus() const;
+    uint8_t device() const;
+    uint8_t function() const;
 private:
     PCIDevice();
 
     volatile char *virt_addr;
-    uint16_t group;
-    uint8_t bus;
-    uint8_t device;
-    uint8_t function;
+    uint16_t _group;
+    uint8_t _bus;
+    uint8_t _device;
+    uint8_t _function;
 };

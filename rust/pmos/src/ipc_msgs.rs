@@ -1,3 +1,6 @@
+use bytemuck::{Pod, Zeroable};
+use std::borrow::Cow;
+
 #[repr(C)]
 pub struct IPCGenericMsg {
     pub msg_type: u32,
@@ -10,6 +13,31 @@ pub struct IPCBusPublishObject<'a> {
     pub reply_port: super::ipc::Port,
     pub user_arg: u64,
     pub object_data: &'a [u8],
+}
+
+pub const IPC_BUS_PUBLISH_OBJECT_REPLY_NUM: u32 = 0x1b0;
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Zeroable, Pod)]
+pub struct IPCBusPublishObjectReply {
+    msg_type: u32,
+    flags: u32,
+    pub result: i32,
+    reserved: u32,
+    pub user_arg: u64,
+    pub sequence_number: u64,
+}
+
+impl IPCBusPublishObjectReply {
+    pub fn new() -> IPCBusPublishObjectReply {
+        IPCBusPublishObjectReply {
+            msg_type: IPC_BUS_PUBLISH_OBJECT_REPLY_NUM,
+            flags: 0,
+            result: 0,
+            reserved: 0,
+            user_arg: 0,
+            sequence_number: 0,
+        }
+    }
 }
 
 pub enum Message<'a> {
@@ -39,5 +67,15 @@ impl super::ipc::Message {
         } else {
             Message::Unknown
         }
+    }
+}
+
+pub trait Serializable {
+    fn serialize(&self) -> Cow<[u8]>;
+}
+
+impl<T: Pod> Serializable for T {
+    fn serialize(&self) -> Cow<[u8]> {
+        Cow::Borrowed(bytemuck::bytes_of(self))
     }
 }

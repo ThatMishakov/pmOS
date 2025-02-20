@@ -29,4 +29,4 @@ struct PublishDisk {
 
 pmos::async::task<uint64_t> publish_disk(AHCIPort &port, uint64_t sector_count, size_t logical_sector_size, size_t physical_sector_size);
 
-void handle_register_disk_reply(const IPC_Disk_Register_Reply *reply);
+void handle_publish_object_reply(const IPC_BUS_Publish_Object_Reply *reply);

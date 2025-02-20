@@ -27,10 +27,10 @@ void send_devicesd(auto &request)
 
 PCIDevice::PCIDevice(uint16_t group, uint8_t bus, uint8_t device, uint8_t function)
 {
-    this->group    = group;
-    this->bus      = bus;
-    this->device   = device;
-    this->function = function;
+    this->_group    = group;
+    this->_bus      = bus;
+    this->_device   = device;
+    this->_function = function;
 
     IPC_Request_PCI_Device req = {
         .type       = IPC_Request_PCI_Device_NUM,
@@ -133,10 +133,10 @@ int PCIDevice::gsi(uint32_t &gsi_result) noexcept
         .type       = IPC_Request_PCI_Device_GSI_NUM,
         .flags      = 0,
         .reply_port = cmd_port,
-        .group      = group,
-        .bus        = bus,
-        .device     = device,
-        .function   = function,
+        .group      = _group,
+        .bus        = _bus,
+        .device     = _device,
+        .function   = _function,
         .pin        = (uint8_t)(pin - 1),
     };
 
@@ -185,10 +185,10 @@ int PCIDevice::register_interrupt(uint32_t &int_vector_result, uint64_t task, ui
     IPC_Register_PCI_Interrupt request = {
         .type       = IPC_Register_PCI_Interrupt_NUM,
         .flags      = 0,
-        .group      = group,
-        .bus        = bus,
-        .device     = device,
-        .function   = function,
+        .group      = _group,
+        .bus        = _bus,
+        .device     = _device,
+        .function   = _function,
         .pin        = (uint8_t)(int_pin - 1),
         .dest_task       = task == 0 ? get_task_id() : task,
         .dest_port       = port,

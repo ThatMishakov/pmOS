@@ -13,18 +13,12 @@ pub enum ObjectPropertyRef<'a> {
     Integer(u64),
 }
 
-pub struct PMBusObject {
-    properties: BTreeMap<Box<str>, ObjectProperty>,
-    name: Box<str>,
-}
+pub type ObjectProperties = BTreeMap<Box<str>, ObjectProperty>;
 
-#[repr(C)]
-struct IPCBusObjectHead {
-    size: u32,
-    name_length: u16,
-    properties_offset: u16,
-    handle_port: u64,
-    task_group: u64,
+pub struct PMBusObject {
+    pub properties: ObjectProperties,
+    pub name: Box<str>,
+    pub handle_port: u64,
 }
 
 impl PMBusObject {
@@ -32,6 +26,7 @@ impl PMBusObject {
         PMBusObject {
             properties: BTreeMap::new(),
             name: name,
+            handle_port: 0,
         }
     }
 
@@ -42,7 +37,7 @@ impl PMBusObject {
         })
     }
 
-    pub fn deserialize(data: &[u8]) -> Result<PMBusObject, Error> {
+    pub fn deserialize(data: &[u8]) -> Result<(PMBusObject, u64), Error> {
         if data.len() < 24 {
             return Err(Error::from_errno(libc::EINVAL));
         }
@@ -88,10 +83,11 @@ impl PMBusObject {
             properties_offset += length;
         }
 
-        Ok(PMBusObject {
+        Ok((PMBusObject {
             properties,
             name: Box::from(name),
-        })
+            handle_port: handle_port,
+        }, task_group))
     }
 }
 

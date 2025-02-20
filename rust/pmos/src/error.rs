@@ -24,6 +24,10 @@ impl Error {
     pub fn to_string(&self) -> &'static str {
         unsafe { std::ffi::CStr::from_ptr(libc::strerror(self.0.get())).to_str().unwrap() }
     }
+
+    pub fn get(&self) -> i32 {
+        self.0.get()
+    }
 }
 
 impl std::fmt::Display for Error {
