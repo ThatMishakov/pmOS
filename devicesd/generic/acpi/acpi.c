@@ -27,26 +27,26 @@
  */
 
 #include <acpi/acpi.h>
+#include <errno.h>
 #include <kernel/block.h>
 #include <main.h>
 #include <phys_map/phys_map.h>
 #include <pmos/helpers.h>
 #include <pmos/ipc.h>
+#include <pmos/pmbus_object.h>
 #include <pmos/ports.h>
+#include <pmos/special.h>
 #include <pmos/system.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <errno.h>
-#include <uacpi/event.h>
-#include <uacpi/utilities.h>
-#include <uacpi/sleep.h>
-#include <pthread.h>
-#include <pmos/special.h>
-#include <uacpi/osi.h>
-#include <uacpi/notify.h>
 #include <uacpi/context.h>
-
+#include <uacpi/event.h>
+#include <uacpi/notify.h>
+#include <uacpi/osi.h>
+#include <uacpi/sleep.h>
+#include <uacpi/utilities.h>
 
 void init_acpi();
 
@@ -181,8 +181,8 @@ void find_acpi_devices();
 void gpio_initialize();
 int power_button_init();
 
-#include <uacpi/uacpi.h>
 #include <uacpi/event.h>
+#include <uacpi/uacpi.h>
 
 uacpi_status uacpi_kernel_get_rsdp(uacpi_phys_addr *out_rdsp_address)
 {
@@ -195,15 +195,17 @@ uacpi_status uacpi_kernel_get_rsdp(uacpi_phys_addr *out_rdsp_address)
 
 void init_ec();
 void ec_finalize();
+void publish_devices();
 
-int acpi_init() {
+int acpi_init()
+{
     uacpi_status ret = uacpi_initialize(0);
     if (uacpi_unlikely_error(ret)) {
         fprintf(stderr, "uacpi_initialize error: %s", uacpi_status_to_string(ret));
         return -ENODEV;
     }
 
-    //uacpi_context_set_log_level(UACPI_LOG_DEBUG);
+    // uacpi_context_set_log_level(UACPI_LOG_DEBUG);
 
     ret = uacpi_namespace_load();
     if (uacpi_unlikely_error(ret)) {
@@ -211,13 +213,13 @@ int acpi_init() {
         return -ENODEV;
     }
 
-    #if defined(__x86_64__) || defined(__i386__) 
+#if defined(__x86_64__) || defined(__i386__)
     ret = uacpi_set_interrupt_model(UACPI_INTERRUPT_MODEL_IOAPIC);
     if (uacpi_unlikely_error(ret)) {
         fprintf(stderr, "uacpi_set_interrupt_model error: %s", uacpi_status_to_string(ret));
         return -ENODEV;
     }
-    #endif
+#endif
 
     acpi_pci_init();
     init_ec();
@@ -238,11 +240,13 @@ int acpi_init() {
     gpio_initialize();
     find_acpi_devices();
     power_button_init();
+    publish_devices();
 
     return 0;
 }
 
-int system_shutdown(void) {
+int system_shutdown(void)
+{
     /*
      * Prepare the system for shutdown.
      * This will run the \_PTS & \_SST methods, if they exist, as well as
@@ -259,7 +263,7 @@ int system_shutdown(void) {
      * This is where we disable interrupts to prevent anything from
      * racing with our shutdown sequence below.
      */
-    //disable_interrupts();
+    // disable_interrupts();
 
     /*
      * Actually do the work of entering the sleep state by writing to the hardware
@@ -280,20 +284,22 @@ int system_shutdown(void) {
     return 0;
 }
 
-void *shutdown_thread(void *) {
+void *shutdown_thread(void *)
+{
     pmos_request_io_permission();
     printf("Shutting down in 3 seconds...\n");
     set_affinity(TASK_ID_SELF, -1, 0);
-    //uint64_t start = pmos_get_time(GET_TIME_NANOSECONDS_SINCE_BOOTUP).value;
+    // uint64_t start = pmos_get_time(GET_TIME_NANOSECONDS_SINCE_BOOTUP).value;
     sleep(3);
-    //uint64_t end = pmos_get_time(GET_TIME_NANOSECONDS_SINCE_BOOTUP).value;
-    //printf("Time difference: %llu\n", end - start);
+    // uint64_t end = pmos_get_time(GET_TIME_NANOSECONDS_SINCE_BOOTUP).value;
+    // printf("Time difference: %llu\n", end - start);
     system_shutdown();
 
     return NULL;
 }
 
-static uacpi_interrupt_ret handle_power_button(uacpi_handle ctx) {
+static uacpi_interrupt_ret handle_power_button(uacpi_handle ctx)
+{
     (void)ctx;
     printf("Power button pressed\n");
     pthread_t thread;
@@ -302,7 +308,9 @@ static uacpi_interrupt_ret handle_power_button(uacpi_handle ctx) {
     return UACPI_INTERRUPT_HANDLED;
 }
 
-static uacpi_status handle_power_button_event(uacpi_handle ctx, uacpi_namespace_node* node, uacpi_u64 value) {
+static uacpi_status handle_power_button_event(uacpi_handle ctx, uacpi_namespace_node *node,
+                                              uacpi_u64 value)
+{
     (void)ctx;
     (void)node;
 
@@ -318,7 +326,9 @@ static uacpi_status handle_power_button_event(uacpi_handle ctx, uacpi_namespace_
     return UACPI_STATUS_OK;
 }
 
-static uacpi_iteration_decision power_button_uacpi_stuff(void* ctx, uacpi_namespace_node *node, uint32_t depth) {
+static uacpi_iteration_decision power_button_uacpi_stuff(void *ctx, uacpi_namespace_node *node,
+                                                         uint32_t depth)
+{
     (void)depth;
     (void)ctx;
 
@@ -328,13 +338,13 @@ static uacpi_iteration_decision power_button_uacpi_stuff(void* ctx, uacpi_namesp
 
 #define ACPI_HID_POWER_BUTTON "PNP0C0C"
 
-int power_button_init(void) {
-    uacpi_status ret = uacpi_install_fixed_event_handler(
-        UACPI_FIXED_EVENT_POWER_BUTTON,
-	    handle_power_button, UACPI_NULL
-    );
+int power_button_init(void)
+{
+    uacpi_status ret = uacpi_install_fixed_event_handler(UACPI_FIXED_EVENT_POWER_BUTTON,
+                                                         handle_power_button, UACPI_NULL);
     if (uacpi_unlikely_error(ret)) {
-        fprintf(stderr, "failed to install power button event callback: %s\n", uacpi_status_to_string(ret));
+        fprintf(stderr, "failed to install power button event callback: %s\n",
+                uacpi_status_to_string(ret));
         return -ENODEV;
     }
 
@@ -347,10 +357,7 @@ void find_com();
 void init_ioapic();
 void init_cpus();
 
-void find_acpi_devices()
-{
-    find_com();
-}
+void find_acpi_devices() { find_com(); }
 
 void init_acpi()
 {
@@ -367,9 +374,9 @@ void init_acpi()
     }
 
     init_cpus();
-    #if defined(__x86_64__) || defined(__i386__)
+#if defined(__x86_64__) || defined(__i386__)
     init_ioapic();
-    #endif
+#endif
     init_pci();
 
     int i = acpi_init();
@@ -378,8 +385,147 @@ void init_acpi()
         return;
     }
 
-    //init_pci();
+    // init_pci();
 
     printf("Walked ACPI tables! ACPI revision: %i\n", acpi_revision);
+}
 
+pmos_hashtable_t register_requests = PMOS_HASHTABLE_INITIALIZER;
+struct RegisterRequest {
+    pmos_hashtable_ll_t hash_head;
+    uint64_t id;
+    pmos_bus_object_t *object;
+};
+uint64_t next_counter = 1;
+
+static size_t register_request_hash(pmos_hashtable_ll_t *element, size_t total_size)
+{
+    RegisterRequest *r = container_of(element, RegisterRequest, pmos_hashtable_ll_t);
+    return (id * 7) % total_size;
+}
+
+int register_object(pmos_bus_object_t *object_owning)
+{
+    struct RegisterRequest *rr = malloc(sizeof(*rr));
+    if (!rr) {
+        pmos_bus_object_free(object_owning);
+        return -1;
+    }
+
+    rr->id            = next_counter++;
+    rr->object_owning = object;
+
+    return -1;
+}
+
+static uacpi_iteration_decision acpi_init_one_device(void *ctx, uacpi_namespace_node *node,
+                                                     uacpi_u32 node_depth)
+{
+    uacpi_namespace_node_info *info = NULL;
+    (void)node_depth;
+    (void)ctx;
+    const char *path              = NULL;
+    pmos_bus_object_t *bus_object = NULL;
+
+    uacpi_status ret = uacpi_get_namespace_node_info(node, &info);
+    if (uacpi_unlikely_error(ret)) {
+        path = uacpi_namespace_node_generate_absolute_path(node);
+        fprintf(stderr, "unable to retrieve node %s information: %s\n", path,
+                uacpi_status_to_string(ret));
+        goto _continue;
+    }
+
+    if (info->flags & (UACPI_NS_NODE_INFO_HAS_HID | UACPI_NS_NODE_INFO_HAS_CID)) {
+        path = uacpi_namespace_node_generate_absolute_path(node);
+        if (!path) {
+            fprintf(stderr, "Unable to get path for uACPI node...\n");
+            goto _continue;
+        }
+
+        bus_object = pmos_bus_object_create();
+        if (!bus_object) {
+            fprintf(stderr, "unable to create bus_object...\n");
+            goto _continue;
+        }
+
+        if (!pmos_bus_object_set_name(bus_object, path)) {
+            fprintf(stderr, "Failed to set object name\n");
+            goto _continue;
+        }
+
+        if ((info->flags & UACPI_NS_NODE_INFO_HAS_ADR) &&
+            !pmos_bus_object_set_property_integer(bus_object, "acpi_adr", info->adr)) {
+            fprintf(stderr, "Failed to set object acpi_adr\n");
+            goto _continue;
+        }
+
+        if ((info->flags & UACPI_NS_NODE_INFO_HAS_HID) &&
+            !pmos_bus_object_set_property_string(bus_object, "acpi_hid", info->hid.value)) {
+            fprintf(stderr, "Failed to set object acpi_hid\n");
+            goto _continue;
+        }
+
+        if ((info->flags & UACPI_NS_NODE_INFO_HAS_UID) &&
+            !pmos_bus_object_set_property_string(bus_object, "acpi_uid", info->uid.value)) {
+            fprintf(stderr, "Failed to set object acpi_hid\n");
+            goto _continue;
+        }
+
+        if ((info->flags & UACPI_NS_NODE_INFO_HAS_CLS) &&
+            !pmos_bus_object_set_property_string(bus_object, "acpi_cls", info->cls.value)) {
+            fprintf(stderr, "Failed to set object acpi_hid\n");
+            goto _continue;
+        }
+
+        if (info->flags & UACPI_NS_NODE_INFO_HAS_CID) {
+            uint32_t num_ids = info->cid.num_ids;
+            const char *strings[num_ids + 1];
+            for (uint32_t i = 0; i < num_ids; ++i) {
+                strings[i] = info->cid.ids[i].value;
+            }
+            strings[num_ids] = NULL;
+
+            if (!pmos_bus_object_set_property_list(bus_object, "acpi_cid", strings)) {
+                fprintf(stderr, "Failed to set object acpi_cid\n");
+                goto _continue;
+            }
+        }
+
+        if (info->flags & UACPI_NS_NODE_INFO_HAS_SXD) {
+            uint64_t value = (info->sxd[0]) || ((uint64_t)info->sxd[1] << 8) ||
+                             ((uint64_t)info->sxd[2] << 16) || ((uint64_t)info->sxd[3] << 24);
+            if (!pmos_bus_object_set_property_integer(bus_object, "acpi_sxd", value)) {
+                fprintf(stderr, "Failed to set object acpi_sxd\n");
+                goto _continue;
+            }
+        }
+
+        if (info->flags & UACPI_NS_NODE_INFO_HAS_SXW) {
+            uint64_t value = (info->sxw[0]) || ((uint64_t)info->sxw[1] << 8) ||
+                             ((uint64_t)info->sxw[2] << 16) || ((uint64_t)info->sxw[3] << 24) ||
+                             ((uint64_t)info->sxw[4] << 32);
+            if (!pmos_bus_object_set_property_integer(bus_object, "acpi_sxw", value)) {
+                fprintf(stderr, "Failed to set object acpi_sxw\n");
+                goto _continue;
+            }
+        }
+
+        int result = register_object(bus_object);
+        bus_object = NULL;
+        if (result < 0) {
+            fprintf(stderr, "Failed to register object...\n");
+            goto _continue;
+        }
+    }
+_continue:
+    pmos_bus_object_free(bus_object);
+    uacpi_free_namespace_node_info(info);
+    uacpi_free_absolute_path(path);
+    return UACPI_ITERATION_DECISION_CONTINUE;
+}
+
+void publish_devices()
+{
+    uacpi_namespace_for_each_child(uacpi_namespace_root(), acpi_init_one_device, UACPI_NULL,
+                                   UACPI_OBJECT_DEVICE_BIT, UACPI_MAX_DEPTH_ANY, UACPI_NULL);
 }
