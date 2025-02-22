@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <pmos/ports.h>
 
 typedef enum {
     PMOS_PROPERTY_STRING = 1,
@@ -39,6 +40,11 @@ void pmos_bus_object_free(pmos_bus_object_t *obj);
 /// @param name Name (will be strdup()ed)
 /// @return true if successful, false otherwise (obj not valid or not enough memory)
 bool pmos_bus_object_set_name(pmos_bus_object_t *obj, const char *name);
+
+/// @brief Gets the name of the object
+/// @param obj Valid object
+/// @return The name of the object. NULL is there is no name, or the object is not valid
+const char *pmos_bus_object_get_name(pmos_bus_object_t *obj);
 
 /// @brief Sets the property to the string. Replaces previous value if the property is not new
 /// @param obj Valid pmbus object
@@ -79,5 +85,7 @@ const pmos_property_t *pmos_bus_object_first_property(const pmos_bus_object_t *o
 /// @param current Current property (property after this will be returned)
 /// @return Pointer to the next property, or NULL if there is none
 const pmos_property_t *pmos_bus_object_next_property(const pmos_bus_object_t *object);
+
+const bool pmos_bus_object_serialize_ipc(pmos_port_t reply_port, uint64_t user_arg, pmos_port_t handle_port, uint64_t task_group, uint8_t **data_out, size_t *size_out);
 
 #endif /* PMOS_BUS_OBJECT_H */

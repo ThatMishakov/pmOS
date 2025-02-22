@@ -10,17 +10,16 @@ pmos_bus_object_t *pmos_bus_object_create()
     if (!obj)
         return NULL;
 
-    
-    pmos_property_t *table = malloc(sizeof(*table)*TABLE_INITIAL_CAPACITY);
+    pmos_property_t *table = malloc(sizeof(*table) * TABLE_INITIAL_CAPACITY);
     if (!table) {
         free(obj);
         return NULL;
     }
 
-    obj->capacity = TABLE_INITIAL_CAPACITY;
-    obj->name = NULL;
+    obj->capacity       = TABLE_INITIAL_CAPACITY;
+    obj->name           = NULL;
     obj->num_properties = 0;
-    obj->properties = table;
+    obj->properties     = table;
 
     return obj;
 }
@@ -30,8 +29,7 @@ static void release_property(pmos_property_t *p)
     if (!p)
         return;
 
-    switch (p->type)
-    {
+    switch (p->type) {
     case PMOS_PROPERTY_STRING:
         free(p->value.s_val);
         break;
@@ -39,7 +37,7 @@ static void release_property(pmos_property_t *p)
         if (p->value.l_val == NULL)
             break;
 
-        for(size_t i = 0; p->value.l_val[i] != NULL; ++i) {
+        for (size_t i = 0; p->value.l_val[i] != NULL; ++i) {
             free(p->value.l_val[i]);
         }
         free(p->value.l_val);
@@ -79,6 +77,8 @@ bool pmos_bus_object_set_name(pmos_bus_object_t *obj, const char *name)
     return true;
 }
 
+const char *pmos_bus_object_get_name(pmos_bus_object_t *obj) { return obj ? obj->name : NULL; }
+
 static size_t lower_bound(const char *key, pmos_property_t properties[], size_t count)
 {
     size_t low = 0, high = count;
@@ -102,7 +102,7 @@ static bool set_property(pmos_bus_object_t *obj, pmos_property_t prop)
         return true;
     } else {
         if (obj->num_properties <= obj->capacity) {
-            size_t new_capacity = obj->capacity*2;
+            size_t new_capacity    = obj->capacity * 2;
             pmos_property_t *new_p = realloc(obj->properties, new_capacity);
             if (!new_p) {
                 release_property(&prop);
@@ -110,7 +110,7 @@ static bool set_property(pmos_bus_object_t *obj, pmos_property_t prop)
             }
 
             obj->properties = new_p;
-            obj->capacity = new_capacity;
+            obj->capacity   = new_capacity;
         }
 
         pmos_property_t *start = obj->properties + pos;
@@ -121,7 +121,8 @@ static bool set_property(pmos_bus_object_t *obj, pmos_property_t prop)
     }
 }
 
-bool pmos_bus_object_set_property_string(pmos_bus_object_t *obj, const char *prop_name, const char *value)
+bool pmos_bus_object_set_property_string(pmos_bus_object_t *obj, const char *prop_name,
+                                         const char *value)
 {
     char *new_name = strdup(prop_name);
     if (!new_name)
@@ -134,30 +135,32 @@ bool pmos_bus_object_set_property_string(pmos_bus_object_t *obj, const char *pro
     }
 
     pmos_property_t prop = {
-        .name = new_name,
-        .type = PMOS_PROPERTY_STRING,
+        .name        = new_name,
+        .type        = PMOS_PROPERTY_STRING,
         .value.s_val = new_val,
     };
 
     return set_property(obj, prop);
 }
 
-bool pmos_bus_object_set_property_integer(pmos_bus_object_t *obj, const char *prop_name, uint64_t value)
+bool pmos_bus_object_set_property_integer(pmos_bus_object_t *obj, const char *prop_name,
+                                          uint64_t value)
 {
     char *new_name = strdup(prop_name);
     if (!new_name)
         return false;
 
     pmos_property_t prop = {
-        .name = new_name,
-        .type = PMOS_PROPERTY_INTEGER,
+        .name        = new_name,
+        .type        = PMOS_PROPERTY_INTEGER,
         .value.i_val = value,
-    }; 
+    };
 
     return set_property(obj, prop);
 }
 
-bool pmos_bus_object_set_property_list(pmos_bus_object_t *obj, const char *prop_name, const char **value)
+bool pmos_bus_object_set_property_list(pmos_bus_object_t *obj, const char *prop_name,
+                                       const char **value)
 {
     if (!obj || !prop_name || !value) {
         return false;
@@ -191,10 +194,10 @@ bool pmos_bus_object_set_property_list(pmos_bus_object_t *obj, const char *prop_
     l_val[count] = NULL;
 
     pmos_property_t prop = {
-        .name = name_cloned,
-        .type = PMOS_PROPERTY_INTEGER,
+        .name        = name_cloned,
+        .type        = PMOS_PROPERTY_INTEGER,
         .value.l_val = l_val,
-    }; 
+    };
 
     return set_property(obj, prop);
 }

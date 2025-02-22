@@ -27,10 +27,12 @@
  */
 
 #include <acpi/acpi.h>
+#include <assert.h>
 #include <errno.h>
 #include <kernel/block.h>
 #include <main.h>
 #include <phys_map/phys_map.h>
+#include <pmos/hashmap.h>
 #include <pmos/helpers.h>
 #include <pmos/ipc.h>
 #include <pmos/pmbus_object.h>
@@ -389,33 +391,120 @@ void init_acpi()
 
     printf("Walked ACPI tables! ACPI revision: %i\n", acpi_revision);
 }
+extern pmos_port_t main_port;
 
 pmos_hashtable_t register_requests = PMOS_HASHTABLE_INITIALIZER;
 struct RegisterRequest {
     pmos_hashtable_ll_t hash_head;
     uint64_t id;
-    pmos_bus_object_t *object;
+    char *acpi_name;
+    uint8_t *message_data;
+    size_t message_data_size;
 };
 uint64_t next_counter = 1;
 
 static size_t register_request_hash(pmos_hashtable_ll_t *element, size_t total_size)
 {
-    RegisterRequest *r = container_of(element, RegisterRequest, pmos_hashtable_ll_t);
-    return (id * 7) % total_size;
+    struct RegisterRequest *r = container_of(element, struct RegisterRequest, hash_head);
+    return (r->id * 7) % total_size;
+}
+
+static pmos_port_t pmbus_port    = 0;
+static bool pmbus_port_requested = false;
+int request_pmbus_port(pmos_port_t *port_out)
+{
+    assert(port_out);
+    if (pmbus_port) {
+        *port_out = pmbus_port;
+        return 0;
+    }
+
+    *port_out = 0;
+    if (pmbus_port_requested)
+        return 0;
+
+    const char *pmbus_port = "/pmos/pmbus";
+    int result             = (int)request_named_port(pmbus_port, strlen(pmbus_port), main_port, 0);
+    if (result < 0) {
+        fprintf(stderr, "devicesd: Fauled to request pmbus port: %i (%s)\n", result,
+                strerror(-result));
+        return -1;
+    }
+
+    pmbus_port_requested = true;
+    return 0;
+}
+
+int send_register_object(struct RegisterRequest *r)
+{
+    pmos_port_t pmbus_port;
+    int result = request_pmbus_port(&pmbus_port);
+    if (result < 0) {
+        fprintf(stderr, "Failed to request pmbus port\n");
+        return -1;
+    }
+
+    result = hashmap_add(&register_requests, register_request_hash, &r->hash_head);
+    if (result < 0) {
+        fprintf(stderr, "devicesd: Failed to add request to hash map\n");
+        return result;
+    }
+
+    if (pmbus_port == 0)
+        // This will be contineud once the port is obtained
+        return 0;
+
+    result = (int)send_message_port(pmbus_port, r->message_data_size, r->message_data);
+    if (result < 0) {
+        fprintf(stderr, "devicesd: Couldn't send message to pmbus: %i (%s)\n", result,
+                strerror(-result));
+        hashtable_delete(r);
+        return -1;
+    }
+
+    return 0;
 }
 
 int register_object(pmos_bus_object_t *object_owning)
 {
-    struct RegisterRequest *rr = malloc(sizeof(*rr));
+    int result                 = -1;
+    struct RegisterRequest *rr = calloc(sizeof(*rr), 1);
     if (!rr) {
-        pmos_bus_object_free(object_owning);
-        return -1;
+        fprintf(stderr, "devicesd: Couldn't allocate memory for RegisterRequest\n");
+        goto end;
     }
 
-    rr->id            = next_counter++;
-    rr->object_owning = object;
+    rr->acpi_name = strdup(pmos_bus_object_get_name(object_owning));
+    if (!rr->acpi_name) {
+        fprintf(stderr, "devicesd: Couldn't allocate memory for acpi_name\n");
+        goto end;
+    }
 
-    return -1;
+    rr->id = next_counter++;
+
+    uint8_t *msg    = NULL;
+    size_t msg_size = 0;
+
+    if (!pmos_bus_object_serialize_ipc(main_port, rr->id, main_port, pmos_process_task_group(),
+                                       &msg, &msg_size)) {
+        fprintf(stderr, "Couldn't serialize pmbus object\n");
+        goto end;
+    }
+
+    rr->message_data      = msg;
+    rr->message_data_size = msg_size;
+
+    result = send_register_object(rr);
+
+end:
+    if (result && rr) {
+        free(rr->message_data);
+        free(rr->acpi_name);
+        free(rr);
+    }
+
+    pmos_bus_object_free(object_owning);
+    return result;
 }
 
 static uacpi_iteration_decision acpi_init_one_device(void *ctx, uacpi_namespace_node *node,

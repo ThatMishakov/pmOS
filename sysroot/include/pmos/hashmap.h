@@ -2,6 +2,7 @@
 #define _PMOS_HASHMAP_
 
 #include <stddef.h>
+#include <stdbool.h>
 
 typedef struct pmos_hashtable_ll {
     struct pmos_hashtable_ll *next, *prev;
@@ -35,7 +36,7 @@ int hashmap_add(pmos_hashtable_t *hashtable, pmos_hashtable_get_hash_t hash_func
 
 /// @brief Deletes the value from the hashtable it is in
 /// @param to_be_deleted Element to be deleted
-void hashmap_delete(pmos_hashtable_ll *to_be_deleted);
+void hashtable_delete(pmos_hashtable_ll_t *to_be_deleted);
 
 pmos_hashtable_ll_t *hashmap_find(pmos_hashtable_t *hashtable, void *value, pmos_hashtable_get_hash_t hash_function, pmos_hashtable_equals equals_function);
 
