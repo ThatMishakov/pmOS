@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use super::error::Error;
 use std::ffi::CStr;
 
@@ -6,11 +6,13 @@ use std::ffi::CStr;
 pub enum ObjectProperty {
     String(Box<str>),
     Integer(u64),
+    List(BTreeSet<Box<str>>),
 }
 
 pub enum ObjectPropertyRef<'a> {
     String(&'a str),
     Integer(u64),
+    List(&'a BTreeSet<Box<str>>),
 }
 
 pub type ObjectProperties = BTreeMap<Box<str>, ObjectProperty>;
@@ -34,6 +36,7 @@ impl PMBusObject {
         self.properties.get(property_name).map(|p| match p {
             ObjectProperty::String(t) => ObjectPropertyRef::String(t),
             ObjectProperty::Integer(i) => ObjectPropertyRef::Integer(*i),
+            ObjectProperty::List(l) => ObjectPropertyRef::List(l),
         })
     }
 
@@ -76,6 +79,24 @@ impl PMBusObject {
                 let integer_value = u64::from_ne_bytes(data.get(data_start..data_start+8).ok_or(Error::from_errno(libc::EINVAL))?.try_into().map_err(|_| Error::from_errno(libc::EINVAL))?);
                 ObjectProperty::Integer(integer_value)
             },
+            0x03 => {
+                let data_end = properties_offset + length;
+                let mut array = data.get(data_start..data_end).ok_or(Error::from_errno(libc::EINVAL))?;
+                let mut set: BTreeSet<Box<str>> = BTreeSet::new();
+
+                while !array.is_empty() {
+                    let value = CStr::from_bytes_until_nul(array).map_err(|_| Error::from_errno(libc::EINVAL))?;
+                    let value = value.to_str().map_err(|_| Error::from_errno(libc::EINVAL))?;
+                    let len = value.len();
+                    set.insert(Box::from(value));
+    
+                    array = &array[len..];
+                    let skip = array.iter().position(|&x| x != 0).unwrap_or(array.len());
+                    array = &array[skip..];
+                }
+
+                ObjectProperty::List(set)
+            }
             _ => return Err(Error::from_errno(libc::EINVAL)),
             };
 

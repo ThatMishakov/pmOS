@@ -49,6 +49,7 @@
 #include <uacpi/osi.h>
 #include <uacpi/sleep.h>
 #include <uacpi/utilities.h>
+#include <inttypes.h>
 
 void init_acpi();
 
@@ -400,6 +401,7 @@ struct RegisterRequest {
     char *acpi_name;
     uint8_t *message_data;
     size_t message_data_size;
+    uint64_t pmbus_sequence_id;
 };
 uint64_t next_counter = 1;
 
@@ -409,8 +411,20 @@ static size_t register_request_hash(pmos_hashtable_ll_t *element, size_t total_s
     return (r->id * 7) % total_size;
 }
 
+static bool hash_equals(pmos_hashtable_ll_t *element, void *value)
+{
+    struct RegisterRequest *rr = container_of(element, struct RegisterRequest, hash_head);
+    return rr->id == *(uint64_t *)value;
+}
+
+static size_t hash_for_value(void *value, size_t total_size)
+{
+    return (*(uint64_t *)(value) * 7) % total_size;
+}
+
 static pmos_port_t pmbus_port    = 0;
 static bool pmbus_port_requested = false;
+const char *pmbus_port_name = "/pmos/pmbus";
 int request_pmbus_port(pmos_port_t *port_out)
 {
     assert(port_out);
@@ -423,8 +437,7 @@ int request_pmbus_port(pmos_port_t *port_out)
     if (pmbus_port_requested)
         return 0;
 
-    const char *pmbus_port = "/pmos/pmbus";
-    int result             = (int)request_named_port(pmbus_port, strlen(pmbus_port), main_port, 0);
+    int result             = (int)request_named_port(pmbus_port_name, strlen(pmbus_port_name), main_port, 0);
     if (result < 0) {
         fprintf(stderr, "devicesd: Fauled to request pmbus port: %i (%s)\n", result,
                 strerror(-result));
@@ -433,6 +446,30 @@ int request_pmbus_port(pmos_port_t *port_out)
 
     pmbus_port_requested = true;
     return 0;
+}
+
+static void send_foreach(pmos_hashtable_ll_t *element, void *ctx)
+{
+    (void)ctx;
+
+    struct RegisterRequest *r = container_of(element, struct RegisterRequest, hash_head);
+    if (!r->message_data)
+        return;
+
+    int result = (int)send_message_port(pmbus_port, r->message_data_size, r->message_data);
+    if (result < 0) {
+        fprintf(stderr, "devicesd: Couldn't send message to pmbus: %i (%s)\n", result,
+                strerror(-result));
+    }
+
+    free(r->message_data);
+    r->message_data = NULL;
+    r->message_data_size = 0;
+}
+
+static void publish_send()
+{
+    hashtable_foreach(&register_requests, send_foreach, NULL);
 }
 
 int send_register_object(struct RegisterRequest *r)
@@ -458,11 +495,49 @@ int send_register_object(struct RegisterRequest *r)
     if (result < 0) {
         fprintf(stderr, "devicesd: Couldn't send message to pmbus: %i (%s)\n", result,
                 strerror(-result));
-        hashtable_delete(r);
+        hashtable_delete(&register_requests, register_request_hash, &r->hash_head);
         return -1;
     }
+    free(r->message_data);
+    r->message_data = NULL;
+    r->message_data_size = 0;
 
     return 0;
+}
+
+void publish_object_reply(Message_Descriptor *desc, IPC_BUS_Publish_Object_Reply *r)
+{
+    (void)desc;
+    uint64_t idx = r->user_arg;
+
+    pmos_hashtable_ll_t *e = hashtable_find(&register_requests, &idx, hash_for_value, hash_equals);
+    if (!e) {
+        fprintf(stderr, "[devicesd] Warning: Recieved IPC_BUS_Publish_Object_Reply arg %" PRIi64 " , but didn't find value\n", idx);
+        return;
+    }
+
+    struct RegisterRequest *rr = container_of(e, struct RegisterRequest, hash_head);
+    if (r->result == 0) {
+        printf("[devicesd] Published %s, sequence number %" PRIi64 "!\n", rr->acpi_name, r->sequence_number);
+        rr->pmbus_sequence_id = r->sequence_number;
+    } else {
+        printf("[devicesd] Failed to publish %s! Result %i\n", rr->acpi_name, r->result);
+    }
+}
+
+void named_port_notification(Message_Descriptor *desc, IPC_Kernel_Named_Port_Notification *n)
+{
+    if (desc->sender != 0) {
+        fprintf(stderr, "[devicesd] Warning: recieved IPC_Kernel_Named_Port_Notification from task %" PRIi64 " , expected kernel (0)\n", desc->sender);
+        return;
+    }
+
+    size_t len = NAMED_PORT_NOTIFICATION_STR_LEN(desc->size);
+    if (len == strlen(pmbus_port_name) && !memcmp(pmbus_port_name, n->port_name, len)) {
+        pmbus_port = n->port_num;
+
+        publish_send();
+    }
 }
 
 int register_object(pmos_bus_object_t *object_owning)
@@ -485,7 +560,7 @@ int register_object(pmos_bus_object_t *object_owning)
     uint8_t *msg    = NULL;
     size_t msg_size = 0;
 
-    if (!pmos_bus_object_serialize_ipc(main_port, rr->id, main_port, pmos_process_task_group(),
+    if (!pmos_bus_object_serialize_ipc(object_owning, main_port, rr->id, main_port, pmos_process_task_group(),
                                        &msg, &msg_size)) {
         fprintf(stderr, "Couldn't serialize pmbus object\n");
         goto end;

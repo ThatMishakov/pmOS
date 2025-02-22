@@ -68,6 +68,8 @@ const char *devicesd_port_name = "/pmos/devicesd";
 void request_pci_devices(Message_Descriptor *desc, IPC_Request_PCI_Devices *d);
 void request_pci_device(Message_Descriptor *desc, IPC_Request_PCI_Device *d);
 void request_pci_device_gsi(Message_Descriptor *desc, IPC_Request_PCI_Device_GSI *d);
+void named_port_notification(Message_Descriptor *desc, IPC_Kernel_Named_Port_Notification *n);
+void publish_object_reply(Message_Descriptor *desc, IPC_BUS_Publish_Object_Reply *r);
 
 void init_acpi();
 
@@ -178,6 +180,12 @@ int main(int argc, char **argv)
                 break;
             case IPC_Request_PCI_Device_GSI_NUM:
                 request_pci_device_gsi(&msg, (IPC_Request_PCI_Device_GSI *)msg_buff);
+                break;
+            case IPC_Kernel_Named_Port_Notification_NUM:
+                named_port_notification(&msg, (IPC_Kernel_Named_Port_Notification *)msg_buff);
+                break;
+            case IPC_BUS_Publish_Object_Reply_NUM:
+                publish_object_reply(&msg, (IPC_BUS_Publish_Object_Reply *)msg_buff);
                 break;
             default:
                 printf("[devicesd] Warning: Recieved unknown message %x from PID %li\n",

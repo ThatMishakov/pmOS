@@ -195,7 +195,10 @@
         "climits": "cpp",
         "filesystem": "cpp",
         "cstdbool": "cpp",
-        "version": "cpp"
+        "version": "cpp",
+        "format": "cpp",
+        "hashmap.h": "c",
+        "__hash": "c"
     },
     "cmake.configureOnOpen": false,
     "C_Cpp.default.compilerPath": "/home/misha/cross/bin/clang",

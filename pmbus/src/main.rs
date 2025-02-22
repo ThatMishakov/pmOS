@@ -75,7 +75,7 @@ fn create_find_task_group(
 }
 
 fn new_object_stuff(sequence_id: u64, state: &mut State) {
-    println!("New object {sequence_id}");
+    //println!("New object {sequence_id}");
 }
 
 fn publish_object(

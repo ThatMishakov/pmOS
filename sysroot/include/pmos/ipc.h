@@ -253,6 +253,7 @@ typedef struct IPC_Kernel_Named_Port_Notification {
     pmos_port_t port_num;
     char port_name[0];
 } IPC_Kernel_Named_Port_Notification;
+#define NAMED_PORT_NOTIFICATION_STR_LEN(len) ((len) - sizeof(IPC_Kernel_Named_Port_Notification));
 
 #define IPC_Kernel_Request_Page_NUM 0x23
 /// Page request for Memory Object
@@ -1474,6 +1475,7 @@ struct IPC_Object_Property {
     uint8_t data_start;
     #define PROPERTY_TYPE_STRING 0x01
     #define PROPERTY_TYPE_INTEGER 0x02
+    #define PROPERTY_TYPE_LIST 0x03
     char name[];
     // Null-terminated char array or uint64_t, after null-terminated name string
 };

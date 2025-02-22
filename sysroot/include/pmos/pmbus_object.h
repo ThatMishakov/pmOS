@@ -86,6 +86,6 @@ const pmos_property_t *pmos_bus_object_first_property(const pmos_bus_object_t *o
 /// @return Pointer to the next property, or NULL if there is none
 const pmos_property_t *pmos_bus_object_next_property(const pmos_bus_object_t *object);
 
-const bool pmos_bus_object_serialize_ipc(pmos_port_t reply_port, uint64_t user_arg, pmos_port_t handle_port, uint64_t task_group, uint8_t **data_out, size_t *size_out);
+bool pmos_bus_object_serialize_ipc(const pmos_bus_object_t *object, pmos_port_t reply_port, uint64_t user_arg, pmos_port_t handle_port, uint64_t task_group, uint8_t **data_out, size_t *size_out);
 
 #endif /* PMOS_BUS_OBJECT_H */
