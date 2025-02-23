@@ -1,11 +1,12 @@
 SYSROOT = $(HOME)/pmos/sysroot/
 
 RUSTFLAGS=-C link-arg=--sysroot=$(SYSROOT) -C linker=clang++ -C link-arg=--target=x86_64-unknown-pmos -C link-arg=-lunwind -C link-arg=-static
+PROGDIR = $(realpath .)
 
 # TODO: i686 and risc-v memes
 
 export RUSTFLAGS
-target/x86_64-unknown-pmos/debug/pmbus:
-	cargo +dev-x86_64-unknown-pmos build --target x86_64-unknown-pmos
+bin/pmbus:
+	cargo +dev-x86_64-unknown-pmos install --target x86_64-unknown-pmos --root . --path . --force
 
-.PHONY: target/x86_64-unknown-pmos/debug/pmbus
+.PHONY: bin/pmbus
