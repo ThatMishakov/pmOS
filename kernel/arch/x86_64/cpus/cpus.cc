@@ -45,6 +45,7 @@
 #include <x86_utils.hh>
 
 using namespace kernel;
+using namespace kernel::pmm;
 
 void program_syscall()
 {
@@ -240,6 +241,7 @@ extern "C" void cpu_start_routine(CPU_Info *c)
 
 extern "C" u64 *get_kern_stack_top() { return get_cpu_struct()->kernel_stack.get_stack_top(); }
 
+void init_acpi_trampoline();
 void init_scheduling(u64 bootstap_apic_id)
 {
     serial_logger.printf("Initializing APIC\n");
@@ -251,5 +253,72 @@ void init_scheduling(u64 bootstap_apic_id)
     serial_logger.printf("Initializing per-CPU structures\n");
     init_per_cpu(bootstap_apic_id);
 
+    serial_logger.printf("Initializing ACPI trampoline\n");
+    init_acpi_trampoline();
+
     serial_logger.printf("Scheduling initialized\n");
+}
+
+extern ulong idle_cr3;
+
+extern char acpi_trampoline_begin;
+extern char acpi_trampoline_startup_end;
+
+extern u32 acpi_trampoline_startup_cr3;
+extern void *acpi_trampoline_kernel_entry;
+
+pmm::phys_page_t acpi_trampoline_page = 0;
+bool have_acpi_startup = false;
+void init_acpi_trampoline ()
+{
+    auto page = pmm::alloc_pages(1, 0, AllocPolicy::ISA);
+    if (!page) {
+        serial_logger.printf("Kernel error: could not allocate memory for ACPI trampoline\n");
+        return;
+    }
+
+    acpi_trampoline_page = page->get_phys_addr();
+    have_acpi_startup = true;
+
+    auto cr3_page = pmm::alloc_pages(1, 0, AllocPolicy::Below4GB);
+    if (!cr3_page)
+        panic("Failed to allocate cr3 page for trampoline");
+    acpi_trampoline_startup_cr3 = (u32)cr3_page->get_phys_addr();
+
+
+    // Prepare the page
+    Temp_Mapper_Obj<x86_PAE_Entry> new_page_m(request_temp_mapper());
+    Temp_Mapper_Obj<x86_PAE_Entry> current_page_m(request_temp_mapper());
+
+    new_page_m.map(acpi_trampoline_startup_cr3);
+    current_page_m.map(idle_cr3);
+
+    page_clear((void *)new_page_m.ptr);
+    memcpy(new_page_m.ptr + 256, current_page_m.ptr + 256, 256 * sizeof(x86_PAE_Entry));
+
+    Page_Table_Argumments pta = {
+        .readable = true,
+        .writeable = true,
+        .user_access = false,
+        .execution_disabled = false,
+    };
+ 
+    auto result = map_pages(acpi_trampoline_startup_cr3, acpi_trampoline_page, (void *)acpi_trampoline_page, PAGE_SIZE, pta);
+    if (result)
+        panic("Failed to ID map vector page...");
+
+    Temp_Mapper_Obj<char> t(request_temp_mapper());
+    char *ptr = t.map(acpi_trampoline_page);
+    memcpy(ptr, &acpi_trampoline_begin, (char *)&acpi_trampoline_startup_end - (char *)&acpi_trampoline_begin);
+
+
+    serial_logger.printf("Initialized ACPI vector at %x\n", acpi_trampoline_page);
+}
+
+ReturnStr<u32> acpi_wakeup_vec()
+{
+    if (!have_acpi_startup)
+        return Error(-ENOENT);
+
+    return Success((u32)acpi_trampoline_page);
 }

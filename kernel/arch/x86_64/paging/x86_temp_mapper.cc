@@ -75,6 +75,8 @@ void *x86_PAE_Temp_Mapper::kern_map(u64 phys_frame)
         }
     }
 
+    assert(false);
+
     return nullptr;
 }
 

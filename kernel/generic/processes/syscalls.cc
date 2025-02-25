@@ -504,6 +504,8 @@ void syscall_get_message_info()
         assert(!"blocking by page is not yet implemented");
 }
 
+ReturnStr<u32> acpi_wakeup_vec();
+
 void syscall_set_attribute()
 {
     task_ptr task = get_current_task();
@@ -517,7 +519,7 @@ void syscall_set_attribute()
     // TODO: This is *very* x86-specific and is a bad idea in general
 
 #if defined(__x86_64__) || defined(__i386__)
-    TaskDescriptor *process = pid == task->task_id ? task : get_task(pid);
+    TaskDescriptor *process = pid == 0 || pid == task->task_id ? task : get_task(pid);
     if (!process) {
         syscall_error(task) = -ESRCH;
         return;
@@ -525,12 +527,29 @@ void syscall_set_attribute()
 
     switch (attribute) {
     case ATTR_ALLOW_PORT:
+        syscall_return(task) = 0;
         process->regs.set_iopl(value ? 3 : 0);
         break;
 
     case ATTR_DEBUG_SYSCALLS:
         process->attr.debug_syscalls = value;
         break;
+    
+    case 3: // ACPI sleep states' stuff
+        syscall_return(task) = 0;
+        __asm__("wbinvd");
+        task->regs.entry_type = 5;
+    break;
+
+    case 4: {
+        auto result = acpi_wakeup_vec();
+        if (!result.success()) {
+            syscall_error(task) = result.result;
+        } else {
+            syscall_return(task) = result.val;
+        }
+    }
+    break;
 
     default:
         syscall_error(task) = -ENOTSUP;

@@ -5,6 +5,7 @@
 
 #include <memory/paging.hh>
 #include <sched/sched.hh>
+#include <array>
 
 using namespace kernel;
 using namespace kernel::pmm;
@@ -566,7 +567,8 @@ static Page *alloc_pages_from(PMMRegion &region, size_t count)
     return nullptr;
 }
 
-static constinit PMMRegion region_below_4gb = PMMRegion(0x0, 0x100000000);
+static constinit PMMRegion region_isa = PMMRegion(0, 0x100000);
+static constinit PMMRegion region_below_4gb = PMMRegion(0x100000, 0x100000000 - 0x100000);
 static constinit PMMRegion region_above_4gb = PMMRegion(0x100000000, (u64)0 - 0x100000000);
 
 Page *kernel::pmm::alloc_pages(size_t count, bool /* contiguous */, AllocPolicy policy) noexcept
@@ -584,6 +586,8 @@ Page *kernel::pmm::alloc_pages(size_t count, bool /* contiguous */, AllocPolicy 
         return ptr;
     } else if (policy == AllocPolicy::Below4GB) {
         return alloc_pages_from(region_below_4gb, count);
+    } else if (policy == AllocPolicy::ISA) {
+        return alloc_pages_from(region_isa, count);
     }
 
     return nullptr;
@@ -591,6 +595,9 @@ Page *kernel::pmm::alloc_pages(size_t count, bool /* contiguous */, AllocPolicy 
 
 PMMRegion *PMMRegion::get(Page::page_addr_t start_addr)
 {
+    if (start_addr < region_isa.end())
+        return &region_isa;
+
     if (start_addr < 0x100000000)
         return &region_below_4gb;
 
@@ -637,4 +644,9 @@ PageArrayDescriptor *PageArrayDescriptor::next()
         return nullptr;
 
     return &*it;
+}
+
+u64 PMMRegion::end() const
+{
+    return start + size_bytes;
 }

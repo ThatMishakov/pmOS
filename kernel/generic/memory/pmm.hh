@@ -133,6 +133,7 @@ struct Page_Descriptor {
 enum class AllocPolicy {
     Normal,
     Below4GB,
+    ISA,
 };
 
 /**
@@ -192,6 +193,8 @@ struct PMMRegion {
     PageLL free_pages_list[page_lists];
 
     static PMMRegion *get(Page::page_addr_t start_addr);
+
+    u64 end() const;
 };
 
 struct PageArrayDescriptor {

@@ -99,6 +99,39 @@ return_from_kernel_thread:
     
     iretq
 
+    .type return_to_userspace_mask_interrupts, @function
+    .globl return_to_userspace_mask_interrupts
+return_to_userspace_mask_interrupts:
+    movq %gs:32, %r15
+    pushq      104(%r15)
+    pushq      96(%r15)
+    pushq      88(%r15)
+
+    xorq $(1 << 9), (%rsp)
+
+    pushq      80(%r15)
+    pushq      72(%r15)
+    movq       112(%r15), %rbx
+    movq       120(%r15), %rbp
+    movq       128(%r15), %r12
+    movq       136(%r15), %r13
+    movq       144(%r15), %r14
+
+    movq 0(%r15), %rdi
+    movq 8(%r15), %rsi
+    movq 16(%r15), %rdx
+    movq 24(%r15), %rcx
+    movq 32(%r15), %r8
+    movq 40(%r15), %r9
+    movq 48(%r15), %rax
+    movq 56(%r15), %r10
+    movq 64(%r15), %r11
+    movq 152(%r15), %r15
+
+	swapgs
+    
+    iretq
+
 
     .type prog_int_common, @function
 prog_int_common:

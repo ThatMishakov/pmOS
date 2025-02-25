@@ -79,6 +79,7 @@ typedef struct ioapic_descriptor {
     uint64_t phys_addr;
     uint32_t int_base;
     uint32_t max_int;
+    uint64_t *redirection_entries_mirrored;
 } ioapic_descriptor;
 
 typedef struct ioapic_list {
@@ -108,7 +109,7 @@ bool program_ioapic(uint8_t cpu_int_vector, uint32_t ext_int_vector);
 bool program_ioapic_manual(uint8_t cpu_int_vector, uint32_t ext_int_vector, bool active_low,
                            bool level_trig);
 
-void ioapic_mask_int(volatile uint32_t *ioapic, uint32_t intno);
+void ioapic_mask_int(struct ioapic_descriptor *ioapic, uint32_t intno);
 
 uint8_t ioapic_get_int(struct int_task_descriptor desc, uint8_t line, bool active_low,
                        bool level_trig, bool check_free);

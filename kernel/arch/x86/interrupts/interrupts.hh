@@ -56,8 +56,9 @@ extern "C" void ret_repeat_syscall(
                     ///< that the process was issuing before blocking.
 
 extern "C" void return_from_kernel_thread(void) NORETURN;
+extern "C" void return_to_userspace_mask_interrupts(void) NORETURN;
 
-extern void (*return_table[5])(void);
+extern void (*return_table[6])(void);
 
 extern "C" void lvt0_int_isr();
 extern "C" void lvt1_int_isr();

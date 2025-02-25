@@ -94,28 +94,28 @@ void print_kernel_int_stack_trace(Logger &logger)
     // }
 }
 
-extern "C" void dbg_main(long code)
+extern "C" void dbg_main(long code, NestedIntContext *kernel_ctx)
 {
     t_print_bochs("Error! Kernel interrupt! %i\n", code);
-    // t_print_bochs("Registers:\n");
-    // t_print_bochs(" => %%rdi: 0x%h\n", kernel_interrupt_regs.scratch_r.rdi);
-    // t_print_bochs(" => %%rsi: 0x%h\n", kernel_interrupt_regs.scratch_r.rsi);
-    // t_print_bochs(" => %%rdx: 0x%h\n", kernel_interrupt_regs.scratch_r.rdx);
-    // t_print_bochs(" => %%rcx: 0x%h\n", kernel_interrupt_regs.scratch_r.rcx);
-    // t_print_bochs(" => %%r8:  0x%h\n", kernel_interrupt_regs.scratch_r.r8);
-    // t_print_bochs(" => %%r9:  0x%h\n", kernel_interrupt_regs.scratch_r.r9);
-    // t_print_bochs(" => %%rax: 0x%h\n", kernel_interrupt_regs.scratch_r.rax);
-    // t_print_bochs(" => %%r10: 0x%h\n", kernel_interrupt_regs.scratch_r.r10);
-    // t_print_bochs(" => %%r11: 0x%h\n", kernel_interrupt_regs.scratch_r.r11);
-    // t_print_bochs(" => %%rbx: 0x%h\n", kernel_interrupt_regs.preserved_r.rbx);
-    // t_print_bochs(" => %%rbp: 0x%h\n", kernel_interrupt_regs.preserved_r.rbp);
-    // t_print_bochs(" => %%r12: 0x%h\n", kernel_interrupt_regs.preserved_r.r12);
-    // t_print_bochs(" => %%r13: 0x%h\n", kernel_interrupt_regs.preserved_r.r13);
-    // t_print_bochs(" => %%r14: 0x%h\n", kernel_interrupt_regs.preserved_r.r14);
-    // t_print_bochs(" => %%r15: 0x%h\n", kernel_interrupt_regs.preserved_r.r15);
-    // t_print_bochs(" => %%rip: 0x%h\n", kernel_interrupt_regs.e.rip);
-    // t_print_bochs(" => %%rsp: 0x%h\n", kernel_interrupt_regs.e.rsp);
-    // t_print_bochs(" => %%rflags: 0x%h\n", kernel_interrupt_regs.e.rflags.numb);
+    t_print_bochs("Registers:\n");
+    t_print_bochs(" => %%rdi: 0x%h\n", kernel_ctx->rdi);
+    t_print_bochs(" => %%rsi: 0x%h\n", kernel_ctx->rsi);
+    t_print_bochs(" => %%rdx: 0x%h\n", kernel_ctx->rdx);
+    t_print_bochs(" => %%rcx: 0x%h\n", kernel_ctx->rcx);
+    t_print_bochs(" => %%r8:  0x%h\n", kernel_ctx->r8);
+    t_print_bochs(" => %%r9:  0x%h\n", kernel_ctx->r9);
+    t_print_bochs(" => %%rax: 0x%h\n", kernel_ctx->rax);
+    t_print_bochs(" => %%r10: 0x%h\n", kernel_ctx->r10);
+    t_print_bochs(" => %%r11: 0x%h\n", kernel_ctx->r11);
+    t_print_bochs(" => %%rbx: 0x%h\n", kernel_ctx->rbx);
+    t_print_bochs(" => %%rbp: 0x%h\n", kernel_ctx->rbp);
+    t_print_bochs(" => %%r12: 0x%h\n", kernel_ctx->r12);
+    t_print_bochs(" => %%r13: 0x%h\n", kernel_ctx->r13);
+    t_print_bochs(" => %%r14: 0x%h\n", kernel_ctx->r14);
+    t_print_bochs(" => %%r15: 0x%h\n", kernel_ctx->r15);
+    t_print_bochs(" => %%rip: 0x%h\n", kernel_ctx->rip);
+    t_print_bochs(" => %%rsp: 0x%h\n", kernel_ctx->rsp);
+    t_print_bochs(" => %%rflags: 0x%h\n", kernel_ctx->rflags);
     // print_registers(kernel_interrupt_regs, bochs_logger);
     // print_kernel_int_stack_trace(bochs_logger);
     abort();
@@ -192,7 +192,7 @@ extern "C" void pagefault_manager(NestedIntContext *kernel_ctx, ulong err)
                 return;
             }
         }
-
+        dbg_main(err, kernel_ctx);
         panic("Pagefault in kernel, error %x at %lx", err, pagefault_cr2);
 
         // c->pagefault_error = c->nested_int_regs.int_err;

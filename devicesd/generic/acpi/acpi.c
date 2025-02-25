@@ -173,7 +173,7 @@ void request_acpi_tables()
     } else {
         rsdp_desc = reply->descriptor;
         have_rsdp = true;
-        printf("RSDT table found at 0x%llx\n", rsdp_desc);
+        printf("RSDT table found at 0x%" PRIu64 "\n", rsdp_desc);
     }
     free(message);
 }
@@ -287,6 +287,70 @@ int system_shutdown(void)
     return 0;
 }
 
+syscall_r __pmos_syscall_set_attr(uint64_t pid, uint32_t attr, uint32_t value);
+
+int init_sleep()
+{
+    static int status = 0;
+    if (status < 0) {
+        return -1;
+    } else if (status == 0) {
+        syscall_r wakeup_vec = __pmos_syscall_set_attr(0, 4, 0);
+        if (wakeup_vec.result) {
+            fprintf(stderr, "[devicesd] Error: Did not get wakeup vector from kernel...\n");
+            status = -1;
+            return -1;
+        }
+
+        uacpi_status result = uacpi_set_waking_vector(wakeup_vec.value, 0);
+        if (result != UACPI_STATUS_OK) {
+            fprintf(stderr, "[devicesd] Error: could not set uacpi_set_waking_vector\n");
+            status = -1;
+            return -1;
+        }
+
+        return 0;
+    } else {
+        return 0;
+    }
+}
+
+int system_sleep()
+{
+    int status = init_sleep();
+    if (status < 0) {
+        fprintf(stdout, "no sleep\n");
+        return status;
+    }
+
+    uacpi_status ret = uacpi_prepare_for_sleep_state(UACPI_SLEEP_STATE_S3);
+    if (uacpi_unlikely_error(ret)) {
+        fprintf(stderr, "failed to prepare for sleep: %s", uacpi_status_to_string(ret));
+        return -EIO;
+    }
+
+    assert(!__pmos_syscall_set_attr(0, 3, 0).result);
+    bool entered_sleep = false;
+    __asm__ volatile("");
+    if (entered_sleep) {
+
+    } else {
+        entered_sleep = true;
+        ret = uacpi_enter_sleep_state(UACPI_SLEEP_STATE_S5);
+        assert(!uacpi_unlikely_error(ret));
+    }
+
+    return 0;
+}
+
+pthread_mutex_t power_lock = PTHREAD_MUTEX_INITIALIZER;
+void system_sleep_wrapper()
+{
+    pthread_mutex_lock(&power_lock);
+    system_sleep();
+    pthread_mutex_unlock(&power_lock);
+}
+
 void *shutdown_thread(void *)
 {
     pmos_request_io_permission();
@@ -296,7 +360,7 @@ void *shutdown_thread(void *)
     sleep(3);
     // uint64_t end = pmos_get_time(GET_TIME_NANOSECONDS_SINCE_BOOTUP).value;
     // printf("Time difference: %llu\n", end - start);
-    system_shutdown();
+    system_sleep();
 
     return NULL;
 }

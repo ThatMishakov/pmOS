@@ -87,6 +87,8 @@ void init_ioapic_at(uint16_t id, uint64_t address, uint32_t base)
     IOAPICVER v        = ioapic_read_ioapicver(ioapic);
     node->desc.max_int = base + v.bits.max_redir_entry;
 
+    node->desc.redirection_entries_mirrored = calloc(sizeof(uint64_t), v.bits.max_redir_entry);
+
     if (ioapic_list_root == NULL) {
         ioapic_list_root = node;
     } else {
@@ -99,7 +101,7 @@ void init_ioapic_at(uint16_t id, uint64_t address, uint32_t base)
     }
 
     for (unsigned int i = 0; i < node->desc.max_int; ++i)
-        ioapic_mask_int(ioapic, i);
+        ioapic_mask_int(&node->desc, i);
 
     printf("IOAPIC %i at %#" PRIx64 " base %i max %i\n", id, address, base, node->desc.max_int);
 }
@@ -213,6 +215,7 @@ bool program_ioapic(uint8_t cpu_int_vector, uint32_t ext_int_vector)
     i.bits.mask        = 0;
     i.bits.destination = get_lapic_id(0).value;
 
+    ioapic_desc->redirection_entries_mirrored[ioapic_base] = i.aslong;
     ioapic_write_redir_reg(ioapic, ioapic_base, i);
 
     return true;
@@ -237,18 +240,20 @@ bool program_ioapic_manual(uint8_t cpu_int_vector, uint32_t ext_int_vector, bool
     i.bits.mask        = 0;
     i.bits.destination = get_lapic_id(0).value;
 
+    ioapic_desc->redirection_entries_mirrored[ioapic_base] = i.aslong;
     ioapic_write_redir_reg(ioapic, ioapic_base, i);
 
     return true;
 }
 
-void ioapic_mask_int(volatile uint32_t *ioapic, uint32_t intno)
+void ioapic_mask_int(struct ioapic_descriptor *ioapic, uint32_t intno)
 {
-    IOREDTBL i = ioapic_read_redir_reg(ioapic, intno);
+    IOREDTBL i = ioapic_read_redir_reg(ioapic->virt_addr, intno);
 
     i.bits.mask = 1;
 
-    ioapic_write_redir_reg(ioapic, intno, i);
+    ioapic->redirection_entries_mirrored[intno] = i.aslong;
+    ioapic_write_redir_reg(ioapic->virt_addr, intno, i);
 }
 
 struct InterruptMapping {
@@ -336,6 +341,7 @@ int get_interrupt_vector(uint32_t gsi, bool active_low, bool level_trig, int *cp
     i.bits.mask        = 0;
     i.bits.destination = lapic_id_for_cpu(*cpu_id_out);
 
+    ioapic_desc->redirection_entries_mirrored[ioapic_base] = i.aslong;
     ioapic_write_redir_reg(ioapic, ioapic_base, i);
 
     pthread_mutex_unlock(&int_vector_mutex);
