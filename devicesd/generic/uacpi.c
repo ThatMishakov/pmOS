@@ -285,9 +285,17 @@ uacpi_status uacpi_kernel_pci_device_open(uacpi_pci_address address, uacpi_handl
     if (g == NULL)
         return UACPI_STATUS_NOT_FOUND;
 
-    *out_handle = pcie_config_space_device(g, address.bus, address.device, address.function);
-    if (*out_handle == NULL)
+    struct PCIDevicePtr *p = malloc(sizeof(*p));
+    if (!p)
+        return UACPI_STATUS_OUT_OF_MEMORY;
+
+    int result = fill_device(p, g, address.bus, address.device, address.function);
+    if (result) {
+        free(p);
         return UACPI_STATUS_NOT_FOUND;
+    }
+
+    *out_handle = p;
 
     return UACPI_STATUS_OK;
 }
@@ -338,8 +346,8 @@ uacpi_status uacpi_kernel_pci_write32(uacpi_handle device, uacpi_size offset, ua
 
 void uacpi_kernel_pci_device_close(uacpi_handle h)
 {
-    // noop
-    (void)h;
+    printf("!!!!! pci device close !!! %lx\n", h);
+    free(h);
 }
 
 uacpi_status uacpi_kernel_raw_io_read(uacpi_io_addr address, uacpi_u8 byte_width,

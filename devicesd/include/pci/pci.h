@@ -29,8 +29,8 @@
 #pragma once
 #include <stdbool.h>
 #include <stdint.h>
-#include <vector.h>
 #include <uacpi/event.h>
+#include <vector.h>
 
 void init_pci();
 
@@ -54,18 +54,36 @@ struct PCIGroupInterruptEntry {
     uint8_t device;
     uint8_t pin;
 
-    bool active_low: 1;
-    bool level_trigger: 1;
+    bool active_low : 1;
+    bool level_trigger : 1;
 
     uint32_t gsi;
 };
 
-struct PCIGroup {
-    struct PCIGroup *next;
-    uint64_t base_addr;
+enum PCIGroupType {
+    PCIGroupECAM,
+    PCIGroupLegacy,
+};
 
+struct PCIEcamDescriptor {
+    uint64_t base_addr;
     // Pointer to the bus 0 of the group (even if it doesn't exist)
     void *base_ptr;
+};
+
+struct PCILegacyDescriptor {
+    uint16_t config_addr_io;
+    uint16_t config_data_io;
+};
+
+struct PCIGroup {
+    struct PCIGroup *next;
+
+    union {
+        struct PCIEcamDescriptor ecam;
+        struct PCILegacyDescriptor legacy;
+    };
+    enum PCIGroupType group_type;
 
     unsigned group_number;
     unsigned start_bus_number;
@@ -94,56 +112,70 @@ struct PCIDevice {
     int downstream : 1;
 };
 
+struct PCIDevicePtr {
+    enum PCIGroupType type;
+    union {
+        uint32_t *ecam_window;
+        uint32_t io_addr;
+    };
+};
+
 int pcicdevice_compare(const void *a, const void *b);
 
 VECTOR_TYPEDEF(struct PCIDevice *, PCIDeviceVector);
 extern PCIDeviceVector pci_devices;
 
-inline unsigned long pcie_config_space_size(unsigned pci_start, unsigned pci_end)
-{
-    // https://wiki.osdev.org/PCI#Configuration_Space_Access_Mechanism_.231
-    // With PCI, the registers are 256 bytes, with PCIe it's expanded to 4096 bytes
-    // Thus, bus number is bits 27-20 of the pointer
-    return (pci_end - pci_start + 1) << 20;
-}
-
-inline uint64_t pcie_config_space_start(uint64_t base, unsigned pci_start)
-{
-    return base + (pci_start << 20);
-}
-
-inline void *pcie_config_space_device(struct PCIGroup *group, unsigned bus, unsigned device,
-                                      unsigned function)
-{
-    // config_space_virt is expected to point to the bus number 0, even if it is not mapped
-    void *config_space_virt = group->base_ptr;
-
-    // https://wiki.osdev.org/PCI_Express
-    const unsigned long offset = (bus << 20) | (device << 15) | (function << 12);
-
-    return (void *)((char *)config_space_virt + offset);
-}
-
 #define PCI_FUNCTIONS       8
 #define PCI_DEVICES_PER_BUS 32
 
-inline uint32_t pci_read_register(void *s, int id)
+uint32_t pci_read_register(struct PCIDevicePtr *s, unsigned register);
+void pci_write_register(struct PCIDevicePtr *s, unsigned register, uint32_t value);
+int fill_device(struct PCIDevicePtr *s, struct PCIGroup *g, int bus, int device, int function);
+
+inline uint16_t pci_read_word(struct PCIDevicePtr *s, unsigned offset)
 {
-    volatile uint32_t *r = (volatile uint32_t *)s;
-    return r[id];
+    uint32_t reg = pci_read_register(s, offset >> 2);
+    return offset & 0x02 ? reg >> 16 : reg;
 }
 
-inline uint16_t pci_read_word(void *s, int ptr)
+inline uint8_t pci_header_type(struct PCIDevicePtr *s)
 {
-    return pci_read_register(s, ptr / 4) >> ((ptr % 4) * 8);
+    uint8_t r = pci_read_register(s, 0x3) >> 16;
+    return r & HEADER_TYPE_MASK;
 }
 
-inline uint16_t pcie_status(void *s)
+inline bool pci_multifunction(struct PCIDevicePtr *s)
+{
+    uint8_t r = pci_read_register(s, 0x3) >> 16;
+    return r & HEADER_MULTIFUNCTION;
+}
+
+inline uint32_t pci_vendor_id(struct PCIDevicePtr *s)
+{
+    uint32_t r = pci_read_register(s, 0);
+    return r & 0xffff;
+}
+
+inline uint32_t pci_device_id(struct PCIDevicePtr *s)
+{
+    uint32_t r = pci_read_register(s, 0);
+    return r >> 16;
+}
+
+inline uint8_t pci_class_code(struct PCIDevicePtr *s) { return pci_read_register(s, 2) >> 24; }
+inline uint8_t pci_subclass(struct PCIDevicePtr *s) { return pci_read_register(s, 2) >> 16; }
+inline bool pci_no_device(struct PCIDevicePtr *s)
+{
+    return pci_vendor_id(s) == VENDOR_ID_NO_DEVICE;
+}
+inline uint8_t pci_secondary_bus(struct PCIDevicePtr *s) { return pci_read_register(s, 0x6) >> 8; }
+
+inline uint16_t pcie_status(struct PCIDevicePtr *s)
 {
     return (pci_read_register(s, 1) >> 16) & 0xffff;
 }
 
-inline int pcie_capability_pointer(void *s)
+inline int pcie_capability_pointer(struct PCIDevicePtr *s)
 {
     if (!(pcie_status(s) & 0x10)) {
         return 0;
@@ -152,41 +184,3 @@ inline int pcie_capability_pointer(void *s)
     // TODO: PCI-to-CardBus Bridge ???
     return pci_read_register(s, 0x34/4) & 0xfc;
 }
-
-inline void pci_write_register(void *s, int id, uint32_t value)
-{
-    volatile uint32_t *r = (volatile uint32_t *)s;
-    r[id] = value;
-}
-
-inline uint8_t pcie_header_type(void *s)
-{
-    uint8_t r = pci_read_register(s, 0x3) >> 16;
-    return r & HEADER_TYPE_MASK;
-}
-
-inline bool pcie_multifunction(void *s)
-{
-    uint8_t r = pci_read_register(s, 0x3) >> 16;
-    return r & HEADER_MULTIFUNCTION;
-}
-
-inline uint32_t pcie_vendor_id(void *s)
-{
-    uint32_t r = pci_read_register(s, 0);
-    return r & 0xffff;
-}
-
-inline uint32_t pcie_device_id(void *s)
-{
-    uint32_t r = pci_read_register(s, 0);
-    return r >> 16;
-}
-
-inline uint8_t pcie_class_code(void *s) { return pci_read_register(s, 2) >> 24; }
-
-inline uint8_t pcie_subclass(void *s) { return pci_read_register(s, 2) >> 16; }
-
-inline bool pci_no_device(void *s) { return pcie_vendor_id(s) == VENDOR_ID_NO_DEVICE; }
-
-inline uint8_t pci_secondary_bus(void *s) { return pci_read_register(s, 0x6) >> 8; }
