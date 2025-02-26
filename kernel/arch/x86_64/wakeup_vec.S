@@ -8,8 +8,6 @@ acpi_trampoline_begin:
 acpi_cpu_startup:
     cli
 
-    xchgw %bx, %bx
-
     movw %cs, %bx
     movw %bx, %cx
     shlw $4, %cx
@@ -68,7 +66,6 @@ acpi_cpu_startup:
     lretl
 _64bitst:
     .code64
-    jmp _64bitst
     jmp *acpi_trampoline_kernel_entry(%rip)
 
     .p2align 4, 0xCC
@@ -95,7 +92,7 @@ acpi_trampoline_startup_cr3:
 
     .globl acpi_trampoline_kernel_entry
 acpi_trampoline_kernel_entry:
-    .space 8
+    .quad _acpi_wakeup_entry
 scratch_stack:
     .space 8
 

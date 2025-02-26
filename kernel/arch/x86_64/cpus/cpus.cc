@@ -259,13 +259,42 @@ void init_scheduling(u64 bootstap_apic_id)
     serial_logger.printf("Scheduling initialized\n");
 }
 
+extern bool serial_initiated;
+extern bool serial_functional;
+
+extern void init_PIC();
+
 extern ulong idle_cr3;
+
+extern "C" void wakeup_main()
+{
+    serial_initiated = false;
+    serial_logger.printf("Printing from C++ after waking up!\n");
+    setCR3(idle_cr3);
+
+    auto c = cpus[0];
+    
+    init_PIC();
+    loadGDT(&c->cpu_gdt);
+    write_msr(0xC0000101, (u64)c);
+    c->cpu_gdt.tss_descriptor.access = 0x89;
+    loadTSS(TSS_OFFSET);
+    program_syscall();
+    set_idt();
+    enable_apic();
+    enable_sse();
+
+    serial_logger.printf("Ready to enter userspace...\n");
+    panic("Haven't implemented that =P");
+}
 
 extern char acpi_trampoline_begin;
 extern char acpi_trampoline_startup_end;
 
 extern u32 acpi_trampoline_startup_cr3;
 extern void *acpi_trampoline_kernel_entry;
+
+extern "C" void _acpi_wakeup_entry();
 
 pmm::phys_page_t acpi_trampoline_page = 0;
 bool have_acpi_startup = false;
@@ -310,7 +339,6 @@ void init_acpi_trampoline ()
     Temp_Mapper_Obj<char> t(request_temp_mapper());
     char *ptr = t.map(acpi_trampoline_page);
     memcpy(ptr, &acpi_trampoline_begin, (char *)&acpi_trampoline_startup_end - (char *)&acpi_trampoline_begin);
-
 
     serial_logger.printf("Initialized ACPI vector at %x\n", acpi_trampoline_page);
 }

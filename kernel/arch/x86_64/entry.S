@@ -80,3 +80,17 @@ _cpu_entry:
     movq $0, %gs:24
 
     jmp start_first_process
+
+    
+    .text
+    .globl _acpi_wakeup_entry
+    .type _acpi_wakeup_entry, @function
+_acpi_wakeup_entry:
+    # Switch to in-kernel stack
+    leaq (stack+STACK_SIZE)(%rip), %rsp
+
+    movq $0, %rbp
+
+    call wakeup_main
+
+    jmp start_first_process
