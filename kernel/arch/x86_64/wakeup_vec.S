@@ -8,23 +8,33 @@ acpi_trampoline_begin:
 acpi_cpu_startup:
     cli
 
-    movw %cs, %bx
+    xchgw %bx, %bx
 
-    xorl %ecx, %ecx
+    movw %cs, %bx
     movw %bx, %cx
+    shlw $4, %cx
+    addw $(acpi_trampoline_gdt - acpi_cpu_startup), %cx
+    movw %cx, %cs:(acpi_tampoline_gdtr_addr - acpi_cpu_startup)
+    movw %bx, %cx
+    shrw $12, %cx
+    movw %cx, %cs:(acpi_tampoline_gdtr_addr - acpi_cpu_startup + 2)
+    lgdt %cs:(acpi_trampoline_gdtr - acpi_cpu_startup)
 
     movl $0x01, %edx # Protected mode
     movl %edx, %cr0
 
-    jmp 1f
+    movw %cs, %bx
+    movw %bx, %cx
+    shlw $4, %cx
+    addw $(1f - acpi_cpu_startup), %cx
+    movw %cx, %cs:(protected_far_jump - acpi_cpu_startup)
+    movw %bx, %cx
+    shrw $12, %cx
+    movw %cx, %cs:(protected_far_jump - acpi_cpu_startup + 2)
+
+    ljmpl *%cs:(protected_far_jump - acpi_cpu_startup)
 1:
     .code32
-
-    shll $4, %ecx
-    leal (acpi_trampoline_gdt - acpi_cpu_startup)(%ecx), %edx
-    movl %edx, %cs:(acpi_tampoline_gdtr_addr - acpi_cpu_startup)
-
-    lgdt (acpi_trampoline_gdtr - acpi_cpu_startup)(%ecx)
     
     movl (acpi_trampoline_startup_cr3 - acpi_cpu_startup)(%ecx), %eax
     movl %eax, %cr3 # cr3 (Page table)
@@ -60,10 +70,13 @@ _64bitst:
 
     .p2align 4, 0xCC
 
+protected_far_jump:
+    .quad 0 # offset
+    .word 0x18 # 32 bit cs
+    
 acpi_trampoline_gdtr:
-    .space 2 # alignment 
 acpi_trampoline_gdtr_limit:
-    .word 23 # 3 entries - 1
+    .word 31 # 3 entries - 1
 acpi_tampoline_gdtr_addr:
     .long 0
 
@@ -71,9 +84,12 @@ acpi_trampoline_gdt:
     .quad 0
     .quad 0x00af9b000000ffff
     .quad 0x00af93000000ffff
+    .quad 0x00cf9a000000ffff
     .globl acpi_trampoline_startup_cr3
 acpi_trampoline_startup_cr3:
     .space 4
+
+
     .globl acpi_trampoline_kernel_entry
 acpi_trampoline_kernel_entry:
     .space 8

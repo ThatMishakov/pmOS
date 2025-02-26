@@ -45,6 +45,7 @@
 #include <string.h>
 #include <timers/hpet.h>
 #include <timers/timers.h>
+#include <pthread.h>
 
 char *exec = NULL;
 
@@ -72,6 +73,8 @@ void named_port_notification(Message_Descriptor *desc, IPC_Kernel_Named_Port_Not
 void publish_object_reply(Message_Descriptor *desc, IPC_BUS_Publish_Object_Reply *r);
 
 void init_acpi();
+
+void *shutdown_thread(void *);
 
 int main(int argc, char **argv)
 {
@@ -121,6 +124,12 @@ int main(int argc, char **argv)
             return 0;
         }
     }
+
+    // --------------------------------------------------
+    pthread_t thread;
+    pthread_create(&thread, NULL, shutdown_thread, NULL);
+    pthread_detach(thread);
+    // --------------------------------------------------
 
     while (1) {
         Message_Descriptor msg;
