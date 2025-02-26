@@ -281,7 +281,7 @@ void uacpi_kernel_reset_event(uacpi_handle handle)
 
 uacpi_status uacpi_kernel_pci_device_open(uacpi_pci_address address, uacpi_handle *out_handle)
 {
-    struct PCIGroup *g = pci_group_find(address.segment);
+    struct PCIGroup *g = pci_host_bridge_find(address.segment);
     if (g == NULL)
         return UACPI_STATUS_NOT_FOUND;
 

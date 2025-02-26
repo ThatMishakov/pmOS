@@ -76,23 +76,23 @@ struct PCILegacyDescriptor {
     uint16_t config_data_io;
 };
 
-struct PCIGroup {
-    struct PCIGroup *next;
+struct PCIHostBridge {
+    struct PCIHostBridge *next;
 
-    union {
-        struct PCIEcamDescriptor ecam;
-        struct PCILegacyDescriptor legacy;
-    };
-    enum PCIGroupType group_type;
+    struct PCIEcamDescriptor ecam;
+    struct PCILegacyDescriptor legacy;
 
     unsigned group_number;
     unsigned start_bus_number;
     unsigned end_bus_number;
 
+    bool has_io;
+    bool has_ecam;
+
     VECTOR(struct PCIGroupInterruptEntry) interrupt_entries;
 };
 
-struct PCIGroup *pci_group_find(unsigned group_number);
+struct PCIHostBridge *pci_host_bridge_find(unsigned group_number);
 
 struct PCIDevice {
     uint16_t group;
@@ -112,11 +112,16 @@ struct PCIDevice {
     int downstream : 1;
 };
 
+struct LegacyAddr {
+    uint32_t data_offset;
+    uint16_t port;
+};
+
 struct PCIDevicePtr {
     enum PCIGroupType type;
     union {
         uint32_t *ecam_window;
-        uint32_t io_addr;
+        struct LegacyAddr io_addr;
     };
 };
 
@@ -130,7 +135,7 @@ extern PCIDeviceVector pci_devices;
 
 uint32_t pci_read_register(struct PCIDevicePtr *s, unsigned register);
 void pci_write_register(struct PCIDevicePtr *s, unsigned register, uint32_t value);
-int fill_device(struct PCIDevicePtr *s, struct PCIGroup *g, int bus, int device, int function);
+int fill_device(struct PCIDevicePtr *s, struct PCIHostBridge *g, int bus, int device, int function);
 
 inline uint16_t pci_read_word(struct PCIDevicePtr *s, unsigned offset)
 {

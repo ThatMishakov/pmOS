@@ -444,7 +444,6 @@ void init_acpi()
 #if defined(__x86_64__) || defined(__i386__)
     init_ioapic();
 #endif
-    init_pci();
 
     int i = acpi_init();
     if (i != 0) {

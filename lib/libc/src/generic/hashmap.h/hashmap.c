@@ -140,7 +140,7 @@ pmos_hashtable_ll_t *hashtable_find(const pmos_hashtable_t *hashtable, void *val
     assert(idx < hashtable->array_size);
     pmos_hashtable_ll_t *e = hashtable->hashtable[idx].next;
     while (e) {
-        if (equals_function(value, e))
+        if (equals_function(e, value))
             return e;
         e = e->next;
     }

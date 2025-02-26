@@ -31,6 +31,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <inttypes.h>
+#include <io.h>
 #include <limits.h>
 #include <pci/pci.h>
 #include <pmos/ipc.h>
@@ -43,11 +44,11 @@
 #include <uacpi/resources.h>
 #include <uacpi/utilities.h>
 #include <vector.h>
-#include <io.h>
+#include <pthread.h>
 
 PCIDeviceVector pci_devices = VECTOR_INIT;
 
-void check_bus(struct PCIGroup *g, uint8_t bus, struct PCIDevice *parent_bridge,
+void check_bus(struct PCIHostBridge *g, uint8_t bus, struct PCIDevice *parent_bridge,
                uacpi_namespace_node *bridge_node);
 
 struct DeviceSearchCtx {
@@ -73,9 +74,9 @@ uacpi_iteration_decision find_pci_device(void *param, uacpi_namespace_node *node
     return UACPI_ITERATION_DECISION_CONTINUE;
 }
 
-void parse_interrupt_table(struct PCIGroup *g, int bus, uacpi_pci_routing_table *pci_routes);
+void parse_interrupt_table(struct PCIHostBridge *g, int bus, uacpi_pci_routing_table *pci_routes);
 
-void check_function(struct PCIGroup *g, uint8_t bus, uint8_t device, uint8_t function,
+void check_function(struct PCIHostBridge *g, uint8_t bus, uint8_t device, uint8_t function,
                     struct PCIDevice *parent_bridge, uacpi_namespace_node *node)
 {
     struct PCIDevicePtr p;
@@ -187,8 +188,8 @@ void check_function(struct PCIGroup *g, uint8_t bus, uint8_t device, uint8_t fun
     }
 }
 
-void check_device(struct PCIGroup *g, uint8_t bus, uint8_t device, struct PCIDevice *parent_bridge,
-                  uacpi_namespace_node *parent_node)
+void check_device(struct PCIHostBridge *g, uint8_t bus, uint8_t device,
+                  struct PCIDevice *parent_bridge, uacpi_namespace_node *parent_node)
 {
     struct PCIDevicePtr p;
     fill_device(&p, g, bus, device, 0);
@@ -208,7 +209,7 @@ void check_device(struct PCIGroup *g, uint8_t bus, uint8_t device, struct PCIDev
     }
 }
 
-void check_bus(struct PCIGroup *g, uint8_t bus, struct PCIDevice *parent_bridge,
+void check_bus(struct PCIHostBridge *g, uint8_t bus, struct PCIDevice *parent_bridge,
                uacpi_namespace_node *node)
 {
     int devices = PCI_DEVICES_PER_BUS;
@@ -225,7 +226,7 @@ void check_bus(struct PCIGroup *g, uint8_t bus, struct PCIDevice *parent_bridge,
     }
 }
 
-void parse_interrupt_table(struct PCIGroup *g, int bus, uacpi_pci_routing_table *pci_routes)
+void parse_interrupt_table(struct PCIHostBridge *g, int bus, uacpi_pci_routing_table *pci_routes)
 {
     for (size_t i = 0; i < pci_routes->num_entries; ++i) {
         uacpi_pci_routing_table_entry *entry = &pci_routes->entries[i];
@@ -249,6 +250,7 @@ void parse_interrupt_table(struct PCIGroup *g, int bus, uacpi_pci_routing_table 
             uacpi_status ret = uacpi_get_current_resources(entry->source, &resources);
             if (ret != UACPI_STATUS_OK) {
                 fprintf(stderr, "Warning: Could not get resources for source: %i\n", ret);
+                return;
             }
 
             switch (resources->entries[0].type) {
@@ -298,7 +300,7 @@ void parse_interrupt_table(struct PCIGroup *g, int bus, uacpi_pci_routing_table 
     }
 }
 
-void check_root(struct PCIGroup *g, int bus, uacpi_namespace_node *node)
+void check_root(struct PCIHostBridge *g, int bus, uacpi_namespace_node *node)
 {
     uacpi_pci_routing_table *pci_routes;
     uacpi_status ret = uacpi_get_pci_routing_table(node, &pci_routes);
@@ -329,7 +331,7 @@ void check_root(struct PCIGroup *g, int bus, uacpi_namespace_node *node)
     }
 }
 
-struct PCIGroup *groups = NULL;
+struct PCIHostBridge *bridges = NULL;
 
 static unsigned long pcie_config_space_size(unsigned pci_start, unsigned pci_end)
 {
@@ -344,75 +346,75 @@ static uint64_t pcie_config_space_start(uint64_t base, unsigned pci_start)
     return base + (pci_start << 20);
 }
 
-void init_pci()
-{
-    printf("Initializing PCI...\n");
+// void init_pci()
+// {
+//     printf("Initializing PCI...\n");
 
-    MCFG *t = (MCFG *)get_table("MCFG", 0);
-    if (!t) {
-        printf("Warning: Could not find MCFG table... Falling back to legacy init\n");
-        printf("(not implemented)\n");
-        return;
-    } else {
-        int c = MCFG_list_size(t);
-        for (int i = 0; i < c; ++i) {
-            struct PCIGroup *g = calloc(sizeof(*g), 1);
-            if (!g) {
-                fprintf(stderr, "Error: Could not allocate PCIGroup: %i\n", errno);
-            }
+//     MCFG *t = (MCFG *)get_table("MCFG", 0);
+//     if (!t) {
+//         printf("Warning: Could not find MCFG table... Falling back to legacy init\n");
+//         printf("(not implemented)\n");
+//         return;
+//     } else {
+//         int c = MCFG_list_size(t);
+//         for (int i = 0; i < c; ++i) {
+//             struct PCIGroup *g = calloc(sizeof(*g), 1);
+//             if (!g) {
+//                 fprintf(stderr, "Error: Could not allocate PCIGroup: %i\n", errno);
+//             }
 
-            MCFGBase *b = &t->structs_list[i];
-            printf("Table %i base addr %" PRIx64 " group %i start %i end %i\n", i, b->base_addr,
-                   b->group_number, b->start_bus_number, b->end_bus_number);
+//             MCFGBase *b = &t->structs_list[i];
+//             printf("Table %i base addr %" PRIx64 " group %i start %i end %i\n", i, b->base_addr,
+//                    b->group_number, b->start_bus_number, b->end_bus_number);
 
-            assert(b->start_bus_number <= b->end_bus_number);
-            uint64_t ecam_base = b->base_addr;
-            uint64_t size      = pcie_config_space_size(b->start_bus_number, b->end_bus_number);
-            uint64_t start     = pcie_config_space_start(ecam_base, b->start_bus_number);
+//             assert(b->start_bus_number <= b->end_bus_number);
+//             uint64_t ecam_base = b->base_addr;
+//             uint64_t size      = pcie_config_space_size(b->start_bus_number, b->end_bus_number);
+//             uint64_t start     = pcie_config_space_start(ecam_base, b->start_bus_number);
 
-            uint64_t phys_start = start;
-            uint64_t phys_end   = phys_start + size;
+//             uint64_t phys_start = start;
+//             uint64_t phys_end   = phys_start + size;
 
-            // Align to page just in case
-            static const uint64_t page_mask = ~((uint64_t)PAGE_SIZE - 1);
-            phys_start &= page_mask;
-            phys_end = (phys_end + PAGE_SIZE - 1) & page_mask;
+//             // Align to page just in case
+//             static const uint64_t page_mask = ~((uint64_t)PAGE_SIZE - 1);
+//             phys_start &= page_mask;
+//             phys_end = (phys_end + PAGE_SIZE - 1) & page_mask;
 
-            mem_request_ret_t t = create_phys_map_region(0, NULL, phys_end - phys_start,
-                                                         PROT_READ | PROT_WRITE, phys_start);
-            if (t.result != SUCCESS) {
-                fprintf(stderr, "Error: could not map PCIe memory: %" PRIi64 "\n", t.result);
-                free(g);
-                continue;
-            }
-            printf("ECAM %lx %lx\n", t.virt_addr, phys_end - phys_start);
-            void *ptr = (char *)t.virt_addr + (ecam_base % PAGE_SIZE) - (start - ecam_base);
+//             mem_request_ret_t t = create_phys_map_region(0, NULL, phys_end - phys_start,
+//                                                          PROT_READ | PROT_WRITE, phys_start);
+//             if (t.result != SUCCESS) {
+//                 fprintf(stderr, "Error: could not map PCIe memory: %" PRIi64 "\n", t.result);
+//                 free(g);
+//                 continue;
+//             }
+//             printf("ECAM %lx %lx\n", t.virt_addr, phys_end - phys_start);
+//             void *ptr = (char *)t.virt_addr + (ecam_base % PAGE_SIZE) - (start - ecam_base);
 
-            g->next = groups;
-            groups  = g;
+//             g->next = groups;
+//             groups  = g;
 
-            g->group_type = PCIGroupECAM;
-            g->ecam       = (struct PCIEcamDescriptor) {
-                      .base_addr = ecam_base,
-                      .base_ptr  = ptr,
-            };
-            g->start_bus_number = b->start_bus_number;
-            g->end_bus_number   = b->end_bus_number;
-        }
-    }
+//             g->group_type = PCIGroupECAM;
+//             g->ecam       = (struct PCIEcamDescriptor) {
+//                       .base_addr = ecam_base,
+//                       .base_ptr  = ptr,
+//             };
+//             g->start_bus_number = b->start_bus_number;
+//             g->end_bus_number   = b->end_bus_number;
+//         }
+//     }
 
-    VECTOR_SORT(pci_devices, pcicdevice_compare);
-}
+//     VECTOR_SORT(pci_devices, pcicdevice_compare);
+// }
 
-struct PCIGroup *get_group(int segment)
-{
-    for (struct PCIGroup *g = groups; g; g = g->next) {
-        if (g->group_number == (uint32_t)segment)
-            return g;
-    }
+// struct PCIGroup *get_group(int segment)
+// {
+//     for (struct PCIGroup *g = groups; g; g = g->next) {
+//         if (g->group_number == (uint32_t)segment)
+//             return g;
+//     }
 
-    return NULL;
-}
+//     return NULL;
+// }
 
 int interrupt_entry_compare(const void *l, const void *r)
 {
@@ -428,29 +430,72 @@ int interrupt_entry_compare(const void *l, const void *r)
     return 0;
 }
 
-void enumerate_pci_bus(int segment, int bus, uacpi_namespace_node *node)
+void enumerate_pci_bus(struct PCIHostBridge *g, int segment, int bus, uacpi_namespace_node *node)
 {
-    struct PCIGroup *g = get_group(segment);
-
-    if (!g) {
-        fprintf(stderr, "Error: Could not find PCI group %i\n", segment);
-        return;
-    }
-
     printf("Enumerating PCI bus %i\n", bus);
     check_root(g, bus, node);
 
     VECTOR_SORT(g->interrupt_entries, interrupt_entry_compare);
 }
 
+uacpi_iteration_decision pci_enumerate_resources(void *ctx, uacpi_resource *resource)
+{
+    struct PCIHostBridge *b = ctx;
+    uint64_t base, size, offset;
+
+    switch (resource->type) {
+    case UACPI_RESOURCE_TYPE_IO: {
+        if (b->has_io)
+            break;
+
+        uacpi_resource_io *r   = &resource->io;
+        uint16_t range_minimum = r->minimum;
+        uint16_t length        = r->length;
+        if (length < 8)
+            break;
+
+        b->legacy.config_addr_io = range_minimum;
+        b->legacy.config_data_io = range_minimum + 8;
+        b->has_io                = true;
+    } break;
+
+    default:
+        // TODO I guess...
+        break;
+    }
+
+    // printf("PCI Resource %i\n", resource->type);
+
+    return UACPI_ITERATION_DECISION_CONTINUE;
+}
+
+static void pci_setup_ecam(struct PCIHostBridge *b, uacpi_namespace_node *node) {}
+
 uacpi_iteration_decision pci_check_acpi_root(void *, uacpi_namespace_node *node, uint32_t /*depth*/)
 {
+    struct PCIHostBridge *b = calloc(sizeof(*b), 1);
+    if (!b) {
+        fprintf(stderr, "devicesd: Failed to enumerate host bridge, out of memory\n");
+        return UACPI_ITERATION_DECISION_CONTINUE;
+    }
+
     uint64_t seg = 0, bus = 0;
 
     uacpi_eval_integer(node, "_SEG", NULL, &seg);
     uacpi_eval_integer(node, "_BBN", NULL, &bus);
+    b->group_number     = seg;
+    b->start_bus_number = bus;
+    b->end_bus_number   = 255;
 
-    enumerate_pci_bus(seg, bus, node);
+    uacpi_for_each_device_resource(node, "_CRS", pci_enumerate_resources, b);
+
+    pci_setup_ecam(b, node);
+
+    b->next = bridges;
+    bridges = b;
+
+    enumerate_pci_bus(b, seg, bus, node);
+
     return UACPI_ITERATION_DECISION_CONTINUE;
 }
 
@@ -466,9 +511,9 @@ void acpi_pci_init()
                           pci_check_acpi_root, NULL);
 }
 
-struct PCIGroup *pci_group_find(unsigned group_number)
+struct PCIHostBridge *pci_host_bridge_find(unsigned group_number)
 {
-    for (struct PCIGroup *g = groups; g; g = g->next) {
+    for (struct PCIHostBridge *g = bridges; g; g = g->next) {
         if (g->group_number == group_number)
             return g;
     }
@@ -499,7 +544,7 @@ void request_pci_device(Message_Descriptor *desc, IPC_Request_PCI_Device *d)
         goto err;
     }
 
-    struct PCIGroup *g = pci_group_find(d->group);
+    struct PCIHostBridge *g = pci_host_bridge_find(d->group);
     if (!g) {
         error = -ENOENT;
         goto err;
@@ -597,7 +642,7 @@ error:
     send_message_port(d->reply_port, sizeof(reply_e), (char *)&reply_e);
 }
 
-struct PCIDevice *find_pci_device_descriptor(struct PCIGroup *g, uint8_t bus, uint8_t device,
+struct PCIDevice *find_pci_device_descriptor(struct PCIHostBridge *g, uint8_t bus, uint8_t device,
                                              uint8_t function)
 {
     struct PCIDevice *d;
@@ -612,8 +657,9 @@ struct PCIDevice *find_pci_device_descriptor(struct PCIGroup *g, uint8_t bus, ui
     return NULL;
 }
 
-int resolve_gsi_for(struct PCIGroup *g, uint8_t bus, uint8_t device, uint8_t function, uint8_t pin,
-                    uint32_t *gsi, bool *active_low, bool *level_trig, struct PCIDevice *d)
+int resolve_gsi_for(struct PCIHostBridge *g, uint8_t bus, uint8_t device, uint8_t function,
+                    uint8_t pin, uint32_t *gsi, bool *active_low, bool *level_trig,
+                    struct PCIDevice *d)
 {
     struct PCIGroupInterruptEntry key = {
         .bus    = bus,
@@ -676,7 +722,7 @@ void request_pci_device_gsi(Message_Descriptor *desc, IPC_Request_PCI_Device_GSI
         return;
     }
 
-    struct PCIGroup *g = pci_group_find(d->group);
+    struct PCIHostBridge *g = pci_host_bridge_find(d->group);
     if (!g) {
         IPC_Request_PCI_Device_GSI_Reply reply = {
             .type   = IPC_Request_PCI_Device_GSI_Reply_NUM,
@@ -720,7 +766,7 @@ void register_pci_interrupt(Message_Descriptor *msg, IPC_Register_PCI_Interrupt 
         goto end;
     }
 
-    struct PCIGroup *g = pci_group_find(desc->group);
+    struct PCIHostBridge *g = pci_host_bridge_find(desc->group);
     if (!g) {
         result = -ENOENT;
         goto end;
@@ -751,6 +797,8 @@ end:
                strerror(-result));
 }
 
+static pthread_mutex_t pci_access_mutex = PTHREAD_MUTEX_INITIALIZER;
+
 uint32_t pci_read_register(struct PCIDevicePtr *s, unsigned _register)
 {
     assert(s);
@@ -758,6 +806,16 @@ uint32_t pci_read_register(struct PCIDevicePtr *s, unsigned _register)
     switch (s->type) {
     case PCIGroupECAM:
         return pci_mmio_readl(s->ecam_window + _register);
+    case PCIGroupLegacy:
+        if (_register >= 256 / 4)
+            return -1U;
+
+        pthread_mutex_lock(&pci_access_mutex);
+        io_out32(s->io_addr.port,
+                 (uint32_t)0x80000000 | s->io_addr.data_offset | (_register << 2));
+        uint32_t data = io_in32(s->io_addr.port + 4);
+        pthread_mutex_unlock(&pci_access_mutex);
+        return data;
     default:
         assert(false);
     }
@@ -771,27 +829,48 @@ void pci_write_register(struct PCIDevicePtr *s, unsigned _register, uint32_t val
     switch (s->type) {
     case PCIGroupECAM:
         return pci_mmio_writel(s->ecam_window + _register, value);
+    case PCIGroupLegacy:
+        if (_register >= 256 / 4)
+            return;
+
+        pthread_mutex_lock(&pci_access_mutex);
+        io_out32(s->io_addr.port,
+                 (uint32_t)0x80000000 | s->io_addr.data_offset | (_register << 2));
+        io_out32(s->io_addr.port + 4, value);
+        pthread_mutex_unlock(&pci_access_mutex);
+        break;
     default:
         assert(false);
     }
 }
 
-int fill_device(struct PCIDevicePtr *s, struct PCIGroup *g, int bus, int device, int function)
+int fill_device(struct PCIDevicePtr *s, struct PCIHostBridge *g, int bus, int device, int function)
 {
     assert(s);
     assert(g);
-    switch (g->group_type) {
-    case PCIGroupECAM: {
-        void *config_space_virt = g->ecam.base_ptr;
+    if (g->has_ecam) {
+        void *config_space_virt    = g->ecam.base_ptr;
         const unsigned long offset = (bus << 20) | (device << 15) | (function << 12);
 
         *s = (struct PCIDevicePtr) {
-            .type = PCIGroupECAM,
+            .type        = PCIGroupECAM,
             .ecam_window = (uint32_t *)((char *)config_space_virt + offset),
         };
-    }
-    break;
-    default:
+    } else if (g->has_io) {
+        if (bus < g->start_bus_number || bus > g->end_bus_number)
+            return -1;
+
+        *s = (struct PCIDevicePtr) {
+            .type = PCIGroupLegacy,
+            .io_addr =
+                (struct LegacyAddr) {
+                    .data_offset = (bus << 16) | (device << 11) | (function << 8),
+                    .port        = g->legacy.config_addr_io,
+                },
+        };
+
+        return 0;
+    } else {
         return -1;
     }
 
