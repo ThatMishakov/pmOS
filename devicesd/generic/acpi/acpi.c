@@ -288,6 +288,8 @@ int system_shutdown(void)
 }
 
 syscall_r __pmos_syscall_set_attr(uint64_t pid, uint32_t attr, uint32_t value);
+syscall_r syscall_prepare_sleep(uint64_t pid, uint32_t attr, uint32_t value);
+
 
 int init_sleep()
 {
@@ -329,14 +331,14 @@ int system_sleep()
         return -EIO;
     }
 
-    assert(!__pmos_syscall_set_attr(0, 3, 0).result);
-    bool entered_sleep = false;
-    __asm__ volatile("");
+    volatile bool entered_sleep = false;
+    int result = syscall_prepare_sleep(0, 3, 0).result;
+    assert(!result);
     if (entered_sleep) {
-
+        asm ("xchgw %bx, %bx");
     } else {
         entered_sleep = true;
-        ret = uacpi_enter_sleep_state(UACPI_SLEEP_STATE_S5);
+        ret = uacpi_enter_sleep_state(UACPI_SLEEP_STATE_S3);
         assert(!uacpi_unlikely_error(ret));
     }
 

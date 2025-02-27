@@ -231,7 +231,7 @@ struct __pthread_waiter {
 #if defined(__DECLARE_PTHREAD_MUTEX_T) && !defined(__DECLARED_PTHREAD_MUTEX_T)
 typedef struct {
     __pmos64u_t block_count;
-    __pmos64u_t blocking_thread_id;
+    void * blocking_thread;
     struct __pthread_waiter *waiters_list_head;
     struct __pthread_waiter *waiters_list_tail;
     unsigned long recursive_lock_count;

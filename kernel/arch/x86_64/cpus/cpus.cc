@@ -266,6 +266,8 @@ extern void init_PIC();
 
 extern ulong idle_cr3;
 
+klib::unique_ptr<Task_Regs> to_restore_on_wakeup;
+
 extern "C" void wakeup_main()
 {
     serial_initiated = false;
@@ -284,8 +286,13 @@ extern "C" void wakeup_main()
     enable_apic();
     enable_sse();
 
-    serial_logger.printf("Ready to enter userspace...\n");
-    panic("Haven't implemented that =P");
+    if (to_restore_on_wakeup) {
+        c->current_task->regs = *to_restore_on_wakeup;
+        to_restore_on_wakeup.reset();
+    }
+    c->current_task->page_table->apply_cpu(c);
+    c->current_task->page_table->apply();
+    c->current_task->after_task_switch();
 }
 
 extern char acpi_trampoline_begin;

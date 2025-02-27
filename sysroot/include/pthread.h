@@ -58,7 +58,7 @@
 
 #define PTHREAD_MUTEX_INITIALIZER                     \
     ((pthread_mutex_t) {.block_count          = 0x00, \
-                        .blocking_thread_id   = 0,    \
+                        .blocking_thread      = NULL, \
                         .waiters_list_head    = NULL, \
                         .waiters_list_tail    = NULL, \
                         .recursive_lock_count = 0,    \

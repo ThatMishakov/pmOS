@@ -49,7 +49,7 @@ int pthread_mutex_init(pthread_mutex_t *mutex, const pthread_mutexattr_t *attr)
         return -1;
     }
 
-    mutex->blocking_thread_id   = 0;
+    mutex->blocking_thread      = NULL;
     mutex->waiters_list_head    = NULL;
     mutex->recursive_lock_count = 0;
     mutex->type                 = attr ? *attr : PTHREAD_MUTEX_DEFAULT;
@@ -119,10 +119,10 @@ static void atomic_pop_front(pthread_mutex_t *mutex)
 
 int pthread_mutex_lock(pthread_mutex_t *mutex)
 {
-    uint64_t thread_id = get_thread_id();
+    pthread_t *thread = pthread_self();
 
-    uint64_t blocking_thread_id = __atomic_load_n(&mutex->blocking_thread_id, __ATOMIC_SEQ_CST);
-    if (blocking_thread_id == thread_id) {
+    pthread_t *blocking_thread = __atomic_load_n(&mutex->blocking_thread, __ATOMIC_SEQ_CST);
+    if (blocking_thread == thread) {
         if (mutex->type == PTHREAD_MUTEX_RECURSIVE) {
             // Mutex has been acquired by the current thread
             mutex->recursive_lock_count++;
@@ -139,7 +139,7 @@ int pthread_mutex_lock(pthread_mutex_t *mutex)
 
     if (block_count == 0) {
         // Mutex has been acquired
-        mutex->blocking_thread_id = thread_id;
+        __atomic_store_n(&mutex->blocking_thread, thread, __ATOMIC_RELAXED);
         return 0;
     }
 
@@ -178,16 +178,16 @@ int pthread_mutex_lock(pthread_mutex_t *mutex)
     assert(result == SUCCESS);
 
     // Mutex has been acquired
-    mutex->blocking_thread_id = thread_id;
+    __atomic_store_n(&mutex->blocking_thread, thread, __ATOMIC_RELAXED);
     return 0;
 }
 
 int pthread_mutex_trylock(pthread_mutex_t *mutex)
 {
-    uint64_t thread_id = get_thread_id();
+    pthread_t *thread = pthread_self();
 
-    uint64_t blocking_thread_id = __atomic_load_n(&mutex->blocking_thread_id, __ATOMIC_SEQ_CST);
-    if (blocking_thread_id == thread_id) {
+    pthread_t * blocking_thread = __atomic_load_n(&mutex->blocking_thread, __ATOMIC_SEQ_CST);
+    if (blocking_thread == thread) {
         if (mutex->type == PTHREAD_MUTEX_RECURSIVE) {
             // Mutex has been acquired by the current thread
             mutex->recursive_lock_count++;
@@ -209,16 +209,16 @@ int pthread_mutex_trylock(pthread_mutex_t *mutex)
     }
 
     // Mutex has been acquired
-    mutex->blocking_thread_id = thread_id;
+    __atomic_store_n(&mutex->blocking_thread, thread, __ATOMIC_RELAXED);
     return 0;
 }
 
 int pthread_mutex_unlock(pthread_mutex_t *mutex)
 {
-    uint64_t thread_id = get_thread_id();
+    pthread_t *thread = pthread_self();
 
     // TODO: Other threads may potentially unlock it (?)
-    if (mutex->blocking_thread_id != thread_id) {
+    if (mutex->blocking_thread != thread) {
         errno = EPERM;
         return -1;
     }
@@ -227,7 +227,7 @@ int pthread_mutex_unlock(pthread_mutex_t *mutex)
         mutex->recursive_lock_count--;
         return 0;
     } else {
-        mutex->blocking_thread_id = 0;
+        __atomic_store_n(&mutex->blocking_thread, 0, __ATOMIC_RELAXED);
     }
 
     // Atomically decrement mutex->block_count

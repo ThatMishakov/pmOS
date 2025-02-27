@@ -136,7 +136,7 @@ extern "C" void syscall_handler()
     // get_cpu_struct()->current_task->task_id, get_cpu_struct()->current_task->name.c_str());
     // t_print_bochs(" %h %h %h %h %h ", arg1, arg2, arg3, arg4, arg5);
     if (task->attr.debug_syscalls) {
-        global_logger.printf("Debug: syscall %h pid %h\n", call_n,
+        serial_logger.printf("Debug: syscall %h pid %h\n", call_n,
                              get_cpu_struct()->current_task->task_id);
     }
 
@@ -506,6 +506,8 @@ void syscall_get_message_info()
 
 ReturnStr<u32> acpi_wakeup_vec();
 
+extern klib::unique_ptr<Task_Regs> to_restore_on_wakeup;
+
 void syscall_set_attribute()
 {
     task_ptr task = get_current_task();
@@ -536,7 +538,21 @@ void syscall_set_attribute()
         break;
     
     case 3: // ACPI sleep states' stuff
+        if (process != task) {
+            syscall_error(task) = -EINVAL;
+            return;
+        }
+
         syscall_return(task) = 0;
+
+        to_restore_on_wakeup = klib::make_unique<Task_Regs>(task->regs);
+        if (!to_restore_on_wakeup) {
+            syscall_error(task) = -ENOMEM;
+            return; 
+        }
+        // TODO: Stop other CPUs
+        task->page_table->unapply_cpu(get_cpu_struct());
+        task->before_task_switch();
         __asm__("wbinvd");
         task->regs.entry_type = 5;
     break;
