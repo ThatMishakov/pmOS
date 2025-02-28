@@ -6,7 +6,6 @@ init_vec_stuff:
 acpi_trampoline_begin:
     .globl acpi_cpu_startup
 acpi_cpu_startup:
-    cli
 
     movw %cs, %bx
     movw %bx, %cx
@@ -18,9 +17,6 @@ acpi_cpu_startup:
     movw %cx, %cs:(acpi_tampoline_gdtr_addr - acpi_cpu_startup + 2)
     lgdt %cs:(acpi_trampoline_gdtr - acpi_cpu_startup)
 
-    movl $0x01, %edx # Protected mode
-    movl %edx, %cr0
-
     movw %bx, %cx
     shlw $4, %cx
     addw $(1f - acpi_cpu_startup), %cx
@@ -28,6 +24,9 @@ acpi_cpu_startup:
     movw %bx, %cx
     shrw $12, %cx
     movw %cx, %cs:(protected_far_jump - acpi_cpu_startup + 2)
+
+    movl $0x01, %edx # Protected mode
+    movl %edx, %cr0
 
     ljmpl *%cs:(protected_far_jump - acpi_cpu_startup)
 1:

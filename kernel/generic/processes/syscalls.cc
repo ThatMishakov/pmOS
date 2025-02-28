@@ -553,7 +553,6 @@ void syscall_set_attribute()
         // TODO: Stop other CPUs
         task->page_table->unapply_cpu(get_cpu_struct());
         task->before_task_switch();
-        __asm__("wbinvd");
         task->regs.entry_type = 5;
     break;
 
@@ -587,7 +586,7 @@ void syscall_set_attribute()
 
         char *user_ptr = reinterpret_cast<char *>(value);
         syscall_success(task);
-        auto copy_result = copy_to_user(user_ptr, (char *)&nvs_regions[0], sizeof(nvs_regions[0]) * nvs_regions.size());
+        auto copy_result = copy_to_user((char *)&nvs_regions[0], user_ptr, sizeof(nvs_regions[0]) * nvs_regions.size());
         if (!copy_result.success()) {
             syscall_error(task) = copy_result.result;
             return;
@@ -597,6 +596,11 @@ void syscall_set_attribute()
             return;
     }
     break;
+
+    case 7:
+        syscall_success(task);
+        __asm__ volatile ("wbinvd");
+        break;
 
     default:
         syscall_error(task) = -ENOTSUP;

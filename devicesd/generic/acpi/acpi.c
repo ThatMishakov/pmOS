@@ -352,9 +352,9 @@ int init_sleep()
         }
 
         struct MemoryRegion regions[count];
-        nvs_cnt = __pmos_syscall_set_attr(0, 6, (unsigned long)regions);
+        nvs_cnt = __pmos_syscall_set_attr(0, 6, (unsigned long)&regions[0]);
         if (nvs_cnt.result) {
-            fprintf(stderr, "Failed to get the ACPI NVS regions\n");
+            fprintf(stderr, "Failed to get the ACPI NVS regions: %i\n", nvs_cnt.result);
             status = -1;
             return -1;
         }

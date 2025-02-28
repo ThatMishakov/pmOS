@@ -1073,10 +1073,10 @@ void limine_main()
 
     if (smp_request.response != nullptr) {
     #ifdef __riscv
-        number_of_cpus = smp_request.response->cpu_count;
+        // number_of_cpus = smp_request.response->cpu_count;
         bsp_cpu_id     = smp_request.response->bsp_hartid;
     #elif defined(__x86_64__)
-        number_of_cpus = smp_request.response->cpu_count;
+        // number_of_cpus = smp_request.response->cpu_count;
         bsp_cpu_id     = smp_request.response->bsp_lapic_id;
     #endif
     }
@@ -1099,7 +1099,7 @@ void limine_main()
     // Switch to CPU-local temp mapper
     global_temp_mapper = nullptr;
 
-    init_smp();
+    // init_smp();
 
     init_modules();
     init_task1();

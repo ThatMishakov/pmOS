@@ -184,6 +184,7 @@ error:
 
 bool init_serial_hardcoded()
 {
+    return false;
     printf("Using hardcoded serial port values\n");
 
     #ifdef __riscv
