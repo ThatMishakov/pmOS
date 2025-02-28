@@ -653,3 +653,21 @@ void apply_page_table(ptable_top_ptr_t page_table);
 // (i.e. those that have global bit set on x86)
 void invalidate_tlb_kernel(void *start);
 void invalidate_tlb_kernel(void *start, size_t size);
+
+enum class MemoryRegionType: u64 { // u64 for coherence with userspace...
+    Unknown = 0,
+    Reserved,
+    ACPIReclaimable,
+    ACPINVS,
+    BadMemory,
+    Usable,
+    Framebuffer
+};
+
+struct MemoryRegion {
+    phys_addr_t start;
+    u64 size;
+    MemoryRegionType type;
+};
+
+extern klib::vector<MemoryRegion> memory_map;

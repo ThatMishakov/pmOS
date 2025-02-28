@@ -106,6 +106,23 @@ void init_ioapic_at(uint16_t id, uint64_t address, uint32_t base)
     printf("IOAPIC %i at %#" PRIx64 " base %i max %i\n", id, address, base, node->desc.max_int);
 }
 
+void restore_ioapics()
+{
+    ioapic_list *node = ioapic_list_root;
+    while (node) {
+        ioapic_descriptor *d = &node->desc;
+        uint32_t size = d->max_int - d->int_base + 1;
+        for (uint32_t i = 0; i < size; ++i) {
+            uint64_t entry = d->redirection_entries_mirrored[i];
+            IOREDTBL e = {
+                .aslong = entry,
+            };
+            ioapic_write_redir_reg(d->virt_addr, i, e);
+        }
+        node = node->next;
+    }
+}
+
 ioapic_descriptor *get_ioapic_for_int(uint32_t intno)
 {
     ioapic_list *node = ioapic_list_root;

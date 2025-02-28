@@ -126,9 +126,9 @@ int main(int argc, char **argv)
     }
 
     // --------------------------------------------------
-    pthread_t thread;
-    pthread_create(&thread, NULL, shutdown_thread, NULL);
-    pthread_detach(thread);
+    // pthread_t thread;
+    // pthread_create(&thread, NULL, shutdown_thread, NULL);
+    // pthread_detach(thread);
     // --------------------------------------------------
 
     while (1) {

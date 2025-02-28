@@ -777,3 +777,5 @@ void TLBShootdownContext::finalize()
     pages_count  = 0;
     ranges_count = 0;
 }
+
+klib::vector<MemoryRegion> memory_map;

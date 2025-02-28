@@ -32,7 +32,7 @@
 #include <unistd.h>
 #include <errno.h>
 
-syscall_r __pmos_syscall_set_attr(uint64_t pid, uint32_t attr, uint32_t value);
+syscall_r __pmos_syscall_set_attr(uint64_t pid, uint32_t attr, unsigned long value);
 
 int pmos_request_io_permission()
 {

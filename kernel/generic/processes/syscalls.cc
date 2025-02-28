@@ -567,6 +567,37 @@ void syscall_set_attribute()
     }
     break;
 
+    case 5: { // Number of NVS entries
+        // TODO: Remove magic numbers
+        size_t count = 0;
+        for (auto region: memory_map)
+            count += region.type == MemoryRegionType::ACPINVS;
+
+        syscall_return(task) = count;
+    }
+    break;
+
+    case 6: { // Return NVS regions to userspace...
+        klib::vector<MemoryRegion> nvs_regions;
+        for (auto region: memory_map)
+            if (region.type == MemoryRegionType::ACPINVS && !nvs_regions.push_back(region)) {
+                syscall_error(task) = -ENOMEM;
+                return;
+            }
+
+        char *user_ptr = reinterpret_cast<char *>(value);
+        syscall_success(task);
+        auto copy_result = copy_to_user(user_ptr, (char *)&nvs_regions[0], sizeof(nvs_regions[0]) * nvs_regions.size());
+        if (!copy_result.success()) {
+            syscall_error(task) = copy_result.result;
+            return;
+        }
+
+        if (!copy_result.val)
+            return;
+    }
+    break;
+
     default:
         syscall_error(task) = -ENOTSUP;
         break;

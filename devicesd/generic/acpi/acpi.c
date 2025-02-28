@@ -29,6 +29,7 @@
 #include <acpi/acpi.h>
 #include <assert.h>
 #include <errno.h>
+#include <inttypes.h>
 #include <kernel/block.h>
 #include <main.h>
 #include <phys_map/phys_map.h>
@@ -49,7 +50,7 @@
 #include <uacpi/osi.h>
 #include <uacpi/sleep.h>
 #include <uacpi/utilities.h>
-#include <inttypes.h>
+#include <vector.h>
 
 void init_acpi();
 
@@ -287,9 +288,31 @@ int system_shutdown(void)
     return 0;
 }
 
-syscall_r __pmos_syscall_set_attr(uint64_t pid, uint32_t attr, uint32_t value);
-syscall_r syscall_prepare_sleep(uint64_t pid, uint32_t attr, uint32_t value);
+syscall_r __pmos_syscall_set_attr(uint64_t pid, uint32_t attr, unsigned long value);
+syscall_r syscall_prepare_sleep(uint64_t pid, uint32_t attr, unsigned long value);
 
+struct MemoryRegion {
+    uint64_t phys_start;
+    uint64_t length;
+    uint64_t type;
+};
+
+struct NvsRegion {
+    uint64_t phys_start;
+    uint64_t size_bytes;
+    void *virt_start;
+    void *save_to;
+};
+
+void nvs_region_free(struct NvsRegion *region)
+{
+    assert(region);
+    free(region->save_to);
+    unmap_phys(region->virt_start, region->size_bytes);
+}
+
+VECTOR_TYPEDEF(struct NvsRegion, NVSRegionVector);
+NVSRegionVector nvs_vector = VECTOR_INIT;
 
 int init_sleep()
 {
@@ -311,11 +334,89 @@ int init_sleep()
             return -1;
         }
 
+        syscall_r nvs_cnt = __pmos_syscall_set_attr(0, 5, 0);
+        if (nvs_cnt.result) {
+            fprintf(stderr, "Could not get the number of ACPI NVS entries\n");
+            status = -1;
+            return -1;
+        }
+
+        size_t count = nvs_cnt.value;
+
+        int resize_result = 0;
+        VECTOR_RESERVE(nvs_vector, count, resize_result);
+        if (resize_result) {
+            fprintf(stderr, "Failed to reserve memory for NVS regions vector\n");
+            status = -1;
+            return -1;
+        }
+
+        struct MemoryRegion regions[count];
+        nvs_cnt = __pmos_syscall_set_attr(0, 6, (unsigned long)regions);
+        if (nvs_cnt.result) {
+            fprintf(stderr, "Failed to get the ACPI NVS regions\n");
+            status = -1;
+            return -1;
+        }
+
+        for (size_t i = 0; i < count; ++i) {
+            void *mapping = map_phys(regions[i].phys_start, regions[i].length);
+            if (!mapping) {
+                struct NvsRegion r;
+                VECTOR_FOREACH(nvs_vector, r)
+                    nvs_region_free(&r);
+
+                VECTOR_FREE(nvs_vector);
+                status = -1;
+                return -1;
+            }
+
+            void *memory = malloc(regions[i].length);
+            if (!memory) {
+                unmap_phys(mapping, regions[i].length);
+
+                struct NvsRegion r;
+                VECTOR_FOREACH(nvs_vector, r)
+                    nvs_region_free(&r);
+
+                VECTOR_FREE(nvs_vector);
+                status = -1;
+                return -1;
+            }
+
+            struct NvsRegion r = {
+                .phys_start = regions[i].phys_start,
+                .size_bytes = regions[i].length,
+                .save_to = memory,
+                .virt_start = mapping,
+            };
+            VECTOR_PUSH_BACK(nvs_vector, r);
+        }
+
         return 0;
     } else {
         return 0;
     }
 }
+
+void save_nvs()
+{
+    struct NvsRegion r;
+    VECTOR_FOREACH(nvs_vector, r)
+    memcpy(r.save_to, r.virt_start, r.size_bytes);
+}
+void restore_nvs()
+{
+    struct NvsRegion r;
+    VECTOR_FOREACH(nvs_vector, r)
+    memcpy(r.virt_start, r.save_to, r.size_bytes);
+}
+
+void call_sleep_handlers() {}
+
+void call_sleep_handlers_wakeup() {}
+
+void restore_ioapics();
 
 int system_sleep()
 {
@@ -332,12 +433,19 @@ int system_sleep()
     }
 
     volatile bool entered_sleep = false;
-    int result = syscall_prepare_sleep(0, 3, 0).result;
+    int result                  = syscall_prepare_sleep(0, 3, 0).result;
     assert(!result);
     if (entered_sleep) {
-        asm ("xchgw %bx, %bx");
+        restore_ioapics();
+        restore_nvs();
+        uacpi_prepare_for_wake_from_sleep_state(UACPI_SLEEP_STATE_S3);
+        int result = uacpi_wake_from_sleep_state(UACPI_SLEEP_STATE_S3);
+        call_sleep_handlers_wakeup();
+        printf("uacpi_wake_from_sleep_state: %i\n", result);
     } else {
         entered_sleep = true;
+        call_sleep_handlers();
+        save_nvs();
         ret = uacpi_enter_sleep_state(UACPI_SLEEP_STATE_S3);
         assert(!uacpi_unlikely_error(ret));
     }
@@ -359,7 +467,7 @@ void *shutdown_thread(void *)
     printf("Shutting down in 3 seconds...\n");
     set_affinity(TASK_ID_SELF, -1, 0);
     // uint64_t start = pmos_get_time(GET_TIME_NANOSECONDS_SINCE_BOOTUP).value;
-    sleep(3);
+    // sleep(3);
     // uint64_t end = pmos_get_time(GET_TIME_NANOSECONDS_SINCE_BOOTUP).value;
     // printf("Time difference: %llu\n", end - start);
     system_sleep();
@@ -489,7 +597,7 @@ static size_t hash_for_value(void *value, size_t total_size)
 
 static pmos_port_t pmbus_port    = 0;
 static bool pmbus_port_requested = false;
-const char *pmbus_port_name = "/pmos/pmbus";
+const char *pmbus_port_name      = "/pmos/pmbus";
 int request_pmbus_port(pmos_port_t *port_out)
 {
     assert(port_out);
@@ -502,7 +610,7 @@ int request_pmbus_port(pmos_port_t *port_out)
     if (pmbus_port_requested)
         return 0;
 
-    int result             = (int)request_named_port(pmbus_port_name, strlen(pmbus_port_name), main_port, 0);
+    int result = (int)request_named_port(pmbus_port_name, strlen(pmbus_port_name), main_port, 0);
     if (result < 0) {
         fprintf(stderr, "devicesd: Fauled to request pmbus port: %i (%s)\n", result,
                 strerror(-result));
@@ -528,14 +636,11 @@ static void send_foreach(pmos_hashtable_ll_t *element, void *ctx)
     }
 
     free(r->message_data);
-    r->message_data = NULL;
+    r->message_data      = NULL;
     r->message_data_size = 0;
 }
 
-static void publish_send()
-{
-    hashtable_foreach(&register_requests, send_foreach, NULL);
-}
+static void publish_send() { hashtable_foreach(&register_requests, send_foreach, NULL); }
 
 int send_register_object(struct RegisterRequest *r)
 {
@@ -564,7 +669,7 @@ int send_register_object(struct RegisterRequest *r)
         return -1;
     }
     free(r->message_data);
-    r->message_data = NULL;
+    r->message_data      = NULL;
     r->message_data_size = 0;
 
     return 0;
@@ -577,13 +682,17 @@ void publish_object_reply(Message_Descriptor *desc, IPC_BUS_Publish_Object_Reply
 
     pmos_hashtable_ll_t *e = hashtable_find(&register_requests, &idx, hash_for_value, hash_equals);
     if (!e) {
-        fprintf(stderr, "[devicesd] Warning: Recieved IPC_BUS_Publish_Object_Reply arg %" PRIi64 " , but didn't find value\n", idx);
+        fprintf(stderr,
+                "[devicesd] Warning: Recieved IPC_BUS_Publish_Object_Reply arg %" PRIi64
+                " , but didn't find value\n",
+                idx);
         return;
     }
 
     struct RegisterRequest *rr = container_of(e, struct RegisterRequest, hash_head);
     if (r->result == 0) {
-        printf("[devicesd] Published %s, sequence number %" PRIi64 "!\n", rr->acpi_name, r->sequence_number);
+        printf("[devicesd] Published %s, sequence number %" PRIi64 "!\n", rr->acpi_name,
+               r->sequence_number);
         rr->pmbus_sequence_id = r->sequence_number;
     } else {
         printf("[devicesd] Failed to publish %s! Result %i\n", rr->acpi_name, r->result);
@@ -593,7 +702,10 @@ void publish_object_reply(Message_Descriptor *desc, IPC_BUS_Publish_Object_Reply
 void named_port_notification(Message_Descriptor *desc, IPC_Kernel_Named_Port_Notification *n)
 {
     if (desc->sender != 0) {
-        fprintf(stderr, "[devicesd] Warning: recieved IPC_Kernel_Named_Port_Notification from task %" PRIi64 " , expected kernel (0)\n", desc->sender);
+        fprintf(stderr,
+                "[devicesd] Warning: recieved IPC_Kernel_Named_Port_Notification from task %" PRIi64
+                " , expected kernel (0)\n",
+                desc->sender);
         return;
     }
 
@@ -625,8 +737,8 @@ int register_object(pmos_bus_object_t *object_owning)
     uint8_t *msg    = NULL;
     size_t msg_size = 0;
 
-    if (!pmos_bus_object_serialize_ipc(object_owning, main_port, rr->id, main_port, pmos_process_task_group(),
-                                       &msg, &msg_size)) {
+    if (!pmos_bus_object_serialize_ipc(object_owning, main_port, rr->id, main_port,
+                                       pmos_process_task_group(), &msg, &msg_size)) {
         fprintf(stderr, "Couldn't serialize pmbus object\n");
         goto end;
     }

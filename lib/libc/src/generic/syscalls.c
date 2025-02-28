@@ -163,7 +163,7 @@ syscall_r __pmos_get_system_info(uint32_t info)
 #endif
 }
 
-syscall_r __pmos_syscall_set_attr(uint64_t pid, uint32_t attr, uint32_t value)
+syscall_r __pmos_syscall_set_attr(uint64_t pid, uint32_t attr, unsigned long value)
 {
 #ifdef __32BITSYSCALL
     return __pmos_syscall32_4words(SYSCALL_SET_ATTR, pid, attr, value);

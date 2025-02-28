@@ -80,6 +80,23 @@
         (vec).capacity = 0;    \
     } while (0)
 
+#define VECTOR_RESERVE(vec, count, result)                            \
+    do {                                                              \
+        if ((vec).capacity >= count)                                      \
+            result = 0;                                               \
+        else {                                                        \
+            void *data = realloc((vec).data, count*sizeof(*(vec).data)); \
+            if (!data)                                                \
+                result = -1;                                          \
+            else {                                                    \
+                result = 0;                                           \
+                (vec).data = data;                                     \
+                (vec).capacity = count;                               \
+            }                                                         \
+        }                                                             \
+    } while (0)
+
+
 #define VECTOR_SIZE(vec)  ((vec).size)
 #define VECTOR_EMPTY(vec) ((vec).size == 0)
 

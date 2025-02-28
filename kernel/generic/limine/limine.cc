@@ -589,6 +589,38 @@ void construct_paging()
     pmm::pmm_fully_initialized = true;
 
     serial_logger.printf("PMM initialized!\n");
+
+    if (!memory_map.reserve(regions.size()))
+        panic("Could not allocate memory for memory map");
+
+    for (auto region : regions_data) {
+        MemoryRegionType type;
+        switch (region.type) {
+        case LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE:
+        case LIMINE_MEMMAP_KERNEL_AND_MODULES:
+        case LIMINE_MEMMAP_USABLE:
+            type = MemoryRegionType::Usable; break;
+        case LIMINE_MEMMAP_RESERVED:
+            type = MemoryRegionType::Reserved; break;
+        case LIMINE_MEMMAP_ACPI_RECLAIMABLE:
+            type = MemoryRegionType::ACPIReclaimable; break;
+        case LIMINE_MEMMAP_ACPI_NVS:
+            type = MemoryRegionType::ACPINVS; break;
+        case LIMINE_MEMMAP_BAD_MEMORY:
+            type = MemoryRegionType::BadMemory; break;
+        case LIMINE_MEMMAP_FRAMEBUFFER:
+            type = MemoryRegionType::Framebuffer; break;
+        default:
+            type = MemoryRegionType::Unknown; break;
+        }
+
+        memory_map.push_back({
+            .start = region.base,
+            .size = region.length,
+            .type = type,
+        });
+    }
+
 }
 
 __attribute__((used)) limine_module_request module_request = {
