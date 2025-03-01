@@ -156,9 +156,10 @@ struct CPU_Info {
 
     static constexpr int IPI_RESCHEDULE    = 0x1;
     static constexpr int IPI_TLB_SHOOTDOWN = 0x2;
+    static constexpr int IPI_CPU_PARK      = 0x4;
     u32 ipi_mask                           = 0;
 
-    constexpr static u32 ipi_synchronous_mask = IPI_TLB_SHOOTDOWN;
+    constexpr static u32 ipi_synchronous_mask = IPI_TLB_SHOOTDOWN | IPI_CPU_PARK;
 
     // IMHO this is better than protecting current_task pointer with spinlock
     priority_t current_task_priority = sched_queues_levels;
@@ -188,9 +189,14 @@ struct CPU_Info {
 
     inline bool is_bootstap_cpu() const noexcept { return cpu_id == 0; }
 
+    klib::unique_ptr<Task_Regs> to_restore_on_wakeup;
+
     pmos::containers::DoubleListHead<CPU_Info> active_page_table;
     int page_table_generation = -1;
     int kernel_pt_generation  = 0;
+
+    // TODO?
+    bool online = true;
 };
 
 extern u64 ticks_since_bootup;

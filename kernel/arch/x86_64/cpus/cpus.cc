@@ -43,6 +43,7 @@
 #include <x86_asm.hh>
 #include <stdlib.h>
 #include <x86_utils.hh>
+#include <cpus/ipi.hh>
 
 using namespace kernel;
 using namespace kernel::pmm;
@@ -263,10 +264,14 @@ extern bool serial_initiated;
 extern bool serial_functional;
 
 extern void init_PIC();
+void deactivate_page_table();
 
 extern ulong idle_cr3;
 
-klib::unique_ptr<Task_Regs> to_restore_on_wakeup;
+extern int kernel_pt_generation;
+extern int kernel_pt_active_cpus_count[2];
+
+void smp_wake_everyone_else_up() {}
 
 extern "C" void wakeup_main()
 {
@@ -286,13 +291,103 @@ extern "C" void wakeup_main()
     enable_apic();
     enable_sse();
 
-    if (to_restore_on_wakeup) {
-        c->current_task->regs = *to_restore_on_wakeup;
-        to_restore_on_wakeup.reset();
+    if (c->to_restore_on_wakeup) {
+        c->current_task->regs = *c->to_restore_on_wakeup;
+        c->to_restore_on_wakeup.reset();
     }
     c->current_task->page_table->apply_cpu(c);
     c->current_task->page_table->apply();
     c->current_task->after_task_switch();
+
+    assert(c->kernel_pt_generation == -1);
+    c->kernel_pt_generation = __atomic_load_n(&kernel_pt_generation, __ATOMIC_ACQUIRE);
+    __atomic_add_fetch(&kernel_pt_active_cpus_count[c->kernel_pt_generation], 1, __ATOMIC_RELAXED);
+    c->online = true;
+
+    smp_wake_everyone_else_up();
+}
+
+extern "C" void smp_entry_main(CPU_Info *c)
+{
+    serial_initiated = false;
+    serial_logger.printf("Woke up CPU %x\n", c->lapic_id);
+    
+    init_PIC();
+    loadGDT(&c->cpu_gdt);
+    write_msr(0xC0000101, (u64)c);
+    c->cpu_gdt.tss_descriptor.access = 0x89;
+    loadTSS(TSS_OFFSET);
+    program_syscall();
+    set_idt();
+    enable_apic();
+    enable_sse();
+
+    if (c->to_restore_on_wakeup) {
+        c->current_task->regs = *c->to_restore_on_wakeup;
+        c->to_restore_on_wakeup.reset();
+    }
+    c->current_task->page_table->apply_cpu(c);
+    c->current_task->page_table->apply();
+    c->current_task->after_task_switch();
+
+    assert(c->kernel_pt_generation == -1);
+    c->kernel_pt_generation = __atomic_load_n(&kernel_pt_generation, __ATOMIC_ACQUIRE);
+    __atomic_add_fetch(&kernel_pt_active_cpus_count[c->kernel_pt_generation], 1, __ATOMIC_RELAXED);
+    c->online = true;   
+}
+
+void park_self()
+{
+    auto c = get_cpu_struct();
+    auto task = c->current_task;
+
+    task->page_table->unapply_cpu(get_cpu_struct());
+    task->before_task_switch();
+
+    // Kill TLB shootdowns
+    int kernel_pt_gen = c->kernel_pt_generation;
+    __atomic_sub_fetch(&kernel_pt_active_cpus_count[kernel_pt_gen], 1, __ATOMIC_RELEASE);
+    c->kernel_pt_generation = -1;
+
+    serial_logger.printf("Parking cpu %x\n", c->lapic_id);
+
+    __atomic_store_n(&c->online, false, __ATOMIC_RELEASE);
+    __asm__ volatile ("wbinvd");
+    __asm__ volatile ("hlt");
+}
+
+void deactivate_page_table()
+{
+    auto c = get_cpu_struct();
+
+    int kernel_pt_gen = c->kernel_pt_generation;
+    __atomic_sub_fetch(&kernel_pt_active_cpus_count[kernel_pt_gen], 1, __ATOMIC_RELEASE);
+    c->kernel_pt_generation = -1;
+}
+
+void check_synchronous_ipis();
+
+void stop_cpus()
+{
+    serial_logger.printf("Stopping cpus\n");
+    auto my_cpu = get_cpu_struct();
+    for (auto cpu: cpus) {
+        if (cpu == my_cpu)
+            continue;
+
+        __atomic_or_fetch(&cpu->ipi_mask, CPU_Info::IPI_CPU_PARK, __ATOMIC_ACQUIRE);
+        send_ipi_fixed(ipi_invalidate_tlb_int_vec, cpu->lapic_id);
+    }
+
+    for (auto cpu: cpus) {
+        if (cpu == my_cpu)
+            continue;
+
+        while (__atomic_load_n(&cpu->online, __ATOMIC_RELAXED)) {
+            x86_pause();
+            check_synchronous_ipis();
+        }
+    }
 }
 
 extern char acpi_trampoline_begin;
@@ -300,6 +395,10 @@ extern char acpi_trampoline_startup_end;
 
 extern u32 acpi_trampoline_startup_cr3;
 extern void *acpi_trampoline_kernel_entry;
+
+// Relocations
+extern u32 protected_acpi_vec_far_jump;
+extern u32 acpi_tampoline_gdtr_addr;
 
 extern "C" void _acpi_wakeup_entry();
 
@@ -315,6 +414,9 @@ void init_acpi_trampoline ()
 
     acpi_trampoline_page = page->get_phys_addr();
     have_acpi_startup = true;
+
+    protected_acpi_vec_far_jump += acpi_trampoline_page;
+    acpi_tampoline_gdtr_addr += acpi_trampoline_page;
 
     auto cr3_page = pmm::alloc_pages(1, 0, AllocPolicy::Below4GB);
     if (!cr3_page)

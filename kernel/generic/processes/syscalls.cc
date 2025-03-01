@@ -505,12 +505,13 @@ void syscall_get_message_info()
 }
 
 ReturnStr<u32> acpi_wakeup_vec();
-
-extern klib::unique_ptr<Task_Regs> to_restore_on_wakeup;
+extern void stop_cpus();
+extern void deactivate_page_table();
 
 void syscall_set_attribute()
 {
-    task_ptr task = get_current_task();
+    auto c = get_cpu_struct();
+    task_ptr task = c->current_task;
 
     u64 pid         = syscall_arg64(task, 0);
     ulong attribute = syscall_arg(task, 1, 1);
@@ -545,12 +546,12 @@ void syscall_set_attribute()
 
         syscall_return(task) = 0;
 
-        to_restore_on_wakeup = klib::make_unique<Task_Regs>(task->regs);
-        if (!to_restore_on_wakeup) {
+        c->to_restore_on_wakeup = klib::make_unique<Task_Regs>(task->regs);
+        if (!c->to_restore_on_wakeup) {
             syscall_error(task) = -ENOMEM;
             return; 
         }
-        // TODO: Stop other CPUs
+        stop_cpus();
         task->page_table->unapply_cpu(get_cpu_struct());
         task->before_task_switch();
         task->regs.entry_type = 5;
@@ -599,6 +600,7 @@ void syscall_set_attribute()
 
     case 7:
         syscall_success(task);
+        deactivate_page_table();
         __asm__ volatile ("wbinvd");
         break;
 

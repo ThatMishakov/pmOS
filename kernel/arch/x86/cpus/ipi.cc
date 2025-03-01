@@ -35,6 +35,8 @@
 #include <types.hh>
 #include <x86_asm.hh>
 
+void park_self();
+
 void ipi_invalidate_tlb_routine()
 {
     auto c = get_cpu_struct();
@@ -42,7 +44,12 @@ void ipi_invalidate_tlb_routine()
     auto val = __atomic_load_n(&c->ipi_mask, __ATOMIC_CONSUME);
     if (val & CPU_Info::ipi_synchronous_mask) {
         __atomic_and_fetch(&c->ipi_mask, ~CPU_Info::IPI_TLB_SHOOTDOWN, __ATOMIC_SEQ_CST);
-        c->current_task->page_table->trigger_shootdown(c);
+
+        if (val & CPU_Info::IPI_TLB_SHOOTDOWN)
+            c->current_task->page_table->trigger_shootdown(c);
+
+        if (val & CPU_Info::IPI_CPU_PARK)
+            park_self();
     }
     apic_eoi();
 }

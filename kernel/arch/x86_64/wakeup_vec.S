@@ -1,35 +1,23 @@
+    .p2align 4, 0xCC
     .data
 init_vec_stuff:
     .code16
 
+    .p2align 4, 0xCC
     .globl acpi_trampoline_begin
 acpi_trampoline_begin:
     .globl acpi_cpu_startup
 acpi_cpu_startup:
 
     movw %cs, %bx
-    movw %bx, %cx
-    shlw $4, %cx
-    addw $(acpi_trampoline_gdt - acpi_cpu_startup), %cx
-    movw %cx, %cs:(acpi_tampoline_gdtr_addr - acpi_cpu_startup)
-    movw %bx, %cx
-    shrw $12, %cx
-    movw %cx, %cs:(acpi_tampoline_gdtr_addr - acpi_cpu_startup + 2)
-    lgdt %cs:(acpi_trampoline_gdtr - acpi_cpu_startup)
 
-    movw %bx, %cx
-    shlw $4, %cx
-    addw $(1f - acpi_cpu_startup), %cx
-    movw %cx, %cs:(protected_far_jump - acpi_cpu_startup)
-    movw %bx, %cx
-    shrw $12, %cx
-    movw %cx, %cs:(protected_far_jump - acpi_cpu_startup + 2)
+    lgdt %cs:(acpi_trampoline_gdtr - acpi_cpu_startup)
 
     movl $0x01, %edx # Protected mode
     movl %edx, %cr0
 
-    ljmpl *%cs:(protected_far_jump - acpi_cpu_startup)
-1:
+    ljmpl *%cs:(protected_acpi_vec_far_jump - acpi_cpu_startup)
+acpi_protected_far_jump_instr:
     .code32
 
     movl $0x10, %eax
@@ -69,15 +57,17 @@ _64bitst:
 
     .p2align 4, 0xCC
 
-protected_far_jump:
-    .long 0 # offset
+    .globl protected_acpi_vec_far_jump
+protected_acpi_vec_far_jump:
+    .long (acpi_protected_far_jump_instr - init_vec_stuff) # offset
     .word 0x18 # 32 bit cs
     
 acpi_trampoline_gdtr:
 acpi_trampoline_gdtr_limit:
     .word 31 # 3 entries - 1
+    .globl acpi_tampoline_gdtr_addr
 acpi_tampoline_gdtr_addr:
-    .long 0
+    .long (acpi_trampoline_gdt - init_vec_stuff)
 
 acpi_trampoline_gdt:
     .quad 0

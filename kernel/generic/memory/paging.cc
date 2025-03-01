@@ -443,6 +443,7 @@ int kernel_pt_active_cpus_count[2]                = {0, 0};
 void Page_Table::trigger_shootdown(CPU_Info *cpu)
 {
     if (kernel_pt_generation != cpu->kernel_pt_generation) {
+        assert(kernel_pt_generation != -1);
         // Kernel shootdown
 
         assert(kernel_shootdown_desc != nullptr);
