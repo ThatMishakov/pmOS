@@ -271,12 +271,12 @@ extern ulong idle_cr3;
 extern int kernel_pt_generation;
 extern int kernel_pt_active_cpus_count[2];
 
-void smp_wake_everyone_else_up() {}
+static void smp_wake_everyone_else_up();
 
 extern "C" void wakeup_main()
 {
     serial_initiated = false;
-    serial_logger.printf("Printing from C++ after waking up!\n");
+    serial_logger.printf("Printing from C++ after waking up! (LAPIC ID %x)\n", get_lapic_id());
     setCR3(idle_cr3);
 
     auto c = cpus[0];
@@ -310,7 +310,7 @@ extern "C" void wakeup_main()
 extern "C" void smp_entry_main(CPU_Info *c)
 {
     serial_initiated = false;
-    serial_logger.printf("Woke up CPU %x\n", c->lapic_id);
+    serial_logger.printf("CPU %x woke up...\n", c->lapic_id);
     
     init_PIC();
     loadGDT(&c->cpu_gdt);
@@ -390,6 +390,7 @@ void stop_cpus()
     }
 }
 
+extern char init_vec_begin;
 extern char acpi_trampoline_begin;
 extern char acpi_trampoline_startup_end;
 
@@ -399,6 +400,7 @@ extern void *acpi_trampoline_kernel_entry;
 // Relocations
 extern u32 protected_acpi_vec_far_jump;
 extern u32 acpi_tampoline_gdtr_addr;
+extern u32 init_vec_jump_pmode;
 
 extern "C" void _acpi_wakeup_entry();
 
@@ -417,6 +419,7 @@ void init_acpi_trampoline ()
 
     protected_acpi_vec_far_jump += acpi_trampoline_page;
     acpi_tampoline_gdtr_addr += acpi_trampoline_page;
+    init_vec_jump_pmode += acpi_trampoline_page;
 
     auto cr3_page = pmm::alloc_pages(1, 0, AllocPolicy::Below4GB);
     if (!cr3_page)
@@ -447,9 +450,20 @@ void init_acpi_trampoline ()
 
     Temp_Mapper_Obj<char> t(request_temp_mapper());
     char *ptr = t.map(acpi_trampoline_page);
-    memcpy(ptr, &acpi_trampoline_begin, (char *)&acpi_trampoline_startup_end - (char *)&acpi_trampoline_begin);
+    memcpy(ptr, &init_vec_begin, (char *)&acpi_trampoline_startup_end - (char *)&init_vec_begin);
 
     serial_logger.printf("Initialized ACPI vector at %x\n", acpi_trampoline_page);
+}
+
+extern "C" CPU_Info *find_cpu_info()
+{
+    auto lapic_id = get_lapic_id();
+    for (auto c: cpus)
+        if (c->lapic_id == lapic_id)
+            return c;
+
+    assert(false);
+    __builtin_unreachable();
 }
 
 ReturnStr<u32> acpi_wakeup_vec()
@@ -457,5 +471,16 @@ ReturnStr<u32> acpi_wakeup_vec()
     if (!have_acpi_startup)
         return Error(-ENOENT);
 
-    return Success((u32)acpi_trampoline_page);
+    return Success((u32)(acpi_trampoline_page + (char *)&acpi_trampoline_begin - (char *)&init_vec_begin));
+}
+
+void smp_wake_everyone_else_up() {
+    uint32_t vector = acpi_trampoline_page >> 12;
+
+    apic_write_reg(APIC_ICR_HIGH, 0);
+
+    // Send to *vector* vector with Assert level and All Excluding Self
+    // shorthand
+    apic_write_reg(APIC_ICR_LOW, vector | (0x01 << 14) | (0b11 << 18) | (0b101) << 8);
+    apic_write_reg(APIC_ICR_LOW, vector | (0x01 << 14) | (0b11 << 18) | (0b110) << 8);
 }

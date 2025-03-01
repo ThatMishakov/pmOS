@@ -26,6 +26,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #define STACK_SIZE 0x4000
+#define SMP_ENTRY_TEMP_STACK_SIZE 0x2000
 
     .section .bss
     .align 16
@@ -33,6 +34,10 @@
     .type stack, @object
 stack:
     .space STACK_SIZE
+smp_stack:
+    .space SMP_ENTRY_TEMP_STACK_SIZE
+smp_locl:
+    .long 0
 
     .section .text
     .globl _limine_entry
@@ -56,7 +61,6 @@ _limine_entry:
     jmp start_first_process
 
 
-    .section .text
     .globl _cpu_entry
     .type _cpu_entry, @function
 _cpu_entry:
@@ -82,7 +86,6 @@ _cpu_entry:
     jmp start_first_process
 
     
-    .text
     .globl _acpi_wakeup_entry
     .type _acpi_wakeup_entry, @function
 _acpi_wakeup_entry:
@@ -92,5 +95,32 @@ _acpi_wakeup_entry:
     movq $0, %rbp
 
     call wakeup_main
+
+    jmp start_first_process
+
+
+    .globl _smp_trampoline_entry
+    .type _smp_trampoline_entry, @function
+_smp_trampoline_entry:
+    leaq (smp_stack + SMP_ENTRY_TEMP_STACK_SIZE)(%rip), %rsp
+    xorl %ebx, %ebx
+
+    lock btsl $0, smp_locl(%rip)
+    jnc aquired
+1:
+    pause
+    testl $1, smp_locl(%rip)
+    jnz 1b
+    lock btsl $0, smp_locl(%rip)
+    jc 1b
+aquired:
+
+    call find_cpu_info
+
+    movl $0, smp_locl(%rip)
+
+    movq 8(%rax), %rsp
+    movq %rax, %rdi
+    call smp_entry_main
 
     jmp start_first_process
