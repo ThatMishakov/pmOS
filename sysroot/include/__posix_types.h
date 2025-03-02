@@ -237,6 +237,7 @@ typedef struct {
     unsigned long recursive_lock_count;
     int type;
 #ifdef __i386__
+    int reserved;
 } pthread_mutex_t __attribute__((aligned(8)));
 #else
 } pthread_mutex_t;
@@ -248,7 +249,7 @@ typedef struct {
 typedef struct {
     struct __pthread_waiter *waiters_list_head;
     struct __pthread_waiter *waiters_list_tail;
-    int pop_spinlock;
+    t pop_spinlock;
 } pthread_cond_t;
     #define __DECLARED_PTHREAD_COND_T
 #endif

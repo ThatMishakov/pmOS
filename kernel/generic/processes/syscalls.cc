@@ -1103,7 +1103,7 @@ void syscall_create_phys_map_region()
     }
 
     // Syscall must be page aligned
-    if (addr_start & 07777 or size & 07777) {
+    if ((addr_start & 07777) or (size & 07777) or (phys_addr & 07777)) {
         syscall_error(current) = -EINVAL;
         return;
     }

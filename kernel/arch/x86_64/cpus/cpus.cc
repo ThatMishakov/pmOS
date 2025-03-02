@@ -29,8 +29,8 @@
 
 #include "cpus.hh"
 
+#include <cpus/ipi.hh>
 #include <cpus/sse.hh>
-
 #include <interrupts/apic.hh>
 #include <interrupts/gdt.hh>
 #include <interrupts/interrupts.hh>
@@ -40,10 +40,9 @@
 #include <processes/syscalls.hh>
 #include <sched/sched.hh>
 #include <sched/timers.hh>
-#include <x86_asm.hh>
 #include <stdlib.h>
+#include <x86_asm.hh>
 #include <x86_utils.hh>
-#include <cpus/ipi.hh>
 
 using namespace kernel;
 using namespace kernel::pmm;
@@ -89,10 +88,10 @@ void init_per_cpu(uint32_t lapic_id)
 
     cpu_struct_works = true;
 
-    TSS *tss                  = new TSS();
+    TSS *tss = new TSS();
     if (!tss)
         panic("Couldn't allocate memory for TSS\n");
-    
+
     c->cpu_gdt.tss_descriptor = System_Segment_Descriptor((u64)tss, sizeof(TSS), 0x89, 0x02);
 
     c->kernel_stack_top = c->kernel_stack.get_stack_top();
@@ -110,7 +109,7 @@ void init_per_cpu(uint32_t lapic_id)
         c->lapic_id = lapic_id;
     else
         c->lapic_id = lapic_id << 24;
-    
+
     assert(c->lapic_id == get_lapic_id());
 
     // This creates a *fat* use-after-free race condition (which hopefully
@@ -121,7 +120,7 @@ void init_per_cpu(uint32_t lapic_id)
 
     if (!cpus.push_back(c))
         panic("Failed to reserve memory for cpus vector in init_per_cpu()\n");
-    
+
     c->cpu_id = cpus.size() - 1;
 
     serial_logger.printf("Initializing idle task\n");
@@ -142,8 +141,8 @@ void init_per_cpu(uint32_t lapic_id)
     void *temp_mapper_start = vmm::kernel_space_allocator.virtmem_alloc_aligned(16, 4);
     if (!temp_mapper_start)
         panic("Failed to allocate memory for temp_mapper_start\n");
-    
-    c->temp_mapper          = x86_PAE_Temp_Mapper(temp_mapper_start, getCR3());
+
+    c->temp_mapper = x86_PAE_Temp_Mapper(temp_mapper_start, getCR3());
 }
 
 u64 bootstrap_cr3 = 0;
@@ -152,7 +151,7 @@ klib::vector<u64> initialize_cpus(const klib::vector<u64> &lapic_ids)
 {
     bootstrap_cr3 = getCR3();
 
-    if (!cpus.reserve(lapic_ids.size())){
+    if (!cpus.reserve(lapic_ids.size())) {
         serial_logger.printf("Failed to reserve memory for cpus vector in initialize_cpus()\n");
         abort();
     }
@@ -167,7 +166,7 @@ klib::vector<u64> initialize_cpus(const klib::vector<u64> &lapic_ids)
         serial_logger.printf("Failed to reserve memory for cpus vector in initialize_cpus()\n");
         abort();
     }
-    
+
     for (const auto &id: lapic_ids) {
         CPU_Info *c               = new CPU_Info;
         TSS *tss                  = new TSS();
@@ -193,7 +192,7 @@ klib::vector<u64> initialize_cpus(const klib::vector<u64> &lapic_ids)
         auto t = init_idle(c);
         if (t)
             panic("Failed to initialize idle task: %i\n", t);
-        
+
         c->current_task = c->idle_task;
 
         void *temp_mapper_start = vmm::kernel_space_allocator.virtmem_alloc_aligned(16, 4);
@@ -220,9 +219,9 @@ extern "C" void cpu_start_routine(CPU_Info *c)
     enable_apic();
     enable_sse();
 
-    const auto &idle               = get_cpu_struct()->idle_task;
-    c->current_task = idle;
-    const auto idle_pt             = klib::dynamic_pointer_cast<x86_Page_Table>(idle->page_table);
+    const auto &idle   = get_cpu_struct()->idle_task;
+    c->current_task    = idle;
+    const auto idle_pt = klib::dynamic_pointer_cast<x86_Page_Table>(idle->page_table);
     idle_pt->apply_cpu(c);
     get_cpu_struct()->current_task->switch_to();
     reschedule();
@@ -268,9 +267,6 @@ void deactivate_page_table();
 
 extern ulong idle_cr3;
 
-extern int kernel_pt_generation;
-extern int kernel_pt_active_cpus_count[2];
-
 static void smp_wake_everyone_else_up();
 
 extern "C" void wakeup_main()
@@ -280,7 +276,7 @@ extern "C" void wakeup_main()
     setCR3(idle_cr3);
 
     auto c = cpus[0];
-    
+
     init_PIC();
     loadGDT(&c->cpu_gdt);
     write_msr(0xC0000101, (u64)c);
@@ -305,13 +301,16 @@ extern "C" void wakeup_main()
     c->online = true;
 
     smp_wake_everyone_else_up();
+
+    if (__atomic_load_n(&c->ipi_mask, __ATOMIC_ACQUIRE))
+        c->ipi_reschedule();
 }
 
 extern "C" void smp_entry_main(CPU_Info *c)
 {
     serial_initiated = false;
     serial_logger.printf("CPU %x woke up...\n", c->lapic_id);
-    
+
     init_PIC();
     loadGDT(&c->cpu_gdt);
     write_msr(0xC0000101, (u64)c);
@@ -333,36 +332,10 @@ extern "C" void smp_entry_main(CPU_Info *c)
     assert(c->kernel_pt_generation == -1);
     c->kernel_pt_generation = __atomic_load_n(&kernel_pt_generation, __ATOMIC_ACQUIRE);
     __atomic_add_fetch(&kernel_pt_active_cpus_count[c->kernel_pt_generation], 1, __ATOMIC_RELAXED);
-    c->online = true;   
-}
+    c->online = true;
 
-void park_self()
-{
-    auto c = get_cpu_struct();
-    auto task = c->current_task;
-
-    task->page_table->unapply_cpu(get_cpu_struct());
-    task->before_task_switch();
-
-    // Kill TLB shootdowns
-    int kernel_pt_gen = c->kernel_pt_generation;
-    __atomic_sub_fetch(&kernel_pt_active_cpus_count[kernel_pt_gen], 1, __ATOMIC_RELEASE);
-    c->kernel_pt_generation = -1;
-
-    serial_logger.printf("Parking cpu %x\n", c->lapic_id);
-
-    __atomic_store_n(&c->online, false, __ATOMIC_RELEASE);
-    __asm__ volatile ("wbinvd");
-    __asm__ volatile ("hlt");
-}
-
-void deactivate_page_table()
-{
-    auto c = get_cpu_struct();
-
-    int kernel_pt_gen = c->kernel_pt_generation;
-    __atomic_sub_fetch(&kernel_pt_active_cpus_count[kernel_pt_gen], 1, __ATOMIC_RELEASE);
-    c->kernel_pt_generation = -1;
+    if (__atomic_load_n(&c->ipi_mask, __ATOMIC_ACQUIRE))
+        c->ipi_reschedule();
 }
 
 void check_synchronous_ipis();
@@ -405,8 +378,8 @@ extern u32 init_vec_jump_pmode;
 extern "C" void _acpi_wakeup_entry();
 
 pmm::phys_page_t acpi_trampoline_page = 0;
-bool have_acpi_startup = false;
-void init_acpi_trampoline ()
+bool have_acpi_startup                = false;
+void init_acpi_trampoline()
 {
     auto page = pmm::alloc_pages(1, 0, AllocPolicy::ISA);
     if (!page) {
@@ -415,7 +388,7 @@ void init_acpi_trampoline ()
     }
 
     acpi_trampoline_page = page->get_phys_addr();
-    have_acpi_startup = true;
+    have_acpi_startup    = true;
 
     protected_acpi_vec_far_jump += acpi_trampoline_page;
     acpi_tampoline_gdtr_addr += acpi_trampoline_page;
@@ -425,7 +398,6 @@ void init_acpi_trampoline ()
     if (!cr3_page)
         panic("Failed to allocate cr3 page for trampoline");
     acpi_trampoline_startup_cr3 = (u32)cr3_page->get_phys_addr();
-
 
     // Prepare the page
     Temp_Mapper_Obj<x86_PAE_Entry> new_page_m(request_temp_mapper());
@@ -438,13 +410,14 @@ void init_acpi_trampoline ()
     memcpy(new_page_m.ptr + 256, current_page_m.ptr + 256, 256 * sizeof(x86_PAE_Entry));
 
     Page_Table_Argumments pta = {
-        .readable = true,
-        .writeable = true,
-        .user_access = false,
+        .readable           = true,
+        .writeable          = true,
+        .user_access        = false,
         .execution_disabled = false,
     };
- 
-    auto result = map_pages(acpi_trampoline_startup_cr3, acpi_trampoline_page, (void *)acpi_trampoline_page, PAGE_SIZE, pta);
+
+    auto result = map_pages(acpi_trampoline_startup_cr3, acpi_trampoline_page,
+                            (void *)acpi_trampoline_page, PAGE_SIZE, pta);
     if (result)
         panic("Failed to ID map vector page...");
 
@@ -471,10 +444,12 @@ ReturnStr<u32> acpi_wakeup_vec()
     if (!have_acpi_startup)
         return Error(-ENOENT);
 
-    return Success((u32)(acpi_trampoline_page + (char *)&acpi_trampoline_begin - (char *)&init_vec_begin));
+    return Success(
+        (u32)(acpi_trampoline_page + (char *)&acpi_trampoline_begin - (char *)&init_vec_begin));
 }
 
-void smp_wake_everyone_else_up() {
+void smp_wake_everyone_else_up()
+{
     uint32_t vector = acpi_trampoline_page >> 12;
 
     apic_write_reg(APIC_ICR_HIGH, 0);

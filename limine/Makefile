@@ -76,7 +76,7 @@ HYPER_IMAGE := pmos-hyper.img
 Hyper/installer/hyper_install: Hyper
 	cd Hyper && ./build.py
 
-$(HYPER_IMAGE): ../kernel/build/kernel ../bootstrapd/bootstrapd.elf ../devicesd/devicesd.elf ../logd/logd.elf ../ns16550/ns16550.elf ../piped/piped.elf ../processd/processd.elf ../terminald/terminald.elf ../vfsd/vfsd.elf ../vfatfsd/vfatfsd.elf ../ahcid/ahcid.elf ../ps2d/ps2d.elf ../i8042/i8042.elf ../blockd/blockd.elf hyper.cfg Hyper/installer/hyper_install
+$(HYPER_IMAGE): ../kernel/build/kernel ../bootstrapd/bootstrapd.elf ../devicesd/devicesd.elf ../logd/logd.elf ../ns16550/ns16550.elf ../piped/piped.elf ../processd/processd.elf ../terminald/terminald.elf ../vfsd/vfsd.elf ../vfatfsd/vfatfsd.elf ../ahcid/ahcid.elf ../ps2d/ps2d.elf ../i8042/i8042.elf ../blockd/blockd.elf ../pmbus/bin/pmbus hyper.cfg Hyper/installer/hyper_install
 	dd if=/dev/zero of=$(HYPER_IMAGE) bs=1M count=128
 
 	# Create an MBR partition table
@@ -104,6 +104,7 @@ $(HYPER_IMAGE): ../kernel/build/kernel ../bootstrapd/bootstrapd.elf ../devicesd/
 	mcopy -i $(BOOT_PARTITION) ../ps2d/ps2d.elf ::/
 	mcopy -i $(BOOT_PARTITION) ../i8042/i8042.elf ::/
 	mcopy -i $(BOOT_PARTITION) ../blockd/blockd.elf ::/
+	mcopy -i $(BOOT_PARTITION) ../pmbus/bin/pmbus ::/
 
 	# Create an ext2 filesystem for the root partition
 	dd if=/dev/zero of=$(EXT2_PARTITION) bs=1M count=64

@@ -148,7 +148,7 @@ ports_request_t create_port(pid_t owner, uint32_t flags)
 result_t pmos_delete_port(pmos_port_t port)
 {
 #ifdef __32BITSYSCALL
-    syscall_r r = __pmos_syscall32_2words(SYSCALL_DELETE_PORT, port).result;
+    return __pmos_syscall32_2words(SYSCALL_DELETE_PORT, port).result;
 #else
     return pmos_syscall(SYSCALL_DELETE_PORT, port).result;
 #endif

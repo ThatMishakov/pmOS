@@ -138,7 +138,8 @@ extern "C" void page_fault_handler(kernel_registers_context *ctx, u32 err)
                                                 : 0;
 
         if (it != regions.end() and it->is_in_range(virtual_addr)) {
-            auto r = it->on_page_fault(access_mask, virtual_addr);
+            void *virtual_addr_filtered = (void *)((unsigned long)virtual_addr & ~0xfff);
+            auto r = it->on_page_fault(access_mask, virtual_addr_filtered);
             if (!r.success())
                 return r.result;
             if (!r.val)

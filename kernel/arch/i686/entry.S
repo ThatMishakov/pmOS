@@ -40,6 +40,35 @@ ret_from_interrupt:
     # Return
     iretl
 
+    .type return_to_userspace_mask_interrupts, @function
+    .globl return_to_userspace_mask_interrupts
+return_to_userspace_mask_interrupts:
+        # Expecting task pointer to be in %eax...
+
+    # Push interrupt stack frame...
+    pushl $0x23    # ss
+    pushl 28(%eax) # esp
+    pushl 36(%eax) # eflags
+    andl $~(1 << 9), (%esp)
+    pushl 40(%eax) # cs
+    pushl 32(%eax) # eip
+
+    # Switch to user gs
+    movw $0x2B, %cx
+    movw %cx, %gs
+
+    # Restore registers
+    movl 4(%eax), %ebx
+    movl 8(%eax), %ecx
+    movl 12(%eax), %edx
+    movl 16(%eax), %esi
+    movl 20(%eax), %edi
+    movl 24(%eax), %ebp
+    movl (%eax), %eax
+
+    # Return
+    iretl
+
     .type return_from_kernel_thread, @function
     .globl return_from_kernel_thread
 return_from_kernel_thread:

@@ -1,6 +1,6 @@
 use super::error::Error;
 
-#[repr(C)]
+#[repr(transparent)]
 #[derive(Clone, Copy)]
 pub struct ResultT(pub i64);
 

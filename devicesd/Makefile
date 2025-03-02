@@ -39,6 +39,9 @@ ifeq ($(ARCH), x86_64)
 	ARCHDIR = x86
 # detect x86 and i286-i686
 else ifneq ($(filter i%86 x86,$(ARCH)),)
+	CCFILES = $(shell find ./arch/x86/ -type f -name '*.cc') $(shell find ./arch/i686/ -type f -name '*.cc')
+	CFILES = $(shell find ./arch/x86/ -type f -name '*.c') $(shell find ./arch/i686/ -type f -name '*.c')
+	ASMFILES = $(shell find ./arch/x86/ -type f -name '*.S') $(shell find ./arch/i686/ -type f -name '*.S')
 	ARCHDIR = x86
 	LDFLAGS += -lclang_rt.builtins-i386
 else

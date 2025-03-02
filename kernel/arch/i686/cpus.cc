@@ -104,3 +104,13 @@ void init_scheduling_on_bsp()
 
     serial_logger.printf("Scheduling initialized\n");
 }
+
+ReturnStr<u32> acpi_wakeup_vec()
+{
+    return Error(-ENOSYS);
+}
+
+void stop_cpus()
+{
+    panic("Not implemented");
+}

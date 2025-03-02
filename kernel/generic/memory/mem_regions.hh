@@ -109,7 +109,8 @@ struct Generic_Mem_Region {
      * @param ptr_addr The address which needs to be allocated/has caused the petition.
      * @return true if the page is avaiable, false otherwise.
      */
-    [[nodiscard]] virtual ReturnStr<bool> alloc_page(void *ptr_addr, Page_Info info, unsigned access_type) = 0;
+    [[nodiscard]] virtual ReturnStr<bool> alloc_page(void *ptr_addr, Page_Info info,
+                                                     unsigned access_type) = 0;
 
     /**
      * @brief Checks if a page from the region can be taken out by provide_page() syscall
@@ -156,7 +157,8 @@ struct Generic_Mem_Region {
      */
     ReturnStr<bool> on_page_fault(unsigned access_mode, void *fault_addr);
 
-    Generic_Mem_Region(void *start_addr, size_t size, klib::string name, Page_Table *owner, unsigned access)
+    Generic_Mem_Region(void *start_addr, size_t size, klib::string name, Page_Table *owner,
+                       unsigned access)
         : start_addr(start_addr), size(size), name(klib::forward<klib::string>(name)),
           id(__atomic_add_fetch(&counter, 1, 0)), owner(owner), access_type(access) {};
 
@@ -167,7 +169,10 @@ struct Generic_Mem_Region {
      * @return true It is inside the region
      * @return false It is outside the region
      */
-    bool is_in_range(void *addr) const { return addr >= start_addr and (char *)addr < (char *)start_addr + size; }
+    bool is_in_range(void *addr) const
+    {
+        return addr >= start_addr and (char *) addr < (char *)start_addr + size;
+    }
 
     bool has_access(unsigned access_mask) const noexcept
     {
@@ -188,7 +193,8 @@ struct Generic_Mem_Region {
      * @param base_addr Base address in the new page table
      * @param new_access New access specifier to be had in the new page table
      */
-    [[nodiscard]] virtual kresult_t move_to(TLBShootdownContext &ctx, const klib::shared_ptr<Page_Table> &new_table,
+    [[nodiscard]] virtual kresult_t move_to(TLBShootdownContext &ctx,
+                                            const klib::shared_ptr<Page_Table> &new_table,
                                             void *base_addr, unsigned new_access);
 
     /**
@@ -199,7 +205,7 @@ struct Generic_Mem_Region {
      * @param new_access New access specifier to be had in the new page table
      */
     [[nodiscard]] virtual kresult_t clone_to(const klib::shared_ptr<Page_Table> &new_table,
-                                            void *base_addr, unsigned new_access) = 0;
+                                             void *base_addr, unsigned new_access) = 0;
 
     /**
      * @brief Prepares a region for being deleted
@@ -225,13 +231,14 @@ struct Generic_Mem_Region {
  */
 struct Phys_Mapped_Region final: Generic_Mem_Region {
     // Allocated a new page, pointing to the corresponding physical address.
-    virtual ReturnStr<bool> alloc_page(void *ptr_addr, Page_Info info, unsigned access_type) override;
+    virtual ReturnStr<bool> alloc_page(void *ptr_addr, Page_Info info,
+                                       unsigned access_type) override;
 
     u64 phys_addr_start = 0;
     constexpr bool can_takeout_page() const noexcept override { return false; }
 
     virtual kresult_t clone_to(const klib::shared_ptr<Page_Table> &new_table, void *base_addr,
-                          unsigned new_access) override;
+                               unsigned new_access) override;
 
     virtual Page_Table_Argumments craft_arguments() const override;
 
@@ -239,10 +246,14 @@ struct Phys_Mapped_Region final: Generic_Mem_Region {
     // to *aligned_phys*
     Phys_Mapped_Region(void *aligned_virt, size_t size, u64 aligned_phys);
 
-    Phys_Mapped_Region(void *start_addr, size_t size, klib::string name, Page_Table *owner, unsigned access,
-                       u64 phys_addr_start)
+    Phys_Mapped_Region(void *start_addr, size_t size, klib::string name, Page_Table *owner,
+                       unsigned access, u64 phys_addr_start)
         : Generic_Mem_Region(start_addr, size, klib::forward<klib::string>(name), owner, access),
-          phys_addr_start(phys_addr_start) {};
+          phys_addr_start(phys_addr_start)
+    {
+        assert(!((unsigned long)start_addr & (PAGE_SIZE - 1)));
+        assert(!(phys_addr_start & (PAGE_SIZE - 1)));
+    };
 
     void trim(void *new_start_addr, size_t new_size_bytes) noexcept override;
     kresult_t punch_hole(void *hole_addr_start, size_t hole_size_bytes) override;
@@ -270,16 +281,19 @@ struct Mem_Object_Reference final: Generic_Mem_Region {
 
     pmos::containers::RBTreeNode<Mem_Object_Reference> object_bst_head;
 
-    Mem_Object_Reference(void *start_addr, size_t size, klib::string name, Page_Table *owner, unsigned access,
-                         klib::shared_ptr<Mem_Object> references, u64 object_offset_bytes,
-                         bool copy_on_write, u64 start_offset_bytes, u64 object_size_bytes);
+    Mem_Object_Reference(void *start_addr, size_t size, klib::string name, Page_Table *owner,
+                         unsigned access, klib::shared_ptr<Mem_Object> references,
+                         u64 object_offset_bytes, bool copy_on_write, u64 start_offset_bytes,
+                         u64 object_size_bytes);
 
-    virtual ReturnStr<bool> alloc_page(void *ptr_addr, Page_Info info, unsigned access_type) override;
+    virtual ReturnStr<bool> alloc_page(void *ptr_addr, Page_Info info,
+                                       unsigned access_type) override;
 
-    virtual kresult_t move_to(TLBShootdownContext &ctx, const klib::shared_ptr<Page_Table> &new_table, void *base_addr,
+    virtual kresult_t move_to(TLBShootdownContext &ctx,
+                              const klib::shared_ptr<Page_Table> &new_table, void *base_addr,
                               unsigned new_access) override;
     virtual kresult_t clone_to(const klib::shared_ptr<Page_Table> &new_table, void *base_addr,
-                          unsigned new_access) override;
+                               unsigned new_access) override;
 
     virtual Page_Table_Argumments craft_arguments() const override;
 
