@@ -5,7 +5,7 @@ bootstrap_stack_top:
     .skip 4096
 smp_temp_stack_top:
 spinlock:
-    .long
+    .long 0
 
     .text
     .globl _kmain_entry
@@ -51,5 +51,17 @@ acquired:
     pushl %eax
     call smp_main
 
+
+    jmp return_from_kernel
+
+
+    .globl _acpi_wakeup_entry
+    .type _acpi_wakeup_entry, @function
+_acpi_wakeup_entry:
+
+    movl $bootstrap_stack_top, %esp
+    xorl %ebp, %ebp
+
+    call acpi_main
 
     jmp return_from_kernel

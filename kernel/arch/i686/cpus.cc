@@ -1,14 +1,15 @@
+#include <acpi/acpi.h>
 #include <cpus/sse.hh>
 #include <interrupts/apic.hh>
 #include <interrupts/gdt.hh>
 #include <interrupts/interrupts.hh>
+#include <interrupts/pic.hh>
 #include <kern_logger/kern_logger.hh>
 #include <memory/vmm.hh>
 #include <paging/x86_temp_mapper.hh>
 #include <processes/tasks.hh>
 #include <sched/sched.hh>
 #include <x86_asm.hh>
-#include <acpi/acpi.h>
 
 using namespace kernel;
 
@@ -42,6 +43,8 @@ bool setup_stacks(CPU_Info *c)
 
     return true;
 }
+
+void smp_wake_everyone_else_up();
 
 extern bool cpu_struct_works;
 
@@ -123,6 +126,44 @@ extern "C" void smp_main(CPU_Info *c)
         c->ipi_reschedule();
 }
 
+extern bool serial_initiated;
+extern bool serial_functional;
+
+extern "C" void acpi_main()
+{
+    serial_initiated = false;
+    serial_logger.printf("Printing from C++ after waking up! (LAPIC ID %x)\n", get_lapic_id());
+
+    auto c = cpus[0];
+    init_PIC();
+
+    gdt_set_cpulocal(c);
+    loadGDT(&c->cpu_gdt);
+    loadTSS();
+    program_syscall();
+    set_idt();
+    enable_apic();
+    enable_sse();
+
+    if (c->to_restore_on_wakeup) {
+        c->current_task->regs = *c->to_restore_on_wakeup;
+        c->to_restore_on_wakeup.reset();
+    }
+    c->current_task->page_table->apply_cpu(c);
+    c->current_task->page_table->apply();
+    c->current_task->after_task_switch();
+
+    assert(c->kernel_pt_generation == -1);
+    c->kernel_pt_generation = __atomic_load_n(&kernel_pt_generation, __ATOMIC_ACQUIRE);
+    __atomic_add_fetch(&kernel_pt_active_cpus_count[c->kernel_pt_generation], 1, __ATOMIC_RELAXED);
+    c->online = true;
+
+    if (__atomic_load_n(&c->ipi_mask, __ATOMIC_ACQUIRE))
+        c->ipi_reschedule();
+
+    smp_wake_everyone_else_up();
+}
+
 CPU_Info *prepare_cpu(unsigned idx, u32 lapic_id)
 {
     serial_logger.printf("Found CPU LAPIC %x\n", lapic_id);
@@ -134,8 +175,8 @@ CPU_Info *prepare_cpu(unsigned idx, u32 lapic_id)
     if (!setup_stacks(c))
         panic("Failed to set up stack for AP");
 
-    c->lapic_id = lapic_id;
-    c->cpu_id   = idx;
+    c->lapic_id             = lapic_id;
+    c->cpu_id               = idx;
     c->kernel_pt_generation = -1;
 
     auto r = init_idle(c);
@@ -157,7 +198,6 @@ CPU_Info *prepare_cpu(unsigned idx, u32 lapic_id)
 }
 
 MADT *get_madt();
-void smp_wake_everyone_else_up();
 void init_acpi_trampoline();
 
 void init_smp()
@@ -172,7 +212,6 @@ void init_smp()
     unsigned idx = 1;
 
     serial_logger.printf("Initializing SMP\n");
-
 
     u32 offset = sizeof(MADT);
     u32 length = m->header.length;
@@ -191,7 +230,7 @@ void init_smp()
                 panic("Failed to add CPU\n");
         } else if (e->type == MADT_X2APIC_entry_type) {
             MADT_X2APIC_entry *ee = (MADT_X2APIC_entry *)e;
-            uint32_t e_id        = ee->x2apic_id;
+            uint32_t e_id         = ee->x2apic_id;
 
             if (e_id == my_lapic_id)
                 continue;
@@ -226,6 +265,7 @@ extern u8 init_vec_end;
 // Relocations
 extern u32 init_vec_jump_pmode;
 extern u32 smp_trampoline_gdtr_addr;
+extern u32 acpi_vec_jump_pmode;
 
 // Variables
 extern u32 smp_trampoline_cr3;
@@ -253,11 +293,11 @@ void init_acpi_trampoline()
 
     init_vec_jump_pmode += acpi_trampoline_page;
     smp_trampoline_gdtr_addr += acpi_trampoline_page;
+    acpi_vec_jump_pmode += acpi_trampoline_page;
 
     auto [result, new_cr3] = create_empty_cr3();
     if (result)
         panic("Failed to allocate cr3 for SMP trampoline");
-
 
     smp_trampoline_cr3        = new_cr3;
     Page_Table_Argumments pta = {
@@ -283,5 +323,3 @@ void init_acpi_trampoline()
 
     serial_logger.printf("Initialized SMP/ACPI trampoline vector at %x\n", acpi_trampoline_page);
 }
-
-void stop_cpus() { panic("Not implemented"); }

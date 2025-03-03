@@ -338,31 +338,6 @@ extern "C" void smp_entry_main(CPU_Info *c)
         c->ipi_reschedule();
 }
 
-void check_synchronous_ipis();
-
-void stop_cpus()
-{
-    serial_logger.printf("Stopping cpus\n");
-    auto my_cpu = get_cpu_struct();
-    for (auto cpu: cpus) {
-        if (cpu == my_cpu)
-            continue;
-
-        __atomic_or_fetch(&cpu->ipi_mask, CPU_Info::IPI_CPU_PARK, __ATOMIC_ACQUIRE);
-        send_ipi_fixed(ipi_invalidate_tlb_int_vec, cpu->lapic_id);
-    }
-
-    for (auto cpu: cpus) {
-        if (cpu == my_cpu)
-            continue;
-
-        while (__atomic_load_n(&cpu->online, __ATOMIC_RELAXED)) {
-            x86_pause();
-            check_synchronous_ipis();
-        }
-    }
-}
-
 extern char init_vec_begin;
 extern char acpi_trampoline_begin;
 extern char acpi_trampoline_startup_end;

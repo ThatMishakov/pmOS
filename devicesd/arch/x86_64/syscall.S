@@ -3,7 +3,7 @@
     .globl syscall_prepare_sleep
     .type syscall_prepare_sleep, @function
 syscall_prepare_sleep:
-    popq %fs:return_addr@tpoff
+    popq %fs:return_addr@ntpoff
 
     shlq $8, %rdx
     orq $14, %rdx
@@ -12,7 +12,7 @@ syscall_prepare_sleep:
     
     syscall
 
-    jmpq *%fs:return_addr@tpoff
+    jmpq *%fs:return_addr@ntpoff
 
 
     .section .tdata,"awT",@progbits   # TLS data section for initialized thread-local data

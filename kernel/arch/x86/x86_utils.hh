@@ -78,3 +78,8 @@ static inline void set_xcr(u32 reg, u64 val)
 
     asm volatile("xsetbv" ::"a"(eax), "c"(ecx), "d"(edx));
 }
+
+inline void x86_pause()
+{
+    asm volatile ("pause");
+}

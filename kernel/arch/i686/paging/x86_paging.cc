@@ -294,7 +294,7 @@ kresult_t IA32_Page_Table::map(pmm::Page_Descriptor page, void *virt_addr,
 }
 
 kresult_t map_page(ptable_top_ptr_t page_table, u64 phys_addr, void *virt_addr,
-    Page_Table_Argumments arg)
+                   Page_Table_Argumments arg)
 {
     return ia32_map_page(page_table, phys_addr, virt_addr, arg);
 }
@@ -1056,17 +1056,42 @@ klib::shared_ptr<IA32_Page_Table> IA32_Page_Table::create_empty(unsigned)
 
         new_table->cr3 = cr3;
 
+        pmm::phys_page_t pdpts[3] = {(pmm::phys_page_t)-1,
+                                             (pmm::phys_page_t)-1,
+                                             (pmm::phys_page_t)-1};
+
+        auto pages_guard = pmos::utility::make_scope_guard([&]() {
+            for (auto page: pdpts) {
+                if (page == (pmm::phys_page_t)-1)
+                    continue;
+
+                pmm::free_memory_for_kernel(page, 1);
+            }
+        });
+
+        for (auto &page: pdpts) {
+            page = pmm::get_memory_for_kernel(1);
+            if (pmm::alloc_failure(page))
+                return nullptr;
+            clear_page(page);
+        }
+
+        for (size_t i = 0; i < 3; ++i)
+            __atomic_store_n(new_page + i, pdpts[i] | PAGE_PRESENT, __ATOMIC_RELEASE);
+
         auto r = insert_global_page_tables(new_table);
         if (r)
             return nullptr;
 
         guard.dismiss();
+        pages_guard.dismiss();
 
         return new_table;
     }
     return nullptr;
 }
 
+// This function is broken
 ReturnStr<u32> create_empty_cr3()
 {
     if (!use_pae) {

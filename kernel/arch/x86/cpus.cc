@@ -3,6 +3,8 @@
 #include <processes/tasks.hh>
 #include <kern_logger/kern_logger.hh>
 #include <interrupts/apic.hh>
+#include <x86_utils.hh>
+#include <cpus/ipi.hh>
 
 extern int kernel_pt_generation;
 extern int kernel_pt_active_cpus_count[2];
@@ -59,4 +61,29 @@ void smp_wake_everyone_else_up()
     // shorthand
     apic_write_reg(APIC_ICR_LOW, vector | (0x01 << 14) | (0b11 << 18) | (0b101) << 8);
     apic_write_reg(APIC_ICR_LOW, vector | (0x01 << 14) | (0b11 << 18) | (0b110) << 8);
+}
+
+void check_synchronous_ipis();
+
+void stop_cpus()
+{
+    serial_logger.printf("Stopping cpus\n");
+    auto my_cpu = get_cpu_struct();
+    for (auto cpu: cpus) {
+        if (cpu == my_cpu)
+            continue;
+
+        __atomic_or_fetch(&cpu->ipi_mask, CPU_Info::IPI_CPU_PARK, __ATOMIC_ACQUIRE);
+        send_ipi_fixed(ipi_invalidate_tlb_int_vec, cpu->lapic_id);
+    }
+
+    for (auto cpu: cpus) {
+        if (cpu == my_cpu)
+            continue;
+
+        while (__atomic_load_n(&cpu->online, __ATOMIC_RELAXED)) {
+            x86_pause();
+            check_synchronous_ipis();
+        }
+    }
 }
