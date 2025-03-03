@@ -78,3 +78,4 @@ TSS *getTSS(u16 selector);
 void loadGDT(GDT *gdt);
 void loadTSS();
 void gdt_set_cpulocal(CPU_Info *c);
+void unbusyTSS(GDT *gdt);

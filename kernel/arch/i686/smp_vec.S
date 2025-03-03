@@ -55,6 +55,7 @@ init_no_pae:
 
 
     .p2align 4, 0xCC
+    .code16
     .globl acpi_trampoline
     .type acpi_trampoline, @function
 acpi_trampoline:
@@ -69,9 +70,6 @@ acpi_trampoline:
     ljmpl *%cs:(acpi_vec_jump_pmode - acpi_trampoline)
 acpi_trampoline_jump_pmode:
     .code32
-
-1:
-    jmp 1b
 
     movl $0x10, %eax
     movw %ax, %ds

@@ -65,4 +65,9 @@ void loadGDT(GDT *gdt)
                  : "memory", "eax");
 }
 
-void loadTSS() { asm volatile("ltr %w0" : : "r"(TSS_SEGMENT)); }
+void unbusyTSS(GDT *gdt)
+{
+    gdt->tss &= ~(1ULL << 41);
+}
+
+void loadTSS() { asm volatile("ltr %w0" : : "rm"(TSS_SEGMENT)); }

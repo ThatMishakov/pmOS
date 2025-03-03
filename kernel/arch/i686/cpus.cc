@@ -103,6 +103,7 @@ extern "C" void smp_main(CPU_Info *c)
 
     gdt_set_cpulocal(c);
     loadGDT(&c->cpu_gdt);
+    unbusyTSS(&c->cpu_gdt);
     loadTSS();
     program_syscall();
     set_idt();
@@ -139,6 +140,7 @@ extern "C" void acpi_main()
 
     gdt_set_cpulocal(c);
     loadGDT(&c->cpu_gdt);
+    unbusyTSS(&c->cpu_gdt);
     loadTSS();
     program_syscall();
     set_idt();
@@ -279,7 +281,7 @@ pmm::phys_page_t acpi_trampoline_page = 0;
 ReturnStr<u32> acpi_wakeup_vec()
 {
 
-    return Success((u32)acpi_trampoline_page + acpi_trampoline - init_vec_begin);
+    return Success((u32)acpi_trampoline_page + (&acpi_trampoline - &init_vec_begin));
 }
 
 void init_acpi_trampoline()
@@ -321,5 +323,5 @@ void init_acpi_trampoline()
     char *ptr = t.map(acpi_trampoline_page);
     memcpy(ptr, &init_vec_begin, (char *)&init_vec_end - (char *)&init_vec_begin);
 
-    serial_logger.printf("Initialized SMP/ACPI trampoline vector at %x\n", acpi_trampoline_page);
+    serial_logger.printf("Initialized SMP/ACPI trampoline vector at %x (%x)\n", (u32)acpi_trampoline_page, acpi_wakeup_vec().val);
 }
