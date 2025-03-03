@@ -570,6 +570,7 @@ void init_acpi(u64 rsdp_addr)
 extern klib::shared_ptr<IA32_Page_Table> idle_page_table;
 
 void init_scheduling_on_bsp();
+void init_smp();
 
 size_t ultra_context_size(struct ultra_boot_context *ctx)
 {
@@ -899,7 +900,7 @@ extern "C" void kmain(struct ultra_boot_context *ctx, uint32_t magic)
 
     global_temp_mapper = nullptr;
 
-    // Init SMP... TODO
+    init_smp();
 
     // Copy context to kernel...
     klib::unique_ptr<char> cctx = klib::unique_ptr<char>(new char[size]);

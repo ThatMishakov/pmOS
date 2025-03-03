@@ -29,6 +29,8 @@
 
 #include <kern_logger/kern_logger.hh>
 #include <x86_asm.hh>
+#include <acpi/acpi.h>
+#include <acpi/acpi.hh>
 
 extern "C" void allow_access_user()
 {
@@ -144,4 +146,26 @@ extern "C" void print_stack_trace()
     __asm__ volatile("movl %%ebp, %0" : "=a"(s));
     #endif
     print_stack_trace(bochs_logger, s);
+}
+
+MADT *get_madt()
+{
+    static MADT *rhct_virt = nullptr;
+    static bool have_acpi  = true;
+
+    if (rhct_virt == nullptr and have_acpi) {
+        u64 rhct_phys = get_table(0x43495041); // APIC (because why not)
+        if (rhct_phys == 0) {
+            have_acpi = false;
+            return nullptr;
+        }
+
+        ACPISDTHeader h;
+        copy_from_phys(rhct_phys, &h, sizeof(h));
+
+        rhct_virt = (MADT *)malloc(h.length);
+        copy_from_phys(rhct_phys, rhct_virt, h.length);
+    }
+
+    return rhct_virt;
 }

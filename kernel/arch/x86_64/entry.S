@@ -106,14 +106,14 @@ _smp_trampoline_entry:
     xorl %ebx, %ebx
 
     lock btsl $0, smp_locl(%rip)
-    jnc aquired
+    jnc acquired
 1:
     pause
     testl $1, smp_locl(%rip)
     jnz 1b
     lock btsl $0, smp_locl(%rip)
     jc 1b
-aquired:
+acquired:
 
     call find_cpu_info
 

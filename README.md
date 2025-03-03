@@ -133,7 +133,7 @@ These are the features that are planned to be had in the OS:
 - [x] Timer interrupt
 - [x] LAPIC
 - [x] Userspace/Ring 3
-- [ ] Multi CPU support - should be easy to implement, but not yet done
+- [x] Multi CPU support
 
 
 **Core utilities and daemons**
@@ -184,6 +184,7 @@ These are the features that are planned to be had in the OS:
   - [X] Power button (interrupt) and shutting down
   - [X] EC driver
   - [X] AMD GPIO driver
+  - [ ] S3 sleep - kinda works, but doesn't have a proper interface for drivers
 
 
 **Userland**

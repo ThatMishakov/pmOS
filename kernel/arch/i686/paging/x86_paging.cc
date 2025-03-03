@@ -23,12 +23,13 @@ bool detect_nx()
     if (!use_pae)
         return false;
 
-    auto c = cpuid(0x80000001);
+    auto c     = cpuid(0x80000001);
     support_nx = c.edx & (1 << 20);
     return support_nx;
 }
 
-void apply_page_table(ptable_top_ptr_t page_table) {
+void apply_page_table(ptable_top_ptr_t page_table)
+{
     if (support_nx) {
         const unsigned msr = 0xC0000080;
         write_msr(msr, read_msr(msr) | (1 << 11));
@@ -281,7 +282,8 @@ kresult_t IA32_Page_Table::map(u64 page_addr, void *virt_addr, Page_Table_Argumm
     return ia32_map_page(cr3, page_addr, virt_addr, arg);
 }
 
-kresult_t IA32_Page_Table::map(pmm::Page_Descriptor page, void *virt_addr, Page_Table_Argumments arg)
+kresult_t IA32_Page_Table::map(pmm::Page_Descriptor page, void *virt_addr,
+                               Page_Table_Argumments arg)
 {
     auto page_phys = page.get_phys_addr();
     arg.extra      = PAGING_FLAG_STRUCT_PAGE;
@@ -291,11 +293,18 @@ kresult_t IA32_Page_Table::map(pmm::Page_Descriptor page, void *virt_addr, Page_
     return result;
 }
 
+kresult_t map_page(ptable_top_ptr_t page_table, u64 phys_addr, void *virt_addr,
+    Page_Table_Argumments arg)
+{
+    return ia32_map_page(page_table, phys_addr, virt_addr, arg);
+}
+
 kresult_t map_pages(ptable_top_ptr_t page_table, u64 phys_addr, void *virt_addr, size_t size,
                     Page_Table_Argumments arg)
 {
     for (u64 i = 0; i < size; i += 4096) {
-        auto result = ia32_map_page(page_table, phys_addr + i, (void *)((char *)virt_addr + i), arg);
+        auto result =
+            ia32_map_page(page_table, phys_addr + i, (void *)((char *)virt_addr + i), arg);
         if (result)
             return result;
     }
@@ -500,14 +509,15 @@ static void x86_invalidate_pages(TLBShootdownContext &ctx, u32 cr3, void *virt_a
             pae_entry_t *pd = pd_mapper.map(pdpt_entry & PAE_ADDR_MASK);
 
             u32 limit_end_aligned = alignup(limit, 21);
-            u32 addr_of_pdpt = i << 30;
-            u32 start_pd     = addr_of_pdpt > (u32)virt_addr ? 0 : ((u32)virt_addr >> 21) & 0x1FF;
+            u32 addr_of_pdpt      = i << 30;
+            u32 start_pd = addr_of_pdpt > (u32)virt_addr ? 0 : ((u32)virt_addr >> 21) & 0x1FF;
             u32 end_pd;
             if (limit_end_aligned == 0 && virt_addr != nullptr)
                 end_pd = 512;
             else if (last_pdpt == 4 && i != 3)
                 end_pd = 512;
-            else if ((limit_end_aligned >= 0x40000000) and addr_of_pdpt <= (limit_end_aligned - 0x40000000))
+            else if ((limit_end_aligned >= 0x40000000) and
+                     addr_of_pdpt <= (limit_end_aligned - 0x40000000))
                 end_pd = 512;
             else
                 end_pd = (limit_end_aligned >> 21) & 0x1FF;
@@ -834,9 +844,10 @@ kresult_t IA32_Page_Table::copy_anonymous_pages(const klib::shared_ptr<Page_Tabl
                     auto pt = pt_mapper.map(pde & _32BIT_ADDR_MASK);
 
                     u32 addr_of_pd = (1 << 22) * i;
-                    u32 start_idx  = addr_of_pd > (u32)from_addr ? 0 : ((u32)from_addr >> 12) & 0x3ff;
-                    u32 end_of_pd  = (1 << 22) * (i + 1);
-                    u32 end_idx    = end_of_pd <= limit ? 1024 : (limit >> 12) & 0x3ff;
+                    u32 start_idx =
+                        addr_of_pd > (u32)from_addr ? 0 : ((u32)from_addr >> 12) & 0x3ff;
+                    u32 end_of_pd = (1 << 22) * (i + 1);
+                    u32 end_idx   = end_of_pd <= limit ? 1024 : (limit >> 12) & 0x3ff;
                     for (unsigned j = start_idx; j < end_idx; ++j) {
                         auto pte = pt[j];
 
@@ -897,10 +908,11 @@ kresult_t IA32_Page_Table::copy_anonymous_pages(const klib::shared_ptr<Page_Tabl
                     pae_entry_t *pd = pd_mapper.map(pdpt_entry & PAE_ADDR_MASK);
 
                     u32 to_pd_aligned = alignup(limit, 21);
-                    u32 addr_of_pdpt = (1 << 30) * i;
-                    u32 start_pd     = addr_of_pdpt > (u32)from_addr ? 0 : ((u32)from_addr >> 21) & 0x1FF;
-                    u32 end_of_pdpt  = (1 << 30) * (i + 1);
-                    u32 end_pd       = end_of_pdpt <= to_pd_aligned ? 512 : (to_pd_aligned >> 21) & 0x1FF;
+                    u32 addr_of_pdpt  = (1 << 30) * i;
+                    u32 start_pd =
+                        addr_of_pdpt > (u32)from_addr ? 0 : ((u32)from_addr >> 21) & 0x1FF;
+                    u32 end_of_pdpt = (1 << 30) * (i + 1);
+                    u32 end_pd = end_of_pdpt <= to_pd_aligned ? 512 : (to_pd_aligned >> 21) & 0x1FF;
                     for (unsigned j = start_pd; j < end_pd; ++j) {
                         pae_entry_t pde = __atomic_load_n(pd + j, __ATOMIC_RELAXED);
                         if (!(pde & PAGE_PRESENT))
@@ -909,9 +921,10 @@ kresult_t IA32_Page_Table::copy_anonymous_pages(const klib::shared_ptr<Page_Tabl
                         pae_entry_t *pt = pt_mapper.map(pde & PAE_ADDR_MASK);
 
                         u32 addr_of_pd = addr_of_pdpt + (1 << 21) * j;
-                        u32 start_idx  = addr_of_pd > (u32)from_addr ? 0 : ((u32)from_addr >> 12) & 0x1FF;
-                        u32 end_of_pd  = addr_of_pd + (1 << 21);
-                        u32 end_idx    = end_of_pd <= limit ? 512 : (limit >> 12) & 0x1FF;
+                        u32 start_idx =
+                            addr_of_pd > (u32)from_addr ? 0 : ((u32)from_addr >> 12) & 0x1FF;
+                        u32 end_of_pd = addr_of_pd + (1 << 21);
+                        u32 end_idx   = end_of_pd <= limit ? 512 : (limit >> 12) & 0x1FF;
                         for (unsigned k = start_idx; k < end_idx; ++k) {
                             pae_entry_t pte = __atomic_load_n(pt + k, __ATOMIC_RELAXED);
 
@@ -1052,6 +1065,57 @@ klib::shared_ptr<IA32_Page_Table> IA32_Page_Table::create_empty(unsigned)
         return new_table;
     }
     return nullptr;
+}
+
+ReturnStr<u32> create_empty_cr3()
+{
+    if (!use_pae) {
+        auto cr3 = pmm::get_memory_for_kernel(1);
+        if (pmm::alloc_failure(cr3))
+            return Error(-ENOMEM);
+
+        auto guard =
+            pmos::utility::make_scope_guard([&]() { pmm::free_memory_for_kernel(cr3, 1); });
+
+        Temp_Mapper_Obj<u32> new_page_m(request_temp_mapper());
+        Temp_Mapper_Obj<u32> current_page_m(request_temp_mapper());
+
+        auto new_page     = new_page_m.map(cr3);
+        auto current_page = current_page_m.map(idle_cr3);
+
+        // Clear new page
+        for (size_t i = 0; i < 768; ++i)
+            new_page[i] = 0;
+
+        // Copy kernel entries
+        for (size_t i = 768; i < 1024; ++i)
+            new_page[i] = current_page[i];
+
+        return Success((u32)cr3);
+    } else {
+        u32 cr3 = new_pae_cr3();
+        if (cr3 == -1U)
+            return Error(-ENOMEM);
+
+        auto [idle_cr3_phys, idle_cr3_offset] = cr3_pae_page_offset(idle_cr3);
+        auto [cr3_phys, cr3_offset]           = cr3_pae_page_offset(cr3);
+
+        Temp_Mapper_Obj<pae_entry_t> new_page_m(request_temp_mapper());
+        Temp_Mapper_Obj<pae_entry_t> current_page_m(request_temp_mapper());
+
+        pae_entry_t *new_page     = new_page_m.map(cr3_phys) + cr3_offset;
+        pae_entry_t *current_page = current_page_m.map(idle_cr3_phys) + idle_cr3_offset;
+
+        // Clear new page
+        for (size_t i = 0; i < 4; ++i)
+            __atomic_store_n(new_page + i, 0, __ATOMIC_RELAXED);
+
+        // Copy kernel entrie
+        pae_entry_t e = __atomic_load_n(current_page + 3, __ATOMIC_RELAXED);
+        __atomic_store_n(new_page + 3, e, __ATOMIC_RELEASE);
+
+        return Success((u32)cr3);
+    }
 }
 
 klib::shared_ptr<IA32_Page_Table> IA32_Page_Table::create_clone()

@@ -8,13 +8,14 @@ floppy_bootsig_check: disabled=0
 floppya: type=1_44
 # no floppyb
 ata0: enabled=true, ioaddr1=0x1f0, ioaddr2=0x3f0, irq=14
-ata0-master: type=disk, path=limine/pmos.img, status=inserted
+ata0-master: type=disk, path=limine/pmos-hyper.img, status=inserted
 ata0-slave: type=none
 ata1: enabled=true, ioaddr1=0x170, ioaddr2=0x370, irq=15
 ata1-master: type=none
 ata1-slave: type=none
 ata2: enabled=false
 ata3: enabled=false
+romimage: file=/home/misha/seabios/out/bios.bin
 optromimage1: file=none
 optromimage2: file=none
 optromimage3: file=none

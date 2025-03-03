@@ -8,6 +8,7 @@
 #include <processes/tasks.hh>
 #include <sched/sched.hh>
 #include <x86_asm.hh>
+#include <acpi/acpi.h>
 
 using namespace kernel;
 
@@ -91,6 +92,119 @@ void init_per_cpu(u64 lapic_id)
         panic("Failed to create temp mapper\n");
 }
 
+extern int kernel_pt_active_cpus_count[2];
+
+extern "C" void smp_main(CPU_Info *c)
+{
+    serial_logger.printf("Entered CPU %i\n", c->cpu_id);
+
+    gdt_set_cpulocal(c);
+    loadGDT(&c->cpu_gdt);
+    loadTSS();
+    program_syscall();
+    set_idt();
+    enable_apic();
+    enable_sse();
+
+    if (c->to_restore_on_wakeup) {
+        c->current_task->regs = *c->to_restore_on_wakeup;
+        c->to_restore_on_wakeup.reset();
+    }
+    c->current_task->page_table->apply_cpu(c);
+    c->current_task->page_table->apply();
+    c->current_task->after_task_switch();
+
+    assert(c->kernel_pt_generation == -1);
+    c->kernel_pt_generation = __atomic_load_n(&kernel_pt_generation, __ATOMIC_ACQUIRE);
+    __atomic_add_fetch(&kernel_pt_active_cpus_count[c->kernel_pt_generation], 1, __ATOMIC_RELAXED);
+    c->online = true;
+
+    if (__atomic_load_n(&c->ipi_mask, __ATOMIC_ACQUIRE))
+        c->ipi_reschedule();
+}
+
+CPU_Info *prepare_cpu(unsigned idx, u32 lapic_id)
+{
+    serial_logger.printf("Found CPU LAPIC %x\n", lapic_id);
+
+    CPU_Info *c = new CPU_Info();
+    if (!c)
+        panic("Couldn't allocate memory for CPU_Info\n");
+
+    if (!setup_stacks(c))
+        panic("Failed to set up stack for AP");
+
+    c->lapic_id = lapic_id;
+    c->cpu_id   = idx;
+    c->kernel_pt_generation = -1;
+
+    auto r = init_idle(c);
+    if (r)
+        panic("Failed to initialize idle task: %i\n", r);
+    c->current_task = c->idle_task;
+
+    void *temp_mapper_start = vmm::kernel_space_allocator.virtmem_alloc_aligned(16, 4);
+    if (!temp_mapper_start)
+        panic("Failed to allocate memory for temp_mapper_start\n");
+
+    c->temp_mapper = create_temp_mapper(temp_mapper_start, getCR3());
+    if (!c->temp_mapper)
+        panic("Failed to create temp mapper\n");
+
+    c->online = false;
+
+    return c;
+}
+
+MADT *get_madt();
+void smp_wake_everyone_else_up();
+void init_acpi_trampoline();
+
+void init_smp()
+{
+    init_acpi_trampoline();
+
+    uint32_t my_lapic_id = get_lapic_id();
+    MADT *m              = get_madt();
+    if (!m)
+        panic("No MADT");
+
+    unsigned idx = 1;
+
+    serial_logger.printf("Initializing SMP\n");
+
+
+    u32 offset = sizeof(MADT);
+    u32 length = m->header.length;
+    while (offset < length) {
+        MADT_entry *e = (MADT_entry *)((char *)m + offset);
+        offset += e->length;
+
+        if (e->type == MADT_LAPIC_entry_type) {
+            MADT_LAPIC_entry *ee = (MADT_LAPIC_entry *)e;
+            uint32_t e_id        = ee->apic_id << 24;
+            if (e_id == my_lapic_id)
+                continue;
+
+            auto c = prepare_cpu(idx++, e_id);
+            if (!cpus.push_back(c))
+                panic("Failed to add CPU\n");
+        } else if (e->type == MADT_X2APIC_entry_type) {
+            MADT_X2APIC_entry *ee = (MADT_X2APIC_entry *)e;
+            uint32_t e_id        = ee->x2apic_id;
+
+            if (e_id == my_lapic_id)
+                continue;
+
+            auto c = prepare_cpu(idx++, e_id);
+            if (!cpus.push_back(c))
+                panic("Failed to add CPU\n");
+        }
+    }
+
+    smp_wake_everyone_else_up();
+}
+
 void init_scheduling_on_bsp()
 {
     serial_logger.printf("Initializing APIC\n");
@@ -105,12 +219,69 @@ void init_scheduling_on_bsp()
     serial_logger.printf("Scheduling initialized\n");
 }
 
+extern u8 init_vec_begin;
+extern u8 acpi_trampoline;
+extern u8 init_vec_end;
+
+// Relocations
+extern u32 init_vec_jump_pmode;
+extern u32 smp_trampoline_gdtr_addr;
+
+// Variables
+extern u32 smp_trampoline_cr3;
+extern u32 smp_trampoline_trampoilne_flags;
+
+constexpr u32 SMP_TRAMPOLINE_ENABLE_PAE = 0b001;
+constexpr u32 SMP_TRAMPOLINE_ENABLE_NX  = 0b010;
+
+pmm::phys_page_t acpi_trampoline_page = 0;
+
 ReturnStr<u32> acpi_wakeup_vec()
 {
-    return Error(-ENOSYS);
+
+    return Success((u32)acpi_trampoline_page + acpi_trampoline - init_vec_begin);
 }
 
-void stop_cpus()
+void init_acpi_trampoline()
 {
-    panic("Not implemented");
+    auto page = pmm::alloc_pages(1, 0, kernel::pmm::AllocPolicy::ISA);
+    if (!page) {
+        panic("Kernel error: could not allocate memory for ACPI trampoline");
+    }
+
+    acpi_trampoline_page = page->get_phys_addr();
+
+    init_vec_jump_pmode += acpi_trampoline_page;
+    smp_trampoline_gdtr_addr += acpi_trampoline_page;
+
+    auto [result, new_cr3] = create_empty_cr3();
+    if (result)
+        panic("Failed to allocate cr3 for SMP trampoline");
+
+
+    smp_trampoline_cr3        = new_cr3;
+    Page_Table_Argumments pta = {
+        .readable           = true,
+        .writeable          = true,
+        .user_access        = false,
+        .execution_disabled = false,
+    };
+
+    if (use_pae) {
+        smp_trampoline_trampoilne_flags |= SMP_TRAMPOLINE_ENABLE_PAE;
+    }
+    if (support_nx)
+        smp_trampoline_trampoilne_flags |= SMP_TRAMPOLINE_ENABLE_NX;
+
+    result = map_page(new_cr3, acpi_trampoline_page, (void *)acpi_trampoline_page, pta);
+    if (result)
+        panic("Failed to ID map init page");
+
+    Temp_Mapper_Obj<char> t(request_temp_mapper());
+    char *ptr = t.map(acpi_trampoline_page);
+    memcpy(ptr, &init_vec_begin, (char *)&init_vec_end - (char *)&init_vec_begin);
+
+    serial_logger.printf("Initialized SMP/ACPI trampoline vector at %x\n", acpi_trampoline_page);
 }
+
+void stop_cpus() { panic("Not implemented"); }

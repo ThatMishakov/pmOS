@@ -82,6 +82,15 @@ typedef struct MADT_LAPIC_entry {
     uint32_t flags;
 } __attribute__((packed)) MADT_LAPIC_entry;
 
+#define MADT_X2APIC_entry_type 9
+typedef struct MADT_X2APIC_entry {
+    MADT_entry header;
+    uint16_t reserved;
+    uint32_t x2apic_id;
+    uint32_t flags;
+    uint32_t apic_processor_uid;
+} __attribute__((packed)) MADT_X2APIC_entry;
+
 #define MADT_IOAPIC_entry_type 1
 typedef struct MADT_IOAPIC_entry {
     MADT_entry header;

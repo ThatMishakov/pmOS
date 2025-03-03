@@ -4,9 +4,7 @@
     .type init_vec_begin, @function
 init_vec_begin:
     .code16
-
     cli
-    xchgw %bx, %bx
     movw %cs, %bx
 
     lgdt %cs:(acpi_trampoline_gdtr - init_vec_begin)

@@ -428,17 +428,6 @@ void init_acpi_trampoline()
     serial_logger.printf("Initialized ACPI vector at %x\n", acpi_trampoline_page);
 }
 
-extern "C" CPU_Info *find_cpu_info()
-{
-    auto lapic_id = get_lapic_id();
-    for (auto c: cpus)
-        if (c->lapic_id == lapic_id)
-            return c;
-
-    assert(false);
-    __builtin_unreachable();
-}
-
 ReturnStr<u32> acpi_wakeup_vec()
 {
     if (!have_acpi_startup)
@@ -446,16 +435,4 @@ ReturnStr<u32> acpi_wakeup_vec()
 
     return Success(
         (u32)(acpi_trampoline_page + (char *)&acpi_trampoline_begin - (char *)&init_vec_begin));
-}
-
-void smp_wake_everyone_else_up()
-{
-    uint32_t vector = acpi_trampoline_page >> 12;
-
-    apic_write_reg(APIC_ICR_HIGH, 0);
-
-    // Send to *vector* vector with Assert level and All Excluding Self
-    // shorthand
-    apic_write_reg(APIC_ICR_LOW, vector | (0x01 << 14) | (0b11 << 18) | (0b101) << 8);
-    apic_write_reg(APIC_ICR_LOW, vector | (0x01 << 14) | (0b11 << 18) | (0b110) << 8);
 }
