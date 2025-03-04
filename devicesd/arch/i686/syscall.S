@@ -7,7 +7,7 @@ syscall_prepare_sleep:
     movl %ebx, %gs:ebx@ntpoff
     movl %esi, %gs:esi@ntpoff
     movl %edi, %gs:edi@ntpoff
-    movl $ebp, %gs:ebp@ntpoff
+    movl %ebp, %gs:ebp@ntpoff
 
     movl (%esp), %eax
     movl 4(%esp), %ecx

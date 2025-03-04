@@ -364,7 +364,7 @@ int init_sleep()
             if (!mapping) {
                 struct NvsRegion r;
                 VECTOR_FOREACH(nvs_vector, r)
-                    nvs_region_free(&r);
+                nvs_region_free(&r);
 
                 VECTOR_FREE(nvs_vector);
                 status = -1;
@@ -377,7 +377,7 @@ int init_sleep()
 
                 struct NvsRegion r;
                 VECTOR_FOREACH(nvs_vector, r)
-                    nvs_region_free(&r);
+                nvs_region_free(&r);
 
                 VECTOR_FREE(nvs_vector);
                 status = -1;
@@ -387,7 +387,7 @@ int init_sleep()
             struct NvsRegion r = {
                 .phys_start = regions[i].phys_start,
                 .size_bytes = regions[i].length,
-                .save_to = memory,
+                .save_to    = memory,
                 .virt_start = mapping,
             };
             VECTOR_PUSH_BACK(nvs_vector, r);
@@ -418,6 +418,7 @@ void call_sleep_handlers_wakeup() {}
 
 void restore_ioapics();
 
+volatile bool entered_sleep = false;
 int system_sleep()
 {
     int status = init_sleep();
@@ -432,8 +433,8 @@ int system_sleep()
         return -EIO;
     }
 
-    volatile bool entered_sleep = false;
-    int result                  = syscall_prepare_sleep(0, 3, 0).result;
+    entered_sleep = false;
+    int result    = syscall_prepare_sleep(0, 3, 0).result;
     assert(!result);
     if (entered_sleep) {
         restore_ioapics();
