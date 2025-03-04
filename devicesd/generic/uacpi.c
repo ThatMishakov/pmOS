@@ -281,9 +281,28 @@ void uacpi_kernel_reset_event(uacpi_handle handle)
 
 uacpi_status uacpi_kernel_pci_device_open(uacpi_pci_address address, uacpi_handle *out_handle)
 {
-    struct PCIGroup *g = pci_host_bridge_find(address.segment);
-    if (g == NULL)
+    if (!pci_fully_working) {
+        if (address.segment != 0)
+            return UACPI_STATUS_NOT_FOUND;
+
+        struct PCIDevicePtr *p = malloc(sizeof(*p));
+        if (!p)
+            return UACPI_STATUS_OUT_OF_MEMORY;
+
+        int result = fill_device_early(p, address.bus, address.device, address.function);
+        if (result) {
+            free(p);
+            return UACPI_STATUS_NOT_FOUND;
+        }
+
+        *out_handle = p;
+        return UACPI_STATUS_OK;
+    }
+
+    struct PCIHostBridge *g = pci_host_bridge_find(address.segment);
+    if (g == NULL) {
         return UACPI_STATUS_NOT_FOUND;
+    }
 
     struct PCIDevicePtr *p = malloc(sizeof(*p));
     if (!p)

@@ -137,6 +137,9 @@ uint32_t pci_read_register(struct PCIDevicePtr *s, unsigned register);
 void pci_write_register(struct PCIDevicePtr *s, unsigned register, uint32_t value);
 int fill_device(struct PCIDevicePtr *s, struct PCIHostBridge *g, int bus, int device, int function);
 
+extern bool pci_fully_working;
+int fill_device_early(struct PCIDevicePtr *s, int bus, int device, int function);
+
 inline uint16_t pci_read_word(struct PCIDevicePtr *s, unsigned offset)
 {
     uint32_t reg = pci_read_register(s, offset >> 2);

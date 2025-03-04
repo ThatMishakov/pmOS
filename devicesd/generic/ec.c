@@ -1,17 +1,18 @@
-#include <stdlib.h>
-#include <uacpi/namespace.h>
-#include <uacpi/tables.h>
-#include <stdbool.h>
-#include <uacpi/acpi.h>
-#include <stdio.h>
-#include <uacpi/resources.h>
-#include <uacpi/kernel_api.h>
-#include <uacpi/opregion.h>
-#include <uacpi/uacpi.h>
-#include <uacpi/event.h>
-#include <uacpi/utilities.h>
 #include <pthread.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <uacpi/acpi.h>
+#include <uacpi/event.h>
 #include <uacpi/io.h>
+#include <uacpi/kernel_api.h>
+#include <uacpi/namespace.h>
+#include <uacpi/opregion.h>
+#include <uacpi/resources.h>
+#include <uacpi/tables.h>
+#include <uacpi/uacpi.h>
+#include <uacpi/utilities.h>
+#include <acpi.h>
 
 struct ECDevice {
     uacpi_namespace_node *node, *gpe_node;
@@ -25,10 +26,10 @@ struct ECDevice {
     pthread_spinlock_t lock;
 };
 
-#define EC_OBF 0x01
-#define EC_IBF 0x02
-#define EC_CMD 0x08
-#define EC_BURST 0x10
+#define EC_OBF     0x01
+#define EC_IBF     0x02
+#define EC_CMD     0x08
+#define EC_BURST   0x10
 #define EC_SCI_EVT 0x20
 #define EC_SMI_EVT 0x40
 
@@ -41,7 +42,10 @@ struct ECDevice {
 #define BURST_ACK 0x90
 
 struct ECDevice *ec_devices = NULL;
-bool ec_initialized = false;
+bool ec_initialized         = false;
+
+static uacpi_interrupt_ret handle_ec_event(uacpi_handle ctx, uacpi_namespace_node *n, uacpi_u16 l);
+static uacpi_status handle_ec_region(uacpi_region_op op, uacpi_handle op_data);
 
 static void free_ec_devices()
 {
@@ -53,7 +57,7 @@ static void free_ec_devices()
     }
 }
 
-static void ec_device_push_back(struct ECDevice * device)
+static void ec_device_push_back(struct ECDevice *device)
 {
     device->next = NULL;
     if (!ec_devices) {
@@ -69,13 +73,54 @@ static void ec_device_push_back(struct ECDevice * device)
     last->next = device;
 }
 
+static int install_ec_handler(struct ECDevice *device)
+{
+    bool first_device = ec_devices == device;
+
+    uacpi_namespace_node *address_space_node = first_device ? uacpi_namespace_root() : device->node;
+    first_device                             = false;
+
+    uacpi_status result = uacpi_install_address_space_handler(
+        address_space_node, UACPI_ADDRESS_SPACE_EMBEDDED_CONTROLLER, handle_ec_region, device);
+    if (result != UACPI_STATUS_OK) {
+        printf("Failed to install EC handler\n");
+        return -1;
+    }
+
+    uint64_t value = 0;
+    uacpi_eval_simple_integer(device->node, "_GLK", &value);
+    if (value) {
+        device->requires_lock = true;
+        printf("EC device has GLK\n");
+    }
+
+    result = uacpi_eval_simple_integer(device->node, "_GPE", &value);
+    if (result != UACPI_STATUS_OK) {
+        printf("Failed to read GPE: %i\n", result);
+        uacpi_uninstall_address_space_handler(address_space_node,
+                                            UACPI_ADDRESS_SPACE_EMBEDDED_CONTROLLER);
+        return -1;
+    }
+
+    device->gpe_idx = value;
+    result          = uacpi_install_gpe_handler(NULL, device->gpe_idx, UACPI_GPE_TRIGGERING_EDGE,
+                                                handle_ec_event, device);
+    if (result != UACPI_STATUS_OK) {
+        printf("Failed to install GPE handler\n");
+        uacpi_uninstall_address_space_handler(address_space_node,
+                                            UACPI_ADDRESS_SPACE_EMBEDDED_CONTROLLER);
+        return -1;
+    }
+    device->initialized = true;
+    return 0;
+}
+
 static void init_from_ecdt()
 {
     uacpi_table edcd;
-    for (uacpi_status result = uacpi_table_find_by_signature("ECDT", &edcd);
-        result == UACPI_STATUS_OK;
-        result = uacpi_table_find_next_with_same_signature(&edcd)) {
-        
+    for (uacpi_status result               = uacpi_table_find_by_signature("ECDT", &edcd);
+         result == UACPI_STATUS_OK; result = uacpi_table_find_next_with_same_signature(&edcd)) {
+
         struct acpi_ecdt *ecdt = edcd.ptr;
         printf("Found ECDT table with ID %s\n", ecdt->ec_id);
 
@@ -96,17 +141,21 @@ static void init_from_ecdt()
             return;
         }
 
-        device->node = ec_node;
-        device->gpe_node = NULL;
-        device->control = ecdt->ec_control;
-        device->data = ecdt->ec_data;
-        device->next = NULL;
-        device->initialized = false;
+        device->node          = ec_node;
+        device->gpe_node      = NULL;
+        device->control       = ecdt->ec_control;
+        device->data          = ecdt->ec_data;
+        device->next          = NULL;
+        device->initialized   = false;
         device->requires_lock = false;
-        device->gpe_idx = 0;
+        device->gpe_idx       = 0;
         pthread_spin_init(&device->lock, PTHREAD_PROCESS_PRIVATE);
-        
+
         ec_device_push_back(device);
+
+        if (!install_ec_handler(device)) {
+            fprintf(stderr, "Failed to install EC handler...\n");
+        }
     }
 }
 
@@ -118,15 +167,15 @@ struct ec_init_ctx {
 static uacpi_iteration_decision find_ec_resources(void *ctx, uacpi_resource *resource)
 {
     struct ec_init_ctx *init_ctx = ctx;
-    struct acpi_gas *reg = init_ctx->index == 0 ? &init_ctx->data : &init_ctx->control;
+    struct acpi_gas *reg         = init_ctx->index == 0 ? &init_ctx->data : &init_ctx->control;
 
     switch (resource->type) {
     case UACPI_RESOURCE_TYPE_IO:
-        reg->address = resource->io.minimum;
-        reg->register_bit_width  = resource->io.length * 8;
+        reg->address            = resource->io.minimum;
+        reg->register_bit_width = resource->io.length * 8;
         break;
     case UACPI_RESOURCE_TYPE_FIXED_IO:
-        reg->address = resource->fixed_io.address;
+        reg->address            = resource->fixed_io.address;
         reg->register_bit_width = resource->fixed_io.length * 8;
         break;
     default:
@@ -135,51 +184,8 @@ static uacpi_iteration_decision find_ec_resources(void *ctx, uacpi_resource *res
 
     reg->address_space_id = UACPI_ADDRESS_SPACE_SYSTEM_IO;
 
-    if(++init_ctx->index == 2)
-		return UACPI_ITERATION_DECISION_BREAK;
-    return UACPI_ITERATION_DECISION_CONTINUE;
-}
-
-static uacpi_iteration_decision match_ec(void *cc, uacpi_namespace_node *node, uint32_t depth)
-{
-    (void)depth;
-    (void)cc;
-    uacpi_resources *resources;
-
-    uacpi_status result = uacpi_get_current_resources(node, &resources);
-    if (result != UACPI_STATUS_OK) {
-        return UACPI_ITERATION_DECISION_CONTINUE;
-    }
-
-    struct ec_init_ctx ctx = {};
-    uacpi_for_each_resource(resources, find_ec_resources, &ctx);
-    uacpi_free_resources(resources);
-
-    if (ctx.index != 2) {
-        printf("EC device didn't find needed resources\n");
-        return UACPI_ITERATION_DECISION_CONTINUE;
-    }
-
-    struct ECDevice *device = malloc(sizeof(struct ECDevice));
-    if (!device) {
-        printf("Failed to allocate memory for EC device\n");
-        return UACPI_ITERATION_DECISION_CONTINUE;
-    }
-
-    device->node = node;
-    device->gpe_node = NULL;
-    device->control = ctx.control;
-    device->data = ctx.data;
-    device->next = NULL;
-    device->initialized = false;
-    device->requires_lock = false;
-    pthread_spin_init(&device->lock, PTHREAD_PROCESS_PRIVATE);
-    device->gpe_idx = 0;
-    ec_device_push_back(device);
-
-    const uacpi_char *path = uacpi_namespace_node_generate_absolute_path(node);
-    printf("Found EC device at %s\n", path);
-    uacpi_kernel_free((void *)path);
+    if (++init_ctx->index == 2)
+        return UACPI_ITERATION_DECISION_BREAK;
     return UACPI_ITERATION_DECISION_CONTINUE;
 }
 
@@ -211,15 +217,9 @@ static void ec_wait_for_bit(struct acpi_gas *reg, uint8_t bit, bool set)
     } while ((status & bit) != (set ? bit : 0));
 }
 
-static void poll_ibf(struct ECDevice *device)
-{
-    ec_wait_for_bit(&device->control, EC_IBF, false);
-}
+static void poll_ibf(struct ECDevice *device) { ec_wait_for_bit(&device->control, EC_IBF, false); }
 
-static void poll_obf(struct ECDevice *device)
-{
-    ec_wait_for_bit(&device->control, EC_OBF, true);
-}
+static void poll_obf(struct ECDevice *device) { ec_wait_for_bit(&device->control, EC_OBF, true); }
 
 static void ec_burst_enable(struct ECDevice *device)
 {
@@ -276,7 +276,7 @@ static uacpi_status ec_do_rw(uacpi_region_op op, uacpi_region_rw_data *data)
             return result;
         }
     }
-        
+
     ec_burst_enable(device);
 
     uacpi_status result = UACPI_STATUS_OK;
@@ -303,11 +303,11 @@ static uacpi_status ec_do_rw(uacpi_region_op op, uacpi_region_rw_data *data)
 static uacpi_status handle_ec_region(uacpi_region_op op, uacpi_handle op_data)
 {
     switch (op) {
-        case UACPI_REGION_OP_ATTACH:
-		case UACPI_REGION_OP_DETACH:
-            return UACPI_STATUS_OK;
-        default:
-            return ec_do_rw(op, op_data);
+    case UACPI_REGION_OP_ATTACH:
+    case UACPI_REGION_OP_DETACH:
+        return UACPI_STATUS_OK;
+    default:
+        return ec_do_rw(op, op_data);
     }
 }
 
@@ -335,18 +335,18 @@ struct ec_event {
 static void to_method_name(char *name, uint8_t event)
 {
     char *hex_chars = "0123456789ABCDEF";
-    name[0] = '_';
-    name[1] = 'Q';
-    name[2] = hex_chars[(event >> 4) & 0xF];
-    name[3] = hex_chars[event & 0xF];
-    name[4] = '\0';
+    name[0]         = '_';
+    name[1]         = 'Q';
+    name[2]         = hex_chars[(event >> 4) & 0xF];
+    name[3]         = hex_chars[event & 0xF];
+    name[4]         = '\0';
 }
 
 static void ec_handle_query(uacpi_handle opaque)
 {
-    struct ec_event *event = opaque;
+    struct ec_event *event  = opaque;
     struct ECDevice *device = event->device;
-    uint8_t ec_event = event->event;
+    uint8_t ec_event        = event->event;
     free(event);
 
     char buff[5];
@@ -363,7 +363,7 @@ static void ec_handle_query(uacpi_handle opaque)
     }
 }
 
-static uacpi_interrupt_ret handle_ec_event(uacpi_handle ctx, uacpi_namespace_node* n, uacpi_u16 l)
+static uacpi_interrupt_ret handle_ec_event(uacpi_handle ctx, uacpi_namespace_node *n, uacpi_u16 l)
 {
     (void)n;
     (void)l;
@@ -397,9 +397,10 @@ static uacpi_interrupt_ret handle_ec_event(uacpi_handle ctx, uacpi_namespace_nod
     pthread_spin_unlock(&device->lock);
 
     ec_event->device = device;
-    ec_event->event = event;
+    ec_event->event  = event;
 
-    uacpi_status result = uacpi_kernel_schedule_work(UACPI_WORK_GPE_EXECUTION, ec_handle_query, ec_event);
+    uacpi_status result =
+        uacpi_kernel_schedule_work(UACPI_WORK_GPE_EXECUTION, ec_handle_query, ec_event);
     if (result != UACPI_STATUS_OK) {
         printf("Failed to schedule work\n");
         free(ec_event);
@@ -416,78 +417,85 @@ ret:
     return ret;
 }
 
-static void install_ec_handlers() {
-    struct ECDevice *device = ec_devices;
-    bool first_device = true;
-    while (device) {
-        uacpi_namespace_node *address_space_node = first_device ? uacpi_namespace_root() : device->node;
-        first_device = false;
-
-        uacpi_status result = uacpi_install_address_space_handler(
-            address_space_node, UACPI_ADDRESS_SPACE_EMBEDDED_CONTROLLER,
-            handle_ec_region, device);
-        if (result != UACPI_STATUS_OK) {
-            printf("Failed to install EC handler\n");
-            continue;
-        }
-
-        uint64_t value = 0;
-        uacpi_eval_simple_integer(device->node, "_GLK", &value);
-        if(value) {
-            device->requires_lock = true;
-            printf("EC device has GLK\n");
-        }
-
-        result = uacpi_eval_simple_integer(device->node, "_GPE", &value);
-        if (result != UACPI_STATUS_OK) {
-            printf("Failed to read GPE: %i\n", result);
-            continue;
-        }
-
-        device->gpe_idx = value;
-        result = uacpi_install_gpe_handler(NULL, device->gpe_idx, UACPI_GPE_TRIGGERING_EDGE, handle_ec_event, device);
-        if (result != UACPI_STATUS_OK) {
-            printf("Failed to install GPE handler\n");
-            continue;
-        }
-        device->initialized = true;
-        device = device->next;
-    }
-    ec_initialized = true;
-}
-
 void init_ec()
 {
-    bool early_reg = true;
     init_from_ecdt();
-
-    if (!ec_devices) {
-        early_reg = false;
-        uacpi_find_devices("PNP0C09", match_ec, NULL);
-    }
-
-    if (!ec_devices) {
-        printf("Failed to find EC device\n");
-        return;
-    }
-
-    if (early_reg)
-        install_ec_handlers();
 }
 
-void ec_finalize()
+static int match_ec_pnp(uacpi_namespace_node *node,
+                                             uacpi_namespace_node_info *)
 {
-    if (ec_devices) {
-        if (!ec_initialized)    
-            install_ec_handlers();
+    struct ECDevice *device = ec_devices;
+    while (device) {
+        if (device->node == node)
+            break;
 
-        struct ECDevice *device = ec_devices;
-        while (device) {
-            uacpi_status result = uacpi_enable_gpe(device->gpe_node, device->gpe_idx);
-            if (result != UACPI_STATUS_OK) {
-                printf("Failed to enable GPE\n");
-            }
-            device = device->next;
+        device = device->next;
+    }
+
+    if (!device) {
+        uacpi_resources *resources;
+
+        uacpi_status result = uacpi_get_current_resources(node, &resources);
+        if (result != UACPI_STATUS_OK) {
+            return UACPI_ITERATION_DECISION_CONTINUE;
+        }
+
+        struct ec_init_ctx ctx = {};
+        uacpi_for_each_resource(resources, find_ec_resources, &ctx);
+        uacpi_free_resources(resources);
+
+        if (ctx.index != 2) {
+            printf("EC device didn't find needed resources\n");
+            return UACPI_ITERATION_DECISION_CONTINUE;
+        }
+
+        device = malloc(sizeof(struct ECDevice));
+        if (!device) {
+            printf("Failed to allocate memory for EC device\n");
+            return UACPI_ITERATION_DECISION_CONTINUE;
+        }
+
+        device->node          = node;
+        device->gpe_node      = NULL;
+        device->control       = ctx.control;
+        device->data          = ctx.data;
+        device->next          = NULL;
+        device->initialized   = false;
+        device->requires_lock = false;
+        pthread_spin_init(&device->lock, PTHREAD_PROCESS_PRIVATE);
+        device->gpe_idx = 0;
+        ec_device_push_back(device);
+
+        const uacpi_char *path = uacpi_namespace_node_generate_absolute_path(node);
+        printf("Found EC device at %s\n", path);
+        uacpi_kernel_free((void *)path);
+
+        if (!install_ec_handler(device)) {
+            fprintf(stderr, "Failed to install handler for the EC device");
         }
     }
+
+    uacpi_status result = uacpi_enable_gpe(device->gpe_node, device->gpe_idx);
+    if (result != UACPI_STATUS_OK) {
+        printf("Failed to enable GPE\n");
+    }
+
+    return UACPI_ITERATION_DECISION_CONTINUE;
+}
+
+static const char *const ec_ids[] = {
+    "PNP0C09",
+    NULL,
+};
+
+static acpi_driver ec = {
+    .device_name = "ACPI Embedded Controller",
+    .pnp_ids = ec_ids,
+    .device_probe = match_ec_pnp,
+};
+
+__attribute__((constructor)) static void add_ec()
+{
+    acpi_register_driver(&ec);
 }

@@ -208,6 +208,8 @@ klib::vector<u64> initialize_cpus(const klib::vector<u64> &lapic_ids)
 extern size_t booted_cpus;
 extern bool boot_barrier_start;
 
+extern int kernel_pt_active_cpus_count[2];
+
 Spinlock l;
 extern "C" void cpu_start_routine(CPU_Info *c)
 {
@@ -267,7 +269,7 @@ void deactivate_page_table();
 
 extern ulong idle_cr3;
 
-static void smp_wake_everyone_else_up();
+void smp_wake_everyone_else_up();
 
 extern "C" void wakeup_main()
 {

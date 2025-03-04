@@ -61,8 +61,3 @@ inline u64 rdtsc()
     asm volatile("rdtsc" : "=a"(rax), "=d"(rdx));
     return (rdx << 32) | rax;
 }
-
-inline void x86_pause()
-{
-    asm volatile ("pause");
-}

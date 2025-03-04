@@ -14,8 +14,13 @@
 #include <pmos/interrupts.h>
 #include <interrupts.h>
 #include <uacpi/uacpi.h>
+#include <acpi.h>
 
-#define AMD_GPIO_ID "AMDI0030"
+static const char *const amd_gpio_ids[] = {
+    "AMDI0030",
+    NULL,
+};
+
 
 struct amd_gpio_pin {
     unsigned DebounceTmrOut     : 4; // Read-write
@@ -401,13 +406,13 @@ static uacpi_iteration_decision amd_gpio_configure_pin(void *ctx, uacpi_resource
     t.as_struct.OutputEnable = 0;
     
     *reg = t.as_uint;
+
+    return UACPI_ITERATION_DECISION_CONTINUE;
 }
 
-static uacpi_iteration_decision match_amd_gpio(void *cc, uacpi_namespace_node *node, uint32_t depth)
+static int match_amd_gpio(uacpi_namespace_node *node, uacpi_namespace_node_info *)
 {
     printf("Found AMD GPIO device\n");
-    (void)depth;
-    (void)cc;
     struct amd_gpio_device *device = NULL;
 
     device = calloc(sizeof(struct amd_gpio_device), 1);
@@ -443,8 +448,13 @@ fail:
     return UACPI_ITERATION_DECISION_CONTINUE;
 }
 
-void gpio_initialize()
+static acpi_driver amd_gpio = {
+    .device_name = "AMD GPIO Controller",
+    .pnp_ids = amd_gpio_ids,
+    .device_probe = match_amd_gpio,
+};
+
+__attribute__((constructor)) static void add_amd_gpio()
 {
-    printf("trying to find GPIO devices\n");
-    uacpi_find_devices(AMD_GPIO_ID, match_amd_gpio, NULL);
+    acpi_register_driver(&amd_gpio);
 }

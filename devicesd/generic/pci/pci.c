@@ -487,7 +487,10 @@ uacpi_iteration_decision pci_check_acpi_root(void *, uacpi_namespace_node *node,
     b->start_bus_number = bus;
     b->end_bus_number   = 255;
 
-    uacpi_for_each_device_resource(node, "_CRS", pci_enumerate_resources, b);
+    // uacpi_for_each_device_resource(node, "_CRS", pci_enumerate_resources, b);
+    b->legacy.config_addr_io = 0xcf8;
+    b->legacy.config_data_io = 0xcfc;
+    b->has_io                = true;
 
     pci_setup_ecam(b, node);
 
@@ -499,6 +502,7 @@ uacpi_iteration_decision pci_check_acpi_root(void *, uacpi_namespace_node *node,
     return UACPI_ITERATION_DECISION_CONTINUE;
 }
 
+bool pci_fully_working = false;
 void acpi_pci_init()
 {
     static const char *pciRootIds[] = {
@@ -509,6 +513,8 @@ void acpi_pci_init()
 
     uacpi_find_devices_at(uacpi_namespace_get_predefined(UACPI_PREDEFINED_NAMESPACE_SB), pciRootIds,
                           pci_check_acpi_root, NULL);
+
+    pci_fully_working = true;
 }
 
 struct PCIHostBridge *pci_host_bridge_find(unsigned group_number)
@@ -857,7 +863,7 @@ int fill_device(struct PCIDevicePtr *s, struct PCIHostBridge *g, int bus, int de
             .ecam_window = (uint32_t *)((char *)config_space_virt + offset),
         };
     } else if (g->has_io) {
-        if (bus < g->start_bus_number || bus > g->end_bus_number)
+        if ((bus < g->start_bus_number) || (bus > g->end_bus_number))
             return -1;
 
         *s = (struct PCIDevicePtr) {
@@ -873,6 +879,20 @@ int fill_device(struct PCIDevicePtr *s, struct PCIHostBridge *g, int bus, int de
     } else {
         return -1;
     }
+
+    return 0;
+}
+
+int fill_device_early(struct PCIDevicePtr *s, int bus, int device, int function)
+{
+    *s = (struct PCIDevicePtr) {
+        .type = PCIGroupLegacy,
+        .io_addr =
+            (struct LegacyAddr) {
+                .data_offset = (bus << 16) | (device << 11) | (function << 8),
+                .port        = 0x3f8,
+            },
+    };
 
     return 0;
 }

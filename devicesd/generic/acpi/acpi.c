@@ -26,6 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <acpi.h>
 #include <acpi/acpi.h>
 #include <assert.h>
 #include <errno.h>
@@ -182,7 +183,6 @@ void request_acpi_tables()
 void acpi_pci_init();
 void init_pci();
 void find_acpi_devices();
-void gpio_initialize();
 int power_button_init();
 
 #include <uacpi/event.h>
@@ -198,8 +198,8 @@ uacpi_status uacpi_kernel_get_rsdp(uacpi_phys_addr *out_rdsp_address)
 }
 
 void init_ec();
-void ec_finalize();
 void publish_devices();
+void acpi_bus_enumerate();
 
 int acpi_init()
 {
@@ -240,8 +240,7 @@ int acpi_init()
         return -ENODEV;
     }
 
-    ec_finalize();
-    gpio_initialize();
+    acpi_bus_enumerate();
     find_acpi_devices();
     power_button_init();
     publish_devices();
@@ -468,10 +467,11 @@ void *shutdown_thread(void *)
     printf("Shutting down in 3 seconds...\n");
     set_affinity(TASK_ID_SELF, -1, 0);
     // uint64_t start = pmos_get_time(GET_TIME_NANOSECONDS_SINCE_BOOTUP).value;
-    // sleep(3);
+    sleep(3);
     // uint64_t end = pmos_get_time(GET_TIME_NANOSECONDS_SINCE_BOOTUP).value;
     // printf("Time difference: %llu\n", end - start);
-    system_sleep();
+    system_shutdown();
+    //system_sleep();
 
     return NULL;
 }
@@ -536,6 +536,80 @@ void init_ioapic();
 void init_cpus();
 
 void find_acpi_devices() { find_com(); }
+
+static struct acpi_driver *acpi_drivers_head = NULL;
+void acpi_register_driver(struct acpi_driver *driver)
+{
+    struct acpi_driver *next = acpi_drivers_head;
+    acpi_drivers_head        = driver;
+    driver->next             = next;
+}
+
+static uacpi_iteration_decision acpi_init_one_device1(void *, uacpi_namespace_node *node,
+                                                      uacpi_u32 node_depth)
+{
+    uacpi_namespace_node_info *info;
+    (void)node_depth;
+
+    uacpi_status ret = uacpi_get_namespace_node_info(node, &info);
+    if (uacpi_unlikely_error(ret)) {
+        const char *path = uacpi_namespace_node_generate_absolute_path(node);
+        fprintf(stderr, "unable to retrieve node %s information: %s", path, uacpi_status_to_string(ret));
+        uacpi_free_absolute_path(path);
+        return UACPI_ITERATION_DECISION_CONTINUE;
+    }
+
+    struct acpi_driver *drv = NULL;
+
+    if (info->flags & UACPI_NS_NODE_INFO_HAS_HID) {
+        const char *hid       = info->hid.value;
+        struct acpi_driver *t = acpi_drivers_head;
+        while (t) {
+            for (int i = 0; t->pnp_ids[i]; ++i) {
+                if (!strcmp(hid, t->pnp_ids[i])) {
+                    drv = t;
+                    goto l1_out;
+                }
+            }
+
+            t = t->next;
+        }
+    l1_out:
+    }
+
+    if (drv == NULL && (info->flags & UACPI_NS_NODE_INFO_HAS_CID)) {
+        struct acpi_driver *t = acpi_drivers_head;
+        while (t) {
+            for (uint32_t i = 0; i < info->cid.num_ids; ++i) {
+                for (int j = 0; t->pnp_ids[j]; ++j) {
+                    if (!strcmp(info->cid.ids[i].value, t->pnp_ids[j])) {
+                        drv = t;
+                        goto l2_out;
+                    }
+                }
+            }
+
+            t = t->next;
+        }
+    l2_out:
+    }
+
+    if (drv != NULL) {
+        // Probe the driver and do something with the error code if desired
+        drv->device_probe(node, info);
+    }
+
+    uacpi_free_namespace_node_info(info);
+    return UACPI_ITERATION_DECISION_CONTINUE;
+}
+
+void acpi_bus_enumerate()
+{
+    uacpi_namespace_for_each_child(
+        uacpi_namespace_root(), acpi_init_one_device1, UACPI_NULL,
+        UACPI_OBJECT_DEVICE_BIT, UACPI_MAX_DEPTH_ANY, UACPI_NULL
+    );
+}
 
 void init_acpi()
 {
