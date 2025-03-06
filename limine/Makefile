@@ -195,13 +195,20 @@ $(DISK_IMAGE): ../kernel/build/kernel ../bootstrapd/bootstrapd.elf ../devicesd/d
 	# Install Limine stage 1
 	limine/limine bios-install $(DISK_IMAGE)
 
-isodir: ../kernel/build/kernel ../bootstrapd/bootstrapd.elf ../devicesd/devicesd.elf ../logd/logd.elf ../ns16550/ns16550.elf ../piped/piped.elf ../processd/processd.elf ../terminald/terminald.elf ../vfsd/vfsd.elf ../vfatfsd/vfatfsd.elf ../ahcid/ahcid.elf ../ps2d/ps2d.elf ../blockd/blockd.elf limine.conf hyper.cfg
-	mkdir -p isodir
+isodir: ../kernel/build/kernel ../bootstrapd/bootstrapd.elf ../devicesd/devicesd.elf ../logd/logd.elf ../ns16550/ns16550.elf ../piped/piped.elf ../processd/processd.elf ../terminald/terminald.elf ../vfsd/vfsd.elf ../vfatfsd/vfatfsd.elf ../ahcid/ahcid.elf ../ps2d/ps2d.elf ../blockd/blockd.elf ../pmbus/bin/pmbus limine.conf hyper.cfg
+	mkdir -p isodir/boot/limine
+	mkdir -p isodir/EFI/BOOT
 
-	cp -v limine.conf isodir/
-	cp -v hyper.cfg isodir/
+	# cp -v limine.conf isodir/
+	# cp -v hyper.cfg isodir/
 
-	cp Hyper/build-clang-i686-bios/loader/hyper_iso_boot isodir/
+	cp limine.conf isodir/boot/limine/
+	cp -v limine/limine-uefi-cd.bin isodir/boot/limine/
+	cp -v limine/limine-bios-cd.bin isodir/boot/limine/
+	cp -v limine/limine-bios.sys isodir/boot/limine/
+	cp -v limine/BOOTRISCV64.EFI isodir/EFI/BOOT/
+	cp -v limine/BOOTX64.EFI isodir/EFI/BOOT/
+
 
 	cp -v ../kernel/build/kernel isodir/kernel
 	cp -v ../bootstrapd/bootstrapd.elf isodir/
@@ -215,9 +222,12 @@ isodir: ../kernel/build/kernel ../bootstrapd/bootstrapd.elf ../devicesd/devicesd
 	cp -v ../vfatfsd/vfatfsd.elf isodir/
 	cp -v ../ahcid/ahcid.elf isodir/
 	cp -v ../ps2d/ps2d.elf isodir/
-	cp -v ../i8042/i8042.elf isodir/
+	# cp -v ../i8042/i8042.elf isodir/
 	cp -v ../blockd/blockd.elf isodir/
+	cp -v ../pmbus/bin/pmbus isodir/
 	# cp -v ../test/test.elf isodir
 
+$(ISO): isodir
+	xorriso -as mkisofs -b boot/limine/limine-bios-cd.bin -no-emul-boot -boot-load-size 4 -boot-info-table --efi-boot boot/limine/limine-uefi-cd.bin -efi-boot-part --efi-boot-image --protective-msdos-label isodir -o $(ISO)
 
 .PHONY: ../kernel/build/kernel ../bootstrapd/bootstrapd.elf ../devicesd/devicesd.elf ../logd/logd.elf ../ns16550/ns16550.elf ../piped/piped.elf ../processd/processd.elf ../terminald/terminald.elf ../vfsd/vfsd.elf ../vfatfsd/vfatfsd.elf ../ahcid/ahcid.elf ../ps2d/ps2d.elf ../i8042/i8042.elf ../blockd/blockd.elf ../pmbus/bin/pmbus	

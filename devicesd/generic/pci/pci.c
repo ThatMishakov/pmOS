@@ -36,15 +36,16 @@
 #include <pci/pci.h>
 #include <pmos/ipc.h>
 #include <pmos/memory.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <uacpi/event.h>
 #include <uacpi/namespace.h>
 #include <uacpi/resources.h>
+#include <uacpi/tables.h>
 #include <uacpi/utilities.h>
 #include <vector.h>
-#include <pthread.h>
 
 PCIDeviceVector pci_devices = VECTOR_INIT;
 
@@ -469,7 +470,71 @@ uacpi_iteration_decision pci_enumerate_resources(void *ctx, uacpi_resource *reso
     return UACPI_ITERATION_DECISION_CONTINUE;
 }
 
-static void pci_setup_ecam(struct PCIHostBridge *b, uacpi_namespace_node *node) {}
+static bool find_ecam_mcfg(uint64_t *ecam_base_out, uint16_t segment, uint8_t start_bus,
+                           uint8_t end_bus)
+{
+    bool result = false;
+    assert(ecam_base_out);
+    uacpi_table mcfg_table;
+    uacpi_status status = uacpi_table_find_by_signature(ACPI_MCFG_SIGNATURE, &mcfg_table);
+    if (status != UACPI_STATUS_OK)
+        return false;
+    struct acpi_mcfg *mcfg = mcfg_table.ptr;
+
+    for (uint32_t i = 0, mcfg_size = (mcfg->hdr.length - offsetof(struct acpi_mcfg, entries)) /
+                                     sizeof(struct acpi_mcfg_allocation);
+         i < mcfg_size; ++i) {
+        if (mcfg->entries[i].segment == segment && mcfg->entries[i].start_bus <= start_bus &&
+            mcfg->entries[i].end_bus >= end_bus) {
+            *ecam_base_out = mcfg->entries[i].address;
+            result         = true;
+            break;
+        }
+    }
+
+    uacpi_table_unref(&mcfg_table);
+    return result;
+}
+
+static void pci_setup_ecam(struct PCIHostBridge *b, uacpi_namespace_node *node)
+{
+    uint64_t ecam_base_0;
+    bool have_ecam =
+        find_ecam_mcfg(&ecam_base_0, b->group_number, b->start_bus_number, b->end_bus_number);
+    if (have_ecam) {
+        printf("devicesd: Found ECAM address in MCFG: %" PRIx64 "\n", ecam_base_0);
+    } else {
+        have_ecam = (uacpi_eval_integer(node, "_CBA", NULL, &ecam_base_0) == UACPI_STATUS_OK);
+        if (have_ecam)
+            printf("devicesd: Found ECAM address in _CBA: %" PRIx64 "\n", ecam_base_0);
+    }
+
+    if (have_ecam) {
+        uint64_t size  = pcie_config_space_size(b->start_bus_number, b->end_bus_number);
+        uint64_t start = pcie_config_space_start(ecam_base_0, b->start_bus_number);
+
+        uint64_t phys_start = start;
+        uint64_t phys_end   = phys_start + size;
+
+        // Align to page just in case
+        static const uint64_t page_mask = ~((uint64_t)PAGE_SIZE - 1);
+        phys_start &= page_mask;
+        phys_end = (phys_end + PAGE_SIZE - 1) & page_mask;
+
+        mem_request_ret_t t = create_phys_map_region(0, NULL, phys_end - phys_start,
+                                                     PROT_READ | PROT_WRITE, phys_start);
+        if (t.result != SUCCESS) {
+            fprintf(stderr, "devicesd: Error: could not map PCIe memory: %" PRIi64 "\n", t.result);
+            return;
+        }
+        // printf("ECAM %lx %lx\n", t.virt_addr, phys_end - phys_start);
+        void *ptr = (char *)t.virt_addr + (ecam_base_0 % PAGE_SIZE) - (start - ecam_base_0);
+        
+        b->ecam.base_addr = ecam_base_0;
+        b->ecam.base_ptr = ptr;
+        b->has_ecam = true;
+    }
+}
 
 uacpi_iteration_decision pci_check_acpi_root(void *, uacpi_namespace_node *node, uint32_t /*depth*/)
 {
@@ -803,7 +868,9 @@ end:
                strerror(-result));
 }
 
+#ifdef PLATFORM_HAS_IO
 static pthread_mutex_t pci_access_mutex = PTHREAD_MUTEX_INITIALIZER;
+#endif
 
 uint32_t pci_read_register(struct PCIDevicePtr *s, unsigned _register)
 {
@@ -812,16 +879,17 @@ uint32_t pci_read_register(struct PCIDevicePtr *s, unsigned _register)
     switch (s->type) {
     case PCIGroupECAM:
         return pci_mmio_readl(s->ecam_window + _register);
+#ifdef PLATFORM_HAS_IO
     case PCIGroupLegacy:
         if (_register >= 256 / 4)
             return -1U;
 
         pthread_mutex_lock(&pci_access_mutex);
-        io_out32(s->io_addr.port,
-                 (uint32_t)0x80000000 | s->io_addr.data_offset | (_register << 2));
+        io_out32(s->io_addr.port, (uint32_t)0x80000000 | s->io_addr.data_offset | (_register << 2));
         uint32_t data = io_in32(s->io_addr.port + 4);
         pthread_mutex_unlock(&pci_access_mutex);
         return data;
+#endif
     default:
         assert(false);
     }
@@ -835,22 +903,23 @@ void pci_write_register(struct PCIDevicePtr *s, unsigned _register, uint32_t val
     switch (s->type) {
     case PCIGroupECAM:
         return pci_mmio_writel(s->ecam_window + _register, value);
+#ifdef PLATFORM_HAS_IO
     case PCIGroupLegacy:
         if (_register >= 256 / 4)
             return;
 
         pthread_mutex_lock(&pci_access_mutex);
-        io_out32(s->io_addr.port,
-                 (uint32_t)0x80000000 | s->io_addr.data_offset | (_register << 2));
+        io_out32(s->io_addr.port, (uint32_t)0x80000000 | s->io_addr.data_offset | (_register << 2));
         io_out32(s->io_addr.port + 4, value);
         pthread_mutex_unlock(&pci_access_mutex);
         break;
+#endif
     default:
         assert(false);
     }
 }
 
-int fill_device(struct PCIDevicePtr *s, struct PCIHostBridge *g, int bus, int device, int function)
+int fill_device(struct PCIDevicePtr *s, struct PCIHostBridge *g, uint8_t bus, uint8_t device, uint8_t function)
 {
     assert(s);
     assert(g);
@@ -883,7 +952,7 @@ int fill_device(struct PCIDevicePtr *s, struct PCIHostBridge *g, int bus, int de
     return 0;
 }
 
-int fill_device_early(struct PCIDevicePtr *s, int bus, int device, int function)
+int fill_device_early(struct PCIDevicePtr *s, uint8_t bus, uint8_t device, uint8_t function)
 {
     *s = (struct PCIDevicePtr) {
         .type = PCIGroupLegacy,

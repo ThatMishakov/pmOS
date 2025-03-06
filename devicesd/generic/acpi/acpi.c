@@ -471,7 +471,7 @@ void *shutdown_thread(void *)
     // uint64_t end = pmos_get_time(GET_TIME_NANOSECONDS_SINCE_BOOTUP).value;
     // printf("Time difference: %llu\n", end - start);
     system_shutdown();
-    //system_sleep();
+    // system_sleep();
 
     return NULL;
 }
@@ -554,7 +554,8 @@ static uacpi_iteration_decision acpi_init_one_device1(void *, uacpi_namespace_no
     uacpi_status ret = uacpi_get_namespace_node_info(node, &info);
     if (uacpi_unlikely_error(ret)) {
         const char *path = uacpi_namespace_node_generate_absolute_path(node);
-        fprintf(stderr, "unable to retrieve node %s information: %s", path, uacpi_status_to_string(ret));
+        fprintf(stderr, "unable to retrieve node %s information: %s", path,
+                uacpi_status_to_string(ret));
         uacpi_free_absolute_path(path);
         return UACPI_ITERATION_DECISION_CONTINUE;
     }
@@ -605,10 +606,8 @@ static uacpi_iteration_decision acpi_init_one_device1(void *, uacpi_namespace_no
 
 void acpi_bus_enumerate()
 {
-    uacpi_namespace_for_each_child(
-        uacpi_namespace_root(), acpi_init_one_device1, UACPI_NULL,
-        UACPI_OBJECT_DEVICE_BIT, UACPI_MAX_DEPTH_ANY, UACPI_NULL
-    );
+    uacpi_namespace_for_each_child(uacpi_namespace_root(), acpi_init_one_device1, UACPI_NULL,
+                                   UACPI_OBJECT_DEVICE_BIT, UACPI_MAX_DEPTH_ANY, UACPI_NULL);
 }
 
 void init_acpi()

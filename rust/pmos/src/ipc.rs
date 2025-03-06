@@ -79,7 +79,7 @@ impl IPCPort {
     }
 
     pub fn name_port(&mut self, name: &str) {
-        unsafe { name_port(self.port, name.as_ptr() as *const i8, name.len(), 0) }
+        unsafe { name_port(self.port, name.as_ptr() as *const libc::c_char, name.len(), 0) }
             .result()
             .unwrap();
     }

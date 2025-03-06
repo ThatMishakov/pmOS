@@ -12,7 +12,7 @@ CXX = clang++
 
 TARGETFLAGS = --target=$(ARCH)-pmos --sysroot=$(ROOTDIR)/sysroot
 
-USERCFLAGS = -Wall -Wextra -O3 -pipe -ggdb3 \
+USERCFLAGS = -g -Wall -Wextra -O3 -pipe -ggdb3 \
 	-DUACPI_OVERRIDE_LIBC -flto -DUACPI_OVERRIDE_ARCH_HELPERS
 
 INCLUDEFLAGS = -I$(PROGDIR)/include -I$(PROGDIR)/uACPI/include
@@ -45,6 +45,9 @@ else ifneq ($(filter i%86 x86,$(ARCH)),)
 	ARCHDIR = x86
 	LDFLAGS += -lclang_rt.builtins-i386
 else
+	CCFILES = $(shell find ./arch/$(ARCH)/ -type f -name '*.cc')
+	CFILES = $(shell find ./arch/$(ARCH)/ -type f -name '*.c')
+	ASMFILES = $(shell find ./arch/$(ARCH)/ -type f -name '*.S')
 	ARCHDIR = $(ARCH)
 endif
  
