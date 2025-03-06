@@ -1,7 +1,7 @@
 SYSROOT = $(HOME)/pmos/sysroot/
 
 ARCH ?= x86_64
-RUSTARCH = ARCH
+RUSTARCH = $(ARCH)
 
 RUSTFLAGS=-C link-arg=--sysroot=$(SYSROOT) -C linker=clang++ -C link-arg=--target=$(ARCH)-unknown-pmos -C link-arg=-lunwind -C link-arg=-static
 PROGDIR = $(realpath .)

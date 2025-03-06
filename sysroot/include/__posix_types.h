@@ -249,7 +249,7 @@ typedef struct {
 typedef struct {
     struct __pthread_waiter *waiters_list_head;
     struct __pthread_waiter *waiters_list_tail;
-    t pop_spinlock;
+    int pop_spinlock;
 } pthread_cond_t;
     #define __DECLARED_PTHREAD_COND_T
 #endif
