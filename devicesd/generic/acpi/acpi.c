@@ -234,11 +234,8 @@ int acpi_init()
         return -ENODEV;
     }
 
-    ret = uacpi_finalize_gpe_initialization();
-    if (uacpi_unlikely_error(ret)) {
-        fprintf(stderr, "uACPI GPE initialization error: %s\n", uacpi_status_to_string(ret));
-        return -ENODEV;
-    }
+    // Ignore return value in case it's not present on reduced 
+    uacpi_finalize_gpe_initialization();
 
     acpi_bus_enumerate();
     find_acpi_devices();
