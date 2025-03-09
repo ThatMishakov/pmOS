@@ -123,6 +123,8 @@ struct CPU_Info {
 #elif defined(__riscv)
     RISCV64_Temp_Mapper temp_mapper;
     RISCV64_Temp_Mapper &get_temp_mapper() { return temp_mapper; }
+#elif defined(__loongarch__)
+    Temp_Mapper &get_temp_mapper();
 #endif
 
     constexpr static unsigned pthread_once_size                       = 16;
@@ -149,6 +151,11 @@ struct CPU_Info {
 
     u64 last_fp_task                 = 0;
     FloatingPointState last_fp_state = FloatingPointState::Disabled;
+#endif
+
+#ifdef __loongarch__
+    u32 cpu_physical_id = 0; // 8 bit in reality...
+    u64 timer_val = 0;
 #endif
 
     // ISRs in userspace

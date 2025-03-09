@@ -747,7 +747,7 @@ void syscall_create_port()
 
 void syscall_set_interrupt()
 {
-#if defined(__riscv) || defined(__x86_64__) || defined(__i386__)
+#if defined(__riscv) || defined(__x86_64__) || defined(__i386__) || defined(__loongarch__)
     auto c               = get_cpu_struct();
     const task_ptr &task = c->current_task;
 
@@ -772,7 +772,7 @@ void syscall_set_interrupt()
 
 void syscall_complete_interrupt()
 {
-#if defined(__riscv) || defined(__x86_64__) || defined(__i386__)
+#if defined(__riscv) || defined(__x86_64__) || defined(__i386__) || defined(__loongarch__)
     auto c               = get_cpu_struct();
     const task_ptr &task = c->current_task;
 
@@ -1179,9 +1179,9 @@ void syscall_set_segment()
         // TODO: Make segments and registers consistent
         target->regs.thread_pointer() = ptr;
         break;
-    case 2:
-        target->regs.global_pointer() = ptr;
-        break;
+    // case 2:
+    //     target->regs.global_pointer() = ptr;
+    //     break;
     case 3: {
         auto b = copy_from_user((char *)&target->regs, (char *)ptr, sizeof(target->regs));
         if (!b.success()) {
@@ -1242,19 +1242,19 @@ void syscall_get_segment()
             return;
         break;
     }
-    case 2: {
-        segment = target->regs.global_pointer();
-        auto b =
-            copy_to_user((char *)&current->regs.global_pointer(), (char *)ptr, sizeof(segment));
-        if (!b.success()) {
-            syscall_error(current) = b.result;
-            return;
-        }
+    // case 2: {
+    //     segment = target->regs.global_pointer();
+    //     auto b =
+    //         copy_to_user((char *)&current->regs.global_pointer(), (char *)ptr, sizeof(segment));
+    //     if (!b.success()) {
+    //         syscall_error(current) = b.result;
+    //         return;
+    //     }
 
-        if (not b.val)
-            return;
-        break;
-    }
+    //     if (not b.val)
+    //         return;
+    //     break;
+    // }
     case 3: {
         // This is very bad (it overwrites user memory that is not supposed to be)...
         auto b = copy_to_user((char *)&target->regs, (char *)ptr, sizeof(target->regs));

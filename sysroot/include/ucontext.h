@@ -44,7 +44,7 @@ typedef struct {
     unsigned long rsp;
     unsigned long rbp;
 } mcontext_t; // TODO
-#elif defined(__riscv)
+#elif defined(__riscv) || defined(__loongarch__)
 typedef struct {
     unsigned long pc;
     unsigned long regs[31];

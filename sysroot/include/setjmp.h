@@ -45,6 +45,17 @@ struct __sigjmp_buf_tag {
     long s9;
     long s10;
     long s11;
+#elif defined(__loongarch__)
+    long ra;
+    long sp;
+    long s0;
+    long s1;
+    long s2;
+    long s3;
+    long s4;
+    long s5;
+    long s6;
+    long s7;
 #elif defined(__x86_64__)
     long rbp;
     long rbx;

@@ -58,4 +58,20 @@ inline void mmio_writel(uint32_t *ptr, uint32_t data)
 #define pci_mmio_writel mmio_writel
 #endif
 
+#if defined(__loongarch__)
+inline uint32_t mmio_readl(uint32_t *ptr)
+{
+    uint32_t data;
+    asm volatile ("ld.w %0, %1" : "=r"(data) : "o"(*ptr));
+    return data;
+}
+inline void mmio_writel(uint32_t *ptr, uint32_t data)
+{
+    asm volatile("st.w %0, %1" :: "r"(data), "o"(*ptr));
+}
+
+#define pci_mmio_readl mmio_readl
+#define pci_mmio_writel mmio_writel
+#endif
+
 #endif

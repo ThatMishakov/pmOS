@@ -91,6 +91,7 @@ typedef struct {
 #define ELF_RISCV   0xF3
 #define ELF_X86_64  0x3E
 #define ELF_AARCH64 0xB7
+#define ELF_LOONGARCH 258
 
 #define ELF_EXEC 2
 
@@ -112,6 +113,9 @@ typedef struct {
 #elif defined(__aarch64__)
     #define ELF_BITNESS   ELF_64BIT
     #define ELF_INSTR_SET ELF_AARCH64
+#elif defined(__loongarch__)
+    #define ELF_BITNESS   ELF_64BIT
+    #define ELF_INSTR_SET ELF_LOONGARCH
 #endif
 
 typedef struct {

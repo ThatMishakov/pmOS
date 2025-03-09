@@ -1,5 +1,6 @@
 {
     "files.associations": {
+        "*.S": "platformio-debug.asm",
         "array": "cpp",
         "string_view": "cpp",
         "initializer_list": "cpp",
@@ -198,7 +199,8 @@
         "version": "cpp",
         "format": "cpp",
         "hashmap.h": "c",
-        "__hash": "c"
+        "__hash": "c",
+        "setjmp.h": "c"
     },
     "cmake.configureOnOpen": false,
     "C_Cpp.default.compilerPath": "/home/misha/cross/bin/clang",
