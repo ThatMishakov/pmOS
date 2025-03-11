@@ -431,7 +431,7 @@ public:
     /// This function checks whether the page is mapped, without checking the allocation regions.
     /// @returns true if the page is mapped.
     /// @returns false if the page is not mapped.
-    virtual bool is_mapped(void *addr) const = 0;
+    virtual bool is_mapped(void *addr) const;
 
     // Creates an empty page table, preparing appropriately the kernel entries
     // virtual klib::shared_ptr<Page_Table> create_empty_from_existing() = 0;

@@ -228,7 +228,8 @@ void Buffered_Logger::set_port(Port *port, uint32_t /* flags */)
     log_buffer.clear();
 }
 
-extern "C" void dbg_uart_putc(unsigned int c);
+void printc(int c);
+extern "C" void dbg_uart_putc(int c) { printc(c); }
 
 void Serial_Logger::log_nolock(const char *c, size_t size)
 {

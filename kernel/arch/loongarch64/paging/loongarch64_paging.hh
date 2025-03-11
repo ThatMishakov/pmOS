@@ -1,4 +1,5 @@
 #pragma once
+#include <memory/mem_object.hh> // ???
 #include <memory/paging.hh>
 #include <types.hh>
 
@@ -12,6 +13,21 @@ constexpr u64 PAGE_WRITEABLE  = 0x0100;
 constexpr u64 PAGE_NO_READ    = (1UL << 61);
 constexpr u64 PAGE_NO_EXECUTE = (1UL << 62);
 constexpr u64 PAGE_RPLV       = (1UL << 63);
+
+constexpr unsigned PAGE_AVAILABLE_SHIFT = 8;
+constexpr u64 PAGE_AVAILABLE_MASK       = (0xf << 8);
+
+constexpr u64 PAGE_ADDR_MASK = 0x1ffffffffffff000UL;
+
+// This is programable, but just use tbe normel x86/risc-v style page tables
+constexpr unsigned page_table_entries = 9;
+constexpr unsigned page_idx_mask      = (1 << page_table_entries) - 1;
+constexpr unsigned paging_l1_offset   = 12 + 9 * 0;
+constexpr unsigned paging_l2_offset   = 12 + 9 * 1;
+constexpr unsigned paging_l3_offset   = 12 + 9 * 2;
+constexpr unsigned paging_l4_offset   = 12 + 9 * 3;
+
+u64 loongarch_cache_bits(Memory_Type);
 
 class LoongArch64_Page_Table final: public Page_Table
 {
@@ -79,16 +95,37 @@ public:
                                            void *to_addr, size_t size_bytes,
                                            unsigned new_access) override;
 
-    /// Checks if the page is mapped
-    bool is_mapped(void *virt_addr) const noexcept override;
-
     virtual void invalidate_range(TLBShootdownContext &ctx, void *virt_addr, size_t size_bytes,
                                   bool free) override;
 
-    bool is_32bit() const { return false; }
+    bool is_32bit() const { return flags & FLAG_32BIT; }
+
+    ~LoongArch64_Page_Table();
 
 protected:
     LoongArch64_Page_Table() = default;
+    LoongArch64_Page_Table(int flags): flags(flags) {}
 
-    u64 page_directory = -1UL;
+    static constexpr u64 PAGE_DIRECTORY_INITIALIZER = -1UL;
+
+    u64 page_directory = PAGE_DIRECTORY_INITIALIZER;
+    int flags          = 0;
+
+    static kresult_t insert_global_page_tables(klib::shared_ptr<LoongArch64_Page_Table>);
+    void takeout_global_page_tables();
+
+    void free_all_pages();
 };
+
+/// Maps a page (kernel or user) to the specified location. The right page directory (low or high)
+/// has to be supplied, depending on the priviledge level
+kresult_t loongarch_map_page(u64 pt_top_phys, void *virt_addr, u64 phys_addr,
+                             Page_Table_Argumments arg);
+
+/// Unmaps the page, freeing it as needed.
+kresult_t loongarch_unmap_page(TLBShootdownContext &ctx, u64 pt_top_phys, void *virt_addr,
+                               bool free = false);
+
+// Generic functions to map and release pages in kernel, using the active page table
+kresult_t map_kernel_page(u64 phys_addr, void *virt_addr, Page_Table_Argumments arg);
+kresult_t unmap_kernel_page(TLBShootdownContext &ctx, void *virt_addr);

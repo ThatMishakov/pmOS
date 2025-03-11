@@ -40,7 +40,7 @@
 #include <processes/tasks.hh>
 
 // Nice code!
-#if defined(__x86_64__) || defined(__riscv)
+#if defined(__x86_64__) || defined(__riscv) || defined(__loongarch64)
 
 using namespace kernel;
 using namespace kernel::pmm;
@@ -90,24 +90,28 @@ __attribute__((used)) limine_paging_mode_request paging_request = {
     #else
     .mode = LIMINE_PAGING_MODE_DEFAULT,
     #endif
-    .flags = 0,
 };
 
 extern void hcf();
 
 Direct_Mapper init_mapper;
 
-    // Temporary temporary mapper
-    #ifdef __x86_64__
-        #include <paging/x86_temp_mapper.hh>
-        #include <x86_asm.hh>
+// Temporary temporary mapper
+#ifdef __x86_64__
+#include <paging/x86_temp_mapper.hh>
+#include <x86_asm.hh>
 using Arch_Temp_Mapper = x86_PAE_Temp_Mapper;
-    #elif defined(__riscv)
-        #include <paging/riscv64_temp_mapper.hh>
-using Arch_Temp_Mapper = RISCV64_Temp_Mapper;
-    #endif
-
 Arch_Temp_Mapper temp_temp_mapper;
+
+#elif defined(__riscv)
+#include <paging/riscv64_temp_mapper.hh>
+using Arch_Temp_Mapper = RISCV64_Temp_Mapper;
+Arch_Temp_Mapper temp_temp_mapper;
+
+#elif defined(__loongarch64)
+#include <paging/loong_temp_mapper.hh>
+
+#endif
 
 u64 hhdm_offset = 0;
 
@@ -219,10 +223,12 @@ void construct_paging()
     idle_cr3 = kernel_ptable_top;
     #endif
 
+    #ifndef __loongarch64
     // Init temp mapper with direct map, while it is still available
     void *temp_mapper_start = vmm::kernel_space_allocator.virtmem_alloc_aligned(
         16, 4); // 16 pages aligned to 16 pages boundary
     temp_temp_mapper = Arch_Temp_Mapper(temp_mapper_start, kernel_ptable_top);
+    #endif
 
     // Map kernel pages
     //
@@ -319,7 +325,12 @@ void construct_paging()
     apply_page_table(kernel_ptable_top);
 
     // Set up the right mapper (since there is no direct map anymore) and bitmap
+    #ifndef __loongarch64
     global_temp_mapper = &temp_temp_mapper;
+    #else
+    set_dmws();
+    global_temp_mapper = &temp_mapper;
+    #endif
 
     serial_logger.printf("Paging initialized!\n");
 
@@ -1046,7 +1057,9 @@ void init_smp()
 
         ++iter;
     }
-    #elif
+    #elif defined(__loongarch64)
+        // No SMP
+    #else
         #error "Unsupported architecture"
     #endif
 }
@@ -1092,7 +1105,11 @@ void limine_main()
     init_dtb();
 
     // Init idle task page table
+    #ifndef __loongarch64
     idle_page_table = Arch_Page_Table::capture_initial(kernel_ptable_top);
+    #else
+    idle_page_table = Arch_Page_Table::create_empty();
+    #endif
 
     init_scheduling(bsp_cpu_id);
 

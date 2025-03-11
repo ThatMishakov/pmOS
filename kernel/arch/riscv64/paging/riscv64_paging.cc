@@ -440,7 +440,8 @@ kresult_t map_pages(ptable_top_ptr_t page_table, u64 phys_addr, void *virt_addr,
 
     // Don't overcomplicate things for now, just call map
     // This is *very* inefficient
-    for (u64 i = 0; i < size && (result == 0); i += 4096) {
+    u64 i = 0;
+    for (i = 0; i < size && (result == 0); i += 4096) {
         result = map_page(page_table, phys_addr + i, (char *)virt_addr + i, arg);
     }
 
@@ -673,6 +674,7 @@ RISCV64_Page_Table::~RISCV64_Page_Table()
 {
     free_user_pages();
     pmm::free_memory_for_kernel(table_root, 1);
+    takeout_global_page_tables();
 }
 
 void free_pages_in_level(u64 pt_phys, u64 level)

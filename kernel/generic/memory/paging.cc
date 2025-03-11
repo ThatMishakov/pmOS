@@ -780,3 +780,8 @@ void TLBShootdownContext::finalize()
 }
 
 klib::vector<MemoryRegion> memory_map;
+
+bool Page_Table::is_mapped(void *ptr) const
+{
+    return get_page_mapping(ptr).is_allocated;
+}

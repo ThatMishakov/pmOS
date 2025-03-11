@@ -13,7 +13,7 @@ Spinlock IA32_Page_Table::page_table_index_lock;
 
 using namespace kernel;
 
-void IA32_Page_Table::apply() { apply_page_table(cr3); }
+void IA32_Page_Table::apply() { setCR3(page_table); }
 
 bool use_pae    = false;
 bool support_nx = false;

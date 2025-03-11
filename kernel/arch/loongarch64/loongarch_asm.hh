@@ -6,9 +6,29 @@ inline void set_pgdl(unsigned long addr)
     asm volatile ("csrwr %0, 0x19" :: "r"(addr) : "memory");
 }
 
+inline void set_pgdh(unsigned long addr)
+{
+    asm volatile ("csrwr %0, 0x1a" :: "r"(addr) : "memory");
+}
+
 inline void flush_tlb()
 {
+    asm volatile ("invtlb 0x01, $zero, $zero" ::: "memory");
+}
+
+inline void invalidate_kernel_page(void *addr, unsigned asid)
+{
+    asm volatile ("invtlb 0x6, %0, %1" :: "r"(asid), "r"(addr) : "memory");
+}
+
+inline void flush_user_pages()
+{
     asm volatile ("invtlb 0x03, $zero, $zero" ::: "memory");
+}
+
+inline void invalidate_user_page(void *addr, unsigned asid)
+{
+    asm volatile ("invtlb 0x5, %0, %1" :: "r"(asid), "r"(addr) : "memory");
 }
 
 inline void iocsr_write32(u32 value, u32 address)
