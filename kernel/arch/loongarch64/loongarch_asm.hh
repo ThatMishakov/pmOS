@@ -43,9 +43,9 @@ inline void set_pgdh(unsigned long addr)
 
 inline u64 get_pgdh()
 {
-    u64 out;
-    asm ("csrrd %0, %1" : "=r"(out) : "i"(0x1A));
-    return out;
+    u64 result;
+    asm volatile ("csrrd %0, 0x1a" : "=r"(result));
+    return result;
 }
 
 inline void flush_tlb()
