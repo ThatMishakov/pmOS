@@ -247,6 +247,7 @@ void LoongArch64_Page_Table::takeout_global_page_tables()
 
 void apply_page_table(ptable_top_ptr_t page_table)
 {
+    kernel_page_dir = page_table;
     set_pgdh(page_table);
     flush_tlb();
 }

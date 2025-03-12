@@ -50,3 +50,18 @@ void CPU_Info::ipi_reschedule()
     __atomic_or_fetch(&ipi_mask, IPI_RESCHEDULE, __ATOMIC_ACQUIRE);
     ipi_send(cpu_physical_id, 0x00);
 }
+
+void CPU_Info::ipi_tlb_shootdown()
+{
+    __atomic_or_fetch(&ipi_mask, IPI_TLB_SHOOTDOWN, __ATOMIC_ACQUIRE);
+    ipi_send(cpu_physical_id, 0x00);
+}
+
+extern "C" void handle_interrupt(LoongArch64Regs *regs)
+{
+    panic("Interrupt!\n");
+}
+
+void interrupt_disable(u32 interrupt_id) {
+    panic("interrupt_disable: not implemented\n");
+}
