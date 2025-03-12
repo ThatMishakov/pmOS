@@ -174,7 +174,7 @@ extern long temp_alloc_entry_id;
 flanterm_context *ft_ctx = nullptr;
 uint32_t *fb_virt        = nullptr;
 
-struct limine_framebuffer_request fb_req = {
+__attribute__((used)) struct limine_framebuffer_request fb_req = {
     .id       = LIMINE_FRAMEBUFFER_REQUEST,
     .revision = 0,
     .response = nullptr,
@@ -211,7 +211,7 @@ void init_fb()
 
         uint64_t phys_addr_all = (uint64_t)fb.address - hhdm_offset - fb_offset;
         auto result =
-            map_kernel_pages(phys_addr_all, (uint64_t)fb_virt, fb_size, args);
+            map_kernel_pages(phys_addr_all, fb_virt, fb_size, args);
         if (result != 0) {
             serial_logger.printf("Failed to map framebuffer\n");
             vmm::kernel_space_allocator.virtmem_free((void *)fb_virt, fb_size / PAGE_SIZE);
