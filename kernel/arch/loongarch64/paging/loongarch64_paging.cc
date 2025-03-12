@@ -31,6 +31,17 @@ u64 loongarch_cache_bits(Memory_Type t)
     return 0;
 }
 
+Memory_Type pte_cache_policy(u64 e)
+{
+    switch (e & 0x30) {
+    case PAGE_MAT_CC:
+        return Memory_Type::Normal;
+        // TODO: Framebuffer...
+    default:
+        return Memory_Type::IONoCache;
+    }
+}
+
 void *LoongArch64TempMapper::kern_map(u64 phys_frame)
 {
     return (void *)(phys_frame + DIRECT_MAP_REGION);
@@ -340,4 +351,209 @@ void LoongArch64_Page_Table::invalidate(TLBShootdownContext &ctx, void *virt_add
                                         bool free) noexcept
 {
     loongarch_unmap_page(ctx, page_directory, virt_addr, free);
+}
+
+void LoongArch64_Page_Table::invalidate_range(TLBShootdownContext &ctx, void *virt_addr,
+                                              size_t size_bytes, bool free)
+{
+    // Slow but doesn't matter for now
+    char *end = (char *)virt_addr + size_bytes;
+    for (char *i = (char *)virt_addr; i < end; i += 4096)
+        invalidate(ctx, i, free);
+}
+
+kresult_t LoongArch64_Page_Table::resolve_anonymous_page(void *virt_addr, unsigned access_type)
+{
+    assert(access_type & Writeable);
+
+    Temp_Mapper_Obj<u64> mapper(request_temp_mapper());
+    mapper.map(page_directory);
+    for (int i = 4; i > 1; --i) {
+        const u8 offset = 12 + (i - 1) * 9;
+        const u64 index = ((u64)virt_addr >> offset) & 0x1FF;
+
+        u64 entry = __atomic_load_n(mapper.ptr + index, __ATOMIC_RELAXED);
+        assert(entry & PAGE_VALID);
+        mapper.map(entry & PAGE_ADDR_MASK);
+    }
+
+    const u64 index = ((u64)virt_addr >> 12) & 0x1FF;
+    u64 entry       = __atomic_load_n(mapper.ptr + index, __ATOMIC_RELAXED);
+    assert(entry & PAGE_VALID);
+    assert(entry & (PAGING_FLAG_STRUCT_PAGE << PAGE_AVAILABLE_SHIFT));
+    assert(!(entry & PAGE_WRITEABLE));
+
+    auto page = pmm::Page_Descriptor::find_page_struct(entry & PAGE_ADDR_MASK);
+    assert(page.page_struct_ptr);
+
+    if (__atomic_load_n(&page.page_struct_ptr->l.refcount, __ATOMIC_ACQUIRE) == 2) {
+        // only owner of the page
+        entry = PAGE_WRITEABLE;
+        __atomic_store_n(mapper.ptr + index, entry, __ATOMIC_RELEASE);
+        invalidate_user_page((void *)virt_addr, 0);
+        return 0;
+    }
+
+    auto owner = page.page_struct_ptr->l.owner;
+    assert(owner && "page owner not found");
+
+    auto new_descriptor =
+        owner->atomic_request_anonymous_page(page.page_struct_ptr->l.offset, true);
+    if (!new_descriptor.success())
+        return new_descriptor.result;
+
+    entry &= ~PAGE_VALID;
+    __atomic_store_n(mapper.ptr + index, entry, __ATOMIC_RELEASE);
+
+    {
+        auto tlb_ctx = TLBShootdownContext::create_userspace(*this);
+        tlb_ctx.invalidate_page(virt_addr);
+    }
+
+    u64 new_page_phys = new_descriptor.val.takeout_page();
+
+    Temp_Mapper_Obj<u64> new_mapper(request_temp_mapper());
+    void *new_page = new_mapper.map(new_page_phys);
+    Temp_Mapper_Obj<u64> old_mapper(request_temp_mapper());
+    void *old_page = old_mapper.map(entry & PAGE_ADDR_MASK);
+
+    memcpy(new_page, old_page, PAGE_SIZE);
+
+    page.release_taken_out_page();
+
+    entry |= PAGE_VALID;
+    entry |= PAGE_WRITEABLE;
+    entry &= ~PAGE_ADDR_MASK;
+    entry |= new_page_phys;
+    __atomic_store_n(mapper.ptr + index, entry, __ATOMIC_RELEASE);
+
+    invalidate_user_page((void *)virt_addr, 0);
+    return 0;
+}
+
+kresult_t loongarch_unmap_page(TLBShootdownContext &ctx, u64 pt_top_phys, void *virt_addr,
+                               bool free)
+{
+
+    unsigned l4_idx = ((u64)virt_addr >> paging_l4_offset) & page_idx_mask;
+    unsigned l3_idx = ((u64)virt_addr >> paging_l3_offset) & page_idx_mask;
+    unsigned l2_idx = ((u64)virt_addr >> paging_l2_offset) & page_idx_mask;
+    unsigned l1_idx = ((u64)virt_addr >> paging_l1_offset) & page_idx_mask;
+
+    Temp_Mapper_Obj<u64> mapper(request_temp_mapper());
+
+    u64 *l4_pt   = mapper.map(pt_top_phys);
+    u64 l4_entry = __atomic_load_n(l4_pt + l4_idx, __ATOMIC_RELAXED);
+    if (!(l4_entry & PAGE_VALID))
+        return -ENOENT;
+
+    u64 *l3_pt   = mapper.map(l4_entry & PAGE_ADDR_MASK);
+    u64 l3_entry = __atomic_load_n(l3_pt + l3_idx, __ATOMIC_RELAXED);
+    if (!(l3_entry & PAGE_VALID))
+        return -ENOENT;
+
+    u64 *l2_pt   = mapper.map(l3_entry & PAGE_ADDR_MASK);
+    u64 l2_entry = __atomic_load_n(l2_pt + l2_idx, __ATOMIC_RELAXED);
+    if (!(l2_entry & PAGE_VALID))
+        return -ENOENT;
+
+    u64 *l1_pt   = mapper.map(l2_entry & PAGE_ADDR_MASK);
+    u64 l1_entry = __atomic_load_n(l1_pt + l1_idx, __ATOMIC_RELAXED);
+    if (!(l1_entry & PAGE_VALID))
+        return -ENOENT;
+
+    __atomic_store_n(l1_pt + l1_idx, 0, __ATOMIC_RELEASE);
+
+    if (free)
+        free_leaf_pte(l1_entry);
+
+    ctx.invalidate_page(virt_addr);
+    return 0;
+}
+
+static kresult_t copy_to_recursive(const klib::shared_ptr<Page_Table> &to, u64 phys_page_level,
+                                   u64 absolute_start, u64 to_addr, u64 size_bytes, u64 new_access,
+                                   u64 current_copy_from, int level, u64 &upper_bound_offset,
+                                   TLBShootdownContext &ctx)
+{
+    const u8 offset = 12 + (level - 1) * 9;
+
+    Temp_Mapper_Obj<u64> mapper(request_temp_mapper());
+    mapper.map(phys_page_level);
+
+    u64 mask        = (1UL << offset) - 1;
+    u64 max         = (absolute_start + size_bytes + mask) & ~mask;
+    u64 end_index   = (current_copy_from >> (offset + 9)) == (max >> (offset + 9))
+                          ? (max >> offset) & 0x1ff
+                          : 512;
+    u64 start_index = (current_copy_from >> offset) & 0x1ff;
+
+    for (u64 i = start_index; i < end_index; ++i) {
+        auto pte = __atomic_load_n(mapper.ptr + i, __ATOMIC_RELAXED);
+        if (!(pte & PAGE_PRESENT))
+            continue;
+
+        if (level == 1) {
+            auto p = pmm::Page_Descriptor::find_page_struct(pte & PAGE_ADDR_MASK);
+            assert(p.page_struct_ptr && "page struct must be present");
+            if (!p.page_struct_ptr->is_anonymous())
+                continue;
+
+            u64 copy_from = ((i - start_index) << offset) + current_copy_from;
+            u64 copy_to   = copy_from - absolute_start + to_addr;
+
+            if (pte & PAGE_WRITEABLE) {
+                pte &= ~PAGE_WRITEABLE;
+                __atomic_store_n(mapper.ptr + i, pte, __ATOMIC_RELEASE);
+                ctx.invalidate_page((void *)copy_from);
+            }
+
+            Page_Table_Argumments arg = {
+                .readable           = !!(new_access & Readable),
+                .writeable          = 0,
+                .user_access        = true,
+                .global             = false,
+                .execution_disabled = not(new_access & Executable),
+                .extra              = static_cast<u8>(pte >> PAGE_AVAILABLE_SHIFT),
+                .cache_policy       = pte_cache_policy(pte),
+            };
+            auto result = to->map(klib::move(p), (void *)copy_to, arg);
+            if (result)
+                return result;
+
+            upper_bound_offset = copy_from - absolute_start + 4096;
+        } else {
+            u64 next_level_phys = pte & PAGE_USER_MASK;
+            u64 current         = ((i - start_index) << offset) + current_copy_from;
+            if (i != start_index)
+                current &= ~mask;
+            auto result =
+                copy_to_recursive(to, next_level_phys, absolute_start, to_addr, size_bytes,
+                                  new_access, current, level - 1, upper_bound_offset, ctx);
+            if (result)
+                return result;
+        }
+    }
+
+    return 0;
+}
+
+kresult_t LoongArch64_Page_Table::copy_anonymous_pages(const klib::shared_ptr<Page_Table> &to,
+                                                       void *from_addr, void *to_addr,
+                                                       size_t size_bytes, unsigned access)
+{
+    u64 offset = 0;
+    kresult_t result;
+    {
+        TLBShootdownContext ctx = TLBShootdownContext::create_userspace(*this);
+        result = copy_to_recursive(to, page_directory, (u64)from_addr, (u64)to_addr, size_bytes,
+                                   access, (u64)from_addr, 4, offset, ctx);
+    }
+
+    if (result != 0) {
+        auto ctx = TLBShootdownContext::create_userspace(*to);
+        to->invalidate_range(ctx, (void *)to_addr, offset, true);
+    }
+
+    return result;
 }

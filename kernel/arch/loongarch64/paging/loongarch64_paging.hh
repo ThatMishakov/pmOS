@@ -8,6 +8,7 @@ constexpr u64 PAGE_DIRTY      = 0x02;
 constexpr u64 PAGE_USER_MASK  = 0x0c;
 constexpr u64 PAGE_MAT_CC     = ((u64)1 << 4);
 constexpr u64 PAGE_MAT_WUC    = ((u64)1 << 5);
+constexpr u64 PAGE_MAT_MASK   = 0x30;
 constexpr u64 PAGE_PRESENT    = 0x80;
 constexpr u64 PAGE_WRITEABLE  = 0x0100;
 constexpr u64 PAGE_NO_READ    = (1UL << 61);
@@ -28,6 +29,7 @@ constexpr unsigned paging_l3_offset   = 12 + 9 * 2;
 constexpr unsigned paging_l4_offset   = 12 + 9 * 3;
 
 u64 loongarch_cache_bits(Memory_Type);
+Memory_Type pte_cache_policy(u64);
 
 class LoongArch64_Page_Table final: public Page_Table
 {
