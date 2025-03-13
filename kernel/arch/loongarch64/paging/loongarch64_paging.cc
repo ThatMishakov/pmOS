@@ -64,6 +64,8 @@ void invalidate_tlb_kernel(void *addr, size_t size)
 }
 
 constexpr u32 CSR_DMW0 = 0x180;
+constexpr u32 CSR_PWCL = 0x1C;
+constexpr u32 PWCH     = 0x1D;
 
 void set_dmws()
 {
@@ -71,6 +73,15 @@ void set_dmws()
     asm volatile("csrwr %0, %1" ::"r"(0), "i"(CSR_DMW0 + 1));
     asm volatile("csrwr %0, %1" ::"r"(0), "i"(CSR_DMW0 + 2));
     asm volatile("csrwr %0, %1" ::"r"(0), "i"(CSR_DMW0 + 3));
+}
+
+void set_pwcs()
+{
+    constexpr u32 pwcl = (12) | (9 << 5) | (21 << 10) | (9 << 15) | (30 << 20) | (9 << 25) | (0 << 30);
+    constexpr u32 pwch = (39) | (9 << 6) | (48 << 12) | (9 << 18);
+
+    asm volatile("csrwr %0, %1" ::"r"(pwcl), "i"(CSR_PWCL));
+    asm volatile("csrwr %0, %1" ::"r"(pwch), "i"(PWCH));
 }
 
 void *LoongArch64_Page_Table::user_addr_max() const
@@ -81,7 +92,7 @@ void *LoongArch64_Page_Table::user_addr_max() const
         return (void *)(1UL << (valen - 1));
 }
 
-u64 kernel_page_dir = 0;
+u64 kernel_page_dir() { return get_pgdh(); }
 
 kresult_t map_kernel_page(u64 phys_addr, void *virt_addr, Page_Table_Argumments arg)
 {
@@ -247,7 +258,8 @@ void LoongArch64_Page_Table::takeout_global_page_tables()
 
 void apply_page_table(ptable_top_ptr_t page_table)
 {
-    kernel_page_dir = page_table;
+    set_dmws();
+    set_pwcs();
     set_pgdh(page_table);
     flush_tlb();
 }
