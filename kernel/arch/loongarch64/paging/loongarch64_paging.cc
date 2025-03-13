@@ -12,6 +12,10 @@
 
 using namespace kernel;
 
+extern u8 _kernel_start;
+extern u8 tlb_refill;
+extern u64 kernel_phys_base;
+
 constexpr u64 DIRECT_MAP_REGION = 0x8000000000000000;
 
 unsigned valen = 48;
@@ -63,9 +67,10 @@ void invalidate_tlb_kernel(void *addr, size_t size)
         invalidate_kernel_page(addr, 0);
 }
 
-constexpr u32 CSR_DMW0 = 0x180;
-constexpr u32 CSR_PWCL = 0x1C;
-constexpr u32 PWCH     = 0x1D;
+constexpr u32 CSR_DMW0      = 0x180;
+constexpr u32 CSR_PWCL      = 0x1C;
+constexpr u32 CSR_PWCH      = 0x1D;
+constexpr u32 CSR_TLBRENTRY = 0x88;
 
 void set_dmws()
 {
@@ -77,11 +82,18 @@ void set_dmws()
 
 void set_pwcs()
 {
-    constexpr u32 pwcl = (12) | (9 << 5) | (21 << 10) | (9 << 15) | (30 << 20) | (9 << 25) | (0 << 30);
+    constexpr u32 pwcl =
+        (12) | (9 << 5) | (21 << 10) | (9 << 15) | (30 << 20) | (9 << 25) | (0 << 30);
     constexpr u32 pwch = (39) | (9 << 6) | (48 << 12) | (9 << 18);
 
     asm volatile("csrwr %0, %1" ::"r"(pwcl), "i"(CSR_PWCL));
-    asm volatile("csrwr %0, %1" ::"r"(pwch), "i"(PWCH));
+    asm volatile("csrwr %0, %1" ::"r"(pwch), "i"(CSR_PWCH));
+}
+
+void set_tlbrentry()
+{
+    u64 tlb_refill_addr = kernel_phys_base + (&tlb_refill - &_kernel_start);
+    asm volatile("csrwr %0, %1" ::"r"(tlb_refill_addr), "i"(CSR_TLBRENTRY));
 }
 
 void *LoongArch64_Page_Table::user_addr_max() const
@@ -96,12 +108,12 @@ u64 kernel_page_dir() { return get_pgdh(); }
 
 kresult_t map_kernel_page(u64 phys_addr, void *virt_addr, Page_Table_Argumments arg)
 {
-    return loongarch_map_page(kernel_page_dir, virt_addr, phys_addr, arg);
+    return loongarch_map_page(kernel_page_dir(), virt_addr, phys_addr, arg);
 }
 
 kresult_t unmap_kernel_page(TLBShootdownContext &ctx, void *virt_addr)
 {
-    return loongarch_unmap_page(ctx, kernel_page_dir, virt_addr, false);
+    return loongarch_unmap_page(ctx, kernel_page_dir(), virt_addr, false);
 }
 
 kresult_t map_pages(ptable_top_ptr_t page_table, u64 phys_addr, void *virt_addr, size_t size,
@@ -260,6 +272,7 @@ void apply_page_table(ptable_top_ptr_t page_table)
 {
     set_dmws();
     set_pwcs();
+    set_tlbrentry();
     set_pgdh(page_table);
     flush_tlb();
 }

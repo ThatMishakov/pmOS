@@ -48,6 +48,8 @@ using namespace kernel::pmm;
 extern "C" void limine_main();
 extern "C" void _limine_entry();
 
+u64 kernel_phys_base = 0;
+
 __attribute__((used)) LIMINE_BASE_REVISION(1)
 
     __attribute__((used)) limine_bootloader_info_request boot_request = {
@@ -273,6 +275,8 @@ void construct_paging()
     // protocol Map these pages and switch to kernel page table
     const u64 kernel_text_start = kernel_start_virt & ~0xfff;
     const u64 kernel_text_end   = ((u64)&_text_end + 0xfff) & ~0xfff;
+
+    kernel_phys_base = kernel_address_request.response->physical_base;
 
     const u64 kernel_phys      = kernel_address_request.response->physical_base;
     const u64 text_phys        = kernel_phys + kernel_text_start - kernel_start_virt;

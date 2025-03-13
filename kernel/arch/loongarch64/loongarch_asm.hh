@@ -11,6 +11,13 @@ inline void set_pgdh(unsigned long addr)
     asm volatile ("csrwr %0, 0x1a" :: "r"(addr) : "memory");
 }
 
+inline u64 get_pgdh()
+{
+    u64 out;
+    asm ("csrrd %0, %1" : "=r"(out) : "i"(0x1A));
+    return out;
+}
+
 inline void flush_tlb()
 {
     asm volatile ("invtlb 0x01, $zero, $zero" ::: "memory");
