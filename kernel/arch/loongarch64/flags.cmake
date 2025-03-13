@@ -1,0 +1,1 @@
+set(PLATFORM_C_FLAGS "-msoft-float -mno-lsx -mno-lasx")
