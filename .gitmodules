@@ -17,3 +17,6 @@
 [submodule "limine/Hyper"]
 	path = limine/Hyper
 	url = https://github.com/UltraOS/Hyper.git
+[submodule "kernel/flanterm"]
+	path = kernel/flanterm
+	url = https://github.com/mintsuki/flanterm.git
