@@ -9,27 +9,31 @@ constexpr u64 PAGE_USER_MASK  = 0x0c;
 constexpr u64 PAGE_MAT_CC     = ((u64)1 << 4);
 constexpr u64 PAGE_MAT_WUC    = ((u64)1 << 5);
 constexpr u64 PAGE_MAT_MASK   = 0x30;
+constexpr u64 PAGE_GLOBAL     = 0x40;
+constexpr u64 PAGE_HUGE       = 0x40;
 constexpr u64 PAGE_PRESENT    = 0x80;
 constexpr u64 PAGE_WRITEABLE  = 0x0100;
 constexpr u64 PAGE_NO_READ    = (1UL << 61);
 constexpr u64 PAGE_NO_EXECUTE = (1UL << 62);
 constexpr u64 PAGE_RPLV       = (1UL << 63);
 
-constexpr unsigned PAGE_AVAILABLE_SHIFT = 8;
-constexpr u64 PAGE_AVAILABLE_MASK       = (0xf << 8);
+constexpr unsigned PAGE_AVAILABLE_SHIFT = 9;
+constexpr u64 PAGE_AVAILABLE_MASK       = (0x7 << 9);
 
 constexpr u64 PAGE_ADDR_MASK = 0x1ffffffffffff000UL;
 
 // This is programable, but just use tbe normel x86/risc-v style page tables
 constexpr unsigned page_table_entries = 9;
-constexpr unsigned page_idx_mask      = (1 << page_table_entries) - 1;
-constexpr unsigned paging_l1_offset   = 12 + 9 * 0;
-constexpr unsigned paging_l2_offset   = 12 + 9 * 1;
-constexpr unsigned paging_l3_offset   = 12 + 9 * 2;
-constexpr unsigned paging_l4_offset   = 12 + 9 * 3;
+constexpr unsigned page_idx_mask      = 0x1ff;
+constexpr unsigned paging_l1_offset   = 12;
+constexpr unsigned paging_l2_offset   = 21;
+constexpr unsigned paging_l3_offset   = 30;
+constexpr unsigned paging_l4_offset   = 39;
 
 u64 loongarch_cache_bits(Memory_Type);
 Memory_Type pte_cache_policy(u64);
+
+bool pde_valid(u64 pde);
 
 class LoongArch64_Page_Table final: public Page_Table
 {

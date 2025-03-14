@@ -71,6 +71,12 @@ constexpr u32 CSR_DMW0      = 0x180;
 constexpr u32 CSR_PWCL      = 0x1C;
 constexpr u32 CSR_PWCH      = 0x1D;
 constexpr u32 CSR_TLBRENTRY = 0x88;
+constexpr u32 CSR_STLBPS    = 0x1E;
+
+void set_page_size()
+{
+    asm volatile("csrwr %0, %1" ::"r"(12), "i"(CSR_STLBPS));
+}
 
 void set_dmws()
 {
@@ -84,7 +90,7 @@ void set_pwcs()
 {
     constexpr u32 pwcl =
         (12) | (9 << 5) | (21 << 10) | (9 << 15) | (30 << 20) | (9 << 25) | (0 << 30);
-    constexpr u32 pwch = (39) | (9 << 6) | (48 << 12) | (9 << 18);
+    constexpr u32 pwch = (39) | (9 << 6); // | (48 << 12) | (9 << 18);
 
     asm volatile("csrwr %0, %1" ::"r"(pwcl), "i"(CSR_PWCL));
     asm volatile("csrwr %0, %1" ::"r"(pwch), "i"(CSR_PWCH));
@@ -133,6 +139,11 @@ kresult_t map_pages(ptable_top_ptr_t page_table, u64 phys_addr, void *virt_addr,
     return result;
 }
 
+bool pde_valid(u64 pde)
+{
+    return pde;
+}
+
 kresult_t loongarch_map_page(u64 pt_top_phys, void *virt_addr, u64 phys_addr,
                              Page_Table_Argumments arg)
 {
@@ -144,38 +155,38 @@ kresult_t loongarch_map_page(u64 pt_top_phys, void *virt_addr, u64 phys_addr,
 
     Temp_Mapper_Obj<u64> mapper(request_temp_mapper());
     u64 *l4_pt = mapper.map(pt_top_phys);
-    auto pte   = __atomic_load_n(l4_pt + l4_idx, __ATOMIC_RELAXED);
-    if (!(pte & PAGE_VALID)) {
+    u64 pte   = __atomic_load_n(l4_pt + l4_idx, __ATOMIC_RELAXED);
+    if (!pde_valid(pte)) {
         u64 new_pt_phys = pmm::get_memory_for_kernel(1);
         if (pmm::alloc_failure(new_pt_phys))
             return -ENOMEM;
 
         clear_page(new_pt_phys);
-        pte = new_pt_phys | PAGE_VALID | priviledge_bits;
+        pte = new_pt_phys;
         __atomic_store_n(l4_pt + l4_idx, pte, __ATOMIC_RELAXED);
     }
 
     u64 *l3_pt = mapper.map(pte & PAGE_ADDR_MASK);
     pte        = __atomic_load_n(l3_pt + l3_idx, __ATOMIC_RELAXED);
-    if (!(pte & PAGE_VALID)) {
+    if (!pde_valid(pte)) {
         u64 new_pt_phys = pmm::get_memory_for_kernel(1);
         if (pmm::alloc_failure(new_pt_phys))
             return -ENOMEM;
 
         clear_page(new_pt_phys);
-        pte = new_pt_phys | PAGE_VALID | priviledge_bits;
+        pte = new_pt_phys;
         __atomic_store_n(l3_pt + l3_idx, pte, __ATOMIC_RELAXED);
     }
 
     u64 *l2_pt = mapper.map(pte & PAGE_ADDR_MASK);
     pte        = __atomic_load_n(l2_pt + l2_idx, __ATOMIC_RELAXED);
-    if (!(pte & PAGE_VALID)) {
+    if (!pde_valid(pte)) {
         u64 new_pt_phys = pmm::get_memory_for_kernel(1);
         if (pmm::alloc_failure(new_pt_phys))
             return -ENOMEM;
 
         clear_page(new_pt_phys);
-        pte = new_pt_phys | PAGE_VALID | priviledge_bits;
+        pte = new_pt_phys;
         __atomic_store_n(l2_pt + l2_idx, pte, __ATOMIC_RELAXED);
     }
 
@@ -193,7 +204,7 @@ kresult_t loongarch_map_page(u64 pt_top_phys, void *virt_addr, u64 phys_addr,
     if (!arg.readable)
         pte |= PAGE_NO_READ;
     if (arg.writeable)
-        pte |= PAGE_WRITEABLE;
+        pte |= PAGE_DIRTY;
     if (arg.execution_disabled)
         pte |= PAGE_NO_EXECUTE;
 
@@ -272,6 +283,7 @@ void apply_page_table(ptable_top_ptr_t page_table)
 {
     set_dmws();
     set_pwcs();
+    set_page_size();
     set_tlbrentry();
     set_pgdh(page_table);
     flush_tlb();
@@ -305,17 +317,17 @@ LoongArch64_Page_Table::Page_Info LoongArch64_Page_Table::get_page_mapping(void 
     Temp_Mapper_Obj<u64> mapper(request_temp_mapper());
     u64 *l4_pt = mapper.map(page_directory);
     auto pte   = __atomic_load_n(l4_pt + l4_idx, __ATOMIC_RELAXED);
-    if (!(pte & PAGE_VALID))
+    if (!pde_valid(pte))
         return i;
 
     u64 *l3_pt = mapper.map(pte & PAGE_ADDR_MASK);
     pte        = __atomic_load_n(l3_pt + l3_idx, __ATOMIC_RELAXED);
-    if (!(pte & PAGE_VALID))
+    if (!pde_valid(pte))
         return i;
 
     u64 *l2_pt = mapper.map(pte & PAGE_ADDR_MASK);
     pte        = __atomic_load_n(l2_pt + l2_idx, __ATOMIC_RELAXED);
-    if (!(pte & PAGE_VALID))
+    if (!pde_valid(pte))
         return i;
 
     u64 *l1_pt = mapper.map(pte & PAGE_ADDR_MASK);
@@ -327,7 +339,7 @@ LoongArch64_Page_Table::Page_Info LoongArch64_Page_Table::get_page_mapping(void 
     i.dirty        = !!(pte & PAGE_DIRTY);
     i.flags        = (pte >> 8) & 0xf;
     i.user_access  = !!(pte & PAGE_USER_MASK);
-    i.writeable    = !!(pte & PAGE_WRITEABLE);
+    i.writeable    = !!(pte & PAGE_DIRTY);
     i.executable   = !(pte & PAGE_NO_EXECUTE);
     i.nofree       = !!(i.flags & PAGING_FLAG_NOFREE);
     i.page_addr    = pte & PAGE_ADDR_MASK;
@@ -407,14 +419,14 @@ kresult_t LoongArch64_Page_Table::resolve_anonymous_page(void *virt_addr, unsign
     u64 entry       = __atomic_load_n(mapper.ptr + index, __ATOMIC_RELAXED);
     assert(entry & PAGE_VALID);
     assert(entry & (PAGING_FLAG_STRUCT_PAGE << PAGE_AVAILABLE_SHIFT));
-    assert(!(entry & PAGE_WRITEABLE));
+    assert(!(entry & PAGE_DIRTY));
 
     auto page = pmm::Page_Descriptor::find_page_struct(entry & PAGE_ADDR_MASK);
     assert(page.page_struct_ptr);
 
     if (__atomic_load_n(&page.page_struct_ptr->l.refcount, __ATOMIC_ACQUIRE) == 2) {
         // only owner of the page
-        entry = PAGE_WRITEABLE;
+        entry = PAGE_DIRTY;
         __atomic_store_n(mapper.ptr + index, entry, __ATOMIC_RELEASE);
         invalidate_user_page((void *)virt_addr, 0);
         return 0;
@@ -448,7 +460,7 @@ kresult_t LoongArch64_Page_Table::resolve_anonymous_page(void *virt_addr, unsign
     page.release_taken_out_page();
 
     entry |= PAGE_VALID;
-    entry |= PAGE_WRITEABLE;
+    entry |= PAGE_DIRTY;
     entry &= ~PAGE_ADDR_MASK;
     entry |= new_page_phys;
     __atomic_store_n(mapper.ptr + index, entry, __ATOMIC_RELEASE);
@@ -470,17 +482,17 @@ kresult_t loongarch_unmap_page(TLBShootdownContext &ctx, u64 pt_top_phys, void *
 
     u64 *l4_pt   = mapper.map(pt_top_phys);
     u64 l4_entry = __atomic_load_n(l4_pt + l4_idx, __ATOMIC_RELAXED);
-    if (!(l4_entry & PAGE_VALID))
+    if (!pde_valid(l4_entry))
         return -ENOENT;
 
     u64 *l3_pt   = mapper.map(l4_entry & PAGE_ADDR_MASK);
     u64 l3_entry = __atomic_load_n(l3_pt + l3_idx, __ATOMIC_RELAXED);
-    if (!(l3_entry & PAGE_VALID))
+    if (!pde_valid(l3_entry))
         return -ENOENT;
 
     u64 *l2_pt   = mapper.map(l3_entry & PAGE_ADDR_MASK);
     u64 l2_entry = __atomic_load_n(l2_pt + l2_idx, __ATOMIC_RELAXED);
-    if (!(l2_entry & PAGE_VALID))
+    if (!pde_valid(l2_entry))
         return -ENOENT;
 
     u64 *l1_pt   = mapper.map(l2_entry & PAGE_ADDR_MASK);
@@ -516,10 +528,11 @@ static kresult_t copy_to_recursive(const klib::shared_ptr<Page_Table> &to, u64 p
 
     for (u64 i = start_index; i < end_index; ++i) {
         auto pte = __atomic_load_n(mapper.ptr + i, __ATOMIC_RELAXED);
-        if (!(pte & PAGE_PRESENT))
-            continue;
 
         if (level == 1) {
+            if (!(pte & PAGE_PRESENT))
+                continue;
+
             auto p = pmm::Page_Descriptor::find_page_struct(pte & PAGE_ADDR_MASK);
             assert(p.page_struct_ptr && "page struct must be present");
             if (!p.page_struct_ptr->is_anonymous())
@@ -528,8 +541,8 @@ static kresult_t copy_to_recursive(const klib::shared_ptr<Page_Table> &to, u64 p
             u64 copy_from = ((i - start_index) << offset) + current_copy_from;
             u64 copy_to   = copy_from - absolute_start + to_addr;
 
-            if (pte & PAGE_WRITEABLE) {
-                pte &= ~PAGE_WRITEABLE;
+            if (pte & PAGE_DIRTY) {
+                pte &= ~PAGE_DIRTY;
                 __atomic_store_n(mapper.ptr + i, pte, __ATOMIC_RELEASE);
                 ctx.invalidate_page((void *)copy_from);
             }
@@ -549,6 +562,9 @@ static kresult_t copy_to_recursive(const klib::shared_ptr<Page_Table> &to, u64 p
 
             upper_bound_offset = copy_from - absolute_start + 4096;
         } else {
+            if (!pde_valid(pte))
+                continue;
+
             u64 next_level_phys = pte & PAGE_USER_MASK;
             u64 current         = ((i - start_index) << offset) + current_copy_from;
             if (i != start_index)
