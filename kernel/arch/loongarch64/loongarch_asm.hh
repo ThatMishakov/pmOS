@@ -1,14 +1,21 @@
 #pragma once
 #include <types.hh>
 
+template<unsigned addr>
+inline auto csrwr(auto value)
+{
+    asm volatile ("csrwr %0, %1" : "+r"(value) : "i"(addr));
+    return value;
+}
+
 inline void set_pgdl(unsigned long addr)
 {
-    asm volatile ("csrwr %0, 0x19" :: "r"(addr) : "memory");
+    csrwr<0x19>(addr);
 }
 
 inline void set_pgdh(unsigned long addr)
 {
-    asm volatile ("csrwr %0, 0x1a" :: "r"(addr) : "memory");
+    csrwr<0x1a>(addr);
 }
 
 inline u64 get_pgdh()
@@ -64,5 +71,5 @@ inline unsigned long timer_value()
 
 inline void timer_tcfg(unsigned long value)
 {
-    asm volatile("csrwr %0, 0x41" :: "r"(value));
+    csrwr<0x41>(value);
 }

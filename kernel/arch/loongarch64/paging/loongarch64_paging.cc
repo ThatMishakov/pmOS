@@ -16,7 +16,7 @@ extern u8 _kernel_start;
 extern u8 tlb_refill;
 extern u64 kernel_phys_base;
 
-constexpr u64 DIRECT_MAP_REGION = 0x8000000000000000;
+constexpr u64 DIRECT_MAP_REGION = 0x9000000000000000;
 
 unsigned valen = 48;
 
@@ -75,15 +75,15 @@ constexpr u32 CSR_STLBPS    = 0x1E;
 
 void set_page_size()
 {
-    asm volatile("csrwr %0, %1" ::"r"(12), "i"(CSR_STLBPS));
+    csrwr<CSR_STLBPS>(12);
 }
 
 void set_dmws()
 {
-    asm volatile("csrwr %0, %1" ::"r"(DIRECT_MAP_REGION | (MAT_CC << 4) | 0x01), "i"(CSR_DMW0));
-    asm volatile("csrwr %0, %1" ::"r"(0), "i"(CSR_DMW0 + 1));
-    asm volatile("csrwr %0, %1" ::"r"(0), "i"(CSR_DMW0 + 2));
-    asm volatile("csrwr %0, %1" ::"r"(0), "i"(CSR_DMW0 + 3));
+    csrwr<CSR_DMW0>(0x9000000000000011);
+    csrwr<CSR_DMW0+1>(0);
+    csrwr<CSR_DMW0+2>(0);
+    csrwr<CSR_DMW0+3>(0);
 }
 
 void set_pwcs()
@@ -92,14 +92,14 @@ void set_pwcs()
         (12) | (9 << 5) | (21 << 10) | (9 << 15) | (30 << 20) | (9 << 25) | (0 << 30);
     constexpr u32 pwch = (39) | (9 << 6); // | (48 << 12) | (9 << 18);
 
-    asm volatile("csrwr %0, %1" ::"r"(pwcl), "i"(CSR_PWCL));
-    asm volatile("csrwr %0, %1" ::"r"(pwch), "i"(CSR_PWCH));
+    csrwr<CSR_PWCL>(pwcl);
+    csrwr<CSR_PWCH>(pwch);
 }
 
 void set_tlbrentry()
 {
     u64 tlb_refill_addr = kernel_phys_base + (&tlb_refill - &_kernel_start);
-    asm volatile("csrwr %0, %1" ::"r"(tlb_refill_addr), "i"(CSR_TLBRENTRY));
+    csrwr<CSR_TLBRENTRY>(tlb_refill_addr);
 }
 
 void *LoongArch64_Page_Table::user_addr_max() const
