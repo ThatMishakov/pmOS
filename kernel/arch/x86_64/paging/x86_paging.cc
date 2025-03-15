@@ -383,6 +383,7 @@ x86_4level_Page_Table::Page_Info x86_4level_Page_Table::get_page_mapping(void *v
     i.user_access  = mapper.ptr[pt_i].user_access;
     i.page_addr    = mapper.ptr[pt_i].page_ppn << 12;
     i.nofree       = mapper.ptr[pt_i].avl & PAGING_FLAG_NOFREE;
+    i.readable     = 1;
     return i;
 }
 

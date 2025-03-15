@@ -316,6 +316,11 @@ static void free_leaf_pte(u64 pte)
 
 LoongArch64_Page_Table::Page_Info LoongArch64_Page_Table::get_page_mapping(void *virt_addr) const
 {
+    return ::get_page_mapping(page_directory, virt_addr);
+}
+
+LoongArch64_Page_Table::Page_Info get_page_mapping(u64 page_directory, void *virt_addr)
+{
     Page_Info i {};
 
     unsigned l4_idx = ((u64)virt_addr >> paging_l4_offset) & page_idx_mask;
@@ -351,6 +356,7 @@ LoongArch64_Page_Table::Page_Info LoongArch64_Page_Table::get_page_mapping(void 
     i.writeable    = !!(pte & PAGE_DIRTY);
     i.executable   = !(pte & PAGE_NO_EXECUTE);
     i.nofree       = !!(i.flags & PAGING_FLAG_NOFREE);
+    i.readable     = !(pte & PAGE_NO_READ);
     i.page_addr    = pte & PAGE_ADDR_MASK;
 
     return i;

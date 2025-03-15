@@ -10,4 +10,7 @@ constexpr unsigned BADV   = 0x07;
 constexpr unsigned BADI   = 0x08;
 constexpr unsigned EENTRY = 0x0C;
 
+constexpr unsigned PGDL = 0x19;
+constexpr unsigned PGDH = 0x1A;
+
 }; // namespace kernel::loongarch::csr

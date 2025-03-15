@@ -3,6 +3,7 @@
 #include <loongarch_asm.hh>
 #include <sched/sched.hh>
 #include <types.hh>
+#include <paging/loongarch64_paging.hh>
 
 using namespace kernel;
 
@@ -85,11 +86,7 @@ void CPU_Info::ipi_tlb_shootdown()
     ipi_send(cpu_physical_id, 0x00);
 }
 
-extern "C" void handle_interrupt(LoongArch64Regs *regs) { panic("Interrupt!\n"); }
-
 void interrupt_disable(u32 interrupt_id) { panic("interrupt_disable: not implemented\n"); }
-
-void printc(int) {}
 
 unsigned exception_code()
 {
@@ -102,6 +99,45 @@ extern "C" void interrupt_early(LoongArch64Regs *regs)
     assert(regs);
 
     auto code = exception_code();
+
+    do {
+        if (code < 0x1 or code > 0x6)
+            break;
+
+        u64 virt_addr = csrrd64<loongarch::csr::BADV>();
+        if (virt_addr < (1UL << 63)) // Lower half
+            break;
+
+        auto page_table = csrrd64<loongarch::csr::PGDH>();
+
+        auto mapping = get_page_mapping(page_table, (void *)virt_addr);
+        if (!mapping.is_allocated)
+            break;
+
+        if ((code == 0x1 or code == 0x5) and !mapping.readable)
+            break;
+
+        if ((code == 0x2 or code == 0x4) and !mapping.writeable)
+            break;
+
+        if ((code == 0x3 or code == 0x6) and !mapping.executable)
+            break;
+
+        invalidate_kernel_page((void *)virt_addr, 0);
+        return;
+    } while (0);
+
+
     print_registers(regs);
     panic("Kernel early exception %i!\n", code);
+}
+
+extern "C" void handle_interrupt(LoongArch64Regs *regs) {
+    print_registers(regs);
+    panic("Interrupts not implemented!\n");
+}
+
+void printc(int)
+{
+    
 }

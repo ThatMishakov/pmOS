@@ -141,6 +141,7 @@ struct Page_Info {
     bool nofree : 1       = 0;
     bool writeable : 1    = 0;
     bool executable : 1   = 0;
+    bool readable : 1     = 0;
     u64 page_addr         = 0;
 
     kernel::pmm::Page_Descriptor create_copy() const;

@@ -185,6 +185,7 @@ IA32_Page_Table::Page_Info IA32_Page_Table::get_page_mapping(void *virt_addr) co
         i.dirty        = !!(pte & PAGE_DIRTY);
         i.user_access  = !!(pte & PAGE_USER);
         i.page_addr    = pte & _32BIT_ADDR_MASK;
+        i.readable     = 1;
         i.nofree       = !!(i.flags & PAGING_FLAG_NOFREE);
     } else {
         auto pdpt_idx = (u32(virt_addr) >> 30) & 0x3;
@@ -220,6 +221,7 @@ IA32_Page_Table::Page_Info IA32_Page_Table::get_page_mapping(void *virt_addr) co
         i.dirty              = !!(pt_entry & PAGE_DIRTY);
         i.user_access        = !!(pt_entry & PAGE_USER);
         i.page_addr          = pt_entry & PAE_ADDR_MASK;
+        i.readable           = 1;
         i.nofree             = !!(i.flags & PAGING_FLAG_NOFREE);
     }
     return i;
@@ -1056,9 +1058,8 @@ klib::shared_ptr<IA32_Page_Table> IA32_Page_Table::create_empty(unsigned)
 
         new_table->cr3 = cr3;
 
-        pmm::phys_page_t pdpts[3] = {(pmm::phys_page_t)-1,
-                                             (pmm::phys_page_t)-1,
-                                             (pmm::phys_page_t)-1};
+        pmm::phys_page_t pdpts[3] = {(pmm::phys_page_t)-1, (pmm::phys_page_t)-1,
+                                     (pmm::phys_page_t)-1};
 
         auto pages_guard = pmos::utility::make_scope_guard([&]() {
             for (auto page: pdpts) {

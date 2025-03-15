@@ -135,3 +135,5 @@ kresult_t loongarch_unmap_page(TLBShootdownContext &ctx, u64 pt_top_phys, void *
 // Generic functions to map and release pages in kernel, using the active page table
 kresult_t map_kernel_page(u64 phys_addr, void *virt_addr, Page_Table_Argumments arg);
 kresult_t unmap_kernel_page(TLBShootdownContext &ctx, void *virt_addr);
+
+Page_Info get_page_mapping(u64 page_table, void *virt_addr);
