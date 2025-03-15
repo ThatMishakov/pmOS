@@ -1,7 +1,10 @@
-#include <types.hh>
+#include <csr.hh>
 #include <kern_logger/kern_logger.hh>
-#include <sched/sched.hh>
 #include <loongarch_asm.hh>
+#include <sched/sched.hh>
+#include <types.hh>
+
+using namespace kernel;
 
 constexpr u32 IOCSR_IPI_SEND = 0x1040;
 
@@ -12,7 +15,7 @@ struct fp_s {
 
 extern "C" CPU_Info *get_cpu_struct()
 {
-    CPU_Info * c;
+    CPU_Info *c;
     asm("move %0, $tp" : "=r"(c));
     return c;
 }
@@ -39,6 +42,31 @@ void print_stack_trace_fp(u64 fp = get_fp())
 
 extern "C" void print_stack_trace() { print_stack_trace_fp(); }
 
+void print_registers(LoongArch64Regs *regs)
+{
+    serial_logger.printf("Registers:\n");
+    if (!regs) {
+        serial_logger.printf("NULL!!!\n");
+    } else {
+        serial_logger.printf("PC: 0x%lx $ra: 0x%lx $tp: 0x%lx $sp: 0x%lx\n", regs->pc, regs->ra,
+                             regs->tp, regs->sp);
+        serial_logger.printf("$a0: 0x%lx $a1: 0x%lx $a2: 0x%lx $a3: 0x%lx\n", regs->a0, regs->a1,
+                             regs->a2, regs->a3);
+        serial_logger.printf("$a4: 0x%lx $a5: 0x%lx $a6: 0x%lx $a7: 0x%lx\n",
+                             regs->a4, regs->a5, regs->a6, regs->a7);
+        serial_logger.printf("$t0: 0x%lx $t1: 0x%lx $t2: 0x%lx $t3: 0x%lx\n",
+                             regs->t0, regs->t1, regs->t2, regs->t3);
+        serial_logger.printf("$t4: 0x%lx $t5: 0x%lx $t6: 0x%lx $t7: 0x%lx\n",
+                             regs->t4, regs->t5, regs->t6, regs->t7);
+        serial_logger.printf("$t8: 0x%lx $r21: 0x%lx $fp: 0x%lx $s0: 0x%lx\n",
+                             regs->t8, regs->r21, regs->fp, regs->s0);
+        serial_logger.printf("$s1: 0x%lx $s2: 0x%lx $s3: 0x%lx $s4: 0x%lx\n",
+                             regs->s1, regs->s2, regs->s3, regs->s4);
+        serial_logger.printf("$s5: 0x%lx $s6: 0x%lx $s7: 0x%lx $s8: 0x%lx\n",
+                             regs->s5, regs->s6, regs->s7, regs->s8);
+    }
+}
+
 void ipi_send(u32 cpu, u32 vector)
 {
     uint32_t value = (cpu << 16) | vector;
@@ -57,11 +85,23 @@ void CPU_Info::ipi_tlb_shootdown()
     ipi_send(cpu_physical_id, 0x00);
 }
 
-extern "C" void handle_interrupt(LoongArch64Regs *regs)
+extern "C" void handle_interrupt(LoongArch64Regs *regs) { panic("Interrupt!\n"); }
+
+void interrupt_disable(u32 interrupt_id) { panic("interrupt_disable: not implemented\n"); }
+
+void printc(int) {}
+
+unsigned exception_code()
 {
-    panic("Interrupt!\n");
+    auto reg = csrrd32<loongarch::csr::ESTAT>();
+    return (reg >> 16) & 0x3f;
 }
 
-void interrupt_disable(u32 interrupt_id) {
-    panic("interrupt_disable: not implemented\n");
+extern "C" void interrupt_early(LoongArch64Regs *regs)
+{
+    assert(regs);
+
+    auto code = exception_code();
+    print_registers(regs);
+    panic("Kernel early exception %i!\n", code);
 }

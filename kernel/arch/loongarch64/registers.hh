@@ -25,7 +25,7 @@ struct LoongArch64Regs {
     u64 t6 = 0;
     u64 t7 = 0;
     u64 t8 = 0;
-    u64 reserved = 0;
+    u64 r21 = 0;
     u64 fp = 0;
     u64 s0 = 0;
     u64 s1 = 0;

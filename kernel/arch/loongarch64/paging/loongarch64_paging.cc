@@ -9,6 +9,7 @@
 #include <memory/temp_mapper.hh>
 #include <pmos/containers/map.hh>
 #include <utils.hh>
+#include <csr.hh>
 
 using namespace kernel;
 
@@ -279,11 +280,19 @@ void LoongArch64_Page_Table::takeout_global_page_tables()
     page_tables.erase(id);
 }
 
+extern "C" void bootstrap_isr();
+void set_early_exceptions()
+{
+    csrwr<loongarch::csr::ECFG>(0);
+    csrwr<loongarch::csr::EENTRY>(bootstrap_isr);
+}
+
 void apply_page_table(ptable_top_ptr_t page_table)
 {
     set_dmws();
     set_pwcs();
     set_page_size();
+    set_early_exceptions();
     set_tlbrentry();
     set_pgdh(page_table);
     flush_tlb();

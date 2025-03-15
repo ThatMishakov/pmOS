@@ -8,6 +8,22 @@ inline auto csrwr(auto value)
     return value;
 }
 
+template<unsigned addr>
+inline u64 csrrd64()
+{
+    u64 result;
+    asm volatile ("csrrd %0, %1" : "=r"(result) : "i"(addr));
+    return result;
+}
+
+template<unsigned addr>
+inline u32 csrrd32()
+{
+    u32 result;
+    asm volatile ("csrrd %0, %1" : "=r"(result) : "i"(addr));
+    return result;
+}
+
 inline void set_pgdl(unsigned long addr)
 {
     csrwr<0x19>(addr);
