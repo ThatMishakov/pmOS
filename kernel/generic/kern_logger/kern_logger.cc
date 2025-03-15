@@ -37,6 +37,8 @@ void printc(int c);
 extern "C" void dbg_uart_putc(int c) { printc(c); }
 
 void t_write_bochs(const char *str, u64 length);
+extern flanterm_context *ft_ctx;
+
 
 namespace kernel::log
 {
@@ -234,11 +236,6 @@ void Buffered_Logger::set_port(ipc::Port *port, uint32_t /* flags */)
 
     log_buffer.clear();
 }
-
-void printc(int c);
-extern "C" void dbg_uart_putc(int c) { printc(c); }
-
-extern flanterm_context *ft_ctx;
 
 void Serial_Logger::log_nolock(const char *c, size_t size)
 {
