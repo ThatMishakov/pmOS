@@ -199,13 +199,13 @@ void init_fb()
         copy_from_phys((u64)framebuffers[0] - hhdm_offset, &fb, sizeof(fb));
 
         size_t fb_size   = fb.pitch * fb.height;
-        size_t fb_offset = size_t(fb_size) & 0xFFF;
+        size_t fb_offset = size_t(fb.address) & 0xFFF;
         fb_size          = (fb_size + fb_offset + 0xFFF) & ~0xFFF;
         fb_virt          = (uint32_t *)vmm::kernel_space_allocator.virtmem_alloc(fb_size / PAGE_SIZE);
         if (!fb_virt)
             return;
 
-        Page_Table_Argumments args = {
+        Page_Table_Arguments args = {
             .readable           = true,
             .writeable          = true,
             .user_access        = false,
@@ -222,6 +222,8 @@ void init_fb()
             vmm::kernel_space_allocator.virtmem_free((void *)fb_virt, fb_size / PAGE_SIZE);
             return;
         }
+
+        fb_virt = (uint32_t *)((char *)fb_virt + fb_offset);
 
         ft_ctx = flanterm_fb_init(
             malloc, [](void *ptr, size_t) { free(ptr); }, fb_virt, fb.width, fb.height,
