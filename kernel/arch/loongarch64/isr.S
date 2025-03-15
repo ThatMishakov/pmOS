@@ -3,73 +3,74 @@
     .type isr, @function
     .globl isr
 isr:
-
-    move $tp, $r21
-
     # Load kernel's tp
-    csrrd $tp, 0x30
+    csrwr $tp, 0x30
 
-    # Save tp (temporary register)
-    st.d $r21, $tp, 16
+    # Save t0 (temporary register)
+    st.d $t0, $tp, 16
 
     # Check nested level (if the interrupt is coming from kernel)
-    ld.d $r21, $tp, 24
-    bne $r21, $zero, nested_interrupt
+    ld.d $t0, $tp, 24
+    bne $t0, $zero, nested_interrupt
 
     # Not nested int
-    addi.d $r21, $r21, 1
-    st.d $r21, $tp, 24
+    addi.d $t0, $t0, 1
+    st.d $t0, $tp, 24
 
     # Load user data stucture
-    ld.d $r21, $tp, 32
+    ld.d $t0, $tp, 32
 
     # Save registers
-    st.d $r1, $r21, 8
-    # st.d $r2, $r21, 16
-    st.d $r3, $r21, 24
-    st.d $r4, $r21, 32
-    st.d $r5, $r21, 40
-    st.d $r6, $r21, 48
-    st.d $r7, $r21, 56
-    st.d $r8, $r21, 64
-    st.d $r9, $r21, 72
-    st.d $r10, $r21, 80
-    st.d $r11, $r21, 88
-    st.d $r12, $r21, 96
-    st.d $r13, $r21, 104
-    st.d $r14, $r21, 112
-    st.d $r15, $r21, 120
-    st.d $r16, $r21, 128
-    st.d $r17, $r21, 136
-    st.d $r18, $r21, 144
-    st.d $r19, $r21, 152
-    st.d $r20, $r21, 160
-    # st.d $r21, $r21, 168
-    st.d $r22, $r21, 176
-    st.d $r23, $r21, 184
-    st.d $r24, $r21, 192
-    st.d $r25, $r21, 200
-    st.d $r26, $r21, 208
-    st.d $r27, $r21, 216
-    st.d $r28, $r21, 224
-    st.d $r29, $r21, 232
-    st.d $r30, $r21, 240
-    st.d $r31, $r21, 248
+    st.d $r1, $t0, 8
+    # st.d $r2, $t0, 16
+    st.d $r3, $t0, 24
+    st.d $r4, $t0, 32
+    st.d $r5, $t0, 40
+    st.d $r6, $t0, 48
+    st.d $r7, $t0, 56
+    st.d $r8, $t0, 64
+    st.d $r9, $t0, 72
+    st.d $r10, $t0, 80
+    st.d $r11, $t0, 88
+    # st.d $r12, $t0, 96
+    st.d $r13, $t0, 104
+    st.d $r14, $t0, 112
+    st.d $r15, $t0, 120
+    st.d $r16, $t0, 128
+    st.d $r17, $t0, 136
+    st.d $r18, $t0, 144
+    st.d $r19, $t0, 152
+    st.d $r20, $t0, 160
+    st.d $r21, $t0, 168
+    st.d $r22, $t0, 176
+    st.d $r23, $t0, 184
+    st.d $r24, $t0, 192
+    st.d $r25, $t0, 200
+    st.d $r26, $t0, 208
+    st.d $r27, $t0, 216
+    st.d $r28, $t0, 224
+    st.d $r29, $t0, 232
+    st.d $r30, $t0, 240
+    st.d $r31, $t0, 248
+
+    # Save t0
+    ld.d $t1, $tp, 16
+    st.d $t1, $t0, 96
 
     # Save tp
-    ld.d $t1, $tp, 16
-    st.d $t1, $r21, 16
+    move $t1, $tp
+    csrwr $tp, 0x30
+    st.d $tp, $t0, 16
+    move $tp, $t1
 
     # Save PC
-    csrrd $t0, 0x06
-    st.d $t0, $r21, 0
+    csrrd $t1, 0x06
+    st.d $t1, $t0, 0
 
     # Switch to kernel stack
     ld.d $sp, $tp, 8
 
-    move $ra, $zero
     move $fp, $zero
-
     move $a0, $zero
 
     bl handle_interrupt
@@ -140,18 +141,18 @@ return_from_kernel:
 
 
 nested_interrupt:
-    addi.d $r21, $r21, 1
-    st.d $r21, $tp, 24
+    addi.d $t0, $t0, 1
+    st.d $t0, $tp, 24
 
     # Align stack as needed
-    andi $r21, $sp, 0xf
-    bne $r21, $zero, 1f
+    andi $t0, $sp, 0xf
+    bne $t0, $zero, 1f
 
     # Stack aligned
     addi.d $sp, $sp, -256
 
-    addi.d $r21, $sp, 256
-    st.d $r21, $sp, 24
+    addi.d $t0, $sp, 256
+    st.d $t0, $sp, 24
 
     b 2f
 1:
@@ -162,9 +163,13 @@ nested_interrupt:
     st.d $r21, $sp, 24
 2:
 
+    # Save t0
+    ld.d $t0, $tp, 16
+    st.d $t0, $sp, 96
+
     # Save registers
     st.d $r1, $sp, 8
-    st.d $r2, $sp, 16
+    # st.d $r2, $sp, 16
     # st.d $r3, $sp, 24
     st.d $r4, $sp, 32
     st.d $r5, $sp, 40
@@ -174,7 +179,7 @@ nested_interrupt:
     st.d $r9, $sp, 72
     st.d $r10, $sp, 80
     st.d $r11, $sp, 88
-    st.d $r12, $sp, 96
+    # st.d $r12, $sp, 96
     st.d $r13, $sp, 104
     st.d $r14, $sp, 112
     st.d $r15, $sp, 120
@@ -195,6 +200,13 @@ nested_interrupt:
     st.d $r30, $sp, 240
     st.d $r31, $sp, 248
 
+    # $tp...
+    move $t0, $tp
+    csrwr $tp, 0x30
+    st.d $tp, $sp, 24
+    move $tp, $t0
+
+
     # Save PC
     csrrd $t0, 0x06
     st.d $t0, $sp, 0
@@ -202,7 +214,6 @@ nested_interrupt:
     move $s0, $sp
     move $a0, $sp
 
-    move $ra, $zero
     move $fp, $zero
 
     bl handle_interrupt
