@@ -26,7 +26,7 @@ set(SYSROOT "${ABSPATH}/../sysroot")
 include(arch/arch.cmake)
 LOAD_PLATFORM(${TARGET_ARCH})
 
-set(CMAKE_C_FLAGS "${PLATFORM_C_FLAGS} -static -ffreestanding -fstack-protector-all -flto -O3 -Wall -Wextra -g -fno-omit-frame-pointer -fasynchronous-unwind-tables  -fexceptions --sysroot=${SYSROOT}")
+set(CMAKE_C_FLAGS "${PLATFORM_C_FLAGS} -static -ffreestanding -fstack-protector-all -flto -Og -Wall -Wextra -g -fno-omit-frame-pointer -fasynchronous-unwind-tables  -fexceptions --sysroot=${SYSROOT}")
 set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} ${PLATFORM_CXX_FLAGS} -fno-exceptions -fno-rtti")
 set(CMAKE_ASM_FLAGS "${CMAKE_C_FLAGS} ${PLATFORM_ASM_FLAGS}")
 add_compile_options("-fcheck-new")

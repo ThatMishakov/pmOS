@@ -203,7 +203,7 @@ nested_interrupt:
     # $tp...
     move $t0, $tp
     csrwr $tp, 0x30
-    st.d $tp, $sp, 24
+    st.d $tp, $sp, 16
     move $tp, $t0
 
 
@@ -216,7 +216,7 @@ nested_interrupt:
 
     move $fp, $zero
 
-    bl handle_interrupt
+    bl kernel_interrupt
 
     # Restore everything
     ld.d $t0, $s0, 0
@@ -372,7 +372,7 @@ b_misaligned:
 
     move $a0, $sp
 
-    bl interrupt_early
+    bl kernel_interrupt
 
     ld.d $t0, $sp, 0
     csrwr $t0, 0x06

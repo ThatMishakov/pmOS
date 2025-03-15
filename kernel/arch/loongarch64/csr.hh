@@ -13,4 +13,6 @@ constexpr unsigned EENTRY = 0x0C;
 constexpr unsigned PGDL = 0x19;
 constexpr unsigned PGDH = 0x1A;
 
+constexpr unsigned SAVE0 = 0x30;
+
 }; // namespace kernel::loongarch::csr

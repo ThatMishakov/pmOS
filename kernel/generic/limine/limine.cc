@@ -1109,11 +1109,13 @@ void limine_main()
     init_dtb();
 
     // Init idle task page table
-    #ifndef __loongarch64
+    #ifndef __loongarch__
     idle_page_table = Arch_Page_Table::capture_initial(kernel_ptable_top);
     #else
     idle_page_table = Arch_Page_Table::create_empty();
     #endif
+    if (!idle_page_table)
+        panic("Could not create idle page table");
 
     init_scheduling(bsp_cpu_id);
 

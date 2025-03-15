@@ -14,13 +14,6 @@ struct fp_s {
     u64 ra;
 };
 
-extern "C" CPU_Info *get_cpu_struct()
-{
-    CPU_Info *c;
-    asm("move %0, $tp" : "=r"(c));
-    return c;
-}
-
 u64 get_fp()
 {
     u64 fp;
@@ -33,7 +26,7 @@ void print_stack_trace_fp(u64 fp = get_fp())
     fp_s *current = (fp_s *)((char *)fp - 16);
     serial_logger.printf("Stack trace:\n");
     for (int i = 0; i < 20; i++) {
-        serial_logger.printf("  0x%x fp 0x%x\n", current->ra, current->fp);
+        serial_logger.printf("  0x%lx fp 0x%lx\n", current->ra, current->fp);
         if (current->fp == 0 or ((i64)current->fp > 0)) {
             break;
         }
@@ -94,7 +87,7 @@ unsigned exception_code()
     return (reg >> 16) & 0x3f;
 }
 
-extern "C" void interrupt_early(LoongArch64Regs *regs)
+extern "C" void kernel_interrupt(LoongArch64Regs *regs)
 {
     assert(regs);
 
@@ -127,13 +120,15 @@ extern "C" void interrupt_early(LoongArch64Regs *regs)
         return;
     } while (0);
 
+    u64 virt_addr = csrrd64<loongarch::csr::BADV>();
+    serial_logger.printf("BADV: 0x%lx\n", virt_addr);
 
     print_registers(regs);
-    panic("Kernel early exception %i!\n", code);
+    print_stack_trace_fp(regs->fp);
+    panic("Kernel interrupt %i!\n", code);
 }
 
-extern "C" void handle_interrupt(LoongArch64Regs *regs) {
-    print_registers(regs);
+extern "C" void handle_interrupt() {
     panic("Interrupts not implemented!\n");
 }
 

@@ -152,6 +152,7 @@ kresult_t init_idle(CPU_Info *cpu_str)
     if (!i) [[unlikely]]
         return -ENOMEM;
 
+    assert(idle_page_table);
     auto result = i->atomic_register_page_table(idle_page_table);
     if (result != 0) [[unlikely]]
         return result;
@@ -282,6 +283,8 @@ kresult_t TaskDescriptor::create_new_page_table()
 
 kresult_t TaskDescriptor::register_page_table(klib::shared_ptr<Arch_Page_Table> table)
 {
+    assert(table);
+
     if (status != TaskStatus::TASK_UNINIT)
         return -EEXIST;
 

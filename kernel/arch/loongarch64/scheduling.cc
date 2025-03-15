@@ -1,4 +1,10 @@
 #include <sched/sched.hh>
+#include <csr.hh>
+#include <loongarch_asm.hh>
+#include <processes/tasks.hh>
+#include <kern_logger/kern_logger.hh>
+
+using namespace kernel;
 
 extern "C" void isr();
 
@@ -9,15 +15,21 @@ void set_cpu_struct(CPU_Info *i)
     cpu_struct = i;
 }
 
+extern "C" CPU_Info *get_cpu_struct()
+{
+    return cpu_struct;
+}
+
 void set_save0(CPU_Info *i)
 {
-    asm volatile("csrwr %0, 0x30" :: "r"(i) : "memory");
+
+    csrwr<loongarch::csr::SAVE0>(i);
 }
 
 void program_interrupts()
 {
-    asm volatile("csrwr %0, 0x4" :: "r"(0xfff) : "memory");
-    asm volatile("csrwr %0, 0xC" :: "r"(isr) : "memory");
+    csrwr<loongarch::csr::ECFG>(0xfff);
+    csrwr<loongarch::csr::EENTRY>(isr);
 }
 
 void init_scheduling(u64 cpu_id)
@@ -39,8 +51,19 @@ void init_scheduling(u64 cpu_id)
     if (!cpus.push_back(i))
         panic("Could not add CPU_Info struct to cpus vector\n");
 
+    auto idle = init_idle(i);
+    if (idle != 0)
+        panic("Failed to initialize idle task: %i\n", idle);
+    
+    i->current_task = i->idle_task;
+    i->idle_task->page_table->apply_cpu(i);
+
     //initialize_timer();
 
     // TODO: FP state
     // TODO: Interrupts
+
+    serial_logger.printf("Scheduling initialized\n");
 }
+
+void halt() { asm volatile("idle 0"); }

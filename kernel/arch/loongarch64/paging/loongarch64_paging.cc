@@ -217,9 +217,11 @@ klib::shared_ptr<LoongArch64_Page_Table> LoongArch64_Page_Table::create_empty(in
 {
     klib::shared_ptr<LoongArch64_Page_Table> new_table =
         klib::unique_ptr<LoongArch64_Page_Table>(new LoongArch64_Page_Table(flags));
+    if (!new_table)
+        return nullptr;
 
     auto n = pmm::get_memory_for_kernel(1);
-    if (pmm::alloc_failure(new_table->page_directory))
+    if (pmm::alloc_failure(n))
         return nullptr;
 
     new_table->page_directory = n;
