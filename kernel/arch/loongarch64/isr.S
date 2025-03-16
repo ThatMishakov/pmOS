@@ -218,6 +218,12 @@ nested_interrupt:
 
     bl kernel_interrupt
 
+
+    ld.d $t0, $tp, 24
+    addi.d $t0, $t0, -1
+    st.d $t0, $tp, 24
+
+
     # Restore everything
     ld.d $t0, $s0, 0
     csrwr $t0, 0x06

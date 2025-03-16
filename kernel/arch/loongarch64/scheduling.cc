@@ -33,6 +33,8 @@ void program_interrupts()
     csrwr<loongarch::csr::EENTRY>(isr);
 }
 
+void detect_supported_extensions();
+
 void init_scheduling(u64 cpu_id)
 {
     CPU_Info *i         = new CPU_Info();
@@ -62,6 +64,7 @@ void init_scheduling(u64 cpu_id)
     //initialize_timer();
 
     // TODO: FP state
+    detect_supported_extensions();
     // TODO: Interrupts
 
     serial_logger.printf("Scheduling initialized\n");

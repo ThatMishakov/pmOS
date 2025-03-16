@@ -142,6 +142,10 @@ constexpr unsigned EXCEPTION_ALE = 0x09;
 constexpr unsigned EXCEPTION_BCE = 0x0a;
 constexpr unsigned EXCEPTION_SYS = 0x0b;
 
+constexpr unsigned EXCEPTION_FPE  = 0x0f;
+constexpr unsigned EXCEPTION_SXD  = 0x10;
+constexpr unsigned EXCEPTION_ASXD = 0x11;
+
 void page_fault(u32 error)
 {
     u64 badv        = csrrd64<loongarch::csr::BADV>();
@@ -204,8 +208,11 @@ void page_fault(u32 error)
 
 extern "C" void syscall_handler();
 
+kresult_t handle_fp_disabled_exception(unsigned code);
+
 extern "C" void handle_interrupt()
 {
+    assert(get_cpu_struct()->nested_level == 1);
     u32 estat = csrrd32<loongarch::csr::ESTAT>();
     auto code = exception_code(estat);
     auto c    = get_cpu_struct();
@@ -230,6 +237,21 @@ extern "C" void handle_interrupt()
         c->current_task->regs.program_counter() += 4;
         syscall_handler();
         break;
+
+    case EXCEPTION_FPE:
+    case EXCEPTION_SXD:
+    case EXCEPTION_ASXD: {
+        auto result = handle_fp_disabled_exception(code);
+        if (result) {
+            auto task = get_current_task();
+            serial_logger.printf("Task %li (%s) is using unsupported FP/vector instructions (code "
+                                 "%i). Killing it...\n",
+                                 task->task_id, task->name.c_str(), code);
+            print_registers(&task->regs, serial_logger);
+            task->atomic_kill();
+        }
+
+    } break;
 
     default: {
         auto task = get_current_task();

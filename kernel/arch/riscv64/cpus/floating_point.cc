@@ -115,3 +115,15 @@ void save_fp_registers(u64 *fp_regs)
         assert(false);
     }
 }
+
+kresult_t TaskDescriptor::init_fp_state()
+{
+    if (!is_system) {
+        fp_registers =
+            klib::unique_ptr<u64[]>(new u64[fp_register_size(max_supported_fp_level) * 2]);
+        if (!fp_registers)
+            return -ENOMEM;
+    }
+
+    return 0;
+}

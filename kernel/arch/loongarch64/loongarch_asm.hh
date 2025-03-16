@@ -24,6 +24,13 @@ inline u32 csrrd32()
     return result;
 }
 
+template<unsigned addr>
+inline u32 csrxchg32(u32 value, u32 mask)
+{
+    asm volatile ("csrxchg %0, %1, %2" : "+r"(value) : "r"(mask), "i"(addr));
+    return value;
+}
+
 inline void set_pgdl(unsigned long addr)
 {
     csrwr<0x19>(addr);

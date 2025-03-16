@@ -82,16 +82,11 @@ TaskDescriptor *TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel le
     if (result != 0)
         return nullptr;
 
-#elif defined(__riscv)
+#elif defined(__riscv) || defined(__loongarch__)
     n->is_system = level == PrivilegeLevel::Kernel;
-
-    // Allocate FPU state
-    if (level == PrivilegeLevel::User) {
-        n->fp_registers =
-            klib::unique_ptr<u64[]>(new u64[fp_register_size(max_supported_fp_level) * 2]);
-        if (!n->fp_registers)
-            return nullptr;
-    }
+    auto result = n->init_fp_state();
+    if (result)
+        return nullptr;
 #endif
 
     // Assign a pid

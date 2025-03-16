@@ -3,6 +3,10 @@
 namespace kernel::loongarch::csr
 {
 
+constexpr unsigned CRMD   = 0x00;
+constexpr unsigned PRMD   = 0x01;
+constexpr unsigned EUEN   = 0x02;
+constexpr unsigned MISC   = 0x03;
 constexpr unsigned ECFG   = 0x04;
 constexpr unsigned ESTAT  = 0x05;
 constexpr unsigned ERA    = 0x06;

@@ -2,7 +2,7 @@
     .globl __pthread_entry_point
 __pthread_entry_point:
     move $ra, $zero
-    move $sp, $zero
+    move $fp, $zero
 
     addi.d $sp, $sp, -16
     st.d $fp, $sp, 0

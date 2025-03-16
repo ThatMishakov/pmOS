@@ -210,6 +210,9 @@ public:
 
     /// Last hart id that used the floating point unit
     u64 last_fp_hart_id = 0;
+#elif defined(__loongarch__)
+    klib::unique_ptr<u64[]> fp_registers = nullptr;
+    bool using_fp = false;
 #endif
     u64 syscall_num = 0;
 
@@ -286,6 +289,10 @@ public:
     void atomic_try_unblock();
 
     bool is_32bit() const;
+
+    #if defined(__riscv) || defined(__loongarch__)
+    kresult_t init_fp_state();
+    #endif
     
 protected:
     TaskDescriptor() = default;
