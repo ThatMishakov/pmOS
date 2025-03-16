@@ -156,6 +156,7 @@ struct CPU_Info {
 #ifdef __loongarch__
     u32 cpu_physical_id = 0; // 8 bit in reality...
     u64 timer_val = 0;
+    u64 timer_total = 0;
 #endif
 
     // ISRs in userspace

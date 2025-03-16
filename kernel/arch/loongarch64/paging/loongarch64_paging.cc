@@ -10,6 +10,7 @@
 #include <pmos/containers/map.hh>
 #include <utils.hh>
 #include <csr.hh>
+#include <pmos/utility/scope_guard.hh>
 
 using namespace kernel;
 
@@ -280,6 +281,12 @@ void LoongArch64_Page_Table::takeout_global_page_tables()
 {
     Auto_Lock_Scope l(page_tables_lock);
     page_tables.erase(id);
+}
+
+klib::shared_ptr<LoongArch64_Page_Table> LoongArch64_Page_Table::get_page_table(u64 id) noexcept
+{
+    auto it = page_tables.find(id);
+    return it == page_tables.end() ? nullptr : it->second; 
 }
 
 extern "C" void bootstrap_isr();
@@ -615,4 +622,74 @@ kresult_t LoongArch64_Page_Table::copy_anonymous_pages(const klib::shared_ptr<Pa
     }
 
     return result;
+}
+
+klib::shared_ptr<LoongArch64_Page_Table> LoongArch64_Page_Table::create_clone()
+{
+    klib::shared_ptr<LoongArch64_Page_Table> new_table = create_empty();
+    if (!new_table)
+        return nullptr;
+
+    Auto_Lock_Scope_Double scope_guard(this->lock, new_table->lock);
+
+    if (!new_table->mem_objects.empty() || !new_table->object_regions.empty() ||
+        !new_table->paging_regions.empty())
+        // Somebody has messed with the page table while it was being created
+        // I don't know if it's the best solution to not block the tables
+        // immediately but I believe it's better to block them for shorter time
+        // and abort the operation when someone tries to mess with the paging,
+        // which would either be very poor coding or a bug anyways
+        return nullptr; // "page table is already cloned"
+
+    // This gets called on error
+    auto guard = pmos::utility::make_scope_guard([&]() {
+        // Remove all the regions and objects. It might not be necessary, since
+        // it should be handled by the destructor but in case somebody from
+        // userspace specultively does weird stuff with the
+        // not-yet-fully-constructed page table, it's better to give them an
+        // empty table
+
+        for (const auto &reg: new_table->mem_objects)
+            reg.first->atomic_unregister_pined(new_table->weak_from_this());
+
+        auto tlb_ctx = TLBShootdownContext::create_userspace(*new_table);
+
+        auto it = new_table->paging_regions.begin();
+        while (it != new_table->paging_regions.end()) {
+            auto region_start = it->start_addr;
+            auto region_size  = it->size;
+
+            it->prepare_deletion();
+            new_table->paging_regions.erase(it);
+
+            new_table->invalidate_range(tlb_ctx, region_start, region_size, true);
+
+            it = new_table->paging_regions.begin();
+        }
+    });
+
+    for (auto &reg: this->mem_objects) {
+        auto res =
+            new_table->mem_objects.insert({reg.first,
+                                           {
+                                               .max_privilege_mask = reg.second.max_privilege_mask,
+                                           }});
+        if (res.first == new_table->mem_objects.end())
+            return nullptr;
+
+        Auto_Lock_Scope reg_lock(reg.first->pinned_lock);
+        auto result = reg.first->register_pined(new_table->weak_from_this());
+        if (result)
+            return nullptr;
+    }
+
+    for (auto &reg: this->paging_regions) {
+        auto result = reg.clone_to(new_table, reg.start_addr, reg.access_type);
+        if (result)
+            return nullptr;
+    }
+
+    guard.dismiss();
+
+    return new_table;
 }

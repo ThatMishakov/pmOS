@@ -56,6 +56,20 @@ struct LoongArch64Regs {
     inline unsigned long &arg1() { return a0; }
     inline unsigned long &arg2() { return a1; }
     inline unsigned long &arg3() { return a2; }
+
+    inline u64 syscall_number() const { return a0 & 0xff; }
+
+    // Get syscall arguments, starting from 1
+    inline u64 &syscall_arg1() { return a1; }
+    inline u64 &syscall_arg2() { return a2; }
+    inline u64 &syscall_arg3() { return a3; }
+    inline u64 &syscall_arg4() { return a4; }
+    inline u64 &syscall_arg5() { return a5; }
+    inline u64 &syscall_arg6() { return a6; }
+
+    // Get syscall return value registers
+    inline u64 &syscall_retval_low() { return a0; }
+    inline u64 &syscall_retval_high() { return a1; }
 };
 
 // Generic Task registers, for all architectures

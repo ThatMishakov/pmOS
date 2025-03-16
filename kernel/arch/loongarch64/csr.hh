@@ -15,4 +15,6 @@ constexpr unsigned PGDH = 0x1A;
 
 constexpr unsigned SAVE0 = 0x30;
 
+constexpr unsigned TICLR = 0x44;
+
 }; // namespace kernel::loongarch::csr

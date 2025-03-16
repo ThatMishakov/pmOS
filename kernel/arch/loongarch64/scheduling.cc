@@ -3,6 +3,7 @@
 #include <loongarch_asm.hh>
 #include <processes/tasks.hh>
 #include <kern_logger/kern_logger.hh>
+#include <interrupts.hh>
 
 using namespace kernel;
 
@@ -28,7 +29,7 @@ void set_save0(CPU_Info *i)
 
 void program_interrupts()
 {
-    csrwr<loongarch::csr::ECFG>(0xfff);
+    csrwr<loongarch::csr::ECFG>(TIMER_INT_MASK);
     csrwr<loongarch::csr::EENTRY>(isr);
 }
 

@@ -1,9 +1,11 @@
 #include <csr.hh>
+#include <interrupts.hh>
 #include <kern_logger/kern_logger.hh>
 #include <loongarch_asm.hh>
+#include <paging/loongarch64_paging.hh>
+#include <processes/tasks.hh>
 #include <sched/sched.hh>
 #include <types.hh>
-#include <paging/loongarch64_paging.hh>
 
 using namespace kernel;
 
@@ -36,28 +38,28 @@ void print_stack_trace_fp(u64 fp = get_fp())
 
 extern "C" void print_stack_trace() { print_stack_trace_fp(); }
 
-void print_registers(LoongArch64Regs *regs)
+void print_registers(LoongArch64Regs *regs, Logger &logger = serial_logger)
 {
-    serial_logger.printf("Registers:\n");
+    logger.printf("Registers:\n");
     if (!regs) {
-        serial_logger.printf("NULL!!!\n");
+        logger.printf("NULL!!!\n");
     } else {
-        serial_logger.printf("PC: 0x%lx $ra: 0x%lx $tp: 0x%lx $sp: 0x%lx\n", regs->pc, regs->ra,
-                             regs->tp, regs->sp);
-        serial_logger.printf("$a0: 0x%lx $a1: 0x%lx $a2: 0x%lx $a3: 0x%lx\n", regs->a0, regs->a1,
-                             regs->a2, regs->a3);
-        serial_logger.printf("$a4: 0x%lx $a5: 0x%lx $a6: 0x%lx $a7: 0x%lx\n",
-                             regs->a4, regs->a5, regs->a6, regs->a7);
-        serial_logger.printf("$t0: 0x%lx $t1: 0x%lx $t2: 0x%lx $t3: 0x%lx\n",
-                             regs->t0, regs->t1, regs->t2, regs->t3);
-        serial_logger.printf("$t4: 0x%lx $t5: 0x%lx $t6: 0x%lx $t7: 0x%lx\n",
-                             regs->t4, regs->t5, regs->t6, regs->t7);
-        serial_logger.printf("$t8: 0x%lx $r21: 0x%lx $fp: 0x%lx $s0: 0x%lx\n",
-                             regs->t8, regs->r21, regs->fp, regs->s0);
-        serial_logger.printf("$s1: 0x%lx $s2: 0x%lx $s3: 0x%lx $s4: 0x%lx\n",
-                             regs->s1, regs->s2, regs->s3, regs->s4);
-        serial_logger.printf("$s5: 0x%lx $s6: 0x%lx $s7: 0x%lx $s8: 0x%lx\n",
-                             regs->s5, regs->s6, regs->s7, regs->s8);
+        logger.printf("PC: 0x%lx $ra: 0x%lx $tp: 0x%lx $sp: 0x%lx\n", regs->pc, regs->ra, regs->tp,
+                      regs->sp);
+        logger.printf("$a0: 0x%lx $a1: 0x%lx $a2: 0x%lx $a3: 0x%lx\n", regs->a0, regs->a1, regs->a2,
+                      regs->a3);
+        logger.printf("$a4: 0x%lx $a5: 0x%lx $a6: 0x%lx $a7: 0x%lx\n", regs->a4, regs->a5, regs->a6,
+                      regs->a7);
+        logger.printf("$t0: 0x%lx $t1: 0x%lx $t2: 0x%lx $t3: 0x%lx\n", regs->t0, regs->t1, regs->t2,
+                      regs->t3);
+        logger.printf("$t4: 0x%lx $t5: 0x%lx $t6: 0x%lx $t7: 0x%lx\n", regs->t4, regs->t5, regs->t6,
+                      regs->t7);
+        logger.printf("$t8: 0x%lx $r21: 0x%lx $fp: 0x%lx $s0: 0x%lx\n", regs->t8, regs->r21,
+                      regs->fp, regs->s0);
+        logger.printf("$s1: 0x%lx $s2: 0x%lx $s3: 0x%lx $s4: 0x%lx\n", regs->s1, regs->s2, regs->s3,
+                      regs->s4);
+        logger.printf("$s5: 0x%lx $s6: 0x%lx $s7: 0x%lx $s8: 0x%lx\n", regs->s5, regs->s6, regs->s7,
+                      regs->s8);
     }
 }
 
@@ -81,10 +83,9 @@ void CPU_Info::ipi_tlb_shootdown()
 
 void interrupt_disable(u32 interrupt_id) { panic("interrupt_disable: not implemented\n"); }
 
-unsigned exception_code()
+unsigned exception_code(u32 estat = csrrd32<loongarch::csr::ESTAT>())
 {
-    auto reg = csrrd32<loongarch::csr::ESTAT>();
-    return (reg >> 16) & 0x3f;
+    return (estat >> 16) & 0x3f;
 }
 
 extern "C" void kernel_interrupt(LoongArch64Regs *regs)
@@ -128,11 +129,132 @@ extern "C" void kernel_interrupt(LoongArch64Regs *regs)
     panic("Kernel interrupt %i!\n", code);
 }
 
-extern "C" void handle_interrupt() {
-    panic("Interrupts not implemented!\n");
+constexpr unsigned EXCEPTION_INT = 0x0;
+constexpr unsigned EXCEPTION_PIL = 0x01;
+constexpr unsigned EXCEPTION_PIS = 0x02;
+constexpr unsigned EXCEPTION_PIF = 0x03;
+constexpr unsigned EXCEPTION_PME = 0x04;
+constexpr unsigned EXCEPTION_PNR = 0x05;
+constexpr unsigned EXCEPTION_PNX = 0x06;
+constexpr unsigned EXCEPTION_PPI = 0x07;
+constexpr unsigned EXCEPTION_ADE = 0x08;
+constexpr unsigned EXCEPTION_ALE = 0x09;
+constexpr unsigned EXCEPTION_BCE = 0x0a;
+constexpr unsigned EXCEPTION_SYS = 0x0b;
+
+void page_fault(u32 error)
+{
+    u64 badv        = csrrd64<loongarch::csr::BADV>();
+    void *virt_addr = (void *)(badv & ~0xfffUL);
+
+    unsigned access_type = 0;
+    switch (error) {
+    case EXCEPTION_PIF:
+    case EXCEPTION_PNX:
+        access_type = Generic_Mem_Region::Executable;
+        break;
+    case EXCEPTION_PIS:
+    case EXCEPTION_PME:
+        access_type = access_type = Generic_Mem_Region::Writeable;
+        break;
+    case EXCEPTION_PIL:
+    case EXCEPTION_PNR:
+        access_type = Generic_Mem_Region::Readable;
+        break;
+    }
+
+    auto task       = get_cpu_struct()->current_task;
+    auto page_table = task->page_table;
+
+    auto result = [&]() -> kresult_t {
+        Auto_Lock_Scope lock(page_table->lock);
+
+        auto &regions = page_table->paging_regions;
+        auto it       = regions.get_smaller_or_equal(virt_addr);
+        if (it != regions.end() and it->is_in_range(virt_addr)) {
+            auto r = it->on_page_fault(access_type, virt_addr);
+            if (!r.success())
+                return r.result;
+
+            if (not r.val) {
+                task->atomic_block_by_page(virt_addr, &task->page_table->blocked_tasks);
+            }
+
+            return 0;
+        } else
+            return -EFAULT;
+    }();
+
+    if (result) {
+        static Spinlock print_lock;
+        Auto_Lock_Scope lock(print_lock);
+
+        serial_logger.printf("Warning: Pagefault %h pid %i (%s) rip %h error "
+                             "%h -> %i killing process...\n",
+                             virt_addr, task->task_id, task->name.c_str(), task->regs.pc, badv,
+                             result);
+        global_logger.printf("Warning: Pagefault %h pid %i (%s) pc %h error %h "
+                             "-> %i killing process...\n",
+                             virt_addr, task->task_id, task->name.c_str(), task->regs.pc, badv,
+                             result);
+        print_registers(&task->regs, serial_logger);
+        task->atomic_kill();
+    }
 }
 
-void printc(int)
+extern "C" void syscall_handler();
+
+extern "C" void handle_interrupt()
 {
-    
+    u32 estat = csrrd32<loongarch::csr::ESTAT>();
+    auto code = exception_code(estat);
+    auto c    = get_cpu_struct();
+
+    switch (code) {
+    case EXCEPTION_INT: {
+        if (estat & TIMER_INT_MASK) {
+            csrwr<loongarch::csr::TICLR>(0x01);
+            sched_periodic();
+        }
+    } break;
+    case EXCEPTION_PIL:
+    case EXCEPTION_PIS:
+    case EXCEPTION_PIF:
+    case EXCEPTION_PME:
+    case EXCEPTION_PNR:
+    case EXCEPTION_PNX:
+        page_fault(code);
+        break;
+
+    case EXCEPTION_SYS:
+        c->current_task->regs.program_counter() += 4;
+        syscall_handler();
+        break;
+
+    default: {
+        auto task = get_current_task();
+        serial_logger.printf("Userspace (or idle) interrupt\n");
+        serial_logger.printf("Exception %i\n", code);
+        print_registers(&task->regs);
+        panic("Unimplemented exception!\n");
+    }
+    }
+
+    while (c->current_task->regs.syscall_restart != 0) {
+        syscall_handler();
+    }
+    assert(c->nested_level == 1);
 }
+
+void printc(int) {}
+
+// TODO
+u32 interrupt_min() { return 0; }
+u32 interrupt_max() { return 0; }
+
+void interrupt_enable(u32) { panic("interrupt enable not implemented"); }
+
+void interrupt_complete(u32) { panic("interrupt complete not implemented"); }
+
+extern "C" void allow_access_user() {}
+extern "C" void disallow_access_user() {}
