@@ -117,6 +117,35 @@ typedef struct MADT_LAPIC_NMI_entry {
     uint8_t LINT_ID;
 } __attribute__((packed)) MADT_LAPIC_NMI_entry;
 
+#define MADT_LIOPIC_ENTRY_TYPE 0x12
+typedef struct MADT_LIOPIC_entry {
+    MADT_entry header;
+    uint8_t version;
+    uint64_t base_address;
+    uint16_t size;
+    uint16_t cascade_vector;
+    uint64_t cascade_vector_mapping;
+} __attribute__((packed)) MADT_LIOPIC_entry;
+
+#define MADT_EIOPIC_ENTRY_TYPE 0x14
+typedef struct MADT_EIOPIC_entry {
+    MADT_entry header;
+    uint8_t version;
+    uint8_t cascade_vector;
+    uint8_t node;
+    uint64_t node_map;
+} __attribute__((packed)) MADT_EIOPIC_entry;
+
+#define MADT_BIOPIC_ENTRY_TYPE 0x16
+typedef struct MADT_BIOPIC_entry {
+    MADT_entry header;
+    uint8_t version;
+    uint64_t base_address;
+    uint16_t size;
+    uint16_t hardware_id;
+    uint16_t gsi_base;
+} __attribute__((packed)) MADT_BIOPIC_entry;
+
 #define MADT_RINTC_ENTRY_TYPE 0x18
 typedef struct MADT_RINTC_entry {
     MADT_entry header;

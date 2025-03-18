@@ -68,6 +68,11 @@ inline void invalidate_user_page(void *addr, unsigned asid)
     asm volatile ("invtlb 0x5, %0, %1" :: "r"(asid), "r"(addr) : "memory");
 }
 
+inline void iocsr_write8(u8 value, u32 address)
+{
+    asm volatile ("iocsrwr.b %0, %1" :: "r"(value), "r"(address) : "memory");
+}
+
 inline void iocsr_write32(u32 value, u32 address)
 {
     asm volatile ("iocsrwr.w %0, %1" :: "r"(value), "r"(address) : "memory");
@@ -76,6 +81,20 @@ inline void iocsr_write32(u32 value, u32 address)
 inline void iocsr_write64(u64 value, u32 address)
 {
     asm volatile ("iocsrwr.d %0, %1" :: "r"(value), "r"(address) : "memory");
+}
+
+inline u32 iocsr_read32(u32 address)
+{
+    u32 value;
+    asm volatile ("iocsrrd.w %0, %1" : "=r"(value) : "r"(address));
+    return value;
+}
+
+inline u64 iocsr_read64(u32 address)
+{
+    u64 value;
+    asm volatile ("iocsrrd.d %0, %1" : "=r"(value) : "r"(address));
+    return value;
 }
 
 inline u32 cpucfg(u32 word)

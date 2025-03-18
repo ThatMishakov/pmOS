@@ -18,7 +18,7 @@ kresult_t Interrupt_Handler_Table::add_handler(u64 interrupt_number, Port *port)
     if (get_handler(interrupt_number))
         return -EEXIST;
 
-    if (interrupt_number > interrupt_max() || interrupt_number < interrupt_min()) {
+    if (interrupt_number >= interrupt_limint() || interrupt_number < interrupt_min()) {
         serial_logger.printf("Interrupt number %d invalid\n", interrupt_number);
         return -EINVAL;
     }
@@ -56,6 +56,13 @@ kresult_t Interrupt_Handler_Table::add_handler(u64 interrupt_number, Port *port)
     if (!handlers.push_back(nullptr))
         return -ENOMEM;
 
+    // Enable the interrupt
+    auto result = interrupt_enable(interrupt_number);
+    if (result) {
+        handlers.pop_back();
+        return result;
+    }
+
     size_t i = handlers.size() - 1;
     for (; i > 0; i--) {
         if (handlers[i - 1]->interrupt_number < interrupt_number) {
@@ -68,9 +75,6 @@ kresult_t Interrupt_Handler_Table::add_handler(u64 interrupt_number, Port *port)
     handlers[i] = klib::move(handler);
 
     on_error.dismiss();
-
-    // Enable the interrupt
-    interrupt_enable(interrupt_number);
 
     return 0;
 }

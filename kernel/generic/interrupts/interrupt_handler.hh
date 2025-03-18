@@ -28,9 +28,9 @@ struct Interrupt_Handler_Table {
 };
 
 // Arch-specific functions
-void interrupt_enable(u32 interrupt_id);
+kresult_t interrupt_enable(u32 interrupt_id);
 void interrupt_disable(u32 interrupt_id);
 void interrupt_complete(u32 interrupt_id);
 
 u32 interrupt_min();
-u32 interrupt_max();
+u32 interrupt_limint();

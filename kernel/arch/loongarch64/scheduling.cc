@@ -29,11 +29,12 @@ void set_save0(CPU_Info *i)
 
 void program_interrupts()
 {
-    csrwr<loongarch::csr::ECFG>(TIMER_INT_MASK);
+    csrwr<loongarch::csr::ECFG>(0x1fff);
     csrwr<loongarch::csr::EENTRY>(isr);
 }
 
 void detect_supported_extensions();
+void init_interrupts();
 
 void init_scheduling(u64 cpu_id)
 {
@@ -65,7 +66,7 @@ void init_scheduling(u64 cpu_id)
 
     // TODO: FP state
     detect_supported_extensions();
-    // TODO: Interrupts
+    init_interrupts();
 
     serial_logger.printf("Scheduling initialized\n");
 }

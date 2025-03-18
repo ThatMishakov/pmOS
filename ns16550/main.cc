@@ -60,12 +60,15 @@ class MMIO final: public IORW
 public:
     MMIO(uint64_t base)
     {
+        auto offset = base & (PAGE_SIZE - 1);
+        auto base_aligned = base & ~(uint64_t)(PAGE_SIZE - 1);
+
         auto result =
-            create_phys_map_region(TASK_ID_SELF, nullptr, 0x1000, PROT_READ | PROT_WRITE, base);
+            create_phys_map_region(TASK_ID_SELF, nullptr, 0x1000, PROT_READ | PROT_WRITE, base_aligned);
         if (result.result != SUCCESS)
             throw std::runtime_error("Failed to map serial port");
 
-        serial_mapped = reinterpret_cast<volatile uint8_t *>(result.virt_addr);
+        serial_mapped = reinterpret_cast<volatile uint8_t *>(result.virt_addr) + offset;
     }
 
     void write_register(int index, uint8_t value) override

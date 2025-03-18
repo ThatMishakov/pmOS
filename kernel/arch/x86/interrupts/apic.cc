@@ -139,20 +139,21 @@ void discover_apic_freq()
     // frequency is in nHz
     apic_freq          = computeFreqFraction(ticks, divisor);
     apic_inverted_freq = computeFreqFraction(divisor, ticks);
-    auto l = apic_freq*1'000'000'000;
+    auto l             = apic_freq * 1'000'000'000;
     global_logger.printf("[Kernel] Info: APIC timer ticks per 1ms: %li\n", l);
-    serial_logger.printf("[Kernel] Info: APIC timer ticks per 1ms: %lu %u\n", l, ticks*100);
+    serial_logger.printf("[Kernel] Info: APIC timer ticks per 1ms: %lu %u\n", l, ticks * 100);
 
     tsc_freq          = computeFreqFraction(tsc_end - tsc_start, divisor);
     tsc_inverted_freq = computeFreqFraction(divisor, tsc_end - tsc_start);
-    global_logger.printf("[Kernel] Info: TSC ticks per 1ms: %li\n", tsc_freq*1'000'000'000);
-    serial_logger.printf("[Kernel] Info: TSC ticks per 1s: %li %li\n", tsc_freq*1'000'000'000, (tsc_end - tsc_start)*100);
+    global_logger.printf("[Kernel] Info: TSC ticks per 1ms: %li\n", tsc_freq * 1'000'000'000);
+    serial_logger.printf("[Kernel] Info: TSC ticks per 1s: %li %li\n", tsc_freq * 1'000'000'000,
+                         (tsc_end - tsc_start) * 100);
 }
 
 void apic_one_shot(u32 ms)
 {
     u64 time_nanoseconds = ms * 1'000'000;
-    u32 ticks = apic_freq * time_nanoseconds;
+    u32 ticks            = apic_freq * time_nanoseconds;
     apic_write_reg(APIC_REG_TMRDIV, 0x3);           // Divide by 16
     apic_write_reg(APIC_REG_LVT_TMR, APIC_TMR_INT); // Init in one-shot mode
     apic_write_reg(APIC_REG_TMRINITCNT, ticks);
@@ -160,7 +161,7 @@ void apic_one_shot(u32 ms)
 
 void apic_one_shot_ticks(u32 ticks)
 {
-    apic_write_reg(APIC_REG_TMRDIV, 0x3);        // Divide by 1
+    apic_write_reg(APIC_REG_TMRDIV, 0x3);           // Divide by 1
     apic_write_reg(APIC_REG_LVT_TMR, APIC_TMR_INT); // Init in one-shot mode
     apic_write_reg(APIC_REG_TMRINITCNT, ticks);
 }
@@ -251,32 +252,33 @@ void smart_eoi(u8 intno)
 
 void apic_pp(int priority) { apic_write_reg(APIC_REG_PPR, priority << 4); }
 
-void lvt0_int_routine() {
+void lvt0_int_routine()
+{
     serial_logger.printf("[Kernel] Info: LVT0 interrupt\n");
     smart_eoi(LVT_INT0);
 }
 
-void lvt1_int_routine() {
+void lvt1_int_routine()
+{
     serial_logger.printf("[Kernel] Info: LVT1 interrupt\n");
     smart_eoi(LVT_INT1);
 }
 
-void apic_spurious_int_routine() {
+void apic_spurious_int_routine()
+{
     global_logger.printf("[Kernel] Info: Spurious LAPIC interrupt\n");
     serial_logger.printf("[Kernel] Info: Spurious LAPIC interrupt\n");
 }
 
-void apic_dummy_int_routine() {
-    smart_eoi(APIC_DUMMY_ISR);
-}
+void apic_dummy_int_routine() { smart_eoi(APIC_DUMMY_ISR); }
 
 void tpr_write(unsigned val)
 {
-    #ifdef __x86_64__
+#ifdef __x86_64__
     setCR8(val);
-    #else
+#else
     apic_write_reg(APIC_REG_TPR, val << 4);
-    #endif
+#endif
 }
 
 void interrupt_complete(u32 intno)
@@ -287,7 +289,7 @@ void interrupt_complete(u32 intno)
 }
 
 u32 interrupt_min() { return 48; }
-u32 interrupt_max() { return 239; }
+u32 interrupt_limint() { return 240; }
 
 extern "C" void programmable_interrupt(u32 intno)
 {
@@ -325,5 +327,5 @@ extern "C" void programmable_interrupt(u32 intno)
     }
 }
 
-void interrupt_enable(u32) {}
+kresult_t interrupt_enable(u32) { return 0; }
 void interrupt_disable(u32) {}

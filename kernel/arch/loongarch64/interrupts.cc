@@ -223,6 +223,10 @@ extern "C" void handle_interrupt()
             csrwr<loongarch::csr::TICLR>(0x01);
             sched_periodic();
         }
+
+        if (estat & HARDWARE_INT_MASK) {
+            panic("hardware interrupt, estat %x", estat);
+        }
     } break;
     case EXCEPTION_PIL:
     case EXCEPTION_PIS:
@@ -269,14 +273,6 @@ extern "C" void handle_interrupt()
 }
 
 void printc(int) {}
-
-// TODO
-u32 interrupt_min() { return 0; }
-u32 interrupt_max() { return 0; }
-
-void interrupt_enable(u32) { panic("interrupt enable not implemented"); }
-
-void interrupt_complete(u32) { panic("interrupt complete not implemented"); }
 
 extern "C" void allow_access_user() {}
 extern "C" void disallow_access_user() {}

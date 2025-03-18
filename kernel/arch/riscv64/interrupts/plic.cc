@@ -49,7 +49,7 @@ void *map_plic(u64 base, size_t size)
                                        .user_access        = false,
                                        .global             = true,
                                        .execution_disabled = true,
-                                       .extra              = 0,
+                                       .extra              = PAGING_FLAG_NOFREE,
                                        .cache_policy       = Memory_Type::IONoCache};
 
     map_kernel_pages(base, virt_base, size, arg);
@@ -167,7 +167,11 @@ void init_plic()
                          system_plic.plic_id, system_plic.max_priority);
 }
 
-void interrupt_enable(u32 interrupt_id) { plic_interrupt_enable(interrupt_id); }
+kresult_t interrupt_enable(u32 interrupt_id)
+{
+    plic_interrupt_enable(interrupt_id);
+    return 0;
+}
 
 void plic_interrupt_enable(u32 interrupt_id)
 {
@@ -205,7 +209,7 @@ void plic_interrupt_disable(u32 interrupt_id)
 u32 plic_interrupt_limit() { return system_plic.external_interrupt_sources; }
 
 u32 interrupt_min() { return 0; }
-u32 interrupt_max() { return plic_interrupt_limit() - 1; }
+u32 interrupt_limint() { return plic_interrupt_limit(); }
 
 void plic_set_threshold(u32 threshold)
 {
