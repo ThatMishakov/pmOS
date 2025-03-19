@@ -119,6 +119,11 @@ kresult_t map_kernel_page(u64 phys_addr, void *virt_addr, Page_Table_Argumments 
     return loongarch_map_page(kernel_page_dir(), virt_addr, phys_addr, arg);
 }
 
+kresult_t map_kernel_pages(u64 phys_addr, void *virt_addr, size_t size, Page_Table_Argumments arg)
+{
+    return map_pages(kernel_page_dir(), phys_addr, virt_addr, size, arg);
+}
+
 kresult_t unmap_kernel_page(TLBShootdownContext &ctx, void *virt_addr)
 {
     return loongarch_unmap_page(ctx, kernel_page_dir(), virt_addr, false);
