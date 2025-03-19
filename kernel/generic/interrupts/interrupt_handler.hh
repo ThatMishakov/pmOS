@@ -2,7 +2,9 @@
 #include <lib/memory.hh>
 #include <lib/vector.hh>
 #include <messaging/messaging.hh>
+#include <utility>
 
+struct CPU_Info;
 struct Interrupt_Handler {
     u64 interrupt_number;
 
@@ -17,6 +19,8 @@ struct Interrupt_Handler {
 struct Interrupt_Handler_Table {
     // Sorted by interrupt number
     klib::vector<klib::unique_ptr<Interrupt_Handler>> handlers;
+    size_t allocated_int_count = 0; // Used to distribute interrupts between processors
+
 
     [[nodiscard]] kresult_t add_handler(u64 interrupt_number, Port *port);
     kresult_t remove_handler(u64 interrupt_number);
@@ -34,3 +38,5 @@ void interrupt_complete(u32 interrupt_id);
 
 u32 interrupt_min();
 u32 interrupt_limint();
+
+ReturnStr<std::pair<CPU_Info *, u32>> allocate_interrupt_single(u32 gsi, bool edge_triggered = false);

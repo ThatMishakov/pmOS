@@ -233,6 +233,9 @@ void syscall_get_page_address_from_object();
 void syscall_unreference_mem_object();
 // Parameters: u64 object_id
 
+void syscall_cpu_for_interrupt();
+// Parameters: u32 gsi, flags
+
 struct SyscallRetval {
     TaskDescriptor *task;
     u64 operator=(u64 value);

@@ -44,6 +44,7 @@ bool init_serial_acpi()
     port->interrupt = t->interrupt_type;
     port->pc_intno  = t->pc_irq;
     port->gsi       = t->interrupt;
+    printf("interrupt %x pc_intno %x gsi %x\n", port->interrupt, port->pc_intno, port->gsi);
 
     switch (t->configured_baud_rate) {
     case 0:

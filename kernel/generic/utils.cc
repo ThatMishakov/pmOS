@@ -538,12 +538,6 @@ extern "C" void __floatundidf()
     assert(false);
 }
 
-extern "C" int fwrite(const void *ptr, size_t size, size_t count, FILE *)
-{
-    serial_logger.log((char *)ptr, size * count);
-    return count;
-}
-
 extern "C" void __cxa_pure_virtual() { panic("__cxa_pure_virtual()"); }
 
 using guard_type = u64;

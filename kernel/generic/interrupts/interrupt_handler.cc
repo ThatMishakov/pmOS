@@ -15,6 +15,7 @@ kresult_t Interrupt_Handler_Table::add_handler(u64 interrupt_number, Port *port)
     auto owner = port->owner;
 
     // Check that there isn't a handler already
+    // TODO: Allow interrupt sharing...
     if (get_handler(interrupt_number))
         return -EEXIST;
 

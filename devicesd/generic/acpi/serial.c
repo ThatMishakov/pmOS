@@ -23,6 +23,6 @@ static uacpi_iteration_decision match_ns16550a(void *user, uacpi_namespace_node 
 
 void find_com()
 {
-    uacpi_find_devices(PC_COM_PNP_ID, match_pc_com, NULL);
-    uacpi_find_devices(NS16550A_PNP_ID, match_ns16550a, NULL);
+    // uacpi_find_devices(PC_COM_PNP_ID, match_pc_com, NULL);
+    // uacpi_find_devices(NS16550A_PNP_ID, match_ns16550a, NULL);
 }

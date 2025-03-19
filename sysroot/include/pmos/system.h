@@ -371,6 +371,25 @@ int pmos_request_timer(pmos_port_t port, uint64_t ns, uint64_t extra);
 
 uint64_t pmos_process_task_group();
 
+typedef struct pmos_int_r {
+    int64_t result;
+    uint32_t cpu;
+    uint32_t vector;
+} pmos_int_r;
+
+/// @brief Assigns an interrupt vector to the given interrupt.
+///
+/// This function assigns an CPU interrupt vector for a given GSI. Internally, this may also
+/// configure interrupt controllers (for example, IOAPICs on x86) as necessary such that
+/// after the vector has been mapped, the interrupts at GSI will be recieved by it.
+/// If the interrupt has already been assigned, the function should not return error,
+/// and will return the same interrupt number.
+/// @param gsi GSI for which the vector should be assigned
+/// @param flags Flags
+/// @return On success, returns the CPU to which the interrupt has been assigned (using kernel's
+/// numbering, starting at 1 for the bootstrap CPU), and the CPU-local interrupt vector. 
+pmos_int_r allocate_interrupt(uint32_t gsi, uint32_t flags);
+
 #endif
 
 #if defined(__cplusplus)

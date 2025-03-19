@@ -31,9 +31,9 @@
 #include <assert.h>
 #include <errno.h>
 #include <inttypes.h>
-#include <io.h>
 #include <limits.h>
 #include <pci/pci.h>
+#include <pmos/io.h>
 #include <pmos/ipc.h>
 #include <pmos/memory.h>
 #include <pthread.h>
@@ -529,10 +529,10 @@ static void pci_setup_ecam(struct PCIHostBridge *b, uacpi_namespace_node *node)
         }
         // printf("ECAM %lx %lx\n", t.virt_addr, phys_end - phys_start);
         void *ptr = (char *)t.virt_addr + (ecam_base_0 % PAGE_SIZE) - (start - ecam_base_0);
-        
+
         b->ecam.base_addr = ecam_base_0;
-        b->ecam.base_ptr = ptr;
-        b->has_ecam = true;
+        b->ecam.base_ptr  = ptr;
+        b->has_ecam       = true;
     }
 }
 
@@ -919,7 +919,8 @@ void pci_write_register(struct PCIDevicePtr *s, unsigned _register, uint32_t val
     }
 }
 
-int fill_device(struct PCIDevicePtr *s, struct PCIHostBridge *g, uint8_t bus, uint8_t device, uint8_t function)
+int fill_device(struct PCIDevicePtr *s, struct PCIHostBridge *g, uint8_t bus, uint8_t device,
+                uint8_t function)
 {
     assert(s);
     assert(g);

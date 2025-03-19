@@ -56,7 +56,7 @@
 #endif
 
 using syscall_function                          = void (*)();
-klib::array<syscall_function, 51> syscall_table = {
+klib::array<syscall_function, 53> syscall_table = {
     syscall_exit,
     syscall_get_task_id,
     syscall_create_process,
@@ -112,6 +112,8 @@ klib::array<syscall_function, 51> syscall_table = {
     syscall_get_page_address,
     syscall_unreference_mem_object,
     syscall_get_page_address_from_object,
+    nullptr,
+    syscall_cpu_for_interrupt,
 };
 
 extern "C" void syscall_handler()
@@ -510,7 +512,7 @@ extern void deactivate_page_table();
 
 void syscall_set_attribute()
 {
-    auto c = get_cpu_struct();
+    auto c        = get_cpu_struct();
     task_ptr task = c->current_task;
 
     u64 pid         = syscall_arg64(task, 0);
@@ -537,7 +539,7 @@ void syscall_set_attribute()
     case ATTR_DEBUG_SYSCALLS:
         process->attr.debug_syscalls = value;
         break;
-    
+
     case 3: // ACPI sleep states' stuff
         if (process != task) {
             syscall_error(task) = -EINVAL;
@@ -549,13 +551,13 @@ void syscall_set_attribute()
         c->to_restore_on_wakeup = klib::make_unique<Task_Regs>(task->regs);
         if (!c->to_restore_on_wakeup) {
             syscall_error(task) = -ENOMEM;
-            return; 
+            return;
         }
         stop_cpus();
         task->page_table->unapply_cpu(get_cpu_struct());
         task->before_task_switch();
         task->regs.entry_type = 5;
-    break;
+        break;
 
     case 4: {
         auto result = acpi_wakeup_vec();
@@ -564,8 +566,7 @@ void syscall_set_attribute()
         } else {
             syscall_return(task) = result.val;
         }
-    }
-    break;
+    } break;
 
     case 5: { // Number of NVS entries
         // TODO: Remove magic numbers
@@ -574,8 +575,7 @@ void syscall_set_attribute()
             count += region.type == MemoryRegionType::ACPINVS;
 
         syscall_return(task) = count;
-    }
-    break;
+    } break;
 
     case 6: { // Return NVS regions to userspace...
         klib::vector<MemoryRegion> nvs_regions;
@@ -587,7 +587,8 @@ void syscall_set_attribute()
 
         char *user_ptr = reinterpret_cast<char *>(value);
         syscall_success(task);
-        auto copy_result = copy_to_user((char *)&nvs_regions[0], user_ptr, sizeof(nvs_regions[0]) * nvs_regions.size());
+        auto copy_result = copy_to_user((char *)&nvs_regions[0], user_ptr,
+                                        sizeof(nvs_regions[0]) * nvs_regions.size());
         if (!copy_result.success()) {
             syscall_error(task) = copy_result.result;
             return;
@@ -595,13 +596,12 @@ void syscall_set_attribute()
 
         if (!copy_result.val)
             return;
-    }
-    break;
+    } break;
 
     case 7:
         syscall_success(task);
         deactivate_page_table();
-        __asm__ volatile ("wbinvd");
+        __asm__ volatile("wbinvd");
         break;
 
     default:
@@ -1290,7 +1290,8 @@ void syscall_transfer_region()
 
     bool fixed = flags & 0x08;
 
-    const auto result = current->page_table->atomic_transfer_region(pt, (void *)region, (void *)dest, flags, fixed);
+    const auto result =
+        current->page_table->atomic_transfer_region(pt, (void *)region, (void *)dest, flags, fixed);
     if (!result.success()) {
         syscall_error(current) = result.result;
         return;
@@ -2000,4 +2001,20 @@ void syscall_unreference_mem_object()
         return;
     }
     syscall_success(current_task);
+}
+
+void syscall_cpu_for_interrupt()
+{
+    auto current_task = get_current_task();
+    auto gsi          = syscall_arg(current_task, 0, 0);
+    // auto flags = syscall_flags(current_task);
+
+    auto result = allocate_interrupt_single(gsi);
+    if (!result.success()) {
+        syscall_error(current_task) = result.result;
+    }
+
+    assert(result.val.first);
+    syscall_return(current_task) = (result.val.first->cpu_id + 1) | (uint64_t)(result.val.second)
+                                                                        << 32;
 }

@@ -9,6 +9,7 @@
 #include <scheduling.hh>
 #include <smoldtb.h>
 #include <types.hh>
+#include <interrupts/interrupt_handler.hh>
 
 using namespace kernel;
 

@@ -546,3 +546,18 @@ result_t release_mem_object(mem_object_t object_id, unsigned flags)
     return pmos_syscall(SYSCALL_RELEASE_MEM_OBJECT | (flags << 8), object_id).result;
 #endif
 }
+
+pmos_int_r allocate_interrupt(uint32_t gsi, uint32_t flags)
+{
+    syscall_r result;
+#ifdef __32BITSYSCALL
+    result = __pmos_syscall32_1words(SYSCALL_ALLOCATE_INTERRUPT | (flags << 8), gsi);
+#else
+    result = pmos_syscall(SYSCALL_ALLOCATE_INTERRUPT | (flags << 8), gsi);
+#endif
+    return (pmos_int_r) {
+        .result = result.result,
+        .cpu = result.value & 0xffffffff,
+        .vector = result.value >> 32,
+    };
+}

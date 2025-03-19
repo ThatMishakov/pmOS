@@ -36,6 +36,7 @@
 #include <lib/memory.hh>
 #include <lib/splay_tree_map.hh>
 #include <lib/stack.hh>
+#include <lib/string.hh>
 #include <lib/vector.hh>
 #include <memory/rcu.hh>
 #include <memory/temp_mapper.hh>
@@ -44,7 +45,6 @@
 #include <pmos/containers/intrusive_list.hh>
 #include <registers.hh>
 #include <types.hh>
-#include <lib/string.hh>
 
 #if defined(__x86_64__) || defined(__i386__)
     #include <interrupts/gdt.hh>
@@ -155,8 +155,8 @@ struct CPU_Info {
 
 #ifdef __loongarch__
     u32 cpu_physical_id = 0; // 8 bit in reality...
-    u64 timer_val = 0;
-    u64 timer_total = 0;
+    u64 timer_val       = 0;
+    u64 timer_total     = 0;
 #endif
 
     // ISRs in userspace
@@ -166,6 +166,7 @@ struct CPU_Info {
     static constexpr int IPI_TLB_SHOOTDOWN = 0x2;
     static constexpr int IPI_CPU_PARK      = 0x4;
     u32 ipi_mask                           = 0;
+    u32 allocated_int_count                = 0;
 
     constexpr static u32 ipi_synchronous_mask = IPI_TLB_SHOOTDOWN | IPI_CPU_PARK;
 

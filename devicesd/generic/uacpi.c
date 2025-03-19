@@ -1,9 +1,9 @@
 #include <assert.h>
 #include <interrupts.h>
-#include <io.h>
 #include <pci/pci.h>
 #include <pmos/helpers.h>
 #include <pmos/interrupts.h>
+#include <pmos/io.h>
 #include <pmos/ipc.h>
 #include <pmos/memory.h>
 #include <pmos/special.h>
@@ -416,8 +416,8 @@ uacpi_status uacpi_kernel_raw_io_write(uacpi_io_addr address, uacpi_u8 byte_widt
 #endif
 }
 
-uacpi_status uacpi_kernel_pci_read(uacpi_handle c, uacpi_size offset,
-                                   uacpi_u8 byte_width, uacpi_u64 *value)
+uacpi_status uacpi_kernel_pci_read(uacpi_handle c, uacpi_size offset, uacpi_u8 byte_width,
+                                   uacpi_u64 *value)
 {
     uint32_t v = pci_read_register(c, offset / 4);
     switch (byte_width) {
@@ -437,8 +437,8 @@ uacpi_status uacpi_kernel_pci_read(uacpi_handle c, uacpi_size offset,
     return UACPI_STATUS_OK;
 }
 
-uacpi_status uacpi_kernel_pci_write(uacpi_handle c, uacpi_size offset,
-                                    uacpi_u8 byte_width, uacpi_u64 value)
+uacpi_status uacpi_kernel_pci_write(uacpi_handle c, uacpi_size offset, uacpi_u8 byte_width,
+                                    uacpi_u64 value)
 {
     uint32_t v = pci_read_register(c, offset / 4);
     switch (byte_width) {

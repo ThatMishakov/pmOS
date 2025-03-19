@@ -151,56 +151,7 @@ void set_up_interrupt()
     printf("Initializing interrupts... Mask: %x\n", interrupt_type_mask);
 
     // Check if interrupts are supported
-    if ((interrupt_type_mask & 0x10)) {
-        IPC_Reg_Int r = {
-            .type       = IPC_Reg_Int_NUM,
-            .flags      = 0,
-            .intno      = (uint32_t)gsi_num,
-            .int_flags  = 0, // TODO
-            .dest_task  = get_task_id(),
-            .dest_chan  = serial_port,
-            .reply_chan = serial_port,
-        };
-
-        result_t result = send_message_port(devicesd_port, sizeof(r), static_cast<void *>(&r));
-        if (result != SUCCESS) {
-            printf("Failed to send message to set up interrupt: %li (%s)\n", result,
-                   strerror(-result));
-            return;
-        }
-
-        Message_Descriptor desc;
-        uint8_t *message;
-        for (int i = 0; i < 5; ++i) {
-            result = get_message(&desc, &message, serial_port);
-            if ((int)result == -EINTR)
-                continue;
-            break;
-        }
-        if (result != SUCCESS) {
-            printf("Failed to get message from devicesd: %li (%s)\n", result, strerror(-result));
-            return;
-        }
-
-        std::unique_ptr<unsigned char> message_ptr(message);
-
-        IPC_Reg_Int_Reply *reply = reinterpret_cast<IPC_Reg_Int_Reply *>(message_ptr.get());
-        if (reply->type != IPC_Reg_Int_Reply_NUM) {
-            printf("Invalid reply type: %i\n", reply->type);
-            return;
-        }
-
-        if (reply->status < 0) {
-            printf("Failed to set up interrupt: recieved error %i\n", -reply->status);
-            return;
-        }
-
-        int_vec = reply->intno;
-
-        printf("ns16550d: Interrupt set up successfully, intno: %i\n", int_vec);
-
-        have_interrupts = true;
-    } else if (interrupt_type_mask == 0) {
+    if (interrupt_type_mask & 0x01) {
         IPC_Reg_Int r = {
             .type       = IPC_Reg_Int_NUM,
             .flags      = IPC_Reg_Int_FLAG_EXT_INTS,
@@ -247,6 +198,28 @@ void set_up_interrupt()
         int_vec = reply->intno;
 
         printf("ns16550d: Interrupt set up successfully, intno: %i\n", int_vec);
+
+        have_interrupts = true;
+    } else {
+        auto [result, cpu, vector] = allocate_interrupt(gsi_num, 0);
+        if (result) {
+            printf("ns16550: failed to get interrupt, error %li\n", result);
+            return;
+        }
+
+        result = set_affinity(0, cpu, 0);
+        if (result) {
+            printf("ns16550: failed to set affinity, error %li\n", result);
+            return;
+        }
+
+        auto result2 = set_interrupt(serial_port, vector, 0);
+        if (result2.result) {
+            printf("ns16550: failed to set interrupt, error %li\n", result2.result);
+            return;
+        }
+
+        int_vec = vector;
 
         have_interrupts = true;
     }
