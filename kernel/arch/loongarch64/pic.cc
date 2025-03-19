@@ -8,8 +8,10 @@
 #include <memory/paging.hh>
 #include <memory/vmm.hh>
 #include <pmos/io.h>
+#include <pmos/ipc.h>
 #include <sched/sched.hh>
 #include <types.hh>
+#include <csr.hh>
 
 using namespace kernel;
 
@@ -27,6 +29,7 @@ struct ExtIntC {
     virtual ~ExtIntC() = default;
 
     virtual void interrupt_enable(u32 controller_vector) = 0;
+    virtual void interrupt_complete(u32 interrupt)       = 0;
 };
 
 struct BIOPIC: ExtIntC {
@@ -43,11 +46,13 @@ struct BIOPIC: ExtIntC {
     static constexpr u32 INT_MASK      = 0x020;
     static constexpr u32 HTMSI_EN      = 0x040;
     static constexpr u32 INTEDGE       = 0x060;
+    static constexpr u32 INTCLR        = 0x080;
     static constexpr u32 ROUTE_ENTRY_0 = 0x100;
     static constexpr u32 HTMSI_VECTOR0 = 0x200;
 
     inline u32 gsi_limit() { return gsi_base + 64; }
     void set_mapping(u32 gsi, unsigned idx, CPU_Info *c, bool edge_triggered);
+    virtual void interrupt_complete(u32 interrupt) override;
 };
 
 struct PICAllocation {
@@ -81,6 +86,7 @@ constexpr unsigned EXT_IOIen_base     = 0x1600;
 constexpr unsigned EXT_IOIbounce_base = 0x1680;
 constexpr unsigned EXT_IOImap_base    = 0x14C0;
 constexpr unsigned EXT_IOImap_Core0   = 0x1C00;
+constexpr unsigned CORE0_EXT_IOIsr    = 0x1800;
 
 Spinlock interrupts_lock;
 kresult_t interrupt_enable(u32 i)
@@ -135,7 +141,16 @@ kresult_t interrupt_enable(u32 i)
     return 0;
 }
 
-void interrupt_complete(u32) { panic("interrupt complete not implemented"); }
+void interrupt_complete(u32 interrupt)
+{
+    assert(interrupt < 256);
+    auto [cpu, controller, vector, _] = interrupt_mappings[interrupt];
+    assert(cpu == get_cpu_struct());
+    assert(controller);
+    controller->interrupt_complete(vector);
+
+    csrxchg32<loongarch::csr::ECFG>(-1U, 1 << (interrupt/sizeof(uint32_t) + 2));
+}
 
 MADT *get_madt()
 {
@@ -243,13 +258,32 @@ void biopic_push(BIOPIC *biopic)
 void BIOPIC::initialize()
 {
     u32 *base = (u32 *)virt_address;
-    u32 id    = mmio_readl(base + 0);
-    id >>= 24;
-    assert(hardware_id == id);
+    // ACPI reports hardware ID 0 for some reason
+    // u32 id    = mmio_readl(base + 0);
+    // id >>= 24;
+    // assert(hardware_id == id);
 
     // Mask interrupts
     mmio_writel(base + INT_MASK / sizeof(uint32_t), -1U);
     mmio_writel(base + INT_MASK / sizeof(uint32_t) + 1, -1U);
+
+    // u8 intnum = mmio_readl(base + 1) >> 16;
+    // serial_logger.printf("BIOPIC intnum %x\n", intnum);
+}
+
+void BIOPIC::interrupt_complete(u32 vector)
+{
+    assert(vector > gsi_base);
+    vector -= gsi_base;
+
+    assert(vector < 64);
+
+    u32 *base = (u32 *)virt_address;
+
+    u32 mask   = 1 << (vector % sizeof(uint32_t));
+    u32 offset = vector / sizeof(uint32_t);
+
+    mmio_writel(base + INTCLR / sizeof(uint32_t) + offset, mask);
 }
 
 void BIOPIC::interrupt_enable(u32 gsi)
@@ -258,17 +292,20 @@ void BIOPIC::interrupt_enable(u32 gsi)
     assert(base < 64);
 
     int idx  = base / 32;
-    u32 mask = 1 << idx % 32;
+    u32 mask = 1 << base % 32;
 
     u32 *ptr = (u32 *)virt_address;
 
+    // Clear interrupt
+    mmio_writel(ptr + INTCLR / sizeof(uint32_t) + idx, mask);
+
     Auto_Lock_Scope l(lock);
-    u32 val = mmio_readl(ptr + INT_MASK / sizeof(u32));
+    u32 val = mmio_readl(ptr + INT_MASK / sizeof(u32) + idx);
     val &= ~mask;
-    mmio_writel(ptr + INT_MASK / sizeof(u32), val);
+    mmio_writel(ptr + INT_MASK / sizeof(u32) + idx, val);
 }
 
-void BIOPIC::set_mapping(u32 gsi, unsigned idx, CPU_Info *c, bool edge_triggered)
+void BIOPIC::set_mapping(u32 gsi, unsigned idx, CPU_Info *, bool edge_triggered)
 {
     u32 base = gsi - gsi_base;
     assert(base < 64);
@@ -280,17 +317,17 @@ void BIOPIC::set_mapping(u32 gsi, unsigned idx, CPU_Info *c, bool edge_triggered
     Auto_Lock_Scope l(lock);
 
     // Enable HT interrupt message
-    u32 val = mmio_readl(ptr + HTMSI_EN/sizeof(uint32_t) + half);
+    u32 val = mmio_readl(ptr + HTMSI_EN / sizeof(uint32_t) + half);
     val |= mask;
-    mmio_writel(ptr + HTMSI_EN/sizeof(uint32_t) + half, val);
+    mmio_writel(ptr + HTMSI_EN / sizeof(uint32_t) + half, val);
 
     // Edge trigger
-    val = mmio_readl(ptr + INTEDGE/sizeof(uint32_t) + half);
+    val = mmio_readl(ptr + INTEDGE / sizeof(uint32_t) + half);
     if (edge_triggered)
         val |= mask;
     else
         val &= ~mask;
-    mmio_writel(ptr + INTEDGE/sizeof(uint32_t) + half, val);
+    mmio_writel(ptr + INTEDGE / sizeof(uint32_t) + half, val);
 
     // TODO: Route entries
 
@@ -351,7 +388,7 @@ void init_interrupts()
                                            .extra              = PAGING_FLAG_NOFREE,
                                            .cache_policy       = Memory_Type::IONoCache};
 
-        auto result = map_kernel_pages(be->base_address & PAGE_MASK, addr, size_aligned, arg);
+        auto result = map_kernel_pages(be->base_address & ~PAGE_MASK, addr, size_aligned, arg);
         if (result)
             panic("Failed to map BIO PIC into kernel\n");
 
@@ -443,4 +480,111 @@ ReturnStr<std::pair<CPU_Info *, u32>> allocate_interrupt_single(u32 gsi, bool ed
     biopic->set_mapping(gsi, idx, cpu, edge_triggered);
 
     return ReturnStr<std::pair<CPU_Info *, u32>>::success(std::pair(cpu, idx));
+}
+
+u32 get_irq(unsigned sector)
+{
+    auto c = get_cpu_struct();
+
+    switch (interrupt_model) {
+    case IntControllerClass::LIOPIC:
+        panic("LIOPIC not implemented\n");
+    case IntControllerClass::EIOPIC: {
+        // TODO: Support non-vectored interrupts
+        u32 core_base = CORE0_EXT_IOIsr + 0x100 * c->cpu_physical_id;
+
+        assert(sector < 8);
+
+        u32 val = iocsr_read32(core_base + sector * 4);
+        if (val == 0)
+            return -1U;
+
+        return sector * 32 + __builtin_ctz(val);
+    } break;
+    default:
+        break;
+    }
+
+    assert(false);
+    return -1U;
+}
+void ack_interrupt(u32 irq)
+{
+    auto c = get_cpu_struct();
+
+    switch (interrupt_model) {
+    case IntControllerClass::EIOPIC: {
+        u32 core_base = CORE0_EXT_IOIsr + 0x100 * c->cpu_physical_id;
+
+        assert(irq < 256);
+        u32 reg  = irq / 32;
+        u32 mask = 1 << irq % 32;
+        iocsr_write32(mask, core_base + reg * 4);
+    } break;
+    default:
+        panic("LIOPIC not implemented\n");
+    }
+}
+
+void handle_hardware_interrupt(u32 estat)
+{
+    auto c = get_cpu_struct();
+
+    assert(estat);
+    u32 sector = __builtin_ctz(estat >> 2);
+
+    u32 irq = get_irq(sector);
+    if (irq == -1U) {
+        panic("Unknown interrupt\n");
+    }
+
+    ack_interrupt(irq);
+
+    auto handler = c->int_handlers.get_handler(irq);
+    if (!handler) {
+        interrupt_disable(irq);
+        return;
+    }
+
+    // Disable interrupts
+    csrxchg32<loongarch::csr::ECFG>(0, 1 << (sector + 2));
+
+    // Send the interrupt to the port
+    auto port = handler->port;
+    bool sent = false;
+    if (port) {
+        IPC_Kernel_Interrupt kmsg = {IPC_Kernel_Interrupt_NUM, irq, c->cpu_id};
+        auto result = port->atomic_send_from_system(reinterpret_cast<char *>(&kmsg), sizeof(kmsg));
+
+        if (result == 0)
+            sent = true;
+        else
+            serial_logger.printf("Error: %i\n", result);
+    }
+
+    if (!sent) {
+        interrupt_disable(irq);
+        interrupt_complete(irq);
+ 
+        c->int_handlers.remove_handler(irq);
+    } else {
+        handler->active = true;
+    }
+}
+
+void interrupt_disable(u32 interrupt_id) {
+    assert(interrupt_id < 256);
+
+    switch (interrupt_model) {
+        case IntControllerClass::EIOPIC: {
+            Auto_Lock_Scope l(interrupts_lock);
+
+            size_t base = interrupt_id / 64;
+            u64 enable  = iocsr_read64(EXT_IOIen_base + base * 8);
+            enable &= ~(1UL << (interrupt_id % 64));
+            iocsr_write64(enable, EXT_IOIen_base + base * 8);
+        } break;
+    default:
+        assert(false);
+    }
 }

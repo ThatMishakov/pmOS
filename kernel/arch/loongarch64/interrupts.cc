@@ -81,8 +81,6 @@ void CPU_Info::ipi_tlb_shootdown()
     ipi_send(cpu_physical_id, 0x00);
 }
 
-void interrupt_disable(u32 interrupt_id) { panic("interrupt_disable: not implemented\n"); }
-
 unsigned exception_code(u32 estat = csrrd32<loongarch::csr::ESTAT>())
 {
     return (estat >> 16) & 0x3f;
@@ -209,23 +207,27 @@ void page_fault(u32 error)
 extern "C" void syscall_handler();
 
 kresult_t handle_fp_disabled_exception(unsigned code);
+void handle_hardware_interrupt(u32 estat);
 
 extern "C" void handle_interrupt()
 {
     assert(get_cpu_struct()->nested_level == 1);
     u32 estat = csrrd32<loongarch::csr::ESTAT>();
     auto code = exception_code(estat);
+    estat &= csrrd32<loongarch::csr::ECFG>();
     auto c    = get_cpu_struct();
 
     switch (code) {
     case EXCEPTION_INT: {
+        assert(estat);
+
         if (estat & TIMER_INT_MASK) {
             csrwr<loongarch::csr::TICLR>(0x01);
             sched_periodic();
         }
 
         if (estat & HARDWARE_INT_MASK) {
-            panic("hardware interrupt, estat %x", estat);
+            handle_hardware_interrupt(estat);
         }
     } break;
     case EXCEPTION_PIL:

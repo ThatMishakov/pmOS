@@ -124,6 +124,9 @@ kresult_t Interrupt_Handler_Table::remove_handler(u64 interrupt_number)
     // Disable the interrupt
     interrupt_disable(interrupt_number);
 
+    if (handler->active)
+        interrupt_complete(interrupt_number);
+
     // Find the handler index
     auto handler_index = get_handler_index(interrupt_number);
 
@@ -149,7 +152,7 @@ kresult_t Interrupt_Handler_Table::ack_interrupt(u64 interrupt_number, u64 task)
         return -EBADF;
 
     handler->active = false;
-    interrupt_complete(interrupt_number);
+    interrupt_complete(handler->interrupt_number);
 
     return 0;
 }
