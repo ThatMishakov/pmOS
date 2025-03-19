@@ -124,9 +124,7 @@ extern "C" void syscall_handler()
 
     // The syscall number is sometimes overwritten which causes issues
     // This is a "temporary" workaround
-    if (task->regs.syscall_pending_restart())
-        call_n = task->syscall_num;
-    task->syscall_num = call_n;
+    task->syscall_num = task->regs.syscall_flags();
 
     // serial_logger.printf("syscall_handler: task: %d (%s) call_n: %x, arg1: %x, arg2: %x, arg3:
     // %x, arg4: %x, arg5: %x\n", task->task_id, task->name.c_str(), call_n, arg1, arg2, arg3, arg4,

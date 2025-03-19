@@ -83,8 +83,10 @@ ReturnStr<bool> Generic_Mem_Region::prepare_page(unsigned access_mode, void *pag
         return Error(-EFAULT);
 
     auto mapping = owner->get_page_mapping(page_addr);
-    if (mapped_right_perm(mapping, access_mode))
+    if (mapped_right_perm(mapping, access_mode)) {
+        owner->invalidate_tlb(page_addr);
         return true;
+    }
 
     return alloc_page(page_addr, mapping, access_mode);
 }

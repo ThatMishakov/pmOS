@@ -57,6 +57,7 @@ struct LoongArch64Regs {
     inline unsigned long &arg2() { return a1; }
     inline unsigned long &arg3() { return a2; }
 
+    inline u64 syscall_flags() const { return a0; }
     inline u64 syscall_number() const { return a0 & 0xff; }
 
     // Get syscall arguments, starting from 1

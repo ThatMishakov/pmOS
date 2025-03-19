@@ -95,6 +95,7 @@ struct RiscV64Regs {
     // TODO: Other operating systems usually use a7 for the syscall number,
     //       consider changing this...
     inline u64 syscall_number() const { return a0 & 0xff; }
+    inline u64 syscall_flags() const { return a0; }
 
     // Get syscall arguments, starting from 1
     inline u64 &syscall_arg1() { return a1; }

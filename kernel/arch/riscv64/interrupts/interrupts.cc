@@ -389,6 +389,8 @@ void handle_interrupt()
     }
 
     while (c->current_task->regs.syscall_restart != 0) {
+        c->current_task->regs.a0 = c->current_task->syscall_num;
+        c->current_task->regs.syscall_restart = 0;
         syscall_handler();
     }
 

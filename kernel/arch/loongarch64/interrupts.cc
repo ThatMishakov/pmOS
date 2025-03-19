@@ -97,8 +97,19 @@ extern "C" void kernel_interrupt(LoongArch64Regs *regs)
             break;
 
         u64 virt_addr = csrrd64<loongarch::csr::BADV>();
-        if (virt_addr < (1UL << 63)) // Lower half
-            break;
+        if (virt_addr < (1UL << 63)) {
+            // Lower half
+            auto c = get_cpu_struct();
+
+            if (!c->jumpto_func)
+                break;
+
+            regs->pc = (ulong)c->jumpto_func;
+            regs->a0 = c->jumpto_arg;
+            regs->a1 = virt_addr;
+
+            return;
+        }
 
         auto page_table = csrrd64<loongarch::csr::PGDH>();
 
@@ -269,6 +280,8 @@ extern "C" void handle_interrupt()
     }
 
     while (c->current_task->regs.syscall_restart != 0) {
+        c->current_task->regs.a0 = c->current_task->syscall_num;
+        c->current_task->regs.syscall_restart = 0;
         syscall_handler();
     }
     assert(c->nested_level == 1);
