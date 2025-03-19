@@ -1,6 +1,6 @@
 # pmOS
 
-A small (hobby) operating for RISC-V and x86 (i686 and x86_64), using a homemade microkernel, C library and userspace, partially developed as my end of degree project. The goal of the project is to make a general purpose operating system, with the objective of learning and being suitable for development and exploration of the RISC-V and X86 platforms. The microkernel is mostly written in C++, and the userspace is in a mixture of C, C++ and Rust (and ASM where needed). The [limine bootloader](https://limine-bootloader.org/) and [Hyper bootloader](https://github.com/UltraOS/Hyper) are used for booting the system, depending on the architecture.
+A small (hobby) operating for RISC-V, LoongArch and x86 (i686 and x86_64), using a homemade microkernel, C library and userspace, partially developed as my end of degree project. The goal of the project is to make a general purpose operating system, with the objective of learning and being suitable for development and exploration of the RISC-V and X86 platforms. The microkernel is mostly written in C++, and the userspace is in a mixture of C, C++ and Rust (and ASM where needed). The [limine bootloader](https://limine-bootloader.org/) and [Hyper bootloader](https://github.com/UltraOS/Hyper) are used for booting the system, depending on the architecture.
 
 ## Screenshots
 RISC-V Execution:
@@ -102,7 +102,8 @@ These are the features that are planned to be had in the OS:
   - [x] Buffered string messages
   - [x] Ports
   - [x] Kernel messages
-  - [x] Quicker messaging - only implemented on x86 for now
+  - [x] Quicker messaging - only implemented on x86 and LoongArch for now (RISC-V missing but should be easy)
+  - [ ] Handles/capabilities - would make API a lot nicer and fix a lot of issues with current design
   
 - [ ] Permissions
 - [x] Multi CPU support
@@ -135,6 +136,14 @@ These are the features that are planned to be had in the OS:
 - [x] Userspace/Ring 3
 - [x] Multi CPU support
 
+#### LoongArch64 specific features:
+- [x] Virtual memory
+- [x] Exceptions
+- [x] Timer interrupt - haven't noticed there was a TSC-like global timer, needs fixing
+- [x] External interrupts - using EIO PIC and BIO PIC over HT
+- [x] Userspace
+- [ ] Multi CPU support - no Limine support
+
 
 **Core utilities and daemons**
 - [ ] Process management (processd) - Mostly unfinished, I plan it to route signals
@@ -147,6 +156,12 @@ These are the features that are planned to be had in the OS:
     - [X] Mounting filesystems
     - [X] Opening files
     - [X] Traversing trees
+- [ ] pmbus - a bus for drivers and services in Rust
+  - [x] Publishing objects
+  - [ ] Requesting objects
+  - [x] C++ bindings
+  - [x] C bindings
+  - [ ] Rust bindings
 - [ ] Drawing on screen (screend)
   - [x] Framebuffer
     - [x] Showing text with framebuffer
