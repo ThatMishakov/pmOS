@@ -38,8 +38,16 @@ isr:
     # sched/sched.hh has the struct layout
     sd t0, 16(tp)
 
+    # Tick the nested_level counter, to know if the interrupt is in kernel next time
+    ld t0, 24(tp)
+    bne zero, t0, kernel_interrupt
+
+    # Entering from userspace (or kernel thread)
+    addi t0, t0, 1
+    sd t0, 24(tp)
+
+
     # Load the address of the task struct
-    # TODO: At the moment, in-kernel interrupts are not supported
     # Load task struct info
     ld t0, 32(tp)
 
@@ -100,12 +108,6 @@ isr:
     sd zero, 0(sp)
     sd zero, 8(sp)
     addi fp, sp, 16
-
-    # Tick the nested_level counter, to know if the interrupt is in kernel next time
-    ld t1, 24(tp)
-    addi t1, t1, 1
-    sd t1, 24(tp)
-
 
 
     # Jump to C++
@@ -178,3 +180,117 @@ return_from_kernel:
     # Return to *wherever*
     sret
 
+
+kernel_interrupt:
+    addi t0, t0, 1
+    sd t0, 24(tp)
+
+    # Save context onto the stack
+    andi t0, sp, 0xf
+    bne t0, zero, kernel_stack_misaligned
+
+    addi sp, sp, -256
+    addi t0, sp, 256
+    sd   t0, 16(sp)
+    j    save_registers_common  
+kernel_stack_misaligned:
+    addi sp, sp, -264
+    addi t0, sp, 264
+    sd   t0, 16(sp)
+save_registers_common:
+
+    sd   ra, 8(sp)
+    # sp
+    sd   gp, 24(sp)
+    # sd   tp, sp(32)
+    ; sd   t0, 40(sp)
+    sd   t1, 48(sp)
+    sd   t2, 56(sp)
+    sd   s0, 64(sp)
+    sd   s1, 72(sp)
+    sd   a0, 80(sp)
+    sd   a1, 88(sp)
+    sd   a2, 96(sp)
+    sd   a3, 104(sp)
+    sd   a4, 112(sp)
+    sd   a5, 120(sp)
+    sd   a6, 128(sp)
+    sd   a7, 136(sp)
+    sd   s2, 144(sp)
+    sd   s3, 152(sp)
+    sd   s4, 160(sp)
+    sd   s5, 168(sp)
+    sd   s6, 176(sp)
+    sd   s7, 184(sp)
+    sd   s8, 192(sp)
+    sd   s9, 200(sp)
+    sd   s10, 208(sp)
+    sd   s11, 216(sp)
+    sd   t3, 224(sp)
+    sd   t4, 232(sp)
+    sd   t5, 240(sp)
+    sd   t6, 248(sp)
+
+    # Save calling address
+    csrr t1, sepc
+    sd t1, 0(sp)
+
+    # tp
+    csrr t1, sscratch
+    csrw sscratch, tp
+    sd t1, 32(sp)
+
+    ld t1, 16(tp)
+    sd t1, 40(sp)
+
+    mv fp, zero
+    mv a0, sp
+    call nested_interrupt
+
+    # nested_level counter
+    ld t1, 24(tp)
+    addi t1, t1, -1
+    sd t1, 24(tp)
+
+    # Return from kernel
+    # Restore program counter
+    ld t1, 0(sp)
+    csrw sepc, t1
+
+    # Restore registers
+    ld x31, 248(sp) # t6
+    ld x30, 240(sp) # t5
+    ld x29, 232(sp) # t4
+    ld x28, 224(sp) # t3
+    ld x27, 216(sp) # s11
+    ld x26, 208(sp) # s10
+    ld x25, 200(sp) # s9
+    ld x24, 192(sp) # s8
+    ld x23, 184(sp) # s7
+    ld x22, 176(sp) # s6
+    ld x21, 168(sp) # s5
+    ld x20, 160(sp) # s4
+    ld x19, 152(sp) # s3
+    ld x18, 144(sp) # s2
+    ld x17, 136(sp) # a7
+    ld x16, 128(sp) # a6
+    ld x15, 120(sp) # a5
+    ld x14, 112(sp) # a4
+    ld x13, 104(sp) # a3
+    ld x12, 96(sp) # a2
+    ld x11, 88(sp) # a1
+    ld x10, 80(sp) # a0
+    ld x9, 72(sp) # s1
+    ld x8, 64(sp) # s0
+    ld x7, 56(sp) # t2
+    ld x6, 48(sp) # t1
+    ld x5, 40(sp) # t0
+    ld x4, 32(sp) # tp
+    ld x3, 24(sp) # gp
+    ld x1, 8(sp)  # ra
+
+    # sp has to go last
+    ld x2, 16(sp) # sp
+
+    # Return to *wherever*
+    sret

@@ -115,8 +115,8 @@ void print_registers(TaskDescriptor *task, Logger &logger)
 
 void page_fault(u64 addr, u64 scause)
 {
-    const u64 page = (u64)addr & ~0xfffUL;
-    void *virt_addr = (void *)addr;	
+    const u64 page  = (u64)addr & ~0xfffUL;
+    void *virt_addr = (void *)addr;
 
     u64 access_type = 0;
     switch (scause) {
@@ -324,22 +324,36 @@ void service_software_interrupt()
         c->current_task->page_table->trigger_shootdown(c);
 }
 
-void handle_interrupt()
+extern "C" void nested_interrupt(RiscV64Regs *regs)
 {
     u64 scause, stval;
     get_scause_stval(&scause, &stval);
-
     auto c = get_cpu_struct();
-    if (c->nested_level > 1) {
-        serial_logger.printf("!!! kernel interrupt !!!\n");
-        serial_logger.printf("nested level: %i\n", c->nested_level);
-        serial_logger.printf("scause: 0x%x\n", scause);
-        serial_logger.printf("stval: 0x%x\n", stval);
-        serial_logger.printf("pc: 0x%x\n", c->current_task->regs.program_counter());
-        print_stack_trace_fp(c->current_task->regs.s0);
-        while (1)
-            ;
+    if ((i64)scause > 0) {
+        // Clear last bit
+        u64 intno = scause & ~(1UL << 63);
+
+        if (intno == INSTRUCTION_PAGE_FAULT or intno == LOAD_PAGE_FAULT or
+            intno == STORE_AMO_PAGE_FAULT or intno == STORE_AMO_ACCESS_FAULT or
+            intno == LOAD_ACCESS_FAULT or intno == INSTRUCTION_ACCESS_FAULT)
+                if (stval < 0x8000000000000000UL and c->jumpto_func) {
+                    // User page fault
+
+                    regs->pc = (ulong)c->jumpto_func;
+                    regs->a0 = c->jumpto_arg;
+                    regs->a1 = stval;
+                    return;
+                }
     }
+
+    panic("nested interrupt! %li", scause);
+}
+
+void handle_interrupt()
+{
+    auto c = get_cpu_struct();
+    u64 scause, stval;
+    get_scause_stval(&scause, &stval);
 
     if ((i64)scause < 0) {
         // Clear last bit
@@ -389,7 +403,7 @@ void handle_interrupt()
     }
 
     while (c->current_task->regs.syscall_restart != 0) {
-        c->current_task->regs.a0 = c->current_task->syscall_num;
+        c->current_task->regs.a0              = c->current_task->syscall_num;
         c->current_task->regs.syscall_restart = 0;
         syscall_handler();
     }
