@@ -2010,6 +2010,7 @@ void syscall_cpu_for_interrupt()
     auto result = allocate_interrupt_single(gsi);
     if (!result.success()) {
         syscall_error(current_task) = result.result;
+        return;
     }
 
     assert(result.val.first);

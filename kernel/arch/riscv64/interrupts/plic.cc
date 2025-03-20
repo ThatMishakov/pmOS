@@ -10,6 +10,7 @@
 #include <smoldtb.h>
 #include <types.hh>
 #include <interrupts/interrupt_handler.hh>
+#include <sched/sched.hh>
 
 using namespace kernel;
 
@@ -80,6 +81,8 @@ bool acpi_init_plic()
     system_plic.external_interrupt_sources = e->total_ext_int_sources_supported;
     system_plic.plic_id                    = e->plic_id;
     system_plic.max_priority               = e->max_priority;
+    if (!system_plic.claimed_by_cpu.resize(e->total_ext_int_sources_supported, nullptr))
+        panic("failed to allocate memory for PLIC\n");
 
     return true;
 }
@@ -168,8 +171,19 @@ void init_plic()
                          system_plic.plic_id, system_plic.max_priority);
 }
 
+static Spinlock lock;
+
 kresult_t interrupt_enable(u32 interrupt_id)
 {
+    auto plic = get_plic(interrupt_id);
+    if (!plic)
+        return -ENOENT;
+
+    auto offset = interrupt_id - plic->gsi_base;
+    auto e = plic->claimed_by_cpu[offset];
+    if (e != get_cpu_struct())
+        return -EBADF;
+
     plic_interrupt_enable(interrupt_id);
     return 0;
 }
@@ -248,4 +262,43 @@ void plic_complete(u32 interrupt_id)
 
     const u32 offset = PLIC_COMPLETE_OFFSET + (context_id * PLIC_COMPLETE_CONTEXT_STRIDE);
     plic_write(system_plic, offset, interrupt_id);
+}
+
+PLIC *get_plic(u32 gsi)
+{
+    if (system_plic.gsi_base > gsi)
+        return nullptr;
+
+    if (system_plic.gsi_base + system_plic.external_interrupt_sources > gsi)
+        return &system_plic;
+
+    return nullptr;
+}
+
+ReturnStr<std::pair<CPU_Info *, u32>> allocate_interrupt_single(u32 gsi, bool)
+{
+    auto plic = get_plic(gsi);
+    assert(plic);
+    if (!plic)
+        return Error(-ENOENT);
+
+    Auto_Lock_Scope l(lock);
+
+    auto offset = gsi - plic->gsi_base;
+    auto e = plic->claimed_by_cpu[offset];
+    if (e)
+        return Success(std::pair{e, gsi});
+
+    // Select the least loaded CPU
+    auto current_cpu = cpus[0];
+    assert(current_cpu);
+    for (size_t i = 1; i < cpus.size(); ++i) {
+        auto h1 = cpus[i]->int_handlers.allocated_int_count;
+        auto current = current_cpu->int_handlers.allocated_int_count;
+        if (h1 < current)
+            current_cpu = cpus[i];
+    }
+
+    plic->claimed_by_cpu[offset] = current_cpu;
+    return Success(std::pair{current_cpu, gsi});
 }

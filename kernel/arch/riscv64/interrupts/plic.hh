@@ -1,8 +1,10 @@
 #pragma once
 #include <types.hh>
+#include <lib/vector.hh>
 
 /// Initialize PLIC during the system boot
 void init_plic();
+struct CPU_Info;
 
 struct PLIC {
     volatile u32 *virt_base = nullptr;
@@ -12,6 +14,8 @@ struct PLIC {
     u16 max_priority               = 0;
     u16 external_interrupt_sources = 0;
     u8 plic_id                     = 0;
+
+    klib::vector<CPU_Info *> claimed_by_cpu;
 };
 
 // Read PLIC register
@@ -38,6 +42,8 @@ u32 plic_claim();
 
 // Complete the interrupt
 void plic_complete(u32 interrupt_id);
+
+PLIC *get_plic(u32 gsi);
 
 constexpr int PLIC_IE_OFFSET         = 0x02000;
 constexpr int PLIC_IE_CONTEXT_STRIDE = 0x80;
