@@ -126,7 +126,7 @@ extern "C" void syscall_handler()
     // This is a "temporary" workaround
     task->syscall_num = task->regs.syscall_flags();
 
-    // serial_logger.printf("syscall_handler: task: %d (%s) call_n: %x, arg1: %x, arg2: %x, arg3: %x, arg4: %x, arg5: %x\n", task->task_id, task->name.c_str(), call_n);
+    // serial_logger.printf("syscall_handler: task: %d (%s) call_n: %x\n", task->task_id, task->name.c_str(), call_n);
 
     // TODO: check permissions
 
@@ -313,7 +313,7 @@ void syscall_init_stack()
 void syscall_exit()
 {
     TaskDescriptor *task = get_cpu_struct()->current_task;
-    serial_logger.printf("syscall exit task %li (%s)\n", task->task_id, task->name.c_str());
+    // serial_logger.printf("syscall exit task %li (%s)\n", task->task_id, task->name.c_str());
 
     ulong arg1 = syscall_arg(task, 0, 0);
     ulong arg2 = syscall_arg(task, 1, 0);

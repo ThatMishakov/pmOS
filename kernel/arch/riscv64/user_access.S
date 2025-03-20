@@ -1,18 +1,17 @@
     .text
     .type fast_copy_from_user, @function
     .globl fast_copy_from_user
-fast_copy_from_user:
-    addi sp, sp, -144
+fast_copy_from_user:    
     li   t0, 1
     j generic
 
     .type fast_copy_to_user, @function
     .globl fast_copy_to_user
 fast_copy_to_user:
-    addi sp, sp, -144
     li   t0, 2
 
 generic:
+    addi sp, sp, -144
     sd t0, 24(sp)
     sd fp, 128(sp)
     sd ra, 136(sp)
@@ -20,8 +19,8 @@ generic:
 
     # Arguments
     sd a0, 0(sp) # dst
-    sd s1, 8(sp) # src
-    sd s2, 16(sp) # size
+    sd a1, 8(sp) # src
+    sd a2, 16(sp) # size
 
     li t0, 0x40000
     csrs sstatus, t0
@@ -48,6 +47,9 @@ generic:
 
     li t0, 0x40000
     csrc sstatus, t0
+
+    sd zero, 48(tp)
+    sd zero, 56(tp)
 
     # Success
     xor a0, a0, a0
@@ -76,7 +78,7 @@ on_failure:
 
     ld a0, 0(sp)
     ld a1, 8(sp)
-    ld s2, 16(sp)
+    ld a2, 16(sp)
 
     call memcpy
 

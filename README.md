@@ -102,7 +102,7 @@ These are the features that are planned to be had in the OS:
   - [x] Buffered string messages
   - [x] Ports
   - [x] Kernel messages
-  - [x] Quicker messaging - only implemented on x86 and LoongArch for now (RISC-V missing but should be easy)
+  - [x] Quick user memory access - catching exceptions on userspace memory access
   - [ ] Handles/capabilities - would make API a lot nicer and fix a lot of issues with current design
   
 - [ ] Permissions
