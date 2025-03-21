@@ -88,7 +88,7 @@ static int init_serial()
     return 0;
 }
 
-extern "C" void dbg_uart_putc(unsigned int c)
+void printc(int c)
 {
     if (!serial_initiated) {
         Auto_Lock_Scope guard(serial_lock);
@@ -111,8 +111,6 @@ extern "C" void dbg_uart_putc(unsigned int c)
 // {
 //     bochs_printc(c);
 // }
-
-void printc(int c) { dbg_uart_putc(c); }
 
 struct stack_frame {
     stack_frame *next;

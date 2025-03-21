@@ -29,7 +29,11 @@
 
 #pragma once
 #include <types.hh>
+#include <utility>
 #include <utils.hh>
+#include <sched/sched.hh>
+
+// TODO: namespace kernel::x86::lapic
 
 #define APIC_REG_LAPIC_ID     0x20
 #define APIC_REG_TPR          0x80
@@ -230,3 +234,15 @@ extern "C" void lvt1_int_routine();
 
 extern "C" void apic_spurious_int_routine();
 extern "C" void apic_dummy_int_routine();
+
+namespace kernel::x86
+{
+class IOAPIC;
+}
+
+struct IntMapping {
+    kernel::x86::IOAPIC *ioapic;
+    u32 vector;
+};
+
+ReturnStr<std::pair<CPU_Info *, u32>> allocate_interrupt(IntMapping);

@@ -390,6 +390,9 @@ typedef struct pmos_int_r {
 /// numbering, starting at 1 for the bootstrap CPU), and the CPU-local interrupt vector. 
 pmos_int_r allocate_interrupt(uint32_t gsi, uint32_t flags);
 
+#define PMOS_INTERRUPT_LEVEL_TRIG 0x01
+#define PMOS_INTERRUPT_ACTIVE_LOW 0x02
+
 #endif
 
 #if defined(__cplusplus)

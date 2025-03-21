@@ -370,18 +370,22 @@ int get_interrupt_vector(uint32_t gsi, bool active_low, bool level_trig, int *cp
 
 int set_up_gsi(uint32_t gsi, bool active_low, bool level_trig, uint64_t task, pmos_port_t port, uint32_t *vector_out)
 {
-    int cpu_id = 0;
-    uint8_t vector = 0;
+    unsigned cpu_id = 0;
+    unsigned vector = 0;
 
-    int result = get_interrupt_vector(gsi, active_low, level_trig, &cpu_id, &vector);
-    if (result < 0) {
-        fprintf(stderr, "Error: Could not get interrupt vector for GSI %u: %s\n", gsi, strerror(-result));
-        return result;
+    unsigned flags = (active_low ? PMOS_INTERRUPT_ACTIVE_LOW : 0) | (level_trig ? PMOS_INTERRUPT_LEVEL_TRIG : 0);
+    auto vec_result = allocate_interrupt(gsi, flags);
+    if (vec_result.result < 0) {
+        fprintf(stderr, "Error: Could not get interrupt vector for GSI %u: %s\n", gsi, strerror(-vec_result.result));
+        return vec_result.result;
     }
+
+    cpu_id = vec_result.cpu;
+    vector = vec_result.vector;
 
     printf("Got vector %u for GSI %u\n", vector, gsi);
 
-    result = register_interrupt(cpu_id, vector, task, port);
+    auto result = register_interrupt(cpu_id, vector, task, port);
     if (result < 0) {
         fprintf(stderr, "Error: Could not register interrupt for GSI %u: %s\n", gsi, strerror(-result));
     }

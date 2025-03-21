@@ -39,4 +39,4 @@ void interrupt_complete(u32 interrupt_id);
 u32 interrupt_min();
 u32 interrupt_limint();
 
-ReturnStr<std::pair<CPU_Info *, u32>> allocate_interrupt_single(u32 gsi, bool edge_triggered = false);
+ReturnStr<std::pair<CPU_Info *, u32>> allocate_interrupt_single(u32 gsi, bool edge_triggered = false, bool active_low = false);

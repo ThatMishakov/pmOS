@@ -275,7 +275,7 @@ PLIC *get_plic(u32 gsi)
     return nullptr;
 }
 
-ReturnStr<std::pair<CPU_Info *, u32>> allocate_interrupt_single(u32 gsi, bool)
+ReturnStr<std::pair<CPU_Info *, u32>> allocate_interrupt_single(u32 gsi, bool, bool)
 {
     auto plic = get_plic(gsi);
     assert(plic);

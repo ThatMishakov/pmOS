@@ -96,7 +96,7 @@ void print_kernel_int_stack_trace(Logger &logger)
 
 extern "C" void dbg_main(long code, NestedIntContext *kernel_ctx)
 {
-    t_print_bochs("Error! Kernel interrupt! %i\n", code);
+    t_print_bochs("Error! Kernel pagefault! %i\n", code);
     t_print_bochs("Registers:\n");
     t_print_bochs(" => %%rdi: 0x%h\n", kernel_ctx->rdi);
     t_print_bochs(" => %%rsi: 0x%h\n", kernel_ctx->rsi);
@@ -118,6 +118,14 @@ extern "C" void dbg_main(long code, NestedIntContext *kernel_ctx)
     t_print_bochs(" => %%rflags: 0x%h\n", kernel_ctx->rflags);
     // print_registers(kernel_interrupt_regs, bochs_logger);
     // print_kernel_int_stack_trace(bochs_logger);
+
+    serial_logger.printf("Stack trace:\n");
+    ulong *rbp = (ulong *)kernel_ctx->rbp;
+    while (rbp) {
+        serial_logger.printf(" => 0x%h\n", rbp[1]);
+        rbp = (ulong *)rbp[0];
+    }
+
     abort();
 }
 

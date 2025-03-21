@@ -29,6 +29,7 @@
 
 #include "apic.hh"
 
+#include "ioapic.hh"
 #include "pic.hh"
 #include "pit.hh"
 
@@ -43,6 +44,7 @@
 #include <x86_utils.hh>
 
 using namespace kernel;
+using namespace kernel::x86;
 
 void *apic_mapped_addr = nullptr;
 
@@ -327,5 +329,70 @@ extern "C" void programmable_interrupt(u32 intno)
     }
 }
 
-kresult_t interrupt_enable(u32) { return 0; }
-void interrupt_disable(u32) {}
+extern Spinlock int_allocation_lock;
+
+kresult_t interrupt_enable(u32 i)
+{
+    assert(i >= 48 and i < 240);
+
+    IOAPIC *ioapic = nullptr;
+    u32 vector     = 0;
+    auto c         = get_cpu_struct();
+
+    {
+        Auto_Lock_Scope l(int_allocation_lock);
+        auto [ii, v] = c->int_mappings[i];
+        ioapic       = (IOAPIC *)ii;
+        vector       = v;
+    }
+
+    if (!ioapic)
+        return -ENOENT;
+
+    ioapic->interrupt_enable(vector);
+    return 0;
+}
+
+void interrupt_disable(u32 i)
+{
+    assert(i >= 48 and i < 240);
+
+    IOAPIC *ioapic = nullptr;
+    u32 vector     = 0;
+    auto c         = get_cpu_struct();
+
+    {
+        Auto_Lock_Scope l(int_allocation_lock);
+        auto [ii, v] = c->int_mappings[i];
+        ioapic       = (IOAPIC *)ii;
+        vector       = v;
+    }
+
+    if (ioapic)
+        ioapic->interrupt_disable(vector);
+}
+
+ReturnStr<std::pair<CPU_Info *, u32>> allocate_interrupt(IntMapping m)
+{
+    // Find least loaded CPU
+    auto *cpu = cpus[0];
+    for (size_t i = 1; i < cpus.size(); ++i) {
+        if (cpus[i]->int_handlers.allocated_int_count < cpu->int_handlers.allocated_int_count)
+            cpu = cpus[i];
+    }
+
+    // Find unused slot
+    u32 idx = 0;
+    for (; idx < cpu->MAPPABLE_INTS; ++idx) {
+        if (!cpu->int_mappings[idx].first)
+            break;
+    }
+
+    if (idx == cpu->MAPPABLE_INTS)
+        return Error(-ENOMEM);
+
+    cpu->int_mappings[idx].first  = m.ioapic;
+    cpu->int_mappings[idx].second = m.vector;
+
+    return Success(std::make_pair(cpu, idx + 48));
+}

@@ -40,6 +40,7 @@
 // #include <cpus/cpus.hh>
 #include "task_group.hh"
 
+#include <array>
 #include <assert.h>
 #include <clock.hh>
 #include <exceptions.hh>
@@ -55,8 +56,8 @@
     #include <sched/segments.hh>
 #endif
 
-using syscall_function                          = void (*)();
-klib::array<syscall_function, 53> syscall_table = {
+using syscall_function                         = void (*)();
+std::array<syscall_function, 53> syscall_table = {
     syscall_exit,
     syscall_get_task_id,
     syscall_create_process,
@@ -124,9 +125,10 @@ extern "C" void syscall_handler()
 
     // The syscall number is sometimes overwritten which causes issues
     // This is a "temporary" workaround
-    task->syscall_num = task->regs.syscall_flags();
+    task->syscall_num = syscall_flags_reg(task);
 
-    // serial_logger.printf("syscall_handler: task: %d (%s) call_n: %x\n", task->task_id, task->name.c_str(), call_n);
+    // serial_logger.printf("syscall_handler: task: %d (%s) call_n: %x\n", task->task_id,
+    // task->name.c_str(), call_n);
 
     // TODO: check permissions
 
@@ -2004,9 +2006,12 @@ void syscall_cpu_for_interrupt()
 {
     auto current_task = get_current_task();
     auto gsi          = syscall_arg(current_task, 0, 0);
-    // auto flags = syscall_flags(current_task);
+    auto flags = syscall_flags(current_task);
 
-    auto result = allocate_interrupt_single(gsi);
+    bool edge = !(flags & 0x01);
+    bool active_low = (flags & 0x02);
+
+    auto result = allocate_interrupt_single(gsi, edge, active_low);
     if (!result.success()) {
         syscall_error(current_task) = result.result;
         return;

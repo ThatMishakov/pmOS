@@ -10,6 +10,11 @@ static ulong call_flags(TaskDescriptor *task)
         return task->regs.scratch_r.rdi;
 }
 
+ulong syscall_flags_reg(TaskDescriptor *task)
+{
+    return call_flags(task);
+}
+
 unsigned syscall_number(TaskDescriptor *task) { return call_flags(task) & 0xff; }
 
 ulong syscall_flags(TaskDescriptor *task) { return call_flags(task) >> 8; }

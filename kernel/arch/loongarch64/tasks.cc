@@ -110,6 +110,11 @@ i64 SyscallError::operator=(long v)
 
 unsigned syscall_number(TaskDescriptor *t) { return t->regs.a0 & 0xff; }
 
+ulong syscall_flags_reg(TaskDescriptor *task)
+{
+    return task->regs.a0;
+}
+
 ulong syscall_flags(TaskDescriptor *t) { return t->regs.a0 >> 8; }
 
 SyscallError::operator int() const { return (i64)task->regs.a0; }

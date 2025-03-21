@@ -161,6 +161,12 @@ kresult_t map_pages(u64 cr3, u64 phys_addr, void *virt_addr, size_t size_bytes,
 
 u64 idle_cr3 = 0;
 
+kresult_t map_kernel_pages(u64 phys_addr, void *virt_addr, size_t size, Page_Table_Argumments arg)
+{
+    return map_pages(idle_cr3, phys_addr, virt_addr, size, arg);
+}
+
+
 kresult_t map_kernel_page(u64 phys_addr, void *virt_addr, Page_Table_Argumments arg)
 {
     return map(phys_addr, virt_addr, arg, idle_cr3);

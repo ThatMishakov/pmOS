@@ -439,7 +439,7 @@ BIOPIC *get_biopic(u32 gsi)
     return nullptr;
 }
 
-ReturnStr<std::pair<CPU_Info *, u32>> allocate_interrupt_single(u32 gsi, bool edge_triggered)
+ReturnStr<std::pair<CPU_Info *, u32>> allocate_interrupt_single(u32 gsi, bool edge_triggered, bool)
 {
     auto biopic = get_biopic(gsi);
     if (!biopic)

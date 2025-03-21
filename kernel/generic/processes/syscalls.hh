@@ -250,6 +250,7 @@ inline SyscallError syscall_error(TaskDescriptor *task) { return {task}; }
 inline SyscallRetval syscall_return(TaskDescriptor *task) { return {task}; }
 
 ulong syscall_flags(TaskDescriptor *task);
+ulong syscall_flags_reg(TaskDescriptor *task);
 unsigned syscall_number(TaskDescriptor *task);
 ulong syscall_arg(TaskDescriptor *task, int arg, int args64before = 0);
 u64 syscall_arg64(TaskDescriptor *task, int arg);

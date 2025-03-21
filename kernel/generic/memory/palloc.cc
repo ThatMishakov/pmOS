@@ -42,7 +42,7 @@ void *palloc(size_t number)
 {
     // Find the suitable memory region
     void *ptr = vmm::kernel_space_allocator.virtmem_alloc(number);
-    if (ptr == nullptr)
+    if (!ptr)
         return nullptr;
 
     auto phys_addr = pmm::get_memory_for_kernel(number);

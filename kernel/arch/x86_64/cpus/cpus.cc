@@ -43,9 +43,11 @@
 #include <stdlib.h>
 #include <x86_asm.hh>
 #include <x86_utils.hh>
+#include <interrupts/ioapic.hh>
 
 using namespace kernel;
 using namespace kernel::pmm;
+using namespace kernel::x86;
 
 void program_syscall()
 {
@@ -254,6 +256,9 @@ void init_scheduling(u64 bootstap_apic_id)
 
     serial_logger.printf("Initializing per-CPU structures\n");
     init_per_cpu(bootstap_apic_id);
+
+    serial_logger.printf("Initializing IOAPICs\n");
+    IOAPIC::init_ioapics();
 
     serial_logger.printf("Initializing ACPI trampoline\n");
     init_acpi_trampoline();

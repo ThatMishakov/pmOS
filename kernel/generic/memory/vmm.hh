@@ -43,6 +43,8 @@
 #include <pmos/containers/intrusive_list.hh>
 #include <types.hh>
 
+#include <kern_logger/kern_logger.hh>
+
 namespace kernel::vmm
 {
 
@@ -230,7 +232,7 @@ template<int Q, int M> void VirtMem<Q, M>::virtmem_free(void *ptr, u64 npages)
     auto head               = &virtmem_hashtable[idx];
     VirtmemBoundaryTag *tag = nullptr;
     for (auto i = head->begin(); i != head->end(); i++) {
-        if (tag->base == base) {
+        if (i->base == base) {
             // Found the tag
             tag = i;
             break;
@@ -239,7 +241,7 @@ template<int Q, int M> void VirtMem<Q, M>::virtmem_free(void *ptr, u64 npages)
 
     assert(tag != nullptr);
     assert(tag->state == VirtmemBoundaryTag::State::ALLOCATED);
-    assert(tag->size == npages);
+    assert(tag->size == (npages << freelist_quantum));
 
     // Take the tag out of the hashtable
     VirtMemFreelist::remove(tag);

@@ -45,6 +45,8 @@
 #include <pmos/containers/intrusive_list.hh>
 #include <registers.hh>
 #include <types.hh>
+#include <array>
+#include <utility>
 
 #if defined(__x86_64__) || defined(__i386__)
     #include <interrupts/gdt.hh>
@@ -137,6 +139,8 @@ struct CPU_Info {
 
 #if defined(__x86_64__) || defined(__i386__)
     u32 lapic_id = 0;
+    static constexpr unsigned MAPPABLE_INTS = 192;
+    std::array<std::pair<void *, u32>, MAPPABLE_INTS> int_mappings{};
 #endif
 
 #ifdef __riscv

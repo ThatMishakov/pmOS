@@ -132,6 +132,7 @@ struct X86_64Regs {                         // 208 bytes
     // TODO: Other operating systems usually use a different register
     inline u64 &syscall_number() { return scratch_r.rdi; }
     inline u64 syscall_number() const { return scratch_r.rdi; }
+    u64 syscall_flags() const;
 
     // Get syscall arguments, starting from 1
     // Although SYSCALL/SYSRET use %rcx to save program pointer, the handler
