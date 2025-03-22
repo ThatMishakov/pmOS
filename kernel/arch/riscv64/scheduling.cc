@@ -401,6 +401,17 @@ void initialize_fp(const klib::string &isa_string)
     max_supported_fp_level = max;
 }
 
+register CPU_Info *cpu_struct __asm__("tp");
+void set_cpu_struct(CPU_Info *i)
+{
+    cpu_struct = i;
+}
+
+extern "C" CPU_Info *get_cpu_struct()
+{
+    return cpu_struct;
+}
+
 extern bool cpu_struct_works;
 
 void init_scheduling(u64 hart_id)
