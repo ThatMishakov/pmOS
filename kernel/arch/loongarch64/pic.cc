@@ -479,6 +479,8 @@ ReturnStr<std::pair<CPU_Info *, u32>> allocate_interrupt_single(u32 gsi, bool ed
 
     biopic->set_mapping(gsi, idx, cpu, edge_triggered);
 
+    cpu->int_handlers.allocated_int_count++;
+
     return ReturnStr<std::pair<CPU_Info *, u32>>::success(std::pair(cpu, idx));
 }
 

@@ -144,11 +144,12 @@ void IOAPIC::init_ioapics()
         if (!ioapic->virt_addr)
             panic("Failed to map IOAPIC\n");
 
+
         // A bit of a sanity check...
         u8 ioapic_id      = ioapic->read_reg(regs::IOAPICID) >> 24;
         ioapic->ioapic_id = ioapic_id;
         if (ioapic_id != e->ioapic_id)
-            panic("IOAPIC ID mismatch, IOAPICID: %x, ACPI: %x\n", ioapic_id, e->ioapic_id);
+            serial_logger.printf("IOAPIC ID mismatch, IOAPICID: %x, ACPI: %x\n", ioapic_id, e->ioapic_id);
 
         u32 ioapicver    = ioapic->read_reg(regs::IOAPICVER);
         u8 version       = ioapicver & 0xff;

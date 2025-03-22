@@ -396,5 +396,7 @@ ReturnStr<std::pair<CPU_Info *, u32>> allocate_interrupt(IntMapping m)
     cpu->int_mappings[idx].first  = m.ioapic;
     cpu->int_mappings[idx].second = m.vector;
 
+    cpu->int_handlers.allocated_int_count++;
+
     return Success(std::make_pair(cpu, idx + 48));
 }

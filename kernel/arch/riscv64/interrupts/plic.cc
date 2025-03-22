@@ -299,6 +299,8 @@ ReturnStr<std::pair<CPU_Info *, u32>> allocate_interrupt_single(u32 gsi, bool, b
             current_cpu = cpus[i];
     }
 
+    cpu->int_handlers.allocated_int_count++;
+
     plic->claimed_by_cpu[offset] = current_cpu;
     return Success(std::pair{current_cpu, gsi});
 }
