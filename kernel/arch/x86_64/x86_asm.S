@@ -115,12 +115,6 @@ write_msr:
     wrmsr
     ret
 
-    .globl get_cpu_struct
-    .type get_cpu_struct, @function
-get_cpu_struct:
-    movq %gs:0, %rax
-    ret
-
     .globl getCR0
 getCR0:
     movq %cr0, %rax

@@ -226,8 +226,7 @@ extern klib::vector<CPU_Info *> cpus;
 
 quantum_t assign_quantum_on_priority(priority_t);
 
-// static CPU_Info* const GSRELATIVE per_cpu = 0; // clang ignores GSRELATIVE for no apparent reason
-extern "C" CPU_Info *get_cpu_struct();
+CPU_Info *get_cpu_struct();
 
 inline TaskDescriptor *get_current_task() { return get_cpu_struct()->current_task; }
 

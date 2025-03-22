@@ -407,7 +407,7 @@ void set_cpu_struct(CPU_Info *i)
     cpu_struct = i;
 }
 
-extern "C" CPU_Info *get_cpu_struct()
+CPU_Info *get_cpu_struct()
 {
     return cpu_struct;
 }

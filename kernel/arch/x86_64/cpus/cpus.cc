@@ -49,6 +49,9 @@ using namespace kernel;
 using namespace kernel::pmm;
 using namespace kernel::x86;
 
+static CPU_Info __seg_gs const *c = nullptr;
+CPU_Info *get_cpu_struct() { return c->self; }
+
 void program_syscall()
 {
     write_msr(0xC0000081, ((u64)(R0_CODE_SEGMENT) << 32) | ((u64)(R3_LEGACY_CODE_SEGMENT) << 48));
