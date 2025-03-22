@@ -101,7 +101,7 @@ static IDT init_idt()
     u[47] = interrupt_gate((u32)apic_spurious_isr, 0);
 
     u[48] = interrupt_gate((u32)prog_int_48, 0);
-    u[49] = interrupt_gate((u32)prog_int_48, 0);
+    u[49] = interrupt_gate((u32)prog_int_49, 0);
     u[50] = interrupt_gate((u32)prog_int_50, 0);
     u[51] = interrupt_gate((u32)prog_int_51, 0);
     u[52] = interrupt_gate((u32)prog_int_52, 0);
