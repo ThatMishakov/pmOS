@@ -362,6 +362,8 @@ template<int Q, int M> void *VirtMem<Q, M>::virtmem_alloc(u64 npages, VirtmemAll
     if (virtmem_ensure_tags(1) != 0)
         return nullptr;
 
+    assert(npages > 0);
+
     // Calculate the size of the segment in bytes
     u64 size = npages << 12;
 

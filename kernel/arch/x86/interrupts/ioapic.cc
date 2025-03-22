@@ -35,7 +35,7 @@ static u32 *map_ioapic(u32 phys_addr)
 
     size_t size     = 0x20;
     unsigned offset = phys_addr & PAGE_MASK;
-    size            = (size + offset + PAGE_MASK) & PAGE_MASK;
+    size            = (size + offset + PAGE_MASK) & ~PAGE_MASK;
 
     void *ptr = vmm::kernel_space_allocator.virtmem_alloc(size / PAGE_SIZE);
     if (!ptr)
@@ -165,7 +165,7 @@ void IOAPIC::init_ioapics()
 
         ioapic->push_global();
 
-        serial_logger.printf("Kernel: initialized IOAPIC ID %x version %x GSI %x - %x\n", ioapic_id,
+        serial_logger.printf("Kernel: initialized IOAPIC ID %x version %x GSI %i - %i\n", ioapic_id,
                              version, ioapic->int_base, ioapic->int_base + redir_entries);
     }
 }
@@ -190,8 +190,6 @@ ReturnStr<std::pair<CPU_Info *, u32>> IOAPIC::allocate_interrupt_single(u32 gsi,
         auto [cpu, vector] = result.val;
 
         ioapic->mappings[apic_base] = {cpu, vector};
-
-        serial_logger.printf("vector: %x\n", vector);
 
         // Set the mapping
         u64 val = ((u64)cpu->lapic_id << 32) | ((u32)!edge_triggered << 15) | ((u32)active_low << 13) | vector;

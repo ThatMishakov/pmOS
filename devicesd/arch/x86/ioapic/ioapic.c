@@ -385,7 +385,7 @@ int set_up_gsi(uint32_t gsi, bool active_low, bool level_trig, uint64_t task, pm
 
     printf("Got vector %u for GSI %u\n", vector, gsi);
 
-    auto result = register_interrupt(cpu_id, vector, task, port);
+    auto result = register_interrupt(cpu_id - 1, vector, task, port);
     if (result < 0) {
         fprintf(stderr, "Error: Could not register interrupt for GSI %u: %s\n", gsi, strerror(-result));
     }

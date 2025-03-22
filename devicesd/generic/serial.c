@@ -208,7 +208,7 @@ bool init_serial_hardcoded()
     struct serial_port *port = malloc(sizeof *port);
     port->interface_type     = 0;
     port->base_address       = 0x3f8;
-    port->interrupt          = 0x0;
+    port->interrupt          = 0x01;
     port->pc_intno           = 4;
     port->gsi                = 0;
     port->baud_rate          = 9600;

@@ -335,6 +335,8 @@ kresult_t interrupt_enable(u32 i)
 {
     assert(i >= 48 and i < 240);
 
+    i -= 48;
+
     IOAPIC *ioapic = nullptr;
     u32 vector     = 0;
     auto c         = get_cpu_struct();
