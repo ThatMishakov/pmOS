@@ -308,16 +308,18 @@ void ns16550_init()
         // set DLAB = 1
         set_register(LCR, DLAB_MASK);
 
+        u32 right_freq = clock_frequency/16;
+
         uint8_t prescaler_division = 0;
         uint16_t divisor_constant  = 0;
-        if (baud_rate > clock_frequency) {
-            prescaler_division = baud_rate / clock_frequency;
+        if (baud_rate > right_freq) {
+            prescaler_division = baud_rate / right_freq;
             divisor_constant   = 1;
 
             if (prescaler_division >= (1 << 4))
                 throw std::runtime_error("Clock too high");
         } else {
-            divisor_constant = clock_frequency / baud_rate;
+            divisor_constant = right_freq / baud_rate;
         }
 
         io_rw->write_register(DLL, divisor_constant);
