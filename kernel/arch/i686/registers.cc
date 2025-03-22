@@ -20,6 +20,11 @@ static unsigned call_flags(TaskDescriptor *task) { return task->regs.eax; }
 unsigned syscall_number(TaskDescriptor *task) { return call_flags(task) & 0xff; }
 ulong syscall_flags(TaskDescriptor *task) { return call_flags(task) >> 8; }
 
+ulong syscall_flags_reg(TaskDescriptor *task)
+{
+    return call_flags(task);
+}
+
 u64 SyscallRetval::operator=(u64 value)
 {
     syscall_ret_low(task, 0); // SUCCESS

@@ -30,7 +30,6 @@
 #include <configuration.h>
 #include <dtb/dtb.h>
 #include <interrupts/interrupts.h>
-#include <ioapic/ioapic.h>
 #include <kernel/block.h>
 #include <kernel/types.h>
 #include <pci/pci.h>

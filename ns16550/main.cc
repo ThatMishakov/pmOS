@@ -201,7 +201,14 @@ void set_up_interrupt()
 
         have_interrupts = true;
     } else {
-        auto [result, cpu, vector] = allocate_interrupt(gsi_num, 0);
+        unsigned flags = 0;
+
+        // TODO: I haven't found where to get the interrupt trigger type in SPCR table...
+        #ifdef __loongarch__
+        flags = INTERRUPT_FLAG_LEVEL_TRIGGERED;
+        #endif
+
+        auto [result, cpu, vector] = allocate_interrupt(gsi_num, flags);
         if (result) {
             printf("ns16550: failed to get interrupt, error %li\n", result);
             return;

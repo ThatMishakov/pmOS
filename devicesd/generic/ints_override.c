@@ -29,6 +29,9 @@
 #include <ioapic/ints_override.h>
 #include <stddef.h>
 #include <stdlib.h>
+#include <acpi/acpi.h>
+#include <stdio.h>
+#include <string.h>
 
 typedef struct redir_list {
     struct redir_list *next;
@@ -68,4 +71,75 @@ int_redirect_descriptor get_for_int(uint32_t intno)
 int_redirect_descriptor isa_gsi_mapping(uint32_t intno)
 {
     return get_for_int(intno);
+}
+
+void init_int_redirects()
+{
+    MADT *madt = (MADT *)get_table("APIC", 0);
+
+    if (madt == NULL) {
+        printf("Warning: Did not find MADT table\n");
+        return;
+    }
+
+    void *madt_end = (char *)(madt) + madt->header.length;
+
+    MADT_entry *p = madt->entries;
+    for (; (void *)(p) < madt_end; p = (MADT_entry *)((char *)(p) + p->length)) {
+        // printf("MADT entry type %x size %i", p->type, p->length);
+
+        switch (p->type) {
+        case MADT_LOCAL_APIC_NMI_TYPE: {
+            // MADT_LAPIC_NMI_entry* e = (MADT_LAPIC_NMI_entry*)p;
+            // printf(" -> LAPIC NMI CPU ID: %x flags %X INT%i\n", e->ACPI_CPU_UID, e->Flags,
+            // e->LINT_ID);
+        } break;
+        case MADT_INT_OVERRIDE_TYPE: {
+            MADT_INT_entry *e = (MADT_INT_entry *)p;
+            // printf(" -> INT bus %x source %x int %x flags %x", e->bus, e->source,
+            // e->global_system_interrupt, e->flags);
+
+            uint8_t is_active_low      = (e->flags & 0x03) == 0b11;
+            uint8_t is_level_triggered = ((e->flags >> 2) & 0x03) == 0b11;
+            register_redirect(e->source, e->global_system_interrupt, is_active_low,
+                              is_level_triggered);
+        } break;
+        default:
+            break;
+        }
+    }
+}
+
+int set_up_gsi(uint32_t gsi, bool active_low, bool level_trig, uint64_t task, pmos_port_t port, uint32_t *vector_out)
+{
+    unsigned cpu_id = 0;
+    unsigned vector = 0;
+
+    unsigned flags = (active_low ? PMOS_INTERRUPT_ACTIVE_LOW : 0) | (level_trig ? PMOS_INTERRUPT_LEVEL_TRIG : 0);
+    auto vec_result = allocate_interrupt(gsi, flags);
+    if (vec_result.result < 0) {
+        fprintf(stderr, "Error: Could not get interrupt vector for GSI %u: %s\n", gsi, strerror(-vec_result.result));
+        return vec_result.result;
+    }
+
+    cpu_id = vec_result.cpu;
+    vector = vec_result.vector;
+
+    printf("Got vector %u for GSI %u\n", vector, gsi);
+
+    auto result = register_interrupt(cpu_id - 1, vector, task, port);
+    if (result < 0) {
+        fprintf(stderr, "Error: Could not register interrupt for GSI %u: %s\n", gsi, strerror(-result));
+    }
+
+    if (vector_out)
+        *vector_out = vector;
+    
+    return result;
+}
+
+int install_isa_interrupt(uint32_t isa_pin, uint64_t task, pmos_port_t port, uint32_t *vector)
+{
+    int_redirect_descriptor desc = get_for_int(isa_pin);
+    return set_up_gsi(desc.destination, desc.active_low, desc.level_trig, task, port, vector);
 }

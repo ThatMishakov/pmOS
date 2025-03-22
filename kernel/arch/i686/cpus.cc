@@ -10,8 +10,10 @@
 #include <processes/tasks.hh>
 #include <sched/sched.hh>
 #include <x86_asm.hh>
+#include <interrupts/ioapic.hh>
 
 using namespace kernel;
+using namespace kernel::x86;
 
 extern "C" void double_fault_isr();
 
@@ -256,6 +258,9 @@ void init_scheduling_on_bsp()
 
     serial_logger.printf("Initializing per-CPU structures\n");
     init_per_cpu(get_lapic_id());
+
+    serial_logger.printf("Initializing I/O APICs\n");
+    IOAPIC::init_ioapics();
 
     serial_logger.printf("Scheduling initialized\n");
 }

@@ -200,6 +200,7 @@ uacpi_status uacpi_kernel_get_rsdp(uacpi_phys_addr *out_rdsp_address)
 void init_ec();
 void publish_devices();
 void acpi_bus_enumerate();
+void init_int_redirects();
 
 int acpi_init()
 {
@@ -225,6 +226,7 @@ int acpi_init()
     }
 #endif
 
+    init_int_redirects();
     acpi_pci_init();
     init_ec();
 
@@ -529,8 +531,6 @@ int power_button_init(void)
 }
 
 void find_com();
-void init_ioapic();
-void init_cpus();
 
 void find_acpi_devices() { find_com(); }
 
@@ -620,11 +620,6 @@ void init_acpi()
     } else {
         printf("Info: ACPI revision: %i\n", acpi_revision);
     }
-
-    init_cpus();
-#if defined(__x86_64__) || defined(__i386__)
-    init_ioapic();
-#endif
 
     int i = acpi_init();
     if (i != 0) {

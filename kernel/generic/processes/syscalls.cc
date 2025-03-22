@@ -1178,9 +1178,11 @@ void syscall_set_segment()
         // TODO: Make segments and registers consistent
         target->regs.thread_pointer() = ptr;
         break;
-    // case 2:
-    //     target->regs.global_pointer() = ptr;
-    //     break;
+    #if defined(__x86_64__) || defined(__i386__)
+    case 2:
+        target->regs.global_pointer() = ptr;
+        break;
+    #endif
     case 3: {
         auto b = copy_from_user((char *)&target->regs, (char *)ptr, sizeof(target->regs));
         if (!b.success()) {

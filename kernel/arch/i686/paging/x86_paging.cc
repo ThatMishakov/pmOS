@@ -13,7 +13,7 @@ Spinlock IA32_Page_Table::page_table_index_lock;
 
 using namespace kernel;
 
-void IA32_Page_Table::apply() { setCR3(page_table); }
+void IA32_Page_Table::apply() { setCR3(cr3); }
 
 bool use_pae    = false;
 bool support_nx = false;
@@ -311,6 +311,11 @@ kresult_t map_pages(ptable_top_ptr_t page_table, u64 phys_addr, void *virt_addr,
             return result;
     }
     return 0;
+}
+
+kresult_t map_kernel_pages(u64 phys_addr, void *virt_addr, size_t size, Page_Table_Argumments arg)
+{
+    return map_pages(idle_cr3, phys_addr, virt_addr, size, arg);
 }
 
 u64 prepare_pt_for(void *virt_addr, Page_Table_Argumments, u32 cr3)
