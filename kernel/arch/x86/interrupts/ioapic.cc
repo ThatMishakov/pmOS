@@ -144,12 +144,12 @@ void IOAPIC::init_ioapics()
         if (!ioapic->virt_addr)
             panic("Failed to map IOAPIC\n");
 
-
         // A bit of a sanity check...
         u8 ioapic_id      = ioapic->read_reg(regs::IOAPICID) >> 24;
         ioapic->ioapic_id = ioapic_id;
         if (ioapic_id != e->ioapic_id)
-            serial_logger.printf("IOAPIC ID mismatch, IOAPICID: %x, ACPI: %x\n", ioapic_id, e->ioapic_id);
+            serial_logger.printf("IOAPIC ID mismatch, IOAPICID: %x, ACPI: %x\n", ioapic_id,
+                                 e->ioapic_id);
 
         u32 ioapicver    = ioapic->read_reg(regs::IOAPICVER);
         u8 version       = ioapicver & 0xff;
@@ -173,7 +173,8 @@ void IOAPIC::init_ioapics()
 
 Spinlock int_allocation_lock;
 
-ReturnStr<std::pair<CPU_Info *, u32>> IOAPIC::allocate_interrupt_single(u32 gsi, bool edge_triggered, bool active_low)
+ReturnStr<std::pair<CPU_Info *, u32>>
+    IOAPIC::allocate_interrupt_single(u32 gsi, bool edge_triggered, bool active_low)
 {
     auto ioapic = IOAPIC::get_ioapic(gsi);
     if (!ioapic)
@@ -193,7 +194,8 @@ ReturnStr<std::pair<CPU_Info *, u32>> IOAPIC::allocate_interrupt_single(u32 gsi,
         ioapic->mappings[apic_base] = {cpu, vector};
 
         // Set the mapping
-        u64 val = ((u64)cpu->lapic_id << 32) | ((u32)!edge_triggered << 15) | ((u32)active_low << 13) | vector;
+        u64 val = ((u64)cpu->lapic_id << 32) | (1 << 16) | ((u32)!edge_triggered << 15) |
+                  ((u32)active_low << 13) | vector;
         ioapic->write_redir_entry(apic_base, val);
     }
 
@@ -210,7 +212,8 @@ IOAPIC *IOAPIC::get_ioapic(u32 gsi)
     return nullptr;
 }
 
-ReturnStr<std::pair<CPU_Info *, u32>> allocate_interrupt_single(u32 gsi, bool edge_triggered, bool active_low)
+ReturnStr<std::pair<CPU_Info *, u32>> allocate_interrupt_single(u32 gsi, bool edge_triggered,
+                                                                bool active_low)
 {
     return IOAPIC::allocate_interrupt_single(gsi, edge_triggered, active_low);
 }
@@ -225,7 +228,7 @@ void IOAPIC::interrupt_enable(u32 vector)
     mmio_writel(virt_addr, addr);
     u32 val = mmio_readl(virt_addr + 4);
     val &= ~(1 << 16);
-    mmio_writel(virt_addr + 4, val); 
+    mmio_writel(virt_addr + 4, val);
 }
 
 void IOAPIC::interrupt_disable(u32 vector)
@@ -238,5 +241,5 @@ void IOAPIC::interrupt_disable(u32 vector)
     mmio_writel(virt_addr, addr);
     u32 val = mmio_readl(virt_addr + 4);
     val |= 1 << 16;
-    mmio_writel(virt_addr + 4, val); 
+    mmio_writel(virt_addr + 4, val);
 }
