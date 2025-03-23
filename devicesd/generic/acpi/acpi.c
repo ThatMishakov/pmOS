@@ -211,6 +211,7 @@ int acpi_init()
     }
 
     // uacpi_context_set_log_level(UACPI_LOG_DEBUG);
+    init_int_redirects();
 
     ret = uacpi_namespace_load();
     if (uacpi_unlikely_error(ret)) {
@@ -225,8 +226,6 @@ int acpi_init()
         return -ENODEV;
     }
 #endif
-
-    init_int_redirects();
     acpi_pci_init();
     init_ec();
 
