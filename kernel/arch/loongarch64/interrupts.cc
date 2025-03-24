@@ -273,8 +273,9 @@ extern "C" void handle_interrupt()
     default: {
         auto task = get_current_task();
         serial_logger.printf("Userspace (or idle) interrupt\n");
-        serial_logger.printf("Exception %i\n", code);
+        serial_logger.printf("Exception 0x%x\n", code);
         print_registers(&task->regs);
+        serial_logger.printf("Task %li (%s)\n", task->task_id, task->name.c_str());
         panic("Unimplemented exception!\n");
     }
     }

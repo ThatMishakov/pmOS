@@ -16,6 +16,8 @@ __pthread_entry_point:
 
     jirl $ra, $t0, 0
 
+    bl __pthread_exit
+
     break 0
 
     .type __pthread_exit, @function
