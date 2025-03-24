@@ -23,7 +23,7 @@ u64 get_fp()
     return fp;
 }
 
-void print_stack_trace_fp(u64 fp = get_fp())
+void print_stack_trace_fp(u64 fp = get_fp(), Logger &logger = serial_logger)
 {
     fp_s *current = (fp_s *)((char *)fp - 16);
     serial_logger.printf("Stack trace:\n");
@@ -210,6 +210,7 @@ void page_fault(u32 error)
                              "-> %i killing process...\n",
                              virt_addr, task->task_id, task->name.c_str(), task->regs.pc, badv,
                              result);
+        print_registers(&task->regs, global_logger);
         print_registers(&task->regs, serial_logger);
         task->atomic_kill();
     }
