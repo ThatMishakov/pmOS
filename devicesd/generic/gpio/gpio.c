@@ -163,7 +163,7 @@ static void amd_gpio_interrupt_handler(struct amd_gpio_device *device)
     }
 }
 
-void *interrupt_thread(void *d)
+static void *interrupt_thread(void *d)
 {
     // TL;DR: This function calls amd_gpio_interrupt_handler when an interrupt is received
     struct amd_gpio_device *device = d;
