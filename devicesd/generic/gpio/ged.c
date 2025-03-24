@@ -234,7 +234,7 @@ static const char *const ged_ids[] = {
 };
 
 static acpi_driver ged = {
-    .device_name  = "AMD GPIO Controller",
+    .device_name  = "ACPI GED controller",
     .pnp_ids      = ged_ids,
     .device_probe = match_ged,
 };
