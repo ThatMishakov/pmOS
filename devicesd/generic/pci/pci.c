@@ -45,7 +45,7 @@
 #include <uacpi/resources.h>
 #include <uacpi/tables.h>
 #include <uacpi/utilities.h>
-#include <vector.h>
+#include <pmos/vector.h>
 
 PCIDeviceVector pci_devices = VECTOR_INIT;
 

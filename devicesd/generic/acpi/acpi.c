@@ -51,7 +51,7 @@
 #include <uacpi/osi.h>
 #include <uacpi/sleep.h>
 #include <uacpi/utilities.h>
-#include <vector.h>
+#include <pmos/vector.h>
 
 void init_acpi();
 

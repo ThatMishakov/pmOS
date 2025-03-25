@@ -30,7 +30,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <uacpi/event.h>
-#include <vector.h>
+#include <pmos/vector.h>
 
 void init_pci();
 
