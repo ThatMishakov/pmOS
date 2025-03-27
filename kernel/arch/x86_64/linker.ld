@@ -92,8 +92,6 @@ SECTIONS
         *(.gcc_except_table .gcc_except_table.*)
         _gcc_except_table_end = .;
     } :eh_frame
-
-    _free_to_use = 0xFFFFFE8000000000;
-    _free_after_kernel = ALIGN(4K);
+    _kernel_end = .;
 }
 

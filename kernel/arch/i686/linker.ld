@@ -93,6 +93,6 @@ SECTIONS
         _gcc_except_table_end = .;
     } :eh_frame
 
-    _free_after_kernel = ALIGN(4K);
+    _kernel_end = .;
 }
 

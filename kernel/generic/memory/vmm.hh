@@ -43,8 +43,6 @@
 #include <pmos/containers/intrusive_list.hh>
 #include <types.hh>
 
-#include <kern_logger/kern_logger.hh>
-
 namespace kernel::vmm
 {
 
@@ -112,7 +110,7 @@ void virtmem_fill_initial_tags();
 
 // Initialize the allocator during booting, and add the space designated for the allocator to the
 // freelist
-void virtmem_init(u64 virtmem_base, u64 virtmem_size);
+void virtmem_init(void *virtmem_base, size_t virtmem_size, void *kernel_start, size_t kernel_size);
 
 template<int QUANTUM, int MAX_ORDER> class VirtMem
 {
@@ -178,7 +176,7 @@ protected:
             return 0;
 
         u64 l = find_bit(size);
-        return l - freelist_quantum;
+        return l - freelist_quantum - 1;
     }
 
     static const u64 virtmem_initial_hash_size = 16;
@@ -214,7 +212,8 @@ protected:
     VirtmemBoundaryTag segment_ll_dummy_head;
 
     friend int virtmem_ensure_tags(size_t size);
-    friend void virtmem_init(u64 virtmem_base, u64 virtmem_size);
+    friend void virtmem_init(void *virtmem_base, size_t virtmem_size, void *kernel_start,
+                             size_t kernel_size);
 };
 
 inline constinit VirtMem<12, 63> kernel_space_allocator;
@@ -295,10 +294,10 @@ template<int Q, int M> void *VirtMem<Q, M>::virtmem_alloc_aligned(u64 npages, u6
     const u64 size = npages << 12;
 
     // Find the smallest list that can fit the requested size
-    int l = find_bit(npages);
+    int l = find_bit(npages) - 1;
 
     VirtmemBoundaryTag *t = nullptr;
-    u64 mask              = ~((1ULL << l) - 1);
+    u64 mask              = ~(((u64)1 << l) - 1);
     u64 wanted_mask       = mask & virtmem_freelist_bitmap;
     while (wanted_mask != 0) {
         // __builtin_ffsl returns the index of the first set bit + 1, or 0 if there are none
@@ -307,8 +306,7 @@ template<int Q, int M> void *VirtMem<Q, M>::virtmem_alloc_aligned(u64 npages, u6
         for (auto tag = list.begin(); tag != list.end(); tag++) {
             u64 base    = tag->base;
             u64 alignup = (base + alignup_mask) & ~alignup_mask;
-            u64 all_end = alignup + size;
-            if (all_end <= tag->end()) {
+            if (alignup <= tag->end() - size) {
                 t = tag;
                 goto found;
             }
@@ -327,6 +325,13 @@ found:
     const u64 aligned_up_base = (t->base + alignup_mask) & ~alignup_mask;
     const u64 old_base        = t->base;
 
+    VirtMemFreelist::remove(t);
+    int idx    = virtmem_freelist_index(t->size);
+    auto &list = virtmem_freelists[idx];
+    if (list.empty())
+        // Mark the list as empty
+        virtmem_freelist_bitmap &= ~((u64)1 << idx);
+
     t->base = aligned_up_base;
     t->size -= aligned_up_base - old_base;
     t->state = VirtmemBoundaryTag::State::ALLOCATED;
@@ -341,7 +346,7 @@ found:
         virtmem_add_to_free_list(new_tag);
     }
 
-    if (t->end() > aligned_up_base + size) {
+    if (t->end() - size > aligned_up_base) {
         // The segment is larger than the requested size
         // Split the segment and return the first part
         auto new_tag   = virtmem_get_free_tag();
@@ -368,11 +373,11 @@ template<int Q, int M> void *VirtMem<Q, M>::virtmem_alloc(u64 npages, VirtmemAll
     u64 size = npages << 12;
 
     // Find the smallest list that can fit the requested size
-    int l = find_bit(npages);
+    int l = find_bit(npages) - 1;
 
     VirtmemBoundaryTag *best = nullptr;
     u64 free_list_idx        = 0;
-    if (policy == VirtmemAllocPolicy::BESTFIT and (1UL << l) < npages) {
+    if (policy == VirtmemAllocPolicy::BESTFIT and ((u64)1 << l) < npages) {
         // The requested size is not a power of 2 and best fit is requested
         // This implies searching the lists for the best fit
         // Before going to larger ones
@@ -384,7 +389,7 @@ template<int Q, int M> void *VirtMem<Q, M>::virtmem_alloc(u64 npages, VirtmemAll
                 VirtMemFreelist::remove(tag);
                 if (list.empty())
                     // Mark the list as empty
-                    virtmem_freelist_bitmap &= ~(1UL << l);
+                    virtmem_freelist_bitmap &= ~((u64)1 << l);
 
                 tag->state = VirtmemBoundaryTag::State::ALLOCATED;
                 virtmem_save_to_alloc_hashtable(tag);
@@ -401,8 +406,12 @@ template<int Q, int M> void *VirtMem<Q, M>::virtmem_alloc(u64 npages, VirtmemAll
         // which is guaranteed to have a fit
 
         // Find the first non-empty list on bitmap
-        u64 mask = (1UL << (l + 1)) - 1;
-        mask     = ~mask;
+        u64 mask;
+        if (((u64)1 << l) != npages)
+            mask = ((u64)1 << (l + 1)) - 1;
+        else
+            mask = ((u64)1 << l) - 1;
+        mask = ~mask;
 
         u64 wanted_mask = mask & virtmem_freelist_bitmap;
         if (wanted_mask == 0)
@@ -422,7 +431,7 @@ template<int Q, int M> void *VirtMem<Q, M>::virtmem_alloc(u64 npages, VirtmemAll
         auto &list = virtmem_freelists[free_list_idx];
         if (list.empty())
             // Mark the list as empty
-            virtmem_freelist_bitmap &= ~(1UL << free_list_idx);
+            virtmem_freelist_bitmap &= ~((u64)1 << free_list_idx);
 
         best->state = VirtmemBoundaryTag::State::ALLOCATED;
         virtmem_save_to_alloc_hashtable(best);
@@ -430,6 +439,12 @@ template<int Q, int M> void *VirtMem<Q, M>::virtmem_alloc(u64 npages, VirtmemAll
     } else {
         // The segment is larger than the requested size
         // Split the segment and return the first part
+        VirtMemFreelist::remove(best);
+        auto &list = virtmem_freelists[free_list_idx];
+        if (list.empty())
+            // Mark the list as empty
+            virtmem_freelist_bitmap &= ~((u64)1 << free_list_idx);
+
         auto new_tag   = virtmem_get_free_tag();
         new_tag->base  = best->base + size;
         new_tag->size  = best->size - size;
@@ -449,7 +464,7 @@ template<int Q, int M> void VirtMem<Q, M>::virtmem_add_to_free_list(VirtmemBound
     int idx    = virtmem_freelist_index(tag->size);
     auto &list = virtmem_freelists[idx];
     list.push_front(tag);
-    virtmem_freelist_bitmap |= (1UL << idx);
+    virtmem_freelist_bitmap |= ((u64)1 << idx);
 }
 
 template<int Q, int M> void VirtMem<Q, M>::init()

@@ -153,6 +153,7 @@ extern void *__eh_frame_start;
 extern void *__eh_frame_end;
 extern void *_gcc_except_table_start;
 extern void *_gcc_except_table_end;
+extern u8 _kernel_end;
 
 ptable_top_ptr_t kernel_ptable_top = 0;
 
@@ -208,7 +209,6 @@ void construct_paging()
     const u64 kernel_start_virt = (u64)&_kernel_start & ~0xfff;
 
     // While we're here, initialize virtmem
-    // Give it the first page of the root paging level
     #ifdef __riscv
     const u64 heap_space_shift = 12 + (riscv64_paging_levels - 1) * 9;
     #else
@@ -216,8 +216,12 @@ void construct_paging()
     #endif
 
     const u64 heap_space_start = (-1UL) << (heap_space_shift + 8);
-    const u64 heap_addr_size   = 1UL << heap_space_shift;
-    vmm::virtmem_init(heap_space_start, heap_addr_size);
+    const u64 heap_addr_size   = -heap_space_start;
+
+    const size_t PAGE_MASK = PAGE_SIZE - 1;
+    void *kernel_start = (void *)(((size_t)&_kernel_start + PAGE_MASK) & ~PAGE_MASK);
+    const size_t kernel_size = ((char *)&_kernel_end - (char *)kernel_start + PAGE_SIZE - 1) & ~PAGE_MASK;
+    vmm::virtmem_init((void *)heap_space_start, heap_addr_size, kernel_start, kernel_size);
 
     kernel_ptable_top = pmm::get_memory_for_kernel(1);
     clear_page(kernel_ptable_top);
@@ -855,6 +859,7 @@ void init_task1()
     module *task1                = nullptr;
     const klib::string bootstrap = "bootstrap";
     for (auto &m: modules) {
+        serial_logger.printf("Module %s\n", m.cmdline.c_str());
         if (m.cmdline == bootstrap) {
             task1 = &m;
             break;
@@ -1086,7 +1091,7 @@ void limine_main()
     #endif
 
     serial_logger.printf("Hello from pmOS kernel!\n");
-    serial_logger.printf("Kernel start: 0x%h\n", &_kernel_start);
+    serial_logger.printf("Kernel start: 0x%lh\n", &_kernel_start);
 
     if (smp_request.response != nullptr) {
     #ifdef __riscv

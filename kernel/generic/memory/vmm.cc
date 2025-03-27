@@ -33,6 +33,7 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <kern_logger/kern_logger.hh>
 
 using namespace kernel;
 
@@ -63,17 +64,44 @@ void virtmem_return_tag(VirtmemBoundaryTag *tag)
     virtmem_available_tags_count++;
 }
 
-void virtmem_init(u64 virtmem_base, u64 virtmem_size)
+void virtmem_init(void *virtmem_base, size_t virtmem_size, void *kernel_start, size_t kernel_size)
 {
     kernel_space_allocator.init();
 
     virtmem_fill_initial_tags();
+
+    if (virtmem_base != kernel_start) {
+        size_t size = (char *)kernel_start - (char *)virtmem_base;
+
+        auto tag   = virtmem_get_free_tag();
+        tag->base  = (u64)virtmem_base;
+        tag->size  = size;
+        tag->state = VirtmemBoundaryTag::State::FREE;
+        virtmem_link_tag(&kernel_space_allocator.segment_ll_dummy_head, tag);
+        kernel_space_allocator.virtmem_add_to_free_list(tag);
+        serial_logger.printf("Kernel vmm: adding %lx size %lx FREE\n", tag->base, tag->size);
+    }
+
     auto tag   = virtmem_get_free_tag();
-    tag->base  = virtmem_base;
-    tag->size  = virtmem_size;
-    tag->state = VirtmemBoundaryTag::State::FREE;
-    kernel_space_allocator.virtmem_add_to_free_list(tag);
-    virtmem_link_tag(&kernel_space_allocator.segment_ll_dummy_head, tag);
+    tag->base = (u64)kernel_start;
+    tag->size = kernel_size;
+    tag->state = VirtmemBoundaryTag::State::ALLOCATED;
+    virtmem_link_tag(kernel_space_allocator.segment_ll_dummy_head.segment_prev, tag);
+    kernel_space_allocator.virtmem_save_to_alloc_hashtable(tag);
+    serial_logger.printf("Kernel vmm: adding %lx size %lx ALLOCATED\n", tag->base, tag->size);
+
+    if (((char *)virtmem_base + virtmem_size) != ((char *)kernel_start + kernel_size)) {
+        size_t size = ((char *)virtmem_base + virtmem_size) - ((char *)kernel_start + kernel_size);
+        u64 base = ((u64)kernel_start) + kernel_size;
+
+        auto tag   = virtmem_get_free_tag();
+        tag->base  = base;
+        tag->size  = size;
+        tag->state = VirtmemBoundaryTag::State::FREE;
+        virtmem_link_tag(kernel_space_allocator.segment_ll_dummy_head.segment_prev, tag);
+        kernel_space_allocator.virtmem_add_to_free_list(tag);
+        serial_logger.printf("Kernel vmm: adding %lx size %lx FREE\n", tag->base, tag->size);
+    }
 }
 
 int virtmem_ensure_tags(size_t size)

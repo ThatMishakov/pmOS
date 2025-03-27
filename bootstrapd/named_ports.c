@@ -1,15 +1,23 @@
-#include <pmos/containters/rbtree.h>
+#include <pmos/containers/rbtree.h>
 #include <pmos/ports.h>
+#include <string.h>
 
 struct NamedPort {
     char *string;
     pmos_port_t port;
 };
 
-static int port_compare(NamedPort &a, NamedPort &b)
+static int port_compare(struct NamedPort *a, struct NamedPort *b)
 {
     return strcmp(&a, &b);
 }
 
-RBTREE(ports_tree, NamedPort, port_compare)
+struct BoundedString {
+    const char *str;
+    size_t length;
+};
+
+int key_compare(struct NamedPort *a, struct BoundedString *s);
+
+RBTREE(ports_tree, struct NamedPort, port_compare, key_compare)
 

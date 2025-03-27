@@ -71,6 +71,8 @@ extern void *__eh_frame_end;
 extern void *_gcc_except_table_start;
 extern void *_gcc_except_table_end;
 
+extern u8 _kernel_end;
+
 ultra_attribute_header *find_attribute(ultra_boot_context *ctx, uint32_t type)
 {
     ultra_attribute_header *hdr = ctx->attributes;
@@ -521,15 +523,19 @@ void init_memory(ultra_boot_context *ctx)
         clear_page(idle_cr3, 0);
     }
 
-    u32 heap_space_start = (u32)&_free_after_kernel;
+    u32 heap_space_start = 0xC0000000;
     u32 heap_space_size  = 0 - heap_space_start;
-    vmm::virtmem_init(heap_space_start, heap_space_size);
+
+    const size_t PAGE_MASK = PAGE_SIZE - 1;
+    void *kernel_start = (void *)(((size_t)&_kernel_start + PAGE_MASK) & ~PAGE_MASK);
+    const size_t kernel_size = ((char *)&_kernel_end - (char *)kernel_start + PAGE_SIZE - 1) & ~PAGE_MASK;
+
+    vmm::virtmem_init((void *)heap_space_start, heap_space_size, kernel_start, kernel_size);
 
     // 16 pages aligned to 16 pages boundary
     void *temp_mapper_start = vmm::kernel_space_allocator.virtmem_alloc_aligned(16, 4);
     if (!temp_mapper_start)
         panic("Failed to allocate virtual memory for temp mapper\n");
-    // Bruh
     temp_temp_mapper = get_temp_temp_mapper(temp_mapper_start, idle_cr3);
 
     map_kernel(ctx);
