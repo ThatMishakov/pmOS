@@ -384,7 +384,7 @@ kresult_t RISCV64_Page_Table::copy_anonymous_pages(const klib::shared_ptr<Page_T
 }
 
 // TODO: This function had great possibilities, but now seems weird
-RISCV64_Page_Table::Page_Info RISCV64_Page_Table::get_page_mapping(void *virt_addr) const
+static RISCV64_Page_Table::Page_Info get_page_mapping(u64 table_root, const void *virt_addr)
 {
     Temp_Mapper_Obj<RISCV64_PTE> mapper(request_temp_mapper());
 
@@ -428,6 +428,42 @@ RISCV64_Page_Table::Page_Info RISCV64_Page_Table::get_page_mapping(void *virt_ad
     return Page_Info {};
 }
 
+unsigned top_pt_index(const void *ptr)
+{
+    return (reinterpret_cast<u64>(ptr) >> (12 + (riscv64_paging_levels - 1) * 9)) & 0x1ff;
+}
+
+RISCV64_Page_Table::Page_Info RISCV64_Page_Table::get_page_mapping(void *virt_addr) const
+{
+    return ::get_page_mapping(table_root, virt_addr);
+}
+
+constexpr int INSTRUCTION_ACCESS_FAULT = 1;
+constexpr int LOAD_ACCESS_FAULT        = 5;
+constexpr int STORE_AMO_ACCESS_FAULT   = 7;
+constexpr int INSTRUCTION_PAGE_FAULT   = 12;
+constexpr int LOAD_PAGE_FAULT          = 13;
+constexpr int STORE_AMO_PAGE_FAULT     = 15;
+
+bool page_mapped(const void *virt_addr, int intno)
+{
+    auto mapping = ::get_page_mapping(get_current_hart_pt(), virt_addr);
+    if (!mapping.is_allocated)
+        return false;
+
+    if ((intno == INSTRUCTION_PAGE_FAULT || intno == INSTRUCTION_ACCESS_FAULT) and
+        !mapping.executable)
+        return false;
+
+    if ((intno == LOAD_PAGE_FAULT || intno == LOAD_ACCESS_FAULT) and !mapping.readable)
+        return false;
+
+    if ((intno == STORE_AMO_PAGE_FAULT || intno == STORE_AMO_ACCESS_FAULT) and !mapping.writeable)
+        return false;
+
+    return true;
+}
+
 kresult_t map_page(ptable_top_ptr_t page_table, u64 phys_addr, void *virt_addr,
                    Page_Table_Argumments arg)
 {
@@ -452,10 +488,13 @@ kresult_t map_pages(ptable_top_ptr_t page_table, u64 phys_addr, void *virt_addr,
     return result;
 }
 
+u64 idle_pt;
+
+u64 get_idle_pt() noexcept { return idle_pt; }
+
 kresult_t map_kernel_pages(u64 phys_addr, void *virt_addr, size_t size, Page_Table_Argumments arg)
 {
-    const u64 pt_top = get_current_hart_pt();
-    return map_pages(pt_top, phys_addr, virt_addr, size, arg);
+    return map_pages(idle_pt, phys_addr, virt_addr, size, arg);
 }
 
 ReturnStr<u64> prepare_leaf_pt_for(void *virt_addr, Page_Table_Argumments /* unused */, u64 pt_ptr)
@@ -502,14 +541,12 @@ ReturnStr<u64> prepare_leaf_pt_for(void *virt_addr, Page_Table_Argumments /* unu
 
 kresult_t map_kernel_page(u64 phys_addr, void *virt_addr, Page_Table_Argumments arg)
 {
-    const u64 pt_top = get_current_hart_pt();
-    return riscv_map_page(pt_top, phys_addr, virt_addr, arg);
+    return riscv_map_page(idle_pt, phys_addr, virt_addr, arg);
 }
 
 kresult_t unmap_kernel_page(TLBShootdownContext &ctx, void *virt_addr)
 {
-    const u64 pt_top = get_current_hart_pt();
-    return riscv_unmap_page(ctx, pt_top, virt_addr);
+    return riscv_unmap_page(ctx, idle_pt, virt_addr);
 }
 
 u64 get_current_hart_pt() noexcept
@@ -662,8 +699,8 @@ void *RISCV64_Page_Table::user_addr_max() const
     return (void *)(1UL << (12 + (riscv64_paging_levels * 9) - 1));
 }
 
-void RISCV64_Page_Table::invalidate_range(TLBShootdownContext &ctx, void *virt_addr, size_t size_bytes,
-                                          bool free)
+void RISCV64_Page_Table::invalidate_range(TLBShootdownContext &ctx, void *virt_addr,
+                                          size_t size_bytes, bool free)
 {
     // Slow but doesn't matter for now
     char *end = (char *)virt_addr + size_bytes;

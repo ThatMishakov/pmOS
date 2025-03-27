@@ -335,7 +335,7 @@ extern "C" void nested_interrupt(RiscV64Regs *regs)
 
         if (intno == INSTRUCTION_PAGE_FAULT or intno == LOAD_PAGE_FAULT or
             intno == STORE_AMO_PAGE_FAULT or intno == STORE_AMO_ACCESS_FAULT or
-            intno == LOAD_ACCESS_FAULT or intno == INSTRUCTION_ACCESS_FAULT)
+            intno == LOAD_ACCESS_FAULT or intno == INSTRUCTION_ACCESS_FAULT) {
                 if (stval < 0x8000000000000000UL and c->jumpto_func) {
                     // User page fault
 
@@ -344,6 +344,32 @@ extern "C" void nested_interrupt(RiscV64Regs *regs)
                     regs->a1 = stval;
                     return;
                 }
+
+                if (stval >= ((u64)1 << 63)) {
+                    auto idle_pt = get_idle_pt();
+                    auto current_pt = get_current_hart_pt();
+                    auto idx = top_pt_index(reinterpret_cast<void *>(stval));
+
+                    Temp_Mapper_Obj<u64> idle_mapper(request_temp_mapper());
+                    Temp_Mapper_Obj<u64> current_mapper(request_temp_mapper());
+
+                    u64 *idle_pd = idle_mapper.map(idle_pt);
+                    u64 *current_pd = current_mapper.map(current_pt);
+
+                    u64 idle_e = __atomic_load_n(idle_pd + idx, __ATOMIC_ACQUIRE);
+                    u64 current_e = __atomic_load_n(current_pd + idx, __ATOMIC_ACQUIRE);
+                    if ((idle_e & RISCV_PAGE_VALID) && !(current_e & RISCV_PAGE_VALID)) {
+                        __atomic_store_n(current_pd + idx, idle_e, __ATOMIC_RELEASE);
+                        flush_page(reinterpret_cast<void *>(stval));
+                        return;
+                    }
+
+                    if (page_mapped(reinterpret_cast<void *>(stval), intno)) {
+                        flush_page(reinterpret_cast<void *>(stval));
+                        return;
+                    }
+                }
+            }
     }
 
     panic("nested interrupt! %li", scause);

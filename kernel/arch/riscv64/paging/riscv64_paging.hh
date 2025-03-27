@@ -81,6 +81,8 @@ struct RISCV64_PTE {
     void clear_auto();
 } __attribute__((packed, aligned(8)));
 
+constexpr ulong RISCV_PAGE_VALID = 1 << 0;
+
 class TLBShootdownContext;
 
 // Active number of paging levels of the system, e.g. 4 for SV48.
@@ -109,6 +111,14 @@ kresult_t riscv_unmap_page(TLBShootdownContext &ctx, u64 pt_top_phys, void *virt
 
 // Gets the top level page table pointer for the current hart
 u64 get_current_hart_pt() noexcept;
+
+u64 get_idle_pt() noexcept;
+
+// Calculates the index of the top page table for the given pointer
+unsigned top_pt_index(const void *ptr);
+
+// Checks if the page is mapped correctly, in the current context
+bool page_mapped(const void *virt_addr, int intno);
 
 /* final allow virtual functions optimizations */
 class RISCV64_Page_Table final: public Page_Table

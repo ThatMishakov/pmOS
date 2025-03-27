@@ -98,22 +98,22 @@ extern void hcf();
 
 Direct_Mapper init_mapper;
 
-// Temporary temporary mapper
-#ifdef __x86_64__
-#include <paging/x86_temp_mapper.hh>
-#include <x86_asm.hh>
+    // Temporary temporary mapper
+    #ifdef __x86_64__
+        #include <paging/x86_temp_mapper.hh>
+        #include <x86_asm.hh>
 using Arch_Temp_Mapper = x86_PAE_Temp_Mapper;
 Arch_Temp_Mapper temp_temp_mapper;
 
-#elif defined(__riscv)
-#include <paging/riscv64_temp_mapper.hh>
+    #elif defined(__riscv)
+        #include <paging/riscv64_temp_mapper.hh>
 using Arch_Temp_Mapper = RISCV64_Temp_Mapper;
 Arch_Temp_Mapper temp_temp_mapper;
 
-#elif defined(__loongarch64)
-#include <paging/loong_temp_mapper.hh>
+    #elif defined(__loongarch64)
+        #include <paging/loong_temp_mapper.hh>
 
-#endif
+    #endif
 
 u64 hhdm_offset = 0;
 
@@ -161,6 +161,8 @@ static klib::vector<limine_memmap_entry> *limine_memory_regions = nullptr;
 
     #ifdef __x86_64__
 extern ulong idle_cr3;
+    #elif defined(__riscv)
+extern ulong idle_pt;
     #endif
 
 void construct_paging()
@@ -219,14 +221,17 @@ void construct_paging()
     const u64 heap_addr_size   = -heap_space_start;
 
     const size_t PAGE_MASK = PAGE_SIZE - 1;
-    void *kernel_start = (void *)(((size_t)&_kernel_start + PAGE_MASK) & ~PAGE_MASK);
-    const size_t kernel_size = ((char *)&_kernel_end - (char *)kernel_start + PAGE_SIZE - 1) & ~PAGE_MASK;
+    void *kernel_start     = (void *)(((size_t)&_kernel_start + PAGE_MASK) & ~PAGE_MASK);
+    const size_t kernel_size =
+        ((char *)&_kernel_end - (char *)kernel_start + PAGE_SIZE - 1) & ~PAGE_MASK;
     vmm::virtmem_init((void *)heap_space_start, heap_addr_size, kernel_start, kernel_size);
 
     kernel_ptable_top = pmm::get_memory_for_kernel(1);
     clear_page(kernel_ptable_top);
     #ifdef __x86_64__
     idle_cr3 = kernel_ptable_top;
+    #elif defined(__riscv)
+    idle_pt = kernel_ptable_top;
     #endif
 
     #ifndef __loongarch64
@@ -502,8 +507,8 @@ void construct_paging()
     };
 
     auto split_into_regions = [&](long first_index, long last_index) -> void {
-        u64 current_addr = regions_data[first_index].base;
-        u64 end_addr = regions_data[last_index].base + regions_data[last_index].length;
+        u64 current_addr   = regions_data[first_index].base;
+        u64 end_addr       = regions_data[last_index].base + regions_data[last_index].length;
         auto current_index = first_index;
 
         while (current_addr < end_addr) {
@@ -517,8 +522,7 @@ void construct_paging()
             }
             auto i = current_index;
 
-            while (i <= last_index and
-                   (final_addr == 0 or regions_data[i].base < final_addr)) {
+            while (i <= last_index and (final_addr == 0 or regions_data[i].base < final_addr)) {
                 i++;
             }
             assert(i > current_index);
@@ -534,16 +538,14 @@ void construct_paging()
                 regions_data[current_index].base = current_addr;
             }
             if (final_addr != 0 and
-                regions_data[last_index].base + regions_data[last_index].length >
-                    final_addr) {
-                u64 diff = regions_data[last_index].base +
-                           regions_data[last_index].length - final_addr;
+                regions_data[last_index].base + regions_data[last_index].length > final_addr) {
+                u64 diff =
+                    regions_data[last_index].base + regions_data[last_index].length - final_addr;
                 assert(diff > 0);
                 regions_data[last_index].length -= diff;
             }
 
-            u64 final_final_addr =
-                regions_data[last_index].base + regions_data[last_index].length;
+            u64 final_final_addr = regions_data[last_index].base + regions_data[last_index].length;
             assert(final_final_addr != 0);
 
             new_region_func(current_index, last_index);
@@ -612,34 +614,40 @@ void construct_paging()
     if (!memory_map.reserve(regions.size()))
         panic("Could not allocate memory for memory map");
 
-    for (auto region : regions_data) {
+    for (auto region: regions_data) {
         MemoryRegionType type;
         switch (region.type) {
         case LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE:
         case LIMINE_MEMMAP_KERNEL_AND_MODULES:
         case LIMINE_MEMMAP_USABLE:
-            type = MemoryRegionType::Usable; break;
+            type = MemoryRegionType::Usable;
+            break;
         case LIMINE_MEMMAP_RESERVED:
-            type = MemoryRegionType::Reserved; break;
+            type = MemoryRegionType::Reserved;
+            break;
         case LIMINE_MEMMAP_ACPI_RECLAIMABLE:
-            type = MemoryRegionType::ACPIReclaimable; break;
+            type = MemoryRegionType::ACPIReclaimable;
+            break;
         case LIMINE_MEMMAP_ACPI_NVS:
-            type = MemoryRegionType::ACPINVS; break;
+            type = MemoryRegionType::ACPINVS;
+            break;
         case LIMINE_MEMMAP_BAD_MEMORY:
-            type = MemoryRegionType::BadMemory; break;
+            type = MemoryRegionType::BadMemory;
+            break;
         case LIMINE_MEMMAP_FRAMEBUFFER:
-            type = MemoryRegionType::Framebuffer; break;
+            type = MemoryRegionType::Framebuffer;
+            break;
         default:
-            type = MemoryRegionType::Unknown; break;
+            type = MemoryRegionType::Unknown;
+            break;
         }
 
         memory_map.push_back({
             .start = region.base,
-            .size = region.length,
-            .type = type,
+            .size  = region.length,
+            .type  = type,
         });
     }
-
 }
 
 __attribute__((used)) limine_module_request module_request = {
