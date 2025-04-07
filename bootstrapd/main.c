@@ -28,17 +28,18 @@
 
 #include "fs.h"
 #include "io.h"
+#include "named_ports.h"
 
 #include <errno.h>
 #include <kernel/messaging.h>
 #include <kernel/syscalls.h>
 #include <pmos/ipc.h>
 #include <pmos/load_data.h>
+#include <pmos/ports.h>
 #include <pmos/system.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/syscall.h>
-#include <pmos/ports.h>
 
 uint64_t loader_port = 0;
 
@@ -217,43 +218,31 @@ void start_executables()
     }
 }
 
+void set_print_callback(int result, const char * /* port_name */, pmos_port_t port)
+{
+    if (!result)
+        set_print_syscalls(port);
+}
+
 void service_ports()
 {
-    ports_request_t r = create_port(0, 0);
-    loader_port = r.port;
-    if (r.result != SUCCESS) {
-        print_str("Loader: could not create a port. Error: ");
-        print_hex(r.result);
-        print_str("\n");
-        goto exit;
-    }
-
     char *log_port_name = "/pmos/terminald";
-    result_t res = request_named_port(log_port_name, strlen(log_port_name), loader_port, 0);
-    if (res != SUCCESS) {
+    auto result = request_port_callback(log_port_name, strlen(log_port_name), set_print_callback);
+    if (result != SUCCESS) {
         print_str("Loader: could not request log port. Error: ");
-        print_hex(res);
+        print_hex(result);
         print_str("\n");
         goto exit;
     }
 
     char *vfsd_port_name = "/pmos/vfsd";
-    res = request_named_port(vfsd_port_name, strlen(vfsd_port_name), loader_port, 0);
-    if (res != SUCCESS) {
-        print_str("Loader: could not request vfsd port. Error: ");
-        print_hex(res);
-        print_str("\n");
-        goto exit;
-    }
-
-    char *loader_port_name = "/pmos/loader";
-    res = name_port(loader_port, loader_port_name, strlen(loader_port_name), 0);
-    if (res != SUCCESS) {
-        print_str("Loader: could not name loader port. Error: ");
-        print_hex(res);
-        print_str("\n");
-        goto exit;
-    }
+    // res = request_named_port(vfsd_port_name, strlen(vfsd_port_name), loader_port, 0);
+    // if (res != SUCCESS) {
+    //     print_str("Loader: could not request vfsd port. Error: ");
+    //     print_hex(res);
+    //     print_str("\n");
+    //     goto exit;
+    // }
 
     while (1) {
         Message_Descriptor desc;
@@ -432,6 +421,43 @@ void service_ports()
             break;
         }
 
+        case IPC_Get_Named_Port_NUM: {
+            IPC_Get_Named_Port *r = (IPC_Get_Named_Port *)ptr;
+            if (desc.size < sizeof(IPC_Get_Named_Port)) {
+                print_str("Loader: Recieved IPC_Get_Named_Port of unexpected size 0x");
+                print_hex(desc.size);
+                print_str("\n");
+                break;
+            }
+
+            size_t length = desc.size - sizeof(IPC_Get_Named_Port);
+            request_port_message(r->name, length, r->flags, r->reply_port);
+            break;
+        }
+
+        case IPC_Name_Port_NUM: {
+            IPC_Name_Port *r = (IPC_Name_Port *)ptr;
+            if (desc.size < sizeof(IPC_Name_Port)) {
+                print_str("Loader: Recieved IPC_Name_Port of unexpected size 0x");
+                print_hex(desc.size);
+                print_str("\n");
+                break;
+            }
+
+            size_t length = desc.size - sizeof(IPC_Name_Port);
+            auto result = register_port(r->name, length, r->port);
+
+            IPC_Name_Port_Reply reply = {
+                .type = IPC_Name_Port_Reply_NUM,
+                .flags = 0,
+                .result = result,
+            };
+
+            send_message_port(r->reply_port, sizeof(reply), &reply);
+            
+            break;
+        }
+
         default:
             print_str("Loader: Recievend unknown message with type ");
             print_hex(ptr->type);
@@ -445,6 +471,33 @@ exit:
 
 int main()
 {
+    ports_request_t r = create_port(0, 0);
+    loader_port       = r.port;
+    if (r.result != SUCCESS) {
+        print_str("Loader: could not create a port. Error: ");
+        print_hex(r.result);
+        print_str("\n");
+        exit(1);
+    }
+
+    char *loader_port_name = "/pmos/loader";
+    int result             = register_port(loader_port_name, strlen(loader_port_name), loader_port);
+    // res = loader_port, loader_port_name, strlen(loader_port_name), 0);
+    if (result != SUCCESS) {
+        print_str("Loader: could not name loader port. Error: ");
+        print_hex(result);
+        print_str("\n");
+        exit(1);
+    }
+
+    auto kresult = set_port0(loader_port);
+    if (kresult != SUCCESS) {
+        print_str("Loader: failed to set port 0: ");
+        print_hex(kresult);
+        print_str("\n");
+        exit(1);
+    }
+
     init_modules();
     init_misc();
     start_executables();

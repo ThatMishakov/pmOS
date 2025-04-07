@@ -236,6 +236,8 @@ void syscall_unreference_mem_object();
 void syscall_cpu_for_interrupt();
 // Parameters: u32 gsi, flags
 
+void syscall_set_port0();
+
 struct SyscallRetval {
     TaskDescriptor *task;
     u64 operator=(u64 value);

@@ -63,7 +63,7 @@ void Send_Message::do_action(Port *p, const klib::string &name)
                 (IPC_Kernel_Named_Port_Notification *)&vec.front();
 
             ipc_ptr->type     = IPC_Kernel_Named_Port_Notification_NUM;
-            ipc_ptr->reserved = 0;
+            ipc_ptr->result = 0;
             ipc_ptr->port_num = p->portno;
 
             memcpy(ipc_ptr->port_name, name.c_str(), name.length());

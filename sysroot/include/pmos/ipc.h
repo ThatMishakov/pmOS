@@ -249,7 +249,7 @@ typedef uint64_t pmos_port_t;
 #define IPC_Kernel_Named_Port_Notification_NUM 0x21
 typedef struct IPC_Kernel_Named_Port_Notification {
     uint32_t type;
-    uint32_t reserved;
+    int32_t result;
     pmos_port_t port_num;
     char port_name[0];
 } IPC_Kernel_Named_Port_Notification;
@@ -1530,6 +1530,51 @@ typedef struct IPC_BUS_Publish_Object_Reply {
     uint64_t sequence_number;
 } IPC_BUS_Publish_Object_Reply;
 
+#define IPC_Name_Port_NUM 0x1c0
+typedef struct IPC_Name_Port {
+    /// Message type (IPC_Name_Port_NUM)
+    uint32_t type;
+
+    // Flags
+    uint32_t flags;
+
+    /// Port
+    uint64_t port;
+
+    /// Reply port
+    uint64_t reply_port;
+
+    /// Port name. The length is deduced from the message size
+    char name[0];
+} IPC_Name_Port;
+
+#define IPC_Get_Named_Port_NUM 0x1c1
+typedef struct IPC_Get_Named_Port {
+    /// Message type (IPC_Name_Port_NUM)
+    uint32_t type;
+
+    // Flags
+    uint32_t flags;
+
+    /// Reply port
+    uint64_t reply_port;
+
+    /// Port name. The length is deduced from the message size
+    char name[0];
+} IPC_Get_Named_Port;
+
+
+#define IPC_Name_Port_Reply_NUM 0x1d0
+typedef struct IPC_Name_Port_Reply {
+    /// Message type (IPC_Name_Port_Reply_NUM)
+    uint32_t type;
+
+    /// Flags
+    uint32_t flags;
+
+    /// Result
+    int32_t result;
+} IPC_Name_Port_Reply;
 
 #if defined(__cplusplus)
 } /* extern "C" */

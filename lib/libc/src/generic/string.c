@@ -92,15 +92,10 @@ char *stpncpy(char * restrict dst, const char * restrict src, size_t sz)
 
 int strcmp(const char *s1, const char *s2)
 {
-    size_t i = 0;
-    while (s1[i] == s2[i] && s1[i])
-        ++i;
+    while (*s1 == *s2 && *s1)
+        ++s1, ++s2;
 
-    if (!s1[i] && !s2[i])
-        return 0;
-    if (s1[i] < s2[i])
-        return -1;
-    return 1;
+    return *(const unsigned char *)s1 - *(const unsigned char *)s2;
 }
 
 int strncmp(const char *s1, const char *s2, size_t size)
@@ -109,11 +104,10 @@ int strncmp(const char *s1, const char *s2, size_t size)
     while (i < size && s1[i] == s2[i] && s1[i])
         ++i;
 
-    if (i == size || (!s1[i] && !s2[i]))
+    if (i == size)
         return 0;
-    if (s1[i] < s2[i])
-        return -1;
-    return 1;
+    
+    return *(const unsigned char *)(s1 + i) - *(const unsigned char *)(s2 + i);
 }
 
 void *memcpy(void * restrict dest, const void * restrict src, size_t n)

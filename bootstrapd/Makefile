@@ -18,7 +18,7 @@ TARGETFLAGS = --target=$(ARCH)-pmos --sysroot=$(ROOTDIR)/sysroot
 # User controllable CFLAGS.
 USERCFLAGS = -Wall -Wextra -O2 -pipe
 
-CFLAGS = -std=c17 -g $(TARGETFLAGS)
+CFLAGS = -std=c23 -g $(TARGETFLAGS)
 CXXFLAGS = -std=c++17 -g $(TARGETFLAGS)
 CPPFLAGS = $(INTERNALCFLAGS) $(USERCFLAGS) -MMD -MP $(TARGETFLAGS)
 ASMFLAGS = -I$(INCLUDEDIR) $(TARGETFLAGS)

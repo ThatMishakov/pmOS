@@ -71,8 +71,20 @@ Port *Port::atomic_create_port(TaskDescriptor *task) noexcept
     return new_port_ptr.release();
 }
 
+u64 port0_id = 0;
+
+kresult_t set_port0(Port *p)
+{
+    assert(p);
+    port0_id = p->portno;
+    return 0;
+}
+
 Port *Port::atomic_get_port(u64 portno) noexcept
 {
+    if (!portno)
+        portno = port0_id;
+
     Auto_Lock_Scope lock(ports_lock);
     return ports.find(portno);
 }

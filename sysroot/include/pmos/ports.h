@@ -125,6 +125,10 @@ ports_request_t get_port_by_name(const char *name, size_t length, uint32_t flags
  */
 result_t set_log_port(pmos_port_t portnum, u32 flags);
 
+// Sets port 0 to the given port
+// TODO: Replace this with handles/capabilities
+result_t set_port0(pmos_port_t port);
+
 #endif
 
 // Causes process not to block when the port doesn't exist, returning ERROR_PORT_DOESNT_EXIST

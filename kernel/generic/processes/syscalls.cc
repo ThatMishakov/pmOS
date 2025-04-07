@@ -57,7 +57,7 @@
 #endif
 
 using syscall_function                         = void (*)();
-std::array<syscall_function, 53> syscall_table = {
+std::array<syscall_function, 54> syscall_table = {
     syscall_exit,
     syscall_get_task_id,
     syscall_create_process,
@@ -115,6 +115,7 @@ std::array<syscall_function, 53> syscall_table = {
     syscall_get_page_address_from_object,
     nullptr,
     syscall_cpu_for_interrupt,
+    syscall_set_port0,
 };
 
 extern "C" void syscall_handler()
@@ -315,10 +316,11 @@ void syscall_init_stack()
 void syscall_exit()
 {
     TaskDescriptor *task = get_cpu_struct()->current_task;
-    // serial_logger.printf("syscall exit task %li (%s)\n", task->task_id, task->name.c_str());
 
     ulong arg1 = syscall_arg(task, 0, 0);
     ulong arg2 = syscall_arg(task, 1, 0);
+
+    //serial_logger.printf("syscall exit task %li (%s) arg %x\n", task->task_id, task->name.c_str(), arg1);
 
     // Record exit code
     task->ret_hi = arg2;
@@ -2022,4 +2024,22 @@ void syscall_cpu_for_interrupt()
     assert(result.val.first);
     syscall_return(current_task) = (result.val.first->cpu_id + 1) | (uint64_t)(result.val.second)
                                                                         << 32;
+}
+
+void syscall_set_port0()
+{
+    auto current = get_current_task();
+    u64 portno = syscall_arg64(current, 0);
+
+    auto port = Port::atomic_get_port(portno);
+    if (!port) {
+        syscall_error(current) = -ENOENT;
+        return;
+    }
+
+    auto result = set_port0(port);
+    if (result)
+        syscall_error(current) = result;
+    else
+        syscall_success(current);
 }

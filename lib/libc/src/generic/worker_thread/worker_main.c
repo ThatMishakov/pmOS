@@ -89,11 +89,11 @@ void worker_main()
     }
     worker_port = new_port.port;
 
-    result_t r = request_named_port(processd_port_name, strlen(processd_port_name), worker_port, 0);
-    if (r != SUCCESS) {
-        fprintf(stderr, "pmOS libC: Failed to request processd port. Result: %li\n", r);
-        _syscall_exit(1);
-    }
+    // result_t r = request_named_port(processd_port_name, strlen(processd_port_name), worker_port, 0);
+    // if (r != SUCCESS) {
+    //     fprintf(stderr, "pmOS libC: Failed to request processd port. Result: %li\n", r);
+    //     _syscall_exit(1);
+    // }
 
     // Run main function
     pthread_t main_thread;

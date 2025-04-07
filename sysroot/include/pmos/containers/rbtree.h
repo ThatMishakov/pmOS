@@ -13,6 +13,8 @@
         NAME##_node_t *root;                                                                      \
     } NAME##_tree_t;                                                                              \
                                                                                                   \
+    static const NAME##_tree_t NAME##_INITIALIZER = {.root = NULL};                               \
+                                                                                                  \
     enum {                                                                                        \
         NAME##_BLACK = 0,                                                                         \
         NAME##_RED   = 1,                                                                         \
@@ -105,10 +107,10 @@
         NAME##_node_t *parent  = NULL;                                                            \
         while (current) {                                                                         \
             parent = current;                                                                     \
-            if (CMP_FUNC(&node->data, &current->data) < 0)                                        \
-                current = current->left;                                                          \
+            if (CMP_FUNC(&current->data, &node->data) < 0)                                        \
+                current = current->right;                                                          \
             else                                                                                  \
-                current = current->right;                                                         \
+                current = current->left;                                                         \
         }                                                                                         \
                                                                                                   \
         node->parent = parent;                                                                    \
@@ -116,10 +118,10 @@
         if (!parent) {                                                                            \
             tree->root  = node;                                                                   \
             node->color = NAME##_BLACK;                                                           \
-        } else if (CMP_FUNC(&node->data, &current->data) < 0)                                     \
-            parent->left = node;                                                                  \
+        } else if (CMP_FUNC(&parent->data, &node->data) < 0)                                     \
+            parent->right = node;                                                                  \
         else                                                                                      \
-            parent->right = node;                                                                 \
+            parent->left = node;                                                                 \
                                                                                                   \
         NAME##_fix_insert(tree, node);                                                            \
     }                                                                                             \
@@ -158,7 +160,7 @@
                 }                                                                                 \
             } else {                                                                              \
                 NAME##_node_t *sibling = parent->left;                                            \
-                if (sibling->color == NAME##_BLACK) {                                             \
+                if (sibling->color == NAME##_RED) {                                             \
                     sibling->color = NAME##_BLACK;                                                \
                     parent->color  = NAME##_RED;                                                  \
                     NAME##_rotate_right(tree, parent);                                            \
@@ -245,14 +247,14 @@
             NAME##_fix_remove(tree, child, parent);                                               \
     }                                                                                             \
                                                                                                   \
-    static inline NAME##_node_t *find(const NAME##_tree_t *tree, void *key)                       \
+    static inline NAME##_node_t *NAME##_find(const NAME##_tree_t *tree, void *key)                       \
     {                                                                                             \
         NAME##_node_t *n = tree->root;                                                            \
         while (n) {                                                                               \
             int cmp = KEY_CMP_FUNC(&n->data, key);                                                \
-            if (cmp < 0)                                                                          \
+            if (cmp > 0)                                                                          \
                 n = n->left;                                                                      \
-            else if (cmp > 0)                                                                     \
+            else if (cmp < 0)                                                                     \
                 n = n->right;                                                                     \
             else                                                                                  \
                 return n;                                                                         \

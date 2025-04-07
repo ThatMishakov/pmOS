@@ -149,3 +149,5 @@ protected:
     friend class TaskGroup;
     friend class TaskDescriptor;
 };
+
+kresult_t set_port0(Port *port);

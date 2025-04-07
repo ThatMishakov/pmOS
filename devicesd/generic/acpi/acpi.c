@@ -766,13 +766,13 @@ void publish_object_reply(Message_Descriptor *desc, IPC_BUS_Publish_Object_Reply
 
 void named_port_notification(Message_Descriptor *desc, IPC_Kernel_Named_Port_Notification *n)
 {
-    if (desc->sender != 0) {
-        fprintf(stderr,
-                "[devicesd] Warning: recieved IPC_Kernel_Named_Port_Notification from task %" PRIi64
-                " , expected kernel (0)\n",
-                desc->sender);
-        return;
-    }
+    // if (desc->sender != 0) {
+    //     fprintf(stderr,
+    //             "[devicesd] Warning: recieved IPC_Kernel_Named_Port_Notification from task %" PRIi64
+    //             " , expected kernel (0)\n",
+    //             desc->sender);
+    //     return;
+    // }
 
     size_t len = NAMED_PORT_NOTIFICATION_STR_LEN(desc->size);
     if (len == strlen(pmbus_port_name) && !memcmp(pmbus_port_name, n->port_name, len)) {

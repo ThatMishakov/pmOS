@@ -181,17 +181,17 @@ result_t __pmos_request_timer(pmos_port_t port, uint64_t ns, uint64_t extra)
 #endif
 }
 
-ports_request_t get_port_by_name(const char *name, size_t length, uint32_t flags)
-{
-#ifdef __32BITSYSCALL
-    syscall_r r =
-        __pmos_syscall32_2words(SYSCALL_GET_PORT_BY_NAME | (flags << 8), (unsigned)name, length);
-#else
-    syscall_r r = pmos_syscall(SYSCALL_GET_PORT_BY_NAME | (flags << 8), name, length);
-#endif
-    ports_request_t t = {r.result, r.value};
-    return t;
-}
+// ports_request_t get_port_by_name(const char *name, size_t length, uint32_t flags)
+// {
+// #ifdef __32BITSYSCALL
+//     syscall_r r =
+//         __pmos_syscall32_2words(SYSCALL_GET_PORT_BY_NAME | (flags << 8), (unsigned)name, length);
+// #else
+//     syscall_r r = pmos_syscall(SYSCALL_GET_PORT_BY_NAME | (flags << 8), name, length);
+// #endif
+//     ports_request_t t = {r.result, r.value};
+//     return t;
+// }
 
 syscall_r set_interrupt(pmos_port_t port, uint32_t intno, uint32_t flags)
 {
@@ -202,16 +202,16 @@ syscall_r set_interrupt(pmos_port_t port, uint32_t intno, uint32_t flags)
 #endif
 }
 
-result_t name_port(pmos_port_t portnum, const char *name, size_t length, uint32_t flags)
-{
-#ifdef __32BITSYSCALL
-    return __pmos_syscall32_4words(SYSCALL_NAME_PORT | (flags << 8), portnum, (unsigned)name,
-                                   length)
-        .result;
-#else
-    return pmos_syscall(SYSCALL_NAME_PORT | (portnum << 8), portnum, name, length).result;
-#endif
-}
+// result_t name_port(pmos_port_t portnum, const char *name, size_t length, uint32_t flags)
+// {
+// #ifdef __32BITSYSCALL
+//     return __pmos_syscall32_4words(SYSCALL_NAME_PORT | (flags << 8), portnum, (unsigned)name,
+//                                    length)
+//         .result;
+// #else
+//     return pmos_syscall(SYSCALL_NAME_PORT | (portnum << 8), portnum, name, length).result;
+// #endif
+// }
 
 result_t set_log_port(pmos_port_t port, uint32_t flags)
 {
@@ -461,18 +461,18 @@ result_t syscall_kill_task(uint64_t tid)
 #endif
 }
 
-result_t request_named_port(const char *name, size_t name_length, pmos_port_t reply_port,
-                            unsigned flags)
-{
-#ifdef __32BITSYSCALL
-    return __pmos_syscall32_4words(SYSCALL_REQUEST_NAMED_PORT | (flags << 8), reply_port,
-                                   (unsigned)name, name_length)
-        .result;
-#else
-    return pmos_syscall(SYSCALL_REQUEST_NAMED_PORT | (flags << 8), reply_port, name, name_length)
-        .result;
-#endif
-}
+// result_t request_named_port(const char *name, size_t name_length, pmos_port_t reply_port,
+//                             unsigned flags)
+// {
+// #ifdef __32BITSYSCALL
+//     return __pmos_syscall32_4words(SYSCALL_REQUEST_NAMED_PORT | (flags << 8), reply_port,
+//                                    (unsigned)name, name_length)
+//         .result;
+// #else
+//     return pmos_syscall(SYSCALL_REQUEST_NAMED_PORT | (flags << 8), reply_port, name, name_length)
+//         .result;
+// #endif
+// }
 
 result_t pause_task(uint64_t tid)
 {
@@ -560,4 +560,15 @@ pmos_int_r allocate_interrupt(uint32_t gsi, uint32_t flags)
         .cpu = result.value & 0xffffffff,
         .vector = result.value >> 32,
     };
+}
+
+result_t set_port0(pmos_port_t port)
+{
+    syscall_r result;
+    #ifdef __32BITSYSCALL
+    result = __pmos_syscall32_2words(SYSCALL_SET_PORT0, port);
+#else
+    result = pmos_syscall(SYSCALL_SET_PORT0, port);
+#endif
+    return result.result;
 }
