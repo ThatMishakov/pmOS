@@ -35,6 +35,7 @@
 #include <memory/rcu.hh>
 #include <pmos/containers/intrusive_bst.hh>
 #include <pmos/containers/intrusive_list.hh>
+#include <pmos/containers/set.hh>
 #include <pmos/containers/map.hh>
 #include <types.hh>
 #include <utils.hh>
@@ -131,7 +132,7 @@ protected:
     };
     pmos::containers::RBTreeNode<Port> bst_head_owner;
 
-    pmos::containers::map<u64, klib::weak_ptr<TaskGroup>> notifier_ports;
+    pmos::containers::set<TaskGroup *> notifier_ports;
     mutable Spinlock notifier_ports_lock;
 
     using global_ports_tree =

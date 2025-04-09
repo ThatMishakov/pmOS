@@ -736,6 +736,16 @@ void TaskDescriptor::cleanup()
         port->delete_self();
     }
 
+    auto get_first_group = [&]{
+        Auto_Lock_Scope l(sched_lock);
+        auto it = task_groups.begin();
+        return it == task_groups.end() ? nullptr : *it;
+    };
+
+    for (auto g = get_first_group(); g; g = get_first_group()) {
+        g->atomic_remove_task(this);
+    }
+
     rcu_head.rcu_func = [](void *self, bool) {
         TaskDescriptor *t = reinterpret_cast<TaskDescriptor *>(reinterpret_cast<char *>(self) -
                                                                offsetof(TaskDescriptor, rcu_head));

@@ -1,6 +1,6 @@
 #pragma once
 #include "intrusive_bst.hh"
-#include "pair.hh"
+#include <utility>
 
 #include <pmos/utility/utility.hh>
 
@@ -27,9 +27,15 @@ namespace detail
 
 template<typename K, typename V> class map
 {
+public:
+    using size_type  = size_t;
+    using key_type   = K;
+    using value_type = std::pair<const K, V>;
+    // node_type
+
 private:
     struct Node {
-        pair<const K, V> value;
+        value_type value;
         RBTreeNode<Node> bst_head;
 
         Node(const K &&key, V &&value): value(key, value) {}
@@ -38,7 +44,7 @@ private:
     using tree_type = RedBlackTree<Node, &Node::bst_head, detail::MapTreeCmp<Node, K>>;
     tree_type::RBTreeHead tree;
 
-    Node *alloc(pair<const K, V> &&val);
+    Node *alloc(value_type &&val);
     void dealloc(Node *node);
 
 public:
@@ -51,20 +57,27 @@ public:
     map clone() noexcept;
 
     struct iterator: public tree_type::RBTreeIterator {
-        pair<const K, V> &operator*() noexcept { return this->node->value; }
-        pair<const K, V> *operator->() noexcept { return &this->node->value; }
+        value_type &operator*() noexcept { return this->node->value; }
+        value_type *operator->() noexcept { return &this->node->value; }
 
         iterator() = default;
         iterator(tree_type::RBTreeIterator it): tree_type::RBTreeIterator(it) {}
     };
 
-    using size_type  = size_t;
-    using key_type   = K;
-    using value_type = pair<const K, V>;
-    // node_type
+    struct const_iterator: public tree_type::RBTreeConstIterator {
+        const value_type &operator*() noexcept { return this->node->value; }
+        const value_type *operator->() noexcept { return &this->node->value; }
+
+        const_iterator() = default;
+        const_iterator(tree_type::RBTreeConstIterator it): tree_type::RBTreeConstIterator(it) {}
+        const_iterator(iterator it): tree_type::RBTreeConstIterator(it) {}
+    };
 
     iterator begin() noexcept;
     iterator end() noexcept;
+
+    const_iterator cbegin() const noexcept;
+    const_iterator cend() const noexcept;
 
     bool empty() const noexcept;
     size_type size() const noexcept;
@@ -78,6 +91,8 @@ public:
     size_type erase(const key_type &key) noexcept;
 
     iterator find(const key_type &key) noexcept;
+    const_iterator find(const key_type &key) const noexcept;
+
     iterator lower_bound(const key_type &key) noexcept;
     iterator upper_bound(const key_type &key) noexcept;
 
@@ -142,7 +157,17 @@ template<typename K, typename V> typename map<K, V>::iterator map<K, V>::end() n
     return tree.end();
 }
 
+template<typename K, typename V> typename map<K, V>::const_iterator map<K, V>::cend() const noexcept
+{
+    return tree.cend();
+}
+
 template<typename K, typename V> typename map<K, V>::iterator map<K, V>::find(const K &key) noexcept
+{
+    return tree.find(key);
+}
+
+template<typename K, typename V> typename map<K, V>::const_iterator map<K, V>::find(const K &key) const noexcept
 {
     return tree.find(key);
 }
@@ -156,6 +181,16 @@ template<typename K, typename V> void map<K, V>::clear() noexcept
         erase(it);
         dealloc(it);
     }
+}
+
+template<typename K, typename V> map<K, V>::size_type map<K, V>::size() const noexcept
+{
+    return tree.size();
+}
+
+template<typename K, typename V> map<K, V>::size_type map<K, V>::count(const key_type &key) const noexcept
+{
+    return find(key) != cend();
 }
 
 } // namespace pmos::containers

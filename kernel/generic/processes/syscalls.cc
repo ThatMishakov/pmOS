@@ -1341,15 +1341,12 @@ void syscall_remove_from_task_group()
 void syscall_create_task_group()
 {
     const auto &current_task  = get_current_task();
-    const auto new_task_group = TaskGroup::create();
+    const auto g = TaskGroup::create_for_task(current_task);
 
-    auto result = new_task_group->atomic_register_task(current_task);
-    if (result) {
-        syscall_error(current_task) = result;
-        return;
-    }
-
-    syscall_return(current_task) = new_task_group->get_id();
+    if (g.success())
+        syscall_return(current_task) = g.val->get_id();
+    else
+        syscall_error(current_task) = g.result;
 }
 
 void syscall_is_in_task_group()

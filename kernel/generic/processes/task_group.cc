@@ -30,11 +30,11 @@
 
 #include "tasks.hh"
 
+#include <kern_logger/kern_logger.hh>
 #include <pmos/ipc.h>
 #include <pmos/utility/scope_guard.hh>
-#include <kern_logger/kern_logger.hh>
 
-TaskGroup::~TaskGroup() noexcept
+void TaskGroup::destroy()
 {
     atomic_remove_from_global_map();
 
@@ -52,9 +52,16 @@ TaskGroup::~TaskGroup() noexcept
             }
 
             Auto_Lock_Scope l(ptr->notifier_ports_lock);
-            ptr->notifier_ports.erase(id);
+            ptr->notifier_ports.erase(this);
         }
     }
+
+    rcu_head.rcu_func = [](void *self, bool) {
+        TaskGroup *t = reinterpret_cast<TaskGroup *>(reinterpret_cast<char *>(self) -
+                                                               offsetof(TaskGroup, rcu_head));
+        delete t;
+    };
+    get_cpu_struct()->heap_rcu_cpu.push(&rcu_head);
 }
 
 bool TaskGroup::atomic_has_task(u64 id) const noexcept
@@ -63,34 +70,72 @@ bool TaskGroup::atomic_has_task(u64 id) const noexcept
     return tasks.count(id) == 1;
 }
 
-void TaskGroup::atomic_remove_from_global_map() const noexcept
+void TaskGroup::atomic_remove_from_global_map() noexcept
 {
     Auto_Lock_Scope lock(global_map_lock);
-    global_map.erase(id);
+    global_map.erase(this);
 }
 
 void TaskGroup::atomic_add_to_global_map()
 {
     Auto_Lock_Scope lock(global_map_lock);
-    global_map.insert({id, weak_from_this()});
+    global_map.insert(this);
 }
 
-klib::shared_ptr<TaskGroup> TaskGroup::create()
+ReturnStr<TaskGroup *> TaskGroup::create_for_task(TaskDescriptor *task)
 {
-    klib::shared_ptr<TaskGroup> group = klib::unique_ptr<TaskGroup>(new TaskGroup());
+    assert(task);
 
-    if (group) [[likely]]
-        group->atomic_add_to_global_map();
+    auto group        = new TaskGroup();
+    auto delete_error = pmos::utility::make_scope_guard([group] { delete group; });
 
-    return group;
+    if (!group) [[unlikely]]
+        return Error(-ENOMEM);
+
+    group->atomic_add_to_global_map();
+    pmos::utility::scope_guard guard([=] { group->destroy(); });
+
+    {
+        Auto_Lock_Scope lock(task->sched_lock);
+        auto s = task->status;
+        if (s == TaskStatus::TASK_DYING || s == TaskStatus::TASK_DEAD)
+            return nullptr;
+
+        auto t = task->task_groups.insert(group);
+        if (!t.second)
+            return nullptr;
+    }
+
+    bool inserted = false;
+
+    {
+        Auto_Lock_Scope l(group->tasks_lock);
+        auto r   = group->tasks.insert({task->task_id, task});
+        inserted = r.second;
+    }
+
+    if (!inserted) {
+        Auto_Lock_Scope lock(task->sched_lock);
+        task->task_groups.erase(group);
+        return Error(-ENOMEM);
+    }
+
+    guard.dismiss();
+    delete_error.dismiss();
+
+    return Success(group);
 }
 
 kresult_t TaskGroup::atomic_register_task(TaskDescriptor *task)
 {
     bool inserted = false;
     {
-        Auto_Lock_Scope lock(task->task_groups_lock);
-        auto t = task->task_groups.insert(shared_from_this());
+        Auto_Lock_Scope lock(task->sched_lock);
+        auto s = task->status;
+        if (s == TaskStatus::TASK_DYING || s == TaskStatus::TASK_DEAD)
+            return -ENOENT;
+
+        auto t = task->task_groups.insert(this);
         if (t.first == task->task_groups.end())
             return -ENOMEM;
         inserted = t.second;
@@ -100,12 +145,14 @@ kresult_t TaskGroup::atomic_register_task(TaskDescriptor *task)
         return -EEXIST;
 
     auto guard = pmos::utility::make_scope_guard([&] {
-        Auto_Lock_Scope lock(task->task_groups_lock);
-        task->task_groups.erase(shared_from_this());
+        Auto_Lock_Scope lock(task->sched_lock);
+        task->task_groups.erase(this);
     });
 
     {
         Auto_Lock_Scope lock(tasks_lock);
+        if (!alive())
+            return -ESRCH;
 
         auto r = tasks.insert({task->task_id, task});
         if (r.first == tasks.end())
@@ -130,8 +177,8 @@ kresult_t TaskGroup::atomic_register_task(TaskDescriptor *task)
                         ptr->atomic_send_from_system(reinterpret_cast<char *>(&msg), sizeof(msg));
                     if (result) {
                         global_logger.printf("Warning: could not send message to port %i on "
-                                               "atomic_register_task: %i\n",
-                                               p.first, result);
+                                             "atomic_register_task: %i\n",
+                                             p.first, result);
                     }
                 }
             }
@@ -150,10 +197,10 @@ kresult_t TaskGroup::atomic_remove_task(TaskDescriptor *task)
             return -ENOENT;
 
         tasks.erase(task->task_id);
-    }
 
-    Auto_Lock_Scope lock(task->task_groups_lock);
-    task->task_groups.erase(shared_from_this());
+        if (!alive())
+            destroy();
+    }
 
     // TODO: It looks like this doesn't work
 
@@ -175,12 +222,17 @@ kresult_t TaskGroup::atomic_remove_task(TaskDescriptor *task)
                         ptr->atomic_send_from_system(reinterpret_cast<char *>(&msg), sizeof(msg));
                     if (r) {
                         global_logger.printf("Warning: could not send message to port %i on "
-                                               "atomic_remove_task: %i\n",
-                                               p.first, r);
+                                             "atomic_remove_task: %i\n",
+                                             p.first, r);
                     }
                 }
             }
         }
+    }
+
+    {
+        Auto_Lock_Scope lock(task->sched_lock);
+        task->task_groups.erase(this);
     }
 
     return 0;
@@ -188,6 +240,9 @@ kresult_t TaskGroup::atomic_remove_task(TaskDescriptor *task)
 
 ReturnStr<u32> TaskGroup::atomic_change_notifier_mask(Port *port, u32 mask, u32 flags)
 {
+    if (!atomic_alive())
+        return -ESRCH;
+
     u32 old_mask      = 0;
     const u64 port_id = port->portno;
 
@@ -204,14 +259,14 @@ ReturnStr<u32> TaskGroup::atomic_change_notifier_mask(Port *port, u32 mask, u32 
             if (mask == 0)
                 return old_mask;
 
-            auto t = notifier_ports.insert({port_id, {mask}});
+            auto t = notifier_ports.insert_noexcept({port_id, {mask}});
             if (t.first == notifier_ports.end())
                 return Error(-ENOMEM);
 
             auto guard = pmos::utility::make_scope_guard([&] { notifier_ports.erase(t.first); });
 
             Auto_Lock_Scope l(port->notifier_ports_lock);
-            auto res = port->notifier_ports.insert_noexcept({id, weak_from_this()});
+            auto res = port->notifier_ports.insert_noexcept(this);
             if (not res.second)
                 return Error(-ENOMEM);
 
@@ -220,13 +275,13 @@ ReturnStr<u32> TaskGroup::atomic_change_notifier_mask(Port *port, u32 mask, u32 
             auto p = notifier_ports.find(port_id);
             assert(p != notifier_ports.end());
 
-            old_mask      = p->second.action_mask;
+            old_mask              = p->second.action_mask;
             p->second.action_mask = mask;
 
             if (mask == 0) {
                 notifier_ports.erase(port_id);
                 Auto_Lock_Scope l(port->notifier_ports_lock);
-                port->notifier_ports.erase(port_id);
+                port->notifier_ports.erase(this);
             }
         }
     }
@@ -251,20 +306,27 @@ ReturnStr<u32> TaskGroup::atomic_change_notifier_mask(Port *port, u32 mask, u32 
                 port->atomic_send_from_system(reinterpret_cast<char *>(&msg), sizeof(msg));
             if (result) {
                 global_logger.printf("Warning: could not send message to port %i on "
-                                       "atomic_change_notifier_mask: %i\n",
-                                       port_id, result);
+                                     "atomic_change_notifier_mask: %i\n",
+                                     port_id, result);
             }
         }
     }
     return old_mask;
 }
 
-klib::shared_ptr<TaskGroup> TaskGroup::get_task_group(u64 id)
+TaskGroup *TaskGroup::get_task_group(u64 id)
 {
     Auto_Lock_Scope lock(global_map_lock);
     auto p = global_map.find(id);
     if (p == global_map.end())
         return nullptr;
 
-    return p->second.lock();
+    return p;
+}
+
+bool TaskGroup::alive() const noexcept { return !tasks.empty(); }
+bool TaskGroup::atomic_alive() const noexcept
+{
+    Auto_Lock_Scope l(tasks_lock);
+    return alive();
 }

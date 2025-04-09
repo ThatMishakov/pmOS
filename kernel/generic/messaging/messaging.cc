@@ -222,10 +222,9 @@ bool Port::delete_self() noexcept
     }
 
     for (const auto &p: notifier_ports) {
-        const auto ptr = p.second.lock();
-        if (ptr) {
-            Auto_Lock_Scope l(ptr->notifier_ports_lock);
-            ptr->notifier_ports.erase(portno);
+        if (p) {
+            Auto_Lock_Scope l(p->notifier_ports_lock);
+            p->notifier_ports.erase(this->portno);
         }
     }
 

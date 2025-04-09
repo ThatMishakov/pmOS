@@ -29,24 +29,26 @@
 #pragma once
 #include <lib/memory.hh>
 #include <lib/splay_tree_map.hh>
+#include <memory/rcu.hh>
 #include <messaging/messaging.hh>
+#include <pmos/containers/intrusive_bst.hh>
+#include <pmos/containers/intrusive_list.hh>
 #include <types.hh>
 
 class TaskDescriptor;
+class TaskGroup;
 
-class TaskGroup: public klib::enable_shared_from_this<TaskGroup>
+class TaskGroup
 {
 public:
     using id_type = u64;
-
-    ~TaskGroup() noexcept;
 
     /**
      * @brief Create a task group
      *
      * @return klib::shared_ptr<TaskGroup> New task group
      */
-    static klib::shared_ptr<TaskGroup> create();
+    static ReturnStr<TaskGroup *> create_for_task(TaskDescriptor *task);
 
     /**
      * @brief Get the task group with the given id
@@ -56,7 +58,7 @@ public:
      * @param id Task group id
      * @throws out of range if the task group does not exist
      */
-    static klib::shared_ptr<TaskGroup> get_task_group(u64 id);
+    static TaskGroup *get_task_group(u64 id);
 
     /**
      * @brief Checks if the task with the given id is in the group
@@ -75,7 +77,7 @@ public:
      *
      * @param task Task to register
      */
-    [[nodiscard]] kresult_t atomic_register_task(TaskDescriptor * task);
+    [[nodiscard]] kresult_t atomic_register_task(TaskDescriptor *task);
 
     /**
      * @brief Removes the task from the group, throwing if not in the group
@@ -119,13 +121,24 @@ public:
      */
     ReturnStr<u32> atomic_get_notifier_mask(u64 port_id);
 
+    bool alive() const noexcept;
+    bool atomic_alive() const noexcept;
 private:
     id_type id = __atomic_fetch_add(&next_id, 1, __ATOMIC_SEQ_CST);
 
-    klib::splay_tree_map<u64, TaskDescriptor*> tasks;
+    klib::splay_tree_map<u64, TaskDescriptor *> tasks;
     mutable Spinlock tasks_lock;
 
-    static inline klib::splay_tree_map<u64, klib::weak_ptr<TaskGroup>> global_map;
+    union {
+        pmos::containers::RBTreeNode<TaskGroup> bst_head_global = {};
+        RCU_Head rcu_head;
+    };
+
+    using global_tree =
+        pmos::containers::RedBlackTree<TaskGroup, &TaskGroup::bst_head_global,
+                                       detail::TreeCmp<TaskGroup, id_type, &TaskGroup::id>>;
+
+    static inline global_tree::RBTreeHead global_map;
     static inline Spinlock global_map_lock;
 
     struct NotifierPort {
@@ -138,7 +151,7 @@ private:
         static constexpr u64 ACTION_MASK_ALL = 0x07;
     };
 
-    klib::splay_tree_map<u64, NotifierPort> notifier_ports;
+    pmos::containers::map<u64, NotifierPort> notifier_ports;
     mutable Spinlock notifier_ports_lock;
 
     TaskGroup() = default;
@@ -151,9 +164,13 @@ private:
     /**
      * @brief Removes this task group from the global map
      */
-    void atomic_remove_from_global_map() const noexcept;
+    void atomic_remove_from_global_map() noexcept;
 
     static inline u64 next_id = 1;
 
     friend bool Port::delete_self() noexcept;
+
+    ~TaskGroup() = default;
+
+    void destroy();
 };

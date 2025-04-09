@@ -127,9 +127,8 @@ public:
     klib::shared_ptr<Arch_Page_Table> page_table;
     void *page_blocked_by = nullptr;
 
-    // Task groups
-    klib::set<klib::shared_ptr<TaskGroup>> task_groups;
-    Spinlock task_groups_lock;
+    // Task groups. Using sched_lock...
+    klib::set<TaskGroup *> task_groups;
 
     // Creates and assigns an emty valid page table
     kresult_t create_new_page_table();

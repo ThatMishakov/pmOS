@@ -71,16 +71,45 @@ public:
         static RBTreeIterator from_node(T *node) noexcept;
     };
 
+    struct RBTreeConstIterator {
+        const T *node = nullptr;
+
+        RBTreeConstIterator operator++() noexcept;
+        RBTreeConstIterator operator--() noexcept;
+
+        RBTreeConstIterator operator++(int) noexcept;
+        RBTreeConstIterator operator--(int) noexcept;
+
+        const T &operator*() const noexcept;
+        const T *operator->() const noexcept;
+
+        bool operator==(const RBTreeConstIterator &other) const noexcept;
+        bool operator!=(const RBTreeConstIterator &other) const noexcept;
+
+        // I don't know if it's a good idea
+        operator const T *() const noexcept { return node; }
+
+        static RBTreeConstIterator from_node(const T *node) noexcept;
+
+        RBTreeConstIterator(const T *node): node(node) {}
+        RBTreeConstIterator(const RBTreeIterator &it) noexcept: node(it.node) {}
+    };
+
     class RBTreeHead
     {
         T *root = nullptr;
 
     public:
         RBTreeIterator begin() noexcept;
+        RBTreeConstIterator cbegin() noexcept;
         static constexpr RBTreeIterator end() noexcept;
+        static constexpr RBTreeConstIterator cend() noexcept;
+
         bool empty() const noexcept;
 
         RBTreeIterator find(const auto &value);
+        RBTreeConstIterator find(const auto &value) const;
+
         RBTreeIterator get_smaller_or_equal(const auto &value);
 
         RBTreeIterator lower_bound(const auto &value);
@@ -116,6 +145,8 @@ private:
     // Methods for the red-black tree
     static T *find(T *root, const T &value);
     static T *find(T *root, const auto &value);
+    static const T *find(const T *root, const T &value);
+    static const T *find(const T *root, const auto &value);
 
     static void insert(T *&root, T *node);
     static void remove(T *&root, T *node);
@@ -169,10 +200,46 @@ T *RedBlackTree<T, bst_head, Compare>::find(T *root, const T &value)
 }
 
 template<typename T, RBTreeNode<T> T::*bst_head, class Compare>
+const T *RedBlackTree<T, bst_head, Compare>::find(const T *root, const T &value)
+{
+    Compare cmp {};
+    const T *current = root;
+    while (current) {
+        if (cmp(value, *current)) {
+            current = (current->*bst_head).left;
+        } else if (cmp(*current, value)) {
+            current = (current->*bst_head).right;
+        } else {
+            return current;
+        }
+    }
+
+    return nullptr;
+}
+
+template<typename T, RBTreeNode<T> T::*bst_head, class Compare>
 T *RedBlackTree<T, bst_head, Compare>::find(T *root, const auto &value)
 {
     Compare cmp {};
     T *current = root;
+    while (current) {
+        if (cmp(value, *current)) {
+            current = (current->*bst_head).left;
+        } else if (cmp(*current, value)) {
+            current = (current->*bst_head).right;
+        } else {
+            return current;
+        }
+    }
+
+    return nullptr;
+}
+
+template<typename T, RBTreeNode<T> T::*bst_head, class Compare>
+const T *RedBlackTree<T, bst_head, Compare>::find(const T *root, const auto &value)
+{
+    Compare cmp {};
+    const T *current = root;
     while (current) {
         if (cmp(value, *current)) {
             current = (current->*bst_head).left;
@@ -467,6 +534,13 @@ constexpr RedBlackTree<T, bst_head, Compare>::RBTreeIterator
 }
 
 template<typename T, RBTreeNode<T> T::*bst_head, class Compare>
+constexpr RedBlackTree<T, bst_head, Compare>::RBTreeConstIterator
+    RedBlackTree<T, bst_head, Compare>::RBTreeHead::cend() noexcept
+{
+    return RBTreeConstIterator {nullptr};
+}
+
+template<typename T, RBTreeNode<T> T::*bst_head, class Compare>
 bool RedBlackTree<T, bst_head, Compare>::RBTreeHead::empty() const noexcept
 {
     return root == nullptr;
@@ -524,7 +598,15 @@ bool RedBlackTree<T, bst_head, Compare>::RBTreeIterator::operator!=(
 }
 
 template<typename T, RBTreeNode<T> T::*bst_head, class Compare>
-RedBlackTree<T, bst_head, Compare>::RBTreeIterator RedBlackTree<T, bst_head, Compare>::RBTreeIterator::from_node(T *node) noexcept
+bool RedBlackTree<T, bst_head, Compare>::RBTreeConstIterator::operator!=(
+    const RBTreeConstIterator &other) const noexcept
+{
+    return node != other.node;
+}
+
+template<typename T, RBTreeNode<T> T::*bst_head, class Compare>
+RedBlackTree<T, bst_head, Compare>::RBTreeIterator
+    RedBlackTree<T, bst_head, Compare>::RBTreeIterator::from_node(T *node) noexcept
 {
     return RBTreeIterator {node};
 }
@@ -585,6 +667,14 @@ RedBlackTree<T, bst_head, Compare>::RBTreeIterator
     RedBlackTree<T, bst_head, Compare>::RBTreeHead::find(const auto &value)
 {
     return RBTreeIterator {RedBlackTree<T, bst_head, Compare>::find(root, value)};
+}
+
+template<typename T, RBTreeNode<T> T::*bst_head, class Compare>
+RedBlackTree<T, bst_head, Compare>::RBTreeConstIterator
+    RedBlackTree<T, bst_head, Compare>::RBTreeHead::find(const auto &value) const
+{
+    return RBTreeConstIterator {
+        RedBlackTree<T, bst_head, Compare>::find(static_cast<const T *>(root), value)};
 }
 
 template<typename T, RBTreeNode<T> T::*bst_head, class Compare>
