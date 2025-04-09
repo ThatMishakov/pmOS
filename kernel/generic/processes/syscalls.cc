@@ -48,7 +48,6 @@
 #include <lib/string.hh>
 #include <lib/utility.hh>
 #include <memory/mem_object.hh>
-#include <messaging/named_ports.hh>
 #include <pmos/system.h>
 #include <sched/sched.hh>
 
@@ -70,13 +69,13 @@ std::array<syscall_function, 54> syscall_table = {
 
     syscall_get_message_info,
     syscall_get_first_message,
-    syscall_request_named_port,
+    nullptr,
     syscall_send_message_port,
     syscall_create_port,
     syscall_set_attribute,
     syscall_set_interrupt,
-    syscall_name_port,
-    syscall_get_port_by_name,
+    nullptr,
+    nullptr,
     syscall_set_log_port,
 
     syscall_get_page_table,
@@ -788,227 +787,6 @@ void syscall_complete_interrupt()
 #else
     #error Unknown architecture
 #endif
-}
-
-void syscall_name_port()
-{
-    const task_ptr task = get_current_task();
-
-    u64 portnum  = syscall_arg64(task, 0);
-    ulong name   = syscall_arg(task, 1, 1);
-    ulong length = syscall_arg(task, 2, 1);
-    ulong flags  = syscall_flags(task);
-
-    klib::string str(length, 0);
-    auto b = copy_from_user((char *)str.data(), (char *)name, length);
-    if (!b.success()) {
-        syscall_error(task) = b.result;
-        return;
-    }
-
-    if (!b.val)
-        return;
-
-    Port *port = Port::atomic_get_port(portnum);
-    if (not port) {
-        syscall_error(task) = -ENOENT;
-        return;
-    }
-
-    Auto_Lock_Scope scope_lock2(global_named_ports.lock);
-
-    Named_Port_Desc *named_port = global_named_ports.storage.find(str);
-
-    if (named_port) {
-        auto parent_port = Port::atomic_get_port(named_port->parent_port_id);
-        if (parent_port) {
-            Auto_Lock_Scope lock(parent_port->lock);
-            if (parent_port->alive) {
-                syscall_error(task) = -EEXIST;
-                return;
-            }
-        }
-
-        {
-            Auto_Lock_Scope scope_lock(port->lock);
-            if (!port->alive) {
-                syscall_error(task) = -ENOENT;
-                return;
-            }
-            named_port->parent_port_id = port->portno;
-        }
-
-        syscall_success(task);
-
-        for (const auto &t: named_port->actions) {
-            t->do_action(port, str);
-        }
-
-        named_port->actions.clear();
-    } else {
-        klib::unique_ptr<Named_Port_Desc> new_desc = new Named_Port_Desc(klib::move(str), port);
-        if (!new_desc) {
-            syscall_error(task) = -ENOMEM;
-            return;
-        }
-
-        {
-            Auto_Lock_Scope scope_lock(port->lock);
-            if (!port->alive) {
-                syscall_error(task) = -ENOENT;
-                return;
-            }
-
-            global_named_ports.storage.insert(new_desc.release());
-        }
-
-        syscall_success(task);
-    }
-}
-
-void syscall_get_port_by_name()
-{
-    // --------------------- TODO: shared pointers *will* explode if the TaskDescriptor is deleted
-    // -------------------------------------
-    constexpr unsigned flag_noblock = 0x01;
-
-    task_ptr task = get_current_task();
-
-    ulong name   = syscall_arg(task, 0, 0);
-    ulong length = syscall_arg(task, 1, 0);
-    ulong flags  = syscall_flags(task);
-
-    klib::string str(length, 0);
-    auto b = copy_from_user((char *)str.data(), (char *)name, length);
-    if (!b.success()) {
-        syscall_error(task) = b.result;
-        return;
-    }
-
-    if (!b.val)
-        return;
-
-    Auto_Lock_Scope scope_lock(global_named_ports.lock);
-    auto named_port = global_named_ports.storage.find(str);
-
-    if (named_port) {
-        auto parent_port = Port::atomic_get_port(named_port->parent_port_id);
-        if (parent_port) {
-            Auto_Lock_Scope lock(parent_port->lock);
-            if (!parent_port->alive) {
-                syscall_error(task) = -ENOENT;
-            } else {
-                syscall_return(task) = parent_port->portno;
-            }
-            return;
-        } else {
-            if (flags & flag_noblock) {
-                syscall_error(task) = -ENOENT;
-                return;
-            } else {
-                auto ptr = klib::make_unique<Notify_Task>(task, named_port);
-                if (!ptr) {
-                    syscall_error(task) = -ENOMEM;
-                    return;
-                }
-                if (!named_port->actions.push_back(klib::move(ptr))) {
-                    syscall_error(task) = -ENOMEM;
-                    return;
-                }
-
-                task->request_repeat_syscall();
-                block_current_task(named_port);
-            }
-        }
-    } else {
-        if (flags & flag_noblock) {
-            syscall_error(task) = -ENOENT;
-            return;
-        } else {
-            auto new_desc = klib::make_unique<Named_Port_Desc>(klib::move(str), nullptr);
-            if (!new_desc) {
-                syscall_error(task) = -ENOMEM;
-                return;
-            }
-
-            if (!new_desc->actions.push_back(
-                    klib::make_unique<Notify_Task>(task, new_desc.get()))) {
-                syscall_error(task) = -ENOMEM;
-                return;
-            }
-
-            global_named_ports.storage.insert(new_desc.get());
-
-            task->request_repeat_syscall();
-            block_current_task(new_desc.release());
-        }
-    }
-}
-
-void syscall_request_named_port()
-{
-    const task_ptr task = get_current_task();
-    u64 reply_port      = syscall_arg64(task, 0);
-    ulong string_ptr    = syscall_arg(task, 1, 1);
-    ulong length        = syscall_arg(task, 2, 1);
-    ulong flags         = syscall_flags(task);
-
-    klib::string str(length, 0);
-    auto b = copy_from_user((char *)str.data(), (char *)string_ptr, length);
-    if (!b.success()) {
-        syscall_error(task) = b.result;
-        return;
-    }
-
-    if (!b.val)
-        return;
-
-    // From this point on, the process can't block
-    syscall_success(task);
-
-    Port *port_ptr = Port::atomic_get_port(reply_port);
-    if (not port_ptr) {
-        syscall_error(task) = -ENOENT;
-        return;
-    }
-
-    Auto_Lock_Scope scope_lock(global_named_ports.lock);
-
-    Named_Port_Desc *named_port = global_named_ports.storage.find(str);
-    if (named_port) {
-        auto parent_port = Port::atomic_get_port(named_port->parent_port_id);
-        if (parent_port) {
-            bool alive = false;
-            {
-                Auto_Lock_Scope lock(parent_port->lock);
-                alive = parent_port->alive;
-            }
-
-            if (alive) {
-                Send_Message msg(port_ptr);
-                msg.do_action(parent_port, str);
-                return;
-            }
-        }
-        if (!named_port->actions.push_back(klib::make_unique<Send_Message>(port_ptr))) {
-            syscall_error(task) = -ENOMEM;
-            return;
-        }
-    } else {
-        auto new_desc =
-            klib::make_unique<Named_Port_Desc>(Named_Port_Desc(klib::move(str), nullptr));
-        if (!new_desc) {
-            syscall_error(task) = -ENOMEM;
-            return;
-        }
-
-        if (!new_desc->actions.push_back(klib::make_unique<Send_Message>(port_ptr))) {
-            syscall_error(task) = -ENOMEM;
-            return;
-        }
-
-        global_named_ports.storage.insert(new_desc.release());
-    }
 }
 
 void syscall_set_log_port()

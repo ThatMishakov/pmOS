@@ -43,10 +43,6 @@ extern Spinlock messaging_ports;
 
 class TaskDescriptor;
 
-struct Generic_Port {
-    virtual ~Generic_Port() noexcept = default;
-};
-
 struct Message {
     pmos::containers::DoubleListHead<Message> list_node;
     u64 task_id_from  = 0;
@@ -70,7 +66,7 @@ struct Message {
 
 class TaskGroup;
 
-class Port: public Generic_Port
+class Port
 {
 public:
     TaskDescriptor *owner;
@@ -109,7 +105,7 @@ public:
      * This destructor cleans up the port and does other misc stuff such as sending not-delivered
      * acknowledgements
      */
-    virtual ~Port() noexcept override;
+    ~Port() noexcept;
 
     /**
      * @brief Gets the port or NULL if it doesn't exist

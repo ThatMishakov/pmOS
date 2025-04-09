@@ -56,7 +56,7 @@ klib::vector<CPU_Info *> cpus;
 
 size_t get_cpu_count() noexcept { return cpus.size(); }
 
-ReturnStr<u64> block_current_task(Generic_Port *ptr)
+ReturnStr<u64> block_current_task(Port *ptr)
 {
     // TODO: This function has a strange return value
     TaskDescriptor *task = get_cpu_struct()->current_task;
@@ -200,7 +200,7 @@ bool TaskDescriptor::atomic_try_unblock_by_page(void *page)
     return true;
 }
 
-bool TaskDescriptor::atomic_unblock_if_needed(Generic_Port *ptr)
+bool TaskDescriptor::atomic_unblock_if_needed(Port *ptr)
 {
     bool unblocked = false;
     Auto_Lock_Scope scope_lock(sched_lock);
@@ -494,7 +494,7 @@ TaskDescriptor *CPU_Info::atomic_get_front_priority(priority_t priority)
     return nullptr;
 }
 
-bool unblock_if_needed(TaskDescriptor *p, Generic_Port *compare_blocked_by)
+bool unblock_if_needed(TaskDescriptor *p, Port *compare_blocked_by)
 {
     return p->atomic_unblock_if_needed(compare_blocked_by);
 }

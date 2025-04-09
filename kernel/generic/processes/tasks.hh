@@ -101,8 +101,8 @@ public:
         pmos::containers::RedBlackTree<Port, &Port::bst_head_owner,
                                        detail::TreeCmp<Port, u64, &Port::portno>>;
     ports_tree::RBTreeHead owned_ports;
-    Generic_Port *blocked_by;
-    Generic_Port *sender_hint;
+    Port *blocked_by;
+    Port *sender_hint;
 
     // Scheduling info
     TaskDescriptor *queue_next = nullptr;
@@ -158,7 +158,7 @@ public:
     u64 check_unblock_immediately(u64 reason, u64 extra);
 
     // Checks if the process is blocked by the port and unblocks it if needed
-    bool atomic_unblock_if_needed(Generic_Port *compare_blocked_by);
+    bool atomic_unblock_if_needed(Port *compare_blocked_by);
 
     // Sets the entry point to the task
     inline void set_entry_point(u64 entry) { this->regs.program_counter() = entry; }

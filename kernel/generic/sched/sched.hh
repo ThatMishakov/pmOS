@@ -58,10 +58,10 @@
 
 // Checks the mask and unblocks the task if needed
 // This function needs to be axed
-bool unblock_if_needed(TaskDescriptor *p, Generic_Port *compare_blocked_by);
+bool unblock_if_needed(TaskDescriptor *p, Port *compare_blocked_by);
 
 // Blocks current task, setting blocked_by to *ptr*.
-ReturnStr<u64> block_current_task(Generic_Port *ptr);
+ReturnStr<u64> block_current_task(Port *ptr);
 
 extern sched_queue blocked;
 extern sched_queue uninit;
