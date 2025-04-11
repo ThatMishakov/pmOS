@@ -59,7 +59,7 @@
  * @see programmable_interrupt()
  */
 struct Prog_Int_Descriptor {
-    Port *port;
+    kernel::ipc::Port *port;
     Spinlock lock;
 };
 

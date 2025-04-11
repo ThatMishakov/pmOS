@@ -380,7 +380,7 @@ void init_interrupts()
         if (!addr)
             panic("Failed to allocate virtual memory window for BIO PIC");
 
-        const Page_Table_Argumments arg = {.readable           = true,
+        const Page_Table_Arguments arg = {.readable           = true,
                                            .writeable          = true,
                                            .user_access        = false,
                                            .global             = true,

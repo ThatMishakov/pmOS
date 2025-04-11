@@ -32,6 +32,8 @@
 #include <acpi/acpi.h>
 #include <acpi/acpi.hh>
 
+using namespace kernel::log;
+
 extern "C" void allow_access_user()
 {
     // On x86, access to user space is always allowed

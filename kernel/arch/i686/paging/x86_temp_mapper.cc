@@ -36,7 +36,7 @@ x86_2level_Mapper::x86_2level_Mapper(void *virt_addr, u32 cr3)
     u32 addr    = (u32)virt_addr;
     start_index = addr / 4096 % 1024;
 
-    Page_Table_Argumments arg {1, 1, 0, 0, 1, 000};
+    Page_Table_Arguments arg {1, 1, 0, 0, 1, 000};
 
     auto pt_phys = prepare_pt_for(virt_addr, arg, cr3);
     if (pt_phys == -1ULL)
@@ -61,7 +61,7 @@ x86_PAE_Temp_Mapper::x86_PAE_Temp_Mapper(void *virt_addr, u32 cr3)
     u32 addr    = (u32)virt_addr;
     start_index = addr / 4096 % 512;
 
-    Page_Table_Argumments arg {1, 1, 0, 0, 1, 000};
+    Page_Table_Arguments arg {1, 1, 0, 0, 1, 000};
 
     auto pt_phys = prepare_pt_for(virt_addr, arg, cr3);
     if (pt_phys == -1ULL)

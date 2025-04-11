@@ -30,6 +30,9 @@
 #pragma once
 #include <memory/paging.hh>
 
+namespace kernel::x86_64::paging
+{
+
 /// @brief Indicates NX (no execute) bit is supported and enabled
 /// @todo Very x86-specific
 extern bool nx_bit_enabled;
@@ -66,7 +69,7 @@ struct x86_PAE_Entry {
     void clear_nofree();
 } PACKED ALIGNED(8);
 
-class x86_Page_Table: public Page_Table
+class x86_Page_Table: public kernel::paging::Page_Table
 {
 public:
     virtual u64 get_cr3() const = 0;
@@ -114,14 +117,15 @@ public:
 
     // Maps the page with the appropriate permissions
     virtual kresult_t map(u64 page_addr, void *virt_addr,
-                          Page_Table_Argumments arg) noexcept override;
+                          Page_Table_Arguments arg) noexcept override;
 
     virtual kresult_t map(kernel::pmm::Page_Descriptor page, void *virt_addr,
-                          Page_Table_Argumments arg) noexcept override;
+                          Page_Table_Arguments arg) noexcept override;
 
-    virtual void invalidate(TLBShootdownContext &ctx, void *virt_addr, bool free) override;
+    virtual void invalidate(kernel::paging::TLBShootdownContext &ctx, void *virt_addr,
+                            bool free) override;
 
-    bool is_mapped(void* virt_addr) const override;
+    bool is_mapped(void *virt_addr) const override;
 
     virtual ~x86_4level_Page_Table();
 
@@ -187,8 +191,8 @@ protected:
     static page_table_map global_page_tables;
     static Spinlock page_table_index_lock;
 
-    virtual void invalidate_range(TLBShootdownContext &ctx, void *virt_addr, size_t size_bytes,
-                                  bool free) override;
+    virtual void invalidate_range(kernel::paging::TLBShootdownContext &ctx, void *virt_addr,
+                                  size_t size_bytes, bool free) override;
 
     x86_4level_Page_Table() = default;
 
@@ -207,22 +211,18 @@ protected:
     kresult_t copy_to_recursive(const klib::shared_ptr<Page_Table> &to, u64 phys_page_level,
                                 u64 absolute_start, u64 to_addr, u64 size_bytes, u64 new_access,
                                 u64 current_copy_from, int level, u64 &upper_bound_offset,
-                                TLBShootdownContext &ctx);
+                                kernel::paging::TLBShootdownContext &ctx);
 };
 
 const u16 rec_map_index = 509;
 
-// Return true if mapped the page successfully
-void map(u64 cr3, u64 physical_addr, void *virtual_addr, Page_Table_Argumments arg);
-
 // Maps the pages. Returns the result
-u64 map_pages(u64 physical_address, void *virtual_address, size_t size_bytes, Page_Table_Argumments pta,
-              u64 page_table_pointer);
+u64 map_pages(u64 physical_address, void *virtual_address, size_t size_bytes,
+              kernel::paging::Page_Table_Arguments pta, u64 page_table_pointer);
 
-u64 prepare_pt_for(void *virt_addr, Page_Table_Argumments arg, u64 pt_top_phys);
-u64 get_pt_ppn(void *virt_addr, u64 pt_top_phys);
-
-class TaskDescriptor;
+u64 prepare_pt_for(void *virt_addr, kernel::paging::Page_Table_Arguments arg, u64 pt_top_phys);
 
 // Releases cr3
 extern "C" void release_cr3(u64 cr3);
+
+}; // namespace kernel::x86::paging

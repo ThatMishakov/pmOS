@@ -52,4 +52,4 @@ bool have_dtb();
 // Where did it come from? arch/riscv/include/asm/csr.h in the Linux kernel source code
 constexpr u32 IRQ_S_EXT = 9;
 
-extern klib::shared_ptr<Mem_Object> dtb_object;
+extern klib::shared_ptr<kernel::paging::Mem_Object> dtb_object;

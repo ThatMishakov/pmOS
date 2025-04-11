@@ -32,4 +32,4 @@
 // Pointer to where special kernel structures can be mapped
 extern void *unoccupied;
 
-void print_registers(TaskDescriptor *);
+void print_registers(kernel::proc::TaskDescriptor *);

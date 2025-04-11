@@ -31,6 +31,8 @@
 
 #include <types.hh>
 
+namespace kernel::sched
+{
 /**
  * This function is called upon the kernel initialization, once for each CPU.
  * Its function is to allocate local CPU_Infos, initialize idle processors,
@@ -42,5 +44,4 @@ struct CPU_Info;
 // A routine for starting a CPU
 extern "C" void cpu_start_routine(CPU_Info *c);
 extern "C" void cpu_startup_entry();
-
-u64 cpu_configure(u64, u64);
+}; // namespace kernel::sched

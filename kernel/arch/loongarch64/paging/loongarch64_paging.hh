@@ -84,9 +84,9 @@ public:
     /// @param free Whether the page needs to be freed
     void invalidate(TLBShootdownContext &ctx, void *virt_addr, bool free) noexcept override;
 
-    virtual kresult_t map(u64 page_addr, void *virt_addr, Page_Table_Argumments arg) override;
+    virtual kresult_t map(u64 page_addr, void *virt_addr, Page_Table_Arguments arg) override;
     virtual kresult_t map(kernel::pmm::Page_Descriptor page, void *virt_addr,
-                          Page_Table_Argumments arg) override;
+                          Page_Table_Arguments arg) override;
 
     kresult_t resolve_anonymous_page(void *virt_addr, unsigned access_type) override;
 
@@ -126,14 +126,14 @@ protected:
 /// Maps a page (kernel or user) to the specified location. The right page directory (low or high)
 /// has to be supplied, depending on the priviledge level
 kresult_t loongarch_map_page(u64 pt_top_phys, void *virt_addr, u64 phys_addr,
-                             Page_Table_Argumments arg);
+                             Page_Table_Arguments arg);
 
 /// Unmaps the page, freeing it as needed.
 kresult_t loongarch_unmap_page(TLBShootdownContext &ctx, u64 pt_top_phys, void *virt_addr,
                                bool free = false);
 
 // Generic functions to map and release pages in kernel, using the active page table
-kresult_t map_kernel_page(u64 phys_addr, void *virt_addr, Page_Table_Argumments arg);
+kresult_t map_kernel_page(u64 phys_addr, void *virt_addr, Page_Table_Arguments arg);
 kresult_t unmap_kernel_page(TLBShootdownContext &ctx, void *virt_addr);
 
 Page_Info get_page_mapping(u64 page_table, void *virt_addr);

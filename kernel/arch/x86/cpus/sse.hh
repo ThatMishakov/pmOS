@@ -28,8 +28,11 @@
  */
 
 #pragma once
-#include <types.hh>
 #include <lib/memory.hh>
+#include <types.hh>
+
+namespace kernel::x86::sse
+{
 
 enum class SSECtxStyle {
     FXSAVE,
@@ -59,7 +62,7 @@ enum class SSECtxStyle {
  */
 struct SSE_Data {
     klib::unique_ptr<u8> data = nullptr;
-    bool holds_state = false;
+    bool holds_state          = false;
 
     /// \brief Initializes the SSE data structure
     ///
@@ -78,7 +81,8 @@ struct SSE_Data {
 void enable_sse();
 
 /**
- * \brief Detects the SSE instructions supported by the CPU (and what to use to save/restore the state)
+ * \brief Detects the SSE instructions supported by the CPU (and what to use to save/restore the
+ * state)
  * \see SSECtxStyle
  */
 void detect_sse();
@@ -93,3 +97,5 @@ void invalidate_sse();
 /// \brief Clears the CR0.TS bit, indicating that the SSE registers are in a
 /// valid state \see invalidate_sse() \see SSE_Data
 void validate_sse();
+
+} // namespace kernel::x86::sse

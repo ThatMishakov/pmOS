@@ -30,13 +30,16 @@
 #pragma once
 #include <memory/temp_mapper.hh>
 
+namespace kernel::x86_64::paging
+{
+
 struct x86_PAE_Entry;
 
 /**
  * @brief Temp_Mapper for x86_64 CPUs
  *
  */
-class x86_PAE_Temp_Mapper final: public Temp_Mapper
+class x86_PAE_Temp_Mapper final: public kernel::paging::Temp_Mapper
 {
 public:
     virtual void *kern_map(u64 phys_frame) override;
@@ -52,3 +55,5 @@ private:
     unsigned min_index             = 1;
     constexpr static unsigned size = 16;
 };
+
+} // namespace kernel::x86_64::paging

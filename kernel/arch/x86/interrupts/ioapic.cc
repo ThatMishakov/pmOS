@@ -14,6 +14,8 @@
 
 using namespace kernel::x86;
 using namespace kernel;
+using namespace kernel::x86::interrupts;
+using namespace kernel::log;
 
 u32 IOAPIC::read_reg(unsigned offset)
 {
@@ -41,13 +43,13 @@ static u32 *map_ioapic(u32 phys_addr)
     if (!ptr)
         panic("Could not map ioapic\n");
 
-    const Page_Table_Argumments arg = {.readable           = true,
-                                       .writeable          = true,
-                                       .user_access        = false,
-                                       .global             = true,
-                                       .execution_disabled = true,
-                                       .extra              = PAGING_FLAG_NOFREE,
-                                       .cache_policy       = Memory_Type::IONoCache};
+    const paging::Page_Table_Arguments arg = {.readable           = true,
+                                              .writeable          = true,
+                                              .user_access        = false,
+                                              .global             = true,
+                                              .execution_disabled = true,
+                                              .extra              = PAGING_FLAG_NOFREE,
+                                              .cache_policy       = paging::Memory_Type::IONoCache};
 
     auto result = map_kernel_pages(phys_addr & ~PAGE_MASK, ptr, size, arg);
     if (result)
@@ -173,7 +175,7 @@ void IOAPIC::init_ioapics()
 
 Spinlock int_allocation_lock;
 
-ReturnStr<std::pair<CPU_Info *, u32>>
+ReturnStr<std::pair<sched::CPU_Info *, u32>>
     IOAPIC::allocate_interrupt_single(u32 gsi, bool edge_triggered, bool active_low)
 {
     auto ioapic = IOAPIC::get_ioapic(gsi);
@@ -187,7 +189,7 @@ ReturnStr<std::pair<CPU_Info *, u32>>
     if (cpu)
         return Success(std::make_pair(cpu, vector));
 
-    auto result = allocate_interrupt({ioapic, apic_base});
+    auto result = lapic::allocate_interrupt({ioapic, apic_base});
     if (result.success()) {
         auto [cpu, vector] = result.val;
 
@@ -212,8 +214,8 @@ IOAPIC *IOAPIC::get_ioapic(u32 gsi)
     return nullptr;
 }
 
-ReturnStr<std::pair<CPU_Info *, u32>> allocate_interrupt_single(u32 gsi, bool edge_triggered,
-                                                                bool active_low)
+ReturnStr<std::pair<sched::CPU_Info *, u32>>
+    kernel::interrupts::allocate_interrupt_single(u32 gsi, bool edge_triggered, bool active_low)
 {
     return IOAPIC::allocate_interrupt_single(gsi, edge_triggered, active_low);
 }

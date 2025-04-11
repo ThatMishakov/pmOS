@@ -53,7 +53,7 @@ template<typename T> static T alignup(T input, unsigned alignment_log)
     return (input + mask) & ~mask;
 }
 
-kresult_t ia32_map_page(u32 cr3, u64 phys_addr, void *virt_addr, Page_Table_Argumments arg)
+kresult_t ia32_map_page(u32 cr3, u64 phys_addr, void *virt_addr, Page_Table_Arguments arg)
 {
     assert(!(phys_addr & 0xFFF));
     if (!use_pae) {
@@ -273,19 +273,19 @@ bool IA32_Page_Table::is_mapped(void *virt_addr) const
     }
 }
 
-kresult_t map_kernel_page(u64 phys_addr, void *virt_addr, Page_Table_Argumments arg)
+kresult_t map_kernel_page(u64 phys_addr, void *virt_addr, Page_Table_Arguments arg)
 {
     assert(!arg.user_access);
     return ia32_map_page(idle_cr3, phys_addr, virt_addr, arg);
 }
 
-kresult_t IA32_Page_Table::map(u64 page_addr, void *virt_addr, Page_Table_Argumments arg)
+kresult_t IA32_Page_Table::map(u64 page_addr, void *virt_addr, Page_Table_Arguments arg)
 {
     return ia32_map_page(cr3, page_addr, virt_addr, arg);
 }
 
 kresult_t IA32_Page_Table::map(pmm::Page_Descriptor page, void *virt_addr,
-                               Page_Table_Argumments arg)
+                               Page_Table_Arguments arg)
 {
     auto page_phys = page.get_phys_addr();
     arg.extra      = PAGING_FLAG_STRUCT_PAGE;
@@ -296,13 +296,13 @@ kresult_t IA32_Page_Table::map(pmm::Page_Descriptor page, void *virt_addr,
 }
 
 kresult_t map_page(ptable_top_ptr_t page_table, u64 phys_addr, void *virt_addr,
-                   Page_Table_Argumments arg)
+                   Page_Table_Arguments arg)
 {
     return ia32_map_page(page_table, phys_addr, virt_addr, arg);
 }
 
 kresult_t map_pages(ptable_top_ptr_t page_table, u64 phys_addr, void *virt_addr, size_t size,
-                    Page_Table_Argumments arg)
+                    Page_Table_Arguments arg)
 {
     for (u64 i = 0; i < size; i += 4096) {
         auto result =
@@ -313,12 +313,12 @@ kresult_t map_pages(ptable_top_ptr_t page_table, u64 phys_addr, void *virt_addr,
     return 0;
 }
 
-kresult_t map_kernel_pages(u64 phys_addr, void *virt_addr, size_t size, Page_Table_Argumments arg)
+kresult_t map_kernel_pages(u64 phys_addr, void *virt_addr, size_t size, Page_Table_Arguments arg)
 {
     return map_pages(idle_cr3, phys_addr, virt_addr, size, arg);
 }
 
-u64 prepare_pt_for(void *virt_addr, Page_Table_Argumments, u32 cr3)
+u64 prepare_pt_for(void *virt_addr, Page_Table_Arguments, u32 cr3)
 {
     if (!use_pae) {
         Temp_Mapper_Obj<u32> mapper(request_temp_mapper());
@@ -869,7 +869,7 @@ kresult_t IA32_Page_Table::copy_anonymous_pages(const klib::shared_ptr<Page_Tabl
                         u32 copy_from = (1 << 22) * i + (1 << 12) * j;
                         u32 copy_to   = (u32)copy_from - (u32)from_addr + (u32)to_addr;
 
-                        Page_Table_Argumments arg = {
+                        Page_Table_Arguments arg = {
                                              .readable           = !!(access & Readable),
                                              .writeable          = false,
                                              .user_access        = !!(pte & PAGE_USER),
@@ -946,7 +946,7 @@ kresult_t IA32_Page_Table::copy_anonymous_pages(const klib::shared_ptr<Page_Tabl
                             u32 copy_from = addr_of_pd + (1 << 12) * k;
                             u32 copy_to   = (u32)copy_from - (u32)from_addr + (u32)to_addr;
 
-                            Page_Table_Argumments arg = {
+                            Page_Table_Arguments arg = {
                                                  .readable           = !!(access & Readable),
                                                  .writeable          = false,
                                                  .user_access        = !!(pte & PAGE_USER),

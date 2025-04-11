@@ -62,9 +62,9 @@ public:
 
     virtual kresult_t resolve_anonymous_page(void *virt_addr, unsigned access_type) override;
 
-    virtual kresult_t map(u64 page_addr, void *virt_addr, Page_Table_Argumments arg) override;
+    virtual kresult_t map(u64 page_addr, void *virt_addr, Page_Table_Arguments arg) override;
     virtual kresult_t map(kernel::pmm::Page_Descriptor page, void *virt_addr,
-                          Page_Table_Argumments arg) override;
+                          Page_Table_Arguments arg) override;
 
     virtual kresult_t copy_anonymous_pages(const klib::shared_ptr<Page_Table> &to, void *from_addr,
                                            void *to_addr, size_t size_bytes,
@@ -91,17 +91,17 @@ protected:
     void free_user_pages();
 };
 
-u64 prepare_pt_for(void *virt_addr, Page_Table_Argumments arg, u32 pt_top_phys);
+u64 prepare_pt_for(void *virt_addr, Page_Table_Arguments arg, u32 pt_top_phys);
 
 void free_pae_cr3(u32 cr3);
 u32 new_pae_cr3();
 
 // Generic functions to map and release pages in kernel, using the active page table
-kresult_t map_kernel_page(u64 phys_addr, void *virt_addr, Page_Table_Argumments arg);
+kresult_t map_kernel_page(u64 phys_addr, void *virt_addr, Page_Table_Arguments arg);
 kresult_t unmap_kernel_page(TLBShootdownContext &ctx, void *virt_addr);
 
 kresult_t map_page(ptable_top_ptr_t page_table, u64 phys_addr, void *virt_addr,
-                   Page_Table_Argumments arg);
+                   Page_Table_Arguments arg);
 
 bool detect_nx();
 

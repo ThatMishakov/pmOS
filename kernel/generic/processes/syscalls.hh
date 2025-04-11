@@ -32,12 +32,16 @@
 #include <sched/sched.hh>
 #include <types.hh>
 
+namespace kernel::proc::syscalls {
+
 // #pragma GCC diagnostic push
 // #pragma GCC diagnostic ignored "-Wreturn-type-c-linkage"
 
 extern "C" void syscall_handler();
 
 // #pragma GCC diagnostic pop
+
+
 
 // Gets the pid of the current process
 void syscall_get_task_id();
@@ -268,8 +272,7 @@ extern "C" void syscall_entry();
 // Entry point for when userspace calls SYSENTER instruction
 extern "C" void sysenter_entry();
 
-// Entry point for when userspace calls software interrupt
-extern "C" void syscall_int_entry();
-
 // Enables SYSCALL instruction
 void program_syscall();
+
+};

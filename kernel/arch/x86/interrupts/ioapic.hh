@@ -1,11 +1,10 @@
 #pragma once
 #include <interrupts/interrupt_handler.hh>
 #include <lib/vector.hh>
+#include <sched/sched.hh>
 #include <types.hh>
 
-struct CPU_Info;
-
-namespace kernel::x86
+namespace kernel::x86::interrupts
 {
 
 class IOAPIC
@@ -15,12 +14,12 @@ public:
     void interrupt_disable(u32 vector);
 
     static void init_ioapics();
-    static ReturnStr<std::pair<CPU_Info *, u32>>
+    static ReturnStr<std::pair<sched::CPU_Info *, u32>>
         allocate_interrupt_single(u32 gsi, bool edge_triggered, bool active_low);
 
 private:
     struct IntMapping {
-        CPU_Info *mapped_to {};
+        sched::CPU_Info *mapped_to {};
         u32 vector {};
     };
 
@@ -53,4 +52,4 @@ private:
     void push_global();
 };
 
-}; // namespace kernel::x86
+}; // namespace kernel::x86::interrupts

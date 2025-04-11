@@ -31,6 +31,9 @@
 
 #include <types.hh>
 
+namespace kernel::paging
+{
+
 /**
  * @brief Per-CPU temporary mapper
  *
@@ -68,7 +71,7 @@ public:
 
     // TODO: Remap would be nice
 
-    Temp_Mapper()                    = default;
+    Temp_Mapper() = default;
 };
 
 /**
@@ -160,3 +163,5 @@ public:
 
 // nullptr indicates that the per-CPU mapper must be used
 extern Temp_Mapper *global_temp_mapper;
+
+} // namespace kernel::paging

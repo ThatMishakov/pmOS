@@ -35,6 +35,14 @@
 #include <lib/vector.hh>
 #include <types.hh>
 
+namespace kernel::sched
+{
+extern size_t number_of_cpus;
+}
+
+namespace kernel::memory
+{
+
 /**
  * @brief RCU function type
  *
@@ -50,12 +58,10 @@ struct RCU_Head {
     rcu_func_t rcu_func;
 };
 
-extern size_t number_of_cpus;
-
 class RCU
 {
 public:
-    inline RCU() { assert(bitmask.resize((number_of_cpus + 63) / 64, 0)); }
+    inline RCU() { assert(bitmask.resize((kernel::sched::number_of_cpus + 63) / 64, 0)); }
 
     ~RCU() = default;
 
@@ -86,3 +92,5 @@ struct RCU_CPU {
 
     void quiet(RCU &parent, size_t my_cpu_id);
 };
+
+} // namespace kernel::memory

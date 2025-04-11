@@ -35,6 +35,9 @@
 #include <pmos/containers/intrusive_list.hh>
 #include <types.hh>
 
+namespace kernel::proc
+{
+
 class TaskDescriptor;
 class TaskGroup;
 
@@ -110,7 +113,7 @@ public:
      * @param mask New mask
      * @return u64 Old mask
      */
-    ReturnStr<u32> atomic_change_notifier_mask(Port *port, u32 mask, u32 flags);
+    ReturnStr<u32> atomic_change_notifier_mask(ipc::Port *port, u32 mask, u32 flags);
 
     /**
      * @brief Gets the notification mask of the port. If the mask is 0, then the port is not in the
@@ -123,6 +126,7 @@ public:
 
     bool alive() const noexcept;
     bool atomic_alive() const noexcept;
+
 private:
     id_type id = __atomic_fetch_add(&next_id, 1, __ATOMIC_SEQ_CST);
 
@@ -131,7 +135,7 @@ private:
 
     union {
         pmos::containers::RBTreeNode<TaskGroup> bst_head_global = {};
-        RCU_Head rcu_head;
+        memory::RCU_Head rcu_head;
     };
 
     using global_tree =
@@ -168,9 +172,11 @@ private:
 
     static inline u64 next_id = 1;
 
-    friend bool Port::delete_self() noexcept;
+    friend bool ipc::Port::delete_self() noexcept;
 
     ~TaskGroup() = default;
 
     void destroy();
 };
+
+}; // namespace kernel::proc

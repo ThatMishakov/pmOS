@@ -34,6 +34,8 @@
 #include <types.hh>
 #include <x86_asm.hh>
 
+using namespace kernel::x86_64::paging;
+
 x86_PAE_Temp_Mapper::x86_PAE_Temp_Mapper(void *virt_addr, u64 cr3)
 {
     pt_mapped = (x86_PAE_Entry *)virt_addr;
@@ -41,13 +43,13 @@ x86_PAE_Temp_Mapper::x86_PAE_Temp_Mapper(void *virt_addr, u64 cr3)
     u64 addr    = (u64)virt_addr;
     start_index = addr / 4096 % 512;
 
-    Page_Table_Argumments arg {1, 1, 0, 0, 1, 000};
+    kernel::paging::Page_Table_Arguments arg {1, 1, 0, 0, 1, 000};
 
     auto pt_phys = prepare_pt_for(virt_addr, arg, cr3);
     if (pt_phys == -1UL)
         panic("Can't initialize temp mapper");
 
-    Temp_Mapper_Obj<x86_PAE_Entry> tm(request_temp_mapper());
+    kernel::paging::Temp_Mapper_Obj<x86_PAE_Entry> tm(kernel::paging::request_temp_mapper());
     x86_PAE_Entry *pt = tm.map(pt_phys);
 
     pt[start_index]           = x86_PAE_Entry();

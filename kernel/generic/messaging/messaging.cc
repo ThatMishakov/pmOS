@@ -39,12 +39,16 @@
 #include <types.hh>
 #include <utils.hh>
 
+using namespace kernel;
+namespace kernel::ipc
+{
+
 ReturnStr<bool> Message::copy_to_user_buff(char *buff)
 {
     return copy_to_user(&content.front(), buff, content.size());
 }
 
-Port *Port::atomic_create_port(TaskDescriptor *task) noexcept
+Port *Port::atomic_create_port(proc::TaskDescriptor *task) noexcept
 {
     assert(task);
 
@@ -58,7 +62,8 @@ Port *Port::atomic_create_port(TaskDescriptor *task) noexcept
 
     {
         Auto_Lock_Scope scope_lock(task->sched_lock);
-        if (task->status == TaskStatus::TASK_DYING || task->status == TaskStatus::TASK_DEAD)
+        if (task->status == proc::TaskStatus::TASK_DYING ||
+            task->status == proc::TaskStatus::TASK_DEAD)
             return nullptr;
         task->owned_ports.insert(new_port_ptr.get());
     }
@@ -101,7 +106,7 @@ void Port::enqueue(klib::unique_ptr<Message> msg)
 
     msg_queue.push_back(msg.release());
 
-    unblock_if_needed(owner, this);
+    sched::unblock_if_needed(owner, this);
 }
 
 kresult_t Port::send_from_system(klib::vector<char> &&v)
@@ -128,7 +133,7 @@ kresult_t Port::send_from_system(const char *msg_ptr, size_t size)
     return send_from_system(klib::move(message));
 }
 
-ReturnStr<bool> Port::send_from_user(TaskDescriptor *sender, const char *unsafe_user_ptr,
+ReturnStr<bool> Port::send_from_user(proc::TaskDescriptor *sender, const char *unsafe_user_ptr,
                                      size_t msg_size)
 {
     assert(lock.is_locked() && "Spinlock not locked!");
@@ -150,8 +155,9 @@ ReturnStr<bool> Port::send_from_user(TaskDescriptor *sender, const char *unsafe_
     return true;
 }
 
-ReturnStr<bool> Port::atomic_send_from_user(TaskDescriptor *sender, const char *unsafe_user_message,
-                                            size_t msg_size, u64 mem_object_id)
+ReturnStr<bool> Port::atomic_send_from_user(proc::TaskDescriptor *sender,
+                                            const char *unsafe_user_message, size_t msg_size,
+                                            u64 mem_object_id)
 {
     klib::vector<char> message;
     if (!message.resize(msg_size))
@@ -233,7 +239,7 @@ bool Port::delete_self() noexcept
             reinterpret_cast<Port *>(reinterpret_cast<char *>(self) - offsetof(Port, rcu_head));
         delete t;
     };
-    get_cpu_struct()->heap_rcu_cpu.push(&rcu_head);
+    sched::get_cpu_struct()->heap_rcu_cpu.push(&rcu_head);
 
     return true;
 }
@@ -247,4 +253,6 @@ Port::~Port() noexcept
     }
 }
 
-Port::Port(TaskDescriptor *owner, u64 portno): owner(owner), portno(portno) {}
+Port::Port(proc::TaskDescriptor *owner, u64 portno): owner(owner), portno(portno) {}
+
+} // namespace kernel::ipc

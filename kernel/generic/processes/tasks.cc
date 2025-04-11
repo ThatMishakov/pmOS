@@ -43,6 +43,17 @@
 #include <sched/defs.hh>
 #include <sched/sched.hh>
 
+namespace kernel::paging
+{
+extern klib::shared_ptr<kernel::paging::Arch_Page_Table> idle_page_table;
+}
+
+namespace kernel::proc
+{
+
+Spinlock tasks_map_lock;
+sched_map tasks_map;
+
 TaskDescriptor *TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel level) noexcept
 {
     // Create the structure
@@ -84,7 +95,7 @@ TaskDescriptor *TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel le
 
 #elif defined(__riscv) || defined(__loongarch__)
     n->is_system = level == PrivilegeLevel::Kernel;
-    auto result = n->init_fp_state();
+    auto result  = n->init_fp_state();
     if (result)
         return nullptr;
 #endif
@@ -96,11 +107,11 @@ TaskDescriptor *TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel le
     Auto_Lock_Scope l(tasks_map_lock);
     tasks_map.insert(n.get());
 
-    Auto_Lock_Scope uninit_lock(uninit.lock);
-    uninit.push_back(n.get());
+    Auto_Lock_Scope uninit_lock(sched::uninit.lock);
+    sched::uninit.push_back(n.get());
 
     if (level == PrivilegeLevel::User) {
-        auto name = get_current_task()->name.clone();
+        auto name = sched::get_current_task()->name.clone();
         Auto_Lock_Scope scope_lock(n->name_lock);
         n->name = klib::move(name);
     }
@@ -125,8 +136,8 @@ ReturnStr<size_t> TaskDescriptor::init_stack()
 
     auto r = this->page_table->atomic_create_normal_region(
         stack_page_start, stack_size,
-        Page_Table::Protection::Writeable | Page_Table::Protection::Readable, true, false,
-        stack_region_name, -1, true);
+        paging::Page_Table::Protection::Writeable | paging::Page_Table::Protection::Readable, true,
+        false, stack_region_name, -1, true);
 
     if (!r.success())
         return r.propagate();
@@ -137,9 +148,7 @@ ReturnStr<size_t> TaskDescriptor::init_stack()
     return this->regs.stack_pointer();
 }
 
-extern klib::shared_ptr<Arch_Page_Table> idle_page_table;
-
-kresult_t init_idle(CPU_Info *cpu_str)
+kresult_t init_idle(sched::CPU_Info *cpu_str)
 {
     // This would not work outside of kernel initialization
     klib::unique_ptr<TaskDescriptor> i =
@@ -147,14 +156,14 @@ kresult_t init_idle(CPU_Info *cpu_str)
     if (!i) [[unlikely]]
         return -ENOMEM;
 
-    assert(idle_page_table);
-    auto result = i->atomic_register_page_table(idle_page_table);
+    assert(paging::idle_page_table);
+    auto result = i->atomic_register_page_table(paging::idle_page_table);
     if (result != 0) [[unlikely]]
         return result;
 
     Auto_Lock_Scope lock(i->sched_lock);
 
-    sched_queue *idle_parent_queue = i->parent_queue;
+    sched::sched_queue *idle_parent_queue = i->parent_queue;
     if (idle_parent_queue != nullptr) {
         Auto_Lock_Scope q_lock(idle_parent_queue->lock);
         idle_parent_queue->erase(i.get());
@@ -186,14 +195,14 @@ void TaskDescriptor::init()
 
     // TODO: This function has a race condition
     parent_queue->atomic_erase(this);
-    auto cpu_struct = get_cpu_struct();
+    auto cpu_struct = sched::get_cpu_struct();
 
     TaskDescriptor *current_task = cpu_struct->current_task;
     if (cpu_affinity != 0 and (cpu_affinity - 1) != cpu_struct->cpu_id) {
         auto cpu = cpu_affinity - 1;
-        push_ready(this);
-        assert(cpu < cpus.size());
-        auto remote_cpu = cpus[cpu];
+        sched::push_ready(this);
+        assert(cpu < sched::cpus.size());
+        auto remote_cpu = sched::cpus[cpu];
         assert(remote_cpu);
         assert(remote_cpu->cpu_id == cpu);
         assert(remote_cpu != cpu_struct);
@@ -206,9 +215,9 @@ void TaskDescriptor::init()
 
         switch_to();
 
-        push_ready(current_task);
+        sched::push_ready(current_task);
     } else {
-        push_ready(this);
+        sched::push_ready(this);
     }
 }
 
@@ -246,7 +255,7 @@ void TaskDescriptor::atomic_kill()
     }
 
     if (reschedule)
-        ::reschedule();
+        sched::reschedule();
 
     // Let the scheduler stumble upon this task and kill it
     // This is done this way so that if a task is bound to a particular CPU, the the destructors
@@ -263,7 +272,7 @@ kresult_t TaskDescriptor::create_new_page_table()
     if (page_table)
         return -EEXIST;
 
-    klib::shared_ptr<Arch_Page_Table> table = Arch_Page_Table::create_empty();
+    auto table = paging::Arch_Page_Table::create_empty();
     if (!table)
         return -ENOMEM;
 
@@ -276,7 +285,7 @@ kresult_t TaskDescriptor::create_new_page_table()
     return 0;
 }
 
-kresult_t TaskDescriptor::register_page_table(klib::shared_ptr<Arch_Page_Table> table)
+kresult_t TaskDescriptor::register_page_table(klib::shared_ptr<paging::Arch_Page_Table> table)
 {
     assert(table);
 
@@ -301,15 +310,16 @@ kresult_t TaskDescriptor::register_page_table(klib::shared_ptr<Arch_Page_Table> 
     return 0;
 }
 
-kresult_t TaskDescriptor::atomic_register_page_table(klib::shared_ptr<Arch_Page_Table> table)
+kresult_t
+    TaskDescriptor::atomic_register_page_table(klib::shared_ptr<paging::Arch_Page_Table> table)
 {
     Auto_Lock_Scope scope_lock(sched_lock);
 
-    return register_page_table(klib::forward<klib::shared_ptr<Arch_Page_Table>>(table));
+    return register_page_table(klib::forward<klib::shared_ptr<paging::Arch_Page_Table>>(table));
 }
 
 ReturnStr<bool>
-    TaskDescriptor::load_elf(klib::shared_ptr<Mem_Object> elf, klib::string name,
+    TaskDescriptor::load_elf(klib::shared_ptr<paging::Mem_Object> elf, klib::string name,
                              const klib::vector<klib::unique_ptr<load_tag_generic>> &tags)
 {
     Auto_Lock_Scope scope_lock(sched_lock);
@@ -344,13 +354,13 @@ ReturnStr<bool>
         return Error(-ENOEXEC);
 
     if (header.instr_set != ELF_X86_64)
-        paging_flags |= Page_Table::FLAG_32BIT;
+        paging_flags |= paging::Page_Table::FLAG_32BIT;
 #else
     if (header.instr_set != ELF_INSTR_SET)
         return Error(-ENOEXEC);
 #endif
 
-    klib::shared_ptr<Arch_Page_Table> table;
+    klib::shared_ptr<paging::Arch_Page_Table> table;
     ulong program_entry;
     load_tag_elf_phdr phdr_tag = {LOAD_TAG_ELF_PHDR_HEADER, 0, 0, 0, 0};
     size_t load_count          = 0;
@@ -385,7 +395,7 @@ ReturnStr<bool>
             return false;
 
         // Create a new page table
-        table = Arch_Page_Table::create_empty(paging_flags);
+        table = paging::Arch_Page_Table::create_empty(paging_flags);
         if (!table)
             return Error(-ENOMEM);
 
@@ -414,12 +424,13 @@ ReturnStr<bool>
                 const u32 file_offset  = ph.p_offset & ~0xFFFUL;
                 const u32 size         = ((ph.p_vaddr & 0xFFFUL) + ph.p_memsz + 0xFFF) & ~0xFFFUL;
 
-                u8 protection_mask =
-                    (ph.flags & ELF_FLAG_EXECUTABLE) ? Page_Table::Protection::Executable : 0;
+                u8 protection_mask = (ph.flags & ELF_FLAG_EXECUTABLE)
+                                         ? paging::Page_Table::Protection::Executable
+                                         : 0;
                 protection_mask |=
-                    (ph.flags & ELF_FLAG_READABLE) ? Page_Table::Protection::Readable : 0;
+                    (ph.flags & ELF_FLAG_READABLE) ? paging::Page_Table::Protection::Readable : 0;
                 protection_mask |=
-                    (ph.flags & ELF_FLAG_WRITABLE) ? Page_Table::Protection::Writeable : 0;
+                    (ph.flags & ELF_FLAG_WRITABLE) ? paging::Page_Table::Protection::Writeable : 0;
 
                 auto res = table->atomic_create_mem_object_region((void *)region_start, size,
                                                                   protection_mask, true, name, elf,
@@ -435,12 +446,13 @@ ReturnStr<bool>
                 const u32 file_size           = ph.p_filesz;
                 const u32 object_start_offset = ph.p_vaddr - region_start;
 
-                u8 protection_mask =
-                    (ph.flags & ELF_FLAG_EXECUTABLE) ? Page_Table::Protection::Executable : 0;
+                u8 protection_mask = (ph.flags & ELF_FLAG_EXECUTABLE)
+                                         ? paging::Page_Table::Protection::Executable
+                                         : 0;
                 protection_mask |=
-                    (ph.flags & ELF_FLAG_READABLE) ? Page_Table::Protection::Readable : 0;
+                    (ph.flags & ELF_FLAG_READABLE) ? paging::Page_Table::Protection::Readable : 0;
                 protection_mask |=
-                    (ph.flags & ELF_FLAG_WRITABLE) ? Page_Table::Protection::Writeable : 0;
+                    (ph.flags & ELF_FLAG_WRITABLE) ? paging::Page_Table::Protection::Writeable : 0;
 
                 auto res = table->atomic_create_mem_object_region(
                     (void *)region_start, size, protection_mask, true, name, elf, true,
@@ -479,9 +491,11 @@ ReturnStr<bool>
 
             // Install memory region
             const u32 pa_size = (size + 0xFFF) & ~0xFFF;
-            auto tls_virt     = table->atomic_create_normal_region(
-                0, pa_size, Page_Table::Protection::Readable | Page_Table::Protection::Writeable,
-                false, false, name + "_tls", 0, true);
+            auto tls_virt =
+                table->atomic_create_normal_region(0, pa_size,
+                                                   paging::Page_Table::Protection::Readable |
+                                                       paging::Page_Table::Protection::Writeable,
+                                                   false, false, name + "_tls", 0, true);
 
             if (!tls_virt.success())
                 return tls_virt.propagate();
@@ -528,7 +542,7 @@ ReturnStr<bool>
             return false;
 
         // Create a new page table
-        table = Arch_Page_Table::create_empty(paging_flags);
+        table = paging::Arch_Page_Table::create_empty(paging_flags);
         if (!table)
             return Error(-ENOMEM);
 
@@ -553,12 +567,13 @@ ReturnStr<bool>
                 const u64 file_offset  = ph.p_offset & ~0xFFFUL;
                 const u64 size         = ((ph.p_vaddr & 0xFFFUL) + ph.p_memsz + 0xFFF) & ~0xFFFUL;
 
-                u8 protection_mask =
-                    (ph.flags & ELF_FLAG_EXECUTABLE) ? Page_Table::Protection::Executable : 0;
+                u8 protection_mask = (ph.flags & ELF_FLAG_EXECUTABLE)
+                                         ? paging::Page_Table::Protection::Executable
+                                         : 0;
                 protection_mask |=
-                    (ph.flags & ELF_FLAG_READABLE) ? Page_Table::Protection::Readable : 0;
+                    (ph.flags & ELF_FLAG_READABLE) ? paging::Page_Table::Protection::Readable : 0;
                 protection_mask |=
-                    (ph.flags & ELF_FLAG_WRITABLE) ? Page_Table::Protection::Writeable : 0;
+                    (ph.flags & ELF_FLAG_WRITABLE) ? paging::Page_Table::Protection::Writeable : 0;
 
                 auto res = table->atomic_create_mem_object_region((void *)(ulong)region_start, size,
                                                                   protection_mask, true, name, elf,
@@ -573,12 +588,13 @@ ReturnStr<bool>
                 const u64 file_size    = ph.p_filesz;
                 const u64 object_start_offset = ph.p_vaddr - region_start;
 
-                u8 protection_mask =
-                    (ph.flags & ELF_FLAG_EXECUTABLE) ? Page_Table::Protection::Executable : 0;
+                u8 protection_mask = (ph.flags & ELF_FLAG_EXECUTABLE)
+                                         ? paging::Page_Table::Protection::Executable
+                                         : 0;
                 protection_mask |=
-                    (ph.flags & ELF_FLAG_READABLE) ? Page_Table::Protection::Readable : 0;
+                    (ph.flags & ELF_FLAG_READABLE) ? paging::Page_Table::Protection::Readable : 0;
                 protection_mask |=
-                    (ph.flags & ELF_FLAG_WRITABLE) ? Page_Table::Protection::Writeable : 0;
+                    (ph.flags & ELF_FLAG_WRITABLE) ? paging::Page_Table::Protection::Writeable : 0;
 
                 auto res = table->atomic_create_mem_object_region(
                     (void *)(ulong)region_start, size, protection_mask, true, name, elf, true,
@@ -615,9 +631,11 @@ ReturnStr<bool>
 
             // Install memory region
             const u64 pa_size = (size + 0xFFF) & ~0xFFFUL;
-            auto tls_virt     = table->atomic_create_normal_region(
-                0, pa_size, Page_Table::Protection::Readable | Page_Table::Protection::Writeable,
-                false, false, name + "_tls", 0, true);
+            auto tls_virt =
+                table->atomic_create_normal_region(0, pa_size,
+                                                   paging::Page_Table::Protection::Readable |
+                                                       paging::Page_Table::Protection::Writeable,
+                                                   false, false, name + "_tls", 0, true);
 
             if (!tls_virt.success())
                 return tls_virt.propagate();
@@ -636,7 +654,7 @@ ReturnStr<bool>
     }
 
     if (phdr_tag.phdr_addr == 0) {
-        serial_logger.printf("load_elf error -> phdr not mapped into the program's memory\n");
+        log::serial_logger.printf("load_elf error -> phdr not mapped into the program's memory\n");
         return Error(-ENOEXEC);
     }
 
@@ -688,9 +706,10 @@ ReturnStr<bool>
 
     const u64 tag_size_page = (size + 0xFFF) & ~0xFFFUL;
 
-    auto pos_p = table->atomic_create_normal_region(
-        0, tag_size_page, Page_Table::Protection::Readable | Page_Table::Protection::Writeable,
-        false, false, name + "_load_tags", 0, true);
+    auto pos_p = table->atomic_create_normal_region(0, tag_size_page,
+                                                    paging::Page_Table::Protection::Readable |
+                                                        paging::Page_Table::Protection::Writeable,
+                                                    false, false, name + "_load_tags", 0, true);
     if (!pos_p.success())
         return pos_p.propagate();
 
@@ -720,23 +739,23 @@ void TaskDescriptor::cleanup()
         tasks_map.erase(this);
     }
 
-    auto c = get_cpu_struct();
+    auto c = sched::get_cpu_struct();
     for (auto &interr: interrupt_handlers) {
         c->int_handlers.remove_handler(interr->interrupt_number);
     }
 
-    auto get_first_port = [&]() -> Port * {
+    auto get_first_port = [&]() -> ipc::Port * {
         Auto_Lock_Scope scope_lock(sched_lock);
         auto it = owned_ports.begin();
         return it == owned_ports.end() ? nullptr : &*it;
     };
 
-    Port *port;
+    ipc::Port *port;
     while ((port = get_first_port())) {
         port->delete_self();
     }
 
-    auto get_first_group = [&]{
+    auto get_first_group = [&] {
         Auto_Lock_Scope l(sched_lock);
         auto it = task_groups.begin();
         return it == task_groups.end() ? nullptr : *it;
@@ -751,7 +770,7 @@ void TaskDescriptor::cleanup()
                                                                offsetof(TaskDescriptor, rcu_head));
         delete t;
     };
-    get_cpu_struct()->heap_rcu_cpu.push(&rcu_head);
+    sched::get_cpu_struct()->heap_rcu_cpu.push(&rcu_head);
 }
 
 TaskDescriptor::TaskID TaskDescriptor::get_new_task_id()
@@ -789,5 +808,7 @@ TaskDescriptor::~TaskDescriptor() noexcept
 void TaskDescriptor::interrupt_restart_syscall()
 {
     pop_repeat_syscall();
-    syscall_error(this) = -EINTR;
+    syscalls::syscall_error(this) = -EINTR;
 }
+
+} // namespace kernel::proc

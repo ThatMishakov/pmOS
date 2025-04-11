@@ -9,6 +9,7 @@
 
 using namespace kernel;
 using namespace kernel::pmm;
+using namespace kernel::paging;
 
 constinit RegionsTree::RBTreeHead kernel::pmm::memory_regions;
 // constinit PageLL kernel::pmm::free_pages_list[page_lists];
@@ -181,12 +182,12 @@ void pmm::release_page(Page *page) noexcept
             page->l.owner->atomic_remove_anonymous_page(page);
 
         page->type                    = Page::PageType::PendingFree;
-        RCU_Head &rcu                 = page->rcu_state.rcu_h;
+        auto &rcu                 = page->rcu_state.rcu_h;
         rcu.rcu_func                  = Page::rcu_callback;
         rcu.rcu_next                  = nullptr;
         page->rcu_state.pages_to_free = 1;
 
-        get_cpu_struct()->paging_rcu_cpu.push(&rcu);
+        sched::get_cpu_struct()->paging_rcu_cpu.push(&rcu);
     }
 }
 
@@ -453,11 +454,11 @@ Page_Descriptor Page_Descriptor::find_page_struct(Page::page_addr_t addr) noexce
         return Page_Descriptor();
 
     if (p->type != Page::PageType::Allocated) [[unlikely]] {
-        serial_logger.printf("!!! Page %p at addr %h is not allocated !!!. Type: %i\n", p, addr,
+        log::serial_logger.printf("!!! Page %p at addr %h is not allocated !!!. Type: %i\n", p, addr,
                              p->type);
         for (size_t i = 0; i < sizeof(Page); i++)
-            serial_logger.printf("%h ", ((u8 *)p)[i]);
-        serial_logger.printf("\n");
+            log::serial_logger.printf("%h ", ((u8 *)p)[i]);
+        log::serial_logger.printf("\n");
     }
 
     assert(p->type == Page::PageType::Allocated);
@@ -478,7 +479,7 @@ void kernel::pmm::free_memory_for_kernel(phys_page_t page, size_t number_of_page
     r.rcu_h.rcu_func = Page::rcu_callback;
     r.rcu_h.rcu_next = nullptr;
 
-    get_cpu_struct()->paging_rcu_cpu.push(&r.rcu_h);
+    sched::get_cpu_struct()->paging_rcu_cpu.push(&r.rcu_h);
 }
 
 constinit bool kernel::pmm::pmm_fully_initialized = false;

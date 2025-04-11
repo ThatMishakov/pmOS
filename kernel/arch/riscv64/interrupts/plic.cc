@@ -46,7 +46,7 @@ void *map_plic(u64 base, size_t size)
         return nullptr;
     }
 
-    const Page_Table_Argumments arg = {.readable           = true,
+    const Page_Table_Arguments arg = {.readable           = true,
                                        .writeable          = true,
                                        .user_access        = false,
                                        .global             = true,

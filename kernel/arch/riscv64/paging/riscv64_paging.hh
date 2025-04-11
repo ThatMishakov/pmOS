@@ -97,13 +97,13 @@ void flush_page(void *virt_addr) noexcept;
 
 // Prepares a leaf PT for a given virtual address. This function is used during
 // temp mapper initialization.
-ReturnStr<u64> prepare_leaf_pt_for(void *virt_addr, Page_Table_Argumments arg, u64 pt_ptr);
+ReturnStr<u64> prepare_leaf_pt_for(void *virt_addr, Page_Table_Arguments arg, u64 pt_ptr);
 
 // Maps a page to a given virtual address, using the available temporary maper.
 // riscv64_paging_levels is used to determine the number of levels of the page
 // table This function can allocate pages for leaf entries, if not already
 // installed
-kresult_t riscv_map_page(u64 pt_top_phys, void *virt_addr, u64 phys_addr, Page_Table_Argumments arg);
+kresult_t riscv_map_page(u64 pt_top_phys, void *virt_addr, u64 phys_addr, Page_Table_Arguments arg);
 
 // Unmaps the page from the given virtual address, using the available temporary
 // maper. If the page is not special, it's freed
@@ -196,8 +196,8 @@ public:
 
     virtual void invalidate_range(TLBShootdownContext &ctx, void *virt_addr, size_t size_bytes, bool free) override;
 
-    virtual kresult_t map(u64 page_addr, void *virt_addr, Page_Table_Argumments arg) override;
-    virtual kresult_t map(kernel::pmm::Page_Descriptor page, void *virt_addr, Page_Table_Argumments arg) override;
+    virtual kresult_t map(u64 page_addr, void *virt_addr, Page_Table_Arguments arg) override;
+    virtual kresult_t map(kernel::pmm::Page_Descriptor page, void *virt_addr, Page_Table_Arguments arg) override;
 
     kresult_t resolve_anonymous_page(void *virt_addr, unsigned access_type) override;
 

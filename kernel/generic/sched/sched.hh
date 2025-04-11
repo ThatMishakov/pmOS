@@ -30,6 +30,7 @@
 #include "defs.hh"
 #include "sched_queue.hh"
 
+#include <array>
 #include <interrupts/interrupt_handler.hh>
 #include <interrupts/stack.hh>
 #include <lib/array.hh>
@@ -45,7 +46,6 @@
 #include <pmos/containers/intrusive_list.hh>
 #include <registers.hh>
 #include <types.hh>
-#include <array>
 #include <utility>
 
 #if defined(__x86_64__) || defined(__i386__)
@@ -56,12 +56,15 @@
     #include <paging/riscv64_temp_mapper.hh>
 #endif
 
+namespace kernel::sched
+{
+
 // Checks the mask and unblocks the task if needed
 // This function needs to be axed
-bool unblock_if_needed(TaskDescriptor *p, Port *compare_blocked_by);
+bool unblock_if_needed(proc::TaskDescriptor *p, ipc::Port *compare_blocked_by);
 
 // Blocks current task, setting blocked_by to *ptr*.
-ReturnStr<u64> block_current_task(Port *ptr);
+ReturnStr<u64> block_current_task(ipc::Port *ptr);
 
 extern sched_queue blocked;
 extern sched_queue uninit;
@@ -69,16 +72,16 @@ extern sched_queue paused;
 
 inline klib::array<sched_queue, sched_queues_levels> global_sched_queues;
 
-extern RCU paging_rcu;
-extern RCU heap_rcu;
+extern memory::RCU paging_rcu;
+extern memory::RCU heap_rcu;
 
 struct CPU_Info {
     CPU_Info *self               = this;    // 0  0
     u64 *kernel_stack_top        = nullptr; // 8  4
     ulong temp_var               = 0;       // 16 8
     ulong nested_level           = 1;       // 24 12
-    TaskDescriptor *current_task = nullptr; // 32 16
-    TaskDescriptor *idle_task    = nullptr; // 40 20
+    proc::TaskDescriptor *current_task = nullptr; // 32 16
+    proc::TaskDescriptor *idle_task    = nullptr; // 40 20
     void *jumpto_func            = nullptr; // 48 24
     ulong jumpto_arg             = 0;       // 56 28
     // u64 jumpto_from              = 0;       // 48 24
@@ -112,16 +115,16 @@ struct CPU_Info {
     // TODO...
 #endif
 
-    TaskDescriptor *atomic_pick_highest_priority(priority_t min = sched_queues_levels - 1);
-    TaskDescriptor *atomic_get_front_priority(priority_t);
+    proc::TaskDescriptor *atomic_pick_highest_priority(priority_t min = sched_queues_levels - 1);
+    proc::TaskDescriptor *atomic_get_front_priority(priority_t);
 
 // Temporary memory mapper; This is arch specific
 #ifdef __i386__
     Temp_Mapper *temp_mapper;
     Temp_Mapper &get_temp_mapper() { return *temp_mapper; }
 #elif defined(__x86_64__)
-    x86_PAE_Temp_Mapper temp_mapper;
-    x86_PAE_Temp_Mapper &get_temp_mapper() { return temp_mapper; }
+    x86_64::paging::x86_PAE_Temp_Mapper temp_mapper;
+    x86_64::paging::x86_PAE_Temp_Mapper &get_temp_mapper() { return temp_mapper; }
 #elif defined(__riscv)
     RISCV64_Temp_Mapper temp_mapper;
     RISCV64_Temp_Mapper &get_temp_mapper() { return temp_mapper; }
@@ -134,13 +137,13 @@ struct CPU_Info {
 
     u32 cpu_id = 0;
 
-    RCU_CPU paging_rcu_cpu;
-    RCU_CPU heap_rcu_cpu;
+    memory::RCU_CPU paging_rcu_cpu;
+    memory::RCU_CPU heap_rcu_cpu;
 
 #if defined(__x86_64__) || defined(__i386__)
-    u32 lapic_id = 0;
+    u32 lapic_id                            = 0;
     static constexpr unsigned MAPPABLE_INTS = 192;
-    std::array<std::pair<void *, u32>, MAPPABLE_INTS> int_mappings{};
+    std::array<std::pair<void *, u32>, MAPPABLE_INTS> int_mappings {};
 #endif
 
 #ifdef __riscv
@@ -164,7 +167,7 @@ struct CPU_Info {
 #endif
 
     // ISRs in userspace
-    Interrupt_Handler_Table int_handlers;
+    interrupts::Interrupt_Handler_Table int_handlers;
 
     static constexpr int IPI_RESCHEDULE    = 0x1;
     static constexpr int IPI_TLB_SHOOTDOWN = 0x2;
@@ -194,7 +197,7 @@ struct CPU_Info {
     Spinlock timer_lock;
 
     // Adds a new timer to the timer queue
-    kresult_t atomic_timer_queue_push(u64 fire_on_core_ticks, Port *, u64 user);
+    kresult_t atomic_timer_queue_push(u64 fire_on_core_ticks, ipc::Port *, u64 user);
 
     // Returns the number of ticks after the given number of milliseconds
     u64 ticks_after_ms(u64 ms);
@@ -228,10 +231,10 @@ quantum_t assign_quantum_on_priority(priority_t);
 
 CPU_Info *get_cpu_struct();
 
-inline TaskDescriptor *get_current_task() { return get_cpu_struct()->current_task; }
+inline proc::TaskDescriptor *get_current_task() { return get_cpu_struct()->current_task; }
 
 // Adds the task to the appropriate ready queue
-void push_ready(TaskDescriptor *p);
+void push_ready(proc::TaskDescriptor *p);
 
 // Initializes scheduling structures during the kernel initialization
 void init_scheduling(u64 boot_cpu_id);
@@ -249,7 +252,9 @@ void sched_periodic();
 void start_scheduler();
 
 // Pushes current processos to the back of sheduling queues
-void evict(const TaskDescriptor *);
+void evict(const proc::TaskDescriptor *);
 
 // Reschedules the tasks
 extern "C" void reschedule();
+
+}; // namespace kernel::sched

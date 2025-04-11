@@ -79,7 +79,7 @@ void virtmem_init(void *virtmem_base, size_t virtmem_size, void *kernel_start, s
         tag->state = VirtmemBoundaryTag::State::FREE;
         virtmem_link_tag(&kernel_space_allocator.segment_ll_dummy_head, tag);
         kernel_space_allocator.virtmem_add_to_free_list(tag);
-        serial_logger.printf("Kernel vmm: adding %lx size %lx FREE\n", tag->base, tag->size);
+        log::serial_logger.printf("Kernel vmm: adding %lx size %lx FREE\n", tag->base, tag->size);
     }
 
     auto tag   = virtmem_get_free_tag();
@@ -88,7 +88,7 @@ void virtmem_init(void *virtmem_base, size_t virtmem_size, void *kernel_start, s
     tag->state = VirtmemBoundaryTag::State::ALLOCATED;
     virtmem_link_tag(kernel_space_allocator.segment_ll_dummy_head.segment_prev, tag);
     kernel_space_allocator.virtmem_save_to_alloc_hashtable(tag);
-    serial_logger.printf("Kernel vmm: adding %lx size %lx ALLOCATED\n", tag->base, tag->size);
+    log::serial_logger.printf("Kernel vmm: adding %lx size %lx ALLOCATED\n", tag->base, tag->size);
 
     if (((char *)virtmem_base + virtmem_size) != ((char *)kernel_start + kernel_size)) {
         size_t size = ((char *)virtmem_base + virtmem_size) - ((char *)kernel_start + kernel_size);
@@ -100,7 +100,7 @@ void virtmem_init(void *virtmem_base, size_t virtmem_size, void *kernel_start, s
         tag->state = VirtmemBoundaryTag::State::FREE;
         virtmem_link_tag(kernel_space_allocator.segment_ll_dummy_head.segment_prev, tag);
         kernel_space_allocator.virtmem_add_to_free_list(tag);
-        serial_logger.printf("Kernel vmm: adding %lx size %lx FREE\n", tag->base, tag->size);
+        log::serial_logger.printf("Kernel vmm: adding %lx size %lx FREE\n", tag->base, tag->size);
     }
 }
 
@@ -126,7 +126,7 @@ int virtmem_ensure_tags(size_t size)
     if (page_phys == -1UL)
         return -ENOMEM;
 
-    Page_Table_Argumments pta = {
+    paging::Page_Table_Arguments pta = {
         .readable           = true,
         .writeable          = true,
         .user_access        = false,

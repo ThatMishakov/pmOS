@@ -1,10 +1,15 @@
-#include <sched/sched.hh>
+#include <cpus/ipi.hh>
+#include <interrupts/apic.hh>
+#include <kern_logger/kern_logger.hh>
 #include <memory/paging.hh>
 #include <processes/tasks.hh>
-#include <kern_logger/kern_logger.hh>
-#include <interrupts/apic.hh>
+#include <sched/sched.hh>
 #include <x86_utils.hh>
-#include <cpus/ipi.hh>
+
+using namespace kernel::sched;
+using namespace kernel::paging;
+using namespace kernel::x86::interrupts::lapic;
+using namespace kernel::log;
 
 extern int kernel_pt_generation;
 extern int kernel_pt_active_cpus_count[2];
@@ -63,7 +68,10 @@ void smp_wake_everyone_else_up()
     apic_write_reg(APIC_ICR_LOW, vector | (0x01 << 14) | (0b11 << 18) | (0b110) << 8);
 }
 
+namespace kernel::sched
+{
 void check_synchronous_ipis();
+}
 
 void stop_cpus()
 {

@@ -35,14 +35,19 @@
 #include <memory/rcu.hh>
 #include <pmos/containers/intrusive_bst.hh>
 #include <pmos/containers/intrusive_list.hh>
-#include <pmos/containers/set.hh>
 #include <pmos/containers/map.hh>
+#include <pmos/containers/set.hh>
 #include <types.hh>
 #include <utils.hh>
 
-extern Spinlock messaging_ports;
-
+namespace kernel::proc
+{
 class TaskDescriptor;
+class TaskGroup;
+}; // namespace kernel::proc
+
+namespace kernel::ipc
+{
 
 struct Message {
     pmos::containers::DoubleListHead<Message> list_node;
@@ -65,18 +70,16 @@ struct Message {
 #define MSG_ATTR_DUMMY     0x02ULL
 #define MSG_ATTR_NODEFAULT 0x03ULL
 
-class TaskGroup;
-
 class Port
 {
 public:
-    TaskDescriptor *owner;
+    proc::TaskDescriptor *owner;
 
     Spinlock lock;
     u64 portno;
     bool alive = true;
 
-    Port(TaskDescriptor *owner, u64 portno);
+    Port(proc::TaskDescriptor *owner, u64 portno);
 
     void enqueue(klib::unique_ptr<Message> msg);
 
@@ -85,16 +88,16 @@ public:
 
     // Returns true if successfully sent, false otherwise (e.g. when it is needed to repeat the
     // syscall). Throws on crytical errors
-    ReturnStr<bool> send_from_user(TaskDescriptor *sender, const char *unsafe_user_ptr,
+    ReturnStr<bool> send_from_user(proc::TaskDescriptor *sender, const char *unsafe_user_ptr,
                                    size_t msg_size);
     kresult_t atomic_send_from_system(const char *msg, size_t size);
 
     // Returns true if successfully sent, false otherwise (e.g. when it is needed to repeat the
     // syscall). Throws on crytical errors
-    ReturnStr<bool> atomic_send_from_user(TaskDescriptor *sender, const char *unsafe_user_message,
+    ReturnStr<bool> atomic_send_from_user(proc::TaskDescriptor *sender, const char *unsafe_user_message,
                                           size_t msg_size, u64 mem_object_id);
 
-    void change_return_upon_unblock(TaskDescriptor *task);
+    void change_return_upon_unblock(proc::TaskDescriptor *task);
 
     Message *get_front();
     void pop_front() noexcept;
@@ -116,23 +119,22 @@ public:
     /**
      * @brief Creates a new port with *task* as its owner
      */
-    static Port *atomic_create_port(TaskDescriptor *task) noexcept;
+    static Port *atomic_create_port(proc::TaskDescriptor *task) noexcept;
 
     /// Deletes the port. Returns false if the port is already deleted
     bool delete_self() noexcept;
 
 protected:
-    using Message_storage =
-        pmos::containers::CircularDoubleList<Message, &Message::list_node>;
+    using Message_storage = pmos::containers::CircularDoubleList<Message, &Message::list_node>;
     Message_storage msg_queue;
 
     union {
         pmos::containers::RBTreeNode<Port> bst_head_global;
-        RCU_Head rcu_head;
+        memory::RCU_Head rcu_head;
     };
     pmos::containers::RBTreeNode<Port> bst_head_owner;
 
-    pmos::containers::set<TaskGroup *> notifier_ports;
+    pmos::containers::set<proc::TaskGroup *> notifier_ports;
     mutable Spinlock notifier_ports_lock;
 
     using global_ports_tree =
@@ -143,8 +145,10 @@ protected:
     static inline global_ports_tree::RBTreeHead ports;
     static inline Spinlock ports_lock;
 
-    friend class TaskGroup;
-    friend class TaskDescriptor;
+    friend class proc::TaskGroup;
+    friend class proc::TaskDescriptor;
 };
 
 kresult_t set_port0(Port *port);
+
+}; // namespace kernel::ipc

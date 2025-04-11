@@ -37,7 +37,13 @@
 #include <cpus/ipi.hh>
 #include <processes/syscalls.hh>
 
-IDT k_idt = {{
+using namespace kernel;
+using namespace kernel::x86_64::interrupts;
+
+// Entry point for when userspace calls software interrupt
+extern "C" void syscall_int_entry();
+
+IDT x86_64::interrupts::k_idt = {{
     {},
     {},
     {},

@@ -32,6 +32,8 @@
 #include <interrupts/gdt.hh>
 #include <x86_asm.hh>
 
+using namespace kernel::proc;
+
 void save_segments(TaskDescriptor *task);
 void restore_segments(TaskDescriptor *task);
 
@@ -39,11 +41,11 @@ void TaskDescriptor::before_task_switch()
 {
     save_segments(this);
 
-    if (sse_is_valid()) {
+    if (x86::sse::sse_is_valid()) {
         // t_print_bochs("Saving SSE registers for PID %h\n",
         // c->current_task->pid);
         sse_data.save_sse();
-        invalidate_sse();
+        x86::sse::invalidate_sse();
         holds_sse_data = true;
     }
 }
@@ -52,7 +54,7 @@ void TaskDescriptor::after_task_switch() {
     if (holds_sse_data) {
         // t_print_bochs("Restoring SSE registers for PID %h\n",
         // c->current_task->pid);
-        validate_sse();
+        x86::sse::validate_sse();
         sse_data.restore_sse();
     }
     restore_segments(this);

@@ -103,7 +103,7 @@ void map_kernel(ultra_boot_context *ctx)
     const u32 text_size   = kernel_text_end - kernel_text_start;
     const u32 text_virt   = text_phys - kernel_phys + kernel_start_virt;
 
-    Page_Table_Argumments args = {
+    Page_Table_Arguments args = {
         .readable           = true,
         .writeable          = false,
         .user_access        = false,
@@ -231,7 +231,7 @@ void pmm_create_regions(klib::vector<ultra_memory_map_entry> &regions_data)
         auto virt_addr =
             vmm::kernel_space_allocator.virtmem_alloc(page_struct_page_size / PAGE_SIZE);
 
-        Page_Table_Argumments args = {
+        Page_Table_Arguments args = {
             .readable           = true,
             .writeable          = true,
             .user_access        = false,

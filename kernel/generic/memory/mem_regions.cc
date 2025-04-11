@@ -38,9 +38,11 @@
 #include <pmos/ipc.h>
 #include <processes/tasks.hh>
 #include <sched/sched.hh>
-u64 counter = 1;
+
+static u64 counter = 1;
 
 using namespace kernel;
+using namespace kernel::paging;
 
 static bool mapped_right_perm(Page_Table::Page_Info info, unsigned access_type)
 {
@@ -91,7 +93,7 @@ ReturnStr<bool> Generic_Mem_Region::prepare_page(unsigned access_mode, void *pag
     return alloc_page(page_addr, mapping, access_mode);
 }
 
-Page_Table_Argumments Phys_Mapped_Region::craft_arguments() const
+Page_Table_Arguments Phys_Mapped_Region::craft_arguments() const
 {
     return {
         !!(access_type & Readable),
@@ -107,10 +109,10 @@ Page_Table_Argumments Phys_Mapped_Region::craft_arguments() const
 
 ReturnStr<bool> Phys_Mapped_Region::alloc_page(void *ptr_addr, Page_Info, unsigned)
 {
-    Page_Table_Argumments args = craft_arguments();
+    Page_Table_Arguments args = craft_arguments();
 
     phys_addr_t page_addr = (u64)ptr_addr & ~07777ULL;
-    assert(page_addr >= (u64)start_addr and (u64)page_addr < (u64)start_addr + size);
+    assert(page_addr >= (u64)start_addr and (u64) page_addr < (u64)start_addr + size);
     phys_addr_t phys_addr = (u64)page_addr - (u64)start_addr + phys_addr_start;
 
     auto result = owner->map(phys_addr, (void *)page_addr, args);
@@ -201,7 +203,8 @@ void Mem_Object_Reference::trim(void *new_start, size_t new_size) noexcept
 
 kresult_t Phys_Mapped_Region::punch_hole(void *hole_addr_start, size_t hole_size_bytes)
 {
-    assert(start_addr < hole_addr_start and (char *)start_addr + size > (char *)hole_addr_start + hole_size_bytes);
+    assert(start_addr < hole_addr_start and
+           (char *) start_addr + size > (char *)hole_addr_start + hole_size_bytes);
 
     auto ptr = new Phys_Mapped_Region(*this);
     if (!ptr)
@@ -218,7 +221,8 @@ kresult_t Phys_Mapped_Region::punch_hole(void *hole_addr_start, size_t hole_size
 
 kresult_t Mem_Object_Reference::punch_hole(void *hole_addr_start, size_t hole_size_bytes)
 {
-    assert(start_addr < hole_addr_start and (char *)start_addr + size > (char *)hole_addr_start + hole_size_bytes);
+    assert(start_addr < hole_addr_start and
+           (char *) start_addr + size > (char *)hole_addr_start + hole_size_bytes);
 
     void *new_start = (char *)hole_addr_start + hole_size_bytes;
 
@@ -237,7 +241,7 @@ kresult_t Mem_Object_Reference::punch_hole(void *hole_addr_start, size_t hole_si
     return 0;
 }
 
-Page_Table_Argumments Mem_Object_Reference::craft_arguments() const
+Page_Table_Arguments Mem_Object_Reference::craft_arguments() const
 {
     return {
         !!(access_type & Readable),
@@ -265,7 +269,7 @@ ReturnStr<bool> Mem_Object_Reference::alloc_page(void *ptr_addr, Page_Table::Pag
     }
 
     if (cow) {
-        const ulong reg_addr = (char*)((ulong)ptr_addr & ~0xfffUL) - (char*)start_addr;
+        const ulong reg_addr = (char *)((ulong)ptr_addr & ~0xfffUL) - (char *)start_addr;
 
         if (reg_addr + 0x1000 <= start_offset_bytes or
             reg_addr >= start_offset_bytes + object_size_bytes) {
@@ -441,11 +445,11 @@ Mem_Object_Reference::Mem_Object_Reference(void *start_addr, size_t size, klib::
 
 void Generic_Mem_Region::rcu_free() noexcept
 {
-    RCU_Head &rcu = rcu_head;
-    rcu.rcu_func  = rcu_callback;
-    rcu.rcu_next  = nullptr;
+    auto &rcu    = rcu_head;
+    rcu.rcu_func = rcu_callback;
+    rcu.rcu_next = nullptr;
 
-    get_cpu_struct()->paging_rcu_cpu.push(&rcu);
+    sched::get_cpu_struct()->paging_rcu_cpu.push(&rcu);
 }
 
 void Generic_Mem_Region::rcu_callback(void *ptr, bool)
@@ -455,3 +459,10 @@ void Generic_Mem_Region::rcu_callback(void *ptr, bool)
 
     delete region;
 }
+
+Generic_Mem_Region::Generic_Mem_Region(void *start_addr, size_t size, klib::string name,
+                                       Page_Table *owner, unsigned access)
+    : start_addr(start_addr), size(size), name(klib::forward<klib::string>(name)),
+      id(__atomic_add_fetch(&counter, 1, 0)), owner(owner), access_type(access) {};
+
+Generic_Mem_Region::Generic_Mem_Region(): id(__atomic_add_fetch(&counter, 1, 0)) {}

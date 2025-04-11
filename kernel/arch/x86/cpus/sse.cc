@@ -35,6 +35,9 @@
 #include <x86_asm.hh>
 #include <x86_utils.hh>
 
+using namespace kernel::log;
+using namespace kernel::x86::sse;
+
 static constexpr ulong CR4_OSXSAVE = 1 << 18;
 
 static SSECtxStyle sse_ctx_style = SSECtxStyle::FXSAVE;
@@ -42,7 +45,7 @@ static size_t sse_ctx_size       = 512;
 static ulong xcr0                = 0;
 static bool xsave_supported      = false;
 
-void detect_sse()
+void kernel::x86::sse::detect_sse()
 {
     auto t          = cpuid(0x01);
     xsave_supported = t.ecx & (0x01 << 26);
@@ -76,7 +79,7 @@ void detect_sse()
     }
 }
 
-void enable_sse()
+void kernel::x86::sse::enable_sse()
 {
     auto cr0 = getCR0();
     cr0 &= ~(0x01UL << 2); // CR0.EM
@@ -95,16 +98,16 @@ void enable_sse()
     }
 }
 
-bool sse_is_valid() { return not(getCR0() & (0x01UL << 3)); }
+bool kernel::x86::sse::sse_is_valid() { return not(getCR0() & (0x01UL << 3)); }
 
-void invalidate_sse()
+void kernel::x86::sse::invalidate_sse()
 {
     auto cr0 = getCR0();
     cr0 |= (0x01 << 3); // CR0.TS
     setCR0(cr0);
 }
 
-void validate_sse()
+void kernel::x86::sse::validate_sse()
 {
     auto cr0 = getCR0();
     cr0 &= ~(0x01 << 3); // CR0.TS

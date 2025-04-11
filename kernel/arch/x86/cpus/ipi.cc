@@ -35,6 +35,9 @@
 #include <types.hh>
 #include <x86_asm.hh>
 
+using namespace kernel::sched;
+using namespace kernel::x86::interrupts::lapic;
+
 void park_self();
 
 void ipi_invalidate_tlb_routine()

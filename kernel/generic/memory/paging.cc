@@ -43,6 +43,7 @@
 #include <utils.hh>
 
 using namespace kernel;
+using namespace kernel::paging;
 
 Page_Table::~Page_Table()
 {
@@ -386,7 +387,7 @@ kresult_t Page_Table::move_pages(TLBShootdownContext &ctx, const klib::shared_pt
     for (; offset < size_bytes; offset += 4096) {
         auto info = get_page_mapping((char *)from_addr + offset);
         if (info.is_allocated) {
-            Page_Table_Argumments arg = {
+            Page_Table_Arguments arg = {
                 .readable           = !!(access & Readable),
                 .writeable          = !!(access & Writeable),
                 .user_access        = info.user_access,
@@ -408,9 +409,9 @@ kresult_t Page_Table::move_pages(TLBShootdownContext &ctx, const klib::shared_pt
     return 0;
 }
 
-void Page_Table::apply_cpu(CPU_Info *cpu)
+void Page_Table::apply_cpu(sched::CPU_Info *cpu)
 {
-    assert(cpu == get_cpu_struct());
+    assert(cpu == sched::get_cpu_struct());
     assert(cpu->page_table_generation == -1); // Assert it is not in the list
 
     Auto_Lock_Scope l(active_cpus_lock);
@@ -422,9 +423,9 @@ void Page_Table::apply_cpu(CPU_Info *cpu)
     active_cpus[paging_generation].push_back(cpu);
 }
 
-void Page_Table::unapply_cpu(CPU_Info *cpu)
+void Page_Table::unapply_cpu(sched::CPU_Info *cpu)
 {
-    assert(cpu == get_cpu_struct());
+    assert(cpu == sched::get_cpu_struct());
     assert(cpu->page_table_generation != -1); // Assert it is in the list
 
     auto generation = cpu->page_table_generation;
@@ -437,10 +438,12 @@ void Page_Table::unapply_cpu(CPU_Info *cpu)
 }
 
 static TLBShootdownContext *kernel_shootdown_desc = nullptr;
-int kernel_pt_generation                          = 0;
-int kernel_pt_active_cpus_count[2]                = {0, 0};
+int kernel::paging::kernel_pt_generation          = 0;
 
-void Page_Table::trigger_shootdown(CPU_Info *cpu)
+// bruh
+int kernel_pt_active_cpus_count[2] = {0, 0};
+
+void Page_Table::trigger_shootdown(sched::CPU_Info *cpu)
 {
     if (kernel_pt_generation != cpu->kernel_pt_generation) {
         assert(kernel_pt_generation != -1);
@@ -462,7 +465,7 @@ void Page_Table::trigger_shootdown(CPU_Info *cpu)
         __atomic_sub_fetch(&kernel_pt_active_cpus_count[old_gen], 1, __ATOMIC_RELEASE);
 
     } else {
-        assert(cpu == get_cpu_struct());
+        assert(cpu == sched::get_cpu_struct());
         assert(cpu->page_table_generation != -1);
 
         Auto_Lock_Scope l(active_cpus_lock);
@@ -701,8 +704,11 @@ bool TLBShootdownContext::flush_all() const
 bool TLBShootdownContext::empty() const { return pages_count == 0 and ranges_count == 0; }
 bool TLBShootdownContext::for_kernel() const { return page_table == nullptr; }
 
+namespace kernel::sched
+{
 extern bool cpu_struct_works;
 extern bool other_cpus_online;
+} // namespace kernel::sched
 
 void TLBShootdownContext::finalize()
 {
@@ -712,11 +718,11 @@ void TLBShootdownContext::finalize()
     if (empty())
         return;
 
-    assert(for_kernel() || cpu_struct_works ||
+    assert(for_kernel() || sched::cpu_struct_works ||
            !"CPU struct is not working (kernel uninitialized) and invalidating userspace pages");
 
     if (for_kernel()) {
-        if (!cpu_struct_works || !other_cpus_online) {
+        if (!sched::cpu_struct_works || !sched::other_cpus_online) {
             // Just flush the pages and call it a day
             for (auto page: iterate_over_pages())
                 invalidate_tlb_kernel(page);
@@ -724,7 +730,7 @@ void TLBShootdownContext::finalize()
             for (auto range: iterate_over_ranges())
                 invalidate_tlb_kernel(range.start, range.size);
         } else {
-            auto my_cpu = get_cpu_struct();
+            auto my_cpu = sched::get_cpu_struct();
 
             Auto_Lock_Scope l(barrier);
 
@@ -733,7 +739,7 @@ void TLBShootdownContext::finalize()
 
             __sync_synchronize();
 
-            for (auto cpu: cpus) {
+            for (auto cpu: sched::cpus) {
                 if (cpu == my_cpu)
                     continue;
                 cpu->ipi_tlb_shootdown();
@@ -745,7 +751,7 @@ void TLBShootdownContext::finalize()
                 spin_pause();
         }
     } else {
-        auto my_cpu = get_cpu_struct();
+        auto my_cpu = sched::get_cpu_struct();
 
         int old_generation;
 
@@ -779,9 +785,6 @@ void TLBShootdownContext::finalize()
     ranges_count = 0;
 }
 
-klib::vector<MemoryRegion> memory_map;
+klib::vector<MemoryRegion> kernel::paging::memory_map;
 
-bool Page_Table::is_mapped(void *ptr) const
-{
-    return get_page_mapping(ptr).is_allocated;
-}
+bool Page_Table::is_mapped(void *ptr) const { return get_page_mapping(ptr).is_allocated; }

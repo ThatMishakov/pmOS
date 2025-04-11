@@ -38,6 +38,9 @@
 
 using namespace kernel;
 
+namespace kernel::paging
+{
+
 void *palloc(size_t number)
 {
     // Find the suitable memory region
@@ -71,7 +74,7 @@ void *palloc(size_t number)
     for (; i < number; ++i) {
         void *virt_addr = (void *)((u64)ptr + i * PAGE_SIZE);
 
-        static const Page_Table_Argumments arg = {
+        static const Page_Table_Arguments arg = {
             .readable           = true,
             .writeable          = true,
             .user_access        = false,
@@ -89,3 +92,5 @@ void *palloc(size_t number)
 
     return ptr;
 }
+
+} // namespace kernel::paging

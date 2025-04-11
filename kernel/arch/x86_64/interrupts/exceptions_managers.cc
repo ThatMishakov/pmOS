@@ -38,7 +38,14 @@
 #include <utils.hh>
 #include <x86_asm.hh>
 
-void print_registers(const Task_Regs &regs, Logger &logger)
+using namespace kernel;
+using namespace kernel::log;
+using namespace kernel::sched;
+using namespace kernel::proc;
+using namespace kernel::paging;
+using namespace kernel::x86;
+
+static void print_registers(const Task_Regs &regs, Logger &logger)
 {
     // logger.printf(" => %%rdi: 0x%h\n", regs.scratch_r.rdi);
     // logger.printf(" => %%rsi: 0x%h\n", regs.scratch_r.rsi);
@@ -69,7 +76,7 @@ void print_registers(const Task_Regs &regs, Logger &logger)
     // logger.printf(" Error code: 0x%h\n", regs.int_err);
 }
 
-void print_registers(TaskDescriptor *task, Logger &logger)
+static void print_registers(TaskDescriptor *task, Logger &logger)
 {
     if (not task)
         return;
@@ -259,7 +266,7 @@ extern "C" void pagefault_manager(NestedIntContext *kernel_ctx, ulong err)
 
 extern "C" void sse_exception_manager()
 {
-    validate_sse();
+    sse::validate_sse();
     get_cpu_struct()->current_task->sse_data.restore_sse();
 }
 

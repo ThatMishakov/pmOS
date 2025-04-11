@@ -44,6 +44,9 @@
 #include <x86_asm.hh>
 #include <utils.hh>
 
+using namespace kernel::x86_64::interrupts;
+using namespace kernel::x86::interrupts;
+
 void set_idt()
 {
     IDTR desc = {sizeof(IDT) - 1, &k_idt};
@@ -52,14 +55,14 @@ void set_idt()
 
 void init_idt()
 {
-    enable_apic();
+    lapic::enable_apic();
     set_idt();
 }
 
 void init_interrupts()
 {
     init_idt();
-    discover_apic_freq();
+    lapic::discover_apic_freq();
 }
 
 extern "C" void timer_interrupt()
@@ -67,9 +70,9 @@ extern "C" void timer_interrupt()
     // apic_eoi was always at the end, but I think it needs to be at the
     // beginning so that the interrupts are not lost Not sure about it and don't
     // remember what it was doing exactly
-    apic_eoi();
+    lapic::apic_eoi();
 
-    sched_periodic();
+    kernel::sched::sched_periodic();
 }
 
 /*

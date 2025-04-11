@@ -8,9 +8,11 @@
 #include <processes/tasks.hh>
 #include <sched/sched.hh>
 
-kresult_t Interrupt_Handler_Table::add_handler(u64 interrupt_number, Port *port)
+using namespace kernel::interrupts;
+
+kresult_t Interrupt_Handler_Table::add_handler(u64 interrupt_number, ipc::Port *port)
 {
-    auto c = get_cpu_struct();
+    auto c = sched::get_cpu_struct();
     assert(this == &c->int_handlers);
     auto owner = port->owner;
 
@@ -20,7 +22,7 @@ kresult_t Interrupt_Handler_Table::add_handler(u64 interrupt_number, Port *port)
         return -EEXIST;
 
     if (interrupt_number >= interrupt_limint() || interrupt_number < interrupt_min()) {
-        serial_logger.printf("Interrupt number %d invalid\n", interrupt_number);
+        log::serial_logger.printf("Interrupt number %d invalid\n", interrupt_number);
         return -EINVAL;
     }
 
@@ -34,12 +36,12 @@ kresult_t Interrupt_Handler_Table::add_handler(u64 interrupt_number, Port *port)
 
     {
         Auto_Lock_Scope lock(owner->sched_lock);
-        if (owner->status == TaskStatus::TASK_DYING || owner->status == TaskStatus::TASK_DEAD)
+        if (owner->status == proc::TaskStatus::TASK_DYING || owner->status == proc::TaskStatus::TASK_DEAD)
             return -ESRCH;
 
         if (owner->cpu_affinity != c->cpu_id + 1) {
-            serial_logger.printf("Task %d (%s) is not bound to CPU %d\n", owner->task_id,
-                                 owner->name.c_str(), c->cpu_id);
+            log::serial_logger.printf("Task %d (%s) is not bound to CPU %d\n", owner->task_id,
+                                      owner->name.c_str(), c->cpu_id);
             return -EPERM;
         }
 
@@ -110,13 +112,13 @@ size_t Interrupt_Handler_Table::get_handler_index(u64 interrupt_number)
 
 kresult_t Interrupt_Handler_Table::remove_handler(u64 interrupt_number)
 {
-    auto c = get_cpu_struct();
+    auto c = sched::get_cpu_struct();
     assert(this == &c->int_handlers);
     auto handler = get_handler(interrupt_number);
     if (!handler)
         return -ESRCH;
 
-    auto owner = get_task(handler->task_id);
+    auto owner = proc::get_task(handler->task_id);
 
     if (owner)
         owner->interrupt_handlers.erase(handler);

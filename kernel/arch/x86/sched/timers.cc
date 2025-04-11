@@ -31,7 +31,11 @@
 #include <sched/sched.hh>
 #include <x86_asm.hh>
 
-u64 ticks_since_bootup = 0;
+using namespace kernel::sched;
+using namespace kernel;
+using namespace kernel::x86::interrupts::lapic;
+
+u64 kernel::sched::ticks_since_bootup = 0;
 void start_timer_ticks(u32 ticks)
 {
     auto t = apic_get_remaining_ticks();
@@ -59,7 +63,7 @@ u64 get_current_time_ticks()
 extern bool have_invariant_tsc;
 extern u64 boot_tsc;
 
-u64 get_ns_since_bootup() { 
+u64 kernel::sched::get_ns_since_bootup() { 
     if (have_invariant_tsc) {
         u64 tsc = rdtsc() - boot_tsc;
         return tsc_inverted_freq * tsc;

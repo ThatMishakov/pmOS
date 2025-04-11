@@ -33,6 +33,9 @@
 #include <stdarg.h>
 #include <types.hh>
 
+namespace kernel::log
+{
+
 /// @brief A generic logger object, which is then extended into different log handlers, available in
 /// different environments.
 struct Logger {
@@ -70,7 +73,7 @@ struct Buffered_Logger: Logger {
 
     virtual void log_nolock(const char *c, size_t size) override;
 
-    void set_port(Port *port, uint32_t flags);
+    void set_port(ipc::Port *port, uint32_t flags);
 };
 extern Buffered_Logger global_logger;
 
@@ -93,3 +96,5 @@ public:
 };
 
 inline Serial_Logger serial_logger;
+
+}; // namespace kernel::log

@@ -2,6 +2,8 @@
 #include <acpi/acpi.hh>
 #include <kern_logger/kern_logger.hh>
 
+using namespace kernel;
+
 using HPET = HPET_Description_Table;
 
 HPET *get_hpet()
@@ -21,7 +23,7 @@ HPET *get_hpet()
 
         hpet_virt = (HPET *)malloc(h.length);
         if (hpet_virt == nullptr) {
-            serial_logger.printf("Could not allocate memory for HPET\n");
+            log::serial_logger.printf("Could not allocate memory for HPET\n");
             return nullptr;
         }
         copy_from_phys(hpet_phys, hpet_virt, h.length);
@@ -34,7 +36,7 @@ void init_hpet()
 {
     HPET *hpet = get_hpet();
     if (hpet == nullptr) {
-        serial_logger.printf("Could not get HPET\n");
+        log::serial_logger.printf("Could not get HPET\n");
         return;
     }
 
@@ -42,5 +44,5 @@ void init_hpet()
     u64 period  = hpet->Min_Clock_tick;
     u64 number = hpet->HPET_Number;
 
-    serial_logger.printf("HPET address: %p\n", address);
+    log::serial_logger.printf("HPET address: %p\n", address);
 }

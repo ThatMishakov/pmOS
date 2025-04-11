@@ -3,7 +3,9 @@
 #include <kern_logger/kern_logger.hh>
 #include <smoldtb.h>
 
-klib::shared_ptr<Mem_Object> dtb_object = nullptr;
+using namespace kernel;
+
+klib::shared_ptr<paging::Mem_Object> dtb_object = nullptr;
 
 // Reads big-endian 32 bit uint into native endianness
 static u32 be32(u32 input)
@@ -28,7 +30,7 @@ void init_dtb(u64 phys_addr)
     copy_from_phys(phys_addr, &h, sizeof(h));
 
     if (be32(h.magic) != FDT_MAGIC) {
-        serial_logger.printf("Error: invalid FDT magic, got %x\n", h.magic);
+        log::serial_logger.printf("Error: invalid FDT magic, got %x\n", h.magic);
         return;
     }
 
@@ -36,36 +38,36 @@ void init_dtb(u64 phys_addr)
     // Align up to the nearest page
     total_size     = (total_size + 0xfff) & ~0xfff;
 
-    serial_logger.printf("FDT at %p, size %x\n", phys_addr, total_size);
+    log::serial_logger.printf("FDT at %p, size %x\n", phys_addr, total_size);
 
     // FDT should be reclaimable
     dtb_object =
-        Mem_Object::create_from_phys(phys_addr, total_size, true, Mem_Object::Protection::Readable);
+        paging::Mem_Object::create_from_phys(phys_addr, total_size, true, paging::Mem_Object::Protection::Readable);
     if (not dtb_object) {
-        serial_logger.printf("Error: could not create FDT object\n");
+        log::serial_logger.printf("Error: could not create FDT object\n");
         return;
     }
 
     // Map it into the kernel space
-    const Page_Table_Argumments args = {
+    const paging::Page_Table_Arguments args = {
         .readable           = true,
         .writeable          = false,
         .user_access        = false,
         .global             = false,
         .execution_disabled = true,
         .extra              = 0,
-        .cache_policy       = Memory_Type::Normal,
+        .cache_policy       = paging::Memory_Type::Normal,
     };
     auto t = dtb_object->map_to_kernel(0, total_size, args);
     assert(t.success());
     void *const virt_base = t.val;
     if (virt_base == nullptr) {
-        serial_logger.printf("Error: could not map FDT object\n");
+        log::serial_logger.printf("Error: could not map FDT object\n");
         return;
     }
     ::dtb_virt_base = virt_base;
 
-    serial_logger.printf("FDT mapped to %p\n", virt_base);
+    log::serial_logger.printf("FDT mapped to %p\n", virt_base);
 
     dtb_ops ops = {.malloc = malloc,
                    .free =
@@ -73,11 +75,11 @@ void init_dtb(u64 phys_addr)
                            (void)size;
                            free(ptr);
                        },
-                   .on_error = [](const char *why) { serial_logger.printf("Error: %s\n", why); }};
+                   .on_error = [](const char *why) { log::serial_logger.printf("Error: %s\n", why); }};
 
     dtb_init(reinterpret_cast<uintptr_t>(virt_base), ops);
 
-    serial_logger.printf("FDT initialized!\n");
+    log::serial_logger.printf("FDT initialized!\n");
 }
 
 bool have_dtb() { return dtb_virt_base != nullptr; }

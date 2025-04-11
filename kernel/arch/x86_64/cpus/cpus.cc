@@ -34,6 +34,7 @@
 #include <interrupts/apic.hh>
 #include <interrupts/gdt.hh>
 #include <interrupts/interrupts.hh>
+#include <interrupts/ioapic.hh>
 #include <kern_logger/kern_logger.hh>
 #include <memory/palloc.hh>
 #include <memory/vmm.hh>
@@ -43,21 +44,24 @@
 #include <stdlib.h>
 #include <x86_asm.hh>
 #include <x86_utils.hh>
-#include <interrupts/ioapic.hh>
 
 using namespace kernel;
 using namespace kernel::pmm;
 using namespace kernel::x86;
+using namespace kernel::log;
+using namespace kernel::sched;
+using namespace kernel::proc;
+using namespace kernel::x86;
 
-static CPU_Info __seg_gs const *c = nullptr;
-CPU_Info *get_cpu_struct() { return c->self; }
+static sched::CPU_Info __seg_gs const *c = nullptr;
+kernel::sched::CPU_Info *sched::get_cpu_struct() { return c->self; }
 
 void program_syscall()
 {
     write_msr(0xC0000081, ((u64)(R0_CODE_SEGMENT) << 32) | ((u64)(R3_LEGACY_CODE_SEGMENT) << 48));
     // STAR (segments for user and kernel code)
-    write_msr(0xC0000082, (u64)&syscall_entry); // LSTAR (64 bit entry point)
-    write_msr(0xC0000084, (u32)~0x0);           // SFMASK (mask for %rflags)
+    write_msr(0xC0000082, (u64)&syscalls::syscall_entry); // LSTAR (64 bit entry point)
+    write_msr(0xC0000084, (u32)~0x0);                     // SFMASK (mask for %rflags)
 
     // Enable SYSCALL/SYSRET in EFER register
     u64 efer = read_msr(0xC0000080);
@@ -77,14 +81,17 @@ extern "C" void _cpu_entry(u64 limine_struct);
 void *get_cpu_start_func() { return (void *)_cpu_entry; }
 
 // TODO: Explain this variable
+namespace kernel::sched
+{
 extern bool cpu_struct_works;
+}
 
 bool use_x2apic = false;
 void init_per_cpu(uint32_t lapic_id)
 {
-    detect_sse();
+    sse::detect_sse();
 
-    CPU_Info *c = new CPU_Info;
+    sched::CPU_Info *c = new sched::CPU_Info;
     if (!c)
         panic("Couldn't allocate memory for CPU_Info\n");
 
@@ -115,7 +122,7 @@ void init_per_cpu(uint32_t lapic_id)
     else
         c->lapic_id = lapic_id << 24;
 
-    assert(c->lapic_id == get_lapic_id());
+    assert(c->lapic_id == x86::interrupts::lapic::get_lapic_id());
 
     // This creates a *fat* use-after-free race condition (which hopefully
     // shouldn't lead to a lot of crashes because current malloc is not that
@@ -140,14 +147,14 @@ void init_per_cpu(uint32_t lapic_id)
 
     program_syscall();
     set_idt();
-    enable_apic();
-    enable_sse();
+    x86::interrupts::lapic::enable_apic();
+    sse::enable_sse();
 
     void *temp_mapper_start = vmm::kernel_space_allocator.virtmem_alloc_aligned(16, 4);
     if (!temp_mapper_start)
         panic("Failed to allocate memory for temp_mapper_start\n");
 
-    c->temp_mapper = x86_PAE_Temp_Mapper(temp_mapper_start, getCR3());
+    c->temp_mapper = x86_64::paging::x86_PAE_Temp_Mapper(temp_mapper_start, getCR3());
 }
 
 u64 bootstrap_cr3 = 0;
@@ -173,7 +180,7 @@ klib::vector<u64> initialize_cpus(const klib::vector<u64> &lapic_ids)
     }
 
     for (const auto &id: lapic_ids) {
-        CPU_Info *c               = new CPU_Info;
+        sched::CPU_Info *c        = new sched::CPU_Info;
         TSS *tss                  = new TSS();
         c->cpu_gdt.tss_descriptor = System_Segment_Descriptor((u64)tss, sizeof(TSS), 0x89, 0x02);
 
@@ -201,7 +208,7 @@ klib::vector<u64> initialize_cpus(const klib::vector<u64> &lapic_ids)
         c->current_task = c->idle_task;
 
         void *temp_mapper_start = vmm::kernel_space_allocator.virtmem_alloc_aligned(16, 4);
-        c->temp_mapper          = x86_PAE_Temp_Mapper(temp_mapper_start, getCR3());
+        c->temp_mapper          = x86_64::paging::x86_PAE_Temp_Mapper(temp_mapper_start, getCR3());
 
         c->kernel_stack_top[-1] = (u64)c;
         ret.push_back((u64)c->kernel_stack_top);
@@ -216,24 +223,25 @@ extern bool boot_barrier_start;
 extern int kernel_pt_active_cpus_count[2];
 
 Spinlock l;
-extern "C" void cpu_start_routine(CPU_Info *c)
+extern "C" void cpu_start_routine(sched::CPU_Info *c)
 {
     loadGDT(&c->cpu_gdt);
     write_msr(0xC0000101, (u64)c);
     loadTSS(TSS_OFFSET);
     program_syscall();
     set_idt();
-    enable_apic();
-    enable_sse();
+    x86::interrupts::lapic::enable_apic();
+    sse::enable_sse();
 
-    const auto &idle   = get_cpu_struct()->idle_task;
-    c->current_task    = idle;
-    const auto idle_pt = klib::dynamic_pointer_cast<x86_Page_Table>(idle->page_table);
+    const auto &idle = get_cpu_struct()->idle_task;
+    c->current_task  = idle;
+    const auto idle_pt =
+        klib::dynamic_pointer_cast<x86_64::paging::x86_Page_Table>(idle->page_table);
     idle_pt->apply_cpu(c);
     get_cpu_struct()->current_task->switch_to();
     reschedule();
 
-    u32 lapic_id = get_lapic_id();
+    u32 lapic_id = x86::interrupts::lapic::get_lapic_id();
     assert(c->lapic_id == lapic_id);
     global_logger.printf("[Kernel] Initialized CPU %h\n", lapic_id);
 
@@ -252,7 +260,7 @@ void init_acpi_trampoline();
 void init_scheduling(u64 bootstap_apic_id)
 {
     serial_logger.printf("Initializing APIC\n");
-    prepare_apic();
+    x86::interrupts::lapic::prepare_apic();
 
     serial_logger.printf("Initializing interrupts\n");
     init_interrupts();
@@ -261,7 +269,7 @@ void init_scheduling(u64 bootstap_apic_id)
     init_per_cpu(bootstap_apic_id);
 
     serial_logger.printf("Initializing IOAPICs\n");
-    IOAPIC::init_ioapics();
+    x86::interrupts::IOAPIC::init_ioapics();
 
     serial_logger.printf("Initializing ACPI trampoline\n");
     init_acpi_trampoline();
@@ -282,7 +290,8 @@ void smp_wake_everyone_else_up();
 extern "C" void wakeup_main()
 {
     serial_initiated = false;
-    serial_logger.printf("Printing from C++ after waking up! (LAPIC ID %x)\n", get_lapic_id());
+    serial_logger.printf("Printing from C++ after waking up! (LAPIC ID %x)\n",
+                         x86::interrupts::lapic::get_lapic_id());
     setCR3(idle_cr3);
 
     auto c = cpus[0];
@@ -294,8 +303,8 @@ extern "C" void wakeup_main()
     loadTSS(TSS_OFFSET);
     program_syscall();
     set_idt();
-    enable_apic();
-    enable_sse();
+    x86::interrupts::lapic::enable_apic();
+    sse::enable_sse();
 
     if (c->to_restore_on_wakeup) {
         c->current_task->regs = *c->to_restore_on_wakeup;
@@ -306,7 +315,8 @@ extern "C" void wakeup_main()
     c->current_task->after_task_switch();
 
     assert(c->kernel_pt_generation == -1);
-    c->kernel_pt_generation = __atomic_load_n(&kernel_pt_generation, __ATOMIC_ACQUIRE);
+    c->kernel_pt_generation =
+        __atomic_load_n(&kernel::paging::kernel_pt_generation, __ATOMIC_ACQUIRE);
     __atomic_add_fetch(&kernel_pt_active_cpus_count[c->kernel_pt_generation], 1, __ATOMIC_RELAXED);
     c->online = true;
 
@@ -316,7 +326,7 @@ extern "C" void wakeup_main()
         c->ipi_reschedule();
 }
 
-extern "C" void smp_entry_main(CPU_Info *c)
+extern "C" void smp_entry_main(sched::CPU_Info *c)
 {
     serial_initiated = false;
     serial_logger.printf("CPU %x woke up...\n", c->lapic_id);
@@ -328,8 +338,8 @@ extern "C" void smp_entry_main(CPU_Info *c)
     loadTSS(TSS_OFFSET);
     program_syscall();
     set_idt();
-    enable_apic();
-    enable_sse();
+    x86::interrupts::lapic::enable_apic();
+    sse::enable_sse();
 
     if (c->to_restore_on_wakeup) {
         c->current_task->regs = *c->to_restore_on_wakeup;
@@ -340,7 +350,8 @@ extern "C" void smp_entry_main(CPU_Info *c)
     c->current_task->after_task_switch();
 
     assert(c->kernel_pt_generation == -1);
-    c->kernel_pt_generation = __atomic_load_n(&kernel_pt_generation, __ATOMIC_ACQUIRE);
+    c->kernel_pt_generation =
+        __atomic_load_n(&kernel::paging::kernel_pt_generation, __ATOMIC_ACQUIRE);
     __atomic_add_fetch(&kernel_pt_active_cpus_count[c->kernel_pt_generation], 1, __ATOMIC_RELAXED);
     c->online = true;
 
@@ -385,28 +396,31 @@ void init_acpi_trampoline()
     acpi_trampoline_startup_cr3 = (u32)cr3_page->get_phys_addr();
 
     // Prepare the page
-    Temp_Mapper_Obj<x86_PAE_Entry> new_page_m(request_temp_mapper());
-    Temp_Mapper_Obj<x86_PAE_Entry> current_page_m(request_temp_mapper());
+    kernel::paging::Temp_Mapper_Obj<x86_64::paging::x86_PAE_Entry> new_page_m(
+        kernel::paging::request_temp_mapper());
+    kernel::paging::Temp_Mapper_Obj<x86_64::paging::x86_PAE_Entry> current_page_m(
+        kernel::paging::request_temp_mapper());
 
     new_page_m.map(acpi_trampoline_startup_cr3);
     current_page_m.map(idle_cr3);
 
     page_clear((void *)new_page_m.ptr);
-    memcpy(new_page_m.ptr + 256, current_page_m.ptr + 256, 256 * sizeof(x86_PAE_Entry));
+    memcpy(new_page_m.ptr + 256, current_page_m.ptr + 256,
+           256 * sizeof(x86_64::paging::x86_PAE_Entry));
 
-    Page_Table_Argumments pta = {
+    kernel::paging::Page_Table_Arguments pta = {
         .readable           = true,
         .writeable          = true,
         .user_access        = false,
         .execution_disabled = false,
     };
 
-    auto result = map_pages(acpi_trampoline_startup_cr3, acpi_trampoline_page,
-                            (void *)acpi_trampoline_page, PAGE_SIZE, pta);
+    auto result = kernel::paging::map_pages(acpi_trampoline_startup_cr3, acpi_trampoline_page,
+                                            (void *)acpi_trampoline_page, PAGE_SIZE, pta);
     if (result)
         panic("Failed to ID map vector page...");
 
-    Temp_Mapper_Obj<char> t(request_temp_mapper());
+    kernel::paging::Temp_Mapper_Obj<char> t(kernel::paging::request_temp_mapper());
     char *ptr = t.map(acpi_trampoline_page);
     memcpy(ptr, &init_vec_begin, (char *)&acpi_trampoline_startup_end - (char *)&init_vec_begin);
 

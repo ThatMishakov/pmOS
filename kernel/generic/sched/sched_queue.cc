@@ -32,7 +32,12 @@
 
 #include <processes/tasks.hh>
 
-TaskDescriptor * sched_queue::pop_front() noexcept
+using namespace kernel::proc;
+
+namespace kernel::sched
+{
+
+TaskDescriptor *sched_queue::pop_front() noexcept
 {
     assert(lock.is_locked() and "Queue is not locked!");
 
@@ -44,7 +49,7 @@ TaskDescriptor * sched_queue::pop_front() noexcept
     return ptr;
 }
 
-TaskDescriptor * sched_queue::front() const noexcept
+TaskDescriptor *sched_queue::front() const noexcept
 {
     assert(lock.is_locked() and "Queue is not locked!");
 
@@ -92,8 +97,8 @@ void sched_queue::erase(TaskDescriptor *desc) noexcept
     assert(lock.is_locked() and "Queue is not locked!");
     assert(desc and "Task is null!");
     assert(desc->parent_queue == this and "Task is not in this queue!");
-    assert(desc->queue_prev or desc->queue_next or first == desc or last == desc and
-           "Task is not in the queue!");
+    assert(desc->queue_prev or desc->queue_next or first == desc or
+           last == desc and "Task is not in the queue!");
 
     if (desc->queue_prev) {
         desc->queue_prev->queue_next = desc->queue_next;
@@ -171,3 +176,5 @@ blocked_sched_queue::~blocked_sched_queue() noexcept
         p->atomic_erase_from_queue(this);
     }
 }
+
+} // namespace kernel::sched

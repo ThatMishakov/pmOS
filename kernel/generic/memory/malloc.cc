@@ -36,6 +36,8 @@
 size_t malloced = 0;
 size_t freed    = 0;
 
+using namespace kernel::paging;
+
 extern "C" void *mmap(void *, size_t length, int, int, int, long)
 {
     // This function is (only) called by malloc
@@ -49,7 +51,7 @@ extern "C" int munmap(void *addr, size_t length)
     (void)addr;
     (void)length;
 
-    serial_logger.printf("Info: munmap(%p, %x)\n", addr, length);
+    kernel::log::serial_logger.printf("Info: munmap(%p, %x)\n", addr, length);
 
     return -1;
     // Can be implemented easilly, but not supported for now

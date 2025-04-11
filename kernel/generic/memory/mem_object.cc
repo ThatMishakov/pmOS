@@ -40,6 +40,7 @@
 #include <pmos/utility/scope_guard.hh>
 
 using namespace kernel;
+using namespace kernel::paging;
 
 Mem_Object::Mem_Object(u64 page_size_log, u64 size_pages, u32 max_user_permissions, int flags)
     : page_size_log(page_size_log), pages_storage(nullptr), pages_size(size_pages), flags(flags),
@@ -463,7 +464,7 @@ ReturnStr<bool> Mem_Object::read_to_kernel(u64 offset, void *buffer, u64 size)
     return true;
 }
 
-ReturnStr<void *> Mem_Object::map_to_kernel(u64 offset, u64 size, Page_Table_Argumments args)
+ReturnStr<void *> Mem_Object::map_to_kernel(u64 offset, u64 size, Page_Table_Arguments args)
 {
     // Lock might be needed here?
     // Also, TODO: magic numbers everywhere
@@ -506,7 +507,7 @@ ReturnStr<void *> Mem_Object::map_to_kernel(u64 offset, u64 size, Page_Table_Arg
         assert(p.success());
 
         assert(p.val.page_struct_ptr);
-        Page_Table_Argumments arg = args;
+        Page_Table_Arguments arg = args;
         arg.extra |= PAGING_FLAG_STRUCT_PAGE;
 
         // TODO: This is weird business and doesn't do refcounting

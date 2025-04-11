@@ -35,6 +35,8 @@
 #include <utils.hh>
 #include <errno.h>
 
+using namespace kernel::log;
+
 struct ACPITable {
     u64 phys_addr;
     u64 length;

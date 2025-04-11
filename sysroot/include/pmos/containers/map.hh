@@ -85,8 +85,8 @@ public:
 
     void clear() noexcept;
     // first == nullptr, second == false => allocation failed
-    pair<iterator, bool> insert_noexcept(const value_type &val) noexcept;
-    pair<iterator, bool> insert_noexcept(value_type &&val) noexcept;
+    std::pair<iterator, bool> insert_noexcept(const value_type &val) noexcept;
+    std::pair<iterator, bool> insert_noexcept(value_type &&val) noexcept;
     iterator erase(iterator pos) noexcept;
     size_type erase(const key_type &key) noexcept;
 
@@ -124,7 +124,7 @@ template<typename K, typename V> size_t map<K, V>::erase(const K &key) noexcept
 }
 
 template<typename K, typename V>
-pair<typename map<K, V>::iterator, bool> map<K, V>::insert_noexcept(value_type &&val) noexcept
+std::pair<typename map<K, V>::iterator, bool> map<K, V>::insert_noexcept(value_type &&val) noexcept
 {
     auto it = find(val.first);
     if (it != end()) {

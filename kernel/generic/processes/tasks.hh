@@ -54,279 +54,296 @@
     #include <cpus/floating_point.hh>
 #endif
 
-struct Interrupt_Handler;
-
-struct TaskPermissions {
-};
-
-enum class TaskStatus : u64 {
-    TASK_RUNNING = 0,
-    TASK_READY,
-    TASK_BLOCKED,
-    TASK_UNINIT,
-    TASK_SPECIAL, // Would be used by idle or system tasks
-    TASK_DYING,
-    TASK_PAUSED,
-    TASK_DEAD
-};
-
-struct Task_Attributes {
-    bool debug_syscalls = false;
-};
-
-class sched_queue;
-class TaskGroup;
-class Mem_Object;
-
-class TaskDescriptor
+namespace kernel
 {
-public:
-    using TaskID = u64;
 
-    // Basic process stuff
-    Task_Regs regs; // 200 on x86_64
-#if defined(__riscv) || defined(__loongarch__)
-    u64 is_system = 0; // 0 if user space task, 1 if kernel task
-#endif
-    TaskID task_id;
+namespace sched
+{
+    class sched_queue;
+    struct CPU_Info;
+};
+namespace paging
+{
+    class Mem_Object;
+};
+namespace interrupts
+{
+    struct Interrupt_Handler;
+};
 
-    // Permissions
-    TaskPermissions perm;
+namespace proc
+{
+    class TaskGroup;
 
-    // Attributes of the task
-    Task_Attributes attr;
-
-    // Messaging
-    using ports_tree =
-        pmos::containers::RedBlackTree<Port, &Port::bst_head_owner,
-                                       detail::TreeCmp<Port, u64, &Port::portno>>;
-    ports_tree::RBTreeHead owned_ports;
-    Port *blocked_by;
-    Port *sender_hint;
-
-    // Scheduling info
-    TaskDescriptor *queue_next = nullptr;
-    TaskDescriptor *queue_prev = nullptr;
-    sched_queue *parent_queue  = nullptr;
-    TaskStatus status          = TaskStatus::TASK_UNINIT;
-    u32 sched_pending_mask     = 0;
-    priority_t priority        = 8;
-    u32 cpu_affinity           = 0;
-    Spinlock sched_lock;
-
-    union {
-        RCU_Head rcu_head;
-        pmos::containers::RBTreeNode<TaskDescriptor> task_tree_head = {};
+    struct TaskPermissions {
     };
 
-    static constexpr int SCHED_PENDING_PAUSE = 1;
+    enum class TaskStatus : u64 {
+        TASK_RUNNING = 0,
+        TASK_READY,
+        TASK_BLOCKED,
+        TASK_UNINIT,
+        TASK_SPECIAL, // Would be used by idle or system tasks
+        TASK_DYING,
+        TASK_PAUSED,
+        TASK_DEAD
+    };
 
-    sched_queue waiting_to_pause;
+    struct Task_Attributes {
+        bool debug_syscalls = false;
+    };
 
-    // Paging
-    klib::shared_ptr<Arch_Page_Table> page_table;
-    void *page_blocked_by = nullptr;
+    class TaskDescriptor
+    {
+    public:
+        using TaskID = u64;
 
-    // Task groups. Using sched_lock...
-    klib::set<TaskGroup *> task_groups;
+        // Basic process stuff
+        Task_Regs regs; // 200 on x86_64
+#if defined(__riscv) || defined(__loongarch__)
+        u64 is_system = 0; // 0 if user space task, 1 if kernel task
+#endif
+        TaskID task_id;
 
-    // Creates and assigns an emty valid page table
-    kresult_t create_new_page_table();
+        // Permissions
+        TaskPermissions perm;
 
-    // Registers a page table within a process, if it doesn't have any
-    [[nodiscard]] kresult_t register_page_table(klib::shared_ptr<Arch_Page_Table>);
-    [[nodiscard]] kresult_t atomic_register_page_table(klib::shared_ptr<Arch_Page_Table>);
+        // Attributes of the task
+        Task_Attributes attr;
 
-    // Inits stack
-    ReturnStr<size_t> init_stack();
+        // Messaging
+        using ports_tree =
+            pmos::containers::RedBlackTree<ipc::Port, &ipc::Port::bst_head_owner,
+                                           detail::TreeCmp<ipc::Port, u64, &ipc::Port::portno>>;
+        ports_tree::RBTreeHead owned_ports;
+        ipc::Port *blocked_by;
+        ipc::Port *sender_hint;
 
-    // Blocks the process by a page (for example in case of a pagefault)
-    void atomic_block_by_page(void *page, sched_queue *push_to_queue);
+        // Scheduling info
+        TaskDescriptor *queue_next = nullptr;
+        TaskDescriptor *queue_prev = nullptr;
+        sched::sched_queue *parent_queue  = nullptr;
+        TaskStatus status          = TaskStatus::TASK_UNINIT;
+        u32 sched_pending_mask     = 0;
+        priority_t priority        = 8;
+        u32 cpu_affinity           = 0;
+        Spinlock sched_lock;
 
-    // Unblocks the task when the page becomes available
-    bool atomic_try_unblock_by_page(void *page);
+        union {
+            memory::RCU_Head rcu_head;
+            pmos::containers::RBTreeNode<TaskDescriptor> task_tree_head = {};
+        };
 
-    /// Tries to atomically erase the task from the queue. If task's parrent queue is not equal to
-    /// *queue*, does nothing
-    void atomic_erase_from_queue(sched_queue *queue) noexcept;
+        static constexpr int SCHED_PENDING_PAUSE = 1;
 
-    // Kills the task
-    void atomic_kill();
+        sched::sched_queue waiting_to_pause;
 
-    // Returns 0 if there are no unblocking events pending. Otherwise returns 0.
-    u64 check_unblock_immediately(u64 reason, u64 extra);
+        // Paging
+        klib::shared_ptr<paging::Arch_Page_Table> page_table;
+        void *page_blocked_by = nullptr;
 
-    // Checks if the process is blocked by the port and unblocks it if needed
-    bool atomic_unblock_if_needed(Port *compare_blocked_by);
+        // Task groups. Using sched_lock...
+        klib::set<TaskGroup *> task_groups;
 
-    // Sets the entry point to the task
-    inline void set_entry_point(u64 entry) { this->regs.program_counter() = entry; }
+        // Creates and assigns an emty valid page table
+        kresult_t create_new_page_table();
 
-    // Switches to this task on the current CPU
-    void switch_to();
+        // Registers a page table within a process, if it doesn't have any
+        [[nodiscard]] kresult_t register_page_table(klib::shared_ptr<paging::Arch_Page_Table>);
+        [[nodiscard]] kresult_t atomic_register_page_table(klib::shared_ptr<paging::Arch_Page_Table>);
 
-    // Functions to be called before and after task switch
-    // These function save and restore extra data (floating point and vector registers,
-    // segment registers on x86, etc.) that are not stored upon the kernel entry
-    // This function is architecture-dependent and is defined in arch/-specific directory
-    void before_task_switch();
-    void after_task_switch();
+        // Inits stack
+        ReturnStr<size_t> init_stack();
 
-    // Checks if the task is uninited
-    bool is_uninited() const;
+        // Blocks the process by a page (for example in case of a pagefault)
+        void atomic_block_by_page(void *page, sched::sched_queue *push_to_queue);
 
-    // Inits the task
-    void init();
+        // Unblocks the task when the page becomes available
+        bool atomic_try_unblock_by_page(void *page);
 
-    enum Type {
-        Normal,
-        System,
-        Idle,
-    } type = Normal;
+        /// Tries to atomically erase the task from the queue. If task's parrent queue is not equal
+        /// to *queue*, does nothing
+        void atomic_erase_from_queue(sched::sched_queue *queue) noexcept;
 
-    enum class PrivilegeLevel { User, Kernel };
+        // Kills the task
+        void atomic_kill();
 
-    u64 ret_hi = 0;
-    u64 ret_lo = 0;
+        // Returns 0 if there are no unblocking events pending. Otherwise returns 0.
+        u64 check_unblock_immediately(u64 reason, u64 extra);
+
+        // Checks if the process is blocked by the port and unblocks it if needed
+        bool atomic_unblock_if_needed(ipc::Port *compare_blocked_by);
+
+        // Sets the entry point to the task
+        inline void set_entry_point(u64 entry) { this->regs.program_counter() = entry; }
+
+        // Switches to this task on the current CPU
+        void switch_to();
+
+        // Functions to be called before and after task switch
+        // These function save and restore extra data (floating point and vector registers,
+        // segment registers on x86, etc.) that are not stored upon the kernel entry
+        // This function is architecture-dependent and is defined in arch/-specific directory
+        void before_task_switch();
+        void after_task_switch();
+
+        // Checks if the task is uninited
+        bool is_uninited() const;
+
+        // Inits the task
+        void init();
+
+        enum Type {
+            Normal,
+            System,
+            Idle,
+        } type = Normal;
+
+        enum class PrivilegeLevel { User, Kernel };
+
+        u64 ret_hi = 0;
+        u64 ret_lo = 0;
 
 #if defined(__x86_64__) || defined(__i386__)
-    // SSE data on x86_64 CPUs (floating point, vector registers)
-    SSE_Data sse_data;
-    bool holds_sse_data = false;
+        // SSE data on x86_64 CPUs (floating point, vector registers)
+        x86::sse::SSE_Data sse_data;
+        bool holds_sse_data = false;
 #elif defined(__riscv)
-    // Floating point data on RISC-V CPUs
+        // Floating point data on RISC-V CPUs
 
-    /// Last state of the floating point register of the task
-    /// If it is clean or disabled, task_fp_registers might not be present
-    FloatingPointState fp_state = FloatingPointState::Disabled;
+        /// Last state of the floating point register of the task
+        /// If it is clean or disabled, task_fp_registers might not be present
+        FloatingPointState fp_state = FloatingPointState::Disabled;
 
-    /// Floating point registers of the task. The actual size depends on what is supported by the
-    /// ISA (F, D or Q extensions) Since I expect most of the tasks to not use floating point, don't
-    /// allocate it by default and only do so when saving registers is needed (when the task leaves
-    /// the CPU state as dirty)
-    klib::unique_ptr<u64[]> fp_registers = nullptr;
-    u64 fcsr                             = 0;
+        /// Floating point registers of the task. The actual size depends on what is supported by
+        /// the ISA (F, D or Q extensions) Since I expect most of the tasks to not use floating
+        /// point, don't allocate it by default and only do so when saving registers is needed (when
+        /// the task leaves the CPU state as dirty)
+        klib::unique_ptr<u64[]> fp_registers = nullptr;
+        u64 fcsr                             = 0;
 
-    /// Last hart id that used the floating point unit
-    u64 last_fp_hart_id = 0;
+        /// Last hart id that used the floating point unit
+        u64 last_fp_hart_id = 0;
 #elif defined(__loongarch__)
-    klib::unique_ptr<u64[]> fp_registers = nullptr;
-    bool using_fp = false;
+        klib::unique_ptr<u64[]> fp_registers = nullptr;
+        bool using_fp                        = false;
 #endif
-    u64 syscall_num = 0;
+        u64 syscall_num = 0;
 
-    // Interrupts handlers
-    pmos::containers::set<Interrupt_Handler *> interrupt_handlers;
-    inline bool can_be_rebound() { return interrupt_handlers.empty(); }
+        // Interrupts handlers
+        pmos::containers::set<interrupts::Interrupt_Handler *> interrupt_handlers;
+        inline bool can_be_rebound() { return interrupt_handlers.empty(); }
 
-    // Debugging
-    bool cleaned_up = false;
+        // Debugging
+        bool cleaned_up = false;
 
-    Spinlock name_lock;
-    klib::string name = "";
+        Spinlock name_lock;
+        klib::string name = "";
 
-    ~TaskDescriptor() noexcept;
+        ~TaskDescriptor() noexcept;
 
-    // Changes the *task* to repeat the syscall upon reentering the system
-    inline void request_repeat_syscall() noexcept { regs.request_syscall_restart(); }
-    inline void pop_repeat_syscall() noexcept { regs.clear_syscall_restart(); }
+        // Changes the *task* to repeat the syscall upon reentering the system
+        inline void request_repeat_syscall() noexcept { regs.request_syscall_restart(); }
+        inline void pop_repeat_syscall() noexcept { regs.clear_syscall_restart(); }
 
-    /// Creates a process structure and returns its pid
-    static TaskDescriptor *create_process(PrivilegeLevel level = PrivilegeLevel::User) noexcept;
+        /// Creates a process structure and returns its pid
+        static TaskDescriptor *create_process(PrivilegeLevel level = PrivilegeLevel::User) noexcept;
 
-    /// Loads ELF into the task from the given memory object
-    /// Returns true if the ELF was loaded successfully, false if the memory object data is not
-    /// immediately available
-    ReturnStr<bool> load_elf(klib::shared_ptr<Mem_Object> obj, klib::string name = "",
-                  const klib::vector<klib::unique_ptr<load_tag_generic>> &tags = {});
+        /// Loads ELF into the task from the given memory object
+        /// Returns true if the ELF was loaded successfully, false if the memory object data is not
+        /// immediately available
+        ReturnStr<bool> load_elf(klib::shared_ptr<paging::Mem_Object> obj, klib::string name = "",
+                                 const klib::vector<klib::unique_ptr<load_tag_generic>> &tags = {});
 
-    /// Cleans up the task when detected that it is dead ("tombstoning")
-    /// This function is called when the dead task has been scheduled to run and is needed to clean
-    /// up CPU-specific data
-    void cleanup();
+        /// Cleans up the task when detected that it is dead ("tombstoning")
+        /// This function is called when the dead task has been scheduled to run and is needed to
+        /// clean up CPU-specific data
+        void cleanup();
 
-    /// Gets an unused task ID
-    static TaskID get_new_task_id();
+        /// Gets an unused task ID
+        static TaskID get_new_task_id();
 
-    struct NotifierPort {
-        u64 action_mask = 0;
+        struct NotifierPort {
+            u64 action_mask = 0;
 
-        static constexpr int NOTIFY_EXIT       = 1;
-        static constexpr int NOTIFY_SEGFAULT   = 2;
-        static constexpr int NOTIFY_BREAKPOINT = 4;
+            static constexpr int NOTIFY_EXIT       = 1;
+            static constexpr int NOTIFY_SEGFAULT   = 2;
+            static constexpr int NOTIFY_BREAKPOINT = 4;
+        };
+
+        klib::splay_tree_map<u64, NotifierPort> notifier_ports;
+        mutable Spinlock notifier_ports_lock;
+
+        /**
+         * @brief Changes the notifier port to the new mask. Setting mask to 0 effectively removes
+         * the port from the notifiers map
+         *
+         * @param port Port whose mask is to be changed. Must not be nullptr.
+         * @param mask New mask
+         * @return u64 Old mask
+         */
+        u64 atomic_change_notifier_mask(ipc::Port *port, u64 mask);
+
+        /**
+         * @brief Gets the notification mask of the port. If the mask is 0, then the port is not in
+         * the notifiers map.
+         *
+         * @param port_id ID of the port whose mask is to be checked
+         * @return u64 Mas of the port
+         */
+        u64 atomic_get_notifier_mask(u64 port_id);
+
+        // Returns true if the task is a kernel task
+        bool is_kernel_task() const;
+
+        // Interrupts restarting syscall, setting the return value to interrupted error
+        void interrupt_restart_syscall();
+
+        // Unblocks the task if it is not already blocked
+        void atomic_try_unblock();
+
+        bool is_32bit() const;
+
+#if defined(__riscv) || defined(__loongarch__)
+        kresult_t init_fp_state();
+#endif
+
+    protected:
+        TaskDescriptor() = default;
+
+        // Unblocks the task from the blocked state
+        void unblock() noexcept;
+
+        kresult_t set_32bit();
     };
 
-    klib::splay_tree_map<u64, NotifierPort> notifier_ports;
-    mutable Spinlock notifier_ports_lock;
+    using task_ptr = TaskDescriptor *;
 
-    /**
-     * @brief Changes the notifier port to the new mask. Setting mask to 0 effectively removes the
-     * port from the notifiers map
-     *
-     * @param port Port whose mask is to be changed. Must not be nullptr.
-     * @param mask New mask
-     * @return u64 Old mask
-     */
-    u64 atomic_change_notifier_mask(Port *port, u64 mask);
+    // Inits an idle process
+    kresult_t init_idle(sched::CPU_Info *cpu);
 
-    /**
-     * @brief Gets the notification mask of the port. If the mask is 0, then the port is not in the
-     * notifiers map.
-     *
-     * @param port_id ID of the port whose mask is to be checked
-     * @return u64 Mas of the port
-     */
-    u64 atomic_get_notifier_mask(u64 port_id);
+    // A map of all the tasks
+    using sched_map = pmos::containers::RedBlackTree<
+        TaskDescriptor, &TaskDescriptor::task_tree_head,
+        detail::TreeCmp<TaskDescriptor, u64, &TaskDescriptor::task_id>>::RBTreeHead;
+    extern sched_map tasks_map;
+    extern Spinlock tasks_map_lock;
 
-    // Returns true if the task is a kernel task
-    bool is_kernel_task() const;
+    // Returns true if the process with pid exists, false otherwise
+    inline bool exists_process(u64 pid)
+    {
+        tasks_map_lock.lock();
+        auto it = tasks_map.find(pid);
+        tasks_map_lock.unlock();
+        return it;
+    }
 
-    // Interrupts restarting syscall, setting the return value to interrupted error
-    void interrupt_restart_syscall();
+    // Gets a task descriptor of the process with pid
+    inline TaskDescriptor *get_task(u64 pid)
+    {
+        Auto_Lock_Scope scope_lock(tasks_map_lock);
+        return tasks_map.find(pid);
+    }
 
-    // Unblocks the task if it is not already blocked
-    void atomic_try_unblock();
-
-    bool is_32bit() const;
-
-    #if defined(__riscv) || defined(__loongarch__)
-    kresult_t init_fp_state();
-    #endif
-    
-protected:
-    TaskDescriptor() = default;
-
-    // Unblocks the task from the blocked state
-    void unblock() noexcept;
-
-    kresult_t set_32bit();
-};
-
-using task_ptr = TaskDescriptor *;
-
-struct CPU_Info;
-// Inits an idle process
-kresult_t init_idle(CPU_Info *cpu);
-
-// A map of all the tasks
-using sched_map = pmos::containers::RedBlackTree<
-    TaskDescriptor, &TaskDescriptor::task_tree_head,
-    detail::TreeCmp<TaskDescriptor, u64, &TaskDescriptor::task_id>>::RBTreeHead;
-extern sched_map tasks_map;
-extern Spinlock tasks_map_lock;
-
-// Returns true if the process with pid exists, false otherwise
-inline bool exists_process(u64 pid)
-{
-    tasks_map_lock.lock();
-    auto it = tasks_map.find(pid);
-    tasks_map_lock.unlock();
-    return it;
-}
-
-// Gets a task descriptor of the process with pid
-inline TaskDescriptor *get_task(u64 pid)
-{
-    Auto_Lock_Scope scope_lock(tasks_map_lock);
-    return tasks_map.find(pid);
-}
+}; // namespace proc
+}; // namespace kernel

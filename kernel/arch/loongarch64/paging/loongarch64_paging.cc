@@ -114,12 +114,12 @@ void *LoongArch64_Page_Table::user_addr_max() const
 
 u64 kernel_page_dir() { return get_pgdh(); }
 
-kresult_t map_kernel_page(u64 phys_addr, void *virt_addr, Page_Table_Argumments arg)
+kresult_t map_kernel_page(u64 phys_addr, void *virt_addr, Page_Table_Arguments arg)
 {
     return loongarch_map_page(kernel_page_dir(), virt_addr, phys_addr, arg);
 }
 
-kresult_t map_kernel_pages(u64 phys_addr, void *virt_addr, size_t size, Page_Table_Argumments arg)
+kresult_t map_kernel_pages(u64 phys_addr, void *virt_addr, size_t size, Page_Table_Arguments arg)
 {
     return map_pages(kernel_page_dir(), phys_addr, virt_addr, size, arg);
 }
@@ -130,7 +130,7 @@ kresult_t unmap_kernel_page(TLBShootdownContext &ctx, void *virt_addr)
 }
 
 kresult_t map_pages(ptable_top_ptr_t page_table, u64 phys_addr, void *virt_addr, size_t size,
-                    Page_Table_Argumments arg)
+                    Page_Table_Arguments arg)
 {
     kresult_t result = 0;
 
@@ -152,7 +152,7 @@ bool pde_valid(u64 pde)
 }
 
 kresult_t loongarch_map_page(u64 pt_top_phys, void *virt_addr, u64 phys_addr,
-                             Page_Table_Argumments arg)
+                             Page_Table_Arguments arg)
 {
     unsigned l4_idx          = ((u64)virt_addr >> paging_l4_offset) & page_idx_mask;
     unsigned l3_idx          = ((u64)virt_addr >> paging_l3_offset) & page_idx_mask;
@@ -254,13 +254,13 @@ LoongArch64_Page_Table::~LoongArch64_Page_Table()
     takeout_global_page_tables();
 }
 
-kresult_t LoongArch64_Page_Table::map(u64 page_addr, void *virt_addr, Page_Table_Argumments arg)
+kresult_t LoongArch64_Page_Table::map(u64 page_addr, void *virt_addr, Page_Table_Arguments arg)
 {
     return loongarch_map_page(page_directory, virt_addr, page_addr, arg);
 }
 
 kresult_t LoongArch64_Page_Table::map(pmm::Page_Descriptor page, void *virt_addr,
-                                      Page_Table_Argumments arg)
+                                      Page_Table_Arguments arg)
 {
     auto page_phys = page.get_phys_addr();
     arg.extra      = PAGING_FLAG_STRUCT_PAGE;
@@ -576,7 +576,7 @@ static kresult_t copy_to_recursive(const klib::shared_ptr<Page_Table> &to, u64 p
                 ctx.invalidate_page((void *)copy_from);
             }
 
-            Page_Table_Argumments arg = {
+            Page_Table_Arguments arg = {
                 .readable           = !!(new_access & Readable),
                 .writeable          = 0,
                 .user_access        = true,

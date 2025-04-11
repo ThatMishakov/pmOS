@@ -42,24 +42,32 @@
 #include <stdlib.h>
 #include <types.hh>
 
+namespace kernel::paging
+{
+klib::shared_ptr<kernel::paging::Arch_Page_Table> idle_page_table;
+}
+
+using namespace kernel::proc;
+using namespace kernel::sched;
+
+namespace kernel::sched
+{
+
 sched_queue blocked;
 sched_queue uninit;
 sched_queue paused;
 
-Spinlock tasks_map_lock;
-sched_map tasks_map;
-
-RCU paging_rcu;
-RCU heap_rcu;
+memory::RCU paging_rcu;
+memory::RCU heap_rcu;
 
 klib::vector<CPU_Info *> cpus;
 
 size_t get_cpu_count() noexcept { return cpus.size(); }
 
-ReturnStr<u64> block_current_task(Port *ptr)
+ReturnStr<u64> block_current_task(ipc::Port *ptr)
 {
     // TODO: This function has a strange return value
-    TaskDescriptor *task = get_cpu_struct()->current_task;
+    auto task = get_cpu_struct()->current_task;
 
     // t_print_bochs("Blocking %i (%s) by port\n", task->pid, task->name.c_str());
 
@@ -83,42 +91,15 @@ ReturnStr<u64> block_current_task(Port *ptr)
     return {0, 0};
 }
 
-void TaskDescriptor::atomic_block_by_page(void *page, sched_queue *blocked_ptr)
-{
-    assert(status != TaskStatus::TASK_BLOCKED && "task cannot be blocked twice");
-
-    // t_print_bochs("Blocking %i (%s) by page. CPU %i\n", this->pid, this->name.c_str(),
-    // get_cpu_struct()->cpu_id);
-
-    Auto_Lock_Scope scope_lock(sched_lock);
-    // If the task is dying, don't actually block it
-    if (status == TaskStatus::TASK_DYING)
-        return;
-
-    status          = TaskStatus::TASK_BLOCKED;
-    page_blocked_by = page;
-
-    if (get_cpu_struct()->current_task == this) {
-        find_new_process();
-    } else if (parent_queue) {
-        Auto_Lock_Scope scope_l(parent_queue->lock);
-        parent_queue->erase(this);
-    }
-
-    {
-        Auto_Lock_Scope scope_l(blocked_ptr->lock);
-        blocked_ptr->push_back(this);
-    }
-}
-
 void service_timer_ports()
 {
     auto c            = get_cpu_struct();
     auto current_time = get_current_time_ticks();
     Auto_Lock_Scope l(c->timer_lock);
 
-    for (auto t = c->timer_queue.begin(); t != c->timer_queue.end() and t->fire_on_core_ticks < current_time;) {
-        auto port = Port::atomic_get_port(t->port_id);
+    for (auto t = c->timer_queue.begin();
+         t != c->timer_queue.end() and t->fire_on_core_ticks < current_time;) {
+        auto port = ipc::Port::atomic_get_port(t->port_id);
         if (port) {
             IPC_Timer_Reply r = {
                 IPC_Timer_Reply_NUM,
@@ -134,14 +115,14 @@ void service_timer_ports()
     }
 }
 
-kresult_t CPU_Info::atomic_timer_queue_push(u64 fire_on_core_ticks, Port *port, u64 user_arg)
+kresult_t CPU_Info::atomic_timer_queue_push(u64 fire_on_core_ticks, ipc::Port *port, u64 user_arg)
 {
     auto t = new Timer;
     if (!t)
         return -ENOMEM;
 
-    t->port_id = port->portno;
-    t->extra = user_arg;
+    t->port_id            = port->portno;
+    t->extra              = user_arg;
     t->fire_on_core_ticks = fire_on_core_ticks;
 
     Auto_Lock_Scope l(timer_lock);
@@ -151,133 +132,7 @@ kresult_t CPU_Info::atomic_timer_queue_push(u64 fire_on_core_ticks, Port *port, 
     return 0;
 }
 
-klib::shared_ptr<Arch_Page_Table> idle_page_table;
 size_t number_of_cpus = 1;
-
-void TaskDescriptor::switch_to()
-{
-    CPU_Info *c = get_cpu_struct();
-    assert(cpu_affinity == 0 or (cpu_affinity - 1) == c->cpu_id);
-
-    if (c->current_task->page_table != page_table) {
-        c->current_task->page_table->unapply_cpu(c);
-        page_table->apply_cpu(c);
-
-        auto new_page_table = page_table ? page_table : idle_page_table;
-
-        new_page_table->apply();
-        c->paging_rcu_cpu.quiet(paging_rcu, c->cpu_id);
-    }
-
-    c->current_task->before_task_switch();
-
-    // Switch task
-    if (status != TaskStatus::TASK_DYING)
-        // If the task is dying, don't change its status and let the scheduler handle it when
-        // returning from the kernel
-        status = TaskStatus::TASK_RUNNING;
-
-    c->current_task_priority = priority;
-    c->current_task          = this;
-
-    this->after_task_switch();
-
-    start_timer(assign_quantum_on_priority(priority));
-}
-
-bool TaskDescriptor::atomic_try_unblock_by_page(void *page)
-{
-    Auto_Lock_Scope scope_lock(sched_lock);
-
-    if (status != TaskStatus::TASK_BLOCKED)
-        return false;
-
-    if (page_blocked_by != page)
-        return false;
-
-    page_blocked_by = 0;
-    unblock();
-    return true;
-}
-
-bool TaskDescriptor::atomic_unblock_if_needed(Port *ptr)
-{
-    bool unblocked = false;
-    Auto_Lock_Scope scope_lock(sched_lock);
-
-    if (status != TaskStatus::TASK_BLOCKED)
-        return unblocked;
-
-    if (page_blocked_by != 0)
-        return unblocked;
-
-    if (ptr and blocked_by == ptr) {
-        unblocked = true;
-
-        unblock();
-    }
-    return unblocked;
-}
-
-void TaskDescriptor::atomic_erase_from_queue(sched_queue *q) noexcept
-{
-    Auto_Lock_Scope l(sched_lock);
-
-    if (parent_queue != q) {
-        [[unlikely]];
-        return;
-    }
-
-    unblock();
-}
-
-void TaskDescriptor::atomic_try_unblock()
-{
-    Auto_Lock_Scope scope_lock(sched_lock);
-
-    if (status != TaskStatus::TASK_BLOCKED)
-        return;
-
-    unblock();
-}
-
-void TaskDescriptor::unblock() noexcept
-{
-    auto *const p_queue = parent_queue;
-    p_queue->atomic_erase(this);
-
-    auto &local_cpu = *get_cpu_struct();
-
-    if (cpu_affinity == 0 or ((cpu_affinity - 1) == local_cpu.cpu_id)) {
-        TaskDescriptor *current_task = get_cpu_struct()->current_task;
-
-        if (current_task->priority > priority) {
-            if (status == TaskStatus::TASK_DYING) {
-                cleanup();
-                return;
-            }
-
-            {
-                Auto_Lock_Scope scope_l(current_task->sched_lock);
-                switch_to();
-            }
-
-            push_ready(current_task);
-        } else {
-            push_ready(this);
-        }
-    } else {
-        push_ready(this);
-
-        // TODO: If other CPU is switching to a lower priority task, it might miss the newly pushed
-        // one and not execute it immediately. Not a big deal for now, but better approach is
-        // probably needed...
-        auto remote_cpu = cpus[cpu_affinity - 1];
-        assert(remote_cpu->cpu_id == cpu_affinity - 1);
-        if (remote_cpu->current_task_priority > priority)
-            remote_cpu->ipi_reschedule();
-    }
-}
 
 // u64 TaskDescriptor::check_unblock_immediately(u64 reason, u64 extra)
 // {
@@ -494,12 +349,12 @@ TaskDescriptor *CPU_Info::atomic_get_front_priority(priority_t priority)
     return nullptr;
 }
 
-bool unblock_if_needed(TaskDescriptor *p, Port *compare_blocked_by)
+bool unblock_if_needed(TaskDescriptor *p, ipc::Port *compare_blocked_by)
 {
     return p->atomic_unblock_if_needed(compare_blocked_by);
 }
 
-bool cpu_struct_works = false;
+bool cpu_struct_works  = false;
 bool other_cpus_online = false;
 
 void check_synchronous_ipis()
@@ -517,4 +372,159 @@ void check_synchronous_ipis()
             c->current_task->page_table->trigger_shootdown(c);
         }
     }
+}
+
+} // namespace kernel::sched
+
+void TaskDescriptor::atomic_block_by_page(void *page, sched_queue *blocked_ptr)
+{
+    assert(status != TaskStatus::TASK_BLOCKED && "task cannot be blocked twice");
+
+    // t_print_bochs("Blocking %i (%s) by page. CPU %i\n", this->pid, this->name.c_str(),
+    // get_cpu_struct()->cpu_id);
+
+    Auto_Lock_Scope scope_lock(sched_lock);
+    // If the task is dying, don't actually block it
+    if (status == TaskStatus::TASK_DYING)
+        return;
+
+    status          = TaskStatus::TASK_BLOCKED;
+    page_blocked_by = page;
+
+    if (get_cpu_struct()->current_task == this) {
+        find_new_process();
+    } else if (parent_queue) {
+        Auto_Lock_Scope scope_l(parent_queue->lock);
+        parent_queue->erase(this);
+    }
+
+    {
+        Auto_Lock_Scope scope_l(blocked_ptr->lock);
+        blocked_ptr->push_back(this);
+    }
+}
+
+void TaskDescriptor::unblock() noexcept
+{
+    auto *const p_queue = parent_queue;
+    p_queue->atomic_erase(this);
+
+    auto &local_cpu = *get_cpu_struct();
+
+    if (cpu_affinity == 0 or ((cpu_affinity - 1) == local_cpu.cpu_id)) {
+        TaskDescriptor *current_task = get_cpu_struct()->current_task;
+
+        if (current_task->priority > priority) {
+            if (status == TaskStatus::TASK_DYING) {
+                cleanup();
+                return;
+            }
+
+            {
+                Auto_Lock_Scope scope_l(current_task->sched_lock);
+                switch_to();
+            }
+
+            push_ready(current_task);
+        } else {
+            push_ready(this);
+        }
+    } else {
+        push_ready(this);
+
+        // TODO: If other CPU is switching to a lower priority task, it might miss the newly pushed
+        // one and not execute it immediately. Not a big deal for now, but better approach is
+        // probably needed...
+        auto remote_cpu = cpus[cpu_affinity - 1];
+        assert(remote_cpu->cpu_id == cpu_affinity - 1);
+        if (remote_cpu->current_task_priority > priority)
+            remote_cpu->ipi_reschedule();
+    }
+}
+
+void TaskDescriptor::switch_to()
+{
+    CPU_Info *c = get_cpu_struct();
+    assert(cpu_affinity == 0 or (cpu_affinity - 1) == c->cpu_id);
+
+    if (c->current_task->page_table != page_table) {
+        c->current_task->page_table->unapply_cpu(c);
+        page_table->apply_cpu(c);
+
+        auto new_page_table = page_table ? page_table : paging::idle_page_table;
+
+        new_page_table->apply();
+        c->paging_rcu_cpu.quiet(paging_rcu, c->cpu_id);
+    }
+
+    c->current_task->before_task_switch();
+
+    // Switch task
+    if (status != TaskStatus::TASK_DYING)
+        // If the task is dying, don't change its status and let the scheduler handle it when
+        // returning from the kernel
+        status = TaskStatus::TASK_RUNNING;
+
+    c->current_task_priority = priority;
+    c->current_task          = this;
+
+    this->after_task_switch();
+
+    start_timer(assign_quantum_on_priority(priority));
+}
+
+bool TaskDescriptor::atomic_try_unblock_by_page(void *page)
+{
+    Auto_Lock_Scope scope_lock(sched_lock);
+
+    if (status != TaskStatus::TASK_BLOCKED)
+        return false;
+
+    if (page_blocked_by != page)
+        return false;
+
+    page_blocked_by = 0;
+    unblock();
+    return true;
+}
+
+bool TaskDescriptor::atomic_unblock_if_needed(ipc::Port *ptr)
+{
+    bool unblocked = false;
+    Auto_Lock_Scope scope_lock(sched_lock);
+
+    if (status != TaskStatus::TASK_BLOCKED)
+        return unblocked;
+
+    if (page_blocked_by != 0)
+        return unblocked;
+
+    if (ptr and blocked_by == ptr) {
+        unblocked = true;
+
+        unblock();
+    }
+    return unblocked;
+}
+
+void TaskDescriptor::atomic_erase_from_queue(sched_queue *q) noexcept
+{
+    Auto_Lock_Scope l(sched_lock);
+
+    if (parent_queue != q) {
+        [[unlikely]];
+        return;
+    }
+
+    unblock();
+}
+
+void TaskDescriptor::atomic_try_unblock()
+{
+    Auto_Lock_Scope scope_lock(sched_lock);
+
+    if (status != TaskStatus::TASK_BLOCKED)
+        return;
+
+    unblock();
 }

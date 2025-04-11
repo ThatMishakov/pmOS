@@ -31,5 +31,5 @@
 #include <processes/tasks.hh>
 
 // Saves and restores GSBase and FSBase
-void save_segments(TaskDescriptor *task);
-void restore_segments(TaskDescriptor *task);
+void save_segments(kernel::proc::TaskDescriptor *task);
+void restore_segments(kernel::proc::TaskDescriptor *task);

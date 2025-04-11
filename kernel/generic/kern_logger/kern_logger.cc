@@ -32,6 +32,14 @@
 #include <stdarg.h>
 #include <types.hh>
 
+void printc(int c);
+extern "C" void dbg_uart_putc(int c) { printc(c); }
+
+void t_write_bochs(const char *str, u64 length);
+
+namespace kernel::log
+{
+
 Buffered_Logger global_logger;
 Bochs_Logger bochs_logger;
 
@@ -165,15 +173,13 @@ void Logger::log(const klib::string &str)
     log_nolock(str.c_str(), str.size());
 }
 
-void t_write_bochs(const char *str, u64 length);
-
 void Bochs_Logger::log_nolock(const char *c, size_t size) { t_write_bochs(c, size); }
 
 void Buffered_Logger::log_nolock(const char *c, size_t size)
 {
     constexpr size_t buff_size = 508;
 
-    Port *ptr  = Port::atomic_get_port(messaging_port_id);
+    auto *ptr  = ipc::Port::atomic_get_port(messaging_port_id);
     bool alive = false;
     if (ptr) {
         Auto_Lock_Scope port_lock(ptr->lock);
@@ -199,7 +205,7 @@ void Buffered_Logger::log_nolock(const char *c, size_t size)
     }
 }
 
-void Buffered_Logger::set_port(Port *port, uint32_t /* flags */)
+void Buffered_Logger::set_port(ipc::Port *port, uint32_t /* flags */)
 {
     Auto_Lock_Scope scope_lock(logger_lock);
 
@@ -228,9 +234,6 @@ void Buffered_Logger::set_port(Port *port, uint32_t /* flags */)
     log_buffer.clear();
 }
 
-void printc(int c);
-extern "C" void dbg_uart_putc(int c) { printc(c); }
-
 void Serial_Logger::log_nolock(const char *c, size_t size)
 {
     for (size_t i = 0; i < size; ++i) {
@@ -240,3 +243,5 @@ void Serial_Logger::log_nolock(const char *c, size_t size)
         dbg_uart_putc(cc);
     }
 }
+
+} // namespace kernel::log

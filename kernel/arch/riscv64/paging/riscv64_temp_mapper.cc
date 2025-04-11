@@ -41,7 +41,7 @@ RISCV64_Temp_Mapper::RISCV64_Temp_Mapper(void *virt_addr, u64 pt_ptr)
     u64 addr    = (u64)virt_addr;
     start_index = addr / 4096 % 512;
 
-    Page_Table_Argumments arg {1, 1, 0, 0, 1, 000};
+    Page_Table_Arguments arg {1, 1, 0, 0, 1, 000};
 
     auto leaf_pt_phys = prepare_leaf_pt_for(virt_addr, arg, pt_ptr);
     if (!leaf_pt_phys.success())

@@ -32,6 +32,9 @@
 
 #include <types.hh>
 
+namespace kernel::x86_64::interrupts
+{
+
 extern "C" typedef void (*isr)(void);
 
 constexpr u8 interrupt_gate_type = 0b1110;
@@ -53,7 +56,7 @@ struct Gate_Descriptor {
     Gate_Descriptor() = default;
 
     Gate_Descriptor(isr offset, u8 gate_type, u8 ist, u8 privilege_level,
-                              u16 segment_selector = R0_CODE_SEGMENT)
+                    u16 segment_selector = R0_CODE_SEGMENT)
         : offset_1((u64)(offset)), segment_selector(segment_selector), ist(ist), reserved(0),
           gate_type(gate_type), zero(0), dpl(privilege_level), present(1),
           offset_2((u64)(offset) >> 16), offset_3((u64)(offset) >> 32), reserved_1(0)
@@ -65,8 +68,7 @@ struct Gate_Descriptor {
 struct IDT {
     Gate_Descriptor entries[256];
 
-    void register_isr(u16 intno, isr isr_routine, u8 gate_type, u8 ist,
-                                u8 allowed_privilege_level)
+    void register_isr(u16 intno, isr isr_routine, u8 gate_type, u8 ist, u8 allowed_privilege_level)
     {
         entries[intno] = {isr_routine, gate_type, ist, allowed_privilege_level};
     }
@@ -82,3 +84,5 @@ struct IDTR {
 } PACKED;
 
 extern "C" void loadIDT(IDTR *IDT_desc);
+
+} // namespace kernel::x86_64::interrupts

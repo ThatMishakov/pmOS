@@ -45,16 +45,19 @@
 
 using namespace kernel;
 using namespace kernel::x86;
+using namespace kernel::x86::interrupts::lapic;
+using namespace kernel::x86::interrupts;
+using namespace kernel::log;
 
-void *apic_mapped_addr = nullptr;
+static void *apic_mapped_addr = nullptr;
 
-void map_apic()
+void kernel::x86::interrupts::lapic::map_apic()
 {
     apic_mapped_addr = vmm::kernel_space_allocator.virtmem_alloc(1);
-    map_kernel_page(apic_base, apic_mapped_addr, {1, 1, 0, 0, 0, PAGE_SPECIAL});
+    paging::map_kernel_page(apic_base, apic_mapped_addr, {1, 1, 0, 0, 0, PAGE_SPECIAL});
 }
 
-void enable_apic()
+void kernel::x86::interrupts::lapic::enable_apic()
 {
     apic_write_reg(APIC_REG_DFR, 0xffffffff);
     apic_write_reg(APIC_REG_LDR, 0x01000000);
@@ -64,17 +67,17 @@ void enable_apic()
     apic_write_reg(APIC_REG_SPURIOUS_INT, APIC_SPURIOUS_INT | 0x100);
 }
 
-void prepare_apic()
+void kernel::x86::interrupts::lapic::prepare_apic()
 {
     init_PIC();
     map_apic();
 }
 
-FreqFraction apic_freq;
-FreqFraction tsc_freq;
+FreqFraction kernel::x86::interrupts::lapic::apic_freq;
+FreqFraction kernel::x86::interrupts::lapic::tsc_freq;
 
-FreqFraction apic_inverted_freq;
-FreqFraction tsc_inverted_freq;
+FreqFraction kernel::x86::interrupts::lapic::apic_inverted_freq;
+FreqFraction kernel::x86::interrupts::lapic::tsc_inverted_freq;
 
 bool have_invariant_tsc = false;
 u64 boot_tsc            = 0;
@@ -93,7 +96,7 @@ static void check_tsc()
     }
 }
 
-void discover_apic_freq()
+void kernel::x86::interrupts::lapic::discover_apic_freq()
 {
     check_tsc();
     // While we're here, also measure TSC frequency
@@ -152,7 +155,7 @@ void discover_apic_freq()
                          (tsc_end - tsc_start) * 100);
 }
 
-void apic_one_shot(u32 ms)
+void kernel::x86::interrupts::lapic::apic_one_shot(u32 ms)
 {
     u64 time_nanoseconds = ms * 1'000'000;
     u32 ticks            = apic_freq * time_nanoseconds;
@@ -161,34 +164,40 @@ void apic_one_shot(u32 ms)
     apic_write_reg(APIC_REG_TMRINITCNT, ticks);
 }
 
-void apic_one_shot_ticks(u32 ticks)
+void kernel::x86::interrupts::lapic::apic_one_shot_ticks(u32 ticks)
 {
     apic_write_reg(APIC_REG_TMRDIV, 0x3);           // Divide by 1
     apic_write_reg(APIC_REG_LVT_TMR, APIC_TMR_INT); // Init in one-shot mode
     apic_write_reg(APIC_REG_TMRINITCNT, ticks);
 }
 
-u64 cpu_get_apic_base() { return read_msr(IA32_APIC_BASE_MSR); }
+u64 kernel::x86::interrupts::lapic::cpu_get_apic_base() { return read_msr(IA32_APIC_BASE_MSR); }
 
-void cpu_set_apic_base(u64 base) { return write_msr(IA32_APIC_BASE_MSR, base); }
+void kernel::x86::interrupts::lapic::cpu_set_apic_base(u64 base)
+{
+    return write_msr(IA32_APIC_BASE_MSR, base);
+}
 
-void apic_write_reg(u16 index, u32 val)
+void kernel::x86::interrupts::lapic::apic_write_reg(u16 index, u32 val)
 {
     volatile u32 *reg = (volatile u32 *)((u64)apic_mapped_addr + index);
     *reg              = val;
 }
 
-u32 apic_read_reg(u16 index)
+u32 kernel::x86::interrupts::lapic::apic_read_reg(u16 index)
 {
     volatile u32 *reg = (volatile u32 *)((u64)apic_mapped_addr + index);
     return *reg;
 }
 
-void apic_eoi() { apic_write_reg(APIC_REG_EOI, 0); }
+void kernel::x86::interrupts::lapic::apic_eoi() { apic_write_reg(APIC_REG_EOI, 0); }
 
-u32 apic_get_remaining_ticks() { return apic_read_reg(APIC_REG_TMRCURRCNT); }
+u32 kernel::x86::interrupts::lapic::apic_get_remaining_ticks()
+{
+    return apic_read_reg(APIC_REG_TMRCURRCNT);
+}
 
-void write_ICR(ICR i)
+void kernel::x86::interrupts::lapic::write_ICR(ICR i)
 {
     u32 *ptr = (u32 *)&i;
     apic_write_reg(APIC_ICR_HIGH, ptr[1]);
@@ -218,20 +227,26 @@ void write_ICR(ICR i)
 //     return result;
 // }
 
-u32 get_lapic_id() { return apic_read_reg(APIC_REG_LAPIC_ID); }
+u32 kernel::x86::interrupts::lapic::get_lapic_id() { return apic_read_reg(APIC_REG_LAPIC_ID); }
 
-void broadcast_sipi(u8 vector) { apic_write_reg(APIC_ICR_LOW, 0x000C4600 | vector); }
+void kernel::x86::interrupts::lapic::broadcast_sipi(u8 vector)
+{
+    apic_write_reg(APIC_ICR_LOW, 0x000C4600 | vector);
+}
 
-void broadcast_init_ipi() { apic_write_reg(APIC_ICR_LOW, 0x000C4500); }
+void kernel::x86::interrupts::lapic::broadcast_init_ipi()
+{
+    apic_write_reg(APIC_ICR_LOW, 0x000C4500);
+}
 
-void send_ipi_fixed(u8 vector, u32 dest)
+void kernel::x86::interrupts::lapic::send_ipi_fixed(u8 vector, u32 dest)
 {
     // serial_logger.printf("[Kernel] Info: Sending IPI to %h with vector %h\n", dest, vector);
     apic_write_reg(APIC_ICR_HIGH, dest);
     apic_write_reg(APIC_ICR_LOW, (u32)vector | (0x01 << 14));
 }
 
-void send_ipi_fixed_others(u8 vector)
+void kernel::x86::interrupts::lapic::send_ipi_fixed_others(u8 vector)
 {
     // serial_logger.printf("[Kernel] Info: Sending IPI to others with vector %h\n", vector);
     apic_write_reg(APIC_ICR_HIGH, 0);
@@ -241,7 +256,7 @@ void send_ipi_fixed_others(u8 vector)
     apic_write_reg(APIC_ICR_LOW, vector | (0x01 << 14) | (0b11 << 18));
 }
 
-void smart_eoi(u8 intno)
+static void smart_eoi(u8 intno)
 {
     u8 isr_index = intno >> 5;
     u8 offset    = intno & 0x1f;
@@ -251,8 +266,6 @@ void smart_eoi(u8 intno)
     if (isr_val & (0x01 << offset))
         apic_eoi();
 }
-
-void apic_pp(int priority) { apic_write_reg(APIC_REG_PPR, priority << 4); }
 
 void lvt0_int_routine()
 {
@@ -283,19 +296,19 @@ void tpr_write(unsigned val)
 #endif
 }
 
-void interrupt_complete(u32 intno)
+void kernel::interrupts::interrupt_complete(u32 intno)
 {
     assert(intno < 256);
     smart_eoi(intno);
     tpr_write(0);
 }
 
-u32 interrupt_min() { return 48; }
-u32 interrupt_limint() { return 240; }
+u32 kernel::interrupts::interrupt_min() { return 48; }
+u32 kernel::interrupts::interrupt_limint() { return 240; }
 
 extern "C" void programmable_interrupt(u32 intno)
 {
-    auto c = get_cpu_struct();
+    auto c = sched::get_cpu_struct();
 
     auto handler = c->int_handlers.get_handler(intno);
     if (!handler) {
@@ -331,15 +344,15 @@ extern "C" void programmable_interrupt(u32 intno)
 
 extern Spinlock int_allocation_lock;
 
-kresult_t interrupt_enable(u32 i)
+kresult_t kernel::interrupts::interrupt_enable(u32 i)
 {
     assert(i >= 48 and i < 240);
 
     i -= 48;
 
-    IOAPIC *ioapic = nullptr;
-    u32 vector     = 0;
-    auto c         = get_cpu_struct();
+    x86::interrupts::IOAPIC *ioapic = nullptr;
+    u32 vector                      = 0;
+    auto c                          = sched::get_cpu_struct();
 
     {
         Auto_Lock_Scope l(int_allocation_lock);
@@ -355,13 +368,13 @@ kresult_t interrupt_enable(u32 i)
     return 0;
 }
 
-void interrupt_disable(u32 i)
+void kernel::interrupts::interrupt_disable(u32 i)
 {
     assert(i >= 48 and i < 240);
 
-    IOAPIC *ioapic = nullptr;
-    u32 vector     = 0;
-    auto c         = get_cpu_struct();
+    x86::interrupts::IOAPIC *ioapic = nullptr;
+    u32 vector                      = 0;
+    auto c                          = sched::get_cpu_struct();
 
     {
         Auto_Lock_Scope l(int_allocation_lock);
@@ -374,13 +387,14 @@ void interrupt_disable(u32 i)
         ioapic->interrupt_disable(vector);
 }
 
-ReturnStr<std::pair<CPU_Info *, u32>> allocate_interrupt(IntMapping m)
+ReturnStr<std::pair<sched::CPU_Info *, u32>> kernel::x86::interrupts::lapic::allocate_interrupt(IntMapping m)
 {
     // Find least loaded CPU
-    auto *cpu = cpus[0];
-    for (size_t i = 1; i < cpus.size(); ++i) {
-        if (cpus[i]->int_handlers.allocated_int_count < cpu->int_handlers.allocated_int_count)
-            cpu = cpus[i];
+    auto *cpu = sched::cpus[0];
+    for (size_t i = 1; i < sched::cpus.size(); ++i) {
+        if (sched::cpus[i]->int_handlers.allocated_int_count <
+            cpu->int_handlers.allocated_int_count)
+            cpu = sched::cpus[i];
     }
 
     // Find unused slot

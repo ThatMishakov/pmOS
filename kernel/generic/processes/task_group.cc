@@ -34,12 +34,15 @@
 #include <pmos/ipc.h>
 #include <pmos/utility/scope_guard.hh>
 
+namespace kernel::proc
+{
+
 void TaskGroup::destroy()
 {
     atomic_remove_from_global_map();
 
     for (const auto &p: notifier_ports) {
-        auto ptr = Port::atomic_get_port(p.first);
+        auto ptr = ipc::Port::atomic_get_port(p.first);
         if (ptr) {
             if (p.second.action_mask & NotifierPort::ACTION_MASK_ON_DESTROY) {
                 IPC_Kernel_Group_Destroyed msg = {
@@ -58,10 +61,10 @@ void TaskGroup::destroy()
 
     rcu_head.rcu_func = [](void *self, bool) {
         TaskGroup *t = reinterpret_cast<TaskGroup *>(reinterpret_cast<char *>(self) -
-                                                               offsetof(TaskGroup, rcu_head));
+                                                     offsetof(TaskGroup, rcu_head));
         delete t;
     };
-    get_cpu_struct()->heap_rcu_cpu.push(&rcu_head);
+    sched::get_cpu_struct()->heap_rcu_cpu.push(&rcu_head);
 }
 
 bool TaskGroup::atomic_has_task(u64 id) const noexcept
@@ -163,7 +166,7 @@ kresult_t TaskGroup::atomic_register_task(TaskDescriptor *task)
         Auto_Lock_Scope lock(notifier_ports_lock);
         for (const auto &p: notifier_ports) {
             if (p.second.action_mask & NotifierPort::ACTION_MASK_ON_ADD_TASK) {
-                auto ptr = Port::atomic_get_port(p.first);
+                auto ptr = ipc::Port::atomic_get_port(p.first);
                 if (ptr) {
                     IPC_Kernel_Group_Task_Changed msg = {
                         .type          = IPC_Kernel_Group_Task_Changed_NUM,
@@ -176,7 +179,7 @@ kresult_t TaskGroup::atomic_register_task(TaskDescriptor *task)
                     auto result =
                         ptr->atomic_send_from_system(reinterpret_cast<char *>(&msg), sizeof(msg));
                     if (result) {
-                        global_logger.printf("Warning: could not send message to port %i on "
+                        log::global_logger.printf("Warning: could not send message to port %i on "
                                              "atomic_register_task: %i\n",
                                              p.first, result);
                     }
@@ -208,7 +211,7 @@ kresult_t TaskGroup::atomic_remove_task(TaskDescriptor *task)
         Auto_Lock_Scope lock(notifier_ports_lock);
         for (const auto &p: notifier_ports) {
             if (p.second.action_mask & NotifierPort::ACTION_MASK_ON_REMOVE_TASK) {
-                auto ptr = Port::atomic_get_port(p.first);
+                auto ptr = ipc::Port::atomic_get_port(p.first);
                 if (ptr) {
                     IPC_Kernel_Group_Task_Changed msg = {
                         .type          = IPC_Kernel_Group_Task_Changed_NUM,
@@ -221,7 +224,7 @@ kresult_t TaskGroup::atomic_remove_task(TaskDescriptor *task)
                     auto r =
                         ptr->atomic_send_from_system(reinterpret_cast<char *>(&msg), sizeof(msg));
                     if (r) {
-                        global_logger.printf("Warning: could not send message to port %i on "
+                        log::global_logger.printf("Warning: could not send message to port %i on "
                                              "atomic_remove_task: %i\n",
                                              p.first, r);
                     }
@@ -238,7 +241,7 @@ kresult_t TaskGroup::atomic_remove_task(TaskDescriptor *task)
     return 0;
 }
 
-ReturnStr<u32> TaskGroup::atomic_change_notifier_mask(Port *port, u32 mask, u32 flags)
+ReturnStr<u32> TaskGroup::atomic_change_notifier_mask(ipc::Port *port, u32 mask, u32 flags)
 {
     if (!atomic_alive())
         return -ESRCH;
@@ -305,7 +308,7 @@ ReturnStr<u32> TaskGroup::atomic_change_notifier_mask(Port *port, u32 mask, u32 
             auto result =
                 port->atomic_send_from_system(reinterpret_cast<char *>(&msg), sizeof(msg));
             if (result) {
-                global_logger.printf("Warning: could not send message to port %i on "
+                log::global_logger.printf("Warning: could not send message to port %i on "
                                      "atomic_change_notifier_mask: %i\n",
                                      port_id, result);
             }
@@ -330,3 +333,5 @@ bool TaskGroup::atomic_alive() const noexcept
     Auto_Lock_Scope l(tasks_lock);
     return alive();
 }
+
+} // namespace kernel::proc

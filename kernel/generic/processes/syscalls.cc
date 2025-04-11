@@ -55,6 +55,20 @@
     #include <sched/segments.hh>
 #endif
 
+using namespace kernel::log;
+using namespace kernel::sched;
+using namespace kernel::ipc;
+using namespace kernel::paging;
+using namespace kernel::interrupts;
+
+
+ReturnStr<u32> acpi_wakeup_vec();
+extern void stop_cpus();
+extern void deactivate_page_table();
+
+namespace kernel::proc::syscalls
+{
+
 using syscall_function                         = void (*)();
 std::array<syscall_function, 54> syscall_table = {
     syscall_exit,
@@ -119,7 +133,7 @@ std::array<syscall_function, 54> syscall_table = {
 
 extern "C" void syscall_handler()
 {
-    TaskDescriptor *task = get_cpu_struct()->current_task;
+    TaskDescriptor *task = sched::get_cpu_struct()->current_task;
 
     unsigned call_n = syscall_number(task);
 
@@ -133,11 +147,11 @@ extern "C" void syscall_handler()
     // TODO: check permissions
 
     // t_print_bochs("Debug: syscall %h pid %h (%s) ", call_n,
-    // get_cpu_struct()->current_task->task_id, get_cpu_struct()->current_task->name.c_str());
+    // sched::get_cpu_struct()->current_task->task_id, sched::get_cpu_struct()->current_task->name.c_str());
     // t_print_bochs(" %h %h %h %h %h ", arg1, arg2, arg3, arg4, arg5);
     if (task->attr.debug_syscalls) {
         serial_logger.printf("Debug: syscall %h pid %h\n", call_n,
-                             get_cpu_struct()->current_task->task_id);
+                             sched::get_cpu_struct()->current_task->task_id);
     }
 
     // TODO: This crashes if the syscall is not implemented
@@ -165,7 +179,7 @@ extern "C" void syscall_handler()
 
 void syscall_get_task_id()
 {
-    const task_ptr &task = get_cpu_struct()->current_task;
+    const task_ptr &task = sched::get_cpu_struct()->current_task;
 
     syscall_return(task) = task->task_id;
 }
@@ -314,12 +328,13 @@ void syscall_init_stack()
 
 void syscall_exit()
 {
-    TaskDescriptor *task = get_cpu_struct()->current_task;
+    TaskDescriptor *task = sched::get_cpu_struct()->current_task;
 
     ulong arg1 = syscall_arg(task, 0, 0);
     ulong arg2 = syscall_arg(task, 1, 0);
 
-    //serial_logger.printf("syscall exit task %li (%s) arg %x\n", task->task_id, task->name.c_str(), arg1);
+    // serial_logger.printf("syscall exit task %li (%s) arg %x\n", task->task_id,
+    // task->name.c_str(), arg1);
 
     // Record exit code
     task->ret_hi = arg2;
@@ -348,7 +363,7 @@ void syscall_kill_task()
 
 void syscall_get_first_message()
 {
-    TaskDescriptor *current = get_cpu_struct()->current_task;
+    TaskDescriptor *current = sched::get_cpu_struct()->current_task;
 
     u64 portno = syscall_arg64(current, 0);
     ulong buff = syscall_arg(current, 1, 1);
@@ -399,7 +414,7 @@ void syscall_get_first_message()
 void syscall_send_message_port()
 {
     static constexpr unsigned flag_send_extended = 1 << 8;
-    TaskDescriptor *current                      = get_cpu_struct()->current_task;
+    TaskDescriptor *current                      = sched::get_cpu_struct()->current_task;
 
     u64 port_num   = syscall_arg64(current, 0);
     ulong size     = syscall_arg(current, 1, 1);
@@ -506,13 +521,9 @@ void syscall_get_message_info()
         assert(!"blocking by page is not yet implemented");
 }
 
-ReturnStr<u32> acpi_wakeup_vec();
-extern void stop_cpus();
-extern void deactivate_page_table();
-
 void syscall_set_attribute()
 {
-    auto c        = get_cpu_struct();
+    auto c        = sched::get_cpu_struct();
     task_ptr task = c->current_task;
 
     u64 pid         = syscall_arg64(task, 0);
@@ -668,7 +679,7 @@ void syscall_get_lapic_id()
 
     CPU_Info *i;
     if (cpu_id == 0) {
-        i = get_cpu_struct();
+        i = sched::get_cpu_struct();
     } else if (cpu_id > cpus.size()) {
         syscall_error(current_task) = -ENOENT;
         return;
@@ -681,14 +692,14 @@ void syscall_get_lapic_id()
 #else
     // Not available on RISC-V
     // TODO: This should be hart id
-    // syscall_ret_high(get_current_task()) = get_cpu_struct()->lapic_id;
+    // syscall_ret_high(get_current_task()) = sched::get_cpu_struct()->lapic_id;
     syscall_error(current_task) = -ENOSYS;
 #endif
 }
 
 void syscall_set_task_name()
 {
-    task_ptr current = get_cpu_struct()->current_task;
+    task_ptr current = sched::get_cpu_struct()->current_task;
 
     u64 pid      = syscall_arg64(current, 0);
     ulong string = syscall_arg(current, 1, 1);
@@ -748,7 +759,7 @@ void syscall_create_port()
 void syscall_set_interrupt()
 {
 #if defined(__riscv) || defined(__x86_64__) || defined(__i386__) || defined(__loongarch__)
-    auto c               = get_cpu_struct();
+    auto c               = sched::get_cpu_struct();
     const task_ptr &task = c->current_task;
 
     u64 port    = syscall_arg64(task, 0);
@@ -773,7 +784,7 @@ void syscall_set_interrupt()
 void syscall_complete_interrupt()
 {
 #if defined(__riscv) || defined(__x86_64__) || defined(__i386__) || defined(__loongarch__)
-    auto c               = get_cpu_struct();
+    auto c               = sched::get_cpu_struct();
     const task_ptr &task = c->current_task;
 
     ulong intno = syscall_arg(task, 0, 0);
@@ -809,7 +820,7 @@ void syscall_set_log_port()
 
 void syscall_create_normal_region()
 {
-    TaskDescriptor *current = get_cpu_struct()->current_task;
+    TaskDescriptor *current = sched::get_cpu_struct()->current_task;
 
     u64 pid          = syscall_arg64(current, 0);
     ulong addr_start = syscall_arg(current, 1, 1);
@@ -849,7 +860,7 @@ void syscall_create_normal_region()
 
 void syscall_create_phys_map_region()
 {
-    TaskDescriptor *current = get_cpu_struct()->current_task;
+    TaskDescriptor *current = sched::get_cpu_struct()->current_task;
     u64 pid                 = syscall_arg64(current, 0);
     u64 phys_addr           = syscall_arg64(current, 1);
 
@@ -898,7 +909,7 @@ void syscall_create_phys_map_region()
 
 void syscall_get_page_table()
 {
-    TaskDescriptor *current = get_cpu_struct()->current_task;
+    TaskDescriptor *current = sched::get_cpu_struct()->current_task;
 
     u64 pid = syscall_arg64(current, 0);
 
@@ -931,7 +942,7 @@ void syscall_get_page_table()
 // somewhere, so this syscall is essentially that
 void syscall_set_segment()
 {
-    TaskDescriptor *current = get_cpu_struct()->current_task;
+    TaskDescriptor *current = sched::get_cpu_struct()->current_task;
     TaskDescriptor *target {};
 
     u64 pid            = syscall_arg64(current, 0);
@@ -958,11 +969,11 @@ void syscall_set_segment()
         // TODO: Make segments and registers consistent
         target->regs.thread_pointer() = ptr;
         break;
-    #if defined(__x86_64__) || defined(__i386__)
+#if defined(__x86_64__) || defined(__i386__)
     case 2:
         target->regs.global_pointer() = ptr;
         break;
-    #endif
+#endif
     case 3: {
         auto b = copy_from_user((char *)&target->regs, (char *)ptr, sizeof(target->regs));
         if (!b.success()) {
@@ -988,7 +999,7 @@ void syscall_set_segment()
 
 void syscall_get_segment()
 {
-    TaskDescriptor *current = get_cpu_struct()->current_task;
+    TaskDescriptor *current = sched::get_cpu_struct()->current_task;
 
     u64 pid            = syscall_arg64(current, 0);
     ulong segment_type = syscall_arg(current, 1, 1);
@@ -1265,7 +1276,7 @@ void syscall_delete_region()
     syscall_success(current_task);
 
     // 0 is TASK_ID_SELF
-    const auto task = tid == 0 ? get_cpu_struct()->current_task : get_task(tid);
+    const auto task = tid == 0 ? sched::get_cpu_struct()->current_task : get_task(tid);
     if (!task) {
         syscall_error(current_task) = -ESRCH;
         return;
@@ -1295,7 +1306,7 @@ void syscall_unmap_range()
     ulong addr_start = syscall_arg(current_task, 1, 1);
     ulong size       = syscall_arg(current_task, 2, 1);
 
-    const auto task = task_id == 0 ? get_cpu_struct()->current_task : get_task(task_id);
+    const auto task = task_id == 0 ? sched::get_cpu_struct()->current_task : get_task(task_id);
     if (!task) {
         syscall_error(current_task) = -ESRCH;
         return;
@@ -1340,8 +1351,8 @@ void syscall_remove_from_task_group()
 
 void syscall_create_task_group()
 {
-    const auto &current_task  = get_current_task();
-    const auto g = TaskGroup::create_for_task(current_task);
+    const auto &current_task = get_current_task();
+    const auto g             = TaskGroup::create_for_task(current_task);
 
     if (g.success())
         syscall_return(current_task) = g.val->get_id();
@@ -1431,7 +1442,7 @@ u64 get_current_time_ticks();
 
 void syscall_request_timer()
 {
-    auto c    = get_cpu_struct();
+    auto c    = sched::get_cpu_struct();
     auto task = c->current_task;
 
     u64 port    = syscall_arg64(task, 0);
@@ -1455,7 +1466,7 @@ void syscall_request_timer()
 
 void syscall_set_affinity()
 {
-    const auto current_cpu = get_cpu_struct();
+    const auto current_cpu = sched::get_cpu_struct();
     auto current_task      = current_cpu->current_task;
 
     auto pid          = syscall_arg64(current_task, 0);
@@ -1785,9 +1796,9 @@ void syscall_cpu_for_interrupt()
 {
     auto current_task = get_current_task();
     auto gsi          = syscall_arg(current_task, 0, 0);
-    auto flags = syscall_flags(current_task);
+    auto flags        = syscall_flags(current_task);
 
-    bool edge = !(flags & 0x01);
+    bool edge       = !(flags & 0x01);
     bool active_low = (flags & 0x02);
 
     auto result = allocate_interrupt_single(gsi, edge, active_low);
@@ -1804,7 +1815,7 @@ void syscall_cpu_for_interrupt()
 void syscall_set_port0()
 {
     auto current = get_current_task();
-    u64 portno = syscall_arg64(current, 0);
+    u64 portno   = syscall_arg64(current, 0);
 
     auto port = Port::atomic_get_port(portno);
     if (!port) {
@@ -1818,3 +1829,5 @@ void syscall_set_port0()
     else
         syscall_success(current);
 }
+
+} // namespace kernel::proc::syscalls

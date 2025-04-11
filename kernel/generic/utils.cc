@@ -40,6 +40,12 @@
 #include <stdarg.h>
 #include <stdio.h>
 
+using namespace kernel;
+using namespace kernel::proc;
+using namespace kernel::sched;
+using namespace kernel::paging;
+using namespace kernel::log;
+
 void int_to_string(i64 n, u8 base, char *str, int &length)
 {
     char temp_str[65];
@@ -341,7 +347,7 @@ extern "C" size_t strlen(const char *start)
 //     u64 t1 = copy_frame_free_p.get_free_page();
 //     u64 t2 = copy_frame_free_p.get_free_page();
 
-//     Page_Table_Argumments pta = {1, 0, 0, 1, 0b010};
+//     Page_Table_Arguments pta = {1, 0, 0, 1, 0b010};
 //     map(from, t1, pta);
 //     map(to, t2, pta);
 
@@ -569,7 +575,10 @@ extern "C" void __cxa_guard_release(int64_t *guard_object)
 }
 
 // Defined in sched/sched.cc
-void check_synchronous_ipis() noexcept;
+namespace kernel::sched
+{
+void check_synchronous_ipis();
+}
 
 void Spinlock::lock() noexcept
 {

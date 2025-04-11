@@ -44,6 +44,9 @@
 
 using namespace kernel;
 using namespace kernel::pmm;
+using namespace kernel::log;
+using namespace kernel::paging;
+using namespace kernel::proc;
 
 extern "C" void limine_main();
 extern "C" void _limine_entry();
@@ -102,7 +105,7 @@ Direct_Mapper init_mapper;
     #ifdef __x86_64__
         #include <paging/x86_temp_mapper.hh>
         #include <x86_asm.hh>
-using Arch_Temp_Mapper = x86_PAE_Temp_Mapper;
+using Arch_Temp_Mapper = x86_64::paging::x86_PAE_Temp_Mapper;
 Arch_Temp_Mapper temp_temp_mapper;
 
     #elif defined(__riscv)
@@ -117,7 +120,10 @@ Arch_Temp_Mapper temp_temp_mapper;
 
 u64 hhdm_offset = 0;
 
+namespace kernel::sched
+{
 extern size_t number_of_cpus;
+}
 
 u64 temp_alloc_base     = 0;
 u64 temp_alloc_size     = 0;
@@ -287,11 +293,11 @@ void construct_paging()
 
     kernel_phys_base = kernel_address_request.response->physical_base;
 
-    const u64 kernel_phys      = kernel_address_request.response->physical_base;
-    const u64 text_phys        = kernel_phys + kernel_text_start - kernel_start_virt;
-    const u64 text_size        = kernel_text_end - kernel_text_start;
-    const u64 text_virt        = text_phys - kernel_phys + kernel_start_virt;
-    Page_Table_Argumments args = {
+    const u64 kernel_phys     = kernel_address_request.response->physical_base;
+    const u64 text_phys       = kernel_phys + kernel_text_start - kernel_start_virt;
+    const u64 text_size       = kernel_text_end - kernel_text_start;
+    const u64 text_virt       = text_phys - kernel_phys + kernel_start_virt;
+    Page_Table_Arguments args = {
         .readable           = true,
         .writeable          = false,
         .user_access        = false,
@@ -410,7 +416,7 @@ void construct_paging()
             vmm::kernel_space_allocator.virtmem_alloc(page_struct_page_size / PAGE_SIZE);
 
         // Map the memory
-        Page_Table_Argumments args = {
+        Page_Table_Arguments args = {
             .readable           = true,
             .writeable          = true,
             .user_access        = false,
@@ -853,7 +859,10 @@ klib::unique_ptr<load_tag_generic> construct_load_tag_fdt()
     return tag;
 }
 
+namespace kernel::paging
+{
 extern klib::shared_ptr<Arch_Page_Table> idle_page_table;
+}
 
 void init(void);
 void init_scheduling(u64 boot_cpu_id);
@@ -967,13 +976,17 @@ __attribute__((used)) struct limine_smp_request smp_request = {
 
 u64 bsp_cpu_id = 0;
 
+namespace kernel::sched
+{
 extern bool other_cpus_online;
+}
+
 extern int kernel_pt_active_cpus_count[2];
 
 void init_smp()
 {
-    other_cpus_online              = true;
-    kernel_pt_active_cpus_count[0] = number_of_cpus;
+    sched::other_cpus_online              = true;
+    kernel_pt_active_cpus_count[0] = sched::number_of_cpus;
 
     if (smp_request.response == nullptr) {
         return;
@@ -1103,10 +1116,10 @@ void limine_main()
 
     if (smp_request.response != nullptr) {
     #ifdef __riscv
-        number_of_cpus = smp_request.response->cpu_count;
+        sched::number_of_cpus = smp_request.response->cpu_count;
         bsp_cpu_id     = smp_request.response->bsp_hartid;
     #elif defined(__x86_64__)
-        number_of_cpus = smp_request.response->cpu_count;
+        sched::number_of_cpus = smp_request.response->cpu_count;
         bsp_cpu_id     = smp_request.response->bsp_lapic_id;
     #endif
     }
@@ -1143,7 +1156,7 @@ void limine_main()
 
     __atomic_add_fetch(&booted_cpus, 1, __ATOMIC_RELAXED);
 
-    while (__atomic_load_n(&booted_cpus, __ATOMIC_ACQUIRE) < number_of_cpus)
+    while (__atomic_load_n(&booted_cpus, __ATOMIC_ACQUIRE) < sched::number_of_cpus)
         // TODO: this is a potential deadlock with the new TLB shootdown mechanism
         ;
     // All CPUs are booted

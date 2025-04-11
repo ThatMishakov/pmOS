@@ -3,6 +3,7 @@
 #include <interrupts/apic.hh>
 #include <interrupts/gdt.hh>
 #include <interrupts/interrupts.hh>
+#include <interrupts/ioapic.hh>
 #include <interrupts/pic.hh>
 #include <kern_logger/kern_logger.hh>
 #include <memory/vmm.hh>
@@ -10,7 +11,6 @@
 #include <processes/tasks.hh>
 #include <sched/sched.hh>
 #include <x86_asm.hh>
-#include <interrupts/ioapic.hh>
 
 using namespace kernel;
 using namespace kernel::x86;
@@ -48,7 +48,10 @@ bool setup_stacks(CPU_Info *c)
 
 void smp_wake_everyone_else_up();
 
+namespace kernel::sched
+{
 extern bool cpu_struct_works;
+}
 
 void init_per_cpu(u64 lapic_id)
 {
@@ -61,7 +64,7 @@ void init_per_cpu(u64 lapic_id)
     gdt_set_cpulocal(c);
     loadGDT(&c->cpu_gdt);
 
-    cpu_struct_works = true;
+    sched::cpu_struct_works = true;
 
     if (!setup_stacks(c))
         panic("Failed to setup stacks\n");
@@ -306,8 +309,8 @@ void init_acpi_trampoline()
     if (result)
         panic("Failed to allocate cr3 for SMP trampoline");
 
-    smp_trampoline_cr3        = new_cr3;
-    Page_Table_Argumments pta = {
+    smp_trampoline_cr3       = new_cr3;
+    Page_Table_Arguments pta = {
         .readable           = true,
         .writeable          = true,
         .user_access        = false,
@@ -328,5 +331,6 @@ void init_acpi_trampoline()
     char *ptr = t.map(acpi_trampoline_page);
     memcpy(ptr, &init_vec_begin, (char *)&init_vec_end - (char *)&init_vec_begin);
 
-    serial_logger.printf("Initialized SMP/ACPI trampoline vector at %x (%x)\n", (u32)acpi_trampoline_page, acpi_wakeup_vec().val);
+    serial_logger.printf("Initialized SMP/ACPI trampoline vector at %x (%x)\n",
+                         (u32)acpi_trampoline_page, acpi_wakeup_vec().val);
 }

@@ -41,6 +41,8 @@
 #include <sched/sched_queue.hh>
 #include <types.hh>
 
+namespace kernel::paging {
+
 /// TODO: I don't use this anymore but it still comes up in a couple of places and needs to be
 /// removed
 #define PAGE_NORMAL  0
@@ -53,7 +55,7 @@
 enum class Memory_Type { Normal, MemoryNoCache, IONoCache };
 
 /// @brief Arguments for mapping of pages
-struct Page_Table_Argumments {
+struct Page_Table_Arguments {
     u8 readable : 1           = 1;
     u8 writeable : 1          = 0;
     u8 user_access : 1        = 0;
@@ -166,15 +168,17 @@ public:
         Generic_Mem_Region, &Generic_Mem_Region::bst_head,
         detail::TreeCmp<Generic_Mem_Region, void *, &Generic_Mem_Region::start_addr>>;
     RegionsRBTree::RBTreeHead paging_regions;
-    using Page_Info = ::Page_Info;
+    using Page_Info = paging::Page_Info;
+
+    using Page_Table_Arguments = paging::Page_Table_Arguments;
 
     /// List of the tasks that own the page table. Task_Descriptor should contain a page_table
     /// pointer which should point to this page table. The kernel does not have special structures
     /// for the threads, so they are achieved by a page table and using IPC for synchronization.
-    pmos::containers::set<TaskDescriptor *> owner_tasks;
+    pmos::containers::set<proc::TaskDescriptor *> owner_tasks;
 
     /// Queue of the tasks blocked by the page table
-    blocked_sched_queue blocked_tasks;
+    sched::blocked_sched_queue blocked_tasks;
 
     /// Page Table ID. these are sequentially created upon the creation of new page tables (during
     /// the creation and initialization of the process or sending a message)
@@ -360,7 +364,7 @@ public:
 
     /// Provides a page to a new page table
     /// @todo redo the function
-    static bool atomic_provide_page(TaskDescriptor *from_task,
+    static bool atomic_provide_page(proc::TaskDescriptor *from_task,
                                     const klib::shared_ptr<Page_Table> &to, void *page_from,
                                     void *page_to, u64 flags);
 
@@ -389,7 +393,7 @@ public:
      * @param arg Arguments and protections with which the page should be mapped.
      */
     [[nodiscard]] virtual kresult_t map(u64 page_addr, void *virt_addr,
-                                        Page_Table_Argumments arg) = 0;
+                                        Page_Table_Arguments arg) = 0;
 
     /**
      * @brief Maps the page to the virtual address
@@ -403,7 +407,7 @@ public:
      * @param arg Arguments and protections with which the page should be mapped.
      */
     [[nodiscard]] virtual kresult_t map(kernel::pmm::Page_Descriptor page, void *virt_addr,
-                                        Page_Table_Argumments arg) noexcept = 0;
+                                        Page_Table_Arguments arg) noexcept = 0;
 
     // /// Return structure used with check_if_allocated_and_set_flag()
     // struct Check_Return_Str {
@@ -425,7 +429,7 @@ public:
     //  * @return Returns old flag value and whether the page is allocated.
     //  */
     // virtual Check_Return_Str check_if_allocated_and_set_flag(u64 virt_addr, u8 flag,
-    // Page_Table_Argumments arg) = 0;
+    // Page_Table_Arguments arg) = 0;
 
     /// @brief Checks whether page is mapped
     ///
@@ -588,11 +592,11 @@ public:
     virtual void invalidate_range(TLBShootdownContext &ctx, void *virt_addr, size_t size_bytes,
                                   bool free) = 0;
 
-    void /* generation */ apply_cpu(CPU_Info *cpu);
-    void unapply_cpu(CPU_Info *cpu);
+    void /* generation */ apply_cpu(sched::CPU_Info *cpu);
+    void unapply_cpu(sched::CPU_Info *cpu);
 
     // TODO: Calling this on page table is weird
-    void trigger_shootdown(CPU_Info *cpu);
+    void trigger_shootdown(sched::CPU_Info *cpu);
 
 protected:
     Page_Table() = default;
@@ -622,7 +626,7 @@ protected:
     int paging_generation    = 0;
     int active_cpus_count[2] = {0, 0};
     using list =
-        pmos::containers::CircularDoubleList<CPU_Info, &CPU_Info::active_page_table>;
+        pmos::containers::CircularDoubleList<sched::CPU_Info, &sched::CPU_Info::active_page_table>;
     list active_cpus[2]                       = {};
     TLBShootdownContext *shootdown_descriptor = nullptr;
 
@@ -636,16 +640,16 @@ using ptable_top_ptr_t = u64;
 
 // Generic function to map a page
 kresult_t map_page(ptable_top_ptr_t page_table, u64 phys_addr, void *virt_addr,
-                   Page_Table_Argumments arg);
+                   Page_Table_Arguments arg);
 
 // Generic functions to map and release pages in kernel, using the active page table
-kresult_t map_kernel_page(u64 phys_addr, void *virt_addr, Page_Table_Argumments arg);
+kresult_t map_kernel_page(u64 phys_addr, void *virt_addr, Page_Table_Arguments arg);
 kresult_t unmap_kernel_page(TLBShootdownContext &ctx, void *virt_addr);
 
 // Generic function to map multiple pages
 kresult_t map_pages(ptable_top_ptr_t page_table, u64 phys_addr, void *virt_addr, size_t size_bytes,
-                    Page_Table_Argumments arg);
-kresult_t map_kernel_pages(u64 phys_addr, void *virt_addr, size_t size, Page_Table_Argumments arg);
+                    Page_Table_Arguments arg);
+kresult_t map_kernel_pages(u64 phys_addr, void *virt_addr, size_t size, Page_Table_Arguments arg);
 
 // Generic function to apply the page table to the current CPU
 void apply_page_table(ptable_top_ptr_t page_table);
@@ -672,3 +676,5 @@ struct MemoryRegion {
 };
 
 extern klib::vector<MemoryRegion> memory_map;
+
+};

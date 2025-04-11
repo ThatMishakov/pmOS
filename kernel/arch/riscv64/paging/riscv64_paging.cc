@@ -44,7 +44,7 @@ void flush_all() noexcept { asm volatile("sfence.vma x0, x0" : : : "memory"); }
 
 bool svpbmt_enabled = false;
 
-u8 pbmt_type(Page_Table_Argumments arg)
+u8 pbmt_type(Page_Table_Arguments arg)
 {
     if (!svpbmt_enabled)
         return PBMT_PMA;
@@ -75,7 +75,7 @@ static Memory_Type pbmt_to_cache_policy(u8 pbmt)
     return Memory_Type::Normal;
 }
 
-kresult_t riscv_map_page(u64 pt_top_phys, u64 phys_addr, void *virt_addr, Page_Table_Argumments arg)
+kresult_t riscv_map_page(u64 pt_top_phys, u64 phys_addr, void *virt_addr, Page_Table_Arguments arg)
 {
     Temp_Mapper_Obj<RISCV64_PTE> mapper(request_temp_mapper());
 
@@ -135,13 +135,13 @@ kresult_t riscv_map_page(u64 pt_top_phys, u64 phys_addr, void *virt_addr, Page_T
     return -ENOSYS;
 }
 
-kresult_t RISCV64_Page_Table::map(u64 page_addr, void *virt_addr, Page_Table_Argumments arg)
+kresult_t RISCV64_Page_Table::map(u64 page_addr, void *virt_addr, Page_Table_Arguments arg)
 {
     return riscv_map_page(table_root, page_addr, virt_addr, arg);
 }
 
 kresult_t RISCV64_Page_Table::map(pmm::Page_Descriptor page, void *virt_addr,
-                                  Page_Table_Argumments arg)
+                                  Page_Table_Arguments arg)
 {
     auto pte_phys = prepare_leaf_pt_for(virt_addr, arg, table_root);
     if (!pte_phys.success())
@@ -331,7 +331,7 @@ kresult_t RISCV64_Page_Table::copy_to_recursive(const klib::shared_ptr<Page_Tabl
                 ctx.invalidate_page((void *)copy_from);
             }
 
-            Page_Table_Argumments arg = {
+            Page_Table_Arguments arg = {
                 .readable           = !!(new_access & Readable),
                 .writeable          = 0,
                 .user_access        = true,
@@ -465,13 +465,13 @@ bool page_mapped(const void *virt_addr, int intno)
 }
 
 kresult_t map_page(ptable_top_ptr_t page_table, u64 phys_addr, void *virt_addr,
-                   Page_Table_Argumments arg)
+                   Page_Table_Arguments arg)
 {
     return riscv_map_page(page_table, phys_addr, virt_addr, arg);
 }
 
 kresult_t map_pages(ptable_top_ptr_t page_table, u64 phys_addr, void *virt_addr, size_t size,
-                    Page_Table_Argumments arg)
+                    Page_Table_Arguments arg)
 {
     kresult_t result = 0;
 
@@ -492,12 +492,12 @@ u64 idle_pt;
 
 u64 get_idle_pt() noexcept { return idle_pt; }
 
-kresult_t map_kernel_pages(u64 phys_addr, void *virt_addr, size_t size, Page_Table_Argumments arg)
+kresult_t map_kernel_pages(u64 phys_addr, void *virt_addr, size_t size, Page_Table_Arguments arg)
 {
     return map_pages(idle_pt, phys_addr, virt_addr, size, arg);
 }
 
-ReturnStr<u64> prepare_leaf_pt_for(void *virt_addr, Page_Table_Argumments /* unused */, u64 pt_ptr)
+ReturnStr<u64> prepare_leaf_pt_for(void *virt_addr, Page_Table_Arguments /* unused */, u64 pt_ptr)
 {
     Temp_Mapper_Obj<RISCV64_PTE> mapper(request_temp_mapper());
 
@@ -539,7 +539,7 @@ ReturnStr<u64> prepare_leaf_pt_for(void *virt_addr, Page_Table_Argumments /* unu
     return 0;
 }
 
-kresult_t map_kernel_page(u64 phys_addr, void *virt_addr, Page_Table_Argumments arg)
+kresult_t map_kernel_page(u64 phys_addr, void *virt_addr, Page_Table_Arguments arg)
 {
     return riscv_map_page(idle_pt, phys_addr, virt_addr, arg);
 }
