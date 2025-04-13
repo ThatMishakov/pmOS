@@ -29,7 +29,7 @@
 #pragma once
 #include <stddef.h>
 
-extern "C" void *malloc(size_t);
-extern "C" void *realloc(void *, size_t);
-extern "C" void *calloc(size_t, size_t);
+__attribute__((malloc)) extern "C" void *malloc(size_t);
+__attribute__((malloc)) extern "C" void *realloc(void *, size_t);
+__attribute__((malloc)) extern "C" void *calloc(size_t, size_t);
 extern "C" void free(void *);

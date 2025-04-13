@@ -37,9 +37,10 @@ namespace kernel::paging
 {
 
 // Allocates *number* of pages
-void *palloc(size_t number);
+__attribute__((malloc)) void *palloc(size_t number);
+
 // Allocates *number* of pages and clears them
-void *palloc_c(size_t number);
+__attribute__((malloc)) void *palloc_c(size_t number);
 
 // Frees pages. Return 0 if successful
 int pfree(void *start, size_t number);
