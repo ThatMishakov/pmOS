@@ -14,6 +14,14 @@
 
 using namespace kernel;
 using namespace kernel::x86;
+using namespace kernel::sched;
+using namespace kernel::log;
+using namespace kernel::ia32::interrupts;
+using namespace kernel::proc;
+using namespace kernel::ia32::paging;
+using namespace kernel::x86::interrupts;
+using namespace kernel::x86::interrupts::lapic;
+using namespace kernel::paging;
 
 extern "C" void double_fault_isr();
 
@@ -22,9 +30,7 @@ void program_syscall()
     // TODO I guess..?
 }
 
-extern u32 idle_cr3;
-
-bool setup_stacks(CPU_Info *c)
+static bool setup_stacks(CPU_Info *c)
 {
     if (!c->kernel_stack)
         return false;
@@ -55,7 +61,7 @@ extern bool cpu_struct_works;
 
 void init_per_cpu(u64 lapic_id)
 {
-    detect_sse();
+    sse::detect_sse();
 
     CPU_Info *c = new CPU_Info();
     if (!c)
@@ -89,7 +95,7 @@ void init_per_cpu(u64 lapic_id)
     program_syscall();
     set_idt();
     enable_apic();
-    enable_sse();
+    sse::enable_sse();
 
     void *temp_mapper_start = vmm::kernel_space_allocator.virtmem_alloc_aligned(16, 4);
     if (!temp_mapper_start)
@@ -113,7 +119,7 @@ extern "C" void smp_main(CPU_Info *c)
     program_syscall();
     set_idt();
     enable_apic();
-    enable_sse();
+    sse::enable_sse();
 
     if (c->to_restore_on_wakeup) {
         c->current_task->regs = *c->to_restore_on_wakeup;
@@ -150,7 +156,7 @@ extern "C" void acpi_main()
     program_syscall();
     set_idt();
     enable_apic();
-    enable_sse();
+    sse::enable_sse();
 
     if (c->to_restore_on_wakeup) {
         c->current_task->regs = *c->to_restore_on_wakeup;

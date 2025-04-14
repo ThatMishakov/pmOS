@@ -7,6 +7,13 @@
 #include <types.hh>
 #include <x86_asm.hh>
 
+using namespace kernel::log;
+using namespace kernel::ia32::interrupts;
+using namespace kernel::paging;
+using namespace kernel::ia32::paging;
+using namespace kernel::x86::sse;
+using namespace kernel::sched;
+
 extern "C" void double_fault_handler()
 {
     serial_logger.printf("Double fault!!!\n");
@@ -73,10 +80,10 @@ static void print_kernel_registers(kernel_registers_context *c, u32 error_code)
                          error_code, c->eip, c->cs, c->eflags);
 }
 
-extern bool use_pae;
-extern u32 idle_cr3;
-
+namespace kernel::ia32::paging
+{
 extern bool page_mapped(void *pagefault_cr2, ulong err);
+}
 
 struct stack_frame;
 void print_stack_trace(Logger &logger, stack_frame *s);
@@ -120,8 +127,8 @@ extern "C" void page_fault_handler(kernel_registers_context *ctx, u32 err)
         panic("Kernel pagefault");
     }
 
-    CPU_Info *c          = get_cpu_struct();
-    TaskDescriptor *task = c->current_task;
+    CPU_Info *c = get_cpu_struct();
+    auto *task  = c->current_task;
 
     auto result = [&]() -> kresult_t {
         if (virtual_addr >= task->page_table->user_addr_max())
@@ -139,7 +146,7 @@ extern "C" void page_fault_handler(kernel_registers_context *ctx, u32 err)
 
         if (it != regions.end() and it->is_in_range(virtual_addr)) {
             void *virtual_addr_filtered = (void *)((unsigned long)virtual_addr & ~0xfff);
-            auto r = it->on_page_fault(access_mask, virtual_addr_filtered);
+            auto r                      = it->on_page_fault(access_mask, virtual_addr_filtered);
             if (!r.success())
                 return r.result;
             if (!r.val)

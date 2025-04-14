@@ -3,6 +3,9 @@
 #include <sched/sched.hh>
 #include <types.hh>
 
+namespace kernel::ia32::interrupts
+{
+
 u32 segment_to_base(u64 segment)
 {
     return ((segment >> 16) & 0xffffff) | ((segment >> 32) & 0xff000000);
@@ -13,7 +16,7 @@ u64 base_to_user_data_segment(u32 base)
     return 0x00cff2000000ffff | (((u64)base & 0xffffff) << 16) | (((u64)base & 0xff000000) << 32);
 }
 
-void gdt_set_cpulocal(CPU_Info *c)
+void gdt_set_cpulocal(sched::CPU_Info *c)
 {
     auto &gdt = c->cpu_gdt;
     gdt.kernel_gs =
@@ -31,9 +34,9 @@ u64 tss_to_base(TSS *tss)
 
 TSS *getTSS(u16 selector)
 {
-    auto cpu_struct = get_cpu_struct();
+    auto cpu_struct = sched::get_cpu_struct();
     u64 *casual_ub  = (u64 *)&cpu_struct->cpu_gdt;
-    return (TSS *)segment_to_base(casual_ub[selector/8]);
+    return (TSS *)segment_to_base(casual_ub[selector / 8]);
 }
 
 struct GDTR {
@@ -65,9 +68,8 @@ void loadGDT(GDT *gdt)
                  : "memory", "eax");
 }
 
-void unbusyTSS(GDT *gdt)
-{
-    gdt->tss &= ~(1ULL << 41);
-}
+void unbusyTSS(GDT *gdt) { gdt->tss &= ~(1ULL << 41); }
 
 void loadTSS() { asm volatile("ltr %w0" : : "rm"(TSS_SEGMENT)); }
+
+} // namespace kernel::ia32::interrupts

@@ -44,7 +44,11 @@
 #include <x86_asm.hh>
 #include <utils.hh>
 
+#ifdef __x86_64__
 using namespace kernel::x86_64::interrupts;
+#else
+using namespace kernel::ia32::interrupts;
+#endif
 using namespace kernel::x86::interrupts;
 
 void set_idt()

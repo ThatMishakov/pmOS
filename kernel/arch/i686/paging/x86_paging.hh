@@ -2,6 +2,9 @@
 #include <memory/paging.hh>
 #include <pmos/containers/map.hh>
 
+namespace kernel::ia32::paging
+{
+
 constexpr u64 PAGE_PRESENT  = 1 << 0;
 constexpr u64 PAGE_WRITE    = 1 << 1;
 constexpr u64 PAGE_USER     = 1 << 2;
@@ -38,7 +41,7 @@ static_assert(sizeof(PDPEPage) == 4096, "PDPEPage size is not 4096");
 inline u8 avl_from_page(u32 page) { return (page >> 9) & 0x7; }
 inline u32 avl_to_bits(u32 page) { return (page & 0x7) << 9; }
 
-class IA32_Page_Table final: public Page_Table
+class IA32_Page_Table final: public kernel::paging::Page_Table
 {
 public:
     klib::shared_ptr<IA32_Page_Table> create_clone();
@@ -62,9 +65,10 @@ public:
 
     virtual kresult_t resolve_anonymous_page(void *virt_addr, unsigned access_type) override;
 
-    virtual kresult_t map(u64 page_addr, void *virt_addr, Page_Table_Arguments arg) override;
+    virtual kresult_t map(u64 page_addr, void *virt_addr,
+                          kernel::paging::Page_Table_Arguments arg) override;
     virtual kresult_t map(kernel::pmm::Page_Descriptor page, void *virt_addr,
-                          Page_Table_Arguments arg) override;
+                          kernel::paging::Page_Table_Arguments arg) override;
 
     virtual kresult_t copy_anonymous_pages(const klib::shared_ptr<Page_Table> &to, void *from_addr,
                                            void *to_addr, size_t size_bytes,
@@ -72,9 +76,10 @@ public:
 
     virtual bool is_mapped(void *addr) const override;
 
-    virtual void invalidate(TLBShootdownContext &ctx, void *virt_addr, bool free) override;
-    virtual void invalidate_range(TLBShootdownContext &ctx, void *virt_addr, size_t size_bytes,
-                                  bool free) override;
+    virtual void invalidate(kernel::paging::TLBShootdownContext &ctx, void *virt_addr,
+                            bool free) override;
+    virtual void invalidate_range(kernel::paging::TLBShootdownContext &ctx, void *virt_addr,
+                                  size_t size_bytes, bool free) override;
 
     virtual Page_Info get_page_mapping(void *virt_addr) const override;
 
@@ -91,17 +96,10 @@ protected:
     void free_user_pages();
 };
 
-u64 prepare_pt_for(void *virt_addr, Page_Table_Arguments arg, u32 pt_top_phys);
+u64 prepare_pt_for(void *virt_addr, kernel::paging::Page_Table_Arguments arg, u32 pt_top_phys);
 
 void free_pae_cr3(u32 cr3);
 u32 new_pae_cr3();
-
-// Generic functions to map and release pages in kernel, using the active page table
-kresult_t map_kernel_page(u64 phys_addr, void *virt_addr, Page_Table_Arguments arg);
-kresult_t unmap_kernel_page(TLBShootdownContext &ctx, void *virt_addr);
-
-kresult_t map_page(ptable_top_ptr_t page_table, u64 phys_addr, void *virt_addr,
-                   Page_Table_Arguments arg);
 
 bool detect_nx();
 
@@ -109,3 +107,16 @@ ReturnStr<u32> create_empty_cr3();
 
 extern bool use_pae;
 extern bool support_nx;
+extern u32 idle_cr3;
+
+} // namespace kernel::ia32::paging
+
+namespace kernel::paging
+{
+// Generic functions to map and release pages in kernel, using the active page table
+kresult_t map_kernel_page(u64 phys_addr, void *virt_addr, Page_Table_Arguments arg);
+kresult_t unmap_kernel_page(kernel::paging::TLBShootdownContext &ctx, void *virt_addr);
+
+kresult_t map_page(ptable_top_ptr_t page_table, u64 phys_addr, void *virt_addr,
+                   Page_Table_Arguments arg);
+} // namespace kernel::paging

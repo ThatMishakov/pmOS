@@ -8,10 +8,21 @@
 #include <x86_asm.hh>
 #include <x86_utils.hh>
 
-IA32_Page_Table::page_table_map IA32_Page_Table::global_page_tables;
-Spinlock IA32_Page_Table::page_table_index_lock;
+template<typename T> static T alignup(T input, unsigned alignment_log)
+{
+    T i = 1;
+    i <<= alignment_log;
+    T mask = i - 1;
+    return (input + mask) & ~mask;
+}
 
 using namespace kernel;
+
+namespace kernel::ia32::paging
+{
+
+IA32_Page_Table::page_table_map IA32_Page_Table::global_page_tables;
+Spinlock IA32_Page_Table::page_table_index_lock;
 
 void IA32_Page_Table::apply() { setCR3(cr3); }
 
@@ -28,36 +39,19 @@ bool detect_nx()
     return support_nx;
 }
 
-void apply_page_table(ptable_top_ptr_t page_table)
-{
-    if (support_nx) {
-        const unsigned msr = 0xC0000080;
-        write_msr(msr, read_msr(msr) | (1 << 11));
-    }
-
-    setCR3(page_table);
-}
-
-extern u32 idle_cr3;
+u32 idle_cr3 = 0;
 
 static std::pair<u32, u32> cr3_pae_page_offset(u32 cr3)
 {
     return {cr3 & 0xFFFFF000, (cr3 & 0xFE0) / sizeof(pae_entry_t)};
 }
 
-template<typename T> static T alignup(T input, unsigned alignment_log)
-{
-    T i = 1;
-    i <<= alignment_log;
-    T mask = i - 1;
-    return (input + mask) & ~mask;
-}
-
-kresult_t ia32_map_page(u32 cr3, u64 phys_addr, void *virt_addr, Page_Table_Arguments arg)
+kresult_t ia32_map_page(u32 cr3, u64 phys_addr, void *virt_addr,
+                        kernel::paging::Page_Table_Arguments arg)
 {
     assert(!(phys_addr & 0xFFF));
     if (!use_pae) {
-        Temp_Mapper_Obj<u32> mapper(request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<u32> mapper(kernel::paging::request_temp_mapper());
         u32 *active_pt = mapper.map(cr3);
 
         auto pd_idx = (u32(virt_addr) >> 22) & 0x3FF;
@@ -75,7 +69,7 @@ kresult_t ia32_map_page(u32 cr3, u64 phys_addr, void *virt_addr, Page_Table_Argu
             pd_entry   = new_pt;
         }
 
-        Temp_Mapper_Obj<u32> pt_mapper(request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<u32> pt_mapper(kernel::paging::request_temp_mapper());
         u32 *pt = pt_mapper.map(pd_entry & 0xFFFFF000);
 
         auto &pt_entry = pt[pt_idx];
@@ -91,7 +85,7 @@ kresult_t ia32_map_page(u32 cr3, u64 phys_addr, void *virt_addr, Page_Table_Argu
         if (arg.global)
             new_pt |= PAGE_GLOBAL;
         new_pt |= avl_to_bits(arg.extra);
-        // if (arg.cache_policy != Memory_Type::Normal)
+        // if (arg.cache_policy != kernel::paging::Memory_Type::Normal)
         //     new_pt |= PAGE_CD;
 
         pt_entry = new_pt;
@@ -103,7 +97,7 @@ kresult_t ia32_map_page(u32 cr3, u64 phys_addr, void *virt_addr, Page_Table_Argu
 
         auto [cr3_phys, cr3_offset] = cr3_pae_page_offset(cr3);
 
-        Temp_Mapper_Obj<pae_entry_t> mapper(request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<pae_entry_t> mapper(kernel::paging::request_temp_mapper());
         pae_entry_t *pdpt = mapper.map(cr3_phys & 0xFFFFFFE0) + cr3_offset;
 
         pae_entry_t pdpt_entry = __atomic_load_n(pdpt + pdpt_idx, __ATOMIC_RELAXED);
@@ -118,7 +112,8 @@ kresult_t ia32_map_page(u32 cr3, u64 phys_addr, void *virt_addr, Page_Table_Argu
             __atomic_store_n(pdpt + pdpt_idx, pdpt_entry, __ATOMIC_RELAXED);
         }
 
-        Temp_Mapper_Obj<pae_entry_t> pd_mapper(request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<pae_entry_t> pd_mapper(
+            kernel::paging::request_temp_mapper());
         pae_entry_t *pd = pd_mapper.map(pdpt_entry & PAE_ADDR_MASK);
 
         pae_entry_t pd_entry = __atomic_load_n(pd + pd_idx, __ATOMIC_RELAXED);
@@ -133,7 +128,8 @@ kresult_t ia32_map_page(u32 cr3, u64 phys_addr, void *virt_addr, Page_Table_Argu
             __atomic_store_n(pd + pd_idx, pd_entry, __ATOMIC_RELAXED);
         }
 
-        Temp_Mapper_Obj<pae_entry_t> pt_mapper(request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<pae_entry_t> pt_mapper(
+            kernel::paging::request_temp_mapper());
         pae_entry_t *pt = pt_mapper.map(pd_entry & PAE_ADDR_MASK);
 
         pae_entry_t pt_entry = __atomic_load_n(pt + pt_idx, __ATOMIC_RELAXED);
@@ -151,7 +147,7 @@ kresult_t ia32_map_page(u32 cr3, u64 phys_addr, void *virt_addr, Page_Table_Argu
         new_pt |= avl_to_bits(arg.extra);
         if (support_nx && arg.execution_disabled)
             new_pt |= PAGE_NX;
-        // if (arg.cache_policy != Memory_Type::Normal)
+        // if (arg.cache_policy != kernel::paging::Memory_Type::Normal)
         //     new_pt |= PAGE_CD;
 
         __atomic_store_n(pt + pt_idx, new_pt, __ATOMIC_RELAXED);
@@ -159,11 +155,11 @@ kresult_t ia32_map_page(u32 cr3, u64 phys_addr, void *virt_addr, Page_Table_Argu
     }
 }
 
-IA32_Page_Table::Page_Info IA32_Page_Table::get_page_mapping(void *virt_addr) const
+static IA32_Page_Table::Page_Info get_page_mapping(u32 cr3, const void *virt_addr)
 {
-    Page_Info i {};
+    IA32_Page_Table::Page_Info i {};
     if (!use_pae) {
-        Temp_Mapper_Obj<u32> mapper(request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<u32> mapper(kernel::paging::request_temp_mapper());
         u32 *active_pt = mapper.map(cr3);
 
         auto pd_idx = (u32(virt_addr) >> 22) & 0x3FF;
@@ -174,7 +170,7 @@ IA32_Page_Table::Page_Info IA32_Page_Table::get_page_mapping(void *virt_addr) co
             return i;
         }
 
-        Temp_Mapper_Obj<u32> pt_mapper(request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<u32> pt_mapper(kernel::paging::request_temp_mapper());
         u32 *pt = mapper.map(pd_entry & ~0xfff);
 
         u32 pte        = pt[pt_idx];
@@ -194,7 +190,7 @@ IA32_Page_Table::Page_Info IA32_Page_Table::get_page_mapping(void *virt_addr) co
 
         auto [cr3_phys, cr3_offset] = cr3_pae_page_offset(cr3);
 
-        Temp_Mapper_Obj<pae_entry_t> mapper(request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<pae_entry_t> mapper(kernel::paging::request_temp_mapper());
         pae_entry_t *pdpt = mapper.map(cr3_phys) + cr3_offset;
 
         pae_entry_t pdpt_entry = __atomic_load_n(pdpt + pdpt_idx, __ATOMIC_RELAXED);
@@ -202,7 +198,8 @@ IA32_Page_Table::Page_Info IA32_Page_Table::get_page_mapping(void *virt_addr) co
             return i;
         }
 
-        Temp_Mapper_Obj<pae_entry_t> pd_mapper(request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<pae_entry_t> pd_mapper(
+            kernel::paging::request_temp_mapper());
         pae_entry_t *pd = pd_mapper.map(pdpt_entry & PAE_ADDR_MASK);
 
         pae_entry_t pd_entry = __atomic_load_n(pd + pd_idx, __ATOMIC_RELAXED);
@@ -210,7 +207,8 @@ IA32_Page_Table::Page_Info IA32_Page_Table::get_page_mapping(void *virt_addr) co
             return i;
         }
 
-        Temp_Mapper_Obj<pae_entry_t> pt_mapper(request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<pae_entry_t> pt_mapper(
+            kernel::paging::request_temp_mapper());
         pae_entry_t *pt = pt_mapper.map(pd_entry & PAE_ADDR_MASK);
 
         pae_entry_t pt_entry = __atomic_load_n(pt + pt_idx, __ATOMIC_RELAXED);
@@ -227,10 +225,15 @@ IA32_Page_Table::Page_Info IA32_Page_Table::get_page_mapping(void *virt_addr) co
     return i;
 }
 
+IA32_Page_Table::Page_Info IA32_Page_Table::get_page_mapping(void *virt_addr) const
+{
+    return paging::get_page_mapping(cr3, virt_addr);
+}
+
 bool IA32_Page_Table::is_mapped(void *virt_addr) const
 {
     if (!use_pae) {
-        Temp_Mapper_Obj<u32> mapper(request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<u32> mapper(kernel::paging::request_temp_mapper());
         u32 *active_pt = mapper.map(cr3);
 
         auto pd_idx = (u32(virt_addr) >> 22) & 0x3FF;
@@ -241,14 +244,14 @@ bool IA32_Page_Table::is_mapped(void *virt_addr) const
             return false;
         }
 
-        Temp_Mapper_Obj<u32> pt_mapper(request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<u32> pt_mapper(kernel::paging::request_temp_mapper());
         u32 *pt = mapper.map(pd_entry & ~0xfff);
 
         return pt[pt_idx] & PAGE_PRESENT;
     } else {
         auto [cr3_phys, cr3_offset] = cr3_pae_page_offset(cr3);
 
-        Temp_Mapper_Obj<pae_entry_t> mapper(request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<pae_entry_t> mapper(kernel::paging::request_temp_mapper());
         pae_entry_t *active_pdpt = mapper.map(cr3_phys) + cr3_offset;
 
         auto pdpt_idx = (u32(virt_addr) >> 30) & 0x3;
@@ -259,33 +262,30 @@ bool IA32_Page_Table::is_mapped(void *virt_addr) const
         if (!(pdpt_entry & PAGE_PRESENT))
             return false;
 
-        Temp_Mapper_Obj<pae_entry_t> pd_mapper(request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<pae_entry_t> pd_mapper(
+            kernel::paging::request_temp_mapper());
         pae_entry_t *pd = mapper.map(pdpt_entry & PAE_ADDR_MASK);
 
         pae_entry_t pde = __atomic_load_n(pd + pd_idx, __ATOMIC_RELAXED);
         if (!(pde & PAGE_PRESENT))
             return false;
 
-        Temp_Mapper_Obj<pae_entry_t> pt_mapper(request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<pae_entry_t> pt_mapper(
+            kernel::paging::request_temp_mapper());
         pae_entry_t *pt = mapper.map(pde & PAE_ADDR_MASK);
 
         return __atomic_load_n(pt + pt_idx, __ATOMIC_RELAXED) & PAGE_PRESENT;
     }
 }
 
-kresult_t map_kernel_page(u64 phys_addr, void *virt_addr, Page_Table_Arguments arg)
-{
-    assert(!arg.user_access);
-    return ia32_map_page(idle_cr3, phys_addr, virt_addr, arg);
-}
-
-kresult_t IA32_Page_Table::map(u64 page_addr, void *virt_addr, Page_Table_Arguments arg)
+kresult_t IA32_Page_Table::map(u64 page_addr, void *virt_addr,
+                               kernel::paging::Page_Table_Arguments arg)
 {
     return ia32_map_page(cr3, page_addr, virt_addr, arg);
 }
 
 kresult_t IA32_Page_Table::map(pmm::Page_Descriptor page, void *virt_addr,
-                               Page_Table_Arguments arg)
+                               kernel::paging::Page_Table_Arguments arg)
 {
     auto page_phys = page.get_phys_addr();
     arg.extra      = PAGING_FLAG_STRUCT_PAGE;
@@ -295,33 +295,10 @@ kresult_t IA32_Page_Table::map(pmm::Page_Descriptor page, void *virt_addr,
     return result;
 }
 
-kresult_t map_page(ptable_top_ptr_t page_table, u64 phys_addr, void *virt_addr,
-                   Page_Table_Arguments arg)
-{
-    return ia32_map_page(page_table, phys_addr, virt_addr, arg);
-}
-
-kresult_t map_pages(ptable_top_ptr_t page_table, u64 phys_addr, void *virt_addr, size_t size,
-                    Page_Table_Arguments arg)
-{
-    for (u64 i = 0; i < size; i += 4096) {
-        auto result =
-            ia32_map_page(page_table, phys_addr + i, (void *)((char *)virt_addr + i), arg);
-        if (result)
-            return result;
-    }
-    return 0;
-}
-
-kresult_t map_kernel_pages(u64 phys_addr, void *virt_addr, size_t size, Page_Table_Arguments arg)
-{
-    return map_pages(idle_cr3, phys_addr, virt_addr, size, arg);
-}
-
-u64 prepare_pt_for(void *virt_addr, Page_Table_Arguments, u32 cr3)
+u64 prepare_pt_for(void *virt_addr, kernel::paging::Page_Table_Arguments, u32 cr3)
 {
     if (!use_pae) {
-        Temp_Mapper_Obj<u32> mapper(request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<u32> mapper(kernel::paging::request_temp_mapper());
         u32 *active_pt = mapper.map(cr3);
 
         auto pd_idx = (u32(virt_addr) >> 22) & 0x3FF;
@@ -343,7 +320,7 @@ u64 prepare_pt_for(void *virt_addr, Page_Table_Arguments, u32 cr3)
 
         auto [cr3_phys, cr3_offset] = cr3_pae_page_offset(cr3);
 
-        Temp_Mapper_Obj<pae_entry_t> mapper(request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<pae_entry_t> mapper(kernel::paging::request_temp_mapper());
         pae_entry_t *pdpt = mapper.map(cr3_phys) + cr3_offset;
 
         pae_entry_t pdpt_entry = __atomic_load_n(pdpt + pdpt_idx, __ATOMIC_RELAXED);
@@ -358,7 +335,8 @@ u64 prepare_pt_for(void *virt_addr, Page_Table_Arguments, u32 cr3)
             __atomic_store_n(pdpt + pdpt_idx, pdpt_entry, __ATOMIC_RELAXED);
         }
 
-        Temp_Mapper_Obj<pae_entry_t> pd_mapper(request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<pae_entry_t> pd_mapper(
+            kernel::paging::request_temp_mapper());
         pae_entry_t *pd = pd_mapper.map(pdpt_entry & PAE_ADDR_MASK);
 
         pae_entry_t pd_entry = __atomic_load_n(pd + pd_idx, __ATOMIC_RELAXED);
@@ -393,10 +371,11 @@ void free_32bit_page(pae_entry_t entry)
     }
 }
 
-void x86_invalidate_page(TLBShootdownContext &ctx, void *virt_addr, bool free, u32 cr3)
+void x86_invalidate_page(kernel::paging::TLBShootdownContext &ctx, void *virt_addr, bool free,
+                         u32 cr3)
 {
     if (!use_pae) {
-        Temp_Mapper_Obj<u32> mapper(request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<u32> mapper(kernel::paging::request_temp_mapper());
         u32 *active_pt = mapper.map(cr3);
 
         auto pd_idx = (u32(virt_addr) >> 22) & 0x3FF;
@@ -406,7 +385,7 @@ void x86_invalidate_page(TLBShootdownContext &ctx, void *virt_addr, bool free, u
         if (!(pd_entry & PAGE_PRESENT))
             return;
 
-        Temp_Mapper_Obj<u32> pt_mapper(request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<u32> pt_mapper(kernel::paging::request_temp_mapper());
         u32 *pt = pt_mapper.map(pd_entry & 0xFFFFF000);
 
         auto &pt_entry = pt[pt_idx];
@@ -425,21 +404,23 @@ void x86_invalidate_page(TLBShootdownContext &ctx, void *virt_addr, bool free, u
 
         auto [cr3_phys, cr3_offset] = cr3_pae_page_offset(cr3);
 
-        Temp_Mapper_Obj<pae_entry_t> mapper(request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<pae_entry_t> mapper(kernel::paging::request_temp_mapper());
         pae_entry_t *pdpt = mapper.map(cr3_phys) + cr3_offset;
 
         pae_entry_t pdpt_entry = __atomic_load_n(pdpt + pdpt_idx, __ATOMIC_RELAXED);
         if (!(pdpt_entry & PAGE_PRESENT))
             return;
 
-        Temp_Mapper_Obj<pae_entry_t> pd_mapper(request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<pae_entry_t> pd_mapper(
+            kernel::paging::request_temp_mapper());
         pae_entry_t *pd = pd_mapper.map(pdpt_entry & PAE_ADDR_MASK);
 
         pae_entry_t pd_entry = __atomic_load_n(pd + pd_idx, __ATOMIC_RELAXED);
         if (!(pd_entry & PAGE_PRESENT))
             return;
 
-        Temp_Mapper_Obj<pae_entry_t> pt_mapper(request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<pae_entry_t> pt_mapper(
+            kernel::paging::request_temp_mapper());
         pae_entry_t *pt = pt_mapper.map(pd_entry & PAE_ADDR_MASK);
 
         pae_entry_t pt_entry = __atomic_load_n(pt + pt_idx, __ATOMIC_RELAXED);
@@ -453,8 +434,8 @@ void x86_invalidate_page(TLBShootdownContext &ctx, void *virt_addr, bool free, u
     }
 }
 
-static void x86_invalidate_pages(TLBShootdownContext &ctx, u32 cr3, void *virt_addr, size_t size,
-                                 bool free)
+static void x86_invalidate_pages(kernel::paging::TLBShootdownContext &ctx, u32 cr3, void *virt_addr,
+                                 size_t size, bool free)
 {
     if (!use_pae) {
         u32 limit        = u32(virt_addr) + size;
@@ -464,7 +445,7 @@ static void x86_invalidate_pages(TLBShootdownContext &ctx, u32 cr3, void *virt_a
         if (last_idx == 0 && end_aligned != (u32)virt_addr)
             last_idx = 1024;
 
-        Temp_Mapper_Obj<u32> mapper(request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<u32> mapper(kernel::paging::request_temp_mapper());
         u32 *active_pt = mapper.map(cr3);
 
         for (u32 i = first_pd_idx; i < last_idx; ++i) {
@@ -472,7 +453,7 @@ static void x86_invalidate_pages(TLBShootdownContext &ctx, u32 cr3, void *virt_a
             if (!(pd_entry & PAGE_PRESENT))
                 continue;
 
-            Temp_Mapper_Obj<u32> pt_mapper(request_temp_mapper());
+            kernel::paging::Temp_Mapper_Obj<u32> pt_mapper(kernel::paging::request_temp_mapper());
             u32 *pt = pt_mapper.map(pd_entry & _32BIT_ADDR_MASK);
 
             u32 addr_of_pd = i << 22;
@@ -504,7 +485,7 @@ static void x86_invalidate_pages(TLBShootdownContext &ctx, u32 cr3, void *virt_a
 
         auto [cr3_phys, cr3_offset] = cr3_pae_page_offset(cr3);
 
-        Temp_Mapper_Obj<pae_entry_t> mapper(request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<pae_entry_t> mapper(kernel::paging::request_temp_mapper());
         pae_entry_t *pdpt = mapper.map(cr3_phys) + cr3_offset;
 
         for (u32 i = first_pdpt; i < last_pdpt; ++i) {
@@ -512,7 +493,8 @@ static void x86_invalidate_pages(TLBShootdownContext &ctx, u32 cr3, void *virt_a
             if (!(pdpt_entry & PAGE_PRESENT))
                 continue;
 
-            Temp_Mapper_Obj<pae_entry_t> pd_mapper(request_temp_mapper());
+            kernel::paging::Temp_Mapper_Obj<pae_entry_t> pd_mapper(
+                kernel::paging::request_temp_mapper());
             pae_entry_t *pd = pd_mapper.map(pdpt_entry & PAE_ADDR_MASK);
 
             u32 limit_end_aligned = alignup(limit, 21);
@@ -534,7 +516,8 @@ static void x86_invalidate_pages(TLBShootdownContext &ctx, u32 cr3, void *virt_a
                 if (!(pd_entry & PAGE_PRESENT))
                     continue;
 
-                Temp_Mapper_Obj<pae_entry_t> pt_mapper(request_temp_mapper());
+                kernel::paging::Temp_Mapper_Obj<pae_entry_t> pt_mapper(
+                    kernel::paging::request_temp_mapper());
                 pae_entry_t *pt = pt_mapper.map(pd_entry & PAE_ADDR_MASK);
 
                 u32 addr_of_pd = addr_of_pdpt + (j << 21);
@@ -564,28 +547,16 @@ static void x86_invalidate_pages(TLBShootdownContext &ctx, u32 cr3, void *virt_a
     }
 }
 
-kresult_t unmap_kernel_page(TLBShootdownContext &ctx, void *virt_addr)
-{
-    x86_invalidate_page(ctx, virt_addr, false, idle_cr3);
-    return 0;
-}
-
-void IA32_Page_Table::invalidate(TLBShootdownContext &ctx, void *virt_addr, bool free)
+void IA32_Page_Table::invalidate(kernel::paging::TLBShootdownContext &ctx, void *virt_addr,
+                                 bool free)
 {
     x86_invalidate_page(ctx, virt_addr, free, cr3);
 }
 
-void IA32_Page_Table::invalidate_range(TLBShootdownContext &ctx, void *virt_addr, size_t size_bytes,
-                                       bool free)
+void IA32_Page_Table::invalidate_range(kernel::paging::TLBShootdownContext &ctx, void *virt_addr,
+                                       size_t size_bytes, bool free)
 {
     x86_invalidate_pages(ctx, cr3, virt_addr, size_bytes, free);
-}
-
-void invalidate_tlb_kernel(void *addr) { invlpg(addr); }
-void invalidate_tlb_kernel(void *addr, size_t size)
-{
-    for (u64 i = 0; i < size; i += 4096)
-        invlpg((void *)((char *)addr + i));
 }
 
 void IA32_Page_Table::invalidate_tlb(void *addr) { invlpg(addr); }
@@ -632,10 +603,10 @@ void IA32_Page_Table::free_user_pages()
     if (!use_pae) {
         u32 pd_limit = (u32)user_addr_max() >> 22;
 
-        Temp_Mapper_Obj<u32> mapper(request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<u32> mapper(kernel::paging::request_temp_mapper());
         u32 *pd = mapper.map(cr3);
 
-        Temp_Mapper_Obj<u32> pt_mapper(request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<u32> pt_mapper(kernel::paging::request_temp_mapper());
 
         for (unsigned i = 0; i < pd_limit; ++i) {
             auto pde = pd[i];
@@ -657,11 +628,13 @@ void IA32_Page_Table::free_user_pages()
 
         auto [cr3_phys, cr3_offset] = cr3_pae_page_offset(cr3);
 
-        Temp_Mapper_Obj<pae_entry_t> mapper(request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<pae_entry_t> mapper(kernel::paging::request_temp_mapper());
         pae_entry_t *pdpt = mapper.map(cr3_phys) + cr3_offset;
 
-        Temp_Mapper_Obj<pae_entry_t> pd_mapper(request_temp_mapper());
-        Temp_Mapper_Obj<pae_entry_t> pt_mapper(request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<pae_entry_t> pd_mapper(
+            kernel::paging::request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<pae_entry_t> pt_mapper(
+            kernel::paging::request_temp_mapper());
 
         for (unsigned i = 0; i < pdpt_limit; ++i) {
             pae_entry_t pdpt_entry = __atomic_load_n(pdpt + i, __ATOMIC_RELAXED);
@@ -698,7 +671,7 @@ kresult_t IA32_Page_Table::resolve_anonymous_page(void *virt_addr, unsigned acce
         return -ENOMEM;
 
     if (!use_pae) {
-        Temp_Mapper_Obj<u32> mapper(request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<u32> mapper(kernel::paging::request_temp_mapper());
         u32 *pt = mapper.map(ptt);
         assert(pt);
 
@@ -730,16 +703,16 @@ kresult_t IA32_Page_Table::resolve_anonymous_page(void *virt_addr, unsigned acce
         pt[pt_index] = 0;
 
         {
-            auto tlb_ctx = TLBShootdownContext::create_userspace(*this);
+            auto tlb_ctx = kernel::paging::TLBShootdownContext::create_userspace(*this);
             tlb_ctx.invalidate_page((void *)((u32)virt_addr & ~0xffful));
         }
 
         u64 new_page_phys = new_descriptor.val.takeout_page();
         assert(!(new_page_phys >> 32));
 
-        Temp_Mapper_Obj<void> old_page(request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<void> old_page(kernel::paging::request_temp_mapper());
         old_page.map(pte & _32BIT_ADDR_MASK);
-        Temp_Mapper_Obj<void> new_page(request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<void> new_page(kernel::paging::request_temp_mapper());
         new_page.map(new_page_phys);
 
         __builtin_memcpy(new_page.ptr, old_page.ptr, 4096);
@@ -750,7 +723,7 @@ kresult_t IA32_Page_Table::resolve_anonymous_page(void *virt_addr, unsigned acce
         pt[pt_index] = pte;
         return 0;
     } else {
-        Temp_Mapper_Obj<pae_entry_t> mapper(request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<pae_entry_t> mapper(kernel::paging::request_temp_mapper());
         pae_entry_t *pt = mapper.map(ptt);
         assert(pt);
 
@@ -782,15 +755,15 @@ kresult_t IA32_Page_Table::resolve_anonymous_page(void *virt_addr, unsigned acce
         __atomic_store_n(pt + pt_index, 0, __ATOMIC_RELEASE);
 
         {
-            auto tlb_ctx = TLBShootdownContext::create_userspace(*this);
+            auto tlb_ctx = kernel::paging::TLBShootdownContext::create_userspace(*this);
             tlb_ctx.invalidate_page((void *)((u32)virt_addr & ~0xffful));
         }
 
         u64 new_page_phys = new_descriptor.val.takeout_page();
 
-        Temp_Mapper_Obj<void> old_page(request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<void> old_page(kernel::paging::request_temp_mapper());
         old_page.map(pte & PAE_ADDR_MASK);
-        Temp_Mapper_Obj<void> new_page(request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<void> new_page(kernel::paging::request_temp_mapper());
         new_page.map(new_page_phys);
 
         __builtin_memcpy(new_page.ptr, old_page.ptr, 4096);
@@ -824,24 +797,26 @@ kresult_t IA32_Page_Table::copy_anonymous_pages(const klib::shared_ptr<Page_Tabl
     u32 offset = 0;
 
     auto guard = pmos::utility::make_scope_guard([&]() {
-        auto ctx = TLBShootdownContext::create_userspace(*to);
+        auto ctx = kernel::paging::TLBShootdownContext::create_userspace(*to);
         to->invalidate_range(ctx, to_addr, offset, true);
     });
 
     kresult_t result;
     {
-        TLBShootdownContext ctx = TLBShootdownContext::create_userspace(*this);
-        result                  = [&]() -> kresult_t {
+        kernel::paging::TLBShootdownContext ctx =
+            kernel::paging::TLBShootdownContext::create_userspace(*this);
+        result = [&]() -> kresult_t {
             if (!use_pae) {
                 u32 start_index     = ((u32)from_addr >> 22) & 0x3FF;
                 u32 limit           = (u32)from_addr + size_bytes;
                 u32 to_addr_aligned = alignup(limit, 22);
                 u32 end_index       = (to_addr_aligned >> 22) & 0x3FF;
 
-                Temp_Mapper_Obj<u32> mapper(request_temp_mapper());
+                kernel::paging::Temp_Mapper_Obj<u32> mapper(kernel::paging::request_temp_mapper());
                 auto pd = mapper.map(cr3);
 
-                Temp_Mapper_Obj<u32> pt_mapper(request_temp_mapper());
+                kernel::paging::Temp_Mapper_Obj<u32> pt_mapper(
+                    kernel::paging::request_temp_mapper());
 
                 for (unsigned i = start_index; i < end_index; ++i) {
                     auto pde = pd[i];
@@ -869,15 +844,15 @@ kresult_t IA32_Page_Table::copy_anonymous_pages(const klib::shared_ptr<Page_Tabl
                         u32 copy_from = (1 << 22) * i + (1 << 12) * j;
                         u32 copy_to   = (u32)copy_from - (u32)from_addr + (u32)to_addr;
 
-                        Page_Table_Arguments arg = {
-                                             .readable           = !!(access & Readable),
-                                             .writeable          = false,
-                                             .user_access        = !!(pte & PAGE_USER),
-                                             .global             = !!(pte & PAGE_GLOBAL),
-                                             .execution_disabled = !(access & Executable),
-                                             .extra              = avl_from_page(pte),
-                                             .cache_policy =
-                                pte & PAGE_CD ? Memory_Type::IONoCache : Memory_Type::Normal,
+                        kernel::paging::Page_Table_Arguments arg = {
+                            .readable           = !!(access & Readable),
+                            .writeable          = false,
+                            .user_access        = !!(pte & PAGE_USER),
+                            .global             = !!(pte & PAGE_GLOBAL),
+                            .execution_disabled = !(access & Executable),
+                            .extra              = avl_from_page(pte),
+                            .cache_policy = pte & PAGE_CD ? kernel::paging::Memory_Type::IONoCache
+                                                          : kernel::paging::Memory_Type::Normal,
                         };
 
                         if (pte & PAGE_WRITE) {
@@ -901,11 +876,14 @@ kresult_t IA32_Page_Table::copy_anonymous_pages(const klib::shared_ptr<Page_Tabl
 
                 auto [cr3_phys, cr3_offset] = cr3_pae_page_offset(cr3);
 
-                Temp_Mapper_Obj<pae_entry_t> mapper(request_temp_mapper());
+                kernel::paging::Temp_Mapper_Obj<pae_entry_t> mapper(
+                    kernel::paging::request_temp_mapper());
                 pae_entry_t *pdpt = mapper.map(cr3_phys) + cr3_offset;
 
-                Temp_Mapper_Obj<pae_entry_t> pd_mapper(request_temp_mapper());
-                Temp_Mapper_Obj<pae_entry_t> pt_mapper(request_temp_mapper());
+                kernel::paging::Temp_Mapper_Obj<pae_entry_t> pd_mapper(
+                    kernel::paging::request_temp_mapper());
+                kernel::paging::Temp_Mapper_Obj<pae_entry_t> pt_mapper(
+                    kernel::paging::request_temp_mapper());
 
                 for (unsigned i = start_index; i < end_index; ++i) {
                     pae_entry_t pdpt_entry = __atomic_load_n(pdpt + i, __ATOMIC_RELAXED);
@@ -946,15 +924,16 @@ kresult_t IA32_Page_Table::copy_anonymous_pages(const klib::shared_ptr<Page_Tabl
                             u32 copy_from = addr_of_pd + (1 << 12) * k;
                             u32 copy_to   = (u32)copy_from - (u32)from_addr + (u32)to_addr;
 
-                            Page_Table_Arguments arg = {
-                                                 .readable           = !!(access & Readable),
-                                                 .writeable          = false,
-                                                 .user_access        = !!(pte & PAGE_USER),
-                                                 .global             = !!(pte & PAGE_GLOBAL),
-                                                 .execution_disabled = !(access & Executable),
-                                                 .extra              = avl_from_page(pte),
-                                                 .cache_policy =
-                                    pte & PAGE_CD ? Memory_Type::IONoCache : Memory_Type::Normal,
+                            kernel::paging::Page_Table_Arguments arg = {
+                                .readable           = !!(access & Readable),
+                                .writeable          = false,
+                                .user_access        = !!(pte & PAGE_USER),
+                                .global             = !!(pte & PAGE_GLOBAL),
+                                .execution_disabled = !(access & Executable),
+                                .extra              = avl_from_page(pte),
+                                .cache_policy       = pte & PAGE_CD
+                                                          ? kernel::paging::Memory_Type::IONoCache
+                                                          : kernel::paging::Memory_Type::Normal,
                             };
 
                             if (pte & PAGE_WRITE) {
@@ -1015,8 +994,8 @@ klib::shared_ptr<IA32_Page_Table> IA32_Page_Table::create_empty(unsigned)
         auto guard =
             pmos::utility::make_scope_guard([&]() { pmm::free_memory_for_kernel(cr3, 1); });
 
-        Temp_Mapper_Obj<u32> new_page_m(request_temp_mapper());
-        Temp_Mapper_Obj<u32> current_page_m(request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<u32> new_page_m(kernel::paging::request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<u32> current_page_m(kernel::paging::request_temp_mapper());
 
         auto new_page     = new_page_m.map(cr3);
         auto current_page = current_page_m.map(idle_cr3);
@@ -1047,8 +1026,10 @@ klib::shared_ptr<IA32_Page_Table> IA32_Page_Table::create_empty(unsigned)
         auto [cr3_phys, cr3_offset]           = cr3_pae_page_offset(cr3);
 
         auto guard = pmos::utility::make_scope_guard([&]() { free_pae_cr3(cr3); });
-        Temp_Mapper_Obj<pae_entry_t> new_page_m(request_temp_mapper());
-        Temp_Mapper_Obj<pae_entry_t> current_page_m(request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<pae_entry_t> new_page_m(
+            kernel::paging::request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<pae_entry_t> current_page_m(
+            kernel::paging::request_temp_mapper());
 
         pae_entry_t *new_page     = new_page_m.map(cr3_phys) + cr3_offset;
         pae_entry_t *current_page = current_page_m.map(idle_cr3_phys) + idle_cr3_offset;
@@ -1108,8 +1089,8 @@ ReturnStr<u32> create_empty_cr3()
         auto guard =
             pmos::utility::make_scope_guard([&]() { pmm::free_memory_for_kernel(cr3, 1); });
 
-        Temp_Mapper_Obj<u32> new_page_m(request_temp_mapper());
-        Temp_Mapper_Obj<u32> current_page_m(request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<u32> new_page_m(kernel::paging::request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<u32> current_page_m(kernel::paging::request_temp_mapper());
 
         auto new_page     = new_page_m.map(cr3);
         auto current_page = current_page_m.map(idle_cr3);
@@ -1131,8 +1112,10 @@ ReturnStr<u32> create_empty_cr3()
         auto [idle_cr3_phys, idle_cr3_offset] = cr3_pae_page_offset(idle_cr3);
         auto [cr3_phys, cr3_offset]           = cr3_pae_page_offset(cr3);
 
-        Temp_Mapper_Obj<pae_entry_t> new_page_m(request_temp_mapper());
-        Temp_Mapper_Obj<pae_entry_t> current_page_m(request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<pae_entry_t> new_page_m(
+            kernel::paging::request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<pae_entry_t> current_page_m(
+            kernel::paging::request_temp_mapper());
 
         pae_entry_t *new_page     = new_page_m.map(cr3_phys) + cr3_offset;
         pae_entry_t *current_page = current_page_m.map(idle_cr3_phys) + idle_cr3_offset;
@@ -1177,7 +1160,7 @@ klib::shared_ptr<IA32_Page_Table> IA32_Page_Table::create_clone()
         for (const auto &reg: new_table->mem_objects)
             reg.first->atomic_unregister_pined(new_table->weak_from_this());
 
-        auto tlb_ctx = TLBShootdownContext::create_userspace(*new_table);
+        auto tlb_ctx = kernel::paging::TLBShootdownContext::create_userspace(*new_table);
 
         auto it = new_table->paging_regions.begin();
         while (it != new_table->paging_regions.end()) {
@@ -1219,101 +1202,19 @@ klib::shared_ptr<IA32_Page_Table> IA32_Page_Table::create_clone()
     return new_table;
 }
 
-bool page_mapped(void *pagefault_cr2, ulong err)
-{
-    bool write = err & 0x02;
-    bool exec  = err & 0x10;
-
-    if (!use_pae) {
-        Temp_Mapper_Obj<u32> mapper(request_temp_mapper());
-        auto pd = mapper.map(getCR3() & 0xFFFFF000);
-
-        auto pd_idx = (u32(pagefault_cr2) >> 22) & 0x3FF;
-        auto pt_idx = (u32(pagefault_cr2) >> 12) & 0x3FF;
-
-        auto pde = pd[pd_idx];
-        if (!(pde & PAGE_PRESENT))
-            return false;
-
-        if (write && !(pde & PAGE_WRITE))
-            return false;
-
-        Temp_Mapper_Obj<u32> pt_mapper(request_temp_mapper());
-        auto pt = pt_mapper.map(pde & 0xFFFFF000);
-
-        auto pte = pt[pt_idx];
-
-        if (!(pte & PAGE_PRESENT))
-            return false;
-
-        if (write && !(pte & PAGE_WRITE))
-            return false;
-
-        return true;
-    } else {
-        auto cr3                    = getCR3();
-        auto [cr3_phys, cr3_offset] = cr3_pae_page_offset(cr3);
-
-        Temp_Mapper_Obj<pae_entry_t> mapper(request_temp_mapper());
-        pae_entry_t *pdpt = mapper.map(cr3_phys) + cr3_offset;
-
-        auto pdpt_idx = (u32(pagefault_cr2) >> 30) & 0x3;
-        auto pd_idx   = (u32(pagefault_cr2) >> 21) & 0x1FF;
-        auto pt_idx   = (u32(pagefault_cr2) >> 12) & 0x1FF;
-
-        pae_entry_t pdpt_entry = __atomic_load_n(pdpt + pdpt_idx, __ATOMIC_RELAXED);
-        if (!(pdpt_entry & PAGE_PRESENT))
-            return false;
-
-        if (write && !(pdpt_entry & PAGE_WRITE))
-            return false;
-
-        if (exec && (pdpt_entry & PAGE_NX))
-            return false;
-
-        Temp_Mapper_Obj<pae_entry_t> pd_mapper(request_temp_mapper());
-        pae_entry_t *pd = pd_mapper.map(pdpt_entry & PAE_ADDR_MASK);
-
-        pae_entry_t pde = __atomic_load_n(pd + pd_idx, __ATOMIC_RELAXED);
-        if (!(pde & PAGE_PRESENT))
-            return false;
-
-        if (write && !(pde & PAGE_WRITE))
-            return false;
-
-        if (exec && (pde & PAGE_NX))
-            return false;
-
-        Temp_Mapper_Obj<pae_entry_t> pt_mapper(request_temp_mapper());
-        pae_entry_t *pt = pt_mapper.map(pde & PAE_ADDR_MASK);
-
-        pae_entry_t pte = __atomic_load_n(pt + pt_idx, __ATOMIC_RELAXED);
-        if (!(pte & PAGE_PRESENT))
-            return false;
-
-        if (write && !(pte & PAGE_WRITE))
-            return false;
-
-        if (exec && (pte & PAGE_NX))
-            return false;
-
-        return true;
-    }
-}
-
 static u32 pae_free_list = -1U;
 static void remove_from_freelist(PDPEPage *page)
 {
     if (page->prev_phys == -1U) {
         pae_free_list = page->next_phys;
     } else {
-        Temp_Mapper_Obj<PDPEPage> mapper(request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<PDPEPage> mapper(kernel::paging::request_temp_mapper());
         PDPEPage *prev  = mapper.map(page->prev_phys);
         prev->next_phys = page->next_phys;
     }
 
     if (page->next_phys != -1U) {
-        Temp_Mapper_Obj<PDPEPage> mapper(request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<PDPEPage> mapper(kernel::paging::request_temp_mapper());
         PDPEPage *next  = mapper.map(page->next_phys);
         next->prev_phys = page->prev_phys;
     }
@@ -1326,13 +1227,13 @@ static void add_to_freelist(PDPEPage *page, u32 addr)
     pae_free_list   = addr;
 
     if (page->next_phys != -1U) {
-        Temp_Mapper_Obj<PDPEPage> mapper(request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<PDPEPage> mapper(kernel::paging::request_temp_mapper());
         PDPEPage *next  = mapper.map(page->next_phys);
         next->prev_phys = addr;
     }
 }
 
-Spinlock pae_alloc_lock;
+static Spinlock pae_alloc_lock;
 
 void free_pae_cr3(u32 cr3)
 {
@@ -1341,7 +1242,7 @@ void free_pae_cr3(u32 cr3)
     u32 addr = cr3 & ~0xfff;
     u32 idx  = (cr3 & 0xfff) >> 5;
 
-    Temp_Mapper_Obj<PDPEPage> mapper(request_temp_mapper());
+    kernel::paging::Temp_Mapper_Obj<PDPEPage> mapper(kernel::paging::request_temp_mapper());
     PDPEPage *page = mapper.map(addr);
 
     if (idx < 64) {
@@ -1372,7 +1273,7 @@ u32 new_pae_cr3()
         if (pmm::alloc_failure(addr))
             return -1U;
 
-        Temp_Mapper_Obj<PDPEPage> mapper(request_temp_mapper());
+        kernel::paging::Temp_Mapper_Obj<PDPEPage> mapper(kernel::paging::request_temp_mapper());
         PDPEPage *page = mapper.map(addr);
 
         __builtin_memset(page, 0, 4096);
@@ -1390,7 +1291,7 @@ u32 new_pae_cr3()
     }
 
     u32 addr = pae_free_list;
-    Temp_Mapper_Obj<PDPEPage> mapper(request_temp_mapper());
+    kernel::paging::Temp_Mapper_Obj<PDPEPage> mapper(kernel::paging::request_temp_mapper());
     PDPEPage *page = mapper.map(addr);
 
     assert(page->allocated_count <= 14);
@@ -1416,3 +1317,147 @@ u32 new_pae_cr3()
 
     return addr + (idx * 32);
 }
+
+bool page_mapped(void *pagefault_cr2, ulong err)
+{
+    bool write = err & 0x02;
+    bool exec  = err & 0x10;
+
+    if (!use_pae) {
+        kernel::paging::Temp_Mapper_Obj<u32> mapper(kernel::paging::request_temp_mapper());
+        auto pd = mapper.map(getCR3() & 0xFFFFF000);
+
+        auto pd_idx = (u32(pagefault_cr2) >> 22) & 0x3FF;
+        auto pt_idx = (u32(pagefault_cr2) >> 12) & 0x3FF;
+
+        auto pde = pd[pd_idx];
+        if (!(pde & PAGE_PRESENT))
+            return false;
+
+        if (write && !(pde & PAGE_WRITE))
+            return false;
+
+        kernel::paging::Temp_Mapper_Obj<u32> pt_mapper(kernel::paging::request_temp_mapper());
+        auto pt = pt_mapper.map(pde & 0xFFFFF000);
+
+        auto pte = pt[pt_idx];
+
+        if (!(pte & PAGE_PRESENT))
+            return false;
+
+        if (write && !(pte & PAGE_WRITE))
+            return false;
+
+        return true;
+    } else {
+        auto cr3                    = getCR3();
+        auto [cr3_phys, cr3_offset] = cr3_pae_page_offset(cr3);
+
+        kernel::paging::Temp_Mapper_Obj<pae_entry_t> mapper(kernel::paging::request_temp_mapper());
+        pae_entry_t *pdpt = mapper.map(cr3_phys) + cr3_offset;
+
+        auto pdpt_idx = (u32(pagefault_cr2) >> 30) & 0x3;
+        auto pd_idx   = (u32(pagefault_cr2) >> 21) & 0x1FF;
+        auto pt_idx   = (u32(pagefault_cr2) >> 12) & 0x1FF;
+
+        pae_entry_t pdpt_entry = __atomic_load_n(pdpt + pdpt_idx, __ATOMIC_RELAXED);
+        if (!(pdpt_entry & PAGE_PRESENT))
+            return false;
+
+        if (write && !(pdpt_entry & PAGE_WRITE))
+            return false;
+
+        if (exec && (pdpt_entry & PAGE_NX))
+            return false;
+
+        kernel::paging::Temp_Mapper_Obj<pae_entry_t> pd_mapper(
+            kernel::paging::request_temp_mapper());
+        pae_entry_t *pd = pd_mapper.map(pdpt_entry & PAE_ADDR_MASK);
+
+        pae_entry_t pde = __atomic_load_n(pd + pd_idx, __ATOMIC_RELAXED);
+        if (!(pde & PAGE_PRESENT))
+            return false;
+
+        if (write && !(pde & PAGE_WRITE))
+            return false;
+
+        if (exec && (pde & PAGE_NX))
+            return false;
+
+        kernel::paging::Temp_Mapper_Obj<pae_entry_t> pt_mapper(
+            kernel::paging::request_temp_mapper());
+        pae_entry_t *pt = pt_mapper.map(pde & PAE_ADDR_MASK);
+
+        pae_entry_t pte = __atomic_load_n(pt + pt_idx, __ATOMIC_RELAXED);
+        if (!(pte & PAGE_PRESENT))
+            return false;
+
+        if (write && !(pte & PAGE_WRITE))
+            return false;
+
+        if (exec && (pte & PAGE_NX))
+            return false;
+
+        return true;
+    }
+}
+
+} // namespace kernel::ia32::paging
+
+namespace kernel::paging
+{
+
+kresult_t map_kernel_page(u64 phys_addr, void *virt_addr, kernel::paging::Page_Table_Arguments arg)
+{
+    assert(!arg.user_access);
+    return ia32::paging::ia32_map_page(ia32::paging::idle_cr3, phys_addr, virt_addr, arg);
+}
+
+kresult_t map_page(ptable_top_ptr_t page_table, u64 phys_addr, void *virt_addr,
+                   kernel::paging::Page_Table_Arguments arg)
+{
+    return ia32::paging::ia32_map_page(page_table, phys_addr, virt_addr, arg);
+}
+
+kresult_t map_pages(ptable_top_ptr_t page_table, u64 phys_addr, void *virt_addr, size_t size,
+                    kernel::paging::Page_Table_Arguments arg)
+{
+    for (u64 i = 0; i < size; i += 4096) {
+        auto result = ia32::paging::ia32_map_page(page_table, phys_addr + i,
+                                                  (void *)((char *)virt_addr + i), arg);
+        if (result)
+            return result;
+    }
+    return 0;
+}
+
+kresult_t map_kernel_pages(u64 phys_addr, void *virt_addr, size_t size,
+                           kernel::paging::Page_Table_Arguments arg)
+{
+    return map_pages(ia32::paging::idle_cr3, phys_addr, virt_addr, size, arg);
+}
+
+kresult_t unmap_kernel_page(kernel::paging::TLBShootdownContext &ctx, void *virt_addr)
+{
+    ia32::paging::x86_invalidate_page(ctx, virt_addr, false, ia32::paging::idle_cr3);
+    return 0;
+}
+
+void invalidate_tlb_kernel(void *addr) { invlpg(addr); }
+void invalidate_tlb_kernel(void *addr, size_t size)
+{
+    for (u64 i = 0; i < size; i += 4096)
+        invlpg((void *)((char *)addr + i));
+}
+
+void apply_page_table(ptable_top_ptr_t page_table)
+{
+    if (ia32::paging::support_nx) {
+        const unsigned msr = 0xC0000080;
+        write_msr(msr, read_msr(msr) | (1 << 11));
+    }
+
+    setCR3(page_table);
+}
+
+} // namespace kernel::paging

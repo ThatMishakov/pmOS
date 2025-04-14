@@ -4,6 +4,9 @@
 
 #include <interrupts/programmable_ints_functs.hh>
 
+namespace kernel::ia32::interrupts
+{
+
 constexpr u64 task_gate(u16 selector) { return 0x0000'8500'0000'0000 | (u64(selector) << 16); }
 
 constexpr u64 interrupt_gate(u32 function, u16 cpl)
@@ -100,58 +103,58 @@ static IDT init_idt()
     u[46] = interrupt_gate((u32)apic_spurious_isr, 0);
     u[47] = interrupt_gate((u32)apic_spurious_isr, 0);
 
-    u[48] = interrupt_gate((u32)prog_int_48, 0);
-    u[49] = interrupt_gate((u32)prog_int_49, 0);
-    u[50] = interrupt_gate((u32)prog_int_50, 0);
-    u[51] = interrupt_gate((u32)prog_int_51, 0);
-    u[52] = interrupt_gate((u32)prog_int_52, 0);
-    u[53] = interrupt_gate((u32)prog_int_53, 0);
-    u[54] = interrupt_gate((u32)prog_int_54, 0);
-    u[55] = interrupt_gate((u32)prog_int_55, 0);
-    u[56] = interrupt_gate((u32)prog_int_56, 0);
-    u[57] = interrupt_gate((u32)prog_int_57, 0);
-    u[58] = interrupt_gate((u32)prog_int_58, 0);
-    u[59] = interrupt_gate((u32)prog_int_59, 0);
-    u[60] = interrupt_gate((u32)prog_int_60, 0);
-    u[61] = interrupt_gate((u32)prog_int_61, 0);
-    u[62] = interrupt_gate((u32)prog_int_62, 0);
-    u[63] = interrupt_gate((u32)prog_int_63, 0);
-    u[64] = interrupt_gate((u32)prog_int_64, 0);
-    u[65] = interrupt_gate((u32)prog_int_65, 0);
-    u[66] = interrupt_gate((u32)prog_int_66, 0);
-    u[67] = interrupt_gate((u32)prog_int_67, 0);
-    u[68] = interrupt_gate((u32)prog_int_68, 0);
-    u[69] = interrupt_gate((u32)prog_int_69, 0);
-    u[70] = interrupt_gate((u32)prog_int_70, 0);
-    u[71] = interrupt_gate((u32)prog_int_71, 0);
-    u[72] = interrupt_gate((u32)prog_int_72, 0);
-    u[73] = interrupt_gate((u32)prog_int_73, 0);
-    u[74] = interrupt_gate((u32)prog_int_74, 0);
-    u[75] = interrupt_gate((u32)prog_int_75, 0);
-    u[76] = interrupt_gate((u32)prog_int_76, 0);
-    u[77] = interrupt_gate((u32)prog_int_77, 0);
-    u[78] = interrupt_gate((u32)prog_int_78, 0);
-    u[79] = interrupt_gate((u32)prog_int_79, 0);
-    u[80] = interrupt_gate((u32)prog_int_80, 0);
-    u[81] = interrupt_gate((u32)prog_int_81, 0);
-    u[82] = interrupt_gate((u32)prog_int_82, 0);
-    u[83] = interrupt_gate((u32)prog_int_83, 0);
-    u[84] = interrupt_gate((u32)prog_int_84, 0);
-    u[85] = interrupt_gate((u32)prog_int_85, 0);
-    u[86] = interrupt_gate((u32)prog_int_86, 0);
-    u[87] = interrupt_gate((u32)prog_int_87, 0);
-    u[88] = interrupt_gate((u32)prog_int_88, 0);
-    u[89] = interrupt_gate((u32)prog_int_89, 0);
-    u[90] = interrupt_gate((u32)prog_int_90, 0);
-    u[91] = interrupt_gate((u32)prog_int_91, 0);
-    u[92] = interrupt_gate((u32)prog_int_92, 0);
-    u[93] = interrupt_gate((u32)prog_int_93, 0);
-    u[94] = interrupt_gate((u32)prog_int_94, 0);
-    u[95] = interrupt_gate((u32)prog_int_95, 0);
-    u[96] = interrupt_gate((u32)prog_int_96, 0);
-    u[97] = interrupt_gate((u32)prog_int_97, 0);
-    u[98] = interrupt_gate((u32)prog_int_98, 0);
-    u[99] = interrupt_gate((u32)prog_int_99, 0);
+    u[48]  = interrupt_gate((u32)prog_int_48, 0);
+    u[49]  = interrupt_gate((u32)prog_int_49, 0);
+    u[50]  = interrupt_gate((u32)prog_int_50, 0);
+    u[51]  = interrupt_gate((u32)prog_int_51, 0);
+    u[52]  = interrupt_gate((u32)prog_int_52, 0);
+    u[53]  = interrupt_gate((u32)prog_int_53, 0);
+    u[54]  = interrupt_gate((u32)prog_int_54, 0);
+    u[55]  = interrupt_gate((u32)prog_int_55, 0);
+    u[56]  = interrupt_gate((u32)prog_int_56, 0);
+    u[57]  = interrupt_gate((u32)prog_int_57, 0);
+    u[58]  = interrupt_gate((u32)prog_int_58, 0);
+    u[59]  = interrupt_gate((u32)prog_int_59, 0);
+    u[60]  = interrupt_gate((u32)prog_int_60, 0);
+    u[61]  = interrupt_gate((u32)prog_int_61, 0);
+    u[62]  = interrupt_gate((u32)prog_int_62, 0);
+    u[63]  = interrupt_gate((u32)prog_int_63, 0);
+    u[64]  = interrupt_gate((u32)prog_int_64, 0);
+    u[65]  = interrupt_gate((u32)prog_int_65, 0);
+    u[66]  = interrupt_gate((u32)prog_int_66, 0);
+    u[67]  = interrupt_gate((u32)prog_int_67, 0);
+    u[68]  = interrupt_gate((u32)prog_int_68, 0);
+    u[69]  = interrupt_gate((u32)prog_int_69, 0);
+    u[70]  = interrupt_gate((u32)prog_int_70, 0);
+    u[71]  = interrupt_gate((u32)prog_int_71, 0);
+    u[72]  = interrupt_gate((u32)prog_int_72, 0);
+    u[73]  = interrupt_gate((u32)prog_int_73, 0);
+    u[74]  = interrupt_gate((u32)prog_int_74, 0);
+    u[75]  = interrupt_gate((u32)prog_int_75, 0);
+    u[76]  = interrupt_gate((u32)prog_int_76, 0);
+    u[77]  = interrupt_gate((u32)prog_int_77, 0);
+    u[78]  = interrupt_gate((u32)prog_int_78, 0);
+    u[79]  = interrupt_gate((u32)prog_int_79, 0);
+    u[80]  = interrupt_gate((u32)prog_int_80, 0);
+    u[81]  = interrupt_gate((u32)prog_int_81, 0);
+    u[82]  = interrupt_gate((u32)prog_int_82, 0);
+    u[83]  = interrupt_gate((u32)prog_int_83, 0);
+    u[84]  = interrupt_gate((u32)prog_int_84, 0);
+    u[85]  = interrupt_gate((u32)prog_int_85, 0);
+    u[86]  = interrupt_gate((u32)prog_int_86, 0);
+    u[87]  = interrupt_gate((u32)prog_int_87, 0);
+    u[88]  = interrupt_gate((u32)prog_int_88, 0);
+    u[89]  = interrupt_gate((u32)prog_int_89, 0);
+    u[90]  = interrupt_gate((u32)prog_int_90, 0);
+    u[91]  = interrupt_gate((u32)prog_int_91, 0);
+    u[92]  = interrupt_gate((u32)prog_int_92, 0);
+    u[93]  = interrupt_gate((u32)prog_int_93, 0);
+    u[94]  = interrupt_gate((u32)prog_int_94, 0);
+    u[95]  = interrupt_gate((u32)prog_int_95, 0);
+    u[96]  = interrupt_gate((u32)prog_int_96, 0);
+    u[97]  = interrupt_gate((u32)prog_int_97, 0);
+    u[98]  = interrupt_gate((u32)prog_int_98, 0);
+    u[99]  = interrupt_gate((u32)prog_int_99, 0);
     u[100] = interrupt_gate((u32)prog_int_100, 0);
     u[101] = interrupt_gate((u32)prog_int_101, 0);
     u[102] = interrupt_gate((u32)prog_int_102, 0);
@@ -301,7 +304,6 @@ static IDT init_idt()
     u[246] = interrupt_gate((u32)prog_int_246, 0);
     u[247] = interrupt_gate((u32)prog_int_247, 0);
 
-
     u[SYSCALL_INT]            = interrupt_gate((u32)syscall_isr, 3);
     u[APIC_DUMMY_ISR]         = interrupt_gate((u32)apic_dummy_isr, 0);
     u[IPI_RESCHEDULE_ISR]     = interrupt_gate((u32)ipi_reschedule_isr, 0);
@@ -315,3 +317,5 @@ static IDT init_idt()
 }
 
 IDT k_idt = init_idt();
+
+} // namespace kernel::ia32::interrupts

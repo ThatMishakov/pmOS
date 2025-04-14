@@ -14,10 +14,11 @@
 
 using namespace kernel;
 using namespace kernel::pmm;
+using namespace kernel::log;
+using namespace kernel::paging;
+using namespace kernel::ia32::paging;
 
 void hcf();
-
-extern bool use_pae;
 
 u32 temp_allocator_below_1gb   = 0;
 u32 temp_allocated_bytes       = 0;
@@ -35,8 +36,6 @@ pmm::Page::page_addr_t alloc_pages_from_temp_pool(size_t pages) noexcept
     return addr;
 }
 
-u32 idle_cr3 = 0;
-
 class Init_Temp_Mapper: public Temp_Mapper
 {
     virtual void *kern_map(u64 phys_frame) override
@@ -47,9 +46,11 @@ class Init_Temp_Mapper: public Temp_Mapper
     }
     virtual void return_map(void *) override { /* noop */ }
 } ultra_temp_mapper;
-extern Temp_Mapper *global_temp_mapper;
 Temp_Mapper *temp_temp_mapper = nullptr;
+namespace kernel::ia32::paging
+{
 Temp_Mapper *get_temp_temp_mapper(void *virt_addr, u32 kernel_cr3);
+}
 
 extern void *_kernel_start;
 extern void *_free_after_kernel;
@@ -123,7 +124,7 @@ void map_kernel(ultra_boot_context *ctx)
     const u32 rodata_phys   = kernel_phys + rodata_offset;
     const u32 rodata_virt   = kernel_start_virt + rodata_offset;
     args                    = {true, false, false, true, true, PAGING_FLAG_STRUCT_PAGE};
-    result                  = map_pages(idle_cr3, rodata_phys, (void *)rodata_virt, rodata_size, args);
+    result = map_pages(idle_cr3, rodata_phys, (void *)rodata_virt, rodata_size, args);
     if (result != 0)
         hcf();
 
@@ -527,8 +528,9 @@ void init_memory(ultra_boot_context *ctx)
     u32 heap_space_size  = 0 - heap_space_start;
 
     const size_t PAGE_MASK = PAGE_SIZE - 1;
-    void *kernel_start = (void *)(((size_t)&_kernel_start + PAGE_MASK) & ~PAGE_MASK);
-    const size_t kernel_size = ((char *)&_kernel_end - (char *)kernel_start + PAGE_SIZE - 1) & ~PAGE_MASK;
+    void *kernel_start     = (void *)(((size_t)&_kernel_start + PAGE_MASK) & ~PAGE_MASK);
+    const size_t kernel_size =
+        ((char *)&_kernel_end - (char *)kernel_start + PAGE_SIZE - 1) & ~PAGE_MASK;
 
     vmm::virtmem_init((void *)heap_space_start, heap_space_size, kernel_start, kernel_size);
 
@@ -573,7 +575,10 @@ void init_acpi(u64 rsdp_addr)
         rsdp = rsdp_addr;
 }
 
+namespace kernel::paging
+{
 extern klib::shared_ptr<IA32_Page_Table> idle_page_table;
+}
 
 void init_scheduling_on_bsp();
 void init_smp();
@@ -862,7 +867,7 @@ void init_task1(ultra_boot_context *ctx)
     if (t && !tags.push_back(klib::move(t)))
         panic("Failed to add modules tag");
 
-    auto task = TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel::User);
+    auto task = proc::TaskDescriptor::create_process(proc::TaskDescriptor::PrivilegeLevel::User);
     if (!task)
         panic("Failed to create task");
     task->name = "bootstrap";
@@ -888,7 +893,8 @@ extern "C" void kmain(struct ultra_boot_context *ctx, uint32_t magic)
         panic("Could not find platform attribute!\n");
     ultra_platform_info_attribute attr = *ptr;
     use_pae                            = attr.page_table_depth == 3;
-    serial_logger.printf("PAE: %s (page depth %i)\n", use_pae ? "enabled" : "disabled", attr.page_table_depth);
+    serial_logger.printf("PAE: %s (page depth %i)\n", use_pae ? "enabled" : "disabled",
+                         attr.page_table_depth);
 
     auto nx_enabled = detect_nx();
     serial_logger.printf("NX: %s\n", nx_enabled ? "enabled" : "disabled");
@@ -900,7 +906,7 @@ extern "C" void kmain(struct ultra_boot_context *ctx, uint32_t magic)
 
     init_acpi(attr.acpi_rsdp_address);
 
-    idle_page_table = IA32_Page_Table::capture_initial(idle_cr3);
+    kernel::paging::idle_page_table = IA32_Page_Table::capture_initial(idle_cr3);
 
     init_scheduling_on_bsp();
 

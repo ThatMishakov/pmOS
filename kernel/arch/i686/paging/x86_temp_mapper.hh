@@ -1,11 +1,14 @@
 #pragma once
 #include <memory/temp_mapper.hh>
 
+namespace kernel::ia32::paging
+{
+
 /**
  * @brief Temp_Mapper for PAE
  *
  */
-class x86_PAE_Temp_Mapper final: public Temp_Mapper
+class x86_PAE_Temp_Mapper final: public kernel::paging::Temp_Mapper
 {
 public:
     virtual void *kern_map(u64 phys_frame) override;
@@ -23,7 +26,7 @@ private:
     static u32 temp_mapper_get_index(u32 addr);
 };
 
-class x86_2level_Mapper final: public Temp_Mapper
+class x86_2level_Mapper final: public kernel::paging::Temp_Mapper
 {
 public:
     virtual void *kern_map(u64 phys_frame) override;
@@ -41,4 +44,6 @@ private:
     static u32 temp_mapper_get_index(u32 addr);
 };
 
-Temp_Mapper *create_temp_mapper(void *virt_addr, u32 cr3);
+kernel::paging::Temp_Mapper *create_temp_mapper(void *virt_addr, u32 cr3);
+
+} // namespace kernel::ia32::paging

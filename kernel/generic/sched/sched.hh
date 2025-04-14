@@ -76,14 +76,14 @@ extern memory::RCU paging_rcu;
 extern memory::RCU heap_rcu;
 
 struct CPU_Info {
-    CPU_Info *self               = this;    // 0  0
-    u64 *kernel_stack_top        = nullptr; // 8  4
-    ulong temp_var               = 0;       // 16 8
-    ulong nested_level           = 1;       // 24 12
+    CPU_Info *self                     = this;    // 0  0
+    u64 *kernel_stack_top              = nullptr; // 8  4
+    ulong temp_var                     = 0;       // 16 8
+    ulong nested_level                 = 1;       // 24 12
     proc::TaskDescriptor *current_task = nullptr; // 32 16
     proc::TaskDescriptor *idle_task    = nullptr; // 40 20
-    void *jumpto_func            = nullptr; // 48 24
-    ulong jumpto_arg             = 0;       // 56 28
+    void *jumpto_func                  = nullptr; // 48 24
+    ulong jumpto_arg                   = 0;       // 56 28
     // u64 jumpto_from              = 0;       // 48 24
     // u64 jumpto_to                = 0;       // 56 28
     Task_Regs nested_int_regs; // 64 32
@@ -103,14 +103,14 @@ struct CPU_Info {
     Kernel_Stack_Pointer machine_check_stack;
     Kernel_Stack_Pointer double_fault_stack;
 
-    GDT cpu_gdt;
+    ia32::interrupts::GDT cpu_gdt;
 
     u64 system_timer_val = 0;
     u32 timer_val        = 0;
 #endif
 #ifdef __i386__
-    TSS tss;
-    TSS double_fault_tss;
+    ia32::interrupts::TSS tss;
+    ia32::interrupts::TSS double_fault_tss;
     // TSS double_fault_tss;
     // TODO...
 #endif
@@ -120,8 +120,8 @@ struct CPU_Info {
 
 // Temporary memory mapper; This is arch specific
 #ifdef __i386__
-    Temp_Mapper *temp_mapper;
-    Temp_Mapper &get_temp_mapper() { return *temp_mapper; }
+    paging::Temp_Mapper *temp_mapper;
+    paging::Temp_Mapper &get_temp_mapper() { return *temp_mapper; }
 #elif defined(__x86_64__)
     x86_64::paging::x86_PAE_Temp_Mapper temp_mapper;
     x86_64::paging::x86_PAE_Temp_Mapper &get_temp_mapper() { return temp_mapper; }

@@ -4,12 +4,13 @@
 
 #include <x86_asm.hh>
 
+namespace kernel::ia32::paging
+{
+
 static x86_PAE_Temp_Mapper pae_mapper;
 static x86_2level_Mapper two_level_mapper;
 
-extern bool use_pae;
-
-Temp_Mapper *get_temp_temp_mapper(void *addr, u32 kernel_cr3)
+kernel::paging::Temp_Mapper *get_temp_temp_mapper(void *addr, u32 kernel_cr3)
 {
     if (use_pae) {
         pae_mapper = x86_PAE_Temp_Mapper(addr, kernel_cr3);
@@ -20,7 +21,7 @@ Temp_Mapper *get_temp_temp_mapper(void *addr, u32 kernel_cr3)
     }
 }
 
-Temp_Mapper *create_temp_mapper(void *virt_addr, u32 cr3)
+kernel::paging::Temp_Mapper *create_temp_mapper(void *virt_addr, u32 cr3)
 {
     if (!use_pae) {
         return new x86_2level_Mapper(virt_addr, cr3);
@@ -36,13 +37,13 @@ x86_2level_Mapper::x86_2level_Mapper(void *virt_addr, u32 cr3)
     u32 addr    = (u32)virt_addr;
     start_index = addr / 4096 % 1024;
 
-    Page_Table_Arguments arg {1, 1, 0, 0, 1, 000};
+    kernel::paging::Page_Table_Arguments arg {1, 1, 0, 0, 1, 000};
 
     auto pt_phys = prepare_pt_for(virt_addr, arg, cr3);
     if (pt_phys == -1ULL)
         panic("Can't initialize temp mapper");
 
-    Temp_Mapper_Obj<u32> tm(request_temp_mapper());
+    kernel::paging::Temp_Mapper_Obj<u32> tm(kernel::paging::request_temp_mapper());
     u32 *pt = tm.map(pt_phys);
 
     u32 entry = 0;
@@ -61,13 +62,13 @@ x86_PAE_Temp_Mapper::x86_PAE_Temp_Mapper(void *virt_addr, u32 cr3)
     u32 addr    = (u32)virt_addr;
     start_index = addr / 4096 % 512;
 
-    Page_Table_Arguments arg {1, 1, 0, 0, 1, 000};
+    kernel::paging::Page_Table_Arguments arg {1, 1, 0, 1, 1, 000};
 
     auto pt_phys = prepare_pt_for(virt_addr, arg, cr3);
     if (pt_phys == -1ULL)
         panic("Can't initialize temp mapper");
 
-    Temp_Mapper_Obj<pae_entry_t> tm(request_temp_mapper());
+    kernel::paging::Temp_Mapper_Obj<pae_entry_t> tm(kernel::paging::request_temp_mapper());
     pae_entry_t *pdpt = tm.map(pt_phys);
 
     pae_entry_t entry = 0;
@@ -158,3 +159,5 @@ void x86_PAE_Temp_Mapper::return_map(void *p)
 }
 
 u32 x86_PAE_Temp_Mapper::temp_mapper_get_index(u32 addr) { return (addr / 4096) % 512; }
+
+} // namespace kernel::ia32::paging

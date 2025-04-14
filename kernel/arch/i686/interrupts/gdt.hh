@@ -8,7 +8,7 @@ namespace sched
     struct CPU_Info;
 }
 
-namespace x86_64
+namespace ia32::interrupts
 {
 
 #define R0_CODE_SEGMENT            0x08
@@ -88,5 +88,5 @@ namespace x86_64
     void gdt_set_cpulocal(sched::CPU_Info *c);
     void unbusyTSS(GDT *gdt);
 
-} // namespace x86_64
+} // namespace ia32::interrupts
 } // namespace kernel
