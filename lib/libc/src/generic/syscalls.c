@@ -572,3 +572,21 @@ result_t set_port0(pmos_port_t port)
 #endif
     return result.result;
 }
+
+syscall_r set_namespace(uint64_t new_id, unsigned type)
+{
+    #ifdef __32BITSYSCALL
+    return __pmos_syscall32_3words(SYSCALL_SET_NAMESPACE, new_id, type);
+    #else
+    return pmos_syscall(SYSCALL_SET_NAMESPACE, new_id, type);
+    #endif
+}
+
+syscall_r create_right(uint64_t port_id, pmos_right_t *id_in_reciever, unsigned flags)
+{
+    #ifdef __32BITSYSCALL
+    return __pmos_syscall32_3words(SYSCALL_CREATE_RIGHT | (flags << 8), port_id, id_in_reciever);
+    #else
+    return pmos_syscall(SYSCALL_CREATE_RIGHT | (flags << 8), port_id, id_in_reciever);
+    #endif
+}

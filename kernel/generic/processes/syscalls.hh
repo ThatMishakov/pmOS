@@ -240,6 +240,12 @@ void syscall_unreference_mem_object();
 void syscall_cpu_for_interrupt();
 // Parameters: u32 gsi, flags
 
+void syscall_create_right();
+// Parameters: u64 port_id, flags
+
+void syscall_set_namespace();
+// Parameters: u64 task_group_id, u32 type
+
 void syscall_set_port0();
 
 struct SyscallRetval {

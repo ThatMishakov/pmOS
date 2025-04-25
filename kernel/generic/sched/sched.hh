@@ -103,7 +103,11 @@ struct CPU_Info {
     Kernel_Stack_Pointer machine_check_stack;
     Kernel_Stack_Pointer double_fault_stack;
 
+    #ifdef __i386__
     ia32::interrupts::GDT cpu_gdt;
+    #else
+    GDT cpu_gdt;
+    #endif
 
     u64 system_timer_val = 0;
     u32 timer_val        = 0;

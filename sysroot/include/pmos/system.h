@@ -45,6 +45,7 @@
 
 typedef uint64_t result_t;
 typedef uint64_t pmos_port_t;
+typedef uint64_t pmos_right_t;
 typedef uint64_t mem_object_t;
 
 typedef struct {
@@ -392,6 +393,29 @@ pmos_int_r allocate_interrupt(uint32_t gsi, uint32_t flags);
 
 #define PMOS_INTERRUPT_LEVEL_TRIG 0x01
 #define PMOS_INTERRUPT_ACTIVE_LOW 0x02
+
+/// @brief Sets the given namespace to the new value, returning the old value
+///
+/// This function sets the namespace of the caller process to the given value.
+/// For example, it might be used to set the rights namespace
+/// @param new_id New namespace task group ID
+/// @param type Type of the namespace (currently, NAMESPACE_TYPE_RIGHTS is supported)
+/// @return On success, returns the old namespace value
+syscall_r set_namespace(uint64_t new_id, unsigned type);
+#define NAMESPACE_RIGHTS 1
+
+/// @brief Creates a right for a given port
+///
+/// This function creates a right for the given port, in the active rights namespace.
+/// The port must be owned by the caller thread. The new right is send many by default,
+/// changable by the flags.
+/// @param port_id ID of the port (must be owned by the caller)
+/// @param id_in_reciever The otput for the ID of the right in the port, if not NULL.
+/// @param flags Flags (for example, CREATE_RIGHT_SEND_ONCE)
+/// @return On success, the right ID in the rights namespace (for sender). On failure,
+/// the error
+syscall_r create_right(uint64_t port_id, pmos_right_t *id_in_reciever, unsigned flags);
+#define CREATE_RIGHT_SEND_ONCE (1 << 0)
 
 #endif
 

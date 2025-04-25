@@ -59,6 +59,15 @@ void TaskGroup::destroy()
         }
     }
 
+    auto first_right = [this] {
+        Auto_Lock_Scope l(rights_lock);
+        auto r = rights.begin();
+        return r == rights.end() ? nullptr : &*r;
+    };
+
+    while (auto r = first_right())
+        r->destroy(this);
+
     rcu_head.rcu_func = [](void *self, bool) {
         TaskGroup *t = reinterpret_cast<TaskGroup *>(reinterpret_cast<char *>(self) -
                                                      offsetof(TaskGroup, rcu_head));
@@ -180,8 +189,8 @@ kresult_t TaskGroup::atomic_register_task(TaskDescriptor *task)
                         ptr->atomic_send_from_system(reinterpret_cast<char *>(&msg), sizeof(msg));
                     if (result) {
                         log::global_logger.printf("Warning: could not send message to port %i on "
-                                             "atomic_register_task: %i\n",
-                                             p.first, result);
+                                                  "atomic_register_task: %i\n",
+                                                  p.first, result);
                     }
                 }
             }
@@ -200,6 +209,10 @@ kresult_t TaskGroup::atomic_remove_task(TaskDescriptor *task)
             return -ENOENT;
 
         tasks.erase(task->task_id);
+
+        auto expected = this;
+        task->rights_namespace.compare_exchange_strong(expected, nullptr, std::memory_order::release,
+                                                       std::memory_order::consume);
 
         if (!alive())
             destroy();
@@ -225,8 +238,8 @@ kresult_t TaskGroup::atomic_remove_task(TaskDescriptor *task)
                         ptr->atomic_send_from_system(reinterpret_cast<char *>(&msg), sizeof(msg));
                     if (r) {
                         log::global_logger.printf("Warning: could not send message to port %i on "
-                                             "atomic_remove_task: %i\n",
-                                             p.first, r);
+                                                  "atomic_remove_task: %i\n",
+                                                  p.first, r);
                     }
                 }
             }
@@ -309,8 +322,8 @@ ReturnStr<u32> TaskGroup::atomic_change_notifier_mask(ipc::Port *port, u32 mask,
                 port->atomic_send_from_system(reinterpret_cast<char *>(&msg), sizeof(msg));
             if (result) {
                 log::global_logger.printf("Warning: could not send message to port %i on "
-                                     "atomic_change_notifier_mask: %i\n",
-                                     port_id, result);
+                                          "atomic_change_notifier_mask: %i\n",
+                                          port_id, result);
             }
         }
     }
@@ -332,6 +345,11 @@ bool TaskGroup::atomic_alive() const noexcept
 {
     Auto_Lock_Scope l(tasks_lock);
     return alive();
+}
+
+bool TaskGroup::task_in_group(u64 id) const
+{
+    return tasks.count(id);
 }
 
 } // namespace kernel::proc

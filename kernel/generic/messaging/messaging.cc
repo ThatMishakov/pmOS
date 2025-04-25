@@ -234,6 +234,16 @@ bool Port::delete_self() noexcept
         }
     }
 
+    auto get_first_right = [&] {
+        Auto_Lock_Scope l(rights_lock);
+        auto right = rights.begin();
+        return right != rights.end() ? *&right : nullptr;
+    };
+
+    while (auto p = get_first_right()) {
+        p->destroy();
+    }
+
     rcu_head.rcu_func = [](void *self, bool) {
         Port *t =
             reinterpret_cast<Port *>(reinterpret_cast<char *>(self) - offsetof(Port, rcu_head));
@@ -254,5 +264,11 @@ Port::~Port() noexcept
 }
 
 Port::Port(proc::TaskDescriptor *owner, u64 portno): owner(owner), portno(portno) {}
+
+bool Port::atomic_alive() const
+{
+    Auto_Lock_Scope l(lock);
+    return alive;
+}
 
 } // namespace kernel::ipc

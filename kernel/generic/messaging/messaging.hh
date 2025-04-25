@@ -27,6 +27,8 @@
  */
 
 #pragma once
+#include "rights.hh"
+
 #include <lib/list.hh>
 #include <lib/memory.hh>
 #include <lib/queue.hh>
@@ -75,7 +77,7 @@ class Port
 public:
     proc::TaskDescriptor *owner;
 
-    Spinlock lock;
+    mutable Spinlock lock;
     u64 portno;
     bool alive = true;
 
@@ -94,8 +96,9 @@ public:
 
     // Returns true if successfully sent, false otherwise (e.g. when it is needed to repeat the
     // syscall). Throws on crytical errors
-    ReturnStr<bool> atomic_send_from_user(proc::TaskDescriptor *sender, const char *unsafe_user_message,
-                                          size_t msg_size, u64 mem_object_id);
+    ReturnStr<bool> atomic_send_from_user(proc::TaskDescriptor *sender,
+                                          const char *unsafe_user_message, size_t msg_size,
+                                          u64 mem_object_id);
 
     void change_return_upon_unblock(proc::TaskDescriptor *task);
 
@@ -124,9 +127,18 @@ public:
     /// Deletes the port. Returns false if the port is already deleted
     bool delete_self() noexcept;
 
+    u64 new_right_id()
+    {
+        return ++current_right_id;
+    }
+
+    bool atomic_alive() const;
+
 protected:
     using Message_storage = pmos::containers::CircularDoubleList<Message, &Message::list_node>;
     Message_storage msg_queue;
+    u64 current_right_id = 0;
+
 
     union {
         pmos::containers::RBTreeNode<Port> bst_head_global;
@@ -145,8 +157,15 @@ protected:
     static inline global_ports_tree::RBTreeHead ports;
     static inline Spinlock ports_lock;
 
+    using rights_tree =
+        pmos::containers::RedBlackTree<Right, &Right::parent_port_head,
+                                       detail::TreeCmp<Right, u64, &Right::right_parent_id>>;
+    rights_tree::RBTreeHead rights;
+    Spinlock rights_lock;
+
     friend class proc::TaskGroup;
     friend class proc::TaskDescriptor;
+    friend struct Right;
 };
 
 kresult_t set_port0(Port *port);

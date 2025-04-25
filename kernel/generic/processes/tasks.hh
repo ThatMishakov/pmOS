@@ -45,6 +45,7 @@
 #include <registers.hh>
 #include <sched/defs.hh>
 #include <types.hh>
+#include <atomic>
 
 #if defined(__x86_64__) || defined(__i386__)
     #include <cpus/sse.hh>
@@ -118,6 +119,8 @@ namespace proc
         ports_tree::RBTreeHead owned_ports;
         ipc::Port *blocked_by;
         ipc::Port *sender_hint;
+
+        std::atomic<TaskGroup *> rights_namespace;
 
         // Scheduling info
         TaskDescriptor *queue_next = nullptr;

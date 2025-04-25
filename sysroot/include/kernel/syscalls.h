@@ -43,13 +43,13 @@
 
 #define SYSCALL_GET_MSG_INFO       9
 #define SYSCALL_GET_MESSAGE        10
-#define SYSCALL_REQUEST_NAMED_PORT 11
+// 11 is unused
 #define SYSCALL_SEND_MSG_PORT      12
 #define SYSCALL_CREATE_PORT        13
 #define SYSCALL_SET_ATTR           14
 #define SYSCALL_SET_INTERRUPT      15
-#define SYSCALL_NAME_PORT          16
-#define SYSCALL_GET_PORT_BY_NAME   17
+#define SYSCALL_CREATE_RIGHT       16
+#define SYSCALL_SET_NAMESPACE      17
 #define SYSCALL_SET_LOG_PORT       18
 
 #define SYSCALL_GET_PAGE_TABLE 19
@@ -90,5 +90,6 @@
 #define SYSCALL_MEM_OBJECT_GET_PAGE_ADDRESS 50
 #define SYSCALL_DELETE_PORT                 51
 #define SYSCALL_ALLOCATE_INTERRUPT          52
+#define SYSCALL_SET_PORT0                   53
 
 #endif

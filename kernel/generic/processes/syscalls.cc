@@ -61,7 +61,6 @@ using namespace kernel::ipc;
 using namespace kernel::paging;
 using namespace kernel::interrupts;
 
-
 ReturnStr<u32> acpi_wakeup_vec();
 extern void stop_cpus();
 extern void deactivate_page_table();
@@ -88,8 +87,8 @@ std::array<syscall_function, 54> syscall_table = {
     syscall_create_port,
     syscall_set_attribute,
     syscall_set_interrupt,
-    nullptr,
-    nullptr,
+    syscall_create_right,
+    syscall_set_namespace,
     syscall_set_log_port,
 
     syscall_get_page_table,
@@ -147,8 +146,9 @@ extern "C" void syscall_handler()
     // TODO: check permissions
 
     // t_print_bochs("Debug: syscall %h pid %h (%s) ", call_n,
-    // sched::get_cpu_struct()->current_task->task_id, sched::get_cpu_struct()->current_task->name.c_str());
-    // t_print_bochs(" %h %h %h %h %h ", arg1, arg2, arg3, arg4, arg5);
+    // sched::get_cpu_struct()->current_task->task_id,
+    // sched::get_cpu_struct()->current_task->name.c_str()); t_print_bochs(" %h %h %h %h %h ", arg1,
+    // arg2, arg3, arg4, arg5);
     if (task->attr.debug_syscalls) {
         serial_logger.printf("Debug: syscall %h pid %h\n", call_n,
                              sched::get_cpu_struct()->current_task->task_id);
@@ -1828,6 +1828,91 @@ void syscall_set_port0()
         syscall_error(current) = result;
     else
         syscall_success(current);
+}
+
+void syscall_set_namespace()
+{
+    auto current = get_current_task();
+
+    u64 id        = syscall_arg64(current, 0);
+    unsigned type = syscall_arg(current, 1, 1);
+    switch (type) {
+    case NAMESPACE_RIGHTS: {
+        auto old_namespace = current->rights_namespace.load(std::memory_order::consume);
+        auto group         = TaskGroup::get_task_group(id);
+        if (!group) {
+            syscall_error(current) = -ESRCH;
+            return;
+        }
+
+        {
+            Auto_Lock_Scope l(group->tasks_lock);
+            if (!group->alive()) {
+                syscall_error(current) = -ESRCH;
+                return;
+            }
+
+            if (!group->task_in_group(current->task_id)) {
+                syscall_error(current) = -ESRCH;
+                return;
+            }
+
+            current->rights_namespace.store(group, std::memory_order::release);
+        }
+
+        syscall_return(current) = old_namespace ? old_namespace->get_id() : 0;
+    } break;
+    default:
+        syscall_error(current) = -EINVAL;
+    }
+}
+
+void syscall_create_right()
+{
+    auto current = get_current_task();
+
+    u64 port_id    = syscall_arg64(current, 0);
+    ulong ptr      = syscall_arg(current, 1, 1);
+    unsigned flags = syscall_flags(current);
+
+    auto group = current->rights_namespace.load(std::memory_order::consume);
+    if (!group) {
+        syscall_error(current) = -ESRCH;
+        return;
+    }
+
+    auto port = Port::atomic_get_port(port_id);
+    if (!port) {
+        syscall_error(current) = -ESRCH;
+        return;
+    }
+
+    if (port->owner != current) {
+        syscall_error(current) = -EPERM;
+        return;
+    }
+
+    auto right_id = port->new_right_id();
+    if (ptr) {
+        auto b = copy_to_user((const char *)&right_id, (char *)ptr, sizeof(right_id));
+        if (!b.success()) {
+            syscall_error(current) = b.result;
+            return;
+        }
+
+        if (not b.val)
+            return;
+    }
+
+    bool send_once = flags & CREATE_RIGHT_SEND_ONCE;
+    RightType type = send_once ? RightType::SendOnce : RightType::SendMany;
+    auto result    = Right::create_for_group(port, group, type, right_id);
+    if (!result.success()) {
+        syscall_error(current) = result.result;
+        return;
+    }
+
+    syscall_return(current) = result.val->right_sender_id;
 }
 
 } // namespace kernel::proc::syscalls

@@ -34,6 +34,7 @@
 #include <pmos/containers/intrusive_bst.hh>
 #include <pmos/containers/intrusive_list.hh>
 #include <types.hh>
+#include <messaging/rights.hh>
 
 namespace kernel::proc
 {
@@ -127,11 +128,14 @@ public:
     bool alive() const noexcept;
     bool atomic_alive() const noexcept;
 
-private:
-    id_type id = __atomic_fetch_add(&next_id, 1, __ATOMIC_SEQ_CST);
+    bool task_in_group(u64 id) const;
 
+    // TODO: make this private...
     klib::splay_tree_map<u64, TaskDescriptor *> tasks;
     mutable Spinlock tasks_lock;
+    
+private:
+    id_type id = __atomic_fetch_add(&next_id, 1, __ATOMIC_SEQ_CST);
 
     union {
         pmos::containers::RBTreeNode<TaskGroup> bst_head_global = {};
@@ -177,6 +181,15 @@ private:
     ~TaskGroup() = default;
 
     void destroy();
+
+    using rights_tree =
+    pmos::containers::RedBlackTree<ipc::Right, &ipc::Right::task_group_head,
+                                   detail::TreeCmp<ipc::Right, u64, &ipc::Right::right_sender_id>>;
+    rights_tree::RBTreeHead rights;
+    mutable Spinlock rights_lock;
+    u64 current_right_id = 0;
+
+    friend struct ipc::Right;
 };
 
 }; // namespace kernel::proc

@@ -10,6 +10,7 @@
 #include <pmos/__internal.h>
 
 pmos_port_t worker_port;
+uint64_t worker_port_right;
 __attribute__((noreturn)) void _syscall_exit(int status);
 
 void *main_trampoline(void *);
@@ -82,12 +83,25 @@ void worker_main()
     }
     process_task_group = sys_result.value;
 
+    sys_result = set_namespace(process_task_group, NAMESPACE_RIGHTS);
+    if (sys_result.result != SUCCESS) {
+        fprintf(stderr, "pmOS libC: Failed to set task group namespace\n");
+        _syscall_exit(1);
+    }
+
     ports_request_t new_port = create_port(TASK_ID_SELF, 0);
     if (new_port.result != SUCCESS) {
         fprintf(stderr, "pmOS libC: Failed to initialize worker port\n");
         _syscall_exit(1);
     }
     worker_port = new_port.port;
+
+    uint64_t reciever_port;
+    sys_result = create_right(worker_port, &reciever_port, 0);
+    if (sys_result.result != SUCCESS) {
+        fprintf(stderr, "Failed to create the task group right\n");
+        _syscall_exit(1);
+    }
 
     // result_t r = request_named_port(processd_port_name, strlen(processd_port_name), worker_port, 0);
     // if (r != SUCCESS) {
