@@ -1,10 +1,22 @@
 #include "rights.hh"
+
 #include "messaging.hh"
-#include <sched/sched.hh>
+
 #include <processes/task_group.hh>
+#include <sched/sched.hh>
 
 namespace kernel::ipc
 {
+
+void Right::rcu_push()
+{
+    rcu_head.rcu_func = [](void *self, bool) {
+        Right *t =
+            reinterpret_cast<Right *>(reinterpret_cast<char *>(self) - offsetof(Right, rcu_head));
+        delete t;
+    };
+    sched::get_cpu_struct()->heap_rcu_cpu.push(&rcu_head);
+}
 
 bool Right::destroy(proc::TaskGroup *match_group)
 {
@@ -24,7 +36,8 @@ bool Right::destroy(proc::TaskGroup *match_group)
         parent->rights.erase(this);
     }
 
-    if (!of_message) { // If it is of message, let it be garbage collected when the message is destroyed (in place of placeholders...)
+    if (!of_message) { // If it is of message, let it be garbage collected when the message is
+                       // destroyed (in place of placeholders...)
         auto group = parent_group;
         assert(group);
 
@@ -33,18 +46,45 @@ bool Right::destroy(proc::TaskGroup *match_group)
             group->rights.erase(this);
         }
 
-        rcu_head.rcu_func = [](void *self, bool) {
-            Right *t =
-                reinterpret_cast<Right *>(reinterpret_cast<char *>(self) - offsetof(Right, rcu_head));
-            delete t;
-        };
-        sched::get_cpu_struct()->heap_rcu_cpu.push(&rcu_head);
+        rcu_push();
     }
 
     return true;
 }
 
-ReturnStr<Right *> Right::create_for_group(Port *port, proc::TaskGroup *group, RightType type, u64 id_in_parent)
+bool Right::destroy_nolock()
+{
+    assert(lock.is_locked());
+
+    if (!alive)
+        return false;
+
+    alive = false;
+
+    assert(parent);
+    {
+        Auto_Lock_Scope l(parent->rights_lock);
+        parent->rights.erase(this);
+    }
+
+    if (!of_message) { // If it is of message, let it be garbage collected when the message is
+                       // destroyed (in place of placeholders...)
+        auto group = parent_group;
+        assert(group);
+
+        {
+            Auto_Lock_Scope l(group->rights_lock);
+            group->rights.erase(this);
+        }
+
+        rcu_push();
+    }
+
+    return true;
+}
+
+ReturnStr<Right *> Right::create_for_group(Port *port, proc::TaskGroup *group, RightType type,
+                                           u64 id_in_parent)
 {
     assert(port);
     assert(group);
@@ -54,10 +94,11 @@ ReturnStr<Right *> Right::create_for_group(Port *port, proc::TaskGroup *group, R
     if (!new_right)
         return Error(-ENOMEM);
 
-    new_right->parent = port;
-    new_right->parent_group = group;
-    new_right->of_message = false;
+    new_right->parent          = port;
+    new_right->parent_group    = group;
+    new_right->of_message      = false;
     new_right->right_parent_id = id_in_parent;
+    new_right->type            = type;
 
     // I don't know if this lock situation is good...
     Auto_Lock_Scope l(new_right->lock);
@@ -78,4 +119,13 @@ ReturnStr<Right *> Right::create_for_group(Port *port, proc::TaskGroup *group, R
     return Success(new_right.release());
 }
 
+bool Right::of_group(proc::TaskGroup *g) const { return !of_message && parent_group == g; }
+
+void Right::destroy_deleting_message()
+{
+    destroy();
+    assert(of_message);
+    rcu_push();
 }
+
+} // namespace kernel::ipc

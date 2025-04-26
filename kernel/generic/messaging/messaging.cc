@@ -271,4 +271,94 @@ bool Port::atomic_alive() const
     return alive;
 }
 
+ReturnStr<Right *> Port::send_message_right(Right *right, proc::TaskGroup *verify_group,
+                                            Port *reply_port, rights_array array,
+                                            message_buffer data, uint64_t sender_id)
+{
+    assert(right);
+    assert(verify_group);
+
+    auto send_to = right->parent;
+
+    klib::unique_ptr<Message> msg = new Message(sender_id, std::move(data));
+    if (!msg)
+        return Error(-ENOMEM);
+
+    klib::unique_ptr<Right> reply_right = nullptr;
+    if (reply_port) {
+        reply_right = klib::make_unique<Right>();
+        if (!reply_right)
+            return Error(-ENOMEM);
+
+        reply_right->of_message     = true;
+        reply_right->parent_message = msg.get();
+        reply_right->parent         = reply_port;
+    }
+
+    msg->sent_with_right = right->right_parent_id;
+
+    LockCarousel<Spinlock, 5> locks;
+    locks.insert(right->lock);
+
+    bool extra_rights = false;
+    for (auto i: array) {
+        if (i)
+            extra_rights = true;
+
+        if (i && !locks.insert(i->lock))
+            return Error(-EINVAL);
+    }
+
+    {
+        Auto_Lock_Scope l(locks);
+
+        if (!right->alive || right->of_group(verify_group))
+            return Error(-ENOENT);
+
+        for (auto p: array) {
+            if (p && (!p->alive || p->of_group(verify_group)))
+                return Error(-ENOENT);
+        }
+
+        if (right->type == RightType::SendOnce)
+            right->destroy_nolock();
+
+        if (extra_rights) {
+            Auto_Lock_Scope l(verify_group->rights_lock);
+            for (auto r: array) {
+                verify_group->rights.erase(r);
+                r->of_message     = true;
+                r->parent_message = msg.get();
+            }
+        }
+    }
+
+    if (reply_port) {
+        assert(reply_port->alive);
+        reply_right->right_parent_id = reply_port->new_right_id();
+        Auto_Lock_Scope l(reply_port->rights_lock);
+        reply_port->rights.insert(reply_right.release());
+    }
+
+    msg->reply_right = reply_right.get();
+    msg->rights      = array;
+
+    {
+        Auto_Lock_Scope l(send_to->lock);
+        send_to->enqueue(std::move(msg));
+    }
+
+    return Success(reply_right.release());
+}
+
+Message::~Message()
+{
+    if (reply_right)
+        reply_right->destroy_deleting_message();
+
+    for (auto right : rights)
+        if (right)
+            right->destroy_deleting_message();
+}
+
 } // namespace kernel::ipc

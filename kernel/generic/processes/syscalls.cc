@@ -82,7 +82,7 @@ std::array<syscall_function, 54> syscall_table = {
 
     syscall_get_message_info,
     syscall_get_first_message,
-    nullptr,
+    send_message_right,
     syscall_send_message_port,
     syscall_create_port,
     syscall_set_attribute,
@@ -1913,6 +1913,71 @@ void syscall_create_right()
     }
 
     syscall_return(current) = result.val->right_sender_id;
+}
+
+void send_message_right()
+{
+    auto current = get_current_task();
+
+    u64 right_id = syscall_arg64(current, 0);
+    u64 reply_port_id = syscall_arg64(current, 1);
+
+    ulong args[3];
+    auto result = syscall_args_checked(current, 2, 2, 3, args);
+    if (!result.success()) {
+        syscall_error(current) = result.result;
+        return;
+    }
+
+    if (!result.val)
+        return;
+
+    auto [size, message, _] = args;
+    auto buffer = to_buffer_from_user((void *)message, size);
+    if (!buffer.success()) {
+        syscall_error(current) = result.result;
+        return;
+    }
+
+    if (!buffer.val)
+        return;
+
+    // TODO: sending rights
+
+    auto group = current->rights_namespace.load(std::memory_order::consume);
+    if (!group) {
+        syscall_error(current) = -ESRCH;
+        return;
+    }
+
+    auto right = group->atomic_get_right(right_id);
+    if (!right) {
+        syscall_error(current) = -ESRCH;
+        return;
+    }
+
+    Port *reply_port = nullptr;
+    if (reply_port_id) {
+        reply_port = Port::atomic_get_port(reply_port_id);
+        if (!reply_port) {
+            syscall_error(current) = -ENOENT;
+            return;
+        }
+
+        if (reply_port->owner != current) {
+            syscall_error(current) = -EPERM;
+            return;
+        }
+    }
+
+    ipc::rights_array rights = {};
+    auto send_result = Port::send_message_right(right, group, reply_port, rights, std::move(*buffer.val), current->task_id);
+    if (!send_result.success()) {
+        syscall_error(current) = send_result.result;
+        return;
+    }
+
+    syscall_return(current) = send_result.val ? send_result.val->right_parent_id : 0;
 }
 
 } // namespace kernel::proc::syscalls

@@ -29,6 +29,7 @@
 #pragma once
 #include "rights.hh"
 
+#include <array>
 #include <lib/list.hh>
 #include <lib/memory.hh>
 #include <lib/queue.hh>
@@ -53,9 +54,12 @@ namespace kernel::ipc
 
 struct Message {
     pmos::containers::DoubleListHead<Message> list_node;
-    u64 task_id_from  = 0;
-    u64 mem_object_id = 0;
+    u64 task_id_from    = 0;
+    u64 mem_object_id   = 0;
+    u64 sent_with_right = 0;
     klib::vector<char> content;
+    Right *reply_right            = {};
+    std::array<Right *, 4> rights = {};
 
     Message(u64 task_id_from, klib::vector<char> content, u64 mem_object_id = 0)
         : task_id_from(task_id_from), mem_object_id(mem_object_id), content(klib::move(content))
@@ -66,11 +70,16 @@ struct Message {
 
     // Returns true if done successfully, false otherwise (e.g. when syscall needs to be repeated)
     ReturnStr<bool> copy_to_user_buff(char *buff);
+
+    ~Message();
 };
 
 #define MSG_ATTR_PRESENT   0x01ULL
 #define MSG_ATTR_DUMMY     0x02ULL
 #define MSG_ATTR_NODEFAULT 0x03ULL
+
+using rights_array   = std::array<Right *, 4>;
+using message_buffer = klib::vector<char>;
 
 class Port
 {
@@ -127,18 +136,18 @@ public:
     /// Deletes the port. Returns false if the port is already deleted
     bool delete_self() noexcept;
 
-    u64 new_right_id()
-    {
-        return ++current_right_id;
-    }
+    u64 new_right_id() { return ++current_right_id; }
 
     bool atomic_alive() const;
+
+    static ReturnStr<Right *> send_message_right(Right *right, proc::TaskGroup *verify_group,
+                                                 Port *reply_port, rights_array array,
+                                                 message_buffer data, uint64_t sender_id);
 
 protected:
     using Message_storage = pmos::containers::CircularDoubleList<Message, &Message::list_node>;
     Message_storage msg_queue;
     u64 current_right_id = 0;
-
 
     union {
         pmos::containers::RBTreeNode<Port> bst_head_global;

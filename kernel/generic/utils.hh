@@ -30,6 +30,8 @@
 #include "types.hh"
 
 #include <stddef.h>
+#include <optional>
+#include <lib/vector.hh>
 
 namespace kernel::log
 {
@@ -68,6 +70,8 @@ void clear_page(u64 phys_addr, u64 pattern = 0);
 
 void copy_from_phys(u64 phys_addr, void *to, size_t size);
 klib::string capture_from_phys(u64 phys_addr);
+
+ReturnStr<std::optional<klib::vector<char>>> to_buffer_from_user(void *ptr, size_t size);
 
 template<class A> const A &max(const A &a, const A &b) noexcept
 {

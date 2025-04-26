@@ -27,6 +27,7 @@
  */
 
 #pragma once
+#include <array>
 #include <assert.h>
 #include <concepts>
 #include <kernel/types.h>
@@ -50,6 +51,8 @@ template<class T> struct ReturnStr {
     ReturnStr(Error e): result {e.result}, val {} {};
     ReturnStr(T val): result {0}, val(klib::move(val)) {};
 
+    template<class U> ReturnStr(ReturnStr<U> u): result {u.result}, val(std::move(u.val)) {};
+
     Error propagate() const
     {
         assert(result);
@@ -68,7 +71,7 @@ template<class T> struct ReturnStr {
     static ReturnStr success(T val) { return {0, klib::move(val)}; }
 };
 
-template<typename T> ReturnStr<T> Success(T r) { return ReturnStr<T>::success(r); }
+template<typename T> ReturnStr<T> Success(T r) { return ReturnStr<T>::success(std::move(r)); }
 
 extern "C" void t_print_bochs(const char *str, ...);
 
@@ -113,7 +116,7 @@ public:
 template<typename T>
 concept spinlock_type = requires(T s) {
     { s.lock() } -> std::same_as<void>;
-    { s.try_lock() } -> std::same_as<bool>;
+    // { s.try_lock() } -> std::same_as<bool>;
     { s.unlock() } -> std::same_as<void>;
 };
 
@@ -172,6 +175,44 @@ template<spinlock_type T> struct Lock_Guard_Simul {
         a.unlock();
         if (&a != &b)
             b.unlock();
+    }
+};
+
+template<spinlock_type T, size_t max_locks> struct LockCarousel {
+    std::array<T *, max_locks> locks;
+    size_t count = 0;
+
+    bool insert(T &lock)
+    {
+        T *ptr   = &lock;
+        size_t i = 0;
+        for (; i < count; ++i) {
+            if (locks[i] == ptr)
+                return false;
+            if (locks[i] > ptr)
+                break;
+        }
+        assert(count < max_locks);
+        for (size_t j = count; j > i; --j)
+            locks[j] = locks[j - 1];
+        locks[i] = ptr;
+        ++count;
+        return true;
+    }
+
+    void reset() { count = 0; }
+
+    void lock()
+    {
+        for (size_t i = 0; i < count; ++i)
+            locks[i]->lock();
+    }
+
+    void unlock()
+    {
+        for (size_t i = count; i > 0; --i) {
+            locks[i - 1]->unlock();
+        }
     }
 };
 

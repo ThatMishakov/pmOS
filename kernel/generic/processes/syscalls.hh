@@ -246,6 +246,9 @@ void syscall_create_right();
 void syscall_set_namespace();
 // Parameters: u64 task_group_id, u32 type
 
+void send_message_right();
+// Parameters: u64 right, u64 reply_port, size_t size, void *message, void *aux_stuff (todo)
+
 void syscall_set_port0();
 
 struct SyscallRetval {

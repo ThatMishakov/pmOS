@@ -36,6 +36,10 @@
 #include <types.hh>
 #include <messaging/rights.hh>
 
+namespace kernel::ipc {
+    class Port;
+}
+
 namespace kernel::proc
 {
 
@@ -133,6 +137,8 @@ public:
     // TODO: make this private...
     klib::splay_tree_map<u64, TaskDescriptor *> tasks;
     mutable Spinlock tasks_lock;
+
+    ipc::Right *atomic_get_right(u64 right_id);
     
 private:
     id_type id = __atomic_fetch_add(&next_id, 1, __ATOMIC_SEQ_CST);
@@ -190,6 +196,7 @@ private:
     u64 current_right_id = 0;
 
     friend struct ipc::Right;
+    friend class ipc::Port;
 };
 
 }; // namespace kernel::proc

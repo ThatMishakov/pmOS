@@ -352,4 +352,11 @@ bool TaskGroup::task_in_group(u64 id) const
     return tasks.count(id);
 }
 
+ipc::Right *TaskGroup::atomic_get_right(u64 right_id)
+{
+    Auto_Lock_Scope l(rights_lock);
+    auto it = rights.find(right_id);
+    return it == rights.end() ? nullptr : &*it;
+}
+
 } // namespace kernel::proc

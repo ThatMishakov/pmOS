@@ -667,3 +667,19 @@ extern "C" ReturnStr<bool> user_access_page_fault(unsigned access, const char *f
 
     return result;
 }
+
+ReturnStr<std::optional<klib::vector<char>>> to_buffer_from_user(void *ptr, size_t size)
+{
+    klib::vector<char> data;
+    if (!data.reserve(size))
+        return Error(-ENOMEM);
+
+    auto result = copy_from_user(&data.front(), (char *)ptr, size );
+    if (!result.success())
+        return result.propagate();
+
+    if (!result.val)
+        return Success(std::nullopt);
+
+    return Success(std::move(data));
+}

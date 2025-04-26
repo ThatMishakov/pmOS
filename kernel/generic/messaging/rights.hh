@@ -1,8 +1,8 @@
 #pragma once
 
+#include <memory/rcu.hh>
 #include <pmos/containers/intrusive_bst.hh>
 #include <types.hh>
-#include <memory/rcu.hh>
 
 namespace kernel::proc
 {
@@ -47,8 +47,15 @@ struct Right {
     Spinlock lock;
 
     bool destroy(proc::TaskGroup *match_group = nullptr);
+    bool destroy_nolock();
+    void destroy_deleting_message();
 
-    static ReturnStr<Right *> create_for_group(Port *port, proc::TaskGroup *group, RightType type, u64 id_in_parent);
+    void rcu_push();
+
+    static ReturnStr<Right *> create_for_group(Port *port, proc::TaskGroup *group, RightType type,
+                                               u64 id_in_parent);
+
+    bool of_group(proc::TaskGroup *) const;
 };
 
 } // namespace kernel::ipc

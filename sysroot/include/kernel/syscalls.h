@@ -43,7 +43,7 @@
 
 #define SYSCALL_GET_MSG_INFO       9
 #define SYSCALL_GET_MESSAGE        10
-// 11 is unused
+#define SYSCALL_SEND_MSG_RIGHT     11
 #define SYSCALL_SEND_MSG_PORT      12
 #define SYSCALL_CREATE_PORT        13
 #define SYSCALL_SET_ATTR           14
