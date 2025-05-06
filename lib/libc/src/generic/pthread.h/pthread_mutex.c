@@ -171,8 +171,8 @@ int pthread_mutex_lock(pthread_mutex_t *mutex)
 
     assert(reply_descriptor.size == sizeof(IPC_Mutex_Unlock));
 
-    result = get_first_message((char *)&unlock_signal, sizeof(IPC_Mutex_Unlock),
-                               waiter->notification_port);
+    result = get_first_message((char *)&unlock_signal, MSG_ARG_REJECT_RIGHT,
+                               waiter->notification_port).result;
 
     // Again, this function should never fail unless something is really wrong
     assert(result == SUCCESS);

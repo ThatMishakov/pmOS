@@ -581,7 +581,7 @@ uacpi_u64 uacpi_kernel_get_nanoseconds_since_boot(void)
 
 struct isr_data {
     pthread_t isr_thread;
-    pmos_port_t port;
+    pmos_port_t right;
     uacpi_interrupt_handler handler;
     uacpi_handle ctx;
     uacpi_u32 irq;
@@ -599,41 +599,48 @@ struct IPC_ISR_Unregister {
     uint32_t type;
 };
 
-void send_isr_reply(pmos_port_t port, uacpi_status status)
+void send_isr_reply(pmos_right_t right, uacpi_status status)
 {
     struct IPC_ISR_Reply reply = {.type = IPC_ISR_Reply_NUM, .status = status};
 
-    send_message_port(port, sizeof(reply), &reply);
+    send_message_right(right, INVALID_PORT, &reply, sizeof(reply), NULL, 0);
 }
 
 void *isr_func(void *arg)
 {
-    struct isr_data *data  = arg;
-    pmos_port_t reply_port = data->port;
+    struct isr_data *data   = arg;
+    pmos_port_t reply_right = data->right;
 
     ports_request_t p = create_port(TASK_ID_SELF, 0);
     if (p.result != SUCCESS) {
-        send_isr_reply(reply_port, UACPI_STATUS_INTERNAL_ERROR);
+        send_isr_reply(reply_right, UACPI_STATUS_INTERNAL_ERROR);
         return NULL;
     }
-    data->port = p.port;
+
+    uint64_t right_reciever;
+    auto rr = create_right(p.port, &right_reciever, 0);
+    if (rr.result != SUCCESS) {
+        send_isr_reply(reply_right, UACPI_STATUS_INTERNAL_ERROR);
+        return NULL;
+    }
+    data->right = rr.value;
 
     uint32_t int_vector = 0;
     int r               = install_isa_interrupt(data->irq, 0, p.port, &int_vector);
     if (r < 0) {
-        send_isr_reply(reply_port, UACPI_STATUS_INTERNAL_ERROR);
+        send_isr_reply(reply_right, UACPI_STATUS_INTERNAL_ERROR);
         return NULL;
     }
 
 #if defined(__x86_64__) || defined(__i386__)
     int result = pmos_request_io_permission();
     if (result != SUCCESS) {
-        send_isr_reply(reply_port, UACPI_STATUS_INTERNAL_ERROR);
+        send_isr_reply(reply_right, UACPI_STATUS_INTERNAL_ERROR);
         return NULL;
     }
 #endif
 
-    send_isr_reply(reply_port, UACPI_STATUS_OK);
+    send_isr_reply(reply_right, UACPI_STATUS_OK);
 
     while (true) {
         Message_Descriptor msg;
@@ -686,14 +693,22 @@ uacpi_status uacpi_kernel_install_interrupt_handler(uacpi_u32 irq, uacpi_interru
     if (data == NULL)
         return UACPI_STATUS_OUT_OF_MEMORY;
 
+    uint64_t id = 0;
+    auto right  = create_right(reply_port, &id, CREATE_RIGHT_SEND_ONCE);
+    if (right.result != SUCCESS) {
+        free(data);
+        return UACPI_STATUS_INTERNAL_ERROR;
+    }
+
     data->handler  = handler;
     data->ctx      = ctx;
     data->irq      = irq;
-    data->port     = reply_port;
+    data->right    = right.value;
     data->refcount = 2;
 
     int result = pthread_create(&data->isr_thread, NULL, isr_func, data);
     if (result != 0) {
+        delete_right(right.result);
         free(data);
         return UACPI_STATUS_INTERNAL_ERROR;
     }
@@ -725,7 +740,7 @@ uacpi_status uacpi_kernel_uninstall_interrupt_handler(uacpi_interrupt_handler,
     struct isr_data *data         = irq_handle;
     struct IPC_ISR_Unregister msg = {.type = IPC_ISR_Unregister_NUM};
 
-    send_message_port(data->port, sizeof(msg), &msg);
+    send_message_right(data->right, INVALID_PORT, &msg, sizeof(msg), NULL, 0);
     pthread_detach(data->isr_thread);
     if (__atomic_sub_fetch(&data->refcount, 1, __ATOMIC_SEQ_CST) == 0)
         free(data);

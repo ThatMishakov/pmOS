@@ -63,7 +63,7 @@ pid_t fork(void)
             goto error;
         }
 
-        result = get_first_message((char *)&reply, sizeof(reply), reply_port);
+        result = get_first_message((char *)&reply, MSG_ARG_REJECT_RIGHT, reply_port).result;
         if (result != 0) {
             continue;
         }

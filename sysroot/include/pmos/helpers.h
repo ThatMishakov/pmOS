@@ -29,9 +29,11 @@
 #ifndef _PMOS_HELPERS_H
 #define _PMOS_HELPERS_H
 
+#include "containers/rbtree.h"
 #include "system.h"
 
 #include <kernel/messaging.h>
+#include <stdio.h>
 
 #if defined(__cplusplus)
 extern "C" {
@@ -46,7 +48,7 @@ typedef uint64_t pmos_port_t;
  * fills it with the content. Internally, calls get_message_info() and get_first_message()
  *
  * @param desc Pointer to the memory location where Message_descriptor will be filled
- * @param message malloc'ed message. To avoid memory leaks, it should be free'd after no longer
+ * @param message malloc'ed message. To avoid memory leaks, it should be freed when it's no longer
  * nedded
  * @param port Valid port, to which the callee should be the owner, from where to get the message
  * @return result of the execution
@@ -63,6 +65,40 @@ result_t get_message(Message_Descriptor *desc, unsigned char **message, pmos_por
  * @return int 0 on success, -1 on failure. Sets errno on error
  */
 int pmos_request_timer(pmos_port_t port, uint64_t ms, uint64_t extra);
+
+int pmos_msgloop_compare(uint64_t *a, uint64_t *b);
+int pmos_msgloop_key_compare(uint64_t *a, uint64_t b);
+
+void pmos_hexdump(FILE *stream, const char *data, size_t data_size);
+
+struct pmos_msgloop_data;
+typedef int (*pmos_msgloop_callback_t)(Message_Descriptor *desc, void *message,
+                                       pmos_right_t *reply_right, void *ctx,
+                                       struct pmos_msgloop_data *data);
+struct msgloop_data {
+    uint64_t right_id;
+    pmos_msgloop_callback_t callback;
+    void *ctx;
+};
+
+RBTREE(pmos_msgloop_tree, struct msgloop_data, pmos_msgloop_compare, pmos_msgloop_compare);
+struct pmos_msgloop_data {
+    pmos_msgloop_tree_tree_t nodes;
+    pmos_port_t port;
+    pmos_msgloop_tree_node_t *default_node;
+};
+
+void pmos_msgloop_initialize(struct pmos_msgloop_data *data, pmos_port_t port);
+void pmos_msgloop_insert(struct pmos_msgloop_data *data, pmos_msgloop_tree_node_t *node);
+pmos_msgloop_tree_node_t *pmos_msgloop_get(struct pmos_msgloop_data *data, pmos_right_t right);
+int pmos_msgloop_erase(struct pmos_msgloop_data *data, pmos_msgloop_tree_node_t *node);
+void pmos_msgloop_loop(struct pmos_msgloop_data *data);
+
+void pmos_msgloop_node_set(pmos_msgloop_tree_node_t *n, pmos_right_t right_id,
+                           pmos_msgloop_callback_t callback, void *ctx);
+
+#define PMOS_MSGLOOP_CONTINUE 0
+#define PMOS_MSGLOOP_BREAK    1
 
 #endif
 

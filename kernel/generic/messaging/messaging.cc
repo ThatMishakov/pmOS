@@ -273,7 +273,8 @@ bool Port::atomic_alive() const
 
 ReturnStr<Right *> Port::send_message_right(Right *right, proc::TaskGroup *verify_group,
                                             Port *reply_port, rights_array array,
-                                            message_buffer data, uint64_t sender_id)
+                                            message_buffer data, uint64_t sender_id,
+                                            RightType new_right_type, bool always_destroy_right)
 {
     assert(right);
     assert(verify_group);
@@ -293,6 +294,7 @@ ReturnStr<Right *> Port::send_message_right(Right *right, proc::TaskGroup *verif
         reply_right->of_message     = true;
         reply_right->parent_message = msg.get();
         reply_right->parent         = reply_port;
+        reply_right->type           = new_right_type;
     }
 
     msg->sent_with_right = right->right_parent_id;
@@ -312,7 +314,7 @@ ReturnStr<Right *> Port::send_message_right(Right *right, proc::TaskGroup *verif
     {
         Auto_Lock_Scope l(locks);
 
-        if (!right->alive || right->of_group(verify_group))
+        if (!right->alive || !right->of_group(verify_group))
             return Error(-ENOENT);
 
         for (auto p: array) {
@@ -320,7 +322,7 @@ ReturnStr<Right *> Port::send_message_right(Right *right, proc::TaskGroup *verif
                 return Error(-ENOENT);
         }
 
-        if (right->type == RightType::SendOnce)
+        if (right->type == RightType::SendOnce || always_destroy_right)
             right->destroy_nolock();
 
         if (extra_rights) {
@@ -331,21 +333,21 @@ ReturnStr<Right *> Port::send_message_right(Right *right, proc::TaskGroup *verif
                 r->parent_message = msg.get();
             }
         }
-    }
 
-    if (reply_port) {
-        assert(reply_port->alive);
-        reply_right->right_parent_id = reply_port->new_right_id();
-        Auto_Lock_Scope l(reply_port->rights_lock);
-        reply_port->rights.insert(reply_right.release());
-    }
+        if (reply_port) {
+            assert(reply_port->alive);
+            reply_right->right_parent_id = reply_port->new_right_id();
+            Auto_Lock_Scope l(reply_port->rights_lock);
+            reply_port->rights.insert(reply_right.release());
+        }
 
-    msg->reply_right = reply_right.get();
-    msg->rights      = array;
+        msg->reply_right = reply_right.get();
+        msg->rights      = array;
 
-    {
-        Auto_Lock_Scope l(send_to->lock);
-        send_to->enqueue(std::move(msg));
+        {
+            Auto_Lock_Scope l(send_to->lock);
+            send_to->enqueue(std::move(msg));
+        }
     }
 
     return Success(reply_right.release());
@@ -356,7 +358,7 @@ Message::~Message()
     if (reply_right)
         reply_right->destroy_deleting_message();
 
-    for (auto right : rights)
+    for (auto right: rights)
         if (right)
             right->destroy_deleting_message();
 }

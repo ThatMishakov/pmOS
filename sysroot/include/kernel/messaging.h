@@ -32,13 +32,20 @@
 
 #define SYSTEM_MESSAGES_START (0x01UL << 31)
 
+#define MESSAGE_FLAG_REPLY_RIGHT     (1 << 0)
+#define MESSAGE_FLAG_REPLY_SEND_MANY (1 << 1)
 typedef struct {
     u64 sender;
     u64 mem_object;
     u64 size;
+    u64 sender_object_id;
+    u64 sent_with_right;
+    u32 other_rights_count;
+    u32 flags;
 } Message_Descriptor;
 
-#define MSG_ARG_NOPOP 0x01
+#define MSG_ARG_NOPOP        0x01
+#define MSG_ARG_REJECT_RIGHT 0x02
 
 typedef struct {
     u32 type;

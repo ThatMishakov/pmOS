@@ -48,7 +48,7 @@ int nanosleep(const struct timespec *req, struct timespec *rem)
     // Check if the message size is correct
     assert(reply_descriptor.size == sizeof(IPC_Timer_Reply));
 
-    result = get_first_message((char *)&reply, sizeof(reply), sleep_reply_port);
+    result = get_first_message((char *)&reply, MSG_ARG_REJECT_RIGHT, sleep_reply_port).result;
 
     __return_cmd_reply_port(sleep_reply_port);
 

@@ -91,5 +91,6 @@
 #define SYSCALL_DELETE_PORT                 51
 #define SYSCALL_ALLOCATE_INTERRUPT          52
 #define SYSCALL_SET_PORT0                   53
+#define SYSCALL_DELETE_SEND_RIGHT           54
 
 #endif

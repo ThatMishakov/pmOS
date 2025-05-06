@@ -41,7 +41,7 @@ result_t get_message(Message_Descriptor *desc, unsigned char **message, pmos_por
         return -ENOMEM; // This needs to be changed
     }
 
-    result = get_first_message(*message, 0, port);
+    result = get_first_message(*message, MSG_ARG_REJECT_RIGHT, port).result;
     if (result != SUCCESS) {
         free(*message);
     }

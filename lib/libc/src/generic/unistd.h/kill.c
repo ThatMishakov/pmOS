@@ -62,7 +62,7 @@ int kill(pid_t pid, int sig)
         goto error;
     }
     
-    result = get_first_message((char *)&reply, sizeof(reply), reply_port);
+    result = get_first_message((char *)&reply, MSG_ARG_REJECT_RIGHT, reply_port).result;
     if (result != SUCCESS) {
         fprintf(stderr, "pmOS libC: Error getting message in kill(): %ld\n", result);
         errno = -result;

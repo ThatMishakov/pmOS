@@ -33,6 +33,7 @@
 #include <errno.h>
 #include <kernel/messaging.h>
 #include <kernel/syscalls.h>
+#include <pmos/helpers.h>
 #include <pmos/ipc.h>
 #include <pmos/load_data.h>
 #include <pmos/ports.h>
@@ -224,9 +225,218 @@ void set_print_callback(int result, const char * /* port_name */, pmos_port_t po
         set_print_syscalls(port);
 }
 
+static const char *log_port_name = "/pmos/terminald";
+static char *vfsd_port_name      = "/pmos/vfsd";
+
+int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *, void *, struct pmos_msgloop_data *)
+{
+    if (desc->size < 4) {
+        // Message too small
+    }
+
+    IPC_ACPI_Request_RSDT *ptr = (IPC_ACPI_Request_RSDT *)buff;
+
+    switch (ptr->type) {
+    case 0x60: {
+        IPC_ACPI_RSDT_Reply reply = {};
+
+        reply.type       = 0x61;
+        reply.result     = -ENOSYS;
+        reply.descriptor = 0;
+
+        if (rsdp_desc != 0) {
+            reply.result     = 0;
+            reply.descriptor = rsdp_desc;
+            print_str("********************************************\n");
+        }
+
+        send_message_port(ptr->reply_channel, sizeof(reply), &reply);
+    } break;
+    case IPC_FDT_Request_NUM: {
+        IPC_FDT_Reply reply = {.type              = IPC_FDT_Reply_NUM,
+                               .result            = -ENOSYS,
+                               .fdt_mem_object_id = 0,
+                               .object_offset     = 0,
+                               .object_size       = 0};
+
+        if (fdt_desc.memory_object != 0) {
+            reply.result            = 0;
+            reply.fdt_mem_object_id = fdt_desc.memory_object;
+            reply.object_offset     = fdt_desc.start_offset;
+            reply.object_size       = fdt_desc.mem_object_size;
+        }
+
+        send_message_port(ptr->reply_channel, sizeof(reply), &reply);
+    } break;
+    case 0x21: {
+        IPC_Kernel_Named_Port_Notification *notif = (IPC_Kernel_Named_Port_Notification *)ptr;
+        if (desc->size < sizeof(IPC_Kernel_Named_Port_Notification)) {
+            print_str(
+                "Loader: Recieved IPC_Kernel_Named_Port_Notification with unexpected size 0x");
+            print_hex(desc->size);
+            print_str("\n");
+            break;
+        }
+
+        size_t msg_size = desc->size - sizeof(IPC_Kernel_Named_Port_Notification);
+
+        if (strncmp(notif->port_name, log_port_name, msg_size) == 0) {
+            set_print_syscalls(notif->port_num);
+        } else if (strncmp(notif->port_name, vfsd_port_name, msg_size) == 0) {
+            initialize_filesystem(notif->port_num);
+        }
+    } break;
+    case IPC_Register_FS_Reply_NUM: {
+        IPC_Register_FS_Reply *a = (IPC_Register_FS_Reply *)ptr;
+        if (desc->size < sizeof(IPC_Register_FS_Reply)) {
+            print_str("Loader: Recieved IPC_Register_FS_Reply of unexpected size 0x");
+            print_hex(desc->size);
+            print_str("\n");
+            break;
+        }
+
+        if (fs_react_register_reply(a, desc->size, desc->sender) != 0) {
+            print_str("Loader: Error registering filesystem\n");
+        }
+        break;
+    }
+    case IPC_Mount_FS_Reply_NUM: {
+        IPC_Mount_FS_Reply *a = (IPC_Mount_FS_Reply *)ptr;
+        if (desc->size < sizeof(IPC_Mount_FS_Reply)) {
+            print_str("Loader: Recieved IPC_Mount_FS_Reply of unexpected size 0x");
+            print_hex(desc->size);
+            print_str("\n");
+            break;
+        }
+
+        if (fs_react_mount_reply(a, desc->size, desc->sender) != 0) {
+            print_str("Loader: Error mounting filesystem\n");
+        }
+
+        break;
+    }
+    case IPC_FS_Open_NUM: {
+        IPC_FS_Open *a          = (IPC_FS_Open *)ptr;
+        IPC_FS_Open_Reply reply = {.type = IPC_FS_Open_Reply_NUM};
+        if (desc->size >= sizeof(IPC_FS_Open)) {
+            int result = register_open_request(a, &reply);
+
+            if (result != 0) {
+                reply.result_code = result;
+            }
+            send_message_port(ptr->reply_channel, sizeof(reply), &reply);
+        } else {
+            print_str("Loader: Recieved IPC_FS_Open of unexpected size 0x");
+            print_hex(desc->size);
+            print_str("\n");
+        }
+
+        break;
+    }
+    case IPC_FS_Resolve_Path_NUM: {
+        IPC_FS_Resolve_Path *a = (IPC_FS_Resolve_Path *)ptr;
+        if (desc->size < sizeof(IPC_FS_Resolve_Path)) {
+            print_str("Loader: Recieved IPC_FS_Resolve_Path of unexpected size 0x");
+            print_hex(desc->size);
+            print_str("\n");
+            break;
+        }
+
+        fs_react_resolve_path(a, desc->size, desc->sender);
+
+        break;
+    }
+    case IPC_Read_NUM: {
+        IPC_Read *a = (IPC_Read *)ptr;
+        if (desc->size < sizeof(IPC_Read)) {
+            print_str("Loader: Recieved IPC_Read of unexpected size 0x");
+            print_hex(desc->size);
+            print_str("\n");
+            break;
+        }
+
+        fs_react_read(a, desc->size, desc->sender);
+
+        break;
+    }
+    case IPC_FS_Dup_NUM: {
+        IPC_FS_Dup *a = (IPC_FS_Dup *)ptr;
+        if (desc->size < sizeof(IPC_FS_Dup)) {
+            print_str("Loader: Recieved IPC_Dup of unexpected size 0x");
+            print_hex(desc->size);
+            print_str("\n");
+            break;
+        }
+
+        fs_react_dup(a, desc->size, desc->sender);
+
+        break;
+    }
+    case IPC_Framebuffer_Request_NUM: {
+        // Provide framebuffer
+        IPC_Framebuffer_Request *a = (IPC_Framebuffer_Request *)ptr;
+        if (desc->size < sizeof(IPC_Framebuffer_Request)) {
+            print_str("Loader: Recieved IPC_Framebuffer_Request of unexpected size 0x");
+            print_hex(desc->size);
+            print_str("\n");
+            break;
+        }
+
+        provide_framebuffer(a->reply_port, a->flags);
+
+        break;
+    }
+
+    case IPC_Get_Named_Port_NUM: {
+        IPC_Get_Named_Port *r = (IPC_Get_Named_Port *)ptr;
+        if (desc->size < sizeof(IPC_Get_Named_Port)) {
+            print_str("Loader: Recieved IPC_Get_Named_Port of unexpected size 0x");
+            print_hex(desc->size);
+            print_str("\n");
+            break;
+        }
+
+        size_t length = desc->size - sizeof(IPC_Get_Named_Port);
+        request_port_message(r->name, length, r->flags, r->reply_port);
+        break;
+    }
+
+    case IPC_Name_Port_NUM: {
+        IPC_Name_Port *r = (IPC_Name_Port *)ptr;
+        if (desc->size < sizeof(IPC_Name_Port)) {
+            print_str("Loader: Recieved IPC_Name_Port of unexpected size 0x");
+            print_hex(desc->size);
+            print_str("\n");
+            break;
+        }
+
+        size_t length = desc->size - sizeof(IPC_Name_Port);
+        auto result   = register_port(r->name, length, r->port);
+
+        IPC_Name_Port_Reply reply = {
+            .type   = IPC_Name_Port_Reply_NUM,
+            .flags  = 0,
+            .result = result,
+        };
+
+        send_message_port(r->reply_port, sizeof(reply), &reply);
+
+        break;
+    }
+
+    default:
+        print_str("Loader: Recievend unknown message with type ");
+        print_hex(ptr->type);
+        print_str(" from task ");
+        print_hex(desc->sender);
+        print_str("\n");
+    }
+
+    return 0;
+}
+
 void service_ports()
 {
-    char *log_port_name = "/pmos/terminald";
     auto result = request_port_callback(log_port_name, strlen(log_port_name), set_print_callback);
     if (result != SUCCESS) {
         print_str("Loader: could not request log port. Error: ");
@@ -235,7 +445,6 @@ void service_ports()
         goto exit;
     }
 
-    char *vfsd_port_name = "/pmos/vfsd";
     // res = request_named_port(vfsd_port_name, strlen(vfsd_port_name), loader_port, 0);
     // if (res != SUCCESS) {
     //     print_str("Loader: could not request vfsd port. Error: ");
@@ -244,228 +453,14 @@ void service_ports()
     //     goto exit;
     // }
 
-    while (1) {
-        Message_Descriptor desc;
-        result_t r = syscall_get_message_info(&desc, loader_port, 0);
+    struct pmos_msgloop_data data;
+    pmos_msgloop_initialize(&data, loader_port);
 
-        if (r != SUCCESS) {
-            print_str("Loader: Could not get message info. Error: ");
-            print_hex(r);
-            print_str("\n");
-            break;
-        }
+    pmos_msgloop_tree_node_t n;
+    pmos_msgloop_node_set(&n, 0, default_callback, NULL);
+    pmos_msgloop_insert(&data, &n);
+    pmos_msgloop_loop(&data);
 
-        char buff[desc.size];
-        r = get_first_message(buff, 0, loader_port);
-        if (r != SUCCESS) {
-            print_str("Loader: Could not get message. Error: ");
-            print_hex(r);
-            print_str("\n");
-            break;
-        }
-
-        if (desc.size < 4) {
-            // Message too small
-        }
-
-        IPC_ACPI_Request_RSDT *ptr = (IPC_ACPI_Request_RSDT *)buff;
-
-        switch (ptr->type) {
-        case 0x60: {
-            IPC_ACPI_RSDT_Reply reply = {};
-
-            reply.type       = 0x61;
-            reply.result     = -ENOSYS;
-            reply.descriptor = 0;
-
-            if (rsdp_desc != 0) {
-                reply.result     = 0;
-                reply.descriptor = rsdp_desc;
-                print_str("********************************************\n");
-            }
-
-            send_message_port(ptr->reply_channel, sizeof(reply), &reply);
-        } break;
-        case IPC_FDT_Request_NUM: {
-            IPC_FDT_Reply reply = {.type              = IPC_FDT_Reply_NUM,
-                                   .result            = -ENOSYS,
-                                   .fdt_mem_object_id = 0,
-                                   .object_offset     = 0,
-                                   .object_size       = 0};
-
-            if (fdt_desc.memory_object != 0) {
-                reply.result            = 0;
-                reply.fdt_mem_object_id = fdt_desc.memory_object;
-                reply.object_offset     = fdt_desc.start_offset;
-                reply.object_size       = fdt_desc.mem_object_size;
-            }
-
-            send_message_port(ptr->reply_channel, sizeof(reply), &reply);
-        } break;
-        case 0x21: {
-            IPC_Kernel_Named_Port_Notification *notif = (IPC_Kernel_Named_Port_Notification *)ptr;
-            if (desc.size < sizeof(IPC_Kernel_Named_Port_Notification)) {
-                print_str(
-                    "Loader: Recieved IPC_Kernel_Named_Port_Notification with unexpected size 0x");
-                print_hex(desc.size);
-                print_str("\n");
-                break;
-            }
-
-            size_t msg_size = desc.size - sizeof(IPC_Kernel_Named_Port_Notification);
-
-            if (strncmp(notif->port_name, log_port_name, msg_size) == 0) {
-                set_print_syscalls(notif->port_num);
-            } else if (strncmp(notif->port_name, vfsd_port_name, msg_size) == 0) {
-                initialize_filesystem(notif->port_num);
-            }
-        } break;
-        case IPC_Register_FS_Reply_NUM: {
-            IPC_Register_FS_Reply *a = (IPC_Register_FS_Reply *)ptr;
-            if (desc.size < sizeof(IPC_Register_FS_Reply)) {
-                print_str("Loader: Recieved IPC_Register_FS_Reply of unexpected size 0x");
-                print_hex(desc.size);
-                print_str("\n");
-                break;
-            }
-
-            if (fs_react_register_reply(a, desc.size, desc.sender) != 0) {
-                print_str("Loader: Error registering filesystem\n");
-            }
-            break;
-        }
-        case IPC_Mount_FS_Reply_NUM: {
-            IPC_Mount_FS_Reply *a = (IPC_Mount_FS_Reply *)ptr;
-            if (desc.size < sizeof(IPC_Mount_FS_Reply)) {
-                print_str("Loader: Recieved IPC_Mount_FS_Reply of unexpected size 0x");
-                print_hex(desc.size);
-                print_str("\n");
-                break;
-            }
-
-            if (fs_react_mount_reply(a, desc.size, desc.sender) != 0) {
-                print_str("Loader: Error mounting filesystem\n");
-            }
-
-            break;
-        }
-        case IPC_FS_Open_NUM: {
-            IPC_FS_Open *a          = (IPC_FS_Open *)ptr;
-            IPC_FS_Open_Reply reply = {.type = IPC_FS_Open_Reply_NUM};
-            if (desc.size >= sizeof(IPC_FS_Open)) {
-                int result = register_open_request(a, &reply);
-
-                if (result != 0) {
-                    reply.result_code = result;
-                }
-                send_message_port(ptr->reply_channel, sizeof(reply), &reply);
-            } else {
-                print_str("Loader: Recieved IPC_FS_Open of unexpected size 0x");
-                print_hex(desc.size);
-                print_str("\n");
-            }
-
-            break;
-        }
-        case IPC_FS_Resolve_Path_NUM: {
-            IPC_FS_Resolve_Path *a = (IPC_FS_Resolve_Path *)ptr;
-            if (desc.size < sizeof(IPC_FS_Resolve_Path)) {
-                print_str("Loader: Recieved IPC_FS_Resolve_Path of unexpected size 0x");
-                print_hex(desc.size);
-                print_str("\n");
-                break;
-            }
-
-            fs_react_resolve_path(a, desc.size, desc.sender);
-
-            break;
-        }
-        case IPC_Read_NUM: {
-            IPC_Read *a = (IPC_Read *)ptr;
-            if (desc.size < sizeof(IPC_Read)) {
-                print_str("Loader: Recieved IPC_Read of unexpected size 0x");
-                print_hex(desc.size);
-                print_str("\n");
-                break;
-            }
-
-            fs_react_read(a, desc.size, desc.sender);
-
-            break;
-        }
-        case IPC_FS_Dup_NUM: {
-            IPC_FS_Dup *a = (IPC_FS_Dup *)ptr;
-            if (desc.size < sizeof(IPC_FS_Dup)) {
-                print_str("Loader: Recieved IPC_Dup of unexpected size 0x");
-                print_hex(desc.size);
-                print_str("\n");
-                break;
-            }
-
-            fs_react_dup(a, desc.size, desc.sender);
-
-            break;
-        }
-        case IPC_Framebuffer_Request_NUM: {
-            // Provide framebuffer
-            IPC_Framebuffer_Request *a = (IPC_Framebuffer_Request *)ptr;
-            if (desc.size < sizeof(IPC_Framebuffer_Request)) {
-                print_str("Loader: Recieved IPC_Framebuffer_Request of unexpected size 0x");
-                print_hex(desc.size);
-                print_str("\n");
-                break;
-            }
-
-            provide_framebuffer(a->reply_port, a->flags);
-
-            break;
-        }
-
-        case IPC_Get_Named_Port_NUM: {
-            IPC_Get_Named_Port *r = (IPC_Get_Named_Port *)ptr;
-            if (desc.size < sizeof(IPC_Get_Named_Port)) {
-                print_str("Loader: Recieved IPC_Get_Named_Port of unexpected size 0x");
-                print_hex(desc.size);
-                print_str("\n");
-                break;
-            }
-
-            size_t length = desc.size - sizeof(IPC_Get_Named_Port);
-            request_port_message(r->name, length, r->flags, r->reply_port);
-            break;
-        }
-
-        case IPC_Name_Port_NUM: {
-            IPC_Name_Port *r = (IPC_Name_Port *)ptr;
-            if (desc.size < sizeof(IPC_Name_Port)) {
-                print_str("Loader: Recieved IPC_Name_Port of unexpected size 0x");
-                print_hex(desc.size);
-                print_str("\n");
-                break;
-            }
-
-            size_t length = desc.size - sizeof(IPC_Name_Port);
-            auto result = register_port(r->name, length, r->port);
-
-            IPC_Name_Port_Reply reply = {
-                .type = IPC_Name_Port_Reply_NUM,
-                .flags = 0,
-                .result = result,
-            };
-
-            send_message_port(r->reply_port, sizeof(reply), &reply);
-            
-            break;
-        }
-
-        default:
-            print_str("Loader: Recievend unknown message with type ");
-            print_hex(ptr->type);
-            print_str(" from task ");
-            print_hex(desc.sender);
-            print_str("\n");
-        }
-    }
 exit:
 }
 
@@ -501,5 +496,6 @@ int main()
     init_modules();
     init_misc();
     start_executables();
+
     service_ports();
 }

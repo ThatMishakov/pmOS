@@ -97,8 +97,8 @@ int pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex)
     // Check if the message is the unlock signal
     assert(reply_descriptor.size >= sizeof(IPC_Mutex_Unlock));
 
-    result = get_first_message((char *)&unlock_signal, sizeof(IPC_Mutex_Unlock),
-                               cond_waiter_struct.notification_port);
+    result = get_first_message((char *)&unlock_signal, MSG_ARG_REJECT_RIGHT,
+                               cond_waiter_struct.notification_port).result;
 
     // Again, this should never fail
     assert(result == SUCCESS);

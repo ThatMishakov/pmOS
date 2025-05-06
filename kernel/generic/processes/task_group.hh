@@ -139,7 +139,8 @@ public:
     mutable Spinlock tasks_lock;
 
     ipc::Right *atomic_get_right(u64 right_id);
-    
+    u64 atomic_new_right_id();
+
 private:
     id_type id = __atomic_fetch_add(&next_id, 1, __ATOMIC_SEQ_CST);
 
@@ -188,6 +189,7 @@ private:
 
     void destroy();
 
+public: // Fun!!!
     using rights_tree =
     pmos::containers::RedBlackTree<ipc::Right, &ipc::Right::task_group_head,
                                    detail::TreeCmp<ipc::Right, u64, &ipc::Right::right_sender_id>>;

@@ -67,6 +67,12 @@ struct Message {
     }
 
     inline size_t size() const { return content.size(); }
+    inline size_t rights_count() const {
+        size_t i = 0;
+        for (auto r : rights)
+            i += r != nullptr;
+        return i;
+    }
 
     // Returns true if done successfully, false otherwise (e.g. when syscall needs to be repeated)
     ReturnStr<bool> copy_to_user_buff(char *buff);
@@ -142,7 +148,8 @@ public:
 
     static ReturnStr<Right *> send_message_right(Right *right, proc::TaskGroup *verify_group,
                                                  Port *reply_port, rights_array array,
-                                                 message_buffer data, uint64_t sender_id);
+                                                 message_buffer data, uint64_t sender_id,
+                                                 RightType new_right_type, bool always_destroy_right);
 
 protected:
     using Message_storage = pmos::containers::CircularDoubleList<Message, &Message::list_node>;

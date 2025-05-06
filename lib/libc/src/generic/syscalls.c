@@ -75,24 +75,29 @@ result_t send_message_port(uint64_t port, size_t size, const void *message)
 }
 
 #define SEND_MESSAGE_EXTENDED (1 << 16)
-result_t send_message_port2(pmos_port_t port, mem_object_t object_id, size_t size, const void *message, unsigned flags)
+result_t send_message_port2(pmos_port_t port, mem_object_t object_id, size_t size,
+                            const void *message, unsigned flags)
 {
-    // Rationale behind this: pointer width changes between 32 and 64 bit systems, so the 64 bit object_id needs to
-    // be passed before the pointers and size. The second syscall is so that the first one can fit into registers
-    // on 32 bit x86.
+    // Rationale behind this: pointer width changes between 32 and 64 bit systems, so the 64 bit
+    // object_id needs to be passed before the pointers and size. The second syscall is so that the
+    // first one can fit into registers on 32 bit x86.
 #ifdef __32BITSYSCALL
-    return __pmos_syscall32_6words(SYSCALL_SEND_MSG_PORT | SEND_MESSAGE_EXTENDED | (flags << 8), port, object_id, size, (unsigned)message).result;
+    return __pmos_syscall32_6words(SYSCALL_SEND_MSG_PORT | SEND_MESSAGE_EXTENDED | (flags << 8),
+                                   port, object_id, size, (unsigned)message)
+        .result;
 #else
-    return pmos_syscall(SYSCALL_SEND_MSG_PORT | SEND_MESSAGE_EXTENDED | (flags << 8), port, object_id, size, message).result;
+    return pmos_syscall(SYSCALL_SEND_MSG_PORT | SEND_MESSAGE_EXTENDED | (flags << 8), port,
+                        object_id, size, message)
+        .result;
 #endif
 }
 
-result_t get_first_message(char *buff, uint32_t args, uint64_t port)
+syscall_r get_first_message(char *buff, uint32_t args, uint64_t port)
 {
 #ifdef __32BITSYSCALL
-    return __pmos_syscall32_3words(SYSCALL_GET_MESSAGE | (args << 8), port, (unsigned)buff).result;
+    return __pmos_syscall32_3words(SYSCALL_GET_MESSAGE | (args << 8), port, (unsigned)buff);
 #else
-    return pmos_syscall(SYSCALL_GET_MESSAGE | (args << 8), port, buff).result;
+    return pmos_syscall(SYSCALL_GET_MESSAGE | (args << 8), port, buff);
 #endif
 }
 
@@ -557,7 +562,7 @@ pmos_int_r allocate_interrupt(uint32_t gsi, uint32_t flags)
 #endif
     return (pmos_int_r) {
         .result = result.result,
-        .cpu = result.value & 0xffffffff,
+        .cpu    = result.value & 0xffffffff,
         .vector = result.value >> 32,
     };
 }
@@ -565,7 +570,7 @@ pmos_int_r allocate_interrupt(uint32_t gsi, uint32_t flags)
 result_t set_port0(pmos_port_t port)
 {
     syscall_r result;
-    #ifdef __32BITSYSCALL
+#ifdef __32BITSYSCALL
     result = __pmos_syscall32_2words(SYSCALL_SET_PORT0, port);
 #else
     result = pmos_syscall(SYSCALL_SET_PORT0, port);
@@ -575,18 +580,39 @@ result_t set_port0(pmos_port_t port)
 
 syscall_r set_namespace(uint64_t new_id, unsigned type)
 {
-    #ifdef __32BITSYSCALL
+#ifdef __32BITSYSCALL
     return __pmos_syscall32_3words(SYSCALL_SET_NAMESPACE, new_id, type);
-    #else
+#else
     return pmos_syscall(SYSCALL_SET_NAMESPACE, new_id, type);
-    #endif
+#endif
 }
 
 syscall_r create_right(uint64_t port_id, pmos_right_t *id_in_reciever, unsigned flags)
 {
-    #ifdef __32BITSYSCALL
+#ifdef __32BITSYSCALL
     return __pmos_syscall32_3words(SYSCALL_CREATE_RIGHT | (flags << 8), port_id, id_in_reciever);
-    #else
+#else
     return pmos_syscall(SYSCALL_CREATE_RIGHT | (flags << 8), port_id, id_in_reciever);
+#endif
+}
+
+syscall_r send_message_right(pmos_right_t send_right, pmos_port_t reply_port, const void *message,
+                             size_t message_size, message_extra_t *aux_stuff, unsigned flags)
+{
+#ifdef __32BITSYSCALL
+    return __pmos_syscall32_7words(SYSCALL_SEND_MSG_RIGHT | (flags << 8), send_right, reply_port,
+                                   message, message_size, aux_stuff);
+#else
+    return pmos_syscall(SYSCALL_SEND_MSG_RIGHT | (flags << 8), send_right, reply_port, message,
+                        message_size, aux_stuff);
+#endif
+}
+
+result_t delete_right(pmos_right_t right_id)
+{
+    #ifdef __32BITSYSCALL
+    return __pmos_syscall32_2words(SYSCALL_DELETE_SEND_RIGHT, right_id).result;
+    #else
+    return pmos_syscall(SYSCALL_DELETE_SEND_RIGHT, right_id).result;
     #endif
 }

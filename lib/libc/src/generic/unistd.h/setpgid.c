@@ -52,7 +52,7 @@ int setpgid(pid_t pid, pid_t pgid)
         return -1;
     }
 
-    result = get_first_message((char *)&reply, sizeof(reply), reply_port);
+    result = get_first_message((char *)&reply, MSG_ARG_REJECT_RIGHT, reply_port).result;
     if (result != SUCCESS) {
         __return_cmd_reply_port(reply_port);
         return -1;

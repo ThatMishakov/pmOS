@@ -249,6 +249,9 @@ void syscall_set_namespace();
 void send_message_right();
 // Parameters: u64 right, u64 reply_port, size_t size, void *message, void *aux_stuff (todo)
 
+void syscall_delete_send_right();
+// Parameters: u64 right_id
+
 void syscall_set_port0();
 
 struct SyscallRetval {

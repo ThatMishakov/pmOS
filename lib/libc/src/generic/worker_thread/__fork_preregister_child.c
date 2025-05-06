@@ -57,7 +57,7 @@ _HIDDEN pid_t __fork_preregister_child(uint64_t tid)
         return -1;
     }
 
-    result = get_first_message((char *)&reply, sizeof(reply), reply_port);
+    result = get_first_message((char *)&reply, MSG_ARG_REJECT_RIGHT, reply_port).result;
     if (result != SUCCESS) {
         printf("Reply port: %ld\n", reply_port);
         fprintf(stderr, "pmOS libC: Failed to get preregister process reply: %li\n", result);

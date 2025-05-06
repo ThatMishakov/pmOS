@@ -69,7 +69,7 @@ namespace kernel::proc::syscalls
 {
 
 using syscall_function                         = void (*)();
-std::array<syscall_function, 54> syscall_table = {
+std::array<syscall_function, 55> syscall_table = {
     syscall_exit,
     syscall_get_task_id,
     syscall_create_process,
@@ -128,6 +128,7 @@ std::array<syscall_function, 54> syscall_table = {
     nullptr,
     syscall_cpu_for_interrupt,
     syscall_set_port0,
+    syscall_delete_send_right,
 };
 
 extern "C" void syscall_handler()
@@ -403,12 +404,40 @@ void syscall_get_first_message()
     if (not result.val)
         return;
 
-    {
-        Auto_Lock_Scope scope_lock(port->lock);
-        if (!(args & MSG_ARG_NOPOP)) {
-            port->pop_front();
+    u64 reply_right_id = 0;
+    if (!(args & MSG_ARG_NOPOP)) {
+        if (!(args & MSG_ARG_REJECT_RIGHT) && top_message->reply_right) {
+            auto right = top_message->reply_right;
+            auto group = current->get_rights_namespace();
+            if (!group) {
+                syscall_error(current) = -ESRCH;
+                return;
+            }
+
+            reply_right_id = group->atomic_new_right_id();
+
+            Auto_Lock_Scope l(right->lock);
+            if (right->alive) {
+                Auto_Lock_Scope gl(group->rights_lock);
+
+                if (!group->atomic_alive()) {
+                    syscall_error(current) = -ESRCH;
+                    return;
+                }
+
+                right->right_sender_id = reply_right_id;
+                group->rights.insert(right);
+                right->of_message = false;
+
+                top_message->reply_right = nullptr;
+            }
         }
+
+        Auto_Lock_Scope scope_lock(port->lock);
+        port->pop_front();
     }
+
+    syscall_return(current) = reply_right_id;
 }
 
 void syscall_send_message_port()
@@ -503,11 +532,20 @@ void syscall_get_message_info()
         msg = port->get_front();
     }
 
+    bool holds_reply_right     = msg->reply_right;
+    bool reply_right_send_many = false;
+    if (holds_reply_right)
+        reply_right_send_many = msg->reply_right->type == RightType::SendMany;
+
     u64 msg_struct_size     = sizeof(Message_Descriptor);
     Message_Descriptor desc = {
-        .sender     = msg->task_id_from,
-        .mem_object = msg->mem_object_id,
-        .size       = msg->size(),
+        .sender             = msg->task_id_from,
+        .mem_object         = msg->mem_object_id,
+        .size               = msg->size(),
+        .sent_with_right    = msg->sent_with_right,
+        .other_rights_count = (unsigned)msg->rights_count(),
+        .flags              = (holds_reply_right ? (unsigned)MESSAGE_FLAG_REPLY_RIGHT : 0) |
+                 (reply_right_send_many ? (unsigned)MESSAGE_FLAG_REPLY_SEND_MANY : 0),
     };
 
     syscall_success(task);
@@ -519,7 +557,7 @@ void syscall_get_message_info()
 
     if (not b.val)
         assert(!"blocking by page is not yet implemented");
-}
+} // namespace kernel::proc::syscalls
 
 void syscall_set_attribute()
 {
@@ -1919,8 +1957,9 @@ void send_message_right()
 {
     auto current = get_current_task();
 
-    u64 right_id = syscall_arg64(current, 0);
+    u64 right_id      = syscall_arg64(current, 0);
     u64 reply_port_id = syscall_arg64(current, 1);
+    auto flags        = syscall_flags(current);
 
     ulong args[3];
     auto result = syscall_args_checked(current, 2, 2, 3, args);
@@ -1932,8 +1971,8 @@ void send_message_right()
     if (!result.val)
         return;
 
-    auto [size, message, _] = args;
-    auto buffer = to_buffer_from_user((void *)message, size);
+    auto [message, size, aux_data] = args;
+    auto buffer                    = to_buffer_from_user((void *)message, size);
     if (!buffer.success()) {
         syscall_error(current) = result.result;
         return;
@@ -1941,8 +1980,6 @@ void send_message_right()
 
     if (!buffer.val)
         return;
-
-    // TODO: sending rights
 
     auto group = current->rights_namespace.load(std::memory_order::consume);
     if (!group) {
@@ -1971,13 +2008,67 @@ void send_message_right()
     }
 
     ipc::rights_array rights = {};
-    auto send_result = Port::send_message_right(right, group, reply_port, rights, std::move(*buffer.val), current->task_id);
+    if (aux_data) {
+        message_extra_t d;
+        auto result = copy_from_user((char *)&d, (char *)aux_data, sizeof(d));
+        if (!result.success()) {
+            syscall_error(current) = result.result;
+            return;
+        }
+
+        if (!result.val)
+            return;
+
+        for (auto i = 0; i < 4; ++i) {
+            if (auto id = d.extra_rights[i]; id) {
+                auto right = group->atomic_get_right(id);
+                if (!right) {
+                    syscall_error(current) = -ESRCH;
+                    return;
+                }
+
+                rights[i] = right;
+            }
+        }
+    }
+
+    auto new_type      = flags & REPLY_CREATE_SEND_MANY ? RightType::SendMany : RightType::SendOnce;
+    bool always_delete = flags & SEND_MESSAGE_DELETE_RIGHT;
+
+    auto send_result =
+        Port::send_message_right(right, group, reply_port, rights, std::move(*buffer.val),
+                                 current->task_id, new_type, always_delete);
     if (!send_result.success()) {
         syscall_error(current) = send_result.result;
         return;
     }
 
     syscall_return(current) = send_result.val ? send_result.val->right_parent_id : 0;
+}
+
+void syscall_delete_send_right()
+{
+    auto current = get_current_task();
+    u64 right_id = syscall_arg64(current, 0);
+
+    auto group = current->get_rights_namespace();
+    if (!group) {
+        syscall_error(current) = -ESRCH;
+        return;
+    }
+
+    auto right = group->atomic_get_right(right_id);
+    if (!right) {
+        syscall_error(current) = -ESRCH;
+        return;
+    }
+
+    auto result = right->destroy(group);
+    if (result) {
+        syscall_success(current);
+    } else {
+        syscall_error(current) = -ESRCH;
+    }
 }
 
 } // namespace kernel::proc::syscalls

@@ -66,12 +66,15 @@ __pthread_entry_point:
 
     # Move the arguments in the right registers
     # Start routine
-    mv t0, a0
+    mv s0, a0
     # Second argument of this function -> first argument of start_routine
-    mv a0, a1
+    mv s1, a1
 
+    call __set_process_namespace
+
+    mv a0, s1
     # Call the start_routine
-    jalr ra, t0, 0
+    jalr ra, s0, 0
 
     # Exit the thread
     # Return value is also the first argument

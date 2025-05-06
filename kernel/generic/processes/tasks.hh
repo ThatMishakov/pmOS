@@ -30,6 +30,7 @@
 #include "task_group.hh"
 
 #include <assert.h>
+#include <atomic>
 #include <errno.h>
 #include <exceptions.hh>
 #include <interrupts/stack.hh>
@@ -45,7 +46,6 @@
 #include <registers.hh>
 #include <sched/defs.hh>
 #include <types.hh>
-#include <atomic>
 
 #if defined(__x86_64__) || defined(__i386__)
     #include <cpus/sse.hh>
@@ -62,7 +62,7 @@ namespace sched
 {
     class sched_queue;
     struct CPU_Info;
-};
+}; // namespace sched
 namespace paging
 {
     class Mem_Object;
@@ -123,13 +123,13 @@ namespace proc
         std::atomic<TaskGroup *> rights_namespace;
 
         // Scheduling info
-        TaskDescriptor *queue_next = nullptr;
-        TaskDescriptor *queue_prev = nullptr;
-        sched::sched_queue *parent_queue  = nullptr;
-        TaskStatus status          = TaskStatus::TASK_UNINIT;
-        u32 sched_pending_mask     = 0;
-        priority_t priority        = 8;
-        u32 cpu_affinity           = 0;
+        TaskDescriptor *queue_next       = nullptr;
+        TaskDescriptor *queue_prev       = nullptr;
+        sched::sched_queue *parent_queue = nullptr;
+        TaskStatus status                = TaskStatus::TASK_UNINIT;
+        u32 sched_pending_mask           = 0;
+        priority_t priority              = 8;
+        u32 cpu_affinity                 = 0;
         Spinlock sched_lock;
 
         union {
@@ -153,7 +153,8 @@ namespace proc
 
         // Registers a page table within a process, if it doesn't have any
         [[nodiscard]] kresult_t register_page_table(klib::shared_ptr<paging::Arch_Page_Table>);
-        [[nodiscard]] kresult_t atomic_register_page_table(klib::shared_ptr<paging::Arch_Page_Table>);
+        [[nodiscard]] kresult_t
+            atomic_register_page_table(klib::shared_ptr<paging::Arch_Page_Table>);
 
         // Inits stack
         ReturnStr<size_t> init_stack();
@@ -310,6 +311,11 @@ namespace proc
 #if defined(__riscv) || defined(__loongarch__)
         kresult_t init_fp_state();
 #endif
+
+        inline TaskGroup *get_rights_namespace() const
+        {
+            return rights_namespace.load(std::memory_order::consume);
+        }
 
     protected:
         TaskDescriptor() = default;

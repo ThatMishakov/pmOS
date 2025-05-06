@@ -49,6 +49,11 @@ uint64_t pmos_process_task_group()
     return process_task_group;
 }
 
+void __set_process_namespace()
+{
+    set_namespace(process_task_group, NAMESPACE_RIGHTS);
+}
+
 int __register_process()
 {
     IPC_Register_Process msg = {
@@ -132,7 +137,7 @@ void worker_main()
 
         void *msg_buff = alloca(msg.size);
 
-        r = get_first_message(msg_buff, 0, worker_port);
+        r = get_first_message(msg_buff, MSG_ARG_REJECT_RIGHT, worker_port).result;
         if (r != SUCCESS) {
             fprintf(stderr, "pmOS libC: Failed to get message: %li\n", r);
             running = false;

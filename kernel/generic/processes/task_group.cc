@@ -359,4 +359,10 @@ ipc::Right *TaskGroup::atomic_get_right(u64 right_id)
     return it == rights.end() ? nullptr : &*it;
 }
 
+u64 TaskGroup::atomic_new_right_id()
+{
+    Auto_Lock_Scope l(rights_lock);
+    return ++current_right_id;
+}
+
 } // namespace kernel::proc

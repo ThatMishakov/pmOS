@@ -35,14 +35,18 @@ __pthread_entry_point:
     pushq %rbp
 	pushq %rbp
 
-    
-    # Move the first argument (the function pointer) into %rax
-    movq %rdi, %rax
-    # Move the second argument (the argument pointer) into %rdi (first function argument)
-    movq %rsi, %rdi
+    # save the arguments
+    # Move the first argument (the function pointer) into %r12
+    movq %rdi, %r12
+    # Move the second argument (the argument pointer) into %r13 (first function argument)
+    movq %rsi, %r13
+
+    callq __set_process_namespace
+
+    movq %r13, %rdi
 
     # Call the function
-    callq *%rax
+    callq *%r12
 
 
     # Pass the return value of the function to pthread_exit()

@@ -86,7 +86,7 @@ syscall_r syscall_new_process();
 
 /**
  * @brief Kills the task
- * 
+ *
  * @param tid ID of the task to kill
  * @return result_t result of the operation
  */
@@ -108,8 +108,8 @@ result_t syscall_kill_task(uint64_t tid);
  * @return result_t Result of the call. If the result != SUCCESS, the process was not started.
  * @see init_stack() syscall_new_process() asign_page_table()
  */
-result_t syscall_start_process(uint64_t pid, unsigned long entry, unsigned long arg1, unsigned long arg2,
-                               unsigned long arg3);
+result_t syscall_start_process(uint64_t pid, unsigned long entry, unsigned long arg1,
+                               unsigned long arg2, unsigned long arg3);
 
 /**
  * @brief Loads an executable from the memory object into the address space of a task
@@ -161,10 +161,12 @@ result_t syscall_get_message_info(Message_Descriptor *descr, pmos_port_t port, u
  * @param buff The buffer to where the message should written. Callee must ensure it is large enough
  * to hold the message (should be known from the syscall_get_message_info() )
  * @param port The valid port from which to get the message. Callee must be the port's owner
- * @param args Aguments. MSG_ARG_NOPOP: do not pop the message after executing the command
- * @return result of the execution. On success, buff should contain the message.
+ * @param args Aguments. MSG_ARG_NOPOP: do not pop the message after executing the command.
+ *             MSG_ARG_REJECT_RIGHT: do not accept the reply right in the message.
+ * @return result of the execution. On success, buff should contain the message. If the message is
+ *         poped, the reply right is returned.
  */
-result_t get_first_message(char *buff, uint32_t args, pmos_port_t port);
+syscall_r get_first_message(char *buff, uint32_t args, pmos_port_t port);
 
 /**
  * @brief Sends the message to the port
@@ -188,7 +190,8 @@ result_t get_first_message(char *buff, uint32_t args, pmos_port_t port);
  * with the messages.
  */
 result_t send_message_port(pmos_port_t port, size_t size, const void *message);
-result_t send_message_port2(pmos_port_t port, mem_object_t object_id, size_t size, const void *message, unsigned flags);
+result_t send_message_port2(pmos_port_t port, mem_object_t object_id, size_t size,
+                            const void *message, unsigned flags);
 
 /**
  * @brief Chages the tasks' scheduler priority
@@ -330,8 +333,8 @@ syscall_r is_task_group_member(uint64_t task_id, uint64_t group_id);
  * @param port_id ID of the port where the notifications must be sent
  * @param new_mask New mask of the notifier, which replaces the old one. 0 removes the port from the
  * watchers list.
- * @param flags Flags for the operation. Can take NOTIFY_FOR_EXISTING_TASKS to send the notifications
- * for the tasks that are already in the group.
+ * @param flags Flags for the operation. Can take NOTIFY_FOR_EXISTING_TASKS to send the
+ * notifications for the tasks that are already in the group.
  * @return syscall_r result. If the result is SUCCESS, the value contains the old mask. Otherwise,
  * the value is undefined.
  */
@@ -348,21 +351,23 @@ syscall_r set_task_group_notifier_mask(uint64_t task_group_id, pmos_port_t port_
  */
 result_t pmos_yield();
 
-#define GET_TIME_NANOSECONDS_SINCE_BOOTUP 0
-#define GET_TIME_REALTIME_NANOSECONDS     1
+    #define GET_TIME_NANOSECONDS_SINCE_BOOTUP 0
+    #define GET_TIME_REALTIME_NANOSECONDS     1
 /**
  * @brief Gets the system time
- * 
- * This function gets the system time, according to the mode parameter. The following modes are supported:
+ *
+ * This function gets the system time, according to the mode parameter. The following modes are
+ * supported:
  * - GET_TIME_NANOSECONDS_SINCE_BOOTUP: Returns the number of ticks since the bootup of the system
  * @param mode Mode of the operation
  * @return syscall_r result of the operation. If the result is SUCCESS, the value contains the time
-*/
+ */
 syscall_r pmos_get_time(unsigned mode);
 
 result_t request_timer(pmos_port_t port, uint64_t after_ns);
 
-result_t request_named_port(const char *name, size_t name_length, pmos_port_t reply_port, uint32_t flags);
+result_t request_named_port(const char *name, size_t name_length, pmos_port_t reply_port,
+                            uint32_t flags);
 
 result_t pause_task(uint64_t tid);
 
@@ -388,11 +393,11 @@ typedef struct pmos_int_r {
 /// @param gsi GSI for which the vector should be assigned
 /// @param flags Flags
 /// @return On success, returns the CPU to which the interrupt has been assigned (using kernel's
-/// numbering, starting at 1 for the bootstrap CPU), and the CPU-local interrupt vector. 
+/// numbering, starting at 1 for the bootstrap CPU), and the CPU-local interrupt vector.
 pmos_int_r allocate_interrupt(uint32_t gsi, uint32_t flags);
 
-#define PMOS_INTERRUPT_LEVEL_TRIG 0x01
-#define PMOS_INTERRUPT_ACTIVE_LOW 0x02
+    #define PMOS_INTERRUPT_LEVEL_TRIG 0x01
+    #define PMOS_INTERRUPT_ACTIVE_LOW 0x02
 
 /// @brief Sets the given namespace to the new value, returning the old value
 ///
@@ -402,7 +407,7 @@ pmos_int_r allocate_interrupt(uint32_t gsi, uint32_t flags);
 /// @param type Type of the namespace (currently, NAMESPACE_TYPE_RIGHTS is supported)
 /// @return On success, returns the old namespace value
 syscall_r set_namespace(uint64_t new_id, unsigned type);
-#define NAMESPACE_RIGHTS 1
+    #define NAMESPACE_RIGHTS 1
 
 /// @brief Creates a right for a given port
 ///
@@ -413,9 +418,42 @@ syscall_r set_namespace(uint64_t new_id, unsigned type);
 /// @param id_in_reciever The otput for the ID of the right in the port, if not NULL.
 /// @param flags Flags (for example, CREATE_RIGHT_SEND_ONCE)
 /// @return On success, the right ID in the rights namespace (for sender). On failure,
-/// the error
-syscall_r create_right(uint64_t port_id, pmos_right_t *id_in_reciever, unsigned flags);
-#define CREATE_RIGHT_SEND_ONCE (1 << 0)
+///         the error
+syscall_r create_right(pmos_port_t port_id, pmos_right_t *id_in_reciever, unsigned flags);
+    #define CREATE_RIGHT_SEND_ONCE (1 << 0)
+
+/// @brief Deletes the right in the namespace of the sender
+/// @param right_id
+/// @return Result of the operation
+result_t delete_right(pmos_right_t right_id);
+
+typedef struct message_extra_t {
+    pmos_right_t extra_rights[4];
+    mem_object_t memory_object;
+} message_extra_t;
+
+/// @brief Sends message to a right
+///
+/// This system call (atomically) sends message to a given right. If a reply port is
+/// passed, a reply is also created during the operation, ensuring that the right
+/// will be replied to (kinda TODO in the kernel, but the interface for that is there).
+/// The system call either fully succeeds, or does not change visible state.
+///
+/// The auxiliary rights are sent in the same order, getting a new corresponding ID once
+/// they are accepted from the message
+///
+/// @param send_right Right to send the message, withing the current NAMESPACE_RIGHT of the sender
+/// @param reply_port Optional reply port. If not INVALID_PORT, creates a new send once right for
+///        the reply
+/// @param message Message buffer to be sent
+/// @param message_size Size of the message buffer
+/// @param aux_stuff Additional rights and memory object (TODO: memory object is ignored)
+/// @param flags Additional flags (REPLY_CREATE_SEND_MANY, SEND_MESSAGE_DELETE_RIGHT)
+/// @return If reply_port is not INVALID_PORT, returns the ID of the new reply right on success.
+syscall_r send_message_right(pmos_right_t send_right, pmos_port_t reply_port, const void *message,
+                             size_t message_size, message_extra_t *todo_aux_stuff, unsigned flags);
+    #define REPLY_CREATE_SEND_MANY    (1 << 1)
+    #define SEND_MESSAGE_DELETE_RIGHT (1 << 8)
 
 #endif
 
