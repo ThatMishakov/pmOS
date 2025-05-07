@@ -201,4 +201,6 @@ public: // Fun!!!
     friend class ipc::Port;
 };
 
+extern TaskGroup *kernel_tasks;
+
 }; // namespace kernel::proc

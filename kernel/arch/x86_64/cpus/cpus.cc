@@ -140,6 +140,12 @@ void init_per_cpu(uint32_t lapic_id)
     auto r = init_idle(c);
     if (r)
         panic("Failed to initialize idle task: %i\n", r);
+
+    if (auto t = proc::TaskGroup::create_for_task(c->idle_task); !t.success())
+        panic("Failed to create task group for kernel: %i\n", t.result);
+    else
+        proc::kernel_tasks = t.val;
+
     c->current_task = c->idle_task;
     c->idle_task->page_table->apply_cpu(c);
 
@@ -204,6 +210,10 @@ klib::vector<u64> initialize_cpus(const klib::vector<u64> &lapic_ids)
         auto t = init_idle(c);
         if (t)
             panic("Failed to initialize idle task: %i\n", t);
+
+        assert(proc::kernel_tasks);
+        if (auto t = proc::kernel_tasks->atomic_register_task(c->idle_task); t)
+            panic("Failed to add idle task to the kernel process group: %i\n", t);
 
         c->current_task = c->idle_task;
 

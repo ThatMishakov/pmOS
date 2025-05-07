@@ -89,6 +89,12 @@ void init_per_cpu(u64 lapic_id)
     auto r = init_idle(c);
     if (r)
         panic("Failed to initialize idle task: %i\n", r);
+
+    auto t = proc::TaskGroup::create_for_task(c->idle_task);
+    if (!t.success())
+        panic("Failed to create task group for kernel: %i\n", t.result);
+    proc::kernel_tasks = t.val;
+
     c->current_task = c->idle_task;
     c->idle_task->page_table->apply_cpu(c);
 
@@ -196,6 +202,11 @@ CPU_Info *prepare_cpu(unsigned idx, u32 lapic_id)
     if (r)
         panic("Failed to initialize idle task: %i\n", r);
     c->current_task = c->idle_task;
+
+    assert(proc::kernel_tasks);
+    if (auto t = proc::kernel_tasks->atomic_register_task(c->idle_task); t)
+        panic("Failed to add idle task to the kernel process group: %i\n", t);
+
 
     void *temp_mapper_start = vmm::kernel_space_allocator.virtmem_alloc_aligned(16, 4);
     if (!temp_mapper_start)

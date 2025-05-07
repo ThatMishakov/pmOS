@@ -58,6 +58,11 @@ void init_scheduling(u64 cpu_id)
     auto idle = init_idle(i);
     if (idle != 0)
         panic("Failed to initialize idle task: %i\n", idle);
+
+    auto t = proc::TaskGroup::create_for_task(i->idle_task);
+    if (!t.success())
+        panic("Failed to create task group for kernel: %i\n", t.result);
+    proc::kernel_tasks = t.val;
     
     i->current_task = i->idle_task;
     i->idle_task->page_table->apply_cpu(i);

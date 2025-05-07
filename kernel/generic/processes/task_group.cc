@@ -365,4 +365,6 @@ u64 TaskGroup::atomic_new_right_id()
     return ++current_right_id;
 }
 
+TaskGroup *kernel_tasks = nullptr;
+
 } // namespace kernel::proc
