@@ -1280,9 +1280,6 @@ typedef struct IPC_Register_Process {
     /// Flags
     uint32_t flags;
 
-    /// Port for the reply
-    pmos_port_t reply_port;
-
     /// Port for signals and notifications
     pmos_port_t signal_port;
 
@@ -1319,9 +1316,6 @@ typedef struct IPC_PID_For_Task {
 #define PID_FOR_TASK_WAIT_TO_APPEAR 0x01
 #define PID_FOR_TASK_PARENT_PID     0x02
 #define PID_FOR_TASK_GROUP_ID       0x04
-
-    /// Port for the reply
-    pmos_port_t reply_port;
 
     /// Task ID (takes TASK_ID_SELF)
     uint64_t task_id;
@@ -1445,9 +1439,6 @@ typedef struct IPC_Preregister_Process {
 
     /// Flags
     uint32_t flags;
-
-    /// Port for the reply
-    pmos_port_t reply_port;
 
     /// Worker task ID of the new process
     uint64_t worker_task_id;

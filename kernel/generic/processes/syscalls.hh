@@ -252,7 +252,13 @@ void send_message_right();
 void syscall_delete_send_right();
 // Parameters: u64 right_id
 
-void syscall_set_port0();
+void syscall_accept_rights();
+// Parameters: u64 port_id, void *ptr
+
+void syscall_dup_right();
+// Parameters: u64 right_id
+
+void syscall_set_right0();
 
 struct SyscallRetval {
     TaskDescriptor *task;
@@ -262,6 +268,7 @@ struct SyscallRetval {
 struct SyscallError {
     TaskDescriptor *task;
     i64 operator=(i64 value);
+    std::pair<i64, u64> operator=(std::pair<i64, u64> error_value);
     operator int() const;
 };
 inline SyscallError syscall_error(TaskDescriptor *task) { return {task}; }

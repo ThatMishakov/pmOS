@@ -78,13 +78,6 @@ Port *Port::atomic_create_port(proc::TaskDescriptor *task) noexcept
 
 u64 port0_id = 0;
 
-kresult_t set_port0(Port *p)
-{
-    assert(p);
-    port0_id = p->portno;
-    return 0;
-}
-
 Port *Port::atomic_get_port(u64 portno) noexcept
 {
     if (!portno)
@@ -208,6 +201,12 @@ Message *Port::get_front()
     return &msg_queue.front();
 }
 
+Message *Port::atomic_get_front()
+{
+    Auto_Lock_Scope l(lock);
+    return get_front();
+}
+
 bool Port::delete_self() noexcept
 {
     {
@@ -271,10 +270,10 @@ bool Port::atomic_alive() const
     return alive;
 }
 
-ReturnStr<Right *> Port::send_message_right(Right *right, proc::TaskGroup *verify_group,
-                                            Port *reply_port, rights_array array,
-                                            message_buffer data, uint64_t sender_id,
-                                            RightType new_right_type, bool always_destroy_right)
+ReturnStr<std::pair<Right * /* right */, u64 /* new_id_error */>>
+    Port::send_message_right(Right *right, proc::TaskGroup *verify_group, Port *reply_port,
+                             rights_array array, message_buffer data, uint64_t sender_id,
+                             RightType new_right_type, bool always_destroy_right)
 {
     assert(right);
     assert(verify_group);
@@ -314,13 +313,13 @@ ReturnStr<Right *> Port::send_message_right(Right *right, proc::TaskGroup *verif
     {
         Auto_Lock_Scope l(locks);
 
-        if (!right->alive || !right->of_group(verify_group))
-            return Error(-ENOENT);
+        if (!right->alive ||
+            !(right->of_group(proc::kernel_tasks) || right->of_group(verify_group)))
+            return {-ENOENT, std::make_pair(nullptr, 0)};
 
-        for (auto p: array) {
-            if (p && (!p->alive || p->of_group(verify_group)))
-                return Error(-ENOENT);
-        }
+        for (size_t i = 0; i < array.size(); ++i)
+            if (auto p = array[i]; p && (!p->alive || p->of_group(verify_group)))
+                return {-ENOENT, std::make_pair(nullptr, i + 1)};
 
         if (right->type == RightType::SendOnce || always_destroy_right)
             right->destroy_nolock();
@@ -350,7 +349,7 @@ ReturnStr<Right *> Port::send_message_right(Right *right, proc::TaskGroup *verif
         }
     }
 
-    return Success(reply_right.release());
+    return Success(std::make_pair(reply_right.release(), reply_right->right_sender_id));
 }
 
 Message::~Message()

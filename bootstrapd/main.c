@@ -228,7 +228,7 @@ void set_print_callback(int result, const char * /* port_name */, pmos_port_t po
 static const char *log_port_name = "/pmos/terminald";
 static char *vfsd_port_name      = "/pmos/vfsd";
 
-int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *, void *, struct pmos_msgloop_data *)
+int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_right, pmos_right_t *extra_rights, void *, struct pmos_msgloop_data *)
 {
     if (desc->size < 4) {
         // Message too small
@@ -268,24 +268,24 @@ int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *, void 
 
         send_message_port(ptr->reply_channel, sizeof(reply), &reply);
     } break;
-    case 0x21: {
-        IPC_Kernel_Named_Port_Notification *notif = (IPC_Kernel_Named_Port_Notification *)ptr;
-        if (desc->size < sizeof(IPC_Kernel_Named_Port_Notification)) {
-            print_str(
-                "Loader: Recieved IPC_Kernel_Named_Port_Notification with unexpected size 0x");
-            print_hex(desc->size);
-            print_str("\n");
-            break;
-        }
+    // case 0x21: {
+    //     IPC_Kernel_Named_Port_Notification *notif = (IPC_Kernel_Named_Port_Notification *)ptr;
+    //     if (desc->size < sizeof(IPC_Kernel_Named_Port_Notification)) {
+    //         print_str(
+    //             "Loader: Recieved IPC_Kernel_Named_Port_Notification with unexpected size 0x");
+    //         print_hex(desc->size);
+    //         print_str("\n");
+    //         break;
+    //     }
 
-        size_t msg_size = desc->size - sizeof(IPC_Kernel_Named_Port_Notification);
+    //     size_t msg_size = desc->size - sizeof(IPC_Kernel_Named_Port_Notification);
 
-        if (strncmp(notif->port_name, log_port_name, msg_size) == 0) {
-            set_print_syscalls(notif->port_num);
-        } else if (strncmp(notif->port_name, vfsd_port_name, msg_size) == 0) {
-            initialize_filesystem(notif->port_num);
-        }
-    } break;
+    //     if (strncmp(notif->port_name, log_port_name, msg_size) == 0) {
+    //         set_print_syscalls(notif->port_num);
+    //     } else if (strncmp(notif->port_name, vfsd_port_name, msg_size) == 0) {
+    //         initialize_filesystem(notif->port_num);
+    //     }
+    // } break;
     case IPC_Register_FS_Reply_NUM: {
         IPC_Register_FS_Reply *a = (IPC_Register_FS_Reply *)ptr;
         if (desc->size < sizeof(IPC_Register_FS_Reply)) {
@@ -397,7 +397,7 @@ int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *, void 
         }
 
         size_t length = desc->size - sizeof(IPC_Get_Named_Port);
-        request_port_message(r->name, length, r->flags, r->reply_port);
+        request_port_message(r->name, length, r->flags, *reply_right);
         break;
     }
 
@@ -411,7 +411,7 @@ int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *, void 
         }
 
         size_t length = desc->size - sizeof(IPC_Name_Port);
-        auto result   = register_port(r->name, length, r->port);
+        auto result   = register_right(r->name, length, extra_rights[0]);
 
         IPC_Name_Port_Reply reply = {
             .type   = IPC_Name_Port_Reply_NUM,
@@ -419,7 +419,9 @@ int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *, void 
             .result = result,
         };
 
-        send_message_port(r->reply_port, sizeof(reply), &reply);
+        auto send_result = send_message_right(*reply_right, 0, &reply, sizeof(reply), NULL, SEND_MESSAGE_DELETE_RIGHT);
+        if (send_result.result)
+            delete_right(*reply_right);
 
         break;
     }
@@ -434,6 +436,9 @@ int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *, void 
 
     return 0;
 }
+
+pmos_right_t loader_right = 0;
+pmos_right_t namespace_right = 0;
 
 void service_ports()
 {
@@ -475,8 +480,16 @@ int main()
         exit(1);
     }
 
+    auto create_result = create_right(loader_port, &loader_right, 0);
+    if (create_result.result != SUCCESS) {
+        print_str("Loader: failed to create loader right: ");
+        print_hex(create_result.result);
+        print_str("\n");
+        exit(1);
+    }
+
     char *loader_port_name = "/pmos/loader";
-    int result             = register_port(loader_port_name, strlen(loader_port_name), loader_port);
+    int result             = register_right(loader_port_name, strlen(loader_port_name), loader_right);
     // res = loader_port, loader_port_name, strlen(loader_port_name), 0);
     if (result != SUCCESS) {
         print_str("Loader: could not name loader port. Error: ");
@@ -485,7 +498,15 @@ int main()
         exit(1);
     }
 
-    auto kresult = set_port0(loader_port);
+    create_result = create_right(loader_port, &namespace_right, 0);
+    if (create_result.result != SUCCESS) {
+        print_str("Loader: failed to create namespace right: ");
+        print_hex(create_result.result);
+        print_str("\n");
+        exit(1);
+    }
+
+    auto kresult = set_right0(create_result.right);
     if (kresult != SUCCESS) {
         print_str("Loader: failed to set port 0: ");
         print_hex(kresult);

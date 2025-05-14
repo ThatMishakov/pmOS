@@ -62,45 +62,32 @@ pmos_port_t prepare_reply_port()
     return ut->cmd_reply_port;
 }
 
-// Variable to cache the filesystem port
-// It could be global but it doesn't really matter and having it
-// this way helps avoid obscure concurrency issues
-__thread pmos_port_t fs_port = INVALID_PORT;
-
-static pmos_port_t request_filesystem_port()
+static pmos_right_t request_filesystem_right()
 {
     static const char filesystem_port_name[] = "/pmos/vfsd";
-    ports_request_t port_req =
-        get_port_by_name(filesystem_port_name, strlen(filesystem_port_name), 0);
-    if (port_req.result != SUCCESS) {
-        // Handle error
+    right_request_t right_req =
+        get_right_by_name(filesystem_port_name, strlen(filesystem_port_name), 0);
+    if (right_req.result != SUCCESS) {
         return INVALID_PORT;
     }
 
-    return port_req.port;
+    return right_req.right;
 }
 
-int __vfsd_send_persistant(size_t msg_size, const void *message)
+static pmos_right_t get_fs_right()
 {
-    result_t k_result =
-        fs_port != INVALID_PORT ? send_message_port(fs_port, msg_size, (char *)message) : -ENOENT;
+    struct uthread *u = __get_tls();
 
-    int fail_count = 0;
-    while (k_result == -ENOENT && fail_count < 5) {
-        // Request the port of the filesystem daemon
-        pmos_port_t fs_port = request_filesystem_port();
-        if (fs_port == INVALID_PORT) {
-            // Handle error: Failed to obtain the filesystem port
-            errno = EIO; // Set errno to appropriate error code
-            return -1;
-        }
+    if (u->fs_right)
+        return u->fs_right;
 
-        // Retry sending IPC_Open message to the filesystem daemon
-        k_result = send_message_port(fs_port, msg_size, (char *)message);
-        ++fail_count;
-    }
+    return (u->fs_right = request_filesystem_right());
+}
 
-    return k_result == SUCCESS ? 0 : -1;
+static void fs_right_invalid(pmos_right_t right)
+{
+    __atomic_compare_exchange_n(&__get_tls()->fs_right, &right, INVALID_RIGHT, false,
+                                __ATOMIC_RELAXED, __ATOMIC_RELAXED);
 }
 
 ssize_t __file_read(void *file_data, uint64_t consumer_id, void *buf, size_t size, size_t offset)
@@ -143,7 +130,7 @@ ssize_t __file_read(void *file_data, uint64_t consumer_id, void *buf, size_t siz
     // Receive the reply message containing the result and data
     Message_Descriptor reply_descr;
     IPC_Generic_Msg *reply_msg;
-    result = get_message(&reply_descr, (unsigned char **)&reply_msg, fs_cmd_reply_port);
+    result = get_message(&reply_descr, (unsigned char **)&reply_msg, fs_cmd_reply_port, NULL, NULL);
     if (result != SUCCESS) {
         errno = EIO; // I/O error
         return -1;
@@ -286,7 +273,7 @@ ssize_t __file_write(void *file_data, uint64_t consumer_id, const void *buf, siz
     }
 
     Message_Descriptor reply_descr;
-    k_result = get_message(&reply_descr, (unsigned char **)&reply_msg, reply_port);
+    k_result = get_message(&reply_descr, (unsigned char **)&reply_msg, reply_port, NULL, NULL);
     if (k_result != SUCCESS) {
         errno = EIO;
         goto error;
@@ -343,7 +330,7 @@ ssize_t __file_writev(void *file_data, uint64_t consumer_id, const struct iovec 
         }
 
         Message_Descriptor reply_descr;
-        k_result = get_message(&reply_descr, (unsigned char **)&reply_msg, reply_port);
+        k_result = get_message(&reply_descr, (unsigned char **)&reply_msg, reply_port, NULL, NULL);
         if (k_result != SUCCESS) {
             errno = EIO;
             goto error;
@@ -408,7 +395,7 @@ int __file_clone(void *file_data, uint64_t consumer_id, void *new_data, uint64_t
     // Receive the reply message containing the result
     Message_Descriptor reply_descr;
     IPC_Generic_Msg *reply_msg;
-    result = get_message(&reply_descr, (unsigned char **)&reply_msg, fs_cmd_reply_port);
+    result = get_message(&reply_descr, (unsigned char **)&reply_msg, fs_cmd_reply_port, NULL, NULL);
     if (result != SUCCESS) {
         // Handle error: Failed to receive the reply message
         errno = -result;
@@ -557,18 +544,15 @@ int __open_file(const char *path, int flags, mode_t mode, void *file_data, uint6
 
     // TODO: Mode is ignored for now
 
-    // Check if the filesystem port is already cached
-    if (fs_port == INVALID_PORT) {
-        // Request the port of the filesystem daemon
-        fs_port = request_filesystem_port();
-        if (fs_port == INVALID_PORT) {
-            // Handle error: Failed to obtain the filesystem port
-            return -1;
-        }
+    pmos_right_t right = get_fs_right();
+    if (!right) {
+        errno = EIO;
+        return -1;
     }
 
     uint64_t fs_cmd_reply_port = prepare_reply_port();
     if (fs_cmd_reply_port == INVALID_PORT) {
+        errno = EIO;
         return -1;
     }
 
@@ -589,20 +573,20 @@ int __open_file(const char *path, int flags, mode_t mode, void *file_data, uint6
     message->num = IPC_Open_NUM;
     message->flags =
         IPC_FLAG_REGISTER_IF_NOT_FOUND; // Set appropriate flags based on the 'flags' argument
-    message->reply_port     = fs_cmd_reply_port; // Use the reply port
     message->fs_consumer_id = consumer_id;
 
     // Copy the path string into the message
     memcpy(message->path, path, path_length);
 
     // Send the IPC_Open message to the filesystem daemon
-    result_t result = send_message_port(fs_port, message_size, (const char *)message);
+    right_request_t result =
+        send_message_right(right, fs_cmd_reply_port, message, message_size, NULL, 0);
 
     int fail_count = 0;
-    while (result == -ENOENT && fail_count < 5) {
+    while (result.result == -ESRCH && fail_count < 5) {
         // Request the port of the filesystem daemon
-        pmos_port_t fs_port = request_filesystem_port();
-        if (fs_port == INVALID_PORT) {
+        fs_right_invalid(right);
+        if ((right = get_fs_right())) {
             // Handle error: Failed to obtain the filesystem port
             free(message); // Free the allocated message memory
             errno = EIO;   // Set errno to appropriate error code
@@ -610,13 +594,13 @@ int __open_file(const char *path, int flags, mode_t mode, void *file_data, uint6
         }
 
         // Retry sending IPC_Open message to the filesystem daemon
-        result = send_message_port(fs_port, message_size, (const char *)message);
+        result = send_message_right(right, fs_cmd_reply_port, message, message_size, NULL, 0);
         ++fail_count;
     }
 
     free(message); // Free the allocated message memory
 
-    if (result != SUCCESS) {
+    if (result.result != SUCCESS) {
         errno = EIO; // Set errno to appropriate error code
         return -1;
     }
@@ -624,18 +608,17 @@ int __open_file(const char *path, int flags, mode_t mode, void *file_data, uint6
     // Receive the reply message containing the result
     Message_Descriptor reply_descr;
     IPC_Generic_Msg *reply_msg;
-    result = get_message(&reply_descr, (unsigned char **)&reply_msg, fs_cmd_reply_port);
-    if (result != SUCCESS) {
-        // Handle error: Failed to receive the reply message
+    result_t get_result =
+        get_message(&reply_descr, (unsigned char **)&reply_msg, fs_cmd_reply_port, NULL, NULL);
+    if (get_result != SUCCESS) {
         errno = EIO; // Set errno to appropriate error code
         return -1;
     }
 
     // Verify that the reply message is of type IPC_Open_Reply
     if (reply_msg->type != IPC_Open_Reply_NUM) {
-        // Handle error: Unexpected reply message type
         free(reply_msg);
-        errno = EIO; // Set errno to appropriate error code
+        errno = EIO;
         return -1;
     }
 
@@ -644,9 +627,8 @@ int __open_file(const char *path, int flags, mode_t mode, void *file_data, uint6
     int result_code       = reply->result_code;
 
     if (result_code < 0) {
-        // Handle error: Failed to open the file
         free(reply_msg);
-        errno = -result_code; // Set errno to appropriate error code (negative value)
+        errno = -result_code;
         return -1;
     }
 
@@ -659,21 +641,59 @@ int __open_file(const char *path, int flags, mode_t mode, void *file_data, uint6
     return 0;
 }
 
-pmos_port_t get_pipe_port()
+int vfsd_send_persistant(size_t msg_size, const void *message)
 {
-    static const char pipe_port_name[] = "/pmos/piped";
-    static pmos_port_t pipe_port       = INVALID_PORT;
-    if (pipe_port == INVALID_PORT) {
-        ports_request_t port_req = get_port_by_name(pipe_port_name, strlen(pipe_port_name), 0);
-        if (port_req.result != SUCCESS) {
-            // Handle error
-            return INVALID_PORT;
-        }
+    struct uthread *current = __get_tls();
+    if (!current)
+        return -1;
 
-        pipe_port = port_req.port;
+    pmos_right_t right = get_fs_right();
+    if (!right) {
+        errno = EIO;
+        return -1;
     }
 
-    return pipe_port;
+    uint64_t fs_cmd_reply_port = prepare_reply_port();
+    if (fs_cmd_reply_port == INVALID_PORT) {
+        errno = EIO;
+        return -1;
+    }
+
+    right_request_t result =
+        send_message_right(right, fs_cmd_reply_port, message, msg_size, NULL, 0);
+
+    int fail_count = 0;
+    while (result.result == -ESRCH && fail_count < 5) {
+        // Request the port of the filesystem daemon
+        fs_right_invalid(right);
+        if ((right = get_fs_right())) {
+            errno = EIO;
+            return -1;
+        }
+
+        result = send_message_right(right, fs_cmd_reply_port, message, msg_size, NULL, 0);
+        ++fail_count;
+    }
+
+    return 0;
+}
+
+pmos_right_t get_pipe_right()
+{
+    struct uthread *ut = __get_tls();
+
+    static const char pipe_port_name[] = "/pmos/piped";
+    if (ut->pipe_right == INVALID_RIGHT) {
+        right_request_t right_req = get_right_by_name(pipe_port_name, strlen(pipe_port_name), 0);
+        if (right_req.result != SUCCESS) {
+            // Handle error
+            return INVALID_RIGHT;
+        }
+
+        ut->pipe_right = right_req.right;
+    }
+
+    return ut->pipe_right;
 }
 
 int __create_pipe(void *file_data, uint64_t consumer_id)
@@ -685,19 +705,20 @@ int __create_pipe(void *file_data, uint64_t consumer_id)
         return -1;
     }
 
-    pmos_port_t pipe_port = get_pipe_port();
-    if (pipe_port == INVALID_PORT) {
+    pmos_right_t pipe_right = get_pipe_right();
+    if (pipe_right == INVALID_PORT) {
         return -1;
     }
 
     IPC_Pipe_Open message = {
         .type           = IPC_Pipe_Open_NUM,
         .flags          = 0,
-        .reply_port     = reply_port,
         .fs_consumer_id = consumer_id,
     };
 
-    result_t k_result = send_message_port(pipe_port, sizeof(message), (const char *)&message);
+    result_t k_result =
+        send_message_right(pipe_right, reply_port, (const char *)&message, sizeof(message), NULL, 0)
+            .result;
     if (k_result != SUCCESS) {
         errno = -k_result;
         return -1;
@@ -705,7 +726,7 @@ int __create_pipe(void *file_data, uint64_t consumer_id)
 
     Message_Descriptor reply_descr;
     IPC_Generic_Msg *reply_msg;
-    k_result = get_message(&reply_descr, (unsigned char **)&reply_msg, reply_port);
+    k_result = get_message(&reply_descr, (unsigned char **)&reply_msg, reply_port, NULL, NULL);
     if (k_result != SUCCESS) {
         errno = -k_result;
         return -1;

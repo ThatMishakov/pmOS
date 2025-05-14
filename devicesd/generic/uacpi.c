@@ -623,7 +623,7 @@ void *isr_func(void *arg)
         send_isr_reply(reply_right, UACPI_STATUS_INTERNAL_ERROR);
         return NULL;
     }
-    data->right = rr.value;
+    data->right = rr.right;
 
     uint32_t int_vector = 0;
     int r               = install_isa_interrupt(data->irq, 0, p.port, &int_vector);
@@ -645,7 +645,7 @@ void *isr_func(void *arg)
     while (true) {
         Message_Descriptor msg;
         unsigned char *message;
-        r = get_message(&msg, &message, p.port);
+        r = get_message(&msg, &message, p.port, NULL, NULL);
         if (r != SUCCESS) {
             fprintf(stderr, "Failed to get message\n");
             return NULL;
@@ -703,7 +703,7 @@ uacpi_status uacpi_kernel_install_interrupt_handler(uacpi_u32 irq, uacpi_interru
     data->handler  = handler;
     data->ctx      = ctx;
     data->irq      = irq;
-    data->right    = right.value;
+    data->right    = right.right;
     data->refcount = 2;
 
     int result = pthread_create(&data->isr_thread, NULL, isr_func, data);
@@ -715,7 +715,7 @@ uacpi_status uacpi_kernel_install_interrupt_handler(uacpi_u32 irq, uacpi_interru
 
     Message_Descriptor msg;
     unsigned char *message;
-    result_t r = get_message(&msg, &message, reply_port);
+    result_t r = get_message(&msg, &message, reply_port, NULL, NULL);
     if (r != SUCCESS) {
         assert(!"Failed to get message");
     }

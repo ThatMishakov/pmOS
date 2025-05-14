@@ -13,10 +13,7 @@ static ulong call_flags(TaskDescriptor *task)
         return task->regs.scratch_r.rdi;
 }
 
-ulong syscalls::syscall_flags_reg(TaskDescriptor *task)
-{
-    return call_flags(task);
-}
+ulong syscalls::syscall_flags_reg(TaskDescriptor *task) { return call_flags(task); }
 
 unsigned syscalls::syscall_number(TaskDescriptor *task) { return call_flags(task) & 0xff; }
 
@@ -111,8 +108,8 @@ ReturnStr<bool> syscalls::syscall_arg64_checked(TaskDescriptor *task, int arg, u
     return Success(true);
 }
 
-ReturnStr<bool> syscalls::syscall_args_checked(TaskDescriptor *task, int arg, int args64before, int count,
-                                     ulong *values)
+ReturnStr<bool> syscalls::syscall_args_checked(TaskDescriptor *task, int arg, int args64before,
+                                               int count, ulong *values)
 {
     if (task->is_32bit()) {
         int realargs = arg + args64before;
@@ -158,6 +155,13 @@ i64 SyscallError::operator=(i64 value)
 {
     assert(value <= 0);
     syscall_ret_low(task, value);
+    return value;
+}
+
+std::pair<i64, u64> SyscallError::operator=(std::pair<i64, u64> value)
+{
+    syscall_ret_low(task, value.first);
+    syscall_ret_high(task, value.second);
     return value;
 }
 

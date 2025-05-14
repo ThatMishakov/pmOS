@@ -367,4 +367,30 @@ u64 TaskGroup::atomic_new_right_id()
 
 TaskGroup *kernel_tasks = nullptr;
 
+kresult_t TaskGroup::transfer_rights(ipc::Message *msg, std::array<u64, 4> right_ids)
+{
+    Auto_Lock_Scope l(rights_lock);
+
+    if (!atomic_alive())
+        return -ESRCH;
+
+    for (int i = 0; i < 4; ++i)
+        if (auto right = msg->rights[i]; right) {
+            msg->rights[i] = nullptr;
+            auto id = right_ids[i];
+            assert(id);
+
+            Auto_Lock_Scope l(right->lock);
+            if (right->alive) {
+                right->right_sender_id = id;
+                right->parent_group = this;
+                rights.insert(right);
+            } else {
+                right->rcu_push();
+            }
+        }
+
+    return 0;
+}
+
 } // namespace kernel::proc

@@ -44,7 +44,7 @@ struct Right {
     RightType type : 1  = RightType::SendOnce;
     bool alive : 1      = true;
     bool of_message : 1 = false;
-    Spinlock lock;
+    mutable Spinlock lock;
 
     bool destroy(proc::TaskGroup *match_group = nullptr);
     bool destroy_nolock();
@@ -56,6 +56,14 @@ struct Right {
                                                u64 id_in_parent);
 
     bool of_group(proc::TaskGroup *) const;
+    bool atomic_alive() const;
+
+    ReturnStr<u64> atomic_transfer_to_group(proc::TaskGroup *from, proc::TaskGroup *to);
+    // Atomically creates and returns right and its id in sender
+    ReturnStr<std::pair<Right *, u64>> duplicate(proc::TaskGroup *);
 };
+
+u64 atomic_right0_id();
+kresult_t set_right0(Right *right, proc::TaskGroup *right_parent);
 
 } // namespace kernel::ipc

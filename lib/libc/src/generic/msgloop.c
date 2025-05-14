@@ -5,12 +5,13 @@
 #include <stdint.h>
 #include <stdio.h>
 
-static int default_handler(Message_Descriptor *desc, void *message, pmos_right_t *reply_right,
+static int default_handler(Message_Descriptor *desc, void *message, pmos_right_t *reply_right, pmos_right_t *other,
                            void * ctx, struct pmos_msgloop_data *data)
 {
     (void)ctx;
     (void)message;
     (void)reply_right;
+    (void)other;
 
     fprintf(stderr,
             "pmOS libc: Error: Did not find callback for message in port %" PRIu64
@@ -85,18 +86,36 @@ void pmos_msgloop_loop(struct pmos_msgloop_data *data)
             break;
         }
 
+        bool have_rights = descr.other_rights_count;
+        pmos_right_t rights[4] = {0};
+        if (have_rights) {
+            result_t result = accept_rights(data->port, rights);
+            if (result != SUCCESS) {
+                fprintf(stderr,
+                    "pmOS libc: failed to accept rights in pmos_msgloop_loop() from port %" PRIu64
+                    " error %i\n",
+                    data->port, (int)-result);
+                break;
+            }
+        }
+
         char buff[descr.size];
 
-        syscall_r message = get_first_message(buff, 0, data->port);
+        right_request_t message = get_first_message(buff, 0, data->port);
         if (message.result != SUCCESS) {
             fprintf(stderr,
                     "pmOS libc: failed to get message in pmos_msgloop_loop() from port %" PRIu64
                     " error %i\n",
                     data->port, (int)-result);
+
+            for (int i = 0; i < 4; ++i) {
+                if (rights[i])
+                    delete_right(rights[i]);
+            }
             break;
         }
 
-        pmos_right_t reply_right = message.value;
+        pmos_right_t reply_right = message.right;
 
         pmos_msgloop_tree_node_t *node = NULL;
         if (descr.sent_with_right != 0)
@@ -114,10 +133,14 @@ void pmos_msgloop_loop(struct pmos_msgloop_data *data)
             callback = default_handler;
         }
 
-        int status = callback(&descr, buff, &reply_right, ctx, data);
+        int status = callback(&descr, buff, &reply_right, rights, ctx, data);
 
         if (reply_right != 0)
             delete_right(reply_right);
+        if (have_rights)
+            for (int i = 0; i < 4; ++i)
+                if (rights[i])
+                    delete_right(rights[i]);
 
         cont = status == PMOS_MSGLOOP_CONTINUE;
     }

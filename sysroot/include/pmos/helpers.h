@@ -47,13 +47,15 @@ typedef uint64_t pmos_port_t;
  * @brief Blocks the process and upon the message reception, allocates memory with malloc(), and
  * fills it with the content. Internally, calls get_message_info() and get_first_message()
  *
- * @param desc Pointer to the memory location where Message_descriptor will be filled
- * @param message malloc'ed message. To avoid memory leaks, it should be freed when it's no longer
+ * @param desc [out] Pointer to the memory location where Message_descriptor will be filled
+ * @param message [out] malloc'ed message. To avoid memory leaks, it should be freed when it's no longer
  * nedded
- * @param port Valid port, to which the callee should be the owner, from where to get the message
+ * @param port [in] Valid port, to which the callee should be the owner, from where to get the message
+ * @param reply_right [out] Reply right sent with the message. NULL discards it on reception.
+ * @param other_rights [out] Array of 4 extra rights in the message. NULL discards them on reception.
  * @return result of the execution
  */
-result_t get_message(Message_Descriptor *desc, unsigned char **message, pmos_port_t port);
+result_t get_message(Message_Descriptor *desc, unsigned char **message, pmos_port_t port, pmos_right_t *reply_right, pmos_right_t *other_rights);
 
 /**
  * @brief Requests a timer message from the system. On success, the given port will receive a
@@ -73,8 +75,8 @@ void pmos_hexdump(FILE *stream, const char *data, size_t data_size);
 
 struct pmos_msgloop_data;
 typedef int (*pmos_msgloop_callback_t)(Message_Descriptor *desc, void *message,
-                                       pmos_right_t *reply_right, void *ctx,
-                                       struct pmos_msgloop_data *data);
+                                       pmos_right_t *reply_right, pmos_right_t *extra_rights,
+                                       void *ctx, struct pmos_msgloop_data *data);
 struct msgloop_data {
     uint64_t right_id;
     pmos_msgloop_callback_t callback;
@@ -97,8 +99,8 @@ void pmos_msgloop_loop(struct pmos_msgloop_data *data);
 void pmos_msgloop_node_set(pmos_msgloop_tree_node_t *n, pmos_right_t right_id,
                            pmos_msgloop_callback_t callback, void *ctx);
 
-#define PMOS_MSGLOOP_CONTINUE 0
-#define PMOS_MSGLOOP_BREAK    1
+    #define PMOS_MSGLOOP_CONTINUE 0
+    #define PMOS_MSGLOOP_BREAK    1
 
 #endif
 

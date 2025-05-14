@@ -69,7 +69,7 @@ namespace kernel::proc::syscalls
 {
 
 using syscall_function                         = void (*)();
-std::array<syscall_function, 55> syscall_table = {
+std::array<syscall_function, 57> syscall_table = {
     syscall_exit,
     syscall_get_task_id,
     syscall_create_process,
@@ -127,8 +127,10 @@ std::array<syscall_function, 55> syscall_table = {
     syscall_get_page_address_from_object,
     nullptr,
     syscall_cpu_for_interrupt,
-    syscall_set_port0,
+    syscall_set_right0,
     syscall_delete_send_right,
+    syscall_accept_rights,
+    syscall_dup_right,
 };
 
 extern "C" void syscall_handler()
@@ -1850,22 +1852,29 @@ void syscall_cpu_for_interrupt()
                                                                         << 32;
 }
 
-void syscall_set_port0()
+void syscall_set_right0()
 {
     auto current = get_current_task();
-    u64 portno   = syscall_arg64(current, 0);
+    u64 right_id = syscall_arg64(current, 0);
 
-    auto port = Port::atomic_get_port(portno);
-    if (!port) {
-        syscall_error(current) = -ENOENT;
+    auto group = current->rights_namespace.load(std::memory_order::consume);
+    if (!group) {
+        syscall_error(current) = -ESRCH;
         return;
     }
 
-    auto result = set_port0(port);
-    if (result)
-        syscall_error(current) = result;
-    else
-        syscall_success(current);
+    auto right = group->atomic_get_right(right_id);
+    if (!right) {
+        syscall_error(current) = -ESRCH;
+        return;
+    }
+
+    if (right->type != RightType::SendMany) {
+        syscall_error(current) = -EPERM;
+        return;
+    }
+
+    syscall_error(current) = set_right0(right, group);
 }
 
 void syscall_set_namespace()
@@ -1981,15 +1990,19 @@ void send_message_right()
     if (!buffer.val)
         return;
 
+    // This can sometimes be omitted when sending message to right 0, but checking it is expensive
+    // and kinda makes no sense, since userspace would probably create reply right anyway...
     auto group = current->rights_namespace.load(std::memory_order::consume);
     if (!group) {
         syscall_error(current) = -ESRCH;
         return;
     }
 
-    auto right = group->atomic_get_right(right_id);
+    Right *right = right_id ? group->atomic_get_right(right_id)
+                            : kernel_tasks->atomic_get_right(atomic_right0_id());
+
     if (!right) {
-        syscall_error(current) = -ESRCH;
+        syscall_error(current) = { -ENOENT, 0 };
         return;
     }
 
@@ -1997,7 +2010,7 @@ void send_message_right()
     if (reply_port_id) {
         reply_port = Port::atomic_get_port(reply_port_id);
         if (!reply_port) {
-            syscall_error(current) = -ENOENT;
+            syscall_error(current) = {-ENOENT, (u64)-1};
             return;
         }
 
@@ -2023,7 +2036,7 @@ void send_message_right()
             if (auto id = d.extra_rights[i]; id) {
                 auto right = group->atomic_get_right(id);
                 if (!right) {
-                    syscall_error(current) = -ESRCH;
+                    syscall_error(current) = { -ESRCH, i + 1 };
                     return;
                 }
 
@@ -2039,11 +2052,11 @@ void send_message_right()
         Port::send_message_right(right, group, reply_port, rights, std::move(*buffer.val),
                                  current->task_id, new_type, always_delete);
     if (!send_result.success()) {
-        syscall_error(current) = send_result.result;
+        syscall_error(current) = { send_result.result, send_result.val.second };
         return;
     }
 
-    syscall_return(current) = send_result.val ? send_result.val->right_parent_id : 0;
+    syscall_return(current) = send_result.val.second;
 }
 
 void syscall_delete_send_right()
@@ -2069,6 +2082,81 @@ void syscall_delete_send_right()
     } else {
         syscall_error(current) = -ESRCH;
     }
+}
+
+void syscall_accept_rights()
+{
+    auto current = get_current_task();
+
+    u64 port_id = syscall_arg64(current, 0);
+    ulong ptr = syscall_arg(current, 1, 1);
+
+    auto group = current->get_rights_namespace();
+    if (!group) {
+        syscall_error(current) = -ESRCH;
+        return;
+    }
+
+    auto port = Port::atomic_get_port(port_id);
+    if (!port) {
+        syscall_error(current) = -ENOENT;
+        return;
+    }
+
+    if (port->owner != current) {
+        syscall_error(current) = -EPERM;
+        return;
+    }
+
+    auto msg = port->atomic_get_front();
+    if (!msg) {
+        syscall_error(current) = -EAGAIN;
+        return;
+    }
+
+    std::array<u64, 4> rights = {};
+    for (int i = 0; i < 4; ++i)
+        if (auto right = msg->rights[i]; right) {
+            rights[i] = group->atomic_new_right_id();
+        }
+
+    auto result = copy_to_user((const char *)&rights, (char *)ptr, sizeof(rights));
+    if (!result.success()) {
+        syscall_error(current) = result.result;
+        return;
+    }
+
+    if (!not result.val)
+        return;
+
+    syscall_error(current) = group->transfer_rights(msg, rights);
+}
+
+void syscall_dup_right()
+{
+    auto current = get_current_task();
+
+    u64 right_id = syscall_arg64(current, 1);
+
+    auto group = current->get_rights_namespace();
+    if (!group) {
+        syscall_error(current) = -ESRCH;
+        return;
+    }
+
+    auto right = group->atomic_get_right(right_id);
+    if (!right) {
+        syscall_error(current) = -ENOENT;
+        return;
+    }
+
+    auto result = right->duplicate(group);
+    if (!result.success()) {
+        syscall_error(current) = result.result;
+        return;
+    }
+
+    syscall_return(current) = result.val.second;
 }
 
 } // namespace kernel::proc::syscalls

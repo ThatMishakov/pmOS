@@ -21,22 +21,29 @@ void __close_files_on_exit();
 void __terminate_threads();
 
 static const char *processd_port_name = "/pmos/processd";
-static pmos_port_t processd_port = 0;
+static pthread_mutex_t processd_right_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pmos_right_t processd_right = 0;
 
-pmos_port_t __get_processd_port()
+pmos_right_t __get_processd_right()
 {
-    if (processd_port != 0) {
-        return processd_port;
+    pthread_mutex_lock(&processd_right_mutex);
+
+    if (processd_right != 0) {
+        pmos_port_t p = processd_right;
+        pthread_mutex_unlock(&processd_right_mutex);
+        return p;
     }
 
-    ports_request_t port_req =
-        get_port_by_name(processd_port_name, strlen(processd_port_name), 0);
-    if (port_req.result != SUCCESS) {
-        // Handle error
+    right_request_t right_req =
+        get_right_by_name(processd_port_name, strlen(processd_port_name), 0);
+    if (right_req.result != SUCCESS) {
+        pthread_mutex_unlock(&processd_right_mutex);
         return INVALID_PORT;
     }
 
-    return port_req.port;
+    pmos_port_t p = processd_right = right_req.result;
+    pthread_mutex_unlock(&processd_right_mutex);
+    return p;
 }
 
 uint64_t process_task_group = 0;
@@ -60,12 +67,13 @@ int __register_process()
         .type = IPC_Register_Process_NUM,
         .flags = 0,
         .task_group_id = process_task_group, 
-        .reply_port = worker_port,
         .signal_port = worker_port,
         .worker_task_id = TASK_ID_SELF,
     };
 
-    result_t r = send_message_port(processd_port, sizeof(msg), &msg);
+    pmos_right_t right = __get_processd_right();
+
+    result_t r = send_message_right(right, worker_port, &msg, sizeof(msg), NULL, 0).result;
     if (r != SUCCESS) {
         return -1;
     }
@@ -102,8 +110,8 @@ void worker_main()
     worker_port = new_port.port;
 
     uint64_t reciever_port;
-    sys_result = create_right(worker_port, &reciever_port, 0);
-    if (sys_result.result != SUCCESS) {
+    right_request_t right_result = create_right(worker_port, &reciever_port, 0);
+    if (right_result.result != SUCCESS) {
         fprintf(stderr, "Failed to create the task group right\n");
         _syscall_exit(1);
     }
@@ -161,18 +169,18 @@ switch (ipc_msg->type) {
         __do_fork(msg.sender, fork_msg->reply_port);
         break;
     }
-    case IPC_Kernel_Named_Port_Notification_NUM: {
-        IPC_Kernel_Named_Port_Notification *notification = (IPC_Kernel_Named_Port_Notification *)ipc_msg;
-        size_t len = msg.size - sizeof(IPC_Kernel_Named_Port_Notification);
-        if (len == strlen(processd_port_name) && strncmp(notification->port_name, processd_port_name, len) == 0) {
-            processd_port = notification->port_num;
-            if (__register_process() < 0) {
-                fprintf(stderr, "pmOS libC: Failed to register process\n");
-                running = false;
-            }
-        }
-        break;
-    }
+    // case IPC_Kernel_Named_Port_Notification_NUM: {
+    //     IPC_Kernel_Named_Port_Notification *notification = (IPC_Kernel_Named_Port_Notification *)ipc_msg;
+    //     size_t len = msg.size - sizeof(IPC_Kernel_Named_Port_Notification);
+    //     if (len == strlen(processd_port_name) && strncmp(notification->port_name, processd_port_name, len) == 0) {
+    //         processd_port = notification->port_num;
+    //         if (__register_process() < 0) {
+    //             fprintf(stderr, "pmOS libC: Failed to register process\n");
+    //             running = false;
+    //         }
+    //     }
+    //     break;
+    // }
     case IPC_Register_Process_Reply_NUM: {
         IPC_Register_Process_Reply *reply = (IPC_Register_Process_Reply *)ipc_msg;
         if (reply->result != 0) {

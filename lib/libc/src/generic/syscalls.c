@@ -92,13 +92,18 @@ result_t send_message_port2(pmos_port_t port, mem_object_t object_id, size_t siz
 #endif
 }
 
-syscall_r get_first_message(char *buff, uint32_t args, uint64_t port)
+right_request_t get_first_message(char *buff, uint32_t args, uint64_t port)
 {
+    syscall_r result;
 #ifdef __32BITSYSCALL
-    return __pmos_syscall32_3words(SYSCALL_GET_MESSAGE | (args << 8), port, (unsigned)buff);
+    result = __pmos_syscall32_3words(SYSCALL_GET_MESSAGE | (args << 8), port, (unsigned)buff);
 #else
-    return pmos_syscall(SYSCALL_GET_MESSAGE | (args << 8), port, buff);
+    result = pmos_syscall(SYSCALL_GET_MESSAGE | (args << 8), port, buff);
 #endif
+    return (right_request_t) {
+        .result = result.result,
+        .right = result.value,
+    };
 }
 
 result_t syscall_get_message_info(Message_Descriptor *descr, uint64_t port, uint32_t flags)
@@ -567,13 +572,13 @@ pmos_int_r allocate_interrupt(uint32_t gsi, uint32_t flags)
     };
 }
 
-result_t set_port0(pmos_port_t port)
+result_t set_right0(pmos_right_t right)
 {
     syscall_r result;
 #ifdef __32BITSYSCALL
-    result = __pmos_syscall32_2words(SYSCALL_SET_PORT0, port);
+    result = __pmos_syscall32_2words(SYSCALL_SET_RIGHT0, right);
 #else
-    result = pmos_syscall(SYSCALL_SET_PORT0, port);
+    result = pmos_syscall(SYSCALL_SET_RIGHT0, right);
 #endif
     return result.result;
 }
@@ -587,25 +592,35 @@ syscall_r set_namespace(uint64_t new_id, unsigned type)
 #endif
 }
 
-syscall_r create_right(uint64_t port_id, pmos_right_t *id_in_reciever, unsigned flags)
+right_request_t create_right(uint64_t port_id, pmos_right_t *id_in_reciever, unsigned flags)
 {
+    syscall_r result;
 #ifdef __32BITSYSCALL
-    return __pmos_syscall32_3words(SYSCALL_CREATE_RIGHT | (flags << 8), port_id, id_in_reciever);
+    result = __pmos_syscall32_3words(SYSCALL_CREATE_RIGHT | (flags << 8), port_id, id_in_reciever);
 #else
-    return pmos_syscall(SYSCALL_CREATE_RIGHT | (flags << 8), port_id, id_in_reciever);
+    result = pmos_syscall(SYSCALL_CREATE_RIGHT | (flags << 8), port_id, id_in_reciever);
 #endif
+    return (right_request_t) {
+        .result = result.result,
+        .right = result.value,
+    };
 }
 
-syscall_r send_message_right(pmos_right_t send_right, pmos_port_t reply_port, const void *message,
+right_request_t send_message_right(pmos_right_t send_right, pmos_port_t reply_port, const void *message,
                              size_t message_size, message_extra_t *aux_stuff, unsigned flags)
 {
+    syscall_r result;
 #ifdef __32BITSYSCALL
-    return __pmos_syscall32_7words(SYSCALL_SEND_MSG_RIGHT | (flags << 8), send_right, reply_port,
+    result = __pmos_syscall32_7words(SYSCALL_SEND_MSG_RIGHT | (flags << 8), send_right, reply_port,
                                    message, message_size, aux_stuff);
 #else
-    return pmos_syscall(SYSCALL_SEND_MSG_RIGHT | (flags << 8), send_right, reply_port, message,
+    result = pmos_syscall(SYSCALL_SEND_MSG_RIGHT | (flags << 8), send_right, reply_port, message,
                         message_size, aux_stuff);
 #endif
+    return (right_request_t) {
+        .result = result.result,
+        .right = result.value,
+    };
 }
 
 result_t delete_right(pmos_right_t right_id)
@@ -615,4 +630,27 @@ result_t delete_right(pmos_right_t right_id)
     #else
     return pmos_syscall(SYSCALL_DELETE_SEND_RIGHT, right_id).result;
     #endif
+}
+
+result_t accept_rights(pmos_port_t port, pmos_right_t *rights_array)
+{
+    #ifdef __32BITSYSCALL
+    return __pmos_syscall32_3words(SYSCALL_ACCEPT_RIGHTS, port, rights_array).result;
+    #else
+    return pmos_syscall(SYSCALL_ACCEPT_RIGHTS, port, rights_array).result;
+    #endif
+}
+
+right_request_t dup_right(pmos_right_t right)
+{
+    syscall_r result;
+    #ifdef __32BITSYSCALL
+    result = __pmos_syscall32_2words(SYSCALL_DUP_RIGHT, right);
+    #else
+    result = pmos_syscall(SYSCALL_DUP_RIGHT, right);
+    #endif
+    return (right_request_t) {
+        .result = result.result,
+        .right = result.value,
+    };
 }

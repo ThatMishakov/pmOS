@@ -8,7 +8,7 @@
 pmos_port_t __get_cmd_reply_port();
 void __return_cmd_reply_port(pmos_port_t);
 
-pmos_port_t __get_processd_port();
+pmos_right_t __get_processd_right();
 
 extern pid_t __pid_cached;
 
@@ -32,17 +32,16 @@ pid_t __getpid(int type)
     IPC_PID_For_Task request = {
         .type = IPC_PID_For_Task_NUM,
         .task_id = TASK_ID_SELF,
-        .reply_port = reply_port,
         .flags = PID_FOR_TASK_WAIT_TO_APPEAR | extra_flags,
     };
 
-    pmos_port_t processd_port = __get_processd_port();
-    if (processd_port == INVALID_PORT) {
+    pmos_right_t processd_right = __get_processd_right();
+    if (processd_right == INVALID_RIGHT) {
         __return_cmd_reply_port(reply_port);
         return -1;
     }
 
-    result_t result = send_message_port(processd_port, sizeof(request), &request);
+    result_t result = send_message_right(processd_right, reply_port, &request, sizeof(request), NULL, 0).result;
     if (result != SUCCESS) {
         __return_cmd_reply_port(reply_port);
         errno = -result;

@@ -67,9 +67,10 @@ struct Message {
     }
 
     inline size_t size() const { return content.size(); }
-    inline size_t rights_count() const {
+    inline size_t rights_count() const
+    {
         size_t i = 0;
-        for (auto r : rights)
+        for (auto r: rights)
             i += r != nullptr;
         return i;
     }
@@ -118,6 +119,7 @@ public:
     void change_return_upon_unblock(proc::TaskDescriptor *task);
 
     Message *get_front();
+    Message *atomic_get_front();
     void pop_front() noexcept;
     bool is_empty() const noexcept;
 
@@ -146,10 +148,10 @@ public:
 
     bool atomic_alive() const;
 
-    static ReturnStr<Right *> send_message_right(Right *right, proc::TaskGroup *verify_group,
-                                                 Port *reply_port, rights_array array,
-                                                 message_buffer data, uint64_t sender_id,
-                                                 RightType new_right_type, bool always_destroy_right);
+    static ReturnStr<std::pair<Right * /* right */, u64 /* new_id_error */>>
+        send_message_right(Right *right, proc::TaskGroup *verify_group, Port *reply_port,
+                           rights_array array, message_buffer data, uint64_t sender_id,
+                           RightType new_right_type, bool always_destroy_right);
 
 protected:
     using Message_storage = pmos::containers::CircularDoubleList<Message, &Message::list_node>;
@@ -183,7 +185,5 @@ protected:
     friend class proc::TaskDescriptor;
     friend struct Right;
 };
-
-kresult_t set_port0(Port *port);
 
 }; // namespace kernel::ipc

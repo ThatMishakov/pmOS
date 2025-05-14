@@ -53,7 +53,13 @@ typedef struct {
     uint64_t value;
 } syscall_r;
 
+typedef struct {
+    result_t result;
+    pmos_right_t right;
+} right_request_t;
+
 #define INVALID_PORT 0
+#define INVALID_RIGHT 0
 
 #if defined(__cplusplus)
 extern "C" {
@@ -166,7 +172,7 @@ result_t syscall_get_message_info(Message_Descriptor *descr, pmos_port_t port, u
  * @return result of the execution. On success, buff should contain the message. If the message is
  *         poped, the reply right is returned.
  */
-syscall_r get_first_message(char *buff, uint32_t args, pmos_port_t port);
+right_request_t get_first_message(char *buff, uint32_t args, pmos_port_t port);
 
 /**
  * @brief Sends the message to the port
@@ -366,7 +372,7 @@ syscall_r pmos_get_time(unsigned mode);
 
 result_t request_timer(pmos_port_t port, uint64_t after_ns);
 
-result_t request_named_port(const char *name, size_t name_length, pmos_port_t reply_port,
+right_request_t request_named_port(const char *name, size_t name_length, pmos_port_t reply_port,
                             uint32_t flags);
 
 result_t pause_task(uint64_t tid);
@@ -419,8 +425,13 @@ syscall_r set_namespace(uint64_t new_id, unsigned type);
 /// @param flags Flags (for example, CREATE_RIGHT_SEND_ONCE)
 /// @return On success, the right ID in the rights namespace (for sender). On failure,
 ///         the error
-syscall_r create_right(pmos_port_t port_id, pmos_right_t *id_in_reciever, unsigned flags);
+right_request_t create_right(pmos_port_t port_id, pmos_right_t *id_in_reciever, unsigned flags);
     #define CREATE_RIGHT_SEND_ONCE (1 << 0)
+
+/// @brief Duplicates the right. The right must be send many and be in the namespace of the caller
+/// @param right Right to duplicate
+/// @return Result. On success, the new ID of the right
+right_request_t dup_right(pmos_right_t right);
 
 /// @brief Deletes the right in the namespace of the sender
 /// @param right_id
@@ -449,11 +460,24 @@ typedef struct message_extra_t {
 /// @param message_size Size of the message buffer
 /// @param aux_stuff Additional rights and memory object (TODO: memory object is ignored)
 /// @param flags Additional flags (REPLY_CREATE_SEND_MANY, SEND_MESSAGE_DELETE_RIGHT)
-/// @return If reply_port is not INVALID_PORT, returns the ID of the new reply right on success.
-syscall_r send_message_right(pmos_right_t send_right, pmos_port_t reply_port, const void *message,
+/// @return If reply_port is not INVALID_PORT, returns the ID of the new reply right on success. On error,
+///         if it is related to the right not being found, returns the ID of the first failed right,
+///         starting with 0 for the `send_right`
+right_request_t send_message_right(pmos_right_t send_right, pmos_port_t reply_port, const void *message,
                              size_t message_size, message_extra_t *todo_aux_stuff, unsigned flags);
     #define REPLY_CREATE_SEND_MANY    (1 << 1)
     #define SEND_MESSAGE_DELETE_RIGHT (1 << 8)
+
+/// @brief Accepts the rights from the front message of the port
+///
+/// This system call accepts the rights from the front message, by moving them from the message to the
+/// current rights namespace of the caller. After it, the rights are eliminated from the message, so calling
+/// this function second time on the same message would result in accepting zero rights, as if the message
+/// did not have them in the first place.
+/// @param port Port from where the rights should be accepted
+/// @param rights_array Array of 4 rights, where they should be stored
+/// @return Result of the operation
+result_t accept_rights(pmos_port_t port, pmos_right_t *rights_array);
 
 #endif
 

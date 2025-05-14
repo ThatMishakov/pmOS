@@ -41,16 +41,16 @@
 #define SYSCALL_GET_LAPIC_ID     7
 #define SYSCALL_CONFIGURE_SYSTEM 8
 
-#define SYSCALL_GET_MSG_INFO       9
-#define SYSCALL_GET_MESSAGE        10
-#define SYSCALL_SEND_MSG_RIGHT     11
-#define SYSCALL_SEND_MSG_PORT      12
-#define SYSCALL_CREATE_PORT        13
-#define SYSCALL_SET_ATTR           14
-#define SYSCALL_SET_INTERRUPT      15
-#define SYSCALL_CREATE_RIGHT       16
-#define SYSCALL_SET_NAMESPACE      17
-#define SYSCALL_SET_LOG_PORT       18
+#define SYSCALL_GET_MSG_INFO   9
+#define SYSCALL_GET_MESSAGE    10
+#define SYSCALL_SEND_MSG_RIGHT 11
+#define SYSCALL_SEND_MSG_PORT  12
+#define SYSCALL_CREATE_PORT    13
+#define SYSCALL_SET_ATTR       14
+#define SYSCALL_SET_INTERRUPT  15
+#define SYSCALL_CREATE_RIGHT   16
+#define SYSCALL_SET_NAMESPACE  17
+#define SYSCALL_SET_LOG_PORT   18
 
 #define SYSCALL_GET_PAGE_TABLE 19
 
@@ -90,7 +90,9 @@
 #define SYSCALL_MEM_OBJECT_GET_PAGE_ADDRESS 50
 #define SYSCALL_DELETE_PORT                 51
 #define SYSCALL_ALLOCATE_INTERRUPT          52
-#define SYSCALL_SET_PORT0                   53
+#define SYSCALL_SET_RIGHT0                  53
 #define SYSCALL_DELETE_SEND_RIGHT           54
+#define SYSCALL_ACCEPT_RIGHTS               55
+#define SYSCALL_DUP_RIGHT                   56
 
 #endif

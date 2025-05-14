@@ -92,7 +92,7 @@ int pthread_join(pthread_t thread, void **retval)
 
     Message_Descriptor reply_desc;
     IPC_Thread_Finished *reply;
-    result_t result = get_message(&reply_desc, (unsigned char **)&reply, join_notify_port);
+    result_t result = get_message(&reply_desc, (unsigned char **)&reply, join_notify_port, NULL, NULL);
     if (result != SUCCESS) {
         errno = -result;
         return -1;

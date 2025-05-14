@@ -48,7 +48,7 @@ ssize_t __ipc_queue_read(void *file_data, uint64_t consumer_id, void *buf, size_
     return -1;
 }
 
-static ssize_t write_ipc_queue(pmos_port_t port, const void *buf, size_t size)
+static ssize_t write_ipc_queue(pmos_right_t right, const void *buf, size_t size)
 {
     static const int buffer_size = 252;
     const char *str              = buf;
@@ -67,7 +67,9 @@ static ssize_t write_ipc_queue(pmos_port_t port, const void *buf, size_t size)
         int size_s = size - i > buffer_size ? buffer_size : size - i;
         memcpy(desc.buffer, &str[i], size_s);
 
-        int k = send_message_port(port, size_s + sizeof(uint32_t), (const char *)(&desc));
+        int k =
+            send_message_right(right, 0, (const char *)(&desc), size_s + sizeof(uint32_t), NULL, 0)
+                .result;
 
         if (k == SUCCESS) {
             s += size_s;
@@ -92,42 +94,51 @@ ssize_t __ipc_queue_write(void *file_data, uint64_t consumer_id, const void *buf
 {
     struct IPC_Queue *q = (struct IPC_Queue *)file_data;
 
-    pmos_port_t queue_port = q->port;
-    const char *port_name  = q->name;
-    if (queue_port == INVALID_PORT) {
-        ports_request_t port_req = get_port_by_name(port_name, strlen(port_name), 0);
-        if (port_req.result != SUCCESS) {
-            errno = -port_req.result;
+    pmos_port_t queue_right = q->port;
+    const char *port_name   = q->name;
+    if (queue_right == INVALID_RIGHT) {
+        right_request_t right_req = get_right_by_name(port_name, strlen(port_name), 0);
+        if (right_req.result != SUCCESS) {
+            errno = -right_req.result;
             return -1;
         }
 
-        queue_port = port_req.port;
-        q->port    = queue_port;
+        bool result = __atomic_compare_exchange_n(&q->port, &queue_right, right_req.result, false,
+                                                  __ATOMIC_RELAXED, __ATOMIC_RELAXED);
+        if (!result) {
+            delete_right(right_req.right);
+        }
+        queue_right = q->port;
     }
 
-    return write_ipc_queue(queue_port, buf, count);
+    return write_ipc_queue(queue_right, buf, count);
 }
 
-ssize_t __ipc_queue_writev(void *file_data, uint64_t consumer_id, const struct iovec *iov, int iovcnt, size_t /* offset */)
+ssize_t __ipc_queue_writev(void *file_data, uint64_t consumer_id, const struct iovec *iov,
+                           int iovcnt, size_t /* offset */)
 {
     struct IPC_Queue *q = (struct IPC_Queue *)file_data;
 
-    pmos_port_t queue_port = q->port;
-    const char *port_name  = q->name;
-    if (queue_port == INVALID_PORT) {
-        ports_request_t port_req = get_port_by_name(port_name, strlen(port_name), 0);
-        if (port_req.result != SUCCESS) {
-            errno = -port_req.result;
+    pmos_port_t queue_right = q->port;
+    const char *port_name   = q->name;
+    if (queue_right == INVALID_PORT) {
+        right_request_t right_req = get_right_by_name(port_name, strlen(port_name), 0);
+        if (right_req.result != SUCCESS) {
+            errno = -right_req.result;
             return -1;
         }
 
-        queue_port = port_req.port;
-        q->port    = queue_port;
+        bool result = __atomic_compare_exchange_n(&q->port, &queue_right, right_req.right, false,
+                                                  __ATOMIC_RELAXED, __ATOMIC_RELAXED);
+        if (!result) {
+            delete_right(right_req.right);
+        }
+        queue_right = q->port;
     }
 
     ssize_t count = 0;
     for (int i = 0; i < iovcnt; i++) {
-        ssize_t k = write_ipc_queue(queue_port, iov[i].iov_base, iov[i].iov_len);
+        ssize_t k = write_ipc_queue(queue_right, iov[i].iov_base, iov[i].iov_len);
         if (k < 0) {
             if (count > 0) {
                 return count;

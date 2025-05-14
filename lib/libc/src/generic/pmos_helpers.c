@@ -26,11 +26,13 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <assert.h>
+#include <errno.h>
 #include <pmos/helpers.h>
 #include <stdlib.h>
-#include <errno.h>
 
-result_t get_message(Message_Descriptor *desc, unsigned char **message, pmos_port_t port)
+result_t get_message(Message_Descriptor *desc, unsigned char **message, pmos_port_t port,
+                     pmos_right_t *reply_right, pmos_right_t *other_rights)
 {
     result_t result = syscall_get_message_info(desc, port, 0);
     if (result != SUCCESS)
@@ -41,7 +43,18 @@ result_t get_message(Message_Descriptor *desc, unsigned char **message, pmos_por
         return -ENOMEM; // This needs to be changed
     }
 
-    result = get_first_message(*message, MSG_ARG_REJECT_RIGHT, port).result;
+    if (other_rights) {
+        result_t result = accept_rights(port, other_rights);
+        assert(result == SUCCESS);
+    }
+
+    if (reply_right) {
+        right_request_t r = get_first_message((char *)*message, 0, port);
+        *reply_right = r.right;
+        result = r.result;
+    } else {
+        result = get_first_message((char *)*message, MSG_ARG_REJECT_RIGHT, port).result;
+    }
     if (result != SUCCESS) {
         free(*message);
     }

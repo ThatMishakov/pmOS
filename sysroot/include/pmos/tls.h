@@ -106,7 +106,8 @@ struct uthread {
     } *dtv;
     size_t dtv_size;
 
-    pmos_port_t fs_port;
+    pmos_right_t fs_right;
+    pmos_right_t pipe_right;
     pmos_port_t cmd_reply_port;
 
     int signal_stack_spinlock;

@@ -73,43 +73,40 @@ ports_request_t create_port(pid_t owner, uint32_t flags);
 result_t pmos_delete_port(pmos_port_t port);
 
 /**
- * @brief Assigns a name to the unnamed port.
+ * @brief Assigns a name to the right.
  *
- * This syscall assigns a name to the IPC port. Internally, it creates a Named_Port object, which
- * points to a port. The named port must not exist, otherwise the error will be returned. The tasks
- * might then reference this name to get the underlying IPC port. In addition, during the creation
+ * This syscall assigns a name to the IPC right. Internally, it creates a Named_Port object, which
+ * points to a port. If the named port already exists, this replaces it. The tasks
+ * might then reference this name to get the underlying IPC right. In addition, during the creation
  * of the object, if there are waiting tasks, they immediately get unblocked and recieve the new
- * port number. See get_port_by_name().
+ * right number. See get_right_by_name(). The right must be send-many.
  *
- * @param portnum The ID of the IPC port to which the name would be asigned.
- * @param name The pointer to the string holding the port name. Any character is valid, including
- * '\0'. The kernel uses binary comparison to determine if the name matches and does stop on NULL
- * termination.
+ * @param right_id The ID of the IPC right to which the name would be asigned, within the caller
+ *                 thread rights namespace.
+ * @param name The pointer to the string holding the right name.
  * @param length The length of the name. In current implementation, there is no limit.
  * @param flags Currently unused. Must be set to 0.
  * @return result_t Result of the operation.
- * @todo Create a syscall to delete the named ports. Decide if a port might have several names.
- * @see get_port_by_name()
+ * @see get_right_by_name()
  */
-result_t name_port(pmos_port_t portnum, const char *name, size_t length, uint32_t flags);
+result_t name_right(pmos_port_t right_id, const char *name, size_t length, uint32_t flags);
 
 /**
  * @brief Get the port by name object.
  *
- * This system call gets a port referenced by the *name*. If the port with a given name is found,
- * its number is immediately returned. Otherwise, the behaviour is dependent on the flags. If
- * FLAG_NOBLOCK is set, then the error is returned. Otherwise, the process is blocked untill the
- * port becomes available.
+ * This function gets a right referenced by the *name* by making an IPC request to the rights
+ * server. If the right with a given name is found, its number is immediately returned. Otherwise,
+ * the behaviour is dependent on the flags. If FLAG_NOBLOCK is set, then the error is returned.
+ * Otherwise, the process is blocked untill the right becomes available.
  *
- * @param name The name of the port. Similarly to name_port(pmos_port_t, const char*, size_t,
- * uint32_t), any character is valid and '\0' is not considered a string termination.
+ * @param name The name of the right.
  * @param length The length of the name.
  * @param flags OR of different flags defining the behaviour. FLAG_NOBLOCK indicated that the
- * syscall should not block. Other bits are currently unused and must be set to 0.
- * @return ports_request_t Result of the operation. On success, *port* holds the ID of the port to
+ * function should not block. Other bits are currently unused and must be set to 0.
+ * @return right_request_t Result of the operation. On success, *right* holds the ID of the right to
  * which the name is asigned.
  */
-ports_request_t get_port_by_name(const char *name, size_t length, uint32_t flags);
+right_request_t get_right_by_name(const char *name, size_t length, uint32_t flags);
 
 /**
  * @brief Set the port to which the kernel sends its logs.
@@ -125,9 +122,9 @@ ports_request_t get_port_by_name(const char *name, size_t length, uint32_t flags
  */
 result_t set_log_port(pmos_port_t portnum, u32 flags);
 
-// Sets port 0 to the given port
-// TODO: Replace this with handles/capabilities
-result_t set_port0(pmos_port_t port);
+// Sets right 0 to the given right
+// TODO: implement missing stuff (I will not elaborate...)
+result_t set_right0(pmos_right_t port);
 
 #endif
 

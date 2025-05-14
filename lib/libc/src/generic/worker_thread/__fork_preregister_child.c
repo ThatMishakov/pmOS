@@ -8,7 +8,7 @@
 // TODO: Move this to a header
 pmos_port_t __get_cmd_reply_port();
 void __return_cmd_reply_port(pmos_port_t);
-pmos_port_t __get_processd_port();
+pmos_port_t __get_processd_right();
 
 _HIDDEN pid_t __fork_preregister_child(uint64_t tid)
 {
@@ -21,18 +21,17 @@ _HIDDEN pid_t __fork_preregister_child(uint64_t tid)
         .type = IPC_Preregister_Process_NUM,
         .flags = 0,
         .worker_task_id = tid,
-        .reply_port = reply_port,
         .parent_pid = 0,
     };
 
-    pmos_port_t processd_port = __get_processd_port();
-    if (processd_port == INVALID_PORT) {
-        fprintf(stderr, "pmOS libC: Failed to get processd port\n");
+    pmos_port_t processd_right = __get_processd_right();
+    if (processd_right == INVALID_RIGHT) {
+        fprintf(stderr, "pmOS libC: Failed to get processd right\n");
         __return_cmd_reply_port(reply_port);
         return -1;
     }
 
-    result_t result = send_message_port(processd_port, sizeof(request), &request);
+    result_t result = send_message_right(processd_right, reply_port, &request, sizeof(request), NULL, 0).result;
     if (result != SUCCESS) {
         __return_cmd_reply_port(reply_port);
         errno = -result;

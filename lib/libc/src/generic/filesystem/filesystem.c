@@ -151,36 +151,6 @@ static int release_descriptor(struct Filesystem_Data *fs_data)
     return release_descriptors(fs_data, 1);
 }
 
-// Requests a port of the filesystem daemon
-pmos_port_t request_filesystem_port()
-{
-    static const char filesystem_port_name[] = "/pmos/vfsd";
-    ports_request_t port_req =
-        get_port_by_name(filesystem_port_name, strlen(filesystem_port_name), 0);
-    if (port_req.result != SUCCESS) {
-        // Handle error
-        return INVALID_PORT;
-    }
-
-    return port_req.port;
-}
-
-// Global thread-local variable to save a reply port
-// static __thread pmos_port_t fs_cmd_reply_port = INVALID_PORT;
-
-pmos_port_t get_filesytem_port()
-{
-    const char *port_name   = "filesystem";
-    ports_request_t request = get_port_by_name(port_name, strlen(port_name), 0);
-
-    if (request.result != SUCCESS) {
-        // Handle error
-        return INVALID_PORT;
-    }
-
-    return request.port;
-}
-
 int __share_fs_data(uint64_t tid)
 {
     if (ensure_fs_initialization() < 0)
@@ -350,7 +320,7 @@ int stat(const char *restrict name, struct stat *restrict stat)
         goto finish;
 
     Message_Descriptor reply_descr;
-    result_t result = get_message(&reply_descr, (unsigned char **)&reply, reply_port);
+    result_t result = get_message(&reply_descr, (unsigned char **)&reply, reply_port, NULL, NULL);
     if (result != SUCCESS) {
         result_code = -1;
         goto finish;
@@ -932,35 +902,6 @@ off_t __lseek_internal(long int fd, off_t offset, int whence)
 
 off_t lseek(int fd, off_t offset, int whence) { return __lseek_internal(fd, offset, whence); }
 
-int vfsd_send_persistant(size_t msg_size, const void *message)
-{
-    struct uthread *current = __get_tls();
-    if (!current)
-        return -1;
-
-    result_t k_result = current->fs_port != INVALID_PORT
-                            ? send_message_port(current->fs_port, msg_size, (char *)message)
-                            : -ENOENT;
-
-    int fail_count = 0;
-    while (k_result == -ENOENT && fail_count < 5) {
-        // Request the port of the filesystem daemon
-        pmos_port_t fs_port = request_filesystem_port();
-        if (fs_port == INVALID_PORT) {
-            // Handle error: Failed to obtain the filesystem port
-            errno = EIO; // Set errno to appropriate error code
-            return -1;
-        }
-        current->fs_port = fs_port;
-
-        // Retry sending IPC_Open message to the filesystem daemon
-        k_result = send_message_port(fs_port, msg_size, (char *)message);
-        ++fail_count;
-    }
-
-    return k_result == SUCCESS ? 0 : -1;
-}
-
 int __clone_fs_data(struct Filesystem_Data **new_data, uint64_t for_task, bool exclusive)
 {
     assert(new_data != NULL);
@@ -1082,7 +1023,9 @@ void __libc_fixup_fs_post_fork(struct Filesystem_Data *child_data)
     // Fixup the reply port
     struct uthread *current = __get_tls();
     if (current != NULL)
-        current->fs_port = INVALID_PORT;
+        current->fs_right = INVALID_PORT;
+
+    // --------------------------- TODO --------------------------------
 }
 
 void __libc_fs_lock_pre_fork()
