@@ -21,13 +21,9 @@
 #include <string>
 #include <unistd.h>
 #include <vector>
+#include <pmos/helpers.hh>
 
-std::string devicesd_port_name = "/pmos/devicesd";
-pmos_port_t devicesd_port      = []() -> auto {
-    ports_request_t request =
-        get_port_by_name(devicesd_port_name.c_str(), devicesd_port_name.length(), 0);
-    return request.port;
-}();
+pmos::Right devicesd_right = pmos::get_right_by_name("/pmos/devicesd").value();
 
 pmos_port_t _create_port()
 {
@@ -39,7 +35,7 @@ pmos_port_t _create_port()
     return request.port;
 }
 
-pmos_port_t cmd_port = _create_port();
+pmos::Port cmd_port = pmos::Port::create().value();
 pmos_port_t ahci_port;
 
 struct PCIDescriptor {
@@ -57,7 +53,7 @@ std::vector<PCIDescriptor> get_ahci_controllers()
     *request = {
         .type       = IPC_Request_PCI_Devices_NUM,
         .flags      = 0,
-        .reply_port = cmd_port,
+        .reply_port = cmd_port.get(),
     };
     request->devices[0] = {
         .vendor_id  = 0xffff,
@@ -76,15 +72,15 @@ std::vector<PCIDescriptor> get_ahci_controllers()
         .reserved   = 0,
     };
 
-    result_t result = send_message_port(devicesd_port, struct_size, (unsigned char *)request);
-    if (result != 0) {
+    auto r = pmos::send_message_right_one(devicesd_right, std::span<std::byte>{reinterpret_cast<std::byte *>(request), struct_size}, {});
+    if (!r) {
         printf("Failed to request PCI devices\n");
         return {};
     }
 
     Message_Descriptor desc;
     uint8_t *message;
-    result = get_message(&desc, &message, cmd_port);
+    auto result = get_message(&desc, &message, cmd_port.get(), nullptr, nullptr);
     if (result != 0) {
         printf("Failed to get message\n");
         return {};
@@ -586,7 +582,7 @@ void ahci_controller_main()
     while (1) {
         Message_Descriptor desc;
         uint8_t *message;
-        auto result = get_message(&desc, &message, ahci_port);
+        auto result = get_message(&desc, &message, ahci_port, nullptr, nullptr);
         if (result != 0) {
             printf("Failed to get message\n");
             return;
@@ -853,7 +849,8 @@ int main()
 
         auto r = fork();
         if (r == 0) {
-            cmd_port  = _create_port();
+            cmd_port.release();
+            cmd_port  = pmos::Port::create().value();
             ahci_port = _create_port();
             ahci_handle(controller);
             return 0;

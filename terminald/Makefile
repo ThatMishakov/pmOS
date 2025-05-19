@@ -11,11 +11,12 @@ CXX = clang++
 
 INCLUDEDIR =
 
-USERCFLAGS = -Wall -Wextra -Og -g -pipe -I.
+USERCFLAGS = -Wall -Wextra -O3 -g -pipe -I.
 
 TARGETFLAGS = --target=$(ARCH)-pmos --sysroot=$(ROOTDIR)/sysroot
 
 CPPFLAGS = $(INTERNALCFLAGS) $(USERCFLAGS) -MMD -MP -DFLANTERM_FB_DISABLE_BUMP_ALLOC -DFLANTERM_FB_SUPPORT_BPP $(TARGETFLAGS)
+CXXFLAGS =  -std=c++23
 ASMFLAGS = -I$(INCLUDEDIR) $(TARGETFLAGS)
 LDFLAGS = $(INTERNALLDFLAGS) $(TARGETFLAGS)
 
@@ -40,7 +41,7 @@ DEP    := $(OBJ:.o=.d)
 all: $(EXEC)
 
 $(EXEC): $(OBJ) libc
-	$(CC) $(LDFLAGS) $(OBJ) -o $@
+	$(CXX) $(LDFLAGS) $(OBJ) -o $@
 	
 clean:
 	$(RM) $(EXEC) $(OBJ)

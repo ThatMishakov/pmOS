@@ -36,9 +36,12 @@
 #include <string.h>
 
 pmos_port_t main_port     = 0;
-pmos_port_t devicesd_port = 0;
+
+pmos_right_t devicesd_right = 0;
 
 const char *ps2d_port_name = "/pmos/ps2d";
+
+pmos_right_t main_right = INVALID_RIGHT;
 
 int main()
 {
@@ -55,23 +58,29 @@ int main()
     }
 
     {
-        result_t r = name_port(main_port, ps2d_port_name, strlen(ps2d_port_name), 0);
-        if (r != SUCCESS) {
-            printf("Error %li naming port\n", r);
-            return 0;
+        right_request_t r = create_right(main_port, &main_right, 0);
+        if (r.result) {
+            printf("Error %i creating right\n", (int)r.result);
+            return 1;
+        }
+
+        result_t rr = name_right(r.right, ps2d_port_name, strlen(ps2d_port_name), 0);
+        if (rr != SUCCESS) {
+            printf("Error %i naming port\n", (int)rr);
+            return 1;
         }
     }
 
     {
         static const char *devicesd_port_name = "/pmos/devicesd";
-        ports_request_t devicesd_port_req =
-            get_port_by_name(devicesd_port_name, strlen(devicesd_port_name), 0);
-        if (devicesd_port_req.result != SUCCESS) {
-            printf("[i8042] Warning: Could not get devicesd port. Error %li\n",
-                   devicesd_port_req.result);
+        right_request_t devicesd_right_req =
+            get_right_by_name(devicesd_port_name, strlen(devicesd_port_name), 0);
+        if (devicesd_right_req.result != SUCCESS) {
+            printf("[i8042] Warning: Could not get devicesd port. Error %i\n",
+                   (int)devicesd_right_req.result);
             return 0;
         }
-        devicesd_port = devicesd_port_req.port;
+        devicesd_right = devicesd_right_req.right;
     }
 
     while (1) {
@@ -79,7 +88,7 @@ int main()
 
         Message_Descriptor desc = {};
         unsigned char *message  = NULL;
-        result                  = get_message(&desc, &message, main_port);
+        result                  = get_message(&desc, &message, main_port, NULL, NULL);
 
         if (result != SUCCESS) {
             fprintf(stderr, "[PS2d] Error: Could not get message\n");

@@ -1,27 +1,31 @@
 #include "pci.hh"
 
+#include <errno.h>
 #include <pmos/helpers.h>
+#include <pmos/helpers.hh>
 #include <pmos/ipc.h>
 #include <pmos/memory.h>
 #include <pmos/ports.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
 #include <system_error>
-#include <errno.h>
-#include <stdlib.h>
 
-extern pmos_port_t devicesd_port;
-extern pmos_port_t cmd_port;
+extern pmos::Right devicesd_right;
+extern pmos::Port cmd_port;
 
 // TODO: pthread stuff
 
-void send_devicesd(auto &request)
+void send_devicesd(auto &request, pmos::Port *reply_port)
 {
-    auto r = send_message_port(devicesd_port, sizeof(request), (void *)&request);
-    if (r != 0) {
+    auto r =
+        send_message_right_one(devicesd_right, request, {reply_port, pmos::RightType::SendMany});
+    if (!r) {
         // TODO: Eventually don't throw
-        printf("Failed to send message to devicesd: %i (%s)\n", (int)r, strerror(-r));
-        throw std::system_error(r, std::generic_category(), "Failed to send message to devicesd");
+        printf("Failed to send message to devicesd: %i (%s)\n", (int)r.error(),
+               strerror(r.error()));
+        throw std::system_error(r.error(), std::generic_category(),
+                                "Failed to send message to devicesd");
     }
 }
 
@@ -35,7 +39,6 @@ PCIDevice::PCIDevice(uint16_t group, uint8_t bus, uint8_t device, uint8_t functi
     IPC_Request_PCI_Device req = {
         .type       = IPC_Request_PCI_Device_NUM,
         .flags      = 0,
-        .reply_port = cmd_port,
         .group      = group,
         .bus        = bus,
         .device     = device,
@@ -43,11 +46,11 @@ PCIDevice::PCIDevice(uint16_t group, uint8_t bus, uint8_t device, uint8_t functi
         .reserved   = 0,
     };
 
-    send_devicesd(req);
+    send_devicesd(req, &cmd_port);
 
     Message_Descriptor desc;
     uint8_t *message;
-    result_t result = get_message(&desc, &message, cmd_port);
+    result_t result = get_message(&desc, &message, cmd_port.get(), nullptr, nullptr);
     if (result != 0) {
         printf("Failed to get message\n");
         throw std::system_error(result, std::generic_category(), "Failed to get message");
@@ -78,8 +81,7 @@ PCIDevice::PCIDevice(uint16_t group, uint8_t bus, uint8_t device, uint8_t functi
     free(message);
 
     // Map the PCI device's configuration space
-    auto mem_req =
-        create_phys_map_region(0, nullptr, 4096, PROT_READ | PROT_WRITE, base_phys);
+    auto mem_req = create_phys_map_region(0, nullptr, 4096, PROT_READ | PROT_WRITE, base_phys);
     if (mem_req.result != SUCCESS)
         throw std::system_error(mem_req.result, std::generic_category(),
                                 "Failed to map PCI device's configuration space");
@@ -116,10 +118,7 @@ void PCIDevice::writel(uint16_t offset, uint32_t val)
     *((volatile uint32_t *)(virt_addr + offset)) = val;
 }
 
-char PCIDevice::interrupt_pin() noexcept
-{
-    return readb(0x3d);
-}
+char PCIDevice::interrupt_pin() noexcept { return readb(0x3d); }
 
 int PCIDevice::gsi(uint32_t &gsi_result) noexcept
 {
@@ -132,7 +131,6 @@ int PCIDevice::gsi(uint32_t &gsi_result) noexcept
     IPC_Request_PCI_Device_GSI request = {
         .type       = IPC_Request_PCI_Device_GSI_NUM,
         .flags      = 0,
-        .reply_port = cmd_port,
         .group      = _group,
         .bus        = _bus,
         .device     = _device,
@@ -141,7 +139,7 @@ int PCIDevice::gsi(uint32_t &gsi_result) noexcept
     };
 
     try {
-        send_devicesd(request);
+        send_devicesd(request, &cmd_port);
     } catch (std::system_error &e) {
         errno = e.code().value();
         return -1;
@@ -150,7 +148,7 @@ int PCIDevice::gsi(uint32_t &gsi_result) noexcept
     Message_Descriptor desc;
     uint8_t *message;
 
-    result_t result = get_message(&desc, &message, cmd_port);
+    result_t result = get_message(&desc, &message, cmd_port.get(), nullptr, nullptr);
     if (result != 0) {
         errno = result;
         return -1;
@@ -175,7 +173,8 @@ int PCIDevice::gsi(uint32_t &gsi_result) noexcept
     return 0;
 }
 
-int PCIDevice::register_interrupt(uint32_t &int_vector_result, uint64_t task, uint64_t port) noexcept
+int PCIDevice::register_interrupt(uint32_t &int_vector_result, uint64_t task,
+                                  uint64_t port) noexcept
 {
     auto int_pin = interrupt_pin();
     if (int_pin < 1 or int_pin > 4) {
@@ -190,13 +189,12 @@ int PCIDevice::register_interrupt(uint32_t &int_vector_result, uint64_t task, ui
         .device     = _device,
         .function   = _function,
         .pin        = (uint8_t)(int_pin - 1),
-        .dest_task       = task == 0 ? get_task_id() : task,
-        .dest_port       = port,
-        .reply_port      = cmd_port,
+        .dest_task  = task == 0 ? get_task_id() : task,
+        .dest_port  = port,
     };
 
     try {
-        send_devicesd(request);
+        send_devicesd(request, &cmd_port);
     } catch (std::system_error &e) {
         return -e.code().value();
     }
@@ -204,7 +202,7 @@ int PCIDevice::register_interrupt(uint32_t &int_vector_result, uint64_t task, ui
     Message_Descriptor desc;
     uint8_t *message;
     for (int i = 0; i < 5; ++i) {
-        result_t result = get_message(&desc, &message, cmd_port);
+        result_t result = get_message(&desc, &message, cmd_port.get(), nullptr, nullptr);
         // The affinity may be changed, which can interrupt the system call
         // This is not an error, so retry a few times
         if ((int)result == -EINTR)

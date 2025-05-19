@@ -177,7 +177,6 @@ typedef struct IPC_Request_PCI_Devices_Reply {
 typedef struct IPC_Request_PCI_Device {
     uint32_t type; // IPC_Request_PCI_Device_NUM
     uint32_t flags;
-    uint64_t reply_port;
     uint16_t group;
     uint8_t bus;
     uint8_t device;
@@ -200,7 +199,6 @@ typedef struct IPC_Request_PCI_Device_Reply {
 typedef struct IPC_Request_PCI_Device_GSI {
     uint32_t type; // IPC_Request_PCI_Device_GSI_NUM
     uint32_t flags;
-    uint64_t reply_port;
 
     uint32_t group; // uint32_t for alignment to 8 bytes
     uint8_t bus;
@@ -232,7 +230,6 @@ typedef struct IPC_Register_PCI_Interrupt {
 
     uint64_t dest_task;
     uint64_t dest_port;
-    uint64_t reply_port;
 } IPC_Register_PCI_Interrupt;
 
 #define IPC_Kernel_Interrupt_NUM 0x20

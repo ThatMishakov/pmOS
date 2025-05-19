@@ -30,8 +30,8 @@ void WaitForPMBusPort::await_suspend(std::coroutine_handle<> hh)
     if (!pmbus_port_requested) {
         auto result =
             request_named_port(pmbus_port_name.data(), pmbus_port_name.size(), ahci_port, 0);
-        if (result != SUCCESS)
-            throw std::system_error(-result, std::system_category());
+        if (result.result != SUCCESS)
+            throw std::system_error(-result.result, std::system_category());
             
         pmbus_port_requested = true;
     }

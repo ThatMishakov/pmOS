@@ -37,6 +37,8 @@ bool sender_is_of_group(uint64_t task_group_id, Message_Descriptor msg)
     return code == 0 && result == 1;
 }
 
+pmos_right_t main_right;
+
 pmos_port_t create_main_port(std::string_view port_name)
 {
     ports_request_t request = create_port(TASK_ID_SELF, 0);
@@ -45,7 +47,12 @@ pmos_port_t create_main_port(std::string_view port_name)
 
     auto port = request.port;
 
-    result_t r = name_port(port, port_name.data(), port_name.size(), 0);
+    right_request_t rr = create_right(port, &main_right, 0);
+    if (rr.result)
+        throw std::system_error(-rr.result, std::system_category());
+
+
+    result_t r = name_right(rr.right, port_name.data(), port_name.size(), 0);
     if (r != SUCCESS)
         throw std::system_error(-r, std::system_category());
 

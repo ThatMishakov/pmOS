@@ -57,11 +57,20 @@ int create_main_port()
     return 0;
 }
 
+pmos_right_t main_recieve_right = INVALID_RIGHT;
+
 int name_main_port()
 {
-    result_t result = name_port(main_port, vfsd_port_name, strlen(vfsd_port_name), 0);
+    right_request_t r = create_right(main_port, &main_recieve_right, 0);
+    if (r.result != SUCCESS) {
+        printf("Error createing right: %i\n", (int)r.result);
+        return -1;
+    }
+
+    result_t result = name_right(r.right, vfsd_port_name, strlen(vfsd_port_name), 0);
     if (result != SUCCESS) {
-        printf("Error naming port %li\n", result);
+        printf("Error naming port %i\n", (int)result);
+        delete_right(r.right);
         return -1;
     }
 

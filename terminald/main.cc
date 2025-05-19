@@ -35,6 +35,7 @@
 #include <pmos/ports.h>
 #include <pmos/memory.h>
 #include <pmos/helpers.h>
+#include <pmos/helpers.hh>
 
 #include <flanterm/flanterm.h>
 #include <flanterm/backends/fb.h>
@@ -74,7 +75,7 @@ void print_hex(uint64_t i)
 }
 
 pmos_port_t main_port = 0;
-pmos_port_t configuration_port = 0;
+pmos::Port configuration_port = pmos::Port::create().value();
 
 const char terminal_port_name[] = "/pmos/terminald";
 const char stdout_port_name[] = "/pmos/stdout";
@@ -93,21 +94,15 @@ void init_screen()
     IPC_Framebuffer_Request req = {
         .type = IPC_Framebuffer_Request_NUM,
         .flags = 0,
-        .reply_port = configuration_port,
+        .reply_port = configuration_port.get(),
     };
 
-    static const char* loader_port_name = "/pmos/loader";
-    ports_request_t loader_port_req = get_port_by_name(loader_port_name, strlen(loader_port_name), 0);
-    if (loader_port_req.result != SUCCESS)
-        exit(1);
-
-    result_t result = send_message_port(loader_port_req.port, sizeof(req), &req);
-    if (result != SUCCESS)
-        exit(2);
+    auto loader_right = pmos::get_right_by_name("/pmos/loader").value();
+    pmos::send_message_right_one(loader_right, req, {&configuration_port, pmos::RightType::SendOnce}).value();
 
     Message_Descriptor desc = {};
     unsigned char* message = NULL;
-    result = get_message(&desc, &message, configuration_port);
+    auto result = get_message(&desc, &message, configuration_port.get(), nullptr, nullptr);
     if (result != SUCCESS)
         exit(3);
 
@@ -173,13 +168,6 @@ void react_named_port_notification(char *msg_buff, size_t size)
 
 int main() {
     ports_request_t req;
-    req = create_port(TASK_ID_SELF, 0);
-    if (req.result != SUCCESS) {
-        write_screen("Error creating configuration port ");
-        print_hex(req.result);
-        write_screen("\n");
-    }
-    configuration_port = req.port;
 
     init_screen();
     const char msg[] = "Initialized framebuffer...\n";

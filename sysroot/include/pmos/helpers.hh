@@ -208,8 +208,8 @@ inline std::expected<void, int> name_right(Right right, std::string_view name)
     return {};
 }
 
-std::expected<std::tuple<Message_Descriptor, std::vector<std::byte>, Right, std::array<Right, 4>>,
-              int>
+inline std::expected<
+    std::tuple<Message_Descriptor, std::vector<std::byte>, Right, std::array<Right, 4>>, int>
     Port::get_first_message(bool nonblocking)
 {
     Message_Descriptor desc;
@@ -250,8 +250,21 @@ std::expected<std::tuple<Message_Descriptor, std::vector<std::byte>, Right, std:
     bool send_many = desc.flags & MESSAGE_FLAG_REPLY_SEND_MANY;
     if (r.right)
         reply_right = {r.right, send_many ? RightType::SendMany : RightType::SendOnce};
-    
+
     return std::make_tuple(desc, std::move(data), std::move(reply_right), std::move(rights));
+}
+
+inline std::expected<Right, int> get_right_by_name(std::string_view name, bool noblock = false)
+{
+    unsigned flags = 0;
+    if (noblock)
+        flags |= FLAG_NOBLOCK;
+
+    auto result = ::get_right_by_name(name.data(), name.length(), flags);
+    if (result.result)
+        return std::unexpected(static_cast<int>(-result.result));
+
+    return Right(result.right, RightType::SendMany);
 }
 
 }; // namespace pmos
