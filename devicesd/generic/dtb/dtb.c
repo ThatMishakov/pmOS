@@ -34,22 +34,22 @@ void init_dtb()
 
     printf("Info: Initializing DTB...\n");
 
-    IPC_FDT_Request request = {IPC_FDT_Request_NUM, 0, configuration_port};
+    IPC_FDT_Request request = {IPC_FDT_Request_NUM, 0};
 
-    ports_request_t loader_port = get_port_by_name(loader_port_name, strlen(loader_port_name), 0);
-    if (loader_port.result != SUCCESS) {
-        printf("Warning: Could not get loader port. Error %li\n", loader_port.result);
+    auto loader_right = get_right_by_name(loader_port_name, strlen(loader_port_name), 0);
+    if (loader_right.result != SUCCESS) {
+        printf("Warning: Could not get loader right. Error %i\n", (int)loader_right.result);
         goto end;
     }
 
-    result_t result = send_message_port(loader_port.port, sizeof(request), (char *)&request);
+    result_t result = send_message_right(loader_right.right, configuration_port, (char *)&request, sizeof(request), NULL, 0).result;
     if (result != SUCCESS) {
         printf("Warning: Could not send message to get the RSDT\n");
         goto end;
     }
 
     Message_Descriptor desc = {};
-    result                  = get_message(&desc, &message, configuration_port);
+    result                  = get_message(&desc, &message, configuration_port, NULL, NULL);
 
     if (result != SUCCESS) {
         printf("Warning: Could not get message\n");

@@ -34,6 +34,11 @@
 
 #define MESSAGE_FLAG_REPLY_RIGHT     (1 << 0)
 #define MESSAGE_FLAG_REPLY_SEND_MANY (1 << 1)
+
+#define MESSAGE_FLAG_RIGHT0_SEND_MANY (1 << 16)
+#define MESSAGE_FLAG_RIGHT1_SEND_MANY (1 << 17)
+#define MESSAGE_FLAG_RIGHT2_SEND_MANY (1 << 18)
+#define MESSAGE_FLAG_RIGHT3_SEND_MANY (1 << 19)
 typedef struct {
     u64 sender;
     u64 mem_object;

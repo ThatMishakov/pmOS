@@ -228,7 +228,8 @@ void set_print_callback(int result, const char * /* port_name */, pmos_port_t po
 static const char *log_port_name = "/pmos/terminald";
 static char *vfsd_port_name      = "/pmos/vfsd";
 
-int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_right, pmos_right_t *extra_rights, void *, struct pmos_msgloop_data *)
+int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_right,
+                     pmos_right_t *extra_rights, void *, struct pmos_msgloop_data *)
 {
     if (desc->size < 4) {
         // Message too small
@@ -250,7 +251,10 @@ int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_r
             print_str("********************************************\n");
         }
 
-        send_message_port(ptr->reply_channel, sizeof(reply), &reply);
+        auto r = send_message_right(*reply_right, 0, &reply, sizeof(reply), NULL,
+                                    SEND_MESSAGE_DELETE_RIGHT);
+        if (!r.result)
+            *reply_right = 0;
     } break;
     case IPC_FDT_Request_NUM: {
         IPC_FDT_Reply reply = {.type              = IPC_FDT_Reply_NUM,
@@ -266,7 +270,9 @@ int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_r
             reply.object_size       = fdt_desc.mem_object_size;
         }
 
-        send_message_port(ptr->reply_channel, sizeof(reply), &reply);
+        auto r = send_message_right(*reply_right, 0, &reply, sizeof(reply), NULL, SEND_MESSAGE_DELETE_RIGHT);
+        if (!r.result)
+            *reply_right = 0;
     } break;
     // case 0x21: {
     //     IPC_Kernel_Named_Port_Notification *notif = (IPC_Kernel_Named_Port_Notification *)ptr;
@@ -324,7 +330,10 @@ int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_r
             if (result != 0) {
                 reply.result_code = result;
             }
-            send_message_port(ptr->reply_channel, sizeof(reply), &reply);
+            auto r = send_message_right(*reply_right, 0, &reply, sizeof(reply), NULL,
+                                        SEND_MESSAGE_DELETE_RIGHT);
+            if (!r.result)
+                *reply_right = 0;
         } else {
             print_str("Loader: Recieved IPC_FS_Open of unexpected size 0x");
             print_hex(desc->size);
@@ -419,7 +428,8 @@ int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_r
             .result = result,
         };
 
-        auto send_result = send_message_right(*reply_right, 0, &reply, sizeof(reply), NULL, SEND_MESSAGE_DELETE_RIGHT);
+        auto send_result = send_message_right(*reply_right, 0, &reply, sizeof(reply), NULL,
+                                              SEND_MESSAGE_DELETE_RIGHT);
         if (send_result.result)
             delete_right(*reply_right);
 
@@ -437,7 +447,7 @@ int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_r
     return 0;
 }
 
-pmos_right_t loader_right = 0;
+pmos_right_t loader_right    = 0;
 pmos_right_t namespace_right = 0;
 
 void service_ports()
@@ -489,7 +499,7 @@ int main()
     }
 
     char *loader_port_name = "/pmos/loader";
-    int result             = register_right(loader_port_name, strlen(loader_port_name), loader_right);
+    int result = register_right(loader_port_name, strlen(loader_port_name), loader_right);
     // res = loader_port, loader_port_name, strlen(loader_port_name), 0);
     if (result != SUCCESS) {
         print_str("Loader: could not name loader port. Error: ");

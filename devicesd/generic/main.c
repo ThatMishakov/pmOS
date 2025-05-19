@@ -75,6 +75,8 @@ void init_acpi();
 
 void *shutdown_thread(void *);
 
+pmos_right_t main_recieve_right = 0;
+
 int main(int argc, char **argv)
 {
     printf("Hello from devicesd!. My PID: %lx\n", get_task_id());
@@ -85,6 +87,7 @@ int main(int argc, char **argv)
     pmos_request_io_permission();
     #endif
     //request_priority(0);
+    pmos_right_t recieve_right;
 
     {
         ports_request_t req;
@@ -101,6 +104,13 @@ int main(int argc, char **argv)
             return 0;
         }
         main_port = req.port;
+
+        auto right_req = create_right(req.port, &main_recieve_right, 0);
+        if (!right_req.result) {
+            printf("Error creating right %i\n", (int)req.result);
+            return 0;
+        }
+        recieve_right = right_req.right;
     }
 
     init_dtb();
@@ -117,9 +127,9 @@ int main(int argc, char **argv)
     // Get messages
 
     {
-        result_t r = name_port(main_port, devicesd_port_name, strlen(devicesd_port_name), 0);
+        result_t r = name_right(recieve_right, devicesd_port_name, strlen(devicesd_port_name), 0);
         if (r != SUCCESS) {
-            printf("Error %li naming port\n", r);
+            printf("Error %i naming right\n", (int)r);
             return 0;
         }
     }

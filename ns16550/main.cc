@@ -2,17 +2,18 @@
 
 #include <cstdint>
 #include <cstring>
+#include <inttypes.h>
 #include <memory>
 #include <pmos/helpers.h>
 #include <pmos/interrupts.h>
 #include <pmos/ipc.h>
 #include <pmos/memory.h>
 #include <pmos/ports.h>
+#include <pmos/special.h>
 #include <pmos/system.h>
 #include <queue>
 #include <stdio.h>
 #include <string>
-#include <pmos/special.h>
 
 // Either physcial memory base or I/O port base
 uint64_t terminal_base = 0x0;
@@ -35,16 +36,19 @@ unsigned clock_frequency = 1843200;
 
 bool have_interrupts = false;
 
-pmos_port_t serial_port = []() -> auto {
+auto new_port()
+{
     ports_request_t request = create_port(TASK_ID_SELF, 0);
     return request.port;
-}();
+};
+
+pmos_port_t serial_port = new_port();
+pmos_port_t reply_port = new_port();
 
 std::string devicesd_port_name = "/pmos/devicesd";
-pmos_port_t devicesd_port      = []() -> auto {
-    ports_request_t request =
-        get_port_by_name(devicesd_port_name.c_str(), devicesd_port_name.length(), 0);
-    return request.port;
+pmos_right_t devicesd_right    = []() -> auto {
+    auto request = get_right_by_name(devicesd_port_name.c_str(), devicesd_port_name.length(), 0);
+    return request.right;
 }();
 
 class IORW
@@ -60,11 +64,11 @@ class MMIO final: public IORW
 public:
     MMIO(uint64_t base)
     {
-        auto offset = base & (PAGE_SIZE - 1);
+        auto offset       = base & (PAGE_SIZE - 1);
         auto base_aligned = base & ~(uint64_t)(PAGE_SIZE - 1);
 
-        auto result =
-            create_phys_map_region(TASK_ID_SELF, nullptr, 0x1000, PROT_READ | PROT_WRITE, base_aligned);
+        auto result = create_phys_map_region(TASK_ID_SELF, nullptr, 0x1000, PROT_READ | PROT_WRITE,
+                                             base_aligned);
         if (result.result != SUCCESS)
             throw std::runtime_error("Failed to map serial port");
 
@@ -159,10 +163,9 @@ void set_up_interrupt()
             .int_flags  = 0, // TODO
             .dest_task  = get_task_id(),
             .dest_chan  = serial_port,
-            .reply_chan = serial_port,
         };
 
-        result_t result = send_message_port(devicesd_port, sizeof(r), static_cast<void *>(&r));
+        result_t result = send_message_right(devicesd_right, reply_port, static_cast<void *>(&r), sizeof(r), NULL, 0).result;
         if (result != SUCCESS) {
             printf("Failed to send message to set up interrupt: %li (%s)\n", result,
                    strerror(-result));
@@ -172,7 +175,7 @@ void set_up_interrupt()
         Message_Descriptor desc;
         uint8_t *message;
         for (int i = 0; i < 5; ++i) {
-            result = get_message(&desc, &message, serial_port);
+            result = get_message(&desc, &message, reply_port, NULL, NULL);
             if ((int)result == -EINTR)
                 continue;
             break;
@@ -203,10 +206,10 @@ void set_up_interrupt()
     } else {
         unsigned flags = 0;
 
-        // TODO: I haven't found where to get the interrupt trigger type in SPCR table...
-        #ifdef __loongarch__
+// TODO: I haven't found where to get the interrupt trigger type in SPCR table...
+#ifdef __loongarch__
         flags = INTERRUPT_FLAG_LEVEL_TRIGGERED;
-        #endif
+#endif
 
         auto [result, cpu, vector] = allocate_interrupt(gsi_num, flags);
         if (result) {
@@ -239,22 +242,23 @@ void ns16550_init()
     request_priority(4);
 
     IPC_Request_Serial request = {
-        .type       = IPC_Request_Serial_NUM,
-        .flags      = 0,
-        .reply_port = serial_port,
-        .serial_id  = 0,
+        .type      = IPC_Request_Serial_NUM,
+        .flags     = 0,
+        .serial_id = 0,
     };
 
-    result_t result =
-        send_message_port(devicesd_port, sizeof(request), static_cast<void *>(&request));
+    auto result = send_message_right(devicesd_right, reply_port, static_cast<void *>(&request),
+                                     sizeof(request), nullptr, 0)
+                      .result;
     if (result != SUCCESS) {
-        printf("Failed to send message to devicesd port %lx: %lx\n", devicesd_port, result);
+        printf("Failed to send message to devicesd right %" PRIu64 ": %i\n", devicesd_right,
+               (int)result);
         throw std::runtime_error("Failed to send message to devicesd");
     }
 
     Message_Descriptor desc;
     uint8_t *message;
-    result = get_message(&desc, &message, serial_port);
+    result = get_message(&desc, &message, reply_port, NULL, NULL);
     if (result != SUCCESS) {
         printf("Failed to get message from devicesd\n");
         throw std::runtime_error("Failed to get message from devicesd");
@@ -308,7 +312,7 @@ void ns16550_init()
         // set DLAB = 1
         set_register(LCR, DLAB_MASK);
 
-        u32 right_freq = clock_frequency/16;
+        u32 right_freq = clock_frequency / 16;
 
         uint8_t prescaler_division = 0;
         uint16_t divisor_constant  = 0;
@@ -550,7 +554,9 @@ int main()
 
         std::unique_ptr<char[]> msg_buff = std::make_unique<char[]>(msg.size);
 
-        get_first_message(msg_buff.get(), 0, serial_port);
+        auto result = get_first_message(msg_buff.get(), 0, serial_port);
+        if (result.right)
+            delete_right(result.right);
 
         if (msg.size < sizeof(IPC_Generic_Msg)) {
             write_str("Warning: recieved very small message\n");

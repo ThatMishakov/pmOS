@@ -119,7 +119,7 @@ static void *interrupt_thread(void *d)
     while (true) {
         Message_Descriptor msg;
         unsigned char *message = NULL;
-        result_t r             = get_message(&msg, &message, p.port);
+        result_t r             = get_message(&msg, &message, p.port, NULL, NULL);
         if (r != SUCCESS) {
             printf("Failed to get message\n");
             return NULL;

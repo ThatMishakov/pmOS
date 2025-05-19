@@ -133,15 +133,15 @@ static const char *loader_port_name = "/pmos/loader";
 
 void request_acpi_tables()
 {
-    IPC_ACPI_Request_RSDT request = {IPC_ACPI_Request_RSDT_NUM, 0, configuration_port};
+    IPC_ACPI_Request_RSDT request = {IPC_ACPI_Request_RSDT_NUM, 0};
 
-    ports_request_t loader_port = get_port_by_name(loader_port_name, strlen(loader_port_name), 0);
-    if (loader_port.result != SUCCESS) {
-        printf("Warning: Could not get loader port. Error %li\n", loader_port.result);
+    auto loader_right = get_right_by_name(loader_port_name, strlen(loader_port_name), 0);
+    if (loader_right.result != SUCCESS) {
+        printf("Warning: Could not get loader right. Error %li\n", loader_right.result);
         return;
     }
 
-    result_t result = send_message_port(loader_port.port, sizeof(request), (char *)&request);
+    result_t result = send_message_right(loader_right.right, configuration_port, (char *)&request, sizeof(request), NULL, SEND_MESSAGE_DELETE_RIGHT).result;
     if (result != SUCCESS) {
         printf("Warning: Could not send message to get the RSDT\n");
         return;
@@ -149,7 +149,7 @@ void request_acpi_tables()
 
     Message_Descriptor desc = {};
     unsigned char *message  = NULL;
-    result                  = get_message(&desc, &message, configuration_port);
+    result                  = get_message(&desc, &message, configuration_port, NULL, NULL);
 
     if (result != SUCCESS) {
         printf("Warning: Could not get message\n");
@@ -675,7 +675,7 @@ int request_pmbus_port(pmos_port_t *port_out)
     if (pmbus_port_requested)
         return 0;
 
-    int result = (int)request_named_port(pmbus_port_name, strlen(pmbus_port_name), main_port, 0);
+    int result = (int)request_named_port(pmbus_port_name, strlen(pmbus_port_name), main_port, 0).result;
     if (result < 0) {
         fprintf(stderr, "devicesd: Fauled to request pmbus port: %i (%s)\n", result,
                 strerror(-result));

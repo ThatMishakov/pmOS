@@ -85,6 +85,10 @@ void register_log_output(const Message_Descriptor &, const IPC_Register_Log_Outp
     }
 }
 
+pmos_right_t stdout_right = INVALID_RIGHT;
+pmos_right_t stderr_right = INVALID_RIGHT;
+pmos_right_t log_right    = INVALID_RIGHT;
+
 int main()
 {
     set_log_port(main_port, 0);
@@ -95,19 +99,39 @@ int main()
         "\n");
 
     {
-        result_t r = name_port(main_port, stdout_port_name.c_str(), stdout_port_name.length(), 0);
+        right_request_t c = create_right(main_port, &stdout_right, 0);
+        if (c.result != SUCCESS) {
+            std::string error = "terminald: Error " + std::to_string(c.result) + "creating rignt\n";
+            log(std::move(error));
+        }
+
+        result_t r = name_right(c.right, stdout_port_name.c_str(), stdout_port_name.length(), 0);
         if (r != SUCCESS) {
             std::string error = "terminald: Error " + std::to_string(r) + " naming port\n";
             log(std::move(error));
         }
 
-        r = name_port(main_port, stderr_port_name.c_str(), stderr_port_name.length(), 0);
+        c = create_right(main_port, &stderr_right, 0);
+        if (c.result != SUCCESS) {
+            std::string error = "terminald: Error " + std::to_string(c.result) + "creating rignt\n";
+            log(std::move(error));
+        }
+
+
+        r = name_right(c.right, stderr_port_name.c_str(), stderr_port_name.length(), 0);
         if (r != SUCCESS) {
             std::string error = "terminald: Error " + std::to_string(r) + " naming port\n";
             log(std::move(error));
         }
 
-        r = name_port(main_port, log_port_name.c_str(), log_port_name.length(), 0);
+        c = create_right(main_port, &log_right, 0);
+        if (c.result != SUCCESS) {
+            std::string error = "terminald: Error " + std::to_string(c.result) + "creating rignt\n";
+            log(std::move(error));
+        }
+
+
+        r = name_right(c.right, log_port_name.c_str(), log_port_name.length(), 0);
         if (r != SUCCESS) {
             std::string error = "terminald: Error " + std::to_string(r) + " naming port\n";
             log(std::move(error));

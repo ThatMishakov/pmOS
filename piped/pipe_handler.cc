@@ -58,7 +58,7 @@ Pipe::ConsumerData &Pipe::register_new_consumer(uint64_t consumer_id, size_t rea
     assert(desc.size == sizeof(IPCPipeRegisterConsReply));
 
     IPCPipeRegisterConsReply reply;
-    sr = get_first_message(reinterpret_cast<char *>(&reply), 0, service_port);
+    sr = get_first_message(reinterpret_cast<char *>(&reply), 0, service_port).result;
     assert(sr == SUCCESS);
     assert(reply.type == IPCPipeRegisterConsReplyType);
 
@@ -593,8 +593,8 @@ void pipe_main(IPC_Pipe_Open o, Message_Descriptor /* desc */)
 
         std::unique_ptr<char[]> msg_buff = std::make_unique<char[]>(msg.size);
 
-        auto r = get_first_message(msg_buff.get(), 0, pipe_data.pipe_port);
-        if (r != SUCCESS) {
+        auto r = get_first_message(msg_buff.get(), MSG_ARG_REJECT_RIGHT, pipe_data.pipe_port);
+        if (r.result != SUCCESS) {
             printf("Could not get the message\n");
             break;
         }

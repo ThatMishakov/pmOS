@@ -4,7 +4,7 @@
 #include <set>
 #include <unordered_map>
 
-class Pipe;
+struct Pipe;
 struct FsConsumer {
     std::set<pmos_port_t> pipe_ports;
 };

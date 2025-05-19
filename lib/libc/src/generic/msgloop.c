@@ -5,8 +5,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
-static int default_handler(Message_Descriptor *desc, void *message, pmos_right_t *reply_right, pmos_right_t *other,
-                           void * ctx, struct pmos_msgloop_data *data)
+static int default_handler(Message_Descriptor *desc, void *message, pmos_right_t *reply_right,
+                           pmos_right_t *other, void *ctx, struct pmos_msgloop_data *data)
 {
     (void)ctx;
     (void)message;
@@ -43,15 +43,26 @@ void pmos_msgloop_insert(struct pmos_msgloop_data *data, pmos_msgloop_tree_node_
     }
 }
 
-int pmos_msgloop_compare(uint64_t *a, uint64_t *b)
+int pmos_msgloop_compare(struct msgloop_data *a, struct msgloop_data *b)
 {
-    if (*a < *b) {
+    if (a->right_id < b->right_id)
         return -1;
-    } else if (*a > *b) {
+    else if (a->right_id > b->right_id)
         return 1;
-    } else {
+    else
         return 0;
-    }
+}
+
+int pmos_msgloop_key_compare(struct msgloop_data *a, void *bb)
+{
+    uint64_t b = *(uint64_t *)bb;
+
+    if (a->right_id < b)
+        return -1;
+    else if (a->right_id > b)
+        return 1;
+    else
+        return 0;
 }
 
 void pmos_msgloop_node_set(pmos_msgloop_tree_node_t *n, pmos_right_t right_id,
@@ -86,12 +97,13 @@ void pmos_msgloop_loop(struct pmos_msgloop_data *data)
             break;
         }
 
-        bool have_rights = descr.other_rights_count;
+        bool have_rights       = descr.other_rights_count;
         pmos_right_t rights[4] = {0};
         if (have_rights) {
             result_t result = accept_rights(data->port, rights);
             if (result != SUCCESS) {
-                fprintf(stderr,
+                fprintf(
+                    stderr,
                     "pmOS libc: failed to accept rights in pmos_msgloop_loop() from port %" PRIu64
                     " error %i\n",
                     data->port, (int)-result);

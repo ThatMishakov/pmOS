@@ -539,6 +539,13 @@ void syscall_get_message_info()
     if (holds_reply_right)
         reply_right_send_many = msg->reply_right->type == RightType::SendMany;
 
+    unsigned flags_ = (holds_reply_right ? (unsigned)MESSAGE_FLAG_REPLY_RIGHT : 0) |
+                 (reply_right_send_many ? (unsigned)MESSAGE_FLAG_REPLY_SEND_MANY : 0);
+
+    for (int i = 0; i < 4; ++i)
+        if (auto r = msg->rights[i]; r && r->type == RightType::SendMany)
+            flags_ |= 1 << (16 + i);
+
     u64 msg_struct_size     = sizeof(Message_Descriptor);
     Message_Descriptor desc = {
         .sender             = msg->task_id_from,
@@ -546,8 +553,7 @@ void syscall_get_message_info()
         .size               = msg->size(),
         .sent_with_right    = msg->sent_with_right,
         .other_rights_count = (unsigned)msg->rights_count(),
-        .flags              = (holds_reply_right ? (unsigned)MESSAGE_FLAG_REPLY_RIGHT : 0) |
-                 (reply_right_send_many ? (unsigned)MESSAGE_FLAG_REPLY_SEND_MANY : 0),
+        .flags              = flags_,
     };
 
     syscall_success(task);

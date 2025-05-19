@@ -3,6 +3,7 @@
 #include "pipe_handler.hh"
 
 #include <cassert>
+#include <cinttypes>
 #include <memory>
 #include <pmos/ipc.h>
 #include <pmos/ports.h>
@@ -13,16 +14,23 @@
 pmos_port_t main_port = create_port();
 
 std::string piped_port_name = "/pmos/piped";
+pmos_right_t recieve_right  = 0;
 
 int main()
 {
     printf("Hello from piped! My PID: %li\n", get_task_id());
 
     {
-        result_t r = name_port(main_port, piped_port_name.c_str(), piped_port_name.length(), 0);
+        auto rr = create_right(main_port, &recieve_right, 0);
+        if (rr.result != SUCCESS) {
+            fprintf(stderr, "terminald: Error %i creating right\n", (int)rr.result);
+            return 1;
+        }
+
+        result_t r = name_right(rr.right, piped_port_name.c_str(), piped_port_name.length(), 0);
         if (r != SUCCESS) {
             std::string error = "terminald: Error " + std::to_string(r) + " naming port\n";
-            fprintf(stderr, error.c_str());
+            fprintf(stderr, "%s", error.c_str());
         }
     }
 
@@ -44,9 +52,10 @@ int main()
         switch (ipc_msg->type) {
         case IPC_Pipe_Open_NUM:
             if (msg.size < sizeof(IPC_Pipe_Open)) {
-                fprintf(stderr, ("Warning: Recieved IPC_Pipe_Open that is too small. Size: " +
-                                 std::to_string(msg.size) + "\n")
-                                    .c_str());
+                fprintf(stderr,
+                        "Warning: Received IPC_Pipe_Open from sender %" PRIu64
+                        " is too small (expected %zu bytes, got %zu bytes)\n",
+                        msg.sender, sizeof(IPC_Pipe_Open), msg.size);
                 break;
             }
             open_pipe(std::move(msg_buff), msg);
@@ -83,11 +92,10 @@ int main()
         case IPC_Kernel_Group_Destroyed_NUM: {
             auto t = reinterpret_cast<IPC_Kernel_Group_Destroyed *>(msg_buff.get());
             if (msg.size < sizeof(IPC_Kernel_Group_Destroyed)) {
-                fprintf(
-                    stderr,
-                    ("Warning: Recieved IPC_Kernel_Group_Task_Changed that is too small. Size: " +
-                     std::to_string(msg.size) + "\n")
-                        .c_str());
+                fprintf(stderr,
+                        "Warning: Received IPC_Kernel_Group_Destroyed from sender %" PRIu64
+                        " is too small. Expected %zu bytes, got %zu bytes\n",
+                        msg.sender, sizeof(IPC_Kernel_Group_Destroyed), msg.size);
                 break;
             }
 
@@ -106,9 +114,9 @@ int main()
             break;
         }
         default:
-            fprintf(stderr, ("Warning: Unknown message type " + std::to_string(ipc_msg->type) +
-                             " from task " + std::to_string(msg.sender) + "\n")
-                                .c_str());
+            fprintf(stderr, "Warning: Unknown message type %u (size %zu) from task %" PRIu64 "\n",
+                    ipc_msg->type, msg.size, msg.sender);
+            break;
             break;
         }
     }

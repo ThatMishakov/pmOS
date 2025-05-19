@@ -68,8 +68,9 @@ result_t get_message(Message_Descriptor *desc, unsigned char **message, pmos_por
  */
 int pmos_request_timer(pmos_port_t port, uint64_t ms, uint64_t extra);
 
-int pmos_msgloop_compare(uint64_t *a, uint64_t *b);
-int pmos_msgloop_key_compare(uint64_t *a, uint64_t b);
+struct msgloop_data;
+int pmos_msgloop_compare(struct msgloop_data *a, struct msgloop_data *b);
+int pmos_msgloop_key_compare(struct msgloop_data *a, void *b);
 
 void pmos_hexdump(FILE *stream, const char *data, size_t data_size);
 
@@ -83,7 +84,7 @@ struct msgloop_data {
     void *ctx;
 };
 
-RBTREE(pmos_msgloop_tree, struct msgloop_data, pmos_msgloop_compare, pmos_msgloop_compare);
+RBTREE(pmos_msgloop_tree, struct msgloop_data, pmos_msgloop_compare, pmos_msgloop_key_compare);
 struct pmos_msgloop_data {
     pmos_msgloop_tree_tree_t nodes;
     pmos_port_t port;

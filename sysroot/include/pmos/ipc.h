@@ -55,7 +55,6 @@ typedef struct IPC_Reg_Int {
 #define INTERRUPT_FLAG_ACTIVE_LOW      0x2
     uint64_t dest_task;
     uint64_t dest_chan;
-    uint64_t reply_chan;
 } IPC_Reg_Int;
 #define IPC_Reg_Int_FLAG_EXT_INTS 0x01
 
@@ -110,7 +109,6 @@ typedef struct IPC_Timer_Reply {
 typedef struct IPC_Request_Serial {
     uint32_t type;
     uint32_t flags;
-    uint64_t reply_port;
     uint64_t serial_id;
 } IPC_Request_Serial;
 
@@ -591,7 +589,6 @@ typedef struct IPC_Close {
 typedef struct IPC_ACPI_Request_RSDT {
     uint32_t type;
     uint32_t flags;
-    uint64_t reply_channel;
 } IPC_ACPI_Request_RSDT;
 
 #define IPC_ACPI_RSDT_Reply_NUM 0x61
@@ -605,7 +602,6 @@ typedef struct IPC_ACPI_RSDT_Reply {
 typedef struct IPC_FDT_Request {
     uint32_t type;
     uint32_t flags;
-    uint64_t reply_channel;
 } IPC_FDT_Request;
 
 #define IPC_FDT_Reply_NUM 0x63
