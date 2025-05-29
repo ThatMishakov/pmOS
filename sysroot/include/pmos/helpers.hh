@@ -155,7 +155,7 @@ inline template<typename T, typename... Rights>
              (std::is_same_v<std::decay_t<Rights>, Right> && ...)
 inline std::expected<Right, int> send_message_right(
     Right &right, std::span<T const> data, std::pair<Port const *, RightType> optional_reply_port,
-    Rights... rights, bool delete_right = false) noexcept
+    bool delete_right = false, Rights... rights) noexcept
 {
     message_extra_t extra = {};
 
@@ -173,7 +173,7 @@ inline std::expected<Right, int> send_message_right(
         flags != SEND_MESSAGE_DELETE_RIGHT;
 
     auto result = send_message_right(right.get(), rp ? rp->get() : INVALID_PORT,
-                                     reinterpret_cast<const void *>(data.data()), data.size(),
+                                     reinterpret_cast<const void *>(data.data()), data.size_bytes(),
                                      NUM_RIGHTS > 0 ? &extra : nullptr, flags);
 
     if (result.result)
@@ -192,10 +192,10 @@ inline template<typename T, typename... Rights>
              (std::is_same_v<std::decay_t<Rights>, Right> && ...)
 inline std::expected<Right, int> send_message_right_one(
     Right &right, T const &object, std::pair<Port const *, RightType> optional_reply_port,
-    Rights... rights, bool delete_right = false) noexcept
+    bool delete_right = false, Rights... rights) noexcept
 {
-    return send_message_right<T, Rights...>(right, {&object, 1}, optional_reply_port, rights...,
-                                            delete_right);
+    return send_message_right<T, Rights...>(right, {&object, 1}, optional_reply_port, delete_right,
+                                            std::forward<Rights>(rights)...);
 }
 
 inline std::expected<void, int> name_right(Right right, std::string_view name)

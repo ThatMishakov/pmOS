@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <pmos/ipc.h>
 #include <string.h>
+#include <inttypes.h>
 
 int register_interrupt(uint32_t cpu_id, uint32_t vector, uint64_t task, pmos_port_t port)
 {
@@ -57,7 +58,7 @@ int register_interrupt(uint32_t cpu_id, uint32_t vector, uint64_t task, pmos_por
     return 0;
 }
 
-void configure_interrupts_for(Message_Descriptor *desc, IPC_Reg_Int *m)
+void configure_interrupts_for(Message_Descriptor *desc, IPC_Reg_Int *m, pmos_right_t reply_right)
 {
     uint32_t gsi = 0;
     bool active_low = false;
@@ -87,7 +88,9 @@ void configure_interrupts_for(Message_Descriptor *desc, IPC_Reg_Int *m)
     reply.type = IPC_Reg_Int_Reply_NUM;
     reply.status = result;
     reply.intno = vector;
-    result = send_message_port(m->reply_chan, sizeof(reply), (char*)&reply);
-    if (result < 0)
-        fprintf(stderr, "Warning could not reply to task %#lx port %#lx in configure_interrupts_for: %i (%s)\n", desc->sender, m->reply_chan, result, strerror(-result));
+    result = send_message_right(reply_right, 0, &reply, sizeof(reply), NULL, 0).result;
+    if (result < 0) {
+        delete_right(reply_right);
+        fprintf(stderr, "Warning could not reply to task %#" PRIx64 " port %#" PRIx64 " in configure_interrupts_for: %i (%s)\n", desc->sender, reply_right, result, strerror(-result));
+    }
 }

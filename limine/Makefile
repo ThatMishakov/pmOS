@@ -76,7 +76,7 @@ HYPER_IMAGE := pmos-hyper.img
 Hyper/installer/hyper_install: Hyper
 	cd Hyper && ./build.py
 
-$(HYPER_IMAGE): ../kernel/build/kernel ../bootstrapd/bootstrapd.elf ../devicesd/devicesd.elf ../logd/logd.elf ../ns16550/ns16550.elf ../piped/piped.elf ../processd/processd.elf ../terminald/terminald.elf ../vfsd/vfsd.elf ../vfatfsd/vfatfsd.elf ../ahcid/ahcid.elf ../ps2d/ps2d.elf ../i8042/i8042.elf ../blockd/blockd.elf ../pmbus/bin/pmbus hyper.cfg Hyper/installer/hyper_install
+$(HYPER_IMAGE): ../kernel/build/kernel ../bootstrapd/bootstrapd.elf ../devicesd/devicesd.elf ../logd/logd.elf ../ns16550/ns16550.elf ../piped/piped.elf ../processd/processd.elf ../terminald/terminald.elf ../vfsd/vfsd.elf ../vfatfsd/vfatfsd.elf ../ps2d/ps2d.elf ../i8042/i8042.elf ../blockd/blockd.elf ../pmbus/bin/pmbus hyper.cfg Hyper/installer/hyper_install
 	dd if=/dev/zero of=$(HYPER_IMAGE) bs=1M count=128
 
 	# Create an MBR partition table
@@ -100,7 +100,7 @@ $(HYPER_IMAGE): ../kernel/build/kernel ../bootstrapd/bootstrapd.elf ../devicesd/
 	mcopy -i $(BOOT_PARTITION) ../terminald/terminald.elf ::/
 	mcopy -i $(BOOT_PARTITION) ../vfsd/vfsd.elf ::/
 	mcopy -i $(BOOT_PARTITION) ../vfatfsd/vfatfsd.elf ::/
-	mcopy -i $(BOOT_PARTITION) ../ahcid/ahcid.elf ::/
+	# mcopy -i $(BOOT_PARTITION) ../ahcid/ahcid.elf ::/
 	mcopy -i $(BOOT_PARTITION) ../ps2d/ps2d.elf ::/
 	mcopy -i $(BOOT_PARTITION) ../i8042/i8042.elf ::/
 	mcopy -i $(BOOT_PARTITION) ../blockd/blockd.elf ::/
@@ -119,7 +119,7 @@ $(HYPER_IMAGE): ../kernel/build/kernel ../bootstrapd/bootstrapd.elf ../devicesd/
 
 
 
-$(DISK_IMAGE): ../kernel/build/kernel ../bootstrapd/bootstrapd.elf ../devicesd/devicesd.elf ../logd/logd.elf ../ns16550/ns16550.elf ../piped/piped.elf ../processd/processd.elf ../terminald/terminald.elf ../vfsd/vfsd.elf ../vfatfsd/vfatfsd.elf ../ahcid/ahcid.elf ../ps2d/ps2d.elf ../blockd/blockd.elf ../pmbus/bin/pmbus limine.conf limine limine-binary
+$(DISK_IMAGE): ../kernel/build/kernel ../bootstrapd/bootstrapd.elf ../devicesd/devicesd.elf ../logd/logd.elf ../ns16550/ns16550.elf ../piped/piped.elf ../processd/processd.elf ../terminald/terminald.elf ../vfsd/vfsd.elf ../vfatfsd/vfatfsd.elf ../ps2d/ps2d.elf ../blockd/blockd.elf ../pmbus/bin/pmbus limine.conf limine limine-binary
 	mkdir -p isodir/boot/limine
 	mkdir -p isodir/EFI/BOOT
 
@@ -177,7 +177,7 @@ $(DISK_IMAGE): ../kernel/build/kernel ../bootstrapd/bootstrapd.elf ../devicesd/d
 	mcopy -i $(BOOT_PARTITION) ../terminald/terminald.elf ::/
 	mcopy -i $(BOOT_PARTITION) ../vfsd/vfsd.elf ::/
 	mcopy -i $(BOOT_PARTITION) ../vfatfsd/vfatfsd.elf ::/
-	mcopy -i $(BOOT_PARTITION) ../ahcid/ahcid.elf ::/
+	# mcopy -i $(BOOT_PARTITION) ../ahcid/ahcid.elf ::/
 	mcopy -i $(BOOT_PARTITION) ../ps2d/ps2d.elf ::/
 	# mcopy -i $(BOOT_PARTITION) ../i8042/i8042.elf ::/
 	mcopy -i $(BOOT_PARTITION) ../blockd/blockd.elf ::/
@@ -195,7 +195,7 @@ $(DISK_IMAGE): ../kernel/build/kernel ../bootstrapd/bootstrapd.elf ../devicesd/d
 	# Install Limine stage 1
 	limine/limine bios-install $(DISK_IMAGE)
 
-isodir: ../kernel/build/kernel ../bootstrapd/bootstrapd.elf ../devicesd/devicesd.elf ../logd/logd.elf ../ns16550/ns16550.elf ../piped/piped.elf ../processd/processd.elf ../terminald/terminald.elf ../vfsd/vfsd.elf ../vfatfsd/vfatfsd.elf ../ahcid/ahcid.elf ../ps2d/ps2d.elf ../blockd/blockd.elf ../pmbus/bin/pmbus limine.conf hyper.cfg
+isodir: ../kernel/build/kernel ../bootstrapd/bootstrapd.elf ../devicesd/devicesd.elf ../logd/logd.elf ../ns16550/ns16550.elf ../piped/piped.elf ../processd/processd.elf ../terminald/terminald.elf ../vfsd/vfsd.elf ../vfatfsd/vfatfsd.elf ../ps2d/ps2d.elf ../blockd/blockd.elf ../pmbus/bin/pmbus limine.conf hyper.cfg
 	mkdir -p isodir/boot/limine
 	mkdir -p isodir/EFI/BOOT
 
@@ -220,7 +220,7 @@ isodir: ../kernel/build/kernel ../bootstrapd/bootstrapd.elf ../devicesd/devicesd
 	cp -v ../terminald/terminald.elf isodir/
 	cp -v ../vfsd/vfsd.elf isodir/
 	cp -v ../vfatfsd/vfatfsd.elf isodir/
-	cp -v ../ahcid/ahcid.elf isodir/
+	# cp -v ../ahcid/ahcid.elf isodir/
 	cp -v ../ps2d/ps2d.elf isodir/
 	# cp -v ../i8042/i8042.elf isodir/
 	cp -v ../blockd/blockd.elf isodir/
@@ -230,4 +230,4 @@ isodir: ../kernel/build/kernel ../bootstrapd/bootstrapd.elf ../devicesd/devicesd
 $(ISO): isodir
 	xorriso -as mkisofs -b boot/limine/limine-bios-cd.bin -no-emul-boot -boot-load-size 4 -boot-info-table --efi-boot boot/limine/limine-uefi-cd.bin -efi-boot-part --efi-boot-image --protective-msdos-label isodir -o $(ISO)
 
-.PHONY: ../kernel/build/kernel ../bootstrapd/bootstrapd.elf ../devicesd/devicesd.elf ../logd/logd.elf ../ns16550/ns16550.elf ../piped/piped.elf ../processd/processd.elf ../terminald/terminald.elf ../vfsd/vfsd.elf ../vfatfsd/vfatfsd.elf ../ahcid/ahcid.elf ../ps2d/ps2d.elf ../i8042/i8042.elf ../blockd/blockd.elf ../pmbus/bin/pmbus isodir
+.PHONY: ../kernel/build/kernel ../bootstrapd/bootstrapd.elf ../devicesd/devicesd.elf ../logd/logd.elf ../ns16550/ns16550.elf ../piped/piped.elf ../processd/processd.elf ../terminald/terminald.elf ../vfsd/vfsd.elf ../vfatfsd/vfatfsd.elf ../ps2d/ps2d.elf ../i8042/i8042.elf ../blockd/blockd.elf ../pmbus/bin/pmbus isodir

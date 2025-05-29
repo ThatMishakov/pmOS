@@ -5,6 +5,7 @@
 #include <inttypes.h>
 #include <memory>
 #include <pmos/helpers.h>
+#include <pmos/helpers.hh>
 #include <pmos/interrupts.h>
 #include <pmos/ipc.h>
 #include <pmos/memory.h>
@@ -42,14 +43,11 @@ auto new_port()
     return request.port;
 };
 
-pmos_port_t serial_port = new_port();
-pmos_port_t reply_port = new_port();
+auto serial_port = pmos::Port::create().value();
+auto reply_port  = pmos::Port::create().value();
 
-std::string devicesd_port_name = "/pmos/devicesd";
-pmos_right_t devicesd_right    = []() -> auto {
-    auto request = get_right_by_name(devicesd_port_name.c_str(), devicesd_port_name.length(), 0);
-    return request.right;
-}();
+constexpr auto devicesd_port_name = "/pmos/devicesd";
+auto devicesd_right               = pmos::get_right_by_name(devicesd_port_name).value();
 
 class IORW
 {
@@ -157,25 +155,27 @@ void set_up_interrupt()
     // Check if interrupts are supported
     if (interrupt_type_mask & 0x01) {
         IPC_Reg_Int r = {
-            .type       = IPC_Reg_Int_NUM,
-            .flags      = IPC_Reg_Int_FLAG_EXT_INTS,
-            .intno      = static_cast<uint32_t>(pc_irq),
-            .int_flags  = 0, // TODO
-            .dest_task  = get_task_id(),
-            .dest_chan  = serial_port,
+            .type      = IPC_Reg_Int_NUM,
+            .flags     = IPC_Reg_Int_FLAG_EXT_INTS,
+            .intno     = static_cast<uint32_t>(pc_irq),
+            .int_flags = 0, // TODO
+            .dest_task = get_task_id(),
+            .dest_chan = serial_port.get(),
         };
 
-        result_t result = send_message_right(devicesd_right, reply_port, static_cast<void *>(&r), sizeof(r), NULL, 0).result;
-        if (result != SUCCESS) {
-            printf("Failed to send message to set up interrupt: %li (%s)\n", result,
-                   strerror(-result));
+        auto send_result = pmos::send_message_right_one(devicesd_right, r,
+                                                        {&reply_port, pmos::RightType::SendOnce});
+        if (!send_result) {
+            printf("Failed to send message to set up interrupt: %i (%s)\n", send_result.error(),
+                   strerror(send_result.error()));
             return;
         }
 
         Message_Descriptor desc;
         uint8_t *message;
+        result_t result = 0;
         for (int i = 0; i < 5; ++i) {
-            result = get_message(&desc, &message, reply_port, NULL, NULL);
+            result = get_message(&desc, &message, reply_port.get(), NULL, NULL);
             if ((int)result == -EINTR)
                 continue;
             break;
@@ -223,7 +223,7 @@ void set_up_interrupt()
             return;
         }
 
-        auto result2 = set_interrupt(serial_port, vector, 0);
+        auto result2 = set_interrupt(serial_port.get(), vector, 0);
         if (result2.result) {
             printf("ns16550: failed to set interrupt, error %li\n", result2.result);
             return;
@@ -247,18 +247,18 @@ void ns16550_init()
         .serial_id = 0,
     };
 
-    auto result = send_message_right(devicesd_right, reply_port, static_cast<void *>(&request),
-                                     sizeof(request), nullptr, 0)
+    auto result = send_message_right(devicesd_right.get(), reply_port.get(),
+                                     static_cast<void *>(&request), sizeof(request), nullptr, 0)
                       .result;
     if (result != SUCCESS) {
-        printf("Failed to send message to devicesd right %" PRIu64 ": %i\n", devicesd_right,
+        printf("Failed to send message to devicesd right %" PRIu64 ": %i\n", devicesd_right.get(),
                (int)result);
         throw std::runtime_error("Failed to send message to devicesd");
     }
 
     Message_Descriptor desc;
     uint8_t *message;
-    result = get_message(&desc, &message, reply_port, NULL, NULL);
+    result = get_message(&desc, &message, reply_port.get(), NULL, NULL);
     if (result != SUCCESS) {
         printf("Failed to get message from devicesd\n");
         throw std::runtime_error("Failed to get message from devicesd");
@@ -377,7 +377,7 @@ constexpr int buff_capacity = 16;
 
 bool writing = false;
 struct buffer {
-    std::unique_ptr<char[]> data;
+    std::vector<std::byte> data;
     size_t pos;
     size_t length;
 };
@@ -409,17 +409,17 @@ void check_tx()
     if ((io_rw->read_register(LSR) & LSR_TX_EMPTY) == 0)
         return;
 
-    if (not active_buffer.data and not write_queue.empty()) {
+    if (active_buffer.data.empty() and not write_queue.empty()) {
         active_buffer = std::move(write_queue.front());
         write_queue.pop();
     }
 
-    if (active_buffer.data) {
+    if (not active_buffer.data.empty()) {
         size_t i = active_buffer.length - active_buffer.pos;
         if (i > 16)
             i = 16;
 
-        write_blind(active_buffer.data.get() + active_buffer.pos, i);
+        write_blind(reinterpret_cast<const char *>(active_buffer.data.data()) + active_buffer.pos, i);
         active_buffer.pos += i;
         if (active_buffer.pos == active_buffer.length)
             active_buffer = {};
@@ -428,19 +428,19 @@ void check_tx()
 
 void write_interrupt()
 {
-    if (not active_buffer.data and not write_queue.empty()) {
+    if (active_buffer.data.empty() and not write_queue.empty()) {
         active_buffer = std::move(write_queue.front());
         write_queue.pop();
     }
 
-    if (active_buffer.data) {
+    if (!active_buffer.data.empty()) {
         size_t i = active_buffer.length - active_buffer.pos;
         if (i > 16)
             i = 16;
 
         writing = true;
 
-        write_blind(active_buffer.data.get() + active_buffer.pos, i);
+        write_blind(reinterpret_cast<const char *>(active_buffer.data.data()) + active_buffer.pos, i);
         active_buffer.pos += i;
         if (active_buffer.pos == active_buffer.length)
             active_buffer = {};
@@ -473,7 +473,7 @@ void check_buffers()
 
 void poll()
 {
-    auto r = pmos_request_timer(serial_port, 100, 0);
+    auto r = pmos_request_timer(serial_port.get(), 100, 0);
     if (r != 0) {
         printf("Failed to request timer\n");
         return;
@@ -486,32 +486,32 @@ void react_timer_msg()
     check_buffers();
 }
 
-std::string log_port_name = "/pmos/logd";
-pmos_port_t log_port      = 0;
+std::string log_right_name = "/pmos/logd";
+pmos::Right log_right;
 
 void request_logger_port()
 {
     // TODO: Add a syscall for this
-    request_named_port(log_port_name.c_str(), log_port_name.length(), serial_port, 0);
+    request_named_port(log_right_name.c_str(), log_right_name.length(), serial_port.get(), 0);
 }
 
-void react_named_port_notification(char *msg_buff, size_t size)
+void react_named_port_notification(const char *msg_buff, size_t size, pmos::Right right)
 {
     IPC_Kernel_Named_Port_Notification *msg = (IPC_Kernel_Named_Port_Notification *)msg_buff;
     if (size < sizeof(IPC_Kernel_Named_Port_Notification))
         return;
 
-    log_port = msg->port_num;
+    log_right = std::move(right);
 
     IPC_Register_Log_Output reg = {
         .type       = IPC_Register_Log_Output_NUM,
         .flags      = 0,
-        .reply_port = serial_port,
-        .log_port   = serial_port,
         .task_id    = get_task_id(),
     };
 
-    send_message_port(log_port, sizeof(reg), &reg);
+    auto serial_right = serial_port.create_right(pmos::RightType::SendMany).value().first;
+
+    pmos::send_message_right_one(log_right, reg, {&serial_port, pmos::RightType::SendOnce}, false, std::move(serial_right)).value();
 }
 
 void react_interrupt()
@@ -549,21 +549,14 @@ int main()
     request_logger_port();
 
     while (1) {
-        Message_Descriptor msg;
-        syscall_get_message_info(&msg, serial_port, 0);
-
-        std::unique_ptr<char[]> msg_buff = std::make_unique<char[]>(msg.size);
-
-        auto result = get_first_message(msg_buff.get(), 0, serial_port);
-        if (result.right)
-            delete_right(result.right);
+        auto [msg, msg_buff, reply_right, array] = serial_port.get_first_message().value();
 
         if (msg.size < sizeof(IPC_Generic_Msg)) {
             write_str("Warning: recieved very small message\n");
             break;
         }
 
-        IPC_Generic_Msg *ipc_msg = reinterpret_cast<IPC_Generic_Msg *>(msg_buff.get());
+        IPC_Generic_Msg *ipc_msg = reinterpret_cast<IPC_Generic_Msg *>(msg_buff.data());
 
         switch (ipc_msg->type) {
         case IPC_Timer_Reply_NUM: {
@@ -587,7 +580,7 @@ int main()
             // (TODO)
             break;
         case IPC_Kernel_Named_Port_Notification_NUM:
-            react_named_port_notification(msg_buff.get(), msg.size);
+            react_named_port_notification(reinterpret_cast<const char *>(msg_buff.data()), msg.size, std::move(array[0]));
             break;
         case IPC_Kernel_Interrupt_NUM:
             react_interrupt();

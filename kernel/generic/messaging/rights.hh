@@ -44,6 +44,7 @@ struct Right {
     RightType type : 1  = RightType::SendOnce;
     bool alive : 1      = true;
     bool of_message : 1 = false;
+    bool right_0 : 1    = false;
     mutable Spinlock lock;
 
     bool destroy(proc::TaskGroup *match_group = nullptr);

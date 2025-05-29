@@ -93,7 +93,7 @@ static bool /* continue */ do_callback(struct CallBackNode *node, struct NamedPo
         switch (result.result) {
         case -ENOMEM:
             delete_right(right.right);
-            delete_right(port->right);
+            delete_right(node->reply_right);
             print_str("Loader: failed to reply with right, no memory");
             return true;
         case -ESRCH:
@@ -107,7 +107,7 @@ static bool /* continue */ do_callback(struct CallBackNode *node, struct NamedPo
             break;
         default:
             delete_right(right.right);
-            delete_right(port->right);
+            delete_right(node->reply_right);
             print_str("Loader: failed to reply with right, unknown error");
             return true;
         }
@@ -276,6 +276,7 @@ static void name_port_reply_error(pmos_right_t reply_right, int result, const ch
     auto r = send_message_right(reply_right, 0, n, length, NULL, SEND_MESSAGE_DELETE_RIGHT);
     if (r.result) {
         // TODO: Print error
+        delete_right(reply_right);
         (void)r;
     }
 }

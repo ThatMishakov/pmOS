@@ -138,7 +138,9 @@ fn main() {
         main_port: port.get_id(),
         ..Default::default()
     };
-    port.name_port("/pmos/pmbus");
+    let (send_right, _reply_right) = port.create_right_sendmany().unwrap();
+    send_right.name_self("/pmos/pmbus").unwrap();
+
     loop {
         let msg = port.pop_front_blocking();
         match msg.deserialize() {

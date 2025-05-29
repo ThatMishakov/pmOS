@@ -94,7 +94,7 @@ ssize_t __ipc_queue_write(void *file_data, uint64_t consumer_id, const void *buf
 {
     struct IPC_Queue *q = (struct IPC_Queue *)file_data;
 
-    pmos_port_t queue_right = q->port;
+    pmos_port_t queue_right = __atomic_load_n(&q->port, __ATOMIC_RELAXED);
     const char *port_name   = q->name;
     if (queue_right == INVALID_RIGHT) {
         right_request_t right_req = get_right_by_name(port_name, strlen(port_name), 0);
@@ -103,14 +103,18 @@ ssize_t __ipc_queue_write(void *file_data, uint64_t consumer_id, const void *buf
             return -1;
         }
 
-        bool result = __atomic_compare_exchange_n(&q->port, &queue_right, right_req.result, false,
+        bool result = __atomic_compare_exchange_n(&q->port, &queue_right, right_req.right, false,
                                                   __ATOMIC_RELAXED, __ATOMIC_RELAXED);
         if (!result) {
             delete_right(right_req.right);
         }
-        queue_right = q->port;
+        queue_right = right_req.right;
     }
 
+    if (queue_right == INVALID_RIGHT) {
+        errno = EIO;
+        return -1;
+    }
     return write_ipc_queue(queue_right, buf, count);
 }
 
@@ -119,7 +123,7 @@ ssize_t __ipc_queue_writev(void *file_data, uint64_t consumer_id, const struct i
 {
     struct IPC_Queue *q = (struct IPC_Queue *)file_data;
 
-    pmos_port_t queue_right = q->port;
+    pmos_port_t queue_right = __atomic_load_n(&q->port, __ATOMIC_RELAXED);
     const char *port_name   = q->name;
     if (queue_right == INVALID_PORT) {
         right_request_t right_req = get_right_by_name(port_name, strlen(port_name), 0);
@@ -133,7 +137,12 @@ ssize_t __ipc_queue_writev(void *file_data, uint64_t consumer_id, const struct i
         if (!result) {
             delete_right(right_req.right);
         }
-        queue_right = q->port;
+        queue_right = right_req.right;
+    }
+
+    if (queue_right == INVALID_RIGHT) {
+        errno = EIO;
+        return -1;
     }
 
     ssize_t count = 0;

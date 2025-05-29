@@ -245,7 +245,6 @@ typedef uint64_t pmos_port_t;
 typedef struct IPC_Kernel_Named_Port_Notification {
     uint32_t type;
     int32_t result;
-    pmos_port_t port_num;
     char port_name[0];
 } IPC_Kernel_Named_Port_Notification;
 #define NAMED_PORT_NOTIFICATION_STR_LEN(len) ((len) - sizeof(IPC_Kernel_Named_Port_Notification));
@@ -1153,9 +1152,6 @@ typedef struct IPC_Framebuffer_Request {
 
     /// Flags
     uint32_t flags;
-
-    /// Port for the reply
-    pmos_port_t reply_port;
 } IPC_Framebuffer_Request;
 
 #define IPC_Framebuffer_Reply_NUM 0x121
@@ -1192,12 +1188,6 @@ typedef struct IPC_Register_Log_Output {
 
     /// Flags
     uint32_t flags;
-
-    /// Port for the reply
-    pmos_port_t reply_port;
-
-    /// Log output port
-    pmos_port_t log_port;
 
     /// ID of the task that wants to register the log output
     uint64_t task_id;

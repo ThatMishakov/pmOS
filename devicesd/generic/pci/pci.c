@@ -36,6 +36,7 @@
 #include <pmos/io.h>
 #include <pmos/ipc.h>
 #include <pmos/memory.h>
+#include <pmos/vector.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -45,7 +46,6 @@
 #include <uacpi/resources.h>
 #include <uacpi/tables.h>
 #include <uacpi/utilities.h>
-#include <pmos/vector.h>
 
 PCIDeviceVector pci_devices = VECTOR_INIT;
 
@@ -178,8 +178,8 @@ void check_function(struct PCIHostBridge *g, uint8_t bus, uint8_t device, uint8_
         uacpi_pci_routing_table *pci_routes;
         uacpi_status ret = uacpi_get_pci_routing_table(ctx.out_node, &pci_routes);
         if (ret != UACPI_STATUS_OK) {
-            fprintf(stderr, "Warning: Could not get PCI routing for root bridge bus %0x: %i\n", bus,
-                    ret);
+            fprintf(stderr, "Warning: Could not get PCI routing for root bridge bus %0x: %i (%s)\n", bus,
+                    ret, uacpi_status_to_string(ret));
         } else {
             parse_interrupt_table(g, secondary_bus, pci_routes);
             uacpi_free_pci_routing_table(pci_routes);
@@ -306,8 +306,8 @@ void check_root(struct PCIHostBridge *g, int bus, uacpi_namespace_node *node)
     uacpi_pci_routing_table *pci_routes;
     uacpi_status ret = uacpi_get_pci_routing_table(node, &pci_routes);
     if (ret != UACPI_STATUS_OK) {
-        fprintf(stderr, "Warning: Could not get PCI routing for root bridge bus %0x: %i\n", bus,
-                ret);
+        fprintf(stderr, "Warning: Could not get PCI routing for root bridge bus %0x: %i (%s)\n", bus,
+                ret, uacpi_status_to_string(ret));
     } else {
         parse_interrupt_table(g, bus, pci_routes);
         uacpi_free_pci_routing_table(pci_routes);
@@ -605,7 +605,8 @@ int pcicdevice_compare(const void *aa, const void *bb)
     return (*a)->function - (*b)->function;
 }
 
-void request_pci_device(Message_Descriptor *desc, IPC_Request_PCI_Device *d)
+void request_pci_device(Message_Descriptor *desc, IPC_Request_PCI_Device *d,
+                        pmos_right_t reply_right)
 {
     int error = 0;
     IPC_Request_PCI_Device_Reply reply;
@@ -631,10 +632,11 @@ void request_pci_device(Message_Descriptor *desc, IPC_Request_PCI_Device *d)
         .base_address = g->ecam.base_addr + offset,
     };
 
-    result_t result =
-        send_message_port(d->reply_port, sizeof(reply_success), (char *)&reply_success);
-    if (result != 0)
+    auto result = send_message_right(reply_right, 0, &reply, sizeof(reply), NULL, 0).result;
+    if (result != 0) {
+        delete_right(reply_right);
         printf("Failed to send message in request_pci_device: %li\n", result);
+    }
     return;
 err:
     reply = (IPC_Request_PCI_Device_Reply) {
@@ -644,7 +646,10 @@ err:
         .base_address = 0,
     };
 
-    send_message_port(d->reply_port, sizeof(reply), (char *)&reply);
+    result = send_message_right(reply_right, 0, &reply, sizeof(reply), NULL, 0).result;
+    if (result != 0) {
+        delete_right(reply_right);
+    }
 }
 
 void request_pci_devices(Message_Descriptor *desc, IPC_Request_PCI_Devices *d)
@@ -779,7 +784,8 @@ int resolve_gsi_for(struct PCIHostBridge *g, uint8_t bus, uint8_t device, uint8_
                            active_low, level_trig, bridge);
 }
 
-void request_pci_device_gsi(Message_Descriptor *desc, IPC_Request_PCI_Device_GSI *d)
+void request_pci_device_gsi(Message_Descriptor *desc, IPC_Request_PCI_Device_GSI *d,
+                            pmos_right_t reply_right)
 {
     if (desc->size < sizeof(IPC_Request_PCI_Device_GSI)) {
         IPC_Request_PCI_Device_GSI_Reply reply = {
@@ -789,7 +795,9 @@ void request_pci_device_gsi(Message_Descriptor *desc, IPC_Request_PCI_Device_GSI
             .gsi    = 0,
         };
 
-        send_message_port(d->reply_port, sizeof(reply), (char *)&reply);
+        auto result = send_message_right(reply_right, 0, &reply, sizeof(reply), NULL, 0);
+        if (!result.result)
+            delete_right(reply_right);
         return;
     }
 
@@ -802,7 +810,9 @@ void request_pci_device_gsi(Message_Descriptor *desc, IPC_Request_PCI_Device_GSI
             .gsi    = 0,
         };
 
-        send_message_port(d->reply_port, sizeof(reply), (char *)&reply);
+        auto result = send_message_right(reply_right, 0, &reply, sizeof(reply), NULL, 0);
+        if (!result.result)
+            delete_right(reply_right);
         return;
     }
 
@@ -818,13 +828,15 @@ void request_pci_device_gsi(Message_Descriptor *desc, IPC_Request_PCI_Device_GSI
         .gsi    = gsi,
     };
 
-    send_message_port(d->reply_port, sizeof(reply), (char *)&reply);
+    auto result = send_message_right(reply_right, 0, &reply, sizeof(reply), NULL, 0);
+    if (!result.result)
+        delete_right(reply_right);
 }
 
 int set_up_gsi(uint32_t gsi, bool active_low, bool level_trig, uint64_t task, pmos_port_t port,
                uint32_t *vector_out);
 
-void register_pci_interrupt(Message_Descriptor *msg, IPC_Register_PCI_Interrupt *desc)
+void register_pci_interrupt(Message_Descriptor *msg, IPC_Register_PCI_Interrupt *desc, pmos_right_t reply_right)
 {
     IPC_Reg_Int_Reply reply;
     int result      = 0;
@@ -862,10 +874,12 @@ end:
         .intno  = vector,
     };
 
-    result = send_message_port(desc->reply_port, sizeof(reply), (char *)&reply);
-    if (result != 0)
+    result = send_message_right(reply_right, 0, &reply, sizeof(reply), NULL, 0).result;
+    if (result != 0) {
+        delete_right(reply_right);
         printf("Failed to send message in register_pci_interrupt: %i (%s)\n", result,
                strerror(-result));
+    }
 }
 
 #ifdef PLATFORM_HAS_IO

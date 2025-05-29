@@ -408,7 +408,8 @@ void syscall_get_first_message()
 
     u64 reply_right_id = 0;
     if (!(args & MSG_ARG_NOPOP)) {
-        if (!(args & MSG_ARG_REJECT_RIGHT) && top_message->reply_right) {
+        if (top_message->reply_right)
+        if ((!(args & MSG_ARG_REJECT_RIGHT)) && top_message->reply_right) {
             auto right = top_message->reply_right;
             auto group = current->get_rights_namespace();
             if (!group) {
@@ -430,6 +431,7 @@ void syscall_get_first_message()
                 right->right_sender_id = reply_right_id;
                 group->rights.insert(right);
                 right->of_message = false;
+                right->parent_group = group;
 
                 top_message->reply_right = nullptr;
             }
@@ -2004,8 +2006,14 @@ void send_message_right()
         return;
     }
 
-    Right *right = right_id ? group->atomic_get_right(right_id)
-                            : kernel_tasks->atomic_get_right(atomic_right0_id());
+    Right *right;
+    if (right_id) {
+        right = group->atomic_get_right(right_id);
+    } else {
+        auto id = atomic_right0_id();
+        right = kernel_tasks->atomic_get_right(id);
+    }
+                           
 
     if (!right) {
         syscall_error(current) = { -ENOENT, 0 };
@@ -2040,6 +2048,8 @@ void send_message_right()
 
         for (auto i = 0; i < 4; ++i) {
             if (auto id = d.extra_rights[i]; id) {
+                if (!id)
+                    continue;
                 auto right = group->atomic_get_right(id);
                 if (!right) {
                     syscall_error(current) = { -ESRCH, i + 1 };
@@ -2086,7 +2096,7 @@ void syscall_delete_send_right()
     if (result) {
         syscall_success(current);
     } else {
-        syscall_error(current) = -ESRCH;
+        syscall_error(current) = -ENOENT;
     }
 }
 
@@ -2132,7 +2142,7 @@ void syscall_accept_rights()
         return;
     }
 
-    if (!not result.val)
+    if (!result.val)
         return;
 
     syscall_error(current) = group->transfer_rights(msg, rights);
@@ -2142,7 +2152,7 @@ void syscall_dup_right()
 {
     auto current = get_current_task();
 
-    u64 right_id = syscall_arg64(current, 1);
+    u64 right_id = syscall_arg64(current, 0);
 
     auto group = current->get_rights_namespace();
     if (!group) {

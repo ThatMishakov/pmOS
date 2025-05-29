@@ -155,6 +155,8 @@ kresult_t set_right0(Right *right, proc::TaskGroup *right_parent)
     if (!result.success())
         return result.result;
 
+    right->right_0 = true;
+
     right0_id = result.val;
     return 0;
 }
@@ -222,7 +224,9 @@ ReturnStr<std::pair<Right *, u64>> Right::duplicate(proc::TaskGroup *group)
     parent->rights.insert(new_right.get());
     parent_group->rights.insert(new_right.get());
 
-    return Success(std::make_pair(new_right.release(), new_right->right_sender_id));
+    auto ptr = new_right.release();
+
+    return Success(std::make_pair(ptr, ptr->right_sender_id));
 }
 
 } // namespace kernel::ipc

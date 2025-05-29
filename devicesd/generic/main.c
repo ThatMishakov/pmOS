@@ -65,8 +65,8 @@ pmos_port_t configuration_port = 0;
 
 const char *devicesd_port_name = "/pmos/devicesd";
 
-void request_pci_devices(Message_Descriptor *desc, IPC_Request_PCI_Devices *d);
-void request_pci_device(Message_Descriptor *desc, IPC_Request_PCI_Device *d);
+void request_pci_devices(Message_Descriptor *desc, IPC_Request_PCI_Devices *d, pmos_right_t reply_right);
+void request_pci_device(Message_Descriptor *desc, IPC_Request_PCI_Device *d, pmos_right_t reply_right);
 void request_pci_device_gsi(Message_Descriptor *desc, IPC_Request_PCI_Device_GSI *d);
 void named_port_notification(Message_Descriptor *desc, IPC_Kernel_Named_Port_Notification *n);
 void publish_object_reply(Message_Descriptor *desc, IPC_BUS_Publish_Object_Reply *r);
@@ -106,7 +106,7 @@ int main(int argc, char **argv)
         main_port = req.port;
 
         auto right_req = create_right(req.port, &main_recieve_right, 0);
-        if (!right_req.result) {
+        if (right_req.result) {
             printf("Error creating right %i\n", (int)req.result);
             return 0;
         }
@@ -146,7 +146,7 @@ int main(int argc, char **argv)
 
         char *msg_buff = (char *)malloc(msg.size);
 
-        get_first_message(msg_buff, 0, main_port);
+        auto result = get_first_message(msg_buff, 0, main_port);
 
         if (msg.size >= sizeof(IPC_Generic_Msg)) {
             switch (((IPC_Generic_Msg *)msg_buff)->type) {
@@ -158,7 +158,8 @@ int main(int argc, char **argv)
 
                 IPC_Reg_Int* m = (IPC_Reg_Int*)msg_buff;
 
-                configure_interrupts_for(&msg, m);
+                configure_interrupts_for(&msg, m, result.right);
+                result.right = 0;
             }
                 break;
             case IPC_Register_PCI_Interrupt_NUM: {
@@ -167,7 +168,8 @@ int main(int argc, char **argv)
                     "(%lx)\n", msg.sender, msg.size);
 
                 IPC_Register_PCI_Interrupt* m = (IPC_Register_PCI_Interrupt*)msg_buff;
-                register_pci_interrupt(&msg, m);
+                register_pci_interrupt(&msg, m, result.right);
+                result.right = 0;
             }
                 break;
             // case IPC_Start_Timer_NUM: {
@@ -187,14 +189,17 @@ int main(int argc, char **argv)
             //     break;
             case IPC_Request_Serial_NUM:{
                 IPC_Request_Serial *m = (IPC_Request_Serial *)msg_buff;
-                request_serial(&msg, m);
+                request_serial(&msg, m, result.right);
+                result.right = 0;
             }
                 break;
             case IPC_Request_PCI_Devices_NUM:
-                request_pci_devices(&msg, (IPC_Request_PCI_Devices *)msg_buff);
+                request_pci_devices(&msg, (IPC_Request_PCI_Devices *)msg_buff, result.right);
+                result.right = 0;
                 break;
             case IPC_Request_PCI_Device_NUM:
-                request_pci_device(&msg, (IPC_Request_PCI_Device *)msg_buff);
+                request_pci_device(&msg, (IPC_Request_PCI_Device *)msg_buff, result.right);
+                result.right = 0;
                 break;
             case IPC_Request_PCI_Device_GSI_NUM:
                 request_pci_device_gsi(&msg, (IPC_Request_PCI_Device_GSI *)msg_buff);
@@ -211,6 +216,9 @@ int main(int argc, char **argv)
                 break;
             }
         }
+
+        if (result.right)
+            delete_right(result.right);
 
         free(msg_buff);
     }

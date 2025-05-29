@@ -63,6 +63,6 @@ struct serial_port {
 };
 
 void init_serial();
-void request_serial(Message_Descriptor *d, IPC_Request_Serial *m);
+void request_serial(Message_Descriptor *d, IPC_Request_Serial *m, pmos_right_t reply_right);
 
 #endif

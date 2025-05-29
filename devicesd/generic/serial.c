@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <inttypes.h>
 
 struct serial_port *serial_port = NULL;
 
@@ -260,14 +261,19 @@ void init_serial()
     printf("Terminal type: %i\n", serial_port->terminal_type);
 }
 
-void request_serial(Message_Descriptor *d, IPC_Request_Serial *m)
+void request_serial(Message_Descriptor *d, IPC_Request_Serial *m, pmos_right_t reply_right)
 {
     IPC_Serial_Reply reply;
     result_t result;
 
     if (d->size < sizeof(IPC_Request_Serial)) {
         // TODO: No way to determine the reply channel
-        fprintf(stderr, "Invalid message size %li from task %li\n", d->size, d->sender);
+        fprintf(stderr, "Invalid message size %li from task %" PRIi64 "\n", d->size, d->sender);
+        return;
+    }
+
+    if (!reply_right) {
+        fprintf(stderr, "No reply right from request_serial from task %" PRIi64 "...\n", d->sender);
         return;
     }
 
@@ -277,7 +283,7 @@ void request_serial(Message_Descriptor *d, IPC_Request_Serial *m)
             .result = -ENODEV,
         };
 
-        result = send_message_port(m->reply_port, sizeof(reply), (char *)&reply);
+        result = send_message_right(reply_right, 0, (char *)&reply, sizeof(reply), NULL, 0).result;
         if (result != SUCCESS) {
             fprintf(stderr, "Failed to send message to task %li: %lx\n", d->sender, result);
         }
@@ -301,7 +307,7 @@ void request_serial(Message_Descriptor *d, IPC_Request_Serial *m)
         .terminal_type  = serial_port->terminal_type,
     };
 
-    result = send_message_port(m->reply_port, sizeof(reply), (char *)&reply);
+    result = send_message_right(reply_right, 0, (char *)&reply, sizeof(reply), NULL, 0).result;
     if (result != SUCCESS) {
         fprintf(stderr, "Failed to send message to task %li: %lx\n", d->sender, result);
     }

@@ -42,9 +42,9 @@
 
 struct flanterm_context *ft_ctx;
 
-void write_screen(const char * msg)
+void write_screen(std::string_view s)
 {
-    flanterm_write(ft_ctx, msg, strlen(msg));
+    flanterm_write(ft_ctx, s.data(), s.length());
 }
 
 void int_to_hex(char * buffer, uint64_t n, char upper)
@@ -74,7 +74,7 @@ void print_hex(uint64_t i)
     write_screen(buffer);
 }
 
-pmos_port_t main_port = 0;
+pmos::Port main_port = pmos::Port::create().value();
 pmos::Port configuration_port = pmos::Port::create().value();
 
 const char terminal_port_name[] = "/pmos/terminald";
@@ -94,7 +94,6 @@ void init_screen()
     IPC_Framebuffer_Request req = {
         .type = IPC_Framebuffer_Request_NUM,
         .flags = 0,
-        .reply_port = configuration_port.get(),
     };
 
     auto loader_right = pmos::get_right_by_name("/pmos/loader").value();
@@ -139,31 +138,31 @@ void init_screen()
 }
 
 const char log_port_name[] = "/pmos/logd";
-pmos_port_t log_port = 0;
+pmos::Right log_right;
 
 void request_logger_port()
 {
     // TODO: Add a syscall for this
-    request_named_port(log_port_name, strlen(log_port_name), main_port, 0);
+    request_named_port(log_port_name, strlen(log_port_name), main_port.get(), 0);
 }
 
-void react_named_port_notification(char *msg_buff, size_t size)
+void react_named_port_notification(char *msg_buff, size_t size, pmos::Right r)
 {
     IPC_Kernel_Named_Port_Notification *msg = (IPC_Kernel_Named_Port_Notification *)msg_buff;
     if (size < sizeof(IPC_Kernel_Named_Port_Notification))
         return;
     
-    log_port = msg->port_num;
+    log_right = std::move(r);
 
     IPC_Register_Log_Output reg = {
         .type = IPC_Register_Log_Output_NUM,
         .flags = 0,
-        .reply_port = main_port,
-        .log_port = main_port,
         .task_id = get_task_id(),
     };
 
-    send_message_port(log_port, sizeof(reg), &reg);
+    auto terminal_right = main_port.create_right(pmos::RightType::SendMany).value();
+
+    pmos::send_message_right_one(log_right, reg, {&main_port, pmos::RightType::SendOnce}, false, std::move(terminal_right.first));
 }
 
 int main() {
@@ -173,26 +172,11 @@ int main() {
     const char msg[] = "Initialized framebuffer...\n";
     flanterm_write(ft_ctx, msg, sizeof(msg));
 
-    req = create_port(TASK_ID_SELF, 0);
-    if (req.result != SUCCESS) {
-        write_screen("Error creating main port ");
-        print_hex(req.result);
-        write_screen("\n");
-    }
-    main_port = req.port;
-
     request_logger_port();
 
     while (1)
     {
-        Message_Descriptor msg;
-        syscall_get_message_info(&msg, main_port, 0);
-
-        char* msg_buff = (char*)malloc(msg.size+1);
-
-        get_first_message(msg_buff, 0, main_port);
-
-        msg_buff[msg.size] = '\0';
+        auto [msg, buffer, right, rights] = main_port.get_first_message().value();
 
         if (msg.size < sizeof(IPC_Write_Plain)-1) {
             write_screen("Warning: recieved very small message from ");
@@ -200,18 +184,17 @@ int main() {
             write_screen(" of size ");
             print_hex(msg.size);
             write_screen("\n");
-            free(msg_buff);
             break;
         }
 
-        IPC_Write_Plain *str = (IPC_Write_Plain *)(msg_buff);
+        IPC_Write_Plain *str = (IPC_Write_Plain *)(buffer.data());
 
         switch (str->type) {
         case IPC_Write_Plain_NUM:
-            write_screen(str->data);
+            write_screen({str->data, msg.size - offsetof(IPC_Write_Plain, data)});
             break;
         case IPC_Kernel_Named_Port_Notification_NUM:
-            react_named_port_notification(msg_buff, msg.size);
+            react_named_port_notification((char *)buffer.data(), msg.size, std::move(rights[0]));
             break;
         case IPC_Log_Output_Reply_NUM:
             // Ignore it :)
@@ -223,8 +206,6 @@ int main() {
             print_hex(str->type);
             write_screen("\n");
         }
-
-        free(msg_buff);
     }
     
 

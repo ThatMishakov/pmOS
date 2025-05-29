@@ -157,8 +157,11 @@ void init_misc()
     } while (0);
 }
 
-void provide_framebuffer(pmos_port_t port, uint32_t flags)
+void provide_framebuffer(pmos_right_t right, uint32_t flags)
 {
+    if (!right)
+        return;
+
     (void)flags;
 
     IPC_Framebuffer_Reply r = {
@@ -184,7 +187,9 @@ void provide_framebuffer(pmos_port_t port, uint32_t flags)
         r.framebuffer_blue_mask_shift  = fb->framebuffer_blue_mask_shift;
     }
 
-    send_message_port(port, sizeof(r), &r);
+    auto result = send_message_right(right, 0, &r, sizeof(r), NULL, SEND_MESSAGE_DELETE_RIGHT);
+    if (result.result && (result.result != ENOENT))
+        delete_right(right);
 }
 
 void start_executables()
@@ -391,7 +396,8 @@ int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_r
             break;
         }
 
-        provide_framebuffer(a->reply_port, a->flags);
+        provide_framebuffer(*reply_right, a->flags);
+        *reply_right = 0;
 
         break;
     }
@@ -407,6 +413,7 @@ int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_r
 
         size_t length = desc->size - sizeof(IPC_Get_Named_Port);
         request_port_message(r->name, length, r->flags, *reply_right);
+        *reply_right = 0;
         break;
     }
 
@@ -419,6 +426,11 @@ int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_r
             break;
         }
 
+        if (!*reply_right) {
+            print_str("No reply port in IPC_Name_Port\n");
+            break;
+        }
+
         size_t length = desc->size - sizeof(IPC_Name_Port);
         auto result   = register_right(r->name, length, extra_rights[0]);
 
@@ -428,10 +440,13 @@ int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_r
             .result = result,
         };
 
+        if (!result)
+            extra_rights[0] = 0;
+
         auto send_result = send_message_right(*reply_right, 0, &reply, sizeof(reply), NULL,
                                               SEND_MESSAGE_DELETE_RIGHT);
-        if (send_result.result)
-            delete_right(*reply_right);
+        if (!send_result.result)
+            *reply_right = 0;
 
         break;
     }
@@ -499,7 +514,7 @@ int main()
     }
 
     char *loader_port_name = "/pmos/loader";
-    int result = register_right(loader_port_name, strlen(loader_port_name), loader_right);
+    int result = register_right(loader_port_name, strlen(loader_port_name), create_result.right);
     // res = loader_port, loader_port_name, strlen(loader_port_name), 0);
     if (result != SUCCESS) {
         print_str("Loader: could not name loader port. Error: ");

@@ -313,13 +313,15 @@ ReturnStr<std::pair<Right * /* right */, u64 /* new_id_error */>>
     {
         Auto_Lock_Scope l(locks);
 
-        if (!right->alive ||
-            !(right->of_group(proc::kernel_tasks) || right->of_group(verify_group)))
+        if (!right->alive || !((right->of_group(verify_group) || right->right_0)))
             return {-ENOENT, std::make_pair(nullptr, 0)};
 
         for (size_t i = 0; i < array.size(); ++i)
-            if (auto p = array[i]; p && (!p->alive || p->of_group(verify_group)))
+            if (auto p = array[i]; p && (!p->alive || !p->of_group(verify_group)))
                 return {-ENOENT, std::make_pair(nullptr, i + 1)};
+
+        if (right->right_0 && always_destroy_right)
+            return {-EINVAL, std::make_pair(nullptr, 0)};
 
         if (right->type == RightType::SendOnce || always_destroy_right)
             right->destroy_nolock();
@@ -327,11 +329,18 @@ ReturnStr<std::pair<Right * /* right */, u64 /* new_id_error */>>
         if (extra_rights) {
             Auto_Lock_Scope l(verify_group->rights_lock);
             for (auto r: array) {
+                if (!r)
+                    continue;
+
+                assert(!r->of_message);
+                assert(r->parent_group == verify_group);
                 verify_group->rights.erase(r);
                 r->of_message     = true;
                 r->parent_message = msg.get();
             }
         }
+
+        msg->reply_right = reply_right.get();
 
         if (reply_port) {
             assert(reply_port->alive);
@@ -340,8 +349,7 @@ ReturnStr<std::pair<Right * /* right */, u64 /* new_id_error */>>
             reply_port->rights.insert(reply_right.release());
         }
 
-        msg->reply_right = reply_right.get();
-        msg->rights      = array;
+        msg->rights = array;
 
         {
             Auto_Lock_Scope l(send_to->lock);
@@ -349,7 +357,10 @@ ReturnStr<std::pair<Right * /* right */, u64 /* new_id_error */>>
         }
     }
 
-    return Success(std::make_pair(reply_right.release(), reply_right->right_sender_id));
+    if (auto ptr = reply_right.release(); ptr)
+        return Success(std::make_pair(ptr, ptr->right_sender_id));
+    else
+        return Success(std::make_pair(nullptr, 0));
 }
 
 Message::~Message()

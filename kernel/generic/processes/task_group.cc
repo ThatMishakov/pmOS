@@ -211,8 +211,8 @@ kresult_t TaskGroup::atomic_remove_task(TaskDescriptor *task)
         tasks.erase(task->task_id);
 
         auto expected = this;
-        task->rights_namespace.compare_exchange_strong(expected, nullptr, std::memory_order::release,
-                                                       std::memory_order::consume);
+        task->rights_namespace.compare_exchange_strong(
+            expected, nullptr, std::memory_order::release, std::memory_order::consume);
 
         if (!alive())
             destroy();
@@ -347,10 +347,7 @@ bool TaskGroup::atomic_alive() const noexcept
     return alive();
 }
 
-bool TaskGroup::task_in_group(u64 id) const
-{
-    return tasks.count(id);
-}
+bool TaskGroup::task_in_group(u64 id) const { return tasks.count(id); }
 
 ipc::Right *TaskGroup::atomic_get_right(u64 right_id)
 {
@@ -377,13 +374,14 @@ kresult_t TaskGroup::transfer_rights(ipc::Message *msg, std::array<u64, 4> right
     for (int i = 0; i < 4; ++i)
         if (auto right = msg->rights[i]; right) {
             msg->rights[i] = nullptr;
-            auto id = right_ids[i];
+            auto id        = right_ids[i];
             assert(id);
 
             Auto_Lock_Scope l(right->lock);
             if (right->alive) {
                 right->right_sender_id = id;
-                right->parent_group = this;
+                right->parent_group    = this;
+                right->of_message      = false;
                 rights.insert(right);
             } else {
                 right->rcu_push();

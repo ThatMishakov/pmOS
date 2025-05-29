@@ -660,29 +660,29 @@ static size_t hash_for_value(void *value, size_t total_size)
     return (*(uint64_t *)(value) * 7) % total_size;
 }
 
-static pmos_port_t pmbus_port    = 0;
-static bool pmbus_port_requested = false;
-const char *pmbus_port_name      = "/pmos/pmbus";
-int request_pmbus_port(pmos_port_t *port_out)
+static pmos_right_t pmbus_right    = 0;
+static bool pmbus_right_requested = false;
+const char *pmbus_right_name      = "/pmos/pmbus";
+int request_pmbus_right(pmos_right_t *right_out)
 {
-    assert(port_out);
-    if (pmbus_port) {
-        *port_out = pmbus_port;
+    assert(right_out);
+    if (pmbus_right) {
+        *right_out = pmbus_right;
         return 0;
     }
 
-    *port_out = 0;
-    if (pmbus_port_requested)
+    *right_out = 0;
+    if (pmbus_right_requested)
         return 0;
 
-    int result = (int)request_named_port(pmbus_port_name, strlen(pmbus_port_name), main_port, 0).result;
+    int result = (int)request_named_port(pmbus_right_name, strlen(pmbus_right_name), main_port, 0).result;
     if (result < 0) {
         fprintf(stderr, "devicesd: Fauled to request pmbus port: %i (%s)\n", result,
                 strerror(-result));
         return -1;
     }
 
-    pmbus_port_requested = true;
+    pmbus_right_requested = true;
     return 0;
 }
 
@@ -694,7 +694,7 @@ static void send_foreach(pmos_hashtable_ll_t *element, void *ctx)
     if (!r->message_data)
         return;
 
-    int result = (int)send_message_port(pmbus_port, r->message_data_size, r->message_data);
+    int result = (int)send_message_right(pmbus_right, 0, r->message_data, r->message_data_size, NULL, 0).result;
     if (result < 0) {
         fprintf(stderr, "devicesd: Couldn't send message to pmbus: %i (%s)\n", result,
                 strerror(-result));
@@ -709,10 +709,10 @@ static void publish_send() { hashtable_foreach(&register_requests, send_foreach,
 
 int send_register_object(struct RegisterRequest *r)
 {
-    pmos_port_t pmbus_port;
-    int result = request_pmbus_port(&pmbus_port);
+    pmos_right_t pmbus_right;
+    int result = request_pmbus_right(&pmbus_right);
     if (result < 0) {
-        fprintf(stderr, "Failed to request pmbus port\n");
+        fprintf(stderr, "Failed to request pmbus right: %i\n", result);
         return -1;
     }
 
@@ -722,11 +722,11 @@ int send_register_object(struct RegisterRequest *r)
         return result;
     }
 
-    if (pmbus_port == 0)
-        // This will be contineud once the port is obtained
+    if (pmbus_right == 0)
+        // This will be contineud once the right is obtained
         return 0;
 
-    result = (int)send_message_port(pmbus_port, r->message_data_size, r->message_data);
+    result = (int)send_message_right(pmbus_right, 0, r->message_data, r->message_data_size, NULL, 0).result;
     if (result < 0) {
         fprintf(stderr, "devicesd: Couldn't send message to pmbus: %i (%s)\n", result,
                 strerror(-result));
@@ -764,7 +764,7 @@ void publish_object_reply(Message_Descriptor *desc, IPC_BUS_Publish_Object_Reply
     }
 }
 
-void named_port_notification(Message_Descriptor *desc, IPC_Kernel_Named_Port_Notification *n)
+void named_port_notification(Message_Descriptor *desc, IPC_Kernel_Named_Port_Notification *n, pmos_right_t first_right)
 {
     // if (desc->sender != 0) {
     //     fprintf(stderr,
@@ -774,9 +774,14 @@ void named_port_notification(Message_Descriptor *desc, IPC_Kernel_Named_Port_Not
     //     return;
     // }
 
+    if (!first_right) {
+        fprintf(stderr, "devicesd: Recieved named right notification with no right...");
+        return;
+    }
+
     size_t len = NAMED_PORT_NOTIFICATION_STR_LEN(desc->size);
-    if (len == strlen(pmbus_port_name) && !memcmp(pmbus_port_name, n->port_name, len)) {
-        pmbus_port = n->port_num;
+    if (len == strlen(pmbus_right_name) && !memcmp(pmbus_right_name, n->port_name, len)) {
+        pmbus_right = first_right;
 
         publish_send();
     }

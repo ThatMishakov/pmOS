@@ -29,6 +29,7 @@
 #ifndef CONFIGURATION_H
 #define CONFIGURATION_H
 #include <pmos/ipc.h>
+#include <pmos/system.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <kernel/messaging.h>
@@ -36,8 +37,8 @@
 // Returns CPU int vector or 0 on error
 uint8_t get_ioapic_int(uint32_t intno, uint64_t dest_pid, uint64_t chan);
 
-void configure_interrupts_for(Message_Descriptor *msg, IPC_Reg_Int *desc);
-void register_pci_interrupt(Message_Descriptor *msg, IPC_Register_PCI_Interrupt *desc);
+void configure_interrupts_for(Message_Descriptor *msg, IPC_Reg_Int *desc, pmos_right_t reply_right);
+void register_pci_interrupt(Message_Descriptor *msg, IPC_Register_PCI_Interrupt *desc, pmos_right_t reply_right);
 
 struct interrupt_descriptor {
     uint32_t intno;
