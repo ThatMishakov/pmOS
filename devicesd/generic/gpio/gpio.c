@@ -365,9 +365,9 @@ static uacpi_iteration_decision amd_gpio_configure_pin(void *ctx, uacpi_resource
     if (c->pin_table_length < 1)
         return UACPI_ITERATION_DECISION_CONTINUE;
 
-    bool lever_trigger = c->interrupt.triggering == UACPI_TRIGGERING_LEVEL;
+    bool lever_trigger = c->intr.triggering == UACPI_TRIGGERING_LEVEL;
     // The same meaning as in ACPI
-    int active_level = c->interrupt.polarity;
+    int active_level = c->intr.polarity;
     unsigned pin = c->pin_table[0];
     assert(pin < 256);
 
