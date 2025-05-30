@@ -3,6 +3,7 @@
 #include <processes/tasks.hh>
 
 using namespace kernel;
+using namespace kernel::proc;
 
 enum class VectorInstructionsLevel {
     None,
@@ -164,7 +165,7 @@ kresult_t handle_fp_disabled_exception(unsigned code)
         assert(false);
     }
 
-    auto task      = get_current_task();
+    auto task      = kernel::sched::get_current_task();
     task->using_fp = true;
     fp_enable();
     fp_restore(task->fp_registers.get());

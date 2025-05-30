@@ -14,6 +14,8 @@
 #include <csr.hh>
 
 using namespace kernel;
+using namespace kernel::sched;
+using namespace kernel::log;
 
 // constexpr u32 BIOPIC_GSI_COUNT = 256;
 
@@ -63,7 +65,7 @@ struct PICAllocation {
 };
 
 constexpr size_t INTERRUPT_MAPPINGS_SIZE = 256;
-PICAllocation interrupt_mappings[INTERRUPT_MAPPINGS_SIZE];
+static PICAllocation interrupt_mappings[INTERRUPT_MAPPINGS_SIZE];
 
 constexpr unsigned OTHER_FUNCTION_CONF = 0x0420;
 
@@ -88,8 +90,8 @@ constexpr unsigned EXT_IOImap_base    = 0x14C0;
 constexpr unsigned EXT_IOImap_Core0   = 0x1C00;
 constexpr unsigned CORE0_EXT_IOIsr    = 0x1800;
 
-Spinlock interrupts_lock;
-kresult_t interrupt_enable(u32 i)
+static Spinlock interrupts_lock;
+kresult_t interrupts::interrupt_enable(u32 i)
 {
     auto c = get_cpu_struct();
     assert(i < 256);
@@ -141,7 +143,7 @@ kresult_t interrupt_enable(u32 i)
     return 0;
 }
 
-void interrupt_complete(u32 interrupt)
+void interrupts::interrupt_complete(u32 interrupt)
 {
     assert(interrupt < 256);
     auto [cpu, controller, vector, _] = interrupt_mappings[interrupt];
@@ -236,7 +238,7 @@ MADT_BIOPIC_entry *get_biopic_entry(int index = 0)
 
 klib::vector<BIOPIC *> biopics;
 
-void biopic_push(BIOPIC *biopic)
+static void biopic_push(BIOPIC *biopic)
 {
     if (!biopics.push_back(nullptr))
         panic("Could not allocate memory for biopics array\n");
@@ -380,13 +382,13 @@ void init_interrupts()
         if (!addr)
             panic("Failed to allocate virtual memory window for BIO PIC");
 
-        const Page_Table_Arguments arg = {.readable           = true,
+        const paging::Page_Table_Arguments arg = {.readable           = true,
                                            .writeable          = true,
                                            .user_access        = false,
                                            .global             = true,
                                            .execution_disabled = true,
                                            .extra              = PAGING_FLAG_NOFREE,
-                                           .cache_policy       = Memory_Type::IONoCache};
+                                           .cache_policy       = paging::Memory_Type::IONoCache};
 
         auto result = map_kernel_pages(be->base_address & ~PAGE_MASK, addr, size_aligned, arg);
         if (result)
@@ -406,7 +408,7 @@ void init_interrupts()
 }
 
 // TODO
-u32 interrupt_min()
+u32 interrupts::interrupt_min()
 {
     switch (interrupt_model) {
     default:
@@ -414,7 +416,7 @@ u32 interrupt_min()
     }
 }
 
-u32 interrupt_limint()
+u32 interrupts::interrupt_limint()
 {
     switch (interrupt_model) {
     case IntControllerClass::None:
@@ -439,7 +441,7 @@ BIOPIC *get_biopic(u32 gsi)
     return nullptr;
 }
 
-ReturnStr<std::pair<CPU_Info *, u32>> allocate_interrupt_single(u32 gsi, bool edge_triggered, bool)
+ReturnStr<std::pair<CPU_Info *, u32>> interrupts::allocate_interrupt_single(u32 gsi, bool edge_triggered, bool)
 {
     auto biopic = get_biopic(gsi);
     if (!biopic)
@@ -510,7 +512,7 @@ u32 get_irq(unsigned sector)
     assert(false);
     return -1U;
 }
-void ack_interrupt(u32 irq)
+static void ack_interrupt(u32 irq)
 {
     auto c = get_cpu_struct();
 
@@ -544,7 +546,7 @@ void handle_hardware_interrupt(u32 estat)
 
     auto handler = c->int_handlers.get_handler(irq);
     if (!handler) {
-        interrupt_disable(irq);
+        interrupts::interrupt_disable(irq);
         return;
     }
 
@@ -565,8 +567,8 @@ void handle_hardware_interrupt(u32 estat)
     }
 
     if (!sent) {
-        interrupt_disable(irq);
-        interrupt_complete(irq);
+        interrupts::interrupt_disable(irq);
+        interrupts::interrupt_complete(irq);
  
         c->int_handlers.remove_handler(irq);
     } else {
@@ -574,7 +576,7 @@ void handle_hardware_interrupt(u32 estat)
     }
 }
 
-void interrupt_disable(u32 interrupt_id) {
+void interrupts::interrupt_disable(u32 interrupt_id) {
     assert(interrupt_id < 256);
 
     switch (interrupt_model) {

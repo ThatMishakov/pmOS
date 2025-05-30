@@ -133,7 +133,7 @@ struct CPU_Info {
     riscv64::paging::RISCV64_Temp_Mapper temp_mapper;
     riscv64::paging::RISCV64_Temp_Mapper &get_temp_mapper() { return temp_mapper; }
 #elif defined(__loongarch__)
-    Temp_Mapper &get_temp_mapper();
+    paging::Temp_Mapper &get_temp_mapper();
 #endif
 
     constexpr static unsigned pthread_once_size                       = 16;

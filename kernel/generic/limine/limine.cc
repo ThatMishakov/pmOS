@@ -351,8 +351,8 @@ void construct_paging()
     #ifndef __loongarch64
     global_temp_mapper = &temp_temp_mapper;
     #else
-    set_dmws();
-    global_temp_mapper = &temp_mapper;
+    loongarch64::paging::set_dmws();
+    global_temp_mapper = &loongarch64::paging::temp_mapper;
     #endif
 
     serial_logger.printf("Paging initialized!\n");

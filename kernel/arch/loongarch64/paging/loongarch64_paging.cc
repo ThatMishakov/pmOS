@@ -2,15 +2,15 @@
 
 #include "loong_temp_mapper.hh"
 
+#include <csr.hh>
 #include <kern_logger/kern_logger.hh>
 #include <loongarch_asm.hh>
 #include <loongarch_defs.hh>
 #include <memory/pmm.hh>
 #include <memory/temp_mapper.hh>
 #include <pmos/containers/map.hh>
-#include <utils.hh>
-#include <csr.hh>
 #include <pmos/utility/scope_guard.hh>
+#include <utils.hh>
 
 using namespace kernel;
 
@@ -18,33 +18,41 @@ extern u8 _kernel_start;
 extern u8 tlb_refill;
 extern u64 kernel_phys_base;
 
+using namespace kernel::paging;
+
+namespace kernel::loongarch64::paging
+{
+
 constexpr u64 DIRECT_MAP_REGION = 0x9000000000000000;
 
 unsigned valen = 48;
 
 LoongArch64TempMapper temp_mapper;
 
-u64 loongarch_cache_bits(Memory_Type t)
+u64 loongarch_cache_bits(kernel::paging::Memory_Type t)
 {
     switch (t) {
-    case Memory_Type::Normal:
+    case kernel::paging::Memory_Type::Normal:
         return PAGE_MAT_CC;
-    case Memory_Type::MemoryNoCache:
-    case Memory_Type::IONoCache:
+    case kernel::paging::Memory_Type::Framebuffer:
+        return PAGE_MAT_WUC;
+    case kernel::paging::Memory_Type::MemoryNoCache:
+    case kernel::paging::Memory_Type::IONoCache:
         return 0;
     }
 
     return 0;
 }
 
-Memory_Type pte_cache_policy(u64 e)
+kernel::paging::Memory_Type pte_cache_policy(u64 e)
 {
     switch (e & 0x30) {
     case PAGE_MAT_CC:
-        return Memory_Type::Normal;
-        // TODO: Framebuffer...
+        return kernel::paging::Memory_Type::Normal;
+    case PAGE_MAT_WUC:
+        return kernel::paging::Memory_Type::Framebuffer;
     default:
-        return Memory_Type::IONoCache;
+        return kernel::paging::Memory_Type::IONoCache;
     }
 }
 
@@ -54,19 +62,10 @@ void *LoongArch64TempMapper::kern_map(u64 phys_frame)
 }
 void LoongArch64TempMapper::return_map(void *) {}
 
-Temp_Mapper &CPU_Info::get_temp_mapper() { return temp_mapper; }
-
 void LoongArch64_Page_Table::apply() noexcept
 {
     set_pgdl(page_directory);
     flush_tlb();
-}
-
-void invalidate_tlb_kernel(void *addr) { invalidate_kernel_page(addr, 0); }
-void invalidate_tlb_kernel(void *addr, size_t size)
-{
-    for (u64 i = 0; i < size; i += PAGE_SIZE)
-        invalidate_kernel_page(addr, 0);
 }
 
 constexpr u32 CSR_DMW0      = 0x180;
@@ -75,17 +74,14 @@ constexpr u32 CSR_PWCH      = 0x1D;
 constexpr u32 CSR_TLBRENTRY = 0x88;
 constexpr u32 CSR_STLBPS    = 0x1E;
 
-void set_page_size()
-{
-    csrwr<CSR_STLBPS>(12);
-}
+void set_page_size() { csrwr<CSR_STLBPS>(12); }
 
 void set_dmws()
 {
     csrwr<CSR_DMW0>(0x9000000000000011);
-    csrwr<CSR_DMW0+1>(0);
-    csrwr<CSR_DMW0+2>(0);
-    csrwr<CSR_DMW0+3>(0);
+    csrwr<CSR_DMW0 + 1>(0);
+    csrwr<CSR_DMW0 + 2>(0);
+    csrwr<CSR_DMW0 + 3>(0);
 }
 
 void set_pwcs()
@@ -114,45 +110,10 @@ void *LoongArch64_Page_Table::user_addr_max() const
 
 u64 kernel_page_dir() { return get_pgdh(); }
 
-kresult_t map_kernel_page(u64 phys_addr, void *virt_addr, Page_Table_Arguments arg)
-{
-    return loongarch_map_page(kernel_page_dir(), virt_addr, phys_addr, arg);
-}
-
-kresult_t map_kernel_pages(u64 phys_addr, void *virt_addr, size_t size, Page_Table_Arguments arg)
-{
-    return map_pages(kernel_page_dir(), phys_addr, virt_addr, size, arg);
-}
-
-kresult_t unmap_kernel_page(TLBShootdownContext &ctx, void *virt_addr)
-{
-    return loongarch_unmap_page(ctx, kernel_page_dir(), virt_addr, false);
-}
-
-kresult_t map_pages(ptable_top_ptr_t page_table, u64 phys_addr, void *virt_addr, size_t size,
-                    Page_Table_Arguments arg)
-{
-    kresult_t result = 0;
-
-    size_t i = 0;
-    for (i = 0; i < size && (result == 0); i += 4096) {
-        result = loongarch_map_page(page_table, (char *)virt_addr + i, phys_addr + i, arg);
-    }
-
-    // Leak memory on error
-    if (result)
-        serial_logger.printf("Warning: leaking memory in map_pages because of an error...\n");
-
-    return result;
-}
-
-bool pde_valid(u64 pde)
-{
-    return pde;
-}
+bool pde_valid(u64 pde) { return pde; }
 
 kresult_t loongarch_map_page(u64 pt_top_phys, void *virt_addr, u64 phys_addr,
-                             Page_Table_Arguments arg)
+                             kernel::paging::Page_Table_Arguments arg)
 {
     unsigned l4_idx          = ((u64)virt_addr >> paging_l4_offset) & page_idx_mask;
     unsigned l3_idx          = ((u64)virt_addr >> paging_l3_offset) & page_idx_mask;
@@ -162,7 +123,7 @@ kresult_t loongarch_map_page(u64 pt_top_phys, void *virt_addr, u64 phys_addr,
 
     Temp_Mapper_Obj<u64> mapper(request_temp_mapper());
     u64 *l4_pt = mapper.map(pt_top_phys);
-    u64 pte   = __atomic_load_n(l4_pt + l4_idx, __ATOMIC_RELAXED);
+    u64 pte    = __atomic_load_n(l4_pt + l4_idx, __ATOMIC_RELAXED);
     if (!pde_valid(pte)) {
         u64 new_pt_phys = pmm::get_memory_for_kernel(1);
         if (pmm::alloc_failure(new_pt_phys))
@@ -254,13 +215,14 @@ LoongArch64_Page_Table::~LoongArch64_Page_Table()
     takeout_global_page_tables();
 }
 
-kresult_t LoongArch64_Page_Table::map(u64 page_addr, void *virt_addr, Page_Table_Arguments arg)
+kresult_t LoongArch64_Page_Table::map(u64 page_addr, void *virt_addr,
+                                      kernel::paging::Page_Table_Arguments arg)
 {
     return loongarch_map_page(page_directory, virt_addr, page_addr, arg);
 }
 
 kresult_t LoongArch64_Page_Table::map(pmm::Page_Descriptor page, void *virt_addr,
-                                      Page_Table_Arguments arg)
+                                      kernel::paging::Page_Table_Arguments arg)
 {
     auto page_phys = page.get_phys_addr();
     arg.extra      = PAGING_FLAG_STRUCT_PAGE;
@@ -291,7 +253,7 @@ void LoongArch64_Page_Table::takeout_global_page_tables()
 klib::shared_ptr<LoongArch64_Page_Table> LoongArch64_Page_Table::get_page_table(u64 id) noexcept
 {
     auto it = page_tables.find(id);
-    return it == page_tables.end() ? nullptr : it->second; 
+    return it == page_tables.end() ? nullptr : it->second;
 }
 
 extern "C" void bootstrap_isr();
@@ -299,17 +261,6 @@ void set_early_exceptions()
 {
     csrwr<loongarch::csr::ECFG>(0);
     csrwr<loongarch::csr::EENTRY>(bootstrap_isr);
-}
-
-void apply_page_table(ptable_top_ptr_t page_table)
-{
-    set_dmws();
-    set_pwcs();
-    set_page_size();
-    set_early_exceptions();
-    set_tlbrentry();
-    set_pgdh(page_table);
-    flush_tlb();
 }
 
 static void free_leaf_pte(u64 pte)
@@ -330,7 +281,7 @@ static void free_leaf_pte(u64 pte)
 
 LoongArch64_Page_Table::Page_Info LoongArch64_Page_Table::get_page_mapping(void *virt_addr) const
 {
-    return ::get_page_mapping(page_directory, virt_addr);
+    return paging::get_page_mapping(page_directory, virt_addr);
 }
 
 LoongArch64_Page_Table::Page_Info get_page_mapping(u64 page_directory, void *virt_addr)
@@ -576,7 +527,7 @@ static kresult_t copy_to_recursive(const klib::shared_ptr<Page_Table> &to, u64 p
                 ctx.invalidate_page((void *)copy_from);
             }
 
-            Page_Table_Arguments arg = {
+            kernel::paging::Page_Table_Arguments arg = {
                 .readable           = !!(new_access & Readable),
                 .writeable          = 0,
                 .user_access        = true,
@@ -697,4 +648,67 @@ klib::shared_ptr<LoongArch64_Page_Table> LoongArch64_Page_Table::create_clone()
     guard.dismiss();
 
     return new_table;
+}
+
+} // namespace kernel::loongarch64::paging
+
+kernel::paging::Temp_Mapper &kernel::sched::CPU_Info::get_temp_mapper()
+{
+    return loongarch64::paging::temp_mapper;
+}
+
+void paging::invalidate_tlb_kernel(void *addr) { invalidate_kernel_page(addr, 0); }
+void paging::invalidate_tlb_kernel(void *addr, size_t size)
+{
+    for (u64 i = 0; i < size; i += PAGE_SIZE)
+        invalidate_kernel_page(addr, 0);
+}
+
+kresult_t paging::map_kernel_page(u64 phys_addr, void *virt_addr,
+                                  kernel::paging::Page_Table_Arguments arg)
+{
+    return loongarch64::paging::loongarch_map_page(loongarch64::paging::kernel_page_dir(),
+                                                   virt_addr, phys_addr, arg);
+}
+
+kresult_t paging::map_kernel_pages(u64 phys_addr, void *virt_addr, size_t size,
+                                   kernel::paging::Page_Table_Arguments arg)
+{
+    return paging::map_pages(loongarch64::paging::kernel_page_dir(), phys_addr, virt_addr, size, arg);
+}
+
+kresult_t paging::unmap_kernel_page(TLBShootdownContext &ctx, void *virt_addr)
+{
+    return loongarch64::paging::loongarch_unmap_page(ctx, loongarch64::paging::kernel_page_dir(),
+                                                     virt_addr, false);
+}
+
+kresult_t paging::map_pages(ptable_top_ptr_t page_table, u64 phys_addr, void *virt_addr,
+                            size_t size, kernel::paging::Page_Table_Arguments arg)
+{
+    kresult_t result = 0;
+
+    size_t i = 0;
+    for (i = 0; i < size && (result == 0); i += 4096) {
+        result = loongarch64::paging::loongarch_map_page(page_table, (char *)virt_addr + i,
+                                                         phys_addr + i, arg);
+    }
+
+    // Leak memory on error
+    if (result)
+        log::serial_logger.printf("Warning: leaking memory in map_pages because of an error...\n");
+
+    return result;
+}
+
+
+void paging::apply_page_table(ptable_top_ptr_t page_table)
+{
+    loongarch64::paging::set_dmws();
+    loongarch64::paging::set_pwcs();
+    loongarch64::paging::set_page_size();
+    loongarch64::paging::set_early_exceptions();
+    loongarch64::paging::set_tlbrentry();
+    set_pgdh(page_table);
+    flush_tlb();
 }

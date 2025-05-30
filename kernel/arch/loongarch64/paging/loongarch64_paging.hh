@@ -3,6 +3,9 @@
 #include <memory/paging.hh>
 #include <types.hh>
 
+namespace kernel::loongarch64::paging
+{
+
 constexpr u64 PAGE_VALID      = 0x01;
 constexpr u64 PAGE_DIRTY      = 0x02;
 constexpr u64 PAGE_USER_MASK  = 0x0c;
@@ -30,12 +33,12 @@ constexpr unsigned paging_l2_offset   = 21;
 constexpr unsigned paging_l3_offset   = 30;
 constexpr unsigned paging_l4_offset   = 39;
 
-u64 loongarch_cache_bits(Memory_Type);
-Memory_Type pte_cache_policy(u64);
+u64 loongarch_cache_bits(kernel::paging::Memory_Type);
+kernel::paging::Memory_Type pte_cache_policy(u64);
 
 bool pde_valid(u64 pde);
 
-class LoongArch64_Page_Table final: public Page_Table
+class LoongArch64_Page_Table final: public ::kernel::paging::Page_Table
 {
 public:
     // Gets the page table by its ID
@@ -82,11 +85,12 @@ public:
     /// allocator
     /// @param virt_addr Virtual address of the page
     /// @param free Whether the page needs to be freed
-    void invalidate(TLBShootdownContext &ctx, void *virt_addr, bool free) noexcept override;
+    void invalidate(::kernel::paging::TLBShootdownContext&, void *virt_addr, bool free) noexcept override;
 
-    virtual kresult_t map(u64 page_addr, void *virt_addr, Page_Table_Arguments arg) override;
+    virtual kresult_t map(u64 page_addr, void *virt_addr,
+                          ::kernel::paging::Page_Table_Arguments arg) override;
     virtual kresult_t map(kernel::pmm::Page_Descriptor page, void *virt_addr,
-                          Page_Table_Arguments arg) override;
+                          ::kernel::paging::Page_Table_Arguments arg) override;
 
     kresult_t resolve_anonymous_page(void *virt_addr, unsigned access_type) override;
 
@@ -101,7 +105,7 @@ public:
                                            void *to_addr, size_t size_bytes,
                                            unsigned new_access) override;
 
-    virtual void invalidate_range(TLBShootdownContext &ctx, void *virt_addr, size_t size_bytes,
+    virtual void invalidate_range(::kernel::paging::TLBShootdownContext&, void *virt_addr, size_t size_bytes,
                                   bool free) override;
 
     bool is_32bit() const { return flags & FLAG_32BIT; }
@@ -123,17 +127,19 @@ protected:
     void free_all_pages();
 };
 
-/// Maps a page (kernel or user) to the specified location. The right page directory (low or high)
-/// has to be supplied, depending on the priviledge level
+/// Maps a page (kernel or user) to the specified location. The right page directory (low or
+/// high) has to be supplied, depending on the priviledge level
 kresult_t loongarch_map_page(u64 pt_top_phys, void *virt_addr, u64 phys_addr,
-                             Page_Table_Arguments arg);
+                             ::kernel::paging::Page_Table_Arguments arg);
 
 /// Unmaps the page, freeing it as needed.
-kresult_t loongarch_unmap_page(TLBShootdownContext &ctx, u64 pt_top_phys, void *virt_addr,
+kresult_t loongarch_unmap_page(::kernel::paging::TLBShootdownContext&, u64 pt_top_phys, void *virt_addr,
                                bool free = false);
 
-// Generic functions to map and release pages in kernel, using the active page table
-kresult_t map_kernel_page(u64 phys_addr, void *virt_addr, Page_Table_Arguments arg);
-kresult_t unmap_kernel_page(TLBShootdownContext &ctx, void *virt_addr);
+kernel::paging::Page_Info get_page_mapping(u64 page_table, void *virt_addr);
 
-Page_Info get_page_mapping(u64 page_table, void *virt_addr);
+} // namespace kernel::loongarch64::paging
+
+// // Generic functions to map and release pages in kernel, using the active page table
+// kresult_t map_kernel_page(u64 phys_addr, void *virt_addr, ::kernel::paging::Page_Table_Arguments
+// arg); kresult_t unmap_kernel_page(::kernel::paging:: &ctx, void *virt_addr);

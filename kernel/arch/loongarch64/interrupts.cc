@@ -8,6 +8,9 @@
 #include <types.hh>
 
 using namespace kernel;
+using namespace kernel::log;
+using namespace kernel::paging;
+using namespace kernel::sched;
 
 constexpr u32 IOCSR_IPI_SEND = 0x1040;
 
@@ -113,7 +116,7 @@ extern "C" void kernel_interrupt(LoongArch64Regs *regs)
 
         auto page_table = csrrd64<loongarch::csr::PGDH>();
 
-        auto mapping = get_page_mapping(page_table, (void *)virt_addr);
+        auto mapping = loongarch64::paging::get_page_mapping(page_table, (void *)virt_addr);
         if (!mapping.is_allocated)
             break;
 

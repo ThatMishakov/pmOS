@@ -3,10 +3,12 @@
 #include <sched/sched.hh>
 #include <types.hh>
 
+using namespace kernel;
+
 constexpr u32 CPUCFG_LLFTP = (1 << 14);
 
-FreqFraction timer_freq;
-FreqFraction timer_period;
+static FreqFraction timer_freq;
+static FreqFraction timer_period;
 
 u64 ticks_since_bootup = 0;
 
@@ -14,7 +16,7 @@ bool calculate_timer_frequency()
 {
     auto cpucfg2 = cpucfg(2);
     if (!(cpucfg2 & CPUCFG_LLFTP)) {
-        serial_logger.printf("CPU has no constant frequency timer...\n");
+        log::serial_logger.printf("CPU has no constant frequency timer...\n");
         return false;
     }
 
@@ -37,7 +39,7 @@ void start_timer_oneshot(u64 ticks)
 
 void start_timer(u32 ms)
 {
-    auto c = get_cpu_struct();
+    auto c = sched::get_cpu_struct();
 
     const u64 ticks     = timer_freq * ms / 1000;
     const u64 timer_val = timer_value();
@@ -52,10 +54,10 @@ void start_timer(u32 ms)
 
 u64 get_current_time_ticks()
 {
-    auto c = get_cpu_struct();
+    auto c = sched::get_cpu_struct();
     return c->timer_total + c->timer_val - timer_value();
 }
 
-u64 CPU_Info::ticks_after_ns(u64 ns) { return get_current_time_ticks() + (timer_freq * ns); }
+u64 sched::CPU_Info::ticks_after_ns(u64 ns) { return get_current_time_ticks() + (timer_freq * ns); }
 
-u64 get_ns_since_bootup() { return timer_period * ticks_since_bootup; }
+u64 sched::get_ns_since_bootup() { return timer_period * ticks_since_bootup; }
