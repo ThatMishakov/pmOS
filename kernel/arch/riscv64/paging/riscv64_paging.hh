@@ -31,9 +31,17 @@
 #include <memory/paging.hh>
 #include <types.hh>
 
-#define PBMT_PMA 0x0
-#define PBMT_NC  0x1
-#define PBMT_IO  0x2
+namespace kernel::paging
+{
+class TLBShootdownContext;
+}
+
+namespace kernel::riscv64::paging
+{
+
+constexpr unsigned PBMT_PMA = 0x0;
+constexpr unsigned PBMT_NC  = 0x1;
+constexpr unsigned PBMT_IO  = 0x2;
 
 struct RISCV64_PTE {
     bool valid : 1 = false; // Indicates if the PTE (page table entry) is valid.
@@ -83,8 +91,6 @@ struct RISCV64_PTE {
 
 constexpr ulong RISCV_PAGE_VALID = 1 << 0;
 
-class TLBShootdownContext;
-
 // Active number of paging levels of the system, e.g. 4 for SV48.
 // At this moment, 4 is hardcoded, but this can be adjusted during the boot
 // tu support SV57 or SV39 on systems with little memory
@@ -97,17 +103,19 @@ void flush_page(void *virt_addr) noexcept;
 
 // Prepares a leaf PT for a given virtual address. This function is used during
 // temp mapper initialization.
-ReturnStr<u64> prepare_leaf_pt_for(void *virt_addr, Page_Table_Arguments arg, u64 pt_ptr);
+ReturnStr<u64> prepare_leaf_pt_for(void *virt_addr, kernel::paging::Page_Table_Arguments arg,
+                                   u64 pt_ptr);
 
 // Maps a page to a given virtual address, using the available temporary maper.
 // riscv64_paging_levels is used to determine the number of levels of the page
 // table This function can allocate pages for leaf entries, if not already
 // installed
-kresult_t riscv_map_page(u64 pt_top_phys, void *virt_addr, u64 phys_addr, Page_Table_Arguments arg);
+kresult_t riscv_map_page(u64 pt_top_phys, void *virt_addr, u64 phys_addr,
+                         kernel::paging::Page_Table_Arguments arg);
 
 // Unmaps the page from the given virtual address, using the available temporary
 // maper. If the page is not special, it's freed
-kresult_t riscv_unmap_page(TLBShootdownContext &ctx, u64 pt_top_phys, void *virt_addr);
+kresult_t riscv_unmap_page(kernel::paging::TLBShootdownContext &ctx, u64 pt_top_phys, void *virt_addr);
 
 // Gets the top level page table pointer for the current hart
 u64 get_current_hart_pt() noexcept;
@@ -121,7 +129,7 @@ unsigned top_pt_index(const void *ptr);
 bool page_mapped(const void *virt_addr, int intno);
 
 /* final allow virtual functions optimizations */
-class RISCV64_Page_Table final: public Page_Table
+class RISCV64_Page_Table final: public ::kernel::paging::Page_Table
 {
 public:
     // Gets the page table by its ID
@@ -187,17 +195,20 @@ public:
     /// allocator
     /// @param virt_addr Virtual address of the page
     /// @param free Whether the page needs to be freed
-    void invalidate(TLBShootdownContext &ctx, void *virt_addr, bool free) noexcept override;
+    void invalidate(kernel::paging::TLBShootdownContext &ctx, void *virt_addr, bool free) noexcept override;
 
     /// Checks if the page is mapped
     bool is_mapped(void *virt_addr) const noexcept override;
 
     Page_Info get_page_mapping(void *virt_addr) const override;
 
-    virtual void invalidate_range(TLBShootdownContext &ctx, void *virt_addr, size_t size_bytes, bool free) override;
+    virtual void invalidate_range(kernel::paging::TLBShootdownContext &ctx, void *virt_addr, size_t size_bytes,
+                                  bool free) override;
 
-    virtual kresult_t map(u64 page_addr, void *virt_addr, Page_Table_Arguments arg) override;
-    virtual kresult_t map(kernel::pmm::Page_Descriptor page, void *virt_addr, Page_Table_Arguments arg) override;
+    virtual kresult_t map(u64 page_addr, void *virt_addr,
+                          kernel::paging::Page_Table_Arguments arg) override;
+    virtual kresult_t map(kernel::pmm::Page_Descriptor page, void *virt_addr,
+                          kernel::paging::Page_Table_Arguments arg) override;
 
     kresult_t resolve_anonymous_page(void *virt_addr, unsigned access_type) override;
 
@@ -210,17 +221,22 @@ public:
 
     ReturnStr<bool> atomic_copy_to_user(void *to, const void *from, size_t size) override;
 
-    virtual kresult_t copy_anonymous_pages(const klib::shared_ptr<Page_Table> &to, void *from_addr, void *to_addr,
-                    size_t size_bytes, unsigned new_access) override;
+    virtual kresult_t copy_anonymous_pages(const klib::shared_ptr<Page_Table> &to, void *from_addr,
+                                           void *to_addr, size_t size_bytes,
+                                           unsigned new_access) override;
 
     bool is_32bit() const noexcept { return false; }
+
 protected:
     /// Root node/top level of paging structures
     u64 table_root = 0;
 
     RISCV64_Page_Table() = default;
 
-    static kresult_t copy_to_recursive(const klib::shared_ptr<Page_Table> &to, u64 phys_page_level, u64 start, u64 to_offset, u64 max_size, u64 new_access, u64 i, int level, u64 &last_copied, TLBShootdownContext &ctx);
+    static kresult_t copy_to_recursive(const klib::shared_ptr<Page_Table> &to, u64 phys_page_level,
+                                       u64 start, u64 to_offset, u64 max_size, u64 new_access,
+                                       u64 i, int level, u64 &last_copied,
+                                       kernel::paging::TLBShootdownContext &ctx);
 
 private:
     // There is an interesting pattern for this:
@@ -247,3 +263,5 @@ private:
     /// pointer
     void free_user_pages();
 };
+
+} // namespace kernel::riscv64::paging

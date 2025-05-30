@@ -34,6 +34,9 @@
 #include <memory/paging.hh>
 #include <memory/temp_mapper.hh>
 
+namespace kernel::riscv64::paging
+{
+
 RISCV64_Temp_Mapper::RISCV64_Temp_Mapper(void *virt_addr, u64 pt_ptr)
 {
     pt_mapped = (RISCV64_PTE *)virt_addr;
@@ -41,13 +44,13 @@ RISCV64_Temp_Mapper::RISCV64_Temp_Mapper(void *virt_addr, u64 pt_ptr)
     u64 addr    = (u64)virt_addr;
     start_index = addr / 4096 % 512;
 
-    Page_Table_Arguments arg {1, 1, 0, 0, 1, 000};
+    ::kernel::paging::Page_Table_Arguments arg {1, 1, 0, 0, 1, 000};
 
     auto leaf_pt_phys = prepare_leaf_pt_for(virt_addr, arg, pt_ptr);
     if (!leaf_pt_phys.success())
         panic("Failed to prepare leaf page table for temp mapper");
-        
-    Temp_Mapper_Obj<RISCV64_PTE> tm(request_temp_mapper());
+
+    ::kernel::paging::Temp_Mapper_Obj<RISCV64_PTE> tm(::kernel::paging::request_temp_mapper());
     RISCV64_PTE *pt = tm.map(leaf_pt_phys.val);
 
     RISCV64_PTE pte = RISCV64_PTE();
@@ -103,3 +106,5 @@ void RISCV64_Temp_Mapper::return_map(void *p)
 
     flush_page(p);
 }
+
+} // namespace kernel::riscv64::paging

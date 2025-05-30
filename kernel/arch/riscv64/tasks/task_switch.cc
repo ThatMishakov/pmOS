@@ -31,6 +31,10 @@
 #include <processes/tasks.hh>
 #include <sched/sched.hh>
 
+using namespace kernel::sched;
+using namespace kernel::proc;
+using namespace kernel::riscv64::fp;
+
 void TaskDescriptor::before_task_switch()
 {
     u32 fp_state = get_fp_state();

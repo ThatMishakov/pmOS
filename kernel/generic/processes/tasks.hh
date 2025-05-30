@@ -217,7 +217,7 @@ namespace proc
 
         /// Last state of the floating point register of the task
         /// If it is clean or disabled, task_fp_registers might not be present
-        FloatingPointState fp_state = FloatingPointState::Disabled;
+        riscv64::fp::FloatingPointState fp_state = riscv64::fp::FloatingPointState::Disabled;
 
         /// Floating point registers of the task. The actual size depends on what is supported by
         /// the ISA (F, D or Q extensions) Since I expect most of the tasks to not use floating

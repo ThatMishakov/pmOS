@@ -38,44 +38,50 @@
 #include <processes/tasks.hh>
 
 using namespace kernel;
+using namespace kernel::paging;
+
+namespace kernel::riscv64::paging
+{
+
+bool svpbmt_enabled = false;
 
 void flush_page(void *virt) noexcept { asm volatile("sfence.vma %0, x0" : : "r"(virt) : "memory"); }
 void flush_all() noexcept { asm volatile("sfence.vma x0, x0" : : : "memory"); }
 
-bool svpbmt_enabled = false;
-
-u8 pbmt_type(Page_Table_Arguments arg)
+u8 pbmt_type(kernel::paging::Page_Table_Arguments arg)
 {
     if (!svpbmt_enabled)
         return PBMT_PMA;
 
     switch (arg.cache_policy) {
-    case Memory_Type::Normal:
+    case kernel::paging::Memory_Type::Normal:
         return PBMT_PMA;
-    case Memory_Type::MemoryNoCache:
+    case kernel::paging::Memory_Type::MemoryNoCache:
         return PBMT_NC;
-    case Memory_Type::IONoCache:
+    case kernel::paging::Memory_Type::IONoCache:
+    case kernel::paging::Memory_Type::Framebuffer:
         return PBMT_IO;
     }
 
     return PBMT_PMA;
 }
 
-static Memory_Type pbmt_to_cache_policy(u8 pbmt)
+static ::kernel::paging::Memory_Type pbmt_to_cache_policy(u8 pbmt)
 {
     switch (pbmt) {
     case PBMT_PMA:
-        return Memory_Type::Normal;
+        return ::kernel::paging::Memory_Type::Normal;
     case PBMT_NC:
-        return Memory_Type::MemoryNoCache;
+        return ::kernel::paging::Memory_Type::MemoryNoCache;
     case PBMT_IO:
-        return Memory_Type::IONoCache;
+        return ::kernel::paging::Memory_Type::IONoCache;
     }
 
-    return Memory_Type::Normal;
+    return ::kernel::paging::Memory_Type::Normal;
 }
 
-kresult_t riscv_map_page(u64 pt_top_phys, u64 phys_addr, void *virt_addr, Page_Table_Arguments arg)
+kresult_t riscv_map_page(u64 pt_top_phys, u64 phys_addr, void *virt_addr,
+                         kernel::paging::Page_Table_Arguments arg)
 {
     Temp_Mapper_Obj<RISCV64_PTE> mapper(request_temp_mapper());
 
@@ -135,13 +141,14 @@ kresult_t riscv_map_page(u64 pt_top_phys, u64 phys_addr, void *virt_addr, Page_T
     return -ENOSYS;
 }
 
-kresult_t RISCV64_Page_Table::map(u64 page_addr, void *virt_addr, Page_Table_Arguments arg)
+kresult_t RISCV64_Page_Table::map(u64 page_addr, void *virt_addr,
+                                  kernel::paging::Page_Table_Arguments arg)
 {
     return riscv_map_page(table_root, page_addr, virt_addr, arg);
 }
 
 kresult_t RISCV64_Page_Table::map(pmm::Page_Descriptor page, void *virt_addr,
-                                  Page_Table_Arguments arg)
+                                  kernel::paging::Page_Table_Arguments arg)
 {
     auto pte_phys = prepare_leaf_pt_for(virt_addr, arg, table_root);
     if (!pte_phys.success())
@@ -331,7 +338,7 @@ kresult_t RISCV64_Page_Table::copy_to_recursive(const klib::shared_ptr<Page_Tabl
                 ctx.invalidate_page((void *)copy_from);
             }
 
-            Page_Table_Arguments arg = {
+            kernel::paging::Page_Table_Arguments arg = {
                 .readable           = !!(new_access & Readable),
                 .writeable          = 0,
                 .user_access        = true,
@@ -435,7 +442,7 @@ unsigned top_pt_index(const void *ptr)
 
 RISCV64_Page_Table::Page_Info RISCV64_Page_Table::get_page_mapping(void *virt_addr) const
 {
-    return ::get_page_mapping(table_root, virt_addr);
+    return paging::get_page_mapping(table_root, virt_addr);
 }
 
 constexpr int INSTRUCTION_ACCESS_FAULT = 1;
@@ -447,7 +454,7 @@ constexpr int STORE_AMO_PAGE_FAULT     = 15;
 
 bool page_mapped(const void *virt_addr, int intno)
 {
-    auto mapping = ::get_page_mapping(get_current_hart_pt(), virt_addr);
+    auto mapping = paging::get_page_mapping(get_current_hart_pt(), virt_addr);
     if (!mapping.is_allocated)
         return false;
 
@@ -463,41 +470,12 @@ bool page_mapped(const void *virt_addr, int intno)
 
     return true;
 }
-
-kresult_t map_page(ptable_top_ptr_t page_table, u64 phys_addr, void *virt_addr,
-                   Page_Table_Arguments arg)
-{
-    return riscv_map_page(page_table, phys_addr, virt_addr, arg);
-}
-
-kresult_t map_pages(ptable_top_ptr_t page_table, u64 phys_addr, void *virt_addr, size_t size,
-                    Page_Table_Arguments arg)
-{
-    kresult_t result = 0;
-
-    // Don't overcomplicate things for now, just call map
-    // This is *very* inefficient
-    u64 i = 0;
-    for (i = 0; i < size && (result == 0); i += 4096) {
-        result = map_page(page_table, phys_addr + i, (char *)virt_addr + i, arg);
-    }
-
-    // On failure, pages need to be unmapped here...
-    // Leak memory for now :)
-
-    return result;
-}
-
 u64 idle_pt;
 
 u64 get_idle_pt() noexcept { return idle_pt; }
 
-kresult_t map_kernel_pages(u64 phys_addr, void *virt_addr, size_t size, Page_Table_Arguments arg)
-{
-    return map_pages(idle_pt, phys_addr, virt_addr, size, arg);
-}
-
-ReturnStr<u64> prepare_leaf_pt_for(void *virt_addr, Page_Table_Arguments /* unused */, u64 pt_ptr)
+ReturnStr<u64> prepare_leaf_pt_for(void *virt_addr,
+                                   kernel::paging::Page_Table_Arguments /* unused */, u64 pt_ptr)
 {
     Temp_Mapper_Obj<RISCV64_PTE> mapper(request_temp_mapper());
 
@@ -539,35 +517,11 @@ ReturnStr<u64> prepare_leaf_pt_for(void *virt_addr, Page_Table_Arguments /* unus
     return 0;
 }
 
-kresult_t map_kernel_page(u64 phys_addr, void *virt_addr, Page_Table_Arguments arg)
-{
-    return riscv_map_page(idle_pt, phys_addr, virt_addr, arg);
-}
-
-kresult_t unmap_kernel_page(TLBShootdownContext &ctx, void *virt_addr)
-{
-    return riscv_unmap_page(ctx, idle_pt, virt_addr);
-}
-
 u64 get_current_hart_pt() noexcept
 {
     u64 satp;
     asm volatile("csrr %0, satp" : "=r"(satp));
     return (satp & (((1UL << 44) - 1))) << 12;
-}
-
-void apply_page_table(ptable_top_ptr_t page_table)
-{
-    u64 ppn  = page_table >> 12;
-    u64 asid = 0;
-    u64 mode = 5 + riscv64_paging_levels;
-    u64 satp = (mode << 60) | (asid << 44) | (ppn << 0);
-
-    // Apply the new page table
-    asm volatile("csrw satp, %0" : : "r"(satp) : "memory");
-
-    // Flush the TLB
-    asm volatile("sfence.vma x0, x0" : : : "memory");
 }
 
 void RISCV64_Page_Table::takeout_global_page_tables()
@@ -799,7 +753,6 @@ klib::shared_ptr<RISCV64_Page_Table> RISCV64_Page_Table::create_empty(int flags)
 }
 
 void RISCV64_Page_Table::invalidate_tlb(void *page) { flush_page(page); }
-void invalidate_tlb_kernel(void *page) { flush_page(page); }
 
 void RISCV64_Page_Table::invalidate_tlb(void *page, size_t size)
 {
@@ -814,12 +767,6 @@ void RISCV64_Page_Table::invalidate_tlb(void *page, size_t size)
     }
 }
 
-void invalidate_tlb_kernel(void *page, size_t size)
-{
-    for (char *i = (char *)page; i < (char *)page + size; i += 0x1000) {
-        flush_page(i);
-    }
-}
 void RISCV64_Page_Table::tlb_flush_all() { flush_all(); }
 
 ReturnStr<bool> RISCV64_Page_Table::atomic_copy_to_user(void *to, const void *from, u64 size)
@@ -915,3 +862,73 @@ kresult_t RISCV64_Page_Table::resolve_anonymous_page(void *virt_addr, unsigned a
     flush_page((void *)virt_addr);
     return 0;
 }
+
+} // namespace kernel::riscv64::paging
+
+namespace kernel::paging
+{
+kresult_t map_page(ptable_top_ptr_t page_table, u64 phys_addr, void *virt_addr,
+                   kernel::paging::Page_Table_Arguments arg)
+{
+    return riscv64::paging::riscv_map_page(page_table, phys_addr, virt_addr, arg);
+}
+
+kresult_t map_pages(ptable_top_ptr_t page_table, u64 phys_addr, void *virt_addr, size_t size,
+                    kernel::paging::Page_Table_Arguments arg)
+{
+    kresult_t result = 0;
+
+    // Don't overcomplicate things for now, just call map
+    // This is *very* inefficient
+    u64 i = 0;
+    for (i = 0; i < size && (result == 0); i += 4096) {
+        result = map_page(page_table, phys_addr + i, (char *)virt_addr + i, arg);
+    }
+
+    // On failure, pages need to be unmapped here...
+    // Leak memory for now :)
+
+    return result;
+}
+
+kresult_t map_kernel_pages(u64 phys_addr, void *virt_addr, size_t size,
+                           kernel::paging::Page_Table_Arguments arg)
+{
+    return map_pages(riscv64::paging::idle_pt, phys_addr, virt_addr, size, arg);
+}
+
+kresult_t map_kernel_page(u64 phys_addr, void *virt_addr, kernel::paging::Page_Table_Arguments arg)
+{
+    return riscv64::paging::riscv_map_page(riscv64::paging::idle_pt, phys_addr, virt_addr, arg);
+}
+
+kresult_t unmap_kernel_page(TLBShootdownContext &ctx, void *virt_addr)
+{
+    return riscv64::paging::riscv_unmap_page(ctx, riscv64::paging::idle_pt, virt_addr);
+}
+
+void invalidate_tlb_kernel(void *page) { riscv64::paging::flush_page(page); }
+void invalidate_tlb_kernel(void *page, size_t size)
+{
+    for (char *i = (char *)page; i < (char *)page + size; i += 0x1000) {
+        riscv64::paging::flush_page(i);
+    }
+}
+
+void apply_page_table(ptable_top_ptr_t page_table)
+{
+    u64 ppn  = page_table >> 12;
+    u64 asid = 0;
+    u64 mode = 5 + riscv64::paging::riscv64_paging_levels;
+    u64 satp = (mode << 60) | (asid << 44) | (ppn << 0);
+
+    // Apply the new page table
+    asm volatile("csrw satp, %0" : : "r"(satp) : "memory");
+
+    // Flush the TLB
+    asm volatile("sfence.vma x0, x0" : : : "memory");
+}
+
+void flush_page(void *virt) noexcept { riscv64::paging::flush_page(virt); }
+
+} // namespace kernel::paging

@@ -110,7 +110,7 @@ Arch_Temp_Mapper temp_temp_mapper;
 
     #elif defined(__riscv)
         #include <paging/riscv64_temp_mapper.hh>
-using Arch_Temp_Mapper = RISCV64_Temp_Mapper;
+using Arch_Temp_Mapper = kernel::riscv64::paging::RISCV64_Temp_Mapper;
 Arch_Temp_Mapper temp_temp_mapper;
 
     #elif defined(__loongarch64)
@@ -168,7 +168,10 @@ static klib::vector<limine_memmap_entry> *limine_memory_regions = nullptr;
     #ifdef __x86_64__
 extern ulong idle_cr3;
     #elif defined(__riscv)
+namespace kernel::riscv64::paging
+{
 extern ulong idle_pt;
+}
     #endif
 
 void construct_paging()
@@ -207,9 +210,10 @@ void construct_paging()
     serial_logger.printf("Initializing paging...\n");
 
     #ifdef __riscv
-    auto rr               = paging_request.response;
-    riscv64_paging_levels = rr->mode + 3;
-    serial_logger.printf("Using %i paging levels\n", riscv64_paging_levels);
+    auto rr                                        = paging_request.response;
+    kernel::riscv64::paging::riscv64_paging_levels = rr->mode + 3;
+    serial_logger.printf("Using %i paging levels\n",
+                         kernel::riscv64::paging::riscv64_paging_levels);
     #endif
 
     kresult_t result = 0;
@@ -218,7 +222,7 @@ void construct_paging()
 
     // While we're here, initialize virtmem
     #ifdef __riscv
-    const u64 heap_space_shift = 12 + (riscv64_paging_levels - 1) * 9;
+    const u64 heap_space_shift = 12 + (kernel::riscv64::paging::riscv64_paging_levels - 1) * 9;
     #else
     const u64 heap_space_shift = 12 + 27;
     #endif
@@ -237,7 +241,7 @@ void construct_paging()
     #ifdef __x86_64__
     idle_cr3 = kernel_ptable_top;
     #elif defined(__riscv)
-    idle_pt = kernel_ptable_top;
+    riscv64::paging::idle_pt = kernel_ptable_top;
     #endif
 
     #ifndef __loongarch64
@@ -985,7 +989,7 @@ extern int kernel_pt_active_cpus_count[2];
 
 void init_smp()
 {
-    sched::other_cpus_online              = true;
+    sched::other_cpus_online       = true;
     kernel_pt_active_cpus_count[0] = sched::number_of_cpus;
 
     if (smp_request.response == nullptr) {
@@ -1117,10 +1121,10 @@ void limine_main()
     if (smp_request.response != nullptr) {
     #ifdef __riscv
         sched::number_of_cpus = smp_request.response->cpu_count;
-        bsp_cpu_id     = smp_request.response->bsp_hartid;
+        bsp_cpu_id            = smp_request.response->bsp_hartid;
     #elif defined(__x86_64__)
         sched::number_of_cpus = smp_request.response->cpu_count;
-        bsp_cpu_id     = smp_request.response->bsp_lapic_id;
+        bsp_cpu_id            = smp_request.response->bsp_lapic_id;
     #endif
     }
 

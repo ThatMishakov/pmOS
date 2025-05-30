@@ -1,10 +1,17 @@
 #pragma once
-#include <types.hh>
 #include <lib/vector.hh>
+#include <types.hh>
+
+namespace kernel::sched
+{
+struct CPU_Info;
+}
+
+namespace kernel::riscv::interrupts
+{
 
 /// Initialize PLIC during the system boot
 void init_plic();
-struct CPU_Info;
 
 struct PLIC {
     volatile u32 *virt_base = nullptr;
@@ -15,7 +22,7 @@ struct PLIC {
     u16 external_interrupt_sources = 0;
     u8 plic_id                     = 0;
 
-    klib::vector<CPU_Info *> claimed_by_cpu;
+    klib::vector<sched::CPU_Info *> claimed_by_cpu;
 };
 
 // Read PLIC register
@@ -57,3 +64,5 @@ constexpr int PLIC_COMPLETE_CONTEXT_STRIDE = 0x1000;
 
 constexpr int PLIC_PRIORITY_OFFSET        = 0x00000;
 constexpr int PLIC_PRIORITY_SOURCE_STRIDE = 0x4;
+
+}

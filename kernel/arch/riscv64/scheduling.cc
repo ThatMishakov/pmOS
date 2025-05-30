@@ -37,18 +37,25 @@
 #include <kern_logger/kern_logger.hh>
 #include <memory/malloc.hh>
 #include <memory/vmm.hh>
+#include <paging/arch_paging.hh>
 #include <paging/riscv64_paging.hh>
+#include <processes/tasks.hh>
 #include <sched/sched.hh>
 #include <smoldtb.h>
 #include <types.hh>
-#include <paging/arch_paging.hh>
-#include <processes/tasks.hh>
 
 using namespace kernel;
+using namespace kernel::log;
+using namespace kernel::riscv64::fp;
+using namespace kernel::sched;
+using namespace kernel::proc;
+using namespace kernel::riscv::interrupts;
+using namespace kernel::riscv64::paging;
 
-extern klib::shared_ptr<Arch_Page_Table> idle_page_table;
-
-extern "C" void set_cpu_struct(CPU_Info *);
+namespace kernel::paging
+{
+extern klib::shared_ptr<kernel::paging::Arch_Page_Table> idle_page_table;
+}
 
 // Direct mode
 // I find this more convenient, as it allows to save the context in a single
@@ -358,7 +365,7 @@ ReturnStr<klib::string> dtb_get_isa_string(u64 hart_id)
     }
 
     auto str = dtb_read_string(prop, 0);
-    auto s = klib::string(str);
+    auto s   = klib::string(str);
     return {0, klib::move(s)};
 }
 
@@ -402,28 +409,26 @@ void initialize_fp(const klib::string &isa_string)
 }
 
 register CPU_Info *cpu_struct __asm__("tp");
-void set_cpu_struct(CPU_Info *i)
-{
-    cpu_struct = i;
-}
+void set_cpu_struct(CPU_Info *i) { cpu_struct = i; }
 
-CPU_Info *get_cpu_struct()
-{
-    return cpu_struct;
-}
+CPU_Info *sched::get_cpu_struct() { return cpu_struct; }
 
+namespace kernel::sched
+{
 extern bool cpu_struct_works;
+}
 
 void init_scheduling(u64 hart_id)
 {
-    CPU_Info *i         = new CPU_Info();
+    CPU_Info *i = new CPU_Info();
     if (!i)
         panic("Could not allocate CPU_Info struct\n");
 
-    i->kernel_stack_top = i->kernel_stack.get_stack_top();
-    i->hart_id          = hart_id;
+    i->kernel_stack_top     = i->kernel_stack.get_stack_top();
+    i->hart_id              = hart_id;
     void *temp_mapper_start = vmm::kernel_space_allocator.virtmem_alloc_aligned(16, 4);
-    i->temp_mapper          = RISCV64_Temp_Mapper(temp_mapper_start, idle_page_table->get_root());
+    i->temp_mapper =
+        RISCV64_Temp_Mapper(temp_mapper_start, kernel::paging::idle_page_table->get_root());
 
     set_cpu_struct(i);
 
@@ -479,7 +484,7 @@ void init_scheduling(u64 hart_id)
     if (!t.success())
         panic("Failed to create task group for kernel: %i\n", t.result);
     proc::kernel_tasks = t.val;
-    
+
     i->current_task = i->idle_task;
     i->idle_task->page_table->apply_cpu(i);
 
@@ -508,15 +513,16 @@ klib::vector<u64> initialize_cpus(const klib::vector<u64> &hartids)
         panic("Failed to reserve memory for temp_vals vector\n");
 
     for (auto hart_id: hartids) {
-        CPU_Info *i         = new CPU_Info();
+        CPU_Info *i = new CPU_Info();
         if (!i)
             panic("Could not allocate CPU_Info struct\n");
-        
+
         i->kernel_stack_top = i->kernel_stack.get_stack_top();
         i->hart_id          = hart_id;
 
         void *temp_mapper_start = vmm::kernel_space_allocator.virtmem_alloc_aligned(16, 4);
-        i->temp_mapper = RISCV64_Temp_Mapper(temp_mapper_start, idle_page_table->get_root());
+        i->temp_mapper =
+            RISCV64_Temp_Mapper(temp_mapper_start, kernel::paging::idle_page_table->get_root());
 
         cpus.push_back(i);
         i->cpu_id = cpus.size() - 1;
@@ -542,10 +548,9 @@ klib::vector<u64> initialize_cpus(const klib::vector<u64> &hartids)
             panic("Failed to initialize idle task: %i\n", idle);
 
         assert(proc::kernel_tasks);
-        if (auto t = proc::kernel_tasks->atomic_register_task(c->idle_task); t)
+        if (auto t = proc::kernel_tasks->atomic_register_task(i->idle_task); t)
             panic("Failed to add idle task to the kernel process group: %i\n", t);
 
-        
         i->current_task = i->idle_task;
 
         u64 *stack_top = (u64 *)i->kernel_stack.get_stack_top();
@@ -593,7 +598,4 @@ extern "C" void bootstrap_entry(CPU_Info *i)
     serial_logger.printf("CPU %i (hart %i) entering userspace/idle...\n", i->cpu_id, i->hart_id);
 }
 
-bool TaskDescriptor::is_kernel_task() const
-{
-    return is_system;
-}
+bool TaskDescriptor::is_kernel_task() const { return is_system; }

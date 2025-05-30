@@ -40,6 +40,14 @@
 #include <sched/sched.hh>
 #include <utils.hh>
 
+using namespace kernel::riscv64;
+using namespace kernel::riscv::interrupts;
+using namespace kernel::proc;
+using namespace kernel::log;
+using namespace kernel::paging;
+using namespace kernel::riscv64::paging;
+using namespace kernel::sched;
+
 extern "C" void handle_interrupt();
 
 struct fp_s {
@@ -222,19 +230,19 @@ void illegal_instruction(u32 instruction)
         }
 
         if (instruction_is_fp_csr(instruction)) {
-            if (not fp_is_supported())
+            if (not fp::fp_is_supported())
                 return -ENOTSUP;
 
-            restore_fp_state(task);
+            fp::restore_fp_state(task);
         } else if (instruction_is_fp_op(instruction) or instruction_is_fp_ld_st(instruction)) {
-            if (not fp_is_supported())
+            if (not fp::fp_is_supported())
                 return -ENOTSUP;
 
-            if (get_fp_state() != FloatingPointState::Disabled) // FP is enabled but instruction
+            if (fp::get_fp_state() != fp::FloatingPointState::Disabled) // FP is enabled but instruction
                                                                 // is illegal -> not supported
                 return -ENOTSUP;
 
-            restore_fp_state(task);
+            fp::restore_fp_state(task);
         } else {
             // What is this
             return -ENOTSUP;

@@ -31,6 +31,8 @@
 #include <sched/sched.hh>
 #include <sched/timers.hh>
 
+using namespace kernel::sched;
+
 // Put a bogus value for now
 u64 ticks_per_ms = 0;
 
@@ -46,7 +48,7 @@ int fire_timer_at(u64 next_value) { return sbi_set_timer(next_value).error; }
 
 #include <kern_logger/kern_logger.hh>
 
-u64 ticks_since_bootup = 0;
+u64 kernel::sched::ticks_since_bootup = 0;
 void start_timer(u32 ms)
 {
     const u64 ticks         = ms * ticks_per_ms;
@@ -58,7 +60,7 @@ void start_timer(u32 ms)
     }
 }
 
-u64 get_ns_since_bootup() { 
+u64 kernel::sched::get_ns_since_bootup() { 
     return ticks_since_bootup * 1000000 / ticks_per_ms;
 }
 

@@ -2,6 +2,7 @@
 
 #include <acpi/acpi.h>
 #include <dtb/dtb.hh>
+#include <interrupts/interrupt_handler.hh>
 #include <kern_logger/kern_logger.hh>
 #include <memory/paging.hh>
 #include <memory/vmm.hh>
@@ -9,10 +10,15 @@
 #include <scheduling.hh>
 #include <smoldtb.h>
 #include <types.hh>
-#include <interrupts/interrupt_handler.hh>
-#include <sched/sched.hh>
 
 using namespace kernel;
+using namespace kernel::log;
+dtb_node *dtb_get_plic_node();
+
+static Spinlock lock;
+
+namespace kernel::riscv::interrupts
+{
 
 u32 plic_read(const PLIC &plic, u32 offset) { return plic.virt_base[offset >> 2]; }
 
@@ -46,13 +52,13 @@ void *map_plic(u64 base, size_t size)
         return nullptr;
     }
 
-    const Page_Table_Arguments arg = {.readable           = true,
-                                       .writeable          = true,
-                                       .user_access        = false,
-                                       .global             = true,
-                                       .execution_disabled = true,
-                                       .extra              = PAGING_FLAG_NOFREE,
-                                       .cache_policy       = Memory_Type::IONoCache};
+    const paging::Page_Table_Arguments arg = {.readable           = true,
+                                              .writeable          = true,
+                                              .user_access        = false,
+                                              .global             = true,
+                                              .execution_disabled = true,
+                                              .extra              = PAGING_FLAG_NOFREE,
+                                              .cache_policy       = paging::Memory_Type::IONoCache};
 
     map_kernel_pages(base, virt_base, size, arg);
 
@@ -86,8 +92,6 @@ bool acpi_init_plic()
 
     return true;
 }
-
-dtb_node *dtb_get_plic_node();
 
 bool dtb_init_plic()
 {
@@ -171,29 +175,12 @@ void init_plic()
                          system_plic.plic_id, system_plic.max_priority);
 }
 
-static Spinlock lock;
-
-kresult_t interrupt_enable(u32 interrupt_id)
-{
-    auto plic = get_plic(interrupt_id);
-    if (!plic)
-        return -ENOENT;
-
-    auto offset = interrupt_id - plic->gsi_base;
-    auto e = plic->claimed_by_cpu[offset];
-    if (e != get_cpu_struct())
-        return -EBADF;
-
-    plic_interrupt_enable(interrupt_id);
-    return 0;
-}
-
 void plic_interrupt_enable(u32 interrupt_id)
 {
     // Set priority 1 (will do for now)
     plic_set_priority(interrupt_id, 1);
 
-    const auto c         = get_cpu_struct();
+    const auto c         = sched::get_cpu_struct();
     const u16 context_id = c->eic_id & 0xffff;
 
     const u32 offset =
@@ -205,11 +192,9 @@ void plic_interrupt_enable(u32 interrupt_id)
     plic_write(system_plic, offset, reg | mask);
 }
 
-void interrupt_disable(u32 interrupt_id) { plic_interrupt_disable(interrupt_id); }
-
 void plic_interrupt_disable(u32 interrupt_id)
 {
-    const auto c         = get_cpu_struct();
+    const auto c         = sched::get_cpu_struct();
     const u16 context_id = c->eic_id & 0xffff;
 
     const u32 offset =
@@ -223,12 +208,9 @@ void plic_interrupt_disable(u32 interrupt_id)
 
 u32 plic_interrupt_limit() { return system_plic.external_interrupt_sources; }
 
-u32 interrupt_min() { return 0; }
-u32 interrupt_limint() { return plic_interrupt_limit(); }
-
 void plic_set_threshold(u32 threshold)
 {
-    const auto c         = get_cpu_struct();
+    const auto c         = sched::get_cpu_struct();
     const u16 context_id = c->eic_id & 0xffff;
 
     if (system_plic.virt_base == nullptr)
@@ -246,18 +228,16 @@ void plic_set_priority(u32 interrupt_id, u32 priority)
 
 u32 plic_claim()
 {
-    const auto c         = get_cpu_struct();
+    const auto c         = sched::get_cpu_struct();
     const u16 context_id = c->eic_id & 0xffff;
 
     const u32 offset = PLIC_CLAIM_OFFSET + (context_id * PLIC_COMPLETE_CONTEXT_STRIDE);
     return plic_read(system_plic, offset);
 }
 
-void interrupt_complete(u32 interrupt_id) { plic_complete(interrupt_id); }
-
 void plic_complete(u32 interrupt_id)
 {
-    const auto c         = get_cpu_struct();
+    const auto c         = sched::get_cpu_struct();
     const u16 context_id = c->eic_id & 0xffff;
 
     const u32 offset = PLIC_COMPLETE_OFFSET + (context_id * PLIC_COMPLETE_CONTEXT_STRIDE);
@@ -275,9 +255,11 @@ PLIC *get_plic(u32 gsi)
     return nullptr;
 }
 
-ReturnStr<std::pair<CPU_Info *, u32>> allocate_interrupt_single(u32 gsi, bool, bool)
+} // namespace kernel::riscv::interrupts
+
+ReturnStr<std::pair<sched::CPU_Info *, u32>> kernel::interrupts::allocate_interrupt_single(u32 gsi, bool, bool)
 {
-    auto plic = get_plic(gsi);
+    auto plic = riscv::interrupts::get_plic(gsi);
     assert(plic);
     if (!plic)
         return Error(-ENOENT);
@@ -285,22 +267,50 @@ ReturnStr<std::pair<CPU_Info *, u32>> allocate_interrupt_single(u32 gsi, bool, b
     Auto_Lock_Scope l(lock);
 
     auto offset = gsi - plic->gsi_base;
-    auto e = plic->claimed_by_cpu[offset];
+    auto e      = plic->claimed_by_cpu[offset];
     if (e)
-        return Success(std::pair{e, gsi});
+        return Success(std::pair {e, gsi});
 
     // Select the least loaded CPU
-    auto current_cpu = cpus[0];
+    auto current_cpu = sched::cpus[0];
     assert(current_cpu);
-    for (size_t i = 1; i < cpus.size(); ++i) {
-        auto h1 = cpus[i]->int_handlers.allocated_int_count;
+    for (size_t i = 1; i < sched::cpus.size(); ++i) {
+        auto h1      = sched::cpus[i]->int_handlers.allocated_int_count;
         auto current = current_cpu->int_handlers.allocated_int_count;
         if (h1 < current)
-            current_cpu = cpus[i];
+            current_cpu = sched::cpus[i];
     }
 
     current_cpu->int_handlers.allocated_int_count++;
 
     plic->claimed_by_cpu[offset] = current_cpu;
-    return Success(std::pair{current_cpu, gsi});
+    return Success(std::pair {current_cpu, gsi});
+}
+
+void kernel::interrupts::interrupt_disable(u32 interrupt_id)
+{
+    riscv::interrupts::plic_interrupt_disable(interrupt_id);
+}
+
+void kernel::interrupts::interrupt_complete(u32 interrupt_id)
+{
+    riscv::interrupts::plic_complete(interrupt_id);
+}
+
+u32 kernel::interrupts::interrupt_min() { return 0; }
+u32 kernel::interrupts::interrupt_limint() { return riscv::interrupts::plic_interrupt_limit(); }
+
+kresult_t kernel::interrupts::interrupt_enable(u32 interrupt_id)
+{
+    auto plic = riscv::interrupts::get_plic(interrupt_id);
+    if (!plic)
+        return -ENOENT;
+
+    auto offset = interrupt_id - plic->gsi_base;
+    auto e      = plic->claimed_by_cpu[offset];
+    if (e != sched::get_cpu_struct())
+        return -EBADF;
+
+    riscv::interrupts::plic_interrupt_enable(interrupt_id);
+    return 0;
 }

@@ -30,6 +30,14 @@
 #pragma once
 #include <types.hh>
 
+namespace kernel::proc
+{
+class TaskDescriptor;
+}
+
+namespace kernel::riscv64::fp
+{
+
 enum class FloatingPointSize {
     None            = 0,
     SinglePrecision = 1,
@@ -84,10 +92,10 @@ inline FloatingPointState get_fp_state()
     return static_cast<FloatingPointState>((sstatus >> 13) & 0b11);
 }
 
-class TaskDescriptor;
-
 // Restores the floating point state from the given task
-void restore_fp_state(TaskDescriptor *task);
+void restore_fp_state(kernel::proc::TaskDescriptor *task);
 
 // Saves the floating point registers to the given pointer
 void save_fp_registers(u64 *fp_regs);
+
+} // namespace kernel::riscv64::fp

@@ -33,11 +33,17 @@
 #include <processes/tasks.hh>
 #include <sched/sched.hh>
 
+using namespace kernel::riscv64::fp;
+using namespace kernel::proc;
+
 extern "C" void fp_write_regs_initial();
 extern "C" void fp_load_regs_single(const u64 *fp_regs);
 extern "C" void fp_load_regs_double(const u64 *fp_regs);
 extern "C" void fp_store_regs_single(u64 *fp_regs);
 extern "C" void fp_store_regs_double(u64 *fp_regs);
+
+namespace kernel::riscv64::fp
+{
 
 void set_fp_state_initial()
 {
@@ -115,6 +121,8 @@ void save_fp_registers(u64 *fp_regs)
         assert(false);
     }
 }
+
+} // namespace kernel::riscv64::fp
 
 kresult_t TaskDescriptor::init_fp_state()
 {

@@ -52,7 +52,7 @@ namespace kernel::paging {
 #define PAGE_COW     4
 
 /// @brief Memory mapping type
-enum class Memory_Type { Normal, MemoryNoCache, IONoCache };
+enum class Memory_Type { Normal, MemoryNoCache, IONoCache, Framebuffer };
 
 /// @brief Arguments for mapping of pages
 struct Page_Table_Arguments {

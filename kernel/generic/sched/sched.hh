@@ -130,8 +130,8 @@ struct CPU_Info {
     x86_64::paging::x86_PAE_Temp_Mapper temp_mapper;
     x86_64::paging::x86_PAE_Temp_Mapper &get_temp_mapper() { return temp_mapper; }
 #elif defined(__riscv)
-    RISCV64_Temp_Mapper temp_mapper;
-    RISCV64_Temp_Mapper &get_temp_mapper() { return temp_mapper; }
+    riscv64::paging::RISCV64_Temp_Mapper temp_mapper;
+    riscv64::paging::RISCV64_Temp_Mapper &get_temp_mapper() { return temp_mapper; }
 #elif defined(__loongarch__)
     Temp_Mapper &get_temp_mapper();
 #endif
@@ -160,8 +160,8 @@ struct CPU_Info {
 
     klib::string isa_string;
 
-    u64 last_fp_task                 = 0;
-    FloatingPointState last_fp_state = FloatingPointState::Disabled;
+    u64 last_fp_task                              = 0;
+    riscv64::fp::FloatingPointState last_fp_state = riscv64::fp::FloatingPointState::Disabled;
 #endif
 
 #ifdef __loongarch__

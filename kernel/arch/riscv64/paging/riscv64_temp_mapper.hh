@@ -31,13 +31,16 @@
 
 #include <memory/temp_mapper.hh>
 
+namespace kernel::riscv64::paging
+{
+
 struct RISCV64_PTE;
 
 /**
  * @brief Temp_Mapper for x86_64 CPUs
  *
  */
-class RISCV64_Temp_Mapper final: public Temp_Mapper
+class RISCV64_Temp_Mapper final: public kernel::paging::Temp_Mapper
 {
 public:
     virtual void *kern_map(u64 phys_frame) override;
@@ -53,3 +56,5 @@ private:
     unsigned min_index             = 1;
     constexpr static unsigned size = 16;
 };
+
+} // namespace kernel::riscv64::paging

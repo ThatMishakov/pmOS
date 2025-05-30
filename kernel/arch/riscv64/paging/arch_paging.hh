@@ -31,5 +31,7 @@
 
 #include "riscv64_paging.hh"
 
+namespace kernel::paging {
 // Generic declaration for arch-independent code
-using Arch_Page_Table = RISCV64_Page_Table;
+using Arch_Page_Table = ::kernel::riscv64::paging::RISCV64_Page_Table;
+}
