@@ -10,11 +10,15 @@ __pthread_entry_point:
     addi.d $fp, $sp, 16
 
     # Start routine
-    move $t0, $a0
+    move $s0, $a0
     # First argument
-    move $a0, $a1
+    move $s1, $a1
 
-    jirl $ra, $t0, 0
+    bl __set_process_namespace
+
+    move $a0, $s1
+
+    jirl $ra, $s0, 0
 
     bl __pthread_exit
 
