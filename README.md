@@ -103,7 +103,9 @@ These are the features that are planned to be had in the OS:
   - [x] Ports
   - [x] Kernel messages
   - [x] Quick user memory access - catching exceptions on userspace memory access
-  - [ ] Handles/capabilities - would make API a lot nicer and fix a lot of issues with current design
+  - [x] Handles/capabilities - would make API a lot nicer and fix a lot of issues with current design
+    - [x] Handles for ports
+    - [ ] Notification of closed handles
   
 - [ ] Permissions
 - [x] Multi CPU support
