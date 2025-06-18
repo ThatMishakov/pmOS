@@ -764,6 +764,10 @@ void publish_object_reply(Message_Descriptor *desc, IPC_BUS_Publish_Object_Reply
     }
 }
 
+#define BRED "\e[1;31m"
+#define BGRN "\e[1;32m"
+#define CRESET "\e[0m"
+
 void named_port_notification(Message_Descriptor *desc, IPC_Kernel_Named_Port_Notification *n, pmos_right_t first_right)
 {
     // if (desc->sender != 0) {
@@ -775,9 +779,11 @@ void named_port_notification(Message_Descriptor *desc, IPC_Kernel_Named_Port_Not
     // }
 
     if (!first_right) {
-        fprintf(stderr, "devicesd: Recieved named right notification with no right...");
+        fprintf(stderr, BRED "devicesd: Recieved named right notification with no right..." CRESET "\n");
         return;
     }
+
+    printf(BGRN "named port right % "PRIi64 CRESET "\n", first_right);
 
     size_t len = NAMED_PORT_NOTIFICATION_STR_LEN(desc->size);
     if (len == strlen(pmbus_right_name) && !memcmp(pmbus_right_name, n->port_name, len)) {
