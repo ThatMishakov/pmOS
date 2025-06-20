@@ -15,13 +15,15 @@ CXX = clang++
 
 TARGETFLAGS = --target=$(ARCH)-pmos --sysroot=$(ROOTDIR)/sysroot
 
+INCLUDEDIR = -I$(realpath .)/libyaml/include
+
 # User controllable CFLAGS.
 USERCFLAGS = -Wall -Wextra -O2 -pipe
 
 CFLAGS = -std=c23 -g $(TARGETFLAGS)
 CXXFLAGS = -std=c++17 -g $(TARGETFLAGS)
-CPPFLAGS = $(INTERNALCFLAGS) $(USERCFLAGS) -MMD -MP $(TARGETFLAGS)
-ASMFLAGS = -I$(INCLUDEDIR) $(TARGETFLAGS)
+CPPFLAGS = $(INTERNALCFLAGS) $(USERCFLAGS) -MMD -MP $(TARGETFLAGS) $(INCLUDEDIR)
+ASMFLAGS = $(INCLUDEDIR) $(TARGETFLAGS)
 LDFLAGS = $(INTERNALLDFLAGS) $(TARGETFLAGS)
 
 # Internal link flags that should not be changed by the user.
@@ -36,9 +38,9 @@ INTERNALCFLAGS  :=       \
 	-fPIE
  
 # Use find to glob all *.c files in the directory and extract the object names.
-CCFILES := $(shell find ./ -type f -name '*.cc')
-CFILES := $(shell find ./ -type f -name '*.c')
-ASMFILES := $(shell find ./ -type f -name '*.S')
+CCFILES := $(shell find ./src -type f -name '*.cc')
+CFILES := $(shell find ./src -type f -name '*.c') $(shell find ./libyaml/src -type f -name '*.c')
+ASMFILES := $(shell find ./src -type f -name '*.S')
 OBJ    := $(CCFILES:.cc=.o) $(ASMFILES:.S=.o) $(CFILES:.c=.o)
 DEP    := $(OBJ:.o=.d)
 all: $(EXEC)
