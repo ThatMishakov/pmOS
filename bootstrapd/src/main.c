@@ -224,13 +224,13 @@ void start_executables()
     }
 }
 
-void set_print_callback(int result, const char * /* port_name */, pmos_port_t port)
+void set_print_callback(int result, const char * /* right_name */, pmos_right_t right)
 {
     if (!result)
-        set_print_syscalls(port);
+        set_print_syscalls(right);
 }
 
-static const char *log_port_name = "/pmos/terminald";
+static const char *log_port_name = "/pmos/stdout";
 static char *vfsd_port_name      = "/pmos/vfsd";
 
 int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_right,
@@ -494,8 +494,14 @@ void service_ports()
 exit:
 }
 
+#define BRED "\e[1;31m"
+#define BGRN "\e[1;32m"
+#define CRESET "\e[0m"
+
 int main()
 {
+    print_str(BGRN "Started init server" CRESET "\n");
+
     ports_request_t r = create_port(0, 0);
     loader_port       = r.port;
     if (r.result != SUCCESS) {

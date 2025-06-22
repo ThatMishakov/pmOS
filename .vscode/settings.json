@@ -200,7 +200,8 @@
         "format": "cpp",
         "hashmap.h": "c",
         "__hash": "c",
-        "setjmp.h": "c"
+        "setjmp.h": "c",
+        "expected": "cpp"
     },
     "cmake.configureOnOpen": false,
     "C_Cpp.default.compilerPath": "/home/misha/cross/bin/clang",
