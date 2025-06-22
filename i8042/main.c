@@ -56,8 +56,8 @@ bool enable_second_channel = true;
 pmos_port_t main_port          = 0;
 pmos_port_t configuration_port = 0;
 
-pmos_port_t devicesd_port = 0;
-pmos_port_t ps2d_port     = 0;
+pmos_right_t devicesd_right = 0;
+pmos_right_t ps2d_right     = 0;
 
 __thread pmos_port_t control_port = 0;
 pmos_port_t get_control_port()
@@ -91,8 +91,8 @@ uint8_t get_interrupt_number(uint32_t intnum, uint64_t int_port)
                        .int_flags  = 0,
                        .dest_task  = mypid,
                        .dest_chan  = int_port,
-                       .reply_chan = control_port};
-    result_t result = send_message_port(devicesd_port, sizeof(m), (char *)&m);
+    };
+    result_t result = send_message_right(devicesd_right, control_port, (char *)&m, sizeof(m), NULL, 0).result;
     if (result != SUCCESS) {
         printf("[i8042] Warning: Could not send message to get the interrupt\n");
         return 0;
@@ -101,7 +101,7 @@ uint8_t get_interrupt_number(uint32_t intnum, uint64_t int_port)
     Message_Descriptor desc = {};
     unsigned char *message  = NULL;
     for (int i = 0; i < 10; i++) {
-        result = get_message(&desc, &message, control_port);
+        result = get_message(&desc, &message, control_port, NULL, NULL);
         if ((int)result != -EINTR)
             break;
     }
@@ -167,7 +167,7 @@ void *interrupt_thread(void *arg)
 
         Message_Descriptor desc = {};
         unsigned char *message  = NULL;
-        result                  = get_message(&desc, &message, int_port);
+        result                  = get_message(&desc, &message, int_port, NULL, NULL);
 
         if (result != SUCCESS) {
             fprintf(stderr, "[i8042] Error: Could not get message %i %s\n", (int)-result,
@@ -245,26 +245,52 @@ void init_interrupts()
     }
 }
 
-pmos_port_t register_port(unsigned char id)
+#define BRED "\e[1;31m"
+#define BGRN "\e[1;32m"
+#define CRESET "\e[0m"
+
+pmos_right_t register_port(unsigned char id, pmos_right_t *main_right, pmos_right_t *configuration_right)
 {
-    IPC_PS2_Reg_Port req = {
+    pmos_right_t main_right_s = INVALID_RIGHT;
+    pmos_right_t configuration_right_s = INVALID_RIGHT;
+    pmos_right_t recieved_rights[4] = {};
+    unsigned char *message  = NULL;
+
+    right_request_t req = create_right(main_port, main_right, 0);
+    if (req.result) {
+        fprintf(stderr, BRED "[i8042] Warning: failed to create right for port: %" PRIi64 CRESET "\n", req.result);
+        goto error;
+    }
+    main_right_s = req.right;
+
+    req = create_right(configuration_port, configuration_right, 0);
+    if (req.result) {
+        fprintf(stderr, BRED "[i8042] Warning: failed to create right for port: %" PRIi64 CRESET "\n", req.result);
+        goto error;
+    }
+
+    IPC_PS2_Reg_Port rreq = {
         .type          = IPC_PS2_Reg_Port_NUM,
         .flags         = 0,
         .internal_id   = id,
-        .cmd_port      = main_port,
-        .config_port   = configuration_port,
         .task_group_id = pmos_process_task_group(),
     };
 
-    result_t result = send_message_port(ps2d_port, sizeof(req), (char *)&req);
-    if (result != SUCCESS) {
-        printf("[i8042] Warning: Could not send message to register the port %i\n", id);
-        return 0;
+    message_extra_t rights = {
+        .extra_rights = {main_right_s, configuration_right_s,},
+        .memory_object = 0,
+    };
+
+    req = send_message_right(ps2d_right, configuration_port, (char *)&rreq, sizeof(rreq), &rights, 0);
+    if (req.result != SUCCESS) {
+        fprintf(stderr, BRED "[i8042] Warning: Could not send message to register the port %u: %" PRIi64 CRESET "\n", id, req.result);
+        goto error;
     }
 
+    main_right_s = configuration_right_s = INVALID_RIGHT;
+
     Message_Descriptor desc = {};
-    unsigned char *message  = NULL;
-    result                  = get_message(&desc, &message, configuration_port);
+    result_t result                  = get_message(&desc, &message, configuration_port, NULL, recieved_rights);
 
     if (result != SUCCESS) {
         printf("[i8042] Warning: Could not get message\n");
@@ -273,31 +299,50 @@ pmos_port_t register_port(unsigned char id)
 
     if (desc.size < sizeof(IPC_PS2_Config)) {
         printf("[i8042] Warning: Recieved message which is too small\n");
-        free(message);
-        return 0;
+        goto error;
     }
 
     IPC_PS2_Config *reply = (IPC_PS2_Config *)message;
 
     if (reply->type != IPC_PS2_Config_NUM) {
         printf("[i8042] Warning: Recieved unexepcted message type\n");
-        free(message);
-        return 0;
+        goto error;
     }
 
     if (reply->request_type != IPC_PS2_Config_Reg_Port) {
         printf("[i8042] Warning: Could register port %i\n", id);
-        free(message);
-        return 0;
+        goto error;
     }
 
-    if (reply->result_cmd == 0)
+    if (reply->result) {
         printf("[i8042] Warning: Did not register the port\n");
+        goto error;
+    }
 
-    pmos_port_t port = reply->result_cmd;
+    if (!recieved_rights[0]) {
+        fprintf(stderr, BRED "[i8042] Warning: Recieved register success with no right" CRESET "\n");
+        goto error;
+    }
+
     free(message);
 
-    return port;
+    for (int i = 1; i < 4; ++i)
+        if (recieved_rights[i])
+            delete_right(recieved_rights[i]);
+
+    return recieved_rights[0];
+
+error:
+    if (main_right_s)
+        delete_right(main_right_s);
+    if (configuration_right_s)
+        delete_right(configuration_right_s);
+    free(message);
+    for (int i = 0; i < 4; ++i)
+        if (recieved_rights[i])
+            delete_right(recieved_rights[i]);
+
+    return INVALID_RIGHT;
 };
 
 void register_ports()
@@ -305,12 +350,12 @@ void register_ports()
     bool success = false;
 
     if (first_port_works)
-        success = (ports[0].notification_port = register_port(0));
+        success = (ports[0].notification_right = register_port(0, NULL, NULL));
 
     if (second_port_works)
-        ports[1].notification_port = register_port(1);
+        ports[1].notification_right = register_port(1, NULL, NULL);
 
-    success = success || ports[1].notification_port;
+    success = success || ports[1].notification_right;
 
     if (!success) {
         fprintf(stderr, "[i8042] Error: Could not register ports with PS2d\n");
@@ -468,23 +513,23 @@ int main()
         main_port = req.port;
 
         static const char *devicesd_port_name = "/pmos/devicesd";
-        ports_request_t devicesd_port_req =
-            get_port_by_name(devicesd_port_name, strlen(devicesd_port_name), 0);
-        if (devicesd_port_req.result != SUCCESS) {
+        right_request_t devicesd_right_req =
+            get_right_by_name(devicesd_port_name, strlen(devicesd_port_name), 0);
+        if (devicesd_right_req.result != SUCCESS) {
             printf("[i8042] Warning: Could not get devicesd port. Error %" PRIi64 "\n",
-                   devicesd_port_req.result);
+                   devicesd_right_req.result);
             return 0;
         }
-        devicesd_port = devicesd_port_req.port;
+        devicesd_right = devicesd_right_req.right;
 
         static const char *ps2d_port_name = "/pmos/ps2d";
-        ports_request_t ps2d_port_req = get_port_by_name(ps2d_port_name, strlen(ps2d_port_name), 0);
-        if (ps2d_port_req.result != SUCCESS) {
+        right_request_t ps2d_right_req = get_right_by_name(ps2d_port_name, strlen(ps2d_port_name), 0);
+        if (ps2d_right_req.result != SUCCESS) {
             printf("[i8042] Warning: Could not get devicesd port. Error %" PRIi64 "\n",
-                   ps2d_port_req.result);
+                   ps2d_right_req.result);
             return 0;
         }
-        ps2d_port = ps2d_port_req.port;
+        ps2d_right = ps2d_right_req.right;
     }
 
     pmos_request_io_permission();
@@ -509,7 +554,7 @@ int main()
 
         Message_Descriptor desc = {};
         unsigned char *message  = NULL;
-        result                  = get_message(&desc, &message, main_port);
+        result                  = get_message(&desc, &message, main_port, NULL, NULL);
 
         if (result != SUCCESS) {
             fprintf(stderr, "[i8042] Error: Could not get message\n");

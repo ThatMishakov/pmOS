@@ -198,7 +198,7 @@ void start_executables()
     while (d != NULL) {
         struct module_descriptor_list *c = d;
         d                                = d->next;
-        if (strcmp(c->cmdline, "init") == 0) {
+        if (strcmp(c->cmdline, "bootstrap")) {
             syscall_r r = syscall_new_process();
             if (r.result != SUCCESS) {
                 print_str("Loader: Could not create process for ");

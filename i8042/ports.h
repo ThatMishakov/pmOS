@@ -60,7 +60,7 @@ void poll_ports();
 void react_send_data(IPC_PS2_Send_Data *str, size_t message_size);
 
 typedef struct Port {
-    pmos_port_t notification_port;
+    pmos_right_t notification_right;
 } Port;
 
 extern uint64_t last_polling_timer;

@@ -610,6 +610,7 @@ typedef struct IPC_FDT_Reply {
 } IPC_FDT_Reply;
 
 // Structure used for registering a new PS/2 port by its driver
+// command right 0, configuration port 1
 #define IPC_PS2_Reg_Port_NUM 0x80
 typedef struct IPC_PS2_Reg_Port {
     // Message type (must be equal to IPC_PS2_Reg_Port_NUM)
@@ -621,12 +622,6 @@ typedef struct IPC_PS2_Reg_Port {
     // Internal ID of the port, decided by its driver (used for identification when driver registers
     // more than one port)
     uint64_t internal_id;
-
-    // Port used for sending commands to the port
-    uint64_t cmd_port;
-
-    // Port used for configuration
-    uint64_t config_port;
 
     // Task group ID of the driver
     uint64_t task_group_id;
@@ -647,8 +642,8 @@ typedef struct IPC_PS2_Config {
     // Request type
     uint64_t request_type;
 
-    // Result or command
-    uint64_t result_cmd;
+    // Result
+    int64_t result;
 } IPC_PS2_Config;
 #define IPC_PS2_Config_Reg_Port \
     1 // Indicates the chanel where ps/2 driver should send the data and requests or 0 on failure

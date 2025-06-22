@@ -84,7 +84,7 @@ void react_data(uint8_t data, unsigned char port_num)
     str->task_group_id = pmos_process_task_group();
     str->data[0]       = data;
 
-    result_t result = send_message_port(ports[port_num].notification_port, size, (char *)str);
+    result_t result = send_message_right(ports[port_num].notification_right, 0, (char *)str, size, NULL, 0).result;
     if (result != SUCCESS) {
         printf("[i8042] Warning: Could not send message to get the interrupt\n");
     }
