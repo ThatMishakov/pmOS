@@ -11,7 +11,7 @@ iso: $(ISO)
 	$(MAKE) -C ../kernel build/kernel
 
 ../bootstrapd/build/bootstrapd:
-	$(MAKE) -C ../bootstrapd/build bootstrapd
+	$(MAKE) -C ../bootstrapd
 
 ../devicesd/devicesd.elf:
 	$(MAKE) -C ../devicesd devicesd.elf
