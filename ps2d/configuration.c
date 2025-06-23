@@ -33,6 +33,8 @@
 #include "ports.h"
 #include "stdio.h"
 
+#include <inttypes.h>
+
 void unknown_react_timer(struct port_list_node *port) {}
 
 void unknown_react_data(struct port_list_node *port, unsigned char data)
@@ -53,8 +55,8 @@ void configure_port(struct port_list_node *port)
     }
 
     if (!inited_port) {
-        printf("[PS2d] Info: Found unknown device on port %li PID %li with type 0x%x (size %i)\n",
-               port->port_id, port->owner_pid, port->device_id, port->device_id_size);
+        printf("[PS2d] Info: Found unknown device on port % " PRIu64 " with type 0x%x (size %i)\n",
+               port->index, port->device_id, port->device_id_size);
 
         port->state               = PORT_STATE_MANAGED;
         port->managed_react_data  = &unknown_react_data;

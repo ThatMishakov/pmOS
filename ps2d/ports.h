@@ -31,6 +31,7 @@
 #include "keyboard.h"
 
 #include <pmos/ipc.h>
+#include <pmos/helpers.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -55,20 +56,24 @@ struct port_list_node {
     struct port_list_node *previous;
     struct port_list_node *next;
 
-    // Owner of the port and its id
-    uint64_t owner_pid;
-    uint64_t port_id;
+    // Recieve right associated with the owner
+    pmos_right_t owner_recieve_right;
 
     // Internal index of the port
     uint64_t index;
 
-    // Port used for communications with the driver
-    uint64_t com_port;
+    // External index
+    uint64_t port_id;
+
+    // Right used for communications with the driver
+    pmos_right_t com_right;
 
     uint64_t last_timer;
 
     uint32_t device_id;
     unsigned char device_id_size;
+
+    pmos_msgloop_tree_node_t *node;
 
     enum Port_States state;
     enum Device_Types type;
@@ -95,11 +100,10 @@ struct port_list_node *list_get(uint64_t owner_pid, uint64_t port_id);
 // Find the node with the given timer_id. Return NULL if no node was found
 struct port_list_node *list_find_by_timer(uint64_t timer_id);
 
-bool register_port(IPC_PS2_Reg_Port *message, uint64_t sender);
-void react_message(IPC_PS2_Notify_Data *message, uint64_t sender, uint64_t size);
+bool register_port(IPC_PS2_Reg_Port *message, uint64_t sender, struct pmos_msgloop_data *msgloop, pmos_right_t reply_right, pmos_right_t main_right, pmos_right_t configuration_right);
 
-void send_data_port(struct port_list_node *port, const unsigned char *data, size_t data_size);
-void send_byte_port(struct port_list_node *port, unsigned char byte);
+int send_data_port(struct port_list_node *port, const unsigned char *data, size_t data_size);
+int send_byte_port(struct port_list_node *port, unsigned char byte);
 void react_data(struct port_list_node *port, const char *data, size_t data_size);
 void react_byte(struct port_list_node *port, unsigned char byte);
 void start_port(struct port_list_node *port);

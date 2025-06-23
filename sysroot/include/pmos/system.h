@@ -437,6 +437,7 @@ right_request_t dup_right(pmos_right_t right);
 /// @param right_id
 /// @return Result of the operation
 result_t delete_right(pmos_right_t right_id);
+result_t delete_right_raw(pmos_right_t right_id);
 
 typedef struct message_extra_t {
     pmos_right_t extra_rights[4];

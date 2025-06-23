@@ -623,7 +623,7 @@ right_request_t send_message_right(pmos_right_t send_right, pmos_port_t reply_po
     };
 }
 
-result_t delete_right(pmos_right_t right_id)
+result_t delete_right_raw(pmos_right_t right_id)
 {
     #ifdef __32BITSYSCALL
     return __pmos_syscall32_2words(SYSCALL_DELETE_SEND_RIGHT, right_id).result;

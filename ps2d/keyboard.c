@@ -32,6 +32,7 @@
 #include "ports.h"
 
 #include <stdio.h>
+#include <inttypes.h>
 
 unsigned keyboard_ids[] = {
     0x41ab,
@@ -95,8 +96,8 @@ void keyboard_react_timer(struct port_list_node *port)
     case STATUS_SENT_ECHO:
         fprintf(
             stderr,
-            "[PS2d] Warning: Keyboard at port %lx PID %lx did not ACK STATUS_SENT_ECHO command\n",
-            port->port_id, port->owner_pid);
+            "[PS2d] Warning: Keyboard at port %"PRIu64" did not ACK STATUS_SENT_ECHO command\n",
+            port->index);
         unregister_keyboard(port);
 
         reset_port(port);
@@ -121,7 +122,7 @@ void keyboard_push_get_scancode(struct port_list_node *port)
 
 bool init_keyboard(struct port_list_node *port)
 {
-    printf("[PS2d] Info: Found keyboard on port %lx PID %lx\n", port->port_id, port->owner_pid);
+    printf("[PS2d] Info: Found keyboard on port %" PRIu64 "\n", port->index);
 
     register_keyboard(port);
 
@@ -208,9 +209,9 @@ void keyboard_push_cmd(struct port_list_node *port, struct keyboard_cmd data)
 
     if (new_keyboard_index == port->kb_state.cmd_buffer_index) {
         fprintf(stderr,
-                "[PS2d] Warning: Keyboard at port %li PID %li hat its buffer full. Discarding the "
+                "[PS2d] Warning: Keyboard at port %" PRIu64  " hat its buffer full. Discarding the "
                 "last command...\n",
-                port->port_id, port->owner_pid);
+                port->index);
     } else {
         bool empty_before = keyboard_cmd_queue_empty(port);
 
