@@ -23,6 +23,7 @@ set(CMAKE_SYSROOT "${ABSPATH}/../sysroot" CACHE PATH "System root for cross-comp
 
 project(bootstrapd C CXX ASM)
 
+set(CMAKE_BUILD_TYPE Debug)
 set(CMAKE_EXE_LINKER_FLAGS "-static")
 
 file(GLOB_RECURSE GENERIC_SRC

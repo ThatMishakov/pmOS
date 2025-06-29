@@ -16,7 +16,7 @@ struct Instance {
     struct Service *parent;
     enum State state;
 };
-VECTOR(struct Instance) instances_vector;
+VECTOR_TYPEDEF(struct Instance, instances_vector);
 
 struct MatchFilter {
     char *key;
@@ -37,5 +37,6 @@ struct Service {
     instances_vector instances;
 
     bool start_on_boot;
-
 };
+
+void parse_service(const char *cmdline, const char *name);

@@ -64,9 +64,9 @@ void set_print_syscalls(pmos_right_t right)
     buff_ack = buff_pos;
 }
 
-void print_str(char *str) { print_str_n(str, strlen(str)); }
+void print_str(const char *str) { print_str_n(str, strlen(str)); }
 
-void print_str_n(char *str, int length)
+void print_str_n(const char *str, int length)
 {
     if (log_right) {
         struct {

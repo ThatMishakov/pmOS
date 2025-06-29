@@ -29,6 +29,7 @@
 #include "fs.h"
 #include "io.h"
 #include "named_ports.h"
+#include "init/init.h"
 
 #include <errno.h>
 #include <kernel/messaging.h>
@@ -199,6 +200,8 @@ void start_executables()
         struct module_descriptor_list *c = d;
         d                                = d->next;
         if (strcmp(c->cmdline, "bootstrap")) {
+            parse_service(c->cmdline, c->path);
+
             syscall_r r = syscall_new_process();
             if (r.result != SUCCESS) {
                 print_str("Loader: Could not create process for ");
