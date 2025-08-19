@@ -9,7 +9,8 @@ enum State {
 };
 
 struct Service;
-VECTOR(struct Service) service_vector;
+VECTOR_TYPEDEF(struct Service, service_vector_type);
+extern service_vector_type service_vector;
 
 struct Instance {
     uint64_t id;
@@ -31,6 +32,7 @@ struct MatchFilter {
 struct Service {
     char *name;
     char *path;
+    char *description;
 
     enum State state;
 
@@ -38,5 +40,8 @@ struct Service {
 
     bool start_on_boot;
 };
+
+struct Service *new_service();
+void free_service(struct Service *service);
 
 void parse_service(const char *cmdline, const char *name);
