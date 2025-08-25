@@ -29,12 +29,23 @@ struct MatchFilter {
     // blacklist?
 };
 
+enum RunType {
+    RUN_MANUAL,
+    RUN_ALWAYS_ONCE,
+    RUN_FIRST_MATCH_ONCE,
+    RUN_FOR_EACH_MATCH,
+    RUN_UNKNOWN,
+};
+
+enum RunType parse_run_type(const char *str);
+
 struct Service {
     char *name;
     char *path;
     char *description;
 
     enum State state;
+    enum RunType run_type;
 
     instances_vector instances;
 
@@ -44,4 +55,4 @@ struct Service {
 struct Service *new_service();
 void free_service(struct Service *service);
 
-void parse_service(const char *cmdline, const char *name);
+void parse_service(const char *cmdline, const char *name, struct Service **out_service);

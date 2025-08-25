@@ -200,7 +200,8 @@ void start_executables()
         struct module_descriptor_list *c = d;
         d                                = d->next;
         if (strcmp(c->cmdline, "bootstrap")) {
-            parse_service(c->cmdline, c->path);
+            struct Service *s = NULL;
+            parse_service(c->cmdline, c->path, &s);
 
             syscall_r r = syscall_new_process();
             if (r.result != SUCCESS) {

@@ -4,6 +4,7 @@
 #include <string.h>
 #include <yaml.h>
 #include "init.h"
+#include <strings.h>
 
 enum parser_states {
     STATE_START,
@@ -133,18 +134,21 @@ enum ServiceParseState {
     SERVICE_STATE_START,
     SERVICE_STATE_NAME,
     SERVICE_STATE_DESCRIPTION,
+    SERVICE_STATE_RUN_TYPE,
     SERVICE_STATE_SKIP,
     SERVICE_STATE_END,
 };
 
 const char *SERVICE_NAME = "name";
 const char *SERVICE_DESCRIPTION = "description";
+const char *SERVICE_RUN_TYPE = "run_type";
 
 static bool parse_service_event(yaml_parser_t *state, yaml_event_t *, struct parser_state *s)
 {
     yaml_event_t event;
     struct Service *service = NULL;
     bool success = true;
+    bool has_run_type = false;
     enum ServiceParseState service_state = SERVICE_STATE_START;
 
     if (!yaml_parser_parse(state, &event)) {
@@ -206,6 +210,8 @@ static bool parse_service_event(yaml_parser_t *state, yaml_event_t *, struct par
                     service_state = SERVICE_STATE_NAME;
                 } else if (!strcmp(value, SERVICE_DESCRIPTION)) {
                     service_state = SERVICE_STATE_DESCRIPTION;
+                } else if (!strcmp(value, SERVICE_RUN_TYPE)) {
+                    service_state = SERVICE_STATE_RUN_TYPE;
                 } else {
                     print_str("Unknown service key: ");
                     print_str(value);
@@ -218,6 +224,7 @@ static bool parse_service_event(yaml_parser_t *state, yaml_event_t *, struct par
             break;
             }
         case SERVICE_STATE_NAME:
+        case SERVICE_STATE_RUN_TYPE:
         case SERVICE_STATE_DESCRIPTION: {
             yaml_event_t new_event;
             if (!yaml_parser_parse(state, &new_event)) {
@@ -258,7 +265,22 @@ static bool parse_service_event(yaml_parser_t *state, yaml_event_t *, struct par
                             success = false;
                         }
                     }
+                } else if (service_state == SERVICE_STATE_RUN_TYPE) {
+                    if (has_run_type) {
+                        print_str("Duplicate service run type! Skipping...\n");
+                    } else {
+                        auto run_type = parse_run_type((char *)new_event.data.scalar.value);
+                        if (run_type == RUN_UNKNOWN) {
+                            print_str("Unknown run type: ");
+                            print_str((char *)new_event.data.scalar.value);
+                            print_str("\n");
+                        } else {
+                            service->run_type = run_type;
+                            has_run_type = true;
+                        }
+                    }
                 }
+
             }
 
             yaml_event_delete(&new_event);
@@ -432,7 +454,7 @@ static bool parse_event(yaml_parser_t *state, yaml_event_t *event, struct parser
     return true;
 }
 
-void parse_service(const char *cmdline, const char *name)
+void parse_service(const char *cmdline, const char *name, struct Service **out_service)
 {
     print_str("Parsing module ");
     if (!name)
@@ -464,10 +486,30 @@ void parse_service(const char *cmdline, const char *name)
         yaml_event_delete(&event);
     }
 
+    *out_service = state.service;
+    state.service = NULL;
+
     yaml_parser_delete(&parser);
     return;
 error:
+    free_service(state.service);
+    *out_service = NULL;
+    state.service = NULL;
+
     yaml_parser_delete(&parser);
     print_str("Yaml parsing error\n");
     return;
+}
+
+enum RunType parse_run_type(const char *str)
+{
+    if (!strcasecmp(str, "manual"))
+        return RUN_MANUAL;
+    if (!strcasecmp(str, "always_once"))
+        return RUN_ALWAYS_ONCE;
+    if (!strcasecmp(str, "first_match_once"))
+        return RUN_FIRST_MATCH_ONCE;
+    if (!strcasecmp(str, "for_each_match"))
+        return RUN_FOR_EACH_MATCH;
+    return RUN_UNKNOWN;
 }
