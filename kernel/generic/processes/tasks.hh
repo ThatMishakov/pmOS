@@ -159,7 +159,7 @@ namespace proc
             atomic_register_page_table(klib::shared_ptr<paging::Arch_Page_Table>);
 
         // Inits stack
-        ReturnStr<size_t> init_stack();
+        ReturnStr<size_t> init_stack(klib::shared_ptr<paging::Arch_Page_Table> optional_existing_table = {});
 
         // Blocks the process by a page (for example in case of a pagefault)
         void atomic_block_by_page(void *page, sched::sched_queue *push_to_queue);

@@ -119,14 +119,16 @@ TaskDescriptor *TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel le
     return n.release();
 }
 
-ReturnStr<size_t> TaskDescriptor::init_stack()
+ReturnStr<size_t> TaskDescriptor::init_stack(klib::shared_ptr<paging::Arch_Page_Table> optional_existing_table)
 {
     // TODO: Check if page table exists and that task is uninited
     assert(sched_lock.is_locked());
-    if (!page_table)
-        return Error(-EINVAL);
 
     ulong stack_size = is_32bit() ? MB(32) : GB(2);
+
+    const auto& page_table = optional_existing_table ? optional_existing_table : this->page_table;
+    if (!page_table)
+        return Error(-EINVAL);
 
     // Prealloc a page for the stack
     void *stack_end        = page_table->user_addr_max(); //&_free_to_use;
@@ -134,7 +136,9 @@ ReturnStr<size_t> TaskDescriptor::init_stack()
 
     static const klib::string stack_region_name = "default_stack";
 
-    auto r = this->page_table->atomic_create_normal_region(
+    assert(not (optional_existing_table and this->page_table));
+
+    auto r = page_table->atomic_create_normal_region(
         stack_page_start, stack_size,
         paging::Page_Table::Protection::Writeable | paging::Page_Table::Protection::Readable, true,
         false, stack_region_name, -1, true);
@@ -675,11 +679,7 @@ ReturnStr<bool>
         return Error(-ENOEXEC);
     }
 
-    auto result = register_page_table(table);
-    if (result != 0)
-        return Error(result);
-
-    auto stack_top = init_stack();
+    auto stack_top = init_stack(table);
 
     if (!stack_top.success())
         return stack_top.propagate();
@@ -738,6 +738,10 @@ ReturnStr<bool>
 
     if (!b.val)
         return false;
+
+    auto result = register_page_table(table);
+    if (result != 0)
+        return Error(result);
 
     regs.arg1() = (ulong)pos;
     regs.arg2() = size;
