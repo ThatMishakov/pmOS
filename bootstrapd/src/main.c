@@ -27,9 +27,9 @@
  */
 
 #include "fs.h"
+#include "init/init.h"
 #include "io.h"
 #include "named_ports.h"
-#include "init/init.h"
 
 #include <errno.h>
 #include <kernel/messaging.h>
@@ -48,12 +48,15 @@ uint64_t loader_port = 0;
 extern void *__load_data_kernel;
 extern size_t __load_data_size_kernel;
 
+struct Service;
+
 struct module_descriptor_list {
     struct module_descriptor_list *next;
     uint64_t object_id;
     size_t size;
     char *cmdline;
     char *path;
+    struct Service *service;
 };
 
 struct module_descriptor_list *module_list = NULL;
@@ -97,7 +100,37 @@ void init_modules()
         d->cmdline   = strdup((char *)m + m->modules[i].cmdline_offset);
         d->path      = strdup((char *)m + m->modules[i].path_offset);
         d->next      = module_list;
+        d->service   = NULL;
         module_list  = d;
+
+        if (strcmp(d->cmdline, "bootstrap")) {
+            struct Service *s = NULL;
+            parse_service(d->cmdline, d->path, &s);
+            d->service = s;
+
+            if (s) {
+                print_str("Service; ");
+                if (s->name) {
+                    print_str("name: ");
+                    print_str(s->name);
+                }
+                if (s->path) {
+                    print_str(", path: ");
+                    print_str(s->path);
+                }
+                if (s->description) {
+                    print_str(", description: ");
+                    print_str(s->description);
+                }
+                print_str(", state: ");
+                print_hex(s->state);
+                print_str(", run type: ");
+                print_hex(s->run_type);
+                print_str(", start on boot: ");
+                print_hex(s->start_on_boot);
+                print_str("\n");
+            }
+        }
     }
 }
 
@@ -199,10 +232,8 @@ void start_executables()
     while (d != NULL) {
         struct module_descriptor_list *c = d;
         d                                = d->next;
-        if (strcmp(c->cmdline, "bootstrap")) {
-            struct Service *s = NULL;
-            parse_service(c->cmdline, c->path, &s);
 
+        if (c->service && c->service->run_type == RUN_ALWAYS_ONCE) {
             syscall_r r = syscall_new_process();
             if (r.result != SUCCESS) {
                 print_str("Loader: Could not create process for ");
@@ -210,6 +241,8 @@ void start_executables()
                 print_str(". Error: ");
                 print_hex(r.result);
                 print_str("\n");
+
+                continue;
             }
 
             syscall_set_task_name(r.value, c->path, strlen(c->path));
@@ -223,7 +256,10 @@ void start_executables()
                 print_str("\n");
 
                 // TODO: Terminate the task on error
+                continue;
             }
+
+            c->service->state = STATE_STARTED;
         }
     }
 }
@@ -279,7 +315,8 @@ int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_r
             reply.object_size       = fdt_desc.mem_object_size;
         }
 
-        auto r = send_message_right(*reply_right, 0, &reply, sizeof(reply), NULL, SEND_MESSAGE_DELETE_RIGHT);
+        auto r = send_message_right(*reply_right, 0, &reply, sizeof(reply), NULL,
+                                    SEND_MESSAGE_DELETE_RIGHT);
         if (!r.result)
             *reply_right = 0;
     } break;
@@ -498,8 +535,8 @@ void service_ports()
 exit:
 }
 
-#define BRED "\e[1;31m"
-#define BGRN "\e[1;32m"
+#define BRED   "\e[1;31m"
+#define BGRN   "\e[1;32m"
 #define CRESET "\e[0m"
 
 int main()

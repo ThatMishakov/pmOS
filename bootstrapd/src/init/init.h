@@ -4,6 +4,7 @@
 
 enum State {
     STATE_UNINITIALIZED,
+    STATE_STARTED,
     STATE_RUNNING,
     STATE_ERROR,
 };
