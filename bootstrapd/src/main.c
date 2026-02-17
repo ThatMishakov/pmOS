@@ -245,7 +245,34 @@ void start_executables()
                 continue;
             }
 
+            // Doesn't really matter if this fails
             syscall_set_task_name(r.value, c->path, strlen(c->path));
+
+            syscall_r group_id = create_task_group();
+            if (group_id.result != SUCCESS) {
+                print_str("Loader: Could not create task group for ");
+                print_str(c->path);
+                print_str(". Error: ");
+                print_hex(group_id.result);
+                print_str("\n");
+
+                syscall_kill_task(r.value);
+                continue;
+            }
+
+            if (add_task_to_group(r.value, group_id.value) != SUCCESS) {
+                print_str("Loader: Could not add task to group for ");
+                print_str(c->path);
+                print_str(". Error: ");
+                print_hex(r.result);
+                print_str("\n");
+
+                syscall_kill_task(r.value);
+                remove_task_from_group(TASK_ID_SELF, group_id.value);
+                continue;
+            }
+
+            remove_task_from_group(TASK_ID_SELF, group_id.value);
 
             result_t res = syscall_load_executable(r.value, c->object_id, 0);
             if (res != SUCCESS) {
@@ -255,7 +282,7 @@ void start_executables()
                 print_hex(res);
                 print_str("\n");
 
-                // TODO: Terminate the task on error
+                syscall_kill_task(r.value);
                 continue;
             }
 

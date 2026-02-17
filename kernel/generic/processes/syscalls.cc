@@ -277,7 +277,7 @@ void syscall_load_executable()
         }
     }
 
-    auto b = t->load_elf(object, name);
+    auto b = t->atomic_load_elf(object, name);
     if (!b.success()) {
         syscall_error(task) = b.result;
         return;

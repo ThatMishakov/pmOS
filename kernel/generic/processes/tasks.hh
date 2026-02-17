@@ -40,11 +40,13 @@
 #include <memory/paging.hh>
 #include <memory/rcu.hh>
 #include <messaging/messaging.hh>
+#include <optional>
 #include <paging/arch_paging.hh>
 #include <pmos/containers/set.hh>
 #include <pmos/load_data.h>
 #include <registers.hh>
 #include <sched/defs.hh>
+#include <tuple>
 #include <types.hh>
 
 #if defined(__x86_64__) || defined(__i386__)
@@ -256,8 +258,16 @@ namespace proc
         /// Loads ELF into the task from the given memory object
         /// Returns true if the ELF was loaded successfully, false if the memory object data is not
         /// immediately available
-        ReturnStr<bool> load_elf(klib::shared_ptr<paging::Mem_Object> obj, klib::string name = "",
-                                 const klib::vector<klib::unique_ptr<load_tag_generic>> &tags = {});
+        ReturnStr<bool>
+            atomic_load_elf(klib::shared_ptr<paging::Mem_Object> obj, klib::string name = "",
+                            const klib::vector<klib::unique_ptr<load_tag_generic>> &tags = {});
+
+        /// Loads ELF into the task from the given memory object. This function does not acquire the
+        /// sched_lock. Returns the program header if loaded successfully, empty optional if the
+        /// memory object data is not immediately available, or an error.
+        ReturnStr<std::optional<
+            std::tuple<ulong, load_tag_elf_phdr, klib::shared_ptr<paging::Arch_Page_Table>>>>
+            load_elf_into_memory(klib::shared_ptr<paging::Mem_Object> obj);
 
         /// Cleans up the task when detected that it is dead ("tombstoning")
         /// This function is called when the dead task has been scheduled to run and is needed to

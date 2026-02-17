@@ -872,7 +872,7 @@ void init_task1(ultra_boot_context *ctx)
         panic("Failed to create task");
     task->name = "bootstrap";
     serial_logger.printf("Loading ELF...\n");
-    auto p = task->load_elf(task1->object, task1->path, tags);
+    auto p = task->atomic_load_elf(task1->object, task1->path, tags);
     if (!p.success() || !p.val)
         panic("Failed to load task 1: %i", p.result);
 }

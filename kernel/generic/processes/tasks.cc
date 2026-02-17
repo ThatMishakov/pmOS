@@ -318,18 +318,8 @@ kresult_t
     return register_page_table(klib::forward<klib::shared_ptr<paging::Arch_Page_Table>>(table));
 }
 
-ReturnStr<bool>
-    TaskDescriptor::load_elf(klib::shared_ptr<paging::Mem_Object> elf, klib::string name,
-                             const klib::vector<klib::unique_ptr<load_tag_generic>> &tags)
+ReturnStr<std::optional<std::tuple<ulong, load_tag_elf_phdr, klib::shared_ptr<paging::Arch_Page_Table>>>> TaskDescriptor::load_elf_into_memory(klib::shared_ptr<paging::Mem_Object> elf)
 {
-    Auto_Lock_Scope scope_lock(sched_lock);
-
-    if (status != TaskStatus::TASK_UNINIT)
-        return Error(-EEXIST);
-
-    if (page_table)
-        return Error(-EEXIST);
-
     ELF_Common header;
     auto r = elf->read_to_kernel(0, (u8 *)&header, sizeof(header));
     if (!r.success())
@@ -337,7 +327,7 @@ ReturnStr<bool>
 
     if (!r.val)
         // ELF header can't be read immediately
-        return false;
+        return {};
 
     if (header.magic != ELF_MAGIC)
         return Error(-ENOEXEC);
@@ -373,6 +363,10 @@ ReturnStr<bool>
         if (!r.success())
             return r.propagate();
 
+        if (!r.val)
+            // ELF header can't be read immediately
+            return {};
+
         if (header.prog_header_size != sizeof(phreader))
             return Error(-ENOEXEC);
 
@@ -392,15 +386,12 @@ ReturnStr<bool>
 
         if (!r.val)
             // Program headers can't be read immediately
-            return false;
+            return {};
 
         // Create a new page table
         table = paging::Arch_Page_Table::create_empty(paging_flags);
         if (!table)
             return Error(-ENOMEM);
-
-        ulong stack_ptr  = 0;
-        ulong stack_size = 0;
 
         // Load the program header into the page table
         for (size_t i = 0; i < ph_count; ++i) {
@@ -432,7 +423,8 @@ ReturnStr<bool>
                 protection_mask |=
                     (ph.flags & ELF_FLAG_WRITABLE) ? paging::Page_Table::Protection::Writeable : 0;
 
-                auto res = table->atomic_create_mem_object_region((void *)region_start, size,
+                // Upcast in 64 bit kernels is fine
+                auto res = table->atomic_create_mem_object_region((void *)(ulong)region_start, size,
                                                                   protection_mask, true, name, elf,
                                                                   false, 0, file_offset, size);
                 if (!res.success())
@@ -455,7 +447,7 @@ ReturnStr<bool>
                     (ph.flags & ELF_FLAG_WRITABLE) ? paging::Page_Table::Protection::Writeable : 0;
 
                 auto res = table->atomic_create_mem_object_region(
-                    (void *)region_start, size, protection_mask, true, name, elf, true,
+                    (void *)(ulong)region_start, size, protection_mask, true, name, elf, true,
                     object_start_offset, file_offset, file_size);
 
                 if (!res.success())
@@ -487,7 +479,7 @@ ReturnStr<bool>
             }
 
             if (!r.val)
-                return false;
+                return {};
 
             // Install memory region
             const u32 pa_size = (size + 0xFFF) & ~0xFFF;
@@ -505,7 +497,7 @@ ReturnStr<bool>
                 return r.propagate();
 
             if (!r.val)
-                return false;
+                return {};
 
             regs.arg3() = (ulong)tls_virt.val->start_addr;
         }
@@ -539,7 +531,7 @@ ReturnStr<bool>
 
         if (!r.val)
             // Program headers can't be read immediately
-            return false;
+            return {};
 
         // Create a new page table
         table = paging::Arch_Page_Table::create_empty(paging_flags);
@@ -554,7 +546,7 @@ ReturnStr<bool>
                 continue;
 
             if ((ph.p_vaddr & 0xfff) != (ph.p_offset & 0xfff))
-                return (-ENOEXEC);
+                return Error(-ENOEXEC);
 
             if (ph.p_offset <= header.program_header &&
                 header.program_header + pheader_size <= ph.p_offset + ph.p_filesz) {
@@ -627,7 +619,7 @@ ReturnStr<bool>
                 return r.propagate();
 
             if (!r.val)
-                return false;
+                return {};
 
             // Install memory region
             const u64 pa_size = (size + 0xFFF) & ~0xFFFUL;
@@ -645,7 +637,7 @@ ReturnStr<bool>
                 return r.propagate();
 
             if (!r.val)
-                return false;
+                return {};
 
             regs.arg3() = (ulong)tls_virt.val->start_addr;
         }
@@ -653,8 +645,33 @@ ReturnStr<bool>
         program_entry = header.program_entry;
     }
 
+    return std::optional<std::tuple<ulong, load_tag_elf_phdr, klib::shared_ptr<paging::Arch_Page_Table>>>{std::make_tuple(program_entry, phdr_tag, klib::move(table))};
+}
+
+ReturnStr<bool>
+    TaskDescriptor::atomic_load_elf(klib::shared_ptr<paging::Mem_Object> elf, klib::string name,
+                             const klib::vector<klib::unique_ptr<load_tag_generic>> &tags)
+{
+    Auto_Lock_Scope scope_lock(sched_lock);
+
+    if (status != TaskStatus::TASK_UNINIT)
+        return Error(-EEXIST);
+
+    if (page_table)
+        return Error(-EEXIST);
+
+    auto r = load_elf_into_memory(elf);
+    if (!r.success())
+        return r.propagate();
+
+    if (!r.val)
+        // ELF can't be loaded immediately
+        return false;
+
+    auto [program_entry, phdr_tag, table] = std::move(r.val.value());
+
     if (phdr_tag.phdr_addr == 0) {
-        log::serial_logger.printf("load_elf error -> phdr not mapped into the program's memory\n");
+        log::serial_logger.printf("atomic_load_elf error -> phdr not mapped into the program's memory\n");
         return Error(-ENOEXEC);
     }
 
@@ -762,7 +779,7 @@ void TaskDescriptor::cleanup()
     };
 
     for (auto g = get_first_group(); g; g = get_first_group()) {
-        g->atomic_remove_task(this);
+        (void)g->atomic_remove_task(this);
     }
 
     rcu_head.rcu_func = [](void *self, bool) {
