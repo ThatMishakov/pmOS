@@ -208,16 +208,33 @@ struct load_tag_generic *get_load_tag_global(uint32_t tag, size_t index)
             return NULL;
     }
     
-    t = __load_data_user;
-    while ((unsigned char *)t <= (unsigned char *)__load_data_user + __load_data_size_user + sizeof(struct load_tag_generic) &&
-    (unsigned char *)t + t->offset_to_next <= (unsigned char *)__load_data_user + __load_data_size_user &&
-    t->tag != LOAD_TAG_CLOSE) {
+    if (!__load_data_user || !__load_data_size_user)
+        return NULL;
+    
+    uintptr_t base = (uintptr_t)__load_data_user;
+    uintptr_t end  = base + __load_data_size_user;
+
+    uintptr_t p = base;
+    while (p + sizeof(struct load_tag_generic) <= end) {
+        struct load_tag_generic *t = (struct load_tag_generic *)p;
+        if (t->tag == LOAD_TAG_CLOSE)
+            break;
+
+        if (p + t->offset_to_next > end)
+            break; // Out of bounds
+
         if (t->tag == tag) {
             if (index == 0)
                 return t;
             index--;
         }
-        t = (struct load_tag_generic *)((unsigned char *)t + t->offset_to_next);
+
+        if (t->offset_to_next == 0)
+            break; // infinite loop
+        if (t->offset_to_next < sizeof(struct load_tag_generic))
+            break; // invalid offset
+
+        p += t->offset_to_next;
     }
     return NULL;
 }

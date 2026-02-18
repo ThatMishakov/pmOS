@@ -277,6 +277,7 @@ void start_executables()
                 continue;
             }
 
+            uint64_t new_group_id = group_id;
             remove_task_from_group(TASK_ID_SELF, group_id);
             group_id = 0;
 
@@ -302,7 +303,7 @@ void start_executables()
             size_t current_offset = 0;
             struct load_tag_task_group_id g = {
                 .header = LOAD_TAG_TASK_GROUP_ID_HEADER,
-                .group_id = group_id,
+                .group_id = new_group_id,
             };
             memcpy((char *)mem_region + current_offset, &g, sizeof(g));
             current_offset += sizeof(g);
@@ -320,8 +321,7 @@ void start_executables()
                 print_hex(res);
                 print_str("\n");
 
-                syscall_kill_task(r.value);
-                continue;
+                goto error;
             }
 
             c->service->state = STATE_STARTED;
