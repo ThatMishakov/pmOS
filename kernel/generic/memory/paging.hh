@@ -40,6 +40,7 @@
 #include <sched/sched.hh>
 #include <sched/sched_queue.hh>
 #include <types.hh>
+#include <utility>
 
 namespace kernel::paging {
 
@@ -470,7 +471,7 @@ public:
      * exception will be thrown. Otherwise, the new region would be found.
      * @return The location of the region in the new page table.
      */
-    ReturnStr<void *> atomic_transfer_region(const klib::shared_ptr<Page_Table> &to,
+    ReturnStr<std::pair<void *, size_t>> atomic_transfer_region(const klib::shared_ptr<Page_Table> &to,
                                              void *region_orig, void *prefered_to, unsigned access,
                                              bool fixed);
 

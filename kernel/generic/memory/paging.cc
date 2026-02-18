@@ -165,7 +165,7 @@ kresult_t Page_Table::atomic_release_in_range(void *start, size_t size)
     return release_in_range(ctx, start, size);
 }
 
-ReturnStr<void *> Page_Table::atomic_transfer_region(const klib::shared_ptr<Page_Table> &to,
+ReturnStr<std::pair<void *, size_t>> Page_Table::atomic_transfer_region(const klib::shared_ptr<Page_Table> &to,
                                                      void *region_orig, void *prefered_to,
                                                      unsigned access, bool fixed)
 {
@@ -174,6 +174,8 @@ ReturnStr<void *> Page_Table::atomic_transfer_region(const klib::shared_ptr<Page
     auto reg = paging_regions.find(region_orig);
     if (!reg)
         return Error(-ENOENT);
+
+    auto size = reg->size;
 
     if ((ulong)prefered_to & 07777)
         prefered_to = nullptr;
@@ -187,7 +189,7 @@ ReturnStr<void *> Page_Table::atomic_transfer_region(const klib::shared_ptr<Page
     if (result)
         return Error(result);
 
-    return start_addr.val;
+    return std::make_pair(start_addr.val, size);
 }
 
 ReturnStr<Phys_Mapped_Region *> Page_Table::atomic_create_phys_region(void *page_aligned_start,

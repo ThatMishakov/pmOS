@@ -126,13 +126,18 @@ result_t syscall_start_process(uint64_t pid, unsigned long entry, unsigned long 
  *
  * @param tid ID of the task to load the executable into
  * @param object_id ID of the memory object containing the executable
+ * @param optional_data Pointer to the memory region containing the additional tags for
+ *                      the executable. If not NULL, the kernel moves the region into
+ *                      the new process, and passes it a tag containing the address and size of the
+ *                      region. This region is always consumed (including on error), unless it's
+ *                      a bad address.
  * @param flags Flags for the function. Currently unused, but at least FLAG_NOBLOCK is planned
  * @return result_t Result of the operation. If the result != SUCCESS, the executable was not
  * loaded.
  * @see syscall_start_process()
  * @todo Think of a way to pass the arguments to the executable
  */
-result_t syscall_load_executable(uint64_t tid, uint64_t object_id, uint32_t flags);
+result_t syscall_load_executable(uint64_t tid, uint64_t object_id, void *optional_data, uint32_t flags);
 
 /// Sets the name of the task
 result_t syscall_set_task_name(uint64_t tid, const char *name, size_t name_length);

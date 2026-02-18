@@ -274,7 +274,7 @@ void start_executables()
 
             remove_task_from_group(TASK_ID_SELF, group_id.value);
 
-            result_t res = syscall_load_executable(r.value, c->object_id, 0);
+            result_t res = syscall_load_executable(r.value, c->object_id, nullptr, 0);
             if (res != SUCCESS) {
                 print_str("Loader: Could not load executable ");
                 print_str(c->path);

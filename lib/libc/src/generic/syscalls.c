@@ -417,12 +417,12 @@ result_t syscall_set_task_name(uint64_t tid, const char *name, size_t name_lengt
 #endif
 }
 
-result_t syscall_load_executable(uint64_t tid, uint64_t object_id, unsigned flags)
+result_t syscall_load_executable(uint64_t tid, uint64_t object_id, void *optional_data, unsigned flags)
 {
 #ifdef __32BITSYSCALL
-    return __pmos_syscall32_4words(SYSCALL_LOAD_EXECUTABLE | (flags << 8), tid, object_id).result;
+    return __pmos_syscall32_5words(SYSCALL_LOAD_EXECUTABLE | (flags << 8), tid, object_id, optional_data).result;
 #else
-    return pmos_syscall(SYSCALL_LOAD_EXECUTABLE | (flags << 8), tid, object_id).result;
+    return pmos_syscall(SYSCALL_LOAD_EXECUTABLE | (flags << 8), tid, object_id, optional_data).result;
 #endif
 }
 

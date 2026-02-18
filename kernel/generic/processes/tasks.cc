@@ -119,14 +119,15 @@ TaskDescriptor *TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel le
     return n.release();
 }
 
-ReturnStr<size_t> TaskDescriptor::init_stack(klib::shared_ptr<paging::Arch_Page_Table> optional_existing_table)
+ReturnStr<std::tuple<size_t, load_tag_stack_descriptor>>
+    TaskDescriptor::init_stack(klib::shared_ptr<paging::Arch_Page_Table> optional_existing_table)
 {
     // TODO: Check if page table exists and that task is uninited
     assert(sched_lock.is_locked());
 
     ulong stack_size = is_32bit() ? MB(32) : GB(2);
 
-    const auto& page_table = optional_existing_table ? optional_existing_table : this->page_table;
+    const auto &page_table = optional_existing_table ? optional_existing_table : this->page_table;
     if (!page_table)
         return Error(-EINVAL);
 
@@ -136,12 +137,12 @@ ReturnStr<size_t> TaskDescriptor::init_stack(klib::shared_ptr<paging::Arch_Page_
 
     static const klib::string stack_region_name = "default_stack";
 
-    assert(not (optional_existing_table and this->page_table));
+    assert(not(optional_existing_table and this->page_table));
 
-    auto r = page_table->atomic_create_normal_region(
-        stack_page_start, stack_size,
-        paging::Page_Table::Protection::Writeable | paging::Page_Table::Protection::Readable, true,
-        false, stack_region_name, -1, true);
+    auto r = page_table->atomic_create_normal_region(stack_page_start, stack_size,
+                                                     paging::Page_Table::Protection::Writeable |
+                                                         paging::Page_Table::Protection::Readable,
+                                                     true, false, stack_region_name, -1, true);
 
     if (!r.success())
         return r.propagate();
@@ -149,7 +150,14 @@ ReturnStr<size_t> TaskDescriptor::init_stack(klib::shared_ptr<paging::Arch_Page_
     // Set new rsp
     this->regs.stack_pointer() = (ulong)stack_end;
 
-    return this->regs.stack_pointer();
+    return std::make_tuple((ulong)stack_end,
+                           load_tag_stack_descriptor {
+                               .header     = LOAD_TAG_STACK_DESCRIPTOR_HEADER,
+                               .stack_top  = (ulong)stack_end,
+                               .stack_size = stack_size,
+                               .guard_size = 0,
+                               .unused0    = 0,
+                           });
 }
 
 kresult_t init_idle(sched::CPU_Info *cpu_str)
@@ -322,7 +330,9 @@ kresult_t
     return register_page_table(klib::forward<klib::shared_ptr<paging::Arch_Page_Table>>(table));
 }
 
-ReturnStr<std::optional<std::tuple<ulong, load_tag_elf_phdr, klib::shared_ptr<paging::Arch_Page_Table>>>> TaskDescriptor::load_elf_into_memory(klib::shared_ptr<paging::Mem_Object> elf)
+ReturnStr<
+    std::optional<std::tuple<ulong, load_tag_elf_phdr, klib::shared_ptr<paging::Arch_Page_Table>>>>
+    TaskDescriptor::load_elf_into_memory(klib::shared_ptr<paging::Mem_Object> elf)
 {
     ELF_Common header;
     auto r = elf->read_to_kernel(0, (u8 *)&header, sizeof(header));
@@ -649,12 +659,14 @@ ReturnStr<std::optional<std::tuple<ulong, load_tag_elf_phdr, klib::shared_ptr<pa
         program_entry = header.program_entry;
     }
 
-    return std::optional<std::tuple<ulong, load_tag_elf_phdr, klib::shared_ptr<paging::Arch_Page_Table>>>{std::make_tuple(program_entry, phdr_tag, klib::move(table))};
+    return std::optional<
+        std::tuple<ulong, load_tag_elf_phdr, klib::shared_ptr<paging::Arch_Page_Table>>> {
+        std::make_tuple(program_entry, phdr_tag, klib::move(table))};
 }
 
 ReturnStr<bool>
     TaskDescriptor::atomic_load_elf(klib::shared_ptr<paging::Mem_Object> elf, klib::string name,
-                             const klib::vector<klib::unique_ptr<load_tag_generic>> &tags)
+                                    const klib::vector<klib::unique_ptr<load_tag_generic>> &tags)
 {
     Auto_Lock_Scope scope_lock(sched_lock);
 
@@ -675,14 +687,17 @@ ReturnStr<bool>
     auto [program_entry, phdr_tag, table] = std::move(r.val.value());
 
     if (phdr_tag.phdr_addr == 0) {
-        log::serial_logger.printf("atomic_load_elf error -> phdr not mapped into the program's memory\n");
+        log::serial_logger.printf(
+            "atomic_load_elf error -> phdr not mapped into the program's memory\n");
         return Error(-ENOEXEC);
     }
 
-    auto stack_top = init_stack(table);
+    auto stack = init_stack(table);
 
-    if (!stack_top.success())
-        return stack_top.propagate();
+    if (!stack.success())
+        return stack.propagate();
+
+    auto [_, stack_desc] = stack.val;
 
     regs.program_counter() = program_entry;
 
@@ -695,23 +710,20 @@ ReturnStr<bool>
     }
     u64 current_offset = 0;
 
-    u64 load_stack[size / 8];
+    klib::vector<u64> load_stack;
+    if (!load_stack.resize(size / 8))
+        return Error(-ENOMEM);
+
     load_tag_stack_descriptor *d = (load_tag_stack_descriptor *)&load_stack[current_offset / 8];
-    *d                           = {
-                                  .header     = LOAD_TAG_STACK_DESCRIPTOR_HEADER,
-                                  .stack_top  = stack_top.val,
-                                  .stack_size = is_32bit() ? MB(32) : GB(2),
-                                  .guard_size = 0,
-                                  .unused0    = 0,
-    };
+    *d                           = stack_desc;
 
     current_offset += sizeof(*d);
 
-    memcpy((char *)(load_stack) + current_offset, (char *)&phdr_tag, sizeof(phdr_tag));
+    memcpy((char *)(&load_stack[0]) + current_offset, (char *)&phdr_tag, sizeof(phdr_tag));
     current_offset += sizeof(phdr_tag);
 
     for (auto &tag: tags) {
-        auto ptr = load_stack + current_offset / 8;
+        auto ptr = &load_stack[0] + current_offset / 8;
         current_offset += tag->offset_to_next;
         memcpy((char *)ptr, (const char *)tag.get(), tag->offset_to_next);
     }

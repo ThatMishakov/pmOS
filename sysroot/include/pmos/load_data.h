@@ -42,6 +42,7 @@ enum {
     LOAD_TAG_RSDP             = 7,
     LOAD_TAG_FDT              = 8,
     LOAD_TAG_ELF_PHDR         = 9,
+    LOAD_TAG_USERSPACE_TAGS   = 10, // Set by kernel when userspace passes some tags
 };
 
 /// @brief Header for a load tag
@@ -172,6 +173,17 @@ struct load_tag_elf_phdr {
 #define LOAD_TAG_ELF_PHDR_HEADER                          \
     {                                                     \
         LOAD_TAG_ELF_PHDR, 0, sizeof(struct load_tag_elf_phdr) \
+    }
+
+struct load_tag_userspace_tags {
+    struct load_tag_generic header;
+    // Use uint64_t for consistency between 64 bit kernel and 32 bit userspace
+    uint64_t tags_address; //< Address of the userspace tags in the process's memory
+    uint64_t memory_size;  //< Size of the memory region in bytes
+};
+#define LOAD_TAG_USERSPACE_TAGS_HEADER                          \
+    {                                                     \
+        LOAD_TAG_USERSPACE_TAGS, 0, sizeof(struct load_tag_userspace_tags) \
     }
 
 /// @brief Gets the first tag of the specified type

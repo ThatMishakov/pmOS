@@ -253,7 +253,20 @@ void syscall_load_executable()
 
     u64 task_id   = syscall_arg64(task, 0);
     u64 object_id = syscall_arg64(task, 1);
-    ulong flags   = syscall_flags(task);
+    ulong args[1];
+    auto memory_region = syscall_args_checked(task, 2, 2, 1, args);
+    ulong flags        = syscall_flags(task);
+
+    if (!memory_region.success()) {
+        syscall_error(task) = memory_region.result;
+        return;
+    }
+    if (!memory_region.val) {
+        syscall_error(task) = -EINVAL;
+        return;
+    }
+
+    void *move_region = (void *)args[0];
 
     TaskDescriptor *t = get_task(task_id);
     if (!t) {
@@ -277,8 +290,125 @@ void syscall_load_executable()
         }
     }
 
-    auto b = t->atomic_load_elf(object, name);
+    // This is bad...
+    auto b = [&]() -> ReturnStr<bool> {
+        Auto_Lock_Scope scope_lock(t->sched_lock);
+
+        if (t->status != TaskStatus::TASK_UNINIT)
+            return Error(-EEXIST);
+
+        if (t->page_table)
+            return Error(-EEXIST);
+
+        auto r = t->load_elf_into_memory(object);
+        if (!r.success())
+            return r.propagate();
+
+        if (!r.val)
+            // ELF can't be loaded immediately
+            return false;
+
+        auto [program_entry, phdr_tag, table] = std::move(r.val.value());
+
+        if (phdr_tag.phdr_addr == 0) {
+            log::serial_logger.printf(
+                "atomic_load_elf error -> phdr not mapped into the program's memory\n");
+            return Error(-ENOEXEC);
+        }
+
+        auto stack = t->init_stack(table);
+
+        if (!stack.success())
+            return stack.propagate();
+
+        auto [_, stack_desc] = stack.val;
+
+        t->regs.program_counter() = program_entry;
+
+        void *move_addr = nullptr;
+        size_t move_size = 0;
+
+        if (move_region) {
+            auto r = task->page_table->atomic_transfer_region(table, move_region, nullptr, 0x3, false);
+            if (!r.success())
+                return r.propagate();
+
+            move_addr = r.val.first;
+            move_size = r.val.second;
+        }
+
+        // Push stack descriptor structure
+        u64 size =
+            sizeof(load_tag_stack_descriptor) + sizeof(load_tag_elf_phdr) + sizeof(load_tag_close);
+        if (move_addr)
+            size += sizeof(load_tag_userspace_tags);
+
+        u64 current_offset = 0;
+
+        klib::vector<u64> load_stack;
+        if (!load_stack.resize(size / 8))
+            return Error(-ENOMEM);
+
+        load_tag_stack_descriptor *d = (load_tag_stack_descriptor *)&load_stack[current_offset / 8];
+        *d                           = stack_desc;
+
+        current_offset += sizeof(*d);
+
+        memcpy((char *)(&load_stack[0]) + current_offset, (char *)&phdr_tag, sizeof(phdr_tag));
+        current_offset += sizeof(phdr_tag);
+
+        if (move_addr) {
+            load_tag_userspace_tags *t = (load_tag_userspace_tags *)&load_stack[current_offset / 8];
+            *t                    = {
+                .header = LOAD_TAG_USERSPACE_TAGS_HEADER,
+                .tags_address = (u64)move_addr,
+                .memory_size = (u64)move_size,
+            };
+
+            current_offset += sizeof(*t);
+        }
+
+        load_tag_close *h = (load_tag_close *)&load_stack[current_offset / 8];
+        *h                = {
+                           .header = LOAD_TAG_CLOSE_HEADER,
+        };
+
+        const u64 tag_size_page = (size + 0xFFF) & ~0xFFFUL;
+
+        auto pos_p = table->atomic_create_normal_region(
+            0, tag_size_page,
+            paging::Page_Table::Protection::Readable | paging::Page_Table::Protection::Writeable,
+            false, false, name + "_load_tags", 0, true);
+        if (!pos_p.success())
+            return pos_p.propagate();
+
+        auto pos = pos_p.val->start_addr;
+
+        auto b = table->atomic_copy_to_user(pos, &(load_stack[0]), size);
+        if (!b.success())
+            return b.propagate();
+
+        if (!b.val)
+            panic("Trying to block on page, but it's not implemented");
+            //return false;
+
+        auto result = t->register_page_table(table);
+        if (result != 0)
+            return Error(result);
+
+        t->regs.arg1() = (ulong)pos;
+        t->regs.arg2() = size;
+
+        t->init();
+
+        return true;
+    }();
+
     if (!b.success()) {
+        if (move_region)
+            // Doesn't matter if this fails...
+            task->page_table->atomic_delete_region(move_region);
+
         syscall_error(task) = b.result;
         return;
     }
@@ -319,7 +449,7 @@ void syscall_init_stack()
     if (esp == 0) { // If ESP == 0 use default kernel's stack policy
         auto result = t->init_stack();
         if (result.success()) {
-            syscall_return(task) = result.val;
+            syscall_return(task) = std::get<0>(result.val);
         } else {
             syscall_error(task) = result.result;
         }
@@ -409,33 +539,33 @@ void syscall_get_first_message()
     u64 reply_right_id = 0;
     if (!(args & MSG_ARG_NOPOP)) {
         if (top_message->reply_right)
-        if ((!(args & MSG_ARG_REJECT_RIGHT)) && top_message->reply_right) {
-            auto right = top_message->reply_right;
-            auto group = current->get_rights_namespace();
-            if (!group) {
-                syscall_error(current) = -ESRCH;
-                return;
-            }
-
-            reply_right_id = group->atomic_new_right_id();
-
-            Auto_Lock_Scope l(right->lock);
-            if (right->alive) {
-                Auto_Lock_Scope gl(group->rights_lock);
-
-                if (!group->atomic_alive()) {
+            if ((!(args & MSG_ARG_REJECT_RIGHT)) && top_message->reply_right) {
+                auto right = top_message->reply_right;
+                auto group = current->get_rights_namespace();
+                if (!group) {
                     syscall_error(current) = -ESRCH;
                     return;
                 }
 
-                right->right_sender_id = reply_right_id;
-                group->rights.insert(right);
-                right->of_message = false;
-                right->parent_group = group;
+                reply_right_id = group->atomic_new_right_id();
 
-                top_message->reply_right = nullptr;
+                Auto_Lock_Scope l(right->lock);
+                if (right->alive) {
+                    Auto_Lock_Scope gl(group->rights_lock);
+
+                    if (!group->atomic_alive()) {
+                        syscall_error(current) = -ESRCH;
+                        return;
+                    }
+
+                    right->right_sender_id = reply_right_id;
+                    group->rights.insert(right);
+                    right->of_message   = false;
+                    right->parent_group = group;
+
+                    top_message->reply_right = nullptr;
+                }
             }
-        }
 
         Auto_Lock_Scope scope_lock(port->lock);
         port->pop_front();
@@ -542,7 +672,7 @@ void syscall_get_message_info()
         reply_right_send_many = msg->reply_right->type == RightType::SendMany;
 
     unsigned flags_ = (holds_reply_right ? (unsigned)MESSAGE_FLAG_REPLY_RIGHT : 0) |
-                 (reply_right_send_many ? (unsigned)MESSAGE_FLAG_REPLY_SEND_MANY : 0);
+                      (reply_right_send_many ? (unsigned)MESSAGE_FLAG_REPLY_SEND_MANY : 0);
 
     for (int i = 0; i < 4; ++i)
         if (auto r = msg->rights[i]; r && r->type == RightType::SendMany)
@@ -1137,7 +1267,7 @@ void syscall_transfer_region()
         return;
     }
 
-    syscall_return(current) = (ulong)result.val;
+    syscall_return(current) = (ulong)result.val.first;
 }
 
 void syscall_asign_page_table()
@@ -2011,12 +2141,11 @@ void send_message_right()
         right = group->atomic_get_right(right_id);
     } else {
         auto id = atomic_right0_id();
-        right = kernel_tasks->atomic_get_right(id);
+        right   = kernel_tasks->atomic_get_right(id);
     }
-                           
 
     if (!right) {
-        syscall_error(current) = { -ENOENT, 0 };
+        syscall_error(current) = {-ENOENT, 0};
         return;
     }
 
@@ -2052,7 +2181,7 @@ void send_message_right()
                     continue;
                 auto right = group->atomic_get_right(id);
                 if (!right) {
-                    syscall_error(current) = { -ESRCH, i + 1 };
+                    syscall_error(current) = {-ESRCH, i + 1};
                     return;
                 }
 
@@ -2068,7 +2197,7 @@ void send_message_right()
         Port::send_message_right(right, group, reply_port, rights, std::move(*buffer.val),
                                  current->task_id, new_type, always_delete);
     if (!send_result.success()) {
-        syscall_error(current) = { send_result.result, send_result.val.second };
+        syscall_error(current) = {send_result.result, send_result.val.second};
         return;
     }
 
@@ -2105,7 +2234,7 @@ void syscall_accept_rights()
     auto current = get_current_task();
 
     u64 port_id = syscall_arg64(current, 0);
-    ulong ptr = syscall_arg(current, 1, 1);
+    ulong ptr   = syscall_arg(current, 1, 1);
 
     auto group = current->get_rights_namespace();
     if (!group) {
