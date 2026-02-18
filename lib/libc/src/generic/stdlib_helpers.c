@@ -103,11 +103,24 @@ void __libc_init_hook() __attribute__((weak));
 void *__load_data_kernel       = 0;
 size_t __load_data_size_kernel = 0;
 
-static void init_tls_first_time(void *load_data, size_t load_data_size, TLS_Data *d)
+void *__load_data_user       = 0;
+size_t __load_data_size_user = 0;
+
+static void prepare_load_tags(void *load_data, size_t load_data_size)
 {
     __load_data_kernel      = load_data;
     __load_data_size_kernel = load_data_size;
 
+    struct load_tag_userspace_tags *t = (struct load_tag_userspace_tags *)get_load_tag(
+        LOAD_TAG_USERSPACE_TAGS, load_data, load_data_size);
+    if (t) {
+        __load_data_user      = (void *)t->tags_address;
+        __load_data_size_user = t->memory_size; // This is the size of the page
+    }
+}
+
+static void init_tls_first_time(void *load_data, size_t load_data_size, TLS_Data *d)
+{
     __global_tls_data = d;
 
     struct load_tag_stack_descriptor *s = (struct load_tag_stack_descriptor *)get_load_tag(
@@ -158,6 +171,7 @@ void init_std_lib(void *load_data, size_t load_data_size, TLS_Data *d)
     __libc_gp = __get_gp();
     #endif
 
+    prepare_load_tags(load_data, load_data_size);
     init_tls_first_time(load_data, load_data_size, d);
 
     __active_threads = 1;
@@ -176,6 +190,34 @@ struct load_tag_generic *get_load_tag(uint32_t tag, void *load_data, size_t load
         t = (struct load_tag_generic *)((unsigned char *)t + t->offset_to_next);
         if ((unsigned char *)t >= (unsigned char *)load_data + load_data_size)
             return NULL;
+    }
+    return NULL;
+}
+
+struct load_tag_generic *get_load_tag_global(uint32_t tag, size_t index)
+{
+    struct load_tag_generic *t = __load_data_kernel;
+    while (t->tag != LOAD_TAG_CLOSE) {
+        if (t->tag == tag) {
+            if (index == 0)
+                return t;
+            index--;
+        }
+        t = (struct load_tag_generic *)((unsigned char *)t + t->offset_to_next);
+        if ((unsigned char *)t >= (unsigned char *)__load_data_kernel + __load_data_size_kernel)
+            return NULL;
+    }
+    
+    t = __load_data_user;
+    while ((unsigned char *)t <= (unsigned char *)__load_data_user + __load_data_size_user + sizeof(struct load_tag_generic) &&
+    (unsigned char *)t + t->offset_to_next <= (unsigned char *)__load_data_user + __load_data_size_user &&
+    t->tag != LOAD_TAG_CLOSE) {
+        if (t->tag == tag) {
+            if (index == 0)
+                return t;
+            index--;
+        }
+        t = (struct load_tag_generic *)((unsigned char *)t + t->offset_to_next);
     }
     return NULL;
 }

@@ -8,6 +8,7 @@
 #include <pmos/tls.h>
 #include <string.h>
 #include <pmos/__internal.h>
+#include <pmos/load_data.h>
 
 pmos_port_t worker_port;
 uint64_t worker_port_right;
@@ -89,14 +90,20 @@ void worker_main()
 {
     worker_thread = __get_tls();
 
-    syscall_r sys_result = create_task_group();
-    if (sys_result.result != SUCCESS) {
-        fprintf(stderr, "pmOS libC: Failed to create task group\n");
-        _syscall_exit(1);
-    }
-    process_task_group = sys_result.value;
+    struct load_tag_task_group_id *task_group_tag = (struct load_tag_task_group_id *)get_load_tag_global(LOAD_TAG_TASK_GROUP_ID, 0);
 
-    sys_result = set_namespace(process_task_group, NAMESPACE_RIGHTS);
+    if (task_group_tag && task_group_tag->group_id != 0) {
+        process_task_group = task_group_tag->group_id;
+    } else {
+        syscall_r sys_result = create_task_group();
+        if (sys_result.result != SUCCESS) {
+            fprintf(stderr, "pmOS libC: Failed to create task group\n");
+            _syscall_exit(1);
+        }
+        process_task_group = sys_result.value;
+    }
+
+    syscall_r sys_result = set_namespace(process_task_group, NAMESPACE_RIGHTS);
     if (sys_result.result != SUCCESS) {
         fprintf(stderr, "pmOS libC: Failed to set task group namespace\n");
         _syscall_exit(1);
