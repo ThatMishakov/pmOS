@@ -605,7 +605,7 @@ protected:
     /// @brief Unblocks the tasks blocked by the given page
     /// @param blocked_by_page Virtuall address of the page that has blocked the tasks
     void unblock_tasks(void *blocked_by_page);
-    void unblock_tasks_rage(void *blocked_by_page, size_t size_bytes);
+    void unblock_tasks_range(void *blocked_by_page, size_t size_bytes);
 
     /// Gets the region for the page. Returns end() if no region exists
     RegionsRBTree::RBTreeIterator get_region(void *page);

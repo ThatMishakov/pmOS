@@ -42,6 +42,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/syscall.h>
+#include <pmos/memory.h>
 
 uint64_t loader_port = 0;
 
@@ -234,7 +235,9 @@ void start_executables()
         d                                = d->next;
 
         if (c->service && c->service->run_type == RUN_ALWAYS_ONCE) {
+            uint64_t group_id = {};
             syscall_r r = syscall_new_process();
+            void *mem_region = NULL;
             if (r.result != SUCCESS) {
                 print_str("Loader: Could not create process for ");
                 print_str(c->path);
@@ -248,19 +251,21 @@ void start_executables()
             // Doesn't really matter if this fails
             syscall_set_task_name(r.value, c->path, strlen(c->path));
 
-            syscall_r group_id = create_task_group();
-            if (group_id.result != SUCCESS) {
+            syscall_r rr = create_task_group();
+            if (rr.result != SUCCESS) {
                 print_str("Loader: Could not create task group for ");
                 print_str(c->path);
                 print_str(". Error: ");
-                print_hex(group_id.result);
+                print_hex(rr.result);
                 print_str("\n");
 
                 syscall_kill_task(r.value);
                 continue;
             }
 
-            if (add_task_to_group(r.value, group_id.value) != SUCCESS) {
+            group_id = rr.value;
+
+            if (add_task_to_group(r.value, group_id) != SUCCESS) {
                 print_str("Loader: Could not add task to group for ");
                 print_str(c->path);
                 print_str(". Error: ");
@@ -268,13 +273,46 @@ void start_executables()
                 print_str("\n");
 
                 syscall_kill_task(r.value);
-                remove_task_from_group(TASK_ID_SELF, group_id.value);
+                remove_task_from_group(TASK_ID_SELF, group_id);
                 continue;
             }
 
-            remove_task_from_group(TASK_ID_SELF, group_id.value);
+            remove_task_from_group(TASK_ID_SELF, group_id);
+            group_id = 0;
 
-            result_t res = syscall_load_executable(r.value, c->object_id, nullptr, 0);
+            // Pass arguments
+            size_t args_size = 0;
+            args_size += sizeof(struct load_tag_task_group_id);
+            // TODO: Add other tags (and move this to a separate function, this is a mess)
+            args_size += sizeof(struct load_tag_close);
+
+            size_t page_aligned = (args_size + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+            mem_request_ret_t mem = create_normal_region(TASK_ID_SELF, NULL, page_aligned, PROT_READ | PROT_WRITE);
+            if (mem.result != SUCCESS) {
+                print_str("Loader: Could not create memory region for arguments for ");
+                print_str(c->path);
+                print_str(". Error: ");
+                print_hex(mem.result);
+                print_str("\n");
+
+                goto error;
+            }
+            mem_region = mem.virt_addr;
+
+            size_t current_offset = 0;
+            struct load_tag_task_group_id g = {
+                .header = LOAD_TAG_TASK_GROUP_ID_HEADER,
+                .group_id = group_id,
+            };
+            memcpy((char *)mem_region + current_offset, &g, sizeof(g));
+            current_offset += sizeof(g);
+
+            struct load_tag_close h = {
+                .header = LOAD_TAG_CLOSE_HEADER,
+            };
+            memcpy((char *)mem_region + current_offset, &h, sizeof(h));
+
+            result_t res = syscall_load_executable(r.value, c->object_id, mem_region, 0);
             if (res != SUCCESS) {
                 print_str("Loader: Could not load executable ");
                 print_str(c->path);
@@ -287,6 +325,19 @@ void start_executables()
             }
 
             c->service->state = STATE_STARTED;
+            mem_region = NULL;
+
+            continue;
+        error:
+            if (mem_region)
+                release_region(TASK_ID_SELF, mem_region);
+
+
+            if (group_id)
+                remove_task_from_group(TASK_ID_SELF, group_id);
+
+            if (r.value)
+                syscall_kill_task(r.value);
         }
     }
 }

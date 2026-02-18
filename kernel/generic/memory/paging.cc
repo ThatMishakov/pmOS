@@ -620,7 +620,7 @@ void Page_Table::atomic_shrink_regions(const klib::shared_ptr<Mem_Object> &id,
             }
 
             invalidate_range(ctx, free_from, free_size, true);
-            unblock_tasks_rage(free_from, free_size);
+            unblock_tasks_range(free_from, free_size);
         }
     }
 }
@@ -642,7 +642,7 @@ kresult_t Page_Table::atomic_delete_region(void *region_start)
     auto ctx = TLBShootdownContext::create_userspace(*this);
 
     invalidate_range(ctx, region_start, region_size, true);
-    unblock_tasks_rage(region_start, region_size);
+    unblock_tasks_range(region_start, region_size);
 
     return 0;
 }
@@ -656,7 +656,7 @@ void Page_Table::unreference_object(const klib::shared_ptr<Mem_Object> &object,
         p->second.erase(region);
 }
 
-void Page_Table::unblock_tasks_rage(void *blocked_by_page, size_t size_bytes)
+void Page_Table::unblock_tasks_range(void *blocked_by_page, size_t size_bytes)
 {
     // TODO
 }
