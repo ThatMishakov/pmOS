@@ -37,12 +37,12 @@
 #include <pmos/helpers.h>
 #include <pmos/ipc.h>
 #include <pmos/load_data.h>
+#include <pmos/memory.h>
 #include <pmos/ports.h>
 #include <pmos/system.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/syscall.h>
-#include <pmos/memory.h>
 
 uint64_t loader_port = 0;
 
@@ -227,6 +227,139 @@ void provide_framebuffer(pmos_right_t right, uint32_t flags)
         delete_right(right);
 }
 
+uint64_t instance_id_counter = 1;
+
+void start_service(struct Service *service, uint64_t object_id)
+{
+    if (!service)
+        return;
+
+    int result = 0;
+    size_t size = service->instances.size;
+    VECTOR_RESERVE(service->instances, size + 1, result);
+    if (result != 0) {
+        print_str("Loader: Could not reserve space for service instance for ");
+        print_str(service->name);
+        print_str(". Error: ");
+        print_hex(result);
+        print_str("\n");
+        return;
+    }
+
+    uint64_t group_id = {};
+    syscall_r r       = syscall_new_process();
+    void *mem_region  = NULL;
+    if (r.result != SUCCESS) {
+        print_str("Loader: Could not create process for ");
+        print_str(service->name);
+        print_str(". Error: ");
+        print_hex(r.result);
+        print_str("\n");
+
+        return;
+    }
+
+    // Doesn't really matter if this fails
+    syscall_set_task_name(r.value, service->name, strlen(service->name));
+
+    syscall_r rr = create_task_group();
+    if (rr.result != SUCCESS) {
+        print_str("Loader: Could not create task group for ");
+        print_str(service->name);
+        print_str(". Error: ");
+        print_hex(rr.result);
+        print_str("\n");
+
+        syscall_kill_task(r.value);
+        return;
+    }
+
+    group_id = rr.value;
+
+    if (add_task_to_group(r.value, group_id) != SUCCESS) {
+        print_str("Loader: Could not add task to group for ");
+        print_str(service->name);
+        print_str(". Error: ");
+        print_hex(r.result);
+        print_str("\n");
+
+        syscall_kill_task(r.value);
+        remove_task_from_group(TASK_ID_SELF, group_id);
+        return;
+    }
+
+    uint64_t new_group_id = group_id;
+    remove_task_from_group(TASK_ID_SELF, group_id);
+    group_id = 0;
+
+    // Pass arguments
+    size_t args_size = 0;
+    args_size += sizeof(struct load_tag_task_group_id);
+    // TODO: Add other tags (and move this to a separate function, this is a mess)
+    args_size += sizeof(struct load_tag_close);
+
+    size_t page_aligned = (args_size + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+    mem_request_ret_t mem =
+        create_normal_region(TASK_ID_SELF, NULL, page_aligned, PROT_READ | PROT_WRITE);
+    if (mem.result != SUCCESS) {
+        print_str("Loader: Could not create memory region for arguments for ");
+        print_str(service->name);
+        print_str(". Error: ");
+        print_hex(mem.result);
+        print_str("\n");
+
+        goto error;
+    }
+    mem_region = mem.virt_addr;
+
+    size_t current_offset           = 0;
+    struct load_tag_task_group_id g = {
+        .header   = LOAD_TAG_TASK_GROUP_ID_HEADER,
+        .group_id = new_group_id,
+    };
+    memcpy((char *)mem_region + current_offset, &g, sizeof(g));
+    current_offset += sizeof(g);
+
+    struct load_tag_close h = {
+        .header = LOAD_TAG_CLOSE_HEADER,
+    };
+    memcpy((char *)mem_region + current_offset, &h, sizeof(h));
+
+    result_t res = syscall_load_executable(r.value, object_id, mem_region, 0);
+    if (res != SUCCESS) {
+        print_str("Loader: Could not load executable ");
+        print_str(service->name);
+        print_str(". Error: ");
+        print_hex(res);
+        print_str("\n");
+
+        goto error;
+    }
+
+    service->state = STATE_STARTED;
+    mem_region        = NULL;
+
+    struct Instance instance = {
+        .id = instance_id_counter++,
+        .group_id = new_group_id,
+        .parent = service,
+        .state = STATE_STARTED,
+    };
+
+    VECTOR_PUSH_BACK(service->instances, instance);
+
+    return;
+error:
+    if (mem_region)
+        release_region(TASK_ID_SELF, mem_region);
+
+    if (group_id)
+        remove_task_from_group(TASK_ID_SELF, group_id);
+
+    if (r.value)
+        syscall_kill_task(r.value);
+}
+
 void start_executables()
 {
     struct module_descriptor_list *d = module_list;
@@ -235,109 +368,7 @@ void start_executables()
         d                                = d->next;
 
         if (c->service && c->service->run_type == RUN_ALWAYS_ONCE) {
-            uint64_t group_id = {};
-            syscall_r r = syscall_new_process();
-            void *mem_region = NULL;
-            if (r.result != SUCCESS) {
-                print_str("Loader: Could not create process for ");
-                print_str(c->path);
-                print_str(". Error: ");
-                print_hex(r.result);
-                print_str("\n");
-
-                continue;
-            }
-
-            // Doesn't really matter if this fails
-            syscall_set_task_name(r.value, c->path, strlen(c->path));
-
-            syscall_r rr = create_task_group();
-            if (rr.result != SUCCESS) {
-                print_str("Loader: Could not create task group for ");
-                print_str(c->path);
-                print_str(". Error: ");
-                print_hex(rr.result);
-                print_str("\n");
-
-                syscall_kill_task(r.value);
-                continue;
-            }
-
-            group_id = rr.value;
-
-            if (add_task_to_group(r.value, group_id) != SUCCESS) {
-                print_str("Loader: Could not add task to group for ");
-                print_str(c->path);
-                print_str(". Error: ");
-                print_hex(r.result);
-                print_str("\n");
-
-                syscall_kill_task(r.value);
-                remove_task_from_group(TASK_ID_SELF, group_id);
-                continue;
-            }
-
-            uint64_t new_group_id = group_id;
-            remove_task_from_group(TASK_ID_SELF, group_id);
-            group_id = 0;
-
-            // Pass arguments
-            size_t args_size = 0;
-            args_size += sizeof(struct load_tag_task_group_id);
-            // TODO: Add other tags (and move this to a separate function, this is a mess)
-            args_size += sizeof(struct load_tag_close);
-
-            size_t page_aligned = (args_size + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
-            mem_request_ret_t mem = create_normal_region(TASK_ID_SELF, NULL, page_aligned, PROT_READ | PROT_WRITE);
-            if (mem.result != SUCCESS) {
-                print_str("Loader: Could not create memory region for arguments for ");
-                print_str(c->path);
-                print_str(". Error: ");
-                print_hex(mem.result);
-                print_str("\n");
-
-                goto error;
-            }
-            mem_region = mem.virt_addr;
-
-            size_t current_offset = 0;
-            struct load_tag_task_group_id g = {
-                .header = LOAD_TAG_TASK_GROUP_ID_HEADER,
-                .group_id = new_group_id,
-            };
-            memcpy((char *)mem_region + current_offset, &g, sizeof(g));
-            current_offset += sizeof(g);
-
-            struct load_tag_close h = {
-                .header = LOAD_TAG_CLOSE_HEADER,
-            };
-            memcpy((char *)mem_region + current_offset, &h, sizeof(h));
-
-            result_t res = syscall_load_executable(r.value, c->object_id, mem_region, 0);
-            if (res != SUCCESS) {
-                print_str("Loader: Could not load executable ");
-                print_str(c->path);
-                print_str(". Error: ");
-                print_hex(res);
-                print_str("\n");
-
-                goto error;
-            }
-
-            c->service->state = STATE_STARTED;
-            mem_region = NULL;
-
-            continue;
-        error:
-            if (mem_region)
-                release_region(TASK_ID_SELF, mem_region);
-
-
-            if (group_id)
-                remove_task_from_group(TASK_ID_SELF, group_id);
-
-            if (r.value)
-                syscall_kill_task(r.value);
+            start_service(c->service, c->object_id);
         }
     }
 }

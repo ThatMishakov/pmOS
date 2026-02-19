@@ -15,20 +15,25 @@ extern service_vector_type service_vector;
 
 struct Instance {
     uint64_t id;
+    uint64_t group_id;
     struct Service *parent;
     enum State state;
 };
 VECTOR_TYPEDEF(struct Instance, instances_vector);
 
+struct Requirement {
+    char *service_name;
+    struct Service *service;
+};
+VECTOR_TYPEDEF(struct Requirement, requirements_vector);
+
 struct MatchFilter {
     char *key;
-    union { // NULL-terminated lists
-        char **strings;
-        uint64_t **ints;
-    };
+    char **strings; // Get converted to ints if necessary
 
     // blacklist?
 };
+VECTOR_TYPEDEF(struct MatchFilter, match_filter_vector);
 
 enum RunType {
     RUN_MANUAL,
@@ -49,6 +54,8 @@ struct Service {
     enum RunType run_type;
 
     instances_vector instances;
+    requirements_vector requirements;
+    match_filter_vector match_filters;
 
     bool start_on_boot;
 };
