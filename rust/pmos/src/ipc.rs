@@ -72,6 +72,10 @@ impl IPCPort {
             sender: 0,
             mem_object: 0,
             size: 0,
+            sender_object_id: 0,
+            sent_with_right: 0,
+            other_rights_count: 0,
+            flags: 0,
         };
 
         unsafe { syscall_get_message_info(&mut desc, self.port, 0) }
@@ -87,6 +91,7 @@ impl IPCPort {
             data: buffer.into_boxed_slice(),
             sender: desc.sender,
             object: MemoryObject::from_message(desc.mem_object),
+            sent_with_right: desc.sent_with_right,
         }
     }
 
@@ -118,11 +123,16 @@ struct MessageDescriptor {
     sender: u64,
     mem_object: u64,
     size: u64,
+    sender_object_id: u64,
+    sent_with_right: u64,
+    other_rights_count: u32,
+    flags: u32,
 }
 
 pub struct Message {
     pub data: Box<[u8]>,
     pub sender: u64,
+    pub sent_with_right: u64,
     pub object: Option<MemoryObject>,
 }
 
