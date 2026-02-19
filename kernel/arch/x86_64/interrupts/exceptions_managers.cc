@@ -249,9 +249,9 @@ extern "C" void pagefault_manager(NestedIntContext *kernel_ctx, ulong err)
     }();
 
     if (result) {
-        t_print_bochs("Debug: Pagefault %h pid %i rip %h error %h returned "
+        t_print_bochs("Debug: Pagefault %h pid %i (%s) rip %h error %h returned "
                       "error %i\n",
-                      virtual_addr, task->task_id, task->regs.program_counter(), err, result);
+                      virtual_addr, task->task_id, task->name.c_str(), task->regs.program_counter(), err, result);
         global_logger.printf("Warning: Pagefault %h pid %i (%s) rip %h error "
                              "%h -> %i killing process...\n",
                              virtual_addr, task->task_id, task->name.c_str(),
