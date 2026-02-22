@@ -30,6 +30,7 @@
 #include "init/init.h"
 #include "io.h"
 #include "named_ports.h"
+#include "pmbus.h"
 
 #include <errno.h>
 #include <kernel/messaging.h>
@@ -361,25 +362,6 @@ error:
         syscall_kill_task(r.value);
 }
 
-void hook_match_service(struct Service *service, uint64_t object_id)
-{
-    void *filter = construct_filter(service);
-    if (!filter) {
-        print_str("Loader: Could not construct filter for service ");
-        print_str(service->name);
-        print_str("\n");
-        return;
-    }
-
-    // TODO...
-
-    print_str("Loader: Hooking up match service ");
-    print_str(service->name);
-    print_str("\n");
-
-    pmos_bus_filter_free(filter);
-}
-
 void start_executables()
 {
     struct module_descriptor_list *d = module_list;
@@ -410,6 +392,7 @@ void set_print_callback(int result, const char * /* right_name */, pmos_right_t 
 
 static const char *log_port_name = "/pmos/stdout";
 static char *vfsd_port_name      = "/pmos/vfsd";
+static char *pmbus_port_name     = "/pmos/pmbus";
 
 int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_right,
                      pmos_right_t *extra_rights, void *, struct pmos_msgloop_data *)
@@ -644,11 +627,21 @@ int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_r
 pmos_right_t loader_right    = 0;
 pmos_right_t namespace_right = 0;
 
+struct pmos_msgloop_data msgloop_data;
+
 void service_ports()
 {
     auto result = request_port_callback(log_port_name, strlen(log_port_name), set_print_callback);
     if (result != SUCCESS) {
         print_str("Loader: could not request log port. Error: ");
+        print_hex(result);
+        print_str("\n");
+        goto exit;
+    }
+
+    result = request_port_callback(pmbus_port_name, strlen(pmbus_port_name), pmbus_callback);
+    if (result != SUCCESS) {
+        print_str("Loader: could not request pmbus port. Error: ");
         print_hex(result);
         print_str("\n");
         goto exit;
@@ -662,13 +655,12 @@ void service_ports()
     //     goto exit;
     // }
 
-    struct pmos_msgloop_data data;
-    pmos_msgloop_initialize(&data, loader_port);
+    pmos_msgloop_initialize(&msgloop_data, loader_port);
 
     pmos_msgloop_tree_node_t n;
     pmos_msgloop_node_set(&n, 0, default_callback, NULL);
-    pmos_msgloop_insert(&data, &n);
-    pmos_msgloop_loop(&data);
+    pmos_msgloop_insert(&msgloop_data, &n);
+    pmos_msgloop_loop(&msgloop_data);
 
 exit:
 }

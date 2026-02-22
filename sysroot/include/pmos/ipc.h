@@ -1479,6 +1479,23 @@ typedef struct IPC_BUS_Publish_Object {
     struct IPC_Bus_Object object;
 } IPC_BUS_Publish_Object;
 
+#define IPC_BUS_Request_Object_NUM 0x1a1
+typedef struct IPC_BUS_Request_Object {
+    /// Message type (must be IPC_BUS_Request_Object_NUM)
+    uint32_t type;
+
+    /// TODO: Eager vs lazy flag?
+
+    /// Flags
+    uint32_t flags;
+
+    /// Starting sequence for the objects to be sent (0 is the first number...)
+    uint64_t start_sequence_number;
+
+    /// Serialized filter data, aligned to 8 bytes.
+    uint8_t data[];
+} IPC_BUS_Request_Object;
+
 #define IPC_BUS_Publish_Object_Reply_NUM 0x1b0
 typedef struct IPC_BUS_Publish_Object_Reply {
     /// Message type (must be IPC_BUS_Publish_Object_Reply)
@@ -1498,6 +1515,27 @@ typedef struct IPC_BUS_Publish_Object_Reply {
     /// New sequence number (starting with 1, shared globally)
     uint64_t sequence_number;
 } IPC_BUS_Publish_Object_Reply;
+
+#define IPC_BUS_Request_Object_Reply_NUM 0x1b1
+typedef struct IPC_BUS_Request_Object_Reply {
+    /// Message type (must be IPC_BUS_Request_Object_Reply_NUM)
+    uint32_t type;
+
+    /// Flags
+    uint32_t flags;
+
+    /// Result (negative -> error)
+    int32_t result;
+
+    /// Reserved (for alignment)
+    uint32_t reserved;
+
+    /// Sequence number of the next potential object with the same filter (so at least the object id + 1)
+    uint64_t next_sequence_number;
+
+    /// Object data (for more objects, the same request should be sent again with the next_sequence_number)
+    struct IPC_Bus_Object object;
+} IPC_BUS_Request_Object_Reply;
 
 #define IPC_Name_Port_NUM 0x1c0
 typedef struct IPC_Name_Port {

@@ -2201,6 +2201,9 @@ void send_message_right()
         return;
     }
 
+    // This was a fun thing to discover... (just silently wrecked userspace)
+    assert(!(reply_port and !send_result.val.second));
+
     syscall_return(current) = send_result.val.second;
 }
 
