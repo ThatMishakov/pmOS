@@ -15,6 +15,14 @@ pub struct IPCBusPublishObject<'a> {
     pub object_data: &'a [u8],
 }
 
+pub const IPC_BUS_REQUEST_OBJECT_NUM: u32 = 0x1a1;
+#[derive(Debug)]
+pub struct IPCBusRequestObject<'a> {
+    pub flags: u32,
+    pub start_sequence_number: u64,
+    pub filter_data: &'a [u8],
+}
+
 pub const IPC_BUS_PUBLISH_OBJECT_REPLY_NUM: u32 = 0x1b0;
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Zeroable, Pod)]
@@ -42,6 +50,7 @@ impl IPCBusPublishObjectReply {
 
 pub enum Message<'a> {
     IPCBusPublishObject(IPCBusPublishObject<'a>),
+    IPCBusRequestObject(IPCBusRequestObject<'a>),
     Unknown,
 }
 
@@ -60,6 +69,17 @@ impl super::ipc::Message {
                         reply_port: u64::from_ne_bytes(data[8..16].try_into().unwrap()),
                         user_arg: u64::from_ne_bytes(data[16..24].try_into().unwrap()),
                         object_data: &data[24..],
+                    })
+                }
+                IPC_BUS_REQUEST_OBJECT_NUM => {
+                    if data.len() < 16 {
+                        return Message::Unknown;
+                    }
+
+                    Message::IPCBusRequestObject(IPCBusRequestObject {
+                        flags: u32::from_ne_bytes(data[4..8].try_into().unwrap()),
+                        start_sequence_number: u64::from_ne_bytes(data[8..16].try_into().unwrap()),
+                        filter_data: &data[16..],
                     })
                 }
                 _ => Message::Unknown,

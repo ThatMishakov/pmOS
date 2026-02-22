@@ -3,6 +3,7 @@ use pmos::ipc::IPCPort;
 use pmos::ipc_msgs;
 use pmos::ipc_msgs::Message;
 use pmos::pmbus;
+use pmos::pmbus::AnyFilter;
 use pmos::task_group;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -131,6 +132,18 @@ fn publish_object(
     }
 }
 
+fn request_object(
+    object: ipc_msgs::IPCBusRequestObject,
+    _message: &ipc::Message,
+    _state: &mut State,
+) {
+    if let Ok(req) = AnyFilter::deserialize(&object.filter_data) {
+        println!("Recieved filter request: {:?}", req)
+    } else {
+        println!("Failed to deserialize filters...")
+    }
+}
+
 fn main() {
     let mut port = IPCPort::new().unwrap();
     let mut state = State {
@@ -148,6 +161,9 @@ fn main() {
         match msg.deserialize() {
             Message::IPCBusPublishObject(o) => {
                 publish_object(o, &msg, &mut state);
+            }
+            Message::IPCBusRequestObject(o) => {
+                request_object(o, &msg, &mut state);
             }
             Message::Unknown => {
                 let id = msg.get_known_id();
