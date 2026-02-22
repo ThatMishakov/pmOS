@@ -72,6 +72,9 @@
 #define VECTOR_FOREACH(vec, var) \
     for (size_t i = 0; i < (vec).size && ((var) = (vec).data[i], 1); ++i)
 
+#define VECTOR_FOREACH_PTR(vec, var) \
+    for (size_t i = 0; i < (vec).size && ((var) = &(vec).data[i], 1); ++i)
+
 #define VECTOR_FREE(vec)       \
     do {                       \
         free((vec).data);      \

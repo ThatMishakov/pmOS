@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <pmos/ports.h>
+#include <pmos/vector.h>
 
 typedef enum {
     PMOS_PROPERTY_STRING = 1,
@@ -87,5 +88,75 @@ const pmos_property_t *pmos_bus_object_first_property(const pmos_bus_object_t *o
 const pmos_property_t *pmos_bus_object_next_property(const pmos_bus_object_t *object);
 
 bool pmos_bus_object_serialize_ipc(const pmos_bus_object_t *object, pmos_port_t reply_port, uint64_t user_arg, pmos_port_t handle_port, uint64_t task_group, uint8_t **data_out, size_t *size_out);
+
+
+/// Header for the list of filters
+struct _pmos_bus_filter_header {
+    int type; 
+};
+
+/// Filter that checks if the property with the given key is equal to the given value
+typedef struct {
+    struct _pmos_bus_filter_header header;
+    char *key;
+    char *value;
+} pmos_bus_filter_equals;
+
+/// @brief Create a new "equals" filter, which checks if the property with the given key is equal to the
+/// given value. Returns NULL if there is not enough memory. Values are copied.
+/// @param key Key of the property to check
+/// @param value Value to compare the property to
+/// @return New equals filter, or NULL if there is not enough memory
+pmos_bus_filter_equals *pmos_bus_filter_equals_create(const char *key, const char *value);
+
+/// @brief Free an equals filter
+/// @param filter Filter to free. Does nothing if filter is NULL
+void pmos_bus_filter_equals_free(pmos_bus_filter_equals *filter);
+
+VECTOR_TYPEDEF(void *, pmos_filter_void_ptr_vector);
+
+/// Conjunction or disjunction of filters.
+typedef struct {
+    struct _pmos_bus_filter_header header;
+    pmos_filter_void_ptr_vector values;
+} pmos_bus_filter_conjunction, pmos_bus_filter_disjunction;
+
+/// Create a new conjunction filter. Returns NULL if there is not enough memory. The filter should be freed with pmos_bus_filter_conjunction_free
+/// @return New conjunction filter, or NULL if there is not enough memory
+pmos_bus_filter_conjunction *pmos_bus_filter_conjunction_create();
+/// @brief Adds a filter to the conjunction. Returns false if there is not enough memory or the filter is invalid (NULL or of wrong type)
+/// @param filter Valid conjunction filter
+/// @param value Value to be added to the conjunction. Can be a conjunction, disjunction or equals filter. Consumed if successfully added.
+/// @return 0 if successful, -1 otherwise (not enough memory, filter or value are NULL, filter is of wrong type)
+int pmos_bus_filter_conjunction_add(pmos_bus_filter_conjunction *filter, void *value);
+void pmos_bus_filter_conjunction_free(pmos_bus_filter_conjunction *filter);
+
+/// Create a new disjunction filter. Returns NULL if there is not enough memory. The filter should be freed with pmos_bus_filter_disjunction_free
+/// @return New disjunction filter, or NULL if there is not enough memory
+pmos_bus_filter_disjunction *pmos_bus_filter_disjunction_create();
+/// @brief Adds a filter to the disjunction. Returns false if there is not enough memory or the filter is invalid (NULL or of wrong type)
+/// @param filter Valid disjunction filter
+/// @param value Value to be added to the disjunction. Can be a conjunction, disjunction or equals filter. Consumed if successfully added.
+/// @return 0 if successful, -1 otherwise (not enough memory, filter or value are NULL, filter is of wrong type)
+int pmos_bus_filter_disjunction_add(pmos_bus_filter_disjunction *filter, void *value);
+/// @brief Free a disjunction filter
+/// @param filter Filter to free. Does nothing if filter is NULL
+void pmos_bus_filter_disjunction_free(pmos_bus_filter_disjunction *filter);
+
+/// @brief Free a filter of any type. The correct type is determined from the header. Does nothing if filter is NULL
+void pmos_bus_filter_free(void *filter);
+
+/// @brief Serialize a filter to be sent over IPC. Passing NULL data_out will return the size without writing anything.
+///
+/// @param filter Valid filter to serialize
+/// @param data_out If not NULL, pointer to the buffer where serialized data will be written
+/// @return Size of the serialized data. Alligned to 8 bytes. Returns 0 if the filter is NULL or invalid
+size_t pmos_bus_filter_serialize_ipc(const void *filter, uint8_t *data_out);
+/// @brief Deserialize a filter from IPC data
+/// @param data Data to deserialize from
+/// @param size Size of the data
+/// @return Pointer to the new filter, or NULL if the data is invalid or there is not enough memory. The filter should be freed with pmos_bus_filter_free
+void *pmos_bus_filter_deserialize_ipc(const uint8_t *data, size_t size);
+
 
 #endif /* PMOS_BUS_OBJECT_H */

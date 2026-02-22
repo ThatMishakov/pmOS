@@ -64,3 +64,5 @@ struct Service *new_service();
 void free_service(struct Service *service);
 
 void parse_service(const char *cmdline, const char *name, struct Service **out_service);
+
+void *construct_filter(struct Service *service);

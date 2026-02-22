@@ -43,6 +43,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/syscall.h>
+#include <pmos/pmbus_object.h>
 
 uint64_t loader_port = 0;
 
@@ -360,6 +361,25 @@ error:
         syscall_kill_task(r.value);
 }
 
+void hook_match_service(struct Service *service, uint64_t object_id)
+{
+    void *filter = construct_filter(service);
+    if (!filter) {
+        print_str("Loader: Could not construct filter for service ");
+        print_str(service->name);
+        print_str("\n");
+        return;
+    }
+
+    // TODO...
+
+    print_str("Loader: Hooking up match service ");
+    print_str(service->name);
+    print_str("\n");
+
+    pmos_bus_filter_free(filter);
+}
+
 void start_executables()
 {
     struct module_descriptor_list *d = module_list;
@@ -367,8 +387,17 @@ void start_executables()
         struct module_descriptor_list *c = d;
         d                                = d->next;
 
-        if (c->service && c->service->run_type == RUN_ALWAYS_ONCE) {
-            start_service(c->service, c->object_id);
+        if (c->service) {
+            switch (c->service->run_type) {
+            case RUN_ALWAYS_ONCE:
+                start_service(c->service, c->object_id);
+                break;
+            case RUN_FIRST_MATCH_ONCE:
+                hook_match_service(c->service, c->object_id);
+                break;
+            default:
+                break;
+            }
         }
     }
 }

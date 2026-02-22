@@ -120,3 +120,55 @@ impl std::fmt::Debug for PMBusObject {
             .finish()
     }
 }
+
+pub enum AnyFilter {
+    EqualsFilter(EqualsFilter),
+    Conjunction(Conjunction),
+    Disjunction(Disjunction),
+}
+
+pub struct Conjunction {
+    pub operands: Vec<AnyFilter>,
+}
+
+pub struct Disjunction {
+    pub operands: Vec<AnyFilter>,
+}
+
+pub struct EqualsFilter {
+    pub name: Box<str>,
+    pub property: Box<str>,
+}
+
+impl From<EqualsFilter> for AnyFilter {
+    fn from(filter: EqualsFilter) -> Self {
+        AnyFilter::EqualsFilter(filter)
+    }
+}
+impl From<Conjunction> for AnyFilter {
+    fn from(filter: Conjunction) -> Self {
+        AnyFilter::Conjunction(filter)
+    }
+}
+impl From<Disjunction> for AnyFilter {
+    fn from(filter: Disjunction) -> Self {
+        AnyFilter::Disjunction(filter)
+    }
+}
+
+impl AnyFilter {    
+    pub fn matches(&self, object: &PMBusObject) -> bool {
+        match self {
+            AnyFilter::EqualsFilter(filter) => {
+                match object.get_property(filter.name.as_ref()) {
+                    Some(ObjectPropertyRef::String(s)) => *s == *filter.property,
+                    Some(ObjectPropertyRef::Integer(i)) => filter.property.parse().ok().is_some_and(|v: u64| v == i),
+                    Some(ObjectPropertyRef::List(l)) => l.contains(&filter.property),
+                    None => false,
+                }
+            },
+            AnyFilter::Conjunction(conjunction) => conjunction.operands.iter().all(|f| f.matches(object)),
+            AnyFilter::Disjunction(disjunction) => disjunction.operands.iter().any(|f| f.matches(object)),
+        }
+    }
+}
