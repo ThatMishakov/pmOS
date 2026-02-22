@@ -149,8 +149,8 @@ const char *SERVICE_MATCH = "match";
 
 static bool parse_match_filter(yaml_parser_t *state, yaml_event_t *event, struct Service *service)
 {
-    if (event->type != YAML_SEQUENCE_START_EVENT) {
-        print_str("Expected YAML_SEQUENCE_START_EVENT for match filter, got ");
+    if (event->type != YAML_MAPPING_START_EVENT) {
+        print_str("Expected YAML_MAPPING_START_EVENT for match filter, got ");
         print_hex(event->type);
         print_str("\n");
         return skip_event(state, event);
@@ -164,7 +164,7 @@ static bool parse_match_filter(yaml_parser_t *state, yaml_event_t *event, struct
             return false;
         }
 
-        if (new_event.type == YAML_SEQUENCE_END_EVENT) {
+        if (new_event.type == YAML_MAPPING_END_EVENT) {
             cont = false;
         } else if (new_event.type != YAML_SCALAR_EVENT) {
             print_str("Expected YAML_SCALAR_EVENT for match filter entry, got ");
@@ -498,6 +498,10 @@ static bool parse_service_event(yaml_parser_t *state, yaml_event_t *, struct par
                     }
 
                     yaml_event_delete(&seq_event);
+                    if (success)
+                        service_state = SERVICE_STATE_START;
+                    else
+                        service_state = SERVICE_STATE_END;
                 }
             }
             break;
@@ -519,6 +523,12 @@ static bool parse_service_event(yaml_parser_t *state, yaml_event_t *, struct par
                     success = false;
                 }
             }
+
+            yaml_event_delete(&new_event);
+            if (success)
+                service_state = SERVICE_STATE_START;
+            else
+                service_state = SERVICE_STATE_END;
             break;
         }
         case SERVICE_STATE_SKIP: {
@@ -545,7 +555,8 @@ static bool parse_service_event(yaml_parser_t *state, yaml_event_t *, struct par
     }
 
 end:
-    free_service(service);
+    if (!success)
+        free_service(service);
     yaml_event_delete(&event);
     return success;
 }

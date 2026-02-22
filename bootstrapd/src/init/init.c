@@ -116,9 +116,12 @@ void *construct_filter(struct Service *service)
             continue;
         }
 
-        if (!strcmp(f->key, "acpi")) {
+        if (!strcmp(f->key, "pnp")) {
             void *a = construct_acpi_filter(f->strings);
             if (!a) {
+                print_str("ACPI filter error (NULL) for service ");
+                print_str(service->name);
+                print_str("\n");
                 continue;
             }
 
