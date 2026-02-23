@@ -1,4 +1,6 @@
 use super::error::Error;
+use bytemuck::Pod;
+use bytemuck::Zeroable;
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::CStr;
 
@@ -15,7 +17,22 @@ pub enum ObjectPropertyRef<'a> {
     List(&'a BTreeSet<Box<str>>),
 }
 
-pub type ObjectProperties = BTreeMap<Box<str>, ObjectProperty>;
+#[derive(Debug)]
+pub struct ObjectProperties(BTreeMap<Box<str>, ObjectProperty>);
+
+impl ObjectProperties {
+    pub fn get_property(&self, property_name: &str) -> Option<ObjectPropertyRef> {
+        self.0.get(property_name).map(|p| match p {
+            ObjectProperty::String(t) => ObjectPropertyRef::String(t),
+            ObjectProperty::Integer(i) => ObjectPropertyRef::Integer(*i),
+            ObjectProperty::List(l) => ObjectPropertyRef::List(l),
+        })
+    }
+
+    pub fn new() -> ObjectProperties {
+        ObjectProperties(BTreeMap::new())
+    }
+}
 
 pub struct PMBusObject {
     pub properties: ObjectProperties,
@@ -23,21 +40,131 @@ pub struct PMBusObject {
     pub handle_port: u64,
 }
 
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+pub struct IPCObjectPropertyHdr {
+    pub length: u16,    // total record length incl padding
+    pub type_: u8,      // PROPERTY_TYPE_*
+    pub data_start: u8, // offset from start of record to value bytes
+}
+
+pub const PROPERTY_TYPE_STRING: u8 = 0x01;
+pub const PROPERTY_TYPE_INTEGER: u8 = 0x02;
+pub const PROPERTY_TYPE_LIST: u8 = 0x03;
+
+#[inline]
+fn push_pod<T: Pod>(out: &mut Vec<u8>, v: &T) {
+    out.extend_from_slice(bytemuck::bytes_of(v));
+}
+
+#[inline]
+fn align_up(x: usize, alignment: usize) -> usize {
+    debug_assert!(alignment.is_power_of_two());
+    (x + (alignment - 1)) & !(alignment - 1)
+}
+
+fn push_property_string(out: &mut Vec<u8>, name: &str, value: &str) {
+    let hdr_len = core::mem::size_of::<IPCObjectPropertyHdr>();
+    let name_len = name.len();
+    let value_len = value.len();
+
+    let name_hdr_len = hdr_len + name_len + 1;
+    let total_size = name_hdr_len + value_len + 1;
+    let size_aligned = align_up(total_size, 8);
+
+    let hdr = IPCObjectPropertyHdr {
+        length: size_aligned as u16,
+        type_: PROPERTY_TYPE_STRING,
+        data_start: name_hdr_len as u8,
+    };
+
+    push_pod(out, &hdr);
+    out.extend_from_slice(name.as_bytes());
+    out.push(0);
+
+    out.extend_from_slice(value.as_bytes());
+    out.push(0);
+
+    out.resize(size_aligned, 0);
+}
+
+fn push_property_list(
+    out: &mut Vec<u8>,
+    name: &str,
+    items: impl IntoIterator<Item = impl AsRef<str>>,
+) {
+    let hdr_len = core::mem::size_of::<IPCObjectPropertyHdr>();
+    let name_len = name.len();
+
+    let name_hdr_len = hdr_len + name_len + 1;
+
+    let mut list_bytes = Vec::new();
+    for s in items {
+        let s = s.as_ref();
+        list_bytes.extend_from_slice(s.as_bytes());
+        list_bytes.push(0);
+    }
+
+    let total_size = name_hdr_len + list_bytes.len();
+    let size_aligned = align_up(total_size, 8);
+
+    let hdr = IPCObjectPropertyHdr {
+        length: total_size as u16,
+        type_: PROPERTY_TYPE_LIST,
+        data_start: name_hdr_len as u8,
+    };
+
+    push_pod(out, &hdr);
+    out.extend_from_slice(name.as_bytes());
+    out.push(0);
+    out.extend_from_slice(&list_bytes);
+
+    out.resize(size_aligned, 0);
+}
+
+fn push_property_u64(out: &mut Vec<u8>, name: &str, value: u64) {
+    let hdr_len = core::mem::size_of::<IPCObjectPropertyHdr>();
+    let name_len = name.len();
+
+    let name_hdr_len = hdr_len + name_len + 1;
+    let data_offset = align_up(name_hdr_len, 8);
+    let total_size = data_offset + 8;
+
+    let hdr = IPCObjectPropertyHdr {
+        length: total_size as u16,
+        type_: PROPERTY_TYPE_INTEGER,
+        data_start: data_offset as u8,
+    };
+
+    push_pod(out, &hdr);
+    out.extend_from_slice(name.as_bytes());
+    out.push(0);
+
+    out.resize(data_offset, 0);
+    out.extend_from_slice(&value.to_ne_bytes());
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+pub struct IPCBusObjectHdr {
+    pub size: u32,
+    pub name_length: u16,
+    pub properties_offset: u16,
+    pub handle_port: u64,
+    pub task_group: u64,
+}
+
 impl PMBusObject {
     pub fn new(name: Box<str>) -> PMBusObject {
         PMBusObject {
-            properties: BTreeMap::new(),
+            properties: ObjectProperties::new(),
             name: name,
             handle_port: 0,
         }
     }
 
     pub fn get_property(&self, property_name: &str) -> Option<ObjectPropertyRef> {
-        self.properties.get(property_name).map(|p| match p {
-            ObjectProperty::String(t) => ObjectPropertyRef::String(t),
-            ObjectProperty::Integer(i) => ObjectPropertyRef::Integer(*i),
-            ObjectProperty::List(l) => ObjectPropertyRef::List(l),
-        })
+        self.properties.get_property(property_name)
     }
 
     pub fn deserialize(data: &[u8]) -> Result<(PMBusObject, u64), Error> {
@@ -158,13 +285,52 @@ impl PMBusObject {
 
         Ok((
             PMBusObject {
-                properties,
+                properties: ObjectProperties(properties),
                 name: Box::from(name),
                 handle_port: handle_port,
             },
             task_group,
         ))
     }
+}
+
+pub fn pmbus_object_serialize(name: &str, properties: &ObjectProperties) -> Vec<u8> {
+    let hdr_len = core::mem::size_of::<IPCBusObjectHdr>();
+
+    let name_len = name.len();
+    let properties_offset = align_up(hdr_len + name_len, 8);
+    let properties_offset_u16 = properties_offset as u16;
+
+    let mut props = Vec::new();
+    for i in &properties.0 {
+        match i.1 {
+            ObjectProperty::String(s) => push_property_string(&mut props, i.0.as_ref(), s.as_ref()),
+            ObjectProperty::Integer(integ) => push_property_u64(&mut props, i.0.as_ref(), *integ),
+            ObjectProperty::List(l) => push_property_list(&mut props, i.0.as_ref(), l),
+        }
+    }
+
+    let total_size = properties_offset + props.len();
+    let hdr = IPCBusObjectHdr {
+        size: total_size as u32,
+        name_length: name.len() as u16, // matches your C: strlen(name)
+        properties_offset: properties_offset_u16,
+        handle_port: 0, // Same as below
+        task_group: 0, // ??? (whatever...)
+    };
+
+    let mut out = Vec::with_capacity(total_size);
+    push_pod(&mut out, &hdr);
+
+    out.extend_from_slice(name.as_bytes());
+    out.push(0);
+
+    out.resize(properties_offset, 0);
+
+    out.extend_from_slice(&props);
+    debug_assert_eq!(out.len(), total_size);
+
+    out
 }
 
 impl std::fmt::Debug for PMBusObject {
@@ -220,7 +386,7 @@ const FILTER_CONJUNCTION_TYPE: u32 = 2;
 const FILTER_DISJUNCTION_TYPE: u32 = 3;
 
 impl AnyFilter {
-    pub fn matches(&self, object: &PMBusObject) -> bool {
+    pub fn matches(&self, object: &ObjectProperties) -> bool {
         match self {
             AnyFilter::EqualsFilter(filter) => match object.get_property(filter.name.as_ref()) {
                 Some(ObjectPropertyRef::String(s)) => *s == *filter.property,
@@ -285,7 +451,11 @@ impl AnyFilter {
                 let mut filters = vec![];
                 while pos < len {
                     let (filter, flen) = AnyFilter::deserialize(&data[pos as usize..])?;
-                    if pos.checked_add(flen).ok_or(Error::from_errno(libc::EINVAL))? > len {
+                    if pos
+                        .checked_add(flen)
+                        .ok_or(Error::from_errno(libc::EINVAL))?
+                        > len
+                    {
                         return Err(Error::from_errno(libc::EINVAL));
                     }
 
@@ -297,17 +467,13 @@ impl AnyFilter {
                     Err(Error::from_errno(libc::EINVAL))
                 } else if filter_type == FILTER_CONJUNCTION_TYPE {
                     Ok((
-                        AnyFilter::Conjunction(Conjunction{
-                            operands: filters,
-                        }),
-                        len
+                        AnyFilter::Conjunction(Conjunction { operands: filters }),
+                        len,
                     ))
                 } else {
                     Ok((
-                        AnyFilter::Disjunction(Disjunction{
-                            operands: filters,
-                        }),
-                        len
+                        AnyFilter::Disjunction(Disjunction { operands: filters }),
+                        len,
                     ))
                 }
             }

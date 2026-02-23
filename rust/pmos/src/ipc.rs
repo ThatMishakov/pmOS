@@ -2,7 +2,7 @@ use super::error::Error;
 use super::mem_object::MemoryObject;
 use super::system::ResultT;
 use core::ffi::c_uint;
-use std::mem;
+use std::{cmp::Ordering, mem, ptr};
 
 pub struct IPCPort {
     port: Port,
@@ -29,24 +29,54 @@ impl RightRequestResult {
     }
 }
 
+#[repr(C)]
+struct SendRightAux {
+    rights: [Right; 4],
+    msg_object: u64, // Again, this is currently ignored by the kernel
+}
+
+impl SendRightAux {
+    fn new() -> Self {
+        Self {
+            rights: [0; 4],
+            msg_object: 0,
+        }
+    }
+}
+
 unsafe extern "C" {
     fn create_port(owner_pid: libc::pid_t, flags: u32) -> PortReqResult;
     fn pmos_delete_port(port: Port) -> ResultT;
     fn syscall_get_message_info(descr: &mut MessageDescriptor, port: u64, flags: u32) -> ResultT;
     unsafe fn get_first_message(buff: *mut u8, args: u32, port: u64) -> RightRequestResult;
     #[link_name = "name_right"]
-    unsafe fn name_right_stdlib(right: Right, name: *const libc::c_char, length: libc::size_t, flags: u32) -> ResultT;
+    unsafe fn name_right_stdlib(
+        right: Right,
+        name: *const libc::c_char,
+        length: libc::size_t,
+        flags: u32,
+    ) -> ResultT;
     unsafe fn delete_right(id: Right) -> ResultT;
     unsafe fn dup_right(id: Right) -> RightRequestResult;
-    unsafe fn create_right(port: Port, id_in_reciever: *mut Right, flags: u32) -> RightRequestResult;
+    unsafe fn create_right(
+        port: Port,
+        id_in_reciever: *mut Right,
+        flags: u32,
+    ) -> RightRequestResult;
     unsafe fn accept_rights(port: Port, rights_array: *mut u64) -> ResultT;
+    unsafe fn send_message_right(
+        send_right: Right,
+        reply_port: Port,
+        message: *const u8,
+        message_size: libc::size_t,
+        aux_info: *const SendRightAux,
+        flags: c_uint,
+    ) -> RightRequestResult;
 }
 
 impl Drop for IPCPort {
     fn drop(&mut self) {
-        let result = unsafe {
-            pmos_delete_port(self.port)
-        };
+        let result = unsafe { pmos_delete_port(self.port) };
 
         if !result.success() {
             panic!("couldn't delete port")
@@ -108,11 +138,13 @@ impl IPCPort {
             for i in 0..4 {
                 let rid = other_rights_raw[i];
                 if rid != 0 {
-                    other_rights[i] = Some(if desc.flags & (1 << (MESSAGE_FLAG_RIGHT0_SEND_MANY_SHIFT + i)) != 0 {
-                        SendRight::Many(SendManyRight(rid))
-                    } else {
-                        SendRight::Once(SendOnceRight(rid))
-                    })
+                    other_rights[i] = Some(
+                        if desc.flags & (1 << (MESSAGE_FLAG_RIGHT0_SEND_MANY_SHIFT + i)) != 0 {
+                            SendRight::Many(SendManyRight(rid))
+                        } else {
+                            SendRight::Once(SendOnceRight(rid))
+                        },
+                    )
                 }
             }
         }
@@ -122,7 +154,7 @@ impl IPCPort {
             .result()
             .unwrap();
 
-        let right= if r != 0 {
+        let right = if r != 0 {
             if desc.flags & MESSAGE_FLAG_REPLY_RIGHT_SEND_MANY != 0 {
                 Some(SendRight::Many(SendManyRight(r)))
             } else {
@@ -142,9 +174,10 @@ impl IPCPort {
         }
     }
 
-    pub fn create_right_sendonce(& self) -> Option<(SendOnceRight, RecieveRight)> {
+    pub fn create_right_sendonce(&self) -> Option<(SendOnceRight, RecieveRight)> {
         let mut recieve_id: Right = 0;
-        let RightRequestResult { result, right } = unsafe { create_right(self.port, &raw mut recieve_id, CREATE_RIGHT_SEND_ONCE) };
+        let RightRequestResult { result, right } =
+            unsafe { create_right(self.port, &raw mut recieve_id, CREATE_RIGHT_SEND_ONCE) };
 
         if result.success() {
             Some((SendOnceRight(right), RecieveRight(recieve_id)))
@@ -153,9 +186,10 @@ impl IPCPort {
         }
     }
 
-    pub fn create_right_sendmany(& self) -> Option<(SendManyRight, RecieveRight)> {
+    pub fn create_right_sendmany(&self) -> Option<(SendManyRight, RecieveRight)> {
         let mut recieve_id: Right = 0;
-        let RightRequestResult { result, right } = unsafe { create_right(self.port, &raw mut recieve_id, 0) };
+        let RightRequestResult { result, right } =
+            unsafe { create_right(self.port, &raw mut recieve_id, 0) };
 
         if result.success() {
             Some((SendManyRight(right), RecieveRight(recieve_id)))
@@ -212,6 +246,67 @@ pub fn send_message(
     Ok(())
 }
 
+const SEND_MESSAGE_DELETE_RIGHT: u32 = 1 << 8;
+const REPLY_CREATE_SEND_MANY: u32 = 1 << 1;
+
+pub fn send_message_right_consume(
+    msg: &impl super::ipc_msgs::Serializable,
+    right: SendRight,
+    // object: Option<MemoryObject>,
+    reply_port: Option<(&IPCPort, bool /* create send many */)>,
+    include_rights: [Option<SendRight>; 4],
+    // TODO: Memory objects...
+) -> Result<Option<RecieveRight>, Error> {
+    let mut aux_rights_count = 0;
+    let mut aux_struct = SendRightAux::new();
+
+    for i in 0..4 {
+        if let Some(r) = &include_rights[i] {
+            aux_struct.rights[i] = r.get_id();
+            aux_rights_count += 1;
+        }
+    }
+
+    let aux_ptr = if aux_rights_count > 0 {
+        &aux_struct
+    } else {
+        ptr::null()
+    };
+
+    let msg = msg.serialize();
+    let msg_size = msg.len();
+    let msg = msg.as_ptr();
+
+    let flags = SEND_MESSAGE_DELETE_RIGHT
+        | reply_port.map_or(
+            0,
+            |(_, send_many)| if send_many { REPLY_CREATE_SEND_MANY } else { 0 },
+        );
+
+    let result = unsafe {
+        send_message_right(
+            right.get_id(),
+            reply_port.map_or(0, |(i, _)| i.port),
+            msg,
+            msg_size,
+            aux_ptr,
+            flags,
+        )
+    }
+    .result()?;
+
+    mem::forget(right);
+    for i in include_rights {
+        mem::forget(i);
+    }
+
+    if result != 0 {
+        Ok(Some(RecieveRight(result)))
+    } else {
+        Ok(None)
+    }
+}
+
 impl Message {
     pub fn get_known_id(&self) -> Option<u32> {
         Some(u32::from_ne_bytes(self.data.get(0..4)?.try_into().ok()?))
@@ -220,12 +315,47 @@ impl Message {
 
 pub enum SendRight {
     Once(SendOnceRight),
-    Many(SendManyRight)
+    Many(SendManyRight),
 }
 
-pub struct SendManyRight (Right);
-pub struct SendOnceRight (Right);
-pub struct RecieveRight (Right);
+impl SendRight {
+    pub fn get_id(&self) -> Right {
+        match self {
+            Self::Once(o) => o.0,
+            Self::Many(o) => o.0,
+        }
+    }
+}
+
+impl Ord for SendRight {
+    fn cmp(&self, other: &Self) -> Ordering {
+        if self.get_id() < other.get_id() {
+            Ordering::Less
+        } else if self.get_id() > other.get_id() {
+            Ordering::Greater
+        } else {
+            Ordering::Equal
+        }
+    }
+}
+
+impl PartialOrd for SendRight {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for SendRight {
+    fn eq(&self, other: &Self) -> bool {
+        self.get_id() == other.get_id()
+    }
+}
+
+impl Eq for SendRight {}
+
+pub struct SendManyRight(Right);
+pub struct SendOnceRight(Right);
+pub struct RecieveRight(Right);
 // TODO: Destructor for this
 
 impl SendManyRight {
@@ -243,9 +373,9 @@ impl SendManyRight {
     }
 
     pub fn name_self(self, name: &str) -> Result<(), Error> {
-        unsafe {
-            name_right_stdlib(self.0, name.as_ptr() as *const libc::c_char, name.len(), 0)
-        }.result().map(|_| mem::forget(self))
+        unsafe { name_right_stdlib(self.0, name.as_ptr() as *const libc::c_char, name.len(), 0) }
+            .result()
+            .map(|_| mem::forget(self))
     }
 }
 
@@ -263,16 +393,12 @@ impl From<SendOnceRight> for SendRight {
 
 impl Drop for SendManyRight {
     fn drop(&mut self) {
-        unsafe {
-            _ = delete_right(self.0)
-        }
+        unsafe { _ = delete_right(self.0) }
     }
 }
 
 impl Drop for SendOnceRight {
     fn drop(&mut self) {
-        unsafe {
-            _ = delete_right(self.0)
-        }
+        unsafe { _ = delete_right(self.0) }
     }
 }
