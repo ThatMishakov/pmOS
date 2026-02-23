@@ -25,8 +25,8 @@ public:
     std::optional<property> get_property(std::string_view name);
 
     /// Serializes the BUSObject into IPC_BUS_Publish_Object message
-    std::vector<uint8_t> serialize(pmos_port_t handle_port, uint64_t task_group);
-    std::vector<uint8_t> serialize_into_ipc(pmos_port_t reply_port, uint64_t user_arg, pmos_port_t handle_port, uint64_t task_group);
+    std::vector<uint8_t> serialize();
+    std::vector<uint8_t> serialize_into_ipc();
 private:
     std::string name;
     std::unordered_map<std::string, property> properties;
@@ -111,18 +111,16 @@ inline std::vector<uint8_t> BUSObject::serialize_properties()
     return result;
 }
 
-inline std::vector<uint8_t> BUSObject::serialize_into_ipc(pmos_port_t reply_port, uint64_t user_arg, pmos_port_t handle_port, uint64_t task_group)
+inline std::vector<uint8_t> BUSObject::serialize_into_ipc()
 {
     auto struct_size = sizeof(IPC_BUS_Publish_Object) - sizeof(IPC_Bus_Object);
     
-    auto object = serialize(handle_port, task_group);
+    auto object = serialize();
     std::vector<uint8_t> data;
     data.reserve(struct_size + object.size());
     IPC_BUS_Publish_Object p = {
         .type = IPC_BUS_Publish_Object_NUM,
         .flags = 0,
-        .reply_port = reply_port,
-        .user_arg = user_arg,
         .object = {},
     };
     auto ptr = reinterpret_cast<uint8_t *>(&p);
@@ -131,7 +129,7 @@ inline std::vector<uint8_t> BUSObject::serialize_into_ipc(pmos_port_t reply_port
     return data;
 }
 
-inline std::vector<uint8_t> BUSObject::serialize(pmos_port_t handle_port, uint64_t task_group)
+inline std::vector<uint8_t> BUSObject::serialize()
 {
     auto name_size_aligned = name.size() + 1;
     name_size_aligned = (name_size_aligned + 7) & ~7;
@@ -141,8 +139,6 @@ inline std::vector<uint8_t> BUSObject::serialize(pmos_port_t handle_port, uint64
         .size = sizeof(object) + properties.size() + name_size_aligned,
         .name_length = name.size(),
         .properties_offset = name_size_aligned + sizeof(object),
-        .handle_port = handle_port,
-        .task_group = task_group,
     };
 
     std::vector<uint8_t> vec;

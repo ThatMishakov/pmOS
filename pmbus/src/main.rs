@@ -2,6 +2,7 @@
 
 use pmos::ipc;
 use pmos::ipc::IPCPort;
+use pmos::ipc::SendManyRight;
 use pmos::ipc::SendRight;
 use pmos::ipc_msgs;
 use pmos::ipc_msgs::Message;
@@ -12,40 +13,35 @@ use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::rc::Rc;
-use std::rc::Weak;
 use std::range::Bound;
 
 struct ObjectInfo {
     sequence_id: u64,
     properties: pmbus::ObjectProperties,
     name: String,
-    group: Rc<RefCell<TaskGroup>>,
-    handle_port: u64,
+    right: SendManyRight,
 }
 
 #[derive(Default)]
 struct State {
     properties: BTreeMap<u64, Rc<RefCell<ObjectInfo>>>,
-    task_groups: BTreeMap<u64, Weak<RefCell<TaskGroup>>>,
     next_sequence_id: u64,
     main_port: ipc::Port,
     pending_filters: BTreeMap<ipc::Right, (Option<SendRight>, AnyFilter)>,
 }
 
-fn publish_object_error(error: i32, reply_port: u64, user_arg: u64) {
+fn publish_object_error(error: i32, reply_right: SendRight) {
     let mut msg = ipc_msgs::IPCBusPublishObjectReply::new();
     msg.result = -error;
-    msg.user_arg = user_arg;
 
-    _ = ipc::send_message(&msg, reply_port, None);
+    _ = ipc::send_message_right_consume(&msg, reply_right, None, [const { None }; 4]);
 }
 
-fn publish_object_success(reply_port: u64, user_arg: u64, seq_id: u64) -> Result<(), i32> {
+fn publish_object_success(reply_right: &mut Option<SendRight>, seq_id: u64) -> Result<(), i32> {
     let mut msg = ipc_msgs::IPCBusPublishObjectReply::new();
     msg.sequence_number = seq_id;
-    msg.user_arg = user_arg;
 
-    ipc::send_message(&msg, reply_port, None).map_err(|e| e.get())
+    ipc::send_message_right(&msg, reply_right, None, &mut [const { None }; 4]).map(|_| ()).map_err(|i| i.get())
 }
 
 struct TaskGroup {
@@ -71,70 +67,59 @@ impl TaskGroup {
     }
 }
 
-fn create_find_task_group(
-    task_group_id: u64,
-    state: &mut State,
-) -> Result<Rc<RefCell<TaskGroup>>, i32> {
-    if let Some(weak) = state.task_groups.get(&task_group_id) {
-        Ok(weak.upgrade().unwrap())
-    } else {
-        TaskGroup::new(task_group_id, state.main_port).map(|ptr| {
-            state.task_groups.insert(task_group_id, Rc::downgrade(&ptr));
-            ptr
-        })
-    }
-}
-
 fn publish_object(
     object: ipc_msgs::IPCBusPublishObject,
+    reply_right: Option<SendRight>,
+    object_right: Option<SendRight>,
     message: &ipc::Message,
     state: &mut State,
 ) {
-    let user_arg = object.user_arg;
-    let reply_port = object.reply_port;
+    if reply_right.is_none() {
+        println!("Recieved UPCBusPublishObject from task {} with no reply right!", message.sender);
+        return;
+    }
+    
+    let mut reply_right = reply_right;
+
+    let object_right = match object_right {
+        Some(SendRight::Many(m)) => m,
+        Some(SendRight::Once(_)) => {
+            // No object right...
+            publish_object_error(libc::ENOENT, reply_right.unwrap());
+            return;
+        },
+        None => {
+            publish_object_error(libc::ENOENT, reply_right.unwrap());
+            return;
+        },
+    };
+
+
     match pmbus::PMBusObject::deserialize(&object.object_data) {
-        Ok((object, task_group)) => {
+        Ok(object) => {
             println!("{:?}", &object);
-
-            if !task_group::is_task_of_group(message.sender, task_group) {
-                publish_object_error(libc::EPERM, reply_port, user_arg);
-                return;
-            }
-
-            let task_group_ptr;
-            match create_find_task_group(task_group, state) {
-                Ok(g) => {
-                    task_group_ptr = g;
-                }
-                Err(i) => {
-                    publish_object_error(i, reply_port, user_arg);
-                    return;
-                }
-            }
 
             let id = state.next_sequence_id;
             let info = ObjectInfo {
                 sequence_id: id,
                 properties: object.properties,
                 name: object.name.into_string(),
-                group: task_group_ptr,
-                handle_port: object.handle_port,
+                right: object_right,
             };
 
-            if let Err(error) = publish_object_success(reply_port, user_arg, id) {
-                publish_object_error(error, reply_port, user_arg);
+            if let Err(error) = publish_object_success(&mut reply_right, id) {
+                publish_object_error(error, reply_right.unwrap());
                 return;
             }
 
-            info.group.borrow_mut().sequences.insert(id);
             let info = Rc::new(RefCell::new(info));
             state.properties.insert(id, info.clone());
             state.next_sequence_id += 1;
 
-            new_object_stuff((id, info), state);
+            new_object_stuff(info, state);
         }
         Err(e) => {
-            publish_object_error(e.get(), object.reply_port, object.user_arg);
+            publish_object_error(e.get(), reply_right.unwrap());
         }
     }
 }
@@ -153,17 +138,20 @@ fn queue_request_object(
     assert!(result.is_none(), "Expected new insert, got a duplicate (for reply right {})", id);
 }
 
-fn new_object_stuff(obj: (u64, Rc<RefCell<ObjectInfo>>), state: &mut State) {
+fn new_object_stuff(obj: Rc<RefCell<ObjectInfo>>, state: &mut State) {
     state.pending_filters.retain(|_, (right, f)| {
-        if f.matches(&obj.1.borrow().properties) {
-            let id_after = obj.0 + 1;
-            let obj = obj.1.borrow();
+        if f.matches(&obj.borrow().properties) {
+            let obj = obj.borrow();
+
+            let id = obj.sequence_id;
+            let id_after = id + 1;
 
             let r = ipc_msgs::IPCBusRequestObjectReply {
                 flags: 0,
                 result: 0,
                 next_sequence_number: id_after,
                 object: Some((&obj.name, &obj.properties)),
+                object_id: id,
             };
 
             let other_rights = [const { None }; 4]; // (Big (not really, but rather a big deal)) TODO
@@ -200,8 +188,7 @@ fn request_object(
             .range((Bound::Included(start_with), Bound::Unbounded));
 
         let item = it
-            .find(|(_idx, item)| !filter.matches(&item.borrow().properties))
-            .map(|(_, o)| o);
+            .find(|(_idx, item)| !filter.matches(&item.borrow().properties));
 
         if let Some(item) = item {
             // Answer immediately
@@ -210,13 +197,14 @@ fn request_object(
                 .next()
                 .map_or(state.next_sequence_id, |(i, _)| *i);
 
-            let obj = item.borrow();
+            let obj = item.1.borrow();
 
             let r = ipc_msgs::IPCBusRequestObjectReply {
                 flags: 0,
                 result: 0,
                 next_sequence_number: id_after,
                 object: Some((&obj.name, &obj.properties)),
+                object_id: *item.0,
             };
 
             let other_rights = [const { None }; 4]; // (Big (not really, but rather a big deal)) TODO
@@ -249,10 +237,11 @@ fn main() {
         let mut msg = port.pop_front_blocking();
 
         let reply_right = msg.reply_right.take().or_else(|| msg.other_rights[3].take());
+        let extra_right = msg.other_rights[0].take();
 
         match msg.deserialize() {
             Message::IPCBusPublishObject(o) => {
-                publish_object(o, &msg, &mut state);
+                publish_object(o, reply_right, extra_right, &msg ,&mut state);
             }
             Message::IPCBusRequestObject(o) => {
                 request_object(o, &mut state, reply_right);

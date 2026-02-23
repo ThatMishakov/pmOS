@@ -64,7 +64,8 @@ unsafe extern "C" {
         flags: u32,
     ) -> RightRequestResult;
     unsafe fn accept_rights(port: Port, rights_array: *mut u64) -> ResultT;
-    unsafe fn send_message_right(
+    #[link_name = "send_message_right"]
+    unsafe fn send_message_right_stdlib(
         send_right: Right,
         reply_port: Port,
         message: *const u8,
@@ -249,6 +250,64 @@ pub fn send_message(
 const SEND_MESSAGE_DELETE_RIGHT: u32 = 1 << 8;
 const REPLY_CREATE_SEND_MANY: u32 = 1 << 1;
 
+pub fn send_message_right(
+    msg: &impl super::ipc_msgs::Serializable,
+    right: &mut Option<SendRight>, // Do mut Option so that it can be taken out
+    reply_port: Option<(&IPCPort, bool)>, /* create_send_many */
+    include_rights: &mut [Option<SendRight>; 4],
+) -> Result<Option<RecieveRight>, Error> {
+    let mut aux_rights_count = 0;
+    let mut aux_struct = SendRightAux::new();
+
+    for i in 0..4 {
+        if let Some(r) = &include_rights[i] {
+            aux_struct.rights[i] = r.get_id();
+            aux_rights_count += 1;
+        }
+    }
+
+    let aux_ptr = if aux_rights_count > 0 {
+        &aux_struct
+    } else {
+        ptr::null()
+    };
+
+    let msg = msg.serialize();
+    let msg_size = msg.len();
+    let msg = msg.as_ptr();
+
+    let flags = reply_port.map_or(
+        0,
+        |(_, send_many)| if send_many { REPLY_CREATE_SEND_MANY } else { 0 },
+    );
+
+    let result = unsafe {
+        send_message_right_stdlib(
+            right.as_ref().ok_or_else(|| Error::from_errno(libc::EINVAL))?.get_id(),
+            reply_port.map_or(0, |(i, _)| i.port),
+            msg,
+            msg_size,
+            aux_ptr,
+            flags,
+        )
+    }
+    .result()?;
+
+    match right.as_mut().unwrap() {
+        SendRight::Once(_) => mem::forget(right.take()),
+        SendRight::Many(_) => (),
+    }    
+    for i in include_rights {
+        mem::forget(i.take());
+    }
+
+    if result != 0 {
+        Ok(Some(RecieveRight(result)))
+    } else {
+        Ok(None)
+    }
+}
+
 pub fn send_message_right_consume(
     msg: &impl super::ipc_msgs::Serializable,
     right: SendRight,
@@ -284,7 +343,7 @@ pub fn send_message_right_consume(
         );
 
     let result = unsafe {
-        send_message_right(
+        send_message_right_stdlib(
             right.get_id(),
             reply_port.map_or(0, |(i, _)| i.port),
             msg,

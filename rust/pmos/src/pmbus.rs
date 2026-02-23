@@ -37,7 +37,6 @@ impl ObjectProperties {
 pub struct PMBusObject {
     pub properties: ObjectProperties,
     pub name: Box<str>,
-    pub handle_port: u64,
 }
 
 #[repr(C)]
@@ -150,8 +149,6 @@ pub struct IPCBusObjectHdr {
     pub size: u32,
     pub name_length: u16,
     pub properties_offset: u16,
-    pub handle_port: u64,
-    pub task_group: u64,
 }
 
 impl PMBusObject {
@@ -159,7 +156,6 @@ impl PMBusObject {
         PMBusObject {
             properties: ObjectProperties::new(),
             name: name,
-            handle_port: 0,
         }
     }
 
@@ -167,8 +163,8 @@ impl PMBusObject {
         self.properties.get_property(property_name)
     }
 
-    pub fn deserialize(data: &[u8]) -> Result<(PMBusObject, u64), Error> {
-        if data.len() < 24 {
+    pub fn deserialize(data: &[u8]) -> Result<PMBusObject, Error> {
+        if data.len() < 8 {
             return Err(Error::from_errno(libc::EINVAL));
         }
 
@@ -187,23 +183,13 @@ impl PMBusObject {
                 .try_into()
                 .map_err(|_| Error::from_errno(libc::EINVAL))?,
         ) as usize;
-        let handle_port = u64::from_ne_bytes(
-            data[8..16]
-                .try_into()
-                .map_err(|_| Error::from_errno(libc::EINVAL))?,
-        );
-        let task_group = u64::from_ne_bytes(
-            data[16..24]
-                .try_into()
-                .map_err(|_| Error::from_errno(libc::EINVAL))?,
-        );
 
-        if name_length + 24 > properties_offset {
+        if name_length + 8 > properties_offset {
             return Err(Error::from_errno(libc::EINVAL));
         }
 
         let name_data = data
-            .get(24..24 + name_length)
+            .get(8..8 + name_length)
             .ok_or(Error::from_errno(libc::EINVAL))?;
         let name = str::from_utf8(name_data).map_err(|_| Error::from_errno(libc::EINVAL))?;
 
@@ -283,14 +269,12 @@ impl PMBusObject {
             properties_offset += length;
         }
 
-        Ok((
+        Ok(
             PMBusObject {
                 properties: ObjectProperties(properties),
                 name: Box::from(name),
-                handle_port: handle_port,
             },
-            task_group,
-        ))
+        )
     }
 }
 
@@ -315,8 +299,6 @@ pub fn pmbus_object_serialize(name: &str, properties: &ObjectProperties) -> Vec<
         size: total_size as u32,
         name_length: name.len() as u16, // matches your C: strlen(name)
         properties_offset: properties_offset_u16,
-        handle_port: 0, // Same as below
-        task_group: 0, // ??? (whatever...)
     };
 
     let mut out = Vec::with_capacity(total_size);

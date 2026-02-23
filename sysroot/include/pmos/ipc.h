@@ -1454,8 +1454,6 @@ struct IPC_Bus_Object {
     uint32_t size;
     uint16_t name_length;
     uint16_t properties_offset;
-    pmos_port_t handle_port;
-    uint64_t task_group;
 
     /// Name, with '.' separator
     /// for example, pmos.disks.pci_11_22_33_44_ahci_port0
@@ -1470,11 +1468,6 @@ typedef struct IPC_BUS_Publish_Object {
 
     /// Flags
     uint32_t flags;
-
-    pmos_port_t reply_port;
-
-    // TODO: Implement handles so that this is not needed
-    uint64_t user_arg;
 
     struct IPC_Bus_Object object;
 } IPC_BUS_Publish_Object;
@@ -1510,8 +1503,6 @@ typedef struct IPC_BUS_Publish_Object_Reply {
     /// Reserved (for alignment)
     uint32_t reserved;
 
-    uint64_t user_arg;
-
     /// New sequence number (starting with 1, shared globally)
     uint64_t sequence_number;
 } IPC_BUS_Publish_Object_Reply;
@@ -1532,6 +1523,9 @@ typedef struct IPC_BUS_Request_Object_Reply {
 
     /// Sequence number of the next potential object with the same filter (so at least the object id + 1)
     uint64_t next_sequence_number;
+
+    /// ID of the object (saves from deserializing it if that's not needed as well...)
+    uint64_t object_id;
 
     /// Object data (for more objects, the same request should be sent again with the next_sequence_number)
     struct IPC_Bus_Object object;

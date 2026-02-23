@@ -12,8 +12,6 @@ pub const IPC_BUS_PUBLISH_OBJECT_NUM: u32 = 0x1a0;
 #[derive(Debug)]
 pub struct IPCBusPublishObject<'a> {
     pub flags: u32,
-    pub reply_port: super::ipc::Port,
-    pub user_arg: u64,
     pub object_data: &'a [u8],
 }
 
@@ -33,7 +31,6 @@ pub struct IPCBusPublishObjectReply {
     flags: u32,
     pub result: i32,
     reserved: u32,
-    pub user_arg: u64,
     pub sequence_number: u64,
 }
 
@@ -44,7 +41,6 @@ impl IPCBusPublishObjectReply {
             flags: 0,
             result: 0,
             reserved: 0,
-            user_arg: 0,
             sequence_number: 0,
         }
     }
@@ -58,6 +54,7 @@ pub struct IPCBusRequestObjectReply<'a> {
     pub flags: u32,
     pub result: i32,
     pub next_sequence_number: u64,
+    pub object_id: u64,
     pub object: Option<(&'a str, &'a ObjectProperties)>,
 }
 
@@ -69,6 +66,7 @@ struct IPCBusRequestObjectReplyHdr {
     result: i32,
     reserved: u32,
     next_sequence_number: u64,
+    object_id: u64,
 }
 
 fn push_pod<T: Pod>(out: &mut Vec<u8>, v: &T) {
@@ -83,6 +81,7 @@ impl Serializable for IPCBusRequestObjectReply<'_> {
             result: self.result, 
             reserved: 0,
             next_sequence_number: self.next_sequence_number,
+            object_id: self.object_id,
         };
 
         let object_data = self.object.map_or(vec![], |o| pmbus_object_serialize(o.0, o.1));
@@ -99,6 +98,7 @@ impl IPCBusRequestObjectReply<'_> {
             flags: 0,
             result: 0,
             next_sequence_number: 0,
+            object_id: 0,
             object: None,
         }
     }
@@ -116,15 +116,13 @@ impl super::ipc::Message {
             let data = &self.data;
             match i {
                 IPC_BUS_PUBLISH_OBJECT_NUM => {
-                    if data.len() < 24 {
+                    if data.len() < 8 {
                         return Message::Unknown;
                     }
 
                     Message::IPCBusPublishObject(IPCBusPublishObject {
                         flags: u32::from_ne_bytes(data[4..8].try_into().unwrap()),
-                        reply_port: u64::from_ne_bytes(data[8..16].try_into().unwrap()),
-                        user_arg: u64::from_ne_bytes(data[16..24].try_into().unwrap()),
-                        object_data: &data[24..],
+                        object_data: &data[8..],
                     })
                 }
                 IPC_BUS_REQUEST_OBJECT_NUM => {
