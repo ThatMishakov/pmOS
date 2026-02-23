@@ -138,7 +138,7 @@ fn request_object(
     _state: &mut State,
 ) {
     if let Ok(req) = AnyFilter::deserialize(&object.filter_data) {
-        println!("Recieved filter request: {:?}", req)
+        //println!("Recieved filter request: {:?}", req)
     } else {
         println!("Failed to deserialize filters...")
     }
