@@ -760,11 +760,12 @@ static void send_request(struct RegisterRequest *r)
     aux_data.extra_rights[0] = send_right.right;
 
     auto result =
-        send_message_right(pmbus_right, 0, r->message_data, r->message_data_size, &aux_data, 0);
+        send_message_right(pmbus_right, main_port, r->message_data, r->message_data_size, &aux_data, 0);
     if (result.result < 0) {
         fprintf(stderr, "devicesd: Couldn't send message to pmbus: %i (%s)\n", (int)result.result,
                 strerror(-result.result));
     }
+    assert(result.right);
 
     pmos_msgloop_node_set(&obj->device_node, recieve_right, acpi_device_message_callback, obj);
     pmos_msgloop_insert(&main_msgloop_data, &obj->device_node);
@@ -805,9 +806,12 @@ int send_register_object(struct RegisterRequest *r)
         return -1;
     }
 
-    if (pmbus_right == 0)
+    if (pmbus_right != 0)
         send_request(r);
-    // If not, this will be contineud once the right is obtained
+    else {
+        r->next = pending_registering;
+        pending_registering = r;
+    }
 
     return 0;
 }
@@ -844,10 +848,6 @@ void named_port_notification(Message_Descriptor *desc, IPC_Kernel_Named_Port_Not
 
 int register_object(pmos_bus_object_t *object_owning)
 {
-    // TODO
-    pmos_bus_object_free(object_owning);
-    return 0;
-
     int result                 = -1;
     struct RegisterRequest *rr = calloc(sizeof(*rr), 1);
     if (!rr) {

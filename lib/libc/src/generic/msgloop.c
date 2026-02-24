@@ -43,6 +43,16 @@ void pmos_msgloop_insert(struct pmos_msgloop_data *data, pmos_msgloop_tree_node_
     }
 }
 
+void pmos_msgloop_erase(struct pmos_msgloop_data *data, pmos_msgloop_tree_node_t *node)
+{
+    assert(data);
+    if (!node)
+        return;
+
+    // Cut corners and don't search
+    pmos_msgloop_tree_remove(&data->nodes, node);
+}
+
 int pmos_msgloop_compare(struct msgloop_data *a, struct msgloop_data *b)
 {
     if (a->right_id < b->right_id)

@@ -331,7 +331,7 @@ static size_t object_header_fill(uint8_t *ptr, const char *name, uint32_t length
     return properties_offset;
 }
 
-static const size_t PUBLISH_OBJECT_HEADER_SIZE = 24;
+static const size_t PUBLISH_OBJECT_HEADER_SIZE = 8;
 
 bool pmos_bus_object_serialize_ipc(const pmos_bus_object_t *object, uint8_t **data_out, size_t *size_out)
 {

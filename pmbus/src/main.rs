@@ -79,7 +79,7 @@ fn publish_object(
 ) {
     if reply_right.is_none() {
         println!(
-            "Recieved UPCBusPublishObject from task {} with no reply right!",
+            "Recieved PMBusPublishObject from task {} with no reply right!",
             message.sender
         );
         return;
