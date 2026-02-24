@@ -1,5 +1,6 @@
 #![feature(new_range_api)]
 
+use pmos::error;
 use pmos::ipc;
 use pmos::ipc::IPCPort;
 use pmos::ipc::SendManyRight;
@@ -12,8 +13,8 @@ use pmos::task_group;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
-use std::rc::Rc;
 use std::range::Bound;
+use std::rc::Rc;
 
 struct ObjectInfo {
     sequence_id: u64,
@@ -41,7 +42,9 @@ fn publish_object_success(reply_right: &mut Option<SendRight>, seq_id: u64) -> R
     let mut msg = ipc_msgs::IPCBusPublishObjectReply::new();
     msg.sequence_number = seq_id;
 
-    ipc::send_message_right(&msg, reply_right, None, &mut [const { None }; 4]).map(|_| ()).map_err(|i| i.get())
+    ipc::send_message_right(&msg, reply_right, None, &mut [const { None }; 4])
+        .map(|_| ())
+        .map_err(|(e, _)| e.get())
 }
 
 struct TaskGroup {
@@ -75,10 +78,13 @@ fn publish_object(
     state: &mut State,
 ) {
     if reply_right.is_none() {
-        println!("Recieved UPCBusPublishObject from task {} with no reply right!", message.sender);
+        println!(
+            "Recieved UPCBusPublishObject from task {} with no reply right!",
+            message.sender
+        );
         return;
     }
-    
+
     let mut reply_right = reply_right;
 
     let object_right = match object_right {
@@ -87,13 +93,12 @@ fn publish_object(
             // No object right...
             publish_object_error(libc::ENOENT, reply_right.unwrap());
             return;
-        },
+        }
         None => {
             publish_object_error(libc::ENOENT, reply_right.unwrap());
             return;
-        },
+        }
     };
-
 
     match pmbus::PMBusObject::deserialize(&object.object_data) {
         Ok(object) => {
@@ -124,18 +129,19 @@ fn publish_object(
     }
 }
 
-fn queue_request_object(
-    filter: AnyFilter,
-    state: &mut State,
-    reply_right: SendRight,
-)
-{
+fn queue_request_object(filter: AnyFilter, state: &mut State, reply_right: SendRight) {
     let id = reply_right.get_id();
 
     // Kernel should give new right IDs every time, so there shouldn't be duplicates
-    let result = state.pending_filters.insert(id,(Some(reply_right), filter));
+    let result = state
+        .pending_filters
+        .insert(id, (Some(reply_right), filter));
 
-    assert!(result.is_none(), "Expected new insert, got a duplicate (for reply right {})", id);
+    assert!(
+        result.is_none(),
+        "Expected new insert, got a duplicate (for reply right {})",
+        id
+    );
 }
 
 fn new_object_stuff(obj: Rc<RefCell<ObjectInfo>>, state: &mut State) {
@@ -154,11 +160,22 @@ fn new_object_stuff(obj: Rc<RefCell<ObjectInfo>>, state: &mut State) {
                 object_id: id,
             };
 
-            let other_rights = [const { None }; 4]; // (Big (not really, but rather a big deal)) TODO
+            let clone = obj.right.clone().ok().map(|r| SendRight::from(r));
+            if clone.is_none() {
+                return false;
+            }
 
-            let result = ipc::send_message_right_consume(&r, right.take().unwrap(), None, other_rights);
+            let mut other_rights = [clone, None, None, None];
+
+            let result =
+                ipc::send_message_right(&r, right, None, &mut other_rights).map_err(|(e, _)| e);
             if let Err(r) = result {
                 println!("Error replying to the right request: {}", r);
+
+                if r.get() == libc::ESRCH {
+                    // Right went away, so don't remove the request...
+                    return true;
+                }
             }
 
             false
@@ -171,12 +188,15 @@ fn new_object_stuff(obj: Rc<RefCell<ObjectInfo>>, state: &mut State) {
 fn request_object(
     object: ipc_msgs::IPCBusRequestObject,
     state: &mut State,
+    sender_task: u64,
     reply_right: Option<SendRight>,
 ) {
     if reply_right.is_none() {
         println!("pmbus: Recieved object filter request with no reply right!");
         return;
     }
+
+    let mut reply_right = reply_right;
 
     if let Ok(req) = AnyFilter::deserialize(&object.filter_data) {
         // Try matching everything known, then reply or stash...
@@ -187,15 +207,12 @@ fn request_object(
             .properties
             .range((Bound::Included(start_with), Bound::Unbounded));
 
-        let item = it
-            .find(|(_idx, item)| !filter.matches(&item.borrow().properties));
+        let mut search_item = it.find(|(_idx, item)| !filter.matches(&item.borrow().properties));
 
-        if let Some(item) = item {
+        while let Some(item) = search_item {
             // Answer immediately
 
-            let id_after = it
-                .next()
-                .map_or(state.next_sequence_id, |(i, _)| *i);
+            let id_after = it.clone().next().map_or(state.next_sequence_id, |(i, _)| *i);
 
             let obj = item.1.borrow();
 
@@ -207,15 +224,29 @@ fn request_object(
                 object_id: *item.0,
             };
 
-            let other_rights = [const { None }; 4]; // (Big (not really, but rather a big deal)) TODO
-
-            let result = ipc::send_message_right_consume(&r, reply_right.unwrap(), None, other_rights);
-            if let Err(r) = result {
-                println!("Error replying to the right request: {}", r);
+            let mut other_rights = [const { None }; 4];
+            other_rights[0] = obj.right.clone().ok().map(|r| SendRight::from(r));
+            if other_rights[0].is_none() {
+                search_item = it.find(|(_idx, item)| !filter.matches(&item.borrow().properties));
+                continue;
             }
-        } else {
-            queue_request_object(filter, state, reply_right.unwrap());
+
+            let result =
+                ipc::send_message_right(&r, &mut reply_right, None, &mut other_rights)
+                    .map_err(|(e, _)| e);
+            if let Err(e) = result {
+                match e.get() {
+                    libc::ENOENT => println!("pmbus error: Task {} requested object, but reply port went away...", sender_task),
+                    libc::ESRCH => {
+                        search_item = it.find(|(_idx, item)| !filter.matches(&item.borrow().properties));
+                        continue;
+                    },
+                    e => println!("pmbus error: Error sending object to task {}, error {}", sender_task, e),
+                }
+            }
         }
+
+        queue_request_object(filter, state, reply_right.unwrap());
     } else {
         println!("Failed to deserialize filters...")
     }
@@ -236,15 +267,18 @@ fn main() {
     loop {
         let mut msg = port.pop_front_blocking();
 
-        let reply_right = msg.reply_right.take().or_else(|| msg.other_rights[3].take());
+        let reply_right = msg
+            .reply_right
+            .take()
+            .or_else(|| msg.other_rights[3].take());
         let extra_right = msg.other_rights[0].take();
 
         match msg.deserialize() {
             Message::IPCBusPublishObject(o) => {
-                publish_object(o, reply_right, extra_right, &msg ,&mut state);
+                publish_object(o, reply_right, extra_right, &msg, &mut state);
             }
             Message::IPCBusRequestObject(o) => {
-                request_object(o, &mut state, reply_right);
+                request_object(o, &mut state, msg.sender, reply_right);
             }
             Message::Unknown => {
                 let id = msg.get_known_id();

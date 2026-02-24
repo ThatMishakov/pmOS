@@ -24,8 +24,8 @@ struct RightRequestResult {
 }
 
 impl RightRequestResult {
-    pub fn result(self: RightRequestResult) -> Result<Right, Error> {
-        self.result.result().map(|()| self.right)
+    pub fn result(self: RightRequestResult) -> Result<Right, (Error, u64)> {
+        self.result.result().map(|()| self.right).map_err(|r| (r, self.right))
     }
 }
 
@@ -255,7 +255,7 @@ pub fn send_message_right(
     right: &mut Option<SendRight>, // Do mut Option so that it can be taken out
     reply_port: Option<(&IPCPort, bool)>, /* create_send_many */
     include_rights: &mut [Option<SendRight>; 4],
-) -> Result<Option<RecieveRight>, Error> {
+) -> Result<Option<RecieveRight>, (Error, u64)> {
     let mut aux_rights_count = 0;
     let mut aux_struct = SendRightAux::new();
 
@@ -283,7 +283,7 @@ pub fn send_message_right(
 
     let result = unsafe {
         send_message_right_stdlib(
-            right.as_ref().ok_or_else(|| Error::from_errno(libc::EINVAL))?.get_id(),
+            right.as_ref().ok_or_else(|| (Error::from_errno(libc::EINVAL), 0))?.get_id(),
             reply_port.map_or(0, |(i, _)| i.port),
             msg,
             msg_size,
@@ -315,7 +315,7 @@ pub fn send_message_right_consume(
     reply_port: Option<(&IPCPort, bool /* create send many */)>,
     include_rights: [Option<SendRight>; 4],
     // TODO: Memory objects...
-) -> Result<Option<RecieveRight>, Error> {
+) -> Result<Option<RecieveRight>, (Error, u64)> {
     let mut aux_rights_count = 0;
     let mut aux_struct = SendRightAux::new();
 
