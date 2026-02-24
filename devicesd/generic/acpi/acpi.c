@@ -41,6 +41,7 @@
 #include <pmos/ports.h>
 #include <pmos/special.h>
 #include <pmos/system.h>
+#include <pmos/vector.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -51,7 +52,6 @@
 #include <uacpi/osi.h>
 #include <uacpi/sleep.h>
 #include <uacpi/utilities.h>
-#include <pmos/vector.h>
 
 void init_acpi();
 
@@ -141,7 +141,9 @@ void request_acpi_tables()
         return;
     }
 
-    result_t result = send_message_right(loader_right.right, configuration_port, (char *)&request, sizeof(request), NULL, SEND_MESSAGE_DELETE_RIGHT).result;
+    result_t result = send_message_right(loader_right.right, configuration_port, (char *)&request,
+                                         sizeof(request), NULL, SEND_MESSAGE_DELETE_RIGHT)
+                          .result;
     if (result != SUCCESS) {
         printf("Warning: Could not send message to get the RSDT\n");
         return;
@@ -235,7 +237,7 @@ int acpi_init()
         return -ENODEV;
     }
 
-    // Ignore return value in case it's not present on reduced 
+    // Ignore return value in case it's not present on reduced
     uacpi_finalize_gpe_initialization();
 
     acpi_bus_enumerate();
@@ -351,7 +353,7 @@ int init_sleep()
         struct MemoryRegion regions[count];
         nvs_cnt = __pmos_syscall_set_attr(0, 6, (unsigned long)&regions[0]);
         if (nvs_cnt.result) {
-            fprintf(stderr, "Failed to get the ACPI NVS regions: %i\n", nvs_cnt.result);
+            fprintf(stderr, "Failed to get the ACPI NVS regions: %" PRIu64 "\n", nvs_cnt.result);
             status = -1;
             return -1;
         }
@@ -491,7 +493,7 @@ static uacpi_status handle_power_button_event(uacpi_handle ctx, uacpi_namespace_
     (void)node;
 
     if (value != 0x80) {
-        printf("Unknown power button event: %llu\n", value);
+        printf("Unknown power button event: %" PRIu64 "\n", value);
         return UACPI_STATUS_OK;
     }
 
@@ -632,35 +634,30 @@ void init_acpi()
 }
 extern pmos_port_t main_port;
 
-pmos_hashtable_t register_requests = PMOS_HASHTABLE_INITIALIZER;
+struct DeviceObject {
+    pmos_msgloop_tree_node_t device_node;
+    pmos_right_t right;
+    uint64_t pmbus_id;
+    char *acpi_name;
+};
+
 struct RegisterRequest {
-    pmos_hashtable_ll_t hash_head;
+    struct RegisterRequest *next;
     uint64_t id;
     char *acpi_name;
     uint8_t *message_data;
     size_t message_data_size;
     uint64_t pmbus_sequence_id;
+
+    pmos_msgloop_tree_node_t reply_node;
+
+    struct DeviceObject *device_object;
 };
-uint64_t next_counter = 1;
 
-static size_t register_request_hash(pmos_hashtable_ll_t *element, size_t total_size)
-{
-    struct RegisterRequest *r = container_of(element, struct RegisterRequest, hash_head);
-    return (r->id * 7) % total_size;
-}
+struct RegisterRequest *pending_registering = NULL;
+uint64_t next_counter                       = 1;
 
-static bool hash_equals(pmos_hashtable_ll_t *element, void *value)
-{
-    struct RegisterRequest *rr = container_of(element, struct RegisterRequest, hash_head);
-    return rr->id == *(uint64_t *)value;
-}
-
-static size_t hash_for_value(void *value, size_t total_size)
-{
-    return (*(uint64_t *)(value) * 7) % total_size;
-}
-
-static pmos_right_t pmbus_right    = 0;
+static pmos_right_t pmbus_right   = 0;
 static bool pmbus_right_requested = false;
 const char *pmbus_right_name      = "/pmos/pmbus";
 int request_pmbus_right(pmos_right_t *right_out)
@@ -675,7 +672,8 @@ int request_pmbus_right(pmos_right_t *right_out)
     if (pmbus_right_requested)
         return 0;
 
-    int result = (int)request_named_port(pmbus_right_name, strlen(pmbus_right_name), main_port, 0).result;
+    int result =
+        (int)request_named_port(pmbus_right_name, strlen(pmbus_right_name), main_port, 0).result;
     if (result < 0) {
         fprintf(stderr, "devicesd: Fauled to request pmbus port: %i (%s)\n", result,
                 strerror(-result));
@@ -686,26 +684,117 @@ int request_pmbus_right(pmos_right_t *right_out)
     return 0;
 }
 
-static void send_foreach(pmos_hashtable_ll_t *element, void *ctx)
+int publish_object_reply(Message_Descriptor *desc, void *buff, pmos_right_t *, pmos_right_t *,
+                         void *ctx, struct pmos_msgloop_data *msgloop)
 {
-    (void)ctx;
-
-    struct RegisterRequest *r = container_of(element, struct RegisterRequest, hash_head);
-    if (!r->message_data)
-        return;
-
-    int result = (int)send_message_right(pmbus_right, 0, r->message_data, r->message_data_size, NULL, 0).result;
-    if (result < 0) {
-        fprintf(stderr, "devicesd: Couldn't send message to pmbus: %i (%s)\n", result,
-                strerror(-result));
+    struct RegisterRequest *rr = ctx;
+    if (desc->size < sizeof(IPC_Generic_Msg)) {
+        fprintf(stderr,
+                "Received message from task %" PRIu64
+                " in reply to publish object that is too small; size: 0x%x\n",
+                desc->sender, (int)desc->size);
+        goto error;
     }
 
+    IPC_Generic_Msg *m = buff;
+    switch (m->type) {
+    case IPC_BUS_Publish_Object_Reply_NUM: {
+        IPC_BUS_Publish_Object_Reply *r = buff;
+
+        if (r->result == 0) {
+            printf("[devicesd] Published %s, sequence number %" PRIi64 "!\n", rr->acpi_name,
+                   r->sequence_number);
+            rr->device_object->pmbus_id = r->sequence_number;
+        } else {
+            printf("[devicesd] Failed to publish %s! Result %i\n", rr->acpi_name, r->result);
+        }
+    } break;
+    default:
+        fprintf(stderr,
+                "Recieved unknown message %" PRIu32 " from task %" PRIu64
+                " waiting for object register reply...\n",
+                m->type, desc->sender);
+    }
+
+error:
+    // This is a send once right, so erase this...
+    pmos_msgloop_erase(msgloop, &rr->reply_node);
+
+    // And free ourselves....
+    free(rr);
+
+    // Continue with msgloop
+    return 0;
+}
+
+int acpi_device_message_callback(Message_Descriptor *, void *, pmos_right_t *,
+                                 pmos_right_t *, void *ctx, struct pmos_msgloop_data *)
+{
+    struct DeviceObject *obj = ctx;
+
+    printf("Devicesd: received message for %s! (it's not implemented yet!!)\n", obj->acpi_name);
+    return 0;
+}
+
+extern struct pmos_msgloop_data main_msgloop_data;
+
+static void send_request(struct RegisterRequest *r)
+{
+    struct DeviceObject *obj   = malloc(sizeof(*obj));
+    right_request_t send_right = {};
+    pmos_right_t recieve_right;
+
+    if (!obj) {
+        fprintf(stderr, "devicesd: Couldn't allocate memory for DeviceObject...\n");
+        goto error;
+    }
+
+    send_right = create_right(main_port, &recieve_right, 0);
+    if (send_right.result) {
+        fprintf(stderr, "devicesd: Couldn't create right for the object %s: %i (%s)\n",
+                r->acpi_name, (int)send_right.result, strerror(-(int)send_right.result));
+        goto error;
+    }
+
+    message_extra_t aux_data = {};
+    aux_data.extra_rights[0] = send_right.right;
+
+    auto result =
+        send_message_right(pmbus_right, 0, r->message_data, r->message_data_size, &aux_data, 0);
+    if (result.result < 0) {
+        fprintf(stderr, "devicesd: Couldn't send message to pmbus: %i (%s)\n", (int)result.result,
+                strerror(-result.result));
+    }
+
+    pmos_msgloop_node_set(&obj->device_node, recieve_right, acpi_device_message_callback, obj);
+    pmos_msgloop_insert(&main_msgloop_data, &obj->device_node);
+
+    obj->right       = send_right.right;
+    r->device_object = obj;
+
+    pmos_msgloop_node_set(&r->reply_node, result.right, publish_object_reply, r);
+    pmos_msgloop_insert(&main_msgloop_data, &r->reply_node);
+
+    obj              = NULL;
+    send_right.right = 0;
+
+error:
+    delete_right(send_right.right);
+    free(obj);
     free(r->message_data);
     r->message_data      = NULL;
     r->message_data_size = 0;
 }
 
-static void publish_send() { hashtable_foreach(&register_requests, send_foreach, NULL); }
+static void publish_send()
+{
+    while (pending_registering) {
+        struct RegisterRequest *r = pending_registering;
+        pending_registering       = r->next;
+
+        send_request(r);
+    }
+}
 
 int send_register_object(struct RegisterRequest *r)
 {
@@ -716,74 +805,34 @@ int send_register_object(struct RegisterRequest *r)
         return -1;
     }
 
-    result = hashmap_add(&register_requests, register_request_hash, &r->hash_head);
-    if (result < 0) {
-        fprintf(stderr, "devicesd: Failed to add request to hash map\n");
-        return result;
-    }
-
     if (pmbus_right == 0)
-        // This will be contineud once the right is obtained
-        return 0;
-
-    result = (int)send_message_right(pmbus_right, 0, r->message_data, r->message_data_size, NULL, 0).result;
-    if (result < 0) {
-        fprintf(stderr, "devicesd: Couldn't send message to pmbus: %i (%s)\n", result,
-                strerror(-result));
-        hashtable_delete(&register_requests, register_request_hash, &r->hash_head);
-        return -1;
-    }
-    free(r->message_data);
-    r->message_data      = NULL;
-    r->message_data_size = 0;
+        send_request(r);
+    // If not, this will be contineud once the right is obtained
 
     return 0;
 }
 
-void publish_object_reply(Message_Descriptor *desc, IPC_BUS_Publish_Object_Reply *r)
-{
-    (void)desc;
-    uint64_t idx = r->user_arg;
-
-    pmos_hashtable_ll_t *e = hashtable_find(&register_requests, &idx, hash_for_value, hash_equals);
-    if (!e) {
-        fprintf(stderr,
-                "[devicesd] Warning: Recieved IPC_BUS_Publish_Object_Reply arg %" PRIi64
-                " , but didn't find value\n",
-                idx);
-        return;
-    }
-
-    struct RegisterRequest *rr = container_of(e, struct RegisterRequest, hash_head);
-    if (r->result == 0) {
-        printf("[devicesd] Published %s, sequence number %" PRIi64 "!\n", rr->acpi_name,
-               r->sequence_number);
-        rr->pmbus_sequence_id = r->sequence_number;
-    } else {
-        printf("[devicesd] Failed to publish %s! Result %i\n", rr->acpi_name, r->result);
-    }
-}
-
-#define BRED "\e[1;31m"
-#define BGRN "\e[1;32m"
+#define BRED   "\e[1;31m"
+#define BGRN   "\e[1;32m"
 #define CRESET "\e[0m"
 
-void named_port_notification(Message_Descriptor *desc, IPC_Kernel_Named_Port_Notification *n, pmos_right_t first_right)
+void named_port_notification(Message_Descriptor *desc, IPC_Kernel_Named_Port_Notification *n,
+                             pmos_right_t first_right)
 {
     // if (desc->sender != 0) {
     //     fprintf(stderr,
-    //             "[devicesd] Warning: recieved IPC_Kernel_Named_Port_Notification from task %" PRIi64
-    //             " , expected kernel (0)\n",
-    //             desc->sender);
+    //             "[devicesd] Warning: recieved IPC_Kernel_Named_Port_Notification from task %"
+    //             PRIi64 " , expected kernel (0)\n", desc->sender);
     //     return;
     // }
 
     if (!first_right) {
-        fprintf(stderr, BRED "devicesd: Recieved named right notification with no right..." CRESET "\n");
+        fprintf(stderr,
+                BRED "devicesd: Recieved named right notification with no right..." CRESET "\n");
         return;
     }
 
-    printf(BGRN "named port right % "PRIi64 CRESET "\n", first_right);
+    printf(BGRN "named port right %" PRIi64 CRESET "\n", first_right);
 
     size_t len = NAMED_PORT_NOTIFICATION_STR_LEN(desc->size);
     if (len == strlen(pmbus_right_name) && !memcmp(pmbus_right_name, n->port_name, len)) {
@@ -795,6 +844,10 @@ void named_port_notification(Message_Descriptor *desc, IPC_Kernel_Named_Port_Not
 
 int register_object(pmos_bus_object_t *object_owning)
 {
+    // TODO
+    pmos_bus_object_free(object_owning);
+    return 0;
+
     int result                 = -1;
     struct RegisterRequest *rr = calloc(sizeof(*rr), 1);
     if (!rr) {
@@ -813,8 +866,7 @@ int register_object(pmos_bus_object_t *object_owning)
     uint8_t *msg    = NULL;
     size_t msg_size = 0;
 
-    if (!pmos_bus_object_serialize_ipc(object_owning, main_port, rr->id, main_port,
-                                       pmos_process_task_group(), &msg, &msg_size)) {
+    if (!pmos_bus_object_serialize_ipc(object_owning, &msg, &msg_size)) {
         fprintf(stderr, "Couldn't serialize pmbus object\n");
         goto end;
     }
