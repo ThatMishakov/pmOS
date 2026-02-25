@@ -275,10 +275,12 @@ result_t get_registers(uint64_t pid, unsigned register_set, void *addr);
  * protections. PAGE_TABLE_CLONE - clones the page table provided by the page_table argument. In
  * this case, the page table is copied and the new process has its own address space. The page table
  * can be modified without affecting the other processes.
+ * @param architecture Target architecture for the new page table. Allows starting 32 bit processes
+ * on 64 bit kernel. Use 0 to inherit the one of the caller.
  * @return page_table_req_ret_t returns the result of the execution and the ID of the page table
  * assigned to the process. If result != SUCCESS, page_table does not hold a meaningful value.
  */
-page_table_req_ret_t assign_page_table(uint64_t pid, uint64_t page_table, uint64_t flags);
+page_table_req_ret_t assign_page_table(uint64_t pid, uint64_t page_table, unsigned flags, unsigned architecture);
 
 /**
  * @brief Initializes stack for the given task
@@ -294,11 +296,21 @@ page_table_req_ret_t assign_page_table(uint64_t pid, uint64_t page_table, uint64
  * @param stack_top The top of the stack. If NULL, the kernel will allocate 2GB stack for the task.
  * @return syscall_r The result of the operation. If the result is SUCCESS, the pointer to the top
  * of the stack is stored in the *value* field.
- * @todo This functionality can be replicated in by the callee, both being more convenient,
+ * @todo This functionality can be replicated in by the caller, both being more convenient,
  * flexible, faster (not requiring trip to kernel) and more akin to the pmOS philosophy. This
  * syscall should be revised in the future.
  */
 syscall_r init_stack(uint64_t tid, void *stack_top);
+
+/**
+ * @brief Gets the size (in bytes) of the given memory object
+ * 
+ * @param mem_object_id ID of the memory object
+ * @param flags Optional flags (bitmask)
+ * @return syscall_r result of the operation. If the result is SUCCESS, the value is the size in bytes,
+ * otherwise, result contains the -errno error from kernel.
+ */
+syscall_r get_mem_object_size(mem_object_t mem_object_id, unsigned flags);
 
 #endif
 

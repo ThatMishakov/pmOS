@@ -313,12 +313,12 @@ page_table_req_ret_t get_page_table(uint64_t pid)
     return t;
 }
 
-page_table_req_ret_t assign_page_table(uint64_t pid, uint64_t page_table, uint64_t flags)
+page_table_req_ret_t assign_page_table(uint64_t pid, uint64_t page_table, unsigned flags, unsigned for_arch)
 {
 #ifdef __32BITSYSCALL
-    syscall_r r = __pmos_syscall32_4words(SYSCALL_ASSIGN_PAGE_TABLE | (flags << 8), pid, page_table);
+    syscall_r r = __pmos_syscall32_4words(SYSCALL_ASSIGN_PAGE_TABLE | (flags << 8) | (for_arch << 24), pid, page_table);
 #else
-    syscall_r r = pmos_syscall(SYSCALL_ASSIGN_PAGE_TABLE | (flags << 8), pid, page_table);
+    syscall_r r = pmos_syscall(SYSCALL_ASSIGN_PAGE_TABLE | (flags << 8) | (for_arch << 24), pid, page_table);
 #endif
     page_table_req_ret_t t = {r.result, r.value};
     return t;
@@ -653,4 +653,13 @@ right_request_t dup_right(pmos_right_t right)
         .result = result.result,
         .right = result.value,
     };
+}
+
+syscall_r get_mem_object_size(mem_object_t mem_object_id, unsigned flags)
+{
+    #ifdef __32BITSYSCALL
+    return __pmos_syscall32_2words(SYSCALL_GET_MEM_OBJECT_SIZE | (flags << 8), mem_object_id);
+    #else
+    return pmos_syscall(SYSCALL_GET_MEM_OBJECT_SIZE | (flags << 8), mem_object_id);
+    #endif
 }

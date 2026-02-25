@@ -94,5 +94,6 @@
 #define SYSCALL_DELETE_SEND_RIGHT           54
 #define SYSCALL_ACCEPT_RIGHTS               55
 #define SYSCALL_DUP_RIGHT                   56
+#define SYSCALL_GET_MEM_OBJECT_SIZE         57
 
 #endif

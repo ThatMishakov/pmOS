@@ -76,7 +76,7 @@ namespace paging
         /// Gets the id of the memory region
         id_type get_id() const noexcept;
 
-        Spinlock lock;
+        mutable Spinlock lock;
 
         /**
          * @brief Creates a new memory object
@@ -132,6 +132,8 @@ namespace paging
          * @see size_bytes()
          */
         u64 size_pages() const noexcept;
+
+        u64 atomic_size_bytes() const;
 
         /**
          * @brief Returns the size of the region in bytes

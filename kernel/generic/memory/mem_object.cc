@@ -524,3 +524,9 @@ ReturnStr<void *> Mem_Object::map_to_kernel(u64 offset, u64 size, Page_Table_Arg
 }
 
 u64 Mem_Object::size_bytes() const noexcept { return pages_size << page_size_log; }
+
+u64 Mem_Object::atomic_size_bytes() const
+{
+    Auto_Lock_Scope l(lock);
+    return size_bytes();
+}

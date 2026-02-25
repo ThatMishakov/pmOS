@@ -69,7 +69,7 @@ namespace kernel::proc::syscalls
 {
 
 using syscall_function                         = void (*)();
-std::array<syscall_function, 57> syscall_table = {
+std::array<syscall_function, 58> syscall_table = {
     syscall_exit,
     syscall_get_task_id,
     syscall_create_process,
@@ -131,6 +131,7 @@ std::array<syscall_function, 57> syscall_table = {
     syscall_delete_send_right,
     syscall_accept_rights,
     syscall_dup_right,
+    syscall_get_mem_object_size,
 };
 
 extern "C" void syscall_handler()
@@ -2305,6 +2306,22 @@ void syscall_dup_right()
     }
 
     syscall_return(current) = result.val.second;
+}
+
+void syscall_get_mem_object_size()
+{
+    auto current = get_current_task();
+
+    u64 object_id = syscall_arg64(current, 0);
+    auto flags = syscall_flags(current);
+
+    const auto object = Mem_Object::get_object(object_id);
+    if (!object) {
+        syscall_error(current) = -ENOENT;
+        return;
+    }
+
+    syscall_return(current) = object->atomic_size_bytes();
 }
 
 } // namespace kernel::proc::syscalls

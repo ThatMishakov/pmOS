@@ -120,7 +120,7 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
 
     // Assign a page table
     page_table_req_ret_t thread_table =
-        assign_page_table(u->thread_task_id, PAGE_TABLE_SELF, PAGE_TABLE_ASSIGN);
+        assign_page_table(u->thread_task_id, PAGE_TABLE_SELF, PAGE_TABLE_ASSIGN, 0);
     if (thread_table.result != 0) {
         syscall_kill_task(u->thread_task_id);
         release_region(TASK_ID_SELF, stack.virt_addr);
