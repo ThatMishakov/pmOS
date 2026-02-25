@@ -313,12 +313,12 @@ page_table_req_ret_t get_page_table(uint64_t pid)
     return t;
 }
 
-page_table_req_ret_t asign_page_table(uint64_t pid, uint64_t page_table, uint64_t flags)
+page_table_req_ret_t assign_page_table(uint64_t pid, uint64_t page_table, uint64_t flags)
 {
 #ifdef __32BITSYSCALL
-    syscall_r r = __pmos_syscall32_4words(SYSCALL_ASIGN_PAGE_TABLE | (flags << 8), pid, page_table);
+    syscall_r r = __pmos_syscall32_4words(SYSCALL_ASSIGN_PAGE_TABLE | (flags << 8), pid, page_table);
 #else
-    syscall_r r = pmos_syscall(SYSCALL_ASIGN_PAGE_TABLE | (flags << 8), pid, page_table);
+    syscall_r r = pmos_syscall(SYSCALL_ASSIGN_PAGE_TABLE | (flags << 8), pid, page_table);
 #endif
     page_table_req_ret_t t = {r.result, r.value};
     return t;

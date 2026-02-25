@@ -102,7 +102,7 @@ std::array<syscall_function, 57> syscall_table = {
     nullptr,
     syscall_set_segment,
 
-    syscall_asign_page_table,
+    syscall_assign_page_table,
     syscall_create_mem_object,
     syscall_create_task_group,
     syscall_add_to_task_group,
@@ -1270,7 +1270,7 @@ void syscall_transfer_region()
     syscall_return(current) = (ulong)result.val.first;
 }
 
-void syscall_asign_page_table()
+void syscall_assign_page_table()
 {
     TaskDescriptor *current = get_current_task();
 
@@ -1296,7 +1296,7 @@ void syscall_asign_page_table()
         }
         break;
     }
-    case 2: // PAGE_TABLE_ASIGN
+    case 2: // PAGE_TABLE_ASSIGN
     {
         klib::shared_ptr<Arch_Page_Table> t;
         if (page_table == 0 or page_table == current->page_table->id)

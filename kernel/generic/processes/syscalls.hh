@@ -136,7 +136,7 @@ void syscall_set_segment();
 void syscall_get_segment();
 // Parameters: u64 pid, u64 segment_type
 
-void syscall_asign_page_table();
+void syscall_assign_page_table();
 // Parameters: u64 pid, u64 page_table, u64 flags
 
 void syscall_create_mem_object();

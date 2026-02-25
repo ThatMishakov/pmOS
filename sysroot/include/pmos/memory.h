@@ -216,7 +216,7 @@ typedef struct page_table_req_ret_t {
 
 /**
  * @brief Get the kernel page table object id for the process identified by PID.
- *        The process must have some page table asigned, otherwise an error will be returned.
+ *        The process must have some page table assigned, otherwise an error will be returned.
  * @param pid The PID of the process. Can take TASK_ID_SELF (0)
  * @return page_table_req_ret_t has the result and the page table. If the result is not SUCCESSm
  * then page_table does not hold a meaningful value.
@@ -252,33 +252,33 @@ result_t get_registers(uint64_t pid, unsigned register_set, void *addr);
     #define PAGE_TABLE_SELF 0
 
     #define PAGE_TABLE_CREATE 1
-    #define PAGE_TABLE_ASIGN  2
+    #define PAGE_TABLE_ASSIGN 2
     #define PAGE_TABLE_CLONE  3
 /**
- * @brief Asigns a page table to the process
+ * @brief Assigns a page table to the process
  *
- * This system call asigns the page table to the newly created process. After issuing the
+ * This system call assigns the page table to the newly created process. After issuing the
  * start_process() function, the new process is found in an uninit state and has no page table. This
- * function can be either used to create a new page table or asign the existing one (e.g. for the
+ * function can be either used to create a new page table or assign the existing one (e.g. for the
  * threads), in which case several process can share the same address space.
  *
- * Before execution, the process must not have a page table asigned. Flags can be used to define if
+ * Before execution, the process must not have a page table assigned. Flags can be used to define if
  * the new page table shall be created or inherited from *page_table* parameter.
- * @param pid PID of the target task, to which the page table must be asigned.
- * @param page_table ID of the page table if it is to be asigned. Given page table must not be
+ * @param pid PID of the target task, to which the page table must be assigned.
+ * @param page_table ID of the page table if it is to be assigned. Given page table must not be
  * virtual. PAGE_TABLE_SELF might be used as a shorthand for inheriting the page table from the
  * caller. If PAGE_TABLE_CREATE is used, this parameter is ignored.
  * @param flags Flags defining the behaviour of the system call. Can take one of the following
  * values: PAGE_TABLE_CREATE - create a new empty page table. In this case, the page_table parameter
- * is ignored. PAGE_TABLE_ASIGN - asigns the page table provided by the page_table argument. In this
+ * is ignored. PAGE_TABLE_ASSIGN - assigns the page table provided by the page_table argument. In this
  * case, all the process with the same page table object share the same address space with the same
  * protections. PAGE_TABLE_CLONE - clones the page table provided by the page_table argument. In
  * this case, the page table is copied and the new process has its own address space. The page table
  * can be modified without affecting the other processes.
  * @return page_table_req_ret_t returns the result of the execution and the ID of the page table
- * asigned to the process. If result != SUCCESS, page_table does not hold a meaningful value.
+ * assigned to the process. If result != SUCCESS, page_table does not hold a meaningful value.
  */
-page_table_req_ret_t asign_page_table(uint64_t pid, uint64_t page_table, uint64_t flags);
+page_table_req_ret_t assign_page_table(uint64_t pid, uint64_t page_table, uint64_t flags);
 
 /**
  * @brief Initializes stack for the given task

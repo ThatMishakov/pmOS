@@ -112,7 +112,7 @@ result_t syscall_kill_task(uint64_t tid);
  * @param arg2 Second argument to the entry point. On x86_64, it is passed in the RSI register.
  * @param arg3 Third argument to the entry point. On x86_64, it is passed in the RDX register.
  * @return result_t Result of the call. If the result != SUCCESS, the process was not started.
- * @see init_stack() syscall_new_process() asign_page_table()
+ * @see init_stack() syscall_new_process() assign_page_table()
  */
 result_t syscall_start_process(uint64_t pid, unsigned long entry, unsigned long arg1,
                                unsigned long arg2, unsigned long arg3);

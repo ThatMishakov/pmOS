@@ -243,7 +243,7 @@ namespace paging
         id_type id = create_id();
 
         /**
-         * @brief Asigns a new Memory Object id
+         * @brief Assigns a new Memory Object id
          *
          * @return New id
          */
