@@ -50,6 +50,7 @@
 #include <memory/mem_object.hh>
 #include <pmos/system.h>
 #include <sched/sched.hh>
+#include <pmos/memory.h>
 
 #if defined(__x86_64__) || defined(__i386__)
     #include <sched/segments.hh>
@@ -1375,11 +1376,11 @@ void syscall_create_mem_object()
 void syscall_map_mem_object()
 {
     const auto &current_task = get_current_task();
-    u64 page_table_id        = syscall_arg64(current_task, 0);
-    u64 object_id            = syscall_arg64(current_task, 1);
-    ulong access             = syscall_flags(current_task);
-    u64 offset;
-    auto result = syscall_arg64_checked(current_task, 2, offset);
+
+    map_mem_object_param_t params = {};
+
+    ulong ptr = syscall_arg(current_task, 0, 0);
+    auto result = copy_from_user((char *)&params, (const char *)ptr, sizeof(params));
     if (!result.success()) {
         syscall_error(current_task) = result.result;
         return;
@@ -1387,17 +1388,14 @@ void syscall_map_mem_object()
     if (!result.val)
         return;
 
-    ulong args[2];
-    result = syscall_args_checked(current_task, 3, 3, 2, args);
-    if (!result.success()) {
-        syscall_error(current_task) = result.result;
-        return;
-    }
-    if (!result.val)
-        return;
+    u64 page_table_id = params.page_table_id;
+    u64 object_id =     params.object_id;
+    ulong access =      params.access_flags;
+    u64 object_offset_bytes = params.offset_object;
+    ulong size_bytes = params.size;
+    ulong addr_start = params.addr_start_uint;
 
-    ulong addr_start = args[0];
-    ulong size_bytes = args[1];
+    u64 start_offset_bytes = 0;
 
     klib::shared_ptr<Page_Table> table = page_table_id == 0
                                              ? current_task->page_table
@@ -1408,12 +1406,7 @@ void syscall_map_mem_object()
         return;
     }
 
-    if ((size_bytes == 0) or ((size_bytes & 0xfff) != 0)) {
-        syscall_error(current_task) = -EINVAL;
-        return;
-    }
-
-    if (offset & 0xfff) {
+    if ((size_bytes == 0) or ((size_bytes & (PAGE_SIZE - 1)) != 0)) {
         syscall_error(current_task) = -EINVAL;
         return;
     }
@@ -1429,14 +1422,9 @@ void syscall_map_mem_object()
         return;
     }
 
-    if (object->size_bytes() < offset + size_bytes) {
-        syscall_error(current_task) = -EFBIG;
-        return;
-    }
-
     auto res = table->atomic_create_mem_object_region((void *)addr_start, size_bytes, access & 0x7,
                                                       access & 0x8, "object map", object,
-                                                      access & 0x20, 0, offset, size_bytes);
+                                                      access & 0x20, start_offset_bytes, object_offset_bytes, size_bytes);
 
     if (!res.success()) {
         syscall_error(current_task) = res.result;

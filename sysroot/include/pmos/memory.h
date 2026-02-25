@@ -47,8 +47,11 @@ extern "C" {
  */
 typedef struct mem_request_ret_t {
     result_t result; ///< The result of the operation
-    void *virt_addr; ///< Address of the new region. Does not hold a meningful value if the result
-                     ///< was not successfull.
+    union {
+        void *virt_addr; ///< Address of the new region. Does not hold a meningful value if the result
+                        ///< was not successfull.
+        uint64_t virt_addr_intptr; /// to access as 64 bit int
+    };
 } mem_request_ret_t;
 
 typedef struct phys_addr_request_t {
@@ -155,25 +158,40 @@ mem_request_ret_t create_phys_map_region(uint64_t pid, void *addr_start, size_t 
  */
 mem_object_request_ret_t create_mem_object(size_t size, uint32_t flags);
 
+/// @brief Parameters for map_mem_object syscall
+typedef struct map_mem_object_param_t {
+    /// ID of the page table where the new region should be created. Takes
+    /// PAGE_TABLE_SELF (0) for the current process.
+    uint64_t page_table_id;
+    /// ID of the memory object that should be mapped to the new region.
+    mem_object_t object_id;
+    /// The suggestion for the virutal address of the new region. The parameter must be
+    /// page-alligned. uint64_t is used here instead of void to be able to address memory in 64 bit
+    /// processes from 32 bit executables. (So void * can be cast to it if mapping for yourself)
+    uint64_t addr_start_uint;
+    /// The size in bytes of the new region. The size must be page-alligned and not 0,
+    /// otherwise the error will be returned
+    uint64_t size;
+    /// Offset in the memory object where the mapping should start. The offset must be
+    /// page aligned if not using CoW, or have the same offset to (offset_start % PAGE_SIZE), in which case
+    /// the beginning would be willed with 0.
+    uint64_t offset_object;
+    /// Offset in the page table, from which the pages will be copied. Must be 0 if
+    /// FLAG_COW is not set.
+    uint64_t offset_start;
+    /// An OR-conjugated list of the argument. Takes PROT_READ, PROT_WRITE and PROT_EXEC as
+    /// access bytes and CREATE_FLAG_FIXED, and FLAG_COW
+    uint64_t access_flags;
+} map_mem_object_param_t;
+
 /**
  * @brief Maps a memory object to the new region.
- * @param page_table_id ID of the page table where the new region should be created. Takes
- * PAGE_TABLE_SELF (0) for the current process.
- * @param addr_start The suggestion for the virutal address of the new region. The parameter must be
- * page-alligned.
- * @param size The size in bytes of the new region. The size must be page-alligned and not 0,
- * otherwise the error will be returned
- * @param access An OR-conjugated list of the argument. Takes PROT_READ, PROT_WRITE and PROT_EXEC as
- * access bytes and CREATE_FLAG_FIXED, and FLAG_COW
- * @param object_id ID of the memory object that should be mapped to the new region.
- * @param offset Offset in the memory object where the mapping should start. The offset must be
- * page-alligned.
+ * @param params Parameters for the mapping (passed as a struct since it's too big for a syscall)
  * @returns mem_request_ret_t structure. Result indicated if the operation was successfull and error
  * otherwise. If the operation was successfull, virt_addr contains the address of the new virtual
  * region.
  */
-mem_request_ret_t map_mem_object(uint64_t page_table_id, void *addr_start, size_t size,
-                                 uint32_t access, mem_object_t object_id, uint64_t offset);
+mem_request_ret_t map_mem_object(const map_mem_object_param_t *params);
 
 /**
  * @brief Transfers a memory region to the new page table.

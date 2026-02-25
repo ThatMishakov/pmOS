@@ -242,7 +242,10 @@ mem_request_ret_t create_phys_map_region(uint64_t pid, void *addr_start, size_t 
     syscall_r r =
         pmos_syscall(SYSCALL_CREATE_PHYS_REGION | (access << 8), pid, phys_addr, addr_start, size);
 #endif
-    mem_request_ret_t t = {r.result, (void *)r.value};
+    mem_request_ret_t t = {
+        .result = r.result,
+        .virt_addr_intptr = r.value
+    };
     return t;
 }
 
@@ -254,7 +257,10 @@ mem_request_ret_t create_normal_region(uint64_t pid, void *addr_start, size_t si
 #else
     syscall_r r = pmos_syscall(SYSCALL_CREATE_NORMAL_REGION | (access << 8), pid, addr_start, size);
 #endif
-    mem_request_ret_t t = {r.result, (void *)r.value};
+    mem_request_ret_t t = {
+        .result = r.result,
+        .virt_addr_intptr = r.value
+    };
     return t;
 }
 
@@ -266,21 +272,24 @@ mem_request_ret_t transfer_region(uint64_t to_page_table, void *region, void *de
 #else
     syscall_r r = pmos_syscall(SYSCALL_TRANSFER_REGION | (flags << 8), to_page_table, region, dest);
 #endif
-    mem_request_ret_t t = {r.result, (void *)r.value};
+    mem_request_ret_t t = {
+        .result = r.result,
+        .virt_addr_intptr = r.value
+    };
     return t;
 }
 
-mem_request_ret_t map_mem_object(uint64_t page_table_id, void *addr_start, size_t size,
-                                 uint32_t access, mem_object_t object_id, uint64_t offset)
+mem_request_ret_t map_mem_object(const map_mem_object_param_t *params)
 {
 #ifdef __32BITSYSCALL
-    syscall_r r = __pmos_syscall32_8words(SYSCALL_MAP_MEM_OBJECT | (access << 8), page_table_id,
-                                          object_id, offset, addr_start, size);
+    syscall_r r = __pmos_syscall32_1words(SYSCALL_MAP_MEM_OBJECT, params);
 #else
-    syscall_r r = pmos_syscall(SYSCALL_MAP_MEM_OBJECT | (access << 8), page_table_id, object_id,
-                               offset, addr_start, size);
+    syscall_r r = pmos_syscall(SYSCALL_MAP_MEM_OBJECT, params);
 #endif
-    mem_request_ret_t t = {r.result, (void *)r.value};
+    mem_request_ret_t t = {
+        .result = r.result,
+        .virt_addr_intptr = r.value
+    };
     return t;
 }
 
