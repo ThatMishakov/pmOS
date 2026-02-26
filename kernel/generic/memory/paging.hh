@@ -33,7 +33,6 @@
 #include <kernel/memory.h>
 #include <lib/memory.hh>
 #include <lib/pair.hh>
-#include <lib/set.hh>
 #include <lib/splay_tree_map.hh>
 #include <pmos/containers/intrusive_list.hh>
 #include <pmos/containers/set.hh>

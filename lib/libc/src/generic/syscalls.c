@@ -264,13 +264,13 @@ mem_request_ret_t create_normal_region(uint64_t pid, void *addr_start, size_t si
     return t;
 }
 
-mem_request_ret_t transfer_region(uint64_t to_page_table, void *region, void *dest, uint32_t flags)
+mem_request_ret_t transfer_region(uint64_t to_page_table, void *region, uint64_t dest, uint32_t flags)
 {
 #ifdef __32BITSYSCALL
-    syscall_r r = __pmos_syscall32_4words(SYSCALL_TRANSFER_REGION | (flags << 8), to_page_table,
-                                          region, dest);
+    syscall_r r = __pmos_syscall32_5words(SYSCALL_TRANSFER_REGION | (flags << 8), to_page_table, dest,
+                                          region);
 #else
-    syscall_r r = pmos_syscall(SYSCALL_TRANSFER_REGION | (flags << 8), to_page_table, region, dest);
+    syscall_r r = pmos_syscall(SYSCALL_TRANSFER_REGION | (flags << 8), to_page_table, dest, region);
 #endif
     mem_request_ret_t t = {
         .result = r.result,
@@ -302,10 +302,10 @@ result_t release_region(uint64_t tid, void *region)
 #endif
 }
 
-syscall_r init_stack(uint64_t tid, void *stack_top)
+syscall_r init_stack(uint64_t tid, uint64_t stack_top)
 {
 #ifdef __32BITSYSCALL
-    return __pmos_syscall32_3words(SYSCALL_INIT_STACK, tid, (unsigned)stack_top);
+    return __pmos_syscall32_4words(SYSCALL_INIT_STACK, tid, stack_top);
 #else
     return pmos_syscall(SYSCALL_INIT_STACK, tid, stack_top);
 #endif

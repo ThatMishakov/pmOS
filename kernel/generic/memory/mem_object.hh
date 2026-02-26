@@ -31,7 +31,6 @@
 
 #include <lib/list.hh>
 #include <lib/memory.hh>
-#include <lib/set.hh>
 #include <lib/splay_tree_map.hh>
 #include <lib/vector.hh>
 #include <memory/mem_protection.hh>
@@ -309,7 +308,7 @@ namespace paging
          * used as a representation of UNIX processes.
          *
          */
-        klib::set<klib::weak_ptr<Page_Table>> pined_by;
+        pmos::containers::set<klib::weak_ptr<Page_Table>> pined_by;
 
         /**
          * @brief Pager for the region

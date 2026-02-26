@@ -430,7 +430,7 @@ void syscall_init_stack()
     const task_ptr &task = get_current_task();
 
     u64 pid   = syscall_arg64(task, 0);
-    ulong esp = syscall_arg(task, 1, 1);
+    u64 esp = syscall_arg64(task, 1);
 
     // TODO: Check permissions
 
@@ -1250,8 +1250,8 @@ void syscall_transfer_region()
     TaskDescriptor *current = get_current_task();
 
     u64 to_page_table = syscall_arg64(current, 0);
-    ulong region      = syscall_arg(current, 1, 1);
-    ulong dest        = syscall_arg(current, 2, 1);
+    u64 dest          = syscall_arg64(current, 1);
+    ulong region      = syscall_arg(current, 2, 2);
     ulong flags       = syscall_flags(current);
 
     auto pt = Arch_Page_Table::get_page_table(to_page_table);
@@ -1288,7 +1288,7 @@ void syscall_assign_page_table()
 
     syscall_success(current);
 
-    switch (flags) {
+    switch (flags & 0xffff) {
     case 1: { // PAGE_TABLE_CREATE
         auto result = dest->create_new_page_table();
         if (result) {
@@ -1394,8 +1394,8 @@ void syscall_map_mem_object()
     u64 object_offset_bytes = params.offset_object;
     ulong size_bytes = params.size;
     ulong addr_start = params.addr_start_uint;
-
-    u64 start_offset_bytes = 0;
+    ulong object_size = params.object_size;
+    u64 start_offset_bytes = params.offset_start;
 
     klib::shared_ptr<Page_Table> table = page_table_id == 0
                                              ? current_task->page_table
@@ -1424,7 +1424,7 @@ void syscall_map_mem_object()
 
     auto res = table->atomic_create_mem_object_region((void *)addr_start, size_bytes, access & 0x7,
                                                       access & 0x8, "object map", object,
-                                                      access & 0x20, start_offset_bytes, object_offset_bytes, size_bytes);
+                                                      access & 0x20, start_offset_bytes, object_offset_bytes, object_size);
 
     if (!res.success()) {
         syscall_error(current_task) = res.result;

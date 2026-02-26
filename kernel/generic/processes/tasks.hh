@@ -35,7 +35,6 @@
 #include <exceptions.hh>
 #include <interrupts/stack.hh>
 #include <lib/memory.hh>
-#include <lib/set.hh>
 #include <lib/string.hh>
 #include <memory/paging.hh>
 #include <memory/rcu.hh>
@@ -148,7 +147,7 @@ namespace proc
         void *page_blocked_by = nullptr;
 
         // Task groups. Using sched_lock...
-        klib::set<TaskGroup *> task_groups;
+        pmos::containers::set<TaskGroup *> task_groups;
 
         // Creates and assigns an emty valid page table
         kresult_t create_new_page_table();

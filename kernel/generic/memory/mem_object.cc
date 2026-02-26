@@ -177,7 +177,7 @@ kresult_t Mem_Object::register_pined(klib::weak_ptr<Page_Table> pined_by)
 {
     assert(pinned_lock.is_locked() && "lock is not locked!");
 
-    auto t = this->pined_by.insert(pined_by);
+    auto t = this->pined_by.insert_noexcept(pined_by);
     if (t.first == this->pined_by.end())
         return -ENOMEM;
 

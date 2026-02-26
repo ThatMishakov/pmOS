@@ -179,8 +179,11 @@ typedef struct map_mem_object_param_t {
     /// Offset in the page table, from which the pages will be copied. Must be 0 if
     /// FLAG_COW is not set.
     uint64_t offset_start;
+    /// Size of the memory object (in bytes). If smaller than size and region is CoW,
+    /// the trailing space will be zeroed.
+    uint64_t object_size;
     /// An OR-conjugated list of the argument. Takes PROT_READ, PROT_WRITE and PROT_EXEC as
-    /// access bytes and CREATE_FLAG_FIXED, and FLAG_COW
+    /// access bytes and CREATE_FLAG_FIXED, and CREATE_FLAG_COW
     uint64_t access_flags;
 } map_mem_object_param_t;
 
@@ -210,7 +213,7 @@ mem_request_ret_t map_mem_object(const map_mem_object_param_t *params);
  * meaningless if the result is not SUCCESS
  * @see create_normal_region()
  */
-mem_request_ret_t transfer_region(uint64_t to_page_table, void *region, void *dest, uint32_t flags);
+mem_request_ret_t transfer_region(uint64_t to_page_table, void *region, uint64_t dest, uint32_t flags);
 
 /// @brief Releases memory region
 /// @param pid PID of the process holding the region that should be released. Takes TASK_ID_SELF (0)
@@ -311,14 +314,14 @@ page_table_req_ret_t assign_page_table(uint64_t pid, uint64_t page_table, unsign
  * If NULL is passed as a stack pointer, the kernel will allocate 2GB stack for the task. This
  * currently is hardcoded and needs to be revised in the future.
  * @param tid ID of the task
- * @param stack_top The top of the stack. If NULL, the kernel will allocate 2GB stack for the task.
+ * @param stack_top The top of the stack. If 0, the kernel will allocate 2GB stack for the task.
  * @return syscall_r The result of the operation. If the result is SUCCESS, the pointer to the top
  * of the stack is stored in the *value* field.
  * @todo This functionality can be replicated in by the caller, both being more convenient,
  * flexible, faster (not requiring trip to kernel) and more akin to the pmOS philosophy. This
  * syscall should be revised in the future.
  */
-syscall_r init_stack(uint64_t tid, void *stack_top);
+syscall_r init_stack(uint64_t tid, uint64_t stack_top);
 
 /**
  * @brief Gets the size (in bytes) of the given memory object

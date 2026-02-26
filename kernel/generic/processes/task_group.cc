@@ -99,7 +99,6 @@ ReturnStr<TaskGroup *> TaskGroup::create_for_task(TaskDescriptor *task)
     assert(task);
 
     auto group        = new TaskGroup();
-    auto delete_error = pmos::utility::make_scope_guard([group] { delete group; });
 
     if (!group) [[unlikely]]
         return Error(-ENOMEM);
@@ -113,7 +112,7 @@ ReturnStr<TaskGroup *> TaskGroup::create_for_task(TaskDescriptor *task)
         if (s == TaskStatus::TASK_DYING || s == TaskStatus::TASK_DEAD)
             return nullptr;
 
-        auto t = task->task_groups.insert(group);
+        auto t = task->task_groups.insert_noexcept(group);
         if (!t.second)
             return nullptr;
     }
@@ -133,7 +132,6 @@ ReturnStr<TaskGroup *> TaskGroup::create_for_task(TaskDescriptor *task)
     }
 
     guard.dismiss();
-    delete_error.dismiss();
 
     return Success(group);
 }
@@ -147,7 +145,7 @@ kresult_t TaskGroup::atomic_register_task(TaskDescriptor *task)
         if (s == TaskStatus::TASK_DYING || s == TaskStatus::TASK_DEAD)
             return -ENOENT;
 
-        auto t = task->task_groups.insert(this);
+        auto t = task->task_groups.insert_noexcept(this);
         if (t.first == task->task_groups.end())
             return -ENOMEM;
         inserted = t.second;
