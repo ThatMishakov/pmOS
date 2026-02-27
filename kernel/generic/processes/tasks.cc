@@ -703,7 +703,7 @@ ReturnStr<bool>
 
     // Push stack descriptor structure
     u64 size =
-        sizeof(load_tag_stack_descriptor) + sizeof(load_tag_elf_phdr) + sizeof(load_tag_close);
+        sizeof(load_tag_stack_descriptor) + sizeof(load_tag_elf_phdr) + sizeof(load_tag_mem_object_id) + sizeof(load_tag_close);
     // Add other tags
     for (auto &tag: tags) {
         size += tag->offset_to_next;
@@ -721,6 +721,13 @@ ReturnStr<bool>
 
     memcpy((char *)(&load_stack[0]) + current_offset, (char *)&phdr_tag, sizeof(phdr_tag));
     current_offset += sizeof(phdr_tag);
+
+    load_tag_mem_object_id *mobjid = (load_tag_mem_object_id *)((char *)&load_stack[0] + current_offset);
+    *mobjid = {
+        .header = LOAD_TAG_MEM_OBJECT_ID_HEADER,
+        .memory_object_id = elf->get_id(),
+    };
+    current_offset += sizeof(*mobjid);
 
     for (auto &tag: tags) {
         auto ptr = &load_stack[0] + current_offset / 8;

@@ -37,8 +37,13 @@
 #include <stdio_internal.h>
 #include <stdlib.h>
 #include <string.h>
+#include <kernel/elf.h>
+#include <pthread.h>
 
-TLS_Data *__global_tls_data = NULL;
+#define TLS_MODEL0 0
+#define TLS_MODEL1 1
+
+#define TLS_MODEL TLS_MODEL1
 
 #define max(x, y)                (x > y ? x : y)
 #define alignup(size, alignment) (size % alignment ? size + (alignment - size % alignment) : size)
@@ -119,13 +124,131 @@ static void prepare_load_tags(void *load_data, size_t load_data_size)
     }
 }
 
-static void init_tls_first_time(void *load_data, size_t load_data_size, TLS_Data *d)
+static uint64_t tls_mem_object = 0;
+static size_t tls_memsz = 0;
+static size_t tls_filesz = 0;
+static uintptr_t tls_file_offset = 0;
+static uintptr_t tls_page_offset = 0;
+
+extern int pthread_list_spinlock;
+// Worker thread is the list head
+extern struct uthread *worker_thread;
+
+struct uthread *__prepare_tls(void *stack_top, size_t stack_size)
 {
-    __global_tls_data = d;
+    // TODO: maybe not everything has TLS? :)
+    // bool has_tls = tls_mem_object != 0;
+
+    #if TLS_MODEL == TLS_MODEL1
+    uintptr_t tls_end = tls_page_offset + tls_memsz + sizeof(struct uthread);
+    tls_end = alignup(tls_end, _Alignof(struct uthread));
+
+    size_t size_to_page = alignup(tls_end, PAGE_SIZE);
+
+    map_mem_object_param_t params = {
+        .page_table_id = PAGE_TABLE_SELF,
+        .object_id = tls_mem_object,
+        .addr_start_uint = 0,
+        .size = size_to_page,
+        .offset_object = tls_file_offset,
+        .offset_start = tls_page_offset,
+        .object_size = tls_filesz,
+        .access_flags = CREATE_FLAG_COW | PROT_READ | PROT_WRITE,
+    };
+
+    mem_request_ret_t res = map_mem_object(&params);
+    if (res.result != SUCCESS)
+        return NULL;
+
+    unsigned char *tls = (unsigned char *)res.virt_addr + tls_page_offset + tls_memsz;
+
+    // #else ...
+    #else
+    #endif
+
+    __init_uthread((struct uthread *)tls, stack_top, stack_size);
+
+    return (struct uthread *)tls;
+}
+
+#if TLS_MODEL == TLS_MODEL1
+void __release_tls(struct uthread *u)
+{
+    if (u == NULL)
+        return;
+
+    pthread_spin_lock(&pthread_list_spinlock);
+    u->prev->next = u->next;
+    u->next->prev = u->prev;
+    pthread_spin_unlock(&pthread_list_spinlock);
+
+
+    release_region(TASK_ID_SELF, (char *)u - tls_file_offset - tls_memsz);
+}
+
+void *__get_tp()
+{
+    if (tls_memsz == 0)
+        return NULL;
+
+    return (char *)__get_tls() - tls_memsz;
+}
+
+void *__thread_pointer_from_uthread(struct uthread *uthread) { return uthread; }
+#endif
+
+static void parse_tls_elf(void *load_data, size_t load_data_size)
+{
+    struct load_tag_elf_phdr *phdr = (void *)get_load_tag(
+        LOAD_TAG_ELF_PHDR, load_data, load_data_size);
+    if (!phdr) {
+        return;
+    }
+
+    struct load_tag_mem_object_id *mo = (void *)get_load_tag(
+        LOAD_TAG_MEM_OBJECT_ID, load_data, load_data_size);
+    if (!mo) {
+        return;
+    }
+
+    if (phdr->phdr_size == sizeof(ELF_PHeader_32)) {
+        ELF_PHeader_32 *header = (void *)phdr->phdr_addr;
+        for (uint64_t i = 0; i < phdr->phdr_num; ++i) {
+            ELF_PHeader_32 *e = header + i;
+            if (e->type == PT_TLS) {
+                tls_memsz = e->p_memsz;
+                tls_filesz = e->p_filesz;
+                tls_file_offset = e->p_offset;
+                tls_page_offset = tls_file_offset % PAGE_SIZE;
+
+                break;
+            }
+        }
+    } else {
+        ELF_PHeader_64 *header = (void *)phdr->phdr_addr;
+        for (uint64_t i = 0; i < phdr->phdr_num; ++i) {
+            ELF_PHeader_64 *e = header + i;
+            if (e->type == PT_TLS) {
+                tls_memsz = e->p_memsz;
+                tls_filesz = e->p_filesz;
+                tls_file_offset = e->p_offset;
+                tls_page_offset = tls_file_offset % PAGE_SIZE;
+
+                break;
+            }
+        }
+    }
+
+    tls_mem_object = mo->memory_object_id;
+}
+
+static void init_tls_first_time(void *load_data, size_t load_data_size)
+{
+    parse_tls_elf(load_data, load_data_size);
 
     struct load_tag_stack_descriptor *s = (struct load_tag_stack_descriptor *)get_load_tag(
         LOAD_TAG_STACK_DESCRIPTOR, load_data, load_data_size);
-    if (d == NULL)
+    if (s == NULL)
         return; // TODO: Panic
 
     struct uthread *u = __prepare_tls((void *)s->stack_top, s->stack_size);
@@ -165,14 +288,14 @@ void __libc_init_dyn();
 /// @param load_data Pointer to the memory region containing the load tags
 /// @param load_data_size Size of the memory region containing the load tags
 /// @param d Page containing the TLS data
-void init_std_lib(void *load_data, size_t load_data_size, TLS_Data *d)
+void init_std_lib(void *load_data, size_t load_data_size)
 {
     #ifdef __riscv
     __libc_gp = __get_gp();
     #endif
 
     prepare_load_tags(load_data, load_data_size);
-    init_tls_first_time(load_data, load_data_size, d);
+    init_tls_first_time(load_data, load_data_size);
 
     __active_threads = 1;
 

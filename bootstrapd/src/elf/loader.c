@@ -329,11 +329,17 @@ result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flag
     };
 
     struct load_tag_userspace_tags ut = {
+        .header = LOAD_TAG_USERSPACE_TAGS_HEADER,
         .tags_address = 0,
         .memory_size = 0,
     };
 
-    size_t load_tags_size = sizeof(struct load_tag_elf_phdr) + sizeof(struct load_tag_close) + sizeof(struct load_tag_stack_descriptor);
+    struct load_tag_mem_object_id mo = {
+        .header = LOAD_TAG_MEM_OBJECT_ID_HEADER,
+        .memory_object_id = mem_object_id,
+    };
+
+    size_t load_tags_size = sizeof(struct load_tag_elf_phdr) + sizeof(struct load_tag_close) + sizeof(struct load_tag_stack_descriptor) + sizeof(struct load_tag_mem_object_id);
 
     if (userspace_tags) {
         load_tags_size += sizeof(struct load_tag_userspace_tags);
@@ -357,9 +363,11 @@ result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flag
 
     memcpy(tags_result.virt_addr, &phdr_tag, sizeof(phdr_tag));
     memcpy((char *)tags_result.virt_addr + sizeof(phdr_tag), &sd, sizeof(struct load_tag_stack_descriptor));
+    memcpy((char *)tags_result.virt_addr + sizeof(phdr_tag) + sizeof(sd), &mo, sizeof(mo));
+
 
     if (userspace_tags) {
-        memcpy((char *)tags_result.virt_addr + sizeof(phdr_tag) + sizeof(struct load_tag_stack_descriptor), &ut, sizeof(ut));
+        memcpy((char *)tags_result.virt_addr + sizeof(phdr_tag) + sizeof(struct load_tag_stack_descriptor) + sizeof(mo), &ut, sizeof(ut));
     }
 
     struct load_tag_close ltgcl = {

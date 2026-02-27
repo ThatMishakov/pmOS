@@ -43,6 +43,7 @@ enum {
     LOAD_TAG_FDT              = 8,
     LOAD_TAG_ELF_PHDR         = 9,
     LOAD_TAG_USERSPACE_TAGS   = 10, // Set by kernel when userspace passes some tags
+    LOAD_TAG_MEM_OBJECT_ID    = 11, // ID of the memory object that contains this executable
 
     // Values above 0x100 are reserved for userspace
     LOAD_TAG_TASK_GROUP_ID = 0x100,
@@ -189,6 +190,15 @@ struct load_tag_task_group_id {
 #define LOAD_TAG_TASK_GROUP_ID_HEADER \
     {LOAD_TAG_TASK_GROUP_ID, 0, sizeof(struct load_tag_task_group_id)}
 
+/// @brief Memory object ID tag
+///
+/// This tag passes the memory object that containing this executable
+struct load_tag_mem_object_id {
+    struct load_tag_generic header;
+    uint64_t memory_object_id;
+};
+#define LOAD_TAG_MEM_OBJECT_ID_HEADER \
+    {LOAD_TAG_MEM_OBJECT_ID, 0, sizeof(struct load_tag_mem_object_id)}
 
 
 /// @brief Gets the first tag of the specified type
