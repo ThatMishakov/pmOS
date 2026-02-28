@@ -15,6 +15,6 @@ endif
 
 export RUSTFLAGS
 bin/pmbus:
-	cargo +dev-x86_64-unknown-pmos install --target $(RUSTARCH)-unknown-pmos --root . --path . --force
+	cargo +dev-$(RUSTARCH)-unknown-pmos install --target $(RUSTARCH)-unknown-pmos --root . --path . --force
 
 .PHONY: bin/pmbus

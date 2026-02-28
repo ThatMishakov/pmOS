@@ -43,7 +43,11 @@
 #define TLS_MODEL0 0
 #define TLS_MODEL1 1
 
+#if defined(__x86_64__) || defined (__i386__)
 #define TLS_MODEL TLS_MODEL1
+#else
+#define TLS_MODEL TLS_MODEL0
+#endif
 
 #define max(x, y)                (x > y ? x : y)
 #define alignup(size, alignment) (size % alignment ? size + (alignment - size % alignment) : size)
@@ -164,6 +168,28 @@ struct uthread *__prepare_tls(void *stack_top, size_t stack_size)
 
     // #else ...
     #else
+    uintptr_t tls_offset = (tls_page_offset - sizeof(struct uthread)) % PAGE_SIZE;
+    uintptr_t tls_end = tls_offset + sizeof(struct uthread) + tls_memsz;
+
+    size_t size_all = alignup(tls_end, PAGE_SIZE);
+
+    map_mem_object_param_t params = {
+        .page_table_id = PAGE_TABLE_SELF,
+        .object_id = tls_mem_object,
+        .addr_start_uint = 0,
+        .size = size_all,
+        .offset_object = tls_file_offset,
+        .offset_start = tls_page_offset,
+        .object_size = tls_filesz,
+        .access_flags = CREATE_FLAG_COW | PROT_READ | PROT_WRITE,
+    };
+
+    mem_request_ret_t res = map_mem_object(&params);
+    if (res.result != SUCCESS)
+        return NULL;
+
+    unsigned char *tls = (unsigned char *)res.virt_addr + tls_offset;
+
     #endif
 
     __init_uthread((struct uthread *)tls, stack_top, stack_size);
@@ -195,6 +221,34 @@ void *__get_tp()
 }
 
 void *__thread_pointer_from_uthread(struct uthread *uthread) { return uthread; }
+#else
+void *__get_tp();
+
+void __release_tls(struct uthread *u)
+{
+    if (u == NULL)
+        return;
+
+    pthread_spin_lock(&pthread_list_spinlock);
+    u->prev->next = u->next;
+    u->next->prev = u->prev;
+    pthread_spin_unlock(&pthread_list_spinlock);
+
+    uintptr_t tls_offset = (tls_page_offset - sizeof(struct uthread)) % PAGE_SIZE;
+
+    release_region(TASK_ID_SELF, (char *)u - tls_offset);
+}
+
+struct uthread *__get_tls()
+{
+    char *tls = __get_tp();
+    return (struct uthread *)(tls - sizeof(struct uthread));
+}
+
+void *__thread_pointer_from_uthread(struct uthread *uthread)
+{
+    return (void *)((char *)uthread + sizeof(*uthread));
+}
 #endif
 
 static void parse_tls_elf(void *load_data, size_t load_data_size)
