@@ -13,7 +13,7 @@ use pmos::task_group;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
-use std::range::Bound;
+use std::ops::Bound;
 use std::rc::Rc;
 
 struct ObjectInfo {
