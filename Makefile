@@ -2,6 +2,10 @@ TOPTARGETS := all clean
 
 SUBDIRS := sysroot lib bootstrapd devicesd kernel logd ns16550 piped processd terminald vfatfsd vfsd test ps2d blockd
 
+# ifeq ($(filter i%86 x86,$(ARCH)),)
+# 	SUBDIRS += i8042
+# endif
+
 limine/pmOS.iso:
 	$(MAKE) -C limine pmOS.iso
 
@@ -22,6 +26,12 @@ ovmf-riscv64: ovmf-riscv64/OVMF.fd
 ovmf-riscv64/OVMF.fd:
 	mkdir -p ovmf-riscv64
 	cd ovmf-riscv64 && curl -o OVMF.fd https://retrage.github.io/edk2-nightly/bin/RELEASERISCV64_VIRT_CODE.fd && dd if=/dev/zero of=OVMF.fd bs=1 count=0 seek=33554432
+
+ovmf-loongarch64: ovmf-loongarch64/OVMF.fd
+
+ovmf-loongarch64/OVMF.fd:
+	mkdir -p ovmf-loongarch64
+	cd ovmf-loongarch64 && curl -o OVMF.fd https://retrage.github.io/edk2-nightly/bin/RELEASELOONGARCH64_QEMU_EFI.fd && dd if=/dev/zero of=OVMF.fd bs=1 count=0 seek=33554432
 
 ovmf-x86: ovmf-x86/OVMF.fd
 
