@@ -62,7 +62,7 @@ void *malloc(size_t size_bytes)
 {
     // Reserve 8 bytes for size header
     size_bytes += 8;
-    // Allign to 16
+    // Align to 16
     size_t size_bytes_a = size_bytes & ~0x0fULL;
     
     if (size_bytes%16)

@@ -42,6 +42,8 @@
 #include <pmos/tls.h>
 #include <sched/defs.hh>
 #include <sched/sched.hh>
+#include "elf.hh"
+#include <elf.h>
 
 namespace kernel::paging
 {
@@ -483,7 +485,7 @@ ReturnStr<
             TLS_Data *tls_data = (TLS_Data *)t.get();
 
             tls_data->memsz  = ph.p_memsz;
-            tls_data->align  = ph.allignment;
+            tls_data->align  = ph.alignment;
             tls_data->filesz = ph.p_filesz;
 
             if (ph.p_filesz) {
@@ -625,7 +627,7 @@ ReturnStr<
             TLS_Data *tls_data = (TLS_Data *)t.get();
 
             tls_data->memsz  = ph.p_memsz;
-            tls_data->align  = ph.allignment;
+            tls_data->align  = ph.alignment;
             tls_data->filesz = ph.p_filesz;
 
             r = elf->read_to_kernel(ph.p_offset, tls_data->data, ph.p_filesz);
@@ -701,6 +703,53 @@ ReturnStr<bool>
 
     regs.program_counter() = program_entry;
 
+    ElFAuxvec auxvec_builder;
+    auxvec_builder.set_width(table->is_32bit() ? ElFAuxvec::PtrWidth::W32bit : ElFAuxvec::PtrWidth::W64bit);
+    auto &auxvals = auxvec_builder.auxvec();
+    auto &extra_info = auxvec_builder.extra_info();
+    auto &args = auxvec_builder.args();
+
+    // Stack...
+    if (!auxvals.push_back({AT_USRSTACKLIM, (long) stack_desc.stack_size}))
+        return Error(-ENOMEM);
+    if (!auxvals.push_back({AT_USRSTACKBASE, (uintptr_t) stack_desc.stack_top}))
+        return Error(-ENOMEM);
+
+    // Pheader
+    if (!auxvals.push_back({AT_PHDR, (uintptr_t) phdr_tag.phdr_addr}))
+        return Error(-ENOMEM);
+    if (!auxvals.push_back({AT_PHENT, (uintptr_t) phdr_tag.phdr_size}))
+        return Error(-ENOMEM);
+    if (!auxvals.push_back({AT_PHNUM, (uintptr_t) phdr_tag.phdr_num}))
+        return Error(-ENOMEM);
+
+    // Object id
+    {
+        auto object_id = elf->get_id();
+        auto arr = std::bit_cast<std::array<std::byte, sizeof(object_id)>>(object_id);
+        auto vec = klib::vector<std::byte>();
+        if (!vec.append_range(arr))
+            return Error(-ENOMEM);
+
+        auto idx = extra_info.size();
+        if (!extra_info.push_back(std::move(vec)))
+            return Error(-ENOMEM);
+
+        if (!auxvals.push_back({AT_MEM_OBJ_ID, (int) idx}))
+            return Error(-ENOMEM);
+    }
+
+    {
+        auto str = name.clone();
+        if (str.empty())
+            str = "<unknown>";
+        if (str.empty())
+            return Error(-ENOMEM);
+            
+        if (!args.push_back(std::move(str)))
+            return Error(-ENOMEM);
+    }
+
     // Push stack descriptor structure
     u64 size =
         sizeof(load_tag_stack_descriptor) + sizeof(load_tag_elf_phdr) + sizeof(load_tag_mem_object_id) + sizeof(load_tag_close);
@@ -757,6 +806,23 @@ ReturnStr<bool>
 
     if (!b.val)
         return false;
+
+
+    auto data = auxvec_builder.serialize(stack_desc.stack_top);
+    if (!data)
+        return Error(-ENOMEM);
+
+    auto vec = std::move(data.value());
+
+    auto ptr = stack_desc.stack_top - vec.size();
+    b = table->atomic_copy_to_user((void *)ptr, &(vec[0]), vec.size());
+    if (!b.success())
+        return b.propagate();
+
+    if (!b.val)
+        return false;
+
+    regs.stack_pointer() = ptr;
 
     auto result = register_page_table(table);
     if (result != 0)

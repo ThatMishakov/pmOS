@@ -150,7 +150,7 @@ void pmos_bus_filter_free(void *filter);
 ///
 /// @param filter Valid filter to serialize
 /// @param data_out If not NULL, pointer to the buffer where serialized data will be written
-/// @return Size of the serialized data. Alligned to 8 bytes. Returns 0 if the filter is NULL or invalid
+/// @return Size of the serialized data. Aligned to 8 bytes. Returns 0 if the filter is NULL or invalid
 size_t pmos_bus_filter_serialize_ipc(const void *filter, uint8_t *data_out);
 /// @brief Deserialize a filter from IPC data
 /// @param data Data to deserialize from

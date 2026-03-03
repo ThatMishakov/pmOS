@@ -32,6 +32,9 @@
 #include <memory/malloc.hh>
 #include <stddef.h>
 #include <new>
+#include <ranges>
+#include <concepts>
+#include <utility>
 
 namespace klib
 {
@@ -53,88 +56,8 @@ public:
     typedef const T &const_reference;
     typedef size_t size_type;
 
-    class iterator
-    {
-    private:
-        T *ptr;
-
-    public:
-        constexpr iterator(T *n): ptr(n) {};
-
-        iterator &operator++()
-        {
-            ptr++;
-            return *this;
-        }
-
-        iterator operator++(int)
-        {
-            iterator temp = *this;
-            ptr++;
-            return temp;
-        }
-
-        iterator &operator--()
-        {
-            ptr--;
-            return *this;
-        }
-
-        iterator operator--(int)
-        {
-            iterator temp = *this;
-            ptr--;
-            return temp;
-        }
-
-        iterator &operator+=(size_t n)
-        {
-            ptr += n;
-            return *this;
-        }
-
-        iterator &operator-=(size_t n)
-        {
-            ptr -= n;
-            return *this;
-        }
-
-        long operator-(iterator k) const { return this->ptr - k.ptr; }
-
-        iterator operator+(long n) const { return iterator(ptr + n); }
-        iterator operator-(long n) const { return iterator(ptr - n); }
-
-        bool operator!=(iterator k) const { return this->ptr != k.ptr; }
-        bool operator<(iterator k) const { return this->ptr < k.ptr; }
-
-        T &operator*() { return *ptr; }
-        const T &operator*() const { return *ptr; }
-
-        T *operator->() { return ptr; }
-
-        bool operator==(iterator k) const { return this->ptr == k.ptr; }
-    };
-
-    class const_iterator
-    {
-    private:
-        const T *ptr;
-
-    public:
-        constexpr const_iterator(const T *n): ptr(n) {};
-
-        const_iterator &operator++()
-        {
-            ptr++;
-            return *this;
-        }
-
-        const T &operator*() const { return *ptr; }
-
-        bool operator==(const_iterator k) const { return this->ptr == k.ptr; }
-
-        const_iterator &operator++(int) { return *ptr++; }
-    };
+    using iterator = T*;
+    using const_iterator = const T*;
 
     vector() noexcept;
     vector(vector<T> &&) noexcept;
@@ -175,10 +98,27 @@ public:
     const_iterator begin() const;
     const_iterator end() const;
 
+    const_iterator cbegin() const;
+    const_iterator cend() const;
+
     [[nodiscard]] bool resize(size_type n) noexcept;
     [[nodiscard]] bool resize(size_type n, const value_type &val) noexcept;
 
     size_t capacity() const { return a_capacity; }
+
+    template<class R>
+    requires std::ranges::input_range<R> &&
+            std::convertible_to<std::ranges::range_reference_t<R>, T>
+    constexpr bool append_range(R&& rg);
+
+    const T* get(size_t idx) const noexcept;
+
+    constexpr bool insert(const_iterator pos, const T& value);
+    constexpr bool insert(const_iterator pos, T&& value);
+    constexpr bool insert(const_iterator pos, size_type count, const T& value);
+    template<class InputIt>
+    bool insert(const_iterator pos, InputIt first, InputIt last);
+    constexpr bool insert(const_iterator pos, std::initializer_list<T> ilist);
 };
 
 template<typename T> vector<T>::vector() noexcept: ptr(nullptr), a_capacity(0), a_size(0) {};
@@ -253,6 +193,16 @@ template<typename T> typename vector<T>::const_iterator vector<T>::begin() const
 }
 
 template<typename T> typename vector<T>::const_iterator vector<T>::end() const
+{
+    return const_iterator(ptr + a_size);
+}
+
+template<typename T> typename vector<T>::const_iterator vector<T>::cbegin() const
+{
+    return const_iterator(ptr);
+}
+
+template<typename T> typename vector<T>::const_iterator vector<T>::cend() const
 {
     return const_iterator(ptr + a_size);
 }
@@ -346,7 +296,7 @@ template<typename T> bool vector<T>::expand(size_t new_capacity)
         return false;
 
     for (size_t i = 0; i < a_size; ++i)
-        new (&temp_ptr[i]) T(move(ptr[i]));
+        new (&temp_ptr[i]) T(std::move(ptr[i]));
 
     for (size_t i = 0; i < a_size; ++i)
         ptr[i].~T();
@@ -374,5 +324,65 @@ template<typename T> void vector<T>::clear() noexcept
 template<typename T> T *vector<T>::data() { return ptr; }
 
 template<typename T> const T *vector<T>::data() const { return ptr; }
+
+template<class T>
+template<class R>
+requires std::ranges::input_range<R> &&
+        std::convertible_to<std::ranges::range_reference_t<R>, T>
+constexpr bool vector<T>::append_range(R&& rg)
+{
+    if constexpr (std::ranges::sized_range<R>) {
+        const auto size_ = std::ranges::size(rg);
+        size_t required = size_ + this->size();
+
+        if (!reserve(required))
+            return false;
+    }
+
+    size_t count = 0;
+    bool success = true;
+    for (auto&& elem : rg) {
+        if (!emplace_back(static_cast<T>(std::forward<decltype(elem)>(elem)))) {
+            success = false;
+            break;
+        }
+    }
+
+    if (!success)
+        (void)resize(size() - count);
+
+    return success;
+}
+
+template<class T>
+const T* vector<T>::get(size_t idx) const noexcept
+{
+    if (idx >= size())
+        return nullptr;
+
+    return ptr + idx;
+}
+
+template<class T>
+constexpr bool vector<T>::insert(vector<T>::const_iterator pos, vector<T>::size_type count, const T& value)
+{
+    size_t idx = pos - begin();
+    size_t current_size = size();
+
+    size_t new_size = current_size + count;
+    if (!reserve(new_size))
+        return false;
+
+    for (auto i = idx; i < current_size; ++i)
+        new (&ptr[i + count]) T(std::move(ptr[i]));
+
+    size_t up_to = idx + count;
+    for (auto i = idx; i < up_to; ++i)
+        ptr[i] = value;
+
+    a_size = new_size;
+
+    return true;
+}
 
 } // namespace klib

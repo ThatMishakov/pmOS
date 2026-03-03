@@ -38,7 +38,6 @@
 #include <processes/tasks.hh>
 #include <sched/sched.hh>
 #include <stdarg.h>
-#include <stdio.h>
 
 using namespace kernel;
 using namespace kernel::proc;

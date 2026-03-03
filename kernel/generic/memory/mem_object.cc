@@ -113,9 +113,9 @@ klib::shared_ptr<Mem_Object> Mem_Object::create_from_phys(u64 phys_addr, u64 siz
                                                           bool take_ownership,
                                                           u32 max_user_permissions)
 {
-    const u64 size_alligned  = (size_bytes + 0xFFF) & ~0xFFFUL;
-    const u64 start_alligned = phys_addr & ~0xFFFUL;
-    const u64 pages_count    = size_alligned >> 12;
+    const u64 size_aligned  = (size_bytes + 0xFFF) & ~0xFFFUL;
+    const u64 start_aligned = phys_addr & ~0xFFFUL;
+    const u64 pages_count    = size_aligned >> 12;
 
     assert(take_ownership && "not taking ownership is not implemented");
 
@@ -135,7 +135,7 @@ klib::shared_ptr<Mem_Object> Mem_Object::create_from_phys(u64 phys_addr, u64 siz
     // Provide the pages
     // This can't fail
     for (u64 i = 0; i < pages_count; ++i) {
-        auto page = pmm::Page_Descriptor::create_from_allocated(start_alligned + i * 0x1000);
+        auto page = pmm::Page_Descriptor::create_from_allocated(start_aligned + i * 0x1000);
         auto c    = page.page_struct_ptr;
         page.takeout_page();
         c->l.offset        = i * 0x1000;

@@ -735,7 +735,7 @@ klib::unique_ptr<load_tag_generic> construct_load_tag_for_modules()
         size += t.cmdline.size() + 1;
     }
 
-    // Allign to u64
+    // Align to u64
     size = (size + 7) & ~7UL;
 
     // Allocate the tag

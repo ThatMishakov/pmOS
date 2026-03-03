@@ -64,7 +64,7 @@ result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flag
     pmos_pagetable_t page_table_id = pt_request.page_table;
 
     uint64_t tls_memsz = 0;
-    uint64_t tls_allign = 0;
+    uint64_t tls_align = 0;
     uint64_t tls_filesz = 0;
     uint64_t tls_offset = 0;
 
@@ -95,7 +95,7 @@ result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flag
 
             if (ph->type == PT_TLS) {
                 tls_memsz = ph->p_memsz;
-                tls_allign = ph->allignment;
+                tls_align = ph->alignment;
                 tls_filesz = ph->p_filesz;
                 tls_offset = ph->p_offset;
             }
@@ -193,7 +193,7 @@ result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flag
 
             if (ph->type == PT_TLS) {
                 tls_memsz = ph->p_memsz;
-                tls_allign = ph->allignment;
+                tls_align = ph->alignment;
                 tls_filesz = ph->p_filesz;
                 tls_offset = ph->p_offset;
             }
@@ -291,8 +291,8 @@ result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flag
         TLS_Data *tls_data = tls_result.virt_addr;
 
         tls_data->memsz  = tls_memsz;
-        tls_data->align  = tls_allign;
-        tls_data->filesz = tls_allign;
+        tls_data->align  = tls_align;
+        tls_data->filesz = tls_align;
 
         memcpy(tls_data->data, (char *)file_mapped + tls_offset, tls_filesz);
 

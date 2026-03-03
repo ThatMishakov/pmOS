@@ -122,12 +122,12 @@ struct task_register_set {
 /// @param pid PID of the process holding where the region should be allocated. Takes TASK_ID_SELF
 /// (0)
 /// @param addr_start The suggestion for the virutal address of the new region. The parameter must
-/// be page-alligned,
+/// be page-aligned,
 ///                   otherwise will ignore it (as if NULL was passed). If the address is
 ///                   not occupied, the kernel will try and place the new region there. Otherwise,
 ///                   the behaviour depends on the *access* arguments, where either the new location
 ///                   would be found or the error would be returned.
-/// @param size The size in bytes of the new region. The size must be page-alligned and not 0,
+/// @param size The size in bytes of the new region. The size must be page-aligned and not 0,
 /// otherwise the error will be returned
 /// @param access An OR-conjugated list of the argument. Takes PROT_READ, PROT_WRITE and PROT_EXEC
 /// as access bytes, CREATE_FLAG_FIXED and CREATE_FLAG_DMA
@@ -152,7 +152,7 @@ mem_request_ret_t create_phys_map_region(uint64_t pid, void *addr_start, size_t 
 
 /**
  * @brief Creates a memory object
- * @param size The size of the memory object in bytes. The size must be page-alligned.
+ * @param size The size of the memory object in bytes. The size must be page-aligned.
  * @param flags Flags for the memory object. Takes FLAG_ANONYMOUS, FLAG_DMA and
  * FLAG_ALLOW_DISCONTINUOUS
  */
@@ -166,10 +166,10 @@ typedef struct map_mem_object_param_t {
     /// ID of the memory object that should be mapped to the new region.
     mem_object_t object_id;
     /// The suggestion for the virutal address of the new region. The parameter must be
-    /// page-alligned. uint64_t is used here instead of void to be able to address memory in 64 bit
+    /// page-aligned. uint64_t is used here instead of void to be able to address memory in 64 bit
     /// processes from 32 bit executables. (So void * can be cast to it if mapping for yourself)
     uint64_t addr_start_uint;
-    /// The size in bytes of the new region. The size must be page-alligned and not 0,
+    /// The size in bytes of the new region. The size must be page-aligned and not 0,
     /// otherwise the error will be returned
     uint64_t size;
     /// Offset in the memory object where the mapping should start. The offset must be

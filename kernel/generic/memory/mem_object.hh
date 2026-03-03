@@ -260,7 +260,7 @@ namespace paging
          *
          * This number can be used to get the page size by shifting 2 by this number. This allows
          * for supporting different architectures with different page sizes. This also indicates the
-         * allignment.
+         * alignment.
          */
         u8 page_size_log = 12;
 

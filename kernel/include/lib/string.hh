@@ -37,6 +37,7 @@
 #include <types.hh>
 #include <utils.hh>
 #include <errno.h>
+#include <string_view>
 
 namespace klib
 {
@@ -72,6 +73,11 @@ private:
     }
 
 public:
+    using value_type = char;
+    using iterator = char*;
+    using const_iterator = const char*;
+    using size_type = size_t;
+
     static const size_t npos = -1;
 
     constexpr string() noexcept: s_capacity(0), long_string({0, 0}) {};
@@ -265,6 +271,11 @@ public:
     char &front();
     const char &front() const;
 
+    constexpr char *data() noexcept
+    {
+        return is_long() ? long_string.ptr : short_string;
+    }
+
     constexpr const char *data() const noexcept
     {
         return is_long() ? long_string.ptr : short_string;
@@ -394,6 +405,19 @@ public:
     bool operator==(const string &s) const { return compare(s) == 0; }
 
     string clone() const { return string(*this); }
+
+    iterator begin() noexcept { return data(); }
+    iterator end() noexcept { return data() + size(); }
+
+    const_iterator begin() const noexcept { return data(); }
+    const_iterator end() const noexcept { return data() + size(); }
+
+    const_iterator cbegin() const noexcept { return begin(); }
+    const_iterator cend() const noexcept { return end(); }
+
+    operator std::string_view() const noexcept {
+        return std::string_view(data(), size());
+    }
 };
 
 } // namespace klib

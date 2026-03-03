@@ -75,14 +75,14 @@ void reserve(uint64_t base, uint64_t size)
 
 void reserve_unal(uint64_t base, uint64_t size)
 {
-    uint64_t base_alligned = base & ~0xfff;
+    uint64_t base_aligned = base & ~0xfff;
     size += base & 0xfff;
-    uint64_t size_alligned = size & ~0xfff;
-    if (size & 0xfff) size_alligned += 0x1000;
+    uint64_t size_aligned = size & ~0xfff;
+    if (size & 0xfff) size_aligned += 0x1000;
 
     if (size == 0) return;
 
-    reserve(base_alligned, size_alligned);
+    reserve(base_aligned, size_aligned);
 }
 
 void bitmap_reserve(uint64_t base, uint64_t size)
