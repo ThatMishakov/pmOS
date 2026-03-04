@@ -8,11 +8,17 @@
 #include <pmos/load_data.h>
 #include <pmos/tls.h>
 #include <string.h>
+#include "auxvec.h"
+#include <elf.h>
+#include "loader.h"
 
 static const uint64_t page_mask = PAGE_SIZE - 1;
 
-result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flags, void *userspace_tags, size_t userspace_tags_size)
+result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flags,
+                         void *userspace_tags, size_t userspace_tags_size,
+                         const char *argv[], const char *envp[], const struct AuxVecEntry *auxvec_entries[])
 {
+    struct AuxVecBuilder *builder = NULL;
     auto size_r = get_mem_object_size(mem_object_id, 0);
     if (size_r.result)
         return size_r.result;
@@ -20,6 +26,8 @@ result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flag
 
     if (mem_object_size == 0)
         return -EFAULT;
+
+    uint8_t *auxvec_data = NULL;
 
     result_t result = 0;
     void *file_mapped = NULL;
@@ -55,6 +63,11 @@ result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flag
         goto error;
     }
 
+    builder = auxvec_new();
+    if (!builder) {
+        result = -ENOMEM;
+        goto error;
+    }
 
     page_table_req_ret_t pt_request = assign_page_table(task_id, 0, PAGE_TABLE_CREATE, header->instr_set);
     if (pt_request.result) {
@@ -171,6 +184,7 @@ result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flag
             }
         }
     } else {
+        builder->ptr_is_64bit = true;
         ELF_64bit *header = file_mapped;
 
         uint64_t pheader_count = header->program_header_entries;
@@ -308,17 +322,63 @@ result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flag
 
     size_t stack_size = MB(16);
     // Init stack
-    auto stack_result = create_normal_region(task_id, nullptr, stack_size, PROT_READ | PROT_WRITE);
+    auto stack_result = create_normal_region(task_id, nullptr, stack_size, PROT_NONE);
     if (stack_result.result) {
         result = stack_result.result;
         goto error;
     }
 
-    auto sr = init_stack(task_id, stack_result.virt_addr_intptr + stack_size);
-    if (sr.result) {
-        result = sr.result;
+    // Stack
+    int push_res;
+    VECTOR_PUSH_BACK_CHECKED(builder->entries, ((struct AuxVecEntry){
+        .entry_type = AT_USRSTACKLIM,
+        .data_type = DATA_TYPE_LONG,
+        .long_data = stack_size,
+    }), push_res);
+    if (push_res) {
+        result = push_res;
         goto error;
     }
+
+    VECTOR_PUSH_BACK_CHECKED(builder->entries, ((struct AuxVecEntry){
+        .entry_type = AT_USRSTACKBASE,
+        .data_type = DATA_TYPE_PTR,
+        .ptr = stack_result.virt_addr_intptr + stack_size,
+    }), push_res);
+    if (push_res) {
+        result = push_res;
+        goto error;
+    }
+
+    // PHDR
+        VECTOR_PUSH_BACK_CHECKED(builder->entries, ((struct AuxVecEntry){
+        .entry_type = AT_PHDR,
+        .data_type = DATA_TYPE_PTR,
+        .ptr = phdr_tag.phdr_addr,
+    }), push_res);
+    if (push_res) {
+        result = push_res;
+        goto error;
+    }
+    VECTOR_PUSH_BACK_CHECKED(builder->entries, ((struct AuxVecEntry){
+        .entry_type = AT_PHENT,
+        .data_type = DATA_TYPE_LONG,
+        .long_data = phdr_tag.phdr_size,
+    }), push_res);
+    if (push_res) {
+        result = push_res;
+        goto error;
+    }
+    VECTOR_PUSH_BACK_CHECKED(builder->entries, ((struct AuxVecEntry){
+        .entry_type = AT_PHNUM,
+        .data_type = DATA_TYPE_LONG,
+        .long_data = phdr_tag.phdr_num,
+    }), push_res);
+    if (push_res) {
+        result = push_res;
+        goto error;
+    }
+
 
     struct load_tag_stack_descriptor sd = {
         .header = LOAD_TAG_STACK_DESCRIPTOR_HEADER,
@@ -338,6 +398,42 @@ result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flag
         .header = LOAD_TAG_MEM_OBJECT_ID_HEADER,
         .memory_object_id = mem_object_id,
     };
+
+    VECTOR_PUSH_BACK_CHECKED(builder->entries, ((struct AuxVecEntry){
+        .entry_type = AT_MEM_OBJ_ID,
+        .data_type = DATA_TYPE_EXTERNAL,
+        .external_data = {
+            .size = sizeof(mem_object_id),
+            .data = &mem_object_id,
+        },
+    }), push_res);
+    if (push_res) {
+        result = push_res;
+        goto error;
+    }
+
+    push_res = auxvec_push_argv(builder, argv);
+    if (push_res) {
+        result = push_res;
+        goto error;
+    }
+    push_res = auxvec_push_envp(builder, envp);
+    if (push_res) {
+        result = push_res;
+        goto error;
+    }
+
+    if (auxvec_entries) {
+        auto ptr = auxvec_entries;
+        while (*ptr) {
+            VECTOR_PUSH_BACK_CHECKED(builder->entries, **ptr, push_res);
+            if (push_res) {
+                result = push_res;
+                goto error;
+            }
+            ++ptr;
+        }
+    }
 
     size_t load_tags_size = sizeof(struct load_tag_elf_phdr) + sizeof(struct load_tag_close) + sizeof(struct load_tag_stack_descriptor) + sizeof(struct load_tag_mem_object_id);
 
@@ -383,6 +479,34 @@ result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flag
         goto error;
     }
 
+    // // Stack stuff
+    size_t auxvec_size = 0;
+    int serial_result = auxvec_serialize(builder, stack_result.virt_addr_intptr, &auxvec_data, &auxvec_size);
+    if (serial_result) {
+        result = serial_result;
+        goto error;
+    }
+    auto s_res = create_normal_region(TASK_ID_SELF, NULL, stack_size, PROT_READ | PROT_WRITE);
+    if (s_res.result) {
+        result = s_res.result;
+        goto error;
+    }
+
+    memcpy((char *)s_res.virt_addr + stack_size - auxvec_size, auxvec_data, auxvec_size);
+    s_res = transfer_region(page_table_id, s_res.virt_addr, stack_result.virt_addr_intptr, CREATE_FLAG_FIXED | PROT_READ | PROT_WRITE);
+    if (s_res.result) {
+        release_region(TASK_ID_SELF, s_res.virt_addr);
+        result = s_res.result;
+        goto error;
+    }
+
+    auto sr = init_stack(task_id, stack_result.virt_addr_intptr + stack_size - auxvec_size);
+    if (sr.result) {
+        result = sr.result;
+        goto error;
+    }
+
+
     auto start_result = syscall_start_process(task_id, program_entry, res.virt_addr_intptr, load_tags_size, tls_addr);
     if (start_result) {
         result = start_result;
@@ -390,6 +514,8 @@ result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flag
     }
 
 error:
+    free(auxvec_data);
+    auxvec_free(builder);
     if (file_mapped)
         release_region(0, file_mapped);
 

@@ -45,6 +45,8 @@
 #include <string.h>
 #include <sys/syscall.h>
 #include <pmos/pmbus_object.h>
+#include "elf/loader.h"
+#include <elf.h>
 
 uint64_t loader_port = 0;
 
@@ -229,8 +231,6 @@ void provide_framebuffer(pmos_right_t right, uint32_t flags)
         delete_right(right);
 }
 
-result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flags, void *userspace_tags, size_t userspace_tags_size);
-
 uint64_t instance_id_counter = 1;
 
 void start_service(struct Service *service, uint64_t object_id)
@@ -329,7 +329,24 @@ void start_service(struct Service *service, uint64_t object_id)
     };
     memcpy((char *)mem_region + current_offset, &h, sizeof(h));
 
-    result_t res = load_executable(r.value, object_id, 0, mem_region, page_aligned);
+    // Task group tag
+    struct AuxVecEntry *auxvec_entries[2];
+    struct AuxVecEntry group_id_entry = {
+        .entry_type = AT_TASK_GROUP_ID,
+        .data_type = DATA_TYPE_EXTERNAL,
+        .external_data = {
+            .data = &new_group_id,
+            .size = sizeof(new_group_id),
+        },
+    };
+    auxvec_entries[0] = &group_id_entry;
+    auxvec_entries[1] = NULL;
+
+    const char *argc[2];
+    argc[0] = service->name;
+    argc[1] = NULL;
+
+    result_t res = load_executable(r.value, object_id, 0, mem_region, page_aligned, argc, NULL, auxvec_entries);
     //result_t res = syscall_load_executable(r.value, object_id, mem_region, 0);
     if (res != SUCCESS) {
         print_str("Loader: Could not load executable ");

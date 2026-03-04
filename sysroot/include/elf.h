@@ -124,6 +124,7 @@ typedef struct {
 #define	AT_USRSTACKLIM  36 // Maximum size of the user stack
 
 #define AT_MEM_OBJ_ID 40 // a_ptr, Pointer to uint64_t with memory object id of the process
+#define AT_TASK_GROUP_ID 41 // a_ptr, Pointer to uint64_t with group id of the process
 
 #define AT_COUNT    2 // Number of possible entries
 

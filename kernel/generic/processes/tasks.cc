@@ -718,9 +718,9 @@ ReturnStr<bool>
     // Pheader
     if (!auxvals.push_back({AT_PHDR, (uintptr_t) phdr_tag.phdr_addr}))
         return Error(-ENOMEM);
-    if (!auxvals.push_back({AT_PHENT, (uintptr_t) phdr_tag.phdr_size}))
+    if (!auxvals.push_back({AT_PHENT, (long) phdr_tag.phdr_size}))
         return Error(-ENOMEM);
-    if (!auxvals.push_back({AT_PHNUM, (uintptr_t) phdr_tag.phdr_num}))
+    if (!auxvals.push_back({AT_PHNUM, (long) phdr_tag.phdr_num}))
         return Error(-ENOMEM);
 
     // Object id

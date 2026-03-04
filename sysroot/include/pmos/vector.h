@@ -99,6 +99,8 @@
         }                                                             \
     } while (0)
 
+#define VECTOR_AT(vec, idx) ((vec.data)[idx])
+
 
 #define VECTOR_SIZE(vec)  ((vec).size)
 #define VECTOR_EMPTY(vec) ((vec).size == 0)
