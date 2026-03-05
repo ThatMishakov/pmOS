@@ -30,6 +30,7 @@
 _start:
     # Set up stack frame
     movl $0, %ebp
+    movl %esp, %eax
 
     # Push in needed to be done twice to align stack to 16 bytes (according to calling conventions)
     pushl $0
@@ -38,7 +39,7 @@ _start:
     # Push arguments
     # Align stack to 16 bytes
     subl $12, %esp
-    pushl %edx
+    pushl %eax
     pushl %esi
     pushl %edi
 

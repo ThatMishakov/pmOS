@@ -39,6 +39,7 @@
 #include <string.h>
 #include <kernel/elf.h>
 #include <pthread.h>
+#include <elf.h>
 
 #define TLS_MODEL0 0
 #define TLS_MODEL1 1
@@ -55,6 +56,18 @@
 struct uthread *__get_tls();
 void __release_tls(struct uthread *u);
 struct uthread *__prepare_tls(void *stack_top, size_t stack_size);
+
+const auxv_t *__elf_aux_search(const auxv_t *auxv, int a_type)
+{
+    while (auxv->a_type != AT_NULL) {
+        if (auxv->a_type == a_type)
+            return auxv;
+        
+        auxv++;
+    }
+
+    return NULL;
+}
 
 void __init_uthread(struct uthread *u, void *stack_top, size_t stack_size)
 {
@@ -251,23 +264,33 @@ void *__thread_pointer_from_uthread(struct uthread *uthread)
 }
 #endif
 
-static void parse_tls_elf(void *load_data, size_t load_data_size)
+void *__phdr_addr = NULL;
+size_t __phdr_size = 0;
+size_t __phdr_num = 0;
+
+static void parse_tls_elf(const auxv_t *auxv)
 {
-    struct load_tag_elf_phdr *phdr = (void *)get_load_tag(
-        LOAD_TAG_ELF_PHDR, load_data, load_data_size);
-    if (!phdr) {
+    const auxv_t *e = __elf_aux_search(auxv, AT_PHDR);
+    if (!e)
         return;
-    }
-
-    struct load_tag_mem_object_id *mo = (void *)get_load_tag(
-        LOAD_TAG_MEM_OBJECT_ID, load_data, load_data_size);
-    if (!mo) {
+    __phdr_addr = e->a_ptr;
+    e = __elf_aux_search(auxv, AT_PHENT);
+    if (!e)
         return;
-    }
+    __phdr_size = e->a_val;
+    e = __elf_aux_search(auxv, AT_PHNUM);
+    if (!e)
+        return;
+    __phdr_num = e->a_val;
 
-    if (phdr->phdr_size == sizeof(ELF_PHeader_32)) {
-        ELF_PHeader_32 *header = (void *)phdr->phdr_addr;
-        for (uint64_t i = 0; i < phdr->phdr_num; ++i) {
+    e = __elf_aux_search(auxv, AT_MEM_OBJ_ID);
+    if (!e)
+        return;
+    tls_mem_object = *(uint64_t *)e->a_ptr;
+
+    if (__phdr_size == sizeof(ELF_PHeader_32)) {
+        ELF_PHeader_32 *header = (void *)__phdr_addr;
+        for (uint64_t i = 0; i < __phdr_num; ++i) {
             ELF_PHeader_32 *e = header + i;
             if (e->type == PT_TLS) {
                 tls_memsz = e->p_memsz;
@@ -279,8 +302,8 @@ static void parse_tls_elf(void *load_data, size_t load_data_size)
             }
         }
     } else {
-        ELF_PHeader_64 *header = (void *)phdr->phdr_addr;
-        for (uint64_t i = 0; i < phdr->phdr_num; ++i) {
+        ELF_PHeader_64 *header = (void *)__phdr_addr;
+        for (uint64_t i = 0; i < __phdr_num; ++i) {
             ELF_PHeader_64 *e = header + i;
             if (e->type == PT_TLS) {
                 tls_memsz = e->p_memsz;
@@ -292,20 +315,25 @@ static void parse_tls_elf(void *load_data, size_t load_data_size)
             }
         }
     }
-
-    tls_mem_object = mo->memory_object_id;
 }
 
-static void init_tls_first_time(void *load_data, size_t load_data_size)
+static void init_tls_first_time(const auxv_t *auxv)
 {
-    parse_tls_elf(load_data, load_data_size);
+    parse_tls_elf(auxv);
 
-    struct load_tag_stack_descriptor *s = (struct load_tag_stack_descriptor *)get_load_tag(
-        LOAD_TAG_STACK_DESCRIPTOR, load_data, load_data_size);
-    if (s == NULL)
-        return; // TODO: Panic
+    void *stack_top;
+    size_t stack_size;
 
-    struct uthread *u = __prepare_tls((void *)s->stack_top, s->stack_size);
+    const auxv_t *e = __elf_aux_search(auxv, AT_USRSTACKBASE);
+    if (!e)
+        return;
+    stack_top = e->a_ptr;
+    e = __elf_aux_search(auxv, AT_USRSTACKLIM);
+    if (!e)
+        return;
+    stack_size = e->a_val;
+
+    struct uthread *u = __prepare_tls(stack_top, stack_size);
     if (u == NULL)
         return; // TODO: Panic
 
@@ -332,6 +360,13 @@ long __libc_gp = 0;
 
 void __libc_init_dyn();
 
+int __argc;
+char **__argv;
+char **__envp;
+auxv_t *__auxv;
+
+void __init_environ(const char **envp);
+
 /// @brief Initializes the standard library
 ///
 /// This function initializes the standard library and is the first thing called in _start function
@@ -342,16 +377,34 @@ void __libc_init_dyn();
 /// @param load_data Pointer to the memory region containing the load tags
 /// @param load_data_size Size of the memory region containing the load tags
 /// @param d Page containing the TLS data
-void init_std_lib(void *load_data, size_t load_data_size)
+void init_std_lib(void *load_data, size_t load_data_size, int *argc)
 {
     #ifdef __riscv
     __libc_gp = __get_gp();
     #endif
 
+    // Find argc, argv, envp, auxvec
+    int argc_ = *argc;
+    char **argv = (char **)argc + 1;
+
+    char **envp = argv + argc_ + 1;
+
+    void **envp_p = (void **)envp;
+    while (*envp_p++) ;
+    auxv_t *auxv = (auxv_t *)envp_p;
+
+
     prepare_load_tags(load_data, load_data_size);
-    init_tls_first_time(load_data, load_data_size);
+    init_tls_first_time(auxv);
+
+    __argc = argc_;
+    __argv = argv;
+    __envp = envp;
+    __auxv = auxv;
 
     __active_threads = 1;
+
+    __init_environ(__envp);
 
     __init_stdio();
 

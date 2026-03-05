@@ -481,7 +481,7 @@ result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flag
 
     // // Stack stuff
     size_t auxvec_size = 0;
-    int serial_result = auxvec_serialize(builder, stack_result.virt_addr_intptr, &auxvec_data, &auxvec_size);
+    int serial_result = auxvec_serialize(builder, stack_result.virt_addr_intptr + stack_size, &auxvec_data, &auxvec_size);
     if (serial_result) {
         result = serial_result;
         goto error;

@@ -49,6 +49,9 @@ _start:
 	la gp, __global_pointer$
 	.option pop
 
+    # argv
+    addi a2, sp, 16
+
     # Initialize libc
     call init_std_lib
 

@@ -122,20 +122,18 @@ int auxvec_serialize(const struct AuxVecBuilder *builder, uint64_t stack_top, ui
     memset(data_ptr + pos, 0, padding);
     pos += padding;
 
-    size_t vals_count = 0;
     for (size_t i = 0; i < vals_size; ++i) {
         struct AuxVecEntry *e = builder->entries.data + i;
 
         if (e->data_type != DATA_TYPE_EXTERNAL)
             continue;
 
-        entries_offsets[vals_count] = pos;
+        entries_offsets[i] = pos;
         size_t s = e->external_data.size;
         memcpy(data_ptr + pos, e->external_data.data, s);
         size_t padding = (-s) & pointer_mask;
         memset(data_ptr + pos + s, 0, padding);
         pos += s + padding;
-        vals_count++;
     }
 
     uint64_t start_of_args = stack_top - pos;
@@ -167,7 +165,6 @@ int auxvec_serialize(const struct AuxVecBuilder *builder, uint64_t stack_top, ui
         memset(data_ptr + pos, 0, sizeof(uint64_t));
         pos += sizeof(uint64_t);
 
-        size_t tt = 0;
         for (size_t i = 0; i < vals_size; ++i) {
             struct AuxVecEntry *e = builder->entries.data + i;
 
@@ -189,7 +186,7 @@ int auxvec_serialize(const struct AuxVecBuilder *builder, uint64_t stack_top, ui
             }
                 break;
             case DATA_TYPE_EXTERNAL: {
-                uint64_t ptr = entries_offsets[tt++] + start_of_args;
+                uint64_t ptr = entries_offsets[i] + start_of_args;
                 memcpy(data_ptr + pos, &ptr, sizeof(ptr));
                 pos += sizeof(ptr);
             }
