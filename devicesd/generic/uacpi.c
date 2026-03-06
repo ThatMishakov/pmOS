@@ -752,3 +752,16 @@ uacpi_status uacpi_kernel_handle_firmware_request(uacpi_firmware_request *r)
     fprintf(stderr, "!!! Firmware request: %i !!!\n", r->type);
     return UACPI_STATUS_OK;
 }
+
+syscall_r __pmos_syscall_set_attr(uint64_t pid, uint32_t attr, unsigned long value);
+
+uacpi_interrupt_state uacpi_kernel_disable_interrupts(void)
+{
+    return __pmos_syscall_set_attr(0, 8, 0).value;
+}
+
+void uacpi_kernel_restore_interrupts(uacpi_interrupt_state state)
+{
+    __pmos_syscall_set_attr(0, 9, state);
+}
+

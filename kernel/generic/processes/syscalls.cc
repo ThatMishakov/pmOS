@@ -794,6 +794,12 @@ void syscall_set_attribute()
         deactivate_page_table();
         __asm__ volatile("wbinvd");
         break;
+    case 8:
+        // Disable interrupts
+    case 9:
+        // Enable interrupts
+        // TODO...
+        break;
 
     default:
         syscall_error(task) = -ENOTSUP;
