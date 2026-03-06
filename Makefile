@@ -53,9 +53,9 @@ qemu-x86: $(ISO) ovmf-x86
 		-M q35\
 		-smbios type=0,uefi=on -bios ovmf-x86/OVMF.fd\
 		-m 2G\
-	       	-smp 1\
-	       	-serial stdio
-		# -d cpu_reset\
+	       	-smp 4\
+	       	-serial stdio \
+		-d cpu_reset -cpu max,x2apic=on
 # -trace ahci_* -trace handle_cmd_* \
 
 qemu-kvm: $(ISO) ovmf-x86

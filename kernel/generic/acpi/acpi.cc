@@ -127,7 +127,7 @@ bool enumerate_tables_from_xsdt(u64 xsdt_desc_phys)
 
 bool enumerate_tables(u64 rsdt_desc_phys)
 {
-    serial_logger.printf("Enumerating ACPI tables...");
+    serial_logger.printf("Enumerating ACPI tables...\n");
 
     RSDP_descriptor desc;
     copy_from_phys(rsdt_desc_phys, &desc, sizeof(desc));

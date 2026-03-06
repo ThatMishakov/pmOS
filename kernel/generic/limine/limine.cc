@@ -975,7 +975,7 @@ __attribute__((used)) struct limine_smp_request smp_request = {
     .id       = LIMINE_SMP_REQUEST,
     .revision = 0,
     .response = nullptr,
-    .flags    = 0,
+    .flags    = LIMINE_SMP_X2APIC,
 };
 
 u64 bsp_cpu_id = 0;
@@ -986,6 +986,10 @@ extern bool other_cpus_online;
 }
 
 extern int kernel_pt_active_cpus_count[2];
+
+#ifdef __x86_64__
+bool have_x2apic = false;
+#endif
 
 void init_smp()
 {
@@ -1061,10 +1065,13 @@ void init_smp()
     for (auto &info: smp_info) {
         limine_smp_info i;
         copy_from_phys((u64)info - hhdm_offset, &i, sizeof(i));
-        if (i.lapic_id == bsp_cpu_id)
+
+        auto lapic_id = have_x2apic ? i.lapic_id : (i.lapic_id << 24); 
+
+        if (lapic_id == bsp_cpu_id)
             continue;
 
-        lapic_ids.push_back(i.lapic_id);
+        lapic_ids.push_back(lapic_id);
     }
 
     auto v         = initialize_cpus(lapic_ids);
@@ -1073,7 +1080,8 @@ void init_smp()
     for (auto &info: smp_info) {
         limine_smp_info i;
         copy_from_phys((u64)info - hhdm_offset, &i, sizeof(i));
-        if (i.lapic_id == bsp_cpu_id)
+        auto lapic_id = have_x2apic ? i.lapic_id : (i.lapic_id << 24); 
+        if (lapic_id == bsp_cpu_id)
             continue;
 
         u64 offset = ((u64)info - hhdm_offset + offsetof(limine_smp_info, extra_argument)) & 0xfff;
@@ -1123,8 +1131,11 @@ void limine_main()
         sched::number_of_cpus = smp_request.response->cpu_count;
         bsp_cpu_id            = smp_request.response->bsp_hartid;
     #elif defined(__x86_64__)
+        have_x2apic           = smp_request.response->flags & 0x01;
         sched::number_of_cpus = smp_request.response->cpu_count;
         bsp_cpu_id            = smp_request.response->bsp_lapic_id;
+        if (!have_x2apic)
+            bsp_cpu_id <<= 24;
     #endif
     }
 

@@ -86,7 +86,6 @@ namespace kernel::sched
 extern bool cpu_struct_works;
 }
 
-bool use_x2apic = false;
 void init_per_cpu(uint32_t lapic_id)
 {
     sse::detect_sse();
@@ -116,11 +115,7 @@ void init_per_cpu(uint32_t lapic_id)
     c->cpu_gdt.tss_descriptor.tss()->rsp0 = (u64)c->kernel_stack.get_stack_top();
 
     loadTSS(TSS_OFFSET);
-
-    if (use_x2apic)
-        c->lapic_id = lapic_id;
-    else
-        c->lapic_id = lapic_id << 24;
+    c->lapic_id = lapic_id;
 
     assert(c->lapic_id == x86::interrupts::lapic::get_lapic_id());
 
@@ -198,11 +193,8 @@ klib::vector<u64> initialize_cpus(const klib::vector<u64> &lapic_ids)
         c->cpu_gdt.tss_descriptor.tss()->ist2 = (u64)c->debug_stack.get_stack_top();
         c->cpu_gdt.tss_descriptor.tss()->ist1 = (u64)c->kernel_stack.get_stack_top();
         c->cpu_gdt.tss_descriptor.tss()->rsp0 = (u64)c->kernel_stack.get_stack_top();
-
-        if (use_x2apic)
-            c->lapic_id = id;
-        else
-            c->lapic_id = id << 24;
+        
+        c->lapic_id = id;
 
         cpus.push_back(c);
         c->cpu_id = cpus.size() - 1;

@@ -195,10 +195,15 @@ ReturnStr<std::pair<sched::CPU_Info *, u32>>
 
         ioapic->mappings[apic_base] = {cpu, vector};
 
+        // TODO!
+        u32 lapic_id = lapic::apic_mode == lapic::APICMode::XAPIC ? cpu->lapic_id : cpu->lapic_id << 24;
+
         // Set the mapping
-        u64 val = ((u64)cpu->lapic_id << 32) | (1 << 16) | ((u32)!edge_triggered << 15) |
+        u64 val = ((u64)lapic_id << 32) | (1 << 16) | ((u32)!edge_triggered << 15) |
                   ((u32)active_low << 13) | vector;
         ioapic->write_redir_entry(apic_base, val);
+
+        log::serial_logger.printf("IOAPIC added entry for lapic %x\n", cpu->lapic_id);
     }
 
     return result;

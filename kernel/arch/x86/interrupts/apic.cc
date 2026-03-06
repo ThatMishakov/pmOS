@@ -42,6 +42,7 @@
 #include <utils.hh>
 #include <x86_asm.hh>
 #include <x86_utils.hh>
+#include <pmos/io.h>
 
 using namespace kernel;
 using namespace kernel::x86;
@@ -57,10 +58,37 @@ void kernel::x86::interrupts::lapic::map_apic()
     paging::map_kernel_page(apic_base, apic_mapped_addr, {1, 1, 0, 0, 0, PAGE_SPECIAL});
 }
 
+APICMode kernel::x86::interrupts::lapic::apic_mode = APICMode::XAPIC;
+
+static void detect_x2apic()
+{
+    auto c = cpuid(0x01);
+    if (c.ecx & (1 << 21)) {
+        serial_logger.printf("System has X2APIC!\n");
+        apic_mode = APICMode::X2APIC;
+    }
+}
+
+static void enable_x2apic()
+{
+    auto r = read_msr(IA32_APIC_BASE_MSR);
+    if (!(r & (1 << 10))) {
+        r |= 1 << 10;
+        write_msr(IA32_APIC_BASE_MSR, r);
+    }
+}
+
+
 void kernel::x86::interrupts::lapic::enable_apic()
 {
-    apic_write_reg(APIC_REG_DFR, 0xffffffff);
-    apic_write_reg(APIC_REG_LDR, 0x01000000);
+    if (apic_mode == APICMode::X2APIC)
+        enable_x2apic();
+    
+    if (apic_mode != APICMode::X2APIC)
+        // This doesn't exist with X2APIC
+        apic_write_reg(APIC_REG_DFR, 0xffffffff);
+     
+    // apic_write_reg(APIC_REG_LDR, 0x01000000);
     apic_write_reg(APIC_REG_LVT_TMR, APIC_LVT_MASK);
     apic_write_reg(APIC_REG_LVT_INT0, LVT_INT0);
     apic_write_reg(APIC_REG_LVT_INT1, LVT_INT1);
@@ -70,7 +98,10 @@ void kernel::x86::interrupts::lapic::enable_apic()
 void kernel::x86::interrupts::lapic::prepare_apic()
 {
     init_PIC();
-    map_apic();
+    detect_x2apic();
+
+    if (apic_mode == APICMode::XAPIC)
+        map_apic();
 }
 
 FreqFraction kernel::x86::interrupts::lapic::apic_freq;
@@ -180,14 +211,23 @@ void kernel::x86::interrupts::lapic::cpu_set_apic_base(u64 base)
 
 void kernel::x86::interrupts::lapic::apic_write_reg(u16 index, u32 val)
 {
-    volatile u32 *reg = (volatile u32 *)((u64)apic_mapped_addr + index);
-    *reg              = val;
+    if (apic_mode == APICMode::X2APIC) {
+        write_msr(X2APIC_MSR_BASE + index, val);
+    } else {
+        u32 *reg = (u32 *)((char *)apic_mapped_addr + index * 0x10);
+        mmio_writel(reg, val);
+    }
 }
 
 u32 kernel::x86::interrupts::lapic::apic_read_reg(u16 index)
 {
-    volatile u32 *reg = (volatile u32 *)((u64)apic_mapped_addr + index);
-    return *reg;
+    if (apic_mode == APICMode::X2APIC) {
+        // For 64 bit regs just do raw write I guess?
+        return (u32)read_msr(X2APIC_MSR_BASE + index);
+    } else {
+        u32 *reg = (u32 *)((char *)apic_mapped_addr + (index * 0x10));
+        return mmio_readl(reg);
+    } 
 }
 
 void kernel::x86::interrupts::lapic::apic_eoi() { apic_write_reg(APIC_REG_EOI, 0); }
@@ -195,13 +235,6 @@ void kernel::x86::interrupts::lapic::apic_eoi() { apic_write_reg(APIC_REG_EOI, 0
 u32 kernel::x86::interrupts::lapic::apic_get_remaining_ticks()
 {
     return apic_read_reg(APIC_REG_TMRCURRCNT);
-}
-
-void kernel::x86::interrupts::lapic::write_ICR(ICR i)
-{
-    u32 *ptr = (u32 *)&i;
-    apic_write_reg(APIC_ICR_HIGH, ptr[1]);
-    apic_write_reg(APIC_ICR_LOW, ptr[0]);
 }
 
 // u64 lapic_configure(u64 opt, u64 arg)
@@ -229,31 +262,38 @@ void kernel::x86::interrupts::lapic::write_ICR(ICR i)
 
 u32 kernel::x86::interrupts::lapic::get_lapic_id() { return apic_read_reg(APIC_REG_LAPIC_ID); }
 
+static void apic_write_icr(u64 dest)
+{
+    if (apic_mode != APICMode::X2APIC) {
+        apic_write_reg(APIC_ICR_HIGH, static_cast<u32>(dest >> 32));
+        apic_write_reg(APIC_ICR_LOW, static_cast<u32>(dest));
+    } else {
+        write_msr(APIC_ICR_LOW + X2APIC_MSR_BASE, dest);
+    }
+}
+
 void kernel::x86::interrupts::lapic::broadcast_sipi(u8 vector)
 {
-    apic_write_reg(APIC_ICR_LOW, 0x000C4600 | vector);
+    apic_write_icr(0x000C4600 | vector);
 }
 
 void kernel::x86::interrupts::lapic::broadcast_init_ipi()
 {
-    apic_write_reg(APIC_ICR_LOW, 0x000C4500);
+    apic_write_icr(0x000C4500);
 }
 
 void kernel::x86::interrupts::lapic::send_ipi_fixed(u8 vector, u32 dest)
 {
+    u64 val = (((u64)dest << 32) | (u32)vector | (0x01 << 14));
+    apic_write_icr(val);
+
     // serial_logger.printf("[Kernel] Info: Sending IPI to %h with vector %h\n", dest, vector);
-    apic_write_reg(APIC_ICR_HIGH, dest);
-    apic_write_reg(APIC_ICR_LOW, (u32)vector | (0x01 << 14));
+
 }
 
 void kernel::x86::interrupts::lapic::send_ipi_fixed_others(u8 vector)
 {
-    // serial_logger.printf("[Kernel] Info: Sending IPI to others with vector %h\n", vector);
-    apic_write_reg(APIC_ICR_HIGH, 0);
-
-    // Send to *vector* vector with Assert level and All Excluding Self
-    // shorthand
-    apic_write_reg(APIC_ICR_LOW, vector | (0x01 << 14) | (0b11 << 18));
+    apic_write_icr(vector | (0x01 << 14) | (0b11 << 18));
 }
 
 static void smart_eoi(u8 intno)
@@ -261,7 +301,7 @@ static void smart_eoi(u8 intno)
     u8 isr_index = intno >> 5;
     u8 offset    = intno & 0x1f;
 
-    u32 isr_val = apic_read_reg(APIC_ISR_REG_START + isr_index * 0x10);
+    u32 isr_val = apic_read_reg(APIC_ISR_REG_START + isr_index);
 
     if (isr_val & (0x01 << offset))
         apic_eoi();
