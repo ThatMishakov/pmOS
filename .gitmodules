@@ -17,3 +17,6 @@
 [submodule "limine/Hyper"]
 	path = limine/Hyper
 	url = https://github.com/UltraOS/Hyper.git
+[submodule "kernel/uACPI"]
+	path = kernel/uACPI
+	url = https://github.com/uACPI/uACPI.git

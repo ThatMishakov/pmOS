@@ -35,7 +35,6 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <types.hh>
-#include <utils.hh>
 #include <errno.h>
 #include <string_view>
 
@@ -380,7 +379,7 @@ public:
 
     int compare(const string &str) const noexcept
     {
-        size_t size = min(this->size(), str.size());
+        size_t size = this->size() > str.size() ? str.size() : this->size();
 
         const char *str1_data = this->data();
         const char *str2_data = str.data();

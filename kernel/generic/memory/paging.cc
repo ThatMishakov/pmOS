@@ -790,3 +790,9 @@ void TLBShootdownContext::finalize()
 klib::vector<MemoryRegion> kernel::paging::memory_map;
 
 bool Page_Table::is_mapped(void *ptr) const { return get_page_mapping(ptr).is_allocated; }
+
+void kernel::paging::unmap_kernel_pages(TLBShootdownContext &ctx, void *virt_addr, size_t size_bytes)
+{
+    for (size_t i = 0; i < size_bytes; i += PAGE_SIZE)
+        unmap_kernel_page(ctx, (void *)((char *)virt_addr + i));
+}

@@ -29,10 +29,8 @@
 
 #include <kern_logger/kern_logger.hh>
 #include <x86_asm.hh>
-#include <acpi/acpi.h>
-#include <acpi/acpi.hh>
+#include <utils.hh>
 
-using namespace kernel::log;
 
 extern "C" void allow_access_user()
 {
@@ -119,14 +117,14 @@ struct stack_frame {
     void *return_addr;
 };
 
-void print_stack_trace(Logger &logger, stack_frame *s)
+void print_stack_trace(kernel::log::Logger &logger, stack_frame *s)
 {
     logger.printf("Stack trace:\n");
     for (; s != NULL; s = s->next)
         logger.printf("  -> %h\n", (u64)s->return_addr);
 }
 
-void print_stack_trace(Logger &logger)
+void print_stack_trace(kernel::log::Logger &logger)
 {
     struct stack_frame *s;
     #ifdef __x86_64__
@@ -145,27 +143,5 @@ extern "C" void print_stack_trace()
     #else
     __asm__ volatile("movl %%ebp, %0" : "=a"(s));
     #endif
-    print_stack_trace(bochs_logger, s);
-}
-
-MADT *get_madt()
-{
-    static MADT *rhct_virt = nullptr;
-    static bool have_acpi  = true;
-
-    if (rhct_virt == nullptr and have_acpi) {
-        u64 rhct_phys = get_table(0x43495041); // APIC (because why not)
-        if (rhct_phys == 0) {
-            have_acpi = false;
-            return nullptr;
-        }
-
-        ACPISDTHeader h;
-        copy_from_phys(rhct_phys, &h, sizeof(h));
-
-        rhct_virt = (MADT *)malloc(h.length);
-        copy_from_phys(rhct_phys, rhct_virt, h.length);
-    }
-
-    return rhct_virt;
+    print_stack_trace(kernel::log::bochs_logger, s);
 }
