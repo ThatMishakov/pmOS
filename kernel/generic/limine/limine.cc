@@ -1003,11 +1003,17 @@ void init_dtb()
     init_dtb((u64)addr);
 }
 
+#ifdef __x86_64__
+constexpr u64 SMP_FLAGS = LIMINE_SMP_X2APIC;
+#else
+constexpr u64 SMP_FLAGS = 0;
+#endif
+
 __attribute__((used)) struct limine_smp_request smp_request = {
     .id       = LIMINE_SMP_REQUEST,
     .revision = 0,
     .response = nullptr,
-    .flags    = LIMINE_SMP_X2APIC,
+    .flags    = SMP_FLAGS,
 };
 
 u64 bsp_cpu_id = 0;
