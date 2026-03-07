@@ -40,6 +40,14 @@ i64 SyscallError::operator=(i64 value)
     return value;
 }
 
+std::pair<i64, u64> SyscallError::operator=(std::pair<i64, u64> error_value)
+{
+    auto [error, value] = error_value;
+    syscall_ret_low(task, error);
+    syscall_ret_high(task, value);
+    return error_value;
+}
+
 SyscallError::operator int() const { return (int)task->regs.eax; }
 
 void syscall_success(TaskDescriptor *task) { syscall_ret_low(task, 0); }

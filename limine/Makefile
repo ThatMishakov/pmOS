@@ -76,7 +76,7 @@ HYPER_IMAGE := pmos-hyper.img
 Hyper/installer/hyper_install: Hyper
 	cd Hyper && ./build.py
 
-$(HYPER_IMAGE): ../kernel/build/kernel ../bootstrapd/src/bootstrapd ../devicesd/devicesd.elf ../logd/logd.elf ../ns16550/ns16550.elf ../piped/piped.elf ../processd/processd.elf ../terminald/terminald.elf ../vfsd/vfsd.elf ../vfatfsd/vfatfsd.elf ../ps2d/ps2d.elf ../i8042/i8042.elf ../blockd/blockd.elf ../pmbus/bin/pmbus hyper.cfg Hyper/installer/hyper_install
+$(HYPER_IMAGE): ../kernel/build/kernel ../bootstrapd/build/bootstrapd ../devicesd/devicesd.elf ../logd/logd.elf ../ns16550/ns16550.elf ../piped/piped.elf ../processd/processd.elf ../terminald/terminald.elf ../vfsd/vfsd.elf ../vfatfsd/vfatfsd.elf ../ps2d/ps2d.elf ../i8042/i8042.elf ../blockd/blockd.elf ../pmbus/bin/pmbus hyper.cfg Hyper/installer/hyper_install
 	dd if=/dev/zero of=$(HYPER_IMAGE) bs=1M count=128
 
 	# Create an MBR partition table
@@ -132,7 +132,7 @@ $(DISK_IMAGE): ../kernel/build/kernel ../bootstrapd/build/bootstrapd ../devicesd
 
 # cp -v ../kernel/build/kernel isodir/kernel
 
-# cp -v ../bootstrapd/bootstrapd.elf isodir/
+# cp -v ../bootstrapd/build/bootstrapd.elf isodir/
 # cp -v ../devicesd/devicesd.elf isodir/
 # cp -v ../logd/logd.elf isodir/
 # cp -v ../ns16550/ns16550.elf isodir/
@@ -211,7 +211,7 @@ isodir: ../kernel/build/kernel ../bootstrapd/build/bootstrapd ../devicesd/device
 
 
 	cp -v ../kernel/build/kernel isodir/kernel
-	cp -v ../bootstrapd/build/bootstrapd isodir/bootstrapd.elf
+	cp -v ../bootstrapd isodir/bootstrapd.elf
 	cp -v ../devicesd/devicesd.elf isodir/
 	cp -v ../logd/logd.elf isodir/
 	cp -v ../ns16550/ns16550.elf isodir/

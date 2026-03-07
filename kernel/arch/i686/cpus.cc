@@ -1,4 +1,5 @@
-#include <acpi/acpi.h>
+#include <uacpi/acpi.h>
+#include <uacpi/tables.h>
 #include <cpus/sse.hh>
 #include <interrupts/apic.hh>
 #include <interrupts/gdt.hh>
@@ -11,6 +12,7 @@
 #include <processes/tasks.hh>
 #include <sched/sched.hh>
 #include <x86_asm.hh>
+#include <pmos/utility/scope_guard.hh>
 
 using namespace kernel;
 using namespace kernel::x86;
@@ -221,7 +223,6 @@ CPU_Info *prepare_cpu(unsigned idx, u32 lapic_id)
     return c;
 }
 
-MADT *get_madt();
 void init_acpi_trampoline();
 
 void init_smp()
@@ -229,32 +230,39 @@ void init_smp()
     init_acpi_trampoline();
 
     uint32_t my_lapic_id = get_lapic_id();
-    MADT *m              = get_madt();
-    if (!m)
+    uacpi_table madt;
+    auto res = uacpi_table_find_by_signature(ACPI_MADT_SIGNATURE, &madt);
+    if (res != UACPI_STATUS_OK) {
         panic("No MADT");
+    }
+    auto guard = pmos::utility::make_scope_guard([&]{
+        uacpi_table_unref(&madt);
+    });
+    
+    acpi_madt *m = (acpi_madt *)madt.ptr; 
 
     unsigned idx = 1;
 
     serial_logger.printf("Initializing SMP\n");
 
-    u32 offset = sizeof(MADT);
-    u32 length = m->header.length;
+    u32 offset = sizeof(acpi_madt);
+    u32 length = m->hdr.length;
     while (offset < length) {
-        MADT_entry *e = (MADT_entry *)((char *)m + offset);
+        acpi_entry_hdr *e = (acpi_entry_hdr *)((char *)m + offset);
         offset += e->length;
 
-        if (e->type == MADT_LAPIC_entry_type) {
-            MADT_LAPIC_entry *ee = (MADT_LAPIC_entry *)e;
-            uint32_t e_id        = ee->apic_id << 24;
+        if (e->type == ACPI_MADT_ENTRY_TYPE_LAPIC) {
+            acpi_madt_lapic *ee = (acpi_madt_lapic *)e;
+            uint32_t e_id        = ee->id << 24;
             if (e_id == my_lapic_id)
                 continue;
 
             auto c = prepare_cpu(idx++, e_id);
             if (!cpus.push_back(c))
                 panic("Failed to add CPU\n");
-        } else if (e->type == MADT_X2APIC_entry_type) {
-            MADT_X2APIC_entry *ee = (MADT_X2APIC_entry *)e;
-            uint32_t e_id         = ee->x2apic_id;
+        } else if (e->type == ACPI_MADT_ENTRY_TYPE_LOCAL_X2APIC) {
+            acpi_madt_x2apic *ee = (acpi_madt_x2apic *)e;
+            uint32_t e_id        = ee->id;
 
             if (e_id == my_lapic_id)
                 continue;

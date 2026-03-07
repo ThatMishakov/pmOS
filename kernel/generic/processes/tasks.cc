@@ -152,7 +152,7 @@ ReturnStr<std::tuple<size_t, load_tag_stack_descriptor>>
     // Set new rsp
     this->regs.stack_pointer() = (ulong)stack_end;
 
-    return std::make_tuple((ulong)stack_end,
+    return std::make_tuple((size_t)stack_end,
                            load_tag_stack_descriptor {
                                .header     = LOAD_TAG_STACK_DESCRIPTOR_HEADER,
                                .stack_top  = (ulong)stack_end,

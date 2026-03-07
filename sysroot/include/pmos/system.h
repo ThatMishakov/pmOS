@@ -48,6 +48,9 @@ typedef uint64_t pmos_port_t;
 typedef uint64_t pmos_right_t;
 typedef uint64_t mem_object_t;
 
+typedef pmos_port_t pmos_port_aligned __attribute__((aligned(8)));
+typedef pmos_right_t pmos_right_aligned __attribute__((aligned(8)));
+
 typedef struct {
     result_t result;
     uint64_t value;

@@ -123,7 +123,7 @@ ssize_t __ipc_queue_writev(void *file_data, uint64_t consumer_id, const struct i
 {
     struct IPC_Queue *q = (struct IPC_Queue *)file_data;
 
-    pmos_port_t queue_right = __atomic_load_n(&q->port, __ATOMIC_RELAXED);
+    pmos_right_aligned queue_right = __atomic_load_n(&q->port, __ATOMIC_RELAXED);
     const char *port_name   = q->name;
     if (queue_right == INVALID_PORT) {
         right_request_t right_req = get_right_by_name(port_name, strlen(port_name), 0);

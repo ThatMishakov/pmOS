@@ -86,7 +86,8 @@ static pmos_right_t get_fs_right()
 
 static void fs_right_invalid(pmos_right_t right)
 {
-    __atomic_compare_exchange_n(&__get_tls()->fs_right, &right, INVALID_RIGHT, false,
+    pmos_right_aligned rr = right;
+    __atomic_compare_exchange_n(&__get_tls()->fs_right, &rr, INVALID_RIGHT, false,
                                 __ATOMIC_RELAXED, __ATOMIC_RELAXED);
 }
 

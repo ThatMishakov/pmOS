@@ -191,7 +191,7 @@ int main() {
 
         switch (str->type) {
         case IPC_Write_Plain_NUM:
-            write_screen({str->data, msg.size - offsetof(IPC_Write_Plain, data)});
+            write_screen({str->data, static_cast<size_t>(msg.size - offsetof(IPC_Write_Plain, data))});
             break;
         case IPC_Kernel_Named_Port_Notification_NUM:
             react_named_port_notification((char *)buffer.data(), msg.size, std::move(rights[0]));

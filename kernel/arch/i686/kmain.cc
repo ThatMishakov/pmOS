@@ -1,6 +1,7 @@
 #include "ultra_protocol.h"
 
-#include <acpi/acpi.hh>
+#include <uacpi/uacpi.h>
+#include <uacpi/kernel_api.h>
 #include <kern_logger/kern_logger.hh>
 #include <memory/mem_object.hh>
 #include <memory/paging.hh>
@@ -562,6 +563,18 @@ void init_memory(ultra_boot_context *ctx)
 constexpr u64 RSDP_INITIALIZER = -1ULL;
 u64 rsdp                       = -1ULL;
 
+uacpi_status uacpi_kernel_get_rsdp(uacpi_phys_addr *out_rsdp_address)
+{
+    if (rsdp == RSDP_INITIALIZER)
+        return UACPI_STATUS_NOT_FOUND;
+
+    *out_rsdp_address = rsdp;
+    return UACPI_STATUS_OK;
+}
+
+size_t uacpi_early_size = 0x1000;
+char *uacpi_temp_buffer = nullptr;
+
 void init();
 void init_acpi(u64 rsdp_addr)
 {
@@ -570,9 +583,25 @@ void init_acpi(u64 rsdp_addr)
         return;
     }
 
-    const bool b = enumerate_tables(rsdp_addr);
-    if (b)
-        rsdp = rsdp_addr;
+    rsdp = rsdp_addr;
+
+    for (;;) {
+        uacpi_temp_buffer = new char[uacpi_early_size];
+        if (!uacpi_temp_buffer)
+            panic("Couldn't allocate memory for uACPI early buffer");
+    
+        auto ret = uacpi_setup_early_table_access((void *)uacpi_temp_buffer, uacpi_early_size);
+        if (ret == UACPI_STATUS_OK)
+        break;
+
+        delete uacpi_temp_buffer;
+        if (ret == UACPI_STATUS_OUT_OF_MEMORY) {
+            uacpi_early_size += 4096;
+        } else {
+            serial_logger.printf("uacpi_initialize error: %s", uacpi_status_to_string(ret));
+            return;
+        }
+    }
 }
 
 namespace kernel::paging

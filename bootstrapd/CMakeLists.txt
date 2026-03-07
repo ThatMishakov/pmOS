@@ -4,6 +4,10 @@ if(NOT DEFINED TARGET_ARCH)
   set(TARGET_ARCH "x86_64" CACHE STRING "Target architecture (x86_64, riscv64 or i686)")
 endif()
 
+# This is hacky...
+set(CMAKE_TRY_COMPILE_TARGET_TYPE "STATIC_LIBRARY")
+set(BUILD_TESTING OFF)
+
 set(TOOLCHAIN_PREFIX "${TARGET_ARCH}-pmos")
 
 SET(CMAKE_C_COMPILER_TARGET ${TOOLCHAIN_PREFIX})
@@ -44,3 +48,6 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(libyaml)
 target_link_libraries(bootstrapd PRIVATE yaml)
 
+if(CMAKE_C_COMPILER_TARGET MATCHES "^i[3-6]86-pmos$")
+    string(APPEND CMAKE_C_FLAGS " -lclang_rt.builtins-i386")
+endif()
