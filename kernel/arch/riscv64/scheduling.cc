@@ -27,8 +27,8 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <acpi/acpi.h>
-#include <acpi/acpi.hh>
+#include <uacpi/tables.h>
+#include <uacpi/acpi.h>
 #include <cpus/floating_point.hh>
 #include <cpus/timer.hh>
 #include <dtb/dtb.hh>
@@ -43,6 +43,7 @@
 #include <sched/sched.hh>
 #include <smoldtb.h>
 #include <types.hh>
+#include <pmos/utility/scope_guard.hh>
 
 using namespace kernel;
 using namespace kernel::log;
@@ -71,37 +72,18 @@ void program_stvec()
 
 void set_sscratch(u64 scratch) { asm volatile("csrw sscratch, %0" : : "r"(scratch) : "memory"); }
 
-RCHT *get_rhct()
-{
-    static RCHT *rhct_virt = nullptr;
-    static bool have_acpi  = true;
-
-    if (rhct_virt == nullptr and have_acpi) {
-        u64 rhct_phys = get_table(0x54434852); // RHCT
-        if (rhct_phys == 0) {
-            have_acpi = false;
-            return nullptr;
-        }
-
-        ACPISDTHeader h;
-        copy_from_phys(rhct_phys, &h, sizeof(h));
-
-        rhct_virt = (RCHT *)malloc(h.length);
-        copy_from_phys(rhct_phys, rhct_virt, h.length);
-    }
-
-    return rhct_virt;
-}
-
 void initialize_timer()
 {
     if (timer_needs_initialization()) {
         u64 time_base_frequency = 0;
 
         do {
-            RCHT *rhct = get_rhct();
-            if (rhct != nullptr) {
-                time_base_frequency = rhct->time_base_frequency;
+            uacpi_table m;
+            auto res = uacpi_table_find_by_signature(ACPI_RHCT_SIGNATURE, &m);
+            if (res == UACPI_STATUS_OK) {
+                struct acpi_rhct *rhct = (acpi_rhct *)m.ptr;
+                time_base_frequency = rhct->timebase_frequency;
+                uacpi_table_unref(&m);
             } else if (have_dtb()) {
                 auto node = dtb_find("/cpus");
                 if (!node) {
@@ -134,48 +116,6 @@ void initialize_timer()
 
         set_timer_frequency(time_base_frequency);
     }
-}
-
-MADT *get_madt()
-{
-    static MADT *rhct_virt = nullptr;
-    static bool have_acpi  = true;
-
-    if (rhct_virt == nullptr and have_acpi) {
-        u64 rhct_phys = get_table(0x43495041); // APIC (because why not)
-        if (rhct_phys == 0) {
-            have_acpi = false;
-            return nullptr;
-        }
-
-        ACPISDTHeader h;
-        copy_from_phys(rhct_phys, &h, sizeof(h));
-
-        rhct_virt = (MADT *)malloc(h.length);
-        copy_from_phys(rhct_phys, rhct_virt, h.length);
-    }
-
-    return rhct_virt;
-}
-
-MADT_RINTC_entry *acpi_get_hart_rtnic(u64 hart_id)
-{
-    MADT *m = get_madt();
-    if (m == nullptr)
-        return nullptr;
-
-    // Find the RINTC
-    u32 offset = sizeof(MADT);
-    u32 length = m->header.length;
-    while (offset < length) {
-        MADT_RINTC_entry *e = (MADT_RINTC_entry *)((char *)m + offset);
-        if (e->header.type == MADT_RINTC_ENTRY_TYPE and e->hart_id == hart_id)
-            return e;
-
-        offset += e->header.length;
-    }
-
-    return nullptr;
 }
 
 static dtb_node *find_cpu(u32 hart_id)
@@ -282,11 +222,52 @@ ReturnStr<u32> dtb_get_hart_rtnic_id(u64 hart_id)
     return {-ENOTSUP, 0};
 }
 
+static acpi_entry_hdr *get_madt_entry(acpi_madt *madt, u8 type, int idx)
+{
+    size_t offset = sizeof(acpi_madt);
+    int iidx = 0;
+    while (offset < madt->hdr.length) {
+        acpi_entry_hdr *ee = (acpi_entry_hdr *)((char *)madt + offset);
+        offset += ee->length;
+        if (ee->type != type)
+            continue;
+
+        if (iidx++ == idx)
+            return ee;
+    }
+
+    return nullptr;
+}
+
+std::optional<acpi_madt_rintc> acpi_get_hart_rtnic(u64 hart_id)
+{
+    uacpi_table m;
+    auto res = uacpi_table_find_by_signature(ACPI_MADT_SIGNATURE, &m);
+    if (res != UACPI_STATUS_OK) {
+        log::serial_logger.printf("Couldn't get MADT table...\n");
+        return {};
+    }
+    auto guard = pmos::utility::make_scope_guard([&]{
+        uacpi_table_unref(&m);
+    });
+
+    acpi_madt *madt = (acpi_madt *)m.ptr;
+    
+    acpi_madt_rintc *r;
+    int idx = 0;
+    while ((r = (acpi_madt_rintc *)get_madt_entry(madt, ACPI_MADT_ENTRY_TYPE_RINTC, idx++))) {
+        if (r->hart_id == hart_id)
+            return *r;
+    }
+
+    return {};
+}
+
 ReturnStr<u32> get_hart_rtnic_id(u64 hart_id)
 {
     auto e = acpi_get_hart_rtnic(hart_id);
     if (e)
-        return {0, e->external_interrupt_controller_id};
+        return {0, e->ext_intc_id};
 
     return dtb_get_hart_rtnic_id(hart_id);
 }
@@ -295,7 +276,7 @@ ReturnStr<u32> get_apic_processor_uid(u64 hart_id)
 {
     auto e = acpi_get_hart_rtnic(hart_id);
     if (e)
-        return {0, e->acpi_processor_id};
+        return {0, e->uid};
 
     return {-ENOTSUP, 0};
 }
@@ -307,25 +288,31 @@ ReturnStr<klib::string> acpi_get_isa_string(u64 hart_id)
     if (apic_id.result != 0)
         return {apic_id.result, {}};
 
-    RCHT *rhct = get_rhct();
-    if (rhct == nullptr) {
-        serial_logger.printf("Could not get rhct\n");
+    uacpi_table m;
+    auto res = uacpi_table_find_by_signature(ACPI_RHCT_SIGNATURE, &m);
+    if (res != UACPI_STATUS_OK) {
+        log::serial_logger.printf("Couldn't get RHCT table...\n");
         return {-ENOTSUP, {}};
     }
+    auto guard = pmos::utility::make_scope_guard([&]{
+        uacpi_table_unref(&m);
+    });
 
-    const u32 size = rhct->h.length;
+    acpi_rhct *rhct = (acpi_rhct *)m.ptr;
 
+    const u32 size = rhct->hdr.length;
     // Find the right hart info node
-    u32 offset             = sizeof(RCHT);
-    RCHT_HART_INFO_node *n = nullptr;
+    u32 offset             = sizeof(acpi_rhct);
+    acpi_rhct_hart_info *n = nullptr;
     while (offset < size) {
-        RCHT_HART_INFO_node *t = (RCHT_HART_INFO_node *)((char *)rhct + offset);
-        if (t->header.type == RCHT_HART_INFO_NODE and t->acpi_processor_uid == apic_id.val) {
+        acpi_rhct_hart_info *t = (acpi_rhct_hart_info *)((char *)rhct + offset);
+        if (t->hdr.type == ACPI_RHCT_ENTRY_TYPE_HART_INFO
+            and t->uid == apic_id.val) {
             n = t;
             break;
         }
 
-        offset += t->header.length;
+        offset += t->hdr.length;
     }
 
     if (n == nullptr) {
@@ -335,10 +322,10 @@ ReturnStr<klib::string> acpi_get_isa_string(u64 hart_id)
     }
 
     // Find ISA string
-    for (u16 i = 0; i < n->offsets_count; ++i) {
-        RCHT_ISA_STRING_node *node = (RCHT_ISA_STRING_node *)((char *)rhct + n->offsets[i]);
-        if (node->header.type == RHCT_ISA_STRING_NODE) {
-            auto s = klib::string(node->string, node->string_length);
+    for (u16 i = 0; i < n->offset_count; ++i) {
+        acpi_rhct_isa_string *node = (acpi_rhct_isa_string *)((char *)rhct + n->offsets[i]);
+        if (node->hdr.type == ACPI_RHCT_ENTRY_TYPE_ISA_STRING) {
+            auto s = klib::string((char *)node->isa, node->length);
             return {0, klib::move(s)};
         }
     }
