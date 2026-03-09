@@ -43,6 +43,8 @@
 #include <x86_asm.hh>
 #include <x86_utils.hh>
 #include <pmos/io.h>
+#include <uacpi/acpi.h>
+#include <uacpi/tables.h>
 
 using namespace kernel;
 using namespace kernel::x86;
@@ -50,15 +52,90 @@ using namespace kernel::x86::interrupts::lapic;
 using namespace kernel::x86::interrupts;
 using namespace kernel::log;
 
+bool have_invariant_tsc = false;
+u64 boot_tsc            = 0;
+
+namespace kernel::x86::interrupts::lapic {
+
+u64 apic_base = 0xFEE00000;
+
 static void *apic_mapped_addr = nullptr;
 
-void kernel::x86::interrupts::lapic::map_apic()
+void map_apic()
 {
+    uacpi_table t;
+    auto res = uacpi_table_find_by_signature(ACPI_MADT_SIGNATURE, &t);
+    if (res != UACPI_STATUS_OK) {
+        serial_logger.printf("Couldn't get MADT when mapping apic! Using address from IA32_APIC_BASE_MSR...\n");
+
+        auto val = read_msr(IA32_APIC_BASE_MSR);
+        if (val & (1 << 11) && !(val & (1 << 10)))
+            apic_base = val & ~(u64)0xfff;
+        else
+            serial_logger.printf("Using hardcoded LAPIC address!\n");
+    } else {
+        acpi_madt *madt = (acpi_madt *)t.ptr;
+
+        apic_base = static_cast<u64>(madt->local_interrupt_controller_address);
+
+        size_t offset = sizeof(acpi_madt);
+        while (offset < madt->hdr.length) {
+            acpi_entry_hdr *ee = (acpi_entry_hdr *)((char *)madt + offset);
+            offset += ee->length;
+            assert(ee->length);
+            if (ee->type != ACPI_MADT_ENTRY_TYPE_LAPIC_ADDRESS_OVERRIDE)
+                continue;
+
+            acpi_madt_lapic_address_override *e = (acpi_madt_lapic_address_override *)ee;
+            apic_base = e->address;
+            break;
+        }
+
+        uacpi_table_unref(&t);
+    }
+
+    serial_logger.printf("LAPIC base: %lx\n", apic_base);
+
     apic_mapped_addr = vmm::kernel_space_allocator.virtmem_alloc(1);
-    paging::map_kernel_page(apic_base, apic_mapped_addr, {1, 1, 0, 0, 0, PAGE_SPECIAL});
+    if (!apic_mapped_addr)
+        panic("Couldn't allocate virtual memory for LAPIC!!\n");
+
+    paging::Page_Table_Arguments arg = {
+        .readable = true,
+        .writeable = true,
+        .user_access = false,
+        .global = true,
+        .execution_disabled = true,
+        .extra = PAGE_SPECIAL,
+        .cache_policy = paging::Memory_Type::IONoCache,
+    };
+
+    auto result = paging::map_kernel_page(apic_base, apic_mapped_addr, arg);
+    if (result)
+        panic("Failed to map LAPIC!!");
 }
 
-APICMode kernel::x86::interrupts::lapic::apic_mode = APICMode::XAPIC;
+APICMode apic_mode = APICMode::XAPIC;
+bool can_use_32bit_apic_ids = false;
+
+
+static bool cant_diable_x2apic()
+{
+    // TODO: Check MAX leaf
+
+    auto cc = cpuid(0x07);
+    if (!(cc.edx & (1  << 29)))
+        return false;
+
+    auto c = read_msr(IA32_ARCH_CAPABILITIES_MSR);
+    if (!(c & (1 << 21)))
+        return false;
+
+    c = read_msr(A32_XAPIC_DISABLE_STATUS_MSR);
+    if (c & 0x01)
+        return true;
+    return false;
+}
 
 static void detect_x2apic()
 {
@@ -66,6 +143,26 @@ static void detect_x2apic()
     if (c.ecx & (1 << 21)) {
         serial_logger.printf("System has X2APIC!\n");
         apic_mode = APICMode::X2APIC;
+        can_use_32bit_apic_ids = true;
+    } else {
+        return;
+    }
+
+    uacpi_table t;
+    auto res = uacpi_table_find_by_signature(ACPI_DMAR_SIGNATURE, &t);
+    if (res == UACPI_STATUS_OK) {
+        auto dmar = (acpi_dmar *)t.ptr;
+
+        if (dmar->flags & ACPI_DMAR_X2APIC_OPT_OUT) {
+            serial_logger.printf("Firmware doesn't want us to use x2APIC...\n");
+
+            if (!cant_diable_x2apic()) {
+                apic_mode = APICMode::XAPIC;
+            }
+            can_use_32bit_apic_ids = false;
+        }
+
+        uacpi_table_unref(&t);
     }
 }
 
@@ -78,15 +175,23 @@ static void enable_x2apic()
     }
 }
 
-
-void kernel::x86::interrupts::lapic::enable_apic()
+void enable_apic()
 {
     if (apic_mode == APICMode::X2APIC)
         enable_x2apic();
     
-    if (apic_mode != APICMode::X2APIC)
+    if (apic_mode != APICMode::X2APIC) {
+        auto state = read_msr(IA32_APIC_BASE_MSR);
+        // auto bsp_flag = state & (1 << 8);
+
+        if (state & (1 << 10)) // x2APIC enabled. Disable it, and re-enable LAPIC in xAPIC mode
+            write_msr(IA32_APIC_BASE_MSR, 0);
+
+        write_msr(IA32_APIC_BASE_MSR, apic_base | (state & (u64)0xbff) | (1 << 11));
+    
         // This doesn't exist with X2APIC
         apic_write_reg(APIC_REG_DFR, 0xffffffff);
+    }
      
     // apic_write_reg(APIC_REG_LDR, 0x01000000);
     apic_write_reg(APIC_REG_LVT_TMR, APIC_LVT_MASK);
@@ -95,7 +200,7 @@ void kernel::x86::interrupts::lapic::enable_apic()
     apic_write_reg(APIC_REG_SPURIOUS_INT, APIC_SPURIOUS_INT | 0x100);
 }
 
-void kernel::x86::interrupts::lapic::prepare_apic()
+void prepare_apic_bsp()
 {
     init_PIC();
     detect_x2apic();
@@ -104,14 +209,12 @@ void kernel::x86::interrupts::lapic::prepare_apic()
         map_apic();
 }
 
-FreqFraction kernel::x86::interrupts::lapic::apic_freq;
-FreqFraction kernel::x86::interrupts::lapic::tsc_freq;
+FreqFraction apic_freq;
+FreqFraction tsc_freq;
 
-FreqFraction kernel::x86::interrupts::lapic::apic_inverted_freq;
-FreqFraction kernel::x86::interrupts::lapic::tsc_inverted_freq;
+FreqFraction apic_inverted_freq;
+FreqFraction tsc_inverted_freq;
 
-bool have_invariant_tsc = false;
-u64 boot_tsc            = 0;
 static void check_tsc()
 {
     auto c = cpuid(0x80000007);
@@ -127,7 +230,7 @@ static void check_tsc()
     }
 }
 
-void kernel::x86::interrupts::lapic::discover_apic_freq()
+void discover_apic_freq()
 {
     check_tsc();
     // While we're here, also measure TSC frequency
@@ -186,7 +289,7 @@ void kernel::x86::interrupts::lapic::discover_apic_freq()
                          (tsc_end - tsc_start) * 100);
 }
 
-void kernel::x86::interrupts::lapic::apic_one_shot(u32 ms)
+void apic_one_shot(u32 ms)
 {
     u64 time_nanoseconds = ms * 1'000'000;
     u32 ticks            = apic_freq * time_nanoseconds;
@@ -195,21 +298,21 @@ void kernel::x86::interrupts::lapic::apic_one_shot(u32 ms)
     apic_write_reg(APIC_REG_TMRINITCNT, ticks);
 }
 
-void kernel::x86::interrupts::lapic::apic_one_shot_ticks(u32 ticks)
+void apic_one_shot_ticks(u32 ticks)
 {
     apic_write_reg(APIC_REG_TMRDIV, 0x3);           // Divide by 1
     apic_write_reg(APIC_REG_LVT_TMR, APIC_TMR_INT); // Init in one-shot mode
     apic_write_reg(APIC_REG_TMRINITCNT, ticks);
 }
 
-u64 kernel::x86::interrupts::lapic::cpu_get_apic_base() { return read_msr(IA32_APIC_BASE_MSR); }
+u64 cpu_get_apic_base() { return read_msr(IA32_APIC_BASE_MSR); }
 
-void kernel::x86::interrupts::lapic::cpu_set_apic_base(u64 base)
+void cpu_set_apic_base(u64 base)
 {
     return write_msr(IA32_APIC_BASE_MSR, base);
 }
 
-void kernel::x86::interrupts::lapic::apic_write_reg(u16 index, u32 val)
+void apic_write_reg(u16 index, u32 val)
 {
     if (apic_mode == APICMode::X2APIC) {
         write_msr(X2APIC_MSR_BASE + index, val);
@@ -219,7 +322,7 @@ void kernel::x86::interrupts::lapic::apic_write_reg(u16 index, u32 val)
     }
 }
 
-u32 kernel::x86::interrupts::lapic::apic_read_reg(u16 index)
+u32 apic_read_reg(u16 index)
 {
     if (apic_mode == APICMode::X2APIC) {
         // For 64 bit regs just do raw write I guess?
@@ -230,9 +333,9 @@ u32 kernel::x86::interrupts::lapic::apic_read_reg(u16 index)
     } 
 }
 
-void kernel::x86::interrupts::lapic::apic_eoi() { apic_write_reg(APIC_REG_EOI, 0); }
+void apic_eoi() { apic_write_reg(APIC_REG_EOI, 0); }
 
-u32 kernel::x86::interrupts::lapic::apic_get_remaining_ticks()
+u32 apic_get_remaining_ticks()
 {
     return apic_read_reg(APIC_REG_TMRCURRCNT);
 }
@@ -260,7 +363,7 @@ u32 kernel::x86::interrupts::lapic::apic_get_remaining_ticks()
 //     return result;
 // }
 
-u32 kernel::x86::interrupts::lapic::get_lapic_id() { return apic_read_reg(APIC_REG_LAPIC_ID); }
+u32 get_lapic_id() { return apic_read_reg(APIC_REG_LAPIC_ID); }
 
 static void apic_write_icr(u64 dest)
 {
@@ -272,17 +375,17 @@ static void apic_write_icr(u64 dest)
     }
 }
 
-void kernel::x86::interrupts::lapic::broadcast_sipi(u8 vector)
+void broadcast_sipi(u8 vector)
 {
     apic_write_icr(0x000C4600 | vector);
 }
 
-void kernel::x86::interrupts::lapic::broadcast_init_ipi()
+void broadcast_init_ipi()
 {
     apic_write_icr(0x000C4500);
 }
 
-void kernel::x86::interrupts::lapic::send_ipi_fixed(u8 vector, u32 dest)
+void send_ipi_fixed(u8 vector, u32 dest)
 {
     u64 val = (((u64)dest << 32) | (u32)vector | (0x01 << 14));
     apic_write_icr(val);
@@ -291,7 +394,7 @@ void kernel::x86::interrupts::lapic::send_ipi_fixed(u8 vector, u32 dest)
 
 }
 
-void kernel::x86::interrupts::lapic::send_ipi_fixed_others(u8 vector)
+void send_ipi_fixed_others(u8 vector)
 {
     apic_write_icr(vector | (0x01 << 14) | (0b11 << 18));
 }
@@ -305,6 +408,36 @@ static void smart_eoi(u8 intno)
 
     if (isr_val & (0x01 << offset))
         apic_eoi();
+}
+
+ReturnStr<std::pair<sched::CPU_Info *, u32>> allocate_interrupt(IntMapping m)
+{
+    // Find least loaded CPU
+    auto *cpu = sched::cpus[0];
+    for (size_t i = 1; i < sched::cpus.size(); ++i) {
+        if (sched::cpus[i]->int_handlers.allocated_int_count <
+            cpu->int_handlers.allocated_int_count)
+            cpu = sched::cpus[i];
+    }
+
+    // Find unused slot
+    u32 idx = 0;
+    for (; idx < cpu->MAPPABLE_INTS; ++idx) {
+        if (!cpu->int_mappings[idx].first)
+            break;
+    }
+
+    if (idx == cpu->MAPPABLE_INTS)
+        return Error(-ENOMEM);
+
+    cpu->int_mappings[idx].first  = m.ioapic;
+    cpu->int_mappings[idx].second = m.vector;
+
+    cpu->int_handlers.allocated_int_count++;
+
+    return Success(std::make_pair(cpu, idx + 48));
+}
+
 }
 
 void lvt0_int_routine()
@@ -425,32 +558,4 @@ void kernel::interrupts::interrupt_disable(u32 i)
 
     if (ioapic)
         ioapic->interrupt_disable(vector);
-}
-
-ReturnStr<std::pair<sched::CPU_Info *, u32>> kernel::x86::interrupts::lapic::allocate_interrupt(IntMapping m)
-{
-    // Find least loaded CPU
-    auto *cpu = sched::cpus[0];
-    for (size_t i = 1; i < sched::cpus.size(); ++i) {
-        if (sched::cpus[i]->int_handlers.allocated_int_count <
-            cpu->int_handlers.allocated_int_count)
-            cpu = sched::cpus[i];
-    }
-
-    // Find unused slot
-    u32 idx = 0;
-    for (; idx < cpu->MAPPABLE_INTS; ++idx) {
-        if (!cpu->int_mappings[idx].first)
-            break;
-    }
-
-    if (idx == cpu->MAPPABLE_INTS)
-        return Error(-ENOMEM);
-
-    cpu->int_mappings[idx].first  = m.ioapic;
-    cpu->int_mappings[idx].second = m.vector;
-
-    cpu->int_handlers.allocated_int_count++;
-
-    return Success(std::make_pair(cpu, idx + 48));
 }

@@ -40,6 +40,9 @@ class IOAPIC;
 
 namespace lapic
 {
+constexpr u32 A32_XAPIC_DISABLE_STATUS_MSR = 0xbd;
+constexpr u32 IA32_ARCH_CAPABILITIES_MSR = 0x10a;
+
 constexpr u32 X2APIC_MSR_BASE = 0x800;
 
 #define APIC_REG_LAPIC_ID     0x2
@@ -72,7 +75,7 @@ constexpr u32 X2APIC_MSR_BASE = 0x800;
 #define APIC_ENABLE (1 << 11)
 
     /// The base of the APIC MMIO register
-    static constexpr u64 apic_base = 0xFEE00000;
+    extern u64 apic_base;
 
     /**
      * @brief Function used for writing a given APIC register.
@@ -121,7 +124,7 @@ constexpr u32 X2APIC_MSR_BASE = 0x800;
     /**
      * @brief Disables PIC and maps LAPIC to the kernel virtual memory.
      */
-    void prepare_apic();
+    void prepare_apic_bsp();
 
     /**
      * @brief Discovers LAPIC frequency using PIT

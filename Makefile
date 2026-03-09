@@ -55,7 +55,7 @@ qemu-x86: $(ISO) ovmf-x86
 		-m 2G\
 	       	-smp 4\
 	       	-serial stdio \
-		-d cpu_reset -cpu max,x2apic=on
+		-d cpu_reset -device intel-iommu
 # -trace ahci_* -trace handle_cmd_* \
 
 qemu-kvm: $(ISO) ovmf-x86

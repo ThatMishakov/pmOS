@@ -279,7 +279,7 @@ void init_smp()
 void init_scheduling_on_bsp()
 {
     serial_logger.printf("Initializing APIC\n");
-    prepare_apic();
+    prepare_apic_bsp();
 
     serial_logger.printf("Initializing interrupts\n");
     init_interrupts();

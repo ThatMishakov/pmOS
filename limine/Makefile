@@ -211,7 +211,7 @@ isodir: ../kernel/build/kernel ../bootstrapd/build/bootstrapd ../devicesd/device
 
 
 	cp -v ../kernel/build/kernel isodir/kernel
-	cp -v ../bootstrapd isodir/bootstrapd.elf
+	cp -v ../bootstrapd/build/bootstrapd isodir/bootstrapd.elf
 	cp -v ../devicesd/devicesd.elf isodir/
 	cp -v ../logd/logd.elf isodir/
 	cp -v ../ns16550/ns16550.elf isodir/

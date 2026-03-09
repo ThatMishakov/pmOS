@@ -262,7 +262,7 @@ void init_acpi_trampoline();
 void init_scheduling(u64 bootstap_apic_id)
 {
     serial_logger.printf("Initializing APIC\n");
-    x86::interrupts::lapic::prepare_apic();
+    x86::interrupts::lapic::prepare_apic_bsp();
 
     serial_logger.printf("Initializing interrupts\n");
     init_interrupts();
