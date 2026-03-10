@@ -20,3 +20,7 @@
 [submodule "kernel/uACPI"]
 	path = kernel/uACPI
 	url = https://github.com/uACPI/uACPI.git
+[submodule "limine/limine"]
+	path = limine/limine
+	url = https://codeberg.org/Limine/Limine.git
+	branch = v10.x-binary

@@ -66,7 +66,7 @@ void map_apic()
     uacpi_table t;
     auto res = uacpi_table_find_by_signature(ACPI_MADT_SIGNATURE, &t);
     if (res != UACPI_STATUS_OK) {
-        serial_logger.printf("Couldn't get MADT when mapping apic! Using address from IA32_APIC_BASE_MSR...\n");
+        serial_logger.printf("Couldn't get MADT when mapping apic (%s)! Using address from IA32_APIC_BASE_MSR...\n", uacpi_status_to_string(res));
 
         auto val = read_msr(IA32_APIC_BASE_MSR);
         if (val & (1 << 11) && !(val & (1 << 10)))

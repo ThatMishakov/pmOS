@@ -44,7 +44,6 @@ void *uacpi_kernel_map(uacpi_phys_addr addr, uacpi_size len)
     auto result = map_kernel_pages(start, mapping, size_aligned, arg);
     if (result)
         return nullptr;
-
     guard.dismiss();
 
     return (void *)((char *)mapping + offset);

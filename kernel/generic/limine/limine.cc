@@ -57,47 +57,47 @@ extern "C" void _limine_entry();
 
 u64 kernel_phys_base = 0;
 
-__attribute__((used)) LIMINE_BASE_REVISION(1)
+static volatile uint64_t limine_base_revision[] = LIMINE_BASE_REVISION(5);
 
-    __attribute__((used)) limine_bootloader_info_request boot_request = {
-        .id       = LIMINE_BOOTLOADER_INFO_REQUEST,
+__attribute__((used)) limine_bootloader_info_request boot_request = {
+        .id       = LIMINE_BOOTLOADER_INFO_REQUEST_ID,
         .revision = 0,
         .response = nullptr,
 };
 
 __attribute__((used)) limine_memmap_request memory_request = {
-    .id       = LIMINE_MEMMAP_REQUEST,
+    .id       = LIMINE_MEMMAP_REQUEST_ID,
     .revision = 0,
     .response = nullptr,
 };
 
 __attribute__((used)) limine_entry_point_request entry_point_request = {
-    .id       = LIMINE_ENTRY_POINT_REQUEST,
+    .id       = LIMINE_ENTRY_POINT_REQUEST_ID,
     .revision = 0,
     .response = nullptr,
     .entry    = _limine_entry,
 };
 
-__attribute__((used)) limine_kernel_address_request kernel_address_request = {
-    .id       = LIMINE_KERNEL_ADDRESS_REQUEST,
+__attribute__((used)) limine_executable_address_request kernel_address_request = {
+    .id       = LIMINE_EXECUTABLE_ADDRESS_REQUEST_ID,
     .revision = 0,
     .response = nullptr,
 };
 
 __attribute__((used)) limine_hhdm_request hhdm_request = {
-    .id       = LIMINE_HHDM_REQUEST,
+    .id       = LIMINE_HHDM_REQUEST_ID,
     .revision = 0,
     .response = nullptr,
 };
 
 __attribute__((used)) limine_paging_mode_request paging_request = {
-    .id       = LIMINE_PAGING_MODE_REQUEST,
+    .id       = LIMINE_PAGING_MODE_REQUEST_ID,
     .revision = 0,
     .response = nullptr,
     #ifdef __riscv
     .mode = LIMINE_PAGING_MODE_RISCV_SV57,
     #else
-    .mode = LIMINE_PAGING_MODE_DEFAULT,
+    .mode = 0,
     #endif
 };
 
@@ -577,7 +577,7 @@ void construct_paging()
         if (regions_data[i].type == LIMINE_MEMMAP_USABLE ||
             regions_data[i].type == LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE ||
             regions_data[i].type == LIMINE_MEMMAP_ACPI_RECLAIMABLE ||
-            regions_data[i].type == LIMINE_MEMMAP_KERNEL_AND_MODULES) {
+            regions_data[i].type == LIMINE_MEMMAP_EXECUTABLE_AND_MODULES) {
             if (first_index_of_range == -1) {
                 first_index_of_range = i;
             } else if (region_last_addr(i - 1) < regions_data[i].base) {
@@ -632,7 +632,7 @@ void construct_paging()
         MemoryRegionType type;
         switch (region.type) {
         case LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE:
-        case LIMINE_MEMMAP_KERNEL_AND_MODULES:
+        case LIMINE_MEMMAP_EXECUTABLE_AND_MODULES:
         case LIMINE_MEMMAP_USABLE:
             type = MemoryRegionType::Usable;
             break;
@@ -665,7 +665,7 @@ void construct_paging()
 }
 
 __attribute__((used)) limine_module_request module_request = {
-    .id                    = LIMINE_MODULE_REQUEST,
+    .id                    = LIMINE_MODULE_REQUEST_ID,
     .revision              = 1,
     .response              = nullptr,
     .internal_module_count = 0,
@@ -709,7 +709,7 @@ void init_modules()
         copy_from_phys((u64)mm - hhdm_offset, &f, sizeof(f));
         module m = {
             .path      = capture_from_phys((u64)f.path - hhdm_offset),
-            .cmdline   = capture_from_phys((u64)f.cmdline - hhdm_offset),
+            .cmdline   = capture_from_phys((u64)f.string - hhdm_offset),
             .phys_addr = (u64)f.address - hhdm_offset,
             .size      = f.size,
             .object    = Mem_Object::create_from_phys((u64)f.address - hhdm_offset,
@@ -777,7 +777,7 @@ klib::unique_ptr<load_tag_generic> construct_load_tag_for_modules()
 }
 
 __attribute__((used)) struct limine_framebuffer_request fb_req = {
-    .id       = LIMINE_FRAMEBUFFER_REQUEST,
+    .id       = LIMINE_FRAMEBUFFER_REQUEST_ID,
     .revision = 0,
     .response = nullptr,
 };
@@ -926,7 +926,7 @@ void init_task1()
 }
 
 __attribute__((used)) limine_rsdp_request rsdp_request = {
-    .id       = LIMINE_RSDP_REQUEST,
+    .id       = LIMINE_RSDP_REQUEST_ID,
     .revision = 0,
     .response = nullptr,
 };
@@ -983,7 +983,13 @@ uacpi_status uacpi_kernel_get_rsdp(uacpi_phys_addr *out_rsdp_address)
 }
 
 __attribute__((used)) limine_dtb_request dtb_request = {
-    .id       = LIMINE_DTB_REQUEST,
+    .id       = LIMINE_DTB_REQUEST_ID,
+    .revision = 0,
+    .response = nullptr,
+};
+
+__attribute__((used)) limine_riscv_bsp_hartid_request hartid_request = {
+    .id = LIMINE_RISCV_BSP_HARTID_REQUEST_ID,
     .revision = 0,
     .response = nullptr,
 };
@@ -1003,19 +1009,6 @@ void init_dtb()
     init_dtb((u64)addr);
 }
 
-#ifdef __x86_64__
-constexpr u64 SMP_FLAGS = LIMINE_SMP_X2APIC;
-#else
-constexpr u64 SMP_FLAGS = 0;
-#endif
-
-__attribute__((used)) struct limine_smp_request smp_request = {
-    .id       = LIMINE_SMP_REQUEST,
-    .revision = 0,
-    .response = nullptr,
-    .flags    = SMP_FLAGS,
-};
-
 u64 bsp_cpu_id = 0;
 
 namespace kernel::sched
@@ -1025,125 +1018,6 @@ extern bool other_cpus_online;
 
 extern int kernel_pt_active_cpus_count[2];
 
-#ifdef __x86_64__
-bool have_x2apic = false;
-#endif
-
-void init_smp()
-{
-    sched::other_cpus_online       = true;
-    kernel_pt_active_cpus_count[0] = sched::number_of_cpus;
-
-    if (smp_request.response == nullptr) {
-        return;
-    }
-
-    #ifdef __riscv
-    limine_smp_response r;
-    copy_from_phys((u64)smp_request.response - hhdm_offset, &r, sizeof(r));
-
-    klib::vector<limine_smp_info *> smp_info;
-    if (!smp_info.resize(r.cpu_count))
-        panic("Failed to reserve memory for smp_info");
-
-    copy_from_phys((u64)r.cpus - hhdm_offset, smp_info.data(),
-                   r.cpu_count * sizeof(limine_smp_info *));
-
-    klib::vector<u64> hartids;
-    if (!hartids.reserve(r.cpu_count))
-        panic("Failed to reserve memory for hartids");
-
-    for (auto &info: smp_info) {
-        limine_smp_info i;
-        copy_from_phys((u64)info - hhdm_offset, &i, sizeof(i));
-        if (i.hartid == bsp_cpu_id)
-            continue;
-        hartids.push_back(i.hartid);
-    }
-
-    auto v         = initialize_cpus(hartids);
-    auto iter      = v.begin();
-    auto jump_func = get_cpu_start_func();
-
-    Temp_Mapper_Obj<u64> mapper(request_temp_mapper());
-
-    for (auto &info: smp_info) {
-        limine_smp_info i;
-        copy_from_phys((u64)info - hhdm_offset, &i, sizeof(i));
-        if (i.hartid == bsp_cpu_id)
-            continue;
-
-        u64 offset = ((u64)info - hhdm_offset + offsetof(limine_smp_info, extra_argument)) & 0xfff;
-        u64 addr = ((u64)info - hhdm_offset + offsetof(limine_smp_info, extra_argument)) & ~0xfffUL;
-        mapper.map(addr);
-        u64 *stack = (u64 *)((size_t)mapper.ptr + offset);
-        *stack     = *iter;
-
-        offset = ((u64)info - hhdm_offset + offsetof(limine_smp_info, goto_address)) & 0xfff;
-        addr   = ((u64)info - hhdm_offset + offsetof(limine_smp_info, goto_address)) & ~0xfffUL;
-        mapper.map(addr);
-        void **func = (void **)((size_t)mapper.ptr + offset);
-        *func       = jump_func;
-
-        ++iter;
-    }
-    #elif defined(__x86_64__)
-    limine_smp_response r;
-    copy_from_phys((u64)smp_request.response - hhdm_offset, &r, sizeof(r));
-
-    klib::vector<limine_smp_info *> smp_info;
-    if (!smp_info.resize(r.cpu_count))
-        panic("Failed to reserve memory for smp_info");
-
-    copy_from_phys((u64)r.cpus - hhdm_offset, smp_info.data(),
-                   r.cpu_count * sizeof(limine_smp_info *));
-
-    // Store as 64 bit ints to be inline with RISC-V
-    klib::vector<u64> lapic_ids;
-    for (auto &info: smp_info) {
-        limine_smp_info i;
-        copy_from_phys((u64)info - hhdm_offset, &i, sizeof(i));
-
-        auto lapic_id = have_x2apic ? i.lapic_id : (i.lapic_id << 24); 
-
-        if (lapic_id == bsp_cpu_id)
-            continue;
-
-        lapic_ids.push_back(lapic_id);
-    }
-
-    auto v         = initialize_cpus(lapic_ids);
-    auto iter      = v.begin();
-    auto jump_func = get_cpu_start_func();
-    for (auto &info: smp_info) {
-        limine_smp_info i;
-        copy_from_phys((u64)info - hhdm_offset, &i, sizeof(i));
-        auto lapic_id = have_x2apic ? i.lapic_id : (i.lapic_id << 24); 
-        if (lapic_id == bsp_cpu_id)
-            continue;
-
-        u64 offset = ((u64)info - hhdm_offset + offsetof(limine_smp_info, extra_argument)) & 0xfff;
-        u64 addr = ((u64)info - hhdm_offset + offsetof(limine_smp_info, extra_argument)) & ~0xfffUL;
-        Temp_Mapper_Obj<u64> mapper(request_temp_mapper());
-        mapper.map(addr);
-        u64 *stack = (u64 *)((size_t)mapper.ptr + offset);
-        *stack     = *iter;
-
-        offset = ((u64)info - hhdm_offset + offsetof(limine_smp_info, goto_address)) & 0xfff;
-        addr   = ((u64)info - hhdm_offset + offsetof(limine_smp_info, goto_address)) & ~0xfffUL;
-        mapper.map(addr);
-        void **func = (void **)((size_t)mapper.ptr + offset);
-        *func       = jump_func;
-
-        ++iter;
-    }
-    #elif defined(__loongarch64)
-        // No SMP
-    #else
-        #error "Unsupported architecture"
-    #endif
-}
-
 size_t booted_cpus      = 0;
 bool boot_barrier_start = false;
 
@@ -1151,9 +1025,12 @@ bool boot_barrier_start = false;
 extern u64 boot_tsc;
     #endif
 
+void init_smp();
+void init_scheduling_on_bsp();
+
 void limine_main()
 {
-    if (LIMINE_BASE_REVISION_SUPPORTED == false) {
+    if (LIMINE_BASE_REVISION_SUPPORTED(limine_base_revision) == false) {
         hcf();
     }
 
@@ -1164,18 +1041,10 @@ void limine_main()
     serial_logger.printf("Hello from pmOS kernel!\n");
     serial_logger.printf("Kernel start: 0x%lh\n", &_kernel_start);
 
-    if (smp_request.response != nullptr) {
     #ifdef __riscv
-        sched::number_of_cpus = smp_request.response->cpu_count;
-        bsp_cpu_id            = smp_request.response->bsp_hartid;
-    #elif defined(__x86_64__)
-        have_x2apic           = smp_request.response->flags & 0x01;
-        sched::number_of_cpus = smp_request.response->cpu_count;
-        bsp_cpu_id            = smp_request.response->bsp_lapic_id;
-        if (!have_x2apic)
-            bsp_cpu_id <<= 24;
+    if (hartid_request->response)
+        bsp_cpu_id = hartid_request->response.bsp_hartid;
     #endif
-    }
 
     construct_paging();
 
@@ -1196,7 +1065,11 @@ void limine_main()
     if (!idle_page_table)
         panic("Could not create idle page table");
 
+    #ifdef __x86_64__
+    init_scheduling_on_bsp();
+    #else
     init_scheduling(bsp_cpu_id);
+    #endif
 
     // Switch to CPU-local temp mapper
     global_temp_mapper = nullptr;
@@ -1209,10 +1082,10 @@ void limine_main()
 
     __atomic_add_fetch(&booted_cpus, 1, __ATOMIC_RELAXED);
 
-    while (__atomic_load_n(&booted_cpus, __ATOMIC_ACQUIRE) < sched::number_of_cpus)
-        // TODO: this is a potential deadlock with the new TLB shootdown mechanism
-        ;
-    // All CPUs are booted
+    // while (__atomic_load_n(&booted_cpus, __ATOMIC_ACQUIRE) < sched::number_of_cpus)
+    //     // TODO: this is a potential deadlock with the new TLB shootdown mechanism
+    //     ;
+    // // All CPUs are booted
 
     serial_logger.printf("All CPUs booted. Cleaning up...\n");
 

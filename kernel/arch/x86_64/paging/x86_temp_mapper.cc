@@ -96,5 +96,10 @@ void x86_PAE_Temp_Mapper::return_map(void *p)
     if (index < min_index)
         min_index = index;
 
-    invlpg(i);
+    invlpg((void *)i);
+}
+
+x86_PAE_Temp_Mapper create_temp_mapper(void *virt_addr, u64 cr3)
+{
+    return x86_PAE_Temp_Mapper(virt_addr, cr3);
 }

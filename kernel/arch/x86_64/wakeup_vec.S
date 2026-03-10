@@ -7,7 +7,7 @@ init_vec_begin:
     cli
     movw %cs, %bx
 
-    lgdt %cs:(acpi_trampoline_gdtr - init_vec_begin)
+    lgdt %cs:(smp_trampoline_gdtr - init_vec_begin)
 
     movl $0x01, %edx # Protected mode
     movl %edx, %cr0
@@ -26,7 +26,7 @@ init_vec_jump_instr:
     movzx %bx, %ebx
     shll $4, %ebx
     
-    movl (acpi_trampoline_startup_cr3 - init_vec_begin)(%ebx), %eax
+    movl (smp_trampoline_cr3 - init_vec_begin)(%ebx), %eax
     movl %eax, %cr3 # cr3 (Page table)
 
     movl %cr4, %eax # PAE 
@@ -54,19 +54,19 @@ init_vec_jump_instr:
 
     .p2align 4, 0xCC
     .code16
-    .globl acpi_trampoline_begin
-acpi_trampoline_begin:
+    .globl acpi_trampoline
+acpi_trampoline:
     .globl acpi_cpu_startup
 acpi_cpu_startup:
 
     movw %cs, %bx
 
-    lgdt %cs:(acpi_trampoline_gdtr - acpi_cpu_startup)
+    lgdt %cs:(smp_trampoline_gdtr - acpi_cpu_startup)
 
     movl $0x01, %edx # Protected mode
     movl %edx, %cr0
 
-    ljmpl *%cs:(protected_acpi_vec_far_jump - acpi_cpu_startup)
+    ljmpl *%cs:(acpi_vec_jump_pmode - acpi_cpu_startup)
 acpi_protected_far_jump_instr:
     .code32
 
@@ -80,7 +80,7 @@ acpi_protected_far_jump_instr:
     movzx %bx, %ebx
     shll $4, %ebx
     
-    movl (acpi_trampoline_startup_cr3 - acpi_cpu_startup)(%ebx), %eax
+    movl (smp_trampoline_cr3 - acpi_cpu_startup)(%ebx), %eax
     movl %eax, %cr3 # cr3 (Page table)
 
     movl %cr4, %eax # PAE 
@@ -107,8 +107,8 @@ _64bitst:
 
     .p2align 4, 0xCC
 
-    .globl protected_acpi_vec_far_jump
-protected_acpi_vec_far_jump:
+    .globl acpi_vec_jump_pmode
+acpi_vec_jump_pmode:
     .long (acpi_protected_far_jump_instr - init_vec_begin) # offset
     .word 0x18 # 32 bit cs
 
@@ -119,11 +119,11 @@ init_vec_jump_pmode:
     .long (init_vec_jump_instr - init_vec_begin)
     .word 0x18
     
-acpi_trampoline_gdtr:
-acpi_trampoline_gdtr_limit:
+smp_trampoline_gdtr:
+smp_trampoline_gdtr_limit:
     .word 31 # 3 entries - 1
-    .globl acpi_tampoline_gdtr_addr
-acpi_tampoline_gdtr_addr:
+    .globl smp_trampoline_gdtr_addr
+smp_trampoline_gdtr_addr:
     .long (acpi_trampoline_gdt - init_vec_begin)
 
 acpi_trampoline_gdt:
@@ -131,8 +131,8 @@ acpi_trampoline_gdt:
     .quad 0x00af9b000000ffff
     .quad 0x00cf92000000ffff
     .quad 0x00cf9a000000ffff
-    .globl acpi_trampoline_startup_cr3
-acpi_trampoline_startup_cr3:
+    .globl smp_trampoline_cr3
+smp_trampoline_cr3:
     .space 4
 
 smp_trampoline_scratch_stack:
@@ -145,5 +145,5 @@ acpi_trampoline_kernel_entry:
 init_vec_kernel_entry:
     .quad _smp_trampoline_entry
 
-    .globl acpi_trampoline_startup_end
-acpi_trampoline_startup_end:
+    .globl init_vec_end
+init_vec_end:

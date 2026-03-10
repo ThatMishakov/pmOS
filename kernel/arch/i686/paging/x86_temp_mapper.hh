@@ -44,6 +44,6 @@ private:
     static u32 temp_mapper_get_index(u32 addr);
 };
 
-kernel::paging::Temp_Mapper *create_temp_mapper(void *virt_addr, u32 cr3);
-
 } // namespace kernel::ia32::paging
+
+kernel::paging::Temp_Mapper *create_temp_mapper(void *virt_addr, u32 cr3);

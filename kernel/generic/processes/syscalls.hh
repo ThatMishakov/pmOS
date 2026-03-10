@@ -288,13 +288,4 @@ ReturnStr<bool> syscall_arg64_checked(TaskDescriptor *task, int arg, u64 &value)
 ReturnStr<bool> syscall_arg_checked(TaskDescriptor *task, int arg, int args64before, ulong &value);
 ReturnStr<bool> syscall_args_checked(TaskDescriptor *task, int arg, int args64before, int count, ulong *values);
 
-// Entry point for when userspace calls SYSCALL instruction
-extern "C" void syscall_entry();
-
-// Entry point for when userspace calls SYSENTER instruction
-extern "C" void sysenter_entry();
-
-// Enables SYSCALL instruction
-void program_syscall();
-
 };

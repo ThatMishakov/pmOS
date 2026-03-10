@@ -225,4 +225,11 @@ u64 prepare_pt_for(void *virt_addr, kernel::paging::Page_Table_Arguments arg, u6
 // Releases cr3
 extern "C" void release_cr3(u64 cr3);
 
-}; // namespace kernel::x86::paging
+}; // namespace kernel::x86_64::paging
+
+extern u64 idle_cr3;
+
+namespace kernel::x86::paging
+{
+ReturnStr<u64> create_empty_cr3();
+}

@@ -53,7 +53,7 @@ static u32 *map_ioapic(u32 phys_addr)
 
     auto result = map_kernel_pages(phys_addr & ~PAGE_MASK, ptr, size, arg);
     if (result)
-        panic("Failed to map IOAPIC into kernel\n");
+        panic("Failed to map IOAPIC into kernel");
 
     return (u32 *)((char *)ptr + offset);
 }
@@ -113,6 +113,8 @@ void IOAPIC::init_ioapics()
         auto ioapic = new IOAPIC();
         if (!ioapic)
             panic("Could not allocate memory for IOAPIC");
+
+        serial_logger.printf("Found IOAPIC GSI %x at %lx\n", e->gsi_base, e->address);
 
         ioapic->phys_addr = e->address;
         ioapic->int_base  = e->gsi_base;

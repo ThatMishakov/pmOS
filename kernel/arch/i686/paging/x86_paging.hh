@@ -103,13 +103,17 @@ u32 new_pae_cr3();
 
 bool detect_nx();
 
-ReturnStr<u32> create_empty_cr3();
-
 extern bool use_pae;
 extern bool support_nx;
-extern u32 idle_cr3;
+
+ReturnStr<u32> create_empty_cr3();
 
 } // namespace kernel::ia32::paging
+
+namespace kernel::x86::paging {
+extern u32 idle_cr3;
+
+}
 
 namespace kernel::paging
 {

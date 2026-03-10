@@ -123,7 +123,7 @@ struct CPU_Info {
     proc::TaskDescriptor *atomic_get_front_priority(priority_t);
 
 // Temporary memory mapper; This is arch specific
-#ifdef __i386__
+#if defined(__i386__)
     paging::Temp_Mapper *temp_mapper;
     paging::Temp_Mapper &get_temp_mapper() { return *temp_mapper; }
 #elif defined(__x86_64__)

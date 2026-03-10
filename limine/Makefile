@@ -55,11 +55,6 @@ iso: $(ISO)
 ../pmbus/bin/pmbus:
 	$(MAKE) -C ../pmbus bin/pmbus
 
-limine: limine/.git
-
-limine/.git:
-	git clone https://github.com/limine-bootloader/limine.git --branch=v8.x-binary --depth=1
-
 limine-binary: limine limine/limine
 	$(MAKE) -C limine
 

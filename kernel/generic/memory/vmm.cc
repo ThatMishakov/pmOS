@@ -66,6 +66,11 @@ void virtmem_return_tag(VirtmemBoundaryTag *tag)
 
 void virtmem_init(void *virtmem_base, size_t virtmem_size, void *kernel_start, size_t kernel_size)
 {
+    assert(!((ulong)virtmem_base % PAGE_SIZE));
+    assert(!(virtmem_size % PAGE_SIZE));
+    assert(!((ulong)kernel_start % PAGE_SIZE));
+    assert(!(kernel_size % PAGE_SIZE));
+
     kernel_space_allocator.init();
 
     virtmem_fill_initial_tags();
@@ -149,10 +154,7 @@ int virtmem_ensure_tags(size_t size)
     // Add a new boundary tag
     if (tag->size == 4096) {
         // Boundary tag is an exact fit. Take it out of free and mark as used
-        VirtMemFreelist::remove(tag);
-        if (list.empty())
-            // Mark the list as empty
-            kernel_space_allocator.virtmem_freelist_bitmap &= ~(1UL << idx);
+        kernel_space_allocator.virtmem_remove_from_free_list(tag);
 
         tag->state = VirtmemBoundaryTag::State::ALLOCATED;
         kernel_space_allocator.virtmem_save_to_alloc_hashtable(tag);
@@ -185,6 +187,12 @@ int virtmem_ensure_tags(size_t size)
 
 void virtmem_link_tag(VirtmemBoundaryTag *prev, VirtmemBoundaryTag *next)
 {
+    // Since only PAGE_SIZE is used for now...
+    assert(!(prev->base % PAGE_SIZE));
+    assert(!(prev->size % PAGE_SIZE));
+    assert(!(next->base % PAGE_SIZE));
+    assert(!(next->size % PAGE_SIZE));
+
     next->segment_prev               = prev;
     next->segment_next               = prev->segment_next;
     prev->segment_next->segment_prev = next;
