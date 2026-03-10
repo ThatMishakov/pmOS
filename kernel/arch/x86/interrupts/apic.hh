@@ -229,6 +229,8 @@ constexpr u32 X2APIC_MSR_BASE = 0x800;
     /// recieved)
     void send_ipi_fixed_others(u8 vector);
 
+    void apic_write_icr(u64 dest);
+
 #define APIC_DELIVERY_START_UP 0b110
 #define APIC_DELIVERY_INIT     0b100
 

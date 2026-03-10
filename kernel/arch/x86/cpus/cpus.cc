@@ -14,6 +14,7 @@
 #include <x86_asm.hh>
 #include <pmos/utility/scope_guard.hh>
 #include <syscall.hh>
+#include <pmos/containers/set.hh>
 
 using namespace kernel;
 using namespace kernel::x86;
@@ -189,7 +190,7 @@ extern "C" void acpi_main()
 
 void init_acpi_trampoline();
 
-CPU_Info *prepare_cpu(unsigned idx, u32 lapic_id)
+CPU_Info *prepare_cpu(u32 lapic_id)
 {
     serial_logger.printf("Found CPU LAPIC %x\n", lapic_id);
 
@@ -201,7 +202,6 @@ CPU_Info *prepare_cpu(unsigned idx, u32 lapic_id)
         panic("Failed to set up stack for AP");
 
     c->lapic_id             = lapic_id;
-    c->cpu_id               = idx;
     c->kernel_pt_generation = -1;
 
     if (!cpus.push_back(c))
@@ -232,9 +232,36 @@ CPU_Info *prepare_cpu(unsigned idx, u32 lapic_id)
     return c;
 }
 
+static bool have_online_capable_bit = false;
+static void setup_online_capable()
+{
+    struct acpi_fadt *fadt;
+    auto res = uacpi_table_fadt(&fadt);
+    if (res != UACPI_STATUS_OK)
+        panic("No FADT!");
+
+    have_online_capable_bit = (fadt->hdr.revision > 6) or 
+        (fadt->hdr.revision == 6 and fadt->fadt_minor_verison >= 3);
+}
+
+static bool cpu_usable(u32 flags)
+{
+    if (flags & ACPI_PIC_ENABLED)
+        return true;
+
+    if (!have_online_capable_bit)
+        return false;
+
+    return flags & ACPI_PIC_ONLINE_CAPABLE;
+}
+
+constexpr u32 LAPIC_ID_NONE = 0xff;
+constexpr u32 x2APIC_ID_NONE = 0xffffffff;
 
 void init_smp()
 {
+    setup_online_capable();
+
     uint32_t my_lapic_id = get_lapic_id();
     uacpi_table madt;
     auto res = uacpi_table_find_by_signature(ACPI_MADT_SIGNATURE, &madt);
@@ -247,9 +274,32 @@ void init_smp()
     
     acpi_madt *m = (acpi_madt *)madt.ptr; 
 
-    unsigned idx = 1;
-
     serial_logger.printf("Initializing SMP\n");
+
+    pmos::containers::set<u32> lapic_ids;
+    if (lapic_ids.insert_noexcept(my_lapic_id).first == lapic_ids.end())
+        panic("Coildn't insert my lapic id into set");
+
+    bool have_xapic_entries = false;
+    res = uacpi_for_each_subtable(madt.hdr, sizeof(struct acpi_madt), [](auto ctx, auto hdr) -> uacpi_iteration_decision {
+        bool &have_xapic_entries = *(bool *)ctx;
+
+        if (hdr->type == ACPI_MADT_ENTRY_TYPE_LAPIC) {
+            struct acpi_madt_lapic *lapic = (struct acpi_madt_lapic*)hdr;
+
+            if (!cpu_usable(lapic->flags))
+                return UACPI_ITERATION_DECISION_CONTINUE;
+
+            if (lapic->id == LAPIC_ID_NONE)
+                return UACPI_ITERATION_DECISION_CONTINUE;
+
+            have_xapic_entries = true;
+            return UACPI_ITERATION_DECISION_BREAK;
+        }
+        return UACPI_ITERATION_DECISION_CONTINUE;
+    }, (void *)&have_xapic_entries);
+    if (res != UACPI_STATUS_OK)
+        panic("uacpi_for_each_subtable error");
 
     u32 offset = sizeof(acpi_madt);
     u32 length = m->hdr.length;
@@ -259,19 +309,50 @@ void init_smp()
 
         if (e->type == ACPI_MADT_ENTRY_TYPE_LAPIC) {
             acpi_madt_lapic *ee = (acpi_madt_lapic *)e;
-            uint32_t e_id        = ee->id << 24;
-            if (e_id == my_lapic_id)
+            uint32_t e_id        = ee->id;
+
+            if (ee->id == LAPIC_ID_NONE)
                 continue;
 
-            prepare_cpu(idx++, e_id);
+            if (!cpu_usable(ee->flags))
+                continue;
+
+            auto res = lapic_ids.insert_noexcept(e_id);
+            if (res.first == lapic_ids.end())
+                panic("Couldn't allocate memory for set in CPU initialization");
+
+            if (!res.second)
+                continue;
+
+            prepare_cpu(e_id);
         } else if (e->type == ACPI_MADT_ENTRY_TYPE_LOCAL_X2APIC) {
             acpi_madt_x2apic *ee = (acpi_madt_x2apic *)e;
             uint32_t e_id        = ee->id;
 
-            if (e_id == my_lapic_id)
+            if (apic_mode != APICMode::X2APIC)
                 continue;
 
-            prepare_cpu(idx++, e_id);
+            if (have_xapic_entries and e_id <= 0xff)
+                // Ignore this and use XAPIC entry
+                continue;
+
+            if (e_id == x2APIC_ID_NONE)
+                continue;
+
+            if (!cpu_usable(ee->flags))
+                continue;
+
+            auto res = lapic_ids.insert_noexcept(e_id);
+            if (res.first == lapic_ids.end())
+                panic("Couldn't allocate memory for set in CPU initialization");
+
+            // Duplicate entry
+            if (!res.second)
+                continue;
+
+            prepare_cpu(e_id);
+        } else if (e->type == ACPI_MADT_ENTRY_TYPE_LSAPIC) {
+            panic("Found LSAPIC entry in MADT!");
         }
     }
 

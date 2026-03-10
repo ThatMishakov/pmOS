@@ -60,12 +60,10 @@ void smp_wake_everyone_else_up()
 {
     uint32_t vector = acpi_trampoline_page >> 12;
 
-    apic_write_reg(APIC_ICR_HIGH, 0);
-
     // Send to *vector* vector with Assert level and All Excluding Self
     // shorthand
-    apic_write_reg(APIC_ICR_LOW, vector | (0x01 << 14) | (0b11 << 18) | (0b101) << 8);
-    apic_write_reg(APIC_ICR_LOW, vector | (0x01 << 14) | (0b11 << 18) | (0b110) << 8);
+    apic_write_icr(vector | (0x01 << 14) | (0b11 << 18) | (0b101) << 8);
+    apic_write_icr(vector | (0x01 << 14) | (0b11 << 18) | (0b110) << 8);
 }
 
 namespace kernel::sched

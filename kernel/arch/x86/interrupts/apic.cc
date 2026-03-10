@@ -363,9 +363,15 @@ u32 apic_get_remaining_ticks()
 //     return result;
 // }
 
-u32 get_lapic_id() { return apic_read_reg(APIC_REG_LAPIC_ID); }
+u32 get_lapic_id() {
+    auto id = apic_read_reg(APIC_REG_LAPIC_ID);
+    if (apic_mode == APICMode::X2APIC)
+        return id;
+    else
+        return id >> 24;
+}
 
-static void apic_write_icr(u64 dest)
+void apic_write_icr(u64 dest)
 {
     if (apic_mode != APICMode::X2APIC) {
         apic_write_reg(APIC_ICR_HIGH, static_cast<u32>(dest >> 32));
@@ -387,7 +393,8 @@ void broadcast_init_ipi()
 
 void send_ipi_fixed(u8 vector, u32 dest)
 {
-    u64 val = (((u64)dest << 32) | (u32)vector | (0x01 << 14));
+    u64 dest_shifted = apic_mode == APICMode::X2APIC ? (u64)dest << 32 : (u64)dest << (32 + 24);
+    u64 val = dest_shifted | (u32)vector | (0x01 << 14);
     apic_write_icr(val);
 
     // serial_logger.printf("[Kernel] Info: Sending IPI to %h with vector %h\n", dest, vector);

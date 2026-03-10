@@ -310,7 +310,7 @@ void syscall_load_executable()
             // ELF can't be loaded immediately
             return false;
 
-        auto [program_entry, phdr_tag, table] = std::move(r.val.value());
+        auto [program_entry, phdr_tag, table] = std::move(*r.val);
 
         if (phdr_tag.phdr_addr == 0) {
             log::serial_logger.printf(
