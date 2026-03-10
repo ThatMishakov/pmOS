@@ -90,6 +90,7 @@ _smp_trampoline_entry:
     jc 1b
 acquired:
 
+    call enable_apic
     call find_cpu_info
 
     movl $0, smp_locl(%rip)

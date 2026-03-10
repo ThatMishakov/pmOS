@@ -66,7 +66,6 @@ void init_per_cpu(u64 lapic_id)
 
     if (!cpus.push_back(c))
         panic("Failed to reserve memory for cpus vector in init_per_cpu()\n");
-
     c->cpu_id = cpus.size() - 1;
 
     serial_logger.printf("Initializing idle task\n");
@@ -122,7 +121,6 @@ extern "C" void smp_main(CPU_Info *c)
     loadTSS(TSS_SEGMENT);
     program_syscall();
     set_idt();
-    enable_apic();
     sse::enable_sse();
 
     if (c->to_restore_on_wakeup) {
@@ -206,6 +204,10 @@ CPU_Info *prepare_cpu(unsigned idx, u32 lapic_id)
     c->cpu_id               = idx;
     c->kernel_pt_generation = -1;
 
+    if (!cpus.push_back(c))
+        panic("Failed to reserve memory for cpus vector in init_per_cpu()\n");
+    c->cpu_id = cpus.size() - 1;
+
     auto r = init_idle(c);
     if (r)
         panic("Failed to initialize idle task: %i\n", r);
@@ -216,6 +218,16 @@ CPU_Info *prepare_cpu(unsigned idx, u32 lapic_id)
         panic("Failed to add idle task to the kernel process group: %i\n", t);
 
     c->online = false;
+
+    void *temp_mapper_start = vmm::kernel_space_allocator.virtmem_alloc_aligned(16, 4);
+    if (!temp_mapper_start)
+        panic("Failed to allocate memory for temp_mapper_start\n");
+
+    c->temp_mapper = create_temp_mapper(temp_mapper_start, getCR3());
+    #ifdef __i386__
+    if (!c->temp_mapper)
+        panic("Failed to create temp mapper\n");
+    #endif
 
     return c;
 }
@@ -251,9 +263,7 @@ void init_smp()
             if (e_id == my_lapic_id)
                 continue;
 
-            auto c = prepare_cpu(idx++, e_id);
-            if (!cpus.push_back(c))
-                panic("Failed to add CPU\n");
+            prepare_cpu(idx++, e_id);
         } else if (e->type == ACPI_MADT_ENTRY_TYPE_LOCAL_X2APIC) {
             acpi_madt_x2apic *ee = (acpi_madt_x2apic *)e;
             uint32_t e_id        = ee->id;
@@ -261,9 +271,7 @@ void init_smp()
             if (e_id == my_lapic_id)
                 continue;
 
-            auto c = prepare_cpu(idx++, e_id);
-            if (!cpus.push_back(c))
-                panic("Failed to add CPU\n");
+            prepare_cpu(idx++, e_id);
         }
     }
 

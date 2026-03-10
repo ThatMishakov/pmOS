@@ -109,7 +109,7 @@ constexpr u32 X2APIC_MSR_BASE = 0x800;
     /**
      * @brief Enables the LAPIC and sets the appropriate interrupt vectors
      */
-    void enable_apic();
+    extern "C" void enable_apic();
 
     /**
      * @brief Maps the LAPIC register to the virtual memory

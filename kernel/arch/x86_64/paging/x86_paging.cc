@@ -453,7 +453,20 @@ ReturnStr<u64> kernel::x86::paging::create_empty_cr3()
     if (pmm::alloc_failure(p))
         return Error(-ENOMEM);
 
-    clear_page(p);
+
+    // Prepare the page
+    kernel::paging::Temp_Mapper_Obj<x86_64::paging::x86_PAE_Entry> new_page_m(
+        kernel::paging::request_temp_mapper());
+    kernel::paging::Temp_Mapper_Obj<x86_64::paging::x86_PAE_Entry> current_page_m(
+        kernel::paging::request_temp_mapper());
+
+    new_page_m.map(p);
+    current_page_m.map(idle_cr3);
+
+    memcpy(new_page_m.ptr + 256, current_page_m.ptr + 256,
+           256 * sizeof(x86_64::paging::x86_PAE_Entry));
+
+    memset(new_page_m.ptr, 0, 256 * sizeof(x86_64::paging::x86_PAE_Entry));
 
     return Success(p);
 }
