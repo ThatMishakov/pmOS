@@ -46,6 +46,7 @@
 #include <uacpi/resources.h>
 #include <uacpi/tables.h>
 #include <uacpi/utilities.h>
+#include "../pmbus.h"
 
 PCIDeviceVector pci_devices = VECTOR_INIT;
 
@@ -567,6 +568,91 @@ uacpi_iteration_decision pci_check_acpi_root(void *, uacpi_namespace_node *node,
     return UACPI_ITERATION_DECISION_CONTINUE;
 }
 
+void publish_pci_device(struct PCIDevice * device)
+{
+    pmos_bus_object_t *bus_object = NULL;
+
+    bus_object = pmos_bus_object_create();
+    if (!bus_object)    {
+        fprintf(stderr, "[devicesd] Error: Couldn't allocate memory for pmbus object\n");
+        goto error;
+    }
+
+    char buff[128];
+    snprintf(buff, sizeof(buff), "pci_%x_%x_%x_%x", device->group, device->bus, device->device, device->function);
+
+    if (!pmos_bus_object_set_name(bus_object, buff)) {
+        fprintf(stderr, "Failed to set object name\n");
+        goto error;
+    }
+
+    if (!pmos_bus_object_set_property_integer(bus_object, "pci_group", device->group)) {
+        fprintf(stderr, "Failed to set pci_group for PCI device\n");
+        goto error;
+    }
+
+    if (!pmos_bus_object_set_property_integer(bus_object, "pci_bus", device->bus)) {
+        fprintf(stderr, "Failed to set pci_bus for PCI device\n");
+        goto error;
+    }
+
+    if (!pmos_bus_object_set_property_integer(bus_object, "pci_device", device->function)) {
+        fprintf(stderr, "Failed to set pci_device for PCI device\n");
+        goto error;
+    }
+
+    if (!pmos_bus_object_set_property_integer(bus_object, "pci_function", device->function)) {
+        fprintf(stderr, "Failed to set pci_function for PCI device\n");
+        goto error;
+    }
+
+
+    if (!pmos_bus_object_set_property_integer(bus_object, "pci_vendor_id", device->vendor_id)) {
+        fprintf(stderr, "Failed to set pci_vendor_id for PCI device\n");
+        goto error;
+    }
+
+    if (!pmos_bus_object_set_property_integer(bus_object, "pci_device_id", device->device_id)) {
+        fprintf(stderr, "Failed to set pci_device_id for PCI device\n");
+        goto error;
+    }
+
+    if (!pmos_bus_object_set_property_integer(bus_object, "pci_class", device->class_code)) {
+        fprintf(stderr, "Failed to set pci_class for PCI device\n");
+        goto error;
+    }
+
+    if (!pmos_bus_object_set_property_integer(bus_object, "pci_subclass", device->subclass)) {
+        fprintf(stderr, "Failed to set pci_subclass for PCI device\n");
+        goto error;
+    }
+
+    if (device->pcie &&
+        !pmos_bus_object_set_property_integer(bus_object, "pci_device_is_pcie", 1)
+    ){
+        fprintf(stderr, "Failed to set pci_device_is_pcie for PCI device\n");
+        goto error;
+    }
+
+    int result = register_pci_object(bus_object, device);
+    bus_object = NULL;
+    if (result < 0) {
+        fprintf(stderr, "Failed to publish pmbus object: %i (%s)\n", result, strerror(-result));
+        goto error;
+    }
+
+error:
+    pmos_bus_object_free(bus_object);
+}
+
+void publish_pci_devices()
+{
+    for (size_t i = 0; i < pci_devices.size; ++i) {
+        auto device = pci_devices.data[i];
+        publish_pci_device(device);
+    }
+}
+
 bool pci_fully_working = false;
 void acpi_pci_init()
 {
@@ -580,6 +666,8 @@ void acpi_pci_init()
                           pci_check_acpi_root, NULL);
 
     pci_fully_working = true;
+
+    publish_pci_devices();
 }
 
 struct PCIHostBridge *pci_host_bridge_find(unsigned group_number)

@@ -210,13 +210,12 @@ static ssize_t flush_buffer(FILE *stream)
     stream->buf_pos = 0;
     return 0;
 }
-
 static ssize_t write_file(void *arg, const char *str, size_t size)
 {
     FILE *stream = (FILE *)arg;
     size_t t     = size;
 
-    // Callee is expected to lock the file
+    // Caller is expected to lock the file
 
     if (stream->buf_size != 0 && stream->buf == NULL) {
         stream->buf = malloc(stream->buf_size);

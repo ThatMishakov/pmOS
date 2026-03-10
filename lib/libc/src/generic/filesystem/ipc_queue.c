@@ -58,13 +58,10 @@ static ssize_t write_ipc_queue(pmos_right_t right, const void *buf, size_t size)
         char buffer[buffer_size];
     } desc;
 
-    desc.type = IPC_Write_Plain_NUM;
-    int s     = 0;
-
-    result_t result = SUCCESS;
-
-    for (int i = 0; i < size; i += buffer_size) {
-        int size_s = size - i > buffer_size ? buffer_size : size - i;
+    desc.type    = IPC_Write_Plain_NUM;
+    ssize_t sent = 0;
+    for (size_t i = 0; i < size; i += buffer_size) {
+        ssize_t size_s = (size - i > buffer_size) ? buffer_size : (size - i);
         memcpy(desc.buffer, &str[i], size_s);
 
         int k =
@@ -72,21 +69,17 @@ static ssize_t write_ipc_queue(pmos_right_t right, const void *buf, size_t size)
                 .result;
 
         if (k == SUCCESS) {
-            s += size_s;
+            sent += size_s;
         } else {
-            if (s == 0) {
-                errno  = -k;
-                result = EOF;
-            }
+            if (sent > 0)
+                return (ssize_t)sent;
 
-            break;
+            errno = -k;
+            return -1;
         }
-
-        // TODO: If the file was sent partially, return the number of bytes sent and not EOF
-        result = result == SUCCESS ? s : EOF;
     }
 
-    return result;
+    return (ssize_t)sent;
 }
 
 ssize_t __ipc_queue_write(void *file_data, uint64_t consumer_id, const void *buf, size_t count,
