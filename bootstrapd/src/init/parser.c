@@ -1,10 +1,10 @@
 #include "../io.h"
+#include "init.h"
 
 #include <stdbool.h>
 #include <string.h>
-#include <yaml.h>
-#include "init.h"
 #include <strings.h>
+#include <yaml.h>
 
 enum parser_states {
     STATE_START,
@@ -141,11 +141,247 @@ enum ServiceParseState {
     SERVICE_STATE_END,
 };
 
-const char *SERVICE_NAME = "name";
+const char *SERVICE_NAME        = "name";
 const char *SERVICE_DESCRIPTION = "description";
-const char *SERVICE_RUN_TYPE = "run_type";
-const char *SERVICE_REQUIRE = "require";
-const char *SERVICE_MATCH = "match";
+const char *SERVICE_RUN_TYPE    = "run_type";
+const char *SERVICE_REQUIRE     = "require";
+const char *SERVICE_MATCH       = "match";
+
+const char *FILTER_PCI_CLASS    = "class";
+const char *FILTER_PCI_SUBCLASS = "subclass";
+const char *FILTER_PCI_PROG_IF  = "interface";
+
+static bool parse_pci(yaml_parser_t *state, struct Service *service)
+{
+    bool cont = true;
+    struct MatchFilter f = {
+        .key = strdup("pci"),
+        .pci_filter = {},
+    };
+    if (!f.key) {
+        print_str("Failed to allocate memory for match filter key\n");
+        return false;
+    }
+
+    yaml_event_t filter_event;
+    if (!yaml_parser_parse(state, &filter_event)) {
+        print_str("Failed to parse event!\n");
+        free(f.key);
+        return false;
+    }
+
+    if (filter_event.type == YAML_SEQUENCE_END_EVENT) {
+        print_str("Unexpected YAML_SEQUENCE_END_EVENT in match filter\n");
+        cont = false;
+        goto end;
+    }
+    if (filter_event.type != YAML_MAPPING_START_EVENT) {
+        print_str("Expected YAML_MAPPING_START_EVENT for match filter values, got ");
+        print_hex(filter_event.type);
+        print_str("\n");
+        cont = skip_event(state, &filter_event);
+        goto end;
+    }
+
+    yaml_event_t mapping;
+    if (!yaml_parser_parse(state, &mapping)) {
+        print_str("Failed to parse event!\n");
+        cont = false;
+        goto end;
+    }
+    while (cont && mapping.type != YAML_MAPPING_END_EVENT) {
+        if (mapping.type != YAML_SCALAR_EVENT) {
+            print_str("Expected YAML_SCALAR_EVENT for match filter entry, got ");
+            print_hex(mapping.type);
+            print_str("\n");
+            if (!skip_event(state, &mapping)) {
+                cont = false;
+                break;
+            }
+        }
+
+        const char *value = (char *)mapping.data.scalar.value;
+        char **filter_entry = NULL;
+        if (!strcmp(value, FILTER_PCI_CLASS))
+            filter_entry = &f.pci_filter.class;
+        else if (!strcmp(value, FILTER_PCI_SUBCLASS))
+            filter_entry = &f.pci_filter.subclass;
+        else if (!strcmp(value, FILTER_PCI_PROG_IF))
+            filter_entry = &f.pci_filter.prog_if;
+        else {
+            print_str("Warning: Unrecognized PCI filter parameter: ");
+            print_str(value);
+            print_str("\n");
+        }
+
+        if (filter_entry && *filter_entry) {
+            print_str("Warning: Duplicate PCI filter parameter: ");
+            print_str(value);
+            print_str("\n");
+        }
+
+        yaml_event_delete(&mapping);
+        if (!yaml_parser_parse(state, &mapping)) {
+            print_str("Failed to parse event!\n");
+            cont = false;
+            goto end;
+        }
+
+        if (mapping.type == YAML_MAPPING_END_EVENT) {
+            print_str("Unexpected YAML_MAPPING_END_EVENT when parsing PCI filter!\n");
+            cont = false;
+            break;
+        } else if (mapping.type != YAML_SCALAR_EVENT) {
+            print_str("Warning: Unexpected yaml event type when parsing PCI filter: ");
+            print_hex(mapping.type);
+            print_str("\n");
+        } else {
+            if (filter_entry && !*filter_entry) {
+                *filter_entry = strdup((char *)mapping.data.scalar.value);
+                if (!*filter_entry) {
+                    print_str("Error: Failed to allocate memory for a filter\n");
+                    cont = false;
+                    break;
+                }
+            }
+        }
+        yaml_event_delete(&mapping);
+        
+        if (!yaml_parser_parse(state, &mapping)) {
+            print_str("Failed to parse event!\n");
+            cont = false;
+            goto end;
+        }
+    }
+    yaml_event_delete(&mapping);
+
+    if (cont) {
+        int res = 0;
+        VECTOR_PUSH_BACK_CHECKED(service->match_filters, f, res);
+        if (res != 0) {
+            print_str("Failed to add match filter to the service!\n");
+            cont = false;
+            goto end;
+        } else {
+            memset(&f, 0, sizeof(f));
+        }
+    }
+
+end:
+    free(f.key);
+    free(f.pci_filter.class);
+    free(f.pci_filter.prog_if);
+    free(f.pci_filter.subclass);
+    yaml_event_delete(&filter_event); 
+    return cont;
+}
+
+static bool parse_pnp(yaml_parser_t *state, struct Service *service)
+{
+    bool cont = true;
+
+    yaml_event_t filter_event;
+    if (!yaml_parser_parse(state, &filter_event)) {
+        print_str("Failed to parse event!\n");
+        return false;
+    }
+
+    if (filter_event.type == YAML_SEQUENCE_END_EVENT) {
+        print_str("Unexpected YAML_SEQUENCE_END_EVENT in match filter\n");
+        yaml_event_delete(&filter_event);
+        cont = false;
+    } else if (filter_event.type != YAML_SEQUENCE_START_EVENT) {
+        print_str("Expected YAML_SEQUENCE_START_EVENT for match filter values, got ");
+        print_hex(filter_event.type);
+        print_str("\n");
+        bool success = skip_event(state, &filter_event);
+        yaml_event_delete(&filter_event);
+        if (!success) {
+            return false;
+        }
+    } else {
+        struct MatchFilter f = {
+            .key = strdup("pnp"),
+        };
+        if (!f.key) {
+            print_str("Failed to allocate memory for match filter key!\n");
+            yaml_event_delete(&filter_event);
+            return false;
+        }
+
+        char **strings       = NULL;
+        size_t strings_count = 0;
+
+        bool cont2 = true;
+        while (cont2) {
+            yaml_event_t value_event;
+            if (!yaml_parser_parse(state, &value_event)) {
+                print_str("Failed to parse event!\n");
+                free(f.key);
+                free(strings);
+                yaml_event_delete(&filter_event);
+                return false;
+            }
+
+            if (value_event.type == YAML_SEQUENCE_END_EVENT) {
+                cont2 = false;
+            } else if (value_event.type != YAML_SCALAR_EVENT) {
+                print_str("Expected YAML_SCALAR_EVENT for match filter value, got ");
+                print_hex(value_event.type);
+                print_str("\n");
+                bool success = skip_event(state, &value_event);
+                yaml_event_delete(&value_event);
+                if (!success) {
+                    free(f.key);
+                    free(strings);
+                    yaml_event_delete(&filter_event);
+                    return false;
+                }
+            } else {
+                char **new_strings = realloc(strings, sizeof(char *) * (strings_count + 2));
+                if (!new_strings) {
+                    print_str("Failed to allocate memory for match filter strings!\n");
+                    free(f.key);
+                    free(strings);
+                    yaml_event_delete(&value_event);
+                    yaml_event_delete(&filter_event);
+                    return false;
+                }
+                strings                = new_strings;
+                strings[strings_count] = strdup((char *)value_event.data.scalar.value);
+                if (!strings[strings_count]) {
+                    print_str("Failed to allocate memory for match filter string!\n");
+                    free(f.key);
+                    for (size_t i = 0; i < strings_count; i++)
+                        free(strings[i]);
+                    free(strings);
+                    yaml_event_delete(&value_event);
+                    yaml_event_delete(&filter_event);
+                    return false;
+                }
+                strings_count++;
+                strings[strings_count] = NULL;
+                yaml_event_delete(&value_event);
+            }
+        }
+
+        f.strings = strings;
+        int res   = 0;
+        VECTOR_PUSH_BACK_CHECKED(service->match_filters, f, res);
+        if (res != 0) {
+            print_str("Failed to add match filter to service!\n");
+            free(f.key);
+            for (size_t i = 0; i < strings_count; i++)
+                free(strings[i]);
+            free(strings);
+            yaml_event_delete(&filter_event);
+            return false;
+        }
+        yaml_event_delete(&filter_event);
+    }
+
+    return cont;
+}
 
 static bool parse_match_filter(yaml_parser_t *state, yaml_event_t *event, struct Service *service)
 {
@@ -176,113 +412,9 @@ static bool parse_match_filter(yaml_parser_t *state, yaml_event_t *event, struct
             }
         } else {
             if (!strcmp((char *)new_event.data.scalar.value, "pnp")) {
-                yaml_event_t filter_event;
-                if (!yaml_parser_parse(state, &filter_event)) {
-                    print_str("Failed to parse event!\n");
-                    yaml_event_delete(&new_event);
-                    return false;
-                }
-
-                if (filter_event.type == YAML_SEQUENCE_END_EVENT) {
-                    print_str("Unexpected YAML_SEQUENCE_END_EVENT in match filter\n");
-                    yaml_event_delete(&filter_event);
-                    cont = false;
-                } else if (filter_event.type != YAML_SEQUENCE_START_EVENT) {
-                    print_str("Expected YAML_SEQUENCE_START_EVENT for match filter values, got ");
-                    print_hex(filter_event.type);
-                    print_str("\n");
-                    bool success = skip_event(state, &filter_event);
-                    yaml_event_delete(&filter_event);
-                    if (!success) {
-                        yaml_event_delete(&new_event);
-                        return false;
-                    }
-                } else {
-                    struct MatchFilter f = {
-                        .key = strdup("pnp"),
-                    };
-                    if (!f.key) {
-                        print_str("Failed to allocate memory for match filter key!\n");
-                        yaml_event_delete(&filter_event);
-                        yaml_event_delete(&new_event);
-                        return false;
-                    }
-
-                    char **strings = NULL;
-                    size_t strings_count = 0;
-
-                    bool cont2 = true;
-                    while (cont2) {
-                        yaml_event_t value_event;
-                        if (!yaml_parser_parse(state, &value_event)) {
-                            print_str("Failed to parse event!\n");
-                            free(f.key);
-                            free(strings);
-                            yaml_event_delete(&filter_event);
-                            yaml_event_delete(&new_event);
-                            return false;
-                        }
-
-                        if (value_event.type == YAML_SEQUENCE_END_EVENT) {
-                            cont2 = false;
-                        } else if (value_event.type != YAML_SCALAR_EVENT) {
-                            print_str("Expected YAML_SCALAR_EVENT for match filter value, got ");
-                            print_hex(value_event.type);
-                            print_str("\n");
-                            bool success = skip_event(state, &value_event);
-                            yaml_event_delete(&value_event);
-                            if (!success) {
-                                free(f.key);
-                                free(strings);
-                                yaml_event_delete(&filter_event);
-                                yaml_event_delete(&new_event);
-                                return false;
-                            }
-                        } else {
-                            char **new_strings = realloc(strings, sizeof(char *) * (strings_count + 2));
-                            if (!new_strings) {
-                                print_str("Failed to allocate memory for match filter strings!\n");
-                                free(f.key);
-                                free(strings);
-                                yaml_event_delete(&value_event);
-                                yaml_event_delete(&filter_event);
-                                yaml_event_delete(&new_event);
-                                return false;
-                            }
-                            strings = new_strings;
-                            strings[strings_count] = strdup((char *)value_event.data.scalar.value);
-                            if (!strings[strings_count]) {
-                                print_str("Failed to allocate memory for match filter string!\n");
-                                free(f.key);
-                                for (size_t i = 0; i < strings_count; i++)
-                                    free(strings[i]);
-                                free(strings);
-                                yaml_event_delete(&value_event);
-                                yaml_event_delete(&filter_event);
-                                yaml_event_delete(&new_event);
-                                return false;
-                            }
-                            strings_count++;
-                            strings[strings_count] = NULL;
-                            yaml_event_delete(&value_event);
-                        }
-                    }
-
-                    f.strings = strings;
-                    int res = 0;
-                    VECTOR_PUSH_BACK_CHECKED(service->match_filters, f, res);
-                    if (res != 0) {
-                        print_str("Failed to add match filter to service!\n");
-                        free(f.key);
-                        for (size_t i = 0; i < strings_count; i++)
-                            free(strings[i]);
-                        free(strings);
-                        yaml_event_delete(&filter_event);
-                        yaml_event_delete(&new_event);
-                        return false;
-                    }
-                    yaml_event_delete(&filter_event);
-                }
+                cont = parse_pnp(state, service);
+            } else if (!strcmp((char *)new_event.data.scalar.value, "pci")) {
+                cont = parse_pci(state, service);
             } else {
                 print_str("Unknown match filter key: ");
                 print_str((char *)new_event.data.scalar.value);
@@ -298,9 +430,9 @@ static bool parse_match_filter(yaml_parser_t *state, yaml_event_t *event, struct
 static bool parse_service_event(yaml_parser_t *state, yaml_event_t *, struct parser_state *s)
 {
     yaml_event_t event;
-    struct Service *service = NULL;
-    bool success = true;
-    bool has_run_type = false;
+    struct Service *service              = NULL;
+    bool success                         = true;
+    bool has_run_type                    = false;
     enum ServiceParseState service_state = SERVICE_STATE_START;
 
     if (!yaml_parser_parse(state, &event)) {
@@ -346,14 +478,14 @@ static bool parse_service_event(yaml_parser_t *state, yaml_event_t *, struct par
             }
 
             if (new_event.type == YAML_MAPPING_END_EVENT) {
-                s->service = service;
-                service = NULL;
+                s->service    = service;
+                service       = NULL;
                 service_state = SERVICE_STATE_END;
             } else if (new_event.type != YAML_SCALAR_EVENT) {
                 print_str("Expected YAML_SCALAR_EVENT for service name, got ");
                 print_hex(new_event.type);
                 print_str("\n");
-                success = skip_event(state, &new_event);
+                success       = skip_event(state, &new_event);
                 service_state = SERVICE_STATE_SKIP;
             } else {
                 const char *value = (const char *)new_event.data.scalar.value;
@@ -378,7 +510,7 @@ static bool parse_service_event(yaml_parser_t *state, yaml_event_t *, struct par
 
             yaml_event_delete(&new_event);
             break;
-            }
+        }
         case SERVICE_STATE_NAME:
         case SERVICE_STATE_RUN_TYPE:
         case SERVICE_STATE_DESCRIPTION: {
@@ -388,7 +520,6 @@ static bool parse_service_event(yaml_parser_t *state, yaml_event_t *, struct par
                 success = false;
                 goto end;
             }
-
 
             if (new_event.type == YAML_MAPPING_END_EVENT) {
                 print_str("Unexpected YAML_MAPPING_END_EVENT while parsing service name\n");
@@ -432,11 +563,10 @@ static bool parse_service_event(yaml_parser_t *state, yaml_event_t *, struct par
                             print_str("\n");
                         } else {
                             service->run_type = run_type;
-                            has_run_type = true;
+                            has_run_type      = true;
                         }
                     }
                 }
-
             }
 
             yaml_event_delete(&new_event);
@@ -445,7 +575,7 @@ static bool parse_service_event(yaml_parser_t *state, yaml_event_t *, struct par
             else
                 service_state = SERVICE_STATE_END;
             break;
-            }
+        }
         case SERVICE_STATE_REQUIRE: {
             yaml_event_t new_event;
             if (!yaml_parser_parse(state, &new_event)) {
@@ -479,7 +609,7 @@ static bool parse_service_event(yaml_parser_t *state, yaml_event_t *, struct par
                         char *required_service_name = (char *)seq_event.data.scalar.value;
 
                         struct Requirement r = {};
-                        r.service_name = strdup(required_service_name);
+                        r.service_name       = strdup(required_service_name);
                         if (!r.service_name) {
                             print_str("Failed to allocate memory for requirement service name!\n");
                             success = false;
@@ -551,7 +681,7 @@ static bool parse_service_event(yaml_parser_t *state, yaml_event_t *, struct par
         case SERVICE_STATE_END:
             __builtin_unreachable();
             break;
-    }
+        }
     }
 
 end:
@@ -658,29 +788,28 @@ static bool parse_event(yaml_parser_t *state, yaml_event_t *event, struct parser
                 print_str(value);
                 print_str("\n");
             }
-        
-        skip_event:
-            {
-                yaml_event_t event;
-                if (!yaml_parser_parse(state, &event)) {
-                    print_str("Failed to parse event!\n");
-                    return false;
-                }
 
-                if (event.type == YAML_MAPPING_END_EVENT) {
-                    print_str("Unexpected YAML_MAPPING_END_EVENT\n");
-                    yaml_event_delete(&event);
-                    return false;
-                }
-
-                bool b = skip_event(state, &event);
-
-                yaml_event_delete(&event);
-                if (!b)
-                    return false;
+        skip_event: {
+            yaml_event_t event;
+            if (!yaml_parser_parse(state, &event)) {
+                print_str("Failed to parse event!\n");
+                return false;
             }
 
-            break;
+            if (event.type == YAML_MAPPING_END_EVENT) {
+                print_str("Unexpected YAML_MAPPING_END_EVENT\n");
+                yaml_event_delete(&event);
+                return false;
+            }
+
+            bool b = skip_event(state, &event);
+
+            yaml_event_delete(&event);
+            if (!b)
+                return false;
+        }
+
+        break;
         case YAML_MAPPING_END_EVENT:
             s->state = STATE_DOCUMENT;
             break;
@@ -728,14 +857,14 @@ void parse_service(const char *cmdline, const char *name, struct Service **out_s
         yaml_event_delete(&event);
     }
 
-    *out_service = state.service;
+    *out_service  = state.service;
     state.service = NULL;
 
     yaml_parser_delete(&parser);
     return;
 error:
     free_service(state.service);
-    *out_service = NULL;
+    *out_service  = NULL;
     state.service = NULL;
 
     yaml_parser_delete(&parser);

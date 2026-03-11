@@ -106,6 +106,9 @@ struct PCIDevice {
     uint8_t class_code;
     uint8_t subclass;
 
+    uint8_t prog_if;
+    uint8_t revision_id;
+
     struct PCIDevice *associated_bridge;
 
     int pcie : 1;
@@ -172,6 +175,8 @@ inline uint32_t pci_device_id(struct PCIDevicePtr *s)
 
 inline uint8_t pci_class_code(struct PCIDevicePtr *s) { return pci_read_register(s, 2) >> 24; }
 inline uint8_t pci_subclass(struct PCIDevicePtr *s) { return pci_read_register(s, 2) >> 16; }
+inline uint8_t pci_prog_if(struct PCIDevicePtr *s) { return pci_read_register(s, 2) >> 8; }
+inline uint8_t pci_revision_id(struct PCIDevicePtr *s) { return pci_read_register(s, 2) >> 0; }
 inline bool pci_no_device(struct PCIDevicePtr *s)
 {
     return pci_vendor_id(s) == VENDOR_ID_NO_DEVICE;

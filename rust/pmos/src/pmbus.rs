@@ -269,12 +269,10 @@ impl PMBusObject {
             properties_offset += length;
         }
 
-        Ok(
-            PMBusObject {
-                properties: ObjectProperties(properties),
-                name: Box::from(name),
-            },
-        )
+        Ok(PMBusObject {
+            properties: ObjectProperties(properties),
+            name: Box::from(name),
+        })
     }
 }
 
@@ -367,14 +365,21 @@ const FILTER_EQUALS_TYPE: u32 = 1;
 const FILTER_CONJUNCTION_TYPE: u32 = 2;
 const FILTER_DISJUNCTION_TYPE: u32 = 3;
 
+fn match_number(s: &str, i: u64) -> bool {
+    s.strip_prefix("0x")
+        .map(|s| u64::from_str_radix(s, 16))
+        .or_else(|| s.strip_prefix("0o").map(|s| u64::from_str_radix(s, 8)))
+        .or_else(|| Some(s.parse::<u64>()))
+        .and_then(Result::ok)
+        .is_some_and(|v| v == i)
+}
+
 impl AnyFilter {
     pub fn matches(&self, object: &ObjectProperties) -> bool {
         match self {
             AnyFilter::EqualsFilter(filter) => match object.get_property(filter.name.as_ref()) {
                 Some(ObjectPropertyRef::String(s)) => *s == *filter.property,
-                Some(ObjectPropertyRef::Integer(i)) => {
-                    filter.property.parse().ok().is_some_and(|v: u64| v == i)
-                }
+                Some(ObjectPropertyRef::Integer(i)) => match_number(&filter.property, i),
                 Some(ObjectPropertyRef::List(l)) => l.contains(&filter.property),
                 None => false,
             },

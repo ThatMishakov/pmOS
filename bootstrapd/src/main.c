@@ -395,6 +395,7 @@ void start_executables()
                 start_service(c->service, c->object_id);
                 break;
             case RUN_FIRST_MATCH_ONCE:
+            case RUN_FOR_EACH_MATCH:
                 hook_match_service(c->service, c->object_id);
                 break;
             default:

@@ -125,6 +125,10 @@ int pmos_bus_filter_disjunction_add(pmos_bus_filter_disjunction *filter, void *v
     VECTOR_PUSH_BACK_CHECKED(filter->values, value, result);
     return result;
 }
+int pmos_bus_filter_conjunction_add(pmos_bus_filter_conjunction *filter, void *value)
+{
+    return pmos_bus_filter_disjunction_add(filter, value);
+}
 
 struct EqualsFilterBinary {
     uint32_t type;
@@ -140,7 +144,7 @@ struct ConDisFilterBinary {
     // Followed by inner filters
 };
 
-#define SIZE_MAX UINT32_MAX
+#define FILTER_SIZE_MAX UINT32_MAX
 
 
 size_t pmos_bus_filter_serialize_ipc(const void *filter, uint8_t *data_out)
@@ -163,7 +167,7 @@ size_t pmos_bus_filter_serialize_ipc(const void *filter, uint8_t *data_out)
 
         binary.total_size = total_size;
 
-        if (total_size > SIZE_MAX)
+        if (total_size > FILTER_SIZE_MAX)
             return 0;
 
         if (data_out) {
@@ -186,7 +190,7 @@ size_t pmos_bus_filter_serialize_ipc(const void *filter, uint8_t *data_out)
             if (s == 0)
                 return 0;
 
-            if (s > SIZE_MAX - total_size)
+            if (s > FILTER_SIZE_MAX - total_size)
                 return 0;
 
             total_size += s;

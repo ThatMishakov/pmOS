@@ -102,6 +102,8 @@ void check_function(struct PCIHostBridge *g, uint8_t bus, uint8_t device, uint8_
         .device_id         = pci_device_id(&p),
         .class_code        = pci_class_code(&p),
         .subclass          = pci_subclass(&p),
+        .prog_if           = pci_prog_if(&p),
+        .revision_id       = pci_revision_id(&p),
         .associated_bridge = parent_bridge,
     };
 
@@ -586,6 +588,11 @@ void publish_pci_device(struct PCIDevice * device)
         goto error;
     }
 
+    if (!pmos_bus_object_set_property_string(bus_object, "device_type", "pci")) {
+        fprintf(stderr, "Failed to set device_type for PCI device\n");
+        goto error;
+    }
+
     if (!pmos_bus_object_set_property_integer(bus_object, "pci_group", device->group)) {
         fprintf(stderr, "Failed to set pci_group for PCI device\n");
         goto error;
@@ -624,6 +631,16 @@ void publish_pci_device(struct PCIDevice * device)
 
     if (!pmos_bus_object_set_property_integer(bus_object, "pci_subclass", device->subclass)) {
         fprintf(stderr, "Failed to set pci_subclass for PCI device\n");
+        goto error;
+    }
+
+    if (device->prog_if != 0xff && !pmos_bus_object_set_property_integer(bus_object, "pci_interface", device->prog_if)) {
+        fprintf(stderr, "Failed to set pci_prog_if for PCI device\n");
+        goto error;
+    }
+
+    if (!pmos_bus_object_set_property_integer(bus_object, "pci_revision", device->revision_id)) {
+        fprintf(stderr, "Failed to set pci_revision for PCI device\n");
         goto error;
     }
 

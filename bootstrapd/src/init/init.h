@@ -27,10 +27,21 @@ struct Requirement {
 };
 VECTOR_TYPEDEF(struct Requirement, requirements_vector);
 
+struct PCIFilter {
+    // TODO: Add more fields as necessary
+    char *class;
+    char *subclass;
+    char *prog_if;
+};
+
 struct MatchFilter {
     char *key;
-    char **strings; // Get converted to ints if necessary
+    union {
+        char **strings; // Get converted to ints if necessary
+        struct PCIFilter pci_filter;
+    };
 
+    bool require_all;
     // blacklist?
 };
 VECTOR_TYPEDEF(struct MatchFilter, match_filter_vector);

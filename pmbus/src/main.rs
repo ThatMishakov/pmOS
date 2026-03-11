@@ -102,7 +102,7 @@ fn publish_object(
 
     match pmbus::PMBusObject::deserialize(&object.object_data) {
         Ok(object) => {
-            println!("{:?}", &object);
+            // println!("{:?}", &object);
 
             let id = state.next_sequence_id;
             let info = ObjectInfo {

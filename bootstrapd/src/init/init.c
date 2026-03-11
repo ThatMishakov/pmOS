@@ -48,12 +48,73 @@ struct Service *new_service()
     return calloc(1, sizeof(struct Service));
 }
 
+void *construct_pci_filter(struct PCIFilter f)
+{
+    pmos_bus_filter_conjunction *c = pmos_bus_filter_conjunction_create();
+    if (!c)
+        return NULL;
+
+    pmos_bus_filter_equals *e = pmos_bus_filter_equals_create("device_type", "pci");
+    if (!e) {
+        print_str("Failed to create PCI device filter\n");
+        goto error;
+    }
+    if (pmos_bus_filter_conjunction_add(c, e) != 0) {
+        print_str("Failed to add value to the conjunction\n");
+        pmos_bus_filter_free(e);
+        goto error;
+    }
+
+    if (f.class) {
+        e = pmos_bus_filter_equals_create("pci_class", f.class);
+        if (!e) {
+            print_str("Failed to create PCI device filter\n");
+            goto error;
+        }
+        if (pmos_bus_filter_conjunction_add(c, e) != 0) {
+            print_str("Failed to add value to the conjunction\n");
+            pmos_bus_filter_free(e);
+            goto error;
+        }
+    }
+    if (f.prog_if) {
+        e = pmos_bus_filter_equals_create("pci_interface", f.prog_if);
+        if (!e) {
+            print_str("Failed to create PCI device filter\n");
+            goto error;
+        }
+        if (pmos_bus_filter_conjunction_add(c, e) != 0) {
+            print_str("Failed to add value to the conjunction\n");
+            pmos_bus_filter_free(e);
+            goto error;
+        }
+    }
+    if (f.subclass) {
+        e = pmos_bus_filter_equals_create("pci_subclass", f.subclass);
+        if (!e) {
+            print_str("Failed to create PCI device filter\n");
+            goto error;
+        }
+        if (pmos_bus_filter_conjunction_add(c, e) != 0) {
+            print_str("Failed to add value to the conjunction\n");
+            pmos_bus_filter_free(e);
+            goto error;
+        }
+    }
+
+return c;
+
+error:
+    pmos_bus_filter_free(c);
+    return NULL;
+}
+
 void *construct_acpi_filter(char **strings)
 {
     if (!strings || !strings[0])
         return NULL;
 
-    pmos_bus_filter_conjunction *c = pmos_bus_filter_disjunction_create();
+    pmos_bus_filter_disjunction *c = pmos_bus_filter_disjunction_create();
     if (!c)
         return NULL;
 
@@ -120,6 +181,20 @@ void *construct_filter(struct Service *service)
             void *a = construct_acpi_filter(f->strings);
             if (!a) {
                 print_str("ACPI filter error (NULL) for service ");
+                print_str(service->name);
+                print_str("\n");
+                continue;
+            }
+
+            if (pmos_bus_filter_disjunction_add(d, a) < 0) {
+                print_str("Failed to add ACPI filter to disjunction\n");
+                pmos_bus_filter_free(a);
+                goto error;
+            }
+        } else if (!strcmp(f->key, "pci")) {
+            void *a = construct_pci_filter(f->pci_filter);
+            if (!a) {
+                print_str("PCI filter error (NULL) for service ");
                 print_str(service->name);
                 print_str("\n");
                 continue;
