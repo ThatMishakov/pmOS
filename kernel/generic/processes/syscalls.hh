@@ -263,6 +263,9 @@ void syscall_set_right0();
 void syscall_get_mem_object_size();
 // Parameters: u64 mem_object_id, flags
 
+void syscall_transfer_right();
+// Parameters: u64 to_group, u64 right_id, flags
+
 struct SyscallRetval {
     TaskDescriptor *task;
     u64 operator=(u64 value);

@@ -70,7 +70,7 @@ namespace kernel::proc::syscalls
 {
 
 using syscall_function                         = void (*)();
-std::array<syscall_function, 58> syscall_table = {
+std::array<syscall_function, 59> syscall_table = {
     syscall_exit,
     syscall_get_task_id,
     syscall_create_process,
@@ -133,6 +133,7 @@ std::array<syscall_function, 58> syscall_table = {
     syscall_accept_rights,
     syscall_dup_right,
     syscall_get_mem_object_size,
+    syscall_transfer_right
 };
 
 extern "C" void syscall_handler()
@@ -1564,6 +1565,7 @@ void syscall_add_to_task_group()
         return;
     }
 
+    // TODO: Add permissions or whatever
     const auto group_ptr = TaskGroup::get_task_group(group);
     if (!group_ptr) {
         syscall_error(current_task) = -ENOENT;
@@ -2300,6 +2302,47 @@ void syscall_dup_right()
     }
 
     syscall_return(current) = result.val.second;
+}
+
+void syscall_transfer_right()
+{
+    auto current = get_current_task();
+
+    u64 to_group = syscall_arg64(current, 0);
+    u64 right_id = syscall_arg64(current, 1);
+    // Also maybe flags, when the groups eventually get handles to
+    // them, so that the handle can be used instead of the group...
+
+    auto group = current->get_rights_namespace();
+    if (!group) {
+        syscall_error(current) = -ESRCH;
+        return;
+    }
+
+    // TODO: Add permissions or whatever
+    const auto group_ptr = TaskGroup::get_task_group(to_group);
+    if (!group_ptr) {
+        syscall_error(current) = -ENOENT;
+        return;
+    }
+
+    auto right = group->atomic_get_right(right_id);
+    if (!right) {
+        syscall_error(current) = -ENOENT;
+        return;
+    }
+
+    // This has a potentiall for a race condition, where under the right circumstances, the right might
+    // be transfered to a different group, and right back, after which it will be moved by using its old
+    // id, and none of the syscalls will fail. But this implies a dumb userspace, and perhaps its their mistake?
+    // (need to think about this...)
+    auto result = right->atomic_transfer_to_group(group, group_ptr);
+    if (!result.success()) {
+        syscall_error(current) = result.result;
+        return;
+    }
+
+    syscall_return(current) = result.val;
 }
 
 void syscall_get_mem_object_size()

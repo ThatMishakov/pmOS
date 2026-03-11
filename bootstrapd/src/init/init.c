@@ -369,11 +369,11 @@ int start_service(struct Service *service, uint64_t object_id, uint64_t optional
     argc[1] = NULL;
 
     if (new_right) {
-        argc[2] = "--pmbus-right";
+        argc[1] = "--right-id";
         char buff[64];
         sprintf(buff, "%" PRIu64, new_right);
-        argc[3] = buff;
-        argc[4] = NULL;
+        argc[2] = buff;
+        argc[3] = NULL;
     }
 
     result_t res = load_executable(r.value, object_id, 0, mem_region, page_aligned, argc, NULL, (const struct AuxVecEntry **)auxvec_entries);

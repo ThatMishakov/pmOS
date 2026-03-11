@@ -114,7 +114,7 @@ $(HYPER_IMAGE): ../kernel/build/kernel ../bootstrapd/build/bootstrapd ../devices
 
 
 
-$(DISK_IMAGE): ../kernel/build/kernel ../bootstrapd/build/bootstrapd ../devicesd/devicesd.elf ../logd/logd.elf ../ns16550/ns16550.elf ../piped/piped.elf ../processd/processd.elf ../terminald/terminald.elf ../vfsd/vfsd.elf ../vfatfsd/vfatfsd.elf ../ps2d/ps2d.elf ../blockd/blockd.elf ../pmbus/bin/pmbus limine.conf limine limine-binary
+$(DISK_IMAGE): ../kernel/build/kernel ../bootstrapd/build/bootstrapd ../devicesd/devicesd.elf ../logd/logd.elf ../ns16550/ns16550.elf ../piped/piped.elf ../processd/processd.elf ../terminald/terminald.elf ../vfsd/vfsd.elf ../vfatfsd/vfatfsd.elf ../ps2d/ps2d.elf ../blockd/blockd.elf ../pmbus/bin/pmbus ../i8042/i8042.elf limine.conf limine limine-binary
 	mkdir -p isodir/boot/limine
 	mkdir -p isodir/EFI/BOOT
 
@@ -174,7 +174,7 @@ $(DISK_IMAGE): ../kernel/build/kernel ../bootstrapd/build/bootstrapd ../devicesd
 	mcopy -i $(BOOT_PARTITION) ../vfatfsd/vfatfsd.elf ::/
 	# mcopy -i $(BOOT_PARTITION) ../ahcid/ahcid.elf ::/
 	mcopy -i $(BOOT_PARTITION) ../ps2d/ps2d.elf ::/
-	# mcopy -i $(BOOT_PARTITION) ../i8042/i8042.elf ::/
+	mcopy -i $(BOOT_PARTITION) ../i8042/i8042.elf ::/
 	mcopy -i $(BOOT_PARTITION) ../blockd/blockd.elf ::/
 	# mcopy -i $(BOOT_PARTITION) ../ext2fsd/target/x86_64-unknown-pmos/debug/ext2fsd ::/
 	mcopy -i $(BOOT_PARTITION) ../pmbus/bin/pmbus ::/
@@ -217,7 +217,7 @@ isodir: ../kernel/build/kernel ../bootstrapd/build/bootstrapd ../devicesd/device
 	cp -v ../vfatfsd/vfatfsd.elf isodir/
 	# cp -v ../ahcid/ahcid.elf isodir/
 	cp -v ../ps2d/ps2d.elf isodir/
-# 	cp -v ../i8042/i8042.elf isodir/
+	cp -v ../i8042/i8042.elf isodir/
 	cp -v ../blockd/blockd.elf isodir/
 	cp -v ../pmbus/bin/pmbus isodir/
 	# cp -v ../test/test.elf isodir

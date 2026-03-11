@@ -494,8 +494,55 @@ uint8_t port2_int = 0;
 
 pthread_mutex_t ports_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-int main()
+pmos_right_t right_to_device = 0;
+
+void usage(char *name)
 {
+    printf("i8042 Usage: %s --right-id <ID of the right to the i8042 controller>\n", name);
+    exit(1);
+}
+
+void parse_args(int argc, char **argv)
+{
+    if (argc < 1)
+        printf("i8042: empty argc!\n");
+    char *name = argv[0];
+
+    bool have_right = false;
+
+    for (int i = 1; i < argc; ++i) {
+        char *r = argv[i];
+
+        if (!strcmp(r, "--right-id")) {
+            if (have_right) {
+                printf("i8042: Repeated --right-id\n");
+                usage(name);
+            }
+
+            ++i;
+            if (i >= argc) {
+                printf("i8042 missing right ID\n");
+                usage(name);
+            }
+            right_to_device = strtoull(argv[i], NULL, 0);
+            have_right = true;
+        } else {
+            printf("Unrecognized argument %s\n", argv[i]);
+            usage(name);
+        }
+    }
+
+    if (!have_right) {
+        printf("i8042: no right_id!\n");
+        usage(name);
+    }
+}
+
+int main(int argc, char **argv)
+{
+    parse_args(argc, argv);
+    printf("i8042 started. Right: %" PRIu64 "\n", right_to_device);
+
     {
         ports_request_t req;
         req = create_port(TASK_ID_SELF, 0);
