@@ -440,6 +440,13 @@ right_request_t create_right(pmos_port_t port_id, pmos_right_t *id_in_reciever, 
 /// @return Result. On success, the new ID of the right
 right_request_t dup_right(pmos_right_t right);
 
+/// @brief Transfers right to a new task group
+/// @param task_group Task group to transfer the right to
+/// @param right Right to transer
+/// @param flags Optional flags (currently, none)
+/// @return On success, the new ID of the right (in the new group)
+right_request_t transfer_right(uint64_t task_group, pmos_right_t right, unsigned flags);
+
 /// @brief Deletes the right in the namespace of the sender
 /// @param right_id
 /// @return Result of the operation

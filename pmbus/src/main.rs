@@ -207,7 +207,7 @@ fn request_object(
             .properties
             .range((Bound::Included(start_with), Bound::Unbounded));
 
-        let mut search_item = it.find(|(_idx, item)| !filter.matches(&item.borrow().properties));
+        let mut search_item = it.find(|(_idx, item)| filter.matches(&item.borrow().properties));
 
         while let Some(item) = search_item {
             // Answer immediately
@@ -227,7 +227,7 @@ fn request_object(
             let mut other_rights = [const { None }; 4];
             other_rights[0] = obj.right.clone().ok().map(|r| SendRight::from(r));
             if other_rights[0].is_none() {
-                search_item = it.find(|(_idx, item)| !filter.matches(&item.borrow().properties));
+                search_item = it.find(|(_idx, item)| filter.matches(&item.borrow().properties));
                 continue;
             }
 
@@ -241,8 +241,13 @@ fn request_object(
                         search_item = it.find(|(_idx, item)| !filter.matches(&item.borrow().properties));
                         continue;
                     },
-                    e => println!("pmbus error: Error sending object to task {}, error {}", sender_task, e),
+                    e => {
+                        println!("pmbus error: Error sending object to task {}, error {}", sender_task, e);
+                        return;
+                    }
                 }
+            } else {
+                return;
             }
         }
 

@@ -837,25 +837,25 @@ int main()
 {
     printf("Hello from AHCId! My PID: %" PRIi64 "\n", getpid());
 
-    auto controllers = get_ahci_controllers();
-    if (controllers.empty()) {
-        printf("No AHCI controllers found\n");
-        return 0;
-    }
+    // auto controllers = get_ahci_controllers();
+    // if (controllers.empty()) {
+    //     printf("No AHCI controllers found\n");
+    //     return 0;
+    // }
 
-    for (const auto &controller: controllers) {
-        printf("Found AHCI controller: group %i bus %i device %i function %i\n", controller.group,
-               controller.bus, controller.device, controller.function);
+    // for (const auto &controller: controllers) {
+    //     printf("Found AHCI controller: group %i bus %i device %i function %i\n", controller.group,
+    //            controller.bus, controller.device, controller.function);
 
-        auto r = fork();
-        if (r == 0) {
-            cmd_port.release();
-            cmd_port  = pmos::Port::create().value();
-            ahci_port = _create_port();
-            ahci_handle(controller);
-            return 0;
-        } else if (r < 0) {
-            printf("Failed to fork\n");
-        }
-    }
+    //     auto r = fork();
+    //     if (r == 0) {
+    //         cmd_port.release();
+    //         cmd_port  = pmos::Port::create().value();
+    //         ahci_port = _create_port();
+    //         ahci_handle(controller);
+    //         return 0;
+    //     } else if (r < 0) {
+    //         printf("Failed to fork\n");
+    //     }
+    // }
 }

@@ -69,6 +69,8 @@ struct Service {
     match_filter_vector match_filters;
 
     bool start_on_boot;
+
+    struct HookedService *hook;
 };
 
 struct Service *new_service();
@@ -77,3 +79,5 @@ void free_service(struct Service *service);
 void parse_service(const char *cmdline, const char *name, struct Service **out_service);
 
 void *construct_filter(struct Service *service);
+
+int start_service(struct Service *service, uint64_t object_id, uint64_t optional_right_id);

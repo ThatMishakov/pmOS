@@ -672,3 +672,17 @@ syscall_r get_mem_object_size(mem_object_t mem_object_id, unsigned flags)
     return pmos_syscall(SYSCALL_GET_MEM_OBJECT_SIZE | (flags << 8), mem_object_id);
     #endif
 }
+
+right_request_t transfer_right(uint64_t task_group, uint64_t right, unsigned flags)
+{
+    syscall_r result;
+    #ifdef __32BITSYSCALL
+    result = __pmos_syscall32_4words(SYSCALL_TRANSFER_RIGHT | (flags << 8), task_group, right);
+    #else
+    result = pmos_syscall(SYSCALL_TRANSFER_RIGHT | (flags << 8), task_group, right);
+    #endif
+    return (right_request_t) {
+        .result = result.result,
+        .right = result.value,
+    };
+}
