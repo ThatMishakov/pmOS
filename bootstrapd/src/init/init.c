@@ -414,3 +414,74 @@ error:
 
     return result;
 }
+
+struct Service *services = NULL;
+
+void push_services(struct Service *s)
+{
+    // Leak that memory!
+    while (s) {
+        struct Service *ss = s->next;
+        s->next = services;
+        services = s;
+
+        print_str("Added service ");
+        if (s->name)
+            print_str(s->name);
+        print_str("\n");
+
+        s = ss;
+    }
+}
+
+struct module_descriptor_list {
+    struct module_descriptor_list *next;
+    uint64_t object_id;
+    size_t size;
+    char *cmdline;
+    char *path;
+    struct Service *service;
+};
+
+struct module_descriptor_list *find_module(char *path);
+
+void match_services()
+{
+    for (struct Service *s = services; s; s = s->next) {
+        if (s->module)
+            continue;
+
+        const char *name;
+        if (s->name)
+            name = s->name;
+        else
+            name = "<unknown>";
+
+        if (!s->path) {
+            print_str("Warning: module ");
+            print_str(name);
+            print_str(" with empty path!\n");
+            continue;
+        }
+
+        struct module_descriptor_list *module = find_module(s->path);
+        if (!module) {
+            print_str("Module not found for service ");
+            print_str(name);
+            print_str(", path: ");
+            print_str(s->path);
+            print_str("\n");
+            continue;
+        }
+
+        if (module->service) {
+            print_str("Warning: module ");
+            print_str(module->path);
+            print_str(" already has a service!\n");
+            continue;
+        }
+
+        module->service = s;
+        s->module = module;
+    }
+}

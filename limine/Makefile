@@ -190,7 +190,7 @@ $(DISK_IMAGE): ../kernel/build/kernel ../bootstrapd/build/bootstrapd ../devicesd
 	# Install Limine stage 1
 	limine/limine bios-install $(DISK_IMAGE)
 
-isodir: ../kernel/build/kernel ../bootstrapd/build/bootstrapd ../devicesd/devicesd.elf ../logd/logd.elf ../ns16550/ns16550.elf ../piped/piped.elf ../processd/processd.elf ../terminald/terminald.elf ../vfsd/vfsd.elf ../vfatfsd/vfatfsd.elf ../ps2d/ps2d.elf ../blockd/blockd.elf ../pmbus/bin/pmbus limine.conf hyper.cfg
+isodir: ../kernel/build/kernel ../bootstrapd/build/bootstrapd ../devicesd/devicesd.elf ../logd/logd.elf ../ns16550/ns16550.elf ../piped/piped.elf ../processd/processd.elf ../terminald/terminald.elf ../vfsd/vfsd.elf ../vfatfsd/vfatfsd.elf ../ps2d/ps2d.elf ../blockd/blockd.elf ../pmbus/bin/pmbus init.yaml limine.conf hyper.cfg
 	mkdir -p isodir/boot/limine
 	mkdir -p isodir/EFI/BOOT
 
@@ -221,6 +221,7 @@ isodir: ../kernel/build/kernel ../bootstrapd/build/bootstrapd ../devicesd/device
 	cp -v ../blockd/blockd.elf isodir/
 	cp -v ../pmbus/bin/pmbus isodir/
 	# cp -v ../test/test.elf isodir
+	cp -v init.yaml isodir/
 
 $(ISO): isodir
 	xorriso -as mkisofs -b boot/limine/limine-bios-cd.bin -no-emul-boot -boot-load-size 4 -boot-info-table --efi-boot boot/limine/limine-uefi-cd.bin -efi-boot-part --efi-boot-image --protective-msdos-label isodir -o $(ISO)

@@ -5,12 +5,15 @@
 #include <string.h>
 #include <strings.h>
 #include <yaml.h>
+#include <pmos/memory.h>
 
 enum parser_states {
     STATE_START,
     STATE_STREAM,
     STATE_DOCUMENT,
     STATE_SECTION,
+    STATE_SERVICES,
+    STATE_SERVICES_START,
 };
 struct parser_state {
     enum parser_states state;
@@ -137,6 +140,7 @@ enum ServiceParseState {
     SERVICE_STATE_RUN_TYPE,
     SERVICE_STATE_REQUIRE,
     SERVICE_STATE_MATCH,
+    SERVICE_STATE_PATH,
     SERVICE_STATE_SKIP,
     SERVICE_STATE_END,
 };
@@ -146,6 +150,7 @@ const char *SERVICE_DESCRIPTION = "description";
 const char *SERVICE_RUN_TYPE    = "run_type";
 const char *SERVICE_REQUIRE     = "require";
 const char *SERVICE_MATCH       = "match";
+const char *SERVICE_PATH        = "path";
 
 const char *FILTER_PCI_CLASS    = "class";
 const char *FILTER_PCI_SUBCLASS = "subclass";
@@ -427,36 +432,27 @@ static bool parse_match_filter(yaml_parser_t *state, yaml_event_t *event, struct
     return true;
 }
 
-static bool parse_service_event(yaml_parser_t *state, yaml_event_t *, struct parser_state *s)
+static bool parse_service_event(yaml_parser_t *state, yaml_event_t *event, struct parser_state *s)
 {
-    yaml_event_t event;
     struct Service *service              = NULL;
     bool success                         = true;
     bool has_run_type                    = false;
     enum ServiceParseState service_state = SERVICE_STATE_START;
 
-    if (!yaml_parser_parse(state, &event)) {
-        print_str("Failed to parse event!\n");
-        return false;
-    }
-
-    if (event.type == YAML_MAPPING_END_EVENT) {
+    if (event->type == YAML_MAPPING_END_EVENT) {
         print_str("Unexpected YAML_MAPPING_END_EVENT\n");
-        yaml_event_delete(&event);
         return false;
     }
 
-    if (event.type != YAML_MAPPING_START_EVENT) {
+    if (event->type != YAML_MAPPING_START_EVENT) {
         print_str("Expected YAML_MAPPING_START_EVENT when parsing service, got ");
-        print_hex(event.type);
+        print_hex(event->type);
+        if (event->type) {
+            print_str(" -> ");
+            print_str(event->data.scalar.value);
+        }
         print_str("\n");
-        success = skip_event(state, &event);
-        goto end;
-    }
-
-    if (s->service) {
-        print_str("Duplicate service definition! Skipping...\n");
-        success = skip_event(state, &event);
+        success = skip_event(state, event);
         goto end;
     }
 
@@ -478,6 +474,7 @@ static bool parse_service_event(yaml_parser_t *state, yaml_event_t *, struct par
             }
 
             if (new_event.type == YAML_MAPPING_END_EVENT) {
+                service->next = s->service;
                 s->service    = service;
                 service       = NULL;
                 service_state = SERVICE_STATE_END;
@@ -500,6 +497,8 @@ static bool parse_service_event(yaml_parser_t *state, yaml_event_t *, struct par
                     service_state = SERVICE_STATE_REQUIRE;
                 } else if (!strcmp(value, SERVICE_MATCH)) {
                     service_state = SERVICE_STATE_MATCH;
+                } else if (!strcmp(value, SERVICE_PATH)) {
+                    service_state = SERVICE_STATE_PATH;
                 } else {
                     print_str("Unknown service key: ");
                     print_str(value);
@@ -513,6 +512,7 @@ static bool parse_service_event(yaml_parser_t *state, yaml_event_t *, struct par
         }
         case SERVICE_STATE_NAME:
         case SERVICE_STATE_RUN_TYPE:
+        case SERVICE_STATE_PATH:
         case SERVICE_STATE_DESCRIPTION: {
             yaml_event_t new_event;
             if (!yaml_parser_parse(state, &new_event)) {
@@ -564,6 +564,16 @@ static bool parse_service_event(yaml_parser_t *state, yaml_event_t *, struct par
                         } else {
                             service->run_type = run_type;
                             has_run_type      = true;
+                        }
+                    }
+                } else if (service_state == SERVICE_STATE_PATH) {
+                    if (service->path) {
+                        print_str("Duplicate service path! Skipping...\n");
+                    } else {
+                        service->path = strdup((char *)new_event.data.scalar.value);
+                        if (!service->path) {
+                            print_str("Failed to allocate memory for service path!\n");
+                            success = false;
                         }
                     }
                 }
@@ -673,6 +683,10 @@ static bool parse_service_event(yaml_parser_t *state, yaml_event_t *, struct par
                 service_state = SERVICE_STATE_END;
             } else {
                 success = skip_event(state, &new_event);
+                if (success)
+                    service_state = SERVICE_STATE_START;
+                else
+                    service_state = SERVICE_STATE_END;
             }
 
             yaml_event_delete(&new_event);
@@ -687,7 +701,6 @@ static bool parse_service_event(yaml_parser_t *state, yaml_event_t *, struct par
 end:
     if (!success)
         free_service(service);
-    yaml_event_delete(&event);
     return success;
 }
 
@@ -779,7 +792,19 @@ static bool parse_event(yaml_parser_t *state, yaml_event_t *event, struct parser
             value = (char *)event->data.scalar.value;
 
             if (!strcmp(value, "service")) {
-                bool b = parse_service_event(state, event, s);
+                yaml_event_t event;                
+                if (!yaml_parser_parse(state, &event)) {
+                    print_str("Failed to parse event!\n");
+                    return false;
+                }
+                bool b;
+                if (s->service) {
+                    print_str("Duplicate service entry!\n");
+                    b = skip_event(state, &event);
+                } else {
+                    b = parse_service_event(state, &event, s);
+                }
+                yaml_event_delete(&event);
                 if (!b)
                     return false;
                 break;
@@ -825,6 +850,155 @@ static bool parse_event(yaml_parser_t *state, yaml_event_t *event, struct parser
     return true;
 }
 
+static bool parse_services_event(yaml_parser_t *state, yaml_event_t *event, struct parser_state *s)
+{
+    switch (s->state) {
+    case STATE_START:
+        switch (event->type) {
+        case YAML_STREAM_START_EVENT:
+            s->state = STATE_STREAM;
+            break;
+        default:
+            print_str("Unknown event ");
+            print_hex(event->type);
+            print_str("\n");
+            break;
+        }
+        break;
+    case STATE_STREAM:
+        switch (event->type) {
+        case YAML_DOCUMENT_START_EVENT:
+            s->state = STATE_DOCUMENT;
+            break;
+        case YAML_STREAM_END_EVENT:
+            return false;
+            break;
+        default:
+            print_str("Unknown event ");
+            print_hex(event->type);
+            print_str(" in STATE_STREAM\n");
+            break;
+        }
+        break;
+    case STATE_DOCUMENT:
+        switch (event->type) {
+        case YAML_MAPPING_START_EVENT:
+            s->state = STATE_SECTION;
+            break;
+        case YAML_SCALAR_EVENT:
+            print_str("Unexpected scalar ");
+            print_str((char *)event->data.scalar.value);
+            print_str(". Skipping...\n");
+            break;
+        case YAML_DOCUMENT_END_EVENT:
+            // End of the document. Only parse one...
+            return false;
+        default:
+            print_str("Unknown event ");
+            print_hex(event->type);
+            print_str(" in STATE_DOCUMENT\n");
+            return false;
+        }
+        break;
+    case STATE_SECTION: {
+        char *value = NULL;
+        switch (event->type) {
+        case YAML_SEQUENCE_START_EVENT:
+            print_str("Unexpected sequence as key... Skipping\n");
+
+            if (!skip_sequence(state, event))
+                return false;
+
+            goto skip_event;
+        case YAML_MAPPING_START_EVENT:
+            print_str("Unexpected mapping as key... Skipping\n");
+
+            if (!skip_mapping(state, event))
+                return false;
+
+            goto skip_event;
+        case YAML_ALIAS_EVENT:
+            print_str("Aliases not supported! Skipping mapping\n");
+
+            goto skip_event;
+        case YAML_SCALAR_EVENT:
+            value = (char *)event->data.scalar.value;
+
+            if (!strcmp(value, "services")) {
+                s->state = STATE_SERVICES_START;
+                break;
+            } else {
+                print_str("Unknown key: ");
+                print_str(value);
+                print_str("\n");
+            }
+
+        skip_event: {
+            yaml_event_t event;
+            if (!yaml_parser_parse(state, &event)) {
+                print_str("Failed to parse event!\n");
+                return false;
+            }
+
+            if (event.type == YAML_MAPPING_END_EVENT) {
+                print_str("Unexpected YAML_MAPPING_END_EVENT\n");
+                yaml_event_delete(&event);
+                return false;
+            }
+
+            bool b = skip_event(state, &event);
+
+            yaml_event_delete(&event);
+            if (!b)
+                return false;
+        }
+
+        break;
+        case YAML_MAPPING_END_EVENT:
+            s->state = STATE_DOCUMENT;
+            break;
+        default:
+            print_str("Unknown event ");
+            print_hex(event->type);
+            print_str(" in STATE_SECTION\n");
+            return false;
+        }
+    }
+    break;
+    case STATE_SERVICES_START:
+        switch (event->type) {
+        case YAML_SEQUENCE_START_EVENT:
+            s->state = STATE_SERVICES;
+            break;
+        case YAML_DOCUMENT_END_EVENT:
+            // End of the document. Only parse one...
+            return false;
+        default:
+            print_str("Unknown event ");
+            print_hex(event->type);
+            print_str(" for \"services\" (expected a sequence)\n");
+            if (!skip_event(state, event))
+                return false;
+            s->state = STATE_SECTION;
+            break;
+        }
+        break;
+    case STATE_SERVICES:
+        switch (event->type) {
+        case YAML_SEQUENCE_END_EVENT:
+            s->state = STATE_SECTION;
+            break;
+        default:
+            bool b = parse_service_event(state, event, s);
+            if (!b)
+                return false;
+            break;
+    }
+    }
+
+    return true;
+}
+
 void parse_service(const char *cmdline, const char *name, struct Service **out_service)
 {
     print_str("Parsing module ");
@@ -863,11 +1037,82 @@ void parse_service(const char *cmdline, const char *name, struct Service **out_s
     yaml_parser_delete(&parser);
     return;
 error:
-    free_service(state.service);
+    while (state.service) {
+        struct Service *s = state.service->next;
+        free_service(s);
+    }
     *out_service  = NULL;
     state.service = NULL;
 
     yaml_parser_delete(&parser);
+    print_str("Yaml parsing error\n");
+    return;
+}
+
+void push_services(struct Service *s);
+
+struct module_descriptor_list {
+    struct module_descriptor_list *next;
+    uint64_t object_id;
+    size_t size;
+    char *cmdline;
+    char *path;
+    struct Service *service;
+};
+
+void parse_services(struct module_descriptor_list *d)
+{
+    size_t size = d->size;
+    size_t size_page = (size + PAGE_SIZE - 1) & ~((size_t)PAGE_SIZE - 1);
+    map_mem_object_param_t p = {
+        .page_table_id = PAGE_TABLE_SELF,
+        .object_id = d->object_id,
+        .addr_start_uint = 0,
+        .size = size_page,
+        .offset_object = 0,
+        .offset_start = 0,
+        .object_size = size_page,
+        .access_flags = PROT_READ,
+    };
+    mem_request_ret_t r = map_mem_object(&p);
+    if (r.result) {
+        print_str("Failed to map memory object: ");
+        print_hex(-r.result);
+        print_str("\n");
+        return;
+    }
+
+    struct parser_state state = {};
+
+    yaml_parser_t parser;
+    yaml_parser_initialize(&parser);
+
+    yaml_parser_set_input_string(&parser, r.virt_addr, size);
+
+    bool done = false;
+    while (!done) {
+        yaml_event_t event;
+        if (!yaml_parser_parse(&parser, &event))
+            goto error;
+
+        bool t = parse_services_event(&parser, &event, &state);
+        done = (event.type == YAML_STREAM_END_EVENT) || !t;
+        yaml_event_delete(&event);
+    }
+
+    push_services(state.service);
+    state.service = NULL;
+
+    yaml_parser_delete(&parser);
+    return;
+error:
+    while (state.service) {
+        struct Service *s = state.service->next;
+        free_service(s);
+    }
+
+    yaml_parser_delete(&parser);
+    release_region(0, r.virt_addr);
     print_str("Yaml parsing error\n");
     return;
 }

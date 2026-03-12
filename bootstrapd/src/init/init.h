@@ -56,6 +56,8 @@ enum RunType {
 
 enum RunType parse_run_type(const char *str);
 
+struct module_descriptor_list;
+
 struct Service {
     char *name;
     char *path;
@@ -71,12 +73,17 @@ struct Service {
     bool start_on_boot;
 
     struct HookedService *hook;
+    struct Service *next;
+    struct module_descriptor_list *module;
 };
 
 struct Service *new_service();
 void free_service(struct Service *service);
 
 void parse_service(const char *cmdline, const char *name, struct Service **out_service);
+void parse_services(struct module_descriptor_list *d);
+
+void match_services();
 
 void *construct_filter(struct Service *service);
 

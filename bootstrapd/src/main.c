@@ -84,6 +84,25 @@ struct framebuffer {
 // TODO: Several framebuffers can be present. Only store one for now
 struct framebuffer *fb = NULL;
 
+struct module_descriptor_list *find_module(char *path)
+{
+    if (!path)
+        return NULL;
+
+    for (struct module_descriptor_list *l = module_list; l; l = l->next) {
+        if (!l->path)
+            continue;
+
+        if (strcmp(path, l->path))
+            continue;
+
+        return l;
+    }
+
+    return NULL;
+}   
+  
+
 void init_modules()
 {
     struct load_tag_generic *t =
@@ -108,7 +127,11 @@ void init_modules()
         d->service   = NULL;
         module_list  = d;
 
-        if (strcmp(d->cmdline, "bootstrap")) {
+        if (!strcmp(d->cmdline, "init-config")) {
+            parse_services(d);
+        } else if (!strcmp(d->cmdline, "file")) {
+            continue;
+        } else if (strcmp(d->cmdline, "bootstrap")) {
             struct Service *s = NULL;
             parse_service(d->cmdline, d->path, &s);
             d->service = s;
@@ -137,6 +160,8 @@ void init_modules()
             }
         }
     }
+
+    match_services();
 }
 
 uint64_t rsdp_desc = 0;
