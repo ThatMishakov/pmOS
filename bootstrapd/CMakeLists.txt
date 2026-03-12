@@ -49,5 +49,5 @@ FetchContent_MakeAvailable(libyaml)
 target_link_libraries(bootstrapd PRIVATE yaml)
 
 if(CMAKE_C_COMPILER_TARGET MATCHES "^i[3-6]86-pmos$")
-    string(APPEND CMAKE_C_FLAGS " -lclang_rt.builtins-i386")
+    target_link_libraries(bootstrapd PRIVATE clang_rt.builtins-i386)
 endif()

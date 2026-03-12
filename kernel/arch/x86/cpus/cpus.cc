@@ -26,6 +26,11 @@ using namespace kernel::x86::paging;
 using namespace kernel::x86::interrupts::lapic;
 using namespace kernel::paging;
 
+#ifdef __i386__
+using namespace kernel::ia32::interrupts;
+using namespace kernel::ia32::paging;
+#endif
+
 constexpr sched::CPU_Info __seg_gs const *c = nullptr;
 kernel::sched::CPU_Info *sched::get_cpu_struct() { return c->self; }
 
@@ -49,7 +54,7 @@ void init_per_cpu(u64 lapic_id)
         panic("Couldn't allocate memory for CPU_Info\n");
 
     #ifdef __i386__
-    gdt_set_cpulocal(c);
+    kernel::ia32::interrupts::gdt_set_cpulocal(c);
     loadGDT(&c->cpu_gdt);
     #else
     loadGDT(&c->cpu_gdt);
@@ -108,7 +113,7 @@ extern "C" void smp_main(CPU_Info *c)
     serial_logger.printf("Entered CPU %i\n", c->cpu_id);
 
     #ifdef __i386__
-    gdt_set_cpulocal(c);
+    kernel::ia32::interrupts::gdt_set_cpulocal(c);
     loadGDT(&c->cpu_gdt);
     #else
     loadGDT(&c->cpu_gdt);
@@ -154,7 +159,7 @@ extern "C" void acpi_main()
     init_PIC();
 
     #ifdef __i386__
-    gdt_set_cpulocal(c);
+    kernel::ia32::interrupts::gdt_set_cpulocal(c);
     loadGDT(&c->cpu_gdt);
     unbusyTSS(&c->cpu_gdt);
     #else
@@ -437,12 +442,12 @@ void init_acpi_trampoline()
     if (use_pae) {
         smp_trampoline_trampoilne_flags |= SMP_TRAMPOLINE_ENABLE_PAE;
     }
+    if (support_nx)
+        smp_trampoline_trampoilne_flags |= SMP_TRAMPOLINE_ENABLE_NX;
     #else
     // if (use_5lvl_paging)
     //     smp_trampoline_trampoilne_flags |= SMP_TRAMPOLINE_5_LVL_PAGING;
     #endif
-    // if (support_nx)
-    //     smp_trampoline_trampoilne_flags |= SMP_TRAMPOLINE_ENABLE_NX;
 
     result = map_page(new_cr3, acpi_trampoline_page, (void *)acpi_trampoline_page, pta);
     if (result)

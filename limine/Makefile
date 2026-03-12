@@ -100,6 +100,7 @@ $(HYPER_IMAGE): ../kernel/build/kernel ../bootstrapd/build/bootstrapd ../devices
 	mcopy -i $(BOOT_PARTITION) ../i8042/i8042.elf ::/
 	mcopy -i $(BOOT_PARTITION) ../blockd/blockd.elf ::/
 	mcopy -i $(BOOT_PARTITION) ../pmbus/bin/pmbus ::/
+	mcopy -i $(BOOT_PARTITION) init.yaml ::/
 
 	# Create an ext2 filesystem for the root partition
 	dd if=/dev/zero of=$(EXT2_PARTITION) bs=1M count=64
@@ -178,6 +179,7 @@ $(DISK_IMAGE): ../kernel/build/kernel ../bootstrapd/build/bootstrapd ../devicesd
 	mcopy -i $(BOOT_PARTITION) ../blockd/blockd.elf ::/
 	# mcopy -i $(BOOT_PARTITION) ../ext2fsd/target/x86_64-unknown-pmos/debug/ext2fsd ::/
 	mcopy -i $(BOOT_PARTITION) ../pmbus/bin/pmbus ::/
+	mcopy -i $(BOOT_PARTITION) init.yaml ::/
 
 	# Create an ext2 filesystem for the root partition
 	dd if=/dev/zero of=$(EXT2_PARTITION) bs=1M count=64

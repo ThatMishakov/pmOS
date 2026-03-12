@@ -1,8 +1,14 @@
 #include <sched/sched.hh>
 #include <x86_asm.hh>
 #include <interrupts/gdt.hh>
+#include <paging/x86_paging.hh>
 
-static bool setup_stacks(CPU_Info *c)
+using namespace kernel::sched;
+using namespace kernel::x86::paging;
+
+extern "C" void double_fault_isr();
+
+bool setup_stacks(CPU_Info *c)
 {
     if (!c->kernel_stack)
         return false;

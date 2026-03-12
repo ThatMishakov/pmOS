@@ -18,6 +18,7 @@ using namespace kernel::pmm;
 using namespace kernel::log;
 using namespace kernel::paging;
 using namespace kernel::ia32::paging;
+using namespace kernel::x86::paging;
 
 void hcf();
 
