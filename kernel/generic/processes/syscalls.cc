@@ -69,6 +69,80 @@ extern void deactivate_page_table();
 namespace kernel::proc::syscalls
 {
 
+std::array<const char *, 59> syscall_names = {
+    "SYSCALL EXIT",
+    "SYSCALL GET TASK ID",
+    "SYSCALL CREATE PROCESS",
+    "SYSCALL CREATE PROCESS",
+    "SYSCALL INIT STACK",
+    "SYSCALL SET PRIORITY",
+    "SYSCALL SET TASK NAME",
+    "SYSCALL GET LAPIC ID",
+    "SYSCALL CONFIGURE SYSTEM",
+
+    "SYSCALL GET MESSAGE INFO",
+    "SYSCALL GET FIRST MESSAGE",
+    "SYSCALL SEND MESSAGE RIGHT",
+    "SYSCALL SEND MESSAGE PORT",
+    "SYSCALL CREATE PORT",
+    "SYSCALL SET ATTRIBUTE",
+    "SYSCALL SET INTERRUPT",
+    "SYSCALL SET RIGHT",
+    "SYSCALL SET NAMESPACE",
+    "SYSCALL SET LOG PORT",
+
+    "SYSCALL GET PAGE TABLE",
+    "EMPTY!",
+    "SYSCALL TRANSFER REGION",
+    "SYSCALL CREATE NORMAL REGION",
+    "SYSCALL GET REGISTERS",
+    "SYSCALL CREATE PHYS REGION",
+    "SYSCALL DELETE REGION",
+    "SYSCALL UNMAP RANGE",
+    "SYSCALL MEM PROTECT",
+    "SYSCALL SET REGISTERS",
+
+    "SYSCALL ASSIGN PAGE TABLE",
+    "SYSCALL CREATE MEM OBJECT",
+    "SYSCALL CREATE TASK GROUP",
+    "SYSCALL ADD TO TASK GROUP",
+    "SYSCALL REMOVE TASK FROM GROUP",
+    "SYSCALL CHECK IF TASK IN GROUP",
+
+    "SYSCALL SET NOTIFY MASK",
+    "SYSCALL LOAD EXECUTABLE",
+    "SYSCALL REQUEST TIMER",
+    "SYSCALL SET AFFINITY",
+    "SYSCALL COMPLETE INTERRUPT",
+    "SYSCALL YIELD",
+    "SYSCALL MAP MEM OBJECT",
+    "SYSCALL UNSET INTERRUPT",
+    "SYSCALL GET TIME",
+    "SYSCALL GET SYSTEM INFO",
+    "SYSCALL KILL TASK",
+    "SYSCALL PAUSE TASK",
+    "SYSCALL RESUME TASK",
+    "SYSCALL GET PAGE ADDRESS",
+    "SYSCALL RELEASE MEM OBJECT",
+    "SYSCALL MEM OBJECT GET PAGE ADDRESS",
+    "SYSCALL DELETE PORT",
+    "SYSCALL ALLOCATE INTERRUPT",
+    "SYSCALL SET RIGHT 0",
+    "SYSCALL DELETE SEND RIGHT",
+    "SYSCALL ACCEPT RIGHTS",
+    "SYSCALL DUP RIGHT",
+    "SYSCALL GET MEM OBJECT SIZE",
+    "SYSCALL TRANSFER RIGHT",
+};
+
+const char *syscall_name(unsigned id)
+{
+    const char *c = "UNKNOWN!";
+    if (syscall_names.size() > id)
+        c = syscall_names[id];
+    return c;
+}
+
 using syscall_function                         = void (*)();
 std::array<syscall_function, 59> syscall_table = {
     syscall_exit,
@@ -156,8 +230,9 @@ extern "C" void syscall_handler()
     // sched::get_cpu_struct()->current_task->name.c_str()); t_print_bochs(" %h %h %h %h %h ", arg1,
     // arg2, arg3, arg4, arg5);
     if (task->attr.debug_syscalls) {
-        serial_logger.printf("Debug: syscall %h (%i) pid %h\n", call_n, call_n,
-                             sched::get_cpu_struct()->current_task->task_id);
+        auto current = sched::get_cpu_struct()->current_task;
+        serial_logger.printf("Debug: syscall %h (%i %s) pid %lx (%s)\n", call_n, call_n, syscall_name(call_n),
+                             current->task_id, current->name.c_str());
     }
 
     // TODO: This crashes if the syscall is not implemented
@@ -172,7 +247,7 @@ extern "C" void syscall_handler()
     syscall_table[call_n]();
 
     if ((syscall_error(task) < 0) && !task->regs.syscall_pending_restart()) {
-        serial_logger.printf("Debug: syscall %h (%i) pid %li (%s) ", call_n, call_n, task->task_id,
+        serial_logger.printf("Debug: syscall %i (%s) pid %li (%s) ", call_n, syscall_name(call_n), task->task_id,
                              task->name.c_str());
         int val = syscall_error(task);
         serial_logger.printf(" -> %i (%s)\n", val, "syscall failed");
