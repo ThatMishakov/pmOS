@@ -156,7 +156,7 @@ extern "C" void syscall_handler()
     // sched::get_cpu_struct()->current_task->name.c_str()); t_print_bochs(" %h %h %h %h %h ", arg1,
     // arg2, arg3, arg4, arg5);
     if (task->attr.debug_syscalls) {
-        serial_logger.printf("Debug: syscall %h pid %h\n", call_n,
+        serial_logger.printf("Debug: syscall %h (%i) pid %h\n", call_n, call_n,
                              sched::get_cpu_struct()->current_task->task_id);
     }
 
@@ -1258,8 +1258,17 @@ void syscall_transfer_region()
 
     u64 to_page_table = syscall_arg64(current, 0);
     u64 dest          = syscall_arg64(current, 1);
-    ulong region      = syscall_arg(current, 2, 2);
+    ulong region;
     ulong flags       = syscall_flags(current);
+
+    auto r = syscall_args_checked(current, 2, 2, 1, &region);
+    if (!r.success()) {
+        syscall_error(current) = r.result;
+        return;
+    }
+
+    if (!r.val)
+        return;
 
     auto pt = Arch_Page_Table::get_page_table(to_page_table);
     if (!pt) {

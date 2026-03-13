@@ -34,8 +34,11 @@ __pthread_entry_point:
     movl $0, %ebp
 	pushl %ebp
 
+    subl $12, %esp
+    calll __set_process_namespace
+    addl $12, %esp
     
-    # %eax is the function pointer
+    # %esi is the function pointer
 
     subl $8, %esp
     # Pass the arguments to the function
