@@ -74,20 +74,20 @@ bool read_data(char *data, bool *is_second)
 
 void react_data(uint8_t data, unsigned char port_num)
 {
-    size_t size = sizeof(IPC_PS2_Notify_Data) + 1;
+    // size_t size = sizeof(IPC_PS2_Notify_Data) + 1;
 
-    IPC_PS2_Notify_Data *str = alloca(size);
+    // IPC_PS2_Notify_Data *str = alloca(size);
 
-    str->type          = IPC_PS2_Notify_Data_NUM;
-    str->flags         = 0;
-    str->internal_id   = port_num;
-    str->task_group_id = pmos_process_task_group();
-    str->data[0]       = data;
+    // str->type          = IPC_PS2_Notify_Data_NUM;
+    // str->flags         = 0;
+    // str->internal_id   = port_num;
+    // str->task_group_id = pmos_process_task_group();
+    // str->data[0]       = data;
 
-    result_t result = send_message_right(ports[port_num].notification_right, 0, (char *)str, size, NULL, 0).result;
-    if (result != SUCCESS) {
-        printf("[i8042] Warning: Could not send message to get the interrupt\n");
-    }
+    // result_t result = send_message_right(ports[port_num].notification_right, 0, (char *)str, size, NULL, 0).result;
+    // if (result != SUCCESS) {
+    //     printf("[i8042] Warning: Could not send message to get the interrupt\n");
+    // }
 }
 
 void react_port_int(unsigned port_num)

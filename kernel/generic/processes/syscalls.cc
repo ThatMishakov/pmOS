@@ -92,7 +92,7 @@ std::array<const char *, 59> syscall_names = {
     "SYSCALL SET LOG PORT",
 
     "SYSCALL GET PAGE TABLE",
-    "EMPTY!",
+    "SYSCALL DELETE RECEIVE RIGHT",
     "SYSCALL TRANSFER REGION",
     "SYSCALL CREATE NORMAL REGION",
     "SYSCALL GET REGISTERS",

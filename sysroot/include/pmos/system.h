@@ -453,6 +453,12 @@ right_request_t transfer_right(uint64_t task_group, pmos_right_t right, unsigned
 result_t delete_right(pmos_right_t right_id);
 result_t delete_right_raw(pmos_right_t right_id);
 
+/// @brief Deletes the receive right for the given port
+/// @param port Port for which the right should be deleted
+/// @param receive_right_id ID of the right in the port. Does nothing if it is 0.
+/// @return 0 on success, -errno (typical kernel thing) on error
+result_t delete_receive_right(pmos_port_t port, pmos_right_t receive_right_id);
+
 typedef struct message_extra_t {
     pmos_right_t extra_rights[4];
     mem_object_t memory_object;

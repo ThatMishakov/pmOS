@@ -44,6 +44,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pmos/pmbus_helper.h>
+#include <pmos/pmbus_object.h>
+
+struct pmos_msgloop_data msgloop_data;
 
 bool has_second_channel = false;
 
@@ -249,118 +253,112 @@ void init_interrupts()
 #define BGRN "\e[1;32m"
 #define CRESET "\e[0m"
 
-pmos_right_t register_port(unsigned char id, pmos_right_t *main_right, pmos_right_t *configuration_right)
+
+struct pmbus_helper *pmbus_helper = NULL;
+
+pmos_right_t port_0_right = 0;
+pmos_right_t port_1_right = 0;
+
+pmos_right_t port_0_receive_right = 0;
+pmos_right_t port_1_receive_right = 0;
+
+pmos_msgloop_tree_node_t port0_node, port1_node;
+
+void publish_callback(int status, uint64_t object_id, void *ctx, struct pmbus_helper *helper)
 {
-    pmos_right_t main_right_s = INVALID_RIGHT;
-    pmos_right_t configuration_right_s = INVALID_RIGHT;
-    pmos_right_t recieved_rights[4] = {};
-    unsigned char *message  = NULL;
+    (void)helper;
+    unsigned id = (unsigned)(uintptr_t)ctx;
+    if (status < 0) {
+        fprintf(stderr, "Failed to publish pmbus object for port %u: %i\n", id, status);
+    } else {
+        printf("Published object with id %" PRIu64 " for port %i!\n", object_id, id);
+    }
+}
 
-    right_request_t req = create_right(main_port, main_right, 0);
+int port_callback(Message_Descriptor *, void *,
+                                       pmos_right_t *, pmos_right_t *,
+                                       void *ctx, struct pmos_msgloop_data *)
+{
+    unsigned port = (int)(uintptr_t)ctx;
+
+    printf("i8042 received message on for port %u!\n", port);
+    return PMOS_MSGLOOP_CONTINUE;
+}
+
+void register_port(unsigned char id)
+{
+    printf("i8042: registeting port %u\n", id);
+    if (!pmbus_helper) {
+        pmbus_helper = pmbus_helper_create(&msgloop_data);
+        
+        if (!pmbus_helper) {
+            fprintf(stderr, "Failed to create pmbus helper (probably no memory!)\n");
+            exit(1);
+        }
+    }
+
+    pmos_right_t *right, *receive_right;
+    pmos_msgloop_tree_node_t *node;
+    if (id == 0) {
+        right = &port_0_right;
+        receive_right = &port_0_receive_right;
+        node = &port0_node;
+    } else {
+        right = &port_1_right;
+        receive_right = &port_1_receive_right;
+        node = &port1_node;
+    }
+
+    right_request_t req = create_right(main_port, receive_right, 0);
     if (req.result) {
-        fprintf(stderr, BRED "[i8042] Warning: failed to create right for port: %" PRIi64 CRESET "\n", req.result);
-        goto error;
+        fprintf(stderr, "Failed to create right for port %u: %i\n", id, (int)req.result);
+        exit(1);
     }
-    main_right_s = req.right;
+    *right = req.right;
 
-    req = create_right(configuration_port, configuration_right, 0);
+    pmos_msgloop_node_set(node, *receive_right, port_callback, (void *)(uintptr_t)id);
+    pmos_msgloop_insert(&msgloop_data, node);
+
+    pmos_bus_object_t *object = pmos_bus_object_create();
+    
+    char name[64];
+    sprintf(name, "port_%i", id);
+
+    if (!pmos_bus_object_set_name(object, name)) {
+        fprintf(stderr, "Failed to set pmbus object name\n");
+        exit(1);
+    }
+
+    if (!pmos_bus_object_set_property_string(object, "device", "ps2_port")) {
+        fprintf(stderr, "Failed to set pmbus object property");
+        exit(1);
+    }
+
+    if (!pmos_bus_object_set_property_integer(object, "i8042_port", id)) {
+        fprintf(stderr, "Failed to set pmbus object property");
+        exit(1);
+    }
+
+    req = dup_right(*right);
     if (req.result) {
-        fprintf(stderr, BRED "[i8042] Warning: failed to create right for port: %" PRIi64 CRESET "\n", req.result);
-        goto error;
+        fprintf(stderr, "Failed to dup right for port %u: %i\n", id, (int)req.result);
+        exit(1);
     }
 
-    IPC_PS2_Reg_Port rreq = {
-        .type          = IPC_PS2_Reg_Port_NUM,
-        .flags         = 0,
-        .internal_id   = id,
-        .task_group_id = pmos_process_task_group(),
-    };
-
-    message_extra_t rights = {
-        .extra_rights = {main_right_s, configuration_right_s,},
-        .memory_object = 0,
-    };
-
-    req = send_message_right(ps2d_right, configuration_port, (char *)&rreq, sizeof(rreq), &rights, 0);
-    if (req.result != SUCCESS) {
-        fprintf(stderr, BRED "[i8042] Warning: Could not send message to register the port %u: %" PRIi64 CRESET "\n", id, req.result);
-        goto error;
+    int result = pmbus_helper_publish(pmbus_helper, object, req.right, publish_callback, (void *)(uintptr_t)id);
+    if (result < 0) {
+        fprintf(stderr, "Failed to publish object for port %u: %i\n", id, result);
+        exit(1);
     }
-
-    main_right_s = configuration_right_s = INVALID_RIGHT;
-
-    Message_Descriptor desc = {};
-    result_t result                  = get_message(&desc, &message, configuration_port, NULL, recieved_rights);
-
-    if (result != SUCCESS) {
-        printf("[i8042] Warning: Could not get message\n");
-        return 0;
-    }
-
-    if (desc.size < sizeof(IPC_PS2_Config)) {
-        printf("[i8042] Warning: Recieved message which is too small\n");
-        goto error;
-    }
-
-    IPC_PS2_Config *reply = (IPC_PS2_Config *)message;
-
-    if (reply->type != IPC_PS2_Config_NUM) {
-        printf("[i8042] Warning: Recieved unexepcted message type\n");
-        goto error;
-    }
-
-    if (reply->request_type != IPC_PS2_Config_Reg_Port) {
-        printf("[i8042] Warning: Could register port %i\n", id);
-        goto error;
-    }
-
-    if (reply->result) {
-        printf("[i8042] Warning: Did not register the port\n");
-        goto error;
-    }
-
-    if (!recieved_rights[0]) {
-        fprintf(stderr, BRED "[i8042] Warning: Recieved register success with no right" CRESET "\n");
-        goto error;
-    }
-
-    free(message);
-
-    for (int i = 1; i < 4; ++i)
-        if (recieved_rights[i])
-            delete_right(recieved_rights[i]);
-
-    return recieved_rights[0];
-
-error:
-    if (main_right_s)
-        delete_right(main_right_s);
-    if (configuration_right_s)
-        delete_right(configuration_right_s);
-    free(message);
-    for (int i = 0; i < 4; ++i)
-        if (recieved_rights[i])
-            delete_right(recieved_rights[i]);
-
-    return INVALID_RIGHT;
 };
 
 void register_ports()
 {
-    bool success = false;
-
     if (first_port_works)
-        success = (ports[0].notification_right = register_port(0, NULL, NULL));
+        register_port(0);
 
     if (second_port_works)
-        ports[1].notification_right = register_port(1, NULL, NULL);
-
-    success = success || ports[1].notification_right;
-
-    if (!success) {
-        fprintf(stderr, "[i8042] Error: Could not register ports with PS2d\n");
-        exit(1);
-    }
+        register_port(1);
 }
 
 void wait_output_set()
@@ -538,6 +536,85 @@ void parse_args(int argc, char **argv)
     }
 }
 
+int main_callback(Message_Descriptor *desc, void *message,
+                                       pmos_right_t *, pmos_right_t *,
+                                       void *, struct pmos_msgloop_data *)
+{
+    if (desc->size < IPC_MIN_SIZE) {
+        fprintf(stderr, "[i8042] Error: Message too small (size %" PRIu64 ")\n", desc->size);
+        return PMOS_MSGLOOP_CONTINUE;
+    }
+
+    int mutex_result = pthread_mutex_lock(&ports_mutex);
+    if (mutex_result != 0) {
+        fprintf(stderr, "[i8042] Error: Could not lock mutex\n");
+        return PMOS_MSGLOOP_CONTINUE;
+    }
+
+    switch (IPC_TYPE(message)) {
+    case IPC_Kernel_Interrupt_NUM: {
+        if (desc->size < sizeof(IPC_Kernel_Interrupt)) {
+            printf("[i8042] Warning: message for type %i is too small (size %" PRIu64 ")\n",
+                    IPC_Kernel_Interrupt_NUM, desc->size);
+            break;
+        }
+
+        IPC_Kernel_Interrupt *str = (IPC_Kernel_Interrupt *)message;
+
+        if (str->intno == port1_int) {
+            react_port1_int();
+            break;
+        }
+
+        if (str->intno == port2_int) {
+            react_port2_int();
+            break;
+        }
+
+        printf("[i8042] Warning: Recieved unknown interrupt %i\n", str->intno);
+    } break;
+    case IPC_Timer_Reply_NUM: {
+        unsigned expected_size = sizeof(IPC_Timer_Reply);
+        if (desc->size != expected_size) {
+            fprintf(stderr,
+                    "[i8042] Warning: Recieved message of wrong size on port (expected "
+                    "%x got %" PRIu64 ")\n",
+                    expected_size, desc->size);
+            break;
+        }
+
+        IPC_Timer_Reply *reply = (IPC_Timer_Reply *)message;
+
+        if (reply->type != IPC_Timer_Reply_NUM) {
+            fprintf(stderr, "[i8042] Warning: Recieved unexpected meesage of type %x\n",
+                    reply->type);
+            break;
+        }
+
+        react_timer(reply->timer_id);
+
+        break;
+    }
+    // case IPC_PS2_Send_Data_NUM: {
+    //     IPC_PS2_Send_Data *d = (IPC_PS2_Send_Data *)message;
+    //     react_send_data(d, desc.size);
+    //     break;
+    // }
+    default:
+        fprintf(stderr, "[i8042] Warning: Recieved message of unknown type %x\n",
+                IPC_TYPE(message));
+        break;
+    }
+
+    mutex_result = pthread_mutex_unlock(&ports_mutex);
+    if (mutex_result != 0) {
+        fprintf(stderr, "[i8042] Error: Could not unlock mutex\n");
+        exit(mutex_result);
+    }
+
+    return PMOS_MSGLOOP_CONTINUE;
+}
+
 int main(int argc, char **argv)
 {
     parse_args(argc, argv);
@@ -558,29 +635,12 @@ int main(int argc, char **argv)
             return 0;
         }
         main_port = req.port;
-
-        static const char *devicesd_port_name = "/pmos/devicesd";
-        right_request_t devicesd_right_req =
-            get_right_by_name(devicesd_port_name, strlen(devicesd_port_name), 0);
-        if (devicesd_right_req.result != SUCCESS) {
-            printf("[i8042] Warning: Could not get devicesd port. Error %" PRIi64 "\n",
-                   devicesd_right_req.result);
-            return 0;
-        }
-        devicesd_right = devicesd_right_req.right;
-
-        static const char *ps2d_port_name = "/pmos/ps2d";
-        right_request_t ps2d_right_req = get_right_by_name(ps2d_port_name, strlen(ps2d_port_name), 0);
-        if (ps2d_right_req.result != SUCCESS) {
-            printf("[i8042] Warning: Could not get devicesd port. Error %" PRIi64 "\n",
-                   ps2d_right_req.result);
-            return 0;
-        }
-        ps2d_right = ps2d_right_req.right;
     }
 
+    pmos_msgloop_initialize(&msgloop_data, main_port);
+
     pmos_request_io_permission();
-    request_priority(1);
+    //request_priority(1);
     init_controller();
 
     if (!first_port_works && !second_port_works) {
@@ -596,91 +656,7 @@ int main(int argc, char **argv)
 
     poll_ports();
 
-    while (1) {
-        result_t result;
-
-        Message_Descriptor desc = {};
-        unsigned char *message  = NULL;
-        result                  = get_message(&desc, &message, main_port, NULL, NULL);
-
-        if (result != SUCCESS) {
-            fprintf(stderr, "[i8042] Error: Could not get message\n");
-        }
-
-        if (desc.size < IPC_MIN_SIZE) {
-            fprintf(stderr, "[i8042] Error: Message too small (size %" PRIu64 ")\n", desc.size);
-            free(message);
-        }
-
-        int mutex_result = pthread_mutex_lock(&ports_mutex);
-        if (mutex_result != 0) {
-            fprintf(stderr, "[i8042] Error: Could not lock mutex\n");
-            free(message);
-            continue;
-        }
-
-        switch (IPC_TYPE(message)) {
-        case IPC_Kernel_Interrupt_NUM: {
-            if (desc.size < sizeof(IPC_Kernel_Interrupt)) {
-                printf("[i8042] Warning: message for type %i is too small (size %" PRIu64 ")\n",
-                       IPC_Kernel_Interrupt_NUM, desc.size);
-                break;
-            }
-
-            IPC_Kernel_Interrupt *str = (IPC_Kernel_Interrupt *)message;
-
-            if (str->intno == port1_int) {
-                react_port1_int();
-                break;
-            }
-
-            if (str->intno == port2_int) {
-                react_port2_int();
-                break;
-            }
-
-            printf("[i8042] Warning: Recieved unknown interrupt %i\n", str->intno);
-        } break;
-        case IPC_Timer_Reply_NUM: {
-            unsigned expected_size = sizeof(IPC_Timer_Reply);
-            if (desc.size != expected_size) {
-                fprintf(stderr,
-                        "[i8042] Warning: Recieved message of wrong size on port (expected "
-                        "%x got %" PRIu64 ")\n",
-                        expected_size, desc.size);
-                break;
-            }
-
-            IPC_Timer_Reply *reply = (IPC_Timer_Reply *)message;
-
-            if (reply->type != IPC_Timer_Reply_NUM) {
-                fprintf(stderr, "[i8042] Warning: Recieved unexpected meesage of type %x\n",
-                        reply->type);
-                break;
-            }
-
-            react_timer(reply->timer_id);
-
-            break;
-        }
-        case IPC_PS2_Send_Data_NUM: {
-            IPC_PS2_Send_Data *d = (IPC_PS2_Send_Data *)message;
-            react_send_data(d, desc.size);
-            break;
-        }
-        default:
-            fprintf(stderr, "[i8042] Warning: Recieved message of unknown type %x\n",
-                    IPC_TYPE(message));
-            break;
-        }
-
-        mutex_result = pthread_mutex_unlock(&ports_mutex);
-        if (mutex_result != 0) {
-            fprintf(stderr, "[i8042] Error: Could not unlock mutex\n");
-            exit(mutex_result);
-        }
-        free(message);
-    }
+    pmos_msgloop_loop(&msgloop_data);
 
     return 0;
 }

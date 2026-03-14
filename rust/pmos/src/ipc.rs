@@ -73,6 +73,11 @@ unsafe extern "C" {
         aux_info: *const SendRightAux,
         flags: c_uint,
     ) -> RightRequestResult;
+
+    unsafe fn delete_receive_right(
+        port: Port,
+        receive_right: Right,
+    ) -> ResultT;
 }
 
 impl Drop for IPCPort {
@@ -181,7 +186,7 @@ impl IPCPort {
             unsafe { create_right(self.port, &raw mut recieve_id, CREATE_RIGHT_SEND_ONCE) };
 
         if result.success() {
-            Some((SendOnceRight(right), RecieveRight(recieve_id)))
+            Some((SendOnceRight(right), RecieveRight(recieve_id, self.port)))
         } else {
             None
         }
@@ -193,7 +198,7 @@ impl IPCPort {
             unsafe { create_right(self.port, &raw mut recieve_id, 0) };
 
         if result.success() {
-            Some((SendManyRight(right), RecieveRight(recieve_id)))
+            Some((SendManyRight(right), RecieveRight(recieve_id, self.port)))
         } else {
             None
         }
@@ -302,7 +307,7 @@ pub fn send_message_right(
     }
 
     if result != 0 {
-        Ok(Some(RecieveRight(result)))
+        Ok(Some(RecieveRight(result, reply_port.unwrap().0.port)))
     } else {
         Ok(None)
     }
@@ -360,7 +365,7 @@ pub fn send_message_right_consume(
     }
 
     if result != 0 {
-        Ok(Some(RecieveRight(result)))
+        Ok(Some(RecieveRight(result, reply_port.unwrap().0.port)))
     } else {
         Ok(None)
     }
@@ -414,8 +419,15 @@ impl Eq for SendRight {}
 
 pub struct SendManyRight(Right);
 pub struct SendOnceRight(Right);
-pub struct RecieveRight(Right);
+pub struct RecieveRight(Right, Port);
 // TODO: Destructor for this
+
+impl Drop for RecieveRight {
+    fn drop(&mut self) {
+        let RecieveRight(right, port) = *self;
+        _ = unsafe { delete_receive_right(right, port)}
+    }
+}
 
 impl SendManyRight {
     fn new(id: Right) -> Self {
