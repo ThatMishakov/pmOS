@@ -222,6 +222,7 @@ isodir: ../kernel/build/kernel ../bootstrapd/build/bootstrapd ../devicesd/device
 	cp -v ../i8042/i8042.elf isodir/
 	cp -v ../blockd/blockd.elf isodir/
 	cp -v ../pmbus/bin/pmbus isodir/
+	cp -v ../ahcid/ahcid.elf isodir/
 	# cp -v ../test/test.elf isodir
 	cp -v init.yaml isodir/
 

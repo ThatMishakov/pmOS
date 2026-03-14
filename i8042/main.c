@@ -60,9 +60,6 @@ bool enable_second_channel = true;
 pmos_port_t main_port          = 0;
 pmos_port_t configuration_port = 0;
 
-pmos_right_t devicesd_right = 0;
-pmos_right_t ps2d_right     = 0;
-
 __thread pmos_port_t control_port = 0;
 pmos_port_t get_control_port()
 {
@@ -77,6 +74,8 @@ pmos_port_t get_control_port()
 
     return control_port;
 }
+
+pmos_right_t right_to_device = 0;
 
 uint8_t get_interrupt_number(uint32_t intnum, uint64_t int_port)
 {
@@ -96,7 +95,7 @@ uint8_t get_interrupt_number(uint32_t intnum, uint64_t int_port)
                        .dest_task  = mypid,
                        .dest_chan  = int_port,
     };
-    result_t result = send_message_right(devicesd_right, control_port, (char *)&m, sizeof(m), NULL, 0).result;
+    result_t result = send_message_right(right_to_device, control_port, (char *)&m, sizeof(m), NULL, 0).result;
     if (result != SUCCESS) {
         printf("[i8042] Warning: Could not send message to get the interrupt\n");
         return 0;
@@ -491,8 +490,6 @@ uint8_t port1_int = 0;
 uint8_t port2_int = 0;
 
 pthread_mutex_t ports_mutex = PTHREAD_MUTEX_INITIALIZER;
-
-pmos_right_t right_to_device = 0;
 
 void usage(char *name)
 {

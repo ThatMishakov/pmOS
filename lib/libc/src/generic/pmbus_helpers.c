@@ -154,6 +154,7 @@ static int send_object_callback(Message_Descriptor *desc, void *message, pmos_ri
 
     struct object_request *req = ctx;
     pmos_msgloop_erase(data, &req->node);
+    req->reply_right = 0;
     struct pmbus_helper *helper = req->helper;
     ll_delete(&helper->next_pending, req);
 
@@ -252,8 +253,9 @@ static int send_pmbus_object(struct pmbus_helper *helper, struct object_request 
 
     req_owning->object_right_owning = 0;
     req_owning->reply_right = reply_right.right;
-    pmos_msgloop_node_set(&req_owning->node, reply_right.right, send_object_callback, req_owning);
+    pmos_msgloop_node_set(&req_owning->node, 0, send_object_callback, req_owning);
     pmos_msgloop_insert(helper->for_msgloop, &req_owning->node);
+
 
     ll_push(&helper->next_pending, req_owning);
     req_owning = NULL;
