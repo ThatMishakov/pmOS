@@ -612,7 +612,7 @@ void ahci_controller_main()
             auto len  = desc.size - offsetof(IPC_Kernel_Named_Port_Notification, port_name);
             auto name = std::string_view(kmsg->port_name, len);
             if (name == pmbus_port_name) {
-                pmbus_port_ready(kmsg->port_num);
+                // pmbus_port_ready(kmsg->port_num);
             } else {
                 printf("Unknown named port notification: %.*s\n", (int)len, kmsg->port_name);
             }
