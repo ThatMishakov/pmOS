@@ -46,6 +46,7 @@
 #include <string.h>
 #include <timers/hpet.h>
 #include <timers/timers.h>
+#include <pmos/pmbus_helper.h>
 
 char *exec = NULL;
 
@@ -71,8 +72,6 @@ void request_pci_devices(Message_Descriptor *desc, IPC_Request_PCI_Devices *d,
 void request_pci_device(Message_Descriptor *desc, IPC_Request_PCI_Device *d,
                         pmos_right_t reply_right);
 void request_pci_device_gsi(Message_Descriptor *desc, IPC_Request_PCI_Device_GSI *d);
-void named_port_notification(Message_Descriptor *desc, IPC_Kernel_Named_Port_Notification *n,
-                             pmos_right_t first_right);
 void publish_object_reply(Message_Descriptor *desc, IPC_BUS_Publish_Object_Reply *r);
 
 void init_acpi();
@@ -139,22 +138,23 @@ int default_callback(Message_Descriptor *desc, void *msg_buff, pmos_right_t *rep
         case IPC_Request_PCI_Device_GSI_NUM:
             request_pci_device_gsi(desc, (IPC_Request_PCI_Device_GSI *)msg_buff);
             break;
-        case IPC_Kernel_Named_Port_Notification_NUM:
-            named_port_notification(desc, (IPC_Kernel_Named_Port_Notification *)msg_buff,
-                                    other_rights[0]);
-            other_rights[0] = 0;
-            break;
-        default:
+        // case IPC_Kernel_Named_Port_Notification_NUM:
+        //     named_port_notification(desc, (IPC_Kernel_Named_Port_Notification *)msg_buff,
+        //                             other_rights[0]);
+        //     other_rights[0] = 0;
+        //     break;
+        // default:
             printf("[devicesd] Warning: Recieved unknown message %x from PID %li\n",
                    ((IPC_Generic_Msg *)msg_buff)->type, desc->sender);
             break;
         }
     }
 
-    return 0;
+    return PMOS_MSGLOOP_CONTINUE;
 }
 
 struct pmos_msgloop_data main_msgloop_data;
+struct pmbus_helper *pmbus_helper = NULL;
 
 int main(int , char **)
 {
@@ -192,6 +192,15 @@ int main(int , char **)
         recieve_right = right_req.right;
     }
 
+    pmos_msgloop_initialize(&main_msgloop_data, main_port);
+
+    pmbus_helper = pmbus_helper_create(&main_msgloop_data);
+    if (!pmbus_helper) {
+        printf("Failed to initialize pmbus helper!\n");
+        return 0;
+    }
+
+
     init_dtb();
     init_acpi();
     init_serial();
@@ -219,12 +228,11 @@ int main(int , char **)
     // pthread_detach(thread);
     // --------------------------------------------------
 
-    pmos_msgloop_initialize(&main_msgloop_data, main_port);
-
     pmos_msgloop_tree_node_t n;
-    pmos_msgloop_node_set(&n, 0, default_callback, &main_msgloop_data);
+    pmos_msgloop_node_set(&n, main_recieve_right, default_callback, &main_msgloop_data);
     pmos_msgloop_insert(&main_msgloop_data, &n);
     pmos_msgloop_loop(&main_msgloop_data);
 
+    printf("devicesd main return 0\n");
     return 0;
 }

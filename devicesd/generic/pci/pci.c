@@ -46,8 +46,10 @@
 #include <uacpi/resources.h>
 #include <uacpi/tables.h>
 #include <uacpi/utilities.h>
-#include "../pmbus.h"
+#include <pmos/pmbus_helper.h>
 
+extern pmos_port_t main_port;
+extern struct pmbus_helper *pmbus_helper;
 PCIDeviceVector pci_devices = VECTOR_INIT;
 
 void check_bus(struct PCIHostBridge *g, uint8_t bus, struct PCIDevice *parent_bridge,
@@ -570,8 +572,32 @@ uacpi_iteration_decision pci_check_acpi_root(void *, uacpi_namespace_node *node,
     return UACPI_ITERATION_DECISION_CONTINUE;
 }
 
+void pci_register_callback(int status, uint64_t sequence_number, void *ctx, struct pmbus_helper *)
+{
+    struct PCIDevice *d = ctx;
+    if (status < 0) {
+        printf("Failed to register PCI device %x:%x:%x.%x, error: %i\n", d->group, d->bus, d->device, d->function, status);
+    } else {
+        printf("Published PCI device %x:%x:%x.%x, sequence: %" PRIu64 "\n", d->group, d->bus, d->device, d->function, sequence_number);
+    }
+}
+
 void publish_pci_device(struct PCIDevice * device)
 {
+    right_request_t req = create_right(main_port, &device->receive_right, 0);
+    if (req.result) {
+        fprintf(stderr, "Failed to create a right for a PCI device, error: %i (%s)\n", (int)req.result, strerror(-(int)req.result));
+        return;
+    }
+    device->send_right = req.right;
+
+    if (!pmbus_helper) {
+        fprintf(stderr, "Failed to publish a PCI device, no pmbus helper...\n");
+        return;
+    }
+
+    // TODO: Install a callback for this...
+
     pmos_bus_object_t *bus_object = NULL;
 
     bus_object = pmos_bus_object_create();
@@ -651,7 +677,13 @@ void publish_pci_device(struct PCIDevice * device)
         goto error;
     }
 
-    int result = register_pci_object(bus_object, device);
+    req = dup_right(req.right);
+    if (req.result) {
+        fprintf(stderr, "Failed to dup right: %i (%s)\n", (int)req.result, strerror(-(int)req.result));
+        goto error;
+    }
+
+    int result = pmbus_helper_publish(pmbus_helper, bus_object, req.right, pci_register_callback, device);
     bus_object = NULL;
     if (result < 0) {
         fprintf(stderr, "Failed to publish pmbus object: %i (%s)\n", result, strerror(-result));

@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+// #include <assert.h>
 
 static int default_handler(Message_Descriptor *desc, void *message, pmos_right_t *reply_right,
                            pmos_right_t *other, void *ctx, struct pmos_msgloop_data *data)
@@ -48,6 +49,13 @@ void pmos_msgloop_erase(struct pmos_msgloop_data *data, pmos_msgloop_tree_node_t
     assert(data);
     if (!node)
         return;
+
+    if (!node->data.right_id) {
+        data->default_node = NULL;
+        return;
+    }
+
+    //assert(pmos_msgloop_get(data, node->data.right_id) == node);
 
     // Cut corners and don't search
     pmos_msgloop_tree_remove(&data->nodes, node);

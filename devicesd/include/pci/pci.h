@@ -109,6 +109,8 @@ struct PCIDevice {
     uint8_t prog_if;
     uint8_t revision_id;
 
+    pmos_right_t send_right;
+    pmos_right_t receive_right;
     struct PCIDevice *associated_bridge;
 
     int pcie : 1;

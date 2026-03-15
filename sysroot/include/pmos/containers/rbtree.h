@@ -83,6 +83,7 @@
                     parent->color      = NAME##_BLACK;                                            \
                     uncle->color       = NAME##_BLACK;                                            \
                     grandparent->color = NAME##_RED;                                              \
+                    node               = grandparent;                                             \
                 } else {                                                                          \
                     if (node == parent->left) {                                                   \
                         node = parent;                                                            \
@@ -132,6 +133,12 @@
         while (node != tree->root && (!node || node->color == NAME##_BLACK)) {                    \
             if (node == parent->left) {                                                           \
                 NAME##_node_t *sibling = parent->right;                                           \
+                /* Not sure this is necessary */                                                  \
+                if (!sibling) {                                                                   \
+                    node = parent;                                                                \
+                    parent = parent->parent;                                                      \
+                    continue;                                                                     \
+                }                                                                                 \
                 if (sibling->color == NAME##_RED) {                                               \
                     sibling->color = NAME##_BLACK;                                                \
                     parent->color  = NAME##_RED;                                                  \
@@ -160,7 +167,12 @@
                 }                                                                                 \
             } else {                                                                              \
                 NAME##_node_t *sibling = parent->left;                                            \
-                if (sibling->color == NAME##_RED) {                                             \
+                if (!sibling) {                                                                   \
+                    node = parent;                                                                \
+                    parent = parent->parent;                                                      \
+                    continue;                                                                     \
+                }                                                                                 \
+                if (sibling->color == NAME##_RED) {                                               \
                     sibling->color = NAME##_BLACK;                                                \
                     parent->color  = NAME##_RED;                                                  \
                     NAME##_rotate_right(tree, parent);                                            \

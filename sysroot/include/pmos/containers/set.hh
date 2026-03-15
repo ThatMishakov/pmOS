@@ -3,6 +3,7 @@
 #include "pair.hh"
 // utility is broken in kernel, so improvise...
 #include <pmos/utility/utility.hh>
+#include <cstddef>
 
 namespace pmos::containers
 {
@@ -40,7 +41,7 @@ public:
         iterator(tree_type::RBTreeIterator it): tree_type::RBTreeIterator(it) {}
     };
 
-    using size_type  = size_t;
+    using size_type  = std::size_t;
     using key_type   = T;
     using value_type = T;
     // node_type

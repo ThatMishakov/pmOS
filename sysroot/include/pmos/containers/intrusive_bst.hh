@@ -444,6 +444,12 @@ void RedBlackTree<T, bst_head, Compare>::fix_remove(T *&root, T *node, T *parent
     while (node != root and (!node or !(node->*bst_head).is_red())) {
         if (node == (parent->*bst_head).left) {
             T *sibling = (parent->*bst_head).right;
+            // I'm not sure about this
+            if (!sibling) {
+                node = parent;
+                parent = (node->*bst_head).get_parent();
+                continue;
+            }
             if ((sibling->*bst_head).is_red()) {
                 (sibling->*bst_head).set_color(false);
                 (parent->*bst_head).set_color(true);
@@ -474,6 +480,11 @@ void RedBlackTree<T, bst_head, Compare>::fix_remove(T *&root, T *node, T *parent
             }
         } else {
             T *sibling = (parent->*bst_head).left;
+            if (!sibling) {
+                node = parent;
+                parent = (node->*bst_head).get_parent();
+                continue;
+            }
             if ((sibling->*bst_head).is_red()) {
                 (sibling->*bst_head).set_color(false);
                 (parent->*bst_head).set_color(true);

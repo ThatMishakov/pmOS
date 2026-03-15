@@ -52,9 +52,12 @@
 #include <uacpi/osi.h>
 #include <uacpi/sleep.h>
 #include <uacpi/utilities.h>
-#include "../pmbus.h"
+#include <pmos/pmbus_helper.h>
 
 void init_acpi();
+
+extern pmos_port_t main_port;
+extern struct pmbus_helper *pmbus_helper;
 
 bool have_rsdp = false;
 extern uint64_t rsdp_desc;
@@ -634,6 +637,27 @@ void init_acpi()
     printf("Walked ACPI tables! ACPI revision: %i\n", acpi_revision);
 }
 
+struct ACPIDevice {
+    char *path;
+
+    pmos_right_t send_right;
+    pmos_right_t receive_right;
+
+    struct ACPIDevice *next;
+};
+
+struct ACPIDevice *acpi_devices = NULL;
+
+void acpi_register_callback(int result, uint64_t sequence_number, void *ctx, struct pmbus_helper *)
+{
+    struct ACPIDevice *device = ctx;
+    if (result < 0) {
+        fprintf(stderr, "Failed to publish ACPI device: %i (%s)\n", result, strerror(-result));
+    } else {
+        printf("Published %s! Sequence ID: %" PRIu64 "\n", device->path, sequence_number);
+    }
+}
+
 static uacpi_iteration_decision acpi_init_one_device(void *ctx, uacpi_namespace_node *node,
                                                      uacpi_u32 node_depth)
 {
@@ -642,6 +666,7 @@ static uacpi_iteration_decision acpi_init_one_device(void *ctx, uacpi_namespace_
     (void)ctx;
     const char *path              = NULL;
     pmos_bus_object_t *bus_object = NULL;
+    struct ACPIDevice *device = NULL;
 
     uacpi_status ret = uacpi_get_namespace_node_info(node, &info);
     if (uacpi_unlikely_error(ret)) {
@@ -652,11 +677,35 @@ static uacpi_iteration_decision acpi_init_one_device(void *ctx, uacpi_namespace_
     }
 
     if (info->flags & (UACPI_NS_NODE_INFO_HAS_HID | UACPI_NS_NODE_INFO_HAS_CID)) {
+        if (!pmbus_helper) {
+            fprintf(stderr, "Can't publish ACPI device: no pmbus helper\n");
+            goto _continue;
+        }
+
         path = uacpi_namespace_node_generate_absolute_path(node);
         if (!path) {
             fprintf(stderr, "Unable to get path for uACPI node...\n");
             goto _continue;
         }
+
+        device = calloc(1, sizeof(*device));
+        if (!device) {
+            fprintf(stderr, "Failed to allocate memory for ACPIDevice...\n");
+            goto _continue;
+        }
+
+        device->path = strdup(path);
+        if (!device->path) {
+            fprintf(stderr, "Couldn't allocate memory for device path...\n");
+            goto _continue;
+        }
+
+        right_request_t req = create_right(main_port, &device->receive_right, 0);
+        if (req.result) {
+            fprintf(stderr, "Failed to create right for the ACPI device: %" PRIi64 "...\n", req.result);
+            goto _continue;
+        }
+        device->send_right = req.right;
 
         bus_object = pmos_bus_object_create();
         if (!bus_object) {
@@ -726,16 +775,31 @@ static uacpi_iteration_decision acpi_init_one_device(void *ctx, uacpi_namespace_
             }
         }
 
-        int result = register_acpi_object(bus_object);
+        req = dup_right(req.right);
+        if (req.result) {
+            fprintf(stderr, "Failed to dup right for the ACPI device: %i (%s)\n", (int)req.result, strerror(-(int)req.result));
+            goto _continue;
+        }
+
+        int result = pmbus_helper_publish(pmbus_helper, bus_object, req.right, acpi_register_callback, device);
         bus_object = NULL;
         if (result < 0) {
             fprintf(stderr, "Failed to register object...\n");
             goto _continue;
         }
+
+        device->next = acpi_devices;
+        acpi_devices = device;
+        device = NULL;
     }
 _continue:
     pmos_bus_object_free(bus_object);
     uacpi_free_namespace_node_info(info);
+    if (device) {
+        delete_right(device->send_right);
+        free(device->path);
+        free(device);
+    }
     uacpi_free_absolute_path(path);
     return UACPI_ITERATION_DECISION_CONTINUE;
 }
