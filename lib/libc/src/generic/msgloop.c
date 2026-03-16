@@ -4,20 +4,27 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <pmos/ipc.h>
 // #include <assert.h>
 
 static int default_handler(Message_Descriptor *desc, void *message, pmos_right_t *reply_right,
                            pmos_right_t *other, void *ctx, struct pmos_msgloop_data *data)
 {
     (void)ctx;
-    (void)message;
     (void)reply_right;
     (void)other;
 
+    uint32_t type = 0;
+
+    if (desc->size > sizeof(IPC_Generic_Msg)) {
+        IPC_Generic_Msg *msg = message;
+        type = msg->type;
+    }
+
     fprintf(stderr,
             "pmOS libc: Error: Did not find callback for message in port %" PRIu64
-            ", sender %" PRIu64 ", right %" PRIu64 ", size %" PRIu64 "\n",
-            data->port, desc->sender, desc->sent_with_right, desc->size);
+            ", sender %" PRIu64 ", right %" PRIu64 ", size %" PRIu64 ", type %" PRIu32 "\n",
+            data->port, desc->sender, desc->sent_with_right, desc->size, type);
 
     return PMOS_MSGLOOP_CONTINUE;
 }

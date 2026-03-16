@@ -229,7 +229,8 @@ int main(int , char **)
     // --------------------------------------------------
 
     pmos_msgloop_tree_node_t n;
-    pmos_msgloop_node_set(&n, main_recieve_right, default_callback, &main_msgloop_data);
+    pmos_msgloop_node_set(&n, 0, default_callback, &main_msgloop_data);
+    // pmos_msgloop_node_set(&n, main_recieve_right, default_callback, &main_msgloop_data);
     pmos_msgloop_insert(&main_msgloop_data, &n);
     pmos_msgloop_loop(&main_msgloop_data);
 
