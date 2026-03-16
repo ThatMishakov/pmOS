@@ -35,12 +35,15 @@
 #include <stdlib.h>
 #include <string.h>
 #include <inttypes.h>
+#include <pmos/pmbus_helper.h>
 
 pmos_port_t main_port = 0;
 pmos_right_t main_right = INVALID_RIGHT;
 struct pmos_msgloop_data msgloop_data;
 
 pmos_port_t configuration_port = 0;
+
+struct pmbus_helper *main_pmbus_helper = NULL;
 
 int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_right,
                      pmos_right_t *extra_rights, void *ctx, struct pmos_msgloop_data *)
@@ -239,6 +242,12 @@ int main(int argc, char *argv[])
     }
 
     pmos_msgloop_initialize(&msgloop_data, main_port);
+
+    main_pmbus_helper = pmbus_helper_create(&msgloop_data);
+    if (!main_pmbus_helper) {
+        fprintf(stderr, "[PS2d] Error creating pmbus helper!\n");
+        return 1;
+    }
 
     register_with_controller();
 

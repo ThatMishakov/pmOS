@@ -48,8 +48,8 @@ uint64_t last_timer;
 uint32_t device_id = 0;
 unsigned device_id_size = 0;
 
-extern void (*managed_react_data)(unsigned char data) = NULL;
-extern void (*managed_react_timer)() = NULL;
+void (*managed_react_data)(unsigned char data) = NULL;
+void (*managed_react_timer)() = NULL;
 
 void start_port()
 {

@@ -30,6 +30,7 @@
 #define KEYBOARD_H
 #include <stdbool.h>
 #include <stdint.h>
+#include <pmos/helpers.h>
 
 struct port_list_node;
 
@@ -72,6 +73,9 @@ struct keyboard_state {
     struct keyboard_cmd cmd_buffer[KBD_CMD_BUFF_SIZE];
     unsigned cmd_buffer_start;
     unsigned cmd_buffer_index;
+
+    pmos_right_t receive_right;
+    pmos_msgloop_tree_node_t node;
 };
 
 struct keyboard_cmd *keyboard_cmd_get_front();

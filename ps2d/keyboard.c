@@ -33,6 +33,8 @@
 
 #include <stdio.h>
 #include <inttypes.h>
+#include <string.h>
+#include <pmos/pmbus_helper.h>
 
 struct keyboard_state kb_state;
 
@@ -146,9 +148,89 @@ bool init_keyboard()
     return true;
 }
 
-void register_keyboard() {}
+extern struct pmos_msgloop_data msgloop_data;
+extern struct pmbus_helper *main_pmbus_helper;
 
-void unregister_keyboard() {}
+static int keyboard_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_right,
+                     pmos_right_t *extra_rights, void *ctx, struct pmos_msgloop_data *)
+{
+    printf("Keyboard callback recieved a message...\n");
+    return PMOS_MSGLOOP_CONTINUE;
+}
+
+static void pmbus_callback(int status, uint64_t sequence_number, void *ctx, struct pmbus_helper *helper)
+{
+    (void)helper;
+    pmos_right_t right = *(pmos_right_t *)ctx;
+    free(ctx);
+
+    if (!status) {
+        printf("[PS2d] Published a keyboard with pmbus sequence id %" PRIu64 "!\n", sequence_number);
+    } else {
+        if (right != kb_state.receive_right)
+            return;
+
+        printf("[PS2d] Failed to publish a keyboard, status %i (%s)\n", status, strerror(-status));
+        exit(1);
+    }
+}
+
+void register_keyboard()
+{
+    pmos_right_t recieve_right;
+    right_request_t req = create_right(main_port, &recieve_right, 0);
+    if (req.result) {
+        fprintf(stderr, "[PS2d] Failed to create right for a keyboard: %i (%s)...\n", (int)req.result, strerror(-(int)req.result));
+        exit(1);
+    }
+    kb_state.receive_right = recieve_right;
+
+    pmos_msgloop_node_set(&kb_state.node, recieve_right, keyboard_callback, NULL);
+    pmos_msgloop_insert(&msgloop_data, &kb_state.node);
+
+    pmos_bus_object_t *obj = pmos_bus_object_create();
+    if (!obj) {
+        fprintf(stderr, "[PS2d] Failed to create a pmbus object...\n");
+        exit(1);
+    }
+
+    if (!pmos_bus_object_set_name(obj, "ps2_keyboard")) {
+        fprintf(stderr, "[PS2d] Failed to name the pmbus object for a keyboard...\n");
+        exit(1);
+    }
+
+    if (!pmos_bus_object_set_property_string(obj, "device", "keyboard")) {
+        fprintf(stderr, "[PS2d] Failed to set the device property in pmbus object...\n");
+        exit(1);
+    }
+
+    if (!pmos_bus_object_set_property_string(obj, "interface", "ps2")) {
+        fprintf(stderr, "[PS2d] Failed to set the interface property in pmbus object...\n");
+        exit(1);
+    }
+
+    pmos_right_t *right = malloc(sizeof(*right));
+    if (!right) {
+        fprintf(stderr, "[PS2d] Failed to allocate memory\n");
+        exit(1);
+    }
+    *right = recieve_right;
+
+    int result = pmbus_helper_publish(main_pmbus_helper, obj, req.right, pmbus_callback, right);
+    if (result) {
+        fprintf(stderr, "[PS2d] Failed to publish the object: %i (%s)\n", result, strerror(result));
+        free(right);
+        exit(1);
+    }
+}
+
+void unregister_keyboard() {
+    if (kb_state.receive_right) {
+        delete_receive_right(main_port, kb_state.receive_right);
+        pmos_msgloop_erase(&msgloop_data, &kb_state.node);
+        kb_state.receive_right = 0;
+    }
+}
 
 void keyboard_send_front_cmd()
 {

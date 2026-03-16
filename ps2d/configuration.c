@@ -35,8 +35,7 @@
 
 #include <inttypes.h>
 
-void unknown_react_timer()
-{}
+void unknown_react_timer() {}
 
 void unknown_react_data(unsigned char data)
 {
@@ -47,7 +46,7 @@ void unknown_react_data(unsigned char data)
     }
 }
 
-void configure_port(struct port_list_node *port)
+void configure_port()
 {
     bool inited_port = false;
 
@@ -56,7 +55,8 @@ void configure_port(struct port_list_node *port)
     }
 
     if (!inited_port) {
-        printf("[PS2d] Info: Found unknown device with type 0x%x (size %i)\n", device_id, device_id_size);
+        printf("[PS2d] Info: Found unknown device with type 0x%x (size %i)\n", device_id,
+               device_id_size);
 
         state               = PORT_STATE_MANAGED;
         managed_react_data  = &unknown_react_data;
