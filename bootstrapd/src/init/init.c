@@ -162,6 +162,40 @@ error:
     return NULL;
 }
 
+void *construct_devices_filter(char **strings)
+{
+    if (!strings || !strings[0])
+        return NULL;
+
+    pmos_bus_filter_disjunction *c = pmos_bus_filter_disjunction_create();
+    if (!c)
+        return NULL;
+
+    char **s = strings;
+    while (*s) {
+        pmos_bus_filter_equals *e = NULL;
+
+        e = pmos_bus_filter_equals_create("device", *s);
+        if (!e) {
+            print_str("Failed to create ACPI HID filter\n");
+            goto error;
+        }
+
+        if (pmos_bus_filter_disjunction_add(c, e) != 0) {
+            print_str("Failed to add ACPI CID filter to disjunction\n");
+            pmos_bus_filter_free(e);
+            goto error;
+        }
+
+        ++s;
+    }
+
+    return c;
+error:
+    pmos_bus_filter_disjunction_free(c);
+    return NULL;
+}
+
 
 void *construct_filter(struct Service *service)
 {
@@ -203,6 +237,20 @@ void *construct_filter(struct Service *service)
             void *a = construct_pci_filter(f->pci_filter);
             if (!a) {
                 print_str("PCI filter error (NULL) for service ");
+                print_str(service->name);
+                print_str("\n");
+                continue;
+            }
+
+            if (pmos_bus_filter_disjunction_add(d, a) < 0) {
+                print_str("Failed to add ACPI filter to disjunction\n");
+                pmos_bus_filter_free(a);
+                goto error;
+            }
+        } else if (!strcmp(f->key, "devices")) {
+            void *a = construct_devices_filter(f->strings);
+            if (!a) {
+                print_str("Devices filter error (NULL) for service ");
                 print_str(service->name);
                 print_str("\n");
                 continue;

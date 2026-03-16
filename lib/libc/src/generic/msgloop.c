@@ -16,7 +16,7 @@ static int default_handler(Message_Descriptor *desc, void *message, pmos_right_t
 
     uint32_t type = 0;
 
-    if (desc->size > sizeof(IPC_Generic_Msg)) {
+    if (desc->size >= sizeof(IPC_Generic_Msg)) {
         IPC_Generic_Msg *msg = message;
         type = msg->type;
     }

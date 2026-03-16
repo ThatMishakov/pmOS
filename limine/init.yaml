@@ -51,7 +51,10 @@ services:
 - name: ps2d
   path: /ps2d.elf
   description: PS/2 driver
-  run_type: RUN_MANUAL
+  run_type: FOR_EACH_MATCH
+  match:
+    devices:
+      - ps2_port
 
 - name: blockd
   path: /blockd.elf

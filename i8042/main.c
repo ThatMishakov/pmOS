@@ -270,7 +270,7 @@ void publish_callback(int status, uint64_t object_id, void *ctx, struct pmbus_he
     if (status < 0) {
         fprintf(stderr, "Failed to publish pmbus object for port %u: %i\n", id, status);
     } else {
-        printf("Published object with id %" PRIu64 " for port %i!\n", object_id, id);
+        printf("i8042: Published object with id %" PRIu64 " for port %i!\n", object_id, id);
     }
 }
 

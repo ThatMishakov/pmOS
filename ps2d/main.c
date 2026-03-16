@@ -40,8 +40,6 @@ pmos_port_t main_port = 0;
 
 pmos_right_t devicesd_right = 0;
 
-const char *ps2d_port_name = "/pmos/ps2d";
-
 pmos_right_t main_right = INVALID_RIGHT;
 
 int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_right,
@@ -108,9 +106,54 @@ int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_r
     }
 }
 
-int main()
+pmos_right_t right_to_device = INVALID_RIGHT;
+
+void usage(char *name)
 {
-    printf("Hello from PS2d! My PID: %li\n", get_task_id());
+    printf("ps2d Usage: %s --right-id <ID of the right to the ps2d controller>\n", name);
+    exit(1);
+}
+
+void parse_args(int argc, char **argv)
+{
+    if (argc < 1)
+        printf("ps2d: empty argc!\n");
+    char *name = argv[0];
+
+    bool have_right = false;
+
+    for (int i = 1; i < argc; ++i) {
+        char *r = argv[i];
+
+        if (!strcmp(r, "--right-id")) {
+            if (have_right) {
+                printf("ps2d: Repeated --right-id\n");
+                usage(name);
+            }
+
+            ++i;
+            if (i >= argc) {
+                printf("ps2d missing right ID\n");
+                usage(name);
+            }
+            right_to_device = strtoull(argv[i], NULL, 0);
+            have_right = true;
+        } else {
+            printf("Unrecognized argument %s\n", argv[i]);
+            usage(name);
+        }
+    }
+
+    if (!have_right) {
+        printf("ps2d: no right_id!\n");
+        usage(name);
+    }
+}
+
+int main(int argc, char *argv[])
+{
+    parse_args(argc, argv);
+    printf("Hello from PS2d! My PID: %" PRIi64 ", right to device: %"PRIu64 "\n", get_task_id(), right_to_device);
     {
         ports_request_t req;
 
@@ -126,12 +169,6 @@ int main()
         right_request_t r = create_right(main_port, &main_right, 0);
         if (r.result) {
             printf("Error %i creating right\n", (int)r.result);
-            return 1;
-        }
-
-        result_t rr = name_right(r.right, ps2d_port_name, strlen(ps2d_port_name), 0);
-        if (rr != SUCCESS) {
-            printf("Error %i naming port\n", (int)rr);
             return 1;
         }
     }

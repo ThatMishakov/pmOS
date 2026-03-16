@@ -53,6 +53,16 @@ static int pmbus_reply_callback(Message_Descriptor *desc, void *buff, pmos_right
     } else {
         hs->next_bus_id = r->next_sequence_number;
 
+        print_str("Starting service ");
+        if (hs->service->name)
+            print_str(hs->service->name);
+        else
+            print_str("<UNKNOWN>");
+
+        print_str(" for pmbus object ID ");
+        print_hex(r->object_id);
+        print_str("\n");
+
         int result = start_service(hs->service, hs->object_id, extra_rights[0]);
         if (result) {
             print_str("Failed to start service: ");
