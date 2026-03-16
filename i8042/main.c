@@ -183,7 +183,7 @@ void *interrupt_thread(void *arg)
         }
 
         if (IPC_TYPE(message) != IPC_Kernel_Interrupt_NUM) {
-            fprintf(stderr, "[i8042] Warning: Recieved message of unknown type %x\n",
+            fprintf(stderr, "[i8042] Warning: Recieved message of unknown type %x in the interrupt thread!\n",
                     IPC_TYPE(message));
             free(message);
             continue;
@@ -207,7 +207,7 @@ void *interrupt_thread(void *arg)
         }
 
         if (IPC_TYPE(message) != IPC_Kernel_Interrupt_NUM) {
-            fprintf(stderr, "[i8042] Warning: Recieved message of unknown type %x\n",
+            fprintf(stderr, "[i8042] Warning: Recieved message of unknown type %x in the interrupt thread!\n",
                     IPC_TYPE(message));
         } else {
             if (port == 0)
@@ -274,13 +274,46 @@ void publish_callback(int status, uint64_t object_id, void *ctx, struct pmbus_he
     }
 }
 
-int port_callback(Message_Descriptor *, void *,
-                                       pmos_right_t *, pmos_right_t *,
+int port_callback(Message_Descriptor *desc, void *msg,
+                                       pmos_right_t *reply_right, pmos_right_t *other_rights,
                                        void *ctx, struct pmos_msgloop_data *)
 {
     unsigned port = (int)(uintptr_t)ctx;
 
-    printf("i8042 received message on for port %u!\n", port);
+    if (desc->size < IPC_MIN_SIZE) {
+        fprintf(stderr, "i8042 recieved message too small for port %u!\n", port);
+        return PMOS_MSGLOOP_CONTINUE;
+    }
+
+    uint32_t type = ((IPC_Generic_Msg *)msg)->type;
+
+    switch (type) {
+    case IPC_PS2_Reg_Port_NUM: {
+        if (desc->size < sizeof(IPC_PS2_Reg_Port)) {
+            fprintf(stderr, "i8042 recieved IPC_PS2_Reg_Port which is too small (size %u)\n", (unsigned)desc->size);
+            break;
+        }
+
+        int mutex_result = pthread_mutex_lock(&ports_mutex);
+        if (mutex_result != 0) {
+            fprintf(stderr, "[i8042] Error: Could not lock mutex\n");
+            return PMOS_MSGLOOP_CONTINUE;
+        }
+
+        react_register_port(port, msg, reply_right, other_rights);
+
+        mutex_result = pthread_mutex_unlock(&ports_mutex);
+        if (mutex_result != 0) {
+            fprintf(stderr, "[i8042] Error: Could not unlock mutex\n");
+            exit(mutex_result);
+        }
+
+        break;
+    }
+    default:
+        fprintf(stderr, "i8042 recieved message with unknown type for port %" PRIu32 "\n", type);
+        break;
+    }
     return PMOS_MSGLOOP_CONTINUE;
 }
 
@@ -468,10 +501,10 @@ void init_controller()
 void enable_ports()
 {
     if (first_port_works)
-        write_wait(RW_PORT, ENABLE_FIRST_PORT);
+        write_wait(RW_PORT, DISABLE_FIRST_PORT);
 
     if (second_port_works)
-        write_wait(RW_PORT, ENABLE_SECOND_PORT);
+        write_wait(RW_PORT, DISABLE_SECOND_PORT);
 
     uint8_t data;
     write_wait(RW_PORT, CMD_CONFIG_READ);
@@ -598,8 +631,8 @@ int main_callback(Message_Descriptor *desc, void *message,
     //     break;
     // }
     default:
-        fprintf(stderr, "[i8042] Warning: Recieved message of unknown type %x\n",
-                IPC_TYPE(message));
+        fprintf(stderr, "[i8042] Warning: Recieved message of unknown type %x in default callback. Sent from right: %" PRIu64 "\n",
+                IPC_TYPE(message), desc->sent_with_right);
         break;
     }
 
@@ -653,6 +686,9 @@ int main(int argc, char **argv)
 
     poll_ports();
 
+    pmos_msgloop_tree_node_t n;
+    pmos_msgloop_node_set(&n, 0, main_callback, &msgloop_data);
+    pmos_msgloop_insert(&msgloop_data, &n);
     pmos_msgloop_loop(&msgloop_data);
 
     return 0;

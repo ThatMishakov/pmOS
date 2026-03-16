@@ -37,10 +37,10 @@
 #include <inttypes.h>
 
 pmos_port_t main_port = 0;
-
-pmos_right_t devicesd_right = 0;
-
 pmos_right_t main_right = INVALID_RIGHT;
+struct pmos_msgloop_data msgloop_data;
+
+pmos_port_t configuration_port = 0;
 
 int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_right,
                      pmos_right_t *extra_rights, void *ctx, struct pmos_msgloop_data *)
@@ -65,45 +65,12 @@ int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_r
 
         break;
     }
-
-    case IPC_PS2_Reg_Port_NUM: {
-        if (desc->size < sizeof(IPC_PS2_Reg_Port)) {
-            fprintf(stderr, "[PS2d] Warning: Recieved IPC_PS2_Reg_Port of unexpected size %" PRIu64 "\n",
-                    desc->size);
-            break;
-        }
-
-        IPC_PS2_Reg_Port *d = (IPC_PS2_Reg_Port *)buff;
-
-        bool result = register_port(d, desc->sender, ctx, *reply_right, extra_rights[0], extra_rights[1]);
-        *reply_right = 0;
-        extra_rights[0] = INVALID_RIGHT;
-        extra_rights[1] = INVALID_RIGHT;
-
-        if (result)
-            printf("[PS2d] Info: Task %" PRIu64 " registered port %" PRIu64 "\n", desc->sender, d->internal_id);
-
-        break;
-    }
-
-    // case IPC_PS2_Notify_Data_NUM: {
-    //     if (desc.size < sizeof(IPC_PS2_Notify_Data)) {
-    //         fprintf(stderr, "[PS2d] Warning: Recieved IPC_PS2_Notify_Data of unexpected size %lx\n",
-    //                 desc.size);
-    //         break;
-    //     }
-
-    //     IPC_PS2_Notify_Data *d = (IPC_PS2_Notify_Data *)buff;
-
-    //     react_message(d, desc.sender, desc.size);
-
-    //     break;
-    // }
-
     default:
-        fprintf(stderr, "[PS2d] Warning: Recieved message of unknown type %" PRIu32 "\n", IPC_TYPE(buff));
+        fprintf(stderr, "[PS2d] Warning: Recieved message of unknown type %" PRIu32 " (right %" PRIu64 "\n", IPC_TYPE(buff), desc->sent_with_right);
         break;
     }
+
+    return PMOS_MSGLOOP_CONTINUE;
 }
 
 pmos_right_t right_to_device = INVALID_RIGHT;
@@ -150,6 +117,104 @@ void parse_args(int argc, char **argv)
     }
 }
 
+int port_msg_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_right,
+                     pmos_right_t *extra_rights, void *ctx, struct pmos_msgloop_data *)
+{
+    if (desc->size < IPC_MIN_SIZE) {
+        fprintf(stderr, "[PS2d] Error: Message too small (size %" PRIi64 ")\n", desc->size);
+        return 0;
+    }
+
+    switch (IPC_TYPE(buff)) {
+    case IPC_PS2_Notify_Data_NUM: {
+        if (desc->size < sizeof(IPC_PS2_Notify_Data)) {
+            fprintf(stderr, "[PS2d] Warning: Recieved IPC_PS2_Notify_Data of unexpected size %lx\n",
+                    desc->size);
+            break;
+        }
+
+        IPC_PS2_Notify_Data *d = (IPC_PS2_Notify_Data *)buff;
+
+        react_data(d->data, desc->size - sizeof(*d));
+
+        break;
+    }
+
+    default:
+        fprintf(stderr, "[PS2d] Warning: Recieved message of unknown type %" PRIu32 " from the port...\n", IPC_TYPE(buff));
+        break;
+    }
+}
+
+pmos_right_t port_receive_right = INVALID_RIGHT;
+pmos_msgloop_tree_node_t port_entry;
+
+pmos_right_t port_send_right = INVALID_RIGHT;
+
+void register_with_controller()
+{
+    right_request_t right = create_right(main_port, &port_receive_right, 0);
+    if (right.result) {
+        fprintf(stderr, "[PS2d] Failed to create right for the port: %i (%s)\n", (int)right.result, strerror(-(int)right.result));
+        exit(1);
+    }
+
+    pmos_msgloop_node_set(&port_entry, port_receive_right, port_msg_callback, &msgloop_data);
+    pmos_msgloop_insert(&msgloop_data, &port_entry);
+
+    IPC_PS2_Reg_Port r = {
+        .type = IPC_PS2_Reg_Port_NUM,
+        .flags = 0,
+    };
+
+    message_extra_t extra = {
+        .extra_rights = {right.right, 0},
+        .memory_object = 0,
+    };
+    right_request_t result = send_message_right(right_to_device, configuration_port, &r, sizeof(r), &extra, 0);
+    if (result.result) {
+        fprintf(stderr, "[PS2d] Failed to request the port from the device: %i (%s)\n", (int)result.result, strerror(-(int)result.result));
+        exit(1);
+    }
+
+    Message_Descriptor desc;
+    uint8_t *message;
+    pmos_right_t extra_rights[4] = {};
+
+    result_t get_result = get_message(&desc, &message, configuration_port, NULL, extra_rights);
+    if (get_result) {
+        fprintf(stderr, "[PS2d] Error getting message in the regoster request: %i (%s)\n", (int)get_result, strerror(-(int)get_result));
+        exit(1);
+    }
+
+    if (desc.size < sizeof(IPC_PS2_Reg_Port_Reply)) {
+        fprintf(stderr, "[PS2d] Reg port reply too small! Size: %u\n", (unsigned)desc.size);
+        exit(1);
+    }
+
+    IPC_PS2_Reg_Port_Reply *reply = (IPC_PS2_Reg_Port_Reply *)message;
+    if (reply->type != IPC_PS2_Reg_Port_Reply_NUM) {
+        fprintf(stderr, "[PS2d] Unknown message type in reg reply: %" PRIu32 "\n", reply->type);
+        exit(1);
+    }
+
+    if (reply->result) {
+        fprintf(stderr, "[PS2d] Error registering PS/2 port: %i (%s)\n", reply->result, strerror(-reply->result));
+        exit(1);
+    }
+
+    port_send_right = extra_rights[0];
+    if (!port_send_right) {
+        fprintf(stderr, "[PS2d] Recieved no send right in the PS/2 register reply\n");
+        exit(1);
+    }
+
+    for (int i = 1; i < 4; ++i)
+        delete_right(extra_rights[i]);
+
+    printf("PS2d: Registered myself with the controller...\n");
+}
+
 int main(int argc, char *argv[])
 {
     parse_args(argc, argv);
@@ -163,7 +228,19 @@ int main(int argc, char *argv[])
             return 0;
         }
         main_port = req.port;
+
+        req = create_port(TASK_ID_SELF, 0);
+        if (req.result != SUCCESS) {
+            printf("[PS2d] Error creating port %li\n", req.result);
+            return 0;
+        }
+        configuration_port = req.port;
+
     }
+
+    pmos_msgloop_initialize(&msgloop_data, main_port);
+
+    register_with_controller();
 
     {
         right_request_t r = create_right(main_port, &main_right, 0);
@@ -173,11 +250,10 @@ int main(int argc, char *argv[])
         }
     }
 
-    struct pmos_msgloop_data data;
-    pmos_msgloop_initialize(&data, main_port);
+    start_port();
 
     pmos_msgloop_tree_node_t n;
-    pmos_msgloop_node_set(&n, 0, default_callback, &data);
-    pmos_msgloop_insert(&data, &n);
-    pmos_msgloop_loop(&data);
+    pmos_msgloop_node_set(&n, 0, default_callback, &msgloop_data);
+    pmos_msgloop_insert(&msgloop_data, &n);
+    pmos_msgloop_loop(&msgloop_data);
 }

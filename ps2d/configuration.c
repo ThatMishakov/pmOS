@@ -35,14 +35,15 @@
 
 #include <inttypes.h>
 
-void unknown_react_timer(struct port_list_node *port) {}
+void unknown_react_timer()
+{}
 
-void unknown_react_data(struct port_list_node *port, unsigned char data)
+void unknown_react_data(unsigned char data)
 {
     if (data == RESPONSE_SELF_TEST_OK) {
         // Another device has been connected
 
-        reset_port(port);
+        reset_port();
     }
 }
 
@@ -50,16 +51,15 @@ void configure_port(struct port_list_node *port)
 {
     bool inited_port = false;
 
-    if (is_keyboard(port)) {
-        inited_port = init_keyboard(port);
+    if (is_keyboard()) {
+        inited_port = init_keyboard();
     }
 
     if (!inited_port) {
-        printf("[PS2d] Info: Found unknown device on port % " PRIu64 " with type 0x%x (size %i)\n",
-               port->index, port->device_id, port->device_id_size);
+        printf("[PS2d] Info: Found unknown device with type 0x%x (size %i)\n", device_id, device_id_size);
 
-        port->state               = PORT_STATE_MANAGED;
-        port->managed_react_data  = &unknown_react_data;
-        port->managed_react_timer = &unknown_react_timer;
+        state               = PORT_STATE_MANAGED;
+        managed_react_data  = &unknown_react_data;
+        managed_react_timer = &unknown_react_timer;
     }
 }

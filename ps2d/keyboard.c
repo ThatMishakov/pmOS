@@ -34,78 +34,79 @@
 #include <stdio.h>
 #include <inttypes.h>
 
+struct keyboard_state kb_state;
+
 unsigned keyboard_ids[] = {
     0x41ab,
     0x83ab,
 };
 
-bool is_keyboard(struct port_list_node *port)
+bool is_keyboard()
 {
-    if (port->device_id_size == 0)
+    if (device_id_size == 0)
         return true;
 
-    if (port->device_id_size != 2)
+    if (device_id_size != 2)
         return false;
 
     for (unsigned i = 0; i < sizeof(keyboard_ids) / sizeof(keyboard_ids[0]); ++i)
-        if (port->device_id == keyboard_ids[i])
+        if (device_id == keyboard_ids[i])
             return true;
 
     return false;
 }
 
-void keyboard_react_data(struct port_list_node *port, unsigned char data)
+void keyboard_react_data(unsigned char data)
 {
-    port->kb_state.send_status = STATUS_RECIEVED_DATA;
+    kb_state.send_status = STATUS_RECIEVED_DATA;
 
     switch (data) {
     case RESPONSE_ECHO:
     case RESPONSE_ACK: // Acked command
-        keyboard_ack_cmd(port);
+        keyboard_ack_cmd();
         break;
 
     case RESPONSE_RESEND:
-        keyboard_send_front_cmd(port);
+        keyboard_send_front_cmd();
         break;
 
     case RESPONSE_SELF_TEST_OK: // New device connected
-        unregister_keyboard(port);
-        reset_port(port);
+        unregister_keyboard();
+        reset_port();
         break;
 
     default:
-        keyboard_scan_byte(port, data);
+        keyboard_scan_byte(data);
         break;
     }
 }
 
-void keyboard_react_timer(struct port_list_node *port)
+void keyboard_react_timer()
 {
-    switch (port->kb_state.send_status) {
+    switch (kb_state.send_status) {
     case STATUS_NODATA:
-        port->kb_state.send_status = STATUS_SENT_ECHO;
-        keyboard_push_cmd_byte(port, COMMAND_ECHO);
-        port_start_timer(port, 1000);
+        kb_state.send_status = STATUS_SENT_ECHO;
+        keyboard_push_cmd_byte(COMMAND_ECHO);
+        port_start_timer(1000);
         break;
 
     case STATUS_RECIEVED_DATA:
-        port->kb_state.send_status = STATUS_NODATA;
-        port_start_timer(port, 1000);
+        kb_state.send_status = STATUS_NODATA;
+        port_start_timer(1000);
         break;
 
     case STATUS_SENT_ECHO:
         fprintf(
             stderr,
-            "[PS2d] Warning: Keyboard at port %"PRIu64" did not ACK STATUS_SENT_ECHO command\n",
-            port->index);
-        unregister_keyboard(port);
+            "[PS2d] Warning: Keyboard did not ACK STATUS_SENT_ECHO command\n");
+        unregister_keyboard();
 
-        reset_port(port);
+        reset_port();
         break;
     }
 }
 
-void keyboard_push_get_scancode(struct port_list_node *port)
+void keyboard_push_get_scancode()
 {
     struct keyboard_cmd cmd = {
         .cmd =
@@ -117,45 +118,45 @@ void keyboard_push_get_scancode(struct port_list_node *port)
         .size             = 2,
         .acked_count      = 0,
     };
-    keyboard_push_cmd(port, cmd);
+    keyboard_push_cmd(cmd);
 }
 
-bool init_keyboard(struct port_list_node *port)
+bool init_keyboard()
 {
-    printf("[PS2d] Info: Found keyboard on port %" PRIu64 "\n", port->index);
+    printf("[PS2d] Info: Found a keyboard!\n");
 
-    register_keyboard(port);
+    register_keyboard();
 
-    port->managed_react_data        = &keyboard_react_data;
-    port->managed_react_timer       = &keyboard_react_timer;
-    port->state                     = PORT_STATE_MANAGED;
-    port->kb_state.send_status      = STATUS_RECIEVED_DATA;
-    port->kb_state.cmd_buffer_index = 0;
-    port->kb_state.cmd_buffer_start = 0;
+    managed_react_data        = &keyboard_react_data;
+    managed_react_timer       = &keyboard_react_timer;
+    state                     = PORT_STATE_MANAGED;
+    kb_state.send_status      = STATUS_RECIEVED_DATA;
+    kb_state.cmd_buffer_index = 0;
+    kb_state.cmd_buffer_start = 0;
 
-    port->kb_state.scancode       = 0;
-    port->kb_state.expected_bytes = 1;
-    port->kb_state.shift_val      = 0;
+    kb_state.scancode       = 0;
+    kb_state.expected_bytes = 1;
+    kb_state.shift_val      = 0;
 
-    port->kb_state.operation_status = STATUS_SCAN_CODE_REQUEST;
+    kb_state.operation_status = STATUS_SCAN_CODE_REQUEST;
 
-    keyboard_push_get_scancode(port);
-    port_start_timer(port, 1000);
+    keyboard_push_get_scancode();
+    port_start_timer(1000);
 
     return true;
 }
 
-void register_keyboard(struct port_list_node *port) {}
+void register_keyboard() {}
 
-void unregister_keyboard(struct port_list_node *port) {}
+void unregister_keyboard() {}
 
-void keyboard_send_front_cmd(struct port_list_node *port)
+void keyboard_send_front_cmd()
 {
-    struct keyboard_cmd cmd = *keyboard_cmd_get_front(port);
-    send_data_port(port, cmd.cmd + cmd.acked_count, 1);
+    struct keyboard_cmd cmd = *keyboard_cmd_get_front();
+    send_data_port(cmd.cmd + cmd.acked_count, 1);
 }
 
-void keyboard_push_cmd_byte(struct port_list_node *port, unsigned char data)
+void keyboard_push_cmd_byte(unsigned char data)
 {
     struct keyboard_cmd cmd = {
         .cmd =
@@ -168,95 +169,94 @@ void keyboard_push_cmd_byte(struct port_list_node *port, unsigned char data)
         .acked_count      = 0,
     };
 
-    keyboard_push_cmd(port, cmd);
+    keyboard_push_cmd(cmd);
 }
 
-void keyboard_ack_cmd(struct port_list_node *port)
+void keyboard_ack_cmd()
 {
-    if (keyboard_cmd_queue_empty(port))
+    if (keyboard_cmd_queue_empty())
         return;
 
-    struct keyboard_cmd *cmd = keyboard_cmd_get_front(port);
+    struct keyboard_cmd *cmd = keyboard_cmd_get_front();
     cmd->acked_count++;
     if (cmd->acked_count < cmd->size) {
-        keyboard_send_front_cmd(port);
+        keyboard_send_front_cmd();
         return;
     }
 
     if (cmd->complex_response)
         return;
 
-    keyboard_pop_front_cmd(port);
-    if (!keyboard_cmd_queue_empty(port))
-        keyboard_send_front_cmd(port);
+    keyboard_pop_front_cmd();
+    if (!keyboard_cmd_queue_empty())
+        keyboard_send_front_cmd();
 }
 
-bool keyboard_cmd_queue_empty(struct port_list_node *port)
+bool keyboard_cmd_queue_empty()
 {
-    return port->kb_state.cmd_buffer_index == port->kb_state.cmd_buffer_start;
+    return kb_state.cmd_buffer_index == kb_state.cmd_buffer_start;
 }
 
-struct keyboard_cmd *keyboard_cmd_get_front(struct port_list_node *port)
+struct keyboard_cmd *keyboard_cmd_get_front()
 {
-    return &port->kb_state.cmd_buffer[port->kb_state.cmd_buffer_index];
+    return &kb_state.cmd_buffer[kb_state.cmd_buffer_index];
 }
 
-void keyboard_push_cmd(struct port_list_node *port, struct keyboard_cmd data)
+void keyboard_push_cmd(struct keyboard_cmd data)
 {
-    unsigned new_keyboard_index = port->kb_state.cmd_buffer_start + 1;
+    unsigned new_keyboard_index = kb_state.cmd_buffer_start + 1;
     if (new_keyboard_index == KBD_CMD_BUFF_SIZE)
         new_keyboard_index = 0;
 
-    if (new_keyboard_index == port->kb_state.cmd_buffer_index) {
+    if (new_keyboard_index == kb_state.cmd_buffer_index) {
         fprintf(stderr,
-                "[PS2d] Warning: Keyboard at port %" PRIu64  " hat its buffer full. Discarding the "
-                "last command...\n",
-                port->index);
+                "[PS2d] Warning: Keyboard has its buffer full. Discarding the "
+                "last command...\n");
     } else {
-        bool empty_before = keyboard_cmd_queue_empty(port);
+        bool empty_before = keyboard_cmd_queue_empty();
 
-        port->kb_state.cmd_buffer[port->kb_state.cmd_buffer_start] = data;
-        port->kb_state.cmd_buffer_start                            = new_keyboard_index;
+        kb_state.cmd_buffer[kb_state.cmd_buffer_start] = data;
+        kb_state.cmd_buffer_start                            = new_keyboard_index;
 
         if (empty_before)
-            keyboard_send_front_cmd(port);
+            keyboard_send_front_cmd();
     }
 }
 
-void keyboard_pop_front_cmd(struct port_list_node *port)
+void keyboard_pop_front_cmd()
 {
-    ++port->kb_state.cmd_buffer_index;
-    if (port->kb_state.cmd_buffer_index == KBD_CMD_BUFF_SIZE)
-        port->kb_state.cmd_buffer_index = 0;
+    ++kb_state.cmd_buffer_index;
+    if (kb_state.cmd_buffer_index == KBD_CMD_BUFF_SIZE)
+        kb_state.cmd_buffer_index = 0;
 }
 
-void keyboard_react_command_response(struct port_list_node *port, unsigned char data)
+void keyboard_react_command_response(unsigned char data)
 {
-    switch (port->kb_state.operation_status) {
+    switch (kb_state.operation_status) {
     case STATUS_SCAN_CODE_REQUEST:
         printf("[PS2d] Info: Keyboard has scan code %x\n", data);
-        port->kb_state.send_status = STATUS_RECIEVED_DATA;
-        keyboard_push_cmd_byte(port, COMMAND_ENABLE_SCANNING);
+        kb_state.send_status = STATUS_RECIEVED_DATA;
+        keyboard_push_cmd_byte(COMMAND_ENABLE_SCANNING);
         break;
     default:
         break;
     }
 
-    keyboard_pop_front_cmd(port);
-    if (!keyboard_cmd_queue_empty(port))
-        keyboard_send_front_cmd(port);
+    keyboard_pop_front_cmd();
+    if (!keyboard_cmd_queue_empty())
+        keyboard_send_front_cmd();
 }
-void keyboard_scan_byte(struct port_list_node *port, unsigned char data)
+void keyboard_scan_byte(unsigned char data)
 {
-    struct keyboard_cmd *cmd = keyboard_cmd_get_front(port);
+    struct keyboard_cmd *cmd = keyboard_cmd_get_front();
     if (cmd && (cmd->acked_count == cmd->size) && cmd->complex_response) {
-        keyboard_react_command_response(port, data);
+        keyboard_react_command_response(data);
         return;
     }
 
-    port->kb_state.scancode |= (uint64_t)data << port->kb_state.shift_val;
+    kb_state.scancode |= (uint64_t)data << kb_state.shift_val;
 
-    port->kb_state.shift_val += 8;
+    kb_state.shift_val += 8;
 
     switch (data) {
     case 0xF0: // break
@@ -265,16 +265,16 @@ void keyboard_scan_byte(struct port_list_node *port, unsigned char data)
         break;
 
     default:
-        port->kb_state.expected_bytes -= 1;
+        kb_state.expected_bytes -= 1;
         break;
     }
 
-    if (port->kb_state.expected_bytes == 0) {
-        keyboard_react_scancode(port, port->kb_state.scancode);
+    if (kb_state.expected_bytes == 0) {
+        keyboard_react_scancode(kb_state.scancode);
 
-        port->kb_state.scancode       = 0;
-        port->kb_state.shift_val      = 0;
-        port->kb_state.expected_bytes = 1;
+        kb_state.scancode       = 0;
+        kb_state.shift_val      = 0;
+        kb_state.expected_bytes = 1;
     }
 }
 
@@ -289,7 +289,7 @@ char scancodes[128] = {
     '0', '.', '2',  '5', '6', '8', 0,   0, 0, '+', '3',  '-', '*', '9',  0,   0,
 };
 
-void keyboard_react_scancode(struct port_list_node *port, uint64_t scancode)
+void keyboard_react_scancode(uint64_t scancode)
 {
     uint8_t first_byte = scancode;
     if (first_byte > 127)

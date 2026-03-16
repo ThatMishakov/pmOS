@@ -618,13 +618,6 @@ typedef struct IPC_PS2_Reg_Port {
 
     // Configuration flags
     uint32_t flags;
-
-    // Internal ID of the port, decided by its driver (used for identification when driver registers
-    // more than one port)
-    uint64_t internal_id;
-
-    // Task group ID of the driver
-    uint64_t task_group_id;
 } IPC_PS2_Reg_Port;
 
 // Structure that can be sent by both driver and PS2d for internal configuration
@@ -635,9 +628,6 @@ typedef struct IPC_PS2_Config {
 
     // Configuration flags
     uint32_t flags;
-
-    // Internal ID of the port
-    uint64_t internal_id;
 
     // Request type
     uint64_t request_type;
@@ -657,14 +647,8 @@ typedef struct IPC_PS2_Notify_Data {
     // Configuration flags
     uint32_t flags;
 
-    // Internal ID of the port, must be the same as used with IPC_PS2_Reg_Port
-    uint64_t internal_id;
-
-    // Task group ID of the driver
-    uint64_t task_group_id;
-
     // Data recieved by the port; size of the array should be determined by the message size
-    char data[0];
+    char data[];
 } IPC_PS2_Notify_Data;
 
 // Structure used by PS2d to send data to devices
@@ -676,12 +660,22 @@ typedef struct IPC_PS2_Send_Data {
     // Configuration flags
     uint32_t flags;
 
-    // Internal ID of the port
-    uint64_t internal_id;
-
     // Data to be sent to the port; size of the array should be determined by the message size
-    char data[0];
+    char data[];
 } IPC_PS2_Send_Data;
+
+// Structure to signal the status of the registered port
+#define IPC_PS2_Reg_Port_Reply_NUM 0x84
+typedef struct IPC_PS2_Reg_Port_Reply {
+    // Message type (must be equal to IPC_Reg_port_Reply_NUM)
+    uint32_t type;
+
+    // Optional flags
+    uint16_t flags;
+
+    // Result (0 - success, negative - error)
+    int16_t result;
+} IPC_PS2_Reg_Port_Reply;
 
 #define IPC_Mutex_Unlock_NUM 0xA0
 typedef struct IPC_Mutex_Unlock {
