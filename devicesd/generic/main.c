@@ -69,9 +69,6 @@ const char *devicesd_port_name = "/pmos/devicesd";
 
 void request_pci_devices(Message_Descriptor *desc, IPC_Request_PCI_Devices *d,
                          pmos_right_t reply_right);
-void request_pci_device(Message_Descriptor *desc, IPC_Request_PCI_Device *d,
-                        pmos_right_t reply_right);
-void request_pci_device_gsi(Message_Descriptor *desc, IPC_Request_PCI_Device_GSI *d);
 void publish_object_reply(Message_Descriptor *desc, IPC_BUS_Publish_Object_Reply *r);
 
 void init_acpi();
@@ -130,13 +127,6 @@ int default_callback(Message_Descriptor *desc, void *msg_buff, pmos_right_t *rep
         case IPC_Request_PCI_Devices_NUM:
             request_pci_devices(desc, (IPC_Request_PCI_Devices *)msg_buff, *reply_right);
             *reply_right = 0;
-            break;
-        case IPC_Request_PCI_Device_NUM:
-            request_pci_device(desc, (IPC_Request_PCI_Device *)msg_buff, *reply_right);
-            *reply_right = 0;
-            break;
-        case IPC_Request_PCI_Device_GSI_NUM:
-            request_pci_device_gsi(desc, (IPC_Request_PCI_Device_GSI *)msg_buff);
             break;
         // case IPC_Kernel_Named_Port_Notification_NUM:
         //     named_port_notification(desc, (IPC_Kernel_Named_Port_Notification *)msg_buff,

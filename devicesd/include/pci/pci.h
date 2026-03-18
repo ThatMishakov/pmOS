@@ -31,6 +31,7 @@
 #include <stdint.h>
 #include <uacpi/event.h>
 #include <pmos/vector.h>
+#include <pmos/helpers.h>
 
 void init_pci();
 
@@ -112,6 +113,7 @@ struct PCIDevice {
     pmos_right_t send_right;
     pmos_right_t receive_right;
     struct PCIDevice *associated_bridge;
+    pmos_msgloop_tree_node_t msgloop_node;
 
     int pcie : 1;
     int downstream : 1;

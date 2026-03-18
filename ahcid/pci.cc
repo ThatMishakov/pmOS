@@ -10,6 +10,7 @@
 #include <string.h>
 #include <sys/mman.h>
 #include <system_error>
+#include <inttypes.h>
 
 extern pmos::Right device_right;
 extern pmos::Port cmd_port;
@@ -53,7 +54,7 @@ pmos::async::task<std::unique_ptr<PCIDevice>> get_pci_device()
 
     auto *reply = (IPC_Request_PCI_Device_Reply *)msg->data.data();
     if (reply->type != IPC_Request_PCI_Device_Reply_NUM) {
-        printf("Unexpected message type\n");
+        printf("Unexpected message type %" PRIu32 "\n", reply->type);
         throw std::runtime_error("Unexpected message type");
     }
 

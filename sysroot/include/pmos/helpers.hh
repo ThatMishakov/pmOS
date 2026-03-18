@@ -437,7 +437,7 @@ inline get_msg_return_type Port::get_first_message(bool nonblocking)
         return std::unexpected(static_cast<int>(-result));
 
     // TODO: Make this not throw
-    data.resize(desc.size);
+    data.resize(desc.size, std::byte(0xff));
 
     if (desc.other_rights_count) {
         std::array<pmos_right_t, 4> rights_ids = {};
