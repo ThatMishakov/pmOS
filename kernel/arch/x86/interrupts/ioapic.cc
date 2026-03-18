@@ -187,6 +187,26 @@ ReturnStr<std::pair<sched::CPU_Info *, u32>>
     return result;
 }
 
+std::optional<std::pair<IOAPIC *, int>> IOAPIC::find_ioapic(sched::CPU_Info *cpu, u32 vector)
+{
+    for (auto i: ioapics) {
+        for (size_t ii = 0; ii < i->int_count; ++ii) {
+            if (i->mappings[ii].mapped_to == cpu and  i->mappings[ii].vector == vector)
+                return std::pair{i, ii};
+        }
+    }
+    return {};
+}
+
+void IOAPIC::mask_interrupt(sched::CPU_Info *cpu, int vec)
+{
+    auto entry = find_ioapic(cpu, vec);
+    if (entry) {
+        log::serial_logger.printf("Masking IOAPIC entry %i for IOAPIC %i\n", entry->second, entry->first->ioapic_id);
+        entry->first->write_redir_entry(entry->second, 0);
+    }
+}
+
 IOAPIC *IOAPIC::get_ioapic(u32 gsi)
 {
     for (auto ioapic: ioapics) {

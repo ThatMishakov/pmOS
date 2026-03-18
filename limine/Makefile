@@ -145,10 +145,16 @@ $(DISK_IMAGE): ../kernel/build/kernel ../bootstrapd/build/bootstrapd ../devicesd
 
 	dd if=/dev/zero of=$(DISK_IMAGE) bs=1M count=128
 
-	# Create a GPT partition table
-	sgdisk -og $(DISK_IMAGE)
-	sgdisk -n 1:2048:67583 -c 1:"boot" -t 1:ef00 $(DISK_IMAGE)
-	sgdisk -n 2:67584:$(shell expr 128 \* 1024 - 1) -c 2:"ext2" -t 2:8300 $(DISK_IMAGE)
+# 	# Create a GPT partition table
+# 	sgdisk -og $(DISK_IMAGE)
+# 	sgdisk -n 1:2048:67583 -c 1:"boot" -t 1:ef00 $(DISK_IMAGE)
+# 	sgdisk -n 2:67584:$(shell expr 128 \* 1024 - 1) -c 2:"ext2" -t 2:8300 $(DISK_IMAGE)
+
+	# Create an MBR partition table
+	echo 'label: dos' | sfdisk $(DISK_IMAGE)
+	echo '2048,130048,0x0C,*' | sfdisk --append $(DISK_IMAGE)
+	echo '132096,130048,0x83' | sfdisk --append $(DISK_IMAGE)
+
 
 	# Create a FAT32 filesystem for the boot partition
 	dd if=/dev/zero of=$(BOOT_PARTITION) bs=1M count=64
@@ -173,7 +179,7 @@ $(DISK_IMAGE): ../kernel/build/kernel ../bootstrapd/build/bootstrapd ../devicesd
 	mcopy -i $(BOOT_PARTITION) ../terminald/terminald.elf ::/
 	mcopy -i $(BOOT_PARTITION) ../vfsd/vfsd.elf ::/
 	mcopy -i $(BOOT_PARTITION) ../vfatfsd/vfatfsd.elf ::/
-	# mcopy -i $(BOOT_PARTITION) ../ahcid/ahcid.elf ::/
+	mcopy -i $(BOOT_PARTITION) ../ahcid/ahcid.elf ::/
 	mcopy -i $(BOOT_PARTITION) ../ps2d/ps2d.elf ::/
 	mcopy -i $(BOOT_PARTITION) ../i8042/i8042.elf ::/
 	mcopy -i $(BOOT_PARTITION) ../blockd/blockd.elf ::/
@@ -229,4 +235,4 @@ isodir: ../kernel/build/kernel ../bootstrapd/build/bootstrapd ../devicesd/device
 $(ISO): isodir
 	xorriso -as mkisofs -b boot/limine/limine-bios-cd.bin -no-emul-boot -boot-load-size 4 -boot-info-table --efi-boot boot/limine/limine-uefi-cd.bin -efi-boot-part --efi-boot-image --protective-msdos-label isodir -o $(ISO)
 
-.PHONY: ../kernel/build/kernel ../bootstrapd/build/bootstrapd ../devicesd/devicesd.elf ../logd/logd.elf ../ns16550/ns16550.elf ../piped/piped.elf ../processd/processd.elf ../terminald/terminald.elf ../vfsd/vfsd.elf ../vfatfsd/vfatfsd.elf ../ps2d/ps2d.elf ../i8042/i8042.elf ../blockd/blockd.elf ../pmbus/bin/pmbus isodir
+.PHONY: ../kernel/build/kernel ../bootstrapd/build/bootstrapd ../devicesd/devicesd.elf ../logd/logd.elf ../ns16550/ns16550.elf ../piped/piped.elf ../processd/processd.elf ../terminald/terminald.elf ../vfsd/vfsd.elf ../vfatfsd/vfatfsd.elf ../ps2d/ps2d.elf ../i8042/i8042.elf ../blockd/blockd.elf ../pmbus/bin/pmbus ../ahcid/ahcid.elf isodir

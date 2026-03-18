@@ -54,9 +54,9 @@ pmos::async::detached_task handle_device(AHCIPort &parent)
     printf("Port %i sector count: %" PRIu64 "\n", parent.index, sector_count);
 
     auto e = cmd_port.create_right(pmos::RightType::SendMany);
-    if (e) {
-        printf("Failed to create the right for the port!");
-        co_return;
+    if (not e) {
+        printf("Failed to create the right for the port!");    
+        exit(10);
     }
 
     parent.port_right = std::move(e->first);
@@ -65,8 +65,6 @@ pmos::async::detached_task handle_device(AHCIPort &parent)
     auto disk = co_await publish_disk(parent, sector_count, logical_sector_size, physical_sector_size);
     
     printf("Port %i disk published: %" PRIu64 "\n", parent.index, disk);
-
-    co_return;
 }
 
 bool GetCmdIndex::await_ready() const noexcept { return parent.active_cmd_slots < num_slots; }

@@ -324,9 +324,10 @@ protected:
         get_msg_return_type await_resume() noexcept;
 
     private:
-        MessageWaiter(PortDispatcher &dispatcher, pmos_right_t recieve_right) noexcept;
+        MessageWaiter(PortDispatcher &dispatcher, RecieveRight *recieve_right) noexcept;
 
-        pmos_right_t recieve_right = 0;
+        RecieveRight *recieve_right = nullptr;
+        pmos_right_t recieve_right_id;
         pmos::containers::RBTreeNode<MessageWaiter> tree_node = {};
         std::coroutine_handle<> h;
         PortDispatcher &dispatcher;
@@ -338,7 +339,7 @@ protected:
 
     using PortsTree = pmos::containers::RedBlackTree<
         MessageWaiter, &MessageWaiter::tree_node,
-        detail::TreeCmp<MessageWaiter, pmos_right_t, &MessageWaiter::recieve_right>>;
+        detail::TreeCmp<MessageWaiter, pmos_right_t, &MessageWaiter::recieve_right_id>>;
 
     Port &port;
     MessageWaiter *default_waiter = {};
@@ -355,17 +356,23 @@ public:
     std::expected<void, int> dispatch();
 };
 
-inline PortDispatcher::MessageWaiter::MessageWaiter(pmos::PortDispatcher& d, pmos_right_t right) noexcept:
-    recieve_right(right), dispatcher(d) {}
+inline PortDispatcher::MessageWaiter::MessageWaiter(pmos::PortDispatcher& d, RecieveRight *right) noexcept:
+    recieve_right(right), dispatcher(d)
+{
+    if (right)
+        recieve_right_id = right->get();
+    else
+        recieve_right_id = 0;
+}
 
 inline PortDispatcher::MessageWaiter PortDispatcher::get_message(RecieveRight &r) noexcept
 {
-    return MessageWaiter(*this, r.get());
+    return MessageWaiter(*this, &r);
 }
 
 inline PortDispatcher::MessageWaiter PortDispatcher::get_message_default() noexcept
 {
-    return MessageWaiter(*this, 0);
+    return MessageWaiter(*this, nullptr);
 }
 
 inline bool PortDispatcher::MessageWaiter::await_ready() noexcept
@@ -376,7 +383,7 @@ inline bool PortDispatcher::MessageWaiter::await_ready() noexcept
 inline void PortDispatcher::MessageWaiter::await_suspend(std::coroutine_handle<> hh)
 {
     h = hh;
-    if (recieve_right != 0) {
+    if (recieve_right != nullptr) {
         dispatcher.waiters.insert(this);
     } else {
         dispatcher.default_waiter = this;
@@ -414,6 +421,9 @@ inline constexpr Port &PortDispatcher::get_port() noexcept
 
 inline get_msg_return_type PortDispatcher::MessageWaiter::await_resume() noexcept
 {
+    if (recieve_right and recieve_right->type() == RightType::SendOnce)
+        recieve_right->release();
+
     return std::move(message);
 }
 

@@ -14,7 +14,7 @@ public:
     // I don't know what to do with the list of waiters here...
     // ~PMBUSHelper();
 private:
-    pmos::async::task<void> request_right();
+    pmos::async::detached_task request_right();
 
     struct PMBUSRightWaiter {
         void await_suspend(std::coroutine_handle<> h) noexcept;
@@ -72,7 +72,7 @@ inline void PMBUSHelper::dispatch_waiters()
     }
 }
 
-inline pmos::async::task<void> PMBUSHelper::request_right()
+inline pmos::async::detached_task PMBUSHelper::request_right()
 {
     // TODO: This is kinda bad, in case the parent is destroyed, while this is running...
     auto right = request_named_port("/pmos/pmbus", dispatcher_.get_port());

@@ -493,6 +493,7 @@ extern "C" void programmable_interrupt(u32 intno)
     auto handler = c->int_handlers.get_handler(intno);
     if (!handler) {
         global_logger.printf("[Kernel] Error: No handler for interrupt %h\n", intno);
+        IOAPIC::mask_interrupt(c, intno);
         apic_eoi();
         return;
     }

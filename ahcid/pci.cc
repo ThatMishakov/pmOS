@@ -164,6 +164,10 @@ char PCIDevice::interrupt_pin() noexcept { return readb(0x3d); }
 int PCIDevice::register_interrupt(uint32_t &int_vector_result, uint64_t task,
                                   uint64_t port) noexcept
 {
+    auto reply_port = pmos::Port::create();
+    if (!reply_port)
+        return reply_port.error();
+
     auto int_pin = interrupt_pin();
     if (int_pin < 1 or int_pin > 4) {
         return -ENOENT;
@@ -177,8 +181,10 @@ int PCIDevice::register_interrupt(uint32_t &int_vector_result, uint64_t task,
         .dest_port  = port,
     };
 
+    pmos::RecieveRight rr;
+
     try {
-        send_devicesd(request, &cmd_port);
+        rr = send_devicesd(request, &*reply_port);
     } catch (std::system_error &e) {
         return -e.code().value();
     }
@@ -186,7 +192,7 @@ int PCIDevice::register_interrupt(uint32_t &int_vector_result, uint64_t task,
     Message_Descriptor desc;
     uint8_t *message;
     for (int i = 0; i < 5; ++i) {
-        result_t result = get_message(&desc, &message, cmd_port.get(), nullptr, nullptr);
+        result_t result = get_message(&desc, &message, reply_port->get(), nullptr, nullptr);
         // The affinity may be changed, which can interrupt the system call
         // This is not an error, so retry a few times
         if ((int)result == -EINTR)
@@ -197,6 +203,8 @@ int PCIDevice::register_interrupt(uint32_t &int_vector_result, uint64_t task,
         }
         break;
     }
+
+    rr.release();
 
     auto *reply = (IPC_Reg_Int_Reply *)message;
     if (reply->type != IPC_Reg_Int_Reply_NUM) {

@@ -39,6 +39,8 @@ pmos::async::task<uint64_t> publish_disk(AHCIPort &port, uint64_t sector_count,
 
     handle_ipc(port);
 
+    printf("Publishing disk...\n");
+
     auto right = port.port_right.clone();
     co_return co_await pmbus_helper.publish_object(std::move(object), std::move(right));
 }

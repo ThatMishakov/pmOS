@@ -40,7 +40,6 @@ pmos_port_t _create_port()
 pmos::Port cmd_port = pmos::Port::create().value();
 auto dispatcher = pmos::PortDispatcher(cmd_port);
 auto pmbus_helper = pmos::PMBUSHelper(dispatcher);
-pmos_port_t ahci_port;
 
 std::unique_ptr<PCIDevice> ahci_controller = nullptr;
 volatile uint32_t *ahci_virt_base          = nullptr;
@@ -460,7 +459,7 @@ void TimerWaiter::wait(int time_ms)
 
     if (timer_tree.begin() == this) {
         next_timer_time = timer_time;
-        pmos_request_timer(ahci_port, time_ms * 1'000'000, 0);
+        pmos_request_timer(cmd_port.get(), time_ms * 1'000'000, 0);
     } else {
         TimerTree::RBTreeIterator it;
         while (!timer_tree.empty() and ((it = timer_tree.begin())->timer_time < time.value)) {
@@ -482,7 +481,7 @@ void react_timer()
 
     if (it != timer_tree.end()) {
         next_timer_time = it->timer_time;
-        int t           = pmos_request_timer(ahci_port, next_timer_time - current_time.value, 0);
+        int t           = pmos_request_timer(cmd_port.get(), next_timer_time - current_time.value, 0);
         if (t != 0) {
         }
     }
@@ -510,7 +509,6 @@ pmos::async::detached_task ahci_controller_main()
         }
 
         auto request = (IPC_Generic_Msg *)msg->data.data();
-        std::unique_ptr<IPC_Generic_Msg> request_ptr(request);
 
         switch (request->type) {
         case IPC_Timer_Reply_NUM: {
@@ -654,7 +652,7 @@ pmos::async::detached_task ahci_handle()
     }
 
     // Attach PCI interrupt
-    int r = ahci_controller->register_interrupt(ahci_int_vec, 0, ahci_port);
+    int r = ahci_controller->register_interrupt(ahci_int_vec, 0, cmd_port.get());
     if (r < 0) {
         printf("Failed to register interrupt: %i (%s)\n", -r, strerror(-r));
     } else {
@@ -725,14 +723,14 @@ pmos::async::detached_task ahci_handle()
 
 void usage(char *name)
 {
-    printf("i8042 Usage: %s --right-id <ID of the right to the i8042 controller>\n", name);
+    printf("ahcid Usage: %s --right-id <ID of the right to the i8042 controller>\n", name);
     exit(1);
 }
 
 void parse_args(int argc, char **argv)
 {
     if (argc < 1)
-        printf("i8042: empty argc!\n");
+        printf("ahcid: empty argc!\n");
     char *name = argv[0];
 
     bool have_right = false;
@@ -742,13 +740,13 @@ void parse_args(int argc, char **argv)
 
         if (!strcmp(r, "--right-id")) {
             if (have_right) {
-                printf("i8042: Repeated --right-id\n");
+                printf("ahcid: Repeated --right-id\n");
                 usage(name);
             }
 
             ++i;
             if (i >= argc) {
-                printf("i8042 missing right ID\n");
+                printf("ahcid missing right ID\n");
                 usage(name);
             }
             pmos_right_t right_to_device = strtoull(argv[i], NULL, 0);
@@ -761,7 +759,7 @@ void parse_args(int argc, char **argv)
     }
 
     if (!have_right) {
-        printf("i8042: no right_id!\n");
+        printf("ahcid: no right_id!\n");
         usage(name);
     }
 }
@@ -775,4 +773,6 @@ int main(int argc, char **argv)
     ahci_controller_main();
 
     dispatcher.dispatch();
+
+    printf("!!! ahcid: Exiting... !!!\n");
 }
