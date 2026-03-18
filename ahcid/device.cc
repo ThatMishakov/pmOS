@@ -12,6 +12,8 @@
 #include "blockd.hh"
 #include <cinttypes>
 
+extern pmos::Port cmd_port;
+
 pmos::async::detached_task handle_device(AHCIPort &parent)
 {
     constexpr size_t dma_size = 4096;
@@ -50,6 +52,15 @@ pmos::async::detached_task handle_device(AHCIPort &parent)
     auto sector_count = s->get_sector_count();
 
     printf("Port %i sector count: %" PRIu64 "\n", parent.index, sector_count);
+
+    auto e = cmd_port.create_right(pmos::RightType::SendMany);
+    if (e) {
+        printf("Failed to create the right for the port!");
+        co_return;
+    }
+
+    parent.port_right = std::move(e->first);
+    parent.port_recieve_right = std::move(e->second);
 
     auto disk = co_await publish_disk(parent, sector_count, logical_sector_size, physical_sector_size);
     

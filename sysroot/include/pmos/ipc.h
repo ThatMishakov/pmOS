@@ -177,11 +177,6 @@ typedef struct IPC_Request_PCI_Devices_Reply {
 typedef struct IPC_Request_PCI_Device {
     uint32_t type; // IPC_Request_PCI_Device_NUM
     uint32_t flags;
-    uint16_t group;
-    uint8_t bus;
-    uint8_t device;
-    uint8_t function;
-    uint8_t reserved;
 } IPC_Request_PCI_Device;
 
 #define IPC_Request_PCI_Device_Reply_NUM 0x0B
@@ -198,14 +193,10 @@ typedef struct IPC_Request_PCI_Device_Reply {
 #define IPC_Request_PCI_Device_GSI_NUM 0x0C
 typedef struct IPC_Request_PCI_Device_GSI {
     uint32_t type; // IPC_Request_PCI_Device_GSI_NUM
-    uint32_t flags;
+    uint16_t flags;
 
-    uint32_t group; // uint32_t for alignment to 8 bytes
-    uint8_t bus;
-    uint8_t device;
-    uint8_t function;
-    // 0 for INTA, 1 for INTB, 2 for INTC, 3 for INTD
-    uint8_t pin;
+    // 0 for INTA, 1 for INTB, 2 for INTC, 3 for INTDº
+    uint16_t pin;
 } IPC_Request_PCI_Device_GSI;
 
 #define IPC_Request_PCI_Device_GSI_Reply_NUM 0x0D
@@ -221,12 +212,7 @@ typedef struct IPC_Request_PCI_Device_GSI_Reply {
 typedef struct IPC_Register_PCI_Interrupt {
     uint32_t type;
     uint16_t flags;
-
-    uint16_t group;
-    uint8_t bus;
-    uint8_t device;
-    uint8_t function;
-    uint8_t pin;
+    uint16_t pin;
 
     uint64_t dest_task;
     uint64_t dest_port;

@@ -13,6 +13,8 @@
 
 extern pmos_port_t ahci_port;
 
+extern pmos::PortDispatcher dispatcher;
+
 using dptr = std::unique_ptr<DiskHandler>;
 std::unordered_map<uint64_t, dptr> handlers;
 uint64_t id = 1;
@@ -382,3 +384,29 @@ DiskHandler::DiskHandler(AHCIPort &port, uint64_t disk_id, uint64_t sector_count
     std::size_t physical_sector_size):
     port(port), disk_id(disk_id), sector_count(sector_count), logical_sector_size(logical_sector_size),
     physical_sector_size(physical_sector_size) {}
+
+pmos::async::detached_task handle_ipc(AHCIPort &port)
+{
+    while (true) {
+        auto msg = co_await dispatcher.get_message(port.port_recieve_right);
+        if (!msg) {
+            fprintf(stderr, "ahcid: Failed to get message for port! %i\n", msg.error());
+            exit(1);
+        }
+
+        printf("ahcid: Recieved message for port %u! (TODO: handle it)\n", port.index);
+
+        // case IPC_Disk_Open_NUM: {
+        //     auto msg = (IPC_Disk_Open *)request;
+
+        //     handle_disk_open(desc, msg);
+        // } break;
+        // case IPC_Disk_Read_NUM: {
+        //     auto msg = (IPC_Disk_Read *)request;
+
+        //     handle_disk_read(desc, *msg);
+        // } break;
+    }
+
+    co_return;
+}

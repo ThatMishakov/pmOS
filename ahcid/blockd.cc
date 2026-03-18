@@ -13,57 +13,19 @@
 #include <string_view>
 #include <system_error>
 #include <pmos/helpers.hh>
+#include <pmos/pmbus_helper.hh>
 
-static pmos_port_t pmbus_port = 0;
-
-bool WaitForPMBusPort::await_ready() noexcept { return pmbus_port != 0; }
-pmos_port_t WaitForPMBusPort::await_resume() noexcept { return pmbus_port; }
-
-using list_type = pmos::containers::CircularDoubleList<WaitForPMBusPort, &WaitForPMBusPort::l>;
-static list_type waiters {};
-static bool pmbus_port_requested = false;
-extern pmos_port_t ahci_port;
-
-void WaitForPMBusPort::await_suspend(std::coroutine_handle<> hh)
-{
-    this->h = hh;
-
-    if (!pmbus_port_requested) {
-        auto result =
-            request_named_port(pmbus_port_name.data(), pmbus_port_name.size(), ahci_port, 0);
-        if (result.result != SUCCESS)
-            throw std::system_error(-result.result, std::system_category());
-
-        pmbus_port_requested = true;
-    }
-
-    waiters.push_back(this);
-}
-
-void pmbus_right_ready(pmos::Right right)
-{
-    auto pmbus_right       = std::move(right);
-    list_type::iterator it = waiters.begin();
-    while (it != waiters.end()) {
-        waiters.remove(it);
-        it->h.resume();
-        it = waiters.begin();
-    }
-}
-
-bool PublishDisk::await_ready() noexcept { return false; }
-
-void PublishDisk::await_suspend(std::coroutine_handle<> hh) { handler.h = hh; }
-
-void PublishDisk::await_resume() {}
+extern pmos::Right device_right;
+extern pmos::PortDispatcher dispatcher;
+extern pmos::PMBUSHelper pmbus_helper;
 
 extern std::string pci_string;
+
+pmos::async::detached_task handle_ipc(AHCIPort &port);
 
 pmos::async::task<uint64_t> publish_disk(AHCIPort &port, uint64_t sector_count,
                                          size_t logical_sector_size, size_t physical_sector_size)
 {
-    auto pmbus_port = co_await WaitForPMBusPort {};
-
     auto handler =
         DiskHandler::create(port, sector_count, logical_sector_size, physical_sector_size);
     pmos::utility::scope_guard guard {[=] { handler->destroy(); }};
@@ -75,63 +37,8 @@ pmos::async::task<uint64_t> publish_disk(AHCIPort &port, uint64_t sector_count,
     object.set_property("physical_sector_size", physical_sector_size);
     object.set_property("handler_id", handler->get_disk_id());
 
-    auto vec    = object.serialize_into_ipc();
-    auto result = send_message_port(pmbus_port, vec.size(), (unsigned char *)&vec[0]);
-    if (result != SUCCESS)
-        throw std::system_error(-result, std::system_category());
+    handle_ipc(port);
 
-    co_await PublishDisk {*handler};
-
-    if (handler->error_code != 0)
-        throw std::system_error(-handler->error_code, std::system_category());
-    guard.dismiss();
-    co_return handler->get_disk_id();
-}
-
-// pmos::async::task<uint64_t> register_disk(AHCIPort &port, uint64_t sector_count,
-//                                           size_t logical_sector_size, size_t
-//                                           physical_sector_size)
-// {
-//     auto blockd_port = co_await WaitForBlockdPort {};
-
-//     auto handler =
-//         DiskHandler::create(port, sector_count, logical_sector_size, physical_sector_size);
-//     pmos::utility::scope_guard guard {[=] { handler->destroy(); }};
-
-//     IPC_Disk_Register request = {
-//         .type                 = IPC_Disk_Register_NUM,
-//         .flags                = 0,
-//         .reply_port           = ahci_port,
-//         .disk_port            = ahci_port,
-//         .disk_id              = handler->get_disk_id(),
-//         .task_group_id        = pmos_process_task_group(),
-//         .sector_count         = sector_count,
-//         .logical_sector_size  = static_cast<uint32_t>(logical_sector_size),
-//         .physical_sector_size = static_cast<uint32_t>(physical_sector_size),
-//     };
-
-//     auto result = send_message_port(blockd_port, sizeof(request), (unsigned char *)&request);
-//     if (result != SUCCESS)
-//         throw std::system_error(-result, std::system_category());
-
-//     co_await RegisterDisk {*handler};
-
-//     if (handler->error_code != 0)
-//         throw std::system_error(-handler->error_code, std::system_category());
-
-//     guard.dismiss();
-//     co_return handler->get_disk_id();
-// }
-
-void handle_publish_object_reply(const IPC_BUS_Publish_Object_Reply *reply)
-{
-    try {
-        // auto id             = reply->user_arg;
-        // auto handler        = DiskHandler::get(id);
-        // handler->error_code = reply->result;
-
-        // handler->h.resume();
-    } catch (std::exception &e) {
-        printf("Exception in handle_register_disk_reply: %s\n", e.what());
-    }
+    auto right = port.port_right.clone();
+    co_return co_await pmbus_helper.publish_object(std::move(object), std::move(right));
 }

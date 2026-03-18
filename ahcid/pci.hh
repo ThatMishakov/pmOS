@@ -1,9 +1,11 @@
 #pragma once
 #include <stdint.h>
+#include <pmos/async/coroutines.hh>
+#include <expected>
+#include <memory>
 
-class PCIDevice
+struct PCIDevice
 {
-public:
     uint32_t readl(uint16_t offset);
     uint16_t readw(uint16_t offset);
     uint8_t readb(uint16_t offset);
@@ -12,7 +14,6 @@ public:
     void writew(uint16_t offset, uint16_t val);
     void writeb(uint16_t offset, uint8_t val);
 
-    PCIDevice(uint16_t group, uint8_t bus, uint8_t device, uint8_t function);
     ~PCIDevice();
 
     PCIDevice(const PCIDevice &other)            = delete;
@@ -21,27 +22,28 @@ public:
     PCIDevice(PCIDevice &&other);
     PCIDevice &operator=(PCIDevice &&other);
 
+    PCIDevice(volatile char *virt_addr);
+
     // Returns 0 if no interrupt pin is connected, otherwise 0x1 for INTA# to 0x4 for INTD#
     char interrupt_pin() noexcept;
 
-    // Resolves the device's interrupt line to GSI
-    // Returns 0 on success, otherwise -1 setting errno to the error code
-    int gsi(uint32_t &gsi_result) noexcept;
+    // // Resolves the device's interrupt line to GSI
+    // // Returns 0 on success, otherwise -1 setting errno to the error code
+    // int gsi(uint32_t &gsi_result) noexcept;
 
     // Registers the interrupt for the device
     // Returns 0 on success, otherwise -errno
+    // This has to block, since it can change the affinity, and it might break the messaging (yet another TODO...)
     int register_interrupt(uint32_t &int_vector_result, uint64_t task, uint64_t port) noexcept;
 
     uint16_t group() const;
     uint8_t bus() const;
     uint8_t device() const;
     uint8_t function() const;
-private:
+
     PCIDevice();
 
     volatile char *virt_addr;
-    uint16_t _group;
-    uint8_t _bus;
-    uint8_t _device;
-    uint8_t _function;
 };
+
+pmos::async::task<std::unique_ptr<PCIDevice>> get_pci_device();

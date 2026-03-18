@@ -7,6 +7,7 @@
 #include <pmos/containers/intrusive_list.hh>
 #include <stdint.h>
 #include <vector>
+#include <pmos/helpers.hh>
 
 struct CommandListEntry;
 
@@ -166,6 +167,9 @@ struct AHCIPort: TimerWaiter {
     };
 
     DeviceType classify_device();
+
+    pmos::Right port_right;
+    pmos::RecieveRight port_recieve_right;
 };
 
 extern int num_slots;

@@ -1,5 +1,6 @@
 #pragma once
 #include <pmos/async/coroutines.hh>
+#include <pmos/helpers.hh>
 #include <pmos/containers/intrusive_list.hh>
 #include <string_view>
 #include <pmos/ipc.h>
