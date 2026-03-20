@@ -75,6 +75,12 @@ inline klib::array<sched_queue, sched_queues_levels> global_sched_queues;
 extern memory::RCU paging_rcu;
 extern memory::RCU heap_rcu;
 
+struct TimerNode {
+    pmos::containers::RBTreeNode<TimerNode> node;
+    u64 fire_at_ns = 0;
+    virtual void fire() = 0;
+};
+
 struct CPU_Info {
     CPU_Info *self                     = this;    // 0  0
     u64 *kernel_stack_top              = nullptr; // 8  4
@@ -187,18 +193,10 @@ struct CPU_Info {
     void ipi_reschedule(); // nothrow ?
     void ipi_tlb_shootdown();
 
-    // TODO: Replace this with multimap
-    struct Timer {
-        pmos::containers::RBTreeNode<Timer> node;
-        u64 fire_on_core_ticks;
-        u64 port_id;
-        u64 extra;
-    };
     using timer_tree =
-        pmos::containers::RedBlackTree<Timer, &Timer::node,
-                                       detail::TreeCmp<Timer, u64, &Timer::fire_on_core_ticks>>;
+        pmos::containers::RedBlackTree<TimerNode, &TimerNode::node,
+                                       detail::TreeCmp<TimerNode, u64, &TimerNode::fire_at_ns>>;
     timer_tree::RBTreeHead timer_queue;
-    Spinlock timer_lock;
 
     // Adds a new timer to the timer queue
     kresult_t atomic_timer_queue_push(u64 fire_on_core_ticks, ipc::Port *, u64 user);
@@ -217,6 +215,17 @@ struct CPU_Info {
 
     // TODO?
     bool online = true;
+
+    struct SchedulerTimerNode final: TimerNode {
+        virtual void fire() override;
+    };
+
+    SchedulerTimerNode stn = {};
+    u64 sched_timer_deadline = 0;
+
+    void sched_timer(u64 period_ms);
+
+    u64 local_timer_next_deadline = 0;
 };
 
 extern u64 ticks_since_bootup;
@@ -250,7 +259,7 @@ void task_switch();
 void find_new_process();
 
 // To be called from the clock routine
-void sched_periodic();
+void cpu_timer_interrupt();
 
 // Starts the scheduler
 void start_scheduler();
@@ -260,5 +269,8 @@ void evict(const proc::TaskDescriptor *);
 
 // Reschedules the tasks
 extern "C" void reschedule();
+
+// Rearms the timer, if the current entry is sooner than the first one
+void maybe_rearm_timer(u64 deadline_nanoseconds);
 
 }; // namespace kernel::sched

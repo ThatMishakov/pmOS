@@ -43,6 +43,8 @@ namespace lapic
 constexpr u32 A32_XAPIC_DISABLE_STATUS_MSR = 0xbd;
 constexpr u32 IA32_ARCH_CAPABILITIES_MSR = 0x10a;
 
+constexpr u32 IA32_TSC_DEADLINE_MSR = 0x6e0;
+
 constexpr u32 X2APIC_MSR_BASE = 0x800;
 
 #define APIC_REG_LAPIC_ID     0x2
@@ -247,6 +249,11 @@ constexpr u32 X2APIC_MSR_BASE = 0x800;
     };
 
     extern APICMode apic_mode;
+
+    void arm_tsc_deadline(u64 deadline_ticks);
+    bool use_tsc_deadline();
+
+    void timer_self_ipi();
 
 }; // namespace lapic
 }; // namespace kernel::x86::interrupts

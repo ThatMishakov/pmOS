@@ -266,7 +266,7 @@ extern "C" void syscall_handler();
 
 void service_timer_interrupt()
 {
-    sched_periodic();
+    cpu_timer_interrupt();
     // Pending timer interrupt is cleared by SBI
 }
 

@@ -15,6 +15,7 @@
 #include <pmos/utility/scope_guard.hh>
 #include <syscall.hh>
 #include <pmos/containers/set.hh>
+#include <time/timers.hh>
 
 using namespace kernel;
 using namespace kernel::x86;
@@ -369,7 +370,8 @@ void init_scheduling_on_bsp()
     serial_logger.printf("Initializing APIC\n");
     prepare_apic_bsp();
 
-    serial_logger.printf("Initializing interrupts\n");
+    serial_logger.printf("Initializing interrupts and timers\n");
+    time::init_timers();
     init_interrupts();
 
     serial_logger.printf("Initializing per-CPU structures\n");
@@ -377,6 +379,8 @@ void init_scheduling_on_bsp()
 
     serial_logger.printf("Initializing I/O APICs\n");
     IOAPIC::init_ioapics();
+
+    time::init_after_lapic();
 
     serial_logger.printf("Initializing ACPI trampoline\n");
     init_acpi_trampoline();

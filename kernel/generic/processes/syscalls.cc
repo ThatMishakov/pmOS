@@ -53,7 +53,7 @@
 #include <pmos/memory.h>
 
 #if defined(__x86_64__) || defined(__i386__)
-    #include <sched/segments.hh>
+    #include <segments.hh>
 #endif
 
 using namespace kernel::log;
@@ -1719,8 +1719,8 @@ void syscall_request_timer()
         return;
     }
 
-    u64 core_time_ms    = c->ticks_after_ns(timeout);
-    syscall_error(task) = c->atomic_timer_queue_push(core_time_ms, port_ptr, user_arg);
+    u64 time    = get_ns_since_bootup() + timeout;
+    syscall_error(task) = c->atomic_timer_queue_push(time, port_ptr, user_arg);
 }
 
 void syscall_set_affinity()

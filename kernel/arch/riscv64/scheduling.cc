@@ -571,7 +571,7 @@ extern "C" void bootstrap_entry(CPU_Info *i)
     plic_set_threshold(0);
 
     // Start the timer (otherwise, the CPU will likely idle forever)
-    start_timer(10 /* ms */);
+    // start_timer(10 /* ms */);
     reschedule();
 
     serial_logger.printf("CPU %i (hart %i) initialized!\n", i->cpu_id, i->hart_id);

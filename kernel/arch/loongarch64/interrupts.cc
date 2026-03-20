@@ -238,7 +238,7 @@ extern "C" void handle_interrupt()
 
         if (estat & TIMER_INT_MASK) {
             csrwr<loongarch::csr::TICLR>(0x01);
-            sched_periodic();
+            cpu_timer_interrupt();
         }
 
         if (estat & HARDWARE_INT_MASK) {

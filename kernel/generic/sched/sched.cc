@@ -91,43 +91,63 @@ ReturnStr<u64> block_current_task(ipc::Port *ptr)
     return {0, 0};
 }
 
-void service_timer_ports()
+// void service_timer_ports()
+// {
+//     auto c            = get_cpu_struct();
+//     auto current_time = get_current_time_ticks();
+//     Auto_Lock_Scope l(c->timer_lock);
+
+//     for (auto t = c->timer_queue.begin();
+//          t != c->timer_queue.end() and t->fire_on_core_ticks < current_time;) {
+//         auto port = ipc::Port::atomic_get_port(t->port_id);
+//         if (port) {
+//             IPC_Timer_Reply r = {
+//                 IPC_Timer_Reply_NUM,
+//                 0,
+//                 t->extra,
+//             };
+//             port->atomic_send_from_system(reinterpret_cast<char *>(&r), sizeof(r));
+//         }
+
+//         auto o = t++;
+//         c->timer_queue.erase(o);
+//         delete &*o;
+//     }
+// }
+
+struct Timer final: TimerNode {
+    u64 port_id;
+    u64 extra;
+
+    virtual void fire() override;
+};
+
+void Timer::fire()
 {
-    auto c            = get_cpu_struct();
-    auto current_time = get_current_time_ticks();
-    Auto_Lock_Scope l(c->timer_lock);
-
-    for (auto t = c->timer_queue.begin();
-         t != c->timer_queue.end() and t->fire_on_core_ticks < current_time;) {
-        auto port = ipc::Port::atomic_get_port(t->port_id);
-        if (port) {
-            IPC_Timer_Reply r = {
-                IPC_Timer_Reply_NUM,
-                0,
-                t->extra,
-            };
-            port->atomic_send_from_system(reinterpret_cast<char *>(&r), sizeof(r));
-        }
-
-        auto o = t++;
-        c->timer_queue.erase(o);
-        delete &*o;
+    auto port = ipc::Port::atomic_get_port(port_id);
+    if (port) {
+        IPC_Timer_Reply r = {
+            IPC_Timer_Reply_NUM,
+            0,
+            extra,
+        };
+        port->atomic_send_from_system(reinterpret_cast<char *>(&r), sizeof(r));
     }
+    delete this;
 }
 
-kresult_t CPU_Info::atomic_timer_queue_push(u64 fire_on_core_ticks, ipc::Port *port, u64 user_arg)
+kresult_t CPU_Info::atomic_timer_queue_push(u64 fire_at_ns, ipc::Port *port, u64 user_arg)
 {
     auto t = new Timer;
     if (!t)
         return -ENOMEM;
 
-    t->port_id            = port->portno;
-    t->extra              = user_arg;
-    t->fire_on_core_ticks = fire_on_core_ticks;
-
-    Auto_Lock_Scope l(timer_lock);
+    t->port_id    = port->portno;
+    t->extra      = user_arg;
+    t->fire_at_ns = fire_at_ns;
 
     timer_queue.insert(t);
+    maybe_rearm_timer(fire_at_ns);
 
     return 0;
 }
@@ -168,16 +188,34 @@ void push_ready(TaskDescriptor *p)
     }
 }
 
-void sched_periodic()
+void CPU_Info::sched_timer(u64 period_ms)
 {
+    if (period_ms == 0) {
+        // Let the timer just fire whenever it wants...
+        sched_timer_deadline = 0;
+    } else {
+        u64 time = get_ns_since_bootup();
+        u64 nanoseconds = period_ms * 1'000'000;
+
+        sched_timer_deadline = time + nanoseconds;
+        if (stn.fire_at_ns > sched_timer_deadline) {
+            timer_queue.erase(&stn);
+            stn.fire_at_ns = sched_timer_deadline;
+            timer_queue.insert(&stn);
+            maybe_rearm_timer(sched_timer_deadline);
+        } else if (stn.fire_at_ns == 0) {
+            stn.fire_at_ns = sched_timer_deadline;
+            timer_queue.insert(&stn);
+            maybe_rearm_timer(sched_timer_deadline);
+        }
+        // Otherwise, the timer will fire before the deadline, so the kernel will just re-fire it...
+    }
+}
+
+void CPU_Info::SchedulerTimerNode::fire()
+{
+    fire_at_ns = 0;
     CPU_Info *c = get_cpu_struct();
-
-    // Quiet RCU
-    // Since this function is called from the timer interrupt, no context is held here
-    c->heap_rcu_cpu.quiet(heap_rcu, c->cpu_id);
-
-    // TODO: Replace with more sophisticated algorithm. Will definitely need to be redone once we
-    // have multi-cpu support
 
     TaskDescriptor *current = c->current_task;
     TaskDescriptor *next    = c->atomic_pick_highest_priority(current->priority);
@@ -189,7 +227,7 @@ void sched_periodic()
 
         push_ready(current);
     } else {
-        start_timer(assign_quantum_on_priority(current->priority));
+        c->sched_timer(assign_quantum_on_priority(current->priority));
     }
 
     while (c->current_task->status == TaskStatus::TASK_DYING) {
@@ -197,11 +235,35 @@ void sched_periodic()
 
         find_new_process();
     }
+}
 
-    // Funny bug, that took 1 monts to find and fix: if this is done between when the copy of the
-    // current task is made and the task switch, the current task might disappear, since
-    // `service_timer_ports()` can reschedule and current task will no longer be running
-    service_timer_ports();
+void cpu_timer_interrupt()
+{
+    CPU_Info *c = get_cpu_struct();
+
+    // Quiet RCU
+    // Since this function is called from the timer interrupt, no context is held here
+    c->heap_rcu_cpu.quiet(heap_rcu, c->cpu_id);
+
+    // TODO: Replace with more sophisticated algorithm. Will definitely need to be redone once we
+    // have multi-cpu support
+
+    // Assume timer is not running
+    c->local_timer_next_deadline = 0;
+
+    u64 time = get_ns_since_bootup();
+    auto it = c->timer_queue.end();
+    while ((it = c->timer_queue.begin()) != c->timer_queue.end()) {
+        if (it->fire_at_ns > time)
+            break;
+
+        auto cc = it;
+        c->timer_queue.erase(it);
+        cc->fire();
+    }
+
+    if (it != c->timer_queue.end())
+        maybe_rearm_timer(it->fire_at_ns);
 }
 
 void start_scheduler()
@@ -209,7 +271,7 @@ void start_scheduler()
     CPU_Info *s       = get_cpu_struct();
     TaskDescriptor *t = s->current_task;
 
-    start_timer(assign_quantum_on_priority(t->priority));
+    s->sched_timer(assign_quantum_on_priority(t->priority));
 }
 
 void reschedule()
@@ -470,7 +532,7 @@ void TaskDescriptor::switch_to()
 
     this->after_task_switch();
 
-    start_timer(assign_quantum_on_priority(priority));
+    c->sched_timer(assign_quantum_on_priority(priority));
 }
 
 bool TaskDescriptor::atomic_try_unblock_by_page(void *page)

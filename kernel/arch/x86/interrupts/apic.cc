@@ -53,6 +53,7 @@ using namespace kernel::x86::interrupts;
 using namespace kernel::log;
 
 bool have_invariant_tsc = false;
+bool have_tsc_deadline  = false;
 u64 boot_tsc            = 0;
 
 namespace kernel::x86::interrupts::lapic {
@@ -200,15 +201,6 @@ void enable_apic()
     apic_write_reg(APIC_REG_SPURIOUS_INT, APIC_SPURIOUS_INT | 0x100);
 }
 
-void prepare_apic_bsp()
-{
-    init_PIC();
-    detect_x2apic();
-
-    if (apic_mode == APICMode::XAPIC)
-        map_apic();
-}
-
 FreqFraction apic_freq;
 FreqFraction tsc_freq;
 
@@ -230,9 +222,34 @@ static void check_tsc()
     }
 }
 
+bool use_tsc_deadline()
+{
+    // return have_invariant_tsc and have_tsc_deadline;
+    return false;
+}
+
+static void detect_tsc_deadline()
+{
+    auto c = cpuid(0x01);
+    if (c.ecx & (1 << 24)) {
+        global_logger.printf("[Kernel] Info: TSC deadline support detected...\n");
+        have_tsc_deadline = true;
+    }
+}
+
+void prepare_apic_bsp()
+{
+    init_PIC();
+    detect_x2apic();
+    check_tsc();
+    detect_tsc_deadline();
+
+    if (apic_mode == APICMode::XAPIC)
+        map_apic();
+}
+
 void discover_apic_freq()
 {
-    check_tsc();
     // While we're here, also measure TSC frequency
     u64 tsc_start;
 
@@ -287,6 +304,11 @@ void discover_apic_freq()
     global_logger.printf("[Kernel] Info: TSC ticks per 1ms: %li\n", tsc_freq * 1'000'000'000);
     serial_logger.printf("[Kernel] Info: TSC ticks per 1s: %li %li\n", tsc_freq * 1'000'000'000,
                          (tsc_end - tsc_start) * 100);
+}
+
+void arm_tsc_deadline(u64 time)
+{
+    write_msr(IA32_TSC_DEADLINE_MSR, time);
 }
 
 void apic_one_shot(u32 ms)
