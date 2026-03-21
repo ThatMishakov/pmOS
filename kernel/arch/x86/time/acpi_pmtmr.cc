@@ -89,8 +89,6 @@ void Runner::fire()
 
     c->timer_queue.insert(this);
     sched::maybe_rearm_timer(fire_at_ns);
-
-    log::global_logger.printf("! %li\n", fire_at_ns);
 }
 
 void AcpiPmTmrSource::init_as_main()
