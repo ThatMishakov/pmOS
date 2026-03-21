@@ -117,6 +117,8 @@ void kernel::sched::maybe_rearm_timer(u64 deadline_nanoseconds)
 
 void time::init_timers()
 {
+    // The timers are initialized, from worst to best, and set the kernel timeosource and cal
+    // source as they do...
     acpi_pmtmr::init_acpi_pmtmr();
     hpet::init_hpet();
 
