@@ -175,10 +175,13 @@ flanterm_context *ft_ctx = nullptr;
 uint32_t *fb_virt        = nullptr;
 
 __attribute__((used)) struct limine_framebuffer_request fb_req = {
-    .id       = LIMINE_FRAMEBUFFER_REQUEST,
+    .id       = LIMINE_FRAMEBUFFER_REQUEST_ID,
     .revision = 0,
     .response = nullptr,
 };
+
+flanterm_context *ft_ctx = nullptr;
+uint32_t *fb_virt        = nullptr;
 
 void init_fb()
 {
