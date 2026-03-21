@@ -45,6 +45,7 @@
 #include <pmos/io.h>
 #include <uacpi/acpi.h>
 #include <uacpi/tables.h>
+#include <time/tsc.hh>
 
 using namespace kernel;
 using namespace kernel::x86;
@@ -199,6 +200,20 @@ void enable_apic()
     apic_write_reg(APIC_REG_LVT_INT0, LVT_INT0);
     apic_write_reg(APIC_REG_LVT_INT1, LVT_INT1);
     apic_write_reg(APIC_REG_SPURIOUS_INT, APIC_SPURIOUS_INT | 0x100);
+
+    apic_write_reg(APIC_REG_TMRDIV, 0x3);           // Divide by 16
+    apic_write_reg(APIC_REG_TMRINITCNT, 0);
+    if (!tsc::use_tsc_deadline())
+        apic_write_reg(APIC_REG_LVT_TMR, APIC_TMR_INT); // Init in one-shot mode
+    else
+        apic_write_reg(APIC_REG_LVT_TMR, APIC_TMR_INT | (1 << 18));
+}
+
+void init_tsc_deadline()
+{
+    apic_write_reg(APIC_REG_LVT_TMR, APIC_TMR_INT | (1 << 18));
+    // Just in case the system is in xAPIC mode...
+    __sync_synchronize();
 }
 
 FreqFraction apic_freq;
@@ -220,12 +235,6 @@ static void check_tsc()
         global_logger.printf("[Kernel] Warning: TSC Invariant bit is not set\n");
         serial_logger.printf("[Kernel] Warning: TSC Invariant bit is not set\n");
     }
-}
-
-bool use_tsc_deadline()
-{
-    // return have_invariant_tsc and have_tsc_deadline;
-    return false;
 }
 
 static void detect_tsc_deadline()

@@ -33,6 +33,7 @@
 #include "timers.hh"
 #include "acpi_pmtmr.hh"
 #include "hpet.hh"
+#include "tsc.hh"
 
 using namespace kernel::sched;
 using namespace kernel;
@@ -96,7 +97,7 @@ void kernel::sched::maybe_rearm_timer(u64 deadline_nanoseconds)
         return;
 
     c->local_timer_next_deadline = deadline_nanoseconds;
-    if (use_tsc_deadline()) {
+    if (tsc::use_tsc_deadline()) {
         arm_tsc_deadline(tsc_freq * deadline_nanoseconds);
     } else {
         auto current_time = get_ns_since_bootup();
@@ -121,6 +122,7 @@ void time::init_timers()
     // source as they do...
     acpi_pmtmr::init_acpi_pmtmr();
     hpet::init_hpet();
+    tsc::init_tsc();
 
     if (!kernel_timesource)
         panic("No kernel timesource!\n");
@@ -139,3 +141,5 @@ u64 CPU_Info::ticks_after_ns(u64 ns)
 {
     return get_current_time_ticks() + (apic_freq * ns);
 }
+
+void TimeSource::init_as_main() {}

@@ -7,8 +7,8 @@ namespace kernel::x86::time
 
 struct TimeSource {
     virtual u64 get_absolute_time() const = 0;
-    virtual void init_as_main()           = 0;
-    virtual const char *name() const      = 0;
+    virtual void init_as_main();
+    virtual const char *name() const = 0;
 };
 
 struct CalibrationSource {

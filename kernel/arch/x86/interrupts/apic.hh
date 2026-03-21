@@ -251,9 +251,7 @@ constexpr u32 X2APIC_MSR_BASE = 0x800;
     extern APICMode apic_mode;
 
     void arm_tsc_deadline(u64 deadline_ticks);
-    bool use_tsc_deadline();
-
-    void timer_self_ipi();
+    void init_tsc_deadline();
 
 }; // namespace lapic
 }; // namespace kernel::x86::interrupts
