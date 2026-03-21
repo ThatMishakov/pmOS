@@ -1042,8 +1042,8 @@ void limine_main()
     serial_logger.printf("Kernel start: 0x%lh\n", &_kernel_start);
 
     #ifdef __riscv
-    if (hartid_request->response)
-        bsp_cpu_id = hartid_request->response.bsp_hartid;
+    if (hartid_request.response)
+        bsp_cpu_id = hartid_request.response->bsp_hartid;
     #endif
 
     construct_paging();
@@ -1074,7 +1074,7 @@ void limine_main()
     // Switch to CPU-local temp mapper
     global_temp_mapper = nullptr;
 
-    init_smp();
+    //init_smp();
 
     init_modules();
     init_task1();
