@@ -34,6 +34,7 @@
 #include "acpi_pmtmr.hh"
 #include "hpet.hh"
 #include "tsc.hh"
+#include "kvmclock.hh"
 
 using namespace kernel::sched;
 using namespace kernel;
@@ -123,6 +124,7 @@ void time::init_timers()
     acpi_pmtmr::init_acpi_pmtmr();
     hpet::init_hpet();
     tsc::init_tsc();
+    //kvmclock::init_kvmclock();
 
     if (!kernel_timesource)
         panic("No kernel timesource!\n");
