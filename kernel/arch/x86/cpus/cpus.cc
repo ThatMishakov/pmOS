@@ -284,7 +284,7 @@ void init_smp()
 
     pmos::containers::set<u32> lapic_ids;
     if (lapic_ids.insert_noexcept(my_lapic_id).first == lapic_ids.end())
-        panic("Coildn't insert my lapic id into set");
+        panic("Couldn't insert my lapic id into set");
 
     bool have_xapic_entries = false;
     res = uacpi_for_each_subtable(madt.hdr, sizeof(struct acpi_madt), [](auto ctx, auto hdr) -> uacpi_iteration_decision {
