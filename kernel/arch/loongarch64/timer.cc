@@ -31,10 +31,10 @@ bool calculate_timer_frequency()
     tmrbits = (csrrd32<0x21>() >> 4) & 0xff;
     timer_max = (1 << tmrbits) - 1;
 
-    log::serial_logger.printf("CPU Timer freq %i mul %i div %i bits %i\n", constant_freq, mul_div, mul, div, tmrbits);
+    log::serial_logger.printf("CPU Timer freq %i mul %i div %i bits %i\n", constant_freq, mul, div, tmrbits);
 
-    timer_freq   = computeFreqFraction((u64)constant_freq * mul, div * 1e9);
-    timer_period = computeFreqFraction(div * 1e9, (u64)constant_freq * mul);
+    timer_freq   = computeFreqFraction((u64)constant_freq * mul, div * (u64)1'000'000'000);
+    timer_period = computeFreqFraction(div * (u64)1'000'000'000, (u64)constant_freq * mul);
     return true;
 }
 

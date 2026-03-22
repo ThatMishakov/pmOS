@@ -30,6 +30,8 @@ void program_interrupts()
 void detect_supported_extensions();
 void init_interrupts();
 
+bool calculate_timer_frequency();
+
 void init_scheduling(u64 cpu_id)
 {
     sched::CPU_Info *i = new sched::CPU_Info();
@@ -61,7 +63,7 @@ void init_scheduling(u64 cpu_id)
     i->current_task = i->idle_task;
     i->idle_task->page_table->apply_cpu(i);
 
-    // initialize_timer();
+    calculate_timer_frequency();
 
     // TODO: FP state
     detect_supported_extensions();
