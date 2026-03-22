@@ -54,26 +54,36 @@ _limine_entry:
     j return_from_kernel
 
     .text
-    .globl _cpu_bootstrap_entry
-    .type _cpu_bootstrap_entry, @function
-_cpu_bootstrap_entry:
+    .globl _ap_bootstrap_entry
+    .type _ap_bootstrap_entry, @function
+_ap_bootstrap_entry:
     # Entry to the hart bootstrap code
 
-    # Load the stack, since limine struct will not be available once the page table is switched
-    ld sp, 32(a0)
+    # Load the bootstrap address into stvec, then pagefault to it...
+    la t0, ap_entry_ptr
+    ld t1, 0(t0)
+    csrw stvec, t1
 
-    # Switch to the kernel page table
     la t0, satp_bootstrap_value
     ld t1, 0(t0)
-
-    # Switch to the kernel page table
     csrw satp, t1
+    sfence.vma
+    unimp
 
-    # Pass CPU struct to the kernel
-    ld a0, -8(sp)
+ap_entry:
+    mv fp, zero
+    mv tp, a1
+    # Load stack. The CPU_Info *i is passed through SBI
+    ld sp, 8(a1)
 
     # Jump to C
     call bootstrap_entry
 
     # Return to userspace
     j return_from_kernel
+
+
+    .section .data
+    .align 3
+ap_entry_ptr:
+    .dword  ap_entry

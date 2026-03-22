@@ -44,6 +44,7 @@
 #include <smoldtb.h>
 #include <types.hh>
 #include <pmos/utility/scope_guard.hh>
+#include <sbi/sbi.hh>
 
 using namespace kernel;
 using namespace kernel::log;
@@ -486,6 +487,130 @@ void init_scheduling(u64 hart_id)
 
 u64 satp_bootstrap_value = 0;
 
+CPU_Info *prepare_cpu(u64 hart_id)
+{
+    CPU_Info *i = new CPU_Info();
+    if (!i)
+        panic("Could not allocate CPU_Info struct\n");
+
+    i->kernel_stack_top = i->kernel_stack.get_stack_top();
+    i->hart_id          = hart_id;
+
+    void *temp_mapper_start = vmm::kernel_space_allocator.virtmem_alloc_aligned(16, 4);
+    i->temp_mapper =
+        RISCV64_Temp_Mapper(temp_mapper_start, kernel::paging::idle_page_table->get_root());
+
+    i->cpu_id = cpus.size() - 1;
+    if (!cpus.push_back(i))
+        panic("Failed to push CPU to waiers...");
+
+    auto s = get_isa_string(hart_id);
+    if (s.result == 0) {
+        i->isa_string = klib::forward<klib::string>(s.val);
+        global_logger.printf("[Kernel] ISA string: %s\n", i->isa_string.c_str());
+        serial_logger.printf("ISA string: %s\n", i->isa_string.c_str());
+    }
+
+    auto e = get_hart_rtnic_id(hart_id);
+    if (e.result != 0) {
+        serial_logger.printf("Could not get EIC ID: %i\n", e.result);
+    } else {
+        i->eic_id = e.val;
+        // global_logger.printf("[Kernel] EIC ID: %i\n", i->eic_id);
+        // serial_logger.printf("EIC ID: %i\n", i->eic_id);
+    }
+
+    auto idle = init_idle(i);
+    if (idle != 0)
+        panic("Failed to initialize idle task: %i\n", idle);
+
+    assert(proc::kernel_tasks);
+    if (auto t = proc::kernel_tasks->atomic_register_task(i->idle_task); t)
+        panic("Failed to add idle task to the kernel process group: %i\n", t);
+
+    i->current_task = i->idle_task;
+
+    u64 *stack_top = (u64 *)i->kernel_stack.get_stack_top();
+    stack_top[-1]  = (u64)i;
+
+    return i;
+}
+
+void init_smp_acpi()
+{
+    auto my_hartid = get_cpu_struct()->hart_id;
+    
+    uacpi_table madt;
+    auto res = uacpi_table_find_by_signature(ACPI_MADT_SIGNATURE, &madt);
+    if (res != UACPI_STATUS_OK) {
+        return;
+    }
+    auto guard = pmos::utility::make_scope_guard([&]{
+        uacpi_table_unref(&madt);
+    });
+
+    struct Ctx {
+        pmos::containers::set<u64> hart_ids;
+    } ctx;
+
+    if (ctx.hart_ids.insert_noexcept(my_hartid).first == ctx.hart_ids.end())
+        panic("Couldn't allocate memory for hart id");
+
+    res = uacpi_for_each_subtable(madt.hdr, sizeof(struct acpi_madt), [](auto c, auto hdr) -> uacpi_iteration_decision {
+        Ctx &ctx = *(Ctx *)c;
+        if (hdr->type == ACPI_MADT_ENTRY_TYPE_RINTC) {
+            acpi_madt_rintc *intc = (acpi_madt_rintc *)hdr;
+
+            if (!(intc->flags & ACPI_PIC_ENABLED) && !(intc->flags & ACPI_PIC_ONLINE_CAPABLE))
+                // CPU not usable...
+                return UACPI_ITERATION_DECISION_CONTINUE;
+
+            auto hart_id = intc->hart_id;
+            
+            auto res = ctx.hart_ids.insert_noexcept(hart_id);
+            if (res.first == ctx.hart_ids.end())
+                panic("Couldn't allocate memory for set in CPU initialization");
+
+            if (!res.second)
+                return UACPI_ITERATION_DECISION_CONTINUE;
+
+            prepare_cpu(hart_id);
+        }
+        return UACPI_ITERATION_DECISION_CONTINUE;
+    }, (void *)&ctx);
+    if (res != UACPI_STATUS_OK)
+        panic("uacpi_for_each_subtable error");   
+}
+
+extern "C" void _ap_bootstrap_entry();
+
+void start_aps()
+{
+    u64 satp;
+    asm volatile("csrr %0, satp" : "=r"(satp));
+    satp_bootstrap_value = satp;
+
+    auto mapping = get_kernel_page_mapping((void *)_ap_bootstrap_entry);
+    assert(mapping.is_allocated);
+    u64 phys_addr = mapping.page_addr | ((u64)_ap_bootstrap_entry & (PAGE_SIZE - 1));
+
+    for (size_t i = 1; i < cpus.size(); ++i) {
+        auto cpu = cpus[i];
+        log::serial_logger.printf("Starting AP 0x%lx\n", cpu->hart_id);
+        auto result = sbi_hart_start(cpu->hart_id, phys_addr, (unsigned long)cpu);
+        if (result.error)
+            panic("Failed to init a CPU");
+    }
+}
+
+void init_smp()
+{
+    init_smp_acpi();
+    // TODO: FDT
+
+    start_aps();
+}
+
 klib::vector<u64> initialize_cpus(const klib::vector<u64> &hartids)
 {
     u64 satp;
@@ -549,15 +674,12 @@ klib::vector<u64> initialize_cpus(const klib::vector<u64> &hartids)
     return temp_vals;
 }
 
-extern "C" void _cpu_bootstrap_entry(void *limine_data);
-
-void *get_cpu_start_func() { return (void *)_cpu_bootstrap_entry; }
-
 extern size_t booted_cpus;
 extern bool boot_barrier_start;
 
-extern "C" void bootstrap_entry(CPU_Info *i)
+extern "C" void bootstrap_entry(u64 hart_id, CPU_Info *i)
 {
+    assert(hart_id == i->hart_id);
     set_cpu_struct(i);
     set_sscratch((u64)i);
     program_stvec();
@@ -577,10 +699,6 @@ extern "C" void bootstrap_entry(CPU_Info *i)
     serial_logger.printf("CPU %i (hart %i) initialized!\n", i->cpu_id, i->hart_id);
 
     __atomic_add_fetch(&booted_cpus, 1, __ATOMIC_SEQ_CST);
-
-    // Wait for bootstrap hart to do the final initialization
-    while (!__atomic_load_n(&boot_barrier_start, __ATOMIC_SEQ_CST))
-        ;
 
     serial_logger.printf("CPU %i (hart %i) entering userspace/idle...\n", i->cpu_id, i->hart_id);
 }

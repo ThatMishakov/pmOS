@@ -50,3 +50,11 @@ sbi_send_ipi:
     li a7, 0x735049
     ecall
     ret
+
+    .globl sbi_hart_start
+    .type sbi_hart_start, @function
+sbi_hart_start:
+    li a6, 0
+    li a7, 0x48534d
+    ecall
+    ret

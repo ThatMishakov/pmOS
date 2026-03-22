@@ -1074,7 +1074,7 @@ void limine_main()
     // Switch to CPU-local temp mapper
     global_temp_mapper = nullptr;
 
-    //init_smp();
+    init_smp();
 
     init_modules();
     init_task1();

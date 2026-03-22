@@ -128,6 +128,8 @@ unsigned top_pt_index(const void *ptr);
 // Checks if the page is mapped correctly, in the current context
 bool page_mapped(const void *virt_addr, int intno);
 
+
+
 /* final allow virtual functions optimizations */
 class RISCV64_Page_Table final: public ::kernel::paging::Page_Table
 {
@@ -263,5 +265,7 @@ private:
     /// pointer
     void free_user_pages();
 };
+
+RISCV64_Page_Table::Page_Info get_kernel_page_mapping(const void *virt_addr);
 
 } // namespace kernel::riscv64::paging
