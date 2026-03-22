@@ -115,3 +115,15 @@ inline void timer_tcfg(unsigned long value)
 {
     csrwr<0x41>(value);
 }
+
+struct RdtimeRet {
+    u64 stable_counter;
+    u64 counter_id;
+};
+
+inline RdtimeRet rdtimed()
+{
+    RdtimeRet r;
+    asm volatile("rdtime.d %0, %1" : "=r"(r.stable_counter), "=r"(r.counter_id));
+    return r;
+}
