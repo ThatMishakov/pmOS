@@ -40,9 +40,9 @@ file(GLOB_RECURSE GENERIC_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/generic/*.S")
 
 file(GLOB_RECURSE FLANTERM_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/flanterm/*.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/flanterm/*.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/flanterm/*.S")
+    "${CMAKE_CURRENT_SOURCE_DIR}/flanterm/src/*.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/flanterm/src/*.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/flanterm/src/*.S")
 
 add_executable(kernel ${PLATFORM_SRCS} ${GENERIC_SRC} ${FLANTERM_SRC})
 
@@ -66,7 +66,7 @@ if(${TARGET_ARCH} STREQUAL "x86_64" OR ${TARGET_ARCH} STREQUAL "i686")
 endif()
 
 target_include_directories(kernel PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/generic")
-target_include_directories(kernel PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/flanterm")
+target_include_directories(kernel PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/flanterm/src")
 
 add_subdirectory(smoldtb)
 
