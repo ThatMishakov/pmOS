@@ -254,8 +254,14 @@ void Buffered_Logger::set_port(ipc::Port *port, uint32_t /* flags */)
 
 void Serial_Logger::log_nolock(const char *c, size_t size)
 {
+    // if (ft_ctx)
+    //     flanterm_write(ft_ctx, c, size);
     if (ft_ctx)
-        flanterm_write(ft_ctx, c, size);
+        for (size_t i = 0; i < size; ++i) {
+            if (c[i] == '\n')
+                flanterm_write(ft_ctx, "\r", 1);
+            flanterm_write(ft_ctx, c + i, 1);
+        }
     for (size_t i = 0; i < size; ++i) {
         const char cc = c[i];
         if (cc == '\n')

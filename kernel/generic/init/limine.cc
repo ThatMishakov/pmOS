@@ -33,7 +33,7 @@
 #include "../memory/temp_mapper.hh"
 #include "../memory/vmm.hh"
 
-#include <backends/fb.h>
+#include <flanterm_backends/fb.h>
 #include <dtb/dtb.hh>
 #include <flanterm.h>
 #include <kern_logger/kern_logger.hh>
@@ -170,9 +170,6 @@ extern phys_addr_t temp_alloc_base;
 extern phys_addr_t temp_alloc_size;
 extern phys_addr_t temp_alloc_reserved;
 extern long temp_alloc_entry_id;
-    
-flanterm_context *ft_ctx = nullptr;
-uint32_t *fb_virt        = nullptr;
 
 __attribute__((used)) struct limine_framebuffer_request fb_req = {
     .id       = LIMINE_FRAMEBUFFER_REQUEST_ID,
@@ -227,7 +224,7 @@ void init_fb()
             malloc, [](void *ptr, size_t) { free(ptr); }, fb_virt, fb.width, fb.height,
             fb.pitch, fb.red_mask_size, fb.red_mask_shift, fb.green_mask_size, fb.green_mask_shift,
             fb.blue_mask_size, fb.blue_mask_shift, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-            0, 0, 1, 0, 0, 0);
+            0, 0, 1, 0, 0, 0, 0);
     }
 }
 
@@ -433,12 +430,6 @@ void init_modules()
         ::modules.push_back(m);
     }
 }
-
-__attribute__((used)) struct limine_framebuffer_request fb_req = {
-    .id       = LIMINE_FRAMEBUFFER_REQUEST_ID,
-    .revision = 0,
-    .response = nullptr,
-};
 
 klib::vector<klib::unique_ptr<load_tag_generic>> construct_load_tag_framebuffer()
 {
