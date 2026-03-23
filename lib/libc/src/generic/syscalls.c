@@ -693,7 +693,7 @@ result_t delete_receive_right(pmos_port_t port, pmos_right_t right)
         return SUCCESS;
 
     #ifdef __i386__
-    return __pmos_syscall_4words(SYSCALL_DELETE_RECEIVE_RIGHT, port, right).result;
+    return __pmos_syscall32_4words(SYSCALL_DELETE_RECEIVE_RIGHT, port, right).result;
     #else
     return pmos_syscall(SYSCALL_DELETE_RECEIVE_RIGHT, port, right).result;
     #endif
