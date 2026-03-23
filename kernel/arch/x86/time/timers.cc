@@ -146,3 +146,4 @@ u64 CPU_Info::ticks_after_ns(u64 ns)
 
 void TimeSource::init_as_main() {}
 void CalibrationSource::prepare_for_calibration() {}
+void CalibrationSource::end_calibration() {}

@@ -6,6 +6,7 @@
 #include <pmos/utility/scope_guard.hh>
 #include <pmos/io.h>
 #include "timers.hh"
+#include <x86_utils.hh>
 
 using namespace kernel;
 using namespace kernel::x86::time;
@@ -34,6 +35,8 @@ unsigned num_timers = 0;
 void *virt_addr;
 
 constexpr size_t hpet_size = 1024;
+
+bool hpet_is_always_running = false;
 
 static u32 hpet_readl_offset(unsigned offset)
 {
@@ -104,7 +107,15 @@ struct HpetSource final: TimeSource {
     virtual const char *name() const override;
 };
 
+struct HpetCalSource final: CalibrationSource {
+    virtual void prepare_for_calibration() override;
+    virtual u64 wait_for_nanoseconds(u64 time_nanoseconds) const override;
+    virtual const char *name() const override;
+    virtual void end_calibration() override;
+};
+
 HpetSource hpet_source;
+HpetCalSource hpet_cal_source;
 
 u64 HpetSource::get_absolute_time() const
 {
@@ -115,6 +126,11 @@ const char *HpetSource::name() const
 {
     return HPET_NAME;
 } 
+
+const char *HpetCalSource::name() const
+{
+    return HPET_NAME;
+}
 
 struct Runner: sched::TimerNode {
     void fire();
@@ -134,11 +150,6 @@ void Runner::fire()
 
 void HpetSource::init_as_main()
 {
-    // Enable HPET and set counter to 0, just in case
-    hpet_writel_offset(HPET_COUNTER_REG, 0);
-    if (is_64bit)
-        hpet_writel_offset(HPET_COUNTER_REG + sizeof(u32), 0);
-
     // Start the counter
     u64 reg = hpet_read64_general(HPET_CONF_REG);
     reg |= 0x01;
@@ -156,8 +167,42 @@ void HpetSource::init_as_main()
         runner->fire_at_ns = 1'000'000'000;
         c->timer_queue.insert(runner);
     }
+
+    hpet_is_always_running = true;
 }
 
+void HpetCalSource::prepare_for_calibration()
+{
+    if (!hpet_is_always_running) {
+        // Start HPET
+        u64 reg = hpet_read64_general(HPET_CONF_REG);
+        reg |= 0x01;
+        hpet_write64_general(HPET_CONF_REG, reg);
+    }
+}
+
+void HpetCalSource::end_calibration()
+{
+    if (!hpet_is_always_running) {
+        // Stop HPET...
+        u64 reg = hpet_read64_general(HPET_CONF_REG);
+        reg &= ~(u64)0x01;
+        hpet_write64_general(HPET_CONF_REG, reg);
+    }  
+}
+
+u64 HpetCalSource::wait_for_nanoseconds(u64 ns) const
+{
+    u64 ticks = hpet_freq * ns;
+    u64 time = hpet_read_time();
+    u64 init = time;
+    u64 end = time + ticks;
+    do {
+        x86_pause();
+        time = hpet_read_time();
+    } while (time < end);
+    return hpet_freq_inv * (time - init);
+}
 
 void init_hpet()
 {
@@ -238,6 +283,11 @@ void init_hpet()
     reg &= ~(u64)0x03;
     hpet_write64_general(HPET_CONF_REG, reg);
 
+    // Set counter to zero, for later
+    hpet_writel_offset(HPET_COUNTER_REG, 0);
+    if (is_64bit)
+        hpet_writel_offset(HPET_COUNTER_REG + sizeof(u32), 0);
+
     // Disable timers...
     for (unsigned i = 0; i < num_timers; ++i) {
         auto offset = HPET_TIMER0_REG + i*0x20;
@@ -245,6 +295,7 @@ void init_hpet()
     }
 
     kernel_timesource = &hpet_source;
+    kernel_calibration_source = &hpet_cal_source;
 }
 
 }

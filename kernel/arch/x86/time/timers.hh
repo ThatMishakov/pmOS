@@ -11,9 +11,12 @@ struct TimeSource {
     virtual const char *name() const = 0;
 };
 
+// The prepare and end functions there are so that the timers can (HPET) can start and stop their counters, without
+// factoring that time into the calibration time itself...
 struct CalibrationSource {
     virtual void prepare_for_calibration();
     virtual u64 wait_for_nanoseconds(u64 time_nanoseconds) const = 0;
+    virtual void end_calibration();
     virtual const char *name() const                             = 0;
 };
 
