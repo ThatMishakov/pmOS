@@ -12,6 +12,7 @@ struct TimeSource {
 };
 
 struct CalibrationSource {
+    virtual void prepare_for_calibration();
     virtual u64 wait_for_nanoseconds(u64 time_nanoseconds) const = 0;
     virtual const char *name() const                             = 0;
 };

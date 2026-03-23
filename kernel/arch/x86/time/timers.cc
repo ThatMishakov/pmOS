@@ -99,7 +99,7 @@ void kernel::sched::maybe_rearm_timer(u64 deadline_nanoseconds)
 
     c->local_timer_next_deadline = deadline_nanoseconds;
     if (tsc::use_tsc_deadline()) {
-        arm_tsc_deadline(tsc_freq * deadline_nanoseconds);
+        arm_tsc_deadline(tsc::tsc_freq * deadline_nanoseconds);
     } else {
         auto current_time = get_ns_since_bootup();
 
@@ -145,3 +145,4 @@ u64 CPU_Info::ticks_after_ns(u64 ns)
 }
 
 void TimeSource::init_as_main() {}
+void CalibrationSource::prepare_for_calibration() {}

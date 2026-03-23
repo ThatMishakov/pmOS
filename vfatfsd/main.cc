@@ -104,7 +104,7 @@ void tick()
         int i = 0;
         while (true) {
             printf("Tick %i\n", ++i);
-            sleep(5);
+            sleep(1);
         }
     } else if (p == -1) {
         perror("fork");
@@ -124,7 +124,7 @@ int main()
 {
     sleep(1);
     printf("Starting tests...\n");
-    // tick();
+    //tick();
     test_containers();
     test_exception();
 

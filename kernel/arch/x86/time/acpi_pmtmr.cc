@@ -31,7 +31,7 @@ struct AcpiPmTmrCalSource final: CalibrationSource {
 };
 
 AcpiPmTmrSource acpi_pm_tmr_timesource = {};
-AcpiPmTmrCalSource acpi_pm_trm_calsource = {};
+AcpiPmTmrCalSource acpi_pm_tmr_calsource = {};
 
 static u32 apci_pmtmr_read()
 {
@@ -141,6 +141,20 @@ void init_acpi_pmtmr()
     log::global_logger.printf("Found %i bit ACPI PM Timer at port 0x%x\n", size, pmtmr_ioport);
 
     kernel_timesource = &acpi_pm_tmr_timesource;
+    kernel_calibration_source = &acpi_pm_tmr_calsource;
+}
+
+u64 AcpiPmTmrCalSource::wait_for_nanoseconds(u64 ns) const
+{
+    u64 ticks = acpi_pm_freq * ns;
+    u64 time = read_accumulated();
+    u64 init = time;
+    u64 wanted = time + ticks;
+    do {
+        x86_pause();
+        time = read_accumulated();
+    } while (time < wanted);
+    return acpi_pm_freq_inv * (time - init);
 }
 
 }

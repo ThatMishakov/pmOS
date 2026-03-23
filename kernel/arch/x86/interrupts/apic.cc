@@ -46,6 +46,7 @@
 #include <uacpi/acpi.h>
 #include <uacpi/tables.h>
 #include <time/tsc.hh>
+#include <time/timers.hh>
 
 using namespace kernel;
 using namespace kernel::x86;
@@ -217,10 +218,7 @@ void init_tsc_deadline()
 }
 
 FreqFraction apic_freq;
-FreqFraction tsc_freq;
-
 FreqFraction apic_inverted_freq;
-FreqFraction tsc_inverted_freq;
 
 static void check_tsc()
 {
@@ -257,10 +255,57 @@ void prepare_apic_bsp()
         map_apic();
 }
 
+bool lapic_freq_from_cpuid()
+{
+    constexpr u32 divisor = 16;
+
+    u32 max_leaf = 0;
+    auto c = cpuid(0x0);
+    max_leaf = c.eax;
+
+    if (max_leaf >= 0x15) {
+        auto c = cpuid(0x015);
+        if (c.ecx) {
+            u32 clock = c.ecx;
+            apic_freq = computeFreqFraction(clock, 1e9 * divisor);
+            apic_inverted_freq = computeFreqFraction(1e9 * divisor, clock);
+            return true;
+        }
+    }
+
+    if (max_leaf >= 0x16) {
+        auto c = cpuid(0x16);
+        u16 bus_freq_mhz = c.ecx & 0xffff;
+        if (bus_freq_mhz) {
+            apic_freq = computeFreqFraction(bus_freq_mhz, 1e3 * divisor);
+            apic_inverted_freq = computeFreqFraction(1e3 * divisor, bus_freq_mhz);
+            return true;
+        }
+    }
+
+    return false;
+}
+
 void discover_apic_freq()
 {
-    // While we're here, also measure TSC frequency
-    u64 tsc_start;
+    if (tsc::use_tsc_deadline()) {
+        log::serial_logger.printf("Kernel: Using tsc deadline in kernel, so not bothering with calibrating LAPIC timer...\n");
+        log::global_logger.printf("[Kernel] Info: Not using LAPIC timer\n");
+        return;
+    }
+
+    if (lapic_freq_from_cpuid()) {
+        auto l = apic_freq * 1'000'000'000;
+        global_logger.printf("[Kernel] Info: APIC timer freq from CPUID: %li\n", l);
+        serial_logger.printf("[Kernel] Info: APIC timer freq from CPUID: %li\n", l);
+        return;
+    }
+
+    // TODO: APIC timer has a flag indicating it stops in C states on some system, use HPET instead in those cases...
+    // (but this was not yet implemented by the kernel, so don't bother...)
+
+    if (!time::kernel_calibration_source)
+        panic("No calibration source for LAPIC timer!");
 
     // Enable APIC Timer and map to dummy ISR
     apic_write_reg(APIC_REG_LVT_TMR, APIC_DUMMY_ISR);
@@ -268,34 +313,18 @@ void discover_apic_freq()
     // Set up divide value to 16
     apic_write_reg(APIC_REG_TMRDIV, 0x03);
 
-    // Play with keyboard controller since channel 2 timer is
-    // connected to it... (I don't undertstand this)
-    u8 p = inb(0x61);
-    p    = (p & 0xfd) | 1;
-    outb(0x61, p);
-
-    outb(PIT_MODE_REG, 0b10'11'000'0);
-    set_pit_count(0x2e9b, 2);
-
-    // Start timer 2
-    p = inb(0x61);
-    p = (p & 0xfe);
-    outb(0x61, p);     // Gate LOW
-    outb(0x61, p | 1); // Gate HIGH
-
-    tsc_start = rdtsc();
+    time::kernel_calibration_source->prepare_for_calibration();
     // Reset APIC counter
     apic_write_reg(APIC_REG_TMRINITCNT, (u32)-1);
 
-    // Wait for PIT timer 2 to reach 0
-    while (not(inb(0x61) & 0x20))
-        ;
+    serial_logger.printf("[Kernel] Calibrating LAPIC with %s...\n", time::kernel_calibration_source->name());
 
-    u64 tsc_end = rdtsc();
+    constexpr u64 wait_time_ns = 10'000'000; // 10ms
+    u64 actual_time = time::kernel_calibration_source->wait_for_nanoseconds(wait_time_ns);
 
     // Get how many ticks have passed
     u32 ticks   = -apic_read_reg(APIC_REG_TMRCURRCNT);
-    u64 divisor = 10'000'000; // 10ms
+    u64 divisor = actual_time;
 
     // Stop APIC timer
     apic_write_reg(APIC_REG_TMRINITCNT, 0);
@@ -305,14 +334,8 @@ void discover_apic_freq()
     apic_freq          = computeFreqFraction(ticks, divisor);
     apic_inverted_freq = computeFreqFraction(divisor, ticks);
     auto l             = apic_freq * 1'000'000'000;
-    global_logger.printf("[Kernel] Info: APIC timer ticks per 1ms: %li\n", l);
-    serial_logger.printf("[Kernel] Info: APIC timer ticks per 1ms: %lu %u\n", l, ticks * 100);
-
-    tsc_freq          = computeFreqFraction(tsc_end - tsc_start, divisor);
-    tsc_inverted_freq = computeFreqFraction(divisor, tsc_end - tsc_start);
-    global_logger.printf("[Kernel] Info: TSC ticks per 1ms: %li\n", tsc_freq * 1'000'000'000);
-    serial_logger.printf("[Kernel] Info: TSC ticks per 1s: %li %li\n", tsc_freq * 1'000'000'000,
-                         (tsc_end - tsc_start) * 100);
+    global_logger.printf("[Kernel] Info: APIC timer frequency: %li\n", l);
+    serial_logger.printf("[Kernel] Info: APIC timer ticks per 1ms: %lu, cal time: %lu ns\n", l / 1000, actual_time);
 }
 
 void arm_tsc_deadline(u64 time)

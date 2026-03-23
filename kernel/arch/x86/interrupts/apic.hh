@@ -166,10 +166,7 @@ constexpr u32 X2APIC_MSR_BASE = 0x800;
     /// @brief Ticks that LAPIC timer does per 1 ms
     /// @see discover_apic_freq()
     extern FreqFraction apic_freq;
-    extern FreqFraction tsc_freq;
-
     extern FreqFraction apic_inverted_freq;
-    extern FreqFraction tsc_inverted_freq;
 
     /// @brief Fires a single shot of LAPIC timer
     /// @param ms Time in milliseconds before the interrupt would be fired
