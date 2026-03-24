@@ -170,6 +170,26 @@ int setenv(const char *name, const char *value, int overwrite)
     return 0;
 }
 
+void __init_environ(const char **envp)
+{
+    if (!envp)
+        // This should never happen, but just in case...
+        return;
+
+    const char **envp_p = envp;
+    while (*envp_p) {
+        char *cc = strchr(*envp_p, '=');
+        if (*cc) {
+            char *new = strndup(*envp_p, cc - *envp_p);
+            if (new) {
+                setenv(new, cc+1, 0);
+            }
+            free(new);
+        }
+        ++envp_p;
+    }
+}
+
 __attribute__((constructor)) static void init_environ()
 {
     setenv("RUST_BACKTRACE", "full", 1);

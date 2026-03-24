@@ -81,7 +81,7 @@ result_t pmos_delete_port(pmos_port_t port);
  * of the object, if there are waiting tasks, they immediately get unblocked and recieve the new
  * right number. See get_right_by_name(). The right must be send-many.
  *
- * @param right_id The ID of the IPC right to which the name would be asigned, within the caller
+ * @param right_id The ID of the IPC right to which the name would be assigned, within the caller
  *                 thread rights namespace.
  * @param name The pointer to the string holding the right name.
  * @param length The length of the name. In current implementation, there is no limit.
@@ -104,7 +104,7 @@ result_t name_right(pmos_port_t right_id, const char *name, size_t length, uint3
  * @param flags OR of different flags defining the behaviour. FLAG_NOBLOCK indicated that the
  * function should not block. Other bits are currently unused and must be set to 0.
  * @return right_request_t Result of the operation. On success, *right* holds the ID of the right to
- * which the name is asigned.
+ * which the name is assigned.
  */
 right_request_t get_right_by_name(const char *name, size_t length, uint32_t flags);
 

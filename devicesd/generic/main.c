@@ -33,10 +33,12 @@
 #include <kernel/block.h>
 #include <kernel/types.h>
 #include <pci/pci.h>
+#include <pmos/helpers.h>
 #include <pmos/ipc.h>
 #include <pmos/ports.h>
 #include <pmos/special.h>
 #include <pmos/system.h>
+#include <pthread.h>
 #include <serial.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -44,7 +46,7 @@
 #include <string.h>
 #include <timers/hpet.h>
 #include <timers/timers.h>
-#include <pthread.h>
+#include <pmos/pmbus_helper.h>
 
 char *exec = NULL;
 
@@ -65,10 +67,8 @@ pmos_port_t configuration_port = 0;
 
 const char *devicesd_port_name = "/pmos/devicesd";
 
-void request_pci_devices(Message_Descriptor *desc, IPC_Request_PCI_Devices *d, pmos_right_t reply_right);
-void request_pci_device(Message_Descriptor *desc, IPC_Request_PCI_Device *d, pmos_right_t reply_right);
-void request_pci_device_gsi(Message_Descriptor *desc, IPC_Request_PCI_Device_GSI *d);
-void named_port_notification(Message_Descriptor *desc, IPC_Kernel_Named_Port_Notification *n, pmos_right_t first_right);
+void request_pci_devices(Message_Descriptor *desc, IPC_Request_PCI_Devices *d,
+                         pmos_right_t reply_right);
 void publish_object_reply(Message_Descriptor *desc, IPC_BUS_Publish_Object_Reply *r);
 
 void init_acpi();
@@ -77,16 +77,85 @@ void *shutdown_thread(void *);
 
 pmos_right_t main_recieve_right = 0;
 
-int main(int argc, char **argv)
+int default_callback(Message_Descriptor *desc, void *msg_buff, pmos_right_t *reply_right,
+                     pmos_right_t *other_rights, void *, struct pmos_msgloop_data *)
+{
+    if (desc->size >= sizeof(IPC_Generic_Msg)) {
+        switch (((IPC_Generic_Msg *)msg_buff)->type) {
+        case IPC_Reg_Int_NUM: {
+            if (desc->size != sizeof(IPC_Reg_Int))
+                printf("[devicesd] Warning: Message from PID %lx does no have the right size"
+                       "(%lx)\n",
+                       desc->sender, desc->size);
+            // TODO: Add more checks & stuff
+
+            IPC_Reg_Int *m = (IPC_Reg_Int *)msg_buff;
+
+            configure_interrupts_for(desc, m, *reply_right);
+            *reply_right = 0;
+        } break;
+        case IPC_Register_PCI_Interrupt_NUM: {
+            if (desc->size != sizeof(IPC_Register_PCI_Interrupt))
+                printf("[devicesd] Warning: Message from PID %lx does no have the right size"
+                       "(%lx)\n",
+                       desc->sender, desc->size);
+
+            IPC_Register_PCI_Interrupt *m = (IPC_Register_PCI_Interrupt *)msg_buff;
+            register_pci_interrupt(desc, m, *reply_right);
+            *reply_right = 0;
+        } break;
+        // case IPC_Start_Timer_NUM: {
+        //     if (desc->size != sizeof(IPC_Start_Timer))
+        //         printf("[devicesd] Warning: Message from PID %lx does no have the right size
+        //         (%lx)\n", desc->sender, desc->size);
+
+        //     IPC_Start_Timer* m = (IPC_Start_Timer*)msg_buff;
+        //     start_timer(m, desc->sender);
+        // }
+
+        //     break;
+        // case IPC_Kernel_Interrupt_NUM:
+        //     // TODO: Check that it's from kernel, etc.
+
+        //     hpet_int();
+        //     break;
+        case IPC_Request_Serial_NUM: {
+            IPC_Request_Serial *m = (IPC_Request_Serial *)msg_buff;
+            request_serial(desc, m, *reply_right);
+            *reply_right = 0;
+        } break;
+        case IPC_Request_PCI_Devices_NUM:
+            request_pci_devices(desc, (IPC_Request_PCI_Devices *)msg_buff, *reply_right);
+            *reply_right = 0;
+            break;
+        // case IPC_Kernel_Named_Port_Notification_NUM:
+        //     named_port_notification(desc, (IPC_Kernel_Named_Port_Notification *)msg_buff,
+        //                             other_rights[0]);
+        //     other_rights[0] = 0;
+        //     break;
+        // default:
+            printf("[devicesd] Warning: Recieved unknown message %x from PID %li\n",
+                   ((IPC_Generic_Msg *)msg_buff)->type, desc->sender);
+            break;
+        }
+    }
+
+    return PMOS_MSGLOOP_CONTINUE;
+}
+
+struct pmos_msgloop_data main_msgloop_data;
+struct pmbus_helper *pmbus_helper = NULL;
+
+int main(int , char **)
 {
     printf("Hello from devicesd!. My PID: %lx\n", get_task_id());
 
     // parse_args(argc, argv);
 
-    #if defined(__x86_64__) || defined(__i386__)
+#if defined(__x86_64__) || defined(__i386__)
     pmos_request_io_permission();
-    #endif
-    //request_priority(0);
+#endif
+    // request_priority(0);
     pmos_right_t recieve_right;
 
     {
@@ -112,6 +181,15 @@ int main(int argc, char **argv)
         }
         recieve_right = right_req.right;
     }
+
+    pmos_msgloop_initialize(&main_msgloop_data, main_port);
+
+    pmbus_helper = pmbus_helper_create(&main_msgloop_data);
+    if (!pmbus_helper) {
+        printf("Failed to initialize pmbus helper!\n");
+        return 0;
+    }
+
 
     init_dtb();
     init_acpi();
@@ -140,95 +218,12 @@ int main(int argc, char **argv)
     // pthread_detach(thread);
     // --------------------------------------------------
 
-    while (1) {
-        Message_Descriptor msg;
-        syscall_get_message_info(&msg, main_port, 0);
+    pmos_msgloop_tree_node_t n;
+    pmos_msgloop_node_set(&n, 0, default_callback, &main_msgloop_data);
+    // pmos_msgloop_node_set(&n, main_recieve_right, default_callback, &main_msgloop_data);
+    pmos_msgloop_insert(&main_msgloop_data, &n);
+    pmos_msgloop_loop(&main_msgloop_data);
 
-        char *msg_buff = (char *)malloc(msg.size);
-
-        pmos_right_t other_rights[4] = {};
-        accept_rights(main_port, other_rights);
-
-        auto result = get_first_message(msg_buff, 0, main_port);
-
-        if (msg.size >= sizeof(IPC_Generic_Msg)) {
-            switch (((IPC_Generic_Msg *)msg_buff)->type) {
-            case IPC_Reg_Int_NUM: {
-                if (msg.size != sizeof(IPC_Reg_Int))
-                    printf("[devicesd] Warning: Message from PID %lx does no have the right size"
-                    "(%lx)\n", msg.sender, msg.size);
-                // TODO: Add more checks & stuff
-
-                IPC_Reg_Int* m = (IPC_Reg_Int*)msg_buff;
-
-                configure_interrupts_for(&msg, m, result.right);
-                result.right = 0;
-            }
-                break;
-            case IPC_Register_PCI_Interrupt_NUM: {
-                if (msg.size != sizeof(IPC_Register_PCI_Interrupt))
-                    printf("[devicesd] Warning: Message from PID %lx does no have the right size"
-                    "(%lx)\n", msg.sender, msg.size);
-
-                IPC_Register_PCI_Interrupt* m = (IPC_Register_PCI_Interrupt*)msg_buff;
-                register_pci_interrupt(&msg, m, result.right);
-                result.right = 0;
-            }
-                break;
-            // case IPC_Start_Timer_NUM: {
-            //     if (msg.size != sizeof(IPC_Start_Timer))
-            //         printf("[devicesd] Warning: Message from PID %lx does no have the right size
-            //         (%lx)\n", msg.sender, msg.size);
-
-            //     IPC_Start_Timer* m = (IPC_Start_Timer*)msg_buff;
-            //     start_timer(m, msg.sender);
-            // }
-
-            //     break;
-            // case IPC_Kernel_Interrupt_NUM:
-            //     // TODO: Check that it's from kernel, etc.
-
-            //     hpet_int();
-            //     break;
-            case IPC_Request_Serial_NUM:{
-                IPC_Request_Serial *m = (IPC_Request_Serial *)msg_buff;
-                request_serial(&msg, m, result.right);
-                result.right = 0;
-            }
-                break;
-            case IPC_Request_PCI_Devices_NUM:
-                request_pci_devices(&msg, (IPC_Request_PCI_Devices *)msg_buff, result.right);
-                result.right = 0;
-                break;
-            case IPC_Request_PCI_Device_NUM:
-                request_pci_device(&msg, (IPC_Request_PCI_Device *)msg_buff, result.right);
-                result.right = 0;
-                break;
-            case IPC_Request_PCI_Device_GSI_NUM:
-                request_pci_device_gsi(&msg, (IPC_Request_PCI_Device_GSI *)msg_buff);
-                break;
-            case IPC_Kernel_Named_Port_Notification_NUM:
-                named_port_notification(&msg, (IPC_Kernel_Named_Port_Notification *)msg_buff, other_rights[0]);
-                other_rights[0] = 0;
-                break;
-            case IPC_BUS_Publish_Object_Reply_NUM:
-                publish_object_reply(&msg, (IPC_BUS_Publish_Object_Reply *)msg_buff);
-                break;
-            default:
-                printf("[devicesd] Warning: Recieved unknown message %x from PID %li\n",
-                       ((IPC_Generic_Msg *)msg_buff)->type, msg.sender);
-                break;
-            }
-        }
-
-        if (result.right)
-            delete_right(result.right);
-
-        free(msg_buff);
-        for (int i = 0; i < 4; ++i)
-            if (other_rights[i])
-                delete_right(other_rights[i]);
-    }
-
+    printf("devicesd main return 0\n");
     return 0;
 }

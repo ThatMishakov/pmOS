@@ -312,7 +312,7 @@ static size_t object_header_length(const char *name)
     return ALIGN_TO(l, 8);
 }
 
-static size_t object_header_fill(uint8_t *ptr, const char *name, pmos_port_t handle_port, uint64_t task_group, uint32_t length)
+static size_t object_header_fill(uint8_t *ptr, const char *name, uint32_t length)
 {
     size_t name_length = strlen(name);
     size_t properties_offset = ALIGN_TO(sizeof(struct IPC_Bus_Object) + name_length + 1, 8);
@@ -321,8 +321,6 @@ static size_t object_header_fill(uint8_t *ptr, const char *name, pmos_port_t han
         .size = length,
         .name_length = name_length,
         .properties_offset = properties_offset,
-        .handle_port = handle_port,
-        .task_group = task_group,
     };
     
     memcpy(ptr, &o, sizeof(struct IPC_Bus_Object));
@@ -333,9 +331,9 @@ static size_t object_header_fill(uint8_t *ptr, const char *name, pmos_port_t han
     return properties_offset;
 }
 
-static const size_t PUBLISH_OBJECT_HEADER_SIZE = 24;
+static const size_t PUBLISH_OBJECT_HEADER_SIZE = 8;
 
-bool pmos_bus_object_serialize_ipc(const pmos_bus_object_t *object, pmos_port_t reply_port, uint64_t user_arg, pmos_port_t handle_port, uint64_t task_group, uint8_t **data_out, size_t *size_out)
+bool pmos_bus_object_serialize_ipc(const pmos_bus_object_t *object, uint8_t **data_out, size_t *size_out)
 {
     if (!object)
         return false;
@@ -361,14 +359,12 @@ bool pmos_bus_object_serialize_ipc(const pmos_bus_object_t *object, pmos_port_t 
     IPC_BUS_Publish_Object po = {
         .type = IPC_BUS_Publish_Object_NUM,
         .flags = 0,
-        .reply_port = reply_port,
-        .user_arg = user_arg,
     };
 
     size_t offset = 0;
     memcpy(data, &po, PUBLISH_OBJECT_HEADER_SIZE);
     offset += PUBLISH_OBJECT_HEADER_SIZE;
-    offset += object_header_fill(data + offset, object->name, handle_port, task_group, size - offset);
+    offset += object_header_fill(data + offset, object->name, size - offset);
     for (size_t i = 0; i < object->num_properties; ++i) {
         offset += property_fill(data + offset, object->properties + i);
     }

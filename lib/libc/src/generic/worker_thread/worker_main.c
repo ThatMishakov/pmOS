@@ -8,6 +8,8 @@
 #include <pmos/tls.h>
 #include <string.h>
 #include <pmos/__internal.h>
+#include <pmos/load_data.h>
+#include <elf.h>
 
 pmos_port_t worker_port;
 uint64_t worker_port_right;
@@ -85,18 +87,26 @@ int __register_process()
 
 void __do_fork(uint64_t requester, pmos_port_t reply_port);
 
+extern const auxv_t *__elf_aux_search(const auxv_t *auxv, int a_type);
+extern auxv_t *__auxv;
+
 void worker_main()
 {
     worker_thread = __get_tls();
 
-    syscall_r sys_result = create_task_group();
-    if (sys_result.result != SUCCESS) {
-        fprintf(stderr, "pmOS libC: Failed to create task group\n");
-        _syscall_exit(1);
+    const auxv_t *tasg_group_e = __elf_aux_search(__auxv, AT_TASK_GROUP_ID);
+    if (tasg_group_e && *(uint64_t *)tasg_group_e->a_ptr != 0) {
+        process_task_group = *(uint64_t *)tasg_group_e->a_ptr;
+    } else {
+        syscall_r sys_result = create_task_group();
+        if (sys_result.result != SUCCESS) {
+            fprintf(stderr, "pmOS libC: Failed to create task group\n");
+            _syscall_exit(1);
+        }
+        process_task_group = sys_result.value;
     }
-    process_task_group = sys_result.value;
 
-    sys_result = set_namespace(process_task_group, NAMESPACE_RIGHTS);
+    syscall_r sys_result = set_namespace(process_task_group, NAMESPACE_RIGHTS);
     if (sys_result.result != SUCCESS) {
         fprintf(stderr, "pmOS libC: Failed to set task group namespace\n");
         _syscall_exit(1);

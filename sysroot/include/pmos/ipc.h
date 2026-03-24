@@ -177,11 +177,6 @@ typedef struct IPC_Request_PCI_Devices_Reply {
 typedef struct IPC_Request_PCI_Device {
     uint32_t type; // IPC_Request_PCI_Device_NUM
     uint32_t flags;
-    uint16_t group;
-    uint8_t bus;
-    uint8_t device;
-    uint8_t function;
-    uint8_t reserved;
 } IPC_Request_PCI_Device;
 
 #define IPC_Request_PCI_Device_Reply_NUM 0x0B
@@ -198,14 +193,10 @@ typedef struct IPC_Request_PCI_Device_Reply {
 #define IPC_Request_PCI_Device_GSI_NUM 0x0C
 typedef struct IPC_Request_PCI_Device_GSI {
     uint32_t type; // IPC_Request_PCI_Device_GSI_NUM
-    uint32_t flags;
+    uint16_t flags;
 
-    uint32_t group; // uint32_t for alignment to 8 bytes
-    uint8_t bus;
-    uint8_t device;
-    uint8_t function;
-    // 0 for INTA, 1 for INTB, 2 for INTC, 3 for INTD
-    uint8_t pin;
+    // 0 for INTA, 1 for INTB, 2 for INTC, 3 for INTDº
+    uint16_t pin;
 } IPC_Request_PCI_Device_GSI;
 
 #define IPC_Request_PCI_Device_GSI_Reply_NUM 0x0D
@@ -221,12 +212,7 @@ typedef struct IPC_Request_PCI_Device_GSI_Reply {
 typedef struct IPC_Register_PCI_Interrupt {
     uint32_t type;
     uint16_t flags;
-
-    uint16_t group;
-    uint8_t bus;
-    uint8_t device;
-    uint8_t function;
-    uint8_t pin;
+    uint16_t pin;
 
     uint64_t dest_task;
     uint64_t dest_port;
@@ -610,6 +596,7 @@ typedef struct IPC_FDT_Reply {
 } IPC_FDT_Reply;
 
 // Structure used for registering a new PS/2 port by its driver
+// command right 0, configuration port 1
 #define IPC_PS2_Reg_Port_NUM 0x80
 typedef struct IPC_PS2_Reg_Port {
     // Message type (must be equal to IPC_PS2_Reg_Port_NUM)
@@ -617,19 +604,6 @@ typedef struct IPC_PS2_Reg_Port {
 
     // Configuration flags
     uint32_t flags;
-
-    // Internal ID of the port, decided by its driver (used for identification when driver registers
-    // more than one port)
-    uint64_t internal_id;
-
-    // Port used for sending commands to the port
-    uint64_t cmd_port;
-
-    // Port used for configuration
-    uint64_t config_port;
-
-    // Task group ID of the driver
-    uint64_t task_group_id;
 } IPC_PS2_Reg_Port;
 
 // Structure that can be sent by both driver and PS2d for internal configuration
@@ -641,14 +615,11 @@ typedef struct IPC_PS2_Config {
     // Configuration flags
     uint32_t flags;
 
-    // Internal ID of the port
-    uint64_t internal_id;
-
     // Request type
     uint64_t request_type;
 
-    // Result or command
-    uint64_t result_cmd;
+    // Result
+    int64_t result;
 } IPC_PS2_Config;
 #define IPC_PS2_Config_Reg_Port \
     1 // Indicates the chanel where ps/2 driver should send the data and requests or 0 on failure
@@ -662,14 +633,8 @@ typedef struct IPC_PS2_Notify_Data {
     // Configuration flags
     uint32_t flags;
 
-    // Internal ID of the port, must be the same as used with IPC_PS2_Reg_Port
-    uint64_t internal_id;
-
-    // Task group ID of the driver
-    uint64_t task_group_id;
-
     // Data recieved by the port; size of the array should be determined by the message size
-    char data[0];
+    char data[];
 } IPC_PS2_Notify_Data;
 
 // Structure used by PS2d to send data to devices
@@ -681,12 +646,22 @@ typedef struct IPC_PS2_Send_Data {
     // Configuration flags
     uint32_t flags;
 
-    // Internal ID of the port
-    uint64_t internal_id;
-
     // Data to be sent to the port; size of the array should be determined by the message size
-    char data[0];
+    char data[];
 } IPC_PS2_Send_Data;
+
+// Structure to signal the status of the registered port
+#define IPC_PS2_Reg_Port_Reply_NUM 0x84
+typedef struct IPC_PS2_Reg_Port_Reply {
+    // Message type (must be equal to IPC_Reg_port_Reply_NUM)
+    uint32_t type;
+
+    // Optional flags
+    uint16_t flags;
+
+    // Result (0 - success, negative - error)
+    int16_t result;
+} IPC_PS2_Reg_Port_Reply;
 
 #define IPC_Mutex_Unlock_NUM 0xA0
 typedef struct IPC_Mutex_Unlock {
@@ -1459,8 +1434,6 @@ struct IPC_Bus_Object {
     uint32_t size;
     uint16_t name_length;
     uint16_t properties_offset;
-    pmos_port_t handle_port;
-    uint64_t task_group;
 
     /// Name, with '.' separator
     /// for example, pmos.disks.pci_11_22_33_44_ahci_port0
@@ -1476,13 +1449,25 @@ typedef struct IPC_BUS_Publish_Object {
     /// Flags
     uint32_t flags;
 
-    pmos_port_t reply_port;
-
-    // TODO: Implement handles so that this is not needed
-    uint64_t user_arg;
-
     struct IPC_Bus_Object object;
 } IPC_BUS_Publish_Object;
+
+#define IPC_BUS_Request_Object_NUM 0x1a1
+typedef struct IPC_BUS_Request_Object {
+    /// Message type (must be IPC_BUS_Request_Object_NUM)
+    uint32_t type;
+
+    /// TODO: Eager vs lazy flag?
+
+    /// Flags
+    uint32_t flags;
+
+    /// Starting sequence for the objects to be sent (0 is the first number...)
+    uint64_t start_sequence_number;
+
+    /// Serialized filter data, aligned to 8 bytes.
+    uint8_t data[];
+} IPC_BUS_Request_Object;
 
 #define IPC_BUS_Publish_Object_Reply_NUM 0x1b0
 typedef struct IPC_BUS_Publish_Object_Reply {
@@ -1498,11 +1483,33 @@ typedef struct IPC_BUS_Publish_Object_Reply {
     /// Reserved (for alignment)
     uint32_t reserved;
 
-    uint64_t user_arg;
-
     /// New sequence number (starting with 1, shared globally)
     uint64_t sequence_number;
 } IPC_BUS_Publish_Object_Reply;
+
+#define IPC_BUS_Request_Object_Reply_NUM 0x1b1
+typedef struct IPC_BUS_Request_Object_Reply {
+    /// Message type (must be IPC_BUS_Request_Object_Reply_NUM)
+    uint32_t type;
+
+    /// Flags
+    uint32_t flags;
+
+    /// Result (negative -> error)
+    int32_t result;
+
+    /// Reserved (for alignment)
+    uint32_t reserved;
+
+    /// Sequence number of the next potential object with the same filter (so at least the object id + 1)
+    uint64_t next_sequence_number;
+
+    /// ID of the object (saves from deserializing it if that's not needed as well...)
+    uint64_t object_id;
+
+    /// Object data (for more objects, the same request should be sent again with the next_sequence_number)
+    struct IPC_Bus_Object object;
+} IPC_BUS_Request_Object_Reply;
 
 #define IPC_Name_Port_NUM 0x1c0
 typedef struct IPC_Name_Port {

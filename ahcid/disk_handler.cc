@@ -11,7 +11,8 @@
 #include <system_error>
 #include <unordered_map>
 
-extern pmos_port_t ahci_port;
+extern pmos::PortDispatcher dispatcher;
+extern pmos::Port cmd_port;
 
 using dptr = std::unique_ptr<DiskHandler>;
 std::unordered_map<uint64_t, dptr> handlers;
@@ -66,7 +67,7 @@ void handle_disk_open_reply(int16_t result_code, uint64_t disk_id, uint16_t flag
         .flags            = flags,
         .result_code      = result_code,
         .disk_id          = disk_id,
-        .disk_port        = ahci_port,
+        .disk_port        = cmd_port.get(),
         .task_group_id    = pmos_process_task_group(),
         .disk_consumer_id = disk_consumer_id,
     };
@@ -182,7 +183,7 @@ TaskGroup *TaskGroup::get_or_create(uint64_t group_id)
     assert(itn.second);
 
     auto [result, _] =
-        set_task_group_notifier_mask(group_id, ahci_port, NOTIFICATION_MASK_DESTROYED, 0);
+        set_task_group_notifier_mask(group_id, cmd_port.get(), NOTIFICATION_MASK_DESTROYED, 0);
     if (result != 0) {
         groups.erase(itn.first);
         throw std::system_error(-result, std::system_category());
@@ -200,7 +201,7 @@ void TaskGroup::handle_maybe_empty()
 
 void TaskGroup::remove()
 {
-    set_task_group_notifier_mask(task_group_id, ahci_port, 0, 0);
+    set_task_group_notifier_mask(task_group_id, cmd_port.get(), 0, 0);
     groups.erase(task_group_id);
 }
 
@@ -382,3 +383,29 @@ DiskHandler::DiskHandler(AHCIPort &port, uint64_t disk_id, uint64_t sector_count
     std::size_t physical_sector_size):
     port(port), disk_id(disk_id), sector_count(sector_count), logical_sector_size(logical_sector_size),
     physical_sector_size(physical_sector_size) {}
+
+pmos::async::detached_task handle_ipc(AHCIPort &port)
+{
+    while (true) {
+        auto msg = co_await dispatcher.get_message(port.port_recieve_right);
+        if (!msg) {
+            fprintf(stderr, "ahcid: Failed to get message for port! %i\n", msg.error());
+            exit(1);
+        }
+
+        printf("ahcid: Recieved message for port %u! (TODO: handle it)\n", port.index);
+
+        // case IPC_Disk_Open_NUM: {
+        //     auto msg = (IPC_Disk_Open *)request;
+
+        //     handle_disk_open(desc, msg);
+        // } break;
+        // case IPC_Disk_Read_NUM: {
+        //     auto msg = (IPC_Disk_Read *)request;
+
+        //     handle_disk_read(desc, *msg);
+        // } break;
+    }
+
+    co_return;
+}

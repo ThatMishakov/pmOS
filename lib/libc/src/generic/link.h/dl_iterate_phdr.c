@@ -39,28 +39,23 @@ int elf_modules_ensure_capacity(int additional)
 extern void *__load_data_kernel;
 extern size_t __load_data_size_kernel;
 
+extern void *__phdr_addr;
+extern size_t __phdr_size;
+extern size_t __phdr_num;
+
 void __libc_init_dyn()
 {
-    struct load_tag_generic *t =
-        get_load_tag(LOAD_TAG_ELF_PHDR, __load_data_kernel, __load_data_size_kernel);
-    if (t == NULL) {
-        fprintf(stderr, "pmOS libC: No ELF program header tag found\n");
-        return;
-    }
-
-    struct load_tag_elf_phdr *elf_phdr = (struct load_tag_elf_phdr *)t;
-    if (elf_phdr->phdr_num == 0) {
-        fprintf(stderr, "pmOS libC: ELF program header tag has no entries\n");
-        return;
-    }
-
     if (elf_modules_ensure_capacity(1) < 0)
         return;
 
+    // TODO: Find the dlpi_addr offset from the PHDR
+    // Since the ELF loader doesn't rellocate for the time being, leave it as 0
+    size_t dlpi_addr = 0; // So, replace this...
+
     struct elf_module *m = &elf_modules[elf_module_size++];
-    m->dlpi_addr = elf_phdr->dlpi_addr;
-    m->dlpi_phdr = (const Elf_Phdr *)elf_phdr->phdr_addr;
-    m->dlpi_phnum = elf_phdr->phdr_num;
+    m->dlpi_addr = dlpi_addr;
+    m->dlpi_phdr = (const Elf_Phdr *)__phdr_addr;
+    m->dlpi_phnum = __phdr_num;
     m->dlpi_name = NULL;
 }
 

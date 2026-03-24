@@ -26,12 +26,14 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#pragma once
-#include <types.hh>
+#ifndef IO_H
+#define IO_H
+#include <stdint.h>
 
-/// Enumerate all ACPI tables from the RSDT. Returns true on success
-bool enumerate_tables(u64 rsdt_desc_phys);
+void print_str(const char *str);
+void int_to_hex(char *buffer, uint64_t n, char upper);
+void print_hex(uint64_t i);
+void set_print_syscalls(uint64_t port);
+void print_str_n(const char *str, int length);
 
-/// Returns the physical address of the table with the given signature
-/// 0 is returned if the table was not found (or to an extension, ACPI is not available)
-u64 get_table(u32 signature);
+#endif

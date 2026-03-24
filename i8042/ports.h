@@ -33,6 +33,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <pthread.h>
+#include <pmos/helpers.h>
 
 extern bool first_port_works;
 extern bool second_port_works;
@@ -50,6 +51,9 @@ typedef enum Port_States {
 extern int port1_state;
 extern int port2_state;
 
+void disable_port(unsigned port);
+void enable_port(unsigned port);
+
 void react_port1_int();
 void react_port2_int();
 void react_timer(uint64_t index);
@@ -57,10 +61,14 @@ void react_timer(uint64_t index);
 void init_ports();
 void poll_ports();
 
-void react_send_data(IPC_PS2_Send_Data *str, size_t message_size);
+void react_register_port(unsigned port, IPC_PS2_Reg_Port *msg, pmos_right_t *reply_right, pmos_right_t *other_rights);
+// void react_send_data(IPC_PS2_Send_Data *str, size_t message_size);
 
 typedef struct Port {
-    pmos_port_t notification_port;
+    pmos_right_t notification_right;
+
+    pmos_right_t port_data_recieve_right;
+    pmos_msgloop_tree_node_t port_data_node;
 } Port;
 
 extern uint64_t last_polling_timer;

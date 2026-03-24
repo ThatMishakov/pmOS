@@ -35,6 +35,7 @@ _start:
     pushq %rbp
 	pushq %rbp
 
+    leaq 16(%rsp), %rdx
     # Initialize the libc
     call init_std_lib
 

@@ -75,8 +75,19 @@ void init_dtb()
         fdt_offset = reply->object_offset;
         fdt_size   = reply->object_size;
 
+        map_mem_object_param_t params = {
+            .page_table_id = PAGE_TABLE_SELF,
+            .object_id = fdt_object,
+            .addr_start_uint = 0,
+            .size = fdt_size + fdt_offset,
+            .offset_object = 0,
+            .offset_start = 0,
+            .object_size = fdt_size + fdt_offset,
+            .access_flags = PROT_READ,
+        };
+
         mem_request_ret_t req =
-            map_mem_object(0, NULL, fdt_size + fdt_offset, PROT_READ, fdt_object, 0);
+            map_mem_object(&params);
         if (req.result != SUCCESS) {
             printf("Warning: Could not map FDT memory object: %li\n", req.result);
             goto end;

@@ -11,7 +11,7 @@ unsigned long long int strtoull(const char *str, char **endptr, int base)
     }
 
     // Check for valid base
-    if (base < 2 || base > 36) {
+    if (base && (base < 2 || base > 36)) {
         errno = EINVAL;
         if (endptr != NULL) {
             *endptr = (char *)str;

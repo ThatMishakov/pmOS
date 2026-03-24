@@ -57,3 +57,5 @@ private:
 };
 
 } // namespace kernel::x86_64::paging
+
+kernel::x86_64::paging::x86_PAE_Temp_Mapper create_temp_mapper(void *virt_addr, u64 cr3);

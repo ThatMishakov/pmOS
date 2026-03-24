@@ -27,8 +27,10 @@
  */
 
 #include "fs.h"
+#include "init/init.h"
 #include "io.h"
 #include "named_ports.h"
+#include "pmbus.h"
 
 #include <errno.h>
 #include <kernel/messaging.h>
@@ -36,16 +38,22 @@
 #include <pmos/helpers.h>
 #include <pmos/ipc.h>
 #include <pmos/load_data.h>
+#include <pmos/memory.h>
 #include <pmos/ports.h>
 #include <pmos/system.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/syscall.h>
+#include <pmos/pmbus_object.h>
+#include "elf/loader.h"
+#include <elf.h>
 
 uint64_t loader_port = 0;
 
 extern void *__load_data_kernel;
 extern size_t __load_data_size_kernel;
+
+struct Service;
 
 struct module_descriptor_list {
     struct module_descriptor_list *next;
@@ -53,6 +61,7 @@ struct module_descriptor_list {
     size_t size;
     char *cmdline;
     char *path;
+    struct Service *service;
 };
 
 struct module_descriptor_list *module_list = NULL;
@@ -75,6 +84,25 @@ struct framebuffer {
 // TODO: Several framebuffers can be present. Only store one for now
 struct framebuffer *fb = NULL;
 
+struct module_descriptor_list *find_module(char *path)
+{
+    if (!path)
+        return NULL;
+
+    for (struct module_descriptor_list *l = module_list; l; l = l->next) {
+        if (!l->path)
+            continue;
+
+        if (strcmp(path, l->path))
+            continue;
+
+        return l;
+    }
+
+    return NULL;
+}   
+  
+
 void init_modules()
 {
     struct load_tag_generic *t =
@@ -96,8 +124,44 @@ void init_modules()
         d->cmdline   = strdup((char *)m + m->modules[i].cmdline_offset);
         d->path      = strdup((char *)m + m->modules[i].path_offset);
         d->next      = module_list;
+        d->service   = NULL;
         module_list  = d;
+
+        if (!strcmp(d->cmdline, "init-config")) {
+            parse_services(d);
+        } else if (!strcmp(d->cmdline, "file")) {
+            continue;
+        } else if (strcmp(d->cmdline, "bootstrap")) {
+            struct Service *s = NULL;
+            parse_service(d->cmdline, d->path, &s);
+            d->service = s;
+
+            if (s) {
+                print_str("Service; ");
+                if (s->name) {
+                    print_str("name: ");
+                    print_str(s->name);
+                }
+                if (s->path) {
+                    print_str(", path: ");
+                    print_str(s->path);
+                }
+                if (s->description) {
+                    print_str(", description: ");
+                    print_str(s->description);
+                }
+                print_str(", state: ");
+                print_hex(s->state);
+                print_str(", run type: ");
+                print_hex(s->run_type);
+                print_str(", start on boot: ");
+                print_hex(s->start_on_boot);
+                print_str("\n");
+            }
+        }
     }
+
+    match_services();
 }
 
 uint64_t rsdp_desc = 0;
@@ -198,40 +262,32 @@ void start_executables()
     while (d != NULL) {
         struct module_descriptor_list *c = d;
         d                                = d->next;
-        if (strcmp(c->cmdline, "init") == 0) {
-            syscall_r r = syscall_new_process();
-            if (r.result != SUCCESS) {
-                print_str("Loader: Could not create process for ");
-                print_str(c->path);
-                print_str(". Error: ");
-                print_hex(r.result);
-                print_str("\n");
-            }
 
-            syscall_set_task_name(r.value, c->path, strlen(c->path));
-
-            result_t res = syscall_load_executable(r.value, c->object_id, 0);
-            if (res != SUCCESS) {
-                print_str("Loader: Could not load executable ");
-                print_str(c->path);
-                print_str(". Error: ");
-                print_hex(res);
-                print_str("\n");
-
-                // TODO: Terminate the task on error
+        if (c->service) {
+            switch (c->service->run_type) {
+            case RUN_ALWAYS_ONCE:
+                start_service(c->service, c->object_id, 0);
+                break;
+            case RUN_FIRST_MATCH_ONCE:
+            case RUN_FOR_EACH_MATCH:
+                hook_match_service(c->service, c->object_id);
+                break;
+            default:
+                break;
             }
         }
     }
 }
 
-void set_print_callback(int result, const char * /* port_name */, pmos_port_t port)
+void set_print_callback(int result, const char * /* right_name */, pmos_right_t right)
 {
     if (!result)
-        set_print_syscalls(port);
+        set_print_syscalls(right);
 }
 
-static const char *log_port_name = "/pmos/terminald";
+static const char *log_port_name = "/pmos/stdout";
 static char *vfsd_port_name      = "/pmos/vfsd";
+static char *pmbus_port_name     = "/pmos/pmbus";
 
 int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_right,
                      pmos_right_t *extra_rights, void *, struct pmos_msgloop_data *)
@@ -275,7 +331,8 @@ int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_r
             reply.object_size       = fdt_desc.mem_object_size;
         }
 
-        auto r = send_message_right(*reply_right, 0, &reply, sizeof(reply), NULL, SEND_MESSAGE_DELETE_RIGHT);
+        auto r = send_message_right(*reply_right, 0, &reply, sizeof(reply), NULL,
+                                    SEND_MESSAGE_DELETE_RIGHT);
         if (!r.result)
             *reply_right = 0;
     } break;
@@ -465,11 +522,21 @@ int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_r
 pmos_right_t loader_right    = 0;
 pmos_right_t namespace_right = 0;
 
+struct pmos_msgloop_data msgloop_data;
+
 void service_ports()
 {
     auto result = request_port_callback(log_port_name, strlen(log_port_name), set_print_callback);
     if (result != SUCCESS) {
         print_str("Loader: could not request log port. Error: ");
+        print_hex(result);
+        print_str("\n");
+        goto exit;
+    }
+
+    result = request_port_callback(pmbus_port_name, strlen(pmbus_port_name), pmbus_callback);
+    if (result != SUCCESS) {
+        print_str("Loader: could not request pmbus port. Error: ");
         print_hex(result);
         print_str("\n");
         goto exit;
@@ -483,19 +550,24 @@ void service_ports()
     //     goto exit;
     // }
 
-    struct pmos_msgloop_data data;
-    pmos_msgloop_initialize(&data, loader_port);
+    pmos_msgloop_initialize(&msgloop_data, loader_port);
 
     pmos_msgloop_tree_node_t n;
     pmos_msgloop_node_set(&n, 0, default_callback, NULL);
-    pmos_msgloop_insert(&data, &n);
-    pmos_msgloop_loop(&data);
+    pmos_msgloop_insert(&msgloop_data, &n);
+    pmos_msgloop_loop(&msgloop_data);
 
 exit:
 }
 
+#define BRED   "\e[1;31m"
+#define BGRN   "\e[1;32m"
+#define CRESET "\e[0m"
+
 int main()
 {
+    print_str(BGRN "Started init server" CRESET "\n");
+
     ports_request_t r = create_port(0, 0);
     loader_port       = r.port;
     if (r.result != SUCCESS) {

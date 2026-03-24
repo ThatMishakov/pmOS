@@ -53,6 +53,8 @@ typedef struct _FILE {
 
     int fd;
     int flags;
+#define _FILE_FLAG_EOF          1
+#define _FILE_FLAG_ERROR        2
 
     int mode;
 

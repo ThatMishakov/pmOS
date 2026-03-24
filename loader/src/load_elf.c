@@ -40,7 +40,7 @@ uint64_t load_elf(struct task_list_node* n, uint8_t ring)
     }
     uint64_t pid = r.value;
 
-    n->page_table = asign_page_table(pid, 0, PAGE_TABLE_CREATE).page_table;
+    n->page_table = assign_page_table(pid, 0, PAGE_TABLE_CREATE, 0).page_table;
 
     for (int i = 0; i < elf_pheader_entries; ++i) {
         ELF_PHeader_64 * p = &elf_pheader[i];
@@ -97,7 +97,7 @@ uint64_t load_elf(struct task_list_node* n, uint8_t ring)
             TLS_Data * d = req.virt_addr;
             d->memsz = p->p_memsz;
             d->filesz = p->p_filesz;
-            d->align = p->allignment;   
+            d->align = p->alignment;   
             memcpy(d->data, (void*)((uint64_t)elf_h + p->p_offset), p->p_filesz);   
 
             req = transfer_region(n->page_table, req.virt_addr, NULL, 1);

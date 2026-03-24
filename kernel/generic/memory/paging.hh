@@ -33,13 +33,13 @@
 #include <kernel/memory.h>
 #include <lib/memory.hh>
 #include <lib/pair.hh>
-#include <lib/set.hh>
 #include <lib/splay_tree_map.hh>
 #include <pmos/containers/intrusive_list.hh>
 #include <pmos/containers/set.hh>
 #include <sched/sched.hh>
 #include <sched/sched_queue.hh>
 #include <types.hh>
+#include <utility>
 
 namespace kernel::paging {
 
@@ -470,7 +470,7 @@ public:
      * exception will be thrown. Otherwise, the new region would be found.
      * @return The location of the region in the new page table.
      */
-    ReturnStr<void *> atomic_transfer_region(const klib::shared_ptr<Page_Table> &to,
+    ReturnStr<std::pair<void *, size_t>> atomic_transfer_region(const klib::shared_ptr<Page_Table> &to,
                                              void *region_orig, void *prefered_to, unsigned access,
                                              bool fixed);
 
@@ -604,7 +604,7 @@ protected:
     /// @brief Unblocks the tasks blocked by the given page
     /// @param blocked_by_page Virtuall address of the page that has blocked the tasks
     void unblock_tasks(void *blocked_by_page);
-    void unblock_tasks_rage(void *blocked_by_page, size_t size_bytes);
+    void unblock_tasks_range(void *blocked_by_page, size_t size_bytes);
 
     /// Gets the region for the page. Returns end() if no region exists
     RegionsRBTree::RBTreeIterator get_region(void *page);
@@ -645,6 +645,7 @@ kresult_t map_page(ptable_top_ptr_t page_table, u64 phys_addr, void *virt_addr,
 // Generic functions to map and release pages in kernel, using the active page table
 kresult_t map_kernel_page(u64 phys_addr, void *virt_addr, Page_Table_Arguments arg);
 kresult_t unmap_kernel_page(TLBShootdownContext &ctx, void *virt_addr);
+void unmap_kernel_pages(TLBShootdownContext &ctx, void *virt_addr, size_t size_bytes);
 
 // Generic function to map multiple pages
 kresult_t map_pages(ptable_top_ptr_t page_table, u64 phys_addr, void *virt_addr, size_t size_bytes,

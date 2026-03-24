@@ -374,8 +374,20 @@ kresult_t Mem_Object_Reference::move_to(TLBShootdownContext &ctx,
                                         const klib::shared_ptr<Page_Table> &new_table,
                                         void *base_addr, unsigned new_access)
 {
-    return -ENOSYS;
-    // throw Kern_Exception(-ENOSYS, "move_to of Mem_Object_Reference was not yet implemented");
+    // This could probably be improved...
+    // But for now, copy (which does CoW) and delete if successful is good enough
+    auto result = clone_to(new_table, base_addr, new_access);
+    if (result)
+        return result;
+
+    prepare_deletion();
+    owner->paging_regions.erase(this);
+    rcu_free();
+
+    owner->invalidate_range(ctx, start_addr, size, true);
+    owner->unblock_tasks_range(start_addr, size);
+
+    return 0;
 }
 
 kresult_t Mem_Object_Reference::clone_to(const klib::shared_ptr<Page_Table> &new_table,

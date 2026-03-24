@@ -165,7 +165,7 @@ kresult_t Page_Table::atomic_release_in_range(void *start, size_t size)
     return release_in_range(ctx, start, size);
 }
 
-ReturnStr<void *> Page_Table::atomic_transfer_region(const klib::shared_ptr<Page_Table> &to,
+ReturnStr<std::pair<void *, size_t>> Page_Table::atomic_transfer_region(const klib::shared_ptr<Page_Table> &to,
                                                      void *region_orig, void *prefered_to,
                                                      unsigned access, bool fixed)
 {
@@ -174,6 +174,8 @@ ReturnStr<void *> Page_Table::atomic_transfer_region(const klib::shared_ptr<Page
     auto reg = paging_regions.find(region_orig);
     if (!reg)
         return Error(-ENOENT);
+
+    auto size = reg->size;
 
     if ((ulong)prefered_to & 07777)
         prefered_to = nullptr;
@@ -187,7 +189,7 @@ ReturnStr<void *> Page_Table::atomic_transfer_region(const klib::shared_ptr<Page
     if (result)
         return Error(result);
 
-    return start_addr.val;
+    return std::make_pair(start_addr.val, size);
 }
 
 ReturnStr<Phys_Mapped_Region *> Page_Table::atomic_create_phys_region(void *page_aligned_start,
@@ -618,7 +620,7 @@ void Page_Table::atomic_shrink_regions(const klib::shared_ptr<Mem_Object> &id,
             }
 
             invalidate_range(ctx, free_from, free_size, true);
-            unblock_tasks_rage(free_from, free_size);
+            unblock_tasks_range(free_from, free_size);
         }
     }
 }
@@ -640,7 +642,7 @@ kresult_t Page_Table::atomic_delete_region(void *region_start)
     auto ctx = TLBShootdownContext::create_userspace(*this);
 
     invalidate_range(ctx, region_start, region_size, true);
-    unblock_tasks_rage(region_start, region_size);
+    unblock_tasks_range(region_start, region_size);
 
     return 0;
 }
@@ -654,7 +656,7 @@ void Page_Table::unreference_object(const klib::shared_ptr<Mem_Object> &object,
         p->second.erase(region);
 }
 
-void Page_Table::unblock_tasks_rage(void *blocked_by_page, size_t size_bytes)
+void Page_Table::unblock_tasks_range(void *blocked_by_page, size_t size_bytes)
 {
     // TODO
 }
@@ -788,3 +790,9 @@ void TLBShootdownContext::finalize()
 klib::vector<MemoryRegion> kernel::paging::memory_map;
 
 bool Page_Table::is_mapped(void *ptr) const { return get_page_mapping(ptr).is_allocated; }
+
+void kernel::paging::unmap_kernel_pages(TLBShootdownContext &ctx, void *virt_addr, size_t size_bytes)
+{
+    for (size_t i = 0; i < size_bytes; i += PAGE_SIZE)
+        unmap_kernel_page(ctx, (void *)((char *)virt_addr + i));
+}

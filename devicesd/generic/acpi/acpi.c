@@ -41,6 +41,7 @@
 #include <pmos/ports.h>
 #include <pmos/special.h>
 #include <pmos/system.h>
+#include <pmos/vector.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -51,9 +52,12 @@
 #include <uacpi/osi.h>
 #include <uacpi/sleep.h>
 #include <uacpi/utilities.h>
-#include <pmos/vector.h>
+#include <pmos/pmbus_helper.h>
 
 void init_acpi();
+
+extern pmos_port_t main_port;
+extern struct pmbus_helper *pmbus_helper;
 
 bool have_rsdp = false;
 extern uint64_t rsdp_desc;
@@ -141,7 +145,9 @@ void request_acpi_tables()
         return;
     }
 
-    result_t result = send_message_right(loader_right.right, configuration_port, (char *)&request, sizeof(request), NULL, SEND_MESSAGE_DELETE_RIGHT).result;
+    result_t result = send_message_right(loader_right.right, configuration_port, (char *)&request,
+                                         sizeof(request), NULL, SEND_MESSAGE_DELETE_RIGHT)
+                          .result;
     if (result != SUCCESS) {
         printf("Warning: Could not send message to get the RSDT\n");
         return;
@@ -235,7 +241,7 @@ int acpi_init()
         return -ENODEV;
     }
 
-    // Ignore return value in case it's not present on reduced 
+    // Ignore return value in case it's not present on reduced
     uacpi_finalize_gpe_initialization();
 
     acpi_bus_enumerate();
@@ -351,7 +357,7 @@ int init_sleep()
         struct MemoryRegion regions[count];
         nvs_cnt = __pmos_syscall_set_attr(0, 6, (unsigned long)&regions[0]);
         if (nvs_cnt.result) {
-            fprintf(stderr, "Failed to get the ACPI NVS regions: %i\n", nvs_cnt.result);
+            fprintf(stderr, "Failed to get the ACPI NVS regions: %" PRIu64 "\n", nvs_cnt.result);
             status = -1;
             return -1;
         }
@@ -491,7 +497,7 @@ static uacpi_status handle_power_button_event(uacpi_handle ctx, uacpi_namespace_
     (void)node;
 
     if (value != 0x80) {
-        printf("Unknown power button event: %llu\n", value);
+        printf("Unknown power button event: %" PRIu64 "\n", value);
         return UACPI_STATUS_OK;
     }
 
@@ -630,209 +636,26 @@ void init_acpi()
 
     printf("Walked ACPI tables! ACPI revision: %i\n", acpi_revision);
 }
-extern pmos_port_t main_port;
 
-pmos_hashtable_t register_requests = PMOS_HASHTABLE_INITIALIZER;
-struct RegisterRequest {
-    pmos_hashtable_ll_t hash_head;
-    uint64_t id;
-    char *acpi_name;
-    uint8_t *message_data;
-    size_t message_data_size;
-    uint64_t pmbus_sequence_id;
+struct ACPIDevice {
+    char *path;
+
+    pmos_right_t send_right;
+    pmos_right_t receive_right;
+
+    struct ACPIDevice *next;
 };
-uint64_t next_counter = 1;
 
-static size_t register_request_hash(pmos_hashtable_ll_t *element, size_t total_size)
+struct ACPIDevice *acpi_devices = NULL;
+
+void acpi_register_callback(int result, uint64_t sequence_number, void *ctx, struct pmbus_helper *)
 {
-    struct RegisterRequest *r = container_of(element, struct RegisterRequest, hash_head);
-    return (r->id * 7) % total_size;
-}
-
-static bool hash_equals(pmos_hashtable_ll_t *element, void *value)
-{
-    struct RegisterRequest *rr = container_of(element, struct RegisterRequest, hash_head);
-    return rr->id == *(uint64_t *)value;
-}
-
-static size_t hash_for_value(void *value, size_t total_size)
-{
-    return (*(uint64_t *)(value) * 7) % total_size;
-}
-
-static pmos_right_t pmbus_right    = 0;
-static bool pmbus_right_requested = false;
-const char *pmbus_right_name      = "/pmos/pmbus";
-int request_pmbus_right(pmos_right_t *right_out)
-{
-    assert(right_out);
-    if (pmbus_right) {
-        *right_out = pmbus_right;
-        return 0;
-    }
-
-    *right_out = 0;
-    if (pmbus_right_requested)
-        return 0;
-
-    int result = (int)request_named_port(pmbus_right_name, strlen(pmbus_right_name), main_port, 0).result;
+    struct ACPIDevice *device = ctx;
     if (result < 0) {
-        fprintf(stderr, "devicesd: Fauled to request pmbus port: %i (%s)\n", result,
-                strerror(-result));
-        return -1;
-    }
-
-    pmbus_right_requested = true;
-    return 0;
-}
-
-static void send_foreach(pmos_hashtable_ll_t *element, void *ctx)
-{
-    (void)ctx;
-
-    struct RegisterRequest *r = container_of(element, struct RegisterRequest, hash_head);
-    if (!r->message_data)
-        return;
-
-    int result = (int)send_message_right(pmbus_right, 0, r->message_data, r->message_data_size, NULL, 0).result;
-    if (result < 0) {
-        fprintf(stderr, "devicesd: Couldn't send message to pmbus: %i (%s)\n", result,
-                strerror(-result));
-    }
-
-    free(r->message_data);
-    r->message_data      = NULL;
-    r->message_data_size = 0;
-}
-
-static void publish_send() { hashtable_foreach(&register_requests, send_foreach, NULL); }
-
-int send_register_object(struct RegisterRequest *r)
-{
-    pmos_right_t pmbus_right;
-    int result = request_pmbus_right(&pmbus_right);
-    if (result < 0) {
-        fprintf(stderr, "Failed to request pmbus right: %i\n", result);
-        return -1;
-    }
-
-    result = hashmap_add(&register_requests, register_request_hash, &r->hash_head);
-    if (result < 0) {
-        fprintf(stderr, "devicesd: Failed to add request to hash map\n");
-        return result;
-    }
-
-    if (pmbus_right == 0)
-        // This will be contineud once the right is obtained
-        return 0;
-
-    result = (int)send_message_right(pmbus_right, 0, r->message_data, r->message_data_size, NULL, 0).result;
-    if (result < 0) {
-        fprintf(stderr, "devicesd: Couldn't send message to pmbus: %i (%s)\n", result,
-                strerror(-result));
-        hashtable_delete(&register_requests, register_request_hash, &r->hash_head);
-        return -1;
-    }
-    free(r->message_data);
-    r->message_data      = NULL;
-    r->message_data_size = 0;
-
-    return 0;
-}
-
-void publish_object_reply(Message_Descriptor *desc, IPC_BUS_Publish_Object_Reply *r)
-{
-    (void)desc;
-    uint64_t idx = r->user_arg;
-
-    pmos_hashtable_ll_t *e = hashtable_find(&register_requests, &idx, hash_for_value, hash_equals);
-    if (!e) {
-        fprintf(stderr,
-                "[devicesd] Warning: Recieved IPC_BUS_Publish_Object_Reply arg %" PRIi64
-                " , but didn't find value\n",
-                idx);
-        return;
-    }
-
-    struct RegisterRequest *rr = container_of(e, struct RegisterRequest, hash_head);
-    if (r->result == 0) {
-        printf("[devicesd] Published %s, sequence number %" PRIi64 "!\n", rr->acpi_name,
-               r->sequence_number);
-        rr->pmbus_sequence_id = r->sequence_number;
+        fprintf(stderr, "Failed to publish ACPI device: %i (%s)\n", result, strerror(-result));
     } else {
-        printf("[devicesd] Failed to publish %s! Result %i\n", rr->acpi_name, r->result);
+        printf("Published %s! Sequence ID: %" PRIu64 "\n", device->path, sequence_number);
     }
-}
-
-#define BRED "\e[1;31m"
-#define BGRN "\e[1;32m"
-#define CRESET "\e[0m"
-
-void named_port_notification(Message_Descriptor *desc, IPC_Kernel_Named_Port_Notification *n, pmos_right_t first_right)
-{
-    // if (desc->sender != 0) {
-    //     fprintf(stderr,
-    //             "[devicesd] Warning: recieved IPC_Kernel_Named_Port_Notification from task %" PRIi64
-    //             " , expected kernel (0)\n",
-    //             desc->sender);
-    //     return;
-    // }
-
-    if (!first_right) {
-        fprintf(stderr, BRED "devicesd: Recieved named right notification with no right..." CRESET "\n");
-        return;
-    }
-
-    printf(BGRN "named port right % "PRIi64 CRESET "\n", first_right);
-
-    size_t len = NAMED_PORT_NOTIFICATION_STR_LEN(desc->size);
-    if (len == strlen(pmbus_right_name) && !memcmp(pmbus_right_name, n->port_name, len)) {
-        pmbus_right = first_right;
-
-        publish_send();
-    }
-}
-
-int register_object(pmos_bus_object_t *object_owning)
-{
-    int result                 = -1;
-    struct RegisterRequest *rr = calloc(sizeof(*rr), 1);
-    if (!rr) {
-        fprintf(stderr, "devicesd: Couldn't allocate memory for RegisterRequest\n");
-        goto end;
-    }
-
-    rr->acpi_name = strdup(pmos_bus_object_get_name(object_owning));
-    if (!rr->acpi_name) {
-        fprintf(stderr, "devicesd: Couldn't allocate memory for acpi_name\n");
-        goto end;
-    }
-
-    rr->id = next_counter++;
-
-    uint8_t *msg    = NULL;
-    size_t msg_size = 0;
-
-    if (!pmos_bus_object_serialize_ipc(object_owning, main_port, rr->id, main_port,
-                                       pmos_process_task_group(), &msg, &msg_size)) {
-        fprintf(stderr, "Couldn't serialize pmbus object\n");
-        goto end;
-    }
-
-    rr->message_data      = msg;
-    rr->message_data_size = msg_size;
-
-    result = send_register_object(rr);
-
-end:
-    if (result && rr) {
-        free(rr->message_data);
-        free(rr->acpi_name);
-        free(rr);
-    }
-
-    pmos_bus_object_free(object_owning);
-    return result;
 }
 
 static uacpi_iteration_decision acpi_init_one_device(void *ctx, uacpi_namespace_node *node,
@@ -843,6 +666,7 @@ static uacpi_iteration_decision acpi_init_one_device(void *ctx, uacpi_namespace_
     (void)ctx;
     const char *path              = NULL;
     pmos_bus_object_t *bus_object = NULL;
+    struct ACPIDevice *device = NULL;
 
     uacpi_status ret = uacpi_get_namespace_node_info(node, &info);
     if (uacpi_unlikely_error(ret)) {
@@ -853,11 +677,35 @@ static uacpi_iteration_decision acpi_init_one_device(void *ctx, uacpi_namespace_
     }
 
     if (info->flags & (UACPI_NS_NODE_INFO_HAS_HID | UACPI_NS_NODE_INFO_HAS_CID)) {
+        if (!pmbus_helper) {
+            fprintf(stderr, "Can't publish ACPI device: no pmbus helper\n");
+            goto _continue;
+        }
+
         path = uacpi_namespace_node_generate_absolute_path(node);
         if (!path) {
             fprintf(stderr, "Unable to get path for uACPI node...\n");
             goto _continue;
         }
+
+        device = calloc(1, sizeof(*device));
+        if (!device) {
+            fprintf(stderr, "Failed to allocate memory for ACPIDevice...\n");
+            goto _continue;
+        }
+
+        device->path = strdup(path);
+        if (!device->path) {
+            fprintf(stderr, "Couldn't allocate memory for device path...\n");
+            goto _continue;
+        }
+
+        right_request_t req = create_right(main_port, &device->receive_right, 0);
+        if (req.result) {
+            fprintf(stderr, "Failed to create right for the ACPI device: %" PRIi64 "...\n", req.result);
+            goto _continue;
+        }
+        device->send_right = req.right;
 
         bus_object = pmos_bus_object_create();
         if (!bus_object) {
@@ -927,16 +775,31 @@ static uacpi_iteration_decision acpi_init_one_device(void *ctx, uacpi_namespace_
             }
         }
 
-        int result = register_object(bus_object);
+        req = dup_right(req.right);
+        if (req.result) {
+            fprintf(stderr, "Failed to dup right for the ACPI device: %i (%s)\n", (int)req.result, strerror(-(int)req.result));
+            goto _continue;
+        }
+
+        int result = pmbus_helper_publish(pmbus_helper, bus_object, req.right, acpi_register_callback, device);
         bus_object = NULL;
         if (result < 0) {
             fprintf(stderr, "Failed to register object...\n");
             goto _continue;
         }
+
+        device->next = acpi_devices;
+        acpi_devices = device;
+        device = NULL;
     }
 _continue:
     pmos_bus_object_free(bus_object);
     uacpi_free_namespace_node_info(info);
+    if (device) {
+        delete_right(device->send_right);
+        free(device->path);
+        free(device);
+    }
     uacpi_free_absolute_path(path);
     return UACPI_ITERATION_DECISION_CONTINUE;
 }

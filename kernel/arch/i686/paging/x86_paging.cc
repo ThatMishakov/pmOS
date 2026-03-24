@@ -18,6 +18,10 @@ template<typename T> static T alignup(T input, unsigned alignment_log)
 
 using namespace kernel;
 
+namespace kernel::x86::paging {
+u32 idle_cr3 = 0;
+}
+
 namespace kernel::ia32::paging
 {
 
@@ -38,8 +42,6 @@ bool detect_nx()
     support_nx = c.edx & (1 << 20);
     return support_nx;
 }
-
-u32 idle_cr3 = 0;
 
 static std::pair<u32, u32> cr3_pae_page_offset(u32 cr3)
 {
@@ -998,7 +1000,7 @@ klib::shared_ptr<IA32_Page_Table> IA32_Page_Table::create_empty(unsigned)
         kernel::paging::Temp_Mapper_Obj<u32> current_page_m(kernel::paging::request_temp_mapper());
 
         auto new_page     = new_page_m.map(cr3);
-        auto current_page = current_page_m.map(idle_cr3);
+        auto current_page = current_page_m.map(kernel::x86::paging::idle_cr3);
 
         // Clear new page
         for (size_t i = 0; i < 768; ++i)
@@ -1022,7 +1024,7 @@ klib::shared_ptr<IA32_Page_Table> IA32_Page_Table::create_empty(unsigned)
         if (cr3 == -1U)
             return nullptr;
 
-        auto [idle_cr3_phys, idle_cr3_offset] = cr3_pae_page_offset(idle_cr3);
+        auto [idle_cr3_phys, idle_cr3_offset] = cr3_pae_page_offset(kernel::x86::paging::idle_cr3);
         auto [cr3_phys, cr3_offset]           = cr3_pae_page_offset(cr3);
 
         auto guard = pmos::utility::make_scope_guard([&]() { free_pae_cr3(cr3); });
@@ -1093,7 +1095,7 @@ ReturnStr<u32> create_empty_cr3()
         kernel::paging::Temp_Mapper_Obj<u32> current_page_m(kernel::paging::request_temp_mapper());
 
         auto new_page     = new_page_m.map(cr3);
-        auto current_page = current_page_m.map(idle_cr3);
+        auto current_page = current_page_m.map(kernel::x86::paging::idle_cr3);
 
         // Clear new page
         for (size_t i = 0; i < 768; ++i)
@@ -1109,7 +1111,7 @@ ReturnStr<u32> create_empty_cr3()
         if (cr3 == -1U)
             return Error(-ENOMEM);
 
-        auto [idle_cr3_phys, idle_cr3_offset] = cr3_pae_page_offset(idle_cr3);
+        auto [idle_cr3_phys, idle_cr3_offset] = cr3_pae_page_offset(kernel::x86::paging::idle_cr3);
         auto [cr3_phys, cr3_offset]           = cr3_pae_page_offset(cr3);
 
         kernel::paging::Temp_Mapper_Obj<pae_entry_t> new_page_m(
@@ -1410,7 +1412,7 @@ namespace kernel::paging
 kresult_t map_kernel_page(u64 phys_addr, void *virt_addr, kernel::paging::Page_Table_Arguments arg)
 {
     assert(!arg.user_access);
-    return ia32::paging::ia32_map_page(ia32::paging::idle_cr3, phys_addr, virt_addr, arg);
+    return ia32::paging::ia32_map_page(kernel::x86::paging::idle_cr3, phys_addr, virt_addr, arg);
 }
 
 kresult_t map_page(ptable_top_ptr_t page_table, u64 phys_addr, void *virt_addr,
@@ -1434,12 +1436,12 @@ kresult_t map_pages(ptable_top_ptr_t page_table, u64 phys_addr, void *virt_addr,
 kresult_t map_kernel_pages(u64 phys_addr, void *virt_addr, size_t size,
                            kernel::paging::Page_Table_Arguments arg)
 {
-    return map_pages(ia32::paging::idle_cr3, phys_addr, virt_addr, size, arg);
+    return map_pages(kernel::x86::paging::idle_cr3, phys_addr, virt_addr, size, arg);
 }
 
 kresult_t unmap_kernel_page(kernel::paging::TLBShootdownContext &ctx, void *virt_addr)
 {
-    ia32::paging::x86_invalidate_page(ctx, virt_addr, false, ia32::paging::idle_cr3);
+    ia32::paging::x86_invalidate_page(ctx, virt_addr, false, kernel::x86::paging::idle_cr3);
     return 0;
 }
 

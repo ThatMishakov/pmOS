@@ -33,12 +33,12 @@ void uacpi_kernel_log(enum uacpi_log_level ll, const char *log)
 
 void *uacpi_kernel_map(uacpi_phys_addr addr, uacpi_size len)
 {
-    uint64_t page_alligned_addr = addr & ~0xFFFUL;
+    uint64_t page_aligned_addr = addr & ~0xFFFUL;
     uint64_t page_offset        = addr & 0xFFFUL;
-    uint64_t size_alligned      = (len + page_offset + 0xFFF) & ~0xFFFUL;
+    uint64_t size_aligned      = (len + page_offset + 0xFFF) & ~0xFFFUL;
 
-    mem_request_ret_t r = create_phys_map_region(TASK_ID_SELF, NULL, size_alligned,
-                                                 PROT_READ | PROT_WRITE, page_alligned_addr);
+    mem_request_ret_t r = create_phys_map_region(TASK_ID_SELF, NULL, size_aligned,
+                                                 PROT_READ | PROT_WRITE, page_aligned_addr);
     if (r.result != SUCCESS)
         return NULL;
 
@@ -49,9 +49,9 @@ void uacpi_kernel_unmap(void *addr, uacpi_size len)
 {
     (void)len;
 
-    void *region_start_alligned = (void *)((uint64_t)addr & ~0xFFFUL);
+    void *region_start_aligned = (void *)((uint64_t)addr & ~0xFFFUL);
 
-    release_region(TASK_ID_SELF, region_start_alligned);
+    release_region(TASK_ID_SELF, region_start_aligned);
 }
 
 uacpi_handle uacpi_kernel_create_mutex(void)
@@ -752,3 +752,16 @@ uacpi_status uacpi_kernel_handle_firmware_request(uacpi_firmware_request *r)
     fprintf(stderr, "!!! Firmware request: %i !!!\n", r->type);
     return UACPI_STATUS_OK;
 }
+
+syscall_r __pmos_syscall_set_attr(uint64_t pid, uint32_t attr, unsigned long value);
+
+uacpi_interrupt_state uacpi_kernel_disable_interrupts(void)
+{
+    return __pmos_syscall_set_attr(0, 8, 0).value;
+}
+
+void uacpi_kernel_restore_interrupts(uacpi_interrupt_state state)
+{
+    __pmos_syscall_set_attr(0, 9, state);
+}
+

@@ -28,8 +28,8 @@
 
 #ifndef PMOS_LOAD_DATA_H
 #define PMOS_LOAD_DATA_H
-#include <stdint.h>
 #include <stddef.h>
+#include <stdint.h>
 
 enum {
     LOAD_TAG_CLOSE            = 0,
@@ -42,6 +42,11 @@ enum {
     LOAD_TAG_RSDP             = 7,
     LOAD_TAG_FDT              = 8,
     LOAD_TAG_ELF_PHDR         = 9,
+    LOAD_TAG_USERSPACE_TAGS   = 10, // Set by kernel when userspace passes some tags
+    LOAD_TAG_MEM_OBJECT_ID    = 11, // ID of the memory object that contains this executable
+
+    // Values above 0x100 are reserved for userspace
+    LOAD_TAG_TASK_GROUP_ID = 0x100,
 };
 
 /// @brief Header for a load tag
@@ -61,10 +66,7 @@ struct load_tag_generic {
 struct load_tag_close {
     struct load_tag_generic header;
 };
-#define LOAD_TAG_CLOSE_HEADER                     \
-    {                                             \
-        LOAD_TAG_CLOSE, 0, sizeof(load_tag_close) \
-    }
+#define LOAD_TAG_CLOSE_HEADER {LOAD_TAG_CLOSE, 0, sizeof(struct load_tag_close)}
 
 /// @brief Stack descriptor tag
 ///
@@ -76,21 +78,19 @@ struct load_tag_stack_descriptor {
     uint64_t guard_size; //< Size of the guard area in bytes
     uint64_t unused0;    //< Unused, must be 0
 };
-#define LOAD_TAG_STACK_DESCRIPTOR_HEADER                                       \
-    {                                                                          \
-        LOAD_TAG_STACK_DESCRIPTOR, 0, sizeof(struct load_tag_stack_descriptor) \
-    }
+#define LOAD_TAG_STACK_DESCRIPTOR_HEADER \
+    {LOAD_TAG_STACK_DESCRIPTOR, 0, sizeof(struct load_tag_stack_descriptor)}
 
 /// @brief Descriptor of a memory object
 struct module_descriptor {
     uint64_t memory_object_id; //< ID of the memory object containing the module
     uint64_t size; //< Size of the module in bytes. The size of the memory object is rounded up to
-                   //the nearest page from this.
+                   // the nearest page from this.
     uint64_t path_offset; //< Offset to the start of the module name from the start of parent
-                          //load_tag_modules_descriptor, < pointing to the null-terminated string
-                          //containing the path of the module
+                          // load_tag_modules_descriptor, < pointing to the null-terminated string
+                          // containing the path of the module
     uint64_t cmdline_offset; //< Offset to the start of cmdline argument for the module, similar to
-                             //path_offset
+                             // path_offset
 };
 
 /// @brief Load module tag
@@ -123,10 +123,7 @@ struct load_tag_framebuffer {
     uint8_t blue_mask_shift;     //< Shift of the blue mask
     uint8_t unused[1];           //< Unused, must be 0
 };
-#define LOAD_TAG_FRAMEBUFFER_HEADER                                  \
-    {                                                                \
-        LOAD_TAG_FRAMEBUFFER, 0, sizeof(struct load_tag_framebuffer) \
-    }
+#define LOAD_TAG_FRAMEBUFFER_HEADER {LOAD_TAG_FRAMEBUFFER, 0, sizeof(struct load_tag_framebuffer)}
 
 /// @brief RSDP tag
 ///
@@ -135,10 +132,7 @@ struct load_tag_rsdp {
     struct load_tag_generic header;
     uint64_t rsdp; //< Pointer to the RSDP in the physical memory
 };
-#define LOAD_TAG_RSDP_HEADER                           \
-    {                                                  \
-        LOAD_TAG_RSDP, 0, sizeof(struct load_tag_rsdp) \
-    }
+#define LOAD_TAG_RSDP_HEADER {LOAD_TAG_RSDP, 0, sizeof(struct load_tag_rsdp)}
 
 /// @brief FDT tag
 ///
@@ -155,10 +149,7 @@ struct load_tag_fdt {
     /// Size of the memory object in bytes
     uint32_t mem_object_size;
 };
-#define LOAD_TAG_FDT_HEADER                          \
-    {                                                \
-        LOAD_TAG_FDT, 0, sizeof(struct load_tag_fdt) \
-    }
+#define LOAD_TAG_FDT_HEADER {LOAD_TAG_FDT, 0, sizeof(struct load_tag_fdt)}
 
 /// @brief ELF program header tag
 ///
@@ -169,10 +160,46 @@ struct load_tag_elf_phdr {
     uint32_t phdr_num;  //< Number of entries in the program header table
     uint32_t phdr_size; //< Size of each entry in the program header table
 };
-#define LOAD_TAG_ELF_PHDR_HEADER                          \
-    {                                                     \
-        LOAD_TAG_ELF_PHDR, 0, sizeof(struct load_tag_elf_phdr) \
-    }
+#define LOAD_TAG_ELF_PHDR_HEADER {LOAD_TAG_ELF_PHDR, 0, sizeof(struct load_tag_elf_phdr)}
+
+/// @brief Userspace tags tag
+///
+/// This struct is passed by the kernel with the optional memory region
+/// from userspace, containing userspace tags. This was separated, so that
+/// they can optionally be sanitized by the recieving process.
+struct load_tag_userspace_tags {
+    struct load_tag_generic header;
+    // Use uint64_t for consistency between 64 bit kernel and 32 bit userspace
+    uint64_t tags_address; //< Address of the userspace tags in the process's memory
+    uint64_t memory_size;  //< Size of the memory region in bytes
+};
+#define LOAD_TAG_USERSPACE_TAGS_HEADER \
+    {LOAD_TAG_USERSPACE_TAGS, 0, sizeof(struct load_tag_userspace_tags)}
+
+/// @brief Task group tag.
+///
+/// This tag passes the task group id to the newly created process, so that it can be used
+/// instead of creating a new one, keeping a value known by the parent process (and recieving
+/// handles and so on). If it was passed, the libc should use this instead of creating a new task
+/// group.
+struct load_tag_task_group_id {
+    struct load_tag_generic header;
+    uint64_t group_id; //< Task group ID to be used by the process. If 0, then no task group ID was
+                       //passed and a new one should be created.
+};
+#define LOAD_TAG_TASK_GROUP_ID_HEADER \
+    {LOAD_TAG_TASK_GROUP_ID, 0, sizeof(struct load_tag_task_group_id)}
+
+/// @brief Memory object ID tag
+///
+/// This tag passes the memory object that containing this executable
+struct load_tag_mem_object_id {
+    struct load_tag_generic header;
+    uint64_t memory_object_id;
+};
+#define LOAD_TAG_MEM_OBJECT_ID_HEADER \
+    {LOAD_TAG_MEM_OBJECT_ID, 0, sizeof(struct load_tag_mem_object_id)}
+
 
 /// @brief Gets the first tag of the specified type
 ///
@@ -181,5 +208,15 @@ struct load_tag_elf_phdr {
 /// @param load_data_size The size of the load data
 /// @return The address of the first tag of the specified type, or NULL if not found
 struct load_tag_generic *get_load_tag(uint32_t tag, void *load_data, size_t load_data_size);
+
+/// @brief Gets the first tag of the specified type from the global load data
+///
+/// This is a wrapper around get_load_tag that uses the global load data passed to the process
+/// @param tag The tag type to search for
+/// @param idx If there are multiple tags of the specified type, this specifies the index of
+/// the tag to return (0 for the first one, 1 for the second one, etc.)
+/// @return The address of the first tag of the specified type, or NULL if not found
+struct load_tag_generic *get_load_tag_global(uint32_t tag, size_t idx);
+
 
 #endif // PMOS_LOAD_DATA_H

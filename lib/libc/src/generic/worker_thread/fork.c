@@ -170,7 +170,7 @@ void __libc_fork_inner(uint64_t requester, pmos_port_t reply_port, unsigned long
 
     // Clone memory
     page_table_req_ret_t child_new_page_table =
-        asign_page_table(child_tid, PAGE_TABLE_SELF, PAGE_TABLE_CLONE);
+        assign_page_table(child_tid, PAGE_TABLE_SELF, PAGE_TABLE_CLONE, 0);
     if (child_new_page_table.result != 0) {
         syscall_kill_task(child_tid);
         child_pid = child_new_page_table.result;
@@ -260,7 +260,7 @@ void __libc_fork_child()
     }
 
     // Set page table
-    r.result = asign_page_table(r.value, PAGE_TABLE_SELF, PAGE_TABLE_ASIGN).result;
+    r.result = assign_page_table(r.value, PAGE_TABLE_SELF, PAGE_TABLE_ASSIGN, 0).result;
     if (r.result != 0) {
         fprintf(stderr, "pmOS libC: Failed to set page table in fork: %li\n", r.result);
         _syscall_exit(-r.result);

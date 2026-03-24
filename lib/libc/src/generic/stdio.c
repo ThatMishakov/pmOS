@@ -210,13 +210,12 @@ static ssize_t flush_buffer(FILE *stream)
     stream->buf_pos = 0;
     return 0;
 }
-
 static ssize_t write_file(void *arg, const char *str, size_t size)
 {
     FILE *stream = (FILE *)arg;
     size_t t     = size;
 
-    // Callee is expected to lock the file
+    // Caller is expected to lock the file
 
     if (stream->buf_size != 0 && stream->buf == NULL) {
         stream->buf = malloc(stream->buf_size);
@@ -999,11 +998,25 @@ int snprintf(char *str, size_t size, const char *format, ...)
 
 size_t fread(void *ptr, size_t size, size_t count, FILE *stream)
 {
+    __atomic_or_fetch(&stream->flags, _FILE_FLAG_ERROR, __ATOMIC_RELAXED);
+
     // Not implemented
     errno = ENOSYS;
-    return -1;
+    return 0;
 
     return __read_internal((long int)stream, ptr, size * count, true, 0);
+}
+
+char* fgets(char* restrict str, int count, FILE* restrict stream)
+{
+    // Stub!
+    fprintf(stderr, "fgets stub!!!\n");
+
+    (void)str;
+    (void)count;
+
+    __atomic_or_fetch(&stream->flags, _FILE_FLAG_ERROR, __ATOMIC_RELAXED);
+    return NULL;
 }
 
 int getc_unlocked(FILE *stream)
@@ -1090,3 +1103,14 @@ int fflush(FILE *stream)
     UNLOCK_FILE(&stream->lock);
     return i;
 }
+
+int feof(FILE *stream)
+{
+    return __atomic_load_n(&stream->flags, __ATOMIC_RELAXED) & _FILE_FLAG_EOF ? -1 : 0;
+}
+
+int ferror(FILE *stream)
+{
+    return __atomic_load_n(&stream->flags, __ATOMIC_RELAXED) & _FILE_FLAG_ERROR ? -1 : 0;
+}
+	

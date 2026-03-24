@@ -106,7 +106,7 @@ struct uthread {
     } *dtv;
     size_t dtv_size;
 
-    pmos_right_t fs_right;
+    pmos_right_aligned fs_right;
     pmos_right_t pipe_right;
     pmos_port_t cmd_reply_port;
 

@@ -126,7 +126,7 @@ typedef struct {
     uint64_t undefined;
     uint64_t p_filesz;
     uint64_t p_memsz;
-    uint64_t allignment;
+    uint64_t alignment;
 } ELF_PHeader_64;
 
 typedef struct {
@@ -137,7 +137,7 @@ typedef struct {
     uint32_t p_filesz;
     uint32_t p_memsz;
     uint32_t flags;
-    uint32_t allignment;
+    uint32_t alignment;
 } ELF_PHeader_32;
 
 #define ELF_SEGMENT_LOAD    1

@@ -35,16 +35,17 @@
 #include <exceptions.hh>
 #include <interrupts/stack.hh>
 #include <lib/memory.hh>
-#include <lib/set.hh>
 #include <lib/string.hh>
 #include <memory/paging.hh>
 #include <memory/rcu.hh>
 #include <messaging/messaging.hh>
+#include <optional>
 #include <paging/arch_paging.hh>
 #include <pmos/containers/set.hh>
 #include <pmos/load_data.h>
 #include <registers.hh>
 #include <sched/defs.hh>
+#include <tuple>
 #include <types.hh>
 
 #if defined(__x86_64__) || defined(__i386__)
@@ -146,7 +147,7 @@ namespace proc
         void *page_blocked_by = nullptr;
 
         // Task groups. Using sched_lock...
-        klib::set<TaskGroup *> task_groups;
+        pmos::containers::set<TaskGroup *> task_groups;
 
         // Creates and assigns an emty valid page table
         kresult_t create_new_page_table();
@@ -157,7 +158,7 @@ namespace proc
             atomic_register_page_table(klib::shared_ptr<paging::Arch_Page_Table>);
 
         // Inits stack
-        ReturnStr<size_t> init_stack();
+        ReturnStr<std::tuple<size_t, load_tag_stack_descriptor>> init_stack(klib::shared_ptr<paging::Arch_Page_Table> optional_existing_table = {});
 
         // Blocks the process by a page (for example in case of a pagefault)
         void atomic_block_by_page(void *page, sched::sched_queue *push_to_queue);
@@ -256,8 +257,16 @@ namespace proc
         /// Loads ELF into the task from the given memory object
         /// Returns true if the ELF was loaded successfully, false if the memory object data is not
         /// immediately available
-        ReturnStr<bool> load_elf(klib::shared_ptr<paging::Mem_Object> obj, klib::string name = "",
-                                 const klib::vector<klib::unique_ptr<load_tag_generic>> &tags = {});
+        ReturnStr<bool>
+            atomic_load_elf(klib::shared_ptr<paging::Mem_Object> obj, klib::string name = "",
+                            const klib::vector<klib::unique_ptr<load_tag_generic>> &tags = {});
+
+        /// Loads ELF into the task from the given memory object. This function does not acquire the
+        /// sched_lock. Returns the program header if loaded successfully, empty optional if the
+        /// memory object data is not immediately available, or an error.
+        ReturnStr<std::optional<
+            std::tuple<ulong, load_tag_elf_phdr, klib::shared_ptr<paging::Arch_Page_Table>>>>
+            load_elf_into_memory(klib::shared_ptr<paging::Mem_Object> obj);
 
         /// Cleans up the task when detected that it is dead ("tombstoning")
         /// This function is called when the dead task has been scheduled to run and is needed to

@@ -94,7 +94,7 @@ struct pmos_msgloop_data {
 void pmos_msgloop_initialize(struct pmos_msgloop_data *data, pmos_port_t port);
 void pmos_msgloop_insert(struct pmos_msgloop_data *data, pmos_msgloop_tree_node_t *node);
 pmos_msgloop_tree_node_t *pmos_msgloop_get(struct pmos_msgloop_data *data, pmos_right_t right);
-int pmos_msgloop_erase(struct pmos_msgloop_data *data, pmos_msgloop_tree_node_t *node);
+void pmos_msgloop_erase(struct pmos_msgloop_data *data, pmos_msgloop_tree_node_t *node);
 void pmos_msgloop_loop(struct pmos_msgloop_data *data);
 
 void pmos_msgloop_node_set(pmos_msgloop_tree_node_t *n, pmos_right_t right_id,

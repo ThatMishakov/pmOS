@@ -4,19 +4,27 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <pmos/ipc.h>
+// #include <assert.h>
 
 static int default_handler(Message_Descriptor *desc, void *message, pmos_right_t *reply_right,
                            pmos_right_t *other, void *ctx, struct pmos_msgloop_data *data)
 {
     (void)ctx;
-    (void)message;
     (void)reply_right;
     (void)other;
 
+    uint32_t type = 0;
+
+    if (desc->size >= sizeof(IPC_Generic_Msg)) {
+        IPC_Generic_Msg *msg = message;
+        type = msg->type;
+    }
+
     fprintf(stderr,
             "pmOS libc: Error: Did not find callback for message in port %" PRIu64
-            ", sender %" PRIu64 ", right %" PRIu64 ", size %" PRIu64 "\n",
-            data->port, desc->sender, desc->sent_with_right, desc->size);
+            ", sender %" PRIu64 ", right %" PRIu64 ", size %" PRIu64 ", type %" PRIu32 "\n",
+            data->port, desc->sender, desc->sent_with_right, desc->size, type);
 
     return PMOS_MSGLOOP_CONTINUE;
 }
@@ -41,6 +49,23 @@ void pmos_msgloop_insert(struct pmos_msgloop_data *data, pmos_msgloop_tree_node_
     } else {
         data->default_node = node;
     }
+}
+
+void pmos_msgloop_erase(struct pmos_msgloop_data *data, pmos_msgloop_tree_node_t *node)
+{
+    assert(data);
+    if (!node)
+        return;
+
+    if (!node->data.right_id) {
+        data->default_node = NULL;
+        return;
+    }
+
+    //assert(pmos_msgloop_get(data, node->data.right_id) == node);
+
+    // Cut corners and don't search
+    pmos_msgloop_tree_remove(&data->nodes, node);
 }
 
 int pmos_msgloop_compare(struct msgloop_data *a, struct msgloop_data *b)

@@ -38,11 +38,11 @@
 char screen_buff[8192];
 int buff_pos      = 0;
 int buff_ack      = 0;
-uint64_t log_port = 0;
+uint64_t log_right = 0;
 
-void set_print_syscalls(uint64_t port)
+void set_print_syscalls(pmos_right_t right)
 {
-    log_port = port;
+    log_right = right;
 
     struct {
         uint32_t type;
@@ -57,18 +57,18 @@ void set_print_syscalls(uint64_t port)
         unsigned size = length - i > 256 ? 256 : length - i;
         memcpy(msg_str.buff, &str[i], size);
 
-        send_message_port(log_port, size + sizeof(uint32_t), &msg_str);
+        send_message_right(log_right, 0, &msg_str, size + sizeof(uint32_t), 0, 0);
     }
 
     // syscall(SYSCALL_SEND_MSG_PORT, 1, buff_pos - buff_ack, &screen_buff[buff_ack]);
     buff_ack = buff_pos;
 }
 
-void print_str(char *str) { print_str_n(str, strlen(str)); }
+void print_str(const char *str) { print_str_n(str, strlen(str)); }
 
-void print_str_n(char *str, int length)
+void print_str_n(const char *str, int length)
 {
-    if (log_port) {
+    if (log_right) {
         struct {
             uint32_t type;
             char buff[256];
@@ -78,12 +78,12 @@ void print_str_n(char *str, int length)
             int size = length - i > 256 ? 256 : length - i;
             memcpy(msg_str.buff, &str[i], size);
 
-            send_message_port(log_port, size + sizeof(uint32_t), &msg_str);
+            send_message_right(log_right, 0, &msg_str, size + sizeof(uint32_t), 0, 0);
             // TODO: Error checking
         }
     }
 
-    if (!log_port)
+    if (!log_right)
         while (*str != '\0') {
             screen_buff[buff_pos++] = (*str);
             ++str;

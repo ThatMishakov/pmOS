@@ -47,8 +47,11 @@ extern "C" {
  */
 typedef struct mem_request_ret_t {
     result_t result; ///< The result of the operation
-    void *virt_addr; ///< Address of the new region. Does not hold a meningful value if the result
-                     ///< was not successfull.
+    union {
+        void *virt_addr; ///< Address of the new region. Does not hold a meningful value if the result
+                        ///< was not successfull.
+        uint64_t virt_addr_intptr; /// to access as 64 bit int
+    };
 } mem_request_ret_t;
 
 typedef struct phys_addr_request_t {
@@ -119,12 +122,12 @@ struct task_register_set {
 /// @param pid PID of the process holding where the region should be allocated. Takes TASK_ID_SELF
 /// (0)
 /// @param addr_start The suggestion for the virutal address of the new region. The parameter must
-/// be page-alligned,
+/// be page-aligned,
 ///                   otherwise will ignore it (as if NULL was passed). If the address is
 ///                   not occupied, the kernel will try and place the new region there. Otherwise,
 ///                   the behaviour depends on the *access* arguments, where either the new location
 ///                   would be found or the error would be returned.
-/// @param size The size in bytes of the new region. The size must be page-alligned and not 0,
+/// @param size The size in bytes of the new region. The size must be page-aligned and not 0,
 /// otherwise the error will be returned
 /// @param access An OR-conjugated list of the argument. Takes PROT_READ, PROT_WRITE and PROT_EXEC
 /// as access bytes, CREATE_FLAG_FIXED and CREATE_FLAG_DMA
@@ -149,31 +152,49 @@ mem_request_ret_t create_phys_map_region(uint64_t pid, void *addr_start, size_t 
 
 /**
  * @brief Creates a memory object
- * @param size The size of the memory object in bytes. The size must be page-alligned.
+ * @param size The size of the memory object in bytes. The size must be page-aligned.
  * @param flags Flags for the memory object. Takes FLAG_ANONYMOUS, FLAG_DMA and
  * FLAG_ALLOW_DISCONTINUOUS
  */
 mem_object_request_ret_t create_mem_object(size_t size, uint32_t flags);
 
+/// @brief Parameters for map_mem_object syscall
+typedef struct map_mem_object_param_t {
+    /// ID of the page table where the new region should be created. Takes
+    /// PAGE_TABLE_SELF (0) for the current process.
+    uint64_t page_table_id;
+    /// ID of the memory object that should be mapped to the new region.
+    mem_object_t object_id;
+    /// The suggestion for the virutal address of the new region. The parameter must be
+    /// page-aligned. uint64_t is used here instead of void to be able to address memory in 64 bit
+    /// processes from 32 bit executables. (So void * can be cast to it if mapping for yourself)
+    uint64_t addr_start_uint;
+    /// The size in bytes of the new region. The size must be page-aligned and not 0,
+    /// otherwise the error will be returned
+    uint64_t size;
+    /// Offset in the memory object where the mapping should start. The offset must be
+    /// page aligned if not using CoW, or have the same offset to (offset_start % PAGE_SIZE), in which case
+    /// the beginning would be willed with 0.
+    uint64_t offset_object;
+    /// Offset in the page table, from which the pages will be copied. Must be 0 if
+    /// FLAG_COW is not set.
+    uint64_t offset_start;
+    /// Size of the memory object (in bytes). If smaller than size and region is CoW,
+    /// the trailing space will be zeroed.
+    uint64_t object_size;
+    /// An OR-conjugated list of the argument. Takes PROT_READ, PROT_WRITE and PROT_EXEC as
+    /// access bytes and CREATE_FLAG_FIXED, and CREATE_FLAG_COW
+    uint64_t access_flags;
+} map_mem_object_param_t;
+
 /**
  * @brief Maps a memory object to the new region.
- * @param page_table_id ID of the page table where the new region should be created. Takes
- * PAGE_TABLE_SELF (0) for the current process.
- * @param addr_start The suggestion for the virutal address of the new region. The parameter must be
- * page-alligned.
- * @param size The size in bytes of the new region. The size must be page-alligned and not 0,
- * otherwise the error will be returned
- * @param access An OR-conjugated list of the argument. Takes PROT_READ, PROT_WRITE and PROT_EXEC as
- * access bytes and CREATE_FLAG_FIXED, and FLAG_COW
- * @param object_id ID of the memory object that should be mapped to the new region.
- * @param offset Offset in the memory object where the mapping should start. The offset must be
- * page-alligned.
+ * @param params Parameters for the mapping (passed as a struct since it's too big for a syscall)
  * @returns mem_request_ret_t structure. Result indicated if the operation was successfull and error
  * otherwise. If the operation was successfull, virt_addr contains the address of the new virtual
  * region.
  */
-mem_request_ret_t map_mem_object(uint64_t page_table_id, void *addr_start, size_t size,
-                                 uint32_t access, mem_object_t object_id, uint64_t offset);
+mem_request_ret_t map_mem_object(const map_mem_object_param_t *params);
 
 /**
  * @brief Transfers a memory region to the new page table.
@@ -192,7 +213,7 @@ mem_request_ret_t map_mem_object(uint64_t page_table_id, void *addr_start, size_
  * meaningless if the result is not SUCCESS
  * @see create_normal_region()
  */
-mem_request_ret_t transfer_region(uint64_t to_page_table, void *region, void *dest, uint32_t flags);
+mem_request_ret_t transfer_region(uint64_t to_page_table, void *region, uint64_t dest, uint32_t flags);
 
 /// @brief Releases memory region
 /// @param pid PID of the process holding the region that should be released. Takes TASK_ID_SELF (0)
@@ -216,7 +237,7 @@ typedef struct page_table_req_ret_t {
 
 /**
  * @brief Get the kernel page table object id for the process identified by PID.
- *        The process must have some page table asigned, otherwise an error will be returned.
+ *        The process must have some page table assigned, otherwise an error will be returned.
  * @param pid The PID of the process. Can take TASK_ID_SELF (0)
  * @return page_table_req_ret_t has the result and the page table. If the result is not SUCCESSm
  * then page_table does not hold a meaningful value.
@@ -252,33 +273,35 @@ result_t get_registers(uint64_t pid, unsigned register_set, void *addr);
     #define PAGE_TABLE_SELF 0
 
     #define PAGE_TABLE_CREATE 1
-    #define PAGE_TABLE_ASIGN  2
+    #define PAGE_TABLE_ASSIGN 2
     #define PAGE_TABLE_CLONE  3
 /**
- * @brief Asigns a page table to the process
+ * @brief Assigns a page table to the process
  *
- * This system call asigns the page table to the newly created process. After issuing the
+ * This system call assigns the page table to the newly created process. After issuing the
  * start_process() function, the new process is found in an uninit state and has no page table. This
- * function can be either used to create a new page table or asign the existing one (e.g. for the
+ * function can be either used to create a new page table or assign the existing one (e.g. for the
  * threads), in which case several process can share the same address space.
  *
- * Before execution, the process must not have a page table asigned. Flags can be used to define if
+ * Before execution, the process must not have a page table assigned. Flags can be used to define if
  * the new page table shall be created or inherited from *page_table* parameter.
- * @param pid PID of the target task, to which the page table must be asigned.
- * @param page_table ID of the page table if it is to be asigned. Given page table must not be
+ * @param pid PID of the target task, to which the page table must be assigned.
+ * @param page_table ID of the page table if it is to be assigned. Given page table must not be
  * virtual. PAGE_TABLE_SELF might be used as a shorthand for inheriting the page table from the
  * caller. If PAGE_TABLE_CREATE is used, this parameter is ignored.
  * @param flags Flags defining the behaviour of the system call. Can take one of the following
  * values: PAGE_TABLE_CREATE - create a new empty page table. In this case, the page_table parameter
- * is ignored. PAGE_TABLE_ASIGN - asigns the page table provided by the page_table argument. In this
+ * is ignored. PAGE_TABLE_ASSIGN - assigns the page table provided by the page_table argument. In this
  * case, all the process with the same page table object share the same address space with the same
  * protections. PAGE_TABLE_CLONE - clones the page table provided by the page_table argument. In
  * this case, the page table is copied and the new process has its own address space. The page table
  * can be modified without affecting the other processes.
+ * @param architecture Target architecture for the new page table. Allows starting 32 bit processes
+ * on 64 bit kernel. Use 0 to inherit the one of the caller.
  * @return page_table_req_ret_t returns the result of the execution and the ID of the page table
- * asigned to the process. If result != SUCCESS, page_table does not hold a meaningful value.
+ * assigned to the process. If result != SUCCESS, page_table does not hold a meaningful value.
  */
-page_table_req_ret_t asign_page_table(uint64_t pid, uint64_t page_table, uint64_t flags);
+page_table_req_ret_t assign_page_table(uint64_t pid, uint64_t page_table, unsigned flags, unsigned architecture);
 
 /**
  * @brief Initializes stack for the given task
@@ -291,14 +314,24 @@ page_table_req_ret_t asign_page_table(uint64_t pid, uint64_t page_table, uint64_
  * If NULL is passed as a stack pointer, the kernel will allocate 2GB stack for the task. This
  * currently is hardcoded and needs to be revised in the future.
  * @param tid ID of the task
- * @param stack_top The top of the stack. If NULL, the kernel will allocate 2GB stack for the task.
+ * @param stack_top The top of the stack. If 0, the kernel will allocate 2GB stack for the task.
  * @return syscall_r The result of the operation. If the result is SUCCESS, the pointer to the top
  * of the stack is stored in the *value* field.
- * @todo This functionality can be replicated in by the callee, both being more convenient,
+ * @todo This functionality can be replicated in by the caller, both being more convenient,
  * flexible, faster (not requiring trip to kernel) and more akin to the pmOS philosophy. This
  * syscall should be revised in the future.
  */
-syscall_r init_stack(uint64_t tid, void *stack_top);
+syscall_r init_stack(uint64_t tid, uint64_t stack_top);
+
+/**
+ * @brief Gets the size (in bytes) of the given memory object
+ * 
+ * @param mem_object_id ID of the memory object
+ * @param flags Optional flags (bitmask)
+ * @return syscall_r result of the operation. If the result is SUCCESS, the value is the size in bytes,
+ * otherwise, result contains the -errno error from kernel.
+ */
+syscall_r get_mem_object_size(mem_object_t mem_object_id, unsigned flags);
 
 #endif
 

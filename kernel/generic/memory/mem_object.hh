@@ -31,7 +31,6 @@
 
 #include <lib/list.hh>
 #include <lib/memory.hh>
-#include <lib/set.hh>
 #include <lib/splay_tree_map.hh>
 #include <lib/vector.hh>
 #include <memory/mem_protection.hh>
@@ -76,7 +75,7 @@ namespace paging
         /// Gets the id of the memory region
         id_type get_id() const noexcept;
 
-        Spinlock lock;
+        mutable Spinlock lock;
 
         /**
          * @brief Creates a new memory object
@@ -132,6 +131,8 @@ namespace paging
          * @see size_bytes()
          */
         u64 size_pages() const noexcept;
+
+        u64 atomic_size_bytes() const;
 
         /**
          * @brief Returns the size of the region in bytes
@@ -243,7 +244,7 @@ namespace paging
         id_type id = create_id();
 
         /**
-         * @brief Asigns a new Memory Object id
+         * @brief Assigns a new Memory Object id
          *
          * @return New id
          */
@@ -259,7 +260,7 @@ namespace paging
          *
          * This number can be used to get the page size by shifting 2 by this number. This allows
          * for supporting different architectures with different page sizes. This also indicates the
-         * allignment.
+         * alignment.
          */
         u8 page_size_log = 12;
 
@@ -307,7 +308,7 @@ namespace paging
          * used as a representation of UNIX processes.
          *
          */
-        klib::set<klib::weak_ptr<Page_Table>> pined_by;
+        pmos::containers::set<klib::weak_ptr<Page_Table>> pined_by;
 
         /**
          * @brief Pager for the region

@@ -3,6 +3,8 @@
 #include <lib/vector.hh>
 #include <sched/sched.hh>
 #include <types.hh>
+#include <optional>
+#include <utility>
 
 namespace kernel::x86::interrupts
 {
@@ -17,6 +19,8 @@ public:
     static ReturnStr<std::pair<sched::CPU_Info *, u32>>
         allocate_interrupt_single(u32 gsi, bool edge_triggered, bool active_low);
 
+    static void mask_interrupt(sched::CPU_Info *cpu, int vec);
+    
 private:
     struct IntMapping {
         sched::CPU_Info *mapped_to {};
@@ -50,6 +54,8 @@ private:
     };
 
     void push_global();
+
+    static std::optional<std::pair<IOAPIC *, int>> find_ioapic(sched::CPU_Info *cpu, u32 vector);
 };
 
 }; // namespace kernel::x86::interrupts

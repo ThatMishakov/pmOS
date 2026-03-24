@@ -35,7 +35,7 @@ extern u64 ticks_per_ms;
 
 inline bool timer_needs_initialization() { return ticks_per_ms == 0; }
 
-inline void set_timer_frequency(u64 frequency) { ticks_per_ms = frequency / 1000; }
+void set_timer_frequency(u64 frequency);
 
 void start_timer(u32 ms);
 

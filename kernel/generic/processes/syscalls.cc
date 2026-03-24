@@ -50,9 +50,10 @@
 #include <memory/mem_object.hh>
 #include <pmos/system.h>
 #include <sched/sched.hh>
+#include <pmos/memory.h>
 
 #if defined(__x86_64__) || defined(__i386__)
-    #include <sched/segments.hh>
+    #include <segments.hh>
 #endif
 
 using namespace kernel::log;
@@ -68,8 +69,82 @@ extern void deactivate_page_table();
 namespace kernel::proc::syscalls
 {
 
+std::array<const char *, 59> syscall_names = {
+    "SYSCALL EXIT",
+    "SYSCALL GET TASK ID",
+    "SYSCALL CREATE PROCESS",
+    "SYSCALL CREATE PROCESS",
+    "SYSCALL INIT STACK",
+    "SYSCALL SET PRIORITY",
+    "SYSCALL SET TASK NAME",
+    "SYSCALL GET LAPIC ID",
+    "SYSCALL CONFIGURE SYSTEM",
+
+    "SYSCALL GET MESSAGE INFO",
+    "SYSCALL GET FIRST MESSAGE",
+    "SYSCALL SEND MESSAGE RIGHT",
+    "SYSCALL SEND MESSAGE PORT",
+    "SYSCALL CREATE PORT",
+    "SYSCALL SET ATTRIBUTE",
+    "SYSCALL SET INTERRUPT",
+    "SYSCALL SET RIGHT",
+    "SYSCALL SET NAMESPACE",
+    "SYSCALL SET LOG PORT",
+
+    "SYSCALL GET PAGE TABLE",
+    "SYSCALL DELETE RECEIVE RIGHT",
+    "SYSCALL TRANSFER REGION",
+    "SYSCALL CREATE NORMAL REGION",
+    "SYSCALL GET REGISTERS",
+    "SYSCALL CREATE PHYS REGION",
+    "SYSCALL DELETE REGION",
+    "SYSCALL UNMAP RANGE",
+    "SYSCALL MEM PROTECT",
+    "SYSCALL SET REGISTERS",
+
+    "SYSCALL ASSIGN PAGE TABLE",
+    "SYSCALL CREATE MEM OBJECT",
+    "SYSCALL CREATE TASK GROUP",
+    "SYSCALL ADD TO TASK GROUP",
+    "SYSCALL REMOVE TASK FROM GROUP",
+    "SYSCALL CHECK IF TASK IN GROUP",
+
+    "SYSCALL SET NOTIFY MASK",
+    "SYSCALL LOAD EXECUTABLE",
+    "SYSCALL REQUEST TIMER",
+    "SYSCALL SET AFFINITY",
+    "SYSCALL COMPLETE INTERRUPT",
+    "SYSCALL YIELD",
+    "SYSCALL MAP MEM OBJECT",
+    "SYSCALL UNSET INTERRUPT",
+    "SYSCALL GET TIME",
+    "SYSCALL GET SYSTEM INFO",
+    "SYSCALL KILL TASK",
+    "SYSCALL PAUSE TASK",
+    "SYSCALL RESUME TASK",
+    "SYSCALL GET PAGE ADDRESS",
+    "SYSCALL RELEASE MEM OBJECT",
+    "SYSCALL MEM OBJECT GET PAGE ADDRESS",
+    "SYSCALL DELETE PORT",
+    "SYSCALL ALLOCATE INTERRUPT",
+    "SYSCALL SET RIGHT 0",
+    "SYSCALL DELETE SEND RIGHT",
+    "SYSCALL ACCEPT RIGHTS",
+    "SYSCALL DUP RIGHT",
+    "SYSCALL GET MEM OBJECT SIZE",
+    "SYSCALL TRANSFER RIGHT",
+};
+
+const char *syscall_name(unsigned id)
+{
+    const char *c = "UNKNOWN!";
+    if (syscall_names.size() > id)
+        c = syscall_names[id];
+    return c;
+}
+
 using syscall_function                         = void (*)();
-std::array<syscall_function, 57> syscall_table = {
+std::array<syscall_function, 59> syscall_table = {
     syscall_exit,
     syscall_get_task_id,
     syscall_create_process,
@@ -102,7 +177,7 @@ std::array<syscall_function, 57> syscall_table = {
     nullptr,
     syscall_set_segment,
 
-    syscall_asign_page_table,
+    syscall_assign_page_table,
     syscall_create_mem_object,
     syscall_create_task_group,
     syscall_add_to_task_group,
@@ -131,6 +206,8 @@ std::array<syscall_function, 57> syscall_table = {
     syscall_delete_send_right,
     syscall_accept_rights,
     syscall_dup_right,
+    syscall_get_mem_object_size,
+    syscall_transfer_right
 };
 
 extern "C" void syscall_handler()
@@ -153,8 +230,9 @@ extern "C" void syscall_handler()
     // sched::get_cpu_struct()->current_task->name.c_str()); t_print_bochs(" %h %h %h %h %h ", arg1,
     // arg2, arg3, arg4, arg5);
     if (task->attr.debug_syscalls) {
-        serial_logger.printf("Debug: syscall %h pid %h\n", call_n,
-                             sched::get_cpu_struct()->current_task->task_id);
+        auto current = sched::get_cpu_struct()->current_task;
+        serial_logger.printf("Debug: syscall %h (%i %s) pid %lx (%s)\n", call_n, call_n, syscall_name(call_n),
+                             current->task_id, current->name.c_str());
     }
 
     // TODO: This crashes if the syscall is not implemented
@@ -169,7 +247,7 @@ extern "C" void syscall_handler()
     syscall_table[call_n]();
 
     if ((syscall_error(task) < 0) && !task->regs.syscall_pending_restart()) {
-        serial_logger.printf("Debug: syscall %h (%i) pid %li (%s) ", call_n, call_n, task->task_id,
+        serial_logger.printf("Debug: syscall %i (%s) pid %li (%s) ", call_n, syscall_name(call_n), task->task_id,
                              task->name.c_str());
         int val = syscall_error(task);
         serial_logger.printf(" -> %i (%s)\n", val, "syscall failed");
@@ -253,7 +331,20 @@ void syscall_load_executable()
 
     u64 task_id   = syscall_arg64(task, 0);
     u64 object_id = syscall_arg64(task, 1);
-    ulong flags   = syscall_flags(task);
+    ulong args[1];
+    auto memory_region = syscall_args_checked(task, 2, 2, 1, args);
+    ulong flags        = syscall_flags(task);
+
+    if (!memory_region.success()) {
+        syscall_error(task) = memory_region.result;
+        return;
+    }
+    if (!memory_region.val) {
+        syscall_error(task) = -EINVAL;
+        return;
+    }
+
+    void *move_region = (void *)args[0];
 
     TaskDescriptor *t = get_task(task_id);
     if (!t) {
@@ -277,8 +368,125 @@ void syscall_load_executable()
         }
     }
 
-    auto b = t->load_elf(object, name);
+    // This is bad...
+    auto b = [&]() -> ReturnStr<bool> {
+        Auto_Lock_Scope scope_lock(t->sched_lock);
+
+        if (t->status != TaskStatus::TASK_UNINIT)
+            return Error(-EEXIST);
+
+        if (t->page_table)
+            return Error(-EEXIST);
+
+        auto r = t->load_elf_into_memory(object);
+        if (!r.success())
+            return r.propagate();
+
+        if (!r.val)
+            // ELF can't be loaded immediately
+            return false;
+
+        auto [program_entry, phdr_tag, table] = std::move(*r.val);
+
+        if (phdr_tag.phdr_addr == 0) {
+            log::serial_logger.printf(
+                "atomic_load_elf error -> phdr not mapped into the program's memory\n");
+            return Error(-ENOEXEC);
+        }
+
+        auto stack = t->init_stack(table);
+
+        if (!stack.success())
+            return stack.propagate();
+
+        auto [_, stack_desc] = stack.val;
+
+        t->regs.program_counter() = program_entry;
+
+        void *move_addr = nullptr;
+        size_t move_size = 0;
+
+        if (move_region) {
+            auto r = task->page_table->atomic_transfer_region(table, move_region, nullptr, 0x3, false);
+            if (!r.success())
+                return r.propagate();
+
+            move_addr = r.val.first;
+            move_size = r.val.second;
+        }
+
+        // Push stack descriptor structure
+        u64 size =
+            sizeof(load_tag_stack_descriptor) + sizeof(load_tag_elf_phdr) + sizeof(load_tag_close);
+        if (move_addr)
+            size += sizeof(load_tag_userspace_tags);
+
+        u64 current_offset = 0;
+
+        klib::vector<u64> load_stack;
+        if (!load_stack.resize(size / 8))
+            return Error(-ENOMEM);
+
+        load_tag_stack_descriptor *d = (load_tag_stack_descriptor *)&load_stack[current_offset / 8];
+        *d                           = stack_desc;
+
+        current_offset += sizeof(*d);
+
+        memcpy((char *)(&load_stack[0]) + current_offset, (char *)&phdr_tag, sizeof(phdr_tag));
+        current_offset += sizeof(phdr_tag);
+
+        if (move_addr) {
+            load_tag_userspace_tags *t = (load_tag_userspace_tags *)&load_stack[current_offset / 8];
+            *t                    = {
+                .header = LOAD_TAG_USERSPACE_TAGS_HEADER,
+                .tags_address = (u64)move_addr,
+                .memory_size = (u64)move_size,
+            };
+
+            current_offset += sizeof(*t);
+        }
+
+        load_tag_close *h = (load_tag_close *)&load_stack[current_offset / 8];
+        *h                = {
+                           .header = LOAD_TAG_CLOSE_HEADER,
+        };
+
+        const u64 tag_size_page = (size + 0xFFF) & ~0xFFFUL;
+
+        auto pos_p = table->atomic_create_normal_region(
+            0, tag_size_page,
+            paging::Page_Table::Protection::Readable | paging::Page_Table::Protection::Writeable,
+            false, false, name + "_load_tags", 0, true);
+        if (!pos_p.success())
+            return pos_p.propagate();
+
+        auto pos = pos_p.val->start_addr;
+
+        auto b = table->atomic_copy_to_user(pos, &(load_stack[0]), size);
+        if (!b.success())
+            return b.propagate();
+
+        if (!b.val)
+            panic("Trying to block on page, but it's not implemented");
+            //return false;
+
+        auto result = t->register_page_table(table);
+        if (result != 0)
+            return Error(result);
+
+        t->regs.arg1() = (ulong)pos;
+        t->regs.arg2() = size;
+
+        t->init();
+
+        return true;
+    }();
+
     if (!b.success()) {
+        if (move_region)
+            // Doesn't matter if this fails...
+            task->page_table->atomic_delete_region(move_region);
+
         syscall_error(task) = b.result;
         return;
     }
@@ -298,7 +506,7 @@ void syscall_init_stack()
     const task_ptr &task = get_current_task();
 
     u64 pid   = syscall_arg64(task, 0);
-    ulong esp = syscall_arg(task, 1, 1);
+    u64 esp = syscall_arg64(task, 1);
 
     // TODO: Check permissions
 
@@ -319,7 +527,7 @@ void syscall_init_stack()
     if (esp == 0) { // If ESP == 0 use default kernel's stack policy
         auto result = t->init_stack();
         if (result.success()) {
-            syscall_return(task) = result.val;
+            syscall_return(task) = std::get<0>(result.val);
         } else {
             syscall_error(task) = result.result;
         }
@@ -409,33 +617,33 @@ void syscall_get_first_message()
     u64 reply_right_id = 0;
     if (!(args & MSG_ARG_NOPOP)) {
         if (top_message->reply_right)
-        if ((!(args & MSG_ARG_REJECT_RIGHT)) && top_message->reply_right) {
-            auto right = top_message->reply_right;
-            auto group = current->get_rights_namespace();
-            if (!group) {
-                syscall_error(current) = -ESRCH;
-                return;
-            }
-
-            reply_right_id = group->atomic_new_right_id();
-
-            Auto_Lock_Scope l(right->lock);
-            if (right->alive) {
-                Auto_Lock_Scope gl(group->rights_lock);
-
-                if (!group->atomic_alive()) {
+            if ((!(args & MSG_ARG_REJECT_RIGHT)) && top_message->reply_right) {
+                auto right = top_message->reply_right;
+                auto group = current->get_rights_namespace();
+                if (!group) {
                     syscall_error(current) = -ESRCH;
                     return;
                 }
 
-                right->right_sender_id = reply_right_id;
-                group->rights.insert(right);
-                right->of_message = false;
-                right->parent_group = group;
+                reply_right_id = group->atomic_new_right_id();
 
-                top_message->reply_right = nullptr;
+                Auto_Lock_Scope l(right->lock);
+                if (right->alive) {
+                    Auto_Lock_Scope gl(group->rights_lock);
+
+                    if (!group->atomic_alive()) {
+                        syscall_error(current) = -ESRCH;
+                        return;
+                    }
+
+                    right->right_sender_id = reply_right_id;
+                    group->rights.insert(right);
+                    right->of_message   = false;
+                    right->parent_group = group;
+
+                    top_message->reply_right = nullptr;
+                }
             }
-        }
 
         Auto_Lock_Scope scope_lock(port->lock);
         port->pop_front();
@@ -542,7 +750,7 @@ void syscall_get_message_info()
         reply_right_send_many = msg->reply_right->type == RightType::SendMany;
 
     unsigned flags_ = (holds_reply_right ? (unsigned)MESSAGE_FLAG_REPLY_RIGHT : 0) |
-                 (reply_right_send_many ? (unsigned)MESSAGE_FLAG_REPLY_SEND_MANY : 0);
+                      (reply_right_send_many ? (unsigned)MESSAGE_FLAG_REPLY_SEND_MANY : 0);
 
     for (int i = 0; i < 4; ++i)
         if (auto r = msg->rights[i]; r && r->type == RightType::SendMany)
@@ -661,6 +869,12 @@ void syscall_set_attribute()
         syscall_success(task);
         deactivate_page_table();
         __asm__ volatile("wbinvd");
+        break;
+    case 8:
+        // Disable interrupts
+    case 9:
+        // Enable interrupts
+        // TODO...
         break;
 
     default:
@@ -1118,9 +1332,18 @@ void syscall_transfer_region()
     TaskDescriptor *current = get_current_task();
 
     u64 to_page_table = syscall_arg64(current, 0);
-    ulong region      = syscall_arg(current, 1, 1);
-    ulong dest        = syscall_arg(current, 2, 1);
+    u64 dest          = syscall_arg64(current, 1);
+    ulong region;
     ulong flags       = syscall_flags(current);
+
+    auto r = syscall_args_checked(current, 2, 2, 1, &region);
+    if (!r.success()) {
+        syscall_error(current) = r.result;
+        return;
+    }
+
+    if (!r.val)
+        return;
 
     auto pt = Arch_Page_Table::get_page_table(to_page_table);
     if (!pt) {
@@ -1137,10 +1360,10 @@ void syscall_transfer_region()
         return;
     }
 
-    syscall_return(current) = (ulong)result.val;
+    syscall_return(current) = (ulong)result.val.first;
 }
 
-void syscall_asign_page_table()
+void syscall_assign_page_table()
 {
     TaskDescriptor *current = get_current_task();
 
@@ -1156,7 +1379,7 @@ void syscall_asign_page_table()
 
     syscall_success(current);
 
-    switch (flags) {
+    switch (flags & 0xffff) {
     case 1: { // PAGE_TABLE_CREATE
         auto result = dest->create_new_page_table();
         if (result) {
@@ -1166,7 +1389,7 @@ void syscall_asign_page_table()
         }
         break;
     }
-    case 2: // PAGE_TABLE_ASIGN
+    case 2: // PAGE_TABLE_ASSIGN
     {
         klib::shared_ptr<Arch_Page_Table> t;
         if (page_table == 0 or page_table == current->page_table->id)
@@ -1244,11 +1467,11 @@ void syscall_create_mem_object()
 void syscall_map_mem_object()
 {
     const auto &current_task = get_current_task();
-    u64 page_table_id        = syscall_arg64(current_task, 0);
-    u64 object_id            = syscall_arg64(current_task, 1);
-    ulong access             = syscall_flags(current_task);
-    u64 offset;
-    auto result = syscall_arg64_checked(current_task, 2, offset);
+
+    map_mem_object_param_t params = {};
+
+    ulong ptr = syscall_arg(current_task, 0, 0);
+    auto result = copy_from_user((char *)&params, (const char *)ptr, sizeof(params));
     if (!result.success()) {
         syscall_error(current_task) = result.result;
         return;
@@ -1256,17 +1479,14 @@ void syscall_map_mem_object()
     if (!result.val)
         return;
 
-    ulong args[2];
-    result = syscall_args_checked(current_task, 3, 3, 2, args);
-    if (!result.success()) {
-        syscall_error(current_task) = result.result;
-        return;
-    }
-    if (!result.val)
-        return;
-
-    ulong addr_start = args[0];
-    ulong size_bytes = args[1];
+    u64 page_table_id = params.page_table_id;
+    u64 object_id =     params.object_id;
+    ulong access =      params.access_flags;
+    u64 object_offset_bytes = params.offset_object;
+    ulong size_bytes = params.size;
+    ulong addr_start = params.addr_start_uint;
+    ulong object_size = params.object_size;
+    u64 start_offset_bytes = params.offset_start;
 
     klib::shared_ptr<Page_Table> table = page_table_id == 0
                                              ? current_task->page_table
@@ -1277,12 +1497,7 @@ void syscall_map_mem_object()
         return;
     }
 
-    if ((size_bytes == 0) or ((size_bytes & 0xfff) != 0)) {
-        syscall_error(current_task) = -EINVAL;
-        return;
-    }
-
-    if (offset & 0xfff) {
+    if ((size_bytes == 0) or ((size_bytes & (PAGE_SIZE - 1)) != 0)) {
         syscall_error(current_task) = -EINVAL;
         return;
     }
@@ -1298,14 +1513,9 @@ void syscall_map_mem_object()
         return;
     }
 
-    if (object->size_bytes() < offset + size_bytes) {
-        syscall_error(current_task) = -EFBIG;
-        return;
-    }
-
     auto res = table->atomic_create_mem_object_region((void *)addr_start, size_bytes, access & 0x7,
                                                       access & 0x8, "object map", object,
-                                                      access & 0x20, 0, offset, size_bytes);
+                                                      access & 0x20, start_offset_bytes, object_offset_bytes, object_size);
 
     if (!res.success()) {
         syscall_error(current_task) = res.result;
@@ -1439,6 +1649,7 @@ void syscall_add_to_task_group()
         return;
     }
 
+    // TODO: Add permissions or whatever
     const auto group_ptr = TaskGroup::get_task_group(group);
     if (!group_ptr) {
         syscall_error(current_task) = -ENOENT;
@@ -1508,8 +1719,8 @@ void syscall_request_timer()
         return;
     }
 
-    u64 core_time_ms    = c->ticks_after_ns(timeout);
-    syscall_error(task) = c->atomic_timer_queue_push(core_time_ms, port_ptr, user_arg);
+    u64 time    = get_ns_since_bootup() + timeout;
+    syscall_error(task) = c->atomic_timer_queue_push(time, port_ptr, user_arg);
 }
 
 void syscall_set_affinity()
@@ -2011,12 +2222,11 @@ void send_message_right()
         right = group->atomic_get_right(right_id);
     } else {
         auto id = atomic_right0_id();
-        right = kernel_tasks->atomic_get_right(id);
+        right   = kernel_tasks->atomic_get_right(id);
     }
-                           
 
     if (!right) {
-        syscall_error(current) = { -ENOENT, 0 };
+        syscall_error(current) = {-ENOENT, 0};
         return;
     }
 
@@ -2052,7 +2262,7 @@ void send_message_right()
                     continue;
                 auto right = group->atomic_get_right(id);
                 if (!right) {
-                    syscall_error(current) = { -ESRCH, i + 1 };
+                    syscall_error(current) = {-ESRCH, i + 1};
                     return;
                 }
 
@@ -2068,9 +2278,12 @@ void send_message_right()
         Port::send_message_right(right, group, reply_port, rights, std::move(*buffer.val),
                                  current->task_id, new_type, always_delete);
     if (!send_result.success()) {
-        syscall_error(current) = { send_result.result, send_result.val.second };
+        syscall_error(current) = {send_result.result, send_result.val.second};
         return;
     }
+
+    // This was a fun thing to discover... (just silently wrecked userspace)
+    assert(!(reply_port and !send_result.val.second));
 
     syscall_return(current) = send_result.val.second;
 }
@@ -2105,7 +2318,7 @@ void syscall_accept_rights()
     auto current = get_current_task();
 
     u64 port_id = syscall_arg64(current, 0);
-    ulong ptr = syscall_arg(current, 1, 1);
+    ulong ptr   = syscall_arg(current, 1, 1);
 
     auto group = current->get_rights_namespace();
     if (!group) {
@@ -2173,6 +2386,63 @@ void syscall_dup_right()
     }
 
     syscall_return(current) = result.val.second;
+}
+
+void syscall_transfer_right()
+{
+    auto current = get_current_task();
+
+    u64 to_group = syscall_arg64(current, 0);
+    u64 right_id = syscall_arg64(current, 1);
+    // Also maybe flags, when the groups eventually get handles to
+    // them, so that the handle can be used instead of the group...
+
+    auto group = current->get_rights_namespace();
+    if (!group) {
+        syscall_error(current) = -ESRCH;
+        return;
+    }
+
+    // TODO: Add permissions or whatever
+    const auto group_ptr = TaskGroup::get_task_group(to_group);
+    if (!group_ptr) {
+        syscall_error(current) = -ENOENT;
+        return;
+    }
+
+    auto right = group->atomic_get_right(right_id);
+    if (!right) {
+        syscall_error(current) = -ENOENT;
+        return;
+    }
+
+    // This has a potentiall for a race condition, where under the right circumstances, the right might
+    // be transfered to a different group, and right back, after which it will be moved by using its old
+    // id, and none of the syscalls will fail. But this implies a dumb userspace, and perhaps its their mistake?
+    // (need to think about this...)
+    auto result = right->atomic_transfer_to_group(group, group_ptr);
+    if (!result.success()) {
+        syscall_error(current) = result.result;
+        return;
+    }
+
+    syscall_return(current) = result.val;
+}
+
+void syscall_get_mem_object_size()
+{
+    auto current = get_current_task();
+
+    u64 object_id = syscall_arg64(current, 0);
+    auto flags = syscall_flags(current);
+
+    const auto object = Mem_Object::get_object(object_id);
+    if (!object) {
+        syscall_error(current) = -ENOENT;
+        return;
+    }
+
+    syscall_return(current) = object->atomic_size_bytes();
 }
 
 } // namespace kernel::proc::syscalls

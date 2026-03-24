@@ -42,8 +42,8 @@ void push_arg(Args_List_Header *header, const char *param)
         while (p->next != 0) {
             p = (args_list_node *)((uint64_t)p + (uint64_t)p->next);
         }
-        uint64_t size_alligned = (p->size & ~0b111) + ((p->size & 0b111) ? 0b1000 : 0);
-        p->next                = (args_list_node *)(sizeof(args_list_node) + size_alligned);
+        uint64_t size_aligned = (p->size & ~0b111) + ((p->size & 0b111) ? 0b1000 : 0);
+        p->next                = (args_list_node *)(sizeof(args_list_node) + size_aligned);
         p                      = (args_list_node *)((uint64_t)p + (uint64_t)p->next);
     }
     p->size = strlen(param);

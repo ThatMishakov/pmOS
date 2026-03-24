@@ -22,8 +22,10 @@
 #include <unistd.h>
 #include <vector>
 #include <pmos/helpers.hh>
+#include <pmos/pmbus_helper.hh>
+#include <pmos/async/coroutines.hh>
 
-pmos::Right devicesd_right = pmos::get_right_by_name("/pmos/devicesd").value();
+pmos::Right device_right;
 
 pmos_port_t _create_port()
 {
@@ -36,90 +38,8 @@ pmos_port_t _create_port()
 }
 
 pmos::Port cmd_port = pmos::Port::create().value();
-pmos_port_t ahci_port;
-
-struct PCIDescriptor {
-    int group;
-    int bus;
-    int device;
-    int function;
-};
-
-std::vector<PCIDescriptor> get_ahci_controllers()
-{
-    auto struct_size = sizeof(IPC_Request_PCI_Devices) + sizeof(IPC_PCIDevice) * 2;
-    auto request     = (IPC_Request_PCI_Devices *)alloca(struct_size);
-
-    *request = {
-        .type       = IPC_Request_PCI_Devices_NUM,
-        .flags      = 0,
-        .reply_port = cmd_port.get(),
-    };
-    request->devices[0] = {
-        .vendor_id  = 0xffff,
-        .device_id  = 0xffff,
-        .class_code = 0x01,
-        .subclass   = 0x06,
-        .prog_if    = 0x01,
-        .reserved   = 0,
-    };
-    request->devices[1] = {
-        .vendor_id  = 0xffff,
-        .device_id  = 0xffff,
-        .class_code = 0x01,
-        .subclass   = 0x04,
-        .prog_if    = 0x00,
-        .reserved   = 0,
-    };
-
-    auto r = pmos::send_message_right_one(devicesd_right, std::span<std::byte>{reinterpret_cast<std::byte *>(request), struct_size}, {});
-    if (!r) {
-        printf("Failed to request PCI devices\n");
-        return {};
-    }
-
-    Message_Descriptor desc;
-    uint8_t *message;
-    auto result = get_message(&desc, &message, cmd_port.get(), nullptr, nullptr);
-    if (result != 0) {
-        printf("Failed to get message\n");
-        return {};
-    }
-
-    auto reply = (IPC_Request_PCI_Devices_Reply *)message;
-    if (reply->type != IPC_Request_PCI_Devices_NUM) {
-        printf("Invalid reply type\n");
-        free(message);
-        return {};
-    }
-
-    if (reply->result_num_of_devices < 0) {
-        printf("Failed to get PCI devices: %i (%s)\n", (int)reply->result_num_of_devices,
-               strerror(-reply->result_num_of_devices));
-        free(message);
-        return {};
-    }
-
-    try {
-        std::vector<PCIDescriptor> controllers;
-        for (int i = 0; i < reply->result_num_of_devices; ++i) {
-            auto &device = reply->devices[i];
-            controllers.push_back({
-                .group    = device.group,
-                .bus      = device.bus,
-                .device   = device.device,
-                .function = device.function,
-            });
-        }
-        return controllers;
-    } catch (...) {
-        free(message);
-        throw;
-    }
-
-    free(message);
-    return {};
-}
+auto dispatcher = pmos::PortDispatcher(cmd_port);
+auto pmbus_helper = pmos::PMBUSHelper(dispatcher);
 
 std::unique_ptr<PCIDevice> ahci_controller = nullptr;
 volatile uint32_t *ahci_virt_base          = nullptr;
@@ -131,7 +51,7 @@ static constexpr uint32_t AHCI_PORT_SCTL_DET_MASK = 0xf;
 
 static constexpr uint32_t AHCI_MAX_PORTS = 32;
 
-void reset_controller()
+pmos::async::task<void> reset_controller()
 {
     printf("Resetting AHCI controller\n");
 
@@ -154,6 +74,8 @@ void reset_controller()
     }
 
     printf("AHCI controller reset\n");
+
+    co_return;
 }
 
 int num_slots         = 0;
@@ -316,7 +238,7 @@ std::vector<AHCIPort> ports;
 AHCIPort &find_port(int i)
 {
     auto it = std::lower_bound(ports.begin(), ports.end(), i,
-                               [](auto port, auto i) { return port.index < i; });
+                               [](const auto &port, auto i) { return port.index < i; });
 
     if (it == ports.end() || it->index != i) {
         throw std::runtime_error("Port not found");
@@ -537,7 +459,7 @@ void TimerWaiter::wait(int time_ms)
 
     if (timer_tree.begin() == this) {
         next_timer_time = timer_time;
-        pmos_request_timer(ahci_port, time_ms * 1'000'000, 0);
+        pmos_request_timer(cmd_port.get(), time_ms * 1'000'000, 0);
     } else {
         TimerTree::RBTreeIterator it;
         while (!timer_tree.empty() and ((it = timer_tree.begin())->timer_time < time.value)) {
@@ -559,7 +481,7 @@ void react_timer()
 
     if (it != timer_tree.end()) {
         next_timer_time = it->timer_time;
-        int t           = pmos_request_timer(ahci_port, next_timer_time - current_time.value, 0);
+        int t           = pmos_request_timer(cmd_port.get(), next_timer_time - current_time.value, 0);
         if (t != 0) {
         }
     }
@@ -577,19 +499,16 @@ void react_interrupt()
     }
 }
 
-void ahci_controller_main()
+pmos::async::detached_task ahci_controller_main()
 {
     while (1) {
-        Message_Descriptor desc;
-        uint8_t *message;
-        auto result = get_message(&desc, &message, ahci_port, nullptr, nullptr);
-        if (result != 0) {
-            printf("Failed to get message\n");
-            return;
+        auto msg = co_await dispatcher.get_message_default();
+        if (!msg) {
+            fprintf(stderr, "ahcid: Failed to get message: %i\n", msg.error());
+            exit(1);
         }
 
-        auto request = (IPC_Generic_Msg *)message;
-        std::unique_ptr<IPC_Generic_Msg> request_ptr(request);
+        auto request = (IPC_Generic_Msg *)msg->data.data();
 
         switch (request->type) {
         case IPC_Timer_Reply_NUM: {
@@ -602,37 +521,6 @@ void ahci_controller_main()
             react_interrupt();
             complete_interrupt(kmsg->intno);
         } break;
-        case IPC_Kernel_Named_Port_Notification_NUM: {
-            auto kmsg = (IPC_Kernel_Named_Port_Notification *)request;
-            if (desc.sender != 0) {
-                printf("Named port notification not from kernel: %" PRIx64 "\n", desc.sender);
-                break;
-            }
-
-            auto len  = desc.size - offsetof(IPC_Kernel_Named_Port_Notification, port_name);
-            auto name = std::string_view(kmsg->port_name, len);
-            if (name == pmbus_port_name) {
-                pmbus_port_ready(kmsg->port_num);
-            } else {
-                printf("Unknown named port notification: %.*s\n", (int)len, kmsg->port_name);
-            }
-        } break;
-        case IPC_BUS_Publish_Object_Reply_NUM: {
-            auto msg = (IPC_BUS_Publish_Object_Reply *)request;
-            // TODO: check the sender
-
-            handle_publish_object_reply(msg);
-        } break;
-        case IPC_Disk_Open_NUM: {
-            auto msg = (IPC_Disk_Open *)request;
-
-            handle_disk_open(desc, msg);
-        } break;
-        case IPC_Disk_Read_NUM: {
-            auto msg = (IPC_Disk_Read *)request;
-
-            handle_disk_read(desc, *msg);
-        } break;
         default:
             printf("AHCId unknown message type: %i\n", request->type);
             break;
@@ -642,10 +530,10 @@ void ahci_controller_main()
 
 std::string pci_string;
 
-void ahci_handle(PCIDescriptor d)
+pmos::async::detached_task ahci_handle()
 {
-    pci_string = "pci_" + std::to_string(d.group) + "_" + std::to_string(d.bus) + "_" + std::to_string(d.device) + "_" + std::to_string(d.function);
-    ahci_controller = std::make_unique<PCIDevice>(d.group, d.bus, d.device, d.function);
+    // pci_string = "pci_" + std::to_string(d.group) + "_" + std::to_string(d.bus) + "_" + std::to_string(d.device) + "_" + std::to_string(d.function);
+    ahci_controller = co_await get_pci_device();
 
     printf("AHCI controller created\n");
 
@@ -671,7 +559,7 @@ void ahci_handle(PCIDescriptor d)
     auto mem_req = create_phys_map_region(0, nullptr, 8192, PROT_READ | PROT_WRITE, bar5);
     if (mem_req.result != SUCCESS) {
         printf("Failed to map AHCI controller's memory\n");
-        return;
+        exit(1);
     }
     ahci_virt_base = reinterpret_cast<volatile uint32_t *>(mem_req.virt_addr);
 
@@ -686,7 +574,7 @@ void ahci_handle(PCIDescriptor d)
     bool s64a = !!(cap & (1 << 31));
     if (!s64a) {
         printf("AHCI controller does not support 64-bit addressing\n");
-        return;
+        exit(1);
     }
 
     uint32_t cap2 = ahci_virt_base[9];
@@ -731,7 +619,7 @@ void ahci_handle(PCIDescriptor d)
     }
 
     // Reset the controller
-    reset_controller();
+    co_await reset_controller();
 
     // Enable ACPI again
     ghc = ahci_virt_base[1];
@@ -764,7 +652,7 @@ void ahci_handle(PCIDescriptor d)
     }
 
     // Attach PCI interrupt
-    int r = ahci_controller->register_interrupt(ahci_int_vec, 0, ahci_port);
+    int r = ahci_controller->register_interrupt(ahci_int_vec, 0, cmd_port.get());
     if (r < 0) {
         printf("Failed to register interrupt: %i (%s)\n", -r, strerror(-r));
     } else {
@@ -833,29 +721,58 @@ void ahci_handle(PCIDescriptor d)
     ahci_controller_main();
 }
 
-int main()
+void usage(char *name)
 {
-    printf("Hello from AHCId! My PID: %" PRIi64 "\n", getpid());
+    printf("ahcid Usage: %s --right-id <ID of the right to the i8042 controller>\n", name);
+    exit(1);
+}
 
-    auto controllers = get_ahci_controllers();
-    if (controllers.empty()) {
-        printf("No AHCI controllers found\n");
-        return 0;
-    }
+void parse_args(int argc, char **argv)
+{
+    if (argc < 1)
+        printf("ahcid: empty argc!\n");
+    char *name = argv[0];
 
-    for (const auto &controller: controllers) {
-        printf("Found AHCI controller: group %i bus %i device %i function %i\n", controller.group,
-               controller.bus, controller.device, controller.function);
+    bool have_right = false;
 
-        auto r = fork();
-        if (r == 0) {
-            cmd_port.release();
-            cmd_port  = pmos::Port::create().value();
-            ahci_port = _create_port();
-            ahci_handle(controller);
-            return 0;
-        } else if (r < 0) {
-            printf("Failed to fork\n");
+    for (int i = 1; i < argc; ++i) {
+        char *r = argv[i];
+
+        if (!strcmp(r, "--right-id")) {
+            if (have_right) {
+                printf("ahcid: Repeated --right-id\n");
+                usage(name);
+            }
+
+            ++i;
+            if (i >= argc) {
+                printf("ahcid missing right ID\n");
+                usage(name);
+            }
+            pmos_right_t right_to_device = strtoull(argv[i], NULL, 0);
+            have_right = true;
+            device_right = pmos::Right{right_to_device, pmos::RightType::SendMany};
+        } else {
+            printf("Unrecognized argument %s\n", argv[i]);
+            usage(name);
         }
     }
+
+    if (!have_right) {
+        printf("ahcid: no right_id!\n");
+        usage(name);
+    }
+}
+
+int main(int argc, char **argv)
+{
+    printf("Hello from AHCId! My PID: %" PRIi64 "\n", getpid());
+    parse_args(argc, argv);
+
+    ahci_handle();
+    ahci_controller_main();
+
+    dispatcher.dispatch();
+
+    printf("!!! ahcid: Exiting... !!!\n");
 }

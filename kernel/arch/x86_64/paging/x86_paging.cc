@@ -127,6 +127,12 @@ static kresult_t map(u64 physical_addr, void *virtual_addr,
     return 0;
 }
 
+kresult_t kernel::paging::map_page(ptable_top_ptr_t page_table, u64 phys_addr, void *virt_addr,
+                   kernel::paging::Page_Table_Arguments arg)
+{
+    return map(phys_addr, virt_addr, arg, page_table);
+}
+
 kresult_t kernel::paging::map_pages(u64 cr3, u64 phys_addr, void *virt_addr, size_t size_bytes,
                                     kernel::paging::Page_Table_Arguments args)
 {
@@ -316,7 +322,7 @@ void x86_Page_Table::invalidate_tlb(void *page, size_t size)
 {
     if (size / 4096 < 64)
         for (u64 i = 0; i < size; i += 4096)
-            invlpg((u64)page + i);
+            invlpg((void *)((char *)page + i));
 
     else
         setCR3(get_cr3());
@@ -424,7 +430,7 @@ klib::shared_ptr<x86_4level_Page_Table> x86_4level_Page_Table::create_empty(int 
 
     // Clear it as memory contains rubbish and it will cause weird paging
     // bugs on real machines
-    page_clear((void *)new_page_m.ptr);
+    memset(new_page_m.ptr, 0, PAGE_SIZE);
 
     // Copy the last entries into the new page table as they are shared
     // across all processes
@@ -439,6 +445,30 @@ klib::shared_ptr<x86_4level_Page_Table> x86_4level_Page_Table::create_empty(int 
     guard.dismiss();
 
     return new_table;
+}
+
+ReturnStr<u64> kernel::x86::paging::create_empty_cr3()
+{
+    auto p = pmm::get_memory_for_kernel(1);
+    if (pmm::alloc_failure(p))
+        return Error(-ENOMEM);
+
+
+    // Prepare the page
+    kernel::paging::Temp_Mapper_Obj<x86_64::paging::x86_PAE_Entry> new_page_m(
+        kernel::paging::request_temp_mapper());
+    kernel::paging::Temp_Mapper_Obj<x86_64::paging::x86_PAE_Entry> current_page_m(
+        kernel::paging::request_temp_mapper());
+
+    new_page_m.map(p);
+    current_page_m.map(idle_cr3);
+
+    memcpy(new_page_m.ptr + 256, current_page_m.ptr + 256,
+           256 * sizeof(x86_64::paging::x86_PAE_Entry));
+
+    memset(new_page_m.ptr, 0, 256 * sizeof(x86_64::paging::x86_PAE_Entry));
+
+    return Success(p);
 }
 
 x86_4level_Page_Table::~x86_4level_Page_Table()
@@ -860,13 +890,13 @@ void x86_4level_Page_Table::apply() noexcept { setCR3((u64)pml4_phys); }
 
 void kernel::paging::apply_page_table(ptable_top_ptr_t page_table) { setCR3((u64)page_table); }
 
-void x86_Page_Table::invalidate_tlb(void *addr) { invlpg((u64)addr); }
-void kernel::paging::invalidate_tlb_kernel(void *addr) { invlpg((u64)addr); }
+void x86_Page_Table::invalidate_tlb(void *addr) { invlpg(addr); }
+void kernel::paging::invalidate_tlb_kernel(void *addr) { invlpg(addr); }
 
 void kernel::paging::invalidate_tlb_kernel(void *addr, size_t size)
 {
     for (u64 i = 0; i < size; i += 4096)
-        invlpg((u64)addr + i);
+        invlpg((void *)((char *)addr + i));
 }
 
 ReturnStr<bool> x86_4level_Page_Table::atomic_copy_to_user(void *to, const void *from, u64 size)

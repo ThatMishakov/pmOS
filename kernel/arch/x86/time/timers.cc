@@ -30,10 +30,20 @@
 #include <interrupts/apic.hh>
 #include <sched/sched.hh>
 #include <x86_asm.hh>
+#include "timers.hh"
+#include "acpi_pmtmr.hh"
+#include "hpet.hh"
+#include "tsc.hh"
+#include "kvmclock.hh"
 
 using namespace kernel::sched;
 using namespace kernel;
 using namespace kernel::x86::interrupts::lapic;
+using namespace kernel::x86::time;
+using namespace kernel::x86;
+
+TimeSource *kernel::x86::time::kernel_timesource = nullptr;
+CalibrationSource *kernel::x86::time::kernel_calibration_source = nullptr;
 
 u64 kernel::sched::ticks_since_bootup = 0;
 void start_timer_ticks(u32 ticks)
@@ -48,11 +58,11 @@ void start_timer_ticks(u32 ticks)
         ticks_since_bootup = c->system_timer_val;
 }
 
-void start_timer(u32 ms)
-{
-    u64 ticks = apic_freq * (ms * 1'000'000);
-    start_timer_ticks(ticks);
-}
+// void start_timer(u32 ms)
+// {
+//     u64 ticks = apic_freq * (ms * 1'000'000);
+//     start_timer_ticks(ticks);
+// }
 
 u64 get_current_time_ticks()
 {
@@ -62,17 +72,78 @@ u64 get_current_time_ticks()
 
 extern bool have_invariant_tsc;
 extern u64 boot_tsc;
+// 
+// u64 kernel::sched::get_ns_since_bootup() { 
+//     if (have_invariant_tsc) {
+//         u64 tsc = rdtsc() - boot_tsc;
+//         return tsc_inverted_freq * tsc;
+//     }
+//     return apic_inverted_freq * ticks_since_bootup;
+// }
 
-u64 kernel::sched::get_ns_since_bootup() { 
-    if (have_invariant_tsc) {
-        u64 tsc = rdtsc() - boot_tsc;
-        return tsc_inverted_freq * tsc;
-    }
-    return apic_inverted_freq * ticks_since_bootup;
+u64 kernel::sched::get_ns_since_bootup()
+{
+    if (!kernel_timesource)
+        panic("No kernel timesource!!\n");
+
+    return kernel_timesource->get_absolute_time();
 }
 
 u64 CPU_Info::ticks_after_ms(u64 ms) { return ticks_after_ns(ms * 1'000'000); }
+
+void kernel::sched::maybe_rearm_timer(u64 deadline_nanoseconds)
+{
+    auto c = get_cpu_struct();
+    if (c->local_timer_next_deadline != 0 and (c->local_timer_next_deadline < deadline_nanoseconds))
+        return;
+
+    c->local_timer_next_deadline = deadline_nanoseconds;
+    if (tsc::use_tsc_deadline()) {
+        arm_tsc_deadline(tsc::tsc_freq * deadline_nanoseconds);
+    } else {
+        auto current_time = get_ns_since_bootup();
+
+        if (current_time > deadline_nanoseconds) {
+            apic_one_shot_ticks(1);
+        } else {
+            auto diff = deadline_nanoseconds - current_time;
+            auto time = apic_freq * diff + 1;
+            if (time > UINT32_MAX) {
+                time = UINT32_MAX;
+            }
+
+            apic_one_shot_ticks((u32)time);
+        }
+    }
+}
+
+void time::init_timers()
+{
+    // The timers are initialized, from worst to best, and set the kernel timeosource and cal
+    // source as they do...
+    acpi_pmtmr::init_acpi_pmtmr();
+    hpet::init_hpet();
+    tsc::init_tsc();
+    //kvmclock::init_kvmclock();
+
+    if (!kernel_timesource)
+        panic("No kernel timesource!\n");
+
+    log::serial_logger.printf("Using %s as the kernel time source...\n", kernel_timesource->name());
+    log::global_logger.printf("Using %s as the kernel time source...\n", kernel_timesource->name());
+}
+
+void time::init_after_lapic()
+{
+    assert(kernel_timesource);
+    kernel_timesource->init_as_main();
+}
+
 u64 CPU_Info::ticks_after_ns(u64 ns)
 {
     return get_current_time_ticks() + (apic_freq * ns);
 }
+
+void TimeSource::init_as_main() {}
+void CalibrationSource::prepare_for_calibration() {}
+void CalibrationSource::end_calibration() {}

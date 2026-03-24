@@ -155,7 +155,7 @@ int main()
         switch (ipc_msg->type) {
         case IPC_Write_Plain_NUM: {
             IPC_Write_Plain *str = reinterpret_cast<IPC_Write_Plain *>(ipc_msg);
-            log({str->data, msg.size - sizeof(*str)});
+            log({str->data, static_cast<size_t>(msg.size - sizeof(*str))});
             break;
         }
         case IPC_Register_Log_Output_NUM: {

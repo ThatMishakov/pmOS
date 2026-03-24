@@ -48,7 +48,7 @@ struct PACKED RFLAGS_Bits {
     u8 reserved3 : 1;
     u8 resume : 1;
     u8 virtual_m : 1;
-    u8 allignment : 1;
+    u8 alignment : 1;
     u8 virtual_i_f : 1;
     u8 virtual_i_p : 1;
     u8 id : 1;

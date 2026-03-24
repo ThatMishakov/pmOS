@@ -104,4 +104,31 @@ typedef struct {
     } d_un;
 } Elf64_Dyn;
 
+typedef struct {
+    int a_type;
+    union {
+        long a_val;
+        void *a_ptr;
+        void (*a_func)();
+    };
+} auxv_t;
+
+// ELF auxvec stuff
+#define	AT_NULL   0 // Last member of vector
+#define	AT_IGNORE 1 // Ignore this member
+#define AT_PHDR   3 // a_ptr, PHDR address
+#define AT_PHENT  4 // a_val, PHDR size of entry
+#define AT_PHNUM  5 // a_val, PHDR number of entries
+
+#define	AT_USRSTACKBASE	35 // Base (top) of the userspace stack
+#define	AT_USRSTACKLIM  36 // Maximum size of the user stack
+
+#define AT_MEM_OBJ_ID 40 // a_ptr, Pointer to uint64_t with memory object id of the process
+#define AT_TASK_GROUP_ID 41 // a_ptr, Pointer to uint64_t with group id of the process
+
+#define AT_COUNT    2 // Number of possible entries
+
+
+
+
 #endif // _ELF_H

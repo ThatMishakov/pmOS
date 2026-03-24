@@ -46,7 +46,13 @@
 #include <uacpi/resources.h>
 #include <uacpi/tables.h>
 #include <uacpi/utilities.h>
+#include <pmos/pmbus_helper.h>
+#include <pmos/helpers.h>
 
+extern pmos_port_t main_port;
+
+extern struct pmos_msgloop_data main_msgloop_data;
+extern struct pmbus_helper *pmbus_helper;
 PCIDeviceVector pci_devices = VECTOR_INIT;
 
 void check_bus(struct PCIHostBridge *g, uint8_t bus, struct PCIDevice *parent_bridge,
@@ -101,6 +107,8 @@ void check_function(struct PCIHostBridge *g, uint8_t bus, uint8_t device, uint8_
         .device_id         = pci_device_id(&p),
         .class_code        = pci_class_code(&p),
         .subclass          = pci_subclass(&p),
+        .prog_if           = pci_prog_if(&p),
+        .revision_id       = pci_revision_id(&p),
         .associated_bridge = parent_bridge,
     };
 
@@ -567,6 +575,140 @@ uacpi_iteration_decision pci_check_acpi_root(void *, uacpi_namespace_node *node,
     return UACPI_ITERATION_DECISION_CONTINUE;
 }
 
+void pci_register_callback(int status, uint64_t sequence_number, void *ctx, struct pmbus_helper *)
+{
+    struct PCIDevice *d = ctx;
+    if (status < 0) {
+        printf("Failed to register PCI device %x:%x:%x.%x, error: %i\n", d->group, d->bus, d->device, d->function, status);
+    } else {
+        printf("Published PCI device %x:%x:%x.%x, sequence: %" PRIu64 "\n", d->group, d->bus, d->device, d->function, sequence_number);
+    }
+}
+
+static int pci_callback(Message_Descriptor *desc, void *msg_buff, pmos_right_t *reply_right,
+                     pmos_right_t *other_rights, void *, struct pmos_msgloop_data *);
+
+void publish_pci_device(struct PCIDevice * device)
+{
+    right_request_t req = create_right(main_port, &device->receive_right, 0);
+    if (req.result) {
+        fprintf(stderr, "Failed to create a right for a PCI device, error: %i (%s)\n", (int)req.result, strerror(-(int)req.result));
+        return;
+    }
+    device->send_right = req.right;
+
+    if (!pmbus_helper) {
+        fprintf(stderr, "Failed to publish a PCI device, no pmbus helper...\n");
+        return;
+    }
+
+    pmos_msgloop_node_set(&device->msgloop_node, device->receive_right, pci_callback, device);
+    pmos_msgloop_insert(&main_msgloop_data, &device->msgloop_node);
+
+    pmos_bus_object_t *bus_object = NULL;
+
+    bus_object = pmos_bus_object_create();
+    if (!bus_object)    {
+        fprintf(stderr, "[devicesd] Error: Couldn't allocate memory for pmbus object\n");
+        goto error;
+    }
+
+    char buff[128];
+    snprintf(buff, sizeof(buff), "pci_%x_%x_%x_%x", device->group, device->bus, device->device, device->function);
+
+    if (!pmos_bus_object_set_name(bus_object, buff)) {
+        fprintf(stderr, "Failed to set object name\n");
+        goto error;
+    }
+
+    if (!pmos_bus_object_set_property_string(bus_object, "device_type", "pci")) {
+        fprintf(stderr, "Failed to set device_type for PCI device\n");
+        goto error;
+    }
+
+    if (!pmos_bus_object_set_property_integer(bus_object, "pci_group", device->group)) {
+        fprintf(stderr, "Failed to set pci_group for PCI device\n");
+        goto error;
+    }
+
+    if (!pmos_bus_object_set_property_integer(bus_object, "pci_bus", device->bus)) {
+        fprintf(stderr, "Failed to set pci_bus for PCI device\n");
+        goto error;
+    }
+
+    if (!pmos_bus_object_set_property_integer(bus_object, "pci_device", device->function)) {
+        fprintf(stderr, "Failed to set pci_device for PCI device\n");
+        goto error;
+    }
+
+    if (!pmos_bus_object_set_property_integer(bus_object, "pci_function", device->function)) {
+        fprintf(stderr, "Failed to set pci_function for PCI device\n");
+        goto error;
+    }
+
+
+    if (!pmos_bus_object_set_property_integer(bus_object, "pci_vendor_id", device->vendor_id)) {
+        fprintf(stderr, "Failed to set pci_vendor_id for PCI device\n");
+        goto error;
+    }
+
+    if (!pmos_bus_object_set_property_integer(bus_object, "pci_device_id", device->device_id)) {
+        fprintf(stderr, "Failed to set pci_device_id for PCI device\n");
+        goto error;
+    }
+
+    if (!pmos_bus_object_set_property_integer(bus_object, "pci_class", device->class_code)) {
+        fprintf(stderr, "Failed to set pci_class for PCI device\n");
+        goto error;
+    }
+
+    if (!pmos_bus_object_set_property_integer(bus_object, "pci_subclass", device->subclass)) {
+        fprintf(stderr, "Failed to set pci_subclass for PCI device\n");
+        goto error;
+    }
+
+    if (device->prog_if != 0xff && !pmos_bus_object_set_property_integer(bus_object, "pci_interface", device->prog_if)) {
+        fprintf(stderr, "Failed to set pci_prog_if for PCI device\n");
+        goto error;
+    }
+
+    if (!pmos_bus_object_set_property_integer(bus_object, "pci_revision", device->revision_id)) {
+        fprintf(stderr, "Failed to set pci_revision for PCI device\n");
+        goto error;
+    }
+
+    if (device->pcie &&
+        !pmos_bus_object_set_property_integer(bus_object, "pci_device_is_pcie", 1)
+    ){
+        fprintf(stderr, "Failed to set pci_device_is_pcie for PCI device\n");
+        goto error;
+    }
+
+    req = dup_right(req.right);
+    if (req.result) {
+        fprintf(stderr, "Failed to dup right: %i (%s)\n", (int)req.result, strerror(-(int)req.result));
+        goto error;
+    }
+
+    int result = pmbus_helper_publish(pmbus_helper, bus_object, req.right, pci_register_callback, device);
+    bus_object = NULL;
+    if (result < 0) {
+        fprintf(stderr, "Failed to publish pmbus object: %i (%s)\n", result, strerror(-result));
+        goto error;
+    }
+
+error:
+    pmos_bus_object_free(bus_object);
+}
+
+void publish_pci_devices()
+{
+    for (size_t i = 0; i < pci_devices.size; ++i) {
+        auto device = pci_devices.data[i];
+        publish_pci_device(device);
+    }
+}
+
 bool pci_fully_working = false;
 void acpi_pci_init()
 {
@@ -580,6 +722,8 @@ void acpi_pci_init()
                           pci_check_acpi_root, NULL);
 
     pci_fully_working = true;
+
+    publish_pci_devices();
 }
 
 struct PCIHostBridge *pci_host_bridge_find(unsigned group_number)
@@ -605,7 +749,7 @@ int pcicdevice_compare(const void *aa, const void *bb)
     return (*a)->function - (*b)->function;
 }
 
-void request_pci_device(Message_Descriptor *desc, IPC_Request_PCI_Device *d,
+void request_pci_device(Message_Descriptor *desc, IPC_Request_PCI_Device *d, struct PCIDevice *device,
                         pmos_right_t reply_right)
 {
     int error = 0;
@@ -616,14 +760,14 @@ void request_pci_device(Message_Descriptor *desc, IPC_Request_PCI_Device *d,
         goto err;
     }
 
-    struct PCIHostBridge *g = pci_host_bridge_find(d->group);
+    struct PCIHostBridge *g = pci_host_bridge_find(device->group);
     if (!g) {
         error = -ENOENT;
         goto err;
     }
 
     // Calculate the offset of the device in the configuration space
-    const unsigned long offset = (d->bus << 20) | (d->device << 15) | (d->function << 12);
+    const unsigned long offset = (device->bus << 20) | (device->device << 15) | (device->function << 12);
 
     IPC_Request_PCI_Device_Reply reply_success = {
         .type         = IPC_Request_PCI_Device_Reply_NUM,
@@ -632,7 +776,7 @@ void request_pci_device(Message_Descriptor *desc, IPC_Request_PCI_Device *d,
         .base_address = g->ecam.base_addr + offset,
     };
 
-    auto result = send_message_right(reply_right, 0, &reply, sizeof(reply), NULL, 0).result;
+    auto result = send_message_right(reply_right, 0, &reply_success, sizeof(reply), NULL, 0).result;
     if (result != 0) {
         delete_right(reply_right);
         printf("Failed to send message in request_pci_device: %li\n", result);
@@ -784,7 +928,7 @@ int resolve_gsi_for(struct PCIHostBridge *g, uint8_t bus, uint8_t device, uint8_
                            active_low, level_trig, bridge);
 }
 
-void request_pci_device_gsi(Message_Descriptor *desc, IPC_Request_PCI_Device_GSI *d,
+void request_pci_device_gsi(Message_Descriptor *desc, IPC_Request_PCI_Device_GSI *d, struct PCIDevice *device,
                             pmos_right_t reply_right)
 {
     if (desc->size < sizeof(IPC_Request_PCI_Device_GSI)) {
@@ -801,7 +945,7 @@ void request_pci_device_gsi(Message_Descriptor *desc, IPC_Request_PCI_Device_GSI
         return;
     }
 
-    struct PCIHostBridge *g = pci_host_bridge_find(d->group);
+    struct PCIHostBridge *g = pci_host_bridge_find(device->group);
     if (!g) {
         IPC_Request_PCI_Device_GSI_Reply reply = {
             .type   = IPC_Request_PCI_Device_GSI_Reply_NUM,
@@ -819,7 +963,7 @@ void request_pci_device_gsi(Message_Descriptor *desc, IPC_Request_PCI_Device_GSI
     uint32_t gsi    = 0;
     bool active_low = false;
     bool level_trig = false;
-    int ret         = resolve_gsi_for(g, d->bus, d->device, d->function, d->pin, &gsi, &active_low,
+    int ret         = resolve_gsi_for(g, device->bus, device->device, device->function, d->pin, &gsi, &active_low,
                                       &level_trig, NULL);
     IPC_Request_PCI_Device_GSI_Reply reply = {
         .type   = IPC_Request_PCI_Device_GSI_Reply_NUM,
@@ -833,10 +977,43 @@ void request_pci_device_gsi(Message_Descriptor *desc, IPC_Request_PCI_Device_GSI
         delete_right(reply_right);
 }
 
+void register_pci_interrupt(Message_Descriptor *msg, IPC_Register_PCI_Interrupt *desc, struct PCIDevice *device, pmos_right_t reply_right);
+
+static int pci_callback(Message_Descriptor *desc, void *msg_buff, pmos_right_t *reply_right,
+                     pmos_right_t *other_rights, void *ctx, struct pmos_msgloop_data *)
+{
+    struct PCIDevice *device = ctx;
+    if (desc->size < IPC_MIN_SIZE) {
+        fprintf(stdout, "devicesd: Receieved message for PCI device that is too small, size: %" PRIu64 "\n", desc->size);
+        return PMOS_MSGLOOP_CONTINUE;
+    }
+
+    IPC_Generic_Msg *msg = msg_buff;
+    switch (msg->type) {
+    case IPC_Request_PCI_Device_NUM:
+        request_pci_device(desc, msg_buff, device, *reply_right);
+        *reply_right = 0;
+        break;
+    case IPC_Register_PCI_Interrupt_NUM:
+        register_pci_interrupt(desc, msg_buff, device, *reply_right);
+        *reply_right = 0;
+        break;
+    case IPC_Request_PCI_Device_GSI_NUM:
+        request_pci_device_gsi(desc, msg_buff, device, *reply_right);
+        *reply_right = 0;
+    default:
+        printf("devicesd: Unknown message type for PCI device: %" PRIu32 "\n", msg->type);
+        break;
+    }
+
+
+    return PMOS_MSGLOOP_CONTINUE;
+}
+
 int set_up_gsi(uint32_t gsi, bool active_low, bool level_trig, uint64_t task, pmos_port_t port,
                uint32_t *vector_out);
 
-void register_pci_interrupt(Message_Descriptor *msg, IPC_Register_PCI_Interrupt *desc, pmos_right_t reply_right)
+void register_pci_interrupt(Message_Descriptor *msg, IPC_Register_PCI_Interrupt *desc, struct PCIDevice *device, pmos_right_t reply_right)
 {
     IPC_Reg_Int_Reply reply;
     int result      = 0;
@@ -849,13 +1026,13 @@ void register_pci_interrupt(Message_Descriptor *msg, IPC_Register_PCI_Interrupt 
         goto end;
     }
 
-    struct PCIHostBridge *g = pci_host_bridge_find(desc->group);
+    struct PCIHostBridge *g = pci_host_bridge_find(device->group);
     if (!g) {
         result = -ENOENT;
         goto end;
     }
 
-    result = resolve_gsi_for(g, desc->bus, desc->device, desc->function, desc->pin, &vector,
+    result = resolve_gsi_for(g, device->bus, device->device, device->function, desc->pin, &vector,
                              &active_low, &level_trig, NULL);
     if (result != 0)
         goto end;

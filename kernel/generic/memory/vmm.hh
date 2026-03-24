@@ -198,6 +198,8 @@ protected:
     // Adds a boundary tag to the appropriate list of free segments
     void virtmem_add_to_free_list(VirtmemBoundaryTag *tag);
 
+    void virtmem_remove_from_free_list(VirtmemBoundaryTag *tag);
+
     constexpr u64 virtmem_hashtable_index(u64 base)
     {
         // Hashtable size is always a power of 2
@@ -225,6 +227,7 @@ void virtmem_unlink_tag(VirtmemBoundaryTag *tag);
 
 template<int Q, int M> void VirtMem<Q, M>::virtmem_free(void *ptr, u64 npages)
 {
+    assert(!((ulong)ptr % (1 << Q)));
     // Find the tag that corresponds to the base of the segment
     u64 base                = (u64)ptr;
     u64 idx                 = virtmem_hashtable_index(base);
@@ -251,7 +254,7 @@ template<int Q, int M> void VirtMem<Q, M>::virtmem_free(void *ptr, u64 npages)
     // Merge the tag with the previous and next tags if they are free
     if (tag->segment_prev->state == VirtmemBoundaryTag::State::FREE) {
         auto prev = tag->segment_prev;
-        VirtMemFreelist::remove(prev);
+        virtmem_remove_from_free_list(prev);
         tag->base = prev->base;
         tag->size += prev->size;
         virtmem_unlink_tag(prev);
@@ -260,7 +263,7 @@ template<int Q, int M> void VirtMem<Q, M>::virtmem_free(void *ptr, u64 npages)
 
     if (tag->segment_next->state == VirtmemBoundaryTag::State::FREE) {
         auto next = tag->segment_next;
-        VirtMemFreelist::remove(next);
+        virtmem_remove_from_free_list(next);
         tag->size += next->size;
         virtmem_unlink_tag(next);
         virtmem_return_tag(next);
@@ -304,11 +307,13 @@ template<int Q, int M> void *VirtMem<Q, M>::virtmem_alloc_aligned(u64 npages, u6
         int idx    = first_bit(wanted_mask) - 1;
         auto &list = virtmem_freelists[idx];
         for (auto tag = list.begin(); tag != list.end(); tag++) {
-            u64 base    = tag->base;
-            u64 alignup = (base + alignup_mask) & ~alignup_mask;
-            if (alignup <= tag->end() - size) {
-                t = tag;
-                goto found;
+            if (tag->size >= size) {
+                u64 base    = tag->base;
+                u64 alignup = (base + alignup_mask) & ~alignup_mask;
+                if (alignup <= tag->end() - size) {
+                    t = tag;
+                    goto found;
+                }
             }
         }
 
@@ -325,12 +330,11 @@ found:
     const u64 aligned_up_base = (t->base + alignup_mask) & ~alignup_mask;
     const u64 old_base        = t->base;
 
-    VirtMemFreelist::remove(t);
-    int idx    = virtmem_freelist_index(t->size);
-    auto &list = virtmem_freelists[idx];
-    if (list.empty())
-        // Mark the list as empty
-        virtmem_freelist_bitmap &= ~((u64)1 << idx);
+    virtmem_remove_from_free_list(t);
+
+    assert(t->size >= size);
+    assert(!(t->base % (1 << Q)));
+    assert(!(t->size % (1 << Q)));
 
     t->base = aligned_up_base;
     t->size -= aligned_up_base - old_base;
@@ -358,6 +362,7 @@ found:
     }
 
     virtmem_save_to_alloc_hashtable(t);
+    assert(!(aligned_up_base % (1 << Q)));
     return (void *)aligned_up_base;
 }
 
@@ -384,7 +389,7 @@ template<int Q, int M> void *VirtMem<Q, M>::virtmem_alloc(u64 npages, VirtmemAll
         auto &list    = virtmem_freelists[l];
         free_list_idx = l;
         for (auto tag = list.begin(); tag != list.end(); tag++) {
-            if (tag->size == npages) {
+            if (tag->size == size) {
                 // The exact fit has been found. Use it directly
                 VirtMemFreelist::remove(tag);
                 if (list.empty())
@@ -393,10 +398,11 @@ template<int Q, int M> void *VirtMem<Q, M>::virtmem_alloc(u64 npages, VirtmemAll
 
                 tag->state = VirtmemBoundaryTag::State::ALLOCATED;
                 virtmem_save_to_alloc_hashtable(tag);
+                assert(!(tag->base % (1 << Q)));
                 return (void *)tag->base;
             }
 
-            if (tag->size > npages and (best == nullptr or tag->size < best->size))
+            if (tag->size > size and (best == nullptr or tag->size < best->size))
                 best = tag;
         }
     }
@@ -421,9 +427,17 @@ template<int Q, int M> void *VirtMem<Q, M>::virtmem_alloc(u64 npages, VirtmemAll
         // __builtin_ffsl returns the index of the first set bit + 1, or 0 if there are none
         int idx       = first_bit(wanted_mask) - 1;
         auto &list    = virtmem_freelists[idx];
+        assert(!list.empty());
         best          = &list.front();
         free_list_idx = idx;
     }
+
+    assert(best->size >= size);
+    assert(best->state == VirtmemBoundaryTag::State::FREE);
+    assert(!(best->base % (1 << Q)));
+    assert(!(best->size % (1 << Q)));
+    assert(best->segment_prev != nullptr);
+    assert(best->segment_next != nullptr);
 
     if (best->size == size) {
         // The segment is an exact fit
@@ -435,6 +449,7 @@ template<int Q, int M> void *VirtMem<Q, M>::virtmem_alloc(u64 npages, VirtmemAll
 
         best->state = VirtmemBoundaryTag::State::ALLOCATED;
         virtmem_save_to_alloc_hashtable(best);
+        assert(!(best->base % (1 << Q)));
         return (void *)best->base;
     } else {
         // The segment is larger than the requested size
@@ -455,12 +470,16 @@ template<int Q, int M> void *VirtMem<Q, M>::virtmem_alloc(u64 npages, VirtmemAll
         virtmem_link_tag(best, new_tag);
         virtmem_save_to_alloc_hashtable(best);
         virtmem_add_to_free_list(new_tag);
+        assert(!(best->base % (1 << Q)));
         return (void *)best->base;
     }
 }
 
 template<int Q, int M> void VirtMem<Q, M>::virtmem_add_to_free_list(VirtmemBoundaryTag *tag)
 {
+    assert(!(tag->size % (1 << Q)));
+    assert(!(tag->base % (1 << Q)));
+
     int idx    = virtmem_freelist_index(tag->size);
     auto &list = virtmem_freelists[idx];
     list.push_front(tag);
@@ -480,6 +499,23 @@ template<int Q, int M> void VirtMem<Q, M>::init()
     // for (auto &i: virtmem_initial_hash)
     //     i.init();
     virtmem_hashtable = virtmem_initial_hash;
+}
+
+template<int Q, int M>
+void VirtMem<Q, M>::virtmem_remove_from_free_list(VirtmemBoundaryTag *tag)
+{
+    assert(tag->state == VirtmemBoundaryTag::State::FREE);
+    assert(!(tag->base % (1 << Q)));
+    assert(!(tag->size % (1 << Q)));
+
+    VirtMemFreelist::remove(tag);
+
+    int idx = virtmem_freelist_index(tag->size);
+    auto &list = virtmem_freelists[idx];
+
+    if (list.empty())
+        // Mark the list as empty
+        virtmem_freelist_bitmap &= ~((u64)1 << idx);
 }
 
 }; // namespace kernel::vmm

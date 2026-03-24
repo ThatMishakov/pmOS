@@ -31,6 +31,7 @@
 #include "keyboard.h"
 
 #include <pmos/ipc.h>
+#include <pmos/helpers.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -49,63 +50,27 @@ enum Device_Types {
     DEVICE_TYPE_MOUSE,
 };
 
-// TODO: Replace with a better data structure
+extern enum Port_States state;
+extern enum Device_Types type;
+extern uint32_t device_id;
+extern unsigned device_id_size;
 
-struct port_list_node {
-    struct port_list_node *previous;
-    struct port_list_node *next;
+extern uint64_t last_timer;
+extern pmos_right_t port_send_right;
 
-    // Owner of the port and its id
-    uint64_t owner_pid;
-    uint64_t port_id;
+extern pmos_port_t main_port;
 
-    // Internal index of the port
-    uint64_t index;
+extern void (*managed_react_data)(unsigned char data);
+extern void (*managed_react_timer)();
 
-    // Port used for communications with the driver
-    uint64_t com_port;
-
-    uint64_t last_timer;
-
-    uint32_t device_id;
-    unsigned char device_id_size;
-
-    enum Port_States state;
-    enum Device_Types type;
-
-    void (*managed_react_data)(struct port_list_node *port, unsigned char data);
-    void (*managed_react_timer)(struct port_list_node *port);
-
-    union {
-        struct keyboard_state kb_state;
-    };
-};
-
-extern struct port_list_node *first;
-extern struct port_list_node *last;
-
-void list_push_back(struct port_list_node *n);
-
-// Takes out the node out of the list. Does not free it.
-void list_take_out(struct port_list_node *n);
-
-// Get the node with the given owner_id and port_if. Return NULL if no node was found
-struct port_list_node *list_get(uint64_t owner_pid, uint64_t port_id);
-
-// Find the node with the given timer_id. Return NULL if no node was found
-struct port_list_node *list_find_by_timer(uint64_t timer_id);
-
-bool register_port(IPC_PS2_Reg_Port *message, uint64_t sender);
-void react_message(IPC_PS2_Notify_Data *message, uint64_t sender, uint64_t size);
-
-void send_data_port(struct port_list_node *port, const unsigned char *data, size_t data_size);
-void send_byte_port(struct port_list_node *port, unsigned char byte);
-void react_data(struct port_list_node *port, const char *data, size_t data_size);
-void react_byte(struct port_list_node *port, unsigned char byte);
-void start_port(struct port_list_node *port);
-uint64_t port_start_timer(struct port_list_node *port, unsigned time_ms);
+int send_data_port(const unsigned char *data, size_t data_size);
+int send_byte_port(unsigned char byte);
+void react_data(const char *data, size_t data_size);
+void react_byte(unsigned char byte);
+void start_port();
+uint64_t port_start_timer(unsigned time_ms);
 void react_timer(IPC_Timer_Reply *tmr);
-void port_react_timer(struct port_list_node *port, uint64_t timer_id);
-void reset_port(struct port_list_node *port);
+void port_react_timer(uint64_t timer_id);
+void reset_port();
 
 #endif

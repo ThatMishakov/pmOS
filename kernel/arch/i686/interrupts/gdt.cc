@@ -70,6 +70,4 @@ void loadGDT(GDT *gdt)
 
 void unbusyTSS(GDT *gdt) { gdt->tss &= ~(1ULL << 41); }
 
-void loadTSS() { asm volatile("ltr %w0" : : "rm"(TSS_SEGMENT)); }
-
 } // namespace kernel::ia32::interrupts

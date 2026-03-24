@@ -60,31 +60,6 @@ _limine_entry:
 
     jmp start_first_process
 
-
-    .globl _cpu_entry
-    .type _cpu_entry, @function
-_cpu_entry:
-    # Switch to stack from the limine structure
-    movq 24(%rdi), %rsp
-
-    # Switch to in-kernel page table
-    movq bootstrap_cr3(%rip), %rax
-    movq %rax, %cr3
-
-    # Pass CPU struct
-    movq -8(%rsp), %rdi
-
-    # Init stack frame
-    pushq $0
-    pushq $0
-
-    # Call kernel entry
-    call cpu_start_routine
-
-    movq $0, %gs:24
-
-    jmp start_first_process
-
     
     .globl _acpi_wakeup_entry
     .type _acpi_wakeup_entry, @function
@@ -94,7 +69,7 @@ _acpi_wakeup_entry:
 
     movq $0, %rbp
 
-    call wakeup_main
+    call acpi_main
 
     jmp start_first_process
 
@@ -115,12 +90,13 @@ _smp_trampoline_entry:
     jc 1b
 acquired:
 
+    call enable_apic
     call find_cpu_info
 
     movl $0, smp_locl(%rip)
 
     movq 8(%rax), %rsp
     movq %rax, %rdi
-    call smp_entry_main
+    call smp_main
 
     jmp start_first_process

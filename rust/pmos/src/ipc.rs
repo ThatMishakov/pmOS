@@ -2,7 +2,7 @@ use super::error::Error;
 use super::mem_object::MemoryObject;
 use super::system::ResultT;
 use core::ffi::c_uint;
-use std::mem;
+use std::{cmp::Ordering, mem, ptr};
 
 pub struct IPCPort {
     port: Port,
@@ -23,23 +23,66 @@ struct RightRequestResult {
     right: Right,
 }
 
+impl RightRequestResult {
+    pub fn result(self: RightRequestResult) -> Result<Right, (Error, u64)> {
+        self.result.result().map(|()| self.right).map_err(|r| (r, self.right))
+    }
+}
+
+#[repr(C)]
+struct SendRightAux {
+    rights: [Right; 4],
+    msg_object: u64, // Again, this is currently ignored by the kernel
+}
+
+impl SendRightAux {
+    fn new() -> Self {
+        Self {
+            rights: [0; 4],
+            msg_object: 0,
+        }
+    }
+}
+
 unsafe extern "C" {
     fn create_port(owner_pid: libc::pid_t, flags: u32) -> PortReqResult;
     fn pmos_delete_port(port: Port) -> ResultT;
     fn syscall_get_message_info(descr: &mut MessageDescriptor, port: u64, flags: u32) -> ResultT;
-    unsafe fn get_first_message(buff: *mut u8, args: u32, port: u64) -> ResultT;
+    unsafe fn get_first_message(buff: *mut u8, args: u32, port: u64) -> RightRequestResult;
     #[link_name = "name_right"]
-    unsafe fn name_right_stdlib(right: Right, name: *const libc::c_char, length: libc::size_t, flags: u32) -> ResultT;
+    unsafe fn name_right_stdlib(
+        right: Right,
+        name: *const libc::c_char,
+        length: libc::size_t,
+        flags: u32,
+    ) -> ResultT;
     unsafe fn delete_right(id: Right) -> ResultT;
     unsafe fn dup_right(id: Right) -> RightRequestResult;
-    unsafe fn create_right(port: Port, id_in_reciever: *mut Right, flags: u32) -> RightRequestResult;
+    unsafe fn create_right(
+        port: Port,
+        id_in_reciever: *mut Right,
+        flags: u32,
+    ) -> RightRequestResult;
+    unsafe fn accept_rights(port: Port, rights_array: *mut u64) -> ResultT;
+    #[link_name = "send_message_right"]
+    unsafe fn send_message_right_stdlib(
+        send_right: Right,
+        reply_port: Port,
+        message: *const u8,
+        message_size: libc::size_t,
+        aux_info: *const SendRightAux,
+        flags: c_uint,
+    ) -> RightRequestResult;
+
+    unsafe fn delete_receive_right(
+        port: Port,
+        receive_right: Right,
+    ) -> ResultT;
 }
 
 impl Drop for IPCPort {
     fn drop(&mut self) {
-        let result = unsafe {
-            pmos_delete_port(self.port)
-        };
+        let result = unsafe { pmos_delete_port(self.port) };
 
         if !result.success() {
             panic!("couldn't delete port")
@@ -48,6 +91,15 @@ impl Drop for IPCPort {
 }
 
 const CREATE_RIGHT_SEND_ONCE: u32 = 1 << 0;
+
+const MESSAGE_FLAG_HAS_REPLY_RIGHT: u32 = 1 << 0;
+const MESSAGE_FLAG_REPLY_RIGHT_SEND_MANY: u32 = 1 << 1; // SendOnce otherwise...
+const MESSAGE_FLAG_RIGHT0_SEND_MANY: u32 = 1 << 16;
+const MESSAGE_FLAG_RIGHT1_SEND_MANY: u32 = 1 << 17;
+const MESSAGE_FLAG_RIGHT2_SEND_MANY: u32 = 1 << 18;
+const MESSAGE_FLAG_RIGHT3_SEND_MANY: u32 = 1 << 19;
+
+const MESSAGE_FLAG_RIGHT0_SEND_MANY_SHIFT: usize = 16;
 
 impl IPCPort {
     pub fn new() -> Option<IPCPort> {
@@ -72,41 +124,81 @@ impl IPCPort {
             sender: 0,
             mem_object: 0,
             size: 0,
+            sender_object_id: 0,
+            sent_with_right: 0,
+            other_rights_count: 0,
+            flags: 0,
         };
 
         unsafe { syscall_get_message_info(&mut desc, self.port, 0) }
             .result()
             .unwrap();
 
+        let mut other_rights = [const { None }; 4];
+        if desc.other_rights_count > 0 {
+            let mut other_rights_raw = [0u64; 4];
+            unsafe { accept_rights(self.port, other_rights_raw.as_mut_ptr()) }
+                .result()
+                .unwrap();
+
+            for i in 0..4 {
+                let rid = other_rights_raw[i];
+                if rid != 0 {
+                    other_rights[i] = Some(
+                        if desc.flags & (1 << (MESSAGE_FLAG_RIGHT0_SEND_MANY_SHIFT + i)) != 0 {
+                            SendRight::Many(SendManyRight(rid))
+                        } else {
+                            SendRight::Once(SendOnceRight(rid))
+                        },
+                    )
+                }
+            }
+        }
+
         let mut buffer = vec![0u8; desc.size as usize];
-        unsafe { get_first_message(buffer.as_mut_ptr(), 0, self.port) }
+        let r = unsafe { get_first_message(buffer.as_mut_ptr(), 0, self.port) }
             .result()
             .unwrap();
+
+        let right = if r != 0 {
+            if desc.flags & MESSAGE_FLAG_REPLY_RIGHT_SEND_MANY != 0 {
+                Some(SendRight::Many(SendManyRight(r)))
+            } else {
+                Some(SendRight::Once(SendOnceRight(r)))
+            }
+        } else {
+            None
+        };
 
         Message {
             data: buffer.into_boxed_slice(),
             sender: desc.sender,
             object: MemoryObject::from_message(desc.mem_object),
+            sent_with_right: desc.sent_with_right,
+            reply_right: right,
+            other_rights,
         }
     }
 
-    pub fn create_right_sendonce(& self) -> Option<(SendOnceRight, RecieveRight)> {
+    pub fn create_right_sendonce(&self) -> Option<(SendOnceRight, RecieveRight)> {
         let mut recieve_id: Right = 0;
-        let RightRequestResult { result, right } = unsafe { create_right(self.port, &raw mut recieve_id, CREATE_RIGHT_SEND_ONCE) };
+        let RightRequestResult { result, right } =
+            unsafe { create_right(self.port, &raw mut recieve_id, CREATE_RIGHT_SEND_ONCE) };
 
         if result.success() {
-            Some((SendOnceRight(right), RecieveRight(recieve_id)))
+            Some((SendOnceRight(right), RecieveRight(recieve_id, self.port)))
         } else {
             None
         }
     }
 
-    pub fn create_right_sendmany(& self) -> Option<(SendManyRight, RecieveRight)> {
+    pub fn create_right_sendmany(&self) -> Option<(SendManyRight, RecieveRight)> {
         let mut recieve_id: Right = 0;
-        let RightRequestResult { result, right } = unsafe { create_right(self.port, &raw mut recieve_id, 0) };
+        let RightRequestResult { result, right } =
+            unsafe { create_right(self.port, &raw mut recieve_id, 0) };
 
         if result.success() {
-            Some((SendManyRight(right), RecieveRight(recieve_id)))
+            Some((SendManyRight(right), RecieveRight(recieve_id, self.port)))
         } else {
             None
         }
@@ -118,12 +210,19 @@ struct MessageDescriptor {
     sender: u64,
     mem_object: u64,
     size: u64,
+    sender_object_id: u64,
+    sent_with_right: u64,
+    other_rights_count: u32,
+    flags: u32,
 }
 
 pub struct Message {
     pub data: Box<[u8]>,
     pub sender: u64,
+    pub sent_with_right: u64,
     pub object: Option<MemoryObject>,
+    pub reply_right: Option<SendRight>,
+    pub other_rights: [Option<SendRight>; 4],
 }
 
 extern "C" {
@@ -153,16 +252,182 @@ pub fn send_message(
     Ok(())
 }
 
+const SEND_MESSAGE_DELETE_RIGHT: u32 = 1 << 8;
+const REPLY_CREATE_SEND_MANY: u32 = 1 << 1;
+
+pub fn send_message_right(
+    msg: &impl super::ipc_msgs::Serializable,
+    right: &mut Option<SendRight>, // Do mut Option so that it can be taken out
+    reply_port: Option<(&IPCPort, bool)>, /* create_send_many */
+    include_rights: &mut [Option<SendRight>; 4],
+) -> Result<Option<RecieveRight>, (Error, u64)> {
+    let mut aux_rights_count = 0;
+    let mut aux_struct = SendRightAux::new();
+
+    for i in 0..4 {
+        if let Some(r) = &include_rights[i] {
+            aux_struct.rights[i] = r.get_id();
+            aux_rights_count += 1;
+        }
+    }
+
+    let aux_ptr = if aux_rights_count > 0 {
+        &aux_struct
+    } else {
+        ptr::null()
+    };
+
+    let msg = msg.serialize();
+    let msg_size = msg.len();
+    let msg = msg.as_ptr();
+
+    let flags = reply_port.map_or(
+        0,
+        |(_, send_many)| if send_many { REPLY_CREATE_SEND_MANY } else { 0 },
+    );
+
+    let result = unsafe {
+        send_message_right_stdlib(
+            right.as_ref().ok_or_else(|| (Error::from_errno(libc::EINVAL), 0))?.get_id(),
+            reply_port.map_or(0, |(i, _)| i.port),
+            msg,
+            msg_size,
+            aux_ptr,
+            flags,
+        )
+    }
+    .result()?;
+
+    match right.as_mut().unwrap() {
+        SendRight::Once(_) => mem::forget(right.take()),
+        SendRight::Many(_) => (),
+    }    
+    for i in include_rights {
+        mem::forget(i.take());
+    }
+
+    if result != 0 {
+        Ok(Some(RecieveRight(result, reply_port.unwrap().0.port)))
+    } else {
+        Ok(None)
+    }
+}
+
+pub fn send_message_right_consume(
+    msg: &impl super::ipc_msgs::Serializable,
+    right: SendRight,
+    // object: Option<MemoryObject>,
+    reply_port: Option<(&IPCPort, bool /* create send many */)>,
+    include_rights: [Option<SendRight>; 4],
+    // TODO: Memory objects...
+) -> Result<Option<RecieveRight>, (Error, u64)> {
+    let mut aux_rights_count = 0;
+    let mut aux_struct = SendRightAux::new();
+
+    for i in 0..4 {
+        if let Some(r) = &include_rights[i] {
+            aux_struct.rights[i] = r.get_id();
+            aux_rights_count += 1;
+        }
+    }
+
+    let aux_ptr = if aux_rights_count > 0 {
+        &aux_struct
+    } else {
+        ptr::null()
+    };
+
+    let msg = msg.serialize();
+    let msg_size = msg.len();
+    let msg = msg.as_ptr();
+
+    let flags = SEND_MESSAGE_DELETE_RIGHT
+        | reply_port.map_or(
+            0,
+            |(_, send_many)| if send_many { REPLY_CREATE_SEND_MANY } else { 0 },
+        );
+
+    let result = unsafe {
+        send_message_right_stdlib(
+            right.get_id(),
+            reply_port.map_or(0, |(i, _)| i.port),
+            msg,
+            msg_size,
+            aux_ptr,
+            flags,
+        )
+    }
+    .result()?;
+
+    mem::forget(right);
+    for i in include_rights {
+        mem::forget(i);
+    }
+
+    if result != 0 {
+        Ok(Some(RecieveRight(result, reply_port.unwrap().0.port)))
+    } else {
+        Ok(None)
+    }
+}
+
 impl Message {
     pub fn get_known_id(&self) -> Option<u32> {
         Some(u32::from_ne_bytes(self.data.get(0..4)?.try_into().ok()?))
     }
 }
 
-pub struct SendManyRight (Right);
-pub struct SendOnceRight (Right);
-pub struct RecieveRight (Right);
+pub enum SendRight {
+    Once(SendOnceRight),
+    Many(SendManyRight),
+}
+
+impl SendRight {
+    pub fn get_id(&self) -> Right {
+        match self {
+            Self::Once(o) => o.0,
+            Self::Many(o) => o.0,
+        }
+    }
+}
+
+impl Ord for SendRight {
+    fn cmp(&self, other: &Self) -> Ordering {
+        if self.get_id() < other.get_id() {
+            Ordering::Less
+        } else if self.get_id() > other.get_id() {
+            Ordering::Greater
+        } else {
+            Ordering::Equal
+        }
+    }
+}
+
+impl PartialOrd for SendRight {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for SendRight {
+    fn eq(&self, other: &Self) -> bool {
+        self.get_id() == other.get_id()
+    }
+}
+
+impl Eq for SendRight {}
+
+pub struct SendManyRight(Right);
+pub struct SendOnceRight(Right);
+pub struct RecieveRight(Right, Port);
 // TODO: Destructor for this
+
+impl Drop for RecieveRight {
+    fn drop(&mut self) {
+        let RecieveRight(right, port) = *self;
+        _ = unsafe { delete_receive_right(right, port)}
+    }
+}
 
 impl SendManyRight {
     fn new(id: Right) -> Self {
@@ -179,24 +444,32 @@ impl SendManyRight {
     }
 
     pub fn name_self(self, name: &str) -> Result<(), Error> {
-        unsafe {
-            name_right_stdlib(self.0, name.as_ptr() as *const libc::c_char, name.len(), 0)
-        }.result().map(|_| mem::forget(self))
+        unsafe { name_right_stdlib(self.0, name.as_ptr() as *const libc::c_char, name.len(), 0) }
+            .result()
+            .map(|_| mem::forget(self))
+    }
+}
+
+impl From<SendManyRight> for SendRight {
+    fn from(right: SendManyRight) -> SendRight {
+        SendRight::Many(right)
+    }
+}
+
+impl From<SendOnceRight> for SendRight {
+    fn from(right: SendOnceRight) -> SendRight {
+        SendRight::Once(right)
     }
 }
 
 impl Drop for SendManyRight {
     fn drop(&mut self) {
-        unsafe {
-            _ = delete_right(self.0)
-        }
+        unsafe { _ = delete_right(self.0) }
     }
 }
 
 impl Drop for SendOnceRight {
     fn drop(&mut self) {
-        unsafe {
-            _ = delete_right(self.0)
-        }
+        unsafe { _ = delete_right(self.0) }
     }
 }

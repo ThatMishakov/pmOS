@@ -2,8 +2,8 @@
 
 #include "apic.hh"
 
-#include <acpi/acpi.h>
-#include <acpi/acpi.hh>
+#include <uacpi/acpi.h>
+#include <uacpi/tables.h>
 #include <interrupts/interrupt_handler.hh>
 #include <kern_logger/kern_logger.hh>
 #include <memory/paging.hh>
@@ -53,51 +53,9 @@ static u32 *map_ioapic(u32 phys_addr)
 
     auto result = map_kernel_pages(phys_addr & ~PAGE_MASK, ptr, size, arg);
     if (result)
-        panic("Failed to map IOAPIC into kernel\n");
+        panic("Failed to map IOAPIC into kernel");
 
     return (u32 *)((char *)ptr + offset);
-}
-
-static MADT *get_madt()
-{
-    static MADT *rhct_virt = nullptr;
-    static bool have_acpi  = true;
-
-    if (rhct_virt == nullptr and have_acpi) {
-        u64 rhct_phys = get_table(0x43495041); // APIC (because why not)
-        if (rhct_phys == 0) {
-            have_acpi = false;
-            return nullptr;
-        }
-
-        ACPISDTHeader h;
-        copy_from_phys(rhct_phys, &h, sizeof(h));
-
-        rhct_virt = (MADT *)malloc(h.length);
-        copy_from_phys(rhct_phys, rhct_virt, h.length);
-    }
-
-    return rhct_virt;
-}
-
-static MADT_IOAPIC_entry *get_ioapic_entry(unsigned index = 0)
-{
-    MADT *m = get_madt();
-    if (m == nullptr)
-        return nullptr;
-
-    u32 offset     = sizeof(MADT);
-    u32 length     = m->header.length;
-    unsigned count = 0;
-    while (offset < length) {
-        MADT_IOAPIC_entry *e = (MADT_IOAPIC_entry *)((char *)m + offset);
-        if (e->header.type == MADT_IOAPIC_entry_type and count++ == index)
-            return e;
-
-        offset += e->header.length;
-    }
-
-    return nullptr;
 }
 
 static klib::vector<IOAPIC *> ioapics;
@@ -134,14 +92,32 @@ void IOAPIC::write_redir_entry(unsigned idx, u64 value)
 
 void IOAPIC::init_ioapics()
 {
-    int idx = 0;
-    while (MADT_IOAPIC_entry *e = get_ioapic_entry(idx++)) {
+    uacpi_table m;
+    auto res = uacpi_table_find_by_signature(ACPI_MADT_SIGNATURE, &m);
+    if (res != UACPI_STATUS_OK) {
+        log::serial_logger.printf("Couldn't get MADT table...\n");
+        return;
+    }
+
+    acpi_madt *madt = (acpi_madt *)m.ptr;
+
+    size_t offset = sizeof(acpi_madt);
+    while (offset < madt->hdr.length) {
+        acpi_entry_hdr *ee = (acpi_entry_hdr *)((char *)madt + offset);
+        offset += ee->length;
+        if (ee->type != ACPI_MADT_ENTRY_TYPE_IOAPIC)
+            continue;
+
+        acpi_madt_ioapic *e = (acpi_madt_ioapic *)ee;
+
         auto ioapic = new IOAPIC();
         if (!ioapic)
             panic("Could not allocate memory for IOAPIC");
 
-        ioapic->phys_addr = e->ioapic_addr;
-        ioapic->int_base  = e->global_system_interrupt_base;
+        serial_logger.printf("Found IOAPIC GSI %x at %lx\n", e->gsi_base, e->address);
+
+        ioapic->phys_addr = e->address;
+        ioapic->int_base  = e->gsi_base;
         ioapic->virt_addr = map_ioapic(ioapic->phys_addr);
         if (!ioapic->virt_addr)
             panic("Failed to map IOAPIC\n");
@@ -149,9 +125,9 @@ void IOAPIC::init_ioapics()
         // A bit of a sanity check...
         u8 ioapic_id      = ioapic->read_reg(regs::IOAPICID) >> 24;
         ioapic->ioapic_id = ioapic_id;
-        if (ioapic_id != e->ioapic_id)
+        if (ioapic_id != e->id)
             serial_logger.printf("IOAPIC ID mismatch, IOAPICID: %x, ACPI: %x\n", ioapic_id,
-                                 e->ioapic_id);
+                                 e->id);
 
         u32 ioapicver    = ioapic->read_reg(regs::IOAPICVER);
         u8 version       = ioapicver & 0xff;
@@ -171,6 +147,8 @@ void IOAPIC::init_ioapics()
         serial_logger.printf("Kernel: initialized IOAPIC ID %x version %x GSI %i - %i\n", ioapic_id,
                              version, ioapic->int_base, ioapic->int_base + redir_entries);
     }
+
+    uacpi_table_unref(&m);
 }
 
 Spinlock int_allocation_lock;
@@ -195,13 +173,38 @@ ReturnStr<std::pair<sched::CPU_Info *, u32>>
 
         ioapic->mappings[apic_base] = {cpu, vector};
 
+        // TODO!
+        u32 lapic_id = cpu->lapic_id << 24;
+
         // Set the mapping
-        u64 val = ((u64)cpu->lapic_id << 32) | (1 << 16) | ((u32)!edge_triggered << 15) |
+        u64 val = ((u64)lapic_id << 32) | (1 << 16) | ((u32)!edge_triggered << 15) |
                   ((u32)active_low << 13) | vector;
         ioapic->write_redir_entry(apic_base, val);
+
+        log::serial_logger.printf("IOAPIC added entry for lapic %x\n", cpu->lapic_id);
     }
 
     return result;
+}
+
+std::optional<std::pair<IOAPIC *, int>> IOAPIC::find_ioapic(sched::CPU_Info *cpu, u32 vector)
+{
+    for (auto i: ioapics) {
+        for (size_t ii = 0; ii < i->int_count; ++ii) {
+            if (i->mappings[ii].mapped_to == cpu and  i->mappings[ii].vector == vector)
+                return std::pair{i, ii};
+        }
+    }
+    return {};
+}
+
+void IOAPIC::mask_interrupt(sched::CPU_Info *cpu, int vec)
+{
+    auto entry = find_ioapic(cpu, vec);
+    if (entry) {
+        log::serial_logger.printf("Masking IOAPIC entry %i for IOAPIC %i\n", entry->second, entry->first->ioapic_id);
+        entry->first->write_redir_entry(entry->second, 0);
+    }
 }
 
 IOAPIC *IOAPIC::get_ioapic(u32 gsi)

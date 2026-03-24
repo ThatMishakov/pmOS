@@ -42,7 +42,7 @@
 #include <variant>
 #include <vector>
 
-pmos::Right send_reply_throw(pmos::Right &right, auto t)
+pmos::RecieveRight send_reply_throw(pmos::Right &right, auto t)
 {
     auto result = pmos::send_message_right_one(right, t, {}, true);
     if (!result)
@@ -651,13 +651,13 @@ void preregister_process(IPC_Preregister_Process *m, uint64_t sender_task, pmos:
 
 int main()
 {
-    [[maybe_unused]] pmos_port_t recieve_right;
+    [[maybe_unused]] pmos::RecieveRight recieve_right;
     {
         auto right = main_port.create_right(pmos::RightType::SendMany);
         auto [r, rr] = std::move(right.value());
         auto result = pmos::name_right(std::move(r), processd_port_name);
         result.value();
-        recieve_right = rr;
+        recieve_right = std::move(rr);
     }
 
     while (1) {

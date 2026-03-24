@@ -40,26 +40,30 @@ class IOAPIC;
 
 namespace lapic
 {
+constexpr u32 A32_XAPIC_DISABLE_STATUS_MSR = 0xbd;
+constexpr u32 IA32_ARCH_CAPABILITIES_MSR = 0x10a;
 
-    // TODO: namespace kernel::x86::lapic
+constexpr u32 IA32_TSC_DEADLINE_MSR = 0x6e0;
 
-#define APIC_REG_LAPIC_ID     0x20
-#define APIC_REG_TPR          0x80
-#define APIC_REG_PPR          0xa0
-#define APIC_REG_EOI          0xb0
-#define APIC_REG_LDR          0xd0
-#define APIC_REG_DFR          0xe0
-#define APIC_REG_SPURIOUS_INT 0xf0
-#define APIC_ISR_REG_START    0x100
-#define APIC_IRR_REG_START    0x200
-#define APIC_ICR_LOW          0x300
-#define APIC_ICR_HIGH         0x310
-#define APIC_REG_LVT_TMR      0x320
-#define APIC_REG_LVT_INT0     0x350
-#define APIC_REG_LVT_INT1     0x360
-#define APIC_REG_TMRINITCNT   0x380
-#define APIC_REG_TMRCURRCNT   0x390
-#define APIC_REG_TMRDIV       0x3e0
+constexpr u32 X2APIC_MSR_BASE = 0x800;
+
+#define APIC_REG_LAPIC_ID     0x2
+#define APIC_REG_TPR          0x8
+#define APIC_REG_PPR          0xa
+#define APIC_REG_EOI          0xb
+#define APIC_REG_LDR          0xd
+#define APIC_REG_DFR          0xe
+#define APIC_REG_SPURIOUS_INT 0xf
+#define APIC_ISR_REG_START    0x10
+#define APIC_IRR_REG_START    0x20
+#define APIC_ICR_LOW          0x30
+#define APIC_ICR_HIGH         0x31
+#define APIC_REG_LVT_TMR      0x32
+#define APIC_REG_LVT_INT0     0x35
+#define APIC_REG_LVT_INT1     0x36
+#define APIC_REG_TMRINITCNT   0x38
+#define APIC_REG_TMRCURRCNT   0x39
+#define APIC_REG_TMRDIV       0x3e
 
 #define APIC_TMR_INT      0xfc
 #define LVT_INT0          0xfd
@@ -73,7 +77,7 @@ namespace lapic
 #define APIC_ENABLE (1 << 11)
 
     /// The base of the APIC MMIO register
-    static constexpr u64 apic_base = 0xFEE00000;
+    extern u64 apic_base;
 
     /**
      * @brief Function used for writing a given APIC register.
@@ -107,7 +111,7 @@ namespace lapic
     /**
      * @brief Enables the LAPIC and sets the appropriate interrupt vectors
      */
-    void enable_apic();
+    extern "C" void enable_apic();
 
     /**
      * @brief Maps the LAPIC register to the virtual memory
@@ -122,7 +126,7 @@ namespace lapic
     /**
      * @brief Disables PIC and maps LAPIC to the kernel virtual memory.
      */
-    void prepare_apic();
+    void prepare_apic_bsp();
 
     /**
      * @brief Discovers LAPIC frequency using PIT
@@ -162,10 +166,7 @@ namespace lapic
     /// @brief Ticks that LAPIC timer does per 1 ms
     /// @see discover_apic_freq()
     extern FreqFraction apic_freq;
-    extern FreqFraction tsc_freq;
-
     extern FreqFraction apic_inverted_freq;
-    extern FreqFraction tsc_inverted_freq;
 
     /// @brief Fires a single shot of LAPIC timer
     /// @param ms Time in milliseconds before the interrupt would be fired
@@ -197,10 +198,6 @@ namespace lapic
         u8 dest_field : 8     = 0;
     } PACKED ALIGNED(4);
 
-    /// @brief Writes ICR to the LAPIC
-    /// @param  ICR structure to be written
-    void write_ICR(ICR);
-
     /// @brief Reads ICR from LAPIC
     ICR read_ICR();
 
@@ -231,6 +228,8 @@ namespace lapic
     /// recieved)
     void send_ipi_fixed_others(u8 vector);
 
+    void apic_write_icr(u64 dest);
+
 #define APIC_DELIVERY_START_UP 0b110
 #define APIC_DELIVERY_INIT     0b100
 
@@ -240,6 +239,16 @@ namespace lapic
     };
 
     ReturnStr<std::pair<sched::CPU_Info *, u32>> allocate_interrupt(IntMapping);
+    
+    enum class APICMode {
+        XAPIC,
+        X2APIC,
+    };
+
+    extern APICMode apic_mode;
+
+    void arm_tsc_deadline(u64 deadline_ticks);
+    void init_tsc_deadline();
 
 }; // namespace lapic
 }; // namespace kernel::x86::interrupts

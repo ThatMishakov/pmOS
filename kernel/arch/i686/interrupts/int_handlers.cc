@@ -12,6 +12,7 @@ using namespace kernel::ia32::interrupts;
 using namespace kernel::paging;
 using namespace kernel::ia32::paging;
 using namespace kernel::x86::sse;
+using namespace kernel::x86::paging;
 using namespace kernel::sched;
 
 extern "C" void double_fault_handler()

@@ -61,3 +61,11 @@ result_t get_message(Message_Descriptor *desc, unsigned char **message, pmos_por
 
     return result;
 }
+
+result_t delete_right(pmos_right_t right_id)
+{
+    if (!right_id)
+        return SUCCESS;
+    else
+        return delete_right_raw(right_id);
+}

@@ -440,6 +440,11 @@ unsigned top_pt_index(const void *ptr)
     return (reinterpret_cast<u64>(ptr) >> (12 + (riscv64_paging_levels - 1) * 9)) & 0x1ff;
 }
 
+RISCV64_Page_Table::Page_Info get_kernel_page_mapping(const void *virt_addr)
+{
+    return get_page_mapping(get_current_hart_pt(), virt_addr);
+}
+
 RISCV64_Page_Table::Page_Info RISCV64_Page_Table::get_page_mapping(void *virt_addr) const
 {
     return paging::get_page_mapping(table_root, virt_addr);

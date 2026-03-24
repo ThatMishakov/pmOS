@@ -4,6 +4,8 @@
 
 #include <x86_asm.hh>
 
+using namespace kernel::ia32::paging;
+
 namespace kernel::ia32::paging
 {
 
@@ -18,15 +20,6 @@ kernel::paging::Temp_Mapper *get_temp_temp_mapper(void *addr, u32 kernel_cr3)
     } else {
         two_level_mapper = x86_2level_Mapper(addr, kernel_cr3);
         return &two_level_mapper;
-    }
-}
-
-kernel::paging::Temp_Mapper *create_temp_mapper(void *virt_addr, u32 cr3)
-{
-    if (!use_pae) {
-        return new x86_2level_Mapper(virt_addr, cr3);
-    } else {
-        return new x86_PAE_Temp_Mapper(virt_addr, cr3);
     }
 }
 
@@ -161,3 +154,12 @@ void x86_PAE_Temp_Mapper::return_map(void *p)
 u32 x86_PAE_Temp_Mapper::temp_mapper_get_index(u32 addr) { return (addr / 4096) % 512; }
 
 } // namespace kernel::ia32::paging
+
+kernel::paging::Temp_Mapper *create_temp_mapper(void *virt_addr, u32 cr3)
+{
+    if (!use_pae) {
+        return new x86_2level_Mapper(virt_addr, cr3);
+    } else {
+        return new x86_PAE_Temp_Mapper(virt_addr, cr3);
+    }
+}

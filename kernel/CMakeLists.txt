@@ -26,7 +26,7 @@ set(SYSROOT "${ABSPATH}/../sysroot")
 include(arch/arch.cmake)
 LOAD_PLATFORM(${TARGET_ARCH})
 
-set(CMAKE_C_FLAGS "${PLATFORM_C_FLAGS} -static -ffreestanding -fstack-protector-all -flto -O3 -Wall -Wextra -g -fno-omit-frame-pointer -fasynchronous-unwind-tables  -fexceptions --sysroot=${SYSROOT}")
+set(CMAKE_C_FLAGS "${PLATFORM_C_FLAGS} -static -ffreestanding -fstack-protector-all -flto -O3 -Wall -Wextra -ggdb3 -fno-omit-frame-pointer -fasynchronous-unwind-tables  -fexceptions --sysroot=${SYSROOT}")
 set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} ${PLATFORM_CXX_FLAGS} -fno-exceptions -fno-rtti")
 set(CMAKE_ASM_FLAGS "${CMAKE_C_FLAGS} ${PLATFORM_ASM_FLAGS}")
 add_compile_options("-fcheck-new")
@@ -67,3 +67,17 @@ if (DEFINED ENABLE_DTB)
   target_link_libraries(kernel PUBLIC smoldtb)
   add_compile_definitions(ENABLE_DTB)
 endif()
+
+include(${CMAKE_SOURCE_DIR}/uACPI/uacpi.cmake)
+
+target_sources(kernel PRIVATE
+  ${UACPI_SOURCES}
+)
+
+target_include_directories(kernel PRIVATE
+  ${UACPI_INCLUDES}
+)
+
+target_compile_definitions(kernel PRIVATE
+  UACPI_BAREBONES_MODE
+)

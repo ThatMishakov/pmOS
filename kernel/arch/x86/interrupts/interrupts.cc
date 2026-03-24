@@ -76,7 +76,7 @@ extern "C" void timer_interrupt()
     // remember what it was doing exactly
     lapic::apic_eoi();
 
-    kernel::sched::sched_periodic();
+    kernel::sched::cpu_timer_interrupt();
 }
 
 /*
@@ -111,7 +111,7 @@ intno); halt(); break;
     } else if (intno < 0xf0) {
         programmable_interrupt(intno);
     } else if (intno == 0xfb) {
-        sched_periodic();
+        cpu_timer_interrupt();
         // smart_eoi(intno);
     }
 }

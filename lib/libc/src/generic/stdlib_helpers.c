@@ -37,8 +37,18 @@
 #include <stdio_internal.h>
 #include <stdlib.h>
 #include <string.h>
+#include <kernel/elf.h>
+#include <pthread.h>
+#include <elf.h>
 
-TLS_Data *__global_tls_data = NULL;
+#define TLS_MODEL0 0
+#define TLS_MODEL1 1
+
+#if defined(__x86_64__) || defined (__i386__)
+#define TLS_MODEL TLS_MODEL1
+#else
+#define TLS_MODEL TLS_MODEL0
+#endif
 
 #define max(x, y)                (x > y ? x : y)
 #define alignup(size, alignment) (size % alignment ? size + (alignment - size % alignment) : size)
@@ -46,6 +56,18 @@ TLS_Data *__global_tls_data = NULL;
 struct uthread *__get_tls();
 void __release_tls(struct uthread *u);
 struct uthread *__prepare_tls(void *stack_top, size_t stack_size);
+
+const auxv_t *__elf_aux_search(const auxv_t *auxv, int a_type)
+{
+    while (auxv->a_type != AT_NULL) {
+        if (auxv->a_type == a_type)
+            return auxv;
+        
+        auxv++;
+    }
+
+    return NULL;
+}
 
 void __init_uthread(struct uthread *u, void *stack_top, size_t stack_size)
 {
@@ -103,19 +125,215 @@ void __libc_init_hook() __attribute__((weak));
 void *__load_data_kernel       = 0;
 size_t __load_data_size_kernel = 0;
 
-static void init_tls_first_time(void *load_data, size_t load_data_size, TLS_Data *d)
+void *__load_data_user       = 0;
+size_t __load_data_size_user = 0;
+
+static void prepare_load_tags(void *load_data, size_t load_data_size)
 {
     __load_data_kernel      = load_data;
     __load_data_size_kernel = load_data_size;
 
-    __global_tls_data = d;
+    struct load_tag_userspace_tags *t = (struct load_tag_userspace_tags *)get_load_tag(
+        LOAD_TAG_USERSPACE_TAGS, load_data, load_data_size);
+    if (t) {
+        __load_data_user      = (void *)t->tags_address;
+        __load_data_size_user = t->memory_size; // This is the size of the page
+    }
+}
 
-    struct load_tag_stack_descriptor *s = (struct load_tag_stack_descriptor *)get_load_tag(
-        LOAD_TAG_STACK_DESCRIPTOR, load_data, load_data_size);
-    if (d == NULL)
-        return; // TODO: Panic
+static uint64_t tls_mem_object = 0;
+static size_t tls_memsz = 0;
+static size_t tls_filesz = 0;
+static uintptr_t tls_file_offset = 0;
+static uintptr_t tls_page_offset = 0;
 
-    struct uthread *u = __prepare_tls((void *)s->stack_top, s->stack_size);
+extern int pthread_list_spinlock;
+// Worker thread is the list head
+extern struct uthread *worker_thread;
+
+struct uthread *__prepare_tls(void *stack_top, size_t stack_size)
+{
+    // TODO: maybe not everything has TLS? :)
+    // bool has_tls = tls_mem_object != 0;
+
+    #if TLS_MODEL == TLS_MODEL1
+    uintptr_t tls_end = tls_page_offset + tls_memsz + sizeof(struct uthread);
+    tls_end = alignup(tls_end, _Alignof(struct uthread));
+
+    size_t size_to_page = alignup(tls_end, PAGE_SIZE);
+
+    map_mem_object_param_t params = {
+        .page_table_id = PAGE_TABLE_SELF,
+        .object_id = tls_mem_object,
+        .addr_start_uint = 0,
+        .size = size_to_page,
+        .offset_object = tls_file_offset,
+        .offset_start = tls_page_offset,
+        .object_size = tls_filesz,
+        .access_flags = CREATE_FLAG_COW | PROT_READ | PROT_WRITE,
+    };
+
+    mem_request_ret_t res = map_mem_object(&params);
+    if (res.result != SUCCESS)
+        return NULL;
+
+    unsigned char *tls = (unsigned char *)res.virt_addr + tls_page_offset + tls_memsz;
+
+    // #else ...
+    #else
+    uintptr_t tls_offset = (tls_page_offset - sizeof(struct uthread)) % PAGE_SIZE;
+    uintptr_t tls_end = tls_offset + sizeof(struct uthread) + tls_memsz;
+
+    size_t size_all = alignup(tls_end, PAGE_SIZE);
+
+    map_mem_object_param_t params = {
+        .page_table_id = PAGE_TABLE_SELF,
+        .object_id = tls_mem_object,
+        .addr_start_uint = 0,
+        .size = size_all,
+        .offset_object = tls_file_offset,
+        .offset_start = tls_page_offset,
+        .object_size = tls_filesz,
+        .access_flags = CREATE_FLAG_COW | PROT_READ | PROT_WRITE,
+    };
+
+    mem_request_ret_t res = map_mem_object(&params);
+    if (res.result != SUCCESS)
+        return NULL;
+
+    unsigned char *tls = (unsigned char *)res.virt_addr + tls_offset;
+
+    #endif
+
+    __init_uthread((struct uthread *)tls, stack_top, stack_size);
+
+    return (struct uthread *)tls;
+}
+
+#if TLS_MODEL == TLS_MODEL1
+void __release_tls(struct uthread *u)
+{
+    if (u == NULL)
+        return;
+
+    pthread_spin_lock(&pthread_list_spinlock);
+    u->prev->next = u->next;
+    u->next->prev = u->prev;
+    pthread_spin_unlock(&pthread_list_spinlock);
+
+
+    release_region(TASK_ID_SELF, (char *)u - tls_file_offset - tls_memsz);
+}
+
+void *__get_tp()
+{
+    if (tls_memsz == 0)
+        return NULL;
+
+    return (char *)__get_tls() - tls_memsz;
+}
+
+void *__thread_pointer_from_uthread(struct uthread *uthread) { return uthread; }
+#else
+void *__get_tp();
+
+void __release_tls(struct uthread *u)
+{
+    if (u == NULL)
+        return;
+
+    pthread_spin_lock(&pthread_list_spinlock);
+    u->prev->next = u->next;
+    u->next->prev = u->prev;
+    pthread_spin_unlock(&pthread_list_spinlock);
+
+    uintptr_t tls_offset = (tls_page_offset - sizeof(struct uthread)) % PAGE_SIZE;
+
+    release_region(TASK_ID_SELF, (char *)u - tls_offset);
+}
+
+struct uthread *__get_tls()
+{
+    char *tls = __get_tp();
+    return (struct uthread *)(tls - sizeof(struct uthread));
+}
+
+void *__thread_pointer_from_uthread(struct uthread *uthread)
+{
+    return (void *)((char *)uthread + sizeof(*uthread));
+}
+#endif
+
+void *__phdr_addr = NULL;
+size_t __phdr_size = 0;
+size_t __phdr_num = 0;
+
+static void parse_tls_elf(const auxv_t *auxv)
+{
+    const auxv_t *e = __elf_aux_search(auxv, AT_PHDR);
+    if (!e)
+        return;
+    __phdr_addr = e->a_ptr;
+    e = __elf_aux_search(auxv, AT_PHENT);
+    if (!e)
+        return;
+    __phdr_size = e->a_val;
+    e = __elf_aux_search(auxv, AT_PHNUM);
+    if (!e)
+        return;
+    __phdr_num = e->a_val;
+
+    e = __elf_aux_search(auxv, AT_MEM_OBJ_ID);
+    if (!e)
+        return;
+    tls_mem_object = *(uint64_t *)e->a_ptr;
+
+    if (__phdr_size == sizeof(ELF_PHeader_32)) {
+        ELF_PHeader_32 *header = (void *)__phdr_addr;
+        for (uint64_t i = 0; i < __phdr_num; ++i) {
+            ELF_PHeader_32 *e = header + i;
+            if (e->type == PT_TLS) {
+                tls_memsz = e->p_memsz;
+                tls_filesz = e->p_filesz;
+                tls_file_offset = e->p_offset;
+                tls_page_offset = tls_file_offset % PAGE_SIZE;
+
+                break;
+            }
+        }
+    } else {
+        ELF_PHeader_64 *header = (void *)__phdr_addr;
+        for (uint64_t i = 0; i < __phdr_num; ++i) {
+            ELF_PHeader_64 *e = header + i;
+            if (e->type == PT_TLS) {
+                tls_memsz = e->p_memsz;
+                tls_filesz = e->p_filesz;
+                tls_file_offset = e->p_offset;
+                tls_page_offset = tls_file_offset % PAGE_SIZE;
+
+                break;
+            }
+        }
+    }
+}
+
+static void init_tls_first_time(const auxv_t *auxv)
+{
+    parse_tls_elf(auxv);
+
+    void *stack_top;
+    size_t stack_size;
+
+    const auxv_t *e = __elf_aux_search(auxv, AT_USRSTACKBASE);
+    if (!e)
+        return;
+    stack_top = e->a_ptr;
+    e = __elf_aux_search(auxv, AT_USRSTACKLIM);
+    if (!e)
+        return;
+    stack_size = e->a_val;
+
+    struct uthread *u = __prepare_tls(stack_top, stack_size);
     if (u == NULL)
         return; // TODO: Panic
 
@@ -142,6 +360,13 @@ long __libc_gp = 0;
 
 void __libc_init_dyn();
 
+int __argc;
+char **__argv;
+char **__envp;
+auxv_t *__auxv;
+
+void __init_environ(const char **envp);
+
 /// @brief Initializes the standard library
 ///
 /// This function initializes the standard library and is the first thing called in _start function
@@ -152,15 +377,34 @@ void __libc_init_dyn();
 /// @param load_data Pointer to the memory region containing the load tags
 /// @param load_data_size Size of the memory region containing the load tags
 /// @param d Page containing the TLS data
-void init_std_lib(void *load_data, size_t load_data_size, TLS_Data *d)
+void init_std_lib(void *load_data, size_t load_data_size, int *argc)
 {
     #ifdef __riscv
     __libc_gp = __get_gp();
     #endif
 
-    init_tls_first_time(load_data, load_data_size, d);
+    // Find argc, argv, envp, auxvec
+    int argc_ = *argc;
+    char **argv = (char **)argc + 1;
+
+    char **envp = argv + argc_ + 1;
+
+    void **envp_p = (void **)envp;
+    while (*envp_p++) ;
+    auxv_t *auxv = (auxv_t *)envp_p;
+
+
+    prepare_load_tags(load_data, load_data_size);
+    init_tls_first_time(auxv);
+
+    __argc = argc_;
+    __argv = argv;
+    __envp = envp;
+    __auxv = auxv;
 
     __active_threads = 1;
+
+    __init_environ(__envp);
 
     __init_stdio();
 
@@ -176,6 +420,51 @@ struct load_tag_generic *get_load_tag(uint32_t tag, void *load_data, size_t load
         t = (struct load_tag_generic *)((unsigned char *)t + t->offset_to_next);
         if ((unsigned char *)t >= (unsigned char *)load_data + load_data_size)
             return NULL;
+    }
+    return NULL;
+}
+
+struct load_tag_generic *get_load_tag_global(uint32_t tag, size_t index)
+{
+    struct load_tag_generic *t = __load_data_kernel;
+    while (t->tag != LOAD_TAG_CLOSE) {
+        if (t->tag == tag) {
+            if (index == 0)
+                return t;
+            index--;
+        }
+        t = (struct load_tag_generic *)((unsigned char *)t + t->offset_to_next);
+        if ((unsigned char *)t >= (unsigned char *)__load_data_kernel + __load_data_size_kernel)
+            return NULL;
+    }
+    
+    if (!__load_data_user || !__load_data_size_user)
+        return NULL;
+    
+    uintptr_t base = (uintptr_t)__load_data_user;
+    uintptr_t end  = base + __load_data_size_user;
+
+    uintptr_t p = base;
+    while (p + sizeof(struct load_tag_generic) <= end) {
+        struct load_tag_generic *t = (struct load_tag_generic *)p;
+        if (t->tag == LOAD_TAG_CLOSE)
+            break;
+
+        if (p + t->offset_to_next > end)
+            break; // Out of bounds
+
+        if (t->tag == tag) {
+            if (index == 0)
+                return t;
+            index--;
+        }
+
+        if (t->offset_to_next == 0)
+            break; // infinite loop
+        if (t->offset_to_next < sizeof(struct load_tag_generic))
+            break; // invalid offset
+
+        p += t->offset_to_next;
     }
     return NULL;
 }

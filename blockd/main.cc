@@ -17,6 +17,7 @@
 #include <system_error>
 #include <unistd.h>
 #include <vector>
+#include <limits.h>
 
 size_t alignup(size_t value, size_t alignment)
 {
@@ -277,7 +278,7 @@ void DiskOpenAwaiter::await_suspend(std::coroutine_handle<> h_)
 
 size_t align_to_page(size_t size)
 {
-    auto page_size = 4096; // TODO: don't hardcode this
+    auto page_size = PAGE_SIZE; // TODO: don't hardcode this
     return (size + page_size - 1) & ~(page_size - 1);
 }
 
@@ -296,7 +297,21 @@ pmos::async::detached_task probe_partitions(size_t disk_idx)
 
     pmos::utility::scope_guard guard {[&] { release_mem_object(object, 0); }};
     auto mbr_size          = align_to_page(disk.logical_sector_size * 2);
-    auto [result, mbr_ptr] = map_mem_object(0, nullptr, mbr_size, PROT_READ, object, 0);
+
+    map_mem_object_param_t p = {
+        .page_table_id = PAGE_TABLE_SELF,
+        .object_id = object,
+        .addr_start_uint = 0,
+        .size = mbr_size,
+        .offset_object = 0,
+        .offset_start = 0,
+        .object_size = mbr_size,
+        .access_flags = PROT_READ,
+    };
+    auto r = map_mem_object(&p);
+
+    auto result = r.result;
+    auto mbr_ptr = r.virt_addr;
     if (result != SUCCESS) {
         printf("Failed to map partition table %i (%s)\n", -(int)result, strerror(-result));
         co_return;
@@ -353,8 +368,24 @@ pmos::async::detached_task probe_partitions(size_t disk_idx)
         }
         pmos::utility::scope_guard guard3 {[&] { release_mem_object(gpt_object, 0); }};
         auto array_size_aligned = align_to_page(gpt_partition_array_size);
-        auto [result, gpt_ptr] = map_mem_object(0, nullptr, array_size_aligned, PROT_READ,
-                                                gpt_object, 0);
+
+        auto res = [&] { 
+            map_mem_object_param_t p = {
+                .page_table_id = 0,
+                .object_id = gpt_object,
+                .addr_start_uint = 0,
+                .size = array_size_aligned,
+                .offset_object = 0,
+                .offset_start = 0,
+                .object_size = array_size_aligned,
+                .access_flags = PROT_READ,
+            };
+
+            return map_mem_object(&p);
+        }();
+
+        auto result = res.result;
+        auto gpt_ptr = res.virt_addr;
         if (result != SUCCESS) {
             printf("Failed to map GPT partition array %i (%s)\n", -(int)result, strerror(-result));
             co_return;

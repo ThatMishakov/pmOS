@@ -108,7 +108,7 @@ struct GDT {
 #define R3_CODE_SEGMENT        (0x28 | 0x03)
 #define R2_CODE_SEGMENT        (0x30 | 0x02)
 #define R2_DATA_SEGMENT        (0x38 | 0x02)
-#define TSS_OFFSET             (0x48)
+#define TSS_SEGMENT            (0x48)
 #define KERNEL_THREAD_CODE_SEGMENT (0x58)
 
 extern "C" void loadGDT(GDT *gdt, u16 size);

@@ -41,7 +41,7 @@ struct File {
 };
 
 struct IPC_Queue {
-    pmos_port_t port;
+    pmos_port_t port __attribute__((aligned(8)));
     char *name;
 };
 

@@ -78,7 +78,7 @@ namespace paging
             memory::RCU_Head rcu_head;
         };
 
-        /// Asigns the ID sequentially upon region creation.
+        /// Assigns the ID sequentially upon region creation.
         Generic_Mem_Region();
 
         void rcu_free() noexcept;

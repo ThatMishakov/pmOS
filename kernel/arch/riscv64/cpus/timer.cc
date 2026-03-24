@@ -36,6 +36,16 @@ using namespace kernel::sched;
 // Put a bogus value for now
 u64 ticks_per_ms = 0;
 
+FreqFraction frequency_ns;
+FreqFraction frequency_inv;
+
+void set_timer_frequency(u64 frequency)
+{
+    frequency_ns = computeFreqFraction(frequency, 1e9);
+    frequency_inv = computeFreqFraction(1e9, frequency);
+    ticks_per_ms = frequency / 1000;
+}
+
 // https://popovicu.com/posts/risc-v-interrupts-with-timer-example/
 u64 get_current_timer_val()
 {
@@ -49,22 +59,28 @@ int fire_timer_at(u64 next_value) { return sbi_set_timer(next_value).error; }
 #include <kern_logger/kern_logger.hh>
 
 u64 kernel::sched::ticks_since_bootup = 0;
-void start_timer(u32 ms)
-{
-    const u64 ticks         = ms * ticks_per_ms;
-    const u64 current_value = get_current_timer_val();
-    const u64 next_value    = current_value + ticks;
-    fire_timer_at(next_value);
-    if (get_cpu_struct()->is_bootstap_cpu()) {
-        ticks_since_bootup = current_value;
-    }
-}
+// void start_timer(u32 ms)
+// {
+//     const u64 ticks         = ms * ticks_per_ms;
+//     const u64 current_value = get_current_timer_val();
+//     const u64 next_value    = current_value + ticks;
+//     fire_timer_at(next_value);
+//     if (get_cpu_struct()->is_bootstap_cpu()) {
+//         ticks_since_bootup = current_value;
+//     }
+// }
 
 u64 kernel::sched::get_ns_since_bootup() { 
-    return ticks_since_bootup * 1000000 / ticks_per_ms;
+    return frequency_inv * get_current_timer_val();
 }
 
-u64 get_current_time_ticks() { return get_current_timer_val(); }
+void kernel::sched::maybe_rearm_timer(u64 deadline_nanoseconds)
+{
+    auto c = get_cpu_struct();
+    if (c->local_timer_next_deadline != 0 and (c->local_timer_next_deadline < deadline_nanoseconds))
+        return;
 
-u64 CPU_Info::ticks_after_ms(u64 ms) { return get_current_time_ticks() + ms * ticks_per_ms; }
-u64 CPU_Info::ticks_after_ns(u64 ns) { return get_current_time_ticks() + ns / 1000000 * ticks_per_ms; }
+    c->local_timer_next_deadline = deadline_nanoseconds;
+    u64 ticks = frequency_ns * deadline_nanoseconds;
+    fire_timer_at(ticks);
+}

@@ -113,9 +113,9 @@ klib::shared_ptr<Mem_Object> Mem_Object::create_from_phys(u64 phys_addr, u64 siz
                                                           bool take_ownership,
                                                           u32 max_user_permissions)
 {
-    const u64 size_alligned  = (size_bytes + 0xFFF) & ~0xFFFUL;
-    const u64 start_alligned = phys_addr & ~0xFFFUL;
-    const u64 pages_count    = size_alligned >> 12;
+    const u64 size_aligned  = (size_bytes + 0xFFF) & ~0xFFFUL;
+    const u64 start_aligned = phys_addr & ~0xFFFUL;
+    const u64 pages_count    = size_aligned >> 12;
 
     assert(take_ownership && "not taking ownership is not implemented");
 
@@ -135,7 +135,7 @@ klib::shared_ptr<Mem_Object> Mem_Object::create_from_phys(u64 phys_addr, u64 siz
     // Provide the pages
     // This can't fail
     for (u64 i = 0; i < pages_count; ++i) {
-        auto page = pmm::Page_Descriptor::create_from_allocated(start_alligned + i * 0x1000);
+        auto page = pmm::Page_Descriptor::create_from_allocated(start_aligned + i * 0x1000);
         auto c    = page.page_struct_ptr;
         page.takeout_page();
         c->l.offset        = i * 0x1000;
@@ -177,7 +177,7 @@ kresult_t Mem_Object::register_pined(klib::weak_ptr<Page_Table> pined_by)
 {
     assert(pinned_lock.is_locked() && "lock is not locked!");
 
-    auto t = this->pined_by.insert(pined_by);
+    auto t = this->pined_by.insert_noexcept(pined_by);
     if (t.first == this->pined_by.end())
         return -ENOMEM;
 
@@ -524,3 +524,9 @@ ReturnStr<void *> Mem_Object::map_to_kernel(u64 offset, u64 size, Page_Table_Arg
 }
 
 u64 Mem_Object::size_bytes() const noexcept { return pages_size << page_size_log; }
+
+u64 Mem_Object::atomic_size_bytes() const
+{
+    Auto_Lock_Scope l(lock);
+    return size_bytes();
+}

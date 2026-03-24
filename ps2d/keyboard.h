@@ -30,20 +30,21 @@
 #define KEYBOARD_H
 #include <stdbool.h>
 #include <stdint.h>
+#include <pmos/helpers.h>
 
 struct port_list_node;
 
-bool is_keyboard(struct port_list_node *port);
-bool init_keyboard(struct port_list_node *port);
+bool is_keyboard();
+bool init_keyboard();
 
-void keyboard_react_timer(struct port_list_node *port);
-void keyboard_react_data(struct port_list_node *port, unsigned char data);
+void keyboard_react_timer();
+void keyboard_react_data(unsigned char data);
 
-void keyboard_scan_byte(struct port_list_node *port, unsigned char data);
+void keyboard_scan_byte(unsigned char data);
 
 // Registers keyboard with HID daemon
-void register_keyboard(struct port_list_node *port);
-void unregister_keyboard(struct port_list_node *port);
+void register_keyboard();
+void unregister_keyboard();
 
 #define KBD_CMD_BUFF_SIZE 16
 
@@ -72,16 +73,19 @@ struct keyboard_state {
     struct keyboard_cmd cmd_buffer[KBD_CMD_BUFF_SIZE];
     unsigned cmd_buffer_start;
     unsigned cmd_buffer_index;
+
+    pmos_right_t receive_right;
+    pmos_msgloop_tree_node_t node;
 };
 
-struct keyboard_cmd *keyboard_cmd_get_front(struct port_list_node *port);
-void keyboard_push_cmd(struct port_list_node *port, struct keyboard_cmd data);
-void keyboard_push_cmd_byte(struct port_list_node *port, unsigned char data);
-void keyboard_ack_cmd(struct port_list_node *port);
-void keyboard_pop_front_cmd(struct port_list_node *port);
-void keyboard_send_front_cmd(struct port_list_node *port);
-bool keyboard_cmd_queue_empty(struct port_list_node *port);
+struct keyboard_cmd *keyboard_cmd_get_front();
+void keyboard_push_cmd(struct keyboard_cmd data);
+void keyboard_push_cmd_byte(unsigned char data);
+void keyboard_ack_cmd();
+void keyboard_pop_front_cmd();
+void keyboard_send_front_cmd();
+bool keyboard_cmd_queue_empty();
 
-void keyboard_react_scancode(struct port_list_node *port, uint64_t scancode);
+void keyboard_react_scancode(uint64_t scancode);
 
 #endif

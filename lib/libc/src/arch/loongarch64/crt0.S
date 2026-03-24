@@ -7,6 +7,8 @@ _start:
     st.d $zero, $sp, 8 # RA
     addi.d $fp, $sp, 16
 
+    # argc and stuff
+    addi.d $a2, $sp, 16
     # Initialize libc
     bl init_std_lib
 

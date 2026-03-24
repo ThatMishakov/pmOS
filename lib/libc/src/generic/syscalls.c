@@ -242,7 +242,10 @@ mem_request_ret_t create_phys_map_region(uint64_t pid, void *addr_start, size_t 
     syscall_r r =
         pmos_syscall(SYSCALL_CREATE_PHYS_REGION | (access << 8), pid, phys_addr, addr_start, size);
 #endif
-    mem_request_ret_t t = {r.result, (void *)r.value};
+    mem_request_ret_t t = {
+        .result = r.result,
+        .virt_addr_intptr = r.value
+    };
     return t;
 }
 
@@ -254,33 +257,39 @@ mem_request_ret_t create_normal_region(uint64_t pid, void *addr_start, size_t si
 #else
     syscall_r r = pmos_syscall(SYSCALL_CREATE_NORMAL_REGION | (access << 8), pid, addr_start, size);
 #endif
-    mem_request_ret_t t = {r.result, (void *)r.value};
+    mem_request_ret_t t = {
+        .result = r.result,
+        .virt_addr_intptr = r.value
+    };
     return t;
 }
 
-mem_request_ret_t transfer_region(uint64_t to_page_table, void *region, void *dest, uint32_t flags)
+mem_request_ret_t transfer_region(uint64_t to_page_table, void *region, uint64_t dest, uint32_t flags)
 {
 #ifdef __32BITSYSCALL
-    syscall_r r = __pmos_syscall32_4words(SYSCALL_TRANSFER_REGION | (flags << 8), to_page_table,
-                                          region, dest);
+    syscall_r r = __pmos_syscall32_5words(SYSCALL_TRANSFER_REGION | (flags << 8), to_page_table, dest,
+                                          region);
 #else
-    syscall_r r = pmos_syscall(SYSCALL_TRANSFER_REGION | (flags << 8), to_page_table, region, dest);
+    syscall_r r = pmos_syscall(SYSCALL_TRANSFER_REGION | (flags << 8), to_page_table, dest, region);
 #endif
-    mem_request_ret_t t = {r.result, (void *)r.value};
+    mem_request_ret_t t = {
+        .result = r.result,
+        .virt_addr_intptr = r.value
+    };
     return t;
 }
 
-mem_request_ret_t map_mem_object(uint64_t page_table_id, void *addr_start, size_t size,
-                                 uint32_t access, mem_object_t object_id, uint64_t offset)
+mem_request_ret_t map_mem_object(const map_mem_object_param_t *params)
 {
 #ifdef __32BITSYSCALL
-    syscall_r r = __pmos_syscall32_8words(SYSCALL_MAP_MEM_OBJECT | (access << 8), page_table_id,
-                                          object_id, offset, addr_start, size);
+    syscall_r r = __pmos_syscall32_1words(SYSCALL_MAP_MEM_OBJECT, params);
 #else
-    syscall_r r = pmos_syscall(SYSCALL_MAP_MEM_OBJECT | (access << 8), page_table_id, object_id,
-                               offset, addr_start, size);
+    syscall_r r = pmos_syscall(SYSCALL_MAP_MEM_OBJECT, params);
 #endif
-    mem_request_ret_t t = {r.result, (void *)r.value};
+    mem_request_ret_t t = {
+        .result = r.result,
+        .virt_addr_intptr = r.value
+    };
     return t;
 }
 
@@ -293,10 +302,10 @@ result_t release_region(uint64_t tid, void *region)
 #endif
 }
 
-syscall_r init_stack(uint64_t tid, void *stack_top)
+syscall_r init_stack(uint64_t tid, uint64_t stack_top)
 {
 #ifdef __32BITSYSCALL
-    return __pmos_syscall32_3words(SYSCALL_INIT_STACK, tid, (unsigned)stack_top);
+    return __pmos_syscall32_4words(SYSCALL_INIT_STACK, tid, stack_top);
 #else
     return pmos_syscall(SYSCALL_INIT_STACK, tid, stack_top);
 #endif
@@ -313,12 +322,12 @@ page_table_req_ret_t get_page_table(uint64_t pid)
     return t;
 }
 
-page_table_req_ret_t asign_page_table(uint64_t pid, uint64_t page_table, uint64_t flags)
+page_table_req_ret_t assign_page_table(uint64_t pid, uint64_t page_table, unsigned flags, unsigned for_arch)
 {
 #ifdef __32BITSYSCALL
-    syscall_r r = __pmos_syscall32_4words(SYSCALL_ASIGN_PAGE_TABLE | (flags << 8), pid, page_table);
+    syscall_r r = __pmos_syscall32_4words(SYSCALL_ASSIGN_PAGE_TABLE | (flags << 8) | (for_arch << 24), pid, page_table);
 #else
-    syscall_r r = pmos_syscall(SYSCALL_ASIGN_PAGE_TABLE | (flags << 8), pid, page_table);
+    syscall_r r = pmos_syscall(SYSCALL_ASSIGN_PAGE_TABLE | (flags << 8) | (for_arch << 24), pid, page_table);
 #endif
     page_table_req_ret_t t = {r.result, r.value};
     return t;
@@ -417,12 +426,12 @@ result_t syscall_set_task_name(uint64_t tid, const char *name, size_t name_lengt
 #endif
 }
 
-result_t syscall_load_executable(uint64_t tid, uint64_t object_id, unsigned flags)
+result_t syscall_load_executable(uint64_t tid, uint64_t object_id, void *optional_data, unsigned flags)
 {
 #ifdef __32BITSYSCALL
-    return __pmos_syscall32_4words(SYSCALL_LOAD_EXECUTABLE | (flags << 8), tid, object_id).result;
+    return __pmos_syscall32_5words(SYSCALL_LOAD_EXECUTABLE | (flags << 8), tid, object_id, optional_data).result;
 #else
-    return pmos_syscall(SYSCALL_LOAD_EXECUTABLE | (flags << 8), tid, object_id).result;
+    return pmos_syscall(SYSCALL_LOAD_EXECUTABLE | (flags << 8), tid, object_id, optional_data).result;
 #endif
 }
 
@@ -623,7 +632,7 @@ right_request_t send_message_right(pmos_right_t send_right, pmos_port_t reply_po
     };
 }
 
-result_t delete_right(pmos_right_t right_id)
+result_t delete_right_raw(pmos_right_t right_id)
 {
     #ifdef __32BITSYSCALL
     return __pmos_syscall32_2words(SYSCALL_DELETE_SEND_RIGHT, right_id).result;
@@ -653,4 +662,39 @@ right_request_t dup_right(pmos_right_t right)
         .result = result.result,
         .right = result.value,
     };
+}
+
+syscall_r get_mem_object_size(mem_object_t mem_object_id, unsigned flags)
+{
+    #ifdef __32BITSYSCALL
+    return __pmos_syscall32_2words(SYSCALL_GET_MEM_OBJECT_SIZE | (flags << 8), mem_object_id);
+    #else
+    return pmos_syscall(SYSCALL_GET_MEM_OBJECT_SIZE | (flags << 8), mem_object_id);
+    #endif
+}
+
+right_request_t transfer_right(uint64_t task_group, uint64_t right, unsigned flags)
+{
+    syscall_r result;
+    #ifdef __32BITSYSCALL
+    result = __pmos_syscall32_4words(SYSCALL_TRANSFER_RIGHT | (flags << 8), task_group, right);
+    #else
+    result = pmos_syscall(SYSCALL_TRANSFER_RIGHT | (flags << 8), task_group, right);
+    #endif
+    return (right_request_t) {
+        .result = result.result,
+        .right = result.value,
+    };
+}
+
+result_t delete_receive_right(pmos_port_t port, pmos_right_t right)
+{
+    if (!port || !right)
+        return SUCCESS;
+
+    #ifdef __i386__
+    return __pmos_syscall32_4words(SYSCALL_DELETE_RECEIVE_RIGHT, port, right).result;
+    #else
+    return pmos_syscall(SYSCALL_DELETE_RECEIVE_RIGHT, port, right).result;
+    #endif
 }

@@ -31,6 +31,7 @@
 #include <stdint.h>
 #include <uacpi/event.h>
 #include <pmos/vector.h>
+#include <pmos/helpers.h>
 
 void init_pci();
 
@@ -106,7 +107,13 @@ struct PCIDevice {
     uint8_t class_code;
     uint8_t subclass;
 
+    uint8_t prog_if;
+    uint8_t revision_id;
+
+    pmos_right_t send_right;
+    pmos_right_t receive_right;
     struct PCIDevice *associated_bridge;
+    pmos_msgloop_tree_node_t msgloop_node;
 
     int pcie : 1;
     int downstream : 1;
@@ -172,6 +179,8 @@ inline uint32_t pci_device_id(struct PCIDevicePtr *s)
 
 inline uint8_t pci_class_code(struct PCIDevicePtr *s) { return pci_read_register(s, 2) >> 24; }
 inline uint8_t pci_subclass(struct PCIDevicePtr *s) { return pci_read_register(s, 2) >> 16; }
+inline uint8_t pci_prog_if(struct PCIDevicePtr *s) { return pci_read_register(s, 2) >> 8; }
+inline uint8_t pci_revision_id(struct PCIDevicePtr *s) { return pci_read_register(s, 2) >> 0; }
 inline bool pci_no_device(struct PCIDevicePtr *s)
 {
     return pci_vendor_id(s) == VENDOR_ID_NO_DEVICE;

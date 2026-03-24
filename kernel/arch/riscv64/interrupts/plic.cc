@@ -3,6 +3,7 @@
 #include <acpi/acpi.h>
 #include <dtb/dtb.hh>
 #include <interrupts/interrupt_handler.hh>
+#include <pmos/utility/scope_guard.hh>
 #include <kern_logger/kern_logger.hh>
 #include <memory/paging.hh>
 #include <memory/vmm.hh>
@@ -10,6 +11,9 @@
 #include <scheduling.hh>
 #include <smoldtb.h>
 #include <types.hh>
+
+#include <uacpi/tables.h>
+#include <uacpi/acpi.h>
 
 using namespace kernel;
 using namespace kernel::log;
@@ -24,21 +28,19 @@ u32 plic_read(const PLIC &plic, u32 offset) { return plic.virt_base[offset >> 2]
 
 void plic_write(const PLIC &plic, u32 offset, u32 value) { plic.virt_base[offset >> 2] = value; }
 
-MADT_PLIC_entry *get_plic_entry(int index = 0)
+
+static acpi_entry_hdr *get_madt_entry(acpi_madt *madt, u8 type, int idx)
 {
-    MADT *m = get_madt();
-    if (m == nullptr)
-        return nullptr;
+    size_t offset = sizeof(acpi_madt);
+    int iidx = 0;
+    while (offset < madt->hdr.length) {
+        acpi_entry_hdr *ee = (acpi_entry_hdr *)((char *)madt + offset);
+        offset += ee->length;
+        if (ee->type != type)
+            continue;
 
-    u32 offset = sizeof(MADT);
-    u32 length = m->header.length;
-    int count  = 0;
-    while (offset < length) {
-        MADT_PLIC_entry *e = (MADT_PLIC_entry *)((char *)m + offset);
-        if (e->header.type == MADT_PLIC_ENTRY_TYPE and count++ == index)
-            return e;
-
-        offset += e->header.length;
+        if (iidx++ == idx)
+            return ee;
     }
 
     return nullptr;
@@ -71,23 +73,30 @@ PLIC system_plic;
 bool acpi_init_plic()
 {
     // TODO: Only one PLIC is supported at the moment
-
-    MADT_PLIC_entry *e = get_plic_entry();
-    if (e == nullptr) {
+    uacpi_table m;
+    auto res = uacpi_table_find_by_signature(ACPI_MADT_SIGNATURE, &m);
+    if (res != UACPI_STATUS_OK) {
         return false;
     }
+    auto guard = pmos::utility::make_scope_guard([&]{
+        uacpi_table_unref(&m);
+    });
 
-    const auto base      = e->plic_address;
-    const auto size      = e->plic_size;
+    acpi_madt *madt = (acpi_madt *)m.ptr;  
+
+    acpi_madt_plic *e = (acpi_madt_plic *)get_madt_entry(madt, ACPI_MADT_ENTRY_TYPE_PLIC, 0);
+
+    const auto base      = e->address;
+    const auto size      = e->size;
     const auto virt_base = map_plic(base, size);
 
     system_plic.virt_base                  = reinterpret_cast<volatile u32 *>(virt_base);
     system_plic.hardware_id                = e->hardware_id;
-    system_plic.gsi_base                   = e->global_sys_int_vec_base;
-    system_plic.external_interrupt_sources = e->total_ext_int_sources_supported;
-    system_plic.plic_id                    = e->plic_id;
+    system_plic.gsi_base                   = e->gsi_base;
+    system_plic.external_interrupt_sources = e->sources_count;
+    system_plic.plic_id                    = e->id;
     system_plic.max_priority               = e->max_priority;
-    if (!system_plic.claimed_by_cpu.resize(e->total_ext_int_sources_supported, nullptr))
+    if (!system_plic.claimed_by_cpu.resize(e->sources_count, nullptr))
         panic("failed to allocate memory for PLIC\n");
 
     return true;

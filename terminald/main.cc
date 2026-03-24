@@ -37,8 +37,8 @@
 #include <pmos/helpers.h>
 #include <pmos/helpers.hh>
 
-#include <flanterm/flanterm.h>
-#include <flanterm/backends/fb.h>
+#include <flanterm/src/flanterm.h>
+#include <flanterm/src/flanterm_backends/fb.h>
 
 struct flanterm_context *ft_ctx;
 
@@ -119,9 +119,9 @@ void init_screen()
     size_t start = r->framebuffer_addr&~0xfffUL;
     size_t size = r->framebuffer_width*r->framebuffer_height*r->framebuffer_bpp/8;
     size_t end = (start + size + 0xfff)&~0xfffUL;
-    size_t size_alligned = end - start;
+    size_t size_aligned = end - start;
 
-    mem_request_ret_t map_request = create_phys_map_region(TASK_ID_SELF, 0, size_alligned, PROT_READ|PROT_WRITE, start);
+    mem_request_ret_t map_request = create_phys_map_region(TASK_ID_SELF, 0, size_aligned, PROT_READ|PROT_WRITE, start);
     if (map_request.result != SUCCESS)
         exit(7);
 
@@ -191,7 +191,7 @@ int main() {
 
         switch (str->type) {
         case IPC_Write_Plain_NUM:
-            write_screen({str->data, msg.size - offsetof(IPC_Write_Plain, data)});
+            write_screen({str->data, static_cast<size_t>(msg.size - offsetof(IPC_Write_Plain, data))});
             break;
         case IPC_Kernel_Named_Port_Notification_NUM:
             react_named_port_notification((char *)buffer.data(), msg.size, std::move(rights[0]));

@@ -346,7 +346,7 @@ ReturnStr<std::pair<Right * /* right */, u64 /* new_id_error */>>
             assert(reply_port->alive);
             reply_right->right_parent_id = reply_port->new_right_id();
             Auto_Lock_Scope l(reply_port->rights_lock);
-            reply_port->rights.insert(reply_right.release());
+            reply_port->rights.insert(reply_right.get());
         }
 
         msg->rights = array;
@@ -358,7 +358,8 @@ ReturnStr<std::pair<Right * /* right */, u64 /* new_id_error */>>
     }
 
     if (auto ptr = reply_right.release(); ptr)
-        return Success(std::make_pair(ptr, ptr->right_sender_id));
+        // Note to myself: ptr->right_sender_id is 0 here, and probably not wanted anyway
+        return Success(std::make_pair(ptr, ptr->right_parent_id));
     else
         return Success(std::make_pair(nullptr, 0));
 }

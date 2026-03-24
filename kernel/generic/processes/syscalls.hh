@@ -136,7 +136,7 @@ void syscall_set_segment();
 void syscall_get_segment();
 // Parameters: u64 pid, u64 segment_type
 
-void syscall_asign_page_table();
+void syscall_assign_page_table();
 // Parameters: u64 pid, u64 page_table, u64 flags
 
 void syscall_create_mem_object();
@@ -260,6 +260,12 @@ void syscall_dup_right();
 
 void syscall_set_right0();
 
+void syscall_get_mem_object_size();
+// Parameters: u64 mem_object_id, flags
+
+void syscall_transfer_right();
+// Parameters: u64 to_group, u64 right_id, flags
+
 struct SyscallRetval {
     TaskDescriptor *task;
     u64 operator=(u64 value);
@@ -284,14 +290,5 @@ void syscall_success(TaskDescriptor *task);
 ReturnStr<bool> syscall_arg64_checked(TaskDescriptor *task, int arg, u64 &value);
 ReturnStr<bool> syscall_arg_checked(TaskDescriptor *task, int arg, int args64before, ulong &value);
 ReturnStr<bool> syscall_args_checked(TaskDescriptor *task, int arg, int args64before, int count, ulong *values);
-
-// Entry point for when userspace calls SYSCALL instruction
-extern "C" void syscall_entry();
-
-// Entry point for when userspace calls SYSENTER instruction
-extern "C" void sysenter_entry();
-
-// Enables SYSCALL instruction
-void program_syscall();
 
 };

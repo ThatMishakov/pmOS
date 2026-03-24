@@ -1,6 +1,7 @@
 #include "ultra_protocol.h"
 
-#include <acpi/acpi.hh>
+#include <uacpi/uacpi.h>
+#include <uacpi/kernel_api.h>
 #include <kern_logger/kern_logger.hh>
 #include <memory/mem_object.hh>
 #include <memory/paging.hh>
@@ -17,6 +18,7 @@ using namespace kernel::pmm;
 using namespace kernel::log;
 using namespace kernel::paging;
 using namespace kernel::ia32::paging;
+using namespace kernel::x86::paging;
 
 void hcf();
 
@@ -562,6 +564,18 @@ void init_memory(ultra_boot_context *ctx)
 constexpr u64 RSDP_INITIALIZER = -1ULL;
 u64 rsdp                       = -1ULL;
 
+uacpi_status uacpi_kernel_get_rsdp(uacpi_phys_addr *out_rsdp_address)
+{
+    if (rsdp == RSDP_INITIALIZER)
+        return UACPI_STATUS_NOT_FOUND;
+
+    *out_rsdp_address = rsdp;
+    return UACPI_STATUS_OK;
+}
+
+size_t uacpi_early_size = 0x1000;
+char *uacpi_temp_buffer = nullptr;
+
 void init();
 void init_acpi(u64 rsdp_addr)
 {
@@ -570,9 +584,25 @@ void init_acpi(u64 rsdp_addr)
         return;
     }
 
-    const bool b = enumerate_tables(rsdp_addr);
-    if (b)
-        rsdp = rsdp_addr;
+    rsdp = rsdp_addr;
+
+    for (;;) {
+        uacpi_temp_buffer = new char[uacpi_early_size];
+        if (!uacpi_temp_buffer)
+            panic("Couldn't allocate memory for uACPI early buffer");
+    
+        auto ret = uacpi_setup_early_table_access((void *)uacpi_temp_buffer, uacpi_early_size);
+        if (ret == UACPI_STATUS_OK)
+        break;
+
+        delete uacpi_temp_buffer;
+        if (ret == UACPI_STATUS_OUT_OF_MEMORY) {
+            uacpi_early_size += 4096;
+        } else {
+            serial_logger.printf("uacpi_initialize error: %s", uacpi_status_to_string(ret));
+            return;
+        }
+    }
 }
 
 namespace kernel::paging
@@ -801,7 +831,7 @@ klib::unique_ptr<load_tag_generic> construct_load_tag_for_modules()
         size += t.cmdline.size() + 1;
     }
 
-    // Allign to u64
+    // Align to u64
     size = (size + 7) & ~7UL;
 
     // Allocate the tag
@@ -872,7 +902,7 @@ void init_task1(ultra_boot_context *ctx)
         panic("Failed to create task");
     task->name = "bootstrap";
     serial_logger.printf("Loading ELF...\n");
-    auto p = task->load_elf(task1->object, task1->path, tags);
+    auto p = task->atomic_load_elf(task1->object, task1->path, tags);
     if (!p.success() || !p.val)
         panic("Failed to load task 1: %i", p.result);
 }

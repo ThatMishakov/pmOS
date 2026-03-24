@@ -120,7 +120,7 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
 
     // Assign a page table
     page_table_req_ret_t thread_table =
-        asign_page_table(u->thread_task_id, PAGE_TABLE_SELF, PAGE_TABLE_ASIGN);
+        assign_page_table(u->thread_task_id, PAGE_TABLE_SELF, PAGE_TABLE_ASSIGN, 0);
     if (thread_table.result != 0) {
         syscall_kill_task(u->thread_task_id);
         release_region(TASK_ID_SELF, stack.virt_addr);
@@ -131,7 +131,7 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
     // Kernel counts references to page table and it can't be freed explicitly
 
     // Set the stack
-    syscall_r r_result = init_stack(u->thread_task_id, (void *)stack_top);
+    syscall_r r_result = init_stack(u->thread_task_id, (uint64_t)stack_top);
     if (r_result.result != SUCCESS) {
         release_region(TASK_ID_SELF, stack.virt_addr);
         __release_tls(u);

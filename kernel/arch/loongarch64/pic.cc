@@ -1,5 +1,5 @@
-#include <acpi/acpi.h>
-#include <acpi/acpi.hh>
+#include <uacpi/tables.h>
+#include <uacpi/acpi.h>
 #include <errno.h>
 #include <interrupts/interrupt_handler.hh>
 #include <kern_logger/kern_logger.hh>
@@ -12,6 +12,7 @@
 #include <sched/sched.hh>
 #include <types.hh>
 #include <csr.hh>
+#include <pmos/utility/scope_guard.hh>
 
 using namespace kernel;
 using namespace kernel::sched;
@@ -154,88 +155,6 @@ void interrupts::interrupt_complete(u32 interrupt)
     csrxchg32<loongarch::csr::ECFG>(-1U, 1 << (interrupt/sizeof(uint32_t) + 2));
 }
 
-MADT *get_madt()
-{
-    static MADT *rhct_virt = nullptr;
-    static bool have_acpi  = true;
-
-    if (rhct_virt == nullptr and have_acpi) {
-        u64 rhct_phys = get_table(0x43495041); // APIC (because why not)
-        if (rhct_phys == 0) {
-            have_acpi = false;
-            return nullptr;
-        }
-
-        ACPISDTHeader h;
-        copy_from_phys(rhct_phys, &h, sizeof(h));
-
-        rhct_virt = (MADT *)malloc(h.length);
-        copy_from_phys(rhct_phys, rhct_virt, h.length);
-    }
-
-    return rhct_virt;
-}
-
-MADT_LIOPIC_entry *get_liopic_entry(int index = 0)
-{
-    MADT *m = get_madt();
-    if (m == nullptr)
-        return nullptr;
-
-    u32 offset = sizeof(MADT);
-    u32 length = m->header.length;
-    int count  = 0;
-    while (offset < length) {
-        MADT_LIOPIC_entry *e = (MADT_LIOPIC_entry *)((char *)m + offset);
-        if (e->header.type == MADT_LIOPIC_ENTRY_TYPE and count++ == index)
-            return e;
-
-        offset += e->header.length;
-    }
-
-    return nullptr;
-}
-
-MADT_EIOPIC_entry *get_eiopic_entry(int index = 0)
-{
-    MADT *m = get_madt();
-    if (m == nullptr)
-        return nullptr;
-
-    u32 offset = sizeof(MADT);
-    u32 length = m->header.length;
-    int count  = 0;
-    while (offset < length) {
-        MADT_EIOPIC_entry *e = (MADT_EIOPIC_entry *)((char *)m + offset);
-        if (e->header.type == MADT_EIOPIC_ENTRY_TYPE and count++ == index)
-            return e;
-
-        offset += e->header.length;
-    }
-
-    return nullptr;
-}
-
-MADT_BIOPIC_entry *get_biopic_entry(int index = 0)
-{
-    MADT *m = get_madt();
-    if (m == nullptr)
-        return nullptr;
-
-    u32 offset = sizeof(MADT);
-    u32 length = m->header.length;
-    int count  = 0;
-    while (offset < length) {
-        MADT_BIOPIC_entry *e = (MADT_BIOPIC_entry *)((char *)m + offset);
-        if (e->header.type == MADT_BIOPIC_ENTRY_TYPE and count++ == index)
-            return e;
-
-        offset += e->header.length;
-    }
-
-    return nullptr;
-}
-
 klib::vector<BIOPIC *> biopics;
 
 static void biopic_push(BIOPIC *biopic)
@@ -337,9 +256,40 @@ void BIOPIC::set_mapping(u32 gsi, unsigned idx, CPU_Info *, bool edge_triggered)
     mmio_writeb((u8 *)virt_address + HTMSI_VECTOR0 + base, idx);
 }
 
+static acpi_entry_hdr *get_madt_entry(acpi_madt *madt, u8 type, int idx)
+{
+    size_t offset = sizeof(acpi_madt);
+    int iidx = 0;
+    while (offset < madt->hdr.length) {
+        acpi_entry_hdr *ee = (acpi_entry_hdr *)((char *)madt + offset);
+        offset += ee->length;
+        if (ee->type != type)
+            continue;
+
+        if (iidx++ == idx)
+            return ee;
+    }
+
+    return nullptr;
+}
+
 void init_interrupts()
 {
-    auto e = get_eiopic_entry();
+    uacpi_table m;
+    auto res = uacpi_table_find_by_signature(ACPI_MADT_SIGNATURE, &m);
+    if (res != UACPI_STATUS_OK) {
+        log::serial_logger.printf("Couldn't get MADT table...\n");
+        return;
+    }
+    auto guard = pmos::utility::make_scope_guard([&]{
+        uacpi_table_unref(&m);
+    });
+
+    acpi_madt *madt = (acpi_madt *)m.ptr;
+
+
+
+    auto e = (acpi_madt_eio_pic *)get_madt_entry(madt, ACPI_MADT_ENTRY_TYPE_EIO_PIC, 0);
     if (e) {
         interrupt_model = IntControllerClass::EIOPIC;
 
@@ -364,17 +314,17 @@ void init_interrupts()
     }
 
     int idx = 0;
-    auto be = get_biopic_entry(idx);
-    while (be) {
+    acpi_madt_bio_pic *be;
+    while ((be = (acpi_madt_bio_pic *)get_madt_entry(madt, ACPI_MADT_ENTRY_TYPE_BIO_PIC, idx++))) {
         auto biopic = new BIOPIC();
         if (!biopic)
             panic("Failed to allocate memory for BIO PIC");
 
         constexpr u64 PAGE_MASK = PAGE_SIZE - 1;
 
-        biopic->base_address = be->base_address;
+        biopic->base_address = be->address;
         biopic->gsi_base     = be->gsi_base;
-        auto offset          = be->base_address & PAGE_MASK;
+        auto offset          = biopic->base_address & PAGE_MASK;
         auto size            = be->size + offset;
         auto size_aligned    = (size + PAGE_MASK) & ~PAGE_MASK;
 
@@ -390,7 +340,7 @@ void init_interrupts()
                                            .extra              = PAGING_FLAG_NOFREE,
                                            .cache_policy       = paging::Memory_Type::IONoCache};
 
-        auto result = map_kernel_pages(be->base_address & ~PAGE_MASK, addr, size_aligned, arg);
+        auto result = map_kernel_pages(biopic->base_address & ~PAGE_MASK, addr, size_aligned, arg);
         if (result)
             panic("Failed to map BIO PIC into kernel\n");
 
@@ -402,8 +352,6 @@ void init_interrupts()
         biopic->initialize();
 
         serial_logger.printf("Initialized BIO PIC at %lx\n", biopic->virt_address);
-
-        be = get_biopic_entry(++idx);
     }
 }
 

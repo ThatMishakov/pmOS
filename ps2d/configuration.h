@@ -31,6 +31,6 @@
 
 struct port_list_node;
 
-void configure_port(struct port_list_node *port);
+void configure_port();
 
 #endif

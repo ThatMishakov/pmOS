@@ -70,7 +70,7 @@ void kernel::x86::sse::detect_sse()
 
     serial_logger.printf(
         "SSE: XSAVE %s supported, XSAVEOPT %s supported, XSAVE area size: %u bytes\n",
-        xsave_supported ? "" : "not", sse_ctx_style == SSECtxStyle::XSAVEOPT ? "" : "not",
+        xsave_supported ? "is" : "is not", sse_ctx_style == SSECtxStyle::XSAVEOPT ? "is" : "is not",
         sse_ctx_size);
 
     if (sse_ctx_size < 512) {

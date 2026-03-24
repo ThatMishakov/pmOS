@@ -89,6 +89,8 @@ extern "C" void test_qsort();
 extern "C" void test_pipe();
 extern "C" void test_tlb_shootdown();
 
+void test_containers();
+
 void run_tests()
 {
     test_qsort();
@@ -102,7 +104,7 @@ void tick()
         int i = 0;
         while (true) {
             printf("Tick %i\n", ++i);
-            sleep(5);
+            sleep(1);
         }
     } else if (p == -1) {
         perror("fork");
@@ -123,6 +125,7 @@ int main()
     sleep(1);
     printf("Starting tests...\n");
     //tick();
+    test_containers();
     test_exception();
 
     //test_tlb_shootdown();

@@ -48,6 +48,9 @@ typedef uint64_t pmos_port_t;
 typedef uint64_t pmos_right_t;
 typedef uint64_t mem_object_t;
 
+typedef pmos_port_t pmos_port_aligned __attribute__((aligned(8)));
+typedef pmos_right_t pmos_right_aligned __attribute__((aligned(8)));
+
 typedef struct {
     result_t result;
     uint64_t value;
@@ -112,7 +115,7 @@ result_t syscall_kill_task(uint64_t tid);
  * @param arg2 Second argument to the entry point. On x86_64, it is passed in the RSI register.
  * @param arg3 Third argument to the entry point. On x86_64, it is passed in the RDX register.
  * @return result_t Result of the call. If the result != SUCCESS, the process was not started.
- * @see init_stack() syscall_new_process() asign_page_table()
+ * @see init_stack() syscall_new_process() assign_page_table()
  */
 result_t syscall_start_process(uint64_t pid, unsigned long entry, unsigned long arg1,
                                unsigned long arg2, unsigned long arg3);
@@ -126,13 +129,18 @@ result_t syscall_start_process(uint64_t pid, unsigned long entry, unsigned long 
  *
  * @param tid ID of the task to load the executable into
  * @param object_id ID of the memory object containing the executable
+ * @param optional_data Pointer to the memory region containing the additional tags for
+ *                      the executable. If not NULL, the kernel moves the region into
+ *                      the new process, and passes it a tag containing the address and size of the
+ *                      region. This region is always consumed (including on error), unless it's
+ *                      a bad address.
  * @param flags Flags for the function. Currently unused, but at least FLAG_NOBLOCK is planned
  * @return result_t Result of the operation. If the result != SUCCESS, the executable was not
  * loaded.
  * @see syscall_start_process()
  * @todo Think of a way to pass the arguments to the executable
  */
-result_t syscall_load_executable(uint64_t tid, uint64_t object_id, uint32_t flags);
+result_t syscall_load_executable(uint64_t tid, uint64_t object_id, void *optional_data, uint32_t flags);
 
 /// Sets the name of the task
 result_t syscall_set_task_name(uint64_t tid, const char *name, size_t name_length);
@@ -239,7 +247,6 @@ result_t request_priority(uint32_t priority);
 result_t set_affinity(uint64_t tid, uint32_t cpu_id, uint32_t flags);
 
 /// Returns the LAPIC id the process is running on when calling the process
-/// This value is not shifted left, so in non-X2APIC it would be lapic id << 24
 /// @param cpu_num Index of the CPU (assigned by the kernel during its initialization).
 ///                0 counts as the CPU the caller is executing on.
 syscall_r get_lapic_id(uint32_t cpu_id);
@@ -433,10 +440,24 @@ right_request_t create_right(pmos_port_t port_id, pmos_right_t *id_in_reciever, 
 /// @return Result. On success, the new ID of the right
 right_request_t dup_right(pmos_right_t right);
 
+/// @brief Transfers right to a new task group
+/// @param task_group Task group to transfer the right to
+/// @param right Right to transer
+/// @param flags Optional flags (currently, none)
+/// @return On success, the new ID of the right (in the new group)
+right_request_t transfer_right(uint64_t task_group, pmos_right_t right, unsigned flags);
+
 /// @brief Deletes the right in the namespace of the sender
 /// @param right_id
 /// @return Result of the operation
 result_t delete_right(pmos_right_t right_id);
+result_t delete_right_raw(pmos_right_t right_id);
+
+/// @brief Deletes the receive right for the given port
+/// @param port Port for which the right should be deleted
+/// @param receive_right_id ID of the right in the port. Does nothing if it is 0.
+/// @return 0 on success, -errno (typical kernel thing) on error
+result_t delete_receive_right(pmos_port_t port, pmos_right_t receive_right_id);
 
 typedef struct message_extra_t {
     pmos_right_t extra_rights[4];

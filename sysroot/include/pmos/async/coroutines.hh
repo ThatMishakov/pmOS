@@ -6,7 +6,8 @@
 namespace pmos::async
 {
 
-template<typename T> class task
+template<typename T>
+class task
 {
 public:
     struct promise_type {
@@ -21,6 +22,7 @@ public:
 
         std::coroutine_handle<> continuation = std::noop_coroutine();
         T value;
+        std::exception_ptr exception_;
 
         task get_return_object()
         {
@@ -28,7 +30,7 @@ public:
         }
         std::suspend_always initial_suspend() { return {}; }
         final_awaiter final_suspend() noexcept { return {}; }
-        void unhandled_exception() { std::terminate(); }
+        void unhandled_exception() { exception_ = std::current_exception(); }
         final_awaiter yield_value(T v)
         {
             value = std::move(v);
@@ -53,12 +55,76 @@ public:
             h_.promise().continuation = h;
             return h_;
         }
-        T && await_resume() {return std::move(h_.promise().value);}
+        T && await_resume() {
+            if (h_.promise().exception_) std::rethrow_exception(h_.promise().exception_);
+            return std::move(h_.promise().value);
+        }
 
     private:
         std::coroutine_handle<promise_type> h_;
         explicit awaiter(std::coroutine_handle<promise_type> h): h_(h) {}
         friend task<T>;
+    };
+
+    awaiter operator co_await() && noexcept { return awaiter (h_); }
+
+    ~task()
+    {
+        if (h_)
+            h_.destroy();
+    }
+
+private:
+    std::coroutine_handle<promise_type> h_;
+    explicit task(std::coroutine_handle<promise_type> h): h_(h) {}
+};
+
+template<>
+class task<void>
+{
+public:
+    struct promise_type {
+        struct final_awaiter {
+            constexpr bool await_ready() const noexcept { return false; }
+            std::coroutine_handle<> await_suspend(std::coroutine_handle<promise_type> h)
+            {
+                return h.promise().continuation;
+            }
+            void await_resume() noexcept {}
+        };
+
+        std::coroutine_handle<> continuation = std::noop_coroutine();
+        std::exception_ptr exception_;
+
+        task get_return_object()
+        {
+            return task(std::coroutine_handle<promise_type>::from_promise(*this));
+        }
+        std::suspend_always initial_suspend() { return {}; }
+        final_awaiter final_suspend() noexcept { return {}; }
+        void unhandled_exception() { exception_ = std::current_exception(); }
+        void return_void() noexcept {}
+    };
+
+    operator std::coroutine_handle<promise_type>() const noexcept { return h_; }
+
+    class awaiter
+    {
+    public:
+        constexpr bool await_ready() const noexcept { return false; }
+        std::coroutine_handle<> await_suspend(std::coroutine_handle<> h)
+        {
+            h_.promise().continuation = h;
+            return h_;
+        }
+        void await_resume() {
+            if (h_.promise().exception_) std::rethrow_exception(h_.promise().exception_);
+        }
+
+    private:
+        std::coroutine_handle<promise_type> h_;
+        explicit awaiter(std::coroutine_handle<promise_type> h): h_(h) {}
+        friend task<void>;
     };
 
     awaiter operator co_await() && noexcept { return awaiter (h_); }
