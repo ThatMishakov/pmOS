@@ -105,9 +105,10 @@ These are the features that are planned to be had in the OS:
   - [x] Quick user memory access - catching exceptions on userspace memory access
   - [x] Handles/capabilities - would make API a lot nicer and fix a lot of issues with current design
     - [x] Handles for ports
+    - [ ] Handles for other stuff
     - [ ] Notification of closed handles
   
-- [ ] Permissions
+- [ ] ~~Permissions~~ -> capabilities would solve that
 - [x] Multi CPU support
 
 #### RISC-V specific features:
@@ -118,25 +119,33 @@ These are the features that are planned to be had in the OS:
 - [x] Userspace/U mode
 - [x] Multi hart support
 
-#### x86_64 specific features:
-
+#### x86 features:
 - [x] Virtual memory
 - [x] Exceptions
-- [x] Timer interrupt
-- [x] LAPIC
+- [x] Time
+  - [x] ACPI PM Timer (clock source and calibration)
+  - [x] HPET (clock source and calibration)
+    - [ ] HPET timer interrupt source (in absence of LAPIC timer)
+  - [x] LAPIC timer
+  - [x] TSC
+  - [x] TSC deadline
+  - [x] KVM clock
+- [ ] APIC
+  - [x] xAPIC
+  - [x] x2APIC
+  - [x] LAPIC
+  - [ ] IOMMU
 - [x] Userspace/Ring 3
 - [x] Multi CPU support
+
+#### x86_64 specific features:
+- [ ] 5 level paging
 
 #### i686 specific features:
 
 - [x] Virtual memory
   - [x] 2 level page tables
   - [x] PAE - supports and uses up to 16GB of RAM, if available
-- [x] Exceptions
-- [x] Timer interrupt
-- [x] LAPIC
-- [x] Userspace/Ring 3
-- [x] Multi CPU support
 
 #### LoongArch64 specific features:
 - [x] Virtual memory
@@ -144,7 +153,7 @@ These are the features that are planned to be had in the OS:
 - [x] Timer interrupt - haven't noticed there was a TSC-like global timer, needs fixing
 - [x] External interrupts - using EIO PIC and BIO PIC over HT
 - [x] Userspace
-- [ ] Multi CPU support - no Limine support
+- [ ] Multi CPU support
 
 
 **Core utilities and daemons**
@@ -160,7 +169,7 @@ These are the features that are planned to be had in the OS:
     - [X] Traversing trees
 - [ ] pmbus - a bus for drivers and services in Rust
   - [x] Publishing objects
-  - [ ] Requesting objects
+  - [x] Requesting objects
   - [x] C++ bindings
   - [x] C bindings
   - [ ] Rust bindings
@@ -208,6 +217,9 @@ These are the features that are planned to be had in the OS:
 - [ ] Terminal
 - [ ] GUI
 - [ ] C/POSIX Library - a buch of functions are implemented, but a lot more are missing
+- [ ] Init server
+  - [x] Launching servers
+  - [x] Matching pmbus objects
 
 **Languages/Runtimes**
 - [X] LLVM/Clang patch
