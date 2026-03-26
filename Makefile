@@ -52,7 +52,7 @@ qemu-x86: $(IMG) ovmf-x86
 		-m 256M\
 	       	-smp 1\
 	       	-serial stdio \
-		-device intel-iommu -cpu max,x2apic=on,+invtsc -no-shutdown -no-reboot
+		-device intel-iommu -cpu max,x2apic=on,+smep,+smap -no-shutdown -no-reboot
 # -trace ahci_* -trace handle_cmd_* \
 
 qemu-kvm: $(ISO) ovmf-x86

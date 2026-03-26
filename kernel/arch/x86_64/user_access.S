@@ -1,3 +1,17 @@
+    .macro enable_user
+    cmpb $0, use_smap(%rip)
+    je 1f
+    stac
+1:
+    .endm
+
+    .macro disable_user
+    cmpb $0x0, use_smap(%rip)
+    je 1f
+    clac
+1:
+    .endm
+
     .text
     .balign 16, 0x90
     .type fast_copy_to_user, @function
@@ -37,7 +51,9 @@ generic_copy:
     leaq on_failure(%rip), %rax
     movq %rax, %gs:48
 
+    enable_user
     call memcpy
+    disable_user
 
     xorq %rax, %rax
     movq $1, %rdx
@@ -61,19 +77,21 @@ on_failure:
 
     cmpq $0, %rax
     jne failure
-    cmpq $1, %rdx
+    cmpb $1, %dl
     jne failure
 
     movq -56(%rbp), %rdx
     movq -64(%rbp), %rsi
     movq -72(%rbp), %rdi
 
+    enable_user
     call memcpy
 
     movq $1, %rdx
-    xorq %rax, %rax
+    xorl %eax, %eax
 failure:
-    xorq %rcx, %rcx
+    disable_user
+    xorl %ecx, %ecx
     movq %rcx, %gs:48
 
     addq $40, %rsp
