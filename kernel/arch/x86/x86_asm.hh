@@ -79,3 +79,13 @@ inline void setCR8(u64 val)
     asm("mov %%cr8, %0" : "=r"(val) :: "memory");
 }
 #endif
+
+inline void stac()
+{
+    asm("stac");
+}
+
+inline void clac()
+{
+    asm("clac");
+}

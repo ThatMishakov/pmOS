@@ -31,14 +31,6 @@
 #include <x86_asm.hh>
 #include <utils.hh>
 
-
-extern "C" void allow_access_user()
-{
-    // On x86, access to user space is always allowed
-}
-
-extern "C" void disallow_access_user() {}
-
 void halt() { asm("hlt"); }
 
 bool serial_initiated  = false;

@@ -12,6 +12,7 @@
 #include <processes/tasks.hh>
 #include <sched/sched.hh>
 #include <x86_asm.hh>
+#include <x86_utils.hh>
 #include <pmos/utility/scope_guard.hh>
 #include <syscall.hh>
 #include <pmos/containers/set.hh>
@@ -46,9 +47,58 @@ extern bool cpu_struct_works;
 
 bool setup_stacks(kernel::sched::CPU_Info *c);
 
+bool use_smap = false;
+bool use_smep = false;
+
+
+
+extern "C" void allow_access_user()
+{
+    stac();
+}
+
+extern "C" void disallow_access_user()
+{
+    clac();
+}
+
+void detect_protections()
+{
+    
+    auto c = cpuid(0x0);
+    u32 max_cpuid_leaf = c.eax;
+
+    if (max_cpuid_leaf >= 0x07) {
+        auto c = cpuid2(0x07, 0);
+        if (c.ebx & (1 << 7)) {
+            use_smep = true;
+            serial_logger.printf("Using SMEP in kernel...\n");
+        }
+
+        if (c.ebx & (1 << 20)) {
+            use_smap = true;
+            serial_logger.printf("Using SMAP in kernel...\n");
+        }
+    }
+}
+
+void enable_protections()
+{
+    auto c = getCR4();
+    if (use_smap)
+        c |= (1 << 21);
+    if (use_smep)
+        c |= (1 << 20);
+    setCR4(c);
+
+    if (use_smap)
+        clac();
+}
+
 void init_per_cpu(u64 lapic_id)
 {
     sse::detect_sse();
+    detect_protections();
 
     CPU_Info *c = new CPU_Info();
     if (!c)
@@ -95,6 +145,7 @@ void init_per_cpu(u64 lapic_id)
     set_idt();
     enable_apic();
     sse::enable_sse();
+    enable_protections();
 
     void *temp_mapper_start = vmm::kernel_space_allocator.virtmem_alloc_aligned(16, 4);
     if (!temp_mapper_start)
@@ -129,6 +180,7 @@ extern "C" void smp_main(CPU_Info *c)
     program_syscall();
     set_idt();
     sse::enable_sse();
+    enable_protections();
 
     if (c->to_restore_on_wakeup) {
         c->current_task->regs = *c->to_restore_on_wakeup;
@@ -174,6 +226,7 @@ extern "C" void acpi_main()
     set_idt();
     enable_apic();
     sse::enable_sse();
+    enable_protections();
 
     if (c->to_restore_on_wakeup) {
         c->current_task->regs = *c->to_restore_on_wakeup;

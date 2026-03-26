@@ -1,3 +1,33 @@
+    .macro enable_user
+    call 2f
+2:
+    # ebx is saved anyway
+    popl %ebx
+    cmpb $0x0, use_smap - 2b(%ebx)
+    je 1f
+    stac
+1:
+    .endm
+    
+    .macro disable_user_fast
+    cmpb $0x0, use_smap - 2b(%ebx)
+    je 1f
+    clac
+1:
+    .endm
+
+    .macro disable_user
+    call 2f
+2:
+    popl %ebx
+    cmpb $0x0, use_smap - 2b(%ebx)
+    je 1f
+    clac
+1:
+    .endm
+
+
+
     .text
     .balign 16, 0x90
     .type fast_copy_to_user, @function
@@ -45,7 +75,10 @@ continue:
     pushl 16(%ebp)
     pushl 12(%ebp)
     
+    enable_user
     call memcpy
+    disable_user_fast
+
     addl $28, %esp
 
     # Return on success
@@ -81,6 +114,7 @@ on_failure:
     pushl -16(%ebp)     # unsigned access
     pushl 8(%ebp)       # ReturnStr<bool> *return_value
 
+    disable_user
     call user_access_page_fault
     
     leal -16(%ebp), %esp
