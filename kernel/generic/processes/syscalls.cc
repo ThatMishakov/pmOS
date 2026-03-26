@@ -1473,6 +1473,7 @@ void syscall_map_mem_object()
     ulong ptr = syscall_arg(current_task, 0, 0);
     auto result = copy_from_user((char *)&params, (const char *)ptr, sizeof(params));
     if (!result.success()) {
+        serial_logger.printf("Result %lx\n", result.result);
         syscall_error(current_task) = result.result;
         return;
     }
