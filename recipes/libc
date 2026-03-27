@@ -4,7 +4,7 @@ name=libc
 version=0.0.1
 revision=1
 
-source_dir=lib/libc
+source_dir=lib
 deps="libc-headers"
 hostdeps="clang"
 
