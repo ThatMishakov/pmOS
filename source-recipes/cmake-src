@@ -1,0 +1,5 @@
+name=cmake-src
+version=4.3.0
+source_method=tarball
+tarball_url="https://github.com/Kitware/CMake/releases/download/v${version}/cmake-${version}.tar.gz"
+tarball_sha256="f51b3c729f85d8dde46a92c071d2826ea6afb77d850f46894125de7cc51baa77"

@@ -1,0 +1,3 @@
+JINX_MAJOR_VER=0.8
+JINX_DEBIAN_SNAPSHOT=20260326T203750Z
+JINX_BASE_PACKAGES="make gcc cmake build-essential ninja-build python3"
