@@ -21,7 +21,6 @@ set(CMAKE_AR "llvm-ar")
 project(kernel C CXX ASM)
 
 get_filename_component(ABSPATH "${CMAKE_CURRENT_LIST_FILE}" PATH)
-set(SYSROOT "${ABSPATH}/../sysroot")
 
 include(arch/arch.cmake)
 LOAD_PLATFORM(${TARGET_ARCH})
@@ -81,3 +80,5 @@ target_include_directories(kernel PRIVATE
 target_compile_definitions(kernel PRIVATE
   UACPI_BAREBONES_MODE
 )
+
+install(TARGETS kernel RUNTIME DESTINATION "/boot")

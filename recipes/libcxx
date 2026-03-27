@@ -1,8 +1,8 @@
 #!/bin/sh
 
-name=libc++
-revision=1
+name=libcxx
 from_source=clang-src
+revision=1
 deps="libc-headers libc"
 hostdeps="clang"
 
