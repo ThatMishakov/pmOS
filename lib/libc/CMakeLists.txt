@@ -1,10 +1,26 @@
 cmake_minimum_required(VERSION 3.22)
 set(CMAKE_C_STANDARD 17)
 
+set(TOOLCHAIN_PREFIX "${TARGET_ARCH}-pmos")
+
+set(CMAKE_C_COMPILER "clang")
+set(CMAKE_ASM_COMPILER "clang")
+set(CMAKE_AR "llvm-ar")
+
+SET(CMAKE_C_COMPILER_TARGET ${TOOLCHAIN_PREFIX})
+SET(CMAKE_ASM_COMPILER_TARGET ${TOOLCHAIN_PREFIX})
+
 set(CMAKE_TRY_COMPILE_TARGET_TYPE "STATIC_LIBRARY")
 set(CMAKE_ASM_OUTPUT_EXTENSION_REPLACE 1)
 set(CMAKE_C_OUTPUT_EXTENSION_REPLACE 1)
 
+set(CMAKE_C_FLAGS "-Wall -Wextra -O3 -g -nostdlib -fPIC --sysroot=${SYSROOT} -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -flto -ffat-lto-objects")
+
+if (${TARGET_ARCH} STREQUAL "riscv64")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=rva20u64 -mabi=lp64d")
+endif()
+
+set(CMAKE_ASM_FLAGS ${CMAKE_C_FLAGS})
 
 project(libc VERSION 0.1 LANGUAGES C ASM)
 
@@ -38,8 +54,8 @@ add_library(c STATIC $<TARGET_OBJECTS:csrc>)
 # crti and crtn
 add_library(crtstuff OBJECT ${SRC_FOLDER}/arch/${TARGET_ARCH}/crti.S ${SRC_FOLDER}/arch/${TARGET_ARCH}/crtn.S ${SRC_FOLDER}/arch/${TARGET_ARCH}/crt0.S)
 
-set(INSTALL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../sysroot/usr/lib" CACHE PATH "Installation directory")
-install(TARGETS c ARCHIVE DESTINATION ${INSTALL_DIR})
+# set(INSTALL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../sysroot/usr/lib" CACHE PATH "Installation directory")
+install(TARGETS c ARCHIVE DESTINATION "/usr/lib")
 # install(TARGETS c_static DESTINATION ${INSTALL_DIR})
 
-install(FILES $<TARGET_OBJECTS:crtstuff> DESTINATION ${INSTALL_DIR})
+install(FILES $<TARGET_OBJECTS:crtstuff> DESTINATION "/usr/lib")
