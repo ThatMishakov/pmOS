@@ -4,7 +4,7 @@ name=i8042
 version=0.0.1
 revision=1
 
-source_dir=i8042
+source_dir=userspace/i8042
 deps="libc libc-headers"
 hostdeps="clang"
 

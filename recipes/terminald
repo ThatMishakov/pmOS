@@ -1,10 +1,10 @@
 #!/bin/sh
 
-name=ahcid
+name=terminald
 version=0.0.1
 revision=1
 
-source_dir=userspace/ahcid
+source_dir=userspace/terminald
 deps="libc libc-headers libcxx"
 hostdeps="clang"
 

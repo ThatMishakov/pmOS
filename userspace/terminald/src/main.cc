@@ -37,8 +37,8 @@
 #include <pmos/helpers.h>
 #include <pmos/helpers.hh>
 
-#include <flanterm/src/flanterm.h>
-#include <flanterm/src/flanterm_backends/fb.h>
+#include <src/flanterm.h>
+#include <src/flanterm_backends/fb.h>
 
 struct flanterm_context *ft_ctx;
 

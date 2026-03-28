@@ -1,10 +1,10 @@
 #!/bin/sh
 
-name=ahcid
+name=piped
 version=0.0.1
 revision=1
 
-source_dir=userspace/ahcid
+source_dir=userspace/piped
 deps="libc libc-headers libcxx"
 hostdeps="clang"
 
