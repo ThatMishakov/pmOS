@@ -419,8 +419,6 @@ void call_sleep_handlers() {}
 
 void call_sleep_handlers_wakeup() {}
 
-void restore_ioapics();
-
 volatile bool entered_sleep = false;
 int system_sleep()
 {
@@ -440,7 +438,6 @@ int system_sleep()
     int result    = syscall_prepare_sleep(0, 3, 0).result;
     assert(!result);
     if (entered_sleep) {
-        restore_ioapics();
         restore_nvs();
         uacpi_prepare_for_wake_from_sleep_state(UACPI_SLEEP_STATE_S3);
         int result = uacpi_wake_from_sleep_state(UACPI_SLEEP_STATE_S3);

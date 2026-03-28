@@ -1,0 +1,21 @@
+#!/bin/sh
+
+name=devicesd
+version=0.0.1
+revision=1
+
+source_dir=userspace/devicesd
+deps="libc libc-headers"
+hostdeps="clang"
+
+configure() {
+    cmake -S ${source_dir} -DTARGET_ARCH=${JINX_ARCH} -DCMAKE_SYSROOT=${sysroot_dir}
+}
+
+build() {
+    make -j ${parallelism}
+}
+
+package() {
+    DESTDIR="${dest_dir}" make install
+}
