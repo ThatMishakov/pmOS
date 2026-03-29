@@ -1,0 +1,11 @@
+#!/bin/sh
+
+name=rust-src
+version=1.0.0
+revision=1
+git_url=https://gitlab.com/mishakov/rust-pmos.git
+commit="39dedc845fe6715741cf9a7d425cd389f9e26f0f"
+
+early_prepare() {
+    git submodule update --init --recursive --depth=1
+}

@@ -1,0 +1,38 @@
+#!/bin/sh
+
+name=rust
+revision=1
+from_source=rust-src
+allow_network=yes
+
+package() {
+    cat > ${build_dir}/config.toml <<EOL
+[llvm]
+download-ci-llvm = false
+targets = "X86"
+
+[build]
+target = ["x86_64-unknown-aero", "x86_64-unknown-linux-gnu"]
+build-dir = "${base_dir}/host-builds/rust"
+docs = false
+
+[install]
+prefix = "${prefix}"
+sysconfdir = "${prefix}/etc"
+
+EOL
+}
+
+build() {
+    CARGO_HOME="${build_dir}/.cargo" ${source_dir}/x.py build --stage 2 -j${parallelism} --verbose 
+}
+
+package() {
+    CARGO_HOME="${build_dir}/.cargo" DESTDIR="${dest_dir}" ${source_dir}/x.py install -j${parallelism}
+
+    
+    find ${dest_dir} -name "*.old" -delete
+
+    strip_command=strip
+    post_package_strip
+}
