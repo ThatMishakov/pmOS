@@ -1,6 +1,6 @@
 #!/bin/sh
 
-name=rust-src
+name=rust
 version=1.0.0
 revision=1
 git_url=https://gitlab.com/mishakov/rust-pmos.git
