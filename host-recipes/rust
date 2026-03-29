@@ -25,7 +25,6 @@ EOF
 
     cat <<EOF > bootstrap.toml
 [llvm]
-change-id = 148671
 download-ci-llvm = false
 EOF
 }
