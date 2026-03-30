@@ -14,7 +14,7 @@ download-ci-llvm = false
 targets = "X86"
 
 [build]
-target = ["x86_64-unknown-pmos", "x86_64-unknown-linux-gnu"]
+target = ["x86_64-unknown-pmos", "${RUST_HOST_TARGET}"]
 build-dir = "${base_dir}/host-builds/rust"
 docs = false
 
@@ -39,6 +39,6 @@ package() {
     
     find ${dest_dir} -name "*.old" -delete
 
-    # strip_command=strip
-    # post_package_strip
+    strip_command=strip
+    post_package_strip
 }

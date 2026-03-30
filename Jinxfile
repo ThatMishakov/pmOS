@@ -2,3 +2,24 @@ JINX_MAJOR_VER=0.8
 JINX_DEBIAN_SNAPSHOT=20260326T203750Z
 JINX_BASE_PACKAGES="make gcc cmake build-essential ninja-build python3"
 JINX_ARCH=x86_64
+
+RUST_HOST_TARGET="$(uname -m)-unknown-linux-gnu"
+
+case "$(uname -m)" in
+    i?86) RUST_HOST_TARGET="i686-unknown-linux-gnu" ;;
+    arm*) RUST_HOST_TARGET="armv7-unknown-linux-gnueabihf" ;;
+    riscv64) RUST_HOST_TARGET="riscv64gc-unknown-linux-gnu" ;;
+    ppc64le) RUST_HOST_TARGET="powerpc64le-unknown-linux-gnu" ;;
+esac
+
+package_rust_crate() {
+    package() {
+        mkdir -p "${dest_dir}${prefix}"/src/rust/${name}
+        cp -r "${source_dir}"/* "${dest_dir}${prefix}"/src/rust/${name}/
+        # post_package_strip
+    }
+}
+
+post_package_strip() {
+    :
+}

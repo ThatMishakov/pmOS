@@ -1,0 +1,10 @@
+#!/bin/sh
+
+name=pmos-rust-lib
+version=0.0.1
+revision=1
+
+source_dir=libs/rust
+hostdeps="rust"
+
+package_rust_crate

@@ -1,0 +1,29 @@
+#!/bin/sh
+
+name=pmbus
+version=0.0.1
+revision=1
+
+source_dir=userspace/pmbus
+deps="libc pmos-rust-lib"
+hostdeps="rust cargo clang"
+allow_network=yes
+
+RUSTARCH=${JINX_ARCH}
+
+prepare() {
+    CARGO_HOME="${build_dir}/.cargo" \
+    cargo fetch --target ${RUSTARCH}-unknown-pmos
+}
+
+build() {
+    CARGO_HOME="${build_dir}/.cargo" \
+    cargo build --target ${RUSTARCH}-unknown-pmos --jobs ${parallelism}
+}
+
+package() {
+    CARGO_HOME="${build_dir}/.cargo" \
+    DESTDIR="${dest_dir}" \
+    RUSTFLAGS="-C link-arg=--sysroot=${SYSROOT} -C linker=clang++ -C link-arg=--target=${RUSTARCH}-unknown-pmos -C link-arg=-lunwind -C link-arg=-static" \
+    cargo install --target ${RUSTARCH}-unknown-pmos --root ${dest_dir} --path ${source_dir}
+}
