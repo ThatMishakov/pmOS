@@ -36,7 +36,6 @@ build() {
 package() {
     CARGO_HOME="${build_dir}/.cargo" DESTDIR="${dest_dir}" ${source_dir}/x.py install -j${parallelism}
 
-    
     find ${dest_dir} -name "*.old" -delete
 
     strip_command=strip

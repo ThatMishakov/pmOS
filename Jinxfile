@@ -45,7 +45,6 @@ cargo_build() {
         CARGO_TARGET_DIR="${TARGET_DIR}" \
     cargo build \
         --release \
-        --sysroot "$sysroot_dir" \
         "$@"
 }
 

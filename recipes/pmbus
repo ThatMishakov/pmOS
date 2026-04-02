@@ -5,7 +5,7 @@ version=1.0.0
 revision=1
 
 source_dir=userspace/pmbus
-deps="libc pmos-rust-lib libcxx rust-core"
+deps="libc pmos-rust-lib libcxx"
 hostdeps="cargo rust clang"
 source_hostdeps="cargo"
 allow_network=yes
