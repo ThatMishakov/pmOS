@@ -4,24 +4,25 @@ name=pmbus
 version=1.0.0
 revision=1
 
-source_dir=userspace/ps2d
-deps="libc pmos-rust-lib"
-hostdeps="cargo rust"
+source_dir=userspace/pmbus
+deps="libc pmos-rust-lib libcxx rust-core"
+hostdeps="cargo rust clang"
+source_hostdeps="cargo"
 allow_network=yes
 
-prepare() {
-    CARGO_HOME="${build_dir}/.cargo" \
-    cargo fetch --target ${JINX_ARCH}-unknown-pmos
-}
+# prepare() {
+#     CARGO_HOME="${build_dir}/.cargo" \
+#     cargo fetch --target ${JINX_ARCH}-unknown-pmos
+# }
 
 build() {
-    CARGO_HOME="${build_dir}/.cargo" \
-    cargo build --target ${JINX_ARCH}-unknown-pmos --jobs ${parallelism}
+    TARGET_CC="clang" \
+    cargo_build_nolock
 }
 
-package() {
-    CARGO_HOME="${build_dir}/.cargo" \
-    DESTDIR="${dest_dir}" \
-    RUSTFLAGS="-C link-arg=--sysroot=${SYSROOT} -C linker=clang++ -C link-arg=--target=${JINX_ARCH}-unknown-pmos -C link-arg=-lunwind -C link-arg=-static" \
-    cargo install --target ${JINX_ARCH}-unknown-pmos --root ${dest_dir} --path ${source_dir}
-}
+# package() {
+#     CARGO_HOME="${build_dir}/.cargo" \
+#     DESTDIR="${dest_dir}" \
+#     RUSTFLAGS="-C link-arg=--sysroot=${SYSROOT} -C linker=clang++ -C link-arg=--target=${JINX_ARCH}-unknown-pmos -C link-arg=-lunwind -C link-arg=-static" \
+#     cargo install --target ${JINX_ARCH}-unknown-pmos --root ${dest_dir} --path ${source_dir}
+# }
