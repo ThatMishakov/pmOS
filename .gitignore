@@ -7,6 +7,7 @@
 /bin
 /tmp*
 /build
+/build-*
 /jinx
 /.jinx-cache
 /sources
