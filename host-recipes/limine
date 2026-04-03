@@ -1,0 +1,33 @@
+#! /bin/sh
+
+name=limine
+from_source=limine
+revision=1
+imagedeps="clang lld llvm nasm build-essential mtools pkg-config"
+
+configure() {
+        X86_FLAGS="--enable-bios \
+                   --enable-bios-cd \
+                   --enable-bios-pxe \
+                   --enable-uefi-ia32 \
+        "
+
+        CFLAGS="$HOST_CFLAGS" \
+        CXXFLAGS="$HOST_CXXFLAGS" \
+        LDFLAGS="$HOST_LDFLAGS -static" \
+    "${source_dir}"/configure \
+        --prefix="${prefix}" \
+        --enable-uefi-cd \
+        $X86_FLAGS
+}
+
+build() {
+    make -j${parallelism}
+}
+
+package() {
+    DESTDIR="${dest_dir}" make install
+
+        strip_command=strip \
+    post_package_strip
+}

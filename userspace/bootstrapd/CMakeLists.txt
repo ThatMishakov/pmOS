@@ -51,3 +51,5 @@ target_link_libraries(bootstrapd PRIVATE yaml)
 if(CMAKE_C_COMPILER_TARGET MATCHES "^i[3-6]86-pmos$")
     target_link_libraries(bootstrapd PRIVATE clang_rt.builtins-i386)
 endif()
+
+install(TARGETS bootstrapd RUNTIME DESTINATION "/boot")

@@ -1,0 +1,5 @@
+services:
+- name: ns16550
+  path: /ns16550.elf
+  description: NS16550 UART Driver
+  run_type: ALWAYS_ONCE

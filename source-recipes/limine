@@ -1,0 +1,5 @@
+name=limine
+version=11.2.0
+revision=1
+tarball_url="https://codeberg.org/Limine/Limine/releases/download/v${version}/limine-${version}.tar.gz"
+tarball_blake2b="570f4b185d2ea2afd0f8ed707d24a1870059e7e3825e750404ecd951c1e7ab1742e28b8473b6cc2f81e2f7214ec96a93b036b4704093e37dcf9b607b3e29d2fe"

@@ -1,0 +1,5 @@
+services:
+- name: terminald
+  path: /terminald.elf
+  description: Terminal Service
+  run_type: ALWAYS_ONCE

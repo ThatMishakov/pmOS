@@ -1,0 +1,8 @@
+services:
+- name: ps2d
+  path: /ps2d.elf
+  description: PS/2 driver
+  run_type: FOR_EACH_MATCH
+  match:
+    devices:
+      - ps2_port

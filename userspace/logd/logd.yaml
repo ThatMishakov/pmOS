@@ -1,0 +1,5 @@
+services:
+- name: logd
+  path: /logd.elf
+  description: Logging Server
+  run_type: ALWAYS_ONCE

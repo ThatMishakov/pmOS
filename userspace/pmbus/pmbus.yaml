@@ -1,0 +1,5 @@
+services:
+- name: pmbus
+  path: /pmbus
+  description: pmbus capabilities discovery server
+  run_type: ALWAYS_ONCE

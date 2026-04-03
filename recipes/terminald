@@ -18,4 +18,5 @@ build() {
 
 package() {
     DESTDIR="${dest_dir}" make install
+    cp ${source_dir}/terminald.yaml "${dest_dir}/boot/terminald.yaml"
 }

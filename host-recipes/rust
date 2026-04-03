@@ -8,6 +8,8 @@ hostdeps="clang"
 
 configure() {
     cat <<EOF > bootstrap.toml
+change-id = 148671
+
 [llvm]
 download-ci-llvm = false
 

@@ -1,0 +1,17 @@
+#!/bin/sh
+
+name=limine-config
+version=1
+revision=1
+
+source_dir=scripts
+
+build() {
+    CONFIG_FILE="$build_dir/limine.conf"
+    ${source_dir}/make_limine_cnf.sh "$CONFIG_FILE" "$BOOT_SERVICES"
+}
+
+package() {
+    mkdir -p "${dest_dir}/boot"
+    cp "$build_dir/limine.conf" "${dest_dir}/boot/limine.conf"
+}

@@ -18,4 +18,5 @@ build() {
 
 package() {
     DESTDIR="${dest_dir}" make install
+    cp ${source_dir}/i8042.yaml "${dest_dir}/boot/i8042.yaml"
 }

@@ -18,4 +18,5 @@ build() {
 
 package() {
     DESTDIR="${dest_dir}" make install
+    cp ${source_dir}/ns16550.yaml "${dest_dir}/boot/ns16550.yaml"
 }
