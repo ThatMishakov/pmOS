@@ -4,28 +4,21 @@ name=rust
 revision=1
 from_source=rust
 allow_network=yes
+hostdeps="clang"
 
 configure() {
-    cat <<EOF > config.toml
-change-id = 148671
-
+    cat <<EOF > bootstrap.toml
 [llvm]
 download-ci-llvm = false
-targets = "X86"
 
 [build]
 target = ["x86_64-unknown-pmos", "${RUST_HOST_TARGET}"]
-build-dir = "${base_dir}/host-builds/rust"
+build-dir = "${build_dir}/host-builds/rust"
 docs = false
 
 [install]
 prefix = "${prefix}"
 sysconfdir = "${prefix}/etc"
-EOF
-
-    cat <<EOF > bootstrap.toml
-[llvm]
-download-ci-llvm = false
 EOF
 }
 
@@ -34,7 +27,7 @@ build() {
 }
 
 package() {
-    CARGO_HOME="${build_dir}/.cargo" DESTDIR="${dest_dir}" ${source_dir}/x.py install -j${parallelism}
+    CARGO_HOME="${build_dir}/.cargo" DESTDIR="${dest_dir}" ${source_dir}/x.py install --stage 2 -j${parallelism}
 
     find ${dest_dir} -name "*.old" -delete
 
