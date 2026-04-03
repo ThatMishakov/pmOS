@@ -8,7 +8,7 @@ write_service_entry() {
     module_cmdline: file
 
     module_path: boot():/${NAME}.yaml
-    module_cmdline: init_config
+    module_cmdline: init-config
 
 EOF
 }

@@ -19,7 +19,7 @@ EXT2_PARTITION=tmp_ext2.img
 
 copy_service() {
     SERVICE="$1"
-
+    echo "Copying service $SERVICE..."
     mcopy -i "$BOOT_PARTITION" "${BOOT_DIR}/${SERVICE}" "::/${SERVICE}.elf"
     mcopy -i "$BOOT_PARTITION" "${BOOT_DIR}/${SERVICE}.yaml" "::/${SERVICE}.yaml"
 }
