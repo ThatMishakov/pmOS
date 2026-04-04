@@ -1,0 +1,17 @@
+#!/bin/sh
+
+name=hyper-config
+version=1
+revision=1
+
+source_dir=scripts
+FILE_NAME=hyper.cfg
+
+build() {
+    ${source_dir}/make_hyper_config.sh "$FILE_NAME" "$BOOT_SERVICES"
+}
+
+package() {
+    mkdir -p "${dest_dir}/boot"
+    cp "${FILE_NAME}" "${dest_dir}/boot/${FILE_NAME}"
+}

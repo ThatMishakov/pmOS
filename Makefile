@@ -1,4 +1,5 @@
 ISO=build/pmOS.iso
+i686-IMG=build-i686/pmos-hyper.img
 x86_64-IMG=build-x86_64/pmos.img
 riscv64-IMG=build-riscv64/pmos.img
 loongarch64-IMG=build-loongarch64/pmos.img
@@ -19,6 +20,10 @@ build-loongarch64/.jinx-parameters: jinx
 	@mkdir -p build-loongarch64
 	@cd build-loongarch64 && ../jinx init .. ARCH=loongarch64
 
+build-i686/.jinx-parameters: jinx
+	@mkdir -p build-i686
+	@cd build-i686 && ../jinx init .. ARCH=i686
+
 $(x86_64-IMG): build-x86_64/.jinx-parameters
 	@cd build-x86_64 && ../jinx build limine-disk-image
 
@@ -27,6 +32,9 @@ $(riscv64-IMG): build-riscv64/.jinx-parameters
 
 $(loongarch64-IMG): build-loongarch64/.jinx-parameters
 	@cd build-loongarch64 && ../jinx build limine-disk-image
+
+$(i686-IMG): build-i686/.jinx-parameters
+	@cd build-i686 && ../jinx build hyper-disk-image
 
 emul: $(ISO)
 	bochs-debugger -q -f .bochsrc
@@ -63,6 +71,9 @@ qemu-x86: $(x86_64-IMG) ovmf-x86
 	       	-serial stdio \
 		-device intel-iommu -cpu max,x2apic=on,+smep,+smap -no-shutdown -no-reboot
 # -trace ahci_* -trace handle_cmd_* \
+
+qemu-i686: $(i686-IMG) ovmf-x86
+	qemu-system-i386 -serial stdio -m 512M -cpu max,+hypervisor,+invtsc,+tsc-deadline -M q35 -hdd $(i686-IMG) -smp 4
 
 qemu-kvm: $(ISO) ovmf-x86
 	qemu-system-x86_64 -serial stdio -bios ovmf-x86/OVMF.fd -m 512M -cpu max,+hypervisor,+invtsc,+tsc-deadline -M q35 -accel kvm -cdrom limine/pmOS.iso -smp 1
