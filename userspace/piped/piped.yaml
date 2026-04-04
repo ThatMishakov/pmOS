@@ -1,0 +1,4 @@
+- name: piped
+  path: /piped.elf
+  description: Unix pipes server
+  run_type: ALWAYS_ONCE

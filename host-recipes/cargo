@@ -1,0 +1,43 @@
+#! /bin/sh
+
+# This was taken from jinix
+
+_cargo_home="${build_dir}/host-builds/cargo-cbuild/cargo-home"
+
+name=cargo
+from_source=cargo-src
+revision=1
+imagedeps="build-essential gcc libssl-dev pkg-config cargo"
+hostdeps="rust"
+# Needed for `cargo fetch` during configure.
+#
+# We can't put this into prepare because we need to use a separate CARGO_HOME
+# for this package to avoid pulling in patched crates.
+allow_network=yes
+
+configure() {
+    cp -rp "${source_dir}"/. ./
+
+        CARGO_HOME="${_cargo_home}" \
+    cargo fetch \
+        --target ${RUST_HOST_TARGET}
+}
+
+build() {
+        CARGO_HOME="${_cargo_home}" \
+    cargo build \
+        --release \
+        --offline \
+        --target ${RUST_HOST_TARGET}
+}
+
+package() {
+    find target/${RUST_HOST_TARGET}/release \
+        -maxdepth 1 \
+        -type f \
+        -executable \
+        -exec install -D -m755 -t "${dest_dir}${prefix}/bin" {} +
+
+        strip_command=strip \
+    post_package_strip
+}

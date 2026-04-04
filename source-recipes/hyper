@@ -1,0 +1,12 @@
+#!/bin/sh
+
+name=hyper
+version=0.10.0
+revision=0
+
+git_url="https://github.com/UltraOS/Hyper.git"
+commit="707cf65b7aa864f58232012e4c409aeb85d00584"
+
+early_prepare() {
+    git submodule update --init --recursive --depth=1
+}

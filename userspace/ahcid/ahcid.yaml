@@ -1,0 +1,10 @@
+services:
+- name: ahcid
+  path: /ahcid.elf
+  description: AHCI disk driver
+  run_type: FOR_EACH_MATCH
+  match:
+    pci:
+      class: 0x1
+      subclass: 0x6
+      interface: 0x1

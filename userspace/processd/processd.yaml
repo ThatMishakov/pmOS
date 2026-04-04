@@ -1,0 +1,5 @@
+services:
+- name: processd
+  path: /processd.elf
+  description: Unix process server
+  run_type: ALWAYS_ONCE

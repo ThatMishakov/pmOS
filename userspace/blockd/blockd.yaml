@@ -1,0 +1,5 @@
+services:
+- name: blockd
+  path: /blockd.elf
+  description: Block Device Service
+  run_type: ALWAYS_ONCE

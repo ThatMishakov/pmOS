@@ -1,0 +1,22 @@
+#!/bin/sh
+
+name=i8042
+version=0.0.1
+revision=1
+
+source_dir=userspace/i8042
+deps="libc libc-headers"
+hostdeps="clang"
+
+configure() {
+    cmake -S ${source_dir} -DTARGET_ARCH=${JINX_ARCH} -DCMAKE_SYSROOT=${sysroot_dir}
+}
+
+build() {
+    make -j ${parallelism}
+}
+
+package() {
+    DESTDIR="${dest_dir}" make install
+    cp ${source_dir}/i8042.yaml "${dest_dir}/boot/i8042.yaml"
+}

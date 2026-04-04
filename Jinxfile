@@ -1,0 +1,138 @@
+JINX_MAJOR_VER=0.8
+JINX_DEBIAN_SNAPSHOT=20260326T203750Z
+JINX_BASE_PACKAGES="make gcc cmake build-essential ninja-build python3"
+
+BOOT_SERVICES="ahcid devicesd logd ns16550 pmbus processd ps2d terminald tests"
+if [ "$JINX_ARCH" = "x86_64" ] || [ "$JINX_ARCH" = "i686" ]; then
+    BOOT_SERVICES="$BOOT_SERVICES i8042"
+fi
+
+
+RUST_HOST_TARGET="$(uname -m)-unknown-linux-gnu"
+case "$(uname -m)" in
+    i?86) RUST_HOST_TARGET="i686-unknown-linux-gnu" ;;
+    arm*) RUST_HOST_TARGET="armv7-unknown-linux-gnueabihf" ;;
+    riscv64) RUST_HOST_TARGET="riscv64gc-unknown-linux-gnu" ;;
+    ppc64le) RUST_HOST_TARGET="powerpc64le-unknown-linux-gnu" ;;
+esac
+
+RUST_TARGET="${JINX_ARCH}-unknown-pmos"
+case "$JINX_ARCH" in
+    x86_64) RUST_TARGET="x86_64-unknown-pmos" ;;
+    i686) RUST_TARGET="i686-unknown-pmos" ;;
+    riscv64) RUST_TARGET="riscv64gc-unknown-pmos" ;;
+    loongarch64) RUST_TARGET="loongarch64-unknown-pmos" ;;
+esac
+
+package_rust_crate() {
+    package() {
+        mkdir -p "${dest_dir}${prefix}"/src/rust/${name}
+        cp -r "${source_dir}" "${dest_dir}${prefix}"/src/rust/${name}/
+        # post_package_strip
+    }
+}
+
+cargo_build_nolock() {
+    TARGET_DIR=$(pwd -P)
+    cd "${source_dir}"
+
+        RUSTUP_HOME="${build_dir}/.rustup" \
+        CARGO_HOME="${build_dir}/.cargo" \
+        CARGO_TARGET_DIR="${TARGET_DIR}" \
+        CARGO_RESOLVER_LOCKFILE_PATH="${TARGET_DIR}/Cargo.lock" \
+        RUSTFLAGS="-C link-arg=--sysroot=${sysroot_dir} -C linker=clang++ -C link-arg=--target=${JINX_ARCH}-unknown-pmos -C link-arg=-lunwind -C link-arg=-static" \
+    cargo build \
+        -Zunstable-options \
+        --target ${RUST_TARGET} \
+        -Zlockfile-path \
+        --release \
+        "$@"
+}
+
+cargo_build() {
+    TARGET_DIR=$(pwd -P)
+    cd "${source_dir}"
+
+        RUSTUP_HOME="${build_dir}/.rustup" \
+        CARGO_HOME="${build_dir}/.cargo" \
+        CARGO_TARGET_DIR="${TARGET_DIR}" \
+    cargo build \
+        --release \
+        "$@"
+}
+
+autotools_recursive_regen() {
+    for f in $(grep -rl 'GNU config.sub ($timestamp)'); do
+        mv "$f" "$f".reference
+        cp -v ${base_dir}/scripts/config.sub "$f"
+        touch -r "$f".reference "$f"
+        rm -f "$f".reference
+    done
+    for f in $(grep -rl 'GNU config.guess ($timestamp)'); do
+        mv "$f" "$f".reference
+        cp -v ${base_dir}/scripts/config.guess "$f"
+        touch -r "$f".reference "$f"
+        rm -f "$f".reference
+    done
+
+    if ! [ -z "$(grep -rl "# No shared lib support for Linux oldld, aout, or coff.")" ]; then
+        #if [ -z "$(grep -rl "dynamic_linker='mlibc ld.so'")" ]; then
+            echo "*** Missing libtool support for mlibc - trying to patch support in :3 ***"
+            for f in $(grep -rl "We cannot seem to hardcode it, guess we'll fake it."); do
+                if grep -q 'add_dir="\?-L$lt_sysroot$libdir"\?' "$f"; then
+                    continue
+                fi
+                checked_subst 's/add_dir=(")?-L\$libdir(")?/add_dir=\1-L$lt_sysroot$libdir\1/g' "$f"
+            done
+            for f in $(grep -rl "# No shared lib support for Linux oldld, aout, or coff."); do
+                if grep -q 'AC_DEFUN(\[AC_PROG_LIBTOOL\]' "$f"; then
+                    continue
+                fi
+                if grep -q 'ltconfig - Create a system-specific libtool' "$f"; then
+                    continue
+                fi
+                checked_subst 's/(# This must be (glibc\/|Linux )?ELF.\nlinux\* \| k\*bsd\*-gnu \| kopensolaris\*-gnu( \| gnu\*)?( \| uclinuxfdpiceabi)?)(\)\n  lt_cv_deplibs_check_method=pass_all)/\1 | *-mlibc\5/g' "$f"
+                checked_subst 's/(\)\n	# FreeBSD uses GNU C)/ | *-mlibc\1/g' "$f" no_die || true
+                checked_subst 's/(lt_prog_compiler_static(_[^=]*)?='"'"'-non_shared'"'"'\n      ;;)(\n\n    linux\* \| k\*bsd\*-gnu \| kopensolaris\*-gnu( \| gnu\*)?\))/\1\n\n    *-mlibc)\n      lt_prog_compiler_wl\2='"'"'-Wl,'"'"'\n      lt_prog_compiler_pic\2='"'"'-fPIC'"'"'\n      lt_prog_compiler_static\2='"'"'-static'"'"'\n      ;;\3/g' "$f"
+                checked_subst 's/(    (haiku|interix\[3-9\])?\*\)\n      (archive_cmds|hardcode_direct)?(_[^=]*)?=)/    *-mlibc)\n      archive_cmds\4='"'"'$CC -shared $pic_flag $libobjs $deplibs $compiler_flags $wl-soname $wl$soname -o $lib'"'"'\n      archive_expsym_cmds\4='"'"'$CC -shared $pic_flag $libobjs $deplibs $compiler_flags $wl-soname $wl$soname $wl-retain-symbols-file $wl$export_symbols -o $lib'"'"'\n      ;;\n\n\1/g' "$f"
+                checked_subst 's/(\)\n        # FreeBSD 3 and later use GNU C)/ | *-mlibc\1/g' "$f" no_die || true
+                # putting this last to avoid a bug with determining whether the substitutions should be run or not.
+                checked_subst 's/(hardcode_into_libs=yes\n  ;;\n\n)(# No shared lib support for Linux oldld, aout, or coff.)/\1*-mlibc)\n  version_type=linux\n  need_lib_prefix=no\n  need_version=no\n  library_names_spec='"'"'$libname$release$shared_ext$versuffix $libname$release$shared_ext$major $libname$shared_ext'"'"'\n  soname_spec='"'"'$libname$release$shared_ext$major'"'"'\n  dynamic_linker='"'"'mlibc ld.so'"'"'\n  shlibpath_var=LD_LIBRARY_PATH\n  shlibpath_overrides_runpath=no\n  hardcode_into_libs=yes\n  ;;\n\n\2/g' "$f"
+            done
+        #fi
+    fi
+}
+
+autotools_configure() {
+        CFLAGS="$TARGET_CFLAGS" \
+        CXXFLAGS="$TARGET_CXXFLAGS" \
+        LDFLAGS="$TARGET_LDFLAGS" \
+    autotools_configure_noflags "$@"
+}
+
+autotools_configure_noflags() {
+    if [ -z "${configure_script_path}" ]; then
+        configure_script_path="${source_dir}/configure"
+    fi
+
+        ac_cv_func_malloc_0_nonnull=yes \
+        ac_cv_func_calloc_0_nonnull=yes \
+        ac_cv_func_realloc_0_nonnull=yes \
+    ${configure_script_path} \
+        --host=${OS_TRIPLET} \
+        --with-sysroot=${sysroot_dir} \
+        --prefix=${prefix} \
+        --sysconfdir=/etc \
+        --localstatedir=/var \
+        --bindir=${prefix}/bin \
+        --sbindir=${prefix}/bin \
+        --libdir=${prefix}/lib \
+        --disable-static \
+        --enable-shared \
+        --disable-malloc0returnsnull \
+        "$@"
+}
+
+post_package_strip() {
+    :
+}

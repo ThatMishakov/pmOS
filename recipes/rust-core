@@ -1,0 +1,21 @@
+#!/bin/sh
+
+name=rust-core
+from_source=rust
+
+hostdepts="rust cargo"
+allow_network=yes
+
+package() {
+    CARGO_HOME="${build_dir}/.cargo" ${source_dir}/x build library --target x86_64-unknown-pmos
+}
+
+package() {
+    CARGO_HOME="${build_dir}/.cargo" DESTDIR="${dest_dir}" ${source_dir}/x.py install -j${parallelism}
+
+    
+    find ${dest_dir} -name "*.old" -delete
+
+    strip_command=strip
+    post_package_strip
+}

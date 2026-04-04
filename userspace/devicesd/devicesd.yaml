@@ -1,0 +1,5 @@
+services:
+- name: devicesd
+  path: /devicesd.elf
+  description: Devices Server
+  run_type: ALWAYS_ONCE

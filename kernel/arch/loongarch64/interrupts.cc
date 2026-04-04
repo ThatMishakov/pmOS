@@ -296,3 +296,6 @@ void printc(int) {}
 
 extern "C" void allow_access_user() {}
 extern "C" void disallow_access_user() {}
+
+// TODO
+void init_smp() {}

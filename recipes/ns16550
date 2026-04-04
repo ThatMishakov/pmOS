@@ -1,0 +1,22 @@
+#!/bin/sh
+
+name=ns16550
+version=0.0.1
+revision=1
+
+source_dir=userspace/ns16550
+deps="libc libc-headers libcxx"
+hostdeps="clang"
+
+configure() {
+    cmake -S ${source_dir} -DTARGET_ARCH=${JINX_ARCH} -DCMAKE_SYSROOT=${sysroot_dir}
+}
+
+build() {
+    make -j ${parallelism}
+}
+
+package() {
+    DESTDIR="${dest_dir}" make install
+    cp ${source_dir}/ns16550.yaml "${dest_dir}/boot/ns16550.yaml"
+}

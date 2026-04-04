@@ -1,0 +1,22 @@
+#!/bin/sh
+
+name=logd
+version=0.0.1
+revision=1
+
+source_dir=userspace/logd
+deps="libc libc-headers libcxx"
+hostdeps="clang"
+
+configure() {
+    cmake -S ${source_dir} -DTARGET_ARCH=${JINX_ARCH} -DCMAKE_SYSROOT=${sysroot_dir}
+}
+
+build() {
+    make -j ${parallelism}
+}
+
+package() {
+    DESTDIR="${dest_dir}" make install
+    cp ${source_dir}/logd.yaml "${dest_dir}/boot/logd.yaml"
+}

@@ -1,0 +1,26 @@
+#!/bin/sh
+
+name=hyper
+from_source=hyper
+revision=1
+
+imagedeps="clang lld nasm cmake python3"
+
+configure() {
+    cp -rp "${source_dir}"/. ./
+}
+
+build() {
+    ./build.py
+    ./build.py --arch amd64
+    ./build.py --arch aarch64
+}
+
+package() {
+    mkdir -p ${dest_dir}/usr/local/share/hyper
+    cp build-clang-aarch64-uefi/loader/hyper_uefi ${dest_dir}/usr/local/share/hyper/BOOTAAARCH64.elf
+    cp build-clang-amd64-uefi/loader/hyper_uefi ${dest_dir}/usr/local/share/hyper/BOOTX64.elf
+
+    mkdir -p ${dest_dir}/usr/local/bin
+    cp installer/hyper_install ${dest_dir}/usr/local/bin/
+}

@@ -1,0 +1,5 @@
+services:
+- name: tests
+  path: /tests.elf
+  description: Tests server (program...)
+  run_type: ALWAYS_ONCE

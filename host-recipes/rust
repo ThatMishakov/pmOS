@@ -1,0 +1,38 @@
+#!/bin/sh
+
+name=rust
+revision=1
+from_source=rust
+allow_network=yes
+hostdeps="clang"
+
+configure() {
+    cat <<EOF > bootstrap.toml
+change-id = 148671
+
+[llvm]
+download-ci-llvm = false
+
+[build]
+target = ["${RUST_TARGET}", "${RUST_HOST_TARGET}"]
+build-dir = "${build_dir}/host-builds/rust"
+docs = false
+
+[install]
+prefix = "${prefix}"
+sysconfdir = "${prefix}/etc"
+EOF
+}
+
+build() {
+    CARGO_HOME="${build_dir}/.cargo" ${source_dir}/x.py build --stage 2 -j${parallelism}
+}
+
+package() {
+    CARGO_HOME="${build_dir}/.cargo" DESTDIR="${dest_dir}" ${source_dir}/x.py install --stage 2 -j${parallelism}
+
+    find ${dest_dir} -name "*.old" -delete
+
+    strip_command=strip
+    post_package_strip
+}

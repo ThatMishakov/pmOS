@@ -6,4 +6,8 @@
 /bx_enh_dbg.ini
 /bin
 /tmp*
-
+/build
+/build-*
+/jinx
+/.jinx-cache
+/sources

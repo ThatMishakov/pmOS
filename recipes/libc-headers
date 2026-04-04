@@ -1,0 +1,11 @@
+#!/bin/sh
+
+name=libc-headers
+version=0.0.1
+revision=1
+
+source_dir=libs/sysroot/
+
+package() {
+    DESTDIR="${dest_dir}" make -C ${source_dir} install
+}
