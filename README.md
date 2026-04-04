@@ -23,21 +23,19 @@ The i686 port is using [Hyper](https://github.com/UltraOS/Hyper) bootloader and 
 
 ## Compilation and execution
 
-The patched LLVM infrastructure (clang compiler and lld linker), targeting pmOS, is used for both the kernel and userspace. Before that, GCC and binutils were used, which probably still work, but I haven't been using/testing them. The build scritps expect to see the clang binaries targeting pmOS in the PATH. The ARCH environment variable controls the target architecture of build scripts (riscv64, x86_64 or i686).
+The [Jinx build system](https://codeberg.org/Mintsuki/jinx) is used for building the system. A Makfile is provided in the root of this project, which downloads Jinx and uses it to build the system images for different architectures. The `qemu`, `qemu-x86` and `qemu-loongarch64` makefile targets are provided to build and run RISC-V, x86 and LoongArch64 images in qemu, respectively.
 
-The patched clang sources can be obtained from [https://gitlab.com/mishakov/llvm-pmos](https://gitlab.com/mishakov/llvm-pmos). The [https://llvm.org/docs/CMake.htm](https://llvm.org/docs/CMake.html) is an documentation for compiling LLVM.
+If you would like to use jinx directly, you can run
+```sh
+export source_dir=<path to this repository>
 
-To compile the project, the following steps should be followed:
-1. Compile clang and lld from source
-2. Prepare the sysroot by executing `make sysroot` in the root of the project tree. Compile C libraries, executing `make lib` in the root of the project tree (this is necessary to link C++ libraries)
-3. Compile llvm runtimes (libcxx, libcxxabi, libunwind)
-4. Compile the rest of the system with `make all`
+cd ${source_dir} && git submodule update --init --recursive # Prepare submodules
+make -C ${source_dir} jinx # Download jinx
 
-After that, the output iso is produced in limine/pmOS.iso. The build script downloads and packages limine into iso when running the last step (`make all`). To run QEMU, use `make qemu` for RISC-V and `make qemu-x86` for x86.
-
-The following shorthands can be used to configure to configure llvm and runtimes:
-- `cmake -S ../llvm-pmos/llvm  -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_PROJECTS="clang;lld;lldb" -DLLVM_TARGETS_TO_BUILD="X86;RISCV" -DCMAKE_INSTALL_PREFIX=$HOME/cross/ -DLLVM_HOST_TRIPLE=x86_64-linux-gnueabihf -DLLVM_TARGET_TRIPLE=x86_64-pmos -DCLANG_DEFAULT_CXX_STDLIB=libc++ -DCLANG_DEFAULT_LINKER=lld` - configures clang and lld for RISC-V and x86, assuming `$HOME/cross` destination (you can then use `export PATH=$HOME/cross/bin:$PATH` to add them to the PATH)
-- `cmake -S ../llvm-pmos/runtimes -DLLVM_ENABLE_RUNTIMES="libcxx;libcxxabi;libunwind;compiler-rt"  -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$HOME/pmos/sysroot/usr/ -DLLVM_TARGET_TRIPLE=x86_64-pmos -DCMAKE_CXX_COMPILER_TARGET="x86_64-pmos" -DCMAKE_C_COMPILER="clang" -DCMAKE_CXX_COMPILER="clang++" -DCMAKE_C_COMPILER_TARGET="x86_64-pmos" -DCMAKE_ASM_COMPILER_TARGET="x86_64-pmos" -DCOMPILER_RT_BUILD_BUILTINS=ON -DCMAKE_C_FLAGS="--sysroot=$HOME/pmos/sysroot -nostartfiles" -DCMAKE_CXX_FLAGS="--sysroot=$HOME/pmos/sysroot" -DLIBCXXABI_USE_LLVM_UNWINDER=true -DLIBCXX_ENABLE_SHARED=OFF -DLIBUNWIND_ENABLE_SHARED=OFF -DLIBCXXABI_ENABLE_SHARED=OFF  -DCOMPILER_RT_BUILD_BUILTINS=ON -DCOMPILER_RT_BUILD_LIBFUZZER=OFF -DCOMPILER_RT_BUILD_MEMPROF=OFF -DCOMPILER_RT_BUILD_PROFILE=OFF -DCOMPILER_RT_BUILD_SANITIZERS=OFF -DCOMPILER_RT_BUILD_XRAY=OFF -DCOMPILER_RT_INSTALL_LIBRARY_DIR="$HOME/pmos/sysroot/usr/lib"` - configures llvm runtimes for x86 (replace x86_64 with risc64 for RISC-V), assuming `$HOME/pmos/sysroot` the sysroot, installing the headers and libraries into `$HOME/pmos/sysroot/usr`.
+cd <your build directory>
+${source_dir}/jinx init ${source_dir} ARCH=<desired architecture, e.g. riscv64, x86_64, i686, loongarch64>
+${source_dir}/jinx build
+```
 
 ## Immediate plans
 

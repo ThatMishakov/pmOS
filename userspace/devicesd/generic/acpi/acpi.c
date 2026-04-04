@@ -292,7 +292,7 @@ int system_shutdown(void)
 }
 
 syscall_r __pmos_syscall_set_attr(uint64_t pid, uint32_t attr, unsigned long value);
-syscall_r syscall_prepare_sleep(uint64_t pid, uint32_t attr, unsigned long value);
+syscall_r syscall_prepare_sleep(uint64_t pid, uint32_t attr, unsigned long value) __attribute__((weak));
 
 struct MemoryRegion {
     uint64_t phys_start;
@@ -435,6 +435,9 @@ int system_sleep()
     }
 
     entered_sleep = false;
+    if (!syscall_prepare_sleep)
+        return -ENOSYS;
+    
     int result    = syscall_prepare_sleep(0, 3, 0).result;
     assert(!result);
     if (entered_sleep) {

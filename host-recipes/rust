@@ -14,7 +14,7 @@ change-id = 148671
 download-ci-llvm = false
 
 [build]
-target = ["${JINX_ARCH}-unknown-pmos", "${RUST_HOST_TARGET}"]
+target = ["${RUST_TARGET}", "${RUST_HOST_TARGET}"]
 build-dir = "${build_dir}/host-builds/rust"
 docs = false
 

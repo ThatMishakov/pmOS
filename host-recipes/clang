@@ -3,16 +3,17 @@
 name=clang
 revision=1
 from_source=clang-src
+imagedeps="ninja-build"
 # hostdeps="cmake"
 
 configure() {
-    cmake -S ${source_dir}/llvm  -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_PROJECTS="clang;lld;lldb" -DLLVM_TARGETS_TO_BUILD="X86;RISCV;LoongArch" -DCMAKE_INSTALL_PREFIX=${prefix} -DLLVM_TARGET_TRIPLE=${JINX_ARCH}-pmos -DCLANG_DEFAULT_CXX_STDLIB=libc++ -DCLANG_DEFAULT_LINKER=lld
+    cmake -S ${source_dir}/llvm -G Ninja -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_PROJECTS="clang;lld;lldb" -DLLVM_TARGETS_TO_BUILD="X86;RISCV;LoongArch" -DCMAKE_INSTALL_PREFIX=${prefix} -DLLVM_TARGET_TRIPLE=${JINX_ARCH}-pmos -DCLANG_DEFAULT_CXX_STDLIB=libc++ -DCLANG_DEFAULT_LINKER=lld
 }
 
 build() {
-    make -j ${parallelism}
+    ninja -j ${parallelism}
 }
 
 package() {
-    DESTDIR="${dest_dir}" make install
+    DESTDIR="${dest_dir}" ninja install
 }

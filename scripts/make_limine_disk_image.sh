@@ -47,7 +47,8 @@ mcopy -i "$BOOT_PARTITION" "${BOOT_DIR}/bootstrapd" "::/bootstrapd"
 # Copy limine
 mcopy -i "$BOOT_PARTITION" "/usr/local/share/limine/limine-bios.sys" "::/limine-bios.sys"
 mmd -i "$BOOT_PARTITION" "::/EFI"
-mcopy -i "$BOOT_PARTITION" "/usr/local/share/limine/BOOT"* "::/EFI/"
+mmd -i "$BOOT_PARTITION" "::/EFI/BOOT"
+mcopy -i "$BOOT_PARTITION" "/usr/local/share/limine/BOOT"* "::/EFI/BOOT/"
 
 # Copy services
 for SERVICE in $SERVICES; do

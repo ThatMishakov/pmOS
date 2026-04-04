@@ -18,6 +18,10 @@ configure() {
     "${source_dir}"/configure \
         --prefix="${prefix}" \
         --enable-uefi-cd \
+        --enable-uefi-x86-64 \
+        --enable-uefi-aarch64 \
+        --enable-uefi-loongarch64 \
+        --enable-uefi-riscv64 \
         $X86_FLAGS
 }
 

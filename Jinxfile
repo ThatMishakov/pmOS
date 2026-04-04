@@ -1,9 +1,12 @@
 JINX_MAJOR_VER=0.8
 JINX_DEBIAN_SNAPSHOT=20260326T203750Z
 JINX_BASE_PACKAGES="make gcc cmake build-essential ninja-build python3"
-JINX_ARCH=x86_64
 
-BOOT_SERVICES="ahcid devicesd i8042 logd ns16550 pmbus processd ps2d terminald tests"
+BOOT_SERVICES="ahcid devicesd logd ns16550 pmbus processd ps2d terminald tests"
+if [ "$JINX_ARCH" = "x86_64" ] || [ "$JINX_ARCH" = "i686" ]; then
+    BOOT_SERVICES="$BOOT_SERVICES i8042"
+fi
+
 
 RUST_HOST_TARGET="$(uname -m)-unknown-linux-gnu"
 case "$(uname -m)" in
@@ -11,6 +14,14 @@ case "$(uname -m)" in
     arm*) RUST_HOST_TARGET="armv7-unknown-linux-gnueabihf" ;;
     riscv64) RUST_HOST_TARGET="riscv64gc-unknown-linux-gnu" ;;
     ppc64le) RUST_HOST_TARGET="powerpc64le-unknown-linux-gnu" ;;
+esac
+
+RUST_TARGET="${JINX_ARCH}-unknown-pmos"
+case "$JINX_ARCH" in
+    x86_64) RUST_TARGET="x86_64-unknown-pmos" ;;
+    i686) RUST_TARGET="i686-unknown-pmos" ;;
+    riscv64) RUST_TARGET="riscv64gc-unknown-pmos" ;;
+    loongarch64) RUST_TARGET="loongarch64-unknown-pmos" ;;
 esac
 
 package_rust_crate() {
@@ -32,7 +43,7 @@ cargo_build_nolock() {
         RUSTFLAGS="-C link-arg=--sysroot=${sysroot_dir} -C linker=clang++ -C link-arg=--target=${JINX_ARCH}-unknown-pmos -C link-arg=-lunwind -C link-arg=-static" \
     cargo build \
         -Zunstable-options \
-        --target ${JINX_ARCH}-unknown-pmos \
+        --target ${RUST_TARGET} \
         -Zlockfile-path \
         --release \
         "$@"
