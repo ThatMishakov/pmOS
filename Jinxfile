@@ -64,13 +64,13 @@ cargo_build() {
 autotools_recursive_regen() {
     for f in $(grep -rl 'GNU config.sub ($timestamp)'); do
         mv "$f" "$f".reference
-        cp -v ${base_dir}/build-support/config.sub "$f"
+        cp -v ${base_dir}/scripts/config.sub "$f"
         touch -r "$f".reference "$f"
         rm -f "$f".reference
     done
     for f in $(grep -rl 'GNU config.guess ($timestamp)'); do
         mv "$f" "$f".reference
-        cp -v ${base_dir}/build-support/config.guess "$f"
+        cp -v ${base_dir}/scripts/config.guess "$f"
         touch -r "$f".reference "$f"
         rm -f "$f".reference
     done
