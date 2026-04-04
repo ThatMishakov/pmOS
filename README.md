@@ -23,7 +23,7 @@ The i686 port is using [Hyper](https://github.com/UltraOS/Hyper) bootloader and 
 
 ## Compilation and execution
 
-The [Jinx build system](https://codeberg.org/Mintsuki/jinx) is used for building the system. A Makfile is provided in the root of this project, which downloads Jinx and uses it to build the system images for different architectures. The `qemu`, `qemu-x86` and `qemu-loongarch64` makefile targets are provided to build and run RISC-V, x86 and LoongArch64 images in qemu, respectively.
+The [Jinx build system](https://codeberg.org/Mintsuki/jinx) is used for building the system. A Makfile is provided in the root of this project, which downloads Jinx and uses it to build the system images for different architectures. The `qemu`, `qemu-x86`, `qemu-i686` and `qemu-loongarch64` makefile targets are provided to build and run RISC-V, amd64, ia32 and LoongArch64 images in qemu, respectively.
 
 If you would like to use jinx directly, you can run
 ```sh
@@ -34,7 +34,7 @@ make -C ${source_dir} jinx # Download jinx
 
 cd <your build directory>
 ${source_dir}/jinx init ${source_dir} ARCH=<desired architecture, e.g. riscv64, x86_64, i686, loongarch64>
-${source_dir}/jinx build
+${source_dir}/jinx build limine-disk-image
 ```
 
 ## Immediate plans
