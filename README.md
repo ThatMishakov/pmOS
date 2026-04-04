@@ -21,6 +21,15 @@ As such, the `kernel` directory contains the kernel, the `lib` contains userspac
 
 The i686 port is using [Hyper](https://github.com/UltraOS/Hyper) bootloader and its Ultra protocol.
 
+## Project structure
+
+The project is rougly structured as follows:
+- `kernel/` - The microkernel
+- `lib/` - Different libraries (C, Rust and so on)
+- `userspace/` - Different userspace servers/programs
+- `host-recipes/`, `source-recipes/`, `recipes/`, `patches/`, `Jinxfile` - [Jinx](https://codeberg.org/Mintsuki/jinx) build system stuff
+- `scripts/` - Build support scripts
+
 ## Compilation and execution
 
 The [Jinx build system](https://codeberg.org/Mintsuki/jinx) is used for building the system. A Makfile is provided in the root of this project, which downloads Jinx and uses it to build the system images for different architectures. The `qemu`, `qemu-x86`, `qemu-i686` and `qemu-loongarch64` makefile targets are provided to build and run RISC-V, amd64, ia32 and LoongArch64 images in qemu, respectively.
