@@ -1,0 +1,15 @@
+#!/bin/sh
+
+name=limine-disk-image
+version=1
+revision=1
+
+source_dir=scripts
+imagedeps="xorriso"
+deps="limine-config kernel bootstrapd ${BOOT_SERVICES}"
+hostdeps="limine"
+
+build() {
+    SYSROOT="$sysroot_dir" \
+    ${source_dir}/make_limine_iso.sh "$build_dir/pmos.iso" "${BOOT_SERVICES}" "limine.conf"
+}
