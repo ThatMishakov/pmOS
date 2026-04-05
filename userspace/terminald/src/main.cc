@@ -44,7 +44,15 @@ struct flanterm_context *ft_ctx;
 
 void write_screen(std::string_view s)
 {
-    flanterm_write(ft_ctx, s.data(), s.length());
+    size_t w = 0;
+    for (size_t i = 0; i < s.length(); ++i) {
+        if (s[i] == '\n') {
+            flanterm_write(ft_ctx, s.data() + w, i - w);
+            flanterm_write(ft_ctx, "\r\n", 2);
+            w = i + 1;
+        }
+    }
+    flanterm_write(ft_ctx, s.data() + w, s.length() - w);
 }
 
 void int_to_hex(char * buffer, uint64_t n, char upper)
