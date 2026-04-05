@@ -32,6 +32,7 @@ pmos::async::task<uint64_t> publish_disk(AHCIPort &port, uint64_t sector_count,
 
     pmos::ipc::BUSObject object;
     object.set_name("system.disk." + pci_string + "_port" + std::to_string(port.index));
+    object.set_property("device", "hard_disk");
     object.set_property("sector_count", sector_count);
     object.set_property("logical_sector_size", logical_sector_size);
     object.set_property("physical_sector_size", physical_sector_size);

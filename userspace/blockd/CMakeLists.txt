@@ -25,4 +25,6 @@ add_executable(blockd ${GENERIC_SRC})
 set_property(TARGET blockd PROPERTY C_STANDARD 23)
 set_property(TARGET blockd PROPERTY CXX_STANDARD 23)
 
+target_link_libraries(blockd pmoscxx)
+
 install(TARGETS blockd RUNTIME DESTINATION "/boot")

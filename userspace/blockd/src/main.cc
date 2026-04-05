@@ -18,6 +18,13 @@
 #include <unistd.h>
 #include <vector>
 #include <limits.h>
+#include <pmos/helpers.hh>
+#include <pmos/pmbus_helper.hh>
+#include <pmos/ipc/bus_object.hh>
+
+pmos::Port port = pmos::Port::create().value();
+pmos::PortDispatcher dispatcher(port);
+pmos::PMBUSHelper bus_helper(dispatcher);
 
 size_t alignup(size_t value, size_t alignment)
 {
@@ -487,34 +494,54 @@ pmos::async::detached_task register_disk(char *i, Message_Descriptor d)
     }
 }
 
-int main()
+pmos::async::detached_task get_disks()
 {
+    auto filter = pmos::ipc::EqualsFilter("device", "hard_disk");
     while (true) {
-        Message_Descriptor msg;
-        syscall_get_message_info(&msg, main_port, 0);
-
-        auto msg_buff = std::make_unique<char[]>(msg.size);
-
-        get_first_message(msg_buff.get(), 0, main_port);
-
-        if (msg.size < sizeof(IPC_Generic_Msg)) {
-            fprintf(stderr, "Warning: recieved very small message\n");
-            break;
-        }
-
-        IPC_Generic_Msg *ipc_msg = reinterpret_cast<IPC_Generic_Msg *>(msg_buff.get());
-        switch (ipc_msg->type) {
-        case IPC_Disk_Register_NUM:
-            register_disk(msg_buff.get(), msg);
-            break;
-        case IPC_Disk_Open_Reply_NUM:
-            disk_open_msg(msg_buff.get(), msg);
-            break;
-        case IPC_Disk_Read_Reply_NUM:
-            disk_read_msg(msg_buff.get(), msg);
-            break;
-        default:
-            printf("Received message of type %d\n", ipc_msg->type);
+        try {
+            auto disk = co_await bus_helper.get_object(filter);
+            if (disk) {
+                printf("Got disk object with name %s\n", disk.value().object.get_name().c_str());
+            } else {
+                printf("No more disk objects\n");
+                break;
+            }
+        } catch (std::system_error &e) {
+            printf("Error getting disk objects: %s\n", e.what());
         }
     }
+}
+
+int main()
+{
+    // while (true) {
+    //     Message_Descriptor msg;
+    //     syscall_get_message_info(&msg, main_port, 0);
+
+    //     auto msg_buff = std::make_unique<char[]>(msg.size);
+
+    //     get_first_message(msg_buff.get(), 0, main_port);
+
+    //     if (msg.size < sizeof(IPC_Generic_Msg)) {
+    //         fprintf(stderr, "Warning: recieved very small message\n");
+    //         break;
+    //     }
+
+    //     IPC_Generic_Msg *ipc_msg = reinterpret_cast<IPC_Generic_Msg *>(msg_buff.get());
+    //     switch (ipc_msg->type) {
+    //     case IPC_Disk_Register_NUM:
+    //         register_disk(msg_buff.get(), msg);
+    //         break;
+    //     case IPC_Disk_Open_Reply_NUM:
+    //         disk_open_msg(msg_buff.get(), msg);
+    //         break;
+    //     case IPC_Disk_Read_Reply_NUM:
+    //         disk_read_msg(msg_buff.get(), msg);
+    //         break;
+    //     default:
+    //         printf("Received message of type %d\n", ipc_msg->type);
+    //     }
+    // }
+    get_disks();
+    dispatcher.dispatch();
 }

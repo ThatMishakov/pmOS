@@ -10,6 +10,15 @@ class PMBUSHelper {
 public:
     pmos::async::task<uint64_t> publish_object(pmos::ipc::BUSObject object, Right right);
 
+    struct GetObjectReturn {
+        pmos::ipc::BUSObject object;
+        Right right;
+        uint64_t sequence_number;
+    };
+
+    pmos::async::task<std::optional<GetObjectReturn>>
+        get_object(const pmos::ipc::AnyFilter &filter, uint64_t from_sequence_number = 0);
+
     PMBUSHelper(PortDispatcher &);
     // I don't know what to do with the list of waiters here...
     // ~PMBUSHelper();

@@ -88,4 +88,29 @@ pmos::async::task<uint64_t> PMBUSHelper::publish_object(pmos::ipc::BUSObject obj
     co_return reply->sequence_number;
 }
 
+pmos::async::task<std::optional<PMBUSHelper::GetObjectReturn>>
+PMBUSHelper::get_object(const pmos::ipc::AnyFilter &filter, uint64_t from_sequence_number)
+{
+    auto &pmbus_right = co_await PMBUSRightWaiter{*this};
+
+    auto vec = serialize_filter_ipc(filter, from_sequence_number);
+    auto span = std::span<const uint8_t>(vec);
+    auto result = send_message_right(pmbus_right, span, std::pair{&dispatcher_.get_port(), RightType::SendOnce}, false);
+    if (!result)
+        throw std::system_error(result.error(), std::system_category());
+
+    auto msg = co_await dispatcher_.get_message(result.value());
+    if (!msg)
+        throw std::system_error(msg.error(), std::system_category());
+
+    GetObjectReturn ret;
+
+    auto deserialized = ipc::BUSObject::deserialize(reinterpret_cast<const IPC_BUS_Request_Object_Reply *>(msg->data.data()), msg->descriptor.size);
+    ret.object = std::move(deserialized.first);
+    ret.sequence_number = deserialized.second;
+    ret.right = std::move(msg->other_rights[0]);
+
+    co_return ret;
+}
+
 }
