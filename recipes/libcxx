@@ -5,6 +5,7 @@ from_source=clang-src
 revision=1
 deps="libc-headers libc"
 hostdeps="clang"
+imagedeps="python3 build-essential"
 
 triplet="${JINX_ARCH}-pmos"
 

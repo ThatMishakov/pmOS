@@ -1,48 +1,14 @@
-#pragma once
-
-#include <cstdint>
-#include <optional>
-#include <pmos/ipc.h>
-#include <string>
-#include <variant>
-#include <vector>
-#include <unordered_map>
+#include <pmos/ipc/bus_object.hh>
 
 namespace pmos::ipc
 {
-
-class BUSObject
-{
-public:
-    using property = std::variant<std::string, uint64_t>;
-
-    /// Sets the property to the desired value (replacing the previous value if it had already been set)
-    void set_property(std::string_view name, std::variant<std::string_view, uint64_t> p);
-
-    /// Sets the name of this busobject
-    void set_name(std::string name);
-
-    std::optional<property> get_property(std::string_view name);
-
-    /// Serializes the BUSObject into IPC_BUS_Publish_Object message
-    std::vector<uint8_t> serialize();
-    std::vector<uint8_t> serialize_into_ipc();
-private:
-    std::string name;
-    std::unordered_map<std::string, property> properties;
-
-    template<class... Ts>
-    struct overloads : Ts... { using Ts::operator()...; };
-
-    std::vector<uint8_t> serialize_properties();
-};
-
-inline void BUSObject::set_name(std::string name)
+    
+void BUSObject::set_name(std::string name)
 {
     std::swap(name, this->name);
 }
 
-inline void BUSObject::set_property(std::string_view name, std::variant<std::string_view, uint64_t> p)
+void BUSObject::set_property(std::string_view name, std::variant<std::string_view, uint64_t> p)
 {
     const auto visitor = overloads
     {
@@ -52,7 +18,7 @@ inline void BUSObject::set_property(std::string_view name, std::variant<std::str
     properties[std::string(name)] = std::visit(visitor, p);
 }
 
-inline std::vector<uint8_t> BUSObject::serialize_properties()
+std::vector<uint8_t> BUSObject::serialize_properties()
 {
     const auto struct_size = sizeof(IPC_Object_Property);
 
@@ -69,9 +35,9 @@ inline std::vector<uint8_t> BUSObject::serialize_properties()
             buffer.reserve(total_size + alignment);
 
             IPC_Object_Property prop = {
-                .length = total_size + alignment,
+                .length = static_cast<uint16_t>(total_size + alignment),
                 .type = PROPERTY_TYPE_STRING,
-                .data_start = struct_size + name_length,
+                .data_start = static_cast<uint8_t>(struct_size + name_length),
             };
             auto ptr = reinterpret_cast<const uint8_t *>(&prop);
             buffer.insert(buffer.end(), ptr, ptr + sizeof(prop));
@@ -93,9 +59,9 @@ inline std::vector<uint8_t> BUSObject::serialize_properties()
             buffer.reserve(total_size + alignment);
 
             IPC_Object_Property prop = {
-                .length = total_size + alignment,
+                .length = static_cast<uint16_t>(total_size + alignment),
                 .type = PROPERTY_TYPE_INTEGER,
-                .data_start = struct_size + name_length + alignment,
+                .data_start = static_cast<uint8_t>(struct_size + name_length + alignment),
             };
             auto ptr = reinterpret_cast<const uint8_t *>(&prop);
             buffer.insert(buffer.end(), ptr, ptr + sizeof(prop));
@@ -111,7 +77,7 @@ inline std::vector<uint8_t> BUSObject::serialize_properties()
     return result;
 }
 
-inline std::vector<uint8_t> BUSObject::serialize_into_ipc()
+std::vector<uint8_t> BUSObject::serialize_into_ipc()
 {
     auto struct_size = sizeof(IPC_BUS_Publish_Object) - sizeof(IPC_Bus_Object);
     
@@ -129,16 +95,16 @@ inline std::vector<uint8_t> BUSObject::serialize_into_ipc()
     return data;
 }
 
-inline std::vector<uint8_t> BUSObject::serialize()
+std::vector<uint8_t> BUSObject::serialize()
 {
     auto name_size_aligned = name.size() + 1;
     name_size_aligned = (name_size_aligned + 7) & ~7;
 
     auto properties = serialize_properties();
     IPC_Bus_Object object = {
-        .size = sizeof(object) + properties.size() + name_size_aligned,
-        .name_length = name.size(),
-        .properties_offset = name_size_aligned + sizeof(object),
+        .size = static_cast<uint32_t>(sizeof(object) + properties.size() + name_size_aligned),
+        .name_length = static_cast<uint16_t>(name.size()),
+        .properties_offset = static_cast<uint16_t>(name_size_aligned + sizeof(object)),
     };
 
     std::vector<uint8_t> vec;
@@ -156,4 +122,4 @@ inline std::vector<uint8_t> BUSObject::serialize()
     return vec;
 }
 
-} // namespace pmos::ipc
+}

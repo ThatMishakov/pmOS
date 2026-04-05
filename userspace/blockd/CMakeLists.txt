@@ -14,17 +14,15 @@ set(CMAKE_AR "llvm-ar")
 set(CMAKE_CXX_FLAGS "-Wall -Wextra -O2 -pipe")
 set(CMAKE_C_FLAGS "-Wall -Wextra -O2 -pipe")
 
-project(tests C CXX)
+project(blockd CXX)
 
 file(GLOB_RECURSE GENERIC_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.S")
 
-add_executable(tests ${GENERIC_SRC})
-set_property(TARGET tests PROPERTY C_STANDARD 23)
-set_property(TARGET tests PROPERTY CXX_STANDARD 23)
+add_executable(blockd ${GENERIC_SRC})
+set_property(TARGET blockd PROPERTY C_STANDARD 23)
+set_property(TARGET blockd PROPERTY CXX_STANDARD 23)
 
-target_link_libraries(tests pmoscxx)
-
-install(TARGETS tests RUNTIME DESTINATION "/boot")
+install(TARGETS blockd RUNTIME DESTINATION "/boot")

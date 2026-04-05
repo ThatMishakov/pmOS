@@ -1,10 +1,10 @@
 #!/bin/sh
 
-name=tests
+name=blockd
 version=0.0.1
 revision=1
 
-source_dir=userspace/tests
+source_dir=userspace/blockd
 deps="libc libc-headers libcxx pmoscxx"
 hostdeps="clang"
 
@@ -18,5 +18,5 @@ build() {
 
 package() {
     DESTDIR="${dest_dir}" make install
-    cp ${source_dir}/tests.yaml "${dest_dir}/boot/tests.yaml"
+    cp ${source_dir}/blockd.yaml "${dest_dir}/boot/blockd.yaml"
 }

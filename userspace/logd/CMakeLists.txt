@@ -25,4 +25,6 @@ add_executable(logd ${GENERIC_SRC})
 set_property(TARGET logd PROPERTY C_STANDARD 23)
 set_property(TARGET logd PROPERTY CXX_STANDARD 23)
 
+target_link_libraries(logd pmoscxx)
+
 install(TARGETS logd RUNTIME DESTINATION "/boot")

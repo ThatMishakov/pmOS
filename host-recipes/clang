@@ -3,7 +3,7 @@
 name=clang
 revision=1
 from_source=clang-src
-imagedeps="ninja-build"
+imagedeps="ninja-build cmake gcc lld python3 build-essential"
 # hostdeps="cmake"
 
 configure() {

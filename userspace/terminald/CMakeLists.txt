@@ -35,4 +35,6 @@ set_property(TARGET terminald PROPERTY CXX_STANDARD 23)
 
 target_include_directories(terminald PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/flanterm")
 
+target_link_libraries(terminald pmoscxx)
+
 install(TARGETS terminald RUNTIME DESTINATION "/boot")

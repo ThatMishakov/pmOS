@@ -1,0 +1,23 @@
+#!/bin/sh
+
+name=pmoscxx
+version=0.1
+revision=1
+
+imagedeps="make cmake"
+
+source_dir=libs/pmoscxx
+deps="libc-headers libcxx"
+hostdeps="clang"
+
+configure() {
+    cmake -S ${source_dir} -DSYSROOT=${sysroot_dir} -DTARGET_ARCH=${JINX_ARCH}
+}
+
+build() {
+    make -j ${parallelism}
+}
+
+package() {
+    DESTDIR="${dest_dir}" make install
+}

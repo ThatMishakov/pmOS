@@ -25,4 +25,6 @@ add_executable(ahcid ${GENERIC_SRC})
 set_property(TARGET ahcid PROPERTY C_STANDARD 23)
 set_property(TARGET ahcid PROPERTY CXX_STANDARD 23)
 
+target_link_libraries(ahcid pmoscxx)
+
 install(TARGETS ahcid RUNTIME DESTINATION "/boot")

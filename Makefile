@@ -66,7 +66,7 @@ qemu-x86: $(x86_64-IMG) ovmf-x86
     	-device ide-hd,drive=hdd0 \
 		-M q35\
 		-smbios type=0,uefi=on -bios ovmf-x86/OVMF.fd\
-		-m 256M\
+		-m 512M\
 	       	-smp 1\
 	       	-serial stdio \
 		-device intel-iommu -cpu max,x2apic=on,+smep,+smap -no-shutdown -no-reboot

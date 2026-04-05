@@ -25,4 +25,6 @@ add_executable(ns16550 ${GENERIC_SRC})
 set_property(TARGET ns16550 PROPERTY C_STANDARD 23)
 set_property(TARGET ns16550 PROPERTY CXX_STANDARD 23)
 
+target_link_libraries(ns16550 pmoscxx)
+
 install(TARGETS ns16550 RUNTIME DESTINATION "/boot")
