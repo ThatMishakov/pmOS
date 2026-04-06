@@ -264,12 +264,12 @@ BUSObject BUSObject::deserialize(std::span<uint8_t> data)
         throw std::system_error(EINTR, std::system_category());
 
     constexpr size_t name_offset = sizeof(IPC_Bus_Object);
-    if (name_length > data.size() or name_offset > data.size() - name_length)
+
+    if ((name_length > data.size()) or (name_offset > data.size() - name_length))
         throw std::system_error(EINTR, std::system_category());
 
     auto name_data = reinterpret_cast<const char *>(data.data() + 8);
     ret.name = std::string(name_data, name_length);
-
 
     if (properties_offset > data.size())
         throw std::system_error(EINTR, std::system_category());
@@ -291,7 +291,7 @@ BUSObject BUSObject::deserialize(std::span<uint8_t> data)
         auto name = std::string(cstr, strnlen(cstr, name_length));
         BUSObject::property p = "";
 
-        auto data_length = property->length - properties_offset - property->data_start;
+        auto data_length = property->length - property->data_start;
         switch (property->type) {
         case PROPERTY_TYPE_STRING: {
             auto cstr = reinterpret_cast<const char *>(data.data() + properties_offset + property->data_start);

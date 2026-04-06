@@ -497,10 +497,12 @@ pmos::async::detached_task register_disk(char *i, Message_Descriptor d)
 pmos::async::detached_task get_disks()
 {
     auto filter = pmos::ipc::EqualsFilter("device", "hard_disk");
+    uint64_t next_id = 0;
     while (true) {
         try {
-            auto disk = co_await bus_helper.get_object(filter);
+            auto disk = co_await bus_helper.get_object(filter, next_id);
             if (disk) {
+                next_id = disk.value().sequence_number + 1;
                 printf("Got disk object with name %s\n", disk.value().object.get_name().c_str());
             } else {
                 printf("No more disk objects\n");
@@ -508,6 +510,7 @@ pmos::async::detached_task get_disks()
             }
         } catch (std::system_error &e) {
             printf("Error getting disk objects: %s\n", e.what());
+            exit(1);
         }
     }
 }

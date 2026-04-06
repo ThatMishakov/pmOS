@@ -117,7 +117,7 @@ PMBUSHelper::get_object(const pmos::ipc::AnyFilter &filter, uint64_t from_sequen
     if (reply->result < 0)
         throw std::system_error(-reply->result, std::system_category());
 
-    uint8_t *data = reinterpret_cast<uint8_t *>(reply + 1);
+    uint8_t *data = reinterpret_cast<uint8_t *>(msg->data.data() + sizeof(IPC_BUS_Request_Object_Reply));
     auto deserialized = ipc::BUSObject::deserialize(std::span(data, msg->data.size() - sizeof(IPC_BUS_Request_Object_Reply)));
 
     ret.object = std::move(deserialized);

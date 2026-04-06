@@ -77,6 +77,7 @@ fn push_property_string(out: &mut Vec<u8>, name: &str, value: &str) {
         data_start: name_hdr_len as u8,
     };
 
+    let initial_size = out.len();
     push_pod(out, &hdr);
     out.extend_from_slice(name.as_bytes());
     out.push(0);
@@ -84,7 +85,7 @@ fn push_property_string(out: &mut Vec<u8>, name: &str, value: &str) {
     out.extend_from_slice(value.as_bytes());
     out.push(0);
 
-    out.resize(size_aligned, 0);
+    out.resize(initial_size + size_aligned, 0);
 }
 
 fn push_property_list(
@@ -113,12 +114,13 @@ fn push_property_list(
         data_start: name_hdr_len as u8,
     };
 
+    let initial_size = out.len();
     push_pod(out, &hdr);
     out.extend_from_slice(name.as_bytes());
     out.push(0);
     out.extend_from_slice(&list_bytes);
 
-    out.resize(size_aligned, 0);
+    out.resize(initial_size + size_aligned, 0);
 }
 
 fn push_property_u64(out: &mut Vec<u8>, name: &str, value: u64) {
@@ -135,11 +137,12 @@ fn push_property_u64(out: &mut Vec<u8>, name: &str, value: u64) {
         data_start: data_offset as u8,
     };
 
+    let initial_size = out.len();
     push_pod(out, &hdr);
     out.extend_from_slice(name.as_bytes());
     out.push(0);
 
-    out.resize(data_offset, 0);
+    out.resize(initial_size + data_offset, 0);
     out.extend_from_slice(&value.to_ne_bytes());
 }
 
@@ -296,7 +299,7 @@ pub fn pmbus_object_serialize(name: &str, properties: &ObjectProperties) -> Vec<
     let total_size = properties_offset + props.len();
     let hdr = IPCBusObjectHdr {
         size: total_size as u32,
-        name_length: name.len() as u16, // matches your C: strlen(name)
+        name_length: name_len as u16,
         properties_offset: properties_offset_u16,
     };
 
