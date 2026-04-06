@@ -21,24 +21,17 @@ extern pmos::PMBUSHelper pmbus_helper;
 
 extern std::string pci_string;
 
-pmos::async::detached_task handle_ipc(AHCIPort &port);
-
 pmos::async::task<uint64_t> publish_disk(AHCIPort &port, uint64_t sector_count,
                                          size_t logical_sector_size, size_t physical_sector_size)
 {
-    auto handler =
-        DiskHandler::create(port, sector_count, logical_sector_size, physical_sector_size);
-    pmos::utility::scope_guard guard {[=] { handler->destroy(); }};
-
     pmos::ipc::BUSObject object;
     object.set_name("system.disk." + pci_string + "_port" + std::to_string(port.index));
     object.set_property("device", "hard_disk");
     object.set_property("sector_count", sector_count);
     object.set_property("logical_sector_size", logical_sector_size);
     object.set_property("physical_sector_size", physical_sector_size);
-    object.set_property("handler_id", handler->get_disk_id());
 
-    handle_ipc(port);
+    handle_ipc(port, sector_count, logical_sector_size, physical_sector_size);
 
     printf("Publishing disk...\n");
 
