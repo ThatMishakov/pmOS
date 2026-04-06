@@ -105,9 +105,23 @@ PMBUSHelper::get_object(const pmos::ipc::AnyFilter &filter, uint64_t from_sequen
 
     GetObjectReturn ret;
 
-    auto deserialized = ipc::BUSObject::deserialize(reinterpret_cast<const IPC_BUS_Request_Object_Reply *>(msg->data.data()), msg->descriptor.size);
-    ret.object = std::move(deserialized.first);
-    ret.sequence_number = deserialized.second;
+    if (msg->descriptor.size < sizeof(IPC_BUS_Request_Object_Reply))
+        throw std::system_error(EINTR, std::system_category());
+
+    auto *reply = reinterpret_cast<IPC_BUS_Request_Object_Reply *>(msg->data.data());
+    if (reply->type != IPC_BUS_Request_Object_Reply_NUM)
+        throw std::system_error(EINTR, std::system_category());
+
+    if (reply->result == -ENOENT)
+        co_return {};
+    if (reply->result < 0)
+        throw std::system_error(-reply->result, std::system_category());
+
+    uint8_t *data = reinterpret_cast<uint8_t *>(reply + 1);
+    auto deserialized = ipc::BUSObject::deserialize(std::span(data, msg->data.size() - sizeof(IPC_BUS_Request_Object_Reply)));
+
+    ret.object = std::move(deserialized);
+    ret.sequence_number = reply->object_id;
     ret.right = std::move(msg->other_rights[0]);
 
     co_return ret;

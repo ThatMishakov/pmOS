@@ -1508,7 +1508,7 @@ typedef struct IPC_BUS_Request_Object_Reply {
     uint64_t object_id;
 
     /// Object data (for more objects, the same request should be sent again with the next_sequence_number)
-    struct IPC_Bus_Object object;
+    ///struct IPC_Bus_Object object;
 } IPC_BUS_Request_Object_Reply;
 
 #define IPC_Name_Port_NUM 0x1c0

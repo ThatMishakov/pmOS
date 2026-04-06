@@ -1,4 +1,5 @@
 #include <pmos/ipc/bus_object.hh>
+#include <system_error>
 
 template<class... Ts>
 struct overloads : Ts... { using Ts::operator()...; };
@@ -11,14 +12,9 @@ void BUSObject::set_name(std::string name)
     std::swap(name, this->name);
 }
 
-void BUSObject::set_property(std::string_view name, std::variant<std::string_view, uint64_t> p)
+void BUSObject::set_property(std::string_view name, BUSObject::property p)
 {
-    const auto visitor = overloads
-    {
-        [](std::string_view s) -> property { return std::string(s); },
-        [](uint64_t i) -> property { return i;} ,
-    };
-    properties[std::string(name)] = std::visit(visitor, p);
+    properties[std::string(name)] = std::move(p);
 }
 
 std::vector<uint8_t> BUSObject::serialize_properties()
@@ -249,6 +245,89 @@ std::vector<uint8_t> serialize_filter_ipc(const AnyFilter &filter, uint64_t from
     filter_serialize_push_back(result, filter);
 
     return result;
+}
+
+BUSObject BUSObject::deserialize(std::span<uint8_t> data)
+{
+    BUSObject ret{};
+
+    if (data.size() < sizeof(IPC_Bus_Object))
+        throw std::system_error(EINTR, std::system_category());
+
+    IPC_Bus_Object *object = reinterpret_cast<IPC_Bus_Object *>(data.data());
+
+    size_t size = object->size;
+    size_t name_length = object->name_length;
+    size_t properties_offset = object->properties_offset;
+
+    if (size < data.size())
+        throw std::system_error(EINTR, std::system_category());
+
+    constexpr size_t name_offset = sizeof(IPC_Bus_Object);
+    if (name_length > data.size() or name_offset > data.size() - name_length)
+        throw std::system_error(EINTR, std::system_category());
+
+    auto name_data = reinterpret_cast<const char *>(data.data() + 8);
+    ret.name = std::string(name_data, name_length);
+
+
+    if (properties_offset > data.size())
+        throw std::system_error(EINTR, std::system_category());
+
+    while (properties_offset < size) {
+        if (size - properties_offset < sizeof(IPC_Object_Property))
+            throw std::system_error(EINTR, std::system_category());
+
+        auto property = reinterpret_cast<IPC_Object_Property *>(data.data() + properties_offset);
+        if (size - properties_offset < property->length)
+            throw std::system_error(EINTR, std::system_category());
+
+        // data_start beyong the length
+        if (property->data_start > size - property->length)
+            throw std::system_error(EINTR, std::system_category());
+
+        auto name_length = property->data_start - sizeof(IPC_Object_Property);
+        auto cstr = reinterpret_cast<const char *>(data.data() + properties_offset + sizeof(IPC_Object_Property));
+        auto name = std::string(cstr, strnlen(cstr, name_length));
+        BUSObject::property p = "";
+
+        auto data_length = property->length - properties_offset - property->data_start;
+        switch (property->type) {
+        case PROPERTY_TYPE_STRING: {
+            auto cstr = reinterpret_cast<const char *>(data.data() + properties_offset + property->data_start);
+            p = std::string(cstr, strnlen(cstr, data_length));
+        }
+            break;
+        case PROPERTY_TYPE_INTEGER: {
+            if (data_length != sizeof(uint64_t))
+                throw std::system_error(EINTR, std::system_category());
+
+            p = *reinterpret_cast<const uint64_t *>(data.data() + properties_offset + property->data_start);
+        }
+            break;
+        case PROPERTY_TYPE_LIST: {
+            std::vector<std::string> values;
+            auto cstr = reinterpret_cast<const char *>(data.data() + properties_offset + property->data_start);
+            size_t ptr = 0;
+            while (ptr < data_length and ptr[cstr] != '\0') {
+                auto len = strnlen(cstr + ptr, data_length - ptr);
+                values.emplace_back(std::string(cstr + ptr, len));
+                ptr += len + 1;
+            }
+            p = std::move(values);
+        }
+            break;
+        default:
+            // Unknown type...
+            break;
+        }
+
+        ret.properties[name] = std::move(p);
+
+        properties_offset += property->length;
+    }
+
+    return ret;
 }
 
 }

@@ -7,6 +7,7 @@
 #include <variant>
 #include <vector>
 #include <unordered_map>
+#include <span>
 
 namespace pmos::ipc
 {
@@ -14,10 +15,10 @@ namespace pmos::ipc
 class BUSObject
 {
 public:
-    using property = std::variant<std::string, uint64_t>;
+    using property = std::variant<std::string, uint64_t, std::vector<std::string>>;
 
     /// Sets the property to the desired value (replacing the previous value if it had already been set)
-    void set_property(std::string_view name, std::variant<std::string_view, uint64_t> p);
+    void set_property(std::string_view name, property p);
 
     /// Sets the name of this busobject
     void set_name(std::string name);
@@ -30,7 +31,7 @@ public:
     std::vector<uint8_t> serialize();
     std::vector<uint8_t> serialize_into_ipc();
 
-    static std::pair<BUSObject, uint64_t> deserialize(const IPC_BUS_Request_Object_Reply *reply, uint64_t message_length);
+    static BUSObject deserialize(std::span<uint8_t> serialized_data);
 private:
     std::string name;
     std::unordered_map<std::string, property> properties;
