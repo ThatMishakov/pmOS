@@ -271,12 +271,16 @@ bool Port::atomic_alive() const
 }
 
 ReturnStr<std::pair<Right * /* right */, u64 /* new_id_error */>>
-    Port::send_message_right(Right *right, proc::TaskGroup *verify_group, Port *reply_port,
+    Port::send_message_right(Right *r, proc::TaskGroup *verify_group, Port *reply_port,
                              rights_array array, message_buffer data, uint64_t sender_id,
                              RightType new_right_type, bool always_destroy_right)
 {
-    assert(right);
+    assert(r);
     assert(verify_group);
+
+    auto right = to_send_right(r);
+    if (!right)
+        return {-EPERM, std::make_pair(nullptr, 0)};
 
     auto send_to = right->parent;
 
@@ -284,16 +288,18 @@ ReturnStr<std::pair<Right * /* right */, u64 /* new_id_error */>>
     if (!msg)
         return Error(-ENOMEM);
 
-    klib::unique_ptr<Right> reply_right = nullptr;
+    klib::unique_ptr<SendRight> reply_right = nullptr;
     if (reply_port) {
-        reply_right = klib::make_unique<Right>();
+        reply_right = klib::make_unique<SendRight>();
         if (!reply_right)
             return Error(-ENOMEM);
+
+        assert(new_right_type == RightType::SendOnce || new_right_type == RightType::SendMany);
 
         reply_right->of_message     = true;
         reply_right->parent_message = msg.get();
         reply_right->parent         = reply_port;
-        reply_right->type           = new_right_type;
+        reply_right->send_many      = (new_right_type == RightType::SendMany);
     }
 
     msg->sent_with_right = right->right_parent_id;
@@ -323,7 +329,7 @@ ReturnStr<std::pair<Right * /* right */, u64 /* new_id_error */>>
         if (right->right_0 && always_destroy_right)
             return {-EINVAL, std::make_pair(nullptr, 0)};
 
-        if (right->type == RightType::SendOnce || always_destroy_right)
+        if (!right->send_many || always_destroy_right)
             right->destroy_nolock();
 
         if (extra_rights) {

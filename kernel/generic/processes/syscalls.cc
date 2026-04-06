@@ -747,13 +747,13 @@ void syscall_get_message_info()
     bool holds_reply_right     = msg->reply_right;
     bool reply_right_send_many = false;
     if (holds_reply_right)
-        reply_right_send_many = msg->reply_right->type == RightType::SendMany;
+        reply_right_send_many = msg->reply_right->type() == RightType::SendMany;
 
     unsigned flags_ = (holds_reply_right ? (unsigned)MESSAGE_FLAG_REPLY_RIGHT : 0) |
                       (reply_right_send_many ? (unsigned)MESSAGE_FLAG_REPLY_SEND_MANY : 0);
 
     for (int i = 0; i < 4; ++i)
-        if (auto r = msg->rights[i]; r && r->type == RightType::SendMany)
+        if (auto r = msg->rights[i]; r && r->type() == RightType::SendMany)
             flags_ |= 1 << (16 + i);
 
     u64 msg_struct_size     = sizeof(Message_Descriptor);
@@ -2089,7 +2089,7 @@ void syscall_set_right0()
         return;
     }
 
-    if (right->type != RightType::SendMany) {
+    if (right->type() != RightType::SendMany) {
         syscall_error(current) = -EPERM;
         return;
     }
@@ -2173,7 +2173,7 @@ void syscall_create_right()
 
     bool send_once = flags & CREATE_RIGHT_SEND_ONCE;
     RightType type = send_once ? RightType::SendOnce : RightType::SendMany;
-    auto result    = Right::create_for_group(port, group, type, right_id);
+    auto result    = SendRight::create_for_group(port, group, type, right_id);
     if (!result.success()) {
         syscall_error(current) = result.result;
         return;

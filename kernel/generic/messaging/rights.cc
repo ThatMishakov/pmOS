@@ -8,11 +8,11 @@
 namespace kernel::ipc
 {
 
-void Right::rcu_push()
+void SendRight::rcu_push()
 {
     rcu_head.rcu_func = [](void *self, bool) {
-        Right *t =
-            reinterpret_cast<Right *>(reinterpret_cast<char *>(self) - offsetof(Right, rcu_head));
+        SendRight *t =
+            reinterpret_cast<SendRight *>(reinterpret_cast<char *>(self) - offsetof(SendRight, rcu_head));
         delete t;
     };
     sched::get_cpu_struct()->heap_rcu_cpu.push(&rcu_head);
@@ -30,11 +30,7 @@ bool Right::destroy(proc::TaskGroup *match_group)
 
     alive = false;
 
-    assert(parent);
-    {
-        Auto_Lock_Scope l(parent->rights_lock);
-        parent->rights.erase(this);
-    }
+    remove_from_parent();
 
     if (!of_message) { // If it is of message, let it be garbage collected when the message is
                        // destroyed (in place of placeholders...)
@@ -50,6 +46,13 @@ bool Right::destroy(proc::TaskGroup *match_group)
     }
 
     return true;
+}
+
+void SendRight::remove_from_parent()
+{
+    assert(parent);
+    Auto_Lock_Scope l(parent->rights_lock);
+    parent->rights.erase(this);
 }
 
 bool Right::destroy_nolock()
@@ -61,11 +64,7 @@ bool Right::destroy_nolock()
 
     alive = false;
 
-    assert(parent);
-    {
-        Auto_Lock_Scope l(parent->rights_lock);
-        parent->rights.erase(this);
-    }
+    remove_from_parent();
 
     if (!of_message) { // If it is of message, let it be garbage collected when the message is
                        // destroyed (in place of placeholders...)
@@ -83,14 +82,15 @@ bool Right::destroy_nolock()
     return true;
 }
 
-ReturnStr<Right *> Right::create_for_group(Port *port, proc::TaskGroup *group, RightType type,
+ReturnStr<SendRight *> SendRight::create_for_group(Port *port, proc::TaskGroup *group, RightType type,
                                            u64 id_in_parent)
 {
     assert(port);
     assert(group);
     assert(id_in_parent);
+    assert(type == RightType::SendOnce || type == RightType::SendMany);
 
-    klib::unique_ptr<Right> new_right = new Right();
+    klib::unique_ptr<SendRight> new_right = new SendRight();
     if (!new_right)
         return Error(-ENOMEM);
 
@@ -98,7 +98,7 @@ ReturnStr<Right *> Right::create_for_group(Port *port, proc::TaskGroup *group, R
     new_right->parent_group    = group;
     new_right->of_message      = false;
     new_right->right_parent_id = id_in_parent;
-    new_right->type            = type;
+    new_right->send_many       = (type == RightType::SendMany);
 
     // I don't know if this lock situation is good...
     Auto_Lock_Scope l(new_right->lock);
@@ -189,12 +189,12 @@ ReturnStr<u64> Right::atomic_transfer_to_group(proc::TaskGroup *from, proc::Task
     return Success(new_id);
 }
 
-ReturnStr<std::pair<Right *, u64>> Right::duplicate(proc::TaskGroup *group)
+ReturnStr<std::pair<Right *, u64>> SendRight::duplicate(proc::TaskGroup *group)
 {
-    if (type != RightType::SendMany)
+    if (!send_many)
         return Error(-EPERM);
 
-    klib::unique_ptr<Right> new_right = new Right();
+    klib::unique_ptr<SendRight> new_right = new SendRight();
     if (!new_right)
         return Error(-ENOMEM);
 
@@ -202,7 +202,7 @@ ReturnStr<std::pair<Right *, u64>> Right::duplicate(proc::TaskGroup *group)
     new_right->parent_group    = parent_group;
     new_right->of_message      = false;
     new_right->right_parent_id = right_parent_id;
-    new_right->type            = type;
+    new_right->send_many       = true;
 
     Auto_Lock_Scope l(lock);
     if (!alive || of_message || parent_group != group)
@@ -227,6 +227,22 @@ ReturnStr<std::pair<Right *, u64>> Right::duplicate(proc::TaskGroup *group)
     auto ptr = new_right.release();
 
     return Success(std::make_pair(ptr, ptr->right_sender_id));
+}
+
+SendRight *to_send_right(Right *r)
+{
+    if (r->type() != RightType::SendOnce && r->type() != RightType::SendMany)
+        return nullptr;
+
+    return static_cast<SendRight *>(r);
+}
+
+RightType SendRight::type() const
+{ 
+    if (send_many)
+        return RightType::SendMany;
+    else
+        return RightType::SendOnce;
 }
 
 } // namespace kernel::ipc

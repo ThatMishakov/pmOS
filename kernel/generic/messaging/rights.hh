@@ -21,27 +21,16 @@ enum class RightType : bool {
 };
 
 struct Right {
-    // Parent port
-    Port *parent = nullptr;
-
     union {
         Message *parent_message = nullptr;
         proc::TaskGroup *parent_group;
-    };
-
-    union {
-        pmos::containers::RBTreeNode<Right> parent_port_head = {};
-        memory::RCU_Head rcu_head;
     };
 
     pmos::containers::RBTreeNode<Right> task_group_head;
 
     /// Sender-facing id (gets changed when the right is copied/moved, depending on the task group)
     u64 right_sender_id = 0;
-    /// Parent-facing id (does not change, and gets copied when right is duplicated)
-    u64 right_parent_id = 0;
 
-    RightType type : 1  = RightType::SendOnce;
     bool alive : 1      = true;
     bool of_message : 1 = false;
     bool right_0 : 1    = false;
@@ -51,18 +40,47 @@ struct Right {
     bool destroy_nolock();
     void destroy_deleting_message();
 
-    void rcu_push();
-
-    static ReturnStr<Right *> create_for_group(Port *port, proc::TaskGroup *group, RightType type,
-                                               u64 id_in_parent);
+    virtual void rcu_push() = 0;
 
     bool of_group(proc::TaskGroup *) const;
     bool atomic_alive() const;
 
     ReturnStr<u64> atomic_transfer_to_group(proc::TaskGroup *from, proc::TaskGroup *to);
     // Atomically creates and returns right and its id in sender
-    ReturnStr<std::pair<Right *, u64>> duplicate(proc::TaskGroup *);
+    virtual ReturnStr<std::pair<Right *, u64>> duplicate(proc::TaskGroup *) = 0;
+
+    virtual RightType type() const = 0;
+    virtual ~Right() = default;
+    virtual void remove_from_parent() = 0;
 };
+
+struct SendRight: Right {
+    union {
+        pmos::containers::RBTreeNode<SendRight> parent_head = {};
+        memory::RCU_Head rcu_head;
+    };
+
+    // Parent port
+    Port *parent = nullptr;
+
+    /// Parent-facing id (does not change, and gets copied when right is duplicated)
+    u64 right_parent_id = 0;
+    
+    bool send_many = false;
+
+    virtual ReturnStr<std::pair<Right *, u64>> duplicate(proc::TaskGroup *) override;
+
+    static ReturnStr<SendRight *> create_for_group(Port *port, proc::TaskGroup *group, RightType type,
+                                            u64 id_in_parent);
+
+
+    virtual RightType type() const override;
+    virtual void rcu_push() override;
+    virtual void remove_from_parent() override;
+};
+
+// Returns nullptr if the right is not a send right
+SendRight *to_send_right(Right *r);
 
 u64 atomic_right0_id();
 kresult_t set_right0(Right *right, proc::TaskGroup *right_parent);

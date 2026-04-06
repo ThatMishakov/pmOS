@@ -176,14 +176,14 @@ protected:
     static inline Spinlock ports_lock;
 
     using rights_tree =
-        pmos::containers::RedBlackTree<Right, &Right::parent_port_head,
-                                       detail::TreeCmp<Right, u64, &Right::right_parent_id>>;
+        pmos::containers::RedBlackTree<SendRight, &SendRight::parent_head,
+                                       detail::TreeCmp<SendRight, u64, &SendRight::right_parent_id>>;
     rights_tree::RBTreeHead rights;
     Spinlock rights_lock;
 
     friend class proc::TaskGroup;
     friend class proc::TaskDescriptor;
-    friend struct Right;
+    friend struct SendRight;
 };
 
 }; // namespace kernel::ipc
