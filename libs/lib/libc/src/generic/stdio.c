@@ -950,7 +950,7 @@ int fprintf(FILE *stream, const char *format, ...)
     va_start(arg, format);
 
     LOCK(&stream->lock);
-    int t = __va_printf_closure(write_file, stream, arg, format);
+    ssize_t t = __va_printf_closure(write_file, stream, arg, format);
     UNLOCK_FILE(&stream->lock);
 
     va_end(arg);
@@ -973,9 +973,9 @@ int sprintf(char *str, const char *format, ...)
 
     struct string_descriptor desc = {str, -1, 0, 0};
 
-    int ret = __va_printf_closure(write_string, &desc, arg, format);
+    ssize_t ret = __va_printf_closure(write_string, &desc, arg, format);
 
-    str[desc.pos] = '\0';
+    str[ret] = '\0';
 
     va_end(arg);
 
@@ -987,11 +987,22 @@ int snprintf(char *str, size_t size, const char *format, ...)
     va_list arg;
     va_start(arg, format);
 
-    struct string_descriptor desc = {str, size, 0, 0};
+    size_t out_size = 0;
+    if (size > 1)
+        out_size = size;
 
-    int ret = __va_printf_closure(write_string, &desc, arg, format);
+    struct string_descriptor desc = {str, out_size, 0, 0};
+
+    ssize_t ret = __va_printf_closure(write_string, &desc, arg, format);
 
     va_end(arg);
+
+    if (size == 1)
+        str[0] = '\0';
+    else if (ret >= (ssize_t)size)
+        str[size - 1] = '\0';
+    else
+        str[ret] = '\0';
 
     return ret;
 }

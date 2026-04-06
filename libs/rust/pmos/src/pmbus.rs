@@ -191,6 +191,7 @@ impl PMBusObject {
         let name_data = data
             .get(8..8 + name_length)
             .ok_or(Error::from_errno(libc::EINVAL))?;
+        
         let name = str::from_utf8(name_data).map_err(|_| Error::from_errno(libc::EINVAL))?;
 
         let mut properties = BTreeMap::new();

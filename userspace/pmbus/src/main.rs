@@ -124,6 +124,7 @@ fn publish_object(
             new_object_stuff(info, state);
         }
         Err(e) => {
+            println!("Failed to deserialize pmbus object, error {}", e.get());
             publish_object_error(e.get(), reply_right.unwrap());
         }
     }
