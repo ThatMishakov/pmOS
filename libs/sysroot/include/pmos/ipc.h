@@ -1020,26 +1020,11 @@ typedef struct IPC_Disk_Read {
     /// Flags changing the behaviour
     uint32_t flags;
 
-    /// ID of the disk
-    uint64_t disk_id;
-
-    /// ID of the disk driver task group
-    uint64_t task_group_id;
-
-    /// ID of the disk consumer
-    uint64_t disk_consumer_id;
-
     /// Starting sector
     uint64_t start_sector;
 
     /// Number of sectors to read
     uint64_t sector_count;
-
-    /// Port where the reply will be sent
-    pmos_port_t reply_port;
-
-    /// User argument (sent back in the reply)
-    uint64_t user_arg;
 } IPC_Disk_Read;
 
 #define IPC_Disk_Write_NUM  0xF3
@@ -1100,9 +1085,6 @@ typedef struct IPC_Disk_Read_Reply {
 
     /// Result code indicating the outcome of the read operation
     int16_t result_code;
-
-    /// User argument (sent back in the reply)
-    uint64_t user_arg;
 } IPC_Disk_Read_Reply;
 
 #define IPC_Thread_Finished_NUM 0x100

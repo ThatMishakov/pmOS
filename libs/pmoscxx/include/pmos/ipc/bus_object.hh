@@ -6,7 +6,7 @@
 #include <string>
 #include <variant>
 #include <vector>
-#include <unordered_map>
+#include <map>
 #include <span>
 
 namespace pmos::ipc
@@ -25,7 +25,7 @@ public:
 
     const std::string &get_name() const;
 
-    std::optional<property> get_property(std::string_view name);
+    std::optional<property> get_property(std::string_view name) const;
 
     /// Serializes the BUSObject into IPC_BUS_Publish_Object message
     std::vector<uint8_t> serialize();
@@ -34,7 +34,7 @@ public:
     static BUSObject deserialize(std::span<uint8_t> serialized_data);
 private:
     std::string name;
-    std::unordered_map<std::string, property> properties;
+    std::map<std::string, property, std::less<>> properties;
 
     template<class... Ts>
     struct overloads : Ts... { using Ts::operator()...; };

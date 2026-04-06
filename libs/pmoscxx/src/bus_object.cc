@@ -309,7 +309,7 @@ BUSObject BUSObject::deserialize(std::span<uint8_t> data)
             std::vector<std::string> values;
             auto cstr = reinterpret_cast<const char *>(data.data() + properties_offset + property->data_start);
             size_t ptr = 0;
-            while (ptr < data_length and ptr[cstr] != '\0') {
+            while (ptr < (size_t)data_length and ptr[cstr] != '\0') {
                 auto len = strnlen(cstr + ptr, data_length - ptr);
                 values.emplace_back(std::string(cstr + ptr, len));
                 ptr += len + 1;
@@ -328,6 +328,14 @@ BUSObject BUSObject::deserialize(std::span<uint8_t> data)
     }
 
     return ret;
+}
+
+std::optional<BUSObject::property> BUSObject::get_property(std::string_view name) const
+{
+    auto it = properties.find(name);
+    if (it == properties.end())
+        return std::nullopt;
+    return it->second;
 }
 
 }
