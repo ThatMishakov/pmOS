@@ -532,14 +532,14 @@ phys_addr_request_t get_page_phys_address(uint64_t task_id, void *region, uint64
     return t;
 }
 
-mem_object_request_ret_t create_mem_object(size_t size, uint32_t flags)
+right_request_t create_mem_object(uint64_t size, uint32_t flags)
 {
 #ifdef __32BITSYSCALL
-    syscall_r r = __pmos_syscall32_4words(SYSCALL_CREATE_MEM_OBJECT | (flags << 8), size);
+    syscall_r r = __pmos_syscall32_2words(SYSCALL_CREATE_MEM_OBJECT | (flags << 8), size);
 #else
     syscall_r r = pmos_syscall(SYSCALL_CREATE_MEM_OBJECT | (flags << 8), size);
 #endif
-    mem_object_request_ret_t t = {r.result, r.value};
+    right_request_t t = {r.result, r.value};
     return t;
 }
 

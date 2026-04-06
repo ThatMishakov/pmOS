@@ -155,8 +155,9 @@ mem_request_ret_t create_phys_map_region(uint64_t pid, void *addr_start, size_t 
  * @param size The size of the memory object in bytes. The size must be page-aligned.
  * @param flags Flags for the memory object. Takes FLAG_ANONYMOUS, FLAG_DMA and
  * FLAG_ALLOW_DISCONTINUOUS
+ * @return A right to the new memory object, or an error...
  */
-mem_object_request_ret_t create_mem_object(size_t size, uint32_t flags);
+right_request_t create_mem_object(uint64_t size, uint32_t flags);
 
 /// @brief Parameters for map_mem_object syscall
 typedef struct map_mem_object_param_t {

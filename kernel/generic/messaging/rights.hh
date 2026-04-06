@@ -2,11 +2,19 @@
 
 #include <memory/rcu.hh>
 #include <pmos/containers/intrusive_bst.hh>
+#include <pmos/containers/intrusive_list.hh>
 #include <types.hh>
+#include <lib/memory.hh>
+
 
 namespace kernel::proc
 {
 class TaskGroup;
+}
+
+namespace kernel::paging
+{
+    class Mem_Object;
 }
 
 namespace kernel::ipc
@@ -15,9 +23,10 @@ namespace kernel::ipc
 struct Message;
 class Port;
 
-enum class RightType : bool {
+enum class RightType : u8 {
     SendOnce,
     SendMany,
+    MemObject,
 };
 
 struct Right {
@@ -52,9 +61,11 @@ struct Right {
     virtual RightType type() const = 0;
     virtual ~Right() = default;
     virtual void remove_from_parent() = 0;
+
+    unsigned type_as_int() const;
 };
 
-struct SendRight: Right {
+struct SendRight final: Right {
     union {
         pmos::containers::RBTreeNode<SendRight> parent_head = {};
         memory::RCU_Head rcu_head;
@@ -65,7 +76,7 @@ struct SendRight: Right {
 
     /// Parent-facing id (does not change, and gets copied when right is duplicated)
     u64 right_parent_id = 0;
-    
+
     bool send_many = false;
 
     virtual ReturnStr<std::pair<Right *, u64>> duplicate(proc::TaskGroup *) override;
@@ -77,6 +88,34 @@ struct SendRight: Right {
     virtual RightType type() const override;
     virtual void rcu_push() override;
     virtual void remove_from_parent() override;
+};
+
+struct MemObjectRight final: Right {
+    union {
+        pmos::containers::DoubleListHead<MemObjectRight> parent_node = {};
+        memory::RCU_Head rcu_head;
+    };
+
+    klib::shared_ptr<paging::Mem_Object> mem_object;
+
+    static constexpr u32 PERM_READ   = 1 << 0;
+    static constexpr u32 PERM_WRITE  = 1 << 1;
+    static constexpr u32 PERM_DELETE = 1 << 2;
+    static constexpr u32 PERM_PAGE   = 1 << 3;
+    static constexpr u32 PERM_EXPAND = 1 << 4;
+
+    static constexpr u32 PERM_ALL = (1 << 5) - 1;
+
+    u32 permission_mask = 0;
+
+    virtual ReturnStr<std::pair<Right *, u64>> duplicate(proc::TaskGroup *) override;
+
+    virtual RightType type() const override;
+    virtual void rcu_push() override;
+    virtual void remove_from_parent() override;
+
+    static ReturnStr<MemObjectRight *> create_for_group(klib::shared_ptr<paging::Mem_Object> mem_object,
+                                            proc::TaskGroup *group, u32 permissions = PERM_ALL);
 };
 
 // Returns nullptr if the right is not a send right

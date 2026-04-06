@@ -1435,14 +1435,22 @@ void syscall_create_mem_object()
     const auto &current_task       = get_current_task();
     const auto &current_page_table = current_task->page_table;
 
-    ulong size_bytes = syscall_arg(current_task, 0, 0);
+    u64 size_bytes = syscall_arg64(current_task, 0);
     ulong flags      = syscall_flags(current_task);
 
     // TODO: Remove hard-coded page sizes
 
+
+
     // Syscall must be page aligned
-    if (size_bytes & 07777) {
+    if (size_bytes & (PAGE_SIZE - 1)) {
         syscall_error(current_task) = -EINVAL;
+        return;
+    }
+
+    auto group = current_task->get_rights_namespace();
+    if (!group) {
+        syscall_error(current_task) = -ESRCH;
         return;
     }
 
@@ -1454,14 +1462,20 @@ void syscall_create_mem_object()
         syscall_error(current_task) = -ENOMEM;
         return;
     }
-
-    auto result = current_page_table->atomic_pin_memory_object(ptr);
-    if (result) {
-        syscall_error(current_task) = result;
+    
+    auto right = MemObjectRight::create_for_group(klib::move(ptr), group);
+    if (!right.success()) {
+        syscall_error(current_task) = right.result;
         return;
     }
 
-    syscall_return(current_task) = ptr->get_id();
+    // This is kinda maybe not great, since someone might snatch the right
+    // in here, and the ID would change (and be leaked), but it doesn't look like a big deal,
+    // and it would be userspace's fault anyway...
+
+    // On a separate note, senser_id is like not the best name for this??
+    // (I know this is me talking to myself, but it would be fun to read in the future)
+    syscall_return(current_task) = right.val->right_sender_id;
 }
 
 void syscall_map_mem_object()

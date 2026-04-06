@@ -4,6 +4,7 @@
 
 #include <processes/task_group.hh>
 #include <sched/sched.hh>
+#include <memory/mem_object.hh>
 
 namespace kernel::ipc
 {
@@ -13,6 +14,16 @@ void SendRight::rcu_push()
     rcu_head.rcu_func = [](void *self, bool) {
         SendRight *t =
             reinterpret_cast<SendRight *>(reinterpret_cast<char *>(self) - offsetof(SendRight, rcu_head));
+        delete t;
+    };
+    sched::get_cpu_struct()->heap_rcu_cpu.push(&rcu_head);
+}
+
+void MemObjectRight::rcu_push()
+{
+    rcu_head.rcu_func = [](void *self, bool) {
+        MemObjectRight *t =
+            reinterpret_cast<MemObjectRight *>(reinterpret_cast<char *>(self) - offsetof(MemObjectRight, rcu_head));
         delete t;
     };
     sched::get_cpu_struct()->heap_rcu_cpu.push(&rcu_head);
@@ -53,6 +64,13 @@ void SendRight::remove_from_parent()
     assert(parent);
     Auto_Lock_Scope l(parent->rights_lock);
     parent->rights.erase(this);
+}
+
+void MemObjectRight::remove_from_parent()
+{
+    assert(mem_object);
+    Auto_Lock_Scope l(mem_object->rights_lock);
+    mem_object->rights.remove(this);
 }
 
 bool Right::destroy_nolock()
@@ -117,6 +135,42 @@ ReturnStr<SendRight *> SendRight::create_for_group(Port *port, proc::TaskGroup *
     port->rights.insert(new_right.get());
     group->rights.insert(new_right.get());
     return Success(new_right.release());
+}
+
+ReturnStr<MemObjectRight *> MemObjectRight::create_for_group(klib::shared_ptr<paging::Mem_Object> mem_object,
+                                            proc::TaskGroup *group, u32 permissions)
+{
+    // This is kinda copied from SendRight::create_for_group, and written very late into the night,
+    // so it's probably worth having a second look at this in the future...
+    assert(mem_object);
+    assert(group);
+
+    klib::unique_ptr<MemObjectRight> new_right = new MemObjectRight();
+    if (!new_right)
+        return Error(-ENOMEM);
+
+    new_right->mem_object      = klib::move(mem_object);
+    new_right->parent_group    = group;
+    new_right->of_message      = false;
+    new_right->permission_mask = permissions & PERM_ALL;
+    
+
+    Auto_Lock_Scope l(new_right->lock);
+
+    Auto_Lock_Scope l1(mem_object->rights_lock);
+    Auto_Lock_Scope l2(group->rights_lock);
+
+    // The memory object should always be alive ... I think??
+
+    if (!group->atomic_alive())
+        return Error(-ESRCH);
+
+    new_right->right_sender_id = ++group->current_right_id;
+
+    mem_object->rights.push_back(new_right.get());
+    group->rights.insert(new_right.get());
+    return Success(new_right.release());
+
 }
 
 bool Right::of_group(proc::TaskGroup *g) const { return !of_message && parent_group == g; }
@@ -229,6 +283,39 @@ ReturnStr<std::pair<Right *, u64>> SendRight::duplicate(proc::TaskGroup *group)
     return Success(std::make_pair(ptr, ptr->right_sender_id));
 }
 
+ReturnStr<std::pair<Right *, u64>> MemObjectRight::duplicate(proc::TaskGroup *group)
+{
+    klib::unique_ptr<MemObjectRight> new_right = new MemObjectRight();
+    if (!new_right)
+        return Error(-ENOMEM);
+
+    new_right->mem_object      = mem_object;
+    new_right->parent_group    = parent_group;
+    new_right->of_message      = false;
+    new_right->permission_mask = permission_mask;
+
+    Auto_Lock_Scope l(lock);
+    if (!alive || of_message || parent_group != group)
+        return Error(-ENOENT);
+
+    Auto_Lock_Scope ll(new_right->lock);
+
+    Auto_Lock_Scope l1(mem_object->rights_lock);
+    Auto_Lock_Scope l2(parent_group->rights_lock);
+
+    if (!parent_group->atomic_alive())
+        return Error(-ESRCH);
+
+    new_right->right_sender_id = ++parent_group->current_right_id;
+
+    mem_object->rights.push_back(new_right.get());
+    parent_group->rights.insert(new_right.get());
+
+    auto ptr = new_right.release();
+
+    return Success(std::make_pair(ptr, ptr->right_sender_id));
+}
+
 SendRight *to_send_right(Right *r)
 {
     if (r->type() != RightType::SendOnce && r->type() != RightType::SendMany)
@@ -243,6 +330,11 @@ RightType SendRight::type() const
         return RightType::SendMany;
     else
         return RightType::SendOnce;
+}
+
+RightType MemObjectRight::type() const
+{
+    return RightType::MemObject;
 }
 
 } // namespace kernel::ipc
