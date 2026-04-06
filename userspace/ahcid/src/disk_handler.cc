@@ -33,10 +33,11 @@ void handle_disk_read(uint64_t memory_object, int result, pmos::Right &reply_rig
     };
 
     // printf("Sending reply to disk read status %i\n", result);
-
-    auto r = send_message_port2(port, memory_object, sizeof(reply), (void *)&reply, 0);
-    if (r != 0)
-        throw std::system_error(-r, std::system_category());
+    auto span = std::span<uint8_t const>(reinterpret_cast<uint8_t *>(&reply), sizeof(reply));
+    auto r = send_message_right_object(reply_right, span, {}, true, memory_object);
+    if (!r) {
+        printf("Failed to send disk read reply: %i (%s)\n", (int)r.error(), strerror(r.error()));
+    }
 }
 
 void handle_disk_read_error(int result, pmos::Right &reply_right)
@@ -48,7 +49,7 @@ void handle_disk_read_error(int result, pmos::Right &reply_right)
     }
 }
 
-pmos::async::detached_task handle_disk_read(const Message_Descriptor &d, IPC_Disk_Read request, DiskGeometry geometry, AHCIPort &disk_port, pmos::Right reply_right)
+pmos::async::detached_task handle_disk_read(IPC_Disk_Read request, DiskGeometry geometry, AHCIPort &disk_port, pmos::Right reply_right)
 {
     auto sector_start = request.start_sector;
     auto sector_count = request.sector_count;
@@ -181,18 +182,26 @@ pmos::async::detached_task handle_ipc(AHCIPort &port, uint64_t sector_count, siz
             exit(1);
         }
 
-        printf("ahcid: Recieved message for port %u! (TODO: handle it)\n", port.index);
-
+        if (msg->data.size() < sizeof(IPC_Generic_Msg)) {
+            fprintf(stderr, "ahcid: Received message too small for header! Ignoring.\n");
+            continue;
+        }
+        auto header = reinterpret_cast<const IPC_Generic_Msg *>(msg->data.data());
+        switch (header->type) {
         // case IPC_Disk_Open_NUM: {
         //     auto msg = (IPC_Disk_Open *)request;
 
         //     handle_disk_open(desc, msg);
         // } break;
-        // case IPC_Disk_Read_NUM: {
-        //     auto msg = (IPC_Disk_Read *)request;
+        case IPC_Disk_Read_NUM: {
+            auto rmsg = (IPC_Disk_Read *)msg->data.data();
 
-        //     handle_disk_read(desc, *msg);
-        // } break;
+            handle_disk_read(*rmsg, geometry, port, std::move(msg->reply_right));
+        } break;
+        default:
+            fprintf(stderr, "ahcid: Received message with unknown type %u! Ignoring.\n", header->type);
+            break;
+        }
     }
 
     co_return;

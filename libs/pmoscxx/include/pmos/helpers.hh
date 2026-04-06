@@ -147,6 +147,35 @@ inline std::expected<RecieveRight, int> send_message_right(
     return RecieveRight(result.right, t, port);
 }
 
+template<typename T>
+    requires std::is_trivially_copyable_v<T>
+inline std::expected<RecieveRight, int> send_message_right_object(
+    Right &right, std::span<T const> data, std::pair<Port const *, RightType> optional_reply_port,
+    bool delete_right = false, mem_object_t object_id = 0) noexcept
+{
+    auto [rp, t] = optional_reply_port;
+    message_extra_t extra = {};
+    extra.memory_object = object_id;
+
+    int flags {};
+    if (rp && t == RightType::SendMany)
+        flags |= REPLY_CREATE_SEND_MANY;
+
+    if (delete_right)
+        flags |= SEND_MESSAGE_DELETE_RIGHT;
+
+    auto port = rp ? rp->get() : INVALID_PORT;
+    auto result = send_message_right(right.get(), port, reinterpret_cast<const void *>(data.data()), data.size_bytes(),
+                                     &extra, flags);
+    if (result.result)
+        return std::unexpected(static_cast<int>(-result.result));
+
+    if (right.type() == RightType::SendOnce || delete_right)
+        right.release();
+
+    return RecieveRight(result.right, t, port);
+}
+
 template<typename T, typename... Rights>
     requires std::is_trivially_copyable_v<T> && (sizeof...(Rights) <= 4) &&
              (std::is_same_v<std::decay_t<Rights>, Right> && ...)
