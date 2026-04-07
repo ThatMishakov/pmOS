@@ -149,7 +149,7 @@ ReturnStr<MemObjectRight *> MemObjectRight::create_for_group(klib::shared_ptr<pa
     if (!new_right)
         return Error(-ENOMEM);
 
-    new_right->mem_object      = klib::move(mem_object);
+    new_right->mem_object      = mem_object;
     new_right->parent_group    = group;
     new_right->of_message      = false;
     new_right->permission_mask = permissions & PERM_ALL;
@@ -170,7 +170,6 @@ ReturnStr<MemObjectRight *> MemObjectRight::create_for_group(klib::shared_ptr<pa
     mem_object->rights.push_back(new_right.get());
     group->rights.insert(new_right.get());
     return Success(new_right.release());
-
 }
 
 bool Right::of_group(proc::TaskGroup *g) const { return !of_message && parent_group == g; }

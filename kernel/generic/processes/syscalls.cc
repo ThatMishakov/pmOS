@@ -754,7 +754,7 @@ void syscall_get_message_info()
 
     for (int i = 0; i < 4; ++i) {
         if (auto r = msg->rights[i] ; r)
-            flags_ |= (16 + i*4) << (unsigned)r->type_as_int();
+            flags_ |= r->type_as_int() << (16 + i*4);
     }
 
     u64 msg_struct_size     = sizeof(Message_Descriptor);
@@ -1434,14 +1434,9 @@ void syscall_assign_page_table()
 void syscall_create_mem_object()
 {
     const auto &current_task       = get_current_task();
-    const auto &current_page_table = current_task->page_table;
 
     u64 size_bytes = syscall_arg64(current_task, 0);
     ulong flags      = syscall_flags(current_task);
-
-    // TODO: Remove hard-coded page sizes
-
-
 
     // Syscall must be page aligned
     if (size_bytes & (PAGE_SIZE - 1)) {
@@ -1469,6 +1464,8 @@ void syscall_create_mem_object()
         syscall_error(current_task) = right.result;
         return;
     }
+
+    assert(right.val);
 
     // This is kinda maybe not great, since someone might snatch the right
     // in here, and the ID would change (and be leaked), but it doesn't look like a big deal,
@@ -2031,6 +2028,7 @@ ReturnStr<klib::shared_ptr<Mem_Object>> mem_object_for_right(TaskDescriptor *tas
         return Error(-EPERM);
 
     auto mem_object_right = static_cast<MemObjectRight *>(right);
+    assert(mem_object_right->mem_object);
     return mem_object_right->mem_object;
 }
 
@@ -2043,13 +2041,14 @@ void syscall_get_page_address_from_object()
 
     klib::shared_ptr<Mem_Object> object;
     if (flags & FLAG_MEM_OBJECT_ID_RIGHT) {
-        auto object = mem_object_for_right(current_task, object_id);
-        if (!object) {
-            syscall_error(current_task) = object.result;
+        auto ret = mem_object_for_right(current_task, object_id);
+        if (!ret.success()) {
+            syscall_error(current_task) = ret.result;
             return;
         }
 
-        object = klib::move(object.val);
+        assert(ret.val);
+        object = klib::move(ret.val);
     } else {
         object = Mem_Object::get_object(object_id);
         if (!object) {
@@ -2057,6 +2056,7 @@ void syscall_get_page_address_from_object()
             return;
         }
     }
+    assert(object);
 
 
     if (object->is_anonymous()) {
