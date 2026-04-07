@@ -18,6 +18,8 @@ namespace pmos
 enum class RightType {
     SendOnce,
     SendMany,
+    MemObject,
+    Unknown,
 };
 
 class Right

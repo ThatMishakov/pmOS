@@ -337,4 +337,18 @@ RightType MemObjectRight::type() const
     return RightType::MemObject;
 }
 
+unsigned Right::type_as_int() const
+{
+    switch (type()) {
+    case RightType::SendOnce:
+        return 1;
+    case RightType::SendMany:
+        return 2;
+    case RightType::MemObject:
+        return 3;
+    default:
+        return 0;
+    }
+}
+
 } // namespace kernel::ipc

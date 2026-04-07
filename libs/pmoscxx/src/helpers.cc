@@ -3,6 +3,22 @@
 namespace pmos
 {
 
+static RightType type_from_flags(unsigned flags, int index)
+{
+    unsigned type = (flags >> (16 + index*4)) & 0xf;
+
+    switch (type) {
+    case 1:
+        return RightType::SendOnce;
+    case 2:
+        return RightType::SendMany;
+    case 3:
+        return RightType::MemObject;
+    default:
+        return RightType::Unknown;
+    }
+}
+
 std::expected<Right, int> Right::clone_noexcept() const noexcept
 {
     if (!right)
@@ -127,8 +143,7 @@ get_msg_return_type Port::get_first_message(bool nonblocking)
 
         for (int i = 0; i < 4; ++i)
             if (rights_ids[i]) {
-                bool send_many = desc.flags & (1 << (16 + i));
-                rights[i] = {rights_ids[i], send_many ? RightType::SendMany : RightType::SendOnce};
+                rights[i] = {rights_ids[i], type_from_flags(desc.flags, i)};
             }
     }
 

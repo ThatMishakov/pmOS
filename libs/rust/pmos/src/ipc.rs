@@ -94,10 +94,14 @@ const CREATE_RIGHT_SEND_ONCE: u32 = 1 << 0;
 
 const MESSAGE_FLAG_HAS_REPLY_RIGHT: u32 = 1 << 0;
 const MESSAGE_FLAG_REPLY_RIGHT_SEND_MANY: u32 = 1 << 1; // SendOnce otherwise...
-const MESSAGE_FLAG_RIGHT0_SEND_MANY: u32 = 1 << 16;
-const MESSAGE_FLAG_RIGHT1_SEND_MANY: u32 = 1 << 17;
-const MESSAGE_FLAG_RIGHT2_SEND_MANY: u32 = 1 << 18;
-const MESSAGE_FLAG_RIGHT3_SEND_MANY: u32 = 1 << 19;
+// const MESSAGE_FLAG_RIGHT0_SEND_MANY: u32 = 1 << 16;
+// const MESSAGE_FLAG_RIGHT1_SEND_MANY: u32 = 1 << 17;
+// const MESSAGE_FLAG_RIGHT2_SEND_MANY: u32 = 1 << 18;
+// const MESSAGE_FLAG_RIGHT3_SEND_MANY: u32 = 1 << 19;
+
+const RIGHT_TYPE_SEND_ONCE: u32 = 1;
+const RIGHT_TYPE_SEND_MANY: u32 = 2;
+const RIGHT_TYPE_MEM_OBJECT: u32 = 3;
 
 const MESSAGE_FLAG_RIGHT0_SEND_MANY_SHIFT: usize = 16;
 
@@ -145,11 +149,12 @@ impl IPCPort {
                 let rid = other_rights_raw[i];
                 if rid != 0 {
                     other_rights[i] = Some(
-                        if desc.flags & (1 << (MESSAGE_FLAG_RIGHT0_SEND_MANY_SHIFT + i)) != 0 {
-                            SendRight::Many(SendManyRight(rid))
-                        } else {
-                            SendRight::Once(SendOnceRight(rid))
-                        },
+                        match (desc.flags >> (MESSAGE_FLAG_RIGHT0_SEND_MANY_SHIFT + i*4)) & 0xf {
+                            RIGHT_TYPE_SEND_ONCE => SendRight::Once(SendOnceRight(rid)),
+                            RIGHT_TYPE_SEND_MANY => SendRight::Many(SendManyRight(rid)),
+                            RIGHT_TYPE_MEM_OBJECT => SendRight::Object(MemoryObjectRight(rid)),
+                            _ => continue, // Invalid right type, ignore
+                        }
                     )
                 }
             }
@@ -301,6 +306,8 @@ pub fn send_message_right(
     match right.as_mut().unwrap() {
         SendRight::Once(_) => mem::forget(right.take()),
         SendRight::Many(_) => (),
+        SendRight::Object(_) => mem::forget(right.take()),
+        SendRight::Unknown(_) => mem::forget(right.take()),
     }    
     for i in include_rights {
         mem::forget(i.take());
@@ -380,6 +387,8 @@ impl Message {
 pub enum SendRight {
     Once(SendOnceRight),
     Many(SendManyRight),
+    Object(MemoryObjectRight),
+    Unknown(UnknownRight),
 }
 
 impl SendRight {
@@ -387,6 +396,8 @@ impl SendRight {
         match self {
             Self::Once(o) => o.0,
             Self::Many(o) => o.0,
+            Self::Object(o) => o.0,
+            Self::Unknown(o) => o.0,
         }
     }
 }
@@ -419,6 +430,8 @@ impl Eq for SendRight {}
 
 pub struct SendManyRight(Right);
 pub struct SendOnceRight(Right);
+pub struct MemoryObjectRight(Right);
+pub struct UnknownRight(Right);
 pub struct RecieveRight(Right, Port);
 // TODO: Destructor for this
 
@@ -447,6 +460,18 @@ impl SendManyRight {
         unsafe { name_right_stdlib(self.0, name.as_ptr() as *const libc::c_char, name.len(), 0) }
             .result()
             .map(|_| mem::forget(self))
+    }
+}
+
+impl Drop for MemoryObjectRight {
+    fn drop(&mut self) {
+        unsafe { _ = delete_right(self.0) }
+    }
+}
+
+impl Drop for UnknownRight {
+    fn drop(&mut self) {
+        unsafe { _ = delete_right(self.0) }
     }
 }
 

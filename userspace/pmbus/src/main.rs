@@ -94,6 +94,14 @@ fn publish_object(
             publish_object_error(libc::ENOENT, reply_right.unwrap());
             return;
         }
+        Some(SendRight::Object(_)) => {
+            publish_object_error(libc::ENOENT, reply_right.unwrap());
+            return;
+        }
+        Some(SendRight::Unknown(_)) => {
+            publish_object_error(libc::ENOENT, reply_right.unwrap());
+            return;
+        }
         None => {
             publish_object_error(libc::ENOENT, reply_right.unwrap());
             return;
