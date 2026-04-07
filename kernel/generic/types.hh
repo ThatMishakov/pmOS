@@ -60,6 +60,7 @@ template<class T> struct ReturnStr {
     }
 
     bool success() const { return result == 0; }
+    explicit operator bool() const { return success(); }
 
     static ReturnStr error(kresult_t result)
     {

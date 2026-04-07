@@ -23,7 +23,7 @@ struct DiskGeometry
 
 uint64_t align_to_page(uint64_t size) { return (size + 0xfff) & ~(uint64_t)0xfff; }
 
-void handle_disk_read(uint64_t memory_object, int result, pmos::Right &reply_right)
+void handle_disk_read(pmos::Right memory_object, int result, pmos::Right &reply_right)
 {
     // TODO: Memory object handling
     IPC_Disk_Read_Reply reply = {
@@ -33,8 +33,7 @@ void handle_disk_read(uint64_t memory_object, int result, pmos::Right &reply_rig
     };
 
     // printf("Sending reply to disk read status %i\n", result);
-    auto span = std::span<uint8_t const>(reinterpret_cast<uint8_t *>(&reply), sizeof(reply));
-    auto r = send_message_right_object(reply_right, span, {}, true, memory_object);
+    auto r = send_message_right_one(reply_right, reply, {}, true, std::move(memory_object));
     if (!r) {
         printf("Failed to send disk read reply: %i (%s)\n", (int)r.error(), strerror(r.error()));
     }
@@ -43,7 +42,7 @@ void handle_disk_read(uint64_t memory_object, int result, pmos::Right &reply_rig
 void handle_disk_read_error(int result, pmos::Right &reply_right)
 {
     try {
-        handle_disk_read(0, -result, reply_right);
+        handle_disk_read({}, -result, reply_right);
     } catch (const std::exception &e) {
         printf("Exception in handle_disk_read_error: %s\n", e.what());
     }
@@ -68,20 +67,20 @@ pmos::async::detached_task handle_disk_read(IPC_Disk_Read request, DiskGeometry 
     auto size         = sector_count * geometry.logical_sector_size;
     auto size_aligned = align_to_page(size);
 
-    auto res = create_mem_object(size_aligned, CREATE_FLAG_DMA | CREATE_FLAG_ALLOW_DISCONTINUOUS);
-    if (res.result != SUCCESS) {
-        handle_disk_read_error(res.result, reply_right);
+    auto res = pmos::create_mem_object_noexcept(size_aligned, CREATE_FLAG_DMA | CREATE_FLAG_ALLOW_DISCONTINUOUS);
+    if (!res) {
+        handle_disk_read_error(res.error(), reply_right);
         co_return;
     }
 
-    auto object = res.object_id;
-    pmos::utility::scope_guard guard {[=] { release_mem_object(object, 0); }};
+    auto object = std::move(res.value());
+    // RAII takes care of cleaning up the object if we fail before replying
 
     try {
         // Casually try to read the disk
         uint64_t bytes_read = 0;
 
-        auto [result, phys_addr] = get_page_phys_address_from_object(object, 0, 0);
+        auto [result, phys_addr] = get_page_phys_address_from_object(object.get(), 0, FLAG_MEM_OBJECT_ID_RIGHT);
         if (result != SUCCESS) {
             printf("Error reading page from object\n");
             handle_disk_read_error(-result, reply_right);
@@ -115,7 +114,7 @@ pmos::async::detached_task handle_disk_read(IPC_Disk_Read request, DiskGeometry 
                         offset += page_size;
                     } else {
                         auto [result, phys_addr] =
-                            get_page_phys_address_from_object(object, offset, 0);
+                            get_page_phys_address_from_object(object.get(), offset, FLAG_MEM_OBJECT_ID_RIGHT);
                         if (result != SUCCESS) {
                             handle_disk_read_error(result, reply_right);
                             co_return;
@@ -163,8 +162,7 @@ pmos::async::detached_task handle_disk_read(IPC_Disk_Read request, DiskGeometry 
             bytes_read = pushed_max_offset;
         }
 
-        handle_disk_read(object, 0, reply_right);
-        guard.dismiss();
+        handle_disk_read(std::move(object), 0, reply_right);
     } catch (const std::system_error &e) {
         printf("Error reading disk: %s\n", e.what());
         handle_disk_read_error(-e.code().value(), reply_right);

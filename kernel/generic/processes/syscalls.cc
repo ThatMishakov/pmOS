@@ -2014,17 +2014,50 @@ void syscall_get_page_address()
     syscall_return(task) = mapping.page_addr;
 }
 
+ReturnStr<klib::shared_ptr<Mem_Object>> mem_object_for_right(TaskDescriptor *task, u64 right_id)
+{
+    auto group = task->get_rights_namespace();
+    if (!group)
+        return Error(-ESRCH);
+
+    auto right = group->atomic_get_right(right_id);
+    if (!right)
+        return Error(-ESRCH);
+
+    if (!right->atomic_alive())
+        return Error(-ESRCH);
+
+    if (right->type() != RightType::MemObject)
+        return Error(-EPERM);
+
+    auto mem_object_right = static_cast<MemObjectRight *>(right);
+    return mem_object_right->mem_object;
+}
+
 void syscall_get_page_address_from_object()
 {
     auto current_task = get_current_task();
     auto object_id    = syscall_arg64(current_task, 0);
     auto offset       = syscall_arg64(current_task, 1);
+    auto flags        = syscall_flags(current_task);
 
-    auto object = Mem_Object::get_object(object_id);
-    if (!object) {
-        syscall_error(current_task) = -ENOENT;
-        return;
+    klib::shared_ptr<Mem_Object> object;
+    if (flags & FLAG_MEM_OBJECT_ID_RIGHT) {
+        auto object = mem_object_for_right(current_task, object_id);
+        if (!object) {
+            syscall_error(current_task) = object.result;
+            return;
+        }
+
+        object = klib::move(object.val);
+    } else {
+        object = Mem_Object::get_object(object_id);
+        if (!object) {
+            syscall_error(current_task) = -ENOENT;
+            return;
+        }
     }
+
 
     if (object->is_anonymous()) {
         syscall_error(current_task) = -EPERM;

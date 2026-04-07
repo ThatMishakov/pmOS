@@ -112,6 +112,8 @@ struct task_register_set {
 #define CREATE_FLAG_COW                 0x20
 #define CREATE_FLAG_ALLOW_DISCONTINUOUS 0x40
 
+#define FLAG_MEM_OBJECT_ID_RIGHT (1 << 15)
+
 #ifdef __STDC_HOSTED__
 /// @brief Creates a normal page region
 ///

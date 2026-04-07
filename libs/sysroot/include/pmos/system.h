@@ -461,7 +461,6 @@ result_t delete_receive_right(pmos_port_t port, pmos_right_t receive_right_id);
 
 typedef struct message_extra_t {
     pmos_right_t extra_rights[4];
-    mem_object_t memory_object;
 } message_extra_t;
 
 /// @brief Sends message to a right
@@ -479,13 +478,13 @@ typedef struct message_extra_t {
 ///        the reply
 /// @param message Message buffer to be sent
 /// @param message_size Size of the message buffer
-/// @param aux_stuff Additional rights and memory object (TODO: memory object is ignored)
+/// @param aux_rights Additional rights
 /// @param flags Additional flags (REPLY_CREATE_SEND_MANY, SEND_MESSAGE_DELETE_RIGHT)
 /// @return If reply_port is not INVALID_PORT, returns the ID of the new reply right on success. On error,
 ///         if it is related to the right not being found, returns the ID of the first failed right,
 ///         starting with 0 for the `send_right`
 right_request_t send_message_right(pmos_right_t send_right, pmos_port_t reply_port, const void *message,
-                             size_t message_size, message_extra_t *todo_aux_stuff, unsigned flags);
+                             size_t message_size, message_extra_t *aux_rights, unsigned flags);
     #define REPLY_CREATE_SEND_MANY    (1 << 1)
     #define SEND_MESSAGE_DELETE_RIGHT (1 << 8)
 

@@ -1,4 +1,5 @@
 #include <pmos/helpers.hh>
+#include <pmos/memory.h>
 
 namespace pmos
 {
@@ -32,6 +33,15 @@ std::expected<Right, int> Right::clone_noexcept() const noexcept
         return std::unexpected(-static_cast<int>(req.result));
 
     return Right {req.right, type_};
+}
+
+std::expected<Right, int> create_mem_object_noexcept(uint64_t size, uint32_t flags) noexcept
+{
+    auto result = ::create_mem_object(size, flags);
+    if (result.result)
+        return std::unexpected(-static_cast<int>(result.result));
+
+    return Right(result.right, RightType::MemObject);
 }
 
 Right Right::clone() const
