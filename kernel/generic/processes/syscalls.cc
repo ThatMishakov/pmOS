@@ -1476,6 +1476,27 @@ void syscall_create_mem_object()
     syscall_return(current_task) = right.val->right_sender_id;
 }
 
+ReturnStr<klib::shared_ptr<Mem_Object>> mem_object_for_right(TaskDescriptor *task, u64 right_id)
+{
+    auto group = task->get_rights_namespace();
+    if (!group)
+        return Error(-ESRCH);
+
+    auto right = group->atomic_get_right(right_id);
+    if (!right)
+        return Error(-ESRCH);
+
+    if (!right->atomic_alive())
+        return Error(-ESRCH);
+
+    if (right->type() != RightType::MemObject)
+        return Error(-EPERM);
+
+    auto mem_object_right = static_cast<MemObjectRight *>(right);
+    assert(mem_object_right->mem_object);
+    return mem_object_right->mem_object;
+}
+
 void syscall_map_mem_object()
 {
     const auto &current_task = get_current_task();
@@ -1515,11 +1536,23 @@ void syscall_map_mem_object()
         return;
     }
 
-    const auto object = Mem_Object::get_object(object_id);
-    if (!object) {
-        syscall_error(current_task) = -ENOENT;
-        return;
+    klib::shared_ptr<Mem_Object> object;
+    if (access & FLAG_MEM_OBJECT_ID_RIGHT) {
+        auto res = mem_object_for_right(current_task, object_id);
+        if (!res) {
+            syscall_error(current_task) = res.result;
+            return;
+        }
+
+        object = klib::move(res.val);
+    } else {
+        object = Mem_Object::get_object(object_id);
+        if (!object) {
+            syscall_error(current_task) = -ENOENT;
+            return;
+        }
     }
+    assert(object);
 
     if (object->is_anonymous()) {
         syscall_error(current_task) = -EPERM;
@@ -2009,27 +2042,6 @@ void syscall_get_page_address()
 
     auto mapping         = table->get_page_mapping((void *)page_base);
     syscall_return(task) = mapping.page_addr;
-}
-
-ReturnStr<klib::shared_ptr<Mem_Object>> mem_object_for_right(TaskDescriptor *task, u64 right_id)
-{
-    auto group = task->get_rights_namespace();
-    if (!group)
-        return Error(-ESRCH);
-
-    auto right = group->atomic_get_right(right_id);
-    if (!right)
-        return Error(-ESRCH);
-
-    if (!right->atomic_alive())
-        return Error(-ESRCH);
-
-    if (right->type() != RightType::MemObject)
-        return Error(-EPERM);
-
-    auto mem_object_right = static_cast<MemObjectRight *>(right);
-    assert(mem_object_right->mem_object);
-    return mem_object_right->mem_object;
 }
 
 void syscall_get_page_address_from_object()

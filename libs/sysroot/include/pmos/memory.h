@@ -186,7 +186,8 @@ typedef struct map_mem_object_param_t {
     /// the trailing space will be zeroed.
     uint64_t object_size;
     /// An OR-conjugated list of the argument. Takes PROT_READ, PROT_WRITE and PROT_EXEC as
-    /// access bytes and CREATE_FLAG_FIXED, and CREATE_FLAG_COW
+    /// access bytes and CREATE_FLAG_FIXED, and CREATE_FLAG_COW. Also takes FLAG_MEM_OBJECT_ID_RIGHT, which indicates
+    /// that the object_id field is a right to the memory object
     uint64_t access_flags;
 } map_mem_object_param_t;
 

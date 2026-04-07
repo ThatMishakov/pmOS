@@ -42,34 +42,6 @@ void ipc_send(const auto &data, pmos_port_t dest)
         throw std::system_error(-result, std::system_category(), strerror(-result));
 }
 
-bool sender_is_of_group(uint64_t task_group_id, Message_Descriptor msg)
-{
-    auto [code, result] = is_task_group_member(msg.sender, task_group_id);
-    return code == 0 && result == 1;
-}
-
-pmos_right_t main_right;
-
-pmos_port_t create_main_port(std::string_view port_name)
-{
-    ports_request_t request = create_port(TASK_ID_SELF, 0);
-    if (request.result != SUCCESS)
-        throw std::system_error(-request.result, std::system_category());
-
-    auto port = request.port;
-
-    right_request_t rr = create_right(port, &main_right, 0);
-    if (rr.result)
-        throw std::system_error(-rr.result, std::system_category());
-
-
-    result_t r = name_right(rr.right, port_name.data(), port_name.size(), 0);
-    if (r != SUCCESS)
-        throw std::system_error(-r, std::system_category());
-
-    return port;
-}
-
 struct Disk;
 struct DiskOpenAwaiter {
     Disk *disk;
@@ -87,36 +59,6 @@ struct DiskOpenAwaiter {
 };
 
 using mem_object_id = uint64_t;
-struct ReadAwaiter {
-    std::coroutine_handle<> h {};
-    mem_object_id mem_object {};
-
-    Disk &disk;
-    uint64_t sector_start;
-    uint64_t sector_count;
-
-    uint64_t op_id;
-
-    pmos::containers::DoubleListHead<ReadAwaiter> list_node;
-    pmos::containers::RBTreeNode<ReadAwaiter> node;
-
-    ReadAwaiter(Disk &disk, uint64_t sector_start, uint64_t sector_count)
-        : disk(disk), sector_start(sector_start), sector_count(sector_count)
-    {
-    }
-
-    bool await_ready() noexcept { return false; }
-    void await_suspend(std::coroutine_handle<> h_);
-    uint64_t await_resume() { return mem_object; }
-};
-
-pmos::containers::RedBlackTree<
-    ReadAwaiter, &ReadAwaiter::node,
-    detail::TreeCmp<ReadAwaiter, uint64_t, &ReadAwaiter::op_id>>::RBTreeHead read_awaiters;
-
-DiskOpenAwaiter open_disk(Disk &disk, uint64_t task_group_id);
-
-pmos_port_t main_port = create_main_port("/pmos/blockd");
 
 struct Disk {
     size_t id;
@@ -157,7 +99,7 @@ size_t align_to_page(size_t size)
     return (size + page_size - 1) & ~(page_size - 1);
 }
 
-pmos::async::task<mem_object_id> read_disk(Disk &disk, uint64_t sector_start, uint64_t sector_count)
+pmos::async::task<pmos::Right> read_disk(Disk &disk, uint64_t sector_start, uint64_t sector_count)
 {
     IPC_Disk_Read read = {
         .type             = IPC_Disk_Read_NUM,
@@ -185,33 +127,35 @@ pmos::async::task<mem_object_id> read_disk(Disk &disk, uint64_t sector_start, ui
     if (reply->result_code != 0)
         throw std::system_error(-reply->result_code, std::system_category());
 
-    co_return std::move(msg->descriptor.mem_object);
+    if (!msg->other_rights[0] || msg->other_rights[0].type() != RightType::MemObject)
+        throw std::system_error(EINTR, std::system_category());
+
+    co_return std::move(msg->other_rights[0]);
 }
 
 pmos::async::detached_task probe_partitions(size_t disk_idx)
 {
     auto &disk  = disks[disk_idx];
     // Read partition table
-    auto object = co_await read_disk(disk, 0, 2);
-    printf("Mem object: %lu\n", object);
+    auto object_right = co_await read_disk(disk, 0, 2);
+    printf("Mem object right: %" PRIu64 "\n", object_right.get());
 
-    if (object == 0) {
+    if (!object_right) {
         printf("Failed to read partition table off disk %s\n", disk.name.c_str());
         co_return;
     }
 
-    pmos::utility::scope_guard guard {[&] { release_mem_object(object, 0); }};
     auto mbr_size          = align_to_page(disk.logical_sector_size * 2);
 
     map_mem_object_param_t p = {
         .page_table_id = PAGE_TABLE_SELF,
-        .object_id = object,
+        .object_id = object_right.get(),
         .addr_start_uint = 0,
         .size = mbr_size,
         .offset_object = 0,
         .offset_start = 0,
         .object_size = mbr_size,
-        .access_flags = PROT_READ,
+        .access_flags = PROT_READ | FLAG_MEM_OBJECT_ID_RIGHT,
     };
     auto r = map_mem_object(&p);
 
@@ -266,24 +210,24 @@ pmos::async::detached_task probe_partitions(size_t disk_idx)
 
         auto number_of_sectors = alignup(gpt_partition_array_size, disk.logical_sector_size) /
                                  disk.logical_sector_size;
-        auto gpt_object = co_await read_disk(disk, gpt->partition_entry_lba, number_of_sectors);
-        if (gpt_object == 0) {
+        auto gpt_object_right = co_await read_disk(disk, gpt->partition_entry_lba, number_of_sectors);
+        if (!gpt_object_right) {
             printf("Failed to read GPT partition array\n");
             co_return;
         }
-        pmos::utility::scope_guard guard3 {[&] { release_mem_object(gpt_object, 0); }};
+        pmos::utility::scope_guard guard3 {[&] { release_mem_object(gpt_object_right.get(), 0); }};
         auto array_size_aligned = align_to_page(gpt_partition_array_size);
 
         auto res = [&] { 
             map_mem_object_param_t p = {
                 .page_table_id = 0,
-                .object_id = gpt_object,
+                .object_id = gpt_object_right.get(),
                 .addr_start_uint = 0,
                 .size = array_size_aligned,
                 .offset_object = 0,
                 .offset_start = 0,
                 .object_size = array_size_aligned,
-                .access_flags = PROT_READ,
+                .access_flags = PROT_READ | FLAG_MEM_OBJECT_ID_RIGHT,
             };
 
             return map_mem_object(&p);
