@@ -35,14 +35,14 @@ fn publish_object_error(error: i32, reply_right: SendRight) {
     let mut msg = ipc_msgs::IPCBusPublishObjectReply::new();
     msg.result = -error;
 
-    _ = ipc::send_message_right_consume(&msg, reply_right, None, [const { None }; 4]);
+    _ = ipc::send_message_right_consume(&msg, reply_right, [const { None }; 4]);
 }
 
 fn publish_object_success(reply_right: &mut Option<SendRight>, seq_id: u64) -> Result<(), i32> {
     let mut msg = ipc_msgs::IPCBusPublishObjectReply::new();
     msg.sequence_number = seq_id;
 
-    ipc::send_message_right(&msg, reply_right, None, &mut [const { None }; 4])
+    ipc::send_message_right(&msg, reply_right, &mut [const { None }; 4])
         .map(|_| ())
         .map_err(|(e, _)| e.get())
 }
@@ -177,7 +177,7 @@ fn new_object_stuff(obj: Rc<RefCell<ObjectInfo>>, state: &mut State) {
             let mut other_rights = [clone, None, None, None];
 
             let result =
-                ipc::send_message_right(&r, right, None, &mut other_rights).map_err(|(e, _)| e);
+                ipc::send_message_right(&r, right, &mut other_rights).map_err(|(e, _)| e);
             if let Err(r) = result {
                 println!("Error replying to the right request: {}", r);
 
@@ -241,7 +241,7 @@ fn request_object(
             }
 
             let result =
-                ipc::send_message_right(&r, &mut reply_right, None, &mut other_rights)
+                ipc::send_message_right(&r, &mut reply_right, &mut other_rights)
                     .map_err(|(e, _)| e);
             if let Err(e) = result {
                 match e.get() {

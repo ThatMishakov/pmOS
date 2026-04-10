@@ -32,14 +32,12 @@ impl RightRequestResult {
 #[repr(C)]
 struct SendRightAux {
     rights: [Right; 4],
-    msg_object: u64, // Again, this is currently ignored by the kernel
 }
 
 impl SendRightAux {
     fn new() -> Self {
         Self {
             rights: [0; 4],
-            msg_object: 0,
         }
     }
 }
@@ -185,25 +183,25 @@ impl IPCPort {
         }
     }
 
-    pub fn create_right_sendonce(&self) -> Option<(SendOnceRight, RecieveRight)> {
+    pub fn create_right_sendonce(&self) -> Option<(SendOnceRight, RecieveOnceRight)> {
         let mut recieve_id: Right = 0;
         let RightRequestResult { result, right } =
             unsafe { create_right(self.port, &raw mut recieve_id, CREATE_RIGHT_SEND_ONCE) };
 
         if result.success() {
-            Some((SendOnceRight(right), RecieveRight(recieve_id, self.port)))
+            Some((SendOnceRight(right), RecieveOnceRight(recieve_id, self.port)))
         } else {
             None
         }
     }
 
-    pub fn create_right_sendmany(&self) -> Option<(SendManyRight, RecieveRight)> {
+    pub fn create_right_sendmany(&self) -> Option<(SendManyRight, RecieveManyRight)> {
         let mut recieve_id: Right = 0;
         let RightRequestResult { result, right } =
             unsafe { create_right(self.port, &raw mut recieve_id, 0) };
 
         if result.success() {
-            Some((SendManyRight(right), RecieveRight(recieve_id, self.port)))
+            Some((SendManyRight(right), RecieveManyRight(recieve_id, self.port)))
         } else {
             None
         }
@@ -260,12 +258,18 @@ pub fn send_message(
 const SEND_MESSAGE_DELETE_RIGHT: u32 = 1 << 8;
 const REPLY_CREATE_SEND_MANY: u32 = 1 << 1;
 
-pub fn send_message_right(
+enum RightResult {
+    Once(SendOnceRight),
+    Many(SendManyRight),
+    None,
+}
+
+fn send_message_right_internal(
     msg: &impl super::ipc_msgs::Serializable,
     right: &mut Option<SendRight>, // Do mut Option so that it can be taken out
     reply_port: Option<(&IPCPort, bool)>, /* create_send_many */
     include_rights: &mut [Option<SendRight>; 4],
-) -> Result<Option<RecieveRight>, (Error, u64)> {
+) -> Result<RightResult, (Error, u64)> {
     let mut aux_rights_count = 0;
     let mut aux_struct = SendRightAux::new();
 
@@ -285,6 +289,8 @@ pub fn send_message_right(
     let msg = msg.serialize();
     let msg_size = msg.len();
     let msg = msg.as_ptr();
+
+    let send_many = reply_port.map_or(false, |(_, send_many)| send_many);
 
     let flags = reply_port.map_or(
         0,
@@ -314,20 +320,22 @@ pub fn send_message_right(
     }
 
     if result != 0 {
-        Ok(Some(RecieveRight(result, reply_port.unwrap().0.port)))
+        Ok(if send_many {
+            RightResult::Many(SendManyRight(result))
+        } else {
+            RightResult::Once(SendOnceRight(result))
+        })
     } else {
-        Ok(None)
+        Ok(RightResult::None)
     }
 }
 
-pub fn send_message_right_consume(
+fn send_message_right_consume_internal(
     msg: &impl super::ipc_msgs::Serializable,
     right: SendRight,
-    // object: Option<MemoryObject>,
     reply_port: Option<(&IPCPort, bool /* create send many */)>,
     include_rights: [Option<SendRight>; 4],
-    // TODO: Memory objects...
-) -> Result<Option<RecieveRight>, (Error, u64)> {
+) -> Result<RightResult, (Error, u64)> {
     let mut aux_rights_count = 0;
     let mut aux_struct = SendRightAux::new();
 
@@ -347,6 +355,8 @@ pub fn send_message_right_consume(
     let msg = msg.serialize();
     let msg_size = msg.len();
     let msg = msg.as_ptr();
+
+    let send_many = reply_port.map_or(false, |(_, send_many)| send_many);
 
     let flags = SEND_MESSAGE_DELETE_RIGHT
         | reply_port.map_or(
@@ -372,10 +382,30 @@ pub fn send_message_right_consume(
     }
 
     if result != 0 {
-        Ok(Some(RecieveRight(result, reply_port.unwrap().0.port)))
+        Ok(if send_many {
+            RightResult::Many(SendManyRight(result))
+        } else {
+            RightResult::Once(SendOnceRight(result))
+        })
     } else {
-        Ok(None)
+        Ok(RightResult::None)
     }
+}
+
+pub fn send_message_right(
+    msg: &impl super::ipc_msgs::Serializable,
+    right: &mut Option<SendRight>,
+    include_rights: &mut [Option<SendRight>; 4],
+) -> Result<(), (Error, u64)> {
+    send_message_right_internal(msg, right, None, include_rights).map(|_| ())
+}
+
+pub fn send_message_right_consume(
+    msg: &impl super::ipc_msgs::Serializable,
+    right: SendRight,
+    include_rights: [Option<SendRight>; 4],
+) -> Result<(), (Error, u64)> {
+    send_message_right_consume_internal(msg, right, None, include_rights).map(|_| ())
 }
 
 impl Message {
@@ -432,12 +462,20 @@ pub struct SendManyRight(Right);
 pub struct SendOnceRight(Right);
 pub struct MemoryObjectRight(Right);
 pub struct UnknownRight(Right);
-pub struct RecieveRight(Right, Port);
+pub struct RecieveOnceRight(Right, Port);
+pub struct RecieveManyRight(Right, Port);
 // TODO: Destructor for this
 
-impl Drop for RecieveRight {
+impl Drop for RecieveOnceRight {
     fn drop(&mut self) {
-        let RecieveRight(right, port) = *self;
+        let RecieveOnceRight(right, port) = *self;
+        _ = unsafe { delete_receive_right(right, port)}
+    }
+}
+
+impl Drop for RecieveManyRight {
+    fn drop(&mut self) {
+        let RecieveManyRight(right, port) = *self;
         _ = unsafe { delete_receive_right(right, port)}
     }
 }
