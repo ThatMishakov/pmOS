@@ -251,12 +251,12 @@ pub fn send_message(
 const SEND_MESSAGE_DELETE_RIGHT: u32 = 1 << 8;
 const REPLY_CREATE_SEND_MANY: u32 = 1 << 1;
 
-#[derive(Debug)]
-enum RightResult {
-    Once(SendOnceRight),
-    Many(SendManyRight),
-    None,
-}
+// #[derive(Debug)]
+// enum RightResult {
+//     Once(SendOnceRight),
+//     Many(SendManyRight),
+//     None,
+// }
 
 #[derive(Debug)]
 enum RecieveRightResult {

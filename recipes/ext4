@@ -1,0 +1,22 @@
+#!/bin/sh
+
+name=ext4
+version=1.0.0
+revision=1
+
+source_dir=userspace/ext4
+deps="libc pmos-rust-lib libcxx"
+hostdeps="cargo rust clang"
+source_hostdeps="cargo"
+allow_network=yes
+
+build() {
+    TARGET_CC="clang" \
+    cargo_build_nolock
+}
+
+package() {
+    mkdir -p ${dest_dir}/boot
+    cp -r ${build_dir}/builds/ext4/${RUST_TARGET}/release/ext4 ${dest_dir}/boot/
+    cp ${source_dir}/ext4.yaml "${dest_dir}/boot/ext4.yaml"
+}

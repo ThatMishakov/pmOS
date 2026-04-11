@@ -9,8 +9,6 @@ use crate::ipc::get_right0;
 
 use crate::ipc_msgs::{
     IPCNameRight,
-    IPCNameRightReply,
-    Message,
 };
 
 use crate::ipc_msgs;

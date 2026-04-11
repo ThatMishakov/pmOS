@@ -542,6 +542,14 @@ void service_ports()
         goto exit;
     }
 
+    // result = request_port_callback(vfsd_port_name, strlen(vfs_port_name), vfs_callback);
+    // if (result != SUCCESS) {
+    //     print_str("Loader: could not request vfsd port. Error: ");
+    //     print_hex(result);
+    //     print_str("\n");
+    //     goto exit;
+    // }
+
     // res = request_named_port(vfsd_port_name, strlen(vfsd_port_name), loader_port, 0);
     // if (res != SUCCESS) {
     //     print_str("Loader: could not request vfsd port. Error: ");

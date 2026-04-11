@@ -21,7 +21,7 @@ pub enum ObjectPropertyRef<'a> {
 pub struct ObjectProperties(BTreeMap<Box<str>, ObjectProperty>);
 
 impl ObjectProperties {
-    pub fn get_property(&self, property_name: &str) -> Option<ObjectPropertyRef> {
+    pub fn get_property(&self, property_name: &str) -> Option<ObjectPropertyRef<'_>> {
         self.0.get(property_name).map(|p| match p {
             ObjectProperty::String(t) => ObjectPropertyRef::String(t),
             ObjectProperty::Integer(i) => ObjectPropertyRef::Integer(*i),
@@ -162,7 +162,7 @@ impl PMBusObject {
         }
     }
 
-    pub fn get_property(&self, property_name: &str) -> Option<ObjectPropertyRef> {
+    pub fn get_property(&self, property_name: &str) -> Option<ObjectPropertyRef<'_>> {
         self.properties.get_property(property_name)
     }
 

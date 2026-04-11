@@ -29,12 +29,6 @@ struct Task {
     enqueued: bool,
 }
 
-impl Task {
-    fn poll(&mut self, cx: &mut Context<'_>) -> Poll<()> {
-        self.future.as_mut().poll(cx)
-    }
-}
-
 pub struct ManyReciever {
     state: Rc<RefCell<RightEndpointState>>,
     executor: Weak<RefCell<ExecutorState>>,

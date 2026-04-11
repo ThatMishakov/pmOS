@@ -1,7 +1,5 @@
 #![feature(new_range_api)]
 
-use pmos::error;
-
 use pmos::ipc_runner::Executor;
 use pmos::async_helpers;
 use futures::StreamExt;
@@ -21,7 +19,7 @@ async fn handle_ipc(executor: Executor) {
 fn main() {
     println!("Hello from vfsd!");
 
-    let mut executor = Executor::new();
+    let executor = Executor::new();
     executor.spawn(handle_ipc(executor.clone()));
     executor.run();
 }
