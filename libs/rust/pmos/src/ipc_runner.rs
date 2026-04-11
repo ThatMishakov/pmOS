@@ -167,7 +167,7 @@ impl ExecutorState {
         &mut self,
         endpoint_rc: &Rc<RefCell<RightEndpointState>>,
         msg: super::ipc::Message
-    ) {
+    ) -> Option<Waker> {
         let mut endpoint = endpoint_rc.borrow_mut();
 
         assert!(endpoint.message.is_none(),
@@ -179,51 +179,23 @@ impl ExecutorState {
         if let RightStorage::Once(_) = endpoint.right {
             let mut right = RightStorage::None;
             mem::swap(&mut endpoint.right, &mut right);
+            let id = right.get_id().unwrap();
             mem::forget(right);
 
-            self.rights.remove(&endpoint.right.get_id().unwrap());
+            self.rights.remove(&id);
         }
 
         // TODO: The right deletion notification handling should be done here
 
         if let Some(waker) = endpoint.waker.take() {
-            waker.wake();
+            Some(waker)
+        } else {
+            None
         }
     }
 
     fn default_handler(&self, _msg: super::ipc::Message) {
         // Do nothing
-    }
-
-    fn poll_messages(&mut self) {
-        if let Some(msg) = self.message.take() {
-            let right = msg.sent_with_right;
-            if let Some(endpoint_rc) = self.rights.get(&right).cloned() {
-                let has_msg = endpoint_rc.borrow().message.is_some();
-                if has_msg {
-                    panic!("Right {:?} already has a message, deadlock", right);
-                }
-
-                self.push_message(&endpoint_rc, msg);
-            } else {
-                self.default_handler(msg);
-            }
-            return;
-        }
-
-        let msg = self.port.pop_front_blocking();
-        
-        if let Some(endpoint_rc) = self.rights.get(&msg.sent_with_right).cloned() {
-            let has_msg = endpoint_rc.borrow().message.is_some();
-            if has_msg {
-                self.message = Some(msg);
-                return;
-            }
-
-            self.push_message(&endpoint_rc, msg);
-        } else {
-            self.default_handler(msg);
-        }
     }
 
     pub(crate) fn get_port(&self) -> &IPCPort {
@@ -261,7 +233,7 @@ impl Executor {
         }
     }
 
-    pub fn run(&mut self) {
+    pub fn run(&self) {
         loop {
             let task_id = {
                 self.state.borrow_mut().runnable.pop_front()
@@ -272,7 +244,7 @@ impl Executor {
                 continue;
             }
 
-            self.state.borrow_mut().poll_messages();
+            self.poll_messages();
         }
     }
 
@@ -322,7 +294,7 @@ impl Executor {
         }
     }
 
-    fn poll_task(&mut self, task_id: TaskId) {
+    fn poll_task(&self, task_id: TaskId) {
         let waker = self.create_waker(task_id);
         let mut cx = Context::from_waker(&waker);
 
@@ -339,6 +311,45 @@ impl Executor {
 
         if done {
             self.state.borrow_mut().tasks.remove(&task_id);
+        }
+    }
+
+    fn poll_messages(&self) {
+        let mut waker = None;
+
+        let mut state = self.state.borrow_mut();
+        if let Some(msg) = state.message.take() {
+            let right = msg.sent_with_right;
+            if let Some(endpoint_rc) = state.rights.get(&right).cloned() {
+                let has_msg = endpoint_rc.borrow().message.is_some();
+                if has_msg {
+                    panic!("Right {:?} already has a message, deadlock", right);
+                }
+
+                waker = state.push_message(&endpoint_rc, msg);
+            } else {
+                state.default_handler(msg);
+            }
+        } else {
+            let msg = state.port.pop_front_blocking();
+            
+            if let Some(endpoint_rc) = state.rights.get(&msg.sent_with_right).cloned() {
+                let has_msg = endpoint_rc.borrow().message.is_some();
+                if has_msg {
+                    state.message = Some(msg);
+                    return;
+                }
+
+                waker = state.push_message(&endpoint_rc, msg);
+            } else {
+                state.default_handler(msg);
+            }
+        }
+
+        mem::drop(state);
+
+        if let Some(waker) = waker {
+            waker.wake();
         }
     }
 }

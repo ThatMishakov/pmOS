@@ -11,7 +11,7 @@ async fn handle_ipc(executor: Executor) {
         .await
         .unwrap();
 
-    println!("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! Registered /pmos/vfsd...\n");
+    println!("Registered /pmos/vfsd...");
 
     while let Some(message) = stream.next().await {
         println!("Got message in vfsd!")
