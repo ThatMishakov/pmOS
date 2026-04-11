@@ -7,6 +7,8 @@ pub mod error;
 pub mod mem_object;
 pub mod pmbus;
 pub mod task_group;
+pub mod async_helpers;
+pub mod ipc_runner;
 
 // #[cfg(test)]
 // mod tests {

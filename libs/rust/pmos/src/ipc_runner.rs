@@ -2,10 +2,29 @@ use std::{
     future::Future,
     pin::Pin,
     task::{Context, Poll},
+    rc::Rc,
+    rc::Weak,
+    cell::RefCell,
+    mem,
+    task::Waker,
+    collections::HashMap,
+    collections::VecDeque,
 };
 
-use super::ipc::{Port, RecieveRight, Right};
-use alloc::collections::VecDeque;
+use super::error::Error;
+
+use super::ipc::{
+    Port,
+    RecieveOnceRight,
+    RecieveManyRight,
+    SendOnceRight,
+    SendManyRight,
+    SendRight,
+    Right,
+    IPCPort
+};
+
+use futures::Stream;
 
 struct Task {
     future: Pin<Box<dyn Future<Output = ()>>>,
@@ -17,8 +36,8 @@ impl Task {
     }
 }
 
-struct ManyReciever {
-    state: Rc<RefCell<IpcEndpointState>>,
+pub struct ManyReciever {
+    state: Rc<RefCell<RightEndpointState>>,
     executor: Weak<RefCell<ExecutorState>>,
 }
 
@@ -32,17 +51,19 @@ impl Stream for ManyReciever {
         if let Some(msg) = this.message.take() {
             Poll::Ready(Some(msg))
         } else {
-            if let RightStorage::None = this.right {
-                Poll::Ready(None)
-            } else {
-                Poll::Pending
+            match this.right {
+                RightStorage::None => Poll::Ready(None),
+                _ => {
+                    this.waker = Some(cx.waker().clone());
+                    Poll::Pending
+                }
             }
         }
     }
 }
 
-struct OnceReciever {
-    state: Rc<RefCell<IpcEndpointState>>,
+pub struct OnceReciever {
+    state: Rc<RefCell<RightEndpointState>>,
     executor: Weak<RefCell<ExecutorState>>,
 }
 
@@ -56,10 +77,12 @@ impl Future for OnceReciever {
         if let Some(msg) = this.message.take() {
             Poll::Ready(Some(msg))
         } else {
-            if let RightStorage::None = this.right {
-                Poll::Ready(None)
-            } else {
-                Poll::Pending
+            match this.right {
+                RightStorage::None => Poll::Ready(None),
+                _ => {
+                    this.waker = Some(cx.waker().clone());
+                    Poll::Pending
+                }
             }
         }
     }
@@ -68,19 +91,17 @@ impl Future for OnceReciever {
 impl OnceReciever {
     pub(crate) fn from_right(right: RecieveOnceRight, executor: Executor) -> Self {
         let id = right.get_id();
-        let state = Rc::new(RefCell::new(IpcEndpointState {
+        let state = Rc::new(RefCell::new(RightEndpointState {
             right: RightStorage::Once(right),
             message: None,
             waker: None,
         }));
 
-        executor.borrow_mut().rights.insert(id, state);
-
-        mem::forget(right);
+        executor.state.borrow_mut().rights.insert(id, state.clone());
 
         Self {
             state,
-            executor.state,
+            executor: Rc::downgrade(&executor.state),
         }        
     }
 }
@@ -88,27 +109,36 @@ impl OnceReciever {
 impl ManyReciever {
     pub(crate) fn from_right(right: RecieveManyRight, executor: Executor) -> Self {
         let id = right.get_id();
-        let state = Rc::new(RefCell::new(IpcEndpointState {
-            right: RightStorage::Once(right),
+        let state = Rc::new(RefCell::new(RightEndpointState {
+            right: RightStorage::Many(right),
             message: None,
             waker: None,
         }));
 
-        executor.borrow_mut().rights.insert(id, state);
-
-        mem::forget(right);
+        executor.state.borrow_mut().rights.insert(id, state.clone());
 
         Self {
             state,
-            executor.state,
+            executor: Rc::downgrade(&executor.state),
         }        
     }
 }
 
+#[derive(Debug)]
 enum RightStorage {
     None,
-    Once(SendOnceRight),
-    Many(SendManyRight),
+    Once(RecieveOnceRight),
+    Many(RecieveManyRight),
+}
+
+impl RightStorage {
+    fn get_id(&self) -> Option<Right> {
+        match self {
+            Self::Once(r) => Some(r.get_id()),
+            Self::Many(r) => Some(r.get_id()),
+            Self::None => None,
+        }
+    }
 }
 
 struct RightEndpointState {
@@ -133,20 +163,30 @@ struct ExecutorState {
 }
 
 impl ExecutorState {
-    fn push_message(&mut self, endpoint: &mut RightEndpointState, msg: super::ipc::Message) {
-        assert!(endpoint.message.is_none(), "Right {:?} already has a message", endpoint.right);
+    fn push_message(
+        &mut self,
+        endpoint_rc: &Rc<RefCell<RightEndpointState>>,
+        msg: super::ipc::Message
+    ) {
+        let mut endpoint = endpoint_rc.borrow_mut();
+
+        assert!(endpoint.message.is_none(),
+            "Right {:?} already has a message",
+            endpoint.right
+        );
         endpoint.message = Some(msg);
 
         if let RightStorage::Once(_) = endpoint.right {
-            forget!(endpoint.right);
-            endpoint.right = RightStorage::None;
+            let mut right = RightStorage::None;
+            mem::swap(&mut endpoint.right, &mut right);
+            mem::forget(right);
 
-            self.rights.remove(&endpoint.right);
+            self.rights.remove(&endpoint.right.get_id().unwrap());
         }
 
         // TODO: The right deletion notification handling should be done here
 
-        if let Some(waker) = self.waker.take() {
+        if let Some(waker) = endpoint.waker.take() {
             waker.wake();
         }
     }
@@ -157,14 +197,14 @@ impl ExecutorState {
 
     fn poll_messages(&mut self) {
         if let Some(msg) = self.message.take() {
-            let right = msg.right;
-            if let Some(endpoint) = self.rights.get(&right) {
-                let mut endpoint = endpoint.borrow_mut();
-                if endpoint.message.is_some() {
+            let right = msg.sent_with_right;
+            if let Some(endpoint_rc) = self.rights.get(&right).cloned() {
+                let has_msg = endpoint_rc.borrow().message.is_some();
+                if has_msg {
                     panic!("Right {:?} already has a message, deadlock", right);
                 }
 
-                endpoint.push_message(msg);
+                self.push_message(&endpoint_rc, msg);
             } else {
                 self.default_handler(msg);
             }
@@ -174,14 +214,14 @@ impl ExecutorState {
 
         let msg = self.port.pop_front_blocking();
         
-        if let Some(endpoint) = self.rights.get(&msg.right) {
-            let mut endpoint = endpoint.borrow_mut();
-            if endpoint.message.is_some() {
+        if let Some(endpoint_rc) = self.rights.get(&msg.sent_with_right).cloned() {
+            let has_msg = endpoint_rc.borrow().message.is_some();
+            if has_msg {
                 self.message = Some(msg);
                 return;
             }
 
-            endpoint.push_message(msg);
+            self.push_message(&endpoint_rc, msg);
         } else {
             self.default_handler(msg);
         }
@@ -196,11 +236,15 @@ impl ExecutorState {
             self.tasks.remove(&task_id);
         }
     }
+
+    pub(crate) fn get_port(&self) -> &IPCPort {
+        &self.port
+    }
 }
 
 #[derive(Clone)]
 pub struct Executor {
-    state: Rc<RefCell<ExecutorState>>,
+    pub(crate) state: Rc<RefCell<ExecutorState>>,
 }
 
 impl Executor {
@@ -219,13 +263,17 @@ impl Executor {
     }
 
     fn run(&self) {
-        let mut state = self.state.borrow_mut();
         loop {
-            while let Some(task_id) = state.runnable.pop_front() {
-                state.poll_task(task_id);
+            let task_id = {
+                self.state.borrow_mut().runnable.pop_front()
+            };
+
+            while let Some(task_id) = task_id {
+                self.state.borrow_mut().poll_task(task_id);
+                continue;
             }
 
-            state.poll_messages();
+            self.state.borrow_mut().poll_messages();
         }
     }
 
@@ -249,14 +297,7 @@ impl Executor {
         right: &mut Option<SendRight>,
         include_rights: &mut [Option<SendRight>; 4],
     ) -> Result<OnceReciever, (Error, u64)> {
-        let mut state = self.state.borrow_mut();
-
-        let &port = self.state.borrow().port;
-        let right = super::ipc::send_message_reply_once(msg, right, port, include_rights)?;
-        Ok(OnceReciever::from_right(right, self.clone()))
-    }
-
-    pub(crate) fn get_port(&self) -> &IPCPort {
-        self.state.borrow().port
+        super::ipc::send_message_reply_once(msg, right, &self.state.borrow().port, include_rights)
+            .map(|right| OnceReciever::from_right(right, self.clone()))
     }
 }

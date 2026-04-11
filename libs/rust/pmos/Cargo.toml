@@ -7,4 +7,5 @@ edition = "2021"
 bitflags = "2.8.0"
 bytemuck = { version = "1.21.0", features = ["derive"] }
 endian-num = { version = "0.2.0", features = ["linux-types", "bitflags"] }
+futures = "0.3.32"
 libc = { git = "https://gitlab.com/mishakov/libc-pmos.git", branch = "pmos-0.2.178" }

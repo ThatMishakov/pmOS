@@ -766,7 +766,8 @@ void parse_args(int argc, char **argv)
 
 int main(int argc, char **argv)
 {
-    printf("Hello from AHCId! My PID: %" PRIi64 "\n", getpid());
+    //printf("Hello from AHCId! My PID: %" PRIi64 "\n", getpid());
+    printf("AHCId started...\n");
     parse_args(argc, argv);
 
     ahci_handle();

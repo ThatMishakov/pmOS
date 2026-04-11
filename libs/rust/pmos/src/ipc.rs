@@ -258,12 +258,19 @@ enum RightResult {
     None,
 }
 
+#[derive(Debug)]
+enum RecieveRightResult {
+    Once(RecieveOnceRight),
+    Many(RecieveManyRight),
+    None,
+}
+
 fn send_message_right_internal(
     msg: &impl super::ipc_msgs::Serializable,
     right: &mut Option<SendRight>, // Do mut Option so that it can be taken out
     reply_port: Option<(&IPCPort, bool)>, /* create_send_many */
     include_rights: &mut [Option<SendRight>; 4],
-) -> Result<RightResult, (Error, u64)> {
+) -> Result<RecieveRightResult, (Error, u64)> {
     let mut aux_rights_count = 0;
     let mut aux_struct = SendRightAux::new();
 
@@ -291,6 +298,11 @@ fn send_message_right_internal(
         |(_, send_many)| if send_many { REPLY_CREATE_SEND_MANY } else { 0 },
     );
 
+    let port_id = reply_port.map_or(
+        0,
+        |(p, _)| p.port,
+    );
+
     let result = unsafe {
         send_message_right_stdlib(
             right.as_ref().ok_or_else(|| (Error::from_errno(libc::EINVAL), 0))?.get_id(),
@@ -315,12 +327,12 @@ fn send_message_right_internal(
 
     if result != 0 {
         Ok(if send_many {
-            RightResult::Many(SendManyRight(result))
+            RecieveRightResult::Many(RecieveManyRight(result, port_id))
         } else {
-            RightResult::Once(SendOnceRight(result))
+            RecieveRightResult::Once(RecieveOnceRight(result, port_id))
         })
     } else {
-        Ok(RightResult::None)
+        Ok(RecieveRightResult::None)
     }
 }
 
@@ -329,7 +341,7 @@ fn send_message_right_consume_internal(
     right: SendRight,
     reply_port: Option<(&IPCPort, bool /* create send many */)>,
     include_rights: [Option<SendRight>; 4],
-) -> Result<RightResult, (Error, u64)> {
+) -> Result<RecieveRightResult, (Error, u64)> {
     let mut aux_rights_count = 0;
     let mut aux_struct = SendRightAux::new();
 
@@ -358,6 +370,11 @@ fn send_message_right_consume_internal(
             |(_, send_many)| if send_many { REPLY_CREATE_SEND_MANY } else { 0 },
         );
 
+    let port_id = reply_port.map_or(
+        0,
+        |(p, _)| p.port,
+    );
+
     let result = unsafe {
         send_message_right_stdlib(
             right.get_id(),
@@ -377,12 +394,12 @@ fn send_message_right_consume_internal(
 
     if result != 0 {
         Ok(if send_many {
-            RightResult::Many(SendManyRight(result))
+            RecieveRightResult::Many(RecieveManyRight(result, port_id))
         } else {
-            RightResult::Once(SendOnceRight(result))
+            RecieveRightResult::Once(RecieveOnceRight(result, port_id))
         })
     } else {
-        Ok(RightResult::None)
+        Ok(RecieveRightResult::None)
     }
 }
 
@@ -413,10 +430,10 @@ pub fn send_message_reply_once(
     right: &mut Option<SendRight>,
     reply_port: &IPCPort,
     include_rights: &mut [Option<SendRight>; 4],
-) -> Result<SendOnceRight, (Error, u64)> {
+) -> Result<RecieveOnceRight, (Error, u64)> {
     let result = send_message_right_internal(msg, right, Some((reply_port, false)), include_rights)?;
-    assert_matches!(result, RightResult::Once(_));
-    if let RightResult::Once(r) = result {
+    assert_matches!(result, RecieveRightResult::Once(_));
+    if let RecieveRightResult::Once(r) = result {
         Ok(r)
     } else {
         unreachable!()
@@ -473,7 +490,9 @@ pub struct SendManyRight(Right);
 pub struct SendOnceRight(Right);
 pub struct MemoryObjectRight(Right);
 pub struct UnknownRight(Right);
+#[derive(Debug)]
 pub struct RecieveOnceRight(Right, Port);
+#[derive(Debug)]
 pub struct RecieveManyRight(Right, Port);
 // TODO: Destructor for this
 
@@ -492,6 +511,12 @@ impl Drop for RecieveManyRight {
 }
 
 impl RecieveOnceRight {
+    pub fn get_id(&self) -> Right {
+        self.0
+    }
+}
+
+impl RecieveManyRight {
     pub fn get_id(&self) -> Right {
         self.0
     }
@@ -539,6 +564,12 @@ impl From<SendManyRight> for SendRight {
 impl From<SendOnceRight> for SendRight {
     fn from(right: SendOnceRight) -> SendRight {
         SendRight::Once(right)
+    }
+}
+
+impl From<MemoryObjectRight> for SendRight {
+    fn from(right: MemoryObjectRight) -> Self {
+        Self::Object(right)
     }
 }
 
