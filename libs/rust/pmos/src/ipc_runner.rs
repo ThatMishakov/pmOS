@@ -6,28 +6,27 @@ use std::{
     rc::Weak,
     cell::RefCell,
     mem,
-    task::Waker,
-    collections::HashMap,
+    collections::BTreeMap,
     collections::VecDeque,
 };
 
 use super::error::Error;
 
 use super::ipc::{
-    Port,
     RecieveOnceRight,
     RecieveManyRight,
-    SendOnceRight,
-    SendManyRight,
     SendRight,
     Right,
     IPCPort
 };
 
+use std::task::{RawWaker, RawWakerVTable, Waker};
+
 use futures::Stream;
 
 struct Task {
     future: Pin<Box<dyn Future<Output = ()>>>,
+    enqueued: bool,
 }
 
 impl Task {
@@ -148,12 +147,13 @@ struct RightEndpointState {
 }
 
 type TaskId = u64;
+type TaskRef = Rc<RefCell<Task>>;
 
-struct ExecutorState {
+pub(crate) struct ExecutorState {
     runnable: VecDeque<TaskId>,
-    tasks: HashMap<TaskId, Task>,
+    tasks: BTreeMap<TaskId, TaskRef>,
 
-    rights: HashMap<Right, Rc<RefCell<RightEndpointState>>>,
+    rights: BTreeMap<Right, Rc<RefCell<RightEndpointState>>>,
 
     port: IPCPort,
 
@@ -211,7 +211,6 @@ impl ExecutorState {
             return;
         }
 
-
         let msg = self.port.pop_front_blocking();
         
         if let Some(endpoint_rc) = self.rights.get(&msg.sent_with_right).cloned() {
@@ -227,18 +226,18 @@ impl ExecutorState {
         }
     }
 
-    fn poll_task(&mut self, task_id: TaskId) {
-        let waker = self.create_waker(task_id);
-        let mut cx = Context::from_waker(&waker);
-
-        let done = self.tasks.get_mut(&task_id).unwrap().future.as_mut().poll(&mut cx).is_ready();
-        if done {
-            self.tasks.remove(&task_id);
-        }
-    }
-
     pub(crate) fn get_port(&self) -> &IPCPort {
         &self.port
+    }
+
+    fn enqueue(&mut self, task_id: TaskId) {
+        if let Some(task_rc) = self.tasks.get(&task_id) {
+            let mut task = task_rc.borrow_mut();
+            if !task.enqueued {
+                task.enqueued = true;
+                self.runnable.push_back(task_id);
+            }
+        }
     }
 }
 
@@ -253,8 +252,8 @@ impl Executor {
         Self {
             state: Rc::new(RefCell::new(ExecutorState {
                 runnable: VecDeque::new(),
-                tasks: HashMap::new(),
-                rights: HashMap::new(),
+                tasks: BTreeMap::new(),
+                rights: BTreeMap::new(),
                 port,
                 next_task_id: 0,
                 message: None,
@@ -262,14 +261,14 @@ impl Executor {
         }
     }
 
-    fn run(&self) {
+    pub fn run(&mut self) {
         loop {
             let task_id = {
                 self.state.borrow_mut().runnable.pop_front()
             };
 
-            while let Some(task_id) = task_id {
-                self.state.borrow_mut().poll_task(task_id);
+            if let Some(task_id) = task_id {
+                self.poll_task(task_id);
                 continue;
             }
 
@@ -277,7 +276,7 @@ impl Executor {
         }
     }
 
-    fn spawn<F> (&self, future: F) -> TaskId
+    pub fn spawn<F> (&self, future: F) -> TaskId
     where
         F: Future<Output = ()> + 'static,
     {
@@ -286,7 +285,14 @@ impl Executor {
         let task_id = state.next_task_id;
         state.next_task_id += 1;
 
-        state.tasks.insert(task_id, Task { future: Box::pin(future) });
+        state.tasks.insert(
+            task_id,
+            Rc::new(RefCell::new(Task {
+                future: Box::pin(future),
+                enqueued: false 
+            })),
+        );
+
         state.runnable.push_back(task_id);
         task_id
     }
@@ -297,7 +303,93 @@ impl Executor {
         right: &mut Option<SendRight>,
         include_rights: &mut [Option<SendRight>; 4],
     ) -> Result<OnceReciever, (Error, u64)> {
-        super::ipc::send_message_reply_once(msg, right, &self.state.borrow().port, include_rights)
-            .map(|right| OnceReciever::from_right(right, self.clone()))
+        let result = super::ipc::send_message_reply_once(msg, right, &self.state.borrow().port, include_rights);
+
+        result.map(|right| OnceReciever::from_right(right, self.clone()))
+    }
+
+    fn create_waker(&self, task_id: TaskId) -> Waker {
+        let waker = Rc::new(TaskWaker {
+            task_id,
+            executor: Rc::downgrade(&self.state),
+        });
+
+        unsafe {
+            Waker::from_raw(RawWaker::new(
+                Rc::into_raw(waker) as *const (),
+                &VTABLE,
+            ))
+        }
+    }
+
+    fn poll_task(&mut self, task_id: TaskId) {
+        let waker = self.create_waker(task_id);
+        let mut cx = Context::from_waker(&waker);
+
+        let task_rc = {
+            let state = self.state.borrow();
+            state.tasks.get(&task_id).cloned().expect("missing task")
+        };
+
+        let done = {
+            let mut task = task_rc.borrow_mut();
+            task.enqueued = false;
+            task.future.as_mut().poll(&mut cx).is_ready()
+        };
+
+        if done {
+            self.state.borrow_mut().tasks.remove(&task_id);
+        }
     }
 }
+
+struct TaskWaker {
+    task_id: TaskId,
+    executor: Weak<RefCell<ExecutorState>>,
+}
+
+impl TaskWaker {
+    fn wake_task(&self) {
+        if let Some(exec) = self.executor.upgrade() {
+            let mut exec = exec.borrow_mut();
+            exec.enqueue(self.task_id);
+        }
+    }
+}
+
+unsafe fn clone(data: *const ()) -> RawWaker {
+    let rc = Rc::<TaskWaker>::from_raw(data as *const TaskWaker);
+
+    let cloned = rc.clone();
+
+    // don't drop original
+    let _ = Rc::into_raw(rc);
+
+    RawWaker::new(
+        Rc::into_raw(cloned) as *const (),
+        &VTABLE,
+    )
+}
+
+unsafe fn wake(data: *const ()) {
+    let rc = Rc::<TaskWaker>::from_raw(data as *const TaskWaker);
+
+    rc.wake_task();
+    // rc is dropped here
+}
+
+unsafe fn wake_by_ref(data: *const ()) {
+    let rc = Rc::<TaskWaker>::from_raw(data as *const TaskWaker);
+
+    rc.wake_task();
+
+    // don't drop it
+    let _ = Rc::into_raw(rc);
+}
+
+unsafe fn drop(data: *const ()) {
+    let _ = Rc::<TaskWaker>::from_raw(data as *const TaskWaker);
+}
+
+static VTABLE: RawWakerVTable =
+    RawWakerVTable::new(clone, wake, wake_by_ref, drop);

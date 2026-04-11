@@ -24,11 +24,18 @@ pub struct IPCBusRequestObject<'a> {
     pub filter_data: &'a [u8],
 }
 
-pub const IPC_BANE_RIGHT_NUM: u32 = 0x1c0;
+pub const IPC_NAME_RIGHT_NUM: u32 = 0x1c0;
 #[derive(Debug)]
 pub struct IPCNameRight<'a> {
     pub flags: u32,
     pub name: &'a str,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+struct IPCNameRightHdr {
+    msg_type: u32,
+    flags: u32,
 }
 
 pub const IPC_NAME_RIGHT_REPLY_NUM: u32 = 0x1d0;
@@ -105,6 +112,20 @@ impl Serializable for IPCBusRequestObjectReply<'_> {
         let mut out = Vec::with_capacity(core::mem::size_of::<IPCBusRequestObjectReplyHdr>() + object_data.len());
         push_pod(& mut out, &hdr);
         out.extend_from_slice(&object_data);
+        Cow::<[u8]>::from(out)
+    }
+}
+
+impl Serializable for IPCNameRight<'_> {
+    fn serialize(&self) -> Cow<'_, [u8]> {
+        let hdr = IPCNameRightHdr {
+            msg_type: IPC_NAME_RIGHT_NUM,
+            flags: 0,
+        };
+
+        let mut out = Vec::with_capacity(core::mem::size_of::<IPCNameRightHdr>() + self.name.len());
+        push_pod(&mut out, &hdr);
+        out.extend_from_slice(self.name.as_bytes());
         Cow::<[u8]>::from(out)
     }
 }

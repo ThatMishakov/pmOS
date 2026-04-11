@@ -6,3 +6,4 @@ edition = "2021"
 [dependencies]
 pmos = { path = "/sysroot/usr/src/rust/pmos-rust-lib/rust/pmos" }
 libc = { git = "https://gitlab.com/mishakov/libc-pmos.git", branch = "pmos-0.2.178" }
+futures = "0.3.32"

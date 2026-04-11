@@ -16,6 +16,8 @@ use std::collections::BTreeSet;
 use std::ops::Bound;
 use std::rc::Rc;
 
+use pmos::ipc_runner::Executor;
+
 struct ObjectInfo {
     sequence_id: u64,
     properties: pmbus::ObjectProperties,

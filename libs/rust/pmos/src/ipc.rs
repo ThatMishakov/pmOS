@@ -543,6 +543,10 @@ impl SendManyRight {
     }
 }
 
+pub fn get_right0() -> SendManyRight {
+    SendManyRight::new(0)
+}
+
 impl Drop for MemoryObjectRight {
     fn drop(&mut self) {
         unsafe { _ = delete_right(self.0) }

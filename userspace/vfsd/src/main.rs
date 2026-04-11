@@ -1,33 +1,27 @@
 #![feature(new_range_api)]
 
 use pmos::error;
-use pmos::ipc;
-use pmos::ipc::IPCPort;
-use pmos::ipc::SendManyRight;
-use pmos::ipc::SendRight;
-use pmos::ipc_msgs;
-use pmos::ipc_msgs::Message;
-use pmos::pmbus;
-use pmos::pmbus::AnyFilter;
-use pmos::task_group;
+
+use pmos::ipc_runner::Executor;
 use pmos::async_helpers;
-use pmos::ipc_runner;
-use std::cell::RefCell;
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
-use std::ops::Bound;
-use std::rc::Rc;
+use futures::StreamExt;
 
 async fn handle_ipc(executor: Executor) {
-    let stream = create_named_stream(executor, "/pmos/vfsd");
+    let mut stream = async_helpers::create_named_stream(executor, "/pmos/vfsd")
+        .await
+        .unwrap();
+
+    println!("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! Registered /pmos/vfsd...\n");
+
     while let Some(message) = stream.next().await {
-        println!("Got message {message}")
+        println!("Got message in vfsd!")
     }
 }
 
 fn main() {
     println!("Hello from vfsd!");
 
-    let executor = Executor::new();
-
+    let mut executor = Executor::new();
+    executor.spawn(handle_ipc(executor.clone()));
+    executor.run();
 }
