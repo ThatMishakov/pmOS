@@ -227,13 +227,13 @@ typedef struct IPC_Kernel_Interrupt {
 
 typedef uint64_t pmos_port_t;
 
-#define IPC_Kernel_Named_Port_Notification_NUM 0x21
-typedef struct IPC_Kernel_Named_Port_Notification {
+#define IPC_Named_Right_Notification_NUM 0x21
+typedef struct IPC_Named_Right_Notification {
     uint32_t type;
     int32_t result;
     char port_name[0];
-} IPC_Kernel_Named_Port_Notification;
-#define NAMED_PORT_NOTIFICATION_STR_LEN(len) ((len) - sizeof(IPC_Kernel_Named_Port_Notification));
+} IPC_Named_Right_Notification;
+#define NAMED_RIGHT_NOTIFICATION_STR_LEN(len) ((len) - sizeof(IPC_Named_Right_Notification));
 
 #define IPC_Kernel_Request_Page_NUM 0x23
 /// Page request for Memory Object
@@ -1493,43 +1493,34 @@ typedef struct IPC_BUS_Request_Object_Reply {
     ///struct IPC_Bus_Object object;
 } IPC_BUS_Request_Object_Reply;
 
-#define IPC_Name_Port_NUM 0x1c0
-typedef struct IPC_Name_Port {
-    /// Message type (IPC_Name_Port_NUM)
+#define IPC_Name_Right_NUM 0x1c0
+typedef struct IPC_Name_Right {
+    /// Message type (IPC_Name_Right_NUM)
     uint32_t type;
 
     // Flags
     uint32_t flags;
 
-    /// Port
-    uint64_t port;
-
-    /// Reply port
-    uint64_t reply_port;
-
     /// Port name. The length is deduced from the message size
     char name[0];
-} IPC_Name_Port;
+} IPC_Name_Right;
 
-#define IPC_Get_Named_Port_NUM 0x1c1
-typedef struct IPC_Get_Named_Port {
-    /// Message type (IPC_Name_Port_NUM)
+#define IPC_Get_Named_Right_NUM 0x1c1
+typedef struct IPC_Get_Named_Right {
+    /// Message type (IPC_Name_Right_NUM)
     uint32_t type;
 
     // Flags
     uint32_t flags;
-
-    /// Reply port
-    uint64_t reply_port;
-
+    
     /// Port name. The length is deduced from the message size
     char name[0];
-} IPC_Get_Named_Port;
+} IPC_Get_Named_Right;
 
 
-#define IPC_Name_Port_Reply_NUM 0x1d0
-typedef struct IPC_Name_Port_Reply {
-    /// Message type (IPC_Name_Port_Reply_NUM)
+#define IPC_Name_Right_Reply_NUM 0x1d0
+typedef struct IPC_Name_Right_Reply {
+    /// Message type (IPC_Name_Right_Reply_NUM)
     uint32_t type;
 
     /// Flags
@@ -1537,7 +1528,7 @@ typedef struct IPC_Name_Port_Reply {
 
     /// Result
     int32_t result;
-} IPC_Name_Port_Reply;
+} IPC_Name_Right_Reply;
 
 #if defined(__cplusplus)
 } /* extern "C" */

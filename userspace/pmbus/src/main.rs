@@ -298,6 +298,9 @@ fn main() {
                 let id = msg.get_known_id();
                 println!("pmbus: Unknown message {:?}", id);
             }
+            other => {
+                println!("pmbus: Unknown message {:?}", other);
+            }
         }
     }
 }

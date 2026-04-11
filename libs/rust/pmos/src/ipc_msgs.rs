@@ -1,5 +1,6 @@
 use bytemuck::{Pod, Zeroable};
 use std::borrow::Cow;
+use bytemuck::checked::try_from_bytes;
 
 use crate::pmbus::{ObjectProperties, pmbus_object_serialize};
 
@@ -21,6 +22,22 @@ pub struct IPCBusRequestObject<'a> {
     pub flags: u32,
     pub start_sequence_number: u64,
     pub filter_data: &'a [u8],
+}
+
+pub const IPC_BANE_RIGHT_NUM: u32 = 0x1c0;
+#[derive(Debug)]
+pub struct IPCNameRight<'a> {
+    pub flags: u32,
+    pub name: &'a str,
+}
+
+pub const IPC_NAME_RIGHT_REPLY_NUM: u32 = 0x1d0;
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Zeroable, Pod)]
+pub struct IPCNameRightReply {
+    msg_type: u32,
+    pub flags: u32,
+    pub result: i32,
 }
 
 pub const IPC_BUS_PUBLISH_OBJECT_REPLY_NUM: u32 = 0x1b0;
@@ -74,7 +91,7 @@ fn push_pod<T: Pod>(out: &mut Vec<u8>, v: &T) {
 }
 
 impl Serializable for IPCBusRequestObjectReply<'_> {
-    fn serialize(&self) -> Cow<[u8]> {
+    fn serialize(&self) -> Cow<'_, [u8]> {
         let hdr = IPCBusRequestObjectReplyHdr {
             msg_type: IPC_BUS_REQUEST_OBJECT_REPLY_NUM,
             flags: self.flags,
@@ -104,14 +121,16 @@ impl IPCBusRequestObjectReply<'_> {
     }
 }
 
+#[derive(Debug)]
 pub enum Message<'a> {
     IPCBusPublishObject(IPCBusPublishObject<'a>),
     IPCBusRequestObject(IPCBusRequestObject<'a>),
+    IPCNameRightReply(IPCNameRightReply),
     Unknown,
 }
 
 impl super::ipc::Message {
-    pub fn deserialize(&self) -> Message {
+    pub fn deserialize(&self) -> Message<'_> {
         if let Some(i) = self.get_known_id() {
             let data = &self.data;
             match i {
@@ -136,6 +155,8 @@ impl super::ipc::Message {
                         filter_data: &data[16..],
                     })
                 }
+                IPC_NAME_RIGHT_REPLY_NUM =>
+                    try_from_bytes::<IPCNameRightReply>(data).map(|data| Message::IPCNameRightReply(data.clone())).unwrap_or(Message::Unknown),
                 _ => Message::Unknown,
             }
         } else {
@@ -145,11 +166,11 @@ impl super::ipc::Message {
 }
 
 pub trait Serializable {
-    fn serialize(&self) -> Cow<[u8]>;
+    fn serialize(&self) -> Cow<'_, [u8]>;
 }
 
 impl<T: Pod> Serializable for T {
-    fn serialize(&self) -> Cow<[u8]> {
+    fn serialize(&self) -> Cow<'_, [u8]> {
         Cow::Borrowed(bytemuck::bytes_of(self))
     }
 }

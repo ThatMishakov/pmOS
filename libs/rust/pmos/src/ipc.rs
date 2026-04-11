@@ -3,6 +3,7 @@ use super::mem_object::MemoryObject;
 use super::system::ResultT;
 use core::ffi::c_uint;
 use std::{cmp::Ordering, mem, ptr};
+use std::assert_matches;
 
 pub struct IPCPort {
     port: Port,
@@ -183,28 +184,20 @@ impl IPCPort {
         }
     }
 
-    pub fn create_right_sendonce(&self) -> Option<(SendOnceRight, RecieveOnceRight)> {
+    pub fn create_right_sendonce(&self) -> Result<(SendOnceRight, RecieveOnceRight), Error> {
         let mut recieve_id: Right = 0;
         let RightRequestResult { result, right } =
             unsafe { create_right(self.port, &raw mut recieve_id, CREATE_RIGHT_SEND_ONCE) };
 
-        if result.success() {
-            Some((SendOnceRight(right), RecieveOnceRight(recieve_id, self.port)))
-        } else {
-            None
-        }
+        result.result().map(|()| (SendOnceRight(right), RecieveOnceRight(recieve_id, self.port)))
     }
 
-    pub fn create_right_sendmany(&self) -> Option<(SendManyRight, RecieveManyRight)> {
+    pub fn create_right_sendmany(&self) -> Result<(SendManyRight, RecieveManyRight), Error> {
         let mut recieve_id: Right = 0;
         let RightRequestResult { result, right } =
             unsafe { create_right(self.port, &raw mut recieve_id, 0) };
 
-        if result.success() {
-            Some((SendManyRight(right), RecieveManyRight(recieve_id, self.port)))
-        } else {
-            None
-        }
+        result.result().map(|()| (SendManyRight(right), RecieveManyRight(recieve_id, self.port)))
     }
 }
 
@@ -258,6 +251,7 @@ pub fn send_message(
 const SEND_MESSAGE_DELETE_RIGHT: u32 = 1 << 8;
 const REPLY_CREATE_SEND_MANY: u32 = 1 << 1;
 
+#[derive(Debug)]
 enum RightResult {
     Once(SendOnceRight),
     Many(SendManyRight),
@@ -414,6 +408,21 @@ impl Message {
     }
 }
 
+pub fn send_message_reply_once(
+    msg: &impl super::ipc_msgs::Serializable,
+    right: &mut Option<SendRight>,
+    reply_port: &IPCPort,
+    include_rights: &mut [Option<SendRight>; 4],
+) -> Result<SendOnceRight, (Error, u64)> {
+    let result = send_message_right_internal(msg, right, Some((reply_port, false)), include_rights)?;
+    assert_matches!(result, RightResult::Once(_));
+    if let RightResult::Once(r) = result {
+        Ok(r)
+    } else {
+        unreachable!()
+    }
+}
+
 pub enum SendRight {
     Once(SendOnceRight),
     Many(SendManyRight),
@@ -458,7 +467,9 @@ impl PartialEq for SendRight {
 
 impl Eq for SendRight {}
 
+#[derive(Debug)]
 pub struct SendManyRight(Right);
+#[derive(Debug)]
 pub struct SendOnceRight(Right);
 pub struct MemoryObjectRight(Right);
 pub struct UnknownRight(Right);
@@ -477,6 +488,12 @@ impl Drop for RecieveManyRight {
     fn drop(&mut self) {
         let RecieveManyRight(right, port) = *self;
         _ = unsafe { delete_receive_right(right, port)}
+    }
+}
+
+impl RecieveOnceRight {
+    pub fn get_id(&self) -> Right {
+        self.0
     }
 }
 

@@ -65,6 +65,46 @@ impl Future for OnceReciever {
     }
 }
 
+impl OnceReciever {
+    pub(crate) fn from_right(right: RecieveOnceRight, executor: Executor) -> Self {
+        let id = right.get_id();
+        let state = Rc::new(RefCell::new(IpcEndpointState {
+            right: RightStorage::Once(right),
+            message: None,
+            waker: None,
+        }));
+
+        executor.borrow_mut().rights.insert(id, state);
+
+        mem::forget(right);
+
+        Self {
+            state,
+            executor.state,
+        }        
+    }
+}
+
+impl ManyReciever {
+    pub(crate) fn from_right(right: RecieveManyRight, executor: Executor) -> Self {
+        let id = right.get_id();
+        let state = Rc::new(RefCell::new(IpcEndpointState {
+            right: RightStorage::Once(right),
+            message: None,
+            waker: None,
+        }));
+
+        executor.borrow_mut().rights.insert(id, state);
+
+        mem::forget(right);
+
+        Self {
+            state,
+            executor.state,
+        }        
+    }
+}
+
 enum RightStorage {
     None,
     Once(SendOnceRight),
@@ -158,6 +198,7 @@ impl ExecutorState {
     }
 }
 
+#[derive(Clone)]
 pub struct Executor {
     state: Rc<RefCell<ExecutorState>>,
 }
@@ -200,5 +241,22 @@ impl Executor {
         state.tasks.insert(task_id, Task { future: Box::pin(future) });
         state.runnable.push_back(task_id);
         task_id
+    }
+
+    pub fn send_message_reply_once(
+        &self,
+        msg: &impl super::ipc_msgs::Serializable,
+        right: &mut Option<SendRight>,
+        include_rights: &mut [Option<SendRight>; 4],
+    ) -> Result<OnceReciever, (Error, u64)> {
+        let mut state = self.state.borrow_mut();
+
+        let &port = self.state.borrow().port;
+        let right = super::ipc::send_message_reply_once(msg, right, port, include_rights)?;
+        Ok(OnceReciever::from_right(right, self.clone()))
+    }
+
+    pub(crate) fn get_port(&self) -> &IPCPort {
+        self.state.borrow().port
     }
 }

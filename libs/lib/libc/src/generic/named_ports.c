@@ -19,8 +19,8 @@ result_t name_right(pmos_right_t right, const char *name, size_t length, uint32_
         return -ENOMEM;
     }
 
-    IPC_Name_Port *n = alloca(sizeof(*n) + length);
-    n->type          = IPC_Name_Port_NUM;
+    IPC_Name_Right *n = alloca(sizeof(*n) + length);
+    n->type          = IPC_Name_Right_NUM;
     n->flags         = flags;
     memcpy(n->name, name, length);
 
@@ -42,17 +42,17 @@ result_t name_right(pmos_right_t right, const char *name, size_t length, uint32_
         goto out;
     }
 
-    if (reply_descr.size < sizeof(IPC_Name_Port_Reply)) {
+    if (reply_descr.size < sizeof(IPC_Name_Right_Reply)) {
         result = -EIO;
         goto out;
     }
 
-    if (reply_msg->type != IPC_Name_Port_Reply_NUM) {
+    if (reply_msg->type != IPC_Name_Right_Reply_NUM) {
         result = -EIO;
         goto out;
     }
 
-    IPC_Name_Port_Reply *reply = (IPC_Name_Port_Reply *)reply_msg;
+    IPC_Name_Right_Reply *reply = (IPC_Name_Right_Reply *)reply_msg;
 
     result = reply->result;
 out:
@@ -62,10 +62,10 @@ out:
 
 right_request_t request_named_port(const char *name, size_t length, pmos_port_t reply_port, unsigned flags)
 {
-    size_t size = sizeof(IPC_Get_Named_Port) + length;
+    size_t size = sizeof(IPC_Get_Named_Right) + length;
 
-    IPC_Get_Named_Port *n = alloca(size);
-    n->type               = IPC_Get_Named_Port_NUM;
+    IPC_Get_Named_Right *n = alloca(size);
+    n->type               = IPC_Get_Named_Right_NUM;
     n->flags              = flags;
     memcpy(n->name, name, length);
 
@@ -101,7 +101,7 @@ right_request_t get_right_by_name(const char *name, size_t length, uint32_t flag
         };
     }
 
-    if (reply_descr.size < sizeof(IPC_Kernel_Named_Port_Notification)) {
+    if (reply_descr.size < sizeof(IPC_Named_Right_Notification)) {
         free(reply_msg);
         return (right_request_t) {
             .result = -EIO,
@@ -109,7 +109,7 @@ right_request_t get_right_by_name(const char *name, size_t length, uint32_t flag
         };
     }
 
-    if (((IPC_Generic_Msg *)reply_msg)->type != IPC_Kernel_Named_Port_Notification_NUM) {
+    if (((IPC_Generic_Msg *)reply_msg)->type != IPC_Named_Right_Notification_NUM) {
         free(reply_msg);
         return (right_request_t) {
             .result = -EIO,
@@ -117,7 +117,7 @@ right_request_t get_right_by_name(const char *name, size_t length, uint32_t flag
         };
     }
 
-    IPC_Kernel_Named_Port_Notification *reply = reply_msg;
+    IPC_Named_Right_Notification *reply = reply_msg;
 
     right_request_t rresult = {
         .result = reply->result,

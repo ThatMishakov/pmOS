@@ -156,8 +156,8 @@ void request_logger_port()
 
 void react_named_port_notification(char *msg_buff, size_t size, pmos::Right r)
 {
-    IPC_Kernel_Named_Port_Notification *msg = (IPC_Kernel_Named_Port_Notification *)msg_buff;
-    if (size < sizeof(IPC_Kernel_Named_Port_Notification))
+    IPC_Named_Right_Notification *msg = (IPC_Named_Right_Notification *)msg_buff;
+    if (size < sizeof(IPC_Named_Right_Notification))
         return;
     
     log_right = std::move(r);
@@ -201,7 +201,7 @@ int main() {
         case IPC_Write_Plain_NUM:
             write_screen({str->data, static_cast<size_t>(msg.size - offsetof(IPC_Write_Plain, data))});
             break;
-        case IPC_Kernel_Named_Port_Notification_NUM:
+        case IPC_Named_Right_Notification_NUM:
             react_named_port_notification((char *)buffer.data(), msg.size, std::move(rights[0]));
             break;
         case IPC_Log_Output_Reply_NUM:
