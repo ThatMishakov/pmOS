@@ -8,6 +8,8 @@
 #include <stdint.h>
 #include <vector>
 #include <pmos/helpers.hh>
+#include <memory>
+#include <set>
 
 struct CommandListEntry;
 
@@ -98,6 +100,11 @@ struct TimerWaiter {
 
 struct WaitCommandCompletion;
 
+struct RRWrapper {
+    pmos::RecieveRight right;
+    bool canceled = false;
+};
+
 struct AHCIPort: TimerWaiter {
     int index;
 
@@ -169,7 +176,8 @@ struct AHCIPort: TimerWaiter {
     DeviceType classify_device();
 
     pmos::Right port_right;
-    pmos::RecieveRight port_recieve_right;
+    std::shared_ptr<RRWrapper> port_recieve_right;
+    std::set<std::shared_ptr<RRWrapper>> port_recieve_rights;
 };
 
 extern int num_slots;

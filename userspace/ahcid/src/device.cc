@@ -60,7 +60,8 @@ pmos::async::detached_task handle_device(AHCIPort &parent)
     }
 
     parent.port_right = std::move(e->first);
-    parent.port_recieve_right = std::move(e->second);
+    parent.port_recieve_right = std::make_shared<RRWrapper>(RRWrapper{std::move(e->second), false});
+    parent.port_recieve_rights.insert(parent.port_recieve_right);
 
     auto disk = co_await publish_disk(parent, sector_count, logical_sector_size, physical_sector_size);
     

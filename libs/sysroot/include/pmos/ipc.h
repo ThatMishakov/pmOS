@@ -1027,6 +1027,21 @@ typedef struct IPC_Disk_Read {
     uint64_t sector_count;
 } IPC_Disk_Read;
 
+#define IPC_Disk_Create_Right_NUM 0xF3
+typedef struct IPC_Disk_Create_Right {
+    /// Message type (must be IPC_Disk_Create_Right_NUM)
+    uint32_t type;
+
+    /// Flags
+    uint32_t flags;
+
+    /// Starting sector
+    uint64_t start_sector;
+
+    /// Number of sectors to allow with the right
+    uint64_t sector_count;
+} IPC_Disk_Create_Right;
+
 #define IPC_Disk_Write_NUM  0xF3
 #define IPC_Disk_Notify_NUM 0xF4
 
@@ -1086,6 +1101,18 @@ typedef struct IPC_Disk_Read_Reply {
     /// Result code indicating the outcome of the read operation
     int16_t result_code;
 } IPC_Disk_Read_Reply;
+
+#define IPC_Disk_Create_Right_Reply_NUM 0xF3
+typedef struct IPC_Disk_Create_Right_Reply {
+    /// Message type (must be IPC_Disk_Create_Right_Reply_NUM)
+    uint32_t type;
+
+    /// Flags
+    uint16_t flags;
+
+    /// Result code of creating the right...
+    int16_t result_code;
+} IPC_Disk_Create_Right_Reply;
 
 #define IPC_Thread_Finished_NUM 0x100
 /// @brief Message sent by the thread to the one calling pthread_join() when notifing that it has

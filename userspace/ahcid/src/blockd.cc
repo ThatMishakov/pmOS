@@ -31,7 +31,7 @@ pmos::async::task<uint64_t> publish_disk(AHCIPort &port, uint64_t sector_count,
     object.set_property("logical_sector_size", logical_sector_size);
     object.set_property("physical_sector_size", physical_sector_size);
 
-    handle_ipc(port, sector_count, logical_sector_size, physical_sector_size);
+    handle_ipc(port, port.port_recieve_right, sector_count, logical_sector_size, physical_sector_size, 0, sector_count);
 
     printf("Publishing disk...\n");
 

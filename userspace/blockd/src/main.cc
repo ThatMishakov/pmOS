@@ -71,6 +71,7 @@ struct Disk {
     struct Partition {
         uint64_t start_lba;
         uint64_t end_lba;
+        pmos::Right partition_right;
     };
 
     std::vector<Partition> partitions;
@@ -131,6 +132,56 @@ pmos::async::task<pmos::Right> read_disk(Disk &disk, uint64_t sector_start, uint
         throw std::system_error(EINTR, std::system_category());
 
     co_return std::move(msg->other_rights[0]);
+}
+
+pmos::async::task<std::optional<pmos::Right>> get_partition_right(Disk &disk, const Disk::Partition &partition)
+{
+    try {
+        IPC_Disk_Create_Right r = {
+            .type = IPC_Disk_Create_Right_NUM,
+            .flags = 0,
+            .start_sector = partition.start_lba,
+            .sector_count = partition.end_lba - partition.start_lba + 1,
+        };
+
+        auto result = send_message_right_one(disk.disk_right, r, std::pair{&dispatcher.get_port(), RightType::SendOnce}, false);
+        if (!result)
+            co_return std::nullopt;
+
+        auto msg = co_await dispatcher.get_message(result.value());
+
+        if (msg.value().descriptor.size < sizeof(IPC_Disk_Create_Right_Reply))
+            co_return std::nullopt;
+
+        auto *reply = reinterpret_cast<IPC_Disk_Create_Right_Reply *>(msg->data.data());
+        if (reply->type != IPC_Disk_Create_Right_Reply_NUM)
+            co_return std::nullopt;
+
+        if (reply->result_code != 0)
+            co_return std::nullopt;
+
+        if (!msg->other_rights[0] || msg->other_rights[0].type() != RightType::SendMany)
+            co_return std::nullopt;
+
+        co_return std::move(msg->other_rights[0]);
+    } catch (...) {
+        co_return std::nullopt;
+    }
+}
+
+pmos::async::task<void> create_partition_rights(size_t disk_idx)
+{
+    auto &disk  = disks[disk_idx];
+
+    for (auto &partition: disk.partitions) {
+        auto right = co_await get_partition_right(disk, partition);
+        if (right) {
+            partition.partition_right = std::move(right.value());
+            printf("Got right for a partition...\n");
+        } else {
+            printf("Failed to get right for a partition!\n");
+        }
+    }
 }
 
 pmos::async::detached_task probe_partitions(size_t disk_idx)
@@ -251,7 +302,7 @@ pmos::async::detached_task probe_partitions(size_t disk_idx)
             std::string guid = guid_to_string(entry->type_guid);
             printf("GPT partition: type %s, start %" PRIu64 ", end %" PRIu64 " offset %" PRIu64 "\n", guid.c_str(),
                    entry->first_lba, entry->last_lba, offset/gpt_entry_size);
-            partitions.push_back({entry->first_lba, entry->last_lba});
+            partitions.push_back({entry->first_lba, entry->last_lba, {}});
         }
         disk.partitions = std::move(partitions);
     } else {
@@ -265,10 +316,12 @@ pmos::async::detached_task probe_partitions(size_t disk_idx)
             printf("Partition %i: type %x, start %" PRIu32 ", size %" PRIu32 "\n", i, part.type,
                    part.lba_start, part.num_sectors);
 
-            partitions.push_back({part.lba_start, part.lba_start + part.num_sectors});
+            partitions.push_back({part.lba_start, part.lba_start + part.num_sectors, {}});
         }
         disk.partitions = std::move(partitions);
     }
+
+    co_await create_partition_rights(disk_idx);
 }
 
 pmos::async::task<void> populate_disk_info(Disk &disk, const BUSObject &object)
