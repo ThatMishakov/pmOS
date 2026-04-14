@@ -162,6 +162,7 @@ void init_modules()
     }
 
     match_services();
+    publish_services();
 }
 
 uint64_t rsdp_desc = 0;

@@ -196,7 +196,6 @@ error:
     return NULL;
 }
 
-
 void *construct_filter(struct Service *service)
 {
     pmos_bus_filter_disjunction *d = pmos_bus_filter_disjunction_create();
@@ -467,7 +466,6 @@ struct Service *services = NULL;
 
 void push_services(struct Service *s)
 {
-    // Leak that memory!
     while (s) {
         struct Service *ss = s->next;
         s->next = services;
@@ -532,4 +530,38 @@ void match_services()
         module->service = s;
         s->module = module;
     }
+}
+
+pmos_bus_object_t *construct_pmbus_object(struct Service *service)
+{
+    const char *name = service->name;
+    if (!name)
+        name = "UNKNOWN";
+    
+    ssize_t name_size = snprintf(NULL, 0, "bootstrapd_service_%s", name);
+    char name_buf[name_size + 1];
+    sprintf(name_buf, "bootstrapd_service_%s", name);
+
+    pmos_bus_object_t *object = pmos_bus_object_create();
+    if (!object) {
+        print_str("Loader: Failed to create pmbus object...\n");
+        goto error;
+    }
+
+    if (!pmos_bus_object_set_name(object, name_buf)) {
+        print_str("Failed to set object name\n");
+        goto error;
+    }
+
+    if (!pmos_bus_object_set_property_string(object, "type", "service")) {
+        print_str("Failed to set object type\n");
+        goto error;
+    }
+
+    // TODO: Capabilities...
+
+    return object;
+error:
+    pmos_bus_object_free(object);
+    return NULL;
 }

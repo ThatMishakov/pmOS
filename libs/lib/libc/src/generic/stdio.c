@@ -277,11 +277,17 @@ struct string_descriptor {
 static ssize_t write_string(void *arg, const char *str, size_t size)
 {
     struct string_descriptor *stream = (struct string_descriptor *)arg;
-    size_t max_size                  = stream->size - stream->pos;
-    size_t size_s                    = size > max_size ? max_size : size;
-    memcpy(&stream->buffer[stream->pos], str, size_s);
-    stream->pos += size_s;
-    return size_s;
+
+    if (stream->pos < stream->size) {
+        size_t max_size = stream->size - stream->pos;
+        size_t size_s   = size > max_size ? max_size : size;
+
+        memcpy(&stream->buffer[stream->pos], str, size_s);
+    }
+
+    stream->pos += size;
+
+    return size;
 }
 
 static int int_to_string(long int n, uint8_t base, char *str, int flags, int width)
@@ -997,12 +1003,12 @@ int snprintf(char *str, size_t size, const char *format, ...)
 
     va_end(arg);
 
-    if (size == 1)
-        str[0] = '\0';
-    else if (ret >= (ssize_t)size)
-        str[size - 1] = '\0';
-    else
-        str[ret] = '\0';
+    if (size > 0) {
+        if (ret >= (ssize_t)size)
+            str[size - 1] = '\0';
+        else
+            str[ret] = '\0';
+    }
 
     return ret;
 }
@@ -1078,14 +1084,20 @@ int printf(const char *format, ...)
 
 int vsnprintf(char *str, size_t size, const char *format, va_list ap)
 {
-    if (size < 1)
-        return 0;
+    size_t out_size = 0;
+    if (size > 1)
+        out_size = size;
 
-    struct string_descriptor desc = {str, size-1, 0, 0};
+    struct string_descriptor desc = {str, out_size, 0, 0};
 
     int ret = __va_printf_closure(write_string, &desc, ap, format);
 
-    str[desc.pos] = '\0';
+    if (size > 0) {
+        if (ret >= (ssize_t)size)
+            str[size - 1] = '\0';
+        else
+            str[ret] = '\0';
+    }
 
     return ret;
 }

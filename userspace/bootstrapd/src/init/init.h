@@ -1,5 +1,6 @@
 #pragma once
 #include <pmos/vector.h>
+#include <pmos/pmbus_helper.h>
 #include <stdint.h>
 
 enum State {
@@ -73,8 +74,13 @@ struct Service {
     bool start_on_boot;
 
     struct HookedService *hook;
+    struct PmbusPublishHook *publish_hook;
     struct Service *next;
     struct module_descriptor_list *module;
+
+    uint64_t service_right;
+    uint64_t service_recieve_right;
+    uint64_t pmbus_id;
 };
 
 struct Service *new_service();
@@ -83,8 +89,13 @@ void free_service(struct Service *service);
 void parse_service(const char *cmdline, const char *name, struct Service **out_service);
 void parse_services(struct module_descriptor_list *d);
 
+void publish_service(struct Service *);
+
 void match_services();
+void publish_services();
 
 void *construct_filter(struct Service *service);
+pmos_bus_object_t *construct_pmbus_object(struct Service *service);
+
 
 int start_service(struct Service *service, uint64_t object_id, uint64_t optional_right_id);
