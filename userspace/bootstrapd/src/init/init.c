@@ -46,6 +46,12 @@ void free_service(struct Service *service)
     }
     VECTOR_FREE(service->requirements);
 
+    struct Property p;
+    VECTOR_FOREACH(service->properties, p) {
+        release_property(&p);
+    }
+    VECTOR_FREE(service->properties);
+
     free_match_filters(service->match_filters);
 
     free(service);
@@ -532,11 +538,42 @@ void match_services()
     }
 }
 
+const char *run_type_str(struct Service *service)
+{
+    switch (service->run_type) {
+    case RUN_MANUAL:
+        return "manual";
+    case RUN_ALWAYS_ONCE:
+        return "always_once";
+    case RUN_FIRST_MATCH_ONCE:
+        return "fire_match_once";
+    case RUN_FOR_EACH_MATCH:
+        return "for_each_match";
+    case RUN_UNKNOWN:
+    default:
+        return "unknown";
+    }
+}
+
+static bool service_set_property(pmos_bus_object_t *object, struct Property *property)
+{
+    switch (property->type) {
+    case PROPERTY_LIST:
+        return pmos_bus_object_set_property_list(object, property->name, (const char **)property->list);
+    case PROPERTY_STRING:
+        return pmos_bus_object_set_property_string(object, property->name, property->string);
+    case PROPERTY_INTEGER:
+        return pmos_bus_object_set_property_integer(object, property->name, property->integer);
+    }
+}
+
 pmos_bus_object_t *construct_pmbus_object(struct Service *service)
 {
     const char *name = service->name;
     if (!name)
         name = "UNKNOWN";
+
+    const char *run_type = run_type_str(service);
     
     ssize_t name_size = snprintf(NULL, 0, "bootstrapd_service_%s", name);
     char name_buf[name_size + 1];
@@ -558,10 +595,45 @@ pmos_bus_object_t *construct_pmbus_object(struct Service *service)
         goto error;
     }
 
-    // TODO: Capabilities...
+    if (!pmos_bus_object_set_property_string(object, "run_type", run_type)) {
+        print_str("Failed to set service run type\n");
+        goto error;
+    }
+
+    struct Property *p;
+    VECTOR_FOREACH_PTR(service->properties, p) {
+        if (!service_set_property(object, p)) {
+            print_str("Failed to set service property\n");
+            goto error;
+        }
+    }
 
     return object;
 error:
     pmos_bus_object_free(object);
     return NULL;
+}
+
+void release_property(struct Property *property)
+{
+    switch (property->type) {
+    case PROPERTY_INTEGER:
+        // Do nothing
+        break;
+    case PROPERTY_STRING:
+        free(property->string);
+        break;
+    case PROPERTY_LIST: {
+        char **ptr = property->list;
+        while (ptr && *ptr) {
+            free(*ptr);
+            ++ptr;
+        }
+        free(property->list);
+    }
+        break;
+    }
+
+    property->type = PROPERTY_INTEGER;
+    property->integer = 0;
 }

@@ -1,5 +1,0 @@
-services:
-- name: ext4
-  path: /ext4.elf
-  description: EXT4 Daemon
-  run_type: ALWAYS_ONCE

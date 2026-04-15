@@ -1,0 +1,14 @@
+services:
+- name: ext4
+  path: /ext4.elf
+  description: EXT4 Daemon
+  run_type: MANUAL
+  pmbus_properties:
+    service_type: filesystem
+    filesystem:
+      - ext2
+      - ext3
+      - ext4
+    filesystem_ops:
+      - probe
+      - mount

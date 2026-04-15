@@ -16,7 +16,7 @@ async fn handle_ipc(executor: Executor) {
 fn main() {
     println!("Hello from ext4!");
 
-    let mut executor = Executor::new();
+    let executor = Executor::new();
     executor.spawn(handle_ipc(executor.clone()));
     executor.run();
 }
