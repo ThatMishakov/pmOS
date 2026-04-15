@@ -109,7 +109,7 @@ fn push_property_list(
     let size_aligned = align_up(total_size, 8);
 
     let hdr = IPCObjectPropertyHdr {
-        length: total_size as u16,
+        length: size_aligned as u16,
         type_: PROPERTY_TYPE_LIST,
         data_start: name_hdr_len as u8,
     };

@@ -18,6 +18,7 @@
 #include <unistd.h>
 #include <vector>
 #include <limits.h>
+#include <set>
 #include <pmos/helpers.hh>
 #include <pmos/pmbus_helper.hh>
 #include <pmos/ipc/bus_object.hh>
@@ -60,6 +61,23 @@ struct DiskOpenAwaiter {
 
 using mem_object_id = uint64_t;
 
+struct Filesystem;
+
+struct PartitionInfo {
+    std::string label;
+    std::vector<uint8_t> id;
+};
+
+struct Partition {
+    uint64_t start_lba;
+    uint64_t end_lba;
+    pmos::Right partition_right;
+
+    std::map<uint64_t, PartitionInfo> infos;
+
+    Partition(uint64_t start_lba, uint64_t end_lba): start_lba(start_lba), end_lba(end_lba), partition_right({}), infos({}) {}
+};
+
 struct Disk {
     size_t id;
     bool used;
@@ -68,13 +86,7 @@ struct Disk {
     int physical_sector_size;
     uint64_t sector_count;
 
-    struct Partition {
-        uint64_t start_lba;
-        uint64_t end_lba;
-        pmos::Right partition_right;
-    };
-
-    std::vector<Partition> partitions;
+    std::vector<std::shared_ptr<Partition>> partitions;
 
     pmos::Right disk_right;
 
@@ -82,6 +94,11 @@ struct Disk {
 };
 
 std::vector<Disk> disks;
+
+struct Filesystem {
+    pmos::Right service_right;
+    std::set<std::shared_ptr<Partition>> probed_partitions;
+};
 
 size_t prepare_unused_disk_index()
 {
@@ -134,7 +151,7 @@ pmos::async::task<pmos::Right> read_disk(Disk &disk, uint64_t sector_start, uint
     co_return std::move(msg->other_rights[0]);
 }
 
-pmos::async::task<std::optional<pmos::Right>> get_partition_right(Disk &disk, const Disk::Partition &partition)
+pmos::async::task<std::optional<pmos::Right>> get_partition_right(Disk &disk, const Partition &partition)
 {
     try {
         IPC_Disk_Create_Right r = {
@@ -174,9 +191,9 @@ pmos::async::task<void> create_partition_rights(size_t disk_idx)
     auto &disk  = disks[disk_idx];
 
     for (auto &partition: disk.partitions) {
-        auto right = co_await get_partition_right(disk, partition);
+        auto right = co_await get_partition_right(disk, *partition);
         if (right) {
-            partition.partition_right = std::move(right.value());
+            partition->partition_right = std::move(right.value());
             printf("Got right for a partition...\n");
         } else {
             printf("Failed to get right for a partition!\n");
@@ -293,7 +310,7 @@ pmos::async::detached_task probe_partitions(size_t disk_idx)
         pmos::utility::scope_guard guard4 {[&] { munmap(gpt_ptr, array_size_aligned); }};
 
 
-        std::vector<Disk::Partition> partitions;
+        std::vector<std::shared_ptr<Partition>> partitions;
         for (size_t offset = 0; offset < gpt_partition_array_size; offset += gpt_entry_size) {
             auto *entry = reinterpret_cast<GPTPartitionEntry *>(reinterpret_cast<char *>(gpt_ptr) + offset);
             if (guid_zero(entry->type_guid))
@@ -302,12 +319,12 @@ pmos::async::detached_task probe_partitions(size_t disk_idx)
             std::string guid = guid_to_string(entry->type_guid);
             printf("GPT partition: type %s, start %" PRIu64 ", end %" PRIu64 " offset %" PRIu64 "\n", guid.c_str(),
                    entry->first_lba, entry->last_lba, offset/gpt_entry_size);
-            partitions.push_back({entry->first_lba, entry->last_lba, {}});
+            partitions.push_back(std::make_shared<Partition>(entry->first_lba, entry->last_lba));
         }
         disk.partitions = std::move(partitions);
     } else {
         printf("MBR partition table:\n");
-        std::vector<Disk::Partition> partitions;
+        std::vector<std::shared_ptr<Partition>> partitions;
         for (int i = 0; i < 4; ++i) {
             auto &part = mbr->partitions[i];
             if (part.type == 0)
@@ -316,7 +333,7 @@ pmos::async::detached_task probe_partitions(size_t disk_idx)
             printf("Partition %i: type %x, start %" PRIu32 ", size %" PRIu32 "\n", i, part.type,
                    part.lba_start, part.num_sectors);
 
-            partitions.push_back({part.lba_start, part.lba_start + part.num_sectors, {}});
+            partitions.push_back(std::make_shared<Partition>(part.lba_start, part.lba_start + part.num_sectors));
         }
         disk.partitions = std::move(partitions);
     }
@@ -387,9 +404,27 @@ pmos::async::detached_task get_disks()
     }
 }
 
+pmos::async::detached_task get_filesystems()
+{
+    auto filter = pmos::ipc::Conjunction({
+        pmos::ipc::EqualsFilter("type", "service"),
+        pmos::ipc::EqualsFilter("service_type", "filesystem"),
+    });
+    uint64_t next_id = 0;
+    while (true) {
+        auto fs = co_await bus_helper.get_object(filter, next_id);
+        if (fs) {
+            next_id = fs.value().sequence_number + 1;
+
+            printf("Got a filesystem service with name %s\n", fs.value().object.get_name().c_str());
+        }
+    }
+}
+
 int main()
 {
     get_disks();
+    get_filesystems();
     dispatcher.dispatch();
     return 0;
 }
