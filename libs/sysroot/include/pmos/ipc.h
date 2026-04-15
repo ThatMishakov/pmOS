@@ -1557,6 +1557,30 @@ typedef struct IPC_Name_Right_Reply {
     int32_t result;
 } IPC_Name_Right_Reply;
 
+#define IPC_Start_Service_NUM 0x1e0
+typedef struct IPC_Start_Service {
+    /// Message type (IPC_Start_Service_NUM)
+    uint32_t type;
+
+    /// Flags
+    uint32_t flags;
+
+    /// cmdline string (gets parsed into arguments)
+    char cmdline[];
+} IPC_Start_Service;
+
+#define IPC_Start_Service_Result_NUM 0x1f0
+typedef struct IPC_Start_Service_Result {
+    /// Message type (IPC_Start_Service_Result_NUM)
+    uint32_t type;
+
+    /// Result (0 on success, -errno on error)
+    int32_t result;
+
+    /// ID of the instance
+    uint64_t instance_id;
+} IPC_Start_Service_Result;
+
 #if defined(__cplusplus)
 } /* extern "C" */
 #endif

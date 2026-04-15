@@ -35,14 +35,6 @@ size_t alignup(size_t value, size_t alignment)
     return (value + alignment - 1) & ~(alignment - 1);
 }
 
-void ipc_send(const auto &data, pmos_port_t dest)
-{
-    auto size   = sizeof(data);
-    auto result = send_message_port(dest, size, reinterpret_cast<const char *>(&data));
-    if (result != 0)
-        throw std::system_error(-result, std::system_category(), strerror(-result));
-}
-
 struct Disk;
 struct DiskOpenAwaiter {
     Disk *disk;
@@ -92,13 +84,19 @@ struct Disk {
 
     std::string name;
 };
+std::set<std::shared_ptr<Partition>> ready_partitions;
 
 std::vector<Disk> disks;
+
+uint64_t filesystem_next_id = 1;
 
 struct Filesystem {
     pmos::Right service_right;
     std::set<std::shared_ptr<Partition>> probed_partitions;
+    uint64_t id = filesystem_next_id++;
+    std::string name;
 };
+std::map<uint64_t, std::shared_ptr<Filesystem>> filesystems;
 
 size_t prepare_unused_disk_index()
 {
@@ -198,6 +196,47 @@ pmos::async::task<void> create_partition_rights(size_t disk_idx)
         } else {
             printf("Failed to get right for a partition!\n");
         }
+    }
+}
+
+pmos::async::detached_task probe_partition(std::shared_ptr<Filesystem> fs, std::shared_ptr<Partition> partition)
+{
+    printf("Probing partition for filesystem %s\n", fs->name.c_str());
+
+    IPC_Start_Service req = {
+        .type = IPC_Start_Service_NUM,
+        .flags = 0,
+    };
+
+    std::vector<std::byte> data;
+    auto span = std::span<const std::byte>(reinterpret_cast<const std::byte *>(&req), sizeof(req));
+    data.insert(data.end(), span.begin(), span.end());
+
+    std::string_view cmdline = "--probe --disk $RIGHT0 --reply $RIGHT1";
+    auto cmd_span = std::as_bytes(std::span(cmdline.data(), cmdline.size()));
+    data.insert(data.end(), cmd_span.begin(), cmd_span.end());
+
+    auto partition_right = partition->partition_right.clone_noexcept();
+    if (!partition_right) {
+        printf("Failed to clone the partition right...\n");
+        co_return;
+    }
+    auto reply_right = port.create_right(RightType::SendOnce).value();
+    auto result = pmos::send_message_right(fs->service_right, std::span<const std::byte>(data), {}, false, std::move(reply_right.first), std::move(partition_right.value()));
+    if (!result) {
+        printf("Failed to send the message to start the service...\n");
+        co_return;
+    }
+
+    auto msg = co_await dispatcher.get_message(reply_right.second);
+
+    printf("Got a message...\n");
+}
+
+void probe_new_partition(std::shared_ptr<Partition> p)
+{
+    for (auto fs: filesystems) {
+        probe_partition(fs.second, p);
     }
 }
 
@@ -339,6 +378,11 @@ pmos::async::detached_task probe_partitions(size_t disk_idx)
     }
 
     co_await create_partition_rights(disk_idx);
+
+    for (auto p: disk.partitions) {
+        ready_partitions.insert(p);
+        probe_new_partition(p);
+    }
 }
 
 pmos::async::task<void> populate_disk_info(Disk &disk, const BUSObject &object)
@@ -381,6 +425,19 @@ pmos::async::detached_task register_disk(pmos::Right right, pmos::ipc::BUSObject
     co_return;
 }
 
+void register_filesystem(pmos::Right right, pmos::ipc::BUSObject object)
+{
+    auto filesystem = std::make_shared<Filesystem>();
+    filesystem->service_right = std::move(right);
+    filesystem->name = object.get_name();
+
+    filesystems.insert({filesystem->id, filesystem});
+
+    for (auto p: ready_partitions) {
+        probe_partition(filesystem, p);
+    }
+}
+
 pmos::async::detached_task get_disks()
 {
     auto filter = pmos::ipc::EqualsFilter("device", "hard_disk");
@@ -409,6 +466,8 @@ pmos::async::detached_task get_filesystems()
     auto filter = pmos::ipc::Conjunction({
         pmos::ipc::EqualsFilter("type", "service"),
         pmos::ipc::EqualsFilter("service_type", "filesystem"),
+        pmos::ipc::EqualsFilter("filesystem_ops", "probe"),
+        pmos::ipc::EqualsFilter("filesystem_ops", "mount"),
     });
     uint64_t next_id = 0;
     while (true) {
@@ -417,6 +476,7 @@ pmos::async::detached_task get_filesystems()
             next_id = fs.value().sequence_number + 1;
 
             printf("Got a filesystem service with name %s\n", fs.value().object.get_name().c_str());
+            register_filesystem(std::move(fs.value().right), std::move(fs.value().object));
         }
     }
 }
