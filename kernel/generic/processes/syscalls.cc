@@ -544,6 +544,10 @@ void syscall_exit()
     ulong arg1 = syscall_arg(task, 0, 0);
     ulong arg2 = syscall_arg(task, 1, 0);
 
+    if (arg1 || arg1) {
+        serial_logger.printf("Kernel: syscall exit task %li (%s) arg %li %li\n", task->task_id, task->name.c_str(), arg1, arg2);
+    }
+
     // serial_logger.printf("syscall exit task %li (%s) arg %x\n", task->task_id,
     // task->name.c_str(), arg1);
 

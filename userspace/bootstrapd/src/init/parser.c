@@ -515,6 +515,8 @@ static bool parse_property(yaml_parser_t *state, struct Service *service, const 
                     print_str("Failed to allocate memory for property string!\n");
                     release_strings_array(strings, strings_count);
                     free(strings);
+                    yaml_event_delete(&value_event);
+                    goto error;
                 }
                 strings[strings_count] = str;
                 strings[++strings_count] = NULL;

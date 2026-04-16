@@ -631,7 +631,7 @@ void *__request_mem_b(unsigned long bytes);
 #define MALLOC_ALIGNMENT ((size_t)(2 * sizeof(void *)))
 #endif  /* MALLOC_ALIGNMENT */
 #ifndef FOOTERS
-#define FOOTERS 0
+#define FOOTERS 1
 #endif  /* FOOTERS */
 #ifndef ABORT
 #define ABORT  abort()

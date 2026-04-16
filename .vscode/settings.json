@@ -218,5 +218,6 @@
         "/sources": true,
         "**/.vscode": true,
         "**/.vs": true
-    }
+    },
+    "explorer.excludeGitIgnore": true
 }
