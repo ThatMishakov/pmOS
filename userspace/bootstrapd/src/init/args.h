@@ -16,7 +16,7 @@ void args_init(struct Args *args);
 void args_release(struct Args *args);
 
 // True on success, false on ENOMEM
-bool push_arg(struct Args *args, const char *arg);
+bool args_push_arg(struct Args *args, const char *arg);
 bool push_arg_size(struct Args *args, const char *arg, size_t size);
 
 // Parses args and pushes them back. Calls the callback to replace the args

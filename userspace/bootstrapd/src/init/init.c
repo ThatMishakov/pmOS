@@ -409,9 +409,9 @@ int start_service(struct Service *service, uint64_t object_id, uint64_t optional
     argc[0] = service->name;
     argc[1] = NULL;
 
+    char buff[64];
     if (new_right) {
         argc[1] = "--right-id";
-        char buff[64];
         sprintf(buff, "%" PRIu64, new_right);
         argc[2] = buff;
         argc[3] = NULL;
@@ -526,7 +526,7 @@ int start_service_request(struct Service *service, const char *cmdline, size_t c
         return result;
 
     uint64_t group_id = {};
-    struct Args args = {};
+
     syscall_r r       = syscall_new_process();
     if (r.result != SUCCESS) {
         print_str("Loader: Could not create process for ");
@@ -583,7 +583,10 @@ int start_service_request(struct Service *service, const char *cmdline, size_t c
     auxvec_entries[0] = &group_id_entry;
     auxvec_entries[1] = NULL;
 
-    if (!push_arg(&args, service->name)) {
+    struct Args args = {};
+    args_init(&args);
+
+    if (!args_push_arg(&args, service->name)) {
         print_str("Failed to push arg\n");
         result = -ENOMEM;
         goto error;
