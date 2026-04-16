@@ -69,6 +69,9 @@
         result                   = 0;                                                     \
     } while (0)
 
+#define VECTOR_BACK(vec) \
+    ((vec).data[(vec).size - 1])
+
 #define VECTOR_FOREACH(vec, var) \
     for (size_t i = 0; i < (vec).size && ((var) = (vec).data[i], 1); ++i)
 

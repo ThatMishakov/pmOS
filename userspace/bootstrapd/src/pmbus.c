@@ -324,26 +324,6 @@ void publish_services()
         publish_service(s);
 }
 
-bool create_service_right(struct Service *service)
-{
-    if (service->service_recieve_right)
-        return true;
-
-    uint64_t recieve_right;
-    right_request_t right = create_right(loader_port, &recieve_right, 0);
-    if (right.result != SUCCESS) {
-        print_str("Loader: failed to create right for a service: ");
-        print_hex(right.result);
-        print_str("\n");
-        return false;
-    }
-
-    service->service_recieve_right = recieve_right;
-    service->service_right = right.right;
-
-    return true;
-}
-
 void publish_service(struct Service *service)
 {
     if (!create_service_right(service))

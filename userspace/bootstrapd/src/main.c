@@ -294,7 +294,8 @@ int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_r
                      pmos_right_t *extra_rights, void *, struct pmos_msgloop_data *)
 {
     if (desc->size < 4) {
-        // Message too small
+        print_str("Loader: Recieved a message that is too small...\n");
+        return 0;
     }
 
     IPC_ACPI_Request_RSDT *ptr = (IPC_ACPI_Request_RSDT *)buff;
@@ -514,6 +515,8 @@ int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_r
         print_hex(ptr->type);
         print_str(" from task ");
         print_hex(desc->sender);
+        print_str(", with recieve right ");
+        print_hex(desc->sent_with_right);
         print_str("\n");
     }
 
@@ -558,8 +561,6 @@ void service_ports()
     //     print_str("\n");
     //     goto exit;
     // }
-
-    pmos_msgloop_initialize(&msgloop_data, loader_port);
 
     pmos_msgloop_tree_node_t n;
     pmos_msgloop_node_set(&n, 0, default_callback, NULL);
@@ -619,6 +620,8 @@ int main()
         print_str("\n");
         exit(1);
     }
+
+    pmos_msgloop_initialize(&msgloop_data, loader_port);
 
     init_modules();
     init_misc();
