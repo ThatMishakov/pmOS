@@ -91,7 +91,7 @@
         if ((vec).capacity >= count)                                      \
             result = 0;                                               \
         else {                                                        \
-            void *data = realloc((vec).data, count*sizeof(*(vec).data)); \
+            void *data = realloc((vec).data, (count) * sizeof(*(vec).data)); \
             if (!data)                                                \
                 result = -1;                                          \
             else {                                                    \
