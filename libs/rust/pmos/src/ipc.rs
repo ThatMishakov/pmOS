@@ -52,6 +52,7 @@ impl SendRightAux {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 struct MapMemObjectParamT {
     page_table_id: u64,
     mem_object_id_right: Right,
@@ -104,7 +105,7 @@ unsafe extern "C" {
     #[link_name = "munmap"]
     unsafe fn sys_munmap(addr: *mut libc::c_void, length: libc::size_t) -> c_int;
 
-    unsafe fn map_mem_object(param: *const MapMemObjectParamT) -> ResultT;
+    unsafe fn map_mem_object(param: *const MapMemObjectParamT) -> SyscallR;
 }
 
 impl Drop for IPCPort {
@@ -606,9 +607,11 @@ impl MemoryObjectRight {
             access_flags: MAP_PROT_READ | MAP_MEM_OBJECT_IS_RIGHT,
         };
 
-        unsafe { map_mem_object(&params) }.result().map(|()| {
+        let result = unsafe { map_mem_object(&params) };
+        
+        result.result.result().map(|()| {
             ObjectMmap {
-                ptr: NonNull::new(params.addr_start_uint as *mut u8).expect("mapping memory object failed with null pointer"),
+                ptr: NonNull::new(result.value as *mut u8).expect("mapping memory object failed with null pointer"),
                 size: size as usize,
             }
         })  

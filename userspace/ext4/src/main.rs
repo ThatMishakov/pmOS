@@ -7,6 +7,8 @@ use pmos::ipc::SendRight;
 use std::rc::Rc;
 use std::cell::RefCell;
 
+use ext4plus::Ext4;
+
 #[derive(PartialEq)]
 enum RunType {
     Probe,
@@ -106,6 +108,11 @@ impl ReaderWrapper {
     }
 }
 
+fn get_page_size() -> u64 {
+    // TODO
+    4096
+}
+
 #[async_trait(?Send)]
 impl ext4plus::Ext4Read for ReaderWrapper {
     async fn read(
@@ -147,8 +154,11 @@ impl ext4plus::Ext4Read for ReaderWrapper {
             let mut offset = 0;
             while offset < dst.len() as u64 {
                 let chunk_size = std::cmp::min(MAX_MMAP_SIZE, dst.len() as u64 - offset);
-                let mmap = unsafe { right.map(offset, chunk_size).expect("Failed to map memory object right") };
-                dst[offset as usize..(offset + chunk_size) as usize].copy_from_slice(&mmap);
+                // Align chunk_size up to page size
+                let page_size = get_page_size();
+                let chunk_size_aligned = (chunk_size + page_size - 1) & (!(page_size - 1));
+                let mmap = unsafe { right.map(offset, chunk_size_aligned).expect("Failed to map memory object right") };
+                dst[offset as usize..(offset + chunk_size) as usize].copy_from_slice(&mmap[..chunk_size as usize]);
                 offset += chunk_size;
             }
 
@@ -192,9 +202,26 @@ impl DiskReader {
     }
 }
 
+async fn ipc_probe(executor: Executor, reader: ReaderWrapper, reply_right: Option<SendRight>) {
+    let fs = Ext4::load(Box::new(reader)).await;
+    println!("{:#?}", fs);
+}
+    
+
 async fn handle_ipc(executor: Executor, run_type: RunType, disk_right: pmos::ipc::SendManyRight, reply_right: Option<pmos::ipc::SendRight>) {
     let reader = ReaderWrapper::new(executor.clone(), disk_right).await;
-    todo!();
+
+    match run_type {
+        RunType::Probe => {
+            ipc_probe(executor, reader, reply_right).await;
+        }
+        RunType::Mount => {
+            todo!();
+        }
+        _ => unreachable!(),
+    }
+
+    std::process::exit(0);
 }
 
 fn main() {
