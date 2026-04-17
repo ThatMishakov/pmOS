@@ -51,6 +51,18 @@ impl SendRightAux {
     }
 }
 
+#[repr(C)]
+struct MapMemObjectParamT {
+    page_table_id: u64,
+    mem_object_id_right: Right,
+    addr_start_uint: u64,
+    size_uint: u64,
+    offset_object: u64,
+    offset_start: u64,
+    object_size: u64,
+    access_flags: u64,
+}
+
 unsafe extern "C" {
     fn create_port(owner_pid: libc::pid_t, flags: u32) -> PortReqResult;
     fn pmos_delete_port(port: Port) -> ResultT;
@@ -91,6 +103,8 @@ unsafe extern "C" {
 
     #[link_name = "munmap"]
     unsafe fn sys_munmap(addr: *mut libc::c_void, length: libc::size_t) -> c_int;
+
+    unsafe fn map_mem_object(param: *const MapMemObjectParamT) -> ResultT;
 }
 
 impl Drop for IPCPort {
@@ -576,9 +590,28 @@ impl Drop for RecieveManyRight {
     }
 }
 
+const MAP_PROT_READ: u64 = 1 << 0;
+const MAP_MEM_OBJECT_IS_RIGHT: u64 = 1 << 15;
+
 impl MemoryObjectRight {
     pub unsafe fn map(&self, offset: u64, size: u64) -> Result<ObjectMmap, Error> {
-        todo!();
+        let params = MapMemObjectParamT {
+            page_table_id: 0, // Page table self
+            mem_object_id_right: self.0,
+            addr_start_uint: 0, // nullptr
+            size_uint: size,
+            offset_object: offset,
+            offset_start: 0,
+            object_size: size,
+            access_flags: MAP_PROT_READ | MAP_MEM_OBJECT_IS_RIGHT,
+        };
+
+        unsafe { map_mem_object(&params) }.result().map(|()| {
+            ObjectMmap {
+                ptr: NonNull::new(params.addr_start_uint as *mut u8).expect("mapping memory object failed with null pointer"),
+                size: size as usize,
+            }
+        })  
     }
 }
 

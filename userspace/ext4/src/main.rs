@@ -127,16 +127,17 @@ impl ext4plus::Ext4Read for ReaderWrapper {
 
         let msg = pmos::ipc_msgs::IPCDiskRead::new(0, physical_start_sector, physical_sector_count);
         let msg = executor.send_message_reply_once(&msg, &mut self.reader.borrow_mut().disk_right, &mut [None, None, None, None]).expect("Failed to send IPCDiskRead message");
-        let msg = msg.await
+        let mut msg = msg.await
             .expect("Failed to receive IPCDiskRead reply");
-        let msg_deserialized = msg.deserialize();
+        let mut maybe_right = msg.other_rights[0].take();
+        let msg = msg.deserialize();
 
-        if let pmos::ipc_msgs::Message::IPCDiskReadReply(reply) = msg_deserialized {
+        if let pmos::ipc_msgs::Message::IPCDiskReadReply(reply) = msg {
             if reply.result != 0 {
                 return Err(Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("Disk read failed with error code {}", -reply.result)))));
             }
 
-            let right = match msg.other_rights[0] {
+            let right = match maybe_right.take() {
                 Some(SendRight::Object(r)) => r,
                 _ => return Err(Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, "Expected a SendObjectRight in the reply to IPCDiskRead")))),
             };
@@ -146,7 +147,7 @@ impl ext4plus::Ext4Read for ReaderWrapper {
             while offset < dst.len() as u64 {
                 let chunk_size = std::cmp::min(MAX_MMAP_SIZE, dst.len() as u64 - offset);
                 let mmap = unsafe { right.map(offset, chunk_size).expect("Failed to map memory object right") };
-                mmap.copy_to_slice(&mut dst[offset as usize..(offset + chunk_size) as usize]);
+                dst[offset as usize..(offset + chunk_size) as usize].copy_from_slice(&mmap);
                 offset += chunk_size;
             }
 
@@ -178,6 +179,7 @@ impl DiskReader {
 
             Rc::new(RefCell::new(Self {
                 disk_right,
+                executor,
                 physical_sector_size: reply.physical_sector_size,
                 logical_sector_size: reply.logical_sector_size,
                 sector_count: reply.sector_count,
