@@ -1,5 +1,6 @@
 #![feature(new_range_api)]
 
+use async_trait::async_trait;
 use pmos::ipc_runner::Executor;
 use pmos::ipc::SendRight;
 
@@ -105,14 +106,14 @@ impl ReaderWrapper {
     }
 }
 
+#[async_trait(?Send)]
 impl ext4plus::Ext4Read for ReaderWrapper {
     async fn read(
         &self,
         start_byte: u64,
         dst: &mut [u8],
-    ) -> Result<(), Result<(), Box<dyn Send + Sync + 'static>>> {
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
         let sector_size = self.reader.borrow().logical_sector_size as u64;
-        let start_sector = start_byte / sector_size;
         let sector_count = (dst.len() as u64 + sector_size - 1) / sector_size;
 
         let physical_sector_size = self.reader.borrow().physical_sector_size as u64;
@@ -120,7 +121,7 @@ impl ext4plus::Ext4Read for ReaderWrapper {
         let physical_sector_count = sector_count * (sector_size / physical_sector_size);
         let max_sector = self.reader.borrow().sector_count;
         if physical_start_sector >= max_sector || physical_start_sector + physical_sector_count > max_sector {
-            return Err(Err(Box::new(std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "Read out of bounds"))));
+            return Err(Box::new(std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "Read out of bounds")));
         }
 
         let executor = self.reader.borrow().executor.clone();
@@ -134,12 +135,12 @@ impl ext4plus::Ext4Read for ReaderWrapper {
 
         if let pmos::ipc_msgs::Message::IPCDiskReadReply(reply) = msg {
             if reply.result != 0 {
-                return Err(Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("Disk read failed with error code {}", -reply.result)))));
+                return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("Disk read failed with error code {}", -reply.result))));
             }
 
             let right = match maybe_right.take() {
                 Some(SendRight::Object(r)) => r,
-                _ => return Err(Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, "Expected a SendObjectRight in the reply to IPCDiskRead")))),
+                _ => return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, "Expected a SendObjectRight in the reply to IPCDiskRead"))),
             };
 
             const MAX_MMAP_SIZE: u64 = 16 * 1024 * 1024; // 16 MiB
@@ -153,7 +154,7 @@ impl ext4plus::Ext4Read for ReaderWrapper {
 
             Ok(())
         } else {
-            Err(Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, "Unexpected message type received in response to IPCDiskRead"))))
+            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, "Unexpected message type received in response to IPCDiskRead")))
         }
     }
 }
