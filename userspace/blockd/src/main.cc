@@ -212,7 +212,7 @@ pmos::async::detached_task probe_partition(std::shared_ptr<Filesystem> fs, std::
     auto span = std::span<const std::byte>(reinterpret_cast<const std::byte *>(&req), sizeof(req));
     data.insert(data.end(), span.begin(), span.end());
 
-    std::string_view cmdline = "--probe --disk $RIGHT0 --reply $RIGHT1";
+    std::string_view cmdline = "--probe --disk $RIGHT1 --reply $RIGHT0";
     auto cmd_span = std::as_bytes(std::span(cmdline.data(), cmdline.size()));
     data.insert(data.end(), cmd_span.begin(), cmd_span.end());
 

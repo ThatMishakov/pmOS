@@ -1,5 +1,3 @@
-#![feature(inherent_str_constructors)]
-
 pub mod ipc;
 pub mod ipc_msgs;
 pub mod system;

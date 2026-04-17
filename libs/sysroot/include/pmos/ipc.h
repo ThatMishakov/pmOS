@@ -1042,8 +1042,17 @@ typedef struct IPC_Disk_Create_Right {
     uint64_t sector_count;
 } IPC_Disk_Create_Right;
 
-#define IPC_Disk_Write_NUM  0xF3
-#define IPC_Disk_Notify_NUM 0xF4
+#define IPC_Disk_Write_NUM  0xF4
+#define IPC_Disk_Notify_NUM 0xF5
+
+#define IPC_Disk_Describe_NUM 0xF6
+typedef struct IPC_Disk_Describe {
+    /// Message type (must be IPC_Disk_Describe_NUM)
+    uint32_t type;
+
+    /// Flags
+    uint32_t flags;
+} IPC_Disk_Describe;
 
 #define IPC_Disk_Register_Reply_NUM 0xF8
 typedef struct IPC_Disk_Register_Reply {
@@ -1101,6 +1110,27 @@ typedef struct IPC_Disk_Read_Reply {
     /// Result code indicating the outcome of the read operation
     int16_t result_code;
 } IPC_Disk_Read_Reply;
+
+#define IPC_Disk_Describe_Reply_NUM 0xFE
+typedef struct IPC_Disk_Describe_Reply {
+    /// Message type (must be IPC_Disk_Describe_Reply_NUM)
+    uint32_t type;
+
+    /// Flags
+    uint16_t flags;
+
+    /// Result code indicating the outcome of the describe operation
+    int16_t result_code;
+
+    /// Sector count of the disk
+    uint64_t sector_count;
+
+    /// Logical sector size of the disk in bytes
+    uint32_t logical_sector_size;
+
+    /// Physical sector size of the disk in bytes
+    uint32_t physical_sector_size;
+} IPC_Disk_Describe_Reply;
 
 #define IPC_Disk_Create_Right_Reply_NUM 0xF3
 typedef struct IPC_Disk_Create_Right_Reply {

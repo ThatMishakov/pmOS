@@ -43,6 +43,14 @@ extern "C" {
     #define TASK_ID_SELF 0
 #endif
 
+#ifndef _DEFINED_SYSCALL_R
+#define _DEFINED_SYSCALL_R
+typedef struct {
+    result_t result;
+    uint64_t value;
+} syscall_r;
+#endif
+
 typedef uint64_t pmos_port_t;
 
 typedef struct ports_request_t {
@@ -125,6 +133,12 @@ result_t set_log_port(pmos_port_t portnum, u32 flags);
 // Sets right 0 to the given right
 // TODO: implement missing stuff (I will not elaborate...)
 result_t set_right0(pmos_right_t port);
+
+/// @brief Gets the type of the send right.
+///
+/// @param right The right to get the type of
+/// @return syscall_r Result of the operation. On success, the value field contains the type
+syscall_r get_right_type(pmos_right_t right);
 
 #endif
 

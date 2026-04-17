@@ -244,6 +244,24 @@ pmos::async::detached_task handle_right_create(IPC_Disk_Create_Right request, Di
     }
 }
 
+void handle_disk_describe(AHCIPort &, DiskGeometry geometry, DiskConstraint constraint, pmos::Right reply_right)
+{
+    u64 sector_count = constraint.sector_count;
+    IPC_Disk_Describe_Reply reply = {
+        .type = IPC_Disk_Describe_Reply_NUM,
+        .flags = 0,
+        .result_code = 0,
+        .sector_count = sector_count,
+        .logical_sector_size = static_cast<uint32_t>(geometry.logical_sector_size),
+        .physical_sector_size = static_cast<uint32_t>(geometry.physical_sector_size),
+    };
+
+    auto r = send_message_right_one(reply_right, reply, {}, true);
+    if (!r) {
+        printf("Failed to send disk describe reply: %i (%s)\n", (int)r.error(), strerror(r.error()));
+    }
+}
+
 pmos::async::detached_task handle_ipc(AHCIPort &port, std::shared_ptr<RRWrapper> recieve_right, uint64_t sector_count, size_t logical_sector_size, size_t physical_sector_size, uint64_t from_sector, uint64_t to_sector_count)
 {
     DiskGeometry geometry{sector_count, logical_sector_size, physical_sector_size};
@@ -293,6 +311,14 @@ pmos::async::detached_task handle_ipc(AHCIPort &port, std::shared_ptr<RRWrapper>
             auto cmsg = (IPC_Disk_Create_Right *)msg->data.data();
 
             handle_right_create(*cmsg, geometry, constraint, port, std::move(msg->reply_right));
+        } break;
+        case IPC_Disk_Describe_NUM: {
+            if (msg->data.size() < sizeof(IPC_Disk_Describe)) {
+                fprintf(stderr, "ahcid: Recieved message IPC_Disk_Describe with too small of size\n");
+                break;
+            }
+
+            handle_disk_describe(port, geometry, constraint, std::move(msg->reply_right));
         } break;
         default:
             fprintf(stderr, "ahcid: Received message with unknown type %u! Ignoring.\n", header->type);

@@ -93,6 +93,65 @@ struct IPCBusRequestObjectReplyHdr {
     object_id: u64,
 }
 
+pub const IPC_DISK_READ_NUM: u32 = 0xF2;
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+pub struct IPCDiskRead {
+    msg_type: u32,
+    pub flags: u32,
+    pub start_sector: u64,
+    pub sector_count: u64,
+}
+
+impl IPCDiskRead {
+    pub fn new(flags: u32, start_sector: u64, sector_count: u64) -> Self {
+        IPCDiskRead {
+            msg_type: IPC_DISK_READ_NUM,
+            flags,
+            start_sector,
+            sector_count,
+        }
+     }
+}
+
+pub const IPC_DISK_DESCRIBE_NUM: u32 = 0xF6;
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+pub struct IPCDiskDescribe {
+    msg_type: u32,
+    flags: u32,
+}
+
+impl IPCDiskDescribe {
+    pub fn new() -> Self {
+        IPCDiskDescribe {
+            msg_type: IPC_DISK_DESCRIBE_NUM,
+            flags: 0,
+        }
+    }
+}
+
+pub const IPC_DISK_READ_REPLY_NUM: u32 = 0xFA;
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Zeroable, Pod)]
+pub struct IPCDiskReadReply {
+    msg_type: u32,
+    pub flags: u16,
+    pub result: i16,
+}
+
+pub const IPC_DISK_DESCRIBE_REPLY_NUM: u32 = 0xFE;
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+pub struct IPCDiskDescribeReply {
+    msg_type: u32,
+    pub flags: u16,
+    pub result: i16,
+    pub sector_count: u64,
+    pub logical_sector_size: u32,
+    pub physical_sector_size: u32,
+}
+
 fn push_pod<T: Pod>(out: &mut Vec<u8>, v: &T) {
     out.extend_from_slice(bytemuck::bytes_of(v));
 }
@@ -147,6 +206,8 @@ pub enum Message<'a> {
     IPCBusPublishObject(IPCBusPublishObject<'a>),
     IPCBusRequestObject(IPCBusRequestObject<'a>),
     IPCNameRightReply(IPCNameRightReply),
+    IPCDiskDescribeReply(IPCDiskDescribeReply),
+    IPCDiskReadReply(IPCDiskReadReply),
     Unknown,
 }
 
@@ -178,6 +239,10 @@ impl super::ipc::Message {
                 }
                 IPC_NAME_RIGHT_REPLY_NUM =>
                     try_from_bytes::<IPCNameRightReply>(data).map(|data| Message::IPCNameRightReply(data.clone())).unwrap_or(Message::Unknown),
+                IPC_DISK_DESCRIBE_REPLY_NUM =>
+                    try_from_bytes::<IPCDiskDescribeReply>(data).map(|data| Message::IPCDiskDescribeReply(data.clone())).unwrap_or(Message::Unknown),
+                IPC_DISK_READ_REPLY_NUM =>
+                    try_from_bytes::<IPCDiskReadReply>(data).map(|data| Message::IPCDiskReadReply(data.clone())).unwrap_or(Message::Unknown),
                 _ => Message::Unknown,
             }
         } else {

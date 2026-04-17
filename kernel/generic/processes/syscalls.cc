@@ -69,7 +69,7 @@ extern void deactivate_page_table();
 namespace kernel::proc::syscalls
 {
 
-std::array<const char *, 59> syscall_names = {
+std::array<const char *, 60> syscall_names = {
     "SYSCALL EXIT",
     "SYSCALL GET TASK ID",
     "SYSCALL CREATE PROCESS",
@@ -133,6 +133,7 @@ std::array<const char *, 59> syscall_names = {
     "SYSCALL DUP RIGHT",
     "SYSCALL GET MEM OBJECT SIZE",
     "SYSCALL TRANSFER RIGHT",
+    "SYSCALL GET RIGHT TYPE",
 };
 
 const char *syscall_name(unsigned id)
@@ -144,7 +145,7 @@ const char *syscall_name(unsigned id)
 }
 
 using syscall_function                         = void (*)();
-std::array<syscall_function, 59> syscall_table = {
+std::array<syscall_function, 60> syscall_table = {
     syscall_exit,
     syscall_get_task_id,
     syscall_create_process,
@@ -207,7 +208,8 @@ std::array<syscall_function, 59> syscall_table = {
     syscall_accept_rights,
     syscall_dup_right,
     syscall_get_mem_object_size,
-    syscall_transfer_right
+    syscall_transfer_right,
+    syscall_get_right_type,
 };
 
 extern "C" void syscall_handler()
@@ -2508,6 +2510,34 @@ void syscall_get_mem_object_size()
     }
 
     syscall_return(current) = object->atomic_size_bytes();
+}
+
+void syscall_get_right_type()
+{
+    auto current = get_current_task();
+
+    u64 right_id = syscall_arg64(current, 0);
+
+    auto group = current->get_rights_namespace();
+    if (!group) {
+        syscall_error(current) = -ESRCH;
+        return;
+    }
+
+    Right *right;
+    if (right_id) {
+        right = group->atomic_get_right(right_id);
+    } else {
+        auto id = atomic_right0_id();
+        right   = kernel_tasks->atomic_get_right(id);
+    }
+
+    if (!right) {
+        syscall_error(current) = -ENOENT;
+        return;
+    }
+
+    syscall_return(current) = right->type_as_int();
 }
 
 } // namespace kernel::proc::syscalls

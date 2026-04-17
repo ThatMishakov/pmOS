@@ -4,6 +4,8 @@ use super::system::ResultT;
 use core::ffi::c_uint;
 use std::{cmp::Ordering, mem, ptr};
 use std::assert_matches;
+use std::ptr::NonNull;
+use libc::c_int;
 
 pub struct IPCPort {
     port: Port,
@@ -22,6 +24,12 @@ struct PortReqResult {
 struct RightRequestResult {
     result: ResultT,
     right: Right,
+}
+
+#[repr(C)]
+struct SyscallR {
+    result: ResultT,
+    value: u64,
 }
 
 impl RightRequestResult {
@@ -77,6 +85,12 @@ unsafe extern "C" {
         port: Port,
         receive_right: Right,
     ) -> ResultT;
+
+    #[link_name = "get_right_type"]
+    unsafe fn get_right_type(right: Right) -> SyscallR;
+
+    #[link_name = "munmap"]
+    unsafe fn sys_munmap(addr: *mut libc::c_void, length: libc::size_t) -> c_int;
 }
 
 impl Drop for IPCPort {
@@ -447,6 +461,18 @@ pub enum SendRight {
     Unknown(UnknownRight),
 }
 
+pub fn send_right_from_id(id: Right) -> Result<SendRight, Error> {
+    let result = unsafe { get_right_type(id) };
+    result.result.result().and_then(|()| {
+        match result.value as u32 {
+            RIGHT_TYPE_SEND_ONCE => Ok(SendRight::Once(SendOnceRight(id))),
+            RIGHT_TYPE_SEND_MANY => Ok(SendRight::Many(SendManyRight(id))),
+            RIGHT_TYPE_MEM_OBJECT => Ok(SendRight::Object(MemoryObjectRight(id))),
+            _ => Ok(SendRight::Unknown(UnknownRight(id))),
+        }
+    })
+}
+
 impl SendRight {
     pub fn get_id(&self) -> Right {
         match self {
@@ -496,6 +522,46 @@ pub struct RecieveOnceRight(Right, Port);
 pub struct RecieveManyRight(Right, Port);
 // TODO: Destructor for this
 
+pub struct ObjectMmap{
+    ptr: NonNull<u8>,
+    size: usize,
+}
+
+impl ObjectMmap {
+    pub fn as_slice(&self) -> &[u8] {
+        unsafe { std::slice::from_raw_parts(self.ptr.as_ptr(), self.size) }
+    }
+
+    pub fn len(&self) -> usize {
+        self.size
+    }
+
+    pub fn as_ptr(&self) -> *const u8 {
+        self.ptr.as_ptr()
+    }
+}
+
+impl std::ops::Deref for ObjectMmap {
+    type Target = [u8];
+
+    fn deref(&self) -> &[u8] {
+        self.as_slice()
+    }
+}
+
+impl AsRef<[u8]> for ObjectMmap {
+    fn as_ref(&self) -> &[u8] {
+        self.as_slice()
+    }
+}
+
+impl Drop for ObjectMmap {
+    fn drop(&mut self) {
+        unsafe { sys_munmap(self.ptr.as_ptr() as *mut libc::c_void, self.size) };
+    }
+}
+   
+
 impl Drop for RecieveOnceRight {
     fn drop(&mut self) {
         let RecieveOnceRight(right, port) = *self;
@@ -507,6 +573,12 @@ impl Drop for RecieveManyRight {
     fn drop(&mut self) {
         let RecieveManyRight(right, port) = *self;
         _ = unsafe { delete_receive_right(right, port)}
+    }
+}
+
+impl MemoryObjectRight {
+    pub unsafe fn map(&self, offset: u64, size: u64) -> Result<ObjectMmap, Error> {
+        todo!();
     }
 }
 

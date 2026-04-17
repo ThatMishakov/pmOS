@@ -698,3 +698,12 @@ result_t delete_receive_right(pmos_port_t port, pmos_right_t right)
     return pmos_syscall(SYSCALL_DELETE_RECEIVE_RIGHT, port, right).result;
     #endif
 }
+
+syscall_r get_right_type(pmos_right_t right)
+{
+    #ifdef __32BITSYSCALL
+    return __pmos_syscall32_2words(SYSCALL_GET_RIGHT_TYPE, right);
+    #else
+    return pmos_syscall(SYSCALL_GET_RIGHT_TYPE, right);
+    #endif
+}
