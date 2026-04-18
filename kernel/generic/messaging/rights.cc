@@ -5,6 +5,7 @@
 #include <processes/task_group.hh>
 #include <sched/sched.hh>
 #include <memory/mem_object.hh>
+#include <pmos/ipc.h>
 
 namespace kernel::ipc
 {
@@ -108,7 +109,13 @@ ReturnStr<SendRight *> SendRight::create_for_group(Port *port, proc::TaskGroup *
     assert(id_in_parent);
     assert(type == RightType::SendOnce || type == RightType::SendMany);
 
-    klib::unique_ptr<SendRight> new_right = new SendRight();
+    klib::unique_ptr<SendRight> new_right;
+
+    if (type == RightType::SendOnce)
+        new_right = klib::unique_ptr<SendRight>(new SendOnceRight());
+    else
+        new_right = klib::unique_ptr<SendRight>(new SendManyRight());
+   
     if (!new_right)
         return Error(-ENOMEM);
 
@@ -116,7 +123,6 @@ ReturnStr<SendRight *> SendRight::create_for_group(Port *port, proc::TaskGroup *
     new_right->parent_group    = group;
     new_right->of_message      = false;
     new_right->right_parent_id = id_in_parent;
-    new_right->send_many       = (type == RightType::SendMany);
 
     // I don't know if this lock situation is good...
     Auto_Lock_Scope l(new_right->lock);
@@ -242,12 +248,14 @@ ReturnStr<u64> Right::atomic_transfer_to_group(proc::TaskGroup *from, proc::Task
     return Success(new_id);
 }
 
-ReturnStr<std::pair<Right *, u64>> SendRight::duplicate(proc::TaskGroup *group)
+ReturnStr<std::pair<Right *, u64>> SendOnceRight::duplicate(proc::TaskGroup *)
 {
-    if (!send_many)
-        return Error(-EPERM);
+    return Error(-EPERM);
+}
 
-    klib::unique_ptr<SendRight> new_right = new SendRight();
+ReturnStr<std::pair<Right *, u64>> SendManyRight::duplicate(proc::TaskGroup *group)
+{
+    klib::unique_ptr<SendRight> new_right = new SendManyRight();
     if (!new_right)
         return Error(-ENOMEM);
 
@@ -255,7 +263,6 @@ ReturnStr<std::pair<Right *, u64>> SendRight::duplicate(proc::TaskGroup *group)
     new_right->parent_group    = parent_group;
     new_right->of_message      = false;
     new_right->right_parent_id = right_parent_id;
-    new_right->send_many       = true;
 
     Auto_Lock_Scope l(lock);
     if (!alive || of_message || parent_group != group)
@@ -323,12 +330,14 @@ SendRight *to_send_right(Right *r)
     return static_cast<SendRight *>(r);
 }
 
-RightType SendRight::type() const
+RightType SendOnceRight::type() const
 { 
-    if (send_many)
-        return RightType::SendMany;
-    else
-        return RightType::SendOnce;
+    return RightType::SendOnce;
+}
+
+RightType SendManyRight::type() const
+{
+    return RightType::SendMany;
 }
 
 RightType MemObjectRight::type() const
@@ -348,6 +357,31 @@ unsigned Right::type_as_int() const
     default:
         return 0;
     }
+}
+
+u64 SendRight::sender_task_id() const
+{
+    return 0; // Kernel
+}
+
+u64 SendRight::sent_with_right() const
+{
+    return right_parent_id;
+}
+
+static IPC_Kernel_Recieve_Right_Destroyed destroyed_msg = {
+    .type  = IPC_Kernel_Recieve_Right_Destroyed_NUM,
+    .flags = 0,
+};
+
+size_t SendRight::size() const
+{
+    return sizeof(destroyed_msg);
+}
+
+ReturnStr<bool> SendRight::copy_to_user_buff(char *buff) const
+{
+    return copy_to_user(reinterpret_cast<const char *>(&destroyed_msg), buff, sizeof(destroyed_msg));
 }
 
 } // namespace kernel::ipc

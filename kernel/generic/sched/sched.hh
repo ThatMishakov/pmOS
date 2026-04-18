@@ -47,6 +47,7 @@
 #include <registers.hh>
 #include <types.hh>
 #include <utility>
+#include <messaging/ports.hh>
 
 #if defined(__x86_64__) || defined(__i386__)
     #include <interrupts/gdt.hh>

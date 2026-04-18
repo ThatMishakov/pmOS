@@ -27,7 +27,6 @@
  */
 
 #pragma once
-#include "rights.hh"
 
 #include <array>
 #include <lib/list.hh>
@@ -51,6 +50,11 @@ class TaskGroup;
 
 namespace kernel::ipc
 {
+
+struct Right;
+
+using rights_array   = std::array<Right *, 4>;
+using message_buffer = klib::vector<char>;
 
 struct GenericMessage {
     pmos::containers::DoubleListHead<GenericMessage> list_node;
@@ -78,7 +82,7 @@ struct GenericMessage {
         return i;
     }
 
-    virtual ReturnStr<bool> copy_to_user_buff(char *buff) = 0;
+    virtual ReturnStr<bool> copy_to_user_buff(char *buff) const = 0;
 
     virtual ~GenericMessage() = default;
 };
@@ -99,7 +103,7 @@ struct Message final: public GenericMessage {
     virtual inline size_t size() const override { return content.size(); }
 
     // Returns true if done successfully, false otherwise (e.g. when syscall needs to be repeated)
-    virtual ReturnStr<bool> copy_to_user_buff(char *buff) override;
+    virtual ReturnStr<bool> copy_to_user_buff(char *buff) const override;
 
     virtual Right *get_reply_right() const override;
     virtual void clear_reply_right() override;
@@ -111,110 +115,6 @@ struct Message final: public GenericMessage {
     virtual u64 sender_task_id() const override;
 
     virtual ~Message();
-};
-
-#define MSG_ATTR_PRESENT   0x01ULL
-#define MSG_ATTR_DUMMY     0x02ULL
-#define MSG_ATTR_NODEFAULT 0x03ULL
-
-using rights_array   = std::array<Right *, 4>;
-using message_buffer = klib::vector<char>;
-
-class Port
-{
-public:
-    proc::TaskDescriptor *owner;
-
-    mutable Spinlock lock;
-    u64 portno;
-    bool alive = true;
-
-    Port(proc::TaskDescriptor *owner, u64 portno);
-
-    void enqueue(klib::unique_ptr<GenericMessage> msg);
-
-    kresult_t send_from_system(klib::vector<char> &&msg);
-    kresult_t send_from_system(const char *msg, size_t size);
-
-    // Returns true if successfully sent, false otherwise (e.g. when it is needed to repeat the
-    // syscall). Throws on crytical errors
-    ReturnStr<bool> send_from_user(proc::TaskDescriptor *sender, const char *unsafe_user_ptr,
-                                   size_t msg_size);
-    kresult_t atomic_send_from_system(const char *msg, size_t size);
-
-    // Returns true if successfully sent, false otherwise (e.g. when it is needed to repeat the
-    // syscall). Throws on crytical errors
-    ReturnStr<bool> atomic_send_from_user(proc::TaskDescriptor *sender,
-                                          const char *unsafe_user_message, size_t msg_size);
-
-    void change_return_upon_unblock(proc::TaskDescriptor *task);
-
-    GenericMessage *get_front();
-    GenericMessage *atomic_get_front();
-    void pop_front() noexcept;
-    bool is_empty() const noexcept;
-
-    /**
-     * @brief Destructor of port
-     *
-     * This destructor cleans up the port and does other misc stuff such as sending not-delivered
-     * acknowledgements
-     */
-    ~Port() noexcept;
-
-    /**
-     * @brief Gets the port or NULL if it doesn't exist
-     */
-    static Port *atomic_get_port(u64 portno) noexcept;
-
-    /**
-     * @brief Creates a new port with *task* as its owner
-     */
-    static Port *atomic_create_port(proc::TaskDescriptor *task) noexcept;
-
-    /// Deletes the port. Returns false if the port is already deleted
-    bool delete_self() noexcept;
-
-    u64 new_right_id() { return ++current_right_id; }
-
-    bool atomic_alive() const;
-
-    static ReturnStr<std::pair<Right * /* right */, u64 /* new_id_error */>>
-        send_message_right(Right *right, proc::TaskGroup *verify_group, Port *reply_port,
-                           rights_array array, message_buffer data, uint64_t sender_id,
-                           RightType new_right_type, bool always_destroy_right);
-
-protected:
-    using Message_storage = pmos::containers::CircularDoubleList<GenericMessage, &GenericMessage::list_node>;
-    Message_storage msg_queue;
-    u64 current_right_id = 0;
-
-    union {
-        pmos::containers::RBTreeNode<Port> bst_head_global;
-        memory::RCU_Head rcu_head;
-    };
-    pmos::containers::RBTreeNode<Port> bst_head_owner;
-
-    pmos::containers::set<proc::TaskGroup *> notifier_ports;
-    mutable Spinlock notifier_ports_lock;
-
-    using global_ports_tree =
-        pmos::containers::RedBlackTree<Port, &Port::bst_head_global,
-                                       detail::TreeCmp<Port, u64, &Port::portno>>;
-
-    static inline u64 biggest_port = 1;
-    static inline global_ports_tree::RBTreeHead ports;
-    static inline Spinlock ports_lock;
-
-    using rights_tree =
-        pmos::containers::RedBlackTree<SendRight, &SendRight::parent_head,
-                                       detail::TreeCmp<SendRight, u64, &SendRight::right_parent_id>>;
-    rights_tree::RBTreeHead rights;
-    Spinlock rights_lock;
-
-    friend class proc::TaskGroup;
-    friend class proc::TaskDescriptor;
-    friend struct SendRight;
 };
 
 }; // namespace kernel::ipc

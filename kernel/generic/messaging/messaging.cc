@@ -43,7 +43,7 @@ using namespace kernel;
 namespace kernel::ipc
 {
 
-ReturnStr<bool> Message::copy_to_user_buff(char *buff)
+ReturnStr<bool> Message::copy_to_user_buff(char *buff) const
 {
     return copy_to_user(&content.front(), buff, content.size());
 }
@@ -283,16 +283,19 @@ ReturnStr<std::pair<Right * /* right */, u64 /* new_id_error */>>
 
     klib::unique_ptr<SendRight> reply_right = nullptr;
     if (reply_port) {
-        reply_right = klib::make_unique<SendRight>();
+        assert(new_right_type == RightType::SendOnce || new_right_type == RightType::SendMany);
+
+        if (new_right_type == RightType::SendOnce)
+            reply_right = klib::make_unique<SendOnceRight>();
+        else
+            reply_right = klib::make_unique<SendManyRight>();
+        
         if (!reply_right)
             return Error(-ENOMEM);
-
-        assert(new_right_type == RightType::SendOnce || new_right_type == RightType::SendMany);
 
         reply_right->of_message     = true;
         reply_right->parent_message = msg.get();
         reply_right->parent         = reply_port;
-        reply_right->send_many      = (new_right_type == RightType::SendMany);
     }
 
     msg->sent_with_right_ = right->right_parent_id;
@@ -322,7 +325,7 @@ ReturnStr<std::pair<Right * /* right */, u64 /* new_id_error */>>
         if (right->right_0 && always_destroy_right)
             return {-EINVAL, std::make_pair(nullptr, 0)};
 
-        if (!right->send_many || always_destroy_right)
+        if (right->type() == RightType::SendOnce || always_destroy_right)
             right->destroy_nolock();
 
         if (extra_rights) {

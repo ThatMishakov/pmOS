@@ -5,7 +5,7 @@
 #include <pmos/containers/intrusive_list.hh>
 #include <types.hh>
 #include <lib/memory.hh>
-
+#include "messaging.hh"
 
 namespace kernel::proc
 {
@@ -65,7 +65,7 @@ struct Right {
     unsigned type_as_int() const;
 };
 
-struct SendRight final: Right {
+struct SendRight: Right, GenericMessage {
     union {
         pmos::containers::RBTreeNode<SendRight> parent_head = {};
         memory::RCU_Head rcu_head;
@@ -77,17 +77,28 @@ struct SendRight final: Right {
     /// Parent-facing id (does not change, and gets copied when right is duplicated)
     u64 right_parent_id = 0;
 
-    bool send_many = false;
-
-    virtual ReturnStr<std::pair<Right *, u64>> duplicate(proc::TaskGroup *) override;
-
     static ReturnStr<SendRight *> create_for_group(Port *port, proc::TaskGroup *group, RightType type,
                                             u64 id_in_parent);
 
 
-    virtual RightType type() const override;
     virtual void rcu_push() override;
     virtual void remove_from_parent() override;
+
+    // GenericMessage overrides
+    virtual size_t size() const override;
+    virtual ReturnStr<bool> copy_to_user_buff(char *buff) const override;
+    virtual u64 sent_with_right() const override;
+    virtual u64 sender_task_id() const override;
+};
+
+struct SendManyRight final: SendRight {
+    virtual ReturnStr<std::pair<Right *, u64>> duplicate(proc::TaskGroup *) override;
+    virtual RightType type() const override;
+};
+
+struct SendOnceRight final: SendRight {
+    virtual ReturnStr<std::pair<Right *, u64>> duplicate(proc::TaskGroup *) override;
+    virtual RightType type() const override;
 };
 
 struct MemObjectRight final: Right {

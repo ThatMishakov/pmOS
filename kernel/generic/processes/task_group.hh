@@ -35,6 +35,7 @@
 #include <pmos/containers/intrusive_list.hh>
 #include <types.hh>
 #include <messaging/rights.hh>
+#include <messaging/ports.hh>
 
 namespace kernel::ipc {
     class Port;

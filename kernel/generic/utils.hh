@@ -32,7 +32,6 @@
 #include <stddef.h>
 #include <optional>
 #include <lib/vector.hh>
-#include <kern_logger/kern_logger.hh>
 #include "utils.hh"
 
 namespace kernel::log

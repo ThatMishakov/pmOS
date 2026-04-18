@@ -2,6 +2,7 @@
 #include <lib/memory.hh>
 #include <lib/vector.hh>
 #include <messaging/messaging.hh>
+#include <messaging/ports.hh>
 #include <utility>
 
 namespace kernel
