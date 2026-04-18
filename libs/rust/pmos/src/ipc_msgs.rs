@@ -152,9 +152,120 @@ pub struct IPCDiskDescribeReply {
     pub physical_sector_size: u32,
 }
 
+#[derive(Clone, Debug)]
+pub struct FSPropertyType {
+    pub name: &'static str,
+}
+#[derive(Clone, Debug)]
+pub struct FSPropertyUUID {
+    pub uuid: [u8; 16],
+}
+#[derive(Clone, Debug)]
+pub struct FSPropertyLabel {
+    pub label: String,
+}
+
+const PROPERTY_TYPE_TYPE: u32 = 1;
+const PROPERTY_TYPE_UUID: u32 = 2;
+const PROPERTY_TYPE_LABEL: u32 = 3;
+#[derive(Clone, Debug)]
+pub enum FSProperty {
+    Type(FSPropertyType),
+    UUID(FSPropertyUUID),
+    Label(FSPropertyLabel),
+    Unknown(u32, u32, Vec<u8>),
+}
+
+impl From<FSPropertyType> for FSProperty {
+    fn from(value: FSPropertyType) -> Self {
+        FSProperty::Type(value)
+    }
+}
+impl From<FSPropertyUUID> for FSProperty {
+    fn from(value: FSPropertyUUID) -> Self {
+        FSProperty::UUID(value)
+    }
+}
+impl From<FSPropertyLabel> for FSProperty {
+    fn from(value: FSPropertyLabel) -> Self {
+        FSProperty::Label(value)
+    }
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+struct IPCFSPropertyHdr {
+    property_type: u32,
+    flags: u32,
+    // Total length of the property, including this header, aligned to 8 bytes
+    length: u32,
+    data_length: u32,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+struct IPCFSProbeResultHdr {
+    msg_type: u32,
+    flags: u16,
+    result: i16,
+}
+
+pub const IPC_FS_PROBE_RESULT_NUM: u32 = 0xD7;
+#[repr(C)]
+pub struct IPCFSProbeResult {
+    pub flags: u16,
+    pub result: i16,
+    pub properties: Vec<FSProperty>,
+}
+
 fn push_pod<T: Pod>(out: &mut Vec<u8>, v: &T) {
     out.extend_from_slice(bytemuck::bytes_of(v));
 }
+
+impl Serializable for IPCFSProbeResult {
+    fn serialize(&self) -> Cow<'_, [u8]> {
+        let hdr = IPCFSProbeResultHdr {
+            msg_type: IPC_FS_PROBE_RESULT_NUM,
+            flags: self.flags,
+            result: self.result,
+        };
+
+        let mut out = Vec::with_capacity(core::mem::size_of::<IPCFSProbeResultHdr>() + self.properties.iter().map(|p| {
+            let data_len = core::mem::size_of::<IPCFSPropertyHdr>() + match p {
+                FSProperty::Type(t) => t.name.len(),
+                FSProperty::UUID(_) => 16,
+                FSProperty::Label(l) => l.label.len(),
+                FSProperty::Unknown(_, _, d) => d.len(),
+            };
+            // Align to 8 bytes
+            (data_len + 7) & !7
+        }).sum::<usize>());
+        push_pod(&mut out, &hdr);
+
+        for prop in &self.properties {
+            let (property_type, flags, data): (u32, u32, Vec<u8>) = match prop {
+                FSProperty::Type(t) => (PROPERTY_TYPE_TYPE, 0, t.name.as_bytes().to_vec()),
+                FSProperty::UUID(u) => (PROPERTY_TYPE_UUID, 0, u.uuid.to_vec()),
+                FSProperty::Label(l) => (PROPERTY_TYPE_LABEL, 0, l.label.as_bytes().to_vec()),
+                FSProperty::Unknown(t, f, d) => (*t, *f, d.clone()),
+            };
+
+            let length_aligned = (data.len() + 7) & !7;
+            let prop_hdr = IPCFSPropertyHdr {
+                property_type,
+                flags,
+                length: (core::mem::size_of::<IPCFSPropertyHdr>() + length_aligned) as u32,
+                data_length: data.len() as u32,
+            };
+            push_pod(&mut out, &prop_hdr);
+            out.extend_from_slice(&data);
+            // Pad to 8 bytes
+            out.extend_from_slice(&vec![0u8; length_aligned - data.len()]);
+        }
+        Cow::from(out)
+    }
+}
+                
 
 impl Serializable for IPCBusRequestObjectReply<'_> {
     fn serialize(&self) -> Cow<'_, [u8]> {

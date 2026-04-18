@@ -263,6 +263,15 @@ impl Executor {
         task_id
     }
 
+    pub fn send_message(
+        &self,
+        msg: &impl super::ipc_msgs::Serializable,
+        right: &mut Option<SendRight>,
+        include_rights: &mut [Option<SendRight>; 4],
+    ) -> Result<(), (Error, u64)> {
+        super::ipc::send_message_right(msg, right, include_rights)
+    }
+
     pub fn send_message_reply_once(
         &self,
         msg: &impl super::ipc_msgs::Serializable,

@@ -920,6 +920,37 @@ typedef struct IPC_FS_Dup_Reply {
     uint64_t operation_id;
 } IPC_FS_Dup_Reply;
 
+#define IPC_FS_PROPERTY_TYPE 0x01
+#define IPC_FS_PROPERTY_UUID 0x02
+#define IPC_FS_PROPERTY_LABEL 0x03
+typedef struct IPC_FS_Property {
+    /// ID of the property, e.g. UUID, label, etc.
+    uint32_t property_id;
+    /// Flags associated with the property
+    uint32_t property_flags;
+    /// Length of this structure including the header and data
+    uint32_t property_length;
+    /// Length of the data in bytes
+    uint32_t data_length; 
+    /// Data (the size is property_length - sizeof(IPC_FS_Property))
+    uint8_t data[];
+};
+
+#define IPC_FS_Probe_Result_NUM 0xD7
+typedef struct IPC_FS_Probe_Result {
+    /// Message type (must be IPC_FS_Probe_Result_NUM)
+    uint32_t type;
+
+    /// Flags
+    uint16_t flags;
+
+    /// Result code indicating the outcome of the probe operation (negative value on error, 0 on success)
+    int16_t result_code;
+
+    /// FS properties (array of IPC_FS_Property structures, the total size can be deduced from the message size and property_length fields)
+    uint8_t properties[];
+} IPC_FS_Probe_Result;
+
 #define IPC_Pipe_Open_NUM 0xE0
 typedef struct IPC_Pipe_Open {
     /// Message type (must be IPC_Pipe_Open_NUM)

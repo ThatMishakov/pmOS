@@ -82,15 +82,30 @@ pmos::async::detached_task handle_disk_read(IPC_Disk_Read request, DiskGeometry 
         co_return;
     }
 
-    if (request.start_sector + constraint.first_sector < request.start_sector) {
+    auto req_start = request.start_sector;
+    auto req_count = request.sector_count;
+
+    if (req_start > UINT64_MAX - req_count || req_start + req_count > constraint.sector_count) {
         handle_disk_read_error(-E2BIG, reply_right);
         co_return;
     }
-    auto sector_start = request.start_sector + constraint.first_sector;
-    auto sector_count = request.sector_count;
 
-    if (sector_start > constraint.sector_count || (sector_start > UINT64_MAX - sector_count) ||
-        sector_start + sector_count > constraint.sector_count) {
+    if (constraint.first_sector > UINT64_MAX - req_start) {
+        handle_disk_read_error(-E2BIG, reply_right);
+        co_return;
+    }
+
+    auto sector_start = req_start + constraint.first_sector;
+    auto sector_count = req_count;
+
+    if (constraint.first_sector > UINT64_MAX - constraint.sector_count) {
+        handle_disk_read_error(-E2BIG, reply_right);
+        co_return;
+    }
+
+    auto constraint_end = constraint.first_sector + constraint.sector_count;
+
+    if (sector_start > UINT64_MAX - sector_count || sector_start + sector_count > constraint_end) {
         handle_disk_read_error(-E2BIG, reply_right);
         co_return;
     }
@@ -207,15 +222,30 @@ pmos::async::detached_task handle_right_create(IPC_Disk_Create_Right request, Di
         co_return;
     }
 
-    if (request.start_sector + constraint.first_sector < request.start_sector) {
+    auto req_start = request.start_sector;
+    auto req_count = request.sector_count;
+
+    if (req_start > UINT64_MAX - req_count || req_start + req_count > constraint.sector_count) {
         handle_create_right_error(-E2BIG, reply_right);
         co_return;
     }
-    auto sector_start = request.start_sector + constraint.first_sector;
-    auto sector_count = request.sector_count;
 
-    if (sector_start > constraint.sector_count || (sector_start > UINT64_MAX - sector_count) ||
-        sector_start + sector_count > constraint.sector_count) {
+    if (constraint.first_sector > UINT64_MAX - req_start) {
+        handle_create_right_error(-E2BIG, reply_right);
+        co_return;
+    }
+
+    auto sector_start = req_start + constraint.first_sector;
+    auto sector_count = req_count;
+
+    if (constraint.first_sector > UINT64_MAX - constraint.sector_count) {
+        handle_create_right_error(-E2BIG, reply_right);
+        co_return;
+    }
+
+    auto constraint_end = constraint.first_sector + constraint.sector_count;
+
+    if (sector_start > UINT64_MAX - sector_count || sector_start + sector_count > constraint_end) {
         handle_create_right_error(-E2BIG, reply_right);
         co_return;
     }

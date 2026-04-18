@@ -22,6 +22,7 @@
 #include <pmos/helpers.hh>
 #include <pmos/pmbus_helper.hh>
 #include <pmos/ipc/bus_object.hh>
+#include <pmos/fs_properties.hh>
 
 using namespace pmos;
 using namespace pmos::ipc;
@@ -199,6 +200,9 @@ pmos::async::task<void> create_partition_rights(size_t disk_idx)
     }
 }
 
+template<class... Ts>
+struct overloaded : Ts... { using Ts::operator()...; };
+
 pmos::async::detached_task probe_partition(std::shared_ptr<Filesystem> fs, std::shared_ptr<Partition> partition)
 {
     printf("Probing partition for filesystem %s\n", fs->name.c_str());
@@ -230,7 +234,53 @@ pmos::async::detached_task probe_partition(std::shared_ptr<Filesystem> fs, std::
 
     auto msg = co_await dispatcher.get_message(reply_right.second);
 
-    printf("Got a message...\n");
+    if (!msg) {
+        printf("Failed to get the reply message...\n");
+        co_return;
+    }
+
+    if (msg->descriptor.size < sizeof(IPC_FS_Probe_Result)) {
+        printf("Invalid reply size for FS probe result\n");
+        co_return;
+    }
+
+    auto *reply = reinterpret_cast<IPC_FS_Probe_Result *>(msg->data.data());
+    if (reply->type != IPC_FS_Probe_Result_NUM) {
+        printf("Invalid reply type for FS probe result (%i)\n", reply->type);
+        co_return;
+    }
+
+    if (reply->result_code != 0) {
+        printf("Filesystem %s does not recognize the partition\n", fs->name.c_str());
+        co_return;
+    }
+
+    std::vector<FSProperty> properties;
+
+    try {
+        properties = parse_fs_properties(std::span<const uint8_t>(reply->properties, msg->descriptor.size - sizeof(IPC_FS_Probe_Result)));
+    } catch (const std::exception &e) {
+        printf("Failed to parse filesystem properties: %s\n", e.what());
+        co_return;
+    }
+
+    printf("Filesystem %s recognizes the partition! Properties:\n", fs->name.c_str());
+    for (const auto &prop: properties) {
+        std::visit(overloaded {
+            [](const FSPropertyType &type) {
+                printf("  Filesystem type: %s\n", type.name.c_str());
+            },
+            [](const FSPropertyUUID &uuid) {
+                printf("  Filesystem UUID: %s\n", guid_to_string(uuid.uuid).c_str());
+            },
+            [](const FSPropertyLabel &label) {
+                printf("  Filesystem label: %s\n", label.label.c_str());
+            },
+            [](const FSPropertyUnknown &unknown) {
+                printf("  Unknown filesystem property: id=%" PRIu32 " flags=%" PRIu32 " data_size=%zu\n", unknown.property_id, unknown.property_flags, unknown.data.size());
+            }
+        }, prop);
+    }
 }
 
 void probe_new_partition(std::shared_ptr<Partition> p)

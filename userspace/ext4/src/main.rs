@@ -9,6 +9,8 @@ use std::cell::RefCell;
 
 use ext4plus::Ext4;
 
+use libc::ENOENT;
+
 #[derive(PartialEq)]
 enum RunType {
     Probe,
@@ -120,20 +122,32 @@ impl ext4plus::Ext4Read for ReaderWrapper {
         start_byte: u64,
         dst: &mut [u8],
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
-        let sector_size = self.reader.borrow().logical_sector_size as u64;
-        let sector_count = (dst.len() as u64 + sector_size - 1) / sector_size;
-
-        let physical_sector_size = self.reader.borrow().physical_sector_size as u64;
-        let physical_start_sector = start_byte / physical_sector_size;
-        let physical_sector_count = sector_count * (sector_size / physical_sector_size);
-        let max_sector = self.reader.borrow().sector_count;
-        if physical_start_sector >= max_sector || physical_start_sector + physical_sector_count > max_sector {
-            return Err(Box::new(std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "Read out of bounds")));
+        if dst.is_empty() {
+            return Ok(());
         }
 
-        let executor = self.reader.borrow().executor.clone();
+        let reader = self.reader.borrow();
+        let sector_size = reader.logical_sector_size as u64;
+        let aligned_start_byte = (start_byte / sector_size) * sector_size;
+        let byte_offset_in_first_sector = start_byte - aligned_start_byte;
+        let total_bytes = byte_offset_in_first_sector
+            .checked_add(dst.len() as u64)
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "Read size overflow"))?;
+        let sector_count = (total_bytes + sector_size - 1) / sector_size;
+        let start_sector = aligned_start_byte / sector_size;
+        let max_sector = reader.sector_count;
 
-        let msg = pmos::ipc_msgs::IPCDiskRead::new(0, physical_start_sector, physical_sector_count);
+        if start_sector >= max_sector || start_sector + sector_count > max_sector {
+            return Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::UnexpectedEof,
+                "Read out of bounds",
+            )));
+        }
+
+        let executor = reader.executor.clone();
+        drop(reader);
+
+        let msg = pmos::ipc_msgs::IPCDiskRead::new(0, start_sector, sector_count);
         let msg = executor.send_message_reply_once(&msg, &mut self.reader.borrow_mut().disk_right, &mut [None, None, None, None]).expect("Failed to send IPCDiskRead message");
         let mut msg = msg.await
             .expect("Failed to receive IPCDiskRead reply");
@@ -151,15 +165,19 @@ impl ext4plus::Ext4Read for ReaderWrapper {
             };
 
             const MAX_MMAP_SIZE: u64 = 16 * 1024 * 1024; // 16 MiB
-            let mut offset = 0;
-            while offset < dst.len() as u64 {
-                let chunk_size = std::cmp::min(MAX_MMAP_SIZE, dst.len() as u64 - offset);
-                // Align chunk_size up to page size
-                let page_size = get_page_size();
-                let chunk_size_aligned = (chunk_size + page_size - 1) & (!(page_size - 1));
-                let mmap = unsafe { right.map(offset, chunk_size_aligned).expect("Failed to map memory object right") };
-                dst[offset as usize..(offset + chunk_size) as usize].copy_from_slice(&mmap[..chunk_size as usize]);
-                offset += chunk_size;
+            let page_size = get_page_size();
+            let mut copied = 0_u64;
+            while copied < dst.len() as u64 {
+                let src_offset = byte_offset_in_first_sector + copied;
+                let map_offset = src_offset & (!(page_size - 1));
+                let in_page_offset = src_offset - map_offset;
+                let chunk_size = std::cmp::min(MAX_MMAP_SIZE, dst.len() as u64 - copied);
+                let map_size = in_page_offset + chunk_size;
+                let map_size_aligned = (map_size + page_size - 1) & (!(page_size - 1));
+                let mmap = unsafe { right.map(map_offset, map_size_aligned).expect("Failed to map memory object right") };
+                dst[copied as usize..(copied + chunk_size) as usize]
+                    .copy_from_slice(&mmap[in_page_offset as usize..(in_page_offset + chunk_size) as usize]);
+                copied += chunk_size;
             }
 
             Ok(())
@@ -203,8 +221,43 @@ impl DiskReader {
 }
 
 async fn ipc_probe(executor: Executor, reader: ReaderWrapper, reply_right: Option<SendRight>) {
+    println!("ext4: Probing filesystem...");
+
     let fs = Ext4::load(Box::new(reader)).await;
-    println!("{:#?}", fs);
+    let msg = if let Ok(fs) = fs {
+        let mut properties = Vec::new();
+        let uuid = fs.uuid().as_bytes().clone();
+        properties.push(pmos::ipc_msgs::FSPropertyUUID {
+            uuid,
+        }.into());
+
+        let label = fs.label().to_str().unwrap_or("").to_string();
+        if !label.is_empty() {
+            properties.push(pmos::ipc_msgs::FSPropertyLabel {
+                label,
+            }.into());
+        }
+
+        properties.push(pmos::ipc_msgs::FSPropertyType {
+            name: "ext4",
+        }.into());
+
+        pmos::ipc_msgs::IPCFSProbeResult {
+            flags: 0,
+            result: 0,
+            properties,
+        }
+    } else {
+        pmos::ipc_msgs::IPCFSProbeResult {
+            flags: 0,
+            result: -ENOENT as i16,
+            properties: [].to_vec(),
+        }
+    };
+
+    if let Some(mut reply_right) = reply_right {
+        executor.send_message(&msg, &mut Some(reply_right), &mut [None, None, None, None]).expect("Failed to send IPCFSProbeResult message");
+    }
 }
     
 
@@ -225,8 +278,6 @@ async fn handle_ipc(executor: Executor, run_type: RunType, disk_right: pmos::ipc
 }
 
 fn main() {
-    println!("Hello from ext4!");
-
     let (run_type, disk_right, reply_right) = parse_args();
 
     let executor = Executor::new();
