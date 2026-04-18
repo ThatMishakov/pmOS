@@ -1,5 +1,4 @@
 use super::error::Error;
-use super::mem_object::MemoryObject;
 use super::system::ResultT;
 use core::ffi::c_uint;
 use std::{cmp::Ordering, mem, ptr};
@@ -154,9 +153,7 @@ impl IPCPort {
     pub fn pop_front_blocking(&mut self) -> Message {
         let mut desc = MessageDescriptor {
             sender: 0,
-            mem_object: 0,
             size: 0,
-            sender_object_id: 0,
             sent_with_right: 0,
             other_rights_count: 0,
             flags: 0,
@@ -206,7 +203,6 @@ impl IPCPort {
         Message {
             data: buffer.into_boxed_slice(),
             sender: desc.sender,
-            object: MemoryObject::from_message(desc.mem_object),
             sent_with_right: desc.sent_with_right,
             reply_right: right,
             other_rights,
@@ -233,9 +229,7 @@ impl IPCPort {
 #[repr(C)]
 struct MessageDescriptor {
     sender: u64,
-    mem_object: u64,
     size: u64,
-    sender_object_id: u64,
     sent_with_right: u64,
     other_rights_count: u32,
     flags: u32,
@@ -245,7 +239,6 @@ pub struct Message {
     pub data: Box<[u8]>,
     pub sender: u64,
     pub sent_with_right: u64,
-    pub object: Option<MemoryObject>,
     pub reply_right: Option<SendRight>,
     pub other_rights: [Option<SendRight>; 4],
 }
@@ -264,17 +257,10 @@ extern "C" {
 pub fn send_message(
     msg: &impl super::ipc_msgs::Serializable,
     port: u64,
-    object: Option<MemoryObject>,
 ) -> Result<(), Error> {
     let data = msg.serialize();
     let size = data.len();
-    if let Some(object) = object {
-        unsafe { send_message_port2(port, object.id(), size, data.as_ptr(), 0) }.result()?;
-        mem::forget(object);
-    } else {
-        unsafe { send_message_port(port, size, data.as_ptr()) }.result()?
-    }
-    Ok(())
+    unsafe { send_message_port(port, size, data.as_ptr()) }.result()
 }
 
 const SEND_MESSAGE_DELETE_RIGHT: u32 = 1 << 8;

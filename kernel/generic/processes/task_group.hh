@@ -142,7 +142,7 @@ public:
     ipc::Right *atomic_get_right(u64 right_id);
     u64 atomic_new_right_id();
 
-    kresult_t transfer_rights(ipc::Message *msg, std::array<u64, 4> right_ids);
+    kresult_t transfer_rights(ipc::GenericMessage *msg, std::array<u64, 4> right_ids);
 private:
     id_type id = __atomic_fetch_add(&next_id, 1, __ATOMIC_SEQ_CST);
 

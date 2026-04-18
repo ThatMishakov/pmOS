@@ -2,7 +2,6 @@ pub mod ipc;
 pub mod ipc_msgs;
 pub mod system;
 pub mod error;
-pub mod mem_object;
 pub mod pmbus;
 pub mod task_group;
 pub mod async_helpers;

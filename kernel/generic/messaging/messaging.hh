@@ -52,33 +52,65 @@ class TaskGroup;
 namespace kernel::ipc
 {
 
-struct Message {
-    pmos::containers::DoubleListHead<Message> list_node;
-    u64 task_id_from    = 0;
-    u64 mem_object_id   = 0;
-    u64 sent_with_right = 0;
-    klib::vector<char> content;
-    Right *reply_right            = {};
-    std::array<Right *, 4> rights = {};
+struct GenericMessage {
+    pmos::containers::DoubleListHead<GenericMessage> list_node;
+    virtual size_t size() const = 0;
 
-    Message(u64 task_id_from, klib::vector<char> content, u64 mem_object_id = 0)
-        : task_id_from(task_id_from), mem_object_id(mem_object_id), content(klib::move(content))
-    {
-    }
+    using rights_array = std::array<Right *, 4>;
 
-    inline size_t size() const { return content.size(); }
-    inline size_t rights_count() const
+    // This was added here returning nullptr here instead of making it a pure virtual function
+    // so that there's less boilerplate in message types that don't hold a reply right
+    virtual Right *get_reply_right() const;
+    virtual void clear_reply_right();
+
+    // Same here as with the reply right...
+    virtual rights_array &get_rights();
+    virtual const rights_array &get_rights() const;
+
+    virtual u64 sent_with_right() const = 0;
+    virtual u64 sender_task_id() const = 0;
+
+    virtual inline size_t rights_count() const
     {
         size_t i = 0;
-        for (auto r: rights)
+        for (auto r: get_rights())
             i += r != nullptr;
         return i;
     }
 
-    // Returns true if done successfully, false otherwise (e.g. when syscall needs to be repeated)
-    ReturnStr<bool> copy_to_user_buff(char *buff);
+    virtual ReturnStr<bool> copy_to_user_buff(char *buff) = 0;
 
-    ~Message();
+    virtual ~GenericMessage() = default;
+};
+
+// The final here is more of an optimization, more than anything else, I might inherit from this later as well...
+struct Message final: public GenericMessage {
+    u64 task_id_from    = 0;
+    u64 sent_with_right_ = 0;
+    klib::vector<char> content;
+    Right *reply_right            = {};
+    std::array<Right *, 4> rights = {};
+
+    Message(u64 task_id_from, klib::vector<char> content)
+        : task_id_from(task_id_from), content(klib::move(content))
+    {
+    }
+
+    virtual inline size_t size() const override { return content.size(); }
+
+    // Returns true if done successfully, false otherwise (e.g. when syscall needs to be repeated)
+    virtual ReturnStr<bool> copy_to_user_buff(char *buff) override;
+
+    virtual Right *get_reply_right() const override;
+    virtual void clear_reply_right() override;
+
+    virtual rights_array &get_rights() override;
+    virtual const rights_array &get_rights() const override;
+
+    virtual u64 sent_with_right() const override;
+    virtual u64 sender_task_id() const override;
+
+    virtual ~Message();
 };
 
 #define MSG_ATTR_PRESENT   0x01ULL
@@ -99,7 +131,7 @@ public:
 
     Port(proc::TaskDescriptor *owner, u64 portno);
 
-    void enqueue(klib::unique_ptr<Message> msg);
+    void enqueue(klib::unique_ptr<GenericMessage> msg);
 
     kresult_t send_from_system(klib::vector<char> &&msg);
     kresult_t send_from_system(const char *msg, size_t size);
@@ -113,13 +145,12 @@ public:
     // Returns true if successfully sent, false otherwise (e.g. when it is needed to repeat the
     // syscall). Throws on crytical errors
     ReturnStr<bool> atomic_send_from_user(proc::TaskDescriptor *sender,
-                                          const char *unsafe_user_message, size_t msg_size,
-                                          u64 mem_object_id);
+                                          const char *unsafe_user_message, size_t msg_size);
 
     void change_return_upon_unblock(proc::TaskDescriptor *task);
 
-    Message *get_front();
-    Message *atomic_get_front();
+    GenericMessage *get_front();
+    GenericMessage *atomic_get_front();
     void pop_front() noexcept;
     bool is_empty() const noexcept;
 
@@ -154,7 +185,7 @@ public:
                            RightType new_right_type, bool always_destroy_right);
 
 protected:
-    using Message_storage = pmos::containers::CircularDoubleList<Message, &Message::list_node>;
+    using Message_storage = pmos::containers::CircularDoubleList<GenericMessage, &GenericMessage::list_node>;
     Message_storage msg_queue;
     u64 current_right_id = 0;
 

@@ -592,7 +592,7 @@ void syscall_get_first_message()
         return;
     }
 
-    Message *top_message = nullptr;
+    GenericMessage *top_message = nullptr;
 
     {
         Auto_Lock_Scope scope_lock(port->lock);
@@ -622,9 +622,9 @@ void syscall_get_first_message()
 
     u64 reply_right_id = 0;
     if (!(args & MSG_ARG_NOPOP)) {
-        if (top_message->reply_right)
-            if ((!(args & MSG_ARG_REJECT_RIGHT)) && top_message->reply_right) {
-                auto right = top_message->reply_right;
+        auto reply_right = top_message->get_reply_right();
+        if (reply_right)
+            if ((!(args & MSG_ARG_REJECT_RIGHT)) && reply_right) {
                 auto group = current->get_rights_namespace();
                 if (!group) {
                     syscall_error(current) = -ESRCH;
@@ -633,8 +633,8 @@ void syscall_get_first_message()
 
                 reply_right_id = group->atomic_new_right_id();
 
-                Auto_Lock_Scope l(right->lock);
-                if (right->alive) {
+                Auto_Lock_Scope l(reply_right->lock);
+                if (reply_right->alive) {
                     Auto_Lock_Scope gl(group->rights_lock);
 
                     if (!group->atomic_alive()) {
@@ -642,12 +642,12 @@ void syscall_get_first_message()
                         return;
                     }
 
-                    right->right_sender_id = reply_right_id;
-                    group->rights.insert(right);
-                    right->of_message   = false;
-                    right->parent_group = group;
+                    reply_right->right_sender_id = reply_right_id;
+                    group->rights.insert(reply_right);
+                    reply_right->of_message   = false;
+                    reply_right->parent_group = group;
 
-                    top_message->reply_right = nullptr;
+                    top_message->clear_reply_right();
                 }
             }
 
@@ -699,8 +699,17 @@ void syscall_send_message_port()
         return;
     }
 
+    // Fail on mem object here, since that interface was bad anyway, and this function is going away once everything is switched
+    // to send_message_right; so just don't bother with changing the signature everywhere in userspace
+    // (if someone is reading this and is trying to figure out how to send memory object, just get a right to it, and send it
+    // as right with send_message_right)
+    if (mem_object) {
+        syscall_error(current) = -ENOSYS;
+        return;
+    }
+
     syscall_success(current);
-    auto result = port->atomic_send_from_user(current, (char *)message, size, mem_object);
+    auto result = port->atomic_send_from_user(current, (char *)message, size);
     if (!result.success()) {
         syscall_error(current) = result.result;
         return;
@@ -731,7 +740,7 @@ void syscall_get_message_info()
         return;
     }
 
-    Message *msg {};
+    GenericMessage *msg {};
 
     {
         Auto_Lock_Scope lock(port->lock);
@@ -750,25 +759,26 @@ void syscall_get_message_info()
         msg = port->get_front();
     }
 
-    bool holds_reply_right     = msg->reply_right;
+    auto reply_right = msg->get_reply_right();
+    bool holds_reply_right     = reply_right != nullptr;
     bool reply_right_send_many = false;
     if (holds_reply_right)
-        reply_right_send_many = msg->reply_right->type() == RightType::SendMany;
+        reply_right_send_many = reply_right->type() == RightType::SendMany;
 
     unsigned flags_ = (holds_reply_right ? (unsigned)MESSAGE_FLAG_REPLY_RIGHT : 0) |
                       (reply_right_send_many ? (unsigned)MESSAGE_FLAG_REPLY_SEND_MANY : 0);
 
+    auto const &rights = msg->get_rights();
     for (int i = 0; i < 4; ++i) {
-        if (auto r = msg->rights[i] ; r)
+        if (auto r = rights[i] ; r)
             flags_ |= r->type_as_int() << (16 + i*4);
     }
 
     u64 msg_struct_size     = sizeof(Message_Descriptor);
     Message_Descriptor desc = {
-        .sender             = msg->task_id_from,
-        .mem_object         = msg->mem_object_id,
+        .sender             = msg->sender_task_id(),
         .size               = msg->size(),
-        .sent_with_right    = msg->sent_with_right,
+        .sent_with_right    = msg->sent_with_right(),
         .other_rights_count = (unsigned)msg->rights_count(),
         .flags              = flags_,
     };
@@ -2411,8 +2421,9 @@ void syscall_accept_rights()
     }
 
     std::array<u64, 4> rights = {};
+    auto msg_rights = msg->get_rights();
     for (int i = 0; i < 4; ++i)
-        if (auto right = msg->rights[i]; right) {
+        if (auto right = msg_rights[i]; right) {
             rights[i] = group->atomic_new_right_id();
         }
 
