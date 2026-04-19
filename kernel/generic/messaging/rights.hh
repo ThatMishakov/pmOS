@@ -43,10 +43,21 @@ struct Right {
     bool alive : 1      = true;
     bool of_message : 1 = false;
     bool right_0 : 1    = false;
+    // Define this bit here to save space
+    bool sent : 1       = false;
+
     mutable Spinlock lock;
 
-    bool destroy(proc::TaskGroup *match_group = nullptr);
-    bool destroy_nolock();
+    enum class DestroyReason {
+        DeletedBySender,
+        DeletedByReceiver,
+        SendingMessage,
+    };
+
+    bool destroy(DestroyReason reason, proc::TaskGroup *match_group = nullptr);
+    virtual bool destroy_nolock(DestroyReason reason, proc::TaskGroup *match_group = nullptr);
+
+    // Here, the reason would be DeletedBySender
     void destroy_deleting_message();
 
     virtual void rcu_push() = 0;
@@ -94,11 +105,18 @@ struct SendRight: Right, GenericMessage {
 struct SendManyRight final: SendRight {
     virtual ReturnStr<std::pair<Right *, u64>> duplicate(proc::TaskGroup *) override;
     virtual RightType type() const override;
+
+    // GenericMessage
+    virtual void delete_self() override;
 };
 
 struct SendOnceRight final: SendRight {
     virtual ReturnStr<std::pair<Right *, u64>> duplicate(proc::TaskGroup *) override;
     virtual RightType type() const override;
+
+    virtual bool destroy_nolock(DestroyReason reason, proc::TaskGroup *match_group = nullptr) override;
+    
+    virtual void delete_self() override;
 };
 
 struct MemObjectRight final: Right {

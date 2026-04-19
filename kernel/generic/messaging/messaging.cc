@@ -177,7 +177,7 @@ void Port::pop_front() noexcept
     assert(not msg_queue.empty());
     auto begin = msg_queue.begin();
     msg_queue.remove(begin);
-    delete &*begin;
+    begin->delete_self();
 }
 
 bool Port::is_empty() const noexcept
@@ -233,7 +233,7 @@ bool Port::delete_self() noexcept
     };
 
     while (auto p = get_first_right()) {
-        p->destroy();
+        p->destroy(Right::DestroyReason::DeletedByReceiver);
     }
 
     rcu_head.rcu_func = [](void *self, bool) {
@@ -251,7 +251,7 @@ Port::~Port() noexcept
     while (!msg_queue.empty()) {
         auto begin = msg_queue.begin();
         msg_queue.remove(begin);
-        delete &*begin;
+        begin->delete_self();
     }
 }
 
@@ -326,7 +326,7 @@ ReturnStr<std::pair<Right * /* right */, u64 /* new_id_error */>>
             return {-EINVAL, std::make_pair(nullptr, 0)};
 
         if (right->type() == RightType::SendOnce || always_destroy_right)
-            right->destroy_nolock();
+            right->destroy_nolock(Right::DestroyReason::SendingMessage);
 
         if (extra_rights) {
             Auto_Lock_Scope l(verify_group->rights_lock);
@@ -408,7 +408,7 @@ const GenericMessage::rights_array &GenericMessage::get_rights() const
 
 GenericMessage::rights_array &GenericMessage::get_rights()
 {
-    // This is fine for parallel calls, since everything should check that rights are not nullptr anyway, so
+    // This is fine for concurrent calls, since everything should check that rights are not nullptr anyway, so
     // this array would never be modified
 
     for (auto &i: empty_rights)
@@ -436,6 +436,11 @@ u64 Message::sent_with_right() const
 u64 Message::sender_task_id() const
 {
     return task_id_from;
+}
+
+void Message::delete_self()
+{
+    delete this;
 }
 
 } // namespace kernel::ipc

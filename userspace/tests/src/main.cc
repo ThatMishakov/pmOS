@@ -121,10 +121,13 @@ void test_exception()
     }
 }
 
+extern "C" void test_delete_ipc();
+
 int main()
 {
     sleep(1);
     printf("Starting tests...\n");
+    test_delete_ipc();
     //tick();
     test_containers();
     test_exception();

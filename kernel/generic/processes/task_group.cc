@@ -66,7 +66,7 @@ void TaskGroup::destroy()
     };
 
     while (auto r = first_right())
-        r->destroy(this);
+        r->destroy(ipc::Right::DestroyReason::DeletedBySender, this);
 
     rcu_head.rcu_func = [](void *self, bool) {
         TaskGroup *t = reinterpret_cast<TaskGroup *>(reinterpret_cast<char *>(self) -
@@ -377,11 +377,16 @@ kresult_t TaskGroup::transfer_rights(ipc::GenericMessage *msg, std::array<u64, 4
             assert(id);
 
             Auto_Lock_Scope l(right->lock);
+            assert(right->of_message);
             if (right->alive) {
                 right->right_sender_id = id;
                 right->parent_group    = this;
                 right->of_message      = false;
                 rights.insert(right);
+            } else if (right->sent) {
+                // Make the message queue hold the right...
+                // The msg queue will check if the right is of message and won't free it, so just clear that flag
+                right->of_message = false;
             } else {
                 right->rcu_push();
             }

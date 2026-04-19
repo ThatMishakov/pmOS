@@ -7,6 +7,7 @@
 #include <memory/mem_object.hh>
 #include <pmos/ipc.h>
 
+
 namespace kernel::ipc
 {
 
@@ -30,9 +31,30 @@ void MemObjectRight::rcu_push()
     sched::get_cpu_struct()->heap_rcu_cpu.push(&rcu_head);
 }
 
-bool Right::destroy(proc::TaskGroup *match_group)
+bool Right::destroy(Right::DestroyReason reason, proc::TaskGroup *match_group)
 {
     Auto_Lock_Scope l(lock);
+
+    return destroy_nolock(reason, match_group);
+}
+
+void SendRight::remove_from_parent()
+{
+    assert(parent);
+    Auto_Lock_Scope l(parent->rights_lock);
+    parent->rights.erase(this);
+}
+
+void MemObjectRight::remove_from_parent()
+{
+    assert(mem_object);
+    Auto_Lock_Scope l(mem_object->rights_lock);
+    mem_object->rights.remove(this);
+}
+
+bool Right::destroy_nolock(Right::DestroyReason, proc::TaskGroup *match_group)
+{
+    assert(lock.is_locked());
 
     if (!alive)
         return false;
@@ -60,33 +82,23 @@ bool Right::destroy(proc::TaskGroup *match_group)
     return true;
 }
 
-void SendRight::remove_from_parent()
-{
-    assert(parent);
-    Auto_Lock_Scope l(parent->rights_lock);
-    parent->rights.erase(this);
-}
-
-void MemObjectRight::remove_from_parent()
-{
-    assert(mem_object);
-    Auto_Lock_Scope l(mem_object->rights_lock);
-    mem_object->rights.remove(this);
-}
-
-bool Right::destroy_nolock()
+bool SendOnceRight::destroy_nolock(DestroyReason reason, proc::TaskGroup *match_group)
 {
     assert(lock.is_locked());
-
+    
     if (!alive)
+        return false;
+
+    if (match_group && (of_message || parent_group != match_group))
         return false;
 
     alive = false;
 
     remove_from_parent();
 
-    if (!of_message) { // If it is of message, let it be garbage collected when the message is
-                       // destroyed (in place of placeholders...)
+    bool send_notification = reason == DestroyReason::DeletedBySender;
+
+    if (!of_message) {
         auto group = parent_group;
         assert(group);
 
@@ -94,11 +106,54 @@ bool Right::destroy_nolock()
             Auto_Lock_Scope l(group->rights_lock);
             group->rights.erase(this);
         }
+    }
 
+    if (!send_notification and !of_message) {
         rcu_push();
     }
 
+    if (send_notification) {
+        auto port = parent;
+        assert(port);
+
+        {
+            Auto_Lock_Scope l(port->lock);
+            port->enqueue(klib::unique_ptr<SendRight>(this));
+        }
+
+        sent = true;
+    }
+
     return true;
+}
+
+void SendOnceRight::delete_self()
+{
+    Auto_Lock_Scope l(lock);
+    
+    assert(!alive);
+    assert(sent);
+    sent = false; // Clear this so that if it's held by a message, it can be freed
+
+    if (!of_message) {
+        rcu_push();
+    }
+}
+
+void SendManyRight::delete_self()
+{
+    // Do the deal as with SendOnceRight. This was split into two functions, so that the different RCU queues can be used eventually
+    assert(false && "delete_self() called on SendManyRight, which shouldn't be possible");
+
+    Auto_Lock_Scope l(lock);
+    
+    assert(!alive);
+    assert(sent);
+    sent = false; // Clear this so that if it's held by a message, it can be freed
+
+    if (!of_message) {
+        rcu_push();
+    }
 }
 
 ReturnStr<SendRight *> SendRight::create_for_group(Port *port, proc::TaskGroup *group, RightType type,
@@ -182,7 +237,7 @@ bool Right::of_group(proc::TaskGroup *g) const { return !of_message && parent_gr
 
 void Right::destroy_deleting_message()
 {
-    destroy();
+    destroy(DestroyReason::DeletedByReceiver);
     assert(of_message);
     rcu_push();
 }

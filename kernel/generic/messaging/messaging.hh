@@ -85,6 +85,8 @@ struct GenericMessage {
     virtual ReturnStr<bool> copy_to_user_buff(char *buff) const = 0;
 
     virtual ~GenericMessage() = default;
+
+    virtual void delete_self() = 0;
 };
 
 // The final here is more of an optimization, more than anything else, I might inherit from this later as well...
@@ -115,6 +117,8 @@ struct Message final: public GenericMessage {
     virtual u64 sender_task_id() const override;
 
     virtual ~Message();
+
+    virtual void delete_self() override;
 };
 
 }; // namespace kernel::ipc

@@ -2382,7 +2382,7 @@ void syscall_delete_send_right()
         return;
     }
 
-    auto result = right->destroy(group);
+    auto result = right->destroy(Right::DestroyReason::DeletedBySender, group);
     if (result) {
         syscall_success(current);
     } else {
