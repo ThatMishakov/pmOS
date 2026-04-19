@@ -103,13 +103,14 @@ protected:
     static inline Spinlock ports_lock;
 
     using rights_tree =
-        pmos::containers::RedBlackTree<SendRight, &SendRight::parent_head,
-                                       detail::TreeCmp<SendRight, u64, &SendRight::right_parent_id>>;
+        pmos::containers::RedBlackTree<RecieveRight, &RecieveRight::parent_head,
+                                       detail::TreeCmp<RecieveRight, u64, &RecieveRight::right_parent_id>>;
     rights_tree::RBTreeHead rights;
     Spinlock rights_lock;
 
     friend class proc::TaskGroup;
     friend class proc::TaskDescriptor;
+    friend struct RecieveRight;
     friend struct SendRight;
     friend struct SendManyRight;
 };

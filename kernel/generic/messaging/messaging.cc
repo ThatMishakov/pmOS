@@ -233,7 +233,7 @@ bool Port::delete_self() noexcept
     };
 
     while (auto p = get_first_right()) {
-        p->destroy(Right::DestroyReason::DeletedByReceiver);
+        p->destroy_recieve_right();
     }
 
     rcu_head.rcu_func = [](void *self, bool) {

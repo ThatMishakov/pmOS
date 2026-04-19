@@ -439,4 +439,9 @@ ReturnStr<bool> SendRight::copy_to_user_buff(char *buff) const
     return copy_to_user(reinterpret_cast<const char *>(&destroyed_msg), buff, sizeof(destroyed_msg));
 }
 
+bool SendRight::destroy_recieve_right()
+{
+    return destroy(DestroyReason::DeletedByReceiver);
+}
+
 } // namespace kernel::ipc
