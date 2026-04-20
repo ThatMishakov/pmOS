@@ -269,6 +269,9 @@ void syscall_transfer_right();
 void syscall_get_right_type();
 // Parameters: u64 right_id
 
+void syscall_watch_right();
+// Parameters: u64 right_id, u64 notification_port
+
 struct SyscallRetval {
     TaskDescriptor *task;
     u64 operator=(u64 value);

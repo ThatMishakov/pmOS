@@ -98,5 +98,6 @@
 #define SYSCALL_GET_MEM_OBJECT_SIZE         57
 #define SYSCALL_TRANSFER_RIGHT              58
 #define SYSCALL_GET_RIGHT_TYPE              59
+#define SYSCALL_WATCH_RIGHT                 60
 
 #endif

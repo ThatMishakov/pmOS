@@ -293,6 +293,19 @@ typedef struct IPC_Kernel_Recieve_Right_Destroyed {
     /// The ID can be known from the right it is sent with
 } IPC_Kernel_Recieve_Right_Destroyed;
 
+#define IPC_Kernel_Right_Destroyed_NUM 0x27
+/// Notification of right deletion
+typedef struct IPC_Kernel_Right_Destroyed {
+    /// @brief  Message type (must be IPC_Kernel_Right_Destroyed_NUM)
+    uint32_t type;
+
+    /// Flags
+    uint16_t flags;
+
+    /// Right type
+    uint16_t right_type;
+} IPC_Kernel_Right_Destroyed;
+
 #define IPC_Write_Plain_NUM 0x40
 typedef struct IPC_Write_Plain {
     uint32_t type;

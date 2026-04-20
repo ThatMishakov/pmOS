@@ -707,3 +707,17 @@ syscall_r get_right_type(pmos_right_t right)
     return pmos_syscall(SYSCALL_GET_RIGHT_TYPE, right);
     #endif
 }
+
+right_request_t watch_right(pmos_right_t right, pmos_port_t port)
+{
+    syscall_r result;
+    #ifdef __32BITSYSCALL
+    result = __pmos_syscall32_4words(SYSCALL_WATCH_RIGHT, right, port);
+    #else
+    result = pmos_syscall(SYSCALL_WATCH_RIGHT, right, port);
+    #endif
+    return (right_request_t) {
+        .result = result.result,
+        .right = result.value,
+    };
+}

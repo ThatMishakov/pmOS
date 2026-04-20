@@ -69,7 +69,7 @@ extern void deactivate_page_table();
 namespace kernel::proc::syscalls
 {
 
-std::array<const char *, 60> syscall_names = {
+std::array<const char *, 61> syscall_names = {
     "SYSCALL EXIT",
     "SYSCALL GET TASK ID",
     "SYSCALL CREATE PROCESS",
@@ -134,6 +134,7 @@ std::array<const char *, 60> syscall_names = {
     "SYSCALL GET MEM OBJECT SIZE",
     "SYSCALL TRANSFER RIGHT",
     "SYSCALL GET RIGHT TYPE",
+    "SYSCALL WATCH RIGHT",
 };
 
 const char *syscall_name(unsigned id)
@@ -145,7 +146,7 @@ const char *syscall_name(unsigned id)
 }
 
 using syscall_function                         = void (*)();
-std::array<syscall_function, 60> syscall_table = {
+std::array<syscall_function, 61> syscall_table = {
     syscall_exit,
     syscall_get_task_id,
     syscall_create_process,
@@ -210,6 +211,7 @@ std::array<syscall_function, 60> syscall_table = {
     syscall_get_mem_object_size,
     syscall_transfer_right,
     syscall_get_right_type,
+    syscall_watch_right,
 };
 
 extern "C" void syscall_handler()
@@ -239,8 +241,8 @@ extern "C" void syscall_handler()
 
     // TODO: This crashes if the syscall is not implemented
     if (call_n >= syscall_table.size() or syscall_table[call_n] == nullptr) {
-        serial_logger.printf("Debug: syscall %h pid %li (%s) ", call_n, task->task_id,
-                             task->name.c_str());
+        serial_logger.printf("Debug: syscall %h (%i %s) pid %lx (%s) ", call_n, call_n, syscall_name(call_n),
+                             task->task_id, task->name.c_str());
         serial_logger.printf(" -> %i (%s)\n", -ENOTSUP, "syscall not implemented");
         syscall_error(task) = -ENOTSUP;
         return;
@@ -2552,6 +2554,59 @@ void syscall_get_right_type()
     }
 
     syscall_return(current) = right->type_as_int();
+}
+
+void syscall_watch_right()
+{
+    auto current = get_current_task();
+
+    u64 right_id = syscall_arg64(current, 0);
+    u64 port_id  = syscall_arg64(current, 1);
+
+    auto group = current->get_rights_namespace();
+    if (!group) {
+        syscall_error(current) = -ESRCH;
+        return;
+    }
+
+    Right *right;
+    if (right_id) {
+        right = group->atomic_get_right(right_id);
+    } else {
+        // Right 0 will probably fail, but allow this anyway for consistency
+        auto id = atomic_right0_id();
+        right   = kernel_tasks->atomic_get_right(id);
+    }
+
+    if (!right) {
+        syscall_error(current) = -ENOENT;
+        return;
+    }
+
+    auto many_right = to_send_many_right(right);
+    if (!many_right) {
+        syscall_error(current) = -ENOSYS;
+        return;
+    }
+
+    auto port = Port::atomic_get_port(port_id);
+    if (!port) {
+        syscall_error(current) = -ENOENT;
+        return;
+    }
+
+    if (port->owner != current) {
+        syscall_error(current) = -EPERM;
+        return;
+    }
+
+    auto result = many_right->atomic_watch(port);
+    if (!result.success()) {
+        syscall_error(current) = result.result;
+        return;
+    }
+
+    syscall_return(current) = result.val;
 }
 
 } // namespace kernel::proc::syscalls

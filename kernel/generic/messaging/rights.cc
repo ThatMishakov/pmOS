@@ -189,6 +189,29 @@ ReturnStr<SendOnceRight *> SendOnceRight::create_for_group(Port *port, proc::Tas
     return Success(new_right.release());
 }
 
+ReturnStr<u64> SendManyRight::atomic_watch(Port *port)
+{
+    assert(port);
+
+    Auto_Lock_Scope l(lock);
+    if (!alive)
+        return Error(-ENOENT);
+
+    if (notification_port)
+        return Error(-EEXIST);
+
+    Auto_Lock_Scope ll(port->rights_lock);
+    if (!port->atomic_alive())
+        return Error(-ENOENT);
+
+    notification_port = true;
+    right_parent_id = port->new_right_id();
+    parent = port;
+
+    port->rights.insert(this);
+    return Success(right_parent_id);
+}
+
 ReturnStr<SendManyRight *> SendManyRight::create_for_group(Port *port, proc::TaskGroup *group, u64 id_in_parent)
 {
     assert(port);
@@ -271,9 +294,14 @@ bool Right::of_group(proc::TaskGroup *g) const { return !of_message && parent_gr
 
 void Right::destroy_deleting_message()
 {
-    destroy(DestroyReason::DeletedByReceiver);
+    Auto_Lock_Scope l(lock);
+    destroy_nolock(DestroyReason::DeletedByReceiver);
     assert(of_message);
-    rcu_push();
+
+    of_message = false;
+    if (!sent) {
+        rcu_push();
+    }
 }
 
 bool Right::atomic_alive() const
@@ -387,6 +415,15 @@ SendRight *to_send_right(Right *r)
     return static_cast<SendRight *>(r);
 }
 
+SendManyRight *to_send_many_right(Right *r)
+{
+    assert(r);
+    if (r->type() != RightType::SendMany)
+        return nullptr;
+
+    return static_cast<SendManyRight *>(r);
+}
+
 RightType SendOnceRight::type() const
 { 
     return RightType::SendOnce;
@@ -439,6 +476,24 @@ size_t RecieveRight::size() const
 ReturnStr<bool> RecieveRight::copy_to_user_buff(char *buff) const
 {
     return copy_to_user(reinterpret_cast<const char *>(&destroyed_msg), buff, sizeof(destroyed_msg));
+}
+
+static constinit IPC_Kernel_Right_Destroyed send_destroyed_msg = {
+    .type  = IPC_Kernel_Right_Destroyed_NUM,
+    .flags = 0,
+    .right_type = 2, // SendMany
+};
+
+// With send many, it can only be sent as the right destroyed message, the shared struct will be sent as the recieve right
+// destroyed notification (also, one port can recieve both, or even multiple messages of this type)
+size_t SendManyRight::size() const
+{
+    return sizeof(send_destroyed_msg);
+}
+
+ReturnStr<bool> SendManyRight::copy_to_user_buff(char *buff) const
+{
+    return copy_to_user(reinterpret_cast<const char *>(&send_destroyed_msg), buff, sizeof(send_destroyed_msg));
 }
 
 bool SendRight::destroy_recieve_right()
@@ -594,7 +649,7 @@ bool SendManyRightShared::destroy_recieve_right()
     return true;
 }
 
-bool SendManyRight::destroy_nolock(DestroyReason reason, proc::TaskGroup *match_group)
+bool SendManyRight::destroy_nolock(DestroyReason, proc::TaskGroup *match_group)
 {
     assert(lock.is_locked());
 
@@ -625,8 +680,11 @@ bool SendManyRight::destroy_nolock(DestroyReason reason, proc::TaskGroup *match_
         }
     }
 
-    // TODO
-    bool send_notification = false;
+    bool send_notification = notification_port;
+
+    if (send_notification) {
+        remove_from_parent();
+    }
 
     if (!of_message) {
         auto group = parent_group;

@@ -71,6 +71,7 @@ public:
     /// Deletes the port. Returns false if the port is already deleted
     bool delete_self() noexcept;
 
+    // There is no lock here because it can only be done by the owner thread, so it can only run on one CPU at a time
     u64 new_right_id() { return ++current_right_id; }
 
     bool atomic_alive() const;

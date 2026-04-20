@@ -134,6 +134,13 @@ struct SendManyRight final: SendRight {
 
     static std::pair<klib::unique_ptr<SendRight>, klib::unique_ptr<RecieveRight>> create_for_message();
 
+    // Don't take task group here, since it doesn't matter if userspace tries to race this, and gets
+    // to run this after the right had been sent.
+    ReturnStr<u64> atomic_watch(Port *port);
+
+    // GenericMessage overrides
+    virtual size_t size() const override;
+    virtual ReturnStr<bool> copy_to_user_buff(char *buff) const override;
 };
 
 struct SendOnceRight final: SendRight {
@@ -195,6 +202,8 @@ struct MemObjectRight final: Right {
 
 // Returns nullptr if the right is not a send right
 SendRight *to_send_right(Right *r);
+
+SendManyRight *to_send_many_right(Right *r);
 
 u64 atomic_right0_id();
 kresult_t set_right0(Right *right, proc::TaskGroup *right_parent);
