@@ -534,10 +534,7 @@ ReturnStr<std::pair<Right *, u64>> SendManyRight::duplicate(proc::TaskGroup *gro
         return Error(-ESRCH);
 
     shared->send_many_rights.push_back(new_right.get());
-
     new_right->right_sender_id = ++parent_group->current_right_id;
-
-    parent->rights.insert(new_right.get());
     parent_group->rights.insert(new_right.get());
 
     auto ptr = new_right.release();
@@ -617,8 +614,8 @@ bool SendManyRight::destroy_nolock(DestroyReason reason, proc::TaskGroup *match_
         assert(!shared->send_many_rights.empty());
         shared->send_many_rights.remove(this);
 
-        if (alive && shared->send_many_rights.empty()) {
-            alive = false;
+        if (shared->alive && shared->send_many_rights.empty()) {
+            shared->alive = false;
             send_shared = true;
 
             auto parent = shared->parent;

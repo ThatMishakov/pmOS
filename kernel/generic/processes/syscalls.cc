@@ -222,8 +222,8 @@ extern "C" void syscall_handler()
     // This is a "temporary" workaround
     task->syscall_num = syscall_flags_reg(task);
 
-    // serial_logger.printf("syscall_handler: task: %d (%s) call_n: %x\n", task->task_id,
-    // task->name.c_str(), call_n);
+    // serial_logger.printf("syscall_handler: task: %d (%s) call_n: %x (%s)\n", task->task_id,
+    // task->name.c_str(), call_n, syscall_name(call_n));
 
     // TODO: check permissions
 
