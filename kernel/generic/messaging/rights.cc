@@ -464,6 +464,18 @@ Port *SendManyRight::parent_port()
     return shared->parent;
 }
 
+u64 SendRight::right_id_in_reciever() const
+{
+    // Again, the same todo as in rights.hh applies here...
+    return right_parent_id;
+}
+
+u64 SendManyRight::right_id_in_reciever() const
+{
+    assert(shared);
+    return shared->right_parent_id;
+}
+
 std::pair<klib::unique_ptr<SendRight>, klib::unique_ptr<RecieveRight>> SendManyRight::create_for_message()
 {
     auto send_right = klib::make_unique<SendManyRight>();
@@ -555,6 +567,12 @@ bool SendManyRightShared::destroy_recieve_right()
         alive = false;
     }
 
+    {
+        assert(parent);
+        Auto_Lock_Scope l(parent->rights_lock);
+        parent->rights.erase(this);
+    }
+
     auto get_front = [&]() -> SendManyRight * {
         Auto_Lock_Scope l(lock);
         if (send_many_rights.empty())
@@ -602,6 +620,11 @@ bool SendManyRight::destroy_nolock(DestroyReason reason, proc::TaskGroup *match_
         if (alive && shared->send_many_rights.empty()) {
             alive = false;
             send_shared = true;
+
+            auto parent = shared->parent;
+            assert(parent);
+            Auto_Lock_Scope l(parent->lock);
+            parent->rights.erase(shared);
         }
     }
 

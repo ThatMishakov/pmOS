@@ -100,6 +100,9 @@ struct RecieveRight: GenericMessage {
 };
 
 struct SendRight: Right, RecieveRight {
+    // TODO(-ish): This shouldn't be a recieve right
+    virtual u64 right_id_in_reciever() const;
+
     virtual void rcu_push() override;
     virtual void remove_from_parent() override;
 
@@ -112,6 +115,8 @@ struct SendRight: Right, RecieveRight {
 struct SendManyRightShared;
 
 struct SendManyRight final: SendRight {
+    virtual u64 right_id_in_reciever() const override;
+
     static ReturnStr<SendManyRight *> create_for_group(Port *port, proc::TaskGroup *group, u64 id_in_parent);
 
     virtual ReturnStr<std::pair<Right *, u64>> duplicate(proc::TaskGroup *) override;

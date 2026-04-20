@@ -308,7 +308,8 @@ ReturnStr<std::pair<Right * /* right */, u64 /* new_id_error */>>
         }
     }
 
-    msg->sent_with_right_ = right->right_parent_id;
+    msg->sent_with_right_ = right->right_id_in_reciever();
+    assert(msg->sent_with_right_ && "Right ID in receiver is 0!");
 
     LockCarousel<Spinlock, 5> locks;
     locks.insert(right->lock);
@@ -321,6 +322,8 @@ ReturnStr<std::pair<Right * /* right */, u64 /* new_id_error */>>
         if (i && !locks.insert(i->lock))
             return Error(-EINVAL);
     }
+
+    u64 right_parent_id = 0;
 
     {
         Auto_Lock_Scope l(locks);
@@ -353,12 +356,15 @@ ReturnStr<std::pair<Right * /* right */, u64 /* new_id_error */>>
 
         if (reply_port) {
             assert(reply_port->alive);
-            reply_right->right_parent_id = reply_port->new_right_id();
             Auto_Lock_Scope l(reply_port->rights_lock);
-            if (recieve_right)
+            right_parent_id = reply_port->new_right_id();
+            if (recieve_right) {
+                recieve_right->right_parent_id = right_parent_id;
                 reply_port->rights.insert(recieve_right.release());
-            else
+            } else {
+                reply_right->right_parent_id = right_parent_id;
                 reply_port->rights.insert(reply_right.get());
+            }
         }
 
         msg->rights = array;
@@ -374,7 +380,7 @@ ReturnStr<std::pair<Right * /* right */, u64 /* new_id_error */>>
 
     if (auto ptr = reply_right.release(); ptr)
         // Note to myself: ptr->right_sender_id is 0 here, and probably not wanted anyway
-        return Success(std::make_pair(ptr, ptr->right_parent_id));
+        return Success(std::make_pair(ptr, right_parent_id));
     else
         return Success(std::make_pair(nullptr, 0));
 }

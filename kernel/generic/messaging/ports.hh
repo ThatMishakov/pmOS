@@ -114,6 +114,7 @@ protected:
     friend struct SendRight;
     friend struct SendManyRight;
     friend struct SendOnceRight;
+    friend struct SendManyRightShared;
 };
 
 }
