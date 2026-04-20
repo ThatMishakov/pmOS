@@ -218,6 +218,23 @@ pub struct IPCFSProbeResult {
     pub properties: Vec<FSProperty>,
 }
 
+pub const IPC_KERNEL_RECIEVE_RIGHT_DESTROYED_NUM: u32 = 0x26;
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+pub struct IPCKernelRecieveRightDestroyed {
+    msg_type: u32,
+    pub flags: u32,
+}
+
+pub const IPC_KERNEL_RIGHT_DESTROYED_NUM: u32 = 0x27;
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+pub struct IPCKernelRightDestroyed {
+    msg_type: u32,
+    pub flags: u16,
+    pub right_type: u16,
+}
+
 fn push_pod<T: Pod>(out: &mut Vec<u8>, v: &T) {
     out.extend_from_slice(bytemuck::bytes_of(v));
 }
@@ -319,6 +336,8 @@ pub enum Message<'a> {
     IPCNameRightReply(IPCNameRightReply),
     IPCDiskDescribeReply(IPCDiskDescribeReply),
     IPCDiskReadReply(IPCDiskReadReply),
+    IPCKernelRecieveRightDestroyed(IPCKernelRecieveRightDestroyed),
+    IPCKernelRightDestroyed(IPCKernelRightDestroyed),
     Unknown,
 }
 
@@ -354,11 +373,19 @@ impl super::ipc::Message {
                     try_from_bytes::<IPCDiskDescribeReply>(data).map(|data| Message::IPCDiskDescribeReply(data.clone())).unwrap_or(Message::Unknown),
                 IPC_DISK_READ_REPLY_NUM =>
                     try_from_bytes::<IPCDiskReadReply>(data).map(|data| Message::IPCDiskReadReply(data.clone())).unwrap_or(Message::Unknown),
+                IPC_KERNEL_RIGHT_DESTROYED_NUM =>
+                    try_from_bytes::<IPCKernelRightDestroyed>(data).map(|data| Message::IPCKernelRightDestroyed(data.clone())).unwrap_or(Message::Unknown),
+                IPC_KERNEL_RECIEVE_RIGHT_DESTROYED_NUM =>
+                    try_from_bytes::<IPCKernelRecieveRightDestroyed>(data).map(|data| Message::IPCKernelRecieveRightDestroyed(data.clone())).unwrap_or(Message::Unknown),
                 _ => Message::Unknown,
             }
         } else {
             Message::Unknown
         }
+    }
+
+    pub fn is_destroyed_recieve_notification(&self) -> bool {
+        self.sender == 0 && self.get_known_id() == Some(IPC_KERNEL_RECIEVE_RIGHT_DESTROYED_NUM) && matches!(self.deserialize(), Message::IPCKernelRecieveRightDestroyed(_))
     }
 }
 

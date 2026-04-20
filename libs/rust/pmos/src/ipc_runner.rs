@@ -168,9 +168,14 @@ impl ExecutorState {
             "Right {:?} already has a message",
             endpoint.right
         );
-        endpoint.message = Some(msg);
 
-        if let RightStorage::Once(_) = endpoint.right {
+        let right_destroyed = msg.is_destroyed_recieve_notification();
+
+        if !right_destroyed {
+            endpoint.message = Some(msg);
+        }
+
+        if matches!(endpoint.right, RightStorage::Once(_)) || right_destroyed {
             let mut right = RightStorage::None;
             mem::swap(&mut endpoint.right, &mut right);
             let id = right.get_id().unwrap();
@@ -178,8 +183,6 @@ impl ExecutorState {
 
             self.rights.remove(&id);
         }
-
-        // TODO: The right deletion notification handling should be done here
 
         if let Some(waker) = endpoint.waker.take() {
             Some(waker)

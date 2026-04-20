@@ -105,6 +105,9 @@ unsafe extern "C" {
     unsafe fn sys_munmap(addr: *mut libc::c_void, length: libc::size_t) -> c_int;
 
     unsafe fn map_mem_object(param: *const MapMemObjectParamT) -> SyscallR;
+
+    #[link_name = "watch_right"]
+    unsafe fn watch_right(right: Right, notification_port: Port) -> RightRequestResult;
 }
 
 impl Drop for IPCPort {
@@ -150,7 +153,7 @@ impl IPCPort {
         self.port
     }
 
-    pub fn pop_front_blocking(&mut self) -> Message {
+    pub fn pop_front_blocking(&self) -> Message {
         let mut desc = MessageDescriptor {
             sender: 0,
             size: 0,
@@ -224,6 +227,13 @@ impl IPCPort {
 
         result.result().map(|()| (SendManyRight(right), RecieveManyRight(recieve_id, self.port)))
     }
+
+    pub fn watch_right(&self, right: &SendManyRight) -> Result<RecieveOnceRight, Error> {
+        unsafe { watch_right(right.0, self.port) }
+            .result()
+            .map_err(|(e, _)| e)
+            .and_then(|r| Ok(RecieveOnceRight(r, self.port)))
+    }
 }
 
 #[repr(C)]
@@ -243,25 +253,25 @@ pub struct Message {
     pub other_rights: [Option<SendRight>; 4],
 }
 
-extern "C" {
-    fn send_message_port(port: u64, size: usize, message: *const u8) -> ResultT;
-    fn send_message_port2(
-        port: u64,
-        object_id: u64,
-        size: usize,
-        message: *const u8,
-        flags: c_uint,
-    ) -> ResultT;
-}
+// extern "C" {
+//     fn send_message_port(port: u64, size: usize, message: *const u8) -> ResultT;
+//     fn send_message_port2(
+//         port: u64,
+//         object_id: u64,
+//         size: usize,
+//         message: *const u8,
+//         flags: c_uint,
+//     ) -> ResultT;
+// }
 
-pub fn send_message(
-    msg: &impl super::ipc_msgs::Serializable,
-    port: u64,
-) -> Result<(), Error> {
-    let data = msg.serialize();
-    let size = data.len();
-    unsafe { send_message_port(port, size, data.as_ptr()) }.result()
-}
+// pub fn send_message(
+//     msg: &impl super::ipc_msgs::Serializable,
+//     port: u64,
+// ) -> Result<(), Error> {
+//     let data = msg.serialize();
+//     let size = data.len();
+//     unsafe { send_message_port(port, size, data.as_ptr()) }.result()
+// }
 
 const SEND_MESSAGE_DELETE_RIGHT: u32 = 1 << 8;
 const REPLY_CREATE_SEND_MANY: u32 = 1 << 1;
