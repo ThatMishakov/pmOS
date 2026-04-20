@@ -202,7 +202,7 @@ std::array<syscall_function, 61> syscall_table = {
     syscall_get_page_address,
     syscall_unreference_mem_object,
     syscall_get_page_address_from_object,
-    nullptr,
+    syscall_delete_port,
     syscall_cpu_for_interrupt,
     syscall_set_right0,
     syscall_delete_send_right,
@@ -2607,6 +2607,31 @@ void syscall_watch_right()
     }
 
     syscall_return(current) = result.val;
+}
+
+void syscall_delete_port()
+{
+    auto current = get_current_task();
+
+    u64 port_id = syscall_arg64(current, 0);
+
+    auto port = Port::atomic_get_port(port_id);
+    if (!port) {
+        syscall_error(current) = -ENOENT;
+        return;
+    }
+
+    if (port->owner != current) {
+        syscall_error(current) = -EPERM;
+        return;
+    }
+
+    bool result = port->delete_self();
+    if (result) {
+        syscall_success(current);
+    } else {
+        syscall_error(current) = -ENOENT;
+    }
 }
 
 } // namespace kernel::proc::syscalls

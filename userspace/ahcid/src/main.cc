@@ -27,16 +27,6 @@
 
 pmos::Right device_right;
 
-pmos_port_t _create_port()
-{
-    ports_request_t request = create_port(0, 0);
-    if (request.port == 0) {
-        printf("Failed to create port\n");
-        return 0;
-    }
-    return request.port;
-}
-
 pmos::Port cmd_port = pmos::Port::create().value();
 auto dispatcher = pmos::PortDispatcher(cmd_port);
 auto pmbus_helper = pmos::PMBUSHelper(dispatcher);

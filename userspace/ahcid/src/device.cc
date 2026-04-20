@@ -16,7 +16,7 @@ extern pmos::Port cmd_port;
 
 pmos::async::detached_task handle_device(AHCIPort &parent)
 {
-    constexpr size_t dma_size = 4096;
+    constexpr size_t dma_size = PAGE_SIZE > 4096 ? PAGE_SIZE : 4096;
     auto req = create_normal_region(0, nullptr, dma_size, PROT_READ | PROT_WRITE | CREATE_FLAG_DMA);
     auto guard_ = pmos::utility::make_scope_guard([&] { munmap(req.virt_addr, dma_size); });
     auto phys_addr = get_page_phys_address(0, req.virt_addr, 0);
@@ -46,7 +46,7 @@ pmos::async::detached_task handle_device(AHCIPort &parent)
 
     auto [logical_sector_size, physical_sector_size] = s->get_sector_size();
 
-    printf("Port %i logical sector size: %i, physical sector size: %i\n", parent.index,
+    printf("Port %i logical sector size: %zu, physical sector size: %zu\n", parent.index,
            logical_sector_size, physical_sector_size);
 
     auto sector_count = s->get_sector_count();
