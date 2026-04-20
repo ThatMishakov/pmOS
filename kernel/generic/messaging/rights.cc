@@ -142,35 +142,26 @@ void SendOnceRight::delete_self()
 
 void SendManyRight::delete_self()
 {
-    // Do the deal as with SendOnceRight. This was split into two functions, so that the different RCU queues can be used eventually
-    assert(false && "delete_self() called on SendManyRight, which shouldn't be possible");
+    // At this point, the right was already deleted, and sent, so don't do anything special
 
     Auto_Lock_Scope l(lock);
     
     assert(!alive);
     assert(sent);
-    sent = false; // Clear this so that if it's held by a message, it can be freed
+    sent = false;
 
     if (!of_message) {
         rcu_push();
     }
 }
 
-ReturnStr<SendRight *> SendRight::create_for_group(Port *port, proc::TaskGroup *group, RightType type,
-                                           u64 id_in_parent)
+ReturnStr<SendOnceRight *> SendOnceRight::create_for_group(Port *port, proc::TaskGroup *group, u64 id_in_parent)
 {
     assert(port);
     assert(group);
     assert(id_in_parent);
-    assert(type == RightType::SendOnce || type == RightType::SendMany);
 
-    klib::unique_ptr<SendRight> new_right;
-
-    if (type == RightType::SendOnce)
-        new_right = klib::unique_ptr<SendRight>(new SendOnceRight());
-    else
-        new_right = klib::unique_ptr<SendRight>(new SendManyRight());
-   
+    auto new_right = klib::unique_ptr<SendOnceRight>(new SendOnceRight());
     if (!new_right)
         return Error(-ENOMEM);
 
@@ -179,9 +170,9 @@ ReturnStr<SendRight *> SendRight::create_for_group(Port *port, proc::TaskGroup *
     new_right->of_message      = false;
     new_right->right_parent_id = id_in_parent;
 
-    // I don't know if this lock situation is good...
     Auto_Lock_Scope l(new_right->lock);
 
+    // I don't know if this lock situation is good...
     Auto_Lock_Scope l1(port->rights_lock);
     Auto_Lock_Scope l2(group->rights_lock);
 
@@ -194,6 +185,49 @@ ReturnStr<SendRight *> SendRight::create_for_group(Port *port, proc::TaskGroup *
     new_right->right_sender_id = ++group->current_right_id;
 
     port->rights.insert(new_right.get());
+    group->rights.insert(new_right.get());
+    return Success(new_right.release());
+}
+
+ReturnStr<SendManyRight *> SendManyRight::create_for_group(Port *port, proc::TaskGroup *group, u64 id_in_parent)
+{
+    assert(port);
+    assert(group);
+    assert(id_in_parent);
+
+    auto new_right = klib::unique_ptr<SendManyRight>(new SendManyRight());
+    if (!new_right)
+        return Error(-ENOMEM);
+
+    auto shared = klib::make_unique<SendManyRightShared>();
+    if (!shared)
+        return Error(-ENOMEM);
+
+    new_right->shared = shared.get();
+    shared->send_many_rights.push_back(new_right.get());
+
+    shared->parent          = port;
+    shared->right_parent_id = id_in_parent;
+
+    new_right->parent_group = group;
+    new_right->of_message   = false;
+
+    Auto_Lock_Scope l(new_right->lock);
+
+    Auto_Lock_Scope ll(shared->lock);
+
+    Auto_Lock_Scope l1(port->rights_lock);
+    Auto_Lock_Scope l2(group->rights_lock);
+
+    if (!port->atomic_alive())
+        return Error(-ENOENT);
+
+    if (!group->atomic_alive())
+        return Error(-ESRCH);
+
+    new_right->right_sender_id = ++group->current_right_id;
+
+    port->rights.insert(shared.release());
     group->rights.insert(new_right.get());
     return Success(new_right.release());
 }
@@ -277,6 +311,9 @@ kresult_t set_right0(Right *right, proc::TaskGroup *right_parent)
 
 ReturnStr<u64> Right::atomic_transfer_to_group(proc::TaskGroup *from, proc::TaskGroup *to)
 {
+    assert(from);
+    assert(to);
+
     Auto_Lock_Scope l(lock);
     if (!alive)
         return -ENOENT;
@@ -306,42 +343,6 @@ ReturnStr<u64> Right::atomic_transfer_to_group(proc::TaskGroup *from, proc::Task
 ReturnStr<std::pair<Right *, u64>> SendOnceRight::duplicate(proc::TaskGroup *)
 {
     return Error(-EPERM);
-}
-
-ReturnStr<std::pair<Right *, u64>> SendManyRight::duplicate(proc::TaskGroup *group)
-{
-    klib::unique_ptr<SendRight> new_right = new SendManyRight();
-    if (!new_right)
-        return Error(-ENOMEM);
-
-    new_right->parent          = parent;
-    new_right->parent_group    = parent_group;
-    new_right->of_message      = false;
-    new_right->right_parent_id = right_parent_id;
-
-    Auto_Lock_Scope l(lock);
-    if (!alive || of_message || parent_group != group)
-        return Error(-ENOENT);
-
-    Auto_Lock_Scope ll(new_right->lock);
-
-    Auto_Lock_Scope l1(parent->rights_lock);
-    Auto_Lock_Scope l2(parent_group->rights_lock);
-
-    if (!parent->atomic_alive())
-        return Error(-ENOENT);
-
-    if (!parent_group->atomic_alive())
-        return Error(-ESRCH);
-
-    new_right->right_sender_id = ++parent_group->current_right_id;
-
-    parent->rights.insert(new_right.get());
-    parent_group->rights.insert(new_right.get());
-
-    auto ptr = new_right.release();
-
-    return Success(std::make_pair(ptr, ptr->right_sender_id));
 }
 
 ReturnStr<std::pair<Right *, u64>> MemObjectRight::duplicate(proc::TaskGroup *group)
@@ -379,6 +380,7 @@ ReturnStr<std::pair<Right *, u64>> MemObjectRight::duplicate(proc::TaskGroup *gr
 
 SendRight *to_send_right(Right *r)
 {
+    assert(r);
     if (r->type() != RightType::SendOnce && r->type() != RightType::SendMany)
         return nullptr;
 
@@ -414,12 +416,12 @@ unsigned Right::type_as_int() const
     }
 }
 
-u64 SendRight::sender_task_id() const
+u64 RecieveRight::sender_task_id() const
 {
     return 0; // Kernel
 }
 
-u64 SendRight::sent_with_right() const
+u64 RecieveRight::sent_with_right() const
 {
     return right_parent_id;
 }
@@ -429,12 +431,12 @@ static IPC_Kernel_Recieve_Right_Destroyed destroyed_msg = {
     .flags = 0,
 };
 
-size_t SendRight::size() const
+size_t RecieveRight::size() const
 {
     return sizeof(destroyed_msg);
 }
 
-ReturnStr<bool> SendRight::copy_to_user_buff(char *buff) const
+ReturnStr<bool> RecieveRight::copy_to_user_buff(char *buff) const
 {
     return copy_to_user(reinterpret_cast<const char *>(&destroyed_msg), buff, sizeof(destroyed_msg));
 }
@@ -442,6 +444,218 @@ ReturnStr<bool> SendRight::copy_to_user_buff(char *buff) const
 bool SendRight::destroy_recieve_right()
 {
     return destroy(DestroyReason::DeletedByReceiver);
+}
+
+klib::unique_ptr<SendRight> SendOnceRight::create_for_message()
+{
+    return new SendOnceRight();
+}
+
+Port *SendOnceRight::parent_port()
+{
+    assert(parent);
+    return parent;
+}
+
+Port *SendManyRight::parent_port()
+{
+    assert(shared);
+    assert(shared->parent);
+    return shared->parent;
+}
+
+std::pair<klib::unique_ptr<SendRight>, klib::unique_ptr<RecieveRight>> SendManyRight::create_for_message()
+{
+    auto send_right = klib::make_unique<SendManyRight>();
+    if (!send_right)
+        return {};
+
+    auto shared = klib::make_unique<SendManyRightShared>();
+    if (!shared)
+        return {};
+
+    send_right->shared = shared.get();
+
+    // Port and ID get set by the message
+    // shared->parent = port;
+    // shared->right_parent_id = id_in_parent;
+
+    // Same deal as with the message...
+
+    // Also, since these objects can't be accessed by anyone here, so locks are not needed...
+    shared->send_many_rights.push_back(send_right.get());
+    return {std::move(send_right), std::move(shared)};
+}
+
+ReturnStr<std::pair<Right *, u64>> SendManyRight::duplicate(proc::TaskGroup *group)
+{
+    klib::unique_ptr<SendManyRight> new_right = new SendManyRight();
+    if (!new_right)
+        return Error(-ENOMEM);
+
+    assert(shared);
+    assert(parent_group);
+
+    new_right->shared       = shared;
+    new_right->parent_group = parent_group;
+    new_right->of_message   = false;
+
+    auto parent = shared->parent;
+    assert(parent);
+
+    Auto_Lock_Scope ll(new_right->lock);
+
+    Auto_Lock_Scope l(lock);
+    if (!alive || of_message || parent_group != group)
+        return Error(-ENOENT);
+
+    Auto_Lock_Scope ls(shared->lock);
+    if (!shared->alive)
+        return Error(-ENOENT);
+
+    Auto_Lock_Scope l2(parent_group->rights_lock);
+
+    if (!parent->atomic_alive())
+        return Error(-ENOENT);
+
+    if (!parent_group->atomic_alive())
+        return Error(-ESRCH);
+
+    shared->send_many_rights.push_back(new_right.get());
+
+    new_right->right_sender_id = ++parent_group->current_right_id;
+
+    parent->rights.insert(new_right.get());
+    parent_group->rights.insert(new_right.get());
+
+    auto ptr = new_right.release();
+
+    return Success(std::make_pair(ptr, ptr->right_sender_id));
+}
+
+void SendManyRightShared::rcu_push()
+{
+    rcu_head.rcu_func = [](void *self, bool) {
+        SendManyRightShared *t =
+            reinterpret_cast<SendManyRightShared *>(reinterpret_cast<char *>(self) - offsetof(SendManyRightShared, rcu_head));
+        delete t;
+    };
+    sched::get_cpu_struct()->heap_rcu_cpu.push(&rcu_head);
+}
+
+bool SendManyRightShared::destroy_recieve_right()
+{
+    // Note: the locking situation here is difficult. But basically, the rules are that you don't attempt
+    // to acquire a lock on a right while holding the lock on this struct
+    {
+        Auto_Lock_Scope l(lock);
+        if (!alive)
+            return false;
+
+        alive = false;
+    }
+
+    auto get_front = [&]() -> SendManyRight * {
+        Auto_Lock_Scope l(lock);
+        if (send_many_rights.empty())
+            return nullptr;
+        return &send_many_rights.front();
+    };
+
+    while (auto right = get_front()) {
+        right->destroy(Right::DestroyReason::DeletedBySender);
+    }
+
+    // Here would be the best place to enqueue this right into a port. But I've decided not to, since
+    // when this function gets called, it is either when the channel is dying, at which point this
+    // message won't be read, or because youserspace is calling this explicitly, at which point
+    // you don't have to have notifications.
+    //
+    // It might have been useful to use this to know when you've recieved the last message on the right,
+    // but at this point, this wasn't needed, abd if someone is deleting this right, it id because
+    // the caller doesn't want to recieve any more recieve messages on the right...
+
+    rcu_push();
+    return true;
+}
+
+bool SendManyRight::destroy_nolock(DestroyReason reason, proc::TaskGroup *match_group)
+{
+    assert(lock.is_locked());
+
+    if (!alive)
+        return false;
+
+    if (match_group && (of_message || parent_group != match_group))
+        return false;
+
+    alive = false;
+
+    bool send_shared = false;
+    assert(shared);
+
+    {
+        Auto_Lock_Scope l(shared->lock);
+        assert(!shared->send_many_rights.empty());
+        shared->send_many_rights.remove(this);
+
+        if (alive && shared->send_many_rights.empty()) {
+            alive = false;
+            send_shared = true;
+        }
+    }
+
+    // TODO
+    bool send_notification = false;
+
+    if (!of_message) {
+        auto group = parent_group;
+        assert(group);
+
+        {
+            Auto_Lock_Scope l(group->rights_lock);
+            group->rights.erase(this);
+        }
+    }
+
+    if (!send_notification and !of_message) {
+        rcu_push();
+    }
+
+    if (send_notification) {
+        auto port = parent;
+        assert(port);
+
+        {
+            Auto_Lock_Scope l(port->lock);
+            port->enqueue(klib::unique_ptr<GenericMessage>(this));
+        }
+
+        sent = true;
+    }
+
+    if (send_shared) {
+        auto port = shared->parent;
+        assert(port);
+
+        {
+            Auto_Lock_Scope l(port->lock);
+            port->enqueue(klib::unique_ptr<GenericMessage>(shared));
+        }
+    }
+
+    return true;
+}
+
+void SendManyRightShared::delete_self()
+{   
+    {
+        Auto_Lock_Scope l(lock);
+        assert(!alive);
+        assert(send_many_rights.empty());
+    }
+
+    rcu_push();
 }
 
 } // namespace kernel::ipc

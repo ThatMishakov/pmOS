@@ -2247,9 +2247,12 @@ void syscall_create_right()
             return;
     }
 
-    bool send_once = flags & CREATE_RIGHT_SEND_ONCE;
-    RightType type = send_once ? RightType::SendOnce : RightType::SendMany;
-    auto result    = SendRight::create_for_group(port, group, type, right_id);
+    ReturnStr<Right *> result;
+    if (flags & CREATE_RIGHT_SEND_ONCE) {
+        result = SendOnceRight::create_for_group(port, group, right_id);
+    } else {
+        result = SendManyRight::create_for_group(port, group, right_id);
+    }
     if (!result.success()) {
         syscall_error(current) = result.result;
         return;

@@ -113,6 +113,7 @@ protected:
     friend struct RecieveRight;
     friend struct SendRight;
     friend struct SendManyRight;
+    friend struct SendOnceRight;
 };
 
 }

@@ -44,7 +44,8 @@ struct Right {
     bool of_message : 1 = false;
     bool right_0 : 1    = false;
     // Define this bit here to save space
-    bool sent : 1       = false;
+    bool sent : 1              = false;
+    bool notification_port : 1 = false;
 
     mutable Spinlock lock;
 
@@ -76,7 +77,7 @@ struct Right {
     unsigned type_as_int() const;
 };
 
-struct RecieveRight {
+struct RecieveRight: GenericMessage {
     union {
         pmos::containers::RBTreeNode<RecieveRight> parent_head = {};
         memory::RCU_Head rcu_head;
@@ -89,39 +90,73 @@ struct RecieveRight {
     u64 right_parent_id = 0;
 
     virtual bool destroy_recieve_right() = 0;
-};
-
-struct SendRight: Right, GenericMessage, RecieveRight {
-    static ReturnStr<SendRight *> create_for_group(Port *port, proc::TaskGroup *group, RightType type,
-                                            u64 id_in_parent);
-
-    virtual void rcu_push() override;
-    virtual void remove_from_parent() override;
+    virtual ~RecieveRight() = default;
 
     // GenericMessage overrides
     virtual size_t size() const override;
     virtual ReturnStr<bool> copy_to_user_buff(char *buff) const override;
     virtual u64 sent_with_right() const override;
     virtual u64 sender_task_id() const override;
+};
+
+struct SendRight: Right, RecieveRight {
+    virtual void rcu_push() override;
+    virtual void remove_from_parent() override;
 
     // RecieveRight override
     virtual bool destroy_recieve_right() override;
+
+    virtual Port *parent_port() = 0;
 };
 
+struct SendManyRightShared;
+
 struct SendManyRight final: SendRight {
+    static ReturnStr<SendManyRight *> create_for_group(Port *port, proc::TaskGroup *group, u64 id_in_parent);
+
     virtual ReturnStr<std::pair<Right *, u64>> duplicate(proc::TaskGroup *) override;
     virtual RightType type() const override;
 
+    virtual bool destroy_nolock(DestroyReason reason, proc::TaskGroup *match_group = nullptr) override;
+
+    pmos::containers::DoubleListHead<SendManyRight> send_many_node;
+    SendManyRightShared *shared = nullptr;
+
     // GenericMessage overrides
     virtual void delete_self() override;
+
+    virtual Port *parent_port() override;
+
+    static std::pair<klib::unique_ptr<SendRight>, klib::unique_ptr<RecieveRight>> create_for_message();
+
 };
 
 struct SendOnceRight final: SendRight {
+    static ReturnStr<SendOnceRight *> create_for_group(Port *port, proc::TaskGroup *group, u64 id_in_parent);
+
     virtual ReturnStr<std::pair<Right *, u64>> duplicate(proc::TaskGroup *) override;
     virtual RightType type() const override;
 
     // Right overrides
     virtual bool destroy_nolock(DestroyReason reason, proc::TaskGroup *match_group = nullptr) override;
+    virtual void delete_self() override;
+
+    virtual Port *parent_port() override;
+
+    static klib::unique_ptr<SendRight> create_for_message();
+};
+
+struct SendManyRightShared final: RecieveRight {
+    Spinlock lock;
+    bool alive: 1 = true;
+    using list = pmos::containers::CircularDoubleList<SendManyRight, &SendManyRight::send_many_node>;
+    list send_many_rights;
+
+    void rcu_push();
+
+    virtual bool destroy_recieve_right() override;
+
+    // GenericMessage overrides
     virtual void delete_self() override;
 };
 

@@ -275,27 +275,37 @@ ReturnStr<std::pair<Right * /* right */, u64 /* new_id_error */>>
     if (!right)
         return {-EPERM, std::make_pair(nullptr, 0)};
 
-    auto send_to = right->parent;
+    auto send_to = right->parent_port();
 
     klib::unique_ptr<Message> msg = new Message(sender_id, std::move(data));
     if (!msg)
         return Error(-ENOMEM);
 
+    // With send once, send right is also a recieve right
     klib::unique_ptr<SendRight> reply_right = nullptr;
+    klib::unique_ptr<RecieveRight> recieve_right = nullptr;
     if (reply_port) {
         assert(new_right_type == RightType::SendOnce || new_right_type == RightType::SendMany);
 
         if (new_right_type == RightType::SendOnce)
-            reply_right = klib::make_unique<SendOnceRight>();
-        else
-            reply_right = klib::make_unique<SendManyRight>();
+            reply_right = SendOnceRight::create_for_message();
+        else {
+            auto [send, recieve] = SendManyRight::create_for_message();
+            reply_right = std::move(send);
+            recieve_right = std::move(recieve);
+        }
         
         if (!reply_right)
             return Error(-ENOMEM);
 
         reply_right->of_message     = true;
         reply_right->parent_message = msg.get();
-        reply_right->parent         = reply_port;
+
+        if (recieve_right) {
+            recieve_right->parent = reply_port;
+        } else {
+            reply_right->parent = reply_port;
+        }
     }
 
     msg->sent_with_right_ = right->right_parent_id;
@@ -325,9 +335,6 @@ ReturnStr<std::pair<Right * /* right */, u64 /* new_id_error */>>
         if (right->right_0 && always_destroy_right)
             return {-EINVAL, std::make_pair(nullptr, 0)};
 
-        if (right->type() == RightType::SendOnce || always_destroy_right)
-            right->destroy_nolock(Right::DestroyReason::SendingMessage);
-
         if (extra_rights) {
             Auto_Lock_Scope l(verify_group->rights_lock);
             for (auto r: array) {
@@ -348,7 +355,10 @@ ReturnStr<std::pair<Right * /* right */, u64 /* new_id_error */>>
             assert(reply_port->alive);
             reply_right->right_parent_id = reply_port->new_right_id();
             Auto_Lock_Scope l(reply_port->rights_lock);
-            reply_port->rights.insert(reply_right.get());
+            if (recieve_right)
+                reply_port->rights.insert(recieve_right.release());
+            else
+                reply_port->rights.insert(reply_right.get());
         }
 
         msg->rights = array;
@@ -357,6 +367,9 @@ ReturnStr<std::pair<Right * /* right */, u64 /* new_id_error */>>
             Auto_Lock_Scope l(send_to->lock);
             send_to->enqueue(std::move(msg));
         }
+
+        if (right->type() == RightType::SendOnce || always_destroy_right)
+            right->destroy_nolock(Right::DestroyReason::SendingMessage);
     }
 
     if (auto ptr = reply_right.release(); ptr)
