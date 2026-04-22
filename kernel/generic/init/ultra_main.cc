@@ -1,7 +1,5 @@
 #include "ultra_protocol.h"
 
-#include <uacpi/uacpi.h>
-#include <uacpi/kernel_api.h>
 #include <kern_logger/kern_logger.hh>
 #include <memory/mem_object.hh>
 #include <memory/paging.hh>
@@ -12,69 +10,63 @@
 #include <processes/tasks.hh>
 #include <types.hh>
 #include <utils.hh>
+#include "kernel_pages.hh"
+#include "common.hh"
 
 using namespace kernel;
 using namespace kernel::pmm;
 using namespace kernel::log;
 using namespace kernel::paging;
-using namespace kernel::ia32::paging;
 using namespace kernel::x86::paging;
+
+#ifdef __i386__
+using namespace kernel::ia32::paging;
+#endif
 
 void hcf();
 
-u32 temp_allocator_below_1gb   = 0;
-u32 temp_allocated_bytes       = 0;
-u32 temp_allocator_below_limit = 0;
+// Best and size must be below 1GB on ia32, because of how the protocol works
+extern phys_addr_t temp_alloc_base;
+extern phys_addr_t temp_alloc_size;
+
+extern phys_addr_t temp_alloc_reserved;
 extern long temp_alloc_entry_id;
 
-pmm::Page::page_addr_t alloc_pages_from_temp_pool(size_t pages) noexcept
-{
-    size_t size_bytes = pages * 4096;
-    if (temp_allocated_bytes + size_bytes > temp_allocator_below_limit)
-        panic("Not enough memory in the temp pool\n");
-
-    pmm::Page::page_addr_t addr = temp_allocator_below_1gb + temp_allocated_bytes;
-    temp_allocated_bytes += size_bytes;
-    return addr;
-}
+#ifdef __i386__
+constexpr phys_addr_t temp_mapper_memory_limit = 0x40000000;
+static ulong hhdm_offset = 0xC0000000;
+#else
+bool use_5_level_paging = false;
+constexpr phys_addr_t temp_mapper_memory_limit = 1UL << 52;
+static ulong hhdm_offset = 0; // Defined at boot, either 0xFF00'0000'0000'0000 or 0xFFFF'8000'0000'0000
+                       // depending on paging levels
+#endif
 
 class Init_Temp_Mapper: public Temp_Mapper
 {
     virtual void *kern_map(u64 phys_frame) override
     {
-        assert(phys_frame % 4096 == 0);
-        assert(phys_frame < 0x40000000);
-        return (void *)(phys_frame + 0xC0000000);
+        assert(phys_frame % PAGE_SIZE == 0);
+        assert(phys_frame < temp_mapper_memory_limit);
+        return (void *)(phys_frame + hhdm_offset);
     }
     virtual void return_map(void *) override { /* noop */ }
 } ultra_temp_mapper;
-Temp_Mapper *temp_temp_mapper = nullptr;
+
+static Temp_Mapper *temp_temp_mapper = nullptr;
+#ifdef __i386__
 namespace kernel::ia32::paging
 {
 Temp_Mapper *get_temp_temp_mapper(void *virt_addr, u32 kernel_cr3);
 }
-
-extern void *_kernel_start;
-extern void *_free_after_kernel;
-
-extern void *_text_start;
-extern void *_text_end;
-
-extern void *_rodata_start;
-extern void *_rodata_end;
-
-extern void *_data_start;
-extern void *_data_end;
-
-extern void *_bss_start;
-extern void *_bss_end;
-
-extern void *__eh_frame_start;
-extern void *__eh_frame_end;
-extern void *_gcc_except_table_start;
-extern void *_gcc_except_table_end;
-
-extern u8 _kernel_end;
+#else
+static x86_64::paging::x86_PAE_Temp_Mapper temp_temp_mapper_instance;
+Temp_Mapper *get_temp_temp_mapper(void *virt_addr, ulong kernel_cr3)
+{
+    temp_temp_mapper_instance = x86_64::paging::x86_PAE_Temp_Mapper(virt_addr, kernel_cr3);
+    return &temp_temp_mapper_instance;
+}
+#endif
 
 ultra_attribute_header *find_attribute(ultra_boot_context *ctx, uint32_t type)
 {
@@ -97,13 +89,24 @@ void map_kernel(ultra_boot_context *ctx)
     auto kernel_info =
         (ultra_kernel_info_attribute *)find_attribute(ctx, ULTRA_ATTRIBUTE_KERNEL_INFO);
 
-    map_kernel_pages(kernel_ptable_top, kernel_info->physical_base);
+    map_kernel_pages(idle_cr3, kernel_info->physical_base);
 }
+
+extern void *_kernel_start;
+extern u8 _kernel_end;
+
+extern pmm::Page::page_addr_t alloc_pages_from_temp_pool(size_t pages);
 
 void init_memory(ultra_boot_context *ctx)
 {
     serial_logger.printf("Initializing memory\n");
 
+    #ifdef __x86_64__
+    if (use_5_level_paging)
+        hhdm_offset = 0xFF00'0000'0000'0000;
+    else
+        hhdm_offset = 0xFFFF'8000'0000'0000;
+    #endif
     global_temp_mapper = &ultra_temp_mapper;
 
     auto mem = [=]() -> ultra_memory_map_attribute * {
@@ -129,8 +132,10 @@ void init_memory(ultra_boot_context *ctx)
             mem->entries[i].physical_address + mem->entries[i].size, mem->entries[i].type);
     }
 
+    ulong largest_size = 0;
+    
+    #ifdef __i386__
     // Find the largest memory region below 1GB
-    u32 largest_size = 0;
     for (unsigned i = 0; i < number_of_entries; ++i) {
         if (mem->entries[i].physical_address >= 0x40000000)
             break;
@@ -141,19 +146,31 @@ void init_memory(ultra_boot_context *ctx)
 
         u64 size = end - mem->entries[i].physical_address;
         if (size > largest_size) {
-            largest_size               = size;
-            temp_allocator_below_1gb   = mem->entries[i].physical_address;
-            temp_allocator_below_limit = end;
-            temp_alloc_entry_id        = i;
+            largest_size        = size;
+            temp_alloc_base     = mem->entries[i].physical_address;
+            temp_alloc_size     = end;
+            temp_alloc_entry_id = i;
         }
     }
+    #else
+    for (unsigned i = 0; i < number_of_entries; ++i) {
+        u64 size = mem->entries[i].size;
+        if (size > largest_size) {
+            largest_size = size;
+            temp_alloc_base = mem->entries[i].physical_address;
+            temp_alloc_size = size;
+            temp_alloc_entry_id = i;
+        }
+    }
+    #endif
 
     if (largest_size == 0) {
         panic("No memory region below 1GB\n");
     }
-    serial_logger.printf("Allocating page tables from 0x%x - 0x%x...\n", temp_allocator_below_1gb,
-                         temp_allocator_below_1gb + largest_size);
+    serial_logger.printf("Allocating page tables from 0x%lx - 0x%lx...\n", temp_alloc_base,
+                         temp_alloc_base + largest_size);
 
+    #ifdef __i386__
     if (use_pae) {
         idle_cr3 = new_pae_cr3();
         if (idle_cr3 == -1U)
@@ -164,13 +181,30 @@ void init_memory(ultra_boot_context *ctx)
             panic("Failed to allocate memory for idle_cr3\n");
         clear_page(idle_cr3, 0);
     }
+    #elif defined(__x86_64__)
+    idle_cr3 = (u64)alloc_pages_from_temp_pool(1);
+    clear_page(idle_cr3, 0);
+    #else
+    #error "Unsupported architecture"
+    #endif
 
+    #ifdef __i386__
     u32 heap_space_start = 0xC0000000;
-    u32 heap_space_size  = 0 - heap_space_start;
+    #elif defined(__x86_64__)
+    ulong heap_space_start = 0;
+    if (use_5_level_paging)
+        heap_space_start = 0xFF00'0000'0000'0000;
+    else
+        heap_space_start = 0xFFFF'8000'0000'0000;
+    #else
+    #error "Unsupported architecture"
+    #endif
 
-    const size_t PAGE_MASK = PAGE_SIZE - 1;
-    void *kernel_start     = (void *)(((size_t)&_kernel_start + PAGE_MASK) & ~PAGE_MASK);
-    const size_t kernel_size =
+    ulong heap_space_size  = 0 - heap_space_start;
+
+    const ulong PAGE_MASK = PAGE_SIZE - 1;
+    void *kernel_start     = (void *)(((ulong)&_kernel_start + PAGE_MASK) & ~PAGE_MASK);
+    const ulong kernel_size =
         ((char *)&_kernel_end - (char *)kernel_start + PAGE_SIZE - 1) & ~PAGE_MASK;
 
     vmm::virtmem_init((void *)heap_space_start, heap_space_size, kernel_start, kernel_size);
@@ -194,59 +228,61 @@ void init_memory(ultra_boot_context *ctx)
     if (!regions_data.resize(number_of_entries))
         panic("Failed to reserve memory for regions_data\n");
 
-    copy_from_phys((u64)entries - 0xC0000000, regions_data.data(),
+    copy_from_phys((ulong)entries - hhdm_offset, regions_data.data(),
                    number_of_entries * sizeof(ultra_memory_map_entry));
 
-    pmm_create_regions(regions_data);
-}
 
-constexpr u64 RSDP_INITIALIZER = -1ULL;
-u64 rsdp                       = -1ULL;
+    if (!memory_map.reserve(regions_data.size()))
+        panic("Could not allocate memory for memory map");
 
-uacpi_status uacpi_kernel_get_rsdp(uacpi_phys_addr *out_rsdp_address)
-{
-    if (rsdp == RSDP_INITIALIZER)
-        return UACPI_STATUS_NOT_FOUND;
-
-    *out_rsdp_address = rsdp;
-    return UACPI_STATUS_OK;
-}
-
-size_t uacpi_early_size = 0x1000;
-char *uacpi_temp_buffer = nullptr;
-
-void init();
-void init_acpi(u64 rsdp_addr)
-{
-    if (rsdp_addr == 0) {
-        serial_logger.printf("Warning: ACPI RSDP addr is 0...");
-        return;
-    }
-
-    rsdp = rsdp_addr;
-
-    for (;;) {
-        uacpi_temp_buffer = new char[uacpi_early_size];
-        if (!uacpi_temp_buffer)
-            panic("Couldn't allocate memory for uACPI early buffer");
-    
-        auto ret = uacpi_setup_early_table_access((void *)uacpi_temp_buffer, uacpi_early_size);
-        if (ret == UACPI_STATUS_OK)
-        break;
-
-        delete uacpi_temp_buffer;
-        if (ret == UACPI_STATUS_OUT_OF_MEMORY) {
-            uacpi_early_size += 4096;
-        } else {
-            serial_logger.printf("uacpi_initialize error: %s", uacpi_status_to_string(ret));
-            return;
+    for (auto i : regions_data) {
+        MemoryRegionType type;
+        switch (i.type) {
+        case ULTRA_MEMORY_TYPE_FREE:
+            type = MemoryRegionType::Usable;
+            break;
+        case ULTRA_MEMORY_TYPE_RESERVED:
+            type = MemoryRegionType::Reserved;
+            break;
+        case ULTRA_MEMORY_TYPE_RECLAIMABLE:
+            type = MemoryRegionType::ACPIReclaimable;
+            break;
+        case ULTRA_MEMORY_TYPE_NVS:
+            type = MemoryRegionType::ACPINVS;
+            break;
+        case ULTRA_MEMORY_TYPE_LOADER_RECLAIMABLE:
+            type = MemoryRegionType::UsableReservedOnBoot;
+            break;
+        case ULTRA_MEMORY_TYPE_MODULE:
+            type = MemoryRegionType::UsableReservedOnBoot;
+            break;
+        case ULTRA_MEMORY_TYPE_KERNEL_STACK:
+            type = MemoryRegionType::UsableReservedOnBoot;
+            break;
+        case ULTRA_MEMORY_TYPE_KERNEL_BINARY:
+            type = MemoryRegionType::UsableReservedOnBoot;
+            break;
+        case ULTRA_MEMORY_TYPE_INVALID:
+            type = MemoryRegionType::BadMemory;
+            break;
+        default:
+            type = MemoryRegionType::Unknown;
+            break;
         }
+
+        memory_map.push_back({
+            .start = i.physical_address,
+            .size  = i.size,
+            .type  = type,
+        });
     }
+
+    init_pmm(idle_cr3);
 }
 
 namespace kernel::paging
 {
-extern klib::shared_ptr<IA32_Page_Table> idle_page_table;
+extern klib::shared_ptr<Arch_Page_Table> idle_page_table;
 }
 
 void init_scheduling_on_bsp();
@@ -271,7 +307,7 @@ struct module {
     klib::shared_ptr<Mem_Object> object;
 };
 
-klib::vector<module> modules;
+static klib::vector<module> modules;
 
 char *strnchr(const char *s, size_t len, int c)
 {
@@ -452,7 +488,7 @@ klib::unique_ptr<load_tag_generic> construct_load_tag_rsdp(ultra_boot_context *)
     return tag;
 }
 
-klib::unique_ptr<load_tag_generic> construct_load_tag_for_modules()
+static klib::unique_ptr<load_tag_generic> construct_load_tag_for_modules()
 {
     // Calculate the size
     u64 size = 0;
@@ -546,7 +582,9 @@ void init_task1(ultra_boot_context *ctx)
         panic("Failed to load task 1: %i", p.result);
 }
 
-extern "C" void kmain(struct ultra_boot_context *ctx, uint32_t magic)
+void init();
+
+void ultra_main(struct ultra_boot_context *ctx, uint32_t magic)
 {
     if (magic != 0x554c5442) {
         panic("Not booted by Ultra\n");
@@ -561,12 +599,16 @@ extern "C" void kmain(struct ultra_boot_context *ctx, uint32_t magic)
     if (!ptr)
         panic("Could not find platform attribute!\n");
     ultra_platform_info_attribute attr = *ptr;
-    use_pae                            = attr.page_table_depth == 3;
+
+    #ifdef __i386__
+    use_pae = attr.page_table_depth == 3;
     serial_logger.printf("PAE: %s (page depth %i)\n", use_pae ? "enabled" : "disabled",
                          attr.page_table_depth);
-
+    
     auto nx_enabled = detect_nx();
     serial_logger.printf("NX: %s\n", nx_enabled ? "enabled" : "disabled");
+    
+    #endif
 
     init_memory(ctx);
 
@@ -575,7 +617,7 @@ extern "C" void kmain(struct ultra_boot_context *ctx, uint32_t magic)
 
     init_acpi(attr.acpi_rsdp_address);
 
-    kernel::paging::idle_page_table = IA32_Page_Table::capture_initial(idle_cr3);
+    kernel::paging::idle_page_table = Arch_Page_Table::capture_initial(idle_cr3);
 
     init_scheduling_on_bsp();
 
@@ -588,7 +630,7 @@ extern "C" void kmain(struct ultra_boot_context *ctx, uint32_t magic)
     if (!cctx)
         panic("Couldn't allocate memory for Ultra modules...");
 
-    copy_from_phys((u32)ctx - 0xc0000000, (void *)cctx.get(), size);
+    copy_from_phys((ulong)ctx - hhdm_offset, (void *)cctx.get(), size);
     auto new_ctx = (ultra_boot_context *)cctx.get();
 
     init_modules(new_ctx);
@@ -596,4 +638,9 @@ extern "C" void kmain(struct ultra_boot_context *ctx, uint32_t magic)
     init_task1(new_ctx);
 
     serial_logger.printf("Entering userspace...\n");
+}
+
+extern "C" void kmain(struct ultra_boot_context *ctx, uint32_t magic)
+{
+    ultra_main(ctx, magic);
 }

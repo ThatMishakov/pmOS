@@ -29,12 +29,18 @@ default-entry = "pmOS"
 protocol = "ultra"
 
 binary:
+    allocate-anywhere = true
+    higher-half-exclusive = true
     path = "/kernel"
+EOF
+
+if [ "$JINX_ARCH" = "i686" ]; then
+    cat <<EOF >> "$FILE"
 
 page-table:
     levels = 3
-
 EOF
+fi
 
 for SERVICE in $SERVICES; do
     write_service_entry "$FILE" "$SERVICE"

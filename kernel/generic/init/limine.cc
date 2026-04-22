@@ -43,6 +43,7 @@
 #include <uacpi/uacpi.h>
 #include <uacpi/kernel_api.h>
 #include "kernel_pages.hh"
+#include "common.hh"
 
 // Nice code!
 #if defined(__x86_64__) || defined(__riscv) || defined(__loongarch64)
@@ -496,9 +497,6 @@ klib::vector<klib::unique_ptr<load_tag_generic>> construct_load_tag_framebuffer(
     return tags;
 }
 
-constexpr u64 RSDP_INITIALIZER = (u64)-1;
-u64 rsdp                       = RSDP_INITIALIZER;
-
 klib::unique_ptr<load_tag_generic> construct_load_tag_rsdp()
 {
     if (rsdp == RSDP_INITIALIZER)
@@ -593,9 +591,6 @@ __attribute__((used)) limine_rsdp_request rsdp_request = {
     .response = nullptr,
 };
 
-size_t uacpi_early_size = 0x1000;
-char *uacpi_temp_buffer = nullptr;
-
 void init_acpi()
 {
     if (rsdp_request.response == nullptr) {
@@ -614,34 +609,7 @@ void init_acpi()
     u64 addr = (u64)resp.address - hhdm_offset;
     serial_logger.printf("RSDP found at 0x%x\n", addr);
    
-    rsdp = addr;
-
-    for (;;) {
-        uacpi_temp_buffer = new char[uacpi_early_size];
-        if (!uacpi_temp_buffer)
-            panic("Couldn't allocate memory for uACPI early buffer");
-    
-        auto ret = uacpi_setup_early_table_access((void *)uacpi_temp_buffer, uacpi_early_size);
-        if (ret == UACPI_STATUS_OK)
-        break;
-
-        delete uacpi_temp_buffer;
-        if (ret == UACPI_STATUS_OUT_OF_MEMORY) {
-            uacpi_early_size += 4096;
-        } else {
-            serial_logger.printf("uacpi_initialize error: %s", uacpi_status_to_string(ret));
-            return;
-        }
-    }
-}
-
-uacpi_status uacpi_kernel_get_rsdp(uacpi_phys_addr *out_rsdp_address)
-{
-    if (rsdp == RSDP_INITIALIZER)
-        return UACPI_STATUS_NOT_FOUND;
-
-    *out_rsdp_address = rsdp;
-    return UACPI_STATUS_OK;
+    init_acpi(addr);
 }
 
 __attribute__((used)) limine_dtb_request dtb_request = {

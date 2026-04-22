@@ -147,7 +147,7 @@ phys_addr_t temp_alloc_size     = 0;
 phys_addr_t temp_alloc_reserved = 0;
 long temp_alloc_entry_id = 0;
 
-pmm::Page::page_addr_t alloc_pages_from_temp_pool(size_t pages) noexcept
+pmm::Page::page_addr_t alloc_pages_from_temp_pool(size_t pages)
 {
     size_t size_bytes = pages * 4096;
     if (temp_alloc_reserved + size_bytes > temp_alloc_size)
