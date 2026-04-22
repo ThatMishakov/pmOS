@@ -73,6 +73,8 @@ kernel_main:
     pushq $0
     pushq $0
 
+    call kmain
+
     # TODO: This is hacky
     # get_cpu_info()->nested_level = 0;
     movq $0, %gs:24

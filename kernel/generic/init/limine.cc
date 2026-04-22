@@ -335,18 +335,6 @@ __attribute__((used)) limine_module_request module_request = {
     .internal_modules      = nullptr,
 };
 
-struct module {
-    klib::string path;
-    klib::string cmdline;
-
-    u64 phys_addr;
-    u64 size;
-
-    klib::shared_ptr<Mem_Object> object;
-};
-
-klib::vector<module> modules;
-
 void init_modules()
 {
     limine_module_response *resp = module_request.response;
@@ -382,61 +370,6 @@ void init_modules()
         serial_logger.printf("Module: %s, cmdline: %s\n", m.path.c_str(), m.cmdline.c_str());
         ::modules.push_back(m);
     }
-}
-
-klib::unique_ptr<load_tag_generic> construct_load_tag_for_modules()
-{
-    // Calculate the size
-    u64 size = 0;
-
-    // Header
-    size += sizeof(load_tag_load_modules_descriptor);
-
-    // module_descriptor tags
-    size += sizeof(module_descriptor) * modules.size();
-    u64 string_offset = size;
-
-    // Strings
-    for (const auto &t: modules) {
-        size += t.path.size() + 1;
-        size += t.cmdline.size() + 1;
-    }
-
-    // Align to u64
-    size = (size + 7) & ~7UL;
-
-    // Allocate the tag
-    // I think this is undefined behavior, but who cares :)
-    klib::unique_ptr<load_tag_generic> tag = (load_tag_generic *)new u64[size / 8];
-    if (!tag) {
-        panic("Failed to allocate memory for load tag");
-        return nullptr;
-    }
-
-    tag->tag            = LOAD_TAG_LOAD_MODULES;
-    tag->flags          = 0;
-    tag->offset_to_next = size;
-
-    load_tag_load_modules_descriptor *desc = (load_tag_load_modules_descriptor *)tag.get();
-
-    desc->modules_count = modules.size();
-
-    // Fill in the tags
-    for (size_t i = 0; i < modules.size(); i++) {
-        auto &module                = modules[i];
-        auto &descriptor            = desc->modules[i];
-        descriptor.memory_object_id = module.object->get_id();
-        descriptor.size             = module.size;
-        memcpy((char *)tag.get() + string_offset, module.path.c_str(), module.path.size() + 1);
-        descriptor.path_offset = string_offset;
-        string_offset += module.path.size() + 1;
-        memcpy((char *)tag.get() + string_offset, module.cmdline.c_str(),
-               module.cmdline.size() + 1);
-        descriptor.cmdline_offset = string_offset;
-        string_offset += module.cmdline.size() + 1;
-    }
-
-    return tag;
 }
 
 __attribute__((used)) struct limine_framebuffer_request fb_req = {

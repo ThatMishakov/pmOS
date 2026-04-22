@@ -140,6 +140,9 @@ void init_memory(ultra_boot_context *ctx)
         if (mem->entries[i].physical_address >= 0x40000000)
             break;
 
+        if (mem->entries[i].type != ULTRA_MEMORY_TYPE_FREE)
+            continue;
+
         u64 end = mem->entries[i].physical_address + mem->entries[i].size;
         if (end > 0x40000000)
             end = 0x40000000;
@@ -154,6 +157,9 @@ void init_memory(ultra_boot_context *ctx)
     }
     #else
     for (unsigned i = 0; i < number_of_entries; ++i) {
+        if (mem->entries[i].type != ULTRA_MEMORY_TYPE_FREE)
+            continue;
+
         u64 size = mem->entries[i].size;
         if (size > largest_size) {
             largest_size = size;
@@ -296,18 +302,6 @@ size_t ultra_context_size(struct ultra_boot_context *ctx)
 
     return (char *)limit - (char *)ctx;
 }
-
-struct module {
-    klib::string path;
-    klib::string cmdline;
-
-    u64 phys_addr;
-    u64 size;
-
-    klib::shared_ptr<Mem_Object> object;
-};
-
-static klib::vector<module> modules;
 
 char *strnchr(const char *s, size_t len, int c)
 {
@@ -488,61 +482,6 @@ klib::unique_ptr<load_tag_generic> construct_load_tag_rsdp(ultra_boot_context *)
     return tag;
 }
 
-static klib::unique_ptr<load_tag_generic> construct_load_tag_for_modules()
-{
-    // Calculate the size
-    u64 size = 0;
-
-    // Header
-    size += sizeof(load_tag_load_modules_descriptor);
-
-    // module_descriptor tags
-    size += sizeof(module_descriptor) * modules.size();
-    u64 string_offset = size;
-
-    // Strings
-    for (const auto &t: modules) {
-        size += t.path.size() + 1;
-        size += t.cmdline.size() + 1;
-    }
-
-    // Align to u64
-    size = (size + 7) & ~7UL;
-
-    // Allocate the tag
-    // I think this is undefined behavior, but who cares :)
-    klib::unique_ptr<load_tag_generic> tag = (load_tag_generic *)new u64[size / 8];
-    if (!tag) {
-        panic("Failed to allocate memory for load tag");
-        return nullptr;
-    }
-
-    tag->tag            = LOAD_TAG_LOAD_MODULES;
-    tag->flags          = 0;
-    tag->offset_to_next = size;
-
-    load_tag_load_modules_descriptor *desc = (load_tag_load_modules_descriptor *)tag.get();
-
-    desc->modules_count = modules.size();
-
-    // Fill in the tags
-    for (size_t i = 0; i < modules.size(); i++) {
-        auto &module                = modules[i];
-        auto &descriptor            = desc->modules[i];
-        descriptor.memory_object_id = module.object->get_id();
-        descriptor.size             = module.size;
-        memcpy((char *)tag.get() + string_offset, module.path.c_str(), module.path.size() + 1);
-        descriptor.path_offset = string_offset;
-        string_offset += module.path.size() + 1;
-        memcpy((char *)tag.get() + string_offset, module.cmdline.c_str(),
-               module.cmdline.size() + 1);
-        descriptor.cmdline_offset = string_offset;
-        string_offset += module.cmdline.size() + 1;
-    }
-
-    return tag;
-}
-
 void init_task1(ultra_boot_context *ctx)
 {
     module *task1                = nullptr;
@@ -593,7 +532,7 @@ void ultra_main(struct ultra_boot_context *ctx, uint32_t magic)
     serial_logger.printf("Booted by Ultra. ctx: %p\n", ctx);
 
     auto size = ultra_context_size(ctx);
-    serial_logger.printf("Ultra bootloade context size: %u\n", size);
+    serial_logger.printf("Ultra bootloader context size: %u\n", size);
 
     auto ptr = (ultra_platform_info_attribute *)find_attribute(ctx, ULTRA_ATTRIBUTE_PLATFORM_INFO);
     if (!ptr)
@@ -623,8 +562,6 @@ void ultra_main(struct ultra_boot_context *ctx, uint32_t magic)
 
     global_temp_mapper = nullptr;
 
-    init_smp();
-
     // Copy context to kernel...
     klib::unique_ptr<char> cctx = klib::unique_ptr<char>(new char[size]);
     if (!cctx)
@@ -632,6 +569,8 @@ void ultra_main(struct ultra_boot_context *ctx, uint32_t magic)
 
     copy_from_phys((ulong)ctx - hhdm_offset, (void *)cctx.get(), size);
     auto new_ctx = (ultra_boot_context *)cctx.get();
+
+    init_smp();
 
     init_modules(new_ctx);
 
