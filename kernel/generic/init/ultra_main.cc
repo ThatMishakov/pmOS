@@ -1,3 +1,6 @@
+// Again, maybe this should be done with different defines?
+#if defined(__x86_64__) || defined(__i386__)
+
 #include "ultra_protocol.h"
 
 #include <kern_logger/kern_logger.hh>
@@ -597,3 +600,5 @@ extern "C" void kmain(struct ultra_boot_context *ctx, uint32_t magic)
 {
     ultra_main(ctx, magic);
 }
+
+#endif

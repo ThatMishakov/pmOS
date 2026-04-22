@@ -46,7 +46,7 @@ set_target_properties(kernel PROPERTIES LINK_FLAGS
   "-nostdlib -ffreestanding -static -T${CMAKE_CURRENT_SOURCE_DIR}/arch/${TARGET_ARCH}/linker.ld -z max-page-size=0x1000 -Wl,--eh-frame-hdr -Wl,--demangle")
 if (${TARGET_ARCH} STREQUAL "i686")
   set_property(TARGET kernel APPEND_STRING PROPERTY LINK_FLAGS " -lclang_rt.builtins-i386")
-elif (NOT ${TARGET_ARCH} STREQUAL "x86_64")
+elseif (NOT ${TARGET_ARCH} STREQUAL "x86_64")
   add_compile_options("-fPIE")
   set_property(TARGET kernel APPEND_STRING PROPERTY LINK_FLAGS " -pie -Wl,-pie")
 else()

@@ -137,6 +137,7 @@ void kernel::map_kernel_pages(ptable_top_ptr_t kernel_pt_top, phys_addr_t kernel
 #ifdef __i386__
 phys_addr_t phys_memory_limit      = 0x100000000; // 4GB, if PAE is not enabled, otherwise up to 16GB
 const phys_addr_t MAX_TOTAL_MEMORY = 0x400000000; // 16GB
+extern bool use_pae;
 #define ARCH_LIMITS_PHYS_MEMORY
 #else
 phys_addr_t phys_memory_limit      = 0;
