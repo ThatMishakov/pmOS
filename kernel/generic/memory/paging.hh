@@ -667,8 +667,11 @@ enum class MemoryRegionType: u64 { // u64 for coherence with userspace...
     ACPINVS,
     BadMemory,
     Usable,
-    Framebuffer
+    UsableReservedOnBoot,
+    Framebuffer,
 };
+
+bool region_is_usable_ram(MemoryRegionType type);
 
 struct MemoryRegion {
     phys_addr_t start;

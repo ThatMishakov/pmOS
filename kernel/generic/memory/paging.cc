@@ -796,3 +796,10 @@ void kernel::paging::unmap_kernel_pages(TLBShootdownContext &ctx, void *virt_add
     for (size_t i = 0; i < size_bytes; i += PAGE_SIZE)
         unmap_kernel_page(ctx, (void *)((char *)virt_addr + i));
 }
+
+bool kernel::paging::region_is_usable_ram(MemoryRegionType type)
+{
+    return type == MemoryRegionType::Usable
+           || type == MemoryRegionType::UsableReservedOnBoot
+           || type == MemoryRegionType::ACPIReclaimable;
+}
