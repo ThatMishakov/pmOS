@@ -188,7 +188,7 @@ extern "C" void pagefault_manager(NestedIntContext *kernel_ctx, ulong err)
             u64 *cr3_pd = cr3_mapper.map(getCR3() & 0xfffffffffffff000UL);
 
             auto paging_levels = 4;
-            auto idx           = pagefault_cr2 >> (12 + 9 * (paging_levels - 1));
+            auto idx = (pagefault_cr2 >> (12 + 9 * (paging_levels - 1))) & 0x1ff;
             if ((idle_pd[idx] & 0x01)) {
                 if (not(cr3_pd[idx] & 0x01)) {
                     cr3_pd[idx] = idle_pd[idx];
