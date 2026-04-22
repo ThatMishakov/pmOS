@@ -97,6 +97,22 @@ extern u8 _kernel_end;
 
 extern pmm::Page::page_addr_t alloc_pages_from_temp_pool(size_t pages);
 
+ultra_memory_map_attribute * ultra_memory_map(ultra_boot_context *ctx)
+{
+    ultra_attribute_header *hdr = ctx->attributes;
+    uint32_t i                  = 0;
+    while (hdr->type != ULTRA_ATTRIBUTE_MEMORY_MAP && i < ctx->attribute_count) {
+        hdr = ULTRA_NEXT_ATTRIBUTE(hdr);
+        i++;
+    }
+
+    if (i == ctx->attribute_count) {
+        panic("Memory map attribute not found\n");
+    }
+
+    return (ultra_memory_map_attribute *)hdr;
+};
+
 void init_memory(ultra_boot_context *ctx)
 {
     serial_logger.printf("Initializing memory\n");
@@ -109,20 +125,7 @@ void init_memory(ultra_boot_context *ctx)
     #endif
     global_temp_mapper = &ultra_temp_mapper;
 
-    auto mem = [=]() -> ultra_memory_map_attribute * {
-        ultra_attribute_header *hdr = ctx->attributes;
-        uint32_t i                  = 0;
-        while (hdr->type != ULTRA_ATTRIBUTE_MEMORY_MAP && i < ctx->attribute_count) {
-            hdr = ULTRA_NEXT_ATTRIBUTE(hdr);
-            i++;
-        }
-
-        if (i == ctx->attribute_count) {
-            panic("Memory map attribute not found\n");
-        }
-
-        return (ultra_memory_map_attribute *)hdr;
-    }();
+    auto mem = ultra_memory_map(ctx);
 
     auto number_of_entries = ULTRA_MEMORY_MAP_ENTRY_COUNT(mem->header);
     auto entries           = mem->entries;
@@ -575,6 +578,17 @@ void ultra_main(struct ultra_boot_context *ctx, uint32_t magic)
     init_modules(new_ctx);
 
     init_task1(new_ctx);
+
+    serial_logger.printf("Reclaiming bootloader memory...\n");
+    auto mattr = ultra_memory_map(new_ctx);
+    for (unsigned i = 0; i < ULTRA_MEMORY_MAP_ENTRY_COUNT(mattr->header); i++) {
+        if (mattr->entries[i].type == ULTRA_MEMORY_TYPE_LOADER_RECLAIMABLE
+            || mattr->entries[i].type == ULTRA_MEMORY_TYPE_KERNEL_STACK) {
+            serial_logger.printf("Reclaiming memory region 0x%lx - 0x%lx\n", mattr->entries[i].physical_address,
+                                 mattr->entries[i].physical_address + mattr->entries[i].size);
+            pmm::free_memory_for_kernel(mattr->entries[i].physical_address, mattr->entries[i].size / PAGE_SIZE);            
+        }
+    }
 
     serial_logger.printf("Entering userspace...\n");
 }
