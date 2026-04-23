@@ -131,7 +131,7 @@ kresult_t loongarch_map_page(u64 pt_top_phys, void *virt_addr, u64 phys_addr,
 
         clear_page(new_pt_phys);
         pte = new_pt_phys;
-        __atomic_store_n(l4_pt + l4_idx, pte, __ATOMIC_RELAXED);
+        __atomic_store_n(l4_pt + l4_idx, pte, __ATOMIC_RELEASE);
     }
 
     u64 *l3_pt = mapper.map(pte & PAGE_ADDR_MASK);
@@ -143,7 +143,7 @@ kresult_t loongarch_map_page(u64 pt_top_phys, void *virt_addr, u64 phys_addr,
 
         clear_page(new_pt_phys);
         pte = new_pt_phys;
-        __atomic_store_n(l3_pt + l3_idx, pte, __ATOMIC_RELAXED);
+        __atomic_store_n(l3_pt + l3_idx, pte, __ATOMIC_RELEASE);
     }
 
     u64 *l2_pt = mapper.map(pte & PAGE_ADDR_MASK);
@@ -155,7 +155,7 @@ kresult_t loongarch_map_page(u64 pt_top_phys, void *virt_addr, u64 phys_addr,
 
         clear_page(new_pt_phys);
         pte = new_pt_phys;
-        __atomic_store_n(l2_pt + l2_idx, pte, __ATOMIC_RELAXED);
+        __atomic_store_n(l2_pt + l2_idx, pte, __ATOMIC_RELEASE);
     }
 
     u64 *l1_pt = mapper.map(pte & PAGE_ADDR_MASK);

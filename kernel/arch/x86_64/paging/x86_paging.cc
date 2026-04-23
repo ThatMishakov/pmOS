@@ -907,7 +907,7 @@ ReturnStr<bool> x86_4level_Page_Table::atomic_copy_to_user(void *to, const void 
     for (char *i = (char *)((u64)to & ~0xfffUL); i < (char *)to + size; i += 0x1000) {
         const auto b = prepare_user_page(i, Writeable);
         if (!b.success())
-            b.propagate();
+            return b.propagate();
 
         if (not b.val)
             return false;

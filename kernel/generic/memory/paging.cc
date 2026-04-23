@@ -92,7 +92,7 @@ ReturnStr<bool> Page_Table::atomic_copy_to_user(void *to, const void *from, size
     for (ulong i = (ulong)to & PAGE_MASK; i < (ulong)to + size; i += PAGE_SIZE) {
         const auto b = prepare_user_page((void *)i, Writeable);
         if (!b.success())
-            b.propagate();
+            return b.propagate();
 
         if (not b.val)
             return false;
@@ -445,7 +445,7 @@ int kernel::paging::kernel_pt_generation          = 0;
 // bruh
 int kernel_pt_active_cpus_count[2] = {0, 0};
 
-void Page_Table::trigger_shootdown(sched::CPU_Info *cpu)
+void Page_Table::trigger_shootdown(Page_Table *maybe_page_table, sched::CPU_Info *cpu)
 {
     if (kernel_pt_generation != cpu->kernel_pt_generation) {
         assert(kernel_pt_generation != -1);
@@ -469,42 +469,43 @@ void Page_Table::trigger_shootdown(sched::CPU_Info *cpu)
     } else {
         assert(cpu == sched::get_cpu_struct());
         assert(cpu->page_table_generation != -1);
+        assert(maybe_page_table != nullptr);
 
-        Auto_Lock_Scope l(active_cpus_lock);
+        Auto_Lock_Scope l(maybe_page_table->active_cpus_lock);
 
-        if (paging_generation == cpu->page_table_generation)
+        if (maybe_page_table->paging_generation == cpu->page_table_generation)
             return;
 
         auto current_generation = cpu->page_table_generation;
         auto next_generation    = current_generation == 0 ? 1 : 0;
 
-        assert(shootdown_descriptor != nullptr);
-        auto &desc = *shootdown_descriptor;
+        assert(maybe_page_table->shootdown_descriptor != nullptr);
+        auto &desc = *maybe_page_table->shootdown_descriptor;
 
         if (desc.flush_all()) {
-            tlb_flush_all();
+            maybe_page_table->tlb_flush_all();
         } else {
             for (auto page: desc.iterate_over_pages())
-                invalidate_tlb(page);
+                maybe_page_table->invalidate_tlb(page);
 
             for (auto range: desc.iterate_over_ranges())
-                invalidate_tlb(range.start, range.size);
+                maybe_page_table->invalidate_tlb(range.start, range.size);
         }
 
         // Make sure the invalidation is done before the generation change
         __sync_synchronize();
 
         // I think the order shouldn't matter
-        __atomic_add_fetch(&active_cpus_count[next_generation], 1, __ATOMIC_RELAXED);
+        __atomic_add_fetch(&maybe_page_table->active_cpus_count[next_generation], 1, __ATOMIC_RELAXED);
 
-        active_cpus[current_generation].remove(cpu);
-        active_cpus[next_generation].push_back(cpu);
+        maybe_page_table->active_cpus[current_generation].remove(cpu);
+        maybe_page_table->active_cpus[next_generation].push_back(cpu);
 
         cpu->page_table_generation = next_generation;
 
         // Not sure about the order here though
         // TODO: ???
-        __atomic_sub_fetch(&active_cpus_count[current_generation], 1, __ATOMIC_RELEASE);
+        __atomic_sub_fetch(&maybe_page_table->active_cpus_count[current_generation], 1, __ATOMIC_RELEASE);
     }
 }
 
@@ -686,21 +687,22 @@ TLBShootdownContext TLBShootdownContext::create_kernel()
 
 void TLBShootdownContext::invalidate_page(void *page)
 {
-    // TODO: Align this to page size
-    page = (void *)((ulong)page & ~0xfffULL);
+    constexpr phys_addr_t PAGE_MASK = ~(PAGE_SIZE - 1);
+    page = (void *)((ulong)page & PAGE_MASK);
 
     if ((pages_count == MAX_PAGES) and for_kernel())
         finalize();
 
     if (pages_count >= MAX_PAGES)
         return;
-    pages[pages_count] = page;
+
+    pages[pages_count] = page;    
     pages_count++;
 }
 
 bool TLBShootdownContext::flush_all() const
 {
-    return (pages_count > MAX_PAGES) or (ranges_count > MAX_RANGES);
+    return (pages_count >= MAX_PAGES) or (ranges_count > MAX_RANGES);
 }
 
 bool TLBShootdownContext::empty() const { return pages_count == 0 and ranges_count == 0; }
@@ -747,7 +749,7 @@ void TLBShootdownContext::finalize()
                 cpu->ipi_tlb_shootdown();
             }
 
-            page_table->trigger_shootdown(my_cpu);
+            Page_Table::trigger_shootdown(nullptr, my_cpu);
 
             while (__atomic_load_n(&kernel_pt_active_cpus_count[old_generation], __ATOMIC_ACQUIRE))
                 spin_pause();
@@ -774,7 +776,7 @@ void TLBShootdownContext::finalize()
 
         // If this CPU has this page table, also flush it
         if (my_cpu->current_task->page_table.get() == page_table)
-            page_table->trigger_shootdown(my_cpu);
+            Page_Table::trigger_shootdown(page_table, my_cpu);
 
         // Wait for other CPUs
         while (__atomic_load_n(&page_table->active_cpus_count[old_generation], __ATOMIC_ACQUIRE)) {

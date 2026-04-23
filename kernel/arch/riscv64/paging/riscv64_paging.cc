@@ -122,10 +122,10 @@ kresult_t riscv_map_page(u64 pt_top_phys, u64 phys_addr, void *virt_addr,
                 RISCV64_PTE new_entry = RISCV64_PTE();
                 new_entry.valid       = true;
                 new_entry.ppn         = new_pt_phys >> 12;
-                *entry                = new_entry;
 
                 next_level_phys = new_pt_phys;
                 clear_page(next_level_phys);
+                __atomic_store_n(entry, new_entry, __ATOMIC_RELEASE);
             } else if (entry->is_leaf()) {
                 return -EEXIST;
             } else {

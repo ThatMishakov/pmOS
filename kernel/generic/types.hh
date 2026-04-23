@@ -53,7 +53,7 @@ template<class T> struct ReturnStr {
 
     template<class U> ReturnStr(ReturnStr<U> u): result {u.result}, val(std::move(u.val)) {};
 
-    Error propagate() const
+    [[nodiscard]] Error propagate() const
     {
         assert(result);
         return {result};

@@ -38,17 +38,17 @@ size_t ElFAuxvec::strings_size_aligned() const
     const size_t ptr_mask = ptr_size - 1;
 
     size_t size = 0;
-    size += std::accumulate(args_.begin(), args_.end(), 0,
+    size += std::accumulate(args_.begin(), args_.end(), (size_t)0,
         [](size_t acc, const klib::string &str) {
             return acc + str.size() + 1;
         }
     );
-    size += std::accumulate(envp_.begin(), envp_.end(), 0,
+    size += std::accumulate(envp_.begin(), envp_.end(), (size_t)0,
         [](size_t acc, const klib::string &str) {
             return acc + str.size() + 1;
         }
     );
-    size += std::accumulate(aux_.begin(), aux_.end(), 0,
+    size += std::accumulate(aux_.begin(), aux_.end(), (size_t)0,
         [=](size_t acc, const auto &vec) {
             auto size = vec.size();
             auto aligned_size = (size + ptr_mask) & ~ptr_mask;

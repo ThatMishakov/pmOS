@@ -468,16 +468,16 @@ ReturnStr<void *> Mem_Object::map_to_kernel(u64 offset, u64 size, Page_Table_Arg
 {
     // Lock might be needed here?
     // Also, TODO: magic numbers everywhere
-    u64 object_size_bytes = pages_size * 4096;
+    u64 object_size_bytes = pages_size * (1 << page_size_log);
 
-    assert((offset & 0xfff) == 0);
-    assert(size > 0 && (size & 0xfff) == 0);
+    assert((offset & ((1 << page_size_log) - 1)) == 0);
+    assert(size > 0 && (size & ((1 << page_size_log) - 1)) == 0);
     assert(offset + size <= object_size_bytes);
 
-    const size_t size_pages = size >> 12;
+    const size_t size_pages = size >> page_size_log;
 
     // Make sure all pages are allocated
-    for (size_t i = 0; i < size; i += 4096) {
+    for (size_t i = 0; i < size; i += (1 << page_size_log)) {
         auto p = atomic_request_page(offset + i, args.writeable);
         if (!p.success())
             return p.propagate();
@@ -486,6 +486,7 @@ ReturnStr<void *> Mem_Object::map_to_kernel(u64 offset, u64 size, Page_Table_Arg
             return nullptr;
     }
 
+    // TODO: Remove magic number
     void *mem_virt = vmm::kernel_space_allocator.virtmem_alloc(size >> 12);
     if (mem_virt == nullptr)
         return Error(-ENOMEM);
@@ -493,7 +494,7 @@ ReturnStr<void *> Mem_Object::map_to_kernel(u64 offset, u64 size, Page_Table_Arg
     size_t i   = 0;
     auto guard = pmos::utility::make_scope_guard([&]() {
         auto ctx = TLBShootdownContext::create_kernel();
-        for (size_t ii = 0; ii < i; ++ii) {
+        for (size_t ii = 0; ii < i; ii += (1 << page_size_log)) {
             void *const virt_addr = (void *)(size_t(mem_virt) + ii);
             unmap_kernel_page(ctx, virt_addr);
         }
@@ -502,7 +503,7 @@ ReturnStr<void *> Mem_Object::map_to_kernel(u64 offset, u64 size, Page_Table_Arg
         vmm::kernel_space_allocator.virtmem_free(mem_virt, size_pages);
     });
 
-    for (i = 0; i < size; i += 4096) {
+    for (i = 0; i < size; i += (1 << page_size_log)) {
         auto p = atomic_request_page(offset + i, true);
         assert(p.success());
 

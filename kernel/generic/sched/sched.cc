@@ -431,7 +431,7 @@ void check_synchronous_ipis()
         if (val & CPU_Info::IPI_TLB_SHOOTDOWN) {
             __atomic_and_fetch(&c->ipi_mask, ~CPU_Info::IPI_TLB_SHOOTDOWN, __ATOMIC_SEQ_CST);
 
-            c->current_task->page_table->trigger_shootdown(c);
+            c->current_task->page_table->trigger_shootdown(c->current_task->page_table.get(), c);
         }
     }
 }

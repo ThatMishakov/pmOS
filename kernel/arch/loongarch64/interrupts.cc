@@ -80,7 +80,7 @@ void CPU_Info::ipi_reschedule()
 
 void CPU_Info::ipi_tlb_shootdown()
 {
-    __atomic_or_fetch(&ipi_mask, IPI_TLB_SHOOTDOWN, __ATOMIC_ACQUIRE);
+    __atomic_or_fetch(&ipi_mask, IPI_TLB_SHOOTDOWN, __ATOMIC_RELEASE);
     ipi_send(cpu_physical_id, 0x00);
 }
 

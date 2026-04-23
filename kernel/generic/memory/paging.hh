@@ -596,7 +596,7 @@ public:
     void unapply_cpu(sched::CPU_Info *cpu);
 
     // TODO: Calling this on page table is weird
-    void trigger_shootdown(sched::CPU_Info *cpu);
+    static void trigger_shootdown(Page_Table *maybe_page_table, sched::CPU_Info *cpu);
 
 protected:
     Page_Table() = default;

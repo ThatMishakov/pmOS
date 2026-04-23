@@ -329,7 +329,7 @@ void service_software_interrupt()
         reschedule();
 
     if (m & CPU_Info::IPI_TLB_SHOOTDOWN)
-        c->current_task->page_table->trigger_shootdown(c);
+        c->current_task->page_table->trigger_shootdown(c->current_task->page_table.get(), c);
 }
 
 extern "C" void nested_interrupt(RiscV64Regs *regs)
