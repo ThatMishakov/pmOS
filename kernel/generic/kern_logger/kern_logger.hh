@@ -32,6 +32,7 @@
 #include <messaging/messaging.hh>
 #include <stdarg.h>
 #include <types.hh>
+#include <messaging/ports.hh>
 
 namespace kernel::log
 {

@@ -141,6 +141,7 @@ enum ServiceParseState {
     SERVICE_STATE_REQUIRE,
     SERVICE_STATE_MATCH,
     SERVICE_STATE_PATH,
+    SERVICE_STATE_PROPERTIES,
     SERVICE_STATE_SKIP,
     SERVICE_STATE_END,
 };
@@ -151,6 +152,7 @@ const char *SERVICE_RUN_TYPE    = "run_type";
 const char *SERVICE_REQUIRE     = "require";
 const char *SERVICE_MATCH       = "match";
 const char *SERVICE_PATH        = "path";
+const char *SERVICE_PROPERTIES  = "pmbus_properties";
 
 const char *MATCH_PNP = "pnp";
 const char *MATCH_PCI = "pci";
@@ -285,6 +287,12 @@ end:
     return cont;
 }
 
+void release_strings_array(char **strings, size_t count)
+{
+    for (size_t i = 0; i < count; ++i)
+        free(strings[i]);
+}
+
 static bool parse_pnp(yaml_parser_t *state, struct Service *service)
 {
     bool cont = true;
@@ -334,6 +342,7 @@ static bool parse_pnp(yaml_parser_t *state, struct Service *service)
 
             if (value_event.type == YAML_SEQUENCE_END_EVENT) {
                 cont2 = false;
+                yaml_event_delete(&value_event);
             } else if (value_event.type != YAML_SCALAR_EVENT) {
                 print_str("Expected YAML_SCALAR_EVENT for match filter value, got ");
                 print_hex(value_event.type);
@@ -342,6 +351,7 @@ static bool parse_pnp(yaml_parser_t *state, struct Service *service)
                 yaml_event_delete(&value_event);
                 if (!success) {
                     free(f.key);
+                    release_strings_array(strings, strings_count);
                     free(strings);
                     yaml_event_delete(&filter_event);
                     return false;
@@ -351,6 +361,7 @@ static bool parse_pnp(yaml_parser_t *state, struct Service *service)
                 if (!new_strings) {
                     print_str("Failed to allocate memory for match filter strings!\n");
                     free(f.key);
+                    release_strings_array(strings, strings_count);
                     free(strings);
                     yaml_event_delete(&value_event);
                     yaml_event_delete(&filter_event);
@@ -389,6 +400,155 @@ static bool parse_pnp(yaml_parser_t *state, struct Service *service)
         yaml_event_delete(&filter_event);
     }
 
+    return cont;
+}
+
+const char *reserved_properties[] = {
+    "type",
+    "run_type",
+};
+
+static bool is_reserved(const char *name)
+{
+    for (size_t i = 0; i < sizeof(reserved_properties)/sizeof(reserved_properties[0]); ++i)
+        if (!strcmp(reserved_properties[i], name))
+            return true;
+    return false;
+}
+
+static bool should_skip_property(struct Service *service, const char *name)
+{
+    if (is_reserved(name)) {
+        print_str("Skipping property for some reason... (because it's reserved)\n");
+        return true;
+    }
+
+    struct Property p;
+    VECTOR_FOREACH(service->properties, p) {
+        if (!strcmp(p.name, name)) {
+            print_str("Loader: duplicate property ");
+            print_str(name);
+            print_str("\n");
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static bool parse_property(yaml_parser_t *state, struct Service *service, const char *name)
+{
+    bool cont = true;
+
+    yaml_event_t property_event;
+    if (!yaml_parser_parse(state, &property_event)) {
+        print_str("Failed to parse event!\n");
+        return false;
+    }
+
+    if (should_skip_property(service, name)) {
+        bool success = skip_event(state, &property_event);
+        yaml_event_delete(&property_event);
+        return success;
+    }
+
+    struct Property property = {};
+    property.name = strdup(name);
+    if (!property.name) {
+        print_str("Failed to allocate memory for property key!\n");
+        yaml_event_delete(&property_event);
+        return false;
+    }
+
+    if (property_event.type == YAML_SCALAR_EVENT) {
+        // TODO: Support integer...
+
+        char *str = strdup((const char *)property_event.data.scalar.value);
+        if (!str) {
+            print_str("Failed to allocate memory for a property value\n");
+            goto error;
+        }
+
+        property.type = PROPERTY_STRING;
+        property.string = str;
+    } else if (property_event.type == YAML_SEQUENCE_START_EVENT) {
+        char **strings = NULL;
+        size_t strings_count = 0;
+
+        bool cont2 = true;
+        while (cont2) {
+            yaml_event_t value_event;
+            if (!yaml_parser_parse(state, &value_event)) {
+                print_str("Failed to parse event!\n");
+                release_strings_array(strings, strings_count);
+                free(strings);
+                goto error;
+            }
+
+            if (value_event.type == YAML_SEQUENCE_END_EVENT) {
+                cont2 = false;
+            } else if (value_event.type != YAML_SCALAR_EVENT) {
+                print_str("Expected YAML_SCALAR_EVENT for property value, got ");
+                print_hex(value_event.type);
+                print_str("\n");
+                bool success = skip_event(state, &value_event);
+                yaml_event_delete(&value_event);
+                if (!success) {
+                    release_strings_array(strings, strings_count);
+                    free(strings);
+                    goto error;
+                }
+            } else {
+                char **new_strings = realloc(strings, sizeof(char *) * (strings_count + 2));
+                if (!new_strings) {
+                    print_str("Failed to allocate memory for property strings!\n");
+                    release_strings_array(strings, strings_count);
+                    free(strings);
+                    yaml_event_delete(&value_event);
+                    goto error;
+                }
+
+                strings = new_strings;
+                
+                char *str = strdup((char *)value_event.data.scalar.value);
+                if (!str) {
+                    print_str("Failed to allocate memory for property string!\n");
+                    release_strings_array(strings, strings_count);
+                    free(strings);
+                    yaml_event_delete(&value_event);
+                    goto error;
+                }
+                strings[strings_count] = str;
+                strings[++strings_count] = NULL;
+            }
+            yaml_event_delete(&value_event);
+        }
+
+        property.type = PROPERTY_LIST;
+        property.list = strings;
+    } else {
+        print_str("Unexpected event type when parsing property, got ");
+        print_hex(property_event.type);
+        cont = skip_event(state, &property_event);
+        goto skip;
+    }
+
+    int res = 0;
+    VECTOR_PUSH_BACK_CHECKED(service->properties, property, res);
+    if (res != 0) {
+        print_str("Failed to add property to service!\n");
+        goto error;
+    }
+
+    yaml_event_delete(&property_event);
+    return true;
+error:
+    release_property(&property);
+    yaml_event_delete(&property_event);
+    return false;
+skip:
+    release_property(&property);
+    yaml_event_delete(&property_event);
     return cont;
 }
 
@@ -545,6 +705,42 @@ static bool parse_match_filter(yaml_parser_t *state, yaml_event_t *event, struct
     return true;
 }
 
+static bool parse_properties(yaml_parser_t *state, yaml_event_t *event, struct Service *service)
+{
+    if (event->type != YAML_MAPPING_START_EVENT) {
+        print_str("Expected YAML_MAPPING_START_EVENT for properties, got ");
+        print_hex(event->type);
+        print_str("\n");
+        return skip_event(state, event);
+    }
+
+    bool cont = true;
+    while (cont) {
+        yaml_event_t new_event;
+        if (!yaml_parser_parse(state, &new_event)) {
+            print_str("Failed to parse event!\n");
+            return false;
+        }
+
+        if (new_event.type == YAML_MAPPING_END_EVENT) {
+            cont = false;
+        } else if (new_event.type != YAML_SCALAR_EVENT) {
+            print_str("Expected YAML_SCALAR_EVENT for properties entry, got ");
+            print_hex(new_event.type);
+            print_str("\n");
+            if (!skip_event(state, &new_event)) {
+                yaml_event_delete(&new_event);
+                return false;
+            }
+        } else {
+            cont = parse_property(state, service, (char *)new_event.data.scalar.value);
+        }
+        yaml_event_delete(&new_event);
+    }
+
+    return true;
+}
+
 static bool parse_service_event(yaml_parser_t *state, yaml_event_t *event, struct parser_state *s)
 {
     struct Service *service              = NULL;
@@ -612,6 +808,8 @@ static bool parse_service_event(yaml_parser_t *state, yaml_event_t *event, struc
                     service_state = SERVICE_STATE_MATCH;
                 } else if (!strcmp(value, SERVICE_PATH)) {
                     service_state = SERVICE_STATE_PATH;
+                } else if (!strcmp(value, SERVICE_PROPERTIES)) {
+                    service_state = SERVICE_STATE_PROPERTIES;
                 } else {
                     print_str("Unknown service key: ");
                     print_str(value);
@@ -759,6 +957,7 @@ static bool parse_service_event(yaml_parser_t *state, yaml_event_t *event, struc
             }
             break;
         }
+        case SERVICE_STATE_PROPERTIES:
         case SERVICE_STATE_MATCH: {
             yaml_event_t new_event;
             if (!yaml_parser_parse(state, &new_event)) {
@@ -769,10 +968,16 @@ static bool parse_service_event(yaml_parser_t *state, yaml_event_t *event, struc
 
             if (new_event.type == YAML_MAPPING_END_EVENT) {
                 service_state = SERVICE_STATE_START;
-            } else {
+            } else if (service_state == SERVICE_STATE_MATCH) {
                 bool result = parse_match_filter(state, &new_event, service);
                 if (!result) {
                     print_str("Failed to parse match filter!\n");
+                    success = false;
+                }
+            } else {
+                bool result = parse_properties(state, &new_event, service);
+                if (!result) {
+                    print_str("Failed to parse properties!\n");
                     success = false;
                 }
             }

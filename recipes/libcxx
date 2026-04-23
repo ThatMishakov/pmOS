@@ -9,6 +9,10 @@ imagedeps="python3 build-essential"
 
 triplet="${JINX_ARCH}-pmos"
 
+if [ ${JINX_ARCH} = "i686" ]; then
+    EXTRA_FLAGS="-DCAN_TARGET_i386=1"
+fi
+
 configure() {
     cmake -S ${source_dir}/runtimes \
         -DLLVM_ENABLE_RUNTIMES="libcxx;libcxxabi;libunwind;compiler-rt" \
@@ -26,8 +30,6 @@ configure() {
         -DLIBCXXABI_USE_LLVM_UNWINDER=true \
         -DLIBCXX_ENABLE_SHARED=OFF \
         -DLIBUNWIND_ENABLE_SHARED=OFF \
-        -DLIBCXXABI_ENABLE_SHARED=OFF \
-        -DCOMPILER_RT_BUILD_BUILTINS=ON \
         -DCOMPILER_RT_BUILD_ORC=OFF \
         -DCOMPILER_RT_BUILD_SANITIZERS=OFF \
         -DCOMPILER_RT_BUILD_MEMPROF=OFF \
@@ -35,11 +37,12 @@ configure() {
         -DCOMPILER_RT_BUILD_LIBFUZZER=OFF \
         -DCOMPILER_RT_BUILD_PROFILE=OFF \
         -DCOMPILER_RT_INSTALL_LIBRARY_DIR="/usr/lib" \
-        -DCOMPILER_RT_BUILD_CTX_PROFILE=OFF
+        -DCOMPILER_RT_BUILD_CTX_PROFILE=OFF \
+        ${EXTRA_FLAGS}
 }
 
 build() {
-    make -j ${parallelism}
+    make -j ${parallelism} VERBOSE=1
 }
 
 package() {

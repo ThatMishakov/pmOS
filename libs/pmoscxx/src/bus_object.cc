@@ -260,31 +260,35 @@ BUSObject BUSObject::deserialize(std::span<uint8_t> data)
     size_t name_length = object->name_length;
     size_t properties_offset = object->properties_offset;
 
-    if (size < data.size())
-        throw std::system_error(EINTR, std::system_category());
+    if (size > data.size())
+        throw std::system_error(EINTR, std::system_category(), "object size smaller than span");
 
     constexpr size_t name_offset = sizeof(IPC_Bus_Object);
 
     if ((name_length > data.size()) or (name_offset > data.size() - name_length))
-        throw std::system_error(EINTR, std::system_category());
+        throw std::system_error(EINTR, std::system_category(), "object name too long");
 
-    auto name_data = reinterpret_cast<const char *>(data.data() + 8);
+    auto name_data = reinterpret_cast<const char *>(data.data() + sizeof(IPC_Bus_Object));
     ret.name = std::string(name_data, name_length);
 
-    if (properties_offset > data.size())
-        throw std::system_error(EINTR, std::system_category());
+    if (properties_offset > size)
+        throw std::system_error(EINTR, std::system_category(), "properties offset over data size");
 
     while (properties_offset < size) {
         if (size - properties_offset < sizeof(IPC_Object_Property))
-            throw std::system_error(EINTR, std::system_category());
+            throw std::system_error(EINTR, std::system_category(), "last property smaller than its header");
 
         auto property = reinterpret_cast<IPC_Object_Property *>(data.data() + properties_offset);
         if (size - properties_offset < property->length)
-            throw std::system_error(EINTR, std::system_category());
+            throw std::system_error(EINTR, std::system_category(), "property size overflows object");
+
+        // Bad length (namely, this would loop infinitely if it's 0 for some reason, and this slips through other checks...)
+        if (property->length < sizeof(IPC_Object_Property))
+            throw std::system_error(EINTR, std::system_category(), "property length too small");
 
         // data_start beyong the length
-        if (property->data_start > size - property->length)
-            throw std::system_error(EINTR, std::system_category());
+        if (property->data_start < sizeof(IPC_Object_Property) || property->data_start > property->length)
+            throw std::system_error(EINTR, std::system_category(), "property data start beyond the length");
 
         auto name_length = property->data_start - sizeof(IPC_Object_Property);
         auto cstr = reinterpret_cast<const char *>(data.data() + properties_offset + sizeof(IPC_Object_Property));
@@ -300,7 +304,7 @@ BUSObject BUSObject::deserialize(std::span<uint8_t> data)
             break;
         case PROPERTY_TYPE_INTEGER: {
             if (data_length != sizeof(uint64_t))
-                throw std::system_error(EINTR, std::system_category());
+                throw std::system_error(EINTR, std::system_category(), "integer property misaligned");
 
             p = *reinterpret_cast<const uint64_t *>(data.data() + properties_offset + property->data_start);
         }
@@ -337,5 +341,7 @@ std::optional<BUSObject::property> BUSObject::get_property(std::string_view name
         return std::nullopt;
     return it->second;
 }
+
+Conjunction::Conjunction(std::vector<AnyFilter> operands): operands_(std::move(operands)) {}
 
 }

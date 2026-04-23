@@ -1,0 +1,19 @@
+#!/bin/sh
+
+name=kernel-objdump
+version=0.0.1
+revision=1
+
+source_dir=kernel
+deps="libcxx libc-headers"
+hostdeps="clang"
+
+configure() {
+    echo Arch: $JINX_ARCH
+    cmake -S ${source_dir} -DTARGET_ARCH=${JINX_ARCH} -DSYSROOT=${sysroot_dir}
+}
+
+build() {
+    make -j ${parallelism}
+    objdump -S kernel > kernel.txt
+}

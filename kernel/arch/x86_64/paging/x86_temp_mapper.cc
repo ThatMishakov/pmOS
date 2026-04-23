@@ -77,7 +77,7 @@ void *x86_PAE_Temp_Mapper::kern_map(u64 phys_frame)
         }
     }
 
-    assert(false);
+    assert(false && "trying to map too many things at once");
 
     return nullptr;
 }

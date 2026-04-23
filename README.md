@@ -1,6 +1,6 @@
 # pmOS
 
-A small (hobby) operating for RISC-V, LoongArch and x86 (i686 and x86_64), using a homemade microkernel, C library and userspace, partially developed as my end of degree project. The goal of the project is to make a general purpose operating system, with the objective of learning and being suitable for development and exploration of the RISC-V and X86 platforms. The microkernel is mostly written in C++, and the userspace is in a mixture of C, C++ and Rust (and ASM where needed). The [limine bootloader](https://limine-bootloader.org/) and [Hyper bootloader](https://github.com/UltraOS/Hyper) are used for booting the system, depending on the architecture.
+A small (hobby) operating for RISC-V, LoongArch and x86 (i686 and x86_64), using a homemade microkernel, C library and userspace, partially developed as my end of degree project. The goal of the project is to make a general purpose operating system, with the objective of learning and being suitable for development and exploration of the RISC-V and X86 platforms. The microkernel is mostly written in C++, and the userspace is in a mixture of C, C++ and Rust (and ASM where needed). The [limine bootloader](https://limine-bootloader.org/) and [Hyper bootloader](https://github.com/UltraOS/Hyper) are used for booting the system, depending on the architecture, with x86_64 version being dual protocol with the same binary.
 
 ## Screenshots
 RISC-V Execution:
@@ -19,7 +19,7 @@ The system supports booting by the limine protocol. In the past, multiboot2 was 
 
 As such, the `kernel` directory contains the kernel, the `lib` contains userspace C libraries, `sysroot` contains system headers, `limine` contains the bootloader configs, and the rest of the directories contain different userspace programs, which make up the system. All of the drivers (including framebuffer) are run in userspace.
 
-The i686 port is using [Hyper](https://github.com/UltraOS/Hyper) bootloader and its Ultra protocol.
+The x86_64 and i686 ports are (also) using [Hyper](https://github.com/UltraOS/Hyper) bootloader and its Ultra protocol. The x86_64 build can be booted with either Limine or Ultra, while the rest of the builds only support one of the two (because of the limitations of protocols).
 
 ## Project structure
 
@@ -144,6 +144,7 @@ These are the features that are planned to be had in the OS:
   - [ ] IOMMU
 - [x] Userspace/Ring 3
 - [x] Multi CPU support
+  - [ ] Proper SMP initialization - since the kernel doesn't rely on Limine's MP request, it's broken on physical hardware because it uses broadcast IPIs and doesn't wait properly either.
 
 #### x86_64 specific features:
 - [ ] 5 level paging
@@ -167,13 +168,15 @@ These are the features that are planned to be had in the OS:
 - [ ] Process management (processd) - Mostly unfinished, I plan it to route signals
 - [ ] Networking (networkd)
 - [ ] Filesystems
+  - [ ] ext4 - With the help of [ext4plus crate](https://crates.io/crates/ext4plus/) in userspace
+    - [x] Partition probing
+    - [ ] Mounting
+    - [ ] Reading
+    - [ ] Writing
   - [ ] FAT32
   - [ ] FUSE
   - [ ] USTAR filesystem daemon - Archive parsing works, but it is very incomplete
-  - [ ] VFSd
-    - [X] Mounting filesystems
-    - [X] Opening files
-    - [X] Traversing trees
+  - [ ] VFSd - being rewritten in Rust
 - [ ] pmbus - a bus for drivers and services in Rust
   - [x] Publishing objects
   - [x] Requesting objects

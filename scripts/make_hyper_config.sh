@@ -6,11 +6,11 @@ write_service_entry() {
     cat <<EOF >> "$FILE"
 module:
     path = "/${NAME}.elf"
-    name = "${NAME}.elf;file"
+    name = "/${NAME}.elf;file"
 
 module:
     path = "/${NAME}.yaml"
-    name = "${NAME}.yaml;init-config"
+    name = "/${NAME}.yaml;init-config"
 
 EOF
 }
@@ -29,12 +29,22 @@ default-entry = "pmOS"
 protocol = "ultra"
 
 binary:
+    allocate-anywhere = true
+    higher-half-exclusive = true
     path = "/kernel"
+
+module:
+    path = "/bootstrapd"
+    name = "bootstrapd;bootstrap"
+EOF
+
+if [ "$JINX_ARCH" = "i686" ]; then
+    cat <<EOF >> "$FILE"
 
 page-table:
     levels = 3
-
 EOF
+fi
 
 for SERVICE in $SERVICES; do
     write_service_entry "$FILE" "$SERVICE"

@@ -12,6 +12,17 @@
 #include <elf.h>
 #include "../elf/loader.h"
 #include <inttypes.h>
+#include <pmos/ipc.h>
+#include "args.h"
+
+struct module_descriptor_list {
+    struct module_descriptor_list *next;
+    uint64_t object_id;
+    size_t size;
+    char *cmdline;
+    char *path;
+    struct Service *service;
+};
 
 static void free_match_filters(match_filter_vector filters)
 {
@@ -45,6 +56,12 @@ void free_service(struct Service *service)
         free(r.service_name);
     }
     VECTOR_FREE(service->requirements);
+
+    struct Property p;
+    VECTOR_FOREACH(service->properties, p) {
+        release_property(&p);
+    }
+    VECTOR_FREE(service->properties);
 
     free_match_filters(service->match_filters);
 
@@ -196,7 +213,6 @@ error:
     return NULL;
 }
 
-
 void *construct_filter(struct Service *service)
 {
     pmos_bus_filter_disjunction *d = pmos_bus_filter_disjunction_create();
@@ -284,11 +300,8 @@ error:
 
 uint64_t instance_id_counter = 1;
 
-int start_service(struct Service *service, uint64_t object_id, uint64_t optional_right_id)
+static int reserve_instances_vector(struct Service *service)
 {
-    if (!service)
-        return -EINVAL;
-
     int result = 0;
     size_t size = service->instances.size;
     VECTOR_RESERVE(service->instances, size + 1, result);
@@ -300,10 +313,24 @@ int start_service(struct Service *service, uint64_t object_id, uint64_t optional
         print_str("\n");
         return -ENOMEM;
     }
+    return 0;
+}
+
+int start_service(struct Service *service, uint64_t object_id, uint64_t optional_right_id)
+{
+    if (!service)
+        return -EINVAL;
+
+    print_str("Loader: starting service ");
+    print_str(service->name ? service->name : "UNKNOWN NAME");
+    print_str("\n");
+
+    int result = reserve_instances_vector(service);
+    if (result)
+        return result;
 
     uint64_t group_id = {};
     syscall_r r       = syscall_new_process();
-    void *mem_region  = NULL;
     if (r.result != SUCCESS) {
         print_str("Loader: Could not create process for ");
         print_str(service->name);
@@ -365,40 +392,6 @@ int start_service(struct Service *service, uint64_t object_id, uint64_t optional
     remove_task_from_group(TASK_ID_SELF, group_id);
     group_id = 0;
 
-    // Pass arguments
-    size_t args_size = 0;
-    args_size += sizeof(struct load_tag_task_group_id);
-    // TODO: Add other tags (and move this to a separate function, this is a mess)
-    args_size += sizeof(struct load_tag_close);
-
-    size_t page_aligned = (args_size + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
-    mem_request_ret_t mem =
-        create_normal_region(TASK_ID_SELF, NULL, page_aligned, PROT_READ | PROT_WRITE);
-    if (mem.result != SUCCESS) {
-        print_str("Loader: Could not create memory region for arguments for ");
-        print_str(service->name);
-        print_str(". Error: ");
-        print_hex(mem.result);
-        print_str("\n");
-
-        result = mem.result;
-        goto error;
-    }
-    mem_region = mem.virt_addr;
-
-    size_t current_offset           = 0;
-    struct load_tag_task_group_id g = {
-        .header   = LOAD_TAG_TASK_GROUP_ID_HEADER,
-        .group_id = new_group_id,
-    };
-    memcpy((char *)mem_region + current_offset, &g, sizeof(g));
-    current_offset += sizeof(g);
-
-    struct load_tag_close h = {
-        .header = LOAD_TAG_CLOSE_HEADER,
-    };
-    memcpy((char *)mem_region + current_offset, &h, sizeof(h));
-
     // Task group tag
     struct AuxVecEntry *auxvec_entries[4];
     struct AuxVecEntry group_id_entry = {
@@ -416,15 +409,15 @@ int start_service(struct Service *service, uint64_t object_id, uint64_t optional
     argc[0] = service->name;
     argc[1] = NULL;
 
+    char buff[64];
     if (new_right) {
         argc[1] = "--right-id";
-        char buff[64];
         sprintf(buff, "%" PRIu64, new_right);
         argc[2] = buff;
         argc[3] = NULL;
     }
 
-    result_t res = load_executable(r.value, object_id, 0, mem_region, page_aligned, argc, NULL, (const struct AuxVecEntry **)auxvec_entries);
+    result_t res = load_executable(r.value, object_id, 0, 0, 0, argc, NULL, (const struct AuxVecEntry **)auxvec_entries);
     //result_t res = syscall_load_executable(r.value, object_id, mem_region, 0);
     if (res != SUCCESS) {
         print_str("Loader: Could not load executable ");
@@ -438,7 +431,6 @@ int start_service(struct Service *service, uint64_t object_id, uint64_t optional
     }
 
     service->state = STATE_STARTED;
-    mem_region        = NULL;
 
     struct Instance instance = {
         .id = instance_id_counter++,
@@ -451,8 +443,203 @@ int start_service(struct Service *service, uint64_t object_id, uint64_t optional
 
     return 0;
 error:
-    if (mem_region)
-        release_region(TASK_ID_SELF, mem_region);
+    if (group_id)
+        remove_task_from_group(TASK_ID_SELF, group_id);
+
+    if (r.value)
+        syscall_kill_task(r.value);
+
+    return result;
+}
+
+struct Context {
+    int result;
+    pmos_right_t transfered_right_ids[4];
+    pmos_right_t *rights;
+    uint64_t group_id;
+};
+
+static size_t start_callback(const char *name, size_t name_length, char *out_buffer, void *ctx)
+{
+    struct Context *context = ctx;
+    size_t size = strlen("RIGHT0");
+
+    if (context->result)
+        return 0;
+
+    if (name_length != size)
+        return 0;
+
+    int index = 0;
+    if (!strncmp(name, "RIGHT0", size))
+        index = 0;
+    else if (!strncmp(name, "RIGHT1", size))
+        index = 1;
+    else if (!strncmp(name, "RIGHT2", size))
+        index = 2;
+    else if (!strncmp(name, "RIGHT3", size))
+        index = 3;
+    else
+        return 0;
+
+    if (!context->transfered_right_ids[index]) {
+        if (!context->rights[index]) {
+            context->result = -ENOENT;
+            return 0;
+        }
+
+        auto result = transfer_right(context->group_id, context->rights[index], 0);
+        if (result.result) {
+            print_str("Loader: Could not transfer right to the task group. Error: ");
+            print_hex(result.result);
+            print_str("\n");
+
+            context->result = result.result;
+            return 0;
+        }
+        context->transfered_right_ids[index] = result.right;
+        context->rights[index] = 0;
+    }
+
+    if (out_buffer)
+        return sprintf(out_buffer, "%"PRIu64, context->transfered_right_ids[index]);
+    else
+        return snprintf(NULL, 0, "%"PRIu64, context->transfered_right_ids[index]);
+}
+
+int start_service_request(struct Service *service, const char *cmdline, size_t cmdline_length, pmos_right_t *extra_rights)
+{
+    if (!service)
+        return -EINVAL;
+
+    print_str("Loader: starting service ");
+    print_str(service->name ? service->name : "UNKNOWN NAME");
+    print_str("\n");
+
+    if (!service->module)
+        return -ENOENT;
+
+    uint64_t object_id = service->module->object_id;
+
+    int result = reserve_instances_vector(service);
+    if (result)
+        return result;
+
+    uint64_t group_id = {};
+
+    syscall_r r       = syscall_new_process();
+    if (r.result != SUCCESS) {
+        print_str("Loader: Could not create process for ");
+        print_str(service->name);
+        print_str(". Error: ");
+        print_hex(r.result);
+        print_str("\n");
+
+        return r.result;
+    }
+
+    // Doesn't really matter if this fails
+    syscall_set_task_name(r.value, service->name, strlen(service->name));
+
+    syscall_r rr = create_task_group();
+    if (rr.result != SUCCESS) {
+        print_str("Loader: Could not create task group for ");
+        print_str(service->name);
+        print_str(". Error: ");
+        print_hex(rr.result);
+        print_str("\n");
+
+        syscall_kill_task(r.value);
+        return rr.result;
+    }
+
+    group_id = rr.value;
+
+    result_t rrr = add_task_to_group(r.value, group_id);
+    if (rrr != SUCCESS) {
+        print_str("Loader: Could not add task to group for ");
+        print_str(service->name);
+        print_str(". Error: ");
+        print_hex(r.result);
+        print_str("\n");
+
+        syscall_kill_task(r.value);
+        remove_task_from_group(TASK_ID_SELF, group_id);
+        return rrr;
+    }
+
+    uint64_t new_group_id = group_id;
+
+    // Task group tag
+    struct AuxVecEntry *auxvec_entries[4];
+    struct AuxVecEntry group_id_entry = {
+        .entry_type = AT_TASK_GROUP_ID,
+        .data_type = DATA_TYPE_EXTERNAL,
+        .external_data = {
+            .data = &new_group_id,
+            .size = sizeof(new_group_id),
+        },
+    };
+    auxvec_entries[0] = &group_id_entry;
+    auxvec_entries[1] = NULL;
+
+    struct Args args = {};
+    args_init(&args);
+
+    if (!args_push_arg(&args, service->name)) {
+        print_str("Failed to push arg\n");
+        result = -ENOMEM;
+        goto error;
+    }
+
+    struct Context ctx = {
+        .rights = extra_rights,
+        .group_id = group_id,
+    };
+
+    if (!parse_push_args(&args, cmdline, cmdline_length, start_callback, &ctx)) {
+        print_str("Failed to parse cmdline\n");
+        result = -ENOMEM;
+        goto error;
+    }
+    if (ctx.result) {
+        result = ctx.result;
+        goto error;
+    }
+
+    remove_task_from_group(TASK_ID_SELF, group_id);
+    group_id = 0;
+
+
+    result_t res = load_executable(r.value, object_id, 0, 0, 0, args_get_argv(&args), NULL, (const struct AuxVecEntry **)auxvec_entries);
+    //result_t res = syscall_load_executable(r.value, object_id, mem_region, 0);
+    if (res != SUCCESS) {
+        print_str("Loader: Could not load executable ");
+        print_str(service->name);
+        print_str(". Error: ");
+        print_hex(res);
+        print_str("\n");
+        result = res;
+
+        goto error;
+    }
+
+    service->state = STATE_STARTED;
+
+    struct Instance instance = {
+        .id = instance_id_counter++,
+        .group_id = new_group_id,
+        .parent = service,
+        .state = STATE_STARTED,
+    };
+
+    VECTOR_PUSH_BACK(service->instances, instance);
+
+    args_release(&args);
+
+    return 0;
+error:
+    args_release(&args);
 
     if (group_id)
         remove_task_from_group(TASK_ID_SELF, group_id);
@@ -467,7 +654,6 @@ struct Service *services = NULL;
 
 void push_services(struct Service *s)
 {
-    // Leak that memory!
     while (s) {
         struct Service *ss = s->next;
         s->next = services;
@@ -481,15 +667,6 @@ void push_services(struct Service *s)
         s = ss;
     }
 }
-
-struct module_descriptor_list {
-    struct module_descriptor_list *next;
-    uint64_t object_id;
-    size_t size;
-    char *cmdline;
-    char *path;
-    struct Service *service;
-};
 
 struct module_descriptor_list *find_module(char *path);
 
@@ -532,4 +709,200 @@ void match_services()
         module->service = s;
         s->module = module;
     }
+}
+
+const char *run_type_str(struct Service *service)
+{
+    switch (service->run_type) {
+    case RUN_MANUAL:
+        return "manual";
+    case RUN_ALWAYS_ONCE:
+        return "always_once";
+    case RUN_FIRST_MATCH_ONCE:
+        return "fire_match_once";
+    case RUN_FOR_EACH_MATCH:
+        return "for_each_match";
+    case RUN_UNKNOWN:
+    default:
+        return "unknown";
+    }
+}
+
+static bool service_set_property(pmos_bus_object_t *object, struct Property *property)
+{
+    switch (property->type) {
+    case PROPERTY_LIST:
+        return pmos_bus_object_set_property_list(object, property->name, (const char **)property->list);
+    case PROPERTY_STRING:
+        return pmos_bus_object_set_property_string(object, property->name, property->string);
+    case PROPERTY_INTEGER:
+        return pmos_bus_object_set_property_integer(object, property->name, property->integer);
+    }
+}
+
+pmos_bus_object_t *construct_pmbus_object(struct Service *service)
+{
+    const char *name = service->name;
+    if (!name)
+        name = "UNKNOWN";
+
+    const char *run_type = run_type_str(service);
+    
+    ssize_t name_size = snprintf(NULL, 0, "bootstrapd_service_%s", name);
+    char name_buf[name_size + 1];
+    sprintf(name_buf, "bootstrapd_service_%s", name);
+
+    pmos_bus_object_t *object = pmos_bus_object_create();
+    if (!object) {
+        print_str("Loader: Failed to create pmbus object...\n");
+        goto error;
+    }
+
+    if (!pmos_bus_object_set_name(object, name_buf)) {
+        print_str("Failed to set object name\n");
+        goto error;
+    }
+
+    if (!pmos_bus_object_set_property_string(object, "type", "service")) {
+        print_str("Failed to set object type\n");
+        goto error;
+    }
+
+    if (!pmos_bus_object_set_property_string(object, "run_type", run_type)) {
+        print_str("Failed to set service run type\n");
+        goto error;
+    }
+
+    struct Property *p;
+    VECTOR_FOREACH_PTR(service->properties, p) {
+        if (!service_set_property(object, p)) {
+            print_str("Failed to set service property\n");
+            goto error;
+        }
+    }
+
+    return object;
+error:
+    pmos_bus_object_free(object);
+    return NULL;
+}
+
+void release_property(struct Property *property)
+{
+    switch (property->type) {
+    case PROPERTY_INTEGER:
+        // Do nothing
+        break;
+    case PROPERTY_STRING:
+        free(property->string);
+        break;
+    case PROPERTY_LIST: {
+        char **ptr = property->list;
+        while (ptr && *ptr) {
+            free(*ptr);
+            ++ptr;
+        }
+        free(property->list);
+    }
+        break;
+    }
+
+    property->type = PROPERTY_INTEGER;
+    property->integer = 0;
+}
+
+void handle_start_service(struct Service *service, IPC_Start_Service *msg, size_t msg_len, pmos_right_t *optional_reply_right, pmos_right_t *extra_rights)
+{
+    char *cmdline = msg->cmdline;
+    size_t cmdline_length = msg_len - sizeof(*msg);
+    uint64_t id = 0;
+
+    int result = start_service_request(service, cmdline, cmdline_length, extra_rights);
+    if (!result) {
+        id = VECTOR_BACK(service->instances).id;
+    } 
+
+    if (*optional_reply_right) {
+        IPC_Start_Service_Result reply = {
+            .type = IPC_Start_Service_Result_NUM,
+            .result = result,
+            .instance_id = id,
+        };
+
+        auto send_result = send_message_right(*optional_reply_right, 0, &reply, sizeof(reply), NULL, SEND_MESSAGE_DELETE_RIGHT);
+        if (!send_result.result) {
+            *optional_reply_right = 0;
+        } else {
+            print_str("Loader: Failed to reply to service start request, error ");
+            print_hex(send_result.result);
+            print_str("\n");
+        }
+    } else {
+        if (result) {
+            print_str("Loader: Failed to start service ");
+            print_str(service->name);
+            print_str(", error: ");
+            print_hex(-result);
+            print_str("\n");
+        }
+    }
+}
+
+static int service_right_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_right,
+                     pmos_right_t *extra_rights, void * ctx, struct pmos_msgloop_data *data)
+{
+    (void)data;
+    struct Service *service = ctx;
+
+    if (desc->size < IPC_MIN_SIZE) {
+        print_str("Loader: Recieved a message for a service that is too small...\n");
+        return 0;
+    }
+
+    switch (IPC_TYPE(buff)) {
+    case IPC_Start_Service_NUM:
+        if (desc->size < IPC_RIGHT_SIZE(IPC_Start_Service_NUM)) {
+            print_str("Loader: recieved IPC_Start_Service that is too small\n");
+            break;
+        }
+
+        IPC_Start_Service *i = buff;
+
+        handle_start_service(service, i, desc->size, reply_right, extra_rights);
+
+        break;
+    default:
+        print_str("Loader: recieved unknown message for service, with type ");
+        print_hex(IPC_TYPE(buff));
+        print_str("\n");
+        break;
+    }
+
+    return 0;
+}
+
+extern uint64_t loader_port;
+extern struct pmos_msgloop_data msgloop_data;
+
+bool create_service_right(struct Service *service)
+{
+    if (service->service_recieve_right)
+        return true;
+
+    uint64_t recieve_right;
+    right_request_t right = create_right(loader_port, &recieve_right, 0);
+    if (right.result != SUCCESS) {
+        print_str("Loader: failed to create right for a service: ");
+        print_hex(right.result);
+        print_str("\n");
+        return false;
+    }
+
+    service->service_recieve_right = recieve_right;
+    service->service_right = right.right;
+
+    pmos_msgloop_node_set(&service->service_right_node, recieve_right, service_right_callback, service);
+    pmos_msgloop_insert(&msgloop_data, &service->service_right_node);
+
+    return true;
 }

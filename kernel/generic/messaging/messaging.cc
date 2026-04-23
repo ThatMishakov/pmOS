@@ -43,7 +43,7 @@ using namespace kernel;
 namespace kernel::ipc
 {
 
-ReturnStr<bool> Message::copy_to_user_buff(char *buff)
+ReturnStr<bool> Message::copy_to_user_buff(char *buff) const
 {
     return copy_to_user(&content.front(), buff, content.size());
 }
@@ -93,7 +93,7 @@ kresult_t Port::atomic_send_from_system(const char *msg_ptr, size_t size)
     return send_from_system(msg_ptr, size);
 }
 
-void Port::enqueue(klib::unique_ptr<Message> msg)
+void Port::enqueue(klib::unique_ptr<GenericMessage> msg)
 {
     assert(lock.is_locked() && "Spinlock not locked!");
 
@@ -149,8 +149,7 @@ ReturnStr<bool> Port::send_from_user(proc::TaskDescriptor *sender, const char *u
 }
 
 ReturnStr<bool> Port::atomic_send_from_user(proc::TaskDescriptor *sender,
-                                            const char *unsafe_user_message, size_t msg_size,
-                                            u64 mem_object_id)
+                                            const char *unsafe_user_message, size_t msg_size)
 {
     klib::vector<char> message;
     if (!message.resize(msg_size))
@@ -161,15 +160,9 @@ ReturnStr<bool> Port::atomic_send_from_user(proc::TaskDescriptor *sender,
         return result;
 
     auto ptr = klib::make_unique<Message>(
-        sender->task_id, klib::forward<klib::vector<char>>(message), mem_object_id);
+        sender->task_id, klib::forward<klib::vector<char>>(message));
     if (!ptr)
         return Error(-ENOMEM);
-
-    if (mem_object_id) {
-        auto result = sender->page_table->atomic_transfer_object(owner->page_table, mem_object_id);
-        if (result != 0)
-            return Error(result);
-    }
 
     Auto_Lock_Scope scope_lock(lock);
 
@@ -184,7 +177,7 @@ void Port::pop_front() noexcept
     assert(not msg_queue.empty());
     auto begin = msg_queue.begin();
     msg_queue.remove(begin);
-    delete &*begin;
+    begin->delete_self();
 }
 
 bool Port::is_empty() const noexcept
@@ -194,14 +187,14 @@ bool Port::is_empty() const noexcept
     return msg_queue.empty();
 }
 
-Message *Port::get_front()
+GenericMessage *Port::get_front()
 {
     assert(lock.is_locked() && "Spinlock not locked!");
 
     return &msg_queue.front();
 }
 
-Message *Port::atomic_get_front()
+GenericMessage *Port::atomic_get_front()
 {
     Auto_Lock_Scope l(lock);
     return get_front();
@@ -240,7 +233,7 @@ bool Port::delete_self() noexcept
     };
 
     while (auto p = get_first_right()) {
-        p->destroy();
+        p->destroy_recieve_right();
     }
 
     rcu_head.rcu_func = [](void *self, bool) {
@@ -258,7 +251,7 @@ Port::~Port() noexcept
     while (!msg_queue.empty()) {
         auto begin = msg_queue.begin();
         msg_queue.remove(begin);
-        delete &*begin;
+        begin->delete_self();
     }
 }
 
@@ -282,27 +275,41 @@ ReturnStr<std::pair<Right * /* right */, u64 /* new_id_error */>>
     if (!right)
         return {-EPERM, std::make_pair(nullptr, 0)};
 
-    auto send_to = right->parent;
+    auto send_to = right->parent_port();
 
     klib::unique_ptr<Message> msg = new Message(sender_id, std::move(data));
     if (!msg)
         return Error(-ENOMEM);
 
+    // With send once, send right is also a recieve right
     klib::unique_ptr<SendRight> reply_right = nullptr;
+    klib::unique_ptr<RecieveRight> recieve_right = nullptr;
     if (reply_port) {
-        reply_right = klib::make_unique<SendRight>();
+        assert(new_right_type == RightType::SendOnce || new_right_type == RightType::SendMany);
+
+        if (new_right_type == RightType::SendOnce)
+            reply_right = SendOnceRight::create_for_message();
+        else {
+            auto [send, recieve] = SendManyRight::create_for_message();
+            reply_right = std::move(send);
+            recieve_right = std::move(recieve);
+        }
+        
         if (!reply_right)
             return Error(-ENOMEM);
 
-        assert(new_right_type == RightType::SendOnce || new_right_type == RightType::SendMany);
-
         reply_right->of_message     = true;
         reply_right->parent_message = msg.get();
-        reply_right->parent         = reply_port;
-        reply_right->send_many      = (new_right_type == RightType::SendMany);
+
+        if (recieve_right) {
+            recieve_right->parent = reply_port;
+        } else {
+            reply_right->parent = reply_port;
+        }
     }
 
-    msg->sent_with_right = right->right_parent_id;
+    msg->sent_with_right_ = right->right_id_in_reciever();
+    assert(msg->sent_with_right_ && "Right ID in receiver is 0!");
 
     LockCarousel<Spinlock, 5> locks;
     locks.insert(right->lock);
@@ -316,6 +323,8 @@ ReturnStr<std::pair<Right * /* right */, u64 /* new_id_error */>>
             return Error(-EINVAL);
     }
 
+    u64 right_parent_id = 0;
+
     {
         Auto_Lock_Scope l(locks);
 
@@ -328,9 +337,6 @@ ReturnStr<std::pair<Right * /* right */, u64 /* new_id_error */>>
 
         if (right->right_0 && always_destroy_right)
             return {-EINVAL, std::make_pair(nullptr, 0)};
-
-        if (!right->send_many || always_destroy_right)
-            right->destroy_nolock();
 
         if (extra_rights) {
             Auto_Lock_Scope l(verify_group->rights_lock);
@@ -350,9 +356,15 @@ ReturnStr<std::pair<Right * /* right */, u64 /* new_id_error */>>
 
         if (reply_port) {
             assert(reply_port->alive);
-            reply_right->right_parent_id = reply_port->new_right_id();
             Auto_Lock_Scope l(reply_port->rights_lock);
-            reply_port->rights.insert(reply_right.get());
+            right_parent_id = reply_port->new_right_id();
+            if (recieve_right) {
+                recieve_right->right_parent_id = right_parent_id;
+                reply_port->rights.insert(recieve_right.release());
+            } else {
+                reply_right->right_parent_id = right_parent_id;
+                reply_port->rights.insert(reply_right.get());
+            }
         }
 
         msg->rights = array;
@@ -361,11 +373,14 @@ ReturnStr<std::pair<Right * /* right */, u64 /* new_id_error */>>
             Auto_Lock_Scope l(send_to->lock);
             send_to->enqueue(std::move(msg));
         }
+
+        if (right->type() == RightType::SendOnce || always_destroy_right)
+            right->destroy_nolock(Right::DestroyReason::SendingMessage);
     }
 
     if (auto ptr = reply_right.release(); ptr)
         // Note to myself: ptr->right_sender_id is 0 here, and probably not wanted anyway
-        return Success(std::make_pair(ptr, ptr->right_parent_id));
+        return Success(std::make_pair(ptr, right_parent_id));
     else
         return Success(std::make_pair(nullptr, 0));
 }
@@ -378,6 +393,73 @@ Message::~Message()
     for (auto right: rights)
         if (right)
             right->destroy_deleting_message();
+}
+
+Right *Message::get_reply_right() const
+{
+    return reply_right;
+}
+
+void Message::clear_reply_right()
+{
+    reply_right = nullptr;
+}
+
+void GenericMessage::clear_reply_right()
+{
+    assert(false && "Calling clear_reply_right on generic message!");
+}
+
+Right *GenericMessage::get_reply_right() const
+{
+    return nullptr;
+}
+
+static rights_array empty_rights = {};
+
+const GenericMessage::rights_array &GenericMessage::get_rights() const
+{
+    for (auto &i: empty_rights)
+        assert(!i && "Non-nullptr in empty rights array!");
+    
+    return empty_rights;
+}
+
+GenericMessage::rights_array &GenericMessage::get_rights()
+{
+    // This is fine for concurrent calls, since everything should check that rights are not nullptr anyway, so
+    // this array would never be modified
+
+    for (auto &i: empty_rights)
+        assert(!i && "Non-nullptr in empty rights array!");
+
+    return empty_rights;
+}
+
+
+GenericMessage::rights_array &Message::get_rights()
+{
+    return rights;
+}
+
+const GenericMessage::rights_array &Message::get_rights() const
+{
+    return rights;
+}
+
+u64 Message::sent_with_right() const
+{
+    return sent_with_right_;
+}
+
+u64 Message::sender_task_id() const
+{
+    return task_id_from;
+}
+
+void Message::delete_self()
+{
+    delete this;
 }
 
 } // namespace kernel::ipc

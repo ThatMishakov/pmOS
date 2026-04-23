@@ -1,0 +1,22 @@
+#!/bin/sh
+
+name=vfsd
+version=1.0.0
+revision=1
+
+source_dir=userspace/vfsd
+deps="libc pmos-rust-lib libcxx"
+hostdeps="cargo rust clang"
+source_hostdeps="cargo"
+allow_network=yes
+
+build() {
+    TARGET_CC="clang" \
+    cargo_build_nolock
+}
+
+package() {
+    mkdir -p ${dest_dir}/boot
+    cp -r ${build_dir}/builds/vfsd/${RUST_TARGET}/release/vfsd ${dest_dir}/boot/
+    cp ${source_dir}/vfsd.yaml "${dest_dir}/boot/vfsd.yaml"
+}

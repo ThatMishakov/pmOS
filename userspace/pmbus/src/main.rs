@@ -1,6 +1,5 @@
 #![feature(new_range_api)]
 
-use pmos::error;
 use pmos::ipc;
 use pmos::ipc::IPCPort;
 use pmos::ipc::SendManyRight;
@@ -9,25 +8,27 @@ use pmos::ipc_msgs;
 use pmos::ipc_msgs::Message;
 use pmos::pmbus;
 use pmos::pmbus::AnyFilter;
-use pmos::task_group;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 use std::ops::Bound;
 use std::rc::Rc;
+use std::mem;
+
+use pmos::ipc::RecieveOnceRight;
 
 struct ObjectInfo {
     sequence_id: u64,
     properties: pmbus::ObjectProperties,
     name: String,
     right: SendManyRight,
+    watch_right: Option<RecieveOnceRight>,
 }
 
-#[derive(Default)]
 struct State {
     properties: BTreeMap<u64, Rc<RefCell<ObjectInfo>>>,
+    watch_rights: BTreeMap<u64, Rc<RefCell<ObjectInfo>>>,
     next_sequence_id: u64,
-    main_port: ipc::Port,
+    main_port: IPCPort,
     pending_filters: BTreeMap<ipc::Right, (Option<SendRight>, AnyFilter)>,
 }
 
@@ -35,39 +36,16 @@ fn publish_object_error(error: i32, reply_right: SendRight) {
     let mut msg = ipc_msgs::IPCBusPublishObjectReply::new();
     msg.result = -error;
 
-    _ = ipc::send_message_right_consume(&msg, reply_right, None, [const { None }; 4]);
+    _ = ipc::send_message_right_consume(&msg, reply_right, [const { None }; 4]);
 }
 
 fn publish_object_success(reply_right: &mut Option<SendRight>, seq_id: u64) -> Result<(), i32> {
     let mut msg = ipc_msgs::IPCBusPublishObjectReply::new();
     msg.sequence_number = seq_id;
 
-    ipc::send_message_right(&msg, reply_right, None, &mut [const { None }; 4])
+    ipc::send_message_right(&msg, reply_right, &mut [const { None }; 4])
         .map(|_| ())
         .map_err(|(e, _)| e.get())
-}
-
-struct TaskGroup {
-    id: u64,
-    sequences: BTreeSet<u64>,
-}
-
-impl TaskGroup {
-    fn new(id: u64, port: ipc::Port) -> Result<Rc<RefCell<TaskGroup>>, i32> {
-        task_group::set_group_notifier_mask(
-            id,
-            port,
-            task_group::NotificationMask::GROUP_DESTROYED,
-            0,
-        )
-        .map_err(|e| e.get())
-        .map(|_| {
-            Rc::new(RefCell::new(TaskGroup {
-                id: id,
-                sequences: BTreeSet::new(),
-            }))
-        })
-    }
 }
 
 fn publish_object(
@@ -112,12 +90,24 @@ fn publish_object(
         Ok(object) => {
             // println!("{:?}", &object);
 
+            let watch_right = match state.main_port.watch_right(&object_right) {
+                Ok(r) => r,
+                Err(e) => {
+                    println!("Failed to watch object right, error {}", e.get());
+                    publish_object_error(e.get(), reply_right.unwrap());
+                    return;
+                }
+            };
+
+            let watch_right_id = watch_right.get_id();
+
             let id = state.next_sequence_id;
             let info = ObjectInfo {
                 sequence_id: id,
                 properties: object.properties,
                 name: object.name.into_string(),
                 right: object_right,
+                watch_right: Some(watch_right),
             };
 
             if let Err(error) = publish_object_success(&mut reply_right, id) {
@@ -128,6 +118,8 @@ fn publish_object(
             let info = Rc::new(RefCell::new(info));
             state.properties.insert(id, info.clone());
             state.next_sequence_id += 1;
+
+            state.watch_rights.insert(watch_right_id, info.clone());
 
             new_object_stuff(info, state);
         }
@@ -177,7 +169,7 @@ fn new_object_stuff(obj: Rc<RefCell<ObjectInfo>>, state: &mut State) {
             let mut other_rights = [clone, None, None, None];
 
             let result =
-                ipc::send_message_right(&r, right, None, &mut other_rights).map_err(|(e, _)| e);
+                ipc::send_message_right(&r, right, &mut other_rights).map_err(|(e, _)| e);
             if let Err(r) = result {
                 println!("Error replying to the right request: {}", r);
 
@@ -241,7 +233,7 @@ fn request_object(
             }
 
             let result =
-                ipc::send_message_right(&r, &mut reply_right, None, &mut other_rights)
+                ipc::send_message_right(&r, &mut reply_right, &mut other_rights)
                     .map_err(|(e, _)| e);
             if let Err(e) = result {
                 match e.get() {
@@ -267,37 +259,54 @@ fn request_object(
 }
 
 fn main() {
-    let mut port = IPCPort::new().unwrap();
+    let port = IPCPort::new().unwrap();
     let mut state = State {
         next_sequence_id: 1,
-        main_port: port.get_id(),
-        ..Default::default()
+        main_port: port,
+        properties: BTreeMap::new(),
+        watch_rights: BTreeMap::new(),
+        pending_filters: BTreeMap::new(),
     };
-    let (send_right, _reply_right) = port.create_right_sendmany().unwrap();
+    let (send_right, reply_right) = state.main_port.create_right_sendmany().unwrap();
     send_right.name_self("/pmos/pmbus").unwrap();
 
-    println!("pmbus port {}", port.get_id());
+    println!("pmbus port {}", state.main_port.get_id());
 
     loop {
-        let mut msg = port.pop_front_blocking();
+        let mut msg = state.main_port.pop_front_blocking();
 
-        let reply_right = msg
-            .reply_right
-            .take()
-            .or_else(|| msg.other_rights[3].take());
-        let extra_right = msg.other_rights[0].take();
+        if msg.sent_with_right == reply_right.get_id() {
+            let reply_right = msg
+                .reply_right
+                .take()
+                .or_else(|| msg.other_rights[3].take());
+            let extra_right = msg.other_rights[0].take();
 
-        match msg.deserialize() {
-            Message::IPCBusPublishObject(o) => {
-                publish_object(o, reply_right, extra_right, &msg, &mut state);
+            match msg.deserialize() {
+                Message::IPCBusPublishObject(o) => {
+                    publish_object(o, reply_right, extra_right, &msg, &mut state);
+                }
+                Message::IPCBusRequestObject(o) => {
+                    request_object(o, &mut state, msg.sender, reply_right);
+                }
+                Message::Unknown => {
+                    let id = msg.get_known_id();
+                    println!("pmbus: Unknown message {:?}", id);
+                }
+                other => {
+                    println!("pmbus: Unknown message {:?}", other);
+                }
             }
-            Message::IPCBusRequestObject(o) => {
-                request_object(o, &mut state, msg.sender, reply_right);
-            }
-            Message::Unknown => {
-                let id = msg.get_known_id();
-                println!("pmbus: Unknown message {:?}", id);
-            }
+        } else if let Some(watch_right) = state.watch_rights.get(&msg.sent_with_right) {
+            mem::forget(watch_right.borrow_mut().watch_right.take());
+            // Casually remove the object
+            state.properties.remove(&watch_right.borrow().sequence_id);
+            state.watch_rights.remove(&msg.sent_with_right);
+        } else {
+            println!(
+                "pmbus: Recieved message from task {} with unknown right {}",
+                msg.sender, msg.sent_with_right
+            );
         }
     }
 }

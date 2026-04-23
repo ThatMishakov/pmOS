@@ -51,10 +51,13 @@ typedef uint64_t mem_object_t;
 typedef pmos_port_t pmos_port_aligned __attribute__((aligned(8)));
 typedef pmos_right_t pmos_right_aligned __attribute__((aligned(8)));
 
+#ifndef _DEFINED_SYSCALL_R
+#define _DEFINED_SYSCALL_R
 typedef struct {
     result_t result;
     uint64_t value;
 } syscall_r;
+#endif
 
 typedef struct {
     result_t result;
@@ -498,6 +501,16 @@ right_request_t send_message_right(pmos_right_t send_right, pmos_port_t reply_po
 /// @param rights_array Array of 4 rights, where they should be stored
 /// @return Result of the operation
 result_t accept_rights(pmos_port_t port, pmos_right_t *rights_array);
+
+/// @brief Watches a right for deletion
+///
+/// This system call allows to watch a right for deletion. Currently, only the send many rights can be watched.
+/// After calling this function, when the right is deleted, a notification will be recieved with the given recieve right.
+/// To undo it, delete the recieve right.
+/// @param right Right to watch. Must be in the caller's NAMESPACE_RIGHT and must be send many (TODO: maybe implement for other rights as well)
+/// @param port Port where the notification should be sent when the right is deleted. Must be owned by the caller.
+/// @return Result of the operation. On success, the value contains the ID of the recieve (once) right that will recieve the notification.
+right_request_t watch_right(pmos_right_t right, pmos_port_t port);
 
 #endif
 

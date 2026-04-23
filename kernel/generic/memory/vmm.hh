@@ -129,7 +129,7 @@ public:
 
     // Allocate a segment of a given size, with a specific alignment
     // This function is similar to virtmem_alloc, but it also takes the alignment into account.
-    // The alignment is a log2 of the number of pages, so the segment will be aligned to 2^alignment
+    // The alignment is a log2 of the number of pages, so the segment will be aligned to 2^(alignment + page_shift)
     void *virtmem_alloc_aligned(u64 npages, u64 alignment);
 
     // Free a segment. Only complete segments can be freed and the size is used as a sanity check.
@@ -206,7 +206,7 @@ protected:
         u64 mask = virtmem_hashtable_size - 1;
 
         // TODO: Add a hash function here
-        return (base >> 12) & mask;
+        return (base >> QUANTUM) & mask;
     }
 
     // Dummy head of the list of segments sorted by address
@@ -291,10 +291,10 @@ template<int Q, int M> void *VirtMem<Q, M>::virtmem_alloc_aligned(u64 npages, u6
     if (virtmem_ensure_tags(2) != 0)
         return nullptr;
 
-    const u64 alignup_mask = (1UL << alignment) - 1;
+    const u64 alignup_mask = (1UL << (alignment + Q)) - 1;
 
     // Calculate the size of the segment in bytes
-    const u64 size = npages << 12;
+    const u64 size = npages << Q;
 
     // Find the smallest list that can fit the requested size
     int l = find_bit(npages) - 1;
@@ -375,7 +375,7 @@ template<int Q, int M> void *VirtMem<Q, M>::virtmem_alloc(u64 npages, VirtmemAll
     assert(npages > 0);
 
     // Calculate the size of the segment in bytes
-    u64 size = npages << 12;
+    u64 size = npages << Q;
 
     // Find the smallest list that can fit the requested size
     int l = find_bit(npages) - 1;

@@ -1,5 +1,6 @@
 #pragma once
 #include <pmos/vector.h>
+#include <pmos/pmbus_helper.h>
 #include <stdint.h>
 
 enum State {
@@ -46,6 +47,23 @@ struct MatchFilter {
 };
 VECTOR_TYPEDEF(struct MatchFilter, match_filter_vector);
 
+enum PropertyType {
+    PROPERTY_INTEGER = 0,
+    PROPERTY_STRING,
+    PROPERTY_LIST,
+};
+
+struct Property {
+    enum PropertyType type;
+    char *name;
+    union {
+        char *string;
+        char **list;
+        uint64_t integer;
+    };
+};
+VECTOR_TYPEDEF(struct Property, property_vector);
+
 enum RunType {
     RUN_MANUAL,
     RUN_ALWAYS_ONCE,
@@ -69,12 +87,20 @@ struct Service {
     instances_vector instances;
     requirements_vector requirements;
     match_filter_vector match_filters;
+    property_vector properties;
 
     bool start_on_boot;
 
     struct HookedService *hook;
+    struct PmbusPublishHook *publish_hook;
     struct Service *next;
     struct module_descriptor_list *module;
+
+    uint64_t service_right;
+    uint64_t service_recieve_right;
+    uint64_t pmbus_id;
+
+    pmos_msgloop_tree_node_t service_right_node;
 };
 
 struct Service *new_service();
@@ -83,8 +109,16 @@ void free_service(struct Service *service);
 void parse_service(const char *cmdline, const char *name, struct Service **out_service);
 void parse_services(struct module_descriptor_list *d);
 
+void publish_service(struct Service *);
+
 void match_services();
+void publish_services();
 
 void *construct_filter(struct Service *service);
+pmos_bus_object_t *construct_pmbus_object(struct Service *service);
+
+void release_property(struct Property *property);
 
 int start_service(struct Service *service, uint64_t object_id, uint64_t optional_right_id);
+
+bool create_service_right(struct Service *service);

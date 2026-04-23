@@ -30,6 +30,7 @@
 #pragma once
 #include <lib/array.hh>
 #include <messaging/messaging.hh>
+#include <messaging/ports.hh>
 #include <types.hh>
 
 /** @brief A descriptor of a programmable interrupt.

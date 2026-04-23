@@ -37,6 +37,7 @@ void *dtv_allocate_get_addr(size_t *) { return NULL; }
 #define TLS_DTV_OFFSET 0
 #endif
 
+#ifndef __i386__
 void *__tls_get_addr(size_t *v)
 {
     const size_t object = v[0];
@@ -54,3 +55,14 @@ void *__tls_get_addr(size_t *v)
     // Since dynamic linking is not yet implemented...
     return (char *)__get_tp() + offset + TLS_DTV_OFFSET;
 }
+#else
+__attribute__((regparm(1))) void *___tls_get_addr(size_t *v)
+{
+    const size_t object = v[0];
+    const size_t offset = v[1];
+    struct uthread *self = __get_tls();
+
+    // Same todo as the above...
+    return (char *)__get_tp() + offset + TLS_DTV_OFFSET;
+}
+#endif

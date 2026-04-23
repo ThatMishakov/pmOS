@@ -1,6 +1,7 @@
 ISO=build/pmOS.iso
 i686-IMG=build-i686/pmos-hyper.img
 x86_64-IMG=build-x86_64/pmos.img
+x86_64-HYPER-IMG=build-x86_64/pmos-hyper.img
 riscv64-IMG=build-riscv64/pmos.img
 loongarch64-IMG=build-loongarch64/pmos.img
 
@@ -36,6 +37,9 @@ $(loongarch64-IMG): build-loongarch64/.jinx-parameters
 $(i686-IMG): build-i686/.jinx-parameters
 	@cd build-i686 && ../jinx build hyper-disk-image
 
+$(x86_64-HYPER-IMG): build-x86_64/.jinx-parameters
+	@cd build-x86_64 && ../jinx build hyper-disk-image
+
 emul: $(ISO)
 	bochs-debugger -q -f .bochsrc
 
@@ -69,8 +73,18 @@ qemu-x86: $(x86_64-IMG) ovmf-x86
 		-m 512M\
 	       	-smp 1\
 	       	-serial stdio \
-		-device intel-iommu -cpu max,x2apic=on,+smep,+smap -no-shutdown -no-reboot
+		-device intel-iommu -cpu max,x2apic=on,+smep,+smap
 # -trace ahci_* -trace handle_cmd_* \
+
+qemu-x86-hyper: $(x86_64-HYPER-IMG) ovmf-x86
+	qemu-system-x86_64 \
+		-drive file=$(x86_64-HYPER-IMG),if=none,id=hdd0\
+    	-device ide-hd,drive=hdd0 \
+		-M q35\
+		-m 512M\
+	       	-smp 1\
+	       	-serial stdio \
+		-device intel-iommu -cpu max,x2apic=on,+smep,+smap
 
 qemu-i686: $(i686-IMG) ovmf-x86
 	qemu-system-i386 -serial stdio -m 512M -cpu max,+hypervisor,+invtsc,+tsc-deadline -M q35 -hdd $(i686-IMG) -smp 4
@@ -87,4 +101,4 @@ qemu-loongarch64: $(loongarch64-IMG) ovmf-loongarch64
 qemu-single: $(ISO) ovmf-riscv64
 	qemu-system-riscv64 -M virt -cpu rv64 -device ramfb -device virtio-keyboard -device qemu-xhci -device usb-kbd -m 2G -drive if=pflash,unit=0,format=raw,file=ovmf-riscv64/OVMF.fd -cdrom $(ISO) -serial stdio
 
-.PHONY: $(x86_64-IMG) $(riscv64-IMG) $(loongarch64-IMG)
+.PHONY: $(x86_64-IMG) $(riscv64-IMG) $(loongarch64-IMG) $(i686-IMG) $(x86_64-HYPER-IMG)

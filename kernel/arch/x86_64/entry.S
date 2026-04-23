@@ -60,6 +60,26 @@ _limine_entry:
 
     jmp start_first_process
 
+    .section .text
+    .globl kernel_main
+    .type kernel_main, @function
+kernel_main:
+    # Switch to in-kernel stack, since Limine can't be used because
+    # of how how the paging is set up by the kernel
+    leaq (stack+STACK_SIZE)(%rip), %rsp
+
+    # Push fake return address and frame pointer
+    # this could be helpful to debuggers
+    pushq $0
+    pushq $0
+
+    call kmain
+
+    # TODO: This is hacky
+    # get_cpu_info()->nested_level = 0;
+    movq $0, %gs:24
+
+    jmp start_first_process
     
     .globl _acpi_wakeup_entry
     .type _acpi_wakeup_entry, @function

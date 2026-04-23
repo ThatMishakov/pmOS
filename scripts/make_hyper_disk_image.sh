@@ -15,7 +15,7 @@ SERVICES="$2"
 CONFIG_FILE="$3"
 
 BOOT_PARTITION=tmp_boot.img
-EXT2_PARTITION=tmp_ext2.img
+EXT4_PARTITION=tmp_ext4.img
 
 copy_service() {
     SERVICE="$1"
@@ -45,22 +45,23 @@ mcopy -i "$BOOT_PARTITION" "${BOOT_DIR}/kernel" "::/kernel"
 mcopy -i "$BOOT_PARTITION" "${BOOT_DIR}/bootstrapd" "::/bootstrapd"
 
 # Copy hyper
-mcopy -i "$BOOT_PARTITION" "/usr/local/share/hyper/hyper-bios.sys" "::/hyper-bios.sys"
 mmd -i "$BOOT_PARTITION" "::/EFI"
 mmd -i "$BOOT_PARTITION" "::/EFI/BOOT"
 mcopy -i "$BOOT_PARTITION" "/usr/local/share/hyper/BOOT"* "::/EFI/BOOT/"
+# mcopy -i "$BOOT_PARTITION" "/usr/local/share/hyper/BOOTX64.EFI" "::/EFI/BOOT/"
+# mcopy -i "$BOOT_PARTITION" "/usr/local/share/hyper/BOOTAAARCH64.elf" "::/EFI/BOOT/"
 
 # Copy services
 for SERVICE in $SERVICES; do
     copy_service "$SERVICE"
 done
 
-# Create an ext2 filesystem for the root partition
-dd if=/dev/zero of="$EXT2_PARTITION" bs=1M count=64
-mke2fs -d ../sysroot/usr -t ext2 "$EXT2_PARTITION"
+# Create an ext4 filesystem for the root partition
+dd if=/dev/zero of="$EXT4_PARTITION" bs=1M count=64
+mke2fs -d "$SYSROOT" -t ext4 "$EXT4_PARTITION" -L "pmos-root"
 
 # Combine the partitions into the final disk image
 dd conv=notrunc if="$BOOT_PARTITION" of="$DISK_IMAGE" bs=512 seek=2048
-dd conv=notrunc if="$EXT2_PARTITION" of="$DISK_IMAGE" bs=512 seek=132096
+dd conv=notrunc if="$EXT4_PARTITION" of="$DISK_IMAGE" bs=512 seek=132096
 
 hyper_install "$DISK_IMAGE"

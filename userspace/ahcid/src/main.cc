@@ -27,16 +27,6 @@
 
 pmos::Right device_right;
 
-pmos_port_t _create_port()
-{
-    ports_request_t request = create_port(0, 0);
-    if (request.port == 0) {
-        printf("Failed to create port\n");
-        return 0;
-    }
-    return request.port;
-}
-
 pmos::Port cmd_port = pmos::Port::create().value();
 auto dispatcher = pmos::PortDispatcher(cmd_port);
 auto pmbus_helper = pmos::PMBUSHelper(dispatcher);
@@ -766,7 +756,8 @@ void parse_args(int argc, char **argv)
 
 int main(int argc, char **argv)
 {
-    printf("Hello from AHCId! My PID: %" PRIi64 "\n", getpid());
+    //printf("Hello from AHCId! My PID: %" PRIi64 "\n", getpid());
+    printf("AHCId started...\n");
     parse_args(argc, argv);
 
     ahci_handle();

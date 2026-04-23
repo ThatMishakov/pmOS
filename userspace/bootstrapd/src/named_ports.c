@@ -76,10 +76,10 @@ static bool /* continue */ do_callback(struct CallBackNode *node, struct NamedPo
         node->callback(0, port->string, right.right);
     } else {
         auto name_length = strlen(port->string);
-        auto length      = sizeof(IPC_Kernel_Named_Port_Notification) + name_length;
-        IPC_Kernel_Named_Port_Notification *n = alloca(length);
+        auto length      = sizeof(IPC_Named_Right_Notification) + name_length;
+        IPC_Named_Right_Notification *n = alloca(length);
 
-        n->type   = IPC_Kernel_Named_Port_Notification_NUM;
+        n->type   = IPC_Named_Right_Notification_NUM;
         n->result = 0;
 
         memcpy(n->port_name, port->string, name_length);
@@ -265,10 +265,10 @@ int request_port_callback(const char *name, size_t name_length, register_callbac
 static void name_port_reply_error(pmos_right_t reply_right, int result, const char *name,
                                   size_t name_length)
 {
-    auto length = sizeof(IPC_Kernel_Named_Port_Notification) + name_length;
-    IPC_Kernel_Named_Port_Notification *n = alloca(length);
+    auto length = sizeof(IPC_Named_Right_Notification) + name_length;
+    IPC_Named_Right_Notification *n = alloca(length);
 
-    n->type   = IPC_Kernel_Named_Port_Notification_NUM;
+    n->type   = IPC_Named_Right_Notification_NUM;
     n->result = result;
 
     memcpy(n->port_name, name, name_length);
@@ -297,10 +297,10 @@ void request_port_message(const char *name, size_t name_length, int flags, pmos_
     if (t_node) {
         right_request_t dr;
         if (t_node->data.right && (dr = dup_right(t_node->data.right)).result == SUCCESS) {
-            auto length      = sizeof(IPC_Kernel_Named_Port_Notification) + name_length;
-            IPC_Kernel_Named_Port_Notification *n = alloca(length);
+            auto length      = sizeof(IPC_Named_Right_Notification) + name_length;
+            IPC_Named_Right_Notification *n = alloca(length);
 
-            n->type   = IPC_Kernel_Named_Port_Notification_NUM;
+            n->type   = IPC_Named_Right_Notification_NUM;
             n->result = 0;
 
             memcpy(n->port_name, name, name_length);

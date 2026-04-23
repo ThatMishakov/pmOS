@@ -21,7 +21,7 @@ pub enum ObjectPropertyRef<'a> {
 pub struct ObjectProperties(BTreeMap<Box<str>, ObjectProperty>);
 
 impl ObjectProperties {
-    pub fn get_property(&self, property_name: &str) -> Option<ObjectPropertyRef> {
+    pub fn get_property(&self, property_name: &str) -> Option<ObjectPropertyRef<'_>> {
         self.0.get(property_name).map(|p| match p {
             ObjectProperty::String(t) => ObjectPropertyRef::String(t),
             ObjectProperty::Integer(i) => ObjectPropertyRef::Integer(*i),
@@ -109,7 +109,7 @@ fn push_property_list(
     let size_aligned = align_up(total_size, 8);
 
     let hdr = IPCObjectPropertyHdr {
-        length: total_size as u16,
+        length: size_aligned as u16,
         type_: PROPERTY_TYPE_LIST,
         data_start: name_hdr_len as u8,
     };
@@ -162,7 +162,7 @@ impl PMBusObject {
         }
     }
 
-    pub fn get_property(&self, property_name: &str) -> Option<ObjectPropertyRef> {
+    pub fn get_property(&self, property_name: &str) -> Option<ObjectPropertyRef<'_>> {
         self.properties.get_property(property_name)
     }
 

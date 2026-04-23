@@ -19,8 +19,8 @@ set(CMAKE_CXX_COMPILER "clang++")
 set(CMAKE_ASM_COMPILER "clang")
 set(CMAKE_AR "llvm-ar")
 
-set(CMAKE_CXX_FLAGS "-Wall -Wextra -O2 -pipe")
-set(CMAKE_C_FLAGS "-Wall -Wextra -O2 -pipe")
+set(CMAKE_CXX_FLAGS "-Wall -Wextra -O1 -pipe")
+set(CMAKE_C_FLAGS "-Wall -Wextra -O1 -pipe")
 
 get_filename_component(ABSPATH "${CMAKE_CURRENT_LIST_FILE}" PATH)
 set(CMAKE_SYSROOT "${ABSPATH}/../sysroot" CACHE PATH "System root for cross-compilation")

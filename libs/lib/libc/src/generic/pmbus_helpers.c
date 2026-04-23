@@ -120,12 +120,12 @@ static int right_request_callback(Message_Descriptor *desc, void *message, pmos_
         return PMOS_MSGLOOP_CONTINUE;
     }
 
-    if (IPC_TYPE(message) != IPC_Kernel_Named_Port_Notification_NUM) {
+    if (IPC_TYPE(message) != IPC_Named_Right_Notification_NUM) {
         fprintf(stderr, "pmbus helper: Received wrong message type for pmbus right request: %" PRIu32 "\n", IPC_TYPE(message));
         return PMOS_MSGLOOP_CONTINUE;
     }
 
-    IPC_Kernel_Named_Port_Notification *n = message;
+    IPC_Named_Right_Notification *n = message;
 
     if (n->result) {
         fprintf(stderr, "Error getting pmbus right: %" PRIi32 "\n", n->result);

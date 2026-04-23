@@ -34,5 +34,5 @@ __attribute__((noreturn)) void abort(void)
     // Ask the worker to terminate everything. Don't touch any of
     // the data structures, including thread-local data
     __notify_exit(1, 2);
-    _syscall_exit(1);
+    _syscall_exit(100);
 }

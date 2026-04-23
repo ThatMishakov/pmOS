@@ -162,6 +162,7 @@ void init_modules()
     }
 
     match_services();
+    publish_services();
 }
 
 uint64_t rsdp_desc = 0;
@@ -293,7 +294,8 @@ int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_r
                      pmos_right_t *extra_rights, void *, struct pmos_msgloop_data *)
 {
     if (desc->size < 4) {
-        // Message too small
+        print_str("Loader: Recieved a message that is too small...\n");
+        return 0;
     }
 
     IPC_ACPI_Request_RSDT *ptr = (IPC_ACPI_Request_RSDT *)buff;
@@ -337,16 +339,16 @@ int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_r
             *reply_right = 0;
     } break;
     // case 0x21: {
-    //     IPC_Kernel_Named_Port_Notification *notif = (IPC_Kernel_Named_Port_Notification *)ptr;
-    //     if (desc->size < sizeof(IPC_Kernel_Named_Port_Notification)) {
+    //     IPC_Kernel_Named_Right_Notification *notif = (IPC_Kernel_Named_Right_Notification *)ptr;
+    //     if (desc->size < sizeof(IPC_Kernel_Named_Right_Notification)) {
     //         print_str(
-    //             "Loader: Recieved IPC_Kernel_Named_Port_Notification with unexpected size 0x");
+    //             "Loader: Recieved IPC_Kernel_Named_Right_Notification with unexpected size 0x");
     //         print_hex(desc->size);
     //         print_str("\n");
     //         break;
     //     }
 
-    //     size_t msg_size = desc->size - sizeof(IPC_Kernel_Named_Port_Notification);
+    //     size_t msg_size = desc->size - sizeof(IPC_Kernel_Named_Right_Notification);
 
     //     if (strncmp(notif->port_name, log_port_name, msg_size) == 0) {
     //         set_print_syscalls(notif->port_num);
@@ -459,40 +461,40 @@ int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_r
         break;
     }
 
-    case IPC_Get_Named_Port_NUM: {
-        IPC_Get_Named_Port *r = (IPC_Get_Named_Port *)ptr;
-        if (desc->size < sizeof(IPC_Get_Named_Port)) {
-            print_str("Loader: Recieved IPC_Get_Named_Port of unexpected size 0x");
+    case IPC_Get_Named_Right_NUM: {
+        IPC_Get_Named_Right *r = (IPC_Get_Named_Right *)ptr;
+        if (desc->size < sizeof(IPC_Get_Named_Right)) {
+            print_str("Loader: Recieved IPC_Get_Named_Right of unexpected size 0x");
             print_hex(desc->size);
             print_str("\n");
             break;
         }
 
-        size_t length = desc->size - sizeof(IPC_Get_Named_Port);
+        size_t length = desc->size - sizeof(IPC_Get_Named_Right);
         request_port_message(r->name, length, r->flags, *reply_right);
         *reply_right = 0;
         break;
     }
 
-    case IPC_Name_Port_NUM: {
-        IPC_Name_Port *r = (IPC_Name_Port *)ptr;
-        if (desc->size < sizeof(IPC_Name_Port)) {
-            print_str("Loader: Recieved IPC_Name_Port of unexpected size 0x");
+    case IPC_Name_Right_NUM: {
+        IPC_Name_Right *r = (IPC_Name_Right *)ptr;
+        if (desc->size < sizeof(IPC_Name_Right)) {
+            print_str("Loader: Recieved IPC_Name_Right of unexpected size 0x");
             print_hex(desc->size);
             print_str("\n");
             break;
         }
 
         if (!*reply_right) {
-            print_str("No reply port in IPC_Name_Port\n");
+            print_str("No reply port in IPC_Name_Right\n");
             break;
         }
 
-        size_t length = desc->size - sizeof(IPC_Name_Port);
+        size_t length = desc->size - sizeof(IPC_Name_Right);
         auto result   = register_right(r->name, length, extra_rights[0]);
 
-        IPC_Name_Port_Reply reply = {
-            .type   = IPC_Name_Port_Reply_NUM,
+        IPC_Name_Right_Reply reply = {
+            .type   = IPC_Name_Right_Reply_NUM,
             .flags  = 0,
             .result = result,
         };
@@ -513,6 +515,8 @@ int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_r
         print_hex(ptr->type);
         print_str(" from task ");
         print_hex(desc->sender);
+        print_str(", with recieve right ");
+        print_hex(desc->sent_with_right);
         print_str("\n");
     }
 
@@ -542,6 +546,14 @@ void service_ports()
         goto exit;
     }
 
+    // result = request_port_callback(vfsd_port_name, strlen(vfs_port_name), vfs_callback);
+    // if (result != SUCCESS) {
+    //     print_str("Loader: could not request vfsd port. Error: ");
+    //     print_hex(result);
+    //     print_str("\n");
+    //     goto exit;
+    // }
+
     // res = request_named_port(vfsd_port_name, strlen(vfsd_port_name), loader_port, 0);
     // if (res != SUCCESS) {
     //     print_str("Loader: could not request vfsd port. Error: ");
@@ -549,8 +561,6 @@ void service_ports()
     //     print_str("\n");
     //     goto exit;
     // }
-
-    pmos_msgloop_initialize(&msgloop_data, loader_port);
 
     pmos_msgloop_tree_node_t n;
     pmos_msgloop_node_set(&n, 0, default_callback, NULL);
@@ -610,6 +620,8 @@ int main()
         print_str("\n");
         exit(1);
     }
+
+    pmos_msgloop_initialize(&msgloop_data, loader_port);
 
     init_modules();
     init_misc();

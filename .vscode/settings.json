@@ -208,5 +208,16 @@
     "C_Cpp.inlayHints.autoDeclarationTypes.enabled": true,
     "C_Cpp.inlayHints.autoDeclarationTypes.showOnLeft": true,
     "C_Cpp.inlayHints.parameterNames.enabled": true,
-    "C_Cpp.inlayHints.referenceOperator.enabled": true
+    "C_Cpp.inlayHints.referenceOperator.enabled": true,
+    "files.exclude": {
+        "/build*": true,
+        "/sources": true
+    },
+    "C_Cpp.files.exclude": {
+        "/build*": true,
+        "/sources": true,
+        "**/.vscode": true,
+        "**/.vs": true
+    },
+    "explorer.excludeGitIgnore": true
 }

@@ -29,6 +29,7 @@
 
 #include <interrupts/apic.hh>
 #include <sched/sched.hh>
+#include <kern_logger/kern_logger.hh>
 #include <x86_asm.hh>
 #include "timers.hh"
 #include "acpi_pmtmr.hh"

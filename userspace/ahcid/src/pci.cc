@@ -21,7 +21,7 @@ extern pmos::PortDispatcher dispatcher;
 pmos::RecieveRight send_devicesd(auto &request, pmos::Port *reply_port)
 {
     auto r =
-        send_message_right_one(device_right, request, {reply_port, pmos::RightType::SendMany});
+        send_message_right_one(device_right, request, {reply_port, pmos::RightType::SendOnce});
     if (!r) {
         // TODO: Eventually don't throw
         printf("Failed to send message to devicesd: %i (%s)\n", (int)r.error(),

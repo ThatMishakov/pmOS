@@ -5,6 +5,10 @@ use super::error::Error;
 pub struct ResultT(pub i64);
 
 impl ResultT {
+    pub fn new(val: i64) -> Self {
+        ResultT(val)
+    }
+
     pub fn success(self) -> bool {
         self.0 == 0
     }

@@ -8,6 +8,7 @@
 #include "init/init.h"
 
 static bool pmbus_request(struct HookedService *hs);
+static bool pmbus_publish(struct PmbusPublishHook *s);
 
 static uint64_t pmbus_right = 0;
 
@@ -26,12 +27,24 @@ struct HookedService {
 
 struct HookedService *waiting_for_pmbus = NULL;
 
+struct PmbusPublishHook {
+    struct Service *service;
+    union {
+        struct PmbusPublishHook *waiting_next;
+        pmos_msgloop_tree_node_t pmbus_reply_node;
+    };
+};
+
+struct PmbusPublishHook *waiting_to_publish = NULL;
+
 extern uint64_t loader_port;
 extern struct pmos_msgloop_data msgloop_data;
 
 static int pmbus_reply_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_right,
                      pmos_right_t *extra_rights, void * ctx, struct pmos_msgloop_data *data)
 {
+    (void)reply_right;
+
     print_str("Loader: Received PMBUS reply for service with object id ");
     print_hex(desc->sent_with_right);
     print_str("\n");
@@ -81,6 +94,39 @@ static int pmbus_reply_callback(Message_Descriptor *desc, void *buff, pmos_right
     return 0;
 }
 
+static int pmbus_publish_reply_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_right,
+                     pmos_right_t *extra_rights, void * ctx, struct pmos_msgloop_data *data)
+{
+    (void)reply_right;
+    (void)extra_rights;
+
+    struct PmbusPublishHook *s = ctx;
+
+    IPC_BUS_Publish_Object_Reply *r = buff;
+    if (desc->size < sizeof(*r)) {
+        print_str("Loader: Recieved too small message for object publish\n");
+    } else if (r->result != 0) {
+        print_str("Loader: error in sending a pmbus object. Error: ");
+        print_hex(r->result);
+        print_str("\n");
+    } else {
+        print_str("Published pmbus object for the service ");
+        const char *name = s->service->name;
+        if (!name)
+            name = "UNKNOWN";
+
+        print_str(name);
+        print_str(", sequence number: ");
+        print_hex(r->sequence_number);
+        print_str("\n");
+    }
+
+    pmos_msgloop_erase(data, &s->pmbus_reply_node);
+
+    return 0;
+}
+
+
 static bool pmbus_request(struct HookedService *hs)
 {
     size_t size = pmos_bus_filter_serialize_ipc(hs->filter, NULL);
@@ -113,6 +159,66 @@ static bool pmbus_request(struct HookedService *hs)
     pmos_msgloop_insert(&msgloop_data, &hs->pmbus_reply_node);
 
     return true;
+}
+
+static bool pmbus_publish(struct PmbusPublishHook *s)
+{
+    struct Service *service = s->service;
+    pmos_bus_object_t *object = NULL;
+    uint8_t *ipc_data = NULL;
+    bool result = true;
+    right_request_t right = {};
+
+    object = construct_pmbus_object(service);
+    if (!object) {
+        print_str("Loader: Failed to construct the pmbus object for a service...\n");
+        result = false;
+        goto end;
+    }
+
+    size_t size = 0;
+    result = pmos_bus_object_serialize_ipc(object, &ipc_data, &size);
+    if (!result) {
+        print_str("Loader: Failed to serialize pmbus object into IPC...\n");
+        goto end;
+    }
+
+    right = dup_right(service->service_right);
+    if (right.result) {
+        print_str("Loader: Failed to dup right, error ");
+        print_hex(right.result);
+        print_str("\n");
+        right = (right_request_t){};
+        result = false;
+        goto end;
+    }
+
+    message_extra_t extra = {
+        .extra_rights = {right.right, },
+    };
+
+    auto send_result = send_message_right(pmbus_right, loader_port, ipc_data, size, &extra, 0);
+    if (send_result.result) {
+        print_str("Loader: Failed to send PMBUS request for service ");
+        print_str(service->name);
+        print_str(". Error: ");
+        print_hex(send_result.result);
+        print_str("\n");
+        result = false;
+        goto end;
+    }
+    // The new right above has been consumed by the send syscall
+    right = (right_request_t){};
+
+    pmos_msgloop_node_set(&s->pmbus_reply_node, send_result.right, pmbus_publish_reply_callback, s);
+    pmos_msgloop_insert(&msgloop_data, &s->pmbus_reply_node);
+
+end:
+    if (right.right)
+        delete_right(right.right);
+    free(ipc_data);
+    pmos_bus_object_free(object);
+    return result;
 }
 
 void free_hooked_service(struct HookedService *hs)
@@ -193,4 +299,63 @@ void pmbus_callback(int result, const char * /* right_name */, pmos_right_t righ
         hs = next;
     }
     waiting_for_pmbus = NULL;
+
+    struct PmbusPublishHook *ss = waiting_to_publish;
+    while (ss) {
+        struct PmbusPublishHook *next = ss->waiting_next;
+        bool result = pmbus_publish(ss);
+        if (!result) {
+            print_str("Loader: Failed to publish pmbus object for service ");
+            print_str(ss->service->name);
+            print_str("\n");
+            // free_hooked_service(ss);
+        }
+
+        ss = next;
+    }
+    waiting_to_publish = NULL;
+}
+
+extern struct Service *services;
+
+void publish_services()
+{
+    for (struct Service *s = services; s; s = s->next) 
+        publish_service(s);
+}
+
+void publish_service(struct Service *service)
+{
+    if (!create_service_right(service))
+        return;
+
+    struct PmbusPublishHook *s = NULL;
+    if (service->publish_hook)
+        return;
+
+    s = calloc(1, sizeof(*s));
+    if (!s) {
+        print_str("Loader: Failed to allocate memory for a service...\n");
+        goto error;
+    }
+
+    s->service = service;    
+
+    if (!pmbus_right) {
+        s->waiting_next = waiting_to_publish;
+        waiting_to_publish = s;
+    } else {
+        bool result = pmbus_publish(s);
+        if (!result) {
+            print_str("Loader: Failed to publish PMBUS object for service ");
+            print_str(service->name);
+            print_str("\n");
+            goto error;
+        }
+    }
+
+    service->publish_hook = s;
+    s = NULL;
+error:
+    free(s);
 }
