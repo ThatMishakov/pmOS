@@ -8,4 +8,4 @@ pmos = { path = "/sysroot/usr/src/rust/pmos-rust-lib/rust/pmos" }
 libc = { git = "https://gitlab.com/mishakov/libc-pmos.git", branch = "pmos-0.2.178" }
 futures = "0.3.32"
 async-trait = "0.1.89"
-ext4plus = { git = "https://github.com/arihant2math/ext4plus", branch = "multi-threading", default-features = false }
+ext4plus = { version = "0.1.0-beta.3", default-features = false }
