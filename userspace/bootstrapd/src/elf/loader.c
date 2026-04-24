@@ -40,7 +40,7 @@ result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flag
         .offset_object = 0,
         .offset_start = 0,
         .object_size = mem_object_size,
-        .access_flags = PROT_READ,
+        .access_flags = PROT_READ | FLAG_MEM_OBJECT_ID_RIGHT,
     });
 
     if (mem_request.result)
@@ -147,7 +147,7 @@ result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flag
                     .offset_object = file_offset,
                     .offset_start = 0,
                     .object_size = size,
-                    .access_flags = protection,
+                    .access_flags = protection | FLAG_MEM_OBJECT_ID_RIGHT,
                 });
                 if (mem_request.result) {
                     result = mem_request.result;
@@ -175,7 +175,7 @@ result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flag
                     .offset_object = file_offset,
                     .offset_start = object_start_offset,
                     .object_size = file_size,
-                    .access_flags = protection,
+                    .access_flags = protection | FLAG_MEM_OBJECT_ID_RIGHT,
                 });
                 if (mem_request.result) {
                     result = mem_request.result;
@@ -246,7 +246,7 @@ result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flag
                     .offset_object = file_offset,
                     .offset_start = 0,
                     .object_size = size,
-                    .access_flags = protection,
+                    .access_flags = protection | FLAG_MEM_OBJECT_ID_RIGHT,
                 });
                 if (mem_request.result) {
                     result = mem_request.result;
@@ -274,7 +274,7 @@ result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flag
                     .offset_object = file_offset,
                     .offset_start = object_start_offset,
                     .object_size = file_size,
-                    .access_flags = protection,
+                    .access_flags = protection | FLAG_MEM_OBJECT_ID_RIGHT,
                 });
                 if (mem_request.result) {
                     result = mem_request.result;
@@ -399,18 +399,18 @@ result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flag
         .memory_object_id = mem_object_id,
     };
 
-    VECTOR_PUSH_BACK_CHECKED(builder->entries, ((struct AuxVecEntry){
-        .entry_type = AT_MEM_OBJ_ID,
-        .data_type = DATA_TYPE_EXTERNAL,
-        .external_data = {
-            .size = sizeof(mem_object_id),
-            .data = &mem_object_id,
-        },
-    }), push_res);
-    if (push_res) {
-        result = push_res;
-        goto error;
-    }
+    // VECTOR_PUSH_BACK_CHECKED(builder->entries, ((struct AuxVecEntry){
+    //     .entry_type = AT_MEM_OBJ_ID,
+    //     .data_type = DATA_TYPE_EXTERNAL,
+    //     .external_data = {
+    //         .size = sizeof(mem_object_id),
+    //         .data = &mem_object_id,
+    //     },
+    // }), push_res);
+    // if (push_res) {
+    //     result = push_res;
+    //     goto error;
+    // }
 
     push_res = auxvec_push_argv(builder, argv);
     if (push_res) {

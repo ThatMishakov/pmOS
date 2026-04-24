@@ -4,6 +4,7 @@
 #include <lib/string.hh>
 #include <pmos/load_data.h>
 #include <memory/mem_object.hh>
+#include <processes/task_group.hh>
 
 constexpr phys_addr_t RSDP_INITIALIZER = -1ULL;
 extern phys_addr_t rsdp;
@@ -22,4 +23,4 @@ struct module {
 
 extern klib::vector<module> modules;
 
-klib::unique_ptr<load_tag_generic> construct_load_tag_for_modules();
+klib::unique_ptr<load_tag_generic> construct_load_tag_for_modules(kernel::proc::TaskGroup *group);

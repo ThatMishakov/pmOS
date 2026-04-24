@@ -37,6 +37,8 @@ struct Right {
 
     pmos::containers::RBTreeNode<Right> task_group_head;
 
+    // TODO: right_sender_id is a bad name...
+
     /// Sender-facing id (gets changed when the right is copied/moved, depending on the task group)
     u64 right_sender_id = 0;
 

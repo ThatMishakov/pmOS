@@ -506,6 +506,20 @@ void init_task1(ultra_boot_context *ctx)
 
     serial_logger.printf("Task 1 found: %s\n", task1->path.c_str());
 
+    auto task = proc::TaskDescriptor::create_process(proc::TaskDescriptor::PrivilegeLevel::User);
+    if (!task)
+        panic("Failed to create task");
+    task->name = "bootstrap";
+    serial_logger.printf("Loading ELF...\n");
+
+    auto group = proc::TaskGroup::create_for_task(task);
+    if (!group)
+        panic("Failed to create task group for task 1");
+
+    auto object = ipc::MemObjectRight::create_for_group(task1->object, group.val, ipc::MemObjectRight::PERM_READ);
+    if (!object)
+        panic("Failed to create memory object right for task 1");
+
     klib::vector<klib::unique_ptr<load_tag_generic>> tags;
     tags = construct_load_tag_framebuffer(ctx);
 
@@ -513,16 +527,11 @@ void init_task1(ultra_boot_context *ctx)
     if (t && !tags.push_back(klib::move(t)))
         panic("Failed to add RSDP tag");
 
-    t = construct_load_tag_for_modules();
+    t = construct_load_tag_for_modules(group.val);
     if (t && !tags.push_back(klib::move(t)))
         panic("Failed to add modules tag");
 
-    auto task = proc::TaskDescriptor::create_process(proc::TaskDescriptor::PrivilegeLevel::User);
-    if (!task)
-        panic("Failed to create task");
-    task->name = "bootstrap";
-    serial_logger.printf("Loading ELF...\n");
-    auto p = task->atomic_load_elf(task1->object, task1->path, tags);
+    auto p = task->atomic_load_elf(object.val, task1->path, tags, group.val);
     if (!p.success() || !p.val)
         panic("Failed to load task 1: %i", p.result);
 }

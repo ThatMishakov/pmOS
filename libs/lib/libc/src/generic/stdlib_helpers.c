@@ -53,6 +53,8 @@
 #define max(x, y)                (x > y ? x : y)
 #define alignup(size, alignment) (size % alignment ? size + (alignment - size % alignment) : size)
 
+__attribute__((noreturn)) void _syscall_exit(int status);
+
 struct uthread *__get_tls();
 void __release_tls(struct uthread *u);
 struct uthread *__prepare_tls(void *stack_top, size_t stack_size);
@@ -170,7 +172,7 @@ struct uthread *__prepare_tls(void *stack_top, size_t stack_size)
         .offset_object = tls_file_offset,
         .offset_start = tls_page_offset,
         .object_size = tls_filesz,
-        .access_flags = CREATE_FLAG_COW | PROT_READ | PROT_WRITE,
+        .access_flags = CREATE_FLAG_COW | PROT_READ | PROT_WRITE | FLAG_MEM_OBJECT_ID_RIGHT,
     };
 
     mem_request_ret_t res = map_mem_object(&params);
@@ -194,7 +196,7 @@ struct uthread *__prepare_tls(void *stack_top, size_t stack_size)
         .offset_object = tls_file_offset,
         .offset_start = tls_page_offset,
         .object_size = tls_filesz,
-        .access_flags = CREATE_FLAG_COW | PROT_READ | PROT_WRITE,
+        .access_flags = CREATE_FLAG_COW | PROT_READ | PROT_WRITE | FLAG_MEM_OBJECT_ID_RIGHT,
     };
 
     mem_request_ret_t res = map_mem_object(&params);
@@ -365,6 +367,8 @@ char **__argv;
 char **__envp;
 auxv_t *__auxv;
 
+extern uint64_t process_task_group;
+
 void __init_environ(const char **envp);
 
 /// @brief Initializes the standard library
@@ -393,18 +397,35 @@ void init_std_lib(void *load_data, size_t load_data_size, int *argc)
     while (*envp_p++) ;
     auxv_t *auxv = (auxv_t *)envp_p;
 
-
-    prepare_load_tags(load_data, load_data_size);
-    init_tls_first_time(auxv);
-
     __argc = argc_;
     __argv = argv;
     __envp = envp;
     __auxv = auxv;
 
+    const auxv_t *tasg_group_e = __elf_aux_search(__auxv, AT_TASK_GROUP_ID);
+    if (tasg_group_e && *(uint64_t *)tasg_group_e->a_ptr != 0) {
+        process_task_group = *(uint64_t *)tasg_group_e->a_ptr;
+    } else {
+        syscall_r sys_result = create_task_group();
+        if (sys_result.result != SUCCESS) {
+            //fprintf(stderr, "pmOS libC: Failed to create task group\n");
+            _syscall_exit(1001);
+        }
+        process_task_group = sys_result.value;
+    }
+
+    syscall_r sys_result = set_namespace(process_task_group, NAMESPACE_RIGHTS);
+    if (sys_result.result != SUCCESS) {
+        //fprintf(stderr, "pmOS libC: Failed to set task group namespace\n");
+        _syscall_exit(1002);
+    }
+
+    prepare_load_tags(load_data, load_data_size);
+    init_tls_first_time(auxv);
+
     __active_threads = 1;
 
-    __init_environ(__envp);
+    __init_environ((const char **)__envp);
 
     __init_stdio();
 

@@ -59,6 +59,10 @@
 namespace kernel
 {
 
+namespace ipc {
+    struct MemObjectRight;
+};
+
 namespace sched
 {
     class sched_queue;
@@ -258,8 +262,8 @@ namespace proc
         /// Returns true if the ELF was loaded successfully, false if the memory object data is not
         /// immediately available
         ReturnStr<bool>
-            atomic_load_elf(klib::shared_ptr<paging::Mem_Object> obj, klib::string name = "",
-                            const klib::vector<klib::unique_ptr<load_tag_generic>> &tags = {});
+            atomic_load_elf(ipc::MemObjectRight *obj, klib::string name = "",
+                            const klib::vector<klib::unique_ptr<load_tag_generic>> &tags = {}, TaskGroup *optional_group = nullptr);
 
         /// Loads ELF into the task from the given memory object. This function does not acquire the
         /// sched_lock. Returns the program header if loaded successfully, empty optional if the

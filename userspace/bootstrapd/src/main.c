@@ -57,7 +57,7 @@ struct Service;
 
 struct module_descriptor_list {
     struct module_descriptor_list *next;
-    uint64_t object_id;
+    uint64_t object_right;
     size_t size;
     char *cmdline;
     char *path;
@@ -119,7 +119,7 @@ void init_modules()
             return;
         }
 
-        d->object_id = m->modules[i].memory_object_id;
+        d->object_right = m->modules[i].memory_object_id;
         d->size      = m->modules[i].size;
         d->cmdline   = strdup((char *)m + m->modules[i].cmdline_offset);
         d->path      = strdup((char *)m + m->modules[i].path_offset);
@@ -267,11 +267,11 @@ void start_executables()
         if (c->service) {
             switch (c->service->run_type) {
             case RUN_ALWAYS_ONCE:
-                start_service(c->service, c->object_id, 0);
+                start_service(c->service, c->object_right, 0);
                 break;
             case RUN_FIRST_MATCH_ONCE:
             case RUN_FOR_EACH_MATCH:
-                hook_match_service(c->service, c->object_id);
+                hook_match_service(c->service, c->object_right);
                 break;
             default:
                 break;

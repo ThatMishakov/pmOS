@@ -172,7 +172,6 @@ void register_with_controller()
 
     message_extra_t extra = {
         .extra_rights = {right.right, 0},
-        .memory_object = 0,
     };
     right_request_t result = send_message_right(right_to_device, configuration_port, &r, sizeof(r), &extra, 0);
     if (result.result) {

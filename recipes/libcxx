@@ -42,7 +42,7 @@ configure() {
 }
 
 build() {
-    make -j ${parallelism} VERBOSE=1
+    make -j ${parallelism}
 }
 
 package() {
