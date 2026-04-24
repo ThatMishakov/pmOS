@@ -40,7 +40,7 @@ $(i686-IMG): build-i686/.jinx-parameters
 $(x86_64-HYPER-IMG): build-x86_64/.jinx-parameters
 	@cd build-x86_64 && ../jinx build hyper-disk-image
 
-emul: $(ISO)
+emul: $(x86_64-HYPER-IMG)
 	bochs-debugger -q -f .bochsrc
 
 # bochs: $(ISO)

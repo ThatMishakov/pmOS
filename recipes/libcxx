@@ -27,6 +27,7 @@ configure() {
         -DCOMPILER_RT_BUILD_BUILTINS=ON \
         -DCMAKE_C_FLAGS="--sysroot=${sysroot_dir} -nostartfiles" \
         -DCMAKE_CXX_FLAGS="--sysroot=${sysroot_dir} -nostdlib" \
+        -DLIBCXXABI_ENABLE_SHARED=OFF \
         -DLIBCXXABI_USE_LLVM_UNWINDER=true \
         -DLIBCXX_ENABLE_SHARED=OFF \
         -DLIBUNWIND_ENABLE_SHARED=OFF \

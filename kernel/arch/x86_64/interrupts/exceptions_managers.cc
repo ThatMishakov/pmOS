@@ -47,33 +47,33 @@ using namespace kernel::x86;
 
 static void print_registers(const Task_Regs &regs, Logger &logger)
 {
-    // logger.printf(" => %%rdi: 0x%h\n", regs.scratch_r.rdi);
-    // logger.printf(" => %%rsi: 0x%h\n", regs.scratch_r.rsi);
-    // logger.printf(" => %%rdx: 0x%h\n", regs.scratch_r.rdx);
-    // logger.printf(" => %%rcx: 0x%h\n", regs.scratch_r.rcx);
-    // logger.printf(" => %%r8:  0x%h\n", regs.scratch_r.r8);
-    // logger.printf(" => %%r9:  0x%h\n", regs.scratch_r.r9);
-    // logger.printf(" => %%rax: 0x%h\n", regs.scratch_r.rax);
-    // logger.printf(" => %%r10: 0x%h\n", regs.scratch_r.r10);
-    // logger.printf(" => %%r11: 0x%h\n", regs.scratch_r.r11);
+    logger.printf(" => %%rdi: 0x%lx\n", regs.scratch_r.rdi);
+    logger.printf(" => %%rsi: 0x%lx\n", regs.scratch_r.rsi);
+    logger.printf(" => %%rdx: 0x%lx\n", regs.scratch_r.rdx);
+    logger.printf(" => %%rcx: 0x%lx\n", regs.scratch_r.rcx);
+    logger.printf(" => %%r8:  0x%lx\n", regs.scratch_r.r8);
+    logger.printf(" => %%r9:  0x%lx\n", regs.scratch_r.r9);
+    logger.printf(" => %%rax: 0x%lx\n", regs.scratch_r.rax);
+    logger.printf(" => %%r10: 0x%lx\n", regs.scratch_r.r10);
+    logger.printf(" => %%r11: 0x%lx\n", regs.scratch_r.r11);
 
-    // logger.printf(" => %%rbx: 0x%h\n", regs.preserved_r.rbx);
-    // logger.printf(" => %%rbp: 0x%h\n", regs.preserved_r.rbp);
-    // logger.printf(" => %%r12: 0x%h\n", regs.preserved_r.r12);
-    // logger.printf(" => %%r13: 0x%h\n", regs.preserved_r.r13);
-    // logger.printf(" => %%r14: 0x%h\n", regs.preserved_r.r14);
-    // logger.printf(" => %%r15: 0x%h\n", regs.preserved_r.r15);
+    logger.printf(" => %%rbx: 0x%lx\n", regs.preserved_r.rbx);
+    logger.printf(" => %%rbp: 0x%lx\n", regs.preserved_r.rbp);
+    logger.printf(" => %%r12: 0x%lx\n", regs.preserved_r.r12);
+    logger.printf(" => %%r13: 0x%lx\n", regs.preserved_r.r13);
+    logger.printf(" => %%r14: 0x%lx\n", regs.preserved_r.r14);
+    logger.printf(" => %%r15: 0x%lx\n", regs.preserved_r.r15);
 
-    // logger.printf(" => %%rip: 0x%h\n", regs.e.rip);
-    // logger.printf(" => %%rsp: 0x%h\n", regs.e.rsp);
-    // logger.printf(" => %%rflags: 0x%h\n", regs.e.rflags.numb);
+    logger.printf(" => %%rip: 0x%lx\n", regs.e.rip);
+    logger.printf(" => %%rsp: 0x%lx\n", regs.e.rsp);
+    logger.printf(" => %%rflags: 0x%lx\n", regs.e.rflags.numb);
 
-    // logger.printf(" => %%gs offset: 0x%h\n", regs.seg.gs);
-    // logger.printf(" => %%fs offset: 0x%h\n", regs.seg.fs);
+    logger.printf(" => %%gs offset: 0x%lx\n", regs.seg.gs);
+    logger.printf(" => %%fs offset: 0x%lx\n", regs.seg.fs);
 
     logger.printf(" Entry type: %i\n", regs.entry_type);
 
-    // logger.printf(" Error code: 0x%h\n", regs.int_err);
+    logger.printf(" Error code: 0x%lx\n", regs.int_err);
 }
 
 static void print_registers(TaskDescriptor *task, Logger &logger)
@@ -142,10 +142,15 @@ void print_stack_trace(TaskDescriptor *task, Logger &logger)
         return;
 
     logger.printf("Stack trace:\n");
-    ulong *rbp = (ulong *)task->regs.xbp();
+    ulong rbp = task->regs.xbp();
     while (rbp) {
-        logger.printf(" => 0x%h\n", rbp[1]);
-        rbp = (ulong *)rbp[0];
+        ulong regs[2];
+        auto result = copy_from_user((char *)&regs, (const char *)rbp, sizeof(regs));
+        if (!result)
+            return;
+
+        logger.printf(" => 0x%lx\n", regs[1]);
+        rbp = regs[0];
     }
 }
 
@@ -257,8 +262,8 @@ extern "C" void pagefault_manager(NestedIntContext *kernel_ctx, ulong err)
                              virtual_addr, task->task_id, task->name.c_str(),
                              task->regs.program_counter(), err, result);
 
-        print_registers(task, global_logger);
-        // print_stack_trace(task, global_logger);
+        print_registers(task, serial_logger);
+        print_stack_trace(task, serial_logger);
 
         task->atomic_kill();
     }
