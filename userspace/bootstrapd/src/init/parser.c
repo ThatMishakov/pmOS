@@ -1390,7 +1390,7 @@ void parse_services(struct module_descriptor_list *d)
         .offset_object = 0,
         .offset_start = 0,
         .object_size = size_page,
-        .access_flags = PROT_READ,
+        .access_flags = PROT_READ | FLAG_MEM_OBJECT_ID_RIGHT,
     };
     mem_request_ret_t r = map_mem_object(&p);
     if (r.result) {

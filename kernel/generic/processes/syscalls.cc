@@ -224,8 +224,8 @@ extern "C" void syscall_handler()
     // This is a "temporary" workaround
     task->syscall_num = syscall_flags_reg(task);
 
-    serial_logger.printf("syscall_handler: task: %d (%s) call_n: %x (%s)\n", task->task_id,
-    task->name.c_str(), call_n, syscall_name(call_n));
+    // serial_logger.printf("syscall_handler: task: %d (%s) call_n: %x (%s)\n", task->task_id,
+    // task->name.c_str(), call_n, syscall_name(call_n));
 
     // TODO: check permissions
 
@@ -2519,7 +2519,20 @@ void syscall_get_mem_object_size()
     u64 object_id = syscall_arg64(current, 0);
     auto flags = syscall_flags(current);
 
-    const auto object = Mem_Object::get_object(object_id);
+    klib::shared_ptr<Mem_Object> object;
+    if (flags & FLAG_MEM_OBJECT_ID_RIGHT) {
+        auto res = mem_object_for_right(current, object_id);
+        if (!res.success()) {
+            syscall_error(current) = res.result;
+            return;
+        }
+
+        assert(res.val);
+        object = klib::move(res.val);
+    } else {
+        object = Mem_Object::get_object(object_id);
+    }
+
     if (!object) {
         syscall_error(current) = -ENOENT;
         return;
