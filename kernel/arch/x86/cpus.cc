@@ -45,6 +45,9 @@ void deactivate_page_table()
 
 extern "C" CPU_Info *find_cpu_info()
 {
+    // This is important! Namely, the CPUs will probably enter other cores with x2APIC disabled.
+    enable_apic();
+
     auto lapic_id = get_lapic_id();
     for (auto c: cpus)
         if (c->lapic_id == lapic_id)
