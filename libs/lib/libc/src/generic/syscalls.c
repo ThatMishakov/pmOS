@@ -557,15 +557,6 @@ phys_addr_request_t get_page_phys_address_from_object(mem_object_t object_id, ui
     return t;
 }
 
-result_t release_mem_object(mem_object_t object_id, unsigned flags)
-{
-#ifdef __32BITSYSCALL
-    return __pmos_syscall32_3words(SYSCALL_RELEASE_MEM_OBJECT | (flags << 8), object_id).result;
-#else
-    return pmos_syscall(SYSCALL_RELEASE_MEM_OBJECT | (flags << 8), object_id).result;
-#endif
-}
-
 pmos_int_r allocate_interrupt(uint32_t gsi, uint32_t flags)
 {
     syscall_r result;

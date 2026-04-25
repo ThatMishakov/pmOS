@@ -227,8 +227,6 @@ result_t release_region(uint64_t pid, void *region);
 
 result_t release_memory_range(uint64_t pid, void *start, size_t len);
 
-result_t release_mem_object(mem_object_t object_id, unsigned flags);
-
 phys_addr_request_t get_page_phys_address(uint64_t task_id, void *region, uint64_t flags);
 phys_addr_request_t get_page_phys_address_from_object(mem_object_t object_id, uint64_t offset,
                                                       unsigned flags);

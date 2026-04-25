@@ -372,7 +372,6 @@ pmos::async::detached_task probe_partitions(size_t disk_idx)
             printf("Failed to read GPT partition array\n");
             co_return;
         }
-        pmos::utility::scope_guard guard3 {[&] { release_mem_object(gpt_object_right.get(), 0); }};
         auto array_size_aligned = align_to_page(gpt_partition_array_size);
 
         auto res = [&] { 
