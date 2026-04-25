@@ -306,13 +306,13 @@ pmos::async::detached_task probe_partitions(size_t disk_idx)
 
     map_mem_object_param_t p = {
         .page_table_id = PAGE_TABLE_SELF,
-        .object_id = object_right.get(),
+        .object_right = object_right.get(),
         .addr_start_uint = 0,
         .size = mbr_size,
         .offset_object = 0,
         .offset_start = 0,
         .object_size = mbr_size,
-        .access_flags = PROT_READ | FLAG_MEM_OBJECT_ID_RIGHT,
+        .access_flags = PROT_READ,
     };
     auto r = map_mem_object(&p);
 
@@ -377,13 +377,13 @@ pmos::async::detached_task probe_partitions(size_t disk_idx)
         auto res = [&] { 
             map_mem_object_param_t p = {
                 .page_table_id = 0,
-                .object_id = gpt_object_right.get(),
+                .object_right = gpt_object_right.get(),
                 .addr_start_uint = 0,
                 .size = array_size_aligned,
                 .offset_object = 0,
                 .offset_start = 0,
                 .object_size = array_size_aligned,
-                .access_flags = PROT_READ | FLAG_MEM_OBJECT_ID_RIGHT,
+                .access_flags = PROT_READ,
             };
 
             return map_mem_object(&p);

@@ -112,8 +112,6 @@ struct task_register_set {
 #define CREATE_FLAG_COW                 0x20
 #define CREATE_FLAG_ALLOW_DISCONTINUOUS 0x40
 
-#define FLAG_MEM_OBJECT_ID_RIGHT (1 << 15)
-
 #ifdef __STDC_HOSTED__
 /// @brief Creates a normal page region
 ///
@@ -166,8 +164,8 @@ typedef struct map_mem_object_param_t {
     /// ID of the page table where the new region should be created. Takes
     /// PAGE_TABLE_SELF (0) for the current process.
     uint64_t page_table_id;
-    /// ID of the memory object that should be mapped to the new region.
-    mem_object_t object_id;
+    /// Right to the memory object that should be mapped in the current rights namespace.
+    pmos_right_t object_right;
     /// The suggestion for the virutal address of the new region. The parameter must be
     /// page-aligned. uint64_t is used here instead of void to be able to address memory in 64 bit
     /// processes from 32 bit executables. (So void * can be cast to it if mapping for yourself)
@@ -186,8 +184,7 @@ typedef struct map_mem_object_param_t {
     /// the trailing space will be zeroed.
     uint64_t object_size;
     /// An OR-conjugated list of the argument. Takes PROT_READ, PROT_WRITE and PROT_EXEC as
-    /// access bytes and CREATE_FLAG_FIXED, and CREATE_FLAG_COW. Also takes FLAG_MEM_OBJECT_ID_RIGHT, which indicates
-    /// that the object_id field is a right to the memory object
+    /// access bytes and CREATE_FLAG_FIXED, and CREATE_FLAG_COW.
     uint64_t access_flags;
 } map_mem_object_param_t;
 
@@ -228,7 +225,7 @@ result_t release_region(uint64_t pid, void *region);
 result_t release_memory_range(uint64_t pid, void *start, size_t len);
 
 phys_addr_request_t get_page_phys_address(uint64_t task_id, void *region, uint64_t flags);
-phys_addr_request_t get_page_phys_address_from_object(mem_object_t object_id, uint64_t offset,
+phys_addr_request_t get_page_phys_address_from_object(pmos_right_t object_right, uint64_t offset,
                                                       unsigned flags);
 
 typedef uint64_t pmos_pagetable_t;
@@ -328,12 +325,12 @@ syscall_r init_stack(uint64_t tid, uint64_t stack_top);
 /**
  * @brief Gets the size (in bytes) of the given memory object
  * 
- * @param mem_object_id ID of the memory object
+ * @param mem_object_right Right to the memory object in the current rights namespace
  * @param flags Optional flags (bitmask)
  * @return syscall_r result of the operation. If the result is SUCCESS, the value is the size in bytes,
  * otherwise, result contains the -errno error from kernel.
  */
-syscall_r get_mem_object_size(mem_object_t mem_object_id, unsigned flags);
+syscall_r get_mem_object_size(pmos_right_t mem_object_right, unsigned flags);
 
 #endif
 

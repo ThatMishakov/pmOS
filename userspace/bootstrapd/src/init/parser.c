@@ -1384,13 +1384,13 @@ void parse_services(struct module_descriptor_list *d)
     size_t size_page = (size + PAGE_SIZE - 1) & ~((size_t)PAGE_SIZE - 1);
     map_mem_object_param_t p = {
         .page_table_id = PAGE_TABLE_SELF,
-        .object_id = d->object_id,
+        .object_right = d->object_id,
         .addr_start_uint = 0,
         .size = size_page,
         .offset_object = 0,
         .offset_start = 0,
         .object_size = size_page,
-        .access_flags = PROT_READ | FLAG_MEM_OBJECT_ID_RIGHT,
+        .access_flags = PROT_READ,
     };
     mem_request_ret_t r = map_mem_object(&p);
     if (r.result) {

@@ -166,13 +166,13 @@ struct uthread *__prepare_tls(void *stack_top, size_t stack_size)
 
     map_mem_object_param_t params = {
         .page_table_id = PAGE_TABLE_SELF,
-        .object_id = tls_mem_object,
+        .object_right = tls_mem_object,
         .addr_start_uint = 0,
         .size = size_to_page,
         .offset_object = tls_file_offset,
         .offset_start = tls_page_offset,
         .object_size = tls_filesz,
-        .access_flags = CREATE_FLAG_COW | PROT_READ | PROT_WRITE | FLAG_MEM_OBJECT_ID_RIGHT,
+        .access_flags = CREATE_FLAG_COW | PROT_READ | PROT_WRITE,
     };
 
     mem_request_ret_t res = map_mem_object(&params);
@@ -190,13 +190,13 @@ struct uthread *__prepare_tls(void *stack_top, size_t stack_size)
 
     map_mem_object_param_t params = {
         .page_table_id = PAGE_TABLE_SELF,
-        .object_id = tls_mem_object,
+        .object_right = tls_mem_object,
         .addr_start_uint = 0,
         .size = size_all,
         .offset_object = tls_file_offset,
         .offset_start = tls_page_offset,
         .object_size = tls_filesz,
-        .access_flags = CREATE_FLAG_COW | PROT_READ | PROT_WRITE | FLAG_MEM_OBJECT_ID_RIGHT,
+        .access_flags = CREATE_FLAG_COW | PROT_READ | PROT_WRITE,
     };
 
     mem_request_ret_t res = map_mem_object(&params);

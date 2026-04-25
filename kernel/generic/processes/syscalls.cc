@@ -328,6 +328,27 @@ void syscall_start_process()
     t->init();
 }
 
+static ReturnStr<klib::shared_ptr<Mem_Object>> mem_object_for_right(TaskDescriptor *task, u64 right_id)
+{
+    auto group = task->get_rights_namespace();
+    if (!group)
+        return Error(-ESRCH);
+
+    auto right = group->atomic_get_right(right_id);
+    if (!right)
+        return Error(-ENOENT);
+
+    if (!right->atomic_alive())
+        return Error(-ENOENT);
+
+    if (right->type() != RightType::MemObject)
+        return Error(-EPERM);
+
+    auto mem_object_right = static_cast<MemObjectRight *>(right);
+    assert(mem_object_right->mem_object);
+    return mem_object_right->mem_object;
+}
+
 void syscall_load_executable()
 {
     task_ptr task = get_current_task();
@@ -356,11 +377,13 @@ void syscall_load_executable()
         return;
     }
 
-    klib::shared_ptr<Mem_Object> object = Mem_Object::get_object(object_id);
-    if (!object) {
-        syscall_error(task) = -ENOENT;
+    auto ret = mem_object_for_right(task, object_id);
+    if (!ret.success()) {
+        syscall_error(task) = ret.result;
         return;
     }
+    auto object = std::move(ret.val);
+    assert(object);
 
     klib::string name;
     {
@@ -1494,27 +1517,6 @@ void syscall_create_mem_object()
     syscall_return(current_task) = right.val->right_sender_id;
 }
 
-ReturnStr<klib::shared_ptr<Mem_Object>> mem_object_for_right(TaskDescriptor *task, u64 right_id)
-{
-    auto group = task->get_rights_namespace();
-    if (!group)
-        return Error(-ESRCH);
-
-    auto right = group->atomic_get_right(right_id);
-    if (!right)
-        return Error(-ESRCH);
-
-    if (!right->atomic_alive())
-        return Error(-ESRCH);
-
-    if (right->type() != RightType::MemObject)
-        return Error(-EPERM);
-
-    auto mem_object_right = static_cast<MemObjectRight *>(right);
-    assert(mem_object_right->mem_object);
-    return mem_object_right->mem_object;
-}
-
 void syscall_map_mem_object()
 {
     const auto &current_task = get_current_task();
@@ -1532,7 +1534,7 @@ void syscall_map_mem_object()
         return;
 
     u64 page_table_id = params.page_table_id;
-    u64 object_id =     params.object_id;
+    u64 object_right =     params.object_right;
     ulong access =      params.access_flags;
     u64 object_offset_bytes = params.offset_object;
     ulong size_bytes = params.size;
@@ -1557,22 +1559,13 @@ void syscall_map_mem_object()
         return;
     }
 
-    klib::shared_ptr<Mem_Object> object;
-    if (access & FLAG_MEM_OBJECT_ID_RIGHT) {
-        auto res = mem_object_for_right(current_task, object_id);
-        if (!res) {
-            syscall_error(current_task) = res.result;
-            return;
-        }
-
-        object = klib::move(res.val);
-    } else {
-        object = Mem_Object::get_object(object_id);
-        if (!object) {
-            syscall_error(current_task) = -ENOENT;
-            return;
-        }
+    auto obj_res = mem_object_for_right(current_task, object_right);
+    if (!obj_res.success()) {
+        syscall_error(current_task) = obj_res.result;
+        return;
     }
+
+    auto object = klib::move(obj_res.val);
     assert(object);
 
     if (object->is_anonymous()) {
@@ -2070,27 +2063,15 @@ void syscall_get_page_address_from_object()
     auto current_task = get_current_task();
     auto object_id    = syscall_arg64(current_task, 0);
     auto offset       = syscall_arg64(current_task, 1);
-    auto flags        = syscall_flags(current_task);
+    // auto flags        = syscall_flags(current_task);
 
-    klib::shared_ptr<Mem_Object> object;
-    if (flags & FLAG_MEM_OBJECT_ID_RIGHT) {
-        auto ret = mem_object_for_right(current_task, object_id);
-        if (!ret.success()) {
-            syscall_error(current_task) = ret.result;
-            return;
-        }
-
-        assert(ret.val);
-        object = klib::move(ret.val);
-    } else {
-        object = Mem_Object::get_object(object_id);
-        if (!object) {
-            syscall_error(current_task) = -ENOENT;
-            return;
-        }
+    auto ret = mem_object_for_right(current_task, object_id);
+    if (!ret.success()) {
+        syscall_error(current_task) = ret.result;
+        return;
     }
-    assert(object);
-
+    assert(ret.val);
+    auto object = klib::move(ret.val);
 
     if (object->is_anonymous()) {
         syscall_error(current_task) = -EPERM;
@@ -2501,21 +2482,16 @@ void syscall_get_mem_object_size()
     auto current = get_current_task();
 
     u64 object_id = syscall_arg64(current, 0);
-    auto flags = syscall_flags(current);
+    // auto flags = syscall_flags(current);
 
-    klib::shared_ptr<Mem_Object> object;
-    if (flags & FLAG_MEM_OBJECT_ID_RIGHT) {
-        auto res = mem_object_for_right(current, object_id);
-        if (!res.success()) {
-            syscall_error(current) = res.result;
-            return;
-        }
-
-        assert(res.val);
-        object = klib::move(res.val);
-    } else {
-        object = Mem_Object::get_object(object_id);
+    auto res = mem_object_for_right(current, object_id);
+    if (!res.success()) {
+        syscall_error(current) = res.result;
+        return;
     }
+
+    assert(res.val);
+    auto object = klib::move(res.val);
 
     if (!object) {
         syscall_error(current) = -ENOENT;

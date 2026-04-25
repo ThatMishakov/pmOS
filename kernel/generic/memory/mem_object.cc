@@ -48,8 +48,6 @@ Mem_Object::Mem_Object(u64 page_size_log, u64 size_pages, u32 max_user_permissio
 
 Mem_Object::~Mem_Object()
 {
-    atomic_erase_gloabl_storage(id);
-
     auto current_page = pages_storage;
     while (current_page) {
         auto p       = current_page;
@@ -101,11 +99,6 @@ klib::shared_ptr<Mem_Object> Mem_Object::create(u64 page_size_log, u64 size_page
         }
     }
 
-    // Atomically insert into the object storage
-    auto e = atomic_push_global_storage(ptr);
-    if (e)
-        return nullptr;
-
     return ptr;
 }
 
@@ -127,11 +120,6 @@ klib::shared_ptr<Mem_Object> Mem_Object::create_from_phys(u64 phys_addr, u64 siz
     // Lock the object so nobody overwrites it while the pages are inserted
     Auto_Lock_Scope l(ptr->lock);
 
-    // Atomically insert into the object storage
-    auto e = atomic_push_global_storage(ptr);
-    if (e)
-        return nullptr;
-
     // Provide the pages
     // This can't fail
     for (u64 i = 0; i < pages_count; ++i) {
@@ -147,31 +135,6 @@ klib::shared_ptr<Mem_Object> Mem_Object::create_from_phys(u64 phys_addr, u64 siz
 }
 
 Mem_Object::id_type Mem_Object::get_id() const noexcept { return id; }
-
-kresult_t Mem_Object::atomic_push_global_storage(klib::shared_ptr<Mem_Object> o)
-{
-    // RAII lock against concurrent changes to the map
-    Auto_Lock_Scope l(object_storage_lock);
-
-    auto id = o->get_id();
-
-    auto p = objects_storage.insert({klib::move(id), klib::move(o)});
-    if (p.first == objects_storage.end()) [[unlikely]]
-        return -ENOMEM;
-
-    if (!p.second) [[unlikely]]
-        return -EEXIST;
-
-    return 0;
-}
-
-void Mem_Object::atomic_erase_gloabl_storage(id_type object_to_delete)
-{
-    // RAII lock against concurrent changes to the map
-    Auto_Lock_Scope l(object_storage_lock);
-
-    objects_storage.erase(object_to_delete);
-}
 
 kresult_t Mem_Object::register_pined(klib::weak_ptr<Page_Table> pined_by)
 {
@@ -426,12 +389,6 @@ ReturnStr<pmm::Page_Descriptor> Mem_Object::request_page(u64 offset, bool write,
 
 //     return 0;
 // }
-
-klib::shared_ptr<Mem_Object> Mem_Object::get_object(u64 object_id)
-{
-    Auto_Lock_Scope l(object_storage_lock);
-    return objects_storage.get_copy_or_default(object_id).lock();
-}
 
 ReturnStr<bool> Mem_Object::read_to_kernel(u64 offset, void *buffer, u64 size)
 {

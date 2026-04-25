@@ -19,7 +19,7 @@ result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flag
                          const char *argv[], const char *envp[], const struct AuxVecEntry *auxvec_entries[])
 {
     struct AuxVecBuilder *builder = NULL;
-    auto size_r = get_mem_object_size(mem_object_id, FLAG_MEM_OBJECT_ID_RIGHT);
+    auto size_r = get_mem_object_size(mem_object_id, 0);
     if (size_r.result)
         return size_r.result;
     uint64_t mem_object_size = size_r.value;
@@ -34,13 +34,13 @@ result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flag
 
     auto mem_request = map_mem_object(&(map_mem_object_param_t){
         .page_table_id = 0,
-        .object_id = mem_object_id,
+        .object_right = mem_object_id,
         .addr_start_uint = 0,
         .size = mem_object_size,
         .offset_object = 0,
         .offset_start = 0,
         .object_size = mem_object_size,
-        .access_flags = PROT_READ | FLAG_MEM_OBJECT_ID_RIGHT,
+        .access_flags = PROT_READ,
     });
 
     if (mem_request.result)
@@ -141,13 +141,13 @@ result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flag
 
                 auto mem_request = map_mem_object(&(map_mem_object_param_t){
                     .page_table_id = page_table_id,
-                    .object_id = mem_object_id,
+                    .object_right = mem_object_id,
                     .addr_start_uint = region_start,
                     .size = size,
                     .offset_object = file_offset,
                     .offset_start = 0,
                     .object_size = size,
-                    .access_flags = protection | FLAG_MEM_OBJECT_ID_RIGHT,
+                    .access_flags = protection,
                 });
                 if (mem_request.result) {
                     result = mem_request.result;
@@ -169,13 +169,13 @@ result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flag
 
                 auto mem_request = map_mem_object(&(map_mem_object_param_t){
                     .page_table_id = page_table_id,
-                    .object_id = mem_object_id,
+                    .object_right = mem_object_id,
                     .addr_start_uint = region_start,
                     .size = size,
                     .offset_object = file_offset,
                     .offset_start = object_start_offset,
                     .object_size = file_size,
-                    .access_flags = protection | FLAG_MEM_OBJECT_ID_RIGHT,
+                    .access_flags = protection,
                 });
                 if (mem_request.result) {
                     result = mem_request.result;
@@ -240,13 +240,13 @@ result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flag
 
                 auto mem_request = map_mem_object(&(map_mem_object_param_t){
                     .page_table_id = page_table_id,
-                    .object_id = mem_object_id,
+                    .object_right = mem_object_id,
                     .addr_start_uint = region_start,
                     .size = size,
                     .offset_object = file_offset,
                     .offset_start = 0,
                     .object_size = size,
-                    .access_flags = protection | FLAG_MEM_OBJECT_ID_RIGHT,
+                    .access_flags = protection,
                 });
                 if (mem_request.result) {
                     result = mem_request.result;
@@ -268,13 +268,13 @@ result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flag
 
                 auto mem_request = map_mem_object(&(map_mem_object_param_t){
                     .page_table_id = page_table_id,
-                    .object_id = mem_object_id,
+                    .object_right = mem_object_id,
                     .addr_start_uint = region_start,
                     .size = size,
                     .offset_object = file_offset,
                     .offset_start = object_start_offset,
                     .object_size = file_size,
-                    .access_flags = protection | FLAG_MEM_OBJECT_ID_RIGHT,
+                    .access_flags = protection,
                 });
                 if (mem_request.result) {
                     result = mem_request.result;
