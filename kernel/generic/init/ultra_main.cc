@@ -157,7 +157,7 @@ void init_memory(ultra_boot_context *ctx)
         if (size > largest_size) {
             largest_size        = size;
             temp_alloc_base     = mem->entries[i].physical_address;
-            temp_alloc_size     = end;
+            temp_alloc_size     = end - temp_alloc_base;
             temp_alloc_entry_id = i;
         }
     }
@@ -179,8 +179,8 @@ void init_memory(ultra_boot_context *ctx)
     if (largest_size == 0) {
         panic("No memory region below 1GB\n");
     }
-    serial_logger.printf("Allocating page tables from 0x%lx - 0x%lx...\n", temp_alloc_base,
-                         temp_alloc_base + largest_size);
+    serial_logger.printf("Allocating initial memory from 0x%lx - 0x%lx...\n", temp_alloc_base,
+                         temp_alloc_base + temp_alloc_size);
 
     #ifdef __i386__
     if (use_pae) {
