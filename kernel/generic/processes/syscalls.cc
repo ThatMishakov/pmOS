@@ -1540,6 +1540,9 @@ void syscall_map_mem_object()
     ulong object_size = params.object_size;
     u64 start_offset_bytes = params.offset_start;
 
+    // serial_logger.printf("map_mem_object page_table_id %li object_id %li access %lx object_offset_bytes %lx size_bytes %lx addr_start %lx object_size %lx start_offset_bytes %lx\n",
+    //                      page_table_id, object_id, access, object_offset_bytes, size_bytes, addr_start, object_size, start_offset_bytes);
+
     klib::shared_ptr<Page_Table> table = page_table_id == 0
                                              ? current_task->page_table
                                              : Arch_Page_Table::get_page_table(page_table_id);

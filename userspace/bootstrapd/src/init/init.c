@@ -591,6 +591,7 @@ int start_service_request(struct Service *service, const char *cmdline, size_t c
     }
 
     group_id = rr.value;
+    uint64_t new_group_id = group_id;
 
     result_t rrr = add_task_to_group(r.value, group_id);
     if (rrr != SUCCESS) {
@@ -638,8 +639,8 @@ int start_service_request(struct Service *service, const char *cmdline, size_t c
         .entry_type = AT_TASK_GROUP_ID,
         .data_type = DATA_TYPE_EXTERNAL,
         .external_data = {
-            .data = &group_id,
-            .size = sizeof(group_id),
+            .data = &new_group_id,
+            .size = sizeof(new_group_id),
         },
     };
     struct AuxVecEntry mem_object_entry = {
@@ -678,7 +679,6 @@ int start_service_request(struct Service *service, const char *cmdline, size_t c
         goto error;
     }
 
-    uint64_t new_group_id = group_id;
     remove_task_from_group(TASK_ID_SELF, group_id);
     group_id = 0;
 
