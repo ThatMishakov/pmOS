@@ -232,9 +232,6 @@ kresult_t Mem_Object_Reference::punch_hole(void *hole_addr_start, size_t hole_si
 
     ptr->trim(new_start, size - ((char *)new_start - (char *)start_addr));
     owner->paging_regions.insert(ptr);
-    auto it = owner->object_regions.find(references.get());
-    assert(it != owner->object_regions.end());
-    it->second.insert(ptr);
 
     trim(start_addr, (char *)hole_addr_start - (char *)start_addr);
 
@@ -409,16 +406,6 @@ kresult_t Mem_Object_Reference::clone_to(const klib::shared_ptr<Page_Table> &new
             return result;
     }
 
-    auto it = new_table->object_regions.find(copy->references.get());
-    if (it == new_table->object_regions.end()) {
-        auto result = new_table->object_regions.insert({copy->references.get(), {}});
-        if (result.first == new_table->object_regions.end())
-            return -ENOMEM;
-
-        it = result.first;
-    }
-    it->second.insert(copy.get());
-
     new_table->paging_regions.insert(copy.release());
     return 0;
 }
@@ -430,12 +417,6 @@ void Generic_Mem_Region::prepare_deletion() noexcept
 
 void Mem_Object_Reference::prepare_deletion() noexcept
 {
-    auto p = owner->object_regions.find(references.get());
-    if (p != owner->object_regions.end())
-        p->second.erase(this);
-
-    if (p->second.empty())
-        owner->object_regions.erase(p);
 }
 
 Mem_Object_Reference::Mem_Object_Reference(void *start_addr, size_t size, klib::string name,

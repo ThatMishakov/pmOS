@@ -801,7 +801,7 @@ klib::shared_ptr<x86_4level_Page_Table> x86_4level_Page_Table::create_clone()
 
     Auto_Lock_Scope_Double lock_guard(this->lock, new_table->lock);
 
-    if (new_table->mem_objects.size() != 0)
+    if (!new_table->paging_regions.empty())
         // Somebody has messed with the page table while it was being created
         // I don't know if it's the best solution to not block the tables
         // immediately but I believe it's better to block them for shorter time
@@ -810,14 +810,11 @@ klib::shared_ptr<x86_4level_Page_Table> x86_4level_Page_Table::create_clone()
         return nullptr;
 
     auto guard = pmos::utility::make_scope_guard([&]() {
-        // Remove all the regions and objects. It might not be necessary, since
+        // Remove all the regions. It might not be necessary, since
         // it should be handled by the destructor but in case somebody from
         // userspace does weird stuff with the
         // not-yet-fully-constructed page table, it's better to give them an
         // empty table
-
-        for (const auto &reg: new_table->mem_objects)
-            reg.first->atomic_unregister_pined(new_table->weak_from_this());
 
         auto ctx = TLBShootdownContext::create_userspace(*new_table);
 
@@ -835,22 +832,6 @@ klib::shared_ptr<x86_4level_Page_Table> x86_4level_Page_Table::create_clone()
             it = new_table->paging_regions.begin();
         }
     });
-
-    for (auto &reg: this->mem_objects) {
-        auto t = new_table->mem_objects.insert(
-            klib::pair<const klib::shared_ptr<Mem_Object>, Mem_Object_Data> {
-                reg.first,
-                {
-                    .max_privilege_mask = reg.second.max_privilege_mask,
-                }});
-        if (not t.second)
-            return nullptr;
-
-        Auto_Lock_Scope reg_lock(reg.first->pinned_lock);
-        auto r = reg.first->register_pined(new_table->weak_from_this());
-        if (r)
-            return nullptr;
-    }
 
     for (auto &reg: this->paging_regions) {
         auto r = reg.clone_to(new_table, reg.start_addr, reg.access_type);

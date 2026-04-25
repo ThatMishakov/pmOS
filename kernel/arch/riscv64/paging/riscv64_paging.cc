@@ -36,6 +36,7 @@
 #include <memory/temp_mapper.hh>
 #include <pmos/utility/scope_guard.hh>
 #include <processes/tasks.hh>
+#include <bit>
 
 using namespace kernel;
 using namespace kernel::paging;
@@ -83,18 +84,18 @@ static ::kernel::paging::Memory_Type pbmt_to_cache_policy(u8 pbmt)
 kresult_t riscv_map_page(u64 pt_top_phys, u64 phys_addr, void *virt_addr,
                          kernel::paging::Page_Table_Arguments arg)
 {
-    Temp_Mapper_Obj<RISCV64_PTE> mapper(request_temp_mapper());
+    Temp_Mapper_Obj<u64> mapper(request_temp_mapper());
 
-    RISCV64_PTE *active_pt = mapper.map(pt_top_phys);
+    u64 *active_pt = mapper.map(pt_top_phys);
     for (int i = riscv64_paging_levels; i > 0; --i) {
         const u8 offset = 12 + (i - 1) * 9;
         const u64 index = (u64(virt_addr) >> offset) & 0x1FF;
 
-        RISCV64_PTE *entry = &active_pt[index];
+        u64 entry_val = __atomic_load_n(active_pt + index, __ATOMIC_ACQUIRE);
+        RISCV64_PTE entry = RISCV64_PTE::from_u64(entry_val);
         if (i == 1) {
             // Leaf page table
-
-            if (entry->valid)
+            if (entry.valid)
                 return -EEXIST;
 
             RISCV64_PTE new_entry = RISCV64_PTE();
@@ -108,12 +109,12 @@ kresult_t riscv_map_page(u64 pt_top_phys, u64 phys_addr, void *virt_addr,
             new_entry.ppn         = phys_addr >> 12;
             new_entry.pbmt        = pbmt_type(arg);
 
-            active_pt[index] = new_entry;
+            __atomic_store_n(active_pt + index, new_entry.into_u64(), __ATOMIC_RELEASE);
             return 0;
         } else {
             // Non-leaf page table
             u64 next_level_phys;
-            if (not entry->valid) {
+            if (not entry.valid) {
                 // Allocate a new page table
                 u64 new_pt_phys = pmm::get_memory_for_kernel(1);
                 if (pmm::alloc_failure(new_pt_phys))
@@ -125,11 +126,11 @@ kresult_t riscv_map_page(u64 pt_top_phys, u64 phys_addr, void *virt_addr,
 
                 next_level_phys = new_pt_phys;
                 clear_page(next_level_phys);
-                __atomic_store_n(entry, new_entry, __ATOMIC_RELEASE);
-            } else if (entry->is_leaf()) {
+                __atomic_store_n(active_pt + index, new_entry.into_u64(), __ATOMIC_RELEASE);
+            } else if (entry.is_leaf()) {
                 return -EEXIST;
             } else {
-                next_level_phys = entry->ppn << 12;
+                next_level_phys = entry.ppn << 12;
             }
 
             active_pt = mapper.map(next_level_phys);
@@ -156,10 +157,11 @@ kresult_t RISCV64_Page_Table::map(pmm::Page_Descriptor page, void *virt_addr,
 
     const int index = ((u64)virt_addr >> 12) & 0x1FF;
 
-    Temp_Mapper_Obj<RISCV64_PTE> mapper(request_temp_mapper());
-    RISCV64_PTE *active_pt = mapper.map(pte_phys.val);
+    Temp_Mapper_Obj<u64> mapper(request_temp_mapper());
+    u64 *active_pt = mapper.map(pte_phys.val);
 
-    auto &entry = active_pt[index];
+    u64 entry_val = __atomic_load_n(active_pt + index, __ATOMIC_ACQUIRE);
+    RISCV64_PTE entry = RISCV64_PTE::from_u64(entry_val);
     if (entry.valid)
         return -EEXIST;
 
@@ -173,7 +175,7 @@ kresult_t RISCV64_Page_Table::map(pmm::Page_Descriptor page, void *virt_addr,
     pte.ppn         = page.takeout_page() >> 12;
     pte.pbmt        = 0;
 
-    entry = pte;
+    __atomic_store_n(active_pt + index, pte.into_u64(), __ATOMIC_RELEASE);
 
     return 0;
 }
@@ -182,36 +184,36 @@ kresult_t riscv_unmap_page(TLBShootdownContext &ctx, u64 pt_top_phys, void *virt
 {
     // TODO: Return values of this function make no sense...
 
-    Temp_Mapper_Obj<RISCV64_PTE> mapper(request_temp_mapper());
+    Temp_Mapper_Obj<u64> mapper(request_temp_mapper());
 
-    RISCV64_PTE *active_pt = mapper.map(pt_top_phys);
+    u64 *active_pt = mapper.map(pt_top_phys);
     for (int i = riscv64_paging_levels; i > 0; --i) {
         const u8 offset = 12 + (i - 1) * 9;
         const u64 index = (u64(virt_addr) >> offset) & 0x1FF;
 
-        RISCV64_PTE *entry = &active_pt[index];
+        u64 entry_val = __atomic_load_n(active_pt + index, __ATOMIC_ACQUIRE);
+        RISCV64_PTE entry = RISCV64_PTE::from_u64(entry_val);
         if (i == 1) {
             // Leaf page table
 
-            if (not entry->valid)
+            if (not entry.valid)
                 return -EFAULT;
 
-            RISCV64_PTE entry = active_pt[index];
             entry.clear_auto();
-            entry            = RISCV64_PTE();
-            active_pt[index] = entry;
+            entry = RISCV64_PTE();
+            __atomic_store_n(active_pt + index, entry.into_u64(), __ATOMIC_RELEASE);
             ctx.invalidate_page(virt_addr);
 
             return 0;
         } else {
             // Non-leaf page table
             u64 next_level_phys;
-            if (not entry->valid) {
+            if (not entry.valid) {
                 return -EFAULT;
-            } else if (entry->is_leaf()) {
+            } else if (entry.is_leaf()) {
                 return -ENOSYS;
             } else {
-                next_level_phys = entry->ppn << 12;
+                next_level_phys = entry.ppn << 12;
             }
 
             active_pt = mapper.map(next_level_phys);
@@ -225,37 +227,37 @@ kresult_t riscv_unmap_page(TLBShootdownContext &ctx, u64 pt_top_phys, void *virt
 void RISCV64_Page_Table::invalidate(TLBShootdownContext &ctx, void *virt_addr, bool free) noexcept
 {
     bool invalidated = false;
-    Temp_Mapper_Obj<RISCV64_PTE> mapper(request_temp_mapper());
+    Temp_Mapper_Obj<u64> mapper(request_temp_mapper());
 
-    RISCV64_PTE *active_pt = mapper.map(table_root);
+    u64 *active_pt = mapper.map(table_root);
     for (int i = riscv64_paging_levels; i > 0; --i) {
         const u8 offset = 12 + (i - 1) * 9;
         const u64 index = ((u64)virt_addr >> offset) & 0x1FF;
 
-        RISCV64_PTE *entry = &active_pt[index];
+        auto entry = RISCV64_PTE::from_u64(__atomic_load_n(active_pt + index, __ATOMIC_ACQUIRE));
         if (i == 1) {
             // Leaf page table
-            if (entry->valid) {
-                if (free and not entry->is_special()) {
+            if (entry.valid) {
+                if (free and not entry.is_special()) {
                     // Free the page
-                    pmm::free_memory_for_kernel(entry->ppn << 12, 1);
+                    pmm::free_memory_for_kernel(entry.ppn << 12, 1);
                 } else {
-                    entry->clear_auto();
+                    entry.clear_auto();
                 }
-                *entry      = RISCV64_PTE();
+                __atomic_store_n(active_pt + index, 0, __ATOMIC_RELEASE);
                 invalidated = true;
             }
             break;
         } else {
             // Non-leaf page table
             u64 next_level_phys;
-            if (not entry->valid) {
+            if (not entry.valid) {
                 break;
-            } else if (entry->is_leaf()) {
+            } else if (entry.is_leaf()) {
                 assert(!"Unexpected huge page!");
                 break;
             } else {
-                next_level_phys = entry->ppn << 12;
+                next_level_phys = entry.ppn << 12;
             }
 
             active_pt = mapper.map(next_level_phys);
@@ -268,27 +270,27 @@ void RISCV64_Page_Table::invalidate(TLBShootdownContext &ctx, void *virt_addr, b
 
 bool RISCV64_Page_Table::is_mapped(void *virt_addr) const noexcept
 {
-    Temp_Mapper_Obj<RISCV64_PTE> mapper(request_temp_mapper());
+    Temp_Mapper_Obj<u64> mapper(request_temp_mapper());
 
-    RISCV64_PTE *active_pt = mapper.map(table_root);
+    u64 *active_pt = mapper.map(table_root);
     for (int i = riscv64_paging_levels; i > 0; --i) {
         const u8 offset = 12 + (i - 1) * 9;
         const u64 index = ((u64)virt_addr >> offset) & 0x1FF;
 
-        RISCV64_PTE *entry = &active_pt[index];
+        auto entry = RISCV64_PTE::from_u64(__atomic_load_n(active_pt + index, __ATOMIC_ACQUIRE));
         if (i == 1) {
             // Leaf page table
-            return entry->valid;
+            return entry.valid;
         } else {
             // Non-leaf page table
             u64 next_level_phys;
-            if (not entry->valid) {
+            if (not entry.valid) {
                 return false;
-            } else if (entry->is_leaf()) {
+            } else if (entry.is_leaf()) {
                 assert(!"Unexpected huge page!");
                 return false;
             } else {
-                next_level_phys = entry->ppn << 12;
+                next_level_phys = entry.ppn << 12;
             }
 
             active_pt = mapper.map(next_level_phys);
@@ -306,7 +308,7 @@ kresult_t RISCV64_Page_Table::copy_to_recursive(const klib::shared_ptr<Page_Tabl
 {
     const u8 offset = 12 + (level - 1) * 9;
 
-    Temp_Mapper_Obj<RISCV64_PTE> mapper(request_temp_mapper());
+    Temp_Mapper_Obj<u64> mapper(request_temp_mapper());
     mapper.map(phys_page_level);
 
     u64 mask        = (1UL << offset) - 1;
@@ -317,7 +319,8 @@ kresult_t RISCV64_Page_Table::copy_to_recursive(const klib::shared_ptr<Page_Tabl
     u64 start_index = (current_copy_from >> offset) & 0x1ff;
 
     for (u64 i = start_index; i < end_index; ++i) {
-        auto pte = mapper.ptr[i];
+        auto pte_uint = mapper.ptr[i];
+        auto pte = RISCV64_PTE::from_u64(pte_uint);
         if (!pte.valid)
             continue;
 
@@ -334,7 +337,7 @@ kresult_t RISCV64_Page_Table::copy_to_recursive(const klib::shared_ptr<Page_Tabl
 
             if (pte.writeable) {
                 pte.writeable = 0;
-                mapper.ptr[i] = pte;
+                __atomic_store_n(mapper.ptr + i, pte.into_u64(), __ATOMIC_RELEASE);
                 ctx.invalidate_page((void *)copy_from);
             }
 
@@ -393,40 +396,41 @@ kresult_t RISCV64_Page_Table::copy_anonymous_pages(const klib::shared_ptr<Page_T
 // TODO: This function had great possibilities, but now seems weird
 static RISCV64_Page_Table::Page_Info get_page_mapping(u64 table_root, const void *virt_addr)
 {
-    Temp_Mapper_Obj<RISCV64_PTE> mapper(request_temp_mapper());
+    Temp_Mapper_Obj<u64> mapper(request_temp_mapper());
 
-    RISCV64_PTE *active_pt = mapper.map(table_root);
+    u64 *active_pt = mapper.map(table_root);
     for (int i = riscv64_paging_levels; i > 0; --i) {
         const u8 offset = 12 + (i - 1) * 9;
         const u64 index = ((u64)virt_addr >> offset) & 0x1FF;
 
-        RISCV64_PTE *entry = &active_pt[index];
+        u64 entry_val = __atomic_load_n(active_pt + index, __ATOMIC_ACQUIRE);
+        RISCV64_PTE entry = RISCV64_PTE::from_u64(entry_val);
         if (i == 1) {
             // Leaf page table
-            if (entry->valid) {
+            if (entry.valid) {
                 Page_Info i {};
-                i.flags        = entry->available;
-                i.is_allocated = entry->valid;
-                i.writeable    = entry->writeable;
-                i.executable   = entry->executable;
-                i.readable     = entry->readable;
-                i.dirty        = entry->dirty;
-                i.user_access  = entry->user;
-                i.page_addr    = entry->ppn << 12;
-                i.nofree       = entry->available & PAGING_FLAG_NOFREE;
+                i.flags        = entry.available;
+                i.is_allocated = entry.valid;
+                i.writeable    = entry.writeable;
+                i.executable   = entry.executable;
+                i.readable     = entry.readable;
+                i.dirty        = entry.dirty;
+                i.user_access  = entry.user;
+                i.page_addr    = entry.ppn << 12;
+                i.nofree       = entry.available & PAGING_FLAG_NOFREE;
                 return i;
             }
             break;
         } else {
             // Non-leaf page table
             u64 next_level_phys;
-            if (not entry->valid) {
+            if (not entry.valid) {
                 break;
-            } else if (entry->is_leaf()) {
+            } else if (entry.is_leaf()) {
                 assert(!"Unexpected huge page!");
                 break;
             } else {
-                next_level_phys = entry->ppn << 12;
+                next_level_phys = entry.ppn << 12;
             }
 
             active_pt = mapper.map(next_level_phys);
@@ -482,17 +486,18 @@ u64 get_idle_pt() noexcept { return idle_pt; }
 ReturnStr<u64> prepare_leaf_pt_for(void *virt_addr,
                                    kernel::paging::Page_Table_Arguments /* unused */, u64 pt_ptr)
 {
-    Temp_Mapper_Obj<RISCV64_PTE> mapper(request_temp_mapper());
+    Temp_Mapper_Obj<u64> mapper(request_temp_mapper());
 
-    RISCV64_PTE *active_pt = mapper.map(pt_ptr);
+    u64 *active_pt = mapper.map(pt_ptr);
     for (int i = riscv64_paging_levels; i > 1; --i) {
         const u8 offset = 12 + (i - 1) * 9;
         const u64 index = (u64(virt_addr) >> offset) & 0x1FF;
 
-        RISCV64_PTE *entry = &active_pt[index];
+        u64 entry_val = __atomic_load_n(active_pt + index, __ATOMIC_ACQUIRE);
+        RISCV64_PTE entry = RISCV64_PTE::from_u64(entry_val);
 
         u64 next_level_phys;
-        if (not entry->valid) {
+        if (not entry.valid) {
             // Allocate a new page table
             u64 new_pt_phys = pmm::get_memory_for_kernel(1);
             if (pmm::alloc_failure(new_pt_phys))
@@ -501,14 +506,15 @@ ReturnStr<u64> prepare_leaf_pt_for(void *virt_addr,
             RISCV64_PTE new_entry = RISCV64_PTE();
             new_entry.valid       = true;
             new_entry.ppn         = new_pt_phys >> 12;
-            *entry                = new_entry;
+            
+            __atomic_store_n(active_pt + index, new_entry.into_u64(), __ATOMIC_RELEASE);
 
             next_level_phys = new_pt_phys;
             clear_page(next_level_phys);
-        } else if (entry->is_leaf()) {
+        } else if (entry.is_leaf()) {
             return Error(-EEXIST);
         } else {
-            next_level_phys = entry->ppn << 12;
+            next_level_phys = entry.ppn << 12;
         }
 
         active_pt = mapper.map(next_level_phys);
@@ -569,8 +575,7 @@ klib::shared_ptr<RISCV64_Page_Table> RISCV64_Page_Table::create_clone()
 
     Auto_Lock_Scope_Double scope_guard(this->lock, new_table->lock);
 
-    if (!new_table->mem_objects.empty() || !new_table->object_regions.empty() ||
-        !new_table->paging_regions.empty())
+    if (!new_table->paging_regions.empty())
         // Somebody has messed with the page table while it was being created
         // I don't know if it's the best solution to not block the tables
         // immediately but I believe it's better to block them for shorter time
@@ -580,14 +585,11 @@ klib::shared_ptr<RISCV64_Page_Table> RISCV64_Page_Table::create_clone()
 
     // This gets called on error
     auto guard = pmos::utility::make_scope_guard([&]() {
-        // Remove all the regions and objects. It might not be necessary, since
+        // Remove all the regions. It might not be necessary, since
         // it should be handled by the destructor but in case somebody from
         // userspace specultively does weird stuff with the
         // not-yet-fully-constructed page table, it's better to give them an
         // empty table
-
-        for (const auto &reg: new_table->mem_objects)
-            reg.first->atomic_unregister_pined(new_table->weak_from_this());
 
         auto tlb_ctx = TLBShootdownContext::create_userspace(*new_table);
 
@@ -604,21 +606,6 @@ klib::shared_ptr<RISCV64_Page_Table> RISCV64_Page_Table::create_clone()
             it = new_table->paging_regions.begin();
         }
     });
-
-    for (auto &reg: this->mem_objects) {
-        auto res =
-            new_table->mem_objects.insert({reg.first,
-                                           {
-                                               .max_privilege_mask = reg.second.max_privilege_mask,
-                                           }});
-        if (res.first == new_table->mem_objects.end())
-            return nullptr;
-
-        Auto_Lock_Scope reg_lock(reg.first->pinned_lock);
-        auto result = reg.first->register_pined(new_table->weak_from_this());
-        if (result)
-            return nullptr;
-    }
 
     for (auto &reg: this->paging_regions) {
         auto result = reg.clone_to(new_table, reg.start_addr, reg.access_type);
@@ -676,33 +663,35 @@ RISCV64_Page_Table::~RISCV64_Page_Table()
 
 void free_pages_in_level(u64 pt_phys, u64 level)
 {
-    Temp_Mapper_Obj<RISCV64_PTE> mapper(request_temp_mapper());
-    RISCV64_PTE *active_pt = mapper.map(pt_phys);
+    Temp_Mapper_Obj<u64> mapper(request_temp_mapper());
+    u64 *active_pt = mapper.map(pt_phys);
 
     for (u64 i = 0; i < 512; ++i) {
-        RISCV64_PTE *entry = &active_pt[i];
-        if (entry->valid) {
+        u64 entry_val = __atomic_load_n(active_pt + i, __ATOMIC_ACQUIRE);
+        RISCV64_PTE entry = RISCV64_PTE::from_u64(entry_val);
+        if (entry.valid) {
             if (level > 1) {
-                assert(!entry->is_leaf());
-                free_pages_in_level(entry->ppn << 12, level - 1);
+                assert(!entry.is_leaf());
+                free_pages_in_level(entry.ppn << 12, level - 1);
             }
 
-            entry->clear_auto();
+            entry.clear_auto();
         }
     }
 }
 
 void RISCV64_Page_Table::free_user_pages()
 {
-    Temp_Mapper_Obj<RISCV64_PTE> mapper(request_temp_mapper());
-    RISCV64_PTE *active_pt = mapper.map(table_root);
+    Temp_Mapper_Obj<u64> mapper(request_temp_mapper());
+    u64 *active_pt = mapper.map(table_root);
 
     for (u64 i = 0; i < 256; ++i) {
-        RISCV64_PTE *entry = &active_pt[i];
-        if (entry->valid and not entry->is_special()) {
-            assert(not entry->is_leaf());
-            free_pages_in_level(entry->ppn << 12, riscv64_paging_levels - 1);
-            pmm::free_memory_for_kernel(entry->ppn << 12, 1);
+        u64 entry_val = __atomic_load_n(active_pt + i, __ATOMIC_ACQUIRE);
+        RISCV64_PTE entry = RISCV64_PTE::from_u64(entry_val);
+        if (entry.valid and not entry.is_special()) {
+            assert(not entry.is_leaf());
+            free_pages_in_level(entry.ppn << 12, riscv64_paging_levels - 1);
+            pmm::free_memory_for_kernel(entry.ppn << 12, 1);
         }
     }
 }
@@ -735,22 +724,19 @@ klib::shared_ptr<RISCV64_Page_Table> RISCV64_Page_Table::create_empty(int flags)
 
     clear_page(new_table->table_root);
 
-    Temp_Mapper_Obj<RISCV64_PTE> new_pt_mapper(request_temp_mapper());
-    Temp_Mapper_Obj<RISCV64_PTE> current_pt_mapper(request_temp_mapper());
+    Temp_Mapper_Obj<u64> new_pt_mapper(request_temp_mapper());
+    Temp_Mapper_Obj<u64> current_pt_mapper(request_temp_mapper());
 
-    RISCV64_PTE *new_pt     = new_pt_mapper.map(new_table->table_root);
-    RISCV64_PTE *current_pt = current_pt_mapper.map(get_current_hart_pt());
+    u64 *new_pt     = new_pt_mapper.map(new_table->table_root);
+    u64 *current_pt = current_pt_mapper.map(get_current_hart_pt());
 
-    // Copy heap entry and kernel entries
-    // Heap
-    new_pt[256] = current_pt[256];
+    // Copy the kernel half of the page table
+    for (size_t i = 256; i < 512; ++i)
+        new_pt[i] = __atomic_load_n(current_pt + i, __ATOMIC_RELAXED);
 
-    // Kernel code
-    new_pt[510] = current_pt[510];
-    new_pt[511] = current_pt[511];
+    __atomic_thread_fence(__ATOMIC_RELEASE);
 
     auto result = new_table->insert_global_page_tables(new_table);
-
     if (result)
         pmm::free_memory_for_kernel(new_table->table_root, 1);
 
@@ -803,20 +789,22 @@ kresult_t RISCV64_Page_Table::resolve_anonymous_page(void *virt_addr, unsigned a
 {
     assert(access_type & Writeable);
 
-    Temp_Mapper_Obj<RISCV64_PTE> mapper(request_temp_mapper());
+    Temp_Mapper_Obj<u64> mapper(request_temp_mapper());
     mapper.map(table_root);
     for (int i = riscv64_paging_levels; i > 1; --i) {
         const u8 offset = 12 + (i - 1) * 9;
         const u64 index = ((u64)virt_addr >> offset) & 0x1FF;
 
-        RISCV64_PTE *entry = &mapper.ptr[index];
-        assert(entry->valid);
-        assert(not entry->is_leaf());
-        mapper.map(entry->ppn << 12);
+        u64 entry_val = __atomic_load_n(mapper.ptr + index, __ATOMIC_ACQUIRE);
+        RISCV64_PTE entry = RISCV64_PTE::from_u64(entry_val);
+        assert(entry.valid);
+        assert(not entry.is_leaf());
+        mapper.map(entry.ppn << 12);
     }
 
     const u64 index   = ((u64)virt_addr >> 12) & 0x1FF;
-    RISCV64_PTE entry = mapper.ptr[index];
+    u64 entry_val = __atomic_load_n(mapper.ptr + index, __ATOMIC_ACQUIRE);
+    RISCV64_PTE entry = RISCV64_PTE::from_u64(entry_val);
     assert(entry.valid);
     assert(entry.available & PAGING_FLAG_STRUCT_PAGE);
     assert(not entry.writeable);
@@ -827,7 +815,7 @@ kresult_t RISCV64_Page_Table::resolve_anonymous_page(void *virt_addr, unsigned a
     if (__atomic_load_n(&page.page_struct_ptr->l.refcount, __ATOMIC_ACQUIRE) == 2) {
         // only owner of the page
         entry.writeable   = 1;
-        mapper.ptr[index] = entry;
+        __atomic_store_n(mapper.ptr + index, entry.into_u64(), __ATOMIC_RELEASE);
         flush_page((void *)virt_addr);
         return 0;
     }
@@ -841,7 +829,7 @@ kresult_t RISCV64_Page_Table::resolve_anonymous_page(void *virt_addr, unsigned a
         return new_descriptor.result;
 
     entry.valid       = false;
-    mapper.ptr[index] = entry;
+    __atomic_store_n(mapper.ptr + index, entry.into_u64(), __ATOMIC_RELEASE);
 
     {
         auto tlb_ctx = TLBShootdownContext::create_userspace(*this);
@@ -850,10 +838,10 @@ kresult_t RISCV64_Page_Table::resolve_anonymous_page(void *virt_addr, unsigned a
 
     u64 new_page_phys = new_descriptor.val.takeout_page();
 
-    Temp_Mapper_Obj<RISCV64_PTE> new_mapper(request_temp_mapper());
+    Temp_Mapper_Obj<void> new_mapper(request_temp_mapper());
     void *new_page = new_mapper.map(new_page_phys);
-    Temp_Mapper_Obj<RISCV64_PTE> old_mapper(request_temp_mapper());
-    void *old_page = old_mapper.map(entry.ppn << 12);
+    Temp_Mapper_Obj<void> old_mapper(request_temp_mapper());
+    const void *old_page = old_mapper.map(entry.ppn << 12);
 
     memcpy(new_page, old_page, 4096);
 
@@ -862,11 +850,18 @@ kresult_t RISCV64_Page_Table::resolve_anonymous_page(void *virt_addr, unsigned a
     entry.valid       = true;
     entry.writeable   = 1;
     entry.ppn         = new_page_phys >> 12;
-    mapper.ptr[index] = entry;
+    __atomic_store_n(mapper.ptr + index, entry.into_u64(), __ATOMIC_RELEASE);
 
     flush_page((void *)virt_addr);
     return 0;
 }
+
+// lol
+RISCV64_PTE RISCV64_PTE::from_u64(u64 val)
+{
+    return std::bit_cast<RISCV64_PTE>(val);
+}
+u64 RISCV64_PTE::into_u64() const { return std::bit_cast<u64>(*this); }
 
 } // namespace kernel::riscv64::paging
 

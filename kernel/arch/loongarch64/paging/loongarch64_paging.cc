@@ -588,8 +588,7 @@ klib::shared_ptr<LoongArch64_Page_Table> LoongArch64_Page_Table::create_clone()
 
     Auto_Lock_Scope_Double scope_guard(this->lock, new_table->lock);
 
-    if (!new_table->mem_objects.empty() || !new_table->object_regions.empty() ||
-        !new_table->paging_regions.empty())
+    if (!new_table->paging_regions.empty())
         // Somebody has messed with the page table while it was being created
         // I don't know if it's the best solution to not block the tables
         // immediately but I believe it's better to block them for shorter time
@@ -599,14 +598,11 @@ klib::shared_ptr<LoongArch64_Page_Table> LoongArch64_Page_Table::create_clone()
 
     // This gets called on error
     auto guard = pmos::utility::make_scope_guard([&]() {
-        // Remove all the regions and objects. It might not be necessary, since
+        // Remove all the regions. It might not be necessary, since
         // it should be handled by the destructor but in case somebody from
         // userspace specultively does weird stuff with the
         // not-yet-fully-constructed page table, it's better to give them an
         // empty table
-
-        for (const auto &reg: new_table->mem_objects)
-            reg.first->atomic_unregister_pined(new_table->weak_from_this());
 
         auto tlb_ctx = TLBShootdownContext::create_userspace(*new_table);
 
@@ -623,21 +619,6 @@ klib::shared_ptr<LoongArch64_Page_Table> LoongArch64_Page_Table::create_clone()
             it = new_table->paging_regions.begin();
         }
     });
-
-    for (auto &reg: this->mem_objects) {
-        auto res =
-            new_table->mem_objects.insert({reg.first,
-                                           {
-                                               .max_privilege_mask = reg.second.max_privilege_mask,
-                                           }});
-        if (res.first == new_table->mem_objects.end())
-            return nullptr;
-
-        Auto_Lock_Scope reg_lock(reg.first->pinned_lock);
-        auto result = reg.first->register_pined(new_table->weak_from_this());
-        if (result)
-            return nullptr;
-    }
 
     for (auto &reg: this->paging_regions) {
         auto result = reg.clone_to(new_table, reg.start_addr, reg.access_type);

@@ -123,7 +123,7 @@ std::array<const char *, 61> syscall_names = {
     "SYSCALL PAUSE TASK",
     "SYSCALL RESUME TASK",
     "SYSCALL GET PAGE ADDRESS",
-    "SYSCALL RELEASE MEM OBJECT",
+    "UNUSED!!!!",
     "SYSCALL MEM OBJECT GET PAGE ADDRESS",
     "SYSCALL DELETE PORT",
     "SYSCALL ALLOCATE INTERRUPT",
@@ -200,7 +200,7 @@ std::array<syscall_function, 61> syscall_table = {
     syscall_pause_task,
     syscall_resume_task,
     syscall_get_page_address,
-    syscall_unreference_mem_object,
+    nullptr,
     syscall_get_page_address_from_object,
     syscall_delete_port,
     syscall_cpu_for_interrupt,
@@ -2112,25 +2112,6 @@ void syscall_get_page_address_from_object()
     }
 
     syscall_return(current_task) = page.val.get_phys_addr();
-}
-
-void syscall_unreference_mem_object()
-{
-    auto current_task = get_current_task();
-    auto object_id    = syscall_arg64(current_task, 0);
-
-    auto object = Mem_Object::get_object(object_id);
-    if (!object) {
-        syscall_error(current_task) = -ENOENT;
-        return;
-    }
-
-    auto result = current_task->page_table->atomic_unpin_memory_object(object);
-    if (result) {
-        syscall_error(current_task) = result;
-        return;
-    }
-    syscall_success(current_task);
 }
 
 void syscall_cpu_for_interrupt()

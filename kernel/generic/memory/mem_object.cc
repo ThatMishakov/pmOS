@@ -362,70 +362,70 @@ ReturnStr<pmm::Page_Descriptor> Mem_Object::request_page(u64 offset, bool write,
     assert(false);
 }
 
-kresult_t Mem_Object::atomic_resize(u64 new_size_pages)
-{
-    Auto_Lock_Scope resize_l(resize_lock);
+// kresult_t Mem_Object::atomic_resize(u64 new_size_pages)
+// {
+//     Auto_Lock_Scope resize_l(resize_lock);
 
-    u64 old_size;
+//     u64 old_size;
 
-    {
-        Auto_Lock_Scope l(lock);
+//     {
+//         Auto_Lock_Scope l(lock);
 
-        // Firstly, change the pages_size before resizing the vector. This is needed because even
-        // though the object has been shrunk, there might still be regions referencing pages in it,
-        // so notify page tables of the change before shrinking the vector and releasing pages to
-        // stop people from writing to the pages that were freed.
-        old_size   = pages_size;
-        pages_size = new_size_pages;
+//         // Firstly, change the pages_size before resizing the vector. This is needed because even
+//         // though the object has been shrunk, there might still be regions referencing pages in it,
+//         // so notify page tables of the change before shrinking the vector and releasing pages to
+//         // stop people from writing to the pages that were freed.
+//         old_size   = pages_size;
+//         pages_size = new_size_pages;
 
-        // If the new size is larger, there is no need to shrink memory regions
-        if (old_size <= new_size_pages) {
-            return 0;
-        }
-    }
+//         // If the new size is larger, there is no need to shrink memory regions
+//         if (old_size <= new_size_pages) {
+//             return 0;
+//         }
+//     }
 
-    const auto self           = shared_from_this();
-    const auto new_size_bytes = new_size_pages << page_size_log;
+//     const auto self           = shared_from_this();
+//     const auto new_size_bytes = new_size_pages << page_size_log;
 
-    {
-        Auto_Lock_Scope l(pinned_lock);
-        for (const auto &a: pined_by) {
-            const auto ptr = a.lock();
-            if (ptr)
-                ptr->atomic_shrink_regions(self, new_size_bytes);
-        }
-    }
+//     {
+//         Auto_Lock_Scope l(pinned_lock);
+//         for (const auto &a: pined_by) {
+//             const auto ptr = a.lock();
+//             if (ptr)
+//                 ptr->atomic_shrink_regions(self, new_size_bytes);
+//         }
+//     }
 
-    pmm::Page *pages = nullptr;
+//     pmm::Page *pages = nullptr;
 
-    {
-        Auto_Lock_Scope l(lock);
+//     {
+//         Auto_Lock_Scope l(lock);
 
-        pmm::Page **erase_ptr_head = &pages_storage;
-        while (*erase_ptr_head) {
-            pmm::Page *current = *erase_ptr_head;
+//         pmm::Page **erase_ptr_head = &pages_storage;
+//         while (*erase_ptr_head) {
+//             pmm::Page *current = *erase_ptr_head;
 
-            if (current->l.offset >= new_size_pages) {
-                *erase_ptr_head = current->l.next;
-                current->l.next = pages;
-                pages           = current;
-            } else {
-                if (current->l.next == nullptr)
-                    break;
+//             if (current->l.offset >= new_size_pages) {
+//                 *erase_ptr_head = current->l.next;
+//                 current->l.next = pages;
+//                 pages           = current;
+//             } else {
+//                 if (current->l.next == nullptr)
+//                     break;
 
-                erase_ptr_head = &current->l.next;
-            }
-        }
-    }
+//                 erase_ptr_head = &current->l.next;
+//             }
+//         }
+//     }
 
-    while (pages) {
-        pmm::Page *next = pages->l.next;
-        pages           = next;
-        pmm::Page_Descriptor::from_raw_ptr(pages);
-    }
+//     while (pages) {
+//         pmm::Page *next = pages->l.next;
+//         pages           = next;
+//         pmm::Page_Descriptor::from_raw_ptr(pages);
+//     }
 
-    return 0;
-}
+//     return 0;
+// }
 
 klib::shared_ptr<Mem_Object> Mem_Object::get_object(u64 object_id)
 {

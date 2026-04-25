@@ -243,9 +243,6 @@ public:
     kresult_t release_in_range(TLBShootdownContext &ctx, void *start, size_t size);
     kresult_t atomic_release_in_range(void *start, size_t size);
 
-    /// Moves the memory object to the new page table
-    kresult_t atomic_transfer_object(const klib::shared_ptr<Page_Table> &new_table, u64 memory_object_id);
-
     /**
      * @brief Creates a normal memory region
      *
@@ -509,34 +506,6 @@ public:
     virtual Page_Info get_page_mapping(void *virt_addr) const = 0;
 
     /**
-     * @brief Pin a memory object to the page table
-     *
-     * This function pins a reference (pointer) to the memory object to this page table. If the
-     * object was already pinned, nothing should be done.
-     *
-     * @param object A valid pointer to the object to be pinned.
-     */
-    kresult_t atomic_pin_memory_object(klib::shared_ptr<Mem_Object> object);
-
-    /**
-     * @brief Remove a reference to the memory object from the page table
-     *
-     * @param object Object to be removed
-     */
-    kresult_t atomic_unpin_memory_object(klib::shared_ptr<Mem_Object> object);
-
-    /**
-     * @brief Shrink memory regions referencing *id*
-     *
-     * This procedure cheks all the memory regions if they go out of bound of the new size and
-     * shrinks the memory regions that are larger than it accordingly
-     *
-     * @param id Memory region that is shrunk
-     * @param new_size New size of the region in bytes
-     */
-    void atomic_shrink_regions(const klib::shared_ptr<Mem_Object> &id, u64 new_size) noexcept;
-
-    /**
      * @brief Deletes a memory region identified by (starting at) *region_start*
      *
      * @param region_start Start of the memory region
@@ -545,15 +514,6 @@ public:
      * is not, an error is thrown
      */
     kresult_t atomic_delete_region(void *region_start);
-
-    /**
-     * @brief Unreferences memory region from memory object
-     *
-     * @param object Memory object associated with the region
-     * @param region Memory region to be deleted
-     */
-    void unreference_object(const klib::shared_ptr<Mem_Object> &object,
-                            Mem_Object_Reference *region) noexcept;
 
     /**
      * @brief Invalidates the TLB entries for the given page in the given page table
@@ -608,16 +568,6 @@ protected:
 
     /// Gets the region for the page. Returns end() if no region exists
     RegionsRBTree::RBTreeIterator get_region(void *page);
-
-    /// Storage for the pointers to the pinned memory objects
-    klib::splay_tree_map<klib::shared_ptr<Mem_Object>, Mem_Object_Data> mem_objects;
-
-    using objects_set = pmos::containers::RedBlackTree<
-        Mem_Object_Reference, &Mem_Object_Reference::object_bst_head,
-        detail::TreeCmp<Mem_Object_Reference, u64, &Mem_Object_Reference::start_addr>>::RBTreeHead;
-
-    /// Storage for regions for memory objects
-    klib::splay_tree_map<Mem_Object *, objects_set> object_regions;
 
     // TODO: This is not good
     friend struct Mem_Object_Reference;

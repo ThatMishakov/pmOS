@@ -50,9 +50,6 @@ Page_Table::~Page_Table()
     for (auto &i: paging_regions)
         i.prepare_deletion();
 
-    for (const auto &p: mem_objects)
-        p.first->atomic_unregister_pined(weak_from_this());
-
     auto it = paging_regions.begin();
     while (it != paging_regions.end()) {
         auto next = it;
@@ -262,16 +259,6 @@ ReturnStr<Mem_Object_Reference *> Page_Table::atomic_create_mem_object_region(
         if (r)
             return Error(r);
     }
-
-    auto it = object_regions.find(object.get());
-    if (it == object_regions.end()) {
-        auto result = object_regions.insert({object.get(), {}});
-        if (result.first == object_regions.end())
-            return Error(-ENOMEM);
-
-        it = result.first;
-    }
-    it->second.insert(region.get());
 
     paging_regions.insert(region.get());
     return Success(region.release());
@@ -509,123 +496,6 @@ void Page_Table::trigger_shootdown(Page_Table *maybe_page_table, sched::CPU_Info
     }
 }
 
-kresult_t Page_Table::atomic_pin_memory_object(klib::shared_ptr<Mem_Object> object)
-{
-    // TODO: I have changed the order of locking, which might cause deadlocks elsewhere
-    Auto_Lock_Scope l(lock);
-    auto inserted = mem_objects.insert({object, Mem_Object_Data()});
-
-    if (inserted.first == mem_objects.end())
-        return -ENOMEM;
-    inserted.first->second.handles_ref_count++;
-
-    pmos::utility::scope_guard guard([&]() {
-        if (--inserted.first->second.handles_ref_count == 0)
-            mem_objects.erase(inserted.first);
-    });
-
-    if (inserted.second) {
-        Auto_Lock_Scope object_lock(object->pinned_lock);
-        auto result = object->register_pined(weak_from_this());
-        if (result)
-            return result;
-    }
-
-    guard.dismiss();
-
-    return 0;
-}
-
-kresult_t Page_Table::atomic_unpin_memory_object(klib::shared_ptr<Mem_Object> object)
-{
-    Auto_Lock_Scope l(lock);
-    auto it = mem_objects.find(object);
-    if (it == mem_objects.end())
-        return -ENOENT;
-
-    assert(it->second.handles_ref_count > 0);
-
-    if (--it->second.handles_ref_count == 0) {
-        mem_objects.erase(it);
-        object->atomic_unregister_pined(weak_from_this());
-    }
-
-    return 0;
-}
-
-kresult_t Page_Table::atomic_transfer_object(const klib::shared_ptr<Page_Table> &new_table,
-                                             u64 memory_object_id)
-{
-    auto object = Mem_Object::get_object(memory_object_id);
-    if (!object)
-        return -ENOENT;
-
-    Auto_Lock_Scope_Double l(lock, new_table->lock);
-    auto it = mem_objects.find(object);
-    if (it == mem_objects.end())
-        return -ENOENT;
-
-    if (this == new_table.get())
-        return 0;
-
-    auto inserted = new_table->mem_objects.insert({object, Mem_Object_Data()});
-    if (inserted.first == new_table->mem_objects.end())
-        return -ENOMEM;
-
-    inserted.first->second.max_privilege_mask |= it->second.max_privilege_mask;
-    inserted.first->second.handles_ref_count++;
-    if (inserted.second) {
-        auto result = object->atomic_register_pined(new_table);
-        if (result)
-            return result;
-    }
-
-    assert(it->second.handles_ref_count > 0);
-    if (--it->second.handles_ref_count == 0) {
-        mem_objects.erase(it);
-        object->atomic_unregister_pined(weak_from_this());
-    }
-
-    return 0;
-}
-
-void Page_Table::atomic_shrink_regions(const klib::shared_ptr<Mem_Object> &id,
-                                       u64 new_size) noexcept
-{
-    Auto_Lock_Scope l(lock);
-    auto ctx = TLBShootdownContext::create_userspace(*this);
-
-    auto p = object_regions.find(id.get());
-    if (p == object_regions.end())
-        return;
-
-    auto it = p->second.begin();
-    while (it != p->second.end()) {
-        const auto reg = it;
-        ++it;
-
-        const auto object_end = reg->object_up_to();
-        if (object_end < new_size) {
-            const auto change_size_to =
-                new_size > reg->start_offset_bytes ? new_size - reg->start_offset_bytes : 0UL;
-
-            void *const free_from = (char *)reg->start_addr + change_size_to;
-            const auto free_size  = (char *)reg->addr_end() - (char *)free_from;
-
-            if (change_size_to == 0) { // Delete region
-                reg->prepare_deletion();
-                paging_regions.erase(reg);
-                reg->rcu_free();
-            } else { // Resize region
-                reg->size = change_size_to;
-            }
-
-            invalidate_range(ctx, free_from, free_size, true);
-            unblock_tasks_range(free_from, free_size);
-        }
-    }
-}
-
 kresult_t Page_Table::atomic_delete_region(void *region_start)
 {
     Auto_Lock_Scope l(lock);
@@ -646,15 +516,6 @@ kresult_t Page_Table::atomic_delete_region(void *region_start)
     unblock_tasks_range(region_start, region_size);
 
     return 0;
-}
-
-void Page_Table::unreference_object(const klib::shared_ptr<Mem_Object> &object,
-                                    Mem_Object_Reference *region) noexcept
-{
-    auto p = object_regions.find(object.get());
-
-    if (p != object_regions.end())
-        p->second.erase(region);
 }
 
 void Page_Table::unblock_tasks_range(void *blocked_by_page, size_t size_bytes)

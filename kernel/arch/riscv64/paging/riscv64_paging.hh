@@ -87,6 +87,9 @@ struct RISCV64_PTE {
 
     /// Clears the entry, freeing the memory if needed
     void clear_auto();
+
+    u64 into_u64() const;
+    static RISCV64_PTE from_u64(u64 pte);
 } __attribute__((packed, aligned(8)));
 
 constexpr ulong RISCV_PAGE_VALID = 1 << 0;
