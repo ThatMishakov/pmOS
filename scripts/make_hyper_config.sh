@@ -33,13 +33,14 @@ binary:
     path = "/kernel"
 EOF
 
-if [ -neq "$JINX_ARCH" "i686" ]; then
+if [ "$JINX_ARCH" != "i686" ]; then
     cat <<EOF >> "$FILE"
     allocate-anywhere = true
 EOF
 fi
 
 cat <<EOF >> "$FILE"
+
 module:
     path = "/bootstrapd"
     name = "bootstrapd;bootstrap"
