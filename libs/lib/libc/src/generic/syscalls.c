@@ -203,13 +203,19 @@ result_t __pmos_request_timer(pmos_port_t port, uint64_t ns, uint64_t extra)
 //     return t;
 // }
 
-syscall_r set_interrupt(pmos_port_t port, uint32_t intno, uint32_t flags)
+right_request_t set_interrupt(pmos_right_t right, pmos_port_t port)
 {
+    syscall_r r;
 #ifdef __32BITSYSCALL
-    return __pmos_syscall32_3words(SYSCALL_SET_INTERRUPT | (flags << 8), port, intno);
+    r = __pmos_syscall32_4words(SYSCALL_SET_INTERRUPT, right, port);
 #else
-    return pmos_syscall(SYSCALL_SET_INTERRUPT | (flags << 8), port, intno);
+    r = pmos_syscall(SYSCALL_SET_INTERRUPT, right, port);
 #endif
+    right_request_t ret = {
+        .result = r.result,
+        .right = r.value,
+    };
+    return ret;
 }
 
 // result_t name_port(pmos_port_t portnum, const char *name, size_t length, uint32_t flags)
@@ -444,12 +450,12 @@ result_t set_affinity(uint64_t tid, uint32_t cpu_id, unsigned flags)
 #endif
 }
 
-result_t complete_interrupt(uint32_t intno)
+result_t complete_interrupt(pmos_port_t port, pmos_right_t receive_right)
 {
 #ifdef __32BITSYSCALL
-    return __pmos_syscall32_1words(SYSCALL_COMPLETE_INTERRUPT, intno).result;
+    return __pmos_syscall32_4words(SYSCALL_COMPLETE_INTERRUPT, port, recieve_right).result;
 #else
-    return pmos_syscall(SYSCALL_COMPLETE_INTERRUPT, intno).result;
+    return pmos_syscall(SYSCALL_COMPLETE_INTERRUPT, port, recieve_right).result;
 #endif
 }
 
@@ -557,7 +563,7 @@ phys_addr_request_t get_page_phys_address_from_object(mem_object_t object_id, ui
     return t;
 }
 
-pmos_int_r allocate_interrupt(uint32_t gsi, uint32_t flags)
+right_request_t allocate_interrupt(uint32_t gsi, uint32_t flags)
 {
     syscall_r result;
 #ifdef __32BITSYSCALL
@@ -565,10 +571,9 @@ pmos_int_r allocate_interrupt(uint32_t gsi, uint32_t flags)
 #else
     result = pmos_syscall(SYSCALL_ALLOCATE_INTERRUPT | (flags << 8), gsi);
 #endif
-    return (pmos_int_r) {
+    return (right_request_t) {
         .result = result.result,
-        .cpu    = result.value & 0xffffffff,
-        .vector = result.value >> 32,
+        .right = result.value,
     };
 }
 

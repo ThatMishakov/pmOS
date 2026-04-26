@@ -178,7 +178,13 @@ struct CPU_Info {
 #endif
 
     // ISRs in userspace
-    interrupts::Interrupt_Handler_Table int_handlers;
+    #if defined(__x86_64__) || defined(__i386__)
+    // Hopefully, a comment somewhere else explains why it's 256 - 48
+    std::array<InterruptHandler *, 256 - 48> isr_handlers;
+    #endif
+    // TODO: APLIC on RISC-V and other per-CPU controller memes...
+    // Also, this is a random place to leave this comment, but it would be nice to implement the ELF TLS thing
+    // instead of having all of the CPU-local stuff here, by whomever happens to read this (maybe not me at some point???) :P
 
     static constexpr int IPI_RESCHEDULE    = 0x1;
     static constexpr int IPI_TLB_SHOOTDOWN = 0x2;

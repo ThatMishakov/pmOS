@@ -462,4 +462,16 @@ void Message::delete_self()
     delete this;
 }
 
+RecieveRight *Port::atomic_get_right(u64 right_id)
+{
+    assert(sched::get_current_task() == owner);
+
+    // The lock has to be held here, because other threads can delete the right...
+    Auto_Lock_Scope l(rights_lock);
+    auto right = rights.find(right_id);
+    if (right == rights.end())
+        return nullptr;
+    return right;
+}
+
 } // namespace kernel::ipc

@@ -50,6 +50,8 @@ public:
     void pop_front() noexcept;
     bool is_empty() const noexcept;
 
+    RecieveRight *atomic_get_right(u64 right_id);
+
     /**
      * @brief Destructor of port
      *

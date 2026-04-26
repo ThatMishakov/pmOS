@@ -399,18 +399,17 @@ typedef struct pmos_int_r {
     uint32_t vector;
 } pmos_int_r;
 
-/// @brief Assigns an interrupt vector to the given interrupt.
+/// @brief Assigns an interrupt vector for the given interrupt, and returns the right for it
 ///
 /// This function assigns an CPU interrupt vector for a given GSI. Internally, this may also
 /// configure interrupt controllers (for example, IOAPICs on x86) as necessary such that
 /// after the vector has been mapped, the interrupts at GSI will be recieved by it.
 /// If the interrupt has already been assigned, the function should not return error,
-/// and will return the same interrupt number.
+/// and will just create a new right for the same source.
 /// @param gsi GSI for which the vector should be assigned
 /// @param flags Flags
-/// @return On success, returns the CPU to which the interrupt has been assigned (using kernel's
-/// numbering, starting at 1 for the bootstrap CPU), and the CPU-local interrupt vector.
-pmos_int_r allocate_interrupt(uint32_t gsi, uint32_t flags);
+/// @return On success, returns the interrupt source right for the GSI.
+right_request_t allocate_interrupt(uint32_t gsi, uint32_t flags);
 
     #define PMOS_INTERRUPT_LEVEL_TRIG 0x01
     #define PMOS_INTERRUPT_ACTIVE_LOW 0x02

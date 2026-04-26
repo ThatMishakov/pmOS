@@ -429,7 +429,22 @@ RightType SendOnceRight::type() const
     return RightType::SendOnce;
 }
 
+RightType SendOnceRight::recieve_type() const
+{ 
+    return RightType::SendOnce;
+}
+
 RightType SendManyRight::type() const
+{
+    return RightType::SendMany;
+}
+
+RightType SendManyRight::recieve_type() const
+{
+    return RightType::SendMany;
+}
+
+RightType SendManyRightShared::recieve_type() const
 {
     return RightType::SendMany;
 }

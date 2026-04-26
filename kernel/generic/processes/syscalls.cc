@@ -349,6 +349,28 @@ static ReturnStr<klib::shared_ptr<Mem_Object>> mem_object_for_right(TaskDescript
     return mem_object_right->mem_object;
 }
 
+static ReturnStr<InterruptHandler *> interrupt_handler_for_right(TaskDescriptor *task, u64 right_id)
+{
+    auto group = task->get_rights_namespace();
+    if (!group)
+        return Error(-ESRCH);
+
+    auto right = group->atomic_get_right(right_id);
+    if (!right)
+        return Error(-ENOENT);
+
+    if (!right->atomic_alive())
+        return Error(-ENOENT);
+
+    if (right->type() != RightType::InterruptSource)
+        return Error(-EPERM);
+
+    auto interrupt_right = static_cast<IntSourceRight *>(right);
+    assert(interrupt_right->parent_handler);
+    
+    return interrupt_right->parent_handler;
+}
+
 void syscall_load_executable()
 {
     task_ptr task = get_current_task();
@@ -1062,13 +1084,11 @@ void syscall_create_port()
 
 void syscall_set_interrupt()
 {
-#if defined(__riscv) || defined(__x86_64__) || defined(__i386__) || defined(__loongarch__)
     auto c               = sched::get_cpu_struct();
     const task_ptr &task = c->current_task;
 
-    u64 port    = syscall_arg64(task, 0);
-    ulong intno = syscall_arg(task, 1, 1);
-    ulong flags = syscall_flags(task);
+    u64 right   = syscall_arg64(task, 0);
+    u64 port    = syscall_arg64(task, 1);
 
     auto port_ptr = Port::atomic_get_port(port);
     if (!port_ptr) {
@@ -1076,32 +1096,58 @@ void syscall_set_interrupt()
         return;
     }
 
-    syscall_return(task) = intno;
-    auto result          = c->int_handlers.add_handler(intno, port_ptr);
-    if (result < 0)
-        syscall_error(task) = result;
-#else
-    #error Unknown architecture
-#endif
+    if (port_ptr->owner != task) {
+        syscall_error(task) = -EPERM;
+        return;
+    }
+
+    auto handler = interrupt_handler_for_right(task, port);
+    if (!handler.success()) {
+        syscall_error(task) = handler.result;
+        return;
+    }
+
+    auto recieve_right = IntNotificationRight::create_for_port(handler.val, port_ptr);
+    if (!recieve_right) {
+        syscall_error(task) = -ENOMEM;
+        return;
+    }
+
+    syscall_return(task) = recieve_right.val->right_parent_id;
 }
 
 void syscall_complete_interrupt()
 {
-#if defined(__riscv) || defined(__x86_64__) || defined(__i386__) || defined(__loongarch__)
     auto c               = sched::get_cpu_struct();
     const task_ptr &task = c->current_task;
 
-    ulong intno = syscall_arg(task, 0, 0);
+    u64 port = syscall_arg64(task, 0);
+    u64 right_id = syscall_arg64(task, 1);
 
-    auto result = c->int_handlers.ack_interrupt(intno, task->task_id);
-    if (result < 0) {
-        serial_logger.printf("Error acking interrupt: %i, task %i intno %i CPU %i task CPU %i\n",
-                             result, task->task_id, intno, c->cpu_id, task->cpu_affinity - 1);
+    auto port_ptr = Port::atomic_get_port(port);
+    if (!port_ptr) {
+        syscall_error(task) = -ENOENT;
+        return;
     }
-    syscall_error(task) = result;
-#else
-    #error Unknown architecture
-#endif
+
+    if (port_ptr->owner != task) {
+        syscall_error(task) = -EPERM;
+        return;
+    }
+
+    auto right = port_ptr->atomic_get_right(right_id);
+    if (!right) {
+        syscall_error(task) = -ENOENT;
+        return;
+    }
+
+    if (right->recieve_type() != RightType::InterruptNotification) {
+        syscall_error(task) = -EBADF;
+        return;
+    }
+    auto notification_right = static_cast<IntNotificationRight *>(right);
+
+    syscall_error(task) = notification_right->complete();
 }
 
 void syscall_set_log_port()
@@ -2104,15 +2150,27 @@ void syscall_cpu_for_interrupt()
     bool edge       = !(flags & 0x01);
     bool active_low = (flags & 0x02);
 
-    auto result = allocate_interrupt_single(gsi, edge, active_low);
+    auto group = current_task->rights_namespace.load(std::memory_order::consume);
+    if (!group) {
+        syscall_error(current_task) = -ESRCH;
+        return;
+    }
+
+    // TODO: Check permissions here (superuser right or something)
+
+    auto result = allocate_or_get_handler(gsi, edge, active_low);
     if (!result.success()) {
         syscall_error(current_task) = result.result;
         return;
     }
 
-    assert(result.val.first);
-    syscall_return(current_task) = (result.val.first->cpu_id + 1) | (uint64_t)(result.val.second)
-                                                                        << 32;
+    auto right = IntSourceRight::create_for_group(result.val, group);
+    if (!right.success()) {
+        syscall_error(current_task) = right.result;
+        return;
+    }
+
+    syscall_return(current_task) = right.val->right_sender_id;
 }
 
 void syscall_set_right0()

@@ -27,6 +27,8 @@ enum class RightType : u8 {
     SendOnce,
     SendMany,
     MemObject,
+    InterruptSource,
+    InterruptNotification,
 };
 
 struct Right {
@@ -94,6 +96,8 @@ struct RecieveRight: GenericMessage {
     virtual bool destroy_recieve_right() = 0;
     virtual ~RecieveRight() = default;
 
+    virtual RightType recieve_type() const = 0;
+
     // GenericMessage overrides
     virtual size_t size() const override;
     virtual ReturnStr<bool> copy_to_user_buff(char *buff) const override;
@@ -119,10 +123,13 @@ struct SendManyRightShared;
 struct SendManyRight final: SendRight {
     virtual u64 right_id_in_reciever() const override;
 
+    // This stuff is racey, and allows to potentially leak the right IDs in the namespace of the reciever,
+    // if this right gets sent, before the ID has been returned to userspace, which seems like a very small issue, but is it?
     static ReturnStr<SendManyRight *> create_for_group(Port *port, proc::TaskGroup *group, u64 id_in_parent);
 
     virtual ReturnStr<std::pair<Right *, u64>> duplicate(proc::TaskGroup *) override;
     virtual RightType type() const override;
+    virtual RightType recieve_type() const override;
 
     virtual bool destroy_nolock(DestroyReason reason, proc::TaskGroup *match_group = nullptr) override;
 
@@ -150,6 +157,7 @@ struct SendOnceRight final: SendRight {
 
     virtual ReturnStr<std::pair<Right *, u64>> duplicate(proc::TaskGroup *) override;
     virtual RightType type() const override;
+    virtual RightType recieve_type() const override;
 
     // Right overrides
     virtual bool destroy_nolock(DestroyReason reason, proc::TaskGroup *match_group = nullptr) override;
@@ -169,6 +177,7 @@ struct SendManyRightShared final: RecieveRight {
     void rcu_push();
 
     virtual bool destroy_recieve_right() override;
+    virtual RightType recieve_type() const override;
 
     // GenericMessage overrides
     virtual void delete_self() override;

@@ -105,7 +105,7 @@ void syscall_get_lapic_id();
 
 // Programs interrupt to send the message to the right port
 void syscall_set_interrupt();
-// Parameters: uint64_t port, u64 intno, u64 flags
+// Parameters: uint64_t right_id, uint64_t port_id
 
 // Assigns a name to port
 void syscall_name_port();

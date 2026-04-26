@@ -153,6 +153,9 @@ namespace proc
         // Task groups. Using sched_lock...
         pmos::containers::set<TaskGroup *> task_groups;
 
+        // Count of handlers for interrupts. Also using sched_lock
+        size_t interrupt_handlers_count = 0;
+
         // Creates and assigns an emty valid page table
         kresult_t create_new_page_table();
 
@@ -240,8 +243,7 @@ namespace proc
         u64 syscall_num = 0;
 
         // Interrupts handlers
-        pmos::containers::set<interrupts::Interrupt_Handler *> interrupt_handlers;
-        inline bool can_be_rebound() { return interrupt_handlers.empty(); }
+        inline bool can_be_rebound() { return !interrupt_handlers_count; }
 
         // Debugging
         bool cleaned_up = false;

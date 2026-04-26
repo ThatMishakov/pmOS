@@ -865,11 +865,6 @@ void TaskDescriptor::cleanup()
         tasks_map.erase(this);
     }
 
-    auto c = sched::get_cpu_struct();
-    for (auto &interr: interrupt_handlers) {
-        c->int_handlers.remove_handler(interr->interrupt_number);
-    }
-
     auto get_first_port = [&]() -> ipc::Port * {
         Auto_Lock_Scope scope_lock(sched_lock);
         auto it = owned_ports.begin();
