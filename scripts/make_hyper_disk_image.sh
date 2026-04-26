@@ -47,9 +47,8 @@ mcopy -i "$BOOT_PARTITION" "${BOOT_DIR}/bootstrapd" "::/bootstrapd"
 # Copy hyper
 mmd -i "$BOOT_PARTITION" "::/EFI"
 mmd -i "$BOOT_PARTITION" "::/EFI/BOOT"
-mcopy -i "$BOOT_PARTITION" "/usr/local/share/hyper/BOOT"* "::/EFI/BOOT/"
-# mcopy -i "$BOOT_PARTITION" "/usr/local/share/hyper/BOOTX64.EFI" "::/EFI/BOOT/"
-# mcopy -i "$BOOT_PARTITION" "/usr/local/share/hyper/BOOTAAARCH64.elf" "::/EFI/BOOT/"
+mcopy -i "$BOOT_PARTITION" "/usr/local/share/hyper/BOOTX64.EFI" "::/EFI/BOOT/BOOTX64.EFI"
+mcopy -i "$BOOT_PARTITION" "/usr/local/share/hyper/BOOTAA64.EFI" "::/EFI/BOOT/BOOTAA64.EFI"
 
 # Copy services
 for SERVICE in $SERVICES; do

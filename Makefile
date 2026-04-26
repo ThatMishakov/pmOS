@@ -79,6 +79,7 @@ qemu-x86: $(x86_64-IMG) ovmf-x86
 qemu-x86-hyper: $(x86_64-HYPER-IMG) ovmf-x86
 	qemu-system-x86_64 \
 		-drive file=$(x86_64-HYPER-IMG),if=none,id=hdd0\
+		-smbios type=0,uefi=on -bios ovmf-x86/OVMF.fd\
     	-device ide-hd,drive=hdd0 \
 		-M q35\
 		-m 512M\
@@ -87,7 +88,7 @@ qemu-x86-hyper: $(x86_64-HYPER-IMG) ovmf-x86
 		-device intel-iommu -cpu max,x2apic=on,+smep,+smap
 
 qemu-i686: $(i686-IMG) ovmf-x86
-	qemu-system-i386 -serial stdio -m 512M -cpu max,+hypervisor,+invtsc,+tsc-deadline -M q35 -hdd $(i686-IMG) -smp 4
+	qemu-system-i386 -serial stdio -m 512M -cpu max,+hypervisor,+invtsc,+tsc-deadline -M q35 -hdd $(i686-IMG) -smp 4 
 
 qemu-kvm: $(ISO) ovmf-x86
 	qemu-system-x86_64 -serial stdio -bios ovmf-x86/OVMF.fd -m 512M -cpu max,+hypervisor,+invtsc,+tsc-deadline -M q35 -accel kvm -cdrom limine/pmOS.iso -smp 1
