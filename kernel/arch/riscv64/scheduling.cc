@@ -500,7 +500,7 @@ CPU_Info *prepare_cpu(u64 hart_id)
     i->temp_mapper =
         RISCV64_Temp_Mapper(temp_mapper_start, kernel::paging::idle_page_table->get_root());
 
-    i->cpu_id = cpus.size() - 1;
+    i->cpu_id = cpus.size();
     if (!cpus.push_back(i))
         panic("Failed to push CPU to waiers...");
 
@@ -636,8 +636,8 @@ klib::vector<u64> initialize_cpus(const klib::vector<u64> &hartids)
         i->temp_mapper =
             RISCV64_Temp_Mapper(temp_mapper_start, kernel::paging::idle_page_table->get_root());
 
+        i->cpu_id = cpus.size();
         cpus.push_back(i);
-        i->cpu_id = cpus.size() - 1;
 
         auto s = get_isa_string(hart_id);
         if (s.result == 0) {
@@ -680,6 +680,7 @@ extern bool boot_barrier_start;
 extern "C" void bootstrap_entry(u64 hart_id, CPU_Info *i)
 {
     assert(hart_id == i->hart_id);
+    assert(cpus[i->cpu_id] == i);
     set_cpu_struct(i);
     set_sscratch((u64)i);
     program_stvec();

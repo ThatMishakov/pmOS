@@ -240,6 +240,7 @@ ReturnStr<IntNotificationRight *> IntNotificationRight::create_for_port(Interrup
         if (parent_task->cpu_affinity != (cpu->cpu_id + 1))
             return Error(-EINTR);
 
+        assert(sched::get_cpu_struct()->cpu_id == cpu->cpu_id);
         assert(sched::get_cpu_struct() == cpu);
 
         Auto_Lock_Scope l1(handler->sources_lock);

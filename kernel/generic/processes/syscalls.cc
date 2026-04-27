@@ -1856,7 +1856,7 @@ void syscall_set_affinity()
     uint32_t affinity = syscall_arg(current_task, 1, 1);
     ulong flags       = syscall_flags(current_task);
 
-    const auto task = pid == 0 ? current_cpu->current_task : get_task(pid);
+    const auto task = pid == 0 ? current_task : get_task(pid);
     if (!task) {
         syscall_error(current_task) = -ESRCH;
         return;
@@ -1869,7 +1869,7 @@ void syscall_set_affinity()
         return;
     }
 
-    if (task != current_cpu->current_task) {
+    if (task != current_task) {
         Auto_Lock_Scope lock(task->sched_lock);
         if (task->status != TaskStatus::TASK_PAUSED) {
             syscall_error(current_task) = -EBUSY;
@@ -1911,8 +1911,7 @@ void syscall_set_affinity()
         }
     }
 
-    // serial_logger.printf("Task %d (%s) affinity set to %d\n", task->task_id, task->name.c_str(),
-    // cpu);
+    // serial_logger.printf("Task %d (%s) affinity set to %d\n", task->task_id, task->name.c_str(), cpu);
 
     reschedule();
 }
