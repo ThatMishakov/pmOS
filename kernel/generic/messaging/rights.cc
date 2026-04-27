@@ -6,6 +6,7 @@
 #include <sched/sched.hh>
 #include <memory/mem_object.hh>
 #include <pmos/ipc.h>
+#include <pmos/ports.h>
 
 
 namespace kernel::ipc
@@ -458,11 +459,15 @@ unsigned Right::type_as_int() const
 {
     switch (type()) {
     case RightType::SendOnce:
-        return 1;
+        return RIGHT_TYPE_SEND_ONCE;
     case RightType::SendMany:
-        return 2;
+        return RIGHT_TYPE_SEND_MANY;
     case RightType::MemObject:
-        return 3;
+        return RIGHT_TYPE_MEM_OBJECT;
+    case RightType::InterruptSource:
+        return RIGHT_TYPE_INT_SOURCE;
+    case RightType::InterruptNotification:
+        return RIGHT_TYPE_INT_NOTIFICATION;
     default:
         return 0;
     }

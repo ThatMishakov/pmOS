@@ -626,8 +626,8 @@ void *isr_func(void *arg)
     data->right = rr.right;
 
     uint32_t int_vector = 0;
-    int r               = install_isa_interrupt(data->irq, 0, p.port, &int_vector);
-    if (r < 0) {
+    right_request_t interrupt = install_isa_interrupt(data->irq, p.port);
+    if (interrupt.result < 0) {
         send_isr_reply(reply_right, UACPI_STATUS_INTERNAL_ERROR);
         return NULL;
     }
@@ -645,7 +645,7 @@ void *isr_func(void *arg)
     while (true) {
         Message_Descriptor msg;
         unsigned char *message;
-        r = get_message(&msg, &message, p.port, NULL, NULL);
+        int r = get_message(&msg, &message, p.port, NULL, NULL);
         if (r != SUCCESS) {
             fprintf(stderr, "Failed to get message\n");
             return NULL;
@@ -655,7 +655,7 @@ void *isr_func(void *arg)
         IPC_Generic_Msg *ipc_msg = (IPC_Generic_Msg *)message;
         if (ipc_msg->type == IPC_Kernel_Interrupt_NUM) {
             data->handler(data->ctx);
-            complete_interrupt(int_vector);
+            complete_interrupt(p.port, interrupt.right);
         } else if (ipc_msg->type == IPC_ISR_Unregister_NUM) {
             break;
         } else {

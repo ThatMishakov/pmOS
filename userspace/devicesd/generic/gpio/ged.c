@@ -107,10 +107,8 @@ static void *interrupt_thread(void *d)
         return NULL;
     }
 
-    uint32_t int_vector = 0;
-    int r = set_up_gsi(irq->gsi, irq->active_low, irq->level_trigger, get_task_id(), p.port,
-                       &int_vector);
-    if (r < 0) {
+    right_request_t interrupt = set_up_gsi(irq->gsi, irq->active_low, irq->level_trigger, p.port);
+    if (interrupt.result < 0) {
         printf("Failed to set up GSI\n");
         return NULL;
     }
@@ -129,7 +127,7 @@ static void *interrupt_thread(void *d)
         IPC_Generic_Msg *ipc_msg = (IPC_Generic_Msg *)message;
         if (ipc_msg->type == IPC_Kernel_Interrupt_NUM) {
             ged_interrupt_handle(irq);
-            complete_interrupt(int_vector);
+            complete_interrupt(p.port, interrupt.right);
         }
         // else if (ipc_msg->type == IPC_ISR_Unregister_NUM)
         //     break;

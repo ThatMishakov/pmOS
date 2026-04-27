@@ -44,19 +44,17 @@ typedef struct IPC_Generic_Msg {
 #define IPC_RIGHT_SIZE(type) (sizeof(type))
 #define IPC_TYPE(ptr)        (((IPC_Generic_Msg *)ptr)->type)
 
-// Registers an interrupt handler for the process
-#define IPC_Reg_Int_NUM 0x01
-typedef struct IPC_Reg_Int {
+// Requests an interrupt right for the given parameters
+#define IPC_Request_Int_NUM 0x01
+typedef struct IPC_Request_Int {
     uint32_t type;
     uint32_t flags;
     uint32_t intno;
     uint32_t int_flags;
 #define INTERRUPT_FLAG_LEVEL_TRIGGERED 0x1
 #define INTERRUPT_FLAG_ACTIVE_LOW      0x2
-    uint64_t dest_task;
-    uint64_t dest_chan;
-} IPC_Reg_Int;
-#define IPC_Reg_Int_FLAG_EXT_INTS 0x01
+} IPC_Request_Int;
+#define IPC_Request_Int_FLAG_EXT_INTS 0x01
 
 #define IPC_Request_Int_Reply_NUM 0x02
 typedef struct IPC_Request_Int_Reply {

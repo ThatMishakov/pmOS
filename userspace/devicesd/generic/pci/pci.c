@@ -977,7 +977,7 @@ void request_pci_device_gsi(Message_Descriptor *desc, IPC_Request_PCI_Device_GSI
         delete_right(reply_right);
 }
 
-void register_pci_interrupt(Message_Descriptor *msg, IPC_Register_PCI_Interrupt *desc, struct PCIDevice *device, pmos_right_t reply_right);
+void request_pci_interrupt(Message_Descriptor *msg, IPC_Register_PCI_Interrupt *desc, struct PCIDevice *device, pmos_right_t reply_right);
 
 static int pci_callback(Message_Descriptor *desc, void *msg_buff, pmos_right_t *reply_right,
                      pmos_right_t *other_rights, void *ctx, struct pmos_msgloop_data *)
@@ -994,8 +994,8 @@ static int pci_callback(Message_Descriptor *desc, void *msg_buff, pmos_right_t *
         request_pci_device(desc, msg_buff, device, *reply_right);
         *reply_right = 0;
         break;
-    case IPC_Register_PCI_Interrupt_NUM:
-        register_pci_interrupt(desc, msg_buff, device, *reply_right);
+    case IPC_Request_PCI_Interrupt_NUM:
+        request_pci_interrupt(desc, msg_buff, device, *reply_right);
         *reply_right = 0;
         break;
     case IPC_Request_PCI_Device_GSI_NUM:
@@ -1010,16 +1010,15 @@ static int pci_callback(Message_Descriptor *desc, void *msg_buff, pmos_right_t *
     return PMOS_MSGLOOP_CONTINUE;
 }
 
-int set_up_gsi(uint32_t gsi, bool active_low, bool level_trig, uint64_t task, pmos_port_t port,
-               uint32_t *vector_out);
-
-void register_pci_interrupt(Message_Descriptor *msg, IPC_Register_PCI_Interrupt *desc, struct PCIDevice *device, pmos_right_t reply_right)
+void request_pci_interrupt(Message_Descriptor *msg, IPC_Register_PCI_Interrupt *desc, struct PCIDevice *device, pmos_right_t reply_right)
 {
-    IPC_Reg_Int_Reply reply;
+    IPC_Request_Int_Reply reply;
     int result      = 0;
     uint32_t vector = 0;
     bool active_low = false;
     bool level_trig = false;
+
+    message_extra_t extra = {0};
 
     if (msg->size != sizeof(IPC_Register_PCI_Interrupt)) {
         result = -EINVAL;
@@ -1037,24 +1036,33 @@ void register_pci_interrupt(Message_Descriptor *msg, IPC_Register_PCI_Interrupt 
     if (result != 0)
         goto end;
 
-    if (desc->dest_task == 0 || desc->dest_port == 0) {
-        result = -EINVAL;
+    uint32_t flags = 0;
+    if (active_low)
+        flags |= PMOS_INTERRUPT_LEVEL_TRIG;
+    if (level_trig)
+        flags |= PMOS_INTERRUPT_ACTIVE_LOW;
+
+    right_request_t irq_right = allocate_interrupt(vector, flags);
+    if (irq_right.result != 0) {
+        fprintf(stderr, "Failed to allocate interrupt for GSI %u: %i (%s)\n", vector, irq_right.result,
+               strerror(-irq_right.result));
+        result = irq_right.result;
         goto end;
     }
+    extra.extra_rights[0] = irq_right.right;
 
-    result = set_up_gsi(vector, active_low, level_trig, desc->dest_task, desc->dest_port, &vector);
 end:
-    reply = (IPC_Reg_Int_Reply) {
-        .type   = IPC_Reg_Int_Reply_NUM,
+    reply = (IPC_Request_Int_Reply) {
+        .type   = IPC_Request_Int_Reply_NUM,
         .flags  = 0,
         .status = result,
-        .intno  = vector,
     };
 
-    result = send_message_right(reply_right, 0, &reply, sizeof(reply), NULL, 0).result;
+    result = send_message_right(reply_right, 0, &reply, sizeof(reply), &extra, 0).result;
     if (result != 0) {
         delete_right(reply_right);
-        printf("Failed to send message in register_pci_interrupt: %i (%s)\n", result,
+        delete_right(irq_right.right);
+        printf("Failed to send message in request_pci_interrupt: %i (%s)\n", result,
                strerror(-result));
     }
 }

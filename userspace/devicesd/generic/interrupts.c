@@ -6,91 +6,57 @@
 #include <string.h>
 #include <inttypes.h>
 
-int register_interrupt(uint32_t cpu_id, uint32_t vector, uint64_t task, pmos_port_t port)
+void request_interrupts_for(Message_Descriptor *desc, IPC_Request_Int *m, pmos_right_t reply_right)
 {
-    uint64_t self = get_task_id();
-    task = task == 0 ? self : task;
-
-    if (task != self) {
-        // Retry 5 times in case someone is also trying to pause the task
-        result_t result = 0;
-        for (int i = 0; i < 5; ++i) {
-            result = pause_task(task);
-            if (result != 0) {
-                return -EINVAL;
-            }
-
-            // Bind the task to the CPU
-            result = set_affinity(task, cpu_id + 1, 0);
-            if (result != -EBUSY)
-                break;
-        }
-        if (result != 0) {
-            return result;
-        }
-        // TODO: Save the old affinity to restore it in case of failure
-
-        // Resume the task
-        // It's not an error if this fails
-        resume_task(task);
-    }
-
-    // Bind self to the particular CPU
-    result_t r = set_affinity(self, cpu_id + 1, 0);
-    if (r != 0) {
-        return r;
-    }
-
-    // Set the interrupt
-    syscall_r res = set_interrupt(port, vector, 0);
-    if (res.result != 0) {
-        return res.result;
-    }
-
-    // Bind to all CPUs if not self
-    if (task != self) {
-        r = set_affinity(self, 0, 0);
-        if (r != 0) {
-            return r;
-        }
-    }
-
-    return 0;
-}
-
-void configure_interrupts_for(Message_Descriptor *desc, IPC_Reg_Int *m, pmos_right_t reply_right)
-{
+    message_extra_t extra = {0};
     uint32_t gsi = 0;
     bool active_low = false;
     bool level_trig = false;
     int result = 0;
 
-    uint32_t vector = 0;
+    if (desc->size < sizeof(IPC_Request_Int)) {
+        fprintf(stderr, "Error: IPC_Request_Int message too small! Size: %" PRIu64 "\n", desc->size);
+        result = -EINVAL;
+        goto end;
+    }
 
-    if (m->flags & IPC_Reg_Int_FLAG_EXT_INTS) {
+    if (m->flags & IPC_Request_Int_FLAG_EXT_INTS) {
         int_redirect_descriptor desc = isa_gsi_mapping(m->intno);
         gsi = desc.destination;
         active_low = desc.active_low;
         level_trig = desc.level_trig;
     } else {
         gsi = m->intno;
-        // active_low = m->active_low;
-        // level_trig = m->level_trig;
+        active_low = m->int_flags & INTERRUPT_FLAG_ACTIVE_LOW;
+        level_trig = m->int_flags & INTERRUPT_FLAG_LEVEL_TRIGGERED;
     }
 
-    if (m->dest_task == 0) {
-        result = -EINVAL;
-    } else {
-        result = set_up_gsi(gsi, active_low, level_trig, m->dest_task, m->dest_chan, &vector);
+    uint32_t flags = 0;
+    if (active_low)
+        flags |= PMOS_INTERRUPT_ACTIVE_LOW;
+    if (level_trig)
+        flags |= PMOS_INTERRUPT_LEVEL_TRIG;
+
+    right_request_t irq_right_r = allocate_interrupt(gsi, flags);
+    if (irq_right_r.result != 0) {
+        fprintf(stderr, "Failed to allocate interrupt for GSI %u: %i (%s)\n", gsi, (int)irq_right_r.result,
+               strerror(-irq_right_r.result));
+
+        result = irq_right_r.result;
+        goto end;
     }
+    extra.extra_rights[0] = irq_right_r.right;
     
-    IPC_Reg_Int_Reply reply;
-    reply.type = IPC_Reg_Int_Reply_NUM;
-    reply.status = result;
-    reply.intno = vector;
-    result = send_message_right(reply_right, 0, &reply, sizeof(reply), NULL, 0).result;
+end:
+    IPC_Request_Int_Reply reply = {
+        .type = IPC_Request_Int_Reply_NUM,
+        .status = result,
+    };
+    result = send_message_right(reply_right, 0, &reply, sizeof(reply), &extra, 0).result;
     if (result < 0) {
         delete_right(reply_right);
+        if (extra.extra_rights[0])
+            delete_right(extra.extra_rights[0]);
         fprintf(stderr, "Warning could not reply to task %#" PRIx64 " port %#" PRIx64 " in configure_interrupts_for: %i (%s)\n", desc->sender, reply_right, result, strerror(-result));
     }
 }

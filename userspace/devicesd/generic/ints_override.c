@@ -32,6 +32,9 @@
 #include <acpi/acpi.h>
 #include <stdio.h>
 #include <string.h>
+#include <pmos/interrupts.h>
+#include <pmos/ports.h>
+#include <pmos/system.h>
 
 typedef struct redir_list {
     struct redir_list *next;
@@ -110,36 +113,81 @@ void init_int_redirects()
     }
 }
 
-int set_up_gsi(uint32_t gsi, bool active_low, bool level_trig, uint64_t task, pmos_port_t port, uint32_t *vector_out)
-{
-    unsigned cpu_id = 0;
-    unsigned vector = 0;
+// int set_up_gsi(uint32_t gsi, bool active_low, bool level_trig, uint64_t task, pmos_port_t port, uint32_t *vector_out)
+// {
+//     unsigned cpu_id = 0;
+//     unsigned vector = 0;
 
-    unsigned flags = (active_low ? PMOS_INTERRUPT_ACTIVE_LOW : 0) | (level_trig ? PMOS_INTERRUPT_LEVEL_TRIG : 0);
-    auto vec_result = allocate_interrupt(gsi, flags);
-    if (vec_result.result < 0) {
-        fprintf(stderr, "Error: Could not get interrupt vector for GSI %u: %s\n", gsi, strerror(-vec_result.result));
-        return vec_result.result;
-    }
+//     unsigned flags = (active_low ? PMOS_INTERRUPT_ACTIVE_LOW : 0) | (level_trig ? PMOS_INTERRUPT_LEVEL_TRIG : 0);
+//     auto vec_result = allocate_interrupt(gsi, flags);
+//     if (vec_result.result < 0) {
+//         fprintf(stderr, "Error: Could not get interrupt vector for GSI %u: %s\n", gsi, strerror(-vec_result.result));
+//         return vec_result.result;
+//     }
 
-    cpu_id = vec_result.cpu;
-    vector = vec_result.vector;
+//     cpu_id = vec_result.cpu;
+//     vector = vec_result.vector;
 
-    printf("Got vector %u for GSI %u\n", vector, gsi);
+//     printf("Got vector %u for GSI %u\n", vector, gsi);
 
-    auto result = register_interrupt(cpu_id - 1, vector, task, port);
-    if (result < 0) {
-        fprintf(stderr, "Error: Could not register interrupt for GSI %u: %s\n", gsi, strerror(-result));
-    }
+//     auto result = register_interrupt(cpu_id - 1, vector, task, port);
+//     if (result < 0) {
+//         fprintf(stderr, "Error: Could not register interrupt for GSI %u: %s\n", gsi, strerror(-result));
+//     }
 
-    if (vector_out)
-        *vector_out = vector;
+//     if (vector_out)
+//         *vector_out = vector;
     
+//     return result;
+// }
+
+right_request_t set_up_gsi(uint32_t gsi, bool active_low, bool level_trigger, pmos_port_t reply_port)
+{
+    pmos_right_t irq_right = 0;
+    right_request_t result = {};
+
+    uint32_t flags = 0;
+    if (active_low)
+        flags |= PMOS_INTERRUPT_ACTIVE_LOW;
+    if (level_trigger)
+        flags |= PMOS_INTERRUPT_LEVEL_TRIG;
+
+    right_request_t irq_right_r = allocate_interrupt(gsi, flags);
+    if (irq_right_r.result != 0) {
+        fprintf(stderr, "Failed to allocate interrupt for GSI %u: %i (%s)\n", gsi, (int)irq_right_r.result,
+               strerror(-irq_right_r.result));
+
+        result.result = irq_right_r.result;
+        goto end;
+    }
+    irq_right = irq_right_r.right;
+
+    interrupt_info_t info = get_interrupt_affinity(irq_right);
+    if (info.result != 0) {
+        fprintf(stderr, "Failed to get interrupt affinity for GSI %u: %i (%s)\n", gsi, (int)info.result, strerror(-info.result));
+        result.result = info.result;
+        goto end;
+    }
+
+    auto set_result = set_affinity(TASK_ID_SELF, info.interrupt_affinity_cpu, 0);
+    if (set_result != 0) {
+        fprintf(stderr, "Failed to set affinity for GSI %u: %i (%s)\n", gsi, (int)set_result, strerror(-set_result));
+        result.result = set_result;
+        goto end;
+    }
+
+    result = set_interrupt(irq_right, reply_port);
+    if (result.result != 0) {
+        fprintf(stderr, "Failed to register interrupt for GSI %u: %i (%s)\n", gsi, (int)result.result, strerror(-result.result));
+        // goto end;
+    }
+end:
+    delete_right(irq_right);
     return result;
 }
 
-int install_isa_interrupt(uint32_t isa_pin, uint64_t task, pmos_port_t port, uint32_t *vector)
+right_request_t install_isa_interrupt(uint32_t isa_pin, pmos_port_t port)
 {
     int_redirect_descriptor desc = get_for_int(isa_pin);
-    return set_up_gsi(desc.destination, desc.active_low, desc.level_trig, task, port, vector);
+    return set_up_gsi(desc.destination, desc.active_low, desc.level_trig, port);
 }
