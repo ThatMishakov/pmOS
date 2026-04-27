@@ -58,13 +58,14 @@ typedef struct IPC_Reg_Int {
 } IPC_Reg_Int;
 #define IPC_Reg_Int_FLAG_EXT_INTS 0x01
 
-#define IPC_Reg_Int_Reply_NUM 0x02
-typedef struct IPC_Reg_Int_Reply {
+#define IPC_Request_Int_Reply_NUM 0x02
+typedef struct IPC_Request_Int_Reply {
     uint32_t type;
-    uint32_t flags;
-    int32_t status;
-    uint32_t intno;
-} IPC_Reg_Int_Reply;
+    uint16_t flags;
+    int16_t status;
+
+    // The first right should be the interrupt source right...
+} IPC_Request_Int_Reply;
 
 #define IPC_Start_Timer_NUM 0x03
 typedef struct IPC_Start_Timer {
@@ -207,15 +208,12 @@ typedef struct IPC_Request_PCI_Device_GSI_Reply {
     uint32_t gsi;
 } IPC_Request_PCI_Device_GSI_Reply;
 
-// Replies with IPC_Reg_Int_Reply
-#define IPC_Register_PCI_Interrupt_NUM 0x0E
-typedef struct IPC_Register_PCI_Interrupt {
+// Replies with IPC_Request_Int_Reply
+#define IPC_Request_PCI_Interrupt_NUM 0x0E
+typedef struct IPC_Request_PCI_Interrupt {
     uint32_t type;
     uint16_t flags;
     uint16_t pin;
-
-    uint64_t dest_task;
-    uint64_t dest_port;
 } IPC_Register_PCI_Interrupt;
 
 #define IPC_Kernel_Interrupt_NUM 0x20

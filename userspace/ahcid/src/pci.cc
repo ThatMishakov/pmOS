@@ -161,66 +161,39 @@ char PCIDevice::interrupt_pin() noexcept { return readb(0x3d); }
 //     return 0;
 // }
 
-int PCIDevice::register_interrupt(uint32_t &int_vector_result, uint64_t task,
-                                  uint64_t port) noexcept
+pmos::async::task<pmos::RecieveRight> PCIDevice::register_interrupt()
 {
-    auto reply_port = pmos::Port::create();
-    if (!reply_port)
-        return reply_port.error();
-
     auto int_pin = interrupt_pin();
-    if (int_pin < 1 or int_pin > 4) {
-        return -ENOENT;
-    }
+    if (int_pin < 1 or int_pin > 4)
+        throw std::runtime_error("Device does not have a valid interrupt pin");
 
-    IPC_Register_PCI_Interrupt request = {
-        .type       = IPC_Register_PCI_Interrupt_NUM,
+    IPC_Request_PCI_Interrupt request = {
+        .type       = IPC_Request_PCI_Interrupt_NUM,
         .flags      = 0,
         .pin        = (uint8_t)(int_pin - 1),
-        .dest_task  = task == 0 ? get_task_id() : task,
-        .dest_port  = port,
     };
 
-    pmos::RecieveRight rr;
+    auto right = send_devicesd(request, &cmd_port);
+    auto msg = co_await dispatcher.get_message(right);
 
-    try {
-        rr = send_devicesd(request, &*reply_port);
-    } catch (std::system_error &e) {
-        return -e.code().value();
-    }
+    if (msg->data.size() < sizeof(IPC_Request_Int_Reply))
+        throw std::system_error(EPROTO, std::generic_category(), "Unexpected message size in register_interrupt");
 
-    Message_Descriptor desc;
-    uint8_t *message;
-    for (int i = 0; i < 5; ++i) {
-        result_t result = get_message(&desc, &message, reply_port->get(), nullptr, nullptr);
-        // The affinity may be changed, which can interrupt the system call
-        // This is not an error, so retry a few times
-        if ((int)result == -EINTR)
-            continue;
+    auto *reply = (IPC_Request_Int_Reply *)msg->data.data();
+    if (reply->type != IPC_Request_Int_Reply_NUM)
+        throw std::system_error(EPROTO, std::generic_category(), "Unexpected message type in register_interrupt");
 
-        if (result != 0) {
-            return result;
-        }
-        break;
-    }
+    if (reply->status < 0)
+        throw std::system_error(-reply->status, std::generic_category(), "Failed to register interrupt");
 
-    rr.release();
+    auto int_right = std::move(msg->other_rights[0]);
+    if (!int_right)
+        throw std::system_error(EPROTO, std::generic_category(), "Expected interrupt source right in register_interrupt");
 
-    auto *reply = (IPC_Reg_Int_Reply *)message;
-    if (reply->type != IPC_Reg_Int_Reply_NUM) {
-        free(message);
-        return -EPROTO;
-    }
+    if (int_right.type() != pmos::RightType::IntSource)
+        throw std::system_error(EPROTO, std::generic_category(), "Expected interrupt source right in register_interrupt");
 
-    if (reply->status < 0) {
-        int err = reply->status;
-        free(message);
-        return err;
-    }
-
-    int_vector_result = reply->intno;
-    free(message);
-    return 0;
+    co_return pmos::register_interrupt(int_right, cmd_port);
 }
 
 PCIDevice::PCIDevice(volatile char *virt_addr): virt_addr(virt_addr) {}

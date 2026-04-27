@@ -1,5 +1,7 @@
 #include <pmos/helpers.hh>
 #include <pmos/memory.h>
+#include <pmos/ports.h>
+#include <pmos/interrupts.h>
 
 namespace pmos
 {
@@ -9,12 +11,16 @@ static RightType type_from_flags(unsigned flags, int index)
     unsigned type = (flags >> (16 + index*4)) & 0xf;
 
     switch (type) {
-    case 1:
+    case RIGHT_TYPE_SEND_ONCE:
         return RightType::SendOnce;
-    case 2:
+    case RIGHT_TYPE_SEND_MANY:
         return RightType::SendMany;
-    case 3:
+    case RIGHT_TYPE_MEM_OBJECT:
         return RightType::MemObject;
+    case RIGHT_TYPE_INT_SOURCE:
+        return RightType::IntSource;
+    case RIGHT_TYPE_INT_NOTIFICATION:
+        return RightType::IntNotification;
     default:
         return RightType::Unknown;
     }
@@ -239,5 +245,38 @@ Right::~Right()
         delete_right(right);
 }
 
+RecieveRight register_interrupt(const Right &int_source_right, Port &port)
+{
+    if (int_source_right.type() != RightType::IntSource)
+        throw std::invalid_argument("Right must be of type IntSource");
+
+    auto affinity = get_interrupt_affinity(int_source_right.get());
+    if (affinity.result)
+        throw std::system_error(-static_cast<int>(affinity.result), std::system_category(),
+                                "Failed to get interrupt affinity");
+
+    auto set_result = set_affinity(TASK_ID_SELF, affinity.interrupt_affinity_cpu, 0);
+    if (set_result)
+        throw std::system_error(-static_cast<int>(set_result), std::system_category(),
+                                "Failed to set interrupt affinity");
+
+    auto result = ::set_interrupt(int_source_right.get(), port.get());
+    if (result.result)
+        throw std::system_error(-static_cast<int>(result.result), std::system_category(),
+                                "Failed to register interrupt");
+
+    return RecieveRight{result.right, RightType::IntNotification, port.get()};
+}
+
+void complete_interrupt(const RecieveRight &int_notification_right)
+{
+    if (int_notification_right.type() != RightType::IntNotification)
+        throw std::invalid_argument("Right must be of type IntNotification");
+
+    auto result = ::complete_interrupt(int_notification_right.port(), int_notification_right.get());
+    if (result)
+        throw std::system_error(-static_cast<int>(result), std::system_category(),
+                                "Failed to complete interrupt");
+}
 
 }

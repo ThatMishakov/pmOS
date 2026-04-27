@@ -19,6 +19,8 @@ enum class RightType {
     SendOnce,
     SendMany,
     MemObject,
+    IntSource,
+    IntNotification,
     Unknown,
 };
 
@@ -107,6 +109,9 @@ public:
 private:
     pmos_port_t id = 0;
 };
+
+RecieveRight register_interrupt(const Right &int_source_right, Port &port);
+void complete_interrupt(const RecieveRight &notification_right);
 
 std::expected<RecieveRight, int> request_named_port(std::string_view name, Port &port);
 
@@ -274,6 +279,8 @@ constexpr pmos_right_t RecieveRight::release() noexcept
     port_ = INVALID_PORT;
     return r;
 }
+
+constexpr pmos_port_t RecieveRight::port() const noexcept { return port_; }
 
 constexpr RightType RecieveRight::type() const noexcept { return type_; }
 

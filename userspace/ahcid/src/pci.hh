@@ -3,6 +3,7 @@
 #include <pmos/async/coroutines.hh>
 #include <expected>
 #include <memory>
+#include <pmos/helpers.hh>
 
 struct PCIDevice
 {
@@ -34,7 +35,7 @@ struct PCIDevice
     // Registers the interrupt for the device
     // Returns 0 on success, otherwise -errno
     // This has to block, since it can change the affinity, and it might break the messaging (yet another TODO...)
-    int register_interrupt(uint32_t &int_vector_result, uint64_t task, uint64_t port) noexcept;
+    pmos::async::task<pmos::RecieveRight> register_interrupt();
 
     uint16_t group() const;
     uint8_t bus() const;
