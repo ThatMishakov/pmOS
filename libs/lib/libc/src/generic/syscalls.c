@@ -30,6 +30,7 @@
 #include <pmos/memory.h>
 #include <pmos/ports.h>
 #include <pmos/system.h>
+#include <pmos/interrupts.h>
 
 #ifdef __i386__
     #define __32BITSYSCALL
@@ -453,9 +454,9 @@ result_t set_affinity(uint64_t tid, uint32_t cpu_id, unsigned flags)
 result_t complete_interrupt(pmos_port_t port, pmos_right_t receive_right)
 {
 #ifdef __32BITSYSCALL
-    return __pmos_syscall32_4words(SYSCALL_COMPLETE_INTERRUPT, port, recieve_right).result;
+    return __pmos_syscall32_4words(SYSCALL_COMPLETE_INTERRUPT, port, receive_right).result;
 #else
-    return pmos_syscall(SYSCALL_COMPLETE_INTERRUPT, port, recieve_right).result;
+    return pmos_syscall(SYSCALL_COMPLETE_INTERRUPT, port, receive_right).result;
 #endif
 }
 
@@ -715,5 +716,20 @@ right_request_t watch_right(pmos_right_t right, pmos_port_t port)
     return (right_request_t) {
         .result = result.result,
         .right = result.value,
+    };
+}
+
+interrupt_info_t get_interrupt_affinity(pmos_right_t right)
+{
+    syscall_r result;
+    #ifdef __32BITSYSCALL
+    result = __pmos_syscall32_2words(SYSCALL_GET_INTERRUPT_INFO, right);
+    #else
+    result = pmos_syscall(SYSCALL_GET_INTERRUPT_INFO, right);
+    #endif
+    return (interrupt_info_t) {
+        .result = result.result,
+        .interrupt_affinity_cpu = result.value & 0xffffffff,
+        .arch_vector = result.value >> 32,
     };
 }

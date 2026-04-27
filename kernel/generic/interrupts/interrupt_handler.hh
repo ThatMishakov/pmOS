@@ -43,7 +43,6 @@ struct IntNotificationRight final: ipc::RecieveRight {
     // GenericMessage overrides
     virtual size_t size() const override;
     virtual ReturnStr<bool> copy_to_user_buff(char *buff) const override;
-
     virtual void delete_self() override;
     virtual ipc::RightType recieve_type() const override;
 

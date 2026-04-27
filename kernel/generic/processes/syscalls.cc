@@ -123,7 +123,7 @@ std::array<const char *, 61> syscall_names = {
     "SYSCALL PAUSE TASK",
     "SYSCALL RESUME TASK",
     "SYSCALL GET PAGE ADDRESS",
-    "UNUSED!!!!",
+    "SYSCALL GET INTERRUPT INFO",
     "SYSCALL MEM OBJECT GET PAGE ADDRESS",
     "SYSCALL DELETE PORT",
     "SYSCALL ALLOCATE INTERRUPT",
@@ -200,7 +200,7 @@ std::array<syscall_function, 61> syscall_table = {
     syscall_pause_task,
     syscall_resume_task,
     syscall_get_page_address,
-    nullptr,
+    syscall_get_interrupt_info,
     syscall_get_page_address_from_object,
     syscall_delete_port,
     syscall_cpu_for_interrupt,
@@ -1101,7 +1101,7 @@ void syscall_set_interrupt()
         return;
     }
 
-    auto handler = interrupt_handler_for_right(task, port);
+    auto handler = interrupt_handler_for_right(task, right);
     if (!handler.success()) {
         syscall_error(task) = handler.result;
         return;
@@ -1114,6 +1114,24 @@ void syscall_set_interrupt()
     }
 
     syscall_return(task) = recieve_right.val->right_parent_id;
+}
+
+void syscall_get_interrupt_info()
+{
+    auto c = sched::get_cpu_struct();
+    auto task = c->current_task;
+
+    u64 right = syscall_arg64(task, 0);
+
+    auto handler = interrupt_handler_for_right(task, right);
+    if (!handler) {
+        syscall_error(task) = handler.result;
+        return;
+    }
+
+    assert(handler.val->parent_cpu);
+
+    syscall_return(task) = handler.val->parent_cpu->cpu_id + 1;
 }
 
 void syscall_complete_interrupt()

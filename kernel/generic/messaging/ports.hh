@@ -13,6 +13,10 @@
 #include "messaging.hh"
 #include "rights.hh"
 
+namespace kernel::interrupts {
+struct IntNotificationRight;
+}
+
 namespace kernel::ipc
 {
 
@@ -118,6 +122,7 @@ protected:
     friend struct SendManyRight;
     friend struct SendOnceRight;
     friend struct SendManyRightShared;
+    friend struct interrupts::IntNotificationRight;
 };
 
 }

@@ -221,8 +221,6 @@ typedef struct IPC_Register_PCI_Interrupt {
 #define IPC_Kernel_Interrupt_NUM 0x20
 typedef struct IPC_Kernel_Interrupt {
     uint32_t type;
-    uint32_t intno;
-    uint32_t cpu_id;
 } IPC_Kernel_Interrupt;
 
 typedef uint64_t pmos_port_t;

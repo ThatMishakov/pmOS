@@ -272,6 +272,9 @@ void syscall_watch_right();
 void syscall_delete_port();
 // Parameters: u64 port_id
 
+void syscall_get_interrupt_info();
+// Parameters: u64 right
+
 struct SyscallRetval {
     TaskDescriptor *task;
     u64 operator=(u64 value);

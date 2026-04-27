@@ -43,6 +43,14 @@ syscall_r unregister_interrupt(uint32_t int_vector);
 
 result_t complete_interrupt(pmos_port_t port, pmos_right_t recieve_right);
 
+typedef struct interrupt_info_t {
+    result_t result;
+    u32 interrupt_affinity_cpu;
+    u32 arch_vector;
+} interrupt_info_t;
+
+interrupt_info_t get_interrupt_affinity(pmos_right_t right);
+
 #endif
 
 #if defined(__cplusplus)

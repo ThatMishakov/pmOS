@@ -7,6 +7,7 @@
 #include <pmos/utility/scope_guard.hh>
 #include <processes/tasks.hh>
 #include <sched/sched.hh>
+#include <pmos/ipc.h>
 
 using namespace kernel::interrupts;
 
@@ -58,6 +59,82 @@ void IntSourceRight::remove_from_parent()
 ipc::RightType IntSourceRight::type() const
 {
     return ipc::RightType::InterruptSource;
+}
+
+ipc::RightType IntNotificationRight::recieve_type() const
+{
+    return ipc::RightType::InterruptNotification;
+}
+
+size_t IntNotificationRight::size() const
+{
+    return sizeof(IPC_Kernel_Interrupt);
+}
+
+ReturnStr<bool> IntNotificationRight::copy_to_user_buff(char *buff) const
+{
+    IPC_Kernel_Interrupt interrupt = {
+        .type = IPC_Kernel_Interrupt_NUM,
+    };
+
+    return copy_to_user((const char *)&interrupt, buff, sizeof(interrupt));
+}
+
+// Didn't like having a private struct member
+static void after_removing_pending(InterruptHandler *handler)
+{
+    assert(handler);
+    assert(sched::get_cpu_struct() == handler->parent_cpu);
+
+    bool all_completed = true;
+    for (auto &n: handler->notification_rights) {
+        if (n.pending_completion) {
+            all_completed = false;
+            break;
+        }
+    }
+
+    if (all_completed)
+        interrupt_complete(handler);
+
+    if (handler->notification_rights.empty())
+        interrupt_disable(handler);
+}
+
+bool IntNotificationRight::destroy_recieve_right()
+{
+    if (!alive)
+        return false;
+
+    alive = false;
+
+    assert(parent);
+    auto parent_task = parent->owner;
+    assert(parent_task);
+
+    {
+        Auto_Lock_Scope l(parent_task->sched_lock);
+        assert(parent_task->interrupt_handlers_count > 0);
+        parent_task->interrupt_handlers_count--;
+    }
+
+    assert(parent_handler);
+    parent_handler->notification_rights.remove(this);
+
+    if (pending_completion)
+        after_removing_pending(parent_handler);
+
+    if (!sent)
+        delete this;
+
+    return true;
+}
+
+void IntNotificationRight::delete_self()
+{
+    sent = false;
+    if (!alive)
+        delete this;
 }
 
 ReturnStr<std::pair<ipc::Right *, u64>> IntSourceRight::duplicate(proc::TaskGroup *group)
@@ -134,6 +211,54 @@ kresult_t IntNotificationRight::complete()
         interrupt_complete(parent_handler);
 
     return 0;
+}
+
+ReturnStr<IntNotificationRight *> IntNotificationRight::create_for_port(InterruptHandler *handler, ipc::Port *port)
+{
+    bool first_right;
+
+    assert(handler);
+    assert(port);
+
+    auto parent_task = port->owner;
+    assert(parent_task);
+
+    auto cpu = handler->parent_cpu;
+    assert(cpu);
+
+    assert(sched::get_current_task() == parent_task);
+
+    klib::unique_ptr<IntNotificationRight> new_right = new IntNotificationRight();
+    if (!new_right)
+        return Error(-ENOMEM);
+
+    new_right->parent_handler = handler;
+    new_right->parent = port;
+
+    {
+        Auto_Lock_Scope l3(parent_task->sched_lock);
+        if (parent_task->cpu_affinity != (cpu->cpu_id + 1))
+            return Error(-EINTR);
+
+        assert(sched::get_cpu_struct() == cpu);
+
+        Auto_Lock_Scope l1(handler->sources_lock);
+        Auto_Lock_Scope l2(port->rights_lock);
+
+        first_right = handler->notification_rights.empty();
+
+        assert(port->alive);
+        new_right->right_parent_id = port->new_right_id();
+        handler->notification_rights.push_back(new_right.get());
+        port->rights.insert(new_right.get());
+
+        parent_task->interrupt_handlers_count++;
+    }
+
+    if (first_right)
+        interrupt_enable(handler);
+
+    return Success(new_right.release());
 }
 
 }
