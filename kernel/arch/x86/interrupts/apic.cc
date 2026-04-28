@@ -537,7 +537,7 @@ void ::kernel::interrupts::interrupt_complete(InterruptHandler *handler)
     // Everything goes through IOAPIC for now anyway...
     auto ioapic_handler = static_cast<IOAPIC_Handler *>(handler);
 
-    assert(ioapic_handler->lapic_vector > first_mappable_vector);
+    assert(ioapic_handler->lapic_vector >= first_mappable_vector);
     u32 intno = ioapic_handler->lapic_vector;
     
     assert(intno < 256);

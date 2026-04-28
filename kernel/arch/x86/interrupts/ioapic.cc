@@ -174,6 +174,7 @@ ReturnStr<IOAPIC_Handler *>
     handler->parent_ioapic = ioapic;
     handler->active_low = active_low;
     handler->level_triggered = !edge_triggered;
+    handler->ioapic_index = apic_base;
 
     // Find least loaded CPU
     auto *cpu = sched::cpus[0];
@@ -194,7 +195,7 @@ ReturnStr<IOAPIC_Handler *>
         return Error(-ENOMEM);
 
     handler->parent_cpu = cpu;
-    handler->lapic_vector = idx + 48;
+    handler->lapic_vector = idx + lapic::first_mappable_vector;
 
     assert(ioapic->mappings.size() > apic_base);
 
