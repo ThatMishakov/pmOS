@@ -12,7 +12,13 @@ using namespace kernel::log;
 using namespace kernel::paging;
 using namespace kernel::sched;
 
+constexpr u32 IOCSR_IPI_STATUS = 0x1000;
+constexpr u32 IOCSR_IPI_ENABLE = 0x1004;
+constexpr u32 IOCSR_IPI_SET = 0x1008;
+constexpr u32 IOCSR_IPI_CLEAR = 0x100c;
 constexpr u32 IOCSR_IPI_SEND = 0x1040;
+
+constexpr u32 IPI_MASK = 0x0003;
 
 struct fp_s {
     u64 fp;
@@ -74,14 +80,32 @@ void ipi_send(u32 cpu, u32 vector)
 
 void CPU_Info::ipi_reschedule()
 {
-    __atomic_or_fetch(&ipi_mask, IPI_RESCHEDULE, __ATOMIC_ACQUIRE);
     ipi_send(cpu_physical_id, 0x00);
 }
 
 void CPU_Info::ipi_tlb_shootdown()
 {
-    __atomic_or_fetch(&ipi_mask, IPI_TLB_SHOOTDOWN, __ATOMIC_RELEASE);
-    ipi_send(cpu_physical_id, 0x00);
+    ipi_send(cpu_physical_id, 0x01);
+}
+
+void handle_ipi()
+{
+    auto mask = iocsr_read32(IOCSR_IPI_STATUS);
+    // EOI
+    iocsr_write32(IOCSR_IPI_CLEAR, mask);
+
+    if (mask & (1 << 0))
+        reschedule();
+
+    if (mask & (1 << 1)) {
+        auto c = get_cpu_struct();
+        c->current_task->page_table->trigger_shootdown(c->current_task->page_table.get(), c);
+    }
+}
+
+void ipi_enable()
+{
+    iocsr_write32(IOCSR_IPI_ENABLE, IPI_MASK);
 }
 
 unsigned exception_code(u32 estat = csrrd32<loongarch::csr::ESTAT>())
@@ -236,13 +260,17 @@ extern "C" void handle_interrupt()
     case EXCEPTION_INT: {
         assert(estat);
 
-        if (estat & TIMER_INT_MASK) {
+        if (estat & ESTAT_TIMER_INT_MASK) {
             csrwr<loongarch::csr::TICLR>(0x01);
             cpu_timer_interrupt();
         }
 
-        if (estat & HARDWARE_INT_MASK) {
+        if (estat & ESTAT_HARDWARE_INT_MASK) {
             handle_hardware_interrupt(estat);
+        }
+
+        if (estat & ESTAT_IPI_MASK) {
+            handle_ipi();
         }
     } break;
     case EXCEPTION_PIL:
@@ -296,6 +324,3 @@ void printc(int) {}
 
 extern "C" void allow_access_user() {}
 extern "C" void disallow_access_user() {}
-
-// TODO
-void init_smp() {}

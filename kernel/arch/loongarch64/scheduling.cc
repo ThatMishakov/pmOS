@@ -4,6 +4,9 @@
 #include <loongarch_asm.hh>
 #include <processes/tasks.hh>
 #include <sched/sched.hh>
+#include <uacpi/tables.h>
+#include <uacpi/acpi.h>
+#include <pmos/utility/scope_guard.hh>
 
 using namespace kernel;
 
@@ -21,10 +24,13 @@ sched::CPU_Info *sched::get_cpu_struct() { return cpu_struct; }
 
 void set_save0(sched::CPU_Info *i) { csrwr<loongarch::csr::SAVE0>(i); }
 
+void ipi_enable();
+
 void program_interrupts()
 {
     csrwr<loongarch::csr::ECFG>(0x1fff);
     csrwr<loongarch::csr::EENTRY>(isr);
+    ipi_enable();
 }
 
 void detect_supported_extensions();
@@ -72,4 +78,105 @@ void init_scheduling(u64 cpu_id)
     log::serial_logger.printf("Scheduling initialized\n");
 }
 
+void prepare_cpu(u32 phys_id)
+{
+    sched::CPU_Info *i = new sched::CPU_Info();
+    if (!i)
+        panic("Could not allocate sched::CPU_Info struct\n");
+
+    i->kernel_stack_top = i->kernel_stack.get_stack_top();
+    i->cpu_physical_id  = phys_id;
+
+    i->cpu_id = sched::cpus.size();
+    if (!sched::cpus.push_back(i))
+        panic("Could not add sched::CPU_Info struct to cpus vector\n");
+
+    auto idle = proc::init_idle(i);
+    if (idle != 0)
+        panic("Failed to initialize idle task: %i\n", idle);
+
+    assert(proc::kernel_tasks);
+    if (auto t = proc::kernel_tasks->atomic_register_task(i->idle_task); t)
+        panic("Failed to add idle task to the kernel process group: %i\n", t);
+
+    i->current_task = i->idle_task;
+
+    log::serial_logger.printf("Initialized CPU %u (phys %u)\n", i->cpu_id, i->cpu_physical_id);
+}
+
 void halt() { asm volatile("idle 0"); }
+
+static bool have_online_capable_bit = false;
+static void setup_online_capable()
+{
+    struct acpi_fadt *fadt;
+    auto res = uacpi_table_fadt(&fadt);
+    if (res != UACPI_STATUS_OK)
+        panic("No FADT!");
+
+    have_online_capable_bit = (fadt->hdr.revision > 6) or 
+        (fadt->hdr.revision == 6 and fadt->fadt_minor_verison >= 3);
+}
+
+static bool cpu_usable(u32 flags)
+{
+    if (flags & ACPI_PIC_ENABLED)
+        return true;
+
+    if (!have_online_capable_bit)
+        return false;
+
+    return flags & ACPI_PIC_ONLINE_CAPABLE;
+}
+
+void init_smp()
+{
+    setup_online_capable();
+
+    auto c = sched::get_cpu_struct();
+    auto my_phys_id = c->cpu_physical_id;
+
+    uacpi_table madt;
+    auto res = uacpi_table_find_by_signature(ACPI_MADT_SIGNATURE, &madt);
+    if (res != UACPI_STATUS_OK) {
+        return;
+    }
+    auto guard = pmos::utility::make_scope_guard([&]{
+        uacpi_table_unref(&madt);
+    });
+
+    struct Ctx {
+        pmos::containers::set<u32> physical_ids;
+    } ctx;
+
+
+    if (ctx.physical_ids.insert_noexcept(my_phys_id).first != ctx.physical_ids.end())
+        panic("Failed to allocate memory for my physical id");
+
+    res = uacpi_for_each_subtable(madt.hdr, sizeof(struct acpi_madt), [](auto c, auto hdr) -> uacpi_iteration_decision {
+        Ctx &ctx = *(Ctx *)c;
+        if (hdr->type == ACPI_MADT_ENTRY_TYPE_CORE_PIC) {
+            acpi_madt_core_pic *cpic = (acpi_madt_core_pic *)hdr;
+
+            if (!cpu_usable(cpic->flags))
+                return UACPI_ITERATION_DECISION_CONTINUE;
+
+            if (cpic->id == 0xFFFFFFFF)
+                return UACPI_ITERATION_DECISION_CONTINUE;
+
+            auto phys_id = cpic->id;
+
+            auto res = ctx.physical_ids.insert_noexcept(phys_id);
+            if (res.first == ctx.physical_ids.end())
+                panic("Couldn't allocate memory for set in CPU initialization");
+
+            if (!res.second)
+                return UACPI_ITERATION_DECISION_CONTINUE;
+
+            prepare_cpu(phys_id);
+        }
+        return UACPI_ITERATION_DECISION_CONTINUE;
+    }, (void *)&ctx);
+    if (res != UACPI_STATUS_OK)
+        panic("uacpi_for_each_subtable error");
+}
