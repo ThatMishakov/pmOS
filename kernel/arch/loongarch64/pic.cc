@@ -17,6 +17,7 @@
 using namespace kernel;
 using namespace kernel::sched;
 using namespace kernel::log;
+using namespace kernel::interrupts;
 
 // constexpr u32 BIOPIC_GSI_COUNT = 256;
 
@@ -58,15 +59,14 @@ struct BIOPIC: ExtIntC {
     virtual void interrupt_complete(u32 interrupt) override;
 };
 
-struct PICAllocation {
-    CPU_Info *cpu         = nullptr;
+struct PICAllocation: InterruptHandler {
     ExtIntC *controller   = nullptr;
     u32 controller_vector = 0;
     bool edge_triggered   = false;
 };
 
 constexpr size_t INTERRUPT_MAPPINGS_SIZE = 256;
-static PICAllocation interrupt_mappings[INTERRUPT_MAPPINGS_SIZE];
+static std::array<PICAllocation, INTERRUPT_MAPPINGS_SIZE> interrupt_mappings;
 
 constexpr unsigned OTHER_FUNCTION_CONF = 0x0420;
 
@@ -92,19 +92,14 @@ constexpr unsigned EXT_IOImap_Core0   = 0x1C00;
 constexpr unsigned CORE0_EXT_IOIsr    = 0x1800;
 
 static Spinlock interrupts_lock;
-kresult_t interrupts::interrupt_enable(u32 i)
+void interrupts::interrupt_enable(InterruptHandler *handler)
 {
-    auto c = get_cpu_struct();
-    assert(i < 256);
-
-    auto [cpu, controller, gsi, _] = interrupt_mappings[i];
+    auto h = static_cast<PICAllocation *>(handler);
 
     Auto_Lock_Scope l(interrupts_lock);
-    if (cpu == nullptr)
-        return -ENOENT;
-
-    if (cpu != c)
-        return -EBADF;
+    auto c = h->parent_cpu;
+    auto i = h - &interrupt_mappings[0];
+    assert(h->parent_cpu == get_cpu_struct());
 
     switch (interrupt_model) {
     // case IntControllerClass::LIOPIC: {
@@ -133,26 +128,25 @@ kresult_t interrupts::interrupt_enable(u32 i)
         u64 enable  = iocsr_read64(EXT_IOIen_base + base * 8);
         enable |= 1UL << (i % 64);
         iocsr_write64(enable, EXT_IOIen_base + base * 8);
-        assert(controller);
+        assert(h->controller);
 
-        controller->interrupt_enable(gsi);
+        h->controller->interrupt_enable(h->controller_vector);
     } break;
     default:
         assert(!"interrupt_enable with unknown interrupt_model");
     }
-
-    return 0;
 }
 
-void interrupts::interrupt_complete(u32 interrupt)
+void interrupts::interrupt_complete(InterruptHandler *handler)
 {
-    assert(interrupt < 256);
-    auto [cpu, controller, vector, _] = interrupt_mappings[interrupt];
-    assert(cpu == get_cpu_struct());
-    assert(controller);
-    controller->interrupt_complete(vector);
+    auto h = static_cast<PICAllocation *>(handler);
 
-    csrxchg32<loongarch::csr::ECFG>(-1U, 1 << (interrupt/sizeof(uint32_t) + 2));
+    assert(h->parent_cpu == get_cpu_struct());
+    assert(h->controller);
+    h->controller->interrupt_complete(h->controller_vector);
+    auto i = h - &interrupt_mappings[0];
+
+    csrxchg32<loongarch::csr::ECFG>(-1U, 1 << (i/sizeof(uint32_t) + 2));
 }
 
 klib::vector<BIOPIC *> biopics;
@@ -355,30 +349,6 @@ void init_interrupts()
     }
 }
 
-// TODO
-u32 interrupts::interrupt_min()
-{
-    switch (interrupt_model) {
-    default:
-        return 0;
-    }
-}
-
-u32 interrupts::interrupt_limint()
-{
-    switch (interrupt_model) {
-    case IntControllerClass::None:
-        return 0;
-    case IntControllerClass::LIOPIC:
-        return 32;
-    case IntControllerClass::EIOPIC:
-        return 256;
-    }
-
-    assert(false);
-    return 0;
-}
-
 BIOPIC *get_biopic(u32 gsi)
 {
     // TODO: Do a binary search instead...
@@ -389,7 +359,7 @@ BIOPIC *get_biopic(u32 gsi)
     return nullptr;
 }
 
-ReturnStr<std::pair<CPU_Info *, u32>> interrupts::allocate_interrupt_single(u32 gsi, bool edge_triggered, bool)
+ReturnStr<InterruptHandler *> interrupts::allocate_or_get_handler(u32 gsi, bool edge_triggered, bool)
 {
     auto biopic = get_biopic(gsi);
     if (!biopic)
@@ -401,37 +371,37 @@ ReturnStr<std::pair<CPU_Info *, u32>> interrupts::allocate_interrupt_single(u32 
         if (interrupt_mappings[i].controller == biopic and
             interrupt_mappings[i].controller_vector == gsi)
             return interrupt_mappings[i].edge_triggered == edge_triggered
-                       ? Success(std::pair {interrupt_mappings[i].cpu, i})
+                       ? Success(&interrupt_mappings[i])
                        : Error(-EEXIST);
     }
 
     // Find least loaded CPU
     auto *cpu = cpus[0];
     for (size_t i = 1; i < cpus.size(); ++i) {
-        if (cpus[i]->int_handlers.allocated_int_count < cpu->int_handlers.allocated_int_count)
+        if (cpus[i]->allocated_int_count < cpu->allocated_int_count)
             cpu = cpus[i];
     }
 
     // Find unused slot
     u32 idx = 0;
     for (; idx < INTERRUPT_MAPPINGS_SIZE; ++idx) {
-        if (!interrupt_mappings[idx].cpu)
+        if (!interrupt_mappings[idx].parent_cpu)
             break;
     }
 
     if (idx == INTERRUPT_MAPPINGS_SIZE)
         return Error(-ENOMEM);
 
-    interrupt_mappings[idx].cpu               = cpu;
+    interrupt_mappings[idx].parent_cpu        = cpu;
     interrupt_mappings[idx].controller        = biopic;
     interrupt_mappings[idx].controller_vector = gsi;
     interrupt_mappings[idx].edge_triggered    = edge_triggered;
 
     biopic->set_mapping(gsi, idx, cpu, edge_triggered);
 
-    cpu->int_handlers.allocated_int_count++;
+    cpu->allocated_int_count++;
 
-    return ReturnStr<std::pair<CPU_Info *, u32>>::success(std::pair(cpu, idx));
+    return &interrupt_mappings[idx];
 }
 
 u32 get_irq(unsigned sector)
@@ -491,41 +461,21 @@ void handle_hardware_interrupt(u32 estat)
     }
 
     ack_interrupt(irq);
-
-    auto handler = c->int_handlers.get_handler(irq);
-    if (!handler) {
-        interrupts::interrupt_disable(irq);
-        return;
-    }
+    auto &mapping = interrupt_mappings[irq];
 
     // Disable interrupts
     csrxchg32<loongarch::csr::ECFG>(0, 1 << (sector + 2));
 
-    // Send the interrupt to the port
-    auto port = handler->port;
-    bool sent = false;
-    if (port) {
-        IPC_Kernel_Interrupt kmsg = {IPC_Kernel_Interrupt_NUM, irq, c->cpu_id};
-        auto result = port->atomic_send_from_system(reinterpret_cast<char *>(&kmsg), sizeof(kmsg));
-
-        if (result == 0)
-            sent = true;
-        else
-            serial_logger.printf("Error: %i\n", result);
-    }
-
-    if (!sent) {
-        interrupts::interrupt_disable(irq);
-        interrupts::interrupt_complete(irq);
- 
-        c->int_handlers.remove_handler(irq);
-    } else {
-        handler->active = true;
+    // Send the interrupt
+    if (mapping.send_interrupt_notification() != NotificationResult::Success) {
+        interrupt_disable(&mapping);
+        interrupt_complete(&mapping);
     }
 }
 
-void interrupts::interrupt_disable(u32 interrupt_id) {
-    assert(interrupt_id < 256);
+void interrupts::interrupt_disable(InterruptHandler *handler) {
+    auto h = static_cast<PICAllocation *>(handler);
+    auto interrupt_id = h - &interrupt_mappings[0];
 
     switch (interrupt_model) {
         case IntControllerClass::EIOPIC: {
@@ -533,7 +483,7 @@ void interrupts::interrupt_disable(u32 interrupt_id) {
 
             size_t base = interrupt_id / 64;
             u64 enable  = iocsr_read64(EXT_IOIen_base + base * 8);
-            enable &= ~(1UL << (interrupt_id % 64));
+            enable &= ~((u64)1 << (interrupt_id % 64));
             iocsr_write64(enable, EXT_IOIen_base + base * 8);
         } break;
     default:

@@ -56,7 +56,7 @@ ovmf-loongarch64: ovmf-loongarch64/OVMF.fd
 
 ovmf-loongarch64/OVMF.fd:
 	mkdir -p ovmf-loongarch64
-	cd ovmf-loongarch64 && curl -o OVMF.fd https://retrage.github.io/edk2-nightly/bin/RELEASEloongarch64_QEMU_EFI.fd && dd if=/dev/zero of=OVMF.fd bs=1 count=0 seek=33554432
+	cd ovmf-loongarch64 && curl -o OVMF.fd https://retrage.github.io/edk2-nightly/bin/RELEASEloongarch64_QEMU_EFI.fd
 
 ovmf-x86: ovmf-x86/OVMF.fd
 
