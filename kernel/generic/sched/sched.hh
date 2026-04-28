@@ -154,8 +154,12 @@ struct CPU_Info {
 #if defined(__x86_64__) || defined(__i386__)
     u32 lapic_id                            = 0;
     static constexpr unsigned MAPPABLE_INTS = 192;
-    std::array<std::pair<void *, u32>, MAPPABLE_INTS> int_mappings {};
+    std::array<interrupts::InterruptHandler *, MAPPABLE_INTS> isr_handlers;
 #endif
+    // TODO: APLIC on RISC-V and other per-CPU controller memes...
+    // Also, this is a random place to leave this comment, but it would be nice to implement the ELF TLS thing
+    // instead of having all of the CPU-local stuff here, by whomever happens to read this (maybe not me at some point???) :P
+
 
 #ifdef __riscv
     u64 hart_id = 0;
@@ -176,15 +180,6 @@ struct CPU_Info {
     u64 timer_val       = 0;
     u64 timer_total     = 0;
 #endif
-
-    // ISRs in userspace
-    #if defined(__x86_64__) || defined(__i386__)
-    // Hopefully, a comment somewhere else explains why it's 256 - 48
-    std::array<InterruptHandler *, 256 - 48> isr_handlers;
-    #endif
-    // TODO: APLIC on RISC-V and other per-CPU controller memes...
-    // Also, this is a random place to leave this comment, but it would be nice to implement the ELF TLS thing
-    // instead of having all of the CPU-local stuff here, by whomever happens to read this (maybe not me at some point???) :P
 
     static constexpr int IPI_RESCHEDULE    = 0x1;
     static constexpr int IPI_TLB_SHOOTDOWN = 0x2;

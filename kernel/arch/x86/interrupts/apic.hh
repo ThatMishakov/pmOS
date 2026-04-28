@@ -37,6 +37,7 @@ namespace kernel::x86::interrupts
 {
 
 class IOAPIC;
+struct IOAPIC_Handler;
 
 namespace lapic
 {
@@ -238,7 +239,7 @@ constexpr u32 X2APIC_MSR_BASE = 0x800;
         u32 vector;
     };
 
-    ReturnStr<std::pair<sched::CPU_Info *, u32>> allocate_interrupt(IntMapping);
+    kresult_t allocate_interrupt(IOAPIC_Handler *);
     
     enum class APICMode {
         XAPIC,
@@ -249,6 +250,8 @@ constexpr u32 X2APIC_MSR_BASE = 0x800;
 
     void arm_tsc_deadline(u64 deadline_ticks);
     void init_tsc_deadline();
+
+constexpr u32 first_mappable_vector = 48;
 
 }; // namespace lapic
 }; // namespace kernel::x86::interrupts

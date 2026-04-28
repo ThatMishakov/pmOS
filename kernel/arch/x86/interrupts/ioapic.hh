@@ -9,6 +9,25 @@
 namespace kernel::x86::interrupts
 {
 
+class IOAPIC;
+
+struct IOAPIC_Handler final: ::kernel::interrupts::InterruptHandler {
+    IOAPIC *parent_ioapic = nullptr;
+
+    // 48 .. 240
+    u32 lapic_vector = 0;
+
+    // gsi - parent_ioapic->int_base
+    u32 ioapic_index = 0;
+
+    // Interrupt params
+    bool level_triggered : 1 = false;
+    bool active_low : 1 = false;
+    bool enabled : 1 = false;
+
+    void mask_interrupt();
+};
+
 class IOAPIC
 {
 public:
@@ -16,23 +35,19 @@ public:
     void interrupt_disable(u32 vector);
 
     static void init_ioapics();
-    static ReturnStr<std::pair<sched::CPU_Info *, u32>>
-        allocate_interrupt_single(u32 gsi, bool edge_triggered, bool active_low);
+    static ReturnStr<IOAPIC_Handler *>
+        allocate_or_get_handler(u32 gsi, bool edge_triggered, bool active_low);
 
     static void mask_interrupt(sched::CPU_Info *cpu, int vec);
     
 private:
-    struct IntMapping {
-        sched::CPU_Info *mapped_to {};
-        u32 vector {};
-    };
 
     IOAPIC() = default;
 
     u32 phys_addr;
     u32 int_base;
     u32 *virt_addr;
-    klib::vector<IntMapping> mappings;
+    klib::vector<IOAPIC_Handler *> mappings;
     u32 int_count;
     unsigned ioapic_id;
     Spinlock io_lock;

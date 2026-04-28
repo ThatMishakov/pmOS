@@ -33,7 +33,7 @@ binary:
     path = "/kernel"
 EOF
 
-if [ "$JINX_ARCH" != "i686" ]; then
+if [ "$JINX_ARCH" = "x86_64" ]; then
     cat <<EOF >> "$FILE"
     allocate-anywhere = true
 EOF
