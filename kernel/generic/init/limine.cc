@@ -586,8 +586,6 @@ namespace kernel::sched
 extern bool other_cpus_online;
 }
 
-extern int kernel_pt_active_cpus_count[2];
-
 size_t booted_cpus      = 0;
 bool boot_barrier_start = false;
 

@@ -158,8 +158,6 @@ void init_per_cpu(u64 lapic_id)
     #endif
 }
 
-extern int kernel_pt_active_cpus_count[2];
-
 extern "C" void smp_main(CPU_Info *c)
 {
     serial_logger.printf("Entered CPU %i\n", c->cpu_id);
@@ -182,18 +180,7 @@ extern "C" void smp_main(CPU_Info *c)
     sse::enable_sse();
     enable_protections();
 
-    if (c->to_restore_on_wakeup) {
-        c->current_task->regs = *c->to_restore_on_wakeup;
-        c->to_restore_on_wakeup.reset();
-    }
-    c->current_task->page_table->apply_cpu(c);
-    c->current_task->page_table->apply();
-    c->current_task->after_task_switch();
-
-    assert(c->kernel_pt_generation == -1);
-    c->kernel_pt_generation = __atomic_load_n(&kernel_pt_generation, __ATOMIC_ACQUIRE);
-    __atomic_add_fetch(&kernel_pt_active_cpus_count[c->kernel_pt_generation], 1, __ATOMIC_RELAXED);
-    c->online = true;
+    call_after_smp_entry();    
 
     if (__atomic_load_n(&c->ipi_mask, __ATOMIC_ACQUIRE))
         c->ipi_reschedule();
@@ -228,18 +215,7 @@ extern "C" void acpi_main()
     sse::enable_sse();
     enable_protections();
 
-    if (c->to_restore_on_wakeup) {
-        c->current_task->regs = *c->to_restore_on_wakeup;
-        c->to_restore_on_wakeup.reset();
-    }
-    c->current_task->page_table->apply_cpu(c);
-    c->current_task->page_table->apply();
-    c->current_task->after_task_switch();
-
-    assert(c->kernel_pt_generation == -1);
-    c->kernel_pt_generation = __atomic_load_n(&kernel_pt_generation, __ATOMIC_ACQUIRE);
-    __atomic_add_fetch(&kernel_pt_active_cpus_count[c->kernel_pt_generation], 1, __ATOMIC_RELAXED);
-    c->online = true;
+    call_after_smp_entry();
 
     if (__atomic_load_n(&c->ipi_mask, __ATOMIC_ACQUIRE))
         c->ipi_reschedule();

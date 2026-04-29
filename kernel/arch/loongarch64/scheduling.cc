@@ -7,8 +7,13 @@
 #include <uacpi/tables.h>
 #include <uacpi/acpi.h>
 #include <pmos/utility/scope_guard.hh>
+#include <paging/loongarch64_paging.hh>
+#include "iocsr.hh"
 
 using namespace kernel;
+using namespace kernel::sched;
+using namespace kernel::log;
+using namespace kernel::loongarch;
 
 extern "C" void isr();
 
@@ -78,6 +83,20 @@ void init_scheduling(u64 cpu_id)
     log::serial_logger.printf("Scheduling initialized\n");
 }
 
+extern "C" void smp_ap_entry()
+{
+    auto i = get_cpu_struct();
+    serial_logger.printf("Kernel: Entered AP %i (phys %i)\n", i->cpu_id, i->cpu_physical_id); 
+ 
+    kernel::loongarch64::paging::set_dmws();
+    set_save0(i);
+    program_interrupts();
+
+    call_after_smp_entry();
+
+    reschedule();
+}
+
 void prepare_cpu(u32 phys_id)
 {
     sched::CPU_Info *i = new sched::CPU_Info();
@@ -129,7 +148,7 @@ static bool cpu_usable(u32 flags)
     return flags & ACPI_PIC_ONLINE_CAPABLE;
 }
 
-void init_smp()
+void init_smp_acpi()
 {
     setup_online_capable();
 
@@ -179,4 +198,48 @@ void init_smp()
     }, (void *)&ctx);
     if (res != UACPI_STATUS_OK)
         panic("uacpi_for_each_subtable error");
+}
+
+extern "C" void ap_bringup_trampoline();
+extern phys_addr_t kernel_phys_base;
+extern u8 _kernel_start;
+
+static void mailbox_send(u32 cpu_phys, unsigned idx, u32 data)
+{
+    u64 value = 0;
+    assert(idx < 8);
+    value |= idx << 2;
+    value |= cpu_phys << 16;
+    value |= (1 << 31);
+    value |= (u64)data << 32;
+    iocsr_write64(value, iocsr::IPI_MAIL_SEND);
+}
+
+static void mailbox_send_u64(u32 cpu_phys, unsigned idx, u64 data)
+{
+    mailbox_send(cpu_phys, idx*2, data);
+    mailbox_send(cpu_phys, idx*2 + 1, data >> 32);
+}
+
+void ipi_send(u32 cpu, u32 vector);
+
+void start_aps()
+{
+    phys_addr_t phys_addr = kernel_phys_base + ((u8 *)&ap_bringup_trampoline - &_kernel_start);
+
+    for (size_t i = 1; i < cpus.size(); ++i) {
+        auto cpu = cpus[i];
+        log::serial_logger.printf("Starting AP 0x%x (%x)\n", cpu->cpu_id, cpu->cpu_physical_id);
+
+        mailbox_send_u64(cpu->cpu_physical_id, 0, phys_addr);
+        mailbox_send_u64(cpu->cpu_physical_id, 1, (ulong)cpu);
+        ipi_send(cpu->cpu_physical_id, 1 << 0);
+    }
+}
+
+void init_smp()
+{
+    init_smp_acpi();
+
+    start_aps();
 }

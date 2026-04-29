@@ -275,4 +275,6 @@ extern "C" void reschedule();
 // Rearms the timer, if the current entry is sooner than the first one
 void maybe_rearm_timer(u64 deadline_nanoseconds);
 
+void call_after_smp_entry();
+
 }; // namespace kernel::sched

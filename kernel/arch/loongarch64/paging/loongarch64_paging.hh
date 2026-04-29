@@ -138,6 +138,8 @@ kresult_t loongarch_unmap_page(::kernel::paging::TLBShootdownContext&, u64 pt_to
 
 kernel::paging::Page_Info get_page_mapping(u64 page_table, void *virt_addr);
 
+void set_dmws();
+
 } // namespace kernel::loongarch64::paging
 
 // // Generic functions to map and release pages in kernel, using the active page table

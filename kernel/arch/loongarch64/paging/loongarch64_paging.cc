@@ -20,6 +20,51 @@ extern u64 kernel_phys_base;
 
 using namespace kernel::paging;
 
+constexpr u32 CSR_DMW0      = 0x180;
+constexpr u32 CSR_PWCL      = 0x1C;
+constexpr u32 CSR_PWCH      = 0x1D;
+constexpr u32 CSR_TLBRENTRY = 0x88;
+constexpr u32 CSR_STLBPS    = 0x1E;
+
+u32 stlbps = 12;
+
+void set_page_size() { csrwr<CSR_STLBPS>(stlbps); }
+
+void kernel::loongarch64::paging::set_dmws()
+{
+    csrwr<CSR_DMW0>(0x9000000000000011);
+    csrwr<CSR_DMW0 + 1>(0);
+    csrwr<CSR_DMW0 + 2>(0);
+    csrwr<CSR_DMW0 + 3>(0);
+}
+
+u32 pwcl = (12) | (9 << 5) | (21 << 10) | (9 << 15) | (30 << 20) | (9 << 25) | (0 << 30);
+u32 pwch = (39) | (9 << 6); // | (48 << 12) | (9 << 18);
+
+static void set_pwcs()
+{
+    csrwr<CSR_PWCL>(pwcl);
+    csrwr<CSR_PWCH>(pwch);
+}
+
+u64 tlb_refill_addr = 0;
+
+static void set_tlbrentry()
+{
+    tlb_refill_addr = kernel_phys_base + (&tlb_refill - &_kernel_start);
+    csrwr<CSR_TLBRENTRY>(tlb_refill_addr);
+}
+
+extern "C" void bootstrap_isr();
+
+constinit const void *bootstrap_isr_virt = (void *)bootstrap_isr;
+
+void set_early_exceptions()
+{
+    csrwr<loongarch::csr::ECFG>(0);
+    csrwr<loongarch::csr::EENTRY>(bootstrap_isr_virt);
+}
+
 namespace kernel::loongarch64::paging
 {
 
@@ -66,38 +111,6 @@ void LoongArch64_Page_Table::apply() noexcept
 {
     set_pgdl(page_directory);
     flush_tlb();
-}
-
-constexpr u32 CSR_DMW0      = 0x180;
-constexpr u32 CSR_PWCL      = 0x1C;
-constexpr u32 CSR_PWCH      = 0x1D;
-constexpr u32 CSR_TLBRENTRY = 0x88;
-constexpr u32 CSR_STLBPS    = 0x1E;
-
-void set_page_size() { csrwr<CSR_STLBPS>(12); }
-
-void set_dmws()
-{
-    csrwr<CSR_DMW0>(0x9000000000000011);
-    csrwr<CSR_DMW0 + 1>(0);
-    csrwr<CSR_DMW0 + 2>(0);
-    csrwr<CSR_DMW0 + 3>(0);
-}
-
-void set_pwcs()
-{
-    constexpr u32 pwcl =
-        (12) | (9 << 5) | (21 << 10) | (9 << 15) | (30 << 20) | (9 << 25) | (0 << 30);
-    constexpr u32 pwch = (39) | (9 << 6); // | (48 << 12) | (9 << 18);
-
-    csrwr<CSR_PWCL>(pwcl);
-    csrwr<CSR_PWCH>(pwch);
-}
-
-void set_tlbrentry()
-{
-    u64 tlb_refill_addr = kernel_phys_base + (&tlb_refill - &_kernel_start);
-    csrwr<CSR_TLBRENTRY>(tlb_refill_addr);
 }
 
 void *LoongArch64_Page_Table::user_addr_max() const
@@ -254,13 +267,6 @@ klib::shared_ptr<LoongArch64_Page_Table> LoongArch64_Page_Table::get_page_table(
 {
     auto it = page_tables.find(id);
     return it == page_tables.end() ? nullptr : it->second;
-}
-
-extern "C" void bootstrap_isr();
-void set_early_exceptions()
-{
-    csrwr<loongarch::csr::ECFG>(0);
-    csrwr<loongarch::csr::EENTRY>(bootstrap_isr);
 }
 
 static void free_leaf_pte(u64 pte)
@@ -685,11 +691,11 @@ kresult_t paging::map_pages(ptable_top_ptr_t page_table, u64 phys_addr, void *vi
 
 void paging::apply_page_table(ptable_top_ptr_t page_table)
 {
-    loongarch64::paging::set_dmws();
-    loongarch64::paging::set_pwcs();
-    loongarch64::paging::set_page_size();
-    loongarch64::paging::set_early_exceptions();
-    loongarch64::paging::set_tlbrentry();
+    kernel::loongarch64::paging::set_dmws();
+    set_pwcs();
+    set_page_size();
+    set_early_exceptions();
+    set_tlbrentry();
     set_pgdh(page_table);
     flush_tlb();
 }

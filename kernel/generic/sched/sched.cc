@@ -590,3 +590,23 @@ void TaskDescriptor::atomic_try_unblock()
 
     unblock();
 }
+
+extern int kernel_pt_active_cpus_count[2];
+
+void kernel::sched::call_after_smp_entry()
+{
+    auto c = get_cpu_struct();
+
+    if (c->to_restore_on_wakeup) {
+        c->current_task->regs = *c->to_restore_on_wakeup;
+        c->to_restore_on_wakeup.reset();
+    }
+    c->current_task->page_table->apply_cpu(c);
+    c->current_task->page_table->apply();
+    c->current_task->after_task_switch();
+
+    assert(c->kernel_pt_generation == -1);
+    c->kernel_pt_generation = __atomic_load_n(&kernel::paging::kernel_pt_generation, __ATOMIC_ACQUIRE);
+    __atomic_add_fetch(&kernel_pt_active_cpus_count[c->kernel_pt_generation], 1, __ATOMIC_RELAXED);
+    c->online = true;
+}
