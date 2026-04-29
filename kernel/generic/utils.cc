@@ -411,7 +411,7 @@ extern "C" size_t strlen(const char *start)
 
 extern "C" void dbg_uart_init();
 
-extern void hcf();
+[[noreturn]] extern void hcf();
 extern "C" void abort(void)
 {
     t_print_bochs("Error: abort() was called.\n");
@@ -598,21 +598,13 @@ bool Spinlock::try_lock() noexcept
     return result;
 }
 
+void halt();
+
 // Halt and catch fire function.
 void hcf(void)
 {
-// should be arch-specific, but whatever...
-#if defined(__x86_64__) || defined(__i386__)
-    asm("cli");
-    for (;;) {
-        asm("hlt");
-    }
-#elif defined(__riscv)
-    asm volatile("wfi");
-#endif
-
     while (1)
-        ;
+        halt();
 
     __builtin_unreachable();
 }
