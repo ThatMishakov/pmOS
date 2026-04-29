@@ -87,14 +87,15 @@ extern "C" void smp_ap_entry()
 {
     auto i = get_cpu_struct();
     serial_logger.printf("Kernel: Entered AP %i (phys %i)\n", i->cpu_id, i->cpu_physical_id); 
- 
+
     kernel::loongarch64::paging::set_dmws();
     set_save0(i);
     program_interrupts();
-
     call_after_smp_entry();
 
     reschedule();
+
+    serial_logger.printf("Kernel: AP %i entering userspace...\n", i->cpu_id);
 }
 
 void prepare_cpu(u32 phys_id)
@@ -169,7 +170,7 @@ void init_smp_acpi()
     } ctx;
 
 
-    if (ctx.physical_ids.insert_noexcept(my_phys_id).first != ctx.physical_ids.end())
+    if (ctx.physical_ids.insert_noexcept(my_phys_id).first == ctx.physical_ids.end())
         panic("Failed to allocate memory for my physical id");
 
     res = uacpi_for_each_subtable(madt.hdr, sizeof(struct acpi_madt), [](auto c, auto hdr) -> uacpi_iteration_decision {
@@ -227,6 +228,7 @@ void start_aps()
 {
     phys_addr_t phys_addr = kernel_phys_base + ((u8 *)&ap_bringup_trampoline - &_kernel_start);
 
+    // log::serial_logger.printf("Phys addr %lx\n", phys_addr);
     for (size_t i = 1; i < cpus.size(); ++i) {
         auto cpu = cpus[i];
         log::serial_logger.printf("Starting AP 0x%x (%x)\n", cpu->cpu_id, cpu->cpu_physical_id);

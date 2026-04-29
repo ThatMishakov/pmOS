@@ -70,7 +70,7 @@ void print_registers(LoongArch64Regs *regs, Logger &logger = serial_logger)
 
 void ipi_send(u32 cpu, u32 vector)
 {
-    uint32_t value = (cpu << 16) | vector;
+    uint32_t value = (1 << 31) | (cpu << 16) | vector;
     iocsr_write32(value, iocsr::IPI_SEND);
 }
 

@@ -18,7 +18,7 @@ _limine_entry:
 
     # Switch to our own stack since the one provided by limine will be unusable
     # once the kernel switched to its own page tables
-    la $sp, stack
+    la.pcrel $sp, stack
     li.d $t0, STACK_SIZE
     add.d $sp, $sp, $t0
 
@@ -63,29 +63,29 @@ ap_bringup_trampoline:
     csrwr $zero, CSR_DMW3
 
     # Load kernel and user (none) page tables...
-    la   $t1, kernel_ptable_top
+    la.pcrel  $t1, kernel_ptable_top
     ld.d $t2, $t1, 0
     csrwr $t2, CSR_PGDH
     csrwr $zero, CSR_PGDL
 
     # Other paging geometry stuff
-    la $t0, pwcl
+    la.pcrel $t0, pwcl
     ld.w $t0, $t0, 0
     csrwr $t0, CSR_PWCL
-    la $t0, pwch
+    la.pcrel $t0, pwch
     ld.w $t0, $t0, 0
     csrwr $t0, CSR_PWCH
-    la $t0, stlbps
+    la.pcrel $t0, stlbps
     ld.w $t0, $t0, 0
     csrwr $t0, CSR_STLBPS
 
     # Refill routine...
-    la $t0, tlb_refill_addr
+    la.pcrel $t0, tlb_refill_addr
     ld.d $t0, $t0, 0
     csrwr $t0, CSR_TLBRENTRY
 
     # Bootstrap isr
-    la $t0, bootstrap_isr_virt
+    la.pcrel $t0, bootstrap_isr_virt
     ld.d $t0, $t0, 0
     csrwr $t0, CSR_EENTRY
     csrwr $zero, CSR_ECFG
@@ -95,7 +95,7 @@ ap_bringup_trampoline:
     csrwr $t0, CSR_CRMD
 
     # ---------------------- At virt addr ---------------------
-    la $t0, kernel_smp_at_virt
+    la.pcrel $t0, kernel_smp_at_virt
     ld.d $t0, $t0, 0
     jirl $zero, $t0, 0
 2:
