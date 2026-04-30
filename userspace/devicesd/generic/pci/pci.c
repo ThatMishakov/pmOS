@@ -718,8 +718,13 @@ void acpi_pci_init()
         NULL,
     };
 
-    uacpi_find_devices_at(uacpi_namespace_get_predefined(UACPI_PREDEFINED_NAMESPACE_SB), pciRootIds,
-                          pci_check_acpi_root, NULL);
+    // Fub fact: PCI root bridge is not published in /_SB_ in qemu on loongarch64
+    uacpi_status status =
+        uacpi_find_devices_at(uacpi_namespace_root(), pciRootIds, pci_check_acpi_root, NULL);
+
+    if (status != UACPI_STATUS_OK) {
+        fprintf(stderr, "Failed to find ACPI PCI root bridges: %s\n", uacpi_status_to_string(status));
+    }
 
     pci_fully_working = true;
 
