@@ -496,6 +496,8 @@ CPU_Info *prepare_cpu(u64 hart_id)
     i->kernel_stack_top = i->kernel_stack.get_stack_top();
     i->hart_id          = hart_id;
 
+    i->kernel_pt_generation = -1;
+
     void *temp_mapper_start = vmm::kernel_space_allocator.virtmem_alloc_aligned(16, 4);
     i->temp_mapper =
         RISCV64_Temp_Mapper(temp_mapper_start, kernel::paging::idle_page_table->get_root());
@@ -529,7 +531,7 @@ CPU_Info *prepare_cpu(u64 hart_id)
         panic("Failed to add idle task to the kernel process group: %i\n", t);
 
     i->current_task = i->idle_task;
-
+    
     u64 *stack_top = (u64 *)i->kernel_stack.get_stack_top();
     stack_top[-1]  = (u64)i;
 
@@ -685,13 +687,13 @@ extern "C" void bootstrap_entry(u64 hart_id, CPU_Info *i)
     set_sscratch((u64)i);
     program_stvec();
 
-    i->idle_task->page_table->apply_cpu(i);
-
     // Enable interrupts
     const u64 mask = (1 << TIMER_INTERRUPT) | (1 << EXTERNAL_INTERRUPT) | (1 << SOFTWARE_INTERRUPT);
     asm volatile("csrs sie, %0" : : "r"(mask) : "memory");
 
     plic_set_threshold(0);
+
+    call_after_smp_entry();
 
     // Start the timer (otherwise, the CPU will likely idle forever)
     // start_timer(10 /* ms */);
