@@ -88,7 +88,7 @@ void handle_ipi()
 {
     auto mask = iocsr_read32(iocsr::IPI_STATUS);
     // EOI
-    iocsr_write32(iocsr::IPI_CLEAR, mask);
+    iocsr_write32(mask, iocsr::IPI_CLEAR);
 
     if (mask & (1 << 0))
         reschedule();
@@ -101,7 +101,7 @@ void handle_ipi()
 
 void ipi_enable()
 {
-    iocsr_write32(iocsr::IPI_ENABLE, IPI_MASK);
+    iocsr_write32(IPI_MASK, iocsr::IPI_ENABLE);
 }
 
 unsigned exception_code(u32 estat = csrrd32<loongarch::csr::ESTAT>())

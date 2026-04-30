@@ -1,5 +1,4 @@
 #include <csr.hh>
-#include <interrupts.hh>
 #include <kern_logger/kern_logger.hh>
 #include <loongarch_asm.hh>
 #include <processes/tasks.hh>

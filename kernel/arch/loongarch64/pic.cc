@@ -89,7 +89,7 @@ constexpr unsigned EXT_IOIen_base     = 0x1600;
 constexpr unsigned EXT_IOIbounce_base = 0x1680;
 constexpr unsigned EXT_IOImap_base    = 0x14C0;
 constexpr unsigned EXT_IOImap_Core0   = 0x1C00;
-constexpr unsigned CORE0_EXT_IOIsr    = 0x1800;
+constexpr unsigned perCore_EXT_IOI    = 0x1800;
 
 static Spinlock interrupts_lock;
 void interrupts::interrupt_enable(InterruptHandler *handler)
@@ -413,11 +413,10 @@ u32 get_irq(unsigned sector)
         panic("LIOPIC not implemented\n");
     case IntControllerClass::EIOPIC: {
         // TODO: Support non-vectored interrupts
-        u32 core_base = CORE0_EXT_IOIsr + 0x100 * c->cpu_physical_id;
 
         assert(sector < 8);
 
-        u32 val = iocsr_read32(core_base + sector * 4);
+        u32 val = iocsr_read32(perCore_EXT_IOI + sector * 4);
         if (val == 0)
             return -1U;
 
@@ -436,12 +435,10 @@ static void ack_interrupt(u32 irq)
 
     switch (interrupt_model) {
     case IntControllerClass::EIOPIC: {
-        u32 core_base = CORE0_EXT_IOIsr + 0x100 * c->cpu_physical_id;
-
         assert(irq < 256);
         u32 reg  = irq / 32;
         u32 mask = 1 << irq % 32;
-        iocsr_write32(mask, core_base + reg * 4);
+        iocsr_write32(mask, perCore_EXT_IOI + reg * 4);
     } break;
     default:
         panic("LIOPIC not implemented\n");
@@ -456,9 +453,9 @@ void handle_hardware_interrupt(u32 estat)
     u32 sector = __builtin_ctz(estat >> 2);
 
     u32 irq = get_irq(sector);
-    if (irq == -1U) {
-        panic("Unknown interrupt\n");
-    }
+    if (irq == -1U)
+        // Spurious interrupt?!
+        return;
 
     ack_interrupt(irq);
     auto &mapping = interrupt_mappings[irq];
