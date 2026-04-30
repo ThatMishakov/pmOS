@@ -7,15 +7,13 @@
 
 struct PCIDevice
 {
-    uint32_t readl(uint16_t offset);
-    uint16_t readw(uint16_t offset);
-    uint8_t readb(uint16_t offset);
+    pmos::async::task<uint32_t> readl(uint16_t offset);
+    pmos::async::task<uint16_t> readw(uint16_t offset);
+    pmos::async::task<uint8_t> readb(uint16_t offset);
 
-    void writel(uint16_t offset, uint32_t val);
-    void writew(uint16_t offset, uint16_t val);
-    void writeb(uint16_t offset, uint8_t val);
-
-    ~PCIDevice();
+    pmos::async::task<void> writel(uint16_t offset, uint32_t val);
+    pmos::async::task<void> writew(uint16_t offset, uint16_t val);
+    pmos::async::task<void> writeb(uint16_t offset, uint8_t val);
 
     PCIDevice(const PCIDevice &other)            = delete;
     PCIDevice &operator=(const PCIDevice &other) = delete;
@@ -26,7 +24,7 @@ struct PCIDevice
     PCIDevice(volatile char *virt_addr);
 
     // Returns 0 if no interrupt pin is connected, otherwise 0x1 for INTA# to 0x4 for INTD#
-    char interrupt_pin() noexcept;
+    pmos::async::task<uint8_t> interrupt_pin() noexcept;
 
     // // Resolves the device's interrupt line to GSI
     // // Returns 0 on success, otherwise -1 setting errno to the error code
@@ -42,9 +40,7 @@ struct PCIDevice
     uint8_t device() const;
     uint8_t function() const;
 
-    PCIDevice();
-
-    volatile char *virt_addr;
+    PCIDevice() = default;
 };
 
 pmos::async::task<std::unique_ptr<PCIDevice>> get_pci_device();

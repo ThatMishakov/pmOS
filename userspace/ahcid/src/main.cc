@@ -113,7 +113,7 @@ void AHCIPort::dump_state()
     printf(" --- End Port %i ---\n", index);
 }
 
-void dump_controller()
+pmos::async::task<void> dump_controller()
 {
     printf("AHCI controller registers\n");
     printf(" CAP: %#x\n", ahci_virt_base[0]);
@@ -129,7 +129,7 @@ void dump_controller()
     printf(" BOHC: %#x\n", ahci_virt_base[10]);
 
     printf(" --- PCI config space ---\n");
-    printf(" Status+Command: %#x\n", ahci_controller->readl(0x4));
+    printf(" Status+Command: %#x\n", co_await ahci_controller->readl(0x4));
 }
 
 uint64_t AHCIPort::get_command_table_phys(int index)
@@ -546,21 +546,21 @@ pmos::async::detached_task ahci_handle()
 
     printf("AHCI controller created\n");
 
-    uint16_t vendor_id = ahci_controller->readw(0);
-    uint16_t device_id = ahci_controller->readw(2);
-    uint8_t class_code = ahci_controller->readb(0xb);
-    uint8_t subclass   = ahci_controller->readb(0xa);
-    uint8_t prog_if    = ahci_controller->readb(0x9);
+    uint16_t vendor_id = co_await ahci_controller->readw(0);
+    uint16_t device_id = co_await ahci_controller->readw(2);
+    uint8_t class_code = co_await ahci_controller->readb(0xb);
+    uint8_t subclass   = co_await ahci_controller->readb(0xa);
+    uint8_t prog_if    = co_await ahci_controller->readb(0x9);
     printf("AHCI controller: vendor 0x%x device 0x%x class 0x%x subclass 0x%x prog_if 0x%x\n",
            vendor_id, device_id, class_code, subclass, prog_if);
 
     // Enable DMA and memory space access
-    uint32_t command = ahci_controller->readw(0x4);
+    uint32_t command = co_await ahci_controller->readw(0x4);
     command |= 0x06;
-    ahci_controller->writew(0x4, command);
+    co_await ahci_controller->writew(0x4, command);
 
     // Get BAR5
-    uint32_t bar5 = ahci_controller->readl(0x24);
+    uint32_t bar5 = co_await ahci_controller->readl(0x24);
     printf("ACHI BAR5: %#x\n", bar5);
 
     bar5 &= 0xfffffff0;
@@ -668,10 +668,10 @@ pmos::async::detached_task ahci_handle()
 
     {
     // Clear 'interrupt disable' bit
-    auto command = ahci_controller->readw(0x4);
+    auto command = co_await ahci_controller->readw(0x4);
     command &= ~(1 << 10);
     printf("Command: %#x\n", command);
-    ahci_controller->writew(0x4, command);
+    co_await ahci_controller->writew(0x4, command);
 
     // Clear interrupt status
     ahci_virt_base[2] = 0xffffffff;

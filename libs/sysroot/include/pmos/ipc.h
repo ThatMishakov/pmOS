@@ -172,23 +172,6 @@ typedef struct IPC_Request_PCI_Devices_Reply {
     struct IPC_PCIDeviceLocation devices[];
 } IPC_Request_PCI_Devices_Reply;
 
-#define IPC_Request_PCI_Device_NUM 0x0A
-typedef struct IPC_Request_PCI_Device {
-    uint32_t type; // IPC_Request_PCI_Device_NUM
-    uint32_t flags;
-} IPC_Request_PCI_Device;
-
-#define IPC_Request_PCI_Device_Reply_NUM 0x0B
-typedef struct IPC_Request_PCI_Device_Reply {
-    uint32_t type; // IPC_Request_PCI_Device_Reply_NUM
-    uint16_t flags;
-    int16_t type_error; // Negative value on error, type of the device otherwise
-#define IPC_PCI_ACCESS_TYPE_MMIO 0x01
-#define IPC_PCI_ACCESS_TYPE_IO   0x02
-
-    uint64_t base_address;
-} IPC_Request_PCI_Device_Reply;
-
 #define IPC_Request_PCI_Device_GSI_NUM 0x0C
 typedef struct IPC_Request_PCI_Device_GSI {
     uint32_t type; // IPC_Request_PCI_Device_GSI_NUM
@@ -213,6 +196,38 @@ typedef struct IPC_Request_PCI_Interrupt {
     uint16_t flags;
     uint16_t pin;
 } IPC_Register_PCI_Interrupt;
+
+#define IPC_PCI_Read_NUM 0x0F
+typedef struct IPC_PCI_Read {
+    uint32_t type;
+    uint16_t offset;
+    // {1, 2, 4} bytes
+    uint16_t access_width;
+} IPC_PCI_Read;
+
+#define IPC_PCI_Write_NUM 0x10
+typedef struct IPC_PCI_Write {
+    uint32_t type;
+    uint16_t offset;
+    // {1, 2, 4} bytes
+    uint16_t access_width;
+    uint32_t data;
+} IPC_PCI_Write;
+
+#define IPC_PCI_Read_Result_NUM 0x11
+typedef struct IPC_PCI_Read_Result {
+    uint32_t type;
+    // 0 on success, -errno error otherwise
+    int32_t result;
+    // If reading less than 32 bits, zero-extended
+    uint32_t data;
+} IPC_PCI_Read_Result;
+
+#define IPC_PCI_Write_Result_NUM 0x12
+typedef struct IPC_PCI_Write_Result {
+    uint32_t type;
+    int32_t result;
+} IPC_PCI_Write_Result;
 
 #define IPC_Kernel_Interrupt_NUM 0x20
 typedef struct IPC_Kernel_Interrupt {
