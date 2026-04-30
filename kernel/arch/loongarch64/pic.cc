@@ -21,6 +21,8 @@ using namespace kernel::interrupts;
 
 // constexpr u32 BIOPIC_GSI_COUNT = 256;
 
+struct PICAllocation;
+
 enum class IntControllerClass {
     None,
     LIOPIC,
@@ -44,6 +46,10 @@ struct BIOPIC: ExtIntC {
     u16 hardware_id;
     Spinlock lock;
 
+    static constexpr u32 ints_count = 64;
+
+    std::array<PICAllocation *, ints_count> mappings = {};
+
     virtual void interrupt_enable(u32 controller_vector) override;
     void initialize();
 
@@ -54,7 +60,7 @@ struct BIOPIC: ExtIntC {
     static constexpr u32 ROUTE_ENTRY_0 = 0x100;
     static constexpr u32 HTMSI_VECTOR0 = 0x200;
 
-    inline u32 gsi_limit() { return gsi_base + 64; }
+    inline u32 gsi_limit() { return gsi_base + ints_count; }
     void set_mapping(u32 gsi, unsigned idx, CPU_Info *c, bool edge_triggered);
     virtual void interrupt_complete(u32 interrupt) override;
 };
@@ -66,7 +72,22 @@ struct PICAllocation: InterruptHandler {
 };
 
 constexpr size_t INTERRUPT_MAPPINGS_SIZE = 256;
-static std::array<PICAllocation, INTERRUPT_MAPPINGS_SIZE> interrupt_mappings;
+struct EIOPIC {
+    std::array<PICAllocation, INTERRUPT_MAPPINGS_SIZE> interrupt_mappings;
+
+    u64 node_map = 0;
+    bool present: 1 = false;
+    bool initialized : 1 = false;
+    u8 cascade_vector = 0;
+    u8 node_id = 0;
+    u8 version = 0;
+
+    Spinlock init_lock;
+};
+
+constexpr size_t max_controllers = 8;
+
+static std::array<EIOPIC, 8> eiopics;
 
 constexpr unsigned OTHER_FUNCTION_CONF = 0x0420;
 
@@ -98,7 +119,7 @@ void interrupts::interrupt_enable(InterruptHandler *handler)
 
     Auto_Lock_Scope l(interrupts_lock);
     auto c = h->parent_cpu;
-    auto i = h - &interrupt_mappings[0];
+    auto i = h - &c->parent_eiopic->interrupt_mappings[0];
     assert(h->parent_cpu == get_cpu_struct());
 
     switch (interrupt_model) {
@@ -140,11 +161,12 @@ void interrupts::interrupt_enable(InterruptHandler *handler)
 void interrupts::interrupt_complete(InterruptHandler *handler)
 {
     auto h = static_cast<PICAllocation *>(handler);
+    auto c = get_cpu_struct();
 
     assert(h->parent_cpu == get_cpu_struct());
     assert(h->controller);
     h->controller->interrupt_complete(h->controller_vector);
-    auto i = h - &interrupt_mappings[0];
+    auto i = h - &c->parent_eiopic->interrupt_mappings[0];
 
     csrxchg32<loongarch::csr::ECFG>(-1U, 1 << (i/sizeof(uint32_t) + 2));
 }
@@ -267,6 +289,65 @@ static acpi_entry_hdr *get_madt_entry(acpi_madt *madt, u8 type, int idx)
     return nullptr;
 }
 
+void init_eiopic()
+{
+    auto c = get_cpu_struct();
+    assert(c);
+
+    auto eiopic = c->parent_eiopic;
+    assert(eiopic);
+
+    // Lock here is intentional, vs. pthread_once or whatever
+    Auto_Lock_Scope l(eiopic->init_lock);
+
+    if (eiopic->initialized)
+        return;
+
+    // Enable IOCSR
+    auto val = iocsr_read64(OTHER_FUNCTION_CONF);
+    val |= EXT_INT_en | INT_encode;
+    iocsr_write64(val, OTHER_FUNCTION_CONF);
+
+    // Mask everything
+    for (size_t i = 0; i < 4; ++i) {
+        iocsr_write64(0, EXT_IOIen_base + i * 8);
+        iocsr_write64(0, EXT_IOIbounce_base + i * 8);
+    }
+
+    // EIO PIC has 8 groups of interrupts, and there are 8 external vectors, so route groups to
+    // those
+    iocsr_write64(0x00 | 0x100 | 0x20000 | 0x3000000 | 0x400000000 | 0x50000000000 |
+                        0x6000000000000 | 0x700000000000000,
+                    EXT_IOImap_base);
+
+    eiopic->initialized = true;
+}
+
+EIOPIC *eiopic_for_cpu(CPU_Info *i)
+{
+    assert(i);
+    assert(i->cpu_physical_id < 64);
+
+    for (auto &e: eiopics) {
+        if (!e.present)
+            continue;
+
+        if (e.node_map & ((u64)1 << i->cpu_physical_id))
+            return &e;
+    }
+
+    return nullptr;
+}
+
+void set_eiopic_for_cpu(CPU_Info *i)
+{
+    auto e = eiopic_for_cpu(i);
+    if (!e)
+        panic("No EIOPIC for CPU %u (%u)!", i->cpu_id, i->cpu_physical_id);
+
+    i->parent_eiopic = e;
+}
+
 void init_interrupts()
 {
     uacpi_table m;
@@ -282,28 +363,24 @@ void init_interrupts()
     acpi_madt *madt = (acpi_madt *)m.ptr;
 
 
+    interrupt_model = IntControllerClass::EIOPIC;
+    
+    unsigned i = 0;
+    while (auto e = (acpi_madt_eio_pic *)get_madt_entry(madt, ACPI_MADT_ENTRY_TYPE_EIO_PIC, i)) {
+        auto &eiopic = eiopics[i];
 
-    auto e = (acpi_madt_eio_pic *)get_madt_entry(madt, ACPI_MADT_ENTRY_TYPE_EIO_PIC, 0);
-    if (e) {
-        interrupt_model = IntControllerClass::EIOPIC;
+        eiopic.node_map = e->node_map;
+        eiopic.node_id = e->node;
+        eiopic.version = e->version;
+        eiopic.cascade_vector = e->cascade_vector;
+        eiopic.present = true;
 
-        // Enable IOCSR
-        auto val = iocsr_read64(OTHER_FUNCTION_CONF);
-        val |= EXT_INT_en | INT_encode;
-        iocsr_write64(val, OTHER_FUNCTION_CONF);
+        serial_logger.printf("Found EIO PIC %i, node_map %lx, node %u version %u cascade_vector %u\n", i, e->node_map, e->node, e->version, e->cascade_vector);
 
-        // Mask everything
-        for (size_t i = 0; i < 4; ++i) {
-            iocsr_write64(0, EXT_IOIen_base + i * 8);
-            iocsr_write64(0, EXT_IOIbounce_base + i * 8);
-        }
-
-        // EIO PIC has 8 groups of interrupts, and there are 8 external vectors, so route groups to
-        // those
-        iocsr_write64(0x00 | 0x100 | 0x20000 | 0x3000000 | 0x400000000 | 0x50000000000 |
-                          0x6000000000000 | 0x700000000000000,
-                      EXT_IOImap_base);
-    } else {
+        ++i;
+    } 
+    
+    if (i == 0) {
         panic("Did no find EIOPIC, other interrupt controllers not implemented");
     }
 
@@ -367,13 +444,9 @@ ReturnStr<InterruptHandler *> interrupts::allocate_or_get_handler(u32 gsi, bool 
 
     Auto_Lock_Scope l(interrupts_lock);
 
-    for (u32 i = 0; i < INTERRUPT_MAPPINGS_SIZE; ++i) {
-        if (interrupt_mappings[i].controller == biopic and
-            interrupt_mappings[i].controller_vector == gsi)
-            return interrupt_mappings[i].edge_triggered == edge_triggered
-                       ? Success(&interrupt_mappings[i])
-                       : Error(-EEXIST);
-    }
+    auto all = biopic->mappings[gsi - biopic->gsi_base];
+    if (all)
+        return Success(all);
 
     // Find least loaded CPU
     auto *cpu = cpus[0];
@@ -381,6 +454,8 @@ ReturnStr<InterruptHandler *> interrupts::allocate_or_get_handler(u32 gsi, bool 
         if (cpus[i]->allocated_int_count < cpu->allocated_int_count)
             cpu = cpus[i];
     }
+
+    auto &interrupt_mappings = cpu->parent_eiopic->interrupt_mappings;
 
     // Find unused slot
     u32 idx = 0;
@@ -397,6 +472,7 @@ ReturnStr<InterruptHandler *> interrupts::allocate_or_get_handler(u32 gsi, bool 
     interrupt_mappings[idx].controller_vector = gsi;
     interrupt_mappings[idx].edge_triggered    = edge_triggered;
 
+    biopic->mappings[gsi - biopic->gsi_base] = &interrupt_mappings[idx];
     biopic->set_mapping(gsi, idx, cpu, edge_triggered);
 
     cpu->allocated_int_count++;
@@ -406,8 +482,6 @@ ReturnStr<InterruptHandler *> interrupts::allocate_or_get_handler(u32 gsi, bool 
 
 u32 get_irq(unsigned sector)
 {
-    auto c = get_cpu_struct();
-
     switch (interrupt_model) {
     case IntControllerClass::LIOPIC:
         panic("LIOPIC not implemented\n");
@@ -431,8 +505,6 @@ u32 get_irq(unsigned sector)
 }
 static void ack_interrupt(u32 irq)
 {
-    auto c = get_cpu_struct();
-
     switch (interrupt_model) {
     case IntControllerClass::EIOPIC: {
         assert(irq < 256);
@@ -458,7 +530,7 @@ void handle_hardware_interrupt(u32 estat)
         return;
 
     ack_interrupt(irq);
-    auto &mapping = interrupt_mappings[irq];
+    auto &mapping = c->parent_eiopic->interrupt_mappings[irq];
 
     // Disable interrupts
     csrxchg32<loongarch::csr::ECFG>(0, 1 << (sector + 2));
@@ -472,7 +544,8 @@ void handle_hardware_interrupt(u32 estat)
 
 void interrupts::interrupt_disable(InterruptHandler *handler) {
     auto h = static_cast<PICAllocation *>(handler);
-    auto interrupt_id = h - &interrupt_mappings[0];
+    auto c = get_cpu_struct();
+    auto interrupt_id = h - &c->parent_eiopic->interrupt_mappings[0];
 
     switch (interrupt_model) {
         case IntControllerClass::EIOPIC: {

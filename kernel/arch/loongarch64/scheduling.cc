@@ -42,6 +42,9 @@ void init_interrupts();
 
 bool calculate_timer_frequency();
 
+void set_eiopic_for_cpu(CPU_Info *i);
+void init_eiopic();
+
 void init_scheduling(u64 cpu_id)
 {
     sched::CPU_Info *i = new sched::CPU_Info();
@@ -78,6 +81,9 @@ void init_scheduling(u64 cpu_id)
     // TODO: FP state
     detect_supported_extensions();
     init_interrupts();
+    
+    set_eiopic_for_cpu(i);
+    init_eiopic();
 
     log::serial_logger.printf("Scheduling initialized\n");
 }
@@ -91,6 +97,7 @@ extern "C" void smp_ap_entry()
     set_save0(i);
     program_interrupts();
     call_after_smp_entry();
+    init_eiopic();
 
     reschedule();
 
@@ -111,6 +118,8 @@ void prepare_cpu(u32 phys_id)
     i->cpu_id = sched::cpus.size();
     if (!sched::cpus.push_back(i))
         panic("Could not add sched::CPU_Info struct to cpus vector\n");
+
+    set_eiopic_for_cpu(i);
 
     auto idle = proc::init_idle(i);
     if (idle != 0)

@@ -55,6 +55,8 @@
 #elif defined(__riscv)
     #include <cpus/floating_point.hh>
     #include <paging/riscv64_temp_mapper.hh>
+#elif defined(__loongarch64)
+    struct EIOPIC;
 #endif
 
 namespace kernel::sched
@@ -179,6 +181,8 @@ struct CPU_Info {
     u32 cpu_physical_id = 0; // 8 bit in reality...
     u64 timer_val       = 0;
     u64 timer_total     = 0;
+
+    EIOPIC *parent_eiopic = nullptr;
 #endif
 
     static constexpr int IPI_RESCHEDULE    = 0x1;
