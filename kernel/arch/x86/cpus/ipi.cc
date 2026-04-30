@@ -38,8 +38,6 @@
 using namespace kernel::sched;
 using namespace kernel::x86::interrupts::lapic;
 
-void park_self();
-
 void ipi_invalidate_tlb_routine()
 {
     auto c = get_cpu_struct();
