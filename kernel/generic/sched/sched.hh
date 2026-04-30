@@ -198,6 +198,7 @@ struct CPU_Info {
 
     void ipi_reschedule(); // nothrow ?
     void ipi_tlb_shootdown();
+    void ipi_cpu_park();
 
     using timer_tree =
         pmos::containers::RedBlackTree<TimerNode, &TimerNode::node,
@@ -280,5 +281,6 @@ extern "C" void reschedule();
 void maybe_rearm_timer(u64 deadline_nanoseconds);
 
 void call_after_smp_entry();
+void park_self();
 
 }; // namespace kernel::sched

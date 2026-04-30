@@ -610,3 +610,28 @@ void kernel::sched::call_after_smp_entry()
     __atomic_add_fetch(&kernel_pt_active_cpus_count[c->kernel_pt_generation], 1, __ATOMIC_RELAXED);
     c->online = true;
 }
+
+void arch_specific_park_pre_offline();
+void arch_specific_park_stop();
+
+#include <kern_logger/kern_logger.hh>
+
+void kernel::sched::park_self()
+{
+    auto c    = get_cpu_struct();
+    auto task = c->current_task;
+
+    task->page_table->unapply_cpu(get_cpu_struct());
+    task->before_task_switch();
+
+    // Kill TLB shootdowns
+    int kernel_pt_gen = c->kernel_pt_generation;
+    __atomic_sub_fetch(&kernel_pt_active_cpus_count[kernel_pt_gen], 1, __ATOMIC_RELEASE);
+    c->kernel_pt_generation = -1;
+
+    log::serial_logger.printf("Parking cpu %x\n", c->cpu_id);
+
+    arch_specific_park_pre_offline();
+    __atomic_store_n(&c->online, false, __ATOMIC_RELEASE);
+    arch_specific_park_stop();
+}

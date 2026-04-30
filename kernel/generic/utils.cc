@@ -411,6 +411,11 @@ extern "C" size_t strlen(const char *start)
 
 extern "C" void dbg_uart_init();
 
+namespace kernel::sched
+{
+extern bool cpu_struct_works;
+}
+
 [[noreturn]] extern void hcf();
 extern "C" void abort(void)
 {
@@ -425,6 +430,16 @@ extern "C" void abort(void)
     // serial_logger.printf("Dropping into debugger...\n---------------\n");
 
     // breakpoint;
+
+    if (cpu_struct_works) {
+        auto c = get_cpu_struct();
+        for (auto i : cpus) {
+            if (i == c)
+                continue;
+
+            i->ipi_cpu_park();
+        }
+    }
 
     hcf();
 }

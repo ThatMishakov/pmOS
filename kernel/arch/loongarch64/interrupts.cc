@@ -14,7 +14,7 @@ using namespace kernel::paging;
 using namespace kernel::sched;
 using namespace kernel::loongarch;
 
-constexpr u32 IPI_MASK = 0x0003;
+constexpr u32 IPI_MASK = 0x0007;
 
 struct fp_s {
     u64 fp;
@@ -84,6 +84,12 @@ void CPU_Info::ipi_tlb_shootdown()
     ipi_send(cpu_physical_id, 0x01);
 }
 
+void CPU_Info::ipi_cpu_park()
+{
+    ipi_send(cpu_physical_id, 0x02);
+}
+
+
 void handle_ipi()
 {
     auto mask = iocsr_read32(iocsr::IPI_STATUS);
@@ -96,6 +102,10 @@ void handle_ipi()
     if (mask & (1 << 1)) {
         auto c = get_cpu_struct();
         c->current_task->page_table->trigger_shootdown(c->current_task->page_table.get(), c);
+    }
+
+    if (mask & (1 << 2)) {
+        park_self();
     }
 }
 
@@ -320,3 +330,14 @@ void printc(int) {}
 
 extern "C" void allow_access_user() {}
 extern "C" void disallow_access_user() {}
+
+void arch_specific_park_pre_offline() {}
+
+
+void hcf();
+
+void arch_specific_park_stop()
+{
+    hcf();
+    // TODO: Allow waking up the core, if this was used for more than panic parking...
+}
