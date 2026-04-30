@@ -107,6 +107,8 @@ void prepare_cpu(u32 phys_id)
     i->kernel_stack_top = i->kernel_stack.get_stack_top();
     i->cpu_physical_id  = phys_id;
 
+    i->kernel_pt_generation = -1;
+
     i->cpu_id = sched::cpus.size();
     if (!sched::cpus.push_back(i))
         panic("Could not add sched::CPU_Info struct to cpus vector\n");
@@ -233,8 +235,8 @@ void start_aps()
         log::serial_logger.printf("Starting AP 0x%x (%x)\n", cpu->cpu_id, cpu->cpu_physical_id);
 
         mailbox_send_u64(cpu->cpu_physical_id, 0, phys_addr);
-        mailbox_send_u64(cpu->cpu_physical_id, 1, (ulong)cpu);
-        ipi_send(cpu->cpu_physical_id, 0);
+        mailbox_send_u64(cpu->cpu_physical_id, 3, (ulong)cpu);
+        ipi_send(cpu->cpu_physical_id, 0x00);
     }
 }
 

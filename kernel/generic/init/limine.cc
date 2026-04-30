@@ -643,7 +643,7 @@ void limine_main()
     global_temp_mapper = nullptr;
 
     init_smp();
-    
+
     init_modules();
     init_task1();
     serial_logger.printf("Loaded kernel...\n");

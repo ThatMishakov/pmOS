@@ -32,7 +32,7 @@ _limine_entry:
     # Return to userspace
     b return_from_kernel
 
-.equ CSR_CRMD, 0x01
+.equ CSR_CRMD, 0x00
 .equ CSR_ECFG, 0x04
 .equ CSR_EENTRY, 0xc
 .equ CSR_PGDL, 0x19
@@ -53,12 +53,17 @@ _limine_entry:
     .globl ap_bringup_trampoline
     .type ap_bringup_trampoline, @function
 ap_bringup_trampoline:
+    
+    # Idk what's going on here since it's not documented anywhere, but it looks
+    # like mailbox 3 gets passed in $a1
+    move $tp, $a1
 
     # ----------------------------- Paging ----------------------------
     # Enable direct map
     li.d $t0, 0b010001
     csrwr $t0, CSR_DMW0
-    csrwr $zero, CSR_DMW1
+    li.d $t0, 0x9000000000000011
+    csrwr $t0, CSR_DMW1
     csrwr $zero, CSR_DMW2
     csrwr $zero, CSR_DMW3
 
@@ -91,7 +96,7 @@ ap_bringup_trampoline:
     csrwr $zero, CSR_ECFG
 
     # Enable paging...
-    li.d $t0, 0b1010110000
+    li.d $t0, 0xb0
     csrwr $t0, CSR_CRMD
 
     # ---------------------- At virt addr ---------------------
@@ -99,10 +104,6 @@ ap_bringup_trampoline:
     ld.d $t0, $t0, 0
     jirl $zero, $t0, 0
 2:
-
-    # Load CPU info... It's passed in mailbox 1
-    li.d $t0, IOCSR_MAILBOX1
-    iocsrrd.d $tp, $t0
 
     # Stack
     ld.d $sp, $tp, 8
