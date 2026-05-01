@@ -449,9 +449,10 @@ klib::shared_ptr<x86_4level_Page_Table> x86_4level_Page_Table::create_empty(int 
     return new_table;
 }
 
-ReturnStr<u64> kernel::x86::paging::create_empty_cr3()
+ReturnStr<u64> kernel::x86::paging::create_empty_cr3(bool below_4gb)
 {
-    auto p = pmm::get_memory_for_kernel(1);
+    auto policy = below_4gb ? pmm::AllocPolicy::Below4GB : pmm::AllocPolicy::Normal;
+    auto p = pmm::get_memory_for_kernel(1, policy);
     if (pmm::alloc_failure(p))
         return Error(-ENOMEM);
 

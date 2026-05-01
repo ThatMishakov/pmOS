@@ -210,9 +210,13 @@ constexpr u32 X2APIC_MSR_BASE = 0x800;
      */
     u64 lapic_configure(u64 opt, u64 arg);
 
+    void icr_wait();
+
     /// @brief Sends INIT IPI to the other processor
     /// @param dest Destination LAPIC ID
     void send_init_ipi(u32 dest);
+
+    void send_init_deassert(u32 dest);
 
     /// @brief Sends SIPI to the other processor
     /// @param vector Vector to which it will be recieved (from where the CPU will

@@ -131,12 +131,11 @@ acpi_trampoline_gdt:
     .quad 0x00af9b000000ffff
     .quad 0x00cf92000000ffff
     .quad 0x00cf9a000000ffff
+
     .globl smp_trampoline_cr3
 smp_trampoline_cr3:
     .space 4
 
-smp_trampoline_scratch_stack:
-    .space 8
 scratch_stack:
     .space 8
 acpi_trampoline_kernel_entry:

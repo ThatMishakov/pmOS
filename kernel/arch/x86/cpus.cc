@@ -66,13 +66,17 @@ void smp_wake_everyone_else_up()
 
     auto waiter = x86::time::BlockingWaiter::create();
 
-    for (size_t i = 1; i < cpus.size(); ++i)
+    for (size_t i = 1; i < cpus.size(); ++i) {
         send_init_ipi(cpus[i]->lapic_id);
+        // P5 errata, supposedly?
+        send_init_deassert(cpus[i]->lapic_id);
+    }
 
     waiter.wait(10'000'000);
 
-    for (size_t i = 1; i < cpus.size(); ++i)
+    for (size_t i = 1; i < cpus.size(); ++i) {
         send_sipi(vector, cpus[i]->lapic_id);
+    }
 
     constexpr size_t max_counts = 500; // 200 microseconds to 100 ms
     constexpr u64 wait_time_ns = 200'000;

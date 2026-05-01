@@ -231,5 +231,5 @@ extern u64 idle_cr3;
 
 namespace kernel::x86::paging
 {
-ReturnStr<u64> create_empty_cr3();
+ReturnStr<u64> create_empty_cr3(bool below_4gb = false);
 }

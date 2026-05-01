@@ -1081,7 +1081,7 @@ klib::shared_ptr<IA32_Page_Table> IA32_Page_Table::create_empty(unsigned)
 }
 
 // This function is broken
-ReturnStr<u32> create_empty_cr3()
+ReturnStr<u32> create_empty_cr3(bool) // Also, this will always be below 4GB on ia32
 {
     if (!use_pae) {
         auto cr3 = pmm::get_memory_for_kernel(1);

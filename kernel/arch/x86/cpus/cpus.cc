@@ -427,7 +427,7 @@ extern ulong smp_trampoline_gdtr_addr;
 extern ulong acpi_vec_jump_pmode;
 
 // Variables
-extern ulong smp_trampoline_cr3;
+extern u32 smp_trampoline_cr3;
 extern u32 smp_trampoline_trampoilne_flags;
 
 constexpr u32 SMP_TRAMPOLINE_ENABLE_PAE = 0b001;
@@ -459,10 +459,12 @@ void init_acpi_trampoline()
     smp_trampoline_gdtr_addr += acpi_trampoline_page;
     acpi_vec_jump_pmode += acpi_trampoline_page;
 
-    auto [result, new_cr3] = create_empty_cr3();
+    auto [result, new_cr3] = create_empty_cr3(true);
     if (result)
         panic("Failed to allocate cr3 for SMP trampoline");
-    smp_trampoline_cr3       = new_cr3;
+
+    assert(new_cr3 < (u64)0x100000000);
+    smp_trampoline_cr3 = static_cast<u32>(new_cr3);
 
     Page_Table_Arguments pta = {
         .readable           = true,

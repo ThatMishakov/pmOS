@@ -434,20 +434,26 @@ void apic_write_icr(u64 dest)
     }
 }
 
-void broadcast_sipi(u8 vector)
+void icr_wait()
 {
-    apic_write_icr(0x000C4600 | vector);
-}
+    if (apic_mode != APICMode::X2APIC) {
+        do {
+            if (!(apic_read_reg(APIC_ICR_LOW) & (1 << 12)))
+                return;
 
-void broadcast_init_ipi()
-{
-    apic_write_icr(0x000C4500);
+            x86_pause();
+        } while (true);
+    }
+
+    // This is undefined for x2apic
 }
 
 void send_ipi_fixed(u8 vector, u32 dest)
 {
     u64 dest_shifted = apic_mode == APICMode::X2APIC ? (u64)dest << 32 : (u64)dest << (32 + 24);
     u64 val = dest_shifted | (u32)vector | (0x01 << 14);
+
+    icr_wait();
     apic_write_icr(val);
 
     // serial_logger.printf("[Kernel] Info: Sending IPI to %h with vector %h\n", dest, vector);
@@ -458,6 +464,20 @@ void send_init_ipi(u32 dest)
 {
     u64 dest_shifted = apic_mode == APICMode::X2APIC ? (u64)dest << 32 : (u64)dest << (32 + 24);
     u64 val = dest_shifted | (0b101 << 8) | (1 << 14);
+
+    icr_wait();
+    apic_write_icr(val);
+}
+
+void send_init_deassert(u32 dest)
+{
+    if (apic_mode == APICMode::X2APIC)
+        return;
+
+    u64 dest_shifted = (u64)dest << (32 + 24);
+    u64 val = dest_shifted | (0b101 << 8);
+
+    icr_wait();
     apic_write_icr(val);
 }
 
@@ -465,11 +485,14 @@ void send_sipi(u8 vector, u32 dest)
 {
     u64 dest_shifted = apic_mode == APICMode::X2APIC ? (u64)dest << 32 : (u64)dest << (32 + 24);
     u64 val = dest_shifted | (0b110 << 8) | (1 << 14) | vector;
+
+    icr_wait();
     apic_write_icr(val);
 }
 
 void send_ipi_fixed_others(u8 vector)
 {
+    icr_wait();
     apic_write_icr(vector | (0x01 << 14) | (0b11 << 18));
 }
 
