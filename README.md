@@ -144,10 +144,9 @@ These are the features that are planned to be had in the OS:
   - [ ] IOMMU
 - [x] Userspace/Ring 3
 - [x] Multi CPU support
-  - [ ] Proper SMP initialization - since the kernel doesn't rely on Limine's MP request, it's broken on physical hardware because it uses broadcast IPIs and doesn't wait properly either.
 
 #### x86_64 specific features:
-- [ ] 5 level paging
+- [x] 5 level paging
 
 #### i686 specific features:
 
