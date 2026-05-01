@@ -33,5 +33,5 @@
 
 namespace kernel::paging {
 // Generic declaration for arch-independent code
-using Arch_Page_Table = x86_64::paging::x86_4level_Page_Table;
+using Arch_Page_Table = x86_64::paging::x86_Page_Table;
 };

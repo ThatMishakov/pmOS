@@ -366,10 +366,10 @@ extern "C" void invalid_opcode_manager()
 extern "C" void stack_segment_fault_manager()
 {
     task_ptr task = get_cpu_struct()->current_task;
-    t_print_bochs("!!! Stack-Segment Fault error %h RIP %h RSP %h PID %h (%s)\n",
+    serial_logger.printf("!!! Stack-Segment Fault error %lx RIP %lx RSP %lx PID %h (%s)\n",
                   task->regs.int_err, task->regs.program_counter(), task->regs.stack_pointer(),
                   task->task_id, task->name.c_str());
-    global_logger.printf("!!! Stack-Segment Fault error %h RIP %h RSP %h\n", task->regs.int_err,
+    global_logger.printf("!!! Stack-Segment Fault error %lx RIP %lx RSP %lx\n", task->regs.int_err,
                          task->regs.program_counter(), task->regs.stack_pointer());
     task->atomic_kill();
 }

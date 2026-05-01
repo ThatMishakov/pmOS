@@ -34,8 +34,11 @@ namespace kernel::x86_64::paging
 {
 
 /// @brief Indicates NX (no execute) bit is supported and enabled
-/// @todo Very x86-specific
 extern bool nx_bit_enabled;
+
+extern bool use_5lvl_paging;
+
+constexpr u64 x86_phys_addr_limit = (1ULL << 52);
 
 /** @brief x86 paging structure, used in PAE, 4 level and 5 level paging
  *
@@ -67,13 +70,25 @@ struct x86_PAE_Entry {
 
     /// Clears the entry without doing any checks
     void clear_nofree();
+
+    u64 page() const;
+
+    u64 to_u64() const;
+    static x86_PAE_Entry from_u64(u64 val);
+    static x86_PAE_Entry atomic_load(u64 *ptr);
+    void atomic_store(u64 *ptr);
 } PACKED ALIGNED(8);
 
-class x86_Page_Table: public kernel::paging::Page_Table
+template<int idx>
+requires (idx >= 1 and idx <= 5)
+unsigned level_idx(void *ptr)
+{
+    return (reinterpret_cast<u64>(ptr) >> (9 * idx + 3)) & 0x1ff;
+}
+
+class x86_Page_Table final: public kernel::paging::Page_Table
 {
 public:
-    virtual u64 get_cr3() const = 0;
-
     /// True if the page table is used by the current task
     bool is_active() const;
 
@@ -89,17 +104,13 @@ public:
     virtual void tlb_flush_all() override;
 
 protected:
-    virtual void free_user_pages() = 0;
 
     volatile u64 active_count = 0;
-};
 
-class x86_4level_Page_Table: public x86_Page_Table
-{
 public:
-    u64 pml4_phys = -1UL;
+    u64 pt_top_phys = -1UL;
 
-    virtual u64 get_cr3() const override { return (u64)pml4_phys; }
+    virtual u64 get_cr3() const { return (u64)pt_top_phys; }
 
     /**
      * @brief Creates an initial page table, capturing pointer to the root level
@@ -107,9 +118,9 @@ public:
      * @return klib::shared_ptr<RISCV64_Page_Table> A shared pointer to the page
      * table
      */
-    static klib::shared_ptr<x86_4level_Page_Table> capture_initial(u64 root);
+    static klib::shared_ptr<x86_Page_Table> capture_initial(u64 root);
 
-    static klib::shared_ptr<x86_4level_Page_Table> create_empty(int flags = 0);
+    static klib::shared_ptr<x86_Page_Table> create_empty(int flags = 0);
 
     virtual kresult_t copy_anonymous_pages(const klib::shared_ptr<Page_Table> &to, void *from_addr,
                                            void *to_addr, size_t size_bytes,
@@ -127,12 +138,7 @@ public:
 
     bool is_mapped(void *virt_addr) const override;
 
-    virtual ~x86_4level_Page_Table();
-
-    void *user_addr_max() const override
-    {
-        return (void *)((flags & FLAG_32BIT) ? 0x100000000 : 0x800000000000);
-    }
+    virtual ~x86_Page_Table();
 
     static inline unsigned pt_index(void *addr)
     {
@@ -158,9 +164,15 @@ public:
         return index & 0777;
     }
 
+    static inline unsigned pml5_index(void *addr)
+    {
+        u64 index = (u64)addr >> (12 + 9 + 9 + 9 + 9);
+        return index & 0777;
+    }
+
     Page_Info get_page_mapping(void *virt_addr) const override;
 
-    klib::shared_ptr<x86_4level_Page_Table> create_clone();
+    klib::shared_ptr<x86_Page_Table> create_clone();
 
     virtual ReturnStr<bool> atomic_copy_to_user(void *to, const void *from, size_t size) override;
 
@@ -169,7 +181,7 @@ public:
     constexpr static u64 l2_align = 4096UL * 512;
     constexpr static u64 l1_align = 4096UL;
 
-    static klib::shared_ptr<x86_4level_Page_Table> get_page_table(u64 id);
+    static klib::shared_ptr<x86_Page_Table> get_page_table(u64 id);
 
     void apply() noexcept;
 
@@ -177,14 +189,16 @@ public:
 
     kresult_t resolve_anonymous_page(void *virt_addr, unsigned access_type) override;
 
+    void *user_addr_max() const override;
+
 protected:
     /// @brief Inserts the page table into the map of the page tables
-    static kresult_t insert_global_page_tables(klib::shared_ptr<x86_4level_Page_Table> table);
+    static kresult_t insert_global_page_tables(klib::shared_ptr<x86_Page_Table> table);
 
     /// @brief Takes out this page table from the map of the page tables
     void takeout_global_page_tables();
 
-    using page_table_map = klib::splay_tree_map<u64, klib::weak_ptr<x86_4level_Page_Table>>;
+    using page_table_map = klib::splay_tree_map<u64, klib::weak_ptr<x86_Page_Table>>;
     /// @brief Map holding all the page tables. Currently using splay tree for
     /// the storage
     /// @todo Consider AVL or Red-Black tree instead for better concurrency
@@ -194,14 +208,15 @@ protected:
     virtual void invalidate_range(kernel::paging::TLBShootdownContext &ctx, void *virt_addr,
                                   size_t size_bytes, bool free) override;
 
-    x86_4level_Page_Table() = default;
+    x86_Page_Table() = default;
 
     // Frees user pages
-    void free_user_pages() override;
+    void free_user_pages();
 
-    void free_pt(u64 pt_phys);
-    void free_pd(u64 pd_phys);
-    void free_pdpt(u64 pdpt_phys);
+    static void free_pt(u64 pt_phys);
+    static void free_pd(u64 pd_phys);
+    static void free_pdpt(u64 pdpt_phys);
+    static void free_pml4(u64 pml4_phys);
 
     static void map_return_rec_nofree(const x86_PAE_Entry *entry_virt, u64 alignment_log, u64 start,
                                       u64 end, u64 curr_start);
