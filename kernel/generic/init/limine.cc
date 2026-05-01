@@ -33,7 +33,7 @@
 #include "../memory/temp_mapper.hh"
 #include "../memory/vmm.hh"
 
-#include <flanterm_backends/fb.h>
+#include <backends/fb.h>
 #include <dtb/dtb.hh>
 #include <flanterm.h>
 #include <kern_logger/kern_logger.hh>
@@ -229,7 +229,7 @@ void init_fb()
             malloc, [](void *ptr, size_t) { free(ptr); }, fb_virt, fb.width, fb.height,
             fb.pitch, fb.red_mask_size, fb.red_mask_shift, fb.green_mask_size, fb.green_mask_shift,
             fb.blue_mask_size, fb.blue_mask_shift, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-            0, 0, 1, 0, 0, 0, 0);
+            0, 0, 1, 0, 0, 0);
     }
 }
 
