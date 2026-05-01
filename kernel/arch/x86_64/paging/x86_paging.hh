@@ -34,9 +34,9 @@ namespace kernel::x86_64::paging
 {
 
 /// @brief Indicates NX (no execute) bit is supported and enabled
-extern bool nx_bit_enabled;
-
+extern bool support_nx;
 extern bool use_5lvl_paging;
+
 
 constexpr u64 x86_phys_addr_limit = (1ULL << 52);
 
@@ -239,6 +239,7 @@ u64 prepare_pt_for(void *virt_addr, kernel::paging::Page_Table_Arguments arg, u6
 
 // Releases cr3
 extern "C" void release_cr3(u64 cr3);
+bool detect_nx();
 
 }; // namespace kernel::x86_64::paging
 

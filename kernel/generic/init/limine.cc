@@ -98,6 +98,8 @@ __attribute__((used)) limine_paging_mode_request paging_request = {
     .response = nullptr,
     #ifdef __riscv
     .mode = LIMINE_PAGING_MODE_RISCV_SV57,
+    #elif defined(__x86_64__)
+    .mode = LIMINE_PAGING_MODE_X86_64_5LVL,
     #else
     .mode = 0,
     #endif
@@ -209,11 +211,19 @@ void construct_paging()
     kernel::riscv64::paging::riscv64_paging_levels = rr->mode + 3;
     serial_logger.printf("Using %i paging levels\n",
                          kernel::riscv64::paging::riscv64_paging_levels);
+    #elif defined(__x86_64__)
+    auto rr = paging_request.response;
+    if (rr->mode == LIMINE_PAGING_MODE_X86_64_5LVL) {
+        kernel::x86_64::paging::use_5lvl_paging = true;
+        serial_logger.printf("Using 5-level paging\n");
+    }
     #endif
 
     // While we're here, initialize virtmem
     #ifdef __riscv
     const u64 heap_space_shift = 12 + (kernel::riscv64::paging::riscv64_paging_levels - 1) * 9;
+    #elif defined(__x86_64__)
+    const u64 heap_space_shift = 12 + (kernel::x86_64::paging::use_5lvl_paging ? 4 : 3) * 9;
     #else
     const u64 heap_space_shift = 12 + 27;
     #endif

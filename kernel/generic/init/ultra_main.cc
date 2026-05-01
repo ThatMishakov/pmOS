@@ -24,6 +24,8 @@ using namespace kernel::x86::paging;
 
 #ifdef __i386__
 using namespace kernel::ia32::paging;
+#elif defined(__x86_64__)
+using namespace kernel::x86_64::paging;
 #endif
 
 void hcf();
@@ -39,7 +41,6 @@ extern long temp_alloc_entry_id;
 constexpr phys_addr_t temp_mapper_memory_limit = 0x40000000;
 static ulong hhdm_offset = 0xC0000000;
 #else
-bool use_5_level_paging = false;
 constexpr phys_addr_t temp_mapper_memory_limit = 1UL << 52;
 static ulong hhdm_offset = 0; // Defined at boot, either 0xFF00'0000'0000'0000 or 0xFFFF'8000'0000'0000
                        // depending on paging levels
@@ -121,7 +122,7 @@ void init_memory(ultra_boot_context *ctx)
     serial_logger.printf("Initializing memory\n");
 
     #ifdef __x86_64__
-    if (use_5_level_paging)
+    if (kernel::x86_64::paging::use_5lvl_paging)
         hhdm_offset = 0xFF00'0000'0000'0000;
     else
         hhdm_offset = 0xFFFF'8000'0000'0000;
@@ -204,7 +205,7 @@ void init_memory(ultra_boot_context *ctx)
     u32 heap_space_start = 0xC0000000;
     #elif defined(__x86_64__)
     ulong heap_space_start = 0;
-    if (use_5_level_paging)
+    if (kernel::x86_64::paging::use_5lvl_paging)
         heap_space_start = 0xFF00'0000'0000'0000;
     else
         heap_space_start = 0xFFFF'8000'0000'0000;
@@ -559,9 +560,18 @@ void ultra_main(struct ultra_boot_context *ctx, uint32_t magic)
     serial_logger.printf("PAE: %s (page depth %i)\n", use_pae ? "enabled" : "disabled",
                          attr.page_table_depth);
     
-    auto nx_enabled = detect_nx();
-    serial_logger.printf("NX: %s\n", nx_enabled ? "enabled" : "disabled");
-    
+    if (use_pae) {
+        support_nx = detect_nx();
+        serial_logger.printf("NX: %s\n", support_nx ? "enabled" : "disabled");
+    }
+    #elif defined(__x86_64__)
+    if (attr.page_table_depth == 5) {
+        kernel::x86_64::paging::use_5lvl_paging = true;
+        serial_logger.printf("5-level paging enabled\n");
+    }
+
+    support_nx = detect_nx();
+    serial_logger.printf("NX: %s\n", support_nx ? "enabled" : "disabled");
     #endif
 
     init_memory(ctx);

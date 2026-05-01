@@ -39,13 +39,14 @@
 #include <pmos/utility/scope_guard.hh>
 #include <processes/tasks.hh>
 #include <x86_asm.hh>
+#include <x86_utils.hh>
 
 using namespace kernel;
 using namespace kernel::log;
 using namespace kernel::paging;
 using namespace kernel::x86_64::paging;
 
-bool x86_64::paging::nx_bit_enabled = false;
+bool x86_64::paging::support_nx = false;
 
 bool x86_64::paging::use_5lvl_paging = false;
 
@@ -146,7 +147,7 @@ static kresult_t map(u64 physical_addr, void *virtual_addr,
     pte.writeable   = arg.writeable;
     pte.avl         = arg.extra;
     // pte.cache_disabled = arg.cache_policy != Memory_Type::Normal;
-    if (nx_bit_enabled)
+    if (support_nx)
         pte.execution_disabled = arg.execution_disabled;
 
     pte.atomic_store(pt + ptable_entry);
@@ -671,7 +672,7 @@ kresult_t x86_Page_Table::map(u64 physical_addr, void *virtual_addr,
     pte.writeable   = arg.writeable;
     pte.avl         = arg.extra;
     // pte->cache_disabled = arg.cache_policy != Memory_Type::Normal;
-    if (nx_bit_enabled)
+    if (support_nx)
         pte.execution_disabled = arg.execution_disabled;
 
     pte.atomic_store(mapper.ptr + pt_idx); 
@@ -781,7 +782,7 @@ kresult_t x86_Page_Table::map(pmm::Page_Descriptor page, void *virtual_addr,
     u64 page_ppn     = page.takeout_page() >> 12;
     pte.page_ppn    = page_ppn;
 
-    if (nx_bit_enabled)
+    if (support_nx)
         pte.execution_disabled = arg.execution_disabled;
 
     pte.atomic_store(mapper.ptr + pt_idx);
@@ -1279,3 +1280,10 @@ x86_PAE_Entry x86_PAE_Entry::from_u64(u64 value)
     return std::bit_cast<x86_PAE_Entry>(value);
 }
 u64 x86_PAE_Entry::to_u64() const { return std::bit_cast<u64>(*this); }
+
+bool kernel::x86_64::paging::detect_nx()
+{
+    auto c     = cpuid(0x80000001);
+    support_nx = c.edx & (1 << 20);
+    return support_nx;
+}

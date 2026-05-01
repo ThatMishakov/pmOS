@@ -31,6 +31,8 @@ using namespace kernel::paging;
 #ifdef __i386__
 using namespace kernel::ia32::interrupts;
 using namespace kernel::ia32::paging;
+#else
+using namespace kernel::x86_64::paging;
 #endif
 
 constexpr sched::CPU_Info __seg_gs const *c = nullptr;
@@ -432,7 +434,7 @@ extern u32 smp_trampoline_trampoilne_flags;
 
 constexpr u32 SMP_TRAMPOLINE_ENABLE_PAE = 0b001;
 constexpr u32 SMP_TRAMPOLINE_ENABLE_NX  = 0b010;
-constexpr u32 SMP_TRAMPOLINE_5_LVL_PAGING = 0x100;
+constexpr u32 SMP_TRAMPOLINE_5_LVL_PAGING = 0b100;
 
 pmm::phys_page_t acpi_trampoline_page = 0;
 
@@ -477,12 +479,12 @@ void init_acpi_trampoline()
     if (use_pae) {
         smp_trampoline_trampoilne_flags |= SMP_TRAMPOLINE_ENABLE_PAE;
     }
+    #else
+    if (use_5lvl_paging)
+        smp_trampoline_trampoilne_flags |= SMP_TRAMPOLINE_5_LVL_PAGING;
+    #endif
     if (support_nx)
         smp_trampoline_trampoilne_flags |= SMP_TRAMPOLINE_ENABLE_NX;
-    #else
-    // if (use_5lvl_paging)
-    //     smp_trampoline_trampoilne_flags |= SMP_TRAMPOLINE_5_LVL_PAGING;
-    #endif
 
     result = map_page(new_cr3, acpi_trampoline_page, (void *)acpi_trampoline_page, pta);
     if (result)

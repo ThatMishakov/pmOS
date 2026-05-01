@@ -34,9 +34,18 @@ binary:
     path = "/kernel"
 EOF
 
-if [ "$JINX_ARCH" = "x86_64" ]; then
+if [ "$ARCH" = "x86_64" ]; then
     cat <<EOF >> "$FILE"
     allocate-anywhere = true
+
+page-table:
+    levels = 5
+EOF
+else
+    cat <<EOF >> "$FILE"
+
+page-table:
+    levels = 3
 EOF
 fi
 
