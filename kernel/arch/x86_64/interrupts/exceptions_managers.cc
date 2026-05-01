@@ -178,12 +178,15 @@ void print_stack_trace(TaskDescriptor *task, Logger &logger)
 extern ulong idle_cr3;
 
 bool page_mapped(void *pagefault_cr2, ulong err);
+bool page_mapped_safe(void *pagefault_cr2, ulong err);
+
+extern "C" CPU_Info *find_cpu_info();
+void hcf();
 
 extern "C" void pagefault_manager(NestedIntContext *kernel_ctx, ulong err)
 {
-    CPU_Info *c = get_cpu_struct();
-
     if (kernel_ctx) {
+        auto c = get_cpu_struct();
         auto pagefault_cr2 = (ulong)getCR2();
 
         if (pagefault_cr2 > 0x8000000000000000) {
@@ -212,7 +215,6 @@ extern "C" void pagefault_manager(NestedIntContext *kernel_ctx, ulong err)
                 return;
             }
         }
-        dbg_main(err, kernel_ctx);
         panic("Pagefault in kernel, error %x at %lx", err, pagefault_cr2);
 
         // c->pagefault_error = c->nested_int_regs.int_err;
@@ -220,6 +222,8 @@ extern "C" void pagefault_manager(NestedIntContext *kernel_ctx, ulong err)
         // kernel_jump_to(deal_with_pagefault_in_kernel);
         return;
     }
+
+    CPU_Info *c = get_cpu_struct();
 
     TaskDescriptor *task = c->current_task;
 

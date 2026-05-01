@@ -63,4 +63,5 @@ Temp_Mapper &request_temp_mapper()
     // Use global mapper (typically during kernel initialization)
     return *global_temp_mapper;
 }
+
 } // namespace kernel::paging

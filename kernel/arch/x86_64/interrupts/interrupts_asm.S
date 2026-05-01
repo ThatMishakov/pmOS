@@ -232,16 +232,25 @@ apic_spurious_isr:
     .type apic_dummy_isr, @function
     .globl apic_dummy_isr
 apic_dummy_isr:
-    swapgs
-
     pushq $0
+
+    cmpw $0x08, 16(%rsp)
+	je 1f
+	swapgs
+1:
+
     call save_context
 
     movq $0, %rbp
 
     call apic_dummy_int_routine
 
+    cmpq $0, %r12
+    jne 1f
+    # Return
     auto_return
+1:
+    jmp return_to_kernel
 
         .type ipi_reschedule_isr, @function
     .globl ipi_reschedule_isr

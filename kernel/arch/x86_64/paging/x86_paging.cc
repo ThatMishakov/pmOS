@@ -47,6 +47,8 @@ using namespace kernel::x86_64::paging;
 
 bool x86_64::paging::nx_bit_enabled = false;
 
+unsigned paging_levels = 4;
+
 static kresult_t map(u64 physical_addr, void *virtual_addr,
                               kernel::paging::Page_Table_Arguments arg, u64 pt_phys)
 {
@@ -1042,10 +1044,42 @@ static bool check_level(void *ptr, unsigned level, u64 phys_page_level, ulong er
 
 bool page_mapped(void *pagefault_cr2, ulong err)
 {
-
-    unsigned levels = 4; // TODO;
-
     auto cr3 = getCR3();
 
-    return check_level(pagefault_cr2, levels, cr3, err);
+    return check_level(pagefault_cr2, paging_levels, cr3, err);
+}
+
+extern "C" kernel::sched::CPU_Info *find_cpu_info();
+static bool check_level_safe(void *ptr, unsigned level, u64 phys_page_level, ulong err)
+{
+    bool write = err & 0x02;
+    bool exec  = err & 0x10;
+    if (level == 0)
+        assert(!"level 0");
+
+    unsigned idx = ((ulong)ptr >> (12 + (level - 1) * 9)) & 0x1ff;
+    Temp_Mapper_Obj<x86_PAE_Entry> mapper(find_cpu_info()->temp_mapper);
+    mapper.map(phys_page_level);
+
+    auto pte = mapper.ptr[idx];
+    if (!pte.present)
+        return false;
+
+    if (write && !pte.writeable)
+        return false;
+
+    if (exec && pte.execution_disabled)
+        return false;
+
+    if (level == 1)
+        return true;
+
+    return check_level(ptr, level - 1, pte.page_ppn << 12, err);
+}
+
+bool page_mapped_safe(void *pagefault_cr2, ulong err)
+{
+    auto cr3 = getCR3();
+
+    return check_level_safe(pagefault_cr2, paging_levels, cr3, err);
 }
