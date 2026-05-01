@@ -270,10 +270,10 @@ nested_interrupt:
     .globl bootstrap_isr
 bootstrap_isr:
     addi.d $sp, $sp, -8
-    ld.d $t0, $sp, 0
+    st.d $t0, $sp, 0
 
     andi $t0, $sp, 0xf
-    beq $r21, $zero, b_misaligned
+    beq $t0, $zero, b_misaligned
 
     # Aligned
     addi.d $sp, $sp, -248
@@ -359,7 +359,7 @@ b_misaligned:
     st.d $r30, $sp, 240
 
     # t0 saved initially
-    ld.d $t0, $sp, 264
+    ld.d $t0, $sp, 256
     st.d $t0, $sp, 96
 
     # Stack

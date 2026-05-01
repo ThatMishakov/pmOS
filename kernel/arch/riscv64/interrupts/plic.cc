@@ -96,7 +96,7 @@ bool acpi_init_plic()
     system_plic.external_interrupt_sources = e->sources_count;
     system_plic.plic_id                    = e->id;
     system_plic.max_priority               = e->max_priority;
-    if (!system_plic.claimed_by_cpu.resize(e->sources_count, nullptr))
+    if (!system_plic.handlers.resize(e->sources_count, nullptr))
         panic("failed to allocate memory for PLIC\n");
 
     return true;
@@ -184,7 +184,7 @@ void init_plic()
                          system_plic.plic_id, system_plic.max_priority);
 }
 
-void plic_interrupt_enable(u32 interrupt_id)
+void plic_interrupt_enable(const PLIC &plic, u32 interrupt_id)
 {
     // Set priority 1 (will do for now)
     plic_set_priority(interrupt_id, 1);
@@ -197,11 +197,11 @@ void plic_interrupt_enable(u32 interrupt_id)
     const u32 shift = interrupt_id % 32;
     const u32 mask  = 1 << shift;
 
-    const u32 reg = plic_read(system_plic, offset);
-    plic_write(system_plic, offset, reg | mask);
+    const u32 reg = plic_read(plic, offset);
+    plic_write(plic, offset, reg | mask);
 }
 
-void plic_interrupt_disable(u32 interrupt_id)
+void plic_interrupt_disable(const PLIC &plic, u32 interrupt_id)
 {
     const auto c         = sched::get_cpu_struct();
     const u16 context_id = c->eic_id & 0xffff;
@@ -211,8 +211,8 @@ void plic_interrupt_disable(u32 interrupt_id)
     const u32 shift = interrupt_id % 32;
     const u32 mask  = 1 << shift;
 
-    const u32 reg = plic_read(system_plic, offset);
-    plic_write(system_plic, offset, reg & ~mask);
+    const u32 reg = plic_read(plic, offset);
+    plic_write(plic, offset, reg & ~mask);
 }
 
 u32 plic_interrupt_limit() { return system_plic.external_interrupt_sources; }
@@ -244,13 +244,13 @@ u32 plic_claim()
     return plic_read(system_plic, offset);
 }
 
-void plic_complete(u32 interrupt_id)
+void plic_complete(const PLIC &plic, u32 interrupt_id)
 {
     const auto c         = sched::get_cpu_struct();
     const u16 context_id = c->eic_id & 0xffff;
 
     const u32 offset = PLIC_COMPLETE_OFFSET + (context_id * PLIC_COMPLETE_CONTEXT_STRIDE);
-    plic_write(system_plic, offset, interrupt_id);
+    plic_write(plic, offset, interrupt_id);
 }
 
 PLIC *get_plic(u32 gsi)
@@ -264,9 +264,21 @@ PLIC *get_plic(u32 gsi)
     return nullptr;
 }
 
+PLICHandler *get_plic_handler(u32 gsi)
+{
+    auto plic = get_plic(gsi);
+    if (!plic)
+        return nullptr;
+
+    assert(gsi >= plic->gsi_base);
+    assert(gsi < plic->gsi_base + plic->external_interrupt_sources);
+    auto offset = gsi - plic->gsi_base;
+    return __atomic_load_n(&plic->handlers[offset], __ATOMIC_RELAXED);
+}
+
 } // namespace kernel::riscv::interrupts
 
-ReturnStr<std::pair<sched::CPU_Info *, u32>> kernel::interrupts::allocate_interrupt_single(u32 gsi, bool, bool)
+ReturnStr<interrupts::InterruptHandler *> interrupts::allocate_or_get_handler(u32 gsi, bool, bool)
 {
     auto plic = riscv::interrupts::get_plic(gsi);
     assert(plic);
@@ -275,51 +287,61 @@ ReturnStr<std::pair<sched::CPU_Info *, u32>> kernel::interrupts::allocate_interr
 
     Auto_Lock_Scope l(lock);
 
+    assert(gsi >= plic->gsi_base);
     auto offset = gsi - plic->gsi_base;
-    auto e      = plic->claimed_by_cpu[offset];
+    auto e      = plic->handlers[offset];
     if (e)
-        return Success(std::pair {e, gsi});
+        return Success(e);
+
+    auto handler = klib::make_unique<riscv::interrupts::PLICHandler>();
+    if (!handler)
+        return Error(-ENOMEM);
+
+    handler->parent_plic = plic;
+    handler->interrupt_id = gsi - plic->gsi_base;
 
     // Select the least loaded CPU
     auto current_cpu = sched::cpus[0];
     assert(current_cpu);
     for (size_t i = 1; i < sched::cpus.size(); ++i) {
-        auto h1      = sched::cpus[i]->int_handlers.allocated_int_count;
-        auto current = current_cpu->int_handlers.allocated_int_count;
+        auto h1      = sched::cpus[i]->allocated_int_count;
+        auto current = current_cpu->allocated_int_count;
         if (h1 < current)
             current_cpu = sched::cpus[i];
     }
 
-    current_cpu->int_handlers.allocated_int_count++;
+    current_cpu->allocated_int_count++;
+    handler->parent_cpu = current_cpu;
 
-    plic->claimed_by_cpu[offset] = current_cpu;
-    return Success(std::pair {current_cpu, gsi});
+    // Do relaxed atomic store here so that there is no room for the compiler to do
+    // since the interrupt handler doesn't take locks when reading this.
+    __atomic_store_n(&plic->handlers[offset], handler.get(), __ATOMIC_RELAXED);
+    return Success(handler.release());
 }
 
-void kernel::interrupts::interrupt_disable(u32 interrupt_id)
+void kernel::interrupts::interrupt_disable(InterruptHandler *handler)
 {
-    riscv::interrupts::plic_interrupt_disable(interrupt_id);
+    assert(handler);
+    auto plic_handler = static_cast<riscv::interrupts::PLICHandler *>(handler);
+
+    assert(plic_handler->parent_plic);
+    riscv::interrupts::plic_interrupt_disable(*plic_handler->parent_plic, plic_handler->interrupt_id);
 }
 
-void kernel::interrupts::interrupt_complete(u32 interrupt_id)
+void kernel::interrupts::interrupt_complete(InterruptHandler *handler)
 {
-    riscv::interrupts::plic_complete(interrupt_id);
+    assert(handler);
+    auto plic_handler = static_cast<riscv::interrupts::PLICHandler *>(handler);
+
+    assert(plic_handler->parent_plic);
+    riscv::interrupts::plic_complete(*plic_handler->parent_plic, plic_handler->interrupt_id);
 }
 
-u32 kernel::interrupts::interrupt_min() { return 0; }
-u32 kernel::interrupts::interrupt_limint() { return riscv::interrupts::plic_interrupt_limit(); }
-
-kresult_t kernel::interrupts::interrupt_enable(u32 interrupt_id)
+void kernel::interrupts::interrupt_enable(InterruptHandler *handler)
 {
-    auto plic = riscv::interrupts::get_plic(interrupt_id);
-    if (!plic)
-        return -ENOENT;
+    assert(handler);
+    auto plic_handler = static_cast<riscv::interrupts::PLICHandler *>(handler);
 
-    auto offset = interrupt_id - plic->gsi_base;
-    auto e      = plic->claimed_by_cpu[offset];
-    if (e != sched::get_cpu_struct())
-        return -EBADF;
-
-    riscv::interrupts::plic_interrupt_enable(interrupt_id);
-    return 0;
+    assert(plic_handler->parent_plic);
+    riscv::interrupts::plic_interrupt_enable(*plic_handler->parent_plic, plic_handler->interrupt_id);
 }

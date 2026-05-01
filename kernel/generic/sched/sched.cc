@@ -431,7 +431,7 @@ void check_synchronous_ipis()
         if (val & CPU_Info::IPI_TLB_SHOOTDOWN) {
             __atomic_and_fetch(&c->ipi_mask, ~CPU_Info::IPI_TLB_SHOOTDOWN, __ATOMIC_SEQ_CST);
 
-            c->current_task->page_table->trigger_shootdown(c);
+            c->current_task->page_table->trigger_shootdown(c->current_task->page_table.get(), c);
         }
     }
 }
@@ -589,4 +589,49 @@ void TaskDescriptor::atomic_try_unblock()
         return;
 
     unblock();
+}
+
+extern int kernel_pt_active_cpus_count[2];
+
+void kernel::sched::call_after_smp_entry()
+{
+    auto c = get_cpu_struct();
+
+    if (c->to_restore_on_wakeup) {
+        c->current_task->regs = *c->to_restore_on_wakeup;
+        c->to_restore_on_wakeup.reset();
+    }
+    c->current_task->page_table->apply_cpu(c);
+    c->current_task->page_table->apply();
+    c->current_task->after_task_switch();
+
+    assert(c->kernel_pt_generation == -1);
+    c->kernel_pt_generation = __atomic_load_n(&kernel::paging::kernel_pt_generation, __ATOMIC_ACQUIRE);
+    __atomic_add_fetch(&kernel_pt_active_cpus_count[c->kernel_pt_generation], 1, __ATOMIC_RELAXED);
+    c->online = true;
+}
+
+void arch_specific_park_pre_offline();
+void arch_specific_park_stop();
+
+#include <kern_logger/kern_logger.hh>
+
+void kernel::sched::park_self()
+{
+    auto c    = get_cpu_struct();
+    auto task = c->current_task;
+
+    task->page_table->unapply_cpu(get_cpu_struct());
+    task->before_task_switch();
+
+    // Kill TLB shootdowns
+    int kernel_pt_gen = c->kernel_pt_generation;
+    __atomic_sub_fetch(&kernel_pt_active_cpus_count[kernel_pt_gen], 1, __ATOMIC_RELEASE);
+    c->kernel_pt_generation = -1;
+
+    log::serial_logger.printf("Parking cpu %x\n", c->cpu_id);
+
+    arch_specific_park_pre_offline();
+    __atomic_store_n(&c->online, false, __ATOMIC_RELEASE);
+    arch_specific_park_stop();
 }

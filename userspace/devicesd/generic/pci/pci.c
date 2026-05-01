@@ -718,8 +718,13 @@ void acpi_pci_init()
         NULL,
     };
 
-    uacpi_find_devices_at(uacpi_namespace_get_predefined(UACPI_PREDEFINED_NAMESPACE_SB), pciRootIds,
-                          pci_check_acpi_root, NULL);
+    // Fub fact: PCI root bridge is not published in /_SB_ in qemu on loongarch64
+    uacpi_status status =
+        uacpi_find_devices_at(uacpi_namespace_root(), pciRootIds, pci_check_acpi_root, NULL);
+
+    if (status != UACPI_STATUS_OK) {
+        fprintf(stderr, "Failed to find ACPI PCI root bridges: %s\n", uacpi_status_to_string(status));
+    }
 
     pci_fully_working = true;
 
@@ -747,53 +752,6 @@ int pcicdevice_compare(const void *aa, const void *bb)
     if ((*a)->device != (*b)->device)
         return (*a)->device - (*b)->device;
     return (*a)->function - (*b)->function;
-}
-
-void request_pci_device(Message_Descriptor *desc, IPC_Request_PCI_Device *d, struct PCIDevice *device,
-                        pmos_right_t reply_right)
-{
-    int error = 0;
-    IPC_Request_PCI_Device_Reply reply;
-
-    if (desc->size < sizeof(IPC_Request_PCI_Device)) {
-        error = -EINVAL;
-        goto err;
-    }
-
-    struct PCIHostBridge *g = pci_host_bridge_find(device->group);
-    if (!g) {
-        error = -ENOENT;
-        goto err;
-    }
-
-    // Calculate the offset of the device in the configuration space
-    const unsigned long offset = (device->bus << 20) | (device->device << 15) | (device->function << 12);
-
-    IPC_Request_PCI_Device_Reply reply_success = {
-        .type         = IPC_Request_PCI_Device_Reply_NUM,
-        .flags        = 0,
-        .type_error   = IPC_PCI_ACCESS_TYPE_MMIO,
-        .base_address = g->ecam.base_addr + offset,
-    };
-
-    auto result = send_message_right(reply_right, 0, &reply_success, sizeof(reply), NULL, 0).result;
-    if (result != 0) {
-        delete_right(reply_right);
-        printf("Failed to send message in request_pci_device: %li\n", result);
-    }
-    return;
-err:
-    reply = (IPC_Request_PCI_Device_Reply) {
-        .type         = IPC_Request_PCI_Device_Reply_NUM,
-        .flags        = 0,
-        .type_error   = error,
-        .base_address = 0,
-    };
-
-    result = send_message_right(reply_right, 0, &reply, sizeof(reply), NULL, 0).result;
-    if (result != 0) {
-        delete_right(reply_right);
-    }
 }
 
 void request_pci_devices(Message_Descriptor *desc, IPC_Request_PCI_Devices *d)
@@ -928,6 +886,124 @@ int resolve_gsi_for(struct PCIHostBridge *g, uint8_t bus, uint8_t device, uint8_
                            active_low, level_trig, bridge);
 }
 
+void handle_pci_read(Message_Descriptor *desc, void *msg_buff, struct PCIDevice *device, pmos_right_t reply_right)
+{
+    int result = 0;
+    uint32_t value = 0;
+
+    if (desc->size < sizeof(IPC_PCI_Read)) {
+        result = -EINVAL;
+        goto end;
+    }
+
+    IPC_PCI_Read *r = (IPC_PCI_Read *)msg_buff;
+    
+    assert(device);
+    if (r->offset >= 4096) {
+        result = -ERANGE;
+        goto end;
+    }
+
+    struct PCIDevicePtr p;
+    int fill_result = fill_device_from_device(&p, device);
+    if (fill_result != 0) {
+        result = -ENODEV;
+        goto end;
+    }
+
+    switch (r->access_width) {
+    case 1:
+        value = pci_read_byte(&p, r->offset);
+        break;
+    case 2:
+        if (r->offset % 2 != 0) {
+            result = -EINVAL;
+            goto end;
+        }
+        value = pci_read_word(&p, r->offset);
+        break;
+    case 4:
+        if (r->offset % 4 != 0) {
+            result = -EINVAL;
+            goto end;
+        }
+        value = pci_read_register(&p, r->offset >> 2);
+        break;
+    default:
+        result = -EINVAL;
+        goto end;
+    }
+
+end:
+    IPC_PCI_Read_Result reply = {
+        .type = IPC_PCI_Read_Result_NUM,
+        .result = result,
+        .data = value,
+    };
+
+    auto send_result = send_message_right(reply_right, 0, &reply, sizeof(reply), NULL, SEND_MESSAGE_DELETE_RIGHT);
+    if (send_result.result)
+        delete_right(reply_right);
+}
+
+void handle_pci_write(Message_Descriptor *desc, void *msg_buff, struct PCIDevice *device, pmos_right_t reply_right)
+{
+    int result = 0;
+
+    if (desc->size < sizeof(IPC_PCI_Write)) {
+        result = -EINVAL;
+        goto end;
+    }
+
+    IPC_PCI_Write *r = (IPC_PCI_Write *)msg_buff;
+    
+    assert(device);
+    if (r->offset >= 4096) {
+        result = -ERANGE;
+        goto end;
+    }
+
+    struct PCIDevicePtr p;
+    int fill_result = fill_device_from_device(&p, device);
+    if (fill_result != 0) {
+        result = -ENODEV;
+        goto end;
+    }
+
+    switch (r->access_width) {
+    case 1:
+        pci_write_byte(&p, r->offset, r->data & 0xff);
+        break;
+    case 2:
+        if (r->offset % 2 != 0) {
+            result = -EINVAL;
+            goto end;
+        }
+        pci_write_word(&p, r->offset, r->data & 0xffff);
+        break;
+    case 4:
+        if (r->offset % 4 != 0) {
+            result = -EINVAL;
+            goto end;
+        }
+        pci_write_register(&p, r->offset >> 2, r->data);
+        break;
+    default:
+        result = -EINVAL;
+        goto end;
+    }
+
+end:
+    IPC_PCI_Write_Result reply = {
+        .type = IPC_PCI_Write_Result_NUM,
+        .result = result,
+    };
+
+    auto send_result = send_message_right(reply_right, 0, &reply, sizeof(reply), NULL, SEND_MESSAGE_DELETE_RIGHT);
+    if (send_result.result)
+        delete_right(reply_right);
+}
+
 void request_pci_device_gsi(Message_Descriptor *desc, IPC_Request_PCI_Device_GSI *d, struct PCIDevice *device,
                             pmos_right_t reply_right)
 {
@@ -939,7 +1015,7 @@ void request_pci_device_gsi(Message_Descriptor *desc, IPC_Request_PCI_Device_GSI
             .gsi    = 0,
         };
 
-        auto result = send_message_right(reply_right, 0, &reply, sizeof(reply), NULL, 0);
+        auto result = send_message_right(reply_right, 0, &reply, sizeof(reply), NULL, SEND_MESSAGE_DELETE_RIGHT);
         if (!result.result)
             delete_right(reply_right);
         return;
@@ -954,8 +1030,8 @@ void request_pci_device_gsi(Message_Descriptor *desc, IPC_Request_PCI_Device_GSI
             .gsi    = 0,
         };
 
-        auto result = send_message_right(reply_right, 0, &reply, sizeof(reply), NULL, 0);
-        if (!result.result)
+        auto result = send_message_right(reply_right, 0, &reply, sizeof(reply), NULL, SEND_MESSAGE_DELETE_RIGHT);
+        if (result.result)
             delete_right(reply_right);
         return;
     }
@@ -972,12 +1048,12 @@ void request_pci_device_gsi(Message_Descriptor *desc, IPC_Request_PCI_Device_GSI
         .gsi    = gsi,
     };
 
-    auto result = send_message_right(reply_right, 0, &reply, sizeof(reply), NULL, 0);
-    if (!result.result)
+    auto result = send_message_right(reply_right, 0, &reply, sizeof(reply), NULL, SEND_MESSAGE_DELETE_RIGHT);
+    if (result.result)
         delete_right(reply_right);
 }
 
-void register_pci_interrupt(Message_Descriptor *msg, IPC_Register_PCI_Interrupt *desc, struct PCIDevice *device, pmos_right_t reply_right);
+void request_pci_interrupt(Message_Descriptor *msg, IPC_Register_PCI_Interrupt *desc, struct PCIDevice *device, pmos_right_t reply_right);
 
 static int pci_callback(Message_Descriptor *desc, void *msg_buff, pmos_right_t *reply_right,
                      pmos_right_t *other_rights, void *ctx, struct pmos_msgloop_data *)
@@ -990,17 +1066,22 @@ static int pci_callback(Message_Descriptor *desc, void *msg_buff, pmos_right_t *
 
     IPC_Generic_Msg *msg = msg_buff;
     switch (msg->type) {
-    case IPC_Request_PCI_Device_NUM:
-        request_pci_device(desc, msg_buff, device, *reply_right);
-        *reply_right = 0;
-        break;
-    case IPC_Register_PCI_Interrupt_NUM:
-        register_pci_interrupt(desc, msg_buff, device, *reply_right);
+    case IPC_Request_PCI_Interrupt_NUM:
+        request_pci_interrupt(desc, msg_buff, device, *reply_right);
         *reply_right = 0;
         break;
     case IPC_Request_PCI_Device_GSI_NUM:
         request_pci_device_gsi(desc, msg_buff, device, *reply_right);
         *reply_right = 0;
+        break;
+    case IPC_PCI_Read_NUM:
+        handle_pci_read(desc, msg_buff, device, *reply_right);
+        *reply_right = 0;
+        break;
+    case IPC_PCI_Write_NUM:
+        handle_pci_write(desc, msg_buff, device, *reply_right);
+        *reply_right = 0;
+        break;
     default:
         printf("devicesd: Unknown message type for PCI device: %" PRIu32 "\n", msg->type);
         break;
@@ -1010,16 +1091,15 @@ static int pci_callback(Message_Descriptor *desc, void *msg_buff, pmos_right_t *
     return PMOS_MSGLOOP_CONTINUE;
 }
 
-int set_up_gsi(uint32_t gsi, bool active_low, bool level_trig, uint64_t task, pmos_port_t port,
-               uint32_t *vector_out);
-
-void register_pci_interrupt(Message_Descriptor *msg, IPC_Register_PCI_Interrupt *desc, struct PCIDevice *device, pmos_right_t reply_right)
+void request_pci_interrupt(Message_Descriptor *msg, IPC_Register_PCI_Interrupt *desc, struct PCIDevice *device, pmos_right_t reply_right)
 {
-    IPC_Reg_Int_Reply reply;
+    IPC_Request_Int_Reply reply;
     int result      = 0;
     uint32_t vector = 0;
     bool active_low = false;
     bool level_trig = false;
+
+    message_extra_t extra = {0};
 
     if (msg->size != sizeof(IPC_Register_PCI_Interrupt)) {
         result = -EINVAL;
@@ -1037,24 +1117,33 @@ void register_pci_interrupt(Message_Descriptor *msg, IPC_Register_PCI_Interrupt 
     if (result != 0)
         goto end;
 
-    if (desc->dest_task == 0 || desc->dest_port == 0) {
-        result = -EINVAL;
+    uint32_t flags = 0;
+    if (active_low)
+        flags |= PMOS_INTERRUPT_LEVEL_TRIG;
+    if (level_trig)
+        flags |= PMOS_INTERRUPT_ACTIVE_LOW;
+
+    right_request_t irq_right = allocate_interrupt(vector, flags);
+    if (irq_right.result != 0) {
+        fprintf(stderr, "Failed to allocate interrupt for GSI %u: %i (%s)\n", vector, irq_right.result,
+               strerror(-irq_right.result));
+        result = irq_right.result;
         goto end;
     }
+    extra.extra_rights[0] = irq_right.right;
 
-    result = set_up_gsi(vector, active_low, level_trig, desc->dest_task, desc->dest_port, &vector);
 end:
-    reply = (IPC_Reg_Int_Reply) {
-        .type   = IPC_Reg_Int_Reply_NUM,
+    reply = (IPC_Request_Int_Reply) {
+        .type   = IPC_Request_Int_Reply_NUM,
         .flags  = 0,
         .status = result,
-        .intno  = vector,
     };
 
-    result = send_message_right(reply_right, 0, &reply, sizeof(reply), NULL, 0).result;
+    result = send_message_right(reply_right, 0, &reply, sizeof(reply), &extra, SEND_MESSAGE_DELETE_RIGHT).result;
     if (result != 0) {
         delete_right(reply_right);
-        printf("Failed to send message in register_pci_interrupt: %i (%s)\n", result,
+        delete_right(irq_right.right);
+        printf("Failed to send message in request_pci_interrupt: %i (%s)\n", result,
                strerror(-result));
     }
 }
@@ -1156,4 +1245,46 @@ int fill_device_early(struct PCIDevicePtr *s, uint8_t bus, uint8_t device, uint8
     };
 
     return 0;
+}
+
+uint8_t pci_read_byte(struct PCIDevicePtr *s, unsigned offset)
+{
+    uint32_t reg = pci_read_register(s, offset >> 2);
+    return (reg >> ((offset & 0x3) * 8)) & 0xff;
+}
+
+uint16_t pci_read_word(struct PCIDevicePtr *s, unsigned offset)
+{
+    uint32_t reg = pci_read_register(s, offset >> 2);
+    return offset & 0x02 ? reg >> 16 : reg;
+}
+
+int fill_device_from_device(struct PCIDevicePtr *s, struct PCIDevice *d)
+{
+    struct PCIHostBridge *bridge = pci_host_bridge_find(d->group);
+    if (!bridge)
+        return -ENOENT;
+
+    return fill_device(s, bridge, d->bus, d->device, d->function);
+}
+
+void pci_write_byte(struct PCIDevicePtr *s, unsigned offset, uint8_t value)
+{
+    uint32_t reg = pci_read_register(s, offset >> 2);
+    reg &= ~(0xff << ((offset & 0x3) * 8));
+    reg |= (value & 0xff) << ((offset & 0x3) * 8);
+    pci_write_register(s, offset >> 2, reg);
+}
+
+void pci_write_word(struct PCIDevicePtr *s, unsigned offset, uint16_t value)
+{
+    uint32_t reg = pci_read_register(s, offset >> 2);
+    if (offset & 0x02) {
+        reg &= ~(0xffff << 16);
+        reg |= (value & 0xffff) << 16;
+    } else {
+        reg &= ~0xffff;
+        reg |= value & 0xffff;
+    }
+    pci_write_register(s, offset >> 2, reg);
 }

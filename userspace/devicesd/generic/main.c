@@ -82,26 +82,16 @@ int default_callback(Message_Descriptor *desc, void *msg_buff, pmos_right_t *rep
 {
     if (desc->size >= sizeof(IPC_Generic_Msg)) {
         switch (((IPC_Generic_Msg *)msg_buff)->type) {
-        case IPC_Reg_Int_NUM: {
-            if (desc->size != sizeof(IPC_Reg_Int))
+        case IPC_Request_Int_NUM: {
+            if (desc->size != sizeof(IPC_Request_Int))
                 printf("[devicesd] Warning: Message from PID %lx does no have the right size"
                        "(%lx)\n",
                        desc->sender, desc->size);
             // TODO: Add more checks & stuff
 
-            IPC_Reg_Int *m = (IPC_Reg_Int *)msg_buff;
+            IPC_Request_Int *m = (IPC_Request_Int *)msg_buff;
 
-            configure_interrupts_for(desc, m, *reply_right);
-            *reply_right = 0;
-        } break;
-        case IPC_Register_PCI_Interrupt_NUM: {
-            if (desc->size != sizeof(IPC_Register_PCI_Interrupt))
-                printf("[devicesd] Warning: Message from PID %lx does no have the right size"
-                       "(%lx)\n",
-                       desc->sender, desc->size);
-
-            IPC_Register_PCI_Interrupt *m = (IPC_Register_PCI_Interrupt *)msg_buff;
-            register_pci_interrupt(desc, m, *reply_right);
+            request_interrupts_for(desc, m, *reply_right);
             *reply_right = 0;
         } break;
         // case IPC_Start_Timer_NUM: {

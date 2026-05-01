@@ -203,8 +203,8 @@ impl DiskReader {
             }
 
             assert!(reply.physical_sector_size > 0, "Physical sector size must be greater than 0");
-            assert!(reply.physical_sector_size <= reply.logical_sector_size, "Physical sector size cannot be larger than logical sector size");
-            assert!(reply.logical_sector_size % reply.physical_sector_size == 0, "Logical sector size must be a multiple of physical sector size");
+            assert!(reply.physical_sector_size >= reply.logical_sector_size, "Physical sector size {} cannot be smaller than logical sector size {}", reply.physical_sector_size, reply.logical_sector_size);
+            assert!(reply.physical_sector_size % reply.logical_sector_size == 0, "Physical sector size must be a multiple of logical sector size");
 
             Rc::new(RefCell::new(Self {
                 disk_right,

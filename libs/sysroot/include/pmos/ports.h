@@ -140,6 +140,12 @@ result_t set_right0(pmos_right_t port);
 /// @return syscall_r Result of the operation. On success, the value field contains the type
 syscall_r get_right_type(pmos_right_t right);
 
+#define RIGHT_TYPE_SEND_ONCE        1
+#define RIGHT_TYPE_SEND_MANY        2
+#define RIGHT_TYPE_MEM_OBJECT       3
+#define RIGHT_TYPE_INT_SOURCE       4
+#define RIGHT_TYPE_INT_NOTIFICATION 5
+
 #endif
 
 // Causes process not to block when the port doesn't exist, returning ERROR_PORT_DOESNT_EXIST

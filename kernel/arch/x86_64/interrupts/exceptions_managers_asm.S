@@ -104,6 +104,7 @@ save_context:
     jmpq *%r14
 
     .type return_to_kernel, @function
+    .globl return_to_kernel
 return_to_kernel:
     popq %rax
     popq %rbx
@@ -130,7 +131,6 @@ breakpoint_isr:
     cmpw $0x08, 8(%rsp)
     je 1f
 
-    # It will always be from userspace to ring 0
     swapgs
 1:
 

@@ -30,6 +30,8 @@ static void smoldtb_panic(const char *msg)
 
 void init_dtb()
 {
+    // TODO: This whole thing is broken, since memory objects can't be accessed by their ids anymore
+
     unsigned char *message = NULL;
 
     printf("Info: Initializing DTB...\n");
@@ -77,7 +79,7 @@ void init_dtb()
 
         map_mem_object_param_t params = {
             .page_table_id = PAGE_TABLE_SELF,
-            .object_id = fdt_object,
+            .object_right = fdt_object,
             .addr_start_uint = 0,
             .size = fdt_size + fdt_offset,
             .offset_object = 0,

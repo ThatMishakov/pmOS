@@ -74,9 +74,16 @@ inline u16 str()
 inline void loadTSS(u16 segment) { asm volatile("ltr %w0" : : "rm"(segment)); }
 
 #ifdef __x86_64__
-inline void setCR8(u64 val)
+inline void setCR8(ulong val)
 {
+    asm("mov %0, %%cr8" :: "r"(val) : "memory");
+}
+
+inline ulong getCR8()
+{
+    ulong val;
     asm("mov %%cr8, %0" : "=r"(val) :: "memory");
+    return val;
 }
 #endif
 

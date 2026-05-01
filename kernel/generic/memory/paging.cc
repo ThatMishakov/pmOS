@@ -50,9 +50,6 @@ Page_Table::~Page_Table()
     for (auto &i: paging_regions)
         i.prepare_deletion();
 
-    for (const auto &p: mem_objects)
-        p.first->atomic_unregister_pined(weak_from_this());
-
     auto it = paging_regions.begin();
     while (it != paging_regions.end()) {
         auto next = it;
@@ -92,7 +89,7 @@ ReturnStr<bool> Page_Table::atomic_copy_to_user(void *to, const void *from, size
     for (ulong i = (ulong)to & PAGE_MASK; i < (ulong)to + size; i += PAGE_SIZE) {
         const auto b = prepare_user_page((void *)i, Writeable);
         if (!b.success())
-            b.propagate();
+            return b.propagate();
 
         if (not b.val)
             return false;
@@ -262,16 +259,6 @@ ReturnStr<Mem_Object_Reference *> Page_Table::atomic_create_mem_object_region(
         if (r)
             return Error(r);
     }
-
-    auto it = object_regions.find(object.get());
-    if (it == object_regions.end()) {
-        auto result = object_regions.insert({object.get(), {}});
-        if (result.first == object_regions.end())
-            return Error(-ENOMEM);
-
-        it = result.first;
-    }
-    it->second.insert(region.get());
 
     paging_regions.insert(region.get());
     return Success(region.release());
@@ -445,7 +432,7 @@ int kernel::paging::kernel_pt_generation          = 0;
 // bruh
 int kernel_pt_active_cpus_count[2] = {0, 0};
 
-void Page_Table::trigger_shootdown(sched::CPU_Info *cpu)
+void Page_Table::trigger_shootdown(Page_Table *maybe_page_table, sched::CPU_Info *cpu)
 {
     if (kernel_pt_generation != cpu->kernel_pt_generation) {
         assert(kernel_pt_generation != -1);
@@ -469,159 +456,43 @@ void Page_Table::trigger_shootdown(sched::CPU_Info *cpu)
     } else {
         assert(cpu == sched::get_cpu_struct());
         assert(cpu->page_table_generation != -1);
+        assert(maybe_page_table != nullptr);
 
-        Auto_Lock_Scope l(active_cpus_lock);
+        Auto_Lock_Scope l(maybe_page_table->active_cpus_lock);
 
-        if (paging_generation == cpu->page_table_generation)
+        if (maybe_page_table->paging_generation == cpu->page_table_generation)
             return;
 
         auto current_generation = cpu->page_table_generation;
         auto next_generation    = current_generation == 0 ? 1 : 0;
 
-        assert(shootdown_descriptor != nullptr);
-        auto &desc = *shootdown_descriptor;
+        assert(maybe_page_table->shootdown_descriptor != nullptr);
+        auto &desc = *maybe_page_table->shootdown_descriptor;
 
         if (desc.flush_all()) {
-            tlb_flush_all();
+            maybe_page_table->tlb_flush_all();
         } else {
             for (auto page: desc.iterate_over_pages())
-                invalidate_tlb(page);
+                maybe_page_table->invalidate_tlb(page);
 
             for (auto range: desc.iterate_over_ranges())
-                invalidate_tlb(range.start, range.size);
+                maybe_page_table->invalidate_tlb(range.start, range.size);
         }
 
         // Make sure the invalidation is done before the generation change
         __sync_synchronize();
 
         // I think the order shouldn't matter
-        __atomic_add_fetch(&active_cpus_count[next_generation], 1, __ATOMIC_RELAXED);
+        __atomic_add_fetch(&maybe_page_table->active_cpus_count[next_generation], 1, __ATOMIC_RELAXED);
 
-        active_cpus[current_generation].remove(cpu);
-        active_cpus[next_generation].push_back(cpu);
+        maybe_page_table->active_cpus[current_generation].remove(cpu);
+        maybe_page_table->active_cpus[next_generation].push_back(cpu);
 
         cpu->page_table_generation = next_generation;
 
         // Not sure about the order here though
         // TODO: ???
-        __atomic_sub_fetch(&active_cpus_count[current_generation], 1, __ATOMIC_RELEASE);
-    }
-}
-
-kresult_t Page_Table::atomic_pin_memory_object(klib::shared_ptr<Mem_Object> object)
-{
-    // TODO: I have changed the order of locking, which might cause deadlocks elsewhere
-    Auto_Lock_Scope l(lock);
-    auto inserted = mem_objects.insert({object, Mem_Object_Data()});
-
-    if (inserted.first == mem_objects.end())
-        return -ENOMEM;
-    inserted.first->second.handles_ref_count++;
-
-    pmos::utility::scope_guard guard([&]() {
-        if (--inserted.first->second.handles_ref_count == 0)
-            mem_objects.erase(inserted.first);
-    });
-
-    if (inserted.second) {
-        Auto_Lock_Scope object_lock(object->pinned_lock);
-        auto result = object->register_pined(weak_from_this());
-        if (result)
-            return result;
-    }
-
-    guard.dismiss();
-
-    return 0;
-}
-
-kresult_t Page_Table::atomic_unpin_memory_object(klib::shared_ptr<Mem_Object> object)
-{
-    Auto_Lock_Scope l(lock);
-    auto it = mem_objects.find(object);
-    if (it == mem_objects.end())
-        return -ENOENT;
-
-    assert(it->second.handles_ref_count > 0);
-
-    if (--it->second.handles_ref_count == 0) {
-        mem_objects.erase(it);
-        object->atomic_unregister_pined(weak_from_this());
-    }
-
-    return 0;
-}
-
-kresult_t Page_Table::atomic_transfer_object(const klib::shared_ptr<Page_Table> &new_table,
-                                             u64 memory_object_id)
-{
-    auto object = Mem_Object::get_object(memory_object_id);
-    if (!object)
-        return -ENOENT;
-
-    Auto_Lock_Scope_Double l(lock, new_table->lock);
-    auto it = mem_objects.find(object);
-    if (it == mem_objects.end())
-        return -ENOENT;
-
-    if (this == new_table.get())
-        return 0;
-
-    auto inserted = new_table->mem_objects.insert({object, Mem_Object_Data()});
-    if (inserted.first == new_table->mem_objects.end())
-        return -ENOMEM;
-
-    inserted.first->second.max_privilege_mask |= it->second.max_privilege_mask;
-    inserted.first->second.handles_ref_count++;
-    if (inserted.second) {
-        auto result = object->atomic_register_pined(new_table);
-        if (result)
-            return result;
-    }
-
-    assert(it->second.handles_ref_count > 0);
-    if (--it->second.handles_ref_count == 0) {
-        mem_objects.erase(it);
-        object->atomic_unregister_pined(weak_from_this());
-    }
-
-    return 0;
-}
-
-void Page_Table::atomic_shrink_regions(const klib::shared_ptr<Mem_Object> &id,
-                                       u64 new_size) noexcept
-{
-    Auto_Lock_Scope l(lock);
-    auto ctx = TLBShootdownContext::create_userspace(*this);
-
-    auto p = object_regions.find(id.get());
-    if (p == object_regions.end())
-        return;
-
-    auto it = p->second.begin();
-    while (it != p->second.end()) {
-        const auto reg = it;
-        ++it;
-
-        const auto object_end = reg->object_up_to();
-        if (object_end < new_size) {
-            const auto change_size_to =
-                new_size > reg->start_offset_bytes ? new_size - reg->start_offset_bytes : 0UL;
-
-            void *const free_from = (char *)reg->start_addr + change_size_to;
-            const auto free_size  = (char *)reg->addr_end() - (char *)free_from;
-
-            if (change_size_to == 0) { // Delete region
-                reg->prepare_deletion();
-                paging_regions.erase(reg);
-                reg->rcu_free();
-            } else { // Resize region
-                reg->size = change_size_to;
-            }
-
-            invalidate_range(ctx, free_from, free_size, true);
-            unblock_tasks_range(free_from, free_size);
-        }
+        __atomic_sub_fetch(&maybe_page_table->active_cpus_count[current_generation], 1, __ATOMIC_RELEASE);
     }
 }
 
@@ -645,15 +516,6 @@ kresult_t Page_Table::atomic_delete_region(void *region_start)
     unblock_tasks_range(region_start, region_size);
 
     return 0;
-}
-
-void Page_Table::unreference_object(const klib::shared_ptr<Mem_Object> &object,
-                                    Mem_Object_Reference *region) noexcept
-{
-    auto p = object_regions.find(object.get());
-
-    if (p != object_regions.end())
-        p->second.erase(region);
 }
 
 void Page_Table::unblock_tasks_range(void *blocked_by_page, size_t size_bytes)
@@ -686,21 +548,22 @@ TLBShootdownContext TLBShootdownContext::create_kernel()
 
 void TLBShootdownContext::invalidate_page(void *page)
 {
-    // TODO: Align this to page size
-    page = (void *)((ulong)page & ~0xfffULL);
+    constexpr phys_addr_t PAGE_MASK = ~(PAGE_SIZE - 1);
+    page = (void *)((ulong)page & PAGE_MASK);
 
     if ((pages_count == MAX_PAGES) and for_kernel())
         finalize();
 
     if (pages_count >= MAX_PAGES)
         return;
-    pages[pages_count] = page;
+
+    pages[pages_count] = page;    
     pages_count++;
 }
 
 bool TLBShootdownContext::flush_all() const
 {
-    return (pages_count > MAX_PAGES) or (ranges_count > MAX_RANGES);
+    return (pages_count >= MAX_PAGES) or (ranges_count > MAX_RANGES);
 }
 
 bool TLBShootdownContext::empty() const { return pages_count == 0 and ranges_count == 0; }
@@ -747,7 +610,7 @@ void TLBShootdownContext::finalize()
                 cpu->ipi_tlb_shootdown();
             }
 
-            page_table->trigger_shootdown(my_cpu);
+            Page_Table::trigger_shootdown(nullptr, my_cpu);
 
             while (__atomic_load_n(&kernel_pt_active_cpus_count[old_generation], __ATOMIC_ACQUIRE))
                 spin_pause();
@@ -774,7 +637,7 @@ void TLBShootdownContext::finalize()
 
         // If this CPU has this page table, also flush it
         if (my_cpu->current_task->page_table.get() == page_table)
-            page_table->trigger_shootdown(my_cpu);
+            Page_Table::trigger_shootdown(page_table, my_cpu);
 
         // Wait for other CPUs
         while (__atomic_load_n(&page_table->active_cpus_count[old_generation], __ATOMIC_ACQUIRE)) {

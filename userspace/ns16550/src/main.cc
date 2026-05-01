@@ -29,8 +29,8 @@ int flow_control   = 0;
 int terminal_type  = 0;
 
 int interrupt_type_mask = 0;
-int gsi_num             = 0;
-int pc_irq              = 0;
+uint32_t gsi_num             = 0;
+uint32_t pc_irq              = 0;
 
 // TODO: Don't assume it, apparently it's not always that
 unsigned clock_frequency = 1843200;
@@ -146,93 +146,78 @@ void clear_register(int index, uint8_t mask)
     io_rw->write_register(index, val);
 }
 
-u32 int_vec = 0;
+pmos::RecieveRight interrupt_right;
 
 void set_up_interrupt()
 {
     printf("Initializing interrupts... Mask: %x\n", interrupt_type_mask);
 
     // Check if interrupts are supported
+    IPC_Request_Int r;
+    
     if (interrupt_type_mask & 0x01) {
-        IPC_Reg_Int r = {
-            .type      = IPC_Reg_Int_NUM,
-            .flags     = IPC_Reg_Int_FLAG_EXT_INTS,
+        r = {
+            .type      = IPC_Request_Int_NUM,
+            .flags     = IPC_Request_Int_FLAG_EXT_INTS,
             .intno     = static_cast<uint32_t>(pc_irq),
             .int_flags = 0, // TODO
-            .dest_task = get_task_id(),
-            .dest_chan = serial_port.get(),
         };
+    } else  {
+        uint32_t flags = 0;
 
-        auto send_result = pmos::send_message_right_one(devicesd_right, r,
-                                                        {&reply_port, pmos::RightType::SendOnce});
-        if (!send_result) {
-            printf("Failed to send message to set up interrupt: %i (%s)\n", send_result.error(),
-                   strerror(send_result.error()));
-            return;
-        }
-
-        Message_Descriptor desc;
-        uint8_t *message;
-        result_t result = 0;
-        for (int i = 0; i < 5; ++i) {
-            result = get_message(&desc, &message, reply_port.get(), NULL, NULL);
-            if ((int)result == -EINTR)
-                continue;
-            break;
-        }
-        if (result != SUCCESS) {
-            printf("Failed to get message from devicesd: %li (%s)\n", result, strerror(-result));
-            return;
-        }
-
-        std::unique_ptr<unsigned char> message_ptr(message);
-
-        IPC_Reg_Int_Reply *reply = reinterpret_cast<IPC_Reg_Int_Reply *>(message_ptr.get());
-        if (reply->type != IPC_Reg_Int_Reply_NUM) {
-            printf("Invalid reply type: %i\n", reply->type);
-            return;
-        }
-
-        if (reply->status < 0) {
-            printf("Failed to set up interrupt: recieved error %i\n", -reply->status);
-            return;
-        }
-
-        int_vec = reply->intno;
-
-        printf("ns16550d: Interrupt set up successfully, intno: %i\n", int_vec);
-
-        have_interrupts = true;
-    } else {
-        unsigned flags = 0;
-
-// TODO: I haven't found where to get the interrupt trigger type in SPCR table...
-#ifdef __loongarch__
+        // TODO: I haven't found where to get the interrupt trigger type in SPCR table...
+        #ifdef __loongarch__
         flags = INTERRUPT_FLAG_LEVEL_TRIGGERED;
-#endif
+        #endif
 
-        auto [result, cpu, vector] = allocate_interrupt(gsi_num, flags);
-        if (result) {
-            printf("ns16550: failed to get interrupt, error %li\n", result);
-            return;
-        }
-
-        result = set_affinity(0, cpu, 0);
-        if (result) {
-            printf("ns16550: failed to set affinity, error %li\n", result);
-            return;
-        }
-
-        auto result2 = set_interrupt(serial_port.get(), vector, 0);
-        if (result2.result) {
-            printf("ns16550: failed to set interrupt, error %li\n", result2.result);
-            return;
-        }
-
-        int_vec = vector;
-
-        have_interrupts = true;
+        r = {
+            .type      = IPC_Request_Int_NUM,
+            .flags     = 0,
+            .intno     = gsi_num,
+            .int_flags = flags, // TODO !
+        };
     }
+
+    auto send_result = pmos::send_message_right_one(devicesd_right, r,
+                                                    {&reply_port, pmos::RightType::SendOnce});
+    if (!send_result) {
+        printf("Failed to send message to set up interrupt: %i (%s)\n", send_result.error(),
+                strerror(send_result.error()));
+        return;
+    }
+
+    auto msg = reply_port.get_first_message();
+    if (!msg) {
+        printf("Failed to get message to set up interrupt: %i\n", msg.error());
+        return;
+    }
+
+    if (msg->data.size() < sizeof(IPC_Request_Int_Reply)) {
+        printf("Invalid message size: %zu\n", msg->data.size());
+        return;
+    }
+
+    IPC_Request_Int_Reply *reply = reinterpret_cast<IPC_Request_Int_Reply *>(msg->data.data());
+    if (reply->type != IPC_Request_Int_Reply_NUM) {
+        printf("Invalid reply type: %i\n", reply->type);
+        return;
+    }
+
+    if (reply->status < 0) {
+        printf("Failed to set up interrupt: recieved error %i\n", -reply->status);
+        return;
+    }
+
+    try {
+        interrupt_right = register_interrupt(msg->other_rights[0], serial_port);
+    } catch (const std::exception &e) {
+        printf("Failed to set up interrupt: %s\n", e.what());
+        return;
+    }
+
+    printf("ns16550d: Interrupt set up successfully!\n");
+
+    have_interrupts = true;
 }
 
 void ns16550_init()
@@ -535,7 +520,7 @@ void react_interrupt()
         }
     } // else: Spurious interrupt
 
-    complete_interrupt(int_vec);
+    pmos::complete_interrupt(interrupt_right);
 }
 
 int main()

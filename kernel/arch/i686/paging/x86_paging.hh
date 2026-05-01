@@ -106,7 +106,7 @@ bool detect_nx();
 extern bool use_pae;
 extern bool support_nx;
 
-ReturnStr<u32> create_empty_cr3();
+ReturnStr<u32> create_empty_cr3(bool below_4gb = false);
 
 } // namespace kernel::ia32::paging
 

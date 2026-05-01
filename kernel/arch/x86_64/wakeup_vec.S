@@ -29,12 +29,20 @@ init_vec_jump_instr:
     movl (smp_trampoline_cr3 - init_vec_begin)(%ebx), %eax
     movl %eax, %cr3 # cr3 (Page table)
 
-    movl %cr4, %eax # PAE 
-    orl $(1 << 5), %eax
-    movl %eax, %cr4
+    movl %cr4, %ecx # PAE 
+    orl $(1 << 5), %ecx
+    testl $0x04, (smp_trampoline_trampoilne_flags - init_vec_begin)(%ebx)
+    jz 1f
+    orl $(1 << 12), %ecx
+1:
+    movl %ecx, %cr4
 
     movl $(1 << 8), %eax # LME BIT
     xorl %edx, %edx
+    testl $0x02, (smp_trampoline_trampoilne_flags - init_vec_begin)(%ebx)
+    jz 1f
+    orl $(1 << 11), %eax # Execute Disable Bit Enable
+1:
     movl $0xC0000080, %ecx # IA32_EFER
     wrmsr 
 
@@ -42,7 +50,7 @@ init_vec_jump_instr:
     movl $0x80000001, %eax
     movl %eax, %cr0
 
-    leal (scratch_stack - init_vec_begin)(%ebx), %esp
+    leal (scratch_stack_top - init_vec_begin)(%ebx), %esp
     leal (1f - init_vec_begin)(%ebx), %eax
     pushl $0x08
     pushl %eax
@@ -85,10 +93,18 @@ acpi_protected_far_jump_instr:
 
     movl %cr4, %eax # PAE 
     orl $(1 << 5), %eax
+    testl $0x04, (smp_trampoline_trampoilne_flags - acpi_cpu_startup)(%ebx)
+    jz 1f
+    orl $(1 << 12), %eax
+1:
     movl %eax, %cr4
 
     movl $(1 << 8), %eax # LME BIT
     xorl %edx, %edx
+    testl $0x02, (smp_trampoline_trampoilne_flags - acpi_cpu_startup)(%ebx)
+    jz 1f
+    orl $(1 << 11), %eax # Execute Disable Bit Enable
+1:
     movl $0xC0000080, %ecx # IA32_EFER
     wrmsr 
 
@@ -96,7 +112,7 @@ acpi_protected_far_jump_instr:
     movl $0x80000001, %eax
     movl %eax, %cr0
 
-    leal (acpi_trampoline_kernel_entry - acpi_cpu_startup)(%ebx), %esp
+    leal (scratch_stack_top - acpi_cpu_startup)(%ebx), %esp
     leal (_64bitst - acpi_cpu_startup)(%ebx), %eax
     pushl $0x08
     pushl %eax
@@ -131,14 +147,18 @@ acpi_trampoline_gdt:
     .quad 0x00af9b000000ffff
     .quad 0x00cf92000000ffff
     .quad 0x00cf9a000000ffff
+
     .globl smp_trampoline_cr3
 smp_trampoline_cr3:
-    .space 4
+    .long 0
 
-smp_trampoline_scratch_stack:
-    .space 8
+    .globl smp_trampoline_trampoilne_flags
+smp_trampoline_trampoilne_flags:
+    .long 0
+
 scratch_stack:
     .space 8
+scratch_stack_top:
 acpi_trampoline_kernel_entry:
     .quad _acpi_wakeup_entry
 

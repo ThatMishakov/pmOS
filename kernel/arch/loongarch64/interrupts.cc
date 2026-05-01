@@ -6,13 +6,15 @@
 #include <processes/tasks.hh>
 #include <sched/sched.hh>
 #include <types.hh>
+#include "iocsr.hh"
 
 using namespace kernel;
 using namespace kernel::log;
 using namespace kernel::paging;
 using namespace kernel::sched;
+using namespace kernel::loongarch;
 
-constexpr u32 IOCSR_IPI_SEND = 0x1040;
+constexpr u32 IPI_MASK = 0x0007;
 
 struct fp_s {
     u64 fp;
@@ -68,20 +70,48 @@ void print_registers(LoongArch64Regs *regs, Logger &logger = serial_logger)
 
 void ipi_send(u32 cpu, u32 vector)
 {
-    uint32_t value = (cpu << 16) | vector;
-    iocsr_write32(value, IOCSR_IPI_SEND);
+    uint32_t value = (1 << 31) | (cpu << 16) | vector;
+    iocsr_write32(value, iocsr::IPI_SEND);
 }
 
 void CPU_Info::ipi_reschedule()
 {
-    __atomic_or_fetch(&ipi_mask, IPI_RESCHEDULE, __ATOMIC_ACQUIRE);
     ipi_send(cpu_physical_id, 0x00);
 }
 
 void CPU_Info::ipi_tlb_shootdown()
 {
-    __atomic_or_fetch(&ipi_mask, IPI_TLB_SHOOTDOWN, __ATOMIC_ACQUIRE);
-    ipi_send(cpu_physical_id, 0x00);
+    ipi_send(cpu_physical_id, 0x01);
+}
+
+void CPU_Info::ipi_cpu_park()
+{
+    ipi_send(cpu_physical_id, 0x02);
+}
+
+
+void handle_ipi()
+{
+    auto mask = iocsr_read32(iocsr::IPI_STATUS);
+    // EOI
+    iocsr_write32(mask, iocsr::IPI_CLEAR);
+
+    if (mask & (1 << 0))
+        reschedule();
+
+    if (mask & (1 << 1)) {
+        auto c = get_cpu_struct();
+        c->current_task->page_table->trigger_shootdown(c->current_task->page_table.get(), c);
+    }
+
+    if (mask & (1 << 2)) {
+        park_self();
+    }
+}
+
+void ipi_enable()
+{
+    iocsr_write32(IPI_MASK, iocsr::IPI_ENABLE);
 }
 
 unsigned exception_code(u32 estat = csrrd32<loongarch::csr::ESTAT>())
@@ -236,13 +266,17 @@ extern "C" void handle_interrupt()
     case EXCEPTION_INT: {
         assert(estat);
 
-        if (estat & TIMER_INT_MASK) {
+        if (estat & ESTAT_TIMER_INT_MASK) {
             csrwr<loongarch::csr::TICLR>(0x01);
             cpu_timer_interrupt();
         }
 
-        if (estat & HARDWARE_INT_MASK) {
+        if (estat & ESTAT_HARDWARE_INT_MASK) {
             handle_hardware_interrupt(estat);
+        }
+
+        if (estat & ESTAT_IPI_MASK) {
+            handle_ipi();
         }
     } break;
     case EXCEPTION_PIL:
@@ -297,5 +331,13 @@ void printc(int) {}
 extern "C" void allow_access_user() {}
 extern "C" void disallow_access_user() {}
 
-// TODO
-void init_smp() {}
+void arch_specific_park_pre_offline() {}
+
+
+void hcf();
+
+void arch_specific_park_stop()
+{
+    hcf();
+    // TODO: Allow waking up the core, if this was used for more than panic parking...
+}

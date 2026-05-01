@@ -47,33 +47,33 @@ using namespace kernel::x86;
 
 static void print_registers(const Task_Regs &regs, Logger &logger)
 {
-    // logger.printf(" => %%rdi: 0x%h\n", regs.scratch_r.rdi);
-    // logger.printf(" => %%rsi: 0x%h\n", regs.scratch_r.rsi);
-    // logger.printf(" => %%rdx: 0x%h\n", regs.scratch_r.rdx);
-    // logger.printf(" => %%rcx: 0x%h\n", regs.scratch_r.rcx);
-    // logger.printf(" => %%r8:  0x%h\n", regs.scratch_r.r8);
-    // logger.printf(" => %%r9:  0x%h\n", regs.scratch_r.r9);
-    // logger.printf(" => %%rax: 0x%h\n", regs.scratch_r.rax);
-    // logger.printf(" => %%r10: 0x%h\n", regs.scratch_r.r10);
-    // logger.printf(" => %%r11: 0x%h\n", regs.scratch_r.r11);
+    logger.printf(" => %%rdi: 0x%lx\n", regs.scratch_r.rdi);
+    logger.printf(" => %%rsi: 0x%lx\n", regs.scratch_r.rsi);
+    logger.printf(" => %%rdx: 0x%lx\n", regs.scratch_r.rdx);
+    logger.printf(" => %%rcx: 0x%lx\n", regs.scratch_r.rcx);
+    logger.printf(" => %%r8:  0x%lx\n", regs.scratch_r.r8);
+    logger.printf(" => %%r9:  0x%lx\n", regs.scratch_r.r9);
+    logger.printf(" => %%rax: 0x%lx\n", regs.scratch_r.rax);
+    logger.printf(" => %%r10: 0x%lx\n", regs.scratch_r.r10);
+    logger.printf(" => %%r11: 0x%lx\n", regs.scratch_r.r11);
 
-    // logger.printf(" => %%rbx: 0x%h\n", regs.preserved_r.rbx);
-    // logger.printf(" => %%rbp: 0x%h\n", regs.preserved_r.rbp);
-    // logger.printf(" => %%r12: 0x%h\n", regs.preserved_r.r12);
-    // logger.printf(" => %%r13: 0x%h\n", regs.preserved_r.r13);
-    // logger.printf(" => %%r14: 0x%h\n", regs.preserved_r.r14);
-    // logger.printf(" => %%r15: 0x%h\n", regs.preserved_r.r15);
+    logger.printf(" => %%rbx: 0x%lx\n", regs.preserved_r.rbx);
+    logger.printf(" => %%rbp: 0x%lx\n", regs.preserved_r.rbp);
+    logger.printf(" => %%r12: 0x%lx\n", regs.preserved_r.r12);
+    logger.printf(" => %%r13: 0x%lx\n", regs.preserved_r.r13);
+    logger.printf(" => %%r14: 0x%lx\n", regs.preserved_r.r14);
+    logger.printf(" => %%r15: 0x%lx\n", regs.preserved_r.r15);
 
-    // logger.printf(" => %%rip: 0x%h\n", regs.e.rip);
-    // logger.printf(" => %%rsp: 0x%h\n", regs.e.rsp);
-    // logger.printf(" => %%rflags: 0x%h\n", regs.e.rflags.numb);
+    logger.printf(" => %%rip: 0x%lx\n", regs.e.rip);
+    logger.printf(" => %%rsp: 0x%lx\n", regs.e.rsp);
+    logger.printf(" => %%rflags: 0x%lx\n", regs.e.rflags.numb);
 
-    // logger.printf(" => %%gs offset: 0x%h\n", regs.seg.gs);
-    // logger.printf(" => %%fs offset: 0x%h\n", regs.seg.fs);
+    logger.printf(" => %%gs offset: 0x%lx\n", regs.seg.gs);
+    logger.printf(" => %%fs offset: 0x%lx\n", regs.seg.fs);
 
     logger.printf(" Entry type: %i\n", regs.entry_type);
 
-    // logger.printf(" Error code: 0x%h\n", regs.int_err);
+    logger.printf(" Error code: 0x%lx\n", regs.int_err);
 }
 
 static void print_registers(TaskDescriptor *task, Logger &logger)
@@ -142,10 +142,15 @@ void print_stack_trace(TaskDescriptor *task, Logger &logger)
         return;
 
     logger.printf("Stack trace:\n");
-    ulong *rbp = (ulong *)task->regs.xbp();
+    ulong rbp = task->regs.xbp();
     while (rbp) {
-        logger.printf(" => 0x%h\n", rbp[1]);
-        rbp = (ulong *)rbp[0];
+        ulong regs[2];
+        auto result = copy_from_user((char *)&regs, (const char *)rbp, sizeof(regs));
+        if (!result)
+            return;
+
+        logger.printf(" => 0x%lx\n", regs[1]);
+        rbp = regs[0];
     }
 }
 
@@ -173,12 +178,15 @@ void print_stack_trace(TaskDescriptor *task, Logger &logger)
 extern ulong idle_cr3;
 
 bool page_mapped(void *pagefault_cr2, ulong err);
+bool page_mapped_safe(void *pagefault_cr2, ulong err);
+
+extern "C" CPU_Info *find_cpu_info();
+void hcf();
 
 extern "C" void pagefault_manager(NestedIntContext *kernel_ctx, ulong err)
 {
-    CPU_Info *c = get_cpu_struct();
-
     if (kernel_ctx) {
+        auto c = get_cpu_struct();
         auto pagefault_cr2 = (ulong)getCR2();
 
         if (pagefault_cr2 > 0x8000000000000000) {
@@ -207,7 +215,6 @@ extern "C" void pagefault_manager(NestedIntContext *kernel_ctx, ulong err)
                 return;
             }
         }
-        dbg_main(err, kernel_ctx);
         panic("Pagefault in kernel, error %x at %lx", err, pagefault_cr2);
 
         // c->pagefault_error = c->nested_int_regs.int_err;
@@ -215,6 +222,8 @@ extern "C" void pagefault_manager(NestedIntContext *kernel_ctx, ulong err)
         // kernel_jump_to(deal_with_pagefault_in_kernel);
         return;
     }
+
+    CPU_Info *c = get_cpu_struct();
 
     TaskDescriptor *task = c->current_task;
 
@@ -257,8 +266,8 @@ extern "C" void pagefault_manager(NestedIntContext *kernel_ctx, ulong err)
                              virtual_addr, task->task_id, task->name.c_str(),
                              task->regs.program_counter(), err, result);
 
-        print_registers(task, global_logger);
-        // print_stack_trace(task, global_logger);
+        print_registers(task, serial_logger);
+        print_stack_trace(task, serial_logger);
 
         task->atomic_kill();
     }
@@ -272,27 +281,26 @@ extern "C" void sse_exception_manager()
 
 void print_kernel_regs(NestedIntContext *kernel_ctx)
 {
-    serial_logger.printf("Kernel registers:\n");
-    serial_logger.printf(" => %%rax: 0x%lx\n", kernel_ctx->rax);
-    serial_logger.printf(" => %%rbx: 0x%lx\n", kernel_ctx->rbx);
-    serial_logger.printf(" => %%rcx: 0x%lx\n", kernel_ctx->rcx);
-    serial_logger.printf(" => %%rdx: 0x%lx\n", kernel_ctx->rdx);
-    serial_logger.printf(" => %%rsi: 0x%lx\n", kernel_ctx->rsi);
-    serial_logger.printf(" => %%rdi: 0x%lx\n", kernel_ctx->rdi);
-    serial_logger.printf(" => %%rbp: 0x%lx\n", kernel_ctx->rbp);
-    serial_logger.printf(" => %%r8: 0x%lx\n", kernel_ctx->r8);
-    serial_logger.printf(" => %%r9: 0x%lx\n", kernel_ctx->r9);
-    serial_logger.printf(" => %%r10: 0x%lx\n", kernel_ctx->r10);
-    serial_logger.printf(" => %%r11: 0x%lx\n", kernel_ctx->r11);
-    serial_logger.printf(" => %%r12: 0x%lx\n", kernel_ctx->r12);
-    serial_logger.printf(" => %%r13: 0x%lx\n", kernel_ctx->r13);
-    serial_logger.printf(" => %%r14: 0x%lx\n", kernel_ctx->r14);
-    serial_logger.printf(" => %%r15: 0x%lx\n", kernel_ctx->r15);
-    serial_logger.printf(" => %%rip: 0x%lx\n", kernel_ctx->rip);
-    serial_logger.printf(" => %%rsp: 0x%lx\n", kernel_ctx->rsp);
-    serial_logger.printf(" => %%rflags: 0x%lx\n", kernel_ctx->rflags);
-    serial_logger.printf(" => %%cs: 0x%lx\n", kernel_ctx->cs);
-    serial_logger.printf(" => %%ss: 0x%lx\n", kernel_ctx->ss);
+    serial_logger.printf_nolock(" => %%rax: 0x%lx\n", kernel_ctx->rax);
+    serial_logger.printf_nolock(" => %%rbx: 0x%lx\n", kernel_ctx->rbx);
+    serial_logger.printf_nolock(" => %%rcx: 0x%lx\n", kernel_ctx->rcx);
+    serial_logger.printf_nolock(" => %%rdx: 0x%lx\n", kernel_ctx->rdx);
+    serial_logger.printf_nolock(" => %%rsi: 0x%lx\n", kernel_ctx->rsi);
+    serial_logger.printf_nolock(" => %%rdi: 0x%lx\n", kernel_ctx->rdi);
+    serial_logger.printf_nolock(" => %%rbp: 0x%lx\n", kernel_ctx->rbp);
+    serial_logger.printf_nolock(" => %%r8: 0x%lx\n", kernel_ctx->r8);
+    serial_logger.printf_nolock(" => %%r9: 0x%lx\n", kernel_ctx->r9);
+    serial_logger.printf_nolock(" => %%r10: 0x%lx\n", kernel_ctx->r10);
+    serial_logger.printf_nolock(" => %%r11: 0x%lx\n", kernel_ctx->r11);
+    serial_logger.printf_nolock(" => %%r12: 0x%lx\n", kernel_ctx->r12);
+    serial_logger.printf_nolock(" => %%r13: 0x%lx\n", kernel_ctx->r13);
+    serial_logger.printf_nolock(" => %%r14: 0x%lx\n", kernel_ctx->r14);
+    serial_logger.printf_nolock(" => %%r15: 0x%lx\n", kernel_ctx->r15);
+    serial_logger.printf_nolock(" => %%rip: 0x%lx\n", kernel_ctx->rip);
+    serial_logger.printf_nolock(" => %%rsp: 0x%lx\n", kernel_ctx->rsp);
+    serial_logger.printf_nolock(" => %%rflags: 0x%lx\n", kernel_ctx->rflags);
+    serial_logger.printf_nolock(" => %%cs: 0x%lx\n", kernel_ctx->cs);
+    serial_logger.printf_nolock(" => %%ss: 0x%lx\n", kernel_ctx->ss);
 }
 
 extern "C" void general_protection_fault_manager(NestedIntContext *kernel_ctx, ulong err)
@@ -358,25 +366,23 @@ extern "C" void invalid_opcode_manager()
 extern "C" void stack_segment_fault_manager()
 {
     task_ptr task = get_cpu_struct()->current_task;
-    t_print_bochs("!!! Stack-Segment Fault error %h RIP %h RSP %h PID %h (%s)\n",
+    serial_logger.printf("!!! Stack-Segment Fault error %lx RIP %lx RSP %lx PID %h (%s)\n",
                   task->regs.int_err, task->regs.program_counter(), task->regs.stack_pointer(),
                   task->task_id, task->name.c_str());
-    global_logger.printf("!!! Stack-Segment Fault error %h RIP %h RSP %h\n", task->regs.int_err,
+    global_logger.printf("!!! Stack-Segment Fault error %lx RIP %lx RSP %lx\n", task->regs.int_err,
                          task->regs.program_counter(), task->regs.stack_pointer());
     task->atomic_kill();
 }
 
 extern "C" void double_fault_manager(NestedIntContext *kernel_ctx, ulong err)
 {
-    panic("double fault!\n");
-    task_ptr task = get_cpu_struct()->current_task;
-    t_print_bochs("!!! Double Fault error %h RIP %h RSP %h PID %h (%s)\n", task->regs.int_err,
-                  task->regs.program_counter(), task->regs.stack_pointer(), task->task_id,
-                  task->name.c_str());
-    global_logger.printf("!!! Double Fault error %h RIP %h RSP %h PID %h (%s)\n",
-                         task->regs.int_err, task->regs.program_counter(),
-                         task->regs.stack_pointer(), task->task_id, task->name.c_str());
-    task->atomic_kill();
+    if (kernel_ctx) {
+        print_kernel_regs(kernel_ctx);
+        panic("Double fault in kernel, error %x\n", err);
+        return;
+    }
+
+    panic("Double fault!!\n");
 }
 
 void breakpoint_manager(NestedIntContext *kernel_ctx, ulong err)

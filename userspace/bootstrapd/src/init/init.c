@@ -316,7 +316,7 @@ static int reserve_instances_vector(struct Service *service)
     return 0;
 }
 
-int start_service(struct Service *service, uint64_t object_id, uint64_t optional_right_id)
+int start_service(struct Service *service, uint64_t object_right, uint64_t optional_right_id)
 {
     if (!service)
         return -EINVAL;
@@ -371,6 +371,33 @@ int start_service(struct Service *service, uint64_t object_id, uint64_t optional
         return rrr;
     }
 
+    right_request_t object_request = dup_right(object_right);
+    if (object_request.result != SUCCESS) {
+        print_str("Loader: Could not dup object right for ");
+        print_str(service->name);
+        print_str(". Error: ");
+        print_hex(object_request.result);
+        print_str("\n");
+
+        syscall_kill_task(r.value);
+        remove_task_from_group(TASK_ID_SELF, group_id);
+        return object_request.result;
+    }
+
+    auto object_result = transfer_right(group_id, object_request.right, 0);
+    if (object_result.result) {
+        print_str("Loader: Could not transfer object right to the task group for service ");
+        print_str(service->name);
+        print_str(". Error: ");
+        print_hex(object_result.result);
+        print_str("\n");
+        
+        delete_right(object_request.right);
+        syscall_kill_task(r.value);
+        remove_task_from_group(TASK_ID_SELF, group_id);
+        return object_result.result;
+    }
+
     pmos_right_t new_right = 0;
     if (optional_right_id) {
         auto result = transfer_right(group_id, optional_right_id, 0);
@@ -393,7 +420,7 @@ int start_service(struct Service *service, uint64_t object_id, uint64_t optional
     group_id = 0;
 
     // Task group tag
-    struct AuxVecEntry *auxvec_entries[4];
+    struct AuxVecEntry *auxvec_entries[5];
     struct AuxVecEntry group_id_entry = {
         .entry_type = AT_TASK_GROUP_ID,
         .data_type = DATA_TYPE_EXTERNAL,
@@ -402,8 +429,18 @@ int start_service(struct Service *service, uint64_t object_id, uint64_t optional
             .size = sizeof(new_group_id),
         },
     };
+    struct AuxVecEntry mem_object_entry = {
+        .entry_type = AT_MEM_OBJ_ID,
+        .data_type = DATA_TYPE_EXTERNAL,
+        .external_data = {
+            .data = &object_result.right,
+            .size = sizeof(object_result.right),
+        },
+    };
+
     auxvec_entries[0] = &group_id_entry;
-    auxvec_entries[1] = NULL;
+    auxvec_entries[1] = &mem_object_entry;
+    auxvec_entries[2] = NULL;
 
     const char *argc[5];
     argc[0] = service->name;
@@ -417,7 +454,7 @@ int start_service(struct Service *service, uint64_t object_id, uint64_t optional
         argc[3] = NULL;
     }
 
-    result_t res = load_executable(r.value, object_id, 0, 0, 0, argc, NULL, (const struct AuxVecEntry **)auxvec_entries);
+    result_t res = load_executable(r.value, object_right, 0, 0, 0, argc, NULL, (const struct AuxVecEntry **)auxvec_entries);
     //result_t res = syscall_load_executable(r.value, object_id, mem_region, 0);
     if (res != SUCCESS) {
         print_str("Loader: Could not load executable ");
@@ -490,7 +527,7 @@ static size_t start_callback(const char *name, size_t name_length, char *out_buf
 
         auto result = transfer_right(context->group_id, context->rights[index], 0);
         if (result.result) {
-            print_str("Loader: Could not transfer right to the task group. Error: ");
+            print_str("Loader: Could not transfer right to the task group while parsing cmdline. Error: ");
             print_hex(result.result);
             print_str("\n");
 
@@ -519,7 +556,7 @@ int start_service_request(struct Service *service, const char *cmdline, size_t c
     if (!service->module)
         return -ENOENT;
 
-    uint64_t object_id = service->module->object_id;
+    uint64_t object_right = service->module->object_id;
 
     int result = reserve_instances_vector(service);
     if (result)
@@ -554,6 +591,7 @@ int start_service_request(struct Service *service, const char *cmdline, size_t c
     }
 
     group_id = rr.value;
+    uint64_t new_group_id = group_id;
 
     result_t rrr = add_task_to_group(r.value, group_id);
     if (rrr != SUCCESS) {
@@ -568,7 +606,32 @@ int start_service_request(struct Service *service, const char *cmdline, size_t c
         return rrr;
     }
 
-    uint64_t new_group_id = group_id;
+    right_request_t object_request = dup_right(object_right);
+    if (object_request.result != SUCCESS) {
+        print_str("Loader: Could not dup object right for ");
+        print_str(service->name);
+        print_str(". Error: ");
+        print_hex(object_request.result);
+        print_str("\n");
+
+        syscall_kill_task(r.value);
+        remove_task_from_group(TASK_ID_SELF, group_id);
+        return object_request.result;
+    }
+
+    auto object_result = transfer_right(group_id, object_request.right, 0);
+    if (object_result.result) {
+        print_str("Loader: Could not transfer object right to the task group for service ");
+        print_str(service->name);
+        print_str(". Error: ");
+        print_hex(object_result.result);
+        print_str("\n");
+        
+        delete_right(object_request.right);
+        syscall_kill_task(r.value);
+        remove_task_from_group(TASK_ID_SELF, group_id);
+        return object_result.result;
+    }
 
     // Task group tag
     struct AuxVecEntry *auxvec_entries[4];
@@ -580,8 +643,17 @@ int start_service_request(struct Service *service, const char *cmdline, size_t c
             .size = sizeof(new_group_id),
         },
     };
+    struct AuxVecEntry mem_object_entry = {
+        .entry_type = AT_MEM_OBJ_ID,
+        .data_type = DATA_TYPE_EXTERNAL,
+        .external_data = {
+            .data = &object_result.right,
+            .size = sizeof(object_result.right),
+        },
+    };
     auxvec_entries[0] = &group_id_entry;
-    auxvec_entries[1] = NULL;
+    auxvec_entries[1] = &mem_object_entry;
+    auxvec_entries[2] = NULL;
 
     struct Args args = {};
     args_init(&args);
@@ -611,7 +683,7 @@ int start_service_request(struct Service *service, const char *cmdline, size_t c
     group_id = 0;
 
 
-    result_t res = load_executable(r.value, object_id, 0, 0, 0, args_get_argv(&args), NULL, (const struct AuxVecEntry **)auxvec_entries);
+    result_t res = load_executable(r.value, object_right, 0, 0, 0, args_get_argv(&args), NULL, (const struct AuxVecEntry **)auxvec_entries);
     //result_t res = syscall_load_executable(r.value, object_id, mem_region, 0);
     if (res != SUCCESS) {
         print_str("Loader: Could not load executable ");

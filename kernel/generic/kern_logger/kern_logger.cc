@@ -43,10 +43,8 @@ namespace kernel::log
 Buffered_Logger global_logger;
 Bochs_Logger bochs_logger;
 
-void Logger::vprintf(const char *str, va_list arg)
+void Logger::vprintf_nolock(const char *str, va_list arg)
 {
-    Auto_Lock_Scope scope_lock(logger_lock);
-
     char at        = str[0];
     unsigned int i = 0;
     while (at != '\0') {
@@ -138,12 +136,29 @@ void Logger::vprintf(const char *str, va_list arg)
 
 void Logger::printf(const char *str, ...)
 {
+    Auto_Lock_Scope scope_lock(logger_lock);
+
     va_list arg;
     va_start(arg, str);
 
     vprintf(str, arg);
 
     va_end(arg);
+}
+
+void Logger::printf_nolock(const char *str, ...)
+{
+    va_list arg;
+    va_start(arg, str);
+
+    vprintf(str, arg);
+
+    va_end(arg);
+}
+
+void Logger::vprintf(const char *str, va_list arg)
+{
+    vprintf_nolock(str, arg);
 }
 
 extern "C" int printf(const char *str, ...)

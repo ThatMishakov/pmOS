@@ -111,23 +111,6 @@ public:
                                                     Protection::Executable);
 
     /**
-     * @brief Gets the memory object by its id. If the object is not found, a null pointer is
-     * returned
-     *
-     * @param id ID if the memory object to be searched for
-     * @return Pinter to the memory object. If the object is not found, null is returned
-     */
-    static klib::shared_ptr<Mem_Object> get_object_or_null(id_type id);
-
-    /**
-     * @brief Get the pointer to the memory object by its ID. Throws if the object was not found
-     *
-     * @param id ID of the memory object to be searched for
-     * @return Valid pointer to the memory object
-     */
-    static klib::shared_ptr<Mem_Object> get_object(id_type id);
-
-    /**
      * @brief Returns the size of the region in pages
      *
      * @return Size of the region in pages
@@ -324,27 +307,6 @@ protected:
     ipc::Port *pager = nullptr;
 
     kresult_t push_anonymous_page(kernel::pmm::Page *page);
-
-private:
-    /// @brief Global storage of the memory objects accessible by ID
-    /// @todo Consider a hash table instead
-    static inline klib::splay_tree_map<id_type, klib::weak_ptr<Mem_Object>> objects_storage;
-
-    /// @brief Lock of the map containing all the memory objects
-    static inline Spinlock object_storage_lock;
-
-    /**
-     * @brief Saves the memory object in the map of the memory object
-     *
-     */
-    static kresult_t atomic_push_global_storage(klib::shared_ptr<Mem_Object> o);
-
-    /**
-     * @brief Deletes the memory object from the map of the objects
-     *
-     * @param object_to_delete ID of the object that needs to be deleted from the map
-     */
-    static void atomic_erase_gloabl_storage(id_type object_to_delete);
 
 public:
     /**

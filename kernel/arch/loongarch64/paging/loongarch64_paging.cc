@@ -20,6 +20,51 @@ extern u64 kernel_phys_base;
 
 using namespace kernel::paging;
 
+constexpr u32 CSR_DMW0      = 0x180;
+constexpr u32 CSR_PWCL      = 0x1C;
+constexpr u32 CSR_PWCH      = 0x1D;
+constexpr u32 CSR_TLBRENTRY = 0x88;
+constexpr u32 CSR_STLBPS    = 0x1E;
+
+u32 stlbps = 12;
+
+void set_page_size() { csrwr<CSR_STLBPS>(stlbps); }
+
+void kernel::loongarch64::paging::set_dmws()
+{
+    csrwr<CSR_DMW0>(0x9000000000000011);
+    csrwr<CSR_DMW0 + 1>(0);
+    csrwr<CSR_DMW0 + 2>(0);
+    csrwr<CSR_DMW0 + 3>(0);
+}
+
+u32 pwcl = (12) | (9 << 5) | (21 << 10) | (9 << 15) | (30 << 20) | (9 << 25) | (0 << 30);
+u32 pwch = (39) | (9 << 6); // | (48 << 12) | (9 << 18);
+
+static void set_pwcs()
+{
+    csrwr<CSR_PWCL>(pwcl);
+    csrwr<CSR_PWCH>(pwch);
+}
+
+u64 tlb_refill_addr = 0;
+
+static void set_tlbrentry()
+{
+    tlb_refill_addr = kernel_phys_base + (&tlb_refill - &_kernel_start);
+    csrwr<CSR_TLBRENTRY>(tlb_refill_addr);
+}
+
+extern "C" void bootstrap_isr();
+
+constinit const void *bootstrap_isr_virt = (void *)bootstrap_isr;
+
+void set_early_exceptions()
+{
+    csrwr<loongarch::csr::ECFG>(0);
+    csrwr<loongarch::csr::EENTRY>(bootstrap_isr_virt);
+}
+
 namespace kernel::loongarch64::paging
 {
 
@@ -68,38 +113,6 @@ void LoongArch64_Page_Table::apply() noexcept
     flush_tlb();
 }
 
-constexpr u32 CSR_DMW0      = 0x180;
-constexpr u32 CSR_PWCL      = 0x1C;
-constexpr u32 CSR_PWCH      = 0x1D;
-constexpr u32 CSR_TLBRENTRY = 0x88;
-constexpr u32 CSR_STLBPS    = 0x1E;
-
-void set_page_size() { csrwr<CSR_STLBPS>(12); }
-
-void set_dmws()
-{
-    csrwr<CSR_DMW0>(0x9000000000000011);
-    csrwr<CSR_DMW0 + 1>(0);
-    csrwr<CSR_DMW0 + 2>(0);
-    csrwr<CSR_DMW0 + 3>(0);
-}
-
-void set_pwcs()
-{
-    constexpr u32 pwcl =
-        (12) | (9 << 5) | (21 << 10) | (9 << 15) | (30 << 20) | (9 << 25) | (0 << 30);
-    constexpr u32 pwch = (39) | (9 << 6); // | (48 << 12) | (9 << 18);
-
-    csrwr<CSR_PWCL>(pwcl);
-    csrwr<CSR_PWCH>(pwch);
-}
-
-void set_tlbrentry()
-{
-    u64 tlb_refill_addr = kernel_phys_base + (&tlb_refill - &_kernel_start);
-    csrwr<CSR_TLBRENTRY>(tlb_refill_addr);
-}
-
 void *LoongArch64_Page_Table::user_addr_max() const
 {
     if (is_32bit())
@@ -131,7 +144,7 @@ kresult_t loongarch_map_page(u64 pt_top_phys, void *virt_addr, u64 phys_addr,
 
         clear_page(new_pt_phys);
         pte = new_pt_phys;
-        __atomic_store_n(l4_pt + l4_idx, pte, __ATOMIC_RELAXED);
+        __atomic_store_n(l4_pt + l4_idx, pte, __ATOMIC_RELEASE);
     }
 
     u64 *l3_pt = mapper.map(pte & PAGE_ADDR_MASK);
@@ -143,7 +156,7 @@ kresult_t loongarch_map_page(u64 pt_top_phys, void *virt_addr, u64 phys_addr,
 
         clear_page(new_pt_phys);
         pte = new_pt_phys;
-        __atomic_store_n(l3_pt + l3_idx, pte, __ATOMIC_RELAXED);
+        __atomic_store_n(l3_pt + l3_idx, pte, __ATOMIC_RELEASE);
     }
 
     u64 *l2_pt = mapper.map(pte & PAGE_ADDR_MASK);
@@ -155,7 +168,7 @@ kresult_t loongarch_map_page(u64 pt_top_phys, void *virt_addr, u64 phys_addr,
 
         clear_page(new_pt_phys);
         pte = new_pt_phys;
-        __atomic_store_n(l2_pt + l2_idx, pte, __ATOMIC_RELAXED);
+        __atomic_store_n(l2_pt + l2_idx, pte, __ATOMIC_RELEASE);
     }
 
     u64 *l1_pt = mapper.map(pte & PAGE_ADDR_MASK);
@@ -254,13 +267,6 @@ klib::shared_ptr<LoongArch64_Page_Table> LoongArch64_Page_Table::get_page_table(
 {
     auto it = page_tables.find(id);
     return it == page_tables.end() ? nullptr : it->second;
-}
-
-extern "C" void bootstrap_isr();
-void set_early_exceptions()
-{
-    csrwr<loongarch::csr::ECFG>(0);
-    csrwr<loongarch::csr::EENTRY>(bootstrap_isr);
 }
 
 static void free_leaf_pte(u64 pte)
@@ -588,8 +594,7 @@ klib::shared_ptr<LoongArch64_Page_Table> LoongArch64_Page_Table::create_clone()
 
     Auto_Lock_Scope_Double scope_guard(this->lock, new_table->lock);
 
-    if (!new_table->mem_objects.empty() || !new_table->object_regions.empty() ||
-        !new_table->paging_regions.empty())
+    if (!new_table->paging_regions.empty())
         // Somebody has messed with the page table while it was being created
         // I don't know if it's the best solution to not block the tables
         // immediately but I believe it's better to block them for shorter time
@@ -599,14 +604,11 @@ klib::shared_ptr<LoongArch64_Page_Table> LoongArch64_Page_Table::create_clone()
 
     // This gets called on error
     auto guard = pmos::utility::make_scope_guard([&]() {
-        // Remove all the regions and objects. It might not be necessary, since
+        // Remove all the regions. It might not be necessary, since
         // it should be handled by the destructor but in case somebody from
         // userspace specultively does weird stuff with the
         // not-yet-fully-constructed page table, it's better to give them an
         // empty table
-
-        for (const auto &reg: new_table->mem_objects)
-            reg.first->atomic_unregister_pined(new_table->weak_from_this());
 
         auto tlb_ctx = TLBShootdownContext::create_userspace(*new_table);
 
@@ -623,21 +625,6 @@ klib::shared_ptr<LoongArch64_Page_Table> LoongArch64_Page_Table::create_clone()
             it = new_table->paging_regions.begin();
         }
     });
-
-    for (auto &reg: this->mem_objects) {
-        auto res =
-            new_table->mem_objects.insert({reg.first,
-                                           {
-                                               .max_privilege_mask = reg.second.max_privilege_mask,
-                                           }});
-        if (res.first == new_table->mem_objects.end())
-            return nullptr;
-
-        Auto_Lock_Scope reg_lock(reg.first->pinned_lock);
-        auto result = reg.first->register_pined(new_table->weak_from_this());
-        if (result)
-            return nullptr;
-    }
 
     for (auto &reg: this->paging_regions) {
         auto result = reg.clone_to(new_table, reg.start_addr, reg.access_type);
@@ -704,11 +691,11 @@ kresult_t paging::map_pages(ptable_top_ptr_t page_table, u64 phys_addr, void *vi
 
 void paging::apply_page_table(ptable_top_ptr_t page_table)
 {
-    loongarch64::paging::set_dmws();
-    loongarch64::paging::set_pwcs();
-    loongarch64::paging::set_page_size();
-    loongarch64::paging::set_early_exceptions();
-    loongarch64::paging::set_tlbrentry();
+    kernel::loongarch64::paging::set_dmws();
+    set_pwcs();
+    set_page_size();
+    set_early_exceptions();
+    set_tlbrentry();
     set_pgdh(page_table);
     flush_tlb();
 }

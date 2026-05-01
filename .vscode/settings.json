@@ -210,12 +210,20 @@
     "C_Cpp.inlayHints.parameterNames.enabled": true,
     "C_Cpp.inlayHints.referenceOperator.enabled": true,
     "files.exclude": {
-        "/build*": true,
-        "/sources": true
+        "build*/**": true,
+        "sources/**": true
+    },
+    "search.exclude": {
+        "build*/**": true,
+        "sources/**": true
+    },
+    "search.watcherExclude": {
+        "build*/**": true,
+        "sources/**": true
     },
     "C_Cpp.files.exclude": {
-        "/build*": true,
-        "/sources": true,
+        "build*/**": true,
+        "sources/**": true,
         "**/.vscode": true,
         "**/.vs": true
     },

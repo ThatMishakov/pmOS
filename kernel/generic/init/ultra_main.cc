@@ -24,6 +24,8 @@ using namespace kernel::x86::paging;
 
 #ifdef __i386__
 using namespace kernel::ia32::paging;
+#elif defined(__x86_64__)
+using namespace kernel::x86_64::paging;
 #endif
 
 void hcf();
@@ -39,7 +41,6 @@ extern long temp_alloc_entry_id;
 constexpr phys_addr_t temp_mapper_memory_limit = 0x40000000;
 static ulong hhdm_offset = 0xC0000000;
 #else
-bool use_5_level_paging = false;
 constexpr phys_addr_t temp_mapper_memory_limit = 1UL << 52;
 static ulong hhdm_offset = 0; // Defined at boot, either 0xFF00'0000'0000'0000 or 0xFFFF'8000'0000'0000
                        // depending on paging levels
@@ -121,7 +122,7 @@ void init_memory(ultra_boot_context *ctx)
     serial_logger.printf("Initializing memory\n");
 
     #ifdef __x86_64__
-    if (use_5_level_paging)
+    if (kernel::x86_64::paging::use_5lvl_paging)
         hhdm_offset = 0xFF00'0000'0000'0000;
     else
         hhdm_offset = 0xFFFF'8000'0000'0000;
@@ -157,7 +158,7 @@ void init_memory(ultra_boot_context *ctx)
         if (size > largest_size) {
             largest_size        = size;
             temp_alloc_base     = mem->entries[i].physical_address;
-            temp_alloc_size     = end;
+            temp_alloc_size     = end - temp_alloc_base;
             temp_alloc_entry_id = i;
         }
     }
@@ -179,8 +180,8 @@ void init_memory(ultra_boot_context *ctx)
     if (largest_size == 0) {
         panic("No memory region below 1GB\n");
     }
-    serial_logger.printf("Allocating page tables from 0x%lx - 0x%lx...\n", temp_alloc_base,
-                         temp_alloc_base + largest_size);
+    serial_logger.printf("Allocating initial memory from 0x%lx - 0x%lx...\n", temp_alloc_base,
+                         temp_alloc_base + temp_alloc_size);
 
     #ifdef __i386__
     if (use_pae) {
@@ -204,7 +205,7 @@ void init_memory(ultra_boot_context *ctx)
     u32 heap_space_start = 0xC0000000;
     #elif defined(__x86_64__)
     ulong heap_space_start = 0;
-    if (use_5_level_paging)
+    if (kernel::x86_64::paging::use_5lvl_paging)
         heap_space_start = 0xFF00'0000'0000'0000;
     else
         heap_space_start = 0xFFFF'8000'0000'0000;
@@ -506,6 +507,20 @@ void init_task1(ultra_boot_context *ctx)
 
     serial_logger.printf("Task 1 found: %s\n", task1->path.c_str());
 
+    auto task = proc::TaskDescriptor::create_process(proc::TaskDescriptor::PrivilegeLevel::User);
+    if (!task)
+        panic("Failed to create task");
+    task->name = "bootstrap";
+    serial_logger.printf("Loading ELF...\n");
+
+    auto group = proc::TaskGroup::create_for_task(task);
+    if (!group)
+        panic("Failed to create task group for task 1");
+
+    auto object = ipc::MemObjectRight::create_for_group(task1->object, group.val, ipc::MemObjectRight::PERM_READ);
+    if (!object)
+        panic("Failed to create memory object right for task 1");
+
     klib::vector<klib::unique_ptr<load_tag_generic>> tags;
     tags = construct_load_tag_framebuffer(ctx);
 
@@ -513,16 +528,11 @@ void init_task1(ultra_boot_context *ctx)
     if (t && !tags.push_back(klib::move(t)))
         panic("Failed to add RSDP tag");
 
-    t = construct_load_tag_for_modules();
+    t = construct_load_tag_for_modules(group.val);
     if (t && !tags.push_back(klib::move(t)))
         panic("Failed to add modules tag");
 
-    auto task = proc::TaskDescriptor::create_process(proc::TaskDescriptor::PrivilegeLevel::User);
-    if (!task)
-        panic("Failed to create task");
-    task->name = "bootstrap";
-    serial_logger.printf("Loading ELF...\n");
-    auto p = task->atomic_load_elf(task1->object, task1->path, tags);
+    auto p = task->atomic_load_elf(object.val, task1->path, tags, group.val);
     if (!p.success() || !p.val)
         panic("Failed to load task 1: %i", p.result);
 }
@@ -550,9 +560,18 @@ void ultra_main(struct ultra_boot_context *ctx, uint32_t magic)
     serial_logger.printf("PAE: %s (page depth %i)\n", use_pae ? "enabled" : "disabled",
                          attr.page_table_depth);
     
-    auto nx_enabled = detect_nx();
-    serial_logger.printf("NX: %s\n", nx_enabled ? "enabled" : "disabled");
-    
+    if (use_pae) {
+        support_nx = detect_nx();
+        serial_logger.printf("NX: %s\n", support_nx ? "enabled" : "disabled");
+    }
+    #elif defined(__x86_64__)
+    if (attr.page_table_depth == 5) {
+        kernel::x86_64::paging::use_5lvl_paging = true;
+        serial_logger.printf("5-level paging enabled\n");
+    }
+
+    support_nx = detect_nx();
+    serial_logger.printf("NX: %s\n", support_nx ? "enabled" : "disabled");
     #endif
 
     init_memory(ctx);

@@ -58,7 +58,7 @@ public:
      *
      * @return klib::shared_ptr<TaskGroup> New task group
      */
-    static ReturnStr<TaskGroup *> create_for_task(TaskDescriptor *task);
+    [[nodiscard]] static ReturnStr<TaskGroup *> create_for_task(TaskDescriptor *task);
 
     /**
      * @brief Get the task group with the given id
@@ -68,7 +68,7 @@ public:
      * @param id Task group id
      * @throws out of range if the task group does not exist
      */
-    static TaskGroup *get_task_group(u64 id);
+    [[nodiscard]] static TaskGroup *get_task_group(u64 id);
 
     /**
      * @brief Checks if the task with the given id is in the group
@@ -77,7 +77,7 @@ public:
      * @return true If the task is in the group
      * @return false If the task is not in the group
      */
-    bool atomic_has_task(u64 id) const noexcept;
+    [[nodiscard]] bool atomic_has_task(u64 id) const noexcept;
 
     /**
      * @brief Registers the task with the group
@@ -110,7 +110,7 @@ public:
      *
      * @return id_type Task group id
      */
-    inline id_type get_id() const noexcept { return id; }
+    [[nodiscard]] inline id_type get_id() const noexcept { return id; }
 
     /**
      * @brief Changes the notifier port to the new mask. Setting mask to 0 effectively removes the

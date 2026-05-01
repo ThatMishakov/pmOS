@@ -55,6 +55,8 @@
 #elif defined(__riscv)
     #include <cpus/floating_point.hh>
     #include <paging/riscv64_temp_mapper.hh>
+#elif defined(__loongarch64)
+    struct EIOPIC;
 #endif
 
 namespace kernel::sched
@@ -154,8 +156,12 @@ struct CPU_Info {
 #if defined(__x86_64__) || defined(__i386__)
     u32 lapic_id                            = 0;
     static constexpr unsigned MAPPABLE_INTS = 192;
-    std::array<std::pair<void *, u32>, MAPPABLE_INTS> int_mappings {};
+    std::array<interrupts::InterruptHandler *, MAPPABLE_INTS> isr_handlers;
 #endif
+    // TODO: APLIC on RISC-V and other per-CPU controller memes...
+    // Also, this is a random place to leave this comment, but it would be nice to implement the ELF TLS thing
+    // instead of having all of the CPU-local stuff here, by whomever happens to read this (maybe not me at some point???) :P
+
 
 #ifdef __riscv
     u64 hart_id = 0;
@@ -175,10 +181,9 @@ struct CPU_Info {
     u32 cpu_physical_id = 0; // 8 bit in reality...
     u64 timer_val       = 0;
     u64 timer_total     = 0;
-#endif
 
-    // ISRs in userspace
-    interrupts::Interrupt_Handler_Table int_handlers;
+    EIOPIC *parent_eiopic = nullptr;
+#endif
 
     static constexpr int IPI_RESCHEDULE    = 0x1;
     static constexpr int IPI_TLB_SHOOTDOWN = 0x2;
@@ -193,6 +198,7 @@ struct CPU_Info {
 
     void ipi_reschedule(); // nothrow ?
     void ipi_tlb_shootdown();
+    void ipi_cpu_park();
 
     using timer_tree =
         pmos::containers::RedBlackTree<TimerNode, &TimerNode::node,
@@ -244,6 +250,7 @@ extern klib::vector<CPU_Info *> cpus;
 quantum_t assign_quantum_on_priority(priority_t);
 
 CPU_Info *get_cpu_struct();
+CPU_Info *get_cpu_struct_safe();
 
 inline proc::TaskDescriptor *get_current_task() { return get_cpu_struct()->current_task; }
 
@@ -273,5 +280,8 @@ extern "C" void reschedule();
 
 // Rearms the timer, if the current entry is sooner than the first one
 void maybe_rearm_timer(u64 deadline_nanoseconds);
+
+void call_after_smp_entry();
+void park_self();
 
 }; // namespace kernel::sched

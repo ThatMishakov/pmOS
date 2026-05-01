@@ -98,6 +98,8 @@ __attribute__((used)) limine_paging_mode_request paging_request = {
     .response = nullptr,
     #ifdef __riscv
     .mode = LIMINE_PAGING_MODE_RISCV_SV57,
+    #elif defined(__x86_64__)
+    .mode = LIMINE_PAGING_MODE_X86_64_5LVL,
     #else
     .mode = 0,
     #endif
@@ -209,13 +211,19 @@ void construct_paging()
     kernel::riscv64::paging::riscv64_paging_levels = rr->mode + 3;
     serial_logger.printf("Using %i paging levels\n",
                          kernel::riscv64::paging::riscv64_paging_levels);
+    #elif defined(__x86_64__)
+    auto rr = paging_request.response;
+    if (rr->mode == LIMINE_PAGING_MODE_X86_64_5LVL) {
+        kernel::x86_64::paging::use_5lvl_paging = true;
+        serial_logger.printf("Using 5-level paging\n");
+    }
     #endif
-
-    kresult_t result = 0;
 
     // While we're here, initialize virtmem
     #ifdef __riscv
     const u64 heap_space_shift = 12 + (kernel::riscv64::paging::riscv64_paging_levels - 1) * 9;
+    #elif defined(__x86_64__)
+    const u64 heap_space_shift = 12 + (kernel::x86_64::paging::use_5lvl_paging ? 4 : 3) * 9;
     #else
     const u64 heap_space_shift = 12 + 27;
     #endif
@@ -491,6 +499,21 @@ void init_task1()
 
     serial_logger.printf("Task 1 found: %s\n", task1->path.c_str());
 
+    // Create new task and load ELF into it
+    auto task = TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel::User);
+    if (!task)
+        panic("Failed to create task");
+    task->name = "bootstrap";
+    serial_logger.printf("Loading ELF...\n");
+
+    auto group = proc::TaskGroup::create_for_task(task);
+    if (!group)
+        panic("Failed to create task group for task 1");
+
+    auto object = ipc::MemObjectRight::create_for_group(task1->object, group.val, ipc::MemObjectRight::PERM_READ);
+    if (!object)
+        panic("Failed to create memory object right for task 1");
+
     // Pass the modules to the task
     klib::vector<klib::unique_ptr<load_tag_generic>> tags;
     tags = construct_load_tag_framebuffer();
@@ -503,17 +526,11 @@ void init_task1()
     if (t && !tags.push_back(klib::move(t)))
         panic("Failed to add FDT tag");
 
-    t = construct_load_tag_for_modules();
+    t = construct_load_tag_for_modules(group.val);
     if (t && !tags.push_back(klib::move(t)))
         panic("Failed to add modules tag");
 
-    // Create new task and load ELF into it
-    auto task = TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel::User);
-    if (!task)
-        panic("Failed to create task");
-    task->name = "bootstrap";
-    serial_logger.printf("Loading ELF...\n");
-    auto p = task->atomic_load_elf(task1->object, task1->path, tags);
+    auto p = task->atomic_load_elf(object.val, task1->path, tags, group.val);
     if (!p.success() || !p.val)
         panic("Failed to load task 1: %i", p.result);
 }
@@ -578,8 +595,6 @@ namespace kernel::sched
 {
 extern bool other_cpus_online;
 }
-
-extern int kernel_pt_active_cpus_count[2];
 
 size_t booted_cpus      = 0;
 bool boot_barrier_start = false;

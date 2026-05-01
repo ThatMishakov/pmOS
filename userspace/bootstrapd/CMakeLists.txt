@@ -6,7 +6,7 @@ endif()
 
 # This is hacky...
 set(CMAKE_TRY_COMPILE_TARGET_TYPE "STATIC_LIBRARY")
-set(BUILD_TESTING OFF)
+set(BUILD_TESTING OFF CACHE BOOL "Disable tests for bootstrapd dependencies" FORCE)
 
 set(TOOLCHAIN_PREFIX "${TARGET_ARCH}-pmos")
 
@@ -40,6 +40,8 @@ add_executable(bootstrapd ${GENERIC_SRC})
 set_property(TARGET bootstrapd PROPERTY C_STANDARD 23)
 
 include(FetchContent)
+# Keep libyaml tests disabled even if the dependency declares its own option defaults.
+set(YAML_BUILD_TESTS OFF CACHE BOOL "Disable libyaml tests" FORCE)
 FetchContent_Declare(
   libyaml
   GIT_REPOSITORY https://github.com/yaml/libyaml.git

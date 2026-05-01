@@ -126,7 +126,7 @@ pmos::async::detached_task handle_disk_read(IPC_Disk_Read request, DiskGeometry 
         // Casually try to read the disk
         uint64_t bytes_read = 0;
 
-        auto [result, phys_addr] = get_page_phys_address_from_object(object.get(), 0, FLAG_MEM_OBJECT_ID_RIGHT);
+        auto [result, phys_addr] = get_page_phys_address_from_object(object.get(), 0, 0);
         if (result != SUCCESS) {
             printf("Error reading page from object\n");
             handle_disk_read_error(-result, reply_right);
@@ -160,7 +160,7 @@ pmos::async::detached_task handle_disk_read(IPC_Disk_Read request, DiskGeometry 
                         offset += page_size;
                     } else {
                         auto [result, phys_addr] =
-                            get_page_phys_address_from_object(object.get(), offset, FLAG_MEM_OBJECT_ID_RIGHT);
+                            get_page_phys_address_from_object(object.get(), offset, 0);
                         if (result != SUCCESS) {
                             handle_disk_read_error(result, reply_right);
                             co_return;

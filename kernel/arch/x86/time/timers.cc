@@ -148,3 +148,47 @@ u64 CPU_Info::ticks_after_ns(u64 ns)
 void TimeSource::init_as_main() {}
 void CalibrationSource::prepare_for_calibration() {}
 void CalibrationSource::end_calibration() {}
+
+void BlockingWaiter::wait(u64 nanoseconds)
+{
+    u64 time = get_ns_since_bootup();
+    u64 next = time + nanoseconds;
+
+    do {
+        if (tsc::use_tsc_deadline()) {
+            arm_tsc_deadline(tsc::tsc_freq * next);
+        } else {
+            auto diff = next - time;
+            auto time = apic_freq * diff + 1;
+            if (time > UINT32_MAX) {
+                time = UINT32_MAX;
+            }
+
+            apic_one_shot_ticks((u32)time);
+        }
+
+        asm("sti; hlt; cli;");
+
+        time = get_ns_since_bootup();
+    } while (time < next);
+}
+
+BlockingWaiter BlockingWaiter::create()
+{
+    BlockingWaiter w;
+
+    lapic_timer_set_dummy();
+
+    // Do this to protect against interrupts from IOAPICs
+    w.iopl = tpr_read();
+    tpr_write(14);
+
+    return w;
+}
+
+BlockingWaiter::~BlockingWaiter()
+{
+    lapic_timer_restore_normal();
+
+    tpr_write(iopl);
+}

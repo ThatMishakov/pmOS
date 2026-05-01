@@ -48,8 +48,6 @@ Mem_Object::Mem_Object(u64 page_size_log, u64 size_pages, u32 max_user_permissio
 
 Mem_Object::~Mem_Object()
 {
-    atomic_erase_gloabl_storage(id);
-
     auto current_page = pages_storage;
     while (current_page) {
         auto p       = current_page;
@@ -101,11 +99,6 @@ klib::shared_ptr<Mem_Object> Mem_Object::create(u64 page_size_log, u64 size_page
         }
     }
 
-    // Atomically insert into the object storage
-    auto e = atomic_push_global_storage(ptr);
-    if (e)
-        return nullptr;
-
     return ptr;
 }
 
@@ -127,11 +120,6 @@ klib::shared_ptr<Mem_Object> Mem_Object::create_from_phys(u64 phys_addr, u64 siz
     // Lock the object so nobody overwrites it while the pages are inserted
     Auto_Lock_Scope l(ptr->lock);
 
-    // Atomically insert into the object storage
-    auto e = atomic_push_global_storage(ptr);
-    if (e)
-        return nullptr;
-
     // Provide the pages
     // This can't fail
     for (u64 i = 0; i < pages_count; ++i) {
@@ -147,31 +135,6 @@ klib::shared_ptr<Mem_Object> Mem_Object::create_from_phys(u64 phys_addr, u64 siz
 }
 
 Mem_Object::id_type Mem_Object::get_id() const noexcept { return id; }
-
-kresult_t Mem_Object::atomic_push_global_storage(klib::shared_ptr<Mem_Object> o)
-{
-    // RAII lock against concurrent changes to the map
-    Auto_Lock_Scope l(object_storage_lock);
-
-    auto id = o->get_id();
-
-    auto p = objects_storage.insert({klib::move(id), klib::move(o)});
-    if (p.first == objects_storage.end()) [[unlikely]]
-        return -ENOMEM;
-
-    if (!p.second) [[unlikely]]
-        return -EEXIST;
-
-    return 0;
-}
-
-void Mem_Object::atomic_erase_gloabl_storage(id_type object_to_delete)
-{
-    // RAII lock against concurrent changes to the map
-    Auto_Lock_Scope l(object_storage_lock);
-
-    objects_storage.erase(object_to_delete);
-}
 
 kresult_t Mem_Object::register_pined(klib::weak_ptr<Page_Table> pined_by)
 {
@@ -362,76 +325,70 @@ ReturnStr<pmm::Page_Descriptor> Mem_Object::request_page(u64 offset, bool write,
     assert(false);
 }
 
-kresult_t Mem_Object::atomic_resize(u64 new_size_pages)
-{
-    Auto_Lock_Scope resize_l(resize_lock);
+// kresult_t Mem_Object::atomic_resize(u64 new_size_pages)
+// {
+//     Auto_Lock_Scope resize_l(resize_lock);
 
-    u64 old_size;
+//     u64 old_size;
 
-    {
-        Auto_Lock_Scope l(lock);
+//     {
+//         Auto_Lock_Scope l(lock);
 
-        // Firstly, change the pages_size before resizing the vector. This is needed because even
-        // though the object has been shrunk, there might still be regions referencing pages in it,
-        // so notify page tables of the change before shrinking the vector and releasing pages to
-        // stop people from writing to the pages that were freed.
-        old_size   = pages_size;
-        pages_size = new_size_pages;
+//         // Firstly, change the pages_size before resizing the vector. This is needed because even
+//         // though the object has been shrunk, there might still be regions referencing pages in it,
+//         // so notify page tables of the change before shrinking the vector and releasing pages to
+//         // stop people from writing to the pages that were freed.
+//         old_size   = pages_size;
+//         pages_size = new_size_pages;
 
-        // If the new size is larger, there is no need to shrink memory regions
-        if (old_size <= new_size_pages) {
-            return 0;
-        }
-    }
+//         // If the new size is larger, there is no need to shrink memory regions
+//         if (old_size <= new_size_pages) {
+//             return 0;
+//         }
+//     }
 
-    const auto self           = shared_from_this();
-    const auto new_size_bytes = new_size_pages << page_size_log;
+//     const auto self           = shared_from_this();
+//     const auto new_size_bytes = new_size_pages << page_size_log;
 
-    {
-        Auto_Lock_Scope l(pinned_lock);
-        for (const auto &a: pined_by) {
-            const auto ptr = a.lock();
-            if (ptr)
-                ptr->atomic_shrink_regions(self, new_size_bytes);
-        }
-    }
+//     {
+//         Auto_Lock_Scope l(pinned_lock);
+//         for (const auto &a: pined_by) {
+//             const auto ptr = a.lock();
+//             if (ptr)
+//                 ptr->atomic_shrink_regions(self, new_size_bytes);
+//         }
+//     }
 
-    pmm::Page *pages = nullptr;
+//     pmm::Page *pages = nullptr;
 
-    {
-        Auto_Lock_Scope l(lock);
+//     {
+//         Auto_Lock_Scope l(lock);
 
-        pmm::Page **erase_ptr_head = &pages_storage;
-        while (*erase_ptr_head) {
-            pmm::Page *current = *erase_ptr_head;
+//         pmm::Page **erase_ptr_head = &pages_storage;
+//         while (*erase_ptr_head) {
+//             pmm::Page *current = *erase_ptr_head;
 
-            if (current->l.offset >= new_size_pages) {
-                *erase_ptr_head = current->l.next;
-                current->l.next = pages;
-                pages           = current;
-            } else {
-                if (current->l.next == nullptr)
-                    break;
+//             if (current->l.offset >= new_size_pages) {
+//                 *erase_ptr_head = current->l.next;
+//                 current->l.next = pages;
+//                 pages           = current;
+//             } else {
+//                 if (current->l.next == nullptr)
+//                     break;
 
-                erase_ptr_head = &current->l.next;
-            }
-        }
-    }
+//                 erase_ptr_head = &current->l.next;
+//             }
+//         }
+//     }
 
-    while (pages) {
-        pmm::Page *next = pages->l.next;
-        pages           = next;
-        pmm::Page_Descriptor::from_raw_ptr(pages);
-    }
+//     while (pages) {
+//         pmm::Page *next = pages->l.next;
+//         pages           = next;
+//         pmm::Page_Descriptor::from_raw_ptr(pages);
+//     }
 
-    return 0;
-}
-
-klib::shared_ptr<Mem_Object> Mem_Object::get_object(u64 object_id)
-{
-    Auto_Lock_Scope l(object_storage_lock);
-    return objects_storage.get_copy_or_default(object_id).lock();
-}
+//     return 0;
+// }
 
 ReturnStr<bool> Mem_Object::read_to_kernel(u64 offset, void *buffer, u64 size)
 {
@@ -468,16 +425,16 @@ ReturnStr<void *> Mem_Object::map_to_kernel(u64 offset, u64 size, Page_Table_Arg
 {
     // Lock might be needed here?
     // Also, TODO: magic numbers everywhere
-    u64 object_size_bytes = pages_size * 4096;
+    u64 object_size_bytes = pages_size * (1 << page_size_log);
 
-    assert((offset & 0xfff) == 0);
-    assert(size > 0 && (size & 0xfff) == 0);
+    assert((offset & ((1 << page_size_log) - 1)) == 0);
+    assert(size > 0 && (size & ((1 << page_size_log) - 1)) == 0);
     assert(offset + size <= object_size_bytes);
 
-    const size_t size_pages = size >> 12;
+    const size_t size_pages = size >> page_size_log;
 
     // Make sure all pages are allocated
-    for (size_t i = 0; i < size; i += 4096) {
+    for (size_t i = 0; i < size; i += (1 << page_size_log)) {
         auto p = atomic_request_page(offset + i, args.writeable);
         if (!p.success())
             return p.propagate();
@@ -486,6 +443,7 @@ ReturnStr<void *> Mem_Object::map_to_kernel(u64 offset, u64 size, Page_Table_Arg
             return nullptr;
     }
 
+    // TODO: Remove magic number
     void *mem_virt = vmm::kernel_space_allocator.virtmem_alloc(size >> 12);
     if (mem_virt == nullptr)
         return Error(-ENOMEM);
@@ -493,7 +451,7 @@ ReturnStr<void *> Mem_Object::map_to_kernel(u64 offset, u64 size, Page_Table_Arg
     size_t i   = 0;
     auto guard = pmos::utility::make_scope_guard([&]() {
         auto ctx = TLBShootdownContext::create_kernel();
-        for (size_t ii = 0; ii < i; ++ii) {
+        for (size_t ii = 0; ii < i; ii += (1 << page_size_log)) {
             void *const virt_addr = (void *)(size_t(mem_virt) + ii);
             unmap_kernel_page(ctx, virt_addr);
         }
@@ -502,7 +460,7 @@ ReturnStr<void *> Mem_Object::map_to_kernel(u64 offset, u64 size, Page_Table_Arg
         vmm::kernel_space_allocator.virtmem_free(mem_virt, size_pages);
     });
 
-    for (i = 0; i < size; i += 4096) {
+    for (i = 0; i < size; i += (1 << page_size_log)) {
         auto p = atomic_request_page(offset + i, true);
         assert(p.success());
 

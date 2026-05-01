@@ -411,10 +411,15 @@ extern "C" size_t strlen(const char *start)
 
 extern "C" void dbg_uart_init();
 
-extern void hcf();
+namespace kernel::sched
+{
+extern bool cpu_struct_works;
+}
+
+[[noreturn]] extern void hcf();
 extern "C" void abort(void)
 {
-    t_print_bochs("Error: abort() was called.\n");
+    serial_logger.printf("Error: abort() was called.\n");
 
     print_stack_trace();
     // serial_logger.printf("Error: abort() was called.\n");
@@ -425,6 +430,16 @@ extern "C" void abort(void)
     // serial_logger.printf("Dropping into debugger...\n---------------\n");
 
     // breakpoint;
+
+    if (cpu_struct_works) {
+        auto c = get_cpu_struct();
+        for (auto i : cpus) {
+            if (i == c)
+                continue;
+
+            i->ipi_cpu_park();
+        }
+    }
 
     hcf();
 }
@@ -598,21 +613,13 @@ bool Spinlock::try_lock() noexcept
     return result;
 }
 
+void halt();
+
 // Halt and catch fire function.
 void hcf(void)
 {
-// should be arch-specific, but whatever...
-#if defined(__x86_64__) || defined(__i386__)
-    asm("cli");
-    for (;;) {
-        asm("hlt");
-    }
-#elif defined(__riscv)
-    asm volatile("wfi");
-#endif
-
     while (1)
-        ;
+        halt();
 
     __builtin_unreachable();
 }

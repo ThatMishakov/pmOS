@@ -34,7 +34,7 @@ result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flag
 
     auto mem_request = map_mem_object(&(map_mem_object_param_t){
         .page_table_id = 0,
-        .object_id = mem_object_id,
+        .object_right = mem_object_id,
         .addr_start_uint = 0,
         .size = mem_object_size,
         .offset_object = 0,
@@ -141,7 +141,7 @@ result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flag
 
                 auto mem_request = map_mem_object(&(map_mem_object_param_t){
                     .page_table_id = page_table_id,
-                    .object_id = mem_object_id,
+                    .object_right = mem_object_id,
                     .addr_start_uint = region_start,
                     .size = size,
                     .offset_object = file_offset,
@@ -169,7 +169,7 @@ result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flag
 
                 auto mem_request = map_mem_object(&(map_mem_object_param_t){
                     .page_table_id = page_table_id,
-                    .object_id = mem_object_id,
+                    .object_right = mem_object_id,
                     .addr_start_uint = region_start,
                     .size = size,
                     .offset_object = file_offset,
@@ -240,7 +240,7 @@ result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flag
 
                 auto mem_request = map_mem_object(&(map_mem_object_param_t){
                     .page_table_id = page_table_id,
-                    .object_id = mem_object_id,
+                    .object_right = mem_object_id,
                     .addr_start_uint = region_start,
                     .size = size,
                     .offset_object = file_offset,
@@ -268,7 +268,7 @@ result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flag
 
                 auto mem_request = map_mem_object(&(map_mem_object_param_t){
                     .page_table_id = page_table_id,
-                    .object_id = mem_object_id,
+                    .object_right = mem_object_id,
                     .addr_start_uint = region_start,
                     .size = size,
                     .offset_object = file_offset,
@@ -399,18 +399,18 @@ result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flag
         .memory_object_id = mem_object_id,
     };
 
-    VECTOR_PUSH_BACK_CHECKED(builder->entries, ((struct AuxVecEntry){
-        .entry_type = AT_MEM_OBJ_ID,
-        .data_type = DATA_TYPE_EXTERNAL,
-        .external_data = {
-            .size = sizeof(mem_object_id),
-            .data = &mem_object_id,
-        },
-    }), push_res);
-    if (push_res) {
-        result = push_res;
-        goto error;
-    }
+    // VECTOR_PUSH_BACK_CHECKED(builder->entries, ((struct AuxVecEntry){
+    //     .entry_type = AT_MEM_OBJ_ID,
+    //     .data_type = DATA_TYPE_EXTERNAL,
+    //     .external_data = {
+    //         .size = sizeof(mem_object_id),
+    //         .data = &mem_object_id,
+    //     },
+    // }), push_res);
+    // if (push_res) {
+    //     result = push_res;
+    //     goto error;
+    // }
 
     push_res = auxvec_push_argv(builder, argv);
     if (push_res) {

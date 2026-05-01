@@ -31,6 +31,8 @@ using namespace kernel::paging;
 #ifdef __i386__
 using namespace kernel::ia32::interrupts;
 using namespace kernel::ia32::paging;
+#else
+using namespace kernel::x86_64::paging;
 #endif
 
 constexpr sched::CPU_Info __seg_gs const *c = nullptr;
@@ -158,8 +160,6 @@ void init_per_cpu(u64 lapic_id)
     #endif
 }
 
-extern int kernel_pt_active_cpus_count[2];
-
 extern "C" void smp_main(CPU_Info *c)
 {
     serial_logger.printf("Entered CPU %i\n", c->cpu_id);
@@ -182,18 +182,7 @@ extern "C" void smp_main(CPU_Info *c)
     sse::enable_sse();
     enable_protections();
 
-    if (c->to_restore_on_wakeup) {
-        c->current_task->regs = *c->to_restore_on_wakeup;
-        c->to_restore_on_wakeup.reset();
-    }
-    c->current_task->page_table->apply_cpu(c);
-    c->current_task->page_table->apply();
-    c->current_task->after_task_switch();
-
-    assert(c->kernel_pt_generation == -1);
-    c->kernel_pt_generation = __atomic_load_n(&kernel_pt_generation, __ATOMIC_ACQUIRE);
-    __atomic_add_fetch(&kernel_pt_active_cpus_count[c->kernel_pt_generation], 1, __ATOMIC_RELAXED);
-    c->online = true;
+    call_after_smp_entry();    
 
     if (__atomic_load_n(&c->ipi_mask, __ATOMIC_ACQUIRE))
         c->ipi_reschedule();
@@ -228,18 +217,7 @@ extern "C" void acpi_main()
     sse::enable_sse();
     enable_protections();
 
-    if (c->to_restore_on_wakeup) {
-        c->current_task->regs = *c->to_restore_on_wakeup;
-        c->to_restore_on_wakeup.reset();
-    }
-    c->current_task->page_table->apply_cpu(c);
-    c->current_task->page_table->apply();
-    c->current_task->after_task_switch();
-
-    assert(c->kernel_pt_generation == -1);
-    c->kernel_pt_generation = __atomic_load_n(&kernel_pt_generation, __ATOMIC_ACQUIRE);
-    __atomic_add_fetch(&kernel_pt_active_cpus_count[c->kernel_pt_generation], 1, __ATOMIC_RELAXED);
-    c->online = true;
+    call_after_smp_entry();
 
     if (__atomic_load_n(&c->ipi_mask, __ATOMIC_ACQUIRE))
         c->ipi_reschedule();
@@ -451,12 +429,12 @@ extern ulong smp_trampoline_gdtr_addr;
 extern ulong acpi_vec_jump_pmode;
 
 // Variables
-extern ulong smp_trampoline_cr3;
+extern u32 smp_trampoline_cr3;
 extern u32 smp_trampoline_trampoilne_flags;
 
 constexpr u32 SMP_TRAMPOLINE_ENABLE_PAE = 0b001;
 constexpr u32 SMP_TRAMPOLINE_ENABLE_NX  = 0b010;
-constexpr u32 SMP_TRAMPOLINE_5_LVL_PAGING = 0x100;
+constexpr u32 SMP_TRAMPOLINE_5_LVL_PAGING = 0b100;
 
 pmm::phys_page_t acpi_trampoline_page = 0;
 
@@ -483,10 +461,12 @@ void init_acpi_trampoline()
     smp_trampoline_gdtr_addr += acpi_trampoline_page;
     acpi_vec_jump_pmode += acpi_trampoline_page;
 
-    auto [result, new_cr3] = create_empty_cr3();
+    auto [result, new_cr3] = create_empty_cr3(true);
     if (result)
         panic("Failed to allocate cr3 for SMP trampoline");
-    smp_trampoline_cr3       = new_cr3;
+
+    assert(new_cr3 < (u64)0x100000000);
+    smp_trampoline_cr3 = static_cast<u32>(new_cr3);
 
     Page_Table_Arguments pta = {
         .readable           = true,
@@ -499,12 +479,12 @@ void init_acpi_trampoline()
     if (use_pae) {
         smp_trampoline_trampoilne_flags |= SMP_TRAMPOLINE_ENABLE_PAE;
     }
+    #else
+    if (use_5lvl_paging)
+        smp_trampoline_trampoilne_flags |= SMP_TRAMPOLINE_5_LVL_PAGING;
+    #endif
     if (support_nx)
         smp_trampoline_trampoilne_flags |= SMP_TRAMPOLINE_ENABLE_NX;
-    #else
-    // if (use_5lvl_paging)
-    //     smp_trampoline_trampoilne_flags |= SMP_TRAMPOLINE_5_LVL_PAGING;
-    #endif
 
     result = map_page(new_cr3, acpi_trampoline_page, (void *)acpi_trampoline_page, pta);
     if (result)

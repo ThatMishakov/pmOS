@@ -355,7 +355,6 @@ void apic_one_shot(u32 ms)
 void apic_one_shot_ticks(u32 ticks)
 {
     apic_write_reg(APIC_REG_TMRDIV, 0x3);           // Divide by 1
-    apic_write_reg(APIC_REG_LVT_TMR, APIC_TMR_INT); // Init in one-shot mode
     apic_write_reg(APIC_REG_TMRINITCNT, ticks);
 }
 
@@ -435,28 +434,65 @@ void apic_write_icr(u64 dest)
     }
 }
 
-void broadcast_sipi(u8 vector)
+void icr_wait()
 {
-    apic_write_icr(0x000C4600 | vector);
-}
+    if (apic_mode != APICMode::X2APIC) {
+        do {
+            if (!(apic_read_reg(APIC_ICR_LOW) & (1 << 12)))
+                return;
 
-void broadcast_init_ipi()
-{
-    apic_write_icr(0x000C4500);
+            x86_pause();
+        } while (true);
+    }
+
+    // This is undefined for x2apic
 }
 
 void send_ipi_fixed(u8 vector, u32 dest)
 {
     u64 dest_shifted = apic_mode == APICMode::X2APIC ? (u64)dest << 32 : (u64)dest << (32 + 24);
     u64 val = dest_shifted | (u32)vector | (0x01 << 14);
+
+    icr_wait();
     apic_write_icr(val);
 
     // serial_logger.printf("[Kernel] Info: Sending IPI to %h with vector %h\n", dest, vector);
 
 }
 
+void send_init_ipi(u32 dest)
+{
+    u64 dest_shifted = apic_mode == APICMode::X2APIC ? (u64)dest << 32 : (u64)dest << (32 + 24);
+    u64 val = dest_shifted | (0b101 << 8) | (1 << 14);
+
+    icr_wait();
+    apic_write_icr(val);
+}
+
+void send_init_deassert(u32 dest)
+{
+    if (apic_mode == APICMode::X2APIC)
+        return;
+
+    u64 dest_shifted = (u64)dest << (32 + 24);
+    u64 val = dest_shifted | (0b101 << 8);
+
+    icr_wait();
+    apic_write_icr(val);
+}
+
+void send_sipi(u8 vector, u32 dest)
+{
+    u64 dest_shifted = apic_mode == APICMode::X2APIC ? (u64)dest << 32 : (u64)dest << (32 + 24);
+    u64 val = dest_shifted | (0b110 << 8) | (1 << 14) | vector;
+
+    icr_wait();
+    apic_write_icr(val);
+}
+
 void send_ipi_fixed_others(u8 vector)
 {
+    icr_wait();
     apic_write_icr(vector | (0x01 << 14) | (0b11 << 18));
 }
 
@@ -469,34 +505,6 @@ static void smart_eoi(u8 intno)
 
     if (isr_val & (0x01 << offset))
         apic_eoi();
-}
-
-ReturnStr<std::pair<sched::CPU_Info *, u32>> allocate_interrupt(IntMapping m)
-{
-    // Find least loaded CPU
-    auto *cpu = sched::cpus[0];
-    for (size_t i = 1; i < sched::cpus.size(); ++i) {
-        if (sched::cpus[i]->int_handlers.allocated_int_count <
-            cpu->int_handlers.allocated_int_count)
-            cpu = sched::cpus[i];
-    }
-
-    // Find unused slot
-    u32 idx = 0;
-    for (; idx < cpu->MAPPABLE_INTS; ++idx) {
-        if (!cpu->int_mappings[idx].first)
-            break;
-    }
-
-    if (idx == cpu->MAPPABLE_INTS)
-        return Error(-ENOMEM);
-
-    cpu->int_mappings[idx].first  = m.ioapic;
-    cpu->int_mappings[idx].second = m.vector;
-
-    cpu->int_handlers.allocated_int_count++;
-
-    return Success(std::make_pair(cpu, idx + 48));
 }
 
 }
@@ -521,8 +529,9 @@ void apic_spurious_int_routine()
 
 void apic_dummy_int_routine() { smart_eoi(APIC_DUMMY_ISR); }
 
-void tpr_write(unsigned val)
+void lapic::tpr_write(unsigned val)
 {
+    assert(val < 16);
 #ifdef __x86_64__
     setCR8(val);
 #else
@@ -530,94 +539,70 @@ void tpr_write(unsigned val)
 #endif
 }
 
-void kernel::interrupts::interrupt_complete(u32 intno)
+unsigned lapic::tpr_read()
 {
-    assert(intno < 256);
-    smart_eoi(intno);
-    tpr_write(0);
+#ifdef __x86_64__
+    return getCR8();
+#else
+    return (apic_read_reg(APIC_REG_TPR) >> 4) & 0xff;
+#endif
 }
-
-u32 kernel::interrupts::interrupt_min() { return 48; }
-u32 kernel::interrupts::interrupt_limint() { return 240; }
 
 extern "C" void programmable_interrupt(u32 intno)
 {
     auto c = sched::get_cpu_struct();
 
-    auto handler = c->int_handlers.get_handler(intno);
+    auto offset = intno - first_mappable_vector;
+    auto handler = __atomic_load_n(&c->isr_handlers[offset], __ATOMIC_RELAXED);
     if (!handler) {
         global_logger.printf("[Kernel] Error: No handler for interrupt %h\n", intno);
-        IOAPIC::mask_interrupt(c, intno);
         apic_eoi();
+        tpr_write(0);
+        // panic?? this can't really be handled without iommu
         return;
     }
 
-    auto port = handler->port;
-    bool sent = false;
-    if (port) {
-        IPC_Kernel_Interrupt kmsg = {IPC_Kernel_Interrupt_NUM, intno, c->cpu_id};
-        auto r = port->atomic_send_from_system(reinterpret_cast<char *>(&kmsg), sizeof(kmsg));
-        if (r < 0)
-            global_logger.printf(
-                "[Kernel] Error: Could not send interrupt %h to port %h error %i\n", intno,
-                port->portno, r);
-        else
-            sent = true;
-    }
+    if (handler->send_interrupt_notification() != kernel::interrupts::NotificationResult::Success) {
+        global_logger.printf("[Kernel] Warning: Failed to send interrupt notification for interrupt %h\n", intno);
 
-    if (not sent) {
+        // TODO if I end up sopporting MSIs
+        auto ioapic_handler = static_cast<IOAPIC_Handler *>(handler);
+        ioapic_handler->mask_interrupt();
         apic_eoi();
-
-        c->int_handlers.remove_handler(intno);
+        tpr_write(0);
+        return;
     } else {
-        handler->active = true;
-        // Disable reception of other interrupts from peripheral devices until this one is
-        // handled
         tpr_write(14);
     }
 }
 
-extern Spinlock int_allocation_lock;
-
-kresult_t kernel::interrupts::interrupt_enable(u32 i)
+void ::kernel::interrupts::interrupt_complete(InterruptHandler *handler)
 {
-    assert(i >= 48 and i < 240);
+    assert(handler);
+    
+    // Everything goes through IOAPIC for now anyway...
+    auto ioapic_handler = static_cast<IOAPIC_Handler *>(handler);
 
-    i -= 48;
-
-    x86::interrupts::IOAPIC *ioapic = nullptr;
-    u32 vector                      = 0;
-    auto c                          = sched::get_cpu_struct();
-
-    {
-        Auto_Lock_Scope l(int_allocation_lock);
-        auto [ii, v] = c->int_mappings[i];
-        ioapic       = (IOAPIC *)ii;
-        vector       = v;
-    }
-
-    if (!ioapic)
-        return -ENOENT;
-
-    ioapic->interrupt_enable(vector);
-    return 0;
+    assert(ioapic_handler->lapic_vector >= first_mappable_vector);
+    u32 intno = ioapic_handler->lapic_vector;
+    
+    assert(intno < 256);
+    smart_eoi(intno);
+    tpr_write(0);
 }
 
-void kernel::interrupts::interrupt_disable(u32 i)
+void lapic::lapic_timer_set_dummy()
 {
-    assert(i >= 48 and i < 240);
+    if (!tsc::use_tsc_deadline())
+        apic_write_reg(APIC_REG_LVT_TMR, APIC_DUMMY_ISR); // Init in one-shot mode
+    else
+        apic_write_reg(APIC_REG_LVT_TMR, APIC_DUMMY_ISR | (1 << 18));
+}
 
-    x86::interrupts::IOAPIC *ioapic = nullptr;
-    u32 vector                      = 0;
-    auto c                          = sched::get_cpu_struct();
-
-    {
-        Auto_Lock_Scope l(int_allocation_lock);
-        auto [ii, v] = c->int_mappings[i];
-        ioapic       = (IOAPIC *)ii;
-        vector       = v;
-    }
-
-    if (ioapic)
-        ioapic->interrupt_disable(vector);
+void lapic::lapic_timer_restore_normal()
+{
+    if (!tsc::use_tsc_deadline())
+        apic_write_reg(APIC_REG_LVT_TMR, APIC_TMR_INT); // Init in one-shot mode
+    else
+        apic_write_reg(APIC_REG_LVT_TMR, APIC_TMR_INT | (1 << 18));
 }

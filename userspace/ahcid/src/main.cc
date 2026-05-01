@@ -113,7 +113,7 @@ void AHCIPort::dump_state()
     printf(" --- End Port %i ---\n", index);
 }
 
-void dump_controller()
+pmos::async::task<void> dump_controller()
 {
     printf("AHCI controller registers\n");
     printf(" CAP: %#x\n", ahci_virt_base[0]);
@@ -129,7 +129,7 @@ void dump_controller()
     printf(" BOHC: %#x\n", ahci_virt_base[10]);
 
     printf(" --- PCI config space ---\n");
-    printf(" Status+Command: %#x\n", ahci_controller->readl(0x4));
+    printf(" Status+Command: %#x\n", co_await ahci_controller->readl(0x4));
 }
 
 uint64_t AHCIPort::get_command_table_phys(int index)
@@ -505,12 +505,6 @@ pmos::async::detached_task ahci_controller_main()
             // auto reply = (IPC_Timer_Reply *)request;
             react_timer();
         } break;
-        case IPC_Kernel_Interrupt_NUM: {
-            auto kmsg = (IPC_Kernel_Interrupt *)request;
-            //printf("Kernel interrupt: %i\n", kmsg->intno);
-            react_interrupt();
-            complete_interrupt(kmsg->intno);
-        } break;
         default:
             printf("AHCId unknown message type: %i\n", request->type);
             break;
@@ -520,6 +514,31 @@ pmos::async::detached_task ahci_controller_main()
 
 std::string pci_string;
 
+pmos::async::detached_task handle_interrupts(pmos::RecieveRight int_right)
+{
+    while (1) {
+        auto msg = co_await dispatcher.get_message(int_right);
+        if (!msg) {
+            fprintf(stderr, "ahcid: Failed to get message: %i\n", msg.error());
+            exit(1);
+        }
+
+        auto request = (IPC_Generic_Msg *)msg->data.data();
+        switch (request->type) {
+        case IPC_Kernel_Interrupt_NUM: {
+            // auto kmsg = (IPC_Kernel_Interrupt *)request;
+            //printf("Kernel interrupt: %i\n", kmsg->intno);
+            react_interrupt();
+            pmos::complete_interrupt(int_right);
+        } break;
+        default:
+            printf("AHCId: unknown message type: %i in interrupt handler!\n", request->type);
+            exit(1);
+            break;
+        }
+    }
+}
+
 pmos::async::detached_task ahci_handle()
 {
     // pci_string = "pci_" + std::to_string(d.group) + "_" + std::to_string(d.bus) + "_" + std::to_string(d.device) + "_" + std::to_string(d.function);
@@ -527,21 +546,21 @@ pmos::async::detached_task ahci_handle()
 
     printf("AHCI controller created\n");
 
-    uint16_t vendor_id = ahci_controller->readw(0);
-    uint16_t device_id = ahci_controller->readw(2);
-    uint8_t class_code = ahci_controller->readb(0xb);
-    uint8_t subclass   = ahci_controller->readb(0xa);
-    uint8_t prog_if    = ahci_controller->readb(0x9);
+    uint16_t vendor_id = co_await ahci_controller->readw(0);
+    uint16_t device_id = co_await ahci_controller->readw(2);
+    uint8_t class_code = co_await ahci_controller->readb(0xb);
+    uint8_t subclass   = co_await ahci_controller->readb(0xa);
+    uint8_t prog_if    = co_await ahci_controller->readb(0x9);
     printf("AHCI controller: vendor 0x%x device 0x%x class 0x%x subclass 0x%x prog_if 0x%x\n",
            vendor_id, device_id, class_code, subclass, prog_if);
 
     // Enable DMA and memory space access
-    uint32_t command = ahci_controller->readw(0x4);
+    uint32_t command = co_await ahci_controller->readw(0x4);
     command |= 0x06;
-    ahci_controller->writew(0x4, command);
+    co_await ahci_controller->writew(0x4, command);
 
     // Get BAR5
-    uint32_t bar5 = ahci_controller->readl(0x24);
+    uint32_t bar5 = co_await ahci_controller->readl(0x24);
     printf("ACHI BAR5: %#x\n", bar5);
 
     bar5 &= 0xfffffff0;
@@ -642,25 +661,25 @@ pmos::async::detached_task ahci_handle()
     }
 
     // Attach PCI interrupt
-    int r = ahci_controller->register_interrupt(ahci_int_vec, 0, cmd_port.get());
-    if (r < 0) {
-        printf("Failed to register interrupt: %i (%s)\n", -r, strerror(-r));
-    } else {
-        printf("Interrupt registered. Vector: %u\n", ahci_int_vec);
+    auto r = co_await ahci_controller->register_interrupt();
+    handle_interrupts(std::move(r));
 
-        // Clear 'interrupt disable' bit
-        auto command = ahci_controller->readw(0x4);
-        command &= ~(1 << 10);
-        printf("Command: %#x\n", command);
-        ahci_controller->writew(0x4, command);
+    printf("Interrupt registered...\n");
 
-        // Clear interrupt status
-        ahci_virt_base[2] = 0xffffffff;
+    {
+    // Clear 'interrupt disable' bit
+    auto command = co_await ahci_controller->readw(0x4);
+    command &= ~(1 << 10);
+    printf("Command: %#x\n", command);
+    co_await ahci_controller->writew(0x4, command);
 
-        // Enable interrupts
-        ghc = ahci_virt_base[1];
-        ghc |= AHCI_GHC_IE;
-        ahci_virt_base[1] = ghc;
+    // Clear interrupt status
+    ahci_virt_base[2] = 0xffffffff;
+
+    // Enable interrupts
+    ghc = ahci_virt_base[1];
+    ghc |= AHCI_GHC_IE;
+    ahci_virt_base[1] = ghc;
     }
 
     for (auto &port: ports) {

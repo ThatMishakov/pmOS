@@ -105,7 +105,7 @@ void syscall_get_lapic_id();
 
 // Programs interrupt to send the message to the right port
 void syscall_set_interrupt();
-// Parameters: uint64_t port, u64 intno, u64 flags
+// Parameters: uint64_t right_id, uint64_t port_id
 
 // Assigns a name to port
 void syscall_name_port();
@@ -234,9 +234,6 @@ void syscall_get_page_address();
 void syscall_get_page_address_from_object();
 // Parameters: u64 object_id, u64 offset, u64 flags
 
-void syscall_unreference_mem_object();
-// Parameters: u64 object_id
-
 void syscall_cpu_for_interrupt();
 // Parameters: u32 gsi, flags
 
@@ -274,6 +271,9 @@ void syscall_watch_right();
 
 void syscall_delete_port();
 // Parameters: u64 port_id
+
+void syscall_get_interrupt_info();
+// Parameters: u64 right
 
 struct SyscallRetval {
     TaskDescriptor *task;

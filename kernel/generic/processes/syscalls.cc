@@ -123,7 +123,7 @@ std::array<const char *, 61> syscall_names = {
     "SYSCALL PAUSE TASK",
     "SYSCALL RESUME TASK",
     "SYSCALL GET PAGE ADDRESS",
-    "SYSCALL RELEASE MEM OBJECT",
+    "SYSCALL GET INTERRUPT INFO",
     "SYSCALL MEM OBJECT GET PAGE ADDRESS",
     "SYSCALL DELETE PORT",
     "SYSCALL ALLOCATE INTERRUPT",
@@ -200,7 +200,7 @@ std::array<syscall_function, 61> syscall_table = {
     syscall_pause_task,
     syscall_resume_task,
     syscall_get_page_address,
-    syscall_unreference_mem_object,
+    syscall_get_interrupt_info,
     syscall_get_page_address_from_object,
     syscall_delete_port,
     syscall_cpu_for_interrupt,
@@ -328,6 +328,49 @@ void syscall_start_process()
     t->init();
 }
 
+static ReturnStr<klib::shared_ptr<Mem_Object>> mem_object_for_right(TaskDescriptor *task, u64 right_id)
+{
+    auto group = task->get_rights_namespace();
+    if (!group)
+        return Error(-ESRCH);
+
+    auto right = group->atomic_get_right(right_id);
+    if (!right)
+        return Error(-ENOENT);
+
+    if (!right->atomic_alive())
+        return Error(-ENOENT);
+
+    if (right->type() != RightType::MemObject)
+        return Error(-EPERM);
+
+    auto mem_object_right = static_cast<MemObjectRight *>(right);
+    assert(mem_object_right->mem_object);
+    return mem_object_right->mem_object;
+}
+
+static ReturnStr<InterruptHandler *> interrupt_handler_for_right(TaskDescriptor *task, u64 right_id)
+{
+    auto group = task->get_rights_namespace();
+    if (!group)
+        return Error(-ESRCH);
+
+    auto right = group->atomic_get_right(right_id);
+    if (!right)
+        return Error(-ENOENT);
+
+    if (!right->atomic_alive())
+        return Error(-ENOENT);
+
+    if (right->type() != RightType::InterruptSource)
+        return Error(-EPERM);
+
+    auto interrupt_right = static_cast<IntSourceRight *>(right);
+    assert(interrupt_right->parent_handler);
+    
+    return interrupt_right->parent_handler;
+}
+
 void syscall_load_executable()
 {
     task_ptr task = get_current_task();
@@ -356,11 +399,13 @@ void syscall_load_executable()
         return;
     }
 
-    klib::shared_ptr<Mem_Object> object = Mem_Object::get_object(object_id);
-    if (!object) {
-        syscall_error(task) = -ENOENT;
+    auto ret = mem_object_for_right(task, object_id);
+    if (!ret.success()) {
+        syscall_error(task) = ret.result;
         return;
     }
+    auto object = std::move(ret.val);
+    assert(object);
 
     klib::string name;
     {
@@ -1039,13 +1084,11 @@ void syscall_create_port()
 
 void syscall_set_interrupt()
 {
-#if defined(__riscv) || defined(__x86_64__) || defined(__i386__) || defined(__loongarch__)
     auto c               = sched::get_cpu_struct();
     const task_ptr &task = c->current_task;
 
-    u64 port    = syscall_arg64(task, 0);
-    ulong intno = syscall_arg(task, 1, 1);
-    ulong flags = syscall_flags(task);
+    u64 right   = syscall_arg64(task, 0);
+    u64 port    = syscall_arg64(task, 1);
 
     auto port_ptr = Port::atomic_get_port(port);
     if (!port_ptr) {
@@ -1053,32 +1096,76 @@ void syscall_set_interrupt()
         return;
     }
 
-    syscall_return(task) = intno;
-    auto result          = c->int_handlers.add_handler(intno, port_ptr);
-    if (result < 0)
-        syscall_error(task) = result;
-#else
-    #error Unknown architecture
-#endif
+    if (port_ptr->owner != task) {
+        syscall_error(task) = -EPERM;
+        return;
+    }
+
+    auto handler = interrupt_handler_for_right(task, right);
+    if (!handler.success()) {
+        syscall_error(task) = handler.result;
+        return;
+    }
+
+    auto recieve_right = IntNotificationRight::create_for_port(handler.val, port_ptr);
+    if (!recieve_right) {
+        syscall_error(task) = -ENOMEM;
+        return;
+    }
+
+    syscall_return(task) = recieve_right.val->right_parent_id;
+}
+
+void syscall_get_interrupt_info()
+{
+    auto c = sched::get_cpu_struct();
+    auto task = c->current_task;
+
+    u64 right = syscall_arg64(task, 0);
+
+    auto handler = interrupt_handler_for_right(task, right);
+    if (!handler) {
+        syscall_error(task) = handler.result;
+        return;
+    }
+
+    assert(handler.val->parent_cpu);
+
+    syscall_return(task) = handler.val->parent_cpu->cpu_id + 1;
 }
 
 void syscall_complete_interrupt()
 {
-#if defined(__riscv) || defined(__x86_64__) || defined(__i386__) || defined(__loongarch__)
     auto c               = sched::get_cpu_struct();
     const task_ptr &task = c->current_task;
 
-    ulong intno = syscall_arg(task, 0, 0);
+    u64 port = syscall_arg64(task, 0);
+    u64 right_id = syscall_arg64(task, 1);
 
-    auto result = c->int_handlers.ack_interrupt(intno, task->task_id);
-    if (result < 0) {
-        serial_logger.printf("Error acking interrupt: %i, task %i intno %i CPU %i task CPU %i\n",
-                             result, task->task_id, intno, c->cpu_id, task->cpu_affinity - 1);
+    auto port_ptr = Port::atomic_get_port(port);
+    if (!port_ptr) {
+        syscall_error(task) = -ENOENT;
+        return;
     }
-    syscall_error(task) = result;
-#else
-    #error Unknown architecture
-#endif
+
+    if (port_ptr->owner != task) {
+        syscall_error(task) = -EPERM;
+        return;
+    }
+
+    auto right = port_ptr->atomic_get_right(right_id);
+    if (!right) {
+        syscall_error(task) = -ENOENT;
+        return;
+    }
+
+    if (right->recieve_type() != RightType::InterruptNotification) {
+        syscall_error(task) = -EBADF;
+        return;
+    }
+    auto notification_right = static_cast<IntNotificationRight *>(right);
+
+    syscall_error(task) = notification_right->complete();
 }
 
 void syscall_set_log_port()
@@ -1494,27 +1581,6 @@ void syscall_create_mem_object()
     syscall_return(current_task) = right.val->right_sender_id;
 }
 
-ReturnStr<klib::shared_ptr<Mem_Object>> mem_object_for_right(TaskDescriptor *task, u64 right_id)
-{
-    auto group = task->get_rights_namespace();
-    if (!group)
-        return Error(-ESRCH);
-
-    auto right = group->atomic_get_right(right_id);
-    if (!right)
-        return Error(-ESRCH);
-
-    if (!right->atomic_alive())
-        return Error(-ESRCH);
-
-    if (right->type() != RightType::MemObject)
-        return Error(-EPERM);
-
-    auto mem_object_right = static_cast<MemObjectRight *>(right);
-    assert(mem_object_right->mem_object);
-    return mem_object_right->mem_object;
-}
-
 void syscall_map_mem_object()
 {
     const auto &current_task = get_current_task();
@@ -1532,13 +1598,16 @@ void syscall_map_mem_object()
         return;
 
     u64 page_table_id = params.page_table_id;
-    u64 object_id =     params.object_id;
+    u64 object_right =     params.object_right;
     ulong access =      params.access_flags;
     u64 object_offset_bytes = params.offset_object;
     ulong size_bytes = params.size;
     ulong addr_start = params.addr_start_uint;
     ulong object_size = params.object_size;
     u64 start_offset_bytes = params.offset_start;
+
+    // serial_logger.printf("map_mem_object page_table_id %li object_id %li access %lx object_offset_bytes %lx size_bytes %lx addr_start %lx object_size %lx start_offset_bytes %lx\n",
+    //                      page_table_id, object_id, access, object_offset_bytes, size_bytes, addr_start, object_size, start_offset_bytes);
 
     klib::shared_ptr<Page_Table> table = page_table_id == 0
                                              ? current_task->page_table
@@ -1554,22 +1623,13 @@ void syscall_map_mem_object()
         return;
     }
 
-    klib::shared_ptr<Mem_Object> object;
-    if (access & FLAG_MEM_OBJECT_ID_RIGHT) {
-        auto res = mem_object_for_right(current_task, object_id);
-        if (!res) {
-            syscall_error(current_task) = res.result;
-            return;
-        }
-
-        object = klib::move(res.val);
-    } else {
-        object = Mem_Object::get_object(object_id);
-        if (!object) {
-            syscall_error(current_task) = -ENOENT;
-            return;
-        }
+    auto obj_res = mem_object_for_right(current_task, object_right);
+    if (!obj_res.success()) {
+        syscall_error(current_task) = obj_res.result;
+        return;
     }
+
+    auto object = klib::move(obj_res.val);
     assert(object);
 
     if (object->is_anonymous()) {
@@ -1796,7 +1856,7 @@ void syscall_set_affinity()
     uint32_t affinity = syscall_arg(current_task, 1, 1);
     ulong flags       = syscall_flags(current_task);
 
-    const auto task = pid == 0 ? current_cpu->current_task : get_task(pid);
+    const auto task = pid == 0 ? current_task : get_task(pid);
     if (!task) {
         syscall_error(current_task) = -ESRCH;
         return;
@@ -1809,7 +1869,7 @@ void syscall_set_affinity()
         return;
     }
 
-    if (task != current_cpu->current_task) {
+    if (task != current_task) {
         Auto_Lock_Scope lock(task->sched_lock);
         if (task->status != TaskStatus::TASK_PAUSED) {
             syscall_error(current_task) = -EBUSY;
@@ -1851,8 +1911,7 @@ void syscall_set_affinity()
         }
     }
 
-    // serial_logger.printf("Task %d (%s) affinity set to %d\n", task->task_id, task->name.c_str(),
-    // cpu);
+    // serial_logger.printf("Task %d (%s) affinity set to %d\n", task->task_id, task->name.c_str(), cpu);
 
     reschedule();
 }
@@ -2067,27 +2126,15 @@ void syscall_get_page_address_from_object()
     auto current_task = get_current_task();
     auto object_id    = syscall_arg64(current_task, 0);
     auto offset       = syscall_arg64(current_task, 1);
-    auto flags        = syscall_flags(current_task);
+    // auto flags        = syscall_flags(current_task);
 
-    klib::shared_ptr<Mem_Object> object;
-    if (flags & FLAG_MEM_OBJECT_ID_RIGHT) {
-        auto ret = mem_object_for_right(current_task, object_id);
-        if (!ret.success()) {
-            syscall_error(current_task) = ret.result;
-            return;
-        }
-
-        assert(ret.val);
-        object = klib::move(ret.val);
-    } else {
-        object = Mem_Object::get_object(object_id);
-        if (!object) {
-            syscall_error(current_task) = -ENOENT;
-            return;
-        }
+    auto ret = mem_object_for_right(current_task, object_id);
+    if (!ret.success()) {
+        syscall_error(current_task) = ret.result;
+        return;
     }
-    assert(object);
-
+    assert(ret.val);
+    auto object = klib::move(ret.val);
 
     if (object->is_anonymous()) {
         syscall_error(current_task) = -EPERM;
@@ -2111,25 +2158,6 @@ void syscall_get_page_address_from_object()
     syscall_return(current_task) = page.val.get_phys_addr();
 }
 
-void syscall_unreference_mem_object()
-{
-    auto current_task = get_current_task();
-    auto object_id    = syscall_arg64(current_task, 0);
-
-    auto object = Mem_Object::get_object(object_id);
-    if (!object) {
-        syscall_error(current_task) = -ENOENT;
-        return;
-    }
-
-    auto result = current_task->page_table->atomic_unpin_memory_object(object);
-    if (result) {
-        syscall_error(current_task) = result;
-        return;
-    }
-    syscall_success(current_task);
-}
-
 void syscall_cpu_for_interrupt()
 {
     auto current_task = get_current_task();
@@ -2139,15 +2167,27 @@ void syscall_cpu_for_interrupt()
     bool edge       = !(flags & 0x01);
     bool active_low = (flags & 0x02);
 
-    auto result = allocate_interrupt_single(gsi, edge, active_low);
+    auto group = current_task->rights_namespace.load(std::memory_order::consume);
+    if (!group) {
+        syscall_error(current_task) = -ESRCH;
+        return;
+    }
+
+    // TODO: Check permissions here (superuser right or something)
+
+    auto result = allocate_or_get_handler(gsi, edge, active_low);
     if (!result.success()) {
         syscall_error(current_task) = result.result;
         return;
     }
 
-    assert(result.val.first);
-    syscall_return(current_task) = (result.val.first->cpu_id + 1) | (uint64_t)(result.val.second)
-                                                                        << 32;
+    auto right = IntSourceRight::create_for_group(result.val, group);
+    if (!right.success()) {
+        syscall_error(current_task) = right.result;
+        return;
+    }
+
+    syscall_return(current_task) = right.val->right_sender_id;
 }
 
 void syscall_set_right0()
@@ -2517,9 +2557,17 @@ void syscall_get_mem_object_size()
     auto current = get_current_task();
 
     u64 object_id = syscall_arg64(current, 0);
-    auto flags = syscall_flags(current);
+    // auto flags = syscall_flags(current);
 
-    const auto object = Mem_Object::get_object(object_id);
+    auto res = mem_object_for_right(current, object_id);
+    if (!res.success()) {
+        syscall_error(current) = res.result;
+        return;
+    }
+
+    assert(res.val);
+    auto object = klib::move(res.val);
+
     if (!object) {
         syscall_error(current) = -ENOENT;
         return;

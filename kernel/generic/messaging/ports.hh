@@ -13,6 +13,10 @@
 #include "messaging.hh"
 #include "rights.hh"
 
+namespace kernel::interrupts {
+struct IntNotificationRight;
+}
+
 namespace kernel::ipc
 {
 
@@ -49,6 +53,8 @@ public:
     GenericMessage *atomic_get_front();
     void pop_front() noexcept;
     bool is_empty() const noexcept;
+
+    RecieveRight *atomic_get_right(u64 right_id);
 
     /**
      * @brief Destructor of port
@@ -116,6 +122,7 @@ protected:
     friend struct SendManyRight;
     friend struct SendOnceRight;
     friend struct SendManyRightShared;
+    friend struct interrupts::IntNotificationRight;
 };
 
 }

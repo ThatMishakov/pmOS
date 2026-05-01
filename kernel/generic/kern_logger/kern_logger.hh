@@ -51,6 +51,9 @@ struct Logger {
     /// safety.
     void vprintf(const char *format, va_list list);
 
+    void printf_nolock(const char *format, ...);
+    void vprintf_nolock(const char *format, va_list list);
+
     void log(const klib::string &s);
     void log(const char *s, size_t size);
     virtual ~Logger() = default;

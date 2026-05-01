@@ -667,9 +667,14 @@ ReturnStr<
 }
 
 ReturnStr<bool>
-    TaskDescriptor::atomic_load_elf(klib::shared_ptr<paging::Mem_Object> elf, klib::string name,
-                                    const klib::vector<klib::unique_ptr<load_tag_generic>> &tags)
+    TaskDescriptor::atomic_load_elf(ipc::MemObjectRight *elf, klib::string name,
+                                    const klib::vector<klib::unique_ptr<load_tag_generic>> &tags, TaskGroup *optional_group)
 {
+    assert(elf);
+    assert(elf->alive);
+    assert(elf->mem_object);
+    auto elf_obj = elf->mem_object;
+
     Auto_Lock_Scope scope_lock(sched_lock);
 
     if (status != TaskStatus::TASK_UNINIT)
@@ -678,7 +683,7 @@ ReturnStr<bool>
     if (page_table)
         return Error(-EEXIST);
 
-    auto r = load_elf_into_memory(elf);
+    auto r = load_elf_into_memory(elf_obj);
     if (!r.success())
         return r.propagate();
 
@@ -725,7 +730,7 @@ ReturnStr<bool>
 
     // Object id
     {
-        auto object_id = elf->get_id();
+        auto object_id = elf->right_sender_id;
         auto arr = std::bit_cast<std::array<std::byte, sizeof(object_id)>>(object_id);
         auto vec = klib::vector<std::byte>();
         if (!vec.append_range(arr))
@@ -736,6 +741,21 @@ ReturnStr<bool>
             return Error(-ENOMEM);
 
         if (!auxvals.push_back({AT_MEM_OBJ_ID, (int) idx}))
+            return Error(-ENOMEM);
+    }
+
+    if (optional_group) {
+        auto group_id = optional_group->get_id();
+        auto arr = std::bit_cast<std::array<std::byte, sizeof(group_id)>>(group_id);
+        auto vec = klib::vector<std::byte>();
+        if (!vec.append_range(arr))
+            return Error(-ENOMEM);
+
+        auto idx = extra_info.size();
+        if (!extra_info.push_back(std::move(vec)))
+            return Error(-ENOMEM);
+
+        if (!auxvals.push_back({AT_TASK_GROUP_ID, (int) idx}))
             return Error(-ENOMEM);
     }
 
@@ -774,7 +794,7 @@ ReturnStr<bool>
     load_tag_mem_object_id *mobjid = (load_tag_mem_object_id *)((char *)&load_stack[0] + current_offset);
     *mobjid = {
         .header = LOAD_TAG_MEM_OBJECT_ID_HEADER,
-        .memory_object_id = elf->get_id(),
+        .memory_object_id = elf->right_sender_id,
     };
     current_offset += sizeof(*mobjid);
 
@@ -843,11 +863,6 @@ void TaskDescriptor::cleanup()
     {
         Auto_Lock_Scope scope_lock(tasks_map_lock);
         tasks_map.erase(this);
-    }
-
-    auto c = sched::get_cpu_struct();
-    for (auto &interr: interrupt_handlers) {
-        c->int_handlers.remove_handler(interr->interrupt_number);
     }
 
     auto get_first_port = [&]() -> ipc::Port * {

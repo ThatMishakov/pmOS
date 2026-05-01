@@ -153,8 +153,8 @@ void IOAPIC::init_ioapics()
 
 Spinlock int_allocation_lock;
 
-ReturnStr<std::pair<sched::CPU_Info *, u32>>
-    IOAPIC::allocate_interrupt_single(u32 gsi, bool edge_triggered, bool active_low)
+ReturnStr<IOAPIC_Handler *>
+        IOAPIC::allocate_or_get_handler(u32 gsi, bool edge_triggered, bool active_low)
 {
     auto ioapic = IOAPIC::get_ioapic(gsi);
     if (!ioapic)
@@ -163,48 +163,57 @@ ReturnStr<std::pair<sched::CPU_Info *, u32>>
 
     Auto_Lock_Scope l(int_allocation_lock);
 
-    auto [cpu, vector] = ioapic->mappings[apic_base];
-    if (cpu)
-        return Success(std::make_pair(cpu, vector));
+    auto m = ioapic->mappings[apic_base];
+    if (m)
+        return m;
 
-    auto result = lapic::allocate_interrupt({ioapic, apic_base});
-    if (result.success()) {
-        auto [cpu, vector] = result.val;
+    klib::unique_ptr<IOAPIC_Handler> handler = klib::make_unique<IOAPIC_Handler>();
+    if (!handler)
+        return Error(-ENOMEM);
 
-        ioapic->mappings[apic_base] = {cpu, vector};
+    handler->parent_ioapic = ioapic;
+    handler->active_low = active_low;
+    handler->level_triggered = !edge_triggered;
+    handler->ioapic_index = apic_base;
 
-        // TODO!
-        u32 lapic_id = cpu->lapic_id << 24;
-
-        // Set the mapping
-        u64 val = ((u64)lapic_id << 32) | (1 << 16) | ((u32)!edge_triggered << 15) |
-                  ((u32)active_low << 13) | vector;
-        ioapic->write_redir_entry(apic_base, val);
-
-        log::serial_logger.printf("IOAPIC added entry for lapic %x\n", cpu->lapic_id);
+    // Find least loaded CPU
+    auto *cpu = sched::cpus[0];
+    for (size_t i = 1; i < sched::cpus.size(); ++i) {
+        // TODO: Fix x2apic handling here...
+        if (sched::cpus[i]->allocated_int_count < cpu->allocated_int_count)
+            cpu = sched::cpus[i];
     }
 
-    return result;
-}
-
-std::optional<std::pair<IOAPIC *, int>> IOAPIC::find_ioapic(sched::CPU_Info *cpu, u32 vector)
-{
-    for (auto i: ioapics) {
-        for (size_t ii = 0; ii < i->int_count; ++ii) {
-            if (i->mappings[ii].mapped_to == cpu and  i->mappings[ii].vector == vector)
-                return std::pair{i, ii};
-        }
+    // Find unused slot
+    u32 idx = 0;
+    for (; idx < cpu->MAPPABLE_INTS; ++idx) {
+        if (!cpu->isr_handlers[idx])
+            break;
     }
-    return {};
-}
 
-void IOAPIC::mask_interrupt(sched::CPU_Info *cpu, int vec)
-{
-    auto entry = find_ioapic(cpu, vec);
-    if (entry) {
-        log::serial_logger.printf("Masking IOAPIC entry %i for IOAPIC %i\n", entry->second, entry->first->ioapic_id);
-        entry->first->write_redir_entry(entry->second, 0);
-    }
+    if (idx == cpu->MAPPABLE_INTS)
+        return Error(-ENOMEM);
+
+    handler->parent_cpu = cpu;
+    handler->lapic_vector = idx + lapic::first_mappable_vector;
+
+    assert(ioapic->mappings.size() > apic_base);
+
+    ioapic->mappings[apic_base] = handler.get();
+    __atomic_store_n(&cpu->isr_handlers[idx], handler.get(), __ATOMIC_RELAXED);
+    cpu->allocated_int_count++;
+
+    // TODO!
+    u32 lapic_id = cpu->lapic_id << 24;
+
+    // Set the mapping
+    u64 val = ((u64)lapic_id << 32) | (1 << 16) | ((u32)!edge_triggered << 15) |
+                ((u32)active_low << 13) | handler->lapic_vector;
+    ioapic->write_redir_entry(apic_base, val);
+
+    log::serial_logger.printf("IOAPIC added entry for gsi %x (ioapic vector %x) -> CPU %x (lapic %x) vector %x\n", gsi, apic_base, cpu->cpu_id, cpu->lapic_id, handler->lapic_vector);
+
+    return handler.release();
 }
 
 IOAPIC *IOAPIC::get_ioapic(u32 gsi)
@@ -217,10 +226,9 @@ IOAPIC *IOAPIC::get_ioapic(u32 gsi)
     return nullptr;
 }
 
-ReturnStr<std::pair<sched::CPU_Info *, u32>>
-    kernel::interrupts::allocate_interrupt_single(u32 gsi, bool edge_triggered, bool active_low)
+ReturnStr<kernel::interrupts::InterruptHandler *> kernel::interrupts::allocate_or_get_handler(u32 gsi, bool edge_triggered, bool active_low)
 {
-    return IOAPIC::allocate_interrupt_single(gsi, edge_triggered, active_low);
+    return IOAPIC::allocate_or_get_handler(gsi, edge_triggered, active_low);
 }
 
 void IOAPIC::interrupt_enable(u32 vector)
@@ -247,4 +255,29 @@ void IOAPIC::interrupt_disable(u32 vector)
     u32 val = mmio_readl(virt_addr + 4);
     val |= 1 << 16;
     mmio_writel(virt_addr + 4, val);
+}
+
+void kernel::interrupts::interrupt_enable(InterruptHandler *handler)
+{
+    assert(handler);
+    auto ioapic_handler = static_cast<IOAPIC_Handler *>(handler);
+    assert(ioapic_handler->parent_ioapic);
+    ioapic_handler->parent_ioapic->interrupt_enable(ioapic_handler->ioapic_index);
+    ioapic_handler->enabled = true;
+}
+
+void kernel::interrupts::interrupt_disable(InterruptHandler *handler)
+{
+    assert(handler);
+    auto ioapic_handler = static_cast<IOAPIC_Handler *>(handler);
+    assert(ioapic_handler->parent_ioapic);
+    ioapic_handler->parent_ioapic->interrupt_disable(ioapic_handler->ioapic_index);
+    ioapic_handler->enabled = false;
+}
+
+void IOAPIC_Handler::mask_interrupt()
+{
+    assert(parent_ioapic);
+    parent_ioapic->interrupt_disable(ioapic_index);
+    enabled = false;
 }

@@ -44,27 +44,26 @@ typedef struct IPC_Generic_Msg {
 #define IPC_RIGHT_SIZE(type) (sizeof(type))
 #define IPC_TYPE(ptr)        (((IPC_Generic_Msg *)ptr)->type)
 
-// Registers an interrupt handler for the process
-#define IPC_Reg_Int_NUM 0x01
-typedef struct IPC_Reg_Int {
+// Requests an interrupt right for the given parameters
+#define IPC_Request_Int_NUM 0x01
+typedef struct IPC_Request_Int {
     uint32_t type;
     uint32_t flags;
     uint32_t intno;
     uint32_t int_flags;
 #define INTERRUPT_FLAG_LEVEL_TRIGGERED 0x1
 #define INTERRUPT_FLAG_ACTIVE_LOW      0x2
-    uint64_t dest_task;
-    uint64_t dest_chan;
-} IPC_Reg_Int;
-#define IPC_Reg_Int_FLAG_EXT_INTS 0x01
+} IPC_Request_Int;
+#define IPC_Request_Int_FLAG_EXT_INTS 0x01
 
-#define IPC_Reg_Int_Reply_NUM 0x02
-typedef struct IPC_Reg_Int_Reply {
+#define IPC_Request_Int_Reply_NUM 0x02
+typedef struct IPC_Request_Int_Reply {
     uint32_t type;
-    uint32_t flags;
-    int32_t status;
-    uint32_t intno;
-} IPC_Reg_Int_Reply;
+    uint16_t flags;
+    int16_t status;
+
+    // The first right should be the interrupt source right...
+} IPC_Request_Int_Reply;
 
 #define IPC_Start_Timer_NUM 0x03
 typedef struct IPC_Start_Timer {
@@ -173,23 +172,6 @@ typedef struct IPC_Request_PCI_Devices_Reply {
     struct IPC_PCIDeviceLocation devices[];
 } IPC_Request_PCI_Devices_Reply;
 
-#define IPC_Request_PCI_Device_NUM 0x0A
-typedef struct IPC_Request_PCI_Device {
-    uint32_t type; // IPC_Request_PCI_Device_NUM
-    uint32_t flags;
-} IPC_Request_PCI_Device;
-
-#define IPC_Request_PCI_Device_Reply_NUM 0x0B
-typedef struct IPC_Request_PCI_Device_Reply {
-    uint32_t type; // IPC_Request_PCI_Device_Reply_NUM
-    uint16_t flags;
-    int16_t type_error; // Negative value on error, type of the device otherwise
-#define IPC_PCI_ACCESS_TYPE_MMIO 0x01
-#define IPC_PCI_ACCESS_TYPE_IO   0x02
-
-    uint64_t base_address;
-} IPC_Request_PCI_Device_Reply;
-
 #define IPC_Request_PCI_Device_GSI_NUM 0x0C
 typedef struct IPC_Request_PCI_Device_GSI {
     uint32_t type; // IPC_Request_PCI_Device_GSI_NUM
@@ -207,22 +189,49 @@ typedef struct IPC_Request_PCI_Device_GSI_Reply {
     uint32_t gsi;
 } IPC_Request_PCI_Device_GSI_Reply;
 
-// Replies with IPC_Reg_Int_Reply
-#define IPC_Register_PCI_Interrupt_NUM 0x0E
-typedef struct IPC_Register_PCI_Interrupt {
+// Replies with IPC_Request_Int_Reply
+#define IPC_Request_PCI_Interrupt_NUM 0x0E
+typedef struct IPC_Request_PCI_Interrupt {
     uint32_t type;
     uint16_t flags;
     uint16_t pin;
-
-    uint64_t dest_task;
-    uint64_t dest_port;
 } IPC_Register_PCI_Interrupt;
+
+#define IPC_PCI_Read_NUM 0x0F
+typedef struct IPC_PCI_Read {
+    uint32_t type;
+    uint16_t offset;
+    // {1, 2, 4} bytes
+    uint16_t access_width;
+} IPC_PCI_Read;
+
+#define IPC_PCI_Write_NUM 0x10
+typedef struct IPC_PCI_Write {
+    uint32_t type;
+    uint16_t offset;
+    // {1, 2, 4} bytes
+    uint16_t access_width;
+    uint32_t data;
+} IPC_PCI_Write;
+
+#define IPC_PCI_Read_Result_NUM 0x11
+typedef struct IPC_PCI_Read_Result {
+    uint32_t type;
+    // 0 on success, -errno error otherwise
+    int32_t result;
+    // If reading less than 32 bits, zero-extended
+    uint32_t data;
+} IPC_PCI_Read_Result;
+
+#define IPC_PCI_Write_Result_NUM 0x12
+typedef struct IPC_PCI_Write_Result {
+    uint32_t type;
+    int32_t result;
+} IPC_PCI_Write_Result;
 
 #define IPC_Kernel_Interrupt_NUM 0x20
 typedef struct IPC_Kernel_Interrupt {
     uint32_t type;
-    uint32_t intno;
-    uint32_t cpu_id;
 } IPC_Kernel_Interrupt;
 
 typedef uint64_t pmos_port_t;

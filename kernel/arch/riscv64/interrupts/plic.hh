@@ -1,6 +1,7 @@
 #pragma once
 #include <lib/vector.hh>
 #include <types.hh>
+#include <interrupts/interrupt_handler.hh>
 
 namespace kernel::sched
 {
@@ -13,6 +14,15 @@ namespace kernel::riscv::interrupts
 /// Initialize PLIC during the system boot
 void init_plic();
 
+struct PLIC;
+
+struct PLICHandler: ::kernel::interrupts::InterruptHandler {
+    PLIC *parent_plic = nullptr;
+
+    // This is gsi - parent_plic->gsi_base
+    u32 interrupt_id = 0;
+};
+
 struct PLIC {
     volatile u32 *virt_base = nullptr;
     u64 hardware_id         = 0;
@@ -22,7 +32,7 @@ struct PLIC {
     u16 external_interrupt_sources = 0;
     u8 plic_id                     = 0;
 
-    klib::vector<sched::CPU_Info *> claimed_by_cpu;
+    klib::vector<PLICHandler *> handlers;
 };
 
 // Read PLIC register
@@ -35,8 +45,8 @@ void plic_write(const PLIC &plic, u32 offset, u32 value);
 u32 plic_interrupt_limit();
 
 // Enable interrupt for the current hart
-void plic_interrupt_enable(u32 interrupt_id);
-void plic_interrupt_disable(u32 interrupt_id);
+void plic_interrupt_enable(const PLIC &plic, u32 interrupt_id);
+void plic_interrupt_disable(const PLIC &plic, u32 interrupt_id);
 
 // Sets the priority threshold for the current hart
 void plic_set_threshold(u32 threshold);
@@ -48,7 +58,7 @@ void plic_set_priority(u32 interrupt_id, u32 priority);
 u32 plic_claim();
 
 // Complete the interrupt
-void plic_complete(u32 interrupt_id);
+void plic_complete(const PLIC &plic, u32 interrupt_id);
 
 PLIC *get_plic(u32 gsi);
 
@@ -64,5 +74,7 @@ constexpr int PLIC_COMPLETE_CONTEXT_STRIDE = 0x1000;
 
 constexpr int PLIC_PRIORITY_OFFSET        = 0x00000;
 constexpr int PLIC_PRIORITY_SOURCE_STRIDE = 0x4;
+
+PLICHandler *get_plic_handler(u32 gsi);
 
 }

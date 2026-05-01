@@ -38,8 +38,6 @@
 using namespace kernel::sched;
 using namespace kernel::x86::interrupts::lapic;
 
-void park_self();
-
 void ipi_invalidate_tlb_routine()
 {
     auto c = get_cpu_struct();
@@ -49,7 +47,7 @@ void ipi_invalidate_tlb_routine()
         __atomic_and_fetch(&c->ipi_mask, ~CPU_Info::IPI_TLB_SHOOTDOWN, __ATOMIC_SEQ_CST);
 
         if (val & CPU_Info::IPI_TLB_SHOOTDOWN)
-            c->current_task->page_table->trigger_shootdown(c);
+            c->current_task->page_table->trigger_shootdown(c->current_task->page_table.get(), c);
 
         if (val & CPU_Info::IPI_CPU_PARK)
             park_self();
@@ -71,6 +69,12 @@ void CPU_Info::ipi_reschedule() {
 
 void CPU_Info::ipi_tlb_shootdown()
 {
-    __atomic_or_fetch(&ipi_mask, IPI_TLB_SHOOTDOWN, __ATOMIC_ACQUIRE);
+    __atomic_or_fetch(&ipi_mask, IPI_TLB_SHOOTDOWN, __ATOMIC_RELEASE);
+    send_ipi_fixed(ipi_invalidate_tlb_int_vec, lapic_id);
+}
+
+void CPU_Info::ipi_cpu_park()
+{
+    __atomic_or_fetch(&ipi_mask, IPI_CPU_PARK, __ATOMIC_RELEASE);
     send_ipi_fixed(ipi_invalidate_tlb_int_vec, lapic_id);
 }

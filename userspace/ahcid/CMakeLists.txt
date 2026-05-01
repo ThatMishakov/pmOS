@@ -11,6 +11,10 @@ set(CMAKE_CXX_COMPILER "clang++")
 set(CMAKE_ASM_COMPILER "clang")
 set(CMAKE_AR "llvm-ar")
 
+if(CMAKE_C_COMPILER_TARGET MATCHES "^i[3-6]86-pmos$")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lclang_rt.builtins-i386")
+endif()
+
 set(CMAKE_CXX_FLAGS "-Wall -Wextra -O2 -pipe")
 set(CMAKE_C_FLAGS "-Wall -Wextra -O2 -pipe")
 
@@ -26,5 +30,4 @@ set_property(TARGET ahcid PROPERTY C_STANDARD 23)
 set_property(TARGET ahcid PROPERTY CXX_STANDARD 23)
 
 target_link_libraries(ahcid pmoscxx)
-
 install(TARGETS ahcid RUNTIME DESTINATION "/boot")

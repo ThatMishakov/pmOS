@@ -15,5 +15,5 @@ configure() {
 
 build() {
     make -j ${parallelism}
-    objdump -S kernel > kernel.txt
+    llvm-objdump -S kernel > kernel.txt
 }

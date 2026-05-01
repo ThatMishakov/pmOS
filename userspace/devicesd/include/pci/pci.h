@@ -143,15 +143,16 @@ extern PCIDeviceVector pci_devices;
 uint32_t pci_read_register(struct PCIDevicePtr *s, unsigned register);
 void pci_write_register(struct PCIDevicePtr *s, unsigned register, uint32_t value);
 int fill_device(struct PCIDevicePtr *s, struct PCIHostBridge *g, uint8_t bus, uint8_t device, uint8_t function);
+int fill_device_from_device(struct PCIDevicePtr *s, struct PCIDevice *d);
 
 extern bool pci_fully_working;
 int fill_device_early(struct PCIDevicePtr *s, uint8_t bus, uint8_t device, uint8_t function);
 
-inline uint16_t pci_read_word(struct PCIDevicePtr *s, unsigned offset)
-{
-    uint32_t reg = pci_read_register(s, offset >> 2);
-    return offset & 0x02 ? reg >> 16 : reg;
-}
+uint8_t pci_read_byte(struct PCIDevicePtr *s, unsigned offset);
+uint16_t pci_read_word(struct PCIDevicePtr *s, unsigned offset);
+
+void pci_write_byte(struct PCIDevicePtr *s, unsigned offset, uint8_t value);
+void pci_write_word(struct PCIDevicePtr *s, unsigned offset, uint16_t value);
 
 inline uint8_t pci_header_type(struct PCIDevicePtr *s)
 {

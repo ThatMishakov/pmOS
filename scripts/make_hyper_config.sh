@@ -15,13 +15,14 @@ module:
 EOF
 }
 
-if [ "$#" -ne 2 ]; then
-    echo "Usage: $0 <output_file> <services>"
+if [ "$#" -ne 3 ]; then
+    echo "Usage: $0 <output_file> <services> <ARCH>"
     exit 1
 fi
 
 FILE="$1"
 SERVICES="$2"
+ARCH="$3"
 cat <<EOF > "$FILE"
 default-entry = "pmOS"
 
@@ -29,16 +30,33 @@ default-entry = "pmOS"
 protocol = "ultra"
 
 binary:
-    allocate-anywhere = true
     higher-half-exclusive = true
     path = "/kernel"
+EOF
+
+if [ "$ARCH" = "x86_64" ]; then
+    cat <<EOF >> "$FILE"
+    allocate-anywhere = true
+
+page-table:
+    levels = 5
+EOF
+else
+    cat <<EOF >> "$FILE"
+
+page-table:
+    levels = 3
+EOF
+fi
+
+cat <<EOF >> "$FILE"
 
 module:
     path = "/bootstrapd"
     name = "bootstrapd;bootstrap"
 EOF
 
-if [ "$JINX_ARCH" = "i686" ]; then
+if [ "$ARCH" = "i686" ]; then
     cat <<EOF >> "$FILE"
 
 page-table:

@@ -105,7 +105,7 @@ acpi_trampoline_jump_pmode:
     movl $0x80000001, %eax
     movl %eax, %cr0
 
-    jmpl *(acpu_trampoline_kernel_entry - acpi_trampoline)(%ebx)
+    jmpl *(acpi_trampoline_kernel_entry - acpi_trampoline)(%ebx)
 
 
     .p2align 2, 0xCC
@@ -138,7 +138,7 @@ smp_trampoline_trampoilne_flags:
 init_vec_kernel_entry:
     .long _kernel_smp_entry
 
-acpu_trampoline_kernel_entry:
+acpi_trampoline_kernel_entry:
     .long _acpi_wakeup_entry
 
 acpi_trampoline_gdt:

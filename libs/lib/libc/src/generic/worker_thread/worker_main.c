@@ -94,24 +94,6 @@ void worker_main()
 {
     worker_thread = __get_tls();
 
-    const auxv_t *tasg_group_e = __elf_aux_search(__auxv, AT_TASK_GROUP_ID);
-    if (tasg_group_e && *(uint64_t *)tasg_group_e->a_ptr != 0) {
-        process_task_group = *(uint64_t *)tasg_group_e->a_ptr;
-    } else {
-        syscall_r sys_result = create_task_group();
-        if (sys_result.result != SUCCESS) {
-            fprintf(stderr, "pmOS libC: Failed to create task group\n");
-            _syscall_exit(1);
-        }
-        process_task_group = sys_result.value;
-    }
-
-    syscall_r sys_result = set_namespace(process_task_group, NAMESPACE_RIGHTS);
-    if (sys_result.result != SUCCESS) {
-        fprintf(stderr, "pmOS libC: Failed to set task group namespace\n");
-        _syscall_exit(1);
-    }
-
     ports_request_t new_port = create_port(TASK_ID_SELF, 0);
     if (new_port.result != SUCCESS) {
         fprintf(stderr, "pmOS libC: Failed to initialize worker port\n");

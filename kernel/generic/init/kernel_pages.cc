@@ -31,6 +31,11 @@ extern void *_gcc_except_table_start;
 extern void *_gcc_except_table_end;
 extern u8 _kernel_end;
 
+#ifdef __i386__
+#include <paging/x86_paging.hh>
+using namespace kernel::ia32::paging;
+#endif
+
 void kernel::map_kernel_pages(ptable_top_ptr_t kernel_pt_top, phys_addr_t kernel_phys)
 {
     // Map kernel pages
@@ -137,7 +142,6 @@ void kernel::map_kernel_pages(ptable_top_ptr_t kernel_pt_top, phys_addr_t kernel
 #ifdef __i386__
 phys_addr_t phys_memory_limit      = 0x100000000; // 4GB, if PAE is not enabled, otherwise up to 16GB
 const phys_addr_t MAX_TOTAL_MEMORY = 0x400000000; // 16GB
-extern bool use_pae;
 #define ARCH_LIMITS_PHYS_MEMORY
 #else
 phys_addr_t phys_memory_limit      = 0;
@@ -471,11 +475,13 @@ void kernel::init_pmm(ptable_top_ptr_t kernel_pt_top)
     if (phys_memory_limit != 0 and below_1g_region_end > phys_memory_limit)
         below_1g_region_end = phys_memory_limit;
 
+    serial_logger.printf("Temp pool region: %lx - %lx\n", temp_alloc_base, temp_alloc_base + temp_alloc_size);        
     assert(below_1g_region_end >= (temp_alloc_base + temp_alloc_size));
-    phys_addr_t size          = below_1g_region_end - temp_alloc_base - temp_alloc_size;
+    phys_addr_t size = memory_map[temp_alloc_entry_id].size / PAGE_SIZE;
     #else
     phys_addr_t size  = temp_alloc_size / PAGE_SIZE;
     #endif
+    assert(size >= reserved_count);
     auto free_region  = temp_region_page + reserved_count;
     free_region->type = Page::PageType::PendingFree;
     free_region->rcu_state.pages_to_free = size - reserved_count;

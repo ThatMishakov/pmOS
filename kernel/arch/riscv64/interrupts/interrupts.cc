@@ -272,8 +272,6 @@ void service_timer_interrupt()
 
 void plic_service_interrupt()
 {
-    auto c = get_cpu_struct();
-
     const u32 irq = plic_claim();
     if (irq == 0) {
         // Spurious interrupt
@@ -281,36 +279,25 @@ void plic_service_interrupt()
     }
 
     // Get handler
-    auto handler = c->int_handlers.get_handler(irq);
+    auto handler = get_plic_handler(irq);
     if (handler == nullptr) {
+        auto plic = get_plic(irq);
+        if (!plic)
+            panic("No PLIC found for interrupt %d", irq);
+
         // Disable the interrupt
-        plic_interrupt_disable(irq);
-        plic_complete(irq);
+        plic_interrupt_disable(*plic, irq - plic->gsi_base);
+        plic_complete(*plic, irq - plic->gsi_base);
         return;
     }
 
-    // Send the interrupt to the port
-    auto port = handler->port;
-    bool sent = false;
-    if (port) {
-        IPC_Kernel_Interrupt kmsg = {IPC_Kernel_Interrupt_NUM, irq, c->cpu_id};
-        auto result = port->atomic_send_from_system(reinterpret_cast<char *>(&kmsg), sizeof(kmsg));
+    if (handler->send_interrupt_notification() != kernel::interrupts::NotificationResult::Success) {
+        auto plic = get_plic(irq);
+        if (!plic)
+            panic("No PLIC found for interrupt %d", irq);
 
-        if (result == 0)
-            sent = true;
-        else
-            serial_logger.printf("Error: %i\n", result);
-    }
-
-    if (not sent) {
-        // Disable the interrupt
-        plic_interrupt_disable(irq);
-        plic_complete(irq);
-
-        // Delete the handler
-        c->int_handlers.remove_handler(irq);
-    } else {
-        handler->active = true;
+        plic_interrupt_disable(*plic, irq - plic->gsi_base);
+        plic_complete(*plic, irq - plic->gsi_base);
     }
 }
 
@@ -324,12 +311,15 @@ void service_software_interrupt()
     auto c = get_cpu_struct();
 
     u32 m = __atomic_fetch_and(
-        &c->ipi_mask, ~(CPU_Info::IPI_RESCHEDULE | CPU_Info::IPI_TLB_SHOOTDOWN), __ATOMIC_SEQ_CST);
+        &c->ipi_mask, ~(CPU_Info::IPI_RESCHEDULE | CPU_Info::IPI_TLB_SHOOTDOWN | CPU_Info:: IPI_CPU_PARK), __ATOMIC_SEQ_CST);
     if (m & CPU_Info::IPI_RESCHEDULE)
         reschedule();
 
     if (m & CPU_Info::IPI_TLB_SHOOTDOWN)
-        c->current_task->page_table->trigger_shootdown(c);
+        c->current_task->page_table->trigger_shootdown(c->current_task->page_table.get(), c);
+
+    if (m & CPU_Info:: IPI_CPU_PARK)
+        park_self();
 }
 
 extern "C" void nested_interrupt(RiscV64Regs *regs)
@@ -443,4 +433,13 @@ void handle_interrupt()
     }
 
     assert(c->nested_level == 1);
+}
+
+void arch_specific_park_pre_offline() {}
+
+void hcf();
+void arch_specific_park_stop() 
+{
+    // TODO: Actually stop the CPU with SBI...
+    hcf();
 }

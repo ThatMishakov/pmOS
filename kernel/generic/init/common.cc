@@ -2,6 +2,7 @@
 #include <uacpi/kernel_api.h>
 #include <types.hh>
 #include <kern_logger/kern_logger.hh>
+#include <messaging/rights.hh>
 #include "common.hh"
 
 using namespace kernel::log;
@@ -50,8 +51,10 @@ void init_acpi(phys_addr_t rsdp_addr)
 
 klib::vector<module> modules;
 
-klib::unique_ptr<load_tag_generic> construct_load_tag_for_modules()
+klib::unique_ptr<load_tag_generic> construct_load_tag_for_modules(kernel::proc::TaskGroup *group)
 {
+    assert(group);
+
     // Calculate the size
     u64 size = 0;
 
@@ -90,11 +93,16 @@ klib::unique_ptr<load_tag_generic> construct_load_tag_for_modules()
     serial_logger.printf("Constructing load tag for %u modules\n", desc->modules_count);
     // Fill in the tags
     for (size_t i = 0; i < modules.size(); i++) {
+        auto &module     = modules[i];
+        auto &descriptor = desc->modules[i];
+
+        auto result = kernel::ipc::MemObjectRight::create_for_group(module.object, group);
+        if (!result)
+            panic("Failed to create right for the memory object during task 1 init!");
+
         serial_logger.printf("Module: %s, cmdline: %s\n", modules[i].path.c_str(), modules[i].cmdline.c_str());
 
-        auto &module                = modules[i];
-        auto &descriptor            = desc->modules[i];
-        descriptor.memory_object_id = module.object->get_id();
+        descriptor.memory_object_id = result.val->right_sender_id;
         descriptor.size             = module.size;
         memcpy((char *)tag.get() + string_offset, module.path.c_str(), module.path.size() + 1);
         descriptor.path_offset = string_offset;
