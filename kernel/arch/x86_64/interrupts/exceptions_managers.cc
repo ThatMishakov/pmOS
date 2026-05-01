@@ -277,27 +277,26 @@ extern "C" void sse_exception_manager()
 
 void print_kernel_regs(NestedIntContext *kernel_ctx)
 {
-    serial_logger.printf("Kernel registers:\n");
-    serial_logger.printf(" => %%rax: 0x%lx\n", kernel_ctx->rax);
-    serial_logger.printf(" => %%rbx: 0x%lx\n", kernel_ctx->rbx);
-    serial_logger.printf(" => %%rcx: 0x%lx\n", kernel_ctx->rcx);
-    serial_logger.printf(" => %%rdx: 0x%lx\n", kernel_ctx->rdx);
-    serial_logger.printf(" => %%rsi: 0x%lx\n", kernel_ctx->rsi);
-    serial_logger.printf(" => %%rdi: 0x%lx\n", kernel_ctx->rdi);
-    serial_logger.printf(" => %%rbp: 0x%lx\n", kernel_ctx->rbp);
-    serial_logger.printf(" => %%r8: 0x%lx\n", kernel_ctx->r8);
-    serial_logger.printf(" => %%r9: 0x%lx\n", kernel_ctx->r9);
-    serial_logger.printf(" => %%r10: 0x%lx\n", kernel_ctx->r10);
-    serial_logger.printf(" => %%r11: 0x%lx\n", kernel_ctx->r11);
-    serial_logger.printf(" => %%r12: 0x%lx\n", kernel_ctx->r12);
-    serial_logger.printf(" => %%r13: 0x%lx\n", kernel_ctx->r13);
-    serial_logger.printf(" => %%r14: 0x%lx\n", kernel_ctx->r14);
-    serial_logger.printf(" => %%r15: 0x%lx\n", kernel_ctx->r15);
-    serial_logger.printf(" => %%rip: 0x%lx\n", kernel_ctx->rip);
-    serial_logger.printf(" => %%rsp: 0x%lx\n", kernel_ctx->rsp);
-    serial_logger.printf(" => %%rflags: 0x%lx\n", kernel_ctx->rflags);
-    serial_logger.printf(" => %%cs: 0x%lx\n", kernel_ctx->cs);
-    serial_logger.printf(" => %%ss: 0x%lx\n", kernel_ctx->ss);
+    serial_logger.printf_nolock(" => %%rax: 0x%lx\n", kernel_ctx->rax);
+    serial_logger.printf_nolock(" => %%rbx: 0x%lx\n", kernel_ctx->rbx);
+    serial_logger.printf_nolock(" => %%rcx: 0x%lx\n", kernel_ctx->rcx);
+    serial_logger.printf_nolock(" => %%rdx: 0x%lx\n", kernel_ctx->rdx);
+    serial_logger.printf_nolock(" => %%rsi: 0x%lx\n", kernel_ctx->rsi);
+    serial_logger.printf_nolock(" => %%rdi: 0x%lx\n", kernel_ctx->rdi);
+    serial_logger.printf_nolock(" => %%rbp: 0x%lx\n", kernel_ctx->rbp);
+    serial_logger.printf_nolock(" => %%r8: 0x%lx\n", kernel_ctx->r8);
+    serial_logger.printf_nolock(" => %%r9: 0x%lx\n", kernel_ctx->r9);
+    serial_logger.printf_nolock(" => %%r10: 0x%lx\n", kernel_ctx->r10);
+    serial_logger.printf_nolock(" => %%r11: 0x%lx\n", kernel_ctx->r11);
+    serial_logger.printf_nolock(" => %%r12: 0x%lx\n", kernel_ctx->r12);
+    serial_logger.printf_nolock(" => %%r13: 0x%lx\n", kernel_ctx->r13);
+    serial_logger.printf_nolock(" => %%r14: 0x%lx\n", kernel_ctx->r14);
+    serial_logger.printf_nolock(" => %%r15: 0x%lx\n", kernel_ctx->r15);
+    serial_logger.printf_nolock(" => %%rip: 0x%lx\n", kernel_ctx->rip);
+    serial_logger.printf_nolock(" => %%rsp: 0x%lx\n", kernel_ctx->rsp);
+    serial_logger.printf_nolock(" => %%rflags: 0x%lx\n", kernel_ctx->rflags);
+    serial_logger.printf_nolock(" => %%cs: 0x%lx\n", kernel_ctx->cs);
+    serial_logger.printf_nolock(" => %%ss: 0x%lx\n", kernel_ctx->ss);
 }
 
 extern "C" void general_protection_fault_manager(NestedIntContext *kernel_ctx, ulong err)
@@ -373,15 +372,13 @@ extern "C" void stack_segment_fault_manager()
 
 extern "C" void double_fault_manager(NestedIntContext *kernel_ctx, ulong err)
 {
-    panic("double fault!\n");
-    task_ptr task = get_cpu_struct()->current_task;
-    t_print_bochs("!!! Double Fault error %h RIP %h RSP %h PID %h (%s)\n", task->regs.int_err,
-                  task->regs.program_counter(), task->regs.stack_pointer(), task->task_id,
-                  task->name.c_str());
-    global_logger.printf("!!! Double Fault error %h RIP %h RSP %h PID %h (%s)\n",
-                         task->regs.int_err, task->regs.program_counter(),
-                         task->regs.stack_pointer(), task->task_id, task->name.c_str());
-    task->atomic_kill();
+    if (kernel_ctx) {
+        print_kernel_regs(kernel_ctx);
+        panic("Double fault in kernel, error %x\n", err);
+        return;
+    }
+
+    panic("Double fault!!\n");
 }
 
 void breakpoint_manager(NestedIntContext *kernel_ctx, ulong err)

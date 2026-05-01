@@ -210,13 +210,15 @@ constexpr u32 X2APIC_MSR_BASE = 0x800;
      */
     u64 lapic_configure(u64 opt, u64 arg);
 
-    /// @brief Broadcasts INIT IPI to the other processes
-    void broadcast_init_ipi();
+    /// @brief Sends INIT IPI to the other processor
+    /// @param dest Destination LAPIC ID
+    void send_init_ipi(u32 dest);
 
-    /// @brief Broadcasrs SIPI to other processors
+    /// @brief Sends SIPI to the other processor
     /// @param vector Vector to which it will be recieved (from where the CPU will
     /// start executing instructions)
-    void broadcast_sipi(u8 vector);
+    /// @param dest Destination lapic ID
+    void send_sipi(u8 vector, u32 dest);
 
     /// @brief Sends a fixed IPI
     /// @param vector Destination interrupt vector (which interrupt will be
@@ -252,6 +254,12 @@ constexpr u32 X2APIC_MSR_BASE = 0x800;
     void init_tsc_deadline();
 
 constexpr u32 first_mappable_vector = 48;
+
+    void tpr_write(unsigned val);
+    unsigned tpr_read();
+
+    void lapic_timer_set_dummy();
+    void lapic_timer_restore_normal();
 
 }; // namespace lapic
 }; // namespace kernel::x86::interrupts

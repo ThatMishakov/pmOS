@@ -5,7 +5,9 @@
 #include <processes/tasks.hh>
 #include <sched/sched.hh>
 #include <x86_utils.hh>
+#include <time/timers.hh>
 
+using namespace kernel;
 using namespace kernel::sched;
 using namespace kernel::paging;
 using namespace kernel::x86::interrupts::lapic;
@@ -51,12 +53,57 @@ extern kernel::pmm::phys_page_t acpi_trampoline_page;
 
 void smp_wake_everyone_else_up()
 {
+    // SDM 11.4.4.1 Typical BSP Initialization Sequence
+    //
+    // Send INIT, wait for 10 ms, send SIPI, wait for at least 100 ms, then if the CPUs have not
+    // woken up, send another SIPI
+
+    if (cpus.size() < 2)
+        // Nobody to wake up
+        return;
+
     uint32_t vector = acpi_trampoline_page >> 12;
 
-    // Send to *vector* vector with Assert level and All Excluding Self
-    // shorthand
-    apic_write_icr(vector | (0x01 << 14) | (0b11 << 18) | (0b101) << 8);
-    apic_write_icr(vector | (0x01 << 14) | (0b11 << 18) | (0b110) << 8);
+    auto waiter = x86::time::BlockingWaiter::create();
+
+    for (size_t i = 1; i < cpus.size(); ++i)
+        send_init_ipi(cpus[i]->lapic_id);
+
+    waiter.wait(10'000'000);
+
+    for (size_t i = 1; i < cpus.size(); ++i)
+        send_sipi(vector, cpus[i]->lapic_id);
+
+    constexpr size_t max_counts = 500; // 200 microseconds to 100 ms
+    constexpr u64 wait_time_ns = 200'000;
+
+    for (size_t wait_iters = 0; wait_iters < max_counts; ++wait_iters) {
+        waiter.wait(wait_time_ns);
+
+        bool any_offline = false;
+        for (size_t i = 1; i < cpus.size(); ++i) {
+            bool online = __atomic_load_n(&cpus[i]->online, __ATOMIC_RELAXED);
+            if (online)
+                continue;
+
+            any_offline = true;
+            break;
+        }
+
+        if (!any_offline)
+            return;
+    }
+
+    for (size_t i = 1; i < cpus.size(); ++i) {
+        auto cpu = cpus[i];
+        if (__atomic_load_n(&cpu->online, __ATOMIC_RELAXED))
+            continue;
+
+        send_sipi(vector, cpu->lapic_id);
+    }
+
+    // Don't wait for this again since the kernel doesn't do anything with it anyway...
+    // (is this a good strategy?)
 }
 
 namespace kernel::sched

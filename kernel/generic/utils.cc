@@ -419,7 +419,7 @@ extern bool cpu_struct_works;
 [[noreturn]] extern void hcf();
 extern "C" void abort(void)
 {
-    t_print_bochs("Error: abort() was called.\n");
+    serial_logger.printf_nolock("Error: abort() was called.\n");
 
     print_stack_trace();
     // serial_logger.printf("Error: abort() was called.\n");
@@ -448,10 +448,10 @@ void panic(const char *msg, ...)
 {
     va_list args;
     va_start(args, msg);
-    serial_logger.vprintf(msg, args);
+    serial_logger.vprintf_nolock(msg, args);
     va_end(args);
 
-    serial_logger.printf("\n");
+    serial_logger.printf_nolock("\n");
     abort();
 }
 

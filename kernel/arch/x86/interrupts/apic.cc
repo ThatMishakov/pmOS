@@ -355,7 +355,6 @@ void apic_one_shot(u32 ms)
 void apic_one_shot_ticks(u32 ticks)
 {
     apic_write_reg(APIC_REG_TMRDIV, 0x3);           // Divide by 1
-    apic_write_reg(APIC_REG_LVT_TMR, APIC_TMR_INT); // Init in one-shot mode
     apic_write_reg(APIC_REG_TMRINITCNT, ticks);
 }
 
@@ -455,6 +454,20 @@ void send_ipi_fixed(u8 vector, u32 dest)
 
 }
 
+void send_init_ipi(u32 dest)
+{
+    u64 dest_shifted = apic_mode == APICMode::X2APIC ? (u64)dest << 32 : (u64)dest << (32 + 24);
+    u64 val = dest_shifted | (0b101 << 8) | (1 << 14);
+    apic_write_icr(val);
+}
+
+void send_sipi(u8 vector, u32 dest)
+{
+    u64 dest_shifted = apic_mode == APICMode::X2APIC ? (u64)dest << 32 : (u64)dest << (32 + 24);
+    u64 val = dest_shifted | (0b110 << 8) | (1 << 14) | vector;
+    apic_write_icr(val);
+}
+
 void send_ipi_fixed_others(u8 vector)
 {
     apic_write_icr(vector | (0x01 << 14) | (0b11 << 18));
@@ -493,12 +506,22 @@ void apic_spurious_int_routine()
 
 void apic_dummy_int_routine() { smart_eoi(APIC_DUMMY_ISR); }
 
-void tpr_write(unsigned val)
+void lapic::tpr_write(unsigned val)
 {
+    assert(val < 16);
 #ifdef __x86_64__
     setCR8(val);
 #else
     apic_write_reg(APIC_REG_TPR, val << 4);
+#endif
+}
+
+unsigned lapic::tpr_read()
+{
+#ifdef __x86_64__
+    return getCR8();
+#else
+    return (apic_read_reg(APIC_REG_TPR) >> 4) & 0xff;
 #endif
 }
 
@@ -543,4 +566,20 @@ void ::kernel::interrupts::interrupt_complete(InterruptHandler *handler)
     assert(intno < 256);
     smart_eoi(intno);
     tpr_write(0);
+}
+
+void lapic::lapic_timer_set_dummy()
+{
+    if (!tsc::use_tsc_deadline())
+        apic_write_reg(APIC_REG_LVT_TMR, APIC_DUMMY_ISR); // Init in one-shot mode
+    else
+        apic_write_reg(APIC_REG_LVT_TMR, APIC_DUMMY_ISR | (1 << 18));
+}
+
+void lapic::lapic_timer_restore_normal()
+{
+    if (!tsc::use_tsc_deadline())
+        apic_write_reg(APIC_REG_LVT_TMR, APIC_TMR_INT); // Init in one-shot mode
+    else
+        apic_write_reg(APIC_REG_LVT_TMR, APIC_TMR_INT | (1 << 18));
 }
