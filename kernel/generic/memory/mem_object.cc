@@ -136,39 +136,6 @@ klib::shared_ptr<Mem_Object> Mem_Object::create_from_phys(u64 phys_addr, u64 siz
 
 Mem_Object::id_type Mem_Object::get_id() const noexcept { return id; }
 
-kresult_t Mem_Object::register_pined(klib::weak_ptr<Page_Table> pined_by)
-{
-    assert(pinned_lock.is_locked() && "lock is not locked!");
-
-    auto t = this->pined_by.insert_noexcept(pined_by);
-    if (t.first == this->pined_by.end())
-        return -ENOMEM;
-
-    if (not t.second)
-        return -EEXIST;
-
-    return 0;
-}
-
-kresult_t Mem_Object::atomic_register_pined(klib::weak_ptr<Page_Table> pined_by)
-{
-    Auto_Lock_Scope l(pinned_lock);
-    return register_pined(klib::move(pined_by));
-}
-
-void Mem_Object::atomic_unregister_pined(const klib::weak_ptr<Page_Table> &pined_by) noexcept
-{
-    Auto_Lock_Scope l(pinned_lock);
-    return unregister_pined(klib::move(pined_by));
-}
-
-void Mem_Object::unregister_pined(const klib::weak_ptr<Page_Table> &pined_by) noexcept
-{
-    assert(pinned_lock.is_locked() && "lock is not locked!");
-
-    this->pined_by.erase(pined_by);
-}
-
 ReturnStr<pmm::Page_Descriptor> Mem_Object::atomic_request_page(u64 offset, bool write,
                                                                 bool cow) noexcept
 {

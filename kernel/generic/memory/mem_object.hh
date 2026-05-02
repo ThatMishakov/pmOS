@@ -172,27 +172,7 @@ public:
     /// and so on. Otherwise, an "optimization" is applied and it is not requested.
     ReturnStr<kernel::pmm::Page_Descriptor> atomic_request_anonymous_page(u64 offset,
                                                                             bool clear);
-
-    /**
-     * @brief Atomically resizes the memory region
-     *
-     * This function resizes the memory region, either adding new pages or deleting some and
-     * notifies the referenced memory regions of the changes. It also deallocates the pages
-     * contained if needed. Userspace is responsible to save the memory contents beforehands if
-     * memory content is needed to be preserved.
-     *
-     * @param new_size_pages New size of the object in pages. 0 is a valid size.
-     */
-    kresult_t atomic_resize(u64 new_size_pages);
-
-    /// Registers a pined by page table
-    kresult_t register_pined(klib::weak_ptr<Page_Table> pined_by);
-    kresult_t atomic_register_pined(klib::weak_ptr<Page_Table> pined_by);
-
-    /// Deletes a pined by page table
-    void unregister_pined(const klib::weak_ptr<Page_Table> &pined_by) noexcept;
-    void atomic_unregister_pined(const klib::weak_ptr<Page_Table> &pined_by) noexcept;
-
+                                                                            
     /// Reads from the memory object into the kernel buffer
     /// Returns true if the operation was successful, false if the operation can't be completed
     /// immediately and needs to be repeated Throws on errors
@@ -274,27 +254,6 @@ protected:
     size_t page_vec_index(u64 ptr) const noexcept { return ptr >> page_size_log; }
 
     u32 max_user_access_perm = 0;
-
-public:
-    /**
-     * @brief Lock for when pinned pages are needed to be modified
-     *
-     */
-    Spinlock pinned_lock;
-
-protected:
-    /**
-     * @brief Page tables pinning the memory region
-     *
-     * This set holds the pointers to the page tables currently pining this region.
-     *
-     * The Page_Table is used to pin the objects instead of TaskDescriptor because the kernel
-     * treats threads as different tasks that share the page table without specific knowledge
-     * about what is actually being executed. Thus, in my vision, Page_Table structure can be
-     * used as a representation of UNIX processes.
-     *
-     */
-    pmos::containers::set<klib::weak_ptr<Page_Table>> pined_by;
 
     /**
      * @brief Pager for the region
