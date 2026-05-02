@@ -41,6 +41,7 @@
 #include <sched/sched.hh>
 #include <types.hh>
 #include <utils.hh>
+#include <ranges>
 
 using namespace kernel;
 using namespace kernel::paging;
@@ -193,7 +194,8 @@ ReturnStr<Phys_Mapped_Region *> Page_Table::atomic_create_phys_region(void *page
                                                                       size_t page_aligned_size,
                                                                       unsigned access, bool fixed,
                                                                       klib::string name,
-                                                                      phys_addr_t phys_addr_start)
+                                                                      phys_addr_t phys_addr_start,
+                                                                      PhysRegionType type)
 {
     Auto_Lock_Scope scope_lock(lock);
 
@@ -208,7 +210,7 @@ ReturnStr<Phys_Mapped_Region *> Page_Table::atomic_create_phys_region(void *page
 
     klib::unique_ptr<Phys_Mapped_Region> region =
         new Phys_Mapped_Region(start_addr.val, page_aligned_size, klib::forward<klib::string>(name),
-                               this, access, phys_addr_start);
+                               this, access, phys_addr_start, type);
 
     if (!region)
         return Error(-ENOMEM);
@@ -352,7 +354,7 @@ kresult_t Page_Table::map(u64 page_addr, void *virt_addr) noexcept
     if (it == paging_regions.end())
         return -EFAULT;
 
-    return map(page_addr, virt_addr, it->craft_arguments());
+    return map(page_addr, virt_addr, it->craft_arguments(virt_addr));
 }
 
 u64 Page_Table::phys_addr_limit()
@@ -665,4 +667,22 @@ bool kernel::paging::region_is_usable_ram(MemoryRegionType type)
     return type == MemoryRegionType::Usable
            || type == MemoryRegionType::UsableReservedOnBoot
            || type == MemoryRegionType::ACPIReclaimable;
+}
+
+Memory_Type kernel::paging::memory_type_for_phys_addr(phys_addr_t phys_addr)
+{
+    auto it = std::ranges::upper_bound(memory_map, phys_addr, {}, &MemoryRegion::start);
+
+    if (it == memory_map.begin())
+        return Memory_Type::IONoCache;
+    --it;
+    if (phys_addr >= it->start + it->size)
+        return Memory_Type::IONoCache;
+
+    if (it->type == MemoryRegionType::Framebuffer)
+        return Memory_Type::Framebuffer;
+    else if (region_is_usable_ram(it->type))
+        return Memory_Type::Normal;
+    else
+        return Memory_Type::IONoCache;
 }

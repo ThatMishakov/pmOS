@@ -291,7 +291,7 @@ public:
     [[nodiscard]] ReturnStr<Phys_Mapped_Region *> /* page_start */
         atomic_create_phys_region(void *page_aligned_start, size_t page_aligned_size,
                                   unsigned access, bool fixed, klib::string name,
-                                  phys_addr_t phys_addr_start);
+                                  phys_addr_t phys_addr_start, PhysRegionType type = PhysRegionType::Deduce);
 
     /// Copies anonymous page at the given address
     [[nodiscard]] virtual kresult_t resolve_anonymous_page(void *virt_addr, unsigned access_type) = 0;
@@ -630,5 +630,7 @@ struct MemoryRegion {
 };
 
 extern klib::vector<MemoryRegion> memory_map;
+
+Memory_Type memory_type_for_phys_addr(phys_addr_t phys_addr);
 
 };

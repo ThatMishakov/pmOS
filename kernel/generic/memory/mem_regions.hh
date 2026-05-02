@@ -49,6 +49,13 @@ namespace proc
 
 namespace paging
 {
+    enum class PhysRegionType {
+        Deduce,
+        Framebuffer,
+        MMIO,
+        Normal,
+    };
+
     class Page_Table;
     struct Page_Info;
 
@@ -191,7 +198,7 @@ namespace paging
         void *addr_end() const noexcept { return (void *)((char *)start_addr + size); }
 
         /// @brief Prepares the appropriate Page_Table_Arguments for the region
-        virtual Page_Table_Arguments craft_arguments() const = 0;
+        virtual Page_Table_Arguments craft_arguments(void *for_ptr) const = 0;
 
         constexpr virtual bool is_managed() const noexcept { return false; }
 
@@ -249,17 +256,18 @@ namespace paging
         virtual kresult_t clone_to(const klib::shared_ptr<Page_Table> &new_table, void *base_addr,
                                    unsigned new_access) override;
 
-        virtual Page_Table_Arguments craft_arguments() const override;
+        virtual Page_Table_Arguments craft_arguments(void *for_ptr) const override;
 
         // Constructs a region with virtual address starting at *aligned_virt* of size *size*
         // pointing to *aligned_phys*
         Phys_Mapped_Region(void *aligned_virt, size_t size, u64 aligned_phys);
 
         Phys_Mapped_Region(void *start_addr, size_t size, klib::string name, Page_Table *owner,
-                           unsigned access, u64 phys_addr_start)
+                           unsigned access, u64 phys_addr_start, PhysRegionType type = PhysRegionType::Deduce)
             : Generic_Mem_Region(start_addr, size, klib::forward<klib::string>(name), owner,
                                  access),
-              phys_addr_start(phys_addr_start)
+              phys_addr_start(phys_addr_start),
+              type(type)
         {
             assert(!((unsigned long)start_addr & (PAGE_SIZE - 1)));
             assert(!(phys_addr_start & (PAGE_SIZE - 1)));
@@ -267,6 +275,11 @@ namespace paging
 
         void trim(void *new_start_addr, size_t new_size_bytes) noexcept override;
         kresult_t punch_hole(void *hole_addr_start, size_t hole_size_bytes) override;
+
+
+        static PhysRegionType type_from_syscall_flags(ulong flags);
+
+        PhysRegionType type = PhysRegionType::Deduce;
     };
 
     class Mem_Object;
@@ -303,7 +316,7 @@ namespace paging
         virtual kresult_t clone_to(const klib::shared_ptr<Page_Table> &new_table, void *base_addr,
                                    unsigned new_access) override;
 
-        virtual Page_Table_Arguments craft_arguments() const override;
+        virtual Page_Table_Arguments craft_arguments(void *for_ptr) const override;
 
         /**
          * Returns the end byte of the memory object that is referenced by the region

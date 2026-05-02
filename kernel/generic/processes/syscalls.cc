@@ -1266,8 +1266,10 @@ void syscall_create_phys_map_region()
         return;
     }
 
+    auto type = Phys_Mapped_Region::type_from_syscall_flags(access);
+
     auto result = dest_task->page_table->atomic_create_phys_region(
-        (void *)addr_start, size, access & 0x07, access & 0x08, klib::string(), phys_addr);
+        (void *)addr_start, size, access & 0x07, access & 0x08, klib::string(), phys_addr, type);
     if (!result.success()) {
         syscall_error(current) = result.result;
     } else {

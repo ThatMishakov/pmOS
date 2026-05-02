@@ -129,7 +129,7 @@ void init_screen()
     size_t end = (start + size + 0xfff)&~0xfffUL;
     size_t size_aligned = end - start;
 
-    mem_request_ret_t map_request = create_phys_map_region(TASK_ID_SELF, 0, size_aligned, PROT_READ|PROT_WRITE, start);
+    mem_request_ret_t map_request = create_phys_map_region(TASK_ID_SELF, 0, size_aligned, PROT_READ|PROT_WRITE | PHYS_REGION_TYPE_FRAMEBUFFER, start);
     if (map_request.result != SUCCESS)
         exit(7);
 

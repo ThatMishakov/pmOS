@@ -38,6 +38,7 @@
 #include <pmos/ipc.h>
 #include <processes/tasks.hh>
 #include <sched/sched.hh>
+#include <pmos/memory.h>
 
 static u64 counter = 1;
 
@@ -93,8 +94,25 @@ ReturnStr<bool> Generic_Mem_Region::prepare_page(unsigned access_mode, void *pag
     return alloc_page(page_addr, mapping, access_mode);
 }
 
-Page_Table_Arguments Phys_Mapped_Region::craft_arguments() const
+Page_Table_Arguments Phys_Mapped_Region::craft_arguments(void *for_ptr) const
 {
+    auto phys_addr = phys_addr_start + (char *)for_ptr - (char *)start_addr;
+    Memory_Type type;
+    switch (this->type) {
+    case PhysRegionType::Framebuffer:
+        type = Memory_Type::Framebuffer;
+        break;
+    case PhysRegionType::MMIO:
+        type = Memory_Type::IONoCache;
+        break;
+    case PhysRegionType::Normal:
+        type = Memory_Type::Normal;
+        break;
+    default:
+        type = memory_type_for_phys_addr(phys_addr);
+        break;
+    }
+
     return {
         !!(access_type & Readable),
         !!(access_type & Writeable),
@@ -103,13 +121,13 @@ Page_Table_Arguments Phys_Mapped_Region::craft_arguments() const
         !(access_type & Executable),
         0b010,
         // TODO: This is temporary, make it a flag
-        Memory_Type::IONoCache,
+        type,
     };
 }
 
 ReturnStr<bool> Phys_Mapped_Region::alloc_page(void *ptr_addr, Page_Info, unsigned)
 {
-    Page_Table_Arguments args = craft_arguments();
+    Page_Table_Arguments args = craft_arguments(ptr_addr);
 
     phys_addr_t page_addr = (u64)ptr_addr & ~07777ULL;
     assert(page_addr >= (u64)start_addr and (u64) page_addr < (u64)start_addr + size);
@@ -238,7 +256,7 @@ kresult_t Mem_Object_Reference::punch_hole(void *hole_addr_start, size_t hole_si
     return 0;
 }
 
-Page_Table_Arguments Mem_Object_Reference::craft_arguments() const
+Page_Table_Arguments Mem_Object_Reference::craft_arguments(void *) const
 {
     return {
         !!(access_type & Readable),
@@ -276,7 +294,7 @@ ReturnStr<bool> Mem_Object_Reference::alloc_page(void *ptr_addr, Page_Table::Pag
             if (!page.success())
                 return page.propagate();
 
-            auto res = owner->map(klib::move(page.val), ptr_addr, craft_arguments());
+            auto res = owner->map(klib::move(page.val), ptr_addr, craft_arguments(ptr_addr));
             if (res)
                 return Error(res);
 
@@ -298,7 +316,7 @@ ReturnStr<bool> Mem_Object_Reference::alloc_page(void *ptr_addr, Page_Table::Pag
 
             // TODO
             auto addr_aligned = (ulong)ptr_addr & ~0xffful;
-            auto args         = craft_arguments();
+            auto args         = craft_arguments(ptr_addr);
             args.writeable &= not page.val.page_struct_ptr->is_anonymous();
 
             auto result = owner->map(klib::move(page.val), (void *)addr_aligned, args);
@@ -319,7 +337,7 @@ ReturnStr<bool> Mem_Object_Reference::alloc_page(void *ptr_addr, Page_Table::Pag
         if (reg_addr >= start_offset_bytes and
             reg_addr + 0x1000 <= start_offset_bytes + object_size_bytes) {
             // Whole page; just map it
-            auto result = owner->map(klib::move(page.val), ptr_addr, craft_arguments());
+            auto result = owner->map(klib::move(page.val), ptr_addr, craft_arguments(ptr_addr));
             if (result)
                 return Error(result);
 
@@ -342,7 +360,7 @@ ReturnStr<bool> Mem_Object_Reference::alloc_page(void *ptr_addr, Page_Table::Pag
         const u64 end_offset_start = 0x1000 - end_offset_size;
         memset((char *)pageptr + end_offset_start, 0, end_offset_size);
 
-        auto result = owner->map(klib::move(page.val), ptr_addr, craft_arguments());
+        auto result = owner->map(klib::move(page.val), ptr_addr, craft_arguments(ptr_addr));
         if (result)
             return Error(result);
 
@@ -359,7 +377,7 @@ ReturnStr<bool> Mem_Object_Reference::alloc_page(void *ptr_addr, Page_Table::Pag
         if (not page.val.page_struct_ptr)
             return false;
 
-        auto result = owner->map(klib::move(page.val), (void *)addr_aligned, craft_arguments());
+        auto result = owner->map(klib::move(page.val), (void *)addr_aligned, craft_arguments(ptr_addr));
         if (result)
             return Error(result);
 
@@ -459,3 +477,17 @@ Generic_Mem_Region::Generic_Mem_Region(void *start_addr, size_t size, klib::stri
       id(__atomic_add_fetch(&counter, 1, 0)), owner(owner), access_type(access) {};
 
 Generic_Mem_Region::Generic_Mem_Region(): id(__atomic_add_fetch(&counter, 1, 0)) {}
+
+PhysRegionType Phys_Mapped_Region::type_from_syscall_flags(ulong flags)
+{
+    switch (flags & PHYS_REGION_TYPE_MASK) {
+    case PHYS_REGION_TYPE_FRAMEBUFFER:
+        return PhysRegionType::Framebuffer;
+    case PHYS_REGION_TYPE_MMIO:
+        return PhysRegionType::MMIO;
+    case PHYS_REGION_TYPE_NORMAL:
+        return PhysRegionType::Normal;
+    default:
+        return PhysRegionType::Deduce;
+    }
+}

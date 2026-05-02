@@ -139,6 +139,12 @@ struct task_register_set {
 mem_request_ret_t create_normal_region(uint64_t pid, void *addr_start, size_t size,
                                        uint32_t access);
 
+#define PHYS_REGION_TYPE_DEDUCE (0b000 << 4)
+#define PHYS_REGION_TYPE_FRAMEBUFFER (0b001 << 4)
+#define PHYS_REGION_TYPE_MMIO (0b010 << 4)
+#define PHYS_REGION_TYPE_NORMAL (0b011 << 4)
+#define PHYS_REGION_TYPE_MASK (0b111 << 4)
+
 /**
  * @brief Create a physically mapped memory region. The functioning is very similar to
  * create_normal_region() with the exception that when accessing it, the physical location indicated
