@@ -77,6 +77,9 @@ struct x86_PAE_Entry {
     static x86_PAE_Entry from_u64(u64 val);
     static x86_PAE_Entry atomic_load(u64 *ptr);
     void atomic_store(u64 *ptr);
+
+    void set_cache_bits(::kernel::paging::Memory_Type type);
+    ::kernel::paging::Memory_Type get_cache_type() const;
 } PACKED ALIGNED(8);
 
 template<int idx>

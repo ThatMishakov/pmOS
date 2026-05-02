@@ -146,7 +146,7 @@ static kresult_t map(u64 physical_addr, void *virtual_addr,
     pte.user_access = arg.user_access;
     pte.writeable   = arg.writeable;
     pte.avl         = arg.extra;
-    // pte.cache_disabled = arg.cache_policy != Memory_Type::Normal;
+    pte.set_cache_bits(arg.cache_policy);
     if (support_nx)
         pte.execution_disabled = arg.execution_disabled;
 
@@ -671,7 +671,7 @@ kresult_t x86_Page_Table::map(u64 physical_addr, void *virtual_addr,
     pte.user_access = arg.user_access;
     pte.writeable   = arg.writeable;
     pte.avl         = arg.extra;
-    // pte->cache_disabled = arg.cache_policy != Memory_Type::Normal;
+    pte.set_cache_bits(arg.cache_policy);
     if (support_nx)
         pte.execution_disabled = arg.execution_disabled;
 
@@ -777,8 +777,9 @@ kresult_t x86_Page_Table::map(pmm::Page_Descriptor page, void *virtual_addr,
     pte.present     = 1;
     pte.user_access = arg.user_access;
     pte.writeable   = arg.writeable;
-    pte.avl         = PAGING_FLAG_STRUCT_PAGE;
-    // pte.cache_disabled = arg.cache_policy != Memory_Type::Normal;
+    // assert(arg.extra & PAGING_FLAG_STRUCT_PAGE);
+    pte.avl         = arg.extra | PAGING_FLAG_STRUCT_PAGE;
+    pte.set_cache_bits(arg.cache_policy);
     u64 page_ppn     = page.takeout_page() >> 12;
     pte.page_ppn    = page_ppn;
 
@@ -893,7 +894,7 @@ void x86_Page_Table::free_pdpt(u64 pdpt_phys)
         auto p = x86_PAE_Entry::atomic_load(mapper.ptr + i);
         if (p.present) {
             if (not p.pat_size) // Not a huge page
-                free_pt(p.page_ppn << 12);
+                free_pd(p.page_ppn << 12);
 
             p.clear_auto();
             p.atomic_store(mapper.ptr + i);
@@ -993,7 +994,7 @@ klib::shared_ptr<x86_Page_Table> x86_Page_Table::create_clone()
             auto region_size  = it->size;
 
             it->prepare_deletion();
-            paging_regions.erase(it);
+            new_table->paging_regions.erase(it);
             it->rcu_free();
 
             invalidate_range(ctx, region_start, region_size, true);
@@ -1117,7 +1118,6 @@ kresult_t x86_Page_Table::copy_to_recursive(const klib::shared_ptr<Page_Table> &
             u64 copy_from = ((i - start_index) << offset) + current_copy_from;
             u64 copy_to   = copy_from - absolute_start + to_addr;
 
-            // Spelling mistake?
             kernel::paging::Page_Table_Arguments arg = {
                 .readable           = true,
                 .writeable          = false,
@@ -1125,7 +1125,7 @@ kresult_t x86_Page_Table::copy_to_recursive(const klib::shared_ptr<Page_Table> &
                 .global             = p.global,
                 .execution_disabled = p.execution_disabled,
                 .extra              = p.avl,
-                .cache_policy = p.cache_disabled ? Memory_Type::IONoCache : Memory_Type::Normal,
+                .cache_policy       = p.get_cache_type(),
             };
 
             if (p.writeable) {
@@ -1241,7 +1241,7 @@ static bool check_level_safe(void *ptr, unsigned level, u64 phys_page_level, ulo
     if (level == 1)
         return true;
 
-    return check_level(ptr, level - 1, pte.page_ppn << 12, err);
+    return check_level_safe(ptr, level - 1, pte.page_ppn << 12, err);
 }
 
 bool page_mapped_safe(void *pagefault_cr2, ulong err)
@@ -1286,4 +1286,35 @@ bool kernel::x86_64::paging::detect_nx()
     auto c     = cpuid(0x80000001);
     support_nx = c.edx & (1 << 20);
     return support_nx;
+}
+
+void x86_PAE_Entry::set_cache_bits(Memory_Type memory_type)
+{
+    switch (memory_type) {
+    case Memory_Type::Normal:
+        write_through = 0;
+        cache_disabled = 0;
+        break;
+    case Memory_Type::MemoryNoCache:
+    case Memory_Type::IONoCache:
+        write_through = 0;
+        cache_disabled = 1;
+        break;
+    case Memory_Type::Framebuffer:
+        write_through = 1;
+        cache_disabled = 0;
+        break;
+    default:
+        assert(!"invalid cache policy");
+    }
+}
+
+Memory_Type x86_PAE_Entry::get_cache_type() const
+{
+    if (!write_through && !cache_disabled)
+        return Memory_Type::Normal;
+    if (write_through && !cache_disabled)
+        return Memory_Type::Framebuffer;
+
+    return Memory_Type::IONoCache;
 }
