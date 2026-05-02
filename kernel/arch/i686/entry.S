@@ -207,13 +207,24 @@ apic_dummy_isr:
     pushl $0
     call save_registers
 
-    subl $4, %esp
+    subl $16, %esp
+    andl $0xfffffff0, %esp
     pushl $0
     pushl $0
     movl %esp, %ebp
 
+    movl %eax, %edi
+
     call apic_dummy_int_routine
 
+    cmpl $0, %edi
+    je 1f
+
+    movl %edi, %esp
+    popal
+    iretl
+
+1:
     return_from_kernel_macro
 
     .type ipi_reschedule_isr, @function

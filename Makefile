@@ -88,7 +88,7 @@ qemu-x86: $(x86_64-HYPER-IMG) ovmf-x86
 		-device intel-iommu -cpu max,x2apic=on,+smep,+smap -no-reboot
 
 qemu-i686: $(i686-IMG) ovmf-x86
-	qemu-system-i386 -serial stdio -m 512M -cpu max,+hypervisor -M q35 -hdd $(i686-IMG) -smp 4 
+	qemu-system-i386 -serial stdio -m 512M -cpu max,+hypervisor -M q35 -hdd $(i686-IMG) -smp 4
 
 qemu-kvm: $(x86_64-HYPER-IMG) ovmf-x86
 	qemu-system-x86_64 -serial stdio -bios ovmf-x86/OVMF.fd -m 512M -cpu max,+hypervisor,+invtsc,+tsc-deadline -M q35 -accel kvm -hdd $(x86_64-HYPER-IMG) -smp 4
