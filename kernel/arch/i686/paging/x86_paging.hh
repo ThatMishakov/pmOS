@@ -20,7 +20,8 @@ constexpr u64 PAGE_NX = 1ULL << 63;
 constexpr u32 _32BIT_ADDR_MASK = ~0xfff;
 constexpr u64 PAE_ADDR_MASK    = 0x7ffffffffffff000ULL;
 
-typedef uint64_t pae_entry_t [[gnu::aligned(8)]];
+// typedef uint64_t pae_entry_t [[gnu::aligned(8)]];
+typedef uint64_t pae_entry_t;
 
 struct PDPTd {
     pae_entry_t entries[4];
@@ -40,6 +41,12 @@ static_assert(sizeof(PDPEPage) == 4096, "PDPEPage size is not 4096");
 
 inline u8 avl_from_page(u32 page) { return (page >> 9) & 0x7; }
 inline u32 avl_to_bits(u32 page) { return (page & 0x7) << 9; }
+
+kernel::paging::Memory_Type memory_type_from_page(u32 page);
+u32 memory_type_to_bits(kernel::paging::Memory_Type type);
+
+void pae_clear(u32 *pt, unsigned idx);
+void pae_store_new(u32 *pt, unsigned idx, u64 value);
 
 class IA32_Page_Table final: public kernel::paging::Page_Table
 {

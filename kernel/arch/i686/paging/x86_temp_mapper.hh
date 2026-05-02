@@ -18,7 +18,7 @@ public:
     x86_PAE_Temp_Mapper(void *virt_addr, u32 cr3);
 
 private:
-    u64 *pt_mapped                 = nullptr;
+    u32 *pt_mapped                 = nullptr;
     unsigned start_index           = 0;
     unsigned min_index             = 1;
     constexpr static unsigned size = 16;

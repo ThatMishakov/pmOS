@@ -50,7 +50,7 @@ x86_2level_Mapper::x86_2level_Mapper(void *virt_addr, u32 cr3)
 
 x86_PAE_Temp_Mapper::x86_PAE_Temp_Mapper(void *virt_addr, u32 cr3)
 {
-    pt_mapped = (u64 *)virt_addr;
+    pt_mapped = (u32 *)virt_addr;
 
     u32 addr    = (u32)virt_addr;
     start_index = addr / 4096 % 512;
@@ -61,14 +61,14 @@ x86_PAE_Temp_Mapper::x86_PAE_Temp_Mapper(void *virt_addr, u32 cr3)
     if (pt_phys == -1ULL)
         panic("Can't initialize temp mapper");
 
-    kernel::paging::Temp_Mapper_Obj<pae_entry_t> tm(kernel::paging::request_temp_mapper());
-    pae_entry_t *pdpt = tm.map(pt_phys);
+    kernel::paging::Temp_Mapper_Obj<u32> tm(kernel::paging::request_temp_mapper());
+    u32 *pdpt = tm.map(pt_phys);
 
     pae_entry_t entry = 0;
     entry |= pt_phys;
     entry |= PAGE_PRESENT;
     entry |= PAGE_WRITE;
-    __atomic_store_n(pdpt + start_index, entry, __ATOMIC_RELEASE);
+    pae_store_new(pdpt, start_index, entry);
 
     min_index = start_index + 1;
 }
@@ -122,7 +122,7 @@ void *x86_PAE_Temp_Mapper::kern_map(u64 phys_frame)
             entry |= phys_frame;
             entry |= PAGE_PRESENT;
             entry |= PAGE_WRITE;
-            __atomic_store_n((pae_entry_t *)pt_mapped + i, entry, __ATOMIC_RELEASE);
+            pae_store_new(pt_mapped, i, entry);
 
             min_index = i + 1;
 
@@ -144,7 +144,7 @@ void x86_PAE_Temp_Mapper::return_map(void *p)
     u32 i          = (u64)p;
     unsigned index = temp_mapper_get_index(i);
 
-    __atomic_store_n((pae_entry_t *)pt_mapped + index, 0, __ATOMIC_RELEASE);
+    pae_clear(pt_mapped, index);
     if (index < min_index)
         min_index = index;
 

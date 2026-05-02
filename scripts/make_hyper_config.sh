@@ -56,14 +56,6 @@ module:
     name = "bootstrapd;bootstrap"
 EOF
 
-if [ "$ARCH" = "i686" ]; then
-    cat <<EOF >> "$FILE"
-
-page-table:
-    levels = 3
-EOF
-fi
-
 for SERVICE in $SERVICES; do
     write_service_entry "$FILE" "$SERVICE"
 done
