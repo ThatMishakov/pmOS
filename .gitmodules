@@ -21,3 +21,6 @@
 	path = limine/limine
 	url = https://codeberg.org/Limine/Limine.git
 	branch = v10.x-binary
+[submodule "jinx"]
+	path = jinx
+	url = https://codeberg.org/Mintsuki/jinx.git

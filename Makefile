@@ -5,40 +5,40 @@ x86_64-HYPER-IMG=build-x86_64/pmos-hyper.img
 riscv64-IMG=build-riscv64/pmos.img
 loongarch64-IMG=build-loongarch64/pmos.img
 
-jinx:
-	wget -O jinx https://codeberg.org/Mintsuki/jinx/raw/commit/e6f44d1bd8c6a504fc3fbfcc16ddb549e2e89a3c/jinx
-	chmod +x jinx
+# jinx:
+# 	wget -O jinx https://codeberg.org/Mintsuki/jinx/raw/commit/e6f44d1bd8c6a504fc3fbfcc16ddb549e2e89a3c/jinx
+# 	chmod +x jinx
 
-build-x86_64/.jinx-parameters: jinx
+build-x86_64/.jinx-parameters:
 	@mkdir -p build-x86_64
-	@cd build-x86_64 && ../jinx init .. ARCH=x86_64
+	@cd build-x86_64 && ../jinx/jinx init .. ARCH=x86_64
 
-build-riscv64/.jinx-parameters: jinx
+build-riscv64/.jinx-parameters:
 	@mkdir -p build-riscv64
-	@cd build-riscv64 && ../jinx init .. ARCH=riscv64
+	@cd build-riscv64 && ../jinx/jinx init .. ARCH=riscv64
 
-build-loongarch64/.jinx-parameters: jinx
+build-loongarch64/.jinx-parameters:
 	@mkdir -p build-loongarch64
-	@cd build-loongarch64 && ../jinx init .. ARCH=loongarch64
+	@cd build-loongarch64 && ../jinx/jinx init .. ARCH=loongarch64
 
-build-i686/.jinx-parameters: jinx
+build-i686/.jinx-parameters:
 	@mkdir -p build-i686
-	@cd build-i686 && ../jinx init .. ARCH=i686
+	@cd build-i686 && ../jinx/jinx init .. ARCH=i686
 
 $(x86_64-IMG): build-x86_64/.jinx-parameters
-	@cd build-x86_64 && ../jinx build limine-disk-image
+	@cd build-x86_64 && ../jinx/jinx build limine-disk-image
 
 $(riscv64-IMG): build-riscv64/.jinx-parameters
-	@cd build-riscv64 && ../jinx build limine-disk-image
+	@cd build-riscv64 && ../jinx/jinx build limine-disk-image
 
 $(loongarch64-IMG): build-loongarch64/.jinx-parameters
-	@cd build-loongarch64 && ../jinx build limine-disk-image
+	@cd build-loongarch64 && ../jinx/jinx build limine-disk-image
 
 $(i686-IMG): build-i686/.jinx-parameters
-	@cd build-i686 && ../jinx build hyper-disk-image
+	@cd build-i686 && ../jinx/jinx build hyper-disk-image
 
 $(x86_64-HYPER-IMG): build-x86_64/.jinx-parameters
-	@cd build-x86_64 && ../jinx build hyper-disk-image
+	@cd build-x86_64 && ../jinx/jinx build hyper-disk-image
 
 emul: $(x86_64-HYPER-IMG)
 	bochs-debugger -q -f .bochsrc
