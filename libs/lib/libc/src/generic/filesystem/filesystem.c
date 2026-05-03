@@ -178,7 +178,7 @@ int open(const char *path, int flags)
 
     const struct Filesystem_Adaptor *file_adaptor = &__file_adaptor;
     union File_Data data;
-    int result_code = __open_file(path, flags, 0, &data, fs_data->fs_consumer_id);
+    int result_code = __open_file(path, flags, 0, &data);
 
     if (result_code < 0) {
         // Handle error: Failed to open the file
@@ -191,8 +191,8 @@ int open(const char *path, int flags)
     if (result_code != SUCCESS) {
         // Handle error: Failed to lock the filesystem data
         release_descriptor(fs_data);
-        file_adaptor->close(&data, fs_data->fs_consumer_id);
-        file_adaptor->free(&data, fs_data->fs_consumer_id);
+        file_adaptor->close(&data);
+        file_adaptor->free(&data);
         // errno = result_code; // Set errno to appropriate error code
         return -1;
     }
@@ -245,10 +245,10 @@ int pipe(int pipefd[2])
     result_code = pthread_spin_lock(&fs_data->lock);
     if (result_code != SUCCESS) {
         release_descriptors(fs_data, 2);
-        file_adaptor->close(&data[0], fs_data->fs_consumer_id);
-        file_adaptor->free(&data[0], fs_data->fs_consumer_id);
-        file_adaptor->close(&data[1], fs_data->fs_consumer_id);
-        file_adaptor->free(&data[1], fs_data->fs_consumer_id);
+        file_adaptor->close(&data[0]);
+        file_adaptor->free(&data[0]);
+        file_adaptor->close(&data[1]);
+        file_adaptor->free(&data[1]);
         return -1;
     }
 
@@ -375,10 +375,10 @@ ssize_t __read_internal(long int fd, void *buf, size_t c, bool should_seek, size
     }
 
     size_t offset    = should_seek ? file_desc.offset : _offset;
-    bool is_seekable = file_desc.adaptor->isseekable(&file_desc.data, fs_data->fs_consumer_id);
+    bool is_seekable = file_desc.adaptor->isseekable(&file_desc.data);
 
     ssize_t count =
-        file_desc.adaptor->read(&file_desc.data, fs_data->fs_consumer_id, buf, c, offset);
+        file_desc.adaptor->read(&file_desc.data, buf, c, offset);
 
     if (count < 0)
         // Error
@@ -436,7 +436,7 @@ static int set_desc_queue(struct Filesystem_Data *fs_data, size_t descriptor_id,
 
     struct File_Descriptor *des = &fs_data->descriptors_vector[descriptor_id];
 
-    int result = __set_desc_queue(&des->data, fs_data->fs_consumer_id, name);
+    int result = __set_desc_queue(&des->data, name);
     if (result != 0)
         return result;
 
@@ -453,8 +453,8 @@ static void free_descriptor(struct File_Descriptor *des)
     assert(des != NULL);
 
     if (des->used) {
-        des->adaptor->close(&des->data, fs_data->fs_consumer_id);
-        des->adaptor->free(&des->data, fs_data->fs_consumer_id);
+        des->adaptor->close(&des->data);
+        des->adaptor->free(&des->data);
 
         des->used = false;
     }
@@ -559,8 +559,7 @@ static void destroy_filesystem(struct Filesystem_Data *fs_data)
     if (fs_data->descriptors_vector != NULL) {
         for (size_t i = 0; i < fs_data->capacity; ++i) {
             if (fs_data->descriptors_vector[i].used) {
-                fs_data->descriptors_vector[i].adaptor->free(&fs_data->descriptors_vector[i],
-                                                             fs_data->fs_consumer_id);
+                fs_data->descriptors_vector[i].adaptor->free(&fs_data->descriptors_vector[i]);
             }
         }
 
@@ -609,9 +608,9 @@ int __close_internal(long int filedes)
 
     pthread_spin_unlock(&fs_data->lock);
 
-    result = copy.adaptor->close(&copy.data, fs_consumer_id);
+    result = copy.adaptor->close(&copy.data);
     // Even if the close() function fails, we still need to free the descriptor
-    copy.adaptor->free(&copy.data, fs_consumer_id);
+    copy.adaptor->free(&copy.data);
 
     return result;
 }
@@ -681,7 +680,7 @@ int dup2(int oldfd, int newfd)
 
     const uint64_t consumer = fs_data->fs_consumer_id;
     result                  = fs_data->descriptors_vector[oldfd].adaptor->clone(
-        &fs_data->descriptors_vector[oldfd].data, consumer, &new_data, consumer);
+        &fs_data->descriptors_vector[oldfd].data, &new_data);
     if (result < 0) {
         free_old_data = false;
         result        = -1;
@@ -697,8 +696,8 @@ int dup2(int oldfd, int newfd)
 finish:
     pthread_spin_unlock(&fs_data->lock);
     if (free_old_data) {
-        old_adaptor->close(&old_data, fs_data->fs_consumer_id);
-        old_adaptor->free(&old_data, fs_data->fs_consumer_id);
+        old_adaptor->close(&old_data);
+        old_adaptor->free(&old_data);
     }
 
     return result;
@@ -751,7 +750,7 @@ int dup(int fd)
 
     pthread_spin_unlock(&fs_data->lock);
 
-    result = adaptor->clone(&old_data, fs_data->fs_consumer_id, &new_data, fs_data->fs_consumer_id);
+    result = adaptor->clone(&old_data, &new_data);
     if (result < 0) {
         release_descriptor(fs_data);
         return -1;
@@ -760,7 +759,7 @@ int dup(int fd)
     result = pthread_spin_lock(&fs_data->lock);
     if (result != SUCCESS) {
         release_descriptor(fs_data);
-        adaptor->free(&new_data, fs_data->fs_consumer_id);
+        adaptor->free(&new_data);
         errno = result;
         return -1;
     }
@@ -811,7 +810,7 @@ int isatty(int fd)
         return 0;
     }
 
-    return file_desc.adaptor->isatty(&file_desc.data, fs_data->fs_consumer_id);
+    return file_desc.adaptor->isatty(&file_desc.data);
 }
 
 int fstat(int fd, struct stat *stat)
@@ -833,7 +832,7 @@ int fstat(int fd, struct stat *stat)
         return -1;
     }
 
-    return file_desc.adaptor->fstat(&file_desc.data, fs_data->fs_consumer_id, stat);
+    return file_desc.adaptor->fstat(&file_desc.data, stat);
 }
 
 off_t __lseek_internal(long int fd, off_t offset, int whence)
@@ -861,7 +860,7 @@ off_t __lseek_internal(long int fd, off_t offset, int whence)
         return -1;
     }
 
-    if (!des->adaptor->isseekable(&des->data, fs_data->fs_consumer_id)) {
+    if (!des->adaptor->isseekable(&des->data)) {
         pthread_spin_unlock(&fs_data->lock);
         errno = ESPIPE;
         return -1;
@@ -979,8 +978,7 @@ int __clone_fs_data(struct Filesystem_Data **new_data, uint64_t for_task, bool e
         new_fd->offset  = fd.offset;
         new_fd->adaptor = fd.adaptor;
 
-        result = fd.adaptor->clone(&fd.data, fs_data->fs_consumer_id, &new_fd->data,
-                                   new_fs_data->fs_consumer_id);
+        result = fd.adaptor->clone(&fd.data, &new_fd->data);
         if (result != SUCCESS) {
             // Handle error
             remove_task_from_group(for_task, new_fs_data->fs_consumer_id);
@@ -1087,13 +1085,13 @@ ssize_t __write_internal(long int fd, const void *buf, size_t c, size_t _offset,
         return -1;
     }
 
-    bool is_seekable = file_desc.adaptor->isseekable(&file_desc.data, fs_data->fs_consumer_id);
+    bool is_seekable = file_desc.adaptor->isseekable(&file_desc.data);
     bool seek        = is_seekable && inc_offset;
     union File_Data data_copy = file_desc.data;
     size_t offset = seek ? file_desc.offset : _offset;
 
     ssize_t count =
-        file_desc.adaptor->write(&file_desc.data, fs_data->fs_consumer_id, buf, c, offset);
+        file_desc.adaptor->write(&file_desc.data, buf, c, offset);
 
     bool changed = memcmp(&data_copy, &file_desc.data, sizeof(union File_Data)) != 0;
 
@@ -1156,12 +1154,12 @@ ssize_t writev(int fd, const struct iovec *iov, int iovcnt)
         return -1;
     }
 
-    bool is_seekable = file_desc.adaptor->isseekable(&file_desc.data, file_desc.offset);
+    bool is_seekable = file_desc.adaptor->isseekable(&file_desc.data);
     bool seek        = is_seekable && true;
     union File_Data data_copy = file_desc.data;
 
     ssize_t count =
-        file_desc.adaptor->writev(&file_desc.data, fs_data->fs_consumer_id, iov, iovcnt, file_desc.offset);
+        file_desc.adaptor->writev(&file_desc.data, iov, iovcnt, file_desc.offset);
 
     bool changed = memcmp(&data_copy, &file_desc.data, sizeof(union File_Data)) != 0;
 

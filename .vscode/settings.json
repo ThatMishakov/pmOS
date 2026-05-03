@@ -211,21 +211,25 @@
     "C_Cpp.inlayHints.referenceOperator.enabled": true,
     "files.exclude": {
         "build*/**": true,
-        "sources/**": true
+        "sources/**": true,
+        ".jinx-cache/**": true
     },
     "search.exclude": {
         "build*/**": true,
-        "sources/**": true
+        "sources/**": true,
+        ".jinx-cache/**": true
     },
     "search.watcherExclude": {
         "build*/**": true,
-        "sources/**": true
+        "sources/**": true,
+        ".jinx-cache/**": true
     },
     "C_Cpp.files.exclude": {
         "build*/**": true,
         "sources/**": true,
         "**/.vscode": true,
-        "**/.vs": true
+        "**/.vs": true,
+        ".jinx-cache/**": true
     },
     "explorer.excludeGitIgnore": true
 }

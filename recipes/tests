@@ -19,4 +19,6 @@ build() {
 package() {
     DESTDIR="${dest_dir}" make install
     cp ${source_dir}/tests.yaml "${dest_dir}/boot/tests.yaml"
+    mkdir -p "${dest_dir}/root"
+    cp ${source_dir}/test_file.txt "${dest_dir}/root/test_file.txt"
 }

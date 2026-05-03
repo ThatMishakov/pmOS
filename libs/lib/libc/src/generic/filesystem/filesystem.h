@@ -35,9 +35,8 @@
 #include <stdint.h>
 
 struct File {
-    task_group_t filesystem_id;
-    uint64_t file_id;
-    pmos_port_t fs_port;
+    pmos_right_t file_op_right;
+    pmos_right_t io_right;
 };
 
 struct IPC_Queue {

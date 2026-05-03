@@ -40,7 +40,7 @@
 #include <string.h>
 #include <sys/stat.h>
 
-ssize_t __ipc_queue_read(void *file_data, uint64_t consumer_id, void *buf, size_t count,
+ssize_t __ipc_queue_read(void *file_data, void *buf, size_t count,
                          size_t offset)
 {
     // TODO: Not implemented
@@ -82,7 +82,7 @@ static ssize_t write_ipc_queue(pmos_right_t right, const void *buf, size_t size)
     return (ssize_t)sent;
 }
 
-ssize_t __ipc_queue_write(void *file_data, uint64_t consumer_id, const void *buf, size_t count,
+ssize_t __ipc_queue_write(void *file_data, const void *buf, size_t count,
                           size_t /* offset */)
 {
     struct IPC_Queue *q = (struct IPC_Queue *)file_data;
@@ -111,7 +111,7 @@ ssize_t __ipc_queue_write(void *file_data, uint64_t consumer_id, const void *buf
     return write_ipc_queue(queue_right, buf, count);
 }
 
-ssize_t __ipc_queue_writev(void *file_data, uint64_t consumer_id, const struct iovec *iov,
+ssize_t __ipc_queue_writev(void *file_data, const struct iovec *iov,
                            int iovcnt, size_t /* offset */)
 {
     struct IPC_Queue *q = (struct IPC_Queue *)file_data;
@@ -154,8 +154,7 @@ ssize_t __ipc_queue_writev(void *file_data, uint64_t consumer_id, const struct i
     return count;
 }
 
-int __ipc_queue_clone(void *file_data, uint64_t /* unused consumer_id */, void *new_data,
-                      uint64_t /* unused new_new_consumer_id */)
+int __ipc_queue_clone(void *file_data, void *new_data)
 {
     struct IPC_Queue *q = (struct IPC_Queue *)file_data;
 
@@ -173,14 +172,14 @@ int __ipc_queue_clone(void *file_data, uint64_t /* unused consumer_id */, void *
     return 0;
 }
 
-int __ipc_queue_close(void *file_data, uint64_t consumer_id)
+int __ipc_queue_close(void *file_data)
 {
     // Nothind to do here; call free just in case
-    __ipc_queue_free(file_data, consumer_id);
+    __ipc_queue_free(file_data);
     return 0;
 }
 
-int __ipc_queue_fstat(void *file_data, uint64_t /* unused consumer_id */, struct stat *statbuf)
+int __ipc_queue_fstat(void *file_data, struct stat *statbuf)
 {
     struct IPC_Queue *q = (struct IPC_Queue *)file_data;
 
@@ -201,13 +200,13 @@ int __ipc_queue_fstat(void *file_data, uint64_t /* unused consumer_id */, struct
     return 0;
 }
 
-int __ipc_queue_isatty(void *file_data, uint64_t /* unused consumer_id */) { return 0; }
+int __ipc_queue_isatty(void *file_data) { return 0; }
 
-int __ipc_queue_isseekable(void *file_data, uint64_t /* unused consumer_id */) { return 0; }
+int __ipc_queue_isseekable(void *file_data) { return 0; }
 
-ssize_t __ipc_queue_filesize(void *file_data, uint64_t /* unused consumer_id */) { return 0; }
+ssize_t __ipc_queue_filesize(void *file_data) { return 0; }
 
-void __ipc_queue_free(void *file_data, uint64_t /* unused consumer_id */)
+void __ipc_queue_free(void *file_data)
 {
     struct IPC_Queue *q = (struct IPC_Queue *)file_data;
 
@@ -219,7 +218,7 @@ void __ipc_queue_free(void *file_data, uint64_t /* unused consumer_id */)
     q->port = INVALID_PORT;
 }
 
-int __set_desc_queue(void *file_data, uint64_t consumer_id, const char *name)
+int __set_desc_queue(void *file_data, const char *name)
 {
     assert(file_data != NULL);
 

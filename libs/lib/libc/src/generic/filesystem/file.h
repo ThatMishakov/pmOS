@@ -53,7 +53,7 @@ extern const struct Filesystem_Adaptor __file_adaptor;
 /// @param descriptor File descriptor to be filled in
 /// @param consumer_id ID of the consumer for which the file is being opened
 /// @return 0 on success, -1 on error setting errno
-int __open_file(const char *path, int flags, mode_t mode, void *file_data, uint64_t consumer_id);
+int __open_file(const char *path, int flags, mode_t mode, void *file_data);
 
 /// @brief Creates an anonymous pipe
 /// @param file_data File descriptors to be filled in

@@ -34,25 +34,24 @@
 #include <sys/types.h>
 #include <sys/uio.h>
 
-typedef ssize_t(read_func)(void *file_data, uint64_t consumer_id, void *buf, size_t count,
+typedef ssize_t(read_func)(void *file_data, void *buf, size_t count,
                            size_t offset);
-typedef ssize_t(write_func)(void *file_data, uint64_t consumer_id, const void *buf, size_t count,
+typedef ssize_t(write_func)(void *file_data, const void *buf, size_t count,
                             size_t offset);
-typedef int(clone_func)(void *file_data, uint64_t consumer_id, void *new_data,
-                        uint64_t new_consumer_id);
-typedef int(close_func)(void *file_data, uint64_t consumer_id);
-typedef int(fstat_func)(void *file_data, uint64_t consumer_id, struct stat *statbuf);
-typedef int(isatty_func)(void *file_data, uint64_t consumer_id);
-typedef int(isseekable_func)(void *file_data, uint64_t consumer_id);
-typedef ssize_t(filesize_func)(void *file_data, uint64_t consumer_id);
+typedef int(clone_func)(void *file_data, void *new_data);
+typedef int(close_func)(void *file_data);
+typedef int(fstat_func)(void *file_data, struct stat *statbuf);
+typedef int(isatty_func)(void *file_data);
+typedef int(isseekable_func)(void *file_data);
+typedef ssize_t(filesize_func)(void *file_data);
 
-typedef ssize_t(writev_func)(void *file_data, uint64_t consumer_id, const struct iovec *iov,
+typedef ssize_t(writev_func)(void *file_data, const struct iovec *iov,
                              int iovcnt, size_t offset);
 
 /// @brief Function to free the file data.
 ///
 /// This function must free all the memory associated with the given file data.
-typedef void(free_func)(void *file_data, uint64_t consumer_id);
+typedef void(free_func)(void *file_data);
 
 /**
  * @brief Adaptors for different types of file descriptors.

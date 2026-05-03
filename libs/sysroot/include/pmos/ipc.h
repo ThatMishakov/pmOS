@@ -332,17 +332,8 @@ typedef struct IPC_Write {
     /// Flags changing the behaviour
     uint32_t flags;
 
-    /// Specific identificator for the file within the process
-    uint64_t file_id;
-
     /// Offset where the data should be written
     uint64_t offset;
-
-    /// Port where the reply would be sent
-    uint64_t reply_port;
-
-    /// ID of the filesystem consumer
-    uint64_t fs_consumer_id;
 
     /// Data to be written
     char data[0];
@@ -356,20 +347,11 @@ typedef struct IPC_Read {
     /// Flags changing the behaviour
     uint32_t flags;
 
-    /// Specific identificator for the file within the process
-    uint64_t file_id;
-
-    /// ID of the filesystem consumer
-    uint64_t fs_consumer_id;
-
     /// Beginning of the file to be read
     uint64_t start_offset;
 
     /// Maximum size to be read
     uint64_t max_size;
-
-    /// Channel where the reply would be sent
-    uint64_t reply_port;
 } IPC_Read;
 
 #define IPC_Read_Reply_NUM 0x50
@@ -482,12 +464,6 @@ typedef struct IPC_Open {
     /// Flags changing the behavior of the open operation
     uint32_t flags;
 
-    /// Port where the reply will be sent
-    pmos_port_t reply_port;
-
-    /// ID of the file system consumer
-    uint64_t fs_consumer_id;
-
     /// Path of the file to be opened (flexible array member)
     char path[];
 } IPC_Open;
@@ -502,15 +478,6 @@ typedef struct IPC_Open_Reply {
 
     /// Flags associated with the file system
     uint16_t fs_flags;
-
-    /// ID of the file system
-    uint64_t filesystem_id;
-
-    /// ID of the file
-    uint64_t file_id;
-
-    /// Port associated with the file system
-    pmos_port_t fs_port;
 } IPC_Open_Reply;
 
 #define IPC_Dup_NUM 0x5d

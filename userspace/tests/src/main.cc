@@ -122,6 +122,7 @@ void test_exception()
 }
 
 extern "C" void test_delete_ipc();
+extern "C" void read_test_file();
 
 int main()
 {
@@ -131,6 +132,7 @@ int main()
     //tick();
     test_containers();
     test_exception();
+    read_test_file();
 
     //test_tlb_shootdown();
     //test_threads();
