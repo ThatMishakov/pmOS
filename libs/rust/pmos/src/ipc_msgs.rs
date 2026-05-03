@@ -230,6 +230,15 @@ pub struct IPCMountFSReply {
     pub result: i32,
 }
 
+impl IPCMountFSReply {
+    pub fn new(result: i32) -> Self {
+        IPCMountFSReply {
+            msg_type: IPC_MOUNT_FS_REPLY_NUM,
+            result,
+        }
+    }
+}
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 struct IPCMountFSHdr {
@@ -440,6 +449,7 @@ pub enum Message<'a> {
     IPCKernelRecieveRightDestroyed(IPCKernelRecieveRightDestroyed),
     IPCKernelRightDestroyed(IPCKernelRightDestroyed),
     IPCNamedRightNotification(IPCNamedRightNotification),
+    IPCMountFS(IPCMountFS),
     IPCMountFSReply(IPCMountFSReply),
     Unknown,
 }
@@ -493,6 +503,23 @@ impl super::ipc::Message {
                             Message::IPCNamedRightNotification(IPCNamedRightNotification {
                                 result: hdr.result,
                                 name: name.to_string(),
+                            })
+                        ).unwrap_or(Message::Unknown)
+                }
+                IPC_MOUNT_FS_NUM => {
+                    if data.len() < size_of::<IPCMountFSHdr>() {
+                        return Message::Unknown;
+                    }
+
+                    let hdr = try_from_bytes::<IPCMountFSHdr>(
+                        data[0..size_of::<IPCMountFSHdr>()].try_into().unwrap()).unwrap();
+                    
+                    std::str::from_utf8(&data[size_of::<IPCMountFSHdr>()..]).ok()
+                        .map(|path|
+                            Message::IPCMountFS(IPCMountFS {
+                                flags: hdr.flags,
+                                root_fd: hdr.root_fd,
+                                path: path.to_string(),
                             })
                         ).unwrap_or(Message::Unknown)
                 }
