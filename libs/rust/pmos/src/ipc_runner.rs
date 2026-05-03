@@ -17,7 +17,8 @@ use super::ipc::{
     RecieveManyRight,
     SendRight,
     Right,
-    IPCPort
+    IPCPort,
+    SendManyRight,
 };
 
 use std::task::{RawWaker, RawWakerVTable, Waker};
@@ -357,6 +358,12 @@ impl Executor {
         if let Some(waker) = waker {
             waker.wake();
         }
+    }
+
+    pub fn create_right_sendmany(&self) -> Result<(SendManyRight, ManyReciever), Error> {
+        let right = self.state.borrow().get_port().create_right_sendmany()?;
+        let reciever = ManyReciever::from_right(right.1, self.clone());
+        Ok((right.0, reciever))
     }
 }
 

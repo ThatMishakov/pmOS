@@ -465,6 +465,7 @@ pub fn send_message_reply_once(
     }
 }
 
+#[derive(Debug)]
 pub enum SendRight {
     Once(SendOnceRight),
     Many(SendManyRight),
@@ -525,7 +526,9 @@ impl Eq for SendRight {}
 pub struct SendManyRight(Right);
 #[derive(Debug)]
 pub struct SendOnceRight(Right);
+#[derive(Debug)]
 pub struct MemoryObjectRight(Right);
+#[derive(Debug)]
 pub struct UnknownRight(Right);
 #[derive(Debug)]
 pub struct RecieveOnceRight(Right, Port);

@@ -47,6 +47,25 @@ pub struct IPCNameRightReply {
     pub result: i32,
 }
 
+pub const IPC_FS_MOUNT_REQUEST_REPLY_NUM: u32 = 0xd8;
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Zeroable, Pod)]
+pub struct IPCFSMountRequestReply {
+    msg_type: u32,
+    pub flags: u16,
+    pub result: i16,
+}
+
+impl IPCFSMountRequestReply {
+    pub fn new() -> IPCFSMountRequestReply {
+        IPCFSMountRequestReply {
+            msg_type: IPC_FS_MOUNT_REQUEST_REPLY_NUM,
+            flags: 0,
+            result: 0,
+        }
+    }
+}
+
 pub const IPC_BUS_PUBLISH_OBJECT_REPLY_NUM: u32 = 0x1b0;
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Zeroable, Pod)]
@@ -81,6 +100,49 @@ pub struct IPCBusRequestObjectReply<'a> {
     pub object_id: u64,
     pub object: Option<(&'a str, &'a ObjectProperties)>,
 }
+
+pub const IPC_GET_NAMED_RIGHT_NUM: u32 = 0x1c1;
+pub struct IPCGetNamedRight<'a> {
+    pub flags: u32,
+    pub name: &'a str,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+struct IPCGetNamedRightHdr {
+    msg_type: u32,
+    flags: u32,
+}
+
+impl Serializable for IPCGetNamedRight<'_> {
+    fn serialize(&self) -> Cow<'_, [u8]> {
+        let hdr = IPCGetNamedRightHdr {
+            msg_type: IPC_GET_NAMED_RIGHT_NUM,
+            flags: self.flags,
+        };
+
+        let mut out = Vec::with_capacity(core::mem::size_of::<IPCGetNamedRightHdr>() + self.name.len());
+        out.extend_from_slice(bytemuck::bytes_of(&hdr));
+        out.extend_from_slice(self.name.as_bytes());
+        Cow::<[u8]>::from(out)
+    }
+}
+
+pub const IPC_NAMED_RIGHT_NOTIFICATION_NUM: u32 = 0x21;
+#[derive(Debug)]
+pub struct IPCNamedRightNotification {
+    pub result: i32,
+    pub name: String,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+struct IPCNamedRightNotificationHdr {
+    msg_type: u32,
+    result: i32,
+}
+
+
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
@@ -150,6 +212,45 @@ pub struct IPCDiskDescribeReply {
     pub sector_count: u64,
     pub logical_sector_size: u32,
     pub physical_sector_size: u32,
+}
+
+pub const IPC_MOUNT_FS_NUM: u32 = 0xC2;
+#[derive(Debug)]
+pub struct IPCMountFS {
+    pub flags: u32,
+    pub root_fd: u64,
+    pub path: String,
+}
+
+pub const IPC_MOUNT_FS_REPLY_NUM: u32 = 0xD2;
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Zeroable, Pod)]
+pub struct IPCMountFSReply {
+    msg_type: u32,
+    pub result: i32,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+struct IPCMountFSHdr {
+    msg_type: u32,
+    flags: u32,
+    root_fd: u64,
+}
+
+impl Serializable for IPCMountFS {
+    fn serialize(&self) -> Cow<'_, [u8]> {
+        let hdr = IPCMountFSHdr {
+            msg_type: IPC_MOUNT_FS_NUM,
+            flags: self.flags,
+            root_fd: self.root_fd,
+        };
+
+        let mut out = Vec::with_capacity(core::mem::size_of::<IPCMountFSHdr>() + self.path.len());
+        out.extend_from_slice(bytemuck::bytes_of(&hdr));
+        out.extend_from_slice(self.path.as_bytes());
+        Cow::from(out)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -338,6 +439,8 @@ pub enum Message<'a> {
     IPCDiskReadReply(IPCDiskReadReply),
     IPCKernelRecieveRightDestroyed(IPCKernelRecieveRightDestroyed),
     IPCKernelRightDestroyed(IPCKernelRightDestroyed),
+    IPCNamedRightNotification(IPCNamedRightNotification),
+    IPCMountFSReply(IPCMountFSReply),
     Unknown,
 }
 
@@ -377,6 +480,24 @@ impl super::ipc::Message {
                     try_from_bytes::<IPCKernelRightDestroyed>(data).map(|data| Message::IPCKernelRightDestroyed(data.clone())).unwrap_or(Message::Unknown),
                 IPC_KERNEL_RECIEVE_RIGHT_DESTROYED_NUM =>
                     try_from_bytes::<IPCKernelRecieveRightDestroyed>(data).map(|data| Message::IPCKernelRecieveRightDestroyed(data.clone())).unwrap_or(Message::Unknown),
+                IPC_NAMED_RIGHT_NOTIFICATION_NUM => {
+                    if data.len() < size_of::<IPCNamedRightNotificationHdr>() {
+                        return Message::Unknown;
+                    }
+
+                    let hdr = try_from_bytes::<IPCNamedRightNotificationHdr>(
+                        data[0..size_of::<IPCNamedRightNotificationHdr>()].try_into().unwrap()).unwrap();
+                    
+                    std::str::from_utf8(&data[size_of::<IPCNamedRightNotificationHdr>()..]).ok()
+                        .map(|name|
+                            Message::IPCNamedRightNotification(IPCNamedRightNotification {
+                                result: hdr.result,
+                                name: name.to_string(),
+                            })
+                        ).unwrap_or(Message::Unknown)
+                }
+                IPC_MOUNT_FS_REPLY_NUM =>
+                    try_from_bytes::<IPCMountFSReply>(data).map(|data| Message::IPCMountFSReply(data.clone())).unwrap_or(Message::Unknown),
                 _ => Message::Unknown,
             }
         } else {

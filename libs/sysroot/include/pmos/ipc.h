@@ -727,25 +727,6 @@ typedef struct IPC_FS_Open {
     uint64_t operation_id;
 } IPC_FS_Open;
 
-#define IPC_Register_FS_NUM 0xC1
-/// Message sent by a filesystem driver to register itself with VFS daemon
-typedef struct IPC_Register_FS {
-    /// Message type (must be IPC_REGISTER_FS_NUM)
-    uint32_t num;
-
-    /// Flags indicating the behavior of the registration
-    uint32_t flags;
-
-    /// Port where the reply will be sent
-    pmos_port_t reply_port;
-
-    /// Port associated with the filesystem
-    pmos_port_t fs_port;
-
-    /// Additional data specific to the filesystem (flexible array member)
-    char name[];
-} IPC_Register_FS;
-
 #define IPC_Mount_FS_NUM 0xC2
 /// Message sent by a user process to VFS daemon to mount a filesystem
 typedef struct IPC_Mount_FS {
@@ -754,12 +735,6 @@ typedef struct IPC_Mount_FS {
 
     /// Flags indicating the behavior of the mount operation
     uint32_t flags;
-
-    /// Port where the reply will be sent
-    pmos_port_t reply_port;
-
-    /// ID of the filesystem to be mounted
-    uint64_t filesystem_id;
 
     /// Root file descriptor
     uint64_t root_fd;
@@ -879,18 +854,6 @@ typedef struct IPC_FS_Open_Reply {
     uint64_t operation_id;
 } IPC_FS_Open_Reply;
 
-#define IPC_Register_FS_Reply_NUM 0xD1
-typedef struct IPC_Register_FS_Reply {
-    /// Message type (must be IPC_REGISTER_FS_REPLY_NUM)
-    uint32_t type;
-
-    /// Result code indicating the outcome of the registration
-    int32_t result_code;
-
-    /// ID of the registered filesystem
-    uint64_t filesystem_id;
-} IPC_Register_FS_Reply;
-
 #define IPC_Mount_FS_Reply_NUM 0xD2
 typedef struct IPC_Mount_FS_Reply {
     /// Message type (must be IPC_MOUNT_FS_REPLY_NUM)
@@ -898,9 +861,6 @@ typedef struct IPC_Mount_FS_Reply {
 
     /// Result code indicating the outcome of the mount operation
     int32_t result_code;
-
-    /// ID of the new mountpoint
-    uint64_t mountpoint_id;
 } IPC_Mount_FS_Reply;
 
 #define IPC_UNMOUNT_FS_REPLY_NUM 0xD3
@@ -984,6 +944,18 @@ typedef struct IPC_FS_Probe_Result {
     /// FS properties (array of IPC_FS_Property structures, the total size can be deduced from the message size and property_length fields)
     uint8_t properties[];
 } IPC_FS_Probe_Result;
+
+#define IPC_FS_Mount_Request_Result_NUM 0xD8
+typedef struct IPC_FS_Mount_Request_Result {
+    /// Message type (must be IPC_FS_Mount_Request_Result_NUM)
+    uint32_t type;
+
+    /// Flags
+    uint16_t flags;
+
+    /// Result code
+    int16_t result_code;
+} IPC_FS_Mount_Request_Result;
 
 #define IPC_Pipe_Open_NUM 0xE0
 typedef struct IPC_Pipe_Open {

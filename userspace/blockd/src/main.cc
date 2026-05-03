@@ -19,6 +19,7 @@
 #include <vector>
 #include <limits.h>
 #include <set>
+#include <algorithm>
 #include <pmos/helpers.hh>
 #include <pmos/pmbus_helper.hh>
 #include <pmos/ipc/bus_object.hh>
@@ -56,17 +57,14 @@ using mem_object_id = uint64_t;
 
 struct Filesystem;
 
-struct PartitionInfo {
-    std::string label;
-    std::vector<uint8_t> id;
-};
+using FSProperties = std::vector<FSProperty>;
 
 struct Partition {
     uint64_t start_lba;
     uint64_t end_lba;
     pmos::Right partition_right;
 
-    std::map<uint64_t, PartitionInfo> infos;
+    std::map<uint64_t, FSProperties> infos;
 
     Partition(uint64_t start_lba, uint64_t end_lba): start_lba(start_lba), end_lba(end_lba), partition_right({}), infos({}) {}
 };
@@ -98,6 +96,86 @@ struct Filesystem {
     std::string name;
 };
 std::map<uint64_t, std::shared_ptr<Filesystem>> filesystems;
+
+struct MountpointRequest {
+    std::string mount_path;
+    std::string label;
+    // TODO I guess
+};
+
+std::vector<MountpointRequest> mountpoint_requests = {
+    {.mount_path = "/", .label = "pmos-root"},
+};
+
+pmos::async::detached_task mount_partition(std::shared_ptr<Filesystem> fs, std::shared_ptr<Partition> partition, const std::string &mount_path)
+{
+    IPC_Start_Service req = {
+        .type = IPC_Start_Service_NUM,
+        .flags = 0,
+    };
+
+    std::vector<std::byte> data;
+    auto span = std::span<const std::byte>(reinterpret_cast<const std::byte *>(&req), sizeof(req));
+    data.insert(data.end(), span.begin(), span.end());
+
+    std::string cmdline = "--mount --disk $RIGHT1 --reply $RIGHT0 --mountpoint " + mount_path;
+    auto cmd_span = std::as_bytes(std::span(cmdline.data(), cmdline.size()));
+    data.insert(data.end(), cmd_span.begin(), cmd_span.end());
+
+    auto partition_right = partition->partition_right.clone_noexcept();
+    if (!partition_right) {
+        printf("Failed to clone the partition right...\n");
+        co_return;
+    }
+    auto reply_right = port.create_right(RightType::SendOnce).value();
+    auto result = pmos::send_message_right(fs->service_right, std::span<const std::byte>(data), {}, false, std::move(reply_right.first), std::move(partition_right.value()));
+    if (!result) {
+        printf("Failed to send the message to start the service...\n");
+        co_return;
+    }
+
+    auto msg = co_await dispatcher.get_message(reply_right.second);
+
+    if (!msg) {
+        printf("Failed to get the reply message...\n");
+        co_return;
+    }
+
+    if (msg->descriptor.size < sizeof(IPC_FS_Mount_Request_Result)) {
+        printf("Invalid reply size for FS mount result\n");
+        co_return;
+    }
+
+    auto *reply = reinterpret_cast<IPC_FS_Mount_Request_Result *>(msg->data.data());
+    if (reply->type != IPC_FS_Mount_Request_Result_NUM) {
+        printf("Invalid reply type for FS mount result (%i)\n", reply->type);
+        co_return;
+    }
+
+    if (reply->result_code == 0) {
+        printf("Successfully mounted filesystem %s at mount point %s\n", fs->name.c_str(), mount_path.c_str());
+    } else {
+        printf("Failed to mount filesystem %s at mount point %s\n", fs->name.c_str(), mount_path.c_str());
+    }
+}
+
+void try_mount_new_fs(std::shared_ptr<Filesystem> fs, std::shared_ptr<Partition> partition)
+{
+    auto properties = partition->infos.at(fs->id);
+
+    for (const auto &req: mountpoint_requests) {
+        if (std::ranges::any_of(properties, [&](const FSProperty &prop) {
+                if (auto *label = std::get_if<FSPropertyLabel>(&prop))
+                    return label->label == req.label;
+                return false;
+            })) {
+            printf("Mounting filesystem %s on partition with label %s at mount point %s\n", fs->name.c_str(), req.label.c_str(), req.mount_path.c_str());
+
+            mount_partition(fs, partition, req.mount_path);
+        }
+    }
+}
+
 
 size_t prepare_unused_disk_index()
 {
@@ -281,6 +359,11 @@ pmos::async::detached_task probe_partition(std::shared_ptr<Filesystem> fs, std::
             }
         }, prop);
     }
+
+    fs->probed_partitions.insert(partition);
+    partition->infos[fs->id] = std::move(properties);
+
+    try_mount_new_fs(fs, partition);
 }
 
 void probe_new_partition(std::shared_ptr<Partition> p)

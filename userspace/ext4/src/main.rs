@@ -3,6 +3,12 @@
 use async_trait::async_trait;
 use pmos::ipc_runner::Executor;
 use pmos::ipc::SendRight;
+use pmos::ipc::SendManyRight;
+use pmos::ipc_runner::ManyReciever;
+use pmos::async_helpers::get_named_right;
+use pmos::ipc_msgs::IPCMountFS;
+
+use futures::StreamExt;
 
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -18,18 +24,19 @@ enum RunType {
     Unknown,
 }
 
-fn parse_args() -> (RunType, pmos::ipc::SendManyRight, Option<pmos::ipc::SendRight>) {
+fn parse_args() -> (RunType, pmos::ipc::SendManyRight, Option<pmos::ipc::SendRight>, Option<String>) {
     let mut args = std::env::args();
     let _ = args.next(); // Skip the program name
 
     let mut run_type = RunType::Unknown;
     let mut disk_right: Option<pmos::ipc::SendManyRight> = None;
     let mut reply_right: Option<pmos::ipc::SendRight> = None;
+    let mut mount_point: Option<String> = None;
 
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--help" | "-h" => {
-            println!("Usage: ext4 [--probe|--mount] --disk <disk_right> --reply <reply_right>");
+            println!("Usage: ext4 [--probe|--mount] --disk <disk_right> --reply <reply_right> [--mountpoint <mount_point>]");
             std::process::exit(0);
             }
             "--probe" => {
@@ -72,6 +79,13 @@ fn parse_args() -> (RunType, pmos::ipc::SendManyRight, Option<pmos::ipc::SendRig
                 let right = pmos::ipc::send_right_from_id(right).expect("Invalid reply right");
                 reply_right = Some(right);
             },
+            "--mountpoint" => {
+                if mount_point.is_some() {
+                    eprintln!("Error: Multiple --mountpoint arguments specified");
+                    std::process::exit(1);
+                }
+                mount_point = Some(args.next().expect("Expected mount point after --mountpoint").parse().expect("Invalid mount point"));
+            }
             _ => {
                 eprintln!("Error: Unknown argument {}", arg);
                 std::process::exit(1);
@@ -86,7 +100,7 @@ fn parse_args() -> (RunType, pmos::ipc::SendManyRight, Option<pmos::ipc::SendRig
 
     let disk_right = disk_right.expect("Error: --disk argument is required");
 
-    (run_type, disk_right, reply_right)
+    (run_type, disk_right, reply_right, mount_point)
 }
 
 struct DiskReader {
@@ -97,6 +111,7 @@ struct DiskReader {
     executor: Executor,
 }
 
+#[derive(Clone)]
 struct ReaderWrapper {
     reader: Rc<RefCell<DiskReader>>,
 }
@@ -255,13 +270,98 @@ async fn ipc_probe(executor: Executor, reader: ReaderWrapper, reply_right: Optio
         }
     };
 
-    if let Some(mut reply_right) = reply_right {
+    if let Some(reply_right) = reply_right {
         executor.send_message(&msg, &mut Some(reply_right), &mut [None, None, None, None]).expect("Failed to send IPCFSProbeResult message");
     }
 }
-    
 
-async fn handle_ipc(executor: Executor, run_type: RunType, disk_right: pmos::ipc::SendManyRight, reply_right: Option<pmos::ipc::SendRight>) {
+async fn ipc_do_mount(executor: Executor, right: SendManyRight, mount_point: String, root_inode: u64) -> Result<(), i32> {
+    println!("ext4: Mounting filesystem...");
+
+    let mut vfsd_right = Some(get_named_right(executor.clone(), "/pmos/vfsd").await.map_err(|e| e.get())?.into());
+
+    let msg = IPCMountFS {
+        flags: 0,
+        root_fd: root_inode,
+        path: mount_point,
+    };
+
+    let mut rights = [Some(right.into()), None, None, None];
+
+    let msg = executor.send_message_reply_once(&msg, &mut vfsd_right, &mut rights).map_err(|(e, _)| e.get())?.await
+        .ok_or(libc::EINTR)?;
+
+    match msg.deserialize() {
+        pmos::ipc_msgs::Message::IPCMountFSReply(msg) => if msg.result == 0 {
+            Ok(())
+        } else {
+            Err(-msg.result)
+        }
+        _ => {
+            eprintln!("ext4: Unexpected message type received in response to IPCMountFS");
+            Err(libc::EINTR)
+        }
+    }
+}
+
+async fn ipc_handle(executor: Executor, mut reciever: ManyReciever, fs: Ext4) {
+    while let Some(msg) = reciever.next().await {
+        println!("ext4: Received IPC message!");
+    }
+
+    std::process::exit(0);
+}
+
+async fn ipc_mount(executor: Executor, reader: ReaderWrapper, mount_point: Option<String>, reply_right: Option<SendRight>) {
+    let right = executor.create_right_sendmany().expect("Failed to create SendManyRight for the filesystem");
+    
+    let fs = Ext4::load(Box::new(reader)).await;
+    if !fs.is_ok() {
+        eprintln!("Error: Failed to load ext4 filesystem");
+        let mut msg = pmos::ipc_msgs::IPCFSMountRequestReply::new();
+        msg.result = -ENOENT as i16;
+
+        if let Some(reply_right) = reply_right {
+            executor.send_message(&msg, &mut Some(reply_right), &mut [None, None, None, None]).expect("Failed to send IPCFSMountRequestReply message");
+        }
+        std::process::exit(1);
+    }
+    let fs = fs.unwrap();
+
+    let root_inode = fs.read_root_inode().await;
+    if root_inode.is_err() {
+        eprintln!("Error: Failed to read root inode of ext4 filesystem");
+        let mut msg = pmos::ipc_msgs::IPCFSMountRequestReply::new();
+        msg.result = -ENOENT as i16;
+
+        if let Some(reply_right) = reply_right {
+            executor.send_message(&msg, &mut Some(reply_right), &mut [None, None, None, None]).expect("Failed to send IPCFSMountRequestReply message");
+        }
+        std::process::exit(1);
+    }
+
+    executor.spawn(ipc_handle(executor.clone(), right.1, fs));
+    
+    let mount = ipc_do_mount(executor.clone(), right.0, mount_point.unwrap_or("/".to_string()), root_inode.unwrap().index.get().into()).await;
+
+    let mut msg = pmos::ipc_msgs::IPCFSMountRequestReply::new();
+    msg.result = if let Err(e) = mount {
+        eprintln!("Error: Failed to mount ext4 filesystem: {}", e);
+        -e as i16
+    } else {
+        0
+    };
+
+    if let Some(reply_right) = reply_right {
+        executor.send_message(&msg, &mut Some(reply_right), &mut [None, None, None, None]).expect("Failed to send IPCFSMountRequestReply message");
+    }
+
+    if mount.is_err() {
+        std::process::exit(1);
+    }
+}    
+
+async fn handle_ipc(executor: Executor, run_type: RunType, disk_right: pmos::ipc::SendManyRight, reply_right: Option<pmos::ipc::SendRight>, mount_point: Option<String>) {
     let reader = ReaderWrapper::new(executor.clone(), disk_right).await;
 
     match run_type {
@@ -269,7 +369,7 @@ async fn handle_ipc(executor: Executor, run_type: RunType, disk_right: pmos::ipc
             ipc_probe(executor, reader, reply_right).await;
         }
         RunType::Mount => {
-            todo!();
+            ipc_mount(executor, reader, mount_point, reply_right).await;
         }
         _ => unreachable!(),
     }
@@ -278,9 +378,9 @@ async fn handle_ipc(executor: Executor, run_type: RunType, disk_right: pmos::ipc
 }
 
 fn main() {
-    let (run_type, disk_right, reply_right) = parse_args();
+    let (run_type, disk_right, reply_right, mount_point) = parse_args();
 
     let executor = Executor::new();
-    executor.spawn(handle_ipc(executor.clone(), run_type, disk_right, reply_right));
+    executor.spawn(handle_ipc(executor.clone(), run_type, disk_right, reply_right, mount_point));
     executor.run();
 }
