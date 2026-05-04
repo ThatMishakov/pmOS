@@ -41,6 +41,10 @@
 #include <unordered_set>
 #include <variant>
 #include <vector>
+#include <pmos/async/coroutines.hh>
+
+pmos::Port main_port = pmos::Port::create().value();
+pmos::PortDispatcher dispatcher(main_port);
 
 pmos::RecieveRight send_reply_throw(pmos::Right &right, auto t)
 {
@@ -50,14 +54,6 @@ pmos::RecieveRight send_reply_throw(pmos::Right &right, auto t)
 
     return std::move(*result);
 }
-
-pmos::Port main_port = []() -> auto {
-    auto port = pmos::Port::create();
-    if (!port)
-        throw std::runtime_error("Failed to create port");
-
-    return std::move(*port);
-}();
 
 const std::string processd_port_name = "/pmos/processd";
 
@@ -649,19 +645,16 @@ void preregister_process(IPC_Preregister_Process *m, uint64_t sender_task, pmos:
     process_requests(task);
 }
 
-int main()
+pmos::async::detached_task get_messages()
 {
-    [[maybe_unused]] pmos::RecieveRight recieve_right;
-    {
-        auto right = main_port.create_right(pmos::RightType::SendMany);
-        auto [r, rr] = std::move(right.value());
-        auto result = pmos::name_right(std::move(r), processd_port_name);
-        result.value();
-        recieve_right = std::move(rr);
-    }
+    auto right = main_port.create_right(pmos::RightType::SendMany);
+    auto [r, rr] = std::move(right.value());
+    auto result = pmos::name_right(std::move(r), processd_port_name);
+    auto recieve_right = std::move(rr);
+
 
     while (1) {
-        auto [msg, message, reply_right, _] = main_port.get_first_message().value();
+        auto [msg, message, reply_right, _] = (co_await dispatcher.get_message_default()).value();
     
         if (msg.size < sizeof(IPC_Generic_Msg)) {
             printf("Warning: recieved very small message\n");
@@ -759,4 +752,11 @@ int main()
             break;
         }
     }
+}
+
+int main()
+{
+    get_messages();
+    dispatcher.dispatch();
+    return 0;
 }

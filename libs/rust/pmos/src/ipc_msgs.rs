@@ -155,6 +155,53 @@ struct IPCBusRequestObjectReplyHdr {
     object_id: u64,
 }
 
+pub const IPC_OPEN_NUM: u32 = 0x58;
+#[derive(Debug)]
+pub struct IPCOpen {
+    pub flags: u32,
+    pub path: String,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+struct IPCOpenHdr {
+    msg_type: u32,
+    flags: u32,
+}
+
+impl Serializable for IPCOpen {
+    fn serialize(&self) -> Cow<'_, [u8]> {
+        let hdr = IPCOpenHdr {
+            msg_type: IPC_OPEN_NUM,
+            flags: self.flags,
+        };
+
+        let mut out = Vec::with_capacity(core::mem::size_of::<IPCOpenHdr>() + self.path.len());
+        out.extend_from_slice(bytemuck::bytes_of(&hdr));
+        out.extend_from_slice(self.path.as_bytes());
+        Cow::<[u8]>::from(out)
+    }
+}
+
+pub const IPC_OPEN_REPLY_NUM: u32 = 0x59;
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+pub struct IPCOpenReply {
+    msg_type: u32,
+    pub flags: u32,
+    pub result: i32,
+}
+
+impl IPCOpenReply {
+    pub fn new(result: i32) -> Self {
+        IPCOpenReply {
+            msg_type: IPC_OPEN_REPLY_NUM,
+            flags: 0,
+            result,
+        }
+    }
+}
+
 pub const IPC_DISK_READ_NUM: u32 = 0xF2;
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
@@ -451,6 +498,8 @@ pub enum Message<'a> {
     IPCNamedRightNotification(IPCNamedRightNotification),
     IPCMountFS(IPCMountFS),
     IPCMountFSReply(IPCMountFSReply),
+    IPCOpen(IPCOpen),
+    IPCOpenReply(IPCOpenReply),
     Unknown,
 }
 
@@ -523,6 +572,24 @@ impl super::ipc::Message {
                             })
                         ).unwrap_or(Message::Unknown)
                 }
+                IPC_OPEN_NUM => {
+                    if data.len() < size_of::<IPCOpenHdr>() {
+                        return Message::Unknown;
+                    }
+
+                    let hdr = try_from_bytes::<IPCOpenHdr>(
+                        data[0..size_of::<IPCOpenHdr>()].try_into().unwrap()).unwrap();
+                    
+                    std::str::from_utf8(&data[size_of::<IPCOpenHdr>()..]).ok()
+                        .map(|path|
+                            Message::IPCOpen(IPCOpen {
+                                flags: hdr.flags,
+                                path: path.to_string(),
+                            })
+                        ).unwrap_or(Message::Unknown)
+                }
+                IPC_OPEN_REPLY_NUM =>
+                    try_from_bytes::<IPCOpenReply>(data).map(|data| Message::IPCOpenReply(data.clone())).unwrap_or(Message::Unknown),
                 IPC_MOUNT_FS_REPLY_NUM =>
                     try_from_bytes::<IPCMountFSReply>(data).map(|data| Message::IPCMountFSReply(data.clone())).unwrap_or(Message::Unknown),
                 _ => Message::Unknown,

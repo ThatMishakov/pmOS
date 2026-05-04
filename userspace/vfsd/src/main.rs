@@ -89,6 +89,10 @@ fn mount_filesystem(vfs: Rc<RefCell<VFS>>, reply_right: Option<SendRight>, right
     mount_filesystem_reply(reply_right, 0);
 }
 
+fn open_file(vfs: Rc<RefCell<VFS>>, reply_right: Option<SendRight>, path: String) {
+    todo!();
+}
+
 async fn handle_ipc(executor: Executor) {
     let mut stream = async_helpers::create_named_stream(executor, "/pmos/vfsd")
         .await
@@ -106,6 +110,9 @@ async fn handle_ipc(executor: Executor) {
         match message.deserialize() {
             pmos::ipc_msgs::Message::IPCMountFS(msg) => {
                 mount_filesystem(vfs.clone(), message.reply_right.take(), message.other_rights[0].take(), msg.path, msg.root_fd);
+            }
+            pmos::ipc_msgs::Message::IPCOpen(msg) => {
+                open_file(vfs.clone(), message.reply_right.take(), msg.path);
             }
             _ => {
                 println!("Received unknown message");
