@@ -648,10 +648,8 @@ void preregister_process(IPC_Preregister_Process *m, uint64_t sender_task, pmos:
 pmos::async::detached_task get_messages()
 {
     auto right = main_port.create_right(pmos::RightType::SendMany);
-    auto [r, rr] = std::move(right.value());
+    auto [r, recieve_right] = std::move(right.value());
     auto result = pmos::name_right(std::move(r), processd_port_name);
-    auto recieve_right = std::move(rr);
-
 
     while (1) {
         auto [msg, message, reply_right, _] = (co_await dispatcher.get_message_default()).value();
@@ -754,9 +752,12 @@ pmos::async::detached_task get_messages()
     }
 }
 
+pmos::async::detached_task vfs_handle_messages();
+
 int main()
 {
     get_messages();
+    vfs_handle_messages();
     dispatcher.dispatch();
     return 0;
 }

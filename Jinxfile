@@ -2,7 +2,7 @@ JINX_MAJOR_VER=0.8
 JINX_DEBIAN_SNAPSHOT=20260326T203750Z
 JINX_BASE_PACKAGES="make cmake build-essential ninja-build python3"
 
-BOOT_SERVICES="ahcid devicesd logd ns16550 pmbus processd ps2d terminald tests blockd vfsd ext4"
+BOOT_SERVICES="ahcid devicesd logd ns16550 pmbus processd ps2d terminald tests blockd ext4"
 # if [ "$JINX_ARCH" = "x86_64" ] || [ "$JINX_ARCH" = "i686" ]; then
 #     BOOT_SERVICES="$BOOT_SERVICES i8042"
 # fi
