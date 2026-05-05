@@ -126,9 +126,7 @@ struct AHCIPort: TimerWaiter {
     std::vector<WaitCommandCompletion *> callbacks;
     int active_cmd_slots = 0;
 
-    pmos::containers::CircularDoubleList<CmdPortWaiter, &CmdPortWaiter::l> cmd_waiters_head = {
-        .head = {(pmos::containers::DoubleListHead<CmdPortWaiter> *)&cmd_waiters_head,
-                 (pmos::containers::DoubleListHead<CmdPortWaiter> *)&cmd_waiters_head}};
+    pmos::containers::CircularDoubleList<CmdPortWaiter, &CmdPortWaiter::l> cmd_waiters_head = {};
 
     State state = State::Unknown;
 
