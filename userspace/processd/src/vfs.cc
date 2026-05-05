@@ -363,9 +363,10 @@ void unblock_vnode_waiters(std::shared_ptr<VNode> vnode, const std::string &name
     auto &waiters = std::get<VNodeAwaitersList>(it->second);
     auto waiter_it = waiters.begin();
     while (waiter_it != waiters.end()) {
+        waiters.remove(waiter_it);
         waiter_it->result_ = result;
         waiter_it->h_.resume();
-        waiter_it = waiters.erase(waiter_it);
+        waiter_it = waiters.begin();
     }
 
     if (result)
@@ -455,14 +456,14 @@ pmos::async::task<std::expected<std::shared_ptr<VNode>, int>> VNode::resolve_chi
         co_return co_await VNodeAwaiter(shared_from_this(), name);
     }
 
-    std::unique_ptr<u8[]> buffer = std::make_unique<u8[]>(sizeof(IPC_FS_Resolve_Path) + name.size());
-    auto req = reinterpret_cast<IPC_FS_Resolve_Path *>(buffer.get());
+    std::vector<uint8_t> buffer(sizeof(IPC_FS_Resolve_Path) + name.size());
+    auto req = reinterpret_cast<IPC_FS_Resolve_Path *>(buffer.data());
     req->type = IPC_FS_Resolve_Path_NUM;
     req->flags = 0;
     req->inode = inode;
     memcpy(req->path_name, name.data(), name.size());
 
-    auto span = std::span<const uint8_t>(buffer.get(), sizeof(IPC_FS_Resolve_Path) + name.size());
+    auto span = std::span<const uint8_t>(buffer.data(), sizeof(IPC_FS_Resolve_Path) + name.size());
 
     auto send_result = pmos::send_message_right_one(parent_fs->fs_right, span, {&main_port, pmos::RightType::SendOnce}, false);
     if (!send_result) {

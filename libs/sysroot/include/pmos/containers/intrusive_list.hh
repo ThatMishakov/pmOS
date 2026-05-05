@@ -54,6 +54,15 @@ public:
 
     const T &front() const noexcept;
     const T &back() const noexcept;
+
+    CircularDoubleList() = default;
+    CircularDoubleList(const CircularDoubleList &) = delete;
+    CircularDoubleList &operator=(const CircularDoubleList &) = delete;
+
+    CircularDoubleList(CircularDoubleList &&) noexcept;
+    CircularDoubleList &operator=(CircularDoubleList &&) noexcept;
+
+    void swap(CircularDoubleList &other) noexcept;
 };
 
 template<typename T, DoubleListHead<T> T:: *Head>
@@ -188,4 +197,55 @@ template<typename T, DoubleListHead<T> T:: *Head> T &CircularDoubleList<T, Head>
     return *begin();
 }
 
+template<typename T, DoubleListHead<T> T:: *Head>
+CircularDoubleList<T, Head>::CircularDoubleList(CircularDoubleList &&other) noexcept
+{
+    swap(other);
+}
+
+template<typename T, DoubleListHead<T> T:: *Head>
+CircularDoubleList<T, Head> &CircularDoubleList<T, Head>::operator=(CircularDoubleList &&other) noexcept
+{
+    swap(other);
+    return *this;
+}
+
+template<typename T, DoubleListHead<T> T:: *Head>
+void CircularDoubleList<T, Head>::swap(CircularDoubleList &other) noexcept
+{
+    if (this == &other)
+        return;
+
+    auto tmp = head;
+    head = other.head;
+    other.head = tmp;
+
+    if (head.next == &other.head) {
+        head.next = &head;
+        head.prev = &head;
+    } else {
+        head.next->prev = &head;
+        head.prev->next = &head;
+    }
+
+    if (other.head.next == &head) {
+        other.head.next = &other.head;
+        other.head.prev = &other.head;
+    } else {
+        other.head.next->prev = &other.head;
+        other.head.prev->next = &other.head;
+    }
+}
+
 } // namespace pmos::containers
+
+namespace std
+{
+
+template<typename T, pmos::containers::DoubleListHead<T> T:: *Head>
+void swap(pmos::containers::CircularDoubleList<T, Head> &a, pmos::containers::CircularDoubleList<T, Head> &b) noexcept
+{
+    a.swap(b);  
+}
+
+}

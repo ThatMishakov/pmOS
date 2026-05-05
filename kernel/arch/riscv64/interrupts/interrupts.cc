@@ -183,7 +183,7 @@ void page_fault(u64 addr, u64 scause)
     }
 }
 
-void misaligned_access(u64 addr, u64)
+void misaligned_access(u64 addr, u64 )
 {
     auto task = get_cpu_struct()->current_task;
 
