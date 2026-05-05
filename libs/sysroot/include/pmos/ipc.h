@@ -728,17 +728,8 @@ typedef struct IPC_FS_Resolve_Path {
     /// Flags changing the behaviour
     uint32_t flags;
 
-    /// Port where the reply will be sent
-    pmos_port_t reply_port;
-
-    /// ID of the filesystem
-    uint64_t filesystem_id;
-
-    /// ID of the parent directory
-    uint64_t parent_dir_id;
-
-    /// Operation ID
-    uint64_t operation_id;
+    /// ID of the file in the filesystem
+    uint64_t inode;
 
     /// Name of the file node
     char path_name[];
@@ -827,19 +818,24 @@ typedef struct IPC_FS_Resolve_Path_Reply {
     uint32_t type;
 
     /// Flags
-    uint16_t flags;
+    uint32_t flags;
 
     /// Result code indicating the outcome of the operation
-    int16_t result_code;
+    int32_t result_code;
 
-    /// Operation ID
-    uint64_t operation_id;
+    /// File type
+    uint32_t file_type;
+
+    #define IPC_FILE_TYPE_BLOCK 006
+    #define IPC_FILE_TYPE_CHAR 002
+    #define IPC_FILE_TYPE_FIFO 001
+    #define IPC_FILE_TYPE_REGULAR 010
+    #define IPC_FILE_TYPE_DIRECTORY 004
+    #define IPC_FILE_TYPE_LINK 012
+    #define IPC_FILE_TYPE_SOCKET 014
 
     /// ID of the file node
     uint64_t file_id;
-
-    /// File type
-    uint16_t file_type;
 } IPC_FS_Resolve_Path_Reply;
 
 #define IPC_FS_Dup_Reply_NUM 0xD5

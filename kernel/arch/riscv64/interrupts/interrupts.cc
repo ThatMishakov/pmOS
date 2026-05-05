@@ -71,7 +71,7 @@ void print_stack_trace_fp(u64 fp = get_fp())
     fp_s *current = (fp_s *)((char *)fp - 16);
     serial_logger.printf("Stack trace:\n");
     for (int i = 0; i < 20; i++) {
-        serial_logger.printf("  0x%x fp 0x%x\n", current->ra, current->fp);
+        serial_logger.printf("  0x%lx fp 0x%lx\n", current->ra, current->fp);
         if (current->fp == 0 or ((i64)current->fp > 0)) {
             break;
         }
@@ -87,38 +87,38 @@ void print_stack_trace(Logger &logger) { print_stack_trace_fp(); }
 void print_registers(TaskDescriptor *task, Logger &logger)
 {
     logger.printf("Task %i registers:\n", task->task_id);
-    logger.printf("  ra 0x%x\n", task->regs.ra);
-    logger.printf("  sp 0x%x\n", task->regs.sp);
-    logger.printf("  gp 0x%x\n", task->regs.gp);
-    logger.printf("  tp 0x%x\n", task->regs.tp);
-    logger.printf("  t0 0x%x\n", task->regs.t0);
-    logger.printf("  t1 0x%x\n", task->regs.t1);
-    logger.printf("  t2 0x%x\n", task->regs.t2);
-    logger.printf("  s0 0x%x\n", task->regs.s0);
-    logger.printf("  s1 0x%x\n", task->regs.s1);
-    logger.printf("  a0 0x%x\n", task->regs.a0);
-    logger.printf("  a1 0x%x\n", task->regs.a1);
-    logger.printf("  a2 0x%x\n", task->regs.a2);
-    logger.printf("  a3 0x%x\n", task->regs.a3);
-    logger.printf("  a4 0x%x\n", task->regs.a4);
-    logger.printf("  a5 0x%x\n", task->regs.a5);
-    logger.printf("  a6 0x%x\n", task->regs.a6);
-    logger.printf("  a7 0x%x\n", task->regs.a7);
-    logger.printf("  s2 0x%x\n", task->regs.s2);
-    logger.printf("  s3 0x%x\n", task->regs.s3);
-    logger.printf("  s4 0x%x\n", task->regs.s4);
-    logger.printf("  s5 0x%x\n", task->regs.s5);
-    logger.printf("  s6 0x%x\n", task->regs.s6);
-    logger.printf("  s7 0x%x\n", task->regs.s7);
-    logger.printf("  s8 0x%x\n", task->regs.s8);
-    logger.printf("  s9 0x%x\n", task->regs.s9);
-    logger.printf("  s10 0x%x\n", task->regs.s10);
-    logger.printf("  s11 0x%x\n", task->regs.s11);
-    logger.printf("  t3 0x%x\n", task->regs.t3);
-    logger.printf("  t4 0x%x\n", task->regs.t4);
-    logger.printf("  t5 0x%x\n", task->regs.t5);
-    logger.printf("  t6 0x%x\n", task->regs.t6);
-    logger.printf("  pc 0x%x\n", task->regs.pc);
+    logger.printf("  ra 0x%lx\n", task->regs.ra);
+    logger.printf("  sp 0x%lx\n", task->regs.sp);
+    logger.printf("  gp 0x%lx\n", task->regs.gp);
+    logger.printf("  tp 0x%lx\n", task->regs.tp);
+    logger.printf("  t0 0x%lx\n", task->regs.t0);
+    logger.printf("  t1 0x%lx\n", task->regs.t1);
+    logger.printf("  t2 0x%lx\n", task->regs.t2);
+    logger.printf("  s0 0x%lx\n", task->regs.s0);
+    logger.printf("  s1 0x%lx\n", task->regs.s1);
+    logger.printf("  a0 0x%lx\n", task->regs.a0);
+    logger.printf("  a1 0x%lx\n", task->regs.a1);
+    logger.printf("  a2 0x%lx\n", task->regs.a2);
+    logger.printf("  a3 0x%lx\n", task->regs.a3);
+    logger.printf("  a4 0x%lx\n", task->regs.a4);
+    logger.printf("  a5 0x%lx\n", task->regs.a5);
+    logger.printf("  a6 0x%lx\n", task->regs.a6);
+    logger.printf("  a7 0x%lx\n", task->regs.a7);
+    logger.printf("  s2 0x%lx\n", task->regs.s2);
+    logger.printf("  s3 0x%lx\n", task->regs.s3);
+    logger.printf("  s4 0x%lx\n", task->regs.s4);
+    logger.printf("  s5 0x%lx\n", task->regs.s5);
+    logger.printf("  s6 0x%lx\n", task->regs.s6);
+    logger.printf("  s7 0x%lx\n", task->regs.s7);
+    logger.printf("  s8 0x%lx\n", task->regs.s8);
+    logger.printf("  s9 0x%lx\n", task->regs.s9);
+    logger.printf("  s10 0x%lx\n", task->regs.s10);
+    logger.printf("  s11 0x%lx\n", task->regs.s11);
+    logger.printf("  t3 0x%lx\n", task->regs.t3);
+    logger.printf("  t4 0x%lx\n", task->regs.t4);
+    logger.printf("  t5 0x%lx\n", task->regs.t5);
+    logger.printf("  t6 0x%lx\n", task->regs.t6);
+    logger.printf("  pc 0x%lx\n", task->regs.pc);
 }
 
 void page_fault(u64 addr, u64 scause)
@@ -181,6 +181,15 @@ void page_fault(u64 addr, u64 scause)
         print_registers(task, serial_logger);
         task->atomic_kill();
     }
+}
+
+void misaligned_access(u64 addr, u64)
+{
+    auto task = get_cpu_struct()->current_task;
+
+    serial_logger.printf("Misaligned access at %h, task %i (%s)\n", addr, task->task_id, task->name.c_str());
+    print_registers(get_cpu_struct()->current_task, serial_logger);
+    task->atomic_kill();
 }
 
 bool instruction_is_csr(u32 instruction)
@@ -395,9 +404,7 @@ void handle_interrupt()
 
         default:
             serial_logger.printf("Unknown interrupt: 0x%x\n", scause);
-            while (1)
-                ;
-            break;
+            panic("Unknown interrupt: 0x%x", scause);
         }
     } else {
         switch (scause) {
@@ -419,10 +426,14 @@ void handle_interrupt()
         case INSTRUCTION_ACCESS_FAULT:
             page_fault(stval, scause);
             break;
+        case STORE_AMO_ADDR_MISALIGNED:
+        case LOAD_ADDR_MISALIGNED:
+        case INSTRUCTION_ADDR_MISALIGNED:
+            misaligned_access(stval, scause);
+            break;
         default:
             serial_logger.printf("Unknown exception: 0x%x\n", scause);
-            while (1)
-                ;
+            panic("Unknown exception: 0x%x", scause);
         }
     }
 

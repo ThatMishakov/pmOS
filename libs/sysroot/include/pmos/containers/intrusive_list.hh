@@ -40,6 +40,10 @@ public:
     void push_back(T *p) noexcept;
     static void remove(T *p) noexcept;
     static void remove(iterator it) noexcept;
+
+    static iterator erase(iterator it) noexcept;
+    static iterator erase(T *p) noexcept;
+
     bool empty() const noexcept;
 
     iterator begin() noexcept;
@@ -81,6 +85,23 @@ template<typename T, DoubleListHead<T> T:: *Head>
 void CircularDoubleList<T, Head>::remove(iterator it) noexcept
 {
     remove(&*it);
+}
+
+template<typename T, DoubleListHead<T> T:: *Head>
+typename CircularDoubleList<T, Head>::iterator CircularDoubleList<T, Head>::erase(T *p) noexcept
+{
+    auto next = (p->*Head).next;
+    remove(p);
+    return iterator(next);
+}
+
+template<typename T, DoubleListHead<T> T:: *Head>
+typename CircularDoubleList<T, Head>::iterator CircularDoubleList<T, Head>::erase(iterator it) noexcept
+{
+    auto next = it;
+    ++next;
+    remove(it);
+    return next;
 }
 
 template<typename T, DoubleListHead<T> T:: *Head>
