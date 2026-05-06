@@ -269,6 +269,38 @@ pub struct IPCMountFS {
     pub path: String,
 }
 
+pub const IPC_FS_RESOLVE_PATH_NUM: u32 = 0xC4;
+#[derive(Debug)]
+pub struct IPCFSResolvePath {
+    pub flags: u32,
+    pub inode: u64,
+    pub path_component: String,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+struct IPCFSResolvePathHdr {
+    msg_type: u32,
+    flags: u32,
+    inode: u64,
+}
+
+impl Serializable for IPCFSResolvePath {
+    fn serialize(&self) -> Cow<'_, [u8]> {
+        let hdr = IPCFSResolvePathHdr {
+            msg_type: IPC_FS_RESOLVE_PATH_NUM,
+            flags: self.flags,
+            inode: self.inode,
+        };
+
+        let mut out = Vec::with_capacity(core::mem::size_of::<IPCFSResolvePathHdr>() + self.path_component.len());
+        out.extend_from_slice(bytemuck::bytes_of(&hdr));
+        out.extend_from_slice(self.path_component.as_bytes());
+        Cow::from(out)
+    }
+}
+
+
 pub const IPC_MOUNT_FS_REPLY_NUM: u32 = 0xD2;
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Zeroable, Pod)]
@@ -306,6 +338,29 @@ impl Serializable for IPCMountFS {
         out.extend_from_slice(bytemuck::bytes_of(&hdr));
         out.extend_from_slice(self.path.as_bytes());
         Cow::from(out)
+    }
+}
+
+pub const IPC_FS_RESOLVE_PATH_REPLY: u32 = 0xD4;
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Zeroable, Pod)]
+pub struct IPCFSResolvePathReply {
+    msg_type: u32,
+    pub flags: u32,
+    pub result: i32,
+    pub file_type: u32,
+    pub inode: u64,
+}
+
+impl IPCFSResolvePathReply {
+    pub fn new(result: i32, file_type: u32, inode: u64) -> Self {
+        IPCFSResolvePathReply {
+            msg_type: IPC_FS_RESOLVE_PATH_REPLY,
+            flags: 0,
+            result,
+            file_type,
+            inode,
+        }
     }
 }
 
@@ -500,6 +555,7 @@ pub enum Message<'a> {
     IPCMountFSReply(IPCMountFSReply),
     IPCOpen(IPCOpen),
     IPCOpenReply(IPCOpenReply),
+    IPCFSResolvePath(IPCFSResolvePath),
     Unknown,
 }
 
@@ -569,6 +625,23 @@ impl super::ipc::Message {
                                 flags: hdr.flags,
                                 root_fd: hdr.root_fd,
                                 path: path.to_string(),
+                            })
+                        ).unwrap_or(Message::Unknown)
+                }
+                IPC_FS_RESOLVE_PATH_NUM => {
+                    if data.len() < size_of::<IPCFSResolvePathHdr>() {
+                        return Message::Unknown;
+                    }
+
+                    let hdr = try_from_bytes::<IPCFSResolvePathHdr>(
+                        data[0..size_of::<IPCFSResolvePathHdr>()].try_into().unwrap()).unwrap();
+                    
+                    std::str::from_utf8(&data[size_of::<IPCFSResolvePathHdr>()..]).ok()
+                        .map(|path|
+                            Message::IPCFSResolvePath(IPCFSResolvePath {
+                                flags: hdr.flags,
+                                inode: hdr.inode,
+                                path_component: path.to_string(),
                             })
                         ).unwrap_or(Message::Unknown)
                 }

@@ -63,7 +63,7 @@ void RootNodeWaiter::await_suspend(std::coroutine_handle<> h) noexcept
     root_waiters.push_back(this);
 }
 
-pmos::async::detached_task mount_filesystem(pmos::Right reply_right, pmos::Right fs_right, const std::string &mountpoint, int64_t root_inode)
+pmos::async::detached_task mount_filesystem(pmos::Right reply_right, pmos::Right fs_right, const std::string &mountpoint, uint64_t root_inode)
 {
     if (mountpoint != "/") {
         mount_filesystem_reply(reply_right, -ENOSYS);
@@ -456,16 +456,16 @@ pmos::async::task<std::expected<std::shared_ptr<VNode>, int>> VNode::resolve_chi
         co_return co_await VNodeAwaiter(shared_from_this(), name);
     }
 
-    std::vector<uint8_t> buffer(sizeof(IPC_FS_Resolve_Path) + name.size());
-    auto req = reinterpret_cast<IPC_FS_Resolve_Path *>(buffer.data());
+    std::unique_ptr<uint8_t[]> buffer = std::make_unique<uint8_t[]>(sizeof(IPC_FS_Resolve_Path) + name.size());
+    auto req = reinterpret_cast<IPC_FS_Resolve_Path *>(buffer.get());
     req->type = IPC_FS_Resolve_Path_NUM;
     req->flags = 0;
     req->inode = inode;
     memcpy(req->path_name, name.data(), name.size());
 
-    auto span = std::span<const uint8_t>(buffer.data(), sizeof(IPC_FS_Resolve_Path) + name.size());
+    auto span = std::span<const uint8_t>(buffer.get(), sizeof(IPC_FS_Resolve_Path) + name.size());
 
-    auto send_result = pmos::send_message_right_one(parent_fs->fs_right, span, {&main_port, pmos::RightType::SendOnce}, false);
+    auto send_result = pmos::send_message_right(parent_fs->fs_right, span, {&main_port, pmos::RightType::SendOnce}, false);
     if (!send_result) {
         printf("vfsd: Error %d sending resolve child message to filesystem\n", send_result.error());
         co_return std::unexpected(send_result.error());

@@ -7,8 +7,11 @@ use pmos::ipc::SendManyRight;
 use pmos::ipc_runner::ManyReciever;
 use pmos::async_helpers::get_named_right;
 use pmos::ipc_msgs::IPCMountFS;
+use pmos::ipc::send_message_right;
 
 use futures::StreamExt;
+
+use std::num::NonZeroU32;
 
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -16,6 +19,11 @@ use std::cell::RefCell;
 use ext4plus::Ext4;
 
 use libc::ENOENT;
+
+use ext4plus::prelude::Ext4Error;
+use ext4plus::prelude::Dir;
+use ext4plus::prelude::Inode;
+use ext4plus::FileType;
 
 #[derive(PartialEq)]
 enum RunType {
@@ -304,9 +312,78 @@ async fn ipc_do_mount(executor: Executor, right: SendManyRight, mount_point: Str
     }
 }
 
+fn ext4error_to_int(error: Ext4Error) -> i32 {
+    todo!()
+}
+
+fn ext4direntry_error_to_int(error: ext4plus::prelude::DirEntryNameError) -> i32 {
+    todo!()
+}
+
+fn ext4filetype_to_int(file_type: FileType) -> u32 {
+    todo!()
+}
+
+fn ipc_resolve_path_reply(mut reply_right: Option<SendRight>, result: i32, inode: u64, file_type: u32) {
+    let msg = pmos::ipc_msgs::IPCFSResolvePathReply::new(result, file_type, inode);
+    let result = send_message_right(&msg, &mut reply_right, &mut [None, None, None, None]);
+    if let Err(e) = result {
+        eprintln!("ext4: Failed to send IPCFSResolvePathReply message: {}", e.0);
+    }
+}
+
+async fn ipc_handle_resolve_path(executor: Executor, reply_right: Option<SendRight>, fs: Ext4, path_component: String, inode: u64) {
+    let current_inode = u32::try_from(inode).ok().and_then(NonZeroU32::new);
+    if current_inode.is_none() {
+        ipc_resolve_path_reply(reply_right, -ENOENT as i32, 0, 0);
+        return;
+    }
+    let current_inode = current_inode.unwrap();
+
+    let entry_name = path_component.as_str().try_into();
+    if let Err(e) = entry_name {
+        ipc_resolve_path_reply(reply_right, ext4direntry_error_to_int(e), 0, 0);
+        return;
+    }
+    let entry_name = entry_name.unwrap();
+
+    let inode = Inode::read(&fs, current_inode).await;
+    if let Err(e) = inode {
+        ipc_resolve_path_reply(reply_right, ext4error_to_int(e), 0, 0);
+        return;
+    }
+    let inode = inode.unwrap();
+
+    let dir = Dir::open_inode(&fs, inode);
+    if let Err(e) = dir {
+        ipc_resolve_path_reply(reply_right, ext4error_to_int(e), 0, 0);
+        return;
+    }
+    let dir = dir.unwrap();
+
+    let entry = dir.get_entry(entry_name).await;
+    if let Err(e) = entry {
+        ipc_resolve_path_reply(reply_right, ext4error_to_int(e), 0, 0);
+        return;
+    }
+    let entry = entry.unwrap();
+
+    let file_type = entry.file_type();
+    let inode = entry.index.get().into();
+    ipc_resolve_path_reply(reply_right, 0, inode, ext4filetype_to_int(file_type));
+}
+
 async fn ipc_handle(executor: Executor, mut reciever: ManyReciever, fs: Ext4) {
-    while let Some(msg) = reciever.next().await {
-        println!("ext4: Received IPC message!");
+    while let Some(mut msg) = reciever.next().await {
+        let reply_right = msg.reply_right.take();
+        match msg.deserialize() {
+            pmos::ipc_msgs::Message::IPCFSResolvePath(req) => {
+                executor.spawn(ipc_handle_resolve_path(executor.clone(), reply_right, fs.clone(), req.path_component, req.inode));
+            }
+            _ => {
+                eprintln!("ext4: Received unexpected message type {}", msg.get_known_id().unwrap_or(0));
+            }
+        }
     }
 
     std::process::exit(0);

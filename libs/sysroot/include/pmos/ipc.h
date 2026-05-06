@@ -682,7 +682,7 @@ typedef struct IPC_FS_Open {
     uint32_t flags;
 
     /// ID of the file
-    int64_t inode;
+    uint64_t inode;
 } IPC_FS_Open;
 
 #define IPC_Mount_FS_NUM 0xC2

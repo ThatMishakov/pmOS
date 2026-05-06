@@ -47,7 +47,7 @@ using VNodeAwaitersList = pmos::containers::CircularDoubleList<VNodeAwaiter, &VN
 struct VNode: public std::enable_shared_from_this<VNode> {
     std::shared_ptr<Filesystem> parent_fs;
     std::weak_ptr<VNode> parent;
-    int64_t inode = 0;
+    uint64_t inode = 0;
     std::string name;
 
     FileType type = FileType::None;
