@@ -9,3 +9,9 @@ libc = { git = "https://gitlab.com/mishakov/libc-pmos.git", branch = "pmos-0.2.1
 futures = "0.3.32"
 async-trait = "0.1.89"
 ext4plus = { version = "0.1.0-beta.3", default-features = false }
+
+[profile.release]
+panic = 'abort'
+
+[profile.dev]
+panic = 'abort'

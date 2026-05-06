@@ -179,12 +179,20 @@ impl ext4plus::Ext4Read for ReaderWrapper {
 
         if let pmos::ipc_msgs::Message::IPCDiskReadReply(reply) = msg {
             if reply.result != 0 {
-                return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("Disk read failed with error code {}", -reply.result))));
+                return Err(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("Disk read failed with error code {}", -reply.result),
+                )));
             }
 
             let right = match maybe_right.take() {
                 Some(SendRight::Object(r)) => r,
-                _ => return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, "Expected a SendObjectRight in the reply to IPCDiskRead"))),
+                _ => {
+                    return Err(Box::new(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        "Expected a SendObjectRight in the reply to IPCDiskRead",
+                    )))
+                }
             };
 
             const MAX_MMAP_SIZE: u64 = 16 * 1024 * 1024; // 16 MiB
@@ -205,7 +213,10 @@ impl ext4plus::Ext4Read for ReaderWrapper {
 
             Ok(())
         } else {
-            Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, "Unexpected message type received in response to IPCDiskRead")))
+            Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Unexpected message type received in response to IPCDiskRead",
+            )))
         }
     }
 }
@@ -313,7 +324,30 @@ async fn ipc_do_mount(executor: Executor, right: SendManyRight, mount_point: Str
 }
 
 fn ext4error_to_int(error: Ext4Error) -> i32 {
-    todo!()
+    match error {
+        Ext4Error::NotAbsolute => -libc::ENOENT as i32,
+        Ext4Error::NotASymlink => -libc::EINVAL as i32,
+        Ext4Error::NotFound => -libc::ENOENT as i32,
+        Ext4Error::IsADirectory => -libc::EISDIR as i32,
+        Ext4Error::NotADirectory => -libc::ENOTDIR as i32,
+        Ext4Error::IsASpecialFile => -libc::EACCES as i32,
+        Ext4Error::FileTooLarge => -libc::EFBIG as i32,
+        Ext4Error::NotUtf8 => -libc::EINVAL as i32,
+        Ext4Error::MalformedPath => -libc::EINVAL as i32,
+        Ext4Error::InvalidXattrName => -libc::EINVAL as i32,
+        Ext4Error::PathTooLong => -libc::ENAMETOOLONG as i32,
+        Ext4Error::TooManySymlinks => -libc::ELOOP as i32,
+        Ext4Error::Encrypted => -libc::EACCES as i32,
+        Ext4Error::Io(_) => -libc::EIO as i32,
+        Ext4Error::UnsupportedOperation(_) => -libc::ENOSYS as i32,
+        Ext4Error::Incompatible(_) => -libc::ENOSYS as i32,
+        Ext4Error::Corrupt(_) => -libc::EIO as i32,
+        Ext4Error::Readonly => -libc::EROFS as i32,
+        Ext4Error::NoSpace => -libc::ENOSPC as i32,
+        Ext4Error::AlreadyExists => -libc::EEXIST as i32,
+        Ext4Error::DotEntry => -libc::EINVAL as i32,
+        _ => -libc::EIO as i32,
+    }
 }
 
 fn ext4direntry_error_to_int(error: ext4plus::prelude::DirEntryNameError) -> i32 {
@@ -321,7 +355,15 @@ fn ext4direntry_error_to_int(error: ext4plus::prelude::DirEntryNameError) -> i32
 }
 
 fn ext4filetype_to_int(file_type: FileType) -> u32 {
-    todo!()
+    match file_type {
+        FileType::BlockDevice => 6,
+        FileType::CharacterDevice => 2,
+        FileType::Directory => 4,
+        FileType::Fifo => 1,
+        FileType::Regular => 8,
+        FileType::Socket => 12,
+        FileType::Symlink => 10,
+    }
 }
 
 fn ipc_resolve_path_reply(mut reply_right: Option<SendRight>, result: i32, inode: u64, file_type: u32) {
@@ -444,14 +486,13 @@ async fn handle_ipc(executor: Executor, run_type: RunType, disk_right: pmos::ipc
     match run_type {
         RunType::Probe => {
             ipc_probe(executor, reader, reply_right).await;
+            std::process::exit(0);
         }
         RunType::Mount => {
             ipc_mount(executor, reader, mount_point, reply_right).await;
         }
         _ => unreachable!(),
     }
-
-    std::process::exit(0);
 }
 
 fn main() {
