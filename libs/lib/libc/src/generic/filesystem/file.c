@@ -123,7 +123,7 @@ ssize_t __file_read(void *file_data, void *buf, size_t size, size_t offset, bool
     size_t message_size = sizeof(IPC_Read);
 
     // Send the IPC_Read message to the filesystem daemon
-    right_request_t send_result = send_message_right(file->io_right, 0, (const char *)&message, message_size, NULL, 0);
+    right_request_t send_result = send_message_right(file->io_right, fs_cmd_reply_port, (const char *)&message, message_size, NULL, 0);
     if (send_result.result != SUCCESS) {
         errno = EIO; // I/O error
         return -1;
@@ -269,7 +269,7 @@ ssize_t __file_write(void *file_data, const void *buf, size_t size,
 
     memcpy(message->data, buf, size);
 
-    right_request_t send_result = send_message_right(file->io_right, 0, (const char *)message, msg_size, NULL, 0);
+    right_request_t send_result = send_message_right(file->io_right, reply_port, (const char *)message, msg_size, NULL, 0);
     if (send_result.result != SUCCESS) {
         errno = EIO;
         goto error;
@@ -327,7 +327,7 @@ ssize_t __file_writev(void *file_data, const struct iovec *iov, int iovcnt,
 
         memcpy(message->data, iov[i].iov_base, iov[i].iov_len);
 
-        right_request_t send_result = send_message_right(file->io_right, 0, (const char *)message, msg_size, NULL, 0);
+        right_request_t send_result = send_message_right(file->io_right, reply_port, (const char *)message, msg_size, NULL, 0);
         if (send_result.result != SUCCESS) {
             errno = EIO;
             goto error;
