@@ -53,7 +53,6 @@ struct File_Descriptor {
     bool used;
     uint8_t flags;
     uint8_t type;
-    off_t offset;
 
     const struct Filesystem_Adaptor *adaptor;
     union File_Data data;

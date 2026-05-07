@@ -2,13 +2,17 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+const char path[] = "/root/test_file.txt";
+
 void read_test_file()
 {
-    int fd = open("/root/test_file.txt", O_RDONLY);
+    int fd = open(path, O_RDONLY);
     if (fd < 0) {
         perror("Failed to open test file");
         return;
     }
+
+    printf("Opened %s!\n", path);
 
     char buffer[256];
     ssize_t bytes_read = read(fd, buffer, sizeof(buffer) - 1);

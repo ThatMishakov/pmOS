@@ -185,7 +185,7 @@ pmos::async::task<std::expected<pmos::Right, int>> open_file_on_fs(std::shared_p
 
     if (reply->result_code != 0) {
         printf("vfsd: Filesystem returned error %d opening file\n", reply->result_code);
-        co_return std::unexpected(-reply->result_code);
+        co_return std::unexpected(reply->result_code);
     }
 
     if (!msg->other_rights[0] || msg->other_rights[0].type() != pmos::RightType::SendMany) {
@@ -426,7 +426,7 @@ pmos::async::detached_task vnode_wait(std::shared_ptr<VNode> vnode, std::string 
     }
 
     if (reply->result_code != 0) {
-        unblock_vnode_waiters(vnode, name, std::unexpected(-reply->result_code));
+        unblock_vnode_waiters(vnode, name, std::unexpected(reply->result_code));
         co_return;
     }
 

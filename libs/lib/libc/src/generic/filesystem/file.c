@@ -91,7 +91,7 @@ static void fs_right_invalid(pmos_right_t right)
                                 __ATOMIC_RELAXED, __ATOMIC_RELAXED);
 }
 
-ssize_t __file_read(void *file_data, void *buf, size_t size, size_t offset)
+ssize_t __file_read(void *file_data, void *buf, size_t size, size_t offset, bool seek)
 {
     // Check if ssize_t can represent size
     // This is necessary since, although very implausible with 64 bit ints, size_t value might be
@@ -108,10 +108,14 @@ ssize_t __file_read(void *file_data, void *buf, size_t size, size_t offset)
 
     struct File *file = (struct File *)file_data;
 
+    uint32_t flags = 0;
+    if (seek)
+        flags |= IPC_FLAG_IO_OP_SEEK;
+
     // Initialize the message type, flags, file ID, offset, count, and reply channel
     IPC_Read message = {
         .type           = IPC_Read_NUM,
-        .flags          = 0,
+        .flags          = flags,
         .start_offset   = offset,
         .max_size       = size,
     };
@@ -236,7 +240,7 @@ ssize_t __file_read(void *file_data, void *buf, size_t size, size_t offset)
 // }
 
 ssize_t __file_write(void *file_data, const void *buf, size_t size,
-                     size_t offset)
+                     size_t offset, bool seek)
 {
     ssize_t count              = -1;
     IPC_Generic_Msg *reply_msg = NULL;
@@ -250,13 +254,17 @@ ssize_t __file_write(void *file_data, const void *buf, size_t size,
         return -1;
     }
 
+    uint32_t flags = 0;
+    if (seek)
+        flags |= IPC_FLAG_IO_OP_SEEK;
+
     struct File *file     = (struct File *)file_data;
     const size_t msg_size = sizeof(IPC_Write) + size;
 
     uint64_t buff[1 + (msg_size - 1) / sizeof(uint64_t)];
     IPC_Write *message      = (void *)buff;
     message->type           = IPC_Write_NUM;
-    message->flags          = 0;
+    message->flags          = flags;
     message->offset         = offset;
 
     memcpy(message->data, buf, size);
@@ -292,7 +300,7 @@ error:
 }
 
 ssize_t __file_writev(void *file_data, const struct iovec *iov, int iovcnt,
-                      size_t offset)
+                      size_t offset, bool seek)
 {
     ssize_t count              = -1;
     IPC_Generic_Msg *reply_msg = NULL;
@@ -302,6 +310,10 @@ ssize_t __file_writev(void *file_data, const struct iovec *iov, int iovcnt,
         return -1;
     }
 
+    uint32_t flags = 0;
+    if (seek)
+        flags |= IPC_FLAG_IO_OP_SEEK;
+
     // TODO: This is problematic...
     struct File *file = (struct File *)file_data;
     for (int i = 0; i < iovcnt; i++) {
@@ -310,7 +322,7 @@ ssize_t __file_writev(void *file_data, const struct iovec *iov, int iovcnt,
         uint64_t buff[1 + (msg_size - 1) / sizeof(uint64_t)];
         IPC_Write *message      = (void *)buff;
         message->type           = IPC_Write_NUM;
-        message->flags          = 0;
+        message->flags          = flags;
         message->offset         = offset + count;
 
         memcpy(message->data, iov[i].iov_base, iov[i].iov_len);

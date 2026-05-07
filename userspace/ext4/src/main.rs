@@ -8,6 +8,7 @@ use pmos::ipc_runner::ManyReciever;
 use pmos::async_helpers::get_named_right;
 use pmos::ipc_msgs::IPCMountFS;
 use pmos::ipc::send_message_right;
+use pmos::ipc::send_message_right_consume;
 
 use futures::StreamExt;
 
@@ -415,12 +416,52 @@ async fn ipc_handle_resolve_path(executor: Executor, reply_right: Option<SendRig
     ipc_resolve_path_reply(reply_right, 0, inode, ext4filetype_to_int(file_type));
 }
 
+fn ipc_fs_open_reply(reply_right: Option<SendRight>, result: i16, flags: u16, fs_right: Option<SendRight>) -> Result<(), i32> {
+    let msg = pmos::ipc_msgs::IPCFSOpenReply::new(result, flags);
+    let rights = [fs_right, None, None, None];
+    let reply_right = reply_right.ok_or(libc::ENOENT)?;
+    send_message_right_consume(&msg, reply_right, rights).map_err(|(e, _)| e.get())
+}
+
+async fn ipc_fs_open(executor: Executor, reply_right: Option<SendRight>, fs: Ext4, _flags: u32, inode: u64) {
+    let inode = u32::try_from(inode).ok().and_then(NonZeroU32::new);
+    if inode.is_none() {
+        _ = ipc_fs_open_reply(reply_right, -ENOENT as i16, 0, None);
+        return;
+    }
+    let inode = inode.unwrap();
+
+    let inode = Inode::read(&fs, inode).await;
+    if let Err(e) = inode {
+        _ = ipc_fs_open_reply(reply_right, ext4error_to_int(e).try_into().unwrap(), 0, None);
+        return;
+    }
+    let inode = inode.unwrap();
+
+    let right = executor.create_right_sendmany().expect("Failed to create SendManyRight for the filesystem");
+
+    let result = ipc_fs_open_reply(reply_right, 0, 0, Some(right.0.into()));
+    if let Err(e) = result {
+        println!("Failed to reply to IPC_FS_Open request! {}", e);
+        return;
+    }
+
+    let mut recieve_right = right.1;
+
+    while let Some(mut msg) = recieve_right.next().await {
+        println!("ext4: Recieved a message for a file...");
+    }
+}
+
 async fn ipc_handle(executor: Executor, mut reciever: ManyReciever, fs: Ext4) {
     while let Some(mut msg) = reciever.next().await {
         let reply_right = msg.reply_right.take();
         match msg.deserialize() {
             pmos::ipc_msgs::Message::IPCFSResolvePath(req) => {
                 executor.spawn(ipc_handle_resolve_path(executor.clone(), reply_right, fs.clone(), req.path_component, req.inode));
+            }
+            pmos::ipc_msgs::Message::IPCFSOpen(req) => {
+                executor.spawn(ipc_fs_open(executor.clone(), reply_right, fs.clone(), req.flags, req.inode));
             }
             _ => {
                 eprintln!("ext4: Received unexpected message type {}", msg.get_known_id().unwrap_or(0));

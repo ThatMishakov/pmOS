@@ -183,7 +183,6 @@ int open(const char *path, int flags)
     if (result_code < 0) {
         // Handle error: Failed to open the file
         release_descriptor(fs_data);
-        errno = -result_code; // Set errno to appropriate error code (negative value)
         return -1;
     }
 
@@ -212,7 +211,6 @@ int open(const char *path, int flags)
     fs_data->descriptors_vector[descriptor].type    = DESCRIPTOR_FILE;
     fs_data->descriptors_vector[descriptor].used    = true;
     fs_data->descriptors_vector[descriptor].flags   = flags;
-    fs_data->descriptors_vector[descriptor].offset  = 0;
     fs_data->descriptors_vector[descriptor].adaptor = file_adaptor;
     fs_data->descriptors_vector[descriptor].data    = data;
 
@@ -268,7 +266,6 @@ int pipe(int pipefd[2])
         fs_data->descriptors_vector[descriptor] = (struct File_Descriptor) {.type = DESCRIPTOR_FILE,
                                                                             .used = true,
                                                                             .flags   = 0,
-                                                                            .offset  = 0,
                                                                             .adaptor = file_adaptor,
                                                                             .data    = data[i]};
 
@@ -347,7 +344,7 @@ finish:
     return result_code;
 }
 
-ssize_t __read_internal(long int fd, void *buf, size_t c, bool should_seek, size_t _offset)
+ssize_t __read_internal(long int fd, void *buf, size_t c, bool should_seek, size_t offset)
 {
     if (ensure_fs_initialization() < 0)
         return -1;
@@ -374,38 +371,7 @@ ssize_t __read_internal(long int fd, void *buf, size_t c, bool should_seek, size
         return -1;
     }
 
-    size_t offset    = should_seek ? file_desc.offset : _offset;
-    bool is_seekable = file_desc.adaptor->isseekable(&file_desc.data);
-
-    ssize_t count =
-        file_desc.adaptor->read(&file_desc.data, buf, c, offset);
-
-    if (count < 0)
-        // Error
-        return -1;
-
-    if (!is_seekable || !should_seek)
-        // Don't update the offset
-        return count;
-
-    // Add count to the file descriptor's offset
-    pthread_spin_lock(&fs_data->lock);
-
-    // Check if the file descriptor is valid
-    if (fd < 0 || fd >= fs_data->capacity ||
-        memcmp(&fs_data->descriptors_vector[fd], &file_desc, sizeof(struct File_Descriptor)) != 0) {
-        // POSIX says that the behavior is undefined if multiple threads use the same file
-        // descriptor Be nice and don't crash the program but don't update the offset
-        pthread_spin_unlock(&fs_data->lock);
-        return count;
-    }
-
-    // Update the file descriptor's offset
-    fs_data->descriptors_vector[fd].offset = offset + count;
-    pthread_spin_unlock(&fs_data->lock);
-
-    // Return the number of bytes read
-    return count;
+    return file_desc.adaptor->read(&file_desc.data, buf, c, offset, should_seek);
 }
 
 ssize_t read(int fd, void *buf, size_t count) { return __read_internal(fd, buf, count, true, 0); }
@@ -690,7 +656,6 @@ int dup2(int oldfd, int newfd)
     fs_data->descriptors_vector[newfd].used    = true;
     fs_data->descriptors_vector[newfd].flags   = fs_data->descriptors_vector[oldfd].flags;
     fs_data->descriptors_vector[newfd].type    = fs_data->descriptors_vector[oldfd].type;
-    fs_data->descriptors_vector[newfd].offset  = fs_data->descriptors_vector[oldfd].offset;
     fs_data->descriptors_vector[newfd].adaptor = fs_data->descriptors_vector[oldfd].adaptor;
 
 finish:
@@ -745,7 +710,6 @@ int dup(int fd)
     union File_Data old_data = fs_data->descriptors_vector[fd].data;
     adaptor                  = fs_data->descriptors_vector[fd].adaptor;
     const int type           = fs_data->descriptors_vector[fd].type;
-    const size_t offset      = fs_data->descriptors_vector[fd].offset;
     const int flags          = fs_data->descriptors_vector[fd].flags;
 
     pthread_spin_unlock(&fs_data->lock);
@@ -778,7 +742,6 @@ int dup(int fd)
     fs_data->descriptors_vector[descriptor].type    = type;
     fs_data->descriptors_vector[descriptor].used    = true;
     fs_data->descriptors_vector[descriptor].flags   = flags;
-    fs_data->descriptors_vector[descriptor].offset  = offset;
     fs_data->descriptors_vector[descriptor].adaptor = adaptor;
     fs_data->descriptors_vector[descriptor].data    = new_data;
 
@@ -837,66 +800,7 @@ int fstat(int fd, struct stat *stat)
 
 off_t __lseek_internal(long int fd, off_t offset, int whence)
 {
-    if (ensure_fs_initialization() < 0)
-        return -1;
-
-    int result = pthread_spin_lock(&fs_data->lock);
-    if (result != SUCCESS) {
-        errno = result;
-        return -1;
-    }
-
-    if (fd < 0 || fs_data->capacity <= fd) {
-        pthread_spin_unlock(&fs_data->lock);
-        errno = EBADF;
-        return -1;
-    }
-
-    struct File_Descriptor *des = &fs_data->descriptors_vector[fd];
-
-    if (des->used == false) {
-        pthread_spin_unlock(&fs_data->lock);
-        errno = EBADF;
-        return -1;
-    }
-
-    if (!des->adaptor->isseekable(&des->data)) {
-        pthread_spin_unlock(&fs_data->lock);
-        errno = ESPIPE;
-        return -1;
-    }
-
-    switch (whence) {
-    case SEEK_SET:
-        if (offset < 0) {
-            pthread_spin_unlock(&fs_data->lock);
-            errno = EINVAL;
-            return -1;
-        }
-        des->offset = offset;
-        break;
-    case SEEK_CUR:
-        if (des->offset + offset < 0) {
-            pthread_spin_unlock(&fs_data->lock);
-            errno = EINVAL;
-            return -1;
-        }
-        des->offset += offset;
-        break;
-    case SEEK_END:
-        // Not implemented
-        pthread_spin_unlock(&fs_data->lock);
-        errno = EINVAL;
-        return -1;
-    default:
-        pthread_spin_unlock(&fs_data->lock);
-        errno = EINVAL;
-        return -1;
-    }
-
-    off_t result_offset = des->offset;
-    pthread_spin_unlock(&fs_data->lock);
-    return result_offset;
+    return -ENOENT;
 }
 
 off_t lseek(int fd, off_t offset, int whence) { return __lseek_internal(fd, offset, whence); }
@@ -975,7 +879,6 @@ int __clone_fs_data(struct Filesystem_Data **new_data, uint64_t for_task, bool e
         new_fd->type    = fd.type;
         new_fd->used    = true;
         new_fd->flags   = fd.flags;
-        new_fd->offset  = fd.offset;
         new_fd->adaptor = fd.adaptor;
 
         result = fd.adaptor->clone(&fd.data, &new_fd->data);
@@ -1085,46 +988,7 @@ ssize_t __write_internal(long int fd, const void *buf, size_t c, size_t _offset,
         return -1;
     }
 
-    bool is_seekable = file_desc.adaptor->isseekable(&file_desc.data);
-    bool seek        = is_seekable && inc_offset;
-    union File_Data data_copy = file_desc.data;
-    size_t offset = seek ? file_desc.offset : _offset;
-
-    ssize_t count =
-        file_desc.adaptor->write(&file_desc.data, buf, c, offset);
-
-    bool changed = memcmp(&data_copy, &file_desc.data, sizeof(union File_Data)) != 0;
-
-    if (count < 0)
-        // Error
-        return -1;
-
-    if (!seek && !changed)
-        // Don't update the offset and port
-        return count;
-
-    // Add count to the file descriptor's offset
-    pthread_spin_lock(&fs_data->lock);
-
-    // Check if the file descriptor is valid
-    if (fd < 0 || fd >= fs_data->capacity ||
-        memcmp(&fs_data->descriptors_vector[fd], &file_desc, sizeof(struct File_Descriptor)) != 0) {
-        // POSIX says that the behavior is undefined if multiple threads use the same file
-        // descriptor Be nice and don't crash the program but don't update the offset
-        pthread_spin_unlock(&fs_data->lock);
-        return count;
-    }
-
-    if (changed)
-        fs_data->descriptors_vector[fd].data = file_desc.data;
-
-    if (seek)
-        fs_data->descriptors_vector[fd].offset = _offset + count;
-
-    pthread_spin_unlock(&fs_data->lock);
-
-    // Return the number of bytes read
-    return count;
+    return file_desc.adaptor->write(&file_desc.data, buf, c, _offset, inc_offset);
 }
 
 ssize_t write(int fd, const void *buf, size_t count)
@@ -1154,43 +1018,5 @@ ssize_t writev(int fd, const struct iovec *iov, int iovcnt)
         return -1;
     }
 
-    bool is_seekable = file_desc.adaptor->isseekable(&file_desc.data);
-    bool seek        = is_seekable && true;
-    union File_Data data_copy = file_desc.data;
-
-    ssize_t count =
-        file_desc.adaptor->writev(&file_desc.data, iov, iovcnt, file_desc.offset);
-
-    bool changed = memcmp(&data_copy, &file_desc.data, sizeof(union File_Data)) != 0;
-
-    if (count < 0)
-        // Error
-        return -1;
-
-    if (!seek && !changed)
-        // Don't update the offset and port
-        return count;
-
-    // Add count to the file descriptor's offset
-    pthread_spin_lock(&fs_data->lock);
-
-    // Check if the file descriptor is valid
-    if (fd < 0 || fd >= fs_data->capacity ||
-        memcmp(&fs_data->descriptors_vector[fd], &file_desc, sizeof(struct File_Descriptor)) != 0) {
-        // POSIX says that the behavior is undefined if multiple threads use the same file
-        // descriptor Be nice and don't crash the program but don't update the offset
-        pthread_spin_unlock(&fs_data->lock);
-        return count;
-    }
-
-    if (changed)
-        fs_data->descriptors_vector[fd].data = file_desc.data;
-
-    if (seek)
-        fs_data->descriptors_vector[fd].offset += count;
-
-    pthread_spin_unlock(&fs_data->lock);
-
-    // Return the number of bytes read
-    return count;
+    return file_desc.adaptor->writev(&file_desc.data, iov, iovcnt, 0, true);
 }

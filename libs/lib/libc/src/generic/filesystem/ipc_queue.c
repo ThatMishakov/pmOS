@@ -41,7 +41,7 @@
 #include <sys/stat.h>
 
 ssize_t __ipc_queue_read(void *file_data, void *buf, size_t count,
-                         size_t offset)
+                         size_t offset, bool /* seek */)
 {
     // TODO: Not implemented
     errno = ENOSYS;
@@ -83,7 +83,7 @@ static ssize_t write_ipc_queue(pmos_right_t right, const void *buf, size_t size)
 }
 
 ssize_t __ipc_queue_write(void *file_data, const void *buf, size_t count,
-                          size_t /* offset */)
+                          size_t /* offset */, bool /* seek */)
 {
     struct IPC_Queue *q = (struct IPC_Queue *)file_data;
 
@@ -112,7 +112,7 @@ ssize_t __ipc_queue_write(void *file_data, const void *buf, size_t count,
 }
 
 ssize_t __ipc_queue_writev(void *file_data, const struct iovec *iov,
-                           int iovcnt, size_t /* offset */)
+                           int iovcnt, size_t /* offset */, bool /* seek */)
 {
     struct IPC_Queue *q = (struct IPC_Queue *)file_data;
 

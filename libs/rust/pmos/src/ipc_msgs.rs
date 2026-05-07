@@ -261,6 +261,25 @@ pub struct IPCDiskDescribeReply {
     pub physical_sector_size: u32,
 }
 
+pub const IPC_FS_OPEN_NUM: u32 = 0xC0;
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+pub struct IPCFSOpen {
+    msg_type: u32,
+    pub flags: u32,
+    pub inode: u64,
+}
+
+impl IPCFSOpen {
+    pub fn new(flags: u32, inode: u64) -> Self {
+        Self {
+            msg_type: IPC_FS_OPEN_NUM,
+            flags,
+            inode,
+        }
+    }
+}
+
 pub const IPC_MOUNT_FS_NUM: u32 = 0xC2;
 #[derive(Debug)]
 pub struct IPCMountFS {
@@ -297,6 +316,25 @@ impl Serializable for IPCFSResolvePath {
         out.extend_from_slice(bytemuck::bytes_of(&hdr));
         out.extend_from_slice(self.path_component.as_bytes());
         Cow::from(out)
+    }
+}
+
+pub const IPC_FS_OPEN_REPLY_NUM: u32 = 0xD0;
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Zeroable, Pod)]
+pub struct IPCFSOpenReply {
+    msg_type: u32,
+    pub result_code: i16,
+    pub fs_flags: u16,
+}
+
+impl IPCFSOpenReply {
+    pub fn new(result_code: i16, fs_flags: u16) -> Self {
+        Self {
+            msg_type: IPC_FS_OPEN_REPLY_NUM,
+            result_code,
+            fs_flags,
+        }
     }
 }
 
@@ -551,6 +589,7 @@ pub enum Message<'a> {
     IPCKernelRecieveRightDestroyed(IPCKernelRecieveRightDestroyed),
     IPCKernelRightDestroyed(IPCKernelRightDestroyed),
     IPCNamedRightNotification(IPCNamedRightNotification),
+    IPCFSOpen(IPCFSOpen),
     IPCMountFS(IPCMountFS),
     IPCMountFSReply(IPCMountFSReply),
     IPCOpen(IPCOpen),
@@ -611,6 +650,8 @@ impl super::ipc::Message {
                             })
                         ).unwrap_or(Message::Unknown)
                 }
+                IPC_FS_OPEN_NUM =>
+                    try_from_bytes::<IPCFSOpen>(data).map(|data| Message::IPCFSOpen(data.clone())).unwrap_or(Message::Unknown),
                 IPC_MOUNT_FS_NUM => {
                     if data.len() < size_of::<IPCMountFSHdr>() {
                         return Message::Unknown;

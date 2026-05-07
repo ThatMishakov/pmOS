@@ -33,20 +33,18 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/uio.h>
+#include <stdbool.h>
 
-typedef ssize_t(read_func)(void *file_data, void *buf, size_t count,
-                           size_t offset);
-typedef ssize_t(write_func)(void *file_data, const void *buf, size_t count,
-                            size_t offset);
+typedef ssize_t(read_func)(void *file_data, void *buf, size_t count, size_t offset, bool seek);
+typedef ssize_t(write_func)(void *file_data, const void *buf, size_t count, size_t offset, bool seek);
 typedef int(clone_func)(void *file_data, void *new_data);
 typedef int(close_func)(void *file_data);
 typedef int(fstat_func)(void *file_data, struct stat *statbuf);
 typedef int(isatty_func)(void *file_data);
 typedef int(isseekable_func)(void *file_data);
 typedef ssize_t(filesize_func)(void *file_data);
-
 typedef ssize_t(writev_func)(void *file_data, const struct iovec *iov,
-                             int iovcnt, size_t offset);
+                             int iovcnt, size_t offset, bool seek);
 
 /// @brief Function to free the file data.
 ///
