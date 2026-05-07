@@ -9,6 +9,7 @@ use pmos::async_helpers::get_named_right;
 use pmos::ipc_msgs::IPCMountFS;
 use pmos::ipc::send_message_right;
 use pmos::ipc::send_message_right_consume;
+use pmos::ipc_msgs::IPC_FLAG_IO_OP_SEEK;
 
 use futures::StreamExt;
 
@@ -25,6 +26,7 @@ use ext4plus::prelude::Ext4Error;
 use ext4plus::prelude::Dir;
 use ext4plus::prelude::Inode;
 use ext4plus::FileType;
+use ext4plus::prelude::File;
 
 #[derive(PartialEq)]
 enum RunType {
@@ -423,6 +425,19 @@ fn ipc_fs_open_reply(reply_right: Option<SendRight>, result: i16, flags: u16, fs
     send_message_right_consume(&msg, reply_right, rights).map_err(|(e, _)| e.get())
 }
 
+fn ipc_read_reply(reply_right: SendRight, result: i16, flags: u16, data: &[u8]) {
+    let msg = pmos::ipc_msgs::IPCReadReply {
+        flags,
+        result,
+        data,
+    };
+
+    let result = send_message_right(&msg, &mut Some(reply_right), &mut [None, None, None, None]);
+    if let Err(e) = result {
+        eprintln!("ext4: Failed to send IPCReadReply message: {}", e.0);
+    }
+}
+
 async fn ipc_fs_open(executor: Executor, reply_right: Option<SendRight>, fs: Ext4, _flags: u32, inode: u64) {
     let inode = u32::try_from(inode).ok().and_then(NonZeroU32::new);
     if inode.is_none() {
@@ -438,6 +453,13 @@ async fn ipc_fs_open(executor: Executor, reply_right: Option<SendRight>, fs: Ext
     }
     let inode = inode.unwrap();
 
+    let file = File::open_inode(&fs, inode);
+    if let Err(e) = file {
+        _ = ipc_fs_open_reply(reply_right, ext4error_to_int(e).try_into().unwrap(), 0, None);
+        return;
+    }
+    let mut file = file.unwrap();
+
     let right = executor.create_right_sendmany().expect("Failed to create SendManyRight for the filesystem");
 
     let result = ipc_fs_open_reply(reply_right, 0, 0, Some(right.0.into()));
@@ -449,7 +471,35 @@ async fn ipc_fs_open(executor: Executor, reply_right: Option<SendRight>, fs: Ext
     let mut recieve_right = right.1;
 
     while let Some(mut msg) = recieve_right.next().await {
-        println!("ext4: Recieved a message for a file...");
+        let reply_right = msg.reply_right.take();
+        match msg.deserialize() {
+            pmos::ipc_msgs::Message::IPCRead(data) => {
+                if reply_right.is_none() {
+                    println!("ext4: Recieved read with no reply right!");
+                    continue;
+                }
+                let reply_right = reply_right.unwrap();
+
+                if (data.flags & IPC_FLAG_IO_OP_SEEK) != 0 {
+                    let mut buffer = vec![0u8; data.max_size as usize];
+
+                    let result = file.read_bytes(buffer.as_mut_slice()).await;
+                    if let Err(e) = result {
+                        let error_code = ext4error_to_int(e);
+                        ipc_read_reply(reply_right, error_code as i16, 0, &[]);
+                    } else {
+                        let bytes_read = result.unwrap();
+                        ipc_read_reply(reply_right, 0, 0, &buffer[..bytes_read as usize]);
+                    }
+                } else {
+                    // Not implemented
+                    ipc_read_reply(reply_right, -libc::ENOSYS as i16, 0, &[]);
+                }
+            },
+            _ => {
+                println!("Ext4: recieved unknown message in IPC open file consumer");
+            }
+        }
     }
 }
 

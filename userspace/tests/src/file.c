@@ -22,7 +22,7 @@ void read_test_file()
         return;
     }
 
-    buffer[bytes_read] = '\0'; // Null-terminate the buffer
+    buffer[bytes_read] = '\0';
     printf("Contents of test_file.txt:\n%s\n", buffer);
 
     close(fd);

@@ -225,11 +225,14 @@ pmos::async::detached_task attend_open_file(std::shared_ptr<VNode> vnode, pmos::
 
         auto *ipc_msg = reinterpret_cast<IPC_Generic_Msg *>(message.data());
         switch (ipc_msg->type) {
+        case IPC_Kernel_Recieve_Right_Destroyed_NUM:
+            break;
         default:
             printf("vfsd: Unknown message type %d while attending file\n", ipc_msg->type);
-            break;
         }
     }
+
+    co_return;
 }
 
 pmos::Right create_file_right(std::shared_ptr<VNode> vnode)

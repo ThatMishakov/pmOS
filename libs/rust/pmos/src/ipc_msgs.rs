@@ -142,7 +142,48 @@ struct IPCNamedRightNotificationHdr {
     result: i32,
 }
 
+pub const IPC_FLAG_IO_OP_SEEK: u32 = 0x01;
 
+pub const IPC_READ_NUM: u32 = 0x42;
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+pub struct IPCRead {
+    msg_type: u32,
+    pub flags: u32,
+    pub offset: u64,
+    pub max_size: u64,
+}
+
+pub const IPC_READ_REPLY_NUM: u32 = 0x50;
+#[derive(Debug)]
+pub struct IPCReadReply<'a> {
+    pub flags: u16,
+    pub result: i16,
+    pub data: &'a [u8],
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+struct IPCReadReplyHdr {
+    msg_type: u32,
+    flags: u16,
+    result: i16,
+}
+
+impl Serializable for IPCReadReply<'_> {
+    fn serialize(&self) -> Cow<'_, [u8]> {
+        let hdr = IPCReadReplyHdr {
+            msg_type: IPC_READ_REPLY_NUM,
+            flags: self.flags,
+            result: self.result,
+        };
+
+        let mut out = Vec::with_capacity(core::mem::size_of::<IPCReadReplyHdr>() + self.data.len());
+        out.extend_from_slice(bytemuck::bytes_of(&hdr));
+        out.extend_from_slice(self.data);
+        Cow::<[u8]>::from(out)
+    }
+}
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
@@ -589,6 +630,7 @@ pub enum Message<'a> {
     IPCKernelRecieveRightDestroyed(IPCKernelRecieveRightDestroyed),
     IPCKernelRightDestroyed(IPCKernelRightDestroyed),
     IPCNamedRightNotification(IPCNamedRightNotification),
+    IPCRead(IPCRead),
     IPCFSOpen(IPCFSOpen),
     IPCMountFS(IPCMountFS),
     IPCMountFSReply(IPCMountFSReply),
@@ -686,6 +728,8 @@ impl super::ipc::Message {
                             })
                         ).unwrap_or(Message::Unknown)
                 }
+                IPC_READ_NUM =>
+                    try_from_bytes::<IPCRead>(data).map(|data| Message::IPCRead(data.clone())).unwrap_or(Message::Unknown),
                 IPC_OPEN_NUM => {
                     if data.len() < size_of::<IPCOpenHdr>() {
                         return Message::Unknown;
