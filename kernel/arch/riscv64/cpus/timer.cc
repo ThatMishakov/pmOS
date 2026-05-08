@@ -59,16 +59,6 @@ int fire_timer_at(u64 next_value) { return sbi_set_timer(next_value).error; }
 #include <kern_logger/kern_logger.hh>
 
 u64 kernel::sched::ticks_since_bootup = 0;
-// void start_timer(u32 ms)
-// {
-//     const u64 ticks         = ms * ticks_per_ms;
-//     const u64 current_value = get_current_timer_val();
-//     const u64 next_value    = current_value + ticks;
-//     fire_timer_at(next_value);
-//     if (get_cpu_struct()->is_bootstap_cpu()) {
-//         ticks_since_bootup = current_value;
-//     }
-// }
 
 u64 kernel::sched::get_ns_since_bootup() { 
     return frequency_inv * get_current_timer_val();

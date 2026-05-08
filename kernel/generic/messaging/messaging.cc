@@ -474,4 +474,22 @@ RecieveRight *Port::atomic_get_right(u64 right_id)
     return right;
 }
 
+void Port::atomic_add_to_rights(RecieveRight *right)
+{
+    assert(right);
+    assert(right->parent == this);
+
+    Auto_Lock_Scope l(rights_lock);
+    rights.insert(right);
+}
+
+void Port::atomic_remove_right(RecieveRight *right)
+{
+    assert(right);
+    assert(right->parent == this);
+
+    Auto_Lock_Scope l(rights_lock);
+    rights.erase(right);
+}
+
 } // namespace kernel::ipc

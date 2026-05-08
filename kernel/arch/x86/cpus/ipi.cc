@@ -78,3 +78,9 @@ void CPU_Info::ipi_cpu_park()
     __atomic_or_fetch(&ipi_mask, IPI_CPU_PARK, __ATOMIC_RELEASE);
     send_ipi_fixed(ipi_invalidate_tlb_int_vec, lapic_id);
 }
+
+void CPU_Info::ipi_get_attention()
+{
+    __atomic_or_fetch(&ipi_mask, IPI_GET_ATTENTION, __ATOMIC_RELEASE);
+    send_ipi_fixed(ipi_invalidate_tlb_int_vec, lapic_id);
+}

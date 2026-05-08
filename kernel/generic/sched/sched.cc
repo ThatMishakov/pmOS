@@ -91,30 +91,6 @@ ReturnStr<u64> block_current_task(ipc::Port *ptr)
     return {0, 0};
 }
 
-// void service_timer_ports()
-// {
-//     auto c            = get_cpu_struct();
-//     auto current_time = get_current_time_ticks();
-//     Auto_Lock_Scope l(c->timer_lock);
-
-//     for (auto t = c->timer_queue.begin();
-//          t != c->timer_queue.end() and t->fire_on_core_ticks < current_time;) {
-//         auto port = ipc::Port::atomic_get_port(t->port_id);
-//         if (port) {
-//             IPC_Timer_Reply r = {
-//                 IPC_Timer_Reply_NUM,
-//                 0,
-//                 t->extra,
-//             };
-//             port->atomic_send_from_system(reinterpret_cast<char *>(&r), sizeof(r));
-//         }
-
-//         auto o = t++;
-//         c->timer_queue.erase(o);
-//         delete &*o;
-//     }
-// }
-
 struct Timer final: TimerNode {
     u64 port_id;
     u64 extra;

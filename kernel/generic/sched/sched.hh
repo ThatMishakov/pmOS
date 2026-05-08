@@ -84,6 +84,12 @@ struct TimerNode {
     virtual void fire() = 0;
 };
 
+struct AttentionNode {
+    pmos::containers::DoubleListHead<AttentionNode> attention_list_node;
+
+    virtual void get_attention() = 0;
+};
+
 struct CPU_Info {
     CPU_Info *self                     = this;    // 0  0
     u64 *kernel_stack_top              = nullptr; // 8  4
@@ -188,6 +194,7 @@ struct CPU_Info {
     static constexpr int IPI_RESCHEDULE    = 0x1;
     static constexpr int IPI_TLB_SHOOTDOWN = 0x2;
     static constexpr int IPI_CPU_PARK      = 0x4;
+    static constexpr int IPI_GET_ATTENTION = 0x8;
     u32 ipi_mask                           = 0;
     u32 allocated_int_count                = 0;
 
@@ -199,6 +206,7 @@ struct CPU_Info {
     void ipi_reschedule(); // nothrow ?
     void ipi_tlb_shootdown();
     void ipi_cpu_park();
+    void ipi_get_attention();
 
     using timer_tree =
         pmos::containers::RedBlackTree<TimerNode, &TimerNode::node,
@@ -233,6 +241,9 @@ struct CPU_Info {
     void sched_timer(u64 period_ms);
 
     u64 local_timer_next_deadline = 0;
+
+    Spinlock attention_queue_lock;
+    pmos::containers::CircularDoubleList<AttentionNode, &AttentionNode::attention_list_node> attention_queue;
 };
 
 extern u64 ticks_since_bootup;

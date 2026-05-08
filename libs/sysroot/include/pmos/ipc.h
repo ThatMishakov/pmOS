@@ -315,6 +315,19 @@ typedef struct IPC_Kernel_Right_Destroyed {
     uint16_t right_type;
 } IPC_Kernel_Right_Destroyed;
 
+#define IPC_Timer_Expired_NUM 0x28
+/// Message sent when the timer (deadline) expires.
+typedef struct IPC_Timer_Expired {
+    /// @brief  Message type (must be IPC_Timer_Expired_NUM)
+    uint32_t type;
+
+    /// Flags
+    uint32_t flags;
+
+    /// Deadline in nanoseconds since the system boot
+    uint64_t deadline;
+} IPC_Timer_Expired;
+
 #define IPC_Write_Plain_NUM 0x40
 typedef struct IPC_Write_Plain {
     uint32_t type;

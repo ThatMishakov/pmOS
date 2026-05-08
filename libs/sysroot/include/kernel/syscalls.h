@@ -99,5 +99,6 @@
 #define SYSCALL_TRANSFER_RIGHT              58
 #define SYSCALL_GET_RIGHT_TYPE              59
 #define SYSCALL_WATCH_RIGHT                 60
+#define SYSCALL_CREATE_TIMER                61
 
 #endif

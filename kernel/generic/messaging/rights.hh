@@ -29,6 +29,7 @@ enum class RightType : u8 {
     MemObject,
     InterruptSource,
     InterruptNotification,
+    Timer,
 };
 
 struct Right {

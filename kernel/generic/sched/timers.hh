@@ -28,9 +28,54 @@
 
 #pragma once
 #include <types.hh>
+#include "sched.hh"
+#include <messaging/rights.hh>
+#include <pmos/containers/intrusive_list.hh>
 
-// Starts the timer and updates CPU_Info
-void start_timer(u32 ms);
+namespace kernel::ipc {
 
-// Gets the current system time for local CPU, in ticks
-u64 get_current_time_ticks();
+class Port;
+
+}
+
+namespace kernel::sched
+{
+
+struct TimerRight final: TimerNode, ipc::RecieveRight, AttentionNode {
+    Spinlock lock;
+    // The parent_cpu gets decided and set when the timer gets rearmed
+    CPU_Info *parent_cpu = nullptr;
+    
+    u64 next_update_ns = 0;
+
+    // This can either be in the message, or in the timers queue, but not both at the same time
+    bool is_sent : 1 = false;
+    bool in_timer_queue : 1 = false;
+    bool waiting_for_attention : 1 = false;
+    // Alive basically means it's in the parent's rights list
+    bool alive : 1 = true;
+
+    // TimerNode
+    virtual void fire() override;
+
+    // RecieveRight
+    virtual bool destroy_recieve_right() override;
+    virtual ipc::RightType recieve_type() const override;
+
+    // GenericMessage overrides
+    virtual void delete_self() override;
+    
+    virtual size_t size() const override;
+    virtual ReturnStr<bool> copy_to_user_buff(char *buff) const override;
+
+    static ReturnStr<TimerRight *> create_for_port(ipc::Port *port);
+
+    // AttentionNode
+    virtual void get_attention() override;
+
+protected:
+    bool should_delete_self() const;
+    void request_attention();
+};
+
+} // namespace kernel::sched

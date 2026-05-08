@@ -50,6 +50,7 @@
 #include <memory/mem_object.hh>
 #include <pmos/system.h>
 #include <sched/sched.hh>
+#include <sched/timers.hh>
 #include <pmos/memory.h>
 
 #if defined(__x86_64__) || defined(__i386__)
@@ -69,7 +70,7 @@ extern void deactivate_page_table();
 namespace kernel::proc::syscalls
 {
 
-std::array<const char *, 61> syscall_names = {
+std::array<const char *, 62> syscall_names = {
     "SYSCALL EXIT",
     "SYSCALL GET TASK ID",
     "SYSCALL CREATE PROCESS",
@@ -135,6 +136,7 @@ std::array<const char *, 61> syscall_names = {
     "SYSCALL TRANSFER RIGHT",
     "SYSCALL GET RIGHT TYPE",
     "SYSCALL WATCH RIGHT",
+    "SYSCALL CREATE TIMER",
 };
 
 const char *syscall_name(unsigned id)
@@ -146,7 +148,7 @@ const char *syscall_name(unsigned id)
 }
 
 using syscall_function                         = void (*)();
-std::array<syscall_function, 61> syscall_table = {
+std::array<syscall_function, 62> syscall_table = {
     syscall_exit,
     syscall_get_task_id,
     syscall_create_process,
@@ -212,6 +214,7 @@ std::array<syscall_function, 61> syscall_table = {
     syscall_transfer_right,
     syscall_get_right_type,
     syscall_watch_right,
+    syscall_create_timer,
 };
 
 extern "C" void syscall_handler()
@@ -1823,8 +1826,6 @@ void syscall_set_notify_mask()
     }
 }
 
-u64 get_current_time_ticks();
-
 void syscall_request_timer()
 {
     auto c    = sched::get_cpu_struct();
@@ -2682,6 +2683,34 @@ void syscall_delete_port()
     } else {
         syscall_error(current) = -ENOENT;
     }
+}
+
+void syscall_create_timer()
+{
+    auto current = get_current_task();
+
+    u64 port_id = syscall_arg64(current, 0);
+
+    auto port = Port::atomic_get_port(port_id);
+    if (!port) {
+        syscall_error(current) = -ENOENT;
+        return;
+    }
+
+    if (port->owner != current) {
+        syscall_error(current) = -EPERM;
+        return;
+    }
+
+    auto timer = TimerRight::create_for_port(port);
+    if (!timer.success()) {
+        syscall_error(current) = timer.result;
+        return;
+    }
+
+    assert(timer.val);
+
+    syscall_return(current) = timer.val->right_parent_id;
 }
 
 } // namespace kernel::proc::syscalls

@@ -58,13 +58,6 @@ void start_timer_ticks(u32 ticks)
     if (c->is_bootstap_cpu())
         ticks_since_bootup = c->system_timer_val;
 }
-
-// void start_timer(u32 ms)
-// {
-//     u64 ticks = apic_freq * (ms * 1'000'000);
-//     start_timer_ticks(ticks);
-// }
-
 u64 get_current_time_ticks()
 {
     auto c = get_cpu_struct();
@@ -73,14 +66,6 @@ u64 get_current_time_ticks()
 
 extern bool have_invariant_tsc;
 extern u64 boot_tsc;
-// 
-// u64 kernel::sched::get_ns_since_bootup() { 
-//     if (have_invariant_tsc) {
-//         u64 tsc = rdtsc() - boot_tsc;
-//         return tsc_inverted_freq * tsc;
-//     }
-//     return apic_inverted_freq * ticks_since_bootup;
-// }
 
 u64 kernel::sched::get_ns_since_bootup()
 {
