@@ -611,3 +611,21 @@ void kernel::sched::park_self()
     __atomic_store_n(&c->online, false, __ATOMIC_RELEASE);
     arch_specific_park_stop();
 }
+
+void kernel::sched::get_attention()
+{
+    auto c = get_cpu_struct();
+
+    auto get_front = [=]() -> AttentionNode * {
+        Auto_Lock_Scope lock(c->attention_queue_lock);
+        if (c->attention_queue.empty())
+            return nullptr;
+
+        return &c->attention_queue.front();
+    };
+
+    AttentionNode *e;
+    while ((e = get_front())) {
+        e->get_attention();
+    }
+}

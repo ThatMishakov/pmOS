@@ -73,6 +73,7 @@ struct TimerRight final: TimerNode, ipc::RecieveRight, AttentionNode {
     // AttentionNode
     virtual void get_attention() override;
 
+    kresult_t set_deadline(u64 new_deadline);
 protected:
     bool should_delete_self() const;
     void request_attention();

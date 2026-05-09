@@ -320,7 +320,7 @@ void service_software_interrupt()
     auto c = get_cpu_struct();
 
     u32 m = __atomic_fetch_and(
-        &c->ipi_mask, ~(CPU_Info::IPI_RESCHEDULE | CPU_Info::IPI_TLB_SHOOTDOWN | CPU_Info:: IPI_CPU_PARK), __ATOMIC_SEQ_CST);
+        &c->ipi_mask, ~(CPU_Info::IPI_RESCHEDULE | CPU_Info::IPI_TLB_SHOOTDOWN | CPU_Info:: IPI_CPU_PARK | CPU_Info::IPI_GET_ATTENTION), __ATOMIC_SEQ_CST);
     if (m & CPU_Info::IPI_RESCHEDULE)
         reschedule();
 
@@ -329,6 +329,9 @@ void service_software_interrupt()
 
     if (m & CPU_Info:: IPI_CPU_PARK)
         park_self();
+
+    if (m & CPU_Info::IPI_GET_ATTENTION)
+        get_attention();
 }
 
 extern "C" void nested_interrupt(RiscV64Regs *regs)

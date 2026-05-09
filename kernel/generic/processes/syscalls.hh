@@ -278,6 +278,9 @@ void syscall_get_interrupt_info();
 void syscall_create_timer();
 // Parameters: u64 port_id
 
+void syscall_set_timer_deadline();
+// Parameters: u64 port_id, u64 right_id, u64 deadline
+
 struct SyscallRetval {
     TaskDescriptor *task;
     u64 operator=(u64 value);

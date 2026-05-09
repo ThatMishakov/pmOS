@@ -295,4 +295,7 @@ void maybe_rearm_timer(u64 deadline_nanoseconds);
 void call_after_smp_entry();
 void park_self();
 
+// Should get called from IPI handler, this runs the attention routines stuff...
+void get_attention();
+
 }; // namespace kernel::sched

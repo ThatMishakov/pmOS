@@ -85,6 +85,52 @@ void TimerRight::fire()
     parent->enqueue(klib::unique_ptr<TimerRight>(this));
 }
 
+kresult_t TimerRight::set_deadline(u64 new_deadline)
+{
+    Auto_Lock_Scope l(lock);
+    if (!alive)
+        return -ENOENT;
+
+    if (is_sent) {
+        next_update_ns = new_deadline;
+    } else if (in_timer_queue) {
+        auto c = get_cpu_struct();
+        if (parent_cpu == c) {
+            // This request is newer anyway, so fold the attention one
+            if (waiting_for_attention) {
+                Auto_Lock_Scope scope_lock(c->attention_queue_lock);
+                c->attention_queue.erase(this);
+                waiting_for_attention = false;
+                next_update_ns = 0;
+            }
+
+            c->timer_queue.erase(this);
+            in_timer_queue = false;
+
+            fire_at_ns = new_deadline;
+            if (new_deadline) {
+                c->timer_queue.insert(this);
+                maybe_rearm_timer(new_deadline);
+                in_timer_queue = true;
+            }
+        } else {
+            next_update_ns = new_deadline;
+            if (!waiting_for_attention)
+                request_attention();
+        }
+    } else if (new_deadline) {
+        assert(next_update_ns == 0);
+
+        parent_cpu = get_cpu_struct();
+        fire_at_ns = new_deadline;
+        parent_cpu->timer_queue.insert(this);
+        maybe_rearm_timer(new_deadline);
+        in_timer_queue = true;
+    }
+
+    return 0;
+}
+
 void TimerRight::get_attention()
 {
     Auto_Lock_Scope l(lock);

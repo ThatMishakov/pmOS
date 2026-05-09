@@ -70,7 +70,7 @@ extern void deactivate_page_table();
 namespace kernel::proc::syscalls
 {
 
-std::array<const char *, 62> syscall_names = {
+std::array<const char *, 63> syscall_names = {
     "SYSCALL EXIT",
     "SYSCALL GET TASK ID",
     "SYSCALL CREATE PROCESS",
@@ -137,6 +137,7 @@ std::array<const char *, 62> syscall_names = {
     "SYSCALL GET RIGHT TYPE",
     "SYSCALL WATCH RIGHT",
     "SYSCALL CREATE TIMER",
+    "SYSCALL SET TIMER DEADLINE",
 };
 
 const char *syscall_name(unsigned id)
@@ -148,7 +149,7 @@ const char *syscall_name(unsigned id)
 }
 
 using syscall_function                         = void (*)();
-std::array<syscall_function, 62> syscall_table = {
+std::array<syscall_function, 63> syscall_table = {
     syscall_exit,
     syscall_get_task_id,
     syscall_create_process,
@@ -215,6 +216,7 @@ std::array<syscall_function, 62> syscall_table = {
     syscall_get_right_type,
     syscall_watch_right,
     syscall_create_timer,
+    syscall_set_timer_deadline,
 };
 
 extern "C" void syscall_handler()
@@ -2711,6 +2713,45 @@ void syscall_create_timer()
     assert(timer.val);
 
     syscall_return(current) = timer.val->right_parent_id;
+}
+
+void syscall_set_timer_deadline()
+{
+    auto task = get_current_task();
+
+    u64 port_id = syscall_arg64(task, 0);
+    u64 right_id = syscall_arg64(task, 1);
+    u64 deadline;
+    auto result = syscall_arg64_checked(task, 2, deadline);
+    if (!result) {
+        syscall_error(task) = result.result;
+        return;
+    }
+
+    const auto port_ptr = Port::atomic_get_port(port_id);
+    if (!port_ptr) {
+        syscall_error(task) = -ENOENT;
+        return;
+    }
+
+    if (port_ptr->owner != task) {
+        syscall_error(task) = -EPERM;
+        return;
+    }
+
+    auto right = port_ptr->atomic_get_right(right_id);
+    if (!right) {
+        syscall_error(task) = -ENOENT;
+        return;
+    }
+
+    if (right->recieve_type() != RightType::Timer) {
+        syscall_error(task) = -EBADF;
+        return;
+    }
+    auto timer_right = static_cast<TimerRight *>(right);
+
+    syscall_error(task) = timer_right->set_deadline(deadline);
 }
 
 } // namespace kernel::proc::syscalls

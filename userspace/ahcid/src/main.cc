@@ -467,7 +467,7 @@ pmos::async::detached_task init_timer()
 
         auto request = (IPC_Generic_Msg *)msg->data.data();
         switch (request->type) {
-        case IPC_Timer_Reply_NUM:
+        case IPC_Timer_Expired_NUM:
             react_timer();
             break;
         default:
