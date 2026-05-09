@@ -14,7 +14,9 @@ using namespace kernel::paging;
 using namespace kernel::sched;
 using namespace kernel::loongarch;
 
-constexpr u32 IPI_MASK = 0x0007;
+// Use one interrupt for all IPIs to reduce the IPI traffic
+// (I don't know if this actually a good idea...)
+constexpr u32 IPI_MASK = 0x0001;
 
 struct fp_s {
     u64 fp;
@@ -76,17 +78,34 @@ void ipi_send(u32 cpu, u32 vector)
 
 void CPU_Info::ipi_reschedule()
 {
-    ipi_send(cpu_physical_id, 0x00);
+    auto res = __atomic_fetch_or(&ipi_mask, IPI_RESCHEDULE, __ATOMIC_RELEASE);
+    if (!(res & IPI_MASK)) {
+        ipi_send(cpu_physical_id, 0x00);
+    }
 }
 
 void CPU_Info::ipi_tlb_shootdown()
 {
-    ipi_send(cpu_physical_id, 0x01);
+    auto res = __atomic_fetch_or(&ipi_mask, IPI_TLB_SHOOTDOWN, __ATOMIC_RELEASE);
+    if (!(res & IPI_MASK)) {
+        ipi_send(cpu_physical_id, 0x00);
+    }
 }
 
 void CPU_Info::ipi_cpu_park()
 {
-    ipi_send(cpu_physical_id, 0x02);
+    auto res = __atomic_fetch_or(&ipi_mask, IPI_CPU_PARK, __ATOMIC_RELEASE);
+    if (!(res & IPI_MASK)) {
+        ipi_send(cpu_physical_id, 0x00);
+    }
+}
+
+void CPU_Info::ipi_get_attention()
+{
+    auto res = __atomic_fetch_or(&ipi_mask, IPI_GET_ATTENTION, __ATOMIC_RELEASE);
+    if (!(res & IPI_MASK)) {
+        ipi_send(cpu_physical_id, 0x00);
+    }
 }
 
 
@@ -96,17 +115,21 @@ void handle_ipi()
     // EOI
     iocsr_write32(mask, iocsr::IPI_CLEAR);
 
-    if (mask & (1 << 0))
+    auto c = get_cpu_struct();
+
+    u32 m = __atomic_fetch_and(&c->ipi_mask, ~IPI_MASK, __ATOMIC_SEQ_CST);
+
+    if (m & CPU_Info::IPI_RESCHEDULE)
         reschedule();
 
-    if (mask & (1 << 1)) {
-        auto c = get_cpu_struct();
+    if (m & CPU_Info::IPI_TLB_SHOOTDOWN)
         c->current_task->page_table->trigger_shootdown(c->current_task->page_table.get(), c);
-    }
 
-    if (mask & (1 << 2)) {
+    if (m & CPU_Info:: IPI_CPU_PARK)
         park_self();
-    }
+    
+    if (m & CPU_Info::IPI_GET_ATTENTION)
+        get_attention();
 }
 
 void ipi_enable()
