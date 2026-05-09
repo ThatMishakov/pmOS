@@ -1,9 +1,6 @@
 #include "timers.hh"
 #include <pmos/ipc.h>
 
-#include <kern_logger/kern_logger.hh>
-using namespace kernel::log;
-
 namespace kernel::sched
 {
 
@@ -49,6 +46,7 @@ static void delete_timer_right(TimerRight *t)
 {
     assert(t);
     t->rcu_head.rcu_func = [](void *self, bool) {
+
         TimerRight *t =
             reinterpret_cast<TimerRight *>(reinterpret_cast<char *>(self) - offsetof(TimerRight, rcu_head));
         delete t;

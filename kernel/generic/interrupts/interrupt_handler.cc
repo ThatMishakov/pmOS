@@ -109,6 +109,8 @@ bool IntNotificationRight::destroy_recieve_right()
     alive = false;
 
     assert(parent);
+    parent->atomic_remove_right(this);
+
     auto parent_task = parent->owner;
     assert(parent_task);
 

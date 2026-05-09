@@ -145,6 +145,7 @@ syscall_r get_right_type(pmos_right_t right);
 #define RIGHT_TYPE_MEM_OBJECT       3
 #define RIGHT_TYPE_INT_SOURCE       4
 #define RIGHT_TYPE_INT_NOTIFICATION 5
+#define RIGHT_TYPE_TIMER            6
 
 #endif
 

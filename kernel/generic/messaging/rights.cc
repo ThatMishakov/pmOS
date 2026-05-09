@@ -468,6 +468,8 @@ unsigned Right::type_as_int() const
         return RIGHT_TYPE_INT_SOURCE;
     case RightType::InterruptNotification:
         return RIGHT_TYPE_INT_NOTIFICATION;
+    case RightType::Timer:
+        return RIGHT_TYPE_TIMER;
     default:
         return 0;
     }
