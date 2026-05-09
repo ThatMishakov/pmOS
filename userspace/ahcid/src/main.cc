@@ -436,28 +436,7 @@ void AHCIPort::port_idle2()
     }
 }
 
-void TimerWaiter::wait(int time_ms)
-{
-    auto time = pmos_get_time(GET_TIME_NANOSECONDS_SINCE_BOOTUP);
-    if (time.result != 0) {
-        printf("Failed to get time\n");
-        return;
-    }
-
-    timer_time = time.value + (uint64_t)time_ms * 1'000'000;
-    timer_tree.insert(this);
-
-    if (timer_tree.begin() == this) {
-        next_timer_time = timer_time;
-        pmos_request_timer(cmd_port.get(), time_ms * 1'000'000, 0);
-    } else {
-        TimerTree::RBTreeIterator it;
-        while (!timer_tree.empty() and ((it = timer_tree.begin())->timer_time < time.value)) {
-            timer_tree.erase(it);
-            it->react_timer();
-        }
-    }
-}
+pmos::RecieveRight timer_right;
 
 void react_timer()
 {
@@ -471,8 +450,52 @@ void react_timer()
 
     if (it != timer_tree.end()) {
         next_timer_time = it->timer_time;
-        int t           = pmos_request_timer(cmd_port.get(), next_timer_time - current_time.value, 0);
-        if (t != 0) {
+        set_deadline(timer_right, next_timer_time);
+    }
+}
+
+pmos::async::detached_task init_timer()
+{
+    timer_right = create_timer_right(cmd_port);
+
+    while (1) {
+        auto msg = co_await dispatcher.get_message(timer_right);
+        if (!msg) {
+            fprintf(stderr, "ahcid: Failed to get timer message: %i\n", msg.error());
+            exit(1);
+        }
+
+        auto request = (IPC_Generic_Msg *)msg->data.data();
+        switch (request->type) {
+        case IPC_Timer_Reply_NUM:
+            react_timer();
+            break;
+        default:
+            printf("AHCId unknown message type: %i in timer handler!\n", request->type);
+            break;
+        }
+    }
+}
+
+void TimerWaiter::wait(int time_ms)
+{
+    auto time = pmos_get_time(GET_TIME_NANOSECONDS_SINCE_BOOTUP);
+    if (time.result != 0) {
+        printf("Failed to get time\n");
+        return;
+    }
+
+    timer_time = time.value + (uint64_t)time_ms * 1'000'000;
+    timer_tree.insert(this);
+
+    if (timer_tree.begin() == this) {
+        next_timer_time = timer_time;
+        set_deadline(timer_right, timer_time);
+    } else {
+        TimerTree::RBTreeIterator it;
+        while (!timer_tree.empty() and ((it = timer_tree.begin())->timer_time < time.value)) {
+            timer_tree.erase(it);
+            it->react_timer();
         }
     }
 }
@@ -779,6 +802,7 @@ int main(int argc, char **argv)
     printf("AHCId started...\n");
     parse_args(argc, argv);
 
+    init_timer();
     ahci_handle();
     ahci_controller_main();
 

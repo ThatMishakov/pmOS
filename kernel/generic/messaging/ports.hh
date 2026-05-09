@@ -87,7 +87,7 @@ public:
                            rights_array array, message_buffer data, uint64_t sender_id,
                            RightType new_right_type, bool always_destroy_right);
 
-    void atomic_add_to_rights(RecieveRight *right);
+    bool atomic_add_to_rights(RecieveRight *right);
     void atomic_remove_right(RecieveRight *right);
 protected:
     using Message_storage = pmos::containers::CircularDoubleList<GenericMessage, &GenericMessage::list_node>;

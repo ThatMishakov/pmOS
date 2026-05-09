@@ -733,3 +733,26 @@ interrupt_info_t get_interrupt_affinity(pmos_right_t right)
         .arch_vector = result.value >> 32,
     };
 }
+
+right_request_t pmos_create_timer(pmos_port_t port)
+{
+    syscall_r result;
+    #ifdef __32BITSYSCALL
+    result = __pmos_syscall32_2words(SYSCALL_CREATE_TIMER, port);
+    #else
+    result = pmos_syscall(SYSCALL_CREATE_TIMER, port);
+    #endif
+    return (right_request_t) {
+        .result = result.result,
+        .right = result.value,
+    };
+}
+
+result_t pmos_set_timer(pmos_port_t port, pmos_right_t timer_right, uint64_t deadline_ns)
+{
+    #ifdef __32BITSYSCALL
+    return __pmos_syscall32_6words(SYSCALL_SET_TIMER_DEADLINE, port, timer_right, deadline_ns).result;
+    #else
+    return pmos_syscall(SYSCALL_SET_TIMER_DEADLINE, port, timer_right, deadline_ns).result;
+    #endif
+}

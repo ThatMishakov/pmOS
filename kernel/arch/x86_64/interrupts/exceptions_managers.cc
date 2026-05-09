@@ -215,11 +215,13 @@ extern "C" void pagefault_manager(NestedIntContext *kernel_ctx, ulong err)
                 return;
             }
         }
-        panic("Pagefault in kernel, error %x at %lx", err, pagefault_cr2);
+        // panic("Pagefault in kernel, error %x at %lx", err, pagefault_cr2);
 
         // c->pagefault_error = c->nested_int_regs.int_err;
 
         // kernel_jump_to(deal_with_pagefault_in_kernel);
+        
+        dbg_main(err, kernel_ctx);
         return;
     }
 

@@ -519,6 +519,14 @@ right_request_t watch_right(pmos_right_t right, pmos_port_t port);
 /// @return Result of the operation. On success, the value contains the ID of the recieve right for the timer.
 right_request_t pmos_create_timer(pmos_port_t port);
 
+/// @brief Sets the timer deadline
+///
+/// @param port Port associated with the timer
+/// @param timer_right Recieve right for the timer
+/// @param deadline_ns Deadline for the timer in nanoseconds since bootup. 0 disarms the timer.
+/// @return Result of the operation
+result_t pmos_set_timer(pmos_port_t port, pmos_right_t timer_right, uint64_t deadline_ns);
+
 #endif
 
 #if defined(__cplusplus)

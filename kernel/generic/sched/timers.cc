@@ -1,6 +1,9 @@
 #include "timers.hh"
 #include <pmos/ipc.h>
 
+#include <kern_logger/kern_logger.hh>
+using namespace kernel::log;
+
 namespace kernel::sched
 {
 
@@ -30,12 +33,9 @@ ReturnStr<TimerRight *> TimerRight::create_for_port(ipc::Port *port)
 
     new_timer->parent = port;
 
-    Auto_Lock_Scope l(port->lock);
-    if (!port->atomic_alive())
-        return Error(-ENOENT);
-
     new_timer->right_parent_id = port->new_right_id();
-    port->atomic_add_to_rights(new_timer.get());
+    if (!port->atomic_add_to_rights(new_timer.get()))
+        return Error(-ENOENT);
 
     return Success(new_timer.release());
 }
@@ -47,6 +47,7 @@ ipc::RightType TimerRight::recieve_type() const
 
 static void delete_timer_right(TimerRight *t)
 {
+    assert(t);
     t->rcu_head.rcu_func = [](void *self, bool) {
         TimerRight *t =
             reinterpret_cast<TimerRight *>(reinterpret_cast<char *>(self) - offsetof(TimerRight, rcu_head));
@@ -109,6 +110,7 @@ void TimerRight::get_attention()
         parent_cpu->timer_queue.insert(this);
         maybe_rearm_timer(next_update_ns);
         next_update_ns = 0;
+        in_timer_queue = true;
     }
 
     if (!alive && should_delete_self())
@@ -134,10 +136,10 @@ void TimerRight::delete_self()
     if (next_update_ns) {
         parent_cpu = get_cpu_struct();
         fire_at_ns = next_update_ns;
-        in_timer_queue = true;
         parent_cpu->timer_queue.insert(this);
         maybe_rearm_timer(next_update_ns);
         next_update_ns = 0;
+        in_timer_queue = true;
     }
 }
 
@@ -170,6 +172,8 @@ bool TimerRight::destroy_recieve_right()
 
     if (should_delete_self())
         delete_timer_right(this);
+
+    return true;
 }
 
 void TimerRight::request_attention()

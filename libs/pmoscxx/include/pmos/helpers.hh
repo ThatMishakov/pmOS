@@ -21,6 +21,7 @@ enum class RightType {
     MemObject,
     IntSource,
     IntNotification,
+    Timer,
     Unknown,
 };
 
@@ -113,6 +114,9 @@ private:
 RecieveRight register_interrupt(const Right &int_source_right, Port &port);
 void complete_interrupt(const RecieveRight &notification_right);
 
+RecieveRight create_timer_right(Port &port);
+void set_deadline(const RecieveRight &timer_right, uint64_t deadline_ns);
+
 std::expected<RecieveRight, int> request_named_port(std::string_view name, Port &port);
 
 std::expected<Right, int> create_mem_object_noexcept(uint64_t size, uint32_t flags) noexcept;
@@ -200,6 +204,30 @@ protected:
     Port &port;
     MessageWaiter *default_waiter = {};
     PortsTree::RBTreeHead waiters;
+
+    class TimerWaiter {
+    public:
+        bool await_ready() noexcept;
+        void await_suspend(std::coroutine_handle<> h);
+        void await_resume() noexcept;
+    private:
+        TimerWaiter(PortDispatcher &dispatcher, uint64_t deadline) noexcept;
+
+        uint64_t deadline;
+        std::coroutine_handle<> h;
+        PortDispatcher &dispatcher;
+        pmos::containers::RBTreeNode<TimerWaiter> timer_node = {};
+
+        friend class PortDispatcher;
+    };
+
+    using TimerTree = pmos::containers::RedBlackTree<
+        TimerWaiter, &TimerWaiter::timer_node,
+        detail::TreeCmp<TimerWaiter, uint64_t, &TimerWaiter::deadline>>;
+
+    TimerTree::RBTreeHead timer_tree;
+    uint64_t next_timer_time = 0;
+    RecieveRight timer_waiter_right;
 public:
 
     constexpr PortDispatcher(Port &) noexcept;
@@ -210,6 +238,9 @@ public:
     MessageWaiter get_message(RecieveRight &) noexcept;
     MessageWaiter get_message_default() noexcept;
     std::expected<void, int> dispatch();
+
+    TimerWaiter wait_until(uint64_t deadline_ns);
+    TimerWaiter wait_for(uint64_t duration_ns);
 };
 
 std::expected<Right, int> get_right_by_name(std::string_view name, bool noblock = false);

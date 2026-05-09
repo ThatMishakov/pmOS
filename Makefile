@@ -83,7 +83,7 @@ qemu-x86: $(x86_64-HYPER-IMG) ovmf-x86
     	-device ide-hd,drive=hdd0 \
 		-M q35\
 		-m 512M\
-	       	-smp 4\
+	       	-smp 1\
 	       	-serial stdio \
 		-device intel-iommu -cpu max,x2apic=on,+smep,+smap -no-reboot
 

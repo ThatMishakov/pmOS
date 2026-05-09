@@ -279,4 +279,26 @@ void complete_interrupt(const RecieveRight &int_notification_right)
                                 "Failed to complete interrupt");
 }
 
+RecieveRight create_timer_right(Port &port)
+{
+    auto result = ::pmos_create_timer(port.get());
+    if (result.result)
+        throw std::system_error(-static_cast<int>(result.result), std::system_category(),
+                                "Failed to create timer right");
+
+    return RecieveRight{result.right, RightType::Timer, port.get()};
+}
+
+void set_deadline(const RecieveRight &timer_right, uint64_t deadline_ns)
+{
+    if (timer_right.type() != RightType::Timer)
+        throw std::invalid_argument("Right must be of type Timer");
+
+    auto result = ::pmos_set_timer(timer_right.port(), timer_right.get(), deadline_ns);
+    if (result)
+        throw std::system_error(-static_cast<int>(result), std::system_category(),
+                                "Failed to set timer deadline");
+
+}
+
 }
