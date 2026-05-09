@@ -32,18 +32,32 @@
 
 void kernel::sched::CPU_Info::ipi_reschedule()
 {
-    __atomic_or_fetch(&ipi_mask, IPI_RESCHEDULE, __ATOMIC_RELEASE);
-    sbi_send_ipi(0x1, hart_id);
+    auto res = __atomic_fetch_or(&ipi_mask, IPI_RESCHEDULE, __ATOMIC_RELEASE);
+    if (!(res & IPI_MASK)) {
+        sbi_send_ipi(0x1, hart_id);
+    }
 }
 
 void kernel::sched::CPU_Info::ipi_tlb_shootdown()
 {
-    __atomic_or_fetch(&ipi_mask, IPI_TLB_SHOOTDOWN, __ATOMIC_RELEASE);
-    sbi_send_ipi(0x1, hart_id);
+    auto res = __atomic_fetch_or(&ipi_mask, IPI_TLB_SHOOTDOWN, __ATOMIC_RELEASE);
+    if (!(res & IPI_MASK)) {
+        sbi_send_ipi(0x1, hart_id);
+    }
 }
 
 void kernel::sched::CPU_Info::ipi_cpu_park()
 {
-    __atomic_or_fetch(&ipi_mask, IPI_CPU_PARK, __ATOMIC_RELEASE);
-    sbi_send_ipi(0x1, hart_id);
+    auto res = __atomic_fetch_or(&ipi_mask, IPI_CPU_PARK, __ATOMIC_RELEASE);
+    if (!(res & IPI_MASK)) {
+        sbi_send_ipi(0x1, hart_id);
+    }
+}
+
+void kernel::sched::CPU_Info::ipi_get_attention()
+{
+    auto res = __atomic_fetch_or(&ipi_mask, IPI_GET_ATTENTION, __ATOMIC_RELEASE);
+    if (!(res & IPI_MASK)) {
+        sbi_send_ipi(0x1, hart_id);
+    }
 }

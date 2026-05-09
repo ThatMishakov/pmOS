@@ -319,8 +319,8 @@ void service_software_interrupt()
 
     auto c = get_cpu_struct();
 
-    u32 m = __atomic_fetch_and(
-        &c->ipi_mask, ~(CPU_Info::IPI_RESCHEDULE | CPU_Info::IPI_TLB_SHOOTDOWN | CPU_Info:: IPI_CPU_PARK | CPU_Info::IPI_GET_ATTENTION), __ATOMIC_SEQ_CST);
+    u32 m = __atomic_fetch_and(&c->ipi_mask, ~c->IPI_MASK, __ATOMIC_SEQ_CST);
+
     if (m & CPU_Info::IPI_RESCHEDULE)
         reschedule();
 

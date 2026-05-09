@@ -199,6 +199,7 @@ struct CPU_Info {
     u32 allocated_int_count                = 0;
 
     constexpr static u32 ipi_synchronous_mask = IPI_TLB_SHOOTDOWN | IPI_CPU_PARK;
+    constexpr static u32 IPI_MASK = IPI_RESCHEDULE | IPI_TLB_SHOOTDOWN | IPI_CPU_PARK | IPI_GET_ATTENTION;
 
     // IMHO this is better than protecting current_task pointer with spinlock
     priority_t current_task_priority = sched_queues_levels;
