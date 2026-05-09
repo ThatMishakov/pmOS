@@ -52,7 +52,10 @@ bool setup_stacks(kernel::sched::CPU_Info *c);
 bool use_smap = false;
 bool use_smep = false;
 
-
+#ifdef __x86_64__
+bool use_lass = false;
+bool support_lam = false;
+#endif
 
 extern "C" void allow_access_user()
 {
@@ -81,6 +84,19 @@ void detect_protections()
             use_smap = true;
             serial_logger.printf("Using SMAP in kernel...\n");
         }
+
+        #ifdef __x86_64__
+        auto c1 = cpuid2(0x7, 1);
+        if (c1.eax & (1 << 6)) {
+            use_lass = true;
+            serial_logger.printf("Using LASS in kernel...\n");
+        }
+
+        if (c1.eax & (1 << 27)) {
+            support_lam = true;
+            serial_logger.printf("CPU supports LAM...\n");
+        }
+        #endif
     }
 }
 
@@ -91,6 +107,12 @@ void enable_protections()
         c |= (1 << 21);
     if (use_smep)
         c |= (1 << 20);
+
+    #ifdef __x86_64__
+    if (use_lass)
+        c |= (1 << 27);
+    #endif
+
     setCR4(c);
 
     if (use_smap)
@@ -432,9 +454,13 @@ extern ulong acpi_vec_jump_pmode;
 extern u32 smp_trampoline_cr3;
 extern u32 smp_trampoline_trampoilne_flags;
 
+#ifdef __i386__
 constexpr u32 SMP_TRAMPOLINE_ENABLE_PAE = 0b001;
+#endif
 constexpr u32 SMP_TRAMPOLINE_ENABLE_NX  = 0b010;
+#ifdef __x86_64__
 constexpr u32 SMP_TRAMPOLINE_5_LVL_PAGING = 0b100;
+#endif
 
 pmm::phys_page_t acpi_trampoline_page = 0;
 
