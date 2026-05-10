@@ -17,6 +17,7 @@
 #include <syscall.hh>
 #include <pmos/containers/set.hh>
 #include <time/timers.hh>
+#include <memory/pmm.hh>
 
 using namespace kernel;
 using namespace kernel::x86;
@@ -27,6 +28,7 @@ using namespace kernel::x86::interrupts;
 using namespace kernel::x86::paging;
 using namespace kernel::x86::interrupts::lapic;
 using namespace kernel::paging;
+using namespace kernel::pmm;
 
 #ifdef __i386__
 using namespace kernel::ia32::interrupts;
@@ -119,6 +121,8 @@ void enable_protections()
         clac();
 }
 
+void setup_tss(CPU_Info *c);
+
 void init_per_cpu(u64 lapic_id)
 {
     sse::detect_sse();
@@ -138,6 +142,7 @@ void init_per_cpu(u64 lapic_id)
 
     sched::cpu_struct_works = true;
 
+    setup_tss(c);
     if (!setup_stacks(c))
         panic("Failed to setup stacks\n");
 
@@ -257,6 +262,7 @@ CPU_Info *prepare_cpu(u32 lapic_id)
     if (!c)
         panic("Couldn't allocate memory for CPU_Info\n");
 
+    setup_tss(c);
     if (!setup_stacks(c))
         panic("Failed to set up stack for AP");
 
@@ -522,4 +528,61 @@ void init_acpi_trampoline()
 
     serial_logger.printf("Initialized SMP/ACPI trampoline vector at %x (%x)\n",
                          (u32)acpi_trampoline_page, acpi_wakeup_vec().val);
+}
+
+bool have_tss_page = false;
+phys_addr_t tss_page_phys = 0;
+
+phys_addr_t get_tss_page_common()
+{
+    if (have_tss_page)
+        return tss_page_phys;
+
+    tss_page_phys = get_memory_for_kernel(1);
+    if (alloc_failure(tss_page_phys))
+        panic("Failed to allocate memory for TSS page!");
+
+    have_tss_page = true;
+
+    Temp_Mapper_Obj<u8> mapper(request_temp_mapper());
+    mapper.map(tss_page_phys);
+
+    memset(mapper.ptr, 0, PAGE_SIZE);
+    *mapper.ptr = 0xff; // Fun x86 stuff (yes, this whole page is just for 1 byte)
+    return tss_page_phys;
+}
+
+void setup_tss(CPU_Info *c)
+{
+    void *mapping = vmm::kernel_space_allocator.virtmem_alloc(4);
+    if (!mapping)
+        panic("Failed to alloc virt space for TSS!\n");
+
+    auto phys_addr = get_memory_for_kernel(1);
+    if (alloc_failure(phys_addr))
+        panic("Failed to allocate memory for TSS!\n");
+
+    static const Page_Table_Arguments arg = {
+        .readable           = true,
+        .writeable          = true,
+        .user_access        = false,
+        .global             = true,
+        .execution_disabled = true,
+    };
+
+    auto result = map_kernel_page(phys_addr, mapping, arg);
+    if (result)
+        panic("Failed to map TSS page!\n");
+
+    memset(mapping, 0, PAGE_SIZE);
+
+    void *second_mapping = (char *)mapping + PAGE_SIZE * 3;
+
+    // TODO: The arguments for the second (4th) mapping might be broken...
+
+    result = map_kernel_page(get_tss_page_common(), second_mapping, arg);
+    if (result)
+        panic("Failed to map TSS page second time!\n");
+
+    c->tss_virt = mapping;
 }

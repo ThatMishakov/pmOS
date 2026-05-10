@@ -126,9 +126,10 @@ struct CPU_Info {
 
     u64 system_timer_val = 0;
     u32 timer_val        = 0;
+
+    void *tss_virt = nullptr;
 #endif
 #ifdef __i386__
-    ia32::interrupts::TSS tss;
     ia32::interrupts::TSS double_fault_tss;
     // TSS double_fault_tss;
     // TODO...

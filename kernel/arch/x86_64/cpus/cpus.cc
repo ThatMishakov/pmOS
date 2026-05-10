@@ -38,11 +38,10 @@ bool setup_stacks(sched::CPU_Info *c)
 {
     assert(c);
 
-    TSS *tss = new TSS();
-    if (!tss)
-        panic("Couldn't allocate memory for TSS\n");
+    TSS *tss = (TSS *)c->tss_virt;
+    *tss = {};
 
-    c->cpu_gdt.tss_descriptor = System_Segment_Descriptor((u64)tss, sizeof(TSS), 0x89, 0x02);
+    c->cpu_gdt.tss_descriptor = System_Segment_Descriptor((u64)tss, PAGE_SIZE - 1, 0x89, 0x02);
 
     c->kernel_stack_top = c->kernel_stack.get_stack_top();
 
