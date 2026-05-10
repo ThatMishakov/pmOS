@@ -128,6 +128,9 @@ struct CPU_Info {
     u32 timer_val        = 0;
 
     void *tss_virt = nullptr;
+
+    u64 io_bitmap_page_table = 0;
+    bool io_bitmap_active = false;
 #endif
 #ifdef __i386__
     ia32::interrupts::TSS double_fault_tss;

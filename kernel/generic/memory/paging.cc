@@ -481,6 +481,9 @@ void Page_Table::trigger_shootdown(Page_Table *maybe_page_table, sched::CPU_Info
                 maybe_page_table->invalidate_tlb(range.start, range.size);
         }
 
+        if (desc.get_arch_flags())
+            maybe_page_table->arch_specific_shutdown_stuff(desc.get_arch_flags());
+
         // Make sure the invalidation is done before the generation change
         __sync_synchronize();
 
@@ -582,7 +585,7 @@ void TLBShootdownContext::finalize()
     // TODO: This can be removed later...
     static Spinlock barrier;
 
-    if (empty())
+    if (empty() && !arch_flags)
         return;
 
     assert(for_kernel() || sched::cpu_struct_works ||

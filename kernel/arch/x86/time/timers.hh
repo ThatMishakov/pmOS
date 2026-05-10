@@ -29,7 +29,7 @@ void init_after_lapic();
 /// Blocking timer waiter, for the stuff like MP init
 class BlockingWaiter {
     BlockingWaiter() = default;
-    unsigned iopl = 0;
+    unsigned tpr = 0;
 
 public:
     ~BlockingWaiter();

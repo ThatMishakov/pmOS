@@ -114,11 +114,14 @@ public:
 
     void finalize();
 
+    u16 &get_arch_flags() noexcept { return arch_flags; }
+
 private:
     Page_Table *page_table = nullptr;
 
     short pages_count  = 0;
     short ranges_count = 0;
+    u16 arch_flags     = 0; // This is currently for IO bitmap on x86...
 
     page_ptr pages[MAX_PAGES] = {};
     range ranges[MAX_RANGES]  = {};
@@ -552,11 +555,16 @@ public:
     virtual void invalidate_range(TLBShootdownContext &ctx, void *virt_addr, size_t size_bytes,
                                   bool free) = 0;
 
-    void /* generation */ apply_cpu(sched::CPU_Info *cpu);
+    void apply_cpu(sched::CPU_Info *cpu);
     void unapply_cpu(sched::CPU_Info *cpu);
 
     // TODO: Calling this on page table is weird
     static void trigger_shootdown(Page_Table *maybe_page_table, sched::CPU_Info *cpu);
+
+    virtual inline void arch_specific_shutdown_stuff(u16 flags)
+    {
+        (void)flags;
+    }
 
 protected:
     Page_Table() = default;
@@ -601,6 +609,7 @@ void unmap_kernel_pages(TLBShootdownContext &ctx, void *virt_addr, size_t size_b
 kresult_t map_pages(ptable_top_ptr_t page_table, u64 phys_addr, void *virt_addr, size_t size_bytes,
                     Page_Table_Arguments arg);
 kresult_t map_kernel_pages(u64 phys_addr, void *virt_addr, size_t size, Page_Table_Arguments arg);
+kresult_t map_kernel_pages_overwrite(u64 phys_addr, void *virt_addr, size_t size, Page_Table_Arguments arg);
 
 // Generic function to apply the page table to the current CPU
 void apply_page_table(ptable_top_ptr_t page_table);

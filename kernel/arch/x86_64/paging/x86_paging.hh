@@ -112,6 +112,7 @@ protected:
 
 public:
     u64 pt_top_phys = -1UL;
+    u64 bitmap_pages_phys = -1UL;
 
     virtual u64 get_cr3() const { return (u64)pt_top_phys; }
 
@@ -194,6 +195,9 @@ public:
 
     void *user_addr_max() const override;
 
+    kresult_t get_io_permissions();
+
+    virtual void arch_specific_shutdown_stuff(u16 flags) override;
 protected:
     /// @brief Inserts the page table into the map of the page tables
     static kresult_t insert_global_page_tables(klib::shared_ptr<x86_Page_Table> table);

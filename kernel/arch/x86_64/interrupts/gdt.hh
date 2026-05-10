@@ -46,7 +46,7 @@ struct TSS {
     u64 ist7      = 0;
     u64 reserved1 = 0;
     u16 reserved2 = 0;
-    u16 iopb      = 0;
+    u16 iopb      = PAGE_SIZE;
 } PACKED;
 
 struct System_Segment_Descriptor {

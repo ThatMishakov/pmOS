@@ -40,18 +40,20 @@
 #include <processes/tasks.hh>
 #include <x86_asm.hh>
 #include <x86_utils.hh>
+#include <cpus/io_bitmap.hh>
 
 using namespace kernel;
 using namespace kernel::log;
 using namespace kernel::paging;
 using namespace kernel::x86_64::paging;
+using namespace kernel::x86::cpus;
 
 bool x86_64::paging::support_nx = false;
 
 bool x86_64::paging::use_5lvl_paging = false;
 
 static kresult_t map(u64 physical_addr, void *virtual_addr,
-                              kernel::paging::Page_Table_Arguments arg, u64 pt_phys)
+                              kernel::paging::Page_Table_Arguments arg, u64 pt_phys, bool force = false)
 {
     Temp_Mapper_Obj<u64> mapper(request_temp_mapper());
 
@@ -137,7 +139,7 @@ static kresult_t map(u64 physical_addr, void *virtual_addr,
     auto ptable_entry = level_idx<1>(virtual_addr);
     auto *pt          = mapper.map(pde.page());
     auto pte = x86_PAE_Entry::atomic_load(pt + ptable_entry);
-    if (pte.present)
+    if (pte.present && !force)
         return -EEXIST;
 
     pte             = {};
@@ -183,6 +185,17 @@ kresult_t kernel::paging::map_kernel_pages(u64 phys_addr, void *virt_addr, size_
                                            kernel::paging::Page_Table_Arguments arg)
 {
     return map_pages(idle_cr3, phys_addr, virt_addr, size, arg);
+}
+
+kresult_t kernel::paging::map_kernel_pages_overwrite(u64 phys_addr, void *virt_addr, size_t size,
+                                           kernel::paging::Page_Table_Arguments arg)
+{    
+    for (u64 i = 0; i < size; i += 0x1000) {
+        auto result = map(phys_addr + i, (char *)virt_addr + i, arg, idle_cr3, true);
+        if (result)
+            return result;
+    }
+    return 0;
 }
 
 kresult_t kernel::paging::map_kernel_page(u64 phys_addr, void *virt_addr,
@@ -1037,7 +1050,37 @@ void x86_Page_Table::takeout_global_page_tables()
     global_page_tables.erase_if_exists(this->id);
 }
 
-void x86_Page_Table::apply() noexcept { setCR3((u64)pt_top_phys); }
+void x86_Page_Table::apply() noexcept {
+    apply_io_bitmap(bitmap_pages_phys, id);
+    setCR3((u64)pt_top_phys);
+}
+
+void x86_Page_Table::arch_specific_shutdown_stuff(u16 flags)
+{
+    if (flags & 0x01)
+        apply_io_bitmap(bitmap_pages_phys, id);
+}
+
+kresult_t x86_Page_Table::get_io_permissions()
+{
+    Auto_Lock_Scope l(lock);
+    if (bitmap_pages_phys != -1UL)
+        return 0;
+
+    auto p = pmm::get_memory_for_kernel(2);
+    if (pmm::alloc_failure(p))
+        return -ENOMEM;
+
+    clear_page(p, 0);
+    clear_page(p + PAGE_SIZE, 0);
+
+    bitmap_pages_phys = p;
+
+    auto tlb_ctx = TLBShootdownContext::create_userspace(*this);
+    tlb_ctx.get_arch_flags() |= 0x01;
+
+    return 0;
+}
 
 void kernel::paging::apply_page_table(ptable_top_ptr_t page_table) { setCR3((u64)page_table); }
 

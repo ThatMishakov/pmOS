@@ -29,6 +29,7 @@
 
 #include <sched/sched.hh>
 #include <syscall.hh>
+#include <x86_asm.hh>
 
 using namespace kernel;
 using namespace kernel::sched;
@@ -53,6 +54,24 @@ bool setup_stacks(sched::CPU_Info *c)
     c->cpu_gdt.tss_descriptor.tss()->rsp0 = (u64)c->kernel_stack.get_stack_top();
 
     return true;
+}
+
+namespace kernel::x86::gdt {
+
+void io_bitmap_enable()
+{
+    auto c = sched::get_cpu_struct();
+    c->cpu_gdt.tss_descriptor = System_Segment_Descriptor((u64)c->tss_virt, PAGE_SIZE*3 - 1, 0x89, 0x02);
+    loadTSS(TSS_SEGMENT);
+}
+
+void io_bitmap_disable()
+{
+    auto c = sched::get_cpu_struct();
+    c->cpu_gdt.tss_descriptor = System_Segment_Descriptor((u64)c->tss_virt, PAGE_SIZE - 1, 0x89, 0x02);
+    loadTSS(TSS_SEGMENT);
+}
+
 }
 
 #include "syscall.hh"

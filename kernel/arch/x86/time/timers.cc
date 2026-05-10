@@ -165,7 +165,7 @@ BlockingWaiter BlockingWaiter::create()
     lapic_timer_set_dummy();
 
     // Do this to protect against interrupts from IOAPICs
-    w.iopl = tpr_read();
+    w.tpr = tpr_read();
     tpr_write(14);
 
     return w;
@@ -175,5 +175,5 @@ BlockingWaiter::~BlockingWaiter()
 {
     lapic_timer_restore_normal();
 
-    tpr_write(iopl);
+    tpr_write(tpr);
 }

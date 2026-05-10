@@ -932,4 +932,15 @@ void TaskDescriptor::interrupt_restart_syscall()
     syscalls::syscall_error(this) = -EINTR;
 }
 
+#if defined(__x86_64__) || defined(__i386__)
+kresult_t TaskDescriptor::get_io_permissions()
+{
+    if (status == TaskStatus::TASK_UNINIT)
+        return -EINVAL;
+
+    assert(page_table);
+    return page_table->get_io_permissions();
+}
+#endif
+
 } // namespace kernel::proc

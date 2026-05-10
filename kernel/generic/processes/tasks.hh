@@ -327,6 +327,10 @@ namespace proc
         kresult_t init_fp_state();
 #endif
 
+        #if defined(__i386) || defined(__x86_64)
+        kresult_t get_io_permissions();
+        #endif
+
         inline TaskGroup *get_rights_namespace() const
         {
             return rights_namespace.load(std::memory_order::consume);

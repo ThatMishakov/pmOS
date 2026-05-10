@@ -134,10 +134,6 @@ static void *uacpi_work(void *arg)
     if (work->type == UACPI_WORK_GPE_EXECUTION)
         set_affinity(TASK_ID_SELF, 1, 0);
 
-#if defined(__x86_64__) || defined(__i386__)
-    pmos_request_io_permission();
-#endif
-
     work->handler(work->ctx);
 
     return NULL;
@@ -631,14 +627,6 @@ void *isr_func(void *arg)
         send_isr_reply(reply_right, UACPI_STATUS_INTERNAL_ERROR);
         return NULL;
     }
-
-#if defined(__x86_64__) || defined(__i386__)
-    int result = pmos_request_io_permission();
-    if (result != SUCCESS) {
-        send_isr_reply(reply_right, UACPI_STATUS_INTERNAL_ERROR);
-        return NULL;
-    }
-#endif
 
     send_isr_reply(reply_right, UACPI_STATUS_OK);
 

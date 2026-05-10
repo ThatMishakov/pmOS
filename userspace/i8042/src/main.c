@@ -148,12 +148,6 @@ void *interrupt_thread(void *arg)
         exit(1);
     }
 
-    result_t result = pmos_request_io_permission();
-    if (result) {
-        printf("[i8042] Error: Could not request io permission %i\n", (int)result);
-        exit(1);
-    }
-
     pmos_port_t int_port = req.port;
 
     int port_pin       = port ? 2 : 12;

@@ -868,8 +868,8 @@ void syscall_set_attribute()
 
     switch (attribute) {
     case ATTR_ALLOW_PORT:
-        syscall_return(task) = 0;
-        process->regs.set_iopl(value ? 3 : 0);
+        // TODO: Make this granular, and use rights
+        syscall_error(task) = process->get_io_permissions();
         break;
 
     case ATTR_DEBUG_SYSCALLS:
