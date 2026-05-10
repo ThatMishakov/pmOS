@@ -83,8 +83,8 @@ save_context:
     jmpq *%rcx
 1:
 # Kernel exception
-    xchgq %r15, 8(%rsp) # Error code
-    xchgq %r14, 0(%rsp) # Return address
+    xchgq %r15, 0(%rsp) # Return address
+    pushq %r14
     pushq %r13
     pushq %r12
     pushq %r11
@@ -99,9 +99,9 @@ save_context:
     pushq %rbx
     pushq %rax
     
-    movq %r15, %rdx
+    movq (15*8)(%rsp), %rdx
     movq %rsp, %rax
-    jmpq *%r14
+    jmpq *%r15
 
     .type return_to_kernel, @function
     .globl return_to_kernel
@@ -121,6 +121,7 @@ return_to_kernel:
     popq %r13
     popq %r14
     popq %r15
+    addq $8, %rsp
     iretq
 
     # TODO

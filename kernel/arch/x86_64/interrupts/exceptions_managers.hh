@@ -49,11 +49,24 @@ struct NestedIntContext {
     u64 r13;
     u64 r14;
     u64 r15;
+    u64 error_code;
     u64 rip;
     u64 cs;
     u64 rflags;
     u64 rsp;
     u64 ss;
+    u64 fred_int_code;
+};
+
+struct FREDContext {
+    u64 error_code;
+    u64 rip;
+    u64 cs;
+    u64 rflags;
+    u64 rsp;
+    u64 ss;
+    u64 fred_int_code;
+    u64 reserved;
 };
 
 constexpr int division_error_num = 0x0;

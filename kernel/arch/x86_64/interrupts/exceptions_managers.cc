@@ -45,31 +45,32 @@ using namespace kernel::proc;
 using namespace kernel::paging;
 using namespace kernel::x86;
 
+
 static void print_registers(const Task_Regs &regs, Logger &logger)
 {
-    logger.printf(" => %%rdi: 0x%lx\n", regs.scratch_r.rdi);
-    logger.printf(" => %%rsi: 0x%lx\n", regs.scratch_r.rsi);
-    logger.printf(" => %%rdx: 0x%lx\n", regs.scratch_r.rdx);
-    logger.printf(" => %%rcx: 0x%lx\n", regs.scratch_r.rcx);
-    logger.printf(" => %%r8:  0x%lx\n", regs.scratch_r.r8);
-    logger.printf(" => %%r9:  0x%lx\n", regs.scratch_r.r9);
-    logger.printf(" => %%rax: 0x%lx\n", regs.scratch_r.rax);
-    logger.printf(" => %%r10: 0x%lx\n", regs.scratch_r.r10);
-    logger.printf(" => %%r11: 0x%lx\n", regs.scratch_r.r11);
+    logger.printf(" => %%rdi: 0x%lx\n", regs.rdi);
+    logger.printf(" => %%rsi: 0x%lx\n", regs.rsi);
+    logger.printf(" => %%rdx: 0x%lx\n", regs.rdx);
+    logger.printf(" => %%rcx: 0x%lx\n", regs.rcx);
+    logger.printf(" => %%r8:  0x%lx\n", regs.r8);
+    logger.printf(" => %%r9:  0x%lx\n", regs.r9);
+    logger.printf(" => %%rax: 0x%lx\n", regs.rax);
+    logger.printf(" => %%r10: 0x%lx\n", regs.r10);
+    logger.printf(" => %%r11: 0x%lx\n", regs.r11);
 
-    logger.printf(" => %%rbx: 0x%lx\n", regs.preserved_r.rbx);
-    logger.printf(" => %%rbp: 0x%lx\n", regs.preserved_r.rbp);
-    logger.printf(" => %%r12: 0x%lx\n", regs.preserved_r.r12);
-    logger.printf(" => %%r13: 0x%lx\n", regs.preserved_r.r13);
-    logger.printf(" => %%r14: 0x%lx\n", regs.preserved_r.r14);
-    logger.printf(" => %%r15: 0x%lx\n", regs.preserved_r.r15);
+    logger.printf(" => %%rbx: 0x%lx\n", regs.rbx);
+    logger.printf(" => %%rbp: 0x%lx\n", regs.rbp);
+    logger.printf(" => %%r12: 0x%lx\n", regs.r12);
+    logger.printf(" => %%r13: 0x%lx\n", regs.r13);
+    logger.printf(" => %%r14: 0x%lx\n", regs.r14);
+    logger.printf(" => %%r15: 0x%lx\n", regs.r15);
 
-    logger.printf(" => %%rip: 0x%lx\n", regs.e.rip);
-    logger.printf(" => %%rsp: 0x%lx\n", regs.e.rsp);
-    logger.printf(" => %%rflags: 0x%lx\n", regs.e.rflags.numb);
+    logger.printf(" => %%rip: 0x%lx\n", regs.rip);
+    logger.printf(" => %%rsp: 0x%lx\n", regs.rsp);
+    logger.printf(" => %%rflags: 0x%lx\n", regs.rflags);
 
-    logger.printf(" => %%gs offset: 0x%lx\n", regs.seg.gs);
-    logger.printf(" => %%fs offset: 0x%lx\n", regs.seg.fs);
+    logger.printf(" => %%gs offset: 0x%lx\n", regs.gs);
+    logger.printf(" => %%fs offset: 0x%lx\n", regs.fs);
 
     logger.printf(" Entry type: %i\n", regs.entry_type);
 
@@ -92,7 +93,7 @@ void print_kernel_int_stack_trace(Logger &logger)
 {
     logger.printf("Kernel stack trace:\n");
     logger.printf("Womp womp");
-    // u64 *rbp = (u64 *)kernel_interrupt_regs.preserved_r.rbp;
+    // u64 *rbp = (u64 *)kernel_interrupt_regs.rbp;
     // while (rbp) {
     //     auto a    = rbp[1];
     //     auto filt = (u64)a - (u64)&_kernel_start + kernel_static;
@@ -182,6 +183,8 @@ bool page_mapped_safe(void *pagefault_cr2, ulong err);
 
 extern "C" CPU_Info *find_cpu_info();
 void hcf();
+
+extern "C" std::array<void (*)(NestedIntContext *, ulong), 32> fred_functions;
 
 extern "C" void pagefault_manager(NestedIntContext *kernel_ctx, ulong err)
 {
@@ -390,4 +393,14 @@ extern "C" void double_fault_manager(NestedIntContext *kernel_ctx, ulong err)
 void breakpoint_manager(NestedIntContext *kernel_ctx, ulong err)
 {
     global_logger.printf("Warning: hit a breakpoint but it's not implemented\n");
+}
+
+extern "C" void fred_handle(NestedIntContext *kernel_ctx, FREDContext *ctx)
+{
+    panic("FRED exception! Code %i\n", ctx->fred_int_code);
+}
+
+extern "C" void fred_nested_syscall()
+{
+    panic("FRED NESTED SYSCALL TODO\n");
 }

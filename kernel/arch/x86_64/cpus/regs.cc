@@ -8,9 +8,9 @@ using namespace kernel::proc::syscalls;
 static ulong call_flags(TaskDescriptor *task)
 {
     if (task->is_32bit())
-        return task->regs.scratch_r.rax;
+        return task->regs.rax;
     else
-        return task->regs.scratch_r.rdi;
+        return task->regs.rdi;
 }
 
 ulong syscalls::syscall_flags_reg(TaskDescriptor *task) { return call_flags(task); }
@@ -24,28 +24,28 @@ ulong syscalls::syscall_arg(TaskDescriptor *task, int arg, int args64before)
     if (task->is_32bit()) {
         switch (arg + args64before) {
         case 0:
-            return task->regs.preserved_r.rbx;
+            return task->regs.rbx;
         case 1:
-            return task->regs.scratch_r.rcx;
+            return task->regs.rcx;
         case 2:
-            return task->regs.scratch_r.rdx;
+            return task->regs.rdx;
         case 3:
-            return task->regs.preserved_r.rbp;
+            return task->regs.rbp;
         default:
             assert(!"Too many arguments");
         }
     } else {
         switch (arg) {
         case 0:
-            return task->regs.scratch_r.rsi;
+            return task->regs.rsi;
         case 1:
-            return task->regs.scratch_r.rdx;
+            return task->regs.rdx;
         case 2:
-            return task->regs.scratch_r.rcx;
+            return task->regs.rcx;
         case 3:
-            return task->regs.scratch_r.r8;
+            return task->regs.r8;
         case 4:
-            return task->regs.scratch_r.r9;
+            return task->regs.r9;
         default:
             assert(!"Too many arguments");
         }
@@ -56,19 +56,19 @@ ulong syscalls::syscall_arg(TaskDescriptor *task, int arg, int args64before)
 static void syscall_ret_low(TaskDescriptor *task, i64 value)
 {
     if (task->is_32bit()) {
-        task->regs.scratch_r.rax = value & 0xffffffff;
-        task->regs.scratch_r.rdx = value >> 32;
+        task->regs.rax = value & 0xffffffff;
+        task->regs.rdx = value >> 32;
     } else {
-        task->regs.scratch_r.rax = value;
+        task->regs.rax = value;
     }
 }
 static void syscall_ret_high(TaskDescriptor *task, u64 value)
 {
     if (task->is_32bit()) {
-        task->regs.scratch_r.rsi = value & 0xffffffff;
-        task->regs.scratch_r.rdi = value >> 32;
+        task->regs.rsi = value & 0xffffffff;
+        task->regs.rdi = value >> 32;
     } else {
-        task->regs.scratch_r.rdx = value;
+        task->regs.rdx = value;
     }
 }
 
@@ -77,9 +77,9 @@ u64 syscalls::syscall_arg64(TaskDescriptor *task, int arg)
     if (task->is_32bit()) {
         switch (arg) {
         case 0:
-            return (task->regs.preserved_r.rbx & 0xffffffff) | (task->regs.scratch_r.rcx << 32);
+            return (task->regs.rbx & 0xffffffff) | (task->regs.rcx << 32);
         case 1:
-            return (task->regs.scratch_r.rdx & 0xffffffff) | (task->regs.preserved_r.rbp << 32);
+            return (task->regs.rdx & 0xffffffff) | (task->regs.rbp << 32);
         default:
             assert(!"Too many arguments");
         }
@@ -94,13 +94,13 @@ ReturnStr<bool> syscalls::syscall_arg64_checked(TaskDescriptor *task, int arg, u
     if (task->is_32bit()) {
         switch (arg) {
         case 0:
-            value = (task->regs.preserved_r.rbx & 0xffffffff) | (task->regs.scratch_r.rcx << 32);
+            value = (task->regs.rbx & 0xffffffff) | (task->regs.rcx << 32);
             break;
         case 1:
-            value = (task->regs.scratch_r.rdx & 0xffffffff) | (task->regs.preserved_r.rbp << 32);
+            value = (task->regs.rdx & 0xffffffff) | (task->regs.rbp << 32);
             break;
         default:
-            return copy_from_user((char *)&value, (char *)task->regs.e.rsp + (arg - 2) * 8, 8);
+            return copy_from_user((char *)&value, (char *)task->regs.rsp + (arg - 2) * 8, 8);
         }
     } else {
         value = syscall_arg64(task, arg);
@@ -125,7 +125,7 @@ ReturnStr<bool> syscalls::syscall_args_checked(TaskDescriptor *task, int arg, in
             unsigned args[16];
             assert(end - start <= 16);
 
-            auto b = copy_from_user((char *)args, (char *)task->regs.e.rsp + (start - 4) * 4,
+            auto b = copy_from_user((char *)args, (char *)task->regs.rsp + (start - 4) * 4,
                                     (end - start) * 4);
             if (!b.success() || !b.val) {
                 return b;
@@ -165,18 +165,18 @@ std::pair<i64, u64> SyscallError::operator=(std::pair<i64, u64> value)
     return value;
 }
 
-SyscallError::operator int() const { return task->regs.scratch_r.rax; }
+SyscallError::operator int() const { return task->regs.rax; }
 
 void syscalls::syscall_success(TaskDescriptor *task) { syscall_ret_low(task, 0); }
 
-bool TaskDescriptor::is_32bit() const { return regs.e.cs == R3_LEGACY_CODE_SEGMENT; }
+bool TaskDescriptor::is_32bit() const { return regs.cs == R3_LEGACY_CODE_SEGMENT; }
 
 kresult_t TaskDescriptor::set_32bit()
 {
     assert(!page_table);
     assert(status == TaskStatus::TASK_UNINIT);
 
-    regs.e.cs = R3_LEGACY_CODE_SEGMENT;
+    regs.cs = R3_LEGACY_CODE_SEGMENT;
 
     return 0;
 }
