@@ -1058,7 +1058,7 @@ void x86_Page_Table::apply() noexcept {
 void x86_Page_Table::arch_specific_shutdown_stuff(u16 flags)
 {
     if (flags & 0x01)
-        apply_io_bitmap(bitmap_pages_phys, id);
+        apply_io_bitmap(bitmap_pages_phys, id, true);
 }
 
 kresult_t x86_Page_Table::get_io_permissions()

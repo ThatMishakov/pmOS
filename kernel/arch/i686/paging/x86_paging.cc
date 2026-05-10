@@ -7,6 +7,7 @@
 #include <utility>
 #include <x86_asm.hh>
 #include <x86_utils.hh>
+#include <cpus/io_bitmap.hh>
 
 template<typename T> static T alignup(T input, unsigned alignment_log)
 {
@@ -81,7 +82,7 @@ void pae_invalidate(u32 *pt, unsigned idx)
 }
 
 kresult_t ia32_map_page(u32 cr3, u64 phys_addr, void *virt_addr,
-                        kernel::paging::Page_Table_Arguments arg)
+                        kernel::paging::Page_Table_Arguments arg, bool force = false)
 {
     assert(!(phys_addr & 0xFFF));
     if (!use_pae) {
@@ -107,7 +108,7 @@ kresult_t ia32_map_page(u32 cr3, u64 phys_addr, void *virt_addr,
         u32 *pt = pt_mapper.map(pd_entry & 0xFFFFF000);
 
         auto pt_entry = __atomic_load_n(pt + pt_idx, __ATOMIC_RELAXED);
-        if (pt_entry & PAGE_PRESENT)
+        if (pt_entry & PAGE_PRESENT && !force)
             return -EEXIST;
 
         u32 new_pt = phys_addr;
@@ -166,7 +167,7 @@ kresult_t ia32_map_page(u32 cr3, u64 phys_addr, void *virt_addr,
         u32 *pt = pt_mapper.map(pd_entry & PAE_ADDR_MASK);
 
         pae_entry_t pt_entry = pae_load(pt, pt_idx);
-        if (pt_entry & PAGE_PRESENT)
+        if (pt_entry & PAGE_PRESENT && !force)
             return -EEXIST;
 
         pae_entry_t new_pt = phys_addr;
@@ -1429,6 +1430,33 @@ u32 memory_type_to_bits(kernel::paging::Memory_Type type)
     }
 }
 
+void IA32_Page_Table::arch_specific_shutdown_stuff(u16 flags)
+{
+    if (flags & 0x01)
+        x86::cpus::apply_io_bitmap(bitmap_pages_phys, id, true);
+}
+
+kresult_t IA32_Page_Table::get_io_permissions()
+{
+    Auto_Lock_Scope l(lock);
+    if (bitmap_pages_phys != (phys_addr_t)-1)
+        return 0;
+
+    auto p = pmm::get_memory_for_kernel(2);
+    if (pmm::alloc_failure(p))
+        return -ENOMEM;
+
+    clear_page(p, 0);
+    clear_page(p + PAGE_SIZE, 0);
+
+    bitmap_pages_phys = p;
+
+    auto tlb_ctx = ::kernel::paging::TLBShootdownContext::create_userspace(*this);
+    tlb_ctx.get_arch_flags() |= 0x01;
+
+    return 0;
+}
+
 } // namespace kernel::ia32::paging
 
 namespace kernel::paging
@@ -1485,6 +1513,18 @@ void apply_page_table(ptable_top_ptr_t page_table)
     }
 
     setCR3(page_table);
+}
+
+kresult_t map_kernel_pages_overwrite(u64 phys_addr, void *virt_addr, size_t size,
+                                           kernel::paging::Page_Table_Arguments arg)
+{    
+    for (u64 i = 0; i < size; i += 0x1000) {
+        auto result = ia32::paging::ia32_map_page(kernel::x86::paging::idle_cr3, phys_addr + i,
+                                                  (void *)((char *)virt_addr + i), arg, true);
+        if (result)
+            return result;
+    }
+    return 0;
 }
 
 } // namespace kernel::paging

@@ -80,7 +80,7 @@ namespace ia32::interrupts
     u32 segment_to_base(u64 segment);
     u64 base_to_user_data_segment(u32 base);
     u64 base_to_kernel_data_segment(u32 base);
-    u64 tss_to_base(TSS *tss);
+    u64 tss_to_base(TSS *tss, u16 limit);
     TSS *getTSS(u16 selector);
 
     void loadGDT(GDT *gdt);

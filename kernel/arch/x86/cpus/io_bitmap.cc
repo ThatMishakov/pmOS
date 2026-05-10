@@ -2,6 +2,7 @@
 #include <sched/sched.hh>
 #include <memory/paging.hh>
 #include <memory/vmm.hh>
+#include <x86_asm.hh>
 
 using namespace kernel;
 using namespace kernel::sched;
@@ -74,7 +75,7 @@ namespace kernel::x86::gdt
 namespace kernel::x86::cpus
 {
 
-static void io_bitmap_set(phys_addr_t bitmap_phys)
+static void io_bitmap_set(phys_addr_t bitmap_phys, bool do_invlpg)
 {
     auto c = get_cpu_struct();
 
@@ -91,9 +92,14 @@ static void io_bitmap_set(phys_addr_t bitmap_phys)
     auto result = kernel::paging::map_kernel_pages_overwrite(bitmap_phys, virt, PAGE_SIZE * 2, arg);
     // This can't fail
     assert(!result);
+
+    if (do_invlpg) {
+        invlpg(virt);
+        invlpg((char *)virt + PAGE_SIZE);
+    }
 }
 
-void apply_io_bitmap(phys_addr_t bitmap_phys, u64 page_table_id)
+void apply_io_bitmap(phys_addr_t bitmap_phys, u64 page_table_id, bool invlpg)
 {
     auto c = get_cpu_struct();
 
@@ -105,7 +111,7 @@ void apply_io_bitmap(phys_addr_t bitmap_phys, u64 page_table_id)
     
     if (bitmap_phys != -1ULL) {
         if (c->io_bitmap_page_table != page_table_id) {
-            io_bitmap_set(bitmap_phys);
+            io_bitmap_set(bitmap_phys, invlpg);
             c->io_bitmap_page_table = page_table_id;
         }
 

@@ -90,8 +90,12 @@ public:
 
     virtual Page_Info get_page_mapping(void *virt_addr) const override;
 
+    kresult_t get_io_permissions();
+
+    virtual void arch_specific_shutdown_stuff(u16 flags) override;
 protected:
     unsigned cr3 = -1;
+    phys_addr_t bitmap_pages_phys = (phys_addr_t)-1;
 
     using page_table_map = pmos::containers::map<u64, klib::weak_ptr<IA32_Page_Table>>;
     static page_table_map global_page_tables;

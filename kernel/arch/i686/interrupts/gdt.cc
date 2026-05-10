@@ -25,9 +25,8 @@ void gdt_set_cpulocal(sched::CPU_Info *c)
     // TODO: TSS
 }
 
-u64 tss_to_base(TSS *tss)
+u64 tss_to_base(TSS *tss, u16 limit)
 {
-    u32 limit = sizeof(TSS) - 1; // Maybe not -1?
     return 0x0040890000000000 | (((u64)tss & 0xffffff) << 16) | (((u64)tss & 0xff000000) << 32) |
            (u64)limit;
 }
