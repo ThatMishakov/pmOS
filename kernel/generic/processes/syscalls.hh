@@ -188,10 +188,6 @@ void syscall_is_in_task_group();
 void syscall_set_notify_mask();
 // Parameters: u64 task_group, u64 port_id, u64 new_mask
 
-// Requests a timer notification on a given port after a given timeout
-void syscall_request_timer();
-// Parameters: u64 port, u64 timeout
-
 // Sets the task's affinity
 void syscall_set_affinity();
 // Parameters: u64 task_id, u64 cpu, u64 flags

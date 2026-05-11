@@ -115,7 +115,7 @@ RecieveRight register_interrupt(const Right &int_source_right, Port &port);
 void complete_interrupt(const RecieveRight &notification_right);
 
 RecieveRight create_timer_right(Port &port);
-void set_deadline(const RecieveRight &timer_right, uint64_t deadline_ns);
+void set_deadline(const RecieveRight &timer_right, uint64_t deadline_ns, bool relative = false);
 
 std::expected<RecieveRight, int> request_named_port(std::string_view name, Port &port);
 

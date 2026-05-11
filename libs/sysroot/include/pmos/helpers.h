@@ -57,17 +57,6 @@ typedef uint64_t pmos_port_t;
  */
 result_t get_message(Message_Descriptor *desc, unsigned char **message, pmos_port_t port, pmos_right_t *reply_right, pmos_right_t *other_rights);
 
-/**
- * @brief Requests a timer message from the system. On success, the given port will receive a
- * IPC_Timer_Reply after at least ms milliseconds.
- *
- * @param port Port to receive the message
- * @param ms Time in milliseconds
- * @param extra parameter, that get saved returned in the IPC_Timer_Reply
- * @return int 0 on success, -1 on failure. Sets errno on error
- */
-int pmos_request_timer(pmos_port_t port, uint64_t ms, uint64_t extra);
-
 struct msgloop_data;
 int pmos_msgloop_compare(struct msgloop_data *a, struct msgloop_data *b);
 int pmos_msgloop_key_compare(struct msgloop_data *a, void *b);

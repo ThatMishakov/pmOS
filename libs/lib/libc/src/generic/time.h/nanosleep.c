@@ -6,6 +6,7 @@
 #include <pmos/tls.h>
 #include <assert.h>
 #include <pmos/__internal.h>
+#include <stdbool.h>
 
 pmos_port_t _HIDDEN __get_cmd_reply_port()
 {
@@ -26,44 +27,60 @@ void _HIDDEN __return_cmd_reply_port(pmos_port_t)
     // Do nothing for now
 }
 
+static __thread pmos_right_t sleep_right = INVALID_RIGHT;
+
 int nanosleep(const struct timespec *req, struct timespec *rem)
 {
-    pmos_port_t sleep_reply_port = __get_cmd_reply_port();
-    size_t ns                    = req->tv_sec * 1000000000 + req->tv_nsec;
-    result_t result              = pmos_request_timer(sleep_reply_port, ns, 0);
-    if (result != SUCCESS) {
-        __return_cmd_reply_port(sleep_reply_port);
-        errno = result;
-        *rem  = *req;
+    pmos_port_t reply_port = __get_cmd_reply_port();
+    if (reply_port == INVALID_PORT) {
         return -1;
     }
 
-    IPC_Timer_Reply reply;
+    if (sleep_right == INVALID_RIGHT) {
+        right_request_t right_request = pmos_create_timer(reply_port);
+        if (right_request.result != SUCCESS) {
+            errno = -right_request.result;
+            goto error;
+        }
+        sleep_right = right_request.right;
+    }
+
+    size_t ns = req->tv_sec * 1000000000 + req->tv_nsec;
+
+    result_t result = pmos_set_timer(reply_port, sleep_right, ns, PMOS_SET_TIMER_RELATIVE);
+    if (result != SUCCESS) {
+        errno = -result;
+        goto error;
+    }
+
+    IPC_Timer_Expired reply;
     Message_Descriptor reply_descriptor;
-    result = syscall_get_message_info(&reply_descriptor, sleep_reply_port, 0);
+    result = syscall_get_message_info(&reply_descriptor, reply_port, 0);
 
     // This should never fail
     assert(result == SUCCESS);
 
     // Check if the message size is correct
-    assert(reply_descriptor.size == sizeof(IPC_Timer_Reply));
+    assert(reply_descriptor.size == sizeof(reply));
 
-    result = get_first_message((char *)&reply, MSG_ARG_REJECT_RIGHT, sleep_reply_port).result;
+    result = get_first_message((char *)&reply, MSG_ARG_REJECT_RIGHT, reply_port).result;
 
-    __return_cmd_reply_port(sleep_reply_port);
+    __return_cmd_reply_port(reply_port);
 
     // This should never fail
     assert(result == SUCCESS);
 
-    assert(reply.type == IPC_Timer_Reply_NUM);
-
-    if (reply.status < 0) {
-        errno = -reply.status;
-        *rem  = *req;
-        return -1;
-    }
+    assert(reply.type == IPC_Timer_Expired_NUM);
 
     *rem = (struct timespec){0, 0};
 
     return 0;
+
+error:
+    if (rem) {
+        *rem = *req;
+    }
+    __return_cmd_reply_port(reply_port);
+
+    return -1;
 }

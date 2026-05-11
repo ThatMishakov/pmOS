@@ -112,7 +112,7 @@ std::array<const char *, 63> syscall_names = {
 
     "SYSCALL SET NOTIFY MASK",
     "SYSCALL LOAD EXECUTABLE",
-    "SYSCALL REQUEST TIMER",
+    "UNUSED !!!",
     "SYSCALL SET AFFINITY",
     "SYSCALL COMPLETE INTERRUPT",
     "SYSCALL YIELD",
@@ -191,7 +191,7 @@ std::array<syscall_function, 63> syscall_table = {
 
     syscall_set_notify_mask,
     syscall_load_executable,
-    syscall_request_timer,
+    nullptr,
     syscall_set_affinity,
     syscall_complete_interrupt,
     syscall_yield,
@@ -1828,30 +1828,6 @@ void syscall_set_notify_mask()
     }
 }
 
-void syscall_request_timer()
-{
-    auto c    = sched::get_cpu_struct();
-    auto task = c->current_task;
-
-    u64 port    = syscall_arg64(task, 0);
-    u64 timeout = syscall_arg64(task, 1);
-    u64 user_arg;
-    auto result = syscall_arg64_checked(task, 2, user_arg);
-    if (!result.success()) {
-        syscall_error(task) = result.result;
-        return;
-    }
-
-    const auto port_ptr = Port::atomic_get_port(port);
-    if (!port_ptr) {
-        syscall_error(task) = -ENOENT;
-        return;
-    }
-
-    u64 time    = get_ns_since_bootup() + timeout;
-    syscall_error(task) = c->atomic_timer_queue_push(time, port_ptr, user_arg);
-}
-
 void syscall_set_affinity()
 {
     const auto current_cpu = sched::get_cpu_struct();
@@ -2718,6 +2694,12 @@ void syscall_create_timer()
 void syscall_set_timer_deadline()
 {
     auto task = get_current_task();
+    
+    auto flags = syscall_flags(task);
+    u64 offset = 0;
+    if (flags & PMOS_SET_TIMER_RELATIVE) {
+        offset = get_ns_since_bootup();
+    }
 
     u64 port_id = syscall_arg64(task, 0);
     u64 right_id = syscall_arg64(task, 1);
@@ -2751,7 +2733,7 @@ void syscall_set_timer_deadline()
     }
     auto timer_right = static_cast<TimerRight *>(right);
 
-    syscall_error(task) = timer_right->set_deadline(deadline);
+    syscall_error(task) = timer_right->set_deadline(deadline + offset);
 }
 
 } // namespace kernel::proc::syscalls

@@ -91,43 +91,6 @@ ReturnStr<u64> block_current_task(ipc::Port *ptr)
     return {0, 0};
 }
 
-struct Timer final: TimerNode {
-    u64 port_id;
-    u64 extra;
-
-    virtual void fire() override;
-};
-
-void Timer::fire()
-{
-    auto port = ipc::Port::atomic_get_port(port_id);
-    if (port) {
-        IPC_Timer_Reply r = {
-            IPC_Timer_Reply_NUM,
-            0,
-            extra,
-        };
-        port->atomic_send_from_system(reinterpret_cast<char *>(&r), sizeof(r));
-    }
-    delete this;
-}
-
-kresult_t CPU_Info::atomic_timer_queue_push(u64 fire_at_ns, ipc::Port *port, u64 user_arg)
-{
-    auto t = new Timer;
-    if (!t)
-        return -ENOMEM;
-
-    t->port_id    = port->portno;
-    t->extra      = user_arg;
-    t->fire_at_ns = fire_at_ns;
-
-    timer_queue.insert(t);
-    maybe_rearm_timer(fire_at_ns);
-
-    return 0;
-}
-
 size_t number_of_cpus = 1;
 
 // u64 TaskDescriptor::check_unblock_immediately(u64 reason, u64 extra)

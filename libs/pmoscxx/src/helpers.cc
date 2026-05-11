@@ -289,12 +289,12 @@ RecieveRight create_timer_right(Port &port)
     return RecieveRight{result.right, RightType::Timer, port.get()};
 }
 
-void set_deadline(const RecieveRight &timer_right, uint64_t deadline_ns)
+void set_deadline(const RecieveRight &timer_right, uint64_t deadline_ns, bool relative)
 {
     if (timer_right.type() != RightType::Timer)
         throw std::invalid_argument("Right must be of type Timer");
 
-    auto result = ::pmos_set_timer(timer_right.port(), timer_right.get(), deadline_ns);
+    auto result = ::pmos_set_timer(timer_right.port(), timer_right.get(), deadline_ns, PMOS_SET_TIMER_RELATIVE);
     if (result)
         throw std::system_error(-static_cast<int>(result), std::system_category(),
                                 "Failed to set timer deadline");

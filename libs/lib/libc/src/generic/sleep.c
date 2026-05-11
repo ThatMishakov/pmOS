@@ -35,57 +35,6 @@
 #include <unistd.h>
 #include <time.h>
 
-// int pmos_request_timer(pmos_port_t port, size_t ms) {
-//     if (sleep_reply_port == INVALID_PORT) {
-//         ports_request_t port_request = create_port(TASK_ID_SELF, 0);
-//         if (port_request.result != SUCCESS) {
-//             errno = port_request.result;
-//             return -1;
-//         }
-//         sleep_reply_port = port_request.port;
-//     }
-
-//     IPC_Start_Timer tmr = {
-//         .type = IPC_Start_Timer_NUM,
-//         .ms = ms,
-//         .reply_port = sleep_reply_port,
-//     };
-
-//     pmos_port_t sleep_port = get_sleep_port();
-//     if (sleep_port == INVALID_PORT) {
-//         // Errno is set by get_sleep_port
-//         // errno = ENOSYS;
-//         return -1;
-//     }
-
-//     result_t result = send_message_port(sleep_port, sizeof(tmr), (char*)&tmr);
-//     if (result != SUCCESS) {
-//         errno = result;
-//         return -1;
-//     }
-
-//     return 0;
-// }
-
-result_t __pmos_request_timer(pmos_port_t port, uint64_t ns, uint64_t extra);
-
-int pmos_request_timer(pmos_port_t port, uint64_t ns, uint64_t extra)
-{
-    // Request a timer from the kernel
-    // Initially, this was implemented using HPET in the userspace, on x86.
-    // However, other arches (RISC-V) don't have a global timer and even on x86,
-    // it might be better to do this in kernel and use LAPIC timer, freeing HPET
-    // for other
-
-    result_t r = __pmos_request_timer(port, ns, extra);
-    if (r != SUCCESS) {
-        errno = -r;
-        return -1;
-    }
-
-    return 0;
-}
-
 unsigned int sleep(unsigned int seconds)
 {
     struct timespec req = {.tv_sec = seconds, .tv_nsec = 0};

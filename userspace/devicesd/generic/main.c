@@ -94,21 +94,6 @@ int default_callback(Message_Descriptor *desc, void *msg_buff, pmos_right_t *rep
             request_interrupts_for(desc, m, *reply_right);
             *reply_right = 0;
         } break;
-        // case IPC_Start_Timer_NUM: {
-        //     if (desc->size != sizeof(IPC_Start_Timer))
-        //         printf("[devicesd] Warning: Message from PID %lx does no have the right size
-        //         (%lx)\n", desc->sender, desc->size);
-
-        //     IPC_Start_Timer* m = (IPC_Start_Timer*)msg_buff;
-        //     start_timer(m, desc->sender);
-        // }
-
-        //     break;
-        // case IPC_Kernel_Interrupt_NUM:
-        //     // TODO: Check that it's from kernel, etc.
-
-        //     hpet_int();
-        //     break;
         case IPC_Request_Serial_NUM: {
             IPC_Request_Serial *m = (IPC_Request_Serial *)msg_buff;
             request_serial(desc, m, *reply_right);

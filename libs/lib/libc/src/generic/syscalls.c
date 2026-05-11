@@ -183,15 +183,6 @@ syscall_r __pmos_syscall_set_attr(uint64_t pid, uint32_t attr, unsigned long val
 #endif
 }
 
-result_t __pmos_request_timer(pmos_port_t port, uint64_t ns, uint64_t extra)
-{
-#ifdef __32BITSYSCALL
-    return __pmos_syscall32_6words(SYSCALL_REQUEST_TIMER, port, ns, extra).result;
-#else
-    return pmos_syscall(SYSCALL_REQUEST_TIMER, port, ns, extra).result;
-#endif
-}
-
 // ports_request_t get_port_by_name(const char *name, size_t length, uint32_t flags)
 // {
 // #ifdef __32BITSYSCALL
@@ -748,11 +739,11 @@ right_request_t pmos_create_timer(pmos_port_t port)
     };
 }
 
-result_t pmos_set_timer(pmos_port_t port, pmos_right_t timer_right, uint64_t deadline_ns)
+result_t pmos_set_timer(pmos_port_t port, pmos_right_t timer_right, uint64_t deadline_ns, unsigned flags)
 {
     #ifdef __32BITSYSCALL
-    return __pmos_syscall32_6words(SYSCALL_SET_TIMER_DEADLINE, port, timer_right, deadline_ns).result;
+    return __pmos_syscall32_6words(SYSCALL_SET_TIMER_DEADLINE | (flags << 8), port, timer_right, deadline_ns).result;
     #else
-    return pmos_syscall(SYSCALL_SET_TIMER_DEADLINE, port, timer_right, deadline_ns).result;
+    return pmos_syscall(SYSCALL_SET_TIMER_DEADLINE | (flags << 8), port, timer_right, deadline_ns).result;
     #endif
 }

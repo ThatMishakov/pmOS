@@ -56,9 +56,6 @@ void init_timers();
 uint64_t create_timer_ms(uint64_t ms);
 void timer_tick();
 
-// Returns 0 on success
-int start_timer(IPC_Start_Timer *t, uint64_t pid);
-
 uint64_t timer_calculate_next_ticks(uint64_t ms);
 void update_ticks();
 void start_oneshot_ticks(uint64_t ticks);

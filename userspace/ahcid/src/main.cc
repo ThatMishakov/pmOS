@@ -524,10 +524,6 @@ pmos::async::detached_task ahci_controller_main()
         auto request = (IPC_Generic_Msg *)msg->data.data();
 
         switch (request->type) {
-        case IPC_Timer_Reply_NUM: {
-            // auto reply = (IPC_Timer_Reply *)request;
-            react_timer();
-        } break;
         default:
             printf("AHCId unknown message type: %i\n", request->type);
             break;

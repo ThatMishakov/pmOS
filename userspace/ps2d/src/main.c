@@ -55,14 +55,14 @@ int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_r
     }
 
     switch (IPC_TYPE(buff)) {
-    case IPC_Timer_Reply_NUM: {
-        if (desc->size < sizeof(IPC_Timer_Reply)) {
-            fprintf(stderr, "[PS2d] Warning: Recieved IPC_Timer_Reply of unexpected size %" PRIu64 "\n",
+    case IPC_Timer_Expired_NUM: {
+        if (desc->size < sizeof(IPC_Timer_Expired)) {
+            fprintf(stderr, "[PS2d] Warning: Recieved IPC_Timer_Expired of unexpected size %" PRIu64 "\n",
                     desc->size);
             break;
         }
 
-        IPC_Timer_Reply *tmr = (IPC_Timer_Reply *)buff;
+        IPC_Timer_Expired *tmr = (IPC_Timer_Expired *)buff;
 
         react_timer(tmr);
 

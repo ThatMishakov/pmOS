@@ -380,16 +380,12 @@ result_t pmos_yield();
  */
 syscall_r pmos_get_time(unsigned mode);
 
-result_t request_timer(pmos_port_t port, uint64_t after_ns);
-
 right_request_t request_named_port(const char *name, size_t name_length, pmos_port_t reply_port,
                             uint32_t flags);
 
 result_t pause_task(uint64_t tid);
 
 result_t resume_task(uint64_t tid);
-
-int pmos_request_timer(pmos_port_t port, uint64_t ns, uint64_t extra);
 
 uint64_t pmos_process_task_group();
 
@@ -524,8 +520,11 @@ right_request_t pmos_create_timer(pmos_port_t port);
 /// @param port Port associated with the timer
 /// @param timer_right Recieve right for the timer
 /// @param deadline_ns Deadline for the timer in nanoseconds since bootup. 0 disarms the timer.
+/// @param flags Optional flags.
 /// @return Result of the operation
-result_t pmos_set_timer(pmos_port_t port, pmos_right_t timer_right, uint64_t deadline_ns);
+result_t pmos_set_timer(pmos_port_t port, pmos_right_t timer_right, uint64_t deadline_ns, unsigned flags);
+
+#define PMOS_SET_TIMER_RELATIVE (1 << 0)
 
 #endif
 

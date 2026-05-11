@@ -220,6 +220,8 @@ void set_up_interrupt()
     have_interrupts = true;
 }
 
+pmos::RecieveRight timer_right;
+
 void ns16550_init()
 {
     // Request a high priority, since we are a driver
@@ -349,6 +351,7 @@ void ns16550_init()
         // Enable interrupts
         set_register(IER, IER_RLS | IER_RX_DATA | IER_TX_EMPTY);
     } else {
+        timer_right = create_timer_right(serial_port);
         poll();
     }
 
@@ -458,11 +461,7 @@ void check_buffers()
 
 void poll()
 {
-    auto r = pmos_request_timer(serial_port.get(), 100, 0);
-    if (r != 0) {
-        printf("Failed to request timer\n");
-        return;
-    }
+    set_deadline(timer_right, 100'000'000, true);
 }
 
 void react_timer_msg()
@@ -544,7 +543,7 @@ int main()
         IPC_Generic_Msg *ipc_msg = reinterpret_cast<IPC_Generic_Msg *>(msg_buff.data());
 
         switch (ipc_msg->type) {
-        case IPC_Timer_Reply_NUM: {
+        case IPC_Timer_Expired_NUM: {
             react_timer_msg();
             break;
         }

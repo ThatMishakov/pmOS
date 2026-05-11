@@ -65,44 +65,8 @@ typedef struct IPC_Request_Int_Reply {
     // The first right should be the interrupt source right...
 } IPC_Request_Int_Reply;
 
-#define IPC_Start_Timer_NUM 0x03
-typedef struct IPC_Start_Timer {
-    // Type of the message (must be IPC_Start_Timer_NUM)
-    uint32_t type;
 
-    // Time in milliseconds after which the reply will be sent
-    uint64_t ms;
 
-    // Port for the reply
-    uint64_t reply_port;
-
-    // Data up to the choosing of the sender, will be maintained in the reply message
-    uint64_t extra0;
-    uint64_t extra1;
-    uint64_t extra2;
-} IPC_Start_Timer;
-
-#define IPC_Timer_Ctrl_NUM 0x04
-typedef struct IPC_Timer_Ctrl {
-    uint32_t type;
-    uint32_t flags;
-    uint32_t cmd;
-    uint64_t timer_id;
-} IPC_Timer_Ctrl;
-
-#define IPC_Timer_Reply_NUM 0x05
-typedef struct IPC_Timer_Reply {
-    uint32_t type;
-
-    // Status of the operation. Negative values indicate errors (errno of negative sign)
-    int32_t status;
-
-    uint64_t timer_id;
-    uint64_t extra0;
-    uint64_t extra1;
-    uint64_t extra2;
-} IPC_Timer_Reply;
-#define IPC_TIMER_TICK 0x01
 
 #define IPC_Request_Serial_NUM 0x06
 typedef struct IPC_Request_Serial {
