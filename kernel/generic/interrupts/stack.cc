@@ -31,4 +31,6 @@ Kernel_Stack_Pointer::Kernel_Stack_Pointer()
     auto result = map_kernel_pages(paddr, actual_start, STACK_SIZE, arg);
     if (result)
         panic("Failed to map kernel pages for stack, %i\n", result);
+
+    stack = vaddr;
 }
