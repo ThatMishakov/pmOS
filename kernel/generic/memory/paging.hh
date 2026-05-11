@@ -89,7 +89,7 @@ public:
     void invalidate_range(page_ptr start, page_ptr size);
     void invalidate_page(page_ptr page);
 
-    constexpr static short MAX_PAGES  = 512;
+    constexpr static short MAX_PAGES  = 32;
     constexpr static short MAX_RANGES = 16;
 
     bool flush_all() const;

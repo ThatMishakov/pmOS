@@ -37,6 +37,18 @@ using namespace kernel::ia32::paging;
 using namespace kernel::x86_64::paging;
 #endif
 
+#ifdef __x86_64__
+constexpr u32 IA32_FRED_RSP0 = 0x1CC;
+constexpr u32 IA32_FRED_RSP1 = 0x1CD;
+constexpr u32 IA32_FRED_RSP2 = 0x1CE;
+constexpr u32 IA32_FRED_RSP3 = 0x1CF;
+constexpr u32 IA32_FRED_STKLVLS = 0x1D0;
+constexpr u32 IA32_FRED_CONFIG_MSR = 0x1D4;
+
+
+extern "C" void fred_kernel_entry();
+#endif
+
 constexpr sched::CPU_Info __seg_gs const *c = nullptr;
 kernel::sched::CPU_Info *sched::get_cpu_struct() { return c->self; }
 
@@ -57,6 +69,8 @@ bool use_smep = false;
 #ifdef __x86_64__
 bool use_lass = false;
 bool support_lam = false;
+bool use_fred = false;
+bool support_lkgs = false;
 #endif
 
 extern "C" void allow_access_user()
@@ -98,6 +112,16 @@ void detect_protections()
             support_lam = true;
             serial_logger.printf("CPU supports LAM...\n");
         }
+
+        if (c1.eax & (1 << 17)) {
+            use_fred = true;
+            serial_logger.printf("Using FRED in kernel...\n");
+        }
+
+        if (c1.eax & (1 << 18)) {
+            support_lkgs = true;
+            serial_logger.printf("CPU supports LKGS...\n");
+        }
         #endif
     }
 }
@@ -123,6 +147,31 @@ void enable_protections()
 
 void setup_tss(CPU_Info *c);
 
+#ifdef __x86_64__
+void maybe_enable_fred()
+{
+    if (!use_fred)
+        return;
+
+    auto c = get_cpu_struct();
+
+    u64 function_phys = (u64)fred_kernel_entry;
+    write_msr(IA32_FRED_CONFIG_MSR, function_phys | (0b001 << 6));
+    write_msr(IA32_FRED_RSP0, (u64)c->kernel_stack.get_stack_top());
+    write_msr(IA32_FRED_RSP1, (u64)c->debug_stack.get_stack_top());
+    write_msr(IA32_FRED_RSP2, (u64)c->double_fault_stack.get_stack_top());
+    write_msr(IA32_FRED_RSP3, (u64)c->nmi_stack.get_stack_top());
+    
+    constexpr u64 stlevels = (0b01 << 1*2) | (0b01 << 3*2) | (0b10 << 8*2) | (0b01 << 12*2);
+    write_msr(IA32_FRED_STKLVLS, stlevels);
+
+    // Enable FRED
+    u64 cc = getCR4();
+    cc |= (u64)1 << 32;
+    setCR4(cc);
+}
+#endif
+
 void init_per_cpu(u64 lapic_id)
 {
     sse::detect_sse();
@@ -138,6 +187,7 @@ void init_per_cpu(u64 lapic_id)
     #else
     loadGDT(&c->cpu_gdt);
     write_msr(0xC0000101, (u64)c);
+    maybe_enable_fred();
     #endif
 
     sched::cpu_struct_works = true;
@@ -197,6 +247,7 @@ extern "C" void smp_main(CPU_Info *c)
     #else
     loadGDT(&c->cpu_gdt);
     write_msr(0xC0000101, (u64)c);
+    maybe_enable_fred();
     #endif
 
     #ifdef __i386__
@@ -235,6 +286,7 @@ extern "C" void acpi_main()
     loadGDT(&c->cpu_gdt);
     write_msr(0xC0000101, (u64)c);
     c->cpu_gdt.tss_descriptor.access = 0x89;
+    maybe_enable_fred();
     #endif
 
     loadTSS(TSS_SEGMENT);
