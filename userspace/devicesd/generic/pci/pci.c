@@ -117,6 +117,7 @@ void check_function(struct PCIHostBridge *g, uint8_t bus, uint8_t device, uint8_
     while (cap) {
         uint16_t r = pci_read_word(&p, cap);
 
+        uint16_t old_cap = cap;
         uint8_t id = r & 0xff;
         cap        = (r >> 8) & 0xfc;
         switch (id) {
@@ -145,11 +146,11 @@ void check_function(struct PCIHostBridge *g, uint8_t bus, uint8_t device, uint8_
             printf("PCI Express Capability ");
             d->pcie = true;
 
-            uint16_t r = pci_read_word(&p, cap + 2);
+            uint16_t r = pci_read_word(&p, old_cap + 2);
             uint8_t v  = r & 0xf;
             printf("version %i.%i ", v >> 4, v & 0xf);
 
-            uint16_t dd = (r >> 4) & 0x1f;
+            uint16_t dd = (r >> 4) & 0x0f;
             printf("device Type %i\n", dd);
             d->downstream = dd == 0x4 || dd == 0x6 || dd == 0x8;
         } break;
@@ -158,6 +159,11 @@ void check_function(struct PCIHostBridge *g, uint8_t bus, uint8_t device, uint8_
             break;
         default:
             // printf("Unknown (%02X)\n", id);
+            break;
+        }
+
+        if (old_cap == cap) {
+            fprintf(stderr, "Warning: Capability pointer did not advance, stopping capability parsing\n");
             break;
         }
     }
@@ -183,17 +189,21 @@ void check_function(struct PCIHostBridge *g, uint8_t bus, uint8_t device, uint8_
         uint8_t secondary_bus = pci_secondary_bus(&p);
         printf("PCI secondary bus %x\n", secondary_bus);
 
-        uacpi_pci_routing_table *pci_routes;
-        uacpi_status ret = uacpi_get_pci_routing_table(ctx.out_node, &pci_routes);
-        if (ret != UACPI_STATUS_OK) {
-            fprintf(stderr, "Warning: Could not get PCI routing for root bridge bus %0x: %i (%s)\n", bus,
-                    ret, uacpi_status_to_string(ret));
-        } else {
-            parse_interrupt_table(g, secondary_bus, pci_routes);
-            uacpi_free_pci_routing_table(pci_routes);
+        uacpi_namespace_node *bus_node = node;
+        if (ctx.out_node) {
+            bus_node = ctx.out_node;
+            uacpi_pci_routing_table *pci_routes;
+            uacpi_status ret = uacpi_get_pci_routing_table(ctx.out_node, &pci_routes);
+            if (ret != UACPI_STATUS_OK) {
+                fprintf(stderr, "Warning: Could not get PCI routing for root bridge bus %0x: %i (%s)\n", bus,
+                        ret, uacpi_status_to_string(ret));
+            } else {
+                parse_interrupt_table(g, secondary_bus, pci_routes);
+                uacpi_free_pci_routing_table(pci_routes);
+            }
         }
 
-        check_bus(g, secondary_bus, d, ctx.out_node);
+        check_bus(g, secondary_bus, d, bus_node);
     }
 }
 
@@ -223,7 +233,7 @@ void check_bus(struct PCIHostBridge *g, uint8_t bus, struct PCIDevice *parent_br
 {
     int devices = PCI_DEVICES_PER_BUS;
 
-    if (parent_bridge && parent_bridge->downstream) {
+    if (parent_bridge && parent_bridge->downstream && parent_bridge->pcie) {
         // This is supposedly needed for Raspberry Pi
         // I'm not sure if this is correct
         // devices = 1;
@@ -354,76 +364,6 @@ static uint64_t pcie_config_space_start(uint64_t base, unsigned pci_start)
 {
     return base + (pci_start << 20);
 }
-
-// void init_pci()
-// {
-//     printf("Initializing PCI...\n");
-
-//     MCFG *t = (MCFG *)get_table("MCFG", 0);
-//     if (!t) {
-//         printf("Warning: Could not find MCFG table... Falling back to legacy init\n");
-//         printf("(not implemented)\n");
-//         return;
-//     } else {
-//         int c = MCFG_list_size(t);
-//         for (int i = 0; i < c; ++i) {
-//             struct PCIGroup *g = calloc(sizeof(*g), 1);
-//             if (!g) {
-//                 fprintf(stderr, "Error: Could not allocate PCIGroup: %i\n", errno);
-//             }
-
-//             MCFGBase *b = &t->structs_list[i];
-//             printf("Table %i base addr %" PRIx64 " group %i start %i end %i\n", i, b->base_addr,
-//                    b->group_number, b->start_bus_number, b->end_bus_number);
-
-//             assert(b->start_bus_number <= b->end_bus_number);
-//             uint64_t ecam_base = b->base_addr;
-//             uint64_t size      = pcie_config_space_size(b->start_bus_number, b->end_bus_number);
-//             uint64_t start     = pcie_config_space_start(ecam_base, b->start_bus_number);
-
-//             uint64_t phys_start = start;
-//             uint64_t phys_end   = phys_start + size;
-
-//             // Align to page just in case
-//             static const uint64_t page_mask = ~((uint64_t)PAGE_SIZE - 1);
-//             phys_start &= page_mask;
-//             phys_end = (phys_end + PAGE_SIZE - 1) & page_mask;
-
-//             mem_request_ret_t t = create_phys_map_region(0, NULL, phys_end - phys_start,
-//                                                          PROT_READ | PROT_WRITE, phys_start);
-//             if (t.result != SUCCESS) {
-//                 fprintf(stderr, "Error: could not map PCIe memory: %" PRIi64 "\n", t.result);
-//                 free(g);
-//                 continue;
-//             }
-//             printf("ECAM %lx %lx\n", t.virt_addr, phys_end - phys_start);
-//             void *ptr = (char *)t.virt_addr + (ecam_base % PAGE_SIZE) - (start - ecam_base);
-
-//             g->next = groups;
-//             groups  = g;
-
-//             g->group_type = PCIGroupECAM;
-//             g->ecam       = (struct PCIEcamDescriptor) {
-//                       .base_addr = ecam_base,
-//                       .base_ptr  = ptr,
-//             };
-//             g->start_bus_number = b->start_bus_number;
-//             g->end_bus_number   = b->end_bus_number;
-//         }
-//     }
-
-//     VECTOR_SORT(pci_devices, pcicdevice_compare);
-// }
-
-// struct PCIGroup *get_group(int segment)
-// {
-//     for (struct PCIGroup *g = groups; g; g = g->next) {
-//         if (g->group_number == (uint32_t)segment)
-//             return g;
-//     }
-
-//     return NULL;
-// }
 
 int interrupt_entry_compare(const void *l, const void *r)
 {
@@ -852,8 +792,8 @@ int resolve_gsi_for(struct PCIHostBridge *g, uint8_t bus, uint8_t device, uint8_
         *gsi        = e->gsi;
         *active_low = e->active_low;
         *level_trig = e->level_trigger;
-        printf("devicesd: PCI device %i:%i:%i:%i pin %i GSI %i\n", g->group_number, bus, device,
-               function, pin, *gsi);
+        printf("devicesd: PCI device %i:%i:%i:%i pin %i GSI %i active_low %i level_trig %i\n", g->group_number, bus, device,
+               function, pin, *gsi, *active_low, *level_trig);
         return 0;
     }
 
@@ -1119,13 +1059,13 @@ void request_pci_interrupt(Message_Descriptor *msg, IPC_Register_PCI_Interrupt *
 
     uint32_t flags = 0;
     if (active_low)
-        flags |= PMOS_INTERRUPT_LEVEL_TRIG;
-    if (level_trig)
         flags |= PMOS_INTERRUPT_ACTIVE_LOW;
+    if (level_trig)
+        flags |= PMOS_INTERRUPT_LEVEL_TRIG;
 
     right_request_t irq_right = allocate_interrupt(vector, flags);
     if (irq_right.result != 0) {
-        fprintf(stderr, "Failed to allocate interrupt for GSI %u: %i (%s)\n", vector, irq_right.result,
+        fprintf(stderr, "Failed to allocate interrupt for GSI %u: %i (%s)\n", vector, (int)irq_right.result,
                strerror(-irq_right.result));
         result = irq_right.result;
         goto end;
