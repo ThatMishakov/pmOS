@@ -264,7 +264,7 @@ void init_hpet()
     u16 vendor_id = u16(cap >> 16);
     // bool leg_rt_cap = cap & (1 << 15);
     is_64bit = cap & (1 << 13);
-    num_timers = unsigned(cap >> 8) & 0x1f + 1;
+    num_timers = (unsigned(cap >> 8) & 0x1f) + 1;
     revision = (u8)cap;
 
     if (revision == 0) {
@@ -291,7 +291,9 @@ void init_hpet()
     // Disable timers...
     for (unsigned i = 0; i < num_timers; ++i) {
         auto offset = HPET_TIMER0_REG + i*0x20;
-        hpet_writel_offset(offset, 0);
+        auto val = hpet_read64_general(offset);
+        val &= ~(u64)(1 << 2); // Unset interrupt enable
+        hpet_write64_general(offset, val);
     }
 
     kernel_timesource = &hpet_source;
