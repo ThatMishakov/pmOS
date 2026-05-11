@@ -71,11 +71,11 @@ struct FREDContext {
 
 constexpr int division_error_num = 0x0;
 extern "C" void division_error_isr();
-extern "C" void division_error_manager();
+extern "C" void division_error_manager(NestedIntContext *kernel_ctx, ulong err);
 
 constexpr int debug_trap_num = 0x1;
 extern "C" void debug_trap_isr();
-extern "C" void debug_trap_manager();
+extern "C" void debug_trap_manager(NestedIntContext *kernel_ctx, ulong err);
 
 constexpr int nmi_num = 0x2;
 extern "C" void nmi_isr();
@@ -87,15 +87,15 @@ extern "C" void breakpoint_manager(NestedIntContext *kernel_ctx, ulong err);
 
 constexpr int overflow_num = 0x4;
 extern "C" void overflow_isr();
-extern "C" void overflow_manager();
+extern "C" void overflow_manager(NestedIntContext *kernel_ctx, ulong err);
 
 constexpr int invalid_opcode_num = 0x6;
 extern "C" void invalid_opcode_isr();
-extern "C" void invalid_opcode_manager();
+extern "C" void invalid_opcode_manager(NestedIntContext *kernel_ctx, ulong err);
 
 constexpr int sse_exception_num = 0x7;
 extern "C" void sse_exception_isr();
-extern "C" void sse_exception_manager();
+extern "C" void sse_exception_manager(NestedIntContext *kernel_ctx, ulong err);
 
 constexpr int double_fault_num = 0x8;
 extern "C" void double_fault_isr();
@@ -103,7 +103,7 @@ extern "C" void double_fault_manager(NestedIntContext *kernel_ctx, ulong err);
 
 constexpr int stack_segment_fault_num = 0xC;
 extern "C" void stack_segment_fault_isr();
-extern "C" void stack_segment_fault_manager();
+extern "C" void stack_segment_fault_manager(NestedIntContext *kernel_ctx, ulong err);
 
 constexpr int general_protection_fault_num = 0xD;
 extern "C" void general_protection_fault_isr();
@@ -115,7 +115,7 @@ extern "C" void pagefault_manager(NestedIntContext *kernel_ctx, ulong err);
 
 constexpr int simd_fp_exception_num = 0x13;
 extern "C" void simd_fp_exception_isr();
-extern "C" void simd_fp_exception_manager();
+extern "C" void simd_fp_exception_manager(NestedIntContext *kernel_ctx, ulong err);
 
 // Jumpto functions. This change the return %RIP address in a way that upon
 // returning from the kernel exception, *function* is executed. Used for

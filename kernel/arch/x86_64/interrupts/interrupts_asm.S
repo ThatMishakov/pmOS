@@ -66,6 +66,9 @@ prog_int_\num:
     .type start_first_process, @function
     .globl start_first_process
 start_first_process:
+    cmpb $0, use_fred(%rip)
+    jne fred_return
+
     .type ref_from_interrupt, @function
     .globl ret_from_interrupt
 ret_from_interrupt:

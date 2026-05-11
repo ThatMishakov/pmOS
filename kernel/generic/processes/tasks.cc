@@ -50,6 +50,10 @@ namespace kernel::paging
 extern klib::shared_ptr<kernel::paging::Arch_Page_Table> idle_page_table;
 }
 
+#ifdef __x86_64__
+extern bool use_fred;
+#endif
+
 namespace kernel::proc
 {
 
@@ -69,6 +73,8 @@ TaskDescriptor *TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel le
     case PrivilegeLevel::Kernel:
         n->regs.cs = KERNEL_THREAD_CODE_SEGMENT;
         n->regs.ss = R0_DATA_SEGMENT;
+        if (use_fred)
+            n->regs.entry_type = 1;
         break;
     case PrivilegeLevel::User:
         n->regs.cs = R3_CODE_SEGMENT;

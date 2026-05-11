@@ -56,7 +56,7 @@ _limine_entry:
 
     # TODO: This is hacky
     # get_cpu_info()->nested_level = 0;
-    movq $0, %gs:24
+    # movq $0, %gs:24
 
     jmp start_first_process
 
@@ -77,7 +77,7 @@ kernel_main:
 
     # TODO: This is hacky
     # get_cpu_info()->nested_level = 0;
-    movq $0, %gs:24
+    # movq $0, %gs:24
 
     jmp start_first_process
     

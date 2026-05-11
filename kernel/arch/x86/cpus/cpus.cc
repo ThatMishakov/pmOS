@@ -45,7 +45,7 @@ constexpr u32 IA32_FRED_RSP3 = 0x1CF;
 constexpr u32 IA32_FRED_STKLVLS = 0x1D0;
 constexpr u32 IA32_FRED_CONFIG_MSR = 0x1D4;
 
-
+extern "C" void fred_ring3_entry();
 extern "C" void fred_kernel_entry();
 #endif
 
@@ -155,7 +155,7 @@ void maybe_enable_fred()
 
     auto c = get_cpu_struct();
 
-    u64 function_phys = (u64)fred_kernel_entry;
+    u64 function_phys = (u64)fred_ring3_entry;
     write_msr(IA32_FRED_CONFIG_MSR, function_phys | (0b001 << 6));
     write_msr(IA32_FRED_RSP0, (u64)c->kernel_stack.get_stack_top());
     write_msr(IA32_FRED_RSP1, (u64)c->debug_stack.get_stack_top());

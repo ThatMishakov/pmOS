@@ -49,7 +49,7 @@ struct X86_64Regs {                         // 208 bytes
 
     u64 rip = 0; // Interrupt frame (40 bytes)
     u64 cs  = 0;
-    u64 rflags = 0b1000000000;
+    u64 rflags = 0b1000000010;
     u64 rsp = 0;
     u64 ss  = 0;
     

@@ -37,6 +37,8 @@
 #include <stdlib.h>
 #include <utils.hh>
 #include <x86_asm.hh>
+#include <interrupts/apic.hh>
+#include <cpus/ipi.hh>
 
 using namespace kernel;
 using namespace kernel::log;
@@ -104,7 +106,7 @@ void print_kernel_int_stack_trace(Logger &logger)
 
 extern "C" void dbg_main(long code, NestedIntContext *kernel_ctx)
 {
-    t_print_bochs("Error! Kernel pagefault! %i\n", code);
+    t_print_bochs("Error! Kernel pagefault! 0x%x\n", code);
     t_print_bochs("Registers:\n");
     t_print_bochs(" => %%rdi: 0x%h\n", kernel_ctx->rdi);
     t_print_bochs(" => %%rsi: 0x%h\n", kernel_ctx->rsi);
@@ -155,27 +157,6 @@ void print_stack_trace(TaskDescriptor *task, Logger &logger)
     }
 }
 
-// extern "C" void deal_with_pagefault_in_kernel()
-// {
-//     t_print_bochs("Error: Pagefault inside the kernel! Instr %h %%cr2 0x%h  "
-//                   "error 0x%h CPU %i\n",
-//                   get_cpu_struct()->jumpto_from, get_cpu_struct()->pagefault_cr2,
-//                   get_cpu_struct()->pagefault_error, get_cpu_struct()->cpu_id);
-//     print_registers(get_cpu_struct()->current_task, bochs_logger);
-//     print_stack_trace(bochs_logger);
-
-//     abort();
-// }
-
-// void kernel_jump_to(void (*function)(void))
-// {
-//     CPU_Info *c    = get_cpu_struct();
-//     c->jumpto_from = c->nested_int_regs.program_counter();
-//     c->jumpto_to   = (ulong)function;
-
-//     c->nested_int_regs.program_counter() = (ulong)&jumpto_func;
-// }
-
 extern ulong idle_cr3;
 
 bool page_mapped(void *pagefault_cr2, ulong err);
@@ -183,8 +164,6 @@ bool page_mapped_safe(void *pagefault_cr2, ulong err);
 
 extern "C" CPU_Info *find_cpu_info();
 void hcf();
-
-extern "C" std::array<void (*)(NestedIntContext *, ulong), 32> fred_functions;
 
 extern "C" void pagefault_manager(NestedIntContext *kernel_ctx, ulong err)
 {
@@ -278,7 +257,7 @@ extern "C" void pagefault_manager(NestedIntContext *kernel_ctx, ulong err)
     }
 }
 
-extern "C" void sse_exception_manager()
+extern "C" void sse_exception_manager(NestedIntContext *kernel_ctx, ulong)
 {
     sse::validate_sse();
     get_cpu_struct()->current_task->sse_data.restore_sse();
@@ -333,8 +312,14 @@ extern "C" void general_protection_fault_manager(NestedIntContext *kernel_ctx, u
     task->atomic_kill();
 }
 
-extern "C" void overflow_manager()
+extern "C" void overflow_manager(NestedIntContext *kernel_ctx, ulong)
 {
+    if (kernel_ctx) {
+        print_kernel_regs(kernel_ctx);
+        panic("Overflow exception in kernel\n");
+        return;
+    }
+
     task_ptr task = get_cpu_struct()->current_task;
     serial_logger.printf("!!! Overflow error %h RIP %h RSP %h PID %h (%s)\n", task->regs.int_err,
                          task->regs.program_counter(), task->regs.stack_pointer(), task->task_id,
@@ -345,8 +330,14 @@ extern "C" void overflow_manager()
     task->atomic_kill();
 }
 
-extern "C" void simd_fp_exception_manager()
+extern "C" void simd_fp_exception_manager(NestedIntContext *kernel_ctx, ulong)
 {
+    if (kernel_ctx) {
+        print_kernel_regs(kernel_ctx);
+        panic("SIMD FP exception in kernel\n");
+        return;
+    }
+
     task_ptr task = get_cpu_struct()->current_task;
     t_print_bochs("!!! SIMD FP Exception error %h RIP %h RSP %h PID %h (%s)\n", task->regs.int_err,
                   task->regs.program_counter(), task->regs.stack_pointer(), task->task_id,
@@ -357,8 +348,14 @@ extern "C" void simd_fp_exception_manager()
     task->atomic_kill();
 }
 
-extern "C" void invalid_opcode_manager()
-{
+extern "C" void invalid_opcode_manager(NestedIntContext *kernel_ctx, ulong)
+{  
+    if (kernel_ctx) {
+        print_kernel_regs(kernel_ctx);
+        panic("Invalid opcode exception in kernel\n");
+        return;
+    }
+
     task_ptr task = get_cpu_struct()->current_task;
     serial_logger.printf("!!! Invalid op-code (UD) instr %h task %i (%s)\n",
                          get_cpu_struct()->current_task->regs.program_counter(), task->task_id,
@@ -368,8 +365,14 @@ extern "C" void invalid_opcode_manager()
     task->atomic_kill();
 }
 
-extern "C" void stack_segment_fault_manager()
+extern "C" void stack_segment_fault_manager(NestedIntContext *kernel_ctx, ulong)
 {
+    if (kernel_ctx) {
+        print_kernel_regs(kernel_ctx);
+        panic("Stack-Segment Fault in kernel\n");
+        return;
+    }
+
     task_ptr task = get_cpu_struct()->current_task;
     serial_logger.printf("!!! Stack-Segment Fault error %lx RIP %lx RSP %lx PID %h (%s)\n",
                   task->regs.int_err, task->regs.program_counter(), task->regs.stack_pointer(),
@@ -395,12 +398,160 @@ void breakpoint_manager(NestedIntContext *kernel_ctx, ulong err)
     global_logger.printf("Warning: hit a breakpoint but it's not implemented\n");
 }
 
+void unhandled_exception_manager(NestedIntContext *kernel_ctx, ulong err)
+{
+    panic("Unhandled exception! Int code %i error %i\n", kernel_ctx->fred_int_code, err);
+}
+
+void nmi_handler(NestedIntContext *kernel_ctx, ulong err)
+{
+    panic("NMI received! Error code %i\n", err);
+}
+
+extern "C" void division_error_manager(NestedIntContext *kernel_ctx, ulong)
+{
+    if (kernel_ctx) {
+        print_kernel_regs(kernel_ctx);
+        panic("Division error in kernel\n");
+        return;
+    }
+
+    task_ptr task = get_cpu_struct()->current_task;
+    serial_logger.printf("!!! Division error %h RIP %h RSP %h PID %h (%s)\n", task->regs.int_err,
+                         task->regs.program_counter(), task->regs.stack_pointer(), task->task_id,
+                         task->name.c_str());
+    global_logger.printf("!!! Division error %h RIP %h RSP %h PID %h (%s)\n", task->regs.int_err,
+                         task->regs.program_counter(), task->regs.stack_pointer(), task->task_id,
+                         task->name.c_str());
+    print_registers(task, serial_logger);
+    print_stack_trace(task, serial_logger);
+    task->atomic_kill();
+}
+
+extern "C" std::array<void (*)(NestedIntContext *, ulong), 32> fred_functions = {
+    division_error_manager,      // 0
+    unhandled_exception_manager, // 1
+    unhandled_exception_manager, // 2
+    breakpoint_manager,          // 3
+    overflow_manager,            // 4
+    unhandled_exception_manager, // 5
+    invalid_opcode_manager,      // 6
+    sse_exception_manager,       // 7
+    double_fault_manager,        // 8
+    unhandled_exception_manager, // 9
+    unhandled_exception_manager, // 10
+    unhandled_exception_manager, // 11
+    stack_segment_fault_manager, // 12
+    general_protection_fault_manager, // 13
+    pagefault_manager,           // 14
+    unhandled_exception_manager, // 15
+    unhandled_exception_manager, // 16
+    unhandled_exception_manager, // 17
+    unhandled_exception_manager, // 18
+    simd_fp_exception_manager,   // 19
+    unhandled_exception_manager, // 20
+    unhandled_exception_manager, // 21
+    unhandled_exception_manager, // 22
+    unhandled_exception_manager, // 23
+    unhandled_exception_manager, // 24
+    unhandled_exception_manager, // 25
+    unhandled_exception_manager, // 26
+    unhandled_exception_manager, // 27
+    unhandled_exception_manager, // 28
+    unhandled_exception_manager, // 29
+    unhandled_exception_manager, // 30
+    unhandled_exception_manager, // 31
+};
+
+extern "C" void programmable_interrupt(u32 intno);
+extern "C" void timer_interrupt();
+
+void fred_handle_interrupts(NestedIntContext *kernel_ctx, unsigned vector)
+{
+    switch (vector) {
+    case 0 ... 31:
+        panic("Unhandled interrupt %i\n", vector);
+        break;
+    case 32 ... 47:
+        // Dummy ISR (spurious PICs interrupt)
+        break;
+    case 48 ... 247:
+        programmable_interrupt(vector);
+        break;
+    case 248:
+        panic("External interrupt with syscall number!\n");
+        break;
+    case 249:
+        apic_dummy_int_routine();
+        break;
+    case 250:
+        reschedule_isr();
+        break;
+    case 251:
+        ipi_invalidate_tlb_routine();
+        break;
+    case 252:
+        timer_interrupt();
+        break;
+    case 253:
+        lvt0_int_routine();
+        break;
+    case 254:
+        lvt1_int_routine();
+        break;
+    case 255:
+        apic_spurious_int_routine();
+        break;
+    default:
+        assert(false && "Impossible external interrupt");
+        break;
+    }
+}
+
+void fred_int1_handler(NestedIntContext *kernel_ctx, ulong err)
+{
+    panic("FRED int1 handler called but it's not implemented\n");
+}
+
+extern "C" void syscall_handler();
+
 extern "C" void fred_handle(NestedIntContext *kernel_ctx, FREDContext *ctx)
 {
-    panic("FRED exception! Code %i\n", ctx->fred_int_code);
+    assert(ctx);
+    unsigned type = (ctx->ss >> 48) & 0xf;
+    unsigned vector = (ctx->ss >> 32) & 0xff;
+    auto error_code = ctx->error_code;
+
+    switch(type) {
+    case 0: // External interrupt
+        fred_handle_interrupts(kernel_ctx, vector);
+        break;
+    case 2: // NMI
+        nmi_handler(kernel_ctx, error_code);
+        break;
+    case 3: // Exception
+        assert(vector < fred_functions.size());
+        fred_functions[vector](kernel_ctx, error_code);
+        break;
+    case 4: // Software int
+        syscall_handler();
+        break;
+    case 5: // INT 1
+        fred_int1_handler(kernel_ctx, error_code);
+        break;
+    case 6: // Software exception (INT3 or INTO)
+        breakpoint_manager(kernel_ctx, error_code);
+        break;
+    case 7: // Syscall/sysenter
+        syscall_handler();
+        break;
+    default:
+        assert(false);
+        break;
+    }
 }
 
 extern "C" void fred_nested_syscall()
 {
-    panic("FRED NESTED SYSCALL TODO\n");
+    syscall_handler();
 }
