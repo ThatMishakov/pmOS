@@ -77,18 +77,24 @@ void io_bitmap_disable()
 #include "syscall.hh"
 #include <x86_asm.hh>
 
+constexpr u64 IA32_EFER = 0xC0000080;
+constexpr u32 IA32_STAR = 0xC0000081;
+constexpr u32 IA32_LSTAR = 0xC0000082;
+constexpr u32 IA32_CSTAR = 0xC0000083;
+constexpr u32 IA32_FMASK = 0xC0000084;
+
 namespace kernel::x86 {
 
 void program_syscall()
 {
-    write_msr(0xC0000081, ((u64)(R0_CODE_SEGMENT) << 32) | ((u64)(R3_LEGACY_CODE_SEGMENT) << 48));
+    write_msr(IA32_STAR, ((u64)(R0_CODE_SEGMENT) << 32) | ((u64)(R3_LEGACY_CODE_SEGMENT) << 48));
     // STAR (segments for user and kernel code)
-    write_msr(0xC0000082, (u64)&syscall_entry); // LSTAR (64 bit entry point)
-    write_msr(0xC0000084, (u32)~0x0);                     // SFMASK (mask for %rflags)
+    write_msr(IA32_LSTAR, (u64)&syscall_entry); // LSTAR (64 bit entry point)
+    write_msr(IA32_FMASK, (u32)~0x0);                     // SFMASK (mask for %rflags)
 
     // Enable SYSCALL/SYSRET in EFER register
-    u64 efer = read_msr(0xC0000080);
-    write_msr(0xC0000080, efer | (0x01 << 0));
+    u64 efer = read_msr(IA32_EFER);
+    write_msr(IA32_EFER, efer | (0x01 << 0));
 
     // This doesn't work on AMD CPUs
     // u64 cpuid = ::cpuid(1);

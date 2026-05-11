@@ -1,3 +1,4 @@
+
     .text
     .balign 0x1000
     
@@ -218,6 +219,23 @@ fred_kernel_thread_return:
 
     erets
 
+    .type repeated_syscall_wrapper, @function
+repeated_syscall_wrapper:
+    # Load current_task into %r9
+    movq %gs:32, %r9
+
+    # Restore entry_mode
+    movq 200(%r9), %rax
+    movq %rax, 176(%r9)
+    movq $0, 200(%r9)
+
+    call fred_nested_syscall
+
+    movq %gs:32, %rax
+    movq 176(%rax), %rcx
+    leaq fred_return_table(%rip), %rdx
+    jmp *(%rdx, %rcx, 8)
+
 
 
     .data
@@ -226,4 +244,4 @@ fred_return_table:
 .quad fred_ring3_return
 .quad fred_kernel_thread_return
 .quad 0
-.quad fred_nested_syscall
+.quad repeated_syscall_wrapper

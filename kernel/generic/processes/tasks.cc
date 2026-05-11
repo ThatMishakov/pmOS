@@ -71,10 +71,13 @@ TaskDescriptor *TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel le
     // Assign cs and ss
     switch (level) {
     case PrivilegeLevel::Kernel:
-        n->regs.cs = KERNEL_THREAD_CODE_SEGMENT;
-        n->regs.ss = R0_DATA_SEGMENT;
-        if (use_fred)
+        if (use_fred) {
+            n->regs.cs         = R0_CODE_SEGMENT;
             n->regs.entry_type = 1;
+        } else {
+            n->regs.cs = KERNEL_THREAD_CODE_SEGMENT;
+        }
+        n->regs.ss = R0_DATA_SEGMENT;
         break;
     case PrivilegeLevel::User:
         n->regs.cs = R3_CODE_SEGMENT;
