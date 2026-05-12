@@ -29,7 +29,6 @@
 #include "io.h"
 #include "ports.h"
 #include "registers.h"
-#include "timers.h"
 
 #include <errno.h>
 #include <inttypes.h>
@@ -77,66 +76,69 @@ pmos_port_t get_control_port()
 
 pmos_right_t right_to_device = 0;
 
-uint8_t get_interrupt_number(uint32_t intnum, uint64_t int_port)
+pmos_right_t int1_right = INVALID_RIGHT;
+pmos_right_t int2_right = INVALID_RIGHT;
+
+pmos_right_t get_interrupt_right(unsigned port)
 {
     pmos_port_t control_port = get_control_port();
     if (control_port == 0) {
         printf("[i8042] Error: Could not get control port\n");
-        return 0;
+        exit(1);
     }
 
-    uint8_t int_vector  = 0;
-    unsigned long mypid = get_task_id();
-
-    IPC_Reg_Int m   = {.type       = IPC_Reg_Int_NUM,
-                       .flags      = IPC_Reg_Int_FLAG_EXT_INTS,
-                       .intno      = intnum,
-                       .int_flags  = 0,
-                       .dest_task  = mypid,
-                       .dest_chan  = int_port,
+    IPC_Request_ACPI_Interrupt req = {
+        .type  = IPC_Request_ACPI_Interrupt_NUM,
+        .flags = 0,
+        .index = port,
     };
-    result_t result = send_message_right(right_to_device, control_port, (char *)&m, sizeof(m), NULL, 0).result;
+
+    result_t result = send_message_right(right_to_device, control_port, (char *)&req, sizeof(req), NULL, 0).result;
     if (result != SUCCESS) {
-        printf("[i8042] Warning: Could not send message to get the interrupt\n");
-        return 0;
+        printf("[i8042] Error: Could not send message to get the interrupt\n");
+        exit(1);
     }
 
     Message_Descriptor desc = {};
     unsigned char *message  = NULL;
-    for (int i = 0; i < 10; i++) {
-        result = get_message(&desc, &message, control_port, NULL, NULL);
-        if ((int)result != -EINTR)
-            break;
-    }
+    pmos_right_t rights[4];
 
+    result = get_message(&desc, &message, control_port, NULL, rights);
     if (result != SUCCESS) {
-        printf("[i8042] Warning: Could not get message %i (%s)\n", (int)-result, strerror(-result));
-        return 0;
+        printf("[i8042] Error: Could not get message %i %s\n", (int)-result, strerror(-result));
+        exit(1);
     }
 
-    if (desc.size < sizeof(IPC_Reg_Int_Reply)) {
+    pmos_right_t int_right = INVALID_RIGHT;
+
+    if (desc.size < sizeof(IPC_Request_Int_Reply)) {
         printf("[i8042] Warning: Recieved message which is too small (%i expected %i)\n",
-               (int)desc.size, (int)sizeof(IPC_Reg_Int_Reply));
-        free(message);
-        return 0;
+               (int)desc.size, (int)sizeof(IPC_Request_Int_Reply));
+        exit(1);
     }
 
-    IPC_Reg_Int_Reply *reply = (IPC_Reg_Int_Reply *)message;
-
-    if (reply->type != IPC_Reg_Int_Reply_NUM) {
+    IPC_Request_Int_Reply *reply = (IPC_Request_Int_Reply *)message;
+    if (reply->type != IPC_Request_Int_Reply_NUM) {
         printf("[i8042] Warning: Recieved unexepcted message type\n");
-        free(message);
-        return 0;
+        exit(1);
     }
 
-    if (reply->status) {
-        printf("[i8042] Warning: Did not assign the interrupt, status: %i\n", (int)reply->status);
+    if (reply->status == 0) {
+        int_right = rights[0];
+        rights[0] = INVALID_RIGHT;
+    } else if (reply->status == -ENOENT) {
+        // Don't do anything
     } else {
-        int_vector = reply->intno;
-        printf("[i8042] Info: Assigned interrupt %i\n", int_vector);
+        printf("[i8042] Warning: Did not assign the interrupt, status: %i\n", (int)reply->status);
+    }
+
+// end:
+    for (int i = 0; i < 4; i++) {
+        if (rights[i] != INVALID_RIGHT)
+            delete_right(rights[i]);
     }
     free(message);
-    return int_vector;
+    return int_right;
 }
 
 void *interrupt_thread(void *arg)
@@ -149,15 +151,14 @@ void *interrupt_thread(void *arg)
     }
 
     pmos_port_t int_port = req.port;
+    pmos_right_t int_right = (port == 0) ? int1_right : int2_right;
 
-    int port_pin       = port ? 2 : 12;
-    uint8_t int_vector = get_interrupt_number(port_pin, int_port);
-    if (int_vector == 0) {
-        printf("[i8042] Error: Could not get interrupt number\n");
+    right_request_t r = set_interrupt(int_right, int_port);
+    if (r.result != SUCCESS) {
+        printf("[i8042] Error setting the interrupt %" PRIi64 "\n", r.result);
         exit(1);
-    } else {
-        printf("[i8042] Info: Got interrupt number %i\n", int_vector);
     }
+    pmos_right_t receive_right = r.right;
 
     while (1) {
         result_t result;
@@ -183,20 +184,11 @@ void *interrupt_thread(void *arg)
             continue;
         }
 
-        IPC_Kernel_Interrupt *kmsg = (IPC_Kernel_Interrupt *)message;
-        if (kmsg->intno != int_vector) {
-            fprintf(stderr, "[i8042] Warning: Recieved interrupt of unknown number %i\n",
-                    kmsg->intno);
-            complete_interrupt(kmsg->intno);
-            free(message);
-            continue;
-        }
-
         int mutex_result = pthread_mutex_lock(&ports_mutex);
         if (mutex_result != 0) {
             fprintf(stderr, "[i8042] Error: Could not lock mutex\n");
             free(message);
-            complete_interrupt(kmsg->intno);
+            complete_interrupt(int_port, receive_right);
             continue;
         }
 
@@ -213,10 +205,10 @@ void *interrupt_thread(void *arg)
         mutex_result = pthread_mutex_unlock(&ports_mutex);
         if (mutex_result != 0) {
             fprintf(stderr, "[i8042] Error: Could not unlock mutex\n");
-            complete_interrupt(kmsg->intno);
+            complete_interrupt(int_port, receive_right);
             exit(mutex_result);
         }
-        complete_interrupt(kmsg->intno);
+        complete_interrupt(int_port, receive_right);
         free(message);
     }
 }
@@ -225,7 +217,19 @@ pthread_t thread1, thread2;
 
 void init_interrupts()
 {
-    if (first_port_works) {
+    int1_right = get_interrupt_right(0);
+    if (int1_right == INVALID_RIGHT) {
+        printf("[i8042] Warning: Could not get interrupt right for port 1\n");
+    } else {
+        printf("[i8042] Info: Got interrupt right for port 1\n");
+    }
+
+    int2_right = get_interrupt_right(1);
+    if (int2_right != INVALID_RIGHT) {
+        printf("[i8042] Info: Got interrupt right for port 2\n");
+    }
+
+    if (int1_right != INVALID_RIGHT) {
         int result = pthread_create(&thread1, NULL, interrupt_thread, (void *)0);
         if (result < 0)
             printf("[i8042] Could not create thread for port 1: %i\n", result);
@@ -233,7 +237,7 @@ void init_interrupts()
             pthread_detach(thread1);
     }
 
-    if (second_port_works) {
+    if (int2_right != INVALID_RIGHT) {
         int result = pthread_create(&thread2, NULL, interrupt_thread, (void *)1);
         if (result < 0)
             printf("[i8042] Could not create thread for port 2: %i\n", result);
@@ -576,49 +580,6 @@ int main_callback(Message_Descriptor *desc, void *message,
     }
 
     switch (IPC_TYPE(message)) {
-    case IPC_Kernel_Interrupt_NUM: {
-        if (desc->size < sizeof(IPC_Kernel_Interrupt)) {
-            printf("[i8042] Warning: message for type %i is too small (size %" PRIu64 ")\n",
-                    IPC_Kernel_Interrupt_NUM, desc->size);
-            break;
-        }
-
-        IPC_Kernel_Interrupt *str = (IPC_Kernel_Interrupt *)message;
-
-        if (str->intno == port1_int) {
-            react_port1_int();
-            break;
-        }
-
-        if (str->intno == port2_int) {
-            react_port2_int();
-            break;
-        }
-
-        printf("[i8042] Warning: Recieved unknown interrupt %i\n", str->intno);
-    } break;
-    case IPC_Timer_Reply_NUM: {
-        unsigned expected_size = sizeof(IPC_Timer_Reply);
-        if (desc->size != expected_size) {
-            fprintf(stderr,
-                    "[i8042] Warning: Recieved message of wrong size on port (expected "
-                    "%x got %" PRIu64 ")\n",
-                    expected_size, desc->size);
-            break;
-        }
-
-        IPC_Timer_Reply *reply = (IPC_Timer_Reply *)message;
-
-        if (reply->type != IPC_Timer_Reply_NUM) {
-            fprintf(stderr, "[i8042] Warning: Recieved unexpected meesage of type %x\n",
-                    reply->type);
-            break;
-        }
-
-        react_timer(reply->timer_id);
-
-        break;
-    }
     // case IPC_PS2_Send_Data_NUM: {
     //     IPC_PS2_Send_Data *d = (IPC_PS2_Send_Data *)message;
     //     react_send_data(d, desc.size);
@@ -677,8 +638,6 @@ int main(int argc, char **argv)
     init_interrupts();
 
     enable_ports();
-
-    poll_ports();
 
     pmos_msgloop_tree_node_t n;
     pmos_msgloop_node_set(&n, 0, main_callback, &msgloop_data);

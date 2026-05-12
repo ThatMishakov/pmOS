@@ -193,6 +193,15 @@ typedef struct IPC_PCI_Write_Result {
     int32_t result;
 } IPC_PCI_Write_Result;
 
+// Replies with IPC_Request_Int_Reply
+// To get several interrupts, send several IPC_Request_ACPI_Interrupt messages with different index, until there is -ENOENT in the reply
+#define IPC_Request_ACPI_Interrupt_NUM 0x13
+typedef struct IPC_Request_ACPI_Interrupt {
+    uint32_t type;
+    uint16_t flags;
+    uint16_t index;
+} IPC_Request_ACPI_Interrupt;
+
 #define IPC_Kernel_Interrupt_NUM 0x20
 typedef struct IPC_Kernel_Interrupt {
     uint32_t type;

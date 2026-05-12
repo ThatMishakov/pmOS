@@ -30,7 +30,6 @@
 
 #include "io.h"
 #include "registers.h"
-#include "timers.h"
 
 #include <alloca.h>
 #include <pmos/ipc.h>
@@ -42,7 +41,6 @@
 #include <inttypes.h>
 
 Port ports[2];
-uint64_t last_polling_timer = 0;
 
 bool send_data_port(uint8_t cmd, bool port_2)
 {
@@ -116,33 +114,6 @@ void react_port_int(unsigned port_num)
 void react_port1_int() { react_port_int(0); }
 
 void react_port2_int() { react_port_int(1); }
-
-void poll_ports()
-{
-    char data   = 0;
-    bool second = second_port_works;
-
-    bool two_ports_work = first_port_works && second_port_works;
-
-    bool *check_second  = two_ports_work ? &second : NULL;
-    bool have_read_data = read_data(&data, check_second);
-
-    last_polling_timer = start_timer(100);
-
-    if (!have_read_data)
-        return;
-
-    react_data(data, second);
-}
-
-void react_timer(uint64_t index)
-{
-    if (last_polling_timer == index) {
-        poll_ports();
-    } else {
-        fprintf(stderr, "[i8042] Warning: Recieved timer message with unknown index %li\n", index);
-    }
-}
 
 int data_callback(Message_Descriptor *desc, void *message,
                                        pmos_right_t *, pmos_right_t *,

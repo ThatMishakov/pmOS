@@ -218,9 +218,6 @@ struct CPU_Info {
                                        detail::TreeCmp<TimerNode, u64, &TimerNode::fire_at_ns>>;
     timer_tree::RBTreeHead timer_queue;
 
-    // Adds a new timer to the timer queue
-    kresult_t atomic_timer_queue_push(u64 fire_on_core_ticks, ipc::Port *, u64 user);
-
     // Returns the number of ticks after the given number of milliseconds
     u64 ticks_after_ms(u64 ms);
     u64 ticks_after_ns(u64 ns);
