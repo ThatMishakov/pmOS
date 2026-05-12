@@ -121,6 +121,48 @@ int default_callback(Message_Descriptor *desc, void *msg_buff, pmos_right_t *rep
 struct pmos_msgloop_data main_msgloop_data;
 struct pmbus_helper *pmbus_helper = NULL;
 
+void publish_finalize()
+{
+    pmos_bus_object_t *bus_object = NULL;
+
+    bus_object = pmos_bus_object_create();
+    if (!bus_object) {
+        fprintf(stderr, "Failed to create pmbus object for devicesd\n");
+        goto end;
+    }
+
+    if (!pmos_bus_object_set_name(bus_object, "devicesd_finalized")) {
+        fprintf(stderr, "Failed to set name for devicesd pmbus object\n");
+        goto end;
+    }
+
+    if (!pmos_bus_object_set_property_string(bus_object, "subsystem", "devicesd")) {
+        fprintf(stderr, "Failed to set subsystem for devicesd pmbus object\n");
+        goto end;
+    }
+
+    if (!pmos_bus_object_set_property_string(bus_object, "status", "ready")) {
+        fprintf(stderr, "Failed to set status for devicesd pmbus object\n");
+        goto end;
+    }
+
+    right_request_t req = dup_right(main_recieve_right);
+    if (req.result) {
+        fprintf(stderr, "Failed to dup right for devicesd pmbus object: %i (%s)\n", (int)req.result, strerror(-req.result));
+        goto end;
+    }
+
+    int result = pmbus_helper_publish(pmbus_helper, bus_object, req.right, NULL, NULL);
+    bus_object = NULL;
+    if (result < 0) {
+        fprintf(stderr, "Failed to publish devicesd pmbus object: %i (%s)\n", result, strerror(-result));
+        goto end;
+    }
+end:
+    if (bus_object)
+        pmos_bus_object_free(bus_object);
+}
+
 int main(int , char **)
 {
     printf("Hello from devicesd!. My PID: %lx\n", get_task_id());
@@ -169,6 +211,7 @@ int main(int , char **)
     init_dtb();
     init_acpi();
     init_serial();
+    publish_finalize();
 
     // init_ioapic();
     // init_timers();

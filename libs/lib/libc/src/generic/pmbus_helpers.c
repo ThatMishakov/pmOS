@@ -28,32 +28,39 @@ struct pmbus_helper {
     pmos_msgloop_tree_node_t request_node;
     // Linked list of requests, while waiting for the right...
     struct object_request *next_request;
+    struct object_request *next_tail;
 
     // Pending register reply
     struct object_request *next_pending;
+    struct object_request *next_pending_tail;
 };
 
 static void ll_push(struct object_request **head, struct object_request *node)
 {
-    node->ll_next = *head;
-    if (*head)
-        node->ll_next->ll_prev = node;
-    node->ll_prev = NULL;
-    *head = node; 
+    struct object_request **tail = head + 1;
+    if (*tail) {
+        (*tail)->ll_next = node;
+        node->ll_prev = *tail;
+        *tail = node;
+        node->ll_next = NULL;
+    } else {
+        *head = *tail = node;
+        node->ll_prev = node->ll_next = NULL;
+    }
 }
 
 static void ll_delete(struct object_request **head, struct object_request *node)
 {
-    if (node->ll_prev) {
-        node->ll_prev->ll_next = node->ll_next;
-    } else {
-        *head = node->ll_next;
-    }
-
-    if (node->ll_next)
+    struct object_request **tail = head + 1;
+    if (*tail == node)
+        *tail = node->ll_prev;
+    else
         node->ll_next->ll_prev = node->ll_prev;
 
-    node->ll_next = node->ll_prev = NULL;
+    if (node->ll_prev)
+        node->ll_prev->ll_next = node->ll_next;
+    else
+        *head = node->ll_next;
 }
 
 struct pmbus_helper *pmbus_helper_create(struct pmos_msgloop_data *for_msgloop)
