@@ -53,10 +53,12 @@
 #include <uacpi/sleep.h>
 #include <uacpi/utilities.h>
 #include <pmos/pmbus_helper.h>
+#include <ioapic/ints_override.h>
 
 void init_acpi();
 
 extern pmos_port_t main_port;
+extern struct pmos_msgloop_data main_msgloop_data;
 extern struct pmbus_helper *pmbus_helper;
 
 bool have_rsdp = false;
@@ -638,9 +640,12 @@ void init_acpi()
 
 struct ACPIDevice {
     char *path;
+    uacpi_namespace_node *device_node;
 
     pmos_right_t send_right;
     pmos_right_t receive_right;
+
+    pmos_msgloop_tree_node_t msgloop_node;
 
     struct ACPIDevice *next;
 };
@@ -655,6 +660,225 @@ void acpi_register_callback(int result, uint64_t sequence_number, void *ctx, str
     } else {
         printf("Published %s! Sequence ID: %" PRIu64 "\n", device->path, sequence_number);
     }
+}
+
+int uacpi_status_to_errno(uacpi_status status)
+{
+    switch (status) {
+    case UACPI_STATUS_OK:
+        return 0;
+    case UACPI_STATUS_MAPPING_FAILED:
+        return -EIO;
+    case UACPI_STATUS_OUT_OF_MEMORY:
+        return -ENOMEM;
+    case UACPI_STATUS_BAD_CHECKSUM:
+        return -EIO;
+    case UACPI_STATUS_INVALID_SIGNATURE:
+        return -EIO;
+    case UACPI_STATUS_INVALID_TABLE_LENGTH:
+        return -EIO;
+    case UACPI_STATUS_NOT_FOUND:
+        return -ENOENT;
+    case UACPI_STATUS_INVALID_ARGUMENT:
+        return -EINVAL;
+    case UACPI_STATUS_UNIMPLEMENTED:
+        return -ENOSYS;
+    case UACPI_STATUS_ALREADY_EXISTS:
+        return -EEXIST;
+    case UACPI_STATUS_INTERNAL_ERROR:
+        return -EIO;
+    case UACPI_STATUS_TYPE_MISMATCH:
+        return -EIO;
+    case UACPI_STATUS_INIT_LEVEL_MISMATCH:
+        return -EIO;
+    case UACPI_STATUS_NAMESPACE_NODE_DANGLING:
+        return -EIO;
+    case UACPI_STATUS_NO_HANDLER:
+        return -EIO;
+    case UACPI_STATUS_NO_RESOURCE_END_TAG:
+        return -EIO;
+    case UACPI_STATUS_COMPILED_OUT:
+        return -EIO;
+    case UACPI_STATUS_HARDWARE_TIMEOUT:
+        return -EIO;
+    case UACPI_STATUS_TIMEOUT:
+        return -EIO;
+    case UACPI_STATUS_OVERRIDDEN:
+        return -EIO;
+    case UACPI_STATUS_DENIED:
+        return -EACCES;
+    default:
+        if (status >= UACPI_STATUS_AML_UNDEFINED_REFERENCE &&
+            status <= UACPI_STATUS_AML_CALL_STACK_DEPTH_LIMIT) {
+            return -EIO;
+        }
+
+        return -EIO;
+    }
+}
+
+struct InterruptSearchCtx {
+    unsigned index;
+    unsigned count;
+
+    uint32_t interrupt;
+    bool active_low;
+    bool level_triggered;
+    bool found;
+    bool is_isa;
+};
+
+static uacpi_iteration_decision find_interrupt_resources(void *ctx, uacpi_resource *res)
+{
+    struct InterruptSearchCtx *c = ctx;
+    
+    unsigned wanted_index = c->index - c->count;
+
+    switch (res->type) {
+    case UACPI_RESOURCE_TYPE_IRQ: {
+        uacpi_resource_irq *irq = &res->irq;
+        if (irq->num_irqs <= wanted_index) {
+            c->count += irq->num_irqs;
+            break;
+        }
+
+        c->active_low = irq->polarity == UACPI_POLARITY_ACTIVE_LOW;
+        c->level_triggered = irq->triggering == UACPI_TRIGGERING_LEVEL;
+        c->interrupt = irq->irqs[wanted_index];
+        c->is_isa = true;
+        c->found = true;
+
+        return UACPI_ITERATION_DECISION_BREAK;
+    }
+        break;
+    case UACPI_RESOURCE_TYPE_EXTENDED_IRQ: {
+        uacpi_resource_extended_irq *irq = &res->extended_irq;
+        if (irq->direction == UACPI_PRODUCER)
+            break;
+
+        if (irq->num_irqs <= wanted_index) {
+            c->count += irq->num_irqs;
+            break;
+        }
+
+        c->active_low = irq->polarity == UACPI_POLARITY_ACTIVE_LOW;
+        c->level_triggered = irq->triggering == UACPI_TRIGGERING_LEVEL;
+        c->interrupt = irq->irqs[wanted_index];
+        c->is_isa = false;
+        c->found = true;
+
+        return UACPI_ITERATION_DECISION_BREAK;
+    }
+        break;
+    default:
+        break;
+    }
+
+    return UACPI_ITERATION_DECISION_CONTINUE;
+}
+
+void get_acpi_interrupt(struct ACPIDevice *device, uint16_t index, pmos_right_t reply_right)
+{
+    pmos_right_t right = 0;
+
+    struct InterruptSearchCtx ctx = {
+        .index        = index,
+        .count        = 0,
+        .found        = false,
+        .interrupt    = 0,
+        .active_low   = false,
+        .level_triggered = false,
+        .is_isa       = false,
+    };
+
+    int result = 0;
+    uacpi_status status = uacpi_for_each_device_resource(device->device_node, "_CRS", find_interrupt_resources, &ctx);
+    if (uacpi_unlikely_error(status)) {
+        fprintf(stderr, "Failed to get resources for device %s: %s\n", device->path, uacpi_status_to_string(status));
+        result = uacpi_status_to_errno(status);
+        goto end;
+    }
+
+    if (!ctx.found) {
+        result = -ENOENT;
+        goto end;
+    }
+
+    if (ctx.is_isa) {
+        int_redirect_descriptor desc = get_for_int(ctx.interrupt);
+        ctx.interrupt = desc.destination;
+    }
+
+    uint32_t flags = 0;
+    if (ctx.active_low)
+        flags |= PMOS_INTERRUPT_ACTIVE_LOW;
+    if (ctx.level_triggered)
+        flags |= PMOS_INTERRUPT_LEVEL_TRIG;
+
+    printf("Info: Allocating interrupt for device %s: GSI %u, flags 0x%x\n", device->path, ctx.interrupt, flags);
+
+    right_request_t right_req = allocate_interrupt(ctx.interrupt, flags);
+    if (right_req.result != 0) {
+        fprintf(stderr, "Failed to allocate interrupt for GSI %u: %i (%s)\n", ctx.interrupt, (int)right_req.result, strerror(-right_req.result));
+        result = right_req.result;
+        goto end;
+    } else
+        right = right_req.right;
+
+end:
+    IPC_Request_Int_Reply reply = {
+        .type   = IPC_Request_Int_Reply_NUM,
+        .flags  = 0,
+        .status = result,
+    };
+
+    message_extra_t extra = {
+        .extra_rights = {right, 0, 0, 0},
+    };
+    result = send_message_right(reply_right, 0, &reply, sizeof(reply), &extra, SEND_MESSAGE_DELETE_RIGHT).result;
+    if (result != 0) {
+        fprintf(stderr, "Failed to send interrupt reply message: %i (%s)\n", result, strerror(-result));
+    } else {
+        reply_right = 0;
+        right = 0;
+    }
+
+    if (right)
+        delete_right(right);
+    if (reply_right)
+        delete_right(reply_right);
+}
+
+static int acpi_callback(Message_Descriptor *desc, void *msg_buff, pmos_right_t *reply_right,
+                     pmos_right_t *other_rights, void *ctx, struct pmos_msgloop_data *)
+{
+    struct ACPIDevice *device = ctx;
+    if (desc->size < IPC_MIN_SIZE) {
+        fprintf(stderr, "Received message which is too small for ACPI device %s\n", device->path);
+        return PMOS_MSGLOOP_CONTINUE;
+    }
+
+    IPC_Generic_Msg *msg = (IPC_Generic_Msg *)msg_buff;
+    switch (msg->type) {
+    case IPC_Request_ACPI_Interrupt_NUM: {
+        if (desc->size < sizeof(IPC_Request_ACPI_Interrupt)) {
+            fprintf(stderr, "Received IPC_Request_ACPI_Interrupt which is too small for ACPI device %s\n",
+                    device->path);
+            break;
+        }
+
+        uint16_t index = ((IPC_Request_ACPI_Interrupt *)msg)->index;
+        get_acpi_interrupt(device, index, *reply_right);
+        *reply_right = 0;
+    }
+        break;
+    default:
+        fprintf(stderr, "Received message with unknown type %i for ACPI device %s\n", msg->type,
+                device->path);
+        break;
+    }
+
+    return PMOS_MSGLOOP_CONTINUE;
 }
 
 static uacpi_iteration_decision acpi_init_one_device(void *ctx, uacpi_namespace_node *node,
@@ -705,6 +929,8 @@ static uacpi_iteration_decision acpi_init_one_device(void *ctx, uacpi_namespace_
             goto _continue;
         }
         device->send_right = req.right;
+
+        pmos_msgloop_node_set(&device->msgloop_node, device->receive_right, acpi_callback, device);
 
         bus_object = pmos_bus_object_create();
         if (!bus_object) {
@@ -787,6 +1013,9 @@ static uacpi_iteration_decision acpi_init_one_device(void *ctx, uacpi_namespace_
             goto _continue;
         }
 
+        pmos_msgloop_insert(&main_msgloop_data, &device->msgloop_node);
+
+        device->device_node = node;
         device->next = acpi_devices;
         acpi_devices = device;
         device = NULL;

@@ -146,7 +146,7 @@ void *interrupt_thread(void *arg)
     ptrdiff_t port      = (ptrdiff_t)arg;
     ports_request_t req = create_port(TASK_ID_SELF, 0);
     if (req.result != SUCCESS) {
-        printf("[i8042] Error creating port %" PRIi64 "\n", req.result);
+        printf("[i8042] Error creating port %" PRIi64 " port %i\n", req.result, (int)port);
         exit(1);
     }
 
@@ -155,7 +155,7 @@ void *interrupt_thread(void *arg)
 
     right_request_t r = set_interrupt(int_right, int_port);
     if (r.result != SUCCESS) {
-        printf("[i8042] Error setting the interrupt %" PRIi64 "\n", r.result);
+        printf("[i8042] Error setting the interrupt %" PRIi64 " port %i\n", r.result, (int)port);
         exit(1);
     }
     pmos_right_t receive_right = r.right;
