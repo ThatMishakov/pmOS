@@ -943,6 +943,11 @@ static uacpi_iteration_decision acpi_init_one_device(void *ctx, uacpi_namespace_
             goto _continue;
         }
 
+        if (!pmos_bus_object_set_property_string(bus_object, "type", "acpi_device")) {
+            fprintf(stderr, "Failed to set object type\n");
+            goto _continue;
+        }
+
         if ((info->flags & UACPI_NS_NODE_INFO_HAS_ADR) &&
             !pmos_bus_object_set_property_integer(bus_object, "acpi_adr", info->adr)) {
             fprintf(stderr, "Failed to set object acpi_adr\n");
@@ -957,13 +962,13 @@ static uacpi_iteration_decision acpi_init_one_device(void *ctx, uacpi_namespace_
 
         if ((info->flags & UACPI_NS_NODE_INFO_HAS_UID) &&
             !pmos_bus_object_set_property_string(bus_object, "acpi_uid", info->uid.value)) {
-            fprintf(stderr, "Failed to set object acpi_hid\n");
+            fprintf(stderr, "Failed to set object acpi_uid\n");
             goto _continue;
         }
 
         if ((info->flags & UACPI_NS_NODE_INFO_HAS_CLS) &&
             !pmos_bus_object_set_property_string(bus_object, "acpi_cls", info->cls.value)) {
-            fprintf(stderr, "Failed to set object acpi_hid\n");
+            fprintf(stderr, "Failed to set object acpi_cls\n");
             goto _continue;
         }
 

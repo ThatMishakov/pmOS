@@ -29,6 +29,7 @@
 #include "io.h"
 #include "ports.h"
 #include "registers.h"
+#include "pmbus.h"
 
 #include <errno.h>
 #include <inttypes.h>
@@ -623,6 +624,7 @@ int main(int argc, char **argv)
     }
 
     pmos_msgloop_initialize(&msgloop_data, main_port);
+    request_ps2_rights();
 
     pmos_request_io_permission();
     //request_priority(1);
