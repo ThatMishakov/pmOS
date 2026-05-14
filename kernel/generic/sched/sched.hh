@@ -92,7 +92,7 @@ struct AttentionNode {
 
 struct CPU_Info {
     CPU_Info *self                     = this;    // 0  0
-    u64 *kernel_stack_top              = nullptr; // 8  4
+    ulong *kernel_stack_top            = nullptr; // 8  4
     ulong temp_var                     = 0;       // 16 8
     ulong nested_level                 = 1;       // 24 12
     proc::TaskDescriptor *current_task = nullptr; // 32 16
