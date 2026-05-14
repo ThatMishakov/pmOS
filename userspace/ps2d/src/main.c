@@ -27,6 +27,7 @@
  */
 
 #include "ports.h"
+#include "timer.h"
 
 #include <pmos/helpers.h>
 #include <pmos/ipc.h>
@@ -55,19 +56,6 @@ int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_r
     }
 
     switch (IPC_TYPE(buff)) {
-    case IPC_Timer_Expired_NUM: {
-        if (desc->size < sizeof(IPC_Timer_Expired)) {
-            fprintf(stderr, "[PS2d] Warning: Recieved IPC_Timer_Expired of unexpected size %" PRIu64 "\n",
-                    desc->size);
-            break;
-        }
-
-        IPC_Timer_Expired *tmr = (IPC_Timer_Expired *)buff;
-
-        react_timer(tmr);
-
-        break;
-    }
     default:
         fprintf(stderr, "[PS2d] Warning: Recieved message of unknown type %" PRIu32 " (right %" PRIu64 "\n", IPC_TYPE(buff), desc->sent_with_right);
         break;
@@ -87,7 +75,7 @@ void usage(char *name)
 void parse_args(int argc, char **argv)
 {
     if (argc < 1)
-        printf("ps2d: empty argc!\n");
+        printf("[PS2d] empty argc!\n");
     char *name = argv[0];
 
     bool have_right = false;
@@ -97,25 +85,25 @@ void parse_args(int argc, char **argv)
 
         if (!strcmp(r, "--right-id")) {
             if (have_right) {
-                printf("ps2d: Repeated --right-id\n");
+                printf("[PS2d] Repeated --right-id\n");
                 usage(name);
             }
 
             ++i;
             if (i >= argc) {
-                printf("ps2d missing right ID\n");
+                printf("[PS2d] Missing right ID\n");
                 usage(name);
             }
             right_to_device = strtoull(argv[i], NULL, 0);
             have_right = true;
         } else {
-            printf("Unrecognized argument %s\n", argv[i]);
+            printf("[PS2d] Unrecognized argument %s\n", argv[i]);
             usage(name);
         }
     }
 
     if (!have_right) {
-        printf("ps2d: no right_id!\n");
+        printf("[PS2d] No right_id!\n");
         usage(name);
     }
 }
@@ -214,13 +202,13 @@ void register_with_controller()
     for (int i = 1; i < 4; ++i)
         delete_right(extra_rights[i]);
 
-    printf("PS2d: Registered myself with the controller...\n");
+    printf("[PS2d] Registered myself with the controller...\n");
 }
 
 int main(int argc, char *argv[])
 {
     parse_args(argc, argv);
-    printf("Hello from PS2d! My PID: %" PRIi64 ", right to device: %"PRIu64 "\n", get_task_id(), right_to_device);
+    printf("[PS2d] Hello from PS2d! My PID: %" PRIi64 ", right to device: %"PRIu64 "\n", get_task_id(), right_to_device);
     {
         ports_request_t req;
 
@@ -241,6 +229,8 @@ int main(int argc, char *argv[])
     }
 
     pmos_msgloop_initialize(&msgloop_data, main_port);
+
+    init_timer();
 
     main_pmbus_helper = pmbus_helper_create(&msgloop_data);
     if (!main_pmbus_helper) {

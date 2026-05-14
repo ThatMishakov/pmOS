@@ -68,9 +68,6 @@ int send_byte_port(unsigned char byte);
 void react_data(const char *data, size_t data_size);
 void react_byte(unsigned char byte);
 void start_port();
-uint64_t port_start_timer(unsigned time_ms);
-void react_timer(IPC_Timer_Reply *tmr);
-void port_react_timer(uint64_t timer_id);
 void reset_port();
 
 #endif

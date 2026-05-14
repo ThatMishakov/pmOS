@@ -30,6 +30,7 @@
 
 #include "commands.h"
 #include "configuration.h"
+#include "timer.h"
 
 #include <alloca.h>
 #include <assert.h>
@@ -43,7 +44,6 @@
 
 enum Port_States state = PORT_STATE_RESET;
 enum Device_Types type = DEVICE_TYPE_UNKNOWN;
-uint64_t last_timer;
 
 uint32_t device_id = 0;
 unsigned device_id_size = 0;
@@ -54,7 +54,6 @@ void (*managed_react_timer)() = NULL;
 void start_port()
 {
     state      = PORT_STATE_RESET;
-    last_timer = 0;
 
     unsigned char data[] = {0xff};
     send_data_port(data, sizeof(data));
@@ -150,11 +149,8 @@ void react_byte(unsigned char data)
     }
 }
 
-void port_react_timer(uint64_t timer_id)
+void port_react_timer()
 {
-    if (last_timer != timer_id)
-        return;
-
     switch (state) {
     case PORT_STATE_RESET:
         // Do nothing
@@ -181,28 +177,6 @@ void port_react_timer(uint64_t timer_id)
         managed_react_timer();
         break;
     }
-}
-
-uint64_t tmr_index = 0;
-
-uint64_t port_start_timer(unsigned time_ms)
-{
-    int result = pmos_request_timer(main_port, time_ms * 1000000, tmr_index);
-    if (result != SUCCESS) {
-        printf("[PS2d] Warning: Could not send message to get the interrupt\n");
-        return 0;
-    }
-
-    last_timer = tmr_index;
-
-    // printf("Started timer index %i\n", tmr_index);
-
-    return tmr_index++;
-}
-
-void react_timer(IPC_Timer_Reply *tmr)
-{
-    port_react_timer(tmr->timer_id);
 }
 
 void reset_port()

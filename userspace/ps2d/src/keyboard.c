@@ -30,6 +30,7 @@
 
 #include "commands.h"
 #include "ports.h"
+#include "timer.h"
 
 #include <stdio.h>
 #include <inttypes.h>
