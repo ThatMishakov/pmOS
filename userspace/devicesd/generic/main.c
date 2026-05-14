@@ -76,6 +76,7 @@ void init_acpi();
 void *shutdown_thread(void *);
 
 pmos_right_t main_recieve_right = 0;
+pmos_right_t main_right = 0;
 
 int default_callback(Message_Descriptor *desc, void *msg_buff, pmos_right_t *reply_right,
                      pmos_right_t *other_rights, void *, struct pmos_msgloop_data *)
@@ -146,7 +147,7 @@ void publish_finalize()
         goto end;
     }
 
-    right_request_t req = dup_right(main_recieve_right);
+    right_request_t req = dup_right(main_right);
     if (req.result) {
         fprintf(stderr, "Failed to dup right for devicesd pmbus object: %i (%s)\n", (int)req.result, strerror(-req.result));
         goto end;
@@ -173,8 +174,6 @@ int main(int , char **)
     pmos_request_io_permission();
 #endif
     // request_priority(0);
-    pmos_right_t recieve_right;
-
     {
         ports_request_t req;
         req = create_port(TASK_ID_SELF, 0);
@@ -196,7 +195,7 @@ int main(int , char **)
             printf("Error creating right %i\n", (int)req.result);
             return 0;
         }
-        recieve_right = right_req.right;
+        main_right = right_req.right;
     }
 
     pmos_msgloop_initialize(&main_msgloop_data, main_port);
@@ -223,7 +222,13 @@ int main(int , char **)
     // Get messages
 
     {
-        result_t r = name_right(recieve_right, devicesd_port_name, strlen(devicesd_port_name), 0);
+        right_request_t req = dup_right(main_right);
+        if (req.result) {
+            printf("Error duping right for naming: %i\n", (int)req.result);
+            return 0;
+        }
+
+        result_t r = name_right(req.right, devicesd_port_name, strlen(devicesd_port_name), 0);
         if (r != SUCCESS) {
             printf("Error %i naming right\n", (int)r);
             return 0;

@@ -80,7 +80,7 @@ pmos_right_t right_to_device = 0;
 pmos_right_t int1_right = INVALID_RIGHT;
 pmos_right_t int2_right = INVALID_RIGHT;
 
-pmos_right_t get_interrupt_right(unsigned port)
+pmos_right_t get_interrupt_right(pmos_right_t device_right)
 {
     pmos_port_t control_port = get_control_port();
     if (control_port == 0) {
@@ -91,10 +91,10 @@ pmos_right_t get_interrupt_right(unsigned port)
     IPC_Request_ACPI_Interrupt req = {
         .type  = IPC_Request_ACPI_Interrupt_NUM,
         .flags = 0,
-        .index = port,
+        .index = 0,
     };
 
-    result_t result = send_message_right(right_to_device, control_port, (char *)&req, sizeof(req), NULL, 0).result;
+    result_t result = send_message_right(device_right, control_port, (char *)&req, sizeof(req), NULL, 0).result;
     if (result != SUCCESS) {
         printf("[i8042] Error: Could not send message to get the interrupt\n");
         exit(1);
@@ -216,18 +216,27 @@ void *interrupt_thread(void *arg)
 
 pthread_t thread1, thread2;
 
+extern pmos_right_t main_device_right;
+extern pmos_right_t aux_right;
+
 void init_interrupts()
 {
-    int1_right = get_interrupt_right(0);
-    if (int1_right == INVALID_RIGHT) {
-        printf("[i8042] Warning: Could not get interrupt right for port 1\n");
-    } else {
-        printf("[i8042] Info: Got interrupt right for port 1\n");
+    if (main_device_right != INVALID_RIGHT) {
+        int1_right = get_interrupt_right(main_device_right);
+        if (int1_right == INVALID_RIGHT) {
+            printf("[i8042] Warning: Could not get interrupt right for port 1\n");
+        } else {
+            printf("[i8042] Info: Got interrupt right for port 1\n");
+        }
     }
 
-    int2_right = get_interrupt_right(1);
-    if (int2_right != INVALID_RIGHT) {
-        printf("[i8042] Info: Got interrupt right for port 2\n");
+    if (aux_right != INVALID_RIGHT) {
+        int2_right = get_interrupt_right(aux_right);
+        if (int2_right == INVALID_RIGHT) {
+            printf("[i8042] Warning: Could not get interrupt right for port 2\n");
+        } else {
+            printf("[i8042] Info: Got interrupt right for port 2\n");
+        }
     }
 
     if (int1_right != INVALID_RIGHT) {

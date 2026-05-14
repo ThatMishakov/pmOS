@@ -137,6 +137,9 @@ pmos_port_t get_control_port();
 
 pmos_right_t pmbus_right = INVALID_RIGHT;
 
+pmos_right_t main_device_right = INVALID_RIGHT;
+pmos_right_t aux_right = INVALID_RIGHT;
+
 void request_ps2_rights()
 {
     pmos_bus_filter_disjunction *keyboard = NULL, *aux = NULL;
@@ -257,8 +260,6 @@ void request_ps2_rights()
 
         msg->start_sequence_number = reply->next_sequence_number;
 
-        printf("Got pmbus object\n");
-
         pmos_bus_object_t *object = pmos_bus_object_deserialize_ipc(reply->object_data, desc.size - sizeof(IPC_BUS_Request_Object_Reply));
         if (!object) {
             fprintf(stderr, "Failed to deserialize pmbus object\n");
@@ -266,16 +267,33 @@ void request_ps2_rights()
         }
 
         if (pmos_bus_object_matches_filter(object, keyboard)) {
-            printf("Object matches keyboard filter\n");
+            if (main_device_right == INVALID_RIGHT) {
+                main_device_right = rights[0];
+                rights[0] = 0;
+                printf("Received main device right: %" PRIu64 "\n", main_device_right);
+            } else {
+                printf("Received duplicate main device right\n");
+            }
         } else if (pmos_bus_object_matches_filter(object, aux)) {
-            printf("Object matches aux filter\n");
+            if (aux_right == INVALID_RIGHT) {
+                aux_right = rights[0];
+                rights[0] = 0;
+                printf("Received aux device right: %" PRIu64 "\n", aux_right);
+            } else {
+                printf("Received duplicate aux device right\n");
+            }
         } else if (pmos_bus_object_matches_filter(object, completion)) {
-            printf("Object matches completion filter\n");
+            cont = false;
         }
         pmos_bus_object_free(object);
         free(reply_data);
+        for (int i = 0; i < 4; i++) {
+            if (rights[i] != 0)
+                delete_right(rights[i]);
+        }
     }
 
+    delete_right(pmbus_right);
     free(data);
     pmos_bus_filter_free(filter);
     pmos_bus_filter_free(keyboard);
