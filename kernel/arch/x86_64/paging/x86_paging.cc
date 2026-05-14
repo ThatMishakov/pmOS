@@ -1082,7 +1082,15 @@ kresult_t x86_Page_Table::get_io_permissions()
     return 0;
 }
 
-void kernel::paging::apply_page_table(ptable_top_ptr_t page_table) { setCR3((u64)page_table); }
+void kernel::paging::apply_page_table(ptable_top_ptr_t page_table) {
+    if (support_nx) {
+        u64 efer = read_msr(0xc0000080);
+        efer |= (1 << 11);
+        write_msr(0xc0000080, efer);
+    }
+
+    setCR3((u64)page_table);
+}
 
 void x86_Page_Table::invalidate_tlb(void *addr) { invlpg(addr); }
 void kernel::paging::invalidate_tlb_kernel(void *addr) { invlpg(addr); }
