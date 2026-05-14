@@ -63,7 +63,7 @@ These are the features that are planned to be had in the OS:
 - [ ] Processes and threads
   - [ ] Processes - The kernel has tasks, but POSIX processes and execlp/spawn is not yet implemented
   - [x] Task switching
-  - [x] Preemptive multitasking
+  - [x] Preemptive multitasking (boring)
   - [X] Threads - basic pthread implementation in userspace building on kernel interfaces
   - [X] Kernel threads
   - [x] User space
@@ -83,8 +83,6 @@ These are the features that are planned to be had in the OS:
     - [x] Acccess to physical memory
     - [x] Mapping of memory objects
     - [x] Copy-on-write
-  - [x] Memory mapping
-  - [x] Releasing used pages
   - [ ] Memory objects
     - [x] Memory object creation from kernel
     - [x] Memory object access from kernel
@@ -96,71 +94,58 @@ These are the features that are planned to be had in the OS:
   - [x] Memory protections
   - [x] TLB shootdowns
   - [ ] Swapping
-  - [x] Accessing userspace memory
-    - Implemented (and surprisingly works well), but is very slow, needs rewriting
+  - [x] SMP
 
-- [ ] Interrupts and exceptions
-  - [x] Very basic exception handling
-  - [x] Syscalls
-  - [x] Interrupt dispatching to drivers
-  - [ ] Interrupt sharing
+
+- [x] Interrupts
+  - [x] Interrupt dispatching to userspace drivers
+  - [x] Interrupt sharing
+  - [ ] Proper interrupt priorities
 
 - [x] IPC and messaging
   - [x] Buffered string messages
   - [x] Ports
   - [x] Kernel messages
   - [x] Quick user memory access - catching exceptions on userspace memory access
-  - [x] Handles/capabilities - would make API a lot nicer and fix a lot of issues with current design
-    - [x] Handles for ports
-    - [ ] Handles for other stuff
-    - [ ] Notification of closed handles
+  - [x] Rights (handles/capabilities)
+    - [x] Send once/many rights
+    - [x] Memory objects rights
+    - [x] Interrupt rights
+    - [x] Timer rights
+    - [ ] Phys memory/iommu rights
+    - [ ] I/O ports rights
+    - [x] Notification of closed rights
+    - [x] Sending rights over IPC
   
 - [ ] ~~Permissions~~ -> capabilities would solve that
 - [x] Multi CPU support
 
 #### RISC-V specific features:
+- [x] 3 to 5 level page tables
 
-- [x] Virtual memory - 3 to 5 level page tables
-- [x] Exceptions
-- [x] Timer interrupt
-- [x] Userspace/U mode
-- [x] Multi hart support
-
-#### x86 features:
-- [x] Virtual memory
-- [x] Exceptions
+#### x86-specific features:
 - [x] Time
   - [x] ACPI PM Timer (clock source and calibration)
   - [x] HPET (clock source and calibration)
-    - [ ] HPET timer interrupt source (in absence of LAPIC timer)
   - [x] LAPIC timer
   - [x] TSC
   - [x] TSC deadline
-  - [x] KVM clock
+  - [ ] KVM clock
 - [ ] APIC
   - [x] xAPIC
   - [x] x2APIC
   - [x] LAPIC
   - [ ] IOMMU
-- [x] Userspace/Ring 3
-- [x] Multi CPU support
 
-#### x86_64 specific features:
+#### x86_64-specific features:
 - [x] 5 level paging
+- [x] FRED
 
-#### i686 specific features:
+#### i686-specific features:
 
 - [x] Virtual memory
   - [x] 2 level page tables
   - [x] PAE - supports and uses up to 16GB of RAM, if available
-
-#### LoongArch64 specific features:
-- [x] Virtual memory
-- [x] Exceptions
-- [x] Timer interrupt - haven't noticed there was a TSC-like global timer, needs fixing
-- [x] External interrupts - using EIO PIC and BIO PIC over HT
-- [x] Userspace
-- [ ] Multi CPU support
 
 
 **Core utilities and daemons**
