@@ -1,5 +1,0 @@
-services:
-- name: vfsd
-  path: /vfsd.elf
-  description: Virtual Filesystem Service
-  run_type: ALWAYS_ONCE
