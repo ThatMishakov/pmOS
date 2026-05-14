@@ -148,51 +148,51 @@ void request_ps2_rights()
     uint8_t *data = NULL; 
 
     if (!(keyboard = pmbus_filter_create(PRIMARY_PNP_IDS))) {
-        fprintf(stderr, "Failed to create pmbus filter for keyboard\n");
+        fprintf(stderr, "[i8042] Error: Failed to create pmbus filter for keyboard\n");
         exit(1);
     }
 
     if (!(aux = pmbus_filter_create(AUX_PNP_IDS))) {
-        fprintf(stderr, "Failed to create pmbus filter for aux\n");
+        fprintf(stderr, "[i8042] Error: Failed to create pmbus filter for aux\n");
         exit(1);
     }
 
     if (!(completion = pmbus_filter_completion())) {
-        fprintf(stderr, "Failed to create pmbus filter for completion\n");
+        fprintf(stderr, "[i8042] Error: Failed to create pmbus filter for completion\n");
         exit(1);
     }
 
     filter = pmos_bus_filter_disjunction_create();
     if (!filter) {
-        fprintf(stderr, "Failed to create pmbus filter\n");
+        fprintf(stderr, "[i8042] Error: Failed to create pmbus filter\n");
         exit(1);
     }
 
     void *d = pmos_bus_filter_dup(keyboard);
     if (!d) {
-        fprintf(stderr, "Failed to duplicate keyboard filter\n");
+        fprintf(stderr, "[i8042] Error: Failed to duplicate keyboard filter\n");
         exit(1);
     }
     if (pmos_bus_filter_disjunction_add(filter, d)) {
-        fprintf(stderr, "Failed to add keyboard filter to main filter\n");
+        fprintf(stderr, "[i8042] Error: Failed to add keyboard filter to main filter\n");
         exit(1);
     }
     d = pmos_bus_filter_dup(aux);
     if (!d) {
-        fprintf(stderr, "Failed to duplicate aux filter\n");
+        fprintf(stderr, "[i8042] Error: Failed to duplicate aux filter\n");
         exit(1);
     }
     if (pmos_bus_filter_disjunction_add(filter, d)) {
-        fprintf(stderr, "Failed to add aux filter to main filter\n");
+        fprintf(stderr, "[i8042] Error: Failed to add aux filter to main filter\n");
         exit(1);
     }
     d = pmos_bus_filter_dup(completion);
     if (!d) {
-        fprintf(stderr, "Failed to duplicate completion filter\n");
+        fprintf(stderr, "[i8042] Error: Failed to duplicate completion filter\n");
         exit(1);
     }
     if (pmos_bus_filter_conjunction_add(filter, d)) {
-        fprintf(stderr, "Failed to add completion filter to main filter\n");
+        fprintf(stderr, "[i8042] Error: Failed to add completion filter to main filter\n");
         exit(1);
     }
 
@@ -200,7 +200,7 @@ void request_ps2_rights()
     size_t size = pmos_bus_filter_serialize_ipc(filter, NULL);
     data = malloc(size + sizeof(IPC_BUS_Request_Object));
     if (!data) {
-        fprintf(stderr, "Failed to allocate memory for serialized filter\n");
+        fprintf(stderr, "[i8042] Error: Failed to allocate memory for serialized filter\n");
         exit(1);
     }
 
@@ -215,12 +215,12 @@ void request_ps2_rights()
 
     right_request_t req = get_right_by_name(pmbus_name, strlen(pmbus_name), 0);
     if (req.result) {
-        fprintf(stderr, "Failed to request pmbus right: %i\n", (int)req.result);
+        fprintf(stderr, "[i8042] Error: Failed to request pmbus right: %i\n", (int)req.result);
         exit(1);
     }
     pmbus_right = req.right;
 
-    printf("Requested pmbus right: %" PRIu64 "\n", pmbus_right);
+    printf("[i8042] Info: Requested pmbus right: %" PRIu64 "\n", pmbus_right);
 
     pmos_port_t control_port = get_control_port();
 
@@ -228,7 +228,7 @@ void request_ps2_rights()
     while (cont) {
         req = send_message_right(pmbus_right, control_port, data, request_size, NULL, 0);
         if (req.result) {
-            fprintf(stderr, "Failed to send message on pmbus right: %i\n", (int)req.result);
+            fprintf(stderr, "[i8042] Error: Failed to send message on pmbus right: %i\n", (int)req.result);
             exit(1);
         }
 
@@ -238,23 +238,23 @@ void request_ps2_rights()
 
         result_t get_result = get_message(&desc, &reply_data, control_port, NULL, rights);
         if (get_result) {
-            fprintf(stderr, "Failed to get message reply for pmbus right request: %i\n", (int)get_result);
+            fprintf(stderr, "[i8042] Error: Failed to get message reply for pmbus right request: %i\n", (int)get_result);
             exit(1);
         }
 
         if (desc.size < sizeof(IPC_BUS_Request_Object_Reply)) {
-            fprintf(stderr, "Received message with invalid size for pmbus right request: %i\n", (int)desc.size);
+            fprintf(stderr, "[i8042] Error: Received message with invalid size for pmbus right request: %i\n", (int)desc.size);
             exit(1);
         }
 
         IPC_BUS_Request_Object_Reply *reply = (IPC_BUS_Request_Object_Reply *)reply_data;
         if (reply->type != IPC_BUS_Request_Object_Reply_NUM) {
-            fprintf(stderr, "Received message with invalid type for pmbus right request: %i\n", reply->type);
+            fprintf(stderr, "[i8042] Error: Received message with invalid type for pmbus right request: %i\n", reply->type);
             exit(1);
         }
 
         if (reply->result != 0) {
-            fprintf(stderr, "Received error result for pmbus right request: %i\n", (int)reply->result);
+            fprintf(stderr, "[i8042] Error: Received error result for pmbus right request: %i\n", (int)reply->result);
             exit(1);
         }
 
@@ -262,7 +262,7 @@ void request_ps2_rights()
 
         pmos_bus_object_t *object = pmos_bus_object_deserialize_ipc(reply->object_data, desc.size - sizeof(IPC_BUS_Request_Object_Reply));
         if (!object) {
-            fprintf(stderr, "Failed to deserialize pmbus object\n");
+            fprintf(stderr, "[i8042] Error: Failed to deserialize pmbus object\n");
             exit(1);
         }
 
@@ -270,17 +270,17 @@ void request_ps2_rights()
             if (main_device_right == INVALID_RIGHT) {
                 main_device_right = rights[0];
                 rights[0] = 0;
-                printf("Received main device right: %" PRIu64 "\n", main_device_right);
+                printf("[i8042] Info: Received main device right: %" PRIu64 "\n", main_device_right);
             } else {
-                printf("Received duplicate main device right\n");
+                printf("[i8042] Notice: Received duplicate main device right\n");
             }
         } else if (pmos_bus_object_matches_filter(object, aux)) {
             if (aux_right == INVALID_RIGHT) {
                 aux_right = rights[0];
                 rights[0] = 0;
-                printf("Received aux device right: %" PRIu64 "\n", aux_right);
+                printf("[i8042] Info: Received aux device right: %" PRIu64 "\n", aux_right);
             } else {
-                printf("Received duplicate aux device right\n");
+                printf("[i8042] Notice: Received duplicate aux device right\n");
             }
         } else if (pmos_bus_object_matches_filter(object, completion)) {
             cont = false;

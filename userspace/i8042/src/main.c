@@ -290,7 +290,7 @@ void publish_callback(int status, uint64_t object_id, void *ctx, struct pmbus_he
     if (status < 0) {
         fprintf(stderr, "Failed to publish pmbus object for port %u: %i\n", id, status);
     } else {
-        printf("i8042: Published object with id %" PRIu64 " for port %i!\n", object_id, id);
+        printf("[i8042] Info: Published object with id %" PRIu64 " for port %i!\n", object_id, id);
     }
 }
 
@@ -339,7 +339,7 @@ int port_callback(Message_Descriptor *desc, void *msg,
 
 void register_port(unsigned char id)
 {
-    printf("i8042: registeting port %u\n", id);
+    printf("[i8042] Info: registeting port %u\n", id);
     if (!pmbus_helper) {
         pmbus_helper = pmbus_helper_create(&msgloop_data);
         
@@ -553,7 +553,7 @@ void usage(char *name)
 void parse_args(int argc, char **argv)
 {
     if (argc < 1)
-        printf("i8042: empty argc!\n");
+        printf("[i8042] Error: empty argc!\n");
     char *name = argv[0];
 
     bool have_right = false;
@@ -563,7 +563,7 @@ void parse_args(int argc, char **argv)
 
         if (!strcmp(r, "--right-id")) {
             if (have_right) {
-                printf("i8042: Repeated --right-id\n");
+                printf("[i8042] Error: Repeated --right-id\n");
                 usage(name);
             }
 
@@ -581,7 +581,7 @@ void parse_args(int argc, char **argv)
     }
 
     if (!have_right) {
-        printf("i8042: no right_id!\n");
+        printf("[i8042] Error: no right_id!\n");
         usage(name);
     }
 }
@@ -624,8 +624,6 @@ int main_callback(Message_Descriptor *desc, void *message,
 
 int main(int argc, char **argv)
 {
-    sleep(5);
-
     parse_args(argc, argv);
     printf("i8042 started. Right: %" PRIu64 "\n", right_to_device);
 

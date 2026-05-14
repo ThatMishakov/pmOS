@@ -233,7 +233,7 @@ void react_register_port(unsigned port, IPC_PS2_Reg_Port *msg, pmos_right_t *rep
 
     right_request_t req = send_message_right(*reply_right, 0, &reply, sizeof(reply), &e, SEND_MESSAGE_DELETE_RIGHT);
     if (req.result) {
-        fprintf(stderr, "Failed to send reply to right register request: %i (%s)\n", (int)req.result, strerror(-(int)req.result));
+        fprintf(stderr, "[i8042] Error: Failed to send reply to right register request: %i (%s)\n", (int)req.result, strerror(-(int)req.result));
         port_remove_recieve_right(p);
         return;
     }
