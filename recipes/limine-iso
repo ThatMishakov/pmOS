@@ -1,6 +1,6 @@
 #!/bin/sh
 
-name=limine-disk-image
+name=limine-iso
 version=1
 revision=1
 
