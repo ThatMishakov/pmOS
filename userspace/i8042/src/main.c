@@ -154,6 +154,18 @@ void *interrupt_thread(void *arg)
     pmos_port_t int_port = req.port;
     pmos_right_t int_right = (port == 0) ? int1_right : int2_right;
 
+    interrupt_info_t affinity = get_interrupt_affinity(int_right);
+    if (affinity.result != SUCCESS) {
+        printf("[i8042] Error getting interrupt affinity %" PRIi64 " port %i\n", affinity.result, (int)port);
+        exit(1);
+    }
+
+    auto set_result = set_affinity(TASK_ID_SELF, affinity.interrupt_affinity_cpu, 0);
+    if (set_result != SUCCESS) {
+        printf("[i8042] Error setting affinity %" PRIi64 " port %i\n", set_result, (int)port);
+        exit(1);
+    }
+
     right_request_t r = set_interrupt(int_right, int_port);
     if (r.result != SUCCESS) {
         printf("[i8042] Error setting the interrupt %" PRIi64 " port %i\n", r.result, (int)port);

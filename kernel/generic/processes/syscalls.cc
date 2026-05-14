@@ -1114,7 +1114,7 @@ void syscall_set_interrupt()
 
     auto recieve_right = IntNotificationRight::create_for_port(handler.val, port_ptr);
     if (!recieve_right) {
-        syscall_error(task) = -ENOMEM;
+        syscall_error(task) = recieve_right.result;
         return;
     }
 
