@@ -89,6 +89,7 @@ const pmos_property_t *pmos_bus_object_next_property(const pmos_bus_object_t *ob
 
 bool pmos_bus_object_serialize_ipc(const pmos_bus_object_t *object, uint8_t **data_out, size_t *size_out);
 
+pmos_bus_object_t *pmos_bus_object_deserialize_ipc(const uint8_t *data, size_t size);
 
 /// Header for the list of filters
 struct _pmos_bus_filter_header {
@@ -146,6 +147,9 @@ void pmos_bus_filter_disjunction_free(pmos_bus_filter_disjunction *filter);
 /// @brief Free a filter of any type. The correct type is determined from the header. Does nothing if filter is NULL
 void pmos_bus_filter_free(void *filter);
 
+/// @brief Duplicates a filter of any type
+void *pmos_bus_filter_dup(const void *filter);
+
 /// @brief Serialize a filter to be sent over IPC. Passing NULL data_out will return the size without writing anything.
 ///
 /// @param filter Valid filter to serialize
@@ -157,6 +161,12 @@ size_t pmos_bus_filter_serialize_ipc(const void *filter, uint8_t *data_out);
 /// @param size Size of the data
 /// @return Pointer to the new filter, or NULL if the data is invalid or there is not enough memory. The filter should be freed with pmos_bus_filter_free
 void *pmos_bus_filter_deserialize_ipc(const uint8_t *data, size_t size);
+
+/// @brief Checks if the object matches the filter
+/// @param object Valid pmbus object
+/// @param filter Valid filter
+/// @return true if the object matches the filter, false otherwise
+bool pmos_bus_object_matches_filter(const pmos_bus_object_t *object, const void *filter);
 
 
 #endif /* PMOS_BUS_OBJECT_H */

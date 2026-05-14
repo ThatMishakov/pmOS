@@ -1518,6 +1518,7 @@ typedef struct IPC_BUS_Request_Object_Reply {
 
     /// Object data (for more objects, the same request should be sent again with the next_sequence_number)
     ///struct IPC_Bus_Object object;
+    uint8_t object_data[];
 } IPC_BUS_Request_Object_Reply;
 
 #define IPC_Name_Right_NUM 0x1c0

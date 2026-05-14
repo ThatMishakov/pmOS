@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <pmos/vector.h>
+#include <errno.h>
 
 #define PMOS_BUS_FILTER_EQUALS_TYPE 1
 #define PMOS_BUS_FILTER_CONJUNCTION_TYPE 2
@@ -110,6 +111,54 @@ pmos_bus_filter_equals *pmos_bus_filter_equals_create(const char *key, const cha
     return filter;
 }
 
+void *pmos_bus_filter_dup(const void *filter)
+{
+    if (!filter)
+        return NULL;
+
+    const struct _pmos_bus_filter_header *header = filter;
+    switch (header->type) {
+    case PMOS_BUS_FILTER_EQUALS_TYPE: {
+        const pmos_bus_filter_equals *equals_filter = filter;
+        return pmos_bus_filter_equals_create(equals_filter->key, equals_filter->value);
+    }
+    case PMOS_BUS_FILTER_DISJUNCTION_TYPE:
+    case PMOS_BUS_FILTER_CONJUNCTION_TYPE: {
+        // Since the layout is the same...
+        const pmos_bus_filter_conjunction *conjunction_filter = filter;
+        pmos_bus_filter_conjunction *new_filter = NULL;
+        if (header->type == PMOS_BUS_FILTER_DISJUNCTION_TYPE)
+            new_filter = pmos_bus_filter_disjunction_create();
+        else
+            new_filter = pmos_bus_filter_conjunction_create();
+
+        if (!new_filter)
+            return NULL;
+
+        int result = 0;
+        VECTOR_RESERVE(new_filter->values, conjunction_filter->values.size, result);
+        if (result) {
+            pmos_bus_filter_free(new_filter);
+            return NULL;
+        }
+
+        void *v;
+        VECTOR_FOREACH(conjunction_filter->values, v) {
+            void *d = pmos_bus_filter_dup(v);
+            if (!d) {
+                pmos_bus_filter_free(new_filter);
+                return NULL;
+            }
+
+            pmos_bus_filter_conjunction_add(new_filter, d);
+        }
+        return new_filter;
+    }
+    default:
+        return NULL;
+    }
+}
+
 int pmos_bus_filter_disjunction_add(pmos_bus_filter_disjunction *filter, void *value)
 {
     if (!filter || !value)
@@ -209,4 +258,168 @@ size_t pmos_bus_filter_serialize_ipc(const void *filter, uint8_t *data_out)
     }
         
     return 0;
+}
+
+void *pmos_bus_filter_deserialize_ipc(const uint8_t *data, size_t size)
+{
+    if (!data || size < sizeof(struct ConDisFilterBinary))
+        return NULL;
+    const struct ConDisFilterBinary *binary = (const struct ConDisFilterBinary *)data;
+    if (binary->total_size > size)
+        return NULL;
+    
+    switch (binary->type) {
+    case PMOS_BUS_FILTER_EQUALS_TYPE: {
+        if (binary->total_size < sizeof(struct EqualsFilterBinary))
+            return NULL;
+
+        const struct EqualsFilterBinary *equals_binary = (const struct EqualsFilterBinary *)data;
+        uint32_t key_len = equals_binary->key_len;
+        uint32_t value_len = equals_binary->value_len;
+
+        if (sizeof(*equals_binary) + key_len + value_len > binary->total_size)
+            return NULL;
+
+        pmos_bus_filter_equals *filter = malloc(sizeof(*filter));
+        if (!filter)
+            return NULL;
+
+        filter->header.type = PMOS_BUS_FILTER_EQUALS_TYPE;
+        filter->key = strndup((const char *)(data + sizeof(*equals_binary)), key_len);
+        if (!filter->key) {
+            free(filter);
+            return NULL;
+        }
+
+        filter->value = strndup((const char *)(data + sizeof(*equals_binary) + key_len), value_len);
+        if (!filter->value) {
+            free(filter->key);
+            free(filter);
+            return NULL;
+        }
+
+        return filter;
+    }
+    case PMOS_BUS_FILTER_CONJUNCTION_TYPE:
+    case PMOS_BUS_FILTER_DISJUNCTION_TYPE: {
+        size_t offset = sizeof(struct ConDisFilterBinary);
+
+        pmos_bus_filter_disjunction *filter = NULL;
+        if (binary->type == PMOS_BUS_FILTER_DISJUNCTION_TYPE)
+            filter = pmos_bus_filter_disjunction_create();
+        else
+            filter = pmos_bus_filter_conjunction_create();
+
+        if (!filter)
+            return NULL;
+
+        while (offset < binary->total_size) {
+            if (offset + sizeof(struct ConDisFilterBinary) > binary->total_size) {
+                pmos_bus_filter_free(filter);
+                return NULL;
+            }
+
+            const struct ConDisFilterBinary *inner_binary = (const struct ConDisFilterBinary *)(data + offset);
+            if (inner_binary->total_size > binary->total_size - offset) {
+                pmos_bus_filter_free(filter);
+                return NULL;
+            }
+
+            void *inner_filter = pmos_bus_filter_deserialize_ipc(data + offset, inner_binary->total_size);
+            if (!inner_filter) {
+                pmos_bus_filter_free(filter);
+                return NULL;
+            }
+
+            int result = pmos_bus_filter_disjunction_add(filter, inner_filter);
+            if (result) {
+                pmos_bus_filter_free(inner_filter);
+                pmos_bus_filter_free(filter);
+                return NULL;
+            }
+
+            offset += inner_binary->total_size;
+        }
+
+        return filter;
+    }
+    default:
+        return NULL;
+    }
+}
+
+
+static bool matches_eq_filter(const pmos_bus_object_t *object, const pmos_bus_filter_equals *filter)
+{
+    if (!object || !filter)
+        return false;
+
+    const pmos_property_t *prop = pmos_bus_object_get_property(object, filter->key);
+    if (!prop)
+        return false;
+
+    switch (prop->type) {
+    case PMOS_PROPERTY_STRING:
+        return strcmp(prop->value.s_val, filter->value) == 0;
+    case PMOS_PROPERTY_INTEGER: {
+        char *endptr = NULL;
+        errno = 0;
+        uint64_t val = strtoull(filter->value, &endptr, 0);
+        if (*endptr)
+            return false;
+        if (errno)
+            return false;
+
+        return prop->value.i_val == val;
+    }
+    case PMOS_PROPERTY_LIST: {
+        char **p = prop->value.l_val;
+        while (*p) {
+            if (strcmp(*p, filter->value) == 0)
+                return true;
+            ++p;
+        }
+        return false;
+    }
+    default:
+        return false;
+    }
+}
+
+bool pmos_bus_object_matches_filter(const pmos_bus_object_t *object, const void *filter)
+{
+    if (!object || !filter)
+        return false;
+
+    const struct _pmos_bus_filter_header *header = filter;
+    switch (header->type) {
+    case PMOS_BUS_FILTER_EQUALS_TYPE:
+        return matches_eq_filter(object, filter);
+    case PMOS_BUS_FILTER_CONJUNCTION_TYPE: {
+        bool all_match = true;
+        const pmos_bus_filter_conjunction *conjunction = filter;
+        void *v;
+        VECTOR_FOREACH(conjunction->values, v) {
+            if (!pmos_bus_object_matches_filter(object, v)) {
+                all_match = false;
+                break;
+            }
+        }
+        return all_match;
+    }
+    case PMOS_BUS_FILTER_DISJUNCTION_TYPE: {
+        bool any_match = false;
+        const pmos_bus_filter_disjunction *disjunction = filter;
+        void *v;
+        VECTOR_FOREACH(disjunction->values, v) {
+            if (pmos_bus_object_matches_filter(object, v)) {
+                any_match = true;
+                break;
+            }
+        }
+        return any_match;
+    }
+    default:
+        return false;
+    }
 }

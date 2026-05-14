@@ -603,6 +603,8 @@ int main_callback(Message_Descriptor *desc, void *message,
 
 int main(int argc, char **argv)
 {
+    sleep(5);
+
     parse_args(argc, argv);
     printf("i8042 started. Right: %" PRIu64 "\n", right_to_device);
 

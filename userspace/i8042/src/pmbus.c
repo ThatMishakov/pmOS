@@ -98,33 +98,33 @@ pmos_bus_filter_conjunction *pmbus_filter_create(const char **ids)
     return c;
 }
 
-pmos_bus_filter_disjunction *create_filter()
+pmos_bus_filter_conjunction *pmbus_filter_completion()
 {
-    pmos_bus_filter_disjunction *d = pmos_bus_filter_disjunction_create();
+    pmos_bus_filter_conjunction *d = pmos_bus_filter_conjunction_create();
     if (!d)
         return NULL;
 
-    pmos_bus_filter_conjunction *primary = pmbus_filter_create(PRIMARY_PNP_IDS);
-    if (!primary) {
+    pmos_bus_filter_equals *e = pmos_bus_filter_equals_create("subsystem", "devicesd");
+    if (!e) {
         pmos_bus_filter_free(d);
         return NULL;
     }
 
-    if (pmos_bus_filter_disjunction_add(d, primary)) {
-        pmos_bus_filter_free(d);
-        pmos_bus_filter_free(primary);
-        return NULL;
-    }
-
-    pmos_bus_filter_conjunction *aux = pmbus_filter_create(AUX_PNP_IDS);
-    if (!aux) {
+    if (pmos_bus_filter_conjunction_add(d, e)) {
+        pmos_bus_filter_free(e);
         pmos_bus_filter_free(d);
         return NULL;
     }
 
-    if (pmos_bus_filter_disjunction_add(d, aux)) {
+    e = pmos_bus_filter_equals_create("status", "ready");
+    if (!e) {
         pmos_bus_filter_free(d);
-        pmos_bus_filter_free(aux);
+        return NULL;
+    }
+
+    if (pmos_bus_filter_conjunction_add(d, e)) {
+        pmos_bus_filter_free(e);
+        pmos_bus_filter_free(d);
         return NULL;
     }
 
@@ -139,12 +139,60 @@ pmos_right_t pmbus_right = INVALID_RIGHT;
 
 void request_ps2_rights()
 {
+    pmos_bus_filter_disjunction *keyboard = NULL, *aux = NULL;
+    pmos_bus_filter_conjunction *completion = NULL;
+    pmos_bus_filter_disjunction *filter = NULL;
     uint8_t *data = NULL; 
-    pmos_bus_filter_disjunction *filter = create_filter();
+
+    if (!(keyboard = pmbus_filter_create(PRIMARY_PNP_IDS))) {
+        fprintf(stderr, "Failed to create pmbus filter for keyboard\n");
+        exit(1);
+    }
+
+    if (!(aux = pmbus_filter_create(AUX_PNP_IDS))) {
+        fprintf(stderr, "Failed to create pmbus filter for aux\n");
+        exit(1);
+    }
+
+    if (!(completion = pmbus_filter_completion())) {
+        fprintf(stderr, "Failed to create pmbus filter for completion\n");
+        exit(1);
+    }
+
+    filter = pmos_bus_filter_disjunction_create();
     if (!filter) {
         fprintf(stderr, "Failed to create pmbus filter\n");
         exit(1);
     }
+
+    void *d = pmos_bus_filter_dup(keyboard);
+    if (!d) {
+        fprintf(stderr, "Failed to duplicate keyboard filter\n");
+        exit(1);
+    }
+    if (pmos_bus_filter_disjunction_add(filter, d)) {
+        fprintf(stderr, "Failed to add keyboard filter to main filter\n");
+        exit(1);
+    }
+    d = pmos_bus_filter_dup(aux);
+    if (!d) {
+        fprintf(stderr, "Failed to duplicate aux filter\n");
+        exit(1);
+    }
+    if (pmos_bus_filter_disjunction_add(filter, d)) {
+        fprintf(stderr, "Failed to add aux filter to main filter\n");
+        exit(1);
+    }
+    d = pmos_bus_filter_dup(completion);
+    if (!d) {
+        fprintf(stderr, "Failed to duplicate completion filter\n");
+        exit(1);
+    }
+    if (pmos_bus_filter_conjunction_add(filter, d)) {
+        fprintf(stderr, "Failed to add completion filter to main filter\n");
+        exit(1);
+    }
+
 
     size_t size = pmos_bus_filter_serialize_ipc(filter, NULL);
     data = malloc(size + sizeof(IPC_BUS_Request_Object));
@@ -207,9 +255,30 @@ void request_ps2_rights()
             exit(1);
         }
 
+        msg->start_sequence_number = reply->next_sequence_number;
+
         printf("Got pmbus object\n");
+
+        pmos_bus_object_t *object = pmos_bus_object_deserialize_ipc(reply->object_data, desc.size - sizeof(IPC_BUS_Request_Object_Reply));
+        if (!object) {
+            fprintf(stderr, "Failed to deserialize pmbus object\n");
+            exit(1);
+        }
+
+        if (pmos_bus_object_matches_filter(object, keyboard)) {
+            printf("Object matches keyboard filter\n");
+        } else if (pmos_bus_object_matches_filter(object, aux)) {
+            printf("Object matches aux filter\n");
+        } else if (pmos_bus_object_matches_filter(object, completion)) {
+            printf("Object matches completion filter\n");
+        }
+        pmos_bus_object_free(object);
+        free(reply_data);
     }
 
     free(data);
     pmos_bus_filter_free(filter);
+    pmos_bus_filter_free(keyboard);
+    pmos_bus_filter_free(aux);
+    pmos_bus_filter_free(completion);
 }

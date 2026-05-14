@@ -123,6 +123,19 @@ static bool set_property(pmos_bus_object_t *obj, pmos_property_t prop)
     }
 }
 
+const pmos_property_t *pmos_bus_object_get_property(const pmos_bus_object_t *object, const char *prop_name)
+{
+    if (!object || !prop_name)
+        return NULL;
+
+    size_t pos = lower_bound(prop_name, object->properties, object->num_properties);
+    if (pos < object->num_properties && strcmp(object->properties[pos].name, prop_name) == 0) {
+        return &object->properties[pos];
+    } else {
+        return NULL;
+    }
+}
+
 bool pmos_bus_object_set_property_string(pmos_bus_object_t *obj, const char *prop_name,
                                          const char *value)
 {
@@ -370,4 +383,162 @@ bool pmos_bus_object_serialize_ipc(const pmos_bus_object_t *object, uint8_t **da
     }
     assert(offset == size);
     return true;
+}
+
+VECTOR_TYPEDEF(const char *, string_vector);
+
+pmos_bus_object_t *pmos_bus_object_deserialize_ipc(const uint8_t *data, size_t size)
+{
+    if (!data || size < sizeof(struct IPC_Bus_Object))
+        return NULL;
+
+    const struct IPC_Bus_Object *obj = (const struct IPC_Bus_Object *)data;
+
+    pmos_bus_object_t *result = pmos_bus_object_create();
+    if (!result) {
+        return NULL;
+    }
+
+    if (obj->size > size) {
+        pmos_bus_object_free(result);
+        return NULL;
+    }
+
+    if (obj->name_length == 0 || obj->name_length > size - sizeof(struct IPC_Bus_Object)) {
+        pmos_bus_object_free(result);
+        return NULL;
+    }
+
+    if (obj->name_length + sizeof(struct IPC_Bus_Object) > obj->properties_offset) {
+        pmos_bus_object_free(result);
+        return NULL;
+    }
+
+    char *name = strndup((const char *)(data + sizeof(struct IPC_Bus_Object)), obj->name_length);
+    if (!name) {
+        pmos_bus_object_free(result);
+        return NULL;
+    }
+    result->name = name;
+
+    size_t offset = obj->properties_offset;
+    while (offset < size) {
+        if (offset + sizeof(struct IPC_Object_Property) > size) {
+            pmos_bus_object_free(result);
+            return NULL;
+        }
+
+        const struct IPC_Object_Property *prop = (const struct IPC_Object_Property *)(data + offset);
+        if (offset + prop->length > size) {
+            pmos_bus_object_free(result);
+            return NULL;
+        }
+
+        if (prop->data_start > prop->length) {
+            pmos_bus_object_free(result);
+            return NULL;
+        }
+
+        if (prop->data_start < sizeof(struct IPC_Object_Property)) {
+            pmos_bus_object_free(result);
+            return NULL;
+        }
+
+        size_t name_length = prop->data_start - sizeof(struct IPC_Object_Property);
+
+        char *prop_name = strndup(prop->name, name_length);
+        if (!prop_name) {
+            pmos_bus_object_free(result);
+            return NULL;
+        }
+
+        switch (prop->type) {
+            case PROPERTY_TYPE_STRING: {
+                char *str = strndup((const char *)prop + prop->data_start, prop->length - prop->data_start);
+                if (!str) {
+                    free(prop_name);
+                    pmos_bus_object_free(result);
+                    return NULL;
+                }
+                
+                if (!pmos_bus_object_set_property_string(result, prop_name, str)) {
+                    free(prop_name);
+                    free(str);
+                    pmos_bus_object_free(result);
+                    return NULL;
+                }
+                free(prop_name);
+                free(str);
+            } break;
+            case PROPERTY_TYPE_INTEGER: {
+                if (prop->data_start + sizeof(uint64_t) != prop->length) {
+                    free(prop_name);
+                    pmos_bus_object_free(result);
+                    return NULL;
+                }
+
+                uint64_t val;
+                memcpy(&val, (const char *)prop + prop->data_start, sizeof(uint64_t));
+                if (!pmos_bus_object_set_property_integer(result, prop_name, val)) {
+                    free(prop_name);
+                    pmos_bus_object_free(result);
+                    return NULL;
+                }
+                free(prop_name);
+            } break;
+            case PROPERTY_TYPE_LIST: {
+                if (prop->data_start > prop->length) {
+                    free(prop_name);
+                    pmos_bus_object_free(result);
+                    return NULL;
+                }
+
+                string_vector vec = VECTOR_INIT;
+
+                size_t offset = prop->data_start;
+                size_t str_len = 0;
+                while ((str_len = strnlen((const char *)prop + offset, prop->length - offset))) {
+                    int r = 0;
+                    VECTOR_PUSH_BACK_CHECKED(vec, (const char *)prop + offset, r);
+                    if (r) {
+                        free(prop_name);
+                        VECTOR_FREE(vec);
+                        pmos_bus_object_free(result);
+                        return NULL;
+                    }
+
+                    offset += str_len + 1;
+                }
+
+                int r = 0;
+                VECTOR_PUSH_BACK_CHECKED(vec, NULL, r);
+                if (r) {
+                    free(prop_name);
+                    VECTOR_FREE(vec);
+                    pmos_bus_object_free(result);
+                    return NULL;
+                }
+
+                if (!pmos_bus_object_set_property_list(result, prop_name, vec.data)) {
+                    free(prop_name);
+                    VECTOR_FREE(vec);
+                    pmos_bus_object_free(result);
+                    return NULL;
+                }
+                free(prop_name);
+                VECTOR_FREE(vec);
+            } break;
+            default:
+                free(prop_name);
+                pmos_bus_object_free(result);
+                return NULL;
+        }
+
+        offset += prop->length;
+        if (prop->length == 0) {
+            pmos_bus_object_free(result);
+            return NULL;
+        }
+    }
+    return result;
 }
