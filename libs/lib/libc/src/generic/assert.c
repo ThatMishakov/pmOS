@@ -26,13 +26,12 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <pmos/debug.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 void _assert_fail(const char *condition, const char *file, unsigned int line)
 {
     fprintf(stderr, "Assertion failed: %s, file %s, line %u\n", condition, file, line);
-    pmos_print_stack_trace();
+    // pmos_print_stack_trace();
     exit(EXIT_FAILURE);
 }

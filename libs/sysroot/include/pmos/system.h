@@ -28,7 +28,6 @@
 
 #ifndef _SYSTEM_H
 #define _SYSTEM_H 1
-#include "../kernel/memory.h"
 #include "../kernel/messaging.h"
 #include "../kernel/syscalls.h"
 #include "../kernel/types.h"

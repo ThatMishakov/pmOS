@@ -30,7 +30,6 @@
 #include "mem_protection.hh"
 #include "mem_regions.hh"
 
-#include <kernel/memory.h>
 #include <lib/memory.hh>
 #include <lib/pair.hh>
 #include <lib/splay_tree_map.hh>
@@ -50,6 +49,10 @@ namespace kernel::paging {
 #define PAGE_SPECIAL 2
 #define PAGE_DELAYED 3
 #define PAGE_COW     4
+
+#define PAGING_FLAG_STRUCT_PAGE 0x01
+#define PAGING_FLAG_NOFREE 0x02
+
 
 /// @brief Memory mapping type
 enum class Memory_Type { Normal, MemoryNoCache, IONoCache, Framebuffer };

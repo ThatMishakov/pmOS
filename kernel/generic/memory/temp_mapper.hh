@@ -27,7 +27,6 @@
  */
 
 #pragma once
-#include "kernel/memory.h"
 
 #include <types.hh>
 

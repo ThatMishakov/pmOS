@@ -29,7 +29,6 @@
 #include "temp_mapper.hh"
 
 #include "../sched/sched.hh"
-#include "kernel/memory.h"
 #include "paging.hh"
 
 using namespace kernel;

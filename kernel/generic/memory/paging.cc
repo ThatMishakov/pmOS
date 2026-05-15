@@ -34,7 +34,6 @@
 
 #include <errno.h>
 #include <kern_logger/kern_logger.hh>
-#include <kernel/memory.h>
 #include <lib/memory.hh>
 #include <pmos/utility/scope_guard.hh>
 #include <processes/tasks.hh>
