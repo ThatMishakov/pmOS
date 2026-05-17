@@ -321,6 +321,9 @@ uacpi_status uacpi_kernel_pci_read8(uacpi_handle device, uacpi_size offset, uacp
 
 uacpi_status uacpi_kernel_pci_read16(uacpi_handle device, uacpi_size offset, uacpi_u16 *value)
 {
+    if (offset & 1)
+        return UACPI_STATUS_INVALID_ARGUMENT;
+
     uint32_t v = pci_read_register(device, offset / 4);
     *value     = (v >> ((offset % 4) * 8)) & 0xFFFF;
     return UACPI_STATUS_OK;
@@ -328,6 +331,9 @@ uacpi_status uacpi_kernel_pci_read16(uacpi_handle device, uacpi_size offset, uac
 
 uacpi_status uacpi_kernel_pci_read32(uacpi_handle device, uacpi_size offset, uacpi_u32 *value)
 {
+    if (offset & 3)
+        return UACPI_STATUS_INVALID_ARGUMENT;
+
     *value = pci_read_register(device, offset / 4);
     return UACPI_STATUS_OK;
 }
