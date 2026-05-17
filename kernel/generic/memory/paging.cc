@@ -198,8 +198,10 @@ ReturnStr<Phys_Mapped_Region *> Page_Table::atomic_create_phys_region(void *page
 {
     Auto_Lock_Scope scope_lock(lock);
 
-    if (phys_addr_start >= phys_addr_limit() or
-        phys_addr_start + page_aligned_size >= phys_addr_limit() or
+    auto limit = arch_phys_addr_limit();
+
+    if ((limit and (phys_addr_start >= limit or
+        phys_addr_start + page_aligned_size >= limit)) or
         phys_addr_start > phys_addr_start + page_aligned_size)
         return Error(-ENOTSUP);
 
@@ -354,13 +356,6 @@ kresult_t Page_Table::map(u64 page_addr, void *virt_addr) noexcept
         return -EFAULT;
 
     return map(page_addr, virt_addr, it->craft_arguments(virt_addr));
-}
-
-u64 Page_Table::phys_addr_limit()
-{
-    // TODO: This is arch-specific
-    // BIG TODO!!!
-    return (u64)0x01 << 48;
 }
 
 kresult_t Page_Table::move_pages(TLBShootdownContext &ctx, const klib::shared_ptr<Page_Table> &to,

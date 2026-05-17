@@ -24,3 +24,5 @@ struct module {
 extern klib::vector<module> modules;
 
 klib::unique_ptr<load_tag_generic> construct_load_tag_for_modules(kernel::proc::TaskGroup *group);
+
+void early_detect_cpu_features();

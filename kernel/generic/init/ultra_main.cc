@@ -547,6 +547,8 @@ void ultra_main(struct ultra_boot_context *ctx, uint32_t magic)
 
     serial_logger.printf("Booted by Ultra. ctx: %p\n", ctx);
 
+    early_detect_cpu_features();
+
     auto size = ultra_context_size(ctx);
     serial_logger.printf("Ultra bootloader context size: %u\n", size);
 

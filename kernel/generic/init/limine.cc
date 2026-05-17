@@ -616,6 +616,8 @@ void limine_main()
     boot_tsc = rdtsc();
     #endif
 
+    early_detect_cpu_features();
+
     serial_logger.printf("Hello from pmOS kernel!\n");
     serial_logger.printf("Kernel start: 0x%lh\n", &_kernel_start);
 

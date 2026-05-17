@@ -85,7 +85,6 @@ extern "C" void disallow_access_user()
 
 void detect_protections()
 {
-    
     auto c = cpuid(0x0);
     u32 max_cpuid_leaf = c.eax;
 
@@ -580,4 +579,39 @@ void init_acpi_trampoline()
 
     serial_logger.printf("Initialized SMP/ACPI trampoline vector at %x (%x)\n",
                          (u32)acpi_trampoline_page, acpi_wakeup_vec().val);
+}
+
+unsigned max_memory_bits = 32;
+
+void x86_detect_max_phys_addr()
+{
+    #ifdef __i386__
+    if (!use_pae) {
+        max_memory_bits = 32;
+        serial_logger.printf("Max physical address: %lx\n", max_phys_addr);
+        return;
+    }
+    #endif
+    max_memory_bits = 36; // Default for PAE if there's no CPUID 0x80000008
+
+    u32 max_leaf = cpuid(0x80000000).eax;
+    if (max_leaf >= 0x80000008) {
+        max_memory_bits = cpuid(0x80000008).eax & 0xff;
+    }
+
+    serial_logger.printf("Phys address length: %u bits\n", max_memory_bits);
+}
+
+void early_detect_cpu_features()
+{
+    x86_detect_max_phys_addr();
+}
+
+namespace kernel::paging {
+
+u64 arch_phys_addr_limit()
+{
+    return (u64)1 << max_memory_bits;
+}
+
 }

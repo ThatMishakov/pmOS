@@ -450,11 +450,6 @@ public:
     /// Returns true if the address should not accessible to the user
     inline bool is_in_kernel_space(void *virt_addr) { return virt_addr >= user_addr_max(); }
 
-    /// @brief Returns the limit of the physical address that is supported by the given paging
-    /// scheme
-    /// @return maximum value (first not supported) that can be a valid physical address
-    static u64 phys_addr_limit();
-
     /**
      * @brief Atomically takes out the paging region and transfers it to a new page table
      *
@@ -644,5 +639,8 @@ struct MemoryRegion {
 extern klib::vector<MemoryRegion> memory_map;
 
 Memory_Type memory_type_for_phys_addr(phys_addr_t phys_addr);
+
+// If it's 0, all the physical memory is mappable
+phys_addr_t arch_phys_addr_limit();
 
 };
