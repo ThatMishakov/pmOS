@@ -84,7 +84,7 @@ uacpi_status uacpi_kernel_acquire_mutex(uacpi_handle mutex, uacpi_u16 timeout)
     if (!result)
         return UACPI_STATUS_OK;
 
-    return UACPI_STATUS_INTERNAL_ERROR;
+    return UACPI_STATUS_OUT_OF_MEMORY;
 }
 
 void uacpi_kernel_release_mutex(uacpi_handle mutex)
@@ -161,7 +161,7 @@ uacpi_status uacpi_kernel_schedule_work(uacpi_work_type type, uacpi_work_handler
     int t = pthread_create(&work->thread, NULL, uacpi_work, work);
     if (t != 0) {
         free(work);
-        return UACPI_STATUS_INTERNAL_ERROR;
+        return UACPI_STATUS_OUT_OF_MEMORY;
     }
 
     pthread_spin_lock(&work_queue_lock);
@@ -278,17 +278,14 @@ void uacpi_kernel_reset_event(uacpi_handle handle)
 uacpi_status uacpi_kernel_pci_device_open(uacpi_pci_address address, uacpi_handle *out_handle)
 {
     if (!pci_fully_working) {
-        if (address.segment != 0)
-            return UACPI_STATUS_NOT_FOUND;
-
         struct PCIDevicePtr *p = malloc(sizeof(*p));
         if (!p)
             return UACPI_STATUS_OUT_OF_MEMORY;
 
-        int result = fill_device_early(p, address.bus, address.device, address.function);
+        uacpi_status result = fill_device_early(p, address.segment, address.bus, address.device, address.function);
         if (result) {
             free(p);
-            return UACPI_STATUS_NOT_FOUND;
+            return result;
         }
 
         *out_handle = p;
@@ -361,7 +358,7 @@ uacpi_status uacpi_kernel_pci_write32(uacpi_handle device, uacpi_size offset, ua
 
 void uacpi_kernel_pci_device_close(uacpi_handle h)
 {
-    printf("!!!!! pci device close !!! %lx\n", h);
+    close_maybe_early(h);
     free(h);
 }
 
@@ -609,14 +606,14 @@ void *isr_func(void *arg)
 
     ports_request_t p = create_port(TASK_ID_SELF, 0);
     if (p.result != SUCCESS) {
-        send_isr_reply(reply_right, UACPI_STATUS_INTERNAL_ERROR);
+        send_isr_reply(reply_right, UACPI_STATUS_OUT_OF_MEMORY);
         return NULL;
     }
 
     uint64_t right_reciever;
     auto rr = create_right(p.port, &right_reciever, 0);
     if (rr.result != SUCCESS) {
-        send_isr_reply(reply_right, UACPI_STATUS_INTERNAL_ERROR);
+        send_isr_reply(reply_right, UACPI_STATUS_OUT_OF_MEMORY);
         return NULL;
     }
     data->right = rr.right;
@@ -624,7 +621,7 @@ void *isr_func(void *arg)
     uint32_t int_vector = 0;
     right_request_t interrupt = install_isa_interrupt(data->irq, p.port);
     if (interrupt.result < 0) {
-        send_isr_reply(reply_right, UACPI_STATUS_INTERNAL_ERROR);
+        send_isr_reply(reply_right, UACPI_STATUS_OUT_OF_MEMORY);
         return NULL;
     }
 
@@ -675,7 +672,7 @@ uacpi_status uacpi_kernel_install_interrupt_handler(uacpi_u32 irq, uacpi_interru
 {
     pmos_port_t reply_port = get_reply_port();
     if (reply_port == INVALID_PORT)
-        return UACPI_STATUS_INTERNAL_ERROR;
+        return UACPI_STATUS_OUT_OF_MEMORY;
 
     struct isr_data *data = malloc(sizeof(struct isr_data));
     if (data == NULL)
@@ -685,7 +682,7 @@ uacpi_status uacpi_kernel_install_interrupt_handler(uacpi_u32 irq, uacpi_interru
     auto right  = create_right(reply_port, &id, CREATE_RIGHT_SEND_ONCE);
     if (right.result != SUCCESS) {
         free(data);
-        return UACPI_STATUS_INTERNAL_ERROR;
+        return UACPI_STATUS_OUT_OF_MEMORY;
     }
 
     data->handler  = handler;
@@ -698,7 +695,7 @@ uacpi_status uacpi_kernel_install_interrupt_handler(uacpi_u32 irq, uacpi_interru
     if (result != 0) {
         delete_right(right.result);
         free(data);
-        return UACPI_STATUS_INTERNAL_ERROR;
+        return UACPI_STATUS_OUT_OF_MEMORY;
     }
 
     Message_Descriptor msg;

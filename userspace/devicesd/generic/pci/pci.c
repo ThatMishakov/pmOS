@@ -1189,6 +1189,7 @@ int fill_device(struct PCIDevicePtr *s, struct PCIHostBridge *g, uint8_t bus, ui
 
         *s = (struct PCIDevicePtr) {
             .type        = PCIGroupECAM,
+            .early       = false,
             .ecam_window = (uint32_t *)((char *)config_space_virt + offset),
         };
     } else if (g->has_io) {
@@ -1197,6 +1198,7 @@ int fill_device(struct PCIDevicePtr *s, struct PCIHostBridge *g, uint8_t bus, ui
 
         *s = (struct PCIDevicePtr) {
             .type = PCIGroupLegacy,
+            .early = false,
             .io_addr =
                 (struct LegacyAddr) {
                     .data_offset = (bus << 16) | (device << 11) | (function << 8),
@@ -1212,10 +1214,30 @@ int fill_device(struct PCIDevicePtr *s, struct PCIHostBridge *g, uint8_t bus, ui
     return 0;
 }
 
-int fill_device_early(struct PCIDevicePtr *s, uint8_t bus, uint8_t device, uint8_t function)
+uacpi_status fill_device_early(struct PCIDevicePtr *s, uint16_t seg, uint8_t bus, uint8_t device, uint8_t function)
 {
+    uint64_t ecam_base;
+    if (find_ecam_mcfg(&ecam_base, seg, bus, bus)) {
+        const unsigned long offset = (bus << 20) | (device << 15) | (function << 12);
+        void *ptr = uacpi_kernel_map(ecam_base + offset, 4096);
+        if (!ptr)
+            return UACPI_STATUS_MAPPING_FAILED;
+
+        *s = (struct PCIDevicePtr) {
+            .type        = PCIGroupECAM,
+            .early           = true,
+            .ecam_window = (uint32_t *)ptr,
+        };
+        return UACPI_STATUS_OK;
+    }
+
+    if (seg != 0)
+        return UACPI_STATUS_NOT_FOUND;
+
+    #ifdef PLATFORM_HAS_IO
     *s = (struct PCIDevicePtr) {
         .type = PCIGroupLegacy,
+        .early = false,
         .io_addr =
             (struct LegacyAddr) {
                 .data_offset = (bus << 16) | (device << 11) | (function << 8),
@@ -1223,7 +1245,20 @@ int fill_device_early(struct PCIDevicePtr *s, uint8_t bus, uint8_t device, uint8
             },
     };
 
-    return 0;
+    return UACPI_STATUS_OK;
+    #else
+    return UACPI_STATUS_NOT_FOUND;
+    #endif
+}
+
+void close_maybe_early(struct PCIDevicePtr *s)
+{
+    if (!s)
+        return;
+
+    if (s->type == PCIGroupECAM && s->early) {
+        uacpi_kernel_unmap(s->ecam_window, 4096);
+    }
 }
 
 uint8_t pci_read_byte(struct PCIDevicePtr *s, unsigned offset)

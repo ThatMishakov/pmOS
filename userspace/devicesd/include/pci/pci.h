@@ -113,6 +113,7 @@ struct LegacyAddr {
 
 struct PCIDevicePtr {
     enum PCIGroupType type;
+    bool early : 1;
     union {
         uint32_t *ecam_window;
         struct LegacyAddr io_addr;
@@ -151,7 +152,8 @@ int fill_device(struct PCIDevicePtr *s, struct PCIHostBridge *g, uint8_t bus, ui
 int fill_device_from_device(struct PCIDevicePtr *s, struct PCIDevice *d);
 
 extern bool pci_fully_working;
-int fill_device_early(struct PCIDevicePtr *s, uint8_t bus, uint8_t device, uint8_t function);
+uacpi_status fill_device_early(struct PCIDevicePtr *s, uint16_t seg, uint8_t bus, uint8_t device, uint8_t function);
+void close_maybe_early(struct PCIDevicePtr *s);
 
 uint8_t pci_read_byte(struct PCIDevicePtr *s, unsigned offset);
 uint16_t pci_read_word(struct PCIDevicePtr *s, unsigned offset);
