@@ -931,4 +931,9 @@ void apply_page_table(ptable_top_ptr_t page_table)
 
 void flush_page(void *virt) noexcept { riscv64::paging::flush_page(virt); }
 
+u64 arch_phys_addr_limit()
+{
+    return (u64)1 << 56;
+}
+
 } // namespace kernel::paging

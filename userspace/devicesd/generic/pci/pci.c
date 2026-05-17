@@ -404,7 +404,7 @@ uacpi_iteration_decision pci_enumerate_resources(void *ctx, uacpi_resource *reso
             break;
 
         b->legacy.config_addr_io = range_minimum;
-        b->legacy.config_data_io = range_minimum + 8;
+        b->legacy.config_data_io = range_minimum + 4;
         b->has_io                = true;
     } break;
 
@@ -576,7 +576,7 @@ void publish_pci_device(struct PCIDevice * device)
         goto error;
     }
 
-    if (!pmos_bus_object_set_property_integer(bus_object, "pci_device", device->function)) {
+    if (!pmos_bus_object_set_property_integer(bus_object, "pci_device", device->device)) {
         fprintf(stderr, "Failed to set pci_device for PCI device\n");
         goto error;
     }
@@ -1180,7 +1180,7 @@ int fill_device_early(struct PCIDevicePtr *s, uint8_t bus, uint8_t device, uint8
         .io_addr =
             (struct LegacyAddr) {
                 .data_offset = (bus << 16) | (device << 11) | (function << 8),
-                .port        = 0x3f8,
+                .port        = 0xcf8,
             },
     };
 
