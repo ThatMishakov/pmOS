@@ -77,22 +77,6 @@ struct PCILegacyDescriptor {
     uint16_t config_data_io;
 };
 
-struct PCIHostBridge {
-    struct PCIHostBridge *next;
-
-    struct PCIEcamDescriptor ecam;
-    struct PCILegacyDescriptor legacy;
-
-    unsigned group_number;
-    unsigned start_bus_number;
-    unsigned end_bus_number;
-
-    bool has_io;
-    bool has_ecam;
-
-    VECTOR(struct PCIGroupInterruptEntry) interrupt_entries;
-};
-
 struct PCIHostBridge *pci_host_bridge_find(unsigned group_number);
 
 struct PCIDevice {
@@ -117,6 +101,9 @@ struct PCIDevice {
 
     int pcie : 1;
     int downstream : 1;
+
+    // For PCI bridges
+    uint8_t secondary_bus;
 };
 
 struct LegacyAddr {
@@ -136,6 +123,24 @@ int pcicdevice_compare(const void *a, const void *b);
 
 VECTOR_TYPEDEF(struct PCIDevice *, PCIDeviceVector);
 extern PCIDeviceVector pci_devices;
+
+struct PCIHostBridge {
+    struct PCIHostBridge *next;
+
+    struct PCIEcamDescriptor ecam;
+    struct PCILegacyDescriptor legacy;
+
+    unsigned group_number;
+    unsigned start_bus_number;
+    unsigned end_bus_number;
+
+    bool has_io;
+    bool has_ecam;
+
+    VECTOR(struct PCIGroupInterruptEntry) interrupt_entries;
+
+    PCIDeviceVector bridges;
+};
 
 #define PCI_FUNCTIONS       8
 #define PCI_DEVICES_PER_BUS 32
@@ -178,22 +183,22 @@ inline uint32_t pci_device_id(struct PCIDevicePtr *s)
     return r >> 16;
 }
 
-inline uint8_t pci_class_code(struct PCIDevicePtr *s) { return pci_read_register(s, 2) >> 24; }
-inline uint8_t pci_subclass(struct PCIDevicePtr *s) { return pci_read_register(s, 2) >> 16; }
-inline uint8_t pci_prog_if(struct PCIDevicePtr *s) { return pci_read_register(s, 2) >> 8; }
-inline uint8_t pci_revision_id(struct PCIDevicePtr *s) { return pci_read_register(s, 2) >> 0; }
-inline bool pci_no_device(struct PCIDevicePtr *s)
+static inline uint8_t pci_class_code(struct PCIDevicePtr *s) { return pci_read_register(s, 2) >> 24; }
+static inline uint8_t pci_subclass(struct PCIDevicePtr *s) { return pci_read_register(s, 2) >> 16; }
+static inline uint8_t pci_prog_if(struct PCIDevicePtr *s) { return pci_read_register(s, 2) >> 8; }
+static inline uint8_t pci_revision_id(struct PCIDevicePtr *s) { return pci_read_register(s, 2) >> 0; }
+static inline bool pci_no_device(struct PCIDevicePtr *s)
 {
     return pci_vendor_id(s) == VENDOR_ID_NO_DEVICE;
 }
-inline uint8_t pci_secondary_bus(struct PCIDevicePtr *s) { return pci_read_register(s, 0x6) >> 8; }
+static inline uint8_t pci_secondary_bus(struct PCIDevicePtr *s) { return pci_read_register(s, 0x6) >> 8; }
 
-inline uint16_t pcie_status(struct PCIDevicePtr *s)
+static inline uint16_t pcie_status(struct PCIDevicePtr *s)
 {
     return (pci_read_register(s, 1) >> 16) & 0xffff;
 }
 
-inline int pcie_capability_pointer(struct PCIDevicePtr *s)
+static inline int pcie_capability_pointer(struct PCIDevicePtr *s)
 {
     if (!(pcie_status(s) & 0x10)) {
         return 0;

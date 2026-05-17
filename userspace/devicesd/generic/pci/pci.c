@@ -178,18 +178,37 @@ void check_function(struct PCIHostBridge *g, uint8_t bus, uint8_t device, uint8_
 
     uint8_t class    = pci_class_code(&p);
     uint8_t subclass = pci_subclass(&p);
-    if (class == 0x06 && subclass == 0x04) { // Host bridge
+    uint8_t header_type = pci_header_type(&p);
+    if (!(class == 0x6 && subclass == 0x00 && !parent_bridge) && header_type != 1)
+        return;
+
+    uacpi_namespace_node *bus_node = node;
+    uint8_t secondary_bus = 0;
+    if (header_type == 1) {
+        uint8_t secondary_bus = pci_secondary_bus(&p);
+        printf("PCI bridge, secondary bus %x\n", secondary_bus);
+        
+        d->secondary_bus = secondary_bus;
+
+        int result = 0;
+        VECTOR_PUSH_BACK_CHECKED(g->bridges, d, result);
+        if (result != 0) {
+            fprintf(stderr, "Error: Could not allocate bridge: %i\n", errno);
+            return;
+        }
+        
+        if (secondary_bus == 0) {
+            printf("Unconfigured...\n");
+            return;
+        }
+
         struct DeviceSearchCtx ctx = {
             .addr     = d->device << 16 | d->function,
             .out_node = NULL,
         };
         uacpi_namespace_for_each_child(node, find_pci_device, UACPI_NULL, UACPI_OBJECT_DEVICE_BIT,
-                                       UACPI_MAX_DEPTH_ANY, &ctx);
+                                        UACPI_MAX_DEPTH_ANY, &ctx);
 
-        uint8_t secondary_bus = pci_secondary_bus(&p);
-        printf("PCI secondary bus %x\n", secondary_bus);
-
-        uacpi_namespace_node *bus_node = node;
         if (ctx.out_node) {
             bus_node = ctx.out_node;
             uacpi_pci_routing_table *pci_routes;
@@ -202,9 +221,19 @@ void check_function(struct PCIHostBridge *g, uint8_t bus, uint8_t device, uint8_
                 uacpi_free_pci_routing_table(pci_routes);
             }
         }
-
-        check_bus(g, secondary_bus, d, bus_node);
+    } else {
+        uacpi_pci_routing_table *pci_routes;
+        uacpi_status ret = uacpi_get_pci_routing_table(node, &pci_routes);
+        if (ret != UACPI_STATUS_OK) {
+            fprintf(stderr, "Warning: Could not get PCI routing for root bridge bus %0x: %i (%s)\n", bus,
+                    ret, uacpi_status_to_string(ret));
+        } else {
+            parse_interrupt_table(g, secondary_bus, pci_routes);
+            uacpi_free_pci_routing_table(pci_routes);
+        }
     }
+
+    check_bus(g, secondary_bus, d, bus_node);
 }
 
 void check_device(struct PCIHostBridge *g, uint8_t bus, uint8_t device,
@@ -319,37 +348,6 @@ void parse_interrupt_table(struct PCIHostBridge *g, int bus, uacpi_pci_routing_t
     }
 }
 
-void check_root(struct PCIHostBridge *g, int bus, uacpi_namespace_node *node)
-{
-    uacpi_pci_routing_table *pci_routes;
-    uacpi_status ret = uacpi_get_pci_routing_table(node, &pci_routes);
-    if (ret != UACPI_STATUS_OK) {
-        fprintf(stderr, "Warning: Could not get PCI routing for root bridge bus %0x: %i (%s)\n", bus,
-                ret, uacpi_status_to_string(ret));
-    } else {
-        parse_interrupt_table(g, bus, pci_routes);
-        uacpi_free_pci_routing_table(pci_routes);
-    }
-
-    struct PCIDevicePtr p;
-    fill_device(&p, g, bus, 0, 0);
-
-    if (!pci_multifunction(&p)) {
-        check_bus(g, bus, NULL, node);
-    } else {
-        printf("Root %i Multifunction\n", bus);
-        for (int function = 0; function < PCI_FUNCTIONS; ++function) {
-            struct PCIDevicePtr p;
-            fill_device(&p, g, bus, 0, function);
-            uint16_t vendor_id = pci_vendor_id(&p);
-            if (vendor_id == VENDOR_ID_NO_DEVICE)
-                break;
-
-            check_bus(g, function, NULL, node);
-        }
-    }
-}
-
 struct PCIHostBridge *bridges = NULL;
 
 static unsigned long pcie_config_space_size(unsigned pci_start, unsigned pci_end)
@@ -382,7 +380,7 @@ int interrupt_entry_compare(const void *l, const void *r)
 void enumerate_pci_bus(struct PCIHostBridge *g, int segment, int bus, uacpi_namespace_node *node)
 {
     printf("Enumerating PCI bus %i\n", bus);
-    check_root(g, bus, node);
+    check_device(g, bus, 0, NULL, node);
 
     VECTOR_SORT(g->interrupt_entries, interrupt_entry_compare);
 }
@@ -406,6 +404,38 @@ uacpi_iteration_decision pci_enumerate_resources(void *ctx, uacpi_resource *reso
         b->legacy.config_addr_io = range_minimum;
         b->legacy.config_data_io = range_minimum + 4;
         b->has_io                = true;
+    } break;
+    case UACPI_RESOURCE_TYPE_ADDRESS16: {
+        uacpi_resource_address16 *r = &resource->address16;
+        if (r->common.type != UACPI_RANGE_BUS)
+            break;
+
+        b->start_bus_number = r->minimum;
+        b->end_bus_number   = r->maximum;
+    } break;
+    case UACPI_RESOURCE_TYPE_ADDRESS32: {
+        uacpi_resource_address32 *r = &resource->address32;
+        if (r->common.type != UACPI_RANGE_BUS)
+            break;
+
+        b->start_bus_number = r->minimum;
+        b->end_bus_number   = r->maximum;
+    } break;
+    case UACPI_RESOURCE_TYPE_ADDRESS64: {
+        uacpi_resource_address64 *r = &resource->address64;
+        if (r->common.type != UACPI_RANGE_BUS)
+            break;
+
+        b->start_bus_number = r->minimum;
+        b->end_bus_number   = r->maximum;
+    } break;
+    case UACPI_RESOURCE_TYPE_ADDRESS64_EXTENDED: {
+        uacpi_resource_address64_extended *r = &resource->address64_extended;
+        if (r->common.type != UACPI_RANGE_BUS)
+            break;
+
+        b->start_bus_number = r->minimum;
+        b->end_bus_number   = r->maximum;
     } break;
 
     default:
@@ -495,22 +525,31 @@ uacpi_iteration_decision pci_check_acpi_root(void *, uacpi_namespace_node *node,
     uint64_t seg = 0, bus = 0;
 
     uacpi_eval_integer(node, "_SEG", NULL, &seg);
-    uacpi_eval_integer(node, "_BBN", NULL, &bus);
     b->group_number     = seg;
-    b->start_bus_number = bus;
-    b->end_bus_number   = 255;
 
-    // uacpi_for_each_device_resource(node, "_CRS", pci_enumerate_resources, b);
-    b->legacy.config_addr_io = 0xcf8;
-    b->legacy.config_data_io = 0xcfc;
-    b->has_io                = true;
+    uacpi_status bus_result = uacpi_eval_integer(node, "_BBN", NULL, &bus);
+    if (bus_result != UACPI_STATUS_OK) {
+        b->start_bus_number = bus;
+        b->end_bus_number   = bus;
+    } else {
+        b->start_bus_number = 0;
+        b->end_bus_number   = 255;
+    }
+
+    uacpi_for_each_device_resource(node, "_CRS", pci_enumerate_resources, b);
+    // b->legacy.config_addr_io = 0xcf8;
+    // b->legacy.config_data_io = 0xcfc;
+    // b->has_io                = true;
+
+    printf("Found PCI host bridge: group %i, bus %i-%i\n", b->group_number, b->start_bus_number,
+           b->end_bus_number);
 
     pci_setup_ecam(b, node);
 
     b->next = bridges;
     bridges = b;
 
-    enumerate_pci_bus(b, seg, bus, node);
+    enumerate_pci_bus(b, seg, b->start_bus_number, node);
 
     return UACPI_ITERATION_DECISION_CONTINUE;
 }
