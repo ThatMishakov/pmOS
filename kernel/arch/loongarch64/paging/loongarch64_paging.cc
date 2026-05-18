@@ -699,3 +699,21 @@ void paging::apply_page_table(ptable_top_ptr_t page_table)
     set_pgdh(page_table);
     flush_tlb();
 }
+
+static unsigned max_memory_bits = 60;
+
+void early_detect_cpu_features()
+{
+    auto val = cpucfg(0x1);
+    auto palen = (val >> 4) & 0xff;
+    max_memory_bits = palen;
+}
+
+namespace kernel::paging {
+
+u64 paging::arch_phys_addr_limit()
+{
+    return (u64)1 << max_memory_bits;
+}
+
+}

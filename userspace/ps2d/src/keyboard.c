@@ -90,12 +90,12 @@ void keyboard_react_timer()
     case STATUS_NODATA:
         kb_state.send_status = STATUS_SENT_ECHO;
         keyboard_push_cmd_byte(COMMAND_ECHO);
-        port_start_timer(1000);
+        port_start_timer(10000);
         break;
 
     case STATUS_RECIEVED_DATA:
         kb_state.send_status = STATUS_NODATA;
-        port_start_timer(1000);
+        port_start_timer(10000);
         break;
 
     case STATUS_SENT_ECHO:
