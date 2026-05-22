@@ -31,9 +31,11 @@
     .section .bss
     .align 16
     .globl stack
+    .globl stack_end
     .type stack, @object
 stack:
     .space STACK_SIZE
+stack_end:
 smp_stack:
     .space SMP_ENTRY_TEMP_STACK_SIZE
 smp_locl:

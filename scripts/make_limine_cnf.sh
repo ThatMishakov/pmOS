@@ -40,11 +40,12 @@ FILE="$1"
 SERVICES="$2"
 cat <<EOF > "$FILE"
 timeout: 5
+default_entry: 3
 EOF
 
 # Non-kaslr
 cat <<EOF >> "$FILE"
-/pmos (KASLR OFF)
+/pmos (limine protocol, KASLR OFF)
     protocol: limine
     kaslr: off
 
@@ -60,9 +61,22 @@ done
 cat <<EOF >> "$FILE"
 
 
-/pmos (KASLR ON)
+/pmos (limine protocol, KASLR ON)
     protocol: limine
     kaslr: on
+
+EOF
+
+write_kernel_entry "$FILE"
+write_bootstrap_entry "$FILE"
+for SERVICE in $SERVICES; do
+    write_service_entry "$FILE" "$SERVICE"
+done
+
+# Multiboot2
+cat <<EOF >> "$FILE"
+/pmos (Multiboot2)
+    protocol: multiboot2
 
 EOF
 
