@@ -18,7 +18,7 @@ _multiboot_start:
     // ebx passes the Basic tags structure in %ebx. The second field in it is reserved, so it can be loaded to %esp,
     // followed by a call with popl, giving the relative kernel's relative address to then load the stack from data
 
-    movl %ebx, %ecx
+    movl %ebx, %esi
 
     leal 8(%ebx), %esp
     call rela_anchor
@@ -44,11 +44,64 @@ rela_anchor:
     call print_text
     addl $16, %esp
 
+
+    subl $8, %esp
+    pushl $MULTIBOOT_TAG_TYPE_MMAP
+    pushl %esi
+    call get_multiboot_tag
+    addl $16, %esp
+
+    addl $12, %esp
+    pushl %eax
+    call print_memory_map
+    addl $16, %esp
+
     jmp halt
 
 
 
 
+get_multiboot_tag:
+    pushl %ebp
+    movl %esp, %ebp
+    pushl %esi
+    subl $12, %esp
+
+
+    movl 8(%ebp), %eax
+    // Total size
+    movl (%eax), %ecx
+    // End in %ecx
+    addl %eax, %ecx
+
+    // Current pointer in %edx
+    leal 8(%eax), %edx
+1:
+    movl (%edx), %eax
+    cmpl %eax, 12(%ebp)
+    je 2f
+
+    movl 4(%edx), %eax
+    addl $7, %eax
+    andl $-8, %eax
+    addl %eax, %edx
+    cmpl %ecx, %edx
+    jb 1b
+
+    // Not found, return null
+    xorl %eax, %eax
+    jmp 1f
+
+2:
+    movl %edx, %eax
+1:
+    addl $12, %esp
+    popl %esi
+    movl %ebp, %esp
+    popl %ebp
+    ret
+
+    
     .type print_text, @function
 print_text:
     pushl %ebp
@@ -121,10 +174,129 @@ com_print_char:
     cli
     hlt
 
+    .type print_hex64, @function
+print_hex64:
+    pushl %ebp
+    movl %esp, %ebp
+    pushl %esi
+    pushl %edi
+    subl $16, %esp
+
+    subl 32, %esp
+    movl %esp, %edi
+
+    movl $8, %ecx
+1:
+    movzb 7(%ebp, %ecx), %esi
+    movl %esi, %eax
+    shrl $4, %eax
+    movb (hex_lookup - rela_anchor)(%ebx, %eax), %al
+    movb %al, (%edi)
+    movl %esi, %eax
+    andl $0xf, %eax
+    movb (hex_lookup - rela_anchor)(%ebx, %eax), %al
+    movb %al, 1(%edi)
+    addl $2, %edi
+    loop 1b
+
+    movb $0, (%edi)
+
+    movl %esp, %eax
+    subl $24, %esp
+    pushl %eax
+    call print_text
+
+    movl -8(%ebp), %edi
+    movl -4(%ebp), %esi 
+    movl %ebp, %esp
+    popl %ebp
+    ret
+
+    .type print_memory_map, @function
+print_memory_map:
+    pushl %ebp
+    movl %esp, %ebp
+    pushl %esi
+    pushl %edi
+    subl $8, %esp
+
+    subl $12, %esp
+    leal (memory_map_text - rela_anchor)(%ebx), %eax
+    pushl %eax
+    call print_text
+
+    movl 8(%ebp), %eax // Memory map
+    leal 16(%eax), %esi // Current entry
+    movl 4(%eax), %edi // Size
+    addl %eax, %edi // End of entries
+
+1:
+    cmpl %edi, %esi
+    jge 1f
+
+    leal (memory_map_entry_text - rela_anchor)(%ebx), %eax
+    pushl %eax 
+    call print_text
+
+    subl $4, %esp
+    movl (%esi), %eax
+    movl 4(%esi), %edx
+    pushl %edx
+    pushl %eax
+    call print_hex64
+    addl $4, %esp
+
+    leal (memory_map_entry_text2 - rela_anchor)(%ebx), %eax
+    pushl %eax
+    call print_text
+    addl $4, %esp
+
+    subl $4, %esp
+    movl 8(%esi), %eax
+    movl 12(%esi), %edx
+    pushl %edx
+    pushl %eax
+    call print_hex64
+    addl $4, %esp
+
+    leal (memory_map_entry_text3 - rela_anchor)(%ebx), %eax
+    pushl %eax
+    call print_text
+    addl $4, %esp
+
+    subl $4, %esp
+    pushl $0
+    movl 16(%esi), %eax
+    pushl %eax
+    call print_hex64
+    addl $4, %esp
+
+    leal (memory_map_entry_text4 - rela_anchor)(%ebx), %eax
+    pushl %eax
+    call print_text
+    addl $4, %esp
+
+    movl 8(%ebp), %eax
+    movl 8(%eax), %eax
+    addl %eax, %esi
+    jmp 1b
+
+1:
+    movl -8(%ebp), %edi
+    movl  -4(%ebp), %esi
+    movl %ebp, %esp
+    popl %ebp
+    retl
 
     .rodata
+hex_lookup: .string "0123456789abcdef"
 booted_text: .string "pmOS kernel booted by multiboot2!\r\n"
 bad_magic_text: .string "Multiboot2 bad magic, halting.\r\n"
+memory_map_text: .string "Memory map:\r\n"
+memory_map_entry_text: .string "Base: 0x"
+memory_map_entry_text2: .string ", Length: 0x"
+memory_map_entry_text3: .string ", Type: 0x"
+memory_map_entry_text4: .string "\r\n"
 
     .data
 initialized_serial: .byte 0
