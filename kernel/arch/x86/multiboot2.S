@@ -76,6 +76,25 @@ rela_anchor:
     call find_largest_available_region
     addl $16, %esp
 
+    subl $12, %esp
+    leal (temp_area_text_1 - rela_anchor)(%ebx), %eax
+    pushl %eax
+    call print_text
+    addl $4, %esp
+    pushl (multiboot_temp_area - rela_anchor)(%ebx)
+    call print_hex32
+    addl $4, %esp
+    leal (temp_area_text_2 - rela_anchor)(%ebx), %eax
+    pushl %eax
+    call print_text
+    addl $4, %esp
+    pushl (multiboot_temp_area_size - rela_anchor)(%ebx)
+    call print_hex32
+    addl $4, %esp
+    leal (end - rela_anchor)(%ebx), %eax
+    pushl %eax
+    call print_text
+    addl $16, %esp
 
 
     jmp halt
@@ -490,7 +509,7 @@ check_memory_region:
 
     movl 16(%ebp), %eax
     cmpl (multiboot_temp_area_size - rela_anchor)(%ebx), %eax
-    jb 4f
+    jbe 4f
 
     movl 12(%ebp), %edx
     movl %edx, (multiboot_temp_area - rela_anchor)(%ebx)
@@ -511,8 +530,77 @@ check_memory_region:
     // void adjust_region(struct arg *arg, uint32_t reserved_base, uint32_t reserved_size)
     .type adjust_region, @function
 adjust_region:
-    // TODO
-    ud2
+    pushl %ebp
+    movl %esp, %ebp
+
+    movl 8(%ebp), %eax // arg
+    cmpl $0, 4(%eax) // Check if region_size is 0
+    je 1f // If it is, skip
+    cmpl $0, 16(%ebp) // Check if reserved_size is 0
+    je 1f // If it is, skip
+
+    movl (%eax), %ecx // %ecx = region_base
+    cmpl %ecx, 12(%ebp) // Compare region_base with reserved_base
+    ja 1f
+
+    // Check if the region overlaps with the reserved area, if it does, move the region base up and reduce the region size
+    subl 12(%ebp), %ecx // %ecx = region_base - reserved_base
+    cmpl 16(%ebp), %ecx // Compare with reserved_size
+    jae adjust_region_end // If reserved_size <= region_base - reserved_base, there is no overlap
+
+    movl 16(%ebp), %edx // %edx = reserved_size
+    subl %ecx, %edx // %edx = reserved_size - (region_base - reserved_base)
+
+    cmpl %edx, 4(%eax) // Compare with region_size
+    jb 2f // Reserved region is larger than the available region
+
+    addl %edx, (%eax) // region_base += %edx
+    subl %edx, 4(%eax) // region_size -= %edx
+    jmp adjust_region_end // Done
+
+2:
+    movl 4(%eax), %edx // %edx = region_size
+    addl %edx, (%eax) // region_base += region_size
+    movl $0, 4(%eax) // region_size = 0
+    jmp adjust_region_end // Done
+
+1: // region_base < reserved_base
+    movl 12(%ebp), %ecx // %ecx = reserved_base
+    subl (%eax), %ecx // %ecx = reserved_base - region_base; in other words, free space before the reserved region
+    cmpl 4(%eax), %ecx // Compare with region size
+    jae adjust_region_end // If reserved_base - region_base >= region_size, there is no overlap
+
+    movl 16(%ebp), %edx // %edx = reserved_size
+    addl %ecx, %edx // %edx = reserved_size + (reserved_base - region_base); in other words,
+                    // offset to the end of the reserved region relative to the region base
+    cmpl %edx, 4(%eax) // Compare with region_size
+    ja 2f // Jump if the the reserved region is in the middle
+
+    movl 12(%ebp), %ecx // %ecx = reserved_base
+    subl (%eax), %ecx // %ecx = reserved_base - region_base
+    movl %ecx, 4(%eax) // region_size = reserved_base - region_base 
+    jmp adjust_region_end // Done
+
+2:
+    // Chose the larger half and use that as the new region
+    subl 4(%eax), %edx // %edx = -(end of reserved area - region_base)
+    negl %edx // %edx = end of reserved area - region_base; free space after the reserved region
+    cmpl %ecx, %edx // src = lower half size, dst = higher half size
+    ja 1f // Jump if lower half is larger
+
+    movl 4(%eax), %ecx // %ecx = region_size
+    subl %edx, %ecx // Size diff
+    addl %ecx, (%eax) // region_base += size diff
+    movl %edx, 4(%eax) // region_size = size of higher half
+    jmp adjust_region_end    
+
+1:
+    movl %ecx, 4(%eax) // region_size = size of lower half
+
+adjust_region_end: // end
+    movl %ebp, %esp
+    popl %ebp
+    ret
 
 // =================================================== .rodata ===================================================
 
@@ -525,6 +613,9 @@ memory_map_entry_text: .string "Base: 0x"
 memory_map_entry_text2: .string ", Length: 0x"
 memory_map_entry_text3: .string ", Type: 0x"
 memory_map_entry_text4: .string "\r\n"
+temp_area_text_1: .string "Allocating memory from 0x"
+temp_area_text_2: .string " size 0x"
+end: .string "\r\n"
 
 
 // =================================================== .data =====================================================
