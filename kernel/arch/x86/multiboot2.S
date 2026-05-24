@@ -385,7 +385,7 @@ find_largest_available_region:
 5: // Size less than 4GB
    // Check if base + size is above 4GB, reduce size to fit if it is
    movl (%esi), %ecx // Base addr low
-   movl 12(%esi), %edx // Size low
+   movl 8(%esi), %edx // Size low
 
    // Check if base + size is above 4GB
    movl %ecx, %edi
