@@ -12,7 +12,7 @@
 
 .equ CPUID_NX_BIT, 20
 .equ CPUID_LONG_MODE_BIT, 29
-.equ CPUID_5LVL_PAGING_BIT, 27
+.equ CPUID_5LVL_PAGING_BIT, 16
 
 .equ NX_BIT, 0
 .equ PAGING_5LVL_BIT, 1
@@ -70,16 +70,26 @@ multiboot_map_kernel:
     btl $CPUID_LONG_MODE_BIT, %edx // Check if long mode is supported
     jnc unsupported_cpu // Long mode not supported, CPU is not supported
 
-    btl $CPUID_5LVL_PAGING_BIT, %edx // Check if 5-level paging is supported
-    jnc 1f // 5-level paging not supported
-    bts $PAGING_5LVL_BIT, (cpu_features - 9b)(%edi) // Set 5-level paging bit in features
-1:
-
     // Check NX
     btl $CPUID_NX_BIT, %edx // Check if NX bit is supported
     jnc 2f // NX bit not supported
     bts $NX_BIT, (cpu_features - 9b)(%edi) // Set NX bit in features
 2:
+
+    xorl %eax, %eax
+    cpuid
+
+    cmpl $7, %eax
+    jb 1f // Leaf 7 not supported, skip checking for 5-level paging
+
+    movl $7, %eax
+    xorl %ecx, %ecx
+    cpuid
+
+    testl $(1 << CPUID_5LVL_PAGING_BIT), %ecx // Check if 5-level paging is supported
+    jz 1f // 5-level paging not supported
+    bts $PAGING_5LVL_BIT, (cpu_features - 9b)(%edi) // Set 5-level paging bit in features
+1:
 
     // Alloc cr3
     call multiboot_alloc_page_clear
@@ -88,11 +98,11 @@ multiboot_map_kernel:
     // Map the kernel
     leal (__ehdr_start - 9b)(%edi), %ebx
     // %esi = phnum
-    movl 88(%ebx), %esi
+    movzwl 56(%ebx), %esi
     // %esi = phnum * 64
     shl $6, %esi
     // %ebx = current address of the first program header
-    addl 48(%ebx), %ebx
+    addl 32(%ebx), %ebx
     // %esi = address of the end of the program headers
     addl %ebx, %esi
 1:
@@ -105,16 +115,16 @@ multiboot_map_kernel:
     jne 3f // Not loadable, skip
 
     subl $12, %esp
-    pushl 8(%ebx) // flags
+    pushl 4(%ebx) // flags
     andl $3, (%esp) // Keep writable and executable bits
 
-    movl 32(%ebx), %eax // paddr
+    movl 24(%ebx), %eax // paddr
     addl (multiboot_kernel_phys_offset - 9b)(%edi), %eax // Offset addr by what it was moved by the bootloader
     pushl %eax // phys addr
 
-    pushl 48(%ebx) // memsz
-    pushl 28(%ebx) // p_vaddr high
-    pushl 24(%ebx) // p_vaddr low
+    pushl 40(%ebx) // memsz
+    pushl 20(%ebx) // p_vaddr high
+    pushl 16(%ebx) // p_vaddr low
     call bootstrap_map
     addl $32, %esp
 
@@ -288,7 +298,7 @@ multiboot_enter_kernel:
     // Enable PAE and maybe 5-level paging
     movl %cr4, %eax
     orl $(1 << CR4_PAE_BIT), %eax
-    testl $PAGING_5LVL_BIT, (cpu_features - 9b)(%ebx)
+    testl $(1 << PAGING_5LVL_BIT), (cpu_features - 9b)(%ebx)
     jz 1f
     orl $(1 << CR4_LA57_BIT), %eax
 1:
@@ -387,7 +397,7 @@ map_page:
     movl %edi, -8(%ebp)
     movl %ebx, -12(%ebp)
 
-    call 1f
+    call 9f
 9:
     popl %ebx
     movl (multiboot_cr3 - 9b)(%ebx), %esi // %esi = current page table base
@@ -408,8 +418,9 @@ map_page:
 
 2:
     call multiboot_alloc_page_clear
-    orl $0b11, %eax // Set present and writable bits
-    movl %eax, (%esi, %edi, 8) // Write PML5 entry
+    movl %eax, %ecx
+    orl $0b11, %ecx // Set present and writable bits
+    movl %ecx, (%esi, %edi, 8) // Write PML5 entry
     movl %eax, %esi // Move to next level
 
 1: // PML4
@@ -421,11 +432,12 @@ map_page:
     jz 2f // Not present
     andl $0xfffff000, %eax // Get address of next level page table
     movl %eax, %esi // Move to next level
-    jmp 1b
+    jmp 1f
 2:
     call multiboot_alloc_page_clear
-    orl $0b11, %eax // Set present and writable bits
-    movl %eax, (%esi, %edi, 8) // Write PML5 entry
+    movl %eax, %ecx
+    orl $0b11, %ecx // Set present and writable bits
+    movl %ecx, (%esi, %edi, 8) // Write PML5 entry
     movl %eax, %esi // Move to next level
 
 
@@ -443,11 +455,12 @@ map_page:
     jz 2f // Not present
     andl $0xfffff000, %eax // Get address of next level page table
     movl %eax, %esi // Move to next level
-    jmp 1b
+    jmp 1f
 2:
     call multiboot_alloc_page_clear
-    orl $0b11, %eax // Set present and writable bits
-    movl %eax, (%esi, %edi, 8) // Write PDPT
+    movl %eax, %ecx
+    orl $0b11, %ecx // Set present and writable bits
+    movl %ecx, (%esi, %edi, 8) // Write PDPT
     movl %eax, %esi // Move to next level
 
 1: // PD
@@ -460,11 +473,12 @@ map_page:
     jz 2f // Not present
     andl $0xfffff000, %eax // Get address of next level page table
     movl %eax, %esi // Move to next level
-    jmp 1b
+    jmp 1f
 2:
     call multiboot_alloc_page_clear
-    orl $0b11, %eax // Set present and writable bits
-    movl %eax, (%esi, %edi, 8) // Write PD entry
+    movl %eax, %ecx
+    orl $0b11, %ecx // Set present and writable bits
+    movl %ecx, (%esi, %edi, 8) // Write PD entry
     movl %eax, %esi // Move to next level
 
 1: // PT
@@ -476,9 +490,9 @@ map_page:
     jnz 1f // Present
 
     btl $NX_BIT, (cpu_features - 9b)(%ebx)
-    jnc 1f // CPU doesn't support NX bit, skip setting NX bit
-    testl $MAP_EXECUTABLE, 24(%ebp)
-    jnz 1f // Executable, skip setting NX bit
+    jnc 2f // CPU doesn't support NX bit, skip setting NX bit
+    testl $MAP_EXECUTABLE, 20(%ebp)
+    jnz 2f // Executable, skip setting NX bit
 
     movl $0x80000000, 4(%esi, %edi, 8) // Set NX bit in entry
 2:
@@ -508,7 +522,7 @@ map_page:
 
     movl 4(%esi, %edi, 8), %eax
 
-    testl $MAP_EXECUTABLE, 24(%ebp)
+    testl $MAP_EXECUTABLE, 20(%ebp)
     jz 1f
 
     testl $0x80000000, %eax
