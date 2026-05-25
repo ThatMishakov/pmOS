@@ -73,7 +73,7 @@ qemu-x86-limine: $(x86_64-IMG) ovmf-x86
 		-m 512M\
 	       	-smp 1\
 	       	-serial stdio \
-		-device intel-iommu -no-reboot -no-shutdown -cpu max,la57=off -d int
+		-device intel-iommu -no-reboot -no-shutdown -cpu max,la57=off
 # -trace ahci_* -trace handle_cmd_* \
 
 qemu-x86: $(x86_64-HYPER-IMG) ovmf-x86

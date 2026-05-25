@@ -219,6 +219,7 @@ com_print_char:
     cli
     hlt
 
+    .globl print_hex32
     .type print_hex32, @function
 print_hex32:
     movl $4, %ecx
@@ -233,7 +234,12 @@ print_hex64:
     movl %esp, %ebp
     pushl %esi
     pushl %edi
-    subl $16, %esp
+    pushl %ebx
+    subl $12, %esp
+
+    call 9f
+9:
+    popl %ebx
 
     subl $32, %esp
     movl %esp, %edi
@@ -241,11 +247,11 @@ print_hex64:
     movzb 7(%ebp, %ecx), %esi
     movl %esi, %eax
     shrl $4, %eax
-    movb (hex_lookup - rela_anchor)(%ebx, %eax), %al
+    movb (hex_lookup - 9b)(%ebx, %eax), %al
     movb %al, (%edi)
     movl %esi, %eax
     andl $0xf, %eax
-    movb (hex_lookup - rela_anchor)(%ebx, %eax), %al
+    movb (hex_lookup - 9b)(%ebx, %eax), %al
     movb %al, 1(%edi)
     addl $2, %edi
     loop 1b
@@ -257,6 +263,7 @@ print_hex64:
     pushl %eax
     call multiboot_print_text
 
+    movl -12(%ebp), %ebx
     movl -8(%ebp), %edi
     movl -4(%ebp), %esi 
     movl %ebp, %esp
@@ -668,6 +675,7 @@ memory_map_entry_text4: .string "\r\n"
 temp_area_text_1: .string "Allocating memory from 0x"
 temp_area_text_2: .string " size 0x"
 no_memory_text: .string "Not enough memory available, halting.\r\n"
+    .globl line_end_text
 line_end_text: .string "\r\n"
 
 

@@ -20,11 +20,12 @@
 .equ MAP_EXECUTABLE, 1
 .equ MAP_WRITABLE, 2
 
-.equ pheader_size, 64
+.equ pheader_size, 56
 .equ PT_LOAD, 1
 
 .equ EFER_MSR, 0xc0000080
 .equ EFER_LM_ENABLE_BIT, 8
+.equ EFER_NX_ENABLE_BIT, 11
 
 .equ CR0_PG_BIT, 31
 .equ CR4_PAE_BIT, 5
@@ -100,7 +101,7 @@ multiboot_map_kernel:
     // %esi = phnum
     movzwl 56(%ebx), %esi
     // %esi = phnum * 64
-    shl $6, %esi
+    imull $pheader_size, %esi
     // %ebx = current address of the first program header
     addl 32(%ebx), %ebx
     // %esi = address of the end of the program headers
@@ -308,6 +309,12 @@ multiboot_enter_kernel:
     movl $EFER_MSR, %ecx
     rdmsr
     orl $(1 << EFER_LM_ENABLE_BIT), %eax
+    
+    testl $(1 << NX_BIT), (cpu_features - 9b)(%ebx)
+    jz 1f
+    orl $(1 << EFER_NX_ENABLE_BIT), %eax
+
+1: // No NX
     wrmsr
 
     // Enable paging...

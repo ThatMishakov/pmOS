@@ -20,7 +20,7 @@ extern void hcf();
 extern "C" void multiboot_main(multiboot_info* info) {
     early_detect_cpu_features();
 
-    log::serial_logger.printf("Hello from pmOS kernel!\n");
+    log::serial_logger.printf("Hello from pmOS kernel (booted with multiboot2)!\n");
     log::serial_logger.printf("Kernel start: 0x%lh\n", &_kernel_start);
 
     hcf();
