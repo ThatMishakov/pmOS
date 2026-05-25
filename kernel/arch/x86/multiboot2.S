@@ -34,17 +34,17 @@ rela_anchor:
     subl $12, %esp
     leal (bad_magic_text - rela_anchor)(%ebx), %eax
     pushl %eax
-    call print_text
+    call multiboot_print_text
     jmp halt
 
 1:
     leal (stack_end - rela_anchor)(%ebx), %esp
 
-    // Align stack to 16, call print_text with the booted text
+    // Align stack to 16, call multiboot_print_text with the booted text
     subl $12, %esp
     leal (booted_text - rela_anchor)(%ebx), %eax
     pushl %eax
-    call print_text
+    call multiboot_print_text
     addl $16, %esp
 
 
@@ -54,7 +54,7 @@ rela_anchor:
     call get_multiboot_tag
     addl $16, %esp
 
-    addl $12, %esp
+    subl $12, %esp
     pushl %eax
     call print_memory_map
     addl $16, %esp
@@ -67,8 +67,11 @@ rela_anchor:
     addl $16, %esp
     cmpl $0, %eax
     je 1f
-    leal (multiboot_kernel_base - rela_anchor)(%ebx), %ecx
-    movl %eax, (%ecx)
+    movl 8(%eax), %edx
+    movl %edx, (multiboot_kernel_base - rela_anchor)(%ebx)
+
+    subl $KERNEL_PHYS_BASE, %edx
+    movl %edx, (multiboot_kernel_phys_offset - rela_anchor)(%ebx)
 1:
 
     subl $12, %esp
@@ -79,23 +82,24 @@ rela_anchor:
     subl $12, %esp
     leal (temp_area_text_1 - rela_anchor)(%ebx), %eax
     pushl %eax
-    call print_text
+    call multiboot_print_text
     addl $4, %esp
     pushl (multiboot_temp_area - rela_anchor)(%ebx)
     call print_hex32
     addl $4, %esp
     leal (temp_area_text_2 - rela_anchor)(%ebx), %eax
     pushl %eax
-    call print_text
+    call multiboot_print_text
     addl $4, %esp
     pushl (multiboot_temp_area_size - rela_anchor)(%ebx)
     call print_hex32
     addl $4, %esp
-    leal (end - rela_anchor)(%ebx), %eax
+    leal (line_end_text - rela_anchor)(%ebx), %eax
     pushl %eax
-    call print_text
+    call multiboot_print_text
     addl $16, %esp
 
+    call multiboot_map_kernel
 
     jmp halt
 
@@ -106,7 +110,7 @@ get_multiboot_tag:
     pushl %ebp
     movl %esp, %ebp
     pushl %esi
-    subl $12, %esp
+    subl $4, %esp
 
 
     movl 8(%ebp), %eax
@@ -136,15 +140,15 @@ get_multiboot_tag:
 2:
     movl %edx, %eax
 1:
-    addl $12, %esp
+    addl $4, %esp
     popl %esi
     movl %ebp, %esp
     popl %ebp
     ret
 
-    
-    .type print_text, @function
-print_text:
+    .globl multiboot_print_text
+    .type multiboot_print_text, @function
+multiboot_print_text:
     pushl %ebp
     movl %esp, %ebp
 
@@ -231,7 +235,7 @@ print_hex64:
     pushl %edi
     subl $16, %esp
 
-    subl 32, %esp
+    subl $32, %esp
     movl %esp, %edi
 1:
     movzb 7(%ebp, %ecx), %esi
@@ -251,7 +255,7 @@ print_hex64:
     movl %esp, %eax
     subl $24, %esp
     pushl %eax
-    call print_text
+    call multiboot_print_text
 
     movl -8(%ebp), %edi
     movl -4(%ebp), %esi 
@@ -265,12 +269,11 @@ print_memory_map:
     movl %esp, %ebp
     pushl %esi
     pushl %edi
-    subl $8, %esp
 
     subl $12, %esp
     leal (memory_map_text - rela_anchor)(%ebx), %eax
     pushl %eax
-    call print_text
+    call multiboot_print_text
 
     movl 8(%ebp), %eax // Memory map
     leal 16(%eax), %esi // Current entry
@@ -283,7 +286,7 @@ print_memory_map:
 
     leal (memory_map_entry_text - rela_anchor)(%ebx), %eax
     pushl %eax 
-    call print_text
+    call multiboot_print_text
 
     subl $4, %esp
     movl (%esi), %eax
@@ -295,7 +298,7 @@ print_memory_map:
 
     leal (memory_map_entry_text2 - rela_anchor)(%ebx), %eax
     pushl %eax
-    call print_text
+    call multiboot_print_text
     addl $4, %esp
 
     subl $4, %esp
@@ -308,7 +311,7 @@ print_memory_map:
 
     leal (memory_map_entry_text3 - rela_anchor)(%ebx), %eax
     pushl %eax
-    call print_text
+    call multiboot_print_text
     addl $4, %esp
 
     subl $4, %esp
@@ -320,7 +323,7 @@ print_memory_map:
 
     leal (memory_map_entry_text4 - rela_anchor)(%ebx), %eax
     pushl %eax
-    call print_text
+    call multiboot_print_text
     addl $4, %esp
 
     movl 8(%ebp), %eax
@@ -341,7 +344,7 @@ print_memory_map:
 find_largest_available_region:
     pushl %ebp
     movl %esp, %ebp
-    subl $16, %esp
+    subl $24, %esp
     movl %esi, -4(%ebp)
     movl %edi, -8(%ebp)
 
@@ -441,7 +444,7 @@ find_largest_available_region:
 check_memory_region:
     pushl %ebp
     movl %esp, %ebp
-    subl $16, %esp
+    subl $8, %esp
     movl %esi, -4(%ebp)
     movl %edi, -8(%ebp)
 
@@ -602,6 +605,55 @@ adjust_region_end: // end
     popl %ebp
     ret
 
+    .globl clear_page32
+    .type clear_page32, @function
+clear_page32:
+    pushl %edi
+    movl $1024, %ecx
+    movl 8(%esp), %edi
+    xor %eax, %eax
+    rep stosl
+    popl %edi
+    ret
+
+
+    .globl multiboot_alloc_page_clear
+    .type multiboot_alloc_page_clear, @function
+multiboot_alloc_page_clear:
+    pushl %ebp
+    movl %esp, %ebp
+    pushl %esi
+    pushl %edi
+
+    call 1f  
+1:
+    popl %edx
+    movl (multiboot_temp_area_allocated - 1b)(%edx), %eax
+    cmpl (multiboot_temp_area_size - 1b)(%edx), %eax
+    jae 2f
+
+    addl $4096, (multiboot_temp_area_allocated - 1b)(%edx)
+    movl (multiboot_temp_area - 1b)(%edx), %edx
+    addl %eax, %edx
+    movl %edx, %edi
+    movl $1024, %ecx
+    xor %eax, %eax
+    rep stosl
+
+    movl %edx, %eax
+    popl %edi
+    popl %esi
+    movl %ebp, %esp
+    popl %ebp
+    ret
+
+2: // Not enough memory
+    subl $12, %esp
+    leal (no_memory_text - 1b)(%edx), %eax
+    pushl %eax
+    call multiboot_print_text
+    jmp halt
+
 // =================================================== .rodata ===================================================
 
     .rodata
@@ -615,17 +667,22 @@ memory_map_entry_text3: .string ", Type: 0x"
 memory_map_entry_text4: .string "\r\n"
 temp_area_text_1: .string "Allocating memory from 0x"
 temp_area_text_2: .string " size 0x"
-end: .string "\r\n"
+no_memory_text: .string "Not enough memory available, halting.\r\n"
+line_end_text: .string "\r\n"
 
 
-// =================================================== .data =====================================================
+// =================================================== .bss =====================================================
 
-    .data
+    .bss
     .align 4
 multiboot_temp_area: .long 0
 multiboot_temp_area_size: .long 0
+multiboot_temp_area_allocated: .long 0
+
     .globl multiboot_kernel_base
 multiboot_kernel_base: .long 0
+    .globl multiboot_kernel_phys_offset
+multiboot_kernel_phys_offset: .long 0
 
 initialized_serial: .byte 0
 

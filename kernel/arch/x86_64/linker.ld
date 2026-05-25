@@ -3,7 +3,7 @@ ENTRY(kernel_main)
 
 PHDRS
 {
-    text PT_LOAD FLAGS((1 << 0) | (1 << 2)) ;
+    text PT_LOAD FILEHDR PHDRS FLAGS((1 << 0) | (1 << 2)) ;
     rodata PT_LOAD FLAGS((1 << 2)) ;
     data PT_LOAD FLAGS((1 << 1) | (1 << 2));
     eh_frame PT_LOAD FLAGS((1 << 2));
@@ -14,13 +14,15 @@ SECTIONS
 {
     /* . = 0xFFFFFF0000000000; // 01777777760000000000000 */
     kernel_offset = 0xFFFFFFFF80000000 + 0x100000;
-    . = kernel_offset;
+    . = kernel_offset + SIZEOF_HEADERS;
+
+    KERNEL_PHYS_BASE = 0;
 
     /* Leave a symbol indicating the start of the kernel space */
     _kernel_start = .;
 
     /* Then let's place all the other traditional executable sections afterwards. */
-    .text : AT (ADDR (.text) - kernel_offset) {
+    .text : AT (ADDR (.text) - kernel_offset + KERNEL_PHYS_BASE) {
         _text_start = .;
         *(.multiboot2)
         *(.text .text.*)
@@ -30,19 +32,19 @@ SECTIONS
     . += CONSTANT(MAXPAGESIZE);
 
     _rodata_start = .;
-    .rodata : AT (ADDR (.rodata) - kernel_offset) {
+    .rodata : AT (ADDR (.rodata) - kernel_offset + KERNEL_PHYS_BASE) {
         *(.rodata .rodata.*)
         *(.srodata .srodata.*)
     } :rodata
 
-    .init_array : AT (ADDR (.init_array) - kernel_offset) {
+    .init_array : AT (ADDR (.init_array) - kernel_offset + KERNEL_PHYS_BASE) {
         _init_array_start = .;
         KEEP(*(SORT(.init_array.*)))
         KEEP(*(.init_array))
         _init_array_end = .;
     } :rodata
 
-    .fini_array : AT (ADDR (.fini_array) - kernel_offset) {
+    .fini_array : AT (ADDR (.fini_array) - kernel_offset + KERNEL_PHYS_BASE) {
         _fini_array_start = .;
         KEEP(*(SORT(.fini_array.*)))
         KEEP(*(.fini_array))
@@ -52,7 +54,7 @@ SECTIONS
 
     . += CONSTANT(MAXPAGESIZE);
 
-    .data : AT (ADDR (.data) - kernel_offset) {
+    .data : AT (ADDR (.data) - kernel_offset + KERNEL_PHYS_BASE) {
         _data_start = .;
         *(.data .data.*)
         *(.sdata .sdata.*)
@@ -60,11 +62,11 @@ SECTIONS
     } :data
 
     /* Dynamic section for relocations, both in its own PHDR and inside data PHDR */
-    .dynamic : AT (ADDR (.dynamic) - kernel_offset) {
+    .dynamic : AT (ADDR (.dynamic) - kernel_offset + KERNEL_PHYS_BASE) {
         *(.dynamic)
     } :data :dynamic
  
-    .bss : AT (ADDR (.bss) - kernel_offset) {
+    .bss : AT (ADDR (.bss) - kernel_offset + KERNEL_PHYS_BASE) {
         _bss_start = .;
         *(.bss .bss.*)
         *(.sbss .sbss.*)
@@ -74,14 +76,14 @@ SECTIONS
 
     . += CONSTANT(MAXPAGESIZE);
 
-    .eh_frame : AT (ADDR (.eh_frame) - kernel_offset)
+    .eh_frame : AT (ADDR (.eh_frame) - kernel_offset + KERNEL_PHYS_BASE)
     {
         __eh_frame_start = .;
         KEEP(*(.eh_frame))
         __eh_frame_end = .;
     } :eh_frame
 
-   .eh_frame_hdr : AT (ADDR (.eh_frame_hdr) - kernel_offset)
+   .eh_frame_hdr : AT (ADDR (.eh_frame_hdr) - kernel_offset + KERNEL_PHYS_BASE)
     {
         KEEP(*(.eh_frame_hdr))
     
@@ -89,7 +91,7 @@ SECTIONS
         __eh_frame_hdr_end = SIZEOF(.eh_frame_hdr) > 0 ? . : 0;
     } :eh_frame
 
-    .gcc_except_table : AT (ADDR (.gcc_except_table) - kernel_offset)
+    .gcc_except_table : AT (ADDR (.gcc_except_table) - kernel_offset + KERNEL_PHYS_BASE)
     {
         _gcc_except_table_start = .;
         *(.gcc_except_table .gcc_except_table.*)
