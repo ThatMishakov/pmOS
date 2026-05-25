@@ -23,6 +23,13 @@
 .equ pheader_size, 64
 .equ PT_LOAD, 1
 
+.equ EFER_MSR, 0xc0000080
+.equ EFER_LM_ENABLE_BIT, 8
+
+.equ CR0_PG_BIT, 31
+.equ CR4_PAE_BIT, 5
+.equ CR4_LA57_BIT, 12
+
     .text
     .code32
     .global multiboot_map_kernel
@@ -116,6 +123,8 @@ multiboot_map_kernel:
     jmp 1b
 2:
 
+    call identity_map_memory
+
     movl -12(%ebp), %edi
     movl -8(%ebp), %esi
     movl -4(%ebp), %ebx
@@ -137,7 +146,186 @@ unsupported_cpu:
  
     jmp halt
 
+    .type identity_map_memory, @function
+identity_map_memory:
+    pushl %ebp
+    movl %esp, %ebp
+    pushl %esi
+    pushl %edi
 
+    call 1f
+1:
+    popl %eax
+
+    movl (multiboot_cr3 - 1b)(%eax), %esi // %esi = current page table base
+
+    // PLM5?
+    btl $PAGING_5LVL_BIT, (cpu_features - 1b)(%eax)
+    jnc 1f
+
+    movl (%esi), %eax // Get PML5 entry
+    testl $1, %eax // Check if present
+    jnz 2f // Present
+    call multiboot_alloc_page_clear
+    movl %eax, (%esi) // Write PML5 entry
+    orl $0b11, (%esi) // Set present and writable bits
+    movl %eax, %esi // Move to next level
+    jmp 1f
+2:
+    movl (%esi), %esi
+    andl $0xfffff000, %esi // Get address of next level page table
+
+
+1: // PML4
+    movl (%esi), %eax // Get PML4 entry
+    testl $1, %eax // Check if present
+    jnz 2f // Present
+    call multiboot_alloc_page_clear
+    movl %eax, (%esi) // Write the entry 
+    orl $0b11, (%esi) // Set present and writable bits
+    movl %eax, %esi // Move to next level
+    jmp 1f
+2:
+    movl (%esi), %esi
+    andl $0xfffff000, %esi // Get address of next level page table
+
+1: // PDPT
+    movl $0, %edi
+1:
+    call multiboot_alloc_page_clear
+    movl %eax, (%esi, %edi, 8) // Write the entry
+    orl $0b11, (%esi, %edi, 8)
+
+    movl %edi, %ecx
+    shl $30, %ecx
+
+    pushl %ecx
+    pushl %eax
+    call populate_pdpt
+    addl $8, %esp
+
+    incl %edi
+    cmpl $4, %edi
+    jb 1b
+
+    popl %edi
+    popl %esi
+    movl %ebp, %esp
+    popl %ebp
+    ret
+
+    // void populate_pdpt(uint32_t pdpt_phys_addr, uint32_t virt_base)
+    .type populate_pdpt, @function
+populate_pdpt:
+    pushl %ebp
+    movl %esp, %ebp
+    pushl %esi
+    pushl %edi
+
+    // Store pointer in %edi
+    movl 8(%ebp), %edi
+
+    // First 2MB needs to be mapped with 4KB mappings...
+    cmpl $0x0, 12(%ebp)
+    je 1f
+
+    xorl %esi, %esi
+    jmp 2f
+
+1: // Map the first 2 MB with 4KB pages
+    call multiboot_alloc_page_clear
+    movl %eax, %ecx
+    orl $0b11, %ecx
+    movl %ecx, (%edi)
+
+    xorl %esi, %esi
+1:
+    movl %esi, %ecx
+    shl $12, %ecx
+    orl $0b11, %ecx
+    movl %ecx, (%eax, %esi, 8)
+    incl %esi
+    cmpl $512, %esi
+    jb 1b
+
+    movl $1, %esi
+2:
+    movl %esi, %eax
+    shl $21, %eax
+    addl 12(%ebp), %eax
+    orl $0b10000011, %eax // Present, Writable, PS
+    movl %eax, (%edi, %esi, 8) // Write the entry
+    incl %esi
+    cmpl $512, %esi
+    jb 2b
+
+    popl %edi
+    popl %esi
+    movl %ebp, %esp
+    popl %ebp
+    ret
+
+    .globl multiboot_enter_kernel
+    .type multiboot_enter_kernel, @function
+multiboot_enter_kernel:
+    pushl %ebp
+    movl %esp, %ebp
+    pushl %ebx
+    subl $4, %esp
+
+    call 9f
+9:
+    popl %ebx
+
+    subl $16, %esp
+    // GDTR
+    movl $31, 2(%esp)
+    leal (multiboot_gdt - 9b)(%ebx), %edx
+    movl %edx, 4(%esp)
+
+    lgdt 2(%esp)
+
+    // Enable PAE and maybe 5-level paging
+    movl %cr4, %eax
+    orl $(1 << CR4_PAE_BIT), %eax
+    testl $PAGING_5LVL_BIT, (cpu_features - 9b)(%ebx)
+    jz 1f
+    orl $(1 << CR4_LA57_BIT), %eax
+1:
+    movl %eax, %cr4
+
+    // Enable compat mode
+    movl $EFER_MSR, %ecx
+    rdmsr
+    orl $(1 << EFER_LM_ENABLE_BIT), %eax
+    wrmsr
+
+    // Enable paging...
+    movl (multiboot_cr3 - 9b)(%ebx), %eax
+    movl %eax, %cr3
+
+    movl %cr0, %eax
+    orl $(1 << CR0_PG_BIT), %eax
+    movl %eax, %cr0
+
+    // Jump to 64 bit code
+    movl $0x10, %eax
+    movw %ax, %ds
+    movw %ax, %ss
+
+    // Far return to 64 bit code
+    leal (1f - 9b)(%ebx), %eax
+    pushl $0x08
+    pushl %eax
+    lretl
+1:
+
+    .code64
+    movabsq $multiboot_entry, %rax
+    jmp *%rax
+
+
+    .code32
 .type halt, @function
 halt:
     cli
@@ -292,11 +480,11 @@ map_page:
     testl $MAP_EXECUTABLE, 24(%ebp)
     jnz 1f // Executable, skip setting NX bit
 
-    movl $0x80000000, 1(%esi, %edi, 8) // Set NX bit in entry
+    movl $0x80000000, 4(%esi, %edi, 8) // Set NX bit in entry
 2:
     movl 16(%ebp), %eax // phys_addr
-    btl $MAP_WRITABLE, 20(%ebp)
-    jnc 3f // Not writable
+    testl $MAP_WRITABLE, 20(%ebp)
+    jz 3f // Not writable
     orl $0b10, %eax // Set writable bit
 3:
     orl $1, %eax // Set present bit
@@ -318,7 +506,7 @@ map_page:
     btl $NX_BIT, (cpu_features - 9b)(%ebx)
     jnc 2f // CPU doesn't support NX bit, skip checking it
 
-    movl 1(%esi, %edi, 8), %eax
+    movl 4(%esi, %edi, 8), %eax
 
     testl $MAP_EXECUTABLE, 24(%ebp)
     jz 1f
@@ -361,3 +549,11 @@ unsupported_cpu_msg:
     .asciz "Unsupported CPU. This kernel requires a 64 bit CPU. Consider using different hardware or a 32 bit version of the kernel."
 bad_sections_msg:
     .asciz "Kernel ELF has overlapping sections with incompatible permissions! The kernel can't boot!\r\n"
+
+// =================== .data ===================
+    .data
+multiboot_gdt:
+    .quad 0
+    .quad 0x00af9b000000ffff // 64 bit code
+    .quad 0x00cf92000000ffff // 64/32 bit data
+    .quad 0x00cf9a000000ffff // 32 bit code

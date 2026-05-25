@@ -101,7 +101,7 @@ rela_anchor:
 
     call multiboot_map_kernel
 
-    jmp halt
+    jmp multiboot_enter_kernel
 
 
 

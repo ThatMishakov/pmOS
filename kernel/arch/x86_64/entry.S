@@ -62,7 +62,6 @@ _limine_entry:
 
     jmp start_first_process
 
-    .section .text
     .globl kernel_main
     .type kernel_main, @function
 kernel_main:
@@ -80,6 +79,19 @@ kernel_main:
     # TODO: This is hacky
     # get_cpu_info()->nested_level = 0;
     # movq $0, %gs:24
+
+    jmp start_first_process
+
+    .globl multiboot_entry
+    .type multiboot_entry, @function
+multiboot_entry:
+    # Switch to in-kernel (upper half) stack...
+    leaq (stack+STACK_SIZE)(%rip), %rsp
+
+    pushq $0
+    pushq $0
+
+    call multiboot_main
 
     jmp start_first_process
     
