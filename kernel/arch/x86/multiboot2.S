@@ -683,8 +683,11 @@ line_end_text: .string "\r\n"
 
     .bss
     .align 4
+    .globl multiboot_temp_area
 multiboot_temp_area: .long 0
+    .globl multiboot_temp_area_size
 multiboot_temp_area_size: .long 0
+    .globl multiboot_temp_area_allocated
 multiboot_temp_area_allocated: .long 0
 
     .globl multiboot_kernel_base

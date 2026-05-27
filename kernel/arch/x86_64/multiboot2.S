@@ -74,7 +74,7 @@ multiboot_map_kernel:
     // Check NX
     btl $CPUID_NX_BIT, %edx // Check if NX bit is supported
     jnc 2f // NX bit not supported
-    bts $NX_BIT, (cpu_features - 9b)(%edi) // Set NX bit in features
+    bts $NX_BIT, (multiboot_cpu_features - 9b)(%edi) // Set NX bit in features
 2:
 
     xorl %eax, %eax
@@ -89,7 +89,7 @@ multiboot_map_kernel:
 
     testl $(1 << CPUID_5LVL_PAGING_BIT), %ecx // Check if 5-level paging is supported
     jz 1f // 5-level paging not supported
-    bts $PAGING_5LVL_BIT, (cpu_features - 9b)(%edi) // Set 5-level paging bit in features
+    bts $PAGING_5LVL_BIT, (multiboot_cpu_features - 9b)(%edi) // Set 5-level paging bit in features
 1:
 
     // Alloc cr3
@@ -171,7 +171,7 @@ identity_map_memory:
     movl (multiboot_cr3 - 1b)(%eax), %esi // %esi = current page table base
 
     // PLM5?
-    btl $PAGING_5LVL_BIT, (cpu_features - 1b)(%eax)
+    btl $PAGING_5LVL_BIT, (multiboot_cpu_features - 1b)(%eax)
     jnc 1f
 
     movl (%esi), %eax // Get PML5 entry
@@ -299,7 +299,7 @@ multiboot_enter_kernel:
     // Enable PAE and maybe 5-level paging
     movl %cr4, %eax
     orl $(1 << CR4_PAE_BIT), %eax
-    testl $(1 << PAGING_5LVL_BIT), (cpu_features - 9b)(%ebx)
+    testl $(1 << PAGING_5LVL_BIT), (multiboot_cpu_features - 9b)(%ebx)
     jz 1f
     orl $(1 << CR4_LA57_BIT), %eax
 1:
@@ -310,7 +310,7 @@ multiboot_enter_kernel:
     rdmsr
     orl $(1 << EFER_LM_ENABLE_BIT), %eax
     
-    testl $(1 << NX_BIT), (cpu_features - 9b)(%ebx)
+    testl $(1 << NX_BIT), (multiboot_cpu_features - 9b)(%ebx)
     jz 1f
     orl $(1 << EFER_NX_ENABLE_BIT), %eax
 
@@ -409,7 +409,7 @@ map_page:
     popl %ebx
     movl (multiboot_cr3 - 9b)(%ebx), %esi // %esi = current page table base
 
-    btl $PAGING_5LVL_BIT, (cpu_features - 9b)(%ebx)
+    btl $PAGING_5LVL_BIT, (multiboot_cpu_features - 9b)(%ebx)
     jnc 1f // CPU does not support 5-level paging, skip
 
     movl 12(%ebp), %edi // virt_addr high
@@ -496,7 +496,7 @@ map_page:
     testl $1, %eax // Check if present
     jnz 1f // Present
 
-    btl $NX_BIT, (cpu_features - 9b)(%ebx)
+    btl $NX_BIT, (multiboot_cpu_features - 9b)(%ebx)
     jnc 2f // CPU doesn't support NX bit, skip setting NX bit
     testl $MAP_EXECUTABLE, 20(%ebp)
     jnz 2f // Executable, skip setting NX bit
@@ -524,7 +524,7 @@ map_page:
     jz bad_sections // Page is present but not writable, but kernel requires it to be writable, fail
 
 4: // Check executable bit
-    btl $NX_BIT, (cpu_features - 9b)(%ebx)
+    btl $NX_BIT, (multiboot_cpu_features - 9b)(%ebx)
     jnc 2f // CPU doesn't support NX bit, skip checking it
 
     movl 4(%esi, %edi, 8), %eax
@@ -560,7 +560,8 @@ bad_sections:
 // =================== .bss ===================
     .bss
     .align 4
-cpu_features: .long 0
+    .globl multiboot_cpu_features
+multiboot_cpu_features: .long 0
     .globl multiboot_cr3
 multiboot_cr3: .long 0
 

@@ -5,9 +5,16 @@
 #include <pmos/load_data.h>
 #include <memory/mem_object.hh>
 #include <processes/task_group.hh>
+#include <memory/pmm.hh>
+
 
 constexpr phys_addr_t RSDP_INITIALIZER = -1ULL;
 extern phys_addr_t rsdp;
+
+extern phys_addr_t temp_alloc_base;
+extern phys_addr_t temp_alloc_size;
+
+extern kernel::pmm::Page::page_addr_t alloc_pages_from_temp_pool(size_t pages);
 
 void init_acpi(phys_addr_t rsdp_addr);
 

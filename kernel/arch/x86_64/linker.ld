@@ -14,12 +14,12 @@ SECTIONS
 {
     /* . = 0xFFFFFF0000000000; // 01777777760000000000000 */
     kernel_offset = 0xFFFFFFFF80000000 + 0x100000;
-    . = kernel_offset + SIZEOF_HEADERS;
-
-    KERNEL_PHYS_BASE = 0;
 
     /* Leave a symbol indicating the start of the kernel space */
-    _kernel_start = .;
+    _kernel_start = kernel_offset;
+    KERNEL_PHYS_BASE = 0;
+
+    . = kernel_offset + SIZEOF_HEADERS;
 
     /* Then let's place all the other traditional executable sections afterwards. */
     .text : AT (ADDR (.text) - kernel_offset + KERNEL_PHYS_BASE) {

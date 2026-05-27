@@ -30,9 +30,8 @@ using namespace kernel::x86_64::paging;
 
 void hcf();
 
-// Best and size must be below 1GB on ia32, because of how the protocol works
-extern phys_addr_t temp_alloc_base;
-extern phys_addr_t temp_alloc_size;
+// For temp alloc, best and size must be below 1GB on ia32, because of how the protocol works
+
 
 extern phys_addr_t temp_alloc_reserved;
 extern long temp_alloc_entry_id;
@@ -98,8 +97,6 @@ void map_kernel(ultra_boot_context *ctx)
 
 extern void *_kernel_start;
 extern u8 _kernel_end;
-
-extern pmm::Page::page_addr_t alloc_pages_from_temp_pool(size_t pages);
 
 ultra_memory_map_attribute * ultra_memory_map(ultra_boot_context *ctx)
 {
