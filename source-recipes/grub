@@ -1,0 +1,12 @@
+name=grub
+version=2
+revision=1
+git_url="https://gitlab.freedesktop.org/gnu-grub/grub.git"
+commit="1b9d412bab28006562232c9e5e6839f882c0517c"
+
+imagedeps="autoconf automake gettext wget autopoint"
+allow_network=yes
+
+prepare() {
+    ./bootstrap
+}

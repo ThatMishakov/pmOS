@@ -1,0 +1,22 @@
+#! /bin/sh
+
+name=grub
+from_source=grub
+revision=1
+
+imagedeps="binutils clang lld"
+
+configure() {
+    "${source_dir}"/configure
+}
+
+build() {
+    make -j${parallelism}
+}
+
+package() {
+    DESTDIR="${dest_dir}" make install
+
+        strip_command=strip \
+    post_package_strip
+}

@@ -16,7 +16,7 @@ SECTIONS
 
     /* Leave a symbol indicating the start of the kernel space */
     _kernel_start = kernel_offset;
-    KERNEL_PHYS_BASE = 0;
+    KERNEL_PHYS_BASE = 0x100000;
 
     . = kernel_offset + SIZEOF_HEADERS;
 

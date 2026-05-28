@@ -7,6 +7,8 @@
 .equ KERNEL_OFFSET, 0
 #endif
 
+.equ KERNEL_PHYS_BASE, 0x100000
+
 .equ COM_PORT, 0x3f8
 
 .equ TEMP_AREA_SIZE, 0x300000
@@ -288,6 +290,13 @@ no_memory_text: .string "Not enough memory available, halting.\r\n"
 line_end_text: .string "\r\n"
 
 
+// ================================================== .data ====================================================
+
+    .data
+    .align 4
+    .globl multiboot_kernel_base
+multiboot_kernel_base: .long KERNEL_PHYS_BASE
+
 // =================================================== .bss =====================================================
 
     .bss
@@ -297,8 +306,6 @@ multiboot_temp_area_size: .long 0
     .globl multiboot_temp_area_allocated
 multiboot_temp_area_allocated: .long 0
 
-    .globl multiboot_kernel_base
-multiboot_kernel_base: .long 0
     .globl multiboot_kernel_phys_offset
 multiboot_kernel_phys_offset: .long 0
 
@@ -332,21 +339,22 @@ entry_address_tag_start:
     .short  MULTIBOOT_HEADER_TAG_ENTRY_ADDRESS
     .short  0
     .long   entry_address_tag_end - entry_address_tag_start
-    .long   _multiboot_start - KERNEL_OFFSET
+    .long   _multiboot_start - KERNEL_OFFSET + KERNEL_PHYS_BASE
 entry_address_tag_end:
 
+    .align 8
 relocatable_header_tag_start:
     .short MULTIBOOT_HEADER_TAG_RELOCATABLE
     .short 0
     .long relocatable_header_tag_end - relocatable_header_tag_start
     // Min addr
-    .long 0
+    .long 0x100000 // Start at 1MB to leave lower memory available
     // Max addr
-    .long -1
+    .long 0xffffffff
     // Align
     .long 4096
     // Preference
-    .long 0x100000
+    .long 0
 relocatable_header_tag_end:
 
 framebuffer_tag_start:
@@ -363,6 +371,7 @@ framebuffer_tag_start:
     .long 0 // No preference
 framebuffer_tag_end:
     
+    .align 8
     /* Terminate multiboot2 header */
     .short MULTIBOOT_HEADER_TAG_END
     .short 0
