@@ -4,6 +4,7 @@
 #include <kern_logger/kern_logger.hh>
 #include <memory/pmm.hh>
 #include <memory/vmm.hh>
+#include <kernel/elf.h>
 
 using namespace kernel;
 using namespace kernel::paging;
@@ -13,17 +14,7 @@ using namespace kernel::vmm;
 
 extern void *_kernel_start;
 
-extern void *_text_start;
-extern void *_text_end;
-
-extern void *_rodata_start;
-extern void *_rodata_end;
-
-extern void *_data_start;
-extern void *_data_end;
-
-extern void *_bss_start;
-extern void *_bss_end;
+extern void *__ehdr_start;
 
 extern void *__eh_frame_start;
 extern void *__eh_frame_end;
@@ -38,105 +29,76 @@ using namespace kernel::ia32::paging;
 
 void kernel::map_kernel_pages(ptable_top_ptr_t kernel_pt_top, phys_addr_t kernel_phys)
 {
-    // Map kernel pages
-    //
-    // Prelude:
-    // misha@Yoga:~/pmos/kernel$ readelf -l kernel
+    ELF_Common *ehdr = (ELF_Common *)&__ehdr_start;
 
-    // Elf file type is EXEC (Executable file)
-    // Entry point 0xffffffff800200a8
-    // There are 6 program headers, starting at offset 64
+    assert(ehdr->magic == ELF_MAGIC);
+    assert(ehdr->bitness == ELF_BITNESS);
 
-    // Program Headers:
-    // Type           Offset             VirtAddr           PhysAddr
-    //                 FileSiz            MemSiz              Flags  Align
-    // RISCV_ATTRIBUT 0x000000000029d420 0x0000000000000000 0x0000000000000000
-    //                 0x0000000000000048 0x0000000000000000  R      0x1
-    // LOAD           0x0000000000001000 0xffffffff80000000 0xffffffff80000000
-    //                 0x000000000002b728 0x000000000002b728  R E    0x1000
-    // LOAD           0x000000000002c728 0xffffffff8002c728 0xffffffff8002c728
-    //                 0x00000000000055f8 0x00000000000055f8  R      0x1000
-    // LOAD           0x0000000000031d20 0xffffffff80032d20 0xffffffff80032d20
-    //                 0x0000000000000878 0x0000000000007bf4  RW     0x1000
-    // LOAD           0x0000000000032918 0xffffffff8003b918 0xffffffff8003b918
-    //                 0x0000000000008c71 0x0000000000008c71  R      0x1000
-    // DYNAMIC        0x0000000000000000 0x0000000000000000 0x0000000000000000
-    //                 0x0000000000000000 0x0000000000000000  RW     0x8
-    //...
-    //  Section to Segment mapping:
-    //    Segment Sections...
-    //    00     .riscv.attributes
-    //    01     .text
-    //    02     .rodata .srodata .srodata._ZTS4Port ...
-    //    03     .data .init_array ... .bss .sbss ...
-    //    04     .eh_frame .gcc_except_table
-    //
-    // The kernel is loaded into higher half and has 4 memory regions:
-    // 1. .text and related, with Read an Execute permissions
-    // 2. .rodata, with Read permissions
-    // 3. .data and .bss, with Read and Write permissions
-    // 4. .eh_frame and .gcc_except_table, with Read only permissions
-    // The addresses of these sections are known from the symbols, defined by linker script and
-    // their physical location can be obtained from Kernel Address Feature Request by limine
-    // protocol Map these pages and switch to kernel page table
+    if (ehdr->bitness == ELF_64BIT) {
+        ELF_64bit *ehdr = (ELF_64bit *)&__ehdr_start;
 
-    // phys_addr_t for phys memory (because of PAE on i686), ulong for virtual memory/pointers
+        ELF_PHeader_64 *phdrs = (ELF_PHeader_64 *)((char *)&_kernel_start + ehdr->program_header);
+        for (size_t i = 0; i < ehdr->program_header_entries; ++i) {
+            auto &phdr = phdrs[i];
+            if (phdr.type != ELF_SEGMENT_LOAD)
+                continue;
 
-    const ulong kernel_start_virt = (ulong)&_kernel_start;
-    const ulong kernel_text_start = kernel_start_virt & ~0xfff;
-    const ulong kernel_text_end   = ((ulong)&_text_end + 0xfff) & ~0xfff;
+            Page_Table_Arguments args = {
+                .readable           = (phdr.flags & ELF_FLAG_READABLE) != 0,
+                .writeable          = (phdr.flags & ELF_FLAG_WRITABLE) != 0,
+                .user_access        = false,
+                .global             = true,
+                .execution_disabled = (phdr.flags & ELF_FLAG_EXECUTABLE) == 0,
+                .extra              = PAGING_FLAG_STRUCT_PAGE,
+            };
 
-    const phys_addr_t text_phys   = kernel_phys + kernel_text_start - kernel_start_virt;
-    const ulong text_size   = kernel_text_end - kernel_text_start;
-    const ulong text_virt   = text_phys - kernel_phys + kernel_start_virt;
+            constexpr ulong PAGE_MASK = PAGE_SIZE - 1;
 
-    Page_Table_Arguments args = {
-        .readable           = true,
-        .writeable          = false,
-        .user_access        = false,
-        .global             = true,
-        .execution_disabled = false,
-        .extra              = PAGING_FLAG_STRUCT_PAGE,
-    };
+            size_t offset = phdr.p_vaddr & PAGE_MASK;
+            void *virt_addr = (void *)(phdr.p_vaddr - offset);
+            phys_addr_t phys_addr = kernel_phys + ((ulong)virt_addr - (ulong)&_kernel_start);
+            size_t map_size = phdr.p_memsz + offset;
+            map_size = (map_size + PAGE_MASK) & ~PAGE_MASK;
 
-    kresult_t result = map_pages(kernel_pt_top, text_phys, (void *)text_virt, text_size, args);
-    if (result)
-        panic("Couldn't map kernel text\n");
+            auto result = map_pages(kernel_pt_top, phys_addr, virt_addr, map_size, args);
+            if (result)
+                panic("Couldn't map kernel segment\n");
+        }
+    } else if (ehdr->bitness == ELF_32BIT) {
+        ELF_32bit *ehdr = (ELF_32bit *)&__ehdr_start;
+        assert(ehdr->magic == ELF_MAGIC);
+        assert(ehdr->bitness == ELF_BITNESS);
 
-    const ulong rodata_start  = (ulong)(&_rodata_start) & ~0xfff;
-    const ulong rodata_end    = ((ulong)&_rodata_end + 0xfff) & ~0xfff;
-    const ulong rodata_size   = rodata_end - rodata_start;
-    const ulong rodata_offset = rodata_start - kernel_start_virt;
-    const phys_addr_t rodata_phys     = kernel_phys + rodata_offset;
-    const ulong rodata_virt   = kernel_start_virt + rodata_offset;
-    args                    = {true, false, false, true, true, PAGING_FLAG_STRUCT_PAGE};
-    result = map_pages(kernel_pt_top, rodata_phys, (void *)rodata_virt, rodata_size, args);
-    if (result != 0)
-        panic("Couldn't map kernel rodata\n");
+        ELF_PHeader_32 *phdrs = (ELF_PHeader_32 *)((char *)&_kernel_start + ehdr->program_header);
+        for (size_t i = 0; i < ehdr->program_header_entries; ++i) {
+            auto &phdr = phdrs[i];
+            if (phdr.type != ELF_SEGMENT_LOAD)
+                continue;
 
-    const ulong data_start  = (ulong)(&_data_start) & ~0xfffUL;
-    const ulong data_end    = ((ulong)&_bss_end + 0xfffUL) & ~0xfffUL;
-    const ulong data_size   = data_end - data_start;
-    const ulong data_offset = data_start - kernel_start_virt;
-    const phys_addr_t data_phys     = kernel_phys + data_offset;
-    const ulong data_virt   = kernel_start_virt + data_offset;
-    args                    = {true, true, false, true, true, PAGING_FLAG_STRUCT_PAGE};
+            Page_Table_Arguments args = {
+                .readable           = (phdr.flags & ELF_FLAG_READABLE) != 0,
+                .writeable          = (phdr.flags & ELF_FLAG_WRITABLE) != 0,
+                .user_access        = false,
+                .global             = true,
+                .execution_disabled = (phdr.flags & ELF_FLAG_EXECUTABLE) == 0,
+                .extra              = PAGING_FLAG_STRUCT_PAGE,
+            };
 
-    result                = map_pages(kernel_pt_top, data_phys, (void *)data_virt, data_size, args);
-    if (result)
-        panic("Couldn't map kernel data\n");
+            constexpr ulong PAGE_MASK = PAGE_SIZE - 1;
 
-    const ulong eh_frame_start  = (ulong)(&__eh_frame_start) & ~0xfff;
-    // Same as with data; merge eh_frame and gcc_except_table
-    const ulong eh_frame_end    = ((ulong)&_gcc_except_table_end + 0xfff) & ~0xfff;
-    const ulong eh_frame_size   = eh_frame_end - eh_frame_start;
-    const ulong eh_frame_offset = eh_frame_start - kernel_start_virt;
-    const phys_addr_t eh_frame_phys   = kernel_phys + eh_frame_offset;
-    const ulong eh_frame_virt   = kernel_start_virt + eh_frame_offset;
-    args                      = {true, false, false, true, true, PAGING_FLAG_STRUCT_PAGE};
-    result = map_pages(kernel_pt_top, eh_frame_phys, (void *)eh_frame_virt, eh_frame_size, args);
-    if (result)
-        panic("Couldn't map kernel eh_frame\n");
+            size_t offset = phdr.p_vaddr & PAGE_MASK;
+            void *virt_addr = (void *)(phdr.p_vaddr - offset);
+            phys_addr_t phys_addr = kernel_phys + ((ulong)virt_addr - (ulong)&_kernel_start);
+            size_t map_size = phdr.p_memsz + offset;
+            map_size = (map_size + PAGE_MASK) & ~PAGE_MASK;
+
+            auto result = map_pages(kernel_pt_top, phys_addr, virt_addr, map_size, args);
+            if (result)
+                panic("Couldn't map kernel segment\n");
+        }
+    } else {
+        panic("Invalid ELF header bitness");
+    }
 }
 
 #ifdef __i386__
