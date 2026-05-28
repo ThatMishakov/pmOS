@@ -29,8 +29,7 @@ extern u8 _kernel_end;
 extern u32 multiboot_cpu_features;
 extern u32 multiboot_kernel_phys_offset;
 
-extern u32 multiboot_temp_area;
-extern u32 multiboot_temp_area_size;
+extern const u32 TEMP_AREA_SIZE;
 extern u32 multiboot_temp_area_allocated;
 
 extern u32 multiboot_kernel_base;
@@ -158,8 +157,7 @@ static void init_memory(multiboot_info *info)
 
     global_temp_mapper = &multiboot_temp_mapper;
 
-    temp_alloc_base = multiboot_temp_area + multiboot_temp_area_allocated;
-    temp_alloc_size = multiboot_temp_area_size - multiboot_temp_area_allocated;
+    hcf();
 
     #ifdef __i386__
     if (use_pae) {

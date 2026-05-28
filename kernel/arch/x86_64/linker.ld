@@ -6,7 +6,6 @@ PHDRS
     text PT_LOAD FILEHDR PHDRS FLAGS((1 << 0) | (1 << 2)) ;
     rodata PT_LOAD FLAGS((1 << 2)) ;
     data PT_LOAD FLAGS((1 << 1) | (1 << 2));
-    eh_frame PT_LOAD FLAGS((1 << 2));
     dynamic PT_DYNAMIC FLAGS((1 << 1) | (1 << 2));
 }
 
@@ -23,10 +22,8 @@ SECTIONS
 
     /* Then let's place all the other traditional executable sections afterwards. */
     .text : AT (ADDR (.text) - kernel_offset + KERNEL_PHYS_BASE) {
-        _text_start = .;
         *(.multiboot2)
         *(.text .text.*)
-        _text_end = .;
     } :text
 
     . += CONSTANT(MAXPAGESIZE);
@@ -50,15 +47,34 @@ SECTIONS
         KEEP(*(.fini_array))
         _fini_array_end = .;
     } :rodata
-    _rodata_end = .;
+
+    .eh_frame : AT (ADDR (.eh_frame) - kernel_offset + KERNEL_PHYS_BASE)
+    {
+        __eh_frame_start = .;
+        KEEP(*(.eh_frame))
+        __eh_frame_end = .;
+    } :rodata
+
+   .eh_frame_hdr : AT (ADDR (.eh_frame_hdr) - kernel_offset + KERNEL_PHYS_BASE)
+    {
+        KEEP(*(.eh_frame_hdr))
+    
+        __eh_frame_hdr_start = SIZEOF(.eh_frame_hdr) > 0 ? ADDR(.eh_frame_hdr) : 0;
+        __eh_frame_hdr_end = SIZEOF(.eh_frame_hdr) > 0 ? . : 0;
+    } :rodata
+
+    .gcc_except_table : AT (ADDR (.gcc_except_table) - kernel_offset + KERNEL_PHYS_BASE)
+    {
+        _gcc_except_table_start = .;
+        *(.gcc_except_table .gcc_except_table.*)
+        _gcc_except_table_end = .;
+    } :rodata
 
     . += CONSTANT(MAXPAGESIZE);
 
     .data : AT (ADDR (.data) - kernel_offset + KERNEL_PHYS_BASE) {
-        _data_start = .;
         *(.data .data.*)
         *(.sdata .sdata.*)
-        _data_end = .;
     } :data
 
     /* Dynamic section for relocations, both in its own PHDR and inside data PHDR */
@@ -67,36 +83,17 @@ SECTIONS
     } :data :dynamic
  
     .bss : AT (ADDR (.bss) - kernel_offset + KERNEL_PHYS_BASE) {
-        _bss_start = .;
         *(.bss .bss.*)
         *(.sbss .sbss.*)
         *(COMMON)
-        _bss_end = .;
+        . = ALIGN(4096);
+        _reclaimable_start = .;
+        *(.reclaimable .reclaimable.*)
+        _reclaimable_end = .;
     } :data
 
     . += CONSTANT(MAXPAGESIZE);
 
-    .eh_frame : AT (ADDR (.eh_frame) - kernel_offset + KERNEL_PHYS_BASE)
-    {
-        __eh_frame_start = .;
-        KEEP(*(.eh_frame))
-        __eh_frame_end = .;
-    } :eh_frame
-
-   .eh_frame_hdr : AT (ADDR (.eh_frame_hdr) - kernel_offset + KERNEL_PHYS_BASE)
-    {
-        KEEP(*(.eh_frame_hdr))
-    
-        __eh_frame_hdr_start = SIZEOF(.eh_frame_hdr) > 0 ? ADDR(.eh_frame_hdr) : 0;
-        __eh_frame_hdr_end = SIZEOF(.eh_frame_hdr) > 0 ? . : 0;
-    } :eh_frame
-
-    .gcc_except_table : AT (ADDR (.gcc_except_table) - kernel_offset + KERNEL_PHYS_BASE)
-    {
-        _gcc_except_table_start = .;
-        *(.gcc_except_table .gcc_except_table.*)
-        _gcc_except_table_end = .;
-    } :eh_frame
     _kernel_end = .;
     kernel_end_aligned = ALIGN(4096);
     kernel_size = kernel_end_aligned - _kernel_start;

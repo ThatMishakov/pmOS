@@ -9,6 +9,8 @@
 
 .equ COM_PORT, 0x3f8
 
+.equ TEMP_AREA_SIZE, 0x300000
+
 .extern kernel_size
 .set KERNEL_SIZE, kernel_size
 
@@ -47,18 +49,6 @@ rela_anchor:
     call multiboot_print_text
     addl $16, %esp
 
-
-    subl $8, %esp
-    pushl $MULTIBOOT_TAG_TYPE_MMAP
-    pushl %esi
-    call get_multiboot_tag
-    addl $16, %esp
-
-    subl $12, %esp
-    pushl %eax
-    call print_memory_map
-    addl $16, %esp
-
     // Set kernel phys base
     subl $8, %esp
     pushl $MULTIBOOT_TAG_TYPE_LOAD_BASE_ADDR
@@ -73,31 +63,6 @@ rela_anchor:
     subl $KERNEL_PHYS_BASE, %edx
     movl %edx, (multiboot_kernel_phys_offset - rela_anchor)(%ebx)
 1:
-
-    subl $12, %esp
-    pushl %esi
-    call find_largest_available_region
-    addl $16, %esp
-
-    subl $12, %esp
-    leal (temp_area_text_1 - rela_anchor)(%ebx), %eax
-    pushl %eax
-    call multiboot_print_text
-    addl $4, %esp
-    pushl (multiboot_temp_area - rela_anchor)(%ebx)
-    call print_hex32
-    addl $4, %esp
-    leal (temp_area_text_2 - rela_anchor)(%ebx), %eax
-    pushl %eax
-    call multiboot_print_text
-    addl $4, %esp
-    pushl (multiboot_temp_area_size - rela_anchor)(%ebx)
-    call print_hex32
-    addl $4, %esp
-    leal (line_end_text - rela_anchor)(%ebx), %eax
-    pushl %eax
-    call multiboot_print_text
-    addl $16, %esp
 
     call multiboot_map_kernel
 
@@ -270,347 +235,7 @@ print_hex64:
     popl %ebp
     ret
 
-    .type print_memory_map, @function
-print_memory_map:
-    pushl %ebp
-    movl %esp, %ebp
-    pushl %esi
-    pushl %edi
 
-    subl $12, %esp
-    leal (memory_map_text - rela_anchor)(%ebx), %eax
-    pushl %eax
-    call multiboot_print_text
-
-    movl 8(%ebp), %eax // Memory map
-    leal 16(%eax), %esi // Current entry
-    movl 4(%eax), %edi // Size
-    addl %eax, %edi // End of entries
-
-1:
-    cmpl %edi, %esi
-    jae 1f
-
-    leal (memory_map_entry_text - rela_anchor)(%ebx), %eax
-    pushl %eax 
-    call multiboot_print_text
-
-    subl $4, %esp
-    movl (%esi), %eax
-    movl 4(%esi), %edx
-    pushl %edx
-    pushl %eax
-    call print_hex64
-    addl $4, %esp
-
-    leal (memory_map_entry_text2 - rela_anchor)(%ebx), %eax
-    pushl %eax
-    call multiboot_print_text
-    addl $4, %esp
-
-    subl $4, %esp
-    movl 8(%esi), %eax
-    movl 12(%esi), %edx
-    pushl %edx
-    pushl %eax
-    call print_hex64
-    addl $4, %esp
-
-    leal (memory_map_entry_text3 - rela_anchor)(%ebx), %eax
-    pushl %eax
-    call multiboot_print_text
-    addl $4, %esp
-
-    subl $4, %esp
-    pushl $0
-    movl 16(%esi), %eax
-    pushl %eax
-    call print_hex64
-    addl $4, %esp
-
-    leal (memory_map_entry_text4 - rela_anchor)(%ebx), %eax
-    pushl %eax
-    call multiboot_print_text
-    addl $4, %esp
-
-    movl 8(%ebp), %eax
-    movl 8(%eax), %eax
-    addl %eax, %esi
-    jmp 1b
-
-1:
-    movl -8(%ebp), %edi
-    movl  -4(%ebp), %esi
-    movl %ebp, %esp
-    popl %ebp
-    retl
-
-    // Params:
-    // uint32_t multiboot_info_addr
-    .type find_largest_available_region, @function
-find_largest_available_region:
-    pushl %ebp
-    movl %esp, %ebp
-    subl $24, %esp
-    movl %esi, -4(%ebp)
-    movl %edi, -8(%ebp)
-
-    // Find the memory map tag
-    subl $8, %esp
-    movl 8(%ebp), %eax
-    pushl $MULTIBOOT_TAG_TYPE_MMAP
-    pushl %eax
-    call get_multiboot_tag
-    addl $16, %esp
-
-    movl %eax, -12(%ebp) // Memory map tag in -12(%ebp)
-    movl 4(%eax), %edi // Size of memory map
-    addl %eax, %edi 
-    movl %edi, -16(%ebp) // End of memory map entries in -16(%ebp)
-    leal 16(%eax), %esi // Current entry
-
-    // Here, %esi stores the current offset in the memory map.
-    // %edi is free as a scratch register
-
-    // while (entry < end)
-2:
-    cmpl -16(%ebp), %esi
-    jae 1f
-
-    movl 16(%esi), %eax // Type
-    cmpl $1, %eax // MULTIBOOT_MEMORY_AVAILABLE
-    jne 3f
-
-    cmpl $0, 4(%esi) // base_addr high
-    jne 3f // Above 4GB (not usable in protected mode without paging so can't be used)
-
-    cmpl $0, 12(%esi) // Check if the entry size is above 4GB (which would always overflow the entry)
-    je 5f
-
-    movl (%esi), %ecx // Base addr low
-    movl %ecx, %edx
-    neg %edx // size = -base_addr
-    jmp 4f
-
-5: // Size less than 4GB
-   // Check if base + size is above 4GB, reduce size to fit if it is
-   movl (%esi), %ecx // Base addr low
-   movl 8(%esi), %edx // Size low
-
-   // Check if base + size is above 4GB
-   movl %ecx, %edi
-   addl %edx, %edi
-   jnc 4f // Not above 4GB
-
-   // Above 4GB, reduce size
-   movl %ecx, %edx
-   neg %edx
-
-4: // base + size below 4GB. Base in %ecx, size in %edx
-
-    // Multiboot2 doesn't guarantee the alignment of the entries...
-    movl %ecx, %eax
-    andl $0xfff, %eax
-    jz 6f
-
-    negl %eax
-    addl $4096, %eax
-    cmpl %eax, %edx
-    jb 3f // Size smaller than the rounded up value
-
-    addl %eax, %ecx // Align base up to PAGE_SIZE
-    subl %eax, %edx
-
-6: // Base is aligned here
-    andl $0xfffff000, %edx // Align size down to PAGE_SIZE
-
-    subl $4, %esp // Alignment
-    pushl %edx // region_size
-    pushl %ecx // region_base
-    pushl 8(%ebp) // multiboot_info_addr
-
-    call check_memory_region
-    addl $16, %esp
-
-3:
-    movl -12(%ebp), %eax // Memory map tag
-    movl 8(%eax), %eax // Entry size
-    addl %eax, %esi // Next entry
-
-    jmp 2b
-1:
-
-    movl -8(%ebp), %edi
-    movl -4(%ebp), %esi
-    movl %ebp, %esp
-    popl %ebp
-    ret
-
-    // void check_memory_region(void *multiboot_info_addr, uint32_t region_base, uint32_t region_size)
-    .type check_memory_region, @function
-check_memory_region:
-    pushl %ebp
-    movl %esp, %ebp
-    subl $8, %esp
-    movl %esi, -4(%ebp)
-    movl %edi, -8(%ebp)
-
-    // Multiboot2 info
-    movl 8(%ebp), %ecx
-    movl (%ecx), %edx // Size
-    movl %ecx, %eax
-    andl $0xfff, %eax
-    subl %eax, %ecx // Align begining of multiboot info down to PAGE_SIZE
-    addl %eax, %edx
-    addl $0xfff, %edx
-    andl $0xfffff000, %edx // Align size up to PAGE_SIZE
-
-    subl $4, %esp
-    pushl %edx // reserved_size
-    pushl %ecx // reserved_base
-    leal 12(%ebp), %eax
-    pushl %eax // arg
-    call adjust_region
-    addl $16, %esp
-
-    // Kernel base
-    subl $4, %esp
-    pushl $KERNEL_SIZE
-    pushl (multiboot_kernel_base - rela_anchor)(%ebx)
-    leal 12(%ebp), %eax
-    pushl %eax
-    call adjust_region
-    addl $16, %esp
-
-    // Modules...
-    movl 8(%ebp), %esi
-    movl (%esi), %edi // Size of the multiboot info
-    addl %esi, %edi // End of multiboot info
-    leal 8(%esi), %esi // Current tag
-1: // while (%esi < %edi)
-    cmpl %edi, %esi
-    jae 2f
-
-    movl (%esi), %eax
-    cmpl $MULTIBOOT_TAG_TYPE_MODULE, %eax
-    jne 3f
-
-    subl $4, %esp
-    movl 12(%esi), %eax
-    // Align the end to PAGE_SIZE
-    addl $4095, %eax
-    andl $-4096, %eax
-    subl 8(%esi), %eax // Subtract the base address to get the size
-    pushl %eax // region_size
-    // The start of the module should be aligned to PAGE_SIZE
-    pushl 8(%esi) // region_base
-    leal 12(%ebp), %eax
-    pushl %eax // arg
-    call adjust_region
-    addl $16, %esp
-
-3:  // %esi += size of the tag + alignment
-    movl 4(%esi), %eax
-    addl $7, %eax
-    andl $-8, %eax
-    addl %eax, %esi
-    jmp 1b
-2: // End of loop
-
-    movl 16(%ebp), %eax
-    cmpl (multiboot_temp_area_size - rela_anchor)(%ebx), %eax
-    jbe 4f
-
-    movl 12(%ebp), %edx
-    movl %edx, (multiboot_temp_area - rela_anchor)(%ebx)
-    movl %eax, (multiboot_temp_area_size - rela_anchor)(%ebx)
-
-4:
-
-    movl -4(%ebp), %esi
-    movl -8(%ebp), %edi
-    movl %ebp, %esp
-    popl %ebp
-    ret
-
-    // struct arg {
-    //   uint32_t region_base;
-    //   uint32_t region_size;   
-    // };
-    // void adjust_region(struct arg *arg, uint32_t reserved_base, uint32_t reserved_size)
-    .type adjust_region, @function
-adjust_region:
-    pushl %ebp
-    movl %esp, %ebp
-
-    movl 8(%ebp), %eax // arg
-    cmpl $0, 4(%eax) // Check if region_size is 0
-    je 1f // If it is, skip
-    cmpl $0, 16(%ebp) // Check if reserved_size is 0
-    je 1f // If it is, skip
-
-    movl (%eax), %ecx // %ecx = region_base
-    cmpl %ecx, 12(%ebp) // Compare region_base with reserved_base
-    ja 1f
-
-    // Check if the region overlaps with the reserved area, if it does, move the region base up and reduce the region size
-    subl 12(%ebp), %ecx // %ecx = region_base - reserved_base
-    cmpl 16(%ebp), %ecx // Compare with reserved_size
-    jae adjust_region_end // If reserved_size <= region_base - reserved_base, there is no overlap
-
-    movl 16(%ebp), %edx // %edx = reserved_size
-    subl %ecx, %edx // %edx = reserved_size - (region_base - reserved_base)
-
-    cmpl %edx, 4(%eax) // Compare with region_size
-    jb 2f // Reserved region is larger than the available region
-
-    addl %edx, (%eax) // region_base += %edx
-    subl %edx, 4(%eax) // region_size -= %edx
-    jmp adjust_region_end // Done
-
-2:
-    movl 4(%eax), %edx // %edx = region_size
-    addl %edx, (%eax) // region_base += region_size
-    movl $0, 4(%eax) // region_size = 0
-    jmp adjust_region_end // Done
-
-1: // region_base < reserved_base
-    movl 12(%ebp), %ecx // %ecx = reserved_base
-    subl (%eax), %ecx // %ecx = reserved_base - region_base; in other words, free space before the reserved region
-    cmpl 4(%eax), %ecx // Compare with region size
-    jae adjust_region_end // If reserved_base - region_base >= region_size, there is no overlap
-
-    movl 16(%ebp), %edx // %edx = reserved_size
-    addl %ecx, %edx // %edx = reserved_size + (reserved_base - region_base); in other words,
-                    // offset to the end of the reserved region relative to the region base
-    cmpl %edx, 4(%eax) // Compare with region_size
-    ja 2f // Jump if the the reserved region is in the middle
-
-    movl 12(%ebp), %ecx // %ecx = reserved_base
-    subl (%eax), %ecx // %ecx = reserved_base - region_base
-    movl %ecx, 4(%eax) // region_size = reserved_base - region_base 
-    jmp adjust_region_end // Done
-
-2:
-    // Chose the larger half and use that as the new region
-    subl 4(%eax), %edx // %edx = -(end of reserved area - region_base)
-    negl %edx // %edx = end of reserved area - region_base; free space after the reserved region
-    cmpl %ecx, %edx // src = lower half size, dst = higher half size
-    ja 1f // Jump if lower half is larger
-
-    movl 4(%eax), %ecx // %ecx = region_size
-    subl %edx, %ecx // Size diff
-    addl %ecx, (%eax) // region_base += size diff
-    movl %edx, 4(%eax) // region_size = size of higher half
-    jmp adjust_region_end    
-
-1:
-    movl %ecx, 4(%eax) // region_size = size of lower half
-
-adjust_region_end: // end
-    movl %ebp, %esp
-    popl %ebp
-    ret
 
     .globl clear_page32
     .type clear_page32, @function
@@ -629,33 +254,24 @@ clear_page32:
 multiboot_alloc_page_clear:
     pushl %ebp
     movl %esp, %ebp
-    pushl %esi
-    pushl %edi
 
     call 1f  
 1:
     popl %edx
     movl (multiboot_temp_area_allocated - 1b)(%edx), %eax
-    cmpl (multiboot_temp_area_size - 1b)(%edx), %eax
+    cmpl $TEMP_AREA_SIZE, %eax
     jae 2f
 
     addl $4096, (multiboot_temp_area_allocated - 1b)(%edx)
-    movl (multiboot_temp_area - 1b)(%edx), %edx
-    addl %eax, %edx
-    movl %edx, %edi
-    movl $1024, %ecx
-    xor %eax, %eax
-    rep stosl
+    leal (temp_area - 1b)(%edx), %edx
+    addl %edx, %eax
 
-    movl %edx, %eax
-    popl %edi
-    popl %esi
     movl %ebp, %esp
     popl %ebp
     ret
 
 2: // Not enough memory
-    subl $12, %esp
+    subl $4, %esp
     leal (no_memory_text - 1b)(%edx), %eax
     pushl %eax
     call multiboot_print_text
@@ -667,13 +283,6 @@ multiboot_alloc_page_clear:
 hex_lookup: .string "0123456789abcdef"
 booted_text: .string "pmOS kernel booted by multiboot2!\r\n"
 bad_magic_text: .string "Multiboot2 bad magic, halting.\r\n"
-memory_map_text: .string "Memory map:\r\n"
-memory_map_entry_text: .string "Base: 0x"
-memory_map_entry_text2: .string ", Length: 0x"
-memory_map_entry_text3: .string ", Type: 0x"
-memory_map_entry_text4: .string "\r\n"
-temp_area_text_1: .string "Allocating memory from 0x"
-temp_area_text_2: .string " size 0x"
 no_memory_text: .string "Not enough memory available, halting.\r\n"
     .globl line_end_text
 line_end_text: .string "\r\n"
@@ -683,8 +292,6 @@ line_end_text: .string "\r\n"
 
     .bss
     .align 4
-    .globl multiboot_temp_area
-multiboot_temp_area: .long 0
     .globl multiboot_temp_area_size
 multiboot_temp_area_size: .long 0
     .globl multiboot_temp_area_allocated
@@ -696,6 +303,12 @@ multiboot_kernel_base: .long 0
 multiboot_kernel_phys_offset: .long 0
 
 initialized_serial: .byte 0
+
+// =================================================== .reclaimable =================================================
+    .section .reclaimable.temp_area
+temp_area: // 3MB
+    .align 4096
+    .space TEMP_AREA_SIZE
 
 
 // =================================================== .multiboot2 ===============================================
@@ -733,7 +346,7 @@ relocatable_header_tag_start:
     // Align
     .long 4096
     // Preference
-    .long 0
+    .long 0x100000
 relocatable_header_tag_end:
 
 framebuffer_tag_start:
