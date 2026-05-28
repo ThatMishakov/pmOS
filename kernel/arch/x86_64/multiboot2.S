@@ -339,6 +339,7 @@ multiboot_enter_kernel:
 
     .code64
     movabsq $multiboot_entry, %rax
+    movl %esi, %edi
     jmp *%rax
 
 

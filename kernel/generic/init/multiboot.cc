@@ -69,11 +69,91 @@ static Temp_Mapper *get_temp_temp_mapper(void *virt_addr, ulong kernel_cr3)
 }
 #endif
 
-
 extern void hcf();
+
+static multiboot_tag *find_tag(multiboot_info *info, u32 type)
+{
+    u32 total_size = info->total_size;
+    char *ptr      = (char *)info + sizeof(multiboot_info);
+    while (ptr < (char *)info + total_size) {
+        auto tag = (multiboot_tag *)ptr;
+        if (tag->type == type)
+            return tag;
+
+        ptr += ((tag->size + 7) & ~7); // Tags are aligned on 8 bytes
+    }
+    return nullptr;
+}
+
+// static void multiboot_add_mmap_entry(uint64_t base, uint64_t length, uint32_t type)
+// {
+//     MemoryRegionType region_type;
+//     switch (type) {
+//     case MULTIBOOT_MEMORY_AVAILABLE:
+//         region_type = MemoryRegionType::Usable;
+//         break;
+//     case MULTIBOOT_MEMORY_RESERVED:
+//         region_type = MemoryRegionType::Reserved;
+//         break;
+//     case MULTIBOOT_MEMORY_ACPI_RECLAIMABLE:
+//         region_type = MemoryRegionType::Reclaimable;
+//         break;
+//     case MULTIBOOT_MEMORY_NVS:
+//         region_type = MemoryRegionType::NVS;
+//         break;
+//     case MULTIBOOT_MEMORY_BADRAM:
+//         region_type = MemoryRegionType::BadMemory;
+//         break;
+//     default:
+//         region_type = MemoryRegionType::Unknown;
+//         break;
+//     }
+
+//     const phys_addr_t PAGE_MASK = PAGE_SIZE - 1;
+    
+//     // If usable, align up the base and down the size, otherwise align up the size and down the base
+//     if (region_type == MemoryRegionType::Usable) {
+//         auto offset = base & PAGE_MASK;
+//         base += offset ? PAGE_SIZE - offset : 0;
+//         length = length > offset ? length - offset : 0;
+//         length &= ~PAGE_MASK;
+//     } else {
+//         auto offset = base & PAGE_MASK;
+//         base -= offset;
+//         length += offset;
+//         length += PAGE_MASK;
+//         length &= ~PAGE_MASK;
+//     }
+//     memory_region_add({
+//         .start = base,
+//         .size  = length,
+//         .type  = region_type,
+//     });
+// }
+
+// static void multiboot_reserve_region(uint32_t base, uint32_t length)
+// {
+//     const phys_addr_t PAGE_MASK = PAGE_SIZE - 1;
+//     uint64_t llength = length;
+
+//     auto offset = base & PAGE_MASK;
+//     base -= offset;
+//     llength += offset;
+//     llength += PAGE_MASK;
+//     llength &= ~PAGE_MASK;
+//     memory_region_add({
+//         .start = base,
+//         .size  = llength,
+//         .type  = MemoryRegionType::UsableReservedOnBoot,
+//     });
+// }
 
 static void init_memory(multiboot_info *info)
 {
+    assert(info);
+    u32 multiboot_size = info->total_size;
+    assert(multiboot_size >= sizeof(multiboot_info));
+
     serial_logger.printf("Initializing memory\n");
 
     global_temp_mapper = &multiboot_temp_mapper;
@@ -136,7 +216,49 @@ static void init_memory(multiboot_info *info)
     serial_logger.printf("Paging initialized!\n");
 
     hcf();
+
+    // // Init memory map...
+    // klib::vector<char> multiboot_data;
+    // if (!multiboot_data.resize(multiboot_size))
+    //     panic("Failed to reserve memory for multiboot data copy\n");
+
+    // copy_from_phys((ulong)info, multiboot_data.data(), multiboot_size);
+
+    // auto memory_map = (multiboot_tag_mmap *)find_tag((multiboot_info *)multiboot_data.data(), MULTIBOOT_TAG_TYPE_MMAP);
+    // assert(memory_map);
+
+    // auto mmap_size = memory_map->size;
+    // auto mmap_entry_size = memory_map->entry_size;
+    // auto ptr = (char *)memory_map->entries;
+    // auto end = (char *)memory_map + mmap_size;
+    // while (ptr < end) {
+    //     auto entry = (multiboot_mmap_entry *)ptr;
+    //     multiboot_add_mmap_entry(entry->addr, entry->len, entry->type);
+    //     ptr += mmap_entry_size;
+    // }
+
+    // // Reserve modules, mb2 info, and the kernel...
+    // multiboot_reserve_region((uint32_t)(ulong)info, multiboot_size);
+    // multiboot_reserve_region(multiboot_kernel_base, kernel_size);
+
+    // // Reserve the temp area
+    // multiboot_reserve_region(multiboot_temp_area, multiboot_temp_area_allocated);
+
+    // char *ptr2 = (char *)multiboot_data.data() + sizeof(multiboot_info);
+    // char *end2 = (char *)multiboot_data.data() + multiboot_size;
+    // while (ptr2 < end2) {
+    //     auto tag = (multiboot_tag *)ptr2;
+    //     if (tag->type == MULTIBOOT_TAG_TYPE_MODULE) {
+    //         auto mod = (multiboot_tag_module *)tag;
+    //         multiboot_reserve_region(mod->mod_start, mod->mod_end - mod->mod_start);
+    //     }
+    //     ptr2 += ((tag->size + 7) & ~7);
+    // }
+
+    // init_pmm(idle_cr3);
 }
+
+void init();
 
 extern "C" void multiboot_main(multiboot_info* info) {
     early_detect_cpu_features();
@@ -151,6 +273,9 @@ extern "C" void multiboot_main(multiboot_info* info) {
 
     init_memory(info);
 
+    init();
+
+    serial_logger.printf("hcf\n");
     hcf();
 }
 
