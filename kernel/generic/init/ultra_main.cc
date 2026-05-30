@@ -307,33 +307,6 @@ size_t ultra_context_size(struct ultra_boot_context *ctx)
     return (char *)limit - (char *)ctx;
 }
 
-char *strnchr(const char *s, size_t len, int c)
-{
-    for (size_t i = 0; i < len; ++i) {
-        if (s[i] == c)
-            return (char *)(s + i);
-    }
-
-    return nullptr;
-}
-
-klib::string module_path(const ultra_module_info_attribute *t)
-{
-    auto separator = strnchr(t->name, 64, ';');
-    if (!separator)
-        return klib::string(t->name, 64);
-
-    return klib::string(t->name, separator - t->name);
-}
-klib::string module_cmdline(const ultra_module_info_attribute *t)
-{
-    auto separator = strnchr(t->name, 64, ';');
-    if (!separator)
-        return "";
-
-    return klib::string(separator + 1, 64 - (separator - t->name) - 1);
-}
-
 void init_modules(ultra_boot_context *ctx)
 {
     size_t i                  = 0;
@@ -361,8 +334,8 @@ void init_modules(ultra_boot_context *ctx)
             serial_logger.printf("Ultra module at 0x%lx size %lx, name %s\n", t->address, t->size,
                                  t->name);
 
-            auto path    = module_path(t);
-            auto cmdline = module_cmdline(t);
+            auto path    = module_path(t->name, 64);
+            auto cmdline = module_cmdline(t->name, 64);
 
             if (path == "") {
                 serial_logger.printf("Warning: Empty path for module\n");
@@ -385,7 +358,7 @@ void init_modules(ultra_boot_context *ctx)
             if (!m.object)
                 panic("Failed to create memory object for module\n");
 
-            if (!modules.push_back(m))
+            if (!modules.push_back(std::move(m)))
                 panic("Failed to add module to modules\n");
         }
     }
@@ -610,6 +583,8 @@ void ultra_main(struct ultra_boot_context *ctx, uint32_t magic)
             pmm::free_memory_for_kernel(mattr->entries[i].physical_address, mattr->entries[i].size / PAGE_SIZE);            
         }
     }
+
+    reclaim_kernel_init_memory();
 
     serial_logger.printf("Entering userspace...\n");
 }

@@ -27,8 +27,12 @@ extern u8 _kernel_end;
 using namespace kernel::ia32::paging;
 #endif
 
+static phys_addr_t kernel_phys_base = 0;
+
 void kernel::map_kernel_pages(ptable_top_ptr_t kernel_pt_top, phys_addr_t kernel_phys)
 {
+    kernel_phys_base = kernel_phys;
+
     ELF_Common *ehdr = (ELF_Common *)&__ehdr_start;
 
     assert(ehdr->magic == ELF_MAGIC);
@@ -99,6 +103,28 @@ void kernel::map_kernel_pages(ptable_top_ptr_t kernel_pt_top, phys_addr_t kernel
     } else {
         panic("Invalid ELF header bitness");
     }
+}
+
+extern u8 _reclaimable_start, _reclaimable_end;
+
+namespace kernel {
+    
+void reclaim_kernel_init_memory()
+{
+    if (&_reclaimable_start == &_reclaimable_end)
+        return;
+
+    ulong start = (ulong)&_reclaimable_start;
+    ulong end   = (ulong)&_reclaimable_end;
+    assert(start < end);
+    assert(start % PAGE_SIZE == 0);
+    assert(end % PAGE_SIZE == 0);
+
+    phys_addr_t phys_start = kernel_phys_base + (start - (ulong)&_kernel_start);
+    size_t size = end - start;
+    pmm::free_memory_for_kernel(phys_start, size / PAGE_SIZE);   
+}
+
 }
 
 #ifdef __i386__

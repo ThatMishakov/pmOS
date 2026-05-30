@@ -35,3 +35,11 @@ extern klib::vector<module> modules;
 klib::unique_ptr<load_tag_generic> construct_load_tag_for_modules(kernel::proc::TaskGroup *group);
 
 void early_detect_cpu_features();
+
+void init_scheduling_on_bsp();
+void init_smp();
+
+klib::string module_cmdline(char *name, size_t max_len);
+klib::string module_path(char *name, size_t max_len);
+
+klib::unique_ptr<load_tag_generic> construct_load_tag_rsdp();

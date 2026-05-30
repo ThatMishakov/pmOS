@@ -177,6 +177,7 @@ public:
     /// Returns true if the operation was successful, false if the operation can't be completed
     /// immediately and needs to be repeated Throws on errors
     ReturnStr<bool> read_to_kernel(u64 offset, void *buffer, u64 size);
+    ReturnStr<bool> write_from_kernel(u64 offset, const void *buffer, u64 size);
 
     /// Maps the memory object into the kernel space
     /// Returns the pointer to the mapped memory. If the pointer is null, the operation can't be

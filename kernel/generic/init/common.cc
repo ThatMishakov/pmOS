@@ -115,3 +115,44 @@ klib::unique_ptr<load_tag_generic> construct_load_tag_for_modules(kernel::proc::
 
     return tag;
 }
+
+char *strnchr(const char *s, size_t len, int c)
+{
+    for (size_t i = 0; i < len; ++i) {
+        if (s[i] == c)
+            return (char *)(s + i);
+    }
+
+    return nullptr;
+}
+
+klib::string module_path(char *name, size_t max_len)
+{
+    auto separator = strnchr(name, max_len, ';');
+    if (!separator)
+        return klib::string(name, max_len);
+
+    return klib::string(name, separator - name);
+}
+klib::string module_cmdline(char *name, size_t max_len)
+{
+    auto separator = strnchr(name, max_len, ';');
+    if (!separator)
+        return "";
+
+    return klib::string(separator + 1, max_len - (separator - name) - 1);
+}
+
+klib::unique_ptr<load_tag_generic> construct_load_tag_rsdp()
+{
+    if (rsdp == RSDP_INITIALIZER)
+        return {};
+
+    klib::unique_ptr<load_tag_generic> tag = (load_tag_generic *)new load_tag_rsdp;
+
+    auto *t   = (load_tag_rsdp *)tag.get();
+    t->header = LOAD_TAG_RSDP_HEADER;
+    t->rsdp   = rsdp;
+
+    return tag;
+}

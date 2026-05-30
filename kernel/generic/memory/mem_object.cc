@@ -388,6 +388,37 @@ ReturnStr<bool> Mem_Object::read_to_kernel(u64 offset, void *buffer, u64 size)
     return true;
 }
 
+ReturnStr<bool> Mem_Object::write_from_kernel(u64 offset, const void *buffer, u64 size)
+{
+    if (size == 0)
+        return true;
+
+    Auto_Lock_Scope l(lock);
+
+    assert(!(flags & FLAG_ANONYMOUS));
+
+    Temp_Mapper_Obj<char> mapper(request_temp_mapper());
+    for (u64 i = offset & ~0xfffUL; i < offset + size; i += 0x1000) {
+        const auto page = request_page(i, true, false);
+        if (!page.success())
+            return page.propagate();
+
+        auto page_struct = page.val.page_struct_ptr;
+
+        if (!page_struct)
+            return false;
+
+        char *ptr = mapper.map(page_struct->get_phys_addr());
+
+        const u64 start = i < offset ? offset : i;
+        const u64 end   = i + 0x1000 < offset + size ? i + 0x1000 : offset + size;
+        const u64 len   = end - start;
+        memcpy(ptr + (start & 0xfff), reinterpret_cast<const char *>(buffer) + start - offset, len);
+    }
+
+    return true;
+}
+
 ReturnStr<void *> Mem_Object::map_to_kernel(u64 offset, u64 size, Page_Table_Arguments args)
 {
     // Lock might be needed here?

@@ -9,6 +9,7 @@
 #include <memory/paging.hh>
 #include <memory/mem_object.hh>
 #include "kernel_pages.hh"
+#include <processes/tasks.hh>
 
 
 using namespace kernel;
@@ -16,6 +17,7 @@ using namespace kernel::pmm;
 using namespace kernel::log;
 using namespace kernel::paging;
 using namespace kernel::x86::paging;
+using namespace kernel::proc;
 
 #ifdef __i386__
 using namespace kernel::ia32::paging;
@@ -35,6 +37,12 @@ extern u32 multiboot_kernel_base;
 
 constexpr u32 NX_MASK = 1 << 0;
 constexpr u32 PAGING_5LVL_MASK = 1 << 1;
+
+auto align_up_to_page(auto addr)
+{
+    typeof(addr) page_mask = PAGE_SIZE - 1;
+    return (addr + page_mask) & ~page_mask;
+}
 
 struct multiboot_info {
     u32 total_size;
@@ -529,6 +537,139 @@ static void init_memory(multiboot_info *info)
     init_pmm(idle_cr3);
 }
 
+void init_modules(multiboot_info *info)
+{
+    char *ptr = (char *)info + sizeof(multiboot_info);
+    char *end = (char *)info + info->total_size;
+    while (ptr < end) {
+        auto tag = (multiboot_tag *)ptr;
+        ptr += ((tag->size + 7) & ~7);
+
+        if (tag->type == MULTIBOOT_TAG_TYPE_MODULE) {
+            auto mod = (multiboot_tag_module *)tag;
+            
+            serial_logger.printf("Module at 0x%lx size %lx, name %s\n", mod->mod_start, mod->mod_end - mod->mod_start,
+                                 mod->cmdline);
+
+            size_t name_len = mod->size - sizeof(multiboot_tag_module);
+
+            auto path = module_path(mod->cmdline, name_len);
+            auto cmdline = module_cmdline(mod->cmdline, name_len);
+
+            if (path == "") {
+                serial_logger.printf("Warning: Empty path for module\n");
+                continue;
+            }
+
+            if (cmdline == "") {
+                serial_logger.printf("Warning: Empty cmdline for module\n");
+            }
+
+            module m = {
+                .path = std::move(path),
+                .cmdline = std::move(cmdline),
+                .phys_addr = mod->mod_start,
+                .size = mod->mod_end - mod->mod_start,
+                .object = Mem_Object::create_from_phys(mod->mod_start, align_up_to_page(mod->mod_end - mod->mod_start), true),
+            };
+
+            if (!m.object)
+                panic("Failed to create memory object for module");
+            if (!modules.push_back(std::move(m)))
+                panic("Failed to add module to modules vector");
+        }
+    }
+}
+
+klib::shared_ptr<paging::Mem_Object> rsdp_object;
+void init_acpi(multiboot_info *info)
+{
+    auto tag = find_tag(info, MULTIBOOT_TAG_TYPE_ACPI_OLD);
+    if (!tag)
+        tag = find_tag(info, MULTIBOOT_TAG_TYPE_ACPI_NEW);
+    if (!tag) {
+        serial_logger.printf("No ACPI RSDP found in multiboot info\n");
+        return;
+    }
+
+    size_t rsdp_size = tag->size - sizeof(multiboot_tag);
+    auto size_pages = align_up_to_page(rsdp_size);
+
+    assert(size_pages/ PAGE_SIZE == 1);
+
+    rsdp_object = Mem_Object::create(12, size_pages);
+    if (!rsdp_object)
+        panic("Failed to create memory object for RSDP\n");
+
+    auto r = rsdp_object->write_from_kernel(0, (void *)(tag + 1), rsdp_size);
+    if (!r.success() || !r.val)
+        panic("Failed to write RSDP to memory object\n");
+
+    auto page = rsdp_object->atomic_request_page(0, false);
+    if (!page.success() || !page.val)
+        panic("Failed to request page for RSDP\n");
+
+    init_acpi(page.val.get_phys_addr());
+}
+
+void init_task1(multiboot_info* info)
+{
+    // Find task 1 module.
+    // For now, just search for "bootstrap"
+    module *task1                = nullptr;
+    const klib::string bootstrap = "bootstrap";
+    for (auto &m: modules) {
+        serial_logger.printf("Module %s\n", m.cmdline.c_str());
+        if (m.cmdline == bootstrap) {
+            task1 = &m;
+            break;
+        }
+    }
+
+    if (task1 == nullptr) {
+        serial_logger.printf("Task 1 not found\n");
+        hcf();
+    }
+
+    serial_logger.printf("Task 1 found: %s\n", task1->path.c_str());
+
+    // Create new task and load ELF into it
+    auto task = TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel::User);
+    if (!task)
+        panic("Failed to create task");
+    task->name = "bootstrap";
+    serial_logger.printf("Loading ELF...\n");
+
+    auto group = proc::TaskGroup::create_for_task(task);
+    if (!group)
+        panic("Failed to create task group for task 1");
+
+    auto object = ipc::MemObjectRight::create_for_group(task1->object, group.val, ipc::MemObjectRight::PERM_READ);
+    if (!object)
+        panic("Failed to create memory object right for task 1");
+
+    // Pass the modules to the task
+    klib::vector<klib::unique_ptr<load_tag_generic>> tags;
+    // tags = construct_load_tag_framebuffer();
+
+    auto t = construct_load_tag_rsdp();
+    if (t && !tags.push_back(klib::move(t)))
+        panic("Failed to add RSDP tag");
+
+    t = construct_load_tag_for_modules(group.val);
+    if (t && !tags.push_back(klib::move(t)))
+        panic("Failed to add modules tag");
+
+    auto p = task->atomic_load_elf(object.val, task1->path, tags, group.val);
+    if (!p.success() || !p.val)
+        panic("Failed to load task 1: %i", p.result);
+}
+
+namespace kernel::paging
+{
+extern klib::shared_ptr<Arch_Page_Table> idle_page_table;
+}
+
 void init();
 
 extern "C" void multiboot_main(multiboot_info* info) {
@@ -542,12 +683,42 @@ extern "C" void multiboot_main(multiboot_info* info) {
     kernel::x86_64::paging::use_5lvl_paging = (multiboot_cpu_features & PAGING_5LVL_MASK) != 0;
     #endif
 
+    size_t multiboot_size = info->total_size;
+
     init_memory(info);
 
     init();
 
-    serial_logger.printf("hcf\n");
-    hcf();
+    klib::vector<u8> multiboot_data;
+    if (!multiboot_data.reserve(multiboot_size))
+        panic("Failed to reserve memory for multiboot info copy");
+    copy_from_phys((u64)info, multiboot_data.data(), multiboot_size);
+
+    init_acpi((multiboot_info *)multiboot_data.data());
+
+    idle_page_table = Arch_Page_Table::create_empty();
+    if (!idle_page_table)
+        panic("Could not create idle page table");
+
+    init_scheduling_on_bsp();
+
+    // Switch to CPU-local temp mapper
+    global_temp_mapper = nullptr;
+
+    init_modules((multiboot_info *)multiboot_data.data());
+    init_task1((multiboot_info *)multiboot_data.data());
+    serial_logger.printf("Loaded kernel...\n");
+
+    // Reclaim multiboot info
+    u32 start = (u32)(ulong)info;
+    u32 offset = start & 0xFFF;
+    start -= offset;
+    u32 size = align_up_to_page(multiboot_size + offset);
+    pmm::free_memory_for_kernel(start, size/PAGE_SIZE);
+
+    reclaim_kernel_init_memory();
+
+    serial_logger.printf("Bootstrap CPU entering userspace\n");
 }
 
 #endif

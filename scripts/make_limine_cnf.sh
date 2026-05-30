@@ -31,6 +31,30 @@ write_bootstrap_entry() {
 EOF
 }
 
+write_bootstrap_entry_multiboot() {
+    FILE="$1"
+
+    cat <<EOF >> "$FILE"
+    module_path: boot():/bootstrapd
+    module_string: bootstrapd;bootstrap
+
+EOF
+}
+
+write_service_entry_multiboot() {
+    FILE="$1"
+    NAME="$2"
+    cat <<EOF >> "$FILE"
+    module_path: boot():/${NAME}.elf
+    module_string: /${NAME}.elf;file
+
+    module_path: boot():/${NAME}.yaml
+    module_string: /${NAME}.yaml;init-config
+
+EOF
+}
+
+
 if [ "$#" -ne 2 ]; then
     echo "Usage: $0 <output_file> <services>"
     exit 1
@@ -81,7 +105,7 @@ cat <<EOF >> "$FILE"
 EOF
 
 write_kernel_entry "$FILE"
-write_bootstrap_entry "$FILE"
+write_bootstrap_entry_multiboot "$FILE"
 for SERVICE in $SERVICES; do
-    write_service_entry "$FILE" "$SERVICE"
+    write_service_entry_multiboot "$FILE" "$SERVICE"
 done

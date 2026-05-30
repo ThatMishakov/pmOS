@@ -294,12 +294,12 @@ void construct_paging()
         switch (region.type) {
         case LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE:
         case LIMINE_MEMMAP_EXECUTABLE_AND_MODULES:
-        case LIMINE_MEMMAP_RESERVED_MAPPED:
             type = MemoryRegionType::UsableReservedOnBoot;
             break;
         case LIMINE_MEMMAP_USABLE:
             type = MemoryRegionType::Usable;
             break;
+        case LIMINE_MEMMAP_RESERVED_MAPPED:
         case LIMINE_MEMMAP_RESERVED:
             type = MemoryRegionType::Reserved;
             break;
@@ -431,20 +431,6 @@ klib::vector<klib::unique_ptr<load_tag_generic>> construct_load_tag_framebuffer(
     }
 
     return tags;
-}
-
-klib::unique_ptr<load_tag_generic> construct_load_tag_rsdp()
-{
-    if (rsdp == RSDP_INITIALIZER)
-        return {};
-
-    klib::unique_ptr<load_tag_generic> tag = (load_tag_generic *)new load_tag_rsdp;
-
-    auto *t   = (load_tag_rsdp *)tag.get();
-    t->header = LOAD_TAG_RSDP_HEADER;
-    t->rsdp   = rsdp;
-
-    return tag;
 }
 
 klib::unique_ptr<load_tag_generic> construct_load_tag_fdt()
@@ -674,6 +660,8 @@ void limine_main()
     }
 
     delete limine_memory_regions;
+
+    reclaim_kernel_init_memory();
 
     bool tmp = true;
     __atomic_store(&boot_barrier_start, &tmp, __ATOMIC_RELEASE);
