@@ -612,6 +612,51 @@ void init_acpi(multiboot_info *info)
     init_acpi(page.val.get_phys_addr());
 }
 
+klib::vector<klib::unique_ptr<load_tag_generic>>
+    construct_load_tag_framebuffer(multiboot_info *info)
+{
+    klib::vector<klib::unique_ptr<load_tag_generic>> tags {};
+
+    auto fb_tag = (multiboot_tag_framebuffer *)find_tag(info, MULTIBOOT_TAG_TYPE_FRAMEBUFFER);
+    if (!fb_tag) {
+        serial_logger.printf("No framebuffer found\n");
+        return tags;
+    }
+
+    if (fb_tag->common.framebuffer_type != MULTIBOOT_FRAMEBUFFER_TYPE_RGB) {
+        serial_logger.printf("Unsupported framebuffer type: %i\n", fb_tag->common.framebuffer_type);
+        return tags;
+    }
+
+    klib::unique_ptr<load_tag_generic> tag = (load_tag_generic *)new load_tag_framebuffer;
+    if (!tag)
+        panic("Failed to allocate memory for framebuffer tag");
+
+    tag->tag = LOAD_TAG_FRAMEBUFFER;
+    tag->flags = 0;
+    tag->offset_to_next = sizeof(load_tag_framebuffer);
+
+    load_tag_framebuffer *desc = (load_tag_framebuffer *)tag.get();
+    desc->framebuffer_addr     = fb_tag->common.framebuffer_addr;
+    desc->framebuffer_pitch    = fb_tag->common.framebuffer_pitch;
+    desc->framebuffer_width    = fb_tag->common.framebuffer_width;
+    desc->framebuffer_height   = fb_tag->common.framebuffer_height;
+    desc->framebuffer_bpp      = fb_tag->common.framebuffer_bpp;
+    desc->memory_model         = fb_tag->common.framebuffer_type;
+    desc->red_mask_size        = fb_tag->framebuffer_red_mask_size;
+    desc->red_mask_shift       = fb_tag->framebuffer_red_field_position;
+    desc->green_mask_size      = fb_tag->framebuffer_green_mask_size;
+    desc->green_mask_shift     = fb_tag->framebuffer_green_field_position;
+    desc->blue_mask_size       = fb_tag->framebuffer_blue_mask_size;
+    desc->blue_mask_shift      = fb_tag->framebuffer_blue_field_position;
+    desc->unused[0]            = 0;
+
+    if (!tags.push_back(klib::move(tag)))
+        panic("Failed to add framebuffer tag to tags vector");
+
+    return tags;
+}
+
 void init_task1(multiboot_info* info)
 {
     // Find task 1 module.
@@ -650,7 +695,7 @@ void init_task1(multiboot_info* info)
 
     // Pass the modules to the task
     klib::vector<klib::unique_ptr<load_tag_generic>> tags;
-    // tags = construct_load_tag_framebuffer();
+    tags = construct_load_tag_framebuffer(info);
 
     auto t = construct_load_tag_rsdp();
     if (t && !tags.push_back(klib::move(t)))
