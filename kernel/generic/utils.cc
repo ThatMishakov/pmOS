@@ -314,6 +314,26 @@ void *memcpy(void *__restrict d, const void *__restrict s, size_t n)
     return k;
 }
 
+void *memmove(void *dest, const void *src, size_t n)
+{
+    char *d = (char *)dest;
+    const char *s = (const char *)src;
+
+    if (d < s) {
+        while (n--) {
+            *d++ = *s++;
+        }
+    } else {
+        d += n;
+        s += n;
+        while (n--) {
+            *--d = *--s;
+        }
+    }
+
+    return dest;
+}
+
 extern "C" int memcmp(const void *s1, const void *s2, size_t n)
 {
     const char *c1 = (const char *)s1;

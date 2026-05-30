@@ -165,11 +165,6 @@ namespace kernel::riscv64::paging
 extern ulong idle_pt;
 }
     #endif
-
-extern phys_addr_t temp_alloc_base;
-extern phys_addr_t temp_alloc_size;
-extern phys_addr_t temp_alloc_reserved;
-extern long temp_alloc_entry_id;
     
 void construct_paging()
 {
@@ -618,7 +613,7 @@ void limine_main()
 
     early_detect_cpu_features();
 
-    serial_logger.printf("Hello from pmOS kernel!\n");
+    serial_logger.printf("Hello from pmOS kernel! Booted by limine protocol...\n");
     serial_logger.printf("Kernel start: 0x%lh\n", &_kernel_start);
 
     #ifdef __riscv

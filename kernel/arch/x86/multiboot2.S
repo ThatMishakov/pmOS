@@ -11,6 +11,7 @@
 
 .equ COM_PORT, 0x3f8
 
+    .globl TEMP_AREA_SIZE
 .equ TEMP_AREA_SIZE, 0x300000
 
 .extern kernel_size
@@ -265,7 +266,7 @@ multiboot_alloc_page_clear:
     jae 2f
 
     addl $4096, (multiboot_temp_area_allocated - 1b)(%edx)
-    leal (temp_area - 1b)(%edx), %edx
+    leal (multiboot_temp_area - 1b)(%edx), %edx
     addl %edx, %eax
 
     movl %ebp, %esp
@@ -301,8 +302,6 @@ multiboot_kernel_base: .long KERNEL_PHYS_BASE
 
     .bss
     .align 4
-    .globl multiboot_temp_area_size
-multiboot_temp_area_size: .long 0
     .globl multiboot_temp_area_allocated
 multiboot_temp_area_allocated: .long 0
 
@@ -313,7 +312,8 @@ initialized_serial: .byte 0
 
 // =================================================== .reclaimable =================================================
     .section .reclaimable.temp_area
-temp_area: // 3MB
+    .globl multiboot_temp_area
+multiboot_temp_area: // 3MB
     .align 4096
     .space TEMP_AREA_SIZE
 

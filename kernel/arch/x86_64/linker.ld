@@ -90,9 +90,8 @@ SECTIONS
         _reclaimable_start = .;
         *(.reclaimable .reclaimable.*)
         _reclaimable_end = .;
+        . = ALIGN(4096);
     } :data
-
-    . += CONSTANT(MAXPAGESIZE);
 
     _kernel_end = .;
     kernel_end_aligned = ALIGN(4096);

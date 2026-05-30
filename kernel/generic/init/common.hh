@@ -13,6 +13,8 @@ extern phys_addr_t rsdp;
 
 extern phys_addr_t temp_alloc_base;
 extern phys_addr_t temp_alloc_size;
+extern phys_addr_t temp_alloc_reserved;
+extern long temp_alloc_entry_id;
 
 extern kernel::pmm::Page::page_addr_t alloc_pages_from_temp_pool(size_t pages);
 

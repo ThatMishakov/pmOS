@@ -29,7 +29,6 @@ extern u8 _kernel_end;
 extern u32 multiboot_cpu_features;
 extern u32 multiboot_kernel_phys_offset;
 
-extern const u32 TEMP_AREA_SIZE;
 extern u32 multiboot_temp_area_allocated;
 
 extern u32 multiboot_kernel_base;
@@ -84,68 +83,338 @@ static multiboot_tag *find_tag(multiboot_info *info, u32 type)
     return nullptr;
 }
 
-// static void multiboot_add_mmap_entry(uint64_t base, uint64_t length, uint32_t type)
-// {
-//     MemoryRegionType region_type;
-//     switch (type) {
-//     case MULTIBOOT_MEMORY_AVAILABLE:
-//         region_type = MemoryRegionType::Usable;
-//         break;
-//     case MULTIBOOT_MEMORY_RESERVED:
-//         region_type = MemoryRegionType::Reserved;
-//         break;
-//     case MULTIBOOT_MEMORY_ACPI_RECLAIMABLE:
-//         region_type = MemoryRegionType::Reclaimable;
-//         break;
-//     case MULTIBOOT_MEMORY_NVS:
-//         region_type = MemoryRegionType::NVS;
-//         break;
-//     case MULTIBOOT_MEMORY_BADRAM:
-//         region_type = MemoryRegionType::BadMemory;
-//         break;
-//     default:
-//         region_type = MemoryRegionType::Unknown;
-//         break;
-//     }
+extern u8 multiboot_temp_area[];
+static constexpr u32 TEMP_AREA_SIZE = 0x300000;
+extern u32 multiboot_temp_area_allocated;
 
-//     const phys_addr_t PAGE_MASK = PAGE_SIZE - 1;
+static MemoryRegion *temp_memory_regions = nullptr;
+static size_t memory_regions_size = 0;
+static size_t memory_regions_count = 0;
+
+static void temp_regions_reserve(size_t count)
+{
+    if (count <= memory_regions_size)
+        return;
+
+    constexpr size_t regions_per_page = PAGE_SIZE / sizeof(MemoryRegion);
+    static_assert(regions_per_page > 0);
+
+    size_t missing = count - memory_regions_size;
+    size_t pages = (missing + regions_per_page - 1) / regions_per_page;
+    size_t bytes = pages * PAGE_SIZE;
+
+    if (TEMP_AREA_SIZE - multiboot_temp_area_allocated < bytes)
+        panic("Not enough temporary memory to build the mmap!\n");
+
+    multiboot_temp_area_allocated += bytes;
+    memory_regions_size += pages * regions_per_page;
+}
+
+static paging::MemoryRegionType type_from_multiboot(u32 type)
+{
+    switch (type) {
+    case MULTIBOOT_MEMORY_AVAILABLE:
+        return paging::MemoryRegionType::Usable;
+    case MULTIBOOT_MEMORY_RESERVED:
+        return paging::MemoryRegionType::Reserved;
+    case MULTIBOOT_MEMORY_ACPI_RECLAIMABLE:
+        return paging::MemoryRegionType::ACPIReclaimable;
+    case MULTIBOOT_MEMORY_NVS:
+        return paging::MemoryRegionType::ACPINVS;
+    case MULTIBOOT_MEMORY_BADRAM:
+        return paging::MemoryRegionType::BadMemory;
+    default:
+        return paging::MemoryRegionType::Reserved;
+    }
+}
+
+static bool more_restrictive(paging::MemoryRegionType a, paging::MemoryRegionType b)
+{
+    auto rank = [](paging::MemoryRegionType type) {
+        switch (type) {
+        case paging::MemoryRegionType::Usable:
+            return 0;
+        case paging::MemoryRegionType::UsableReservedOnBoot:
+            return 1;
+        case paging::MemoryRegionType::ACPIReclaimable:
+            return 2;
+        default:
+        case paging::MemoryRegionType::Reserved:
+            return 3;
+        case paging::MemoryRegionType::ACPINVS:
+            return 4;
+        case paging::MemoryRegionType::Framebuffer:
+            return 5;
+        case paging::MemoryRegionType::BadMemory:
+            return 6;
+        }
+    };
+
+    return rank(a) > rank(b);
+}
+
+static auto insert_region = [](MemoryRegion *it, MemoryRegion region) {
+    temp_regions_reserve(memory_regions_count + 1);
+    auto old_end = temp_memory_regions + memory_regions_count;
+    std::copy_backward(it, old_end, old_end + 1);
+    *it = region;
+    ++memory_regions_count;
+};
+
+static void build_memory_map(multiboot_info *info)
+{
+    serial_logger.printf("Filtering multiboot memory map...\n");
+
+    auto mmap = (multiboot_tag_mmap *)find_tag(info, MULTIBOOT_TAG_TYPE_MMAP);
+    if (!mmap)
+        panic("No multiboot memory map!");
+
+    if (mmap->size < sizeof(multiboot_tag_mmap))
+        panic("Invalid multiboot memory map size!");
+    if (mmap->entry_size < sizeof(multiboot_mmap_entry))
+        panic("Invalid multiboot memory map entry size!");
+
+    size_t entry_size = mmap->entry_size;
+    size_t entries_count = (mmap->size - sizeof(*mmap))/entry_size;
+
+    temp_memory_regions = (MemoryRegion *)(multiboot_temp_area + multiboot_temp_area_allocated);
+
+    temp_regions_reserve(entries_count);
+
+    for (size_t i = 0; i < entries_count; ++i) {
+        auto r = (multiboot_mmap_entry *)((char *)(mmap + 1) + i*entry_size);
+
+        // Align and push
+        MemoryRegion region = {
+            .start = r->addr,
+            .size = r->len,
+            .type = type_from_multiboot(r->type),
+        };
+
+        constexpr u64 phys_addr_mask = PAGE_SIZE - 1;
+
+        if (region.type == paging::MemoryRegionType::Usable) {
+            // Align usable up/inwards
+            auto old_start = region.start;
+            region.start += phys_addr_mask;
+            region.start &= ~phys_addr_mask;
+            auto diff = region.start - old_start;
+
+            region.size = diff > region.size ? 0 : region.size - diff;
+            region.size &= ~phys_addr_mask;
+        } else {
+            // Align everything else to the outer boundary
+            auto offset = region.start & phys_addr_mask;
+            region.start -= offset;
+            if (region.size > 0) {
+                region.size += offset;
+                region.size += phys_addr_mask;
+                region.size &= ~phys_addr_mask;
+            }
+        }
+
+        if (region.size > 0)
+            temp_memory_regions[memory_regions_count++] = region;
+    }
+
+    std::sort(temp_memory_regions, temp_memory_regions + memory_regions_count,
+              [](const MemoryRegion &a, const MemoryRegion &b) { return a.start < b.start; });
+
+    auto erase_region = [](size_t i) {
+        std::copy(temp_memory_regions + i + 1, temp_memory_regions + memory_regions_count,
+                   temp_memory_regions + i);
+        --memory_regions_count;
+    };
+
+    for (size_t i = 0; i < memory_regions_count; ) {
+        if (i + 1 >= memory_regions_count)
+            break;
     
-//     // If usable, align up the base and down the size, otherwise align up the size and down the base
-//     if (region_type == MemoryRegionType::Usable) {
-//         auto offset = base & PAGE_MASK;
-//         base += offset ? PAGE_SIZE - offset : 0;
-//         length = length > offset ? length - offset : 0;
-//         length &= ~PAGE_MASK;
-//     } else {
-//         auto offset = base & PAGE_MASK;
-//         base -= offset;
-//         length += offset;
-//         length += PAGE_MASK;
-//         length &= ~PAGE_MASK;
-//     }
-//     memory_region_add({
-//         .start = base,
-//         .size  = length,
-//         .type  = region_type,
-//     });
-// }
+        auto &region = temp_memory_regions[i];
+        auto &next = temp_memory_regions[i + 1];
+        if (region.start + region.size < next.start) {
+            ++i;
+            continue;
+        }
 
-// static void multiboot_reserve_region(uint32_t base, uint32_t length)
-// {
-//     const phys_addr_t PAGE_MASK = PAGE_SIZE - 1;
-//     uint64_t llength = length;
+        if (region.start + region.size == next.start) {
+            if (region.type == next.type) {
+                temp_memory_regions[i].size += next.size;
+                erase_region(i + 1);
+            } else {
+                ++i;
+            }
 
-//     auto offset = base & PAGE_MASK;
-//     base -= offset;
-//     llength += offset;
-//     llength += PAGE_MASK;
-//     llength &= ~PAGE_MASK;
-//     memory_region_add({
-//         .start = base,
-//         .size  = llength,
-//         .type  = MemoryRegionType::UsableReservedOnBoot,
-//     });
-// }
+            continue;
+        }
+
+        if (region.type == next.type) {
+            auto end = std::max(region.start + region.size, next.start + next.size);
+            temp_memory_regions[i].size = end - region.start;
+            erase_region(i + 1);
+        } else {
+            // Oh no...
+            if (region.start == next.start) {
+                if (more_restrictive(region.type, next.type))
+                    std::swap(region, next);
+                
+                if (region.size > next.size) {
+                    auto new_region = region;
+                    new_region.start = next.start + next.size;
+                    new_region.size = region.start + region.size - new_region.start;
+
+                    auto it = std::upper_bound(temp_memory_regions, temp_memory_regions + memory_regions_count,
+                        new_region, [](const MemoryRegion &a, const MemoryRegion &b) {
+                            return a.start < b.start;
+                        });
+
+                    
+                    std::copy(temp_memory_regions + i + 1, it, temp_memory_regions + i);
+                    *(it - 1) = new_region;
+                } else {
+                    erase_region(i);
+                }
+            } else {
+                if (!more_restrictive(region.type, next.type)) {
+                    if (region.start + region.size > next.start + next.size) {
+                        auto new_region = region;
+                        new_region.start = next.start + next.size;
+                        new_region.size = region.start + region.size - new_region.start;
+
+                        auto it = std::upper_bound(temp_memory_regions, temp_memory_regions + memory_regions_count,
+                            new_region, [](const MemoryRegion &a, const MemoryRegion &b) {
+                                return a.start < b.start;
+                            });
+
+                        insert_region(it, new_region);
+                    }
+
+                    region.size = next.start - region.start;
+                } else {
+                    if (next.start + next.size > region.start + region.size) {
+                        auto copy = next;
+                        copy.start = region.start + region.size;
+                        copy.size = next.start + next.size - copy.start;
+
+                        auto it = std::upper_bound(temp_memory_regions, temp_memory_regions + memory_regions_count,
+                            copy, [](const MemoryRegion &a, const MemoryRegion &b) {
+                                return a.start < b.start;
+                            });
+
+                        std::copy(temp_memory_regions + i + 2, it, temp_memory_regions + i + 1);
+                        *(it - 1) = copy;
+                    } else {
+                        erase_region(i + 1);
+                    }
+                }
+            }
+        }
+    }
+}
+
+static void print_memory_map()
+{
+    serial_logger.printf("Memory map:\n");
+    for (size_t i = 0; i < memory_regions_count; ++i) {
+        auto &region = temp_memory_regions[i];
+        serial_logger.printf("  %lx - %lx type %i\n", region.start, region.start + region.size, region.type);
+    }
+}
+
+static void memory_map_reserve(u64 start, u64 length)
+{
+    u64 page_mask = PAGE_SIZE - 1;
+
+    serial_logger.printf("Reserving %lx - %lx in memory map\n", start, start + length);
+
+    auto start_offset = start & page_mask;
+    start -= start_offset;
+    length += start_offset;
+    length = (length + page_mask) & ~page_mask;
+
+    auto it = std::upper_bound(temp_memory_regions, temp_memory_regions + memory_regions_count, start,
+        [](u64 addr, const MemoryRegion &region) {
+            return addr < region.start;
+        });
+
+    if (it == temp_memory_regions)
+        panic("Tried to reserve memory for the region that's not available (bootloader bug?)\n");
+
+    --it;
+
+    if (it->start > start || it->start + it->size < start + length)
+        panic("Tried to reserve memory for the region that's not available (bootloader bug?)\n");
+
+    if (it->type != paging::MemoryRegionType::Usable)
+        panic("Tried to reserve memory for the region that's not usable (bootloader bug?)\n");
+
+    if (it->start == start && it->size == length) {
+        it->type = paging::MemoryRegionType::UsableReservedOnBoot;
+    } else if (it->start == start) {
+        it->start += length;
+        it->size -= length;
+
+        MemoryRegion new_region = {
+            .start = start,
+            .size = length,
+            .type = paging::MemoryRegionType::UsableReservedOnBoot,
+        };
+
+        insert_region(it, new_region);
+    } else if (it->start + it->size == start + length) {
+        it->size -= length;
+
+        MemoryRegion new_region = {
+            .start = start,
+            .size = length,
+            .type = paging::MemoryRegionType::UsableReservedOnBoot,
+        };
+
+        insert_region(it + 1, new_region);
+    } else {
+        // Split into 3 regions
+        auto old_end = it->start + it->size;
+
+        MemoryRegion middle_region = {
+            .start = start,
+            .size = length,
+            .type = paging::MemoryRegionType::UsableReservedOnBoot,
+        };
+
+        MemoryRegion end_region = {
+            .start = start + length,
+            .size = old_end - (start + length),
+            .type = paging::MemoryRegionType::Usable,
+        };
+
+        it->size = start - it->start;
+
+        insert_region(it + 1, middle_region);
+        insert_region(it + 2, end_region);
+    }
+}
+
+void print_memory_map(multiboot_info *info)
+{
+    auto mmap = (multiboot_tag_mmap *)find_tag(info, MULTIBOOT_TAG_TYPE_MMAP);
+    if (!mmap)
+        panic("No multiboot memory map!");
+
+    u8 *ptr = (u8 *)(mmap + 1);
+    u8 *end = (u8 *)mmap + mmap->size;
+
+    if (mmap->size < sizeof(multiboot_tag_mmap))
+        panic("Invalid multiboot memory map size!");
+    if (mmap->entry_size < sizeof(multiboot_mmap_entry))
+        panic("Invalid multiboot memory map entry size!");
+
+    serial_logger.printf("Multiboot e820:\n");
+    while (ptr < end) {
+        auto e = (multiboot_mmap_entry *)ptr;
+        ptr += mmap->entry_size;
+        serial_logger.printf("%lx - %lx type %i\n", e->addr, e->addr + e->len, e->type);
+    }
+}
 
 static void init_memory(multiboot_info *info)
 {
@@ -157,7 +426,47 @@ static void init_memory(multiboot_info *info)
 
     global_temp_mapper = &multiboot_temp_mapper;
 
-    hcf();
+    print_memory_map(info);
+
+    build_memory_map(info);
+
+    serial_logger.printf("Reserving memory regions for the kernel...\n");
+    // Reserve modules, mb2 info, and the kernel...
+    memory_map_reserve((uint32_t)(ulong)info, multiboot_size);
+
+    auto kernel_size = (char *)&_kernel_end - (char *)&_kernel_start;
+    memory_map_reserve(multiboot_kernel_base, kernel_size);
+
+    char *ptr2 = (char *)info + sizeof(multiboot_info);
+    char *end2 = (char *)info + multiboot_size;
+    while (ptr2 < end2) {
+        auto tag = (multiboot_tag *)ptr2;
+        if (tag->type == MULTIBOOT_TAG_TYPE_MODULE) {
+            auto mod = (multiboot_tag_module *)tag;
+            memory_map_reserve(mod->mod_start, mod->mod_end - mod->mod_start);
+        }
+        ptr2 += ((tag->size + 7) & ~7);
+    }
+
+    print_memory_map();
+
+    // Find the largest available region and put the temp area there
+    for (size_t i = 0; i < memory_regions_count; ++i) {
+        auto &region = temp_memory_regions[i];
+        if (region.start >= 0x100000000)
+            // Only below 4GB is mapped by the trampoline
+            break;
+
+        if (region.type != paging::MemoryRegionType::Usable)
+            continue;
+
+        auto size_below_4gb = region.start + region.size > 0x100000000 ? 0x100000000 - region.start : region.size;
+        if (size_below_4gb > temp_alloc_size) {
+            temp_alloc_base = region.start;
+            temp_alloc_size = size_below_4gb;
+            temp_alloc_entry_id = i;
+        }
+    }
 
     #ifdef __i386__
     if (use_pae) {
@@ -193,8 +502,6 @@ static void init_memory(multiboot_info *info)
 
     const ulong PAGE_MASK = PAGE_SIZE - 1;
     void *kernel_start     = (void *)(((ulong)&_kernel_start + PAGE_MASK) & ~PAGE_MASK);
-    const ulong kernel_size =
-        ((char *)&_kernel_end - (char *)kernel_start + PAGE_SIZE - 1) & ~PAGE_MASK;
 
     vmm::virtmem_init((void *)heap_space_start, heap_space_size, kernel_start, kernel_size);
 
@@ -213,47 +520,13 @@ static void init_memory(multiboot_info *info)
 
     serial_logger.printf("Paging initialized!\n");
 
-    hcf();
+    if (!memory_map.reserve(memory_regions_count))
+        panic("Failed to reserve memory for memory map");
 
-    // // Init memory map...
-    // klib::vector<char> multiboot_data;
-    // if (!multiboot_data.resize(multiboot_size))
-    //     panic("Failed to reserve memory for multiboot data copy\n");
+    for (size_t i = 0; i < memory_regions_count; ++i)
+        memory_map.push_back(temp_memory_regions[i]);
 
-    // copy_from_phys((ulong)info, multiboot_data.data(), multiboot_size);
-
-    // auto memory_map = (multiboot_tag_mmap *)find_tag((multiboot_info *)multiboot_data.data(), MULTIBOOT_TAG_TYPE_MMAP);
-    // assert(memory_map);
-
-    // auto mmap_size = memory_map->size;
-    // auto mmap_entry_size = memory_map->entry_size;
-    // auto ptr = (char *)memory_map->entries;
-    // auto end = (char *)memory_map + mmap_size;
-    // while (ptr < end) {
-    //     auto entry = (multiboot_mmap_entry *)ptr;
-    //     multiboot_add_mmap_entry(entry->addr, entry->len, entry->type);
-    //     ptr += mmap_entry_size;
-    // }
-
-    // // Reserve modules, mb2 info, and the kernel...
-    // multiboot_reserve_region((uint32_t)(ulong)info, multiboot_size);
-    // multiboot_reserve_region(multiboot_kernel_base, kernel_size);
-
-    // // Reserve the temp area
-    // multiboot_reserve_region(multiboot_temp_area, multiboot_temp_area_allocated);
-
-    // char *ptr2 = (char *)multiboot_data.data() + sizeof(multiboot_info);
-    // char *end2 = (char *)multiboot_data.data() + multiboot_size;
-    // while (ptr2 < end2) {
-    //     auto tag = (multiboot_tag *)ptr2;
-    //     if (tag->type == MULTIBOOT_TAG_TYPE_MODULE) {
-    //         auto mod = (multiboot_tag_module *)tag;
-    //         multiboot_reserve_region(mod->mod_start, mod->mod_end - mod->mod_start);
-    //     }
-    //     ptr2 += ((tag->size + 7) & ~7);
-    // }
-
-    // init_pmm(idle_cr3);
+    init_pmm(idle_cr3);
 }
 
 void init();
