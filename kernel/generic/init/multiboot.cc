@@ -439,10 +439,9 @@ static void init_memory(multiboot_info *info)
     build_memory_map(info);
 
     serial_logger.printf("Reserving memory regions for the kernel...\n");
-    // Reserve modules, mb2 info, and the kernel...
-    memory_map_reserve((uint32_t)(ulong)info, multiboot_size);
 
     auto kernel_size = (char *)&_kernel_end - (char *)&_kernel_start;
+    serial_logger.printf("Reserving kernel at %p - %p\n", &_kernel_start, &_kernel_start + kernel_size);
     memory_map_reserve(multiboot_kernel_base, kernel_size);
 
     char *ptr2 = (char *)info + sizeof(multiboot_info);
@@ -451,6 +450,8 @@ static void init_memory(multiboot_info *info)
         auto tag = (multiboot_tag *)ptr2;
         if (tag->type == MULTIBOOT_TAG_TYPE_MODULE) {
             auto mod = (multiboot_tag_module *)tag;
+            serial_logger.printf("Reserving module at 0x%lx size %lx, name %s\n", mod->mod_start, mod->mod_end - mod->mod_start,
+                                 mod->cmdline);
             memory_map_reserve(mod->mod_start, mod->mod_end - mod->mod_start);
         }
         ptr2 += ((tag->size + 7) & ~7);
@@ -717,6 +718,19 @@ extern klib::shared_ptr<Arch_Page_Table> idle_page_table;
 
 void init();
 
+multiboot_info *copy_multiboot_to_temp(multiboot_info *info)
+{
+    size_t page_aligned = align_up_to_page(info->total_size);
+    if (page_aligned > TEMP_AREA_SIZE - multiboot_temp_area_allocated)
+        panic("Not enough temporary memory to copy multiboot info\n");
+    auto ptr = (char *)multiboot_temp_area + multiboot_temp_area_allocated;
+    multiboot_temp_area_allocated += page_aligned;
+
+    memcpy(ptr, info, info->total_size);
+
+    return (multiboot_info *)ptr;
+}
+
 extern "C" void multiboot_main(multiboot_info* info) {
     early_detect_cpu_features();
 
@@ -730,16 +744,13 @@ extern "C" void multiboot_main(multiboot_info* info) {
 
     size_t multiboot_size = info->total_size;
 
-    init_memory(info);
+    auto temp_info = copy_multiboot_to_temp(info);
+
+    init_memory(temp_info);
 
     init();
 
-    klib::vector<u8> multiboot_data;
-    if (!multiboot_data.reserve(multiboot_size))
-        panic("Failed to reserve memory for multiboot info copy");
-    copy_from_phys((u64)info, multiboot_data.data(), multiboot_size);
-
-    init_acpi((multiboot_info *)multiboot_data.data());
+    init_acpi(temp_info);
 
     idle_page_table = Arch_Page_Table::create_empty();
     if (!idle_page_table)
@@ -750,8 +761,8 @@ extern "C" void multiboot_main(multiboot_info* info) {
     // Switch to CPU-local temp mapper
     global_temp_mapper = nullptr;
 
-    init_modules((multiboot_info *)multiboot_data.data());
-    init_task1((multiboot_info *)multiboot_data.data());
+    init_modules(temp_info);
+    init_task1(temp_info);
     serial_logger.printf("Loaded kernel...\n");
 
     // Reclaim multiboot info

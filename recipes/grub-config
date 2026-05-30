@@ -1,0 +1,17 @@
+#!/bin/sh
+
+name=grub-config
+version=1
+revision=1
+
+source_dir=scripts
+
+build() {
+    CONFIG_FILE="grub.cfg"
+    ${source_dir}/make_grub_config.sh "$CONFIG_FILE" "$BOOT_SERVICES"
+}
+
+package() {
+    mkdir -p "${dest_dir}/boot"
+    cp "grub.cfg" "${dest_dir}/boot/grub.cfg"
+}
