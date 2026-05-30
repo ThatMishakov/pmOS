@@ -720,6 +720,8 @@ void init();
 
 multiboot_info *copy_multiboot_to_temp(multiboot_info *info)
 {
+    assert(info->total_size > 0 && "Invalid multiboot info size");
+
     size_t page_aligned = align_up_to_page(info->total_size);
     if (page_aligned > TEMP_AREA_SIZE - multiboot_temp_area_allocated)
         panic("Not enough temporary memory to copy multiboot info\n");
@@ -742,8 +744,6 @@ extern "C" void multiboot_main(multiboot_info* info) {
     kernel::x86_64::paging::use_5lvl_paging = (multiboot_cpu_features & PAGING_5LVL_MASK) != 0;
     #endif
 
-    size_t multiboot_size = info->total_size;
-
     auto temp_info = copy_multiboot_to_temp(info);
 
     init_memory(temp_info);
@@ -764,13 +764,6 @@ extern "C" void multiboot_main(multiboot_info* info) {
     init_modules(temp_info);
     init_task1(temp_info);
     serial_logger.printf("Loaded kernel...\n");
-
-    // Reclaim multiboot info
-    u32 start = (u32)(ulong)info;
-    u32 offset = start & 0xFFF;
-    start -= offset;
-    u32 size = align_up_to_page(multiboot_size + offset);
-    pmm::free_memory_for_kernel(start, size/PAGE_SIZE);
 
     reclaim_kernel_init_memory();
 
