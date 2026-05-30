@@ -937,3 +937,8 @@ u64 arch_phys_addr_limit()
 }
 
 } // namespace kernel::paging
+
+void early_detect_cpu_features()
+{
+    // Nothing for RISC-V...+
+}

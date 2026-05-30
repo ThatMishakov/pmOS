@@ -111,9 +111,8 @@ namespace kernel {
     
 void reclaim_kernel_init_memory()
 {
-    if (&_reclaimable_start == &_reclaimable_end)
-        return;
-
+    #if defined(__x86_64__) or defined(__i386__)
+    // There is no reclaimable memory (yet) on other arches
     ulong start = (ulong)&_reclaimable_start;
     ulong end   = (ulong)&_reclaimable_end;
     assert(start < end);
@@ -122,7 +121,8 @@ void reclaim_kernel_init_memory()
 
     phys_addr_t phys_start = kernel_phys_base + (start - (ulong)&_kernel_start);
     size_t size = end - start;
-    pmm::free_memory_for_kernel(phys_start, size / PAGE_SIZE);   
+    pmm::free_memory_for_kernel(phys_start, size / PAGE_SIZE);
+    #endif   
 }
 
 }

@@ -3,7 +3,7 @@ ENTRY(_limine_entry)
 
 PHDRS
 {
-    text PT_LOAD FLAGS((1 << 0) | (1 << 2)) ;
+    text PT_LOAD FILEHDR PHDRS FLAGS((1 << 0) | (1 << 2)) ;
     rodata PT_LOAD FLAGS((1 << 2)) ;
     data PT_LOAD FLAGS((1 << 1) | (1 << 2));
     eh_frame PT_LOAD FLAGS((1 << 2));
@@ -18,16 +18,15 @@ SECTIONS
     /* Leave a symbol indicating the start of the kernel space */
     _kernel_start = .;
 
+    . += SIZEOF_HEADERS;
+
     /* Then let's place all the other traditional executable sections afterwards. */
     .text : {
-        _text_start = .;
         *(.text .text.*)
-        _text_end = .;
     } :text
 
     . += CONSTANT(MAXPAGESIZE);
 
-    _rodata_start = .;
     .rodata : {
         *(.rodata .rodata.*)
         *(.srodata .srodata.*)
@@ -46,15 +45,12 @@ SECTIONS
         KEEP(*(.fini_array))
         _fini_array_end = .;
     } :rodata
-    _rodata_end = .;
 
     . += CONSTANT(MAXPAGESIZE);
 
     .data : {
-        _data_start = .;
         *(.data .data.*)
         *(.sdata .sdata.*)
-        _data_end = .;
     } :data
 
     /* Dynamic section for relocations, both in its own PHDR and inside data PHDR */
@@ -63,11 +59,9 @@ SECTIONS
     } :data :dynamic
  
     .bss : {
-        _bss_start = .;
         *(.bss .bss.*)
         *(.sbss .sbss.*)
         *(COMMON)
-        _bss_end = .;
     } :data
 
     . += CONSTANT(MAXPAGESIZE);
