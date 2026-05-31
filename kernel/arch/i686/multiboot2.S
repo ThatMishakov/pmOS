@@ -77,6 +77,7 @@ multiboot_map_kernel:
 1:
     btl $CPUID_PAE_BIT, %edx
     jnc 2f // PAE not supported
+    orl $1 << PAE_BIT, (multiboot_cpu_features - 9b)(%edi) // Set PAE bit in features
 
     // Check NX if there's PAE
     movl $CPUID_EXTENDED_FEATURES, %eax
@@ -115,8 +116,7 @@ multiboot_map_kernel:
     cmpl $PT_LOAD, (%ebx) // Check if it's a loadable segment
     jne 3f // Not loadable, skip
 
-    subl $8, %esp
-    pushl 4(%ebx) // flags
+    pushl 24(%ebx) // flags
     andl $3, (%esp) // Keep writable and executable bits
 
     movl 12(%ebx), %eax // paddr
@@ -124,9 +124,9 @@ multiboot_map_kernel:
     pushl %eax // phys addr
 
     pushl 20(%ebx) // memsz
-    pushl 12(%ebx) // p_vaddr
+    pushl 8(%ebx) // p_vaddr
     call bootstrap_map
-    addl $32, %esp
+    addl $16, %esp
 
 3:
     addl $pheader_size, %ebx
@@ -175,7 +175,7 @@ identity_map_memory:
     addl $8, %esp
 
     incl %edi
-    cmpl $3, %edi
+    cmpl $2, %edi
     jle 2b
     jmp 3f
 
@@ -196,9 +196,9 @@ identity_map_memory:
     testl $1 << PSE_BIT, (multiboot_cpu_features - 9b)(%ebx)
     jz 2f
 1:
-    movl %esi, %eax
-    shl $12, %eax // Each PDE covers 4MB
-    orl $83, %eax // PS + Write + Present
+    movl %edi, %eax
+    shl $22, %eax // Each PDE covers 4MB
+    orl $0x83, %eax // PS + Write + Present
     movl %eax, (%esi, %edi, 4)
 
     incl %edi
@@ -339,9 +339,13 @@ multiboot_enter_kernel:
     subl $4, %esp
     pushl $0
     pushl $0
-    pushl %edi
+    movl %esp, %ebp
+    pushl %esi
 
-    jmp *multiboot_main
+    movl $1f, %eax
+    jmp *%eax
+1:
+    call multiboot_main
 
     jmp return_from_kernel
 
@@ -396,6 +400,12 @@ map_page:
     andl $0xfffff000, %esi
     jmp 3f
 2:
+    call multiboot_alloc_page_clear
+
+    movl %eax, %edx
+    orl $0x3, %edx // Present + Write
+    movl %edx, (%esi, %edi, 8) // Update PDPT entry
+    movl %eax, %esi
 
 3: // PT
     movl 8(%ebp), %edi // virt_addr

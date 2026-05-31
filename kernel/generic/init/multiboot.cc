@@ -113,7 +113,7 @@ static void temp_regions_reserve(size_t count)
     size_t bytes = pages * PAGE_SIZE;
 
     if (TEMP_AREA_SIZE - multiboot_temp_area_allocated < bytes)
-        panic("Not enough temporary memory to build the mmap!\n");
+        panic("Not enough temporary memory to build the mmap! Temp area size 0x%x, allocated 0x%x, wanted 0x%x\n", TEMP_AREA_SIZE, multiboot_temp_area_allocated, bytes);
 
     multiboot_temp_area_allocated += bytes;
     memory_regions_size += pages * regions_per_page;
@@ -447,10 +447,7 @@ static void init_memory(multiboot_info *info)
 
     build_memory_map(info);
 
-    serial_logger.printf("Reserving memory regions for the kernel...\n");
-
     auto kernel_size = (char *)&_kernel_end - (char *)&_kernel_start;
-    serial_logger.printf("Reserving kernel at %p - %p\n", &_kernel_start, &_kernel_start + kernel_size);
     memory_map_reserve(multiboot_kernel_base, kernel_size);
 
     char *ptr2 = (char *)info + sizeof(multiboot_info);
@@ -459,8 +456,6 @@ static void init_memory(multiboot_info *info)
         auto tag = (multiboot_tag *)ptr2;
         if (tag->type == MULTIBOOT_TAG_TYPE_MODULE) {
             auto mod = (multiboot_tag_module *)tag;
-            serial_logger.printf("Reserving module at 0x%lx size %lx, name %s\n", mod->mod_start, mod->mod_end - mod->mod_start,
-                                 mod->cmdline);
             memory_map_reserve(mod->mod_start, mod->mod_end - mod->mod_start);
         }
         ptr2 += ((tag->size + 7) & ~7);
@@ -558,13 +553,12 @@ void init_modules(multiboot_info *info)
         if (tag->type == MULTIBOOT_TAG_TYPE_MODULE) {
             auto mod = (multiboot_tag_module *)tag;
             
-            serial_logger.printf("Module at 0x%lx size %lx, name %s\n", mod->mod_start, mod->mod_end - mod->mod_start,
-                                 mod->cmdline);
-
             size_t name_len = mod->size - sizeof(multiboot_tag_module);
 
             auto path = module_path(mod->cmdline, name_len);
             auto cmdline = module_cmdline(mod->cmdline, name_len);
+
+            serial_logger.printf("Module at 0x%x size %x path %s cmdline %s\n", mod->mod_start, mod->mod_end - mod->mod_start, path.c_str(), cmdline.c_str());
 
             if (path == "") {
                 serial_logger.printf("Warning: Empty path for module\n");
@@ -733,7 +727,7 @@ multiboot_info *copy_multiboot_to_temp(multiboot_info *info)
 
     size_t page_aligned = align_up_to_page(info->total_size);
     if (page_aligned > TEMP_AREA_SIZE - multiboot_temp_area_allocated)
-        panic("Not enough temporary memory to copy multiboot info\n");
+        panic("Not enough temporary memory to copy multiboot info. Temp area size 0x%x, allocated 0x%x, wanted 0x%x\n", TEMP_AREA_SIZE, multiboot_temp_area_allocated, page_aligned);
     auto ptr = (char *)multiboot_temp_area + multiboot_temp_area_allocated;
     multiboot_temp_area_allocated += page_aligned;
 
@@ -743,6 +737,8 @@ multiboot_info *copy_multiboot_to_temp(multiboot_info *info)
 }
 
 extern "C" void multiboot_main(multiboot_info* info) {
+    serial_logger.printf("Multiboot info: %x\n", info);
+
     early_detect_cpu_features();
 
     log::serial_logger.printf("Hello from pmOS kernel (booted with multiboot2)!\n");

@@ -237,6 +237,8 @@ void kernel::init_pmm(ptable_top_ptr_t kernel_pt_top)
         auto virt_addr =
             vmm::kernel_space_allocator.virtmem_alloc(page_struct_page_size / PAGE_SIZE);
 
+        serial_logger.printf("Mapping page structs for region %lh - %lh at phys %lh to virt %p\n", first_addr, last_addr, phys_addr, virt_addr);
+
         Page_Table_Arguments args = {
             .readable           = true,
             .writeable          = true,
@@ -247,7 +249,7 @@ void kernel::init_pmm(ptable_top_ptr_t kernel_pt_top)
         };
         auto result = map_pages(kernel_pt_top, phys_addr, virt_addr, page_struct_page_size, args);
         if (result)
-            panic("Couldn't map page structs\n");
+            panic("Couldn't map page structs, error %i\n", (int)result);
 
         pmm::Page *pages        = (pmm::Page *)virt_addr;
         // Reserve first and last page

@@ -75,6 +75,7 @@ SECTIONS
     .data : AT (ADDR (.data) - _kernel_start + KERNEL_PHYS_BASE) {
         *(.data .data.*)
         *(.sdata .sdata.*)
+        *(.got .got.*)
     } :data
 
     /* Dynamic section for relocations, both in its own PHDR and inside data PHDR */
@@ -92,8 +93,6 @@ SECTIONS
         _reclaimable_end = .;
         . = ALIGN(4096);
     } :data
-
-    . += CONSTANT(MAXPAGESIZE);
 
     _kernel_end = .;
 }
