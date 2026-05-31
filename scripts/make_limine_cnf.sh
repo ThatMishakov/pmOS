@@ -55,57 +55,87 @@ EOF
 }
 
 
-if [ "$#" -ne 2 ]; then
-    echo "Usage: $0 <output_file> <services>"
+if [ "$#" -ne 3 ]; then
+    echo "Usage: $0 <output_file> <services> <arch>"
     exit 1
 fi
 
 FILE="$1"
 SERVICES="$2"
+ARCH="$3"
 cat <<EOF > "$FILE"
 timeout: 5
-default_entry: 2
+default_entry: 1
 EOF
 
-# Non-kaslr
-cat <<EOF >> "$FILE"
+if [ "$ARCH" = "i686" ]; then
+    # Multiboot2
+    cat <<EOF >> "$FILE"
+/pmos (Multiboot2)
+    protocol: multiboot2
+
+EOF
+
+    write_kernel_entry "$FILE"
+    write_bootstrap_entry_multiboot "$FILE"
+    for SERVICE in $SERVICES; do
+        write_service_entry_multiboot "$FILE" "$SERVICE"
+    done
+elif [ "$ARCH" = "x86_64" ]; then
+    # Non-kaslr
+    cat <<EOF >> "$FILE"
 /pmos (limine protocol, KASLR OFF)
     protocol: limine
     kaslr: off
 
 EOF
 
-write_kernel_entry "$FILE"
-write_bootstrap_entry "$FILE"
-for SERVICE in $SERVICES; do
-    write_service_entry "$FILE" "$SERVICE"
-done
+    write_kernel_entry "$FILE"
+    write_bootstrap_entry "$FILE"
+    for SERVICE in $SERVICES; do
+        write_service_entry "$FILE" "$SERVICE"
+    done
 
-# # Kaslr
-# cat <<EOF >> "$FILE"
-
-
-# /pmos (limine protocol, KASLR ON)
-#     protocol: limine
-#     kaslr: on
-
-# EOF
-
-# write_kernel_entry "$FILE"
-# write_bootstrap_entry "$FILE"
-# for SERVICE in $SERVICES; do
-#     write_service_entry "$FILE" "$SERVICE"
-# done
-
-# Multiboot2
-cat <<EOF >> "$FILE"
+    # Multiboot2
+    cat <<EOF >> "$FILE"
 /pmos (Multiboot2)
     protocol: multiboot2
 
 EOF
 
-write_kernel_entry "$FILE"
-write_bootstrap_entry_multiboot "$FILE"
-for SERVICE in $SERVICES; do
-    write_service_entry_multiboot "$FILE" "$SERVICE"
-done
+    write_kernel_entry "$FILE"
+    write_bootstrap_entry_multiboot "$FILE"
+    for SERVICE in $SERVICES; do
+        write_service_entry_multiboot "$FILE" "$SERVICE"
+    done
+else
+    # Non-kaslr
+    cat <<EOF >> "$FILE"
+/pmos (limine protocol, KASLR OFF)
+    protocol: limine
+    kaslr: off
+
+EOF
+
+    write_kernel_entry "$FILE"
+    write_bootstrap_entry "$FILE"
+    for SERVICE in $SERVICES; do
+        write_service_entry "$FILE" "$SERVICE"
+    done
+
+    # Kaslr
+    cat <<EOF >> "$FILE"
+
+
+/pmos (limine protocol, KASLR ON)
+    protocol: limine
+    kaslr: on
+
+EOF
+
+    write_kernel_entry "$FILE"
+    write_bootstrap_entry "$FILE"
+    for SERVICE in $SERVICES; do
+        write_service_entry "$FILE" "$SERVICE"
+    done
+fi
