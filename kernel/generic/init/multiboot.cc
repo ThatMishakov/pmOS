@@ -37,6 +37,7 @@ extern u32 multiboot_kernel_base;
 
 constexpr u32 NX_MASK = 1 << 0;
 constexpr u32 PAGING_5LVL_MASK = 1 << 1;
+constexpr u32 PAE_MASK = 1 << 2;
 
 auto align_up_to_page(auto addr)
 {
@@ -64,7 +65,7 @@ static Temp_Mapper *temp_temp_mapper = nullptr;
 #ifdef __i386__
 namespace kernel::ia32::paging
 {
-static Temp_Mapper *get_temp_temp_mapper(void *virt_addr, u32 kernel_cr3);
+Temp_Mapper *get_temp_temp_mapper(void *virt_addr, u32 kernel_cr3);
 }
 #else
 static x86_64::paging::x86_PAE_Temp_Mapper temp_temp_mapper_instance;
@@ -92,7 +93,7 @@ static multiboot_tag *find_tag(multiboot_info *info, u32 type)
 }
 
 extern u8 multiboot_temp_area[];
-static constexpr u32 TEMP_AREA_SIZE = 0x300000;
+static constexpr u32 TEMP_AREA_SIZE = 0x400000;
 extern u32 multiboot_temp_area_allocated;
 
 static MemoryRegion *temp_memory_regions = nullptr;
@@ -424,6 +425,14 @@ void print_memory_map(multiboot_info *info)
     }
 }
 
+#ifdef __i386__
+constexpr u64 MAX_INIT_PHYS_ADDR = 0xC0000000; // Only 3GB is mapped by the trampoline in 32-bit mode
+#elif defined(__x86_64__)
+constexpr u64 MAX_INIT_PHYS_ADDR = 0x100000000; // 4GB
+#else
+#error "Unsupported architecture"
+#endif
+
 static void init_memory(multiboot_info *info)
 {
     assert(info);
@@ -462,14 +471,14 @@ static void init_memory(multiboot_info *info)
     // Find the largest available region and put the temp area there
     for (size_t i = 0; i < memory_regions_count; ++i) {
         auto &region = temp_memory_regions[i];
-        if (region.start >= 0x100000000)
+        if (region.start >= MAX_INIT_PHYS_ADDR)
             // Only below 4GB is mapped by the trampoline
             break;
 
         if (region.type != paging::MemoryRegionType::Usable)
             continue;
 
-        auto size_below_4gb = region.start + region.size > 0x100000000 ? 0x100000000 - region.start : region.size;
+        auto size_below_4gb = region.start + region.size > MAX_INIT_PHYS_ADDR ? MAX_INIT_PHYS_ADDR - region.start : region.size;
         if (size_below_4gb > temp_alloc_size) {
             temp_alloc_base = region.start;
             temp_alloc_size = size_below_4gb;
@@ -742,6 +751,8 @@ extern "C" void multiboot_main(multiboot_info* info) {
     support_nx = (multiboot_cpu_features & NX_MASK) != 0;
     #if defined(__x86_64__)
     kernel::x86_64::paging::use_5lvl_paging = (multiboot_cpu_features & PAGING_5LVL_MASK) != 0;
+    #elif defined(__i386__)
+    use_pae = (multiboot_cpu_features & PAE_MASK) != 0;
     #endif
 
     auto temp_info = copy_multiboot_to_temp(info);

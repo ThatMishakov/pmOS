@@ -548,7 +548,10 @@ void init_acpi_trampoline()
     if (result)
         panic("Failed to allocate cr3 for SMP trampoline");
 
+    #ifdef __i386__
+    // Silence the warning on i386
     assert(new_cr3 < (u64)0x100000000);
+    #endif
     smp_trampoline_cr3 = static_cast<u32>(new_cr3);
 
     Page_Table_Arguments pta = {
@@ -588,7 +591,7 @@ void x86_detect_max_phys_addr()
     #ifdef __i386__
     if (!use_pae) {
         max_memory_bits = 32;
-        serial_logger.printf("Max physical address: %lx\n", max_phys_addr);
+        serial_logger.printf("Max memory bits: %i\n", max_memory_bits);
         return;
     }
     #endif

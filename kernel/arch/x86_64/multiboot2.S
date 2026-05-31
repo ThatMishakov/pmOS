@@ -6,6 +6,7 @@
 .extern __ehdr_end
 
 .extern multiboot_kernel_phys_offset
+.extern pae_populate_pdpt
 
 .equ CPUID_EXTENDED_MAX, 0x80000000
 .equ CPUID_EXTENDED_FEATURES, 0x80000001
@@ -111,7 +112,6 @@ multiboot_map_kernel:
     jae 2f
 
     // Check if loadable
-    // The entries are 64 bits long, but the upper half should be 0 (?)
     cmpl $PT_LOAD, (%ebx) // Check if it's a loadable segment
     jne 3f // Not loadable, skip
 
@@ -212,63 +212,12 @@ identity_map_memory:
 
     pushl %ecx
     pushl %eax
-    call populate_pdpt
+    call pae_populate_pdpt
     addl $8, %esp
 
     incl %edi
     cmpl $4, %edi
     jb 1b
-
-    popl %edi
-    popl %esi
-    movl %ebp, %esp
-    popl %ebp
-    ret
-
-    // void populate_pdpt(uint32_t pdpt_phys_addr, uint32_t virt_base)
-    .type populate_pdpt, @function
-populate_pdpt:
-    pushl %ebp
-    movl %esp, %ebp
-    pushl %esi
-    pushl %edi
-
-    // Store pointer in %edi
-    movl 8(%ebp), %edi
-
-    // First 2MB needs to be mapped with 4KB mappings...
-    cmpl $0x0, 12(%ebp)
-    je 1f
-
-    xorl %esi, %esi
-    jmp 2f
-
-1: // Map the first 2 MB with 4KB pages
-    call multiboot_alloc_page_clear
-    movl %eax, %ecx
-    orl $0b11, %ecx
-    movl %ecx, (%edi)
-
-    xorl %esi, %esi
-1:
-    movl %esi, %ecx
-    shl $12, %ecx
-    orl $0b11, %ecx
-    movl %ecx, (%eax, %esi, 8)
-    incl %esi
-    cmpl $512, %esi
-    jb 1b
-
-    movl $1, %esi
-2:
-    movl %esi, %eax
-    shl $21, %eax
-    addl 12(%ebp), %eax
-    orl $0b10000011, %eax // Present, Writable, PS
-    movl %eax, (%edi, %esi, 8) // Write the entry
-    incl %esi
-    cmpl $512, %esi
-    jb 2b
 
     popl %edi
     popl %esi

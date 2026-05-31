@@ -4,7 +4,7 @@
 #ifdef __x86_64__
 .equ KERNEL_OFFSET, (0xFFFFFFFF80000000 + 0x100000)
 #else
-.equ KERNEL_OFFSET, 0
+.equ KERNEL_OFFSET, 0xc0000000 + 0x100000
 #endif
 
 .equ KERNEL_PHYS_BASE, 0x100000
@@ -12,7 +12,7 @@
 .equ COM_PORT, 0x3f8
 
     .globl TEMP_AREA_SIZE
-.equ TEMP_AREA_SIZE, 0x300000
+.equ TEMP_AREA_SIZE, 0x400000
 
 .extern kernel_size
 .set KERNEL_SIZE, kernel_size
@@ -279,6 +279,60 @@ multiboot_alloc_page_clear:
     pushl %eax
     call multiboot_print_text
     jmp halt
+
+
+
+    // void pae_populate_pdpt(uint32_t pdpt_phys_addr, uint32_t virt_base)
+    .globl pae_populate_pdpt
+    .type pae_populate_pdpt, @function
+pae_populate_pdpt:
+    pushl %ebp
+    movl %esp, %ebp
+    pushl %esi
+    pushl %edi
+
+    // Store pointer in %edi
+    movl 8(%ebp), %edi
+
+    // First 2MB needs to be mapped with 4KB mappings...
+    cmpl $0x0, 12(%ebp)
+    je 1f
+
+    xorl %esi, %esi
+    jmp 2f
+
+1: // Map the first 2 MB with 4KB pages
+    call multiboot_alloc_page_clear
+    movl %eax, %ecx
+    orl $0b11, %ecx
+    movl %ecx, (%edi)
+
+    xorl %esi, %esi
+1:
+    movl %esi, %ecx
+    shl $12, %ecx
+    orl $0b11, %ecx
+    movl %ecx, (%eax, %esi, 8)
+    incl %esi
+    cmpl $512, %esi
+    jb 1b
+
+    movl $1, %esi
+2:
+    movl %esi, %eax
+    shl $21, %eax
+    addl 12(%ebp), %eax
+    orl $0b10000011, %eax // Present, Writable, PS
+    movl %eax, (%edi, %esi, 8) // Write the entry
+    incl %esi
+    cmpl $512, %esi
+    jb 2b
+
+    popl %edi
+    popl %esi
+    movl %ebp, %esp
+    popl %ebp
+    ret
 
 // =================================================== .rodata ===================================================
 

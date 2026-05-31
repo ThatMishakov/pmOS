@@ -2,6 +2,8 @@
 bootstrap_stack_bottom:
     .skip 16384
 bootstrap_stack_top:
+    .globl stack_end
+stack_end:
     .skip 4096
 smp_temp_stack_top:
 spinlock:
