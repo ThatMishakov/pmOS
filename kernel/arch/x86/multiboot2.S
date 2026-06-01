@@ -365,7 +365,7 @@ multiboot_kernel_phys_offset: .long 0
 initialized_serial: .byte 0
 
 // =================================================== .reclaimable =================================================
-    .section .reclaimable.temp_area
+    .section .reclaimable.temp_area, "aw", @nobits
     .globl multiboot_temp_area
 multiboot_temp_area: // 3MB
     .align 4096
