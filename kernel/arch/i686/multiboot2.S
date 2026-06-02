@@ -80,7 +80,7 @@ multiboot_map_kernel:
     orl $1 << PAE_BIT, (multiboot_cpu_features - 9b)(%edi) // Set PAE bit in features
 
     // Check NX if there's PAE
-    movl $CPUID_EXTENDED_FEATURES, %eax
+    movl $CPUID_EXTENDED_MAX, %eax
     cpuid
     cmpl $CPUID_EXTENDED_FEATURES, %eax
     jb 2f // Extended features not supported, skip checking for NX
@@ -210,7 +210,7 @@ identity_map_memory:
     movl %eax, (%esi, %edi, 4)
     orl $0x3, (%esi, %edi, 4) // Present + Write
 
-    movl %esi, %ecx
+    movl %edi, %ecx
     shl $22, %ecx // Each PDE covers 4MB
     subl $8, %esp
     pushl %ecx // phys addr
@@ -432,7 +432,7 @@ map_page:
 
 2: // Check the present page...
     // 1. Check writable bit
-    testl $MAP_WRITABLE, 20(%ebp)
+    testl $MAP_WRITABLE, 16(%ebp)
     jnz 3f // Writable
     testl $0b10, %eax
     jnz bad_sections // Page is present but not writable, but kernel requires it to be writable, fail
