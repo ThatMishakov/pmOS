@@ -469,6 +469,46 @@ uacpi_status uacpi_kernel_io_map(uacpi_io_addr base, uacpi_size len, uacpi_handl
 
 void uacpi_kernel_io_unmap(uacpi_handle handle) { (void)handle; }
 
+uacpi_u8 uacpi_kernel_mmio_read8(void* ptr)
+{
+    return mmio_readb(ptr);
+}
+
+uacpi_u16 uacpi_kernel_mmio_read16(void* ptr)
+{
+    return mmio_readh(ptr);
+}
+
+uacpi_u32 uacpi_kernel_mmio_read32(void* ptr)
+{
+    return mmio_readl(ptr);
+}
+
+uacpi_u64 uacpi_kernel_mmio_read64(void* ptr)
+{
+    return mmio_readd(ptr);
+}
+
+void uacpi_kernel_mmio_write8(void* ptr, uacpi_u8 value)
+{
+    mmio_writeb(ptr, value);
+}
+
+void uacpi_kernel_mmio_write16(void* ptr, uacpi_u16 value)
+{
+    mmio_writeh(ptr, value);
+}
+
+void uacpi_kernel_mmio_write32(void* ptr, uacpi_u32 value)
+{
+    mmio_writel(ptr, value);
+}
+
+void uacpi_kernel_mmio_write64(void* ptr, uacpi_u64 value)
+{
+    mmio_writed(ptr, value);
+}
+
 uacpi_status uacpi_kernel_io_read(uacpi_handle h, uacpi_size offset, uacpi_u8 byte_width,
                                   uacpi_u64 *value)
 {

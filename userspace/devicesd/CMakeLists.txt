@@ -44,4 +44,6 @@ target_include_directories(devicesd PRIVATE
   ${UACPI_INCLUDES}
 )
 
+target_compile_definitions(devicesd PRIVATE UACPI_NATIVE_MMIO)
+
 install(TARGETS devicesd RUNTIME DESTINATION "/boot")
