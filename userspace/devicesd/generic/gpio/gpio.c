@@ -226,7 +226,7 @@ static void amd_gpio_device_push_back(struct amd_gpio_device *device)
 static bool prepare_amd_gpio(struct amd_gpio_device *device)
 {
     device->virt_addr = uacpi_kernel_map(device->fixed_memory_base, device->fixed_memory_size);
-    if (!device->virt_addr) {
+    if (device->virt_addr == UACPI_MAP_FAILED) {
         return false;
     }
 
@@ -236,7 +236,7 @@ static bool prepare_amd_gpio(struct amd_gpio_device *device)
     if (result != 0) {
         printf("Failed to create interrupt thread: %i\n", result);
         uacpi_kernel_unmap((void *)device->virt_addr, device->fixed_memory_size);
-        device->virt_addr = NULL;
+        device->virt_addr = UACPI_MAP_FAILED;
         device->refcount--;
         return false;
     }
@@ -255,7 +255,7 @@ static void release_amd_gpio(struct amd_gpio_device *device)
     if (__atomic_sub_fetch(&device->refcount, 1, __ATOMIC_SEQ_CST) != 0)
         return;
 
-    if (device->virt_addr) {
+    if (device->virt_addr && device->virt_addr != UACPI_MAP_FAILED) {
         uacpi_kernel_unmap((void *)device->virt_addr, device->fixed_memory_size);
     }
 

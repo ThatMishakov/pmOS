@@ -26,7 +26,7 @@ void *uacpi_kernel_map(uacpi_phys_addr addr, uacpi_size len)
 
     void *mapping = kernel_space_allocator.virtmem_alloc(size_pages);
     if (!mapping)
-        return nullptr;
+        return UACPI_MAP_FAILED;
     auto guard = pmos::utility::make_scope_guard([=]() {
         kernel_space_allocator.virtmem_free(mapping, size_pages);
     });
@@ -43,7 +43,7 @@ void *uacpi_kernel_map(uacpi_phys_addr addr, uacpi_size len)
 
     auto result = map_kernel_pages(start, mapping, size_aligned, arg);
     if (result)
-        return nullptr;
+        return UACPI_MAP_FAILED;
     guard.dismiss();
 
     return (void *)((char *)mapping + offset);

@@ -1224,7 +1224,7 @@ uacpi_status fill_device_early(struct PCIDevicePtr *s, uint16_t seg, uint8_t bus
     if (find_ecam_mcfg(&ecam_base, seg, bus, bus)) {
         const unsigned long offset = (bus << 20) | (device << 15) | (function << 12);
         void *ptr = uacpi_kernel_map(ecam_base + offset, 4096);
-        if (!ptr)
+        if (ptr == UACPI_MAP_FAILED)
             return UACPI_STATUS_MAPPING_FAILED;
 
         *s = (struct PCIDevicePtr) {

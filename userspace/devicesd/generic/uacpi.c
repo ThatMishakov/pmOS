@@ -40,7 +40,7 @@ void *uacpi_kernel_map(uacpi_phys_addr addr, uacpi_size len)
     mem_request_ret_t r = create_phys_map_region(TASK_ID_SELF, NULL, size_aligned,
                                                  PROT_READ | PROT_WRITE, page_aligned_addr);
     if (r.result != SUCCESS)
-        return NULL;
+        return UACPI_MAP_FAILED;
 
     return (char *)r.virt_addr + page_offset;
 }
