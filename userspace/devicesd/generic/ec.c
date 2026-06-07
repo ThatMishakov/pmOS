@@ -153,7 +153,7 @@ static void init_from_ecdt()
 
         ec_device_push_back(device);
 
-        if (!install_ec_handler(device)) {
+        if (install_ec_handler(device)) {
             fprintf(stderr, "Failed to install EC handler...\n");
         }
     }
@@ -471,7 +471,7 @@ static int match_ec_pnp(uacpi_namespace_node *node,
         printf("Found EC device at %s\n", path);
         uacpi_kernel_free((void *)path);
 
-        if (!install_ec_handler(device)) {
+        if (install_ec_handler(device)) {
             fprintf(stderr, "Failed to install handler for the EC device");
         }
     }
