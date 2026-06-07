@@ -33,9 +33,35 @@ struct AcpiPmTmrCalSource final: CalibrationSource {
 AcpiPmTmrSource acpi_pm_tmr_timesource = {};
 AcpiPmTmrCalSource acpi_pm_tmr_calsource = {};
 
-static u32 apci_pmtmr_read()
+static bool timer_good = false;
+
+static u32 acpi_pmtmr_read_slow()
+{
+    u32 v1, v2, v3;
+    do {
+        v1 = inl(pmtmr_ioport);
+        v2 = inl(pmtmr_ioport);
+        v3 = inl(pmtmr_ioport);
+
+        v1 &= timer_mask;
+        v2 &= timer_mask;
+        v3 &= timer_mask;
+    } while ((v1 > v2 && v1 < v3) || (v2 > v3 && v2 < v1) || (v3 > v1 && v3 < v2));
+    return v2;
+}
+
+static u32 acpi_pmtmr_read_fast()
 {
     return inl(pmtmr_ioport) & timer_mask;
+}
+
+static u32 acpi_pmtmr_read()
+{
+    if (timer_good) {
+        return acpi_pmtmr_read_fast();
+    } else {
+        return acpi_pmtmr_read_slow();
+    }
 }
 
 static u64 timer_last_read = 0;
@@ -44,7 +70,7 @@ static u64 timer_last_read = 0;
 
 static u64 read_accumulated()
 {
-    u64 value = apci_pmtmr_read();
+    u64 value = acpi_pmtmr_read();
 
     u64 last_read = __atomic_load_n(&timer_last_read, __ATOMIC_RELAXED);
     value |= last_read & ~(u64)timer_mask;
@@ -133,7 +159,6 @@ void init_acpi_pmtmr()
         timer_mask = 0xffffffff;
     }
 
-
     if (!pmtmr_ioport)
         return;
 
@@ -142,6 +167,20 @@ void init_acpi_pmtmr()
 
     kernel_timesource = &acpi_pm_tmr_timesource;
     kernel_calibration_source = &acpi_pm_tmr_calsource;
+
+    struct uacpi_table table;
+    res = uacpi_table_find_by_signature(ACPI_WAET_SIGNATURE, &table);
+    if (res != UACPI_STATUS_OK)
+        return;
+
+    auto waet = reinterpret_cast<const struct acpi_waet *>(table.ptr);
+    if (waet->flags & ACPI_WAET_ACPI_PM_TIMER_GOOD) {
+        timer_good = true;
+        log::serial_logger.printf("Found ACPI PM Timer enhancement in WAET...\n");
+        log::global_logger.printf("Found ACPI PM Timer enhancement in WAET...\n");
+    }
+
+    uacpi_table_unref(&table);
 }
 
 u64 AcpiPmTmrCalSource::wait_for_nanoseconds(u64 ns) const
