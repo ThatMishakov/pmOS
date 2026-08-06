@@ -28,7 +28,6 @@
 
 #ifndef _PMOS_IPC_H
 #define _PMOS_IPC_H
-#include "acpi.h"
 
 #include <stdint.h>
 
