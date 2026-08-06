@@ -153,6 +153,20 @@ syscall_r get_right_type(pmos_right_t right);
 // instead
 #define FLAG_NOBLOCK 0x01
 
+/**
+ * @brief Blocks the process and upon the message reception, allocates memory with malloc(), and
+ * fills it with the content. Internally, calls get_message_info() and get_first_message()
+ *
+ * @param desc [out] Pointer to the memory location where Message_descriptor will be filled
+ * @param message [out] malloc'ed message. To avoid memory leaks, it should be freed when it's no longer
+ * nedded
+ * @param port [in] Valid port, to which the callee should be the owner, from where to get the message
+ * @param reply_right [out] Reply right sent with the message. NULL discards it on reception.
+ * @param other_rights [out] Array of 4 extra rights in the message. NULL discards them on reception.
+ * @return result of the execution
+ */
+result_t get_message(Message_Descriptor *desc, unsigned char **message, pmos_port_t port, pmos_right_t *reply_right, pmos_right_t *other_rights);
+
 #if defined(__cplusplus)
 }
 #endif

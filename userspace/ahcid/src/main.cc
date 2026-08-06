@@ -10,7 +10,6 @@
 #include <cassert>
 #include <inttypes.h>
 #include <memory>
-#include <pmos/helpers.h>
 #include <pmos/interrupts.h>
 #include <pmos/ipc.h>
 #include <pmos/memory.h>

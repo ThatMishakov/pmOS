@@ -2,7 +2,7 @@
 #include <pmos/ipc.h>
 #include <pmos/ports.h>
 #include <pmos/system.h>
-#include <pmos/tls.h>
+#include "../pmos/tls.h"
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>

@@ -5,7 +5,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <alloca.h>
-#include <pmos/tls.h>
+#include "../pmos/tls.h"
 #include <string.h>
 #include <pmos/__internal.h>
 #include <pmos/load_data.h>

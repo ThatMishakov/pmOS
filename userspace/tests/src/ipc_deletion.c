@@ -1,6 +1,5 @@
 #include <pmos/ipc.h>
 #include <pmos/ports.h>
-#include <pmos/helpers.h>
 #include <stdint.h>
 #include <assert.h>
 #include <stdio.h>

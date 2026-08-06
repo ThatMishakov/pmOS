@@ -27,7 +27,7 @@
  */
 
 #include <errno.h>
-#include <pmos/tls.h>
+#include "../pmos/tls.h"
 #include <stddef.h>
 #include <stdlib.h>
 

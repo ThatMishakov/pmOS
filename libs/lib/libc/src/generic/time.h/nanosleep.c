@@ -3,7 +3,7 @@
 #include <pmos/ports.h>
 #include <pmos/system.h>
 #include <errno.h>
-#include <pmos/tls.h>
+#include "../pmos/tls.h"
 #include <assert.h>
 #include <pmos/__internal.h>
 #include <stdbool.h>

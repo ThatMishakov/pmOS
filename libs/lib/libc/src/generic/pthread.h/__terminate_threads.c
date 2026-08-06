@@ -1,6 +1,6 @@
 #include <pthread.h>
 #include <stdio.h>
-#include <pmos/tls.h>
+#include "../pmos/tls.h"
 #include <pmos/system.h>
 
 extern int pthread_list_spinlock;

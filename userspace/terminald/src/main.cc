@@ -34,7 +34,6 @@
 #include <pmos/ipc.h>
 #include <pmos/ports.h>
 #include <pmos/memory.h>
-#include <pmos/helpers.h>
 #include <pmos/helpers.hh>
 
 #include <src/flanterm.h>

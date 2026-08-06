@@ -28,7 +28,7 @@
 
 #include <assert.h>
 #include <errno.h>
-#include <pmos/tls.h>
+#include "../pmos/tls.h"
 #include <pthread.h>
 #include <stdbool.h>
 

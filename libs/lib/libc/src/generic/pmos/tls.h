@@ -32,7 +32,7 @@
 #include <stdint.h>
 
 #define __DECLARE_STACK_T
-#include "../__posix_types.h"
+#include <__posix_types.h>
 
 /**
  * @brief Internal TLS structure

@@ -28,7 +28,7 @@
 
 #include <errno.h>
 #include <pmos/memory.h>
-#include <pmos/tls.h>
+#include "../pmos/tls.h"
 #include <pmos/system.h>
 #include <pthread.h>
 

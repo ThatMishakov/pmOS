@@ -3,7 +3,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include <pthread.h>
-#include <pmos/tls.h>
+#include "../pmos/tls.h"
 
 int sigaltstack(const stack_t *ss, stack_t *oss)
 {

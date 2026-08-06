@@ -28,4 +28,6 @@ file(GLOB_RECURSE GENERIC_SRC
 add_executable(i8042 ${GENERIC_SRC})
 set_property(TARGET i8042 PROPERTY C_STANDARD 23)
 
+target_link_libraries(i8042 PRIVATE pmos-helpers)
+
 install(TARGETS i8042 RUNTIME DESTINATION "/boot")

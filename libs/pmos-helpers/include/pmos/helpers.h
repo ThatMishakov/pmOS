@@ -29,8 +29,8 @@
 #ifndef _PMOS_HELPERS_H
 #define _PMOS_HELPERS_H
 
-#include "containers/rbtree.h"
-#include "system.h"
+#include <pmos/containers/rbtree.h>
+#include <pmos/system.h>
 
 #include <kernel/messaging.h>
 #include <stdio.h>
@@ -42,20 +42,6 @@ extern "C" {
 typedef uint64_t pmos_port_t;
 
 #ifdef __STDC_HOSTED__
-
-/**
- * @brief Blocks the process and upon the message reception, allocates memory with malloc(), and
- * fills it with the content. Internally, calls get_message_info() and get_first_message()
- *
- * @param desc [out] Pointer to the memory location where Message_descriptor will be filled
- * @param message [out] malloc'ed message. To avoid memory leaks, it should be freed when it's no longer
- * nedded
- * @param port [in] Valid port, to which the callee should be the owner, from where to get the message
- * @param reply_right [out] Reply right sent with the message. NULL discards it on reception.
- * @param other_rights [out] Array of 4 extra rights in the message. NULL discards them on reception.
- * @return result of the execution
- */
-result_t get_message(Message_Descriptor *desc, unsigned char **message, pmos_port_t port, pmos_right_t *reply_right, pmos_right_t *other_rights);
 
 struct msgloop_data;
 int pmos_msgloop_compare(struct msgloop_data *a, struct msgloop_data *b);

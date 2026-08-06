@@ -1,6 +1,6 @@
 #include <pmos/ipc.h>
 #include <pmos/ports.h>
-#include <pmos/tls.h>
+#include "../pmos/tls.h"
 
 extern pmos_port_t worker_port;
 

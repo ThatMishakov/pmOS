@@ -36,11 +36,10 @@
 #include <assert.h>
 #include <errno.h>
 #include <pmos/__internal.h>
-#include <pmos/helpers.h>
 #include <pmos/ipc.h>
 #include <pmos/ports.h>
 #include <pmos/system.h>
-#include <pmos/tls.h>
+#include "../pmos/tls.h"
 #include <pthread.h>
 #include <stdbool.h>
 #include <stddef.h>

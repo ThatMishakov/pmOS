@@ -31,7 +31,7 @@
 #include <pmos/load_data.h>
 #include <pmos/memory.h>
 #include <pmos/ports.h>
-#include <pmos/tls.h>
+#include "pmos/tls.h"
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdio_internal.h>

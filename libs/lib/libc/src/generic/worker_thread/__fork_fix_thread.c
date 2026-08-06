@@ -1,5 +1,5 @@
 #include <pmos/__internal.h>
-#include <pmos/tls.h>
+#include "../pmos/tls.h"
 #include <pmos/ports.h>
 #include <errno.h>
 #include <pthread.h>

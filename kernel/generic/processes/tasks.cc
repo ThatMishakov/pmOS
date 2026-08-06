@@ -39,7 +39,6 @@
 #include <kernel/elf.h>
 #include <memory/mem_object.hh>
 #include <pmos/load_data.h>
-#include <pmos/tls.h>
 #include <sched/defs.hh>
 #include <sched/sched.hh>
 #include "elf.hh"
@@ -480,53 +479,6 @@ ReturnStr<
             }
         }
 
-        for (size_t i = 0; i < ph_count; ++i) {
-            const phreader &ph = phs[i];
-
-            if (ph.type != PT_TLS)
-                continue;
-
-            const size_t size = sizeof(TLS_Data) + ((ph.p_filesz + 7) & ~7UL);
-            klib::unique_ptr<u32[]> t(new u32[size / sizeof(u32)]);
-            if (!t)
-                return Error(-ENOMEM);
-
-            TLS_Data *tls_data = (TLS_Data *)t.get();
-
-            tls_data->memsz  = ph.p_memsz;
-            tls_data->align  = ph.alignment;
-            tls_data->filesz = ph.p_filesz;
-
-            if (ph.p_filesz) {
-                r = elf->read_to_kernel(ph.p_offset, tls_data->data, ph.p_filesz);
-                if (!r.success())
-                    return r.propagate();
-            }
-
-            if (!r.val)
-                return {};
-
-            // Install memory region
-            const u32 pa_size = (size + 0xFFF) & ~0xFFF;
-            auto tls_virt =
-                table->atomic_create_normal_region(0, pa_size,
-                                                   paging::Page_Table::Protection::Readable |
-                                                       paging::Page_Table::Protection::Writeable,
-                                                   false, false, name + "_tls", 0, true);
-
-            if (!tls_virt.success())
-                return tls_virt.propagate();
-
-            auto r = table->atomic_copy_to_user(tls_virt.val->start_addr, tls_data, size);
-            if (!r.success())
-                return r.propagate();
-
-            if (!r.val)
-                return {};
-
-            regs.arg3() = (ulong)tls_virt.val->start_addr;
-        }
-
         program_entry = header.program_entry;
     } else {
         // Parse program headers
@@ -620,51 +572,6 @@ ReturnStr<
                 if (!res.success())
                     return res.propagate();
             }
-        }
-
-        for (size_t i = 0; i < ph_count; ++i) {
-            const phreader &ph = phs[i];
-
-            if (ph.type != PT_TLS)
-                continue;
-
-            const size_t size = sizeof(TLS_Data) + ((ph.p_filesz + 7) & ~7UL);
-            klib::unique_ptr<u64[]> t(new u64[size / sizeof(u64)]);
-            if (!t)
-                return Error(-ENOMEM);
-
-            TLS_Data *tls_data = (TLS_Data *)t.get();
-
-            tls_data->memsz  = ph.p_memsz;
-            tls_data->align  = ph.alignment;
-            tls_data->filesz = ph.p_filesz;
-
-            r = elf->read_to_kernel(ph.p_offset, tls_data->data, ph.p_filesz);
-            if (!r.success())
-                return r.propagate();
-
-            if (!r.val)
-                return {};
-
-            // Install memory region
-            const u64 pa_size = (size + 0xFFF) & ~0xFFFUL;
-            auto tls_virt =
-                table->atomic_create_normal_region(0, pa_size,
-                                                   paging::Page_Table::Protection::Readable |
-                                                       paging::Page_Table::Protection::Writeable,
-                                                   false, false, name + "_tls", 0, true);
-
-            if (!tls_virt.success())
-                return tls_virt.propagate();
-
-            auto r = table->atomic_copy_to_user(tls_virt.val->start_addr, tls_data, size);
-            if (!r.success())
-                return r.propagate();
-
-            if (!r.val)
-                return {};
-
-            regs.arg3() = (ulong)tls_virt.val->start_addr;
         }
 
         program_entry = header.program_entry;

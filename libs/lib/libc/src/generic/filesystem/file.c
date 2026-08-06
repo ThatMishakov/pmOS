@@ -32,15 +32,15 @@
 
 #include <errno.h>
 #include <limits.h>
-#include <pmos/helpers.h>
 #include <pmos/ipc.h>
 #include <pmos/ports.h>
-#include <pmos/tls.h>
+#include "../pmos/tls.h"
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/uio.h>
+#include <pmos/ports.h>
 
 int vfsd_send_persistant(size_t msg_size, const void *message);
 

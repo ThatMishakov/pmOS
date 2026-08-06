@@ -29,7 +29,6 @@
 #include "ports.h"
 #include "timer.h"
 
-#include <pmos/helpers.h>
 #include <pmos/ipc.h>
 #include <pmos/ports.h>
 #include <stdio.h>

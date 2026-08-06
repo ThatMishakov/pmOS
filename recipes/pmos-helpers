@@ -1,11 +1,13 @@
 #!/bin/sh
 
-name=libc
-version=0.0.1
+name=pmos-helpers
+version=0.1
 revision=1
 
-source_dir=libs/lib
-deps="libc-headers pmos-containers"
+imagedeps="make cmake"
+
+source_dir=libs/pmos-helpers
+deps="libc-headers libcxx pmos-containers"
 hostdeps="clang"
 
 configure() {
@@ -13,7 +15,7 @@ configure() {
 }
 
 build() {
-    make  -j ${parallelism}
+    make -j ${parallelism}
 }
 
 package() {

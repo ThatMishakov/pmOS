@@ -6,7 +6,6 @@
 #include <limits.h>
 #include <kernel/types.h>
 #include <pmos/load_data.h>
-#include <pmos/tls.h>
 #include <string.h>
 #include "auxvec.h"
 #include <elf.h>
@@ -284,42 +283,6 @@ result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flag
         }
     }
 
-    uint64_t tls_addr = 0;
-
-    // TLS Stuff (TODO: Remove it)
-    if (tls_memsz > 0) {
-        if (tls_offset + tls_filesz > mem_object_size) {
-            result = -EFAULT;
-            goto error;
-        }
-
-        const size_t size = sizeof(TLS_Data) + ((tls_memsz + 7) & ~7UL);
-        
-        uint64_t tls_pa_size = (size + page_mask) & ~page_mask;
-        auto tls_result = create_normal_region(TASK_ID_SELF, NULL, tls_pa_size, PROT_READ | PROT_WRITE);
-        if (tls_result.result) {
-            result = tls_result.result;
-            goto error;
-        }
-
-        TLS_Data *tls_data = tls_result.virt_addr;
-
-        tls_data->memsz  = tls_memsz;
-        tls_data->align  = tls_align;
-        tls_data->filesz = tls_align;
-
-        memcpy(tls_data->data, (char *)file_mapped + tls_offset, tls_filesz);
-
-        auto res = transfer_region(page_table_id, tls_result.virt_addr, 0, PROT_READ);
-        if (res.result) {
-            release_region(TASK_ID_SELF, tls_result.virt_addr);
-            result = res.result;
-            goto error;
-        }
-        tls_addr = res.virt_addr_intptr;
-    }
-
-
     size_t stack_size = MB(16);
     // Init stack
     auto stack_result = create_normal_region(task_id, nullptr, stack_size, PROT_NONE);
@@ -507,7 +470,7 @@ result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flag
     }
 
 
-    auto start_result = syscall_start_process(task_id, program_entry, res.virt_addr_intptr, load_tags_size, tls_addr);
+    auto start_result = syscall_start_process(task_id, program_entry, res.virt_addr_intptr, load_tags_size, 0);
     if (start_result) {
         result = start_result;
         goto error;

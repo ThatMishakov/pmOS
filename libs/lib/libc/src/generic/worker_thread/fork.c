@@ -35,7 +35,7 @@
 #include <pmos/system.h>
 #include <pmos/memory.h>
 #include <stdint.h>
-#include <pmos/tls.h>
+#include "../pmos/tls.h"
 #include <pmos/ipc.h>
 #include <pmos/ports.h>
 #include <stdio.h>

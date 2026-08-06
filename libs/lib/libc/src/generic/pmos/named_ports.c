@@ -1,6 +1,5 @@
 #include <alloca.h>
 #include <errno.h>
-#include <pmos/helpers.h>
 #include <pmos/ipc.h>
 #include <pmos/ports.h>
 #include <pmos/system.h>

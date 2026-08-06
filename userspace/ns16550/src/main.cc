@@ -4,7 +4,6 @@
 #include <cstring>
 #include <inttypes.h>
 #include <memory>
-#include <pmos/helpers.h>
 #include <pmos/helpers.hh>
 #include <pmos/interrupts.h>
 #include <pmos/ipc.h>

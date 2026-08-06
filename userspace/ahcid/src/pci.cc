@@ -1,7 +1,6 @@
 #include "pci.hh"
 
 #include <errno.h>
-#include <pmos/helpers.h>
 #include <pmos/helpers.hh>
 #include <pmos/ipc.h>
 #include <pmos/memory.h>

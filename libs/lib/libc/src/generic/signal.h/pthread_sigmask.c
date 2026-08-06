@@ -1,5 +1,5 @@
 #include <signal.h>
-#include <pmos/tls.h>
+#include "../pmos/tls.h"
 #include <errno.h>
 #include <pmos/ipc.h>
 

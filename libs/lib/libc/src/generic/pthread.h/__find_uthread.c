@@ -1,5 +1,5 @@
 #include <pthread.h>
-#include <pmos/tls.h>
+#include "../pmos/tls.h"
 #include <pmos/__internal.h>
 
 extern int pthread_list_spinlock;
