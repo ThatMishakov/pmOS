@@ -76,7 +76,7 @@ typedef struct ports_request_t {
  * @todo Make the tasks own the ports and destroy them automatically when the task is destroyed.
  * Consider ports with queues other than FIFO as that sounds very interesting
  */
-ports_request_t create_port(pid_t owner, uint32_t flags);
+ports_request_t create_port(uint64_t owner, uint32_t flags);
 
 result_t pmos_delete_port(pmos_port_t port);
 

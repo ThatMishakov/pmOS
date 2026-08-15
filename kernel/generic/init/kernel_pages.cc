@@ -4,7 +4,7 @@
 #include <kern_logger/kern_logger.hh>
 #include <memory/pmm.hh>
 #include <memory/vmm.hh>
-#include <kernel/elf.h>
+#include <elf.h>
 
 using namespace kernel;
 using namespace kernel::paging;
@@ -33,15 +33,15 @@ void kernel::map_kernel_pages(ptable_top_ptr_t kernel_pt_top, phys_addr_t kernel
 {
     kernel_phys_base = kernel_phys;
 
-    ELF_Common *ehdr = (ELF_Common *)&__ehdr_start;
+    Elf32_Ehdr *ehdr = (Elf32_Ehdr *)&__ehdr_start;
 
     assert(ehdr->magic == ELF_MAGIC);
     assert(ehdr->bitness == ELF_BITNESS);
 
     if (ehdr->bitness == ELF_64BIT) {
-        ELF_64bit *ehdr = (ELF_64bit *)&__ehdr_start;
+        Elf64_Ehdr *ehdr = (Elf64_Ehdr *)&__ehdr_start;
 
-        ELF_PHeader_64 *phdrs = (ELF_PHeader_64 *)((char *)&_kernel_start + ehdr->program_header);
+        Elf64_Phdr *phdrs = (Elf64_Phdr *)((char *)&_kernel_start + ehdr->program_header);
         for (size_t i = 0; i < ehdr->program_header_entries; ++i) {
             auto &phdr = phdrs[i];
             if (phdr.type != ELF_SEGMENT_LOAD)
@@ -69,11 +69,11 @@ void kernel::map_kernel_pages(ptable_top_ptr_t kernel_pt_top, phys_addr_t kernel
                 panic("Couldn't map kernel segment\n");
         }
     } else if (ehdr->bitness == ELF_32BIT) {
-        ELF_32bit *ehdr = (ELF_32bit *)&__ehdr_start;
+        Elf32_Ehdr *ehdr = (Elf32_Ehdr *)&__ehdr_start;
         assert(ehdr->magic == ELF_MAGIC);
         assert(ehdr->bitness == ELF_BITNESS);
 
-        ELF_PHeader_32 *phdrs = (ELF_PHeader_32 *)((char *)&_kernel_start + ehdr->program_header);
+        Elf32_Phdr *phdrs = (Elf32_Phdr *)((char *)&_kernel_start + ehdr->program_header);
         for (size_t i = 0; i < ehdr->program_header_entries; ++i) {
             auto &phdr = phdrs[i];
             if (phdr.type != ELF_SEGMENT_LOAD)
