@@ -1,0 +1,30 @@
+#!/bin/sh
+
+name=mlibc
+version=0.0.1
+revision=1
+
+source_dir=mlibc
+imagedeps="build-essential meson ninja-build pkg-config"
+builddeps="frigg libsmarter"
+deps="mlibc-headers compiler-rt"
+hostdeps="clang"
+
+allow_network=yes
+
+configure() {
+        CFLAGS="$TARGET_CFLAGS" \
+        CXXFLAGS="$TARGET_CXXFLAGS" \
+        LDFLAGS="$TARGET_LDFLAGS" \
+    meson_configure_noflags \
+        -Dno_headers=true \
+        -Ddefault_library=both
+}
+
+build() {
+    ninja -j${parallelism}
+}
+
+package() {
+    DESTDIR="${dest_dir}" ninja install
+}

@@ -1,0 +1,21 @@
+#!/bin/sh
+
+name=mlibc-headers
+version=0.0.1
+revision=1
+
+source_dir=mlibc
+imagedeps="meson ninja-build pkg-config"
+
+configure() {
+    meson_configure \
+        -Dheaders_only=true
+}
+
+build() {
+    ninja -j${parallelism}
+}
+
+package() {
+    DESTDIR="${dest_dir}" ninja install
+}

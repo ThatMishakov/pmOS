@@ -1,6 +1,6 @@
 JINX_MAJOR_VER=0.8
 JINX_DEBIAN_SNAPSHOT=20260326T203750Z
-JINX_BASE_PACKAGES="make cmake build-essential ninja-build python3"
+JINX_BASE_PACKAGES="make cmake build-essential ninja-build python3 gettext-base"
 
 BOOT_SERVICES="ahcid devicesd logd ns16550 pmbus processd terminald tests blockd ext4 ps2d"
 if [ "$JINX_ARCH" = "x86_64" ] || [ "$JINX_ARCH" = "i686" ]; then
@@ -135,4 +135,35 @@ autotools_configure_noflags() {
 
 post_package_strip() {
     :
+}
+
+meson_configure() {
+        CFLAGS="$TARGET_CFLAGS" \
+        CXXFLAGS="$TARGET_CXXFLAGS" \
+        LDFLAGS="$TARGET_LDFLAGS" \
+    meson_configure_noflags "$@"
+}
+
+meson_configure_noflags() {
+    if [ -z "${meson_source_dir-}" ]; then
+        meson_source_dir="${source_dir}"
+    fi
+
+        JINX_ARCH=${JINX_ARCH} \
+        OS_TRIPLET=${OS_TRIPLET} \
+        sysroot=${sysroot_dir} \
+    envsubst < "${base_dir}/scripts/meson.cross-file" > ./cross-file.txt
+
+    meson setup "${meson_source_dir}" \
+        --cross-file=cross-file.txt \
+        --prefix=${prefix} \
+        --sysconfdir=/etc \
+        --localstatedir=/var \
+        --libdir=lib \
+        --sbindir=sbin \
+        --bindir=bin \
+        --datadir=share \
+        --buildtype=release \
+        -Ddefault_library=shared \
+        "$@"
 }

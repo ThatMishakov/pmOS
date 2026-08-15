@@ -1,0 +1,50 @@
+#!/bin/sh
+
+name=compiler-rt
+revision=1
+from_source=clang-src
+imagedeps="ninja-build cmake python3 build-essential"
+deps="mlibc-headers"
+hostdeps="clang"
+
+triplet="${JINX_ARCH}-pmos"
+
+configure() {
+    cmake -S ${source_dir}/compiler-rt -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX=${prefix} \
+    -DLLVM_DEFAULT_TARGET_TRIPLE=${JINX_ARCH}-pmos \
+    -DCMAKE_CXX_COMPILER_TARGET="${triplet}" \
+    -DCOMPILER_RT_OS_DIR=pmos \
+    -DCMAKE_C_COMPILER="clang" \
+    -DCMAKE_CXX_COMPILER="clang++" \
+    -DCMAKE_C_COMPILER_TARGET="${triplet}" \
+    -DCMAKE_ASM_COMPILER_TARGET="${triplet}" \
+    -DCMAKE_C_FLAGS="--sysroot=${sysroot_dir}" \
+    -DCMAKE_CXX_FLAGS="--sysroot=${sysroot_dir} -nostdlib" \
+    -DCMAKE_C_COMPILER_WORKS=ON \
+    -DCMAKE_CXX_COMPILER_WORKS=ON \
+    -DCOMPILER_RT_BUILD_BUILTINS=ON \
+    -DCLANG_DEFAULT_LINKER=lld \
+    -DCOMPILER_RT_BUILD_BUILTINS=ON \
+    -DCOMPILER_RT_BUILD_ORC=OFF \
+    -DCOMPILER_RT_BUILD_SANITIZERS=OFF \
+    -DCOMPILER_RT_BUILD_MEMPROF=OFF \
+    -DCOMPILER_RT_BUILD_XRAY=OFF \
+    -DCOMPILER_RT_BUILD_LIBFUZZER=OFF \
+    -DCOMPILER_RT_BUILD_PROFILE=OFF \
+    -DDLLVM_ENABLE_PER_TARGET_RUNTIME_DIR=ON \
+    -DCOMPILER_RT_BUILD_CTX_PROFILE=OFF \
+    -DCOMPILER_RT_DEFAULT_TARGET_TRIPLE=${JINX_ARCH}-pmos \
+    -DCMAKE_C_COMPILER_WORKS=ON \
+    -DCMAKE_CXX_COMPILER_WORKS=ON \
+    -DCAN_TARGET_${JINX_ARCH}=1
+}
+
+build() {
+    ninja -j ${parallelism}
+}
+
+package() {
+    DESTDIR="${dest_dir}" ninja install
+}

@@ -71,6 +71,13 @@ typedef struct mem_object_request_ret_t {
 #define SEGMENT_GS   2
 #define GENERAL_REGS 3
 
+// This is dumb for other archetectures
+#ifdef __i386__
+#define SEGMENT_TCB SEGMENT_GS
+#else
+#define SEGMENT_TCB SEGMENT_FS
+#endif
+
 struct task_register_set {
     uint64_t pc;
     uint64_t ra;

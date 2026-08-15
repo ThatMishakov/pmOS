@@ -1,0 +1,25 @@
+#! /bin/sh
+
+name=libsmarter
+
+version=810746abbf03db3d95e49754a137d4417e216832
+revision=1
+git_url="https://github.com/managarm/libsmarter.git"
+commit=${version}
+imagedeps="meson ninja-build pkg-config"
+hostdeps="clang"
+
+configure() {
+    meson_configure \
+        --includedir=share/libsmarter/include
+}
+
+build() {
+    ninja -j${parallelism}
+}
+
+package() {
+    DESTDIR="${dest_dir}" ninja install
+
+    post_package_strip
+}

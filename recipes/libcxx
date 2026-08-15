@@ -18,7 +18,7 @@ configure() {
         -DLLVM_ENABLE_RUNTIMES="libcxx;libcxxabi;libunwind;compiler-rt" \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_INSTALL_PREFIX=/usr/ \
-        -DLLVM_TARGET_TRIPLE=loongarch64-pmos \
+        -DLLVM_TARGET_TRIPLE=${triplet} \
         -DCMAKE_CXX_COMPILER_TARGET="${triplet}" \
         -DCMAKE_C_COMPILER="clang" \
         -DCMAKE_CXX_COMPILER="clang++" \

@@ -24,3 +24,6 @@
 [submodule "jinx"]
 	path = jinx
 	url = https://codeberg.org/Mintsuki/jinx.git
+[submodule "mlibc"]
+	path = mlibc
+	url = git@github.com:ThatMishakov/mlibc.git

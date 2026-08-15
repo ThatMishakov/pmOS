@@ -33,9 +33,9 @@
 
 /// Constants for the `waitpid' function.
 enum {
-    WCONTINUED = 1, //< Report status of continued child process.
-    WNOHANG    = 2, //< Return immediately if no child has exited.
-    WUNTRACED  = 4, //< Report status of stopped child process.
+    WNOHANG    = 1, //< Return immediately if no child has exited.
+    WUNTRACED  = 2, //< Report status of stopped child process.
+    WCONTINUED = 8, //< Report status of continued child process.
 };
 
 /// Exit status of a child process.
