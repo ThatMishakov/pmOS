@@ -7,12 +7,16 @@ revision=1
 source_dir=mlibc
 imagedeps="build-essential meson ninja-build pkg-config"
 builddeps="frigg libsmarter"
-deps="mlibc-headers compiler-rt"
-hostdeps="clang"
+deps="mlibc-headers"
+hostdeps="clang compiler-rt"
 
 allow_network=yes
 
 configure() {
+    clang++ --target=x86_64-unknown-pmos --sysroot=${sysroot_dir} -print-search-dirs
+    clang++ --target=x86_64-unknown-pmos --sysroot=${sysroot_dir} -print-libgcc-file-name
+    clang++ --target=x86_64-unknown-pmos --sysroot=${sysroot_dir} -print-resource-dir
+
         CFLAGS="$TARGET_CFLAGS" \
         CXXFLAGS="$TARGET_CXXFLAGS" \
         LDFLAGS="$TARGET_LDFLAGS" \
