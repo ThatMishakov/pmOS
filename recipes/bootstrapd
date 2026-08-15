@@ -5,7 +5,7 @@ version=0.0.1
 revision=1
 
 source_dir=userspace/bootstrapd
-deps="libc libc-headers libcxx pmos-helpers"
+deps="mlibc mlibc-headers pmos-helpers"
 hostdeps="clang"
 allow_network=yes
 

@@ -7,7 +7,7 @@ revision=1
 imagedeps="make cmake"
 
 source_dir=libs/pmoscxx
-deps="libc-headers libcxx"
+deps="mlibc-headers libcxx pmos-containers"
 hostdeps="clang"
 
 configure() {

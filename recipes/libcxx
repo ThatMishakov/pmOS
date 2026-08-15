@@ -3,8 +3,8 @@
 name=libcxx
 from_source=clang-src
 revision=1
-deps="libc-headers libc"
-hostdeps="clang"
+deps="mlibc-headers mlibc"
+hostdeps="clang compiler-rt"
 imagedeps="python3 build-essential"
 
 triplet="${JINX_ARCH}-pmos"
@@ -15,7 +15,7 @@ fi
 
 configure() {
     cmake -S ${source_dir}/runtimes \
-        -DLLVM_ENABLE_RUNTIMES="libcxx;libcxxabi;libunwind;compiler-rt" \
+        -DLLVM_ENABLE_RUNTIMES="libcxx;libcxxabi;libunwind" \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_INSTALL_PREFIX=/usr/ \
         -DLLVM_TARGET_TRIPLE=${triplet} \
@@ -25,24 +25,16 @@ configure() {
         -DCMAKE_C_COMPILER_TARGET="${triplet}" \
         -DCMAKE_ASM_COMPILER_TARGET="${triplet}" \
         -DCOMPILER_RT_BUILD_BUILTINS=ON \
-        -DCMAKE_C_FLAGS="--sysroot=${sysroot_dir} -nostartfiles" \
-        -DCMAKE_CXX_FLAGS="--sysroot=${sysroot_dir} -nostdlib" \
-        -DLIBCXXABI_ENABLE_SHARED=OFF \
+        -DCMAKE_C_FLAGS="--sysroot=${sysroot_dir} -nostartfiles -lclang_rt.builtins" \
+        -DCMAKE_CXX_FLAGS="--sysroot=${sysroot_dir} -nostdlib -lclang_rt.builtins" \
         -DLIBCXXABI_USE_LLVM_UNWINDER=true \
-        -DLIBCXX_ENABLE_SHARED=OFF \
-        -DLIBUNWIND_ENABLE_SHARED=OFF \
-        -DCOMPILER_RT_BUILD_ORC=OFF \
-        -DCOMPILER_RT_BUILD_SANITIZERS=OFF \
-        -DCOMPILER_RT_BUILD_MEMPROF=OFF \
-        -DCOMPILER_RT_BUILD_XRAY=OFF \
-        -DCOMPILER_RT_BUILD_LIBFUZZER=OFF \
-        -DCOMPILER_RT_BUILD_PROFILE=OFF \
-        -DCOMPILER_RT_BUILD_CTX_PROFILE=OFF \
+        -DCMAKE_C_COMPILER_WORKS=ON \
+        -DCMAKE_CXX_COMPILER_WORKS=ON \
         ${EXTRA_FLAGS}
 }
 
 build() {
-    make -j ${parallelism}
+    make -j ${parallelism} VERBOSE=1
 }
 
 package() {

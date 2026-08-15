@@ -28,7 +28,6 @@
 
 #include <cstdio>
 #include <list>
-#include <pmos/debug.h>
 #include <pmos/system.h>
 #include <pthread.h>
 #include <string>
