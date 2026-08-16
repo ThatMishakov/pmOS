@@ -29,30 +29,36 @@ using namespace kernel::ia32::paging;
 
 static phys_addr_t kernel_phys_base = 0;
 
+#ifdef __i386__
+#define ELF_BITNESS R_LARCH_32
+#else
+#define ELF_BITNESS R_LARCH_64
+#endif
+
 void kernel::map_kernel_pages(ptable_top_ptr_t kernel_pt_top, phys_addr_t kernel_phys)
 {
     kernel_phys_base = kernel_phys;
 
     Elf32_Ehdr *ehdr = (Elf32_Ehdr *)&__ehdr_start;
 
-    assert(ehdr->magic == ELF_MAGIC);
-    assert(ehdr->bitness == ELF_BITNESS);
+    assert(!memcmp(ehdr->e_ident, ELFMAG, SELFMAG));
+    assert((ehdr->e_machine & 0xff) == ELF_BITNESS);
 
-    if (ehdr->bitness == ELF_64BIT) {
+    if ((ehdr->e_machine & 0xff) == R_LARCH_64) {
         Elf64_Ehdr *ehdr = (Elf64_Ehdr *)&__ehdr_start;
 
-        Elf64_Phdr *phdrs = (Elf64_Phdr *)((char *)&_kernel_start + ehdr->program_header);
-        for (size_t i = 0; i < ehdr->program_header_entries; ++i) {
+        Elf64_Phdr *phdrs = (Elf64_Phdr *)((char *)&_kernel_start + ehdr->e_phoff);
+        for (size_t i = 0; i < ehdr->e_phnum; ++i) {
             auto &phdr = phdrs[i];
-            if (phdr.type != ELF_SEGMENT_LOAD)
+            if (phdr.p_type != PT_LOAD)
                 continue;
 
             Page_Table_Arguments args = {
-                .readable           = (phdr.flags & ELF_FLAG_READABLE) != 0,
-                .writeable          = (phdr.flags & ELF_FLAG_WRITABLE) != 0,
+                .readable           = (phdr.p_flags & PF_R) != 0,
+                .writeable          = (phdr.p_flags & PF_W) != 0,
                 .user_access        = false,
                 .global             = true,
-                .execution_disabled = (phdr.flags & ELF_FLAG_EXECUTABLE) == 0,
+                .execution_disabled = (phdr.p_flags & PF_X) == 0,
                 .extra              = PAGING_FLAG_STRUCT_PAGE,
             };
 
@@ -68,23 +74,23 @@ void kernel::map_kernel_pages(ptable_top_ptr_t kernel_pt_top, phys_addr_t kernel
             if (result)
                 panic("Couldn't map kernel segment\n");
         }
-    } else if (ehdr->bitness == ELF_32BIT) {
+    } else if ((ehdr->e_machine & 0xff) == R_LARCH_32) {
         Elf32_Ehdr *ehdr = (Elf32_Ehdr *)&__ehdr_start;
-        assert(ehdr->magic == ELF_MAGIC);
-        assert(ehdr->bitness == ELF_BITNESS);
+        assert(!memcmp(ehdr->e_ident, ELFMAG, SELFMAG));
+        assert((ehdr->e_machine & 0xff) == ELF_BITNESS);
 
-        Elf32_Phdr *phdrs = (Elf32_Phdr *)((char *)&_kernel_start + ehdr->program_header);
-        for (size_t i = 0; i < ehdr->program_header_entries; ++i) {
+        Elf32_Phdr *phdrs = (Elf32_Phdr *)((char *)&_kernel_start + ehdr->e_phoff);
+        for (size_t i = 0; i < ehdr->e_phnum; ++i) {
             auto &phdr = phdrs[i];
-            if (phdr.type != ELF_SEGMENT_LOAD)
+            if (phdr.p_type != PT_LOAD)
                 continue;
 
             Page_Table_Arguments args = {
-                .readable           = (phdr.flags & ELF_FLAG_READABLE) != 0,
-                .writeable          = (phdr.flags & ELF_FLAG_WRITABLE) != 0,
+                .readable           = (phdr.p_flags & PF_R) != 0,
+                .writeable          = (phdr.p_flags & PF_W) != 0,
                 .user_access        = false,
                 .global             = true,
-                .execution_disabled = (phdr.flags & ELF_FLAG_EXECUTABLE) == 0,
+                .execution_disabled = (phdr.p_flags & PF_X) == 0,
                 .extra              = PAGING_FLAG_STRUCT_PAGE,
             };
 

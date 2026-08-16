@@ -36,7 +36,6 @@
 #include <errno.h>
 #include <exceptions.hh>
 #include <kern_logger/kern_logger.hh>
-#include <kernel/elf.h>
 #include <memory/mem_object.hh>
 #include <pmos/load_data.h>
 #include <sched/defs.hh>
@@ -340,11 +339,23 @@ kresult_t
     return register_page_table(klib::forward<klib::shared_ptr<paging::Arch_Page_Table>>(table));
 }
 
+#define ELF_ENDIANNESS 1
+
+#ifdef __x86_64__
+#define ELF_INSTR_SET EM_X86_64
+#elif defined(__i386__)
+#define ELF_INSTR_SET EM_386
+#elif defined(__riscv)
+#define ELF_INSTR_SET EM_RISCV
+#elif defined(__loongarch__)
+#define ELF_INSTR_SET EM_LOONGARCH
+#endif
+
 ReturnStr<
     std::optional<std::tuple<ulong, load_tag_elf_phdr, klib::shared_ptr<paging::Arch_Page_Table>>>>
     TaskDescriptor::load_elf_into_memory(klib::shared_ptr<paging::Mem_Object> elf)
 {
-    ELF_Common header;
+    Elf32_Ehdr header;
     auto r = elf->read_to_kernel(0, (u8 *)&header, sizeof(header));
     if (!r.success())
         return r.propagate();
@@ -353,24 +364,24 @@ ReturnStr<
         // ELF header can't be read immediately
         return {};
 
-    if (header.magic != ELF_MAGIC)
+    if (memcmp(header.e_ident, ELFMAG, SELFMAG))
         return Error(-ENOEXEC);
 
-    if (header.endianness != ELF_ENDIANNESS)
+    if (header.e_ident[5] != ELF_ENDIANNESS)
         return Error(-ENOEXEC);
 
-    if (header.type != ELF_EXEC)
+    if (header.e_type != ET_EXEC)
         return Error(-ENOEXEC);
 
     int paging_flags = 0;
 #ifdef __x86_64__
-    if (header.instr_set != ELF_X86_64 && header.instr_set != ELF_X86)
+    if (header.e_machine == EM_X86_64 && header.e_machine != EM_386)
         return Error(-ENOEXEC);
 
-    if (header.instr_set != ELF_X86_64)
+    if (header.e_machine == EM_386)
         paging_flags |= paging::Page_Table::FLAG_32BIT;
 #else
-    if (header.instr_set != ELF_INSTR_SET)
+    if (header.e_machine != ELF_INSTR_SET)
         return Error(-ENOEXEC);
 #endif
 
@@ -379,11 +390,11 @@ ReturnStr<
     load_tag_elf_phdr phdr_tag = {LOAD_TAG_ELF_PHDR_HEADER, 0, 0, 0, 0};
     size_t load_count          = 0;
 
-    if (header.bitness == ELF_32BIT) {
-        using phreader = ELF_PHeader_32;
+    if (header.e_ident[4] == R_LARCH_32) {
+        using pheader = Elf32_Phdr;
 
-        ELF_32bit header;
-        auto r = elf->read_to_kernel(0, (u8 *)&header, sizeof(ELF_32bit));
+        Elf32_Ehdr header;
+        auto r = elf->read_to_kernel(0, (u8 *)&header, sizeof(header));
         if (!r.success())
             return r.propagate();
 
@@ -391,20 +402,20 @@ ReturnStr<
             // ELF header can't be read immediately
             return {};
 
-        if (header.prog_header_size != sizeof(phreader))
+        if (header.e_phentsize != sizeof(pheader))
             return Error(-ENOEXEC);
 
-        const u32 ph_count = header.program_header_entries;
-        klib::vector<phreader> phs;
+        const u32 ph_count = header.e_phnum;
+        klib::vector<pheader> phs;
         if (!phs.resize(ph_count))
             return Error(-ENOMEM);
 
-        unsigned pheader_size = ph_count * sizeof(phreader);
+        unsigned pheader_size = ph_count * sizeof(pheader);
         phdr_tag.phdr_num     = ph_count;
-        phdr_tag.phdr_size    = sizeof(phreader);
+        phdr_tag.phdr_size    = sizeof(pheader);
 
-        r = elf->read_to_kernel(header.program_header, (u8 *)phs.data(),
-                                ph_count * sizeof(phreader));
+        r = elf->read_to_kernel(header.e_phoff, (u8 *)phs.data(),
+                                ph_count * sizeof(pheader));
         if (!r.success())
             return r.propagate();
 
@@ -419,33 +430,33 @@ ReturnStr<
 
         // Load the program header into the page table
         for (size_t i = 0; i < ph_count; ++i) {
-            const phreader &ph = phs[i];
+            const pheader &ph = phs[i];
 
-            if (ph.type != ELF_SEGMENT_LOAD)
+            if (ph.p_type != PT_LOAD)
                 continue;
 
             if ((ph.p_vaddr & 0xfff) != (ph.p_offset & 0xfff))
                 return Error(-ENOEXEC);
 
             // If pheader is inside this segment, set its virtual address
-            if (ph.p_offset <= header.program_header &&
-                header.program_header + pheader_size <= ph.p_offset + ph.p_filesz) {
-                phdr_tag.phdr_addr = ph.p_vaddr + header.program_header - ph.p_offset;
+            if (ph.p_offset <= header.e_phoff &&
+                header.e_phoff + pheader_size <= ph.p_offset + ph.p_filesz) {
+                phdr_tag.phdr_addr = ph.p_vaddr + header.e_phoff - ph.p_offset;
             }
 
-            if (!(ph.flags & ELF_FLAG_WRITABLE)) {
+            if (!(ph.p_flags & PF_W)) {
                 // Direct map the region
                 const u32 region_start = ph.p_vaddr & ~0xFFFUL;
                 const u32 file_offset  = ph.p_offset & ~0xFFFUL;
                 const u32 size         = ((ph.p_vaddr & 0xFFFUL) + ph.p_memsz + 0xFFF) & ~0xFFFUL;
 
-                u8 protection_mask = (ph.flags & ELF_FLAG_EXECUTABLE)
+                u8 protection_mask = (ph.p_flags & PF_X)
                                          ? paging::Page_Table::Protection::Executable
                                          : 0;
                 protection_mask |=
-                    (ph.flags & ELF_FLAG_READABLE) ? paging::Page_Table::Protection::Readable : 0;
+                    (ph.p_flags & PF_R) ? paging::Page_Table::Protection::Readable : 0;
                 protection_mask |=
-                    (ph.flags & ELF_FLAG_WRITABLE) ? paging::Page_Table::Protection::Writeable : 0;
+                    (ph.p_flags & PF_W) ? paging::Page_Table::Protection::Writeable : 0;
 
                 // Upcast in 64 bit kernels is fine
                 auto res = table->atomic_create_mem_object_region((void *)(ulong)region_start, size,
@@ -462,13 +473,13 @@ ReturnStr<
                 const u32 file_size           = ph.p_filesz;
                 const u32 object_start_offset = ph.p_vaddr - region_start;
 
-                u8 protection_mask = (ph.flags & ELF_FLAG_EXECUTABLE)
+                u8 protection_mask = (ph.p_flags & PF_X)
                                          ? paging::Page_Table::Protection::Executable
                                          : 0;
                 protection_mask |=
-                    (ph.flags & ELF_FLAG_READABLE) ? paging::Page_Table::Protection::Readable : 0;
+                    (ph.p_flags & PF_R) ? paging::Page_Table::Protection::Readable : 0;
                 protection_mask |=
-                    (ph.flags & ELF_FLAG_WRITABLE) ? paging::Page_Table::Protection::Writeable : 0;
+                    (ph.p_flags & PF_W) ? paging::Page_Table::Protection::Writeable : 0;
 
                 auto res = table->atomic_create_mem_object_region(
                     (void *)(ulong)region_start, size, protection_mask, true, name, elf, true,
@@ -479,30 +490,30 @@ ReturnStr<
             }
         }
 
-        program_entry = header.program_entry;
+        program_entry = header.e_entry;
     } else {
         // Parse program headers
-        using phreader = ELF_PHeader_64;
+        using pheader = Elf64_Phdr;
 
-        ELF_64bit header;
-        auto r = elf->read_to_kernel(0, (u8 *)&header, sizeof(ELF_64bit));
+        Elf64_Ehdr header;
+        auto r = elf->read_to_kernel(0, (u8 *)&header, sizeof(header));
         if (!r.success())
             return r.propagate();
 
-        if (header.prog_header_size != sizeof(phreader))
+        if (header.e_phentsize != sizeof(pheader))
             return Error(-ENOEXEC);
 
-        u64 pheader_size   = header.program_header_entries * sizeof(phreader);
-        phdr_tag.phdr_num  = header.program_header_entries;
-        phdr_tag.phdr_size = sizeof(phreader);
+        u64 pheader_size   = header.e_phnum * sizeof(pheader);
+        phdr_tag.phdr_num  = header.e_phnum;
+        phdr_tag.phdr_size = sizeof(pheader);
 
-        const u64 ph_count = header.program_header_entries;
-        klib::vector<phreader> phs;
+        const u64 ph_count = header.e_phnum;
+        klib::vector<pheader> phs;
         if (!phs.resize(ph_count))
             return Error(-ENOMEM);
 
-        r = elf->read_to_kernel(header.program_header, (u8 *)phs.data(),
-                                ph_count * sizeof(phreader));
+        r = elf->read_to_kernel(header.e_phoff, (u8 *)phs.data(),
+                                ph_count * sizeof(pheader));
         if (!r.success())
             return r.propagate();
 
@@ -517,32 +528,32 @@ ReturnStr<
 
         // Load the program header into the page table
         for (size_t i = 0; i < ph_count; ++i) {
-            const phreader &ph = phs[i];
+            const pheader &ph = phs[i];
 
-            if (ph.type != ELF_SEGMENT_LOAD)
+            if (ph.p_type != PT_LOAD)
                 continue;
 
             if ((ph.p_vaddr & 0xfff) != (ph.p_offset & 0xfff))
                 return Error(-ENOEXEC);
 
-            if (ph.p_offset <= header.program_header &&
-                header.program_header + pheader_size <= ph.p_offset + ph.p_filesz) {
-                phdr_tag.phdr_addr = ph.p_vaddr + header.program_header - ph.p_offset;
+            if (ph.p_offset <= header.e_phoff &&
+                header.e_phoff + pheader_size <= ph.p_offset + ph.p_filesz) {
+                phdr_tag.phdr_addr = ph.p_vaddr + header.e_phoff - ph.p_offset;
             }
 
-            if (!(ph.flags & ELF_FLAG_WRITABLE)) {
+            if (!(ph.p_flags & PF_W)) {
                 // Direct map the region
                 const u64 region_start = ph.p_vaddr & ~0xFFFUL;
                 const u64 file_offset  = ph.p_offset & ~0xFFFUL;
                 const u64 size         = ((ph.p_vaddr & 0xFFFUL) + ph.p_memsz + 0xFFF) & ~0xFFFUL;
 
-                u8 protection_mask = (ph.flags & ELF_FLAG_EXECUTABLE)
+                u8 protection_mask = (ph.p_flags & PF_X)
                                          ? paging::Page_Table::Protection::Executable
                                          : 0;
                 protection_mask |=
-                    (ph.flags & ELF_FLAG_READABLE) ? paging::Page_Table::Protection::Readable : 0;
+                    (ph.p_flags & PF_R) ? paging::Page_Table::Protection::Readable : 0;
                 protection_mask |=
-                    (ph.flags & ELF_FLAG_WRITABLE) ? paging::Page_Table::Protection::Writeable : 0;
+                    (ph.p_flags & PF_W) ? paging::Page_Table::Protection::Writeable : 0;
 
                 auto res = table->atomic_create_mem_object_region((void *)(ulong)region_start, size,
                                                                   protection_mask, true, name, elf,
@@ -557,13 +568,13 @@ ReturnStr<
                 const u64 file_size    = ph.p_filesz;
                 const u64 object_start_offset = ph.p_vaddr - region_start;
 
-                u8 protection_mask = (ph.flags & ELF_FLAG_EXECUTABLE)
+                u8 protection_mask = (ph.p_flags & PF_X)
                                          ? paging::Page_Table::Protection::Executable
                                          : 0;
                 protection_mask |=
-                    (ph.flags & ELF_FLAG_READABLE) ? paging::Page_Table::Protection::Readable : 0;
+                    (ph.p_flags & PF_R) ? paging::Page_Table::Protection::Readable : 0;
                 protection_mask |=
-                    (ph.flags & ELF_FLAG_WRITABLE) ? paging::Page_Table::Protection::Writeable : 0;
+                    (ph.p_flags & PF_W) ? paging::Page_Table::Protection::Writeable : 0;
 
                 auto res = table->atomic_create_mem_object_region(
                     (void *)(ulong)region_start, size, protection_mask, true, name, elf, true,
@@ -574,7 +585,7 @@ ReturnStr<
             }
         }
 
-        program_entry = header.program_entry;
+        program_entry = header.e_entry;
     }
 
     return std::optional<
