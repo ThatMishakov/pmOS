@@ -5,8 +5,8 @@ version=0.0.1
 revision=1
 
 source_dir=userspace/ahcid
-deps="libc libc-headers libcxx pmoscxx"
-hostdeps="clang"
+deps="mlibc mlibc-headers libcxx pmoscxx"
+hostdeps="clang compiler-rt"
 
 configure() {
     cmake -S ${source_dir} -DTARGET_ARCH=${JINX_ARCH} -DCMAKE_SYSROOT=${sysroot_dir}

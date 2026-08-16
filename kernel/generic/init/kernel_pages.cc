@@ -42,9 +42,9 @@ void kernel::map_kernel_pages(ptable_top_ptr_t kernel_pt_top, phys_addr_t kernel
     Elf32_Ehdr *ehdr = (Elf32_Ehdr *)&__ehdr_start;
 
     assert(!memcmp(ehdr->e_ident, ELFMAG, SELFMAG));
-    assert((ehdr->e_machine & 0xff) == ELF_BITNESS);
+    assert(ehdr->e_ident[4] == ELF_BITNESS);
 
-    if ((ehdr->e_machine & 0xff) == R_LARCH_64) {
+    if (ehdr->e_ident[4] == R_LARCH_64) {
         Elf64_Ehdr *ehdr = (Elf64_Ehdr *)&__ehdr_start;
 
         Elf64_Phdr *phdrs = (Elf64_Phdr *)((char *)&_kernel_start + ehdr->e_phoff);
@@ -74,10 +74,10 @@ void kernel::map_kernel_pages(ptable_top_ptr_t kernel_pt_top, phys_addr_t kernel
             if (result)
                 panic("Couldn't map kernel segment\n");
         }
-    } else if ((ehdr->e_machine & 0xff) == R_LARCH_32) {
+    } else if (ehdr->e_ident[4] == R_LARCH_32) {
         Elf32_Ehdr *ehdr = (Elf32_Ehdr *)&__ehdr_start;
         assert(!memcmp(ehdr->e_ident, ELFMAG, SELFMAG));
-        assert((ehdr->e_machine & 0xff) == ELF_BITNESS);
+        assert(ehdr->e_ident[4] == ELF_BITNESS);
 
         Elf32_Phdr *phdrs = (Elf32_Phdr *)((char *)&_kernel_start + ehdr->e_phoff);
         for (size_t i = 0; i < ehdr->e_phnum; ++i) {

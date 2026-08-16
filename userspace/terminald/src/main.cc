@@ -35,6 +35,7 @@
 #include <pmos/ports.h>
 #include <pmos/memory.h>
 #include <pmos/helpers.hh>
+#include <sys/mman.h>
 
 #include <src/flanterm.h>
 #include <src/flanterm_backends/fb.h>

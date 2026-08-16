@@ -14,6 +14,8 @@
 #include <queue>
 #include <stdio.h>
 #include <string>
+#include <sys/mman.h>
+#include <sys/user.h>
 
 // Either physcial memory base or I/O port base
 uint64_t terminal_base = 0x0;
@@ -225,7 +227,7 @@ void ns16550_init()
 {
     // Request a high priority, since we are a driver
     // TODO: There is a bug where setting a priority makes the task disappear after some time :)
-    request_priority(4);
+    //request_priority(4);
 
     IPC_Request_Serial request = {
         .type      = IPC_Request_Serial_NUM,

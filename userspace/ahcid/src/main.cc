@@ -23,6 +23,7 @@
 #include <pmos/helpers.hh>
 #include <pmos/pmbus_helper.hh>
 #include <pmos/async/coroutines.hh>
+#include <sys/mman.h>
 
 pmos::Right device_right;
 

@@ -1,6 +1,6 @@
 #include <pmos/system.h>
 #include <pmos/memory.h>
-#include <kernel/elf.h>
+#include <elf.h>
 #include <stdint.h>
 #include <errno.h>
 #include <limits.h>
@@ -10,8 +10,21 @@
 #include "auxvec.h"
 #include <elf.h>
 #include "loader.h"
+#include <sys/user.h>
+#include <sys/mman.h>
 
 static const uint64_t page_mask = PAGE_SIZE - 1;
+
+#define ELF_ENDIANNESS 1
+#ifdef __x86_64__
+#define ELF_INSTR_SET EM_X86_64
+#elif defined(__i386__)
+#define ELF_INSTR_SET EM_386
+#elif defined(__riscv)
+#define ELF_INSTR_SET EM_RISCV
+#elif defined(__loongarch__)
+#define ELF_INSTR_SET EM_LOONGARCH
+#endif
 
 result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flags,
                          void *userspace_tags, size_t userspace_tags_size,
@@ -46,18 +59,18 @@ result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flag
         return mem_request.result;
     file_mapped = mem_request.virt_addr;
 
-    ELF_Common *header = file_mapped;
-    if (header->magic != ELF_MAGIC) {
+    Elf32_Ehdr *header = file_mapped;
+    if (memcmp(header->e_ident, ELFMAG, SELFMAG)) {
         result = -ENOEXEC;
         goto error;
     }
 
-    if (header->endianness != ELF_ENDIANNESS) {
+    if (header->e_ident[5] != ELF_ENDIANNESS) {
         result = -ENOEXEC;
         goto error;
     }
 
-    if (header->type != ELF_EXEC) {
+    if (header->e_type != ET_EXEC) {
         result = -ENOEXEC;
         goto error;
     }
@@ -68,7 +81,7 @@ result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flag
         goto error;
     }
 
-    page_table_req_ret_t pt_request = assign_page_table(task_id, 0, PAGE_TABLE_CREATE, header->instr_set);
+    page_table_req_ret_t pt_request = assign_page_table(task_id, 0, PAGE_TABLE_CREATE, header->e_machine);
     if (pt_request.result) {
         result = pt_request.result;
         goto error;
@@ -84,14 +97,14 @@ result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flag
 
     struct load_tag_elf_phdr phdr_tag = {LOAD_TAG_ELF_PHDR_HEADER, 0, 0, 0, 0};
 
-    if (header->bitness == ELF_32BIT) {
-        ELF_32bit *header = file_mapped;
+    if (header->e_ident[4] == R_LARCH_32) {
+        Elf32_Ehdr *header = file_mapped;
 
-        uint32_t pheader_count = header->program_header_entries;
-        uint32_t pheader_size = pheader_count * sizeof(ELF_32bit);
-        uint32_t offset = header->program_header;
+        uint32_t pheader_count = header->e_phnum;
+        uint32_t pheader_size = pheader_count * sizeof(Elf32_Phdr);
+        uint32_t offset = header->e_phoff;
 
-        program_entry = header->program_entry;
+        program_entry = header->e_entry;
 
         if (offset + pheader_size > mem_object_size) {
             result = -EFAULT;
@@ -99,20 +112,20 @@ result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flag
         }
 
         phdr_tag.phdr_num     = pheader_count;
-        phdr_tag.phdr_size    = sizeof(ELF_PHeader_32);
+        phdr_tag.phdr_size    = sizeof(Elf32_Phdr);
 
-        const ELF_PHeader_32 *pheader = (ELF_PHeader_32 *)((char *)file_mapped + offset);
+        const Elf32_Phdr *pheader = (Elf32_Phdr *)((char *)file_mapped + offset);
         for (uint32_t i = 0; i < pheader_count; ++i) {
-            const ELF_PHeader_32 *ph = pheader + i;
+            const Elf32_Phdr *ph = pheader + i;
 
-            if (ph->type == PT_TLS) {
+            if (ph->p_type == PT_TLS) {
                 tls_memsz = ph->p_memsz;
-                tls_align = ph->alignment;
+                tls_align = ph->p_align;
                 tls_filesz = ph->p_filesz;
                 tls_offset = ph->p_offset;
             }
 
-            if (ph->type != ELF_SEGMENT_LOAD)
+            if (ph->p_type != PT_LOAD)
                 continue;
 
             if ((ph->p_vaddr & 0xfff) != (ph->p_offset & 0xfff)) {
@@ -121,21 +134,21 @@ result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flag
             }
 
             // If pheader is inside this segment, set its virtual address
-            if (ph->p_offset <= header->program_header &&
-                header->program_header + pheader_size <= ph->p_offset + ph->p_filesz) {
-                phdr_tag.phdr_addr = ph->p_vaddr + header->program_header - ph->p_offset;
+            if (ph->p_offset <= header->e_phoff &&
+                header->e_phoff + pheader_size <= ph->p_offset + ph->p_filesz) {
+                phdr_tag.phdr_addr = ph->p_vaddr + header->e_phoff - ph->p_offset;
             }
 
-            if (!(ph->flags & ELF_FLAG_WRITABLE)) {
+            if (!(ph->p_flags & PF_W)) {
                 // Direct map the region
                 const uint32_t region_start = ph->p_vaddr & ~page_mask;
                 const uint32_t file_offset  = ph->p_offset & ~page_mask;
                 const uint32_t size         = ((ph->p_vaddr & page_mask) + ph->p_memsz + page_mask) & ~page_mask;
             
                 unsigned protection = CREATE_FLAG_FIXED;
-                if (ph->flags & ELF_FLAG_EXECUTABLE)
+                if (ph->p_flags & PF_X)
                     protection |= PROT_EXEC;
-                if (ph->flags & ELF_FLAG_READABLE)
+                if (ph->p_flags & PF_R)
                     protection |= PROT_READ;
 
                 auto mem_request = map_mem_object(&(map_mem_object_param_t){
@@ -161,9 +174,9 @@ result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flag
                 const uint32_t object_start_offset = ph->p_vaddr - region_start;
 
                 unsigned protection = CREATE_FLAG_COW | CREATE_FLAG_FIXED | PROT_WRITE;
-                if (ph->flags & ELF_FLAG_EXECUTABLE)
+                if (ph->p_flags & PF_X)
                     protection |= PROT_EXEC;
-                if (ph->flags & ELF_FLAG_READABLE)
+                if (ph->p_flags & PF_R)
                     protection |= PROT_READ;
 
                 auto mem_request = map_mem_object(&(map_mem_object_param_t){
@@ -184,13 +197,13 @@ result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flag
         }
     } else {
         builder->ptr_is_64bit = true;
-        ELF_64bit *header = file_mapped;
+        Elf64_Ehdr *header = file_mapped;
 
-        uint64_t pheader_count = header->program_header_entries;
+        uint64_t pheader_count = header->e_phnum;
         uint64_t pheader_size = pheader_count * sizeof(*header);
-        uint64_t offset = header->program_header;
+        uint64_t offset = header->e_phoff;
 
-        program_entry = header->program_entry;
+        program_entry = header->e_entry;
 
         if (offset + pheader_size > mem_object_size) {
             result = -EFAULT;
@@ -198,20 +211,20 @@ result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flag
         }
 
         phdr_tag.phdr_num     = pheader_count;
-        phdr_tag.phdr_size    = sizeof(ELF_PHeader_64);
+        phdr_tag.phdr_size    = sizeof(Elf64_Phdr);
 
-        const ELF_PHeader_64 *pheader = (ELF_PHeader_64 *)((char *)file_mapped + offset);
+        const Elf64_Phdr *pheader = (Elf64_Phdr *)((char *)file_mapped + offset);
         for (uint64_t i = 0; i < pheader_count; ++i) {
-            const ELF_PHeader_64 *ph = pheader + i;
+            const Elf64_Phdr *ph = pheader + i;
 
-            if (ph->type == PT_TLS) {
+            if (ph->p_type == PT_TLS) {
                 tls_memsz = ph->p_memsz;
-                tls_align = ph->alignment;
+                tls_align = ph->p_align;
                 tls_filesz = ph->p_filesz;
                 tls_offset = ph->p_offset;
             }
 
-            if (ph->type != ELF_SEGMENT_LOAD)
+            if (ph->p_type != PT_LOAD)
                 continue;
 
             if ((ph->p_vaddr & 0xfff) != (ph->p_offset & 0xfff)) {
@@ -220,21 +233,21 @@ result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flag
             }
 
             // If pheader is inside this segment, set its virtual address
-            if (ph->p_offset <= header->program_header &&
-                header->program_header + pheader_size <= ph->p_offset + ph->p_filesz) {
-                phdr_tag.phdr_addr = ph->p_vaddr + header->program_header - ph->p_offset;
+            if (ph->p_offset <= header->e_phoff &&
+                header->e_phoff + pheader_size <= ph->p_offset + ph->p_filesz) {
+                phdr_tag.phdr_addr = ph->p_vaddr + header->e_phoff - ph->p_offset;
             }
 
-            if (!(ph->flags & ELF_FLAG_WRITABLE)) {
+            if (!(ph->p_flags & PF_W)) {
                 // Direct map the region
                 const uint64_t region_start = ph->p_vaddr & ~page_mask;
                 const uint64_t file_offset  = ph->p_offset & ~page_mask;
                 const uint64_t size         = ((ph->p_vaddr & page_mask) + ph->p_memsz + page_mask) & ~page_mask;
             
                 unsigned protection = CREATE_FLAG_FIXED;
-                if (ph->flags & ELF_FLAG_EXECUTABLE)
+                if (ph->p_flags & PF_X)
                     protection |= PROT_EXEC;
-                if (ph->flags & ELF_FLAG_READABLE)
+                if (ph->p_flags & PF_R)
                     protection |= PROT_READ;
 
                 auto mem_request = map_mem_object(&(map_mem_object_param_t){
@@ -260,9 +273,9 @@ result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flag
                 const uint64_t object_start_offset = ph->p_vaddr - region_start;
 
                 unsigned protection = CREATE_FLAG_COW | CREATE_FLAG_FIXED | PROT_WRITE;
-                if (ph->flags & ELF_FLAG_EXECUTABLE)
+                if (ph->p_flags & PF_X)
                     protection |= PROT_EXEC;
-                if (ph->flags & ELF_FLAG_READABLE)
+                if (ph->p_flags & PF_R)
                     protection |= PROT_READ;
 
                 auto mem_request = map_mem_object(&(map_mem_object_param_t){

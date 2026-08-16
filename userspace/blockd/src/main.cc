@@ -24,6 +24,7 @@
 #include <pmos/pmbus_helper.hh>
 #include <pmos/ipc/bus_object.hh>
 #include <pmos/fs_properties.hh>
+#include <sys/user.h>
 
 using namespace pmos;
 using namespace pmos::ipc;

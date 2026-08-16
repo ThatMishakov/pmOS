@@ -6,6 +6,8 @@
 #include <strings.h>
 #include <yaml.h>
 #include <pmos/memory.h>
+#include <sys/user.h>
+#include <sys/mman.h>
 
 enum parser_states {
     STATE_START,

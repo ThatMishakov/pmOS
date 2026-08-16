@@ -6,7 +6,7 @@ revision=1
 
 source_dir=userspace/bootstrapd
 deps="mlibc mlibc-headers pmos-helpers"
-hostdeps="clang"
+hostdeps="clang compiler-rt"
 allow_network=yes
 
 # TODO: Move libyaml to a separate recipe

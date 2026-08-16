@@ -201,22 +201,4 @@ struct load_tag_mem_object_id {
     {LOAD_TAG_MEM_OBJECT_ID, 0, sizeof(struct load_tag_mem_object_id)}
 
 
-/// @brief Gets the first tag of the specified type
-///
-/// @param tag The tag type to search for
-/// @param load_data The address of the first tag
-/// @param load_data_size The size of the load data
-/// @return The address of the first tag of the specified type, or NULL if not found
-struct load_tag_generic *get_load_tag(uint32_t tag, void *load_data, size_t load_data_size);
-
-/// @brief Gets the first tag of the specified type from the global load data
-///
-/// This is a wrapper around get_load_tag that uses the global load data passed to the process
-/// @param tag The tag type to search for
-/// @param idx If there are multiple tags of the specified type, this specifies the index of
-/// the tag to return (0 for the first one, 1 for the second one, etc.)
-/// @return The address of the first tag of the specified type, or NULL if not found
-struct load_tag_generic *get_load_tag_global(uint32_t tag, size_t idx);
-
-
 #endif // PMOS_LOAD_DATA_H

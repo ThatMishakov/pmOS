@@ -43,15 +43,24 @@
 #include <pmos/system.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/syscall.h>
 #include <pmos/pmbus_object.h>
 #include "elf/loader.h"
 #include <elf.h>
 
 uint64_t loader_port = 0;
 
-extern void *__load_data_kernel;
-extern size_t __load_data_size_kernel;
+void *load_data_kernel = NULL;
+
+void init_load_data()
+{
+    long value;
+    int result = peekauxval(AT_LOAD_DATA, &value);
+    if (result < 0) {
+        print_str("Loader: Could not get load data from auxval\n");
+        return;
+    }
+    load_data_kernel = (void *)value;
+}
 
 struct Service;
 
@@ -101,12 +110,22 @@ struct module_descriptor_list *find_module(char *path)
 
     return NULL;
 }   
-  
+
+struct load_tag_generic *get_load_tag(uint32_t tag, void *load_data)
+{
+    struct load_tag_generic *t = load_data;
+    while (t->tag != LOAD_TAG_CLOSE) {
+        if (t->tag == tag)
+            return t;
+        t = (struct load_tag_generic *)((unsigned char *)t + t->offset_to_next);
+    }
+    return NULL;
+}
 
 void init_modules()
 {
     struct load_tag_generic *t =
-        get_load_tag(LOAD_TAG_LOAD_MODULES, __load_data_kernel, __load_data_size_kernel);
+        get_load_tag(LOAD_TAG_LOAD_MODULES, load_data_kernel);
     if (t == NULL)
         return;
 
@@ -177,7 +196,7 @@ void init_misc()
 {
     do {
         struct load_tag_generic *t =
-            get_load_tag(LOAD_TAG_FRAMEBUFFER, __load_data_kernel, __load_data_size_kernel);
+            get_load_tag(LOAD_TAG_FRAMEBUFFER, load_data_kernel);
         if (t == NULL)
             continue;
 
@@ -203,7 +222,7 @@ void init_misc()
 
     do {
         struct load_tag_rsdp *tr = (struct load_tag_rsdp *)get_load_tag(
-            LOAD_TAG_RSDP, __load_data_kernel, __load_data_size_kernel);
+            LOAD_TAG_RSDP, load_data_kernel);
         if (tr == NULL)
             continue;
 
@@ -212,7 +231,7 @@ void init_misc()
 
     do {
         struct load_tag_fdt *tr = (struct load_tag_fdt *)get_load_tag(
-            LOAD_TAG_FDT, __load_data_kernel, __load_data_size_kernel);
+            LOAD_TAG_FDT, load_data_kernel);
         if (tr == NULL)
             continue;
 
@@ -577,6 +596,7 @@ exit:
 int main()
 {
     print_str(BGRN "Started init server" CRESET "\n");
+    init_load_data();
 
     ports_request_t r = create_port(0, 0);
     loader_port       = r.port;

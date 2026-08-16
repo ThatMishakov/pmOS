@@ -5,8 +5,8 @@ version=1.0.0
 revision=1
 
 source_dir=userspace/ext4
-deps="libc pmos-rust-lib libcxx"
-hostdeps="cargo rust clang"
+deps="mlibc mlibc-headers libcxx pmoscxx pmos-rust-lib"
+hostdeps="cargo rust clang compiler-rt"
 source_hostdeps="cargo"
 allow_network=yes
 

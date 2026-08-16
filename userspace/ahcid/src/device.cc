@@ -11,6 +11,7 @@
 #include <pmos/utility/scope_guard.hh>
 #include "blockd.hh"
 #include <cinttypes>
+#include <sys/user.h>
 
 extern pmos::Port cmd_port;
 
