@@ -27,7 +27,6 @@
  */
 
 #include <acpi.h>
-#include <acpi/acpi.h>
 #include <assert.h>
 #include <errno.h>
 #include <inttypes.h>
@@ -68,7 +67,6 @@ extern int acpi_revision;
 
 // Returns -1 on error or ACPI version otherwise
 int walk_acpi_tables();
-int check_table(ACPISDTHeader *header);
 
 int acpi_revision = -1;
 
@@ -130,10 +128,6 @@ void acpi_map_release_exact(void *virt, size_t size)
     free(p->next);
     p->next = temp;
 }
-
-RSDT *rsdt_phys = NULL;
-
-XSDT *xsdt_phys = NULL;
 
 static const char *loader_port_name = "/pmos/loader";
 
@@ -618,14 +612,6 @@ void init_acpi()
     printf("Info: Initializing ACPI...\n");
 
     request_acpi_tables();
-
-    acpi_revision = walk_acpi_tables();
-
-    if (acpi_revision == -1) {
-        printf("Warning: Did not initialize ACPI\n");
-    } else {
-        printf("Info: ACPI revision: %i\n", acpi_revision);
-    }
 
     int i = acpi_init();
     if (i != 0) {

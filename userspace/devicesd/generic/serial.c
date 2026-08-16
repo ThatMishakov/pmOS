@@ -1,4 +1,5 @@
-#include <acpi/acpi.h>
+#include <uacpi/acpi.h>
+#include <uacpi/tables.h>
 #include <errno.h>
 #include <pmos/memory.h>
 #include <serial.h>
@@ -15,11 +16,14 @@ bool init_serial_acpi()
 {
     struct serial_port *port = NULL;
 
-    SPCR *t = (SPCR *)get_table("SPCR", 0);
-    if (!t) {
+    struct uacpi_table m = {};
+    auto res = uacpi_table_find_by_signature(ACPI_MADT_SIGNATURE, &m);
+    if (res != UACPI_STATUS_OK) {
         printf("SPCR table not found\n");
         goto error;
     }
+
+    struct acpi_spcr *t = m.ptr;
 
     printf("Found SPCR table\n");
 
@@ -29,9 +33,9 @@ bool init_serial_acpi()
         goto error;
     }
 
-    port->access_type = t->address.AddressSpace;
+    port->access_type = t->base_address.address_space_id;
 
-    uint8_t access_width = t->address.AccessSize;
+    uint8_t access_width = t->base_address.access_size;
     if (access_width < 1 || access_width > 4) {
         fprintf(stderr, "Warning: SPCR Invalid access width %i\n", access_width);
         port->access_width = 8;
@@ -40,11 +44,11 @@ bool init_serial_acpi()
     }
 
     port->interface_type = t->interface_type;
-    port->base_address   = t->address.Address;
+    port->base_address   = t->base_address.address;
 
     port->interrupt = t->interrupt_type;
-    port->pc_intno  = t->pc_irq;
-    port->gsi       = t->interrupt;
+    port->pc_intno  = t->irq;
+    port->gsi       = t->gsi;
     printf("interrupt %x pc_intno %x gsi %x\n", port->interrupt, port->pc_intno, port->gsi);
 
     switch (t->configured_baud_rate) {
@@ -71,7 +75,7 @@ bool init_serial_acpi()
         port->baud_rate = 115200;
     }
 
-    printf("Serial port found. ACPI version: %i\n", t->h.revision);
+    printf("Serial port found. ACPI version: %i\n", t->hdr.revision);
 
     port->parity        = t->parity;
     port->stop_bits     = t->stop_bits;
@@ -83,6 +87,8 @@ bool init_serial_acpi()
     return true;
 
 error:
+    if (m.ptr)
+            uacpi_table_unref(&m);
     free(port);
     return false;
 }

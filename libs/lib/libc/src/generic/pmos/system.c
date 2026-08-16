@@ -36,9 +36,6 @@ syscall_r __pmos_syscall_set_attr(uint64_t pid, uint32_t attr, unsigned long val
 
 int pmos_request_io_permission()
 {
-    // TODO: Since kernel doesn't support permissions yet, I can just make a syscall
-    // for it but this will need to be changes once that is implemented
-
     pid_t my_pid = get_task_id();
 
     int64_t result = __pmos_syscall_set_attr(my_pid, ATTR_ALLOW_PORT, 1).result;

@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <uacpi/kernel_api.h>
 #include <unistd.h>
+#include <sys/mman.h>
 
 void *uacpi_kernel_alloc(uacpi_size size) { return malloc(size); }
 
@@ -47,11 +48,11 @@ void *uacpi_kernel_map(uacpi_phys_addr addr, uacpi_size len)
 
 void uacpi_kernel_unmap(void *addr, uacpi_size len)
 {
-    (void)len;
-
     void *region_start_aligned = (void *)((uint64_t)addr & ~0xFFFUL);
+    void *region_end_aligned   = (void *)(((uint64_t)addr + len + 0xFFFUL) & ~0xFFFUL);
+    size_t region_size_aligned  = (size_t)((uintptr_t)region_end_aligned - (uintptr_t)region_start_aligned);
 
-    release_region(TASK_ID_SELF, region_start_aligned);
+    release_memory_range(TASK_ID_SELF, region_start_aligned, region_size_aligned);
 }
 
 uacpi_handle uacpi_kernel_create_mutex(void)

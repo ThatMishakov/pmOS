@@ -26,7 +26,6 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <acpi/acpi.h>
 #include <alloca.h>
 #include <assert.h>
 #include <errno.h>
@@ -48,6 +47,8 @@
 #include <uacpi/utilities.h>
 #include <pmos/pmbus_helper.h>
 #include <pmos/helpers.h>
+#include <sys/mman.h>
+#include <unistd.h>
 
 extern pmos_port_t main_port;
 
@@ -492,10 +493,12 @@ static void pci_setup_ecam(struct PCIHostBridge *b, uacpi_namespace_node *node)
         uint64_t phys_start = start;
         uint64_t phys_end   = phys_start + size;
 
+        const uint64_t page_size = getpagesize();
+
         // Align to page just in case
-        static const uint64_t page_mask = ~((uint64_t)PAGE_SIZE - 1);
+        const uint64_t page_mask = ~(page_size - 1);
         phys_start &= page_mask;
-        phys_end = (phys_end + PAGE_SIZE - 1) & page_mask;
+        phys_end = (phys_end + page_size - 1) & page_mask;
 
         mem_request_ret_t t = create_phys_map_region(0, NULL, phys_end - phys_start,
                                                      PROT_READ | PROT_WRITE, phys_start);
@@ -504,7 +507,7 @@ static void pci_setup_ecam(struct PCIHostBridge *b, uacpi_namespace_node *node)
             return;
         }
         // printf("ECAM %lx %lx\n", t.virt_addr, phys_end - phys_start);
-        void *ptr = (char *)t.virt_addr + (ecam_base_0 % PAGE_SIZE) - (start - ecam_base_0);
+        void *ptr = (char *)t.virt_addr + (ecam_base_0 % page_size) - (start - ecam_base_0);
 
         b->ecam.base_addr = ecam_base_0;
         b->ecam.base_ptr  = ptr;

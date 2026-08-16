@@ -7,6 +7,7 @@
 #include <pmos/memory.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>
 
 static const char *loader_port_name = "/pmos/loader";
 

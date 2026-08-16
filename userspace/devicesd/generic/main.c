@@ -26,7 +26,6 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <acpi/acpi.h>
 #include <configuration.h>
 #include <dtb/dtb.h>
 #include <interrupts/interrupts.h>
