@@ -34,7 +34,7 @@
     movq %rdi, 0(%r15)
     movq %rsi, 8(%r15)
     movq %rdx, 16(%r15)
-    movq %r10, 24(%r15) # %r10 -> %rcx
+    movq %rcx, 24(%r15)
     movq %r8, 32(%r15)
     movq %r9, 40(%r15)
     movq %rax, 48(%r15)
@@ -94,8 +94,8 @@
     # Scratch regs
     movq %rdi, 0(%r15)
     movq %rsi, 8(%r15)
-    movq %r11, 16(%r15) # %r11 -> %rdx
-    movq %r10, 24(%r15) # %r10 -> %rcx
+    movq %rdx, 16(%r15)
+    movq %rcx, 24(%r15)
     movq %r8, 32(%r15)
     movq %r9, 40(%r15)
     movq %rax, 48(%r15)

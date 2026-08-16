@@ -181,6 +181,34 @@ void Logger::log(const char *str, size_t size)
     log_nolock(str, size);
 }
 
+void *memchr(const void *s, int c, size_t n)
+{
+    const unsigned char *p = (const unsigned char *)s;
+    for (size_t i = 0; i < n; ++i) {
+        if (p[i] == (unsigned char)c) {
+            return (void *)(p + i);
+        }
+    }
+    return nullptr;
+}
+
+void Logger::log_handle_endl(const char *str, size_t size)
+{
+    Auto_Lock_Scope local_lock(logger_lock);
+
+    const char *current = str;
+    while (current < str + size) {
+        const char *next = (const char *)memchr(current, '\n', str + size - current);
+        if (!next) {
+            log_nolock(current, str + size - current);
+            break;
+        }
+        log_nolock(current, next - current);
+        log_nolock("\r\n", 2);
+        current = next + 1;
+    }
+}
+
 void Logger::log(const klib::string &str)
 {
     Auto_Lock_Scope local_lock(logger_lock);

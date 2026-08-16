@@ -46,6 +46,7 @@
 #include <pmos/pmbus_object.h>
 #include "elf/loader.h"
 #include <elf.h>
+#include <sys/auxv.h>
 
 uint64_t loader_port = 0;
 

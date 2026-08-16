@@ -56,6 +56,9 @@ struct Logger {
 
     void log(const klib::string &s);
     void log(const char *s, size_t size);
+
+    void log_handle_endl(const char *s, size_t size);
+
     virtual ~Logger() = default;
 
     virtual void log_nolock(const char *c, size_t size) = 0;

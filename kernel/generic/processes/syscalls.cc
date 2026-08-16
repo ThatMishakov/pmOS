@@ -70,7 +70,7 @@ extern void deactivate_page_table();
 namespace kernel::proc::syscalls
 {
 
-std::array<const char *, 63> syscall_names = {
+std::array<const char *, 64> syscall_names = {
     "SYSCALL EXIT",
     "SYSCALL GET TASK ID",
     "SYSCALL CREATE PROCESS",
@@ -138,6 +138,7 @@ std::array<const char *, 63> syscall_names = {
     "SYSCALL WATCH RIGHT",
     "SYSCALL CREATE TIMER",
     "SYSCALL SET TIMER DEADLINE",
+    "SYSCALL DEBUG LOG",
 };
 
 const char *syscall_name(unsigned id)
@@ -149,7 +150,7 @@ const char *syscall_name(unsigned id)
 }
 
 using syscall_function                         = void (*)();
-std::array<syscall_function, 63> syscall_table = {
+std::array<syscall_function, 64> syscall_table = {
     syscall_exit,
     syscall_get_task_id,
     syscall_create_process,
@@ -217,6 +218,7 @@ std::array<syscall_function, 63> syscall_table = {
     syscall_watch_right,
     syscall_create_timer,
     syscall_set_timer_deadline,
+    syscall_debug_log,
 };
 
 extern "C" void syscall_handler()
@@ -2734,6 +2736,36 @@ void syscall_set_timer_deadline()
     auto timer_right = static_cast<TimerRight *>(right);
 
     syscall_error(task) = timer_right->set_deadline(deadline + offset);
+}
+
+void syscall_debug_log()
+{
+    auto task = get_current_task();
+    ulong ptr = syscall_arg(task, 0, 0);
+    ulong size = syscall_arg(task, 1, 0);
+
+    if (size == 0) {
+        syscall_success(task);
+        return;
+    }
+
+    klib::vector<char> buffer;
+    if (!buffer.resize(size)) {
+        syscall_error(task) = -ENOMEM;
+        return;
+    }
+
+    auto result = copy_from_user((char *)buffer.data(), (const char *)ptr, size);
+    if (!result)
+        return;
+
+    if (!result.success()) {
+        syscall_error(task) = result.result;
+        return;
+    }
+
+    serial_logger.log_handle_endl((const char *)buffer.data(), size);
+    syscall_success(task);
 }
 
 } // namespace kernel::proc::syscalls

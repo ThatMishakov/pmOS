@@ -7,10 +7,7 @@ using namespace kernel::proc::syscalls;
 
 static ulong call_flags(TaskDescriptor *task)
 {
-    if (task->is_32bit())
-        return task->regs.rax;
-    else
-        return task->regs.rdi;
+    return task->regs.rax;
 }
 
 ulong syscalls::syscall_flags_reg(TaskDescriptor *task) { return call_flags(task); }
@@ -37,11 +34,11 @@ ulong syscalls::syscall_arg(TaskDescriptor *task, int arg, int args64before)
     } else {
         switch (arg) {
         case 0:
-            return task->regs.rsi;
+            return task->regs.rdi;
         case 1:
-            return task->regs.rdx;
+            return task->regs.rsi;
         case 2:
-            return task->regs.rcx;
+            return task->regs.r10;
         case 3:
             return task->regs.r8;
         case 4:

@@ -364,25 +364,37 @@ ReturnStr<
         // ELF header can't be read immediately
         return {};
 
-    if (memcmp(header.e_ident, ELFMAG, SELFMAG))
+    if (memcmp(header.e_ident, ELFMAG, SELFMAG)) {
+        log::serial_logger.printf("Kernel: ELF header magic mismatch: %x %x %x %x\n",
+                             header.e_ident[0], header.e_ident[1], header.e_ident[2],
+                             header.e_ident[3]);
         return Error(-ENOEXEC);
+    }
 
-    if (header.e_ident[5] != ELF_ENDIANNESS)
+    if (header.e_ident[5] != ELF_ENDIANNESS) {
+        log::serial_logger.printf("Kernel: ELF header endianness mismatch: %x, expected %x\n", header.e_ident[5], ELF_ENDIANNESS);
         return Error(-ENOEXEC);
+    }
 
-    if (header.e_type != ET_EXEC)
+    if (header.e_type != ET_EXEC) {
+        log::serial_logger.printf("Kernel: ELF header type mismatch: %x, expected %x\n", header.e_type, ET_EXEC);
         return Error(-ENOEXEC);
+    }
 
     int paging_flags = 0;
 #ifdef __x86_64__
-    if (header.e_machine == EM_X86_64 && header.e_machine != EM_386)
+    if (header.e_machine != EM_X86_64 && header.e_machine != EM_386) {
+        log::serial_logger.printf("Kernel: ELF header machine mismatch: %x, expected %x or %x\n", header.e_machine, EM_X86_64, EM_386);
         return Error(-ENOEXEC);
+    }
 
     if (header.e_machine == EM_386)
         paging_flags |= paging::Page_Table::FLAG_32BIT;
 #else
-    if (header.e_machine != ELF_INSTR_SET)
+    if (header.e_machine != ELF_INSTR_SET) {
+        log::serial_logger.printf("Kernel: ELF header machine mismatch: %x, expected %x\n", header.e_machine, ELF_INSTR_SET);
         return Error(-ENOEXEC);
+    }
 #endif
 
     klib::shared_ptr<paging::Arch_Page_Table> table;
@@ -402,8 +414,10 @@ ReturnStr<
             // ELF header can't be read immediately
             return {};
 
-        if (header.e_phentsize != sizeof(pheader))
+        if (header.e_phentsize != sizeof(pheader)) {
+            log::serial_logger.printf("Kernel: ELF program header size mismatch: %x, expected %x\n", header.e_phentsize, sizeof(pheader));
             return Error(-ENOEXEC);
+        }
 
         const u32 ph_count = header.e_phnum;
         klib::vector<pheader> phs;
@@ -500,8 +514,10 @@ ReturnStr<
         if (!r.success())
             return r.propagate();
 
-        if (header.e_phentsize != sizeof(pheader))
+        if (header.e_phentsize != sizeof(pheader)) {
+            log::serial_logger.printf("Kernel: ELF program header size mismatch: %x, expected %x\n", header.e_phentsize, sizeof(pheader));
             return Error(-ENOEXEC);
+        }
 
         u64 pheader_size   = header.e_phnum * sizeof(pheader);
         phdr_tag.phdr_num  = header.e_phnum;
