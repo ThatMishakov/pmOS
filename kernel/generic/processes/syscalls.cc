@@ -88,7 +88,7 @@ std::array<const char *, 64> syscall_names = {
     "SYSCALL CREATE PORT",
     "SYSCALL SET ATTRIBUTE",
     "SYSCALL SET INTERRUPT",
-    "SYSCALL SET RIGHT",
+    "SYSCALL CREATE RIGHT",
     "SYSCALL SET NAMESPACE",
     "SYSCALL SET LOG PORT",
 
@@ -1085,6 +1085,9 @@ void syscall_create_port()
         syscall_error(task) = -ENOMEM;
         return;
     }
+
+    // serial_logger.printf("syscall_create_port: task %li (%s) created port %lx\n", task->task_id,
+    //                      task->name.c_str(), new_port->portno);
 
     syscall_return(task) = new_port->portno;
 }
@@ -2242,6 +2245,8 @@ void syscall_create_right()
     u64 port_id    = syscall_arg64(current, 0);
     ulong ptr      = syscall_arg(current, 1, 1);
     unsigned flags = syscall_flags(current);
+
+    // serial_logger.printf("syscall_create_right port_id %li ptr %lx flags %lx\n", port_id, ptr, flags);
 
     auto group = current->rights_namespace.load(std::memory_order::consume);
     if (!group) {

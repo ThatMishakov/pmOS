@@ -770,6 +770,9 @@ ReturnStr<bool>
     if (!b.val)
         return false;
 
+    if (!auxvals.push_back({AT_LOAD_DATA, (uintptr_t)pos}))
+        return Error(-ENOMEM);
+
 
     auto data = auxvec_builder.serialize(stack_desc.stack_top);
     if (!data)
