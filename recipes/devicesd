@@ -13,8 +13,7 @@ configure() {
 }
 
 build() {
-    # make -j ${parallelism}
-    make
+    make -j ${parallelism}
 }
 
 package() {

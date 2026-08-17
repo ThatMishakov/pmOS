@@ -307,6 +307,9 @@ void syscall_start_process()
     ulong arg2 = args[0];
     ulong arg3 = args[1];
 
+    serial_logger.printf("syscall_start_process: task %li (%s) starting process %li at %lx with args %lx, %lx, %lx\n",
+                         task->task_id, task->name.c_str(), pid, start, arg1, arg2, arg3);
+
     TaskDescriptor *t = get_task(pid);
     if (!t) {
         syscall_error(task) = -ESRCH;

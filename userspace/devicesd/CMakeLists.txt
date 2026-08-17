@@ -14,10 +14,6 @@ set(CMAKE_AR "llvm-ar")
 set(CMAKE_CXX_FLAGS "-Wall -Wextra -O2 -pipe")
 set(CMAKE_C_FLAGS "-Wall -Wextra -O2 -pipe")
 
-if(CMAKE_C_COMPILER_TARGET MATCHES "^i[3-6]86-pmos$")
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lclang_rt.builtins-i386")
-endif()
-
 project(devicesd ASM C)
 
 file(GLOB_RECURSE GENERIC_SRC
@@ -47,5 +43,7 @@ target_include_directories(devicesd PRIVATE
 target_compile_definitions(devicesd PRIVATE UACPI_NATIVE_MMIO)
 
 target_link_libraries(devicesd PRIVATE pmos-helpers)
+
+target_link_options(devicesd PRIVATE -static)
 
 install(TARGETS devicesd RUNTIME DESTINATION "/boot")

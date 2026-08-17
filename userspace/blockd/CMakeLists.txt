@@ -31,4 +31,6 @@ set_property(TARGET blockd PROPERTY CXX_STANDARD 23)
 
 target_link_libraries(blockd pmoscxx)
 
+target_link_options(blockd PRIVATE -static)
+
 install(TARGETS blockd RUNTIME DESTINATION "/boot")

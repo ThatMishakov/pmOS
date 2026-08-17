@@ -31,4 +31,6 @@ set_property(TARGET ns16550 PROPERTY CXX_STANDARD 23)
 
 target_link_libraries(ns16550 pmoscxx)
 
+target_link_options(ns16550 PRIVATE -static)
+
 install(TARGETS ns16550 RUNTIME DESTINATION "/boot")

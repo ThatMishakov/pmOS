@@ -31,4 +31,7 @@ set_property(TARGET processd PROPERTY CXX_STANDARD 23)
 
 target_link_libraries(processd pmoscxx)
 
+target_link_options(processd PRIVATE -static)
+
+
 install(TARGETS processd RUNTIME DESTINATION "/boot")
