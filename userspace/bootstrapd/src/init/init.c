@@ -420,7 +420,7 @@ int start_service(struct Service *service, uint64_t object_right, uint64_t optio
     group_id = 0;
 
     // Task group tag
-    struct AuxVecEntry *auxvec_entries[5];
+    struct AuxVecEntry *auxvec_entries[8];
     struct AuxVecEntry group_id_entry = {
         .entry_type = AT_TASK_GROUP_ID,
         .data_type = DATA_TYPE_EXTERNAL,
@@ -454,7 +454,7 @@ int start_service(struct Service *service, uint64_t object_right, uint64_t optio
         argc[3] = NULL;
     }
 
-    result_t res = load_executable(r.value, object_right, 0, 0, 0, argc, NULL, (const struct AuxVecEntry **)auxvec_entries);
+    result_t res = load_executable(r.value, new_group_id, object_right, 0, 0, 0, argc, NULL, (const struct AuxVecEntry **)auxvec_entries);
     //result_t res = syscall_load_executable(r.value, object_id, mem_region, 0);
     if (res != SUCCESS) {
         print_str("Loader: Could not load executable ");
@@ -683,7 +683,7 @@ int start_service_request(struct Service *service, const char *cmdline, size_t c
     group_id = 0;
 
 
-    result_t res = load_executable(r.value, object_right, 0, 0, 0, args_get_argv(&args), NULL, (const struct AuxVecEntry **)auxvec_entries);
+    result_t res = load_executable(r.value, new_group_id, object_right, 0, 0, 0, args_get_argv(&args), NULL, (const struct AuxVecEntry **)auxvec_entries);
     //result_t res = syscall_load_executable(r.value, object_id, mem_region, 0);
     if (res != SUCCESS) {
         print_str("Loader: Could not load executable ");
@@ -738,6 +738,23 @@ void push_services(struct Service *s)
 
         s = ss;
     }
+}
+
+struct Service *find_service(const char *name)
+{
+    struct Service *s = services;
+    while (s) {
+        struct Service *ss = s;
+        s = s->next;
+
+        if (!ss->name)
+            continue;
+
+        if (!strcmp(ss->name, name))
+            return ss;
+    }
+
+    return NULL;
 }
 
 struct module_descriptor_list *find_module(char *path);

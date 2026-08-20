@@ -34,7 +34,6 @@
 #include <pmos/ports.h>
 #include <pmos/system.h>
 #include <stdexcept>
-#include <stdio.h>
 #include <string>
 #include <system_error>
 #include <unordered_map>
@@ -42,6 +41,15 @@
 #include <variant>
 #include <vector>
 #include <pmos/async/coroutines.hh>
+#include "log.hh"
+#include <string.h>
+#include <charconv>
+#include "pipe.hh"
+
+void KernelSink::operator()(const char *message)
+{
+    pmos_kernel_debug_log(message, strlen(message));
+}
 
 pmos::Port main_port = pmos::Port::create().value();
 pmos::PortDispatcher dispatcher(main_port);
@@ -179,8 +187,7 @@ void set_group_reply(pmos::Right &reply_right, int result, pid_t group_id)
 
     auto r = pmos::send_message_right_one(reply_right, reply, {}, true);
     if (!r.has_value())
-        printf("processd: Error %d sending message to right %" PRIu64 "for set_group_reply\n",
-               r.error(), reply_right.get());
+        kernelLogger() << "processd: Error " << r.error() << " sending message to right " << reply_right.get() << " for set_group_reply\n" << frg::endlog;
 }
 
 void process_set_group(Task::SetGroupRequest req, Task *t, pmos::Right reply_right)
@@ -284,9 +291,8 @@ void process_requests(Task *t)
 
                         send_reply_throw(right, reply);
                     } catch (std::system_error &e) {
-                        printf(
-                            "processd: Error %d sending message to port %lu for waiting task %lu\n",
-                            e.code().value(), right.get(), t->task_id);
+                        kernelLogger() << "processd: Error " << e.code().value() << " sending message to right " << right.get() << " for waiting task " << t->task_id << "\n" << frg::endlog;
+
                     }
                 },
                 [&](Task::ParentPIDRequest) {
@@ -299,9 +305,7 @@ void process_requests(Task *t)
                         reply.pid    = pp->parent_pid;
                         send_reply_throw(right, reply);
                     } catch (std::system_error &e) {
-                        printf("processd: Error %d sending message to port %" PRIu64
-                               " for waiting task %" PRIu64 "\n",
-                               e.code().value(), right.get(), t->task_id);
+                        kernelLogger() << "processd: Error " << e.code().value() << " sending message to right " << right.get() << " for waiting task " << t->task_id << "\n" << frg::endlog;
                     }
                 },
                 [&](Task::PgroupRequest) {
@@ -314,9 +318,7 @@ void process_requests(Task *t)
                         reply.pid    = pp->parent_group->group_id;
                         send_reply_throw(right, reply);
                     } catch (std::system_error &e) {
-                        printf("processd: Error %d sending message to port %" PRIu64
-                               " for waiting task %" PRIu64 "\n",
-                               e.code().value(), right.get(), t->task_id);
+                        kernelLogger() << "processd: Error " << e.code().value() << " sending message to right " << right.get() << " for waiting task " << t->task_id << "\n" << frg::endlog;
                     }
                 },
                 [&](Task::SetGroupRequest r) { process_set_group(r, t, std::move(right)); }},
@@ -390,8 +392,7 @@ void register_process(IPC_Register_Process *msg, uint64_t sender, pmos::Right re
                 try {
                     register_process_reply(reply_right, 0, -e.code().value(), 0);
                 } catch (std::system_error &e) {
-                    printf("processd: Error %d sending message to port %lu\n", e.code().value(),
-                           reply_right.get());
+                    kernelLogger() << "processd: Error " << e.code().value() << "sending message to right " << reply_right.get() << "\n" << frg::endlog;
                 }
 
                 group->processes.erase(pp);
@@ -412,9 +413,7 @@ void register_process(IPC_Register_Process *msg, uint64_t sender, pmos::Right re
                 register_process_reply(reply_right, REGISTER_PROCESS_REPLY_FLAG_EXISITING, 0,
                                        it->second->parent_process->process_id);
             } catch (std::system_error &e) {
-                printf("processd: Error %d sending message to port %lu for task %lu for "
-                       "register_process\n",
-                       e.code().value(), reply_right.get(), task_id);
+                kernelLogger() << "processd: Error " << e.code().value() << "sending message to right " << reply_right.get() << " for task " << task_id << " for register_process" "\n" << frg::endlog;
             }
         }
     }
@@ -424,7 +423,7 @@ void destroy_process(uint64_t task_group_id)
 {
     auto it = process_for_task_group.find(task_group_id);
     if (it == process_for_task_group.end()) {
-        printf("processd: Task group %lu not found when destroying a process\n", task_group_id);
+        kernelLogger() << "processd: Task group " << task_group_id << " not found when destroying a process\n" << frg::endlog;
         return;
     }
 
@@ -444,7 +443,7 @@ void add_task_to_process(uint64_t task_group_id, uint64_t task_id)
     // Find task group
     auto it = process_for_task_group.find(task_group_id);
     if (it == process_for_task_group.end()) {
-        printf("processd: Task group %lu not found\n", task_group_id);
+        kernelLogger() << "processd: Task group " << task_group_id << " not found\n" << frg::endlog;
         return;
     }
 
@@ -468,7 +467,7 @@ void add_task_to_process(uint64_t task_group_id, uint64_t task_id)
 
             process_requests(it2->second.get());
         } else if (it2->second->parent_process != it->second) {
-            printf("processd: Task %lu already belongs to another process\n", task_id);
+            kernelLogger() << "processd: Task %lu " << task_id << " already belongs to another process\n" << frg::endlog;
         }
         // Else task is already in the group
     }
@@ -538,18 +537,18 @@ void remove_task_from_process(uint64_t task_group_id, uint64_t task_id)
 {
     auto it = tasks.find(task_id);
     if (it == tasks.end()) {
-        printf("processd: Task %lu not found\n", task_id);
+        kernelLogger() << "processd: Task " << task_id << " not found\n" << frg::endlog;
         return;
     }
     auto task = it->second.get();
 
     if (task->parent_process == nullptr) {
-        printf("processd: Task %lu does not belong to any process\n", task_id);
+        kernelLogger() << "processd: Task " << task_id << " does not belong to any process\n" << frg::endlog;
         return;
     }
 
     if (task->parent_process->process_task_group_id != task_group_id) {
-        printf("processd: Task %lu does not belong to group %lu\n", task_id, task_group_id);
+        kernelLogger() << "processd: Task " << task_id << " does not belong to group " << task_group_id << "\n" << frg::endlog;
         return;
     }
 
@@ -589,8 +588,7 @@ void preregister_process_try_reply(pmos::Right &reply_right, unsigned flags, pid
 
     auto r = pmos::send_message_right_one(reply_right, reply, {}, true);
     if (!r)
-        printf("processd: Error %d sending message to port %" PRIu64 " for preregister_process\n",
-               r.error(), reply_right.get());
+        kernelLogger() << "processd: Error " << r.error() << " sending message to port " <<  reply_right.get() << " for preregister_process\n" << frg::endlog;
 }
 
 void preregister_process(IPC_Preregister_Process *m, uint64_t sender_task, pmos::Right reply_right)
@@ -655,7 +653,7 @@ pmos::async::detached_task get_messages()
         auto [msg, message, reply_right, _] = (co_await dispatcher.get_message_default()).value();
     
         if (msg.size < sizeof(IPC_Generic_Msg)) {
-            printf("Warning: recieved very small message\n");
+            kernelLogger() << "processd: Recieved very small message\n" << frg::endlog;
             break;
         }
 
@@ -663,10 +661,7 @@ pmos::async::detached_task get_messages()
         switch (ipc_msg->type) {
         case IPC_Register_Process_NUM: {
             if (msg.size < sizeof(IPC_Register_Process)) {
-                printf("processd: Recieved IPC_Register_Process that is too small from task "
-                       "%li of "
-                       "size %li\n",
-                       msg.sender, msg.size);
+                kernelLogger() << "processd: Recieved IPC_Register_Process that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
                 break;
             }
 
@@ -676,10 +671,7 @@ pmos::async::detached_task get_messages()
         }
         case IPC_PID_For_Task_NUM: {
             if (msg.size < sizeof(IPC_PID_For_Task)) {
-                printf("processd: Recieved IPC_PID_For_Task that is too small from task %li of "
-                       "size "
-                       "%li\n",
-                       msg.sender, msg.size);
+                kernelLogger() << "processd: Recieved IPC_PID_For_Task that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
                 break;
             }
 
@@ -689,10 +681,7 @@ pmos::async::detached_task get_messages()
         }
         case IPC_Set_Process_Group_NUM: {
             if (msg.size < sizeof(IPC_Set_Process_Group)) {
-                printf("processd: Recieved IPC_Set_Process_Group that is too small from task %li "
-                       "of size "
-                       "%li\n",
-                       msg.sender, msg.size);
+                kernelLogger() << "processd: Recieved IPC_Set_Process_Group_NUM that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
                 break;
             }
 
@@ -702,11 +691,7 @@ pmos::async::detached_task get_messages()
         }
         case IPC_Preregister_Process_NUM: {
             if (msg.size < sizeof(IPC_Preregister_Process)) {
-                printf("processd: Recieved IPC_Preregister_Process that is too small from task "
-                       "%li "
-                       "of size "
-                       "%li\n",
-                       msg.sender, msg.size);
+                kernelLogger() << "processd: Recieved IPC_Preregister_Process_NUM that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
                 break;
             }
 
@@ -716,10 +701,7 @@ pmos::async::detached_task get_messages()
         }
         case IPC_Kernel_Group_Task_Changed_NUM: {
             if (msg.size < sizeof(IPC_Kernel_Group_Task_Changed)) {
-                printf("processd: Recieved IPC_Kernel_Group_Task_Changed that is too small "
-                       "from task "
-                       "%li of size %li\n",
-                       msg.sender, msg.size);
+                kernelLogger() << "processd: Recieved IPC_Kernel_Group_Task_Changed_NUM that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
                 break;
             }
 
@@ -734,9 +716,7 @@ pmos::async::detached_task get_messages()
         }
         case IPC_Kernel_Group_Destroyed_NUM: {
             if (msg.size < sizeof(IPC_Kernel_Group_Destroyed)) {
-                printf("processd: Recieved IPC_Kernel_Group_Destroyed that is too small from task "
-                       "%li of size %li\n",
-                       msg.sender, msg.size);
+                kernelLogger() << "processd: Recieved IPC_Kernel_Group_Destroyed_NUM that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
                 break;
             }
 
@@ -746,7 +726,7 @@ pmos::async::detached_task get_messages()
             break;
         }
         default:
-            printf("processd: Unknown message type %d\n", ipc_msg->type);
+            kernelLogger() << "processd: Unknown message type " << ipc_msg->type << "\n" << frg::endlog;
             break;
         }
     }
@@ -754,10 +734,90 @@ pmos::async::detached_task get_messages()
 
 pmos::async::detached_task vfs_handle_messages();
 
-int main()
+pmos::async::detached_task get_messages_bootstrapd(pmos::RecieveRight rr)
 {
-    get_messages();
-    vfs_handle_messages();
+    while (1) {
+        auto [msg, message, reply_right, _] = (co_await dispatcher.get_message(rr)).value();
+    
+        if (msg.size < sizeof(IPC_Generic_Msg)) {
+            kernelLogger() << "processd: Recieved very small message\n" << frg::endlog;
+            break;
+        }
+        
+        IPC_Generic_Msg *ipc_msg = reinterpret_cast<IPC_Generic_Msg *>(message.data());
+        switch (ipc_msg->type) {
+        case IPC_Kernel_Recieve_Right_Destroyed_NUM:
+            co_return;
+
+        case IPC_Pipe_Open_NUM: {
+            if (msg.size < sizeof(IPC_Pipe_Open)) {
+                kernelLogger() << "processd: Recieved IPC_Pipe_Open that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
+                break;
+            }
+
+            IPC_Pipe_Open *m = reinterpret_cast<IPC_Pipe_Open *>(ipc_msg);
+            pipe_open(*m, std::move(reply_right));
+            break;
+        }
+        default:
+            kernelLogger() << "processd: Unknown message type " << ipc_msg->type << " from bootstrapd\n" << frg::endlog;
+            break;
+        }
+    }
+}
+
+void parse_args(int argc, char *argv[])
+{
+    if (argc != 3) {
+        kernelLogger() << "processd: Unexpected number of arguments " << argc << " (expected 3). Not replying to bootstrapd...\n" << frg::endlog;
+        return;
+    }
+
+    if (std::string_view(argv[1]) != "--bootstrapd_right") {
+        kernelLogger() << "processd: Unexpected argument " << argv[1] << " (expected --bootstrapd_right)\n" << frg::endlog;
+        return;
+    }
+
+    const auto numb = argv[2];
+    const auto numb_end = numb + strlen(numb);
+
+    pmos_right_t right_number;
+    auto [ptr, ec] = std::from_chars(numb, numb_end, right_number);
+    if (ec != std::errc()) {
+        kernelLogger() << "processd: Error parsing the reply port " << std::make_error_code(ec).message() << "\n" << frg::endlog;
+        return;
+    }
+    if (ptr != numb_end) {
+        kernelLogger() << "processd: Error parsing the reply port, symbols after number\n" << frg::endlog;
+        return;
+    }
+
+    auto pr = pmos::Right::from(right_number);
+    if (!pr) {
+        kernelLogger() << "processd: Error getting right from the arguments " << pr.error() << "\n" << frg::endlog;
+        return;
+    }
+
+    auto right = main_port.create_right(pmos::RightType::SendMany);
+    auto [send_right, recieve_right] = std::move(right.value());
+    get_messages_bootstrapd(std::move(recieve_right));
+
+    IPC_Request_Right_Reply reply = {
+        .type = IPC_Request_Right_Reply_NUM,
+        .flags = 0,
+        .result = 0,
+    };
+
+    send_message_right_one(pr.value(), reply, {}, true, std::move(send_right));
+}
+
+int main(int argc, char *argv[])
+{
+    kernelLogger() << "processd started\n" << frg::endlog;
+    parse_args(argc, argv);
+
+    // get_messages();
+    // vfs_handle_messages();
     dispatcher.dispatch();
     return 0;
 }

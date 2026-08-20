@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include "../io.h"
 
+#include <pmos/system.h>
+
 void args_release(struct Args *args)
 {
     if (!args)

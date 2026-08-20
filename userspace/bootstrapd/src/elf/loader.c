@@ -12,6 +12,10 @@
 #include "loader.h"
 #include <sys/user.h>
 #include <sys/mman.h>
+#include <pmos/ports.h>
+#include <pmos/fs-data.h>
+
+extern pmos_right_t posix_server_right;
 
 static const uint64_t page_mask = PAGE_SIZE - 1;
 
@@ -26,7 +30,126 @@ static const uint64_t page_mask = PAGE_SIZE - 1;
 #define ELF_INSTR_SET EM_LOONGARCH
 #endif
 
-result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flags,
+result_t add_posix_stuff(struct AuxVecBuilder *builder, uint64_t task_group_id)
+{
+    if (posix_server_right == INVALID_RIGHT)
+        // Just don't pass it
+        return 0;
+
+    auto result = dup_right(posix_server_right);
+    if (result.result)
+        return result.result;
+
+    auto transfer_result = transfer_right(task_group_id, result.right, 0);
+    if (transfer_result.result) {
+        delete_right(result.right);
+        return transfer_result.result;
+    }
+
+    // This server is single threaded so this is fine
+    static uint64_t posix_right_id = 0;
+
+    int push_res = 0;
+    VECTOR_PUSH_BACK_CHECKED(builder->entries, ((struct AuxVecEntry){
+        .entry_type = AT_POSIX_RIGHT,
+        .data_type = DATA_TYPE_EXTERNAL,
+        .external_data = {
+            .size = sizeof(posix_right_id),
+            .data = &posix_right_id,
+        },
+    }), push_res);
+    if (push_res) {
+        return -ENOMEM;
+    }
+
+    return 0;
+}
+
+extern pmos_right_t stdout_pipe[2], stderr_pipe[2];
+
+result_t clone_right_to(uint64_t task_group_id, pmos_right_t *right, uint64_t *out_right_id)
+{
+    auto dup_result = dup_right(*right);
+    if (dup_result.result) {
+        // If the right gets deleted, don't fail the process creation, and just don't pass this to it
+        if (dup_result.result == (result_t)-ENOENT) {
+            *right = INVALID_RIGHT;
+            return 0;
+        }
+    
+        return dup_result.result;
+    }
+
+    auto transfer_result = transfer_right(task_group_id, dup_result.right, 0);
+    if (transfer_result.result) {
+        if (transfer_result.result == (result_t)-ENOENT) {
+            // Same as above
+            *right = INVALID_RIGHT;
+            return 0;
+        }
+
+        delete_right(dup_result.right);
+        return transfer_result.result;
+    }
+
+    *out_right_id = transfer_result.right;
+    return 0;
+}
+
+result_t pass_filesystem(struct AuxVecBuilder *builder, uint64_t page_table_id, uint64_t task_group_id)
+{
+    uint64_t size = PAGE_SIZE;
+    void *page = NULL;
+    auto s_res = create_normal_region(TASK_ID_SELF, NULL, size, PROT_READ | PROT_WRITE);
+    if (s_res.result)
+        return s_res.result;
+
+    page = s_res.virt_addr;
+
+    struct FsData *fs_data = (struct FsData *)page;
+    fs_data->total_size = size;
+    fs_data->array_size = 3;
+
+    result_t result;
+    if (stdout_pipe[1] && (result = clone_right_to(task_group_id, &stdout_pipe[1], &fs_data->open_files[0].io_right)))
+        goto error;
+    if (stdout_pipe[1] && (result = clone_right_to(task_group_id, &stdout_pipe[1], &fs_data->open_files[0].op_right)))
+        goto error;
+    
+    if (stderr_pipe[1] && (result = clone_right_to(task_group_id, &stderr_pipe[1], &fs_data->open_files[1].io_right)))
+        goto error;
+    if (stderr_pipe[1] && (result = clone_right_to(task_group_id, &stderr_pipe[1], &fs_data->open_files[1].op_right)))
+        goto error;
+
+    
+    auto move_result = transfer_region(page_table_id, page, 0, PROT_READ | PROT_WRITE);
+    if (move_result.result) {
+        result = move_result.result;
+        goto error;
+    }
+    page = NULL;
+
+    int push_res = 0;
+    VECTOR_PUSH_BACK_CHECKED(builder->entries, ((struct AuxVecEntry){
+        .entry_type = AT_FD_TABLE,
+        .data_type = DATA_TYPE_PTR,
+        .ptr = move_result.virt_addr_intptr,
+    }), push_res);
+    if (push_res) {
+        result = push_res;
+        goto error;
+    }
+
+    return 0;
+
+error:
+    if (page)
+        release_memory_range(TASK_ID_SELF, page, size);
+
+    return result;
+}
+
+result_t load_executable(uint64_t task_id, uint64_t group_id, uint64_t mem_object_id, unsigned flags,
                          void *userspace_tags, size_t userspace_tags_size,
                          const char *argv[], const char *envp[], const struct AuxVecEntry *auxvec_entries[])
 {
@@ -409,6 +532,17 @@ result_t load_executable(uint64_t task_id, uint64_t mem_object_id, unsigned flag
             }
             ++ptr;
         }
+    }
+
+    int posix_res = add_posix_stuff(builder, group_id);
+    if (posix_res) {
+        result = posix_res;
+        goto error;
+    }
+    int fs_res = pass_filesystem(builder, page_table_id, group_id);
+    if (fs_res) {
+        result = fs_res;
+        goto error;
     }
 
     size_t load_tags_size = sizeof(struct load_tag_elf_phdr) + sizeof(struct load_tag_close) + sizeof(struct load_tag_stack_descriptor) + sizeof(struct load_tag_mem_object_id);

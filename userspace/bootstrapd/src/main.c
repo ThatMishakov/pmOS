@@ -49,6 +49,7 @@
 #include <sys/auxv.h>
 
 uint64_t loader_port = 0;
+pmos_port_t request_port = 0;
 
 void *load_data_kernel = NULL;
 
@@ -277,6 +278,124 @@ void provide_framebuffer(pmos_right_t right, uint32_t flags)
         delete_right(right);
 }
 
+
+pmos_right_t posix_server_right = INVALID_RIGHT;
+
+const char *posix_server_cmdline = "--bootstrapd_right $RIGHT0";
+
+const char *posix_server_name = "processd";
+void start_posix_server()
+{
+    const auto str = "Starting posix server...\n";
+    pmos_kernel_debug_log(str, strlen(str));
+
+    struct Service *s = find_service(posix_server_name);
+    if (!s)
+        return;
+
+    if (!s->module)
+        return;
+
+    pmos_right_t receive_right;
+
+    auto create_result = create_right(request_port, &receive_right, CREATE_RIGHT_SEND_ONCE);
+    if (create_result.result)
+        return;
+
+    int result = start_service_request(s, posix_server_cmdline, strlen(posix_server_cmdline), &create_result.right);
+    if (result) {
+        delete_right(create_result.right);
+        return;
+    }
+
+    pmos_right_t rights[4];
+
+    Message_Descriptor reply_descr;
+    IPC_Generic_Msg *reply_msg;
+    result_t msg_result = get_message(&reply_descr, (unsigned char **)&reply_msg, request_port, NULL, rights);
+    if (msg_result) {
+        // failed to get message
+        return;
+    }
+
+    free(reply_msg);
+    posix_server_right = rights[0];
+    print_str("Gotten posix server right...\n");
+}
+
+int create_pipe(pmos_right_t rights[2])
+{
+    int result = 0;
+
+    IPC_Pipe_Open message = {
+        .type           = IPC_Pipe_Open_NUM,
+        .flags          = 0,
+    };
+
+    right_request_t reply_right = send_message_right(posix_server_right, request_port, &message, sizeof(message), NULL, 0);
+    if (reply_right.result) {
+        print_str("Loader: Failed to send IPC_Pipe_Open message to posix server\n");
+        return -1;
+    }
+
+    pmos_right_t extra_rights[4];
+
+    Message_Descriptor reply_descr;
+    IPC_Generic_Msg *reply_msg;
+    result_t msg_result = get_message(&reply_descr, (unsigned char **)&reply_msg, request_port, NULL, extra_rights);
+    if (msg_result) {
+        print_str("Loader: Failed to get reply message from posix server: ");
+        print_hex(msg_result);
+        print_str("\n");
+        return -1;
+    }
+
+    if (reply_msg->type != IPC_Pipe_Open_Reply_NUM) {
+        print_str("Loader: Received unexpected message type from posix server: ");
+        print_hex(reply_msg->type);
+        print_str("\n");
+        result = -1;
+        goto end;
+    }
+
+    IPC_Pipe_Open_Reply *reply = (IPC_Pipe_Open_Reply *)reply_msg;
+    if (reply->result_code < 0) {
+        print_str("Loader: Received error code from posix server: ");
+        print_hex(reply->result_code);
+        print_str("\n");
+        result = -1;
+        goto end;
+    }
+
+    rights[0] = extra_rights[0];
+    rights[1] = extra_rights[1];
+
+    extra_rights[0] = INVALID_RIGHT;
+    extra_rights[1] = INVALID_RIGHT;
+
+end:
+    free(reply_msg);
+    for (size_t i = 0; i < 4; ++i) {
+        if (extra_rights[i] != INVALID_RIGHT) {
+            delete_right(extra_rights[i]);
+        }
+    }
+    return result;
+}
+
+pmos_right_t stdout_pipe[2] = {INVALID_RIGHT, INVALID_RIGHT}, stderr_pipe[2] = {INVALID_RIGHT, INVALID_RIGHT};
+
+void create_std_pipes()
+{
+    if (create_pipe(stdout_pipe) != 0) {
+        print_str("Loader: Failed to create stdout pipe\n");
+    }
+
+    if (create_pipe(stderr_pipe) != 0) {
+        print_str("Loader: Failed to create stderr pipe\n");
+    }
+}
+
 void start_executables()
 {
     struct module_descriptor_list *d = module_list;
@@ -285,6 +404,10 @@ void start_executables()
         d                                = d->next;
 
         if (c->service) {
+            if (c->service->instances.size > 0)
+                // Service was started by something else before (processd)
+                continue;
+
             switch (c->service->run_type) {
             case RUN_ALWAYS_ONCE:
                 start_service(c->service, c->object_right, 0);
@@ -314,7 +437,7 @@ int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_r
                      pmos_right_t *extra_rights, void *, struct pmos_msgloop_data *)
 {
     if (desc->size < 4) {
-        print_str("Loader: Recieved a message that is too small...\n");
+        print_str("Loader: Received a message that is too small...\n");
         return 0;
     }
 
@@ -362,7 +485,7 @@ int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_r
     //     IPC_Kernel_Named_Right_Notification *notif = (IPC_Kernel_Named_Right_Notification *)ptr;
     //     if (desc->size < sizeof(IPC_Kernel_Named_Right_Notification)) {
     //         print_str(
-    //             "Loader: Recieved IPC_Kernel_Named_Right_Notification with unexpected size 0x");
+    //             "Loader: Received IPC_Kernel_Named_Right_Notification with unexpected size 0x");
     //         print_hex(desc->size);
     //         print_str("\n");
     //         break;
@@ -379,7 +502,7 @@ int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_r
     // case IPC_Register_FS_Reply_NUM: {
     //     IPC_Register_FS_Reply *a = (IPC_Register_FS_Reply *)ptr;
     //     if (desc->size < sizeof(IPC_Register_FS_Reply)) {
-    //         print_str("Loader: Recieved IPC_Register_FS_Reply of unexpected size 0x");
+    //         print_str("Loader: Received IPC_Register_FS_Reply of unexpected size 0x");
     //         print_hex(desc->size);
     //         print_str("\n");
     //         break;
@@ -393,7 +516,7 @@ int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_r
     // case IPC_Mount_FS_Reply_NUM: {
     //     IPC_Mount_FS_Reply *a = (IPC_Mount_FS_Reply *)ptr;
     //     if (desc->size < sizeof(IPC_Mount_FS_Reply)) {
-    //         print_str("Loader: Recieved IPC_Mount_FS_Reply of unexpected size 0x");
+    //         print_str("Loader: Received IPC_Mount_FS_Reply of unexpected size 0x");
     //         print_hex(desc->size);
     //         print_str("\n");
     //         break;
@@ -419,7 +542,7 @@ int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_r
     //         if (!r.result)
     //             *reply_right = 0;
     //     } else {
-    //         print_str("Loader: Recieved IPC_FS_Open of unexpected size 0x");
+    //         print_str("Loader: Received IPC_FS_Open of unexpected size 0x");
     //         print_hex(desc->size);
     //         print_str("\n");
     //     }
@@ -429,7 +552,7 @@ int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_r
     // case IPC_FS_Resolve_Path_NUM: {
     //     IPC_FS_Resolve_Path *a = (IPC_FS_Resolve_Path *)ptr;
     //     if (desc->size < sizeof(IPC_FS_Resolve_Path)) {
-    //         print_str("Loader: Recieved IPC_FS_Resolve_Path of unexpected size 0x");
+    //         print_str("Loader: Received IPC_FS_Resolve_Path of unexpected size 0x");
     //         print_hex(desc->size);
     //         print_str("\n");
     //         break;
@@ -442,7 +565,7 @@ int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_r
     // case IPC_Read_NUM: {
     //     IPC_Read *a = (IPC_Read *)ptr;
     //     if (desc->size < sizeof(IPC_Read)) {
-    //         print_str("Loader: Recieved IPC_Read of unexpected size 0x");
+    //         print_str("Loader: Received IPC_Read of unexpected size 0x");
     //         print_hex(desc->size);
     //         print_str("\n");
     //         break;
@@ -455,7 +578,7 @@ int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_r
     // case IPC_FS_Dup_NUM: {
     //     IPC_FS_Dup *a = (IPC_FS_Dup *)ptr;
     //     if (desc->size < sizeof(IPC_FS_Dup)) {
-    //         print_str("Loader: Recieved IPC_Dup of unexpected size 0x");
+    //         print_str("Loader: Received IPC_Dup of unexpected size 0x");
     //         print_hex(desc->size);
     //         print_str("\n");
     //         break;
@@ -469,7 +592,7 @@ int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_r
         // Provide framebuffer
         IPC_Framebuffer_Request *a = (IPC_Framebuffer_Request *)ptr;
         if (desc->size < sizeof(IPC_Framebuffer_Request)) {
-            print_str("Loader: Recieved IPC_Framebuffer_Request of unexpected size 0x");
+            print_str("Loader: Received IPC_Framebuffer_Request of unexpected size 0x");
             print_hex(desc->size);
             print_str("\n");
             break;
@@ -484,7 +607,7 @@ int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_r
     case IPC_Get_Named_Right_NUM: {
         IPC_Get_Named_Right *r = (IPC_Get_Named_Right *)ptr;
         if (desc->size < sizeof(IPC_Get_Named_Right)) {
-            print_str("Loader: Recieved IPC_Get_Named_Right of unexpected size 0x");
+            print_str("Loader: Received IPC_Get_Named_Right of unexpected size 0x");
             print_hex(desc->size);
             print_str("\n");
             break;
@@ -499,7 +622,7 @@ int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_r
     case IPC_Name_Right_NUM: {
         IPC_Name_Right *r = (IPC_Name_Right *)ptr;
         if (desc->size < sizeof(IPC_Name_Right)) {
-            print_str("Loader: Recieved IPC_Name_Right of unexpected size 0x");
+            print_str("Loader: Received IPC_Name_Right of unexpected size 0x");
             print_hex(desc->size);
             print_str("\n");
             break;
@@ -531,11 +654,11 @@ int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_r
     }
 
     default:
-        print_str("Loader: Recievend unknown message with type ");
+        print_str("Loader: Received unknown message with type ");
         print_hex(ptr->type);
         print_str(" from task ");
         print_hex(desc->sender);
-        print_str(", with recieve right ");
+        print_str(", with receive right ");
         print_hex(desc->sent_with_right);
         print_str("\n");
     }
@@ -608,6 +731,15 @@ int main()
         exit(1);
     }
 
+    ports_request_t r2 = create_port(0, 0);
+    request_port = r2.port;
+    if (r2.result != SUCCESS) {
+        print_str("Loader: could not create a port. Error: ");
+        print_hex(r2.result);
+        print_str("\n");
+        exit(1);
+    }
+
     auto create_result = create_right(loader_port, &loader_right, 0);
     if (create_result.result != SUCCESS) {
         print_str("Loader: failed to create loader right: ");
@@ -646,6 +778,8 @@ int main()
 
     init_modules();
     init_misc();
+    start_posix_server();
+    create_std_pipes();
     start_executables();
 
     service_ports();

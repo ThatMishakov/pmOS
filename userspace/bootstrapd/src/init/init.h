@@ -120,5 +120,8 @@ pmos_bus_object_t *construct_pmbus_object(struct Service *service);
 void release_property(struct Property *property);
 
 int start_service(struct Service *service, uint64_t object_id, uint64_t optional_right_id);
+int start_service_request(struct Service *service, const char *cmdline, size_t cmdline_length, pmos_right_t *extra_rights);
 
 bool create_service_right(struct Service *service);
+
+struct Service *find_service(const char *name);

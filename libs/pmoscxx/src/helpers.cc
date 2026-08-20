@@ -6,6 +6,24 @@
 namespace pmos
 {
 
+static RightType type_from_kernel(unsigned type)
+{
+    switch (type) {
+    case RIGHT_TYPE_SEND_ONCE:
+        return RightType::SendOnce;
+    case RIGHT_TYPE_SEND_MANY:
+        return RightType::SendMany;
+    case RIGHT_TYPE_MEM_OBJECT:
+        return RightType::MemObject;
+    case RIGHT_TYPE_INT_SOURCE:
+        return RightType::IntSource;
+    case RIGHT_TYPE_INT_NOTIFICATION:
+        return RightType::IntNotification;
+    default:
+        return RightType::Unknown;
+    }
+}
+
 static RightType type_from_flags(unsigned flags, int index)
 {
     unsigned type = (flags >> (16 + index*4)) & 0xf;
@@ -299,6 +317,23 @@ void set_deadline(const RecieveRight &timer_right, uint64_t deadline_ns, bool re
         throw std::system_error(-static_cast<int>(result), std::system_category(),
                                 "Failed to set timer deadline");
 
+}
+
+std::expected<Right, int> Right::from(pmos_right_t right) noexcept
+{
+    return get_right_type(right)
+        .transform([=](RightType type) {
+            return Right(right, type);
+        });
+}
+
+std::expected<RightType, int> get_right_type(pmos_right_t right) noexcept
+{
+    auto result = ::get_right_type(right);
+    if (result.result)
+        return std::unexpected(-static_cast<int>(result.result));
+
+    return type_from_kernel(result.value);
 }
 
 }

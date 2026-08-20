@@ -10,7 +10,7 @@ imagedeps="meson ninja-build pkg-config"
 
 configure() {
     meson_configure \
-        --includedir=share/frigg/include \
+        --includedir=include \
         -Dbuild_tests=disabled
 }
 

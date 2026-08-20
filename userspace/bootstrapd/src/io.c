@@ -64,7 +64,8 @@ void set_print_syscalls(pmos_right_t right)
     buff_ack = buff_pos;
 }
 
-void print_str(const char *str) { print_str_n(str, strlen(str)); }
+// void print_str(const char *str) { print_str_n(str, strlen(str)); }
+void print_str(const char *str) { pmos_kernel_debug_log(str, strlen(str)); }
 
 void print_str_n(const char *str, int length)
 {

@@ -44,6 +44,8 @@ public:
 
     constexpr Right(pmos_right_t right, RightType type) noexcept;
 
+    static std::expected<Right, int> from(pmos_right_t right) noexcept;
+
     Right clone() const;
     std::expected<Right, int> clone_noexcept() const noexcept;
 
@@ -51,6 +53,8 @@ private:
     pmos_right_t right = INVALID_RIGHT;
     RightType type_    = {};
 };
+
+std::expected<RightType, int> get_right_type(pmos_right_t right) noexcept;
 
 class RecieveRight
 {
