@@ -106,7 +106,7 @@ result_t pass_filesystem(struct AuxVecBuilder *builder, uint64_t page_table_id, 
 
     page = s_res.virt_addr;
 
-    struct FsData *fs_data = (struct FsData *)page;
+    auto fs_data = (struct PmosFsData *)page;
     fs_data->total_size = size;
     fs_data->array_size = 3;
 
@@ -115,12 +115,18 @@ result_t pass_filesystem(struct AuxVecBuilder *builder, uint64_t page_table_id, 
         goto error;
     if (stdout_pipe[1] && (result = clone_right_to(task_group_id, &stdout_pipe[1], &fs_data->open_files[0].op_right)))
         goto error;
+
+    // Set ISATTY even though it is a pipe
+    fs_data->open_files[0].flags |= FLAG_ISATTY;
+    fs_data->open_files[0].flags |= FLAG_ISPIPE;
     
     if (stderr_pipe[1] && (result = clone_right_to(task_group_id, &stderr_pipe[1], &fs_data->open_files[1].io_right)))
         goto error;
     if (stderr_pipe[1] && (result = clone_right_to(task_group_id, &stderr_pipe[1], &fs_data->open_files[1].op_right)))
         goto error;
 
+    fs_data->open_files[1].flags |= FLAG_ISATTY;
+    fs_data->open_files[1].flags |= FLAG_ISPIPE;
     
     auto move_result = transfer_region(page_table_id, page, 0, PROT_READ | PROT_WRITE);
     if (move_result.result) {
