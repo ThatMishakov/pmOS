@@ -70,7 +70,7 @@ extern void deactivate_page_table();
 namespace kernel::proc::syscalls
 {
 
-std::array<const char *, 64> syscall_names = {
+std::array<const char *, 67> syscall_names = {
     "SYSCALL EXIT",
     "SYSCALL GET TASK ID",
     "SYSCALL CREATE PROCESS",
@@ -139,6 +139,9 @@ std::array<const char *, 64> syscall_names = {
     "SYSCALL CREATE TIMER",
     "SYSCALL SET TIMER DEADLINE",
     "SYSCALL DEBUG LOG",
+    "SYSCALL FUTEX WAIT",
+    "SYSCALL FUTEX WAKE",
+    "SYSCALL SLEEP",
 };
 
 const char *syscall_name(unsigned id)
@@ -150,7 +153,7 @@ const char *syscall_name(unsigned id)
 }
 
 using syscall_function                         = void (*)();
-std::array<syscall_function, 64> syscall_table = {
+std::array<syscall_function, 67> syscall_table = {
     syscall_exit,
     syscall_get_task_id,
     syscall_create_process,
@@ -219,6 +222,9 @@ std::array<syscall_function, 64> syscall_table = {
     syscall_create_timer,
     syscall_set_timer_deadline,
     syscall_debug_log,
+    nullptr,
+    nullptr,
+    nullptr,
 };
 
 extern "C" void syscall_handler()
@@ -2771,6 +2777,62 @@ void syscall_debug_log()
 
     serial_logger.log_handle_endl((const char *)buffer.data(), size);
     syscall_success(task);
+}
+
+static void futex_wakeup(Task *task);
+
+void syscall_futex_wait()
+{
+    auto task = get_current_task();
+    u64 timeout_ns = syscall_arg64(task, 0);
+    ulong ptr = syscall_arg(task, 1, 1);
+    u32 expected_value = syscall_arg(task, 2, 0);
+
+    // TODO: implement the timeout here
+    uint64_t deadline = timeout_ns == -1 ? -1 : get_ns_since_bootup() + timeout_ns;
+
+    u32 user_value;
+    auto result = atomic_read_from_user(&user_value, (u32 *)ptr);
+    if (!result) {
+        syscall_error(task) = result.result;
+        return;
+    }
+
+    if (!result.value)
+        panic("syscall_futex_wait: copy_from_user blocked, not implemented");
+
+    if (user_value != expected_value) {
+        syscall_error(task) = -EAGAIN;
+        return;
+    }
+
+    task->continuation_func = futex_wakeup;
+    task->continuation_data = task->FutexWaitData {
+        .ptr = ptr,
+        .deadline = deadline,
+    };
+
+    task->futex_push();
+
+    task->atomic_block_self();
+
+    // Do a second take so wakeups are not missed
+    result = atomic_read_from_user(&user_value, (u32 *)ptr);
+    if (!result) {
+        task->interrupt_blocked();
+        return;
+    }
+
+    if (!result.value) {
+        task->interrupt_blocked();
+        return;
+    }
+        
+    if (user_value != expected_value) {
+        // interrupt_blocked() will return -EAGAIN
+        task->interrupt_blocked();
+        return;
+    }
 }
 
 } // namespace kernel::proc::syscalls

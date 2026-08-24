@@ -280,6 +280,9 @@ void syscall_set_timer_deadline();
 void syscall_debug_log();
 // Parameters: const char* string, ulong length
 
+void syscall_futex_wait();
+// Parameters: u64 timeout_ns, u32 *pointer, u32 expected
+
 struct SyscallRetval {
     TaskDescriptor *task;
     u64 operator=(u64 value);

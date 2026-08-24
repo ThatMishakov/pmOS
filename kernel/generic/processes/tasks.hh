@@ -142,7 +142,16 @@ namespace proc
             pmos::containers::RBTreeNode<TaskDescriptor> task_tree_head = {};
         };
 
-        static constexpr int SCHED_PENDING_PAUSE = 1;
+        static constexpr int SCHED_FLAG_PAUSE     = 0x01;
+        static constexpr int SCHED_FLAG_WAKE      = 0x02;
+        static constexpr int SCHED_FLAG_INTERRUPT = 0x04;
+        static constexpr int SCHED_FLAG_TIMEOUT   = 0x08;
+        static constexpr int SCHED_FLAG_TERMINATE = 0x10;
+
+        u32 wake_reason_mask = 0;
+
+        static constexpr int SCHED_WAKE_PORT = 0x01;
+        static constexpr int SCHED_WAKE_FUTEX = 0x02;
 
         sched::sched_queue waiting_to_pause;
 
@@ -155,6 +164,17 @@ namespace proc
 
         // Count of handlers for interrupts. Also using sched_lock
         size_t interrupt_handlers_count = 0;
+
+        struct FutexWaitData {
+            ulong pointer;
+            u64 deadline;
+        };
+        struct NoContinuation {
+        };
+
+        // Continuation..?
+        void (*continuation_func)(TaskDescriptor *task) = nullptr;
+        std::variant<NoContinuation, FutexContinuation> continuation_data = NoContinuation{};
 
         // Creates and assigns an emty valid page table
         kresult_t create_new_page_table();
@@ -318,8 +338,18 @@ namespace proc
         // Interrupts restarting syscall, setting the return value to interrupted error
         void interrupt_restart_syscall();
 
+        // Blocks self and schedules a different task (if blocked), respecting the flags (i.e. not blocking if wake is already pending, etc.)
+        void atomic_block_self();
+
+        // Interrupts the blocked task (setting SCHED_FLAG_INTERRUPT, etc.)
+        void interrupt_blocked();
+
         // Unblocks the task if it is not already blocked
         void atomic_try_unblock();
+
+        void futex_push();
+
+        void push_futex_queue();
 
         bool is_32bit() const;
 
