@@ -149,11 +149,16 @@ namespace proc
         static constexpr int SCHED_FLAG_TERMINATE = 0x10;
 
         u32 wake_reason_mask = 0;
+        u32 unblock_mask = 0;
 
         static constexpr int SCHED_WAKE_PORT = 0x01;
         static constexpr int SCHED_WAKE_FUTEX = 0x02;
+        static constexpr int SCHED_WAKE_MEMORY = 0x04;
 
         sched::sched_queue waiting_to_pause;
+
+        static void cancel_syscall(TaskDescriptor *task);
+        static void cancel_noop(TaskDescriptor *task);
 
         // Paging
         klib::shared_ptr<paging::Arch_Page_Table> page_table;
@@ -171,10 +176,24 @@ namespace proc
         };
         struct NoContinuation {
         };
+        struct GetMessageData {
+            ipc::Port *port;
+            ulong ptr;
+            ulong flags;
+        };
+        struct SetNameData {
+            u64 pid;
+            ulong name_ptr;
+            ulong length;
+        };
+        struct PauseData {
+            u64 task_id;
+        };
 
         // Continuation..?
         void (*continuation_func)(TaskDescriptor *task) = nullptr;
-        std::variant<NoContinuation, FutexContinuation> continuation_data = NoContinuation{};
+        void (*cancel_callback)(TaskDescriptor *task) = nullptr;
+        std::variant<NoContinuation, FutexWaitData, GetMessageData, SetNameData, PauseData> continuation_data = NoContinuation{};
 
         // Creates and assigns an emty valid page table
         kresult_t create_new_page_table();
@@ -187,11 +206,11 @@ namespace proc
         // Inits stack
         ReturnStr<std::tuple<size_t, load_tag_stack_descriptor>> init_stack(klib::shared_ptr<paging::Arch_Page_Table> optional_existing_table = {});
 
-        // Blocks the process by a page (for example in case of a pagefault)
-        void atomic_block_by_page(void *page, sched::sched_queue *push_to_queue);
+        // // Blocks the process by a page (for example in case of a pagefault)
+        void atomic_block_by_page(void *page);
 
-        // Unblocks the task when the page becomes available
-        bool atomic_try_unblock_by_page(void *page);
+        // // Unblocks the task when the page becomes available
+        // bool atomic_try_unblock_by_page(void *page);
 
         /// Tries to atomically erase the task from the queue. If task's parrent queue is not equal
         /// to *queue*, does nothing
@@ -339,7 +358,7 @@ namespace proc
         void interrupt_restart_syscall();
 
         // Blocks self and schedules a different task (if blocked), respecting the flags (i.e. not blocking if wake is already pending, etc.)
-        void atomic_block_self();
+        void atomic_block_self(u32 mask);
 
         // Interrupts the blocked task (setting SCHED_FLAG_INTERRUPT, etc.)
         void interrupt_blocked();
@@ -365,6 +384,8 @@ namespace proc
         {
             return rights_namespace.load(std::memory_order::consume);
         }
+
+        void atomic_handle_unblock(u32 reason_mask);
 
     protected:
         TaskDescriptor() = default;

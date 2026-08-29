@@ -878,6 +878,23 @@ void TaskDescriptor::interrupt_restart_syscall()
     syscalls::syscall_error(this) = -EINTR;
 }
 
+void TaskDescriptor::atomic_handle_unblock(u32 reason)
+{
+    auto old_mask = __atomic_fetch_or(&wake_reason_mask, reason, __ATOMIC_RELAXED);
+    old_mask &= reason;
+    if (!(~old_mask & reason))
+        // No new bits set
+        return;
+
+    Auto_Lock_Scope scope_lock(sched_lock);
+    if ((reason & unblock_mask)) {
+        if (status == TaskStatus::TASK_BLOCKED)
+            unblock();
+        else if (status == TaskStatus::TASK_RUNNING)
+            sched_pending_mask |= SCHED_FLAG_WAKE;
+    }
+}
+
 #if defined(__x86_64__) || defined(__i386__)
 kresult_t TaskDescriptor::get_io_permissions()
 {
@@ -888,5 +905,26 @@ kresult_t TaskDescriptor::get_io_permissions()
     return page_table->get_io_permissions();
 }
 #endif
+
+void TaskDescriptor::cancel_noop(TaskDescriptor *)
+{
+    // Do nothing
+}
+
+void TaskDescriptor::cancel_syscall(TaskDescriptor *task)
+{
+    syscalls::syscall_return(task) = -EINTR;
+}
+
+void TaskDescriptor::interrupt_blocked()
+{
+    if (status == TaskStatus::TASK_BLOCKED) {
+        assert(cancel_callback);
+        cancel_callback(this);
+        continuation_func = nullptr;
+    } else if (status == TaskStatus::TASK_RUNNING) {
+        sched_pending_mask |= SCHED_FLAG_INTERRUPT;
+    }
+}
 
 } // namespace kernel::proc

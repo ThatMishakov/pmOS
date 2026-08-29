@@ -187,6 +187,12 @@ bool Port::is_empty() const noexcept
     return msg_queue.empty();
 }
 
+bool Port::atomic_is_empty() const noexcept
+{
+    Auto_Lock_Scope l(lock);
+    return is_empty();
+}
+
 GenericMessage *Port::get_front()
 {
     assert(lock.is_locked() && "Spinlock not locked!");

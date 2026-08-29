@@ -236,7 +236,7 @@ void reschedule()
         find_new_process();
     }
 
-    while (cpu_str->current_task->sched_pending_mask & TaskDescriptor::SCHED_PENDING_PAUSE) {
+    while (cpu_str->current_task->sched_pending_mask & TaskDescriptor::SCHED_FLAG_PAUSE) {
         auto current_task = cpu_str->current_task;
 
         {
@@ -377,32 +377,20 @@ void check_synchronous_ipis()
 
 } // namespace kernel::sched
 
-void TaskDescriptor::atomic_block_by_page(void *page, sched_queue *blocked_ptr)
+void TaskDescriptor::atomic_block_by_page(void *page)
 {
     assert(status != TaskStatus::TASK_BLOCKED && "task cannot be blocked twice");
 
     // t_print_bochs("Blocking %i (%s) by page. CPU %i\n", this->pid, this->name.c_str(),
     // get_cpu_struct()->cpu_id);
+    
+    assert(page_table);
+    page_table->atomic_push_blocked_task(this, page);
 
-    Auto_Lock_Scope scope_lock(sched_lock);
-    // If the task is dying, don't actually block it
-    if (status == TaskStatus::TASK_DYING)
-        return;
+    atomic_block_self(TaskDescriptor::SCHED_WAKE_MEMORY);
 
-    status          = TaskStatus::TASK_BLOCKED;
-    page_blocked_by = page;
-
-    if (get_cpu_struct()->current_task == this) {
-        find_new_process();
-    } else if (parent_queue) {
-        Auto_Lock_Scope scope_l(parent_queue->lock);
-        parent_queue->erase(this);
-    }
-
-    {
-        Auto_Lock_Scope scope_l(blocked_ptr->lock);
-        blocked_ptr->push_back(this);
-    }
+    if (page_table->page_available(page))
+        atomic_handle_unblock(TaskDescriptor::SCHED_WAKE_MEMORY);
 }
 
 void TaskDescriptor::unblock() noexcept
@@ -474,20 +462,20 @@ void TaskDescriptor::switch_to()
     c->sched_timer(assign_quantum_on_priority(priority));
 }
 
-bool TaskDescriptor::atomic_try_unblock_by_page(void *page)
-{
-    Auto_Lock_Scope scope_lock(sched_lock);
+// bool TaskDescriptor::atomic_try_unblock_by_page(void *page)
+// {
+//     Auto_Lock_Scope scope_lock(sched_lock);
 
-    if (status != TaskStatus::TASK_BLOCKED)
-        return false;
+//     if (status != TaskStatus::TASK_BLOCKED)
+//         return false;
 
-    if (page_blocked_by != page)
-        return false;
+//     if (page_blocked_by != page)
+//         return false;
 
-    page_blocked_by = 0;
-    unblock();
-    return true;
-}
+//     page_blocked_by = 0;
+//     unblock();
+//     return true;
+// }
 
 bool TaskDescriptor::atomic_unblock_if_needed(ipc::Port *ptr)
 {

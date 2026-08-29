@@ -197,8 +197,7 @@ ReturnStr<bool> prepare_user_buff_rd(const char *buff, size_t size)
                 return result.propagate();
 
             if (not result.val) {
-                current_task->atomic_block_by_page((void *)page,
-                                                   &current_task->page_table->blocked_tasks);
+                current_task->atomic_block_by_page((void *)page);
                 return false;
             }
         }
@@ -232,8 +231,7 @@ ReturnStr<bool> prepare_user_buff_wr(char *buff, size_t size)
                 return t.propagate();
 
             if (not t.val) {
-                current_task->atomic_block_by_page((void *)page,
-                                                   &current_task->page_table->blocked_tasks);
+                current_task->atomic_block_by_page((void *)page);
                 return false;
             }
         }
@@ -669,8 +667,7 @@ extern "C" ReturnStr<bool> user_access_page_fault(unsigned access, const char *f
     }
 
     if (!result.val) {
-        current_task->atomic_block_by_page((void *)faulting_addr,
-                                           &current_task->page_table->blocked_tasks);
+        current_task->atomic_block_by_page((void *)faulting_addr);
         return false;
     }
 

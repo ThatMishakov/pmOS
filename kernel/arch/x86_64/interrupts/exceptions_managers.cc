@@ -233,8 +233,10 @@ extern "C" void pagefault_manager(NestedIntContext *kernel_ctx, ulong err)
             auto r = it->on_page_fault(access_mask, virtual_addr);
             if (!r.success())
                 return r.result;
-            if (!r.val)
-                task->atomic_block_by_page((void *)addr_all, &task->page_table->blocked_tasks);
+            if (!r.val) {
+                task->cancel_callback = TaskDescriptor::cancel_noop;
+                task->atomic_block_by_page((void *)addr_all);
+            }
 
             return 0;
         }

@@ -152,7 +152,8 @@ const char *syscall_name(unsigned id)
     return c;
 }
 
-using syscall_function                         = void (*)();
+using syscall_function = void (*)(TaskDescriptor *task);
+
 std::array<syscall_function, 67> syscall_table = {
     syscall_exit,
     syscall_get_task_id,
@@ -222,7 +223,7 @@ std::array<syscall_function, 67> syscall_table = {
     syscall_create_timer,
     syscall_set_timer_deadline,
     syscall_debug_log,
-    nullptr,
+    syscall_futex_wait,
     nullptr,
     nullptr,
 };
@@ -261,7 +262,7 @@ extern "C" void syscall_handler()
         return;
     }
 
-    syscall_table[call_n]();
+    syscall_table[call_n](task);
 
     if ((syscall_error(task) < 0) && !task->regs.syscall_pending_restart()) {
         serial_logger.printf("Debug: syscall %i (%s) pid %li (%s) ", call_n, syscall_name(call_n), task->task_id,
@@ -275,16 +276,13 @@ extern "C" void syscall_handler()
     // t_print_bochs(" -> SUCCESS\n");
 }
 
-void syscall_get_task_id()
+void syscall_get_task_id(TaskDescriptor *task)
 {
-    const task_ptr &task = sched::get_cpu_struct()->current_task;
-
     syscall_return(task) = task->task_id;
 }
 
-void syscall_create_process()
+void syscall_create_process(TaskDescriptor *task)
 {
-    auto task   = get_current_task();
     auto result = TaskDescriptor::create_process(TaskDescriptor::PrivilegeLevel::User);
     if (result) {
         syscall_return(task) = result->task_id;
@@ -293,9 +291,8 @@ void syscall_create_process()
     }
 }
 
-void syscall_start_process()
+void syscall_start_process(TaskDescriptor *task)
 {
-    task_ptr task = get_current_task();
     // TODO: Check permissions
 
     u64 pid     = syscall_arg64(task, 0);
@@ -384,9 +381,8 @@ static ReturnStr<InterruptHandler *> interrupt_handler_for_right(TaskDescriptor 
     return interrupt_right->parent_handler;
 }
 
-void syscall_load_executable()
+void syscall_load_executable(TaskDescriptor *task)
 {
-    task_ptr task = get_current_task();
     // TODO: Check permissions
 
     u64 task_id   = syscall_arg64(task, 0);
@@ -563,10 +559,8 @@ void syscall_load_executable()
     syscall_success(task);
 }
 
-void syscall_init_stack()
+void syscall_init_stack(TaskDescriptor *task)
 {
-    const task_ptr &task = get_current_task();
-
     u64 pid   = syscall_arg64(task, 0);
     u64 esp = syscall_arg64(task, 1);
 
@@ -599,10 +593,8 @@ void syscall_init_stack()
     }
 }
 
-void syscall_exit()
+void syscall_exit(TaskDescriptor *task)
 {
-    TaskDescriptor *task = sched::get_cpu_struct()->current_task;
-
     ulong arg1 = syscall_arg(task, 0, 0);
     ulong arg2 = syscall_arg(task, 1, 0);
 
@@ -622,10 +614,8 @@ void syscall_exit()
     task->atomic_kill();
 }
 
-void syscall_kill_task()
+void syscall_kill_task(TaskDescriptor *task)
 {
-    TaskDescriptor *task = get_current_task();
-
     u64 task_id = syscall_arg64(task, 0);
 
     TaskDescriptor *t = get_task(task_id);
@@ -638,18 +628,44 @@ void syscall_kill_task()
     t->atomic_kill();
 }
 
-void syscall_get_first_message()
+void syscall_get_first_message(TaskDescriptor *current)
 {
-    TaskDescriptor *current = sched::get_cpu_struct()->current_task;
+    Port *port;
+    ulong args, buff;
 
-    u64 portno = syscall_arg64(current, 0);
-    ulong buff = syscall_arg(current, 1, 1);
-    ulong args = syscall_flags(current);
+    if (current->continuation_func) {
+        auto data = std::get_if<TaskDescriptor::GetMessageData>(&current->continuation_data);
+        assert(data);
 
-    auto port = Port::atomic_get_port(portno);
-    if (!port) {
-        syscall_error(current) = -ENOENT;
-        return;
+        port = data->port;
+        assert(port);
+
+        buff = data->ptr;
+        args = data->flags;
+    } else {
+        u64 portno = syscall_arg64(current, 0);
+
+        buff = syscall_arg(current, 1, 1);
+        args = syscall_flags(current);
+
+        port = Port::atomic_get_port(portno);
+        if (!port) {
+            syscall_error(current) = -ENOENT;
+            return;
+        }
+        
+        if (current != port->owner) {
+            syscall_error(current) = -EPERM;
+            return;
+        }
+
+        current->continuation_func = syscall_get_first_message;
+        current->cancel_callback = TaskDescriptor::cancel_syscall;
+        current->continuation_data = TaskDescriptor::GetMessageData {
+            .port = port,
+            .ptr = buff,
+            .flags = args,
+        };
     }
 
     GenericMessage *top_message = nullptr;
@@ -657,12 +673,8 @@ void syscall_get_first_message()
     {
         Auto_Lock_Scope scope_lock(port->lock);
 
-        if (current != port->owner) {
-            syscall_error(current) = -EPERM;
-            return;
-        }
-
         if (port->is_empty()) {
+            current->continuation_func = nullptr;
             syscall_error(current) = -EAGAIN;
             return;
         }
@@ -670,15 +682,17 @@ void syscall_get_first_message()
         top_message = port->get_front();
     }
 
-    syscall_success(current);
     auto result = top_message->copy_to_user_buff((char *)buff);
     if (!result.success()) {
+        current->continuation_func = nullptr;
         syscall_error(current) = result.result;
         return;
     }
 
     if (not result.val)
         return;
+
+    current->continuation_func = nullptr;
 
     u64 reply_right_id = 0;
     if (!(args & MSG_ARG_NOPOP)) {
@@ -715,13 +729,13 @@ void syscall_get_first_message()
         port->pop_front();
     }
 
+    syscall_success(current);
     syscall_return(current) = reply_right_id;
 }
 
-void syscall_send_message_port()
+void syscall_send_message_port(TaskDescriptor *current)
 {
     static constexpr unsigned flag_send_extended = 1 << 8;
-    TaskDescriptor *current                      = sched::get_cpu_struct()->current_task;
 
     u64 port_num   = syscall_arg64(current, 0);
     ulong size     = syscall_arg(current, 1, 1);
@@ -738,6 +752,7 @@ void syscall_send_message_port()
             return;
         }
         if (!result.val) {
+            // TODO: block properly
             return;
         }
 
@@ -781,10 +796,8 @@ void syscall_send_message_port()
     // TODO: This is problematic if the task switches
 }
 
-void syscall_get_message_info()
+void syscall_get_message_info(TaskDescriptor *task)
 {
-    task_ptr task = get_current_task();
-
     u64 portno           = syscall_arg64(task, 0);
     ulong message_struct = syscall_arg(task, 1, 1);
     ulong flags          = syscall_flags(task);
@@ -800,64 +813,104 @@ void syscall_get_message_info()
         return;
     }
 
-    GenericMessage *msg {};
+    constexpr unsigned FLAG_NOBLOCK = 0x01;
 
-    {
-        Auto_Lock_Scope lock(port->lock);
-        if (port->is_empty()) {
-            constexpr unsigned FLAG_NOBLOCK = 0x01;
-
-            if (flags & FLAG_NOBLOCK) {
-                syscall_error(task) = -EAGAIN;
-                return;
-            } else {
-                task->request_repeat_syscall();
-                block_current_task(port);
-                return;
-            }
-        }
-        msg = port->get_front();
-    }
-
-    auto reply_right = msg->get_reply_right();
-    bool holds_reply_right     = reply_right != nullptr;
-    bool reply_right_send_many = false;
-    if (holds_reply_right)
-        reply_right_send_many = reply_right->type() == RightType::SendMany;
-
-    unsigned flags_ = (holds_reply_right ? (unsigned)MESSAGE_FLAG_REPLY_RIGHT : 0) |
-                      (reply_right_send_many ? (unsigned)MESSAGE_FLAG_REPLY_SEND_MANY : 0);
-
-    auto const &rights = msg->get_rights();
-    for (int i = 0; i < 4; ++i) {
-        if (auto r = rights[i] ; r)
-            flags_ |= r->type_as_int() << (16 + i*4);
-    }
-
-    u64 msg_struct_size     = sizeof(Message_Descriptor);
-    Message_Descriptor desc = {
-        .sender             = msg->sender_task_id(),
-        .size               = msg->size(),
-        .sent_with_right    = msg->sent_with_right(),
-        .other_rights_count = (unsigned)msg->rights_count(),
-        .flags              = flags_,
-    };
-
-    syscall_success(task);
-    auto b = copy_to_user((char *)&desc, (char *)message_struct, msg_struct_size);
-    if (!b.success()) {
-        syscall_error(task) = b.result;
+    bool is_empty = port->atomic_is_empty();
+    if (is_empty && (flags & FLAG_NOBLOCK)) {
+        syscall_error(task) = -EAGAIN;
         return;
     }
 
-    if (not b.val)
-        assert(!"blocking by page is not yet implemented");
-} // namespace kernel::proc::syscalls
+    static constexpr auto get_func = [](TaskDescriptor *task, ipc::Port *port, ulong message_struct, ulong flags, GenericMessage *msg) -> void {
+        assert(task);
+        assert(port);
+        assert(msg);
+        
+        auto reply_right = msg->get_reply_right();
+        bool holds_reply_right     = reply_right != nullptr;
+        bool reply_right_send_many = false;
+        if (holds_reply_right)
+            reply_right_send_many = reply_right->type() == RightType::SendMany;
 
-void syscall_set_attribute()
+        unsigned flags_ = (holds_reply_right ? (unsigned)MESSAGE_FLAG_REPLY_RIGHT : 0) |
+                        (reply_right_send_many ? (unsigned)MESSAGE_FLAG_REPLY_SEND_MANY : 0);
+
+        auto const &rights = msg->get_rights();
+        for (int i = 0; i < 4; ++i) {
+            if (auto r = rights[i] ; r)
+                flags_ |= r->type_as_int() << (16 + i*4);
+        }
+
+        u64 msg_struct_size     = sizeof(Message_Descriptor);
+        Message_Descriptor desc = {
+            .sender             = msg->sender_task_id(),
+            .size               = msg->size(),
+            .sent_with_right    = msg->sent_with_right(),
+            .other_rights_count = (unsigned)msg->rights_count(),
+            .flags              = flags_,
+        };
+
+        auto b = copy_to_user((char *)&desc, (char *)message_struct, msg_struct_size);
+        if (!b.success()) {
+            syscall_error(task) = b.result;
+            return;
+        }
+
+        if (not b.val)
+            return;
+
+        task->continuation_func = nullptr;
+        syscall_success(task);
+    };
+
+    constexpr auto continuation = [](TaskDescriptor *task) {
+        auto data = std::get_if<TaskDescriptor::GetMessageData>(&task->continuation_data);
+        assert(data);
+
+        auto port = data->port;
+        assert(port);
+        if (port->atomic_is_empty()) [[unlikely]] {
+            task->atomic_block_self(TaskDescriptor::SCHED_WAKE_PORT);
+            return;
+        }
+
+        auto message_struct = data->ptr;
+        auto flags = data->flags;
+
+        auto msg = port->atomic_get_front();
+        assert(msg);
+
+        get_func(task, port, message_struct, flags, msg);
+    };
+
+    if (is_empty) {
+        task->continuation_func = continuation;
+        task->cancel_callback = TaskDescriptor::cancel_syscall;
+        task->continuation_data = TaskDescriptor::GetMessageData{
+            .port  = port,
+            .ptr   = message_struct,
+            .flags = flags,
+        };
+        __atomic_store_n(&task->wake_reason_mask, 0, __ATOMIC_RELAXED);
+        __atomic_store_n(&task->blocked_by, port, __ATOMIC_RELEASE);
+
+        task->atomic_block_self(TaskDescriptor::SCHED_WAKE_PORT);
+
+        if (!port->atomic_is_empty())
+            task->atomic_handle_unblock(TaskDescriptor::SCHED_WAKE_PORT);
+        
+        return;
+    };
+
+    auto msg = port->atomic_get_front();
+    assert(msg);
+    get_func(task, port, message_struct, flags, msg);
+}
+
+void syscall_set_attribute(TaskDescriptor *task)
 {
-    auto c        = sched::get_cpu_struct();
-    task_ptr task = c->current_task;
+    auto c = sched::get_cpu_struct();
+    assert(task == c->current_task);
 
     u64 pid         = syscall_arg64(task, 0);
     ulong attribute = syscall_arg(task, 1, 1);
@@ -963,9 +1016,8 @@ void syscall_set_attribute()
 #endif
 }
 
-void syscall_configure_system() // u64 type, u64 arg1, u64 arg2, u64, u64, u64
+void syscall_configure_system(TaskDescriptor *task) // u64 type, u64 arg1, u64 arg2, u64, u64, u64
 {
-    task_ptr task = get_current_task();
     ulong type    = syscall_arg(task, 0, 0);
     // TODO: Check permissions
 
@@ -988,10 +1040,8 @@ void syscall_configure_system() // u64 type, u64 arg1, u64 arg2, u64, u64, u64
     };
 }
 
-void syscall_set_priority()
+void syscall_set_priority(TaskDescriptor *current_task)
 {
-    task_ptr current_task = get_current_task();
-
     ulong priority = syscall_arg(current_task, 0, 0);
 
     // SUCCESS will be overriden on error
@@ -1010,9 +1060,8 @@ void syscall_set_priority()
     reschedule();
 }
 
-void syscall_get_lapic_id()
+void syscall_get_lapic_id(TaskDescriptor *current_task)
 {
-    auto current_task = get_current_task();
     ulong cpu_id      = syscall_arg(current_task, 0, 0);
 #if defined(__x86_64__) || defined(__i386__)
 
@@ -1036,21 +1085,38 @@ void syscall_get_lapic_id()
 #endif
 }
 
-void syscall_set_task_name()
+void syscall_set_task_name(TaskDescriptor *current)
 {
-    task_ptr current = sched::get_cpu_struct()->current_task;
+    u64 pid;
+    ulong string, length;
 
-    u64 pid      = syscall_arg64(current, 0);
-    ulong string = syscall_arg(current, 1, 1);
-    ulong length = syscall_arg(current, 2, 1);
+    if (current->continuation_func) {
+        auto data = std::get_if<TaskDescriptor::SetNameData>(&current->continuation_data);
+        assert(data);
+        
+        pid = data->pid;
+        string = data->name_ptr;
+        length = data->length;
+    } else {
+        pid      = syscall_arg64(current, 0);
+        string = syscall_arg(current, 1, 1);
+        length = syscall_arg(current, 2, 1);
+
+        current->continuation_func = syscall_set_task_name;
+        current->cancel_callback = nullptr;
+        current->continuation_data = TaskDescriptor::SetNameData {
+            .pid = pid,
+            .name_ptr = string,
+            .length = length,
+        };
+    }
 
     task_ptr t = get_task(pid);
     if (!t) {
+        current->continuation_func = nullptr;
         syscall_error(current) = -ESRCH;
         return;
     }
-
-    syscall_success(current);
 
     klib::string name(length, 0);
     auto b = copy_from_user((char *)name.data(), (char *)string, length);
@@ -1062,14 +1128,16 @@ void syscall_set_task_name()
     if (!b.val)
         return;
 
+    current->continuation_func = nullptr;
+
     Auto_Lock_Scope scope_lock(t->name_lock);
     t->name.swap(name);
+
+    syscall_success(current);
 }
 
-void syscall_create_port()
+void syscall_create_port(TaskDescriptor *task)
 {
-    const task_ptr &task = get_current_task();
-
     u64 owner = syscall_arg64(task, 0);
 
     // TODO: Check permissions
@@ -1098,10 +1166,10 @@ void syscall_create_port()
     syscall_return(task) = new_port->portno;
 }
 
-void syscall_set_interrupt()
+void syscall_set_interrupt(TaskDescriptor *task)
 {
     auto c               = sched::get_cpu_struct();
-    const task_ptr &task = c->current_task;
+    assert(task == c->current_task);
 
     u64 right   = syscall_arg64(task, 0);
     u64 port    = syscall_arg64(task, 1);
@@ -1132,10 +1200,10 @@ void syscall_set_interrupt()
     syscall_return(task) = recieve_right.val->right_parent_id;
 }
 
-void syscall_get_interrupt_info()
+void syscall_get_interrupt_info(TaskDescriptor *task)
 {
     auto c = sched::get_cpu_struct();
-    auto task = c->current_task;
+    assert(task == c->current_task);
 
     u64 right = syscall_arg64(task, 0);
 
@@ -1150,10 +1218,10 @@ void syscall_get_interrupt_info()
     syscall_return(task) = handler.val->parent_cpu->cpu_id + 1;
 }
 
-void syscall_complete_interrupt()
+void syscall_complete_interrupt(TaskDescriptor *task)
 {
-    auto c               = sched::get_cpu_struct();
-    const task_ptr &task = c->current_task;
+    auto c = sched::get_cpu_struct();
+    assert(task == c->current_task);
 
     u64 port = syscall_arg64(task, 0);
     u64 right_id = syscall_arg64(task, 1);
@@ -1184,10 +1252,8 @@ void syscall_complete_interrupt()
     syscall_error(task) = notification_right->complete();
 }
 
-void syscall_set_log_port()
+void syscall_set_log_port(TaskDescriptor *task)
 {
-    const task_ptr &task = get_current_task();
-
     u64 port    = syscall_arg64(task, 0);
     ulong flags = syscall_flags(task);
 
@@ -1202,10 +1268,8 @@ void syscall_set_log_port()
     syscall_success(task);
 }
 
-void syscall_create_normal_region()
+void syscall_create_normal_region(TaskDescriptor *current)
 {
-    TaskDescriptor *current = sched::get_cpu_struct()->current_task;
-
     u64 pid          = syscall_arg64(current, 0);
     ulong addr_start = syscall_arg(current, 1, 1);
     ulong size       = syscall_arg(current, 2, 1);
@@ -1242,9 +1306,8 @@ void syscall_create_normal_region()
     }
 }
 
-void syscall_create_phys_map_region()
+void syscall_create_phys_map_region(TaskDescriptor *current)
 {
-    TaskDescriptor *current = sched::get_cpu_struct()->current_task;
     u64 pid                 = syscall_arg64(current, 0);
     u64 phys_addr           = syscall_arg64(current, 1);
 
@@ -1293,10 +1356,8 @@ void syscall_create_phys_map_region()
     }
 }
 
-void syscall_get_page_table()
+void syscall_get_page_table(TaskDescriptor *current)
 {
-    TaskDescriptor *current = sched::get_cpu_struct()->current_task;
-
     u64 pid = syscall_arg64(current, 0);
 
     syscall_success(current);
@@ -1326,9 +1387,8 @@ void syscall_get_page_table()
 // TODO: This should be renamed, as %fs and %gs segments are x86-64 specific thing, used to hold
 // thread-local storage and stuff. Other architectures also store thread and global pointers
 // somewhere, so this syscall is essentially that
-void syscall_set_segment()
+void syscall_set_segment(TaskDescriptor *current)
 {
-    TaskDescriptor *current = sched::get_cpu_struct()->current_task;
     TaskDescriptor *target {};
 
     u64 pid            = syscall_arg64(current, 0);
@@ -1368,7 +1428,7 @@ void syscall_set_segment()
         }
 
         if (not b.val)
-            return;
+            panic("Blocking not implemented");
         break;
     }
     default:
@@ -1383,10 +1443,8 @@ void syscall_set_segment()
     syscall_success(current);
 }
 
-void syscall_get_segment()
+void syscall_get_segment(TaskDescriptor *current)
 {
-    TaskDescriptor *current = sched::get_cpu_struct()->current_task;
-
     u64 pid            = syscall_arg64(current, 0);
     ulong segment_type = syscall_arg(current, 1, 1);
     ulong ptr          = syscall_arg(current, 2, 1);
@@ -1417,7 +1475,7 @@ void syscall_get_segment()
         }
 
         if (not b.val)
-            return;
+            panic("Blocking not implemented");
         break;
     }
     // case 2: {
@@ -1442,7 +1500,7 @@ void syscall_get_segment()
         }
 
         if (not b.val)
-            return;
+            panic("Blocking not implemented");
         break;
     }
     default:
@@ -1451,10 +1509,8 @@ void syscall_get_segment()
     }
 }
 
-void syscall_transfer_region()
+void syscall_transfer_region(TaskDescriptor *current)
 {
-    TaskDescriptor *current = get_current_task();
-
     u64 to_page_table = syscall_arg64(current, 0);
     u64 dest          = syscall_arg64(current, 1);
     ulong region;
@@ -1467,7 +1523,7 @@ void syscall_transfer_region()
     }
 
     if (!r.val)
-        return;
+        panic("Blocking not implemented");
 
     auto pt = Arch_Page_Table::get_page_table(to_page_table);
     if (!pt) {
@@ -1487,10 +1543,8 @@ void syscall_transfer_region()
     syscall_return(current) = (ulong)result.val.first;
 }
 
-void syscall_assign_page_table()
+void syscall_assign_page_table(TaskDescriptor *current)
 {
-    TaskDescriptor *current = get_current_task();
-
     u64 pid        = syscall_arg64(current, 0);
     u64 page_table = syscall_arg64(current, 1);
     ulong flags    = syscall_flags(current);
@@ -1554,7 +1608,7 @@ void syscall_assign_page_table()
     }
 }
 
-void syscall_create_mem_object()
+void syscall_create_mem_object(TaskDescriptor *current)
 {
     const auto &current_task       = get_current_task();
 
@@ -1599,7 +1653,7 @@ void syscall_create_mem_object()
     syscall_return(current_task) = right.val->right_sender_id;
 }
 
-void syscall_map_mem_object()
+void syscall_map_mem_object(TaskDescriptor *current)
 {
     const auto &current_task = get_current_task();
 
@@ -1613,7 +1667,7 @@ void syscall_map_mem_object()
         return;
     }
     if (!result.val)
-        return;
+        panic("blocking not implemented");
 
     u64 page_table_id = params.page_table_id;
     u64 object_right =     params.object_right;
@@ -1667,9 +1721,8 @@ void syscall_map_mem_object()
     syscall_return(current_task) = (ulong)res.val->start_addr;
 }
 
-void syscall_delete_region()
+void syscall_delete_region(TaskDescriptor *current_task)
 {
-    auto current_task  = get_current_task();
     u64 tid            = syscall_arg64(current_task, 0);
     ulong region_start = syscall_arg(current_task, 1, 1);
 
@@ -1698,10 +1751,8 @@ void syscall_delete_region()
     page_table->atomic_delete_region((void *)region_start);
 }
 
-void syscall_unmap_range()
+void syscall_unmap_range(TaskDescriptor *current_task)
 {
-    auto current_task = get_current_task();
-
     u64 task_id      = syscall_arg64(current_task, 0);
     ulong addr_start = syscall_arg(current_task, 1, 1);
     ulong size       = syscall_arg(current_task, 2, 1);
@@ -1727,10 +1778,8 @@ void syscall_unmap_range()
         page_table->atomic_release_in_range((void *)addr_start_aligned, size_aligned);
 }
 
-void syscall_remove_from_task_group()
+void syscall_remove_from_task_group(TaskDescriptor *current_task)
 {
-    auto current_task = get_current_task();
-
     u64 pid   = syscall_arg64(current_task, 0);
     u64 group = syscall_arg64(current_task, 1);
 
@@ -1749,10 +1798,9 @@ void syscall_remove_from_task_group()
     syscall_error(current_task) = group_ptr->atomic_remove_task(task);
 }
 
-void syscall_create_task_group()
+void syscall_create_task_group(TaskDescriptor *current_task)
 {
-    const auto &current_task = get_current_task();
-    const auto g             = TaskGroup::create_for_task(current_task);
+    const auto g = TaskGroup::create_for_task(current_task);
 
     if (g.success())
         syscall_return(current_task) = g.val->get_id();
@@ -1760,10 +1808,8 @@ void syscall_create_task_group()
         syscall_error(current_task) = g.result;
 }
 
-void syscall_is_in_task_group()
+void syscall_is_in_task_group(TaskDescriptor *current_task)
 {
-    auto current_task = get_current_task();
-
     u64 pid   = syscall_arg64(current_task, 0);
     u64 group = syscall_arg64(current_task, 1);
 
@@ -1778,10 +1824,8 @@ void syscall_is_in_task_group()
     syscall_return(current_task) = has_task;
 }
 
-void syscall_add_to_task_group()
+void syscall_add_to_task_group(TaskDescriptor *current_task)
 {
-    auto current_task = get_current_task();
-
     u64 pid   = syscall_arg64(current_task, 0);
     u64 group = syscall_arg64(current_task, 1);
 
@@ -1801,10 +1845,8 @@ void syscall_add_to_task_group()
     syscall_error(current_task) = group_ptr->atomic_register_task(task);
 }
 
-void syscall_set_notify_mask()
+void syscall_set_notify_mask(TaskDescriptor *current_task)
 {
-    auto current_task = get_current_task();
-
     u64 task_group = syscall_arg64(current_task, 0);
     u64 port_id    = syscall_arg64(current_task, 1);
     ulong new_mask;
@@ -1839,10 +1881,10 @@ void syscall_set_notify_mask()
     }
 }
 
-void syscall_set_affinity()
+void syscall_set_affinity(TaskDescriptor *current_task)
 {
     const auto current_cpu = sched::get_cpu_struct();
-    auto current_task      = current_cpu->current_task;
+    assert(current_task == current_cpu->current_task);
 
     auto pid          = syscall_arg64(current_task, 0);
     uint32_t affinity = syscall_arg(current_task, 1, 1);
@@ -1854,7 +1896,7 @@ void syscall_set_affinity()
         return;
     }
 
-    const auto cpu       = affinity == -1U ? current_cpu->cpu_id + 1 : affinity;
+    const auto cpu       = affinity == (u32)(-1) ? current_cpu->cpu_id + 1 : affinity;
     const auto cpu_count = get_cpu_count();
     if (cpu > cpu_count) {
         syscall_error(current_task) = -EINVAL;
@@ -1908,16 +1950,15 @@ void syscall_set_affinity()
     reschedule();
 }
 
-void syscall_yield()
+void syscall_yield(TaskDescriptor *current_task)
 {
-    syscall_success(get_current_task());
+    syscall_success(current_task);
     reschedule();
 }
 
-void syscall_get_time()
+void syscall_get_time(TaskDescriptor *current_task)
 {
-    const auto current_task = get_current_task();
-    ulong mode              = syscall_arg(current_task, 0, 0);
+    ulong mode = syscall_arg(current_task, 0, 0);
 
     switch (mode) {
     case GET_TIME_NANOSECONDS_SINCE_BOOTUP:
@@ -1932,10 +1973,9 @@ void syscall_get_time()
     }
 }
 
-void syscall_system_info()
+void syscall_system_info(TaskDescriptor *current_task)
 {
-    const auto current_task = get_current_task();
-    ulong param             = syscall_arg(current_task, 0, 0);
+    ulong param = syscall_arg(current_task, 0, 0);
 
     switch (param) {
     case SYSINFO_NPROCS:
@@ -1948,13 +1988,17 @@ void syscall_system_info()
     }
 }
 
-void syscall_pause_task()
+void syscall_pause_task(TaskDescriptor *current_task)
 {
-    const auto current_task = get_current_task();
-    if (current_task->regs.syscall_pending_restart())
-        current_task->pop_repeat_syscall();
+    u64 task_id;
+    if (current_task->continuation_func) {
+        auto data = std::get_if<TaskDescriptor::PauseData>(&current_task->continuation_data);
+        assert(data);
 
-    auto task_id = syscall_arg64(current_task, 0);
+        task_id = data->task_id;
+    } else {
+        task_id = syscall_arg64(current_task, 0);
+    }
 
     const auto task = task_id == 0 ? current_task : get_task(task_id);
     if (!task) {
@@ -1981,28 +2025,29 @@ void syscall_pause_task()
             }
             find_new_process();
         } else {
-            {
-                Auto_Lock_Scope lock(current_task->sched_lock);
-                if (current_task->status == TaskStatus::TASK_DYING) {
-                    syscall_error(current_task) = -ESRCH;
-                    return;
-                }
+            panic("panic()");
+            // {
+            //     Auto_Lock_Scope lock(current_task->sched_lock);
+            //     if (current_task->status == TaskStatus::TASK_DYING) {
+            //         syscall_error(current_task) = -ESRCH;
+            //         return;
+            //     }
 
-                current_task->request_repeat_syscall();
+            //     current_task->request_repeat_syscall();
 
-                current_task->status       = TaskStatus::TASK_BLOCKED;
-                current_task->blocked_by   = nullptr;
-                current_task->parent_queue = &task->waiting_to_pause;
-                {
-                    Auto_Lock_Scope lock(task->waiting_to_pause.lock);
-                    task->waiting_to_pause.push_back(current_task);
-                }
-                find_new_process();
-            }
+            //     current_task->status       = TaskStatus::TASK_BLOCKED;
+            //     current_task->blocked_by   = nullptr;
+            //     current_task->parent_queue = &task->waiting_to_pause;
+            //     {
+            //         Auto_Lock_Scope lock(task->waiting_to_pause.lock);
+            //         task->waiting_to_pause.push_back(current_task);
+            //     }
+            //     find_new_process();
+            // }
 
-            __atomic_or_fetch(&task->sched_pending_mask, TaskDescriptor::SCHED_PENDING_PAUSE,
-                              __ATOMIC_RELEASE);
-            // TODO: IPI other CPU
+            // __atomic_or_fetch(&task->sched_pending_mask, TaskDescriptor::SCHED_PENDING_PAUSE,
+            //                   __ATOMIC_RELEASE);
+            // // TODO: IPI other CPU
         }
         break;
     }
@@ -2047,10 +2092,9 @@ void syscall_pause_task()
     }
 }
 
-void syscall_resume_task()
+void syscall_resume_task(TaskDescriptor *current_task)
 {
     // TODO: Start task syscall is redundant
-    const auto current_task = get_current_task();
     auto task_id            = syscall_arg64(current_task, 0);
 
     const auto task = get_task(task_id);
@@ -2070,9 +2114,8 @@ void syscall_resume_task()
     }
 }
 
-void syscall_get_page_address()
+void syscall_get_page_address(TaskDescriptor *current_task)
 {
-    auto current_task = get_current_task();
     auto task_id      = syscall_arg64(current_task, 0);
     auto page_base    = syscall_arg(current_task, 1, 1);
     auto flags        = syscall_flags(current_task);
@@ -2107,15 +2150,15 @@ void syscall_get_page_address()
     }
 
     if (not b.val)
+        panic("TODO!");
         return;
 
     auto mapping         = table->get_page_mapping((void *)page_base);
     syscall_return(task) = mapping.page_addr;
 }
 
-void syscall_get_page_address_from_object()
+void syscall_get_page_address_from_object(TaskDescriptor *current_task)
 {
-    auto current_task = get_current_task();
     auto object_id    = syscall_arg64(current_task, 0);
     auto offset       = syscall_arg64(current_task, 1);
     // auto flags        = syscall_flags(current_task);
@@ -2150,9 +2193,8 @@ void syscall_get_page_address_from_object()
     syscall_return(current_task) = page.val.get_phys_addr();
 }
 
-void syscall_cpu_for_interrupt()
+void syscall_cpu_for_interrupt(TaskDescriptor *current_task)
 {
-    auto current_task = get_current_task();
     auto gsi          = syscall_arg(current_task, 0, 0);
     auto flags        = syscall_flags(current_task);
 
@@ -2182,9 +2224,8 @@ void syscall_cpu_for_interrupt()
     syscall_return(current_task) = right.val->right_sender_id;
 }
 
-void syscall_set_right0()
+void syscall_set_right0(TaskDescriptor *current)
 {
-    auto current = get_current_task();
     u64 right_id = syscall_arg64(current, 0);
 
     auto group = current->rights_namespace.load(std::memory_order::consume);
@@ -2207,10 +2248,8 @@ void syscall_set_right0()
     syscall_error(current) = set_right0(right, group);
 }
 
-void syscall_set_namespace()
+void syscall_set_namespace(TaskDescriptor *current)
 {
-    auto current = get_current_task();
-
     u64 id        = syscall_arg64(current, 0);
     unsigned type = syscall_arg(current, 1, 1);
     switch (type) {
@@ -2244,10 +2283,8 @@ void syscall_set_namespace()
     }
 }
 
-void syscall_create_right()
+void syscall_create_right(TaskDescriptor *current)
 {
-    auto current = get_current_task();
-
     u64 port_id    = syscall_arg64(current, 0);
     ulong ptr      = syscall_arg(current, 1, 1);
     unsigned flags = syscall_flags(current);
@@ -2297,10 +2334,8 @@ void syscall_create_right()
     syscall_return(current) = result.val->right_sender_id;
 }
 
-void send_message_right()
+void send_message_right(TaskDescriptor *current)
 {
-    auto current = get_current_task();
-
     u64 right_id      = syscall_arg64(current, 0);
     u64 reply_port_id = syscall_arg64(current, 1);
     auto flags        = syscall_flags(current);
@@ -2313,7 +2348,7 @@ void send_message_right()
     }
 
     if (!result.val)
-        return;
+        panic("Blocking not implemented");
 
     auto [message, size, aux_data] = args;
     auto buffer                    = to_buffer_from_user((void *)message, size);
@@ -2323,7 +2358,7 @@ void send_message_right()
     }
 
     if (!buffer.val)
-        return;
+        panic("Blocking not implemented");
 
     // This can sometimes be omitted when sending message to right 0, but checking it is expensive
     // and kinda makes no sense, since userspace would probably create reply right anyway...
@@ -2370,7 +2405,7 @@ void send_message_right()
         }
 
         if (!result.val)
-            return;
+            panic("Blocking not implemented");
 
         for (auto i = 0; i < 4; ++i) {
             if (auto id = d.extra_rights[i]; id) {
@@ -2404,9 +2439,8 @@ void send_message_right()
     syscall_return(current) = send_result.val.second;
 }
 
-void syscall_delete_send_right()
+void syscall_delete_send_right(TaskDescriptor *current)
 {
-    auto current = get_current_task();
     u64 right_id = syscall_arg64(current, 0);
 
     auto group = current->get_rights_namespace();
@@ -2429,10 +2463,8 @@ void syscall_delete_send_right()
     }
 }
 
-void syscall_accept_rights()
+void syscall_accept_rights(TaskDescriptor *current)
 {
-    auto current = get_current_task();
-
     u64 port_id = syscall_arg64(current, 0);
     ulong ptr   = syscall_arg(current, 1, 1);
 
@@ -2473,15 +2505,13 @@ void syscall_accept_rights()
     }
 
     if (!result.val)
-        return;
+        panic("Blocking not implemented");
 
     syscall_error(current) = group->transfer_rights(msg, rights);
 }
 
-void syscall_dup_right()
+void syscall_dup_right(TaskDescriptor *current)
 {
-    auto current = get_current_task();
-
     u64 right_id = syscall_arg64(current, 0);
 
     auto group = current->get_rights_namespace();
@@ -2505,10 +2535,8 @@ void syscall_dup_right()
     syscall_return(current) = result.val.second;
 }
 
-void syscall_transfer_right()
+void syscall_transfer_right(TaskDescriptor *current)
 {
-    auto current = get_current_task();
-
     u64 to_group = syscall_arg64(current, 0);
     u64 right_id = syscall_arg64(current, 1);
     // Also maybe flags, when the groups eventually get handles to
@@ -2546,10 +2574,8 @@ void syscall_transfer_right()
     syscall_return(current) = result.val;
 }
 
-void syscall_get_mem_object_size()
+void syscall_get_mem_object_size(TaskDescriptor *current)
 {
-    auto current = get_current_task();
-
     u64 object_id = syscall_arg64(current, 0);
     // auto flags = syscall_flags(current);
 
@@ -2570,10 +2596,8 @@ void syscall_get_mem_object_size()
     syscall_return(current) = object->atomic_size_bytes();
 }
 
-void syscall_get_right_type()
+void syscall_get_right_type(TaskDescriptor *current)
 {
-    auto current = get_current_task();
-
     u64 right_id = syscall_arg64(current, 0);
 
     auto group = current->get_rights_namespace();
@@ -2598,10 +2622,8 @@ void syscall_get_right_type()
     syscall_return(current) = right->type_as_int();
 }
 
-void syscall_watch_right()
+void syscall_watch_right(TaskDescriptor *current)
 {
-    auto current = get_current_task();
-
     u64 right_id = syscall_arg64(current, 0);
     u64 port_id  = syscall_arg64(current, 1);
 
@@ -2651,10 +2673,8 @@ void syscall_watch_right()
     syscall_return(current) = result.val;
 }
 
-void syscall_delete_port()
+void syscall_delete_port(TaskDescriptor *current)
 {
-    auto current = get_current_task();
-
     u64 port_id = syscall_arg64(current, 0);
 
     auto port = Port::atomic_get_port(port_id);
@@ -2676,10 +2696,8 @@ void syscall_delete_port()
     }
 }
 
-void syscall_create_timer()
+void syscall_create_timer(TaskDescriptor *current)
 {
-    auto current = get_current_task();
-
     u64 port_id = syscall_arg64(current, 0);
 
     auto port = Port::atomic_get_port(port_id);
@@ -2704,10 +2722,8 @@ void syscall_create_timer()
     syscall_return(current) = timer.val->right_parent_id;
 }
 
-void syscall_set_timer_deadline()
-{
-    auto task = get_current_task();
-    
+void syscall_set_timer_deadline(TaskDescriptor *task)
+{    
     auto flags = syscall_flags(task);
     u64 offset = 0;
     if (flags & PMOS_SET_TIMER_RELATIVE) {
@@ -2749,9 +2765,8 @@ void syscall_set_timer_deadline()
     syscall_error(task) = timer_right->set_deadline(deadline + offset);
 }
 
-void syscall_debug_log()
+void syscall_debug_log(TaskDescriptor *task)
 {
-    auto task = get_current_task();
     ulong ptr = syscall_arg(task, 0, 0);
     ulong size = syscall_arg(task, 1, 0);
 
@@ -2768,7 +2783,7 @@ void syscall_debug_log()
 
     auto result = copy_from_user((char *)buffer.data(), (const char *)ptr, size);
     if (!result)
-        return;
+        panic("Blocking not implemented");
 
     if (!result.success()) {
         syscall_error(task) = result.result;
@@ -2779,17 +2794,24 @@ void syscall_debug_log()
     syscall_success(task);
 }
 
-static void futex_wakeup(Task *task);
+static void cancel_futex_wait(TaskDescriptor *task);
+static void futex_wakeup(TaskDescriptor *task);
 
-void syscall_futex_wait()
+void syscall_futex_wait(TaskDescriptor *task)
 {
-    auto task = get_current_task();
     u64 timeout_ns = syscall_arg64(task, 0);
     ulong ptr = syscall_arg(task, 1, 1);
     u32 expected_value = syscall_arg(task, 2, 0);
 
     // TODO: implement the timeout here
-    uint64_t deadline = timeout_ns == -1 ? -1 : get_ns_since_bootup() + timeout_ns;
+    uint64_t deadline = timeout_ns == (u64)-1 ? -1 : get_ns_since_bootup() + timeout_ns;
+
+    task->continuation_func = futex_wakeup;
+    task->cancel_callback = cancel_futex_wait;
+    task->continuation_data = TaskDescriptor::FutexWaitData {
+        .pointer = ptr,
+        .deadline = deadline,
+    };
 
     u32 user_value;
     auto result = atomic_read_from_user(&user_value, (u32 *)ptr);
@@ -2798,23 +2820,16 @@ void syscall_futex_wait()
         return;
     }
 
-    if (!result.value)
-        panic("syscall_futex_wait: copy_from_user blocked, not implemented");
+    if (!result.val)
+        return;
 
     if (user_value != expected_value) {
+        task->continuation_func = nullptr;
         syscall_error(task) = -EAGAIN;
         return;
     }
 
-    task->continuation_func = futex_wakeup;
-    task->continuation_data = task->FutexWaitData {
-        .ptr = ptr,
-        .deadline = deadline,
-    };
-
     task->futex_push();
-
-    task->atomic_block_self();
 
     // Do a second take so wakeups are not missed
     result = atomic_read_from_user(&user_value, (u32 *)ptr);
@@ -2823,16 +2838,16 @@ void syscall_futex_wait()
         return;
     }
 
-    if (!result.value) {
-        task->interrupt_blocked();
+    if (!result.val)
         return;
-    }
         
     if (user_value != expected_value) {
         // interrupt_blocked() will return -EAGAIN
         task->interrupt_blocked();
         return;
     }
+
+    task->atomic_block_self(TaskDescriptor::SCHED_WAKE_FUTEX);
 }
 
 } // namespace kernel::proc::syscalls

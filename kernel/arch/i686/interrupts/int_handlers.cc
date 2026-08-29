@@ -150,8 +150,10 @@ extern "C" void page_fault_handler(kernel_registers_context *ctx, u32 err)
             auto r                      = it->on_page_fault(access_mask, virtual_addr_filtered);
             if (!r.success())
                 return r.result;
-            if (!r.val)
-                task->atomic_block_by_page(addr_all, &task->page_table->blocked_tasks);
+            if (!r.val) {
+                task->cancel_callback = TaskDescriptor::cancel_noop;
+                task->atomic_block_by_page(addr_all);
+            }
 
             return 0;
         }

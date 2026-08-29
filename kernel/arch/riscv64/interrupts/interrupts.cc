@@ -158,7 +158,8 @@ void page_fault(u64 addr, u64 scause)
                 return r.result;
 
             if (not r.val) {
-                task->atomic_block_by_page((void *)page, &task->page_table->blocked_tasks);
+                task->cancel_callback = TaskDescriptor::cancel_noop;
+                task->atomic_block_by_page((void *)page);
             }
 
             return 0;
@@ -233,7 +234,8 @@ void illegal_instruction(u32 instruction)
 
             if (not b.val) {
                 auto page_aligned = task->regs.pc & ~0xfffUL;
-                task->atomic_block_by_page((void *)page_aligned, &task->page_table->blocked_tasks);
+                task->cancel_callback = TaskDescriptor::cancel_noop;
+                task->atomic_block_by_page((void *)page_aligned);
                 return 0;
             }
         }

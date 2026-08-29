@@ -246,7 +246,8 @@ void page_fault(u32 error)
                 return r.result;
 
             if (not r.val) {
-                task->atomic_block_by_page(virt_addr, &task->page_table->blocked_tasks);
+                task->cancel_callback = TaskDescriptor::cancel_noop;
+                task->atomic_block_by_page(virt_addr);
             }
 
             return 0;
