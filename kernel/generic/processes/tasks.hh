@@ -368,6 +368,8 @@ namespace proc
         void futex_push();
         void futex_try_remove();
 
+        void futex_wake(ulong futex_addr, bool wake_all);
+
         bool is_32bit() const;
 
 #if defined(__riscv) || defined(__loongarch__)

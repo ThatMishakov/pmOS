@@ -283,6 +283,9 @@ void syscall_debug_log(TaskDescriptor *current_task);
 void syscall_futex_wait(TaskDescriptor *current_task);
 // Parameters: u64 timeout_ns, u32 *pointer, u32 expected
 
+void syscall_futex_wake(TaskDescriptor *current_task);
+// Parameters: u32 *pointer, bool all
+
 struct SyscallRetval {
     TaskDescriptor *task;
     u64 operator=(u64 value);

@@ -13,7 +13,7 @@ public:
     void insert(Type *item) noexcept;
     void remove(Type *item) noexcept;
 
-    Type *find(const Type &item) noexcept;
+    Type *find(auto &&key) noexcept;
 
 private:
     struct Bucket {
@@ -39,12 +39,12 @@ void HashMap<Type, Head, BucketCount, Hash>::remove(Type *item) noexcept
 }
 
 template<typename Type, DoubleListHead<Type> Type:: *Head, size_t BucketCount, class Hash>
-Type *HashMap<Type, Head, BucketCount, Hash>::find(const Type &item) noexcept
+Type *HashMap<Type, Head, BucketCount, Hash>::find(auto &&key) noexcept
 {
-    size_t bucket_index = hash_func(item) % BucketCount;
+    size_t bucket_index = hash_func(key) % BucketCount;
     auto &bucket = buckets[bucket_index];
     for (auto it = bucket.list.begin(); it != bucket.list.end(); ++it) {
-        if (*it == item) {
+        if (key == *it) {
             return &*it;
         }
     }

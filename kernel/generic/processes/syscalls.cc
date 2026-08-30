@@ -224,7 +224,7 @@ std::array<syscall_function, 67> syscall_table = {
     syscall_set_timer_deadline,
     syscall_debug_log,
     syscall_futex_wait,
-    nullptr,
+    syscall_futex_wake,
     nullptr,
 };
 
@@ -2854,6 +2854,16 @@ void syscall_futex_wait(TaskDescriptor *task)
     }
 
     task->atomic_block_self(TaskDescriptor::SCHED_WAKE_FUTEX);
+}
+
+void syscall_futex_wake(TaskDescriptor *task)
+{
+    ulong ptr = syscall_arg(task, 0, 0);
+    bool all = syscall_arg(task, 1, 0);
+
+    task->futex_wake(ptr, all);
+    
+    syscall_success(task);
 }
 
 } // namespace kernel::proc::syscalls
