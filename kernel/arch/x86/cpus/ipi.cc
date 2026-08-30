@@ -61,6 +61,7 @@ void reschedule_isr()
 {
     reschedule();
     apic_eoi();
+    handle_scheduling();
 }
 
 void CPU_Info::ipi_reschedule() { 

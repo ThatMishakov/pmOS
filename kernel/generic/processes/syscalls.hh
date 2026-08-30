@@ -37,7 +37,7 @@ namespace kernel::proc::syscalls {
 // #pragma GCC diagnostic push
 // #pragma GCC diagnostic ignored "-Wreturn-type-c-linkage"
 
-extern "C" void syscall_handler();
+void syscall_handler();
 
 // #pragma GCC diagnostic pop
 

@@ -163,7 +163,7 @@ syscall_entry:
     # Stack frame conventions
     movq $0, %rbp
 
-    call syscall_handler
+    call x86_syscall_handler
 
     # Syscall might do a task switch, which might need to be returned to by iret
     # Check that and change return method if that's the case
@@ -197,7 +197,7 @@ sysenter_entry:
     # Entry type
     movq $2,   176(%r15)
 
-    call syscall_handler
+    call x86_syscall_handler
 
     # Jmp to the right return method (in case there was a task switch)
     movq %gs:32, %r15
@@ -234,7 +234,7 @@ syscall_int_entry:
     # Entry type
     movq $0,   176(%r11)
 
-    call syscall_handler
+    call x86_syscall_handler
 
     # Jmp to the right return method (in case there was a task switch)
     movq %gs:32, %r15
@@ -254,7 +254,7 @@ ret_repeat_syscall:
     movq %rax, 176(%r15)
     movq $0, 200(%r15)
 
-    call syscall_handler
+    call x86_syscall_handler
 
     # Jmp to the right return method (in case there was a task switch)
     movq %gs:32, %r15

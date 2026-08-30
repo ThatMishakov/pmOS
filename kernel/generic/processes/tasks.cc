@@ -248,8 +248,9 @@ void TaskDescriptor::atomic_kill()
 
     {
         Auto_Lock_Scope scope_lock(sched_lock);
+        sched_pending_mask |= SCHED_FLAG_TERMINATE;
+
         const bool is_blocked = status == TaskStatus::TASK_BLOCKED;
-        status                = TaskStatus::TASK_DYING;
         if (is_blocked)
             unblock();
         else
@@ -806,6 +807,8 @@ void TaskDescriptor::cleanup()
 {
     cleaned_up = true;
 
+    futex_try_remove();
+
     {
         Auto_Lock_Scope scope_lock(tasks_map_lock);
         tasks_map.erase(this);
@@ -864,7 +867,7 @@ TaskDescriptor::TaskID TaskDescriptor::get_new_task_id()
 
 TaskDescriptor::~TaskDescriptor() noexcept
 {
-    assert(status == TaskStatus::TASK_UNINIT or (status == TaskStatus::TASK_DYING and cleaned_up));
+    assert(status == TaskStatus::TASK_UNINIT or (sched_pending_mask == SCHED_FLAG_TERMINATE and cleaned_up));
 
     if (status == TaskStatus::TASK_UNINIT) {
         Auto_Lock_Scope scope_lock(tasks_map_lock);

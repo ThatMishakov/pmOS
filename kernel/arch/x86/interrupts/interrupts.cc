@@ -77,6 +77,7 @@ extern "C" void timer_interrupt()
     lapic::apic_eoi();
 
     kernel::sched::cpu_timer_interrupt();
+    kernel::sched::handle_scheduling();
 }
 
 /*

@@ -273,8 +273,6 @@ void illegal_instruction(u32 instruction)
     }
 }
 
-extern "C" void syscall_handler();
-
 void service_timer_interrupt()
 {
     cpu_timer_interrupt();
@@ -442,11 +440,7 @@ void handle_interrupt()
         }
     }
 
-    while (c->current_task->regs.syscall_restart != 0) {
-        c->current_task->regs.a0              = c->current_task->syscall_num;
-        c->current_task->regs.syscall_restart = 0;
-        syscall_handler();
-    }
+    handle_scheduling();
 
     assert(c->nested_level == 1);
 }

@@ -213,6 +213,35 @@ void start_scheduler()
     s->sched_timer(assign_quantum_on_priority(t->priority));
 }
 
+void handle_scheduling()
+{
+    auto c = get_cpu_struct();
+    do {
+        auto current_task = c->current_task;
+        u32 mask;
+
+        {
+            Auto_Lock_Scope lock(current_task->sched_lock);
+            mask = current_task->sched_pending_mask;
+        }
+        
+        if (!(mask & (TaskDescriptor::SCHED_FLAG_PAUSE | TaskDescriptor::SCHED_FLAG_TERMINATE)) && !current_task->continuation_func)
+            break;
+
+        if (mask & TaskDescriptor::SCHED_FLAG_TERMINATE) {
+            current_task->cleanup();
+            find_new_process();
+            continue;
+        }
+
+        if (mask & TaskDescriptor::SCHED_FLAG_PAUSE)
+            panic("SCHED_FLAG_PAUSE not implemented");
+
+        if (current_task->continuation_func)
+            current_task->continuation_func(current_task);
+    } while (true);
+}
+
 void reschedule()
 {
     auto *const cpu_str         = get_cpu_struct();
@@ -227,13 +256,6 @@ void reschedule()
 
         new_task->switch_to();
         push_ready(current_task);
-    }
-
-    while (cpu_str->current_task->status == TaskStatus::TASK_DYING) {
-        auto t = cpu_str->current_task;
-        t->cleanup();
-
-        find_new_process();
     }
 
     while (cpu_str->current_task->sched_pending_mask & TaskDescriptor::SCHED_FLAG_PAUSE) {

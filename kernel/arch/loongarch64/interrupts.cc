@@ -273,8 +273,6 @@ void page_fault(u32 error)
     }
 }
 
-extern "C" void syscall_handler();
-
 kresult_t handle_fp_disabled_exception(unsigned code);
 void handle_hardware_interrupt(u32 estat);
 

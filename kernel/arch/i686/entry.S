@@ -122,7 +122,7 @@ syscall_isr:
     movl %esp, %ebp
     subl $8, %esp
 
-    call syscall_handler
+    call x86_syscall_handler
 
     jmp return_from_kernel
 
@@ -134,7 +134,7 @@ ret_repeat_syscall:
     xorl %ecx, %ecx
     movl %ecx, 56(%eax)
 
-    call syscall_handler
+    call x86_syscall_handler
 
     jmp return_from_kernel
 
@@ -176,7 +176,7 @@ syscall_entry:
     movl %esp, %ebp
     subl $8, %esp
 
-    call syscall_handler
+    call x86_syscall_handler
 
     jmp return_from_kernel
 

@@ -228,7 +228,7 @@ std::array<syscall_function, 67> syscall_table = {
     nullptr,
 };
 
-extern "C" void syscall_handler()
+void syscall_handler()
 {
     TaskDescriptor *task = sched::get_cpu_struct()->current_task;
 
@@ -1585,10 +1585,8 @@ void syscall_assign_page_table(TaskDescriptor *current)
     }
 }
 
-void syscall_create_mem_object(TaskDescriptor *current)
+void syscall_create_mem_object(TaskDescriptor *current_task)
 {
-    const auto &current_task       = get_current_task();
-
     u64 size_bytes = syscall_arg64(current_task, 0);
     ulong flags      = syscall_flags(current_task);
 
@@ -1630,10 +1628,8 @@ void syscall_create_mem_object(TaskDescriptor *current)
     syscall_return(current_task) = right.val->right_sender_id;
 }
 
-void syscall_map_mem_object(TaskDescriptor *current)
+void syscall_map_mem_object(TaskDescriptor *current_task)
 {
-    const auto &current_task = get_current_task();
-
     map_mem_object_param_t params = {};
 
     ulong ptr = syscall_arg(current_task, 0, 0);
@@ -2089,6 +2085,8 @@ void syscall_get_page_address(TaskDescriptor *current_task)
     auto page_base    = syscall_arg(current_task, 1, 1);
     auto flags        = syscall_flags(current_task);
 
+    current_task->continuation_func = nullptr;
+
     if (page_base & (PAGE_SIZE - 1)) {
         syscall_error(current_task) = -EINVAL;
         return;
@@ -2105,23 +2103,24 @@ void syscall_get_page_address(TaskDescriptor *current_task)
         return;
     }
 
-    syscall_success(task);
-
     auto table = task->page_table;
     assert(table);
+
+    current_task->continuation_func = syscall_get_page_address;
 
     Auto_Lock_Scope lock(table->lock);
 
     auto b = table->prepare_user_page((void *)page_base, 0);
     if (!b.success()) {
+        current_task->continuation_func = nullptr;
         syscall_error(task) = b.result;
         return;
     }
 
     if (not b.val)
-        panic("TODO!");
         return;
 
+    current_task->continuation_func = nullptr;
     auto mapping         = table->get_page_mapping((void *)page_base);
     syscall_return(task) = mapping.page_addr;
 }
@@ -2771,9 +2770,41 @@ static void cancel_futex_wait(TaskDescriptor *task, i64 reason)
 
 static void futex_wakeup(TaskDescriptor *task)
 {
-    syscall_success(task);
+    assert(task);
+    auto mask = __atomic_load_n(&task->wake_reason_mask, __ATOMIC_ACQUIRE);
+    if (mask & TaskDescriptor::SCHED_WAKE_FUTEX) {
+        task->continuation_func = nullptr;
+        task->futex_try_remove();
+        syscall_success(task);
+        return;
+    }
+
+    // Futex has been blocked by memory, so retry reading the value
+
+    u32 expected_value = syscall_arg(task, 2, 0);
+    u32 user_value;
+
+    auto result = atomic_read_from_user(&user_value, (u32 *)task->futex_addr);
+    if (!result) {
+        task->futex_try_remove();
+        syscall_error(task) = result.result;
+        task->continuation_func = nullptr;
+        return;
+    }
+
+    if (!result.val)
+        // Blocked again...
+        return;
+
+    task->futex_try_remove();
     task->continuation_func = nullptr;
-    assert(!task->futex_pushed);
+
+    if (user_value != expected_value) {
+        syscall_error(task) = -EAGAIN;
+        return;
+    }
+
+    syscall_success(task);
 }
 
 void syscall_futex_wait(TaskDescriptor *task)

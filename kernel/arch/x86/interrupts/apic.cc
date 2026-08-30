@@ -559,21 +559,21 @@ extern "C" void programmable_interrupt(u32 intno)
         apic_eoi();
         tpr_write(0);
         // panic?? this can't really be handled without iommu
-        return;
-    }
-
-    if (handler->send_interrupt_notification() != kernel::interrupts::NotificationResult::Success) {
-        global_logger.printf("[Kernel] Warning: Failed to send interrupt notification for interrupt %h\n", intno);
-
-        // TODO if I end up sopporting MSIs
-        auto ioapic_handler = static_cast<IOAPIC_Handler *>(handler);
-        ioapic_handler->mask_interrupt();
-        apic_eoi();
-        tpr_write(0);
-        return;
     } else {
-        tpr_write(14);
+        if (handler->send_interrupt_notification() != kernel::interrupts::NotificationResult::Success) {
+            global_logger.printf("[Kernel] Warning: Failed to send interrupt notification for interrupt %h\n", intno);
+
+            // TODO if I end up sopporting MSIs
+            auto ioapic_handler = static_cast<IOAPIC_Handler *>(handler);
+            ioapic_handler->mask_interrupt();
+            apic_eoi();
+            tpr_write(0);
+        } else {
+            tpr_write(14);
+        }
     }
+
+    kernel::sched::handle_scheduling();
 }
 
 void ::kernel::interrupts::interrupt_complete(InterruptHandler *handler)

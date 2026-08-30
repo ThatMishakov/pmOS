@@ -257,6 +257,8 @@ extern "C" void pagefault_manager(NestedIntContext *kernel_ctx, ulong err)
 
         task->atomic_kill();
     }
+
+    kernel::sched::handle_scheduling();
 }
 
 extern "C" void sse_exception_manager(NestedIntContext *kernel_ctx, ulong)
@@ -312,6 +314,8 @@ extern "C" void general_protection_fault_manager(NestedIntContext *kernel_ctx, u
     print_registers(get_cpu_struct()->current_task, global_logger);
     // print_stack_trace(task, global_logger);
     task->atomic_kill();
+
+    handle_scheduling();
 }
 
 extern "C" void overflow_manager(NestedIntContext *kernel_ctx, ulong)
@@ -330,6 +334,8 @@ extern "C" void overflow_manager(NestedIntContext *kernel_ctx, ulong)
                          task->regs.program_counter(), task->regs.stack_pointer(), task->task_id,
                          task->name.c_str());
     task->atomic_kill();
+
+    kernel::sched::handle_scheduling();
 }
 
 extern "C" void simd_fp_exception_manager(NestedIntContext *kernel_ctx, ulong)
@@ -348,6 +354,8 @@ extern "C" void simd_fp_exception_manager(NestedIntContext *kernel_ctx, ulong)
                          task->regs.int_err, task->regs.program_counter(),
                          task->regs.stack_pointer(), task->task_id, task->name.c_str());
     task->atomic_kill();
+
+    kernel::sched::handle_scheduling();
 }
 
 extern "C" void invalid_opcode_manager(NestedIntContext *kernel_ctx, ulong)
@@ -365,6 +373,8 @@ extern "C" void invalid_opcode_manager(NestedIntContext *kernel_ctx, ulong)
     global_logger.printf("!!! Invalid op-code (UD) instr %h\n",
                          get_cpu_struct()->current_task->regs.program_counter());
     task->atomic_kill();
+
+    kernel::sched::handle_scheduling();
 }
 
 extern "C" void stack_segment_fault_manager(NestedIntContext *kernel_ctx, ulong)
@@ -382,6 +392,8 @@ extern "C" void stack_segment_fault_manager(NestedIntContext *kernel_ctx, ulong)
     global_logger.printf("!!! Stack-Segment Fault error %lx RIP %lx RSP %lx\n", task->regs.int_err,
                          task->regs.program_counter(), task->regs.stack_pointer());
     task->atomic_kill();
+
+    kernel::sched::handle_scheduling();
 }
 
 extern "C" void double_fault_manager(NestedIntContext *kernel_ctx, ulong err)
@@ -428,6 +440,8 @@ extern "C" void division_error_manager(NestedIntContext *kernel_ctx, ulong)
     print_registers(task, serial_logger);
     print_stack_trace(task, serial_logger);
     task->atomic_kill();
+
+    kernel::sched::handle_scheduling();
 }
 
 extern "C" std::array<void (*)(NestedIntContext *, ulong), 32> fred_functions = {
@@ -515,7 +529,7 @@ void fred_int1_handler(NestedIntContext *kernel_ctx, ulong err)
     panic("FRED int1 handler called but it's not implemented\n");
 }
 
-extern "C" void syscall_handler();
+extern "C" void x86_syscall_handler();
 
 extern "C" void fred_handle(NestedIntContext *kernel_ctx, FREDContext *ctx)
 {
@@ -536,7 +550,7 @@ extern "C" void fred_handle(NestedIntContext *kernel_ctx, FREDContext *ctx)
         fred_functions[vector](kernel_ctx, error_code);
         break;
     case 4: // Software int
-        syscall_handler();
+        x86_syscall_handler();
         break;
     case 5: // INT 1
         fred_int1_handler(kernel_ctx, error_code);
@@ -545,7 +559,7 @@ extern "C" void fred_handle(NestedIntContext *kernel_ctx, FREDContext *ctx)
         breakpoint_manager(kernel_ctx, error_code);
         break;
     case 7: // Syscall/sysenter
-        syscall_handler();
+        x86_syscall_handler();
         break;
     default:
         assert(false);
@@ -555,5 +569,11 @@ extern "C" void fred_handle(NestedIntContext *kernel_ctx, FREDContext *ctx)
 
 extern "C" void fred_nested_syscall()
 {
-    syscall_handler();
+    panic("Fred nested syscall called but this is not used anymore");
+}
+
+extern "C" void x86_syscall_handler()
+{
+    syscalls::syscall_handler();
+    kernel::sched::handle_scheduling();
 }

@@ -288,4 +288,7 @@ void park_self();
 // Should get called from IPI handler, this runs the attention routines stuff...
 void get_attention();
 
+// Handles continuations and such before returning to userspace
+void handle_scheduling();
+
 }; // namespace kernel::sched
