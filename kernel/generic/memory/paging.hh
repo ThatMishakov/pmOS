@@ -568,7 +568,7 @@ public:
     // in it already. This does not check if it can be unblocked immediately.
     void atomic_push_blocked_task(proc::TaskDescriptor *task, const void *page);
 
-    [[nodiscard]] virtual bool page_available(void *virt_addr) const;
+    [[nodiscard]] virtual bool page_pending(void *virt_addr) const;
 protected:
     Page_Table() = default;
 

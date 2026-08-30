@@ -99,7 +99,9 @@ void Port::enqueue(klib::unique_ptr<GenericMessage> msg)
 
     msg_queue.push_back(msg.release());
 
-    sched::unblock_if_needed(owner, this);
+    assert(owner);
+    if (__atomic_load_n(&owner->blocked_by, __ATOMIC_ACQUIRE) == this)
+        owner->atomic_handle_unblock(proc::TaskDescriptor::SCHED_WAKE_PORT);
 }
 
 kresult_t Port::send_from_system(klib::vector<char> &&v)

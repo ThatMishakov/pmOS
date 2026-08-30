@@ -895,6 +895,54 @@ void TaskDescriptor::atomic_handle_unblock(u32 reason)
     }
 }
 
+void TaskDescriptor::atomic_block_self(u32 unblock_mask)
+{
+    Auto_Lock_Scope scope_lock(sched_lock);
+    this->unblock_mask = unblock_mask;
+    assert(status == TaskStatus::TASK_RUNNING);
+
+    if (sched_pending_mask & SCHED_FLAG_TERMINATE) {
+        // Don't bother with anything (and keep the bit set)
+        return;
+    }
+
+    if (sched_pending_mask & SCHED_FLAG_WAKE) {
+        auto mask = __atomic_fetch_and(&wake_reason_mask, ~unblock_mask, __ATOMIC_RELAXED);
+        if (mask & unblock_mask) {
+            // Don't block and return immediately (other stuff will be handled after the unblocking)
+            sched_pending_mask &= ~SCHED_FLAG_WAKE;
+            return;
+        }
+    }
+
+    if (sched_pending_mask & SCHED_FLAG_PAUSE) {
+        // Also don't block and propagate
+        return;
+    }
+
+    if (sched_pending_mask & SCHED_FLAG_INTERRUPT) {
+        sched_pending_mask &= ~SCHED_FLAG_INTERRUPT;
+
+        assert(cancel_callback);
+        cancel_callback(this, pending_cancel_reason);
+        continuation_func = nullptr;
+
+        return;
+    }
+
+    status = TaskStatus::TASK_BLOCKED;
+
+    auto &queue = kernel::sched::blocked;
+    parent_queue = &queue;
+    {
+        Auto_Lock_Scope scope_l(queue.lock);
+        queue.push_back(this);
+    }
+
+    // Task switch
+    sched::find_new_process();
+}
+
 #if defined(__x86_64__) || defined(__i386__)
 kresult_t TaskDescriptor::get_io_permissions()
 {
@@ -906,25 +954,32 @@ kresult_t TaskDescriptor::get_io_permissions()
 }
 #endif
 
-void TaskDescriptor::cancel_noop(TaskDescriptor *)
+void TaskDescriptor::cancel_noop(TaskDescriptor *, i64)
 {
     // Do nothing
 }
 
-void TaskDescriptor::cancel_syscall(TaskDescriptor *task)
+void TaskDescriptor::cancel_syscall(TaskDescriptor *task, i64 error_code)
 {
-    syscalls::syscall_return(task) = -EINTR;
+    syscalls::syscall_return(task) = error_code;
 }
 
-void TaskDescriptor::interrupt_blocked()
+void TaskDescriptor::interrupt_blocked(i64 error_code)
 {
     if (status == TaskStatus::TASK_BLOCKED) {
         assert(cancel_callback);
-        cancel_callback(this);
+        cancel_callback(this, error_code);
         continuation_func = nullptr;
     } else if (status == TaskStatus::TASK_RUNNING) {
+        
         sched_pending_mask |= SCHED_FLAG_INTERRUPT;
     }
+}
+
+void TaskDescriptor::TaskWaiter::fire()
+{
+    auto task = reinterpret_cast<TaskDescriptor *>(reinterpret_cast<char *>(this) - offsetof(TaskDescriptor, sleep_waiter));
+    task->interrupt_blocked(-ETIMEDOUT);
 }
 
 } // namespace kernel::proc

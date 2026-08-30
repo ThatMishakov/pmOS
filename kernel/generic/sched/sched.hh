@@ -29,6 +29,7 @@
 #pragma once
 #include "defs.hh"
 #include "sched_queue.hh"
+#include "timer_node.hh"
 
 #include <array>
 #include <interrupts/interrupt_handler.hh>
@@ -62,13 +63,6 @@
 namespace kernel::sched
 {
 
-// Checks the mask and unblocks the task if needed
-// This function needs to be axed
-bool unblock_if_needed(proc::TaskDescriptor *p, ipc::Port *compare_blocked_by);
-
-// Blocks current task, setting blocked_by to *ptr*.
-ReturnStr<u64> block_current_task(ipc::Port *ptr);
-
 extern sched_queue blocked;
 extern sched_queue uninit;
 extern sched_queue paused;
@@ -77,12 +71,6 @@ inline klib::array<sched_queue, sched_queues_levels> global_sched_queues;
 
 extern memory::RCU paging_rcu;
 extern memory::RCU heap_rcu;
-
-struct TimerNode {
-    pmos::containers::RBTreeNode<TimerNode> node;
-    u64 fire_at_ns = 0;
-    virtual void fire() = 0;
-};
 
 struct AttentionNode {
     pmos::containers::DoubleListHead<AttentionNode> attention_list_node;

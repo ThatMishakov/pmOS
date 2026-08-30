@@ -42,11 +42,13 @@
 #include <optional>
 #include <paging/arch_paging.hh>
 #include <pmos/containers/set.hh>
+#include <pmos/containers/intrusive_list.hh>
 #include <pmos/load_data.h>
 #include <registers.hh>
 #include <sched/defs.hh>
 #include <tuple>
 #include <types.hh>
+#include <sched/timer_node.hh>
 
 #if defined(__x86_64__) || defined(__i386__)
     #include <cpus/sse.hh>
@@ -137,6 +139,8 @@ namespace proc
         u32 cpu_affinity                 = 0;
         Spinlock sched_lock;
 
+        i64 pending_cancel_reason = -EINTR;
+
         union {
             memory::RCU_Head rcu_head;
             pmos::containers::RBTreeNode<TaskDescriptor> task_tree_head = {};
@@ -145,8 +149,7 @@ namespace proc
         static constexpr int SCHED_FLAG_PAUSE     = 0x01;
         static constexpr int SCHED_FLAG_WAKE      = 0x02;
         static constexpr int SCHED_FLAG_INTERRUPT = 0x04;
-        static constexpr int SCHED_FLAG_TIMEOUT   = 0x08;
-        static constexpr int SCHED_FLAG_TERMINATE = 0x10;
+        static constexpr int SCHED_FLAG_TERMINATE = 0x08;
 
         u32 wake_reason_mask = 0;
         u32 unblock_mask = 0;
@@ -157,8 +160,8 @@ namespace proc
 
         sched::sched_queue waiting_to_pause;
 
-        static void cancel_syscall(TaskDescriptor *task);
-        static void cancel_noop(TaskDescriptor *task);
+        static void cancel_syscall(TaskDescriptor *task, i64 error_code);
+        static void cancel_noop(TaskDescriptor *task, i64 error_code);
 
         // Paging
         klib::shared_ptr<paging::Arch_Page_Table> page_table;
@@ -170,30 +173,28 @@ namespace proc
         // Count of handlers for interrupts. Also using sched_lock
         size_t interrupt_handlers_count = 0;
 
-        struct FutexWaitData {
-            ulong pointer;
-            u64 deadline;
-        };
         struct NoContinuation {
         };
         struct GetMessageData {
             ipc::Port *port;
-            ulong ptr;
-            ulong flags;
-        };
-        struct SetNameData {
-            u64 pid;
-            ulong name_ptr;
-            ulong length;
-        };
-        struct PauseData {
-            u64 task_id;
         };
 
         // Continuation..?
         void (*continuation_func)(TaskDescriptor *task) = nullptr;
-        void (*cancel_callback)(TaskDescriptor *task) = nullptr;
-        std::variant<NoContinuation, FutexWaitData, GetMessageData, SetNameData, PauseData> continuation_data = NoContinuation{};
+        void (*cancel_callback)(TaskDescriptor *task, i64 error_code) = nullptr;
+        std::variant<NoContinuation, GetMessageData> continuation_data = NoContinuation{};
+
+        // Futex and sleep() syscalls stuff
+        struct TaskWaiter: sched::TimerNode {
+            virtual void fire() override;
+        };
+        TaskWaiter sleep_waiter;
+        u64 futex_deadline = -1;
+
+        // Futex stuff. This is protected by a global futex lock
+        ulong futex_addr = 0;
+        bool futex_pushed = false;
+        pmos::containers::DoubleListHead<TaskDescriptor> futex_list_node;
 
         // Creates and assigns an emty valid page table
         kresult_t create_new_page_table();
@@ -221,9 +222,6 @@ namespace proc
 
         // Returns 0 if there are no unblocking events pending. Otherwise returns 0.
         u64 check_unblock_immediately(u64 reason, u64 extra);
-
-        // Checks if the process is blocked by the port and unblocks it if needed
-        bool atomic_unblock_if_needed(ipc::Port *compare_blocked_by);
 
         // Sets the entry point to the task
         inline void set_entry_point(u64 entry) { this->regs.program_counter() = entry; }
@@ -361,14 +359,14 @@ namespace proc
         void atomic_block_self(u32 mask);
 
         // Interrupts the blocked task (setting SCHED_FLAG_INTERRUPT, etc.)
-        void interrupt_blocked();
+        void interrupt_blocked(i64 error_code = -EINTR);
 
         // Unblocks the task if it is not already blocked
         void atomic_try_unblock();
 
+        // Pushes and removes (if not already inserted) the task from the futex hash table.
         void futex_push();
-
-        void push_futex_queue();
+        void futex_try_remove();
 
         bool is_32bit() const;
 

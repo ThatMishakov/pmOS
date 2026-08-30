@@ -103,3 +103,80 @@ failure:
     popq %rbp
     retq
 
+
+
+
+
+    .type fast_atomic_read_from_user, @function
+    .globl fast_atomic_read_from_user
+fast_atomic_read_from_user:
+    pushq %rbp
+    movq %rsp, %rbp
+    pushq %rbx
+    pushq %r12
+    pushq %r13
+    pushq %r14
+    pushq %r15
+
+    pushq %rdx # const void *src
+    pushq %rsi # void *dst
+
+    movq %rsp, %gs:56
+    leaq read_failure(%rip), %rax
+    movq %rax, %gs:48
+
+    enable_user
+
+    movl (%rdx), %eax
+    movl %eax, (%rsi)
+
+    disable_user
+
+    xorq %rax, %rax
+    movq $1, %rdx
+    movq %rax, %gs:48
+
+    movq %rbp, %rsp
+    popq %rbp
+    retq
+
+read_failure:
+    movq %rax, %rsp
+    leaq 80(%rsp), %rbp
+
+    movq %rcx, %rsi # const void *faulting_addr
+    movq $4, %r8    # size_t size
+    xorl %ecx, %ecx # const void *src
+    xorl %edx, %edx # void *dst
+    movl $1, %edi   # unsigned access
+
+    call user_access_page_fault
+
+    cmpq $0, %rax
+    jne 1f
+    cmpb $1, %dl
+    jne 1f
+
+    movq -56(%rbp), %rdx # source
+    movq -64(%rbp), %rsi # destination
+
+    enable_user
+    movl (%rdx), %eax
+    movl %eax, (%rsi)
+
+    movq $1, %rdx
+    xorl %eax, %eax
+1:
+    disable_user
+    xorl %ecx, %ecx
+    movq %rcx, %gs:48
+
+    addq $16, %rsp
+    popq %r15
+    popq %r14
+    popq %r13
+    popq %r12
+    popq %rbx
+    popq %rbp
+    retq
+

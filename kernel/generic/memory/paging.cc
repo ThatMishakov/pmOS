@@ -684,3 +684,13 @@ Memory_Type kernel::paging::memory_type_for_phys_addr(phys_addr_t phys_addr)
     else
         return Memory_Type::IONoCache;
 }
+
+bool Page_Table::page_pending(void *virt_addr) const
+{
+    panic("page table page_pending() not implemented");
+}
+
+void Page_Table::atomic_push_blocked_task(proc::TaskDescriptor *task, const void *page)
+{
+    panic("atomic_push_blocked_page() not implemented");
+}

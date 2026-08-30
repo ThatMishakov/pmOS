@@ -631,7 +631,9 @@ void syscall_kill_task(TaskDescriptor *task)
 void syscall_get_first_message(TaskDescriptor *current)
 {
     Port *port;
-    ulong args, buff;
+
+    auto buff = syscall_arg(current, 1, 1);
+    auto args = syscall_flags(current);
 
     if (current->continuation_func) {
         auto data = std::get_if<TaskDescriptor::GetMessageData>(&current->continuation_data);
@@ -639,14 +641,8 @@ void syscall_get_first_message(TaskDescriptor *current)
 
         port = data->port;
         assert(port);
-
-        buff = data->ptr;
-        args = data->flags;
     } else {
         u64 portno = syscall_arg64(current, 0);
-
-        buff = syscall_arg(current, 1, 1);
-        args = syscall_flags(current);
 
         port = Port::atomic_get_port(portno);
         if (!port) {
@@ -663,8 +659,6 @@ void syscall_get_first_message(TaskDescriptor *current)
         current->cancel_callback = TaskDescriptor::cancel_syscall;
         current->continuation_data = TaskDescriptor::GetMessageData {
             .port = port,
-            .ptr = buff,
-            .flags = args,
         };
     }
 
@@ -874,8 +868,8 @@ void syscall_get_message_info(TaskDescriptor *task)
             return;
         }
 
-        auto message_struct = data->ptr;
-        auto flags = data->flags;
+        auto message_struct = syscall_arg(task, 1, 1);
+        auto flags = syscall_flags(task);
 
         auto msg = port->atomic_get_front();
         assert(msg);
@@ -888,8 +882,6 @@ void syscall_get_message_info(TaskDescriptor *task)
         task->cancel_callback = TaskDescriptor::cancel_syscall;
         task->continuation_data = TaskDescriptor::GetMessageData{
             .port  = port,
-            .ptr   = message_struct,
-            .flags = flags,
         };
         __atomic_store_n(&task->wake_reason_mask, 0, __ATOMIC_RELAXED);
         __atomic_store_n(&task->blocked_by, port, __ATOMIC_RELEASE);
@@ -1087,28 +1079,13 @@ void syscall_get_lapic_id(TaskDescriptor *current_task)
 
 void syscall_set_task_name(TaskDescriptor *current)
 {
-    u64 pid;
-    ulong string, length;
+    auto pid      = syscall_arg64(current, 0);
+    auto string = syscall_arg(current, 1, 1);
+    auto length = syscall_arg(current, 2, 1);
 
-    if (current->continuation_func) {
-        auto data = std::get_if<TaskDescriptor::SetNameData>(&current->continuation_data);
-        assert(data);
-        
-        pid = data->pid;
-        string = data->name_ptr;
-        length = data->length;
-    } else {
-        pid      = syscall_arg64(current, 0);
-        string = syscall_arg(current, 1, 1);
-        length = syscall_arg(current, 2, 1);
-
+    if (!current->continuation_func) {
         current->continuation_func = syscall_set_task_name;
         current->cancel_callback = nullptr;
-        current->continuation_data = TaskDescriptor::SetNameData {
-            .pid = pid,
-            .name_ptr = string,
-            .length = length,
-        };
     }
 
     task_ptr t = get_task(pid);
@@ -1990,15 +1967,7 @@ void syscall_system_info(TaskDescriptor *current_task)
 
 void syscall_pause_task(TaskDescriptor *current_task)
 {
-    u64 task_id;
-    if (current_task->continuation_func) {
-        auto data = std::get_if<TaskDescriptor::PauseData>(&current_task->continuation_data);
-        assert(data);
-
-        task_id = data->task_id;
-    } else {
-        task_id = syscall_arg64(current_task, 0);
-    }
+    u64 task_id = syscall_arg64(current_task, 0);
 
     const auto task = task_id == 0 ? current_task : get_task(task_id);
     if (!task) {
@@ -2794,8 +2763,18 @@ void syscall_debug_log(TaskDescriptor *task)
     syscall_success(task);
 }
 
-static void cancel_futex_wait(TaskDescriptor *task);
-static void futex_wakeup(TaskDescriptor *task);
+static void cancel_futex_wait(TaskDescriptor *task, i64 reason)
+{
+    task->futex_try_remove();
+    syscall_error(task) = reason;
+}
+
+static void futex_wakeup(TaskDescriptor *task)
+{
+    syscall_success(task);
+    task->continuation_func = nullptr;
+    assert(!task->futex_pushed);
+}
 
 void syscall_futex_wait(TaskDescriptor *task)
 {
@@ -2808,10 +2787,7 @@ void syscall_futex_wait(TaskDescriptor *task)
 
     task->continuation_func = futex_wakeup;
     task->cancel_callback = cancel_futex_wait;
-    task->continuation_data = TaskDescriptor::FutexWaitData {
-        .pointer = ptr,
-        .deadline = deadline,
-    };
+    task->futex_deadline = deadline;
 
     u32 user_value;
     auto result = atomic_read_from_user(&user_value, (u32 *)ptr);
@@ -2834,7 +2810,7 @@ void syscall_futex_wait(TaskDescriptor *task)
     // Do a second take so wakeups are not missed
     result = atomic_read_from_user(&user_value, (u32 *)ptr);
     if (!result) {
-        task->interrupt_blocked();
+        task->interrupt_blocked(result.result);
         return;
     }
 
@@ -2842,8 +2818,7 @@ void syscall_futex_wait(TaskDescriptor *task)
         return;
         
     if (user_value != expected_value) {
-        // interrupt_blocked() will return -EAGAIN
-        task->interrupt_blocked();
+        task->interrupt_blocked(-EAGAIN);
         return;
     }
 

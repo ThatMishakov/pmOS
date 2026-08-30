@@ -350,11 +350,6 @@ TaskDescriptor *CPU_Info::atomic_get_front_priority(priority_t priority)
     return nullptr;
 }
 
-bool unblock_if_needed(TaskDescriptor *p, ipc::Port *compare_blocked_by)
-{
-    return p->atomic_unblock_if_needed(compare_blocked_by);
-}
-
 bool cpu_struct_works  = false;
 bool other_cpus_online = false;
 
@@ -389,7 +384,7 @@ void TaskDescriptor::atomic_block_by_page(void *page)
 
     atomic_block_self(TaskDescriptor::SCHED_WAKE_MEMORY);
 
-    if (page_table->page_available(page))
+    if (!page_table->page_pending(page))
         atomic_handle_unblock(TaskDescriptor::SCHED_WAKE_MEMORY);
 }
 
@@ -476,25 +471,6 @@ void TaskDescriptor::switch_to()
 //     unblock();
 //     return true;
 // }
-
-bool TaskDescriptor::atomic_unblock_if_needed(ipc::Port *ptr)
-{
-    bool unblocked = false;
-    Auto_Lock_Scope scope_lock(sched_lock);
-
-    if (status != TaskStatus::TASK_BLOCKED)
-        return unblocked;
-
-    if (page_blocked_by != 0)
-        return unblocked;
-
-    if (ptr and blocked_by == ptr) {
-        unblocked = true;
-
-        unblock();
-    }
-    return unblocked;
-}
 
 void TaskDescriptor::atomic_erase_from_queue(sched_queue *q) noexcept
 {

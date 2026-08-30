@@ -656,35 +656,37 @@ __attribute__((noreturn)) extern "C" void __stack_chk_fail(void)
 }
 
 extern "C" ReturnStr<bool> user_access_page_fault(unsigned access, const char *faulting_addr,
-                                                  char *&dst, char *&src, size_t &size)
+                                                  char **dst, char **src, size_t &size)
 {
     TaskDescriptor *current_task = get_current_task();
 
     ReturnStr<bool> result =
         current_task->page_table->prepare_user_page((void *)faulting_addr, access);
-    if (!result.success()) {
+    if (!result.success())
         return result;
-    }
 
     if (!result.val) {
         current_task->atomic_block_by_page((void *)faulting_addr);
         return false;
     }
 
+    if (!dst || !src)
+        return result;
+
     if (access == Protection::Readable) {
-        assert(faulting_addr >= src);
-        size_t diff = faulting_addr - src;
+        assert(faulting_addr >= *src);
+        size_t diff = faulting_addr - *src;
         assert(diff < size);
-        dst += diff;
-        src += diff;
+        *dst += diff;
+        *src += diff;
         size += diff;
     } else {
         assert(access == Protection::Writeable);
-        assert(faulting_addr >= dst);
-        size_t diff = faulting_addr - dst;
+        assert(faulting_addr >= *dst);
+        size_t diff = faulting_addr - *dst;
         assert(diff < size);
-        dst += diff;
-        src += diff;
+        *dst += diff;
+        *src += diff;
         size += diff;
     }
 
@@ -705,4 +707,11 @@ ReturnStr<std::optional<klib::vector<char>>> to_buffer_from_user(void *ptr, size
         return Success(std::nullopt);
 
     return Success(std::move(data));
+}
+
+extern "C" ReturnStr<bool> fast_atomic_read_from_user(u32 *to, const u32 *from);
+
+ReturnStr<bool> atomic_read_from_user(u32 *to, const u32 *from)
+{
+    return fast_atomic_read_from_user(to, from);
 }
