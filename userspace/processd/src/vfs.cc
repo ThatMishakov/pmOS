@@ -12,6 +12,7 @@
 #include <inttypes.h>
 #include <cassert>
 #include "vfs.hh"
+#include "log.hh"
 
 extern pmos::Port main_port;
 extern pmos::PortDispatcher dispatcher;
@@ -31,8 +32,7 @@ void mount_filesystem_reply(pmos::Right &reply_right, int result)
 
     auto result_send = pmos::send_message_right_one(reply_right, reply, {}, true);
     if (!result_send)
-        printf("vfsd: Error %d sending mount filesystem reply to port %" PRIu64 "\n", result_send.error(),
-               reply_right.get());
+        kernelLogger() << "vfsd: Error " << result_send.error() << " sending mount filesystem reply to port " << reply_right.get() << "\n" << frg::endlog;
 }
 
 struct RootNodeWaiter {
@@ -100,7 +100,7 @@ pmos::async::detached_task mount_filesystem(pmos::Right reply_right, pmos::Right
         it = root_waiters.begin();
     }
 
-    printf("posix: Mounted filesystem at %s with root inode %" PRId64 "\n", fs->mountpoint.c_str(), root_inode);
+    kernelLogger() << "vfsd: Mounted filesystem at " << fs->mountpoint << " with root inode " << root_inode << "\n" << frg::endlog;
 
     mount_filesystem_reply(reply_right, 0);
 }
@@ -162,34 +162,34 @@ pmos::async::task<std::expected<pmos::Right, int>> open_file_on_fs(std::shared_p
 
     auto reply_right = pmos::send_message_right_one(vnode->parent_fs->fs_right, req, {&main_port, pmos::RightType::SendOnce});
     if (!reply_right) {
-        printf("vfsd: Error %d sending open file message to filesystem\n", reply_right.error());
+        kernelLogger() << "posixd: Error " << reply_right.error() << " sending open file message to filesystem\n" << frg::endlog;
         co_return std::unexpected(reply_right.error());
     }
 
     auto msg = co_await dispatcher.get_message(reply_right.value());
     if (!msg) {
-        printf("vfsd: Error %d waiting for open file reply from filesystem\n", msg.error());
+        kernelLogger() << "posixd: Error " << msg.error() << " waiting for open file reply from filesystem\n" << frg::endlog;
         co_return std::unexpected(msg.error());
     }
 
     if (msg->descriptor.size < sizeof(IPC_FS_Open_Reply)) {
-        printf("vfsd: Invalid open file reply size %li\n", msg->descriptor.size);
+        kernelLogger() << "posixd: Invalid open file reply size " << msg->descriptor.size << "\n" << frg::endlog;
         co_return std::unexpected(-EIO);
     }
 
     auto *reply = reinterpret_cast<IPC_FS_Open_Reply *>(msg->data.data());
     if (reply->type != IPC_FS_Open_Reply_NUM) {
-        printf("vfsd: Invalid open file reply type %d\n", reply->type);
+        kernelLogger() << "posixd: Invalid open file reply type " << reply->type << "\n" << frg::endlog;
         co_return std::unexpected(-EIO);
     }
 
     if (reply->result_code != 0) {
-        printf("vfsd: Filesystem returned error %d opening file\n", reply->result_code);
+        kernelLogger() << "posixd: Filesystem returned error " << reply->result_code << " opening file\n" << frg::endlog;
         co_return std::unexpected(reply->result_code);
     }
 
     if (!msg->other_rights[0] || msg->other_rights[0].type() != pmos::RightType::SendMany) {
-        printf("vfsd: Invalid open file reply: missing file right\n");
+        kernelLogger() << "posixd: Invalid open file reply: missing file right\n" << frg::endlog;
         co_return std::unexpected(-EIO);
     }
 
@@ -209,8 +209,7 @@ void open_file_error_reply(pmos::Right &reply_right, int result)
 
     auto result_send = pmos::send_message_right_one(reply_right, reply, {}, true);
     if (!result_send)
-        printf("vfsd: Error %d sending open file reply to port %" PRIu64 "\n", result_send.error(),
-               reply_right.get());
+        kernelLogger() << "posixd: Error " << result_send.error() << " sending open file reply to port " << reply_right.get() << "\n" << frg::endlog;
 }
 
 pmos::async::detached_task attend_open_file(std::shared_ptr<VNode> vnode, pmos::RecieveRight right)
@@ -219,7 +218,7 @@ pmos::async::detached_task attend_open_file(std::shared_ptr<VNode> vnode, pmos::
         auto [msg, message, reply_right, rights] = (co_await dispatcher.get_message(right)).value();
 
         if (message.size() < sizeof(IPC_Generic_Msg)) {
-            printf("Warning: recieved very small message\n");
+            kernelLogger() << "posixd: Recieved very small message while attending file\n" << frg::endlog;
             break;
         }
 
@@ -228,7 +227,8 @@ pmos::async::detached_task attend_open_file(std::shared_ptr<VNode> vnode, pmos::
         case IPC_Kernel_Recieve_Right_Destroyed_NUM:
             break;
         default:
-            printf("vfsd: Unknown message type %d while attending file\n", ipc_msg->type);
+            kernelLogger() << "posixd: Unknown message type " << ipc_msg->type << " while attending file\n" << frg::endlog;
+            break;
         }
     }
 
@@ -272,7 +272,7 @@ pmos::async::detached_task open_file(pmos::Right reply_right, std::string path)
 
     auto send_result = pmos::send_message_right_one(reply_right, reply, {}, true, std::move(file_right), std::move(fs_right).value());
     if (!send_result)
-        printf("vfsd: Error %d sending open file reply to port %" PRIu64 "\n", send_result.error(), reply_right.get());
+        kernelLogger() << "posixd: Error " << send_result.error() << " sending open file reply to port " << reply_right.get() << "\n" << frg::endlog;
 }
 
 pmos::async::detached_task vfs_handle_messages()
@@ -285,7 +285,7 @@ pmos::async::detached_task vfs_handle_messages()
         auto [msg, message, reply_right, rights] = (co_await dispatcher.get_message_default()).value();
 
         if (message.size() < sizeof(IPC_Generic_Msg)) {
-            printf("Warning: recieved very small message\n");
+            kernelLogger() << "posixd: Warning: recieved very small message\n" << frg::endlog;
             break;
         }
 
@@ -293,8 +293,7 @@ pmos::async::detached_task vfs_handle_messages()
         switch (ipc_msg->type) {
         case IPC_Mount_FS_NUM: {
             if (message.size() < sizeof(IPC_Mount_FS)) {
-                printf("vfsd: Recieved IPC_Mount_FS that is too small from task %li of size %li\n",
-                       msg.sender, message.size());
+                kernelLogger() << "posixd: Recieved IPC_Mount_FS that is too small from task " << msg.sender << " of size " << message.size() << "\n" << frg::endlog;
                 break;
             }
 
@@ -304,8 +303,7 @@ pmos::async::detached_task vfs_handle_messages()
         } break;
         case IPC_Open_NUM: {
             if (message.size() < sizeof(IPC_Open)) {
-                printf("vfsd: Recieved IPC_Open that is too small from task %li of size %li\n", msg.sender,
-                       message.size());
+                kernelLogger() << "posixd: Recieved IPC_Open that is too small from task " << msg.sender << " of size " << message.size() << "\n" << frg::endlog;
                 break;
             }
 
@@ -314,7 +312,7 @@ pmos::async::detached_task vfs_handle_messages()
             open_file(std::move(reply_right), path);
         } break;
         default:
-            printf("vfsd: Unknown message type %d\n", ipc_msg->type);
+            kernelLogger() << "posixd: Unknown message type " << ipc_msg->type << "\n" << frg::endlog;
             break;
         }
     }
@@ -409,21 +407,21 @@ pmos::async::detached_task vnode_wait(std::shared_ptr<VNode> vnode, std::string 
 {
     auto msg = co_await dispatcher.get_message(right);
     if (!msg) {
-        printf("vfsd: Failed to get a reply from the failsystem\n");
+        kernelLogger() << "posixd: Failed to get a reply from the failsystem\n" << frg::endlog;
 
         unblock_vnode_waiters(vnode, name, std::unexpected(-EIO));
         co_return;
     }
 
     if (msg->descriptor.size < sizeof(IPC_FS_Resolve_Path_Reply)) {
-        printf("vfsd: Invalid resolve child reply size %li\n", msg->descriptor.size);
+        kernelLogger() << "posixd: Invalid resolve child reply size " << msg->descriptor.size << "\n" << frg::endlog;
         unblock_vnode_waiters(vnode, name, std::unexpected(-EIO));
         co_return;
     }
 
     auto *reply = reinterpret_cast<IPC_FS_Resolve_Path_Reply *>(msg->data.data());
     if (reply->type != IPC_FS_Resolve_Path_Reply_NUM) {
-        printf("vfsd: Invalid resolve child reply type %d\n", reply->type);
+        kernelLogger() << "posixd: Invalid resolve child reply type " << reply->type << "\n" << frg::endlog;
         unblock_vnode_waiters(vnode, name, std::unexpected(-EIO));
         co_return;
     }
@@ -470,7 +468,7 @@ pmos::async::task<std::expected<std::shared_ptr<VNode>, int>> VNode::resolve_chi
 
     auto send_result = pmos::send_message_right(parent_fs->fs_right, span, {&main_port, pmos::RightType::SendOnce}, false);
     if (!send_result) {
-        printf("vfsd: Error %d sending resolve child message to filesystem\n", send_result.error());
+        kernelLogger() << "posixd: Error " << send_result.error() << " sending resolve child message to filesystem\n" << frg::endlog;
         co_return std::unexpected(send_result.error());
     }
 
