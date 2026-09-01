@@ -2744,6 +2744,8 @@ void syscall_debug_log(TaskDescriptor *task)
         return;
     }
 
+    serial_logger.log(buffer.data(), size);
+
     syscall_success(task);
 }
 

@@ -19,4 +19,5 @@ build() {
 
 package() {
     DESTDIR="${dest_dir}" make install
+    llvm-objdump -S kernel > kernel.txt
 }

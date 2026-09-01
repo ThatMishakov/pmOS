@@ -94,6 +94,8 @@ pmos_right_t stdout_receive_right, stderr_receive_right;
 
 void start_read(pmos::Right &right, pmos_right_t &receive_right)
 {
+    log("Starting read on port " + std::to_string(right.get()) + "\n");
+
     IPC_Read message = {
         .type  = IPC_Read_NUM,
         .flags = 0,
@@ -118,10 +120,10 @@ pmos::Right stderr_pipe;
 
 void start_reads()
 {
-    if (stdout_right) {
+    if (stdout_pipe) {
         start_read(stdout_pipe, stdout_receive_right);
     }
-    if (stderr_right) {
+    if (stderr_pipe) {
         start_read(stderr_pipe, stderr_receive_right);
     }
 }

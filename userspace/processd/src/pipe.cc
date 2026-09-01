@@ -74,7 +74,7 @@ static void wakeup_readers(PipeData &pipe_data)
         std::span<uint8_t> data_span(data.data() + sizeof(IPC_Read_Reply), size);
         pipe_data.buffer.peek(data_span);
 
-        auto send_result = pmos::send_message_right(pending_read.reply_right, data_span, {}, true);
+        auto send_result = pmos::send_message_right(pending_read.reply_right, std::span(data), {}, true);
         if (!send_result) {
             kernelLogger() << "posix: Error " << send_result.error() << " sending message to port " << pending_read.reply_right.get() << " for pipe_read\n" << frg::endlog;
         } else {
@@ -271,7 +271,7 @@ static void handle_read(PipeData &pipe_data, Message_Descriptor msg, std::vector
     std::span<uint8_t> data_span(data.data() + sizeof(IPC_Read_Reply), size);
     pipe_data.buffer.peek(data_span);
 
-    auto send_result = pmos::send_message_right(reply_right, data_span, {}, true);
+    auto send_result = pmos::send_message_right(reply_right, std::span(data), {}, true);
     if (!send_result) {
         kernelLogger() << "posix: Error " << send_result.error() << " sending message to port " << reply_right.get() << " for pipe_read\n" << frg::endlog;
     } else {

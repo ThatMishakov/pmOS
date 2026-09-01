@@ -713,5 +713,12 @@ extern "C" ReturnStr<bool> fast_atomic_read_from_user(u32 *to, const u32 *from);
 
 ReturnStr<bool> atomic_read_from_user(u32 *to, const u32 *from)
 {
+    auto current_task = get_current_task();
+    auto max_addr     = (uintptr_t)current_task->page_table->user_addr_max();
+    uintptr_t addr    = (uintptr_t)from;
+    constexpr size_t size = sizeof(*from);
+    if (addr + size > max_addr or addr > (UINTPTR_MAX - size))
+        return Error(-EFAULT);
+
     return fast_atomic_read_from_user(to, from);
 }
