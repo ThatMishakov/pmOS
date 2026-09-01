@@ -21,36 +21,6 @@ static unsigned call_flags(TaskDescriptor *task) { return task->regs.eax; }
 
 namespace kernel::proc::syscalls
 {
-unsigned syscall_number(TaskDescriptor *task) { return call_flags(task) & 0xff; }
-ulong syscall_flags(TaskDescriptor *task) { return call_flags(task) >> 8; }
-
-ulong syscall_flags_reg(TaskDescriptor *task) { return call_flags(task); }
-
-u64 SyscallRetval::operator=(u64 value)
-{
-    syscall_ret_low(task, 0); // SUCCESS
-    syscall_ret_high(task, value);
-    return value;
-}
-
-i64 SyscallError::operator=(i64 value)
-{
-    assert(value <= 0);
-    syscall_ret_low(task, value);
-    return value;
-}
-
-std::pair<i64, u64> SyscallError::operator=(std::pair<i64, u64> error_value)
-{
-    auto [error, value] = error_value;
-    syscall_ret_low(task, error);
-    syscall_ret_high(task, value);
-    return error_value;
-}
-
-SyscallError::operator int() const { return (int)task->regs.eax; }
-
-void syscall_success(TaskDescriptor *task) { syscall_ret_low(task, 0); }
 
 u64 syscall_arg64(TaskDescriptor *task, int arg)
 {

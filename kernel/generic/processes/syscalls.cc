@@ -655,8 +655,7 @@ void syscall_get_first_message(TaskDescriptor *current)
             return;
         }
 
-        current->continuation_func = syscall_get_first_message;
-        current->cancel_callback = TaskDescriptor::cancel_syscall;
+        current->set_continuation(syscall_get_first_message, TaskDescriptor::cancel_syscall);
         current->continuation_data = TaskDescriptor::GetMessageData {
             .port = port,
         };
@@ -668,7 +667,6 @@ void syscall_get_first_message(TaskDescriptor *current)
         Auto_Lock_Scope scope_lock(port->lock);
 
         if (port->is_empty()) {
-            current->continuation_func = nullptr;
             syscall_error(current) = -EAGAIN;
             return;
         }
@@ -678,15 +676,12 @@ void syscall_get_first_message(TaskDescriptor *current)
 
     auto result = top_message->copy_to_user_buff((char *)buff);
     if (!result.success()) {
-        current->continuation_func = nullptr;
         syscall_error(current) = result.result;
         return;
     }
 
     if (not result.val)
         return;
-
-    current->continuation_func = nullptr;
 
     u64 reply_right_id = 0;
     if (!(args & MSG_ARG_NOPOP)) {
@@ -853,7 +848,6 @@ void syscall_get_message_info(TaskDescriptor *task)
         if (not b.val)
             return;
 
-        task->continuation_func = nullptr;
         syscall_success(task);
     };
 
@@ -873,17 +867,16 @@ void syscall_get_message_info(TaskDescriptor *task)
 
         auto msg = port->atomic_get_front();
         assert(msg);
+        __atomic_store_n(&task->blocked_by, nullptr, __ATOMIC_RELAXED);
 
         get_func(task, port, message_struct, flags, msg);
     };
 
     if (is_empty) {
-        task->continuation_func = continuation;
-        task->cancel_callback = TaskDescriptor::cancel_syscall;
+        task->set_continuation(continuation, TaskDescriptor::cancel_syscall);
         task->continuation_data = TaskDescriptor::GetMessageData{
             .port  = port,
         };
-        __atomic_store_n(&task->wake_reason_mask, 0, __ATOMIC_RELAXED);
         __atomic_store_n(&task->blocked_by, port, __ATOMIC_RELEASE);
 
         task->atomic_block_self(TaskDescriptor::SCHED_WAKE_PORT);
@@ -1084,13 +1077,11 @@ void syscall_set_task_name(TaskDescriptor *current)
     auto length = syscall_arg(current, 2, 1);
 
     if (!current->continuation_func) {
-        current->continuation_func = syscall_set_task_name;
-        current->cancel_callback = nullptr;
+        current->set_continuation(syscall_set_task_name, nullptr);
     }
 
     task_ptr t = get_task(pid);
     if (!t) {
-        current->continuation_func = nullptr;
         syscall_error(current) = -ESRCH;
         return;
     }
@@ -1104,8 +1095,6 @@ void syscall_set_task_name(TaskDescriptor *current)
 
     if (!b.val)
         return;
-
-    current->continuation_func = nullptr;
 
     Auto_Lock_Scope scope_lock(t->name_lock);
     t->name.swap(name);
@@ -2085,8 +2074,6 @@ void syscall_get_page_address(TaskDescriptor *current_task)
     auto page_base    = syscall_arg(current_task, 1, 1);
     auto flags        = syscall_flags(current_task);
 
-    current_task->continuation_func = nullptr;
-
     if (page_base & (PAGE_SIZE - 1)) {
         syscall_error(current_task) = -EINVAL;
         return;
@@ -2106,13 +2093,12 @@ void syscall_get_page_address(TaskDescriptor *current_task)
     auto table = task->page_table;
     assert(table);
 
-    current_task->continuation_func = syscall_get_page_address;
+    current_task->set_continuation(syscall_get_page_address); 
 
     Auto_Lock_Scope lock(table->lock);
 
     auto b = table->prepare_user_page((void *)page_base, 0);
     if (!b.success()) {
-        current_task->continuation_func = nullptr;
         syscall_error(task) = b.result;
         return;
     }
@@ -2120,7 +2106,6 @@ void syscall_get_page_address(TaskDescriptor *current_task)
     if (not b.val)
         return;
 
-    current_task->continuation_func = nullptr;
     auto mapping         = table->get_page_mapping((void *)page_base);
     syscall_return(task) = mapping.page_addr;
 }
@@ -2772,7 +2757,6 @@ static void futex_wakeup(TaskDescriptor *task)
     assert(task);
     auto mask = __atomic_load_n(&task->wake_reason_mask, __ATOMIC_ACQUIRE);
     if (mask & TaskDescriptor::SCHED_WAKE_FUTEX) {
-        task->continuation_func = nullptr;
         task->futex_try_remove();
         syscall_success(task);
         return;
@@ -2787,7 +2771,6 @@ static void futex_wakeup(TaskDescriptor *task)
     if (!result) {
         task->futex_try_remove();
         syscall_error(task) = result.result;
-        task->continuation_func = nullptr;
         return;
     }
 
@@ -2796,7 +2779,6 @@ static void futex_wakeup(TaskDescriptor *task)
         return;
 
     task->futex_try_remove();
-    task->continuation_func = nullptr;
 
     if (user_value != expected_value) {
         syscall_error(task) = -EAGAIN;
@@ -2815,8 +2797,7 @@ void syscall_futex_wait(TaskDescriptor *task)
     // TODO: implement the timeout here
     uint64_t deadline = timeout_ns == (u64)-1 ? -1 : get_ns_since_bootup() + timeout_ns;
 
-    task->continuation_func = futex_wakeup;
-    task->cancel_callback = cancel_futex_wait;
+    task->set_continuation(futex_wakeup, cancel_futex_wait);
     task->futex_deadline = deadline;
 
     u32 user_value;
@@ -2830,7 +2811,6 @@ void syscall_futex_wait(TaskDescriptor *task)
         return;
 
     if (user_value != expected_value) {
-        task->continuation_func = nullptr;
         syscall_error(task) = -EAGAIN;
         return;
     }
@@ -2863,6 +2843,47 @@ void syscall_futex_wake(TaskDescriptor *task)
     task->futex_wake(ptr, all);
     
     syscall_success(task);
+}
+
+unsigned syscall_number(TaskDescriptor *task) { return call_flags(task) & 0xFF; }
+
+ulong syscall_flags(TaskDescriptor *task) { return call_flags(task) >> 8; }
+
+ulong syscall_flags_reg(TaskDescriptor *task) { return call_flags(task); }
+
+u64 SyscallRetval::operator=(u64 value)
+{
+    task->continuation_func = nullptr;
+
+    syscall_ret_low(task, 0); // SUCCESS
+    syscall_ret_high(task, value);
+    return value;
+}
+
+i64 SyscallError::operator=(i64 value)
+{
+    task->continuation_func = nullptr;
+
+    assert(value <= 0);
+    syscall_ret_low(task, value);
+    return value;
+}
+
+std::pair<i64, u64> SyscallError::operator=(std::pair<i64, u64> error_value)
+{
+    task->continuation_func = nullptr;
+
+    auto [error, value] = error_value;
+    syscall_ret_low(task, error);
+    syscall_ret_high(task, value);
+    return error_value;
+}
+
+SyscallError::operator int() const { return syscall_ret_low(task); }
+
+void syscall_success(TaskDescriptor *task) {
+    task->continuation_func = nullptr;
+    syscall_ret_low(task, 0);
 }
 
 } // namespace kernel::proc::syscalls

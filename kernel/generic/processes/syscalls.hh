@@ -300,15 +300,22 @@ struct SyscallError {
 inline SyscallError syscall_error(TaskDescriptor *task) { return {task}; }
 inline SyscallRetval syscall_return(TaskDescriptor *task) { return {task}; }
 
+
 ulong syscall_flags(TaskDescriptor *task);
 ulong syscall_flags_reg(TaskDescriptor *task);
 unsigned syscall_number(TaskDescriptor *task);
+
+// Arch-specific functions
 ulong syscall_arg(TaskDescriptor *task, int arg, int args64before = 0);
 u64 syscall_arg64(TaskDescriptor *task, int arg);
 void syscall_success(TaskDescriptor *task);
+unsigned call_flags(TaskDescriptor *task);
+void syscall_ret_low(TaskDescriptor *task, i64 value);
+void syscall_ret_high(TaskDescriptor *task, u64 value);
+i64 syscall_ret_low(TaskDescriptor *task);
 
 ReturnStr<bool> syscall_arg64_checked(TaskDescriptor *task, int arg, u64 &value);
 ReturnStr<bool> syscall_arg_checked(TaskDescriptor *task, int arg, int args64before, ulong &value);
 ReturnStr<bool> syscall_args_checked(TaskDescriptor *task, int arg, int args64before, int count, ulong *values);
 
-};
+}

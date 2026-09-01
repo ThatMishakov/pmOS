@@ -179,9 +179,12 @@ namespace proc
             ipc::Port *port;
         };
 
+        using continuation_func_type = void (*)(TaskDescriptor *task);
+        using cancel_callback_type = void (*)(TaskDescriptor *task, i64 error_code);
+
         // Continuation..?
-        void (*continuation_func)(TaskDescriptor *task) = nullptr;
-        void (*cancel_callback)(TaskDescriptor *task, i64 error_code) = nullptr;
+        continuation_func_type continuation_func = nullptr;
+        cancel_callback_type cancel_callback = nullptr;
         std::variant<NoContinuation, GetMessageData> continuation_data = NoContinuation{};
 
         // Futex and sleep() syscalls stuff
@@ -371,6 +374,8 @@ namespace proc
         void futex_wake(ulong futex_addr, bool wake_all);
 
         bool is_32bit() const;
+
+        void set_continuation(continuation_func_type func, cancel_callback_type cancel_func = nullptr);
 
 #if defined(__riscv) || defined(__loongarch__)
         kresult_t init_fp_state();

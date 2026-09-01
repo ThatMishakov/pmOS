@@ -985,4 +985,12 @@ void TaskDescriptor::TaskWaiter::fire()
     task->interrupt_blocked(-ETIMEDOUT);
 }
 
+void TaskDescriptor::set_continuation(TaskDescriptor::continuation_func_type func, TaskDescriptor::cancel_callback_type cancel)
+{
+    continuation_func = func;
+    cancel_callback   = cancel;
+
+    __atomic_store_n(&wake_reason_mask, 0, __ATOMIC_RELEASE);
+}
+
 } // namespace kernel::proc
