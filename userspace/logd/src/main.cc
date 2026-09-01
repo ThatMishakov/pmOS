@@ -94,8 +94,6 @@ pmos_right_t stdout_receive_right, stderr_receive_right;
 
 void start_read(pmos::Right &right, pmos_right_t &receive_right)
 {
-    log("Starting read on port " + std::to_string(right.get()) + "\n");
-
     IPC_Read message = {
         .type  = IPC_Read_NUM,
         .flags = 0,
@@ -251,6 +249,28 @@ int main(int argc, char *argv[])
                 break;
             }
             register_log_output(msg, *reg, std::move(right), std::move(reply_right[0]));
+            break;
+        }
+        case IPC_Read_Reply_NUM: {
+            IPC_Read_Reply *read_reply = reinterpret_cast<IPC_Read_Reply *>(ipc_msg);
+            if (msg.size < sizeof(IPC_Read_Reply)) {
+                log("Warning: IPC_Read_Reply_NUM too small\n");
+                break;
+            }
+
+            if (read_reply->result_code != 0) {
+                log("Warning: IPC_Read_Reply_NUM returned error " + std::to_string(read_reply->result_code) + "\n");
+                break;
+            }
+
+            if (msg.sent_with_right == stdout_receive_right) {
+                start_read(stdout_pipe, stdout_receive_right);
+            } else if (msg.sent_with_right == stderr_receive_right) {
+                start_read(stderr_pipe, stderr_receive_right);
+            } else {
+                log("Warning: IPC_Read_Reply_NUM received from unknown right " + std::to_string(msg.sent_with_right) + "\n");
+            }
+            log(std::string((char *)read_reply->data, msg.size - sizeof(IPC_Read_Reply)));
             break;
         }
         default:
