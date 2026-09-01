@@ -17,7 +17,7 @@ extern pmos::PortDispatcher dispatcher;
 
 // TODO: pthread stuff
 
-pmos::RecieveRight send_devicesd(auto &request, pmos::Port *reply_port)
+pmos::ReceiveRight send_devicesd(auto &request, pmos::Port *reply_port)
 {
     auto r =
         send_message_right_one(device_right, request, {reply_port, pmos::RightType::SendOnce});
@@ -109,7 +109,7 @@ pmos::async::task<uint8_t> PCIDevice::readb(uint16_t offset)
 
 pmos::async::task<uint8_t> PCIDevice::interrupt_pin() noexcept { return readb(0x3d); }
 
-pmos::async::task<pmos::RecieveRight> PCIDevice::register_interrupt()
+pmos::async::task<pmos::ReceiveRight> PCIDevice::register_interrupt()
 {
     auto int_pin = co_await interrupt_pin();
     if (int_pin < 1 or int_pin > 4)

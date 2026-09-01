@@ -82,9 +82,9 @@ struct Right {
     unsigned type_as_int() const;
 };
 
-struct RecieveRight: GenericMessage {
+struct ReceiveRight: GenericMessage {
     union {
-        pmos::containers::RBTreeNode<RecieveRight> parent_head = {};
+        pmos::containers::RBTreeNode<ReceiveRight> parent_head = {};
         memory::RCU_Head rcu_head;
     };
 
@@ -95,7 +95,7 @@ struct RecieveRight: GenericMessage {
     u64 right_parent_id = 0;
 
     virtual bool destroy_recieve_right() = 0;
-    virtual ~RecieveRight() = default;
+    virtual ~ReceiveRight() = default;
 
     virtual RightType recieve_type() const = 0;
 
@@ -106,14 +106,14 @@ struct RecieveRight: GenericMessage {
     virtual u64 sender_task_id() const override;
 };
 
-struct SendRight: Right, RecieveRight {
+struct SendRight: Right, ReceiveRight {
     // TODO(-ish): This shouldn't be a recieve right
     virtual u64 right_id_in_reciever() const;
 
     virtual void rcu_push() override;
     virtual void remove_from_parent() override;
 
-    // RecieveRight override
+    // ReceiveRight override
     virtual bool destroy_recieve_right() override;
 
     virtual Port *parent_port() = 0;
@@ -142,7 +142,7 @@ struct SendManyRight final: SendRight {
 
     virtual Port *parent_port() override;
 
-    static std::pair<klib::unique_ptr<SendRight>, klib::unique_ptr<RecieveRight>> create_for_message();
+    static std::pair<klib::unique_ptr<SendRight>, klib::unique_ptr<ReceiveRight>> create_for_message();
 
     // Don't take task group here, since it doesn't matter if userspace tries to race this, and gets
     // to run this after the right had been sent.
@@ -169,7 +169,7 @@ struct SendOnceRight final: SendRight {
     static klib::unique_ptr<SendRight> create_for_message();
 };
 
-struct SendManyRightShared final: RecieveRight {
+struct SendManyRightShared final: ReceiveRight {
     Spinlock lock;
     bool alive: 1 = true;
     using list = pmos::containers::CircularDoubleList<SendManyRight, &SendManyRight::send_many_node>;

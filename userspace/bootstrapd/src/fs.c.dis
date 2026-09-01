@@ -423,7 +423,7 @@ void fs_react_dup(IPC_FS_Dup *msg, uint64_t message_size, size_t sender)
         return;
 
     if (message_size < sizeof(IPC_FS_Dup)) {
-        // printf("[VFSd] Warning: Recieved IPC_Dup that is too small. Size: %li\n", message_size);
+        // printf("[VFSd] Warning: Received IPC_Dup that is too small. Size: %li\n", message_size);
         return;
     }
 

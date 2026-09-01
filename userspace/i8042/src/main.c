@@ -113,14 +113,14 @@ pmos_right_t get_interrupt_right(pmos_right_t device_right)
     pmos_right_t int_right = INVALID_RIGHT;
 
     if (desc.size < sizeof(IPC_Request_Int_Reply)) {
-        printf("[i8042] Warning: Recieved message which is too small (%i expected %i)\n",
+        printf("[i8042] Warning: Received message which is too small (%i expected %i)\n",
                (int)desc.size, (int)sizeof(IPC_Request_Int_Reply));
         exit(1);
     }
 
     IPC_Request_Int_Reply *reply = (IPC_Request_Int_Reply *)message;
     if (reply->type != IPC_Request_Int_Reply_NUM) {
-        printf("[i8042] Warning: Recieved unexepcted message type\n");
+        printf("[i8042] Warning: Received unexepcted message type\n");
         exit(1);
     }
 
@@ -191,7 +191,7 @@ void *interrupt_thread(void *arg)
         }
 
         if (IPC_TYPE(message) != IPC_Kernel_Interrupt_NUM) {
-            fprintf(stderr, "[i8042] Warning: Recieved message of unknown type %x in the interrupt thread!\n",
+            fprintf(stderr, "[i8042] Warning: Received message of unknown type %x in the interrupt thread!\n",
                     IPC_TYPE(message));
             free(message);
             continue;
@@ -206,7 +206,7 @@ void *interrupt_thread(void *arg)
         }
 
         if (IPC_TYPE(message) != IPC_Kernel_Interrupt_NUM) {
-            fprintf(stderr, "[i8042] Warning: Recieved message of unknown type %x in the interrupt thread!\n",
+            fprintf(stderr, "[i8042] Warning: Received message of unknown type %x in the interrupt thread!\n",
                     IPC_TYPE(message));
         } else {
             if (port == 0)
@@ -608,7 +608,7 @@ int main_callback(Message_Descriptor *desc, void *message,
     //     break;
     // }
     default:
-        fprintf(stderr, "[i8042] Warning: Recieved message of unknown type %x in default callback. Sent from right: %" PRIu64 "\n",
+        fprintf(stderr, "[i8042] Warning: Received message of unknown type %x in default callback. Sent from right: %" PRIu64 "\n",
                 IPC_TYPE(message), desc->sent_with_right);
         break;
     }

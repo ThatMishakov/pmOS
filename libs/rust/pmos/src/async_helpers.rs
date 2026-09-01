@@ -1,6 +1,6 @@
 use super::ipc_runner::{
     Executor,
-    ManyReciever,
+    ManyReceiver,
 };
 
 use crate::error::Error;
@@ -18,14 +18,14 @@ use crate::ipc_msgs::{
 
 use crate::ipc_msgs;
 
-pub async fn create_named_stream(executor: Executor, name: &str) -> Result<ManyReciever, Error> {
+pub async fn create_named_stream(executor: Executor, name: &str) -> Result<ManyReceiver, Error> {
     let msg = IPCNameRight {
         flags: 0,
         name,
     };
 
     let right = executor.state.borrow().get_port().create_right_sendmany()?;
-    let stream = ManyReciever::from_right(right.1, executor.clone());
+    let stream = ManyReceiver::from_right(right.1, executor.clone());
 
     let mut other_rights = [Some(right.0.into()), None, None, None];
     let mut right0 = Some(get_right0().into());

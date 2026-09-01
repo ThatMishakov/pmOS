@@ -262,17 +262,17 @@ typedef struct IPC_Kernel_Group_Task_Changed {
     uint64_t task_id;
 } IPC_Kernel_Group_Task_Changed;
 
-#define IPC_Kernel_Recieve_Right_Destroyed_NUM 0x26
+#define IPC_Kernel_Receive_Right_Destroyed_NUM 0x26
 /// Notification of receive right deletion
-typedef struct IPC_Kernel_Recieve_Right_Destroyed {
-    /// @brief  Message type (must be IPC_Kernel_Recieve_Right_Destroyed_NUM)
+typedef struct IPC_Kernel_Receive_Right_Destroyed {
+    /// @brief  Message type (must be IPC_Kernel_Receive_Right_Destroyed_NUM)
     uint32_t type;
 
     /// Flags
     uint32_t flags;
 
     /// The ID can be known from the right it is sent with
-} IPC_Kernel_Recieve_Right_Destroyed;
+} IPC_Kernel_Receive_Right_Destroyed;
 
 #define IPC_Kernel_Right_Destroyed_NUM 0x27
 /// Notification of right deletion

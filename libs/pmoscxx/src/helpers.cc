@@ -77,13 +77,13 @@ Right Right::clone() const
     return std::move(result.value());
 }
 
-RecieveRight::~RecieveRight()
+ReceiveRight::~ReceiveRight()
 {
     if (*this)
         (void)delete_receive_right(port_, right_);
 }
 
-PortDispatcher::MessageWaiter::MessageWaiter(pmos::PortDispatcher& d, RecieveRight *right) noexcept:
+PortDispatcher::MessageWaiter::MessageWaiter(pmos::PortDispatcher& d, ReceiveRight *right) noexcept:
     recieve_right(right), dispatcher(d)
 {
     if (right)
@@ -92,7 +92,7 @@ PortDispatcher::MessageWaiter::MessageWaiter(pmos::PortDispatcher& d, RecieveRig
         recieve_right_id = 0;
 }
 
-PortDispatcher::MessageWaiter PortDispatcher::get_message(RecieveRight &r) noexcept
+PortDispatcher::MessageWaiter PortDispatcher::get_message(ReceiveRight &r) noexcept
 {
     return MessageWaiter(*this, &r);
 }
@@ -215,16 +215,16 @@ std::expected<void, int> name_right(Right right, std::string_view name)
     return {};
 }
 
-std::expected<RecieveRight, int> request_named_port(std::string_view name, Port &port)
+std::expected<ReceiveRight, int> request_named_port(std::string_view name, Port &port)
 {
     auto result = ::request_named_port(name.data(), name.length(), port.get(), 0);
     if (result.result)
         return std::unexpected(-(int)result.result);
     
-    return RecieveRight{result.right, RightType::SendOnce, port.get()};
+    return ReceiveRight{result.right, RightType::SendOnce, port.get()};
 }
 
-std::expected<std::pair<Right, RecieveRight>, int>
+std::expected<std::pair<Right, ReceiveRight>, int>
     Port::create_right(RightType type) noexcept
 {
     if (!*this)
@@ -239,7 +239,7 @@ std::expected<std::pair<Right, RecieveRight>, int>
     if (r.result)
         return std::unexpected(static_cast<int>(-r.result));
 
-    return std::make_pair(Right {r.right, type}, RecieveRight {recieve_right, type, get()});
+    return std::make_pair(Right {r.right, type}, ReceiveRight {recieve_right, type, get()});
 }
 
 Port::~Port()
@@ -263,7 +263,7 @@ Right::~Right()
         delete_right(right);
 }
 
-RecieveRight register_interrupt(const Right &int_source_right, Port &port)
+ReceiveRight register_interrupt(const Right &int_source_right, Port &port)
 {
     if (int_source_right.type() != RightType::IntSource)
         throw std::invalid_argument("Right must be of type IntSource");
@@ -283,10 +283,10 @@ RecieveRight register_interrupt(const Right &int_source_right, Port &port)
         throw std::system_error(-static_cast<int>(result.result), std::system_category(),
                                 "Failed to register interrupt");
 
-    return RecieveRight{result.right, RightType::IntNotification, port.get()};
+    return ReceiveRight{result.right, RightType::IntNotification, port.get()};
 }
 
-void complete_interrupt(const RecieveRight &int_notification_right)
+void complete_interrupt(const ReceiveRight &int_notification_right)
 {
     if (int_notification_right.type() != RightType::IntNotification)
         throw std::invalid_argument("Right must be of type IntNotification");
@@ -297,17 +297,17 @@ void complete_interrupt(const RecieveRight &int_notification_right)
                                 "Failed to complete interrupt");
 }
 
-RecieveRight create_timer_right(Port &port)
+ReceiveRight create_timer_right(Port &port)
 {
     auto result = ::pmos_create_timer(port.get());
     if (result.result)
         throw std::system_error(-static_cast<int>(result.result), std::system_category(),
                                 "Failed to create timer right");
 
-    return RecieveRight{result.right, RightType::Timer, port.get()};
+    return ReceiveRight{result.right, RightType::Timer, port.get()};
 }
 
-void set_deadline(const RecieveRight &timer_right, uint64_t deadline_ns, bool relative)
+void set_deadline(const ReceiveRight &timer_right, uint64_t deadline_ns, bool relative)
 {
     if (timer_right.type() != RightType::Timer)
         throw std::invalid_argument("Right must be of type Timer");

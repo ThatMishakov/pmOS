@@ -13,8 +13,8 @@ use std::{
 use super::error::Error;
 
 use super::ipc::{
-    RecieveOnceRight,
-    RecieveManyRight,
+    ReceiveOnceRight,
+    ReceiveManyRight,
     SendRight,
     Right,
     IPCPort,
@@ -30,12 +30,12 @@ struct Task {
     enqueued: bool,
 }
 
-pub struct ManyReciever {
+pub struct ManyReceiver {
     state: Rc<RefCell<RightEndpointState>>,
     executor: Weak<RefCell<ExecutorState>>,
 }
 
-impl Stream for ManyReciever {
+impl Stream for ManyReceiver {
     type Item = super::ipc::Message;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
@@ -56,12 +56,12 @@ impl Stream for ManyReciever {
     }
 }
 
-pub struct OnceReciever {
+pub struct OnceReceiver {
     state: Rc<RefCell<RightEndpointState>>,
     executor: Weak<RefCell<ExecutorState>>,
 }
 
-impl Future for OnceReciever {
+impl Future for OnceReceiver {
     type Output = Option<super::ipc::Message>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
@@ -82,8 +82,8 @@ impl Future for OnceReciever {
     }
 }
 
-impl OnceReciever {
-    pub(crate) fn from_right(right: RecieveOnceRight, executor: Executor) -> Self {
+impl OnceReceiver {
+    pub(crate) fn from_right(right: ReceiveOnceRight, executor: Executor) -> Self {
         let id = right.get_id();
         let state = Rc::new(RefCell::new(RightEndpointState {
             right: RightStorage::Once(right),
@@ -100,8 +100,8 @@ impl OnceReciever {
     }
 }
 
-impl ManyReciever {
-    pub(crate) fn from_right(right: RecieveManyRight, executor: Executor) -> Self {
+impl ManyReceiver {
+    pub(crate) fn from_right(right: ReceiveManyRight, executor: Executor) -> Self {
         let id = right.get_id();
         let state = Rc::new(RefCell::new(RightEndpointState {
             right: RightStorage::Many(right),
@@ -121,8 +121,8 @@ impl ManyReciever {
 #[derive(Debug)]
 enum RightStorage {
     None,
-    Once(RecieveOnceRight),
-    Many(RecieveManyRight),
+    Once(ReceiveOnceRight),
+    Many(ReceiveManyRight),
 }
 
 impl RightStorage {
@@ -281,10 +281,10 @@ impl Executor {
         msg: &impl super::ipc_msgs::Serializable,
         right: &mut Option<SendRight>,
         include_rights: &mut [Option<SendRight>; 4],
-    ) -> Result<OnceReciever, (Error, u64)> {
+    ) -> Result<OnceReceiver, (Error, u64)> {
         let result = super::ipc::send_message_reply_once(msg, right, &self.state.borrow().port, include_rights);
 
-        result.map(|right| OnceReciever::from_right(right, self.clone()))
+        result.map(|right| OnceReceiver::from_right(right, self.clone()))
     }
 
     fn create_waker(&self, task_id: TaskId) -> Waker {
@@ -360,9 +360,9 @@ impl Executor {
         }
     }
 
-    pub fn create_right_sendmany(&self) -> Result<(SendManyRight, ManyReciever), Error> {
+    pub fn create_right_sendmany(&self) -> Result<(SendManyRight, ManyReceiver), Error> {
         let right = self.state.borrow().get_port().create_right_sendmany()?;
-        let reciever = ManyReciever::from_right(right.1, self.clone());
+        let reciever = ManyReceiver::from_right(right.1, self.clone());
         Ok((right.0, reciever))
     }
 }

@@ -436,7 +436,7 @@ void AHCIPort::port_idle2()
     }
 }
 
-pmos::RecieveRight timer_right;
+pmos::ReceiveRight timer_right;
 
 void react_timer()
 {
@@ -533,7 +533,7 @@ pmos::async::detached_task ahci_controller_main()
 
 std::string pci_string;
 
-pmos::async::detached_task handle_interrupts(pmos::RecieveRight int_right)
+pmos::async::detached_task handle_interrupts(pmos::ReceiveRight int_right)
 {
     while (1) {
         auto msg = co_await dispatcher.get_message(int_right);

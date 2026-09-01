@@ -517,7 +517,7 @@ right_request_t pmos_create_timer(pmos_port_t port);
 /// @brief Sets the timer deadline
 ///
 /// @param port Port associated with the timer
-/// @param timer_right Recieve right for the timer
+/// @param timer_right Receive right for the timer
 /// @param deadline_ns Deadline for the timer in nanoseconds since bootup. 0 disarms the timer.
 /// @param flags Optional flags.
 /// @return Result of the operation

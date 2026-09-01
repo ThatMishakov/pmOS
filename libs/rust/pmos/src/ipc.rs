@@ -212,27 +212,27 @@ impl IPCPort {
         }
     }
 
-    pub fn create_right_sendonce(&self) -> Result<(SendOnceRight, RecieveOnceRight), Error> {
+    pub fn create_right_sendonce(&self) -> Result<(SendOnceRight, ReceiveOnceRight), Error> {
         let mut recieve_id: Right = 0;
         let RightRequestResult { result, right } =
             unsafe { create_right(self.port, &raw mut recieve_id, CREATE_RIGHT_SEND_ONCE) };
 
-        result.result().map(|()| (SendOnceRight(right), RecieveOnceRight(recieve_id, self.port)))
+        result.result().map(|()| (SendOnceRight(right), ReceiveOnceRight(recieve_id, self.port)))
     }
 
-    pub fn create_right_sendmany(&self) -> Result<(SendManyRight, RecieveManyRight), Error> {
+    pub fn create_right_sendmany(&self) -> Result<(SendManyRight, ReceiveManyRight), Error> {
         let mut recieve_id: Right = 0;
         let RightRequestResult { result, right } =
             unsafe { create_right(self.port, &raw mut recieve_id, 0) };
 
-        result.result().map(|()| (SendManyRight(right), RecieveManyRight(recieve_id, self.port)))
+        result.result().map(|()| (SendManyRight(right), ReceiveManyRight(recieve_id, self.port)))
     }
 
-    pub fn watch_right(&self, right: &SendManyRight) -> Result<RecieveOnceRight, Error> {
+    pub fn watch_right(&self, right: &SendManyRight) -> Result<ReceiveOnceRight, Error> {
         unsafe { watch_right(right.0, self.port) }
             .result()
             .map_err(|(e, _)| e)
-            .and_then(|r| Ok(RecieveOnceRight(r, self.port)))
+            .and_then(|r| Ok(ReceiveOnceRight(r, self.port)))
     }
 }
 
@@ -284,9 +284,9 @@ const REPLY_CREATE_SEND_MANY: u32 = 1 << 1;
 // }
 
 #[derive(Debug)]
-enum RecieveRightResult {
-    Once(RecieveOnceRight),
-    Many(RecieveManyRight),
+enum ReceiveRightResult {
+    Once(ReceiveOnceRight),
+    Many(ReceiveManyRight),
     None,
 }
 
@@ -295,7 +295,7 @@ fn send_message_right_internal(
     right: &mut Option<SendRight>, // Do mut Option so that it can be taken out
     reply_port: Option<(&IPCPort, bool)>, /* create_send_many */
     include_rights: &mut [Option<SendRight>; 4],
-) -> Result<RecieveRightResult, (Error, u64)> {
+) -> Result<ReceiveRightResult, (Error, u64)> {
     let mut aux_rights_count = 0;
     let mut aux_struct = SendRightAux::new();
 
@@ -352,12 +352,12 @@ fn send_message_right_internal(
 
     if result != 0 {
         Ok(if send_many {
-            RecieveRightResult::Many(RecieveManyRight(result, port_id))
+            ReceiveRightResult::Many(ReceiveManyRight(result, port_id))
         } else {
-            RecieveRightResult::Once(RecieveOnceRight(result, port_id))
+            ReceiveRightResult::Once(ReceiveOnceRight(result, port_id))
         })
     } else {
-        Ok(RecieveRightResult::None)
+        Ok(ReceiveRightResult::None)
     }
 }
 
@@ -366,7 +366,7 @@ fn send_message_right_consume_internal(
     right: SendRight,
     reply_port: Option<(&IPCPort, bool /* create send many */)>,
     include_rights: [Option<SendRight>; 4],
-) -> Result<RecieveRightResult, (Error, u64)> {
+) -> Result<ReceiveRightResult, (Error, u64)> {
     let mut aux_rights_count = 0;
     let mut aux_struct = SendRightAux::new();
 
@@ -419,12 +419,12 @@ fn send_message_right_consume_internal(
 
     if result != 0 {
         Ok(if send_many {
-            RecieveRightResult::Many(RecieveManyRight(result, port_id))
+            ReceiveRightResult::Many(ReceiveManyRight(result, port_id))
         } else {
-            RecieveRightResult::Once(RecieveOnceRight(result, port_id))
+            ReceiveRightResult::Once(ReceiveOnceRight(result, port_id))
         })
     } else {
-        Ok(RecieveRightResult::None)
+        Ok(ReceiveRightResult::None)
     }
 }
 
@@ -455,10 +455,10 @@ pub fn send_message_reply_once(
     right: &mut Option<SendRight>,
     reply_port: &IPCPort,
     include_rights: &mut [Option<SendRight>; 4],
-) -> Result<RecieveOnceRight, (Error, u64)> {
+) -> Result<ReceiveOnceRight, (Error, u64)> {
     let result = send_message_right_internal(msg, right, Some((reply_port, false)), include_rights)?;
-    assert_matches!(result, RecieveRightResult::Once(_));
-    if let RecieveRightResult::Once(r) = result {
+    assert_matches!(result, ReceiveRightResult::Once(_));
+    if let ReceiveRightResult::Once(r) = result {
         Ok(r)
     } else {
         unreachable!()
@@ -531,9 +531,9 @@ pub struct MemoryObjectRight(Right);
 #[derive(Debug)]
 pub struct UnknownRight(Right);
 #[derive(Debug)]
-pub struct RecieveOnceRight(Right, Port);
+pub struct ReceiveOnceRight(Right, Port);
 #[derive(Debug)]
-pub struct RecieveManyRight(Right, Port);
+pub struct ReceiveManyRight(Right, Port);
 // TODO: Destructor for this
 
 pub struct ObjectMmap{
@@ -576,16 +576,16 @@ impl Drop for ObjectMmap {
 }
    
 
-impl Drop for RecieveOnceRight {
+impl Drop for ReceiveOnceRight {
     fn drop(&mut self) {
-        let RecieveOnceRight(right, port) = *self;
+        let ReceiveOnceRight(right, port) = *self;
         _ = unsafe { delete_receive_right(right, port)}
     }
 }
 
-impl Drop for RecieveManyRight {
+impl Drop for ReceiveManyRight {
     fn drop(&mut self) {
-        let RecieveManyRight(right, port) = *self;
+        let ReceiveManyRight(right, port) = *self;
         _ = unsafe { delete_receive_right(right, port)}
     }
 }
@@ -617,13 +617,13 @@ impl MemoryObjectRight {
     }
 }
 
-impl RecieveOnceRight {
+impl ReceiveOnceRight {
     pub fn get_id(&self) -> Right {
         self.0
     }
 }
 
-impl RecieveManyRight {
+impl ReceiveManyRight {
     pub fn get_id(&self) -> Right {
         self.0
     }

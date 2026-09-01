@@ -123,7 +123,7 @@ static int right_request_callback(Message_Descriptor *desc, void *message, pmos_
     (void)reply_right;
 
     if (desc->size < IPC_MIN_SIZE) {
-        fprintf(stderr, "pmbus helper: Recieved too small message %" PRIu64 ", expecting reply to named port request\n", desc->size);
+        fprintf(stderr, "pmbus helper: Received too small message %" PRIu64 ", expecting reply to named port request\n", desc->size);
         return PMOS_MSGLOOP_CONTINUE;
     }
 
@@ -173,7 +173,7 @@ static int send_object_callback(Message_Descriptor *desc, void *message, pmos_ri
     uint64_t object_id = 0;
 
     if (desc->size < IPC_MIN_SIZE) {
-        fprintf(stderr, "pmbus helper: Recieved too small message %" PRIu64 ", expecting reply to send object\n", desc->size);
+        fprintf(stderr, "pmbus helper: Received too small message %" PRIu64 ", expecting reply to send object\n", desc->size);
         result = -EINTR;
         goto end;
     }

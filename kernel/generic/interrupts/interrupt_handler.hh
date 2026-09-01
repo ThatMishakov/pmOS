@@ -20,15 +20,15 @@ namespace interrupts
 
 struct InterruptHandler;
 
-struct IntNotificationRight final: ipc::RecieveRight {
+struct IntNotificationRight final: ipc::ReceiveRight {
     // A bit of a thinking process here: initially, I wanted to make this an
     // ipc::Right, so that this can be accessed through the same APIs as other rights,
-    // but I think having this just be a RecieveRight makes more sense, so that
+    // but I think having this just be a ReceiveRight makes more sense, so that
     // other threads or whomever have no way to access this erroneously, which saves
     // the kernel from doing a bunch of checks...
     // (also, perhaps recieve rights should be rethought, and made be per-task and not per-port)
 
-    // Also, RecieveRight being a message already (which is a bit of a questionable descision
+    // Also, ReceiveRight being a message already (which is a bit of a questionable descision
     // in itself, but whatever) is what's wanted here already anyway
 
     virtual bool destroy_recieve_right() override;

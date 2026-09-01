@@ -109,7 +109,7 @@ int default_callback(Message_Descriptor *desc, void *msg_buff, pmos_right_t *rep
         //     other_rights[0] = 0;
         //     break;
         // default:
-            printf("[devicesd] Warning: Recieved unknown message %x from PID %li\n",
+            printf("[devicesd] Warning: Received unknown message %x from PID %li\n",
                    ((IPC_Generic_Msg *)msg_buff)->type, desc->sender);
             break;
         }

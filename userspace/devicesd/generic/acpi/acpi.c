@@ -159,7 +159,7 @@ void request_acpi_tables()
     }
 
     if (desc.size < sizeof(IPC_ACPI_RSDT_Reply)) {
-        printf("Warning: Recieved message which is too small\n");
+        printf("Warning: Received message which is too small\n");
         free(message);
         return;
     }
@@ -167,7 +167,7 @@ void request_acpi_tables()
     IPC_ACPI_RSDT_Reply *reply = (IPC_ACPI_RSDT_Reply *)message;
 
     if (reply->type != IPC_ACPI_RSDT_Reply_NUM) {
-        printf("Warning: Recieved unexepcted message type\n");
+        printf("Warning: Received unexepcted message type\n");
         free(message);
         return;
     }

@@ -54,7 +54,7 @@ void KernelSink::operator()(const char *message)
 pmos::Port main_port = pmos::Port::create().value();
 pmos::PortDispatcher dispatcher(main_port);
 
-pmos::RecieveRight send_reply_throw(pmos::Right &right, auto t)
+pmos::ReceiveRight send_reply_throw(pmos::Right &right, auto t)
 {
     auto result = pmos::send_message_right_one(right, t, {}, true);
     if (!result)
@@ -653,7 +653,7 @@ pmos::async::detached_task get_messages()
         auto [msg, message, reply_right, _] = (co_await dispatcher.get_message_default()).value();
     
         if (msg.size < sizeof(IPC_Generic_Msg)) {
-            kernelLogger() << "processd: Recieved very small message\n" << frg::endlog;
+            kernelLogger() << "processd: Received very small message\n" << frg::endlog;
             break;
         }
 
@@ -661,7 +661,7 @@ pmos::async::detached_task get_messages()
         switch (ipc_msg->type) {
         case IPC_Register_Process_NUM: {
             if (msg.size < sizeof(IPC_Register_Process)) {
-                kernelLogger() << "processd: Recieved IPC_Register_Process that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
+                kernelLogger() << "processd: Received IPC_Register_Process that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
                 break;
             }
 
@@ -671,7 +671,7 @@ pmos::async::detached_task get_messages()
         }
         case IPC_PID_For_Task_NUM: {
             if (msg.size < sizeof(IPC_PID_For_Task)) {
-                kernelLogger() << "processd: Recieved IPC_PID_For_Task that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
+                kernelLogger() << "processd: Received IPC_PID_For_Task that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
                 break;
             }
 
@@ -681,7 +681,7 @@ pmos::async::detached_task get_messages()
         }
         case IPC_Set_Process_Group_NUM: {
             if (msg.size < sizeof(IPC_Set_Process_Group)) {
-                kernelLogger() << "processd: Recieved IPC_Set_Process_Group_NUM that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
+                kernelLogger() << "processd: Received IPC_Set_Process_Group_NUM that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
                 break;
             }
 
@@ -691,7 +691,7 @@ pmos::async::detached_task get_messages()
         }
         case IPC_Preregister_Process_NUM: {
             if (msg.size < sizeof(IPC_Preregister_Process)) {
-                kernelLogger() << "processd: Recieved IPC_Preregister_Process_NUM that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
+                kernelLogger() << "processd: Received IPC_Preregister_Process_NUM that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
                 break;
             }
 
@@ -701,7 +701,7 @@ pmos::async::detached_task get_messages()
         }
         case IPC_Kernel_Group_Task_Changed_NUM: {
             if (msg.size < sizeof(IPC_Kernel_Group_Task_Changed)) {
-                kernelLogger() << "processd: Recieved IPC_Kernel_Group_Task_Changed_NUM that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
+                kernelLogger() << "processd: Received IPC_Kernel_Group_Task_Changed_NUM that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
                 break;
             }
 
@@ -716,7 +716,7 @@ pmos::async::detached_task get_messages()
         }
         case IPC_Kernel_Group_Destroyed_NUM: {
             if (msg.size < sizeof(IPC_Kernel_Group_Destroyed)) {
-                kernelLogger() << "processd: Recieved IPC_Kernel_Group_Destroyed_NUM that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
+                kernelLogger() << "processd: Received IPC_Kernel_Group_Destroyed_NUM that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
                 break;
             }
 
@@ -734,24 +734,24 @@ pmos::async::detached_task get_messages()
 
 pmos::async::detached_task vfs_handle_messages();
 
-pmos::async::detached_task get_messages_bootstrapd(pmos::RecieveRight rr)
+pmos::async::detached_task get_messages_bootstrapd(pmos::ReceiveRight rr)
 {
     while (1) {
         auto [msg, message, reply_right, _] = (co_await dispatcher.get_message(rr)).value();
     
         if (msg.size < sizeof(IPC_Generic_Msg)) {
-            kernelLogger() << "processd: Recieved very small message\n" << frg::endlog;
+            kernelLogger() << "processd: Received very small message\n" << frg::endlog;
             break;
         }
         
         IPC_Generic_Msg *ipc_msg = reinterpret_cast<IPC_Generic_Msg *>(message.data());
         switch (ipc_msg->type) {
-        case IPC_Kernel_Recieve_Right_Destroyed_NUM:
+        case IPC_Kernel_Receive_Right_Destroyed_NUM:
             co_return;
 
         case IPC_Pipe_Open_NUM: {
             if (msg.size < sizeof(IPC_Pipe_Open)) {
-                kernelLogger() << "processd: Recieved IPC_Pipe_Open that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
+                kernelLogger() << "processd: Received IPC_Pipe_Open that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;
                 break;
             }
 

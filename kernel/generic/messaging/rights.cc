@@ -475,27 +475,27 @@ unsigned Right::type_as_int() const
     }
 }
 
-u64 RecieveRight::sender_task_id() const
+u64 ReceiveRight::sender_task_id() const
 {
     return 0; // Kernel
 }
 
-u64 RecieveRight::sent_with_right() const
+u64 ReceiveRight::sent_with_right() const
 {
     return right_parent_id;
 }
 
-static IPC_Kernel_Recieve_Right_Destroyed destroyed_msg = {
-    .type  = IPC_Kernel_Recieve_Right_Destroyed_NUM,
+static IPC_Kernel_Receive_Right_Destroyed destroyed_msg = {
+    .type  = IPC_Kernel_Receive_Right_Destroyed_NUM,
     .flags = 0,
 };
 
-size_t RecieveRight::size() const
+size_t ReceiveRight::size() const
 {
     return sizeof(destroyed_msg);
 }
 
-ReturnStr<bool> RecieveRight::copy_to_user_buff(char *buff) const
+ReturnStr<bool> ReceiveRight::copy_to_user_buff(char *buff) const
 {
     return copy_to_user(reinterpret_cast<const char *>(&destroyed_msg), buff, sizeof(destroyed_msg));
 }
@@ -553,7 +553,7 @@ u64 SendManyRight::right_id_in_reciever() const
     return shared->right_parent_id;
 }
 
-std::pair<klib::unique_ptr<SendRight>, klib::unique_ptr<RecieveRight>> SendManyRight::create_for_message()
+std::pair<klib::unique_ptr<SendRight>, klib::unique_ptr<ReceiveRight>> SendManyRight::create_for_message()
 {
     auto send_right = klib::make_unique<SendManyRight>();
     if (!send_right)

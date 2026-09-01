@@ -55,7 +55,7 @@ public:
     bool is_empty() const noexcept;
     bool atomic_is_empty() const noexcept;
 
-    RecieveRight *atomic_get_right(u64 right_id);
+    ReceiveRight *atomic_get_right(u64 right_id);
 
     /**
      * @brief Destructor of port
@@ -88,8 +88,8 @@ public:
                            rights_array array, message_buffer data, uint64_t sender_id,
                            RightType new_right_type, bool always_destroy_right);
 
-    bool atomic_add_to_rights(RecieveRight *right);
-    void atomic_remove_right(RecieveRight *right);
+    bool atomic_add_to_rights(ReceiveRight *right);
+    void atomic_remove_right(ReceiveRight *right);
 protected:
     using Message_storage = pmos::containers::CircularDoubleList<GenericMessage, &GenericMessage::list_node>;
     Message_storage msg_queue;
@@ -113,14 +113,14 @@ protected:
     static inline Spinlock ports_lock;
 
     using rights_tree =
-        pmos::containers::RedBlackTree<RecieveRight, &RecieveRight::parent_head,
-                                       detail::TreeCmp<RecieveRight, u64, &RecieveRight::right_parent_id>>;
+        pmos::containers::RedBlackTree<ReceiveRight, &ReceiveRight::parent_head,
+                                       detail::TreeCmp<ReceiveRight, u64, &ReceiveRight::right_parent_id>>;
     rights_tree::RBTreeHead rights;
     Spinlock rights_lock;
 
     friend class proc::TaskGroup;
     friend class proc::TaskDescriptor;
-    friend struct RecieveRight;
+    friend struct ReceiveRight;
     friend struct SendRight;
     friend struct SendManyRight;
     friend struct SendOnceRight;

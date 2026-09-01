@@ -512,7 +512,7 @@ pub struct IPCFSProbeResult {
 pub const IPC_KERNEL_RECIEVE_RIGHT_DESTROYED_NUM: u32 = 0x26;
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
-pub struct IPCKernelRecieveRightDestroyed {
+pub struct IPCKernelReceiveRightDestroyed {
     msg_type: u32,
     pub flags: u32,
 }
@@ -627,7 +627,7 @@ pub enum Message<'a> {
     IPCNameRightReply(IPCNameRightReply),
     IPCDiskDescribeReply(IPCDiskDescribeReply),
     IPCDiskReadReply(IPCDiskReadReply),
-    IPCKernelRecieveRightDestroyed(IPCKernelRecieveRightDestroyed),
+    IPCKernelReceiveRightDestroyed(IPCKernelReceiveRightDestroyed),
     IPCKernelRightDestroyed(IPCKernelRightDestroyed),
     IPCNamedRightNotification(IPCNamedRightNotification),
     IPCRead(IPCRead),
@@ -675,7 +675,7 @@ impl super::ipc::Message {
                 IPC_KERNEL_RIGHT_DESTROYED_NUM =>
                     try_from_bytes::<IPCKernelRightDestroyed>(data).map(|data| Message::IPCKernelRightDestroyed(data.clone())).unwrap_or(Message::Unknown),
                 IPC_KERNEL_RECIEVE_RIGHT_DESTROYED_NUM =>
-                    try_from_bytes::<IPCKernelRecieveRightDestroyed>(data).map(|data| Message::IPCKernelRecieveRightDestroyed(data.clone())).unwrap_or(Message::Unknown),
+                    try_from_bytes::<IPCKernelReceiveRightDestroyed>(data).map(|data| Message::IPCKernelReceiveRightDestroyed(data.clone())).unwrap_or(Message::Unknown),
                 IPC_NAMED_RIGHT_NOTIFICATION_NUM => {
                     if data.len() < size_of::<IPCNamedRightNotificationHdr>() {
                         return Message::Unknown;
@@ -758,7 +758,7 @@ impl super::ipc::Message {
     }
 
     pub fn is_destroyed_recieve_notification(&self) -> bool {
-        self.sender == 0 && self.get_known_id() == Some(IPC_KERNEL_RECIEVE_RIGHT_DESTROYED_NUM) && matches!(self.deserialize(), Message::IPCKernelRecieveRightDestroyed(_))
+        self.sender == 0 && self.get_known_id() == Some(IPC_KERNEL_RECIEVE_RIGHT_DESTROYED_NUM) && matches!(self.deserialize(), Message::IPCKernelReceiveRightDestroyed(_))
     }
 }
 

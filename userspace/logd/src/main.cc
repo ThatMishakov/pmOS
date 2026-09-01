@@ -6,6 +6,7 @@
 #include <pmos/ports.h>
 #include <string>
 #include <pmos/helpers.hh>
+#include <charconv>
 
 constexpr size_t buffer_size = 8192;
 std::deque<std::string> log_buffer;
@@ -89,11 +90,90 @@ void register_log_output(const Message_Descriptor &, const IPC_Register_Log_Outp
     log_output_rights.push_back(std::move(data_right));
 }
 
+pmos_right_t stdout_receive_right, stderr_receive_right;
+
+void start_read(pmos::Right &right, pmos_right_t &receive_right)
+{
+    IPC_Read message = {
+        .type  = IPC_Read_NUM,
+        .flags = 0,
+        .start_offset = 0,
+        .max_size     = 2048,
+    };
+
+    auto r = pmos::send_message_right_one(right, message, {&main_port, pmos::RightType::SendOnce}, false);
+    if (!r) {
+        log("Error: Failed to send IPC_Read message to port\n");
+        return;
+    }
+
+    receive_right = r.value().release();
+}
 pmos_right_t stdout_right = INVALID_RIGHT;
 pmos_right_t stderr_right = INVALID_RIGHT;
 pmos_right_t log_right    = INVALID_RIGHT;
 
-int main()
+pmos::Right stdout_pipe;
+pmos::Right stderr_pipe;
+
+void start_reads()
+{
+    if (stdout_right) {
+        start_read(stdout_pipe, stdout_receive_right);
+    }
+    if (stderr_right) {
+        start_read(stderr_pipe, stderr_receive_right);
+    }
+}
+
+
+void parse_args(int argc, char *argv[])
+{
+    pmos_right_t stdout_right = INVALID_RIGHT, stderr_right = INVALID_RIGHT;
+
+    for (int i = 1; i < argc; ++i) {
+        if (std::string_view(argv[i]) == "--stdout_pipe") {
+            if (i + 1 >= argc) {
+                log("Error: Missing argument for --stdout_pipe\n");
+                return;
+            }
+            auto [ptr, ec] = std::from_chars(argv[i + 1], argv[i + 1] + strlen(argv[i + 1]), stdout_right);
+            if (ec != std::errc()) {
+                log("Error: Failed to parse stdout pipe right\n");
+                return;
+            }
+            i++;
+        } else if (std::string_view(argv[i]) == "--stderr_pipe") {
+            if (i + 1 >= argc) {
+                log("Error: Missing argument for --stderr_pipe\n");
+                return;
+            }
+            auto [ptr, ec] = std::from_chars(argv[i + 1], argv[i + 1] + strlen(argv[i + 1]), stderr_right);
+            if (ec != std::errc()) {
+                log("Error: Failed to parse stderr pipe right\n");
+                return;
+            }
+            i++;
+        }
+    }
+
+    log("Logd: stdout pipe right: " + std::to_string(stdout_right) + ", stderr pipe right: " + std::to_string(stderr_right) + "\n");
+    auto p = pmos::Right::from(stdout_right);
+    if (!p) {
+        log("Error: Failed to get right from stdout pipe right\n");
+        return;
+    }
+    stdout_pipe = std::move(p.value());
+
+    p = pmos::Right::from(stderr_right);
+    if (!p) {
+        log("Error: Failed to get right from stderr pipe right\n");
+        return;
+    }
+    stderr_pipe = std::move(p.value());
+}
+
+int main(int argc, char *argv[])
 {
     set_log_port(main_port.get(), 0);
     log("\033[1;32m"
@@ -101,6 +181,8 @@ int main()
         std::to_string(get_task_id()) +
         "\033[0m\n"
         "\n");
+
+    parse_args(argc, argv);
 
     {
         right_request_t c = create_right(main_port.get(), &stdout_right, 0);
@@ -141,6 +223,8 @@ int main()
             log(std::move(error));
         }
     }
+
+    start_reads();
 
     while (1) {
         auto [msg, data, right, reply_right] = main_port.get_first_message().value();

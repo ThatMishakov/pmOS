@@ -60,14 +60,14 @@ void init_dtb()
     }
 
     if (desc.size < sizeof(IPC_FDT_Reply)) {
-        printf("Warning: Recieved message which is too small\n");
+        printf("Warning: Received message which is too small\n");
         goto end;
     }
 
     IPC_FDT_Reply *reply = (IPC_FDT_Reply *)message;
 
     if (reply->type != IPC_FDT_Reply_NUM) {
-        printf("Warning: Recieved unexepcted message type\n");
+        printf("Warning: Received unexepcted message type\n");
         goto end;
     }
 

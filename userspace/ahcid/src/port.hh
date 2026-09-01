@@ -101,7 +101,7 @@ struct TimerWaiter {
 struct WaitCommandCompletion;
 
 struct RRWrapper {
-    pmos::RecieveRight right;
+    pmos::ReceiveRight right;
     bool canceled = false;
 };
 

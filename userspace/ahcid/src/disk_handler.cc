@@ -324,7 +324,7 @@ pmos::async::detached_task handle_ipc(AHCIPort &port, std::shared_ptr<RRWrapper>
         // } break;
         case IPC_Disk_Read_NUM: {
             if (msg->data.size() < sizeof(IPC_Disk_Read)) {
-                fprintf(stderr, "ahcid: Recieved message IPC_Disk_Read with too small of size\n");
+                fprintf(stderr, "ahcid: Received message IPC_Disk_Read with too small of size\n");
                 break;
             }
 
@@ -334,7 +334,7 @@ pmos::async::detached_task handle_ipc(AHCIPort &port, std::shared_ptr<RRWrapper>
         } break;
         case IPC_Disk_Create_Right_NUM: {
             if (msg->data.size() < sizeof(IPC_Disk_Create_Right)) {
-                fprintf(stderr, "ahcid: Recieved message IPC_Disk_Create_Right with too small of size\n");
+                fprintf(stderr, "ahcid: Received message IPC_Disk_Create_Right with too small of size\n");
                 break;
             }
 
@@ -344,7 +344,7 @@ pmos::async::detached_task handle_ipc(AHCIPort &port, std::shared_ptr<RRWrapper>
         } break;
         case IPC_Disk_Describe_NUM: {
             if (msg->data.size() < sizeof(IPC_Disk_Describe)) {
-                fprintf(stderr, "ahcid: Recieved message IPC_Disk_Describe with too small of size\n");
+                fprintf(stderr, "ahcid: Received message IPC_Disk_Describe with too small of size\n");
                 break;
             }
 

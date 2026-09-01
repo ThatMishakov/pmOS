@@ -25,9 +25,9 @@ void test_delete_ipc_send_once()
     result_t get_result = get_message(&desc, &msg, port, NULL, NULL);
     assert(get_result == SUCCESS);
 
-    assert(desc.size >= sizeof(IPC_Kernel_Recieve_Right_Destroyed_NUM));
-    IPC_Kernel_Recieve_Right_Destroyed *notification = (IPC_Kernel_Recieve_Right_Destroyed *)msg;
-    assert(notification->type == IPC_Kernel_Recieve_Right_Destroyed_NUM);
+    assert(desc.size >= sizeof(IPC_Kernel_Receive_Right_Destroyed_NUM));
+    IPC_Kernel_Receive_Right_Destroyed *notification = (IPC_Kernel_Receive_Right_Destroyed *)msg;
+    assert(notification->type == IPC_Kernel_Receive_Right_Destroyed_NUM);
     assert(desc.sent_with_right == recieve_right);
     assert(desc.sender == 0);
 
@@ -56,9 +56,9 @@ void test_delete_ipc_send_many()
     result_t get_result = get_message(&desc, &msg, port, NULL, NULL);
     assert(get_result == SUCCESS);
 
-    assert(desc.size >= sizeof(IPC_Kernel_Recieve_Right_Destroyed_NUM));
-    IPC_Kernel_Recieve_Right_Destroyed *notification = (IPC_Kernel_Recieve_Right_Destroyed *)msg;
-    assert(notification->type == IPC_Kernel_Recieve_Right_Destroyed_NUM);
+    assert(desc.size >= sizeof(IPC_Kernel_Receive_Right_Destroyed_NUM));
+    IPC_Kernel_Receive_Right_Destroyed *notification = (IPC_Kernel_Receive_Right_Destroyed *)msg;
+    assert(notification->type == IPC_Kernel_Receive_Right_Destroyed_NUM);
     assert(desc.sent_with_right == recieve_right);
     assert(desc.sender == 0);
 
@@ -94,10 +94,10 @@ void test_watch_right()
     result_t get_result = get_message(&desc, &msg, port1, NULL, NULL);
     assert(get_result == SUCCESS);
 
-    assert(desc.size >= sizeof(IPC_Kernel_Recieve_Right_Destroyed_NUM));
+    assert(desc.size >= sizeof(IPC_Kernel_Receive_Right_Destroyed_NUM));
     assert(desc.sent_with_right == recieve_right);
-    IPC_Kernel_Recieve_Right_Destroyed *notification = (IPC_Kernel_Recieve_Right_Destroyed *)msg;
-    assert(notification->type == IPC_Kernel_Recieve_Right_Destroyed_NUM);
+    IPC_Kernel_Receive_Right_Destroyed *notification = (IPC_Kernel_Receive_Right_Destroyed *)msg;
+    assert(notification->type == IPC_Kernel_Receive_Right_Destroyed_NUM);
     assert(desc.sent_with_right == recieve_right);
     assert(desc.sender == 0);
 

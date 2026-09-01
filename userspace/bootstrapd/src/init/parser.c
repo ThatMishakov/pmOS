@@ -138,6 +138,7 @@ static bool skip_event(yaml_parser_t *state, yaml_event_t *event)
 enum ServiceParseState {
     SERVICE_STATE_START,
     SERVICE_STATE_NAME,
+    SERVICE_STATE_CMDLINE,
     SERVICE_STATE_DESCRIPTION,
     SERVICE_STATE_RUN_TYPE,
     SERVICE_STATE_REQUIRE,
@@ -150,6 +151,7 @@ enum ServiceParseState {
 
 const char *SERVICE_NAME        = "name";
 const char *SERVICE_DESCRIPTION = "description";
+const char *SERVICE_CMDLINE     = "cmdline";
 const char *SERVICE_RUN_TYPE    = "run_type";
 const char *SERVICE_REQUIRE     = "require";
 const char *SERVICE_MATCH       = "match";
@@ -802,6 +804,8 @@ static bool parse_service_event(yaml_parser_t *state, yaml_event_t *event, struc
                     service_state = SERVICE_STATE_NAME;
                 } else if (!strcmp(value, SERVICE_DESCRIPTION)) {
                     service_state = SERVICE_STATE_DESCRIPTION;
+                } else if (!strcmp(value, SERVICE_CMDLINE)) {
+                    service_state = SERVICE_STATE_CMDLINE;
                 } else if (!strcmp(value, SERVICE_RUN_TYPE)) {
                     service_state = SERVICE_STATE_RUN_TYPE;
                 } else if (!strcmp(value, SERVICE_REQUIRE)) {
@@ -826,6 +830,7 @@ static bool parse_service_event(yaml_parser_t *state, yaml_event_t *event, struc
         case SERVICE_STATE_NAME:
         case SERVICE_STATE_RUN_TYPE:
         case SERVICE_STATE_PATH:
+        case SERVICE_STATE_CMDLINE:
         case SERVICE_STATE_DESCRIPTION: {
             yaml_event_t new_event;
             if (!yaml_parser_parse(state, &new_event)) {
@@ -862,6 +867,16 @@ static bool parse_service_event(yaml_parser_t *state, yaml_event_t *event, struc
                         service->description = strdup((char *)new_event.data.scalar.value);
                         if (!service->description) {
                             print_str("Failed to allocate memory for service description!\n");
+                            success = false;
+                        }
+                    }
+                } else if (service_state == SERVICE_STATE_CMDLINE) {
+                    if (service->cmdline) {
+                        print_str("Duplicate service cmdline! Skipping...\n");
+                    } else {
+                        service->cmdline = strdup((char *)new_event.data.scalar.value);
+                        if (!service->cmdline) {
+                            print_str("Failed to allocate memory for service cmdline!\n");
                             success = false;
                         }
                     }

@@ -147,7 +147,7 @@ void clear_register(int index, uint8_t mask)
     io_rw->write_register(index, val);
 }
 
-pmos::RecieveRight interrupt_right;
+pmos::ReceiveRight interrupt_right;
 
 void set_up_interrupt()
 {
@@ -221,7 +221,7 @@ void set_up_interrupt()
     have_interrupts = true;
 }
 
-pmos::RecieveRight timer_right;
+pmos::ReceiveRight timer_right;
 
 void ns16550_init()
 {

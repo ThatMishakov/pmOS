@@ -291,7 +291,7 @@ ReturnStr<std::pair<Right * /* right */, u64 /* new_id_error */>>
 
     // With send once, send right is also a recieve right
     klib::unique_ptr<SendRight> reply_right = nullptr;
-    klib::unique_ptr<RecieveRight> recieve_right = nullptr;
+    klib::unique_ptr<ReceiveRight> recieve_right = nullptr;
     if (reply_port) {
         assert(new_right_type == RightType::SendOnce || new_right_type == RightType::SendMany);
 
@@ -470,7 +470,7 @@ void Message::delete_self()
     delete this;
 }
 
-RecieveRight *Port::atomic_get_right(u64 right_id)
+ReceiveRight *Port::atomic_get_right(u64 right_id)
 {
     assert(sched::get_current_task() == owner);
 
@@ -482,7 +482,7 @@ RecieveRight *Port::atomic_get_right(u64 right_id)
     return right;
 }
 
-bool Port::atomic_add_to_rights(RecieveRight *right)
+bool Port::atomic_add_to_rights(ReceiveRight *right)
 {
     assert(right);
     assert(right->parent == this);
@@ -495,7 +495,7 @@ bool Port::atomic_add_to_rights(RecieveRight *right)
     return true;
 }
 
-void Port::atomic_remove_right(RecieveRight *right)
+void Port::atomic_remove_right(ReceiveRight *right)
 {
     assert(right);
     assert(right->parent == this);

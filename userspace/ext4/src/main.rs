@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use pmos::ipc_runner::Executor;
 use pmos::ipc::SendRight;
 use pmos::ipc::SendManyRight;
-use pmos::ipc_runner::ManyReciever;
+use pmos::ipc_runner::ManyReceiver;
 use pmos::async_helpers::get_named_right;
 use pmos::ipc_msgs::IPCMountFS;
 use pmos::ipc::send_message_right;
@@ -475,7 +475,7 @@ async fn ipc_fs_open(executor: Executor, reply_right: Option<SendRight>, fs: Ext
         match msg.deserialize() {
             pmos::ipc_msgs::Message::IPCRead(data) => {
                 if reply_right.is_none() {
-                    println!("ext4: Recieved read with no reply right!");
+                    println!("ext4: Received read with no reply right!");
                     continue;
                 }
                 let reply_right = reply_right.unwrap();
@@ -503,7 +503,7 @@ async fn ipc_fs_open(executor: Executor, reply_right: Option<SendRight>, fs: Ext
     }
 }
 
-async fn ipc_handle(executor: Executor, mut reciever: ManyReciever, fs: Ext4) {
+async fn ipc_handle(executor: Executor, mut reciever: ManyReceiver, fs: Ext4) {
     while let Some(mut msg) = reciever.next().await {
         let reply_right = msg.reply_right.take();
         match msg.deserialize() {

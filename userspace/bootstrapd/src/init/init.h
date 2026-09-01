@@ -80,6 +80,7 @@ struct Service {
     char *name;
     char *path;
     char *description;
+    char *cmdline;
 
     enum State state;
     enum RunType run_type;

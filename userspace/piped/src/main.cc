@@ -101,12 +101,12 @@ int main()
 
             if (t->task_group_id == 0) {
                 fprintf(stderr,
-                        "Warning: Recieved IPC_Kernel_Group_Task_Changed with group_id 0\n");
+                        "Warning: Received IPC_Kernel_Group_Task_Changed with group_id 0\n");
                 break;
             }
 
             if (msg.sender != 0) {
-                fprintf(stderr, "Warning: Recieved IPC_Kernel_Group_Task_Changed from userspace\n");
+                fprintf(stderr, "Warning: Received IPC_Kernel_Group_Task_Changed from userspace\n");
                 break;
             }
 

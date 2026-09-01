@@ -104,7 +104,7 @@ static int pmbus_publish_reply_callback(Message_Descriptor *desc, void *buff, pm
 
     IPC_BUS_Publish_Object_Reply *r = buff;
     if (desc->size < sizeof(*r)) {
-        print_str("Loader: Recieved too small message for object publish\n");
+        print_str("Loader: Received too small message for object publish\n");
     } else if (r->result != 0) {
         print_str("Loader: error in sending a pmbus object. Error: ");
         print_hex(r->result);

@@ -212,19 +212,19 @@ void open_file_error_reply(pmos::Right &reply_right, int result)
         kernelLogger() << "posixd: Error " << result_send.error() << " sending open file reply to port " << reply_right.get() << "\n" << frg::endlog;
 }
 
-pmos::async::detached_task attend_open_file(std::shared_ptr<VNode> vnode, pmos::RecieveRight right)
+pmos::async::detached_task attend_open_file(std::shared_ptr<VNode> vnode, pmos::ReceiveRight right)
 {
     while (1) {
         auto [msg, message, reply_right, rights] = (co_await dispatcher.get_message(right)).value();
 
         if (message.size() < sizeof(IPC_Generic_Msg)) {
-            kernelLogger() << "posixd: Recieved very small message while attending file\n" << frg::endlog;
+            kernelLogger() << "posixd: Received very small message while attending file\n" << frg::endlog;
             break;
         }
 
         auto *ipc_msg = reinterpret_cast<IPC_Generic_Msg *>(message.data());
         switch (ipc_msg->type) {
-        case IPC_Kernel_Recieve_Right_Destroyed_NUM:
+        case IPC_Kernel_Receive_Right_Destroyed_NUM:
             break;
         default:
             kernelLogger() << "posixd: Unknown message type " << ipc_msg->type << " while attending file\n" << frg::endlog;
@@ -293,7 +293,7 @@ pmos::async::detached_task vfs_handle_messages()
         switch (ipc_msg->type) {
         case IPC_Mount_FS_NUM: {
             if (message.size() < sizeof(IPC_Mount_FS)) {
-                kernelLogger() << "posixd: Recieved IPC_Mount_FS that is too small from task " << msg.sender << " of size " << message.size() << "\n" << frg::endlog;
+                kernelLogger() << "posixd: Received IPC_Mount_FS that is too small from task " << msg.sender << " of size " << message.size() << "\n" << frg::endlog;
                 break;
             }
 
@@ -303,7 +303,7 @@ pmos::async::detached_task vfs_handle_messages()
         } break;
         case IPC_Open_NUM: {
             if (message.size() < sizeof(IPC_Open)) {
-                kernelLogger() << "posixd: Recieved IPC_Open that is too small from task " << msg.sender << " of size " << message.size() << "\n" << frg::endlog;
+                kernelLogger() << "posixd: Received IPC_Open that is too small from task " << msg.sender << " of size " << message.size() << "\n" << frg::endlog;
                 break;
             }
 
@@ -403,7 +403,7 @@ std::expected<std::shared_ptr<VNode>, int> VNodeAwaiter::await_resume() noexcept
     return std::move(result_);
 }
 
-pmos::async::detached_task vnode_wait(std::shared_ptr<VNode> vnode, std::string name, pmos::RecieveRight right)
+pmos::async::detached_task vnode_wait(std::shared_ptr<VNode> vnode, std::string name, pmos::ReceiveRight right)
 {
     auto msg = co_await dispatcher.get_message(right);
     if (!msg) {

@@ -209,12 +209,12 @@ void react_register_port(unsigned port, IPC_PS2_Reg_Port *msg, pmos_right_t *rep
     (void)msg;
 
     if (!*reply_right) {
-        fprintf(stderr, "[i8042] Warning: Recieved register port request for port %u with no reply right...\n", port);
+        fprintf(stderr, "[i8042] Warning: Received register port request for port %u with no reply right...\n", port);
         return;
     }
 
     if (!other_rights[0]) {
-        fprintf(stderr, "[i8042] Warning: Recieved register port request for port %u with no send right...\n", port);
+        fprintf(stderr, "[i8042] Warning: Received register port request for port %u with no send right...\n", port);
         return;
     }
 

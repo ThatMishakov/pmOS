@@ -14,14 +14,14 @@ use std::ops::Bound;
 use std::rc::Rc;
 use std::mem;
 
-use pmos::ipc::RecieveOnceRight;
+use pmos::ipc::ReceiveOnceRight;
 
 struct ObjectInfo {
     sequence_id: u64,
     properties: pmbus::ObjectProperties,
     name: String,
     right: SendManyRight,
-    watch_right: Option<RecieveOnceRight>,
+    watch_right: Option<ReceiveOnceRight>,
 }
 
 struct State {
@@ -57,7 +57,7 @@ fn publish_object(
 ) {
     if reply_right.is_none() {
         println!(
-            "Recieved PMBusPublishObject from task {} with no reply right!",
+            "Received PMBusPublishObject from task {} with no reply right!",
             message.sender
         );
         return;
@@ -193,7 +193,7 @@ fn request_object(
     reply_right: Option<SendRight>,
 ) {
     if reply_right.is_none() {
-        println!("pmbus: Recieved object filter request with no reply right!");
+        println!("pmbus: Received object filter request with no reply right!");
         return;
     }
 
@@ -304,7 +304,7 @@ fn main() {
             state.watch_rights.remove(&msg.sent_with_right);
         } else {
             println!(
-                "pmbus: Recieved message from task {} with unknown right {}",
+                "pmbus: Received message from task {} with unknown right {}",
                 msg.sender, msg.sent_with_right
             );
         }
