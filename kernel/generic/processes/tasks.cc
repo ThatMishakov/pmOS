@@ -672,6 +672,12 @@ ReturnStr<bool>
     if (!auxvals.push_back({AT_PHNUM, (long) phdr_tag.phdr_num}))
         return Error(-ENOMEM);
 
+    if (!auxvals.push_back({AT_PAGESZ, (long) 4096})) // TODO...
+        return Error(-ENOMEM);
+
+    if (!auxvals.push_back({AT_ENTRY, (uintptr_t) program_entry}))
+        return Error(-ENOMEM);
+
     // Object id
     {
         auto object_id = elf->right_sender_id;

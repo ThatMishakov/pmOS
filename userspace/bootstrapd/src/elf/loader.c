@@ -483,6 +483,24 @@ result_t load_executable(uint64_t task_id, uint64_t group_id, uint64_t mem_objec
         result = push_res;
         goto error;
     }
+    VECTOR_PUSH_BACK_CHECKED(builder->entries, ((struct AuxVecEntry){
+        .entry_type = AT_PAGESZ,
+        .data_type = DATA_TYPE_LONG,
+        .long_data = 4096, // TODO...
+    }), push_res);
+    if (push_res) {
+        result = push_res;
+        goto error;
+    }
+    VECTOR_PUSH_BACK_CHECKED(builder->entries, ((struct AuxVecEntry){
+        .entry_type = AT_ENTRY,
+        .data_type = DATA_TYPE_PTR,
+        .ptr = program_entry,
+    }), push_res);
+    if (push_res) {
+        result = push_res;
+        goto error;
+    }
 
 
     struct load_tag_stack_descriptor sd = {
