@@ -40,7 +40,7 @@ cargo_build_nolock() {
         CARGO_HOME="${build_dir}/.cargo" \
         CARGO_TARGET_DIR="${TARGET_DIR}" \
         CARGO_RESOLVER_LOCKFILE_PATH="${TARGET_DIR}/Cargo.lock" \
-        RUSTFLAGS="-C link-arg=--sysroot=${sysroot_dir} -C linker=clang++ -C link-arg=--target=${JINX_ARCH}-unknown-pmos -C link-arg=-lunwind -C link-arg=-static" \
+        RUSTFLAGS="-C link-arg=--sysroot=${sysroot_dir} -C linker=clang++ -C link-arg=--target=${JINX_ARCH}-unknown-pmos -C link-arg=-lunwind" \
     cargo build \
         -Zunstable-options \
         --target ${RUST_TARGET} \
