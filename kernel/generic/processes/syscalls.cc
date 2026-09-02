@@ -225,7 +225,7 @@ std::array<syscall_function, 67> syscall_table = {
     syscall_debug_log,
     syscall_futex_wait,
     syscall_futex_wake,
-    nullptr,
+    syscall_sleep,
 };
 
 void syscall_handler()
@@ -1966,6 +1966,8 @@ void syscall_pause_task(TaskDescriptor *current_task)
     }
 
     Auto_Lock_Scope lock(task->sched_lock);
+    // TODO: Handle dying tasks
+
     switch (task->status) {
     case TaskStatus::TASK_RUNNING: {
         if (current_task == task) {
@@ -2026,7 +2028,6 @@ void syscall_pause_task(TaskDescriptor *current_task)
     case TaskStatus::TASK_SPECIAL:
         syscall_error(current_task) = -EPERM;
         return;
-    case TaskStatus::TASK_DYING:
     case TaskStatus::TASK_DEAD:
         syscall_error(current_task) = -ESRCH;
         return;
@@ -2752,6 +2753,8 @@ void syscall_debug_log(TaskDescriptor *task)
 static void cancel_futex_wait(TaskDescriptor *task, i64 reason)
 {
     task->futex_try_remove();
+    task->timer_try_remove();
+
     syscall_error(task) = reason;
 }
 
@@ -2761,7 +2764,20 @@ static void futex_wakeup(TaskDescriptor *task)
     auto mask = __atomic_load_n(&task->wake_reason_mask, __ATOMIC_ACQUIRE);
     if (mask & TaskDescriptor::SCHED_WAKE_FUTEX) {
         task->futex_try_remove();
+        task->timer_try_remove();
         syscall_success(task);
+        return;
+    }
+
+    if (mask & TaskDescriptor::SCHED_WAKE_ATTENTION) {
+        (void)task->timer_push();
+        return;
+    }
+
+    if (mask & TaskDescriptor::SCHED_WAKE_TIMER) {
+        task->futex_try_remove();
+        task->timer_try_remove();
+        syscall_error(task) = -ETIMEDOUT;
         return;
     }
 
@@ -2773,6 +2789,7 @@ static void futex_wakeup(TaskDescriptor *task)
     auto result = atomic_read_from_user(&user_value, (u32 *)task->futex_addr);
     if (!result) {
         task->futex_try_remove();
+        task->timer_try_remove();
         syscall_error(task) = result.result;
         return;
     }
@@ -2781,14 +2798,15 @@ static void futex_wakeup(TaskDescriptor *task)
         // Blocked again...
         return;
 
-    task->futex_try_remove();
 
     if (user_value != expected_value) {
+        task->futex_try_remove();
+        task->timer_try_remove();
         syscall_error(task) = -EAGAIN;
         return;
     }
 
-    syscall_success(task);
+    task->atomic_block_self(TaskDescriptor::SCHED_WAKE_FUTEX | TaskDescriptor::SCHED_WAKE_TIMER);
 }
 
 void syscall_futex_wait(TaskDescriptor *task)
@@ -2801,7 +2819,7 @@ void syscall_futex_wait(TaskDescriptor *task)
     uint64_t deadline = timeout_ns == (u64)-1 ? -1 : get_ns_since_bootup() + timeout_ns;
 
     task->set_continuation(futex_wakeup, cancel_futex_wait);
-    task->futex_deadline = deadline;
+    task->timer_deadline = deadline;
 
     u32 user_value;
     auto result = atomic_read_from_user(&user_value, (u32 *)ptr);
@@ -2819,6 +2837,8 @@ void syscall_futex_wait(TaskDescriptor *task)
     }
 
     task->futex_push();
+    if (deadline != (u64)-1 && !task->timer_push())
+        return;
 
     // Do a second take so wakeups are not missed
     result = atomic_read_from_user(&user_value, (u32 *)ptr);
@@ -2835,7 +2855,7 @@ void syscall_futex_wait(TaskDescriptor *task)
         return;
     }
 
-    task->atomic_block_self(TaskDescriptor::SCHED_WAKE_FUTEX);
+    task->atomic_block_self(TaskDescriptor::SCHED_WAKE_FUTEX | TaskDescriptor::SCHED_WAKE_TIMER);
 }
 
 void syscall_futex_wake(TaskDescriptor *task)
@@ -2846,6 +2866,39 @@ void syscall_futex_wake(TaskDescriptor *task)
     task->futex_wake(ptr, all);
     
     syscall_success(task);
+}
+
+void syscall_sleep(TaskDescriptor *task)
+{
+    auto sleep_cancel = [](TaskDescriptor *task, i64 reason) {
+        task->timer_try_remove();
+        auto current_time = get_ns_since_bootup();
+        auto remaining_time = current_time > task->timer_deadline ? 0 : task->timer_deadline - current_time;
+        syscall_error(task) = {reason, remaining_time};
+    };
+    auto sleep_wakeup = [](TaskDescriptor *task) {
+        task->timer_try_remove();
+        syscall_success(task);
+    };
+
+    if (!task->continuation_func) {
+        auto timeout_ns = syscall_arg64(task, 0);
+        if (timeout_ns == 0) {
+            syscall_success(task);
+            return;
+        }
+
+        auto deadline = get_ns_since_bootup() + timeout_ns;
+        task->set_continuation(syscall_sleep, sleep_cancel);
+        task->timer_deadline = deadline;
+    }
+
+    if (!task->timer_push())
+        return;
+
+    task->continuation_func = sleep_wakeup;
+
+    task->atomic_block_self(TaskDescriptor::SCHED_WAKE_TIMER);
 }
 
 unsigned syscall_number(TaskDescriptor *task) { return call_flags(task) & 0xFF; }

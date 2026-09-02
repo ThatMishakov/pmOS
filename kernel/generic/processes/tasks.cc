@@ -809,8 +809,29 @@ ReturnStr<bool>
     return true;
 }
 
+// This function name is a bit misleading...
+static bool timer_complete(TaskDescriptor *task)
+{
+    {
+        Auto_Lock_Scope scope_lock(task->timer_lock);
+        if (task->timer_cpu == nullptr && !task->waiting_for_attention)
+            return true;
+    
+        assert(task->waiting_for_attention);
+    }
+
+    task->atomic_block_self(TaskDescriptor::SCHED_WAKE_ATTENTION, true);
+    return false;
+}
+
 void TaskDescriptor::cleanup()
 {
+    timer_try_remove();
+    // "LMAO"
+    if (!timer_complete(this))
+        // Oops, the dying task casually blocked (how did I get here?)
+        return;
+
     cleaned_up = true;
 
     futex_try_remove();
@@ -847,6 +868,8 @@ void TaskDescriptor::cleanup()
         delete t;
     };
     sched::get_cpu_struct()->heap_rcu_cpu.push(&rcu_head);
+
+    sched::find_new_process();
 }
 
 TaskDescriptor::TaskID TaskDescriptor::get_new_task_id()
@@ -904,13 +927,13 @@ void TaskDescriptor::atomic_handle_unblock(u32 reason)
     }
 }
 
-void TaskDescriptor::atomic_block_self(u32 unblock_mask)
+void TaskDescriptor::atomic_block_self(u32 unblock_mask, bool force)
 {
     Auto_Lock_Scope scope_lock(sched_lock);
     this->unblock_mask = unblock_mask;
     assert(status == TaskStatus::TASK_RUNNING);
 
-    if (sched_pending_mask & SCHED_FLAG_TERMINATE) {
+    if (sched_pending_mask & SCHED_FLAG_TERMINATE && !force) {
         // Don't bother with anything (and keep the bit set)
         return;
     }
@@ -924,12 +947,12 @@ void TaskDescriptor::atomic_block_self(u32 unblock_mask)
         }
     }
 
-    if (sched_pending_mask & SCHED_FLAG_PAUSE) {
+    if (sched_pending_mask & SCHED_FLAG_PAUSE && !force) {
         // Also don't block and propagate
         return;
     }
 
-    if (sched_pending_mask & SCHED_FLAG_INTERRUPT) {
+    if (sched_pending_mask & SCHED_FLAG_INTERRUPT && !force) {
         sched_pending_mask &= ~SCHED_FLAG_INTERRUPT;
 
         assert(cancel_callback);
@@ -985,18 +1008,141 @@ void TaskDescriptor::interrupt_blocked(i64 error_code)
     }
 }
 
-void TaskDescriptor::TaskWaiter::fire()
-{
-    auto task = reinterpret_cast<TaskDescriptor *>(reinterpret_cast<char *>(this) - offsetof(TaskDescriptor, sleep_waiter));
-    task->interrupt_blocked(-ETIMEDOUT);
-}
-
 void TaskDescriptor::set_continuation(TaskDescriptor::continuation_func_type func, TaskDescriptor::cancel_callback_type cancel)
 {
     continuation_func = func;
     cancel_callback   = cancel;
 
     __atomic_store_n(&wake_reason_mask, 0, __ATOMIC_RELEASE);
+}
+
+static void timer_continuation(TaskDescriptor *task)
+{
+    assert(task->waiting_for_attention);
+    task->waiting_for_attention = false;
+
+    task->continuation_func = task->attention_saved_continuation;
+    task->cancel_callback   = task->attention_saved_cancel;
+
+    assert(!task->timer_cpu);
+
+    auto result = task->timer_push();
+    assert(result);
+}
+
+bool TaskDescriptor::timer_push()
+{
+    Auto_Lock_Scope scope_lock(timer_lock);
+    auto current_cpu = sched::get_cpu_struct();
+
+    if (timer_cpu == nullptr) {
+        timer_cpu = current_cpu;
+        
+        sleep_waiter.fire_at_ns = timer_deadline;
+        current_cpu->timer_queue.insert(&sleep_waiter);
+        sched::maybe_rearm_timer(timer_deadline);
+
+        __atomic_and_fetch(&wake_reason_mask, ~TaskDescriptor::SCHED_WAKE_TIMER, __ATOMIC_RELAXED);
+
+        return true;
+    } else if (timer_cpu == current_cpu) {
+        current_cpu->timer_queue.erase(&sleep_waiter);
+        sleep_waiter.fire_at_ns = timer_deadline;
+        current_cpu->timer_queue.insert(&sleep_waiter);
+        sched::maybe_rearm_timer(timer_deadline);
+
+        __atomic_and_fetch(&wake_reason_mask, ~TaskDescriptor::SCHED_WAKE_TIMER, __ATOMIC_RELAXED);
+
+        return true;
+    } else {
+        // Wait for the other CPU's attention (it would have been requested before)
+        assert(waiting_for_attention);
+
+        attention_saved_continuation = continuation_func;
+        attention_saved_cancel       = cancel_callback;
+
+        continuation_func = timer_continuation;
+        cancel_callback   = nullptr; // Can't be cancelled
+
+        atomic_block_self(TaskDescriptor::SCHED_WAKE_ATTENTION);
+
+        return false;
+    }
+}
+
+void TaskDescriptor::TaskWaiter::fire()
+{
+    auto task = reinterpret_cast<TaskDescriptor *>(reinterpret_cast<char *>(this) - offsetof(TaskDescriptor, sleep_waiter));
+    
+    {
+        Auto_Lock_Scope scope_lock(task->timer_lock);
+        task->timer_cpu = nullptr;
+    }
+
+    task->atomic_handle_unblock(TaskDescriptor::SCHED_WAKE_TIMER);
+}
+
+void TaskDescriptor::TaskAttention::get_attention()
+{
+    // I have a feeling I forgot to do something in this function...
+
+    auto task = reinterpret_cast<TaskDescriptor *>(reinterpret_cast<char *>(this) - offsetof(TaskDescriptor, attention_node));
+    auto current_cpu = sched::get_cpu_struct();
+    
+    {
+        Auto_Lock_Scope l(current_cpu->attention_queue_lock);
+        current_cpu->attention_queue.erase(this);
+    }
+    bool unblock = true;
+    
+    {
+        Auto_Lock_Scope scope_lock(task->timer_lock);
+        if (task->timer_cpu == current_cpu) {
+            current_cpu->timer_queue.erase(&task->sleep_waiter);
+            task->timer_cpu = nullptr;
+            task->waiting_for_attention = false;
+        } else if (task->timer_cpu == nullptr) {
+            task->waiting_for_attention = false;
+        } else {
+            {
+                Auto_Lock_Scope l(task->timer_cpu->attention_queue_lock);
+                task->timer_cpu->attention_queue.push_back(&task->attention_node);
+            }
+            task->timer_cpu->ipi_get_attention();
+            unblock = false;
+        }
+    }
+
+    if (unblock) {
+        task->atomic_handle_unblock(TaskDescriptor::SCHED_WAKE_ATTENTION);
+    }
+}
+
+void TaskDescriptor::timer_try_remove()
+{
+    Auto_Lock_Scope scope_lock(timer_lock);
+    if (timer_cpu == nullptr)
+        return;
+    auto current = sched::get_cpu_struct();
+    if (timer_cpu == current) {
+        current->timer_queue.erase(&sleep_waiter);
+        timer_cpu = nullptr;
+    } else if (waiting_for_attention) {
+        // Other CPU will remove it when it gets attention
+    } else {
+        {
+            Auto_Lock_Scope l(timer_cpu->attention_queue_lock);
+            timer_cpu->attention_queue.push_back(&attention_node);
+        }
+        timer_cpu->ipi_get_attention();
+        waiting_for_attention = true;
+    }
+}
+
+bool TaskDescriptor::is_terminating() const
+{
+    assert(sched_lock.is_locked());
+    return sched_pending_mask & SCHED_FLAG_TERMINATE;
 }
 
 } // namespace kernel::proc

@@ -109,7 +109,7 @@ ReturnStr<TaskGroup *> TaskGroup::create_for_task(TaskDescriptor *task)
     {
         Auto_Lock_Scope lock(task->sched_lock);
         auto s = task->status;
-        if (s == TaskStatus::TASK_DYING || s == TaskStatus::TASK_DEAD)
+        if (task->is_terminating() || s == TaskStatus::TASK_DEAD)
             return nullptr;
 
         auto t = task->task_groups.insert_noexcept(group);
@@ -141,8 +141,7 @@ kresult_t TaskGroup::atomic_register_task(TaskDescriptor *task)
     bool inserted = false;
     {
         Auto_Lock_Scope lock(task->sched_lock);
-        auto s = task->status;
-        if (s == TaskStatus::TASK_DYING || s == TaskStatus::TASK_DEAD)
+        if (task->is_terminating() || task->status == TaskStatus::TASK_DEAD)
             return -ENOENT;
 
         auto t = task->task_groups.insert_noexcept(this);

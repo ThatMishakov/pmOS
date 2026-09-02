@@ -92,7 +92,6 @@ namespace proc
         TASK_BLOCKED,
         TASK_UNINIT,
         TASK_SPECIAL, // Would be used by idle or system tasks
-        TASK_DYING,
         TASK_PAUSED,
         TASK_DEAD
     };
@@ -146,6 +145,8 @@ namespace proc
             pmos::containers::RBTreeNode<TaskDescriptor> task_tree_head = {};
         };
 
+        bool is_terminating() const;
+
         static constexpr int SCHED_FLAG_PAUSE     = 0x01;
         static constexpr int SCHED_FLAG_WAKE      = 0x02;
         static constexpr int SCHED_FLAG_INTERRUPT = 0x04;
@@ -157,6 +158,8 @@ namespace proc
         static constexpr int SCHED_WAKE_PORT = 0x01;
         static constexpr int SCHED_WAKE_FUTEX = 0x02;
         static constexpr int SCHED_WAKE_MEMORY = 0x04;
+        static constexpr int SCHED_WAKE_TIMER = 0x08;
+        static constexpr int SCHED_WAKE_ATTENTION = 0x10;
 
         sched::sched_queue waiting_to_pause;
 
@@ -191,8 +194,26 @@ namespace proc
         struct TaskWaiter: sched::TimerNode {
             virtual void fire() override;
         };
+
+        struct TaskAttention: sched::AttentionNode {
+            virtual void get_attention() override;
+        };
+
+        Spinlock timer_lock;
+        // If timer_cpu == nullptr, then it is not pushed to any CPU's timer queue
+        sched::CPU_Info *timer_cpu = nullptr;
+        bool waiting_for_attention = false;
+        TaskAttention attention_node;
         TaskWaiter sleep_waiter;
-        u64 futex_deadline = -1;
+        u64 timer_deadline = -1;
+
+        // TODO: Replace this with a stack...
+        continuation_func_type attention_saved_continuation = nullptr;
+        cancel_callback_type attention_saved_cancel = nullptr;
+
+        // This can block; in case that happens, false is returned.
+        [[nodiscard]] bool /* continue */ timer_push();
+        void timer_try_remove();
 
         // Futex stuff. This is protected by a global futex lock
         ulong futex_addr = 0;
@@ -359,7 +380,7 @@ namespace proc
         void interrupt_restart_syscall();
 
         // Blocks self and schedules a different task (if blocked), respecting the flags (i.e. not blocking if wake is already pending, etc.)
-        void atomic_block_self(u32 mask);
+        void atomic_block_self(u32 mask, bool force_block_on_terminate = false);
 
         // Interrupts the blocked task (setting SCHED_FLAG_INTERRUPT, etc.)
         void interrupt_blocked(i64 error_code = -EINTR);

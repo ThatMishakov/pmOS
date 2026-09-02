@@ -64,33 +64,6 @@ klib::vector<CPU_Info *> cpus;
 
 size_t get_cpu_count() noexcept { return cpus.size(); }
 
-ReturnStr<u64> block_current_task(ipc::Port *ptr)
-{
-    // TODO: This function has a strange return value
-    auto task = get_cpu_struct()->current_task;
-
-    // t_print_bochs("Blocking %i (%s) by port\n", task->pid, task->name.c_str());
-
-    Auto_Lock_Scope scope_lock(task->sched_lock);
-    // If the task is dying, don't block it
-    if (task->status == TaskStatus::TASK_DYING)
-        return {0, 0};
-
-    task->status       = TaskStatus::TASK_BLOCKED;
-    task->blocked_by   = ptr;
-    task->parent_queue = &blocked;
-
-    {
-        Auto_Lock_Scope scope_l(blocked.lock);
-        blocked.push_back(task);
-    }
-
-    // Task switch
-    find_new_process();
-
-    return {0, 0};
-}
-
 size_t number_of_cpus = 1;
 
 // u64 TaskDescriptor::check_unblock_immediately(u64 reason, u64 extra)
@@ -106,9 +79,7 @@ size_t number_of_cpus = 1;
 
 void push_ready(TaskDescriptor *p)
 {
-    if (p->status != TaskStatus::TASK_DYING)
-        // Carry dying status, set to ready otherwise
-        p->status = TaskStatus::TASK_READY;
+    p->status = TaskStatus::TASK_READY;
 
     const auto priority           = p->priority;
     const priority_t priority_lim = global_sched_queues.size();
@@ -168,12 +139,6 @@ void CPU_Info::SchedulerTimerNode::fire()
     } else {
         c->sched_timer(assign_quantum_on_priority(current->priority));
     }
-
-    while (c->current_task->status == TaskStatus::TASK_DYING) {
-        c->current_task->cleanup();
-
-        find_new_process();
-    }
 }
 
 void cpu_timer_interrupt()
@@ -230,7 +195,6 @@ void handle_scheduling()
 
         if (mask & TaskDescriptor::SCHED_FLAG_TERMINATE) {
             current_task->cleanup();
-            find_new_process();
             continue;
         }
 
@@ -263,7 +227,7 @@ void reschedule()
 
         {
             Auto_Lock_Scope l(current_task->sched_lock);
-            if (current_task->status != TaskStatus::TASK_DYING) {
+            if (!current_task->is_terminating()) {
                 current_task->status = TaskStatus::TASK_PAUSED;
 
                 current_task->parent_queue = &paused;
@@ -330,11 +294,6 @@ void find_new_process()
     CPU_Info &cpu_str = *get_cpu_struct();
 
     TaskDescriptor *next_task = cpu_str.atomic_pick_highest_priority();
-
-    while (next_task and next_task->status == TaskStatus::TASK_DYING) {
-        next_task->cleanup();
-        next_task = cpu_str.atomic_pick_highest_priority();
-    }
 
     if (not next_task)
         next_task = cpu_str.idle_task;
@@ -421,11 +380,6 @@ void TaskDescriptor::unblock() noexcept
         TaskDescriptor *current_task = get_cpu_struct()->current_task;
 
         if (current_task->priority > priority) {
-            if (status == TaskStatus::TASK_DYING) {
-                cleanup();
-                return;
-            }
-
             {
                 Auto_Lock_Scope scope_l(current_task->sched_lock);
                 switch_to();
@@ -466,10 +420,7 @@ void TaskDescriptor::switch_to()
     c->current_task->before_task_switch();
 
     // Switch task
-    if (status != TaskStatus::TASK_DYING)
-        // If the task is dying, don't change its status and let the scheduler handle it when
-        // returning from the kernel
-        status = TaskStatus::TASK_RUNNING;
+    status = TaskStatus::TASK_RUNNING;
 
     c->current_task_priority = priority;
     c->current_task          = this;

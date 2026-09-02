@@ -62,7 +62,7 @@ Port *Port::atomic_create_port(proc::TaskDescriptor *task) noexcept
 
     {
         Auto_Lock_Scope scope_lock(task->sched_lock);
-        if (task->status == proc::TaskStatus::TASK_DYING ||
+        if (task->is_terminating() ||
             task->status == proc::TaskStatus::TASK_DEAD)
             return nullptr;
         task->owned_ports.insert(new_port_ptr.get());
