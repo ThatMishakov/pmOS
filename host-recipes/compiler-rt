@@ -20,8 +20,8 @@ configure() {
     -DCMAKE_CXX_COMPILER="clang++" \
     -DCMAKE_C_COMPILER_TARGET="${triplet}" \
     -DCMAKE_ASM_COMPILER_TARGET="${triplet}" \
-    -DCMAKE_C_FLAGS="--sysroot=${sysroot_dir}" \
-    -DCMAKE_CXX_FLAGS="--sysroot=${sysroot_dir}" \
+    -DCMAKE_C_FLAGS="--sysroot=${sysroot_dir} -fPIC" \
+    -DCMAKE_CXX_FLAGS="--sysroot=${sysroot_dir} -fPIC" \
     -DCMAKE_C_COMPILER_WORKS=ON \
     -DCMAKE_CXX_COMPILER_WORKS=ON \
     -DCOMPILER_RT_BUILD_BUILTINS=ON \

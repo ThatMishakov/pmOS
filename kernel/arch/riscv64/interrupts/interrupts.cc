@@ -37,6 +37,7 @@
 #include <kern_logger/kern_logger.hh>
 #include <pmos/ipc.h>
 #include <processes/tasks.hh>
+#include <processes/syscalls.hh>
 #include <sched/sched.hh>
 #include <utils.hh>
 
@@ -422,7 +423,7 @@ void handle_interrupt()
         case ENV_CALL_FROM_U_MODE:
             // Advance the program counter to the next instruction
             c->current_task->regs.program_counter() += 4;
-            syscall_handler();
+            syscalls::syscall_handler();
             break;
         case STORE_AMO_ACCESS_FAULT:
         case LOAD_ACCESS_FAULT:

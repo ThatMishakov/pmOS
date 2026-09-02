@@ -89,6 +89,7 @@ failure:
     li t0, 0x40000
     csrc sstatus, t0
 
+ok:
     sd zero, 48(tp)
     sd zero, 56(tp)
 
@@ -110,3 +111,81 @@ failure:
     addi sp, sp, 144
 
     ret
+
+    .type fast_atomic_read_from_user, @function
+    .globl fast_atomic_read_from_user
+fast_atomic_read_from_user:
+    addi sp, sp, -144
+    sd t0, 24(sp)
+    sd fp, 128(sp)
+    sd ra, 136(sp)
+    addi fp, sp, 144
+
+    sd a0, 0(sp) # const void *src
+    sd a1, 8(sp) # void *dst
+
+    sd s0, 32(sp)
+    sd s1, 40(sp)
+    sd s2, 48(sp)
+    sd s3, 56(sp)
+    sd s4, 64(sp)
+    sd s5, 72(sp)
+    sd s6, 80(sp)
+    sd s7, 88(sp)
+    sd s8, 96(sp)
+    sd s9, 104(sp)
+    sd s10, 112(sp)
+    sd s11, 120(sp)
+
+    la t0, read_on_failure
+    sd t0, 48(tp)
+    sd sp, 56(tp)
+
+    li t0, 0x40000
+    csrs sstatus, t0
+
+    lw t0, 0(a0)
+    sw t0, 0(a1)
+
+    li t0, 0x40000
+    csrc sstatus, t0
+
+    # Success
+    xor a0, a0, a0
+    li  a1, 1
+
+    ld  fp, 128(sp)
+    ld  ra, 136(sp)
+    addi sp, sp, 144
+    ret
+
+read_on_failure:
+    mv sp, a0
+    addi fp, sp, 144
+
+    # Arguments
+    li a0, 1 # unsigned access (read)
+    # faulting addr is already in a1
+    xor a2, a2, a2 # void *dst = nullptr
+    xor a3, a3, a3 # const void *src = nullptr
+    li a4, 4 # size_t size = 4
+
+    call user_access_page_fault
+
+    bne a0, zero, failure
+    beq a1, zero, failure
+
+    ld a0, 0(sp) # const void *src
+    ld a1, 8(sp) # void *dst
+
+    lw t0, 0(a0)
+    sw t0, 0(a1)
+
+    li t0, 0x40000
+    csrc sstatus, t0
+
+    # Success
+    xor a0, a0, a0
+    li  a1, 1
+
+    j ok
