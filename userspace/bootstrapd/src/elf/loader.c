@@ -155,38 +155,44 @@ error:
     return result;
 }
 
-result_t load_executable(uint64_t task_id, uint64_t group_id, uint64_t mem_object_id, unsigned flags,
-                         void *userspace_tags, size_t userspace_tags_size,
-                         const char *argv[], const char *envp[], const struct AuxVecEntry *auxvec_entries[])
+uint64_t get_program_entry(void *file_mapped)
 {
-    struct AuxVecBuilder *builder = NULL;
-    auto size_r = get_mem_object_size(mem_object_id, 0);
-    if (size_r.result)
-        return size_r.result;
-    uint64_t mem_object_size = size_r.value;
+    Elf32_Ehdr *header = file_mapped;
+    if (header->e_ident[4] == R_LARCH_32) {
+        Elf32_Ehdr *header = file_mapped;
+        return header->e_entry;
+    } else {
+        Elf64_Ehdr *header = file_mapped;
+        return header->e_entry;
+    }
+}
 
-    if (mem_object_size == 0)
-        return -EFAULT;
+uint64_t get_phdr_addr(void *file_mapped)
+{
+    Elf32_Ehdr *header = file_mapped;
+    if (header->e_ident[4] == R_LARCH_32) {
+        Elf32_Ehdr *header = file_mapped;
+        uint32_t pheader_size = header->e_phentsize;
+        for (uint32_t i = 0; i < header->e_phnum; ++i) {
+            const Elf32_Phdr *ph = (const Elf32_Phdr *)((char *)file_mapped + header->e_phoff + i * pheader_size);
+            if (ph->p_type == PT_PHDR)
+                return ph->p_vaddr;
+        }
+    } else {
+        Elf64_Ehdr *header = file_mapped;
+        uint64_t pheader_size = header->e_phentsize;
+        for (uint64_t i = 0; i < header->e_phnum; ++i) {
+            const Elf64_Phdr *ph = (const Elf64_Phdr *)((char *)file_mapped + header->e_phoff + i * pheader_size);
+            if (ph->p_type == PT_PHDR)
+                return ph->p_vaddr;
+        }
+    }
+    return 0;
+}
 
-    uint8_t *auxvec_data = NULL;
-
+result_t load_elf_to_memory(void *file_mapped, uint64_t mem_object_id, uint64_t mem_object_size, uint64_t page_table_id)
+{
     result_t result = 0;
-    void *file_mapped = NULL;
-
-    auto mem_request = map_mem_object(&(map_mem_object_param_t){
-        .page_table_id = 0,
-        .object_right = mem_object_id,
-        .addr_start_uint = 0,
-        .size = mem_object_size,
-        .offset_object = 0,
-        .offset_start = 0,
-        .object_size = mem_object_size,
-        .access_flags = PROT_READ,
-    });
-
-    if (mem_request.result)
-        return mem_request.result;
-    file_mapped = mem_request.virt_addr;
 
     Elf32_Ehdr *header = file_mapped;
     if (memcmp(header->e_ident, ELFMAG, SELFMAG)) {
@@ -199,32 +205,10 @@ result_t load_executable(uint64_t task_id, uint64_t group_id, uint64_t mem_objec
         goto error;
     }
 
-    if (header->e_type != ET_EXEC) {
+    if (header->e_type != ET_EXEC && header->e_type != ET_DYN) {
         result = -ENOEXEC;
         goto error;
     }
-
-    builder = auxvec_new();
-    if (!builder) {
-        result = -ENOMEM;
-        goto error;
-    }
-
-    page_table_req_ret_t pt_request = assign_page_table(task_id, 0, PAGE_TABLE_CREATE, header->e_machine);
-    if (pt_request.result) {
-        result = pt_request.result;
-        goto error;
-    }
-    pmos_pagetable_t page_table_id = pt_request.page_table;
-
-    uint64_t tls_memsz = 0;
-    uint64_t tls_align = 0;
-    uint64_t tls_filesz = 0;
-    uint64_t tls_offset = 0;
-
-    uint64_t program_entry = 0;
-
-    struct load_tag_elf_phdr phdr_tag = {LOAD_TAG_ELF_PHDR_HEADER, 0, 0, 0, 0};
 
     if (header->e_ident[4] == R_LARCH_32) {
         Elf32_Ehdr *header = file_mapped;
@@ -233,26 +217,14 @@ result_t load_executable(uint64_t task_id, uint64_t group_id, uint64_t mem_objec
         uint32_t pheader_size = pheader_count * sizeof(Elf32_Phdr);
         uint32_t offset = header->e_phoff;
 
-        program_entry = header->e_entry;
-
         if (offset + pheader_size > mem_object_size) {
             result = -EFAULT;
             goto error;
         }
 
-        phdr_tag.phdr_num     = pheader_count;
-        phdr_tag.phdr_size    = sizeof(Elf32_Phdr);
-
         const Elf32_Phdr *pheader = (Elf32_Phdr *)((char *)file_mapped + offset);
         for (uint32_t i = 0; i < pheader_count; ++i) {
             const Elf32_Phdr *ph = pheader + i;
-
-            if (ph->p_type == PT_TLS) {
-                tls_memsz = ph->p_memsz;
-                tls_align = ph->p_align;
-                tls_filesz = ph->p_filesz;
-                tls_offset = ph->p_offset;
-            }
 
             if (ph->p_type != PT_LOAD)
                 continue;
@@ -260,12 +232,6 @@ result_t load_executable(uint64_t task_id, uint64_t group_id, uint64_t mem_objec
             if ((ph->p_vaddr & 0xfff) != (ph->p_offset & 0xfff)) {
                 result = -ENOEXEC;
                 goto error;
-            }
-
-            // If pheader is inside this segment, set its virtual address
-            if (ph->p_offset <= header->e_phoff &&
-                header->e_phoff + pheader_size <= ph->p_offset + ph->p_filesz) {
-                phdr_tag.phdr_addr = ph->p_vaddr + header->e_phoff - ph->p_offset;
             }
 
             if (!(ph->p_flags & PF_W)) {
@@ -325,33 +291,20 @@ result_t load_executable(uint64_t task_id, uint64_t group_id, uint64_t mem_objec
             }
         }
     } else {
-        builder->ptr_is_64bit = true;
         Elf64_Ehdr *header = file_mapped;
 
         uint64_t pheader_count = header->e_phnum;
         uint64_t pheader_size = pheader_count * sizeof(*header);
         uint64_t offset = header->e_phoff;
 
-        program_entry = header->e_entry;
-
         if (offset + pheader_size > mem_object_size) {
             result = -EFAULT;
             goto error;
         }
 
-        phdr_tag.phdr_num     = pheader_count;
-        phdr_tag.phdr_size    = sizeof(Elf64_Phdr);
-
         const Elf64_Phdr *pheader = (Elf64_Phdr *)((char *)file_mapped + offset);
         for (uint64_t i = 0; i < pheader_count; ++i) {
             const Elf64_Phdr *ph = pheader + i;
-
-            if (ph->p_type == PT_TLS) {
-                tls_memsz = ph->p_memsz;
-                tls_align = ph->p_align;
-                tls_filesz = ph->p_filesz;
-                tls_offset = ph->p_offset;
-            }
 
             if (ph->p_type != PT_LOAD)
                 continue;
@@ -359,12 +312,6 @@ result_t load_executable(uint64_t task_id, uint64_t group_id, uint64_t mem_objec
             if ((ph->p_vaddr & 0xfff) != (ph->p_offset & 0xfff)) {
                 result = -ENOEXEC;
                 goto error;
-            }
-
-            // If pheader is inside this segment, set its virtual address
-            if (ph->p_offset <= header->e_phoff &&
-                header->e_phoff + pheader_size <= ph->p_offset + ph->p_filesz) {
-                phdr_tag.phdr_addr = ph->p_vaddr + header->e_phoff - ph->p_offset;
             }
 
             if (!(ph->p_flags & PF_W)) {
@@ -424,6 +371,109 @@ result_t load_executable(uint64_t task_id, uint64_t group_id, uint64_t mem_objec
             }
         }
     }
+error:
+    return result;
+}
+
+result_t load_executable(uint64_t task_id, uint64_t group_id, uint64_t mem_object_id, unsigned flags,
+                         void *userspace_tags, size_t userspace_tags_size,
+                         const char *argv[], const char *envp[], const struct AuxVecEntry *auxvec_entries[])
+{
+    struct AuxVecBuilder *builder = NULL;
+    auto size_r = get_mem_object_size(mem_object_id, 0);
+    if (size_r.result)
+        return size_r.result;
+    uint64_t mem_object_size = size_r.value;
+
+    if (mem_object_size == 0)
+        return -EFAULT;
+
+    uint8_t *auxvec_data = NULL;
+
+    result_t result = 0;
+    void *file_mapped = NULL;
+
+    auto mem_request = map_mem_object(&(map_mem_object_param_t){
+        .page_table_id = 0,
+        .object_right = mem_object_id,
+        .addr_start_uint = 0,
+        .size = mem_object_size,
+        .offset_object = 0,
+        .offset_start = 0,
+        .object_size = mem_object_size,
+        .access_flags = PROT_READ,
+    });
+
+    if (mem_request.result)
+        return mem_request.result;
+    file_mapped = mem_request.virt_addr;
+
+    Elf32_Ehdr *header = file_mapped;
+    if (memcmp(header->e_ident, ELFMAG, SELFMAG)) {
+        result = -ENOEXEC;
+        goto error;
+    }
+
+    if (header->e_ident[5] != ELF_ENDIANNESS) {
+        result = -ENOEXEC;
+        goto error;
+    }
+
+    if (header->e_type != ET_EXEC && header->e_type != ET_DYN) {
+        result = -ENOEXEC;
+        goto error;
+    }
+
+    builder = auxvec_new();
+    if (!builder) {
+        result = -ENOMEM;
+        goto error;
+    }
+
+    page_table_req_ret_t pt_request = assign_page_table(task_id, 0, PAGE_TABLE_CREATE, header->e_machine);
+    if (pt_request.result) {
+        result = pt_request.result;
+        goto error;
+    }
+    pmos_pagetable_t page_table_id = pt_request.page_table;
+
+    uint64_t program_entry = 0;
+
+    unsigned pheader_count = 0;
+    unsigned pheader_size = 0;
+    uint64_t pheader_offset = 0;
+
+    uint64_t file_offset = 0;
+
+    if (header->e_ident[4] == R_LARCH_32) {
+        Elf32_Ehdr *header = file_mapped;
+
+        pheader_count = header->e_phnum;
+        pheader_size = pheader_count * sizeof(Elf32_Phdr);
+
+        if (pheader_offset + pheader_size > mem_object_size) {
+            result = -EFAULT;
+            goto error;
+        }
+    } else {
+        builder->ptr_is_64bit = true;
+        Elf64_Ehdr *header = file_mapped;
+
+        pheader_count = header->e_phnum;
+        pheader_size = pheader_count * sizeof(*header);
+
+        if (pheader_offset + pheader_size > mem_object_size) {
+            result = -EFAULT;
+            goto error;
+        }
+    }
+
+    program_entry = get_program_entry(file_mapped);
+    // TODO!
+    pheader_offset = get_phdr_addr(file_mapped);
+
+    if ((result = load_elf_to_memory(file_mapped, mem_object_id, mem_object_size, page_table_id)))
+        goto error;
 
     size_t stack_size = MB(16);
     // Init stack
@@ -459,7 +509,7 @@ result_t load_executable(uint64_t task_id, uint64_t group_id, uint64_t mem_objec
         VECTOR_PUSH_BACK_CHECKED(builder->entries, ((struct AuxVecEntry){
         .entry_type = AT_PHDR,
         .data_type = DATA_TYPE_PTR,
-        .ptr = phdr_tag.phdr_addr,
+        .ptr = pheader_offset + file_offset,
     }), push_res);
     if (push_res) {
         result = push_res;
@@ -468,7 +518,7 @@ result_t load_executable(uint64_t task_id, uint64_t group_id, uint64_t mem_objec
     VECTOR_PUSH_BACK_CHECKED(builder->entries, ((struct AuxVecEntry){
         .entry_type = AT_PHENT,
         .data_type = DATA_TYPE_LONG,
-        .long_data = phdr_tag.phdr_size,
+        .long_data = pheader_size,
     }), push_res);
     if (push_res) {
         result = push_res;
@@ -477,7 +527,7 @@ result_t load_executable(uint64_t task_id, uint64_t group_id, uint64_t mem_objec
     VECTOR_PUSH_BACK_CHECKED(builder->entries, ((struct AuxVecEntry){
         .entry_type = AT_PHNUM,
         .data_type = DATA_TYPE_LONG,
-        .long_data = phdr_tag.phdr_num,
+        .long_data = pheader_count,
     }), push_res);
     if (push_res) {
         result = push_res;
@@ -501,26 +551,6 @@ result_t load_executable(uint64_t task_id, uint64_t group_id, uint64_t mem_objec
         result = push_res;
         goto error;
     }
-
-
-    struct load_tag_stack_descriptor sd = {
-        .header = LOAD_TAG_STACK_DESCRIPTOR_HEADER,
-        .stack_top = stack_result.virt_addr_intptr + stack_size,
-        .stack_size = stack_size,
-        .guard_size = 0,
-        .unused0 = 0,
-    };
-
-    struct load_tag_userspace_tags ut = {
-        .header = LOAD_TAG_USERSPACE_TAGS_HEADER,
-        .tags_address = 0,
-        .memory_size = 0,
-    };
-
-    struct load_tag_mem_object_id mo = {
-        .header = LOAD_TAG_MEM_OBJECT_ID_HEADER,
-        .memory_object_id = mem_object_id,
-    };
 
     // VECTOR_PUSH_BACK_CHECKED(builder->entries, ((struct AuxVecEntry){
     //     .entry_type = AT_MEM_OBJ_ID,
@@ -569,50 +599,6 @@ result_t load_executable(uint64_t task_id, uint64_t group_id, uint64_t mem_objec
         goto error;
     }
 
-    size_t load_tags_size = sizeof(struct load_tag_elf_phdr) + sizeof(struct load_tag_close) + sizeof(struct load_tag_stack_descriptor) + sizeof(struct load_tag_mem_object_id);
-
-    if (userspace_tags) {
-        load_tags_size += sizeof(struct load_tag_userspace_tags);
-
-        auto res = transfer_region(page_table_id, userspace_tags, 0, PROT_READ | PROT_WRITE);
-        if (res.result) {
-            release_region(task_id, userspace_tags);
-            result = res.result;
-            goto error;
-        }
-        ut.tags_address = res.virt_addr_intptr;
-        ut.memory_size = userspace_tags_size;
-    }
-
-    size_t mtsall = (load_tags_size + page_mask) & ~page_mask;
-    auto tags_result = create_normal_region(TASK_ID_SELF, NULL, mtsall, PROT_READ | PROT_WRITE);
-    if (tags_result.result) {
-        result = tags_result.result;
-        goto error;
-    }
-
-    memcpy(tags_result.virt_addr, &phdr_tag, sizeof(phdr_tag));
-    memcpy((char *)tags_result.virt_addr + sizeof(phdr_tag), &sd, sizeof(struct load_tag_stack_descriptor));
-    memcpy((char *)tags_result.virt_addr + sizeof(phdr_tag) + sizeof(sd), &mo, sizeof(mo));
-
-
-    if (userspace_tags) {
-        memcpy((char *)tags_result.virt_addr + sizeof(phdr_tag) + sizeof(struct load_tag_stack_descriptor) + sizeof(mo), &ut, sizeof(ut));
-    }
-
-    struct load_tag_close ltgcl = {
-        .header = LOAD_TAG_CLOSE_HEADER,
-    };
-
-    memcpy((char *)tags_result.virt_addr + load_tags_size - sizeof(ltgcl), &ltgcl, sizeof(ltgcl));
-
-    auto res = transfer_region(page_table_id, tags_result.virt_addr, 0, PROT_READ | PROT_WRITE);
-    if (res.result) {
-        release_region(task_id, tags_result.virt_addr);
-        result = res.result;
-        goto error;
-    }
-
     // // Stack stuff
     size_t auxvec_size = 0;
     int serial_result = auxvec_serialize(builder, stack_result.virt_addr_intptr + stack_size, &auxvec_data, &auxvec_size);
@@ -641,7 +627,7 @@ result_t load_executable(uint64_t task_id, uint64_t group_id, uint64_t mem_objec
     }
 
 
-    auto start_result = syscall_start_process(task_id, program_entry, res.virt_addr_intptr, load_tags_size, 0);
+    auto start_result = syscall_start_process(task_id, program_entry, 0, 0, 0);
     if (start_result) {
         result = start_result;
         goto error;
