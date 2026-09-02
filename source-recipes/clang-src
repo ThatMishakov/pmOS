@@ -4,4 +4,4 @@ name=clang-src
 version=19.1.0
 revision=rc3
 git_url=https://gitlab.com/mishakov/llvm-pmos.git
-commit="3725fcfe8a44278c5c6bdd9a2a6ffd568b7db7d9"
+commit="7e5f54f901f122f5080416880cb440793fe956b0"

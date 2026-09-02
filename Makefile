@@ -91,6 +91,17 @@ qemu-x86: $(x86_64-HYPER-IMG) ovmf-x86
 	       	-serial stdio \
 		-device intel-iommu -cpu max,x2apic=on,+smep,+smap,+fred -no-reboot -smp 2
 
+qemu-x86-gdb: $(x86_64-HYPER-IMG) ovmf-x86
+	qemu-system-x86_64 \
+		-drive file=$(x86_64-HYPER-IMG),if=none,id=hdd0\
+		-smbios type=0,uefi=on -bios ovmf-x86/OVMF.fd\
+		-device ide-hd,drive=hdd0 \
+		-M q35\
+		-m 512M\
+	       	-smp 1\
+	       	-serial stdio \
+		-device intel-iommu -cpu max,x2apic=on,+smep,+smap,+fred -no-reboot -smp 2 -S -s
+
 qemu-i686: $(i686-IMG) ovmf-x86
 	qemu-system-i386 -serial stdio -m 512M -cpu max,+hypervisor -M q35 -hdd $(i686-IMG) -smp 4
 

@@ -31,6 +31,6 @@ set_property(TARGET tests PROPERTY CXX_STANDARD 23)
 
 target_link_libraries(tests pmoscxx)
 
-target_link_options(tests PRIVATE -static)
+# target_link_options(tests PRIVATE -static)
 
 install(TARGETS tests RUNTIME DESTINATION "/boot")
