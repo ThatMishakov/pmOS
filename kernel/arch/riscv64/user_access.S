@@ -144,8 +144,8 @@ fast_atomic_read_from_user:
     li t0, 0x40000
     csrs sstatus, t0
 
-    lw t0, 0(a0)
-    sw t0, 0(a1)
+    lw t0, 0(a1)
+    sw t0, 0(a0)
 
     li t0, 0x40000
     csrc sstatus, t0
@@ -178,8 +178,8 @@ read_on_failure:
     ld a0, 0(sp) # const void *src
     ld a1, 8(sp) # void *dst
 
-    lw t0, 0(a0)
-    sw t0, 0(a1)
+    lw t0, 0(a1)
+    sw t0, 0(a0)
 
     li t0, 0x40000
     csrc sstatus, t0
