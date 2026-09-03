@@ -4,7 +4,8 @@ name=rust
 revision=1
 from_source=rust
 allow_network=yes
-hostdeps="clang"
+hostdeps="clang compiler-rt"
+deps="mlibc"
 
 configure() {
     cat <<EOF > bootstrap.toml
@@ -17,6 +18,9 @@ download-ci-llvm = false
 target = ["${RUST_TARGET}", "${RUST_HOST_TARGET}"]
 build-dir = "${build_dir}/host-builds/rust"
 docs = false
+
+[target.${RUST_TARGET}]
+rustflags = ["-C", "link-arg=--sysroot=${sysroot_dir}", "-C", "link-arg=--target=${JINX_ARCH}-unknown-pmos"]
 
 [install]
 prefix = "${prefix}"
