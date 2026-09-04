@@ -95,35 +95,22 @@ ReturnStr<bool> syscalls::syscall_args_checked(TaskDescriptor *d, int i, int l, 
     return Success(true);
 }
 
-void syscalls::syscall_success(TaskDescriptor *s) { s->regs.a0 = 0; }
-
-u64 syscalls::SyscallRetval::operator=(unsigned long val)
+unsigned kernel::proc::syscalls::call_flags(TaskDescriptor *d)
 {
-    task->regs.a0 = 0;
-    task->regs.a1 = val;
-    return val;
+    return d->regs.syscall_flags();
 }
 
-i64 syscalls::SyscallError::operator=(long v)
+void kernel::proc::syscalls::syscall_ret_low(TaskDescriptor *d, i64 value)
 {
-    task->regs.a0 = v;
-    return v;
+    d->regs.syscall_retval_low() = value;
 }
 
-std::pair<i64, u64> syscalls::SyscallError::operator=(std::pair<i64, u64> p)
+void kernel::proc::syscalls::syscall_ret_high(TaskDescriptor *d, u64 value)
 {
-    task->regs.a0 = p.first;
-    task->regs.a1 = p.second;
-    return p;
+    d->regs.syscall_arg2() = value;
 }
 
-unsigned syscalls::syscall_number(TaskDescriptor *t) { return t->regs.a0 & 0xff; }
-
-ulong syscalls::syscall_flags_reg(TaskDescriptor *task)
+i64 kernel::proc::syscalls::syscall_ret_low(TaskDescriptor *d)
 {
-    return task->regs.a0;
+    return d->regs.syscall_retval_low();
 }
-
-ulong syscalls::syscall_flags(TaskDescriptor *t) { return t->regs.a0 >> 8; }
-
-syscalls::SyscallError::operator int() const { return (i64)task->regs.a0; }

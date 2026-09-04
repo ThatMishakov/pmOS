@@ -4,6 +4,7 @@
 #include <loongarch_asm.hh>
 #include <paging/loongarch64_paging.hh>
 #include <processes/tasks.hh>
+#include <processes/syscalls.hh>
 #include <sched/sched.hh>
 #include <types.hh>
 #include "iocsr.hh"
@@ -246,7 +247,7 @@ void page_fault(u32 error)
                 return r.result;
 
             if (not r.val) {
-                task->cancel_callback = TaskDescriptor::cancel_noop;
+                task->cancel_callback = proc::TaskDescriptor::cancel_noop;
                 task->atomic_block_by_page(virt_addr);
             }
 
@@ -312,7 +313,7 @@ extern "C" void handle_interrupt()
 
     case EXCEPTION_SYS:
         c->current_task->regs.program_counter() += 4;
-        syscall_handler();
+        proc::syscalls::syscall_handler();
         break;
 
     case EXCEPTION_FPE:
@@ -340,11 +341,7 @@ extern "C" void handle_interrupt()
     }
     }
 
-    while (c->current_task->regs.syscall_restart != 0) {
-        c->current_task->regs.a0 = c->current_task->syscall_num;
-        c->current_task->regs.syscall_restart = 0;
-        syscall_handler();
-    }
+    handle_scheduling();
     assert(c->nested_level == 1);
 }
 

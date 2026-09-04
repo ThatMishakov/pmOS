@@ -145,6 +145,7 @@ fast_atomic_read_from_user:
     csrs sstatus, t0
 
     lw t0, 0(a1)
+    fence r, wr
     sw t0, 0(a0)
 
     li t0, 0x40000
@@ -179,6 +180,7 @@ read_on_failure:
     ld a1, 8(sp) # void *dst
 
     lw t0, 0(a1)
+    fence r, wr
     sw t0, 0(a0)
 
     li t0, 0x40000
