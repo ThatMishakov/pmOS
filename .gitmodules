@@ -27,3 +27,6 @@
 [submodule "mlibc"]
 	path = mlibc
 	url = git@github.com:ThatMishakov/mlibc.git
+[submodule "kernel/Flanterm"]
+	path = kernel/Flanterm
+	url = https://github.com/Mintsuki/Flanterm.git
