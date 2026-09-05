@@ -81,6 +81,27 @@ static void print_kernel_registers(kernel_registers_context *c, u32 error_code)
                          error_code, c->eip, c->cs, c->eflags);
 }
 
+void print_registers(const kernel::proc::TaskDescriptor *task, Logger &logger)
+{
+    assert(task);
+    const auto &regs = task->regs;
+
+    logger.printf("Registers for task %i (%s)\n", task->task_id, task->name.c_str());
+    logger.printf(" => %%eax: 0x%x\n", regs.eax);
+    logger.printf(" => %%ebx: 0x%x\n", regs.ebx);
+    logger.printf(" => %%ecx: 0x%x\n", regs.ecx);
+    logger.printf(" => %%edx: 0x%x\n", regs.edx);
+    logger.printf(" => %%esp: 0x%x\n", regs.esp);
+    logger.printf(" => %%ebp: 0x%x\n", regs.ebp);
+    logger.printf(" => %%esi: 0x%x\n", regs.esi);
+    logger.printf(" => %%edi: 0x%x\n", regs.edi);
+    logger.printf(" => %%eip: 0x%x\n", regs.eip);
+    logger.printf(" => %%eflags: 0x%x\n", regs.eflags);
+    logger.printf(" => %%cs: 0x%x\n", regs.cs);
+    logger.printf(" => %%fs: 0x%x\n", regs.fs);
+    logger.printf(" => %%gs: 0x%x\n", regs.gs);    
+}
+
 namespace kernel::ia32::paging
 {
 extern bool page_mapped(void *pagefault_cr2, ulong err);
@@ -170,7 +191,7 @@ extern "C" void page_fault_handler(kernel_registers_context *ctx, u32 err)
                              virtual_addr, task->task_id, task->name.c_str(),
                              task->regs.program_counter(), err, result);
 
-        // print_registers(task, global_logger);
+        print_registers(task, serial_logger);
         //  print_stack_trace(task, global_logger);
 
         task->atomic_kill();
