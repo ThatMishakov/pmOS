@@ -6,7 +6,7 @@ revision=1
 
 source_dir=kernel
 builddeps="libcxx mlibc-headers pmos-containers"
-hostdeps="clang"
+hostdeps="clang compiler-rt"
 
 configure() {
     echo Arch: $JINX_ARCH

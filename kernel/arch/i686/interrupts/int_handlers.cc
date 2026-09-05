@@ -151,7 +151,7 @@ extern "C" void page_fault_handler(kernel_registers_context *ctx, u32 err)
             if (!r.success())
                 return r.result;
             if (!r.val) {
-                task->cancel_callback = TaskDescriptor::cancel_noop;
+                task->cancel_callback = kernel::proc::TaskDescriptor::cancel_noop;
                 task->atomic_block_by_page(addr_all);
             }
 
@@ -175,6 +175,8 @@ extern "C" void page_fault_handler(kernel_registers_context *ctx, u32 err)
 
         task->atomic_kill();
     }
+
+    kernel::sched::handle_scheduling();
 }
 
 extern "C" void general_protection_fault_handler(kernel_registers_context *ctx, u32 err)
@@ -195,6 +197,7 @@ extern "C" void general_protection_fault_handler(kernel_registers_context *ctx, 
                          err, task->task_id, task->name.c_str(), task->regs.program_counter(),
                          task->regs.cs);
     task->atomic_kill();
+    kernel::sched::handle_scheduling();
 }
 
 extern "C" void sse_exception_manager()

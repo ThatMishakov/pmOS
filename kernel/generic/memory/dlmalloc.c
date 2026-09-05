@@ -535,7 +535,6 @@ extern int malloc_try_lock(unsigned int *);
 #define DESTROY_LOCK(l) (0)
 static MLOCK_T malloc_global_mutex = 0;
 
-void *sbrk(long size);
 #define MORECORE_CONTIGUOUS 0
 #define MORECORE_CANNOT_TRIM 1
 

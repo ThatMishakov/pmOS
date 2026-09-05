@@ -7,6 +7,10 @@ if [ "$JINX_ARCH" = "x86_64" ] || [ "$JINX_ARCH" = "i686" ]; then
     BOOT_SERVICES="$BOOT_SERVICES i8042"
 fi
 
+CPU_FAMILY="${JINX_ARCH}"
+case "$JINX_ARCH" in
+    i?86) CPU_FAMILY="x86" ;;
+esac
 
 RUST_HOST_TARGET="$(uname -m)-unknown-linux-gnu"
 case "$(uname -m)" in
@@ -152,6 +156,7 @@ meson_configure_noflags() {
         JINX_ARCH=${JINX_ARCH} \
         OS_TRIPLET=${OS_TRIPLET} \
         sysroot=${sysroot_dir} \
+        CPU_FAMILY=${CPU_FAMILY} \
     envsubst < "${base_dir}/scripts/meson.cross-file" > ./cross-file.txt
 
     meson setup "${meson_source_dir}" \

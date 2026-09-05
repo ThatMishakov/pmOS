@@ -11,7 +11,7 @@ llvm-config = '/base_dir/support/llvm-config'
 
 [host_machine]
 system = 'pmos'
-cpu_family = '${JINX_ARCH}'
+cpu_family = '${CPU_FAMILY}'
 cpu = '${JINX_ARCH}'
 endian = 'little'
 

@@ -18,6 +18,7 @@
 #include <pmos/containers/set.hh>
 #include <time/timers.hh>
 #include <memory/pmm.hh>
+#include <processes/syscalls.hh>
 
 using namespace kernel;
 using namespace kernel::x86;
@@ -617,4 +618,10 @@ u64 arch_phys_addr_limit()
     return (u64)1 << max_memory_bits;
 }
 
+}
+
+extern "C" void x86_syscall_handler()
+{
+    syscalls::syscall_handler();
+    kernel::sched::handle_scheduling();
 }

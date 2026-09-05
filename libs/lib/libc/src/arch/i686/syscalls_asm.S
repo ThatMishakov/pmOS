@@ -53,9 +53,9 @@
 #     ret
 
     .text
-    .globl __pmos_syscall32_0words
-    .type __pmos_syscall32_0words, @function
-__pmos_syscall32_0words:
+    .globl syscall32_0
+    .type syscall32_0, @function
+syscall32_0:
     popl %eax
     xchgl %eax, 0(%esp)
     pushl %ebp
@@ -73,7 +73,7 @@ __pmos_syscall32_0words:
 syscall_return:
     popl %ecx
     movl %eax, (%ecx)
-    movl %edx, 4(%ecx)
+    movl %ebx, 4(%ecx)
     movl %esi, 8(%ecx)
     movl %edi, 12(%ecx)
     movl %ecx, %eax
@@ -86,9 +86,9 @@ syscall_return:
     ret
 
     .text
-    .globl __pmos_syscall32_1words
-    .type __pmos_syscall32_1words, @function
-__pmos_syscall32_1words:
+    .globl syscall32_1
+    .type syscall32_1, @function
+syscall32_1:
     popl %eax
     xchgl %eax, 0(%esp)
 
@@ -107,9 +107,9 @@ __pmos_syscall32_1words:
 
     jmp syscall_return
 
-    .globl __pmos_syscall32_2words
-    .type __pmos_syscall32_2words, @function
-__pmos_syscall32_2words:
+    .globl syscall32_2
+    .type syscall32_2, @function
+syscall32_2:
     popl %eax
     xchgl %eax, 0(%esp)
 
@@ -123,15 +123,15 @@ __pmos_syscall32_2words:
 
     movl 8(%ebp), %eax
     movl 12(%ebp), %ebx
-    movl 16(%ebp), %ecx
+    movl 16(%ebp), %esi
     
     int $0xf8
 
     jmp syscall_return
 
-    .globl __pmos_syscall32_3words
-    .type __pmos_syscall32_3words, @function
-__pmos_syscall32_3words:
+    .globl syscall32_3
+    .type syscall32_3, @function
+syscall32_3:
     popl %eax
     xchgl %eax, 0(%esp)
 
@@ -145,16 +145,16 @@ __pmos_syscall32_3words:
 
     movl 8(%ebp), %eax
     movl 12(%ebp), %ebx
-    movl 16(%ebp), %ecx
-    movl 20(%ebp), %edx
+    movl 16(%ebp), %esi
+    movl 20(%ebp), %edi
     
     int $0xf8
 
     jmp syscall_return
 
-    .globl __pmos_syscall32_4words
-    .type __pmos_syscall32_4words, @function
-__pmos_syscall32_4words:
+    .globl syscall32_4
+    .type syscall32_4, @function
+syscall32_4:
     popl %eax
     xchgl %eax, 0(%esp)
 
@@ -168,17 +168,17 @@ __pmos_syscall32_4words:
 
     movl 8(%ebp), %eax
     movl 12(%ebp), %ebx
-    movl 16(%ebp), %ecx
-    movl 20(%ebp), %edx
+    movl 16(%ebp), %esi
+    movl 20(%ebp), %edi
     movl 24(%ebp), %ebp
     
     int $0xf8
 
     jmp syscall_return
 
-    .globl __pmos_syscall32_5words
-    .type __pmos_syscall32_5words, @function
-__pmos_syscall32_5words:
+    .globl syscall32_5
+    .type syscall32_5, @function
+syscall32_5:
     popl %eax
     xchgl %eax, 0(%esp)
 
@@ -194,8 +194,8 @@ __pmos_syscall32_5words:
 
     movl 8(%ebp), %eax
     movl 12(%ebp), %ebx
-    movl 16(%ebp), %ecx
-    movl 20(%ebp), %edx
+    movl 16(%ebp), %esi
+    movl 20(%ebp), %edi
     movl 24(%ebp), %ebp
     
     int $0xf8
@@ -204,9 +204,9 @@ __pmos_syscall32_5words:
 
     jmp syscall_return
 
-    .globl __pmos_syscall32_6words
-    .type __pmos_syscall32_6words, @function
-__pmos_syscall32_6words:
+    .globl syscall32_6
+    .type syscall32_6, @function
+syscall32_6:
     popl %eax
     xchgl %eax, 0(%esp)
 
@@ -223,8 +223,8 @@ __pmos_syscall32_6words:
 
     movl 8(%ebp), %eax
     movl 12(%ebp), %ebx
-    movl 16(%ebp), %ecx
-    movl 20(%ebp), %edx
+    movl 16(%ebp), %esi
+    movl 20(%ebp), %edi
     movl 24(%ebp), %ebp
     
     int $0xf8
@@ -233,9 +233,9 @@ __pmos_syscall32_6words:
 
     jmp syscall_return
 
-    .globl __pmos_syscall32_7words
-    .type __pmos_syscall32_7words, @function
-__pmos_syscall32_7words:
+    .globl syscall32_7
+    .type syscall32_7, @function
+syscall32_7:
     popl %eax
     xchgl %eax, 0(%esp)
 
@@ -253,8 +253,8 @@ __pmos_syscall32_7words:
 
     movl 8(%ebp), %eax
     movl 12(%ebp), %ebx
-    movl 16(%ebp), %ecx
-    movl 20(%ebp), %edx
+    movl 16(%ebp), %esi
+    movl 20(%ebp), %edi
     movl 24(%ebp), %ebp
     
     int $0xf8
@@ -263,9 +263,9 @@ __pmos_syscall32_7words:
 
     jmp syscall_return
 
-    .globl __pmos_syscall32_8words
-    .type __pmos_syscall32_8words, @function
-__pmos_syscall32_8words:
+    .globl syscall32_8
+    .type syscall32_8, @function
+syscall32_8:
     popl %eax
     xchgl %eax, 0(%esp)
 
@@ -284,8 +284,8 @@ __pmos_syscall32_8words:
 
     movl 8(%ebp), %eax
     movl 12(%ebp), %ebx
-    movl 26(%ebp), %ecx
-    movl 20(%ebp), %edx
+    movl 26(%ebp), %esi
+    movl 20(%ebp), %edi
     movl 24(%ebp), %ebp
     
     int $0xf8

@@ -17,9 +17,9 @@ ulong syscalls::syscall_arg(TaskDescriptor *task, int arg, int args64before)
         case 0:
             return task->regs.rbx;
         case 1:
-            return task->regs.rcx;
+            return task->regs.rsi;
         case 2:
-            return task->regs.rdx;
+            return task->regs.rdi;
         case 3:
             return task->regs.rbp;
         default:
@@ -48,7 +48,7 @@ void syscalls::syscall_ret_low(TaskDescriptor *task, i64 value)
 {
     if (task->is_32bit()) {
         task->regs.rax = value & 0xffffffff;
-        task->regs.rdx = value >> 32;
+        task->regs.rbx = value >> 32;
     } else {
         task->regs.rax = value;
     }
@@ -56,7 +56,7 @@ void syscalls::syscall_ret_low(TaskDescriptor *task, i64 value)
 i64 syscalls::syscall_ret_low(TaskDescriptor *task)
 {
     if (task->is_32bit()) {
-        return (i64)task->regs.rax | ((i64)task->regs.rdx << 32);
+        return (i64)task->regs.rax | ((i64)task->regs.rbx << 32);
     } else {
         return task->regs.rax;
     }
@@ -77,9 +77,9 @@ u64 syscalls::syscall_arg64(TaskDescriptor *task, int arg)
     if (task->is_32bit()) {
         switch (arg) {
         case 0:
-            return (task->regs.rbx & 0xffffffff) | (task->regs.rcx << 32);
+            return (task->regs.rbx & 0xffffffff) | (task->regs.rsi << 32);
         case 1:
-            return (task->regs.rdx & 0xffffffff) | (task->regs.rbp << 32);
+            return (task->regs.rdi & 0xffffffff) | (task->regs.rbp << 32);
         default:
             assert(!"Too many arguments");
         }
@@ -94,10 +94,10 @@ ReturnStr<bool> syscalls::syscall_arg64_checked(TaskDescriptor *task, int arg, u
     if (task->is_32bit()) {
         switch (arg) {
         case 0:
-            value = (task->regs.rbx & 0xffffffff) | (task->regs.rcx << 32);
+            value = (task->regs.rbx & 0xffffffff) | (task->regs.rsi << 32);
             break;
         case 1:
-            value = (task->regs.rdx & 0xffffffff) | (task->regs.rbp << 32);
+            value = (task->regs.rdi & 0xffffffff) | (task->regs.rbp << 32);
             break;
         default:
             return copy_from_user((char *)&value, (char *)task->regs.rsp + (arg - 2) * 8, 8);

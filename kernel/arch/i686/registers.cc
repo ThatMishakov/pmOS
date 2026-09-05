@@ -8,7 +8,7 @@ using namespace kernel::proc;
 static void syscall_ret_low(TaskDescriptor *task, i64 value)
 {
     task->regs.eax = (u64)value & 0xffffffff;
-    task->regs.edx = (u64)value >> 32;
+    task->regs.ebx = (u64)value >> 32;
 }
 
 static void syscall_ret_high(TaskDescriptor *task, u64 value)
@@ -26,9 +26,9 @@ u64 syscall_arg64(TaskDescriptor *task, int arg)
 {
     switch (arg) {
     case 0:
-        return (u64(task->regs.ecx) << 32) | task->regs.ebx;
+        return (u64(task->regs.esi) << 32) | task->regs.ebx;
     case 1:
-        return (u64(task->regs.ebp) << 32) | task->regs.edx;
+        return (u64(task->regs.ebp) << 32) | task->regs.edi;
     default:
         assert(!"Too many arguments");
     }
@@ -39,10 +39,10 @@ ReturnStr<bool> syscall_arg64_checked(TaskDescriptor *task, int arg, u64 &value)
 {
     switch (arg) {
     case 0:
-        value = (u64(task->regs.ecx) << 32) | task->regs.ebx;
+        value = (u64(task->regs.esi) << 32) | task->regs.ebx;
         break;
     case 1:
-        value = (u64(task->regs.ebp) << 32) | task->regs.edx;
+        value = (u64(task->regs.ebp) << 32) | task->regs.edi;
         break;
     default:
         return copy_from_user((char *)&value, (char *)task->regs.esp + (arg - 2) * 8, 8);
@@ -56,9 +56,9 @@ ulong syscall_arg(TaskDescriptor *task, int arg, int args64before)
     case 0:
         return task->regs.ebx;
     case 1:
-        return task->regs.ecx;
+        return task->regs.esi;
     case 2:
-        return task->regs.edx;
+        return task->regs.edi;
     case 3:
         return task->regs.ebp;
     default:
@@ -97,4 +97,11 @@ ReturnStr<bool> syscall_args_checked(TaskDescriptor *task, int arg, int args64be
 
     return Success(true);
 }
+
+unsigned syscalls::call_flags(TaskDescriptor *task) { return task->regs.eax; }
+
+void syscalls::syscall_ret_low(TaskDescriptor *task, i64 value) { ::syscall_ret_low(task, value); }
+void syscalls::syscall_ret_high(TaskDescriptor *task, u64 value) { ::syscall_ret_high(task, value); }
+i64 syscalls::syscall_ret_low(TaskDescriptor *task) { return (i64(task->regs.esi) << 32) | task->regs.ebx; }
+
 } // namespace kernel::syscalls

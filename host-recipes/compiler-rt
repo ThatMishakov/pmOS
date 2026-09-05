@@ -9,35 +9,42 @@ hostdeps="clang"
 
 triplet="${JINX_ARCH}-pmos"
 
+TARGET_TRIPLE="${JINX_ARCH}-unknown-pmos"
+
+AR="$(command -v llvm-ar)"
+NM="$(command -v llvm-nm)"
+RANLIB="$(command -v llvm-ranlib)"
+
 configure() {
-    cmake -S ${source_dir}/compiler-rt -G Ninja \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_INSTALL_PREFIX=${prefix} \
-    -DLLVM_DEFAULT_TARGET_TRIPLE=${JINX_ARCH}-pmos \
-    -DCMAKE_CXX_COMPILER_TARGET="${triplet}" \
-    -DCOMPILER_RT_OS_DIR=pmos \
-    -DCMAKE_C_COMPILER="clang" \
-    -DCMAKE_CXX_COMPILER="clang++" \
-    -DCMAKE_C_COMPILER_TARGET="${triplet}" \
-    -DCMAKE_ASM_COMPILER_TARGET="${triplet}" \
-    -DCMAKE_C_FLAGS="--sysroot=${sysroot_dir} -fPIC" \
-    -DCMAKE_CXX_FLAGS="--sysroot=${sysroot_dir} -fPIC" \
-    -DCMAKE_C_COMPILER_WORKS=ON \
-    -DCMAKE_CXX_COMPILER_WORKS=ON \
-    -DCOMPILER_RT_BUILD_BUILTINS=ON \
-    -DCLANG_DEFAULT_LINKER=lld \
-    -DCOMPILER_RT_BUILD_BUILTINS=ON \
-    -DCOMPILER_RT_BUILD_ORC=OFF \
-    -DCOMPILER_RT_BUILD_SANITIZERS=OFF \
-    -DCOMPILER_RT_BUILD_MEMPROF=OFF \
-    -DCOMPILER_RT_BUILD_XRAY=OFF \
-    -DCOMPILER_RT_BUILD_LIBFUZZER=OFF \
-    -DCOMPILER_RT_BUILD_PROFILE=OFF \
-    -DCOMPILER_RT_BUILD_CTX_PROFILE=OFF \
-    -DCOMPILER_RT_DEFAULT_TARGET_TRIPLE=${JINX_ARCH}-pmos \
-    -DLLVM_ENABLE_PER_TARGET_RUNTIME_DIR=ON \
-    -DCAN_TARGET_${JINX_ARCH}=true \
-    -DCOMPILER_RT_INSTALL_LIBRARY_DIR=/usr/local/lib/clang/19/lib/
+    cmake -S ${source_dir}/compiler-rt \
+        -G Ninja \
+        -DCMAKE_AR=$AR \
+        -DCMAKE_NM=$NM \
+        -DCMAKE_RANLIB=$RANLIB \
+        -DCMAKE_SYSROOT="${sysroot_dir}" \
+        -DCMAKE_ASM_COMPILER_TARGET="${TARGET_TRIPLE}" \
+        -DCMAKE_ASM_FLAGS="${COMPILE_FLAGS}" \
+        -DCMAKE_C_COMPILER_TARGET="${TARGET_TRIPLE}" \
+        -DCMAKE_C_COMPILER=clang \
+        -DCMAKE_C_FLAGS="${COMPILE_FLAGS}" \
+        -DCMAKE_CXX_COMPILER_TARGET="${TARGET_TRIPLE}" \
+        -DCMAKE_CXX_COMPILER=clang \
+        -DCMAKE_CXX_FLAGS="${COMPILE_FLAGS}" \
+        -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld" \
+        -DCOMPILER_RT_BUILD_BUILTINS=ON \
+        -DCOMPILER_RT_BUILD_LIBFUZZER=OFF \
+        -DCOMPILER_RT_BUILD_MEMPROF=OFF \
+        -DCOMPILER_RT_BUILD_PROFILE=OFF \
+        -DCOMPILER_RT_BUILD_CTX_PROFILE=OFF \
+        -DCOMPILER_RT_BUILD_SANITIZERS=OFF \
+        -DCOMPILER_RT_BUILD_XRAY=OFF \
+        -DCOMPILER_RT_BUILD_ORC=OFF \
+        -DCOMPILER_RT_BUILD_CRT=ON \
+        -DCOMPILER_RT_DEFAULT_TARGET_ONLY=ON \
+        -DCOMPILER_RT_OS_DIR=pmos \
+        -DLLVM_ENABLE_PER_TARGET_RUNTIME_DIR=ON \
+        -DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY \
+        -DCOMPILER_RT_INSTALL_LIBRARY_DIR=/usr/local/lib/clang/19/lib/
 }
 
 build() {

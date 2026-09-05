@@ -571,9 +571,3 @@ extern "C" void fred_nested_syscall()
 {
     panic("Fred nested syscall called but this is not used anymore");
 }
-
-extern "C" void x86_syscall_handler()
-{
-    syscalls::syscall_handler();
-    kernel::sched::handle_scheduling();
-}
