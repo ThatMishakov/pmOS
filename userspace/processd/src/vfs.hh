@@ -2,6 +2,8 @@
 #include <vector>
 #include <string>
 #include <pmos/async/coroutines.hh>
+#include <pmos/containers/intrusive_list.hh>
+#include <map>
 #include <cassert>
 #include <variant>
 
@@ -89,3 +91,5 @@ struct Path {
     bool _trailing_slash = false;
     std::vector<std::string> _components;
 };
+
+pmos::async::detached_task open_file(pmos::Right reply_right, std::string path);

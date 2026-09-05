@@ -14,6 +14,7 @@
 #include <sys/mman.h>
 #include <pmos/ports.h>
 #include <pmos/fs-data.h>
+#include <pmos/ipc.h>
 #include "../io.h"
 
 extern pmos_right_t posix_server_right;
@@ -31,24 +32,63 @@ static const uint64_t page_mask = PAGE_SIZE - 1;
 #define ELF_INSTR_SET EM_LOONGARCH
 #endif
 
+extern pmos_port_t request_port;
+
 result_t add_posix_stuff(struct AuxVecBuilder *builder, uint64_t task_group_id)
 {
+    // This server is single threaded so this is fine
+    static uint64_t posix_right_id = 0;
+    
     if (posix_server_right == INVALID_RIGHT)
         // Just don't pass it
         return 0;
 
-    auto result = dup_right(posix_server_right);
-    if (result.result)
-        return result.result;
+    IPC_Register_Process msg = {
+        .type = IPC_Register_Process_NUM,
+        .flags = 0,
+    };
+    auto send_result = send_message_right(posix_server_right, request_port, &msg, sizeof(msg), nullptr, 0);
+    if (send_result.result) {
+        return send_result.result;
+    }
 
-    auto transfer_result = transfer_right(task_group_id, result.right, 0);
+    Message_Descriptor reply_descr;
+    IPC_Generic_Msg *reply_msg = nullptr;
+    pmos_right_t extra_rights[4];
+    auto get_result = get_message(&reply_descr, (unsigned char **)&reply_msg, request_port, nullptr, extra_rights);
+    if (get_result) {
+        print_str("Loader: Failed to get reply message from posix server: ");
+        print_hex(get_result);
+        print_str("\n");
+        return get_result;
+    }
+
+    if (reply_msg->type != IPC_Register_Process_Reply_NUM) {
+        print_str("Loader: Received unexpected message type from posix server: ");
+        print_hex(reply_msg->type);
+        print_str("\n");
+        free(reply_msg);
+        return -EIO;
+    }
+
+    IPC_Register_Process_Reply *reply = (IPC_Register_Process_Reply *)reply_msg;
+    if (reply->result < 0) {
+        print_str("Loader: Received error code from posix server: ");
+        print_hex(reply->result);
+        print_str("\n");
+        free(reply_msg);
+        return -reply->result;
+    }
+
+    free(reply_msg);
+
+    auto transfer_result = transfer_right(task_group_id, extra_rights[0], 0);
     if (transfer_result.result) {
-        delete_right(result.right);
+        delete_right(extra_rights[0]);
         return transfer_result.result;
     }
 
-    // This server is single threaded so this is fine
-    static uint64_t posix_right_id = 0;
+    posix_right_id = transfer_result.right;
 
     int push_res = 0;
     VECTOR_PUSH_BACK_CHECKED(builder->entries, ((struct AuxVecEntry){
