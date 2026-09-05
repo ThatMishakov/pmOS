@@ -575,9 +575,9 @@ result_t load_executable(uint64_t task_id, uint64_t group_id, uint64_t mem_objec
         Elf32_Ehdr *header = file_mapped;
 
         pheader_count = header->e_phnum;
-        pheader_size = pheader_count * sizeof(Elf32_Phdr);
+        pheader_size = header->e_phentsize;
 
-        if (pheader_offset + pheader_size > mem_object_size) {
+        if (pheader_offset + pheader_size * pheader_count > mem_object_size) {
             result = -EFAULT;
             goto error;
         }
@@ -586,9 +586,9 @@ result_t load_executable(uint64_t task_id, uint64_t group_id, uint64_t mem_objec
         Elf64_Ehdr *header = file_mapped;
 
         pheader_count = header->e_phnum;
-        pheader_size = pheader_count * sizeof(*header);
+        pheader_size = header->e_phentsize;
 
-        if (pheader_offset + pheader_size > mem_object_size) {
+        if (pheader_offset + pheader_size * pheader_count > mem_object_size) {
             result = -EFAULT;
             goto error;
         }
@@ -674,8 +674,6 @@ result_t load_executable(uint64_t task_id, uint64_t group_id, uint64_t mem_objec
         print_hex(interp_rel_offset);
         print_str("\n");
     }
-
-    at_base += interp_rel_offset;
 
     size_t stack_size = MB(16);
     // Init stack
