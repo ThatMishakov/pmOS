@@ -11,5 +11,6 @@ hostdeps="hyper"
 
 build() {
     SYSROOT="$sysroot_dir" \
+    LIBRARIES=$LIBRARIES \
     ${source_dir}/make_hyper_disk_image.sh "$build_dir/pmos-hyper.img" "${BOOT_SERVICES}" "hyper.cfg"
 }

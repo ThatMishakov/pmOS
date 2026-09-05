@@ -15,6 +15,18 @@ module:
 EOF
 }
 
+write_library_entry() {
+    FILE="$1"
+    NAME="$2"
+    LIBPATH="$3"
+    cat <<EOF >> "$FILE"
+module:
+    path = "/$NAME"
+    name = "/$LIBPATH/$NAME;file"
+
+EOF
+}
+
 if [ "$#" -ne 3 ]; then
     echo "Usage: $0 <output_file> <services> <ARCH>"
     exit 1
@@ -58,4 +70,8 @@ EOF
 
 for SERVICE in $SERVICES; do
     write_service_entry "$FILE" "$SERVICE"
+done
+
+for LIBRARY in $LIBRARIES; do
+    write_library_entry "$FILE" "$LIBRARY" "usr/lib"
 done

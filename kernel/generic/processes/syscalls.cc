@@ -1237,9 +1237,20 @@ void syscall_set_log_port(TaskDescriptor *task)
 
 void syscall_create_normal_region(TaskDescriptor *current)
 {
+    current->set_continuation(syscall_create_normal_region, nullptr);
+    
     u64 pid          = syscall_arg64(current, 0);
-    ulong addr_start = syscall_arg(current, 1, 1);
-    ulong size       = syscall_arg(current, 2, 1);
+    u64 addr_start = syscall_arg64(current, 1);
+    u64 size;
+    auto size_result = syscall_arg64_checked(current, 2, size);
+    if (!size_result.success()) {
+        syscall_error(current) = size_result.result;
+        return;
+    }
+    if (!size_result.val) {
+        return;
+    }
+
     ulong access     = syscall_flags(current);
 
     TaskDescriptor *dest_task = nullptr;
@@ -1716,9 +1727,18 @@ void syscall_delete_region(TaskDescriptor *current_task)
 
 void syscall_unmap_range(TaskDescriptor *current_task)
 {
-    u64 task_id      = syscall_arg64(current_task, 0);
-    ulong addr_start = syscall_arg(current_task, 1, 1);
-    ulong size       = syscall_arg(current_task, 2, 1);
+    current_task->set_continuation(syscall_unmap_range, nullptr);
+
+    u64 task_id    = syscall_arg64(current_task, 0);
+    u64 addr_start = syscall_arg64(current_task, 1);
+    u64 size;
+    auto result    = syscall_arg64_checked(current_task, 2, size);
+    if (!result) {
+        syscall_error(current_task) = result.result;
+        return;
+    }
+    if (!result.val)
+        return;
 
     const auto task = task_id == 0 ? sched::get_cpu_struct()->current_task : get_task(task_id);
     if (!task) {

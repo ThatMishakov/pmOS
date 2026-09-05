@@ -55,6 +55,12 @@ for SERVICE in $SERVICES; do
     copy_service "$SERVICE"
 done
 
+# Copy libraries
+for LIBRARY in $LIBRARIES; do
+    echo "Copying library $LIBRARY..."
+    mcopy -i "$BOOT_PARTITION" "$SYSROOT/usr/lib/$LIBRARY" "::/$LIBRARY"
+done
+
 # Create an ext4 filesystem for the root partition
 dd if=/dev/zero of="$EXT4_PARTITION" bs=1M count=64
 mke2fs -d "$SYSROOT" -t ext4 "$EXT4_PARTITION" -L "pmos-root"

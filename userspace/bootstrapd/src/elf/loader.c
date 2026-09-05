@@ -14,6 +14,7 @@
 #include <sys/mman.h>
 #include <pmos/ports.h>
 #include <pmos/fs-data.h>
+#include "../io.h"
 
 extern pmos_right_t posix_server_right;
 
@@ -190,7 +191,113 @@ uint64_t get_phdr_addr(void *file_mapped)
     return 0;
 }
 
-result_t load_elf_to_memory(void *file_mapped, uint64_t mem_object_id, uint64_t mem_object_size, uint64_t page_table_id)
+bool is_relocatable(void *file_mapped)
+{
+    Elf32_Ehdr *header = file_mapped;
+    return header->e_type == ET_DYN;
+}
+
+const char *find_interpreter(void *file_mapped)
+{
+    Elf32_Ehdr *header = file_mapped;
+    if (header->e_ident[4] == R_LARCH_32) {
+        Elf32_Ehdr *header = file_mapped;
+        uint32_t pheader_size = header->e_phentsize;
+        for (uint32_t i = 0; i < header->e_phnum; ++i) {
+            const Elf32_Phdr *ph = (const Elf32_Phdr *)((char *)file_mapped + header->e_phoff + i * pheader_size);
+            if (ph->p_type == PT_INTERP)
+                // TODO: This is an easy buffer overflow on malformed ELFs
+                return (const char *)file_mapped + ph->p_offset;
+        
+            if (ph->p_type == PT_LOAD)
+                // Interpreter segments must precede loadable segments per spec
+                break;
+        }
+    } else {
+        Elf64_Ehdr *header = file_mapped;
+        uint64_t pheader_size = header->e_phentsize;
+        for (uint64_t i = 0; i < header->e_phnum; ++i) {
+            const Elf64_Phdr *ph = (const Elf64_Phdr *)((char *)file_mapped + header->e_phoff + i * pheader_size);
+            if (ph->p_type == PT_INTERP)
+                return (const char *)file_mapped + ph->p_offset;
+        
+            if (ph->p_type == PT_LOAD)
+                break;
+        }
+    }
+    return NULL;
+}
+        
+void find_min_max_page(void *file_mapped, uint64_t *min_page, uint64_t *max_page)
+{
+    Elf32_Ehdr *header = file_mapped;
+    *min_page = UINT64_MAX;
+    *max_page = 0;
+    if (header->e_ident[4] == R_LARCH_32) {
+        Elf32_Ehdr *header = file_mapped;
+        uint32_t pheader_size = header->e_phentsize;
+        for (uint32_t i = 0; i < header->e_phnum; ++i) {
+            const Elf32_Phdr *ph = (const Elf32_Phdr *)((char *)file_mapped + header->e_phoff + i * pheader_size);
+            if (ph->p_type != PT_LOAD)
+                continue;
+
+            uint64_t start_page = ph->p_vaddr & ~page_mask;
+            uint64_t end_page   = ((ph->p_vaddr & page_mask) + ph->p_memsz + page_mask) & ~page_mask;
+
+            if (start_page < *min_page)
+                *min_page = start_page;
+            if (end_page > *max_page)
+                *max_page = end_page;
+        }
+    } else {
+        Elf64_Ehdr *header = file_mapped;
+        uint64_t pheader_size = header->e_phentsize;
+        for (uint64_t i = 0; i < header->e_phnum; ++i) {
+            const Elf64_Phdr *ph = (const Elf64_Phdr *)((char *)file_mapped + header->e_phoff + i * pheader_size);
+            if (ph->p_type != PT_LOAD)
+                continue;
+
+            uint64_t start_page = ph->p_vaddr & ~page_mask;
+            uint64_t end_page   = ((ph->p_vaddr & page_mask) + ph->p_memsz + page_mask) & ~page_mask;
+
+            if (start_page < *min_page)
+                *min_page = start_page;
+            if (end_page > *max_page)
+                *max_page = end_page;
+        }
+    }
+}
+
+mem_object_t find_file(const char *path);
+
+int check_elf_file(void *file_mapped, int *e_machine)
+{
+    Elf32_Ehdr *header = file_mapped;
+    if (memcmp(header->e_ident, ELFMAG, SELFMAG)) {
+        return -ENOEXEC;
+    }
+
+    if (header->e_ident[5] != ELF_ENDIANNESS) {
+        return -ENOEXEC;
+    }
+
+    if (header->e_type != ET_EXEC && header->e_type != ET_DYN) {
+        return -ENOEXEC;
+    }
+
+    if (e_machine && header->e_machine != *e_machine) {
+        print_str("ELF file has wrong machine type: ");
+        print_hex(header->e_machine);
+        print_str(", expected: ");
+        print_hex(*e_machine);
+        print_str("\n");
+        return -ENOEXEC;
+    }
+
+    return 0;
+}
+
+result_t load_elf_to_memory(void *file_mapped, uint64_t mem_object_id, uint64_t mem_object_size, uint64_t page_table_id, uint64_t *relocation_offset)
 {
     result_t result = 0;
 
@@ -208,6 +315,23 @@ result_t load_elf_to_memory(void *file_mapped, uint64_t mem_object_id, uint64_t 
     if (header->e_type != ET_EXEC && header->e_type != ET_DYN) {
         result = -ENOEXEC;
         goto error;
+    }
+
+    if (is_relocatable(file_mapped)) {
+        // Try relocating
+        uint64_t min_page, max_page;
+        find_min_max_page(file_mapped, &min_page, &max_page);
+        auto c_result = create_normal_region64(page_table_id, min_page, max_page - min_page, PROT_READ | PROT_WRITE | PROT_EXEC);
+        if (c_result.result) {
+            result = c_result.result;
+            goto error;
+        }
+
+        *relocation_offset = c_result.virt_addr_intptr - min_page;
+
+        release_memory_range64(page_table_id, min_page, max_page - min_page);
+    } else {
+        *relocation_offset = 0;
     }
 
     if (header->e_ident[4] == R_LARCH_32) {
@@ -249,7 +373,7 @@ result_t load_elf_to_memory(void *file_mapped, uint64_t mem_object_id, uint64_t 
                 auto mem_request = map_mem_object(&(map_mem_object_param_t){
                     .page_table_id = page_table_id,
                     .object_right = mem_object_id,
-                    .addr_start_uint = region_start,
+                    .addr_start_uint = region_start + *relocation_offset,
                     .size = size,
                     .offset_object = file_offset,
                     .offset_start = 0,
@@ -277,7 +401,7 @@ result_t load_elf_to_memory(void *file_mapped, uint64_t mem_object_id, uint64_t 
                 auto mem_request = map_mem_object(&(map_mem_object_param_t){
                     .page_table_id = page_table_id,
                     .object_right = mem_object_id,
-                    .addr_start_uint = region_start,
+                    .addr_start_uint = region_start + *relocation_offset,
                     .size = size,
                     .offset_object = file_offset,
                     .offset_start = object_start_offset,
@@ -329,7 +453,7 @@ result_t load_elf_to_memory(void *file_mapped, uint64_t mem_object_id, uint64_t 
                 auto mem_request = map_mem_object(&(map_mem_object_param_t){
                     .page_table_id = page_table_id,
                     .object_right = mem_object_id,
-                    .addr_start_uint = region_start,
+                    .addr_start_uint = region_start + *relocation_offset,
                     .size = size,
                     .offset_object = file_offset,
                     .offset_start = 0,
@@ -357,7 +481,7 @@ result_t load_elf_to_memory(void *file_mapped, uint64_t mem_object_id, uint64_t 
                 auto mem_request = map_mem_object(&(map_mem_object_param_t){
                     .page_table_id = page_table_id,
                     .object_right = mem_object_id,
-                    .addr_start_uint = region_start,
+                    .addr_start_uint = region_start + *relocation_offset,
                     .size = size,
                     .offset_object = file_offset,
                     .offset_start = object_start_offset,
@@ -384,6 +508,9 @@ result_t load_executable(uint64_t task_id, uint64_t group_id, uint64_t mem_objec
     if (size_r.result)
         return size_r.result;
     uint64_t mem_object_size = size_r.value;
+    uint64_t interp_object_size = 0;
+
+    uint64_t program_rel_offset = 0, interp_rel_offset = 0;
 
     if (mem_object_size == 0)
         return -EFAULT;
@@ -392,6 +519,7 @@ result_t load_executable(uint64_t task_id, uint64_t group_id, uint64_t mem_objec
 
     result_t result = 0;
     void *file_mapped = NULL;
+    void *interp_mapped = NULL;
 
     auto mem_request = map_mem_object(&(map_mem_object_param_t){
         .page_table_id = 0,
@@ -437,13 +565,11 @@ result_t load_executable(uint64_t task_id, uint64_t group_id, uint64_t mem_objec
     }
     pmos_pagetable_t page_table_id = pt_request.page_table;
 
-    uint64_t program_entry = 0;
+    uint64_t program_entry = 0, interp_entry = 0;
 
     unsigned pheader_count = 0;
     unsigned pheader_size = 0;
     uint64_t pheader_offset = 0;
-
-    uint64_t file_offset = 0;
 
     if (header->e_ident[4] == R_LARCH_32) {
         Elf32_Ehdr *header = file_mapped;
@@ -472,8 +598,84 @@ result_t load_executable(uint64_t task_id, uint64_t group_id, uint64_t mem_objec
     // TODO!
     pheader_offset = get_phdr_addr(file_mapped);
 
-    if ((result = load_elf_to_memory(file_mapped, mem_object_id, mem_object_size, page_table_id)))
+    uint64_t at_base = 0;
+
+    bool load_interp_first = false;
+    auto interp = find_interpreter(file_mapped);
+    uint64_t interp_object = 0;
+    if (interp) {
+        print_str("Found interpreter: ");
+        print_str(interp);
+        print_str("\n");
+
+        interp_object = find_file(interp);
+        if (!interp_object) {
+            print_str("Failed to find interpreter file\n");
+            result = -ENOENT;
+            goto error;
+        }
+
+        auto interp_size_r = get_mem_object_size(interp_object, 0);
+        if (interp_size_r.result) {
+            result = interp_size_r.result;
+            goto error;
+        }
+        interp_object_size = interp_size_r.value;
+
+        auto interp_map_r = map_mem_object(&(map_mem_object_param_t){
+            .page_table_id = 0,
+            .object_right = interp_object,
+            .addr_start_uint = 0,
+            .size = interp_object_size,
+            .offset_object = 0,
+            .offset_start = 0,
+            .object_size = interp_object_size,
+            .access_flags = PROT_READ,
+        });
+        if (interp_map_r.result) {
+            result = interp_map_r.result;
+            goto error;
+        }
+        interp_mapped = interp_map_r.virt_addr;
+
+        int e_machine = header->e_machine;
+        if ((result = check_elf_file(interp_map_r.virt_addr, &e_machine))) {
+            goto error;
+        }
+
+        load_interp_first = !is_relocatable(interp_map_r.virt_addr) && is_relocatable(file_mapped);
+        interp_entry = get_program_entry(interp_map_r.virt_addr);
+
+        uint64_t base_addr = 0, end_addr = 0;
+        find_min_max_page(interp_map_r.virt_addr, &base_addr, &end_addr);
+        at_base = base_addr;
+    }
+
+    if (interp_mapped && load_interp_first) {
+        if ((result = load_elf_to_memory(interp_mapped, interp_object, interp_object_size, page_table_id, &interp_rel_offset)))
+            goto error;
+    }
+
+    if ((result = load_elf_to_memory(file_mapped, mem_object_id, mem_object_size, page_table_id, &program_rel_offset)))
         goto error;
+
+    if (interp_mapped && !load_interp_first) {
+        if ((result = load_elf_to_memory(interp_mapped, interp_object, interp_object_size, page_table_id, &interp_rel_offset)))
+            goto error;
+    }
+
+    if (program_rel_offset) {
+        print_str("Relocated program by +");
+        print_hex(program_rel_offset);
+        print_str("\n");
+    }
+    if (interp_rel_offset) {
+        print_str("Relocated interpreter by +");
+        print_hex(interp_rel_offset);
+        print_str("\n");
+    }
+
+    at_base += interp_rel_offset;
 
     size_t stack_size = MB(16);
     // Init stack
@@ -506,10 +708,10 @@ result_t load_executable(uint64_t task_id, uint64_t group_id, uint64_t mem_objec
     }
 
     // PHDR
-        VECTOR_PUSH_BACK_CHECKED(builder->entries, ((struct AuxVecEntry){
+    VECTOR_PUSH_BACK_CHECKED(builder->entries, ((struct AuxVecEntry){
         .entry_type = AT_PHDR,
         .data_type = DATA_TYPE_PTR,
-        .ptr = pheader_offset + file_offset,
+        .ptr = pheader_offset + program_rel_offset,
     }), push_res);
     if (push_res) {
         result = push_res;
@@ -545,11 +747,23 @@ result_t load_executable(uint64_t task_id, uint64_t group_id, uint64_t mem_objec
     VECTOR_PUSH_BACK_CHECKED(builder->entries, ((struct AuxVecEntry){
         .entry_type = AT_ENTRY,
         .data_type = DATA_TYPE_PTR,
-        .ptr = program_entry,
+        .ptr = program_entry + program_rel_offset,
     }), push_res);
     if (push_res) {
         result = push_res;
         goto error;
+    }
+
+    if (interp_mapped) {
+        VECTOR_PUSH_BACK_CHECKED(builder->entries, ((struct AuxVecEntry){
+            .entry_type = AT_BASE,
+            .data_type = DATA_TYPE_PTR,
+            .ptr = at_base + interp_rel_offset,
+        }), push_res);
+        if (push_res) {
+            result = push_res;
+            goto error;
+        }
     }
 
     // VECTOR_PUSH_BACK_CHECKED(builder->entries, ((struct AuxVecEntry){
@@ -627,7 +841,13 @@ result_t load_executable(uint64_t task_id, uint64_t group_id, uint64_t mem_objec
     }
 
 
-    auto start_result = syscall_start_process(task_id, program_entry, 0, 0, 0);
+    uint64_t actual_entry;
+    if (interp_mapped) {
+        actual_entry = interp_entry + interp_rel_offset;
+    } else {
+        actual_entry = program_entry + program_rel_offset;
+    }
+    auto start_result = syscall_start_process(task_id, actual_entry, 0, 0, 0);
     if (start_result) {
         result = start_result;
         goto error;
@@ -636,6 +856,8 @@ result_t load_executable(uint64_t task_id, uint64_t group_id, uint64_t mem_objec
 error:
     free(auxvec_data);
     auxvec_free(builder);
+    if (interp_mapped)
+        release_region(0, interp_mapped);
     if (file_mapped)
         release_region(0, file_mapped);
 

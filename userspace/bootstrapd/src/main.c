@@ -124,6 +124,24 @@ struct load_tag_generic *get_load_tag(uint32_t tag, void *load_data)
     return NULL;
 }
 
+mem_object_t find_file(const char *path)
+{
+    if (!path)
+        return 0;
+
+    for (struct module_descriptor_list *l = module_list; l; l = l->next) {
+        if (!l->path)
+            continue;
+
+        if (strcmp(path, l->path))
+            continue;
+
+        return l->object_right;
+    }
+
+    return 0;
+}
+
 void init_modules()
 {
     struct load_tag_generic *t =
