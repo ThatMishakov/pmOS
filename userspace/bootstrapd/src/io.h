@@ -36,6 +36,6 @@ void print_hex(uint64_t i);
 void set_print_syscalls(uint64_t port);
 void print_str_n(const char *str, int length);
 
-void dbprintf(const char *format, ...);
+void dbprintf(const char *format, ...) __attribute__ ((format (printf, 1, 2)));
 
 #endif

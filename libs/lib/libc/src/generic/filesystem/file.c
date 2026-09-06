@@ -110,7 +110,7 @@ ssize_t __file_read(void *file_data, void *buf, size_t size, size_t offset, bool
 
     uint32_t flags = 0;
     if (seek)
-        flags |= IPC_FLAG_IO_OP_SEEK;
+        flags |= IPC_FLAG_IO_OP_FIXED_OFFSET;
 
     // Initialize the message type, flags, file ID, offset, count, and reply channel
     IPC_Read message = {
@@ -256,7 +256,7 @@ ssize_t __file_write(void *file_data, const void *buf, size_t size,
 
     uint32_t flags = 0;
     if (seek)
-        flags |= IPC_FLAG_IO_OP_SEEK;
+        flags |= IPC_FLAG_IO_OP_FIXED_OFFSET;
 
     struct File *file     = (struct File *)file_data;
     const size_t msg_size = sizeof(IPC_Write) + size;
@@ -312,7 +312,7 @@ ssize_t __file_writev(void *file_data, const struct iovec *iov, int iovcnt,
 
     uint32_t flags = 0;
     if (seek)
-        flags |= IPC_FLAG_IO_OP_SEEK;
+        flags |= IPC_FLAG_IO_OP_FIXED_OFFSET;
 
     // TODO: This is problematic...
     struct File *file = (struct File *)file_data;

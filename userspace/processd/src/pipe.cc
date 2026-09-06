@@ -135,7 +135,7 @@ static void handle_write(PipeData &pipe_data, Message_Descriptor msg, std::vecto
         return;
     }
 
-    if (write_msg->flags & IPC_FLAG_IO_OP_SEEK) {
+    if (write_msg->flags & IPC_FLAG_IO_OP_FIXED_OFFSET) {
         write_reply(reply_right, -ESPIPE, 0);
         return;
     }
@@ -207,7 +207,7 @@ static void handle_read(PipeData &pipe_data, Message_Descriptor msg, std::vector
         return;
     }
 
-    if (read_msg->flags & IPC_FLAG_IO_OP_SEEK) {
+    if (read_msg->flags & IPC_FLAG_IO_OP_FIXED_OFFSET) {
         // Seeking on a pipe
         IPC_Read_Reply reply = {
             .type        = IPC_Read_Reply_NUM,

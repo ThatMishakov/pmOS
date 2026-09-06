@@ -298,7 +298,7 @@ void fs_add_module(struct module_descriptor_list *module)
 
 void print_node(struct tree_node *node, int depth)
 {
-    dbprintf("%*s- %s (inode: %llu, type: %s)\n", depth * 2, "", node->name, node->inode,
+    dbprintf("%*s- %s (inode: %"PRIu64 ", type: %s)\n", depth * 2, "", node->name, node->inode,
              node->type == EntryDirectory ? "directory" : "file");
     
     path_tree_node_t *child_node = path_tree_first(&node->children);
@@ -328,7 +328,7 @@ void resolve_path_reply(int result, int type, uint64_t inode, pmos_right_t *repl
     if (!r.result)
         *reply_right = 0;
     else
-        dbprintf("Loader: Failed to send IPC_FS_Resolve_Path_Reply: %d\n", r.result);
+        dbprintf("Loader: Failed to send IPC_FS_Resolve_Path_Reply: %d\n", (int)r.result);
 }
 
 void resolve_path_msg(IPC_FS_Resolve_Path *msg, size_t msg_size, pmos_right_t *reply_right)
@@ -364,13 +364,112 @@ void resolve_path_msg(IPC_FS_Resolve_Path *msg, size_t msg_size, pmos_right_t *r
     resolve_path_reply(0, entry_type_to_ipc_type(i->type), i->inode, reply_right);
 }
 
-static int filesystem_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_right,
+struct OpenFileData {
+    struct tree_node *node;
+    uint64_t offset;
+    pmos_msgloop_tree_node_t msgloop_node;
+};
+
+void ipc_open_error_reply(int result, pmos_right_t *reply_right)
+{
+    IPC_FS_Open_Reply reply = {
+        .type = IPC_FS_Open_Reply_NUM,
+        .result_code = result,
+        .fs_flags = 0,
+    };
+
+    auto r = send_message_right(*reply_right, 0, &reply, sizeof(reply), NULL, SEND_MESSAGE_DELETE_RIGHT);
+    if (!r.result)
+        *reply_right = 0;
+    else
+        dbprintf("Loader: Failed to send IPC_FS_Open_Reply: %d\n", (int)r.result);
+}
+
+static int file_op_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_right,
                               pmos_right_t *extra_rights, void *ctx, struct pmos_msgloop_data *data)
 {
     (void)reply_right;
     (void)extra_rights;
+    
+    struct OpenFileData *open_file_data = ctx;
+
+    if (desc->size < sizeof(IPC_Generic_Msg)) {
+        print_str("Loader: Received very small message from filesystem\n");
+        return -1;
+    }
+
+    IPC_Generic_Msg *ipc_msg = (IPC_Generic_Msg *)(buff);
+    switch (ipc_msg->type) {
+    case IPC_Kernel_Receive_Right_Destroyed_NUM:
+        pmos_msgloop_erase(data, &open_file_data->msgloop_node);
+        free(open_file_data);
+        break;
+
+    default:
+        dbprintf("Loader: Unknown message type 0x%x while attending file\n", ipc_msg->type);
+        break;
+    }
+
+    return 0;
+}
+
+void ipc_fs_open(uint32_t flags, uint64_t inode, pmos_right_t *reply_right)
+{
+    struct OpenFileData *ofd = NULL;
+
+    struct tree_node *node = get_inode(inode);
+    if (!node) {
+        ipc_open_error_reply(-ENOENT, reply_right);
+        goto end;
+    }
+
+    ofd = malloc(sizeof(struct OpenFileData));
+    if (!ofd) {
+        dbprintf("Loader: Failed to allocate OpenFileData for inode %" PRIu64 "\n", inode);
+        ipc_open_error_reply(-ENOMEM, reply_right);
+        goto end;
+    }
+
+    pmos_right_t receive_right = INVALID_RIGHT;
+    auto ret = create_right(loader_port, &receive_right, 0);
+    if (ret.result != SUCCESS) {
+        dbprintf("Loader: Failed to create receive right for open file: %i\n", (int)ret.result);
+        ipc_open_error_reply(-ENOMEM, reply_right);
+        goto end;
+    }
+
+    ofd->node = node;
+    ofd->offset = 0;
+    pmos_msgloop_node_set(&ofd->msgloop_node, receive_right, file_op_callback, ofd);
+
+    IPC_FS_Open_Reply reply = {
+        .type = IPC_FS_Open_Reply_NUM,
+        .result_code = 0,
+        .fs_flags = 0,
+    };
+
+    message_extra_t rights = {
+        .extra_rights = {ret.right}
+    };
+    auto r = send_message_right(*reply_right, 0, &reply, sizeof(reply), &rights, SEND_MESSAGE_DELETE_RIGHT);
+    if (r.result) {
+        dbprintf("Loader: Failed to send IPC_FS_Open_Reply: %d\n", (int)r.result);
+        delete_right(ret.right);
+    } else {
+        *reply_right = 0;
+        pmos_msgloop_insert(&msgloop_data, &ofd->msgloop_node);
+        ofd = NULL;
+    }
+
+end:
+    free(ofd);
+}
+
+static int filesystem_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_right,
+                              pmos_right_t *extra_rights, void *ctx, struct pmos_msgloop_data *data)
+{
+    (void)extra_rights;
     (void)ctx;
-    (void)data;
 
     if (desc->size < sizeof(IPC_Generic_Msg)) {
         print_str("Loader: Received very small message from filesystem\n");
@@ -390,10 +489,22 @@ static int filesystem_callback(Message_Descriptor *desc, void *buff, pmos_right_
         break;
     }
 
+    case IPC_FS_Open_NUM: {
+        IPC_FS_Open *msg = (IPC_FS_Open *)(buff);
+        if (desc->size < sizeof(IPC_FS_Open)) {
+            print_str("Loader: Received IPC_FS_Open of unexpected size 0x");
+            print_hex(desc->size);
+            print_str("\n");
+            break;
+        }
+
+        ipc_fs_open(msg->flags, msg->inode, reply_right);
+
+        break;
+    }
+
     default:
-        print_str("Loader: Unknown message type ");
-        print_hex(ipc_msg->type);
-        print_str(" from filesystem\n");
+        dbprintf("Loader: Unknown message type 0x%x from filesystem\n", ipc_msg->type);
         break;
     }
 
