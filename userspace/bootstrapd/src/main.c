@@ -473,7 +473,6 @@ int default_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_r
         if (rsdp_desc != 0) {
             reply.result     = 0;
             reply.descriptor = rsdp_desc;
-            print_str("********************************************\n");
         }
 
         auto r = send_message_right(*reply_right, 0, &reply, sizeof(reply), NULL,

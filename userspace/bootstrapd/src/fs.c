@@ -9,6 +9,8 @@
 #include <pmos/helpers.h>
 #include <errno.h>
 #include <inttypes.h>
+#include <pmos/memory.h>
+#include <sys/mman.h>
 
 extern pmos_right_t posix_server_right;
 extern uint64_t loader_port;
@@ -66,6 +68,7 @@ struct tree_node {
     enum EntryType type;
 
     path_tree_tree_t children;
+    struct module_descriptor_list *module; // Only for EntryFile
 };
 
 int inode_tree_compare(inode_tree_node *a, inode_tree_node *b)
@@ -291,6 +294,7 @@ void fs_add_module(struct module_descriptor_list *module)
     node->name = strdup(name);
     node->type = EntryFile;
     node->children = path_tree_INITIALIZER;
+    node->module = module;
 
     path_tree_insert(&parent_dir->children, &node->path_node);
     inode_tree_insert(&inode_tree, &node->inode_node);
@@ -370,6 +374,151 @@ struct OpenFileData {
     pmos_msgloop_tree_node_t msgloop_node;
 };
 
+void read_reply(int result, pmos_right_t *reply_right)
+{
+    IPC_Read_Reply reply = {
+        .type = IPC_Read_Reply_NUM,
+        .result_code = result,
+    };
+
+    auto r = send_message_right(*reply_right, 0, &reply, sizeof(reply), NULL, SEND_MESSAGE_DELETE_RIGHT);
+    if (!r.result)
+        *reply_right = 0;
+    else
+        dbprintf("Loader: Failed to send IPC_Read_Reply: %d\n", (int)r.result);
+}
+
+int read_to_buffer(pmos_right_t mem_object, uint8_t *data, uint64_t start_offset, size_t size)
+{
+    void *ptr = NULL;
+    int result = 0;
+
+    uint64_t page_mask = getpagesize() - 1;
+    uint64_t object_start = start_offset & ~page_mask;
+    uint64_t start = start_offset & page_mask;
+    uint64_t size_aligned = (start + size + page_mask) & ~page_mask;
+
+    auto mem_request = map_mem_object(&(map_mem_object_param_t){
+        .page_table_id = 0,
+        .object_right = mem_object,
+        .addr_start_uint = 0,
+        .size = size_aligned,
+        .offset_object = object_start,
+        .offset_start = 0,
+        .object_size = size_aligned,
+        .access_flags = PROT_READ,
+    });
+
+    if (mem_request.result != SUCCESS) {
+        dbprintf("Loader: Failed to map memory object %" PRIu64 " for read: %d\n", mem_object, (int)mem_request.result);
+        result = -EIO;
+        goto end;
+    }
+
+    ptr = mem_request.virt_addr;
+
+    memcpy(data, (uint8_t *)ptr + start, size);
+
+end:
+    if (ptr)
+        munmap(ptr, size_aligned);
+    return result;
+}
+
+void handle_read(struct OpenFileData *open_file_data, IPC_Read *msg, pmos_right_t *reply_right)
+{
+    char *msg_buff = nullptr;
+    if (open_file_data->node->type != EntryFile) {
+        dbprintf("Loader: Attempted to read from non-file inode %" PRIu64 "\n", open_file_data->node->inode);
+        read_reply(-EINVAL, reply_right);
+        goto end;
+    }
+
+    bool fixed = msg->flags & IPC_FLAG_IO_OP_FIXED_OFFSET;
+    uint64_t offset = fixed ? msg->start_offset : open_file_data->offset;
+    uint64_t max_read = msg->max_size;
+
+    auto module = open_file_data->node->module;
+    if (module->size <= offset) {
+        read_reply(0, reply_right);
+        goto end;
+    }
+
+    size_t bytes_to_read = module->size - offset;
+    bytes_to_read = bytes_to_read > max_read ? max_read : bytes_to_read;
+
+    size_t msg_size = sizeof(IPC_Read_Reply) + bytes_to_read;
+
+    msg_buff = malloc(msg_size);
+    if (!msg_buff) {
+        dbprintf("Loader: Failed to allocate buffer for read operation\n");
+        read_reply(-ENOMEM, reply_right);
+        goto end;
+    }
+
+    IPC_Read_Reply *reply = (IPC_Read_Reply *)msg_buff;
+    reply->type = IPC_Read_Reply_NUM;
+    reply->result_code = 0;
+    reply->flags = 0;
+
+    int result = read_to_buffer(module->object_right, reply->data, offset, bytes_to_read);
+    if (result) {
+        dbprintf("Loader: Failed to read from module object right: %d\n", result);
+        read_reply(result, reply_right);
+        goto end;
+    }
+
+    auto r = send_message_right(*reply_right, 0, reply, msg_size, NULL, SEND_MESSAGE_DELETE_RIGHT);
+    if (!r.result) {
+        if (!fixed)
+            open_file_data->offset += bytes_to_read;
+        *reply_right = 0;
+    } else
+        dbprintf("Loader: Failed to send IPC_Read_Reply: %d\n", (int)r.result);
+
+end:
+    free(msg_buff);
+}
+
+void handle_seek(struct OpenFileData *open_file_data, IPC_Seek *msg, pmos_right_t *reply_right)
+{
+    if (open_file_data->node->type != EntryFile) {
+        dbprintf("Loader: Attempted to seek on non-file inode %" PRIu64 "\n", open_file_data->node->inode);
+        read_reply(-EINVAL, reply_right);
+        return;
+    }
+
+    uint64_t new_offset = 0;
+    switch (msg->whence) {
+    case SEEK_SET:
+        new_offset = (uint64_t)msg->offset;
+        break;
+    case SEEK_CUR:
+        new_offset = open_file_data->offset + msg->offset;
+        break;
+    case SEEK_END:
+        new_offset = open_file_data->node->module->size + msg->offset;
+        break;
+    default:
+        read_reply(-EINVAL, reply_right);
+        return;
+    }
+
+    open_file_data->offset = new_offset;
+
+    IPC_Seek_Reply reply = {
+        .type = IPC_Seek_Reply_NUM,
+        .result_code = 0,
+        .new_offset = new_offset,
+    };
+
+    auto r = send_message_right(*reply_right, 0, &reply, sizeof(reply), NULL, SEND_MESSAGE_DELETE_RIGHT);
+    if (!r.result)
+        *reply_right = 0;
+    else
+        dbprintf("Loader: Failed to send IPC_Seek_Reply: %d\n", (int)r.result);
+}
+
 void ipc_open_error_reply(int result, pmos_right_t *reply_right)
 {
     IPC_FS_Open_Reply reply = {
@@ -383,6 +532,49 @@ void ipc_open_error_reply(int result, pmos_right_t *reply_right)
         *reply_right = 0;
     else
         dbprintf("Loader: Failed to send IPC_FS_Open_Reply: %d\n", (int)r.result);
+}
+
+void get_object_reply(int result, pmos_right_t *reply_right)
+{
+    IPC_Get_Object_Reply reply = {
+        .type = IPC_Get_Object_Reply_NUM,
+        .result_code = result,
+    };
+
+    auto r = send_message_right(*reply_right, 0, &reply, sizeof(reply), NULL, SEND_MESSAGE_DELETE_RIGHT);
+    if (!r.result)
+        *reply_right = 0;
+    else
+        dbprintf("Loader: Failed to send IPC_Get_Object_Reply: %d\n", (int)r.result);
+}
+
+void handle_get_object(struct OpenFileData *open_file_data, IPC_Get_Object *msg, pmos_right_t *reply_right)
+{
+    if (open_file_data->node->type != EntryFile) {
+        dbprintf("Loader: Attempted to get object from non-file inode %" PRIu64 "\n", open_file_data->node->inode);
+        get_object_reply(-EINVAL, reply_right);
+        return;
+    }
+
+    auto result = dup_right(open_file_data->node->module->object_right);
+    if (result.result != SUCCESS) {
+        dbprintf("Loader: Failed to duplicate object right for inode %" PRIu64 ": %d\n", open_file_data->node->inode, (int)result.result);
+        get_object_reply(-EIO, reply_right);
+        return;
+    }
+
+    message_extra_t rights = {
+        .extra_rights = {result.right}
+    };
+    IPC_Get_Object_Reply reply = {
+        .type = IPC_Get_Object_Reply_NUM,
+        .result_code = 0,
+    };
+    auto r = send_message_right(*reply_right, 0, &reply, sizeof(reply), &rights, SEND_MESSAGE_DELETE_RIGHT);
+    if (!r.result)
+        *reply_right = 0;
+    else
+        dbprintf("Loader: Failed to send IPC_Get_Object_Reply: %d\n", (int)r.result);
 }
 
 static int file_op_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_right,
@@ -404,6 +596,39 @@ static int file_op_callback(Message_Descriptor *desc, void *buff, pmos_right_t *
         pmos_msgloop_erase(data, &open_file_data->msgloop_node);
         free(open_file_data);
         break;
+
+    case IPC_Read_NUM: {
+        IPC_Read *msg = (IPC_Read *)(buff);
+        if (desc->size < sizeof(IPC_Read)) {
+            dbprintf("Loader: Received IPC_Read of unexpected size 0x%x\n", (uint32_t)desc->size);
+            break;
+        }
+
+        handle_read(open_file_data, msg, reply_right);
+        break;
+    }
+    
+    case IPC_Seek_NUM: {
+        IPC_Seek *msg = (IPC_Seek *)(buff);
+        if (desc->size < sizeof(IPC_Seek)) {
+            dbprintf("Loader: Received IPC_Seek of unexpected size 0x%x\n", (uint32_t)desc->size);
+            break;
+        }
+
+        handle_seek(open_file_data, msg, reply_right);
+        break;
+    }
+
+    case IPC_Get_Object_NUM: {
+        IPC_Get_Object *msg = (IPC_Get_Object *)(buff);
+        if (desc->size < sizeof(IPC_Get_Object)) {
+            dbprintf("Loader: Received IPC_Get_Object of unexpected size 0x%x\n", (uint32_t)desc->size);
+            break;
+        }
+
+        handle_get_object(open_file_data, msg, reply_right);
+        break;
+    }
 
     default:
         dbprintf("Loader: Unknown message type 0x%x while attending file\n", ipc_msg->type);

@@ -366,6 +366,10 @@ static size_t service_callback(const char *name, size_t name_length, char *out_b
         return snprintf(NULL, 0, "%"PRIu64, *out_right);
 }
 
+const char *envp[1] = {
+    // "MLIBC_RTLD_DEBUG=1",
+};
+
 int start_service(struct Service *service, uint64_t object_right, uint64_t optional_right_id)
 {
     if (!service)
@@ -535,7 +539,7 @@ int start_service(struct Service *service, uint64_t object_right, uint64_t optio
     auxvec_entries[1] = &mem_object_entry;
     auxvec_entries[2] = NULL;
 
-    result_t res = load_executable(r.value, new_group_id, object_right, 0, 0, 0, args_get_argv(&args), NULL, (const struct AuxVecEntry **)auxvec_entries);
+    result_t res = load_executable(r.value, new_group_id, object_right, 0, 0, 0, args_get_argv(&args), envp, (const struct AuxVecEntry **)auxvec_entries);
     //result_t res = syscall_load_executable(r.value, object_id, mem_region, 0);
     if (res != SUCCESS) {
         print_str("Loader: Could not load executable ");
@@ -768,7 +772,7 @@ int start_service_request(struct Service *service, const char *cmdline, size_t c
     group_id = 0;
 
 
-    result_t res = load_executable(r.value, new_group_id, object_right, 0, 0, 0, args_get_argv(&args), NULL, (const struct AuxVecEntry **)auxvec_entries);
+    result_t res = load_executable(r.value, new_group_id, object_right, 0, 0, 0, args_get_argv(&args), envp, (const struct AuxVecEntry **)auxvec_entries);
     //result_t res = syscall_load_executable(r.value, object_id, mem_region, 0);
     if (res != SUCCESS) {
         print_str("Loader: Could not load executable ");

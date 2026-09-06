@@ -89,7 +89,7 @@ qemu-x86: $(x86_64-HYPER-IMG) ovmf-x86
 		-m 512M\
 	       	-smp 1\
 	       	-serial stdio \
-		-device intel-iommu -cpu max,x2apic=on,+smep,+smap,+fred -no-reboot -smp 2
+		-device intel-iommu -cpu max,x2apic=on,+smep,+smap,+fred -no-reboot -smp 1
 
 qemu-x86-gdb: $(x86_64-HYPER-IMG) ovmf-x86
 	qemu-system-x86_64 \

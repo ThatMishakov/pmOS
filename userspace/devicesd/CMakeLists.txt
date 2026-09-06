@@ -44,6 +44,4 @@ target_compile_definitions(devicesd PRIVATE UACPI_NATIVE_MMIO)
 
 target_link_libraries(devicesd PRIVATE pmos-helpers)
 
-target_link_options(devicesd PRIVATE -static)
-
 install(TARGETS devicesd RUNTIME DESTINATION "/boot")
