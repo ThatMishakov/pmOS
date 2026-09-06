@@ -8,7 +8,7 @@ imagedeps="make cmake"
 
 source_dir=libs/pmoscxx
 deps="mlibc-headers libcxx pmos-containers"
-hostdeps="clang"
+hostdeps="clang compiler-rt"
 
 configure() {
     cmake -S ${source_dir} -DSYSROOT=${sysroot_dir} -DTARGET_ARCH=${JINX_ARCH}
