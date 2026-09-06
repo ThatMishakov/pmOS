@@ -118,8 +118,8 @@ fast_atomic_read_from_user:
     pushq %r14
     pushq %r15
 
-    pushq %rdx # const void *src
-    pushq %rsi # void *dst
+    pushq %rsi # const void *src
+    pushq %rdi # void *dst
 
     movq %rsp, %gs:56
     leaq read_failure(%rip), %rax
@@ -127,8 +127,8 @@ fast_atomic_read_from_user:
 
     enable_user
 
-    movl (%rdx), %eax
-    movl %eax, (%rsi)
+    movl (%rsi), %eax
+    movl %eax, (%rdi)
 
     disable_user
 
@@ -157,12 +157,12 @@ read_failure:
     cmpb $1, %dl
     jne 1f
 
-    movq -56(%rbp), %rdx # source
-    movq -64(%rbp), %rsi # destination
+    movq -56(%rbp), %rsi # source
+    movq -64(%rbp), %rdi # destination
 
     enable_user
-    movl (%rdx), %eax
-    movl %eax, (%rsi)
+    movl (%rsi), %eax
+    movl %eax, (%rdi)
 
     movq $1, %rdx
     xorl %eax, %eax

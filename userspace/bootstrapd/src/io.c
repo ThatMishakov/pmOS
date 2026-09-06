@@ -34,6 +34,8 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+#include <stdio.h>
+#include <stdarg.h>
 
 char screen_buff[8192];
 int buff_pos      = 0;
@@ -121,3 +123,22 @@ void print_hex(uint64_t i)
     int_to_hex(buffer, i, 1);
     print_str(buffer);
 }
+
+void dbprintf(const char *format, ...)
+{
+    va_list ap;
+    va_list ap2;
+
+    va_start(ap, fmt);
+    va_copy(ap2, ap);
+
+    int length = vsnprintf(NULL, 0, format, ap);
+    va_end(ap);
+
+    char buffer[length + 1];
+    vsnprintf(buffer, length + 1, format, ap2);
+    va_end(ap2);
+
+    print_str(buffer);
+}
+

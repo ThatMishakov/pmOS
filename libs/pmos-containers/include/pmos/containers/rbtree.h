@@ -2,6 +2,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#define RBTREE_UNUSED __attribute__((unused))
+
 #define RBTREE(NAME, T, CMP_FUNC, KEY_CMP_FUNC)                                                   \
     typedef struct NAME##_node {                                                                  \
         T data;                                                                                   \
@@ -13,14 +15,14 @@
         NAME##_node_t *root;                                                                      \
     } NAME##_tree_t;                                                                              \
                                                                                                   \
-    static const NAME##_tree_t NAME##_INITIALIZER = {.root = NULL};                               \
+    static const RBTREE_UNUSED NAME##_tree_t NAME##_INITIALIZER = {.root = NULL};                               \
                                                                                                   \
     enum {                                                                                        \
         NAME##_BLACK = 0,                                                                         \
         NAME##_RED   = 1,                                                                         \
     };                                                                                            \
                                                                                                   \
-    static inline void NAME##_rotate_right(NAME##_tree_t *tree, NAME##_node_t *node)              \
+    static inline RBTREE_UNUSED void NAME##_rotate_right(NAME##_tree_t *tree, NAME##_node_t *node)              \
     {                                                                                             \
         NAME##_node_t *left = node->left;                                                         \
         node->left          = left->right;                                                        \
@@ -37,7 +39,7 @@
         node->parent = left;                                                                      \
     }                                                                                             \
                                                                                                   \
-    static inline void NAME##_rotate_left(NAME##_tree_t *tree, NAME##_node_t *node)               \
+    static inline RBTREE_UNUSED void NAME##_rotate_left(NAME##_tree_t *tree, NAME##_node_t *node)               \
     {                                                                                             \
         NAME##_node_t *right = node->right;                                                       \
         node->right          = right->left;                                                       \
@@ -54,7 +56,7 @@
         node->parent = right;                                                                     \
     }                                                                                             \
                                                                                                   \
-    static inline void NAME##_fix_insert(NAME##_tree_t *tree, NAME##_node_t *node)                \
+    static inline RBTREE_UNUSED void NAME##_fix_insert(NAME##_tree_t *tree, NAME##_node_t *node)                \
     {                                                                                             \
         while (node->parent && node->parent->color == NAME##_RED) {                               \
             NAME##_node_t *parent      = node->parent;                                            \
@@ -100,7 +102,7 @@
         tree->root->color = NAME##_BLACK;                                                         \
     }                                                                                             \
                                                                                                   \
-    static inline void NAME##_insert(NAME##_tree_t *tree, NAME##_node_t *node)                    \
+    static inline RBTREE_UNUSED void NAME##_insert(NAME##_tree_t *tree, NAME##_node_t *node)                    \
     {                                                                                             \
         node->left = node->right = node->parent = NULL;                                           \
                                                                                                   \
@@ -127,7 +129,7 @@
         NAME##_fix_insert(tree, node);                                                            \
     }                                                                                             \
                                                                                                   \
-    static inline void NAME##_fix_remove(NAME##_tree_t *tree, NAME##_node_t *node,                \
+    static inline RBTREE_UNUSED void NAME##_fix_remove(NAME##_tree_t *tree, NAME##_node_t *node,                \
                                          NAME##_node_t *parent)                                   \
     {                                                                                             \
         while (node != tree->root && (!node || node->color == NAME##_BLACK)) {                    \
@@ -205,7 +207,7 @@
             node->color = NAME##_BLACK;                                                           \
     }                                                                                             \
                                                                                                   \
-    static inline void NAME##_transplant(NAME##_tree_t *tree, NAME##_node_t *u, NAME##_node_t *v) \
+    static inline RBTREE_UNUSED void NAME##_transplant(NAME##_tree_t *tree, NAME##_node_t *u, NAME##_node_t *v) \
     {                                                                                             \
         if (!u->parent)                                                                           \
             tree->root = v;                                                                       \
@@ -218,7 +220,7 @@
             v->parent = u->parent;                                                                \
     }                                                                                             \
                                                                                                   \
-    static inline void NAME##_remove(NAME##_tree_t *tree, NAME##_node_t *node)                    \
+    static inline RBTREE_UNUSED void NAME##_remove(NAME##_tree_t *tree, NAME##_node_t *node)                    \
     {                                                                                             \
         NAME##_node_t *current = node;                                                            \
         NAME##_node_t *child   = NULL;                                                            \
@@ -259,7 +261,7 @@
             NAME##_fix_remove(tree, child, parent);                                               \
     }                                                                                             \
                                                                                                   \
-    static inline NAME##_node_t *NAME##_find(const NAME##_tree_t *tree, void *key)                       \
+    static inline RBTREE_UNUSED NAME##_node_t *NAME##_find(const NAME##_tree_t *tree, void *key)                       \
     {                                                                                             \
         NAME##_node_t *n = tree->root;                                                            \
         while (n) {                                                                               \
@@ -272,4 +274,29 @@
                 return n;                                                                         \
         }                                                                                         \
         return NULL;                                                                              \
+    }                                                                                             \
+                                                                                                  \
+    static inline RBTREE_UNUSED NAME##_node_t *NAME##_first(NAME##_tree_t *tree)                  \
+    {                                                                                             \
+        NAME##_node_t *node = tree->root;                                                         \
+        while (node && node->left)                                                                \
+            node = node->left;                                                                    \
+        return node;                                                                              \
+    }                                                                                             \
+                                                                                                  \
+    static inline RBTREE_UNUSED NAME##_node_t *NAME##_next(NAME##_node_t *node)                                               \
+    {                                                                                             \
+        if (node->right) {                                                                        \
+            node = node->right;                                                                   \
+            while (node->left)                                                                    \
+                node = node->left;                                                                \
+            return node;                                                                          \
+        }                                                                                         \
+                                                                                                  \
+        NAME##_node_t *parent = node->parent;                                                     \
+        while (parent && node == parent->right) {                                                 \
+            node   = parent;                                                                      \
+            parent = parent->parent;                                                              \
+        }                                                                                         \
+        return parent;                                                                            \
     }

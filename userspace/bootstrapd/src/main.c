@@ -169,7 +169,7 @@ void init_modules()
         if (!strcmp(d->cmdline, "init-config")) {
             parse_services(d);
         } else if (!strcmp(d->cmdline, "file")) {
-            continue;
+            fs_add_module(d);
         } else if (strcmp(d->cmdline, "bootstrap")) {
             struct Service *s = NULL;
             parse_service(d->cmdline, d->path, &s);
@@ -200,6 +200,7 @@ void init_modules()
         }
     }
 
+    print_fs_tree();
     match_services();
     publish_services();
 }
