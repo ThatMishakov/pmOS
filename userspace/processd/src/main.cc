@@ -113,7 +113,7 @@ void register_process(IPC_Register_Process *msg, pmos::Right reply_right)
 pmos::async::detached_task get_messages_bootstrapd(pmos::ReceiveRight rr)
 {
     while (1) {
-        auto [msg, message, reply_right, _] = (co_await dispatcher.get_message(rr)).value();
+        auto [msg, message, reply_right, rights] = (co_await dispatcher.get_message(rr)).value();
     
         if (msg.size < sizeof(IPC_Generic_Msg)) {
             kernelLogger() << "processd: Received very small message\n" << frg::endlog;
@@ -135,6 +135,16 @@ pmos::async::detached_task get_messages_bootstrapd(pmos::ReceiveRight rr)
             pipe_open(*m, std::move(reply_right));
             break;
         }
+        case IPC_Mount_FS_NUM: {
+            if (message.size() < sizeof(IPC_Mount_FS)) {
+                kernelLogger() << "posixd: Received IPC_Mount_FS that is too small from task " << msg.sender << " of size " << message.size() << "\n" << frg::endlog;
+                break;
+            }
+
+            auto *m = reinterpret_cast<IPC_Mount_FS *>(message.data());
+            std::string mountpoint(m->mount_path, message.size() - sizeof(IPC_Mount_FS));
+            mount_filesystem(std::move(reply_right), std::move(rights[0]), mountpoint, m->root_fd);
+        } break;
         case IPC_Register_Process_NUM: {
             if (msg.size < sizeof(IPC_Register_Process)) {
                 kernelLogger() << "processd: Received IPC_Register_Process that is too small from task " << msg.sender << " of size " << msg.size << "\n" << frg::endlog;

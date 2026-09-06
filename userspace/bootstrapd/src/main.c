@@ -735,6 +735,8 @@ exit:
 #define BGRN   "\e[1;32m"
 #define CRESET "\e[0m"
 
+void mount_as_root();
+
 int main()
 {
     print_str(BGRN "Started init server" CRESET "\n");
@@ -798,6 +800,7 @@ int main()
     init_misc();
     start_posix_server();
     create_std_pipes();
+    mount_as_root();
     start_executables();
 
     service_ports();

@@ -93,3 +93,4 @@ struct Path {
 };
 
 pmos::async::detached_task open_file(pmos::Right reply_right, std::string path);
+pmos::async::detached_task mount_filesystem(pmos::Right reply_right, pmos::Right fs_right, const std::string &mountpoint, int64_t root_inode);
