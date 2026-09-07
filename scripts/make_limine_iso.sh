@@ -32,6 +32,10 @@ for SERVICE in $SERVICES; do
     copy_service "$SERVICE"
 done
 
+for LIBRARY in $LIBRARIES; do
+    cp -v "$SYSROOT/usr/lib/$LIBRARY" iso_root/usr/lib/
+done
+
 mkdir -p iso_root/EFI/BOOT
 cp -v "/usr/local/share/limine/BOOT"* iso_root/EFI/BOOT/
 

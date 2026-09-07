@@ -50,6 +50,14 @@ mmd -i "$BOOT_PARTITION" "::/EFI"
 mmd -i "$BOOT_PARTITION" "::/EFI/BOOT"
 mcopy -i "$BOOT_PARTITION" "/usr/local/share/limine/BOOT"* "::/EFI/BOOT/"
 
+mmd -i "$BOOT_PARTITION" "::/usr"
+mmd -i "$BOOT_PARTITION" "::/usr/lib"
+
+for LIBRARY in $LIBRARIES; do
+    echo "Copying library $LIBRARY..."
+    mcopy -i "$BOOT_PARTITION" "$SYSROOT/usr/lib/$LIBRARY" "::/usr/lib/$LIBRARY"
+done
+
 # Copy services
 for SERVICE in $SERVICES; do
     copy_service "$SERVICE"

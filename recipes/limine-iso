@@ -11,5 +11,6 @@ hostdeps="limine"
 
 build() {
     SYSROOT="$sysroot_dir" \
+    LIBRARIES=$LIBRARIES \
     ${source_dir}/make_limine_iso.sh "$build_dir/pmos.iso" "${BOOT_SERVICES}" "limine.conf"
 }

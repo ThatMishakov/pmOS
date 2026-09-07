@@ -8,6 +8,7 @@ source_dir=scripts
 
 build() {
     CONFIG_FILE="limine.conf"
+    LIBRARIES=$LIBRARIES \
     ${source_dir}/make_limine_cnf.sh "$CONFIG_FILE" "$BOOT_SERVICES" "$JINX_ARCH"
 }
 
