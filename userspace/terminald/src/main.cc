@@ -154,6 +154,8 @@ void request_logger_port()
     request_named_port(log_port_name, strlen(log_port_name), main_port.get(), 0);
 }
 
+pmos::ReceiveRight terminal_right;
+
 void react_named_port_notification(char *msg_buff, size_t size, pmos::Right r)
 {
     IPC_Named_Right_Notification *msg = (IPC_Named_Right_Notification *)msg_buff;
@@ -169,6 +171,7 @@ void react_named_port_notification(char *msg_buff, size_t size, pmos::Right r)
     };
 
     auto terminal_right = main_port.create_right(pmos::RightType::SendMany).value();
+    ::terminal_right = std::move(terminal_right.second);
 
     pmos::send_message_right_one(log_right, reg, {&main_port, pmos::RightType::SendOnce}, false, std::move(terminal_right.first));
 }

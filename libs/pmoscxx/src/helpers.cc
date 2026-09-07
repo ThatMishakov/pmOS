@@ -80,7 +80,7 @@ Right Right::clone() const
 ReceiveRight::~ReceiveRight()
 {
     if (*this)
-        (void)delete_receive_right(port_, right_);
+        (void)delete_receive_right(port_, right_, 0);
 }
 
 PortDispatcher::MessageWaiter::MessageWaiter(pmos::PortDispatcher& d, ReceiveRight *right) noexcept:
