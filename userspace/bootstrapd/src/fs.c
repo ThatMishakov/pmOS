@@ -11,6 +11,7 @@
 #include <inttypes.h>
 #include <pmos/memory.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 
 extern pmos_right_t posix_server_right;
 extern uint64_t loader_port;
@@ -27,6 +28,7 @@ static pmos_msgloop_tree_node_t fs_node;
 enum EntryType {
     EntryDirectory,
     EntryFile, // Module
+    Unknown,
 };
 
 int entry_type_to_ipc_type(enum EntryType type)
@@ -36,6 +38,18 @@ int entry_type_to_ipc_type(enum EntryType type)
         return IPC_FILE_TYPE_DIRECTORY;
     case EntryFile:
         return IPC_FILE_TYPE_REGULAR;
+    default:
+        return 0;
+    }
+}
+
+unsigned entry_type_to_mode(enum EntryType type)
+{
+    switch (type) {
+    case EntryDirectory:
+        return S_IFDIR;
+    case EntryFile:
+        return S_IFREG;
     default:
         return 0;
     }
@@ -319,13 +333,18 @@ void print_fs_tree()
     print_node(&root_node, 0);
 }
 
-void resolve_path_reply(int result, int type, uint64_t inode, pmos_right_t *reply_right)
+void resolve_path_reply(int result, enum EntryType type, uint64_t inode, pmos_right_t *reply_right)
 {
     IPC_FS_Resolve_Path_Reply reply = {
         .type = IPC_FS_Resolve_Path_Reply_NUM,
         .result_code = result,
-        .file_type = type,
+        .file_type = entry_type_to_ipc_type(type),
         .file_id = inode,
+        .st_mode = 0555 | entry_type_to_mode(type),
+        .st_uid = 0,
+        .st_gid = 0,
+        .st_rdev = 0,
+        .st_blksize = 4096,
     };
 
     auto r = send_message_right(*reply_right, 0, &reply, sizeof(reply), NULL, SEND_MESSAGE_DELETE_RIGHT);
@@ -365,7 +384,7 @@ void resolve_path_msg(IPC_FS_Resolve_Path *msg, size_t msg_size, pmos_right_t *r
         return;
     }
 
-    resolve_path_reply(0, entry_type_to_ipc_type(i->type), i->inode, reply_right);
+    resolve_path_reply(0, i->type, i->inode, reply_right);
 }
 
 struct OpenFileData {
@@ -690,6 +709,36 @@ end:
     free(ofd);
 }
 
+void ipc_fs_stat_dynamic(uint64_t inode, pmos_right_t *reply_right)
+{
+    struct tree_node *node = get_inode(inode);
+    if (!node) {
+        ipc_open_error_reply(-ENOENT, reply_right);
+        return;
+    }
+
+    size_t page_size = getpagesize();
+    uint64_t page_mask = page_size - 1;
+
+    uint64_t size = node->module->size;
+    uint64_t blocks = (size + page_mask) / page_size;
+
+    IPC_FS_Stat_Dynamic_Reply reply = {
+        .type = IPC_FS_Stat_Dynamic_Reply_NUM,
+        .flags = 0,
+        .result_code = 0,
+        .st_size = size,
+        .st_nlink = 1,
+        .st_blocks = blocks,
+    };
+
+    auto r = send_message_right(*reply_right, 0, &reply, sizeof(reply), NULL, SEND_MESSAGE_DELETE_RIGHT);
+    if (!r.result)
+        *reply_right = 0;
+    else
+        dbprintf("Loader: Failed to send IPC_FS_Stat_Dynamic_Reply: %d\n", (int)r.result);
+}
+
 static int filesystem_callback(Message_Descriptor *desc, void *buff, pmos_right_t *reply_right,
                               pmos_right_t *extra_rights, void *ctx, struct pmos_msgloop_data *data)
 {
@@ -717,14 +766,23 @@ static int filesystem_callback(Message_Descriptor *desc, void *buff, pmos_right_
     case IPC_FS_Open_NUM: {
         IPC_FS_Open *msg = (IPC_FS_Open *)(buff);
         if (desc->size < sizeof(IPC_FS_Open)) {
-            print_str("Loader: Received IPC_FS_Open of unexpected size 0x");
-            print_hex(desc->size);
-            print_str("\n");
+            dbprintf("Loader: Received IPC_FS_Open of unexpected size 0x%x\n", (uint32_t)desc->size);
             break;
         }
 
         ipc_fs_open(msg->flags, msg->inode, reply_right);
 
+        break;
+    }
+
+    case IPC_FS_Stat_Dynamic_NUM: {
+        IPC_FS_Stat_Dynamic *msg = (IPC_FS_Stat_Dynamic *)(buff);
+        if (desc->size < sizeof(IPC_FS_Stat_Dynamic)) {
+            dbprintf("Loader: Received IPC_FS_Stat_Dynamic of unexpected size 0x%x\n", (uint32_t)desc->size);
+            break;
+        }
+
+        ipc_fs_stat_dynamic(msg->inode, reply_right);
         break;
     }
 

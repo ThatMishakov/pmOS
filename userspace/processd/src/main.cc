@@ -83,6 +83,19 @@ pmos::async::detached_task handle_process_messages(pmos::ReceiveRight rr)
             open_file(std::move(reply_right), path);
         } break;
 
+        case IPC_Stat_NUM: {
+            if (message.size() < sizeof(IPC_Stat)) {
+                kernelLogger() << "posixd: Received IPC_Stat that is too small while attending file\n" << frg::endlog;
+                break;
+            }
+            auto *stat_msg = reinterpret_cast<IPC_Stat *>(message.data());
+
+            std::string stat_msg_path(stat_msg->path, message.size() - sizeof(IPC_Stat));
+
+            stat_handle(nullptr, std::move(reply_right), stat_msg->flags, std::move(stat_msg_path));
+        }
+            break;
+
         default:
             kernelLogger() << "processd: Unknown message type " << ipc_msg->type << " from process\n" << frg::endlog;
             break;

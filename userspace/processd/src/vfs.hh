@@ -12,6 +12,7 @@ struct VNode;
 struct Filesystem {
     pmos::Right fs_right;
     std::string mountpoint;
+    uint64_t device_id = 0;
 
     std::shared_ptr<VNode> root;
 };
@@ -54,6 +55,13 @@ struct VNode: public std::enable_shared_from_this<VNode> {
 
     FileType type = FileType::None;
 
+    uint32_t st_mode = 0;
+    uint32_t st_blksize = 0;
+
+    uint32_t st_uid = 0;
+    uint32_t st_gid = 0;
+    uint64_t st_rdev = 0;
+
     using vnode_ptr = std::shared_ptr<VNode>;
 
     std::map<std::string, std::variant<vnode_ptr, VNodeAwaitersList>> children_cache;
@@ -94,3 +102,4 @@ struct Path {
 
 pmos::async::detached_task open_file(pmos::Right reply_right, std::string path);
 pmos::async::detached_task mount_filesystem(pmos::Right reply_right, pmos::Right fs_right, const std::string &mountpoint, int64_t root_inode);
+pmos::async::detached_task stat_handle(std::shared_ptr<VNode> vnode, pmos::Right reply_right, unsigned flags, std::string path);

@@ -13,6 +13,7 @@
 #include <cassert>
 #include "vfs.hh"
 #include "log.hh"
+#include <fcntl.h>
 
 extern pmos::Port main_port;
 extern pmos::PortDispatcher dispatcher;
@@ -110,17 +111,19 @@ pmos::async::task<std::expected<std::shared_ptr<VNode>, int>> get_root_vnode()
     co_return co_await RootNodeWaiter{};
 }
 
-pmos::async::task<std::expected<std::shared_ptr<VNode>, int>> resolve_path(std::string path)
+pmos::async::task<std::expected<std::shared_ptr<VNode>, int>> resolve_path(std::string path, std::shared_ptr<VNode> current_vnode = nullptr)
 {
     auto p = Path::parse(path);
 
     // Start at root, since getcwd is not implemented
-
     auto root = co_await get_root_vnode();
     if (!root)
         co_return root;
 
-    auto current_vnode = root.value();
+    if (!current_vnode || !p.relative()) {
+        current_vnode = root.value();
+    }
+
     for (auto i : p.components()) {
         assert(!i.empty());
         if (!current_vnode->is_directory())
@@ -226,6 +229,18 @@ pmos::async::detached_task attend_open_file(std::shared_ptr<VNode> vnode, pmos::
         switch (ipc_msg->type) {
         case IPC_Kernel_Receive_Right_Destroyed_NUM:
             break;
+        case IPC_Stat_NUM: {
+            if (message.size() < sizeof(IPC_Stat)) {
+                kernelLogger() << "posixd: Received IPC_Stat that is too small while attending file\n" << frg::endlog;
+                break;
+            }
+            auto *stat_msg = reinterpret_cast<IPC_Stat *>(message.data());
+
+            std::string stat_msg_path(stat_msg->path, message.size() - sizeof(IPC_Stat));
+
+            stat_handle(vnode, std::move(reply_right), stat_msg->flags, std::move(stat_msg_path));
+        }
+            break;
         default:
             kernelLogger() << "posixd: Unknown message type " << ipc_msg->type << " while attending file\n" << frg::endlog;
             break;
@@ -273,6 +288,145 @@ pmos::async::detached_task open_file(pmos::Right reply_right, std::string path)
     auto send_result = pmos::send_message_right_one(reply_right, reply, {}, true, std::move(file_right), std::move(fs_right).value());
     if (!send_result)
         kernelLogger() << "posixd: Error " << send_result.error() << " sending open file reply to port " << reply_right.get() << "\n" << frg::endlog;
+}
+
+struct StatData {
+    uint64_t st_size;
+    uint64_t st_nlink;
+    uint64_t st_atim_tv_nsec;
+    uint64_t st_mtim_tv_nsec;
+    uint64_t st_ctim_tv_nsec;
+    uint64_t st_btim_tv_nsec;
+    uint64_t st_blocks;
+};
+
+pmos::async::task<std::expected<StatData, int>> get_file_stat_dynamic(std::shared_ptr<VNode> vnode)
+{
+    assert(vnode);
+    
+    IPC_FS_Stat_Dynamic req = {
+        .type  = IPC_FS_Stat_Dynamic_NUM,
+        .flags = 0,
+        .inode = vnode->inode,
+    };
+
+    auto reply_right = pmos::send_message_right_one(vnode->parent_fs->fs_right, req, {&main_port, pmos::RightType::SendOnce});
+    if (!reply_right) {
+        kernelLogger() << "posixd: Error " << reply_right.error() << " sending stat dynamic message to filesystem\n" << frg::endlog;
+        co_return std::unexpected(reply_right.error());
+    }
+
+    auto msg = co_await dispatcher.get_message(reply_right.value());
+    if (!msg) {
+        kernelLogger() << "posixd: Error " << msg.error() << " waiting for stat dynamic reply from filesystem\n" << frg::endlog;
+        co_return std::unexpected(msg.error());
+    }
+
+    if (msg->descriptor.size < sizeof(IPC_FS_Stat_Dynamic_Reply)) {
+        kernelLogger() << "posixd: Invalid stat dynamic reply size " << msg->descriptor.size << "\n" << frg::endlog;
+        co_return std::unexpected(-EIO);
+    }
+
+    auto *reply = reinterpret_cast<IPC_FS_Stat_Dynamic_Reply *>(msg->data.data());
+    if (reply->type != IPC_FS_Stat_Dynamic_Reply_NUM) {
+        kernelLogger() << "posixd: Invalid stat dynamic reply type " << reply->type << "\n" << frg::endlog;
+        co_return std::unexpected(-EIO);
+    }
+
+    if (reply->result_code != 0) {
+        kernelLogger() << "posixd: Filesystem returned error " << reply->result_code << " getting stat dynamic\n" << frg::endlog;
+        co_return std::unexpected(reply->result_code);
+    }
+
+    co_return StatData {
+        .st_size = reply->st_size,
+        .st_nlink = reply->st_nlink,
+        .st_atim_tv_nsec = reply->st_atim_tv_nsec,
+        .st_mtim_tv_nsec = reply->st_mtim_tv_nsec,
+        .st_ctim_tv_nsec = reply->st_ctim_tv_nsec,
+        .st_btim_tv_nsec = reply->st_btim_tv_nsec,
+        .st_blocks = reply->st_blocks,
+    };
+}
+
+
+void stat_handle_error_reply(pmos::Right &reply_right, int result)
+{
+    if (!reply_right)
+        return;
+
+    IPC_Stat_Reply reply = {
+        .type = IPC_Stat_Reply_NUM,
+        .flags = 0,
+        .result = static_cast<int16_t>(result),
+        .st_dev = 0,
+        .st_ino = 0,
+        .st_mode = 0,
+        .st_nlink = 0,
+        .st_uid = 0,
+        .st_gid = 0,
+        .st_rdev = 0,
+        .st_size = 0,
+        .st_atim_tv_nsec = 0,
+        .st_mtim_tv_nsec = 0,
+        .st_ctim_tv_nsec = 0,
+        .st_blksize = 0,
+        .st_blocks = 0,
+    };
+
+    auto result_send = pmos::send_message_right_one(reply_right, reply, {}, true);
+    if (!result_send)
+        kernelLogger() << "posixd: Error " << result_send.error() << " sending stat reply to port " << reply_right.get() << "\n" << frg::endlog;
+}
+
+pmos::async::detached_task stat_handle(std::shared_ptr<VNode> vnode, pmos::Right reply_right, unsigned flags, std::string path)
+{
+    bool empty_path = flags & AT_EMPTY_PATH;
+
+    // TODO: Handle symlinks here, and AT_SYMLINK_NOFOLLOW
+    if (!vnode && !empty_path) {
+        stat_handle_error_reply(reply_right, -EINVAL);
+        co_return;
+    }
+
+    auto result = co_await resolve_path(std::move(path), std::move(vnode));
+    if (!result) {
+        stat_handle_error_reply(reply_right, result.error());
+        co_return;
+    }
+
+    auto vnode_resolved = result.value();
+
+    auto stat_result = co_await get_file_stat_dynamic(vnode_resolved);
+    if (!stat_result) {
+        stat_handle_error_reply(reply_right, stat_result.error());
+        co_return;
+    }
+
+    auto stat_data = stat_result.value();
+
+    IPC_Stat_Reply reply = {
+        .type = IPC_Stat_Reply_NUM,
+        .flags = 0,
+        .result = 0,
+        .st_dev = vnode_resolved->parent_fs->device_id,
+        .st_ino = vnode_resolved->inode,
+        .st_mode = vnode_resolved->st_mode,
+        .st_nlink = stat_data.st_nlink,
+        .st_uid = vnode_resolved->st_uid,
+        .st_gid = vnode_resolved->st_gid,
+        .st_rdev = vnode_resolved->st_rdev,
+        .st_size = stat_data.st_size,
+        .st_atim_tv_nsec = stat_data.st_atim_tv_nsec,
+        .st_mtim_tv_nsec = stat_data.st_mtim_tv_nsec,
+        .st_ctim_tv_nsec = stat_data.st_ctim_tv_nsec,
+        .st_blksize = vnode_resolved->st_blksize,
+        .st_blocks = stat_data.st_blocks,
+    };
+
+    auto send_result = pmos::send_message_right_one(reply_right, reply, {}, true);
+    if (!send_result)
+        kernelLogger() << "posixd: Error " << send_result.error() << " sending stat reply to port " << reply_right.get() << "\n" << frg::endlog;
 }
 
 pmos::async::detached_task vfs_handle_messages()
@@ -436,6 +590,12 @@ pmos::async::detached_task vnode_wait(std::shared_ptr<VNode> vnode, std::string 
     child_vnode->parent = vnode;
     child_vnode->inode = reply->file_id;
     child_vnode->type = file_type_from_ipc(reply->file_type);
+
+    child_vnode->st_mode = reply->st_mode;
+    child_vnode->st_blksize = reply->st_blksize;
+    child_vnode->st_uid = reply->st_uid;
+    child_vnode->st_gid = reply->st_gid;
+    child_vnode->st_rdev = reply->st_rdev;
 
     unblock_vnode_waiters(vnode, name, child_vnode);
 }
