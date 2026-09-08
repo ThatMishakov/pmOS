@@ -83,6 +83,11 @@ public:
 
     bool atomic_alive() const;
 
+    /// @brief Deletes all the mssages with the given receive right id. Returns the number of messages deleted
+    /// @param receive_right_id Receive right id to delete messages for
+    /// @return Count of messages deleted
+    size_t atomic_delete_messages(u64 receive_right_id);
+
     static ReturnStr<std::pair<Right * /* right */, u64 /* new_id_error */>>
         send_message_right(Right *right, proc::TaskGroup *verify_group, Port *reply_port,
                            rights_array array, message_buffer data, uint64_t sender_id,

@@ -13,8 +13,8 @@ void test_delete_ipc_send_once()
     assert(port_req.result == SUCCESS);
 
     pmos_port_t port = port_req.port;
-    pmos_right_t recieve_right;
-    right_request_t right_req = create_right(port, &recieve_right, CREATE_RIGHT_SEND_ONCE);
+    pmos_right_t receive_right;
+    right_request_t right_req = create_right(port, &receive_right, CREATE_RIGHT_SEND_ONCE);
     assert(right_req.result == SUCCESS);
 
     result_t delete_result = delete_right(right_req.right);
@@ -28,7 +28,7 @@ void test_delete_ipc_send_once()
     assert(desc.size >= sizeof(IPC_Kernel_Receive_Right_Destroyed_NUM));
     IPC_Kernel_Receive_Right_Destroyed *notification = (IPC_Kernel_Receive_Right_Destroyed *)msg;
     assert(notification->type == IPC_Kernel_Receive_Right_Destroyed_NUM);
-    assert(desc.sent_with_right == recieve_right);
+    assert(desc.sent_with_right == receive_right);
     assert(desc.sender == 0);
 
     printf("IPC deletion notification received successfully.\n");
@@ -44,8 +44,8 @@ void test_delete_ipc_send_many()
     assert(port_req.result == SUCCESS);
 
     pmos_port_t port = port_req.port;
-    pmos_right_t recieve_right;
-    right_request_t right_req = create_right(port, &recieve_right, 0);
+    pmos_right_t receive_right;
+    right_request_t right_req = create_right(port, &receive_right, 0);
     assert(right_req.result == SUCCESS);
 
     result_t delete_result = delete_right(right_req.right);
@@ -59,7 +59,7 @@ void test_delete_ipc_send_many()
     assert(desc.size >= sizeof(IPC_Kernel_Receive_Right_Destroyed_NUM));
     IPC_Kernel_Receive_Right_Destroyed *notification = (IPC_Kernel_Receive_Right_Destroyed *)msg;
     assert(notification->type == IPC_Kernel_Receive_Right_Destroyed_NUM);
-    assert(desc.sent_with_right == recieve_right);
+    assert(desc.sent_with_right == receive_right);
     assert(desc.sender == 0);
 
     printf("IPC deletion notification for send many received successfully.\n");
@@ -75,8 +75,8 @@ void test_watch_right()
     assert(port_req.result == SUCCESS);
 
     pmos_port_t port1 = port_req.port;
-    pmos_right_t recieve_right;
-    right_request_t right_req = create_right(port1, &recieve_right, 0);
+    pmos_right_t receive_right;
+    right_request_t right_req = create_right(port1, &receive_right, 0);
     assert(right_req.result == SUCCESS);
 
     port_req = create_port(TASK_ID_SELF, 0);
@@ -95,10 +95,10 @@ void test_watch_right()
     assert(get_result == SUCCESS);
 
     assert(desc.size >= sizeof(IPC_Kernel_Receive_Right_Destroyed_NUM));
-    assert(desc.sent_with_right == recieve_right);
+    assert(desc.sent_with_right == receive_right);
     IPC_Kernel_Receive_Right_Destroyed *notification = (IPC_Kernel_Receive_Right_Destroyed *)msg;
     assert(notification->type == IPC_Kernel_Receive_Right_Destroyed_NUM);
-    assert(desc.sent_with_right == recieve_right);
+    assert(desc.sent_with_right == receive_right);
     assert(desc.sender == 0);
 
     free(msg);

@@ -241,7 +241,7 @@ bool Port::delete_self() noexcept
     };
 
     while (auto p = get_first_right()) {
-        p->destroy_recieve_right();
+        p->destroy_receive_right();
     }
 
     rcu_head.rcu_func = [](void *self, bool) {
@@ -289,18 +289,18 @@ ReturnStr<std::pair<Right * /* right */, u64 /* new_id_error */>>
     if (!msg)
         return Error(-ENOMEM);
 
-    // With send once, send right is also a recieve right
+    // With send once, send right is also a receive right
     klib::unique_ptr<SendRight> reply_right = nullptr;
-    klib::unique_ptr<ReceiveRight> recieve_right = nullptr;
+    klib::unique_ptr<ReceiveRight> receive_right = nullptr;
     if (reply_port) {
         assert(new_right_type == RightType::SendOnce || new_right_type == RightType::SendMany);
 
         if (new_right_type == RightType::SendOnce)
             reply_right = SendOnceRight::create_for_message();
         else {
-            auto [send, recieve] = SendManyRight::create_for_message();
+            auto [send, receive] = SendManyRight::create_for_message();
             reply_right = std::move(send);
-            recieve_right = std::move(recieve);
+            receive_right = std::move(receive);
         }
         
         if (!reply_right)
@@ -309,14 +309,14 @@ ReturnStr<std::pair<Right * /* right */, u64 /* new_id_error */>>
         reply_right->of_message     = true;
         reply_right->parent_message = msg.get();
 
-        if (recieve_right) {
-            recieve_right->parent = reply_port;
+        if (receive_right) {
+            receive_right->parent = reply_port;
         } else {
             reply_right->parent = reply_port;
         }
     }
 
-    msg->sent_with_right_ = right->right_id_in_reciever();
+    msg->sent_with_right_ = right->right_id_in_receiver();
     assert(msg->sent_with_right_ && "Right ID in receiver is 0!");
 
     LockCarousel<Spinlock, 5> locks;
@@ -366,9 +366,9 @@ ReturnStr<std::pair<Right * /* right */, u64 /* new_id_error */>>
             assert(reply_port->alive);
             Auto_Lock_Scope l(reply_port->rights_lock);
             right_parent_id = reply_port->new_right_id();
-            if (recieve_right) {
-                recieve_right->right_parent_id = right_parent_id;
-                reply_port->rights.insert(recieve_right.release());
+            if (receive_right) {
+                receive_right->right_parent_id = right_parent_id;
+                reply_port->rights.insert(receive_right.release());
             } else {
                 reply_right->right_parent_id = right_parent_id;
                 reply_port->rights.insert(reply_right.get());
@@ -503,5 +503,35 @@ void Port::atomic_remove_right(ReceiveRight *right)
     Auto_Lock_Scope l(rights_lock);
     rights.erase(right);
 }
+
+size_t Port::atomic_delete_messages(u64 receive_right_id)
+{
+    Message_storage delete_queue{};
+    size_t count = 0;
+
+    {
+        Auto_Lock_Scope l(lock);
+
+        for (auto it = msg_queue.begin(); it != msg_queue.end();) {
+            auto &msg = *it;
+            if (msg.sent_with_right() == receive_right_id) {
+                it = msg_queue.erase(it);
+                delete_queue.push_back(&msg);
+            } else {
+                ++it;
+            }
+        }
+    }
+
+    while (!delete_queue.empty()) {
+        auto begin = delete_queue.begin();
+        delete_queue.remove(begin);
+        begin->delete_self();
+        ++count;
+    }
+
+    return count;
+}
+
 
 } // namespace kernel::ipc

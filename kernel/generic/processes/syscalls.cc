@@ -177,7 +177,7 @@ std::array<syscall_function, 67> syscall_table = {
     syscall_set_log_port,
 
     syscall_get_page_table,
-    nullptr,
+    syscall_delete_receive_right,
     syscall_transfer_region,
     syscall_create_normal_region,
     syscall_get_segment,
@@ -1158,13 +1158,13 @@ void syscall_set_interrupt(TaskDescriptor *task)
         return;
     }
 
-    auto recieve_right = IntNotificationRight::create_for_port(handler.val, port_ptr);
-    if (!recieve_right) {
-        syscall_error(task) = recieve_right.result;
+    auto receive_right = IntNotificationRight::create_for_port(handler.val, port_ptr);
+    if (!receive_right) {
+        syscall_error(task) = receive_right.result;
         return;
     }
 
-    syscall_return(task) = recieve_right.val->right_parent_id;
+    syscall_return(task) = receive_right.val->right_parent_id;
 }
 
 void syscall_get_interrupt_info(TaskDescriptor *task)
@@ -1210,7 +1210,7 @@ void syscall_complete_interrupt(TaskDescriptor *task)
         return;
     }
 
-    if (right->recieve_type() != RightType::InterruptNotification) {
+    if (right->receive_type() != RightType::InterruptNotification) {
         syscall_error(task) = -EBADF;
         return;
     }
@@ -2731,7 +2731,7 @@ void syscall_set_timer_deadline(TaskDescriptor *task)
         return;
     }
 
-    if (right->recieve_type() != RightType::Timer) {
+    if (right->receive_type() != RightType::Timer) {
         syscall_error(task) = -EBADF;
         return;
     }
@@ -2919,6 +2919,46 @@ void syscall_sleep(TaskDescriptor *task)
     task->continuation_func = sleep_wakeup;
 
     task->atomic_block_self(TaskDescriptor::SCHED_WAKE_TIMER);
+}
+
+void syscall_delete_receive_right(TaskDescriptor *task)
+{
+
+    u64 port_id = syscall_arg64(task, 0);
+    u64 right_id = syscall_arg64(task, 1);
+    unsigned flags = syscall_flags(task);
+
+    bool delete_messages = flags & DELETE_RIGHT_CLEAR_MESSAGE_QUEUE;
+
+    auto port_ptr = Port::atomic_get_port(port_id);
+    if (!port_ptr) {
+        syscall_error(task) = -ENOENT;
+        return;
+    }
+
+    if (port_ptr->owner != task) {
+        syscall_error(task) = -EPERM;
+        return;
+    }
+
+    auto right = port_ptr->atomic_get_right(right_id);
+
+    bool deleted_right = false;
+    if (right) {
+        deleted_right = right->destroy_receive_right();
+    }
+
+    size_t poped_messages = 0;
+
+    if (delete_messages) {
+        poped_messages = port_ptr->atomic_delete_messages(right_id);
+    }
+
+    if (deleted_right || poped_messages > 0) {
+        syscall_return(task) = poped_messages;
+    } else {
+        syscall_error(task) = -ENOMSG;
+    }
 }
 
 unsigned syscall_number(TaskDescriptor *task) { return call_flags(task) & 0xFF; }

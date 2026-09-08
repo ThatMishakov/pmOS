@@ -398,7 +398,7 @@ typedef struct pmos_int_r {
 ///
 /// This function assigns an CPU interrupt vector for a given GSI. Internally, this may also
 /// configure interrupt controllers (for example, IOAPICs on x86) as necessary such that
-/// after the vector has been mapped, the interrupts at GSI will be recieved by it.
+/// after the vector has been mapped, the interrupts at GSI will be received by it.
 /// If the interrupt has already been assigned, the function should not return error,
 /// and will just create a new right for the same source.
 /// @param gsi GSI for which the vector should be assigned
@@ -425,11 +425,11 @@ syscall_r set_namespace(uint64_t new_id, unsigned type);
 /// The port must be owned by the caller thread. The new right is send many by default,
 /// changable by the flags.
 /// @param port_id ID of the port (must be owned by the caller)
-/// @param id_in_reciever The otput for the ID of the right in the port, if not NULL.
+/// @param id_in_receiver The otput for the ID of the right in the port, if not NULL.
 /// @param flags Flags (for example, CREATE_RIGHT_SEND_ONCE)
 /// @return On success, the right ID in the rights namespace (for sender). On failure,
 ///         the error
-right_request_t create_right(pmos_port_t port_id, pmos_right_t *id_in_reciever, unsigned flags);
+right_request_t create_right(pmos_port_t port_id, pmos_right_t *id_in_receiver, unsigned flags);
     #define CREATE_RIGHT_SEND_ONCE (1 << 0)
 
 /// @brief Duplicates the right. The right must be send many and be in the namespace of the caller
@@ -499,19 +499,19 @@ result_t accept_rights(pmos_port_t port, pmos_right_t *rights_array);
 /// @brief Watches a right for deletion
 ///
 /// This system call allows to watch a right for deletion. Currently, only the send many rights can be watched.
-/// After calling this function, when the right is deleted, a notification will be recieved with the given recieve right.
-/// To undo it, delete the recieve right.
+/// After calling this function, when the right is deleted, a notification will be received with the given receive right.
+/// To undo it, delete the receive right.
 /// @param right Right to watch. Must be in the caller's NAMESPACE_RIGHT and must be send many (TODO: maybe implement for other rights as well)
 /// @param port Port where the notification should be sent when the right is deleted. Must be owned by the caller.
-/// @return Result of the operation. On success, the value contains the ID of the recieve (once) right that will recieve the notification.
+/// @return Result of the operation. On success, the value contains the ID of the receive (once) right that will receive the notification.
 right_request_t watch_right(pmos_right_t right, pmos_port_t port);
 
 /// @brief Create a timer object
 ///
 /// This system call creates a timer object in kernel, which might then be used to send a message after a specified
-/// deadline. The timer is created in a disarmed state. Canceling the timer can be done by deliting its recieve right.
+/// deadline. The timer is created in a disarmed state. Canceling the timer can be done by deliting its receive right.
 /// @param port Port where the message should be sent when the timer expires. Must be owned by the caller.
-/// @return Result of the operation. On success, the value contains the ID of the recieve right for the timer.
+/// @return Result of the operation. On success, the value contains the ID of the receive right for the timer.
 right_request_t pmos_create_timer(pmos_port_t port);
 
 /// @brief Sets the timer deadline

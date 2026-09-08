@@ -207,10 +207,10 @@ protected:
         get_msg_return_type await_resume() noexcept;
 
     private:
-        MessageWaiter(PortDispatcher &dispatcher, ReceiveRight *recieve_right) noexcept;
+        MessageWaiter(PortDispatcher &dispatcher, ReceiveRight *receive_right) noexcept;
 
-        ReceiveRight *recieve_right = nullptr;
-        pmos_right_t recieve_right_id;
+        ReceiveRight *receive_right = nullptr;
+        pmos_right_t receive_right_id;
         pmos::containers::RBTreeNode<MessageWaiter> tree_node = {};
         std::coroutine_handle<> h;
         PortDispatcher &dispatcher;
@@ -222,7 +222,7 @@ protected:
 
     using PortsTree = pmos::containers::RedBlackTree<
         MessageWaiter, &MessageWaiter::tree_node,
-        detail::TreeCmp<MessageWaiter, pmos_right_t, &MessageWaiter::recieve_right_id>>;
+        detail::TreeCmp<MessageWaiter, pmos_right_t, &MessageWaiter::receive_right_id>>;
 
     Port &port;
     MessageWaiter *default_waiter = {};

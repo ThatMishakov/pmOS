@@ -74,7 +74,7 @@ void init_acpi();
 
 void *shutdown_thread(void *);
 
-pmos_right_t main_recieve_right = 0;
+pmos_right_t main_receive_right = 0;
 pmos_right_t main_right = 0;
 
 int default_callback(Message_Descriptor *desc, void *msg_buff, pmos_right_t *reply_right,
@@ -189,7 +189,7 @@ int main(int , char **)
         }
         main_port = req.port;
 
-        auto right_req = create_right(req.port, &main_recieve_right, 0);
+        auto right_req = create_right(req.port, &main_receive_right, 0);
         if (right_req.result) {
             printf("Error creating right %i\n", (int)req.result);
             return 0;
@@ -242,7 +242,7 @@ int main(int , char **)
 
     pmos_msgloop_tree_node_t n;
     pmos_msgloop_node_set(&n, 0, default_callback, &main_msgloop_data);
-    // pmos_msgloop_node_set(&n, main_recieve_right, default_callback, &main_msgloop_data);
+    // pmos_msgloop_node_set(&n, main_receive_right, default_callback, &main_msgloop_data);
     pmos_msgloop_insert(&main_msgloop_data, &n);
     pmos_msgloop_loop(&main_msgloop_data);
 

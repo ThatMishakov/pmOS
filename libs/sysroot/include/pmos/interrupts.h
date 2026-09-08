@@ -39,7 +39,7 @@ extern "C" {
 
 right_request_t set_interrupt(pmos_right_t right, pmos_port_t port);
 
-result_t complete_interrupt(pmos_port_t port, pmos_right_t recieve_right);
+result_t complete_interrupt(pmos_port_t port, pmos_right_t receive_right);
 
 typedef struct interrupt_info_t {
     result_t result;

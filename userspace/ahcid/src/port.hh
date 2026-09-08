@@ -132,7 +132,7 @@ struct AHCIPort: TimerWaiter {
 
     uint64_t timer_max = 0;
 
-    static constexpr uint32_t recieved_fis_offset = 0x0;
+    static constexpr uint32_t received_fis_offset = 0x0;
     // Put it here for FIS-based switching
     static constexpr uint32_t command_list_offset = 0x1000;
 
@@ -174,8 +174,8 @@ struct AHCIPort: TimerWaiter {
     DeviceType classify_device();
 
     pmos::Right port_right;
-    std::shared_ptr<RRWrapper> port_recieve_right;
-    std::set<std::shared_ptr<RRWrapper>> port_recieve_rights;
+    std::shared_ptr<RRWrapper> port_receive_right;
+    std::set<std::shared_ptr<RRWrapper>> port_receive_rights;
 };
 
 extern int num_slots;

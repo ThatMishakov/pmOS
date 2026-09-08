@@ -757,7 +757,7 @@ impl super::ipc::Message {
         }
     }
 
-    pub fn is_destroyed_recieve_notification(&self) -> bool {
+    pub fn is_destroyed_receive_notification(&self) -> bool {
         self.sender == 0 && self.get_known_id() == Some(IPC_KERNEL_RECIEVE_RIGHT_DESTROYED_NUM) && matches!(self.deserialize(), Message::IPCKernelReceiveRightDestroyed(_))
     }
 }

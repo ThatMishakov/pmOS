@@ -59,8 +59,8 @@ struct TimerRight final: TimerNode, ipc::ReceiveRight, AttentionNode {
     virtual void fire() override;
 
     // ReceiveRight
-    virtual bool destroy_recieve_right() override;
-    virtual ipc::RightType recieve_type() const override;
+    virtual bool destroy_receive_right() override;
+    virtual ipc::RightType receive_type() const override;
 
     // GenericMessage overrides
     virtual void delete_self() override;

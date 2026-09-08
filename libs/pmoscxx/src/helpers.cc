@@ -84,12 +84,12 @@ ReceiveRight::~ReceiveRight()
 }
 
 PortDispatcher::MessageWaiter::MessageWaiter(pmos::PortDispatcher& d, ReceiveRight *right) noexcept:
-    recieve_right(right), dispatcher(d)
+    receive_right(right), dispatcher(d)
 {
     if (right)
-        recieve_right_id = right->get();
+        receive_right_id = right->get();
     else
-        recieve_right_id = 0;
+        receive_right_id = 0;
 }
 
 PortDispatcher::MessageWaiter PortDispatcher::get_message(ReceiveRight &r) noexcept
@@ -110,7 +110,7 @@ bool PortDispatcher::MessageWaiter::await_ready() noexcept
 void PortDispatcher::MessageWaiter::await_suspend(std::coroutine_handle<> hh)
 {
     h = hh;
-    if (recieve_right != nullptr) {
+    if (receive_right != nullptr) {
         dispatcher.waiters.insert(this);
     } else {
         dispatcher.default_waiter = this;
@@ -143,8 +143,8 @@ std::expected<void, int> PortDispatcher::dispatch()
 
 get_msg_return_type PortDispatcher::MessageWaiter::await_resume() noexcept
 {
-    if (recieve_right and recieve_right->type() == RightType::SendOnce)
-        recieve_right->release();
+    if (receive_right and receive_right->type() == RightType::SendOnce)
+        receive_right->release();
 
     return std::move(message);
 }
@@ -234,12 +234,12 @@ std::expected<std::pair<Right, ReceiveRight>, int>
     if (type == RightType::SendOnce)
         flags |= CREATE_RIGHT_SEND_ONCE;
 
-    pmos_right_t recieve_right;
-    auto r = ::create_right(get(), &recieve_right, flags);
+    pmos_right_t receive_right;
+    auto r = ::create_right(get(), &receive_right, flags);
     if (r.result)
         return std::unexpected(static_cast<int>(-r.result));
 
-    return std::make_pair(Right {r.right, type}, ReceiveRight {recieve_right, type, get()});
+    return std::make_pair(Right {r.right, type}, ReceiveRight {receive_right, type, get()});
 }
 
 Port::~Port()

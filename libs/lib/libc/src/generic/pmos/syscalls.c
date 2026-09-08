@@ -589,13 +589,13 @@ syscall_r set_namespace(uint64_t new_id, unsigned type)
 #endif
 }
 
-right_request_t create_right(uint64_t port_id, pmos_right_t *id_in_reciever, unsigned flags)
+right_request_t create_right(uint64_t port_id, pmos_right_t *id_in_receiver, unsigned flags)
 {
     syscall_r result;
 #ifdef __32BITSYSCALL
-    result = __pmos_syscall32_3words(SYSCALL_CREATE_RIGHT | (flags << 8), port_id, id_in_reciever);
+    result = __pmos_syscall32_3words(SYSCALL_CREATE_RIGHT | (flags << 8), port_id, id_in_receiver);
 #else
-    result = pmos_syscall(SYSCALL_CREATE_RIGHT | (flags << 8), port_id, id_in_reciever);
+    result = pmos_syscall(SYSCALL_CREATE_RIGHT | (flags << 8), port_id, id_in_receiver);
 #endif
     return (right_request_t) {
         .result = result.result,

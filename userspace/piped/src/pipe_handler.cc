@@ -600,7 +600,7 @@ void pipe_main(IPC_Pipe_Open o, Message_Descriptor /* desc */)
         }
 
         if (msg.size < sizeof(IPC_Generic_Msg)) {
-            fprintf(stderr, "Warning: recieved very small message\n");
+            fprintf(stderr, "Warning: received very small message\n");
             break;
         }
 

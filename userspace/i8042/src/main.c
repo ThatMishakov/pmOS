@@ -301,7 +301,7 @@ int port_callback(Message_Descriptor *desc, void *msg,
     unsigned port = (int)(uintptr_t)ctx;
 
     if (desc->size < IPC_MIN_SIZE) {
-        fprintf(stderr, "i8042 recieved message too small for port %u!\n", port);
+        fprintf(stderr, "i8042 received message too small for port %u!\n", port);
         return PMOS_MSGLOOP_CONTINUE;
     }
 
@@ -310,7 +310,7 @@ int port_callback(Message_Descriptor *desc, void *msg,
     switch (type) {
     case IPC_PS2_Reg_Port_NUM: {
         if (desc->size < sizeof(IPC_PS2_Reg_Port)) {
-            fprintf(stderr, "i8042 recieved IPC_PS2_Reg_Port which is too small (size %u)\n", (unsigned)desc->size);
+            fprintf(stderr, "i8042 received IPC_PS2_Reg_Port which is too small (size %u)\n", (unsigned)desc->size);
             break;
         }
 
@@ -331,7 +331,7 @@ int port_callback(Message_Descriptor *desc, void *msg,
         break;
     }
     default:
-        fprintf(stderr, "i8042 recieved message with unknown type for port %" PRIu32 "\n", type);
+        fprintf(stderr, "i8042 received message with unknown type for port %" PRIu32 "\n", type);
         break;
     }
     return PMOS_MSGLOOP_CONTINUE;

@@ -170,7 +170,7 @@ impl ExecutorState {
             endpoint.right
         );
 
-        let right_destroyed = msg.is_destroyed_recieve_notification();
+        let right_destroyed = msg.is_destroyed_receive_notification();
 
         if !right_destroyed {
             endpoint.message = Some(msg);
@@ -362,8 +362,8 @@ impl Executor {
 
     pub fn create_right_sendmany(&self) -> Result<(SendManyRight, ManyReceiver), Error> {
         let right = self.state.borrow().get_port().create_right_sendmany()?;
-        let reciever = ManyReceiver::from_right(right.1, self.clone());
-        Ok((right.0, reciever))
+        let receiver = ManyReceiver::from_right(right.1, self.clone());
+        Ok((right.0, receiver))
     }
 }
 

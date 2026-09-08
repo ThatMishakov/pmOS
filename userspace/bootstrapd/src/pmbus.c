@@ -54,14 +54,14 @@ static int pmbus_reply_callback(Message_Descriptor *desc, void *buff, pmos_right
 
     IPC_BUS_Request_Object_Reply *r = buff;
     if (desc->size < sizeof(*r)) {
-        print_str("Loader: recieved too small of a message for device request\n");
+        print_str("Loader: received too small of a message for device request\n");
         retry = false;
     } else if (r->result != 0) {
         print_str("Loader: error in recieving a pmbus object...");
         retry = true;
     } else if (!extra_rights[0]) {
         hs->next_bus_id = r->next_sequence_number;
-        print_str("Loader: recieved pmbus object with no right (probably expired...)\n");
+        print_str("Loader: received pmbus object with no right (probably expired...)\n");
         retry = true;
     } else {
         hs->next_bus_id = r->next_sequence_number;

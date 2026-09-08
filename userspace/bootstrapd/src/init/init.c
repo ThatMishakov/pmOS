@@ -1040,7 +1040,7 @@ static int service_right_callback(Message_Descriptor *desc, void *buff, pmos_rig
     switch (IPC_TYPE(buff)) {
     case IPC_Start_Service_NUM:
         if (desc->size < IPC_RIGHT_SIZE(IPC_Start_Service_NUM)) {
-            print_str("Loader: recieved IPC_Start_Service that is too small\n");
+            print_str("Loader: received IPC_Start_Service that is too small\n");
             break;
         }
 
@@ -1050,7 +1050,7 @@ static int service_right_callback(Message_Descriptor *desc, void *buff, pmos_rig
 
         break;
     default:
-        print_str("Loader: recieved unknown message for service, with type ");
+        print_str("Loader: received unknown message for service, with type ");
         print_hex(IPC_TYPE(buff));
         print_str("\n");
         break;
@@ -1064,11 +1064,11 @@ extern struct pmos_msgloop_data msgloop_data;
 
 bool create_service_right(struct Service *service)
 {
-    if (service->service_recieve_right)
+    if (service->service_receive_right)
         return true;
 
-    uint64_t recieve_right;
-    right_request_t right = create_right(loader_port, &recieve_right, 0);
+    uint64_t receive_right;
+    right_request_t right = create_right(loader_port, &receive_right, 0);
     if (right.result != SUCCESS) {
         print_str("Loader: failed to create right for a service: ");
         print_hex(right.result);
@@ -1076,10 +1076,10 @@ bool create_service_right(struct Service *service)
         return false;
     }
 
-    service->service_recieve_right = recieve_right;
+    service->service_receive_right = receive_right;
     service->service_right = right.right;
 
-    pmos_msgloop_node_set(&service->service_right_node, recieve_right, service_right_callback, service);
+    pmos_msgloop_node_set(&service->service_right_node, receive_right, service_right_callback, service);
     pmos_msgloop_insert(&msgloop_data, &service->service_right_node);
 
     return true;

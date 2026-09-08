@@ -37,7 +37,7 @@ ReturnStr<TimerRight *> TimerRight::create_for_port(ipc::Port *port)
     return Success(new_timer.release());
 }
 
-ipc::RightType TimerRight::recieve_type() const
+ipc::RightType TimerRight::receive_type() const
 {
     return ipc::RightType::Timer;
 }
@@ -187,7 +187,7 @@ void TimerRight::delete_self()
     }
 }
 
-bool TimerRight::destroy_recieve_right()
+bool TimerRight::destroy_receive_right()
 {
     Auto_Lock_Scope l(lock);
     if (!alive)

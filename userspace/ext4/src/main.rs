@@ -468,9 +468,9 @@ async fn ipc_fs_open(executor: Executor, reply_right: Option<SendRight>, fs: Ext
         return;
     }
 
-    let mut recieve_right = right.1;
+    let mut receive_right = right.1;
 
-    while let Some(mut msg) = recieve_right.next().await {
+    while let Some(mut msg) = receive_right.next().await {
         let reply_right = msg.reply_right.take();
         match msg.deserialize() {
             pmos::ipc_msgs::Message::IPCRead(data) => {
@@ -497,14 +497,14 @@ async fn ipc_fs_open(executor: Executor, reply_right: Option<SendRight>, fs: Ext
                 }
             },
             _ => {
-                println!("Ext4: recieved unknown message in IPC open file consumer");
+                println!("Ext4: received unknown message in IPC open file consumer");
             }
         }
     }
 }
 
-async fn ipc_handle(executor: Executor, mut reciever: ManyReceiver, fs: Ext4) {
-    while let Some(mut msg) = reciever.next().await {
+async fn ipc_handle(executor: Executor, mut receiver: ManyReceiver, fs: Ext4) {
+    while let Some(mut msg) = receiver.next().await {
         let reply_right = msg.reply_right.take();
         match msg.deserialize() {
             pmos::ipc_msgs::Message::IPCFSResolvePath(req) => {

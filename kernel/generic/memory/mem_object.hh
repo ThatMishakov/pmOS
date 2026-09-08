@@ -150,7 +150,7 @@ public:
      * checking
      * @param write If the page is mapped for writing
      * @param cow_region If the region is CoW. This enables extra "optimizations", where CoW
-     * (private mapping) regions requesting pages from anonymous objects would directly recieve
+     * (private mapping) regions requesting pages from anonymous objects would directly receive
      * anonymous pages, instead of allocating them inside the object and copying them, never to
      * be used.
      * @return first - page is immediately available and can be maped. Otherwise, the request to

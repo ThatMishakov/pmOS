@@ -174,18 +174,18 @@ void enable_port(unsigned port)
     }
 }
 
-static void port_remove_recieve_right(Port *p)
+static void port_remove_receive_right(Port *p)
 {
-    if (p->port_data_recieve_right) {
-        delete_receive_right(main_port, p->port_data_recieve_right);
+    if (p->port_data_receive_right) {
+        delete_receive_right(main_port, p->port_data_receive_right, 0);
         pmos_msgloop_erase(&msgloop_data, &p->port_data_node);
-        p->port_data_recieve_right = 0;
+        p->port_data_receive_right = 0;
         disable_port(p != ports);
     }
 }
 static pmos_right_t arrange_data_right(Port *p)
 {
-    port_remove_recieve_right(p);
+    port_remove_receive_right(p);
     
     pmos_right_t rr;
     right_request_t req = create_right(main_port, &rr, 0);
@@ -194,7 +194,7 @@ static pmos_right_t arrange_data_right(Port *p)
         exit(1);
     }
 
-    p->port_data_recieve_right = rr;
+    p->port_data_receive_right = rr;
 
     pmos_msgloop_node_set(&p->port_data_node, rr, data_callback, p);
     pmos_msgloop_insert(&msgloop_data, &p->port_data_node);
@@ -234,7 +234,7 @@ void react_register_port(unsigned port, IPC_PS2_Reg_Port *msg, pmos_right_t *rep
     right_request_t req = send_message_right(*reply_right, 0, &reply, sizeof(reply), &e, SEND_MESSAGE_DELETE_RIGHT);
     if (req.result) {
         fprintf(stderr, "[i8042] Error: Failed to send reply to right register request: %i (%s)\n", (int)req.result, strerror(-(int)req.result));
-        port_remove_recieve_right(p);
+        port_remove_receive_right(p);
         return;
     }
     p->notification_right = other_rights[0];

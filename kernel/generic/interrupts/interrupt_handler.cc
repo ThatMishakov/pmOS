@@ -61,7 +61,7 @@ ipc::RightType IntSourceRight::type() const
     return ipc::RightType::InterruptSource;
 }
 
-ipc::RightType IntNotificationRight::recieve_type() const
+ipc::RightType IntNotificationRight::receive_type() const
 {
     return ipc::RightType::InterruptNotification;
 }
@@ -101,7 +101,7 @@ static void after_removing_pending(InterruptHandler *handler)
         interrupt_disable(handler);
 }
 
-bool IntNotificationRight::destroy_recieve_right()
+bool IntNotificationRight::destroy_receive_right()
 {
     if (!alive)
         return false;

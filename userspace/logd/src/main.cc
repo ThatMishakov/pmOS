@@ -230,7 +230,7 @@ int main(int argc, char *argv[])
         auto [msg, data, right, reply_right] = main_port.get_first_message().value();
 
         if (msg.size < sizeof(IPC_Generic_Msg)) {
-            log("Warning: recieved very small message\n");
+            log("Warning: received very small message\n");
             break;
         }
 

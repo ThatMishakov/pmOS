@@ -657,8 +657,8 @@ void *isr_func(void *arg)
         return NULL;
     }
 
-    uint64_t right_reciever;
-    auto rr = create_right(p.port, &right_reciever, 0);
+    uint64_t right_receiver;
+    auto rr = create_right(p.port, &right_receiver, 0);
     if (rr.result != SUCCESS) {
         send_isr_reply(reply_right, UACPI_STATUS_OUT_OF_MEMORY);
         return NULL;

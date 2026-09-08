@@ -98,7 +98,7 @@ struct Service {
     struct module_descriptor_list *module;
 
     uint64_t service_right;
-    uint64_t service_recieve_right;
+    uint64_t service_receive_right;
     uint64_t pmbus_id;
 
     pmos_msgloop_tree_node_t service_right_node;

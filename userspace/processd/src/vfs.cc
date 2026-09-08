@@ -252,8 +252,8 @@ pmos::async::detached_task attend_open_file(std::shared_ptr<VNode> vnode, pmos::
 
 pmos::Right create_file_right(std::shared_ptr<VNode> vnode)
 {
-    auto [send_right, recieve_right] = main_port.create_right(pmos::RightType::SendMany).value();
-    attend_open_file(std::move(vnode), std::move(recieve_right));
+    auto [send_right, receive_right] = main_port.create_right(pmos::RightType::SendMany).value();
+    attend_open_file(std::move(vnode), std::move(receive_right));
     return std::move(send_right);
 }
 
@@ -432,14 +432,14 @@ pmos::async::detached_task stat_handle(std::shared_ptr<VNode> vnode, pmos::Right
 pmos::async::detached_task vfs_handle_messages()
 {
     auto right = main_port.create_right(pmos::RightType::SendMany);
-    auto [r, recieve_right] = std::move(right.value());
+    auto [r, receive_right] = std::move(right.value());
     auto result = pmos::name_right(std::move(r), "/pmos/vfsd");
 
     while (1) {
         auto [msg, message, reply_right, rights] = (co_await dispatcher.get_message_default()).value();
 
         if (message.size() < sizeof(IPC_Generic_Msg)) {
-            kernelLogger() << "posixd: Warning: recieved very small message\n" << frg::endlog;
+            kernelLogger() << "posixd: Warning: received very small message\n" << frg::endlog;
             break;
         }
 

@@ -94,10 +94,10 @@ struct ReceiveRight: GenericMessage {
     /// Parent-facing id (does not change, and gets copied when right is duplicated)
     u64 right_parent_id = 0;
 
-    virtual bool destroy_recieve_right() = 0;
+    virtual bool destroy_receive_right() = 0;
     virtual ~ReceiveRight() = default;
 
-    virtual RightType recieve_type() const = 0;
+    virtual RightType receive_type() const = 0;
 
     // GenericMessage overrides
     virtual size_t size() const override;
@@ -107,14 +107,14 @@ struct ReceiveRight: GenericMessage {
 };
 
 struct SendRight: Right, ReceiveRight {
-    // TODO(-ish): This shouldn't be a recieve right
-    virtual u64 right_id_in_reciever() const;
+    // TODO(-ish): This shouldn't be a receive right
+    virtual u64 right_id_in_receiver() const;
 
     virtual void rcu_push() override;
     virtual void remove_from_parent() override;
 
     // ReceiveRight override
-    virtual bool destroy_recieve_right() override;
+    virtual bool destroy_receive_right() override;
 
     virtual Port *parent_port() = 0;
 };
@@ -122,15 +122,15 @@ struct SendRight: Right, ReceiveRight {
 struct SendManyRightShared;
 
 struct SendManyRight final: SendRight {
-    virtual u64 right_id_in_reciever() const override;
+    virtual u64 right_id_in_receiver() const override;
 
-    // This stuff is racey, and allows to potentially leak the right IDs in the namespace of the reciever,
+    // This stuff is racey, and allows to potentially leak the right IDs in the namespace of the receiver,
     // if this right gets sent, before the ID has been returned to userspace, which seems like a very small issue, but is it?
     static ReturnStr<SendManyRight *> create_for_group(Port *port, proc::TaskGroup *group, u64 id_in_parent);
 
     virtual ReturnStr<std::pair<Right *, u64>> duplicate(proc::TaskGroup *) override;
     virtual RightType type() const override;
-    virtual RightType recieve_type() const override;
+    virtual RightType receive_type() const override;
 
     virtual bool destroy_nolock(DestroyReason reason, proc::TaskGroup *match_group = nullptr) override;
 
@@ -158,7 +158,7 @@ struct SendOnceRight final: SendRight {
 
     virtual ReturnStr<std::pair<Right *, u64>> duplicate(proc::TaskGroup *) override;
     virtual RightType type() const override;
-    virtual RightType recieve_type() const override;
+    virtual RightType receive_type() const override;
 
     // Right overrides
     virtual bool destroy_nolock(DestroyReason reason, proc::TaskGroup *match_group = nullptr) override;
@@ -177,8 +177,8 @@ struct SendManyRightShared final: ReceiveRight {
 
     void rcu_push();
 
-    virtual bool destroy_recieve_right() override;
-    virtual RightType recieve_type() const override;
+    virtual bool destroy_receive_right() override;
+    virtual RightType receive_type() const override;
 
     // GenericMessage overrides
     virtual void delete_self() override;

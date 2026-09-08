@@ -79,7 +79,7 @@ unsafe extern "C" {
     unsafe fn dup_right(id: Right) -> RightRequestResult;
     unsafe fn create_right(
         port: Port,
-        id_in_reciever: *mut Right,
+        id_in_receiver: *mut Right,
         flags: u32,
     ) -> RightRequestResult;
     unsafe fn accept_rights(port: Port, rights_array: *mut u64) -> ResultT;
@@ -213,19 +213,19 @@ impl IPCPort {
     }
 
     pub fn create_right_sendonce(&self) -> Result<(SendOnceRight, ReceiveOnceRight), Error> {
-        let mut recieve_id: Right = 0;
+        let mut receive_id: Right = 0;
         let RightRequestResult { result, right } =
-            unsafe { create_right(self.port, &raw mut recieve_id, CREATE_RIGHT_SEND_ONCE) };
+            unsafe { create_right(self.port, &raw mut receive_id, CREATE_RIGHT_SEND_ONCE) };
 
-        result.result().map(|()| (SendOnceRight(right), ReceiveOnceRight(recieve_id, self.port)))
+        result.result().map(|()| (SendOnceRight(right), ReceiveOnceRight(receive_id, self.port)))
     }
 
     pub fn create_right_sendmany(&self) -> Result<(SendManyRight, ReceiveManyRight), Error> {
-        let mut recieve_id: Right = 0;
+        let mut receive_id: Right = 0;
         let RightRequestResult { result, right } =
-            unsafe { create_right(self.port, &raw mut recieve_id, 0) };
+            unsafe { create_right(self.port, &raw mut receive_id, 0) };
 
-        result.result().map(|()| (SendManyRight(right), ReceiveManyRight(recieve_id, self.port)))
+        result.result().map(|()| (SendManyRight(right), ReceiveManyRight(receive_id, self.port)))
     }
 
     pub fn watch_right(&self, right: &SendManyRight) -> Result<ReceiveOnceRight, Error> {

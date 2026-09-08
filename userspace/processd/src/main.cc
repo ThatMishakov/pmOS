@@ -108,8 +108,8 @@ void register_process(IPC_Register_Process *msg, pmos::Right reply_right)
     (void)msg;
 
     auto right = main_port.create_right(pmos::RightType::SendMany);
-    auto [send_right, recieve_right] = std::move(right.value());
-    handle_process_messages(std::move(recieve_right));
+    auto [send_right, receive_right] = std::move(right.value());
+    handle_process_messages(std::move(receive_right));
 
     IPC_Register_Process_Reply reply = {
         .type = IPC_Register_Process_Reply_NUM,
@@ -208,8 +208,8 @@ void parse_args(int argc, char *argv[])
     }
 
     auto right = main_port.create_right(pmos::RightType::SendMany);
-    auto [send_right, recieve_right] = std::move(right.value());
-    get_messages_bootstrapd(std::move(recieve_right));
+    auto [send_right, receive_right] = std::move(right.value());
+    get_messages_bootstrapd(std::move(receive_right));
 
     IPC_Request_Right_Reply reply = {
         .type = IPC_Request_Right_Reply_NUM,

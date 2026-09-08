@@ -67,7 +67,7 @@ void react_register_port(unsigned port, IPC_PS2_Reg_Port *msg, pmos_right_t *rep
 typedef struct Port {
     pmos_right_t notification_right;
 
-    pmos_right_t port_data_recieve_right;
+    pmos_right_t port_data_receive_right;
     pmos_msgloop_tree_node_t port_data_node;
 } Port;
 

@@ -26,12 +26,12 @@ struct IntNotificationRight final: ipc::ReceiveRight {
     // but I think having this just be a ReceiveRight makes more sense, so that
     // other threads or whomever have no way to access this erroneously, which saves
     // the kernel from doing a bunch of checks...
-    // (also, perhaps recieve rights should be rethought, and made be per-task and not per-port)
+    // (also, perhaps receive rights should be rethought, and made be per-task and not per-port)
 
     // Also, ReceiveRight being a message already (which is a bit of a questionable descision
     // in itself, but whatever) is what's wanted here already anyway
 
-    virtual bool destroy_recieve_right() override;
+    virtual bool destroy_receive_right() override;
     InterruptHandler *parent_handler = nullptr;
 
     bool alive : 1 = true;
@@ -44,7 +44,7 @@ struct IntNotificationRight final: ipc::ReceiveRight {
     virtual size_t size() const override;
     virtual ReturnStr<bool> copy_to_user_buff(char *buff) const override;
     virtual void delete_self() override;
-    virtual ipc::RightType recieve_type() const override;
+    virtual ipc::RightType receive_type() const override;
 
     static ReturnStr<IntNotificationRight *> create_for_port(InterruptHandler *handler, ipc::Port *port);
 

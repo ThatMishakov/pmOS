@@ -101,8 +101,8 @@ void worker_main()
     }
     worker_port = new_port.port;
 
-    uint64_t reciever_port;
-    right_request_t right_result = create_right(worker_port, &reciever_port, 0);
+    uint64_t receiver_port;
+    right_request_t right_result = create_right(worker_port, &receiver_port, 0);
     if (right_result.result != SUCCESS) {
         fprintf(stderr, "Failed to create the task group right\n");
         _syscall_exit(1);

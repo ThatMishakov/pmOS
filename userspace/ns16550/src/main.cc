@@ -193,6 +193,13 @@ void set_up_interrupt()
         return;
     }
 
+    if (msg->descriptor.sent_with_right != send_result->get()) {
+        printf("Received message with unexpected right: %lx, expected: %lx\n",
+                msg->descriptor.sent_with_right, send_result->get());
+        return;
+    }
+    send_result.value().release();
+
     if (msg->data.size() < sizeof(IPC_Request_Int_Reply)) {
         printf("Invalid message size: %zu\n", msg->data.size());
         return;
@@ -205,7 +212,7 @@ void set_up_interrupt()
     }
 
     if (reply->status < 0) {
-        printf("Failed to set up interrupt: recieved error %i\n", -reply->status);
+        printf("Failed to set up interrupt: received error %i\n", -reply->status);
         return;
     }
 
@@ -260,7 +267,7 @@ void ns16550_init()
     }
 
     if (reply->result < 0) {
-        printf("Failed to initialize ns16550: recieved error %i\n", -reply->result);
+        printf("Failed to initialize ns16550: received error %i\n", -reply->result);
         throw std::runtime_error("Failed to initialize ns16550");
     }
 
@@ -480,6 +487,8 @@ void request_logger_port()
     request_named_port(log_right_name.c_str(), log_right_name.length(), serial_port.get(), 0);
 }
 
+pmos::ReceiveRight serial_right;
+
 void react_named_port_notification(const char *msg_buff, size_t size, pmos::Right right)
 {
     IPC_Named_Right_Notification *msg = (IPC_Named_Right_Notification *)msg_buff;
@@ -494,9 +503,11 @@ void react_named_port_notification(const char *msg_buff, size_t size, pmos::Righ
         .task_id    = get_task_id(),
     };
 
-    auto serial_right = serial_port.create_right(pmos::RightType::SendMany).value().first;
+    auto [send_right, receive_right] = serial_port.create_right(pmos::RightType::SendMany).value();
+    serial_right = std::move(receive_right);
 
-    pmos::send_message_right_one(log_right, reg, {&serial_port, pmos::RightType::SendOnce}, false, std::move(serial_right)).value();
+    auto result = pmos::send_message_right_one(log_right, reg, {&serial_port, pmos::RightType::SendOnce}, false, std::move(send_right)).value();
+    result.release();
 }
 
 void react_interrupt()
@@ -537,7 +548,7 @@ int main()
         auto [msg, msg_buff, reply_right, array] = serial_port.get_first_message().value();
 
         if (msg.size < sizeof(IPC_Generic_Msg)) {
-            write_str("Warning: recieved very small message\n");
+            write_str("Warning: received very small message\n");
             break;
         }
 

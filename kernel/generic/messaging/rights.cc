@@ -430,7 +430,7 @@ RightType SendOnceRight::type() const
     return RightType::SendOnce;
 }
 
-RightType SendOnceRight::recieve_type() const
+RightType SendOnceRight::receive_type() const
 { 
     return RightType::SendOnce;
 }
@@ -440,12 +440,12 @@ RightType SendManyRight::type() const
     return RightType::SendMany;
 }
 
-RightType SendManyRight::recieve_type() const
+RightType SendManyRight::receive_type() const
 {
     return RightType::SendMany;
 }
 
-RightType SendManyRightShared::recieve_type() const
+RightType SendManyRightShared::receive_type() const
 {
     return RightType::SendMany;
 }
@@ -506,8 +506,8 @@ static constinit IPC_Kernel_Right_Destroyed send_destroyed_msg = {
     .right_type = 2, // SendMany
 };
 
-// With send many, it can only be sent as the right destroyed message, the shared struct will be sent as the recieve right
-// destroyed notification (also, one port can recieve both, or even multiple messages of this type)
+// With send many, it can only be sent as the right destroyed message, the shared struct will be sent as the receive right
+// destroyed notification (also, one port can receive both, or even multiple messages of this type)
 size_t SendManyRight::size() const
 {
     return sizeof(send_destroyed_msg);
@@ -518,7 +518,7 @@ ReturnStr<bool> SendManyRight::copy_to_user_buff(char *buff) const
     return copy_to_user(reinterpret_cast<const char *>(&send_destroyed_msg), buff, sizeof(send_destroyed_msg));
 }
 
-bool SendRight::destroy_recieve_right()
+bool SendRight::destroy_receive_right()
 {
     return destroy(DestroyReason::DeletedByReceiver);
 }
@@ -541,13 +541,13 @@ Port *SendManyRight::parent_port()
     return shared->parent;
 }
 
-u64 SendRight::right_id_in_reciever() const
+u64 SendRight::right_id_in_receiver() const
 {
     // Again, the same todo as in rights.hh applies here...
     return right_parent_id;
 }
 
-u64 SendManyRight::right_id_in_reciever() const
+u64 SendManyRight::right_id_in_receiver() const
 {
     assert(shared);
     return shared->right_parent_id;
@@ -629,7 +629,7 @@ void SendManyRightShared::rcu_push()
     sched::get_cpu_struct()->heap_rcu_cpu.push(&rcu_head);
 }
 
-bool SendManyRightShared::destroy_recieve_right()
+bool SendManyRightShared::destroy_receive_right()
 {
     // Note: the locking situation here is difficult. But basically, the rules are that you don't attempt
     // to acquire a lock on a right while holding the lock on this struct
@@ -663,9 +663,9 @@ bool SendManyRightShared::destroy_recieve_right()
     // message won't be read, or because youserspace is calling this explicitly, at which point
     // you don't have to have notifications.
     //
-    // It might have been useful to use this to know when you've recieved the last message on the right,
+    // It might have been useful to use this to know when you've received the last message on the right,
     // but at this point, this wasn't needed, abd if someone is deleting this right, it id because
-    // the caller doesn't want to recieve any more recieve messages on the right...
+    // the caller doesn't want to receive any more receive messages on the right...
 
     rcu_push();
     return true;

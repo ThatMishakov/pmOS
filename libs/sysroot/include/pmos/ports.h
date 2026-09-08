@@ -86,7 +86,7 @@ result_t pmos_delete_port(pmos_port_t port);
  * This syscall assigns a name to the IPC right. Internally, it creates a Named_Port object, which
  * points to a port. If the named port already exists, this replaces it. The tasks
  * might then reference this name to get the underlying IPC right. In addition, during the creation
- * of the object, if there are waiting tasks, they immediately get unblocked and recieve the new
+ * of the object, if there are waiting tasks, they immediately get unblocked and receive the new
  * right number. See get_right_by_name(). The right must be send-many.
  *
  * @param right_id The ID of the IPC right to which the name would be assigned, within the caller

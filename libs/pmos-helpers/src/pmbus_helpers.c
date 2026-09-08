@@ -86,7 +86,7 @@ static void free_object_request(struct object_request *r)
 
     if (r->reply_right) {
         pmos_msgloop_erase(r->helper->for_msgloop, &r->node);
-        delete_receive_right(r->helper->for_msgloop->port, r->reply_right);
+        delete_receive_right(r->helper->for_msgloop->port, r->reply_right, 0);
     }
     free(r);
 }

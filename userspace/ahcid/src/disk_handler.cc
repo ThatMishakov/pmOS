@@ -260,7 +260,7 @@ pmos::async::detached_task handle_right_create(IPC_Disk_Create_Right request, Di
 
     try {
         rr = std::make_shared<RRWrapper>(RRWrapper{std::move(e->second), false});
-        disk_port.port_recieve_rights.insert(rr);
+        disk_port.port_receive_rights.insert(rr);
 
         handle_ipc(disk_port, std::move(rr), geometry.sector_count, geometry.logical_sector_size, geometry.physical_sector_size, sector_start, sector_count);
     } catch (...) {
@@ -292,7 +292,7 @@ void handle_disk_describe(AHCIPort &, DiskGeometry geometry, DiskConstraint cons
     }
 }
 
-pmos::async::detached_task handle_ipc(AHCIPort &port, std::shared_ptr<RRWrapper> recieve_right, uint64_t sector_count, size_t logical_sector_size, size_t physical_sector_size, uint64_t from_sector, uint64_t to_sector_count)
+pmos::async::detached_task handle_ipc(AHCIPort &port, std::shared_ptr<RRWrapper> receive_right, uint64_t sector_count, size_t logical_sector_size, size_t physical_sector_size, uint64_t from_sector, uint64_t to_sector_count)
 {
     DiskGeometry geometry{sector_count, logical_sector_size, physical_sector_size};
     DiskConstraint constraint{from_sector, to_sector_count};
@@ -301,10 +301,10 @@ pmos::async::detached_task handle_ipc(AHCIPort &port, std::shared_ptr<RRWrapper>
     assert(to_sector_count <= sector_count);
 
     while (true) {
-        if (recieve_right->canceled)
+        if (receive_right->canceled)
             break;
 
-        auto msg = co_await dispatcher.get_message(recieve_right->right);
+        auto msg = co_await dispatcher.get_message(receive_right->right);
         if (!msg) {
             fprintf(stderr, "ahcid: Failed to get message for port! %i\n", msg.error());
             exit(1);
@@ -356,7 +356,7 @@ pmos::async::detached_task handle_ipc(AHCIPort &port, std::shared_ptr<RRWrapper>
         }
     }
 
-    port.port_recieve_rights.erase(recieve_right);
+    port.port_receive_rights.erase(receive_right);
 
     co_return;
 }

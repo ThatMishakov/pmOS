@@ -612,7 +612,7 @@ typedef struct IPC_PS2_Config {
 #define IPC_PS2_Config_Reg_Port \
     1 // Indicates the chanel where ps/2 driver should send the data and requests or 0 on failure
 
-// Structure used for communicating new data recieved by PS/2 drivers to PS2d
+// Structure used for communicating new data received by PS/2 drivers to PS2d
 #define IPC_PS2_Notify_Data_NUM 0x82
 typedef struct IPC_PS2_Notify_Data {
     // Message type (must be equal to IPC_PS2_Notify_Data_NUM)
@@ -621,7 +621,7 @@ typedef struct IPC_PS2_Notify_Data {
     // Configuration flags
     uint32_t flags;
 
-    // Data recieved by the port; size of the array should be determined by the message size
+    // Data received by the port; size of the array should be determined by the message size
     char data[];
 } IPC_PS2_Notify_Data;
 

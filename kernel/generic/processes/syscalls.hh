@@ -289,6 +289,9 @@ void syscall_futex_wake(TaskDescriptor *current_task);
 void syscall_sleep(TaskDescriptor *current_task);
 // Parameters: u64 timeout_ns
 
+void syscall_delete_receive_right(TaskDescriptor *task);
+// Parameters: u64 port_id, u64 right_id, flags
+
 struct SyscallRetval {
     TaskDescriptor *task;
     u64 operator=(u64 value);

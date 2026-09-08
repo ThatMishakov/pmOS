@@ -219,20 +219,20 @@ constexpr u32 X2APIC_MSR_BASE = 0x800;
     void send_init_deassert(u32 dest);
 
     /// @brief Sends SIPI to the other processor
-    /// @param vector Vector to which it will be recieved (from where the CPU will
+    /// @param vector Vector to which it will be received (from where the CPU will
     /// start executing instructions)
     /// @param dest Destination lapic ID
     void send_sipi(u8 vector, u32 dest);
 
     /// @brief Sends a fixed IPI
     /// @param vector Destination interrupt vector (which interrupt will be
-    /// recieved)
+    /// received)
     /// @param dest Destination LAPIC ID
     void send_ipi_fixed(u8 vector, u32 dest);
 
     /// @brief Sends an IPI with *others* shorthand
     /// @param vector Destination interrupt vector (which interrupt will be
-    /// recieved)
+    /// received)
     void send_ipi_fixed_others(u8 vector);
 
     void apic_write_icr(u64 dest);
