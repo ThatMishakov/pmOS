@@ -1425,6 +1425,56 @@ typedef struct IPC_Preregister_Process_Reply {
     int64_t result;
 } IPC_Preregister_Process_Reply;
 
+#define IPC_Sigaction_NUM 0x18c
+typedef struct IPC_Sigaction {
+    /// Message type (must be IPC_Sigaction_NUM)
+    uint32_t type;
+
+#define SIGACTION_FLAG_SET 0x01
+
+    /// Flags
+    uint32_t flags;
+
+    /// Signal number
+    uint32_t sigval;
+
+    /// Sigaction flags
+    uint32_t sa_flags;
+
+    /// Handler function
+    uint64_t sa_handler_;
+
+    /// Restorer function
+    uint64_t sa_restorer;
+
+    /// New signal mask
+    uint64_t sa_mask; // 1024 bits
+} IPC_Sigaction;
+
+#define IPC_Sigaction_Reply_NUM 0x18d
+typedef struct IPC_Sigaction_Reply {
+    /// Message type (must be IPC_Sigaction_Reply_NUM)
+    uint32_t type;
+
+    /// Flags
+    uint32_t flags;
+
+    /// Result code
+    int32_t result;
+
+    /// Old flags
+    uint32_t old_sa_flags;
+
+    /// Old handler function
+    uint64_t old_sa_handler;
+
+    /// Old restorer function
+    uint64_t old_sa_restorer;
+
+    /// Old signal mask
+    uint64_t old_sa_mask; // 1024 bits
+} IPC_Sigaction_Reply;
+
 struct IPC_Object_Property {
     // Also aligned to 8 I guess...
     uint16_t length;

@@ -2923,7 +2923,6 @@ void syscall_sleep(TaskDescriptor *task)
 
 void syscall_delete_receive_right(TaskDescriptor *task)
 {
-
     u64 port_id = syscall_arg64(task, 0);
     u64 right_id = syscall_arg64(task, 1);
     unsigned flags = syscall_flags(task);

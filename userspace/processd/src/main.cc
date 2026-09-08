@@ -46,6 +46,7 @@
 #include <charconv>
 #include "pipe.hh"
 #include "vfs.hh"
+#include "process.hh"
 
 void KernelSink::operator()(const char *message)
 {
@@ -57,7 +58,46 @@ pmos::PortDispatcher dispatcher(main_port);
 
 pmos::async::detached_task vfs_handle_messages();
 
-pmos::async::detached_task handle_process_messages(pmos::ReceiveRight rr)
+void sigaction_reply(pmos::Right reply_right, int result, uint32_t sa_flags = 0, uint32_t sa_handler = 0, uint64_t sa_restorer = 0, uint64_t sa_mask = 0)
+{
+    IPC_Sigaction_Reply reply = {
+        .type = IPC_Sigaction_Reply_NUM,
+        .flags = 0,
+        .result = result,
+        .old_sa_flags = sa_flags,
+        .old_sa_handler = sa_handler,
+        .old_sa_restorer = sa_restorer,
+        .old_sa_mask = sa_mask
+    };
+
+    auto r = pmos::send_message_right_one(reply_right, reply, {}, true);
+    if (!r)
+        kernelLogger() << "processd: Error " << r.error() << " sending message for sigaction_reply\n" << frg::endlog;
+}
+
+void sigaction_handle(std::shared_ptr<Process> process, pmos::Right reply_right, IPC_Sigaction *msg)
+{
+    auto num = msg->sigval;
+    if (num <= 0 || num >= 65) {
+        sigaction_reply(std::move(reply_right), EINVAL);
+        return;
+    }
+    num -= 1; // Convert to 0-based index
+
+    auto sigaction = process->sigactions[num];
+    if (msg->flags & SIGACTION_FLAG_SET) {
+        process->sigactions[num] = {
+            .sa_handler = msg->sa_handler_,
+            .sa_restorer = msg->sa_restorer,
+            .sa_mask = msg->sa_mask,
+            .sa_flags = msg->sa_flags,
+        };
+    }
+
+    sigaction_reply(std::move(reply_right), 0, sigaction.sa_flags, sigaction.sa_handler, sigaction.sa_restorer, sigaction.sa_mask);
+}
+
+pmos::async::detached_task handle_process_messages(pmos::ReceiveRight rr, std::shared_ptr<Process> process)
 {
     while (1) {
         auto [msg, message, reply_right, _] = (co_await dispatcher.get_message(rr)).value();
@@ -96,6 +136,17 @@ pmos::async::detached_task handle_process_messages(pmos::ReceiveRight rr)
         }
             break;
 
+        case IPC_Sigaction_NUM: {
+            if (message.size() < sizeof(IPC_Sigaction)) {
+                kernelLogger() << "posixd: Received IPC_Sigaction that is too small while attending file\n" << frg::endlog;
+                break;
+            }
+            auto *sigaction_msg = reinterpret_cast<IPC_Sigaction *>(message.data());
+
+            sigaction_handle(process, std::move(reply_right), sigaction_msg);
+        }
+            break;
+
         default:
             kernelLogger() << "processd: Unknown message type " << ipc_msg->type << " from process\n" << frg::endlog;
             break;
@@ -107,15 +158,18 @@ void register_process(IPC_Register_Process *msg, pmos::Right reply_right)
 {
     (void)msg;
 
+    // TODO
+    auto process = std::make_shared<Process>();
+
     auto right = main_port.create_right(pmos::RightType::SendMany);
     auto [send_right, receive_right] = std::move(right.value());
-    handle_process_messages(std::move(receive_right));
+    handle_process_messages(std::move(receive_right), process);
 
     IPC_Register_Process_Reply reply = {
         .type = IPC_Register_Process_Reply_NUM,
         .flags = 0,
         .result = 0,
-        .pid = 0, // PID is TODO (as everything else here)
+        .pid = process->pid, // PID is TODO (as everything else here)
     };
 
     auto r = pmos::send_message_right_one(reply_right, reply, {}, true, std::move(send_right));
