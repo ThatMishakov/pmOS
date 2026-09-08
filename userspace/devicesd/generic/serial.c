@@ -17,7 +17,7 @@ bool init_serial_acpi()
     struct serial_port *port = NULL;
 
     struct uacpi_table m = {};
-    auto res = uacpi_table_find_by_signature(ACPI_MADT_SIGNATURE, &m);
+    auto res = uacpi_table_find_by_signature(ACPI_SPCR_SIGNATURE, &m);
     if (res != UACPI_STATUS_OK) {
         printf("SPCR table not found\n");
         goto error;

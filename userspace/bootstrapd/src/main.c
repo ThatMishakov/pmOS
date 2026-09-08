@@ -402,10 +402,14 @@ end:
     return result;
 }
 
-pmos_right_t stdout_pipe[2] = {INVALID_RIGHT, INVALID_RIGHT}, stderr_pipe[2] = {INVALID_RIGHT, INVALID_RIGHT};
+pmos_right_t stdin_pipe[2] = {INVALID_RIGHT, INVALID_RIGHT}, stdout_pipe[2] = {INVALID_RIGHT, INVALID_RIGHT}, stderr_pipe[2] = {INVALID_RIGHT, INVALID_RIGHT};
 
 void create_std_pipes()
 {
+    if (create_pipe(stdin_pipe) != 0) {
+        print_str("Loader: Failed to create stdin pipe\n");
+    }
+
     if (create_pipe(stdout_pipe) != 0) {
         print_str("Loader: Failed to create stdout pipe\n");
     }

@@ -106,7 +106,7 @@ result_t add_posix_stuff(struct AuxVecBuilder *builder, uint64_t task_group_id)
     return 0;
 }
 
-extern pmos_right_t stdout_pipe[2], stderr_pipe[2];
+extern pmos_right_t stdin_pipe[2], stdout_pipe[2], stderr_pipe[2];
 
 result_t clone_right_to(uint64_t task_group_id, pmos_right_t *right, uint64_t *out_right_id)
 {
@@ -152,12 +152,20 @@ result_t pass_filesystem(struct AuxVecBuilder *builder, uint64_t page_table_id, 
     fs_data->array_size = 3;
 
     result_t result;
+    if (stdin_pipe[0] && (result = clone_right_to(task_group_id, &stdin_pipe[0], &fs_data->open_files[0].io_right)))
+        goto error;
+    if (stdin_pipe[0] && (result = clone_right_to(task_group_id, &stdin_pipe[0], &fs_data->open_files[0].op_right)))
+        goto error;
+
+    // Set ISATTY even though it is a pipe
+    fs_data->open_files[0].flags |= FLAG_ISATTY;
+    fs_data->open_files[0].flags |= FLAG_ISPIPE;
+
     if (stdout_pipe[1] && (result = clone_right_to(task_group_id, &stdout_pipe[1], &fs_data->open_files[1].io_right)))
         goto error;
     if (stdout_pipe[1] && (result = clone_right_to(task_group_id, &stdout_pipe[1], &fs_data->open_files[1].op_right)))
         goto error;
 
-    // Set ISATTY even though it is a pipe
     fs_data->open_files[1].flags |= FLAG_ISATTY;
     fs_data->open_files[1].flags |= FLAG_ISPIPE;
     
