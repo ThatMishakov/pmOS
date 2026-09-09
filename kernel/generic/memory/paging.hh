@@ -469,8 +469,7 @@ public:
      * @return The location of the region in the new page table.
      */
     ReturnStr<std::pair<void *, size_t>> atomic_transfer_region(const klib::shared_ptr<Page_Table> &to,
-                                             void *region_orig, void *prefered_to, unsigned access,
-                                             bool fixed);
+                                             void *region_orig, void *prefered_to, unsigned access, bool fixed);
 
     /**
      * @brief  Moves the mapped pages from the old region to a new region, invaludating the old page

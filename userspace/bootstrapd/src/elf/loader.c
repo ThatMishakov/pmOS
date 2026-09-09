@@ -725,7 +725,7 @@ result_t load_executable(uint64_t task_id, uint64_t group_id, uint64_t mem_objec
 
     size_t stack_size = MB(16);
     // Init stack
-    auto stack_result = create_normal_region(task_id, nullptr, stack_size, PROT_NONE);
+    auto stack_result = create_normal_region(page_table_id, nullptr, stack_size, PROT_NONE);
     if (stack_result.result) {
         result = stack_result.result;
         goto error;
@@ -866,6 +866,14 @@ result_t load_executable(uint64_t task_id, uint64_t group_id, uint64_t mem_objec
         result = serial_result;
         goto error;
     }
+
+    // This is a workaround for a fun little kernel limitation, which I don't have the energy to fix right now.
+    auto rres = release_memory_range64(page_table_id, stack_result.virt_addr_intptr, stack_size);
+    if (rres) {
+        result = rres;
+        goto error;
+    }
+
     auto s_res = create_normal_region(TASK_ID_SELF, NULL, stack_size, PROT_READ | PROT_WRITE);
     if (s_res.result) {
         result = s_res.result;

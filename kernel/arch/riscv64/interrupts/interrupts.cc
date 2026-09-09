@@ -151,9 +151,8 @@ void page_fault(u64 addr, u64 scause)
 
         auto &regions = page_table->paging_regions;
         auto it       = regions.get_smaller_or_equal(virt_addr);
+
         if (it != regions.end() and it->is_in_range(virt_addr)) {
-            // serial_logger.printf("Pagefault in region %s\n",
-            // it->name.c_str());
             auto r = it->on_page_fault(access_type, virt_addr);
             if (!r.success())
                 return r.result;
@@ -180,6 +179,7 @@ void page_fault(u64 addr, u64 scause)
                              "-> %i killing process...\n",
                              virt_addr, task->task_id, task->name.c_str(), task->regs.pc, scause,
                              result);
+
         print_registers(task, serial_logger);
         task->atomic_kill();
     }

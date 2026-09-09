@@ -150,14 +150,14 @@ kresult_t Generic_Mem_Region::move_to(TLBShootdownContext &ctx,
         return result;
 
     old_owner->paging_regions.erase(this);
-    new_table->paging_regions.insert(this);
 
     owner = new_table.get();
-    if (!owner)
-        return -EINVAL;
+    assert(owner);
 
     access_type = new_access;
     start_addr  = base_addr;
+
+    new_table->paging_regions.insert(this);
 
     return 0;
 }
@@ -212,6 +212,8 @@ void Mem_Object_Reference::trim(void *new_start, size_t new_size) noexcept
             object_offset_bytes += diff;
             object_size_bytes = object_size_bytes < diff ? 0 : object_size_bytes - diff;
         }
+
+        start_addr = new_start;
     }
 
     size = new_size;

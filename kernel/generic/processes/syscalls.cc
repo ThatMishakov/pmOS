@@ -1239,8 +1239,8 @@ void syscall_create_normal_region(TaskDescriptor *current)
 {
     current->set_continuation(syscall_create_normal_region, nullptr);
     
-    u64 pid          = syscall_arg64(current, 0);
-    u64 addr_start = syscall_arg64(current, 1);
+    u64 page_table_id = syscall_arg64(current, 0);
+    u64 addr_start    = syscall_arg64(current, 1);
     u64 size;
     auto size_result = syscall_arg64_checked(current, 2, size);
     if (!size_result.success()) {
@@ -1253,17 +1253,16 @@ void syscall_create_normal_region(TaskDescriptor *current)
 
     ulong access     = syscall_flags(current);
 
-    TaskDescriptor *dest_task = nullptr;
+    // serial_logger.printf("syscall_create_normal_region: task %li (%s) page_table_id %li addr_start %lx size %lx access %lx\n",
+    //                      current->task_id, current->name.c_str(), page_table_id, addr_start, size, access);
 
-    if (pid == 0 or current->task_id == pid)
-        dest_task = current;
-
-    if (not dest_task)
-        dest_task = get_task(pid);
-
-    if (not dest_task) {
-        syscall_error(current) = -ESRCH;
-        return;
+    klib::shared_ptr<Page_Table> page_table = page_table_id == 0
+                                             ? current->page_table
+                                             : Arch_Page_Table::get_page_table(page_table_id);
+                                             
+    if (!page_table) {
+        syscall_error(current) = -ENOENT;
+            return;
     }
 
     // Syscall must be page aligned
@@ -1274,7 +1273,7 @@ void syscall_create_normal_region(TaskDescriptor *current)
 
     klib::string region_name("anonymous region");
 
-    auto result = dest_task->page_table->atomic_create_normal_region(
+    auto result = page_table->atomic_create_normal_region(
         (void *)addr_start, size, access & 0x07, access & 0x08, access & 0x10,
         klib::move(region_name), 0, access & 0x20);
     if (!result.success()) {
@@ -1729,8 +1728,8 @@ void syscall_unmap_range(TaskDescriptor *current_task)
 {
     current_task->set_continuation(syscall_unmap_range, nullptr);
 
-    u64 task_id    = syscall_arg64(current_task, 0);
-    u64 addr_start = syscall_arg64(current_task, 1);
+    u64 page_table_id = syscall_arg64(current_task, 0);
+    u64 addr_start    = syscall_arg64(current_task, 1);
     u64 size;
     auto result    = syscall_arg64_checked(current_task, 2, size);
     if (!result) {
@@ -1740,13 +1739,10 @@ void syscall_unmap_range(TaskDescriptor *current_task)
     if (!result.val)
         return;
 
-    const auto task = task_id == 0 ? sched::get_cpu_struct()->current_task : get_task(task_id);
-    if (!task) {
-        syscall_error(current_task) = -ESRCH;
-        return;
-    }
-
-    const auto page_table = task->page_table;
+    klib::shared_ptr<Page_Table> page_table = page_table_id == 0
+                                             ? current_task->page_table
+                                             : Arch_Page_Table::get_page_table(page_table_id);
+                                             
     if (!page_table) {
         syscall_error(current_task) = -ENOENT;
         return;

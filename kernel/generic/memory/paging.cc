@@ -177,9 +177,13 @@ ReturnStr<std::pair<void *, size_t>> Page_Table::atomic_transfer_region(const kl
     if ((ulong)prefered_to & 07777)
         prefered_to = nullptr;
 
-    auto start_addr = to->find_region_spot(prefered_to, reg->size, fixed);
+    auto start_addr = to->find_region_spot(prefered_to, reg->size, false);
     if (!start_addr.success())
         return start_addr.propagate();
+
+    // move_to can't atomically clear the pages and move the region yet
+    if (fixed && start_addr.val != prefered_to)
+        return Error(-ENOSYS);
 
     auto ctx    = TLBShootdownContext::create_userspace(*this);
     auto result = reg->move_to(ctx, to, start_addr.val, access);
@@ -240,6 +244,20 @@ ReturnStr<Mem_Object_Reference *> Page_Table::atomic_create_mem_object_region(
     if (!start_addr.success())
         return start_addr.propagate();
 
+    auto addr_reasonable = [&]() {
+        auto it = paging_regions.get_smaller_or_equal(start_addr.val);
+        if (it != paging_regions.end() and it->is_in_range(start_addr.val))
+            return false;
+
+        auto it2 = paging_regions.lower_bound(start_addr.val);
+        if (it2 != paging_regions.end() and it2->start_addr < (char *)start_addr.val + page_aligned_size)
+            return false;
+
+        return true;
+    };
+
+    assert(addr_reasonable() or fixed or !"Region overlaps with existing region");
+
     if (not cow and start_offset_bytes != 0)
         return Error(-EINVAL);
 
@@ -257,6 +275,8 @@ ReturnStr<Mem_Object_Reference *> Page_Table::atomic_create_mem_object_region(
         return Error(-ENOMEM);
 
     if (fixed) {
+        assert(start_addr.val == page_aligned_start);
+
         auto ctx = TLBShootdownContext::create_userspace(*this);
         auto r   = release_in_range(ctx, start_addr.val, page_aligned_size);
         if (r)
