@@ -107,7 +107,7 @@ void kernel::proc::syscalls::syscall_ret_low(TaskDescriptor *d, i64 value)
 
 void kernel::proc::syscalls::syscall_ret_high(TaskDescriptor *d, u64 value)
 {
-    d->regs.syscall_arg2() = value;
+    d->regs.syscall_retval_high() = value;
 }
 
 i64 kernel::proc::syscalls::syscall_ret_low(TaskDescriptor *d)
