@@ -270,6 +270,8 @@ void illegal_instruction(u32 instruction)
         global_logger.printf("Warning: pid %i (%s) pc %h instr 0x%h -> %i "
                              "killing process...\n",
                              task->task_id, task->name.c_str(), task->regs.pc, instruction, result);
+
+        print_registers(task, serial_logger);
         task->atomic_kill();
     }
 }

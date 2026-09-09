@@ -366,8 +366,10 @@ static size_t service_callback(const char *name, size_t name_length, char *out_b
         return snprintf(NULL, 0, "%"PRIu64, *out_right);
 }
 
-const char *envp[1] = {
+const char *envp[] = {
     // "MLIBC_RTLD_DEBUG=1",
+    // "MLIBC_RTLD_DEBUG_VERBOSE=1",
+    NULL
 };
 
 int start_service(struct Service *service, uint64_t object_right, uint64_t optional_right_id)
