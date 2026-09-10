@@ -271,7 +271,7 @@ ReturnStr<MemObjectRight *> MemObjectRight::create_for_group(klib::shared_ptr<pa
     new_right->mem_object      = mem_object;
     new_right->parent_group    = group;
     new_right->of_message      = false;
-    new_right->permission_mask = permissions & PERM_ALL;
+    new_right->permissions_mask = permissions & PERM_ALL;
     
 
     Auto_Lock_Scope l(new_right->lock);
@@ -383,7 +383,7 @@ ReturnStr<std::pair<Right *, u64>> MemObjectRight::duplicate(proc::TaskGroup *gr
     new_right->mem_object      = mem_object;
     new_right->parent_group    = parent_group;
     new_right->of_message      = false;
-    new_right->permission_mask = permission_mask;
+    new_right->permissions_mask = permissions_mask;
 
     Auto_Lock_Scope l(lock);
     if (!alive || of_message || parent_group != group)
@@ -588,6 +588,7 @@ ReturnStr<std::pair<Right *, u64>> SendManyRight::duplicate(proc::TaskGroup *gro
     new_right->shared       = shared;
     new_right->parent_group = parent_group;
     new_right->of_message   = false;
+    new_right->permissions_mask = permissions_mask;
 
     auto parent = shared->parent;
     assert(parent);
@@ -756,6 +757,16 @@ void SendManyRightShared::delete_self()
     }
 
     rcu_push();
+}
+
+u32 Right::atomic_get_permissions_mask() const
+{
+    return __atomic_load_n(&permissions_mask, __ATOMIC_ACQUIRE);
+}
+
+u32 Right::atomic_set_permissions_mask(u32 mask_to_and)
+{
+    return __atomic_fetch_and(&permissions_mask, mask_to_and, __ATOMIC_ACQUIRE);
 }
 
 } // namespace kernel::ipc

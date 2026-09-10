@@ -147,6 +147,7 @@ ReturnStr<std::pair<ipc::Right *, u64>> IntSourceRight::duplicate(proc::TaskGrou
 
     new_right->parent_group = group;
     new_right->parent_handler = parent_handler;
+    new_right->permissions_mask = permissions_mask;
 
     Auto_Lock_Scope l(lock);
     if (!alive || of_message || parent_group != group)

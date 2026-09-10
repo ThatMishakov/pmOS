@@ -70,7 +70,7 @@ extern void deactivate_page_table();
 namespace kernel::proc::syscalls
 {
 
-std::array<const char *, 67> syscall_names = {
+std::array<const char *, 68> syscall_names = {
     "SYSCALL EXIT",
     "SYSCALL GET TASK ID",
     "SYSCALL CREATE PROCESS",
@@ -142,6 +142,7 @@ std::array<const char *, 67> syscall_names = {
     "SYSCALL FUTEX WAIT",
     "SYSCALL FUTEX WAKE",
     "SYSCALL SLEEP",
+    "SYSCALL RESTRICT RIGHT",
 };
 
 const char *syscall_name(unsigned id)
@@ -154,7 +155,7 @@ const char *syscall_name(unsigned id)
 
 using syscall_function = void (*)(TaskDescriptor *task);
 
-std::array<syscall_function, 67> syscall_table = {
+std::array<syscall_function, 68> syscall_table = {
     syscall_exit,
     syscall_get_task_id,
     syscall_create_process,
@@ -226,6 +227,7 @@ std::array<syscall_function, 67> syscall_table = {
     syscall_futex_wait,
     syscall_futex_wake,
     syscall_sleep,
+    syscall_restrict_right,
 };
 
 void syscall_handler()
@@ -338,7 +340,7 @@ void syscall_start_process(TaskDescriptor *task)
     t->init();
 }
 
-static ReturnStr<klib::shared_ptr<Mem_Object>> mem_object_for_right(TaskDescriptor *task, u64 right_id)
+static ReturnStr<MemObjectRight *> mem_object_right(TaskDescriptor *task, u64 right_id)
 {
     auto group = task->get_rights_namespace();
     if (!group)
@@ -356,7 +358,7 @@ static ReturnStr<klib::shared_ptr<Mem_Object>> mem_object_for_right(TaskDescript
 
     auto mem_object_right = static_cast<MemObjectRight *>(right);
     assert(mem_object_right->mem_object);
-    return mem_object_right->mem_object;
+    return mem_object_right;
 }
 
 static ReturnStr<InterruptHandler *> interrupt_handler_for_right(TaskDescriptor *task, u64 right_id)
@@ -408,12 +410,13 @@ void syscall_load_executable(TaskDescriptor *task)
         return;
     }
 
-    auto ret = mem_object_for_right(task, object_id);
+    // TODO: Check permissions here
+    auto ret = mem_object_right(task, object_id);
     if (!ret.success()) {
         syscall_error(task) = ret.result;
         return;
     }
-    auto object = std::move(ret.val);
+    auto object = std::move(ret.val->mem_object);
     assert(object);
 
     klib::string name;
@@ -1628,6 +1631,19 @@ void syscall_create_mem_object(TaskDescriptor *current_task)
     syscall_return(current_task) = right.val->right_sender_id;
 }
 
+static unsigned mask_for_access(ulong access)
+{
+    u32 mask = 0;
+    if (access & 0x1)
+        mask |= RIGHT_PERMISSION_READ;
+    if (access & 0x2 && !(access & 0x20)) // CoW removes write access
+        mask |= RIGHT_PERMISSION_WRITE;
+    if (access & 0x4)
+        mask |= RIGHT_PERMISSION_EXECUTE;
+
+    return mask;
+}
+
 void syscall_map_mem_object(TaskDescriptor *current_task)
 {
     map_mem_object_param_t params = {};
@@ -1668,13 +1684,20 @@ void syscall_map_mem_object(TaskDescriptor *current_task)
         return;
     }
 
-    auto obj_res = mem_object_for_right(current_task, object_right);
+    auto obj_res = mem_object_right(current_task, object_right);
     if (!obj_res.success()) {
         syscall_error(current_task) = obj_res.result;
         return;
     }
+    auto right = obj_res.val;
 
-    auto object = klib::move(obj_res.val);
+    auto mask = mask_for_access(access);
+    if (mask & ~right->atomic_get_permissions_mask()) {
+        syscall_error(current_task) = -EPERM;
+        return; 
+    }
+
+    auto object = right->mem_object;
     assert(object);
 
     if (object->is_anonymous()) {
@@ -2134,13 +2157,14 @@ void syscall_get_page_address_from_object(TaskDescriptor *current_task)
     auto offset       = syscall_arg64(current_task, 1);
     // auto flags        = syscall_flags(current_task);
 
-    auto ret = mem_object_for_right(current_task, object_id);
+    // TODO: Think about permissions for this
+    auto ret = mem_object_right(current_task, object_id);
     if (!ret.success()) {
         syscall_error(current_task) = ret.result;
         return;
     }
     assert(ret.val);
-    auto object = klib::move(ret.val);
+    auto object = ret.val->mem_object;
 
     if (object->is_anonymous()) {
         syscall_error(current_task) = -EPERM;
@@ -2550,14 +2574,14 @@ void syscall_get_mem_object_size(TaskDescriptor *current)
     u64 object_id = syscall_arg64(current, 0);
     // auto flags = syscall_flags(current);
 
-    auto res = mem_object_for_right(current, object_id);
+    auto res = mem_object_right(current, object_id);
     if (!res.success()) {
         syscall_error(current) = res.result;
         return;
     }
 
     assert(res.val);
-    auto object = klib::move(res.val);
+    auto object = res.val->mem_object;
 
     if (!object) {
         syscall_error(current) = -ENOENT;
@@ -2954,6 +2978,26 @@ void syscall_delete_receive_right(TaskDescriptor *task)
     } else {
         syscall_error(task) = -ENOMSG;
     }
+}
+
+void syscall_restrict_right(TaskDescriptor *task)
+{
+    u64 right_id = syscall_arg64(task, 0);
+    unsigned mask = syscall_arg(task, 1, 1);
+
+    auto group = task->get_rights_namespace();
+    if (!group) {
+        syscall_error(task) = -ESRCH;
+        return;
+    }
+
+    auto right = group->atomic_get_right(right_id);
+    if (!right) {
+        syscall_error(task) = -ENOENT;
+        return;
+    }
+
+    syscall_return(task) = right->atomic_set_permissions_mask(mask);
 }
 
 unsigned syscall_number(TaskDescriptor *task) { return call_flags(task) & 0xFF; }

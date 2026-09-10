@@ -292,6 +292,9 @@ void syscall_sleep(TaskDescriptor *current_task);
 void syscall_delete_receive_right(TaskDescriptor *task);
 // Parameters: u64 port_id, u64 right_id, flags
 
+void syscall_restrict_right(TaskDescriptor *task);
+// Parameters: u64 right_id, u32 mask
+
 struct SyscallRetval {
     TaskDescriptor *task;
     u64 operator=(u64 value);

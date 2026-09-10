@@ -487,7 +487,7 @@ void init_task1(ultra_boot_context *ctx)
     if (!group)
         panic("Failed to create task group for task 1");
 
-    auto object = ipc::MemObjectRight::create_for_group(task1->object, group.val, ipc::MemObjectRight::PERM_READ);
+    auto object = ipc::MemObjectRight::create_for_group(task1->object, group.val, -1);
     if (!object)
         panic("Failed to create memory object right for task 1");
 

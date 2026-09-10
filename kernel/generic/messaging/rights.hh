@@ -6,6 +6,7 @@
 #include <types.hh>
 #include <lib/memory.hh>
 #include "messaging.hh"
+#include <pmos/system.h>
 
 namespace kernel::proc
 {
@@ -44,6 +45,12 @@ struct Right {
 
     /// Sender-facing id (gets changed when the right is copied/moved, depending on the task group)
     u64 right_sender_id = 0;
+
+    // Permissions bitmask for different types of rights
+    u32 permissions_mask = 0;
+
+    u32 atomic_get_permissions_mask() const;
+    u32 atomic_set_permissions_mask(u32 mask_to_and);
 
     bool alive : 1      = true;
     bool of_message : 1 = false;
@@ -192,15 +199,7 @@ struct MemObjectRight final: Right {
 
     klib::shared_ptr<paging::Mem_Object> mem_object;
 
-    static constexpr u32 PERM_READ   = 1 << 0;
-    static constexpr u32 PERM_WRITE  = 1 << 1;
-    static constexpr u32 PERM_DELETE = 1 << 2;
-    static constexpr u32 PERM_PAGE   = 1 << 3;
-    static constexpr u32 PERM_EXPAND = 1 << 4;
-
-    static constexpr u32 PERM_ALL = (1 << 5) - 1;
-
-    u32 permission_mask = 0;
+    static constexpr u32 PERM_ALL = RIGHT_PERMISSION_READ | RIGHT_PERMISSION_WRITE | RIGHT_PERMISSION_EXECUTE | RIGHT_PERMISSION_MANAGE;
 
     virtual ReturnStr<std::pair<Right *, u64>> duplicate(proc::TaskGroup *) override;
 

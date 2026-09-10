@@ -582,6 +582,14 @@ void handle_get_object(struct OpenFileData *open_file_data, IPC_Get_Object *msg,
         return;
     }
 
+    auto restrict_result = restrict_right(result.right, RIGHT_PERMISSION_READ | RIGHT_PERMISSION_EXECUTE);
+    if (restrict_result.result) {
+        int result = (int)restrict_result.result;
+        dbprintf("Loader: Failed to restrict the right, error %i (%s)", result, strerror(-result));
+        get_object_reply(result, reply_right);
+        return;
+    }
+
     message_extra_t rights = {
         .extra_rights = {result.right}
     };
