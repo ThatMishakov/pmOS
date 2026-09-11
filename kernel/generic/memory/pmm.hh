@@ -76,6 +76,8 @@ namespace pmm
         page_addr_t get_phys_addr() const noexcept;
 
         bool is_anonymous() const { return flags & FLAG_ANONYMOUS; }
+
+        size_t atomic_refcount() const;
     };
 
     void release_page(Page *) noexcept;

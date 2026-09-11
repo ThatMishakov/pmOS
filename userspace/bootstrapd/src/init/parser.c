@@ -1405,7 +1405,6 @@ void parse_services(struct module_descriptor_list *d)
         .addr_start_uint = 0,
         .size = size_page,
         .offset_object = 0,
-        .offset_start = 0,
         .object_size = size_page,
         .access_flags = PROT_READ,
     };

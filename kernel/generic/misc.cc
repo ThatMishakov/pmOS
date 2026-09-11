@@ -33,8 +33,6 @@
 
 #include <unistd.h>
 
-void *unoccupied = (void *)&_free_after_kernel;
-
 extern "C" char *__cxa_demangle_gnu3(const char *name) { return (char *)name; }
 
 extern "C" long sysconf(int name)

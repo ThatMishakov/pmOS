@@ -21,9 +21,15 @@ template<class T> typename remove_reference<T>::type &&move(T &&t) noexcept
 }
 
 template< class T >
-constexpr T&& forward( remove_reference<T>& t ) noexcept;
+constexpr T&& forward( typename remove_reference<T>::type& t ) noexcept
+{
+    return static_cast<T&&>(t);
+}
 
 template< class T >
-constexpr T&& forward( remove_reference<T>&& t ) noexcept;
+constexpr T&& forward( typename remove_reference<T>::type&& t ) noexcept
+{
+    return static_cast<T&&>(t);
+}
 
 } // namespace pmos::utility

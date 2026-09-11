@@ -423,7 +423,6 @@ int read_to_buffer(pmos_right_t mem_object, uint8_t *data, uint64_t start_offset
         .addr_start_uint = 0,
         .size = size_aligned,
         .offset_object = object_start,
-        .offset_start = 0,
         .object_size = size_aligned,
         .access_flags = PROT_READ,
     });

@@ -394,7 +394,6 @@ pmos::async::detached_task probe_partitions(size_t disk_idx)
         .addr_start_uint = 0,
         .size = mbr_size,
         .offset_object = 0,
-        .offset_start = 0,
         .object_size = mbr_size,
         .access_flags = PROT_READ,
     };
@@ -465,7 +464,6 @@ pmos::async::detached_task probe_partitions(size_t disk_idx)
                 .addr_start_uint = 0,
                 .size = array_size_aligned,
                 .offset_object = 0,
-                .offset_start = 0,
                 .object_size = array_size_aligned,
                 .access_flags = PROT_READ,
             };

@@ -62,10 +62,12 @@ static bool mapped_right_perm(Page_Table::Page_Info info, unsigned access_type)
     return true;
 }
 
-static bool reading(unsigned access_type) { return access_type & Writeable; }
+static bool writing(unsigned access_type) { return access_type & Writeable; }
 
 ReturnStr<bool> Generic_Mem_Region::on_page_fault(unsigned access_type, void *pagefault_addr)
 {
+    pagefault_addr = (void *)((ulong)pagefault_addr & ~(ulong)(PAGE_SIZE - 1));
+
     if (not has_access(access_type))
         return Error(-EFAULT);
 
@@ -77,26 +79,36 @@ ReturnStr<bool> Generic_Mem_Region::on_page_fault(unsigned access_type, void *pa
         return true;
     }
 
-    return alloc_page(pagefault_addr, mapping, access_type);
+    if (mapping.is_allocated) {
+        auto ctx = TLBShootdownContext::create_userspace(*owner);
+        owner->invalidate(ctx, pagefault_addr, true);
+    }
+
+    auto page = get_page(pagefault_addr, access_type);
+    if (!page.success())
+        return page.propagate();
+
+    if (!page.val)
+        return false;
+
+    assert(!(access_type & Readable) or page.val.readable);
+    assert(!(access_type & Writeable) or page.val.writeable);
+    assert(!(access_type & Executable) or page.val.executable);
+
+    auto result = owner->map(page.val, pagefault_addr);
+    if (result)
+        return Error(result);
+
+    return true;
 }
 
 ReturnStr<bool> Generic_Mem_Region::prepare_page(unsigned access_mode, void *page_addr)
 {
-    if (not has_access(access_mode))
-        return Error(-EFAULT);
-
-    auto mapping = owner->get_page_mapping(page_addr);
-    if (mapped_right_perm(mapping, access_mode)) {
-        owner->invalidate_tlb(page_addr);
-        return true;
-    }
-
-    return alloc_page(page_addr, mapping, access_mode);
+    return Error(-ENOSYS);
 }
 
-Page_Table_Arguments Phys_Mapped_Region::craft_arguments(void *for_ptr) const
+Memory_Type Phys_Mapped_Region::memory_type_for_phys_addr(phys_addr_t phys_addr) const
 {
-    auto phys_addr = phys_addr_start + (char *)for_ptr - (char *)start_addr;
     Memory_Type type;
     switch (this->type) {
     case PhysRegionType::Framebuffer:
@@ -112,32 +124,31 @@ Page_Table_Arguments Phys_Mapped_Region::craft_arguments(void *for_ptr) const
         type = memory_type_for_phys_addr(phys_addr);
         break;
     }
-
-    return {
-        !!(access_type & Readable),
-        !!(access_type & Writeable),
-        true,
-        false,
-        !(access_type & Executable),
-        0b010,
-        // TODO: This is temporary, make it a flag
-        type,
-    };
+    return type;
 }
 
-ReturnStr<bool> Phys_Mapped_Region::alloc_page(void *ptr_addr, Page_Info, unsigned)
+ReturnStr<Page_Info> Phys_Mapped_Region::get_page(void *ptr_addr, unsigned access_type)
 {
-    Page_Table_Arguments args = craft_arguments(ptr_addr);
+    if (not has_access(access_type))
+        return Error(-EFAULT);
 
     phys_addr_t page_addr = (u64)ptr_addr & ~07777ULL;
     assert(page_addr >= (u64)start_addr and (u64) page_addr < (u64)start_addr + size);
     phys_addr_t phys_addr = (u64)page_addr - (u64)start_addr + phys_addr_start;
 
-    auto result = owner->map(phys_addr, (void *)page_addr, args);
-    if (result)
-        return Error(result);
-
-    return true;
+    Page_Info info = {
+        .flags = PAGING_FLAG_NOFREE,
+        .is_allocated = true,
+        .dirty = false,
+        .user_access = true,
+        .nofree = true,
+        .writeable = !!(access_type & Writeable),
+        .executable = !!(access_type & Executable),
+        .readable = !!(access_type & Readable),
+        .cache_policy = memory_type_for_phys_addr(phys_addr),
+        .page_addr = phys_addr,
+    };
+    return info;
 }
 
 kresult_t Generic_Mem_Region::move_to(TLBShootdownContext &ctx,
@@ -197,28 +208,23 @@ void Mem_Object_Reference::trim(void *new_start, size_t new_size) noexcept
     if (new_start != start_addr) {
         u64 diff = (char *)new_start - (char *)start_addr;
 
-        if (diff <= start_offset_bytes) {
-            start_offset_bytes -= diff;
-            object_offset_bytes += diff;
-            object_size_bytes = object_size_bytes < diff ? 0 : object_size_bytes - diff;
-        } else {
-            // Round down to the page boundary
-            u64 t = start_offset_bytes & 0xfff;
-            start_offset_bytes -= t;
-            object_offset_bytes -= t;
-            object_size_bytes += t;
-
-            start_offset_bytes = start_offset_bytes < diff ? 0 : start_offset_bytes - diff;
-            object_offset_bytes += diff;
-            object_size_bytes = object_size_bytes < diff ? 0 : object_size_bytes - diff;
-        }
+        object_offset_bytes += diff;
+        object_size_bytes = object_size_bytes < diff ? 0 : object_size_bytes - diff;
 
         start_addr = new_start;
     }
 
     size = new_size;
-    if (size < start_offset_bytes + object_size_bytes)
-        object_size_bytes = size - start_offset_bytes;
+    if (size < object_size_bytes)
+        object_size_bytes = size;
+
+    auto it = amap.begin();
+    auto end = amap.lower_bound(object_offset_bytes);
+    amap.erase(it, end);
+
+    it = amap.lower_bound(object_offset_bytes + object_size_bytes);
+    end = amap.end();
+    amap.erase(it, end);
 }
 
 kresult_t Phys_Mapped_Region::punch_hole(void *hole_addr_start, size_t hole_size_bytes)
@@ -245,12 +251,33 @@ kresult_t Mem_Object_Reference::punch_hole(void *hole_addr_start, size_t hole_si
            (char *) start_addr + size > (char *)hole_addr_start + hole_size_bytes);
 
     void *new_start = (char *)hole_addr_start + hole_size_bytes;
+    size_t offset = (char *)new_start - (char *)start_addr;
+    size_t new_size = size - offset;
 
-    auto ptr = new Mem_Object_Reference(*this);
+    auto ptr = new Mem_Object_Reference();
     if (!ptr)
         return -ENOMEM;
 
-    ptr->trim(new_start, size - ((char *)new_start - (char *)start_addr));
+    ptr->start_addr = new_start;
+    ptr->size = new_size;
+    // ptr->name = name;
+    ptr->id = __atomic_add_fetch(&counter, 1, 0);
+    ptr->owner = owner;
+    ptr->access_type = access_type;
+    ptr->references = references;
+    ptr->object_offset_bytes = object_offset_bytes + offset;
+    ptr->object_size_bytes = object_size_bytes - offset;
+    ptr->cow = cow;
+
+    for (auto it = amap.lower_bound(ptr->object_offset_bytes); it != amap.end(); ++it) {
+        auto &page = it->second;
+        assert(page);
+
+        auto iit = ptr->amap.insert_noexcept({it->first, page.duplicate()});
+        if (!iit.second)
+            return -ENOMEM;
+    }
+
     owner->paging_regions.insert(ptr);
 
     trim(start_addr, (char *)hole_addr_start - (char *)start_addr);
@@ -258,133 +285,135 @@ kresult_t Mem_Object_Reference::punch_hole(void *hole_addr_start, size_t hole_si
     return 0;
 }
 
-Page_Table_Arguments Mem_Object_Reference::craft_arguments(void *) const
+ReturnStr<Page_Info> Mem_Object_Reference::get_page(void *ptr_addr, unsigned access)
 {
-    return {
-        !!(access_type & Readable),
-        !!(access_type & Writeable),
-        true,
-        false,
-        !(access_type & Executable),
-        0b010,
-    };
-}
+    if (not has_access(access))
+        return Error(-EFAULT);
 
-ReturnStr<bool> Mem_Object_Reference::alloc_page(void *ptr_addr, Page_Table::Page_Info mapping,
-                                                 unsigned access_type)
-{
-    // TODO: mprotect
-    if (mapping.is_allocated) {
-        auto p = mapping.get_page();
-        assert(p);
-        if (p->is_anonymous()) {
-            kresult_t result = owner->resolve_anonymous_page(ptr_addr, access_type);
-            if (result)
-                return Error(result);
-            return true;
-        }
-    }
+    assert((ulong)ptr_addr % PAGE_SIZE == 0);
+
+    uintptr_t offset = (uintptr_t)ptr_addr - (uintptr_t)start_addr;
+    bool is_writing = writing(access);
 
     if (cow) {
-        const ulong reg_addr = (char *)((ulong)ptr_addr & ~0xfffUL) - (char *)start_addr;
+        auto it = amap.find(offset + object_offset_bytes);
+        if (it != amap.end()) {
+            auto &page = it->second;
+            assert(page);
 
-        if (reg_addr + 0x1000 <= start_offset_bytes or
-            reg_addr >= start_offset_bytes + object_size_bytes) {
-            // Out of object range. Allocate an empty page
-            auto page = references->atomic_request_anonymous_page(
-                reg_addr - start_offset_bytes + object_offset_bytes, true);
+            bool owned = page.page_struct_ptr->atomic_refcount() == 1;
+            
+            if (owned or not is_writing) {
+                bool writeable = (access_type & Writeable) and owned;
+
+                return Page_Info{
+                    .flags = PAGING_FLAG_NOFREE,
+                    .is_allocated = true,
+                    .dirty = false,
+                    .user_access = true,
+                    .nofree = true,
+                    .writeable = writeable,
+                    .executable = !!(access_type & Executable),
+                    .readable = !!(access_type & Readable),
+                    .cache_policy = Memory_Type::Normal,
+                    .page_addr = page.get_phys_addr(),
+                };
+            }
+
+            auto new_page = page.create_copy();
+            if (!new_page.success())
+                return new_page.propagate();
+
+            auto phys_addr = new_page.val.get_phys_addr();
+            it->second = std::move(new_page.val);
+
+            return Page_Info{
+                .flags = PAGING_FLAG_NOFREE,
+                .is_allocated = true,
+                .dirty = false,
+                .user_access = true,
+                .nofree = true,
+                .writeable = static_cast<bool>(access_type & Writeable),
+                .executable = static_cast<bool>(access_type & Executable),
+                .readable = static_cast<bool>(access_type & Readable),
+                .cache_policy = Memory_Type::Normal,
+                .page_addr = phys_addr,
+            };
+        }
+        
+        if (offset < object_size_bytes && (!is_writing)) {
+            auto page = references->atomic_request_page(offset + object_offset_bytes, false, true);
             if (!page.success())
                 return page.propagate();
 
-            auto res = owner->map(klib::move(page.val), ptr_addr, craft_arguments(ptr_addr));
-            if (res)
-                return Error(res);
+            if (not page.val)
+                return {};
 
-            return true;
+            auto phys_addr = page.val.get_phys_addr();
+            auto res = amap.insert_noexcept({offset, std::move(page.val)});
+            if (!res.second)
+                return Error(-ENOMEM);
+
+            return Page_Info{
+                .flags = PAGING_FLAG_NOFREE,
+                .is_allocated = true,
+                .dirty = false,
+                .user_access = true,
+                .nofree = true,
+                .writeable = false,
+                .executable = static_cast<bool>(access_type & Executable),
+                .readable = static_cast<bool>(access_type & Readable),
+                .cache_policy = Memory_Type::Normal,
+                .page_addr = phys_addr,
+            };
         }
 
-        if (reg_addr >= start_offset_bytes and
-            reg_addr + 0x1000 <= start_offset_bytes + object_size_bytes and !reading(access_type)) {
-            long addr = reg_addr - start_offset_bytes + object_offset_bytes;
-            // TODO
-            assert(addr >= 0);
-            auto page = references->atomic_request_page(
-                reg_addr - start_offset_bytes + object_offset_bytes, false, true);
-            if (!page.success())
-                return page.propagate();
-
-            if (not page.val.page_struct_ptr)
-                return false;
-
-            // TODO
-            auto addr_aligned = (ulong)ptr_addr & ~0xffful;
-            auto args         = craft_arguments(ptr_addr);
-            args.writeable &= not page.val.page_struct_ptr->is_anonymous();
-
-            auto result = owner->map(klib::move(page.val), (void *)addr_aligned, args);
-            if (result)
-                return Error(result);
-
-            return true;
-        }
-
-        auto page = references->atomic_request_anonymous_page(
-            reg_addr - start_offset_bytes + object_offset_bytes, false);
+        auto page = references->atomic_request_anonymous_page(offset + object_offset_bytes, false);
         if (!page.success())
             return page.propagate();
 
-        if (not page.val.page_struct_ptr)
-            return false;
+        if (not page.val)
+            return {};
 
-        if (reg_addr >= start_offset_bytes and
-            reg_addr + 0x1000 <= start_offset_bytes + object_size_bytes) {
-            // Whole page; just map it
-            auto result = owner->map(klib::move(page.val), ptr_addr, craft_arguments(ptr_addr));
-            if (result)
-                return Error(result);
+        auto phys_addr = page.val.get_phys_addr();
+        auto res = amap.insert_noexcept({offset, std::move(page.val)});
+        if (!res.second)
+            return Error(-ENOMEM);
 
-            return true;
-        }
-
-        // Zero the page
-        Temp_Mapper_Obj<void> mapper(request_temp_mapper());
-        void *pageptr = mapper.map(page.val.page_struct_ptr->get_phys_addr());
-
-        // Zero the start of the page
-        const u64 start_offset_size =
-            reg_addr < start_offset_bytes ? start_offset_bytes - reg_addr : 0;
-        memset((char *)pageptr, 0, start_offset_size);
-
-        // Zero the end of the page
-        const u64 obj_limit = start_offset_bytes + object_size_bytes;
-        const u64 end_offset_size =
-            reg_addr + 0x1000 > obj_limit ? reg_addr + 0x1000 - obj_limit : 0;
-        const u64 end_offset_start = 0x1000 - end_offset_size;
-        memset((char *)pageptr + end_offset_start, 0, end_offset_size);
-
-        auto result = owner->map(klib::move(page.val), ptr_addr, craft_arguments(ptr_addr));
-        if (result)
-            return Error(result);
-
-        return true;
-    } else {
-        // Find the actual address of the page inside the object
-        const auto addr_aligned = (ulong)ptr_addr & ~0xfffUL;
-        const auto reg_addr     = addr_aligned - (ulong)start_addr + object_offset_bytes;
-        // TODO
-        auto page               = references->atomic_request_page(reg_addr, true);
-        if (!page.success())
-            return page.propagate();
-
-        if (not page.val.page_struct_ptr)
-            return false;
-
-        auto result = owner->map(klib::move(page.val), (void *)addr_aligned, craft_arguments(ptr_addr));
-        if (result)
-            return Error(result);
-
-        return true;
+        return Page_Info{
+            .flags = PAGING_FLAG_NOFREE,
+            .is_allocated = true,
+            .dirty = false,
+            .user_access = true,
+            .nofree = true,
+            .writeable = static_cast<bool>(access_type & Writeable),
+            .executable = static_cast<bool>(access_type & Executable),
+            .readable = static_cast<bool>(access_type & Readable),
+            .cache_policy = Memory_Type::Normal,
+            .page_addr = phys_addr,
+        };
     }
+
+    auto page = references->atomic_request_page(offset + object_offset_bytes, is_writing);
+    if (!page.success())
+        return page.propagate();
+
+    if (not page.val)
+        return {};
+
+    auto phys_addr = page.val.get_phys_addr();
+    return Page_Info{
+        .flags = PAGING_FLAG_NOFREE,
+        .is_allocated = true,
+        .dirty = false,
+        .user_access = true,
+        .nofree = true,
+        .writeable = static_cast<bool>(access_type & Writeable) && is_writing,
+        .executable = static_cast<bool>(access_type & Executable),
+        .readable = static_cast<bool>(access_type & Readable),
+        .cache_policy = Memory_Type::Normal,
+        .page_addr = phys_addr,
+    };
 }
 
 kresult_t Mem_Object_Reference::move_to(TLBShootdownContext &ctx,
@@ -410,20 +439,30 @@ kresult_t Mem_Object_Reference::move_to(TLBShootdownContext &ctx,
 kresult_t Mem_Object_Reference::clone_to(const klib::shared_ptr<Page_Table> &new_table,
                                          void *base_addr, unsigned new_access)
 {
-    auto copy = klib::make_unique<Mem_Object_Reference>(*this);
+    auto copy = klib::make_unique<Mem_Object_Reference>();
     if (!copy)
         return -ENOMEM;
 
-    copy->owner       = new_table.get();
-    copy->id          = __atomic_add_fetch(&counter, 1, 0);
+    copy->start_addr = base_addr;
+    copy->size = size;
+    copy->id = __atomic_add_fetch(&counter, 1, 0);
+    copy->owner = new_table.get();
     copy->access_type = new_access;
-    copy->start_addr  = base_addr;
+
+    copy->references = references;
+    copy->object_offset_bytes = object_offset_bytes;
+    copy->object_size_bytes = object_size_bytes;
+    copy->cow = cow;
 
     if (cow) {
-        auto result =
-            owner->copy_anonymous_pages(new_table, start_addr, base_addr, size, new_access);
-        if (result)
-            return result;
+        for (const auto &it: amap) {
+            auto &page = it.second;
+            assert(page);
+
+            auto iit = copy->amap.insert_noexcept({it.first, page.duplicate()});
+            if (!iit.second)
+                return -ENOMEM;
+        }
     }
 
     new_table->paging_regions.insert(copy.release());
@@ -442,17 +481,15 @@ void Mem_Object_Reference::prepare_deletion() noexcept
 Mem_Object_Reference::Mem_Object_Reference(void *start_addr, size_t size, klib::string name,
                                            Page_Table *owner, unsigned access,
                                            klib::shared_ptr<Mem_Object> references,
-                                           u64 object_offset_bytes, bool copy_on_write,
-                                           u64 start_offset_bytes, u64 object_size_bytes)
+                                           u64 object_offset_bytes, bool copy_on_write, u64 object_size_bytes)
     : Generic_Mem_Region(start_addr, size, klib::forward<klib::string>(name), owner, access),
       references(klib::forward<klib::shared_ptr<Mem_Object>>(references)),
-      start_offset_bytes(start_offset_bytes), object_offset_bytes(object_offset_bytes),
+      object_offset_bytes(object_offset_bytes),
       object_size_bytes(object_size_bytes), cow(copy_on_write)
 {
-    assert(cow or (start_offset_bytes == 0) or !"non-CoW region cannot have start offset");
     assert(cow or (object_size_bytes == size) or
            !"non-CoW region cannot have size different from the object size");
-    assert((object_offset_bytes & 0xfff) == (start_offset_bytes & 0xfff) or
+    assert((object_offset_bytes & 0xfff) == 0 or
            !"Object page-misaligned with region");
 }
 

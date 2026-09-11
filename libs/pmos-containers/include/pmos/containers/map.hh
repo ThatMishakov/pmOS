@@ -38,7 +38,7 @@ private:
         value_type value;
         RBTreeNode<Node> bst_head;
 
-        Node(const K &&key, V &&value): value(key, value) {}
+        Node(value_type &&val): value(pmos::utility::forward<value_type>(val)) {}
     };
 
     using tree_type = RedBlackTree<Node, &Node::bst_head, detail::MapTreeCmp<Node, K>>;
@@ -90,6 +90,8 @@ public:
     iterator erase(iterator pos) noexcept;
     size_type erase(const key_type &key) noexcept;
 
+    void erase(iterator first, iterator last) noexcept;
+
     iterator find(const key_type &key) noexcept;
     const_iterator find(const key_type &key) const noexcept;
 
@@ -106,7 +108,7 @@ public:
 
 template<typename K, typename V> typename map<K, V>::Node *map<K, V>::alloc(map<K, V>::value_type &&val)
 {
-    return new Node(pmos::utility::move(val.first), pmos::utility::move(val.second));
+    return new Node(pmos::utility::forward<value_type>(val));
 }
 
 template<typename K, typename V> void map<K, V>::dealloc(Node *n) { delete n; }
@@ -124,6 +126,16 @@ template<typename K, typename V> size_t map<K, V>::erase(const K &key) noexcept
 }
 
 template<typename K, typename V>
+void map<K, V>::erase(iterator first, iterator last) noexcept
+{
+    while (first != last) {
+        auto it = first++;
+        erase(it);
+        dealloc(it);
+    }
+}
+
+template<typename K, typename V>
 std::pair<typename map<K, V>::iterator, bool> map<K, V>::insert_noexcept(value_type &&val) noexcept
 {
     auto it = find(val.first);
@@ -131,7 +143,7 @@ std::pair<typename map<K, V>::iterator, bool> map<K, V>::insert_noexcept(value_t
         return {it, false};
     }
 
-    Node *n = alloc(pmos::utility::move(val));
+    Node *n = alloc(pmos::utility::forward<value_type>(val));
     if (!n) {
         return {end(), false};
     }
@@ -191,6 +203,12 @@ template<typename K, typename V> map<K, V>::size_type map<K, V>::size() const no
 template<typename K, typename V> map<K, V>::size_type map<K, V>::count(const key_type &key) const noexcept
 {
     return find(key) != cend();
+}
+
+template<typename K, typename V>
+map<K, V>::iterator map<K, V>::lower_bound(const key_type &key) noexcept
+{
+    return tree.lower_bound(key);
 }
 
 } // namespace pmos::containers

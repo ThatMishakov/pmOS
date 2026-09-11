@@ -1114,10 +1114,7 @@ ReturnStr<bool> x86_Page_Table::atomic_copy_to_user(void *to, const void *from, 
         if (not b.val)
             return false;
 
-        const auto page = get_page_mapping(i);
-        assert(page.is_allocated);
-
-        char *ptr   = mapper.map(page.page_addr);
+        char *ptr   = mapper.map(b.val.page_addr);
         char *start = i < to ? (char *)to : i;
         char *end   = i + 0x1000 < (char *)to + size ? i + 0x1000 : (char *)to + size;
         memcpy(ptr + (start - i), (const char *)from + (start - (char *)to), end - start);

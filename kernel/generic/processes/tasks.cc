@@ -406,6 +406,8 @@ ReturnStr<
     if (header.e_ident[4] == R_LARCH_32) {
         using pheader = Elf32_Phdr;
 
+        u32 page_mask = PAGE_SIZE - 1;
+
         Elf32_Ehdr header;
         auto r = elf->read_to_kernel(0, (u8 *)&header, sizeof(header));
         if (!r.success())
@@ -450,7 +452,7 @@ ReturnStr<
             if (ph.p_type != PT_LOAD)
                 continue;
 
-            if ((ph.p_vaddr & 0xfff) != (ph.p_offset & 0xfff))
+            if ((ph.p_vaddr & page_mask) != (ph.p_offset & page_mask))
                 return Error(-ENOEXEC);
 
             // If pheader is inside this segment, set its virtual address
@@ -461,9 +463,9 @@ ReturnStr<
 
             if (!(ph.p_flags & PF_W)) {
                 // Direct map the region
-                const u32 region_start = ph.p_vaddr & ~0xFFFUL;
-                const u32 file_offset  = ph.p_offset & ~0xFFFUL;
-                const u32 size         = ((ph.p_vaddr & 0xFFFUL) + ph.p_memsz + 0xFFF) & ~0xFFFUL;
+                const u32 region_start = ph.p_vaddr & ~page_mask;
+                const u32 file_offset  = ph.p_offset & ~page_mask;
+                const u32 size         = ((ph.p_vaddr & page_mask) + ph.p_memsz + page_mask) & ~page_mask;
 
                 u8 protection_mask = (ph.p_flags & PF_X)
                                          ? paging::Page_Table::Protection::Executable
@@ -476,17 +478,16 @@ ReturnStr<
                 // Upcast in 64 bit kernels is fine
                 auto res = table->atomic_create_mem_object_region((void *)(ulong)region_start, size,
                                                                   protection_mask, true, name, elf,
-                                                                  false, 0, file_offset, size);
+                                                                  false, file_offset, size);
                 if (!res.success())
                     return res.propagate();
             } else {
                 // Copy the region on access
-                const u32 region_start = ph.p_vaddr & ~0xFFFUL;
+                const u32 region_start = ph.p_vaddr & ~page_mask;
                 const u32 size =
-                    ((ph.p_vaddr & (u32)0xFFF) + ph.p_memsz + (u32)0xFFF) & ~(u32)0xFFF;
-                const u32 file_offset         = ph.p_offset;
-                const u32 file_size           = ph.p_filesz;
-                const u32 object_start_offset = ph.p_vaddr - region_start;
+                    ((ph.p_vaddr & page_mask) + ph.p_memsz + page_mask) & ~page_mask;
+                const u32 file_offset         = ph.p_offset & ~page_mask;
+                const u32 file_size           = (ph.p_filesz + page_mask) & ~page_mask;
 
                 u8 protection_mask = (ph.p_flags & PF_X)
                                          ? paging::Page_Table::Protection::Executable
@@ -497,8 +498,7 @@ ReturnStr<
                     (ph.p_flags & PF_W) ? paging::Page_Table::Protection::Writeable : 0;
 
                 auto res = table->atomic_create_mem_object_region(
-                    (void *)(ulong)region_start, size, protection_mask, true, name, elf, true,
-                    object_start_offset, file_offset, file_size);
+                    (void *)(ulong)region_start, size, protection_mask, true, name, elf, true, file_offset, file_size);
 
                 if (!res.success())
                     return res.propagate();
@@ -509,6 +509,8 @@ ReturnStr<
     } else {
         // Parse program headers
         using pheader = Elf64_Phdr;
+
+        u64 page_mask = PAGE_SIZE - 1;
 
         Elf64_Ehdr header;
         auto r = elf->read_to_kernel(0, (u8 *)&header, sizeof(header));
@@ -550,7 +552,7 @@ ReturnStr<
             if (ph.p_type != PT_LOAD)
                 continue;
 
-            if ((ph.p_vaddr & 0xfff) != (ph.p_offset & 0xfff))
+            if ((ph.p_vaddr & page_mask) != (ph.p_offset & page_mask))
                 return Error(-ENOEXEC);
 
             if (ph.p_offset <= header.e_phoff &&
@@ -560,9 +562,9 @@ ReturnStr<
 
             if (!(ph.p_flags & PF_W)) {
                 // Direct map the region
-                const u64 region_start = ph.p_vaddr & ~0xFFFUL;
-                const u64 file_offset  = ph.p_offset & ~0xFFFUL;
-                const u64 size         = ((ph.p_vaddr & 0xFFFUL) + ph.p_memsz + 0xFFF) & ~0xFFFUL;
+                const u64 region_start = ph.p_vaddr & ~page_mask;
+                const u64 file_offset  = ph.p_offset & ~page_mask;
+                const u64 size         = ((ph.p_vaddr & page_mask) + ph.p_memsz + page_mask) & ~page_mask;
 
                 u8 protection_mask = (ph.p_flags & PF_X)
                                          ? paging::Page_Table::Protection::Executable
@@ -574,16 +576,15 @@ ReturnStr<
 
                 auto res = table->atomic_create_mem_object_region((void *)(ulong)region_start, size,
                                                                   protection_mask, true, name, elf,
-                                                                  false, 0, file_offset, size);
+                                                                  false, file_offset, size);
                 if (!res.success())
                     return res.propagate();
             } else {
                 // Copy the region on access
-                const u64 region_start = ph.p_vaddr & ~0xFFFUL;
-                const u64 size         = ((ph.p_vaddr & 0xFFFUL) + ph.p_memsz + 0xFFF) & ~0xFFFUL;
-                const u64 file_offset  = ph.p_offset;
-                const u64 file_size    = ph.p_filesz;
-                const u64 object_start_offset = ph.p_vaddr - region_start;
+                const u64 region_start = ph.p_vaddr & ~page_mask;
+                const u64 size         = ((ph.p_vaddr & page_mask) + ph.p_memsz + page_mask) & ~page_mask;
+                const u64 file_offset  = ph.p_offset & ~page_mask;
+                const u64 file_size    = (ph.p_filesz + page_mask) & ~page_mask;
 
                 u8 protection_mask = (ph.p_flags & PF_X)
                                          ? paging::Page_Table::Protection::Executable
@@ -594,8 +595,7 @@ ReturnStr<
                     (ph.p_flags & PF_W) ? paging::Page_Table::Protection::Writeable : 0;
 
                 auto res = table->atomic_create_mem_object_region(
-                    (void *)(ulong)region_start, size, protection_mask, true, name, elf, true,
-                    object_start_offset, file_offset, file_size);
+                    (void *)(ulong)region_start, size, protection_mask, true, name, elf, true, file_offset, file_size);
 
                 if (!res.success())
                     return res.propagate();
@@ -628,8 +628,10 @@ ReturnStr<bool>
         return Error(-EEXIST);
 
     auto r = load_elf_into_memory(elf_obj);
-    if (!r.success())
+    if (!r.success()) {
+        log::serial_logger.printf("atomic_load_elf error -> %d\n", r.error);
         return r.propagate();
+    }
 
     if (!r.val)
         // ELF can't be loaded immediately

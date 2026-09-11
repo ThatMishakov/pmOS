@@ -31,6 +31,9 @@
 #include "pmos/containers/intrusive_bst.hh"
 #include "rcu.hh"
 
+// TODO: Replace this with flat map
+#include <pmos/containers/map.hh>
+
 #include <lib/memory.hh>
 #include <lib/string.hh>
 #include <types.hh>
@@ -58,6 +61,7 @@ namespace paging
 
     class Page_Table;
     struct Page_Info;
+    enum class Memory_Type;
 
     struct Page_Table_Arguments;
 
@@ -117,18 +121,27 @@ namespace paging
         static constexpr u8 Executable = 0x04;
 
         /**
-         * @brief Allocate a page inside the region
+         * @brief Function to be executed upon a page fault.
          *
-         * This function tries to allocate the page for the task (as the kernel is *very* lazy
-         * (which is a good thing) and uses delayed allocation for everything). Depending on the
-         * actual region class, different actions could be done, one of them being mercilessly
-         * blocking the task desperately trying to access it.
-         *
-         * @param ptr_addr The address which needs to be allocated/has caused the petition.
-         * @return true if the page is avaiable, false otherwise.
+         * This is a generic function, to be executed on page fault. It checks the access
+         * permissions and installs the page as needed.
+         * @param access_mode Access mode (OR of Readable, Writeable, Executable)
+         * @param fault_addr Address of the pagefault
+         * @return true Execution was successfull and the page is immediately available
+         * @return false Execution was successfull but the page is not immediately available
          */
-        [[nodiscard]] virtual ReturnStr<bool> alloc_page(void *ptr_addr, Page_Info info,
-                                                         unsigned access_type) = 0;
+        ReturnStr<bool> on_page_fault(unsigned access_mode, void *fault_addr);
+
+        /**
+         * Gets the page from the memory region (e.g. to map it to the page table on the page fault).
+         * 
+         * @param ptr_addr The virtual address of the page to get. Must be inside the region.
+         * @param access_type The access type that is to be used to access the page.
+         * @return ReturnStr<Page_Info> The page info of the page. If the page has been requested,
+         * but is not yet available, the empty Page_Info will be returned, and the caller should block
+         * until that is resolved.
+         */
+        [[nodiscard]] virtual ReturnStr<Page_Info> get_page(void *ptr_addr, unsigned access_type) = 0;
 
         /**
          * @brief Checks if a page from the region can be taken out by provide_page() syscall
@@ -151,30 +164,6 @@ namespace paging
          */
         [[nodiscard]] ReturnStr<bool> prepare_page(unsigned access_mode, void *page_addr);
 
-        // /**
-        //  * @brief Function to be executed upon a page fault.
-        //  *
-        //  * @param error Pagefault error (passed with the exception)
-        //  * @param pagefault_addr Address of the pagefault
-        //  * @param task Task causing the pagefault
-        //  * @return true Execution was successfull and the page is immediately available
-        //  * @return false Execution was successfull but the page is not immediately available
-        //  * @todo This function is very x86-specific
-        //  */
-        // bool on_page_fault(u64 error, u64 pagefault_addr);
-
-        /**
-         * @brief Function to be executed upon a page fault.
-         *
-         * This is a generic function, to be executed on page fault. It checks the access
-         * permissions and installs the page as needed.
-         * @param access_mode Access mode (OR of Readable, Writeable, Executable)
-         * @param fault_addr Address of the pagefault
-         * @return true Execution was successfull and the page is immediately available
-         * @return false Execution was successfull but the page is not immediately available
-         */
-        ReturnStr<bool> on_page_fault(unsigned access_mode, void *fault_addr);
-
         Generic_Mem_Region(void *start_addr, size_t size, klib::string name, Page_Table *owner,
                            unsigned access);
 
@@ -196,9 +185,6 @@ namespace paging
         }
 
         void *addr_end() const noexcept { return (void *)((char *)start_addr + size); }
-
-        /// @brief Prepares the appropriate Page_Table_Arguments for the region
-        virtual Page_Table_Arguments craft_arguments(void *for_ptr) const = 0;
 
         constexpr virtual bool is_managed() const noexcept { return false; }
 
@@ -246,17 +232,11 @@ namespace paging
      * @see syscall_create_phys_map_region()
      */
     struct Phys_Mapped_Region final: Generic_Mem_Region {
-        // Allocated a new page, pointing to the corresponding physical address.
-        virtual ReturnStr<bool> alloc_page(void *ptr_addr, Page_Info info,
-                                           unsigned access_type) override;
-
         u64 phys_addr_start = 0;
         constexpr bool can_takeout_page() const noexcept override { return false; }
 
         virtual kresult_t clone_to(const klib::shared_ptr<Page_Table> &new_table, void *base_addr,
                                    unsigned new_access) override;
-
-        virtual Page_Table_Arguments craft_arguments(void *for_ptr) const override;
 
         // Constructs a region with virtual address starting at *aligned_virt* of size *size*
         // pointing to *aligned_phys*
@@ -276,10 +256,13 @@ namespace paging
         void trim(void *new_start_addr, size_t new_size_bytes) noexcept override;
         kresult_t punch_hole(void *hole_addr_start, size_t hole_size_bytes) override;
 
+        virtual ReturnStr<Page_Info> get_page(void *ptr_addr, unsigned access_type) override;
 
         static PhysRegionType type_from_syscall_flags(ulong flags);
 
         PhysRegionType type = PhysRegionType::Deduce;
+
+        Memory_Type memory_type_for_phys_addr(phys_addr_t phys_addr) const;
     };
 
     class Mem_Object;
@@ -287,11 +270,7 @@ namespace paging
     /// Memory region which references memory object
     struct Mem_Object_Reference final: Generic_Mem_Region {
         /// Memory object that is referenced by the region
-        const klib::shared_ptr<Mem_Object> references;
-
-        /// Offset in bytes, from the start of the memory region to the start of the memory object.
-        /// Before this offset, the pages are zeroed
-        u64 start_offset_bytes = 0;
+        klib::shared_ptr<Mem_Object> references;
 
         /// Offset in bytes from the start of the memory object
         u64 object_offset_bytes = 0;
@@ -302,13 +281,17 @@ namespace paging
         /// Indicates whether the pages should be copied on access
         bool cow = false;
 
+        // u64 offset, Page *anon_page
+        pmos::containers::map<uintptr_t, pmm::Page_Descriptor> amap;
+
+        virtual ReturnStr<Page_Info> get_page(void *ptr_addr, unsigned access_type) override;
+
+        Mem_Object_Reference() = default;
+
         Mem_Object_Reference(void *start_addr, size_t size, klib::string name, Page_Table *owner,
                              unsigned access, klib::shared_ptr<Mem_Object> references,
-                             u64 object_offset_bytes, bool copy_on_write, u64 start_offset_bytes,
+                             u64 object_offset_bytes, bool copy_on_write,
                              u64 object_size_bytes);
-
-        virtual ReturnStr<bool> alloc_page(void *ptr_addr, Page_Info info,
-                                           unsigned access_type) override;
 
         virtual kresult_t move_to(TLBShootdownContext &ctx,
                                   const klib::shared_ptr<Page_Table> &new_table, void *base_addr,
@@ -316,12 +299,10 @@ namespace paging
         virtual kresult_t clone_to(const klib::shared_ptr<Page_Table> &new_table, void *base_addr,
                                    unsigned new_access) override;
 
-        virtual Page_Table_Arguments craft_arguments(void *for_ptr) const override;
-
         /**
          * Returns the end byte of the memory object that is referenced by the region
          */
-        inline u64 object_up_to() const noexcept { return start_offset_bytes + size; }
+        inline u64 object_up_to() const noexcept { return object_offset_bytes + size; }
 
         virtual void prepare_deletion() noexcept override;
 

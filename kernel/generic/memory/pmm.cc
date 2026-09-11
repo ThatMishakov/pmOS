@@ -135,6 +135,11 @@ Page_Descriptor Page_Descriptor::create_from_allocated(Page::page_addr_t phys_ad
     return s;
 }
 
+size_t Page::atomic_refcount() const
+{
+    return __atomic_load_n(&l.refcount, __ATOMIC_ACQUIRE);
+}
+
 Page_Descriptor Page_Descriptor::create_empty() noexcept
 {
     klib::unique_ptr<Page> new_page_struct = klib::make_unique<Page>();

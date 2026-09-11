@@ -84,7 +84,6 @@ void init_dtb()
             .addr_start_uint = 0,
             .size = fdt_size + fdt_offset,
             .offset_object = 0,
-            .offset_start = 0,
             .object_size = fdt_size + fdt_offset,
             .access_flags = PROT_READ,
         };

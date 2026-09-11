@@ -1665,7 +1665,6 @@ void syscall_map_mem_object(TaskDescriptor *current_task)
     ulong size_bytes = params.size;
     ulong addr_start = params.addr_start_uint;
     ulong object_size = params.object_size;
-    u64 start_offset_bytes = params.offset_start;
 
     // serial_logger.printf("map_mem_object page_table_id %li object_id %li access %lx object_offset_bytes %lx size_bytes %lx addr_start %lx object_size %lx start_offset_bytes %lx\n",
                         //  page_table_id, object_right, access, object_offset_bytes, size_bytes, addr_start, object_size, start_offset_bytes);
@@ -1707,7 +1706,7 @@ void syscall_map_mem_object(TaskDescriptor *current_task)
 
     auto res = table->atomic_create_mem_object_region((void *)addr_start, size_bytes, access & 0x7,
                                                       access & 0x8, "object map", object,
-                                                      access & 0x20, start_offset_bytes, object_offset_bytes, object_size);
+                                                      access & 0x20, object_offset_bytes, object_size);
 
     if (!res.success()) {
         syscall_error(current_task) = res.result;

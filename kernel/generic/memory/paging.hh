@@ -150,11 +150,27 @@ struct Page_Info {
     bool writeable : 1    = 0;
     bool executable : 1   = 0;
     bool readable : 1     = 0;
+    Memory_Type cache_policy = Memory_Type::Normal;
     u64 page_addr         = 0;
 
     kernel::pmm::Page_Descriptor create_copy() const;
 
     kernel::pmm::Page *get_page() const;
+
+    explicit operator bool() const { return is_allocated; }
+
+    Page_Table_Arguments to_page_table_args() const
+    {
+        return Page_Table_Arguments{
+            .readable           = readable,
+            .writeable          = writeable,
+            .user_access        = user_access,
+            .global             = 0,
+            .execution_disabled = !executable,
+            .extra              = flags,
+            .cache_policy       = cache_policy,
+        };
+    }
 };
 
 /**
@@ -320,8 +336,6 @@ public:
      * @param name The name of the new region.
      * @param object Memory object to be referenced by the new region.
      * @param cow If the memory should be copied on write or not.
-     * @param start_offset_bytes Offset in bytes, after which the memory object is to be accessed.
-     * Must be 0 for non-CoW regions
      * @param object_offset_bytes Offset in bytes of memory object to start_offset mapping. Must be
      * page-aligned for non-CoW regions
      * @param object_size_bytes Size of the memory object, after which the memory will be nulled. On
@@ -331,27 +345,10 @@ public:
      */
     [[nodiscard]] ReturnStr<Mem_Object_Reference *> atomic_create_mem_object_region(
         void *page_aligned_start, size_t page_aligned_size, unsigned access, bool fixed,
-        klib::string name, klib::shared_ptr<Mem_Object> object, bool cow, u64 start_offset_bytes,
+        klib::string name, klib::shared_ptr<Mem_Object> object, bool cow,
         u64 object_offset_bytes, u64 object_size_bytes) noexcept;
 
-    /**
-     * @brief Prepares user page for being accessed by the kernel.
-     *
-     * This function prepares the user page to be accessed by the kernel in the mannes specified by
-     * access_type. This function might block the task, in which case false will be returned.
-     *
-     * @param virt_addr Page-aligned virtual address of the page
-     * @param access_type The OR combination of Protection enum entries signalling how the memory is
-     * to be accessed.
-     * @param task Task trying to access the memory. This function might block the task if deemed
-     * necessary.
-     * @return true The operation has been successfull and the page is immediately available.
-     * @return false The operation has been successfull, however the page is not immediately
-     * available and the task has been blocked. The action might need to be repeated once the page
-     * becomes available and the task is unblocked.
-     */
-    [[nodiscard]] ReturnStr<bool> prepare_user_page(void *virt_addr, unsigned access_type);
-    // bool prepare_user_buffer(u64 virt_addr, unsigned access_type);
+    [[nodiscard]] ReturnStr<Page_Info> prepare_user_page(void *virt_addr, unsigned access_type);
 
     /// @brief Indicates if the page can be taken out and used without copying to provide for the
     /// missing page
@@ -397,6 +394,8 @@ public:
      */
     [[nodiscard]] virtual kresult_t map(u64 page_addr, void *virt_addr,
                                         Page_Table_Arguments arg) = 0;
+
+    kresult_t map(Page_Info info, void *virt_addr);
 
     /**
      * @brief Maps the page to the virtual address

@@ -75,7 +75,7 @@ ReturnStr<Mem_Object_Reference *>
         return Error(-ENOMEM);
 
     return atomic_create_mem_object_region(page_aligned_start, page_aligned_size, access & 0x7,
-                                           access & 0x8, "anonymous memory", object, cow, 0, 0,
+                                           access & 0x8, "anonymous memory", object, cow, 0,
                                            page_aligned_size);
 }
 
@@ -108,7 +108,8 @@ ReturnStr<bool> Page_Table::atomic_copy_to_user(void *to, const void *from, size
 
 kresult_t Page_Table::release_in_range(TLBShootdownContext &ctx, void *start_addr, size_t size)
 {
-    bool clean_pages = false;
+    invalidate_range(ctx, start_addr, size, true);
+
     // Special case: One large region needs to be split in two, from the middle
     auto it          = paging_regions.get_smaller_or_equal(start_addr);
     if (it != paging_regions.end() and it->start_addr < start_addr and
@@ -120,8 +121,6 @@ kresult_t Page_Table::release_in_range(TLBShootdownContext &ctx, void *start_add
         auto p = it->punch_hole(start_addr, size);
         if (p)
             return p;
-
-        clean_pages = true;
     } else {
         auto it = paging_regions.get_smaller_or_equal(start_addr);
         if (it == paging_regions.end())
@@ -144,13 +143,8 @@ kresult_t Page_Table::release_in_range(TLBShootdownContext &ctx, void *start_add
                 paging_regions.erase(i);
                 i->rcu_free();
             }
-
-            clean_pages = true;
         }
     }
-
-    if (clean_pages)
-        invalidate_range(ctx, start_addr, size, true);
 
     return 0;
 }
@@ -232,7 +226,7 @@ ReturnStr<Phys_Mapped_Region *> Page_Table::atomic_create_phys_region(void *page
 
 ReturnStr<Mem_Object_Reference *> Page_Table::atomic_create_mem_object_region(
     void *page_aligned_start, size_t page_aligned_size, unsigned access, bool fixed,
-    klib::string name, klib::shared_ptr<Mem_Object> object, bool cow, u64 start_offset_bytes,
+    klib::string name, klib::shared_ptr<Mem_Object> object, bool cow,
     u64 object_offset_bytes, u64 object_size_bytes) noexcept
 {
     Auto_Lock_Scope scope_lock(lock);
@@ -258,18 +252,15 @@ ReturnStr<Mem_Object_Reference *> Page_Table::atomic_create_mem_object_region(
 
     assert(addr_reasonable() or fixed or !"Region overlaps with existing region");
 
-    if (not cow and start_offset_bytes != 0)
-        return Error(-EINVAL);
-
     if (not cow and object_size_bytes != page_aligned_size)
         return Error(-EINVAL);
 
-    if ((object_offset_bytes & 0xfff) != (start_offset_bytes & 0xfff))
+    if ((object_offset_bytes & 0xfff) != 0)
         return Error(-EINVAL);
 
     auto region = klib::make_unique<Mem_Object_Reference>(
         start_addr.val, page_aligned_size, klib::forward<klib::string>(name), this, access, object,
-        object_offset_bytes, cow, start_offset_bytes, object_size_bytes);
+        object_offset_bytes, cow, object_size_bytes);
 
     if (!region)
         return Error(-ENOMEM);
@@ -353,14 +344,16 @@ ReturnStr<void *> Page_Table::find_region_spot(void *desired_start, size_t size,
     }
 }
 
-ReturnStr<bool> Page_Table::prepare_user_page(void *virt_addr, unsigned access_type)
+ReturnStr<Page_Info> Page_Table::prepare_user_page(void *virt_addr, unsigned access_type)
 {
+    virt_addr = (void *)((ulong)virt_addr & ~(ulong)(PAGE_SIZE - 1));
+
     auto it = paging_regions.get_smaller_or_equal(virt_addr);
 
     if (it == paging_regions.end() or not it->is_in_range(virt_addr))
         return Error(-EFAULT);
 
-    return it->prepare_page(access_type, virt_addr);
+    return it->get_page(virt_addr, access_type);
 }
 
 void Page_Table::unblock_tasks(void *page)
@@ -372,11 +365,12 @@ void Page_Table::unblock_tasks(void *page)
 
 kresult_t Page_Table::map(u64 page_addr, void *virt_addr) noexcept
 {
-    auto it = get_region(virt_addr);
-    if (it == paging_regions.end())
-        return -EFAULT;
+    // auto it = get_region(virt_addr);
+    // if (it == paging_regions.end())
+    //     return -EFAULT;
 
-    return map(page_addr, virt_addr, it->craft_arguments(virt_addr));
+    // return map(page_addr, virt_addr, it->craft_arguments(virt_addr));
+    return -ENOSYS;
 }
 
 kresult_t Page_Table::move_pages(TLBShootdownContext &ctx, const klib::shared_ptr<Page_Table> &to,
@@ -536,6 +530,12 @@ kresult_t Page_Table::atomic_delete_region(void *region_start)
     unblock_tasks_range(region_start, region_size);
 
     return 0;
+}
+
+kresult_t Page_Table::map(Page_Info info, void *virt_addr)
+{
+    auto args = info.to_page_table_args();
+    return map(info.page_addr, virt_addr, args);
 }
 
 void Page_Table::unblock_tasks_range(void *blocked_by_page, size_t size_bytes)

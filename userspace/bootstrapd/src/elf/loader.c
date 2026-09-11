@@ -424,7 +424,6 @@ result_t load_elf_to_memory(void *file_mapped, uint64_t mem_object_id, uint64_t 
                     .addr_start_uint = region_start + *relocation_offset,
                     .size = size,
                     .offset_object = file_offset,
-                    .offset_start = 0,
                     .object_size = size,
                     .access_flags = protection,
                 });
@@ -434,11 +433,10 @@ result_t load_elf_to_memory(void *file_mapped, uint64_t mem_object_id, uint64_t 
                 }
             } else {
                 // Copy the region on access
-                const uint32_t region_start = ph->p_vaddr & ~page_mask;
-                const uint32_t size         = ((ph->p_vaddr & page_mask) + ph->p_memsz + page_mask) & ~page_mask;
-                const uint32_t file_offset         = ph->p_offset;
-                const uint32_t file_size           = ph->p_filesz;
-                const uint32_t object_start_offset = ph->p_vaddr - region_start;
+                const uint64_t region_start = ph->p_vaddr & ~page_mask;
+                const uint64_t size         = ((ph->p_vaddr & page_mask) + ph->p_memsz + page_mask) & ~page_mask;
+                const uint64_t file_offset         = ph->p_offset & ~page_mask;
+                const uint64_t file_size           = (ph->p_filesz + page_mask) & ~page_mask;
 
                 unsigned protection = CREATE_FLAG_COW | CREATE_FLAG_FIXED | PROT_WRITE;
                 if (ph->p_flags & PF_X)
@@ -452,7 +450,6 @@ result_t load_elf_to_memory(void *file_mapped, uint64_t mem_object_id, uint64_t 
                     .addr_start_uint = region_start + *relocation_offset,
                     .size = size,
                     .offset_object = file_offset,
-                    .offset_start = object_start_offset,
                     .object_size = file_size,
                     .access_flags = protection,
                 });
@@ -504,7 +501,6 @@ result_t load_elf_to_memory(void *file_mapped, uint64_t mem_object_id, uint64_t 
                     .addr_start_uint = region_start + *relocation_offset,
                     .size = size,
                     .offset_object = file_offset,
-                    .offset_start = 0,
                     .object_size = size,
                     .access_flags = protection,
                 });
@@ -516,9 +512,8 @@ result_t load_elf_to_memory(void *file_mapped, uint64_t mem_object_id, uint64_t 
                 // Copy the region on access
                 const uint64_t region_start = ph->p_vaddr & ~page_mask;
                 const uint64_t size         = ((ph->p_vaddr & page_mask) + ph->p_memsz + page_mask) & ~page_mask;
-                const uint64_t file_offset         = ph->p_offset;
-                const uint64_t file_size           = ph->p_filesz;
-                const uint64_t object_start_offset = ph->p_vaddr - region_start;
+                const uint64_t file_offset         = ph->p_offset & ~page_mask;
+                const uint64_t file_size           = (ph->p_filesz + page_mask) & ~page_mask;
 
                 unsigned protection = CREATE_FLAG_COW | CREATE_FLAG_FIXED | PROT_WRITE;
                 if (ph->p_flags & PF_X)
@@ -532,7 +527,6 @@ result_t load_elf_to_memory(void *file_mapped, uint64_t mem_object_id, uint64_t 
                     .addr_start_uint = region_start + *relocation_offset,
                     .size = size,
                     .offset_object = file_offset,
-                    .offset_start = object_start_offset,
                     .object_size = file_size,
                     .access_flags = protection,
                 });
@@ -575,7 +569,6 @@ result_t load_executable(uint64_t task_id, uint64_t group_id, uint64_t mem_objec
         .addr_start_uint = 0,
         .size = mem_object_size,
         .offset_object = 0,
-        .offset_start = 0,
         .object_size = mem_object_size,
         .access_flags = PROT_READ,
     });
@@ -676,7 +669,6 @@ result_t load_executable(uint64_t task_id, uint64_t group_id, uint64_t mem_objec
             .addr_start_uint = 0,
             .size = interp_object_size,
             .offset_object = 0,
-            .offset_start = 0,
             .object_size = interp_object_size,
             .access_flags = PROT_READ,
         });
