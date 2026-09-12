@@ -1666,8 +1666,8 @@ void syscall_map_mem_object(TaskDescriptor *current_task)
     ulong addr_start = params.addr_start_uint;
     ulong object_size = params.object_size;
 
-    // serial_logger.printf("map_mem_object page_table_id %li object_id %li access %lx object_offset_bytes %lx size_bytes %lx addr_start %lx object_size %lx start_offset_bytes %lx\n",
-                        //  page_table_id, object_right, access, object_offset_bytes, size_bytes, addr_start, object_size, start_offset_bytes);
+    // serial_logger.printf("map_mem_object page_table_id %li object_id %li access %lx object_offset_bytes %lx size_bytes %lx addr_start %lx object_size %lx\n",
+                        //  page_table_id, object_right, access, object_offset_bytes, size_bytes, addr_start, object_size);
 
     klib::shared_ptr<Page_Table> table = page_table_id == 0
                                              ? current_task->page_table

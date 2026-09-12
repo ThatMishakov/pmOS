@@ -465,7 +465,7 @@ ReturnStr<
                 // Direct map the region
                 const u32 region_start = ph.p_vaddr & ~page_mask;
                 const u32 file_offset  = ph.p_offset & ~page_mask;
-                const u32 size         = ((ph.p_vaddr & page_mask) + ph.p_memsz + page_mask) & ~page_mask;
+                const u32 size         = ((ph.p_vaddr + ph.p_memsz + page_mask) & ~page_mask) - region_start;
 
                 u8 protection_mask = (ph.p_flags & PF_X)
                                          ? paging::Page_Table::Protection::Executable
@@ -485,9 +485,9 @@ ReturnStr<
                 // Copy the region on access
                 const u32 region_start = ph.p_vaddr & ~page_mask;
                 const u32 size =
-                    ((ph.p_vaddr & page_mask) + ph.p_memsz + page_mask) & ~page_mask;
+                    ((ph.p_vaddr + ph.p_memsz + page_mask) & ~page_mask) - region_start;
                 const u32 file_offset         = ph.p_offset & ~page_mask;
-                const u32 file_size           = (ph.p_filesz + page_mask) & ~page_mask;
+                const u32 file_size           = ph.p_offset + ph.p_filesz - file_offset;
 
                 u8 protection_mask = (ph.p_flags & PF_X)
                                          ? paging::Page_Table::Protection::Executable
@@ -564,7 +564,7 @@ ReturnStr<
                 // Direct map the region
                 const u64 region_start = ph.p_vaddr & ~page_mask;
                 const u64 file_offset  = ph.p_offset & ~page_mask;
-                const u64 size         = ((ph.p_vaddr & page_mask) + ph.p_memsz + page_mask) & ~page_mask;
+                const u64 size         = ((ph.p_vaddr + ph.p_memsz + page_mask) & ~page_mask) - region_start;
 
                 u8 protection_mask = (ph.p_flags & PF_X)
                                          ? paging::Page_Table::Protection::Executable
@@ -582,9 +582,9 @@ ReturnStr<
             } else {
                 // Copy the region on access
                 const u64 region_start = ph.p_vaddr & ~page_mask;
-                const u64 size         = ((ph.p_vaddr & page_mask) + ph.p_memsz + page_mask) & ~page_mask;
+                const u64 size         = ((ph.p_vaddr + ph.p_memsz + page_mask) & ~page_mask) - region_start;
                 const u64 file_offset  = ph.p_offset & ~page_mask;
-                const u64 file_size    = (ph.p_filesz + page_mask) & ~page_mask;
+                const u64 file_size    = ph.p_offset + ph.p_filesz - file_offset;
 
                 u8 protection_mask = (ph.p_flags & PF_X)
                                          ? paging::Page_Table::Protection::Executable

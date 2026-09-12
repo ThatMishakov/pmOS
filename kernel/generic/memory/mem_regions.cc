@@ -341,18 +341,13 @@ ReturnStr<Page_Info> Mem_Object_Reference::get_page(void *ptr_addr, unsigned acc
             };
         }
         
-        if (offset < object_size_bytes && (!is_writing)) {
-            auto page = references->atomic_request_page(offset + object_offset_bytes, false, true);
+        if (offset < object_size_bytes && (offset + PAGE_SIZE <= object_size_bytes) && (!is_writing)) {
+            auto page = references->atomic_request_page(offset + object_offset_bytes, false, false);
             if (!page.success())
                 return page.propagate();
 
             if (not page.val)
                 return {};
-
-            auto phys_addr = page.val.get_phys_addr();
-            auto res = amap.insert_noexcept({offset, std::move(page.val)});
-            if (!res.second)
-                return Error(-ENOMEM);
 
             return Page_Info{
                 .flags = PAGING_FLAG_NOFREE,
@@ -364,11 +359,13 @@ ReturnStr<Page_Info> Mem_Object_Reference::get_page(void *ptr_addr, unsigned acc
                 .executable = static_cast<bool>(access_type & Executable),
                 .readable = static_cast<bool>(access_type & Readable),
                 .cache_policy = Memory_Type::Normal,
-                .page_addr = phys_addr,
+                .page_addr = page.val.get_phys_addr(),
             };
         }
 
-        auto page = references->atomic_request_anonymous_page(offset + object_offset_bytes, false);
+        bool clear = offset >= object_size_bytes;
+
+        auto page = references->atomic_request_anonymous_page(offset + object_offset_bytes, clear);
         if (!page.success())
             return page.propagate();
 
@@ -379,6 +376,18 @@ ReturnStr<Page_Info> Mem_Object_Reference::get_page(void *ptr_addr, unsigned acc
         auto res = amap.insert_noexcept({offset, std::move(page.val)});
         if (!res.second)
             return Error(-ENOMEM);
+
+        if (offset < object_size_bytes && (offset + PAGE_SIZE > object_size_bytes)) {
+            // Zero the part of the page that is outside of the object
+            Temp_Mapper_Obj<char> mapper(request_temp_mapper());
+            char *ptr = mapper.map(phys_addr);
+            assert(ptr);
+
+            size_t zero_start = object_size_bytes - offset;
+            size_t zero_end = PAGE_SIZE;
+
+            memset(ptr + zero_start, 0, zero_end - zero_start);
+        }
 
         return Page_Info{
             .flags = PAGING_FLAG_NOFREE,

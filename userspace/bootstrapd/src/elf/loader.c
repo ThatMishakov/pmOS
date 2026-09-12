@@ -436,7 +436,7 @@ result_t load_elf_to_memory(void *file_mapped, uint64_t mem_object_id, uint64_t 
                 const uint64_t region_start = ph->p_vaddr & ~page_mask;
                 const uint64_t size         = ((ph->p_vaddr & page_mask) + ph->p_memsz + page_mask) & ~page_mask;
                 const uint64_t file_offset         = ph->p_offset & ~page_mask;
-                const uint64_t file_size           = (ph->p_filesz + page_mask) & ~page_mask;
+                const uint64_t file_size           = ph->p_offset + ph->p_filesz - file_offset;
 
                 unsigned protection = CREATE_FLAG_COW | CREATE_FLAG_FIXED | PROT_WRITE;
                 if (ph->p_flags & PF_X)
@@ -513,7 +513,7 @@ result_t load_elf_to_memory(void *file_mapped, uint64_t mem_object_id, uint64_t 
                 const uint64_t region_start = ph->p_vaddr & ~page_mask;
                 const uint64_t size         = ((ph->p_vaddr & page_mask) + ph->p_memsz + page_mask) & ~page_mask;
                 const uint64_t file_offset         = ph->p_offset & ~page_mask;
-                const uint64_t file_size           = (ph->p_filesz + page_mask) & ~page_mask;
+                const uint64_t file_size           = ph->p_offset + ph->p_filesz - file_offset;
 
                 unsigned protection = CREATE_FLAG_COW | CREATE_FLAG_FIXED | PROT_WRITE;
                 if (ph->p_flags & PF_X)
