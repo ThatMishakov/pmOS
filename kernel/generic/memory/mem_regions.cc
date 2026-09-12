@@ -121,7 +121,7 @@ Memory_Type Phys_Mapped_Region::memory_type_for_phys_addr(phys_addr_t phys_addr)
         type = Memory_Type::Normal;
         break;
     default:
-        type = memory_type_for_phys_addr(phys_addr);
+        type = ::memory_type_for_phys_addr(phys_addr);
         break;
     }
     return type;
@@ -373,7 +373,7 @@ ReturnStr<Page_Info> Mem_Object_Reference::get_page(void *ptr_addr, unsigned acc
             return {};
 
         auto phys_addr = page.val.get_phys_addr();
-        auto res = amap.insert_noexcept({offset, std::move(page.val)});
+        auto res = amap.insert_noexcept({offset + object_offset_bytes, std::move(page.val)});
         if (!res.second)
             return Error(-ENOMEM);
 
