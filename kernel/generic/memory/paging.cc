@@ -171,14 +171,22 @@ ReturnStr<std::pair<void *, size_t>> Page_Table::atomic_transfer_region(const kl
     if (!start_addr.success())
         return start_addr.propagate();
 
-    // move_to can't atomically clear the pages and move the region yet
-    if (fixed && start_addr.val != prefered_to)
-        return Error(-ENOSYS);
+    if (fixed) {
+        auto ctx = TLBShootdownContext::create_userspace(*to);
+        auto r   = to->release_in_range(ctx, start_addr.val, size);
+        if (r)
+            return Error(r);
+    }
 
     auto ctx    = TLBShootdownContext::create_userspace(*this);
-    auto result = reg->move_to(ctx, to, start_addr.val, access);
+    auto result = reg->move_to(to, start_addr.val, access);
     if (result)
         return Error(result);
+
+    {
+        auto ctx = TLBShootdownContext::create_userspace(*this);
+        invalidate_range(ctx, region_orig, size, false);
+    }
 
     return std::make_pair(start_addr.val, size);
 }
@@ -367,42 +375,6 @@ kresult_t Page_Table::map(u64 page_addr, void *virt_addr) noexcept
 
     // return map(page_addr, virt_addr, it->craft_arguments(virt_addr));
     return -ENOSYS;
-}
-
-kresult_t Page_Table::move_pages(TLBShootdownContext &ctx, const klib::shared_ptr<Page_Table> &to,
-                                 void *from_addr, void *to_addr, size_t size_bytes,
-                                 unsigned access) noexcept
-{
-    size_t offset = 0;
-
-    pmos::utility::scope_guard guard([&]() {
-        auto ctx = TLBShootdownContext::create_userspace(*to);
-        to->invalidate_range(ctx, to_addr, offset, false);
-    });
-
-    for (; offset < size_bytes; offset += 4096) {
-        auto info = get_page_mapping((char *)from_addr + offset);
-        if (info.is_allocated) {
-            Page_Table_Arguments arg = {
-                .readable           = !!(access & Readable),
-                .writeable          = !!(access & Writeable),
-                .user_access        = info.user_access,
-                .global             = 0,
-                .execution_disabled = !(access & Executable),
-                .extra              = info.flags,
-                .cache_policy       = Memory_Type::Normal // TODO: Fix this
-            };
-            auto res = to->map(info.page_addr, (char *)to_addr + offset, arg);
-            if (res)
-                return res;
-        }
-    }
-
-    invalidate_range(ctx, from_addr, size_bytes, false);
-
-    guard.dismiss();
-
-    return 0;
 }
 
 void Page_Table::apply_cpu(sched::CPU_Info *cpu)

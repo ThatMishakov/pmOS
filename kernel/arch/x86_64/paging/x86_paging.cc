@@ -804,71 +804,6 @@ kresult_t x86_Page_Table::map(pmm::Page_Descriptor page, void *virtual_addr,
     return 0;
 }
 
-kresult_t x86_Page_Table::resolve_anonymous_page(void *virt_addr, unsigned access_type)
-{
-    assert(access_type & Writeable);
-
-    Temp_Mapper_Obj<u64> mapper(request_temp_mapper());
-    mapper.map(pt_top_phys);
-    for (int i = use_5lvl_paging ? 4 : 3; i > 0; --i) {
-        int offset      = 12 + i * 9;
-        int index       = ((u64)virt_addr >> offset) & 0x1ff;
-        auto p          = x86_PAE_Entry::atomic_load(mapper.ptr + index);
-        assert(p.present && "page must be present");
-        mapper.map(p.page_ppn << 12);
-    }
-
-    auto i = pt_index(virt_addr);
-    auto p = x86_PAE_Entry::atomic_load(mapper.ptr + i);
-    assert(p.present && "page must be present");
-    assert(p.avl & PAGING_FLAG_STRUCT_PAGE && "page must be a struct page");
-    assert(!p.writeable && "page must be read-only");
-
-    auto page = pmm::Page_Descriptor::find_page_struct(p.page_ppn << 12);
-    assert(page.page_struct_ptr && "page struct not found");
-
-    if (__atomic_load_n(&page.page_struct_ptr->l.refcount, __ATOMIC_ACQUIRE) == 2) {
-        // only owner of the page
-        p.writeable   = 1;
-        p.atomic_store(mapper.ptr + i);
-        return 0;
-    }
-
-    auto owner = page.page_struct_ptr->l.owner;
-    assert(owner && "page owner not found");
-
-    auto new_descriptor =
-        owner->atomic_request_anonymous_page(page.page_struct_ptr->l.offset, true);
-    if (!new_descriptor.success())
-        return new_descriptor.result;
-
-    p.present     = 0;
-    p.atomic_store(mapper.ptr + i);
-    // Fun!
-    {
-        auto tlb_ctx = TLBShootdownContext::create_userspace(*this);
-        tlb_ctx.invalidate_page((void *)((u64)virt_addr & ~0xffful));
-    }
-
-    u64 new_page_phys = new_descriptor.val.takeout_page();
-
-    Temp_Mapper_Obj<void> old_page(request_temp_mapper());
-    old_page.map(p.page_ppn << 12);
-    Temp_Mapper_Obj<void> new_page(request_temp_mapper());
-    new_page.map(new_page_phys);
-
-    __builtin_memcpy(new_page.ptr, old_page.ptr, 4096);
-
-    page.release_taken_out_page();
-
-    p.page_ppn  = new_page_phys >> 12;
-    p.writeable = 1;
-    p.present   = 1;
-    p.atomic_store(mapper.ptr + i);
-
-    return 0;
-}
-
 void x86_Page_Table::free_pt(u64 pt_phys)
 {
     Temp_Mapper_Obj<u64> mapper(request_temp_mapper());
@@ -1181,31 +1116,6 @@ kresult_t x86_Page_Table::copy_to_recursive(const klib::shared_ptr<Page_Table> &
     }
 
     return 0;
-}
-
-kresult_t x86_Page_Table::copy_anonymous_pages(const klib::shared_ptr<Page_Table> &to,
-                                                      void *from_addr, void *to_addr,
-                                                      size_t size_bytes, unsigned access)
-{
-    u64 offset = 0;
-
-    auto guard = pmos::utility::make_scope_guard([&]() {
-        auto ctx = TLBShootdownContext::create_userspace(*to);
-        to->invalidate_range(ctx, (void *)to_addr, offset, true);
-    });
-
-    kresult_t result;
-
-    {
-        TLBShootdownContext ctx = TLBShootdownContext::create_userspace(*this);
-        result = copy_to_recursive(to, pt_top_phys, (u64)from_addr, (u64)to_addr, size_bytes, access,
-                                   (u64)from_addr, use_5lvl_paging ? 5 : 4, offset, ctx);
-    }
-
-    if (result == 0)
-        guard.dismiss();
-
-    return result;
 }
 
 static bool check_level(void *ptr, unsigned level, u64 phys_page_level, ulong err)

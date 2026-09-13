@@ -373,26 +373,6 @@ kresult_t RISCV64_Page_Table::copy_to_recursive(const klib::shared_ptr<Page_Tabl
     return 0;
 }
 
-kresult_t RISCV64_Page_Table::copy_anonymous_pages(const klib::shared_ptr<Page_Table> &to,
-                                                   void *from_addr, void *to_addr,
-                                                   size_t size_bytes, unsigned access)
-{
-    u64 offset = 0;
-    kresult_t result;
-    {
-        TLBShootdownContext ctx = TLBShootdownContext::create_userspace(*this);
-        result = copy_to_recursive(to, table_root, (u64)from_addr, (u64)to_addr, size_bytes, access,
-                                   (u64)from_addr, riscv64_paging_levels, offset, ctx);
-    }
-
-    if (result != 0) {
-        auto ctx = TLBShootdownContext::create_userspace(*to);
-        to->invalidate_range(ctx, (void *)to_addr, offset, true);
-    }
-
-    return result;
-}
-
 // TODO: This function had great possibilities, but now seems weird
 static RISCV64_Page_Table::Page_Info get_page_mapping(u64 table_root, const void *virt_addr)
 {
@@ -759,77 +739,6 @@ void RISCV64_Page_Table::invalidate_tlb(void *page, size_t size)
 }
 
 void RISCV64_Page_Table::tlb_flush_all() { flush_all(); }
-
-kresult_t RISCV64_Page_Table::resolve_anonymous_page(void *virt_addr, unsigned access_type)
-{
-    assert(access_type & Writeable);
-
-    Temp_Mapper_Obj<u64> mapper(request_temp_mapper());
-    mapper.map(table_root);
-    for (int i = riscv64_paging_levels; i > 1; --i) {
-        const u8 offset = 12 + (i - 1) * 9;
-        const u64 index = ((u64)virt_addr >> offset) & 0x1FF;
-
-        u64 entry_val = __atomic_load_n(mapper.ptr + index, __ATOMIC_ACQUIRE);
-        RISCV64_PTE entry = RISCV64_PTE::from_u64(entry_val);
-        assert(entry.valid);
-        assert(not entry.is_leaf());
-        mapper.map(entry.ppn << 12);
-    }
-
-    const u64 index   = ((u64)virt_addr >> 12) & 0x1FF;
-    u64 entry_val = __atomic_load_n(mapper.ptr + index, __ATOMIC_ACQUIRE);
-    RISCV64_PTE entry = RISCV64_PTE::from_u64(entry_val);
-    assert(entry.valid);
-    assert(entry.available & PAGING_FLAG_STRUCT_PAGE);
-    assert(not entry.writeable);
-
-    auto page = pmm::Page_Descriptor::find_page_struct(entry.ppn << 12);
-    assert(page.page_struct_ptr);
-
-    if (__atomic_load_n(&page.page_struct_ptr->l.refcount, __ATOMIC_ACQUIRE) == 2) {
-        // only owner of the page
-        entry.writeable   = 1;
-        __atomic_store_n(mapper.ptr + index, entry.into_u64(), __ATOMIC_RELEASE);
-        flush_page((void *)virt_addr);
-        return 0;
-    }
-
-    auto owner = page.page_struct_ptr->l.owner;
-    assert(owner && "page owner not found");
-
-    auto new_descriptor =
-        owner->atomic_request_anonymous_page(page.page_struct_ptr->l.offset, true);
-    if (!new_descriptor.success())
-        return new_descriptor.result;
-
-    entry.valid       = false;
-    __atomic_store_n(mapper.ptr + index, entry.into_u64(), __ATOMIC_RELEASE);
-
-    {
-        auto tlb_ctx = TLBShootdownContext::create_userspace(*this);
-        tlb_ctx.invalidate_page(virt_addr);
-    }
-
-    u64 new_page_phys = new_descriptor.val.takeout_page();
-
-    Temp_Mapper_Obj<void> new_mapper(request_temp_mapper());
-    void *new_page = new_mapper.map(new_page_phys);
-    Temp_Mapper_Obj<void> old_mapper(request_temp_mapper());
-    const void *old_page = old_mapper.map(entry.ppn << 12);
-
-    memcpy(new_page, old_page, 4096);
-
-    page.release_taken_out_page();
-
-    entry.valid       = true;
-    entry.writeable   = 1;
-    entry.ppn         = new_page_phys >> 12;
-    __atomic_store_n(mapper.ptr + index, entry.into_u64(), __ATOMIC_RELEASE);
-
-    flush_page((void *)virt_addr);
-    return 0;
-}
 
 // lol
 RISCV64_PTE RISCV64_PTE::from_u64(u64 val)

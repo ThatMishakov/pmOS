@@ -126,10 +126,6 @@ public:
 
     static klib::shared_ptr<x86_Page_Table> create_empty(int flags = 0);
 
-    virtual kresult_t copy_anonymous_pages(const klib::shared_ptr<Page_Table> &to, void *from_addr,
-                                           void *to_addr, size_t size_bytes,
-                                           unsigned new_access) override;
-
     // Maps the page with the appropriate permissions
     virtual kresult_t map(u64 page_addr, void *virt_addr,
                           Page_Table_Arguments arg) noexcept override;
@@ -188,8 +184,6 @@ public:
     void apply() noexcept;
 
     bool is_32bit() const { return flags & FLAG_32BIT; }
-
-    kresult_t resolve_anonymous_page(void *virt_addr, unsigned access_type) override;
 
     void *user_addr_max() const override;
 

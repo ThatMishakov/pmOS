@@ -2146,8 +2146,7 @@ void syscall_get_page_address(TaskDescriptor *current_task)
     if (not b.val)
         return;
 
-    auto mapping         = table->get_page_mapping((void *)page_base);
-    syscall_return(task) = mapping.page_addr;
+    syscall_return(task) = b.val.page_addr;
 }
 
 void syscall_get_page_address_from_object(TaskDescriptor *current_task)

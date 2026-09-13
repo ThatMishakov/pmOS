@@ -195,8 +195,7 @@ namespace paging
          * @param base_addr Base address in the new page table
          * @param new_access New access specifier to be had in the new page table
          */
-        [[nodiscard]] virtual kresult_t move_to(TLBShootdownContext &ctx,
-                                                const klib::shared_ptr<Page_Table> &new_table,
+        [[nodiscard]] kresult_t move_to(const klib::shared_ptr<Page_Table> &new_table,
                                                 void *base_addr, unsigned new_access);
 
         /**
@@ -292,10 +291,7 @@ namespace paging
                              unsigned access, klib::shared_ptr<Mem_Object> references,
                              u64 object_offset_bytes, bool copy_on_write,
                              u64 object_size_bytes);
-
-        virtual kresult_t move_to(TLBShootdownContext &ctx,
-                                  const klib::shared_ptr<Page_Table> &new_table, void *base_addr,
-                                  unsigned new_access) override;
+        
         virtual kresult_t clone_to(const klib::shared_ptr<Page_Table> &new_table, void *base_addr,
                                    unsigned new_access) override;
 

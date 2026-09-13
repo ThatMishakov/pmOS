@@ -151,15 +151,10 @@ ReturnStr<Page_Info> Phys_Mapped_Region::get_page(void *ptr_addr, unsigned acces
     return info;
 }
 
-kresult_t Generic_Mem_Region::move_to(TLBShootdownContext &ctx,
-                                      const klib::shared_ptr<Page_Table> &new_table,
+kresult_t Generic_Mem_Region::move_to(const klib::shared_ptr<Page_Table> &new_table,
                                       void *base_addr, unsigned new_access)
 {
     Page_Table *const old_owner = owner;
-    auto result = old_owner->move_pages(ctx, new_table, start_addr, base_addr, size, new_access);
-    if (result != 0)
-        return result;
-
     old_owner->paging_regions.erase(this);
 
     owner = new_table.get();
@@ -423,26 +418,6 @@ ReturnStr<Page_Info> Mem_Object_Reference::get_page(void *ptr_addr, unsigned acc
         .cache_policy = Memory_Type::Normal,
         .page_addr = phys_addr,
     };
-}
-
-kresult_t Mem_Object_Reference::move_to(TLBShootdownContext &ctx,
-                                        const klib::shared_ptr<Page_Table> &new_table,
-                                        void *base_addr, unsigned new_access)
-{
-    // This could probably be improved...
-    // But for now, copy (which does CoW) and delete if successful is good enough
-    auto result = clone_to(new_table, base_addr, new_access);
-    if (result)
-        return result;
-
-    prepare_deletion();
-    owner->paging_regions.erase(this);
-    rcu_free();
-
-    owner->invalidate_range(ctx, start_addr, size, true);
-    owner->unblock_tasks_range(start_addr, size);
-
-    return 0;
 }
 
 kresult_t Mem_Object_Reference::clone_to(const klib::shared_ptr<Page_Table> &new_table,

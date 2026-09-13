@@ -315,9 +315,6 @@ public:
                                   unsigned access, bool fixed, klib::string name,
                                   phys_addr_t phys_addr_start, PhysRegionType type = PhysRegionType::Deduce);
 
-    /// Copies anonymous page at the given address
-    [[nodiscard]] virtual kresult_t resolve_anonymous_page(void *virt_addr, unsigned access_type) = 0;
-
     /**
      * @brief Creates a memory region referencing the memory object
      *
@@ -361,12 +358,6 @@ public:
 
     /// Gets a page table by its id or throws an exception if no page table was found
     static klib::shared_ptr<Page_Table> get_page_table_throw(u64 id);
-
-    /// Provides a page to a new page table
-    /// @todo redo the function
-    static bool atomic_provide_page(proc::TaskDescriptor *from_task,
-                                    const klib::shared_ptr<Page_Table> &to, void *page_from,
-                                    void *page_to, u64 flags);
 
     /**
      * @brief Maps the page with the appropriate permissions
@@ -469,37 +460,6 @@ public:
      */
     ReturnStr<std::pair<void *, size_t>> atomic_transfer_region(const klib::shared_ptr<Page_Table> &to,
                                              void *region_orig, void *prefered_to, unsigned access, bool fixed);
-
-    /**
-     * @brief  Moves the mapped pages from the old region to a new region, invaludating the old page
-     * table as needed
-     *
-     * @param to Page Table to which the pages shall be moved
-     * @param from_addr From where the pages should be taken out in the old tage table
-     * @param to_addr To where the pages should be transferred in the new page table
-     * @param size_bytes Size of the region that should be transferred in bytes
-     * @param new_access The protections that the pages should have after being moved to the new
-     * page table
-     */
-    [[nodiscard]] kresult_t move_pages(TLBShootdownContext &ctx,
-                                       const klib::shared_ptr<Page_Table> &to, void *from_addr,
-                                       void *to_addr, size_t size_bytes, unsigned new_access) noexcept;
-
-    /**
-     * @brief  Copies (installs) anonymous pages from the old page table to the new page table.
-     *
-     * This function maps the anonymous pages as read only, and shares them with the new page table,
-     * achieving the copy-on-write semantics.
-     *
-     * @param to Page Table to which the pages shall be copied
-     * @param from_addr From where the pages should be taken out in the old tage table
-     * @param to_addr To where the pages should be transferred in the new page table
-     * @param size_bytes Size of the region that should be transferred in bytes
-     * @param new_access The protections that the pages should have after being moved to the new
-     * page table
-     */
-    virtual kresult_t copy_anonymous_pages(const klib::shared_ptr<Page_Table> &to, void *from_addr,
-                                           void *to_addr, size_t size_bytes, unsigned new_access) = 0;
 
     /// Gets information for the page mapping.
     virtual Page_Info get_page_mapping(void *virt_addr) const = 0;
