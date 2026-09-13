@@ -1101,28 +1101,6 @@ void kernel::paging::invalidate_tlb_kernel(void *addr, size_t size)
         invlpg((void *)((char *)addr + i));
 }
 
-ReturnStr<bool> x86_Page_Table::atomic_copy_to_user(void *to, const void *from, u64 size)
-{
-    Auto_Lock_Scope l(lock);
-
-    Temp_Mapper_Obj<char> mapper(request_temp_mapper());
-    for (char *i = (char *)((u64)to & ~0xfffUL); i < (char *)to + size; i += 0x1000) {
-        const auto b = prepare_user_page(i, Writeable);
-        if (!b.success())
-            return b.propagate();
-
-        if (not b.val)
-            return false;
-
-        char *ptr   = mapper.map(b.val.page_addr);
-        char *start = i < to ? (char *)to : i;
-        char *end   = i + 0x1000 < (char *)to + size ? i + 0x1000 : (char *)to + size;
-        memcpy(ptr + (start - i), (const char *)from + (start - (char *)to), end - start);
-    }
-
-    return true;
-}
-
 klib::shared_ptr<x86_Page_Table> x86_Page_Table::get_page_table(u64 id)
 {
     Auto_Lock_Scope local_lock(page_table_index_lock);

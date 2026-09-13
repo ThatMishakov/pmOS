@@ -224,8 +224,6 @@ public:
     void invalidate_tlb(void *start, size_t size) override;
     void tlb_flush_all() override;
 
-    ReturnStr<bool> atomic_copy_to_user(void *to, const void *from, size_t size) override;
-
     virtual kresult_t copy_anonymous_pages(const klib::shared_ptr<Page_Table> &to, void *from_addr,
                                            void *to_addr, size_t size_bytes,
                                            unsigned new_access) override;

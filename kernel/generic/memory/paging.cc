@@ -83,24 +83,20 @@ ReturnStr<bool> Page_Table::atomic_copy_to_user(void *to, const void *from, size
 {
     Auto_Lock_Scope l(lock);
 
-    const ulong PAGE_MASK = ~ulong(PAGE_SIZE - 1);
-
     Temp_Mapper_Obj<char> mapper(request_temp_mapper());
-    for (ulong i = (ulong)to & PAGE_MASK; i < (ulong)to + size; i += PAGE_SIZE) {
-        const auto b = prepare_user_page((void *)i, Writeable);
+    u64 page_mask = PAGE_SIZE - 1;
+    for (char *i = (char *)((u64)to & ~page_mask); i < (char *)to + size; i += PAGE_SIZE) {
+        const auto b = prepare_user_page(i, Writeable);
         if (!b.success())
             return b.propagate();
 
         if (not b.val)
             return false;
 
-        const auto page = get_page_mapping((void *)i);
-        assert(page.is_allocated);
-
-        char *ptr         = mapper.map(page.page_addr);
-        const ulong start = i < (ulong)to ? (ulong)to : i;
-        const ulong end   = i + PAGE_SIZE < (ulong)to + size ? i + PAGE_SIZE : (ulong)to + size;
-        memcpy(ptr + (start - i), (const char *)from + (start - (ulong)to), end - start);
+        char *ptr   = mapper.map(b.val.page_addr);
+        char *start = i < to ? (char *)to : i;
+        char *end   = i + PAGE_SIZE < (char *)to + size ? i + PAGE_SIZE : (char *)to + size;
+        memcpy(ptr + (start - i), (const char *)from + (start - (char *)to), end - start);
     }
 
     return true;

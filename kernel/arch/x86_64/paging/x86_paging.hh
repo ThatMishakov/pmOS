@@ -178,8 +178,6 @@ public:
 
     klib::shared_ptr<x86_Page_Table> create_clone();
 
-    virtual ReturnStr<bool> atomic_copy_to_user(void *to, const void *from, size_t size) override;
-
     constexpr static u64 l4_align = 4096UL * 512 * 512 * 512;
     constexpr static u64 l3_align = 4096UL * 512 * 512;
     constexpr static u64 l2_align = 4096UL * 512;
