@@ -191,6 +191,30 @@ ReturnStr<std::pair<void *, size_t>> Page_Table::atomic_transfer_region(const kl
     return std::make_pair(start_addr.val, size);
 }
 
+ReturnStr<bool> Page_Table::atomic_page_fault(void *virt_addr, unsigned access_type)
+{
+    Auto_Lock_Scope l(lock);
+
+    auto &regions = paging_regions;
+    auto it       = regions.get_smaller_or_equal(virt_addr);
+
+    if (it != regions.end() and it->is_in_range(virt_addr)) {
+        auto r = it->on_page_fault(access_type, virt_addr);
+        if (!r.success())
+            return r.propagate();
+
+        if (not r.val) {
+            auto current_task = sched::get_current_task();
+
+            current_task->cancel_callback = proc::TaskDescriptor::cancel_noop;
+            current_task->atomic_block_by_page((void *)virt_addr);
+        }
+
+        return r.val;
+    } else
+        return Error(-EFAULT);
+}
+
 ReturnStr<Phys_Mapped_Region *> Page_Table::atomic_create_phys_region(void *page_aligned_start,
                                                                       size_t page_aligned_size,
                                                                       unsigned access, bool fixed,

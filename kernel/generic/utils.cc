@@ -661,7 +661,7 @@ extern "C" ReturnStr<bool> user_access_page_fault(unsigned access, const char *f
     TaskDescriptor *current_task = get_current_task();
 
     ReturnStr<bool> result =
-        current_task->page_table->prepare_user_page((void *)faulting_addr, access);
+        current_task->page_table->atomic_page_fault((void *)faulting_addr, access);
     if (!result.success())
         return result;
 

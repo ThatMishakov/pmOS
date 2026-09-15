@@ -129,7 +129,7 @@ void page_fault(u64 addr, u64 scause)
 
     u64 access_type = 0;
     switch (scause) {
-    case INSTRUCTION_ACCESS_FAULT:
+    case INSTRUCTION_PAGE_FAULT:
         access_type = Generic_Mem_Region::Executable;
         break;
     case LOAD_PAGE_FAULT:
@@ -138,6 +138,8 @@ void page_fault(u64 addr, u64 scause)
     case STORE_AMO_PAGE_FAULT:
         access_type = Generic_Mem_Region::Writeable;
         break;
+    default:
+        panic("Unknown page fault cause %h at addr %h\n", scause, addr);
     }
 
     auto task       = get_cpu_struct()->current_task;

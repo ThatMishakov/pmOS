@@ -2774,14 +2774,16 @@ void syscall_debug_log(TaskDescriptor *task)
         return;
     }
 
-    auto result = copy_from_user((char *)buffer.data(), (const char *)ptr, size);
-    if (!result)
-        panic("Blocking not implemented");
+    task->set_continuation(syscall_debug_log);
 
+    auto result = copy_from_user((char *)buffer.data(), (const char *)ptr, size);
     if (!result.success()) {
         syscall_error(task) = result.result;
         return;
     }
+
+    if (!result.val)
+        return;
 
     serial_logger.log(buffer.data(), size);
 
@@ -2858,6 +2860,7 @@ void syscall_futex_wait(TaskDescriptor *task)
 
     task->set_continuation(futex_wakeup, cancel_futex_wait);
     task->timer_deadline = deadline;
+    task->futex_addr = ptr;
 
     u32 user_value;
     auto result = atomic_read_from_user(&user_value, (u32 *)ptr);

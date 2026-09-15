@@ -347,6 +347,8 @@ public:
 
     [[nodiscard]] ReturnStr<Page_Info> prepare_user_page(void *virt_addr, unsigned access_type);
 
+    [[nodiscard]] ReturnStr<bool> atomic_page_fault(void *virt_addr, unsigned access_type);
+
     /// @brief Indicates if the page can be taken out and used without copying to provide for the
     /// missing page
     /// @param page_addr Page aligned address
