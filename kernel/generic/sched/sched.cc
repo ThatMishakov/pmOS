@@ -308,12 +308,12 @@ void find_new_process()
 
 quantum_t assign_quantum_on_priority(priority_t priority)
 {
-    static const quantum_t quantums[16] = {50, 50, 20, 20, 10, 10, 10, 5, 5, 5, 5, 5, 5, 5, 5, 5};
+    static const quantum_t quantums[16] = {50, 50, 20, 20, 20, 20, 20, 20, 10, 10, 10, 10, 5, 5, 5, 5};
 
     if (priority < 16)
         return quantums[priority];
 
-    return 100;
+    return 0;
 }
 
 TaskDescriptor *CPU_Info::atomic_get_front_priority(priority_t priority)
