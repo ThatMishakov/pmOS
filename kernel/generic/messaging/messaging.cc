@@ -104,11 +104,11 @@ void Port::enqueue(klib::unique_ptr<GenericMessage> msg)
         owner->atomic_handle_unblock(proc::TaskDescriptor::SCHED_WAKE_PORT);
 }
 
-kresult_t Port::send_from_system(klib::vector<char> &&v)
+kresult_t Port::send_from_system(pmos::containers::vector<char> &&v)
 {
     assert(lock.is_locked() && "Spinlock not locked!");
 
-    auto ptr = klib::make_unique<Message>(0, klib::forward<klib::vector<char>>(v));
+    auto ptr = klib::make_unique<Message>(0, klib::forward<pmos::containers::vector<char>>(v));
     if (!ptr)
         return -ENOMEM;
 
@@ -120,7 +120,7 @@ kresult_t Port::send_from_system(const char *msg_ptr, size_t size)
 {
     assert(size > 0);
 
-    klib::vector<char> message;
+    pmos::containers::vector<char> message;
     if (!message.resize(size))
         return -ENOMEM;
 
@@ -133,7 +133,7 @@ ReturnStr<bool> Port::send_from_user(proc::TaskDescriptor *sender, const char *u
 {
     assert(lock.is_locked() && "Spinlock not locked!");
 
-    klib::vector<char> message;
+    pmos::containers::vector<char> message;
     if (!message.resize(msg_size))
         return Error(-ENOMEM);
 
@@ -142,7 +142,7 @@ ReturnStr<bool> Port::send_from_user(proc::TaskDescriptor *sender, const char *u
         return result;
 
     auto ptr =
-        klib::make_unique<Message>(sender->task_id, klib::forward<klib::vector<char>>(message));
+        klib::make_unique<Message>(sender->task_id, klib::forward<pmos::containers::vector<char>>(message));
     if (!ptr)
         return Error(-ENOMEM);
 
@@ -153,7 +153,7 @@ ReturnStr<bool> Port::send_from_user(proc::TaskDescriptor *sender, const char *u
 ReturnStr<bool> Port::atomic_send_from_user(proc::TaskDescriptor *sender,
                                             const char *unsafe_user_message, size_t msg_size)
 {
-    klib::vector<char> message;
+    pmos::containers::vector<char> message;
     if (!message.resize(msg_size))
         return Error(-ENOMEM);
 
@@ -162,7 +162,7 @@ ReturnStr<bool> Port::atomic_send_from_user(proc::TaskDescriptor *sender,
         return result;
 
     auto ptr = klib::make_unique<Message>(
-        sender->task_id, klib::forward<klib::vector<char>>(message));
+        sender->task_id, klib::forward<pmos::containers::vector<char>>(message));
     if (!ptr)
         return Error(-ENOMEM);
 

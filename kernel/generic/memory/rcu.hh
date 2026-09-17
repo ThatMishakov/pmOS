@@ -32,7 +32,7 @@
 
 #pragma once
 #include <assert.h>
-#include <lib/vector.hh>
+#include <pmos/containers/vector.hh>
 #include <types.hh>
 
 namespace kernel::sched
@@ -67,7 +67,7 @@ public:
 
 private:
     Spinlock lock;
-    klib::vector<u64> bitmask;
+    pmos::containers::vector<u64> bitmask;
 
     u64 generation         = 0;
     u64 highest_generation = 0;

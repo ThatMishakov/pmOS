@@ -1,6 +1,6 @@
 #pragma once
 #include <lib/memory.hh>
-#include <lib/vector.hh>
+#include <pmos/containers/vector.hh>
 #include <messaging/messaging.hh>
 #include <messaging/ports.hh>
 #include <messaging/rights.hh>

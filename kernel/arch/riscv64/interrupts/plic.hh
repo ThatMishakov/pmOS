@@ -1,5 +1,5 @@
 #pragma once
-#include <lib/vector.hh>
+#include <pmos/containers/vector.hh>
 #include <types.hh>
 #include <interrupts/interrupt_handler.hh>
 
@@ -32,7 +32,7 @@ struct PLIC {
     u16 external_interrupt_sources = 0;
     u8 plic_id                     = 0;
 
-    klib::vector<PLICHandler *> handlers;
+    pmos::containers::vector<PLICHandler *> handlers;
 };
 
 // Read PLIC register

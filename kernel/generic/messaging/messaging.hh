@@ -33,7 +33,7 @@
 #include <lib/memory.hh>
 #include <lib/queue.hh>
 #include <lib/splay_tree_map.hh>
-#include <lib/vector.hh>
+#include <pmos/containers/vector.hh>
 #include <memory/rcu.hh>
 #include <pmos/containers/intrusive_bst.hh>
 #include <pmos/containers/intrusive_list.hh>
@@ -54,7 +54,7 @@ namespace kernel::ipc
 struct Right;
 
 using rights_array   = std::array<Right *, 4>;
-using message_buffer = klib::vector<char>;
+using message_buffer = pmos::containers::vector<char>;
 
 struct GenericMessage {
     pmos::containers::DoubleListHead<GenericMessage> list_node;
@@ -93,11 +93,11 @@ struct GenericMessage {
 struct Message final: public GenericMessage {
     u64 task_id_from    = 0;
     u64 sent_with_right_ = 0;
-    klib::vector<char> content;
+    pmos::containers::vector<char> content;
     Right *reply_right            = {};
     std::array<Right *, 4> rights = {};
 
-    Message(u64 task_id_from, klib::vector<char> content)
+    Message(u64 task_id_from, pmos::containers::vector<char> content)
         : task_id_from(task_id_from), content(klib::move(content))
     {
     }

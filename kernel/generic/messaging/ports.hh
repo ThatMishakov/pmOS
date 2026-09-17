@@ -33,7 +33,7 @@ public:
 
     void enqueue(klib::unique_ptr<GenericMessage> msg);
 
-    kresult_t send_from_system(klib::vector<char> &&msg);
+    kresult_t send_from_system(pmos::containers::vector<char> &&msg);
     kresult_t send_from_system(const char *msg, size_t size);
 
     // Returns true if successfully sent, false otherwise (e.g. when it is needed to repeat the

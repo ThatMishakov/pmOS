@@ -234,7 +234,7 @@ void init_memory(ultra_boot_context *ctx)
 
     serial_logger.printf("Paging initialized!\n");
 
-    klib::vector<ultra_memory_map_entry> regions_data;
+    pmos::containers::vector<ultra_memory_map_entry> regions_data;
     if (!regions_data.resize(number_of_entries))
         panic("Failed to reserve memory for regions_data\n");
 
@@ -364,10 +364,10 @@ void init_modules(ultra_boot_context *ctx)
     }
 }
 
-klib::vector<klib::unique_ptr<load_tag_generic>>
+pmos::containers::vector<klib::unique_ptr<load_tag_generic>>
     construct_load_tag_framebuffer(ultra_boot_context *ctx)
 {
-    klib::vector<klib::unique_ptr<load_tag_generic>> tags {};
+    pmos::containers::vector<klib::unique_ptr<load_tag_generic>> tags {};
     auto attrh =
         (ultra_framebuffer_attribute *)find_attribute(ctx, ULTRA_ATTRIBUTE_FRAMEBUFFER_INFO);
     if (!attrh) {
@@ -491,7 +491,7 @@ void init_task1(ultra_boot_context *ctx)
     if (!object)
         panic("Failed to create memory object right for task 1");
 
-    klib::vector<klib::unique_ptr<load_tag_generic>> tags;
+    pmos::containers::vector<klib::unique_ptr<load_tag_generic>> tags;
     tags = construct_load_tag_framebuffer(ctx);
 
     auto t = construct_load_tag_rsdp(ctx);

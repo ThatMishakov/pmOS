@@ -31,7 +31,7 @@
 #include <kernel/flags.h>
 #include <kernel/messaging.h>
 #include <kernel/sysinfo.h>
-#include <lib/vector.hh>
+#include <pmos/containers/vector.hh>
 #include <memory/paging.hh>
 #include <messaging/messaging.hh>
 #include <processes/syscalls.hh>
@@ -484,7 +484,7 @@ void syscall_load_executable(TaskDescriptor *task)
 
         u64 current_offset = 0;
 
-        klib::vector<u64> load_stack;
+        pmos::containers::vector<u64> load_stack;
         if (!load_stack.resize(size / 8))
             return Error(-ENOMEM);
 
@@ -964,7 +964,7 @@ void syscall_set_attribute(TaskDescriptor *task)
     } break;
 
     case 6: { // Return NVS regions to userspace...
-        klib::vector<MemoryRegion> nvs_regions;
+        pmos::containers::vector<MemoryRegion> nvs_regions;
         for (auto region: memory_map)
             if (region.type == MemoryRegionType::ACPINVS && !nvs_regions.push_back(region)) {
                 syscall_error(task) = -ENOMEM;
@@ -2768,7 +2768,7 @@ void syscall_debug_log(TaskDescriptor *task)
         return;
     }
 
-    klib::vector<char> buffer;
+    pmos::containers::vector<char> buffer;
     if (!buffer.resize(size)) {
         syscall_error(task) = -ENOMEM;
         return;

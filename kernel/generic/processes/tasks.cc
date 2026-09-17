@@ -423,7 +423,7 @@ ReturnStr<
         }
 
         const u32 ph_count = header.e_phnum;
-        klib::vector<pheader> phs;
+        pmos::containers::vector<pheader> phs;
         if (!phs.resize(ph_count))
             return Error(-ENOMEM);
 
@@ -527,7 +527,7 @@ ReturnStr<
         phdr_tag.phdr_size = sizeof(pheader);
 
         const u64 ph_count = header.e_phnum;
-        klib::vector<pheader> phs;
+        pmos::containers::vector<pheader> phs;
         if (!phs.resize(ph_count))
             return Error(-ENOMEM);
 
@@ -612,7 +612,7 @@ ReturnStr<
 
 ReturnStr<bool>
     TaskDescriptor::atomic_load_elf(ipc::MemObjectRight *elf, klib::string name,
-                                    const klib::vector<klib::unique_ptr<load_tag_generic>> &tags, TaskGroup *optional_group)
+                                    const pmos::containers::vector<klib::unique_ptr<load_tag_generic>> &tags, TaskGroup *optional_group)
 {
     assert(elf);
     assert(elf->alive);
@@ -684,7 +684,7 @@ ReturnStr<bool>
     {
         auto object_id = elf->right_sender_id;
         auto arr = std::bit_cast<std::array<std::byte, sizeof(object_id)>>(object_id);
-        auto vec = klib::vector<std::byte>();
+        auto vec = pmos::containers::vector<std::byte>();
         if (!vec.append_range(arr))
             return Error(-ENOMEM);
 
@@ -699,7 +699,7 @@ ReturnStr<bool>
     if (optional_group) {
         auto group_id = optional_group->get_id();
         auto arr = std::bit_cast<std::array<std::byte, sizeof(group_id)>>(group_id);
-        auto vec = klib::vector<std::byte>();
+        auto vec = pmos::containers::vector<std::byte>();
         if (!vec.append_range(arr))
             return Error(-ENOMEM);
 
@@ -731,7 +731,7 @@ ReturnStr<bool>
     }
     u64 current_offset = 0;
 
-    klib::vector<u64> load_stack;
+    pmos::containers::vector<u64> load_stack;
     if (!load_stack.resize(size / 8))
         return Error(-ENOMEM);
 

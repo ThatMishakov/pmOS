@@ -1,5 +1,5 @@
 #pragma once
-#include <lib/vector.hh>
+#include <pmos/containers/vector.hh>
 #include <lib/string.hh>
 #include <types.hh>
 #include <utility>
@@ -12,7 +12,7 @@ namespace kernel::proc
 class ElFAuxvec
 {
 public:
-    using data_out_type = klib::vector<std::byte>;
+    using data_out_type = pmos::containers::vector<std::byte>;
 
     struct AuxVecVal {
         int a_type;
@@ -27,17 +27,17 @@ public:
         W64bit,
     };
 
-    klib::vector<klib::string> &args();
-    const klib::vector<klib::string> &args() const;
+    pmos::containers::vector<klib::string> &args();
+    const pmos::containers::vector<klib::string> &args() const;
 
-    klib::vector<klib::string> &envp();
-    const klib::vector<klib::string> &envp() const;
+    pmos::containers::vector<klib::string> &envp();
+    const pmos::containers::vector<klib::string> &envp() const;
 
-    klib::vector<klib::vector<std::byte>> &extra_info();
-    const klib::vector<klib::vector<std::byte>> &extra_info() const;
+    pmos::containers::vector<pmos::containers::vector<std::byte>> &extra_info();
+    const pmos::containers::vector<pmos::containers::vector<std::byte>> &extra_info() const;
 
-    klib::vector<AuxVecVal> &auxvec();
-    const klib::vector<AuxVecVal> &auxvec() const;
+    pmos::containers::vector<AuxVecVal> &auxvec();
+    const pmos::containers::vector<AuxVecVal> &auxvec() const;
 
     // Sets the width for serialization, and returns the previous one
     PtrWidth set_width(PtrWidth width);
@@ -50,10 +50,10 @@ public:
 
     bool is_64bit() const;
 protected:
-    klib::vector<klib::string> args_;
-    klib::vector<klib::string> envp_;
-    klib::vector<klib::vector<std::byte>> aux_; // Auxiliary info (each entry aligned to 4 or 8)
-    klib::vector<AuxVecVal> auxvec_;
+    pmos::containers::vector<klib::string> args_;
+    pmos::containers::vector<klib::string> envp_;
+    pmos::containers::vector<pmos::containers::vector<std::byte>> aux_; // Auxiliary info (each entry aligned to 4 or 8)
+    pmos::containers::vector<AuxVecVal> auxvec_;
     PtrWidth ptr_width_;
 
     size_t auxval_size() const;

@@ -49,7 +49,7 @@ void init_acpi(phys_addr_t rsdp_addr)
     }
 }
 
-klib::vector<module> modules;
+pmos::containers::vector<module> modules;
 
 klib::unique_ptr<load_tag_generic> construct_load_tag_for_modules(kernel::proc::TaskGroup *group)
 {

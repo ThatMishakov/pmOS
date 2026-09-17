@@ -61,14 +61,14 @@ size_t ElFAuxvec::strings_size_aligned() const
     return size;
 }
 
-klib::vector<ElFAuxvec::AuxVecVal> &ElFAuxvec::auxvec() { return auxvec_; }
+pmos::containers::vector<ElFAuxvec::AuxVecVal> &ElFAuxvec::auxvec() { return auxvec_; }
 
-klib::vector<klib::vector<std::byte>> &ElFAuxvec::extra_info() { return aux_; }
+pmos::containers::vector<pmos::containers::vector<std::byte>> &ElFAuxvec::extra_info() { return aux_; }
 
-klib::vector<klib::string> &ElFAuxvec::args() { return args_; }
+pmos::containers::vector<klib::string> &ElFAuxvec::args() { return args_; }
 
 // Potentially leaves vector messed on error. Which is fine where I use it now
-static bool append_string_bytes(klib::vector<std::byte> &vec, std::string_view s) noexcept
+static bool append_string_bytes(pmos::containers::vector<std::byte> &vec, std::string_view s) noexcept
 {
     auto chars = std::span{s.data(), s.size()};
     auto bytes = std::as_bytes(chars);
@@ -95,9 +95,9 @@ size_t ElFAuxvec::auxval_size() const
 std::optional<ElFAuxvec::data_out_type> ElFAuxvec::serialize(std::uintptr_t stack_end)
 {
     // Serialize args and environment
-    klib::vector<std::byte> args_serialized;
+    pmos::containers::vector<std::byte> args_serialized;
 
-    klib::vector<size_t> args_offsets;
+    pmos::containers::vector<size_t> args_offsets;
     for (const auto &a: args_) {
         auto offset = args_serialized.size();
         if (!args_offsets.push_back(offset))
@@ -107,7 +107,7 @@ std::optional<ElFAuxvec::data_out_type> ElFAuxvec::serialize(std::uintptr_t stac
             return {};
     }
 
-    klib::vector<size_t> environment_offset;
+    pmos::containers::vector<size_t> environment_offset;
     for (const auto &a: envp_) {
         auto offset = args_serialized.size();
         if (!environment_offset.push_back(offset))
@@ -123,7 +123,7 @@ std::optional<ElFAuxvec::data_out_type> ElFAuxvec::serialize(std::uintptr_t stac
     if (!args_serialized.resize(new_size, std::byte{0}))
         return {};
 
-    klib::vector<size_t> extra_offset;
+    pmos::containers::vector<size_t> extra_offset;
     for (const auto &a: aux_) {
         auto offset = args_serialized.size();
         if (!extra_offset.push_back(offset))
@@ -140,7 +140,7 @@ std::optional<ElFAuxvec::data_out_type> ElFAuxvec::serialize(std::uintptr_t stac
 
     size_t final_size = size_serialized();
 
-    klib::vector<std::byte> output;
+    pmos::containers::vector<std::byte> output;
     if (!output.reserve(final_size))
         return {};
 

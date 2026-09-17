@@ -10,6 +10,7 @@
 #include <memory/mem_object.hh>
 #include "kernel_pages.hh"
 #include <processes/tasks.hh>
+#include <algorithm>
 
 
 using namespace kernel;
@@ -616,10 +617,10 @@ void init_acpi(multiboot_info *info)
     init_acpi(page.val.get_phys_addr());
 }
 
-klib::vector<klib::unique_ptr<load_tag_generic>>
+pmos::containers::vector<klib::unique_ptr<load_tag_generic>>
     construct_load_tag_framebuffer(multiboot_info *info)
 {
-    klib::vector<klib::unique_ptr<load_tag_generic>> tags {};
+    pmos::containers::vector<klib::unique_ptr<load_tag_generic>> tags {};
 
     auto fb_tag = (multiboot_tag_framebuffer *)find_tag(info, MULTIBOOT_TAG_TYPE_FRAMEBUFFER);
     if (!fb_tag) {
@@ -698,7 +699,7 @@ void init_task1(multiboot_info* info)
         panic("Failed to create memory object right for task 1");
 
     // Pass the modules to the task
-    klib::vector<klib::unique_ptr<load_tag_generic>> tags;
+    pmos::containers::vector<klib::unique_ptr<load_tag_generic>> tags;
     tags = construct_load_tag_framebuffer(info);
 
     auto t = construct_load_tag_rsdp();

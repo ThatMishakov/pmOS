@@ -60,7 +60,7 @@ sched_queue paused;
 memory::RCU paging_rcu;
 memory::RCU heap_rcu;
 
-klib::vector<CPU_Info *> cpus;
+pmos::containers::vector<CPU_Info *> cpus;
 
 size_t get_cpu_count() noexcept { return cpus.size(); }
 

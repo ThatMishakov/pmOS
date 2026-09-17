@@ -498,9 +498,11 @@ void clear_page(u64 phys_addr, u64 pattern)
         mapper.ptr[i] = pattern;
 }
 
-int fflush(FILE *) { return 0; }
+extern "C" int fflush(FILE *) { return 0; }
 
-int fprintf(FILE *, const char *format, ...)
+int stderr;
+
+extern "C" int fprintf(FILE *, const char *format, ...)
 {
     va_list args;
     va_start(args, format);
@@ -648,11 +650,15 @@ void hcf(void)
     #define STACK_CHK_GUARD 0x595e9fbd94fda766
 #endif
 
+extern "C" {
+
 uintptr_t __stack_chk_guard = STACK_CHK_GUARD;
 
-__attribute__((noreturn)) extern "C" void __stack_chk_fail(void)
+__attribute__((noreturn)) void __stack_chk_fail(void)
 {
     panic("Stack smashing detected");
+}
+
 }
 
 extern "C" ReturnStr<bool> user_access_page_fault(unsigned access, const char *faulting_addr,
@@ -693,9 +699,9 @@ extern "C" ReturnStr<bool> user_access_page_fault(unsigned access, const char *f
     return result;
 }
 
-ReturnStr<std::optional<klib::vector<char>>> to_buffer_from_user(void *ptr, size_t size)
+ReturnStr<std::optional<pmos::containers::vector<char>>> to_buffer_from_user(void *ptr, size_t size)
 {
-    klib::vector<char> data;
+    pmos::containers::vector<char> data;
     if (!data.resize(size))
         return Error(-ENOMEM);
 

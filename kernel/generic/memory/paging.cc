@@ -41,6 +41,7 @@
 #include <types.hh>
 #include <utils.hh>
 #include <ranges>
+#include <algorithm>
 
 using namespace kernel;
 using namespace kernel::paging;
@@ -662,7 +663,7 @@ void TLBShootdownContext::finalize()
     ranges_count = 0;
 }
 
-klib::vector<MemoryRegion> kernel::paging::memory_map;
+pmos::containers::vector<MemoryRegion> kernel::paging::memory_map;
 
 bool Page_Table::is_mapped(void *ptr) const { return get_page_mapping(ptr).is_allocated; }
 

@@ -155,7 +155,7 @@ extern u8 _kernel_end;
 
 ptable_top_ptr_t kernel_ptable_top = 0;
 
-static klib::vector<limine_memmap_entry> *limine_memory_regions = nullptr;
+static pmos::containers::vector<limine_memmap_entry> *limine_memory_regions = nullptr;
 
     #ifdef __x86_64__
 extern ulong idle_cr3;
@@ -264,7 +264,7 @@ void construct_paging()
 
     serial_logger.printf("Paging initialized!\n");
 
-    klib::vector<limine_memmap_entry *> regions;
+    pmos::containers::vector<limine_memmap_entry *> regions;
     if (!regions.resize(resp.entry_count))
         panic("Failed to reserve memory for regions");
 
@@ -273,11 +273,11 @@ void construct_paging()
     copy_from_phys((u64)resp.entries - hhdm_offset, regions.data(),
                    resp.entry_count * sizeof(limine_memmap_entry *));
 
-    limine_memory_regions = new klib::vector<limine_memmap_entry> {};
+    limine_memory_regions = new pmos::containers::vector<limine_memmap_entry> {};
     if (!limine_memory_regions)
         panic("Failed to allocate memory for memory_regions");
 
-    klib::vector<limine_memmap_entry> &regions_data = *limine_memory_regions;
+    pmos::containers::vector<limine_memmap_entry> &regions_data = *limine_memory_regions;
     if (!regions_data.resize(resp.entry_count))
         panic("Failed to reserve memory for regions_data");
 
@@ -348,7 +348,7 @@ void init_modules()
     limine_module_response r;
     copy_from_phys(resp_phys, &r, sizeof(r));
 
-    klib::vector<limine_file *> modules;
+    pmos::containers::vector<limine_file *> modules;
     if (!modules.resize(r.module_count))
         panic("Failed to reserve memory for modules");
 
@@ -381,9 +381,9 @@ __attribute__((used)) struct limine_framebuffer_request fb_req = {
     .response = nullptr,
 };
 
-klib::vector<klib::unique_ptr<load_tag_generic>> construct_load_tag_framebuffer()
+pmos::containers::vector<klib::unique_ptr<load_tag_generic>> construct_load_tag_framebuffer()
 {
-    klib::vector<klib::unique_ptr<load_tag_generic>> tags {};
+    pmos::containers::vector<klib::unique_ptr<load_tag_generic>> tags {};
 
     if (fb_req.response == nullptr)
         return tags;
@@ -456,7 +456,7 @@ extern klib::shared_ptr<Arch_Page_Table> idle_page_table;
 
 void init(void);
 void init_scheduling(u64 boot_cpu_id);
-klib::vector<u64> initialize_cpus(const klib::vector<u64> &hartids);
+pmos::containers::vector<u64> initialize_cpus(const pmos::containers::vector<u64> &hartids);
 void *get_cpu_start_func();
 
 void init_task1()
@@ -496,7 +496,7 @@ void init_task1()
         panic("Failed to create memory object right for task 1");
 
     // Pass the modules to the task
-    klib::vector<klib::unique_ptr<load_tag_generic>> tags;
+    pmos::containers::vector<klib::unique_ptr<load_tag_generic>> tags;
     tags = construct_load_tag_framebuffer();
 
     auto t = construct_load_tag_rsdp();

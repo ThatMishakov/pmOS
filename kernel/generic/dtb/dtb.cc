@@ -2,6 +2,7 @@
 
 #include <kern_logger/kern_logger.hh>
 #include <smoldtb.h>
+#include <memory/malloc.hh>
 
 using namespace kernel;
 

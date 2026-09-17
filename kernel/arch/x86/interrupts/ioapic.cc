@@ -58,7 +58,7 @@ static u32 *map_ioapic(u32 phys_addr)
     return (u32 *)((char *)ptr + offset);
 }
 
-static klib::vector<IOAPIC *> ioapics;
+static pmos::containers::vector<IOAPIC *> ioapics;
 
 void IOAPIC::push_global()
 {

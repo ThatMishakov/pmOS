@@ -39,7 +39,7 @@
 #include <lib/splay_tree_map.hh>
 #include <lib/stack.hh>
 #include <lib/string.hh>
-#include <lib/vector.hh>
+#include <pmos/containers/vector.hh>
 #include <memory/rcu.hh>
 #include <memory/temp_mapper.hh>
 #include <messaging/messaging.hh>
@@ -239,14 +239,14 @@ struct CPU_Info {
 extern u64 ticks_since_bootup;
 u64 get_ns_since_bootup();
 
-extern klib::vector<CPU_Info *> cpus;
+extern pmos::containers::vector<CPU_Info *> cpus;
 
 size_t get_cpu_count() noexcept;
 
 /**
  * This vector holds the data of all of the CPUs
  */
-extern klib::vector<CPU_Info *> cpus;
+extern pmos::containers::vector<CPU_Info *> cpus;
 
 quantum_t assign_quantum_on_priority(priority_t);
 

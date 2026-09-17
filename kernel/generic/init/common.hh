@@ -1,6 +1,6 @@
 #pragma once
 #include <types.hh>
-#include <lib/vector.hh>
+#include <pmos/containers/vector.hh>
 #include <lib/string.hh>
 #include <pmos/load_data.h>
 #include <memory/mem_object.hh>
@@ -30,7 +30,7 @@ struct module {
     klib::shared_ptr<kernel::paging::Mem_Object> object;
 };
 
-extern klib::vector<module> modules;
+extern pmos::containers::vector<module> modules;
 
 klib::unique_ptr<load_tag_generic> construct_load_tag_for_modules(kernel::proc::TaskGroup *group);
 

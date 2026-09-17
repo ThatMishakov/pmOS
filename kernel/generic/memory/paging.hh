@@ -587,7 +587,7 @@ struct MemoryRegion {
     MemoryRegionType type;
 };
 
-extern klib::vector<MemoryRegion> memory_map;
+extern pmos::containers::vector<MemoryRegion> memory_map;
 
 Memory_Type memory_type_for_phys_addr(phys_addr_t phys_addr);
 

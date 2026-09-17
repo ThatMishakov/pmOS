@@ -32,7 +32,7 @@
 #include <lib/list.hh>
 #include <lib/memory.hh>
 #include <lib/splay_tree_map.hh>
-#include <lib/vector.hh>
+#include <pmos/containers/vector.hh>
 #include <memory/mem_protection.hh>
 #include <memory/paging.hh>
 #include <messaging/rights.hh>

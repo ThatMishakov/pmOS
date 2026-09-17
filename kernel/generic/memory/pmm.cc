@@ -250,14 +250,13 @@ bool kernel::pmm::add_page_array(Page::page_addr_t start_addr, u64 size, Page *p
     if (phys_memory_regions_count == phys_memory_regions_capacity) {
         auto old_capacity = phys_memory_regions_capacity;
         auto new_capacity = phys_memory_regions_capacity + 8;
-        auto new_regions =
-            (PageArrayDescriptor *)malloc(new_capacity * sizeof(PageArrayDescriptor));
+        auto new_regions = new PageArrayDescriptor[new_capacity];
         if (!new_regions)
             return false;
 
         memcpy(new_regions, phys_memory_regions,
                phys_memory_regions_count * sizeof(PageArrayDescriptor));
-        free(phys_memory_regions);
+        delete[] phys_memory_regions;
         phys_memory_regions          = new_regions;
         phys_memory_regions_capacity = new_capacity;
 
