@@ -9,7 +9,7 @@ deps="libc-headers pmos-containers"
 hostdeps="clang"
 
 configure() {
-    cmake -S ${source_dir} -DSYSROOT=${sysroot_dir} -DTARGET_ARCH=${JINX_ARCH}
+    cmake -S ${source_dir} -DSYSROOT=${sysroot} -DTARGET_ARCH=${JINX_ARCH}
 }
 
 build() {

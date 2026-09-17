@@ -353,7 +353,7 @@ double_fault_isr:
 save_registers:
     pushl %eax
     movw $0x38, %ax
-    movl %ax, %gs
+    movw %ax, %gs
 
     movw $0x1b, %ax
     cmpw 16(%esp), %ax

@@ -336,7 +336,7 @@ pae_populate_pdpt:
 
 // =================================================== .rodata ===================================================
 
-    .rodata
+    .section .rodata
 hex_lookup: .string "0123456789abcdef"
 booted_text: .string "pmOS kernel booted by multiboot2!\r\n"
 bad_magic_text: .string "Multiboot2 bad magic, halting.\r\n"

@@ -11,6 +11,7 @@ configure() {
     -DCMAKE_BUILD_TYPE=Release \
     -DLLVM_ENABLE_PROJECTS="clang;lld;lldb" \
     -DLLVM_TARGETS_TO_BUILD="X86;RISCV;LoongArch" \
+    -DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD="M68k" \
     -DCMAKE_INSTALL_PREFIX=${prefix} \
     -DLLVM_TARGET_TRIPLE=${JINX_ARCH}-pmos \
     -DCLANG_DEFAULT_CXX_STDLIB=libc++ \

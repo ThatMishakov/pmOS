@@ -1,23 +1,26 @@
 [binaries]
-c = 'clang'
-cpp = 'clang++'
-ar = 'llvm-ar'
-nm = 'llvm-nm'
-objcopy = 'llvm-objcopy'
-ranlib = 'llvm-ranlib'
-strip = 'llvm-strip'
-pkg-config = 'llvm-pkg-config'
+c = '$C_COMPILER'
+cpp = '$CXX_COMPILER'
+ar = '$TOOLS_PREFIX-ar'
+nm = '$TOOLS_PREFIX-nm'
+objcopy = '$TOOLS_PREFIX-objcopy'
+ranlib = '$TOOLS_PREFIX-ranlib'
+strip = '$TOOLS_PREFIX-strip'
+pkg-config = '$TOOLS_PREFIX-pkg-config'
 llvm-config = '/base_dir/support/llvm-config'
 
 [host_machine]
 system = 'pmos'
 cpu_family = '${CPU_FAMILY}'
 cpu = '${JINX_ARCH}'
-endian = 'little'
+endian = '${ENDIAN}'
 
 [built-in options]
 libdir = 'lib'
-c_args = ['--target=${JINX_ARCH}-pmos', '--sysroot=${sysroot}']
-cpp_args = ['--target=${JINX_ARCH}-pmos', '--sysroot=${sysroot}']
-c_link_args = ['--target=${JINX_ARCH}-pmos', '--sysroot=${sysroot}']
-cpp_link_args = ['--target=${JINX_ARCH}-pmos', '--sysroot=${sysroot}']
+# c_args = ['${COMPILE_FLAGS}']
+# cpp_args = ['${COMPILE_FLAGS}']
+# c_link_args = ['${COMPILE_FLAGS}']
+# cpp_link_args = ['${COMPILE_FLAGS}']
+
+[properties]
+sys_root = '${sysroot}'

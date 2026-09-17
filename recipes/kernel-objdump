@@ -10,7 +10,7 @@ hostdeps="clang"
 
 configure() {
     echo Arch: $JINX_ARCH
-    cmake -S ${source_dir} -DTARGET_ARCH=${JINX_ARCH} -DSYSROOT=${sysroot_dir}
+    cmake -S ${source_dir} -DTARGET_ARCH=${JINX_ARCH} -DSYSROOT=${sysroot}
 }
 
 build() {

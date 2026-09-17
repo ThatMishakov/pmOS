@@ -12,7 +12,7 @@ allow_network=yes
 # TODO: Move libyaml to a separate recipe
 
 configure() {
-    cmake -S ${source_dir} -DTARGET_ARCH=${JINX_ARCH} -DCMAKE_SYSROOT=${sysroot_dir} -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+    cmake -S ${source_dir} -DTARGET_ARCH=${JINX_ARCH} -DCMAKE_SYSROOT=${sysroot} -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 }
 
 build() {

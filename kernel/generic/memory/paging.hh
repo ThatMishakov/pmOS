@@ -372,7 +372,7 @@ public:
      * @param virt_addr Virtual address to where the page shall be mapped
      * @return Error code
      */
-    [[nodiscard]] virtual kresult_t map(u64 page_addr, void *virt_addr) noexcept;
+    [[nodiscard]] virtual kresult_t map(u64 page_addr, void *virt_addr);
 
     /**
      * @brief Maps the page to the virtual address
@@ -389,20 +389,6 @@ public:
                                         Page_Table_Arguments arg) = 0;
 
     kresult_t map(Page_Info info, void *virt_addr);
-
-    /**
-     * @brief Maps the page to the virtual address
-     *
-     * This function maps the specified page to the virtual address with given *arg* arguments and
-     * adjusting and allocating memory for the appropriate paging structures as needed (in case of
-     * using multi-level page tables)
-     *
-     * @param page Descriptor of the page
-     * @param virt_addr Virtual address to where the page shall be mapped
-     * @param arg Arguments and protections with which the page should be mapped.
-     */
-    [[nodiscard]] virtual kresult_t map(kernel::pmm::Page_Descriptor page, void *virt_addr,
-                                        Page_Table_Arguments arg) noexcept = 0;
 
     // /// Return structure used with check_if_allocated_and_set_flag()
     // struct Check_Return_Str {

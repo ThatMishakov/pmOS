@@ -17,8 +17,6 @@ static void syscall_ret_high(TaskDescriptor *task, u64 value)
     task->regs.edi = (u64)value >> 32;
 }
 
-static unsigned call_flags(TaskDescriptor *task) { return task->regs.eax; }
-
 namespace kernel::proc::syscalls
 {
 
@@ -98,10 +96,10 @@ ReturnStr<bool> syscall_args_checked(TaskDescriptor *task, int arg, int args64be
     return Success(true);
 }
 
-unsigned syscalls::call_flags(TaskDescriptor *task) { return task->regs.eax; }
+unsigned call_flags(TaskDescriptor *task) { return task->regs.eax; }
 
-void syscalls::syscall_ret_low(TaskDescriptor *task, i64 value) { ::syscall_ret_low(task, value); }
-void syscalls::syscall_ret_high(TaskDescriptor *task, u64 value) { ::syscall_ret_high(task, value); }
-i64 syscalls::syscall_ret_low(TaskDescriptor *task) { return (i64(task->regs.esi) << 32) | task->regs.ebx; }
+void syscall_ret_low(TaskDescriptor *task, i64 value) { ::syscall_ret_low(task, value); }
+void syscall_ret_high(TaskDescriptor *task, u64 value) { ::syscall_ret_high(task, value); }
+i64 syscall_ret_low(TaskDescriptor *task) { return (i64(task->regs.esi) << 32) | task->regs.ebx; }
 
 } // namespace kernel::syscalls

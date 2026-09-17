@@ -4,6 +4,7 @@
 #include <types.hh>
 #include <utility>
 #include <cstddef>
+#include <cstdint>
 
 namespace kernel::proc
 {

@@ -317,17 +317,6 @@ kresult_t IA32_Page_Table::map(u64 page_addr, void *virt_addr,
     return ia32_map_page(cr3, page_addr, virt_addr, arg);
 }
 
-kresult_t IA32_Page_Table::map(pmm::Page_Descriptor page, void *virt_addr,
-                               kernel::paging::Page_Table_Arguments arg)
-{
-    auto page_phys = page.get_phys_addr();
-    arg.extra      = PAGING_FLAG_STRUCT_PAGE;
-    auto result    = ia32_map_page(cr3, page_phys, virt_addr, arg);
-    if (result == 0)
-        page.takeout_page();
-    return result;
-}
-
 u64 prepare_pt_for(void *virt_addr, kernel::paging::Page_Table_Arguments, u32 cr3)
 {
     if (!use_pae) {

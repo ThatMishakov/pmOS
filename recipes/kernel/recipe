@@ -1,0 +1,21 @@
+#!/bin/sh
+
+name=kernel
+version=0.0.1
+revision=1
+
+source_dir=kernel
+builddeps="mlibc-headers mlibc pmos-containers"
+hostdeps="$TOOLCHAIN_DEPS $CXX_DEPS"
+
+configure() {
+    cmake_configure
+}
+
+build() {
+    make -j ${parallelism}
+}
+
+package() {
+    DESTDIR="${dest_dir}" make install
+}

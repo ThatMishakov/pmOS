@@ -20,7 +20,7 @@ build-dir = "${build_dir}/host-builds/rust"
 docs = false
 
 [target.${RUST_TARGET}]
-rustflags = ["-C", "link-arg=--sysroot=${sysroot_dir}", "-C", "link-arg=--target=${JINX_ARCH}-unknown-pmos"]
+rustflags = ["-C", "link-arg=--sysroot=${sysroot}", "-C", "link-arg=--target=${JINX_ARCH}-unknown-pmos"]
 
 [install]
 prefix = "${prefix}"

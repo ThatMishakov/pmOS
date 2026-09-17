@@ -1,13 +1,11 @@
 #! /bin/sh
 
-name=libsmarter
-
 version=810746abbf03db3d95e49754a137d4417e216832
 revision=1
 git_url="https://github.com/managarm/libsmarter.git"
 commit=${version}
 imagedeps="meson ninja-build pkg-config"
-hostdeps="clang"
+hostdeps="binutils gcc"
 
 configure() {
     meson_configure \

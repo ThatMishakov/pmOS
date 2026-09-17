@@ -21,7 +21,7 @@ configure() {
         -DCMAKE_AR=$AR \
         -DCMAKE_NM=$NM \
         -DCMAKE_RANLIB=$RANLIB \
-        -DCMAKE_SYSROOT="${sysroot_dir}" \
+        -DCMAKE_SYSROOT="${sysroot}" \
         -DCMAKE_ASM_COMPILER_TARGET="${TARGET_TRIPLE}" \
         -DCMAKE_ASM_FLAGS="${COMPILE_FLAGS}" \
         -DCMAKE_C_COMPILER_TARGET="${TARGET_TRIPLE}" \
@@ -44,7 +44,7 @@ configure() {
         -DCOMPILER_RT_OS_DIR=pmos \
         -DLLVM_ENABLE_PER_TARGET_RUNTIME_DIR=ON \
         -DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY \
-        -DCOMPILER_RT_INSTALL_LIBRARY_DIR=/usr/local/lib/clang/19/lib/
+        -DCOMPILER_RT_INSTALL_LIBRARY_DIR=/usr/local/lib/clang/23/lib/
 }
 
 build() {

@@ -50,8 +50,11 @@ extern "C" void fred_ring3_entry();
 extern "C" void fred_kernel_entry();
 #endif
 
-constexpr sched::CPU_Info __seg_gs const *c = nullptr;
-kernel::sched::CPU_Info *sched::get_cpu_struct() { return c->self; }
+CPU_Info *sched::get_cpu_struct() {
+    CPU_Info *cpu;
+    asm("movl %%gs:0, %0" : "=r"(cpu));
+    return cpu;
+}
 
 extern "C" void double_fault_isr();
 

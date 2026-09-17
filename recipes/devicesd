@@ -9,7 +9,7 @@ deps="mlibc mlibc-headers libcxx pmos-containers pmos-helpers"
 hostdeps="clang compiler-rt"
 
 configure() {
-    cmake -S ${source_dir} -DTARGET_ARCH=${JINX_ARCH} -DCMAKE_SYSROOT=${sysroot_dir}
+    cmake -S ${source_dir} -DTARGET_ARCH=${JINX_ARCH} -DCMAKE_SYSROOT=${sysroot}
 }
 
 build() {

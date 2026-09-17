@@ -25,8 +25,8 @@ configure() {
         -DCMAKE_C_COMPILER_TARGET="${triplet}" \
         -DCMAKE_ASM_COMPILER_TARGET="${triplet}" \
         -DCOMPILER_RT_BUILD_BUILTINS=ON \
-        -DCMAKE_C_FLAGS="--sysroot=${sysroot_dir} -nostartfiles -lclang_rt.builtins" \
-        -DCMAKE_CXX_FLAGS="--sysroot=${sysroot_dir} -nostdlib -lclang_rt.builtins" \
+        -DCMAKE_C_FLAGS="--sysroot=${sysroot} -nostartfiles -lclang_rt.builtins" \
+        -DCMAKE_CXX_FLAGS="--sysroot=${sysroot} -nostdlib -lclang_rt.builtins" \
         -DLIBCXXABI_USE_LLVM_UNWINDER=true \
         -DCMAKE_C_COMPILER_WORKS=ON \
         -DCMAKE_CXX_COMPILER_WORKS=ON \
