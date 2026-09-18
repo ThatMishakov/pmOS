@@ -212,8 +212,6 @@ public:
 
     virtual kresult_t map(u64 page_addr, void *virt_addr,
                           kernel::paging::Page_Table_Arguments arg) override;
-    virtual kresult_t map(kernel::pmm::Page_Descriptor page, void *virt_addr,
-                          kernel::paging::Page_Table_Arguments arg) override;
 
     virtual ~RISCV64_Page_Table() override;
 

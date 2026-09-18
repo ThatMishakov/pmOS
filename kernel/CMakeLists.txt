@@ -30,10 +30,12 @@ if (${TARGET_ARCH} STREQUAL "i686")
   set_property(TARGET kernel APPEND_STRING PROPERTY LINK_FLAGS " -static")
   target_link_libraries(kernel PUBLIC atomic gcc)
 elseif (NOT ${TARGET_ARCH} STREQUAL "x86_64")
-  add_compile_options("-fPIE")
+  # NB: target_compile_options (not add_compile_options): the kernel target
+  # already exists at this point, and directory options would not apply to it.
+  target_compile_options(kernel PRIVATE "-fPIE")
   set_property(TARGET kernel APPEND_STRING PROPERTY LINK_FLAGS " -pie -Wl,-pie")
 else()
-  add_compile_options("-mcmodel=kernel")
+  target_compile_options(kernel PRIVATE "-mcmodel=kernel")
 endif()
 
 target_include_directories(kernel PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
@@ -46,6 +48,15 @@ endif()
 target_include_directories(kernel PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/generic")
 
 add_subdirectory(smoldtb)
+
+# smoldtb is statically linked into the kernel, so it needs the same code
+# model as the kernel target itself (it is a separate CMake target and does
+# not inherit the options above).
+if (${TARGET_ARCH} STREQUAL "x86_64")
+  target_compile_options(smoldtb PRIVATE "-mcmodel=kernel")
+elseif (NOT ${TARGET_ARCH} STREQUAL "i686")
+  target_compile_options(smoldtb PRIVATE "-fPIE")
+endif()
 
 if (DEFINED ENABLE_DTB)
   target_link_libraries(kernel PUBLIC smoldtb)

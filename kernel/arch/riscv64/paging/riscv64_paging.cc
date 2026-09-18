@@ -151,38 +151,6 @@ kresult_t RISCV64_Page_Table::map(u64 page_addr, void *virt_addr,
     return riscv_map_page(table_root, page_addr, virt_addr, arg);
 }
 
-kresult_t RISCV64_Page_Table::map(pmm::Page_Descriptor page, void *virt_addr,
-                                  kernel::paging::Page_Table_Arguments arg)
-{
-    auto pte_phys = prepare_leaf_pt_for(virt_addr, arg, table_root);
-    if (!pte_phys.success())
-        return pte_phys.result;
-
-    const int index = ((u64)virt_addr >> 12) & 0x1FF;
-
-    Temp_Mapper_Obj<u64> mapper(request_temp_mapper());
-    u64 *active_pt = mapper.map(pte_phys.val);
-
-    u64 entry_val = __atomic_load_n(active_pt + index, __ATOMIC_ACQUIRE);
-    RISCV64_PTE entry = RISCV64_PTE::from_u64(entry_val);
-    if (entry.valid)
-        return -EEXIST;
-
-    RISCV64_PTE pte = RISCV64_PTE();
-    pte.valid       = true;
-    pte.user        = arg.user_access;
-    pte.writeable   = arg.writeable;
-    pte.readable    = arg.readable;
-    pte.executable  = not arg.execution_disabled;
-    pte.available   = PAGING_FLAG_STRUCT_PAGE;
-    pte.ppn         = page.takeout_page() >> 12;
-    pte.pbmt        = 0;
-
-    __atomic_store_n(active_pt + index, pte.into_u64(), __ATOMIC_RELEASE);
-
-    return 0;
-}
-
 kresult_t riscv_unmap_page(TLBShootdownContext &ctx, u64 pt_top_phys, void *virt_addr)
 {
     // TODO: Return values of this function make no sense...

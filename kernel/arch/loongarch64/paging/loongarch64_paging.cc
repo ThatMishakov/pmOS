@@ -234,17 +234,6 @@ kresult_t LoongArch64_Page_Table::map(u64 page_addr, void *virt_addr,
     return loongarch_map_page(page_directory, virt_addr, page_addr, arg);
 }
 
-kresult_t LoongArch64_Page_Table::map(pmm::Page_Descriptor page, void *virt_addr,
-                                      kernel::paging::Page_Table_Arguments arg)
-{
-    auto page_phys = page.get_phys_addr();
-    arg.extra      = PAGING_FLAG_STRUCT_PAGE;
-    auto result    = loongarch_map_page(page_directory, virt_addr, page_phys, arg);
-    if (result == 0)
-        page.takeout_page();
-    return result;
-}
-
 pmos::containers::map<u64, klib::shared_ptr<LoongArch64_Page_Table>> page_tables;
 Spinlock page_tables_lock;
 
