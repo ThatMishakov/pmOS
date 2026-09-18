@@ -314,10 +314,6 @@ namespace proc
 
         ~TaskDescriptor() noexcept;
 
-        // Changes the *task* to repeat the syscall upon reentering the system
-        inline void request_repeat_syscall() noexcept { regs.request_syscall_restart(); }
-        inline void pop_repeat_syscall() noexcept { regs.clear_syscall_restart(); }
-
         /// Creates a process structure and returns its pid
         static TaskDescriptor *create_process(PrivilegeLevel level = PrivilegeLevel::User) noexcept;
 
@@ -375,9 +371,6 @@ namespace proc
 
         // Returns true if the task is a kernel task
         bool is_kernel_task() const;
-
-        // Interrupts restarting syscall, setting the return value to interrupted error
-        void interrupt_restart_syscall();
 
         // Blocks self and schedules a different task (if blocked), respecting the flags (i.e. not blocking if wake is already pending, etc.)
         void atomic_block_self(u32 mask, bool force_block_on_terminate = false);

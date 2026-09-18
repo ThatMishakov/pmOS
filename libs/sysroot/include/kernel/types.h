@@ -28,30 +28,27 @@
 
 #ifndef KERNEL_TYPES_H
 #define KERNEL_TYPES_H
+#include <stdint.h>
 
-typedef unsigned char u8;
-typedef unsigned short u16;
-typedef unsigned int u32;
+typedef uint8_t u8;
+typedef uint16_t u16;
+typedef uint32_t u32;
 
-#ifdef __i386__
-typedef unsigned long long u64;
-#else
-typedef unsigned long u64;
-#endif
+typedef uint64_t u64;
 
-typedef signed char i8;
-typedef signed short i16;
-typedef signed int i32;
+typedef int8_t i8;
+typedef int16_t i16;
+typedef int32_t i32;
 
-#ifdef __i386__
-typedef signed long long i64;
-#else
-typedef signed long i64;
-#endif
+typedef int64_t i64;
 
 typedef unsigned long ulong;
 
+#ifdef __m68k__
+typedef u32 phys_addr_t;
+#else
 typedef u64 phys_addr_t;
+#endif
 
 #define KB(x) ((u64)(x) << 10)
 #define MB(x) ((u64)(x) << 20)

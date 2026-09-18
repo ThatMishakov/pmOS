@@ -350,6 +350,10 @@ kresult_t
 #define ELF_INSTR_SET EM_RISCV
 #elif defined(__loongarch__)
 #define ELF_INSTR_SET EM_LOONGARCH
+#elif defined(__m68k__)
+#define ELF_INSTR_SET EM_68K
+#else
+#error "Unsupported architecture"
 #endif
 
 ReturnStr<
@@ -904,12 +908,6 @@ TaskDescriptor::~TaskDescriptor() noexcept
         Auto_Lock_Scope scope_lock(tasks_map_lock);
         tasks_map.erase(this);
     }
-}
-
-void TaskDescriptor::interrupt_restart_syscall()
-{
-    pop_repeat_syscall();
-    syscalls::syscall_error(this) = -EINTR;
 }
 
 void TaskDescriptor::atomic_handle_unblock(u32 reason)

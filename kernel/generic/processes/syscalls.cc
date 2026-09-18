@@ -266,7 +266,7 @@ void syscall_handler()
 
     syscall_table[call_n](task);
 
-    if ((syscall_error(task) < 0) && !task->regs.syscall_pending_restart()) {
+    if ((syscall_error(task) < 0)) {
         serial_logger.printf("Debug: syscall %i (%s) pid %li (%s) ", call_n, syscall_name(call_n), task->task_id,
                              task->name.c_str());
         int val = syscall_error(task);
@@ -2070,9 +2070,6 @@ void syscall_pause_task(TaskDescriptor *current_task)
         syscall_error(current_task) = -ESRCH;
         return;
     case TaskStatus::TASK_BLOCKED: {
-        if (task->regs.syscall_pending_restart())
-            task->interrupt_restart_syscall();
-
         task->status = TaskStatus::TASK_PAUSED;
         task->parent_queue->atomic_erase(task);
 

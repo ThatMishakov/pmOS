@@ -26,6 +26,10 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+// Nice code!
+#if defined(__x86_64__) || defined(__riscv) || defined(__loongarch64)
+
+
 #include "limine.h"
 
 #include "../memory/paging.hh"
@@ -44,9 +48,6 @@
 #include <uacpi/kernel_api.h>
 #include "kernel_pages.hh"
 #include "common.hh"
-
-// Nice code!
-#if defined(__x86_64__) || defined(__riscv) || defined(__loongarch64)
 
 using namespace kernel;
 using namespace kernel::pmm;

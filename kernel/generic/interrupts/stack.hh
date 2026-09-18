@@ -30,8 +30,8 @@
 #include <types.hh>
 
 /// Size of the kernel stacks
-static const long STACK_SIZE = KB(8);
-static const long GUARD_SIZE = PAGE_SIZE;
+static constexpr long STACK_SIZE = KB(8);
+static constexpr long GUARD_SIZE = PAGE_SIZE;
 
 class Kernel_Stack_Pointer
 {

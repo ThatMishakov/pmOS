@@ -125,23 +125,7 @@ static inline U128 mul64(u64 a, u64 b)
 }
 
 // Shift a U128 right by 'shift' bits.
-static inline U128 u128_shr(U128 x, unsigned int shift)
-{
-    U128 r;
-    if (shift == 0) {
-        return x;
-    } else if (shift < 64) {
-        r.lo = (x.lo >> shift) | (x.hi << (64 - shift));
-        r.hi = x.hi >> shift;
-    } else if (shift < 128) {
-        r.lo = x.hi >> (shift - 64);
-        r.hi = 0;
-    } else {
-        r.lo = 0;
-        r.hi = 0;
-    }
-    return r;
-}
+U128 u128_shr(U128 x, unsigned int shift);
 
 // This structure holds the fraction f/2^s, so that multiplying by rhs is done as:
 //   result = (f * rhs) >> s.

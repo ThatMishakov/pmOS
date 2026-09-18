@@ -29,6 +29,8 @@ set_target_properties(kernel PROPERTIES LINK_FLAGS
 if (${TARGET_ARCH} STREQUAL "i686")
   set_property(TARGET kernel APPEND_STRING PROPERTY LINK_FLAGS " -static")
   target_link_libraries(kernel PUBLIC atomic gcc)
+elseif (${TARGET_ARCH} STREQUAL "m68k")
+  target_link_libraries(kernel PUBLIC gcc)
 elseif (NOT ${TARGET_ARCH} STREQUAL "x86_64")
   # NB: target_compile_options (not add_compile_options): the kernel target
   # already exists at this point, and directory options would not apply to it.
