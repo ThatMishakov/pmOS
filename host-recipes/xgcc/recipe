@@ -1,0 +1,40 @@
+#!/bin/sh
+
+revision=2
+from_source=gcc
+imagedeps="gcc build-essential pkg-config libgmp-dev libmpfr-dev libmpc-dev flex texinfo bison libisl-dev gettext"
+hostdeps="binutils"
+
+configure() {
+    ${source_dir}/configure --target=${JINX_ARCH}-pmos --with-sysroot="${sysroot}" \
+        --enable-languages=c,c++ \
+        --with-newlib \
+        --without-headers \
+        --disable-shared \
+        --disable-threads \
+        --disable-nls \
+        --disable-multilib \
+        --enable-initfini-array \
+        --disable-hosted-libstdcxx \
+        --disable-fixincludes \
+        --disable-wchar_t \
+        --disable-libatomic \
+        --disable-libgomp \
+        --disable-libitm \
+        --disable-libssp \
+        --disable-libsanitizer \
+        --disable-libquadmath \
+        --disable-libvtv
+}
+
+build() {
+    make -j ${parallelism} \
+        all-gcc \
+        all-target-libgcc
+}
+
+package() {
+    DESTDIR="${dest_dir}" make \
+        install-gcc \
+        install-target-libgcc
+}

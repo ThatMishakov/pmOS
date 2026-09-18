@@ -12,8 +12,9 @@ using namespace kernel::x86::time;
 
 namespace kernel::x86::acpi_pmtmr {
 
-static const FreqFraction acpi_pm_freq     = computeFreqFraction(3579545, 1e9);
-static const FreqFraction acpi_pm_freq_inv = computeFreqFraction(1e9, 3579545);
+
+static const FreqFraction acpi_pm_freq     = computeFreqFraction(3579545, 1'000'000'000);
+static const FreqFraction acpi_pm_freq_inv = computeFreqFraction(1'000'000'000, 3579545);
 
 static u32 pmtmr_ioport = 0;
 static u32 timer_mask   = 0xffffff;

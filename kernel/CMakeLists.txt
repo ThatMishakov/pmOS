@@ -28,7 +28,7 @@ set_target_properties(kernel PROPERTIES LINK_FLAGS
   "-nostdlib -ffreestanding -static -T${CMAKE_CURRENT_SOURCE_DIR}/arch/${TARGET_ARCH}/linker.ld -z max-page-size=0x1000 -Wl,--eh-frame-hdr -Wl,--demangle")
 if (${TARGET_ARCH} STREQUAL "i686")
   set_property(TARGET kernel APPEND_STRING PROPERTY LINK_FLAGS " -static")
-  target_link_libraries(kernel PUBLIC gcc)
+  target_link_libraries(kernel PUBLIC atomic gcc)
 elseif (NOT ${TARGET_ARCH} STREQUAL "x86_64")
   add_compile_options("-fPIE")
   set_property(TARGET kernel APPEND_STRING PROPERTY LINK_FLAGS " -pie -Wl,-pie")

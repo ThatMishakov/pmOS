@@ -67,8 +67,8 @@ bool calibrate_tsc_cpuid()
             u64 numerator = c.ebx;
 
             // Nanoseconds for the total confusion...
-            tsc_freq = computeFreqFraction(freq * numerator, 1e9 * denominator);
-            tsc_inverted_freq = computeFreqFraction(1e9 * denominator, freq * numerator);
+            tsc_freq = computeFreqFraction(freq * numerator, 1'000'000'000 * denominator);
+            tsc_inverted_freq = computeFreqFraction(1'000'000'000 * denominator, freq * numerator);
 
             tsc_calibrated = true;
 

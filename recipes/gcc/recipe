@@ -3,4 +3,4 @@
 version=16
 revision=1
 git_url=https://gitlab.com/mishakov/gcc-pmos.git
-commit="7481c48bbf9a82ca9abbf6a10678c5bf582236ba"
+commit="75df16fc2c4048c93c4034ba9cc85c5df5d258b1"

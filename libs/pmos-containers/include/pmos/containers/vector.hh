@@ -368,6 +368,27 @@ constexpr bool vector<T, Allocator>::resize(size_type n, const T &value) noexcep
 }
 
 template<class T, class Allocator>
+constexpr typename vector<T, Allocator>::iterator
+vector<T, Allocator>::insert(const_iterator pos, size_type count, const T &value) noexcept
+{
+    size_t idx = static_cast<size_t>(pos - storage_);
+    size_t current_size = size_;
+
+    if (!add_capacity(count))
+        return end();
+
+    for (size_t i = current_size; i > idx; --i)
+        new (&storage_[i + count - 1]) T(std::move(storage_[i - 1]));
+
+    size_t up_to = idx + count;
+    for (size_t i = idx; i < up_to; ++i)
+        storage_[i] = value;
+
+    size_ = current_size + count;
+    return storage_ + idx;
+}
+
+template<class T, class Allocator>
 constexpr bool vector<T, Allocator>::add_capacity(size_t new_elements) noexcept
 {
     size_t required = size_ + new_elements;

@@ -41,8 +41,8 @@ FreqFraction frequency_inv;
 
 void set_timer_frequency(u64 frequency)
 {
-    frequency_ns = computeFreqFraction(frequency, 1e9);
-    frequency_inv = computeFreqFraction(1e9, frequency);
+    frequency_ns = computeFreqFraction(frequency, 1'000'000'000);
+    frequency_inv = computeFreqFraction(1'000'000'000, frequency);
     ticks_per_ms = frequency / 1000;
 }
 

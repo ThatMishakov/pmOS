@@ -267,8 +267,8 @@ bool lapic_freq_from_cpuid()
         auto c = cpuid(0x015);
         if (c.ecx) {
             u32 clock = c.ecx;
-            apic_freq = computeFreqFraction(clock, 1e9 * divisor);
-            apic_inverted_freq = computeFreqFraction(1e9 * divisor, clock);
+            apic_freq = computeFreqFraction(clock, 1'000'000'000 * divisor);
+            apic_inverted_freq = computeFreqFraction(1'000'000'000 * divisor, clock);
             return true;
         }
     }
@@ -277,8 +277,8 @@ bool lapic_freq_from_cpuid()
         auto c = cpuid(0x16);
         u16 bus_freq_mhz = c.ecx & 0xffff;
         if (bus_freq_mhz) {
-            apic_freq = computeFreqFraction(bus_freq_mhz, 1e3 * divisor);
-            apic_inverted_freq = computeFreqFraction(1e3 * divisor, bus_freq_mhz);
+            apic_freq = computeFreqFraction(bus_freq_mhz, 1'000 * divisor);
+            apic_inverted_freq = computeFreqFraction(1'000 * divisor, bus_freq_mhz);
             return true;
         }
     }

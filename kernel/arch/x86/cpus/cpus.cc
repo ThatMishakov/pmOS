@@ -52,7 +52,7 @@ extern "C" void fred_kernel_entry();
 
 CPU_Info *sched::get_cpu_struct() {
     CPU_Info *cpu;
-    asm("movl %%gs:0, %0" : "=r"(cpu));
+    asm("mov %%gs:0, %0" : "=r"(cpu));
     return cpu;
 }
 

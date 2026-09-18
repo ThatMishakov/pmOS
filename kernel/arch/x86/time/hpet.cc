@@ -275,8 +275,8 @@ void init_hpet()
     log::serial_logger.printf("HPET revision: %u, number of timers: %u, 64 bit: %s, vendor id: %u, clock period: %u\n", revision, num_timers, is_64bit ? "true" : "false", vendor_id, counter_clk_period);
 
     // HPET's clock period is in femptoseconds, the kernel stores time in nanoseconds, so 1e15/1e9
-    hpet_freq = computeFreqFraction(1e6, counter_clk_period);
-    hpet_freq_inv = computeFreqFraction(counter_clk_period, 1e6);
+    hpet_freq = computeFreqFraction(1'000'000, counter_clk_period);
+    hpet_freq_inv = computeFreqFraction(counter_clk_period, 1'000'000);
 
     // Disable HPET (just in case)
     u64 reg = hpet_read64_general(HPET_CONF_REG);

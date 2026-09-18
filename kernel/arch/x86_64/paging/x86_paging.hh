@@ -130,9 +130,6 @@ public:
     virtual kresult_t map(u64 page_addr, void *virt_addr,
                           Page_Table_Arguments arg) noexcept override;
 
-    virtual kresult_t map(kernel::pmm::Page_Descriptor page, void *virt_addr,
-                          Page_Table_Arguments arg) noexcept override;
-
     virtual void invalidate(kernel::paging::TLBShootdownContext &ctx, void *virt_addr,
                             bool free) override;
 
