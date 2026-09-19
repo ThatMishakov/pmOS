@@ -31,4 +31,11 @@ namespace kernel::paging {
 
 using Arch_Page_Table = kernel::m68k::Page_Table;
 
+// Generic functions to map and release pages in kernel, using the active page table
+kresult_t map_kernel_page(phys_addr_t phys_addr, void *virt_addr, Page_Table_Arguments arg);
+kresult_t unmap_kernel_page(kernel::paging::TLBShootdownContext &ctx, void *virt_addr);
+
+kresult_t map_page(ptable_top_ptr_t page_table, phys_addr_t phys_addr, void *virt_addr,
+                   Page_Table_Arguments arg);
+
 } // namespace kernel::paging

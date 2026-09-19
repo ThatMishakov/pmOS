@@ -372,7 +372,7 @@ public:
      * @param virt_addr Virtual address to where the page shall be mapped
      * @return Error code
      */
-    [[nodiscard]] virtual kresult_t map(u64 page_addr, void *virt_addr);
+    [[nodiscard]] virtual kresult_t map(phys_addr_t page_addr, void *virt_addr);
 
     /**
      * @brief Maps the page to the virtual address
@@ -385,7 +385,7 @@ public:
      * @param virt_addr Virtual address to where the page shall be mapped
      * @param arg Arguments and protections with which the page should be mapped.
      */
-    [[nodiscard]] virtual kresult_t map(u64 page_addr, void *virt_addr,
+    [[nodiscard]] virtual kresult_t map(phys_addr_t page_addr, void *virt_addr,
                                         Page_Table_Arguments arg) = 0;
 
     kresult_t map(Page_Info info, void *virt_addr);
@@ -426,7 +426,11 @@ public:
     virtual void *user_addr_max() const = 0;
 
     /// Returns true if the address should not accessible to the user
-    inline bool is_in_kernel_space(void *virt_addr) { return virt_addr >= user_addr_max(); }
+    inline bool is_in_kernel_space(void *virt_addr)
+    {
+        auto addr_max = user_addr_max();
+        return !addr_max || virt_addr >= addr_max;
+    }
 
     /**
      * @brief Atomically takes out the paging region and transfers it to a new page table
@@ -450,7 +454,7 @@ public:
                                              void *region_orig, void *prefered_to, unsigned access, bool fixed);
 
     /// Gets information for the page mapping.
-    virtual Page_Info get_page_mapping(void *virt_addr) const = 0;
+    [[nodiscard]] virtual Page_Info get_page_mapping(void *virt_addr) const = 0;
 
     /**
      * @brief Deletes a memory region identified by (starting at) *region_start*
@@ -490,7 +494,7 @@ public:
     /// @brief Checks if the pages exists and invalidates it, invalidating TLB entries if needed
     /// @param virt_addr Virtual address of the page
     /// @param free Indicates whether the page should be freed or not after invalidating
-    virtual void invalidate(TLBShootdownContext &ctx, void *virt_addr, bool free) = 0;
+    virtual void invalidate(TLBShootdownContext &ctx, void *virt_addr, bool free);
 
     /// @brief Invalidates the pages in the given range, also invalidating TLB entries as needed.
     /// @param virt_addr Virtual address of the start of the region that should be invalidated
