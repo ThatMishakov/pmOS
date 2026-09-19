@@ -1,32 +1,3 @@
-/* Copyright (c) 2024, Mikhail Kovalev
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- *
- * 1. Redistributions of source code must retain the above copyright notice,
- * this list of conditions and the following disclaimer.
- *
- * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the documentation
- *    and/or other materials provided with the distribution.
- *
- * 3. Neither the name of the copyright holder nor the names of its
- *    contributors may be used to endorse or promote products derived from
- *    this software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- */
-
 #include <interrupts/apic.hh>
 #include <sched/sched.hh>
 #include <kern_logger/kern_logger.hh>
@@ -42,9 +13,6 @@ using namespace kernel;
 using namespace kernel::x86::interrupts::lapic;
 using namespace kernel::x86::time;
 using namespace kernel::x86;
-
-TimeSource *kernel::x86::time::kernel_timesource = nullptr;
-CalibrationSource *kernel::x86::time::kernel_calibration_source = nullptr;
 
 u64 kernel::sched::ticks_since_bootup = 0;
 void start_timer_ticks(u32 ticks)
@@ -66,14 +34,6 @@ u64 get_current_time_ticks()
 
 extern bool have_invariant_tsc;
 extern u64 boot_tsc;
-
-u64 kernel::sched::get_ns_since_bootup()
-{
-    if (!kernel_timesource)
-        panic("No kernel timesource!!\n");
-
-    return kernel_timesource->get_absolute_time();
-}
 
 u64 CPU_Info::ticks_after_ms(u64 ms) { return ticks_after_ns(ms * 1'000'000); }
 

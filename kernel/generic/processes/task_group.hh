@@ -145,7 +145,7 @@ public:
 
     kresult_t transfer_rights(ipc::GenericMessage *msg, std::array<u64, 4> right_ids);
 private:
-    id_type id = __atomic_fetch_add(&next_id, 1, __ATOMIC_SEQ_CST);
+    id_type id = next_id.atomic_next();
 
     union {
         pmos::containers::RBTreeNode<TaskGroup> bst_head_global = {};
@@ -184,7 +184,7 @@ private:
      */
     void atomic_remove_from_global_map() noexcept;
 
-    static inline u64 next_id = 1;
+    static inline AtomicCounter next_id;
 
     friend bool ipc::Port::delete_self() noexcept;
 

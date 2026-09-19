@@ -221,8 +221,8 @@ public:
     /// Atomically creates a new id by increasing the top_id counter.
     static u64 create_new_id()
     {
-        static u64 top_id = 1;
-        return __atomic_fetch_add(&top_id, 1, 0);
+        static AtomicCounter top_id;
+        return top_id.atomic_next();
     }
 
     /// ORable flags that can be used to indicate different protection levels.

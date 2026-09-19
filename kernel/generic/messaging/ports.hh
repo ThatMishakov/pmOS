@@ -113,7 +113,7 @@ protected:
         pmos::containers::RedBlackTree<Port, &Port::bst_head_global,
                                        detail::TreeCmp<Port, u64, &Port::portno>>;
 
-    static inline u64 biggest_port = 1;
+    static inline AtomicCounter id_counter;
     static inline global_ports_tree::RBTreeHead ports;
     static inline Spinlock ports_lock;
 

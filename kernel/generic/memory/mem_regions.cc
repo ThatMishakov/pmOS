@@ -40,7 +40,7 @@
 #include <sched/sched.hh>
 #include <pmos/memory.h>
 
-static u64 counter = 1;
+static AtomicCounter counter;
 
 using namespace kernel;
 using namespace kernel::paging;
@@ -176,7 +176,7 @@ kresult_t Phys_Mapped_Region::clone_to(const klib::shared_ptr<Page_Table> &new_t
         return -ENOMEM;
 
     copy->owner       = new_table.get();
-    copy->id          = __atomic_add_fetch(&counter, 1, 0);
+    copy->id          = counter.atomic_next();
     copy->access_type = new_access;
     copy->start_addr  = base_addr;
 
@@ -256,7 +256,7 @@ kresult_t Mem_Object_Reference::punch_hole(void *hole_addr_start, size_t hole_si
     ptr->start_addr = new_start;
     ptr->size = new_size;
     // ptr->name = name;
-    ptr->id = __atomic_add_fetch(&counter, 1, 0);
+    ptr->id = counter.atomic_next();
     ptr->owner = owner;
     ptr->access_type = access_type;
     ptr->references = references;
@@ -429,7 +429,7 @@ kresult_t Mem_Object_Reference::clone_to(const klib::shared_ptr<Page_Table> &new
 
     copy->start_addr = base_addr;
     copy->size = size;
-    copy->id = __atomic_add_fetch(&counter, 1, 0);
+    copy->id = counter.atomic_next();
     copy->owner = new_table.get();
     copy->access_type = new_access;
 
@@ -497,9 +497,9 @@ void Generic_Mem_Region::rcu_callback(void *ptr, bool)
 Generic_Mem_Region::Generic_Mem_Region(void *start_addr, size_t size, klib::string name,
                                        Page_Table *owner, unsigned access)
     : start_addr(start_addr), size(size), name(klib::forward<klib::string>(name)),
-      id(__atomic_add_fetch(&counter, 1, 0)), owner(owner), access_type(access) {};
+      id(counter.atomic_next()), owner(owner), access_type(access) {};
 
-Generic_Mem_Region::Generic_Mem_Region(): id(__atomic_add_fetch(&counter, 1, 0)) {}
+Generic_Mem_Region::Generic_Mem_Region(): id(counter.atomic_next()) {}
 
 PhysRegionType Phys_Mapped_Region::type_from_syscall_flags(ulong flags)
 {

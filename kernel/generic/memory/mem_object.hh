@@ -217,9 +217,8 @@ protected:
      */
     static inline id_type create_id() noexcept
     {
-        static id_type id = 0;
-
-        return __atomic_add_fetch(&id, 1, 0);
+        static AtomicCounter counter;
+        return counter.atomic_next();
     }
 
     /**

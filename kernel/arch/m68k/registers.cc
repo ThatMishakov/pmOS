@@ -78,3 +78,24 @@ void syscall_ret_high(TaskDescriptor *task, u64 value) {
 i64 syscall_ret_low(TaskDescriptor *task) { return (i64(task->regs.d[1]) << 32) | task->regs.d[0]; }
 
 } // namespace kernel::syscalls
+
+kresult_t kernel::proc::TaskDescriptor::set_32bit()
+{
+    return 0;
+} 
+
+bool kernel::proc::TaskDescriptor::is_32bit() const
+{
+    return true;
+}
+
+// TODO: FPU
+void kernel::proc::TaskDescriptor::before_task_switch()
+{
+
+}
+
+void kernel::proc::TaskDescriptor::after_task_switch()
+{
+
+}

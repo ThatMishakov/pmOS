@@ -52,7 +52,7 @@ Port *Port::atomic_create_port(proc::TaskDescriptor *task) noexcept
 {
     assert(task);
 
-    u64 new_port = __atomic_add_fetch(&biggest_port, 1, __ATOMIC_SEQ_CST);
+    u64 new_port = id_counter.atomic_next();
 
     klib::unique_ptr<Port> new_port_ptr = new Port(task, new_port);
     // nothrow?

@@ -748,3 +748,9 @@ U128 u128_shr(U128 x, unsigned int shift)
     }
     return r;
 }
+
+u64 AtomicCounter::atomic_next() noexcept
+{
+    Auto_Lock_Scope l(lock);
+    return ++value;
+}

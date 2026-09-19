@@ -880,8 +880,9 @@ void TaskDescriptor::cleanup()
 
 TaskDescriptor::TaskID TaskDescriptor::get_new_task_id()
 {
-    static TaskID next_id = 1;
-    return __atomic_fetch_add(&next_id, 1, __ATOMIC_RELAXED);
+    // TODO: This needs to be u32
+    static AtomicCounter next_id;
+    return next_id.atomic_next();
 }
 
 // TODO: Arch-specific!!!

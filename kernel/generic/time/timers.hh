@@ -2,7 +2,7 @@
 #include <pmos/containers/vector.hh>
 #include <types.hh>
 
-namespace kernel::x86::time
+namespace kernel::time
 {
 
 struct TimeSource {
@@ -20,22 +20,15 @@ struct CalibrationSource {
     virtual const char *name() const                             = 0;
 };
 
-extern TimeSource *kernel_timesource;
-extern CalibrationSource *kernel_calibration_source;
-
-void init_timers();
-void init_after_lapic();
-
-/// Blocking timer waiter, for the stuff like MP init
-class BlockingWaiter {
-    BlockingWaiter() = default;
-    unsigned tpr = 0;
-
-public:
-    ~BlockingWaiter();
-
-    static BlockingWaiter create();
-    void wait(u64 nanoseconds);
+struct LocalTimer {
+    virtual void set_deadline(u64 deadline_nanoseconds) = 0;
+    virtual void cancel_deadline()                      = 0;
+    virtual void init_as_main()                         = 0;
+    virtual const char *name() const                    = 0;
 };
 
-} // namespace kernel::x86::time
+extern TimeSource *kernel_timesource;
+extern CalibrationSource *kernel_calibration_source;
+extern LocalTimer *kernel_local_timer;
+
+} // namespace kernel::time

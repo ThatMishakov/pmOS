@@ -155,3 +155,12 @@ inline FreqFraction computeFreqFraction(u64 num, u64 denom)
     u64 f = (num << s) / denom;
     return FreqFraction {f, s};
 }
+
+void hcf() __attribute__((noreturn));
+
+struct AtomicCounter {
+    Spinlock lock;
+    u64 value = 0;
+
+    u64 atomic_next() noexcept;
+};
