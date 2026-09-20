@@ -1,4 +1,3 @@
-name=limine
 version=10.8.5
 revision=1
 tarball_url="https://codeberg.org/Limine/Limine/releases/download/v${version}/limine-${version}.tar.gz"
