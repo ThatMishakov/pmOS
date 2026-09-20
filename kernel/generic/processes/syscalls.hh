@@ -295,6 +295,9 @@ void syscall_delete_receive_right(TaskDescriptor *task);
 void syscall_restrict_right(TaskDescriptor *task);
 // Parameters: u64 right_id, u32 mask
 
+void syscall_set_tcb(TaskDescriptor *task);
+// Parameters: ulong tcb_address
+
 struct SyscallRetval {
     TaskDescriptor *task;
     u64 operator=(u64 value);

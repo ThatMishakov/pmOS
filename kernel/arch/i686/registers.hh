@@ -56,10 +56,10 @@ struct IA32Regs {
         eflags |= iopl << 12;
     }
 
-    inline ulong &thread_pointer() { return fs; }
-    inline ulong thread_pointer() const { return fs; }
-    inline ulong &global_pointer() { return gs; }
-    inline ulong global_pointer() const { return gs; }
+    inline ulong &thread_pointer() { return gs; }
+    inline ulong thread_pointer() const { return gs; }
+    inline ulong &global_pointer() { return fs; }
+    inline ulong global_pointer() const { return fs; }
 };
 
 using Task_Regs = IA32Regs;

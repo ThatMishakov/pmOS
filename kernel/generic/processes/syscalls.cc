@@ -70,7 +70,7 @@ extern void deactivate_page_table();
 namespace kernel::proc::syscalls
 {
 
-std::array<const char *, 68> syscall_names = {
+std::array<const char *, 70> syscall_names = {
     "SYSCALL EXIT",
     "SYSCALL GET TASK ID",
     "SYSCALL CREATE PROCESS",
@@ -143,6 +143,8 @@ std::array<const char *, 68> syscall_names = {
     "SYSCALL FUTEX WAKE",
     "SYSCALL SLEEP",
     "SYSCALL RESTRICT RIGHT",
+    "SYSCALL SET TCB",
+    "SYSCALL GET TCB",
 };
 
 const char *syscall_name(unsigned id)
@@ -155,7 +157,7 @@ const char *syscall_name(unsigned id)
 
 using syscall_function = void (*)(TaskDescriptor *task);
 
-std::array<syscall_function, 68> syscall_table = {
+std::array<syscall_function, 70> syscall_table = {
     syscall_exit,
     syscall_get_task_id,
     syscall_create_process,
@@ -228,6 +230,8 @@ std::array<syscall_function, 68> syscall_table = {
     syscall_futex_wake,
     syscall_sleep,
     syscall_restrict_right,
+    syscall_set_tcb,
+    nullptr,
 };
 
 void syscall_handler()
@@ -2996,6 +3000,19 @@ void syscall_restrict_right(TaskDescriptor *task)
     }
 
     syscall_return(task) = right->atomic_set_permissions_mask(mask);
+}
+
+void syscall_set_tcb(TaskDescriptor *task)
+{
+    ulong tcb_address = syscall_arg(task, 0, 0);
+
+    task->regs.thread_pointer() = tcb_address;
+
+    #if defined(__x86_64__) || defined(__i386__)
+    restore_segments(task);
+    #endif
+
+    syscall_success(task);
 }
 
 unsigned syscall_number(TaskDescriptor *task) { return call_flags(task) & 0xFF; }

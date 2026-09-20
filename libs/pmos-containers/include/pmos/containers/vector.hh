@@ -453,8 +453,7 @@ constexpr bool vector<T, Allocator>::expand(size_t new_capacity)
     if (new_capacity <= capacity_)
         return true;
 
-    size_t new_cap = capacity_ == 0 ? start_size : capacity_;
-    auto ptr = allocator_.allocate(new_cap);
+    auto ptr = allocator_.allocate(new_capacity);
     if (!ptr)
         return false;
 
@@ -466,7 +465,7 @@ constexpr bool vector<T, Allocator>::expand(size_t new_capacity)
 
     allocator_.deallocate(storage_, capacity_);
     storage_ = ptr;
-    capacity_ = new_cap;
+    capacity_ = new_capacity;
     return true;
 }
 

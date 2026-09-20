@@ -29,6 +29,9 @@
 
 #pragma once
 
+#include <types.hh>
+#include <interrupts/gdt.hh>
+
 #define ENTRY_INTERRUPT 0
 #define ENTRY_SYSCALL   1
 #define ENTRY_SYSENTER  2
@@ -75,10 +78,26 @@ struct X86_64Regs {                         // 208 bytes
     inline u64 &stack_pointer() { return rsp; }
     inline u64 stack_pointer() const { return rsp; };
 
-    inline u64 &thread_pointer() { return fs; }
-    inline u64 thread_pointer() const { return fs; };
-    inline u64 &global_pointer() { return gs; }
-    inline u64 global_pointer() const { return gs; };
+    inline bool is_32bit() const { return cs == R3_LEGACY_CODE_SEGMENT; }
+
+    inline u64 &thread_pointer() {
+        if (is_32bit())
+            return gs;
+        else
+            return fs;
+    }
+    inline u64 thread_pointer() const {
+        if (is_32bit())
+            return gs;
+        else
+            return fs;
+    };
+    inline u64 &global_pointer() {
+        return gs;
+    }
+    inline u64 global_pointer() const {
+        return gs;
+    };
 
     // Register holding syscall number
     // TODO: Other operating systems usually use a different register

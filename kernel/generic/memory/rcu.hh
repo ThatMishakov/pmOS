@@ -61,7 +61,12 @@ struct RCU_Head {
 class RCU
 {
 public:
-    inline RCU() { assert(bitmask.resize((kernel::sched::number_of_cpus + 63) / 64, 0)); }
+    inline RCU()
+    {
+        bool success = bitmask.resize((kernel::sched::number_of_cpus + 63) / 64, 0);
+        assert(success);
+        (void)success;
+    }
 
     ~RCU() = default;
 
