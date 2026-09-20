@@ -7,7 +7,11 @@ deps="mlibc-headers"
 hostdeps="binutils"
 
 configure() {
-    ${source_dir}/configure --target=${JINX_ARCH}-pmos --with-sysroot="${sysroot}" --enable-languages=c,c++
+    multilib=
+    if [ "${JINX_ARCH}" = "m68k" ]; then
+        multilib=--disable-multilib
+    fi
+    ${source_dir}/configure --target=${JINX_ARCH}-pmos --with-sysroot="${sysroot}" --enable-languages=c,c++ ${multilib}
 }
 
 build() {
