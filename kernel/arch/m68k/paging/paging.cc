@@ -1,6 +1,7 @@
 #include "arch_paging.hh"
 #include <cpu.hh>
 #include <pmos/containers/map.hh>
+#include "m68030.hh"
 
 namespace {
 
@@ -91,3 +92,47 @@ phys_addr_t kernel::paging::arch_phys_addr_limit()
 {
     return 0;
 }
+
+namespace kernel::paging {
+
+kresult_t map_kernel_page(phys_addr_t phys_addr, void *virt_addr, Page_Table_Arguments arg)
+{
+    switch (kernel::m68k::cpu_kind) {
+    case kernel::m68k::CpuKind::M68020:
+    case kernel::m68k::CpuKind::M68030:
+        return m68k::paging::m68030_map_kernel_page(phys_addr, virt_addr, arg);
+    default:
+        assert(false);
+    }
+
+    return -ENOSYS;
+}
+
+kresult_t unmap_kernel_page(kernel::paging::TLBShootdownContext &ctx, void *virt_addr)
+{
+    switch (kernel::m68k::cpu_kind) {
+    case kernel::m68k::CpuKind::M68020:
+    case kernel::m68k::CpuKind::M68030:
+        return m68k::paging::m68030_unmap_kernel_page(ctx, virt_addr);
+    default:
+        assert(false);
+    }
+
+    return -ENOSYS;
+}
+
+kresult_t map_page(ptable_top_ptr_t page_table, phys_addr_t phys_addr, void *virt_addr,
+                   Page_Table_Arguments arg)
+{
+    switch (kernel::m68k::cpu_kind) {
+    case kernel::m68k::CpuKind::M68020:
+    case kernel::m68k::CpuKind::M68030:
+        return m68k::paging::m68030_map_page(page_table, phys_addr, virt_addr, arg);
+    default:
+        assert(false);
+    }
+
+    return -ENOSYS;
+}
+
+} // namespace kernel::paging

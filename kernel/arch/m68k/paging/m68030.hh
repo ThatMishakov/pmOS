@@ -4,7 +4,7 @@
 namespace kernel::m68k::paging
 {
 
-class M68030PageTable final: public kernel::paging::Page_Table {
+class M68030PageTable final: public kernel::m68k::Page_Table {
 public:
     virtual void apply() override;
 
@@ -17,16 +17,16 @@ public:
     virtual void invalidate_tlb(void *start, size_t size) override;
     virtual void tlb_flush_all() override;
 
-    virtual void invalidate_range(TLBShootdownContext &ctx, void *virt_addr, size_t size_bytes,
+    virtual void invalidate_range(kernel::paging::TLBShootdownContext &ctx, void *virt_addr, size_t size_bytes,
                                   bool free) override;
 private:
     u32 table_root = -1;
 };
 
-kresult_t m68030_map_kernel_page(phys_addr_t phys_addr, void *virt_addr, Page_Table_Arguments arg);
+kresult_t m68030_map_kernel_page(phys_addr_t phys_addr, void *virt_addr, kernel::paging::Page_Table_Arguments arg);
 kresult_t m68030_unmap_kernel_page(kernel::paging::TLBShootdownContext &ctx, void *virt_addr);
 
-kresult_t m68030_map_page(ptable_top_ptr_t page_table, phys_addr_t phys_addr, void *virt_addr,
-                   Page_Table_Arguments arg);
+kresult_t m68030_map_page(kernel::paging::ptable_top_ptr_t page_table, phys_addr_t phys_addr, void *virt_addr,
+                   kernel::paging::Page_Table_Arguments arg);
 
 } // namespace kernel::m68k::paging
