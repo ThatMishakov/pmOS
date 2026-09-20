@@ -30,6 +30,7 @@
 #include <sbi/sbi.hh>
 #include <sched/sched.hh>
 #include <sched/timers.hh>
+#include <time/timers.hh>
 
 using namespace kernel::sched;
 
@@ -38,13 +39,6 @@ u64 ticks_per_ms = 0;
 
 FreqFraction frequency_ns;
 FreqFraction frequency_inv;
-
-void set_timer_frequency(u64 frequency)
-{
-    frequency_ns = computeFreqFraction(frequency, 1'000'000'000);
-    frequency_inv = computeFreqFraction(1'000'000'000, frequency);
-    ticks_per_ms = frequency / 1000;
-}
 
 // https://popovicu.com/posts/risc-v-interrupts-with-timer-example/
 u64 get_current_timer_val()
@@ -56,21 +50,52 @@ u64 get_current_timer_val()
 
 int fire_timer_at(u64 next_value) { return sbi_set_timer(next_value).error; }
 
-#include <kern_logger/kern_logger.hh>
+struct SbiTimer final: kernel::time::LocalTimer {
+    virtual void set_deadline(u64 deadline_nanoseconds) override
+    {
+        u64 deadline_ticks = frequency_ns * deadline_nanoseconds;
+        fire_timer_at(deadline_ticks);
+    }
 
-u64 kernel::sched::ticks_since_bootup = 0;
+    virtual void cancel_deadline() override
+    {
+        fire_timer_at((u64)-1);
+    }
 
-u64 kernel::sched::get_ns_since_bootup() { 
-    return frequency_inv * get_current_timer_val();
-}
+    void init_as_main() override
+    {
+    }
 
-void kernel::sched::maybe_rearm_timer(u64 deadline_nanoseconds)
+    virtual const char *name() const override
+    {
+        return "SBI Timer";
+    }
+};
+SbiTimer sbi_timer;
+
+struct RiscvTimer final: kernel::time::TimeSource {
+    virtual u64 get_absolute_time() const override
+    {
+        return frequency_inv * get_current_timer_val();
+    }
+
+    virtual const char *name() const override
+    {
+        return "RISC-V Timer";
+    }
+
+    virtual void init_as_main() override
+    {
+    }
+};
+RiscvTimer riscv_timer;
+
+void set_timer_frequency(u64 frequency)
 {
-    auto c = get_cpu_struct();
-    if (c->local_timer_next_deadline != 0 and (c->local_timer_next_deadline < deadline_nanoseconds))
-        return;
+    frequency_ns = computeFreqFraction(frequency, 1'000'000'000);
+    frequency_inv = computeFreqFraction(1'000'000'000, frequency);
+    ticks_per_ms = frequency / 1000;
 
-    c->local_timer_next_deadline = deadline_nanoseconds;
-    u64 ticks = frequency_ns * deadline_nanoseconds;
-    fire_timer_at(ticks);
+    kernel::time::kernel_timesource = &riscv_timer;
+    kernel::time::kernel_local_timer = &sbi_timer;
 }
