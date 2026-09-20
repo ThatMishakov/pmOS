@@ -1,8 +1,8 @@
 #pragma once
+#include <types.hh>
 
 namespace kernel::x86::time
 {
-
 
 void init_timers();
 void init_after_lapic();

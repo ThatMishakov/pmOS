@@ -12,6 +12,7 @@
 #include "blockd.hh"
 #include <cinttypes>
 #include <sys/user.h>
+#include <cstring>
 
 extern pmos::Port cmd_port;
 

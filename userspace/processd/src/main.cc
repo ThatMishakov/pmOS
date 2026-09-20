@@ -58,14 +58,14 @@ pmos::PortDispatcher dispatcher(main_port);
 
 pmos::async::detached_task vfs_handle_messages();
 
-void sigaction_reply(pmos::Right reply_right, int result, uint32_t sa_flags = 0, uint32_t sa_handler = 0, uint64_t sa_restorer = 0, uint64_t sa_mask = 0)
+void sigaction_reply(pmos::Right reply_right, int result, uint32_t sa_flags = 0, uint32_t sa_handler_ = 0, uint64_t sa_restorer = 0, uint64_t sa_mask = 0)
 {
     IPC_Sigaction_Reply reply = {
         .type = IPC_Sigaction_Reply_NUM,
         .flags = 0,
         .result = result,
         .old_sa_flags = sa_flags,
-        .old_sa_handler = sa_handler,
+        .old_sa_handler = sa_handler_,
         .old_sa_restorer = sa_restorer,
         .old_sa_mask = sa_mask
     };
@@ -87,14 +87,14 @@ void sigaction_handle(std::shared_ptr<Process> process, pmos::Right reply_right,
     auto sigaction = process->sigactions[num];
     if (msg->flags & SIGACTION_FLAG_SET) {
         process->sigactions[num] = {
-            .sa_handler = msg->sa_handler_,
+            .sa_handler_ = msg->sa_handler_,
             .sa_restorer = msg->sa_restorer,
             .sa_mask = msg->sa_mask,
             .sa_flags = msg->sa_flags,
         };
     }
 
-    sigaction_reply(std::move(reply_right), 0, sigaction.sa_flags, sigaction.sa_handler, sigaction.sa_restorer, sigaction.sa_mask);
+    sigaction_reply(std::move(reply_right), 0, sigaction.sa_flags, sigaction.sa_handler_, sigaction.sa_restorer, sigaction.sa_mask);
 }
 
 pmos::async::detached_task handle_process_messages(pmos::ReceiveRight rr, std::shared_ptr<Process> process)
@@ -271,7 +271,11 @@ void parse_args(int argc, char *argv[])
         .result = 0,
     };
 
-    send_message_right_one(pr.value(), reply, {}, true, std::move(send_right));
+    auto r = send_message_right_one(pr.value(), reply, {}, true, std::move(send_right));
+    if (!r) {
+        kernelLogger() << "processd: Error " << r.error() << " sending message to right " << pr.value().get() << " for bootstrapd\n" << frg::endlog;
+        return;
+    }
 }
 
 int main(int argc, char *argv[])
@@ -281,6 +285,6 @@ int main(int argc, char *argv[])
 
     // get_messages();
     // vfs_handle_messages();
-    dispatcher.dispatch();
+    (void)dispatcher.dispatch();
     return 0;
 }

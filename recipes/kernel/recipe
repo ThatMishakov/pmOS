@@ -1,6 +1,5 @@
 #!/bin/sh
 
-name=kernel
 version=0.0.1
 revision=1
 

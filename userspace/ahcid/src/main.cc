@@ -802,7 +802,7 @@ int main(int argc, char **argv)
     ahci_handle();
     ahci_controller_main();
 
-    dispatcher.dispatch();
+    dispatcher.dispatch().value();
 
     printf("!!! ahcid: Exiting... !!!\n");
 }

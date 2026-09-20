@@ -5,30 +5,17 @@ if(NOT DEFINED TARGET_ARCH)
 endif()
 
 # This is hacky...
-set(CMAKE_TRY_COMPILE_TARGET_TYPE "STATIC_LIBRARY")
 set(BUILD_TESTING OFF CACHE BOOL "Disable tests for bootstrapd dependencies" FORCE)
 
-set(TOOLCHAIN_PREFIX "${TARGET_ARCH}-pmos")
-
-SET(CMAKE_C_COMPILER_TARGET ${TOOLCHAIN_PREFIX})
-SET(CMAKE_ASM_COMPILER_TARGET ${TOOLCHAIN_PREFIX})
-SET(CMAKE_CXX_COMPILER_TARGET ${TOOLCHAIN_PREFIX})
-
-set(CMAKE_C_COMPILER "clang")
-set(CMAKE_CXX_COMPILER "clang++")
-set(CMAKE_ASM_COMPILER "clang")
-set(CMAKE_AR "llvm-ar")
-
-set(CMAKE_CXX_FLAGS "-Wall -Wextra -O1 -pipe")
-set(CMAKE_C_FLAGS "-Wall -Wextra -O1 -pipe")
-
-get_filename_component(ABSPATH "${CMAKE_CURRENT_LIST_FILE}" PATH)
-set(CMAKE_SYSROOT "${ABSPATH}/../sysroot" CACHE PATH "System root for cross-compilation")
+set(CMAKE_CXX_FLAGS "-Wall -Wextra -O2 -pipe")
+set(CMAKE_C_FLAGS "-Wall -Wextra -O2 -pipe")
 
 project(bootstrapd C CXX ASM)
 
 set(CMAKE_BUILD_TYPE Debug)
 set(CMAKE_EXE_LINKER_FLAGS "-static")
+
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 
 file(GLOB_RECURSE GENERIC_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cc"

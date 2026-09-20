@@ -1,15 +1,14 @@
 #!/bin/sh
 
-name=devicesd
 version=0.0.1
 revision=1
 
 source_dir=userspace/devicesd
-deps="mlibc mlibc-headers libcxx pmos-containers pmos-helpers"
-hostdeps="clang compiler-rt"
+deps="mlibc mlibc-headers pmos-containers pmos-helpers"
+hostdeps="$TOOLCHAIN_DEPS $CXX_DEPS"
 
 configure() {
-    cmake -S ${source_dir} -DTARGET_ARCH=${JINX_ARCH} -DCMAKE_SYSROOT=${sysroot}
+    cmake_configure
 }
 
 build() {

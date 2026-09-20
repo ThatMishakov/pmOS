@@ -1,17 +1,16 @@
 #!/bin/sh
 
-name=pmos-helpers
 version=0.1
 revision=1
 
 imagedeps="make cmake"
 
 source_dir=libs/pmos-helpers
-deps="mlibc-headers mlibc libcxx pmos-containers"
-hostdeps="clang compiler-rt"
+deps="mlibc-headers mlibc pmos-containers"
+hostdeps="$TOOLCHAIN_DEPS $CXX_DEPS"
 
 configure() {
-    cmake -S ${source_dir} -DSYSROOT=${sysroot} -DTARGET_ARCH=${JINX_ARCH}
+    cmake_configure
 }
 
 build() {

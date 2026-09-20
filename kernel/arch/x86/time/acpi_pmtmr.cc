@@ -3,12 +3,14 @@
 #include <uacpi/acpi.h>
 #include <uacpi/tables.h>
 #include <kern_logger/kern_logger.hh>
-#include "timers.hh"
+#include "x86_timers.hh"
+#include <time/timers.hh>
 #include <utils.hh>
 #include <x86_utils.hh>
 #include <sched/sched.hh>
 
 using namespace kernel::x86::time;
+using namespace kernel::time;
 
 namespace kernel::x86::acpi_pmtmr {
 

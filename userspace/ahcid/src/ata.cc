@@ -1,4 +1,6 @@
 #include "ata.hh"
+#include <stdexcept>
+#include <cstring>
 
 std::string IDENTIFYData::get_model() const
 {

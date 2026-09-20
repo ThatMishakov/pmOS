@@ -1,15 +1,14 @@
 #!/bin/sh
 
-name=i8042
 version=0.0.1
 revision=1
 
 source_dir=userspace/i8042
-deps="mlibc mlibc-headers libcxx pmos-helpers"
-hostdeps="clang compiler-rt"
+deps="mlibc mlibc-headers pmos-helpers"
+hostdeps="$TOOLCHAIN_DEPS $CXX_DEPS"
 
 configure() {
-    cmake -S ${source_dir} -DTARGET_ARCH=${JINX_ARCH} -DCMAKE_SYSROOT=${sysroot}
+    cmake_configure
 }
 
 build() {

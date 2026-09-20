@@ -1,15 +1,14 @@
 #!/bin/sh
 
-name=tests
 version=0.0.1
 revision=1
 
 source_dir=userspace/tests
-deps="mlibc mlibc-headers libcxx pmoscxx"
-hostdeps="clang compiler-rt"
+deps="mlibc mlibc-headers pmoscxx"
+hostdeps="$TOOLCHAIN_DEPS $CXX_DEPS"
 
 configure() {
-    cmake -S ${source_dir} -DTARGET_ARCH=${JINX_ARCH} -DCMAKE_SYSROOT=${sysroot}
+    cmake_configure
 }
 
 build() {

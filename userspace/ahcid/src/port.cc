@@ -6,6 +6,7 @@
 #include <cinttypes>
 #include <sched.h>
 #include <stdio.h>
+#include <cstring>
 
 pmos::async::task<Command> Command::prepare(AHCIPort &port)
 {

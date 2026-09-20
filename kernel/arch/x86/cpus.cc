@@ -6,6 +6,7 @@
 #include <sched/sched.hh>
 #include <x86_utils.hh>
 #include <time/timers.hh>
+#include <time/x86_timers.hh>
 
 using namespace kernel;
 using namespace kernel::sched;

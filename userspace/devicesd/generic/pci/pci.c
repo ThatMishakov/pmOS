@@ -87,7 +87,7 @@ void parse_interrupt_table(struct PCIHostBridge *g, int bus, uacpi_pci_routing_t
 void check_function(struct PCIHostBridge *g, uint8_t bus, uint8_t device, uint8_t function,
                     struct PCIDevice *parent_bridge, uacpi_namespace_node *node)
 {
-    struct PCIDevicePtr p;
+    struct PCIDevicePtr p = {};
     fill_device(&p, g, bus, device, function);
     printf("!! PCI group %i bus %i device %i function %i vendor %x device %x", g->group_number, bus,
            device, function, pci_vendor_id(&p), pci_device_id(&p));
@@ -1082,6 +1082,7 @@ void request_pci_interrupt(Message_Descriptor *msg, IPC_Register_PCI_Interrupt *
     uint32_t vector = 0;
     bool active_low = false;
     bool level_trig = false;
+    right_request_t irq_right = {};
 
     message_extra_t extra = {0};
 
@@ -1107,7 +1108,7 @@ void request_pci_interrupt(Message_Descriptor *msg, IPC_Register_PCI_Interrupt *
     if (level_trig)
         flags |= PMOS_INTERRUPT_LEVEL_TRIG;
 
-    right_request_t irq_right = allocate_interrupt(vector, flags);
+    irq_right = allocate_interrupt(vector, flags);
     if (irq_right.result != 0) {
         fprintf(stderr, "Failed to allocate interrupt for GSI %u: %i (%s)\n", vector, (int)irq_right.result,
                strerror(-irq_right.result));

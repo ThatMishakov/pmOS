@@ -2,17 +2,19 @@
 #include <sched/sched.hh>
 #include <kern_logger/kern_logger.hh>
 #include <x86_asm.hh>
-#include "timers.hh"
+#include "x86_timers.hh"
 #include "acpi_pmtmr.hh"
 #include "hpet.hh"
 #include "tsc.hh"
 #include "kvmclock.hh"
+#include <time/timers.hh>
 
 using namespace kernel::sched;
 using namespace kernel;
 using namespace kernel::x86::interrupts::lapic;
 using namespace kernel::x86::time;
 using namespace kernel::x86;
+using namespace kernel::time;
 
 u64 kernel::sched::ticks_since_bootup = 0;
 void start_timer_ticks(u32 ticks)
@@ -37,16 +39,31 @@ extern u64 boot_tsc;
 
 u64 CPU_Info::ticks_after_ms(u64 ms) { return ticks_after_ns(ms * 1'000'000); }
 
-void kernel::sched::maybe_rearm_timer(u64 deadline_nanoseconds)
-{
-    auto c = get_cpu_struct();
-    if (c->local_timer_next_deadline != 0 and (c->local_timer_next_deadline < deadline_nanoseconds))
-        return;
-
-    c->local_timer_next_deadline = deadline_nanoseconds;
-    if (tsc::use_tsc_deadline()) {
+struct TscTimer final: kernel::time::LocalTimer {
+    virtual void set_deadline(u64 deadline_nanoseconds) override
+    {
         arm_tsc_deadline(tsc::tsc_freq * deadline_nanoseconds);
-    } else {
+    }
+
+    virtual void cancel_deadline() override
+    {
+        arm_tsc_deadline(0);
+    }
+
+    virtual void init_as_main() override
+    {
+    }
+
+    virtual const char *name() const override
+    {
+        return "TSC Deadline";
+    }
+};
+TscTimer tsc_timer;
+
+struct LapicTimer final: kernel::time::LocalTimer {
+    virtual void set_deadline(u64 deadline_nanoseconds) override
+    {
         auto current_time = get_ns_since_bootup();
 
         if (current_time > deadline_nanoseconds) {
@@ -61,9 +78,24 @@ void kernel::sched::maybe_rearm_timer(u64 deadline_nanoseconds)
             apic_one_shot_ticks((u32)time);
         }
     }
-}
 
-void time::init_timers()
+    virtual void cancel_deadline() override
+    {
+        apic_one_shot_ticks(0);
+    }
+
+    virtual void init_as_main() override
+    {
+    }
+
+    virtual const char *name() const override
+    {
+        return "APIC One-Shot";
+    }
+};
+LapicTimer lapic_timer;
+
+void kernel::x86::time::init_timers()
 {
     // The timers are initialized, from worst to best, and set the kernel timeosource and cal
     // source as they do...
@@ -72,6 +104,11 @@ void time::init_timers()
     tsc::init_tsc();
     //kvmclock::init_kvmclock();
 
+    if (tsc::use_tsc_deadline())
+        kernel_local_timer = &tsc_timer;
+    else
+        kernel_local_timer = &lapic_timer;
+
     if (!kernel_timesource)
         panic("No kernel timesource!\n");
 
@@ -79,7 +116,7 @@ void time::init_timers()
     log::global_logger.printf("Using %s as the kernel time source...\n", kernel_timesource->name());
 }
 
-void time::init_after_lapic()
+void x86::time::init_after_lapic()
 {
     assert(kernel_timesource);
     kernel_timesource->init_as_main();

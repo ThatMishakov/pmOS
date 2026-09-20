@@ -108,7 +108,7 @@ static void *interrupt_thread(void *d)
     }
 
     right_request_t interrupt = set_up_gsi(irq->gsi, irq->active_low, irq->level_trigger, p.port);
-    if (interrupt.result < 0) {
+    if (interrupt.result) {
         printf("Failed to set up GSI\n");
         return NULL;
     }
@@ -144,7 +144,7 @@ static uacpi_iteration_decision find_ged_resources(void *ctx, uacpi_resource *re
     switch (resource->type) {
     case UACPI_RESOURCE_TYPE_IRQ: {
         uacpi_resource_irq *acpi_irq     = &resource->irq;
-        irq = calloc(sizeof(irq), 1);
+        irq = calloc(1, sizeof(*irq));
         if (!irq)
             return UACPI_ITERATION_DECISION_CONTINUE;
 
@@ -162,7 +162,7 @@ static uacpi_iteration_decision find_ged_resources(void *ctx, uacpi_resource *re
     case UACPI_RESOURCE_TYPE_EXTENDED_IRQ: {
         uacpi_resource_extended_irq *acpi_irq = &resource->extended_irq;
         
-        irq = calloc(sizeof(irq), 1);
+        irq = calloc(1, sizeof(*irq));
         if (!irq)
             return UACPI_ITERATION_DECISION_CONTINUE;
 
@@ -205,7 +205,7 @@ static int match_ged(uacpi_namespace_node *node, uacpi_namespace_node_info *)
     printf("Found GED\n");
     struct ged_device *device = NULL;
 
-    device = calloc(sizeof(struct ged_device), 1);
+    device = calloc(1, sizeof(struct ged_device));
     if (!device) {
         printf("Failed to allocate memory for GED\n");
         goto fail;

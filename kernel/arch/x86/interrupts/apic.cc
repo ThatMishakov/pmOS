@@ -46,6 +46,7 @@
 #include <uacpi/acpi.h>
 #include <uacpi/tables.h>
 #include <time/tsc.hh>
+#include <time/x86_timers.hh>
 #include <time/timers.hh>
 
 using namespace kernel;
@@ -304,7 +305,7 @@ void discover_apic_freq()
     // TODO: APIC timer has a flag indicating it stops in C states on some system, use HPET instead in those cases...
     // (but this was not yet implemented by the kernel, so don't bother...)
 
-    if (!time::kernel_calibration_source)
+    if (!kernel::time::kernel_calibration_source)
         panic("No calibration source for LAPIC timer!");
 
     // Enable APIC Timer and map to dummy ISR
@@ -313,14 +314,14 @@ void discover_apic_freq()
     // Set up divide value to 16
     apic_write_reg(APIC_REG_TMRDIV, 0x03);
 
-    time::kernel_calibration_source->prepare_for_calibration();
+    kernel::time::kernel_calibration_source->prepare_for_calibration();
     // Reset APIC counter
     apic_write_reg(APIC_REG_TMRINITCNT, (u32)-1);
 
-    serial_logger.printf("[Kernel] Calibrating LAPIC with %s...\n", time::kernel_calibration_source->name());
+    serial_logger.printf("[Kernel] Calibrating LAPIC with %s...\n", kernel::time::kernel_calibration_source->name());
 
     constexpr u64 wait_time_ns = 10'000'000; // 10ms
-    u64 actual_time = time::kernel_calibration_source->wait_for_nanoseconds(wait_time_ns);
+    u64 actual_time = kernel::time::kernel_calibration_source->wait_for_nanoseconds(wait_time_ns);
 
     // Get how many ticks have passed
     u32 ticks   = -apic_read_reg(APIC_REG_TMRCURRCNT);

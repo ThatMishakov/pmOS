@@ -1,5 +1,6 @@
 #include <pmos/ipc/bus_object.hh>
 #include <system_error>
+#include <cstring>
 
 template<class... Ts>
 struct overloads : Ts... { using Ts::operator()...; };

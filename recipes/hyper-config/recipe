@@ -1,6 +1,5 @@
 #!/bin/sh
 
-name=hyper-config
 version=1
 revision=1
 

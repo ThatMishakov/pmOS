@@ -1,10 +1,11 @@
 #include "tsc.hh"
-#include "timers.hh"
+#include "x86_timers.hh"
 #include <interrupts/apic.hh>
 #include <types.hh>
 #include <x86_asm.hh>
 #include <x86_utils.hh>
 #include <kern_logger/kern_logger.hh>
+#include <time/timers.hh>
 
 extern bool have_invariant_tsc;
 extern u64 boot_tsc;
@@ -12,13 +13,14 @@ extern bool have_tsc_deadline;
 
 
 using namespace kernel::x86;
+using namespace kernel::time;
 
 namespace kernel::x86::tsc {
 
 FreqFraction tsc_freq;
 FreqFraction tsc_inverted_freq;
 
-struct TscSource final : time::TimeSource {
+struct TscSource final : TimeSource {
     virtual u64 get_absolute_time() const override;
     virtual const char *name() const override;
     virtual void init_as_main() override;
@@ -41,13 +43,13 @@ void init_tsc()
     if (!have_invariant_tsc)
         return;
 
-    time::kernel_timesource = &tscc;
+    kernel_timesource = &tscc;
 }
 
 
 bool use_tsc_deadline()
 {
-    return have_tsc_deadline and time::kernel_timesource == &tscc;
+    return have_tsc_deadline and kernel_timesource == &tscc;
 }
 
 bool tsc_calibrated = false;
@@ -89,17 +91,17 @@ void calibrate_tsc()
         return;
     }
 
-    if (!time::kernel_calibration_source)
+    if (!kernel_calibration_source)
         // If TSC was chosen and can't be calibrated, then hpet, lapic and other clocks are not usable either
         panic("No calibration source for TSC!");
 
-    log::serial_logger.printf("Calibrating TSC with %s...\n", time::kernel_calibration_source->name());
+    log::serial_logger.printf("Calibrating TSC with %s...\n", kernel_calibration_source->name());
 
     constexpr u64 cal_time = 10'000'000; // 10ms
 
-    time::kernel_calibration_source->prepare_for_calibration();
+    kernel_calibration_source->prepare_for_calibration();
     u64 tsc_start = rdtsc();
-    u64 actual_time = time::kernel_calibration_source->wait_for_nanoseconds(cal_time);
+    u64 actual_time = kernel_calibration_source->wait_for_nanoseconds(cal_time);
     u64 tsc_end = rdtsc();
 
     tsc_freq          = computeFreqFraction(tsc_end - tsc_start, actual_time);
@@ -107,7 +109,7 @@ void calibrate_tsc()
 
     tsc_calibrated = true;
 
-    log::global_logger.printf("[Kernel] Info: TSC frequency: %li, calibrated with %s\n", tsc_freq * 1'000'000'000, time::kernel_calibration_source->name());
+    log::global_logger.printf("[Kernel] Info: TSC frequency: %li, calibrated with %s\n", tsc_freq * 1'000'000'000, kernel_calibration_source->name());
     log::serial_logger.printf("[Kernel] Info: TSC ticks per 1ms: %lu, calibrated over %lu ns\n", tsc_freq * 1'000'000, actual_time);
 }
 

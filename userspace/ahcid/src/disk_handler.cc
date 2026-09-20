@@ -10,6 +10,7 @@
 #include <pmos/utility/scope_guard.hh>
 #include <system_error>
 #include <unordered_map>
+#include <cstring>
 
 extern pmos::PortDispatcher dispatcher;
 extern pmos::Port cmd_port;

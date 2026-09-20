@@ -1,6 +1,5 @@
 #!/bin/sh
 
-name=hyper
 version=0.10.0
 revision=0
 

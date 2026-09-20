@@ -1,6 +1,5 @@
 #!/bin/sh
 
-name=mlibc
 version=0.0.1
 revision=1
 

@@ -177,7 +177,7 @@ int register_right(const char *name, size_t name_length, pmos_right_t right)
             goto error;
         }
 
-        node = calloc(sizeof(*node), 1);
+        node = calloc(1, sizeof(*node));
         if (!node) {
             result = -ENOMEM;
             goto error;
@@ -213,7 +213,7 @@ int request_port_callback(const char *name, size_t name_length, register_callbac
             }
         }
 
-        struct CallBackNode *cnode = calloc(sizeof(*cnode), 1);
+        struct CallBackNode *cnode = calloc(1, sizeof(*cnode));
         if (!cnode)
             return -ENOMEM;
 
@@ -233,13 +233,13 @@ int request_port_callback(const char *name, size_t name_length, register_callbac
             goto error;
         }
 
-        node = calloc(sizeof(*node), 1);
+        node = calloc(1, sizeof(*node));
         if (!node) {
             result = -ENOMEM;
             goto error;
         }
 
-        cnode = calloc(sizeof(*cnode), 1);
+        cnode = calloc(1, sizeof(*cnode));
         if (!cnode) {
             result = -ENOMEM;
             goto error;
@@ -335,7 +335,7 @@ void request_port_message(const char *name, size_t name_length, int flags, pmos_
             }
         }
 
-        struct CallBackNode *cnode = calloc(sizeof(*cnode), 1);
+        struct CallBackNode *cnode = calloc(1, sizeof(*cnode));
         if (!cnode) {
             name_port_reply_error(reply_right, -ENOMEM, name, name_length);
             return;
@@ -355,13 +355,13 @@ void request_port_message(const char *name, size_t name_length, int flags, pmos_
             goto error;
         }
 
-        node = calloc(sizeof(*node), 1);
+        node = calloc(1, sizeof(*node));
         if (!node) {
             result = -ENOMEM;
             goto error;
         }
 
-        cnode = calloc(sizeof(*cnode), 1);
+        cnode = calloc(1, sizeof(*cnode));
         if (!cnode) {
             result = -ENOMEM;
             goto error;

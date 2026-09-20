@@ -25,6 +25,8 @@
 #include <pmos/ipc/bus_object.hh>
 #include <pmos/fs_properties.hh>
 #include <sys/user.h>
+#include <memory>
+#include <cstring>
 
 using namespace pmos;
 using namespace pmos::ipc;
@@ -503,7 +505,7 @@ pmos::async::detached_task probe_partitions(size_t disk_idx)
             printf("Partition %i: type %x, start %" PRIu32 ", size %" PRIu32 "\n", i, part.type,
                    part.lba_start, part.num_sectors);
 
-            partitions.push_back(std::make_shared<Partition>(part.lba_start, part.lba_start + part.num_sectors));
+            partitions.push_back(std::make_shared<Partition>(part.lba_start + 0, part.lba_start + part.num_sectors));
         }
         disk.partitions = std::move(partitions);
     }

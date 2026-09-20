@@ -5,11 +5,13 @@
 #include <memory/vmm.hh>
 #include <pmos/utility/scope_guard.hh>
 #include <pmos/io.h>
-#include "timers.hh"
+#include "x86_timers.hh"
+#include <time/timers.hh>
 #include <x86_utils.hh>
 
 using namespace kernel;
 using namespace kernel::x86::time;
+using namespace kernel::time;
 
 namespace kernel::x86::hpet {
 

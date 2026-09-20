@@ -1,6 +1,5 @@
 #!/bin/sh
 
-name=hyper-disk-image
 version=1
 revision=1
 

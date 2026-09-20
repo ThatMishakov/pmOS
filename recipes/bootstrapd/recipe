@@ -1,18 +1,17 @@
 #!/bin/sh
 
-name=bootstrapd
 version=0.0.1
 revision=1
 
 source_dir=userspace/bootstrapd
 deps="mlibc mlibc-headers pmos-helpers"
-hostdeps="clang compiler-rt"
+hostdeps="$TOOLCHAIN_DEPS $CXX_DEPS"
 allow_network=yes
 
 # TODO: Move libyaml to a separate recipe
 
 configure() {
-    cmake -S ${source_dir} -DTARGET_ARCH=${JINX_ARCH} -DCMAKE_SYSROOT=${sysroot} -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+    cmake_configure
 }
 
 build() {

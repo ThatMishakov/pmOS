@@ -13,7 +13,7 @@ public:
     struct promise_type {
         struct final_awaiter {
             constexpr bool await_ready() const noexcept { return false; }
-            std::coroutine_handle<> await_suspend(std::coroutine_handle<promise_type> h)
+            std::coroutine_handle<> await_suspend(std::coroutine_handle<promise_type> h) noexcept
             {
                 return h.promise().continuation;
             }
@@ -50,7 +50,7 @@ public:
     {
     public:
         constexpr bool await_ready() const noexcept { return false; }
-        std::coroutine_handle<> await_suspend(std::coroutine_handle<> h)
+        std::coroutine_handle<> await_suspend(std::coroutine_handle<> h) noexcept
         {
             h_.promise().continuation = h;
             return h_;
@@ -86,7 +86,7 @@ public:
     struct promise_type {
         struct final_awaiter {
             constexpr bool await_ready() const noexcept { return false; }
-            std::coroutine_handle<> await_suspend(std::coroutine_handle<promise_type> h)
+            std::coroutine_handle<> await_suspend(std::coroutine_handle<promise_type> h) noexcept
             {
                 return h.promise().continuation;
             }
@@ -112,7 +112,7 @@ public:
     {
     public:
         constexpr bool await_ready() const noexcept { return false; }
-        std::coroutine_handle<> await_suspend(std::coroutine_handle<> h)
+        std::coroutine_handle<> await_suspend(std::coroutine_handle<> h) noexcept
         {
             h_.promise().continuation = h;
             return h_;

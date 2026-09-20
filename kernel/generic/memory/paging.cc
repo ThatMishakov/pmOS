@@ -707,3 +707,8 @@ void Page_Table::atomic_push_blocked_task(proc::TaskDescriptor *task, const void
 {
     panic("atomic_push_blocked_page() not implemented");
 }
+
+void Page_Table::invalidate(TLBShootdownContext &ctx, void *virt_addr, bool free)
+{
+    return invalidate_range(ctx, virt_addr, PAGE_SIZE, free);
+}
