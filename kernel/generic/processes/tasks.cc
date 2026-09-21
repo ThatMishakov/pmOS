@@ -1029,6 +1029,7 @@ static void timer_continuation(TaskDescriptor *task)
 
     auto result = task->timer_push();
     assert(result);
+    (void)result;
 }
 
 bool TaskDescriptor::timer_push()

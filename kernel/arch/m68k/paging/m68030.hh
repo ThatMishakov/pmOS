@@ -30,6 +30,9 @@ kresult_t m68030_unmap_kernel_page(kernel::paging::TLBShootdownContext &ctx, voi
 kresult_t m68030_map_page(kernel::paging::ptable_top_ptr_t page_table, phys_addr_t phys_addr, void *virt_addr,
                    kernel::paging::Page_Table_Arguments arg);
 
+void m68030_invalidate_range(phys_addr_t page_table, kernel::paging::TLBShootdownContext &ctx, void *virt_addr, size_t size_bytes,
+                                  bool free);
+
 u32 m68030_kernel_page_table();
 
 } // namespace kernel::m68k::paging

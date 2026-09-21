@@ -2,34 +2,14 @@
 #include <cpu.hh>
 #include <pmos/containers/map.hh>
 #include "m68030.hh"
+#include <asm.hh>
 
 namespace {
-
-void flush_i_d()
-{
-    asm("movec %%cacr, %%d0\n\t"
-        "oriw %0,%%d0\n\t"
-        "movec %%d0,%%cacr"
-        :
-        : "i"(0x808)
-        : "d0", "memory");
-}
 
 // void flush_tlb()
 // {
 //     asm("pflusha");
 // }
-
-void flush_m68020(void *virt_addr)
-{
-    register void *a0 asm("%a0") = virt_addr;
-
-    asm(".word 0xf010, 0x0810\n\t" // pflush #7, #7, (A0)
-        "nop\n\t"
-        :
-        : "r"(a0)
-        : "memory");
-}
 
 void flush_m68040(void *virt_addr)
 {
@@ -49,7 +29,7 @@ void kernel::paging::invalidate_tlb_kernel(void *addr)
     switch (kernel::m68k::cpu_kind) {
     case kernel::m68k::CpuKind::M68020:
     case kernel::m68k::CpuKind::M68030:
-        flush_m68020(addr);
+        flush_m68030(addr);
         flush_i_d();
         break;
     default:
@@ -63,7 +43,7 @@ void kernel::paging::invalidate_tlb_kernel(void *addr, size_t size)
     case kernel::m68k::CpuKind::M68020:
     case kernel::m68k::CpuKind::M68030:
         for (phys_addr_t i = 0; i < size; i += PAGE_SIZE)
-            flush_m68020((void *)((char *)addr + i));
+            flush_m68030((void *)((char *)addr + i));
 
         flush_i_d();
         break;

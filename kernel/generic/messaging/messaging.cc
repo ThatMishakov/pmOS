@@ -427,8 +427,10 @@ static rights_array empty_rights = {};
 
 const GenericMessage::rights_array &GenericMessage::get_rights() const
 {
-    for (auto &i: empty_rights)
+    for (auto &i: empty_rights) {
         assert(!i && "Non-nullptr in empty rights array!");
+        (void)i;
+    }
     
     return empty_rights;
 }
@@ -438,8 +440,10 @@ GenericMessage::rights_array &GenericMessage::get_rights()
     // This is fine for concurrent calls, since everything should check that rights are not nullptr anyway, so
     // this array would never be modified
 
-    for (auto &i: empty_rights)
+    for (auto &i: empty_rights) {
         assert(!i && "Non-nullptr in empty rights array!");
+        (void)i;
+    }
 
     return empty_rights;
 }

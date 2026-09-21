@@ -1,5 +1,7 @@
 #include "m68030.hh"
 #include <pmos/utility/scope_guard.hh>
+#include <algorithm>
+#include <asm.hh>
 
 
 static constexpr u32 DESCRIPTOR_INVALID = 0x0;
@@ -161,6 +163,131 @@ klib::shared_ptr<Page_Table> M68030PageTable::create_clone()
 {
     // TODO
     return {};
+}
+
+kresult_t M68030PageTable::map(phys_addr_t page_addr, void *virt_addr, Page_Table_Arguments arg)
+{
+    return m68030_map_page(table_root, page_addr, virt_addr, arg);
+}
+
+template <typename T>
+static T alignup(T value, size_t alignment)
+{
+    return (value + alignment - 1) & ~(alignment - 1);
+}
+
+void m68030_invalidate_range(phys_addr_t page_table, kernel::paging::TLBShootdownContext &ctx, void *virt_addr, size_t size_bytes,
+                                  bool free)
+{
+    assert(!(reinterpret_cast<uintptr_t>(virt_addr) & ~ACTUAL_MASK));
+    assert(!(size_bytes & ~ACTUAL_MASK));
+
+    u32 limit        = u32(virt_addr) + size_bytes;
+    u32 first_a_idx = (u32(virt_addr) >> 22) & 0x3FF;
+    u32 end_aligned  = alignup((u32(virt_addr) + size_bytes), 22);
+    u32 last_idx     = (end_aligned >> 22) & 0x3FF;
+    if (last_idx == 0 && end_aligned != (u32)virt_addr)
+        last_idx = 1024;
+
+    kernel::paging::Temp_Mapper_Obj<u32> mapper(kernel::paging::request_temp_mapper());
+    auto top = mapper.map(page_table);
+
+    for (u32 i = first_a_idx; i < last_idx; ++i) {
+        auto a_entry = __atomic_load_n(top + i, __ATOMIC_RELAXED);
+        if ((a_entry & DESCRIPTOR_TYPE) != DESCRIPTOR_SHORT) {
+            continue;
+        }
+
+        kernel::paging::Temp_Mapper_Obj<u32> b_mapper(kernel::paging::request_temp_mapper());
+        auto b_table = b_mapper.map(a_entry & TABLE_MASK);
+
+        i32 a_addr = (i << 22);
+        u32 start_idx = a_addr > (u32)virt_addr ? 0 : ((u32)virt_addr >> 12) & 0x3FF;
+        u32 end_idx = (limit == 0 && virt_addr != nullptr) or
+                      (last_idx == 1024 and i != 1023) or
+                      ((limit >= 0x400000) and (a_addr >= limit - 0x400000))
+                      ? 1024
+                      : (limit >> 12) & 0x3FF;
+
+        for (unsigned j = start_idx; j < end_idx; ++j) {
+            auto b_entry = __atomic_load_n(b_table + j, __ATOMIC_RELAXED);
+            if ((b_entry & DESCRIPTOR_TYPE) != DESCRIPTOR_PAGE) {
+                continue;
+            }
+
+            __atomic_store_n(b_table + j, 0, __ATOMIC_RELEASE);
+            ctx.invalidate_page((void *)(a_addr + (j << 12)));
+            if (free)
+                pmm::free_memory_for_kernel(b_entry & PAGE_MASK, 1);
+        }
+    }
+}
+
+void M68030PageTable::invalidate_range(kernel::paging::TLBShootdownContext &ctx, void *virt_addr, size_t size_bytes,
+                                  bool free)
+{
+    m68030_invalidate_range(table_root, ctx, virt_addr, size_bytes, free);
+}
+
+void M68030PageTable::invalidate_tlb(void *page)
+{
+    m68030_flush_user_page(page);
+    flush_i_d();
+}
+
+void M68030PageTable::invalidate_tlb(void *start, size_t size)
+{
+    for (phys_addr_t i = 0; i < size; i += PAGE_SIZE)
+        m68030_flush_user_page((void *)((char *)start + i));
+    flush_i_d();
+}
+
+void M68030PageTable::tlb_flush_all()
+{
+    m68030_flush_user_all();
+    flush_i_d();
+}
+
+Page_Info M68030PageTable::get_page_mapping(void *virt_addr) const
+{
+    assert(!(reinterpret_cast<uintptr_t>(virt_addr) & ~ACTUAL_MASK));
+
+    uintptr_t virt = reinterpret_cast<uintptr_t>(virt_addr);
+
+    kernel::paging::Temp_Mapper_Obj<u32> mapper(kernel::paging::request_temp_mapper());
+    auto top = mapper.map(table_root);
+
+    auto a_level = (virt >> 22) & 0x3ff;
+    auto b_level = (virt >> 12) & 0x3ff;
+
+    auto a_entry = __atomic_load_n(top + a_level, __ATOMIC_RELAXED);
+    if ((a_entry & DESCRIPTOR_TYPE) != DESCRIPTOR_SHORT) {
+        return {};
+    }
+
+    kernel::paging::Temp_Mapper_Obj<u32> b_mapper(kernel::paging::request_temp_mapper());
+    auto b_table = b_mapper.map(a_entry & TABLE_MASK);
+    auto b_entry = __atomic_load_n(b_table + b_level, __ATOMIC_RELAXED);
+    if ((b_entry & DESCRIPTOR_TYPE) != DESCRIPTOR_PAGE) {
+        return {};
+    }
+
+    Page_Info info{};
+    info.page_addr = b_entry & PAGE_MASK;
+    info.writeable = !(b_entry & WRITE_PROTECTED);
+    info.cache_policy =
+        (b_entry & CACHE_INHIBIT) ? kernel::paging::Memory_Type::MemoryNoCache : kernel::paging::Memory_Type::Normal;
+    info.user_access = true;
+    return info;
+}
+
+void M68030PageTable::apply()
+{
+    u64 root_pointer = table_root;
+    root_pointer |= (u64)DESCRIPTOR_SHORT << 32; 
+    root_pointer |= (u64)1024 << 48;
+
+    asm("pmove %0, %%crp" :: "m"(root_pointer) : "memory" );
 }
 
 } // namespace kernel::m68k::paging
