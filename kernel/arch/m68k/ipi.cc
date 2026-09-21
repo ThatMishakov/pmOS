@@ -20,3 +20,7 @@ void CPU_Info::ipi_tlb_shootdown()
 {
     assert(false && "IPI tlb shootdown not implemented for m68k");
 }
+
+void init_smp()
+{
+}

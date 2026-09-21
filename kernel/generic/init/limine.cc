@@ -27,7 +27,7 @@
  */
 
 // Nice code!
-#if defined(__x86_64__) || defined(__riscv) || defined(__loongarch64)
+#if defined(__x86_64__) || defined(__riscv) || defined(__loongarch64) || defined(__m68k__)
 
 
 #include "limine.h"
@@ -42,10 +42,14 @@
 #include <memory/mem_object.hh>
 #include <paging/arch_paging.hh>
 #include <processes/tasks.hh>
+
+#ifdef ENABLE_ACPI
 #include <uacpi/uacpi.h>
 #include <uacpi/event.h>
 #include <uacpi/uacpi.h>
 #include <uacpi/kernel_api.h>
+#endif
+
 #include "kernel_pages.hh"
 #include "common.hh"
 
@@ -110,22 +114,26 @@ extern void hcf();
 
 Direct_Mapper init_mapper;
 
+static Temp_Mapper *temp_temp_mapper = nullptr;
+
     // Temporary temporary mapper
     #ifdef __x86_64__
         #include <paging/x86_temp_mapper.hh>
         #include <x86_asm.hh>
 using Arch_Temp_Mapper = x86_64::paging::x86_PAE_Temp_Mapper;
-Arch_Temp_Mapper temp_temp_mapper;
+Arch_Temp_Mapper temp_temp_mapper_instance;
 
     #elif defined(__riscv)
         #include <paging/riscv64_temp_mapper.hh>
 using Arch_Temp_Mapper = kernel::riscv64::paging::RISCV64_Temp_Mapper;
-Arch_Temp_Mapper temp_temp_mapper;
+Arch_Temp_Mapper temp_temp_mapper_instance;
 
     #elif defined(__loongarch64)
         #include <paging/loong_temp_mapper.hh>
 
-    #endif
+    #elif defined(__m68k__)
+#include <paging/m68k_temp_mapper.hh>
+#endif
 
 u64 hhdm_offset = 0;
 
@@ -241,11 +249,20 @@ void construct_paging()
     riscv64::paging::idle_pt = kernel_ptable_top;
     #endif
 
-    #ifndef __loongarch64
+    #ifdef __loongarch64
+
+    #elif defined(__m68k__)
+    void *temp_mapper_start = vmm::kernel_space_allocator.virtmem_alloc_aligned(
+        16, 4); // 16 pages aligned to 16 pages boundary
+    temp_temp_mapper = kernel::m68k::paging::get_temp_temp_mapper(temp_mapper_start, kernel_ptable_top);
+    #else
     // Init temp mapper with direct map, while it is still available
     void *temp_mapper_start = vmm::kernel_space_allocator.virtmem_alloc_aligned(
         16, 4); // 16 pages aligned to 16 pages boundary
-    temp_temp_mapper = Arch_Temp_Mapper(temp_mapper_start, kernel_ptable_top);
+    temp_temp_mapper_instance = Arch_Temp_Mapper(temp_mapper_start, kernel_ptable_top);
+    // TODO: This stuff should really be unified between the boot protocols
+
+    temp_temp_mapper = &temp_temp_mapper_instance;
     #endif
 
     kernel_phys_base = kernel_address_request.response->physical_base;
@@ -257,7 +274,7 @@ void construct_paging()
 
     // Set up the right mapper (since there is no direct map anymore) and bitmap
     #ifndef __loongarch64
-    global_temp_mapper = &temp_temp_mapper;
+    global_temp_mapper = temp_temp_mapper;
     #else
     loongarch64::paging::set_dmws();
     global_temp_mapper = &loongarch64::paging::temp_mapper;
@@ -523,8 +540,10 @@ __attribute__((used)) limine_rsdp_request rsdp_request = {
     .response = nullptr,
 };
 
+
 void init_acpi()
 {
+#ifdef ENABLE_ACPI
     if (rsdp_request.response == nullptr) {
         serial_logger.printf("No RSDP found\n");
         return;
@@ -542,6 +561,7 @@ void init_acpi()
     serial_logger.printf("RSDP found at 0x%x\n", addr);
    
     init_acpi(addr);
+#endif
 }
 
 __attribute__((used)) limine_dtb_request dtb_request = {
@@ -565,10 +585,10 @@ void init_dtb()
     limine_dtb_response resp;
     copy_from_phys((u64)dtb_request.response - hhdm_offset, &resp, sizeof(resp));
 
-    u64 addr = (u64)resp.dtb_ptr - hhdm_offset;
+    phys_addr_t addr = (phys_addr_t)resp.dtb_ptr - hhdm_offset;
     serial_logger.printf("DTB found at 0x%x\n", addr);
 
-    init_dtb((u64)addr);
+    init_dtb(addr);
 }
 
 u64 bsp_cpu_id = 0;
@@ -619,7 +639,7 @@ void limine_main()
     init_dtb();
 
     // Init idle task page table
-    #ifndef __loongarch__
+    #if !defined(__loongarch__) && !defined(__m68k__)
     idle_page_table = Arch_Page_Table::capture_initial(kernel_ptable_top);
     #else
     idle_page_table = Arch_Page_Table::create_empty();

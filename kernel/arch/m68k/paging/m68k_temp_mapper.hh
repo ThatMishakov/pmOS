@@ -9,4 +9,6 @@ struct M68K_Temp_Mapper : public kernel::paging::Temp_Mapper {
     virtual void return_map(void *) override;
 };
 
+kernel::paging::Temp_Mapper *get_temp_temp_mapper(void *virt_addr, u32 kernel_ptable_top);
+
 } // namespace kernel::m68k::paging

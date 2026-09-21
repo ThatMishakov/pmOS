@@ -25,7 +25,7 @@ static u32 be32(u32 input)
 
 void *dtb_virt_base = nullptr;
 
-void init_dtb(u64 phys_addr)
+void init_dtb(phys_addr_t phys_addr)
 {
     fdt_header h;
     copy_from_phys(phys_addr, &h, sizeof(h));
