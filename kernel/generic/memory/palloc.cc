@@ -64,7 +64,7 @@ void *palloc(size_t number)
             // Unmap and free the allocated pages
             for (size_t j = 0; j < i; ++j) {
                 void *virt_addr = (void *)((u64)ptr + j * PAGE_SIZE);
-                unmap_kernel_page(ctx, virt_addr);
+                unmap_kernel_page(ctx, virt_addr, true);
             }
         }
 

@@ -554,15 +554,15 @@ kresult_t map_page(ptable_top_ptr_t page_table, u64 phys_addr, void *virt_addr,
                    Page_Table_Arguments arg);
 
 // Generic functions to map and release pages in kernel, using the active page table
-kresult_t map_kernel_page(u64 phys_addr, void *virt_addr, Page_Table_Arguments arg);
-kresult_t unmap_kernel_page(TLBShootdownContext &ctx, void *virt_addr);
-void unmap_kernel_pages(TLBShootdownContext &ctx, void *virt_addr, size_t size_bytes);
+kresult_t map_kernel_page(phys_addr_t phys_addr, void *virt_addr, Page_Table_Arguments arg);
+kresult_t unmap_kernel_page(TLBShootdownContext &ctx, void *virt_addr, bool free);
+void unmap_kernel_pages(TLBShootdownContext &ctx, void *virt_addr, size_t size_bytes, bool free);
 
 // Generic function to map multiple pages
-kresult_t map_pages(ptable_top_ptr_t page_table, u64 phys_addr, void *virt_addr, size_t size_bytes,
+kresult_t map_pages(ptable_top_ptr_t page_table, phys_addr_t phys_addr, void *virt_addr, size_t size_bytes,
                     Page_Table_Arguments arg);
-kresult_t map_kernel_pages(u64 phys_addr, void *virt_addr, size_t size, Page_Table_Arguments arg);
-kresult_t map_kernel_pages_overwrite(u64 phys_addr, void *virt_addr, size_t size, Page_Table_Arguments arg);
+kresult_t map_kernel_pages(phys_addr_t phys_addr, void *virt_addr, size_t size, Page_Table_Arguments arg);
+kresult_t map_kernel_pages_overwrite(phys_addr_t phys_addr, void *virt_addr, size_t size, Page_Table_Arguments arg);
 
 // Generic function to apply the page table to the current CPU
 void apply_page_table(ptable_top_ptr_t page_table);

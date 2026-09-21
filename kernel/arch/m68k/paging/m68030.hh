@@ -19,14 +19,17 @@ public:
 
     virtual void invalidate_range(kernel::paging::TLBShootdownContext &ctx, void *virt_addr, size_t size_bytes,
                                   bool free) override;
+
+    static klib::shared_ptr<M68030PageTable> create_empty(unsigned flags = 0);
+    virtual klib::shared_ptr<Page_Table> create_clone() override;
 private:
     u32 table_root = -1;
 };
 
-kresult_t m68030_map_kernel_page(phys_addr_t phys_addr, void *virt_addr, kernel::paging::Page_Table_Arguments arg);
-kresult_t m68030_unmap_kernel_page(kernel::paging::TLBShootdownContext &ctx, void *virt_addr);
-
+kresult_t m68030_unmap_kernel_page(kernel::paging::TLBShootdownContext &ctx, void *virt_addr, bool free);
 kresult_t m68030_map_page(kernel::paging::ptable_top_ptr_t page_table, phys_addr_t phys_addr, void *virt_addr,
                    kernel::paging::Page_Table_Arguments arg);
+
+u32 m68030_kernel_page_table();
 
 } // namespace kernel::m68k::paging

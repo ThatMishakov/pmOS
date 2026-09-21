@@ -56,6 +56,8 @@
 #elif defined(__riscv)
     #include <cpus/floating_point.hh>
     #include <paging/riscv64_temp_mapper.hh>
+#elif defined(__m68k__)
+    #include <paging/m68k_temp_mapper.hh>
 #elif defined(__loongarch64)
     struct EIOPIC;
 #endif
@@ -142,7 +144,8 @@ struct CPU_Info {
 #elif defined(__loongarch__)
     paging::Temp_Mapper &get_temp_mapper();
 #elif defined(__m68k__)
-    paging::Temp_Mapper &get_temp_mapper();
+    m68k::paging::M68K_Temp_Mapper *temp_mapper;
+    m68k::paging::M68K_Temp_Mapper &get_temp_mapper() { return *temp_mapper; }
 #endif
 
     constexpr static unsigned pthread_once_size                       = 16;

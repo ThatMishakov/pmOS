@@ -65,18 +65,24 @@ if (DEFINED ENABLE_DTB)
   add_compile_definitions(ENABLE_DTB)
 endif()
 
-include(${CMAKE_SOURCE_DIR}/uACPI/uacpi.cmake)
+if (DEFINED ENABLE_ACPI)
+  target_compile_definitions(kernel PRIVATE
+    ENABLE_ACPI
+  )
 
-target_sources(kernel PRIVATE
-  ${UACPI_SOURCES}
-)
+  include(${CMAKE_SOURCE_DIR}/uACPI/uacpi.cmake)
 
-target_include_directories(kernel PRIVATE
-  ${UACPI_INCLUDES}
-)
+  target_sources(kernel PRIVATE
+    ${UACPI_SOURCES}
+  )
 
-target_compile_definitions(kernel PRIVATE
-  UACPI_BAREBONES_MODE
-)
+  target_include_directories(kernel PRIVATE
+    ${UACPI_INCLUDES}
+  )
+
+  target_compile_definitions(kernel PRIVATE
+    UACPI_BAREBONES_MODE
+  )
+endif()
 
 install(TARGETS kernel RUNTIME DESTINATION "/boot")

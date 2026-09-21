@@ -392,7 +392,7 @@ void Page_Table::unblock_tasks(void *page)
     //     it->atomic_try_unblock_by_page(page);
 }
 
-kresult_t Page_Table::map(u64 page_addr, void *virt_addr) noexcept
+kresult_t Page_Table::map(phys_addr_t page_addr, void *virt_addr) noexcept
 {
     // auto it = get_region(virt_addr);
     // if (it == paging_regions.end())
@@ -667,10 +667,10 @@ pmos::containers::vector<MemoryRegion> kernel::paging::memory_map;
 
 bool Page_Table::is_mapped(void *ptr) const { return get_page_mapping(ptr).is_allocated; }
 
-void kernel::paging::unmap_kernel_pages(TLBShootdownContext &ctx, void *virt_addr, size_t size_bytes)
+void kernel::paging::unmap_kernel_pages(TLBShootdownContext &ctx, void *virt_addr, size_t size_bytes, bool free)
 {
     for (size_t i = 0; i < size_bytes; i += PAGE_SIZE)
-        unmap_kernel_page(ctx, (void *)((char *)virt_addr + i));
+        unmap_kernel_page(ctx, (void *)((char *)virt_addr + i), free);
 }
 
 bool kernel::paging::region_is_usable_ram(MemoryRegionType type)

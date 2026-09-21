@@ -1,5 +1,3 @@
-#include <uacpi/uacpi.h>
-#include <uacpi/kernel_api.h>
 #include <types.hh>
 #include <kern_logger/kern_logger.hh>
 #include <messaging/rights.hh>
@@ -7,8 +5,11 @@
 
 using namespace kernel::log;
 
-phys_addr_t rsdp                       = -1ULL;
+#if defined(ENABLE_ACPI)
+#include <uacpi/uacpi.h>
+#include <uacpi/kernel_api.h>
 
+phys_addr_t rsdp = -1ULL;
 uacpi_status uacpi_kernel_get_rsdp(uacpi_phys_addr *out_rsdp_address)
 {
     if (rsdp == RSDP_INITIALIZER)
@@ -48,6 +49,27 @@ void init_acpi(phys_addr_t rsdp_addr)
         }
     }
 }
+
+
+klib::unique_ptr<load_tag_generic> construct_load_tag_rsdp()
+{
+    if (rsdp == RSDP_INITIALIZER)
+        return {};
+
+    klib::unique_ptr<load_tag_generic> tag = (load_tag_generic *)new load_tag_rsdp;
+
+    auto *t   = (load_tag_rsdp *)tag.get();
+    t->header = LOAD_TAG_RSDP_HEADER;
+    t->rsdp   = rsdp;
+
+    return tag;
+}
+#else
+klib::unique_ptr<load_tag_generic> construct_load_tag_rsdp()
+{
+    return {};
+}
+#endif
 
 pmos::containers::vector<module> modules;
 
@@ -141,18 +163,4 @@ klib::string module_cmdline(char *name, size_t max_len)
         return "";
 
     return klib::string(separator + 1, max_len - (separator - name) - 1);
-}
-
-klib::unique_ptr<load_tag_generic> construct_load_tag_rsdp()
-{
-    if (rsdp == RSDP_INITIALIZER)
-        return {};
-
-    klib::unique_ptr<load_tag_generic> tag = (load_tag_generic *)new load_tag_rsdp;
-
-    auto *t   = (load_tag_rsdp *)tag.get();
-    t->header = LOAD_TAG_RSDP_HEADER;
-    t->rsdp   = rsdp;
-
-    return tag;
 }

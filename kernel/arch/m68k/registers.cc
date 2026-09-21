@@ -79,6 +79,11 @@ i64 syscall_ret_low(TaskDescriptor *task) { return (i64(task->regs.d[1]) << 32) 
 
 } // namespace kernel::syscalls
 
+bool kernel::proc::TaskDescriptor::is_kernel_task() const
+{
+    return is_system;
+}
+
 kresult_t kernel::proc::TaskDescriptor::set_32bit()
 {
     return 0;

@@ -451,7 +451,7 @@ ReturnStr<void *> Mem_Object::map_to_kernel(u64 offset, u64 size, Page_Table_Arg
         auto ctx = TLBShootdownContext::create_kernel();
         for (size_t ii = 0; ii < i; ii += (1 << page_size_log)) {
             void *const virt_addr = (void *)(size_t(mem_virt) + ii);
-            unmap_kernel_page(ctx, virt_addr);
+            unmap_kernel_page(ctx, virt_addr, false);
         }
         ctx.finalize();
 

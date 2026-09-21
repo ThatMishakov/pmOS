@@ -107,7 +107,7 @@ namespace proc
 
         // Basic process stuff
         Task_Regs regs; // 200 on x86_64
-#if defined(__riscv) || defined(__loongarch__)
+#if defined(__riscv) || defined(__loongarch__) || defined(__m68k__)
         u64 is_system = 0; // 0 if user space task, 1 if kernel task
 #endif
         TaskID task_id;
