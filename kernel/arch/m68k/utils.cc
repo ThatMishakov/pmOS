@@ -4,10 +4,10 @@
 
 using namespace kernel::sched;
 
-CPU_Info *cpu_struct = nullptr;
+CPU_Info cpu_struct;
 
 kernel::sched::CPU_Info *kernel::sched::get_cpu_struct() {
-    return cpu_struct;
+    return &cpu_struct;
 }
 
 void halt()

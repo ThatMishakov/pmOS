@@ -48,17 +48,17 @@ fast_atomic_read_from_user:
     move.l  %a0, -48(%fp)
 
     | Set the trampoline
-    move.l  cpu_struct(%pc), %a0
+    lea     cpu_struct(%pc), %a0
     move.l  %sp, 28(%a0)
     lea fast_read_failure(%pc), %a1
     move.l  %a1, 24(%a0)
 
+    move.l  12(%fp), -(%sp)
     move.l  8(%fp), -(%sp)
-    move.l  4(%fp), -(%sp)
     jsr fetch_user_u32
 
     | Success
-    move.l  cpu_struct(%pc), %a0
+    lea     cpu_struct(%pc), %a0
     move.l  #0, 24(%a0)
 
     move.l -48(%fp), %a0
@@ -77,7 +77,7 @@ fast_read_failure:
     move.l #0, -(%sp)        | size_t *size = nullptr
     move.l #0, -(%sp)        | void **src = nullptr
     move.l #0, -(%sp)        | void **dst = nullptr
-    move.l %a1, -(%sp)       | ReturnStr<bool> *return_value
+    move.l %a1, -(%sp)       | const void *faultung_addr
     move.l #1, -(%sp)        | access_type = 1 (read)
     move.l -48(%fp), %a0     | a0 = ReturnStr<bool> *return_value
     jsr user_access_page_fault
@@ -90,12 +90,15 @@ fast_read_failure:
     cmpi.b  #1, 8(%a0)
     bne common_return
 
+    move.l  12(%fp), -(%sp)
     move.l  8(%fp), -(%sp)
-    move.l  4(%fp), -(%sp)
     jsr fetch_user_u32
     | Don't bother with poping stack here
 
 common_return:
+    lea     cpu_struct(%pc), %a0
+    move.l  #0, 24(%a0)
+
     move.l 4(%fp), %d0
     movec   %d0,%sfc
 
