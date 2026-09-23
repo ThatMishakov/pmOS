@@ -29,16 +29,7 @@ fetch_user_u32:
     .type    fast_atomic_read_from_user,@function
 fast_atomic_read_from_user:
     link    %fp, #48
-    move.l  %a5, -4(%fp)
-    move.l  %a4, -8(%fp)
-    move.l  %a3, -12(%fp)
-    move.l  %a2, -16(%fp)
-    move.l  %d7, -20(%fp)
-    move.l  %d6, -24(%fp)
-    move.l  %d5, -28(%fp)
-    move.l  %d4, -32(%fp)
-    move.l  %d3, -36(%fp)
-    move.l  %d2, -40(%fp)
+    movem.l %d2-%d7/%a2-%a5,-40(%fp)
 
     | Save the SFC register
     movec   %sfc,%d0
@@ -104,15 +95,6 @@ common_return:
 
     move.l  -48(%fp), %a0
     
-    move.l -40(%fp), %d2
-    move.l -36(%fp), %d3
-    move.l -32(%fp), %d4
-    move.l -28(%fp), %d5
-    move.l -24(%fp), %d6
-    move.l -20(%fp), %d7
-    move.l -16(%fp), %a2
-    move.l -12(%fp), %a3
-    move.l -8(%fp), %a4
-    move.l -4(%fp), %a5
+    movem.l -40(%fp), %d2-%d7/%a2-%a5
     unlk  %fp
     rts

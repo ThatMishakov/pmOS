@@ -89,9 +89,6 @@ struct CPU_Info {
     proc::TaskDescriptor *idle_task    = nullptr; // 40 20
     void *jumpto_func                  = nullptr; // 48 24
     ulong jumpto_arg                   = 0;       // 56 28
-    // u64 jumpto_from              = 0;       // 48 24
-    // u64 jumpto_to                = 0;       // 56 28
-    Task_Regs nested_int_regs; // 64 32
 
     klib::array<sched_queue, sched_queues_levels> sched_queues;
 
