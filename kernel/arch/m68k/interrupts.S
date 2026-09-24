@@ -27,7 +27,14 @@
     .globl interrupt_entry
     .type interrupt_entry, @function
 interrupt_entry:
+    ori #0x700, %sr 
+
     move.l %a0, -(%sp)
+
+    lea.l interrupt_entry(%pc), %a0
+    cmp.l 6(%sp), %a0
+    beq raise_ipl | Interrupt arrived between taking the exception and masking the interrupts
+
     move.l %d0, -(%sp)
 
     lea cpu_struct(%pc), %a0
@@ -36,15 +43,11 @@ interrupt_entry:
     cmp.l #1, 12(%a0)
     bne kernel_exception
 
-    move.w 8(%sp), %d0
-    btst.l #13, %d0
-    bne userspace_task
+    btst.b #5, 8(%sp)
+    beq userspace_task
 
-    and.w  #0x700, %d0
-    bne kernel_exception | Preempting another interrupt
 
     lea.l 16(%a0), %a0 | Current task
-
     move.l %sp, 60(%a0)
     
     save_regs
@@ -67,7 +70,7 @@ userspace_task:
 
 return_from_user:
 
-    move.l 16(%pc), %a0 | Current task
+    move.l cpu_struct+16(%pc), %a0 | Current task
     btst.l #13, 68(%a0)
     beq 1f
 
@@ -79,7 +82,6 @@ return_from_user:
     move.l 60(%a0), %sp
 2:
 
-    ori.w #0x0700, %sr
     lea cpu_struct(%pc), %a2
     subi.l #1, 12(%a2)  | Decrement nested_int_count
 
@@ -108,7 +110,23 @@ return_from_user:
 
 kernel_exception:
 
-    | TODO!
+    movl (%sp)+, %d0
+    movl (%sp)+, %a0
 
+    movem.l %d0-%d7/%a0-%a6, -(%sp)
+    move.l %sp, -(%sp)
 
+    bsr kernel_exception_handler
 
+    lea cpu_struct(%pc), %a0
+    subi.l #1, 12(%a0)
+
+    add.l #4, %sp
+    movem.l (%sp)+, %d0-%d7/%a0-%a6
+
+    rte
+
+raise_ipl:
+    move.l (%sp)+, %a0
+    or.w #0x700, (%sp)
+    rte
