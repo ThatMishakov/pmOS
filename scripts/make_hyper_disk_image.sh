@@ -58,7 +58,8 @@ done
 # Copy libraries
 for LIBRARY in $LIBRARIES; do
     echo "Copying library $LIBRARY..."
-    mcopy -i "$BOOT_PARTITION" "$SYSROOT/usr/lib/$LIBRARY" "::/$LIBRARY"
+    LIBRARY_FILE=${LIBRARY##*/}
+    mcopy -i "$BOOT_PARTITION" "$SYSROOT/$LIBRARY" "::/$LIBRARY_FILE"
 done
 
 # Create an ext4 filesystem for the root partition

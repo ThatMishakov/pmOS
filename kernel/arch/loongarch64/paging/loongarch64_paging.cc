@@ -564,10 +564,10 @@ kresult_t paging::map_kernel_pages(u64 phys_addr, void *virt_addr, size_t size,
     return paging::map_pages(loongarch64::paging::kernel_page_dir(), phys_addr, virt_addr, size, arg);
 }
 
-kresult_t paging::unmap_kernel_page(TLBShootdownContext &ctx, void *virt_addr)
+kresult_t paging::unmap_kernel_page(TLBShootdownContext &ctx, void *virt_addr, bool free)
 {
     return loongarch64::paging::loongarch_unmap_page(ctx, loongarch64::paging::kernel_page_dir(),
-                                                     virt_addr, false);
+                                                     virt_addr, free);
 }
 
 kresult_t paging::map_pages(ptable_top_ptr_t page_table, u64 phys_addr, void *virt_addr,

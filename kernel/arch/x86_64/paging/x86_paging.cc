@@ -387,9 +387,9 @@ void x86_Page_Table::invalidate(TLBShootdownContext &ctx, void *virt_addr, bool 
     ::invalidate(ctx, virt_addr, free, (u64)pt_top_phys);
 }
 
-kresult_t kernel::paging::unmap_kernel_page(TLBShootdownContext &ctx, void *virt_addr)
+kresult_t kernel::paging::unmap_kernel_page(TLBShootdownContext &ctx, void *virt_addr, bool free)
 {
-    invalidate(ctx, virt_addr, false, idle_cr3);
+    invalidate(ctx, virt_addr, free, idle_cr3);
     return 0;
 }
 

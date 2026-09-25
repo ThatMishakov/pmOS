@@ -18,6 +18,7 @@ EOF
 write_library_entry() {
     FILE="$1"
     NAME="$2"
+    NAME=${NAME##*/}
     LIBPATH="$3"
     cat <<EOF >> "$FILE"
 module:
