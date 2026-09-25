@@ -7,7 +7,7 @@ source_dir=mlibc
 imagedeps="build-essential meson ninja-build pkg-config"
 builddeps="frigg libsmarter"
 deps="mlibc-headers"
-hostdeps="gcc binutils"
+hostdeps="$TOOLCHAIN_DEPS"
 
 allow_network=yes
 

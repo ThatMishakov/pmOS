@@ -17,10 +17,10 @@ endian = '${ENDIAN}'
 
 [built-in options]
 libdir = 'lib'
-# c_args = ['${COMPILE_FLAGS}']
-# cpp_args = ['${COMPILE_FLAGS}']
-# c_link_args = ['${COMPILE_FLAGS}']
-# cpp_link_args = ['${COMPILE_FLAGS}']
+c_args = ['--target=${JINX_ARCH}-unknown-pmos', '--sysroot=${sysroot}']
+cpp_args = ['--target=${JINX_ARCH}-unknown-pmos', '--sysroot=${sysroot}']
+c_link_args = ['--target=${JINX_ARCH}-unknown-pmos', '--sysroot=${sysroot}']
+cpp_link_args = ['--target=${JINX_ARCH}-unknown-pmos', '--sysroot=${sysroot}']
 
 [properties]
 sys_root = '${sysroot}'

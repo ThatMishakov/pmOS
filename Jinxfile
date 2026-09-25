@@ -21,10 +21,10 @@ fi
 # TOOLCHAIN_DEPS="binutils gcc"
 # CXX_DEPS="libstdc++"
 
-CXX_DEPS=""
+CXX_DEPS="libcxx"
 C_COMPILER="clang"
 CXX_COMPILER="clang++"
-TOOLS_PREFIX="clang"
+TOOLS_PREFIX="llvm"
 
 COMPILER_DEPS="clang"
 TOOLCHAIN_DEPS="clang compiler-rt"

@@ -5,7 +5,6 @@ revision=1
 git_url="https://github.com/managarm/libsmarter.git"
 commit=${version}
 imagedeps="meson ninja-build pkg-config"
-hostdeps="binutils gcc"
 
 configure() {
     meson_configure \

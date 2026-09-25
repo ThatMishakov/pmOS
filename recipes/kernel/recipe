@@ -4,8 +4,8 @@ version=0.0.1
 revision=1
 
 source_dir=kernel
-builddeps="mlibc-headers mlibc pmos-containers"
-hostdeps="$TOOLCHAIN_DEPS $CXX_DEPS"
+builddeps="mlibc-headers mlibc pmos-containers $CXX_DEPS"
+hostdeps="$TOOLCHAIN_DEPS"
 
 configure() {
     cmake_configure

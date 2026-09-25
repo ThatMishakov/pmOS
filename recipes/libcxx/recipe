@@ -1,13 +1,14 @@
 #!/bin/sh
 
-name=libcxx
 revision=1
+from_source=clang
 deps="mlibc-headers mlibc"
 hostdeps="clang compiler-rt"
 imagedeps="python3 build-essential"
 
 triplet="${JINX_ARCH}-pmos"
 
+EXTRA_FLAGS=
 if [ ${JINX_ARCH} = "i686" ]; then
     EXTRA_FLAGS="-DCAN_TARGET_i386=1"
 fi
