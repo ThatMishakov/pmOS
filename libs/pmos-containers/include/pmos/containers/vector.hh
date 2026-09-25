@@ -150,7 +150,7 @@ private:
     size_t size_ = 0;
     allocator_type allocator_{};
 
-    constexpr bool expand(size_t to);
+    constexpr bool expand(size_t to) noexcept;
 
     constexpr bool add_capacity(size_t new_elements) noexcept;
 };
@@ -164,7 +164,7 @@ operator<=>(const vector<T, Alloc>& lhs,
 
 
 template<class T, class Allocator>
-constexpr vector<T, Allocator>::vector():
+constexpr vector<T, Allocator>::vector() noexcept:
     vector(Allocator())
 {}
 
@@ -448,7 +448,7 @@ constexpr bool vector<T, Allocator>::append_range(R&& rg) noexcept
 }
 
 template<class T, class Allocator>
-constexpr bool vector<T, Allocator>::expand(size_t new_capacity)
+constexpr bool vector<T, Allocator>::expand(size_t new_capacity) noexcept
 {
     if (new_capacity <= capacity_)
         return true;

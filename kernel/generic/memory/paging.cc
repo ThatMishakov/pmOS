@@ -392,16 +392,6 @@ void Page_Table::unblock_tasks(void *page)
     //     it->atomic_try_unblock_by_page(page);
 }
 
-kresult_t Page_Table::map(phys_addr_t page_addr, void *virt_addr) noexcept
-{
-    // auto it = get_region(virt_addr);
-    // if (it == paging_regions.end())
-    //     return -EFAULT;
-
-    // return map(page_addr, virt_addr, it->craft_arguments(virt_addr));
-    return -ENOSYS;
-}
-
 void Page_Table::apply_cpu(sched::CPU_Info *cpu)
 {
     assert(cpu == sched::get_cpu_struct());

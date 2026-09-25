@@ -6,8 +6,8 @@ revision=1
 imagedeps="make cmake"
 
 source_dir=libs/pmos-helpers
-deps="mlibc-headers mlibc pmos-containers"
-hostdeps="$TOOLCHAIN_DEPS $CXX_DEPS"
+deps="mlibc-headers mlibc pmos-containers $CXX_DEPS"
+hostdeps="$TOOLCHAIN_DEPS"
 
 configure() {
     cmake_configure

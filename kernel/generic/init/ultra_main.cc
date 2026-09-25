@@ -346,7 +346,7 @@ void init_modules(ultra_boot_context *ctx)
                 serial_logger.printf("Warning: Empty cmdline for module\n");
             }
 
-            module m = {
+            boot_module m = {
                 .path      = klib::move(path),
                 .cmdline   = klib::move(cmdline),
                 .phys_addr = t->address,
@@ -461,7 +461,7 @@ klib::unique_ptr<load_tag_generic> construct_load_tag_rsdp(ultra_boot_context *)
 
 void init_task1(ultra_boot_context *ctx)
 {
-    module *task1                = nullptr;
+    boot_module *task1 = nullptr;
     const klib::string bootstrap = "bootstrap";
     for (auto &m: modules) {
         if (m.cmdline == bootstrap) {

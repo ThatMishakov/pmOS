@@ -570,7 +570,7 @@ void init_modules(multiboot_info *info)
                 serial_logger.printf("Warning: Empty cmdline for module\n");
             }
 
-            module m = {
+            boot_module m = {
                 .path = std::move(path),
                 .cmdline = std::move(cmdline),
                 .phys_addr = mod->mod_start,
@@ -666,7 +666,7 @@ void init_task1(multiboot_info* info)
 {
     // Find task 1 module.
     // For now, just search for "bootstrap"
-    module *task1                = nullptr;
+    boot_module *task1 = nullptr;
     const klib::string bootstrap = "bootstrap";
     for (auto &m: modules) {
         serial_logger.printf("Module %s\n", m.cmdline.c_str());

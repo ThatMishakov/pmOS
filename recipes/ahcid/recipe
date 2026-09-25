@@ -4,8 +4,8 @@ version=0.0.1
 revision=1
 
 source_dir=userspace/ahcid
-deps="mlibc mlibc-headers pmoscxx"
-hostdeps="$TOOLCHAIN_DEPS $CXX_DEPS"
+deps="mlibc mlibc-headers pmoscxx $CXX_DEPS"
+hostdeps="$TOOLCHAIN_DEPS"
 
 configure() {
     cmake_configure

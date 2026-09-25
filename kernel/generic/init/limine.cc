@@ -379,7 +379,7 @@ void init_modules()
     for (auto &mm: modules) {
         limine_file f;
         copy_from_phys((u64)mm - hhdm_offset, &f, sizeof(f));
-        module m = {
+        boot_module m = {
             .path      = capture_from_phys((u64)f.path - hhdm_offset),
             .cmdline   = capture_from_phys((u64)f.string - hhdm_offset),
             .phys_addr = (u64)f.address - hhdm_offset,
@@ -481,7 +481,7 @@ void init_task1()
 {
     // Find task 1 module.
     // For now, just search for "bootstrap"
-    module *task1                = nullptr;
+    boot_module *task1 = nullptr;
     const klib::string bootstrap = "bootstrap";
     for (auto &m: modules) {
         serial_logger.printf("Module %s\n", m.cmdline.c_str());

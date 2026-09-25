@@ -20,7 +20,7 @@ extern kernel::pmm::Page::page_addr_t alloc_pages_from_temp_pool(size_t pages);
 
 void init_acpi(phys_addr_t rsdp_addr);
 
-struct module {
+struct boot_module {
     klib::string path;
     klib::string cmdline;
 
@@ -30,7 +30,7 @@ struct module {
     klib::shared_ptr<kernel::paging::Mem_Object> object;
 };
 
-extern pmos::containers::vector<module> modules;
+extern pmos::containers::vector<boot_module> modules;
 
 klib::unique_ptr<load_tag_generic> construct_load_tag_for_modules(kernel::proc::TaskGroup *group);
 

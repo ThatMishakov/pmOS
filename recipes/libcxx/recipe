@@ -1,6 +1,6 @@
 #!/bin/sh
 
-revision=1
+revision=4
 from_source=clang
 deps="mlibc-headers mlibc"
 hostdeps="clang compiler-rt"

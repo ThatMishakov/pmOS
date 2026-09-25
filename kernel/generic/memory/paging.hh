@@ -362,19 +362,6 @@ public:
     static klib::shared_ptr<Page_Table> get_page_table_throw(u64 id);
 
     /**
-     * @brief Maps the page with the appropriate permissions
-     *
-     * This function deduces the appropriate permissions for the page by finding the corresponding
-     * region and then maps it there, preparing the paging structures as needed (in case of using
-     * multi-level page tables)
-     *
-     * @param page_addr Physical address of the page
-     * @param virt_addr Virtual address to where the page shall be mapped
-     * @return Error code
-     */
-    [[nodiscard]] virtual kresult_t map(phys_addr_t page_addr, void *virt_addr);
-
-    /**
      * @brief Maps the page to the virtual address
      *
      * This function maps the specified page to the virtual address with given *arg* arguments and

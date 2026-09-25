@@ -11,6 +11,7 @@
 #include <system_error>
 #include <unordered_map>
 #include <cstring>
+#include <cstdlib>
 
 extern pmos::PortDispatcher dispatcher;
 extern pmos::Port cmd_port;

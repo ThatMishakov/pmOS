@@ -13,6 +13,7 @@
 #include <cinttypes>
 #include <sys/user.h>
 #include <cstring>
+#include <cstdlib>
 
 extern pmos::Port cmd_port;
 

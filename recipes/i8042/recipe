@@ -4,8 +4,8 @@ version=0.0.1
 revision=1
 
 source_dir=userspace/i8042
-deps="mlibc mlibc-headers pmos-helpers"
-hostdeps="$TOOLCHAIN_DEPS $CXX_DEPS"
+deps="mlibc mlibc-headers pmos-helpers $CXX_DEPS"
+hostdeps="$TOOLCHAIN_DEPS"
 
 configure() {
     cmake_configure

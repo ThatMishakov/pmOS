@@ -502,8 +502,6 @@ void clear_page(u64 phys_addr, u64 pattern)
 
 extern "C" int fflush(FILE *) { return 0; }
 
-int stderr;
-
 extern "C" int fprintf(FILE *, const char *format, ...)
 {
     va_list args;

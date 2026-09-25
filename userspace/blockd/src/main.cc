@@ -27,6 +27,7 @@
 #include <sys/user.h>
 #include <memory>
 #include <cstring>
+#include <cstdlib>
 
 using namespace pmos;
 using namespace pmos::ipc;

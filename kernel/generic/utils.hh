@@ -156,7 +156,7 @@ inline FreqFraction computeFreqFraction(u64 num, u64 denom)
     return FreqFraction {f, s};
 }
 
-void hcf() __attribute__((noreturn));
+[[noreturn]] void hcf();
 
 struct AtomicCounter {
     Spinlock lock;
