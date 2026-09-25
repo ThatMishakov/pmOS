@@ -27,16 +27,19 @@ set_target_properties(kernel PROPERTIES CXX_STANDARD 26)
 set_target_properties(kernel PROPERTIES LINK_FLAGS 
   "-nostdlib -ffreestanding -static -T${CMAKE_CURRENT_SOURCE_DIR}/arch/${TARGET_ARCH}/linker.ld -z max-page-size=0x1000 -Wl,--eh-frame-hdr -Wl,--demangle")
 if (${TARGET_ARCH} STREQUAL "i686")
+  set(ENABLE_ACPI TRUE)
   set_property(TARGET kernel APPEND_STRING PROPERTY LINK_FLAGS " -static")
   target_link_libraries(kernel PUBLIC atomic gcc)
 elseif (${TARGET_ARCH} STREQUAL "m68k")
   target_link_libraries(kernel PUBLIC gcc)
 elseif (NOT ${TARGET_ARCH} STREQUAL "x86_64")
+  set(ENABLE_ACPI TRUE)
   # NB: target_compile_options (not add_compile_options): the kernel target
   # already exists at this point, and directory options would not apply to it.
   target_compile_options(kernel PRIVATE "-fPIE")
   set_property(TARGET kernel APPEND_STRING PROPERTY LINK_FLAGS " -pie -Wl,-pie")
 else()
+  set(ENABLE_ACPI TRUE)
   target_compile_options(kernel PRIVATE "-mcmodel=kernel")
 endif()
 

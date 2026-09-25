@@ -62,7 +62,7 @@ void uacpi_kernel_unmap(void *addr, uacpi_size len)
 
     {
         auto ctx = TLBShootdownContext::create_kernel();
-        (void)unmap_kernel_pages(ctx, (void *)start, size_aligned);
+        (void)unmap_kernel_pages(ctx, (void *)start, size_aligned, false);
     }
 
     kernel_space_allocator.virtmem_free((void *)start, size_pages);

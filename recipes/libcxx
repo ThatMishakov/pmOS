@@ -1,7 +1,6 @@
 #!/bin/sh
 
 name=libcxx
-from_source=clang-src
 revision=1
 deps="mlibc-headers mlibc"
 hostdeps="clang compiler-rt"

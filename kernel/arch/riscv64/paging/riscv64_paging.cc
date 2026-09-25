@@ -151,7 +151,7 @@ kresult_t RISCV64_Page_Table::map(u64 page_addr, void *virt_addr,
     return riscv_map_page(table_root, page_addr, virt_addr, arg);
 }
 
-kresult_t riscv_unmap_page(TLBShootdownContext &ctx, u64 pt_top_phys, void *virt_addr)
+kresult_t riscv_unmap_page(TLBShootdownContext &ctx, u64 pt_top_phys, void *virt_addr, bool free)
 {
     // TODO: Return values of this function make no sense...
 
@@ -757,9 +757,9 @@ kresult_t map_kernel_page(u64 phys_addr, void *virt_addr, kernel::paging::Page_T
     return riscv64::paging::riscv_map_page(riscv64::paging::idle_pt, phys_addr, virt_addr, arg);
 }
 
-kresult_t unmap_kernel_page(TLBShootdownContext &ctx, void *virt_addr)
+kresult_t unmap_kernel_page(TLBShootdownContext &ctx, void *virt_addr, bool free)
 {
-    return riscv64::paging::riscv_unmap_page(ctx, riscv64::paging::idle_pt, virt_addr);
+    return riscv64::paging::riscv_unmap_page(ctx, riscv64::paging::idle_pt, virt_addr, free);
 }
 
 void invalidate_tlb_kernel(void *page) { riscv64::paging::flush_page(page); }

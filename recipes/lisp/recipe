@@ -1,0 +1,12 @@
+#!/bin/sh
+
+version=0
+revision=1
+git_url=https://github.com/DeanoBurrito/lisp.git
+commit=8abecff982fdce7d451082a361d68db303d08d1c
+
+source_allow_network=yes
+
+prepare() {
+    make -C ${source_dir} bootstrap
+}

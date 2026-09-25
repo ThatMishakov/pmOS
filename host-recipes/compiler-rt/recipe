@@ -1,8 +1,7 @@
 #!/bin/sh
 
-name=compiler-rt
 revision=1
-from_source=clang-src
+from_source=clang
 imagedeps="ninja-build cmake python3 build-essential"
 deps="mlibc-headers"
 hostdeps="clang"

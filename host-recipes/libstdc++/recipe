@@ -11,7 +11,7 @@ configure() {
     if [ "${JINX_ARCH}" = "m68k" ]; then
         multilib=--disable-multilib
     fi
-    ${source_dir}/configure --target=${JINX_ARCH}-pmos --with-sysroot="${sysroot}" --prefix=${prefix} --enable-languages=c,c++ --enable-shared --with-pic ${multilib}
+    ${source_dir}/configure --target=${JINX_ARCH}-pmos --with-sysroot="${sysroot}" --prefix=${prefix} --with-toolexeclibdir=/usr/lib --enable-languages=c,c++ --enable-shared --with-pic ${multilib}
 }
 
 build() {

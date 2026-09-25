@@ -2,22 +2,32 @@ JINX_MAJOR_VER=0.9
 JINX_DEBIAN_SNAPSHOT=20260326T203750Z
 JINX_BASE_PACKAGES="make cmake build-essential ninja-build python3 gettext-base"
 
-CLANG_LIBS="libc++.so.1 libc++abi.so.1 libunwind.so.1"
+CLANG_LIBS="/usr/lib/libc++.so.1 /usr/lib/libc++abi.so.1 /usr/lib/libunwind.so.1"
+GCC_LIBS="/usr/local/lib/gcc/riscv64-pmos/16.2.1/libgcc_s.so.1"
 
-LIBRARIES="ld.so libc.so libdl.so libpthread.so libpmoscxx.so libm.so librt.so libpmos-helpers.so"
+LIBRARIES="/usr/lib/ld.so /usr/lib/libc.so /usr/lib/libdl.so /usr/lib/libpthread.so /usr/lib/libpmoscxx.so /usr/lib/libm.so /usr/lib/librt.so /usr/lib/libpmos-helpers.so"
+LIBRARIES="$LIBRARIES $CLANG_LIBS"
 
 BOOT_SERVICES="ahcid devicesd logd processd terminald blockd ps2d tests ns16550" # pmbus ext4
 if [ "$JINX_ARCH" = "x86_64" ] || [ "$JINX_ARCH" = "i686" ]; then
     BOOT_SERVICES="$BOOT_SERVICES i8042"
 fi
 
-C_COMPILER="$JINX_ARCH-pmos-gcc"
-CXX_COMPILER="$JINX_ARCH-pmos-g++"
-TOOLS_PREFIX="$JINX_ARCH-pmos"
+# C_COMPILER="$JINX_ARCH-pmos-gcc"
+# CXX_COMPILER="$JINX_ARCH-pmos-g++"
+# TOOLS_PREFIX="$JINX_ARCH-pmos"
 
-COMPILER_DEPS="gcc"
-TOOLCHAIN_DEPS="binutils gcc"
-CXX_DEPS="libstdc++"
+# COMPILER_DEPS="gcc"
+# TOOLCHAIN_DEPS="binutils gcc"
+# CXX_DEPS="libstdc++"
+
+CXX_DEPS=""
+C_COMPILER="clang"
+CXX_COMPILER="clang++"
+TOOLS_PREFIX="clang"
+
+COMPILER_DEPS="clang"
+TOOLCHAIN_DEPS="clang compiler-rt"
 
 CPU_FAMILY="${JINX_ARCH}"
 case "$JINX_ARCH" in

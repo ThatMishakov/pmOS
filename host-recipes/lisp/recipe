@@ -1,0 +1,12 @@
+#!/bin/sh
+
+from_source=lisp
+allow_network=yes
+
+imagedeps="build-essential clang"
+
+build() {
+    cp -rv ${source_dir}/* .
+
+    make -j${parallelism}
+}

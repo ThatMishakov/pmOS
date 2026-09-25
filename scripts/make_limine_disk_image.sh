@@ -55,7 +55,8 @@ mmd -i "$BOOT_PARTITION" "::/usr/lib"
 
 for LIBRARY in $LIBRARIES; do
     echo "Copying library $LIBRARY..."
-    mcopy -i "$BOOT_PARTITION" "$SYSROOT/usr/lib/$LIBRARY" "::/usr/lib/$LIBRARY"
+    LIBRARY_FILE=${LIBRARY##*/}
+    mcopy -i "$BOOT_PARTITION" "$LIBRARY" "::/usr/lib/$LIBRARY_FILE"
 done
 
 # Copy services
