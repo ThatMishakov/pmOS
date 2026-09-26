@@ -69,7 +69,7 @@ pmos::async::task<uint64_t> PMBUSHelper::publish_object(pmos::ipc::BUSObject obj
     auto span = std::span<const uint8_t>(vec);
     auto result = send_message_right(pmbus_right, span, std::pair{&dispatcher_.get_port(), RightType::SendOnce}, false, std::move(right));
     if (!result)
-        throw std::system_error(result.error(), std::system_category());
+        throw std::system_error(result.error().first, std::system_category());
     
     auto msg = co_await dispatcher_.get_message(result.value());
     if (!msg)
@@ -97,7 +97,7 @@ PMBUSHelper::get_object(const pmos::ipc::AnyFilter &filter, uint64_t from_sequen
     auto span = std::span<const uint8_t>(vec);
     auto result = send_message_right(pmbus_right, span, std::pair{&dispatcher_.get_port(), RightType::SendOnce}, false);
     if (!result)
-        throw std::system_error(result.error(), std::system_category());
+        throw std::system_error(result.error().first, std::system_category());
 
     auto msg = co_await dispatcher_.get_message(result.value());
     if (!msg)

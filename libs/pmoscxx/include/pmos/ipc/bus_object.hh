@@ -94,4 +94,8 @@ std::vector<uint8_t> serialize_filter_ipc(const AnyFilter &filter, uint64_t from
 
 size_t filter_serialized_size(const AnyFilter &filter);
 
+AnyFilter deserialize_filter(std::span<uint8_t const> span);
+
+bool filter_matches(const AnyFilter &filter, const BUSObject &object) noexcept;
+
 } // namespace pmos::ipc

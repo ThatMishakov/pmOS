@@ -131,7 +131,7 @@ Right create_mem_object(uint64_t size, uint32_t flags);
 template<typename T, typename... Rights>
     requires std::is_trivially_copyable_v<T> && (sizeof...(Rights) <= 4) &&
              (std::is_same_v<std::decay_t<Rights>, Right> && ...)
-inline std::expected<ReceiveRight, int> send_message_right(
+inline std::expected<ReceiveRight, std::pair<int, int>> send_message_right(
     Right &right, std::span<T const> data, std::pair<Port const *, RightType> optional_reply_port,
     bool delete_right = false, Rights... rights) noexcept
 {
@@ -157,7 +157,7 @@ inline std::expected<ReceiveRight, int> send_message_right(
                                      NUM_RIGHTS > 0 ? &extra : nullptr, flags);
 
     if (result.result)
-        return std::unexpected(static_cast<int>(-result.result));
+        return std::unexpected(std::make_pair(static_cast<int>(-result.result), static_cast<int>(result.right)));
 
     if (right.type() == RightType::SendOnce || delete_right)
         right.release();
@@ -171,7 +171,7 @@ template<typename T, typename... Rights>
 requires std::is_trivially_copyable_v<T> &&
          (sizeof...(Rights) <= 4) &&
          (std::is_same_v<std::decay_t<Rights>, Right> && ...)
-inline std::expected<ReceiveRight, int> send_message_right(
+inline std::expected<ReceiveRight, std::pair<int, int>> send_message_right(
     Right &right,
     std::span<T> data,
     std::pair<Port const *, RightType> optional_reply_port,
@@ -189,7 +189,7 @@ inline std::expected<ReceiveRight, int> send_message_right(
 template<typename T, typename... Rights>
     requires std::is_trivially_copyable_v<T> && (sizeof...(Rights) <= 4) &&
              (std::is_same_v<std::decay_t<Rights>, Right> && ...)
-inline std::expected<ReceiveRight, int> send_message_right_one(
+inline std::expected<ReceiveRight, std::pair<int, int>> send_message_right_one(
     Right &right, T const &object, std::pair<Port const *, RightType> optional_reply_port,
     bool delete_right = false, Rights... rights) noexcept
 {
