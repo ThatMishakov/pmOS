@@ -248,14 +248,14 @@ std::vector<uint8_t> serialize_filter_ipc(const AnyFilter &filter, uint64_t from
     return result;
 }
 
-BUSObject BUSObject::deserialize(std::span<uint8_t> data)
+BUSObject BUSObject::deserialize(std::span<const uint8_t> data)
 {
     BUSObject ret{};
 
     if (data.size() < sizeof(IPC_Bus_Object))
         throw std::system_error(EINTR, std::system_category());
 
-    IPC_Bus_Object *object = reinterpret_cast<IPC_Bus_Object *>(data.data());
+    const IPC_Bus_Object *object = reinterpret_cast<const IPC_Bus_Object *>(data.data());
 
     size_t size = object->size;
     size_t name_length = object->name_length;
@@ -279,7 +279,7 @@ BUSObject BUSObject::deserialize(std::span<uint8_t> data)
         if (size - properties_offset < sizeof(IPC_Object_Property))
             throw std::system_error(EINTR, std::system_category(), "last property smaller than its header");
 
-        auto property = reinterpret_cast<IPC_Object_Property *>(data.data() + properties_offset);
+        auto property = reinterpret_cast<const IPC_Object_Property *>(data.data() + properties_offset);
         if (size - properties_offset < property->length)
             throw std::system_error(EINTR, std::system_category(), "property size overflows object");
 

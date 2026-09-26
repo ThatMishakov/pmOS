@@ -115,6 +115,8 @@ private:
     pmos_port_t id = 0;
 };
 
+std::expected<ReceiveRight, int> watch_right(const Port &port, const Right &right) noexcept;
+
 ReceiveRight register_interrupt(const Right &int_source_right, Port &port);
 void complete_interrupt(const ReceiveRight &notification_right);
 

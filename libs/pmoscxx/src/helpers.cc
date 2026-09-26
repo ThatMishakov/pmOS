@@ -336,4 +336,13 @@ std::expected<RightType, int> get_right_type(pmos_right_t right) noexcept
     return type_from_kernel(result.value);
 }
 
+std::expected<ReceiveRight, int> watch_right(const Port &port, const Right &right) noexcept
+{
+    auto result = ::watch_right(right.get(), port.get());
+    if (result.result)
+        std::unexpected(-static_cast<int>(result.result));
+
+    return ReceiveRight{result.right, RightType::SendOnce, port.get()};
+}
+
 }

@@ -8,7 +8,7 @@ GCC_LIBS="/usr/local/lib/gcc/riscv64-pmos/16.2.1/libgcc_s.so.1"
 LIBRARIES="/usr/lib/ld.so /usr/lib/libc.so /usr/lib/libdl.so /usr/lib/libpthread.so /usr/lib/libpmoscxx.so /usr/lib/libm.so /usr/lib/librt.so /usr/lib/libpmos-helpers.so"
 LIBRARIES="$LIBRARIES $CLANG_LIBS"
 
-BOOT_SERVICES="ahcid devicesd logd processd terminald blockd ps2d tests ns16550" # pmbus ext4
+BOOT_SERVICES="ahcid devicesd logd processd terminald blockd ps2d tests ns16550 pmbus" # ext4
 if [ "$JINX_ARCH" = "x86_64" ] || [ "$JINX_ARCH" = "i686" ]; then
     BOOT_SERVICES="$BOOT_SERVICES i8042"
 fi

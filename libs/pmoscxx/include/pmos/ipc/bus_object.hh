@@ -31,7 +31,7 @@ public:
     std::vector<uint8_t> serialize();
     std::vector<uint8_t> serialize_into_ipc();
 
-    static BUSObject deserialize(std::span<uint8_t> serialized_data);
+    static BUSObject deserialize(std::span<const uint8_t> serialized_data);
 private:
     std::string name;
     std::map<std::string, property, std::less<>> properties;
